@@ -1,1 +1,186 @@
-{ "shots": [] }
+{
+ "shots": [
+  {
+   "out": "/docs/files/guides/cs-figma-digest-1004/02-select-lesson-teacher.webp",
+   "source": "public/docs/files/cs-figma/대시보드-수업-교사-설정-삭제.png",
+   "crop": {
+    "x": 0.355,
+    "y": 0.358,
+    "w": 0.345,
+    "h": 0.167
+   },
+   "masks": [],
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-1131/02-course-settings-manage.webp",
+   "source": "public/docs/files/cs-figma/코스-내-닉네임-변경-옵션-활성-비활성화.png",
+   "crop": {
+    "x": 0.404,
+    "y": 0.25,
+    "w": 0.192,
+    "h": 0.166
+   },
+   "masks": [
+    {
+     "x": 0.02,
+     "y": 0.12,
+     "w": 0.75,
+     "h": 0.08,
+     "style": "blur",
+     "reason": "코스명"
+    },
+    {
+     "x": 0.02,
+     "y": 0.31,
+     "w": 0.96,
+     "h": 0.06,
+     "style": "blur",
+     "reason": "구성원 이름 첫 글자 아바타"
+    }
+   ],
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-1213/04-field-recording-camera.webp",
+   "source": "public/docs/files/cs-figma/클래스인-교실-내-카메라-마이크-설정-확인-pc.png",
+   "crop": {
+    "x": 0.13,
+    "y": 0.805,
+    "w": 0.36,
+    "h": 0.089
+   },
+   "masks": [],
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-1213/05-recording-icon.webp",
+   "source": "public/docs/files/cs-figma/클래스인-교실-내-카메라-마이크-설정-확인-pc.png",
+   "crop": {
+    "x": 0.675,
+    "y": 0.826,
+    "w": 0.22,
+    "h": 0.062
+   },
+   "masks": [],
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-1327/01-course-list.webp",
+   "source": "public/docs/files/cs-figma/클래스인-학생-대리등록-코스-입장.png",
+   "crop": {
+    "x": 0.175,
+    "y": 0.031,
+    "w": 0.505,
+    "h": 0.075
+   },
+   "masks": [],
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-1327/05-multiple-students.webp",
+   "source": "public/docs/files/cs-figma/클래스인-학생-대리등록-코스-입장.png",
+   "crop": {
+    "x": 0.333,
+    "y": 0.655,
+    "w": 0.334,
+    "h": 0.091
+   },
+   "masks": [
+    {
+     "x": 0.19,
+     "y": 0.465,
+     "w": 0.28,
+     "h": 0.115,
+     "style": "blur",
+     "reason": "학생 휴대폰 번호"
+    }
+   ],
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-1327/06-import-from-text.webp",
+   "source": "public/docs/files/cs-figma/클래스인-학생-대리등록-코스-입장.png",
+   "crop": {
+    "x": 0.14,
+    "y": 0.815,
+    "w": 0.54,
+    "h": 0.105
+   },
+   "masks": [],
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-350/01-course-list.webp",
+   "source": "public/docs/files/cs-figma/웹-라이브-사용-방법-안내-대시보드.png",
+   "crop": {
+    "x": 0.115,
+    "y": 0.031,
+    "w": 0.505,
+    "h": 0.074
+   },
+   "masks": [],
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-350/02-create-lesson-recording.webp",
+   "source": "public/docs/files/cs-figma/웹-라이브-사용-방법-안내-대시보드.png",
+   "crop": {
+    "x": 0.16,
+    "y": 0.197,
+    "w": 0.49,
+    "h": 0.099
+   },
+   "masks": [],
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-350/03-web-live-options.webp",
+   "source": "public/docs/files/cs-figma/웹-라이브-사용-방법-안내-대시보드.png",
+   "crop": {
+    "x": 0.365,
+    "y": 0.373,
+    "w": 0.285,
+    "h": 0.099
+   },
+   "masks": [],
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-350/04-share-link-qr.webp",
+   "source": "public/docs/files/cs-figma/웹-라이브-사용-방법-안내-대시보드.png",
+   "crop": {
+    "x": 0.13,
+    "y": 0.519,
+    "w": 0.55,
+    "h": 0.061
+   },
+   "masks": [],
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-350/05-live-replay-data.webp",
+   "source": "public/docs/files/cs-figma/웹-라이브-사용-방법-안내-대시보드.png",
+   "crop": {
+    "x": 0.12,
+    "y": 0.663,
+    "w": 0.815,
+    "h": 0.117
+   },
+   "masks": [],
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-350/06-web-live-settings.webp",
+   "source": "public/docs/files/cs-figma/웹-라이브-사용-방법-안내-대시보드.png",
+   "crop": {
+    "x": 0.115,
+    "y": 0.838,
+    "w": 0.785,
+    "h": 0.072
+   },
+   "masks": [],
+   "maxWidth": 1200
+  }
+ ]
+}

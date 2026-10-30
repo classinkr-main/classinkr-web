@@ -1,1 +1,59 @@
-{ "shots": [] }
+{
+ "shots": [
+  {
+   "out": "/docs/files/guides/cs-figma-digest-1081/01-sidebar-blackboard.webp",
+   "source": "public/docs/files/cs-figma/수업중-링크-자료-사용-브라우저-즐겨찾기.png",
+   "crop": {
+    "x": 0.172,
+    "y": 0.05,
+    "w": 0.43,
+    "h": 0.1
+   },
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-1081/02-class-tools-browser.webp",
+   "source": "public/docs/files/cs-figma/수업중-링크-자료-사용-브라우저-즐겨찾기.png",
+   "crop": {
+    "x": 0.44,
+    "y": 0.248,
+    "w": 0.39,
+    "h": 0.128
+   },
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-1081/03-paste-link-sound-share.webp",
+   "source": "public/docs/files/cs-figma/수업중-링크-자료-사용-브라우저-즐겨찾기.png",
+   "crop": {
+    "x": 0.172,
+    "y": 0.428,
+    "w": 0.658,
+    "h": 0.126
+   },
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-1081/04-favorite-star.webp",
+   "source": "public/docs/files/cs-figma/수업중-링크-자료-사용-브라우저-즐겨찾기.png",
+   "crop": {
+    "x": 0.172,
+    "y": 0.618,
+    "w": 0.658,
+    "h": 0.132
+   },
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-1081/05-my-collection.webp",
+   "source": "public/docs/files/cs-figma/수업중-링크-자료-사용-브라우저-즐겨찾기.png",
+   "crop": {
+    "x": 0.172,
+    "y": 0.81,
+    "w": 0.658,
+    "h": 0.13
+   },
+   "maxWidth": 1200
+  }
+ ]
+}
