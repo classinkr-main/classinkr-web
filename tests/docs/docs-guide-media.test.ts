@@ -51,7 +51,7 @@ describe("docs guide media map", () => {
   it("records every guide image in a shot spec", () => {
     const specDir = path.join("scripts", "docs-guide-shots")
     const specOuts = new Set<string>()
-    for (const group of ["start", "admin", "teacher", "student", "product", "troubleshooting", "troubleshooting-recording", "cs-usage"]) {
+    for (const group of ["start", "admin", "teacher", "student", "product", "troubleshooting", "troubleshooting-recording", "cs-usage", "cs-usage-2", "cs-usage-3", "cs-usage-4", "cs-usage-5", "public-extra"]) {
       const file = path.join(specDir, `${group}.json`)
       const spec = JSON.parse(readFileSync(file, "utf8")) as { shots: { out: string }[] }
       for (const shot of spec.shots) specOuts.add(shot.out)

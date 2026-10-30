@@ -10,7 +10,12 @@ import type { DocMedia } from "@/lib/docs"
 import type { GuideMediaMap } from "@/lib/docs-guide-media/types"
 import { ADMIN_GUIDE_MEDIA } from "@/lib/docs-guide-media/admin"
 import { CS_USAGE_GUIDE_MEDIA } from "@/lib/docs-guide-media/cs-usage"
+import { CS_USAGE_2_GUIDE_MEDIA } from "@/lib/docs-guide-media/cs-usage-2"
+import { CS_USAGE_3_GUIDE_MEDIA } from "@/lib/docs-guide-media/cs-usage-3"
+import { CS_USAGE_4_GUIDE_MEDIA } from "@/lib/docs-guide-media/cs-usage-4"
+import { CS_USAGE_5_GUIDE_MEDIA } from "@/lib/docs-guide-media/cs-usage-5"
 import { PRODUCT_GUIDE_MEDIA } from "@/lib/docs-guide-media/product"
+import { PUBLIC_EXTRA_GUIDE_MEDIA } from "@/lib/docs-guide-media/public-extra"
 import { START_GUIDE_MEDIA } from "@/lib/docs-guide-media/start"
 import { STUDENT_GUIDE_MEDIA } from "@/lib/docs-guide-media/student"
 import { TEACHER_GUIDE_MEDIA } from "@/lib/docs-guide-media/teacher"
@@ -28,6 +33,11 @@ const GROUPS: GuideMediaMap[] = [
   TROUBLESHOOTING_GUIDE_MEDIA,
   TROUBLESHOOTING_RECORDING_GUIDE_MEDIA,
   CS_USAGE_GUIDE_MEDIA,
+  CS_USAGE_2_GUIDE_MEDIA,
+  CS_USAGE_3_GUIDE_MEDIA,
+  CS_USAGE_4_GUIDE_MEDIA,
+  CS_USAGE_5_GUIDE_MEDIA,
+  PUBLIC_EXTRA_GUIDE_MEDIA,
 ]
 
 function mergeGroups(groups: GuideMediaMap[]): GuideMediaMap {
