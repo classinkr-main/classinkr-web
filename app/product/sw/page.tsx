@@ -468,8 +468,6 @@ const CINEMATIC_CASES = [
         accentBg: "bg-[#ECFDF5]",
         accentText: "text-[#084734]",
         accentBorder: "border-[#D1FAE5]",
-        num: "교안 공유",
-        numLabel: "강사 온보딩 지원",
     },
     {
         index: "02",
