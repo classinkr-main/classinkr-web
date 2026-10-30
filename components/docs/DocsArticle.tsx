@@ -40,7 +40,7 @@ function formatDashTitle(title: ReactNode) {
 
 // 단계 문장 안의 마크다운 링크 `[글](/docs/...)` 와 굵게 `**글**` 만 살린다.
 // `[업그레이드]` 처럼 괄호 주소가 없는 대괄호는 화면 버튼 이름이라 그대로 둔다.
-// 주소는 본문 렌더러와 같은 규칙(sanitizePublicUrl: /경로·#앵커·http(s))만 링크로 만들고, 나머지는 글자 그대로 둔다.
+// 주소는 /경로·#앵커·http(s)(sanitizePublicUrl 통과)·mailto: 만 링크로 만들고, 나머지는 글자 그대로 둔다.
 const INLINE_MARKDOWN_PATTERN = /\[([^\]]+)\]\(([^)\s]+)\)|\*\*([^*]+)\*\*/g
 
 const INLINE_LINK_CLASS =
@@ -55,11 +55,19 @@ function renderInlineMarkdown(text: string): ReactNode {
         if (start > lastIndex) parts.push(text.slice(lastIndex, start))
 
         const [whole, linkText, rawHref, boldText] = match
-        const href = rawHref ? (rawHref.startsWith("#") ? rawHref : sanitizePublicUrl(rawHref, "")) : ""
+        const href = !rawHref
+            ? ""
+            : rawHref.startsWith("#") || /^mailto:[^\s]+$/.test(rawHref)
+                ? rawHref
+                : sanitizePublicUrl(rawHref, "")
         if (linkText && href) {
             const isInternal = href.startsWith("/") || href.startsWith("#")
             parts.push(
-                isInternal ? (
+                href.startsWith("mailto:") ? (
+                    <a key={start} href={href} className={INLINE_LINK_CLASS}>
+                        {linkText}
+                    </a>
+                ) : isInternal ? (
                     <Link key={start} href={href} className={INLINE_LINK_CLASS}>
                         {linkText}
                     </Link>

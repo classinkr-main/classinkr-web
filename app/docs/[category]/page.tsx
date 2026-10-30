@@ -23,11 +23,11 @@ import {
   type DocListKind,
 } from "@/lib/docs-list-meta"
 import { createPublicMetadata } from "@/lib/seo"
+import { searchDocs } from "@/lib/docs-search"
 
 import {
   getDocsCategoryNavItems,
   readQuery,
-  scoreDocsArticle,
   toArticleSummary,
   withSearchNoIndex,
   type DocsSearchParams,
@@ -127,12 +127,9 @@ export default async function DocsCategoryPage({
   const docs = getDocsByCategoryFromContent(docsContent, categoryParam)
   const articleSummaries = docs.map((doc) => toArticleSummary(doc, docsContent.categories))
   const query = q.toLowerCase()
+  // 검색 화면(/docs/search)과 같은 함수로 거른다 — 1위보다 훨씬 약하게 스친 문서는 빠진다.
   const filteredDocs = query
-    ? articleSummaries
-        .map((doc) => ({ doc, score: scoreDocsArticle(doc, query) }))
-        .filter((item) => item.score > 0)
-        .sort((a, b) => b.score - a.score)
-        .map((item) => item.doc)
+    ? searchDocs(articleSummaries, q, { details: false }).map((result) => result.doc)
     : articleSummaries
   const searchFallbackHref = q ? `/docs/search?q=${encodeURIComponent(q)}` : "/docs/search"
   const categoryTabs = getDocsCategoryNavItems(docsContent, categoryParam)

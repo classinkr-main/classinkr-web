@@ -18,6 +18,7 @@ import {
 import { getDocsContent } from "@/lib/docs-content"
 import { pickRecentlyUpdated } from "@/lib/docs-list-meta"
 import { createPublicMetadata } from "@/lib/seo"
+import { searchDocs } from "@/lib/docs-search"
 import { TrackedLink } from "@/components/TrackedLink"
 import type { DocsArticleSummary } from "@/components/docs"
 import { DocsSearchLogger } from "@/components/docs/DocsSearchLogger"
@@ -38,7 +39,6 @@ import {
   getInstallGuideLinks,
   getTroubleshootingLinks,
   readQuery,
-  scoreDocsArticle,
   withSearchNoIndex,
   type DocsSearchParams,
 } from "./_utils"
@@ -161,13 +161,8 @@ export default async function DocsHomePage({ searchParams }: DocsHomePageProps) 
   const docsContent = await getDocsContent()
   const allDocs = getAllDocsSummaries(docsContent)
   const query = q.toLowerCase()
-  const searchResults = query
-    ? allDocs
-        .map((doc) => ({ doc, score: scoreDocsArticle(doc, query) }))
-        .filter((item) => item.score > 0)
-        .sort((a, b) => b.score - a.score)
-        .map((item) => item.doc)
-    : []
+  // 검색 화면(/docs/search)과 같은 함수로 거른다 — 1위보다 훨씬 약하게 스친 문서는 빠진다.
+  const searchResults = query ? searchDocs(allDocs, q, { details: false }).map((result) => result.doc) : []
 
   const intentCards = getGuideIntentCards(docsContent)
   const productTiles = getGuideProductTiles(docsContent)

@@ -132,7 +132,10 @@ describe("단계 문장", () => {
           {
             id: "section-1",
             title: "주소",
-            checklist: [{ label: "[누르기](javascript:alert(1)) 와 **굵게**" }],
+            checklist: [
+              { label: "[누르기](javascript:alert(1)) 와 **굵게**" },
+              { label: "[메일 보내기](mailto:help@example.com) 로 문의합니다." },
+            ],
           },
         ]}
       />
@@ -141,6 +144,7 @@ describe("단계 문장", () => {
     expect(html).not.toMatch(/href="javascript/)
     expect(html).toContain("[누르기](javascript:alert(1))")
     expect(html).toContain("<strong")
+    expect(html).toContain('href="mailto:help@example.com"')
   })
 
   it("섹션 링크 복사 버튼은 켰을 때만 그린다", () => {
