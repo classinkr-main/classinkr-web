@@ -1,1 +1,159 @@
-{ "shots": [] }
+{
+  "shots": [
+    {
+      "out": "/docs/files/guides/cs-figma-digest-1035/03-add-teacher-form.webp",
+      "source": "public/docs/files/cs-figma/대시보드에서-교사-변경.png",
+      "crop": {
+        "x": 0.742,
+        "y": 0.511,
+        "w": 0.205,
+        "h": 0.114
+      },
+      "masks": [],
+      "maxWidth": 700
+    },
+    {
+      "out": "/docs/files/guides/cs-figma-digest-1035/04-set-homeroom-teacher.webp",
+      "source": "public/docs/files/cs-figma/대시보드에서-교사-변경.png",
+      "crop": {
+        "x": 0.135,
+        "y": 0.695,
+        "w": 0.775,
+        "h": 0.085
+      },
+      "masks": [
+        {
+          "x": 0.8,
+          "y": 0.0,
+          "w": 0.17,
+          "h": 0.11,
+          "style": "blur",
+          "reason": "관리자 계정명"
+        },
+        {
+          "x": 0.0,
+          "y": 0.3,
+          "w": 0.3,
+          "h": 0.25,
+          "style": "blur",
+          "reason": "교사 이름"
+        }
+      ],
+      "maxWidth": 1200
+    },
+    {
+      "out": "/docs/files/guides/cs-figma-digest-1151/01-course-list.webp",
+      "source": "public/docs/files/cs-figma/코스-내-수업-온스테이지-옵션-변경.png",
+      "crop": {
+        "x": 0.135,
+        "y": 0.012,
+        "w": 0.745,
+        "h": 0.172
+      },
+      "masks": [
+        {
+          "x": 0.7,
+          "y": 0.0,
+          "w": 0.22,
+          "h": 0.08,
+          "style": "blur",
+          "reason": "관리자 계정명"
+        },
+        {
+          "x": 0.18,
+          "y": 0.47,
+          "w": 0.17,
+          "h": 0.53,
+          "style": "blur",
+          "reason": "코스 이름(강사 이름 포함)"
+        }
+      ],
+      "maxWidth": 1200
+    },
+    {
+      "out": "/docs/files/guides/cs-figma-digest-1151/02-lesson-edit-menu.webp",
+      "source": "public/docs/files/cs-figma/코스-내-수업-온스테이지-옵션-변경.png",
+      "crop": {
+        "x": 0.17,
+        "y": 0.228,
+        "w": 0.67,
+        "h": 0.19
+      },
+      "masks": [
+        {
+          "x": 0.7,
+          "y": 0.0,
+          "w": 0.22,
+          "h": 0.07,
+          "style": "blur",
+          "reason": "관리자 계정명"
+        },
+        {
+          "x": 0.07,
+          "y": 0.07,
+          "w": 0.22,
+          "h": 0.07,
+          "style": "blur",
+          "reason": "코스 이름"
+        },
+        {
+          "x": 0.13,
+          "y": 0.4,
+          "w": 0.16,
+          "h": 0.6,
+          "style": "blur",
+          "reason": "수업 이름"
+        }
+      ],
+      "maxWidth": 1200
+    },
+    {
+      "out": "/docs/files/guides/cs-figma-digest-1151/03-lesson-edit-stage-off.webp",
+      "source": "public/docs/files/cs-figma/코스-내-수업-온스테이지-옵션-변경.png",
+      "crop": {
+        "x": 0.28,
+        "y": 0.465,
+        "w": 0.41,
+        "h": 0.175
+      },
+      "masks": [],
+      "maxWidth": 600
+    },
+    {
+      "out": "/docs/files/guides/cs-figma-digest-1239/01-classroom-device-menu.webp",
+      "source": "public/docs/files/cs-figma/클래스인-마이크-활성화-비활성화-학원e.png",
+      "crop": {
+        "x": 0.25,
+        "y": 0.071,
+        "w": 0.3,
+        "h": 0.08
+      },
+      "masks": [],
+      "maxWidth": 700
+    },
+    {
+      "out": "/docs/files/guides/cs-figma-digest-1239/02-mic-settings.webp",
+      "source": "public/docs/files/cs-figma/클래스인-마이크-활성화-비활성화-학원e.png",
+      "crop": {
+        "x": 0.04,
+        "y": 0.307,
+        "w": 0.525,
+        "h": 0.262
+      },
+      "masks": [],
+      "maxWidth": 1000
+    },
+    {
+      "out": "/docs/files/guides/cs-figma-digest-1239/03-camera-settings.webp",
+      "source": "public/docs/files/cs-figma/클래스인-마이크-활성화-비활성화-학원e.png",
+      "crop": {
+        "x": 0.055,
+        "y": 0.64,
+        "w": 0.51,
+        "h": 0.295
+      },
+      "masks": [],
+      "maxWidth": 1000
+    }
+  ]
+}

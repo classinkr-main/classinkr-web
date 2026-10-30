@@ -1,1 +1,64 @@
-{ "shots": [] }
+{
+  "shots": [
+    {
+      "out": "/docs/files/guides/customer-stories/01-cheongju-korean-classroom.webp",
+      "source": "public/images/case-studies/cheongju-imisook-korean-v3.jpg",
+      "crop": { "x": 0, "y": 0.28, "w": 1, "h": 0.72 },
+      "masks": [],
+      "maxWidth": 768
+    },
+    {
+      "out": "/docs/files/guides/customer-stories/02-busan-science-class.webp",
+      "source": "public/images/case-studies/busan-gwasaram.jpg",
+      "crop": { "x": 0.38, "y": 0.05, "w": 0.54, "h": 0.63 },
+      "masks": [
+        { "x": 0.2463, "y": 0.5714, "w": 0.087, "h": 0.1429, "style": "blur", "reason": "학생 얼굴(옆모습)" }
+      ],
+      "maxWidth": 1200
+    },
+    {
+      "out": "/docs/files/guides/customer-stories/03-daechi-board-answers.webp",
+      "source": "public/images/case-studies/daechi-sejeong.webp",
+      "crop": { "x": 0.22, "y": 0.1, "w": 0.62, "h": 0.55 },
+      "masks": [
+        { "x": 0.5677, "y": 0.3382, "w": 0.2065, "h": 0.0255, "style": "blur", "reason": "칠판 화면의 학생 이름·번호" },
+        { "x": 0.5677, "y": 0.4636, "w": 0.2645, "h": 0.0491, "style": "blur", "reason": "칠판 화면의 학생 이름·번호" },
+        { "x": 0.5677, "y": 0.6182, "w": 0.1742, "h": 0.0618, "style": "blur", "reason": "칠판 화면의 학생 이름·번호" },
+        { "x": 0.7581, "y": 0.5727, "w": 0.0355, "h": 0.0273, "style": "blur", "reason": "칠판 화면의 학생 이름" },
+        { "x": 0.7548, "y": 0.1909, "w": 0.0274, "h": 0.0236, "style": "blur", "reason": "칠판 화면의 학생 이름" },
+        { "x": 0.0565, "y": 0.6818, "w": 0.0403, "h": 0.0727, "style": "blur", "reason": "학생 얼굴(옆모습)" }
+      ],
+      "maxWidth": 1200
+    },
+    {
+      "out": "/docs/files/guides/customer-stories/04-online-game-activity.webp",
+      "source": "public/images/case-studies/online-12inedu.jpg",
+      "masks": [
+        { "x": 0.215, "y": 0.03, "w": 0.58, "h": 0.155, "style": "blur", "reason": "수업 참여자 영상(얼굴)" },
+        { "x": 0.04, "y": 0.22, "w": 0.075, "h": 0.09, "style": "blur", "reason": "학생 이름 손글씨" },
+        { "x": 0.045, "y": 0.84, "w": 0.09, "h": 0.1, "style": "blur", "reason": "학생 이름 손글씨" },
+        { "x": 0.86, "y": 0.86, "w": 0.085, "h": 0.09, "style": "blur", "reason": "학생 이름 손글씨" }
+      ],
+      "maxWidth": 1200
+    },
+    {
+      "out": "/docs/files/guides/customer-stories/05-cheonan-hybrid-classroom.webp",
+      "source": "public/images/case-studies/cheonan-jayscan.jpg",
+      "masks": [],
+      "maxWidth": 1200
+    },
+    {
+      "out": "/docs/files/guides/company-overview/01-eeo-product-family.webp",
+      "source": "public/images/brand/eeo-family.png",
+      "crop": { "x": 0.18, "y": 0, "w": 0.64, "h": 1 },
+      "masks": [],
+      "maxWidth": 1200
+    },
+    {
+      "out": "/docs/files/guides/hardware-spec-installation-faq/01-lineup-sizes.webp",
+      "source": "public/images/product/hw/lineup/lineup-all-sizes.png",
+      "masks": [],
+      "maxWidth": 1200
+    }
+  ]
+}

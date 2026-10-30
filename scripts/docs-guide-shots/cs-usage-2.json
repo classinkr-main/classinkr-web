@@ -215,6 +215,162 @@
     }
    ],
    "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-859/01-mobile-home-course.webp",
+   "source": "public/docs/files/cs-figma/group-3.png",
+   "crop": {
+    "x": 0.0,
+    "y": 0.0,
+    "w": 0.25,
+    "h": 1.0
+   },
+   "masks": [],
+   "maxWidth": 560
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-961/01-shared-drive-menu.webp",
+   "source": "public/docs/files/cs-figma/기관-공유-드라이브-접근-권한-부여-수업-활용-저장-x-1.png",
+   "crop": {
+    "x": 0.16,
+    "y": 0.079,
+    "w": 0.66,
+    "h": 0.066
+   },
+   "masks": [],
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-961/02-invite-member.webp",
+   "source": "public/docs/files/cs-figma/기관-공유-드라이브-접근-권한-부여-수업-활용-저장-x-1.png",
+   "crop": {
+    "x": 0.408,
+    "y": 0.334,
+    "w": 0.244,
+    "h": 0.098
+   },
+   "masks": [],
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-961/03-select-teacher.webp",
+   "source": "public/docs/files/cs-figma/기관-공유-드라이브-접근-권한-부여-수업-활용-저장-x-1.png",
+   "crop": {
+    "x": 0.405,
+    "y": 0.565,
+    "w": 0.24,
+    "h": 0.1
+   },
+   "masks": [],
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-961/04-read-only.webp",
+   "source": "public/docs/files/cs-figma/기관-공유-드라이브-접근-권한-부여-수업-활용-저장-x-1.png",
+   "crop": {
+    "x": 0.43,
+    "y": 0.79,
+    "w": 0.315,
+    "h": 0.09
+   },
+   "masks": [],
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-194/01-lesson-options.webp",
+   "source": "public/docs/files/cs-figma/학원a-로컬-녹화-녹화수업-업로드.png",
+   "crop": {
+    "x": 0.075,
+    "y": 0.068,
+    "w": 0.395,
+    "h": 0.177
+   },
+   "masks": [],
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-194/02-enter-classroom.webp",
+   "source": "public/docs/files/cs-figma/학원a-로컬-녹화-녹화수업-업로드.png",
+   "crop": {
+    "x": 0.53,
+    "y": 0.068,
+    "w": 0.39,
+    "h": 0.177
+   },
+   "masks": [],
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-194/03-device-check.webp",
+   "source": "public/docs/files/cs-figma/학원a-로컬-녹화-녹화수업-업로드.png",
+   "crop": {
+    "x": 0.075,
+    "y": 0.31,
+    "w": 0.245,
+    "h": 0.13
+   },
+   "masks": [],
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-194/04-recording-notice.webp",
+   "source": "public/docs/files/cs-figma/학원a-로컬-녹화-녹화수업-업로드.png",
+   "crop": {
+    "x": 0.66,
+    "y": 0.352,
+    "w": 0.13,
+    "h": 0.076
+   },
+   "masks": [],
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-194/05-pc-camera-record-now.webp",
+   "source": "public/docs/files/cs-figma/학원a-로컬-녹화-녹화수업-업로드.png",
+   "crop": {
+    "x": 0.115,
+    "y": 0.533,
+    "w": 0.33,
+    "h": 0.132
+   },
+   "masks": [],
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-194/06-pc-recording-icon.webp",
+   "source": "public/docs/files/cs-figma/학원a-로컬-녹화-녹화수업-업로드.png",
+   "crop": {
+    "x": 0.625,
+    "y": 0.565,
+    "w": 0.205,
+    "h": 0.1
+   },
+   "masks": [],
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-194/07-board-camera-record-now.webp",
+   "source": "public/docs/files/cs-figma/학원a-로컬-녹화-녹화수업-업로드.png",
+   "crop": {
+    "x": 0.075,
+    "y": 0.763,
+    "w": 0.395,
+    "h": 0.177
+   },
+   "masks": [],
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-194/08-board-recording-icon.webp",
+   "source": "public/docs/files/cs-figma/학원a-로컬-녹화-녹화수업-업로드.png",
+   "crop": {
+    "x": 0.56,
+    "y": 0.77,
+    "w": 0.33,
+    "h": 0.165
+   },
+   "masks": [],
+   "maxWidth": 1200
   }
  ]
 }
