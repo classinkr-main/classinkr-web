@@ -224,6 +224,10 @@ function sanitizeCsFigmaAudience(value: string): string {
 
 const CS_FIGMA_RELATED_SLUGS = ["app-capabilities-map", "classroom-basic-setup", "course-activities"]
 
+// 주의/팁 중 안내 내용이 아니라 캡처 작업 상태를 적은 메모(빈 자리, 흐림 처리, 내보내기 등)를 고른다.
+const CS_FIGMA_CAPTURE_NOTE_RE =
+  /플레이스홀더|export|순수\s*UI\s*스크린샷|원본\s*이미지|블러\s*처리|예시\s*캡처값|강조\s*표현\s*:/i
+
 function getCsFigmaProductArea(guide: CsFigmaGuide): DocArticleProductArea {
   return guide.category === "admin"
     ? "admin"
@@ -341,11 +345,24 @@ export function buildCsFigmaDocArticle(
     ...guide.deepDive
       // 위 "순서대로 따라 하기"와 중복되는 단계 안내 레벨은 제외한다.
       .filter((item) => !/순서\s*그대로\s*안내/.test(item.title))
-      .map((item) => ({
-        heading: sanitizeCsFigmaText(item.title),
-        body: sanitizeCsFigmaText(item.body),
-        steps: item.checks.map(sanitizeCsFigmaText).filter(Boolean),
-      })),
+      // 단계별 사진으로 바꾼 문서에서는 원본 합성 캡처를 글로 옮긴 설명이 더는 화면과 맞지 않는다.
+      .filter((item) => !(hasMaskedStepPhotos && /화면\s*기준\s*확인/.test(item.title)))
+      .map((item): DocSection => {
+        const checks = item.checks.map(sanitizeCsFigmaText).filter(Boolean)
+        if (hasMaskedStepPhotos && /주의사항/.test(item.title)) {
+          return {
+            heading: "주의사항과 참고",
+            body: "",
+            steps: checks.filter((check) => !CS_FIGMA_CAPTURE_NOTE_RE.test(check)),
+          }
+        }
+        return {
+          heading: sanitizeCsFigmaText(item.title),
+          body: sanitizeCsFigmaText(item.body),
+          steps: checks,
+        }
+      })
+      .filter((section) => Boolean(section.body) || (section.steps?.length ?? 0) > 0),
   ]
 
   return {

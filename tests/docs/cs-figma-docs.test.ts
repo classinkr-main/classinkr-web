@@ -13,17 +13,29 @@ describe("CS Figma docs", () => {
       visibility: "unlisted",
       noindex: true,
     })
-    expect(doc?.sections.map((section) => section.heading)).toEqual(
-      expect.arrayContaining([
-        "순서대로 따라 하기",
-        "화면 기준 확인",
-        "주의사항과 안내 화면",
-      ])
-    )
+    // 단계별 사진이 붙은 문서라 합성 캡처를 글로 옮긴 "화면 기준 확인"은 빠지고, 캡처 작업 메모도 걸러진다.
+    const headings = doc?.sections.map((section) => section.heading) ?? []
+    expect(headings).toEqual(expect.arrayContaining(["순서대로 따라 하기", "주의사항과 참고"]))
+    expect(headings).not.toContain("화면 기준 확인")
+    const notes = doc?.sections.find((section) => section.heading === "주의사항과 참고")?.steps ?? []
+    expect(notes.length).toBeGreaterThan(0)
+    for (const note of notes) {
+      expect(note).not.toMatch(/플레이스홀더|export|블러\s*처리|원본\s*이미지/)
+    }
     expect(doc?.sections[0]?.steps).toEqual(
       expect.arrayContaining([
         expect.stringContaining("코스 가입 허용"),
       ])
+    )
+  })
+
+  it("keeps the screen description for generated guides without step photos", () => {
+    const guide = CS_FIGMA_GUIDES.find((item) => item.docSlug === "cs-figma-digest-1195")
+    expect(guide).toBeTruthy()
+
+    const doc = buildCsFigmaDocArticle({ ...guide!, docSlug: "cs-test-generated-without-step-photos" })
+    expect(doc.sections.map((section) => section.heading)).toEqual(
+      expect.arrayContaining(["순서대로 따라 하기", "화면 기준 확인", "주의사항과 안내 화면"])
     )
   })
 
