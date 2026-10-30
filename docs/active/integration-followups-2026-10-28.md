@@ -120,3 +120,45 @@ PR #34·#38·#39·#40·#41·#42·#44 의 내용은 모두 이 통합 브랜치�
 - 닫을 PR: #34 #38 #39 #40 #41 #42 #44(내용이 #45 에 포함), #28(재구성 필요)
 - 지워도 되는 브랜치: #45 가 포함한 19개, `hw-process-*` 4개, `cloud_10.0.2`
 
+
+---
+
+## 8. 2026-10-30 운영 배포 완료 — PR #48
+
+§7 의 배포 절차 1~5 단계를 마쳤다. 운영은 `main@58ed2237`(PR #48 머지)이다.
+
+### 8-1. 브랜치 판정(원격·로컬 30개, 내용 기준)
+
+브랜치마다 분석 1회 + 병합 권고마다 반박 검토 1회. 스쿼시 병합 때문에 커밋 수가 부풀려지므로 `git cherry`·내용 diff·`git merge-tree` 로 판정했다.
+
+| 판정 | 브랜치 | 처리 |
+|---|---|---|
+| 병합 | `claude/compassionate-brown-u5w0sj`(이 문서 §7), `claude/blissful-gates-t60cit`(후킹 루프 10-30), 로컬 `claude/adoring-chandrasekhar-0f1d9b`(정직성·개인정보 핫픽스 3건, 충돌 해소해 cherry-pick), `claude/beautiful-tesla-7d342h`(멀티터치 사진 삭제) | PR #48 |
+| 작업 중이라 보류 | `cloud_10.3`(어드민 콘텐츠 「한눈에」, PR 없음), `claude/dreamy-wright-k65ld4`(PR #47, 가이드 사진 개인정보 가림 진행 중) | 담당 세션이 끝나면 병합 |
+| 운영자 결정 | `cloud_10.0.4`(초안 PR #46 — 원격 16개 통합, 동의 정책 변경으로 GA4·Meta 측정 감소 포함, `cloud_0923-home4.71(_hard)`·`gallant-maxwell`·보관 v3·v5·`codex/crm-customer-placement-motion` 을 품음), `claude/cool-ramanujan-smpryc`(쇼룸 발표 — 고객사 이름·사진 동의 미확인), `design/p0-foundation`·`design/p1-visual`(공개 사이트 개편), 로컬 `anti10-1`(성격이 다른 작업 묶음) | 결정 대기 |
+| 이미 있음·대체·폐기 | 그 밖 17개(`codex/supabase-korea-cutover`, `codex/remove-unresponded-webhooks`, `claude/confident-mclean`, `claude/relaxed-mcnulty`, `claude/admin-campaign-marketing-eval`, `claude/homepage-crm-routes-display`, `claude/claude-instructions-agent-review`, `claude/admiring-dirac`(PR #28 — 20개 파일 충돌, 다시 구현 필요), `worktree-cleanup-dead-json-crud`, 로컬 `2.27`·`2.28`·`2.6_MOONI`·`admin-3.0`·`worktree-agent-*` 등) | 병합하지 않음 |
+
+핫픽스 충돌 해소 원칙: 10-28 이후 `main` 이 고친 홈 섹션·FAQ·사례 문구는 `main` 을 따르고, 핫픽스에서는 출처 없는 수치 삭제와 국가 수(150 → 160, "EEO 공식 소개 기준")만 가져왔다. 핫픽스가 지운 `setPhase(3)` 은 되살렸다(그대로면 `/product/sw` 고민→해결 섹션의 통계 카드·CTA 가 영영 안 뜬다).
+
+### 8-2. 운영 적용
+
+| 항목 | 결과 |
+|---|---|
+| 마이그레이션 | `20261028_branch_sync_runs_runtime` → `20261023_distributor_settlements` → `20261028_blog_posts_content_updated_at`(배포 직전) 적용. `20261023_branch_rev_sheet_writes` 는 이미 적용돼 있었다. 상세는 [DB 마이그레이션 런북](./db-migration-runbook.md) 2026-10-30 적용 기록 |
+| Vercel 운영 env | 추가: `NEXT_PUBLIC_GA4_MEASUREMENT_ID=G-6MWTJ8C0L2`(라이브가 이미 `NEXT_PUBLIC_GA_ID` 폴백으로 쓰던 값), `NEXT_PUBLIC_SITE_URL=https://classin.co.kr`(없으면 자동 발송 메일에 수신 거부 링크가 빠진다). **아직 없음**: `GOOGLE_SITE_VERIFICATION`, `NAVER_SITE_VERIFICATION`, `NEXT_PUBLIC_NAVER_WCS_ID`, `NEXT_PUBLIC_NAVER_LEAD_CONVERSION_TYPE` — 각 콘솔 값이 필요 |
+| 운영 배포 | `dpl_Cxkq2VVURjUwCMsgCQVzJTTo3hNa`(main `58ed2237`) READY, `classin.co.kr`·`classin.ai.kr`·`classinkr-web.vercel.app` 연결. 되돌릴 곳: `dpl_A1C32wRuCTswNFAgYuSagAi5Ka2e`(`1b679864`, 10-28) |
+| GTM | 컨테이너 `GTM-PJH3SWVL` 은 버전 1·태그 0개 — [콘솔 런북](./seo-analytics-console-runbook-2026-10-28.md) §6 의 이중 집계 걱정 없음 |
+
+### 8-3. 라이브 확인(배포 직후)
+
+- §7 4단계: `<title>` 새 문구, Organization `alternateName` 클래스인, SearchAction `/docs/search?q=`, `robots.txt` 의 `Allow: /api/og/`, `sitemap.xml` 의 `/resources`·`/download`(URL 146 → 148) — 전부 확인
+- 핫픽스: `/product/sw` 의 `$63.6M`·`4,000만` 0건, "EEO 공식 소개 기준" 표기, `/contact` 의 "2시간 이내" 0건, IP·전화번호 캡처 `admin-dashboard-source-2.webp`·멀티터치 사진 404
+- 계측(콘솔 런북 §8): 동의 전 GA4 `G-6MWTJ8C0L2` 쿠키 없는 핑(`gcs=G100`)·쿠키 0, 한 화면 `page_view` 1회, `page_location` 에서 `prefill` 제거(`utm_*` 유지), 홈 → 요금 이동 시 `page_view` 1회 + `pricing_view{pricing_surface:"pricing"}` 1회, "필수만 사용" 뒤 동의 전부 denied·쿠키는 `cln_consent` 뿐·Meta·네이버·카카오 요청 없음
+- 실행하지 않은 시나리오: 동의 "수락", 문의·쇼룸·자료 접수(운영 리드가 생긴다), `/share/quote/<토큰>`, 전화 클릭 — 사람이 시크릿 창에서 확인
+
+### 8-4. 남은 일
+
+- GA4 콘솔 설정(콘솔 런북 §5-2~§5-7: 향상된 측정 3개 끄기, 데이터 수정, 맞춤 측정기준 6개, 주요 이벤트 `generate_lead` 하나, 원치 않는 추천·내부 트래픽·보관 14개월·Search Console 연결) — Google 계정 로그인 필요
+- 위 env 4개(서치어드바이저·서치 콘솔·네이버 애널리틱스·검색광고 값) 넣고 재배포
+- 보류 브랜치 결정(8-1), PR #28 닫기 여부, 병합 끝난 원격 브랜치 정리
+- §4 F1~F7·F9·F10(F8 은 PR #48 에서 처리)
