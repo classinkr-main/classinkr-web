@@ -92,7 +92,17 @@
     "w": 0.7375,
     "h": 0.2352
    },
-   "maxWidth": 1200
+   "maxWidth": 1200,
+   "masks": [
+    {
+     "x": 0.48,
+     "y": 0.0,
+     "w": 0.12,
+     "h": 0.02,
+     "style": "blur",
+     "reason": "수업 이름"
+    }
+   ]
   },
   {
    "out": "/docs/files/guides/cs-figma-digest-633/03-billing-overview.webp",
@@ -103,7 +113,26 @@
     "w": 0.6564,
     "h": 0.1329
    },
-   "maxWidth": 1200
+   "maxWidth": 1200,
+   "masks": [
+    {
+     "x": 0.853,
+     "y": 0.0,
+     "w": 0.032,
+     "h": 0.04,
+     "style": "blur",
+     "reason": "기관 로고"
+    },
+    {
+     "x": 0.37,
+     "y": 0.205,
+     "w": 0.2,
+     "h": 0.065,
+     "style": "fill",
+     "color": "#FFFFFF",
+     "reason": "화면 위 안내 글자"
+    }
+   ]
   },
   {
    "out": "/docs/files/guides/cs-figma-digest-940/02-invite-member.webp",
