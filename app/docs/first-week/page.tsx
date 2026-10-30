@@ -10,6 +10,7 @@ import { getAllDocsSummaries, getTroubleshootingLinks } from "../_utils"
 export const metadata: Metadata = {
   title: "첫 7일 수업 준비 가이드",
   description: "관리자와 강사가 클래스인을 설치하고 첫 수업과 다시보기까지 확인하는 순서입니다.",
+  alternates: { canonical: "/docs/first-week" },
 }
 
 const stages = [

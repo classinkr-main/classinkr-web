@@ -60,9 +60,10 @@ interface DocsRelationRow {
   order_index: number | null
 }
 
+// 정적 문서도 DB 와 같은 기준으로 published 만 공개 콘텐츠로 쓴다(draft·review 문서가 정적 병합으로 열리지 않게).
 const staticDocsContent: DocsContent = {
   categories: staticDocsCategories,
-  docs: listStaticDocs(),
+  docs: listStaticDocs().filter((doc) => (doc.status ?? "published") === "published"),
 }
 
 const PUBLISHED_DOC_STATUS_VALUES = ["published", "PUBLISHED"]

@@ -42,8 +42,9 @@ function isTall(item: ZoomItem) {
   return Boolean(item.width && item.height && item.height / item.width >= SCROLL_RATIO)
 }
 
+// display 는 넣지 않는다 — 좁은 화면에서 숨기는 버튼(hidden sm:inline-flex)과 부딪힌다.
 const CONTROL_CLASS =
-  "inline-flex items-center justify-center rounded-[6px] text-white/85 transition-colors duration-150 hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6EE7B7]"
+  "items-center justify-center rounded-[6px] text-white/85 transition-colors duration-150 hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6EE7B7]"
 
 /**
  * 문서 본문의 사진(`a[data-docs-zoom]`)을 눌렀을 때 여는 크게 보기 창.
@@ -228,7 +229,7 @@ export function DocsMediaLightbox({
       aria-describedby={description ? "docs-lightbox-caption" : undefined}
       onClose={handleClose}
       onKeyDown={handleKeyDown}
-      className="fixed inset-0 m-0 h-full max-h-none w-full max-w-none overflow-hidden border-0 bg-[#111110]/[0.97] p-0 text-white backdrop:bg-transparent open:flex open:flex-col print:hidden"
+      className="fixed inset-0 m-0 h-full max-h-none w-full max-w-none overflow-hidden border-0 bg-[#111110] p-0 text-white backdrop:bg-transparent open:flex open:flex-col print:hidden"
     >
       {isOpen && current ? (
         <>
@@ -241,7 +242,7 @@ export function DocsMediaLightbox({
               autoFocus
               onClick={close}
               aria-label="닫기"
-              className={cn(CONTROL_CLASS, "h-11 w-11")}
+              className={cn(CONTROL_CLASS, "inline-flex h-11 w-11")}
             >
               <X className="h-5 w-5" aria-hidden />
             </button>
@@ -328,7 +329,7 @@ export function DocsMediaLightbox({
                 <button
                   type="button"
                   onClick={() => go(-1)}
-                  className={cn(CONTROL_CLASS, "h-11 gap-1 px-3 text-sm font-semibold")}
+                  className={cn(CONTROL_CLASS, "inline-flex h-11 gap-1 px-3 text-sm font-semibold")}
                 >
                   <ChevronLeft className="h-5 w-5" aria-hidden />
                   이전
@@ -336,7 +337,7 @@ export function DocsMediaLightbox({
                 <button
                   type="button"
                   onClick={() => go(1)}
-                  className={cn(CONTROL_CLASS, "h-11 gap-1 px-3 text-sm font-semibold")}
+                  className={cn(CONTROL_CLASS, "inline-flex h-11 gap-1 px-3 text-sm font-semibold")}
                 >
                   다음
                   <ChevronRight className="h-5 w-5" aria-hidden />

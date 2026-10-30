@@ -18,6 +18,7 @@ const staticRoutes: Array<{
 }> = [
   { path: "/", changeFrequency: "weekly", priority: 1, lastModified: "2026-05-20" },
   { path: "/docs", changeFrequency: "weekly", priority: 1, lastModified: "2026-05-20" },
+  { path: "/docs/first-week", changeFrequency: "monthly", priority: 0.7, lastModified: "2026-10-29" },
   { path: "/product", changeFrequency: "weekly", priority: 0.9, lastModified: "2026-05-20" },
   { path: "/product/sw", changeFrequency: "weekly", priority: 0.9, lastModified: "2026-05-20" },
   { path: "/product/hw", changeFrequency: "weekly", priority: 0.9, lastModified: "2026-05-20" },
