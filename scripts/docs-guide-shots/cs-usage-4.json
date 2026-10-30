@@ -54,6 +54,688 @@
     "h": 0.13
    },
    "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-1174/01-course-list.webp",
+   "source": "public/docs/files/cs-figma/코스-내-수업-온스테이지-옵션-변경-대량.png",
+   "crop": {
+    "x": 0.132,
+    "y": 0.011,
+    "w": 0.748,
+    "h": 0.171
+   },
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-1174/02-bulk-seat-setting.webp",
+   "source": "public/docs/files/cs-figma/코스-내-수업-온스테이지-옵션-변경-대량.png",
+   "crop": {
+    "x": 0.262,
+    "y": 0.236,
+    "w": 0.478,
+    "h": 0.172
+   },
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-1174/03-seat-setting-popup.webp",
+   "source": "public/docs/files/cs-figma/코스-내-수업-온스테이지-옵션-변경-대량.png",
+   "crop": {
+    "x": 0.132,
+    "y": 0.462,
+    "w": 0.748,
+    "h": 0.174
+   },
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-1174/04-lesson-edit-check.webp",
+   "source": "public/docs/files/cs-figma/코스-내-수업-온스테이지-옵션-변경-대량.png",
+   "crop": {
+    "x": 0.278,
+    "y": 0.705,
+    "w": 0.444,
+    "h": 0.173
+   },
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-1266/01-classroom-device-cards.webp",
+   "source": "public/docs/files/cs-figma/클래스인-마이크-활성화-비활성화-전자칠판.png",
+   "crop": {
+    "x": 0.037,
+    "y": 0.068,
+    "w": 0.498,
+    "h": 0.163
+   },
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-1266/02-microphone-settings.webp",
+   "source": "public/docs/files/cs-figma/클래스인-마이크-활성화-비활성화-전자칠판.png",
+   "crop": {
+    "x": 0.04,
+    "y": 0.264,
+    "w": 0.477,
+    "h": 0.199
+   },
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-1266/03-camera-settings.webp",
+   "source": "public/docs/files/cs-figma/클래스인-마이크-활성화-비활성화-전자칠판.png",
+   "crop": {
+    "x": 0.19,
+    "y": 0.565,
+    "w": 0.28,
+    "h": 0.1
+   },
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-1266/04-field-recording-camera.webp",
+   "source": "public/docs/files/cs-figma/클래스인-마이크-활성화-비활성화-전자칠판.png",
+   "crop": {
+    "x": 0.025,
+    "y": 0.762,
+    "w": 0.643,
+    "h": 0.218
+   },
+   "masks": [
+    {
+     "x": 0.935,
+     "y": 0.24,
+     "w": 0.065,
+     "h": 0.36,
+     "style": "fill",
+     "reason": "화면 옆 설명 글자",
+     "color": "#FFFFFF"
+    }
+   ],
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-173/01-course-list.webp",
+   "source": "public/docs/files/cs-figma/대시보드-수업-내용-다운로드-및-공유-코스별.png",
+   "crop": {
+    "x": 0.187,
+    "y": 0.018,
+    "w": 0.43,
+    "h": 0.132
+   },
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-173/04-recording-download.webp",
+   "source": "public/docs/files/cs-figma/대시보드-수업-내용-다운로드-및-공유-코스별.png",
+   "crop": {
+    "x": 0.115,
+    "y": 0.587,
+    "w": 0.77,
+    "h": 0.075
+   },
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-173/05-player-download.webp",
+   "source": "public/docs/files/cs-figma/대시보드-수업-내용-다운로드-및-공유-코스별.png",
+   "crop": {
+    "x": 0.125,
+    "y": 0.785,
+    "w": 0.748,
+    "h": 0.159
+   },
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-618/01-answer-status.webp",
+   "source": "public/docs/files/cs-figma/image-6.png",
+   "crop": {
+    "x": 0.028,
+    "y": 0.0,
+    "w": 0.972,
+    "h": 1.0
+   },
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-831/01-course-settings-screen.webp",
+   "source": "public/docs/files/cs-figma/frame-5.png",
+   "crop": {
+    "x": 0.0,
+    "y": 0.0,
+    "w": 1.0,
+    "h": 1.0
+   },
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-919/02-add-sub-account.webp",
+   "source": "public/docs/files/cs-figma/관리자-대시보드-현재-수업-진행-1.png",
+   "crop": {
+    "x": 0.172,
+    "y": 0.588,
+    "w": 0.658,
+    "h": 0.296
+   },
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-1582/01-lesson-materials-icon.webp",
+   "source": "public/docs/files/cs-figma/pdf-다운로드.png",
+   "crop": {
+    "x": 0.077,
+    "y": 0.022,
+    "w": 0.845,
+    "h": 0.162
+   },
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-1582/02-board-materials-tab.webp",
+   "source": "public/docs/files/cs-figma/pdf-다운로드.png",
+   "crop": {
+    "x": 0.15,
+    "y": 0.22,
+    "w": 0.705,
+    "h": 0.158
+   },
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-1582/03-link-icon.webp",
+   "source": "public/docs/files/cs-figma/pdf-다운로드.png",
+   "crop": {
+    "x": 0.15,
+    "y": 0.414,
+    "w": 0.705,
+    "h": 0.156
+   },
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-1582/04-share-page-pdf.webp",
+   "source": "public/docs/files/cs-figma/pdf-다운로드.png",
+   "crop": {
+    "x": 0.077,
+    "y": 0.6,
+    "w": 0.845,
+    "h": 0.165
+   },
+   "masks": [
+    {
+     "x": 0.925,
+     "y": 0.0,
+     "w": 0.075,
+     "h": 0.08,
+     "style": "blur",
+     "reason": "브라우저 프로필"
+    }
+   ],
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-1582/05-pdf-viewer-download.webp",
+   "source": "public/docs/files/cs-figma/pdf-다운로드.png",
+   "crop": {
+    "x": 0.077,
+    "y": 0.8,
+    "w": 0.845,
+    "h": 0.16
+   },
+   "masks": [
+    {
+     "x": 0.925,
+     "y": 0.0,
+     "w": 0.075,
+     "h": 0.08,
+     "style": "blur",
+     "reason": "브라우저 프로필"
+    },
+    {
+     "x": 0.015,
+     "y": 0.05,
+     "w": 0.08,
+     "h": 0.06,
+     "style": "blur",
+     "reason": "자료 출처 이름"
+    },
+    {
+     "x": 0.405,
+     "y": 0.14,
+     "w": 0.56,
+     "h": 0.86,
+     "style": "blur",
+     "reason": "시험지 본문·학원 정보"
+    }
+   ],
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-2161/01-new-activity-exam.webp",
+   "source": "public/docs/files/cs-figma/문제-은행-가이드.png",
+   "crop": {
+    "x": 0.38,
+    "y": 0.0325,
+    "w": 0.49,
+    "h": 0.1075
+   },
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-2161/02-uploaded-next.webp",
+   "source": "public/docs/files/cs-figma/문제-은행-가이드.png",
+   "crop": {
+    "x": 0.12639,
+    "y": 0.4925,
+    "w": 0.74861,
+    "h": 0.1355
+   },
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-299/01-lesson-options.webp",
+   "source": "public/docs/files/cs-figma/미지원교육-현장-녹화-확인.png",
+   "crop": {
+    "x": 0.074,
+    "y": 0.066,
+    "w": 0.396,
+    "h": 0.181
+   },
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-299/02-enter-classroom.webp",
+   "source": "public/docs/files/cs-figma/미지원교육-현장-녹화-확인.png",
+   "crop": {
+    "x": 0.532,
+    "y": 0.066,
+    "w": 0.387,
+    "h": 0.181
+   },
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-299/03-device-test.webp",
+   "source": "public/docs/files/cs-figma/미지원교육-현장-녹화-확인.png",
+   "crop": {
+    "x": 0.075,
+    "y": 0.297,
+    "w": 0.255,
+    "h": 0.113
+   },
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-299/04-recording-alert.webp",
+   "source": "public/docs/files/cs-figma/미지원교육-현장-녹화-확인.png",
+   "crop": {
+    "x": 0.6,
+    "y": 0.32,
+    "w": 0.24,
+    "h": 0.12
+   },
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-299/05-pc-camera-record-now.webp",
+   "source": "public/docs/files/cs-figma/미지원교육-현장-녹화-확인.png",
+   "crop": {
+    "x": 0.11,
+    "y": 0.53,
+    "w": 0.34,
+    "h": 0.125
+   },
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-299/06-board-camera-record-now.webp",
+   "source": "public/docs/files/cs-figma/미지원교육-현장-녹화-확인.png",
+   "crop": {
+    "x": 0.075,
+    "y": 0.769,
+    "w": 0.394,
+    "h": 0.17
+   },
+   "masks": [
+    {
+     "x": 0.31,
+     "y": 0.22,
+     "w": 0.2,
+     "h": 0.26,
+     "style": "blur",
+     "reason": "카메라 화면 속 사람"
+    }
+   ],
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-220/01-lesson-options.webp",
+   "source": "public/docs/files/cs-figma/학원a-수업개설-녹화-활성화-카메라-세팅.png",
+   "crop": {
+    "x": 0.074,
+    "y": 0.066,
+    "w": 0.396,
+    "h": 0.181
+   },
+   "masks": [
+    {
+     "x": 0.6,
+     "y": 0.28,
+     "w": 0.13,
+     "h": 0.075,
+     "style": "blur",
+     "reason": "교사 이름"
+    }
+   ],
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-220/03-device-test.webp",
+   "source": "public/docs/files/cs-figma/학원a-수업개설-녹화-활성화-카메라-세팅.png",
+   "crop": {
+    "x": 0.075,
+    "y": 0.312,
+    "w": 0.255,
+    "h": 0.113
+   },
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-578/01-home-course.webp",
+   "source": "public/docs/files/cs-figma/group-4.png",
+   "crop": {
+    "x": 0.0,
+    "y": 0.0,
+    "w": 0.66,
+    "h": 0.15
+   },
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-578/02-course-ai-speaking.webp",
+   "source": "public/docs/files/cs-figma/group-4.png",
+   "crop": {
+    "x": 0.0,
+    "y": 0.33,
+    "w": 0.85,
+    "h": 0.325
+   },
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-578/03-not-submitted-notify.webp",
+   "source": "public/docs/files/cs-figma/group-4.png",
+   "crop": {
+    "x": 0.2,
+    "y": 0.675,
+    "w": 0.58,
+    "h": 0.27
+   },
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-106/01-course-detail.webp",
+   "source": "public/docs/files/cs-figma/group-19.png",
+   "crop": {
+    "x": 0.0,
+    "y": 0.0,
+    "w": 1.0,
+    "h": 0.58
+   },
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-1558/02-learning-analysis-tab.webp",
+   "source": "public/docs/files/cs-figma/학생-다시보기-기록-확인-대시보드.png",
+   "crop": {
+    "x": 0.135,
+    "y": 0.226,
+    "w": 0.71,
+    "h": 0.08
+   },
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-1558/03-lesson-student-select.webp",
+   "source": "public/docs/files/cs-figma/학생-다시보기-기록-확인-대시보드.png",
+   "crop": {
+    "x": 0.135,
+    "y": 0.409,
+    "w": 0.71,
+    "h": 0.085
+   },
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-1679/01-download-page-installing.webp",
+   "source": "public/docs/files/cs-figma/image-66.png",
+   "crop": {
+    "x": 0.0,
+    "y": 0.0,
+    "w": 1.0,
+    "h": 1.0
+   },
+   "masks": [
+    {
+     "x": 0.74,
+     "y": 0.345,
+     "w": 0.135,
+     "h": 0.057,
+     "style": "blur",
+     "reason": "홍보 이미지 속 인물 얼굴"
+    }
+   ],
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-1764/01-pc-software-info-upgrade.webp",
+   "source": "public/docs/files/cs-figma/클래스인-업데이트-가이드-pc-전자칠판.png",
+   "crop": {
+    "x": 0.128,
+    "y": 0.067,
+    "w": 0.697,
+    "h": 0.199
+   },
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-1863/01-windows-desktop.webp",
+   "source": "public/docs/files/cs-figma/클래스인x-삭제-재설치-전자칠판.png",
+   "crop": {
+    "x": 0.169,
+    "y": 0.0121,
+    "w": 0.65,
+    "h": 0.05
+   },
+   "maxWidth": 960
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-1863/02-start-settings.webp",
+   "source": "public/docs/files/cs-figma/클래스인x-삭제-재설치-전자칠판.png",
+   "crop": {
+    "x": 0.169,
+    "y": 0.0858,
+    "w": 0.65,
+    "h": 0.0546
+   },
+   "maxWidth": 960
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-1863/03-settings-apps.webp",
+   "source": "public/docs/files/cs-figma/클래스인x-삭제-재설치-전자칠판.png",
+   "crop": {
+    "x": 0.169,
+    "y": 0.16,
+    "w": 0.65,
+    "h": 0.0546
+   },
+   "maxWidth": 960
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-1863/04-apps-uninstall.webp",
+   "source": "public/docs/files/cs-figma/클래스인x-삭제-재설치-전자칠판.png",
+   "crop": {
+    "x": 0.169,
+    "y": 0.233,
+    "w": 0.65,
+    "h": 0.0546
+   },
+   "maxWidth": 960
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-1863/05-uninstall-confirm.webp",
+   "source": "public/docs/files/cs-figma/클래스인x-삭제-재설치-전자칠판.png",
+   "crop": {
+    "x": 0.169,
+    "y": 0.3061,
+    "w": 0.65,
+    "h": 0.0546
+   },
+   "maxWidth": 960
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-1863/06-uninstall-local-data.webp",
+   "source": "public/docs/files/cs-figma/클래스인x-삭제-재설치-전자칠판.png",
+   "crop": {
+    "x": 0.169,
+    "y": 0.3849,
+    "w": 0.65,
+    "h": 0.0546
+   },
+   "maxWidth": 960
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-1863/07-search-download.webp",
+   "source": "public/docs/files/cs-figma/클래스인x-삭제-재설치-전자칠판.png",
+   "crop": {
+    "x": 0.169,
+    "y": 0.4565,
+    "w": 0.65,
+    "h": 0.0546
+   },
+   "maxWidth": 960
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-1863/08-download-page.webp",
+   "source": "public/docs/files/cs-figma/클래스인x-삭제-재설치-전자칠판.png",
+   "crop": {
+    "x": 0.169,
+    "y": 0.5298,
+    "w": 0.65,
+    "h": 0.0545
+   },
+   "maxWidth": 960
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-1863/09-classinx-download-64bit.webp",
+   "source": "public/docs/files/cs-figma/클래스인x-삭제-재설치-전자칠판.png",
+   "crop": {
+    "x": 0.169,
+    "y": 0.6066,
+    "w": 0.65,
+    "h": 0.052
+   },
+   "maxWidth": 960
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-1863/10-recent-downloads.webp",
+   "source": "public/docs/files/cs-figma/클래스인x-삭제-재설치-전자칠판.png",
+   "crop": {
+    "x": 0.169,
+    "y": 0.6806,
+    "w": 0.65,
+    "h": 0.0522
+   },
+   "maxWidth": 960
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-1863/11-open-installer.webp",
+   "source": "public/docs/files/cs-figma/클래스인x-삭제-재설치-전자칠판.png",
+   "crop": {
+    "x": 0.169,
+    "y": 0.755,
+    "w": 0.65,
+    "h": 0.052
+   },
+   "maxWidth": 960
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-1863/12-language-korean.webp",
+   "source": "public/docs/files/cs-figma/클래스인x-삭제-재설치-전자칠판.png",
+   "crop": {
+    "x": 0.169,
+    "y": 0.8267,
+    "w": 0.65,
+    "h": 0.0546
+   },
+   "maxWidth": 960
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-1863/13-install.webp",
+   "source": "public/docs/files/cs-figma/클래스인x-삭제-재설치-전자칠판.png",
+   "crop": {
+    "x": 0.169,
+    "y": 0.8974,
+    "w": 0.65,
+    "h": 0.0545
+   },
+   "maxWidth": 960
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-2324/01-learning-report-tab.webp",
+   "source": "public/docs/files/cs-figma/image-76.png",
+   "crop": {
+    "x": 0.0,
+    "y": 0.0,
+    "w": 1.0,
+    "h": 1.0
+   },
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-77/01-ai-board-in-class.webp",
+   "source": "public/docs/files/cs-figma/frame-30.png",
+   "crop": {
+    "x": 0.0,
+    "y": 0.0,
+    "w": 1.0,
+    "h": 1.0
+   },
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-77/02-question-type-tabs.webp",
+   "source": "public/docs/files/cs-figma/frame-30.png",
+   "crop": {
+    "x": 0.245,
+    "y": 0.225,
+    "w": 0.505,
+    "h": 0.15
+   },
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-77/03-agent-select.webp",
+   "source": "public/docs/files/cs-figma/frame-30.png",
+   "crop": {
+    "x": 0.245,
+    "y": 0.565,
+    "w": 0.27,
+    "h": 0.17
+   },
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-77/04-question-input-publish.webp",
+   "source": "public/docs/files/cs-figma/frame-30.png",
+   "crop": {
+    "x": 0.245,
+    "y": 0.225,
+    "w": 0.505,
+    "h": 0.52
+   },
+   "maxWidth": 1200
   }
  ]
 }
