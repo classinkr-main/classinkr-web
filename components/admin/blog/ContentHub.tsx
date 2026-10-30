@@ -6,7 +6,7 @@
  * 수치 규칙은 lib/admin/content-hub.ts 머리 주석이 정본이다.
  */
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useId, useMemo, useRef, useState } from "react"
 import { ExternalLink, Star } from "lucide-react"
 
 import AdminErrorBanner from "@/components/admin/ui/AdminErrorBanner"
@@ -18,7 +18,10 @@ import {
   buildContentHubCadence,
   buildContentHubItems,
   buildContentHubWindow,
+  countContentChars,
   formatDateKeyLabel,
+  instagramCaptionBody,
+  markdownToPreviewText,
   sortContentHubItems,
   type ContentHubChannel,
   type ContentHubInstagramDashboard,
@@ -31,6 +34,8 @@ import { DEFAULT_BLOG_CTA, type BlogPost } from "@/lib/blog-types"
 
 const NUMBER = new Intl.NumberFormat("ko-KR")
 const BAR_DAYS = 14
+/** 미리보기에서 펼쳐 보여 주는 본문 상한 — 그 뒤는 에디터에서 */
+const BODY_PREVIEW_CHARS = 4000
 
 function formatCount(value: number | null | undefined) {
   return value === null || value === undefined ? "-" : NUMBER.format(value)
@@ -391,7 +396,10 @@ export default function ContentHub({
                               <Thumb url={item.thumbnailUrl} className={`h-10 ${item.channel === "blog" ? "w-14" : "w-10"}`} />
                               <span className="flex min-w-0 flex-col">
                                 <span className={`truncate text-[#111110] ${active ? "font-bold" : "font-semibold"}`}>{item.title}</span>
-                                <span className="text-[12px] text-[#615D59]">{item.kind}</span>
+                                <span className="truncate text-[12px] text-[#615D59]">
+                                  {item.kind}
+                                  {item.summary ? ` · ${item.summary}` : ""}
+                                </span>
                               </span>
                             </button>
                           </td>
@@ -618,9 +626,11 @@ function ContentPreview({
         </span>
         <h3 className="flex items-start gap-1.5 text-[18px] font-bold leading-snug tracking-[-0.2px] text-[#111110]">
           {post?.featured ? <Star aria-label="주요 글" className="mt-1 h-4 w-4 shrink-0 fill-[#084734] text-[#084734]" /> : null}
-          <span className="line-clamp-4 min-w-0 break-words">{post ? post.title : media?.caption?.trim() || item.title}</span>
+          <span className="min-w-0 break-words">{post ? post.title : item.title}</span>
         </h3>
       </div>
+
+      <ContentBody key={item.key} item={item} />
 
       <dl className="grid grid-cols-2 overflow-hidden rounded-[10px] border border-[#e8e8e4]">
         {metrics.map(([label, value], index) => (
@@ -715,5 +725,67 @@ function ContentPreview({
         </a>
       ) : null}
     </aside>
+  )
+}
+
+/** 미리보기의 「내용」 — 블로그는 요약 + 본문(마크다운 기호를 걷은 글), 인스타는 캡션 첫 줄 뒤. 고른 줄이 바뀌면 접힌 상태로 돌아간다(key). */
+function ContentBody({ item }: { item: ContentHubItem }) {
+  const [expanded, setExpanded] = useState(false)
+  const bodyId = useId()
+  const post = item.post
+  const lead = post?.excerpt?.trim() ?? ""
+  const body = useMemo(
+    () => (post ? markdownToPreviewText(post.contentMarkdown) : instagramCaptionBody(item.media?.caption)),
+    [post, item.media?.caption]
+  )
+  const chars = countContentChars(post ? body : item.media?.caption ?? "")
+  const label = post ? "본문" : "캡션"
+  const long = body.length > 240 || body.split("\n").length > 6
+  const cut = expanded && body.length > BODY_PREVIEW_CHARS
+
+  if (!lead && !body) {
+    return (
+      <section aria-label="내용" className="rounded-lg bg-[#FAFAF8] px-3.5 py-3 text-[13px] text-[#615D59]">
+        {post ? "요약과 본문이 비어 있습니다." : "캡션이 한 줄뿐입니다."}
+      </section>
+    )
+  }
+
+  return (
+    <section aria-label="내용" className="flex flex-col gap-2">
+      <div className="flex items-baseline justify-between gap-2">
+        <h4 className="text-[12px] font-semibold text-[#615D59]">내용</h4>
+        {chars > 0 ? (
+          <span className="text-[12px] tabular-nums text-[#615D59]">
+            {label} {NUMBER.format(chars)}자
+          </span>
+        ) : null}
+      </div>
+      {lead ? <p className="break-words text-[14px] leading-relaxed text-[#111110]">{lead}</p> : null}
+      {body ? (
+        <div
+          id={bodyId}
+          className={`whitespace-pre-line break-words rounded-lg bg-[#FAFAF8] px-3.5 py-3 text-[13px] leading-relaxed text-[#31302E] ${
+            expanded ? "max-h-[420px] overflow-y-auto" : "line-clamp-6"
+          }`}
+        >
+          {cut ? `${body.slice(0, BODY_PREVIEW_CHARS)}…` : body}
+        </div>
+      ) : null}
+      {body && long ? (
+        <button
+          type="button"
+          aria-expanded={expanded}
+          aria-controls={bodyId}
+          onClick={() => setExpanded((open) => !open)}
+          className="self-start text-[13px] font-semibold text-[#084734] hover:underline"
+        >
+          {expanded ? "접기" : `${label} 펼치기`}
+        </button>
+      ) : null}
+      {cut ? (
+        <p className="text-[12px] text-[#615D59]">앞 {NUMBER.format(BODY_PREVIEW_CHARS)}자까지만 보입니다. 전체는 에디터에서 봅니다.</p>
+      ) : null}
+    </section>
   )
 }

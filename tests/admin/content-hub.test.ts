@@ -8,9 +8,12 @@ import {
   buildContentHubCadence,
   buildContentHubItems,
   buildContentHubWindow,
+  countContentChars,
+  instagramCaptionBody,
   instagramCaptionTitle,
   instagramDateKey,
   instagramMediaTypeLabel,
+  markdownToPreviewText,
   pageMatchesBlogPath,
   sortContentHubItems,
   type ContentHubInstagramMedia,
@@ -247,5 +250,68 @@ describe("instagram labels", () => {
     expect(instagramCaptionTitle("\n  첫 줄 제목\n둘째 줄")).toBe("첫 줄 제목")
     expect(instagramCaptionTitle(undefined)).toBe("캡션 없음")
     expect(instagramCaptionTitle("가".repeat(80), 10)).toBe(`${"가".repeat(9)}…`)
+  })
+})
+
+describe("content preview text", () => {
+  it("keeps headings and list lines but drops markdown syntax, images, code and html", () => {
+    const markdown = [
+      "## 1. 수업 표준화",
+      "",
+      "강사가 바뀌어도 **같은 흐름**을 [유지](https://example.com)합니다.",
+      "",
+      "- 첫째 항목",
+      "2. 둘째 항목",
+      "> 인용문",
+      "",
+      "![표지](https://example.com/a.png)",
+      "```js",
+      "const secret = 1",
+      "```",
+      "<div>상자</div>",
+      "---",
+      "| 구분 | 값 |",
+      "| --- | --- |",
+      "| 점수 | 32 |",
+    ].join("\n")
+    expect(markdownToPreviewText(markdown)).toBe(
+      [
+        "1. 수업 표준화",
+        "",
+        "강사가 바뀌어도 같은 흐름을 유지합니다.",
+        "",
+        "· 첫째 항목",
+        "· 둘째 항목",
+        "인용문",
+        "",
+        "상자",
+        "",
+        "구분 · 값",
+        "점수 · 32",
+      ].join("\n")
+    )
+    expect(markdownToPreviewText(undefined)).toBe("")
+  })
+
+  it("counts characters without whitespace and splits the caption title from its body", () => {
+    expect(countContentChars("가 나\n다")).toBe(3)
+    expect(instagramCaptionBody("\n첫 줄 제목\n\n둘째 줄\n#클래스인")).toBe("둘째 줄\n#클래스인")
+    expect(instagramCaptionBody("한 줄뿐")).toBe("")
+  })
+
+  it("puts a one-line summary on each table row", () => {
+    const window = buildContentHubWindow("last_30d", NOW)
+    const items = buildContentHubItems({
+      posts: [
+        post({ id: 1, slug: "with-excerpt", date: "2026. 10. 20", excerpt: "요약 문장", contentMarkdown: "## 본문" }),
+        post({ id: 2, slug: "no-excerpt", date: "2026. 10. 19", excerpt: "", contentMarkdown: "## 제목\n\n- 본문 첫 줄" }),
+      ],
+      viewsBySlug: null,
+      media: [media({ id: "c", caption: "릴스 제목\n캡션 본문 #해시태그" })],
+      window,
+    })
+    expect(items.find((item) => item.key === "blog:1")?.summary).toBe("요약 문장")
+    expect(items.find((item) => item.key === "blog:2")?.summary).toBe("제목 · 본문 첫 줄")
+    expect(items.find((item) => item.key === "ig:c")?.summary).toBe("캡션 본문 #해시태그")
   })
 })

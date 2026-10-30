@@ -183,6 +183,59 @@ export function instagramCaptionTitle(caption: string | undefined, maxLength = 6
   return firstLine.length > maxLength ? `${firstLine.slice(0, maxLength - 1)}…` : firstLine
 }
 
+/**
+ * 본문 미리보기 글 — 마크다운 기호를 걷고 제목·목록의 줄 구조는 남긴다(화면은 white-space: pre-line).
+ * 이미지·코드 블록·HTML 은 빼고, 링크는 글자만, 목록 머리는 「· 」로.
+ */
+export function markdownToPreviewText(markdown: string | undefined): string {
+  if (!markdown) return ""
+  const lines = markdown
+    .replace(/\r\n?/g, "\n")
+    .replace(/```[\s\S]*?```/g, "\n")
+    .replace(/<!--[\s\S]*?-->/g, "")
+    .replace(/<[^>\n]+>/g, " ")
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, "")
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+    .split("\n")
+    .map((raw): string | null => {
+      let line = raw.trim()
+      if (/^([-*_]\s*){3,}$/.test(line)) return ""
+      // 표 구분선(| --- | --- |)은 줄째 뺀다 — 빈 줄로 두면 표가 두 문단으로 갈린다
+      if (/^\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)*\|?$/.test(line)) return null
+      const heading = /^#{1,6}\s+/.exec(line)
+      line = heading
+        ? line.slice(heading[0].length)
+        : line.replace(/^>\s?/, "").replace(/^([-*+]|\d+[.)])\s+/, "· ")
+      if (line.includes("|")) {
+        line = line.replace(/^\||\|$/g, "").split("|").map((cell) => cell.trim()).filter(Boolean).join(" · ")
+      }
+      return line.replace(/\*\*|__|~~|`|\*/g, "").replace(/\s+/g, " ").trim()
+    })
+  return lines
+    .filter((line): line is string => line !== null)
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
+}
+
+/** 공백을 뺀 글자 수 — 본문 분량 표시용 */
+export function countContentChars(text: string): number {
+  return text.replace(/\s/g, "").length
+}
+
+/** 캡션의 첫 줄(표의 제목으로 쓴다)을 뺀 나머지 */
+export function instagramCaptionBody(caption: string | undefined): string {
+  const lines = (caption ?? "").replace(/\r\n?/g, "\n").split("\n")
+  const first = lines.findIndex((line) => line.trim())
+  if (first === -1) return ""
+  return lines.slice(first + 1).join("\n").replace(/\n{3,}/g, "\n\n").trim()
+}
+
+function oneLine(text: string, maxLength: number) {
+  const flat = text.replace(/\s+/g, " ").trim()
+  return flat.length > maxLength ? `${flat.slice(0, maxLength - 1)}…` : flat
+}
+
 export type ContentHubChannel = "blog" | "ig"
 
 export interface ContentHubItem {
@@ -191,6 +244,8 @@ export interface ContentHubItem {
   title: string
   /** 블로그는 카테고리, 인스타는 게시물 종류 */
   kind: string
+  /** 표 둘째 줄에 붙는 내용 한 줄 — 블로그는 요약(없으면 본문 앞부분), 인스타는 캡션 첫 줄 뒤 */
+  summary: string
   dateKey: string | null
   /** 기간 안에 발행했는지 — 발행 흐름 띠에는 이것만 찍는다 */
   inWindow: boolean
@@ -230,6 +285,7 @@ export function buildContentHubItems({
       channel: "blog",
       title: post.title,
       kind: post.category || "블로그",
+      summary: oneLine(post.excerpt?.trim() || markdownToPreviewText(post.contentMarkdown), 120),
       dateKey,
       inWindow,
       views,
@@ -247,6 +303,7 @@ export function buildContentHubItems({
       channel: "ig",
       title: instagramCaptionTitle(row.caption),
       kind: instagramMediaTypeLabel(row),
+      summary: oneLine(instagramCaptionBody(row.caption), 120),
       dateKey,
       inWindow: true,
       views: row.insights.views,

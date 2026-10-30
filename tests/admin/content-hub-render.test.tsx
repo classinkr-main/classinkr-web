@@ -56,7 +56,15 @@ describe("ContentHub first render", () => {
     const html = renderToStaticMarkup(
       <ContentHub
         posts={[
-          post({ id: 1, slug: "fresh", title: "학생 이탈을 예측하는 6가지 데이터 시그널", date: "2026. 10. 14", featured: true }),
+          post({
+            id: 1,
+            slug: "fresh",
+            title: "학생 이탈을 예측하는 6가지 데이터 시그널",
+            date: "2026. 10. 14",
+            featured: true,
+            excerpt: "이탈 전에 먼저 보이는 신호 여섯 가지를 정리했습니다.",
+            contentMarkdown: "## 출결이 흔들린다\n\n- 지각이 **잦아진다**",
+          }),
           post({ id: 2, slug: "old", title: "오래된 글", date: "2026. 06. 02" }),
           post({ id: 3, slug: "draft", title: "작성 중", date: "2026. 10. 20", status: "draft" }),
         ]}
@@ -84,6 +92,12 @@ describe("ContentHub first render", () => {
     expect(html).toContain("무료 상담 신청하기")
     expect(html).toContain('aria-label="주요 글"')
     expect(html).toContain("9월 30일 ~ 10월 29일")
+    // 내용 — 표 둘째 줄의 요약, 미리보기의 요약·본문(마크다운 기호 없이)
+    expect(html).toContain("인사이트 · 이탈 전에 먼저 보이는 신호 여섯 가지를 정리했습니다.")
+    expect(html).toContain('aria-label="내용"')
+    expect(html).toContain("출결이 흔들린다\n\n· 지각이 잦아진다")
+    expect(html).not.toContain("**")
+    expect(html).toMatch(/본문 \d+자/)
   })
 })
 
