@@ -199,6 +199,27 @@
    "maxWidth": 1200
   },
   {
+   "out": "/docs/files/guides/cs-figma-digest-732/02-value-added-service-tab.webp",
+   "source": "public/docs/files/cs-figma/ai-기능-비활성화-1.png",
+   "crop": {
+    "x": 0.147,
+    "y": 0.395,
+    "w": 0.71,
+    "h": 0.085
+   },
+   "masks": [
+    {
+     "x": 0.76,
+     "y": 0.0,
+     "w": 0.2,
+     "h": 0.09,
+     "style": "blur",
+     "reason": "관리자 계정명"
+    }
+   ],
+   "maxWidth": 1200
+  },
+  {
    "out": "/docs/files/guides/cs-figma-digest-831/01-course-settings-screen.webp",
    "source": "public/docs/files/cs-figma/frame-5.png",
    "crop": {
