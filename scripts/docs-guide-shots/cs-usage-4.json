@@ -301,9 +301,9 @@
      "reason": "자료 출처 이름"
     },
     {
-     "x": 0.394,
+     "x": 0.398,
      "y": 0.36,
-     "w": 0.57,
+     "w": 0.385,
      "h": 0.64,
      "style": "blur",
      "reason": "시험지 본문·학원 정보"
@@ -370,10 +370,10 @@
    "out": "/docs/files/guides/cs-figma-digest-299/04-recording-alert.webp",
    "source": "public/docs/files/cs-figma/미지원교육-현장-녹화-확인.png",
    "crop": {
-    "x": 0.6,
-    "y": 0.32,
-    "w": 0.24,
-    "h": 0.12
+    "x": 0.64,
+    "y": 0.33,
+    "w": 0.165,
+    "h": 0.095
    },
    "maxWidth": 1200
   },
@@ -421,8 +421,8 @@
    "masks": [
     {
      "x": 0.6,
-     "y": 0.28,
-     "w": 0.13,
+     "y": 0.325,
+     "w": 0.125,
      "h": 0.075,
      "style": "blur",
      "reason": "교사 이름"
@@ -468,9 +468,9 @@
    "source": "public/docs/files/cs-figma/group-4.png",
    "crop": {
     "x": 0.2,
-    "y": 0.675,
+    "y": 0.684,
     "w": 0.58,
-    "h": 0.27
+    "h": 0.261
    },
    "maxWidth": 1200
   },
