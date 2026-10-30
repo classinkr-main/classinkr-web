@@ -68,6 +68,7 @@
 | `NEXT_PUBLIC_GOOGLE_ADS_DEMO_CONVERSION_LABEL` | Google Ads 전환 액션 라벨(AW- 접두 제외) | Ads 전환이 안 나간다(같은 런북 §3) |
 | `GA4_MEASUREMENT_ID`, `GA4_API_SECRET` | GA4 Measurement Protocol 비밀키 | 서버 측 generate_lead 가 안 나간다 — **§5-6 결정 전에는 비워 둔다** |
 
+- **2026-10-30 확인(Vercel API)**: 운영에 있는 것은 `NEXT_PUBLIC_GTM_ID`, `NEXT_PUBLIC_META_PIXEL_ID`, `NEXT_PUBLIC_GOOGLE_ADS_DEMO_CONVERSION_LABEL`, `NEXT_PUBLIC_SUPABASE_URL` 뿐이다. `NEXT_PUBLIC_GA4_MEASUREMENT_ID`, `GOOGLE_SITE_VERIFICATION`, `NAVER_SITE_VERIFICATION`, `NEXT_PUBLIC_NAVER_WCS_ID`, `NEXT_PUBLIC_NAVER_LEAD_CONVERSION_TYPE` 은 아직 없다(= GA4 로 아무것도 안 가고, 소유확인 메타태그도 안 나간다). `GA4_MEASUREMENT_ID`·`GA4_API_SECRET` 은 §5-6 결정대로 비어 있는 것이 맞다.
 - 소유확인 값(`*_SITE_VERIFICATION`)은 비밀이 아니다(페이지 소스에 그대로 노출된다). 값이 비어 있으면 태그 자체를 내보내지 않는다(`app/layout.tsx` → `createSiteVerification`).
 - 운영 배포는 main push 가 아니라 Promote to Production 이다(AGENTS.md "인프라 현황"). 재빌드 뒤 라이브에서 §8 을 돈다.
 

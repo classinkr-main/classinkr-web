@@ -92,3 +92,31 @@ PR #34·#38·#39·#40·#41·#42·#44 의 내용은 모두 이 통합 브랜치�
 | `npm run build` | 컴파일만 별도 확인(`next build`). `postbuild` 는 운영 DB 필요 — Vercel Preview 에서 확인 |
 
 병합 과정에서 고친 결함(병합 자체가 만들었거나 드러낸 것): `lib/hardware/sheet-auto-import.ts` 의 `isAnyRunning` import 깨짐 복구, `lib/branch/sync/complete.ts` 가 가드 `skipped` 를 `running` 으로 덮던 자동 병합 결함, `lib/db/schema-contract.ts` 프로브 객체 경계 누락(두 프로브가 하나로 붙음), `tests/crm/unified-segment-ui` 시한폭탄 테스트.
+
+---
+
+## 7. 2026-10-30 상태 — 병합 완료, 운영 배포 대기
+
+| 항목 | 상태 | 근거 |
+|---|---|---|
+| `main` 병합 | **완료.** PR #45(2026-10-29 10:45, 운영자 머지)가 이 통합 브랜치 전체와 발표자료 v3·후킹 루프 문서 브랜치를 최신 `main`(3bf9b41) 위에 올렸다. `main`(a9b2ce32)은 이 브랜치를 모두 포함한다 | `git branch -r --contains` |
+| PR #45 가 추가로 내린 결정 | `main` 의 10-28 로컬 커밋(6dd49b8)과 겹친 곳을 정리: 추적 경로 판정은 `lib/tracking-paths.ts` 하나(`main` 의 `lib/analytics-path.ts` 흡수·삭제), `/checkout` 은 gtag 만 유지·URL 정화, 제외 경로에서는 내부 적재까지 중단, Meta 픽셀 `disablePushState`·consent 유지, 챗봇 요약→문의폼은 `stashContactPrefill`/`takeContactPrefill` 하나(`lib/contact/draft.ts` 흡수), 자료 다운로드 구독 전환은 마케팅 동의 + 서버 저장 확인 둘 다 필요, 지도 iframe `referrerPolicy="no-referrer"` | PR #45 본문 |
+| `main` 게이트(10-30, 이 세션) | typecheck 통과, vitest 10,147 중 10,145 통과. 실패 2건(`tests/server/cron-auth`, `tests/marketing/meta-instagram-dashboard-cache`)은 실제 `CRON_SECRET`·`META_*` 값이 환경에 있을 때만 깨지는 테스트(PR #45 본문에 명시) | 로컬 실행 |
+| 마이그레이션 | **미적용 4건**(`check:db` 10-30 확인): `20261023_branch_rev_sheet_writes`, `20261023_distributor_settlements`, `20261028_blog_posts_content_updated_at`, `20261028_branch_sync_runs_runtime`. 그 밖의 프로브는 전부 ✓(경고는 Compass 뷰 `compass_meta_submissions_v` 뿐, 이 작업과 무관) | `NODE_USE_ENV_PROXY=1 npm run check:db` |
+| Vercel 운영 | **아직 10-28 sha(1b679864)**. `main@a9b2ce32` 는 Preview 빌드 READY(`dpl_FB3KC3WtnBdxDAX3GVtXYwnwRDtQ`, postbuild DB 검사 포함). 프로젝트 `productionBranch` 가 `codex/backend2-admin-blog-design` 이라 `main` 푸시는 운영에 자동 반영되지 않는다(AGENTS.md 규칙과 일치) | Vercel API |
+| Vercel 운영 환경변수 | 있음: `NEXT_PUBLIC_GTM_ID`, `NEXT_PUBLIC_META_PIXEL_ID`, `NEXT_PUBLIC_GOOGLE_ADS_DEMO_CONVERSION_LABEL`, `NEXT_PUBLIC_SUPABASE_URL`. **없음**: `NEXT_PUBLIC_GA4_MEASUREMENT_ID`, `GOOGLE_SITE_VERIFICATION`, `NAVER_SITE_VERIFICATION`, `NEXT_PUBLIC_NAVER_WCS_ID`, `NEXT_PUBLIC_NAVER_LEAD_CONVERSION_TYPE`, `NEXT_PUBLIC_SITE_URL`. `NEXT_PUBLIC_*` 는 빌드 때 박히므로 운영 배포 전에 넣어야 재빌드가 한 번으로 끝난다 | Vercel API(`/v9/projects/{id}/env`) |
+| 클라우드 세션 한계 | 운영 DB 쓰기(Management API `database/query`)와 운영 배포(Deploy API)는 Auto 모드 분류기가 "Production Deploy" 로, `.claude/settings.json` 생성은 "Self-Modification" 으로 차단한다 — 사용자 승인 뒤 재시도해도 같다. 토큰·네트워크는 문제없다 | 2026-10-30 실측 |
+
+### 운영 배포 절차(사람이 실행)
+
+1. 마이그레이션 4건을 파일명 순으로 서울 프로젝트(`pxbrsbovoobowpfarxmn`)에 적용한다. Management API `POST /v1/projects/{ref}/database/query` 에 파일 본문을 `query` 로 넣는다(전부 멱등). 적용 뒤 `NODE_USE_ENV_PROXY=1 npm run check:db` 에서 위 4건이 ✓ 인지 본다.
+2. 위 환경변수를 Vercel 운영에 넣는다(값은 [콘솔 런북](./seo-analytics-console-runbook-2026-10-28.md) §2).
+3. 운영 배포: Deploy API `POST /v13/deployments?teamId=team_W39YZVJ5OewACs3sFThsXOEv` 에 `{"name":"classinkr-web","project":"prj_iZkSESk178bnLeCUF5MAfu1dPAvs","target":"production","gitSource":{"type":"github","repoId":1186773577,"ref":"main","sha":"a9b2ce320ef36b5bd3fc8558a2baf229198b91d1"}}` — 또는 대시보드에서 `main` Preview 를 Promote to Production.
+4. 라이브 확인: `https://classin.co.kr/` 의 `<title>` 이 `클래스인 Classin | 학원 전자칠판·수업 녹화·운영 플랫폼`, Organization JSON-LD `alternateName` 에 클래스인, SearchAction `/docs/search?q=`, `robots.txt` 의 `Allow: /api/og/`, `sitemap.xml` 의 `/resources`·`/download`. 계측은 런북 §8 시나리오.
+5. [DB 마이그레이션 런북](./db-migration-runbook.md)의 10-23·10-28 네 절을 "적용 완료" 로 바꾸고 적용 기록 한 줄을 남긴다.
+
+### 머지 뒤 정리(PR #45 본문 기준, 아직 안 한 것)
+
+- 닫을 PR: #34 #38 #39 #40 #41 #42 #44(내용이 #45 에 포함), #28(재구성 필요)
+- 지워도 되는 브랜치: #45 가 포함한 19개, `hw-process-*` 4개, `cloud_10.0.2`
+
