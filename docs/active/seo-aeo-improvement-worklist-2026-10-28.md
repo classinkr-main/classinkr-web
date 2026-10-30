@@ -395,6 +395,8 @@ select slug, title, lead_magnet_slug from blog_posts
 | 2개월 | D10 마이그레이션(`content_updated_at` 또는 트리거), 문서 `last_reviewed_at` 규칙, `shouldIndex` visibility | 플랫폼 + 콘텐츠 | sitemap lastmod 가 본문 변경일만 반영 |
 | 3개월 | GSC·서치어드바이저 검색어별 노출·클릭, GA4 generate_lead(form_type 별)·pricing_view→문의 전환, 동일 질문 AI 테스트 반복("학원 결석생에게 녹화 수업을 제공하려면?", "클래스인과 Zoom 차이는?", "학원 전자칠판 도입 시 확인할 점은?") | 마케팅 + 영업 | 기준선 대비 변화 보고, 후속 과제 |
 
+진행 기록(2026-10-30): 코드는 PR #45 로 `main` 에 병합됐고 운영 배포는 대기 중이다(마이그레이션 4건 미적용, Vercel 운영 env 에 GA4·소유확인 변수 없음). 현황과 절차는 [통합 병합 기록](./integration-followups-2026-10-28.md) §7.
+
 월간 지표는 진단서 §7 을 그대로 쓴다(비브랜드 노출·클릭·CTR, 색인 상태, generate_lead form_type 별 건수, AI 브랜드 언급·출처 링크·정확성, 모바일 LCP·INP·CLS).
 
 ---
