@@ -178,6 +178,8 @@ function sanitizeCsFigmaText(value: string): string {
     .replace(/원본\s*캡처/gi, "안내 화면")
     .replace(/\bFigma\b/gi, "안내 화면")
     .replace(/(\d+)\s*장의\s*스크린샷으로\s*안내하는\s*가이드/g, "화면을 순서대로 안내하는 가이드")
+    // "[기관 관리](코스 관리/수업 관리…)"처럼 메뉴 아래 항목을 괄호로 적은 표기가 마크다운 링크로 그려지지 않게 띄운다.
+    .replace(/\]\((?!https?:\/\/|\/|#|mailto:|tel:)([^)]*)\)/g, "] ($1)")
     .replace(/[ \t]{2,}/g, " ")
     .trim()
 }
@@ -2179,7 +2181,7 @@ const baseDocs: DocArticle[] = [
         description: "보드 라인업과 카메라·마이크 구성, 도입 흐름이 있는 제품 소개 페이지입니다.",
       },
     ],
-    relatedSlugs: ["board-ai-camera-mic", "board-install-readiness", "webcam-cms-setup-t1-panorama", "cs-microphone-camera-check"],
+    relatedSlugs: ["board-ai-camera-mic", "board-install-readiness", "webcam-cms-setup-t1-panorama", "camera-mic-troubleshooting"],
   },
   {
     slug: "cam-t1-s1",
@@ -2290,7 +2292,7 @@ const baseDocs: DocArticle[] = [
         description: "보드 라인업과 카메라·마이크 구성, 도입 흐름이 있는 제품 소개 페이지입니다.",
       },
     ],
-    relatedSlugs: ["board-ai-camera-mic", "webcam-cms-setup-t1-panorama", "board-install-readiness", "mic-dt2-pro", "cs-microphone-camera-check"],
+    relatedSlugs: ["board-ai-camera-mic", "webcam-cms-setup-t1-panorama", "board-install-readiness", "mic-dt2-pro", "camera-mic-troubleshooting"],
   },
   {
     slug: "classin-607-update",
