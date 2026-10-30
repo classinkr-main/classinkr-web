@@ -181,6 +181,40 @@
    },
    "masks": [],
    "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-655/02-delete-confirm.webp",
+   "source": "public/docs/files/cs-figma/수업-삭제-방법.png",
+   "crop": {
+    "x": 0.09,
+    "y": 0.553,
+    "w": 0.48,
+    "h": 0.127
+   },
+   "masks": [],
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-655/03-deleted-replay.webp",
+   "source": "public/docs/files/cs-figma/수업-삭제-방법.png",
+   "crop": {
+    "x": 0.572,
+    "y": 0.678,
+    "w": 0.294,
+    "h": 0.19
+   },
+   "masks": [
+    {
+     "x": 0.18,
+     "y": 0.64,
+     "w": 0.79,
+     "h": 0.205,
+     "style": "fill",
+     "color": "#EEEEEE",
+     "reason": "화면 위 설명 글자"
+    }
+   ],
+   "maxWidth": 1200
   }
  ]
 }
