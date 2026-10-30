@@ -577,6 +577,30 @@
    },
    "masks": [],
    "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-500/02-blank-board-tools.webp",
+   "source": "public/docs/files/cs-figma/판서-생성-불러오기.png",
+   "crop": {
+    "x": 0.5,
+    "y": 0.242,
+    "w": 0.405,
+    "h": 0.134
+   },
+   "masks": [],
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-500/03-board-settings-tools.webp",
+   "source": "public/docs/files/cs-figma/판서-생성-불러오기.png",
+   "crop": {
+    "x": 0.5,
+    "y": 0.453,
+    "w": 0.402,
+    "h": 0.125
+   },
+   "masks": [],
+   "maxWidth": 1200
   }
  ]
 }
