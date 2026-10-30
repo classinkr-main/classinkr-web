@@ -156,6 +156,20 @@ PR #34·#38·#39·#40·#41·#42·#44 의 내용은 모두 이 통합 브랜치�
 - 계측(콘솔 런북 §8): 동의 전 GA4 `G-6MWTJ8C0L2` 쿠키 없는 핑(`gcs=G100`)·쿠키 0, 한 화면 `page_view` 1회, `page_location` 에서 `prefill` 제거(`utm_*` 유지), 홈 → 요금 이동 시 `page_view` 1회 + `pricing_view{pricing_surface:"pricing"}` 1회, "필수만 사용" 뒤 동의 전부 denied·쿠키는 `cln_consent` 뿐·Meta·네이버·카카오 요청 없음
 - 실행하지 않은 시나리오: 동의 "수락", 문의·쇼룸·자료 접수(운영 리드가 생긴다), `/share/quote/<토큰>`, 전화 클릭 — 사람이 시크릿 창에서 확인
 
+### 8-5. 개인정보 핫픽스 — PR #50 운영 배포(같은 날)
+
+PR #48 배포 뒤 '정직성·개인정보' 리뷰가 공개 `/docs/files/cs-figma/*` 캡처에서 고객사 교사 이름·전화번호·개인 이메일, 직원 전화·이메일, 시청자 IP, 로그인 없이 열리는 재생 링크를 찾았다(2026-06-21 85784ff8 부터 공개). 예: `/docs/admin/cs-figma-digest-919` 교사 목록, `cs-figma-digest-523` '전체 안내 한 장' 의 교사 전화, `web-live-playback` 시청자 IP.
+
+| 항목 | 결과 |
+|---|---|
+| 수정 | PR #47(`claude/dreamy-wright-k65ld4` @4a6266ad)의 가림본 81장·사내 전용 13장 삭제·자산 목록·테스트 개수만 바이트 동일하게 가져옴(PR #50, main `898dbe5b`). PR #47 의 나머지(가이드 UI·검색·새 사진)는 그 세션 몫 — 이 경로들은 PR #47 과 같아 나중 병합에서 충돌하지 않는다 |
+| 검증 | 지적 영역 라이브본·가림본 나란히 확인, 81장 타일 OCR(라이브본에서 잡히던 이메일·전화·재생 URL 이 가림본 0건), typecheck, `check:cs-figma-assets` 99/99, vitest 10,147 |
+| 운영 배포 | `dpl_DY4yEcHFUPV3546reJvNjQBKqUKc`(main `898dbe5b`) READY. 배포 뒤 공개 URL 81장 전부 가림본과 sha256 일치, 삭제 13장 전부 404 |
+| **되돌리기 주의** | 이 배포보다 앞선 `dpl_Cxkq2VVURjUwCMsgCQVzJTTo3hNa`(58ed2237)·`dpl_A1C32wRuCTswNFAgYuSagAi5Ka2e`(1b679864)로 되돌리면 가리지 않은 캡처가 다시 공개된다. 코드 문제로 되돌려야 하면 `898dbe5b` 위에서 고쳐 다시 배포한다 |
+| 남은 위험 | `/docs/files/*` 는 `Cache-Control: public, max-age=31536000, immutable` 이라 이미 받아 간 브라우저·외부 캐시에는 옛 이미지가 남을 수 있다. 검색엔진 이미지 색인에 올라간 경우 Search Console '오래된 콘텐츠 삭제'로 해당 이미지 URL 을 요청한다 |
+
+같은 리뷰의 문구 지적(코드 미수정, 사실 확인 필요): HW `ValueAnchor` "30일 만족 보장"·"평일 24시간 대응"(근거 없음, 문의 페이지 상담 시간은 평일 09:00~18:00)과 교육 시간 4시간/2시간 불일치, SW FAQ·`/product/ai-report` 의 "외부 다운로드 차단·워터마크"(공개 가이드는 다운로드 방법과 로그인 없는 재생 링크를 안내), HW `PainPointsV2`·`LatencyProof` 의 "분필보다 빠른"·출처 없는 경쟁사 지연 수치(사양 정본은 `lib/hardware/board-specs.ts` 2ms), SW '이 가격에' 포함 항목(1,000명·전담 지원)이 Standard 정의(`lib/billing/plans.ts` 50명·이메일 지원)와 다름.
+
 ### 8-4. 남은 일
 
 - GA4 콘솔 설정(콘솔 런북 §5-2~§5-7: 향상된 측정 3개 끄기, 데이터 수정, 맞춤 측정기준 6개, 주요 이벤트 `generate_lead` 하나, 원치 않는 추천·내부 트래픽·보관 14개월·Search Console 연결) — Google 계정 로그인 필요
