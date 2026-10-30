@@ -39,8 +39,9 @@ public/images/product/hw/
 |--------|------|------|--------|
 | `writing-teacher.jpg` | 판서 장면 | 교사가 보드에 수식/그림 필기 중 | 1200×800 |
 | `writing-closeup.jpg` | 표면 디테일 | 펜촉이 화면에 닿는 클로즈업 (저지연 강조) | 800×800 |
-| `writing-multitouch.jpg` | 멀티터치 | 여러 손이 동시 필기하는 장면 | 1200×800 |
 | `writing-canvas-pages.png` | 무한 캔버스 | 50페이지 썸네일 나열 UI 스크린샷 | 1200×700 |
+
+> 멀티터치 장면(학생 여러 명이 눕힌 보드에 동시에 필기하는 사진, 옛 `writing-multitouch.jpg`)은 쓰지 않는다(2026-10-30 삭제). 다시 만들지 않는다.
 
 ### 4. display/ — 화면 품질
 | 파일명 | 용도 | 설명 | 사이즈 |

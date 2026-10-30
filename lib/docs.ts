@@ -1484,16 +1484,6 @@ const docs: DocArticle[] = [
           "손가락과 전용 펜을 모두 인식합니다. 적외선 방식이라 빛을 가리는 물체는 무엇이든 터치로 잡히니, 쓸 때 소매나 팔이 화면에 닿지 않게 합니다.",
           "수업 전에 펜, 손가락, 지우개가 제대로 먹는지 한 번씩 써 봅니다.",
         ],
-        media: [
-          {
-            type: "image",
-            src: `${HARDWARE_MEDIA_BASE}/writing/writing-multitouch.jpg`,
-            alt: "학생 여러 명이 눕혀 놓은 Classin Board에 동시에 마인드맵을 그리는 모습",
-            caption: "50점 멀티터치라 여러 학생이 한 화면에 함께 씁니다.",
-            width: 1440,
-            height: 900,
-          },
-        ],
       },
       {
         heading: "손가락 개수별 동작",
