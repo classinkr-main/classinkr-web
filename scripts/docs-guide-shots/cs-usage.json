@@ -646,6 +646,15 @@
      "h": 0.022,
      "style": "blur",
      "reason": "계정명"
+    },
+    {
+     "x": 0.71,
+     "y": 0.725,
+     "w": 0.215,
+     "h": 0.08,
+     "style": "fill",
+     "color": "#FFFFFF",
+     "reason": "화면 위에 덧쓴 안내 글자"
     }
    ],
    "maxWidth": 1200
