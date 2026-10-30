@@ -47,19 +47,17 @@ export interface CsFigmaEnrichment {
 
 import { GENERATED_CS_FIGMA_ENRICHMENTS } from "@/lib/cs-figma-enrichments.generated"
 
-const RECORDING_ASSET_DIR = "/docs/files/cs-figma/하위계정-녹화본-다운로드"
-
 // 손으로 검증한 플래그십(단계별 분할 포함). 자동 생성본(GENERATED)보다 우선한다.
 const CURATED_CS_FIGMA_ENRICHMENTS: Record<string, CsFigmaEnrichment> = {
   "cs-figma-digest-1054": {
-    updatedAt: "2026-09-24",
+    updatedAt: "2026-10-29",
     title: "수업이 끝난 뒤 들어온 학생에게 이전 수업 다시보기 열어 주기",
     intro:
       "학생이 지난 수업 다시보기가 안 보인다고 하면, 그 수업이 끝난 뒤에 코스에 들어온 학생인지부터 확인해 주세요. 맞다면 관리자 대시보드에서 새로 참여한 학생도 이전 수업을 볼 수 있게 허용해야 합니다. 이미 코스에 들어와 있는 학생은 설정을 바꾼 뒤 코스에서 내보냈다가 다시 추가해야 적용됩니다.",
     stages: [
       {
         title: "1. 관리자 대시보드 열기",
-        body: "클래스인 PC 앱의 프로필 메뉴에서 **관리자용 대시보드**를 엽니다. 대시보드에 바로 로그인해도 됩니다.",
+        body: "클래스인 PC 앱 왼쪽 아래 내 프로필을 눌러 **계정 및 설정** 창을 열고, 오른쪽 위 **관리자용 대시보드**를 누릅니다. 웹 브라우저에서 관리자 대시보드에 바로 로그인해도 됩니다.",
       },
       {
         title: "2. 수업 다시보기 탭으로 이동",
@@ -89,7 +87,7 @@ const CURATED_CS_FIGMA_ENRICHMENTS: Record<string, CsFigmaEnrichment> = {
     ],
   },
   "cs-figma-digest-523": {
-    updatedAt: "2026-09-24",
+    updatedAt: "2026-10-29",
     title: "수업 녹화본을 PC에 내려받기",
     intro:
       "지난 수업 녹화본을 내 PC에 저장하려는 관리자를 위한 순서입니다. 클래스인 홈페이지에 로그인해 기관 관리의 수업 관리에서 수업을 찾고, 수업 녹화 데이터 화면에서 파일을 내려받습니다.",
@@ -111,7 +109,7 @@ const CURATED_CS_FIGMA_ENRICHMENTS: Record<string, CsFigmaEnrichment> = {
         body: [
           "왼쪽 메뉴에서 **기관 관리 → 수업 관리**로 들어갑니다.",
           "",
-          "- 위쪽 필터에서 코스 이름, 교사, 기간으로 수업을 찾습니다.",
+          "- 위쪽 필터에서 코스 이름, 교사, 기간으로 수업을 찾습니다. 찾는 수업이 목록에 없으면 **상태**와 **수업 시작일** 필터가 걸려 있는지 보고 풀어 주세요.",
           "- 수업 행 오른쪽 끝의 **조작 ∧** 버튼을 누릅니다.",
           "- 펼쳐진 메뉴에서 **수업 녹화 데이터**를 누릅니다.",
         ].join("\n"),
@@ -130,7 +128,7 @@ const CURATED_CS_FIGMA_ENRICHMENTS: Record<string, CsFigmaEnrichment> = {
         body: [
           "저장한 영상이나 브라우저에서 재생되는 영상을 확인합니다. 영상이 **음소거**로 시작될 수 있으니 소리가 안 들리면 볼륨부터 올려 주세요.",
           "",
-          "- 플레이어 오른쪽 아래 **더보기(⋮)** 버튼에서 재생 속도를 바꿀 수 있습니다.",
+          "- 플레이어 오른쪽 아래 **더보기(⋮)** 버튼에서 영상을 내려받거나 재생 속도를 바꿀 수 있습니다.",
         ].join("\n"),
       },
     ],
@@ -138,11 +136,6 @@ const CURATED_CS_FIGMA_ENRICHMENTS: Record<string, CsFigmaEnrichment> = {
       "화면 위쪽의 **다운로드 플러그인 사용 추천** 안내를 따르면 더 안정적으로 받을 수 있습니다.",
       "파일로 남길 필요가 없다면 영상 재생 화면의 주소창 링크를 보내도 됩니다. 이 링크는 로그인 없이 열리니 보낼 사람을 먼저 정하세요.",
     ],
-    downloadImage: {
-      src: `${RECORDING_ASSET_DIR}.png`,
-      label: "전체 안내 한 장으로 보기 (이미지 내려받기)",
-      description: "6단계 화면을 한 장에 모았습니다. 인쇄하거나 저장해 두고 보세요.",
-    },
   },
 }
 

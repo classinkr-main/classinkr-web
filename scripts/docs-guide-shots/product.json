@@ -1,0 +1,723 @@
+{
+  "shots": [
+    {
+      "out": "/docs/files/guides/classin-ai-blackboard-609/01-open-ai-blackboard.webp",
+      "source": "public/images/updates/609/bb_01_3e395856.png",
+      "crop": {
+        "x": 0.19,
+        "y": 0.15,
+        "w": 0.81,
+        "h": 0.85
+      },
+      "maxWidth": 1000
+    },
+    {
+      "out": "/docs/files/guides/classin-ai-blackboard-609/02-write-question.webp",
+      "source": "public/images/updates/609/bb_02_3e395856.png",
+      "maxWidth": 1100
+    },
+    {
+      "out": "/docs/files/guides/classin-ai-blackboard-609/03-ai-answer-rubric.webp",
+      "source": "public/images/updates/609/bb_03_3e395856.png",
+      "maxWidth": 1100
+    },
+    {
+      "out": "/docs/files/guides/classin-ai-blackboard-609/04-student-answer-tools.webp",
+      "source": "public/images/updates/609/bb_14_3e395856.png",
+      "maxWidth": 960,
+      "masks": [
+        {
+          "x": 0.97,
+          "y": 0.835,
+          "w": 0.03,
+          "h": 0.055,
+          "style": "blur",
+          "reason": "화면 가장자리에 잘린 이름 글자"
+        }
+      ]
+    },
+    {
+      "out": "/docs/files/guides/classin-ai-blackboard-609/05-student-handwriting.webp",
+      "source": "public/images/updates/609/bb_15_3e395856.png",
+      "maxWidth": 960,
+      "masks": [
+        {
+          "x": 0.955,
+          "y": 0.97,
+          "w": 0.045,
+          "h": 0.03,
+          "style": "blur",
+          "reason": "화면 가장자리에 잘린 이름 글자"
+        }
+      ]
+    },
+    {
+      "out": "/docs/files/guides/classin-ai-blackboard-609/06-student-speaking.webp",
+      "source": "public/images/updates/609/bb_20_3e395856.png",
+      "maxWidth": 960
+    },
+    {
+      "out": "/docs/files/guides/classin-ai-blackboard-609/07-answer-cards.webp",
+      "source": "public/images/updates/609/bb_04_3e395856.png",
+      "masks": [
+        {
+          "x": 0.265,
+          "y": 0.335,
+          "w": 0.105,
+          "h": 0.05,
+          "style": "blur",
+          "reason": "학생 계정 이름"
+        },
+        {
+          "x": 0.04,
+          "y": 0.385,
+          "w": 0.115,
+          "h": 0.05,
+          "style": "blur",
+          "reason": "학생 계정 이름"
+        }
+      ],
+      "maxWidth": 1100
+    },
+    {
+      "out": "/docs/files/guides/classin-ai-blackboard-609/08-ai-grading-detail.webp",
+      "source": "public/images/updates/609/bb_10_3e395856.png",
+      "masks": [
+        {
+          "x": 0.155,
+          "y": 0.19,
+          "w": 0.052,
+          "h": 0.11,
+          "style": "blur",
+          "reason": "프로필 사진"
+        },
+        {
+          "x": 0.205,
+          "y": 0.215,
+          "w": 0.08,
+          "h": 0.045,
+          "style": "blur",
+          "reason": "학생 계정 이름"
+        },
+        {
+          "x": 0.02,
+          "y": 0.325,
+          "w": 0.075,
+          "h": 0.05,
+          "style": "blur",
+          "reason": "학생 계정 이름"
+        }
+      ],
+      "maxWidth": 1200
+    },
+    {
+      "out": "/docs/files/guides/classin-ai-blackboard-609/09-student-ai-result.webp",
+      "source": "public/images/updates/609/bb_17_3e395856.png",
+      "masks": [
+        {
+          "x": 0.12,
+          "y": 0.16,
+          "w": 0.15,
+          "h": 0.065,
+          "style": "blur",
+          "reason": "학생 계정 이름"
+        }
+      ],
+      "maxWidth": 960
+    },
+    {
+      "out": "/docs/files/guides/classin-ai-blackboard-609/10-answer-stats.webp",
+      "source": "public/images/updates/609/bb_07_3e395856.png",
+      "maxWidth": 1200
+    },
+    {
+      "out": "/docs/files/guides/classin-609-update/01-agentin-menu.webp",
+      "source": "public/images/updates/609/rel_01_3e495856.png",
+      "crop": {
+        "x": 0.62,
+        "y": 0.45,
+        "w": 0.38,
+        "h": 0.5
+      },
+      "maxWidth": 900
+    },
+    {
+      "out": "/docs/files/guides/classin-609-update/02-agentin-student-allow.webp",
+      "source": "public/images/updates/609/rel_02_3e495856.png",
+      "crop": {
+        "x": 0.66,
+        "y": 0.6,
+        "w": 0.34,
+        "h": 0.36
+      },
+      "maxWidth": 900
+    },
+    {
+      "out": "/docs/files/guides/classin-609-update/03-homework-ai-grading.webp",
+      "source": "public/images/updates/609/rel_06_3e495856.png",
+      "masks": [
+        {
+          "x": 0.0,
+          "y": 0.165,
+          "w": 0.15,
+          "h": 0.115,
+          "style": "blur",
+          "reason": "학생 계정 이름"
+        }
+      ],
+      "maxWidth": 1200
+    },
+    {
+      "out": "/docs/files/guides/classin-609-update/04-homework-publish-all.webp",
+      "source": "public/images/updates/609/rel_07_3e495856.png",
+      "crop": {
+        "x": 0.35,
+        "y": 0.0,
+        "w": 0.65,
+        "h": 0.72
+      },
+      "masks": [
+        {
+          "x": 0.035,
+          "y": 0.745,
+          "w": 0.07,
+          "h": 0.1,
+          "style": "blur",
+          "reason": "프로필 사진"
+        },
+        {
+          "x": 0.09,
+          "y": 0.755,
+          "w": 0.2,
+          "h": 0.042,
+          "style": "blur",
+          "reason": "학생 계정 이름"
+        },
+        {
+          "x": 0.09,
+          "y": 0.888,
+          "w": 0.2,
+          "h": 0.042,
+          "style": "blur",
+          "reason": "학생 계정 이름"
+        }
+      ],
+      "maxWidth": 1100
+    },
+    {
+      "out": "/docs/files/guides/classin-609-update/05-ai-summary-option.webp",
+      "source": "public/images/updates/609/rel_05_3e495856.png",
+      "crop": {
+        "x": 0.63,
+        "y": 0.08,
+        "w": 0.37,
+        "h": 0.8
+      },
+      "maxWidth": 800
+    },
+    {
+      "out": "/docs/files/guides/classin-609-update/06-live-caption-option.webp",
+      "source": "public/images/updates/609/rel_09_3e495856.png",
+      "crop": {
+        "x": 0.63,
+        "y": 0.29,
+        "w": 0.37,
+        "h": 0.6
+      },
+      "maxWidth": 800
+    },
+    {
+      "out": "/docs/files/guides/classin-609-update/07-live-caption-settings.webp",
+      "source": "public/images/updates/609/rel_10_3e495856.jpg",
+      "crop": {
+        "x": 0.12,
+        "y": 0.34,
+        "w": 0.74,
+        "h": 0.58
+      },
+      "maxWidth": 1200
+    },
+    {
+      "out": "/docs/files/guides/classin-ai-lesson-analysis/01-replay-ai-analysis.webp",
+      "source": "public/images/updates/609/eval_01_3a695856.png",
+      "masks": [
+        {
+          "x": 0.07,
+          "y": 0.02,
+          "w": 0.22,
+          "h": 0.075,
+          "style": "blur",
+          "reason": "수업 이름·코스명"
+        },
+        {
+          "x": 0.08,
+          "y": 0.235,
+          "w": 0.32,
+          "h": 0.04,
+          "style": "blur",
+          "reason": "녹화 화면 속 계정 표시"
+        },
+        {
+          "x": 0.175,
+          "y": 0.895,
+          "w": 0.095,
+          "h": 0.05,
+          "style": "blur",
+          "reason": "교사 이름"
+        },
+        {
+          "x": 0.105,
+          "y": 0.296,
+          "w": 0.13,
+          "h": 0.018,
+          "style": "blur",
+          "reason": "녹화 화면 속 주소창 PC 사용자 계정명·파일 경로"
+        }
+      ],
+      "maxWidth": 1200
+    },
+    {
+      "out": "/docs/files/guides/classin-ai-lesson-analysis/02-report-time-chart.webp",
+      "source": "public/images/updates/609/eval_05_34595856.png",
+      "crop": {
+        "x": 0.18,
+        "y": 0.03,
+        "w": 0.64,
+        "h": 0.65
+      },
+      "maxWidth": 900
+    },
+    {
+      "out": "/docs/files/guides/classin-ai-lesson-analysis/03-admin-teacher-development.webp",
+      "source": "public/images/updates/609/eval_04_34595856.png",
+      "masks": [
+        {
+          "x": 0.75,
+          "y": 0.0,
+          "w": 0.115,
+          "h": 0.05,
+          "style": "blur",
+          "reason": "관리자 계정 이름"
+        },
+        {
+          "x": 0.905,
+          "y": 0.0,
+          "w": 0.04,
+          "h": 0.05,
+          "style": "blur",
+          "reason": "프로필 사진"
+        },
+        {
+          "x": 0.16,
+          "y": 0.39,
+          "w": 0.75,
+          "h": 0.46,
+          "style": "blur",
+          "reason": "수업 이름·교사 이름"
+        }
+      ],
+      "maxWidth": 1200
+    },
+    {
+      "out": "/docs/files/guides/classin-ai-lesson-analysis/04-value-added-service-toggle.webp",
+      "source": "public/images/updates/609/eval_02_34595856.png",
+      "crop": {
+        "x": 0.0,
+        "y": 0.0,
+        "w": 0.8,
+        "h": 0.44
+      },
+      "masks": [
+        {
+          "x": 0.935,
+          "y": 0.0,
+          "w": 0.065,
+          "h": 0.11,
+          "style": "blur",
+          "reason": "관리자 계정 이름"
+        },
+        {
+          "x": 0.244,
+          "y": 0.7,
+          "w": 0.425,
+          "h": 0.08,
+          "style": "fill",
+          "color": "#ffffff",
+          "reason": "기간 한정 요금 안내"
+        }
+      ],
+      "maxWidth": 1200
+    },
+    {
+      "out": "/docs/files/guides/classin-ai-lesson-analysis/05-lesson-ai-analysis-option.webp",
+      "source": "public/images/updates/609/rel_09_3e495856.png",
+      "crop": {
+        "x": 0.63,
+        "y": 0.08,
+        "w": 0.37,
+        "h": 0.62
+      },
+      "maxWidth": 800
+    },
+    {
+      "out": "/docs/files/guides/admin-monitoring-analytics/01-lesson-monitoring-detail.webp",
+      "source": "public/docs/files/cs-figma/group-5.png",
+      "masks": [
+        {
+          "x": 0.915,
+          "y": 0.0,
+          "w": 0.05,
+          "h": 0.045,
+          "style": "blur",
+          "reason": "프로필 사진"
+        },
+        {
+          "x": 0.04,
+          "y": 0.16,
+          "w": 0.915,
+          "h": 0.16,
+          "style": "blur",
+          "reason": "교실 화면 속 학생 영상·이름"
+        },
+        {
+          "x": 0.0,
+          "y": 0.83,
+          "w": 0.09,
+          "h": 0.17,
+          "style": "blur",
+          "reason": "교사·학생 이름과 계정"
+        }
+      ],
+      "maxWidth": 1200
+    },
+    {
+      "out": "/docs/files/guides/admin-monitoring-analytics/02-lesson-manage-menu.webp",
+      "source": "public/docs/files/cs-figma/웹-라이브-생성-방법-대시보드.png",
+      "crop": {
+        "x": 0.38,
+        "y": 0.671,
+        "w": 0.546,
+        "h": 0.039
+      },
+      "masks": [
+        {
+          "x": 0.765,
+          "y": 0.03,
+          "w": 0.066,
+          "h": 0.94,
+          "style": "blur",
+          "reason": "교사 이름"
+        }
+      ],
+      "maxWidth": 900
+    },
+    {
+      "out": "/docs/files/guides/admin-monitoring-analytics/03-web-live-options.webp",
+      "source": "public/docs/files/cs-figma/웹-라이브-생성-방법-대시보드.png",
+      "crop": {
+        "x": 0.355,
+        "y": 0.382,
+        "w": 0.29,
+        "h": 0.09
+      },
+      "maxWidth": 900
+    },
+    {
+      "out": "/docs/files/guides/admin-monitoring-analytics/05-statistics-download.webp",
+      "source": "public/docs/files/cs-figma/관리자-대시보드-현재-수업-진행.png",
+      "crop": {
+        "x": 0.165,
+        "y": 0.81,
+        "w": 0.335,
+        "h": 0.135
+      },
+      "maxWidth": 800
+    },
+    {
+      "out": "/docs/files/guides/lesson-activities/01-add-activity-types.webp",
+      "source": "public/docs/files/cs-figma/12-17-실시간-수업-생성-현장-녹화-확인-ifp.png",
+      "crop": {
+        "x": 0.1432,
+        "y": 0.2823,
+        "w": 0.2516,
+        "h": 0.1447
+      },
+      "maxWidth": 800
+    },
+    {
+      "out": "/docs/files/guides/lesson-activities/02-new-exam.webp",
+      "source": "public/docs/files/cs-figma/문제-은행-가이드.png",
+      "crop": {
+        "x": 0.1325,
+        "y": 0.172,
+        "w": 0.7355,
+        "h": 0.1274
+      },
+      "masks": [
+        {
+          "x": 0.715,
+          "y": 0.64,
+          "w": 0.215,
+          "h": 0.055,
+          "style": "blur",
+          "reason": "게시 대상 학원명"
+        },
+        {
+          "x": 0.905,
+          "y": 0.745,
+          "w": 0.075,
+          "h": 0.05,
+          "style": "blur",
+          "reason": "교사 이름"
+        }
+      ],
+      "maxWidth": 1100
+    },
+    {
+      "out": "/docs/files/guides/lesson-activities/03-repeat-after-me-student.webp",
+      "source": "public/docs/files/cs-figma/image-12.png",
+      "masks": [
+        {
+          "x": 0.562,
+          "y": 0.185,
+          "w": 0.113,
+          "h": 0.075,
+          "style": "fill",
+          "color": "#ffffff",
+          "reason": "화면 위 안내 메모"
+        }
+      ],
+      "maxWidth": 1100
+    },
+    {
+      "out": "/docs/files/guides/classroom-tools/01-expandable-writing-space.webp",
+      "source": "public/docs/files/classin-607-update/expandable-writing-space.png",
+      "crop": {
+        "x": 0.0,
+        "y": 0.045,
+        "w": 1.0,
+        "h": 0.925
+      },
+      "masks": [
+        {
+          "x": 0.598,
+          "y": 0.743,
+          "w": 0.08,
+          "h": 0.047,
+          "style": "fill",
+          "color": "#2e3037",
+          "reason": "화면 위 안내 메모"
+        },
+        {
+          "x": 0.598,
+          "y": 0.803,
+          "w": 0.215,
+          "h": 0.125,
+          "style": "fill",
+          "color": "#2e3037",
+          "reason": "화면 위 안내 메모"
+        }
+      ],
+      "maxWidth": 1200
+    },
+    {
+      "out": "/docs/files/guides/classroom-tools/02-magic-pen.webp",
+      "source": "public/docs/files/classin-607-update/magic-pen.png",
+      "maxWidth": 420
+    },
+    {
+      "out": "/docs/files/guides/classroom-tools/03-blackboard-menu.webp",
+      "source": "public/docs/files/cs-figma/판서-생성-불러오기.png",
+      "crop": {
+        "x": 0.11,
+        "y": 0.03,
+        "w": 0.78,
+        "h": 0.155
+      },
+      "masks": [
+        {
+          "x": 0.025,
+          "y": 0.885,
+          "w": 0.04,
+          "h": 0.07,
+          "style": "blur",
+          "reason": "프로필 사진"
+        }
+      ],
+      "maxWidth": 1100
+    },
+    {
+      "out": "/docs/files/guides/classroom-tools/04-open-edb-file.webp",
+      "source": "public/docs/files/cs-figma/판서-생성-불러오기.png",
+      "crop": {
+        "x": 0.159,
+        "y": 0.639,
+        "w": 0.736,
+        "h": 0.096
+      },
+      "maxWidth": 1100
+    },
+    {
+      "out": "/docs/files/guides/classroom-tools/05-save-share-board.webp",
+      "source": "public/docs/files/cs-figma/판서-생성-불러오기.png",
+      "crop": {
+        "x": 0.319,
+        "y": 0.831,
+        "w": 0.591,
+        "h": 0.114
+      },
+      "maxWidth": 1000
+    },
+    {
+      "out": "/docs/files/guides/board-basic-operation/01-classroom-control-panel.webp",
+      "source": "public/docs/files/cs-figma/클래스인-마이크-활성화-비활성화-전자칠판.png",
+      "crop": {
+        "x": 0.035,
+        "y": 0.065,
+        "w": 0.5,
+        "h": 0.17
+      },
+      "masks": [
+        {
+          "x": 0.06,
+          "y": 0.118,
+          "w": 0.185,
+          "h": 0.054,
+          "style": "blur",
+          "reason": "코스 ID"
+        }
+      ],
+      "maxWidth": 1100
+    },
+    {
+      "out": "/docs/files/guides/mic-dt2-pro/01-classroom-audio-settings.webp",
+      "source": "public/docs/files/cs-figma/클래스인-마이크-활성화-비활성화-전자칠판.png",
+      "crop": {
+        "x": 0.04,
+        "y": 0.262,
+        "w": 0.48,
+        "h": 0.201
+      },
+      "maxWidth": 900
+    },
+    {
+      "out": "/docs/files/guides/board-ai-camera-mic/01-device-test.webp",
+      "source": "public/docs/files/cs-figma/12-17-실시간-수업-생성-현장-녹화-확인-ifp.png",
+      "crop": {
+        "x": 0.542,
+        "y": 0.4857,
+        "w": 0.254,
+        "h": 0.0969
+      },
+      "maxWidth": 900
+    },
+    {
+      "out": "/docs/files/guides/board-ai-camera-mic/02-onsite-recording-option.webp",
+      "source": "public/docs/files/cs-figma/12-17-실시간-수업-생성-현장-녹화-확인-ifp.png",
+      "crop": {
+        "x": 0.6286,
+        "y": 0.2723,
+        "w": 0.2006,
+        "h": 0.176
+      },
+      "masks": [
+        {
+          "x": 0.72,
+          "y": 0.4,
+          "w": 0.24,
+          "h": 0.05,
+          "style": "blur",
+          "reason": "교사 이름·프로필 사진"
+        }
+      ],
+      "maxWidth": 800
+    },
+    {
+      "out": "/docs/files/guides/board-ai-camera-mic/03-recording-notice.webp",
+      "source": "public/docs/files/cs-figma/12-17-실시간-수업-생성-현장-녹화-확인-ifp.png",
+      "crop": {
+        "x": 0.06,
+        "y": 0.71,
+        "w": 0.39,
+        "h": 0.17
+      },
+      "masks": [
+        {
+          "x": 0.34,
+          "y": 0.82,
+          "w": 0.05,
+          "h": 0.085,
+          "style": "blur",
+          "reason": "프로필 사진"
+        },
+        {
+          "x": 0.46,
+          "y": 0.085,
+          "w": 0.145,
+          "h": 0.145,
+          "style": "blur",
+          "reason": "카메라 타일 속 교사 이름"
+        }
+      ],
+      "maxWidth": 1000
+    },
+    {
+      "out": "/docs/files/guides/board-ai-camera-mic/04-start-recording.webp",
+      "source": "public/docs/files/cs-figma/12-17-실시간-수업-생성-현장-녹화-확인-ifp.png",
+      "crop": {
+        "x": 0.538,
+        "y": 0.7128,
+        "w": 0.361,
+        "h": 0.1552
+      },
+      "masks": [
+        {
+          "x": 0.475,
+          "y": 0.075,
+          "w": 0.14,
+          "h": 0.155,
+          "style": "blur",
+          "reason": "교사 이름·카메라 영상 속 인물"
+        },
+        {
+          "x": 0.415,
+          "y": 0.36,
+          "w": 0.265,
+          "h": 0.22,
+          "style": "blur",
+          "reason": "카메라 영상 속 인물"
+        },
+        {
+          "x": 0.358,
+          "y": 0.855,
+          "w": 0.05,
+          "h": 0.085,
+          "style": "blur",
+          "reason": "프로필 사진"
+        }
+      ],
+      "maxWidth": 1000
+    },
+    {
+      "out": "/docs/files/guides/board-ai-camera-mic/05-recording-indicator.webp",
+      "source": "public/docs/files/cs-figma/12-17-실시간-수업-생성-현장-녹화-확인-ifp.png",
+      "crop": {
+        "x": 0.788,
+        "y": 0.8696,
+        "w": 0.158,
+        "h": 0.0556
+      },
+      "masks": [
+        {
+          "x": 0.0,
+          "y": 0.76,
+          "w": 0.11,
+          "h": 0.24,
+          "style": "blur",
+          "reason": "프로필 사진"
+        }
+      ],
+      "maxWidth": 600
+    }
+  ]
+}
