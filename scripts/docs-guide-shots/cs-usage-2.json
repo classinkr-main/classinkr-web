@@ -565,6 +565,18 @@
    },
    "masks": [],
    "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-328/05-new-course-check.webp",
+   "source": "public/docs/files/cs-figma/학원d-코스-학습-활동-다른-코스-과정에-복사하기.png",
+   "crop": {
+    "x": 0.125,
+    "y": 0.808,
+    "w": 0.75,
+    "h": 0.152
+   },
+   "masks": [],
+   "maxWidth": 1200
   }
  ]
 }
