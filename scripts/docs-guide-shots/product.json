@@ -24,12 +24,32 @@
     {
       "out": "/docs/files/guides/classin-ai-blackboard-609/04-student-answer-tools.webp",
       "source": "public/images/updates/609/bb_14_3e395856.png",
-      "maxWidth": 960
+      "maxWidth": 960,
+      "masks": [
+        {
+          "x": 0.97,
+          "y": 0.835,
+          "w": 0.03,
+          "h": 0.055,
+          "style": "blur",
+          "reason": "화면 가장자리에 잘린 이름 글자"
+        }
+      ]
     },
     {
       "out": "/docs/files/guides/classin-ai-blackboard-609/05-student-handwriting.webp",
       "source": "public/images/updates/609/bb_15_3e395856.png",
-      "maxWidth": 960
+      "maxWidth": 960,
+      "masks": [
+        {
+          "x": 0.955,
+          "y": 0.97,
+          "w": 0.045,
+          "h": 0.03,
+          "style": "blur",
+          "reason": "화면 가장자리에 잘린 이름 글자"
+        }
+      ]
     },
     {
       "out": "/docs/files/guides/classin-ai-blackboard-609/06-student-speaking.webp",
@@ -244,6 +264,14 @@
           "h": 0.05,
           "style": "blur",
           "reason": "교사 이름"
+        },
+        {
+          "x": 0.105,
+          "y": 0.296,
+          "w": 0.13,
+          "h": 0.018,
+          "style": "blur",
+          "reason": "녹화 화면 속 주소창 PC 사용자 계정명·파일 경로"
         }
       ],
       "maxWidth": 1200
@@ -621,6 +649,14 @@
           "h": 0.085,
           "style": "blur",
           "reason": "프로필 사진"
+        },
+        {
+          "x": 0.46,
+          "y": 0.085,
+          "w": 0.145,
+          "h": 0.145,
+          "style": "blur",
+          "reason": "카메라 타일 속 교사 이름"
         }
       ],
       "maxWidth": 1000
