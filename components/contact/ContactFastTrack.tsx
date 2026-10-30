@@ -41,10 +41,7 @@ export function ContactFastTrack() {
                         {kakaoChannelUrl ? (
                             "복잡한 양식 없이 클래스인 카카오톡 채널로 바로 연결됩니다. 급한 CS나 도입 상담은 QR코드를 스캔해주세요."
                         ) : (
-                            <>
-                                QR 코드를 확인하시거나,<br />
-                                아래 문의 폼으로 상담 내용을 남겨주세요.
-                            </>
+                            "아래 문의 폼으로 상담 내용을 남겨주세요."
                         )}
                     </p>
                     <div className="pt-4">

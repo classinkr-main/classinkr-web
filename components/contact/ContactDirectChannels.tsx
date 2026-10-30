@@ -50,7 +50,6 @@ export function ContactDirectChannels() {
                     <div>
                         <h4 className="font-bold text-[#111110] mb-0.5 text-sm">이메일 문의</h4>
                         <a href="mailto:classinkr@classin.com" data-track-location="contact_page" className="text-[#615D59] font-medium hover:text-[#084734] transition-colors">classinkr@classin.com</a>
-                        <p className="text-sm text-[#615D59] mt-1">답변 평균 대기 시간: 2시간 이내</p>
                     </div>
                 </div>
 

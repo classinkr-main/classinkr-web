@@ -356,8 +356,8 @@ function sanitizeMarkdownArtifacts(value) {
 }
 
 function parseTextComponent(component) {
-  const module = component.querySelector(".se-module-text");
-  if (!module) return [];
+  const textModule = component.querySelector(".se-module-text");
+  if (!textModule) return [];
 
   const blocks = [];
   let paragraphGroup = [];
@@ -368,7 +368,7 @@ function parseTextComponent(component) {
     }
   };
 
-  for (const child of [...module.children]) {
+  for (const child of [...textModule.children]) {
     const tag = child.tagName.toLowerCase();
     if (tag === "ol" || tag === "ul") {
       flush();
