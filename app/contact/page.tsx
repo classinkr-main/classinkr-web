@@ -283,6 +283,7 @@ export default function ContactPage() {
                 eventId: data.conversionEventId,
                 transactionId: data.leadId,
                 contactTopic: topicValue,
+                userData: { email: formData.get("email") as string, phone },
                 params: {
                     lead_id: data.leadId,
                     stored: data.stored,

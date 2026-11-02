@@ -487,6 +487,7 @@ export function ShowroomBookingForm({ interests }: Props) {
           source: "showroom_booking",
           dedupeKey: payload.bookingId,
           transactionId: payload.bookingId,
+          userData: { email, phone: form.phone },
           params: {
             page: "/showroom",
             visit_date: form.visitDate,

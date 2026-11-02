@@ -109,6 +109,10 @@ export function DemoModal({ children, trackingButton }: { children: React.ReactN
                 dedupeKey: data.conversionEventId ?? data.leadId,
                 eventId: data.conversionEventId,
                 transactionId: data.leadId,
+                userData: {
+                    email: formData.get("email") as string,
+                    phone: formData.get("phone") as string,
+                },
                 params: {
                     lead_id: data.leadId,
                     stored: data.stored,
