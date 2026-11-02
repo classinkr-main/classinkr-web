@@ -1,11 +1,13 @@
 import {
   GOOGLE_ADS_DEMO_CONVERSION_LABEL,
   GOOGLE_ADS_ID,
+  GOOGLE_ADS_SHOWROOM_CONVERSION_LABEL,
   KAKAO_PIXEL_ID,
   NAVER_LEAD_CONVERSION_TYPE,
   NAVER_WCS_ID,
 } from "@/lib/analytics-config"
 import { currentChoice, getAnonymousId } from "@/lib/consent/consent"
+import { isSalesContactTopic } from "@/lib/contact/topics"
 import {
   isTrackingExcludedPath,
   sanitizeTrackingTarget,
@@ -507,7 +509,26 @@ export interface LeadSubmittedInput {
   eventId?: string | null
   /** Google Ads 전환의 transaction_id(리드 id 또는 접수번호). */
   transactionId?: string | null
+  /** /contact 문의 유형. 영업 유형('도입 상담')일 때만 Google Ads 전환을 보낸다. */
+  contactTopic?: string | null
   params?: AnalyticsParams
+}
+
+/**
+ * 폼 → Google Ads 전환 라벨. 입찰은 쇼룸·도입 상담만 학습한다.
+ * 행사 신청·HW 주문 신청·지원 문의는 null(보내지 않음) — 보조 전환이 필요해지면 라벨을 더한다.
+ */
+function adsConversionLabel(input: LeadSubmittedInput): string | null {
+  switch (input.formType) {
+    case "showroom":
+      return GOOGLE_ADS_SHOWROOM_CONVERSION_LABEL
+    case "demo":
+      return GOOGLE_ADS_DEMO_CONVERSION_LABEL
+    case "contact":
+      return isSalesContactTopic(input.contactTopic) ? GOOGLE_ADS_DEMO_CONVERSION_LABEL : null
+    default:
+      return null
+  }
 }
 
 /**
@@ -533,11 +554,10 @@ export const trackLeadSubmitted = (input: LeadSubmittedInput): boolean => {
 
   trackEvent("submit_demo_request", params)
 
-  const eventSlug = typeof params.event_slug === "string" ? params.event_slug : undefined
-  trackDemoRequestAdsConversion({
-    leadId: input.transactionId ?? undefined,
-    eventId,
-    eventSlug,
+  trackAdsConversion(adsConversionLabel(input), {
+    transaction_id: input.transactionId ?? undefined,
+    event_id: eventId,
+    event_slug: typeof params.event_slug === "string" ? params.event_slug : undefined,
   })
   return true
 }
@@ -591,20 +611,5 @@ export const trackAdsConversion = (
     send_to: `${GOOGLE_ADS_ID}/${label}`,
     page_location: currentPageLocation(),
     ...(params ?? {}),
-  })
-}
-
-/**
- * 리드 전환은 trackLeadSubmitted 를 거쳐 부른다 — 직접 부르면 stored=false·중복 방지를 건너뛴다.
- */
-export const trackDemoRequestAdsConversion = (params: {
-  leadId?: string | null
-  eventId?: string | null
-  eventSlug?: string | null
-}) => {
-  trackAdsConversion(GOOGLE_ADS_DEMO_CONVERSION_LABEL, {
-    transaction_id: params.leadId ?? undefined,
-    event_id: params.eventId ?? undefined,
-    event_slug: params.eventSlug ?? undefined,
   })
 }

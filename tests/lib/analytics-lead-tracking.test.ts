@@ -9,6 +9,7 @@ vi.mock("@/lib/consent/consent", () => ({
 
 vi.mock("@/lib/analytics-config", () => ({
   GOOGLE_ADS_DEMO_CONVERSION_LABEL: "demo-label",
+  GOOGLE_ADS_SHOWROOM_CONVERSION_LABEL: "showroom-label",
   GOOGLE_ADS_ID: "AW-TEST",
   KAKAO_PIXEL_ID: null,
   NAVER_LEAD_CONVERSION_TYPE: null,
@@ -97,6 +98,7 @@ describe("trackLeadSubmitted", () => {
       dedupeKey: "lead:abc",
       eventId: "lead:abc",
       transactionId: "abc",
+      contactTopic: "도입 상담",
       params: { lead_id: "abc", stored: true, event_slug: "fall-seminar" },
     })
 
@@ -145,6 +147,25 @@ describe("trackLeadSubmitted", () => {
     expect(gtagEvents("generate_lead")).toHaveLength(1)
     expect(gtagEvents("conversion")).toHaveLength(1)
     expect(storage.map.get("classinkr.leadTracked.booking-1")).toBe("1")
+  })
+
+  it("routes each form to its Ads conversion label and skips non-sales leads", () => {
+    const sendTo = () => gtagEvents("conversion").map(([, , params]) => params?.send_to)
+    const send = (input: Parameters<typeof trackLeadSubmitted>[0]) => {
+      gtag.mockClear()
+      expect(trackLeadSubmitted(input)).toBe(true)
+      return sendTo()
+    }
+
+    expect(send({ formType: "showroom", source: "showroom_booking", dedupeKey: "r1" })).toEqual(["AW-TEST/showroom-label"])
+    expect(send({ formType: "demo", source: "demo_modal", dedupeKey: "r2" })).toEqual(["AW-TEST/demo-label"])
+    expect(send({ formType: "contact", source: "contact_page", dedupeKey: "r3", contactTopic: "도입 상담" })).toEqual(["AW-TEST/demo-label"])
+    // 지원 문의·유형 없음·행사·HW 주문은 GA4 리드로만 남고 광고 전환은 보내지 않는다.
+    expect(send({ formType: "contact", source: "contact_page", dedupeKey: "r4", contactTopic: "계정/접속/기술 지원" })).toEqual([])
+    expect(send({ formType: "contact", source: "contact_page", dedupeKey: "r5" })).toEqual([])
+    expect(send({ formType: "event", source: "contact_page", dedupeKey: "r6" })).toEqual([])
+    expect(send({ formType: "checkout_request", source: "checkout_request", dedupeKey: "r7" })).toEqual([])
+    expect(gtagEvents("generate_lead")).toHaveLength(1)
   })
 
   it("respects a key already recorded in sessionStorage (e.g. after a reload)", () => {

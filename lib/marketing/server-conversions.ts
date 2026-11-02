@@ -3,6 +3,7 @@ import "server-only"
 import { createHash, createHmac } from "node:crypto"
 import type { NextRequest } from "next/server"
 
+import { GOOGLE_ADS_ID } from "@/lib/analytics-config"
 import {
   ANONYMOUS_ID_COOKIE,
   CONSENT_COOKIE,
@@ -150,7 +151,7 @@ export function getMarketingConversionStatus() {
       testEventCodeConfigured: Boolean(readEnv("META_TEST_EVENT_CODE")),
     },
     google: {
-      adsId: "AW-18252550128",
+      adsId: GOOGLE_ADS_ID,
       demoConversionLabelConfigured: Boolean(readEnv("NEXT_PUBLIC_GOOGLE_ADS_DEMO_CONVERSION_LABEL")),
       ga4MeasurementId,
       measurementProtocolConfigured: Boolean(ga4MeasurementProtocolId && ga4ApiSecret),

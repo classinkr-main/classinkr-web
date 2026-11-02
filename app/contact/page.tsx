@@ -327,6 +327,7 @@ export default function ContactPage() {
                 dedupeKey: data.conversionEventId ?? data.leadId,
                 eventId: data.conversionEventId,
                 transactionId: data.leadId,
+                contactTopic: topicValue,
                 params: {
                     lead_id: data.leadId,
                     stored: data.stored,
