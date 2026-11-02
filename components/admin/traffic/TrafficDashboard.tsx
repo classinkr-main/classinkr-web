@@ -138,10 +138,93 @@ async function fetchJson<T>(url: string): Promise<T | null> {
 }
 
 function formatDuration(seconds: number) {
-  if (!seconds || seconds <= 0) return "데이터 없음"
-  const minutes = Math.floor(seconds / 60)
-  const rest = seconds % 60
+  if (!seconds || seconds <= 0) return "—"
+  const whole = Math.round(seconds)
+  const minutes = Math.floor(whole / 60)
+  const rest = whole % 60
   return minutes > 0 ? `${minutes}분 ${rest}초` : `${rest}초`
+}
+
+// 홈(/)을 본 다음 바로 연 페이지 — 사이트 이탈 포함 상위 8개(API가 자름). 막대 길이 = 비중 그대로.
+function HomeNextStepsPanel({
+  steps,
+  loading,
+}: {
+  steps: HomepageFlow["nextStepsFromHome"]
+  loading: boolean
+}) {
+  const total = steps.reduce((sum, step) => sum + step.count, 0)
+  const exitShare = steps.find((step) => step.path === "__exit__")?.share ?? 0
+
+  return (
+    <section
+      aria-labelledby="home-next-steps-title"
+      className="flex flex-col overflow-hidden rounded-2xl border border-black/[0.08] bg-white"
+    >
+      <div className="border-b border-black/[0.08] px-4 py-3">
+        <h2
+          id="home-next-steps-title"
+          className="text-[15px] font-bold tracking-[-0.01em] text-[#111110]"
+        >
+          홈 다음 이동
+        </h2>
+        <p className="mt-0.5 text-[11px] leading-5 text-[#615D59]">
+          홈을 본 뒤 바로 연 페이지
+          {total > 0 ? ` · 총 ${total.toLocaleString("ko-KR")}회` : ""}
+        </p>
+      </div>
+      {loading ? (
+        <div className="space-y-1.5 p-3">
+          {Array.from({ length: 6 }).map((_, index) => (
+            <div key={index} className="h-8 animate-pulse rounded-lg bg-[#F0F0EC]" />
+          ))}
+        </div>
+      ) : steps.length === 0 ? (
+        <p className="px-4 py-8 text-center text-[12px] text-[#615D59]">
+          연속 page_view 데이터가 더 필요합니다.
+        </p>
+      ) : (
+        <ol className="divide-y divide-black/[0.06]">
+          {steps.map((step) => {
+            const exit = step.path === "__exit__"
+            return (
+              <li key={step.path} className="px-4 py-2" title={step.path}>
+                <div className="flex items-baseline justify-between gap-3 text-[13px]">
+                  <span
+                    className={`min-w-0 truncate font-semibold ${exit ? "text-[#B43E3E]" : "text-[#111110]"}`}
+                  >
+                    {pageName(step.path)}
+                  </span>
+                  <span className="shrink-0 tabular-nums text-[12px] text-[#8A857F]">
+                    <span className="text-[13px] font-semibold text-[#111110]">{step.share}%</span>
+                    {` · ${step.count.toLocaleString("ko-KR")}회`}
+                  </span>
+                </div>
+                <span aria-hidden="true" className="mt-1 block h-[3px] overflow-hidden rounded-full bg-[#F0F0EC]">
+                  <span
+                    className={`block h-full rounded-full ${exit ? "bg-[#B43E3E]" : "bg-[#084734]"}`}
+                    style={{ width: `${Math.min(step.share, 100)}%` }}
+                  />
+                </span>
+              </li>
+            )
+          })}
+        </ol>
+      )}
+      {!loading && steps.length > 0 ? (
+        <p className="mt-auto flex items-baseline justify-between gap-3 border-t border-black/[0.08] bg-[#FAFAF8] px-4 py-2.5 text-[12px] text-[#615D59]">
+          <span>
+            계속 둘러봄{" "}
+            <strong className="text-[14px] tabular-nums text-[#084734]">{Math.max(0, 100 - exitShare)}%</strong>
+          </span>
+          <span>
+            바로 이탈{" "}
+            <strong className="text-[14px] tabular-nums text-[#B43E3E]">{exitShare}%</strong>
+          </span>
+        </p>
+      ) : null}
+    </section>
+  )
 }
 
 function formatUpdatedAt(value: string | null) {
@@ -663,40 +746,48 @@ export default function TrafficDashboard({
         </div>
       </section>
 
-      <section
-        aria-labelledby="page-performance-title"
-        className="mb-5 overflow-hidden rounded-2xl border border-black/[0.08] bg-white"
-      >
-        <div className="border-b border-black/[0.08] px-4 py-4 sm:px-6">
-          <h2
-            id="page-performance-title"
-            className="text-[16px] font-bold tracking-[-0.01em] text-[#111110]"
-          >
-            페이지 성과
-          </h2>
-          <p className="mt-1 text-[12px] leading-5 text-[#615D59]">
-            많이 본 페이지 순 · 막대는 1위 대비 페이지뷰, %는 전체 페이지뷰 중 비중 · 이탈률 60% 이상은 빨간 굵은 글씨
-          </p>
-        </div>
-        <div className="p-4 sm:p-6">
+      {/* 넓은 화면: 페이지 성과(체류·이탈) 2 : 홈 다음 이동 1, 같은 높이로 나란히 */}
+      <div className="mb-5 grid gap-5 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+        <section
+          aria-labelledby="page-performance-title"
+          className="overflow-hidden rounded-2xl border border-black/[0.08] bg-white"
+        >
+          <div className="border-b border-black/[0.08] px-4 py-3">
+            <h2
+              id="page-performance-title"
+              className="text-[15px] font-bold tracking-[-0.01em] text-[#111110]"
+            >
+              페이지 성과
+            </h2>
+            <p className="mt-0.5 text-[11px] leading-5 text-[#615D59]">
+              많이 본 순 · 막대=1위 대비 · %=전체 페이지뷰 비중 · 이탈률 60%↑ 빨간 글씨
+            </p>
+          </div>
           {loading ? (
-            <div className="space-y-2">
-              {Array.from({ length: 5 }).map((_, index) => (
+            <div className="space-y-1.5 p-3">
+              {Array.from({ length: 8 }).map((_, index) => (
                 <div
                   key={index}
-                  className="h-14 animate-pulse rounded-xl bg-[#F0F0EC]"
+                  className="h-8 animate-pulse rounded-lg bg-[#F0F0EC]"
                 />
               ))}
             </div>
           ) : (
-            <PagePerformanceTable
-              rows={homepageFlow?.topPages ?? []}
-              totalPageViews={homepageFlow?.totals.pageViews}
-              formatDuration={formatDuration}
-            />
+            <div className="p-3 md:p-0">
+              <PagePerformanceTable
+                rows={homepageFlow?.topPages ?? []}
+                totalPageViews={homepageFlow?.totals.pageViews}
+                formatDuration={formatDuration}
+              />
+            </div>
           )}
-        </div>
-      </section>
+        </section>
+
+        <HomeNextStepsPanel
+          steps={homepageFlow?.nextStepsFromHome ?? []}
+          loading={loading}
+        />
+      </div>
 
       <TrafficConversionPanel
         activeTab={detailTab}
