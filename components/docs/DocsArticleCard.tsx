@@ -1,6 +1,7 @@
 import Link from "next/link"
 import { ArrowRight, Clock } from "lucide-react"
 
+import { DocsKindLabel } from "./DocsListRow"
 import type { DocsArticleSummary } from "./types"
 import { cn } from "./utils"
 
@@ -16,19 +17,22 @@ export function DocsArticleCard({
     readTime,
     updatedAt,
     tags = [],
+    kind,
+    imageCount,
     className,
 }: DocsArticleCardProps) {
     return (
         <Link
             href={href}
             className={cn(
-                "group block origin-center border-b border-black/[0.08] py-5 transition-all duration-150 last:border-b-0 hover:border-[#084734]/25 active:scale-[0.98] active:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8]",
+                "group block border-b border-black/[0.08] py-5 transition-colors duration-150 last:border-b-0 hover:border-black/[0.16] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8]",
                 className
             )}
         >
             <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2 text-[13px] text-[#615D59]">
+                        <DocsKindLabel kind={kind} />
                         {category ? <span>{category}</span> : null}
                         {readTime ? (
                             <span className="inline-flex items-center gap-1">
@@ -36,6 +40,7 @@ export function DocsArticleCard({
                                 {readTime}
                             </span>
                         ) : null}
+                        {imageCount ? <span>사진 {imageCount}장</span> : null}
                         {updatedAt ? <span>업데이트 {updatedAt}</span> : null}
                     </div>
                     <h3 className="mt-2 break-words text-[16px] font-semibold leading-snug tracking-card text-[#111110] transition-colors group-hover:text-[#084734]">
@@ -47,7 +52,7 @@ export function DocsArticleCard({
                 </div>
                 <ArrowRight
                     aria-hidden
-                    className="mt-1 h-4 w-4 shrink-0 text-[#A39E98] transition-transform duration-200 group-hover:translate-x-1 group-hover:text-[#084734]"
+                    className="mt-1 h-4 w-4 shrink-0 text-[#A39E98] transition-[color,transform] duration-150 group-hover:translate-x-0.5 group-hover:text-[#084734]"
                 />
             </div>
 

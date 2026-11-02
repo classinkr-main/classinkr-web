@@ -124,7 +124,7 @@ export function CaseStudies() {
     }
 
     return (
-        <section className="py-16 md:py-24 bg-[#F6F5F4]">
+        <section id="case-studies" className="scroll-mt-24 py-16 md:py-24 bg-[#F6F5F4]">
             <div className="container mx-auto">
                 <h2 className="text-3xl font-extrabold text-center text-[#111110] sm:text-4xl mb-12 break-keep">
                     성공적인 도입 사례

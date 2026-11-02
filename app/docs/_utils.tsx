@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
-import Image from "next/image"
 
 import BlogMarkdownRenderer from "@/components/blog/BlogMarkdownRenderer"
+import { DocsSectionMedia } from "@/components/docs/DocsSectionMedia"
 import type {
   DocsArticleSection,
   DocsArticleSummary,
@@ -17,9 +17,10 @@ import {
   type DocArticle,
   type DocCategory,
   type DocCategoryId,
-  type DocMedia,
 } from "@/lib/docs"
 import type { DocsContent } from "@/lib/docs-content"
+import { buildDocsSearchIndex, scoreDocsSearch } from "@/lib/docs-search"
+import { getDocListKind, getDocListPreview } from "@/lib/docs-list-meta"
 
 const staticDocsContent: DocsContent = {
   categories: docsCategories,
@@ -141,6 +142,7 @@ export function toArticleSummary(
   categories = docsCategories
 ): DocsArticleSummary {
   const category = categories.find((item) => item.id === doc.category)
+  const preview = getDocListPreview(doc)
 
   return {
     title: doc.title,
@@ -151,6 +153,11 @@ export function toArticleSummary(
     updatedAt: formatDocDate(doc.updatedAt),
     tags: doc.tags,
     searchText: getDocSearchText(doc),
+    searchIndex: buildDocsSearchIndex(doc),
+    kind: getDocListKind(doc),
+    thumbnail: preview.thumbnail,
+    imageCount: preview.imageCount,
+    updatedAtIso: doc.updatedAt,
   }
 }
 
@@ -171,48 +178,12 @@ export function toArticleSections(doc: DocArticle): DocsArticleSection[] {
             tone: "info" as const,
           }
         : undefined,
-    children: section.media?.length ? <DocsSectionMedia media={section.media} /> : undefined,
+    // 사진 배치·크게 보기는 components/docs/DocsSectionMedia.tsx 가 맡는다.
+    // 첫 섹션의 첫 사진만 바로 받고, 나머지는 스크롤할 때 받는다.
+    children: section.media?.length ? (
+      <DocsSectionMedia media={section.media} eager={index === 0} />
+    ) : undefined,
   }))
-}
-
-function DocsSectionMedia({ media }: { media: DocMedia[] }) {
-  return (
-    <div className="space-y-5">
-      {media.map((item) => (
-        <figure key={item.src} className="overflow-hidden rounded-lg border border-black/[0.08] bg-white">
-          {item.type === "image" ? (
-            <Image
-              src={item.src}
-              alt={item.alt}
-              width={item.width ?? 1440}
-              height={item.height ?? 900}
-              sizes="(min-width: 1024px) 760px, calc(100vw - 32px)"
-              unoptimized={item.src.startsWith("/")}
-              className={
-                item.width && item.height && item.height > item.width
-                  ? "mx-auto h-auto max-h-[640px] w-auto max-w-full object-contain"
-                  : "h-auto w-full object-contain"
-              }
-            />
-          ) : (
-            <video
-              controls
-              preload="metadata"
-              src={item.src}
-              className="block w-full bg-black"
-            >
-              {item.alt}
-            </video>
-          )}
-          {item.caption ? (
-            <figcaption className="border-t border-black/[0.08] px-4 py-3 text-sm leading-6 text-[#615D59]">
-              {item.caption}
-            </figcaption>
-          ) : null}
-        </figure>
-      ))}
-    </div>
-  )
 }
 
 export function toTocItems(doc: DocArticle): DocsTocItem[] {
@@ -245,6 +216,45 @@ export function getAllDocsSummaries(content = staticDocsContent) {
   return content.docs
     .filter(isListedDoc)
     .map((doc) => toArticleSummary(doc, content.categories))
+}
+
+export interface TroubleshootingLink {
+  label: string
+  /** 히어로 한 줄 바로가기용 짧은 증상 이름. 지정이 없으면 제목에서 괄호 설명을 뗀 것. */
+  shortLabel: string
+  href: string
+  summary: DocsArticleSummary
+}
+
+/**
+ * 공개 목록에 있는 문제 해결 문서(docType "troubleshooting")를 모은다.
+ * 짧은 이름은 문서 제목을 그대로 쓰되, 앞쪽 순서는 실제 문의가 많은 증상 순으로 고정한다.
+ * shortLabels 는 href → 짧은 증상 이름(예: "로그인"). 새 문서는 제목에서 자동으로 만든다.
+ */
+export function getTroubleshootingLinks(
+  content = staticDocsContent,
+  preferredOrder: readonly string[] = [],
+  shortLabels: Readonly<Record<string, string>> = {}
+): TroubleshootingLink[] {
+  const rank = (href: string) => {
+    const index = preferredOrder.indexOf(href)
+    return index === -1 ? preferredOrder.length : index
+  }
+
+  return content.docs
+    .filter((doc) => isListedDoc(doc) && doc.docType === "troubleshooting")
+    .map((doc, index) => ({ doc, index, href: getDocPath(doc) }))
+    .sort((a, b) => rank(a.href) - rank(b.href) || a.index - b.index)
+    .map(({ doc, href }) => {
+      const label = doc.title.replace(/\s*[—-]\s.*$/, "")
+
+      return {
+        label,
+        shortLabel: shortLabels[href] ?? label.replace(/\s*\(.*\)\s*$/, ""),
+        href,
+        summary: toArticleSummary(doc, content.categories),
+      }
+    })
 }
 
 export function getDocsCategoryNavItems(
@@ -397,11 +407,15 @@ export function getGuideProductTiles(content = staticDocsContent): GuideProductT
 
 export function getCuratedFeaturedSummaries(
   content = staticDocsContent,
-  limit = 6
+  limit = 6,
+  /** 같은 화면의 다른 묶음에 이미 나온 문서는 건너뛰고 다음 문서로 채운다. */
+  excludeHrefs?: ReadonlySet<string>
 ): DocsArticleSummary[] {
   const pools = new Map<DocCategoryId, { featured: DocArticle[]; rest: DocArticle[] }>()
   for (const categoryId of CURATED_FEATURED_ORDER) {
-    const listed = getListedDocsByCategory(content, categoryId)
+    const listed = getListedDocsByCategory(content, categoryId).filter(
+      (doc) => !excludeHrefs?.has(getDocPath(doc))
+    )
     pools.set(categoryId, {
       featured: listed.filter((doc) => doc.featured),
       rest: listed.filter((doc) => !doc.featured),
@@ -452,52 +466,10 @@ export function getInstallGuideLinks(content = staticDocsContent, limit = 3): Gu
     .map(({ doc }) => ({ title: doc.title, href: getDocPath(doc) }))
 }
 
+/**
+ * 검색 점수(0이면 결과에서 뺀다). 띄어쓰기·조사·흔한 구어/오타·동의어를 맞추고
+ * 제목 > 섹션 제목 > 키워드 > 설명 > 본문 순으로 가중한다. 규칙은 lib/docs-search.ts.
+ */
 export function scoreDocsArticle(doc: DocsArticleSummary, query: string): number {
-  const tokens = query.split(/\s+/).filter(Boolean)
-  if (tokens.length === 0) return 0
-
-  const titleLower = doc.title.toLowerCase()
-  const descLower = doc.description.toLowerCase()
-  const categoryLower = (doc.category ?? "").toLowerCase()
-  const tagsLower = (doc.tags ?? []).map((t: string) => t.toLowerCase())
-  const searchTextLower = (doc.searchText ?? "").toLowerCase()
-
-  let score = 0
-  let matchesAll = true
-
-  for (const token of tokens) {
-    let tokenMatched = false
-
-    if (titleLower.includes(token)) {
-      score += 100
-      tokenMatched = true
-    }
-    if (descLower.includes(token)) {
-      score += 50
-      tokenMatched = true
-    }
-    if (tagsLower.some((t: string) => t.includes(token))) {
-      score += 30
-      tokenMatched = true
-    }
-    if (categoryLower.includes(token)) {
-      score += 10
-      tokenMatched = true
-    }
-    if (searchTextLower.includes(token)) {
-      score += 10
-      tokenMatched = true
-    }
-
-    if (!tokenMatched) {
-      matchesAll = false
-    }
-  }
-
-  // Bonus for matching all tokens (AND-match gets high priority)
-  if (matchesAll && tokens.length > 1) {
-    score += 500
-  }
-
-  return score
+  return scoreDocsSearch(doc, query)
 }
