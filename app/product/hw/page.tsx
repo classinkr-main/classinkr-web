@@ -3,6 +3,7 @@
 import { Button } from "@/components/ui/button"
 import { trackEvent } from "@/lib/analytics"
 import { BROCHURE_URL } from "@/lib/marketing-links"
+import { TrackedLink } from "@/components/TrackedLink"
 import { TESTIMONIALS } from "@/lib/testimonials"
 import { BOARD_SPEC_GROUPS } from "@/lib/hardware/board-specs"
 import { motion, useInView } from "framer-motion"
@@ -16,6 +17,10 @@ import Image from "next/image"
 import Link from "next/link"
 import dynamic from "next/dynamic"
 import { Fragment, useRef, useState } from "react"
+
+// 이 페이지는 클라이언트 컴포넌트라 lib/docs.ts(수천 줄짜리 문서 데이터)를 번들에 끌어오지 않도록 경로를 직접 적는다.
+// 문서 slug/카테고리가 바뀌면 tests/seo/internal-doc-links.test.ts 가 잡는다.
+const HW_SPEC_FAQ_DOC_HREF = "/docs/hardware/hardware-spec-installation-faq"
 
 // below-the-fold 섹션은 dynamic import로 메인 번들에서 분리 (SSR은 유지되어 초기 HTML 동일)
 const OpeningStatement = dynamic(() => import("@/components/product/hw/OpeningStatement"))
@@ -456,43 +461,6 @@ function ProductAnatomySection() {
     )
 }
 
-/* ── Section: Impact Numbers (Full-width dark) ───────────────────── */
-function ImpactNumbersSection() {
-    const ref = useRef(null)
-    const inView = useInView(ref, { once: true, margin: "-50px" })
-
-    const stats = [
-        { value: "1,200+", label: "도입 학교·기관", sub: "국내외 교육 현장" },
-        { value: "35,000+", label: "활성 교사", sub: "매일 수업에 활용 중" },
-        { value: "12개국", label: "글로벌 교육 시장", sub: "아시아·유럽·미주" },
-    ]
-
-    return (
-        <section ref={ref} className="bg-[#0d1a12] relative overflow-hidden">
-            <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_50%_50%,_rgba(110,231,183,0.13)_0%,_transparent_100%)]" />
-            <div className="container mx-auto px-4 lg:px-8 py-20 md:py-28 relative">
-                <div className="grid md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-white/8">
-                    {stats.map((s, i) => (
-                        <motion.div
-                            key={i}
-                            initial={{ opacity: 0, y: 24 }}
-                            animate={inView ? { opacity: 1, y: 0 } : {}}
-                            transition={{ duration: 0.6, delay: i * 0.15 }}
-                            className="py-12 md:py-0 md:px-16 text-center"
-                        >
-                            <div className="text-5xl md:text-6xl lg:text-7xl font-sans font-bold tabular-nums tracking-tight text-white leading-none mb-3">
-                                {s.value}
-                            </div>
-                            <div className="text-xs font-bold text-[#6EE7B7] uppercase tracking-[0.2em] mb-2">{s.label}</div>
-                            <div className="text-sm text-white/35">{s.sub}</div>
-                        </motion.div>
-                    ))}
-                </div>
-            </div>
-        </section>
-    )
-}
-
 /* ── Section: Full-Width Point (reusable) ────────────────────────── */
 function FullWidthPointSection({
     eyebrow, statement, sub, dark = false, image, contentClassName,
@@ -893,9 +861,6 @@ export default function ProductHWPage() {
 
             {/* BIG BACKDROP — 베젤 클로즈업 풀블리드 */}
             <BigBackdropImage />
-
-            {/* IMPACT NUMBERS — 숫자로 보는 Classin Board */}
-            <ImpactNumbersSection />
 
             {/* DESIGN DETAILS — 반사·지문·몰입 3카드 */}
             <DesignDetails />
@@ -1356,6 +1321,25 @@ export default function ProductHWPage() {
                                 서비스 소개서 보기
                                 </a>
                             </Button>
+                        </div>
+
+                        <div className="mt-8 flex flex-col items-center justify-center gap-1 sm:flex-row sm:gap-8">
+                            <TrackedLink
+                                href={HW_SPEC_FAQ_DOC_HREF}
+                                ctaId="hw_spec_faq_doc"
+                                className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-[#084734] transition-colors hover:text-[#065c41] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#084734]"
+                            >
+                                사양·설치 환경 FAQ 보기
+                                <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                            </TrackedLink>
+                            <TrackedLink
+                                href="/faq"
+                                ctaId="hw_faq_more"
+                                className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-[#084734] transition-colors hover:text-[#065c41] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#084734]"
+                            >
+                                전체 FAQ 보기
+                                <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                            </TrackedLink>
                         </div>
                     </motion.div>
                 </div>

@@ -32,7 +32,8 @@ interface DownloadFormState {
   email: string
   phone: string
   website: string
-  consent: boolean
+  privacyConsent: boolean
+  marketingConsent: boolean
 }
 
 const initialForm: DownloadFormState = {
@@ -43,7 +44,8 @@ const initialForm: DownloadFormState = {
   email: "",
   phone: "",
   website: "",
-  consent: true,
+  privacyConsent: false,
+  marketingConsent: false,
 }
 
 const inputClassName =
@@ -75,6 +77,24 @@ export function ResourceDownloadForm({ resource }: ResourceDownloadFormProps) {
     })
   }
 
+  // 실제 다운로드가 시작되는 순간(서명 URL 을 받은 직후) 1회. 서명 URL·이메일은 싣지 않는다 —
+  // 자료 슬러그·게이트·경로만. lead_magnet 은 어드민 자료 지표(lead-magnet-metrics)가 슬러그로 묶는 키다.
+  // 픽셀은 건너뛴다 — download_materials 는 Meta 에서 Lead 로 매핑돼, 자료 신청(CompleteRegistration)에
+  // 더해 같은 사람이 Lead 로 한 번 더 잡힌다.
+  const trackMaterialDownload = useCallback(() => {
+    trackEvent(
+      "download_materials",
+      {
+        asset_id: resource.slug,
+        lead_magnet: resource.slug,
+        gate: resource.gate,
+        source: "resource_pdf_download",
+        page_path: window.location.pathname,
+      },
+      { skipMarketingPixels: true }
+    )
+  }, [resource.gate, resource.slug])
+
   // 로그인 게이트: 로그인 후 같은 페이지로 돌아오면 다운로드를 한 번 자동 실행한다.
   const runLoginDownload = useCallback(async () => {
     setLoading(true)
@@ -84,6 +104,7 @@ export function ResourceDownloadForm({ resource }: ResourceDownloadFormProps) {
         slug: resource.slug,
         source: "resource_pdf_download",
       })
+      trackMaterialDownload()
       window.location.assign(result.url)
     } catch (downloadError) {
       if (
@@ -101,7 +122,7 @@ export function ResourceDownloadForm({ resource }: ResourceDownloadFormProps) {
     } finally {
       setLoading(false)
     }
-  }, [resource.slug])
+  }, [resource.slug, trackMaterialDownload])
 
   useEffect(() => {
     // 자동 재개는 로그인 게이트 전용. 이메일 게이트는 폼 입력이 필요하므로 재개하지 않는다.
@@ -130,8 +151,8 @@ export function ResourceDownloadForm({ resource }: ResourceDownloadFormProps) {
     if (loading) return
 
     const email = form.email.trim().toLowerCase()
-    if (!email || !form.name.trim() || !form.org.trim() || !form.consent) {
-      setError("필수 정보를 입력하고 수신 동의에 체크해 주세요.")
+    if (!email || !form.name.trim() || !form.org.trim() || !form.privacyConsent) {
+      setError("필수 정보를 입력하고 개인정보 수집·이용에 동의해 주세요.")
       return
     }
 
@@ -155,7 +176,7 @@ export function ResourceDownloadForm({ resource }: ResourceDownloadFormProps) {
           email,
           phone: form.phone.trim(),
           message: `PDF 자료 요청: ${resource.title}`,
-          marketingConsent: true,
+          marketingConsent: form.marketingConsent,
           currentPage: attribution.currentPage ?? window.location.href,
           landingPage: attribution.landingPage ?? window.location.origin + window.location.pathname,
           referrer: attribution.referrer ?? document.referrer,
@@ -170,18 +191,24 @@ export function ResourceDownloadForm({ resource }: ResourceDownloadFormProps) {
         return
       }
 
-      trackEvent("submit_newsletter", {
-        source: "resource_pdf_download",
-        lead_magnet: resource.slug,
-        gate: resource.gate,
-        event_id: leadData.conversionEventId,
-      })
+      // 구독 전환은 선택 마케팅 동의를 한 사람만 센다. 서버가 저장하지 않은 제출
+      // (허니팟·60초 중복 → stored:false)도 세지 않는다.
+      if (form.marketingConsent && leadData.stored !== false) {
+        trackEvent("submit_newsletter", {
+          source: "resource_pdf_download",
+          form_type: "resource",
+          lead_magnet: resource.slug,
+          gate: resource.gate,
+          event_id: leadData.conversionEventId,
+        })
+      }
 
       const result = await requestMaterialDownload({
         slug: resource.slug,
         email,
         source: "resource_pdf_download",
       })
+      trackMaterialDownload()
 
       const destination = new URL(result.url, window.location.origin)
       const isCurrentPage = destination.pathname === window.location.pathname
@@ -414,15 +441,26 @@ export function ResourceDownloadForm({ resource }: ResourceDownloadFormProps) {
               <label className="flex gap-2 border border-black/[0.08] bg-[#F6F5F4] p-3 text-[12px] leading-5 text-[#615D59]">
                 <input
                   type="checkbox"
-                  checked={form.consent}
-                  onChange={(event) => updateField("consent", event.target.checked)}
+                  checked={form.privacyConsent}
+                  onChange={(event) => updateField("privacyConsent", event.target.checked)}
                   className="mt-0.5 h-4 w-4 accent-[#084734]"
                   required
                 />
                 <span>
-                  자료 제공과 Classin 교육 인사이트·제품 소식 수신에 동의합니다. 언제든 수신거부할
-                  수 있습니다.
+                  [필수] 자료 제공을 위한 개인정보 수집·이용에 동의합니다. 수집 항목: 이름, 이메일,
+                  학원명 및 선택 입력 정보 · 목적: 자료 제공 · 보유 기간: 개인정보처리방침 참조.{' '}
+                  <a href="/privacy" target="_blank" rel="noopener noreferrer" className="underline">개인정보처리방침</a>
                 </span>
+              </label>
+
+              <label className="flex gap-2 border border-black/[0.08] bg-white p-3 text-[12px] leading-5 text-[#615D59]">
+                <input
+                  type="checkbox"
+                  checked={form.marketingConsent}
+                  onChange={(event) => updateField("marketingConsent", event.target.checked)}
+                  className="mt-0.5 h-4 w-4 accent-[#084734]"
+                />
+                <span>[선택] Classin 교육 인사이트·제품 소식 수신에 동의합니다. 언제든 수신거부할 수 있습니다.</span>
               </label>
 
               {error ? <p className="text-sm leading-6 text-[#B85C33]">{error}</p> : null}

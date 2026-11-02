@@ -28,6 +28,7 @@
 - [ADR-008 Korea Sales Ledger 운영 정본](ADR-008-korea-sales-ledger-operating-record.md)
 - [ADR-009 홈페이지와 Admin 배포 경계](ADR-009-site-admin-deployment-boundary.md)
 - [ADR-010 예약 작업·외부 의존성 장애 격리](ADR-010-operational-failure-containment.md)
+- [ADR-011 매출 장부 반영 때 '2. REV' 주차 칸에도 쓴다](ADR-011-rev-sheet-writeback-from-ledger.md)
 
 ## 작성 규칙
 

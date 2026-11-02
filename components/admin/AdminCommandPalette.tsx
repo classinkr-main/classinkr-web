@@ -93,11 +93,13 @@ const PALETTE_CHILD_COMMANDS: Record<string, Array<Omit<AdminCommand, "group">>>
   "/admin/campaigns": [
     // 라벨은 허브 탭 이름(lib/marketing/hub-tabs.ts CAMPAIGN_TABS의 email 탭 = "메시지")과 같다.
     { label: "메시지", href: "/admin/campaigns?tab=email", keywords: "메시지 발송 이메일 자동화 문자 카카오 구독자 message email sms kakao automation logs" },
-    // 캠페인 관리·마케팅 프로젝트는 그 자체가 사이드바(ADMIN_NAV) 항목이라 평소에는 최상위 명령으로
-    // 뜨고 여기 자식은 중복이라 방출되지 않는다(buildAdminCommands). 사이드바 SSOT에서 빠지는 날
-    // (허브 흡수 결정 D2) 이 자식이 ⌘K 도달 경로를 자동으로 이어받는 안전망이다.
+    // 캠페인 관리는 그 자체가 사이드바(ADMIN_NAV) 항목이라 평소에는 최상위 명령으로 뜨고 여기 자식은
+    // 중복이라 방출되지 않는다(buildAdminCommands). 사이드바 SSOT에서 빠지는 날(허브 흡수 결정 D2)
+    // 이 자식이 ⌘K 도달 경로를 자동으로 이어받는 안전망이다.
     { label: "캠페인 관리", href: "/admin/campaigns/manage", keywords: "캠페인 관리 크로스채널 통합 롤업 연결 campaign manage cross-channel rollup" },
-    { label: "마케팅 프로젝트", href: "/admin/campaigns/projects", keywords: "마케팅 프로젝트 캠페인 묶음 롤업 예산 소진 project rollup budget" },
+    // 마케팅 프로젝트는 2026-10 캠페인 관리의 "프로젝트" 탭이 됐다 — 사이드바 항목이 없으니 ⌘K 는
+    // 이 자식이 맡고, 탭을 바로 연다(예전 /admin/campaigns/projects 는 같은 곳으로 넘기는 스텁).
+    { label: "마케팅 프로젝트", href: "/admin/campaigns/manage?view=projects", keywords: "마케팅 프로젝트 캠페인 묶음 롤업 예산 소진 페이싱 project rollup budget pacing" },
   ],
   "/admin/blog": [
     { label: "새 블로그 글 작성", href: "/admin/blog/new", keywords: "새글 작성 write new post 블로그" },

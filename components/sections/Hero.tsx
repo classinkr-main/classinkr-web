@@ -7,7 +7,7 @@ import { trackEvent } from "@/lib/analytics"
 import Image from "next/image"
 import { HeroVideoBackdrop } from "@/components/media/HeroVideoBackdrop"
 import { CLASSIN_POSITIONING } from "@/lib/classin-positioning"
-import { ArrowRight } from "lucide-react"
+import { HomeAudiencePaths } from "./HomeAudiencePaths"
 
 const HERO_VIDEO_MEDIA_QUERY = "(min-width: 1024px) and (prefers-reduced-motion: no-preference)"
 
@@ -15,7 +15,7 @@ export function Hero() {
     return (
         <div className="relative bg-[#FAFAF8] pt-[76px] md:pt-20">
             <section
-                className="surface-ink sticky top-[76px] z-0 isolate h-[calc(100svh-76px)] overflow-hidden bg-[#0A1511] md:top-20 md:h-[calc(100svh-5rem)]"
+                className="sticky top-[76px] z-0 isolate h-[calc(100svh-76px)] overflow-hidden bg-[#0A1511] md:top-20 md:h-[calc(100svh-5rem)]"
             >
                 <div className="absolute inset-0 z-0 hidden md:block pointer-events-none overflow-hidden">
                     <HeroVideoBackdrop
@@ -38,8 +38,9 @@ export function Hero() {
                     <div className="container mx-auto px-4">
                         <div className="flex flex-col items-center text-center max-w-5xl mx-auto">
                             <div className="hero-soft-enter hero-soft-enter-badge">
-                                <span className="inline-flex items-center gap-2.5 py-2 px-5 rounded-full bg-[#ECFDF5]/12 border border-white/18 text-white text-sm md:text-base font-semibold mb-8">
+                                <span className="inline-flex items-center gap-2.5 py-2 px-5 rounded-full bg-[#ECFDF5]/12 backdrop-blur-md border border-white/18 text-white text-sm md:text-base font-semibold mb-8 shadow-[0_12px_34px_rgba(0,0,0,0.18)]">
                                     <span className="relative flex h-2 w-2">
+                                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#6EE7B7]/45" />
                                         <span className="relative inline-flex h-2 w-2 rounded-full bg-[#6EE7B7]" />
                                     </span>
                                     <span className="tracking-[0.02em] drop-shadow-[0_1px_8px_rgba(0,0,0,0.45)]">
@@ -54,7 +55,7 @@ export function Hero() {
                             >
                                 좋은 수업을,<br className="hidden sm:block" />{" "}
                                 강사의 개인기에서<br className="hidden lg:block" />{" "}
-                                <span className="font-black">학원의 시스템으로</span>
+                                <span className="font-black animate-text-gradient inline-block pb-2">학원의 시스템으로</span>
                             </h1>
 
                             <p
@@ -67,9 +68,8 @@ export function Hero() {
                                 className="hero-soft-enter hero-soft-enter-actions flex flex-col sm:flex-row items-center gap-4 sm:gap-5 justify-center w-full px-4 sm:px-0 flex-wrap"
                             >
                                 <DemoModal trackingButton="hero_demo">
-                                    <Button size="lg" className="h-[3.5rem] px-8 text-[1.05rem] font-bold bg-[#084734] hover:bg-[#065c41] text-white rounded-2xl w-full sm:w-auto transition-all duration-300 active:scale-[0.97]" style={{ boxShadow: 'rgba(8,71,52,0.2) 0px 4px 18px, rgba(8,71,52,0.1) 0px 2px 7px' }}>
-                                        <span className="relative z-10">대표 수업으로 파일럿 설계받기</span>
-                                        <ArrowRight aria-hidden className="arrow-nudge" />
+                                    <Button size="lg" className="h-[3.5rem] px-8 text-[1.05rem] font-bold bg-[#084734] hover:bg-[#065c41] text-white rounded-2xl w-full sm:w-auto transition-all duration-300 hover:scale-[1.03] active:scale-[0.97]" style={{ boxShadow: 'rgba(8,71,52,0.2) 0px 4px 18px, rgba(8,71,52,0.1) 0px 2px 7px' }}>
+                                        <span className="relative z-10">대표 수업으로 파일럿 설계받기 →</span>
                                     </Button>
                                 </DemoModal>
                                 <Button asChild variant="outline" className="h-12 px-7 text-base font-semibold bg-white/82 hover:bg-white text-[#111110] hover:text-[#111110] border border-white/60 rounded-2xl w-full sm:w-auto transition-all duration-300 shadow-[0_10px_26px_rgba(0,0,0,0.18)]">
@@ -82,6 +82,8 @@ export function Hero() {
                     </div>
                 </div>
             </section>
+
+            <HomeAudiencePaths />
 
             <section
                 className="relative z-20 isolate overflow-hidden rounded-tl-[1.75rem] rounded-tr-[1.75rem] bg-[#FAFAF8] pt-20 pb-20 shadow-[0_-18px_50px_rgba(0,0,0,0.16),0_-1px_0_rgba(255,255,255,0.8)] md:rounded-tl-[2rem] md:rounded-tr-[2rem] md:pt-28 md:pb-32"
@@ -103,10 +105,10 @@ export function Hero() {
                         style={{ perspective: 1000, boxShadow: 'rgba(0,0,0,0.04) 0px 4px 18px, rgba(0,0,0,0.027) 0px 2px 7.8px, rgba(0,0,0,0.02) 0px 0.8px 2.9px, rgba(0,0,0,0.01) 0px 0.175px 1px' }}
                         className="relative mx-auto max-w-6xl rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white p-2 lg:rounded-[2rem] lg:p-4 group"
                     >
-                        <div className="relative rounded-xl overflow-hidden bg-[#111110] border border-[rgba(0,0,0,0.08)] flex items-center justify-center">
+                        <div className="relative rounded-xl overflow-hidden bg-[#111110] border border-[rgba(0,0,0,0.08)] flex items-center justify-center group-hover:shadow-[0_0_60px_rgba(8,71,52,0.12)] transition-shadow duration-700">
                             <Image
                                 src="/images/hero-dashboard.webp"
-                                alt="불 꺼진 교실 벽의 대형 전자칠판 화면에 푸른 지구가 떠 있는 장면"
+                                alt="Classin Education Dashboard"
                                 width={1200}
                                 height={675}
                                 className="w-full h-auto object-cover rounded-xl relative z-10"
@@ -115,6 +117,8 @@ export function Hero() {
                         </div>
                     </div>
                 </div>
+
+                <div className="absolute bottom-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-[#084734]/30 to-transparent" />
             </section>
         </div>
     )

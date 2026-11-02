@@ -29,6 +29,22 @@
   목적지는 서로 대체하지 않는다.
 - 새 알림 종류는 수신자, 목적지, 발송 조건, 멱등 키, 실행당 상한, 비활성화 스위치, 테스트를
   갖춘 뒤에만 활성화한다.
+- **하드웨어 일일 알림**(`hardware.process.daily_alert`, 2026-10-28 —
+  [정의서 차이](./hardware-inventory-process-gap-2026-10-28.md) §6 D9):
+  - 시각·경로: 매일 KST 08시. 새 크론 없이 `/api/cron/dispatch/[slot]` 의 고정 슬롯 UTC 23 에 편승한다
+    (KST 06시 세그먼트 잡과 같은 격리 — 동적 import, 알림 설정 읽기 실패와 묶지 않음, 오류는 이름만 로그).
+  - 발송 조건: 배송 예정 30일 경과(예정일, 없으면 등록일 기준) 또는 샘플 반납 예정일 지남(남은 수량 있음)이
+    한 건 이상일 때만. 없으면 `empty`.
+  - 목적지·수신자: `wecom_webhook`(severity warning → 운영 방 `wecomOpsWebhookUrl`) 한 통, 담당자별 묶음.
+    인앱은 기본 관리자 역할. 담당자 개인 멘션은 아직 없다(계정 ↔ WeCom 사용자 매핑이 없다).
+  - 멱등: `source = hardware_process_alerts`, `source_id = KST 날짜`. 그날 발송 성공(`notification_delivery_logs.status = sent`)
+    기록이 있으면 `already_sent`. 확인 자체가 실패하면 보낸다(하루를 통째로 놓치지 않게).
+  - 상한: 줄 20개, 본문 1,700바이트(WeCom 텍스트 2,048바이트 한도). 넘으면 "외 N건". 담당자 머리줄 건수는 전체.
+  - 끄기: 운영 방 토글(운영 방 알림 전체) 또는 env `HARDWARE_PROCESS_ALERTS=off`(이 알림만, `disabled`).
+  - 확인: `GET /api/cron/dispatch/23?dryRun=true`(Bearer)의 `hardwareAlertsPreview` 로 보낼 내용을 먼저 본다.
+    처음 켜는 날은 시트의 날짜 있는 오래된 예정이 한꺼번에 실릴 수 있다 — 상한이 자른다.
+  - 테스트: `tests/hardware/process-alerts.test.ts` · `tests/hardware/process-alerts-run.test.ts` ·
+    `tests/api/cron-dispatch-route.test.ts`.
 
 ## 2. 확인된 장애와 재발 방지 규칙
 

@@ -38,7 +38,7 @@ Admin Core는 `/admin`의 셸·로그인·공통 내비와 관리자 인증/권�
 
 ### 내비 배치와 보안 경계
 
-사이드바는 2026-09-10부터 전원 동일하다. `admin-nav-access.ts`의 `DEFAULT_PRIMARY_HREFS`가 상시 8개와 접힌 기타 9개를 정하고, `nav_overrides`가 사람별로 그 자리만 바꾼다(`nav_preset`은 레거시 컬럼). 2026-09-25부터 개인 숨김(`hidden`)과 전원 기본 숨김(`DEFAULT_HIDDEN_HREFS`, CRM 하위 탭은 `crm:<href>` 키)이 있지만 접근 통제가 아니다 — 숨긴 탭도 ⌘K·주소로 열리고 `getAccessibleAdminNavItems`는 항상 전체를 돌려준다. 어떤 배치도 API 접근권한을 부여하지 않는다 — API는 반드시 role/capability를 독립적으로 검증해야 한다.
+사이드바는 2026-09-10부터 전원 동일하다. `admin-nav-access.ts`의 `DEFAULT_PRIMARY_HREFS`가 상시 탭을 정하고(나머지는 접힌 기타, 개수는 상수 위 주석이 정본), `nav_overrides`가 사람별로 그 자리만 바꾼다(`nav_preset`은 레거시 컬럼). 2026-09-25부터 개인 숨김(`hidden`)과 전원 기본 숨김(`DEFAULT_HIDDEN_HREFS`, CRM 하위 탭은 `crm:<href>` 키)이 있지만 접근 통제가 아니다 — 숨긴 탭도 ⌘K·주소로 열리고 `getAccessibleAdminNavItems`는 항상 전체를 돌려준다. 어떤 배치도 API 접근권한을 부여하지 않는다 — API는 반드시 role/capability를 독립적으로 검증해야 한다.
 
 ## 4. 공통 구현 규약
 

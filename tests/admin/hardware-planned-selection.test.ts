@@ -194,4 +194,35 @@ describe("judgeImportFreshness", () => {
     expect(result.level).toBe("ok")
     expect(result.daysAgo).toBe(0)
   })
+
+  it("treats a recent hourly 'no sheet change' check as fresh even when the last real import is old", () => {
+    const finished = new Date(Date.now() - 30 * 86400000).toISOString()
+    const result = judgeImportFreshness({
+      id: "run-5",
+      status: "success",
+      started_at: finished,
+      finished_at: finished,
+      rows_imported: 100,
+      rows_skipped: 0,
+      error: null,
+      last_checked_at: new Date().toISOString(),
+    })
+    expect(result.level).toBe("ok")
+    expect(result.daysAgo).toBe(0)
+  })
+
+  it("ignores last_checked_at on a failed run", () => {
+    const result = judgeImportFreshness({
+      id: "run-6",
+      status: "failed",
+      started_at: new Date().toISOString(),
+      finished_at: new Date().toISOString(),
+      rows_imported: null,
+      rows_skipped: null,
+      error: "시트 읽기 실패",
+      last_checked_at: new Date().toISOString(),
+    })
+    expect(result.level).toBe("danger")
+    expect(result.failed).toBe(true)
+  })
 })

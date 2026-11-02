@@ -33,6 +33,16 @@ interface AlertsOutboundSectionsProps {
   // "나간 기록" 행 클릭 → 상세 시트(MovementDetailSheet)를 연다. 내역 탭 HistoryLogSection과
   // 같은 role="button"+onClick+onKeyDown 패턴(이 파일 하단).
   setDetailId: Dispatch<SetStateAction<string | null>>
+  // viewer.canManageInventory — false 면 입고 원탭을 숨긴다(입고는 입고관리 권한자만, §7-2). undefined 는 구응답.
+  canManageInventory?: boolean
+}
+
+// 서버 buildHardwareStockAlerts 의 알림 종류 → 카드 머리 꼬리표. 구응답(kind 없음)은 꼬리표 없이 보인다.
+const ALERT_KIND_TAG: Partial<Record<NonNullable<HardwareAlert["kind"]>, string>> = {
+  ledger_check: "창고 음수",
+  negative_available: "가용 음수",
+  low: "가용 < 최소재고",
+  order: "추세 기준",
 }
 
 function AlertsOutboundSections({
@@ -45,6 +55,7 @@ function AlertsOutboundSections({
   setOutboundPage,
   prepareQuickEntry,
   setDetailId,
+  canManageInventory,
 }: AlertsOutboundSectionsProps) {
   const [mutedOpen, setMutedOpen] = useState(false)
   return (
@@ -54,7 +65,7 @@ function AlertsOutboundSections({
       <section className="min-w-0 rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
         <SectionHeader
           title="알림"
-          description="부족, 주문 검토, 배송 예정 항목입니다."
+          description="창고·가용 음수, 가용 < 최소재고, 주문 검토, 배송 예정 항목입니다."
           open={openSections.alerts}
           onToggle={() => toggleSection("alerts")}
           meta={<span className="text-[11px] font-semibold text-[#615D59]">{formatNumber(alertsPagination.totalItems)}건</span>}
@@ -71,7 +82,12 @@ function AlertsOutboundSections({
                   <div key={alert.id} className={`rounded-lg border px-3 py-2.5 ${ALERT_TONE[alert.severity]}`}>
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div className="min-w-0">
-                        <p className="text-[12px] font-bold">{alert.product} · {alert.title}</p>
+                        <p className="text-[12px] font-bold">
+                          {alert.product} · {alert.title}
+                          {alert.kind && ALERT_KIND_TAG[alert.kind] ? (
+                            <span className="ml-1.5 rounded bg-white/70 px-1.5 py-0.5 text-[10.5px] font-semibold">{ALERT_KIND_TAG[alert.kind]}</span>
+                          ) : null}
+                        </p>
                         <p className="mt-1 text-[11px] opacity-95">{alert.detail}</p>
                       </div>
                       {/* 원탭 조치 — StockLevelsSection 재고행과 같은 QuickMoveButton 재사용. bg-white로
@@ -79,7 +95,9 @@ function AlertsOutboundSections({
                       <div className="inline-flex shrink-0 rounded-md border border-[rgba(0,0,0,0.08)] bg-white p-0.5">
                         <QuickMoveButton kind="sale" bare product={alert.product} onClick={() => prepareQuickEntry(alert.itemId, "sale")} />
                         <QuickMoveButton kind="planned" bare product={alert.product} onClick={() => prepareQuickEntry(alert.itemId, "planned")} />
-                        <QuickMoveButton kind="inbound" bare product={alert.product} onClick={() => prepareQuickEntry(alert.itemId, "inbound")} />
+                        {canManageInventory !== false ? (
+                          <QuickMoveButton kind="inbound" bare product={alert.product} onClick={() => prepareQuickEntry(alert.itemId, "inbound")} />
+                        ) : null}
                       </div>
                     </div>
                   </div>

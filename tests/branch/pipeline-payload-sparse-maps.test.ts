@@ -49,6 +49,15 @@ const mk = (over: Partial<BranchRevDeal>): BranchRevDeal => ({
   monthly_payments: {}, monthly_red: {}, raw: {}, synced_at: "", ...over,
 })
 
+describe("listRevRevenue — 행 데이터 시각(syncedAt, ADR-011 이중 집계 제외 기준)", () => {
+  it("미러 synced_at·임포트 캡처 시각을 그대로 싣고, 비어 있으면 키를 싣지 않는다", () => {
+    const [synced] = listRevRevenue([mk({ synced_at: "2026-10-23T08:05:00.000Z" })])
+    expect(synced.syncedAt).toBe("2026-10-23T08:05:00.000Z")
+    const [blank] = listRevRevenue([mk({ synced_at: "" })])
+    expect(blank).not.toHaveProperty("syncedAt")
+  })
+})
+
 describe("listRevRevenue — 의미 있는 0/false를 응답에서 보존한다", () => {
   it("monthlyPayments/monthlyConfirmed/monthlyHighConfidence의 명시 0값 달을 보존한다", () => {
     const [row] = listRevRevenue([

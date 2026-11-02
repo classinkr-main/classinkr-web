@@ -18,8 +18,6 @@
 - Admin 작업: [docs/active/admin-guidance-map.md](docs/active/admin-guidance-map.md)
 - [DESIGN.md](DESIGN.md)
 
-2026-04-15 저장소 감사 문서는 당시 상태를 남긴 역사 기록이다. 현재 상태 판단에는 `docs/README.md`가 지정한 최신 정본과 실제 코드를 사용한다.
-
 ## 인프라 현황 (서버 위치)
 
 정본은 [Supabase 한국 리전 이관 결과](docs/active/supabase-korea-migration-status.md)다. 아래는 작업 전에 알아야 할 요약이다.
@@ -33,6 +31,12 @@
   이관 전 값이다. 그 상태에서는 DB를 읽는 모든 로컬 작업(`check:db`, `check:alpha-db`, `npm run build`의
   postbuild `check:public-content` 등)이 `fetch failed`·쓰기 거절로 실패한다 — 코드 문제로 오인하지 말고
   서울 프로젝트의 URL·publishable key·secret key로 교체한다. 키 값은 문서·로그·커밋에 남기지 않는다.
+- 위 키로 맞춘 로컬은 **운영 DB에 쓸 수 있는 환경**이다. 매출·HW 시트 동기화(크론·수동 버튼 →
+  `lib/branch/sync/run-all.ts`)는 `VERCEL_ENV=production`에서만 쓰고, 로컬·Preview에서는
+  `BRANCH_SYNC_ALLOW_NONPROD_WRITE=1`을 명시한 세션에서만 쓴다 — 없으면 DB를 건드리지 않고
+  "운영 환경이 아니라 동기화 쓰기를 건너뜁니다"(skipped)로 끝난다(`lib/branch/sync/write-guard.ts`).
+  2026-10-15~19에 로컬/Preview의 수동 동기화가 운영 크론과 활성 REV 임포트를 번갈아 덮은 뒤 넣은 가드다.
+  플래그는 운영 DB를 정말 덮어써야 할 때만, 그 세션에서만 켠다(`.env.local`에 상시로 두지 않는다).
 - **main push 는 Preview 만 만든다 — 운영 배포는 따로 한다.** Vercel 대시보드에서 main 의 Ready 배포를 "Promote to Production"
   (운영 env 로 다시 빌드한 뒤 classin.co.kr 에 연결)하거나, Vercel 배포 API(`POST /v13/deployments`, `target: "production"`,
   `gitSource.ref: "main"` + sha)로 한다. 운영 배포 전에 그 코드가 요구하는 마이그레이션을 서울 프로젝트에 먼저 적용하고,
@@ -133,9 +137,7 @@ npm run build
 
 ## UI 작업 시 필수 체크
 
-- 색상: [DESIGN.md](DESIGN.md) 팔레트만 사용
-- 보더: `1px solid rgba(0,0,0,0.08)`
-- 섹션 배경·레이아웃: [DESIGN.md](DESIGN.md) §2·§5를 따른다(절·토큰 배지 확인)
+- 색·보더·배경·모서리·모션 값은 [DESIGN.md](DESIGN.md)만 따른다. 이 파일에는 값을 복제하지 않는다.
 - 모바일 우선 반응형 유지
 
 ## 문서 운영 규칙

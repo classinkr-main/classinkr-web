@@ -2,11 +2,12 @@
 
 import { createElement, useDeferredValue, useMemo, useState } from "react"
 import { motion, useReducedMotion } from "framer-motion"
-import { ArrowRight, Clock, RotateCcw, Rss, Search, X } from "lucide-react"
+import { ArrowRight, CircleHelp, Clock, FolderOpen, RotateCcw, Rss, Search, X } from "lucide-react"
 import Link from "next/link"
 import { BlogPostCard } from "@/components/blog/BlogPostCard"
 import { BlogThumb } from "@/components/blog/BlogThumb"
 import { NewsletterSubscribe } from "@/components/sections/NewsletterSubscribe"
+import { TrackedLink } from "@/components/TrackedLink"
 import { getCategoryIcon } from "@/lib/blog-categories"
 import type { BlogPost } from "@/lib/blog-types"
 import { CATEGORIES } from "@/lib/blog-types"
@@ -317,6 +318,38 @@ export default function BlogPageClient({ posts, loadFailed = false }: BlogPageCl
                         )}
                     </motion.div>
                 )}
+
+                {/* ─── 더 찾아보기 ──────────────────────────────
+                    검색으로 들어와 글에서 답을 못 찾은 방문자가 FAQ·자료실로 이어지게 한다.
+                    카드 그리드와 섞지 않고 헤어라인 아래 글자 링크 한 줄로만 둔다(그린은 링크 글자에만). */}
+                <nav
+                    aria-label="블로그 밖에서 더 찾아보기"
+                    className="mt-16 flex flex-col gap-1 border-t border-[#e8e8e4] pt-5 sm:flex-row sm:items-center sm:gap-6 md:mt-20"
+                >
+                    <p className="text-[13px] font-medium text-[#615D59]">더 찾아보기</p>
+                    <div className="flex flex-wrap gap-x-6">
+                        <TrackedLink
+                            href="/faq"
+                            ctaId="blog_hub_faq"
+                            prefetch={false}
+                            className="group inline-flex min-h-11 items-center gap-1.5 rounded-[6px] text-sm font-semibold text-[#084734] transition-colors hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8]"
+                        >
+                            <CircleHelp className="h-4 w-4" aria-hidden />
+                            자주 묻는 질문
+                            <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none" aria-hidden />
+                        </TrackedLink>
+                        <TrackedLink
+                            href="/resources"
+                            ctaId="blog_hub_resources"
+                            prefetch={false}
+                            className="group inline-flex min-h-11 items-center gap-1.5 rounded-[6px] text-sm font-semibold text-[#084734] transition-colors hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8]"
+                        >
+                            <FolderOpen className="h-4 w-4" aria-hidden />
+                            자료실
+                            <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none" aria-hidden />
+                        </TrackedLink>
+                    </div>
+                </nav>
             </section>
 
             {/* ─── Newsletter ─────────────────────────────────── */}

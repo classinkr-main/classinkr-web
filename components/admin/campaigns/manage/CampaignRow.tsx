@@ -15,6 +15,7 @@
 
 import {
   CalendarDays,
+  FolderKanban,
   Globe,
   Instagram,
   LayoutTemplate,
@@ -57,7 +58,7 @@ export function formatBudget(budget: number | null): string {
 }
 
 // "YYYY-MM-DD"(또는 ISO) → "YYYY.MM.DD". 형식이 아니면 원문 그대로(정직).
-function toDot(value: string): string {
+export function formatDotDate(value: string): string {
   const head = value.slice(0, 10)
   return /^\d{4}-\d{2}-\d{2}$/.test(head) ? head.replace(/-/g, ".") : value
 }
@@ -65,9 +66,9 @@ function toDot(value: string): string {
 // 기간: 양쪽 null → "기간 미정", 한쪽만 있으면 열린 구간으로 표기.
 export function formatCampaignPeriod(startsAt: string | null, endsAt: string | null): string {
   if (!startsAt && !endsAt) return "기간 미정"
-  if (startsAt && !endsAt) return `${toDot(startsAt)} ~`
-  if (!startsAt && endsAt) return `~ ${toDot(endsAt)}`
-  return `${toDot(startsAt as string)} ~ ${toDot(endsAt as string)}`
+  if (startsAt && !endsAt) return `${formatDotDate(startsAt)} ~`
+  if (!startsAt && endsAt) return `~ ${formatDotDate(endsAt)}`
+  return `${formatDotDate(startsAt as string)} ~ ${formatDotDate(endsAt as string)}`
 }
 
 // 선언 채널(정보성)의 표시 라벨 — 알려진 키만 매핑, 그 외는 원문 유지(폴백).
@@ -116,7 +117,8 @@ export function CampaignStatusChip({ status }: { status: CampaignStatus }) {
 
 // "지금 살아있는 것"을 스캔하기 위한 위계 — 색 채움 카드가 아니라 헤어라인 레일 + 대비 차이.
 // 진행 = 그린 레일(액센트), 일시중지 = 웜 경고 틴트 레일, 계획·완료 = 레일 없음.
-const STATUS_RAIL: Record<CampaignStatus, string | null> = {
+// 프로젝트 상세의 멤버 캠페인 행도 같은 위계를 쓴다(SSOT).
+export const CAMPAIGN_STATUS_RAIL: Record<CampaignStatus, string | null> = {
   active: "bg-[#084734]",
   paused: "bg-[#ECD29C]",
   planned: null,
@@ -155,7 +157,7 @@ const CHANNEL_ICON: Record<string, LucideIcon> = {
   instagram: Instagram,
 }
 
-function ChannelChip({ channel }: { channel: string }) {
+export function ChannelChip({ channel }: { channel: string }) {
   const Icon = CHANNEL_ICON[channel.toLowerCase()]
   return (
     <span className="inline-flex items-center gap-1 rounded-full border border-[rgba(0,0,0,0.08)] bg-white px-1.5 py-px text-[10.5px] font-medium text-[#615D59]">
@@ -227,9 +229,21 @@ export function buildCampaignRowMetrics(rollup: CampaignRollup): CampaignRowMetr
   return metrics.slice(0, MAX_ROW_METRICS)
 }
 
-function CampaignRowMetrics({ metrics, dim }: { metrics: CampaignRowMetric[]; dim?: boolean }) {
+export function CampaignRowMetrics({
+  metrics,
+  dim,
+  align = "end",
+}: {
+  metrics: CampaignRowMetric[]
+  dim?: boolean
+  align?: "start" | "end"
+}) {
   return (
-    <div className="flex flex-wrap items-baseline justify-end gap-x-2.5 gap-y-0.5">
+    <div
+      className={`flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5 ${
+        align === "end" ? "justify-end" : "justify-start"
+      }`}
+    >
       {metrics.map((metric, i) => (
         <span
           key={metric.label}
@@ -253,17 +267,44 @@ function CampaignRowMetrics({ metrics, dim }: { metrics: CampaignRowMetric[]; di
 
 /* ── 리스트 행(순수) ──────────────────────────────────────────── */
 
+/**
+ * 소속 프로젝트 표기 — 캠페인 관리가 프로젝트 탭과 한 화면이 되면서(2026-10) 행·카드에서
+ * "어느 묶음의 실행인지"를 바로 읽게 한다. 라벨 칩이 아니라 아이콘 + 글자색만(어드민 라벨 단순화).
+ * name 이 null 이면 미배정 — showUnassigned 일 때만 흐린 문구로 말한다(리스트 행은 생략).
+ */
+export function CampaignProjectTag({
+  name,
+  showUnassigned = false,
+}: {
+  name: string | null
+  showUnassigned?: boolean
+}) {
+  if (!name && !showUnassigned) return null
+  return (
+    <span
+      className={`inline-flex min-w-0 items-center gap-1 text-[10.5px] font-medium leading-4 ${
+        name ? "text-[#615D59]" : "text-[#A39E98]"
+      }`}
+    >
+      <FolderKanban className="h-3 w-3 shrink-0 text-[#A39E98]" aria-hidden />
+      <span className="truncate">{name ?? "프로젝트 미배정"}</span>
+    </span>
+  )
+}
+
 export function CampaignRow({
   campaign,
+  projectName = null,
   onOpen,
 }: {
   campaign: CampaignWithLinks
+  projectName?: string | null
   onOpen?: () => void
 }) {
   const linkCount = campaign.links.length
   // rollup 은 optional(경량 모드 ?rollup=0 이면 없다) — 없으면 지표를 지어내지 않는다.
   const metrics = campaign.rollup ? buildCampaignRowMetrics(campaign.rollup) : []
-  const rail = STATUS_RAIL[campaign.status]
+  const rail = CAMPAIGN_STATUS_RAIL[campaign.status]
   const dim = campaign.status === "done"
 
   return (
@@ -297,9 +338,12 @@ export function CampaignRow({
         </span>
       </div>
 
-      {/* 2행: 목표 | 기간 · 담당 */}
+      {/* 2행: 소속 프로젝트 · 목표 | 기간 · 담당 */}
       <div className="mt-0.5 flex items-baseline justify-between gap-3 text-[11.5px] text-[#615D59]">
-        <span className="min-w-0 truncate">{metaObjectiveLabel(campaign.objective) ?? ""}</span>
+        <span className="flex min-w-0 items-baseline gap-2">
+          <CampaignProjectTag name={projectName} />
+          <span className="min-w-0 truncate">{metaObjectiveLabel(campaign.objective) ?? ""}</span>
+        </span>
         <span className="shrink-0 tabular-nums">
           {formatCampaignPeriod(campaign.startsAt, campaign.endsAt)}
           {campaign.owner && (

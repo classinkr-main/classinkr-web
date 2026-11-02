@@ -27,7 +27,7 @@
 - `lib/lead-attribution-payload.ts`(`sanitizeLeadAttribution`): `/api/lead`를 거치지 않는 미러링 경로의 단일 귀속 정규화기
 - `lib/marketing/ad-campaign-sync.ts`·`ad-insights.ts`·`ad-sync-candidates.ts`: Google Ads·네이버 검색광고 동기화와 캠페인 자동 링크 후보 — 크론 `sync-google-ads`·`sync-naver-ads`의 도메인 로직은 이 파트, 인증·스케줄 계약은 Platform
 - `lib/marketing/intake-today.ts`: "오늘 유입" 조회 — 라우트와 한눈에 층 서버 프리페치가 공유, Data Cache 20초
-- `components/admin/compass/`: CRM 홈·마케팅 한눈에 층이 함께 쓰는 Compass 밴드. 구 `components/admin/crm/home/CompassPipelineBand.tsx`에서 이동
+- `components/admin/compass/`: CRM 홈·마케팅 한눈에 층이 함께 쓰는 Compass 밴드
 - 재유입 병합 규칙: `lib/server/lead-capture.ts`는 응대 대상 소스의 같은 연락처 재문의를 새 행 대신 기존 리드에 합친다(담당·상태·메모 불변, `last_inflow_at`만 갱신) — 생성 시각(`created_at`)으로 집계하는 화면은 재문의를 세지 못한다
 
 ## 3. 강제 규칙
@@ -49,6 +49,10 @@
 - 외부 CRM의 한국 범위와 자동 연결 임계값은 실제 코드·운영 설정을 정본으로 확인한다.
 - **외부 네오CRM에 무언가를 쓰기 전에** [네오CRM 되밀기 지침](../neocrm-writeback-guide-2026-09-07.md)을 먼저 읽는다.
   남의 CRM에 남는 기록이라 승인 큐를 거치고, 필드 계약·순서 의존성·조용한 실패 지점이 그 문서의 정본이다.
+- **'2. REV' 시트에 쓰는 코드를 고치기 전에** [ADR-011](../../adr/ADR-011-rev-sheet-writeback-from-ledger.md)과
+  [REV 시트 쓰기 런북](../rev-sheet-writeback-runbook.md)을 먼저 읽는다. 런타임 쓰기 진입점은
+  `lib/branch/sheet-writeback/apply-service.ts` 하나이고, 저장소의 Sheets 쓰기 호출은 `tests/branch/sheet-write-surface.test.ts`
+  허용 목록 파일에만 둔다.
 
 ### Notion과 자체 캘린더
 
@@ -60,7 +64,7 @@
 ### 어드민 권한
 
 - 각 Growth/Sales admin API는 `verifyAdmin()` 또는 `requireVerifiedAdminContext()`와 필요한 role/capability를 서버에서 강제한다.
-- `nav_preset`은 메뉴 배치일 뿐 API 권한이 아니다.
+- 사이드바 배치(`nav_overrides`·숨김)는 메뉴 배치일 뿐 API 권한이 아니다.
 - 데이터 접근은 `createSupabaseAdminClient()`와 해당 도메인 repository를 사용한다.
 
 ### 전량 조회

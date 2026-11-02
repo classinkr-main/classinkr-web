@@ -19,6 +19,10 @@ vi.mock("@/lib/admin-crm-revenue-sheet", () => ({ ADMIN_CRM_REVENUE_SHEET_CACHE_
 vi.mock("@/lib/branch/sync/run-all", () => ({ runAll }))
 vi.mock("@/lib/repositories/branch-hw", () => ({ BRANCH_HW_CACHE_TAG: "branch-hw" }))
 vi.mock("@/lib/repositories/branch-deals", () => ({ BRANCH_REV_DEALS_CACHE_TAG: "branch-rev-deals" }))
+vi.mock("@/lib/repositories/branch-dsh-kpi-mirror", () => ({ BRANCH_DSH_CACHE_TAG: "branch-dsh", BRANCH_KPI_CACHE_TAG: "branch-kpi" }))
+vi.mock("@/lib/repositories/branch-sync", () => ({ BRANCH_SYNC_RUNS_CACHE_TAG: "branch-sync-runs" }))
+vi.mock("@/lib/repositories/sales-ledger-imports", () => ({ SALES_LEDGER_IMPORTS_CACHE_TAG: "sales-ledger-imports" }))
+vi.mock("@/lib/repositories/hardware-inventory", () => ({ HARDWARE_INVENTORY_CACHE_TAG: "hardware-inventory" }))
 vi.mock("@/lib/repositories/crm-source-links", () => ({ runBranchRevLinkMaintenance }))
 vi.mock("next/cache", () => ({ revalidateTag }))
 
@@ -47,7 +51,7 @@ describe("POST /api/admin/branch/sync — 부분 실패 시 캐시 무효화 (�
     expect(body.warnings).toHaveLength(2)
     expect(body.warnings[0]).toBe("기존 경고")
     expect(JSON.stringify(body)).not.toContain("private provider error")
-    expect(revalidateTag).toHaveBeenCalledWith("admin-crm-revenue-sheet", "max")
+    expect(revalidateTag).toHaveBeenCalledWith("admin-crm-revenue-sheet", { expire: 0 })
   })
 
   it("rev 성공 + hw 실패(ok=false)에서도 branch-seg는 무효화하지만, hw 전용 태그는 무효화하지 않는다", async () => {
@@ -58,8 +62,8 @@ describe("POST /api/admin/branch/sync — 부분 실패 시 캐시 무효화 (�
     const response = await POST(syncRequest())
 
     expect(response.status).toBe(500)
-    expect(revalidateTag).toHaveBeenCalledWith("branch-seg", "max")
-    expect(revalidateTag).not.toHaveBeenCalledWith("branch-hw", "max")
+    expect(revalidateTag).toHaveBeenCalledWith("branch-seg", { expire: 0 })
+    expect(revalidateTag).not.toHaveBeenCalledWith("branch-hw", { expire: 0 })
   })
 
   it("hw가 성공 객체를 돌려주면(rev만 실패) branch-seg와 함께 BRANCH_HW_CACHE_TAG도 무효화한다", async () => {
@@ -75,19 +79,84 @@ describe("POST /api/admin/branch/sync — 부분 실패 시 캐시 무효화 (�
     const response = await POST(syncRequest())
 
     expect(response.status).toBe(500)
-    expect(revalidateTag).toHaveBeenCalledWith("branch-seg", "max")
-    expect(revalidateTag).toHaveBeenCalledWith("branch-hw", "max")
+    expect(revalidateTag).toHaveBeenCalledWith("branch-seg", { expire: 0 })
+    expect(revalidateTag).toHaveBeenCalledWith("branch-hw", { expire: 0 })
   })
 
   it("skipped(다른 동기화 진행 중)면 아무 태그도 무효화하지 않는다 — 실제로 아무것도 안 바뀌었으므로", async () => {
     verifyAdmin.mockResolvedValue(null)
-    runAll.mockResolvedValue({ ok: false, skipped: true })
+    runAll.mockResolvedValue({ ok: false, skipped: true, startedAt: "2026-10-22T04:00:05Z" })
 
     const { POST } = await import("@/app/api/admin/branch/sync/route")
     const response = await POST(syncRequest())
+    const body = await response.json()
 
     expect(response.status).toBe(200)
     expect(revalidateTag).not.toHaveBeenCalled()
+    // 화면이 "완료"가 아니라 "이미 진행 중"으로 말하도록 결과 종류와 잠금 시작 시각을 싣는다.
+    expect(body.outcome).toBe("running")
+    expect(body.startedAt).toBe("2026-10-22T04:00:05Z")
+  })
+
+  // 2026-10-28 쓰기 가드(lib/branch/sync/write-guard.ts) — runAll 이 outcome="skipped"를 명시한 결과를
+  // 완료 처리가 다시 계산해 "running"(잠금 충돌)으로 덮으면 화면이 "이미 진행 중"이라고 잘못 말한다.
+  it("운영 밖 쓰기 가드로 건너뛴 결과는 outcome=skipped·사유를 그대로 싣고, 아무 태그도 만료하지 않는다", async () => {
+    verifyAdmin.mockResolvedValue(null)
+    const outcomeReason = "운영 환경이 아니라 동기화 쓰기를 건너뜁니다(환경: preview)."
+    runAll.mockResolvedValue({ ok: false, skipped: true, outcome: "skipped", outcomeReason })
+
+    const { POST } = await import("@/app/api/admin/branch/sync/route")
+    const response = await POST(syncRequest())
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(revalidateTag).not.toHaveBeenCalled()
+    expect(body.outcome).toBe("skipped")
+    expect(body.outcomeReason).toBe(outcomeReason)
+    expect(body.startedAt).toBeUndefined()
+  })
+
+  // 2026-10-22: "동기화를 눌러도 화면이 그대로" — revalidateTag(tag, "max")는 오래됨 표시만 해서 바로 다음
+  // 조회가 옛 값을 받았다. 이제 동기화가 쓴 원천의 캐시를 즉시 만료한다(설계 2026-09-14 §7.1).
+  it("성공하면 오래됨 표시(max)가 아니라 즉시 만료하고, 장부 임포트·실행 기록 캐시도 함께 만료한다", async () => {
+    verifyAdmin.mockResolvedValue(null)
+    runAll.mockResolvedValue({ ok: true, revOk: true, rev: 5 })
+    runBranchRevLinkMaintenance.mockResolvedValue({})
+
+    const { POST } = await import("@/app/api/admin/branch/sync/route")
+    const response = await POST(syncRequest({ sources: ["rev"] }))
+    const body = await response.json()
+
+    expect(body.outcome).toBe("done")
+    expect(revalidateTag.mock.calls.every((call) => JSON.stringify(call[1]) === JSON.stringify({ expire: 0 }))).toBe(true)
+    const tags = revalidateTag.mock.calls.map((call) => call[0])
+    expect(tags).toEqual(expect.arrayContaining(["sales-ledger-imports", "branch-sync-runs", "branch-dsh", "branch-kpi"]))
+    expect(tags).not.toContain("branch-hw")
+  })
+
+  it("실패한 런도 실행 기록 캐시는 만료한다 — 상태 줄이 옛 '마지막 동기화'를 보이지 않게", async () => {
+    verifyAdmin.mockResolvedValue(null)
+    runAll.mockResolvedValue({ ok: false, error: "rev: boom", rev: 0, revOk: false })
+
+    const { POST } = await import("@/app/api/admin/branch/sync/route")
+    const response = await POST(syncRequest({ sources: ["rev"] }))
+    const body = await response.json()
+
+    expect(response.status).toBe(500)
+    expect(body.outcome).toBe("failed")
+    expect(revalidateTag).toHaveBeenCalledWith("branch-sync-runs", { expire: 0 })
+    expect(revalidateTag).not.toHaveBeenCalledWith("branch-rev-deals", { expire: 0 })
+  })
+
+  it("rev 성공 + hw 실패는 partial로 알린다", async () => {
+    verifyAdmin.mockResolvedValue(null)
+    runAll.mockResolvedValue({ ok: false, error: "hw: boom", rev: 385, revOk: true, hw: undefined })
+    runBranchRevLinkMaintenance.mockResolvedValue({})
+
+    const { POST } = await import("@/app/api/admin/branch/sync/route")
+    const body = await (await POST(syncRequest())).json()
+
+    expect(body.outcome).toBe("partial")
   })
 
   it("완전 성공(ok=true)에서는 기존과 동일하게 소스별 태그 전체를 무효화하고, branch-seg는 정확히 한 번만 무효화한다(회귀 방지)", async () => {
@@ -124,10 +193,10 @@ describe("POST /api/admin/branch/sync — 부분 실패 시 캐시 무효화 (�
     const { POST } = await import("@/app/api/admin/branch/sync/route")
     await POST(syncRequest({ sources: ["hw"] }))
 
-    expect(revalidateTag).toHaveBeenCalledWith("branch-seg", "max")
-    expect(revalidateTag).not.toHaveBeenCalledWith("branch-rev-deals", "max")
-    expect(revalidateTag).not.toHaveBeenCalledWith("admin-crm-revenue", "max")
-    expect(revalidateTag).not.toHaveBeenCalledWith("admin-crm-revenue-sheet", "max")
+    expect(revalidateTag).toHaveBeenCalledWith("branch-seg", { expire: 0 })
+    expect(revalidateTag).not.toHaveBeenCalledWith("branch-rev-deals", { expire: 0 })
+    expect(revalidateTag).not.toHaveBeenCalledWith("admin-crm-revenue", { expire: 0 })
+    expect(revalidateTag).not.toHaveBeenCalledWith("admin-crm-revenue-sheet", { expire: 0 })
   })
 
   // D1(crm-tab-develop-plan-2026-09-12 §4.4): REV 스냅샷(branch_rev_deals)은 lib/admin-crm-revenue-sheet.ts
@@ -158,7 +227,7 @@ describe("POST /api/admin/branch/sync — 부분 실패 시 캐시 무효화 (�
     const { POST } = await import("@/app/api/admin/branch/sync/route")
     await POST(syncRequest({ sources: ["rev"] }))
 
-    expect(revalidateTag).not.toHaveBeenCalledWith("admin-crm-revenue-sheet", "max")
+    expect(revalidateTag).not.toHaveBeenCalledWith("admin-crm-revenue-sheet", { expire: 0 })
   })
 
   // P0(2026-09-11) — runAll이 revOk를 싣게 되면서 "rev는 성공, hw만 실패"를 구분할 수 있다.

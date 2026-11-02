@@ -6,7 +6,7 @@ import { GraduationCap, Users, Building2, Globe2 } from "lucide-react"
 const SCALE = [
   { value: "3,000만+", label: "월간 수업", icon: GraduationCap },
   { value: "5,000만+", label: "교사 · 학습자", icon: Users },
-  { value: "6만+", label: "교육기관", icon: Building2 },
+  { value: "6만+", label: "기관 파트너", icon: Building2 },
   { value: "160+", label: "서비스 국가", icon: Globe2 },
 ]
 
@@ -56,7 +56,7 @@ export function GlobalScale() {
           })}
         </div>
         <p className="mt-6 text-center text-[12px] text-[#615D59]">
-          전 세계 누적 수치 · EEO 공식 소개 기준
+          전 세계 수치 · <a href="https://www.classin.com/about/" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2">ClassIn 글로벌 공식 소개</a> 기준 · 2026.10.28 확인
         </p>
       </div>
     </section>

@@ -13,7 +13,12 @@ import {
   listCachedPublicEventSlugs,
 } from "@/lib/repositories/public-events"
 import { JsonLd } from "@/components/seo/JsonLd"
-import { createBreadcrumbJsonLd, createEventJsonLd, toAbsoluteUrl } from "@/lib/seo"
+import {
+  DEFAULT_OG_IMAGE_PATH,
+  createBreadcrumbJsonLd,
+  createEventJsonLd,
+  toAbsoluteUrl,
+} from "@/lib/seo"
 import { EventAlertSignup } from "@/components/events/EventAlertSignup"
 import { EventSignupModal } from "@/components/events/EventSignupModal"
 import { ResourcesRecommendation } from "@/components/sections/ResourcesRecommendation"
@@ -92,7 +97,8 @@ export async function generateMetadata({ params }: EventDetailPageProps): Promis
       title: event.title,
       description: event.description ?? undefined,
       url: canonical,
-      ...(event.imageUrl ? { images: [{ url: event.imageUrl }] } : {}),
+      // 행사 이미지가 없으면 기본 브랜드 OG 이미지로 폴백한다(공유 카드에 이미지가 아예 빠지지 않게).
+      images: [{ url: event.imageUrl || toAbsoluteUrl(DEFAULT_OG_IMAGE_PATH) }],
     },
   }
 }

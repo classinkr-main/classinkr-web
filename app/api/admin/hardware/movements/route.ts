@@ -2,9 +2,13 @@ import { NextRequest, NextResponse } from "next/server"
 
 import {
   HardwareApiValidationError,
+  readLotAllocations,
+  readOptionalBoolean,
   readOptionalDate,
+  readOptionalEnum,
   readOptionalNonNegativeNumber,
   readOptionalString,
+  readOptionalUuid,
   readRequestBody,
   readRequiredEnum,
   readRequiredPositiveInt,
@@ -14,8 +18,12 @@ import {
 } from "@/app/api/admin/hardware/_validation"
 import {
   HARDWARE_EDITOR_ADMIN_API_ROLES,
+  requireHardwareInventoryManager,
   requireVerifiedAdminContext,
+  toHardwareActor,
 } from "@/lib/admin-auth"
+import { HARDWARE_OUTBOUND_TYPES } from "@/lib/hardware/inventory-process"
+import { HARDWARE_ADJUST_DIRECTIONS } from "@/lib/hardware/movement-rules"
 import {
   createHardwareMovementRows,
   createHardwareMovementsBatch,
@@ -54,7 +62,21 @@ function readMovementInput(body: Record<string, unknown>, createdBy: string | nu
     serials: readStringArray(body, "serials", "시리얼 번호"),
     createdBy,
     raw: crmLink ? { crmLink } : {},
+    // 재고관리 프로세스(갭 문서 §7-3) — 규칙은 저장소가 요청자 기준으로 적용한다.
+    outboundType: readOptionalEnum(body, "outboundType", "출고 유형", HARDWARE_OUTBOUND_TYPES),
+    isFree: readOptionalBoolean(body, "isFree", "무상 여부"),
+    returnOfMovementId: readOptionalUuid(body, "returnOfMovementId", "회수할 원 출고"),
+    customerId: readOptionalUuid(body, "customerId", "CRM 고객"),
+    ownerUserId: readOptionalUuid(body, "ownerUserId", "담당자 계정"),
+    expectedReturnAt: readOptionalDate(body, "expectedReturnAt", "반납 예정일"),
+    adjustDirection: readOptionalEnum(body, "adjustDirection", "조정 방향", HARDWARE_ADJUST_DIRECTIONS),
+    lotAllocations: readLotAllocations(body),
   }
+}
+
+/** 입고·재고 조정은 입고관리 권한자만 — 바구니에 한 줄이라도 있으면 요청 전체를 403 으로 돌린다. */
+function needsInventoryManager(bodies: Record<string, unknown>[]) {
+  return bodies.some((body) => body.movementType === "inbound" || body.movementType === "adjust")
 }
 
 function readMovementBodies(body: Record<string, unknown>) {
@@ -84,7 +106,12 @@ export async function POST(req: NextRequest) {
   try {
     const body = await readRequestBody(req)
     const createdBy = admin.name ?? admin.userId ?? admin.role
+    const actor = toHardwareActor(admin)
     const movementBodies = readMovementBodies(body)
+    if (needsInventoryManager(movementBodies ?? [body])) {
+      const forbidden = requireHardwareInventoryManager(admin)
+      if (forbidden) return forbidden
+    }
     if (movementBodies) {
       // 줄별 결과(201/207/422)는 그대로 두고 저장만 한 번에 보낸다 — 예전에는 줄마다 저장소를 불러
       // 입고표 20줄이 INSERT 20회 + 캐시 무효화 20회였다(감사 2026-09-20).
@@ -106,7 +133,7 @@ export async function POST(req: NextRequest) {
       })
 
       const savable = parsedLines.filter((line): line is Extract<ParsedLine, { ok: true }> => line.ok)
-      const batchResults = await createHardwareMovementsBatch(savable.map((line) => line.input))
+      const batchResults = await createHardwareMovementsBatch(savable.map((line) => line.input), { actor })
 
       const lineResults = []
       const movements = []
@@ -168,7 +195,7 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const createdMovements = await createHardwareMovementRows(readMovementInput(body, createdBy))
+    const createdMovements = await createHardwareMovementRows(readMovementInput(body, createdBy), { actor })
     return NextResponse.json({ movement: createdMovements[0], movements: createdMovements }, { status: 201 })
   } catch (error) {
     return toErrorResponse(error, "Failed to create hardware movement")

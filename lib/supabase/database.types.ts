@@ -86,6 +86,12 @@ export interface BlogPost {
   deleted_at: string | null;
   created_at: string;
   updated_at: string;
+  /**
+   * 글 내용이 실제로 바뀐 시각(20261028_blog_posts_content_updated_at.sql 트리거가 관리).
+   * 공개 표면(사이트맵 lastmod·JSON-LD dateModified·RSS)의 기준이다. updated_at 은 토글에도 바뀌는 내부용.
+   * 마이그레이션 미적용 DB 나 이 컬럼을 select 하지 않은 조회에서는 런타임에 undefined 일 수 있다.
+   */
+  content_updated_at: string | null;
 }
 
 export interface Lead {
@@ -746,11 +752,13 @@ export type AdminProfileInsert = Omit<
 
 export type BlogPostInsert = Omit<
   BlogPost,
-  "id" | "created_at" | "updated_at"
+  "id" | "created_at" | "updated_at" | "content_updated_at"
 > & {
   id?: string;
   created_at?: string;
   updated_at?: string;
+  // DB 기본값(now())에 맡긴다. 미적용 DB 에 실으면 insert 가 실패하므로 앱은 싣지 않는다.
+  content_updated_at?: string | null;
 };
 
 export type LeadInsert = Omit<Lead, "id" | "created_at" | "updated_at" | "user_id"> & {

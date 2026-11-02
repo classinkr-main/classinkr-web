@@ -2,6 +2,7 @@ import type { BranchRevDeal } from "@/lib/repositories/branch-deals"
 import { normalizeBranchMemberName } from "@/lib/branch/member-names"
 import { confirmedMonthAmountWithColor, dealHasColorData } from "@/lib/branch/computations/rev-confirmed"
 import { fiscalQuarter, fyOf, ymKey } from "@/lib/branch/fiscal"
+import { isValidRowId } from "@/lib/branch/sheet-writeback/row-id"
 
 type RevenuePeriod = "M" | "Q" | "Y"
 
@@ -46,9 +47,24 @@ export interface RevRevenueRow {
   monthlyHighConfidence: Record<string, number>
   monthlyRed: Record<string, boolean>
   weeklyPayments: Record<string, number[]>
+  // 시트 쓰기(ADR-011, 장부 반영 → '2. REV') 행 식별·baseline 용 — parseRev 가 raw 에 실은 값을 검증해 옮긴다.
+  // 값이 없으면 키를 싣지 않는다(재동기화 전 레거시 행·Row ID 열 없음). 페이로드 다이어트 원칙과 같다.
+  /** 숨김 "Row ID" 열 값(형식 맞고 시트에 한 번만 나온 것). */
+  rowId?: string | null
+  /** Row ID 칸 문제 — "invalid"(형식 오류) | "duplicate"(같은 ID 가 여러 행). 있으면 rowId 는 싣지 않는다. */
+  rowIdIssue?: string | null
+  /** 달별 주차 칸 확도 글자("rk--b": r 빨강·b 파랑·k 그 밖·'-' 값 없음). 키는 raw.weeklyPayments 와 같다. */
+  weeklyColors?: Record<string, string>
+  /**
+   * 이 행 데이터의 시각 — 미러 행은 synced_at(동기화가 미러를 바꾼 시각), 액티브 임포트 행은 그 줄의 캡처 시각.
+   * 장부 화면이 "시트에 쓴 정정을 이 행이 이미 담았는가"를 동기화 기록이 아니라 실제로 가진 행으로 판정한다(ADR-011).
+   */
+  syncedAt?: string
 }
 
 const REV_MONTH_ORDER = [4, 5, 6, 7, 8, 9, 10, 11, 12, 1, 2, 3]
+const YM_KEY_RE = /^\d{4}-(0[1-9]|1[0-2])$/
+const WEEK_MARKS_RE = /^[rbk-]{1,5}$/
 const REV_RAW_MONTHLY_START = 13
 const REV_WEEK_COUNT = 5
 
@@ -96,6 +112,27 @@ function weeklyPaymentsFromRaw(deal: BranchRevDeal): Record<string, number[]> {
     if (values.some((value) => value !== 0)) weekly[ym] = values
   }
   return weekly
+}
+
+// deal.raw 의 rowId·rowIdIssue·weeklyColors(parseRev, ADR-011)를 검증해 옮긴다. raw 는 DB jsonb 라
+// 형식을 믿지 않는다 — 틀린 값은 버리고, 값이 없으면 키를 싣지 않는다. 문제(rowIdIssue)가 있는 행의
+// rowId 는 싣지 않는다(쓰기 대상이 아님 — 화면 baseline 이 no_row_id 로 막힌다).
+export function revRowIdentityFields(raw: unknown): Pick<RevRevenueRow, "rowId" | "rowIdIssue" | "weeklyColors"> {
+  const out: Pick<RevRevenueRow, "rowId" | "rowIdIssue" | "weeklyColors"> = {}
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return out
+  const record = raw as Record<string, unknown>
+  const issue = record.rowIdIssue === "invalid" || record.rowIdIssue === "duplicate" ? record.rowIdIssue : null
+  if (issue) out.rowIdIssue = issue
+  else if (isValidRowId(record.rowId)) out.rowId = record.rowId
+  const colors = record.weeklyColors
+  if (colors && typeof colors === "object" && !Array.isArray(colors)) {
+    const weeklyColors: Record<string, string> = {}
+    for (const [ym, marks] of Object.entries(colors)) {
+      if (YM_KEY_RE.test(ym) && typeof marks === "string" && WEEK_MARKS_RE.test(marks)) weeklyColors[ym] = marks
+    }
+    if (Object.keys(weeklyColors).length > 0) out.weeklyColors = weeklyColors
+  }
+  return out
 }
 
 // 품질 감사 2026-09-10 — #1(페이로드 다이어트): /api/admin/branch/pipeline 172.6KB의 상당 비중은
@@ -195,6 +232,8 @@ export function listRevRevenue(
       monthlyHighConfidence: sparseNumberMap(d.monthly_high_conf, true),
       monthlyRed: sparseBooleanMap(d.monthly_red, true),
       weeklyPayments: weeklyPaymentsFromRaw(d),
+      ...revRowIdentityFields(d.raw),
+      ...(typeof d.synced_at === "string" && d.synced_at ? { syncedAt: d.synced_at } : {}),
     }))
     .sort((a, b) => b.revenue - a.revenue || a.customer.localeCompare(b.customer))
 }

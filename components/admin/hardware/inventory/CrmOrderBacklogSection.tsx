@@ -13,6 +13,10 @@ import { memo, useCallback, useState } from "react"
 import { ChevronDown, ExternalLink, Plus, RefreshCw } from "lucide-react"
 
 import { adminFetchJson } from "@/lib/admin-client"
+import { HARDWARE_PROGRESS_STATUS } from "@/lib/hardware/inventory-process"
+
+import LotAllocationDialog, { LotAllocationPreparing, useLotAllocationPrompt } from "./LotAllocationDialog"
+import { normalizeAllocations, type LotAllocation } from "./lot-allocation-model"
 import { formatNumber, todayKey } from "./shared"
 
 interface BacklogOverlap {
@@ -59,6 +63,8 @@ function CrmOrderBacklogSection({ canWrite, onRegistered }: CrmOrderBacklogSecti
   const [rowResults, setRowResults] = useState<Record<string, { ok: boolean; message: string }>>({})
   // 겹침 의심 줄은 한 번 더 누르게 한다 — 첫 클릭은 경고만 띄운다.
   const [overlapAcknowledged, setOverlapAcknowledged] = useState<ReadonlySet<string>>(() => new Set())
+  // 물류번호 관리 품목이면 등록 전에 물류번호를 고른다(결정 D6 — 새 배송 예정도 물류번호 필수).
+  const lotPrompt = useLotAllocationPrompt(undefined)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -109,27 +115,48 @@ function CrmOrderBacklogSection({ canWrite, onRegistered }: CrmOrderBacklogSecti
       return next
     })
     try {
+      const allocations = await lotPrompt.request([
+        {
+          key: entry.id,
+          itemId: null,
+          productName: entry.productName,
+          destination: entry.customerName,
+          lotNo: null,
+          quantity: entry.quantity,
+        },
+      ])
+      if (!allocations) return
+      const productName = entry.productName
+      const base = {
+        productName,
+        movementType: "outbound",
+        occurredAt: todayKey(),
+        fromLocation: "창고",
+        // CRM 오더는 판매다(결정 D5). 고객 id 는 대사 응답에 없어 이름만 싣는다.
+        outboundType: "sales",
+        toLocation: entry.customerName ?? "",
+        status: HARDWARE_PROGRESS_STATUS.planned,
+        referenceNo: entry.referenceNo,
+        memo: `CRM 연동: ${entry.sourceLabel} · ${entry.title}`,
+        crmLink: {
+          id: entry.id,
+          source: entry.source,
+          sourceLabel: entry.sourceLabel,
+          referenceNo: entry.referenceNo,
+          title: entry.title,
+          href: entry.href,
+        },
+      }
+      const lines: LotAllocation[] = normalizeAllocations(allocations.get(entry.id) ?? [])
+      // 물류번호를 나눠 골라도 한 줄로 보낸다(lotAllocations) — 서버가 번호마다 행을 만들고 둘째 줄부터 참조에
+      // 접미사를 단다. 줄마다 따로 보내면 같은 CRM 오더의 둘째 줄이 중복으로 막혔다.
       await adminFetchJson("/api/admin/hardware/movements", {
         method: "POST",
-        body: JSON.stringify({
-          productName: entry.productName,
-          movementType: "outbound",
-          quantity: entry.quantity,
-          occurredAt: todayKey(),
-          fromLocation: "창고",
-          toLocation: entry.customerName ?? "",
-          status: "배송 예정",
-          referenceNo: entry.referenceNo,
-          memo: `CRM 연동: ${entry.sourceLabel} · ${entry.title}`,
-          crmLink: {
-            id: entry.id,
-            source: entry.source,
-            sourceLabel: entry.sourceLabel,
-            referenceNo: entry.referenceNo,
-            title: entry.title,
-            href: entry.href,
-          },
-        }),
+        body: JSON.stringify(
+          lines.length <= 1
+            ? { ...base, quantity: entry.quantity, lotNo: lines[0]?.lotNo ?? "" }
+            : { ...base, quantity: entry.quantity, lotAllocations: lines.map((line) => ({ lotNo: line.lotNo, quantity: line.quantity })) }
+        ),
       })
       setEntries((current) => current.filter((row) => row.id !== entry.id))
       setOverlapAcknowledged((current) => {
@@ -271,6 +298,8 @@ function CrmOrderBacklogSection({ canWrite, onRegistered }: CrmOrderBacklogSecti
           </ul>
         </div>
       ) : null}
+      <LotAllocationDialog state={lotPrompt.dialog} />
+      <LotAllocationPreparing preparing={lotPrompt.preparing} />
     </section>
   )
 }

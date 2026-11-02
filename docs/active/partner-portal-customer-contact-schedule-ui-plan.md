@@ -44,7 +44,7 @@
 이 계획은 아래 문서의 기준을 UI에 반영한다.
 
 - [partner-portal-guidelines.md](../archive/partner-portal-guidelines.md) (아카이브)
-- [partner-portal-master-spec.md](./partner-portal-master-spec.md)
+- [partner-portal-master-spec.md](../archive/partner-portal-master-spec.md)
 - [partner-portal-product-plan.md](../archive/partner-portal-product-plan.md) (아카이브)
 - [partner-portal-screen-layout.md](../archive/partner-portal-screen-layout.md) (아카이브)
 

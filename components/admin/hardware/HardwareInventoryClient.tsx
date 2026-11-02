@@ -46,7 +46,6 @@ import {
   normalizeHardwareText,
   outboundSaleType,
   periodKey,
-  previewFifoLots,
   type PlannedSelectionConfirmProgress,
   type PlannedSelectionConfirmResult,
   PRODUCT_FILTER_OPTIONS,
@@ -77,6 +76,23 @@ import {
 import ImportFreshnessStrip, { judgeImportFreshness } from "./inventory/ImportFreshnessStrip"
 import SheetSyncMenu from "./inventory/SheetSyncMenu"
 import type { HomeRecordDraft } from "./inventory/home-record-model"
+import LotAllocationDialog, { LotAllocationPreparing, plannedLotRequest, useLotAllocationPrompt } from "./inventory/LotAllocationDialog"
+import { confirmLotPayload, type LotAllocation } from "./inventory/lot-allocation-model"
+import { canRecordInboundOrAdjust, movementButtonState as resolveMovementButtonState, type MovementButton } from "./inventory/movement-permissions"
+import { CrmCustomerLink, movementOutboundType, OutboundTypeBadge, SampleReturnBadge } from "./inventory/OutboundMetaBadges"
+import { customerOutboundStatus, isCustomerOutbound, processDraftFields } from "./inventory/outbound-v2-model"
+import {
+  formIsCustomerOutbound,
+  lotEntryForDraft,
+  processFieldErrors,
+  useEnsureProcessLots,
+  validateProcessDraft,
+  validateQuickCartProcess,
+} from "./inventory/quick-record-process"
+import type { QuickRecordProcess } from "./inventory/QuickRecordSheet"
+import ReturnRecordSheet from "./inventory/ReturnRecordSheet"
+import { useHardwareLots } from "./inventory/use-hardware-lots"
+import { useOutboundV2Draft } from "./inventory/use-outbound-v2-draft"
 
 interface HardwareCrmOrderCandidatesResponse {
   candidates: HardwareCrmOrderCandidate[]
@@ -190,8 +206,8 @@ function defaultEntryItemId(items: HardwareItem[]): string {
 
 // 출고 기간 집계 버킷 키/라벨 — shared.periodKey로 이동(분기·연간 회계연도 SSOT, 테스트 포함).
 
-// 확정 판매·설치 출고만 남긴다(무효·예정·샘플·수리 제외) — 기간별 출고 집계(outboundBuckets)와
-// 홈 판매·설치 요약(salesPeriodSummary)이 같은 모수를 쓰도록 필터를 SSOT로 뽑아둔다.
+// 확정 판매·설치 출고만 남긴다(무효·예정·샘플·수리 제외) — 입출고 탭 기간별 출고 집계(outboundBuckets,
+// 고객사·매출 펼침용 최근 원장 기준). FY 판매 수치는 서버 판매대시보드(SalesDashboardSection)가 정본이다.
 function confirmedSalesMovements(movements: HardwareMovement[]): HardwareMovement[] {
   return movements.filter(
     (movement) =>
@@ -317,6 +333,8 @@ function deriveStatus(draft: HardwareMovementDraft): string {
   if (draft.movementType !== "outbound") return draft.status
   // 샘플 대여는 사무실→샘플 경로라 실제/예정 개념이 없다 — 프리셋 status("샘플/대여")를 보존한다.
   if (isSampleOutbound(draft)) return draft.status
+  // 고객 출고의 진행 상태는 고정 두 값(정의서): 배송 예정 | 설치 완료.
+  if (isCustomerOutbound(draft)) return customerOutboundStatus(isDraftPlanned(draft))
   if (isDraftPlanned(draft)) return "배송 예정"
   // 수리 등 실제 출고의 특수 상태는 유지한다.
   if (/수리|repair/i.test(draft.status)) return draft.status
@@ -344,6 +362,13 @@ function toServerDraft(draft: HardwareMovementDraft): Omit<HardwareMovementDraft
     storageLocation: draft.storageLocation,
     importer: draft.importer,
     serials: draft.serials,
+    // 재고관리 프로세스 칸 — 어떤 칸을 싣는지는 드래프트를 만들 때 processDraftFields 가 정했다.
+    outboundType: draft.outboundType,
+    customerId: draft.customerId,
+    expectedReturnAt: draft.expectedReturnAt,
+    ownerUserId: draft.ownerUserId,
+    isFree: draft.isFree,
+    adjustDirection: draft.adjustDirection,
   }
 }
 
@@ -561,7 +586,7 @@ export default function HardwareInventoryClient({
   const [fromLocation, setFromLocation] = useState("창고")
   const [toLocation, setToLocation] = useState("")
   const [owner, setOwner] = useState("")
-  const [status, setStatus] = useState("출고")
+  const [status, setStatus] = useState("설치 완료")
   const [referenceNo, setReferenceNo] = useState("")
   const [memo, setMemo] = useState("")
   const [lotNo, setLotNo] = useState("")
@@ -622,7 +647,8 @@ export default function HardwareInventoryClient({
   const [voidReason, setVoidReason] = useState("")
   const [editingId, setEditingId] = useState<string | null>(null)
   const [confirmQtys, setConfirmQtys] = useState<Record<string, string>>({})
-  const [entrySub, setEntrySub] = useState<"inbound" | "outbound">("inbound")
+  // 입출고 탭 기본 보기는 출고 — 홈 빠른 기록(preset "sale")과 같은 기본값.
+  const [entrySub, setEntrySub] = useState<"inbound" | "outbound">("outbound")
   const [outPeriod, setOutPeriod] = useState<PeriodGranularity>("month")
   const [openPeriods, setOpenPeriods] = useState<Record<string, boolean>>({})
   const [inboundSearch, setInboundSearch] = useState("")
@@ -633,7 +659,23 @@ export default function HardwareInventoryClient({
   const deferredSearch = useDeferredValue(search)
   const deferredHardwareSearch = useDeferredValue(hardwareSearch)
   // 확정·취소 권한(hardware.finalize) — 표시용. viewer가 없으면(구응답·로딩) 열어두고 서버 게이트만 믿는다.
+  // 이제 오더 승인·스냅샷 복원에만 쓴다. 예정 수정·확정·취소와 실현 기록 수정·취소는 movementButtonState.
   const canFinalize = data?.viewer?.canFinalize ?? true
+  const viewer = data?.viewer
+  // 재고관리 프로세스(출고 v2·회수·확정 물류번호·본인 건 버튼) — 상태·규칙은 inventory/ 아래 새 파일이 갖는다.
+  const outboundV2 = useOutboundV2Draft()
+  const { reset: resetOutboundV2, loadFromMovement: loadOutboundV2FromMovement, patch: patchOutboundV2 } = outboundV2
+  const hardwareLots = useHardwareLots()
+  const { invalidate: invalidateLots } = hardwareLots
+  const lotPrompt = useLotAllocationPrompt(data?.items)
+  const [returnSheetOpen, setReturnSheetOpen] = useState(false)
+  // 저장을 한 번 눌러 본 뒤에만 칸별 문구를 보인다(처음 연 폼이 빨갛게 시작하지 않게).
+  const [processAttempted, setProcessAttempted] = useState(false)
+  const canInboundAdjust = canRecordInboundOrAdjust(viewer)
+  const movementButtonState = useCallback(
+    (button: MovementButton, movement: HardwareMovement) => resolveMovementButtonState(button, movement, viewer),
+    [viewer]
+  )
   // 기록 생성 권한 — 없으면 쓰기 버튼을 미리 내린다(강제는 서버 게이트). 구응답·로딩 중에는 열어 둔다.
   const canWriteHardware = data?.viewer?.canWrite ?? true
   const [customerFilter, setCustomerFilter] = useState("")
@@ -1036,17 +1078,6 @@ export default function HardwareInventoryClient({
   // 출고 하위 세그먼트 현재 상태 — 샘플 서브토글이 우선하고, 나머지는 예정/실제로 가른다.
   const outboundMode: "actual" | "planned" | "sample" =
     activePresetKey === "sample" ? "sample" : isPlanned ? "planned" : "actual"
-
-  const fifoPreview = useMemo(() => {
-    const qty = Number(quantity)
-    if (movementType !== "outbound" || lotNo.trim() || !selectedStockRow || !Number.isFinite(qty) || qty <= 0) {
-      return null
-    }
-    // FIFO 자동 배정은 창고 lot에서 나갈 때만 의미가 있다 — 사무실(남은 샘플) 반출에는 창고 lot 미리보기를 띄우지 않는다.
-    const source = fromLocation.trim()
-    if (source && source !== "창고") return null
-    return previewFifoLots(selectedStockRow.lotBalances, qty)
-  }, [fromLocation, lotNo, movementType, quantity, selectedStockRow])
 
   // 출발 위치 잔량 초과 경고 — lot 지정 여부와 무관하게, 나가는(감소하는) 위치의 잔량을 넘으면 알린다.
   // 판매/배송예정/창고발 샘플은 가용(창고−예정)을, 사무실발 샘플 대여는 남은 샘플(사무실)을,
@@ -1561,7 +1592,7 @@ export default function HardwareInventoryClient({
     const refLabel = formatLotLabel(movement.reference_no)
     const custSub = refLabel && refLabel !== lotLabel ? refLabel : null
     const memoText = movement.memo?.trim() || ""
-    const rowSaleType = outboundSaleType(movement)
+    const rowType = movementOutboundType(movement)
     const planned = isPlannedMovement(movement)
     // nested(그룹 하위) 행은 왼쪽 들여쓰기·낮은 높이·살짝 작은 폰트로 위계를 구분한다.
     const sz = {
@@ -1628,11 +1659,10 @@ export default function HardwareInventoryClient({
               예정
             </span>
           ) : null}
-          {rowSaleType && rowSaleType !== "sales" ? (
-            <span className={`inline-flex rounded-full px-1.5 py-0.5 text-[10px] font-bold ${SALE_TYPE_META[rowSaleType].tone}`}>
-              {SALE_TYPE_META[rowSaleType].label}
-            </span>
-          ) : null}
+          {/* 유형(서버 판정 outbound_type_resolved) · 샘플 반납 예정일 · CRM 고객 — 재고관리 프로세스 칸. */}
+          <OutboundTypeBadge type={rowType} size="xs" />
+          <SampleReturnBadge movement={movement} size="xs" />
+          <CrmCustomerLink movement={movement} />
         </span>
         <span className="text-[#A39E98]">
           <ChevronRight className="h-3.5 w-3.5" />
@@ -1833,66 +1863,7 @@ export default function HardwareInventoryClient({
     }))
   }, [data?.movements, outPeriod])
 
-  // 홈 탭 판매·설치 요약 — 이번 달/이번 분기(회계)/올해를 한 줄에 같이 본다. 모수·매출 규약은
-  // 기간별 출고 집계와 동일: 대수는 확정 출고 전체(샘플·수리 제외), 매출은 실판매(sales) USD만.
-  const salesPeriodSummary = useMemo(() => {
-    const sales = confirmedSalesMovements(data?.movements ?? [])
-    const today = todayKey()
-    // 직전 기간 앵커 날짜 — 월초로 고정한 뒤 월/분기(3개월)/연 단위로 되돌린다.
-    // (fiscal 분기는 월 경계라 3개월 전 날짜가 항상 직전 분기에 떨어진다.)
-    const prevAnchor = (granularity: PeriodGranularity): string => {
-      const anchor = new Date(`${today.slice(0, 7)}-01T00:00:00Z`)
-      if (granularity === "month") anchor.setUTCMonth(anchor.getUTCMonth() - 1)
-      if (granularity === "quarter") anchor.setUTCMonth(anchor.getUTCMonth() - 3)
-      if (granularity === "year") anchor.setUTCFullYear(anchor.getUTCFullYear() - 1)
-      return anchor.toISOString().slice(0, 10)
-    }
-    const TITLES: Record<PeriodGranularity, { title: string; prevTitle: string }> = {
-      month: { title: "이번 달", prevTitle: "지난 달" },
-      quarter: { title: "이번 분기", prevTitle: "지난 분기" },
-      year: { title: "연간", prevTitle: "지난해" },
-    }
-    return (["month", "quarter", "year"] as const).map((granularity) => {
-      const current = periodKey(today, granularity)
-      const previous = periodKey(prevAnchor(granularity), granularity)
-      let qty = 0
-      let revenue = 0
-      let hasRevenue = false
-      let prevQty = 0
-      const byProduct = new Map<string, number>()
-      for (const movement of sales) {
-        const date = movement.occurred_at?.slice(0, 10) ?? movement.created_at.slice(0, 10)
-        const key = periodKey(date, granularity).key
-        if (key === previous.key) {
-          prevQty += movement.quantity
-          continue
-        }
-        if (key !== current.key) continue
-        qty += movement.quantity
-        const saleType = outboundSaleType(movement) ?? "sales"
-        if (saleType === "sales" && movement.amount_usd != null) {
-          revenue += movement.amount_usd
-          hasRevenue = true
-        }
-        byProduct.set(movement.product_name, (byProduct.get(movement.product_name) ?? 0) + movement.quantity)
-      }
-      return {
-        granularity,
-        ...TITLES[granularity],
-        label: current.label,
-        qty,
-        revenue,
-        hasRevenue,
-        prevQty,
-        chips: Array.from(byProduct.entries())
-          .sort((a, b) => b[1] - a[1])
-          .slice(0, 3)
-          .map(([product, chipQty]) => ({ product: shortProductName(product), qty: chipQty })),
-      }
-    })
-  }, [data?.movements])
-
-  // 홈 요약 → 입출고 탭 "출고 · 기간 집계" 딥링크(버킷 전체·고객사 펼침은 그쪽이 담당).
+  // 홈 판매대시보드 → 입출고 탭 "출고 · 기간 집계" 딥링크(버킷 전체·고객사 펼침은 그쪽이 담당).
   const openOutboundDetail = useCallback(() => {
     setActiveTab("entry")
     setEntrySub("outbound")
@@ -1997,6 +1968,12 @@ export default function HardwareInventoryClient({
               { label: "매입액 (CNY)", value: detailMovement.amount_cny != null ? formatCurrency(detailMovement.amount_cny, "CNY") : "-" },
             ]
           : []),
+        ...(detailMovement.movement_type === "outbound" || detailMovement.movement_type === "return"
+          ? [
+              { label: "진행 상태", value: detailMovement.status ?? (isPlannedMovement(detailMovement) ? "배송 예정" : "-") },
+              ...(detailMovement.expected_return_at ? [{ label: "반납 예정일", value: formatDate(detailMovement.expected_return_at) }] : []),
+            ]
+          : []),
         ...(detailMovement.movement_type === "outbound"
           ? [
               { label: "판매유형", value: SALE_TYPE_META[outboundSaleType(detailMovement) ?? "sales"].label },
@@ -2007,14 +1984,17 @@ export default function HardwareInventoryClient({
     : [], [detailMovement])
   const detailCrm = useMemo(() => (detailMovement ? extractCrmLink(detailMovement) : null), [detailMovement])
   const detailLotLabel = detailMovement ? formatLotLabel(movementLot(detailMovement)) : null
+  // 버튼 줄을 그릴 수 있는 기록인가(어드민 기록 · 취소·전환 아님). 누를 수 있는지는 아래 버튼 상태가 정한다 —
+  // 배송 예정은 본인 건 또는 입고관리 권한자, 실현 기록은 입고관리 권한자(정의서 §권한·D2).
   const detailCanEdit =
     detailMovement != null &&
     detailMovement.source === "admin_manual" &&
     detailMovement.voided_at == null &&
     !detailMovement.converted_from_movement_id &&
-    !detailMovement.converted_to_movement_id &&
-    // 실현(비예정) 기록 수정은 finalize 권한 필요 — 서버 게이트와 같은 기준으로 버튼을 내린다.
-    (isPlannedMovement(detailMovement) || canFinalize)
+    !detailMovement.converted_to_movement_id
+  const detailEditState = detailMovement ? movementButtonState("edit", detailMovement) : { allowed: false }
+  const detailVoidState = detailMovement ? movementButtonState("void", detailMovement) : { allowed: false }
+  const detailConfirmState = detailMovement && isPlannedMovement(detailMovement) ? movementButtonState("confirm", detailMovement) : null
 
   const quickPickGroups = useMemo(() => {
     const featured: Array<{ row: HardwareStockRow; rank: number }> = []
@@ -2086,7 +2066,7 @@ export default function HardwareInventoryClient({
       owner,
       // 활성 프리셋이 정한 상태를 그대로 따른다 — 예전의 강제 "배송 예정" 폴백은
       // 완료 출고를 배치로 담을 수 없게 만들던 원인이라 제거.
-      status: cartMovementType === "inbound" ? (typeMatchesForm && status ? status : "입고") : typeMatchesForm && status ? status : "출고",
+      status: cartMovementType === "inbound" ? (typeMatchesForm && status ? status : "입고") : typeMatchesForm && status ? status : "설치 완료",
       // 키트/붙여넣기 라인이 단건 폼의 메모·참조·시리얼·금액을 통째로 상속하면
       // 전 라인 오염(FIFO 비활성, 시리얼 수량 불일치)이 생긴다 — 공유 필드는
       // 처리일·담당자·(입고 한정) lot/보관/수입자만으로 한정한다.
@@ -2099,11 +2079,17 @@ export default function HardwareInventoryClient({
       storageLocation: cartMovementType === "inbound" ? storageLocation.trim() : "",
       importer: cartMovementType === "inbound" ? importer.trim() : "",
       serials: [],
+      // 출고 v2 칸(유형·고객·담당)은 폼 값을 따른다 — 같은 고객의 세트·견적 줄이라서다. 도착이 비면 실리지 않는다.
+      ...processDraftFields(outboundV2.state, {
+        movementType: cartMovementType,
+        toLocation: cartMovementType === "inbound" ? "창고" : typeMatchesForm ? toLocation : "",
+      }),
     }
   }
 
   const pushDraftsToQuickCart = (drafts: HardwareMovementDraft[], sourceLabel: string): boolean => {
-    const invalid = drafts.map(validateMovementDraft).find(Boolean)
+    // 물류번호는 바구니 줄에서 고른다 — 담을 때는 건너뛰고 저장 직전에 줄마다 본다.
+    const invalid = drafts.map((draft) => validateMovementDraft(draft, { skipLot: true })).find(Boolean)
     if (invalid) {
       setError(invalid)
       return false
@@ -2199,15 +2185,6 @@ export default function HardwareInventoryClient({
     setQuotePasteText("")
   }
 
-  const previewFifoForDraft = (draft: HardwareMovementDraft) => {
-    if (draft.movementType !== "outbound" || draft.lotNo.trim()) return null
-    const row =
-      data?.stock.find((stockRow) => stockRow.itemId === draft.itemId || stockRow.product === draft.productName) ??
-      findStockRowByText(draft.productName)
-    if (!row) return null
-    return previewFifoLots(row.lotBalances, draft.quantity)
-  }
-
   const toggleSection = useCallback((section: HardwareSectionKey) => {
     setOpenSections((current) => ({ ...current, [section]: !current[section] }))
   }, [])
@@ -2274,7 +2251,12 @@ export default function HardwareInventoryClient({
   const selectOutboundMode = (mode: "actual" | "planned" | "sample") => {
     if (mode === "actual") applyPreset("sale")
     else if (mode === "planned") applyPreset("planned")
-    else applyPreset("sample")
+    else {
+      applyPreset("sample")
+      // 샘플 풀은 내부 이동(→ 샘플) — 앞서 고른 고객사 이름이 도착지에 남아 고객 출고로 읽히지 않게 한다.
+      setToLocation("샘플")
+      patchOutboundV2({ customerId: null })
+    }
   }
 
   // 상세 모드 진입/복귀 — 같은 시트를 상세 프리셋 5종으로 전환한다. 상세는 항상 단건.
@@ -2284,7 +2266,8 @@ export default function HardwareInventoryClient({
       movementType === "outbound" ? activePresetKey : movementType === "inbound" ? "inbound" : null
     setSheetView("detail")
     setSheetMode("single")
-    applyPreset("return")
+    // 고객 회수는 회수 등록 시트로 옮겼다 — 상세 기본은 샘플 반환(내부 이동).
+    applyPreset("sampleReturn")
   }
 
   const exitDetailView = () => {
@@ -2327,7 +2310,11 @@ export default function HardwareInventoryClient({
     setError(null)
     setNotice(null)
     setKitMultiplier(1)
-  }, [applyPreset, data?.items])
+    // 출고 v2 — 유형·고객·반납일·담당 지정은 건 단위로 새로 받는다. 권한 정보가 있는 응답이면 담당은 본인.
+    resetOutboundV2()
+    setProcessAttempted(false)
+    if (typeof viewer?.canManageInventory === "boolean" && viewer.name) setOwner(viewer.name)
+  }, [applyPreset, data?.items, resetOutboundV2, viewer])
 
   const openSheet = useCallback((presetKey: string, itemId?: string, mode?: "single" | "batch") => {
     resetSheetDraft(presetKey, itemId)
@@ -2445,10 +2432,12 @@ export default function HardwareInventoryClient({
     setStorageLocation(movement.storage_location ?? "")
     setImporter(movement.importer ?? "")
     setSerialsText((movement.serials ?? []).join(", "))
+    loadOutboundV2FromMovement(movement)
+    setProcessAttempted(false)
     setEditingId(movement.id)
     setSheetMode("single")
     setSheetOpen(true)
-  }, [applyPreset, data?.items])
+  }, [applyPreset, data?.items, loadOutboundV2FromMovement])
 
   // 직전 기록 복제 — 편집이 아니라 새 기록으로 채운다(editingId 미설정). 같은 고객·경로·품목의
   // 연속 입력을 빠르게 하기 위한 것이라 처리일은 오늘로 리셋하고, 건 단위 값(참조·시리얼·금액)은 비운다.
@@ -2481,6 +2470,9 @@ export default function HardwareInventoryClient({
     setStorageLocation("")
     setImporter("")
     setSerialsText("")
+    // 유형·고객·담당은 같은 고객 연속 입력이라 따라오고, 물류번호·반납일은 건 단위라 다시 고른다.
+    loadOutboundV2FromMovement(movement)
+    patchOutboundV2({ expectedReturnAt: "" })
     setNotice(`직전 기록(${movement.product_name})을 복제했습니다. 수량·경로를 확인하고 저장하세요.`)
   }
 
@@ -2500,15 +2492,25 @@ export default function HardwareInventoryClient({
 
   const confirmPlannedMovementRequest = useCallback(async (
     movement: HardwareMovement,
-    override: { quantity?: number; occurredAt?: string } = {}
+    override: { quantity?: number; occurredAt?: string } = {},
+    // 물류번호 없는 관리 품목 예정 — 확정 때 고른 로트(하나면 lotNo, 여럿이면 lotAllocations).
+    allocations: readonly LotAllocation[] = []
   ) => {
     const { qty, occurredAt } = readPlannedConfirmInput(movement, override)
     await adminFetchJson(`/api/admin/hardware/movements/${movement.id}`, {
       method: "PATCH",
-      body: JSON.stringify({ action: "confirm-planned", occurredAt, confirmQty: qty }),
+      body: JSON.stringify({ action: "confirm-planned", occurredAt, confirmQty: qty, ...confirmLotPayload(allocations) }),
     })
     return qty
   }, [readPlannedConfirmInput])
+
+  // 확정 전에 물류번호를 고른다 — 고를 게 없으면 빈 Map, 사용자가 취소하면 null(확정하지 않는다).
+  const { request: requestLotAllocations } = lotPrompt
+  const pickConfirmLots = useCallback(
+    (entries: Array<{ movement: HardwareMovement; quantity: number }>) =>
+      requestLotAllocations(entries.map((entry) => plannedLotRequest(entry.movement, entry.quantity))),
+    [requestLotAllocations]
+  )
 
   const confirmPlannedMovement = useCallback(async (
     movement: HardwareMovement,
@@ -2519,7 +2521,9 @@ export default function HardwareInventoryClient({
     setNotice(null)
     setError(null)
     try {
-      const qty = await confirmPlannedMovementRequest(movement, override)
+      const allocations = await pickConfirmLots([{ movement, quantity: readPlannedConfirmInput(movement, override).qty }])
+      if (!allocations) return
+      const qty = await confirmPlannedMovementRequest(movement, override, allocations.get(movement.id))
       setPlannedConfirmResults((current) => ({
         ...current,
         [movement.id]: { ok: true, message: `${formatNumber(qty)}대 확정 완료` },
@@ -2529,13 +2533,14 @@ export default function HardwareInventoryClient({
           qty < movement.quantity ? ` 잔여 ${formatNumber(movement.quantity - qty)}대는 예정으로 유지됩니다.` : ""
         }`
       )
+      invalidateLots()
       await refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
       setConfirmingId(null)
     }
-  }, [busy, confirmingGroupKey, confirmingId, confirmPlannedMovementRequest, refresh])
+  }, [busy, confirmingGroupKey, confirmingId, confirmPlannedMovementRequest, invalidateLots, pickConfirmLots, readPlannedConfirmInput, refresh])
 
   const confirmPlannedGroup = useCallback(async (group: { key: string; customer: string; items: HardwareMovement[] }) => {
     if (group.items.length === 0 || plannedConfirmLocked) return
@@ -2544,6 +2549,8 @@ export default function HardwareInventoryClient({
       ...readPlannedConfirmInput(movement),
     }))
     if (!window.confirm(`${group.customer} 예정 출고 ${formatNumber(group.items.length)}개 품목을 확정할까요?`)) return
+    const groupAllocations = await pickConfirmLots(plannedSnapshot.map((entry) => ({ movement: entry.movement, quantity: entry.qty })))
+    if (!groupAllocations) return
     setConfirmingGroupKey(group.key)
     setNotice(null)
     setError(null)
@@ -2553,10 +2560,11 @@ export default function HardwareInventoryClient({
     try {
       for (const entry of plannedSnapshot) {
         try {
-          const qty = await confirmPlannedMovementRequest(entry.movement, {
-            quantity: entry.qty,
-            occurredAt: entry.occurredAt,
-          })
+          const qty = await confirmPlannedMovementRequest(
+            entry.movement,
+            { quantity: entry.qty, occurredAt: entry.occurredAt },
+            groupAllocations.get(entry.movement.id)
+          )
           success += 1
           nextResults[entry.movement.id] = { ok: true, message: `${formatNumber(qty)}대 확정 완료` }
         } catch (err) {
@@ -2573,11 +2581,14 @@ export default function HardwareInventoryClient({
           ? `${group.customer} 출고 확정: ${formatNumber(success)}건 성공, ${formatNumber(failed)}건 실패`
           : `${group.customer} 예정 출고 ${formatNumber(success)}건을 모두 확정했습니다.`
       )
-      if (success > 0) await refresh()
+      if (success > 0) {
+        invalidateLots()
+        await refresh()
+      }
     } finally {
       setConfirmingGroupKey(null)
     }
-  }, [plannedConfirmLocked, readPlannedConfirmInput, confirmPlannedMovementRequest, refresh])
+  }, [plannedConfirmLocked, readPlannedConfirmInput, confirmPlannedMovementRequest, invalidateLots, pickConfirmLots, refresh])
 
   // 일괄 체크(감사 2026-09-14) — PlannedOutboundPanel이 여러 딜을 가로질러 고른 예정 출고를
   // 한 번에 확정하는 전용 핸들러. confirmPlannedGroup의 루프 패턴(성공/실패 집계 →
@@ -2596,6 +2607,9 @@ export default function HardwareInventoryClient({
       if (entries.length === 0 || plannedConfirmLocked) return { successIds: [], failedIds: [] }
       setNotice(null)
       setError(null)
+      const selectionAllocations = await pickConfirmLots(entries)
+      // 물류번호 고르기를 취소하면 아무것도 확정하지 않고 선택을 그대로 둔다.
+      if (!selectionAllocations) return { successIds: [], failedIds: entries.map((entry) => entry.movement.id) }
       const nextResults: Record<string, { ok: boolean; message: string }> = {}
       const successIds: string[] = []
       const failedIds: string[] = []
@@ -2607,7 +2621,7 @@ export default function HardwareInventoryClient({
           // 이 값을 그대로 읽는다(요청사항 ①.5 진행 표시).
           setSelectionConfirmProgress({ index: i + 1, total: entries.length })
           try {
-            const qty = await confirmPlannedMovementRequest(movement, { quantity, occurredAt })
+            const qty = await confirmPlannedMovementRequest(movement, { quantity, occurredAt }, selectionAllocations.get(movement.id))
             successIds.push(movement.id)
             nextResults[movement.id] = { ok: true, message: `${formatNumber(qty)}대 확정 완료` }
           } catch (err) {
@@ -2627,13 +2641,16 @@ export default function HardwareInventoryClient({
             ? `선택 출고 확정: ${formatNumber(successIds.length)}건 성공, ${formatNumber(failedIds.length)}건 실패`
             : `선택한 예정 출고 ${formatNumber(successIds.length)}건을 모두 확정했습니다.`
         )
-        if (successIds.length > 0) await refresh()
+        if (successIds.length > 0) {
+          invalidateLots()
+          await refresh()
+        }
       } finally {
         setSelectionConfirmProgress(null)
       }
       return { successIds, failedIds }
     },
-    [plannedConfirmLocked, confirmPlannedMovementRequest, refresh]
+    [plannedConfirmLocked, confirmPlannedMovementRequest, invalidateLots, pickConfirmLots, refresh]
   )
 
   const voidMovement = useCallback((movement: HardwareMovement) => {
@@ -2697,13 +2714,18 @@ export default function HardwareInventoryClient({
 
   const reviewHomeRecord = (draft: HomeRecordDraft) => {
     if (!canWriteHardware || plannedConfirmLocked || sheetOpen || inboundSheet.open || pendingMovement) return
+    if (draft.preset === "inbound" && !canInboundAdjust) return
     // 홈 입력을 기존 단건 검토 폼에 전달한다. 저장·CRM·로트 검증은 기존 경로가 담당한다.
     openSheet(draft.preset, draft.itemId, "single")
     setQuantity(draft.quantity)
     setOccurredAt(draft.date)
     setMemo(draft.memo)
     if (draft.preset === "inbound") setFromLocation(draft.source.trim())
-    else setToLocation(draft.customer.trim())
+    else {
+      setToLocation(draft.customer.trim())
+      // 홈 칸은 과거 출고처 자유 입력이다 — 이름을 지우지 않게 직접 입력으로 넘기고, 시트에서 CRM 고객으로 바꿀 수 있다.
+      if (draft.customer.trim()) patchOutboundV2({ customerMode: "free" })
+    }
   }
 
   const adjustQuantity = (delta: number) => {
@@ -2858,10 +2880,25 @@ export default function HardwareInventoryClient({
       serials: serialsText.split(/[\s,]+/).map((value) => value.trim()).filter(Boolean),
       // 예정 여부는 출고에만 의미가 있다 — 다른 유형은 undefined로 두어 status 폴백만 쓴다.
       isPlanned: movementType === "outbound" ? isPlanned : undefined,
+      // 출고 v2(유형·CRM 고객·반납 예정일·담당 지정)·입고 유무상·조정 방향 — 유형별로 실을 칸만.
+      ...processDraftFields(outboundV2.state, { movementType, toLocation }),
     }
   }
 
-  const validateMovementDraft = (draft: HardwareMovementDraft) => {
+  const validateMovementDraft = (draft: HardwareMovementDraft, options: { form?: boolean; skipLot?: boolean } = {}) => {
+    const baseError = validateMovementDraftBase(draft)
+    if (baseError) return baseError
+    // 재고관리 프로세스 규칙(출고 v2·입고 유무상·조정 사유) — 서버와 같은 규칙을 저장 전에 보인다.
+    return validateProcessDraft(draft, {
+      lots: hardwareLots,
+      items: data?.items,
+      customerMode: options.form ? outboundV2.state.customerMode : undefined,
+      excludeMovementId: options.form ? editingId : null,
+      skipLot: options.skipLot,
+    })
+  }
+
+  const validateMovementDraftBase = (draft: HardwareMovementDraft) => {
     if (!draft.productName.trim()) return "품목을 선택하거나 새 품목을 입력하세요."
     if (!Number.isInteger(draft.quantity) || draft.quantity <= 0) return "수량은 1 이상 정수여야 합니다."
     // 출고는 도착(고객사) 실명이 있어야 고객 집계·거래이력이 산다. "고객" 같은 일반 위치명은 미지정으로 취급.
@@ -2913,8 +2950,9 @@ export default function HardwareInventoryClient({
 
   const addDraftToQuickCart = () => {
     const draft = buildMovementDraft()
-    const message = validateMovementDraft(draft)
+    const message = validateMovementDraft(draft, { form: true, skipLot: true })
     if (message) {
+      setProcessAttempted(true)
       setError(message)
       return
     }
@@ -2964,6 +3002,13 @@ export default function HardwareInventoryClient({
 
   const submitQuickCart = async () => {
     if (quickCart.length === 0 || busy === "movement") return
+    // 줄마다 출고 v2 규칙(유형·고객·물류번호 잔여)을 먼저 본다 — 서버 422 를 기다리지 않는다.
+    const processLineErrors = validateQuickCartProcess(quickCart, { lots: hardwareLots, items: data?.items })
+    if (Object.keys(processLineErrors).length > 0) {
+      setQuickCartLineErrors(processLineErrors)
+      setError(`바구니 ${formatNumber(Object.keys(processLineErrors).length)}줄을 고쳐야 저장할 수 있습니다 — 줄 아래 문구를 확인하세요.`)
+      return
+    }
     const submittedCart = quickCart.map((draft) => ({ ...draft, serials: [...draft.serials] }))
     setBusy("movement")
     setNotice(null)
@@ -3006,6 +3051,7 @@ export default function HardwareInventoryClient({
       if (result.summary.success > 0) {
         rememberOwner(owner)
         applySavedMovements(result.movements ?? [])
+        invalidateLots()
         void refresh()
       }
     } catch (err) {
@@ -3183,6 +3229,9 @@ export default function HardwareInventoryClient({
         }`
       )
       rememberOwner(draft.owner)
+      invalidateLots()
+      outboundV2.resetAfterSave()
+      setProcessAttempted(false)
       setQuantity("1")
       setMemo("")
       setUnitPrice("")
@@ -3230,12 +3279,14 @@ export default function HardwareInventoryClient({
     try {
       // 수정은 status 필드를 직접 편집하므로 파생하지 않고, UI 전용 isPlanned만 제거한다.
       // toServerDraft는 status를 파생하므로, 사용자가 입력한 원본 status로 되돌린다.
-      const editPayload = { ...toServerDraft(draft), status: draft.status }
+      // 고객 출고는 진행 상태가 고정 두 값이라 파생값을 쓴다(정의서) — 그 밖은 입력한 상태 그대로.
+      const editPayload = { ...toServerDraft(draft), status: isCustomerOutbound(draft) ? deriveStatus(draft) : draft.status }
       await adminFetchJson(`/api/admin/hardware/movements/${editingId}`, {
         method: "PATCH",
         body: JSON.stringify({ action: "update", ...editPayload }),
       })
       setNotice(`${draft.productName} 기록을 수정했습니다.`)
+      invalidateLots()
       setEditingId(null)
       setSheetOpen(false)
       setQuantity("1")
@@ -3257,8 +3308,9 @@ export default function HardwareInventoryClient({
   const submitMovement = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     const draft = buildMovementDraft()
-    const validationError = validateMovementDraft(draft)
+    const validationError = validateMovementDraft(draft, { form: true })
     if (validationError) {
+      setProcessAttempted(true)
       setError(validationError)
       return
     }
@@ -3288,6 +3340,63 @@ export default function HardwareInventoryClient({
       return
     }
     await createMovementFromDraft(draft, null)
+  }
+
+  // ── 재고관리 프로세스 — 빠른 기록 시트 연결(규칙은 inventory/quick-record-process.ts) ──
+  const processFormDraft = sheetOpen ? buildMovementDraft() : null
+  const processFormKey = {
+    itemId: customProduct.trim() ? undefined : selectedItemId || undefined,
+    productName: customProduct.trim() || selectedItem?.name || "",
+    movementType,
+    fromLocation,
+    toLocation: activePresetKey === "sample" ? "샘플" : toLocation,
+  }
+  useEnsureProcessLots({ lots: hardwareLots, enabled: sheetOpen, form: processFormKey, excludeMovementId: editingId, quickCart })
+  const processLotEntry = lotEntryForDraft(hardwareLots, processFormKey, editingId)
+  const selectedLotTracked = data?.items.find((item) => item.id === processFormKey.itemId)?.lot_tracked
+  const quickRecordProcess: QuickRecordProcess = {
+    viewer,
+    state: outboundV2.state,
+    patch: patchOutboundV2,
+    customerOutbound: formIsCustomerOutbound({ movementType, toLocation, activePresetKey }),
+    // 창고에서 나가는 출고만 고른다. 조회 결과가 "수량만 관리"면 숨긴다(칸이 없는 구응답 품목은 조회 결과로 판정).
+    showLotPicker:
+      movementType === "outbound" &&
+      processLotEntry != null &&
+      !(processLotEntry.status === "ready" && !processLotEntry.data.lotTracked) &&
+      !(processLotEntry.status !== "ready" && selectedLotTracked === false),
+    lotEntry: processLotEntry,
+    fieldErrors:
+      processAttempted && processFormDraft
+        ? processFieldErrors(processFormDraft, {
+            lots: hardwareLots,
+            items: data?.items,
+            customerMode: outboundV2.state.customerMode,
+            excludeMovementId: editingId,
+          })
+        : {},
+    canInboundAdjust,
+    selectCustomer: (option, displayName) => {
+      setToLocation(displayName)
+      patchOutboundV2({ customerId: option?.id ?? null, customerMode: "crm" })
+    },
+    setCustomerFreeText: (value) => {
+      setToLocation(value)
+      patchOutboundV2({ customerId: null })
+    },
+    setOwnerChoice: (name, userId) => {
+      setOwner(name)
+      patchOutboundV2({ ownerUserId: userId })
+    },
+    openReturnSheet: () => {
+      setSheetOpen(false)
+      setReturnSheetOpen(true)
+    },
+    basketLotEntry: (draft) => lotEntryForDraft(hardwareLots, draft),
+    setQuickCartLineLot: (index, value) => {
+      setQuickCart((current) => current.map((draft, lineIndex) => (lineIndex === index ? { ...draft, lotNo: value } : draft)))
+      setQuickCartLineErrors({})
+    },
   }
 
   const activeTabId = `hardware-tab-${activeTab}`
@@ -3452,9 +3561,9 @@ export default function HardwareInventoryClient({
                 customers: historyCustomers,
                 disabled: !canWriteHardware || plannedConfirmLocked || sheetOpen || inboundSheet.open || pendingMovement != null || plannedSelectionCount > 0,
                 onReview: reviewHomeRecord,
+                canInbound: canInboundAdjust,
               }}
               categoryCards={categoryCards}
-              salesPeriodSummary={salesPeriodSummary}
               openOutboundDetail={openOutboundDetail}
               hardwareSearch={hardwareSearch}
               setHardwareSearch={setHardwareSearch}
@@ -3470,6 +3579,7 @@ export default function HardwareInventoryClient({
               confirmPlannedMovement={confirmPlannedMovement}
               plannedConfirmLocked={plannedConfirmLocked}
               canFinalize={canFinalize}
+              movementButtonState={movementButtonState}
               setCustomerDetail={setCustomerDetail}
               plannedMovementQuantity={plannedMovementQuantity}
               plannedStaleGroupCount={plannedStaleGroupCount}
@@ -3517,6 +3627,7 @@ export default function HardwareInventoryClient({
               entrySub={entrySub}
               setEntrySub={setEntrySub}
               openFreshSheet={openFreshSheet}
+              openReturnSheet={() => setReturnSheetOpen(true)}
               inboundSearch={inboundSearch}
               setInboundSearch={setInboundSearch}
               inboundLots={inboundLots}
@@ -3593,7 +3704,6 @@ export default function HardwareInventoryClient({
                 availabilityWarning={availabilityWarning}
                 status={status}
                 setStatus={setStatus}
-                fifoPreview={fifoPreview}
                 inboundDraftWarnings={inboundDraftWarnings}
                 unitPrice={unitPrice}
                 setUnitPrice={setUnitPrice}
@@ -3608,7 +3718,6 @@ export default function HardwareInventoryClient({
                 serialsText={serialsText}
                 setSerialsText={setSerialsText}
                 owner={owner}
-                setOwner={setOwner}
                 referenceNo={referenceNo}
                 setReferenceNo={setReferenceNo}
                 memo={memo}
@@ -3636,8 +3745,8 @@ export default function HardwareInventoryClient({
                 removeQuickCartItem={removeQuickCartItem}
                 clearQuickCart={clearQuickCart}
                 submitQuickCart={submitQuickCart}
-                previewFifoForDraft={previewFifoForDraft}
                 toggleStayOpenAfterSave={toggleStayOpenAfterSave}
+                process={quickRecordProcess}
               />
             )}
             </AnimatePresence>
@@ -3708,10 +3817,28 @@ export default function HardwareInventoryClient({
         detailFacts={detailFacts}
         detailCrm={detailCrm}
         detailCanEdit={detailCanEdit}
-        canFinalize={canFinalize}
+        editState={detailEditState}
+        voidState={detailVoidState}
+        confirmState={detailConfirmState}
+        confirmBusy={detailMovement != null && confirmingId === detailMovement.id}
         editMovement={editMovement}
         voidMovement={voidMovement}
+        confirmMovement={(movement) => void confirmPlannedMovement(movement)}
       />
+
+      <ReturnRecordSheet
+        open={returnSheetOpen}
+        onClose={() => setReturnSheetOpen(false)}
+        reduceMotion={reduceMotion}
+        onSaved={async (message) => {
+          setNotice(message)
+          invalidateLots()
+          await refresh()
+        }}
+      />
+
+      <LotAllocationDialog state={lotPrompt.dialog} />
+      <LotAllocationPreparing preparing={lotPrompt.preparing} />
 
       <CustomerHistorySheet
         customerHistory={customerHistory}
@@ -3738,6 +3865,7 @@ export default function HardwareInventoryClient({
           lotStaleNote={inboundLotStaleNote}
           // VIEWER 는 저장 시 서버가 403 으로 막는다 — 대시보드에 편집 권한 플래그가 없어 입력 UI 는 열어 둔다(빠른 기록과 같은 관례).
           canWrite={canWriteHardware}
+          canManageInventory={data?.viewer?.canManageInventory}
           owner={owner.trim() || data?.viewer?.name || null}
           onSaved={(result) => {
             const sampleNote =

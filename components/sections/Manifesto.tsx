@@ -35,7 +35,7 @@ export function Manifesto() {
                         className="block font-black leading-[1.05] break-keep"
                         style={{ fontSize: 'clamp(3rem, 8.5vw, 8.5rem)', letterSpacing: '-0.05em' }}
                     >
-                        의존해서는 안됩니다.
+                        의존해서는 안 됩니다.
                     </span>
                 </motion.div>
 

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import { AlertCircle, Loader2 } from "lucide-react"
 
+import DistributorSettlementSection from "@/components/admin/documents/DistributorSettlementSection"
 import QuoteDocumentPreview from "@/components/portal/quotes/QuoteDocumentPreview"
 import QuoteViewerActions from "@/components/portal/quotes/QuoteViewerActions"
 import { adminFetch } from "@/lib/admin-client"
@@ -177,6 +178,11 @@ export default function QuoteDirectViewerClient({ quoteId }: { quoteId: string }
           내부 확인용 견적서 화면입니다. 고객 발송은 공유 링크를 사용해 주세요.
         </footer>
       </article>
+
+      {/* 좁은 화면에서는 견적 목록 상세 패널이 없어 이 화면이 유일한 진입점이다 — 총판 정산도 여기서 다룬다. */}
+      <div className="mx-auto mt-4 max-w-[210mm] rounded-2xl bg-white print:hidden">
+        <DistributorSettlementSection quoteId={document.id} />
+      </div>
     </main>
   )
 }

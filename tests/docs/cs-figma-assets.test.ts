@@ -209,7 +209,8 @@ describe("CS Figma asset resolver", () => {
     const missing = findMissingCsFigmaAssetLabels(CS_FIGMA_GUIDES)
     const requirements = getCsFigmaAssetRequirements(CS_FIGMA_GUIDES)
 
-    expect(CS_FIGMA_ASSET_PATHS.length).toBe(112)
+    // 사내 전용 캡처 13장(충전·결제, VPN, 번역 작업, 내부 관리자 화면, 빈 프레임)은 공개 폴더에서 뺐다.
+    expect(CS_FIGMA_ASSET_PATHS.length).toBe(99)
     expect(requirements).toHaveLength(99)
     expect(missing).toEqual([])
   })

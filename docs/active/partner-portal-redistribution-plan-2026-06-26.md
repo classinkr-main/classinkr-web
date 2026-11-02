@@ -7,8 +7,8 @@
 관련 기준 문서:
 
 - [repository-status-2026-06-08.md](../archive/repository-status-2026-06-08.md) — 당시 경로 상태 기록
-- [partner-portal-master-spec.md](./partner-portal-master-spec.md)
-- [partner-portal-front-back-contract.md](./partner-portal-front-back-contract.md)
+- [partner-portal-master-spec.md](../archive/partner-portal-master-spec.md)
+- [partner-portal-front-back-contract.md](../archive/partner-portal-front-back-contract.md)
 - [partner-portal-unification.md](./partner-portal-unification.md)
 - [hardware-admin-hub-integration-plan.md](./hardware-admin-hub-integration-plan.md)
 - [quote-lifecycle-execution-plan.md](./quote-lifecycle-execution-plan.md)

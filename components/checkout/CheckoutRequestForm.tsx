@@ -36,7 +36,7 @@ import { ACADEMY_SIZE_OPTIONS, ACADEMY_SIZE_PLACEHOLDER } from "@/lib/contact/ac
 import { getAnonymousId } from "@/lib/consent/consent"
 import { collectLeadAttribution } from "@/lib/marketing-attribution"
 import type { CheckoutRequestItem } from "@/lib/billing/hardware-catalog"
-import { trackDemoRequestAdsConversion, trackEvent } from "@/lib/analytics"
+import { trackLeadSubmitted } from "@/lib/analytics"
 
 export type CheckoutRequestKind = "hardware" | "software"
 
@@ -362,22 +362,25 @@ export function CheckoutRequestForm({
 
       if (response.ok && payload && payload.ok) {
         setRequestId(payload.requestId)
-        trackEvent("submit_demo_request", {
-          source: "checkout_request",
-          request_kind: kind,
-          page: sourcePage,
-          item_count: submitItems.length,
-          // 사이드바·모달이 말하는 금액과 같아야 한다 — 설치비를 뺀 값을 보내면
-          // 전환 금액이 실제 신청보다 대당 단가만큼 낮게 잡힌다.
-          value: itemsSubtotalKrw + installSubtotalKrw,
-          currency: items[0]?.currency ?? "KRW",
-        })
-        // Google Ads 전환. 지금까지 문의·데모·행사만 이걸 불러서, 가장 값비싼 전환이
-        // 광고 최적화 신호로 돌아가지 않았다. 실제 발화 여부는 Consent Mode v2(ad_storage)가
-        // 정하므로 동의 없는 방문자에게는 나가지 않는다.
+        // generate_lead(form_type=checkout_request) + Google Ads 전환. 실제 발화 여부는
+        // Consent Mode v2(ad_storage)가 정하므로 동의 없는 방문자에게는 나가지 않는다.
         // 리드 id 는 서버가 응답 후에 미러링하며 만들어 클라이언트가 모른다 — 접수번호를
-        // 전환의 transaction_id 로 쓴다(중복 제거 키로 충분하다).
-        trackDemoRequestAdsConversion({ leadId: payload.requestId })
+        // 전환의 transaction_id 겸 중복 방지 키로 쓴다(응답에 stored 는 없다).
+        trackLeadSubmitted({
+          formType: "checkout_request",
+          source: "checkout_request",
+          dedupeKey: payload.requestId,
+          transactionId: payload.requestId,
+          params: {
+            request_kind: kind,
+            page: sourcePage,
+            item_count: submitItems.length,
+            // 사이드바·모달이 말하는 금액과 같아야 한다 — 설치비를 뺀 값을 보내면
+            // 전환 금액이 실제 신청보다 대당 단가만큼 낮게 잡힌다.
+            value: itemsSubtotalKrw + installSubtotalKrw,
+            currency: items[0]?.currency ?? "KRW",
+          },
+        })
         return
       }
 

@@ -286,16 +286,6 @@ export const GOLDEN_EFFECT_LOGS: Record<string, unknown[]> = {
       }
     ],
     [
-      "triggerOnSubmitRules",
-      {
-        "email": "demo.golden@example.com",
-        "name": "골든 데모",
-        "org": "골든 데모학원",
-        "role": "실장",
-        "source": "demo_modal"
-      }
-    ],
-    [
       "sendServerConversion",
       {
         "eventId": "lead:lead-golden-demo",
@@ -906,16 +896,6 @@ export const GOLDEN_EFFECT_LOGS: Record<string, unknown[]> = {
         "landingPage": "https://classin.kr/demo",
         "lead_magnet": "golden-guide-pdf",
         "landing_page": "https://classin.kr/demo"
-      }
-    ],
-    [
-      "triggerOnSubmitRules",
-      {
-        "email": "demo.golden@example.com",
-        "name": "골든 데모",
-        "org": "골든 데모학원",
-        "role": "실장",
-        "source": "demo_modal"
       }
     ],
     [

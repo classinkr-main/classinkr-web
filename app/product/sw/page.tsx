@@ -16,7 +16,7 @@ import {
 import Link from "next/link"
 import Image from "next/image"
 import nextDynamic from "next/dynamic"
-import { useRef, useEffect, useState, useMemo, useCallback, useSyncExternalStore } from "react"
+import { useRef, useEffect, useState, useMemo, useSyncExternalStore } from "react"
 
 import { HeroVideoBackdrop } from "@/components/media/HeroVideoBackdrop"
 import { KeyUseCases } from "@/components/sections/KeyUseCases"
@@ -218,116 +218,6 @@ function useCountUp(target: number, trigger: boolean, duration = 2) {
     return value
 }
 
-/* ── SlotDigit ───────────────────────────────────────────────────── */
-function SlotDigit({ digit, delay, trigger, onDone }: { digit: string; delay: number; trigger: boolean; onDone?: () => void }) {
-    const num = Number.parseInt(digit, 10)
-    const [done, setDone] = useState(false)
-    const cellRef = useRef<HTMLSpanElement>(null)
-    const [cellH, setCellH] = useState(0)
-    const [displayIndex, setDisplayIndex] = useState(0)
-    const [spinTransition, setSpinTransition] = useState<{ duration: number; delay?: number; ease?: [number, number, number, number] }>({ duration: 0 })
-    const hasTriggeredRef = useRef(false)
-    const pendingNormalizeRef = useRef(false)
-    const previousDigitRef = useRef(num)
-    const stripDigits = useMemo(() => Array.from({ length: 40 }, (_, i) => i % 10), [])
-
-    useEffect(() => {
-        function measure() {
-            const nextHeight = cellRef.current?.offsetHeight ?? 0
-            if (nextHeight > 0) setCellH(nextHeight)
-        }
-
-        measure()
-        const frame = window.requestAnimationFrame(measure)
-
-        let observer: ResizeObserver | undefined
-        if (typeof ResizeObserver !== "undefined" && cellRef.current) {
-            observer = new ResizeObserver(measure)
-            observer.observe(cellRef.current)
-        }
-
-        void document.fonts?.ready.then(measure)
-        window.addEventListener("resize", measure)
-
-        return () => {
-            window.cancelAnimationFrame(frame)
-            observer?.disconnect()
-            window.removeEventListener("resize", measure)
-        }
-    }, [])
-
-    useEffect(() => {
-        if (!trigger || cellH === 0 || Number.isNaN(num)) return
-
-        const isFirstSpin = !hasTriggeredRef.current
-        let frame = 0
-        if (isFirstSpin) {
-            hasTriggeredRef.current = true
-            previousDigitRef.current = num
-            pendingNormalizeRef.current = true
-            frame = window.requestAnimationFrame(() => {
-                setSpinTransition({
-                    duration: 1.35,
-                    delay,
-                    ease: [0.16, 1, 0.3, 1],
-                })
-                setDisplayIndex(30 + num)
-            })
-            return () => window.cancelAnimationFrame(frame)
-        }
-
-        const previous = previousDigitRef.current
-        if (previous === num) return
-
-        const currentIndex = 10 + previous
-        const delta = (num - previous + 10) % 10
-
-        previousDigitRef.current = num
-        pendingNormalizeRef.current = true
-        frame = window.requestAnimationFrame(() => {
-            setSpinTransition({
-                duration: 0.95,
-                ease: [0.22, 1, 0.36, 1],
-            })
-            setDisplayIndex(currentIndex + 10 + delta)
-        })
-
-        return () => window.cancelAnimationFrame(frame)
-    }, [cellH, delay, num, trigger])
-
-    return (
-        <div className="relative h-14 w-9 overflow-hidden rounded-lg border border-[rgba(8,71,52,0.12)] bg-white shadow-[0_4px_24px_rgba(0,0,0,0.06)] sm:h-28 sm:w-20 sm:rounded-xl md:h-36 md:w-28 md:rounded-2xl">
-            <div className="absolute inset-0 bg-gradient-to-b from-[#FAFAF8]/80 to-transparent h-1/2 pointer-events-none z-10"></div>
-            <motion.div
-                className="absolute left-0 top-0 flex w-full flex-col items-center"
-                initial={{ y: 0 }}
-                animate={trigger && cellH > 0 ? { y: -(displayIndex * cellH) } : { y: 0 }}
-                transition={spinTransition}
-                onAnimationComplete={() => {
-                    if (!pendingNormalizeRef.current) return
-                    pendingNormalizeRef.current = false
-                    setSpinTransition({ duration: 0 })
-                    setDisplayIndex(10 + previousDigitRef.current)
-                    if (!done) {
-                        setDone(true)
-                        onDone?.()
-                    }
-                }}
-            >
-                {stripDigits.map((n, index) => (
-                    <span
-                        key={`${n}-${index}`}
-                        ref={index === 0 ? cellRef : undefined}
-                        className="flex h-14 w-full flex-none items-center justify-center text-3xl font-sans font-semibold leading-none tabular-nums text-[#084734] sm:h-28 sm:text-6xl md:h-36 md:text-8xl"
-                    >
-                        {n}
-                    </span>
-                ))}
-            </motion.div>
-        </div>
-    )
-}
-
 /* ── StatCard ────────────────────────────────────────────────────── */
 function StatCard({ value, suffix, label, delay, trigger }: { value: number; suffix: string; label: string; delay: number; trigger: boolean }) {
     const display = useCountUp(value, trigger, 2)
@@ -478,8 +368,6 @@ function FinalCTASection() {
     const sectionRef = useRef<HTMLElement>(null)
     const { scrollYProgress } = useScroll({ target: sectionRef, offset: ["start end", "end start"] })
     const [phase, setPhase] = useState(0)
-    const [slotsDone, setSlotsDone] = useState(false)
-    const [liveCount, setLiveCount] = useState(0)
     const particlesMounted = useIsClient()
 
     useMotionValueEvent(scrollYProgress, "change", (v) => {
@@ -488,19 +376,8 @@ function FinalCTASection() {
         else if (v >= 0.15 && phase < 1) setPhase(1)
     })
 
-    useEffect(() => {
-        if (!slotsDone) return
-        let interval: ReturnType<typeof setInterval>
-        const timeout = setTimeout(() => {
-            interval = setInterval(() => setLiveCount((p) => p + 1), 4200)
-        }, 3000)
-        return () => { clearTimeout(timeout); clearInterval(interval) }
-    }, [slotsDone])
-
     const particles = useMemo(() => createParticles(15), [])
 
-    const handleLastSlotDone = useCallback(() => setSlotsDone(true), [])
-    const displayDigits = useMemo(() => (1560000 + liveCount).toString().split(""), [liveCount])
 
     return (
         <section ref={sectionRef} className="relative py-32 md:py-44 overflow-x-clip" style={{ minHeight: "100vh" }}>
@@ -522,31 +399,12 @@ function FinalCTASection() {
                     <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#ECFDF5] border border-[#BDEFD8]/60 text-sm font-medium text-[#084734]"><Clock className="w-3.5 h-3.5" />되찾은 수업 시간</div>
                 </motion.div>
 
-                <motion.p initial={{ opacity: 0, y: 10 }} animate={phase >= 2 ? { opacity: 1, y: 0 } : {}} transition={{ duration: 0.5 }} className="text-base sm:text-lg text-[#A39E98] font-medium mb-8 max-w-xl mx-auto">200개 기업 고객사가 Classin으로 되찾은 시간</motion.p>
-                <div className="relative">
-                    <motion.div className="flex justify-center mb-5" initial={{ scale: 0.9, opacity: 0.3, filter: "blur(8px)" }} animate={phase >= 2 ? { scale: 1, opacity: 1, filter: "blur(0px)" } : {}} transition={{ type: "spring", stiffness: 120, damping: 20 }}>
-                        <div className="relative flex items-center gap-1 select-none sm:gap-2.5">
-                            <SlotDigit digit={displayDigits[0]} delay={0.2} trigger={phase >= 2} />
-                            <span className="text-3xl font-sans font-semibold tabular-nums text-[#A39E98] sm:text-6xl md:text-8xl">,</span>
-                            <SlotDigit digit={displayDigits[1]} delay={0.35} trigger={phase >= 2} />
-                            <SlotDigit digit={displayDigits[2]} delay={0.45} trigger={phase >= 2} />
-                            <SlotDigit digit={displayDigits[3]} delay={0.55} trigger={phase >= 2} />
-                            <span className="text-3xl font-sans font-semibold tabular-nums text-[#A39E98] sm:text-6xl md:text-8xl">,</span>
-                            <SlotDigit digit={displayDigits[4]} delay={0.65} trigger={phase >= 2} />
-                            <SlotDigit digit={displayDigits[5]} delay={0.75} trigger={phase >= 2} />
-                            <SlotDigit digit={displayDigits[6]} delay={0.85} trigger={phase >= 2} onDone={handleLastSlotDone} />
-                        </div>
-                    </motion.div>
-                </div>
-                <motion.p initial={{ opacity: 0 }} animate={phase >= 2 ? { opacity: 1 } : {}} transition={{ delay: 0.5 }} className="mb-3 text-2xl font-semibold tracking-tight text-[#31302E] sm:text-4xl md:text-5xl">시간</motion.p>
-                <motion.p initial={{ opacity: 0, y: 10 }} animate={phase >= 2 ? { opacity: 1, y: 0 } : {}} transition={{ delay: 0.7 }} className="text-sm sm:text-base text-[#A39E98] font-medium mb-6">지금 이 순간에도 수업이 진행되고 있습니다</motion.p>
+                <p className="mx-auto mb-8 max-w-xl text-base leading-relaxed text-[#615D59]">수업 도구, 녹화, 과제와 복습을 한 흐름으로 살펴보세요.</p>
 
                 <motion.div className="w-full max-w-sm mx-auto h-px bg-gradient-to-r from-transparent via-[#6EE7B7]/30 to-transparent mb-14 mt-14" initial={{ scaleX: 0 }} animate={phase >= 3 ? { scaleX: 1 } : {}} transition={{ duration: 0.6 }} style={{ originX: 0.5 }} />
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-14 max-w-3xl mx-auto">
-                    <StatCard value={200} suffix="+" label="기업 고객사" delay={0} trigger={phase >= 3} />
+                <div className="grid grid-cols-2 gap-3 sm:gap-4 mb-14 max-w-xl mx-auto">
                     <StatCard value={30} suffix="+" label="인터랙티브 수업 도구" delay={0.1} trigger={phase >= 3} />
                     <StatCard value={10} suffix="가지" label={"참여형\n수업 활동"} delay={0.2} trigger={phase >= 3} />
-                    <StatCard value={98} suffix="%" label={`"과거로 못 돌아간다"\n응답률`} delay={0.3} trigger={phase >= 3} />
                 </div>
                 <motion.p initial={{ opacity: 0, letterSpacing: "0.3em" }} animate={phase >= 3 ? { opacity: 1, letterSpacing: "0.05em" } : {}} transition={{ delay: 0.5, duration: 0.8 }} className="text-lg sm:text-xl font-sans text-[#615D59] font-medium mb-10">수업만을 위해 만든 플랫폼, 다음은 당신의 교실입니다</motion.p>
                 <motion.div initial={{ opacity: 0, y: 20 }} animate={phase >= 3 ? { opacity: 1, y: 0 } : {}} transition={{ delay: 0.7, type: "spring", stiffness: 200, damping: 25 }} className="flex flex-col items-center gap-4">
@@ -568,13 +426,11 @@ const CINEMATIC_CASES = [
         name: "부천 정율사관학원",
         quote: "강사가 바뀌어도 수업 품질이 흔들리지 않게 됐습니다. 수업 콘티를 저장하고 공유하는 것만으로 노하우가 시스템이 됐어요.",
         person: "원장 김O준",
-        before: { label: "도입 전", items: ["강사 의존도 높음", "타지역 학생 모집 불가", "신규 강사 적응 3주"] },
-        after: { label: "도입 후", items: ["하이브리드로 전국 모집", "피어러닝으로 참여도 상승", "강사 온보딩 3일로 단축"] },
+        before: { label: "도입 전", items: ["강사 의존도 높음", "타지역 학생 모집 불가", "신규 강사의 수업 준비 필요"] },
+        after: { label: "도입 후", items: ["하이브리드로 전국 모집", "피어러닝으로 참여도 상승", "수업 콘티 공유로 온보딩 지원"] },
         accentBg: "bg-[#ECFDF5]",
         accentText: "text-[#084734]",
         accentBorder: "border-[#D1FAE5]",
-        num: "50%",
-        numLabel: "강사 온보딩 시간 단축",
     },
     {
         index: "02",
@@ -583,12 +439,10 @@ const CINEMATIC_CASES = [
         quote: "Classin 이전에도 여러 화상 툴을 써봤습니다. 하지만 영업 데모를 할 때 학생과 교사 모두 Classin에 가장 빠르게 반응했어요.",
         person: "Acadsoc 서비스 팀",
         before: { label: "도입 전", items: ["학생 이탈률 높음", "수업 집중도 측정 불가", "다른 플랫폼으로 전전"] },
-        after: { label: "도입 후", items: ["누적 학습자 4,000만+", "영업 데모 1순위 채택", "Series A→C 투자 유치"] },
+        after: { label: "도입 후", items: ["영업 데모 1순위 채택", "학생·교사 반응이 가장 빠름"] },
         accentBg: "bg-[#F6F5F4]",
         accentText: "text-[#31302E]",
         accentBorder: "border-[#e8e8e4]",
-        num: "$63.6M",
-        numLabel: "누적 투자 유치",
     },
     {
         index: "03",
@@ -597,12 +451,10 @@ const CINEMATIC_CASES = [
         quote: "하이브리드 접근 방식은 팬데믹 속 임시 해법이 아닙니다. 이것이 교육의 새로운 표준이 될 것입니다.",
         person: "왕보(王博) 부총장",
         before: { label: "도입 전", items: ["단일 캠퍼스 수업 한계", "해외 학생 접근 불가", "협업 대학 연결 어려움"] },
-        after: { label: "도입 후", items: ["한 학기 287개 하이브리드 수업", "Cornell·ANU·와세다 연결", "글로벌 오픈 코스 프로그램"] },
+        after: { label: "도입 후", items: ["하이브리드 수업 운영", "Cornell·ANU·와세다 연결", "글로벌 오픈 코스 프로그램"] },
         accentBg: "bg-[#ECFDF5]",
         accentText: "text-[#084734]",
         accentBorder: "border-[#D1FAE5]",
-        num: "287",
-        numLabel: "단 한 학기 하이브리드 수업 수",
     },
 ]
 
@@ -632,10 +484,6 @@ function CinematicCasesSection() {
                                 <div>
                                     <span className="text-[11px] font-bold text-white/30 tracking-widest uppercase block mb-3">{c.index} · {c.tag}</span>
                                     <h3 className="text-lg font-bold text-white mb-6">{c.name}</h3>
-                                </div>
-                                <div>
-                                    <div className="text-4xl font-sans font-bold tabular-nums text-[#6EE7B7] mb-1">{c.num}</div>
-                                    <div className="text-xs text-white/30 leading-snug">{c.numLabel}</div>
                                 </div>
                             </div>
 
@@ -778,14 +626,8 @@ function FutureVision1Section() {
     )
 }
 
-/* ── 미래 제시 2 (퀄리티 3배, 리소스 1/3) ─────────────────── */
+/* ── 미래 제시 2 ─────────────────── */
 function FutureVision2Section() {
-    const metricsRef = useRef<HTMLDivElement>(null)
-    const inView = useInView(metricsRef, { once: true, margin: "-80px" })
-
-    const q = useCountUp(3, inView, 1.5)
-    const r = useCountUp(67, inView, 1.5)
-
     return (
         <section className="py-24 md:py-40 bg-[#FDFCF8] overflow-hidden">
             <div className="container mx-auto px-4 lg:px-8 max-w-6xl">
@@ -809,34 +651,6 @@ function FutureVision2Section() {
                         그것이 Classin이 교사에게 드리는 약속입니다.
                     </p>
                 </motion.div>
-
-                {/* 핵심 수치 */}
-                <div ref={metricsRef} className="grid md:grid-cols-2 gap-6 mb-20 max-w-3xl mx-auto">
-                    <motion.div
-                        initial={{ opacity: 0, scale: 0.9 }}
-                        animate={inView ? { opacity: 1, scale: 1 } : {}}
-                        transition={{ duration: 0.7, type: "spring", stiffness: 150 }}
-                        className="bg-[#1a1a19] rounded-3xl p-10 text-center"
-                    >
-                        <div className="text-[72px] md:text-[88px] font-sans font-bold tabular-nums text-[#6EE7B7] leading-none mb-2">
-                            {q}x
-                        </div>
-                        <div className="text-white/80 text-lg font-semibold mb-1">수업 퀄리티</div>
-                        <div className="text-white/30 text-sm">쌍방향 참여 · AI 지원 · 학습 데이터 기반</div>
-                    </motion.div>
-                    <motion.div
-                        initial={{ opacity: 0, scale: 0.9 }}
-                        animate={inView ? { opacity: 1, scale: 1 } : {}}
-                        transition={{ duration: 0.7, delay: 0.15, type: "spring", stiffness: 150 }}
-                        className="bg-[#084734] rounded-3xl p-10 text-center"
-                    >
-                        <div className="text-[72px] md:text-[88px] font-sans font-bold tabular-nums text-[#6EE7B7] leading-none mb-2">
-                            -{r}%
-                        </div>
-                        <div className="text-white/90 text-lg font-semibold mb-1">반복 업무 리소스</div>
-                        <div className="text-white/60 text-sm">채점 · 출결 · 자료 준비 · 보고서 자동화</div>
-                    </motion.div>
-                </div>
 
                 {/* 진정성 텍스트 */}
                 <motion.div
@@ -1099,7 +913,7 @@ const FAQS = [
     },
     {
         q: "인터넷 속도가 느린 환경에서도 괜찮나요?",
-        a: "자체 네트워크 최적화 기술로 일반 화상 회의보다 낮은 대역폭에서도 안정적으로 작동합니다. 글로벌 CDN을 통해 전 세계 어디서든 100ms 이하의 지연 시간을 보장합니다.",
+        a: "수업 환경의 네트워크 상태와 기기 사양에 따라 연결 품질이 달라질 수 있습니다. 도입 전 실제 교실 환경에서 확인해 주세요.",
     },
     {
         q: "수업 녹화본의 저작권은 누가 갖나요?",
@@ -1158,6 +972,25 @@ function FAQSection() {
                             </motion.div>
                         </motion.div>
                     ))}
+                </div>
+
+                <div className="mt-8 flex flex-col items-center justify-center gap-1 sm:flex-row sm:gap-8">
+                    <TrackedLink
+                        href="/faq"
+                        ctaId="sw_faq_more"
+                        className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-[#084734] transition-colors hover:text-[#065c41] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#084734]"
+                    >
+                        전체 FAQ 보기
+                        <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                    </TrackedLink>
+                    <TrackedLink
+                        href="/pricing"
+                        ctaId="sw_pricing_link"
+                        className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-[#084734] transition-colors hover:text-[#065c41] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#084734]"
+                    >
+                        요금 안내
+                        <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                    </TrackedLink>
                 </div>
             </div>
         </section>
@@ -1244,11 +1077,10 @@ function FullscreenQuoteSection() {
                     whileInView={{ opacity: 1 }}
                     viewport={{ once: true }}
                     transition={{ delay: 0.5, duration: 0.7 }}
-                    className="mx-auto mt-14 grid max-w-2xl grid-cols-1 gap-5 border-t border-white/10 pt-10 sm:mt-16 sm:grid-cols-3 sm:gap-8 sm:pt-12"
+                    className="mx-auto mt-14 grid max-w-md grid-cols-2 gap-5 border-t border-white/10 pt-10 sm:mt-16 sm:gap-8 sm:pt-12"
                 >
                     {[
-                        { value: "287개", label: "하이브리드 수업 (2021 가을학기 단 한 학기)" },
-                        { value: "160+", label: "협력 국가" },
+                        { value: "160+", label: "서비스 국가" },
                         { value: "6만+", label: "교육기관" },
                     ].map((s) => (
                         <div key={s.label} className="text-center">
@@ -1256,6 +1088,7 @@ function FullscreenQuoteSection() {
                             <div className="text-xs text-white/40 leading-relaxed">{s.label}</div>
                         </div>
                     ))}
+                    <p className="col-span-2 text-[11px] text-white/40">전 세계 누적 수치 · EEO 공식 소개 기준</p>
                 </motion.div>
             </div>
         </section>
@@ -1272,7 +1105,7 @@ const CASES = [
         results: [
             { label: "타지역 학생 유치", value: "가능" },
             { label: "학생 참여도", value: "급상승" },
-            { label: "강사 온보딩 시간", value: "50% 단축" },
+            { label: "강사 온보딩", value: "수업 자료 공유" },
         ],
         color: "bg-[#ECFDF5] border-[#D1FAE5]",
         accent: "text-[#084734]",
@@ -1281,12 +1114,12 @@ const CASES = [
     {
         tag: "글로벌 튜터링",
         name: "Acadsoc",
-        headline: "1:1 온라인 튜터링으로 4,000만 학습자",
-        body: "필리핀 튜터와 전 세계 학습자를 연결하는 ESL 플랫폼 Acadsoc는 2017년 Classin을 도입한 이후 Series A → C까지 투자를 유치했습니다. 현재도 영업팀과 강사진이 고객 데모에 Classin을 1순위로 사용할 만큼 수업 경험의 품질이 검증됐습니다.",
+        headline: "1:1 온라인 튜터링을 Classin 위에서",
+        body: "필리핀 튜터와 전 세계 학습자를 연결하는 ESL 플랫폼 Acadsoc는 1:1 수업을 Classin으로 운영합니다. 영업팀과 강사진이 고객 데모에 Classin을 1순위로 쓸 만큼, 학생과 교사 모두 수업 경험에 가장 빠르게 반응했다고 말합니다.",
         results: [
-            { label: "누적 학습자", value: "4,000만+" },
-            { label: "고용 튜터", value: "15,000명" },
-            { label: "누적 투자 유치", value: "$63.6M" },
+            { label: "수업 형태", value: "1:1 온라인" },
+            { label: "튜터 네트워크", value: "필리핀 기반" },
+            { label: "고객 데모", value: "1순위" },
         ],
         color: "bg-[#F6F5F4] border-[#e8e8e4]",
         accent: "text-[#31302E]",
@@ -1520,11 +1353,9 @@ export default function ProductPage() {
 
     const metric30 = useCountUp(30, heroMetricInView)
     const metric10 = useCountUp(10, heroMetricInView)
-    const metric150 = useCountUp(150, heroMetricInView)
-    const metric2400 = useCountUp(2400, heroMetricInView)
+    const metric160 = useCountUp(160, heroMetricInView)
 
-    const net150 = useCountUp(150, networkInView)
-    const net99 = useCountUp(99, networkInView)
+    const net160 = useCountUp(160, networkInView)
 
     return (
         <div className="bg-[#FDFCF8] min-h-screen text-[#111110] font-sans selection:bg-[#D1FAE5] pt-20">
@@ -1565,21 +1396,21 @@ export default function ProductPage() {
                             </p>
 
                             {/* Animated hero metrics */}
-                            <div ref={heroMetricRef} className="flex flex-wrap justify-center gap-6 md:gap-12 mb-12">
+                            <div ref={heroMetricRef} className="flex flex-wrap justify-center gap-6 md:gap-12 mb-3">
                                 {[
                                     { value: metric30, suffix: "+", label: "수업 도구" },
                                     { value: metric10, suffix: "+", label: "수업 활동" },
-                                    { value: metric150, suffix: "+", label: "지원 국가" },
-                                    { value: metric2400.toLocaleString(), suffix: "+", label: "도입 학원", raw: true },
+                                    { value: metric160, suffix: "+", label: "서비스 국가" },
                                 ].map((m, i) => (
                                     <motion.div key={i} initial={{ opacity: 0, y: 15 }} animate={heroMetricInView ? { opacity: 1, y: 0 } : {}} transition={{ delay: i * 0.1 + 0.3 }} className="min-w-[84px] text-center">
                                         <div className="text-2xl md:text-3xl font-sans font-bold tabular-nums text-[#6EE7B7] drop-shadow-[0_2px_12px_rgba(0,0,0,0.35)]">
-                                            {m.raw ? m.value : m.value}{m.suffix}
+                                            {m.value}{m.suffix}
                                         </div>
                                         <div className="text-[11px] md:text-xs text-white/62 mt-0.5 font-semibold">{m.label}</div>
                                     </motion.div>
                                 ))}
                             </div>
+                            <p className="mb-12 text-[11px] font-medium text-white/50">서비스 국가 수 · EEO 공식 소개 기준</p>
 
                             <div className="flex flex-col items-stretch justify-center gap-3 sm:flex-row sm:items-center sm:gap-4">
                                 <Button asChild className="h-[3.25rem] rounded-full bg-[#084734] px-7 text-base font-bold text-white shadow-[0_8px_20px_rgba(8,71,52,0.24)] transition-all hover:bg-[#065c41] hover:shadow-[0_12px_25px_rgba(8,71,52,0.32)] group sm:h-14 sm:px-8">
@@ -1913,15 +1744,28 @@ export default function ProductPage() {
                 </div>
             </section>
 
-            <div className="bg-white px-4 py-8 text-center md:py-12">
+            <div className="flex flex-wrap justify-center gap-3 bg-white px-4 py-8 text-center md:py-12">
                 <TrackedLink
                     href="/classin-feature-guide.html"
+                    prefetch={false}
                     target="_blank"
                     rel="noopener noreferrer"
                     ctaId="software_feature_guide"
                     className="inline-flex min-h-12 items-center gap-3 rounded-md bg-[#084734] px-6 text-sm font-semibold text-white transition-colors hover:bg-[#065c41] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#084734]"
                 >
                     기능 자세히 보기
+                    <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                    <span className="sr-only">(새 탭)</span>
+                </TrackedLink>
+                <TrackedLink
+                    href="/classin-ai-feature-guide.html"
+                    prefetch={false}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    ctaId="software_ai_feature_guide"
+                    className="inline-flex min-h-12 items-center gap-3 rounded-md border border-black/[0.08] bg-[#ECFDF5] px-6 text-sm font-semibold text-[#084734] transition-colors hover:bg-[#D1FAE5] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#084734]"
+                >
+                    AI 기능 자세히 보기
                     <ArrowRight className="h-4 w-4" aria-hidden="true" />
                     <span className="sr-only">(새 탭)</span>
                 </TrackedLink>
@@ -1953,14 +1797,14 @@ export default function ProductPage() {
                     <motion.div className="text-center mb-16" {...fadeUp}>
                         <EyebrowTag dark>GLOBAL NETWORK</EyebrowTag>
                         <h2 className="text-3xl md:text-4xl lg:text-5xl font-sans leading-tight">전 세계 어디서든,<br /><span className="text-[#6EE7B7]">끊김 없이</span></h2>
-                        <p className="text-lg text-white/50 mt-6 max-w-2xl mx-auto">자체 네트워크 기술로 낮은 지연 시간과 고화질 수업을 보장합니다.</p>
+                        <p className="text-lg text-white/50 mt-6 max-w-2xl mx-auto">수업에 앞서 교실의 네트워크와 기기 환경을 확인하세요.</p>
                     </motion.div>
 
                     <div className="grid sm:grid-cols-3 gap-5 max-w-4xl mx-auto">
                         {[
-                            { value: `${net150}+`, label: "지원 국가", desc: "글로벌 CDN으로 어디서든 빠르게" },
-                            { value: "< 100ms", label: "지연 시간", desc: "실시간 상호작용이 가능한 속도" },
-                            { value: `${net99}.9%`, label: "가동률", desc: "중단 없는 안정적인 수업 환경" },
+                            { value: `${net160}+`, label: "서비스 국가", desc: "EEO 공식 소개 기준" },
+                            { value: "실시간", label: "수업 연결", desc: "교실 환경에서 직접 연결 상태를 확인" },
+                            { value: "사전 점검", label: "운영 준비", desc: "기기와 네트워크 조건을 미리 점검" },
                         ].map((item, i) => (
                             <motion.div key={i} {...stagger(i)} className="bg-white/5 border border-white/10 rounded-2xl p-8 text-center relative overflow-hidden">
                                 <div className="text-3xl font-sans font-bold tabular-nums text-white mb-1">{item.value}</div>
@@ -2016,7 +1860,7 @@ export default function ProductPage() {
                                     <div className="flex justify-between items-end mb-8">
                                         <div>
                                             <div className="text-white/50 text-sm font-medium mb-1">이번 달 종합 성취도</div>
-                                            <div className="text-white text-3xl font-sans font-bold tabular-nums">상위 15%</div>
+                                            <div className="text-white text-3xl font-sans font-bold">꾸준히 상승</div>
                                         </div>
                                     </div>
 

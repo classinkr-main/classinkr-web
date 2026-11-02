@@ -2,14 +2,15 @@
  * showroom/availability — 예약 가용성 조회(I/O 조립).
  *
  * 순수 판정은 `lib/showroom/slots.ts` 가 한다. 이 모듈은 그 판정에 넣을 재료를 모은다:
- *   ① 공휴일 — 구글 공개 공휴일 캘린더(`lib/korea-holidays.ts`)
+ *   ① 공휴일 — 법정 공휴일 고정 목록 + 구글 공개 공휴일 캘린더(`lib/korea-holiday-dates.ts`)
  *   ② 쇼룸 구글 캘린더 일정 — ICS 읽기 전용(`lib/showroom-ics-calendar.ts`)
  *   ③ 우리 DB 의 접수된 예약 — showroom_bookings
  *
- * ①②는 자격이 없거나 원천이 늦으면 조용히 빈 배열로 떨어진다(각 모듈의 규약).
- * 그때는 "덜 막는" 쪽으로 기운다 — 열려 보이는 슬롯에 요청이 들어와도 담당자가
+ * ①의 구글 몫과 ②는 자격이 없거나 원천이 늦으면 조용히 빈 배열로 떨어진다(각 모듈의
+ * 규약). 그때는 "덜 막는" 쪽으로 기운다 — 열려 보이는 슬롯에 요청이 들어와도 담당자가
  * 확정 단계에서 거를 수 있다. 반대로 원천 장애 때문에 화면을 통째로 닫으면
- * 멀쩡한 리드를 잃는다.
+ * 멀쩡한 리드를 잃는다. 법정 공휴일은 고정 목록이라 이 저하와 무관하게 막힌다
+ * (운영 방침: 공휴일은 쉰다).
  *
  * ③은 우리 DB 라 실패하면 던진다 — 우리 예약을 못 읽는 상태로 "비어 있음"을
  * 보여주면 확정된 방문 위에 덧예약을 받게 된다.
@@ -42,25 +43,30 @@ const MAX_RANGE_DAYS = 62
 /** 슬롯을 잡고 있다고 보는 예약 상태. 취소·노쇼는 자리를 비운다. */
 const BLOCKING_STATUSES = ["requested", "confirmed"] as const
 
-/**
- * 원천이 설정돼 있는지. 실패 흡수 방침("덜 막는다") 자체는 유지하되, 설정이 아예 없는
- * **상시 상태**를 화면이 조용히 넘기지 않게 한다 — 두 값이 모두 false 면 달력은
- * "평일 전부 열림"을 그럴듯하게 보여준다.
- */
-export interface ShowroomAvailabilitySources {
-  /** false 면 공휴일이 선택 가능일로 열린다. */
-  holidays: boolean
-  /** false 면 구글 캘린더의 기존 일정이 점유로 잡히지 않는다. */
-  showroomCalendar: boolean
-}
-
 export interface ShowroomAvailabilityResult {
   /** KST 오늘. 화면이 '오늘' 표식에 쓴다. */
   todayIso: string
   minIso: string
   maxIso: string
   days: ShowroomDayAvailability[]
-  sources: ShowroomAvailabilitySources
+}
+
+/**
+ * 원천 설정이 아예 없는 **상시 상태**를 운영 로그에 남긴다. 실패 흡수 방침("덜 막는다")
+ * 자체는 유지한다 — 고객 화면에 알릴 일은 아니고(요청형이라 담당자가 확정 단계에서 거른다),
+ * 설정을 채울 사람이 봐야 하는 신호다.
+ */
+function warnMissingSources() {
+  if (!hasKoreaHolidayCredentials()) {
+    console.warn(
+      "[showroom-availability] 구글 공휴일 원천 자격이 없어 임시공휴일이 반영되지 않습니다(법정 공휴일은 고정 목록으로 막힘) — GOOGLE_SERVICE_ACCOUNT_EMAIL/GOOGLE_PRIVATE_KEY 확인 필요"
+    )
+  }
+  if (!hasShowroomCalendarSource()) {
+    console.warn(
+      "[showroom-availability] SHOWROOM_CALENDAR_ICS_URL 미설정 — 구글 캘린더의 기존 일정이 점유로 잡히지 않습니다"
+    )
+  }
 }
 
 /** 쇼룸 구글 캘린더(ICS) 일정 → 점유 구간. 읽기 전용 원천이라 실패해도 넘어간다. */
@@ -142,20 +148,7 @@ export async function getShowroomAvailability(
   options: GetAvailabilityOptions = {}
 ): Promise<ShowroomAvailabilityResult> {
   const todayIso = getBusinessDateParts(options.now ?? new Date()).date
-  const sources: ShowroomAvailabilitySources = {
-    holidays: hasKoreaHolidayCredentials(),
-    showroomCalendar: hasShowroomCalendarSource(),
-  }
-  if (!sources.holidays) {
-    console.warn(
-      "[showroom-availability] 공휴일 원천 자격이 없어 공휴일이 예약 가능일로 열립니다 — GOOGLE_SERVICE_ACCOUNT_EMAIL/GOOGLE_PRIVATE_KEY 확인 필요"
-    )
-  }
-  if (!sources.showroomCalendar) {
-    console.warn(
-      "[showroom-availability] SHOWROOM_CALENDAR_ICS_URL 미설정 — 구글 캘린더의 기존 일정이 점유로 잡히지 않습니다"
-    )
-  }
+  warnMissingSources()
 
   // 공휴일을 아직 모르는 상태로 예약 창을 잡으면 최소 날짜가 공휴일에 걸릴 수 있다.
   // 넉넉한 창으로 공휴일을 먼저 읽고, 그 값으로 실제 창을 다시 잡는다.
@@ -172,7 +165,7 @@ export async function getShowroomAvailability(
   const toIso = compareIsoDate(requestedTo, cappedTo) > 0 ? cappedTo : requestedTo
 
   if (compareIsoDate(fromIso, toIso) > 0) {
-    return { todayIso, minIso: range.minIso, maxIso: range.maxIso, days: [], sources }
+    return { todayIso, minIso: range.minIso, maxIso: range.maxIso, days: [] }
   }
 
   const [icsBusy, bookingBusy] = await Promise.all([
@@ -184,7 +177,6 @@ export async function getShowroomAvailability(
     todayIso,
     minIso: range.minIso,
     maxIso: range.maxIso,
-    sources,
     days: buildShowroomAvailability({
       todayIso,
       fromIso,

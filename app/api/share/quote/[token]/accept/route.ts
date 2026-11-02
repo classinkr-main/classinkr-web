@@ -16,6 +16,8 @@ import {
   listActiveTasksForDealByType,
 } from "@/lib/repositories/crm-tasks"
 import type { QuoteDocument, QuoteDocumentVersion } from "@/lib/portal/types"
+import { ensureSalesOrderForAcceptedQuoteSafely } from "@/lib/repositories/sales-orders"
+import { issueDistributorSettlementOnAcceptSafely } from "@/lib/server/distributor-settlement-issue"
 import { isCrossOriginRequest } from "@/lib/server/same-origin"
 
 // 고객이 "이 견적으로 진행"을 누르면 담당자가 바로 계약 전환에 착수해야 하므로
@@ -31,6 +33,8 @@ function notifyQuoteAccepted(input: {
   token: string
   recipientEmail: string | null
   recipientVerified: boolean
+  /** 하드웨어가 들어 있어 오더가 하드웨어 승인 대기로 올라갔다. */
+  hardwareApprovalPending?: boolean
 }) {
   emitNotificationEvent({
     eventType: "quote.accepted",
@@ -44,6 +48,9 @@ function notifyQuoteAccepted(input: {
       `거래: ${input.dealTitle}`,
       `버전 v${input.version.version_number} · 합계 ${input.version.total_amount.toLocaleString("ko-KR")}원`,
       "계약 전환을 진행해 주세요.",
+      ...(input.hardwareApprovalPending
+        ? ["하드웨어 포함 — 하드웨어 탭의 '하드웨어 승인 대기'에서 승인 권한자가 승인하면 오더번호와 배송 예정이 생깁니다."]
+        : []),
     ].join("\n"),
     routeUrl: `/admin/quotes/${input.document.id}/view`,
     source: "quote",
@@ -203,6 +210,11 @@ export async function POST(
         document,
         customerName: customer_name,
       })
+      // 오더도 같은 이유로 재보장한다(멱등 — 살아 있는 오더가 있으면 그대로 둔다).
+      await ensureSalesOrderForAcceptedQuoteSafely({ quoteDocumentId: document.id, acceptedVia: "customer_link" })
+      // 총판 견적서 자동 발행도 재보장한다(이미 발행됐으면 조회 한 번으로 끝난다).
+      // 두 Safely 함수는 각자 실패를 삼키므로 오더 실패가 총판 발행을 막지 않고, 그 반대도 같다.
+      await issueDistributorSettlementOnAcceptSafely({ quoteDocumentId: document.id, origin: req.nextUrl.origin })
       return NextResponse.json({ acceptedAt: existing.acceptedAt })
     }
 
@@ -243,6 +255,20 @@ export async function POST(
 
     await markDocumentAccepted(document.id, document.status)
 
+    // 순서: 오더(내부 기록) → 총판 견적서(외부 메일 포함) → 담당자 알림.
+    // 두 단계는 서로 의존하지 않고 각자 실패를 삼킨다(null 반환). 그래서 한쪽이 실패해도
+    // 다른 쪽은 그대로 진행되고, 수락 응답과 알림도 막히지 않는다.
+
+    // 오더 — 하드웨어가 들어 있으면 승인 대기, 없으면 바로 오더번호. 실패해도 수락 응답은 막지 않는다.
+    const orderResult = await ensureSalesOrderForAcceptedQuoteSafely({
+      quoteDocumentId: document.id,
+      acceptedVia: "customer_link",
+    })
+
+    // 정산 설정이 '고객 동의 시 발행'이면 같은 양식·원가의 총판용 견적서를 발행·발송한다.
+    // 실패는 삼키고(동의 응답 우선) 재확인 알림으로 넘긴다.
+    await issueDistributorSettlementOnAcceptSafely({ quoteDocumentId: document.id, origin: req.nextUrl.origin })
+
     notifyQuoteAccepted({
       dealId: document.deal_id,
       document,
@@ -253,6 +279,7 @@ export async function POST(
       token,
       recipientEmail: providedEmail,
       recipientVerified,
+      hardwareApprovalPending: orderResult?.order.status === "pending_approval",
     })
 
     return NextResponse.json({ acceptedAt: log.created_at })

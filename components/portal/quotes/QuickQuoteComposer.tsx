@@ -8,6 +8,7 @@ import {
   Check,
   Copy,
   Eye,
+  EyeOff,
   Loader2,
   Mail,
   MessageCircle,
@@ -17,10 +18,12 @@ import {
   Send,
   Share2,
   Smartphone,
+  Trash2,
   X,
 } from "lucide-react"
 
 import QuoteDocumentPreview from "./QuoteDocumentPreview"
+import QuoteDisplaySettings, { type QuoteDisplaySettingsProps } from "./QuoteDisplaySettings"
 import paperStyles from "./quote-paper.module.css"
 
 import { Button } from "@/components/ui/button"
@@ -28,6 +31,7 @@ import { normalizeQuoteDetailsFromStructuredJson } from "@/lib/portal/quote-deta
 import { portalFetch } from "@/lib/portal/portal-fetch"
 import { getProductBySku } from "@/lib/product-templates"
 import { quoteComposerMode } from "@/lib/quote-composer-navigation"
+import { QUOTE_WORKSPACE_PREVIEW_LIMIT } from "@/lib/quote-workspace-preferences"
 import type {
   CustomerListItem,
   DealListItem,
@@ -139,6 +143,7 @@ export type QuickQuoteTeamTemplate = {
   id: string
   label: string
   details: PartnerQuoteDetailsInput
+  canDelete?: boolean
 }
 
 type QuickQuoteComposerProps = {
@@ -159,6 +164,8 @@ type QuickQuoteComposerProps = {
    * (포털 번들이 어드민 클라이언트를 끌어오지 않도록). 실패하면 throw 해서 메시지를 띄운다.
    */
   onSaveTemplate?: (draft: { name: string; details: PartnerQuoteDetailsInput }) => Promise<void>
+  onDeleteTemplate?: (id: string) => Promise<void>
+  displaySettings?: QuoteDisplaySettingsProps
   /**
    * 딜/고객 컨텍스트에서 진입할 때 프리필할 대상. 값이 있으면 고객·거래 목록이 로드된 뒤
    * "기존 고객" 모드로 해당 고객·거래를 자동 선택한다. (새 고객 암묵 생성 없음)
@@ -828,6 +835,8 @@ export default function QuickQuoteComposer({
   supplierManagerOptions,
   teamTemplates,
   onSaveTemplate,
+  onDeleteTemplate,
+  displaySettings,
   prefill = null,
 }: QuickQuoteComposerProps) {
   const today = getTodayDateValue()
@@ -849,6 +858,11 @@ export default function QuickQuoteComposer({
   )
   // 왼쪽 레일에서 마지막으로 고른 조합/템플릿(강조용). 품목을 손으로 바꾸면 풀린다.
   const [activePick, setActivePick] = useState<string | null>(null)
+  const [showAllRecent, setShowAllRecent] = useState(false)
+  const [showAllTemplates, setShowAllTemplates] = useState(false)
+  const [toolsExpanded, setToolsExpanded] = useState(false)
+  const [deletingTemplateId, setDeletingTemplateId] = useState<string | null>(null)
+  const [templateDeleteError, setTemplateDeleteError] = useState<string | null>(null)
   // 최근 견적 복제 직후 안내(고객만 비웠음 + 옛 단가 되돌리기)
   const [cloneSource, setCloneSource] = useState<{ customerName: string; title: string } | null>(null)
   // "이 구성을 템플릿으로 저장" 인라인 폼. name=null 이면 닫힘.
@@ -1009,9 +1023,15 @@ export default function QuickQuoteComposer({
   })
   const isSplit = sheets.length > 1
   const composerMode = quoteComposerMode(sheets[0]?.templateId ?? initialTemplateId)
-  const visibleTemplates = STANDARD_QUOTE_TEMPLATES.filter((template) => quoteComposerMode(template.id) === composerMode)
+  const hiddenTemplateIds = displaySettings?.preferences.hiddenTemplateIds ?? []
+  const showRecentQuotes = displaySettings?.preferences.showRecentQuotes ?? true
+  const showTemplates = displaySettings?.preferences.showTemplates ?? true
+  const visibleTemplates = STANDARD_QUOTE_TEMPLATES.filter((template) => quoteComposerMode(template.id) === composerMode && !hiddenTemplateIds.includes(`base:${template.id}`))
   const visibleCatalogItems = QUICK_ADD_RAIL_ITEMS.filter((item) => quoteComposerMode(item.templateId) === composerMode)
-  const visibleTeamTemplates = (teamTemplates ?? []).filter((template) => quoteComposerMode(inferStandardQuoteTemplateId(template.details)) === composerMode)
+  const visibleTeamTemplates = (teamTemplates ?? []).filter((template) => quoteComposerMode(inferStandardQuoteTemplateId(template.details)) === composerMode && !hiddenTemplateIds.includes(template.id))
+  const templateCount = visibleTeamTemplates.length + visibleTemplates.length
+  const displayedTeamTemplates = showAllTemplates ? visibleTeamTemplates : visibleTeamTemplates.slice(0, QUOTE_WORKSPACE_PREVIEW_LIMIT)
+  const displayedBaseTemplates = showAllTemplates ? visibleTemplates : visibleTemplates.slice(0, Math.max(0, QUOTE_WORKSPACE_PREVIEW_LIMIT - displayedTeamTemplates.length))
   const grandTotalAll = composedSheets.reduce((sum, entry) => sum + entry.totals.grandTotalAmount, 0)
   const lineItemCount = sheets.reduce((sum, sheet) => sum + (sheet.quote.lineItems?.length ?? 0), 0)
   const canCreateQuote = customerReady && lineItemCount > 0
@@ -1061,6 +1081,20 @@ export default function QuickQuoteComposer({
       ),
     []
   )
+
+  async function handleDeleteTemplate(template: QuickQuoteTeamTemplate) {
+    if (!onDeleteTemplate || deletingTemplateId || !window.confirm(`'${template.label}' 템플릿을 삭제할까요? 이미 만든 견적서는 그대로 유지됩니다.`)) return
+    setDeletingTemplateId(template.id)
+    setTemplateDeleteError(null)
+    try {
+      await onDeleteTemplate(template.id)
+      setActivePick((current) => current === `team:${template.id}` ? null : current)
+    } catch (deleteError) {
+      setTemplateDeleteError(deleteError instanceof Error ? deleteError.message : "템플릿을 삭제하지 못했습니다.")
+    } finally {
+      setDeletingTemplateId(null)
+    }
+  }
 
   function showErrorToast(message: string, title?: string) {
     if (errorToastTimerRef.current) {
@@ -2081,7 +2115,7 @@ export default function QuickQuoteComposer({
     const noteLineOpen = noteLineOpenFor === sheet.line
 
     return (
-      <section key={sheet.line} aria-label={`${sheet.templateId === "online_suite" ? "AI Suite 통합" : sheet.line === "software" ? "SW" : "HW"} 견적서`} className="grid gap-2">
+      <section key={sheet.line} aria-label={`${sheet.templateId === "online_suite" ? "AI Suite 통합" : sheet.line === "software" ? "SW" : "HW"} 견적서`} className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2">
         {/* 구성 옵션 — 종이에 찍히지 않는 편집 도구 */}
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-1 text-[12px]">
           <span className="font-semibold text-[#111110]">
@@ -2702,186 +2736,209 @@ export default function QuickQuoteComposer({
           <main className="flex flex-wrap items-start justify-center gap-7 p-4 sm:p-6">
             <nav
               aria-label="시작 방법과 품목"
-              className="flex min-w-[230px] flex-[0_1_270px] flex-col gap-4 lg:sticky lg:top-0"
+              className="flex w-full min-w-0 flex-[1_1_100%] flex-col gap-4 lg:sticky lg:top-0 lg:w-auto lg:flex-[0_1_270px]"
             >
-              {recentQuotes.length > 0 && (
+              <button type="button" aria-expanded={toolsExpanded} aria-controls="quote-composer-tools" onClick={() => setToolsExpanded((value) => !value)} className="flex items-center justify-between rounded-md border border-[#E8E8E4] bg-white px-3 py-2.5 text-[12px] font-semibold text-[#31302E] lg:hidden">
+                <span>최근 견적·템플릿·품목</span><span>{toolsExpanded ? "접기" : "펼치기"}</span>
+              </button>
+              <div id="quote-composer-tools" className={toolsExpanded ? "contents" : "hidden lg:contents"}>
+                {displaySettings && <QuoteDisplaySettings {...displaySettings} />}
+                {showRecentQuotes && recentQuotes.length > 0 && (
+                  <section aria-label="최근 견적서">
+                    <p className={RAIL_HEADING_CLASS}>
+                      최근 견적서 <span className="font-normal">· 고객만 바꿔 재사용</span>
+                    </p>
+                    {recentQuotes.slice(0, showAllRecent ? recentQuotes.length : QUOTE_WORKSPACE_PREVIEW_LIMIT).map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        aria-pressed={activePick === `recent:${item.id}`}
+                        disabled={reuseLoadingId === item.id}
+                        onClick={() => {
+                          void handleReuseQuote(item)
+                        }}
+                        className={`${RAIL_BUTTON_CLASS} ${activePick === `recent:${item.id}` ? RAIL_ACTIVE_CLASS : ""}`}
+                      >
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-[12.5px] font-semibold">
+                            {reuseLoadingId === item.id ? "불러오는 중…" : item.customerName}
+                          </span>
+                          <span className="block truncate text-[11px] font-normal text-[#615D59]">{item.title}</span>
+                        </span>
+                        <span className="text-[11.5px] font-normal tabular-nums text-[#78736D]">
+                          {formatQuickAddPrice(item.totalAmount)}
+                        </span>
+                      </button>
+                    ))}
+                    {recentQuotes.length > QUOTE_WORKSPACE_PREVIEW_LIMIT && (
+                      <button type="button" onClick={() => setShowAllRecent((value) => !value)} className="mx-2 mt-1 py-1 text-[11.5px] text-[#084734]">
+                        {showAllRecent ? "접기" : `최근 견적 ${recentQuotes.length}개 모두 보기`}
+                      </button>
+                    )}
+                  </section>
+                )}
+
                 <div>
-                  <p className={RAIL_HEADING_CLASS}>
-                    최근 견적 복제 <span className="font-normal">· 고객만 바꾸기</span>
-                  </p>
-                  {recentQuotes.slice(0, 5).map((item) => (
+                  {showTemplates && (
+                    <section aria-label="견적 템플릿" className="border-t border-[#E8E8E4] pt-3.5">
+                      <p className={RAIL_HEADING_CLASS}>템플릿 <span className="font-normal">{templateCount}</span></p>
+                      {displayedTeamTemplates.map((template) => {
+                        const pickId = `team:${template.id}`
+                        return (
+                          <div key={template.id} className="flex min-w-0 items-center">
+                            <button
+                              type="button"
+                              aria-pressed={activePick === pickId}
+                              onClick={() => applyTeamTemplate(template)}
+                              className={`${RAIL_BUTTON_CLASS} min-w-0 flex-1 ${activePick === pickId ? RAIL_ACTIVE_CLASS : ""}`}
+                            >
+                              <span className="min-w-0 flex-1 truncate text-[12.5px]">
+                                {template.label} <span className="text-[10.5px] text-[#78736D]">· 팀</span>
+                              </span>
+                            </button>
+                            {template.canDelete && onDeleteTemplate ? (
+                              <button type="button" aria-label={`${template.label} 삭제`} title="템플릿 삭제" disabled={deletingTemplateId !== null} onClick={() => void handleDeleteTemplate(template)} className="shrink-0 rounded-md p-2 text-[#615D59] hover:bg-white hover:text-[#B43E3E] disabled:opacity-50">
+                                {deletingTemplateId === template.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                              </button>
+                            ) : displaySettings ? (
+                              <button type="button" aria-label={`${template.label} 숨기기`} title="내 목록에서 숨기기" onClick={() => displaySettings.onChange({ hiddenTemplateIds: [...hiddenTemplateIds, template.id] })} className="shrink-0 rounded-md p-2 text-[#615D59] hover:bg-white hover:text-[#111110]">
+                                <EyeOff className="h-3.5 w-3.5" />
+                              </button>
+                            ) : null}
+                          </div>
+                        )
+                      })}
+                      {displayedBaseTemplates.map((template) => {
+                        const pickId = `template:${template.id}`
+                        return (
+                          <div key={template.id} className="flex min-w-0 items-center">
+                            <button type="button" title={template.description} aria-pressed={activePick === pickId} onClick={() => applyTemplate(template.id)} className={`${RAIL_BUTTON_CLASS} min-w-0 flex-1 ${activePick === pickId ? RAIL_ACTIVE_CLASS : ""}`}>
+                              <span className="min-w-0 flex-1 truncate text-[12.5px]">{template.label}</span>
+                              <span className="text-[11.5px] font-normal tabular-nums text-[#615D59]">{formatQuickAddPrice(templateTotals[template.id] ?? 0)}</span>
+                            </button>
+                            {displaySettings && (
+                              <button type="button" aria-label={`${template.label} 숨기기`} title="내 목록에서 숨기기" onClick={() => displaySettings.onChange({ hiddenTemplateIds: [...hiddenTemplateIds, `base:${template.id}`] })} className="shrink-0 rounded-md p-2 text-[#615D59] hover:bg-white hover:text-[#111110]">
+                                <EyeOff className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        )
+                      })}
+                      {templateCount === 0 && <p className="mx-2 text-[12px] text-[#615D59]">표시할 템플릿이 없습니다. 보기 설정에서 숨긴 항목을 다시 표시할 수 있습니다.</p>}
+                      {templateCount > QUOTE_WORKSPACE_PREVIEW_LIMIT && (
+                        <button type="button" onClick={() => setShowAllTemplates((value) => !value)} className="mx-2 mt-1 py-1 text-[11.5px] text-[#084734]">
+                          {showAllTemplates ? "접기" : `템플릿 ${templateCount}개 모두 보기`}
+                        </button>
+                      )}
+                      {composerMode === "hardware" && (
+                        <details className="mx-2 mt-2 text-[11.5px] text-[#615D59]">
+                          <summary className="cursor-pointer py-1">빠른 조합 · HW + SW 별도 구매</summary>
+                          {QUICK_COMBOS.map((combo) => (
+                            <button key={combo.id} type="button" aria-pressed={activePick === combo.id} onClick={() => applyCombo(combo)} className={`${RAIL_BUTTON_CLASS} ${activePick === combo.id ? RAIL_ACTIVE_CLASS : ""}`}>
+                              <span className="min-w-0 flex-1 text-[12px]">{combo.label}</span>
+                              <span className="text-[11px] tabular-nums">{formatQuickAddPrice(comboTotals[combo.id] ?? 0)}</span>
+                            </button>
+                          ))}
+                        </details>
+                      )}
+                      {templateDeleteError && <p role="alert" className="mx-2 mt-2 text-[12px] text-[#B43E3E]">{templateDeleteError}</p>}
+                    </section>
+                  )}
+                  {onSaveTemplate && (
+                    <div className="mx-2 mt-1.5 grid gap-1 text-[12px]">
+                      {templateDraftName === null ? (
+                        <button
+                          type="button"
+                          disabled={isSplit || sheets.length === 0}
+                          title={isSplit ? "템플릿은 공급자 1곳 기준입니다 — 견적서가 1장일 때 저장하세요" : undefined}
+                          onClick={() => {
+                            setTemplateSaveState(null)
+                            setTemplateDraftName(sheets[0] ? buildDefaultDealTitle([sheets[0]]) : "")
+                          }}
+                          className="w-fit text-left text-[#31302E] underline decoration-[#CFCBC5] underline-offset-[3px] hover:decoration-[#084734] disabled:cursor-not-allowed disabled:text-[#A39E98]"
+                        >
+                          이 구성을 템플릿으로 저장
+                        </button>
+                      ) : (
+                        <div className="flex items-center gap-1">
+                          <input
+                            autoFocus
+                            aria-label="템플릿 이름"
+                            value={templateDraftName}
+                            maxLength={60}
+                            onChange={(event) => setTemplateDraftName(event.target.value)}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter") {
+                                event.preventDefault()
+                                void handleSaveTemplate()
+                              }
+                              if (event.key === "Escape") {
+                                event.preventDefault()
+                                event.stopPropagation()
+                                setTemplateDraftName(null)
+                              }
+                            }}
+                            className={`${EDITABLE_CLASS} min-w-0 flex-1 border-[#CFCBC5]`}
+                          />
+                          <button
+                            type="button"
+                            disabled={!templateDraftName.trim() || templateSaveState?.status === "saving"}
+                            onClick={() => {
+                              void handleSaveTemplate()
+                            }}
+                            className="h-7 shrink-0 rounded-[6px] border border-[#E3E0DB] px-2 text-[12px] hover:border-[#084734] disabled:opacity-50"
+                          >
+                            {templateSaveState?.status === "saving" ? "저장 중…" : "저장"}
+                          </button>
+                          <button
+                            type="button"
+                            aria-label="템플릿 저장 취소"
+                            onClick={() => setTemplateDraftName(null)}
+                            className="h-7 shrink-0 px-1 text-[#78736D] hover:text-[#111110]"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      )}
+                      {templateSaveState?.status === "saved" && (
+                        <span className="text-[#084734]">✓ 팀 템플릿으로 저장됨 · {templateSaveState.name}</span>
+                      )}
+                      {templateSaveState?.status === "error" && (
+                        <span role="alert" className="text-[#B85C33]">{templateSaveState.message}</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <div className="border-t border-[#E3E0DB] pt-3.5">
+                  <p className={RAIL_HEADING_CLASS}>품목 · 눌러서 추가</p>
+                  {visibleCatalogItems.map((item) => (
                     <button
                       key={item.id}
                       type="button"
-                      aria-pressed={activePick === `recent:${item.id}`}
-                      disabled={reuseLoadingId === item.id}
-                      onClick={() => {
-                        void handleReuseQuote(item)
-                      }}
-                      className={`${RAIL_BUTTON_CLASS} ${activePick === `recent:${item.id}` ? RAIL_ACTIVE_CLASS : ""}`}
+                      title={`${item.label} · ${item.description}`}
+                      onClick={() => handleCatalogAdd(item)}
+                      className={`group ${RAIL_BUTTON_CLASS} items-center py-1.5`}
                     >
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[12.5px] font-semibold">
-                          {reuseLoadingId === item.id ? "불러오는 중…" : item.customerName}
+                        <span className="text-[12.5px] font-semibold">{item.label}</span>{" "}
+                        <span className="text-[10.5px] text-[#78736D]">
+                          {item.templateId === "online_suite" ? "HW+SW" : isSoftwareQuoteTemplate(item.templateId) ? "SW" : "HW"}
+                          {item.badge ? ` · ${item.badge}` : ""}
                         </span>
-                        <span className="block truncate text-[11px] font-normal text-[#78736D]">
-                          {item.currentVersionLabel ?? item.title}
+                        <span className="block text-[11.5px] tabular-nums text-[#78736D]">
+                          {formatQuickAddPrice(item.price, item.priceUnit)}
                         </span>
                       </span>
-                      <span className="text-[11.5px] font-normal tabular-nums text-[#78736D]">
-                        {formatQuickAddPrice(item.totalAmount)}
+                      <span
+                        aria-hidden="true"
+                        className="flex h-6 w-6 items-center justify-center rounded-[6px] border border-[#D6D3CE] text-[#615D59] transition-colors group-hover:border-[#084734] group-hover:text-[#084734]"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
                       </span>
                     </button>
                   ))}
                 </div>
-              )}
-
-              <div className="border-t border-[#E3E0DB] pt-3.5">
-                {composerMode === "hardware" && <p className={RAIL_HEADING_CLASS}>빠른 조합</p>}
-                {(composerMode === "hardware" ? QUICK_COMBOS : []).map((combo) => (
-                  <button
-                    key={combo.id}
-                    type="button"
-                    aria-pressed={activePick === combo.id}
-                    onClick={() => applyCombo(combo)}
-                    className={`${RAIL_BUTTON_CLASS} ${activePick === combo.id ? RAIL_ACTIVE_CLASS : ""}`}
-                  >
-                    <span className="min-w-0 flex-1 text-[12.5px]">{combo.label}</span>
-                    <span className="text-[11.5px] font-normal tabular-nums text-[#78736D]">
-                      {formatQuickAddPrice(comboTotals[combo.id] ?? 0)}
-                    </span>
-                  </button>
-                ))}
-
-                <p className={`${RAIL_HEADING_CLASS} mt-3`}>템플릿</p>
-                {visibleTemplates.map((template) => {
-                  const pickId = `template:${template.id}`
-                  return (
-                    <button
-                      key={template.id}
-                      type="button"
-                      title={template.description}
-                      aria-pressed={activePick === pickId}
-                      onClick={() => applyTemplate(template.id)}
-                      className={`${RAIL_BUTTON_CLASS} ${activePick === pickId ? RAIL_ACTIVE_CLASS : ""}`}
-                    >
-                      <span className="min-w-0 flex-1 text-[12.5px]">{template.label}</span>
-                      <span className="text-[11.5px] font-normal tabular-nums text-[#78736D]">
-                        {formatQuickAddPrice(templateTotals[template.id] ?? 0)}
-                      </span>
-                    </button>
-                  )
-                })}
-                {visibleTeamTemplates.map((template) => {
-                  const pickId = `team:${template.id}`
-                  return (
-                    <button
-                      key={template.id}
-                      type="button"
-                      aria-pressed={activePick === pickId}
-                      onClick={() => applyTeamTemplate(template)}
-                      className={`${RAIL_BUTTON_CLASS} ${activePick === pickId ? RAIL_ACTIVE_CLASS : ""}`}
-                    >
-                      <span className="min-w-0 flex-1 text-[12.5px]">
-                        {template.label} <span className="text-[10.5px] text-[#78736D]">· 팀</span>
-                      </span>
-                    </button>
-                  )
-                })}
-                {onSaveTemplate && (
-                  <div className="mx-2 mt-1.5 grid gap-1 text-[12px]">
-                    {templateDraftName === null ? (
-                      <button
-                        type="button"
-                        disabled={isSplit || sheets.length === 0}
-                        title={isSplit ? "템플릿은 공급자 1곳 기준입니다 — 견적서가 1장일 때 저장하세요" : undefined}
-                        onClick={() => {
-                          setTemplateSaveState(null)
-                          setTemplateDraftName(sheets[0] ? buildDefaultDealTitle([sheets[0]]) : "")
-                        }}
-                        className="w-fit text-left text-[#31302E] underline decoration-[#CFCBC5] underline-offset-[3px] hover:decoration-[#084734] disabled:cursor-not-allowed disabled:text-[#A39E98]"
-                      >
-                        이 구성을 템플릿으로 저장
-                      </button>
-                    ) : (
-                      <div className="flex items-center gap-1">
-                        <input
-                          autoFocus
-                          aria-label="템플릿 이름"
-                          value={templateDraftName}
-                          maxLength={60}
-                          onChange={(event) => setTemplateDraftName(event.target.value)}
-                          onKeyDown={(event) => {
-                            if (event.key === "Enter") {
-                              event.preventDefault()
-                              void handleSaveTemplate()
-                            }
-                            if (event.key === "Escape") {
-                              event.preventDefault()
-                              event.stopPropagation()
-                              setTemplateDraftName(null)
-                            }
-                          }}
-                          className={`${EDITABLE_CLASS} min-w-0 flex-1 border-[#CFCBC5]`}
-                        />
-                        <button
-                          type="button"
-                          disabled={!templateDraftName.trim() || templateSaveState?.status === "saving"}
-                          onClick={() => {
-                            void handleSaveTemplate()
-                          }}
-                          className="h-7 shrink-0 rounded-[6px] border border-[#E3E0DB] px-2 text-[12px] hover:border-[#084734] disabled:opacity-50"
-                        >
-                          {templateSaveState?.status === "saving" ? "저장 중…" : "저장"}
-                        </button>
-                        <button
-                          type="button"
-                          aria-label="템플릿 저장 취소"
-                          onClick={() => setTemplateDraftName(null)}
-                          className="h-7 shrink-0 px-1 text-[#78736D] hover:text-[#111110]"
-                        >
-                          <X className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    )}
-                    {templateSaveState?.status === "saved" && (
-                      <span className="text-[#084734]">✓ 팀 템플릿으로 저장됨 · {templateSaveState.name}</span>
-                    )}
-                    {templateSaveState?.status === "error" && (
-                      <span role="alert" className="text-[#B85C33]">{templateSaveState.message}</span>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              <div className="border-t border-[#E3E0DB] pt-3.5">
-                <p className={RAIL_HEADING_CLASS}>품목 · 눌러서 추가</p>
-                {visibleCatalogItems.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    title={`${item.label} · ${item.description}`}
-                    onClick={() => handleCatalogAdd(item)}
-                    className={`group ${RAIL_BUTTON_CLASS} items-center py-1.5`}
-                  >
-                    <span className="min-w-0 flex-1">
-                      <span className="text-[12.5px] font-semibold">{item.label}</span>{" "}
-                      <span className="text-[10.5px] text-[#78736D]">
-                        {item.templateId === "online_suite" ? "HW+SW" : isSoftwareQuoteTemplate(item.templateId) ? "SW" : "HW"}
-                        {item.badge ? ` · ${item.badge}` : ""}
-                      </span>
-                      <span className="block text-[11.5px] tabular-nums text-[#78736D]">
-                        {formatQuickAddPrice(item.price, item.priceUnit)}
-                      </span>
-                    </span>
-                    <span
-                      aria-hidden="true"
-                      className="flex h-6 w-6 items-center justify-center rounded-[6px] border border-[#D6D3CE] text-[#615D59] transition-colors group-hover:border-[#084734] group-hover:text-[#084734]"
-                    >
-                      <Plus className="h-3.5 w-3.5" />
-                    </span>
-                  </button>
-                ))}
               </div>
             </nav>
 

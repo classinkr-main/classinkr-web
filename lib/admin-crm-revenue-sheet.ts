@@ -6,6 +6,13 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import { dealHasColorData, splitMonthConfidence } from "@/lib/branch/computations/rev-confirmed"
 import { getCompassRevenue } from "@/lib/compass/bridge"
 import { nextPendingTransition, pendingMonthAmount } from "@/lib/crm/revenue-sheet-pending"
+import { absorptionCutoff, isSheetWriteAbsorbed, oldestSyncedAt } from "@/lib/branch/sheet-writeback/ledger-rules"
+import {
+  isSheetWritesNotReadyError,
+  lastSuccessfulRevSyncStartedAt,
+  latestSheetWritesByDraftIds,
+  type SheetWriteRecord,
+} from "@/lib/repositories/branch-sales-ledger-sheet-writes"
 import type {
   AdminCrmRevenueSheetBreakdownRow,
   AdminCrmRevenueSheetCompassCompare,
@@ -22,6 +29,8 @@ interface BranchSalesLedgerEntryAmountRow {
   // manual-new(장부에서 새로 만든 행) | manual-edit(시트 행 정정). 구 호출·테스트 입력에는 없을 수 있다 —
   // 없으면 신규로 센다(정정으로 세면 빠진 매출을 숨기게 되므로 보수적인 쪽).
   entry_type?: string | null
+  // REV 시트 쓰기(ADR-011) — 시트에 쓴 정정인지 감사 표(branch_sales_ledger_sheet_writes)에서 찾는 키.
+  draft_id?: string | null
 }
 
 interface BranchRevDealRow {
@@ -199,7 +208,17 @@ function getTargetLabel(
 // 안전하도록 매번 Date 비교로 최댓값을 찾는다 — 빈 배열이면 count/amount 0, latestAppliedAt null.
 // 라운드 5 S-7: 신규(manual-new)와 정정(manual-edit)을 나눠 센다. 정정은 시트 행의 그 달 값을 "대체"하는 값이라
 // 금액을 더하면 빠진 매출이 아니라 대체값 총액이 된다 — 장부의 "장부 가감" 타일(신규만 더함)과 정의를 맞춘다.
-export function computeManualLedgerGap(rows: BranchSalesLedgerEntryAmountRow[]): AdminCrmRevenueSheetManualLedgerGap {
+// REV 시트 쓰기(ADR-011): 반영 때 '2. REV' 에도 쓴 정정은 시트 → 미러(branch_rev_deals) 동기화가 한 번 돌고 나면
+// 이 화면에 이미 들어와 있다 — sheetAbsorbedDraftIds(미러에 들어온 시트 쓰기의 초안 id)에 든 항목은 미반영에서
+// 뺀다(판정 isSheetWriteAbsorbedByMirror). 인자를 생략하면(감사 표 없음·조회 실패) 기존과 같다.
+export function computeManualLedgerGap(
+  allRows: BranchSalesLedgerEntryAmountRow[],
+  sheetAbsorbedDraftIds?: ReadonlySet<string>,
+): AdminCrmRevenueSheetManualLedgerGap {
+  const rows =
+    sheetAbsorbedDraftIds && sheetAbsorbedDraftIds.size > 0
+      ? allRows.filter((row) => !(row.draft_id && sheetAbsorbedDraftIds.has(row.draft_id)))
+      : allRows
   const newRows = rows.filter((row) => row.entry_type !== "manual-edit")
   return {
     count: rows.length,
@@ -212,6 +231,52 @@ export function computeManualLedgerGap(rows: BranchSalesLedgerEntryAmountRow[]):
       if (!latest) return row.applied_at
       return new Date(row.applied_at).getTime() > new Date(latest).getTime() ? row.applied_at : latest
     }, null),
+  }
+}
+
+/**
+ * 시트에 쓴 정정이 미러에 들어왔는가 — 정본은 lib/branch/sheet-writeback/ledger-rules.ts isSheetWriteAbsorbed
+ * (장부 화면 오버레이와 같은 함수). 이 이름은 매출시트 쪽 호출·테스트를 위한 별칭이다.
+ */
+export const isSheetWriteAbsorbedByMirror: (
+  record: Pick<SheetWriteRecord, "status" | "writtenAt">,
+  lastRevSyncStartedAt: string | null,
+) => boolean = isSheetWriteAbsorbed
+
+/**
+ * 미러에 이미 들어온 "시트에 쓴 정정"의 초안 id. 시트 쓰기는 기존 행 정정(manual-edit)만 하므로 그 항목만 본다.
+ * 감사 표가 없으면(마이그레이션 전) 빈 집합이 정상이고, 그 밖의 조회 실패는 빈 집합 + 경고(기존 동작 — 과대집계
+ * 쪽으로 틀린다).
+ */
+async function readSheetAbsorbedDraftIds(
+  rows: BranchSalesLedgerEntryAmountRow[],
+  warnings: string[],
+  mirrorSyncedAt: string | null,
+): Promise<Set<string>> {
+  const draftIds = rows
+    .filter((row) => row.entry_type === "manual-edit" && row.draft_id)
+    .map((row) => row.draft_id as string)
+  if (draftIds.length === 0) return new Set()
+
+  try {
+    const [lastRevSyncStartedAt, latest] = await Promise.all([
+      lastSuccessfulRevSyncStartedAt(),
+      latestSheetWritesByDraftIds(draftIds),
+    ])
+    // 기준은 마지막 성공 동기화와 이 화면이 읽은 미러 행의 synced_at 중 이른 쪽 — 미러가 그 동기화로 아직 바뀌지 않았으면
+    // 쓰기가 미러에 없다(장부 화면 오버레이와 같은 규칙, ledger-rules.ts absorptionCutoff).
+    const cutoff = absorptionCutoff(lastRevSyncStartedAt, mirrorSyncedAt)
+    const absorbed = new Set<string>()
+    for (const [draftId, record] of latest) {
+      if (isSheetWriteAbsorbedByMirror(record, cutoff)) absorbed.add(draftId)
+    }
+    return absorbed
+  } catch (error) {
+    if (!isSheetWritesNotReadyError(error)) {
+      console.error("[admin-crm-revenue-sheet] 시트 쓰기 기록 조회 실패", error)
+      warnings.push("시트에 쓴 장부 정정을 확인하지 못했습니다 — 미반영 배지 수치에 시트 반영분이 섞여 있을 수 있습니다.")
+    }
+    return new Set()
   }
 }
 
@@ -243,7 +308,7 @@ async function computeAdminCrmRevenueSheetWorkspace(): Promise<AdminCrmRevenueSh
     // 구조적으로 볼 수 없다. 서버 병합(row 단위 매칭) 대신 규모만 세어 배지로 알린다.
     sb
       .from("branch_sales_ledger_entries")
-      .select("amount, applied_at, entry_type")
+      .select("amount, applied_at, entry_type, draft_id")
       .eq("entry_status", "active")
       .limit(QUERY_LIMIT),
   ])
@@ -263,9 +328,17 @@ async function computeAdminCrmRevenueSheetWorkspace(): Promise<AdminCrmRevenueSh
       `장부 내부 원본(수기 입력)이 ${QUERY_LIMIT.toLocaleString("ko-KR")}건 이상입니다 — 미반영 배지 수치가 과소집계일 수 있습니다.`
     )
   }
+  const manualLedgerRows = (manualLedgerResult.data ?? []) as BranchSalesLedgerEntryAmountRow[]
   const manualLedgerGap: AdminCrmRevenueSheetManualLedgerGap = manualLedgerResult.error
     ? { count: 0, amount: 0, latestAppliedAt: null, newCount: 0, newAmount: 0, editCount: 0 }
-    : computeManualLedgerGap((manualLedgerResult.data ?? []) as BranchSalesLedgerEntryAmountRow[])
+    : computeManualLedgerGap(
+        manualLedgerRows,
+        await readSheetAbsorbedDraftIds(
+          manualLedgerRows,
+          warnings,
+          oldestSyncedAt(((sheetResult.data ?? []) as Array<{ synced_at?: string | null }>).map((row) => ({ syncedAt: row.synced_at ?? null }))),
+        ),
+      )
 
   // 상한에 정확히 닿았다면 그 뒤가 잘렸을 수 있다. 형제 모듈(admin-crm-revenue)은 같은 위험을
   // getQueryLimitWarning으로 알리는데 여기만 조용히 잘라, 요약·팀별 집계가 소리 없이 과소 집계된다.

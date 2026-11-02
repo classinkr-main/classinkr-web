@@ -5,6 +5,8 @@ import {
   BUDGET_CAVEAT,
   ProjectBudgetCaveat,
   ProjectCard,
+  ProjectGalleryCard,
+  ProjectStatusGroupHeading,
   ProjectsEmpty,
 } from "@/components/admin/campaigns/projects/ProjectCard"
 import type { ProjectRollup, ProjectWithRollup } from "@/lib/types/marketing-campaign"
@@ -119,6 +121,88 @@ describe("ProjectCard", () => {
   })
 })
 
+describe("ProjectGalleryCard", () => {
+  // 시안 기준일 — makeProject 의 2026-07-01 ~ 2026-12-31 은 이날 61% 경과.
+  const TODAY = "2026-10-21"
+
+  it("pairs elapsed time with budget spend and states the pace verdict", () => {
+    const html = renderToStaticMarkup(<ProjectGalleryCard project={makeProject()} today={TODAY} />)
+    expect(html).toContain("기간 경과")
+    expect(html).toContain("61%") // 183일 중 112일
+    expect(html).toContain("71%") // rollup.spentPct
+    expect(html).toContain("일정에 맞는 소진") // 71 − 61 = +10%p ≤ 15%p
+    expect(html).toContain("D-71")
+    expect(html).toContain("₩7,100,000")
+    expect(html).toContain("₩10,000,000")
+    expect(html).toMatch(/>8<\/b><span[^>]*>캠페인</)
+    expect(html).toContain("2026.07.01 ~ 2026.12.31")
+    expect(html).toContain("Minjae")
+  })
+
+  it("leaves the status to its group heading (no chip per card) and never repeats the caveat", () => {
+    const html = renderToStaticMarkup(<ProjectGalleryCard project={makeProject()} today={TODAY} />)
+    expect(html).not.toContain(">진행<") // CampaignStatusChip 라벨
+    expect(html).not.toContain(BUDGET_CAVEAT)
+  })
+
+  it("draws no spend track and no pace verdict without a budget (거짓 0% 금지)", () => {
+    const html = renderToStaticMarkup(
+      <ProjectGalleryCard
+        project={makeProject({
+          budget: null,
+          rollup: { budgetAllocated: null, budgetSpent: 0, spentPct: null },
+        })}
+        today={TODAY}
+      />,
+    )
+    expect(html).toContain("예산 미정")
+    expect(html).toContain("예산 미배정 · 페이싱 없음")
+    // 경과 미터(웜 그레이 채움)만 남고 소진 미터의 그린 채움은 그리지 않는다.
+    expect(html).toContain("bg-[#A39E98]")
+    expect(html).not.toContain("bg-[#084734]")
+    expect(html).not.toMatch(/>0%</) // 소진 "0%" 텍스트 없음
+  })
+
+  it("warns on overspend with a clamped meter", () => {
+    const html = renderToStaticMarkup(
+      <ProjectGalleryCard
+        project={makeProject({
+          rollup: { budgetAllocated: 10_000_000, budgetSpent: 12_800_000, spentPct: 128 },
+        })}
+        today={TODAY}
+      />,
+    )
+    expect(html).toContain("128%")
+    expect(html).toContain("배정 예산 초과") // 색만으로 신호하지 않는다
+    expect(html).toContain("bg-[#A8741A]")
+    expect(html).toContain('style="width:100%"')
+  })
+
+  it("dims a done project and stops counting down", () => {
+    const html = renderToStaticMarkup(
+      <ProjectGalleryCard project={makeProject({ status: "done" })} today={TODAY} />,
+    )
+    expect(html).toContain("완료된 프로젝트")
+    expect(html).toContain("종료")
+    expect(html).toContain("bg-[#FAFAF8]")
+  })
+})
+
+describe("ProjectStatusGroupHeading", () => {
+  it("renders the status label with its count", () => {
+    const html = renderToStaticMarkup(<ProjectStatusGroupHeading status="paused" count={3} />)
+    expect(html).toMatch(/<h2[^>]*>일시중지<\/h2>/)
+    expect(html).toContain(">3<")
+  })
+
+  it("marks done with a hollow ring rather than the heatmap-only grey", () => {
+    const html = renderToStaticMarkup(<ProjectStatusGroupHeading status="done" count={1} size="sm" />)
+    expect(html).toMatch(/<h4[^>]*>완료<\/h4>/)
+    expect(html).toContain("border border-[#A39E98]")
+    expect(html).not.toContain("#D5D2CB")
+  })
+})
+
 describe("ProjectBudgetCaveat", () => {
   it("carries the honesty caveat at section level (list header / detail summary)", () => {
     const html = renderToStaticMarkup(<ProjectBudgetCaveat />)
@@ -128,6 +212,12 @@ describe("ProjectBudgetCaveat", () => {
     expect(html).toContain("Meta(USD)")
     expect(html).toContain("이메일")
     expect(html).toContain("문자 제외")
+  })
+
+  it("pins the pacing reference date when given today", () => {
+    const html = renderToStaticMarkup(<ProjectBudgetCaveat today="2026-10-21" />)
+    expect(html).toContain(BUDGET_CAVEAT)
+    expect(html).toContain("기간 경과는 오늘(2026.10.21) 기준")
   })
 })
 

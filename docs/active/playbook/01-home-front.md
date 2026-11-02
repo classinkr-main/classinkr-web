@@ -1,7 +1,7 @@
 # 파트 가이드 — 홈 및 랜딩 (Public Front)
 
-> 담당 에이전트: `.claude/agents/home-front.md` · 기준 시점: 2026-06-23
-> 변경 검증: `npx eslint app components lib --max-warnings=0` + `npm run build`
+> 담당 에이전트: `.claude/agents/home-front.md`
+> 변경 검증: AGENTS.md 기본 게이트(`npm run typecheck` → `npx eslint app components lib --max-warnings=0` → `npm run build`)
 
 ## 1. 파트 한 줄 정의
 
@@ -65,24 +65,21 @@
 - `docs/active/prd.md` — 공개 사이트 기준 PRD(전환·리드·콘텐츠 운영).
 - `docs/active/classin-korea-positioning-guidelines.md` — **포지셔닝 SSOT**(카피 변경 전 필독).
 - `docs/active/classin-software-feature-inventory.md` — 제품 기능/HW 차별점 SSOT(제품 페이지 사실 검증용).
-- `docs/active/visualization-map.md` — 사이트맵·전환 퍼널·컴포넌트↔라우트 매핑(일부 stale).
 - `docs/hw-intro-visual-plan.md` — `/product/hw` 도입부 섹션 배경·자산 스펙.
 - `docs/active/content-roadmap-blog-events-docs-2026-06-10.md` — 콘텐츠 기능 로드맵.
 - `docs/active/classin-pre-adoption-question-matrix-2026-06-18.md` — 도입 전 22질문 → FAQ/자료실/상담 반영 기준.
 - `docs/active/software-checkout-revamp-plan.md` — `/checkout` 재정렬(공개 결제 UI).
-- `docs/active/contact-showroom-checkout-develop-round2-2026-09-20.md` — 컨택·쇼룸 예약·구매 신청 2차 디벨롭 기획. Phase A·B·C 구현됨, Phase D 미착수.
+- `docs/active/contact-showroom-checkout-develop-round2-2026-09-20.md` — 컨택·쇼룸 예약·구매 신청 2차 디벨롭 기획.
 
-## 7. 현재 목표 & 백로그 (2026-06-23 스냅샷)
+## 7. 알아둘 운영 사실
 
-- **챗봇 상단 퍼널(구현 완료)**: 다음 로드맵 = C(세션 기억·재방문) / D(리드 캡처·핸드오프·예약). **`/pricing`은 챗봇/teaser 미노출(hidden 유지)**, 외부 CTA→챗봇 연결(`openChatbot`)은 비주얼 검토 후 적용. (챗봇 파트와 공유)
-- **콘텐츠 로드맵 미착수 항목**: 리드 마그넷, OG 자동생성(edge 한글 폰트 번들 필요), 행사 리마인더 cron 등. (컨텐츠 파트와 공유)
-- **PRD 미해결**: 일부 CTA가 실제 행동으로 안 이어짐, 전환 데이터 신뢰성 보강.
 - **결제 활성화 플래그**: `NEXT_PUBLIC_SW_CHECKOUT_ENABLED`로 `/product/sw` CTA가 `/checkout` ↔ `/contact#contact-form` 분기.
 - `app/l/test1~3`는 실험/임시 랜딩(운영 정리 후보).
 
 ## 8. 검증 방법
 
 ```bash
+npm run typecheck
 npx eslint app components lib --max-warnings=0
 npm run build
 ```

@@ -258,33 +258,37 @@ export default async function ResourcePage({ params }: ResourcePageProps) {
       <div>
         <p className={BAND_EYEBROW}>복사해서 쓰는 멘트</p>
         <h2 className={BAND_TITLE}>상황별 메시지 예시</h2>
-        <div className="mt-8 space-y-4">
-          {scriptSamples.map((sample) => (
-            <div
+        <ol className="mt-8 border-t border-black/40">
+          {scriptSamples.map((sample, index) => (
+            <li
               key={sample.scenario}
-              className="rounded-[10px] border border-black/[0.08] bg-white p-5"
+              className="grid gap-4 border-b border-black/[0.08] py-6 md:grid-cols-[220px_minmax(0,1fr)] md:gap-8 md:py-7"
             >
-              <p className="text-sm font-bold text-[#111110]">{sample.scenario}</p>
-              <div className="mt-3 border-l-2 border-[#084734] bg-[#ECFDF5]/50 p-3">
-                <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#084734]">
-                  권장
+              <div>
+                <p className="text-[12px] font-bold tabular-nums text-[#084734]">
+                  {String(index + 1).padStart(2, "0")}
                 </p>
-                <p className="mt-1 text-[13px] leading-6 text-[#31302E]">{sample.good}</p>
+                <p className="mt-1 text-[15px] font-bold leading-6 text-[#111110]">
+                  {sample.scenario}
+                </p>
+                {sample.why ? (
+                  <p className="mt-2 text-[13px] leading-6 text-[#615D59]">{sample.why}</p>
+                ) : null}
               </div>
-              {sample.avoid ? (
-                <div className="mt-2 border-l-2 border-[#B85C33] bg-[#FAF6F0] p-3">
-                  <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#B85C33]">
-                    피하기
+              <div>
+                <p className="text-[15px] leading-7 text-[#111110] md:text-[16px] md:leading-8">
+                  “{sample.good}”
+                </p>
+                {sample.avoid ? (
+                  <p className="mt-4 border-t border-dashed border-black/15 pt-3 text-[13px] leading-6 text-[#615D59]">
+                    <span className="mr-3 font-semibold text-[#31302E]">피하기</span>
+                    {sample.avoid}
                   </p>
-                  <p className="mt-1 text-[13px] leading-6 text-[#615D59]">{sample.avoid}</p>
-                </div>
-              ) : null}
-              {sample.why ? (
-                <p className="mt-2 text-[12px] leading-6 text-[#A39E98]">{sample.why}</p>
-              ) : null}
-            </div>
+                ) : null}
+              </div>
+            </li>
           ))}
-        </div>
+        </ol>
       </div>
     ) : null
 

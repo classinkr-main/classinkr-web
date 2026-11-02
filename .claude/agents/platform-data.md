@@ -37,5 +37,5 @@ migration 순서, Portal 403, 결제 회귀, 외부 발송 cron 시나리오, �
 ## 금지
 
 - `lib/db/schema-contract.ts` 프로브 없이 migration을 추가하지 않는다. 금융·관리자 전용 테이블은 생성 즉시 RLS와 정책을 명시한다.
-- Vercel cron 인증에 `x-vercel-cron`을 쓰지 않는다(`Authorization: Bearer ${CRON_SECRET}`만). 플랜 확인 전 sub-daily cron을 두지 않고, 외부 발송 cron은 멱등 키·상한·circuit breaker 없이 배포하지 않는다.
+- Vercel cron 인증에 `x-vercel-cron`을 쓰지 않는다(`Authorization: Bearer ${CRON_SECRET}`만). cron 식은 AGENTS.md 한도(경로당 1항목·하루 288회 이하·전체 40개 이하, `npm run check:vercel-crons`)를 지키고, 외부 발송 cron은 멱등 키·상한·circuit breaker 없이 배포하지 않는다.
 - 웹훅은 HMAC/서명 검증과 timing-safe 비교 없이 받지 않는다. 폐기된 미응답 Webhook 알림을 외부 발송으로 다시 연결하지 않는다.

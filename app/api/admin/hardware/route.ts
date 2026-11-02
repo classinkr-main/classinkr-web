@@ -1,14 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
 
-import {
-  BRANCH_READ_ADMIN_API_ROLES,
-  HARDWARE_EDITOR_ADMIN_API_ROLES,
-  HARDWARE_FINALIZE_CAPABILITY,
-  hasAdminApiRole,
-  hasAdminCapability,
-  requireVerifiedAdminContext,
-} from "@/lib/admin-auth"
+import { BRANCH_READ_ADMIN_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
 import { adminCachedJson } from "@/lib/admin-api-response"
+import { buildHardwareViewer } from "@/lib/hardware/hardware-viewer"
 import { getHardwareCustomerLinks, getHardwareDashboard, getHardwareMovementsPage } from "@/lib/repositories/hardware-inventory"
 
 function getErrorMessage(error: unknown) {
@@ -53,12 +47,8 @@ export async function GET(req: NextRequest) {
     // trim, 없으면 null)이어야 두 경로 응답 shape이 갈라지지 않는다.
     return adminCachedJson({
       ...dashboard,
-      viewer: {
-        canFinalize: hasAdminCapability(admin, HARDWARE_FINALIZE_CAPABILITY),
-        // 읽기 역할(VIEWER)은 기록을 만들 수 없다 — 화면이 쓰기 버튼을 미리 내려 403 을 보여주지 않게 한다.
-        canWrite: hasAdminApiRole(admin.role, HARDWARE_EDITOR_ADMIN_API_ROLES),
-        name: admin.name?.trim() || null,
-      },
+      // 읽기 역할(VIEWER)은 canWrite=false — 화면이 쓰기 버튼을 미리 내려 403 을 보여주지 않게 한다.
+      viewer: buildHardwareViewer(admin),
     })
   } catch (error) {
     return NextResponse.json({

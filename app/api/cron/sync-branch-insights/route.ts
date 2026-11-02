@@ -20,8 +20,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 })
   }
 
-  // Vercel Hobby는 크론을 시(hour) 단위로만 스케줄링하고, 같은 시 안의 실행 순서·간격은
-  // 보장하지 않는다(T11). sync-branch(08:00)와 이 크론(09:30)을 다른 시로 분리해 뒀지만,
+  // 크론 사이의 실행 순서·간격은 플랜(Hobby·Pro)과 무관하게 보장되지 않는다(T11).
+  // sync-branch(08:00)와 이 크론(09:30)을 다른 시로 분리해 뒀지만,
   // 그것만으로는 sync-branch가 그날 실제로 "끝났다"는 보장이 안 된다(동기화가 오래 걸리거나
   // 그날 실패한 경우) — 그래서 인사이트를 돌리기 전에 최근 24시간 안에 성공한 branch sync가
   // 있는지 직접 확인하는 자기 방어를 둔다. 크론 순서에 기대지 않는다.

@@ -7,7 +7,8 @@ import { useState, useCallback, useEffect, useMemo, useRef, use } from "react"
 import { AlertTriangle, CalendarDays, ChevronLeft, RefreshCw } from "lucide-react"
 import SyncStatusBar, { pickSyncStatusError } from "./SyncStatusBar"
 import type { DealModalDeal } from "./sections/DealModal"
-import { adminFetchJson, clearBranchRequestCache, useBranchJson, type BranchJsonState } from "./client-api"
+import { adminFetchJson, clearBranchRequestCache, postBranchSync, useBranchJson, type BranchJsonState } from "./client-api"
+import { describeSyncOutcome, resolveSyncOutcome } from "@/lib/admin/sync-outcome"
 import CompassTeamSection from "./sections/CompassTeamSection"
 import type { CompassKrTeamResult } from "@/lib/compass/kr-team-contract"
 import { adminFetchJsonCached } from "@/lib/admin-client"
@@ -432,7 +433,13 @@ export default function BranchDashboardClient({
     setRefreshing(true)
     try {
       if (canRunAdminOperations) {
-        await adminFetchJson("/api/admin/branch/sync", { method: "POST" })
+        // 결과 계약으로 읽는다 — 잠금에 걸려 건너뛴 200 { skipped }·부분 실패(500)를 "완료"처럼 넘기지 않는다.
+        // 이 화면은 알림 자리가 상태 줄 하나라, 완료가 아닌 결과만 그 줄에 올린다.
+        const { status, body } = await postBranchSync(["rev", "hw"])
+        const kind = body?.outcome ?? resolveSyncOutcome(body ?? {})
+        if (status === 401 || status === 403 || kind !== "done") {
+          setSyncError(describeSyncOutcome(body, { httpStatus: status }).message)
+        }
       }
     } catch (e) {
       setSyncError(e instanceof Error ? e.message : String(e))

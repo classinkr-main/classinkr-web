@@ -12,7 +12,7 @@ import {
 
 // 골든 테스트 — submitLeadCapture 저장 뒤 부수효과의 호출 순서·인자·응답을 잠근다
 // (설계 META-RECEIVER-FINAL §4-2 H3). 저장 뒤 블록을 runLeadCaptureEffects 로 옮기기 **전에**
-// 커밋했고, 옮긴 뒤에도 이 파일과 fixtures 는 바뀌지 않아야 한다.
+// 커밋했다. 동의 없는 마케팅 자동화 차단에 맞춰 비동의 시나리오를 갱신했다.
 //
 // 순서 라벨은 여기 인라인으로 두어 리뷰에서 바로 읽히게 하고, 인자 전체는
 // fixtures/lead-capture-effects-golden.expected.ts 와 비교한다.
@@ -42,7 +42,6 @@ const EXPECTED_ORDER: Record<string, string[]> = {
     "getResolvedSettings",
     "saveLead",
     "postJson:sheet",
-    "triggerOnSubmitRules",
     "sendServerConversion",
     "emitNotificationEvent:lead.created",
     "createCrmCustomerEvent",
@@ -89,7 +88,6 @@ const EXPECTED_ORDER: Record<string, string[]> = {
   demo_modal_suppressed_notification: [
     "getResolvedSettings",
     "saveLead",
-    "triggerOnSubmitRules",
     "sendServerConversion",
     "createCrmCustomerEvent",
     "returned",

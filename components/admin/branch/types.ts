@@ -47,7 +47,7 @@ export interface BranchDealMixSlice {
   prev_actual?: number | null
   // 이번 주/전주(월요일 시작, UTC) REV 딜 first_payment 기준 확정 금액 — 서버 MixSlice의
   // week_actual/prev_week_actual 미러. meta.weekly_available=false면 축 전체가 null.
-  // 소비처: 장부 DSH 지표 밴드 주간 뷰(ledger/dsh-derive.ts deriveDshWeeklyFromDealMix).
+  // 소비처: 장부 DSH 진도 개요 히어로의 주 보기(ledger/dsh-derive.ts deriveDshWeeklyFromDealMix).
   week_actual?: number | null
   prev_week_actual?: number | null
 }
@@ -181,6 +181,15 @@ export interface BranchPipelineRow {
   monthlyHighConfidence?: Record<string, number>
   monthlyRed?: Record<string, boolean>
   weeklyPayments?: Record<string, number[]>
+  // 시트 쓰기(ADR-011) — lib/branch/computations/pipeline.ts RevRevenueRow 미러. 없으면 키가 없다.
+  /** '2. REV' 숨김 "Row ID" 열 값(형식 맞고 한 번만 나온 것). 없으면 그 행은 시트 쓰기 거절(no_row_id). */
+  rowId?: string | null
+  /** "invalid"(형식 오류) | "duplicate"(같은 ID 가 여러 행). */
+  rowIdIssue?: string | null
+  /** 달별 주차 칸 확도 글자("rk--b"). sheet-writeback/baseline.ts buildSheetBaseline 이 읽는다. */
+  weeklyColors?: Record<string, string>
+  /** 이 행 데이터의 시각(미러 synced_at·액티브 임포트 캡처 시각). 이중 집계 제외 기준(absorptionCutoff)에 쓴다. */
+  syncedAt?: string
 }
 
 export interface BranchPipelineResponse {

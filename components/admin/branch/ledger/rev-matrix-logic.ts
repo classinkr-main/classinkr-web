@@ -33,6 +33,7 @@ import {
   rowProductCategory,
   weeklyConfidenceFromMetadata,
   type DraftConfidence,
+  type DraftKind,
   type LedgerDraft,
   type LedgerRevenueRow,
   type RevMonthlyBucket,
@@ -84,12 +85,33 @@ function matrixSameColumn(a: MatrixCellCoord, b: MatrixCellCoord): boolean {
   return a.month === b.month && (a.week ?? -1) === (b.week ?? -1)
 }
 
+// 이 행의 칸을 고치면 어떤 초안이 되는가 — 원천 딜이 있는 행(시트 행·수정 초안 파생 행)은 그 딜의 수정(edit-row),
+// 원천 딜이 없는 행(신규 초안 파생 행)은 신규(new-row). buildCellDraftInput 과 같은 판정의 단일 소스.
+export function rowCommitKind(row: Pick<LedgerRevenueRow, "sourceDealId" | "ledgerOrigin" | "id">): DraftKind {
+  return (row.sourceDealId ?? (row.ledgerOrigin === "sheet" ? row.id : undefined)) ? "edit-row" : "new-row"
+}
+
+// 대기 초안이 이 종류 커밋의 "편집 대상"이 될 수 있는가. 신규 초안은 고객명으로 기존 시트 행 칸에도 걸리지만
+// 적용되면 별도 행으로 더해지는 값이다 — 기존 딜 칸 재편집(수정 초안)이 그 신규 초안을 PATCH 하면 신규가 수정으로
+// 바뀌거나 금액이 섞인다. kind 가 없는 요약(과거 호출부·테스트)은 수정으로 본다.
+export function pendingMatchesKind(pending: Pick<MatrixPendingDraft, "kind">, kind: DraftKind): boolean {
+  return kind === "new-row" ? pending.kind === "new-row" : pending.kind !== "new-row"
+}
+
 // 좌표 → 그 셀에 걸린 미검수 초안(있으면). 주차 좌표면 주차 키 우선, 없으면 월 키로 폴백
 // (월 단위로만 걸린 초안도 주차 칸 재편집 시 "이미 이 달에 초안이 있다"는 신호로 쓴다).
 // matrixCellValue(재편집 시작값)·matrixCellConfidence·onCommitCell(PATCH-vs-POST 타겟)이 공유.
-export function lookupMatrixPending(pendingByCell: Map<string, MatrixPendingDraft>, coord: MatrixCellCoord): MatrixPendingDraft | null {
+// kind 를 주면 그 종류 커밋의 편집 대상이 될 수 있는 초안만 돌려준다(pendingMatchesKind) — 값·확도·저장 대상
+// 판정은 항상 kind 를 준다. 표시(점)만 쓰는 호출부는 kind 없이 어떤 초안이든 받는다.
+export function lookupMatrixPending(
+  pendingByCell: Map<string, MatrixPendingDraft>,
+  coord: MatrixCellCoord,
+  kind?: DraftKind,
+): MatrixPendingDraft | null {
+  const accept = (pending: MatrixPendingDraft | undefined) =>
+    pending && (!kind || pendingMatchesKind(pending, kind)) ? pending : null
   const weekKey = coord.week != null ? matrixCoordKey(coord) : null
-  return (weekKey ? pendingByCell.get(weekKey) : null) ?? pendingByCell.get(matrixCoordKey({ rowId: coord.rowId, month: coord.month })) ?? null
+  return (weekKey ? accept(pendingByCell.get(weekKey)) : null) ?? accept(pendingByCell.get(matrixCoordKey({ rowId: coord.rowId, month: coord.month }))) ?? null
 }
 
 // metadata.week 문자열("w1".."w5") → 0~4 인덱스. "month"/그 외/누락이면 null.
@@ -127,12 +149,57 @@ export function weeklyPaymentsFromDraftMetadata(
 // 있으면 주차별 금액 조회에 쓴다(없으면 amount가 곧 그 셀 금액, 주차 단일대체 규약과 동일).
 export interface MatrixPendingDraft {
   id: string
+  /** 초안 종류 — 신규(new-row)는 기존 행 칸에 이름으로 걸려도 그 칸의 편집 대상이 아니다(pendingMatchesKind).
+      없으면(과거 호출부) 수정으로 본다. */
+  kind?: DraftKind
   amount: number
   confidence: DraftConfidence
   weekly: number[] | null
   /** 주차별 확도(metadata.weeklyConfidence, 라운드 3 P1) — 주차 셀 팝오버 기본값이 슬롯 상태를
       우선하도록 pending 요약에 동봉한다. 없으면 null(초안 단위 confidence 폴백). */
   weeklyConfidence: (DraftConfidence | null)[] | null
+  /** REV 시트 쓰기(ADR-011) — 이 초안에서 사용자가 확도를 직접 골랐는지(metadata.confidenceTouched). 같은 칸을 다시
+      고쳐 PATCH 할 때 앞서 고른 확도 표시를 잃지 않게 동봉한다. 없으면 false. */
+  confidenceTouched?: boolean
+  /** 주차별 확도 직접 선택 표시(metadata.weeklyConfidenceTouched, 5칸). 없으면 null. */
+  weeklyConfidenceTouched?: boolean[] | null
+}
+
+/** metadata.weeklyConfidenceTouched(5칸 불리언) — 모양이 틀리면 null. */
+export function weeklyConfidenceTouchedFromMetadata(metadata: Record<string, unknown> | null | undefined): boolean[] | null {
+  const raw = metadata?.weeklyConfidenceTouched
+  if (!Array.isArray(raw) || raw.length !== 5 || !raw.every((value) => typeof value === "boolean")) return null
+  return raw as boolean[]
+}
+
+/**
+ * 셀 커밋 초안의 확도 선택 표시(REV 시트 쓰기, ADR-011 — metadata.confidenceTouched·weeklyConfidenceTouched).
+ * 서버는 값 있는 시트 칸의 글자색을 이 표시가 있을 때만 쓴다. 그래서
+ *  - picked(호출부의 "명시 선택": 팝오버 확도·E/H/C·편집 바·붙여넣기 확도 고르기)가 아니면 고른 것이 아니다 —
+ *    팝오버 기본값은 그 달 우세 확도라 시작 전 빨강 주차를 '예정'으로, 주차 칸에도 달 전체 확도를 보인다.
+ *  - 골랐어도 화면이 보이던 확도(shownConfidence)와 같으면 바뀐 것이 없다.
+ *  - 같은 칸 대기 초안(pending)이 앞서 고른 표시는 이어 받는다(그 초안을 PATCH 하면서 선택을 지우지 않는다).
+ *  - 주차 병합(mergedWeekly)이면 주차별 5칸: 편집한 주차만 이번 선택, 나머지는 대기 초안의 표시. 금액 0 주차는 false.
+ */
+export function cellDraftConfidenceTouched(input: {
+  picked: boolean
+  confidence: DraftConfidence
+  shownConfidence: DraftConfidence
+  pending: Pick<MatrixPendingDraft, "confidenceTouched" | "weeklyConfidenceTouched"> | null | undefined
+  week?: number
+  mergedWeekly: number[] | null
+}): { confidenceTouched: boolean; weeklyConfidenceTouched: boolean[] | null } {
+  const pickedNow = input.picked && input.confidence !== input.shownConfidence
+  if (!input.mergedWeekly || input.week == null) {
+    return { confidenceTouched: pickedNow || input.pending?.confidenceTouched === true, weeklyConfidenceTouched: null }
+  }
+  const earlier = input.pending?.weeklyConfidenceTouched ?? null
+  const weeklyConfidenceTouched = input.mergedWeekly.map((value, index) => {
+    if (!(value > 0)) return false
+    const before = earlier?.[index] === true
+    return index === input.week ? pickedNow || before : before
+  })
+  return { confidenceTouched: weeklyConfidenceTouched.some(Boolean), weeklyConfidenceTouched }
 }
 
 // pending 요약에서 좌표(coord) 기준 실제 셀 금액을 뽑는다. 주차 좌표 + weekly 병합 배열이 있으면
@@ -156,10 +223,11 @@ export function railDedupTarget(
   month: string,
   weekToken: string | null | undefined,
   excludeDraftId: string | null,
+  kind: DraftKind = "edit-row",
 ): MatrixPendingDraft | null {
   const weekIdx = weekIndexFromToken(weekToken)
   const coord: MatrixCellCoord = weekIdx == null ? { rowId, month } : { rowId, month, week: weekIdx }
-  const pending = lookupMatrixPending(pendingByCell, coord)
+  const pending = lookupMatrixPending(pendingByCell, coord, kind)
   if (!pending || pending.id === excludeDraftId) return null
   return pending
 }
@@ -192,6 +260,8 @@ export function findOpenNewRowDuplicate(
 //   - 월 키: 그 달에 걸린 최신 초안(주차 초안 포함) → 접힌 월 셀 앰버 점 + 월 단위 재편집 타겟.
 //   - 주차 키: metadata.week가 wN인 초안만 → 확장 주차 칸 앰버 점 + 그 주차 재편집 타겟.
 // 같은 키에 여러 초안이 있으면 가장 최근(drafts 배열 앞쪽) 것을 표시 — 컴포넌트는 항상 최신순으로 prepend한다.
+// 단 같은 칸에 수정 초안과 (고객명으로 걸린) 신규 초안이 함께 있으면 수정 초안이 그 칸을 차지한다 — 신규가 앞서면
+// 그 칸의 재편집이 기존 수정 초안을 못 찾아 새 수정 초안을 만들고, 둘 다 적용되면 이중 계상된다.
 // 순수 함수로 분리(useMemo 밖) — 컴포넌트 렌더 없이 회귀 테스트(같은 셀 재편집 시 초안 1건 유지) 가능.
 export function buildMatrixPendingByCell(
   drafts: LedgerDraft[],
@@ -206,18 +276,22 @@ export function buildMatrixPendingByCell(
       if (draft.kind === "edit-row" ? draftDealId !== dealKey : draft.customer.trim() !== row.customer.trim()) continue
       const summary: MatrixPendingDraft = {
         id: draft.id,
+        kind: draft.kind,
         amount: draft.amount,
         confidence: draftConfidenceFromMetadata(draft.metadata),
         weekly: mergedWeeklyFromMetadata(draft.metadata),
         weeklyConfidence: weeklyConfidenceFromMetadata(draft.metadata),
+        confidenceTouched: draft.metadata?.confidenceTouched === true,
+        weeklyConfidenceTouched: weeklyConfidenceTouchedFromMetadata(draft.metadata),
       }
-      const monthKey = matrixCoordKey({ rowId: row.id, month: draft.month })
-      if (!map.has(monthKey)) map.set(monthKey, summary) // 월 셀: 첫(=최신) 초안
+      // 비어 있거나, 먼저 들어온 것이 신규 초안인데 이번 것이 수정 초안이면 이번 것으로(수정 우선).
+      const claim = (key: string) => {
+        const current = map.get(key)
+        if (!current || (current.kind === "new-row" && draft.kind === "edit-row")) map.set(key, summary)
+      }
+      claim(matrixCoordKey({ rowId: row.id, month: draft.month })) // 월 셀: 첫(=최신) 초안
       const weekIdx = weekIndexFromToken(metadataString(draft.metadata, "week"))
-      if (weekIdx != null) {
-        const weekKey = matrixCoordKey({ rowId: row.id, month: draft.month, week: weekIdx })
-        if (!map.has(weekKey)) map.set(weekKey, summary) // 주차 칸: 그 주차 첫(=최신) 초안
-      }
+      if (weekIdx != null) claim(matrixCoordKey({ rowId: row.id, month: draft.month, week: weekIdx })) // 주차 칸
     }
   }
   return map
@@ -649,7 +723,16 @@ export function useMatrixEditor({
   editableCells: MatrixCellCoord[] // 렌더 순서(행 위→아래, 월 좌→우, 확장월은 w1→w5)로 정렬된 편집가능 셀
   cellValue: (coord: MatrixCellCoord) => number // 커밋 기준값(원 단위) — fill-down 소스
   cellConfidence: (coord: MatrixCellCoord) => DraftConfidence // 셀 우세 확도(팝오버 기본값)
-  onCommitCell: (rowId: string, month: string, amount: number, confidence: DraftConfidence, week?: number) => void
+  // options.confidenceTouched(REV 시트 쓰기, ADR-011): 사용자가 이 커밋에서 확도를 직접 골랐는지 — 팝오버 확도 선택·
+  // E/H/C·편집 바로 고른 경우만 true. 기본값으로 흘러간 확도(금액만 고친 Enter·Ctrl+D)는 false 라 시트 글자색을 덮지 않는다.
+  onCommitCell: (
+    rowId: string,
+    month: string,
+    amount: number,
+    confidence: DraftConfidence,
+    week?: number,
+    options?: { confidenceTouched?: boolean },
+  ) => void
   // 음수 입력이 0으로 클램프될 때 호출(커밋 결과와 무관 — 무입력 취급되는 경우도 포함). 항목 3.
   onAmountClamped?: () => void
 }) {
@@ -665,6 +748,9 @@ export function useMatrixEditor({
   // onEditingKeyDown)은 전부 사용자 이벤트 핸들러라, 직전 렌더의 effect가 이미 반영된 뒤 실행돼 stale 없음.
   const bufferRef = useRef(buffer)
   const editConfidenceRef = useRef(editConfidence)
+  // 이번 편집에서 확도를 "명시 선택"했는가(REV 시트 쓰기 — 칸 글자색을 쓸지). beginEdit 가 false 로 되돌리고
+  // pickEditConfidence(팝오버·E/H/C·편집 바)만 true 로 바꾼다. 이벤트 핸들러에서만 읽고 쓴다(렌더 중 접근 없음).
+  const confidencePickedRef = useRef(false)
   useEffect(() => {
     bufferRef.current = buffer
     editConfidenceRef.current = editConfidence
@@ -690,6 +776,7 @@ export function useMatrixEditor({
       // 마지막 명시 선택 확도(localStorage)로 시작한다 — SL-6, A1 확도-분배 로직 회귀 없음.
       const current = cellValue(coord)
       const base = cellConfidence(coord)
+      confidencePickedRef.current = false
       setEditConfidence(current <= 0 && base === "expected" ? (loadStoredMatrixConfidence() ?? base) : base)
       // seed(타이핑 첫 글자)면 그 값으로, 아니면 기존 커밋값(0은 빈칸)으로 시작.
       if (seed != null) {
@@ -711,6 +798,7 @@ export function useMatrixEditor({
   // 한 번의 확정 선택이 이후 빈 셀 입력의 기본값이 된다(SL-6 세션 기억).
   const pickEditConfidence = useCallback((next: DraftConfidence) => {
     storeMatrixConfidence(next)
+    confidencePickedRef.current = true
     setEditConfidence(next)
   }, [])
 
@@ -728,7 +816,7 @@ export function useMatrixEditor({
       // 금액·확도 둘 다 그대로면 저장하지 않는다. (주차 셀도 cellValue/cellConfidence가 주차 기준이라 동일 가드 적용)
       if (amount === previous && confidence === previousConfidence) return false
       if (amount <= 0 && previous <= 0) return false
-      onCommitCell(coord.rowId, coord.month, amount, confidence, coord.week)
+      onCommitCell(coord.rowId, coord.month, amount, confidence, coord.week, { confidenceTouched: confidencePickedRef.current })
       return true
     },
     [cellConfidence, cellValue, onAmountClamped, onCommitCell],
@@ -814,7 +902,8 @@ export function useMatrixEditor({
         for (let i = index - 1; i >= 0; i -= 1) {
           if (matrixSameColumn(editableCells[i], coord)) {
             const value = cellValue(editableCells[i])
-            if (value > 0) onCommitCell(coord.rowId, coord.month, value, cellConfidence(coord), coord.week)
+            // 위 값 채우기는 금액만 옮긴다 — 확도는 그 칸 기본값이라 고른 것이 아니다(시트 글자색 그대로).
+            if (value > 0) onCommitCell(coord.rowId, coord.month, value, cellConfidence(coord), coord.week, { confidenceTouched: false })
             return
           }
         }
@@ -826,7 +915,9 @@ export function useMatrixEditor({
       if (shortcut) {
         event.preventDefault()
         const value = cellValue(coord)
-        if (value > 0 && shortcut !== cellConfidence(coord)) onCommitCell(coord.rowId, coord.month, value, shortcut, coord.week)
+        if (value > 0 && shortcut !== cellConfidence(coord)) {
+          onCommitCell(coord.rowId, coord.month, value, shortcut, coord.week, { confidenceTouched: true })
+        }
         return
       }
       if (event.key === "ArrowRight") {

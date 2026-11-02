@@ -167,7 +167,7 @@ export function buildForecastBoardModel(rows: LedgerRevenueRow[], month: string)
 // 좌측 확도 보더 색은 클래스 리터럴 대신 CONFIDENCE_TOKENS[…].color를 인라인 스타일로
 // 소비한다(확도 색 리터럴 재정의 금지 — confidence-tokens SSOT·디자인 토큰 가드 규약).
 const CARD_TONE_CLASS: Record<ConfidenceKey, string> = {
-  confirmed: "border border-[#084734]/15 border-l-[3px] bg-gradient-to-r from-[#F2FAF6] to-[#E8F6EF]",
+  confirmed: "border border-[#FFC9CF] border-l-[3px] bg-[#FFF0F1]",
   "high-confidence": "border border-[#BFDBFE] border-l-[3px] bg-[#EFF6FF]",
   expected: "border border-dashed border-[#ECD29C] bg-white",
 }
@@ -245,7 +245,7 @@ export function ForecastBoard({
               <span>
                 <span className={`inline-block h-2 w-2 rounded-[2px] align-middle ${CONFIDENCE_TOKENS.confirmed.bgClass}`} />{" "}
                 {CONFIDENCE_TOKENS.confirmed.label}{" "}
-                <span className="font-bold tabular-nums text-[#084734]">{formatMoney(model.monthConfirmed)}</span> · {confirmedPct}%
+                <span className={`font-bold tabular-nums ${CONFIDENCE_TOKENS.confirmed.textClass}`}>{formatMoney(model.monthConfirmed)}</span> · {confirmedPct}%
               </span>
               <span>
                 <span className={`inline-block h-2 w-2 rounded-[2px] align-middle ${CONFIDENCE_TOKENS["high-confidence"].bgClass}`} />{" "}
@@ -389,7 +389,7 @@ export function ForecastBoard({
                               </span>
                               {partial && (
                                 <span className="mt-1 flex h-[3px] overflow-hidden rounded-sm bg-[#F0F0EC]">
-                                  <span className="bg-[#084734]" style={{ width: `${card.confirmedRatio * 100}%` }} />
+                                  <span className={CONFIDENCE_TOKENS.confirmed.bgClass} style={{ width: `${card.confirmedRatio * 100}%` }} />
                                   {card.highRatio > 0 && (
                                     <span className={CONFIDENCE_TOKENS["high-confidence"].bgClass} style={{ width: `${card.highRatio * 100}%` }} />
                                   )}

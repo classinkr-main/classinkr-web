@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 
 import {
   readOptionalBoolean,
+  readOptionalEnum,
   readOptionalNonNegativeInt,
   readOptionalString,
   readOptionalStringArray,
@@ -10,8 +11,10 @@ import {
 } from "@/app/api/admin/hardware/_validation"
 import {
   HARDWARE_EDITOR_ADMIN_API_ROLES,
+  requireHardwareInventoryManager,
   requireVerifiedAdminContext,
 } from "@/lib/admin-auth"
+import { HARDWARE_REPORT_GROUPS } from "@/lib/hardware/inventory-process"
 import { updateHardwareItem } from "@/lib/repositories/hardware-inventory"
 
 export async function PATCH(
@@ -20,6 +23,9 @@ export async function PATCH(
 ) {
   const admin = await requireVerifiedAdminContext(req, HARDWARE_EDITOR_ADMIN_API_ROLES)
   if (admin instanceof NextResponse) return admin
+  // 품목 설정(최소재고·물류번호 관리·보고 묶음 등)은 입고관리 권한자만(갭 문서 §7-2).
+  const forbidden = requireHardwareInventoryManager(admin)
+  if (forbidden) return forbidden
 
   try {
     const { id } = await params
@@ -31,6 +37,9 @@ export async function PATCH(
       sku: readOptionalString(body, "sku", "SKU"),
       sourceAliases: readOptionalStringArray(body, "sourceAliases", "제품 alias"),
       active: readOptionalBoolean(body, "active", "사용 여부"),
+      lotTracked: readOptionalBoolean(body, "lotTracked", "물류번호 관리"),
+      reportGroup: readOptionalEnum(body, "reportGroup", "보고 묶음", HARDWARE_REPORT_GROUPS),
+      sortOrder: body.sortOrder === null ? null : readOptionalNonNegativeInt(body, "sortOrder", "정렬 순서"),
     })
 
     return NextResponse.json({ item })

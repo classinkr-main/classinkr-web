@@ -2277,8 +2277,8 @@ function renderManagedSimulation() {
       title: "기억이 아니라 남은 장면으로 상담합니다",
       body: "지난 수업에서 어려워한 장면, 보강 후 변화, 과제 상태를 학부모에게 구체적으로 설명합니다.",
       detail: "요즘 어때요?라는 질문에 선생님 감각만이 아니라 기록으로 답합니다.",
-      image: "/images/use-cases/generated/admin-dashboard-source-2.webp",
-      alt: "ClassIn 관리자 운영 데이터 화면",
+      image: "/images/use-cases/generated/comms-source.png",
+      alt: "ClassIn 반별 수업 기록과 과제 제출 현황 화면",
     },
   ]
 
@@ -2351,8 +2351,8 @@ function renderOnlineOperatingLoop() {
       title: "복습·재등록 이탈",
       body: "녹화, 피드백, 과제, 재등록 안내가 흩어지면 수업 경험은 그날로 끝납니다.",
       fix: "다시보기 큐, 과제 후속, 학부모 리포트, 재등록 트리거",
-      image: "/images/use-cases/generated/admin-dashboard-source-2.webp",
-      alt: "ClassIn 관리자 대시보드와 운영 데이터 화면",
+      image: "/images/use-cases/generated/comms-source.png",
+      alt: "ClassIn 반별 수업 기록과 과제 제출 현황 화면",
       caption: "수업 기록과 후속 관리 데이터를 운영자가 확인",
     },
   ]
@@ -2414,9 +2414,9 @@ function renderOnlineOperatingLoop() {
     },
     {
       label: "Follow-up",
-      title: "관리자 운영 데이터",
-      image: "/images/use-cases/generated/admin-dashboard-source-2.webp",
-      alt: "ClassIn 관리자 운영 데이터 화면",
+      title: "과제 제출·채점 현황",
+      image: "/images/use-cases/generated/homework-source.png",
+      alt: "ClassIn 과제 제출·채점 현황 화면",
     },
   ]
   const diagnosticOutputs = [

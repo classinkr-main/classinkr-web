@@ -16,6 +16,19 @@ import {
   type DraftStatus,
   type LedgerDraft,
 } from "./shared"
+import {
+  APPLY_NO_RESPONSE_MESSAGE,
+  LEDGER_APPLY_CLIENT_TIMEOUT_MS,
+  LEDGER_DRAFT_APPLY_LIMIT,
+  parseSheetWrites,
+  parseSheetWriteState,
+  SHEET_WRITE_HISTORY_DELETE_MESSAGE,
+  SHEET_WRITE_STATE_OFF,
+  toApplyOutcome,
+  type ApplySheetOutcome,
+  type SheetWriteState,
+  type SheetWriteView,
+} from "./sheet-write-view"
 
 export interface LedgerEntry {
   id: string
@@ -73,7 +86,41 @@ interface LedgerDraftsResponse {
   // 별도 전달된다(app/api/admin/branch/ledger-drafts/route.ts GET). loadDrafts가 이를
   // reversedDraftIds 클라 상태의 서버 진실 소스로 시드한다.
   reversedDraftIds?: string[]
+  // 목록 상한(서버 LEDGER_LIST_MAX)에 닿았는지 — 닿았으면 일부가 화면·합계에서 빠질 수 있어 경고한다.
+  truncated?: { openDrafts?: boolean; entries?: boolean }
+  // REV 시트 쓰기(ADR-011) — 스위치·마지막 REV 동기화 시각과 초안별 최신 시트 쓰기 시도. 신뢰 경계를 넘어온
+  // 값이라 sheet-write-view 의 parse 함수로만 읽는다(모양이 틀리면 꺼짐·빈 객체).
+  sheetWrite?: unknown
+  sheetWrites?: unknown
   error?: string
+}
+
+// 단건 반영(PATCH .../ledger-drafts/{id} action=apply) 응답 — 성공 {draft, sheet}, 실패 {error, sheet} + status.
+// 202 는 "시트 반영 여부 모름"(ok:false) — 장부는 반영되지 않았다.
+interface LedgerApplyResponse {
+  draft?: LedgerDraft
+  sheet?: unknown
+  error?: string
+}
+
+// 서버 목록이 상한에 닿았을 때의 경고 문구(없으면 null). 조용히 잘리면 합계가 틀려도 아무도 모른다.
+export function ledgerTruncationNotice(truncated: LedgerDraftsResponse["truncated"]): string | null {
+  const parts: string[] = []
+  if (truncated?.openDrafts) parts.push("열린 초안이 1,000건을 넘어 일부만 보입니다 — 체크 큐에서 먼저 반영·취소하세요")
+  if (truncated?.entries) parts.push("장부 반영값이 1,000건을 넘어 오래된 반영분이 합계에서 빠질 수 있습니다")
+  return parts.length > 0 ? parts.join(" · ") : null
+}
+
+// 화면에 들고 있는 초안 목록 상한. 열린 초안(draft·checked)과 아직 서버에 못 올린 local-* 초안은 자르지 않고,
+// 끝난 초안(applied·cancelled) 이력만 최근 closedLimit 건으로 자른다 — 열린 초안이 잘리면 결재 바 건수와
+// 같은 칸 재편집(PATCH vs 새 초안) 판정에서 빠져 이중 계상·누락이 생긴다.
+export function capLedgerDrafts(drafts: LedgerDraft[], closedLimit = 50): LedgerDraft[] {
+  let closed = 0
+  return drafts.filter((draft) => {
+    if (draft.status === "draft" || draft.status === "checked" || draft.id.startsWith("local-")) return true
+    closed += 1
+    return closed <= closedLimit
+  })
 }
 
 interface LedgerDraftResponse {
@@ -143,6 +190,8 @@ interface LedgerBatchActionResult {
   status: number
   draft?: LedgerDraft
   error?: string
+  // action=apply 항목만 — 시트 쓰기 결과 코드 + 고정 문구(lib/branch/sheet-writeback/messages.ts).
+  sheet?: unknown
 }
 
 interface LedgerBatchActionResponse {
@@ -178,7 +227,7 @@ function readLocalDrafts() {
 
 function writeLocalDrafts(drafts: LedgerDraft[]) {
   if (typeof window === "undefined") return
-  localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(drafts.slice(0, 50)))
+  localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(capLedgerDrafts(drafts)))
 }
 
 function makeLocalDraft(input: LedgerDraftInput): LedgerDraft {
@@ -255,6 +304,11 @@ export function useLedgerDraftQueue() {
   // 상쇄된 적용"을 구분 못 해 되돌린 행을 재조회 후 유령처럼 되살린다. 이 Set이 그 구분자.
   const [reversedDraftIds, setReversedDraftIds] = useState<Set<string>>(new Set())
   const [ledgerHealth, setLedgerHealth] = useState<{ ok: boolean; message: string | null } | null>(null)
+  // REV 시트 쓰기(ADR-011) — GET 의 sheetWrite(스위치·마지막 REV 동기화 시각)와 초안별 최신 시트 쓰기 시도.
+  // 화면이 칸 아래 힌트·반영 확인 문구·큐 배지·이중 집계 제외(isSheetWriteAbsorbed)에 쓴다. 목록 조회가
+  // 실패하면 직전 값을 그대로 둔다(빈 값을 정상처럼 덮지 않는다 — 판정은 반영 때 서버가 다시 한다).
+  const [sheetWrite, setSheetWrite] = useState<SheetWriteState>(SHEET_WRITE_STATE_OFF)
+  const [sheetWrites, setSheetWrites] = useState<Record<string, SheetWriteView>>({})
   const [queueMode, setQueueMode] = useState<DraftQueueMode>("server")
   const [queueLoading, setQueueLoading] = useState(true)
   const [queueError, setQueueError] = useState<string | null>(null)
@@ -296,7 +350,7 @@ export function useLedgerDraftQueue() {
 
   const updateLocalDrafts = useCallback((updater: (current: LedgerDraft[]) => LedgerDraft[]) => {
     setDrafts((current) => {
-      const next = updater(current).slice(0, 50)
+      const next = capLedgerDrafts(updater(current))
       writeLocalDrafts(next)
       return next
     })
@@ -323,6 +377,8 @@ export function useLedgerDraftQueue() {
       // 품질 웨이브 7 — 항목 2: 재조회 성공(서버가 응답함, health와 무관)마다 행별 에러를 비운다 —
       // 새 목록이 그 행의 실제 서버 상태를 다시 반영하므로 오래된 배지를 들고 있을 이유가 없다.
       setRecordErrors(new Map())
+      setSheetWrite(parseSheetWriteState(data.sheetWrite))
+      setSheetWrites(parseSheetWrites(data.sheetWrites))
       if (data.health?.ok === false) {
         setDrafts(readLocalDrafts())
         setLedgerEntries([])
@@ -359,7 +415,7 @@ export function useLedgerDraftQueue() {
         })
         writeLocalDrafts(stillLocal)
         setUnsyncedLocalCount(stillLocal.length)
-        setDrafts([...resent, ...stillLocal, ...(data.drafts ?? [])].slice(0, 50))
+        setDrafts(capLedgerDrafts([...resent, ...stillLocal, ...(data.drafts ?? [])]))
         setQueueError(
           stillLocal.length > 0
             ? `로컬 초안 ${stillLocal.length}건을 서버로 재전송하지 못했습니다 — 재연결 후 다시 시도하세요.`
@@ -369,6 +425,8 @@ export function useLedgerDraftQueue() {
       setLedgerEntries(data.entries ?? [])
       setLedgerHealth(data.ledgerHealth ?? null)
       setQueueMode("server")
+      const truncatedNotice = ledgerTruncationNotice(data.truncated)
+      if (truncatedNotice) setQueueError((current) => (current ? `${current} · ${truncatedNotice}` : truncatedNotice))
     } catch (error) {
       setDrafts(readLocalDrafts())
       setLedgerEntries([])
@@ -407,7 +465,7 @@ export function useLedgerDraftQueue() {
         }
         if (!data?.draft) throw new Error(data?.error ?? "초안 저장 응답이 비어 있습니다.")
         const nextDraft = data.draft
-        setDrafts((current) => [nextDraft, ...current.filter((draft) => draft.id !== nextDraft.id)].slice(0, 50))
+        setDrafts((current) => capLedgerDrafts([nextDraft, ...current.filter((draft) => draft.id !== nextDraft.id)]))
         setQueueError(null)
         return { draft: nextDraft, dedupedRecent: data.dedupedRecent === true }
       } catch (error) {
@@ -531,31 +589,37 @@ export function useLedgerDraftQueue() {
     ))
   }, [clearRecordError, drafts, queueMode, setRecordError, updateLocalDrafts])
 
-  const applyDraft = useCallback(async (id: string) => {
+  // 단건 반영 — 반영 서비스(lib/branch/sheet-writeback/apply-service.ts)가 켜짐이면 '2. REV' 에도 쓴다.
+  // adminFetchJson 대신 원 Response 를 읽는다: 202(시트 반영 여부 모름)는 2xx 지만 반영 실패이고, 실패 바디의
+  // sheet(코드 + 고정 문구)를 사용자에게 그대로 보여야 하기 때문이다. 결과와 무관하게 다시 읽어 큐 배지
+  // (sheetWrites)를 서버 기록으로 맞춘다. 반환값은 호출부가 결과를 말할 때 쓴다(큐 카드는 쓰지 않는다).
+  const applyDraft = useCallback(async (id: string): Promise<ApplySheetOutcome | null> => {
     const current = drafts.find((draft) => draft.id === id)
-    if (!current || current.status !== "checked") return
+    if (!current || current.status !== "checked") return null
     if (queueMode !== "server" || id.startsWith("local-")) {
       setQueueError("로컬 임시 초안은 DB 장부에 적용할 수 없습니다. 서버 큐가 복구된 뒤 다시 저장/적용하세요.")
-      return
+      return null
     }
 
-    if (queueMode === "server" && !id.startsWith("local-")) {
-      try {
-        const data = await adminFetchJson<LedgerDraftResponse>(`/api/admin/branch/ledger-drafts/${encodeURIComponent(id)}`, {
-          method: "PATCH",
-          body: JSON.stringify({ action: "apply" }),
-        })
-        if (!data.draft) throw new Error(data.error ?? "초안 적용 응답이 비어 있습니다.")
-        setDrafts((items) => items.map((draft) => (draft.id === id ? data.draft! : draft)))
-        await loadDrafts()
-        setQueueError(null)
-        return
-      } catch (error) {
-        setQueueError(`DB 장부 반영에 실패했습니다. 로컬 임시 적용으로 대체하지 않습니다. ${errorMessage(error)}`)
-        return
+    try {
+      const response = await adminFetch(`/api/admin/branch/ledger-drafts/${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        body: JSON.stringify({ action: "apply" }),
+        adminTimeoutMs: LEDGER_APPLY_CLIENT_TIMEOUT_MS,
+      })
+      const data = (await response.json().catch(() => null)) as LedgerApplyResponse | null
+      const outcome = toApplyOutcome(id, data, response.status)
+      if (outcome.ok && data?.draft) {
+        const nextDraft = data.draft
+        setDrafts((items) => items.map((draft) => (draft.id === id ? nextDraft : draft)))
       }
+      await loadDrafts()
+      setQueueError(outcome.ok ? null : `DB 장부 반영에 실패했습니다. 로컬 임시 적용으로 대체하지 않습니다. ${outcome.error ?? ""}`.trim())
+      return outcome
+    } catch (error) {
+      setQueueError(`DB 장부 반영에 실패했습니다. 로컬 임시 적용으로 대체하지 않습니다. ${errorMessage(error)}`)
+      return { id, ok: false, status: 0, code: null, message: null, error: APPLY_NO_RESPONSE_MESSAGE }
     }
-
   }, [drafts, loadDrafts, queueMode])
 
   // 일괄 체크(2026-09-14 최초 구현 → 라운드 4 P0-1: 단건 PATCH 순차 전송을 배치 API로 교체).
@@ -615,25 +679,33 @@ export function useLedgerDraftQueue() {
   // 일괄 적용(2026-09-14 최초 구현 → 라운드 4 P0-1: 배치 API로 교체) — 체크된 서버 초안만 모아
   // 적용하고 마지막에 한 번 다시 읽는다. 로컬 임시 초안은 DB 장부에 적용할 수 없으므로 건너뛴다
   // (단건 applyDraft와 같은 규칙).
+  // REV 시트 쓰기(ADR-011): 한 요청은 LEDGER_DRAFT_APPLY_LIMIT(50)건 — 켜짐이면 서버가 그보다 많은 몫을 400 으로
+  // 돌려준다. 항목별 sheet(코드 + 고정 문구)를 sheetResults 로 돌려줘 ApprovalBar 가 코드별 건수를 말한다.
+  // 클라이언트 마감은 서버 maxDuration 보다 길게(LEDGER_APPLY_CLIENT_TIMEOUT_MS) — 먼저 끊으면 서버는 쓰는데
+  // 화면은 실패로 센다.
   const applyDrafts = useCallback(async (ids: string[]) => {
+    const sheetResults: ApplySheetOutcome[] = []
     if (queueMode !== "server") {
       setQueueError("로컬 임시 초안은 DB 장부에 적용할 수 없습니다. 서버 큐가 복구된 뒤 다시 적용하세요.")
-      return { done: 0, failed: ids.length }
+      return { done: 0, failed: ids.length, sheetResults }
     }
     let done = 0
     let failed = 0
     const serverIds = ids.filter((id) => !id.startsWith("local-"))
 
-    for (let start = 0; start < serverIds.length; start += LEDGER_DRAFT_BATCH_LIMIT) {
-      const chunk = serverIds.slice(start, start + LEDGER_DRAFT_BATCH_LIMIT)
+    for (let start = 0; start < serverIds.length; start += LEDGER_DRAFT_APPLY_LIMIT) {
+      const chunk = serverIds.slice(start, start + LEDGER_DRAFT_APPLY_LIMIT)
       try {
         const data = await adminFetchJson<LedgerBatchActionResponse>("/api/admin/branch/ledger-drafts/batch", {
           method: "PATCH",
           body: JSON.stringify({ action: "apply", ids: chunk }),
+          adminTimeoutMs: LEDGER_APPLY_CLIENT_TIMEOUT_MS,
         })
         for (const id of chunk) {
           const result = data.results?.find((entry) => entry.id === id)
-          if (result?.ok && result.draft) {
+          const outcome = toApplyOutcome(id, result)
+          sheetResults.push(outcome)
+          if (outcome.ok && result?.draft) {
             const next = result.draft
             setDrafts((items) => items.map((draft) => (draft.id === id ? next : draft)))
             done += 1
@@ -642,14 +714,20 @@ export function useLedgerDraftQueue() {
           failed += 1
         }
       } catch {
-        // 청크 요청 자체 실패 — checkDrafts와 동일 계약(큐 강등 없음, 이후 청크 중단).
-        failed += chunk.length
+        // 청크 요청 자체 실패 — checkDrafts와 동일 계약(큐 강등 없음, 이후 청크 중단). 서버가 썼는지 모르므로
+        // 이 청크와 보내지 않은 나머지는 코드 없이(null) 실패로 남긴다 — 다시 누르면 서버가 already_written 으로
+        // 맞춘다. 보내지 않은 나머지도 실패로 센다(결과 줄 건수와 같게 — 반영 안 된 것을 빼고 말하지 않는다).
+        const unsent = serverIds.slice(start)
+        failed += unsent.length
+        for (const id of unsent) {
+          sheetResults.push({ id, ok: false, status: 0, code: null, message: null, error: APPLY_NO_RESPONSE_MESSAGE })
+        }
         break
       }
     }
     await loadDrafts()
     setQueueError(failed > 0 ? `일괄 적용 중 ${failed}건이 DB 장부에 반영되지 않았습니다 — 해당 행에서 다시 적용하세요.` : null)
-    return { done, failed }
+    return { done, failed, sheetResults }
   }, [loadDrafts, queueMode])
 
   // 품질 감사 2026-09-10 — #8: 이전엔 DraftQueue 어떤 동작도 초안을 "cancelled"로 전이시키지
@@ -710,6 +788,12 @@ export function useLedgerDraftQueue() {
           // 지워버리면 "왜 없어졌는지" 신호가 사라진다. 배지+새로고침으로 안내하고, 실제 정리는
           // 다음 loadDrafts(서버 목록 재조회)가 자연히 처리한다.
           setRecordError(id)
+          return
+        }
+        // REV 시트 쓰기(ADR-011): 반영을 시도한 적 있는 초안은 감사 기록 때문에 서버가 삭제를 409 로 막는다 — 서버 장애가
+        // 아니므로 큐를 로컬로 내리지 않고 그 행에만 "취소로 정리" 안내를 단다.
+        if (error instanceof Error && error.message === SHEET_WRITE_HISTORY_DELETE_MESSAGE) {
+          setRecordError(id, SHEET_WRITE_HISTORY_DELETE_MESSAGE)
           return
         }
         setQueueMode("local")
@@ -827,7 +911,7 @@ export function useLedgerDraftQueue() {
             if (item.id) {
               setDrafts((current) => current.map((draft) => (draft.id === item.id ? nextDraft : draft)))
             } else {
-              setDrafts((current) => [nextDraft, ...current.filter((draft) => draft.id !== nextDraft.id)].slice(0, 50))
+              setDrafts((current) => capLedgerDrafts([nextDraft, ...current.filter((draft) => draft.id !== nextDraft.id)]))
             }
             clearRecordError(nextDraft.id)
             results[itemIndex] = { draft: nextDraft, dedupedRecent: result.dedupedRecent === true }
@@ -891,6 +975,8 @@ export function useLedgerDraftQueue() {
     ledgerEntries,
     reversedDraftIds,
     ledgerHealth,
+    sheetWrite,
+    sheetWrites,
     queueMode,
     queueLoading,
     queueError,

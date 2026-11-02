@@ -119,8 +119,8 @@ export function NewsletterSubscribe({ variant = "dark", source = "footer_newslet
       ) : null}
 
       <FormHint className={isDark ? "mt-2 text-white/45" : "mt-2"}>
-        구독 시 Classin의 교육 인사이트, 제품 업데이트, 웨비나 소식을 이메일로 받아보는 데
-        동의한 것으로 간주됩니다. 언제든 수신 해지할 수 있습니다.
+        구독하면 Classin의 교육 인사이트, 제품 업데이트, 웨비나 소식을 이메일로 받게 됩니다.
+        언제든 수신 해지할 수 있습니다.
       </FormHint>
     </div>
   )

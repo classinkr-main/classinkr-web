@@ -49,14 +49,14 @@ describe("admin quick quote composer shell", () => {
     expect(source).toContain('font-semibold text-[#7A520F]')
   })
 
-  it("has the 4-part left rail: 최근 견적 복제 → 빠른 조합 → 템플릿 → 품목", () => {
-    const sections = ["최근 견적 복제", "빠른 조합", "템플릿</p>", "품목 · 눌러서 추가"].map((marker) =>
+  it("keeps recent quotes and templates compact, with optional combinations below templates", () => {
+    const sections = ['aria-label="최근 견적서"', 'aria-label="견적 템플릿"', "빠른 조합 · HW + SW 별도 구매", "품목 · 눌러서 추가"].map((marker) =>
       source.indexOf(marker)
     )
     expect(sections.every((index) => index > 0)).toBe(true)
     expect([...sections].sort((left, right) => left - right)).toEqual(sections)
     expect(source).not.toContain('"녹화 세트 + AI Suite"')
-    expect(source).toContain("visibleTemplates.map(")
+    expect(source).toContain("displayedBaseTemplates.map(")
     // 팀 템플릿(DB)은 목록만 꽂을 자리
     expect(source).toContain("teamTemplates?: QuickQuoteTeamTemplate[]")
     expect(source).toContain("function handleCatalogAdd(")

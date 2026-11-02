@@ -134,12 +134,16 @@ export function useBranchJson<T>(url: string, refreshKey: number, options: UseBr
   return state
 }
 
-// 시트 동기화 응답 본문 중 화면이 읽는 부분 — 결과 계약(lib/admin/sync-outcome) + 장부 임포트 재캡처 결과
-// (lib/branch/sync/run-all.ts RunAllResult 미러).
+// 시트 동기화 응답 본문 중 화면이 읽는 부분 — 결과 계약(lib/admin/sync-outcome: outcome·outcomeReason·startedAt·
+// warnings) + 장부 임포트 재캡처 결과(lib/branch/sync/run-all.ts RunAllResult · RevImportRecaptureResult 미러).
+// 운영 밖 쓰기 가드(lib/branch/sync/write-guard.ts)가 건너뛴 런은 outcome="skipped"·outcomeReason 을 싣는다.
 export type BranchSyncResponseBody = SyncOutcomeFields & {
   revImport?:
     | { status: "inactive" }
     | { status: "captured" | "unchanged"; runId: string; capturedAt: string; lineCount: number }
+    // 캡처는 했지만 활성 run 이 더 높은 캡처 버전이라 포인터를 유지 — runId/capturedAt 은 활성 run,
+    // capturedRunId 는 이번에 만든(또는 재사용한) 캡처 run.
+    | { status: "kept"; runId: string; capturedAt: string; lineCount: number; reason: string; capturedRunId: string }
   revImportError?: string
 }
 

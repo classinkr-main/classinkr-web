@@ -2,6 +2,8 @@ import Link from "next/link"
 
 import { FAQ } from "@/components/sections/FAQ"
 import { JsonLd } from "@/components/seo/JsonLd"
+import { TrackedLink } from "@/components/TrackedLink"
+import { getDocBySlug, getDocPath } from "@/lib/docs"
 import { getPublicFaqItems } from "@/lib/public-faq"
 import { createBreadcrumbJsonLd, createFaqJsonLd, createPublicMetadata, createWebPageJsonLd } from "@/lib/seo"
 
@@ -11,6 +13,12 @@ export const metadata = createPublicMetadata({
   path: "/faq",
   keywords: ["Classin FAQ", "Classin 도입", "Classin 요금제", "Classin Board 설치", "Classin 사용법"],
 })
+
+// 문서가 비공개로 바뀌거나 slug 가 바뀌면 깨진 링크 대신 버튼을 뺀다.
+const PRE_ADOPTION_DOC = getDocBySlug("pre-adoption-faq-22-questions", "start")
+
+const FAQ_LINK_CLASS =
+  "inline-flex items-center justify-center rounded-full border border-black/[0.08] bg-white px-5 py-2.5 text-sm font-semibold text-[#084734] transition-colors hover:bg-[#ECFDF5]"
 
 export default function FAQPage() {
   return (
@@ -37,7 +45,7 @@ export default function FAQPage() {
           <h1 className="break-keep text-[2.35rem] font-black text-[#111110] md:text-5xl" style={{ letterSpacing: '-1.5px' }}>
             자주 묻는 질문
           </h1>
-          <div className="mt-6 flex flex-col items-center justify-center gap-3 sm:flex-row">
+          <div className="mt-6 flex flex-col items-center justify-center gap-3 sm:flex-row sm:flex-wrap">
             <Link
               href="/docs/start"
               className="inline-flex items-center justify-center rounded-full bg-[#084734] px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#065c41]"
@@ -50,6 +58,17 @@ export default function FAQPage() {
             >
               관리자 가이드
             </Link>
+            {PRE_ADOPTION_DOC ? (
+              <TrackedLink href={getDocPath(PRE_ADOPTION_DOC)} ctaId="faq_pre_adoption_doc" className={FAQ_LINK_CLASS}>
+                도입 전 22가지 질문
+              </TrackedLink>
+            ) : null}
+            <TrackedLink href="/pricing" ctaId="faq_pricing" className={FAQ_LINK_CLASS}>
+              요금 안내
+            </TrackedLink>
+            <TrackedLink href="/contact#contact-form" ctaId="faq_contact" className={FAQ_LINK_CLASS}>
+              도입 상담하기
+            </TrackedLink>
           </div>
         </div>
         <FAQ />

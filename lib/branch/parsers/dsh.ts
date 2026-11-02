@@ -81,6 +81,27 @@ function readNumericRow(grid: FormattedCell[][], rowIdx: number, monthMap: Array
   }
 }
 
+// 시트 소계 행 판별 — 열 D(New/Renew 자리)에 "Sum" 같은 소계 라벨이 들어온 행.
+// 실측('1. DSH' FY26-27, 2026-10-28 감사): Team KR 블록의 Status 구간에만 "Software Sum"(시트 row 11)·
+// "Hardware Sum"(row 16) 소계 행이 있다. 1차 루프는 kind 아래의 숫자 행을 전부 누적하므로 구성 행
+// (Software New/Renew × Direct/Channel …)과 소계가 둘 다 더해져 Team KR(ALL) Status가 정확히 2배였다
+// (시트 ¥2,502,976 vs 미러 ¥5,005,951, 월값도 2배). BD/MKT/CSM 팀 행·멤버 행·ALL Goal은 소계가 없어 정확했다.
+//
+// 대안인 "ALL Status = BD+MKT+CSM 합"은 쓰지 않는다 — 장부 DSH 렌즈는 시트 숫자를 정본으로 삼고 합성을
+// 금지하며(components/admin/branch/ledger/dsh-derive.ts buildDshTeamGrid), 팀 블록이 없는 시트
+// (tests/branch/fixtures/dsh-sample.json처럼 전사만 있는 레이아웃)나 팀에 귀속되지 않는 금액이 있으면
+// ALL이 0 또는 과소가 된다. 소계 행을 라벨로 제외하는 쪽은 Goal 구간이나 다른 팀 블록에 소계 행이
+// 생겨도 그대로 맞게 동작하므로 시트 구조 변화에 더 견고하다.
+//
+// 2차 루프(breakdown)는 열 D New/Renew 화이트리스트로 소계 행을 이미 버리므로 여기서 손대지 않는다
+// (소계 행이 prevStatus 캐리포워드를 "Sum"으로 덮는 것도 그대로 둔다 — 소계 다음에 열 D 공란 행이
+// 오면 직전 New/Renew를 물려받아 집계에 섞이는 것보다 버리는 쪽이 안전하다).
+const DSH_SUBTOTAL_LABELS = new Set(["sum", "subtotal", "total", "소계", "합계"])
+
+function isDshSubtotalRow(row: FormattedCell[]): boolean {
+  return DSH_SUBTOTAL_LABELS.has(asText(row[3]?.value).toLowerCase())
+}
+
 function addNumericRow(target: DshRow, source: ReturnType<typeof readNumericRow>) {
   target.annual += source.annual
   for (let i = 0; i < 4; i++) target.quarters[i] += source.quarters[i]
@@ -131,6 +152,8 @@ export function parseDsh(grid: FormattedCell[][], refFy: number): DshOutput {
     else if (section && !["software", "hardware"].includes(section)) currentKind = null
 
     if (!currentKind) continue
+    // 소계 행(Software Sum/Hardware Sum)은 구성 행의 합이므로 누적하면 2중 계상이다.
+    if (isDshSubtotalRow(row)) continue
     const source = readNumericRow(grid, r, monthMap)
     if (source.annual === 0 && source.quarters.every((q) => q === 0) && Object.values(source.months).every((m) => m === 0)) continue
     addNumericRow(getTeamRow(currentTeam, currentKind), source)

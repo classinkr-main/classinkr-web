@@ -33,6 +33,7 @@ async function loadLeadCapture(options?: {
     meta: { status: "fulfilled", value: { skipped: true } },
     ga4: { status: "fulfilled", value: { skipped: true } },
   })
+  const triggerOnSubmitRules = vi.fn().mockResolvedValue(undefined)
   const settings = {
     googleSheetWebhookUrl: "",
     leadWebhookUrl: "",
@@ -41,7 +42,7 @@ async function loadLeadCapture(options?: {
   }
 
   vi.doMock("@/lib/automation-engine", () => ({
-    triggerOnSubmitRules: vi.fn().mockResolvedValue(undefined),
+    triggerOnSubmitRules,
   }))
   vi.doMock("@/lib/notifications/emit-event", () => ({
     emitNotificationEvent,
@@ -79,6 +80,7 @@ async function loadLeadCapture(options?: {
     emitNotificationEvent,
     postJson,
     sendServerConversion,
+    triggerOnSubmitRules,
   }
 }
 
@@ -86,6 +88,27 @@ describe("submitLeadCapture duplicate handling", () => {
   afterEach(() => {
     vi.restoreAllMocks()
     vi.resetModules()
+  })
+
+  it.each([false, true])("respects marketing consent %s for resource automation", async (marketingConsent) => {
+    const { submitLeadCapture, saveLead, triggerOnSubmitRules, sendServerConversion } = await loadLeadCapture()
+    saveLead.mockResolvedValue({ id: `resource-${marketingConsent}` })
+
+    const response = await submitLeadCapture({
+      source: "newsletter",
+      sourceDetail: "resource_pdf_download:academy-system-checklist",
+      name: "Test",
+      org: "Academy",
+      email: `resource-${marketingConsent}@example.com`,
+      marketingConsent,
+    })
+
+    expect(response.status).toBe(200)
+    expect(triggerOnSubmitRules).toHaveBeenCalledTimes(marketingConsent ? 1 : 0)
+    expect(sendServerConversion).toHaveBeenCalledWith(expect.objectContaining({
+      metaEventName: marketingConsent ? "CompleteRegistration" : "Lead",
+      user: expect.objectContaining({ allowHashedUserData: marketingConsent }),
+    }))
   })
 
   it("normalizes a region value so Meta city can be stored in leads.branch", async () => {

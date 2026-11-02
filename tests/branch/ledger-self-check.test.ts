@@ -53,7 +53,7 @@ describe("매트릭스 셀 커밋 → 자가 체크 배선(소스 스캔)", () =
   it("셀 커밋 입력 빌더는 status:'checked'를 싣고, 레일 폼 빌더(buildDraftInput)는 싣지 않는다", () => {
     const cell = sliceBetween(workbench, "const buildCellDraftInput = useCallback", "const onCommitCell = useCallback")
     expect(cell).toContain('status: "checked"')
-    const rail = sliceBetween(workbench, "const buildDraftInput = useCallback", "}, [detail, draftForm, lens, period, selectedMonth, selectedRow, team])")
+    const rail = sliceBetween(workbench, "const buildDraftInput = useCallback", "}, [detail, draftForm, lens, period, selectedMonth, selectedRow, sheetRowById, team])")
     expect(rail).not.toContain('status: "checked"')
   })
 

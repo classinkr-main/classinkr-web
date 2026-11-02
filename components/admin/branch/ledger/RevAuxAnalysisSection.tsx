@@ -97,7 +97,7 @@ export function RevAuxAnalysisSection({
                     {!revAuxOpen && (
                       <span className="hidden min-w-0 flex-1 items-center justify-end gap-x-3 overflow-hidden whitespace-nowrap text-[11px] font-semibold tabular-nums text-[#615D59] md:flex">
                         <span>목표 <span className="font-bold text-[#111110]">{revComparableGoal !== null ? formatMoney(revComparableGoal) : revGoalMutedByFilter ? "필터 중 생략" : "–"}</span></span>
-                        <span>확정 <span className="font-bold text-[#084734]">{formatMoney(revMonthConfirmed)}</span></span>
+                        <span>확정 <span className={`font-bold ${CONFIDENCE_TOKENS.confirmed.textClass}`}>{formatMoney(revMonthConfirmed)}</span></span>
                         {revComparableGoal !== null && (
                           <span>
                             달성률{" "}

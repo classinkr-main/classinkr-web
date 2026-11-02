@@ -42,7 +42,7 @@ New Oriental · TAL · Pearson · Sony Global Education · British Council · Pe
 - `app/about/AboutPageClient.tsx`(타임라인 2021 시리즈 D 유니콘·STATS 5,000만), `components/sections/GlobalScale.tsx`(5,000만), `lib/docs.ts`(회사 소개 문서 "EEO 공식 소개 기준") → 공식 자기소개 기준으로 정합.
 - **표시광고법 안전장치 적용(2026-06-29):** About STATS·GlobalScale 하단에 "전 세계 누적 수치 · EEO 공식 소개 기준" 캡션, 연혁 펀딩에 "(EEO 공식 기준)" 출처 표기 → 한국 실적 오인·실증책임 노출 완화.
   - ⚠️ **남은 숙제:** EEO 공식 실증자료(IR/확인서)를 별도 확보·보관(공정위 실증 요청 대비). "유니콘"은 유지 중(완화 여부 미결정). 노출 전 법무 검토 권장.
-- 변경 시 위 3곳 + 이 문서를 함께 본다.
+- 변경 시 위 3곳 + 이 문서를 함께 본다. 블로그 AI 프롬프트 사본(`lib/blog-ai-prompts.ts` `COMPANY_SCALE`, §3 ✅ 수치만·투자 제외)도 같이 고친다.
 
 ## 6. 출처
 - [classin.com/careers — Series D unicorn / $500M+ / 50M educators & students](https://www.classin.com/careers)

@@ -594,6 +594,27 @@ async function listLedgerOutboundRows(): Promise<LedgerOutboundRow[]> {
   })
 }
 
+const PORTAL_QUOTE_REFERENCE = /^portal-quote:([^:]+):line:/
+
+/**
+ * 오더(sales_orders)가 잡은 견적 — 그 줄은 하드웨어 탭의 '하드웨어 승인 대기'가 맡는다. 하드웨어가 들어간
+ * 오더는 이왕찬·지사장 승인을 거쳐야 하므로(2026-10-22 결정) 여기서 따로 예정 등록하면 승인을 건너뛴다.
+ * 테이블 미적용이면 빈 집합(예전 동작 그대로). 그 밖의 조회 실패는 null — 호출부가 포털 견적 줄을 숨긴다.
+ */
+async function listQuoteDocumentIdsOwnedByOrders(quoteDocumentIds: string[]): Promise<Set<string> | null> {
+  if (quoteDocumentIds.length === 0) return new Set()
+  const sb = createSupabaseAdminClient()
+  const { data, error } = await sb
+    .from("sales_orders")
+    .select("quote_document_id")
+    .in("quote_document_id", quoteDocumentIds)
+  if (error) {
+    if (error.code === "42P01" || error.code === "PGRST205") return new Set()
+    return null
+  }
+  return new Set(((data ?? []) as Array<{ quote_document_id: string }>).map((row) => row.quote_document_id))
+}
+
 export async function listHardwareCrmOrderBacklog(): Promise<HardwareCrmOrderBacklogResult> {
   const [candidateResult, ledgerRows] = await Promise.all([
     // 원장에 이미 있는 것을 걸러낸 **뒤에** 잘라야 한다 — 기본 상한 12 로 먼저 자르면 등록이 끝난
@@ -604,10 +625,25 @@ export async function listHardwareCrmOrderBacklog(): Promise<HardwareCrmOrderBac
 
   // 등록할 수 있는 후보만 — 품목·수량이 있어야 원장 기록을 만들 수 있다.
   // 외부 CRM 오더(실제 CRM)는 품목·수량이 없어 여기 오르지 않는다.
-  const registrable = candidateResult.candidates.filter(
+  const warnings = [...candidateResult.warnings]
+  const withQuantity = candidateResult.candidates.filter(
     (candidate) => Boolean(cleanString(candidate.productName)) && (candidate.quantity ?? 0) > 0
   )
-  if (registrable.length === 0) return { entries: [], warnings: candidateResult.warnings }
+  const portalQuoteIds = Array.from(
+    new Set(
+      withQuantity
+        .map((candidate) => PORTAL_QUOTE_REFERENCE.exec(candidate.referenceNo)?.[1])
+        .filter((id): id is string => Boolean(id))
+    )
+  )
+  const ownedByOrders = await listQuoteDocumentIdsOwnedByOrders(portalQuoteIds)
+  if (ownedByOrders == null) warnings.push("오더 확인에 실패해 포털 견적 줄을 잠시 숨겼습니다.")
+  const registrable = withQuantity.filter((candidate) => {
+    const quoteId = PORTAL_QUOTE_REFERENCE.exec(candidate.referenceNo)?.[1]
+    if (!quoteId) return true
+    return ownedByOrders != null && !ownedByOrders.has(quoteId)
+  })
+  if (registrable.length === 0) return { entries: [], warnings }
 
   const recordedReferences = new Set(
     ledgerRows
@@ -641,5 +677,5 @@ export async function listHardwareCrmOrderBacklog(): Promise<HardwareCrmOrderBac
     })
   }
 
-  return { entries: entries.slice(0, BACKLOG_LIMIT), warnings: candidateResult.warnings }
+  return { entries: entries.slice(0, BACKLOG_LIMIT), warnings }
 }

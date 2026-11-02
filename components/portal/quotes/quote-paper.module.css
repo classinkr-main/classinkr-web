@@ -82,6 +82,17 @@
   .items th, .items td { padding-left: 3px; padding-right: 3px; }
   .items td:last-child, .items th:last-child { padding-right: 3px; }
   .items strong { font-size: 8.5pt; }
+  .paper[data-editing] .itemGrid { grid-template-columns: 20px minmax(0,1fr) minmax(0,1fr) 24px; row-gap: 10px; }
+  .paper[data-editing] .itemHead { display: none; }
+  .paper[data-editing] .itemGrid > :first-child { grid-column: 1; grid-row: 1; }
+  .paper[data-editing] .itemGrid > :nth-child(2) { grid-column: 2 / 4; grid-row: 1; min-width: 0; }
+  .paper[data-editing] .itemGrid > :nth-child(3) { grid-column: 3; grid-row: 2; }
+  .paper[data-editing] .itemGrid > :nth-child(3)::before { content: "단가"; font-size: 11px; color: #615D59; }
+  .paper[data-editing] .itemGrid > :nth-child(4) { grid-column: 2; grid-row: 2; flex-wrap: wrap; }
+  .paper[data-editing] .itemGrid > :nth-child(4)::before { content: "수량"; width: 100%; font-size: 11px; color: #615D59; text-align: center; }
+  .paper[data-editing] .itemGrid > :nth-child(5) { grid-column: 2 / 4; grid-row: 3; display: flex; justify-content: space-between; gap: 8px; }
+  .paper[data-editing] .itemGrid > :nth-child(5)::before { content: "공급가액"; font-size: 11px; font-weight: 400; color: #615D59; }
+  .paper[data-editing] .itemGrid > :nth-child(6) { grid-column: 4; grid-row: 1; }
 }
 @page classin-quote {
   size: A4;

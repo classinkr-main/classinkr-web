@@ -77,7 +77,7 @@ function monthLabel(ym: string) {
 // 카드 헤더 레벨 계보(2026-07-17 사용성 디벨롭 항목 2) — 파서가 DSH breakdown에
 // 행 좌표(sheet_row)를 방출하지 않아 셀 단위 계보는 스코프 밖(YAGNI). SyncStatusBar의
 // sourceLabel과 동일한 kind→라벨 매핑을 그리드 헤더 캡션용으로 재현한다.
-// DSH 계열 카드(지표 밴드·월별 페이스·팀 그리드)가 같은 캡션 관례를 공유하도록 export한다.
+// DSH 계열 카드(진도 개요·월별 페이스·팀 그리드)가 같은 캡션 관례를 공유하도록 export한다.
 export function dshSourceLabel(source: BranchDataSourceInfo): string {
   if (source.kind === "import") return `장부 임포트${source.asOf ? ` · ${formatDateTime(source.asOf)}` : ""}`
   if (source.kind === "mirror") return `시트 미러${source.asOf ? ` · ${formatDateTime(source.asOf)}` : ""}`
@@ -89,7 +89,7 @@ export function dshSourceLabel(source: BranchDataSourceInfo): string {
 // (전사 + 팀/멤버 섹션 — 파서가 시트의 모든 섹션을 훑고, 액티브 임포트 소스는 순서까지 뒤섞임).
 // 전사 행은 부분 행들의 합이라 annual이 항상 최대이므로, 합산 대신 최대 annual 행 하나를
 // 채택한다 — 합산하면 전사+팀+멤버가 3중 계상돼 수치가 부풀려진다. 중복 제거 규칙 자체는
-// dedupeDshByKind(dsh-derive.ts) 단일 소스를 쓴다(지표 밴드·월별 페이스·Rate 뷰와 공유).
+// dedupeDshByKind(dsh-derive.ts) 단일 소스를 쓴다(진도 개요·월별 페이스·Rate 뷰와 공유).
 export function aggregateDshBreakdown(breakdown: BranchDshBreakdownRow[], view: Exclude<DshGridView, "rate">) {
   const { monthKeys: months, goal, status } = dedupeDshByKind(breakdown)
   const byKind = { goal, status }

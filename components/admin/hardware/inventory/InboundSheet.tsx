@@ -13,6 +13,8 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion"
 import { ArrowDownToLine, ChevronDown, ClipboardPaste, Plus, RotateCcw, Search, Trash2, X } from "lucide-react"
 
 import { adminFetch, adminFetchJson } from "@/lib/admin-client"
+import { HARDWARE_OUTBOUND_TYPE_LABELS, type HardwareOutboundType } from "@/lib/hardware/inventory-process"
+import CrmCustomerSearchField from "./CrmCustomerSearchField"
 import {
   applyLinesToRows,
   buildFeaturedInboundRows,
@@ -20,9 +22,16 @@ import {
   buildInboundLotChoices,
   buildInboundSubmission,
   buildSampleRegisterPayloads,
-  buildStorageChoices,
+  checkInboundLot,
   createInboundRow,
+  CUSTOMER_STORAGE_LABEL,
+  DIRECT_SHIP_OUTBOUND_TYPES,
+  effectiveInboundIsFree,
   effectiveInboundStorage,
+  INBOUND_STORAGE_CHOICES,
+  inboundDraftNeedsLot,
+  isLotTrackedItem,
+  resolveInboundNextLot,
   featuredInboundRank,
   findInboundItem,
   formatMonthDay,
@@ -44,7 +53,6 @@ import {
   resolveInboundSaveOutcome,
   shiftDateKey,
   splitInboundSerials,
-  suggestNextLot,
   summarizeInboundDraft,
   validateInboundDraft,
   type InboundDraft,
@@ -54,6 +62,7 @@ import {
   type InboundSavedLine,
 } from "./inbound-sheet-model"
 import { clearStoredDraft, readStoredDraft, writeStoredDraft } from "./draft-storage"
+import { fetchHardwareLots, type HardwareLotsSnapshot } from "./stock-admin-model"
 import { formatCurrency, formatNumber, MONO_META_CLASS, type HardwareItem, type HardwareMovement } from "./shared"
 
 export interface InboundSheetSavedResult {
@@ -77,6 +86,9 @@ export interface InboundSheetProps {
   // 품목 id 또는 정확한 품목 이름. 그 품목 행의 수량 칸에서 시작한다.
   initialProduct?: string | null
   canWrite: boolean
+  // 입고관리 권한자(viewer.canManageInventory). false 면 입고 화면 전체를 닫는다(강제는 서버 403).
+  // undefined(구응답)는 열어 둔다.
+  canManageInventory?: boolean
   // 한 줄이라도 저장되면 부른다(부분 실패 포함). 전부 저장되고 샘플 등록도 문제없으면 시트가 onClose 까지 부른다.
   onSaved: (result: InboundSheetSavedResult) => void
   // 대시보드 items 에는 비활성 품목도 섞여 있다(active 필드 없음). stock 행의 itemId 를 넘기면 주요 품목 슬롯과
@@ -97,12 +109,13 @@ interface MovementBatchResponse {
 
 type LotMode = "new" | "existing" | "custom"
 
-type PickerOption = { kind: "item"; item: HardwareItem } | { kind: "new"; name: string }
+type PickerOption = { kind: "item"; item: HardwareItem }
 
 // 작성 중 입고표 보관 — 새로고침·탭 폐기로 한 물량을 다시 치지 않게 한다(입력 가속 P3-1).
 // 조용히 되살리지 않는다: 어제 쓰다 만 물량번호가 오늘 저장으로 새면 원장이 틀어진다. 배너로 사람이 고른다.
 const INBOUND_DRAFT_KEY = "hw.inboundSheet.draft"
-const INBOUND_DRAFT_VERSION = 1
+// v2(2026-10-28): 유상·무상·메모·직배송·물류번호 관리 여부 칸이 생겼다 — v1 초안은 되살리지 않는다.
+const INBOUND_DRAFT_VERSION = 2
 
 const RECENT_LOT_LIMIT = 6
 const RECENT_LOT_LIMIT_PHONE = 3
@@ -202,18 +215,22 @@ function InboundSheetPanel({
   items,
   movements,
   initialProduct,
-  canWrite,
+  canWrite: canWriteProp,
+  canManageInventory,
   onSaved,
   activeItemIds,
   owner,
   lotStaleNote,
   reduceMotion,
 }: InboundSheetProps & { reduceMotion: boolean | null }) {
+  const blockedByRole = canManageInventory === false
+  const canWrite = canWriteProp && !blockedByRole
   const titleId = useId()
   const lotLabelId = useId()
   const lotListId = useId()
   const dateLabelId = useId()
   const importerLabelId = useId()
+  const freeLabelId = useId()
   const storageLabelId = useId()
   const tableLabelId = useId()
   const rowMessageIdPrefix = useId()
@@ -234,7 +251,13 @@ function InboundSheetPanel({
       if (existing) {
         focusKey = existing.key
       } else {
-        const added = createInboundRow({ key: `initial:${target.id}`, itemId: target.id, productName: target.name, lastPrices: prices })
+        const added = createInboundRow({
+          key: `initial:${target.id}`,
+          itemId: target.id,
+          productName: target.name,
+          lotTracked: isLotTrackedItem(target),
+          lastPrices: prices,
+        })
         rows.push(added)
         focusKey = added.key
       }
@@ -253,10 +276,35 @@ function InboundSheetPanel({
   const lotChoices = useMemo(() => buildInboundLotChoices(movements, 0), [movements])
   // 이번에 저장한 물량 — 부모가 원장을 다시 받기 전에도 같은 번호를 또 추천하지 않게 한다.
   const [savedLots, setSavedLots] = useState<InboundLotChoice[]>([])
-  const suggestedLot = useMemo(() => suggestNextLot([...lotChoices, ...savedLots]), [lotChoices, savedLots])
+  // 품목별 물류번호 응답(GET /lots) — 대시보드 이력(최근 2,000건)에 없는 번호와 서버의 다음 신규 번호를 보탠다.
+  const [lotSnapshots, setLotSnapshots] = useState<Record<string, HardwareLotsSnapshot>>({})
+  const requestedLotItemsRef = useRef<Set<string>>(new Set())
+  const knownLots = useMemo(() => {
+    const seen = new Set<string>()
+    const lots: string[] = []
+    const add = (lot: string) => {
+      const key = lot.replace(/\s+/g, "").toUpperCase()
+      if (!key || seen.has(key)) return
+      seen.add(key)
+      lots.push(lot)
+    }
+    for (const choice of [...lotChoices, ...savedLots]) add(choice.lot)
+    for (const snapshot of Object.values(lotSnapshots)) for (const lot of snapshot.lots) add(lot.lotNo)
+    return lots
+  }, [lotChoices, lotSnapshots, savedLots])
+  const serverNextLot = useMemo(() => {
+    let best: string | null = null
+    for (const snapshot of Object.values(lotSnapshots)) {
+      if (snapshot.nextLotNo) best = resolveInboundNextLot(best ? [best] : [], snapshot.nextLotNo)
+    }
+    return best
+  }, [lotSnapshots])
+  // 다음 신규 물류번호 — 공용 nextLotNo(전역 C 순번) 규칙. 번호를 건너뛰면 서버가 422 로 막는다.
+  const suggestedLot = useMemo(() => resolveInboundNextLot(knownLots, serverNextLot), [knownLots, serverNextLot])
+  const lotContext = useMemo(() => ({ knownLots, nextLot: suggestedLot }), [knownLots, suggestedLot])
   const recentLots = useMemo(() => lotChoices.slice(0, RECENT_LOT_LIMIT), [lotChoices])
   const latestLot = lotChoices[0] ?? null
-  const storageChoices = useMemo(() => buildStorageChoices(movements), [movements])
+  const storageChoices = INBOUND_STORAGE_CHOICES
   const importerChoices = useMemo(() => buildImporterChoices(movements), [movements])
   const lastPrices = useMemo(() => lastUnitPriceByProduct(movements), [movements])
   const itemNames = useMemo(() => items.map((item) => item.name), [items])
@@ -274,9 +322,13 @@ function InboundSheetPanel({
   const [importer, setImporter] = useState(boot.importer)
   const [importerInputOpen, setImporterInputOpen] = useState(false)
   const [defaultStorage, setDefaultStorage] = useState(boot.storage)
-  const [storageInputOpen, setStorageInputOpen] = useState(false)
+  const [isFree, setIsFree] = useState<boolean | null>(null)
+  const [delivery, setDelivery] = useState<"storage" | "direct">("storage")
+  const [directCustomer, setDirectCustomer] = useState<{ id: string; name: string } | null>(null)
+  const [directOutboundType, setDirectOutboundType] = useState<HardwareOutboundType>("sales")
   const [rows, setRows] = useState<InboundDraftRow[]>(boot.rows)
   const [serialOpenKeys, setSerialOpenKeys] = useState<ReadonlySet<string>>(() => new Set())
+  const [memoOpenKeys, setMemoOpenKeys] = useState<ReadonlySet<string>>(() => new Set())
   const [pickerOpen, setPickerOpen] = useState(false)
   const [pickerQuery, setPickerQuery] = useState("")
   const [pickerActive, setPickerActive] = useState(0)
@@ -291,29 +343,63 @@ function InboundSheetPanel({
   const [notice, setNotice] = useState<string | null>(null)
   const [doneBanner, setDoneBanner] = useState<{ lot: string; lines: number; units: number; sampleError: string | null } | null>(null)
 
-  // 추천 번호가 없으면(영문+숫자 물량 이력 없음) 직접 입력으로 시작한다.
-  const effectiveLotMode: LotMode = lotMode === "new" && !suggestedLot ? "custom" : lotMode
-  const lot = effectiveLotMode === "new" ? suggestedLot ?? "" : effectiveLotMode === "existing" ? existingLot : customLot.trim()
+  const effectiveLotMode: LotMode = lotMode
+  const rawLot = effectiveLotMode === "new" ? suggestedLot : effectiveLotMode === "existing" ? existingLot : customLot.trim()
+  const lotCheck = useMemo(() => checkInboundLot(rawLot, lotContext), [lotContext, rawLot])
+  // 전송·표시용 정본 표기 — 기존 번호면 그 표기, 새 번호면 대문자 C 번호.
+  const lot = lotCheck.ok ? lotCheck.lot : rawLot
   const matchedLot = useMemo(() => {
-    const key = lot.toUpperCase()
-    return key ? [...lotChoices, ...savedLots].find((choice) => choice.lot.toUpperCase() === key) ?? null : null
+    const key = lot.replace(/\s+/g, "").toUpperCase()
+    return key ? [...lotChoices, ...savedLots].find((choice) => choice.lot.replace(/\s+/g, "").toUpperCase() === key) ?? null : null
   }, [lot, lotChoices, savedLots])
 
   const draft = useMemo<InboundDraft>(
-    () => ({ lot, occurredAt, importer, defaultStorage, owner: owner ?? "", rows }),
-    [defaultStorage, importer, lot, occurredAt, owner, rows]
+    () => ({
+      lot,
+      occurredAt,
+      importer,
+      defaultStorage,
+      isFree,
+      delivery,
+      directCustomer,
+      directOutboundType,
+      owner: owner ?? "",
+      rows,
+    }),
+    [defaultStorage, delivery, directCustomer, directOutboundType, importer, isFree, lot, occurredAt, owner, rows]
   )
-  const validation = useMemo(() => validateInboundDraft(draft), [draft])
+  const validation = useMemo(() => validateInboundDraft(draft, lotContext), [draft, lotContext])
+  const needsLot = inboundDraftNeedsLot(draft) || rows.every((row) => !row.quantity.trim())
+
+  // 표에 있는 물류번호 관리 품목마다 한 번씩 물류번호를 받아 온다. 실패하면 대시보드 이력만으로 판정한다.
+  const lotItemIdsKey = rows
+    .filter((row) => row.itemId && row.lotTracked)
+    .map((row) => row.itemId as string)
+    .sort()
+    .join(",")
+  useEffect(() => {
+    if (blockedByRole) return
+    for (const itemId of lotItemIdsKey ? lotItemIdsKey.split(",") : []) {
+      if (requestedLotItemsRef.current.has(itemId)) continue
+      requestedLotItemsRef.current.add(itemId)
+      fetchHardwareLots(adminFetchJson, itemId)
+        .then((snapshot) => setLotSnapshots((current) => ({ ...current, [itemId]: snapshot })))
+        .catch(() => {
+          // 엔드포인트가 아직 없거나 실패 — 이력만으로 판정하고 강제는 서버(422)가 한다.
+        })
+    }
+  }, [blockedByRole, lotItemIdsKey])
 
   // ---- 작성 중 입력 보관 ----
   // 수량을 적은 줄이 하나라도 있으면 "쓰던 중"으로 본다. 빈 표는 저장하지도, 보관된 초안을 지우지도
   // 않는다 — 시트를 열자마자 빈 상태가 전날 초안을 덮어쓰면 복구할 것이 사라진다.
-  const draftHasContent = rows.some((row) => row.quantity.trim() !== "") && Boolean(lot.trim())
+  const draftHasContent = rows.some((row) => row.quantity.trim() !== "")
   const [restorable, setRestorable] = useState(() => {
     const saved = readStoredDraft<InboundDraft>(INBOUND_DRAFT_KEY, INBOUND_DRAFT_VERSION)
     if (!saved || !Array.isArray(saved.rows)) return null
     const filled = saved.rows.filter((row) => typeof row?.quantity === "string" && row.quantity.trim() !== "")
     if (filled.length === 0) return null
+    // 입고만 저장된 직배송 줄(inboundSaved)은 그 표시를 그대로 되살린다 — 지우면 다시 저장할 때 입고가 두 번 잡힌다.
     return { ...saved, rows: saved.rows }
   })
 
@@ -329,9 +415,13 @@ function InboundSheetPanel({
     setOccurredAt(restorable.occurredAt)
     setImporter(restorable.importer)
     setDefaultStorage(restorable.defaultStorage)
+    setIsFree(restorable.isFree ?? null)
+    setDelivery(restorable.delivery === "direct" ? "direct" : "storage")
+    setDirectCustomer(restorable.directCustomer ?? null)
+    setDirectOutboundType(restorable.directOutboundType ?? "sales")
     setRows(restorable.rows)
     setRestorable(null)
-    setNotice(`작성 중이던 ${restorable.lot} 입고표를 되살렸습니다. 수량을 확인하고 저장하세요.`)
+    setNotice(`작성 중이던 ${restorable.lot ? `${restorable.lot} ` : ""}입고표를 되살렸습니다. 수량을 확인하고 저장하세요.`)
   }
 
   const discardRestorable = () => {
@@ -354,19 +444,25 @@ function InboundSheetPanel({
     const main = visible.filter((item) => inboundPickerGroup(item.name) === "main").sort(byFeaturedThenName)
     const promoEtc = visible.filter((item) => inboundPickerGroup(item.name) === "promoEtc").sort(byFeaturedThenName)
     const showPromo = Boolean(query) || promoOpen
-    const newName = query && !exact ? normalizeInboundProductName(query) : null
+    // 목록에 없는 이름은 품목으로 만들지 않는다 — 안내만 한다(정의서: 품목은 목록에서 선택).
+    const unlistedName = query && !exact && visible.length === 0 ? normalizeInboundProductName(query) : null
     const options: PickerOption[] = [
       ...main.map((item) => ({ kind: "item" as const, item })),
       ...(showPromo ? promoEtc.map((item) => ({ kind: "item" as const, item })) : []),
-      ...(newName ? [{ kind: "new" as const, name: newName }] : []),
     ]
-    return { query, main, promoEtc, showPromo, newName, options }
+    return { query, main, promoEtc, showPromo, unlistedName, options }
   }, [activeItems, items, pickerQuery, promoOpen])
   const activeOptionIndex = Math.min(pickerActive, Math.max(0, pickerModel.options.length - 1))
 
   const dirty =
     pasteText.trim() !== "" ||
-    rows.some((row) => row.quantity.trim() !== "" || row.serials.trim() !== "" || (!row.unitPriceSuggested && row.unitPrice.trim() !== ""))
+    rows.some(
+      (row) =>
+        row.quantity.trim() !== "" ||
+        row.serials.trim() !== "" ||
+        row.memo.trim() !== "" ||
+        (!row.unitPriceSuggested && row.unitPrice.trim() !== "")
+    )
 
   const requestClose = useCallback(() => {
     if (saving) return
@@ -433,6 +529,16 @@ function InboundSheetPanel({
     clearServerRowError(key)
   }
 
+  const openMemo = (key: string, open: boolean) => {
+    setMemoOpenKeys((current) => {
+      if (current.has(key) === open) return current
+      const next = new Set(current)
+      if (open) next.add(key)
+      else next.delete(key)
+      return next
+    })
+  }
+
   const openSerial = (key: string, open: boolean) => {
     setSerialOpenKeys((current) => {
       if (current.has(key) === open) return current
@@ -459,16 +565,12 @@ function InboundSheetPanel({
   }
 
   const addProduct = (option: PickerOption) => {
-    const item = option.kind === "item" ? option.item : findInboundItem(items, option.name)
-    const productName = item?.name ?? (option.kind === "new" ? option.name : "")
-    if (!productName) return
-    const matchKey = inboundProductMatchKey(productName)
-    const emptyRow = rows.find(
-      (row) => !row.quantity.trim() && (item ? row.itemId === item.id : inboundProductMatchKey(row.productName) === matchKey)
-    )
+    const item = option.item
+    const productName = item.name
+    const emptyRow = rows.find((row) => !row.quantity.trim() && row.itemId === item.id)
     let focusKey = emptyRow?.key
     if (!focusKey) {
-      const created = createInboundRow({ key: nextRowKey(), itemId: item?.id, productName, lastPrices })
+      const created = createInboundRow({ key: nextRowKey(), itemId: item.id, productName, lotTracked: isLotTrackedItem(item), lastPrices })
       setRows((current) => [...current, created])
       focusKey = created.key
     }
@@ -564,7 +666,7 @@ function InboundSheetPanel({
 
   const focusFirstInvalidRow = () => {
     const invalid = rows.find((row) => validation.rowErrors[row.key])
-    if (!invalid) return
+    if (!invalid || !invalid.itemId) return
     if (parseInboundQuantity(invalid.quantity) == null) focusField(invalid.key, "qty")
     else if (invalid.unitPrice.trim() && parseInboundPrice(invalid.unitPrice) == null) focusField(invalid.key, "price")
     else openSerial(invalid.key, true)
@@ -583,6 +685,10 @@ function InboundSheetPanel({
 
     const submission = buildInboundSubmission(draft)
     const lotValue = draft.lot.trim()
+    if (submission.movements.length === 0) {
+      setError("저장할 줄이 없습니다.")
+      return
+    }
     setSaving(true)
     try {
       const response = await adminFetch("/api/admin/hardware/movements", {
@@ -597,9 +703,22 @@ function InboundSheetPanel({
 
       const outcome = resolveInboundSaveOutcome(submission, result.lineResults)
       const failedKeys = new Set(Object.keys(outcome.failedErrors))
+      // 입고만 저장된 직배송 줄 — 다시 저장할 때 출고 줄만 보낸다(입고가 두 번 잡히지 않게).
+      const inboundOnly = new Set(outcome.inboundOnlyRowKeys)
+      if (inboundOnly.size > 0) {
+        setRows((current) => current.map((row) => (inboundOnly.has(row.key) ? { ...row, inboundSaved: true } : row)))
+      }
       if (outcome.savedLines.length === 0) {
         setServerRowErrors(outcome.failedErrors)
-        setError("저장된 줄이 없습니다. 줄마다 표시된 오류를 고친 뒤 다시 저장하세요.")
+        setError(
+          outcome.savedUnits > 0
+            ? `입고 ${formatNumber(outcome.savedUnits)}대는 저장했고 직배송 출고가 실패했습니다. 오류를 확인하고 다시 저장하면 출고만 보냅니다.`
+            : "저장된 줄이 없습니다. 줄마다 표시된 오류를 고친 뒤 다시 저장하세요."
+        )
+        if (outcome.savedUnits > 0) {
+          setLotMode("custom")
+          setCustomLot(lotValue)
+        }
         return
       }
 
@@ -613,10 +732,12 @@ function InboundSheetPanel({
 
       // 저장된 줄은 원장에 있다 — 보관 초안은 여기서 지운다(부분 실패면 남은 줄이 다시 보관된다).
       clearStoredDraft(INBOUND_DRAFT_KEY)
-      setSavedLots((current) => [
-        ...current,
-        { lot: lotValue, firstDate: draft.occurredAt, lastDate: draft.occurredAt, totalQuantity: outcome.savedUnits, productCount: outcome.savedLines.length },
-      ])
+      if (lotValue && inboundDraftNeedsLot(draft)) {
+        setSavedLots((current) => [
+          ...current,
+          { lot: lotValue, firstDate: draft.occurredAt, lastDate: draft.occurredAt, totalQuantity: outcome.savedUnits, productCount: outcome.savedLines.length },
+        ])
+      }
       onSaved({
         lot: lotValue,
         savedLines: outcome.savedLines.length,
@@ -636,6 +757,7 @@ function InboundSheetPanel({
         // 입고는 전부 저장됐고 샘플 등록만 실패 — 입력을 새로 시작하되 실패 문구를 남긴다.
         setRows(buildFeaturedInboundRows(items, { activeItemIds, lastPrices }))
         setSerialOpenKeys(new Set())
+        setMemoOpenKeys(new Set())
         setServerRowErrors({})
         setAttempted(false)
         setLotMode("new")
@@ -695,14 +817,16 @@ function InboundSheetPanel({
   const dateCustomActive = datePickerOpen || (occurredAt !== today && occurredAt !== yesterday)
   const importerMatches = importerChoices.some((choice) => compactText(choice) === compactText(importer))
   const importerCustomActive = importerInputOpen || (importer.trim() !== "" && !importerMatches)
-  const storageMatches = storageChoices.some((choice) => compactText(choice) === compactText(defaultStorage))
-  const storageCustomActive = storageInputOpen || (defaultStorage.trim() !== "" && !storageMatches)
-  const storageMissing = attempted && !defaultStorage.trim() && rows.some((row) => row.quantity.trim() !== "" && !row.storage.trim())
-  const lotStatus = !lot
-    ? "물량번호를 고르거나 입력하세요."
-    : matchedLot
-      ? `기존 물량 ${lot}에 추가 입고합니다 · 지금 ${formatNumber(matchedLot.totalQuantity)}대 · ${formatNumber(matchedLot.productCount)}개 품목`
-      : `새 물량번호 ${lot} · 이 번호로 새로 입고합니다.`
+  const direct = delivery === "direct"
+  const storageMissing = attempted && !direct && !defaultStorage.trim() && rows.some((row) => row.quantity.trim() !== "" && !row.storage.trim())
+  const freeMissing = attempted && isFree == null && rows.some((row) => row.quantity.trim() !== "" && row.isFree == null)
+  const lotStatus = !lotCheck.ok
+    ? lotCheck.error
+    : lotCheck.kind === "existing"
+      ? `기존 물류번호 ${lot}에 추가 입고합니다${
+          matchedLot ? ` · 지금 ${formatNumber(matchedLot.totalQuantity)}대 · ${formatNumber(matchedLot.productCount)}개 품목` : ""
+        }`
+      : `새 물류번호 ${lot} · 다음 순번으로 새로 입고합니다.`
   const summaryParts =
     summary.lineCount === 0
       ? []
@@ -712,21 +836,15 @@ function InboundSheetPanel({
           ...(summary.pricedLines > 0 ? [formatUsd(summary.totalUsd)] : []),
           ...(summary.officeUnits > 0 ? [`사무실 ${formatNumber(summary.officeUnits)}대`] : []),
         ]
-  const storageOptionsFor = (row: InboundDraftRow) => {
-    const options = [...storageChoices]
-    for (const extra of [defaultStorage.trim(), row.storage.trim()]) {
-      if (extra && !options.some((option) => compactText(option) === compactText(extra))) options.push(extra)
-    }
-    return options
-  }
 
   const renderPickerOption = (option: PickerOption, optionIndex: number) => {
     const highlighted = optionIndex === activeOptionIndex
-    const inTable = option.kind === "item" && rows.some((row) => row.itemId === option.item.id)
-    const price = option.kind === "item" ? lookupLastUnitPrice(lastPrices, option.item.name) : null
+    const inTable = rows.some((row) => row.itemId === option.item.id)
+    const price = lookupLastUnitPrice(lastPrices, option.item.name)
+    const lotLess = !isLotTrackedItem(option.item)
     return (
       <div
-        key={option.kind === "item" ? option.item.id : `new:${option.name}`}
+        key={option.item.id}
         id={`${pickerListId}-option-${optionIndex}`}
         role="option"
         aria-selected={highlighted}
@@ -738,24 +856,15 @@ function InboundSheetPanel({
           highlighted ? "border-[#084734] bg-[#F6F5F4] text-[#111110]" : "border-transparent text-[#31302E]"
         }`}
       >
-        {option.kind === "item" ? (
-          <>
-            <span className="min-w-0 truncate font-semibold">{option.item.name}</span>
-            <span className="shrink-0 text-[11px] tabular-nums text-[#A39E98]">
-              {inTable ? "표에 있음" : price != null ? `최근 ${formatUsd(price)}` : ""}
-            </span>
-          </>
-        ) : (
-          <span className="min-w-0 truncate">
-            새 품목으로 추가 <span className="font-semibold text-[#111110]">“{option.name}”</span>
-          </span>
-        )}
+        <span className="min-w-0 truncate font-semibold">{option.item.name}</span>
+        <span className="shrink-0 text-[11px] tabular-nums text-[#A39E98]">
+          {[lotLess ? "수량만" : null, inTable ? "표에 있음" : price != null ? `최근 ${formatUsd(price)}` : null].filter(Boolean).join(" · ")}
+        </span>
       </div>
     )
   }
 
   const promoStartIndex = pickerModel.main.length
-  const newOptionIndex = pickerModel.options.length - 1
 
   return (
     <motion.div
@@ -788,7 +897,7 @@ function InboundSheetPanel({
             <h2 id={titleId} className="mt-1 text-[17px] font-bold tracking-[-0.01em] text-[#111110]">
               입고 등록
             </h2>
-            <p className="mt-0.5 text-[12px] text-[#615D59]">물량번호 하나로 들어온 품목의 수량·단가·보관처를 한 번에 기록합니다.</p>
+            <p className="mt-0.5 text-[12px] text-[#615D59]">물류번호 하나로 들어온 품목의 수량·단가·보관처·유상/무상을 한 번에 기록합니다.</p>
           </div>
           <button
             type="button"
@@ -801,6 +910,14 @@ function InboundSheetPanel({
         </header>
 
         <div className="min-h-0 flex-1 overflow-y-auto bg-[#FAFAF8]">
+          {blockedByRole ? (
+            <div role="status" className="m-4 border-l-2 border-[#A8741A] bg-white py-3 pl-3 pr-3 sm:m-5">
+              <p className="text-[13px] font-semibold text-[#111110]">입고는 입고관리 권한자만 등록할 수 있습니다.</p>
+              <p className="mt-1 text-[12px] text-[#615D59]">
+                입고 기록이 필요하면 입고관리 권한자에게 요청하거나, 설정 › 팀원에서 입고관리 권한을 받으세요. 재고·물류번호 조회는 그대로 할 수 있습니다.
+              </p>
+            </div>
+          ) : (
           <fieldset disabled={saving} className="m-0 min-w-0 space-y-5 border-0 px-4 py-4 sm:px-5">
             {restorable ? (
               // 조용히 되살리지 않는다 — 어제 쓰다 만 물량번호가 오늘 저장으로 새면 원장이 틀어진다.
@@ -833,15 +950,17 @@ function InboundSheetPanel({
               </div>
             ) : null}
 
-            <FieldSection label="물량번호" labelId={lotLabelId}>
+            <FieldSection
+              label="물류번호"
+              labelId={lotLabelId}
+              hint={needsLot ? "기존 번호에 추가하거나 다음 순번만 새로 씁니다" : "이번 표의 품목은 물류번호 없이 수량만 저장합니다"}
+            >
               <div role="group" aria-labelledby={lotLabelId} className="flex flex-wrap gap-1.5">
-                {suggestedLot ? (
-                  <ChoiceChip active={effectiveLotMode === "new"} onClick={() => setLotMode("new")}>
-                    <Plus className="h-3.5 w-3.5" aria-hidden />
-                    <span className={MONO_META_CLASS}>{suggestedLot}</span>
-                    <span>새 물량</span>
-                  </ChoiceChip>
-                ) : null}
+                <ChoiceChip active={effectiveLotMode === "new"} onClick={() => setLotMode("new")}>
+                  <Plus className="h-3.5 w-3.5" aria-hidden />
+                  <span className={MONO_META_CLASS}>{suggestedLot}</span>
+                  <span>새 물류번호</span>
+                </ChoiceChip>
                 {recentLots.map((choice, choiceIndex) => (
                   <ChoiceChip
                     key={choice.lot}
@@ -860,7 +979,7 @@ function InboundSheetPanel({
                   </ChoiceChip>
                 ))}
                 <ChoiceChip active={effectiveLotMode === "custom"} onClick={() => setLotMode("custom")}>
-                  직접 입력
+                  다른 기존 번호
                 </ChoiceChip>
               </div>
               {effectiveLotMode === "custom" ? (
@@ -869,26 +988,48 @@ function InboundSheetPanel({
                     value={customLot}
                     onChange={(event) => setCustomLot(event.target.value)}
                     list={lotListId}
-                    placeholder={suggestedLot ? `예: ${suggestedLot}` : "예: C3"}
-                    aria-label="물량번호 직접 입력"
+                    placeholder={knownLots[0] ? `예: ${knownLots[0]}` : `예: ${suggestedLot}`}
+                    aria-label="기존 물류번호 입력"
+                    aria-invalid={!lotCheck.ok && customLot.trim() !== "" ? true : undefined}
                     autoComplete="off"
                     autoCapitalize="characters"
                     spellCheck={false}
                     className={`${INPUT_CLASS} max-w-[240px] ${MONO_META_CLASS}`}
                   />
                   <datalist id={lotListId}>
-                    {lotChoices.map((choice) => (
-                      <option key={choice.lot} value={choice.lot} />
+                    {knownLots.map((known) => (
+                      <option key={known} value={known} />
                     ))}
                   </datalist>
                 </>
               ) : null}
-              <p className={`border-l-2 pl-2.5 text-[12px] ${lot ? "border-[#084734] text-[#31302E]" : "border-[rgba(0,0,0,0.12)] text-[#615D59]"}`}>
-                {lotStatus}
-              </p>
-              {lotStaleNote && !matchedLot ? (
+              {needsLot ? (
+                <p
+                  className={`border-l-2 pl-2.5 text-[12px] ${
+                    lotCheck.ok ? "border-[#084734] text-[#31302E]" : attempted ? "border-[#B43E3E] font-semibold text-[#8F2C2C]" : "border-[rgba(0,0,0,0.12)] text-[#615D59]"
+                  }`}
+                >
+                  {lotStatus}
+                </p>
+              ) : null}
+              {lotStaleNote && !matchedLot && needsLot ? (
                 <p className="border-l-2 border-[#A8741A] pl-2.5 text-[12px] text-[#7A520F]">{lotStaleNote}</p>
               ) : null}
+            </FieldSection>
+
+            <FieldSection
+              label="유상 · 무상"
+              labelId={freeLabelId}
+              hint={freeMissing ? <span className="font-semibold text-[#B43E3E]">유상·무상을 골라 주세요</span> : "필수 · 줄마다 바꿀 수 있어요"}
+            >
+              <div role="group" aria-labelledby={freeLabelId} className="flex flex-wrap gap-1.5">
+                <ChoiceChip active={isFree === false} onClick={() => setIsFree(false)}>
+                  유상
+                </ChoiceChip>
+                <ChoiceChip active={isFree === true} onClick={() => setIsFree(true)}>
+                  무상
+                </ChoiceChip>
+              </div>
             </FieldSection>
 
             <FieldSection label="입고일" labelId={dateLabelId}>
@@ -963,42 +1104,60 @@ function InboundSheetPanel({
             </FieldSection>
 
             <FieldSection
-              label="기본 보관처"
+              label={direct ? "고객사 직배송" : "기본 보관처"}
               labelId={storageLabelId}
-              hint={storageMissing ? <span className="font-semibold text-[#B43E3E]">보관처를 골라 주세요</span> : "행마다 바꿀 수 있어요"}
+              hint={
+                storageMissing ? (
+                  <span className="font-semibold text-[#B43E3E]">보관처를 골라 주세요</span>
+                ) : direct ? (
+                  "입고와 설치 완료 출고를 함께 기록 · 창고 재고는 그대로"
+                ) : (
+                  "행마다 바꿀 수 있어요"
+                )
+              }
             >
               <div role="group" aria-labelledby={storageLabelId} className="flex flex-wrap gap-1.5">
                 {storageChoices.map((choice) => (
                   <ChoiceChip
                     key={choice}
-                    active={!storageCustomActive && compactText(defaultStorage) === compactText(choice)}
+                    active={!direct && compactText(defaultStorage) === compactText(choice)}
                     onClick={() => {
+                      setDelivery("storage")
                       setDefaultStorage(choice)
-                      setStorageInputOpen(false)
                     }}
                   >
                     {choice}
                   </ChoiceChip>
                 ))}
-                <ChoiceChip
-                  active={storageCustomActive}
-                  onClick={() => {
-                    if (storageMatches) setDefaultStorage("")
-                    setStorageInputOpen(true)
-                  }}
-                >
-                  직접 입력
+                <ChoiceChip active={direct} onClick={() => setDelivery("direct")}>
+                  {CUSTOMER_STORAGE_LABEL.replace("직송", "직배송")}
                 </ChoiceChip>
               </div>
-              {storageCustomActive ? (
-                <input
-                  value={defaultStorage}
-                  onChange={(event) => setDefaultStorage(event.target.value)}
-                  placeholder="보관처 이름"
-                  aria-label="기본 보관처 직접 입력"
-                  autoComplete="off"
-                  className={`${INPUT_CLASS} max-w-[280px]`}
-                />
+              {direct ? (
+                <div className="space-y-2.5 rounded-lg border border-[rgba(0,0,0,0.08)] bg-white p-3">
+                  <div className="space-y-1.5">
+                    <p className="text-[12px] font-semibold text-[#615D59]">받는 고객사 (CRM)</p>
+                    <CrmCustomerSearchField
+                      value={directCustomer}
+                      onChange={setDirectCustomer}
+                      disabled={saving}
+                      invalid={attempted && !directCustomer}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <p className="text-[12px] font-semibold text-[#615D59]">출고 유형</p>
+                    <div role="group" aria-label="직배송 출고 유형" className="flex flex-wrap gap-1.5">
+                      {DIRECT_SHIP_OUTBOUND_TYPES.map((type) => (
+                        <ChoiceChip key={type} active={directOutboundType === type} onClick={() => setDirectOutboundType(type)}>
+                          {HARDWARE_OUTBOUND_TYPE_LABELS[type]}
+                        </ChoiceChip>
+                      ))}
+                    </div>
+                  </div>
+                  <p className="text-[11.5px] text-[#615D59]">
+                    저장하면 줄마다 ‘{CUSTOMER_STORAGE_LABEL}’ 입고와 같은 날짜·같은 물류번호의 설치 완료 출고가 함께 기록됩니다.
+                  </p>
+                </div>
               ) : null}
             </FieldSection>
 
@@ -1116,17 +1275,34 @@ function InboundSheetPanel({
                     const rowError = serverRowErrors[row.key] ?? validation.rowErrors[row.key] ?? null
                     const rowWarning = validation.rowWarnings[row.key] ?? null
                     const active = row.quantity.trim() !== ""
-                    const office = active && isOfficeStorage(effectiveInboundStorage(row, defaultStorage))
+                    const office = active && !direct && isOfficeStorage(effectiveInboundStorage(row, defaultStorage))
                     const serialCount = splitInboundSerials(row.serials).length
                     const serialOpen = serialOpenKeys.has(row.key)
+                    const memoOpen = memoOpenKeys.has(row.key) || row.memo.trim() !== ""
                     const messageId = `${rowMessageIdPrefix}-${index}`
-                    const newProductTag = !row.itemId && !active
-                    // 시리얼·삭제 — 넓은 화면은 품목 이름 아래, 휴대폰은 보관처 옆에 둔다(44px 버튼 줄 하나를 아낀다).
+                    const unlisted = !row.itemId
+                    const rowFree = effectiveInboundIsFree(row, draft)
+                    // 시리얼·메모·삭제 — 넓은 화면은 품목 이름 아래, 휴대폰은 보관처 옆에 둔다(44px 버튼 줄 하나를 아낀다).
                     const rowActions = (
                       <>
                         <button type="button" onClick={() => openSerial(row.key, !serialOpen)} aria-expanded={serialOpen} className={ROW_TEXT_BUTTON_CLASS}>
                           시리얼{serialCount > 0 ? <span className="tabular-nums"> {formatNumber(serialCount)}</span> : null}
                         </button>
+                        <button type="button" onClick={() => openMemo(row.key, !memoOpen)} aria-expanded={memoOpen} className={ROW_TEXT_BUTTON_CLASS}>
+                          메모{row.memo.trim() ? " ✓" : ""}
+                        </button>
+                        <select
+                          value={row.isFree == null ? "" : row.isFree ? "free" : "paid"}
+                          onChange={(event) =>
+                            updateRow(row.key, { isFree: event.target.value === "" ? null : event.target.value === "free" })
+                          }
+                          aria-label={`${row.productName} 유상·무상`}
+                          className="h-7 cursor-pointer rounded border border-transparent bg-transparent px-1 text-[11px] font-semibold text-[#615D59] hover:border-[rgba(0,0,0,0.08)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40"
+                        >
+                          <option value="">{isFree == null ? "유상·무상: 표 따름" : `표 따름(${isFree ? "무상" : "유상"})`}</option>
+                          <option value="paid">유상</option>
+                          <option value="free">무상</option>
+                        </select>
                         {!row.pinned ? (
                           <button
                             type="button"
@@ -1155,9 +1331,16 @@ function InboundSheetPanel({
                                 {amount != null ? formatUsd(amount) : "—"}
                               </span>
                             </div>
-                            <div className={`mt-0.5 flex-wrap items-center gap-x-1.5 text-[11px] ${newProductTag || office ? "flex" : "hidden sm:flex"}`}>
-                              {newProductTag ? <span className="font-semibold text-[#A8741A]">새 품목</span> : null}
+                            <div
+                              className={`mt-0.5 flex-wrap items-center gap-x-1.5 text-[11px] ${
+                                unlisted || office || !row.lotTracked || row.inboundSaved || (active && rowFree) ? "flex" : "hidden sm:flex"
+                              }`}
+                            >
+                              {unlisted ? <span className="font-semibold text-[#B43E3E]">목록에 없는 품목</span> : null}
+                              {!row.lotTracked ? <span className="font-semibold text-[#615D59]">수량만 · 물류번호 없음</span> : null}
+                              {active && rowFree ? <span className="font-semibold text-[#615D59]">무상</span> : null}
                               {office ? <span className="font-semibold text-[#615D59]">사무실 보관</span> : null}
+                              {row.inboundSaved ? <span className="font-semibold text-[#A8741A]">입고 저장됨 · 출고 대기</span> : null}
                               <span className="hidden items-center gap-x-1.5 sm:inline-flex">{rowActions}</span>
                             </div>
                           </div>
@@ -1202,22 +1385,29 @@ function InboundSheetPanel({
                             {amount != null ? formatUsd(amount) : "—"}
                           </span>
                           <div className="col-span-2 flex min-w-0 items-end gap-1 sm:col-span-1 sm:block">
-                            <label className="block min-w-0 flex-1">
-                              <span className="mb-1 block text-[11px] font-semibold text-[#615D59] sm:hidden">보관처</span>
-                              <select
-                                value={row.storage}
-                                onChange={(event) => updateRow(row.key, { storage: event.target.value })}
-                                aria-label={`${row.productName} 보관처`}
-                                className={`${INPUT_BASE_CLASS} truncate pr-7 ${row.storage ? "font-semibold text-[#111110]" : "text-[#615D59]"}`}
-                              >
-                                <option value="">{defaultStorage.trim() ? `기본 · ${defaultStorage.trim()}` : "기본 보관처"}</option>
-                                {storageOptionsFor(row).map((option) => (
-                                  <option key={option} value={option}>
-                                    {option}
-                                  </option>
-                                ))}
-                              </select>
-                            </label>
+                            {direct ? (
+                              <p className="min-w-0 flex-1 truncate text-[12px] font-semibold text-[#615D59]">
+                                <span className="mb-1 block text-[11px] sm:hidden">보관처</span>
+                                {CUSTOMER_STORAGE_LABEL} → {directCustomer?.name ?? "고객사 선택"}
+                              </p>
+                            ) : (
+                              <label className="block min-w-0 flex-1">
+                                <span className="mb-1 block text-[11px] font-semibold text-[#615D59] sm:hidden">보관처</span>
+                                <select
+                                  value={row.storage}
+                                  onChange={(event) => updateRow(row.key, { storage: event.target.value })}
+                                  aria-label={`${row.productName} 보관처`}
+                                  className={`${INPUT_BASE_CLASS} truncate pr-7 ${row.storage ? "font-semibold text-[#111110]" : "text-[#615D59]"}`}
+                                >
+                                  <option value="">{defaultStorage.trim() ? `기본 · ${defaultStorage.trim()}` : "기본 보관처"}</option>
+                                  {storageChoices.map((option) => (
+                                    <option key={option} value={option}>
+                                      {option}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                            )}
                             <div className="flex shrink-0 items-center sm:hidden">{rowActions}</div>
                           </div>
                         </div>
@@ -1229,6 +1419,18 @@ function InboundSheetPanel({
                           <p id={messageId} className="mt-1.5 text-[11.5px] font-medium text-[#A8741A]">
                             {rowWarning}
                           </p>
+                        ) : null}
+                        {memoOpen ? (
+                          <label className="mt-2 block">
+                            <span className="text-[11px] font-semibold text-[#615D59]">메모{direct ? " · 입고·출고 두 줄에 같이 남습니다" : ""}</span>
+                            <input
+                              value={row.memo}
+                              onChange={(event) => updateRow(row.key, { memo: event.target.value })}
+                              aria-label={`${row.productName} 메모`}
+                              autoComplete="off"
+                              className={`mt-1 ${INPUT_CLASS}`}
+                            />
+                          </label>
                         ) : null}
                         {serialOpen ? (
                           <label className="mt-2 block">
@@ -1273,14 +1475,18 @@ function InboundSheetPanel({
                           setPickerActive(0)
                         }}
                         onKeyDown={onPickerKeyDown}
-                        placeholder="품목 검색 · 목록에 없으면 새 품목 이름"
+                        placeholder="품목 검색"
                         autoComplete="off"
                         className={`${INPUT_CLASS} pl-8`}
                       />
                     </div>
                     <div id={pickerListId} role="listbox" aria-label="추가할 품목" className="max-h-64 overflow-y-auto rounded-md border border-[rgba(0,0,0,0.08)] bg-white">
                       {pickerModel.options.length === 0 ? (
-                        <p className="px-3 py-3 text-[12px] text-[#615D59]">추가할 수 있는 품목이 없습니다.</p>
+                        <p className="px-3 py-3 text-[12px] text-[#615D59]">
+                          {pickerModel.unlistedName
+                            ? `“${pickerModel.unlistedName}”은(는) 품목 목록에 없습니다. 입고는 목록의 품목만 받습니다 — 새 품목은 입고관리 권한자가 품목을 먼저 등록해야 합니다.`
+                            : "추가할 수 있는 품목이 없습니다."}
+                        </p>
                       ) : null}
                       {pickerModel.main.length > 0 ? (
                         <div role="group" aria-label="주요 품목">
@@ -1298,7 +1504,6 @@ function InboundSheetPanel({
                           {pickerModel.promoEtc.map((item, itemIndex) => renderPickerOption({ kind: "item", item }, promoStartIndex + itemIndex))}
                         </div>
                       ) : null}
-                      {pickerModel.newName ? renderPickerOption({ kind: "new", name: pickerModel.newName }, newOptionIndex) : null}
                     </div>
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       {!pickerModel.query && pickerModel.promoEtc.length > 0 ? (
@@ -1323,6 +1528,7 @@ function InboundSheetPanel({
               </div>
             </section>
           </fieldset>
+          )}
         </div>
 
         <footer
@@ -1373,13 +1579,17 @@ function InboundSheetPanel({
                 className={`${PRIMARY_BUTTON_CLASS} max-sm:w-full`}
               >
                 <ArrowDownToLine className="h-4 w-4" aria-hidden />
-                {saving ? "저장 중…" : `${lot ? `${lot} ` : ""}입고 저장`}
+                {saving ? "저장 중…" : `${needsLot && lotCheck.ok ? `${lot} ` : ""}${direct ? "직배송 " : ""}입고 저장`}
                 <span aria-hidden className="hidden text-[11px] font-semibold text-white/70 md:inline">
                   ⌘/Ctrl ↵
                 </span>
               </button>
             ) : (
-              <p className="text-[12px] font-semibold text-[#A8741A]">입고 저장 권한이 없습니다. 하드웨어 편집 권한이 있는 관리자에게 요청하세요.</p>
+              <p className="text-[12px] font-semibold text-[#A8741A]">
+                {blockedByRole
+                  ? "입고는 입고관리 권한자만 등록합니다. 설정 › 팀원에서 입고관리 권한을 받으세요."
+                  : "입고 저장 권한이 없습니다. 하드웨어 편집 권한이 있는 관리자에게 요청하세요."}
+              </p>
             )}
           </div>
         </footer>

@@ -117,23 +117,27 @@ async function fetchKakaoProfile(accessToken: string): Promise<KakaoProfile> {
 async function ensureKakaoUser(profile: KakaoProfile) {
   const admin = createSupabaseAdminClient()
   const providerId = profile.id
-  const email = profile.email || `kakao_${providerId}@kakao.invalid`
+  // An unverified provider email must never resolve a different Supabase account.
+  const email = profile.emailVerified && profile.email
+    ? profile.email
+    : `kakao_${providerId}@kakao.invalid`
   const name = profile.nickname || "Kakao User"
 
-  const { data: existingProfile } = await admin
+  const { data: existingProfile, error: profileError } = await admin
     .from("user_profiles")
     .select("id")
     .eq("provider", "kakao")
     .eq("provider_id", providerId)
     .maybeSingle()
 
+  if (profileError) throw profileError
   if (existingProfile?.id) {
     return { email, userId: existingProfile.id as string }
   }
 
   const { data: created, error: createError } = await admin.auth.admin.createUser({
     email,
-    email_confirm: profile.emailVerified,
+    email_confirm: profile.emailVerified || email.endsWith("@kakao.invalid"),
     user_metadata: {
       provider: "kakao",
       provider_id: providerId,
@@ -222,13 +226,16 @@ export async function GET(req: NextRequest) {
     if (!profile.id) {
       return redirectWithError(req, "kakao_email")
     }
-    const { email } = await ensureKakaoUser(profile)
+    const { email, userId } = await ensureKakaoUser(profile)
     const user = (await issueSupabaseSession(
       req,
       email,
-      profile.emailVerified,
+      profile.emailVerified || email.endsWith("@kakao.invalid"),
       response,
     )) as User
+    // A provider already linked to one account may not silently switch accounts
+    // when Kakao changes the supplied email or its verification status.
+    if (userId && user.id !== userId) throw new Error("Kakao account identity mismatch")
     const publicProfile = await upsertPublicUserProfile(user)
     await stitchIdentity({
       anonymousId: req.cookies.get(ANONYMOUS_ID_COOKIE)?.value ?? null,

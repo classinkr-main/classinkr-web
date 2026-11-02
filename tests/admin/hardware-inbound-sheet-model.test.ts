@@ -11,15 +11,18 @@ import {
   buildInboundSubmission,
   buildSampleRegisterPayloads,
   buildStorageChoices,
+  checkInboundLot,
   createInboundRow,
   DEFAULT_IMPORTER_CHOICES,
-  DEFAULT_STORAGE_CHOICES,
+  INBOUND_STORAGE_CHOICES,
+  INBOUND_UNLISTED_PRODUCT_MESSAGE,
   findInboundItem,
   formatMonthDay,
   inboundGridKeyIntent,
   inboundMovementDateKey,
   inboundMovementLot,
   inboundPickerGroup,
+  inboundDraftNeedsLot,
   inboundRowAmount,
   inboundStorageKind,
   isOfficeStorage,
@@ -33,15 +36,16 @@ import {
   previousLotComposition,
   recentInboundImporter,
   recentInboundStorage,
+  resolveInboundNextLot,
   resolveInboundSaveOutcome,
   roundUsd,
   shiftDateKey,
-  suggestNextLot,
   summarizeInboundDraft,
   validateInboundDraft,
   type InboundDraft,
   type InboundDraftRow,
   type InboundHistoryMovement,
+  type InboundLotContext,
 } from "@/components/admin/hardware/inventory/inbound-sheet-model"
 import type { HardwareItem } from "@/components/admin/hardware/inventory/shared"
 
@@ -127,6 +131,9 @@ function row(overrides: Partial<InboundDraftRow> & { key: string }): InboundDraf
   return {
     productName: '86" IFP',
     itemId: itemId('86" IFP'),
+    lotTracked: true,
+    isFree: null,
+    memo: "",
     quantity: "",
     unitPrice: "",
     unitPriceSuggested: false,
@@ -143,9 +150,16 @@ function draft(overrides: Partial<InboundDraft> = {}): InboundDraft {
     occurredAt: "2026-09-15",
     importer: "클래스인",
     defaultStorage: "인천 더조은",
+    isFree: false,
     rows: [],
     ...overrides,
   }
+}
+
+// 대시보드 이력의 물류번호 + 다음 신규 번호(전역 C 순번: C1·C2 다음은 C3).
+const LOT_CONTEXT: InboundLotContext = {
+  knownLots: buildInboundLotChoices(HISTORY, 0).map((choice) => choice.lot),
+  nextLot: "C3",
 }
 
 function sequenceKeys(prefix = "k") {
@@ -182,7 +196,7 @@ describe("로컬 날짜 키", () => {
   })
 })
 
-describe("물량번호 후보·추천", () => {
+describe("물류번호 후보·순번", () => {
   it("수기 행은 lot_no, 시트 행은 reference_no 를 물량번호로 읽는다(movementLot 규칙)", () => {
     expect(inboundMovementLot(movement({ lot_no: " C3 ", reference_no: "C1" }))).toBe("C3")
     expect(inboundMovementLot(movement({ reference_no: "C1" }))).toBe("C1")
@@ -210,60 +224,50 @@ describe("물량번호 후보·추천", () => {
     expect(choices).toEqual([{ lot: "C9", firstDate: "2026-07-16", lastDate: "2026-07-16", totalQuantity: 3, productCount: 1 }])
   })
 
-  it("날짜가 가장 최근인 영문+숫자 물량의 번호를 올린다: C2 → C3, H8 → H9", () => {
-    expect(suggestNextLot(buildInboundLotChoices(HISTORY, 0))).toBe("C3")
-    expect(suggestNextLot([{ lot: "H8", firstDate: "2026-03-19", lastDate: "2026-03-19" }])).toBe("H9")
+  it("다음 신규 번호는 공용 nextLotNo(전역 C 순번)다 — H·FY·Sample 번호는 순번에 안 들어간다", () => {
+    expect(resolveInboundNextLot(buildInboundLotChoices(HISTORY, 0).map((choice) => choice.lot))).toBe("C3")
+    expect(resolveInboundNextLot(["H8", "H7(과사람)", "Sample", "FY24-25"])).toBe("C1")
+    expect(resolveInboundNextLot([])).toBe("C1")
   })
 
-  it("H7(과사람)·FY24-25·Sample 은 올리기 기준이 아니다", () => {
-    expect(
-      suggestNextLot([
-        { lot: "Sample", firstDate: "2026-04-30", lastDate: "2026-04-30" },
-        { lot: "H7(과사람)", firstDate: "2025-11-24", lastDate: "2025-11-24" },
-        { lot: "FY24-25", firstDate: null, lastDate: null },
-      ])
-    ).toBeNull()
-    expect(
-      suggestNextLot([
-        { lot: "H7(과사람)", firstDate: "2025-11-24", lastDate: "2025-11-24" },
-        { lot: "H5", firstDate: "2025-08-29", lastDate: "2025-08-29" },
-      ])
-    ).toBe("H6")
+  it("서버(/lots)의 nextLotNo 가 화면 이력보다 앞서 있으면 서버 값을 쓴다(대시보드는 최근 2,000건만 본다)", () => {
+    expect(resolveInboundNextLot(["C1", "C2"], "C5")).toBe("C5")
+    // 화면이 방금 저장한 번호가 더 크면 그쪽을 따른다.
+    expect(resolveInboundNextLot(["C1", "C2", "C3"], "C3")).toBe("C4")
+    expect(resolveInboundNextLot(["C1"], null)).toBe("C2")
+    expect(resolveInboundNextLot(["C1"], "이상한 값")).toBe("C2")
   })
 
-  it("추천 번호가 기존 물량(앞 코드 포함)과 겹치면 건너뛴다", () => {
-    expect(
-      suggestNextLot([
-        { lot: "H6", firstDate: "2025-11-03", lastDate: "2025-11-03" },
-        { lot: "H7(과사람)", firstDate: null, lastDate: null },
-      ])
-    ).toBe("H8")
-    // 날짜가 잘못 적힌 C1 이 더 최근이어도 이미 있는 C2 는 추천하지 않는다.
-    expect(
-      suggestNextLot([
-        { lot: "C1", firstDate: "2026-09-20", lastDate: "2026-09-20" },
-        { lot: "C2", firstDate: "2026-09-08", lastDate: "2026-09-08" },
-      ])
-    ).toBe("C3")
-    expect(suggestNextLot([{ lot: "H08", firstDate: "2026-01-01", lastDate: "2026-01-01" }])).toBe("H09")
-    expect(suggestNextLot([])).toBeNull()
+  it("물류번호는 기존 번호이거나 다음 순번만 — 건너뛴 번호·없는 번호·형식 밖 새 번호는 막는다", () => {
+    expect(checkInboundLot("C3", LOT_CONTEXT)).toEqual({ ok: true, kind: "new", lot: "C3" })
+    expect(checkInboundLot(" c3 ", LOT_CONTEXT)).toEqual({ ok: true, kind: "new", lot: "C3" })
+    expect(checkInboundLot("c2", LOT_CONTEXT)).toEqual({ ok: true, kind: "existing", lot: "C2" })
+    // 옛 H 번호·특수 번호에도 추가 입고할 수 있다(표기는 원장 그대로).
+    expect(checkInboundLot("h7(과사람)", LOT_CONTEXT)).toEqual({ ok: true, kind: "existing", lot: "H7(과사람)" })
+    expect(checkInboundLot("C5", LOT_CONTEXT)).toEqual({ ok: false, error: "C5은(는) 번호를 건너뜁니다. 다음 신규 물류번호는 C3입니다." })
+    expect(checkInboundLot("C0", LOT_CONTEXT)).toMatchObject({ ok: false })
+    expect(checkInboundLot("H9", LOT_CONTEXT)).toEqual({
+      ok: false,
+      error: "새 물류번호는 다음 순번 C3만 쓸 수 있습니다. 기존 번호는 목록에서 고르세요.",
+    })
+    expect(checkInboundLot("  ", LOT_CONTEXT)).toEqual({ ok: false, error: "물류번호를 고르세요." })
+  })
+
+  it("InboundSheet 는 자체 번호 추천 대신 공용 규칙을 쓴다", () => {
+    const sheet = readFileSync(join(process.cwd(), "components/admin/hardware/inventory/InboundSheet.tsx"), "utf8")
+    const model = readFileSync(join(process.cwd(), "components/admin/hardware/inventory/inbound-sheet-model.ts"), "utf8")
+    expect(sheet).not.toContain("suggestNextLot")
+    expect(model).not.toContain("suggestNextLot")
+    expect(model).toContain('from "@/lib/hardware/inventory-process"')
+    expect(sheet).toContain("resolveInboundNextLot")
+    expect(sheet).toContain("checkInboundLot")
   })
 })
 
 describe("보관처·수입자 후보", () => {
-  it("기본 후보를 앞에 두고, 이력의 클래스인은 클래스인 사무실로 합친다", () => {
-    const choices = buildStorageChoices([
-      ...HISTORY,
-      movement({ source: "admin_manual", storage_location: "평택 물류", occurred_at: "2026-09-10" }),
-      movement({ source: "admin_manual", storage_location: "ClassIn", occurred_at: "2026-09-11", to_location: "사무실" }),
-      movement({ source: "admin_manual", storage_location: "오산창고", occurred_at: "2026-09-12" }),
-    ])
-    expect(choices.slice(0, DEFAULT_STORAGE_CHOICES.length)).toEqual([...DEFAULT_STORAGE_CHOICES])
-    expect(choices).toEqual(["오산 창고", "인천 더조은", "클래스인 사무실", "고객사 직송", "평택 물류"])
-  })
-
-  it("정규화된 도착 위치 '창고' 는 오산·인천을 가를 수 없어 후보로 쓰지 않는다", () => {
-    expect(buildStorageChoices([movement({ to_location: "창고" })])).toEqual([...DEFAULT_STORAGE_CHOICES])
+  it("보관 장소는 고정 3종이다 — 이력의 옛 표기·직접 입력 값은 후보가 되지 않는다", () => {
+    expect(INBOUND_STORAGE_CHOICES).toEqual(["오산 창고", "인천 더조은", "클래스인 사무실"])
+    expect(buildStorageChoices()).toEqual([...INBOUND_STORAGE_CHOICES])
   })
 
   it("수입자 이력을 최근·빈도순으로 뒤에 붙이고 ClassIn 표기를 클래스인으로 합친다", () => {
@@ -278,6 +282,13 @@ describe("보관처·수입자 후보", () => {
     expect(
       recentInboundStorage([...HISTORY, movement({ source: "admin_manual", storage_location: "인천 더조은", occurred_at: "2026-09-12" })])
     ).toBe("인천 더조은")
+    // 고정 목록 밖 보관처(옛 직접 입력)는 기본값으로 되살리지 않고 그 다음 최근 값을 본다.
+    expect(
+      recentInboundStorage([
+        movement({ source: "admin_manual", storage_location: "오산창고", occurred_at: "2026-09-10" }),
+        movement({ source: "admin_manual", storage_location: "평택 물류", occurred_at: "2026-09-12" }),
+      ])
+    ).toBe("오산 창고")
   })
 
   it("사무실 보관 판정은 서버 사무실 규칙(클래스인·사무실·ClassIn·office)과 같다", () => {
@@ -371,6 +382,9 @@ describe("품목 매칭·주요 품목", () => {
       key: `featured:${itemId('86" IFP')}`,
       itemId: itemId('86" IFP'),
       productName: '86" IFP',
+      lotTracked: true,
+      isFree: null,
+      memo: "",
       quantity: "",
       unitPrice: "2500",
       unitPriceSuggested: true,
@@ -378,6 +392,9 @@ describe("품목 매칭·주요 품목", () => {
       serials: "",
       pinned: true,
     })
+    // 물류번호 관리 칸(lot_tracked)이 false 인 품목은 수량만 행으로 만든다.
+    const accessoryRows = buildFeaturedInboundRows(ITEMS.map((item) => (item.name === "S1" ? { ...item, lot_tracked: false } : item)))
+    expect(accessoryRows.find((featured) => featured.productName === "S1")?.lotTracked).toBe(false)
     const withoutS1 = buildFeaturedInboundRows(ITEMS, { activeItemIds: ITEMS.filter((item) => item.name !== "S1").map((item) => item.id) })
     expect(withoutS1.map((featured) => featured.productName)).toEqual(['86" IFP', '75" IFP', "STD1", "T1"])
   })
@@ -449,7 +466,7 @@ describe("구성·붙여넣기 반영", () => {
       featured,
       [
         { productName: '86" IFP', quantity: 40, unitPrice: null, storage: "" },
-        { productName: "S1", quantity: 1, storage: "클래스인 사무실" },
+        { productName: "S1", quantity: 1, storage: "클래스인사무실" },
         { productName: "OPS", quantity: 2, unitPrice: 80 },
         { productName: "신제품 X", quantity: 3 },
       ],
@@ -458,7 +475,7 @@ describe("구성·붙여넣기 반영", () => {
     const byName = Object.fromEntries(next.map((line) => [line.productName, line]))
     expect(byName['86" IFP']).toMatchObject({ quantity: "40", unitPrice: "2500", unitPriceSuggested: true, storage: "", pinned: true })
     expect(byName.S1).toMatchObject({ quantity: "1", storage: "클래스인 사무실", pinned: true })
-    expect(byName.OPS).toMatchObject({ key: "k1", itemId: itemId("OPS"), quantity: "2", unitPrice: "80", unitPriceSuggested: false, pinned: false })
+    expect(byName.OPS).toMatchObject({ key: "k1", itemId: itemId("OPS"), quantity: "2", unitPrice: "80", unitPriceSuggested: false, pinned: false, lotTracked: true })
     expect(byName["신제품 X"]).toMatchObject({ key: "k2", quantity: "3", unitPrice: "", pinned: false })
     expect(byName["신제품 X"].itemId).toBeUndefined()
     expect(next).toHaveLength(featured.length + 2)
@@ -485,10 +502,38 @@ describe("구성·붙여넣기 반영", () => {
 })
 
 describe("검증", () => {
-  it("헤더: 물량번호 필수, 날짜 형식, 수량 입력 품목 없음", () => {
-    const result = validateInboundDraft(draft({ lot: " ", occurredAt: "2026-02-30", rows: [row({ key: "a" })] }))
-    expect(result.headerErrors).toEqual(["물량번호를 정하세요.", "입고일을 YYYY-MM-DD 형식으로 입력하세요.", "수량을 입력한 품목이 없습니다."])
+  it("헤더: 물류번호 순번, 날짜 형식, 수량 입력 품목 없음", () => {
+    const result = validateInboundDraft(draft({ lot: " ", occurredAt: "2026-02-30", rows: [row({ key: "a" })] }), LOT_CONTEXT)
+    expect(result.headerErrors).toEqual(["입고일을 YYYY-MM-DD 형식으로 입력하세요.", "수량을 입력한 품목이 없습니다."])
     expect(result.rowErrors).toEqual({})
+    const skipped = validateInboundDraft(draft({ lot: "C4", rows: [row({ key: "a", quantity: "1" })] }), LOT_CONTEXT)
+    expect(skipped.headerErrors).toEqual(["C4은(는) 번호를 건너뜁니다. 다음 신규 물류번호는 C3입니다."])
+    const blank = validateInboundDraft(draft({ lot: "", rows: [row({ key: "a", quantity: "1" })] }), LOT_CONTEXT)
+    expect(blank.headerErrors).toEqual(["물류번호를 고르세요."])
+  })
+
+  it("물류번호 관리 안 하는 품목(액세서리·터치펜)만 있으면 물류번호를 묻지 않는다", () => {
+    const accessoryOnly = draft({ lot: "", rows: [row({ key: "pen", itemId: itemId("A1"), productName: "A1", lotTracked: false, quantity: "10" })] })
+    expect(inboundDraftNeedsLot(accessoryOnly)).toBe(false)
+    expect(validateInboundDraft(accessoryOnly, LOT_CONTEXT).headerErrors).toEqual([])
+    const mixed = draft({
+      lot: "",
+      rows: [row({ key: "pen", itemId: itemId("A1"), productName: "A1", lotTracked: false, quantity: "10" }), row({ key: "b", quantity: "1" })],
+    })
+    expect(inboundDraftNeedsLot(mixed)).toBe(true)
+    expect(validateInboundDraft(mixed, LOT_CONTEXT).headerErrors).toEqual(["물류번호를 고르세요."])
+  })
+
+  it("유상·무상은 필수 — 표 값이 없으면 줄마다 정해야 한다", () => {
+    const missing = validateInboundDraft(draft({ isFree: null, rows: [row({ key: "a", quantity: "1" })] }), LOT_CONTEXT)
+    expect(missing.headerErrors).toEqual(["유상·무상을 고르세요(표 전체 또는 줄마다)."])
+    const perRow = validateInboundDraft(
+      draft({ isFree: null, rows: [row({ key: "a", quantity: "1", isFree: true }), row({ key: "b", quantity: "2", isFree: false })] }),
+      LOT_CONTEXT
+    )
+    expect(perRow.headerErrors).toEqual([])
+    const warned = validateInboundDraft(draft({ isFree: true, rows: [row({ key: "a", quantity: "1", unitPrice: "100" })] }), LOT_CONTEXT)
+    expect(warned.rowWarnings).toEqual({ a: "무상 입고인데 단가가 있습니다 — 단가는 원가 기록으로만 남습니다." })
   })
 
   it("행: 수량 1 이상 정수, 단가 0 이상, 시리얼 개수 = 수량, 수량 빈 행은 무시", () => {
@@ -503,7 +548,8 @@ describe("검증", () => {
           row({ key: "free", quantity: "5", unitPrice: "0" }),
           row({ key: "ignored", quantity: "", unitPrice: "abc", serials: "SN9" }),
         ],
-      })
+      }),
+      LOT_CONTEXT
     )
     expect(result.headerErrors).toEqual([])
     expect(result.rowErrors).toEqual({
@@ -514,26 +560,45 @@ describe("검증", () => {
     })
   })
 
-  it("보관처가 비면 헤더 오류, 인식되지 않는 보관처·새 품목은 경고만 한다", () => {
-    const missing = validateInboundDraft(draft({ defaultStorage: "", rows: [row({ key: "a", quantity: "1" })] }))
+  it("보관처가 비면 헤더 오류, 고정 목록 밖 보관처·목록에 없는 품목은 저장을 막는다", () => {
+    const missing = validateInboundDraft(draft({ defaultStorage: "", rows: [row({ key: "a", quantity: "1" })] }), LOT_CONTEXT)
     expect(missing.headerErrors).toEqual(["기본 보관처를 고르거나 행마다 보관처를 정하세요."])
 
-    const warned = validateInboundDraft(
+    const blocked = validateInboundDraft(
       draft({
         rows: [
           row({ key: "custom-storage", quantity: "1", storage: "평택 물류" }),
           row({ key: "new-product", quantity: "1", itemId: undefined, productName: "신제품 X" }),
         ],
-      })
+      }),
+      LOT_CONTEXT
     )
-    expect(warned.headerErrors).toEqual([])
-    expect(warned.rowErrors).toEqual({})
-    expect(Object.keys(warned.rowWarnings).sort()).toEqual(["custom-storage", "new-product"])
+    expect(blocked.headerErrors).toEqual([])
+    expect(blocked.rowErrors).toEqual({
+      "custom-storage": "보관 장소는 오산 창고·인천 더조은·클래스인 사무실 중에서 고르세요.",
+      "new-product": INBOUND_UNLISTED_PRODUCT_MESSAGE,
+    })
   })
 
-  it("서버 배치 상한(50줄)을 넘으면 막는다", () => {
+  it("서버 배치 상한(50줄)을 넘으면 막는다 — 직배송은 줄마다 두 줄로 센다", () => {
     const rows = Array.from({ length: 51 }, (_, index) => row({ key: `r${index}`, quantity: "1" }))
-    expect(validateInboundDraft(draft({ rows })).headerErrors).toEqual(["한 번에 최대 50줄까지 저장할 수 있습니다."])
+    expect(validateInboundDraft(draft({ rows }), LOT_CONTEXT).headerErrors).toEqual(["한 번에 최대 50줄까지 저장할 수 있습니다."])
+    const directRows = Array.from({ length: 26 }, (_, index) => row({ key: `d${index}`, quantity: "1" }))
+    expect(
+      validateInboundDraft(draft({ delivery: "direct", directCustomer: { id: "c1", name: "수학의정석" }, directOutboundType: "sales", rows: directRows }), LOT_CONTEXT)
+        .headerErrors
+    ).toEqual(["직배송은 줄마다 입고·출고 두 줄이 저장돼 한 번에 최대 25품목까지 저장할 수 있습니다."])
+  })
+
+  it("직배송은 CRM 고객이 있어야 하고 보관처를 묻지 않는다", () => {
+    const noCustomer = validateInboundDraft(draft({ delivery: "direct", defaultStorage: "", rows: [row({ key: "a", quantity: "1" })] }), LOT_CONTEXT)
+    expect(noCustomer.headerErrors).toEqual(["직배송 받을 고객사를 CRM 고객 목록에서 고르세요.", "직배송 출고 유형을 고르세요."])
+    const ok = validateInboundDraft(
+      draft({ delivery: "direct", defaultStorage: "", directCustomer: { id: "c1", name: "수학의정석" }, directOutboundType: "promotion", rows: [row({ key: "a", quantity: "1" })] }),
+      LOT_CONTEXT
+    )
+    expect(ok.headerErrors).toEqual([])
+    expect(ok.rowErrors).toEqual({})
   })
 })
 
@@ -574,7 +639,8 @@ describe("요약·금액", () => {
 })
 
 describe("전송 형식", () => {
-  const MOVEMENT_KEYS = [
+  // 기존 movements API readMovementInput 이 읽는 키.
+  const LEGACY_KEYS = [
     "amountCny",
     "amountUsd",
     "fromLocation",
@@ -594,82 +660,132 @@ describe("전송 형식", () => {
     "toLocation",
     "unitPrice",
   ]
+  // 재고관리 프로세스 계약(갭 문서 §7-3)에서 새로 받는 키.
+  const PROCESS_KEYS = ["customerId", "isFree", "outboundType"]
 
-  it("수량 있는 행만, 보관처 라벨을 toLocation·storageLocation 양쪽에 싣는다", () => {
+  function inboundBase(overrides: Record<string, unknown> = {}) {
+    return {
+      itemId: itemId('86" IFP'),
+      productName: '86" IFP',
+      movementType: "inbound",
+      quantity: 1,
+      occurredAt: "2026-09-15",
+      fromLocation: "",
+      toLocation: "인천 더조은",
+      owner: "문",
+      status: "입고",
+      referenceNo: "",
+      memo: "",
+      lotNo: "C3",
+      isFree: false,
+      unitPrice: null,
+      amountUsd: null,
+      amountCny: null,
+      storageLocation: "인천 더조은",
+      importer: "클래스인",
+      serials: [],
+      ...overrides,
+    }
+  }
+
+  it("수량 있는 행만, 보관처 라벨을 toLocation·storageLocation 양쪽에 싣고 유상·무상·메모를 보낸다", () => {
     const submission = buildInboundSubmission(
       draft({
         owner: " 문 ",
         rows: [
-          row({ key: "board", quantity: "40", unitPrice: "2500", unitPriceSuggested: true }),
-          row({ key: "empty", itemId: itemId("75\" IFP"), productName: '75" IFP', quantity: "" }),
-          row({ key: "s1", itemId: itemId("S1"), productName: "S1", quantity: "2", unitPrice: "155.555", storage: "클래스인 사무실", serials: "SN1, SN2" }),
-          row({ key: "new", itemId: undefined, productName: "  신제품   X ", quantity: "1" }),
+          row({ key: "board", quantity: "40", unitPrice: "2500", unitPriceSuggested: true, memo: " 1차 선적 " }),
+          row({ key: "empty", itemId: itemId('75" IFP'), productName: '75" IFP', quantity: "" }),
+          row({ key: "s1", itemId: itemId("S1"), productName: "S1", quantity: "2", unitPrice: "155.555", storage: "클래스인 사무실", serials: "SN1, SN2", isFree: true }),
         ],
       })
     )
-    expect(submission.rowKeys).toEqual(["board", "s1", "new"])
+    expect(submission.rowKeys).toEqual(["board", "s1"])
     expect(submission.movements).toEqual([
-      {
-        itemId: itemId('86" IFP'),
-        productName: '86" IFP',
-        movementType: "inbound",
-        quantity: 40,
-        occurredAt: "2026-09-15",
-        fromLocation: "",
-        toLocation: "인천 더조은",
-        owner: "문",
-        status: "입고",
-        referenceNo: "",
-        memo: "",
-        lotNo: "C3",
-        unitPrice: 2500,
-        amountUsd: 100000,
-        amountCny: null,
-        storageLocation: "인천 더조은",
-        importer: "클래스인",
-        serials: [],
-      },
-      {
+      inboundBase({ quantity: 40, memo: "1차 선적", unitPrice: 2500, amountUsd: 100000 }),
+      inboundBase({
         itemId: itemId("S1"),
         productName: "S1",
-        movementType: "inbound",
         quantity: 2,
-        occurredAt: "2026-09-15",
-        fromLocation: "",
         toLocation: "클래스인 사무실",
-        owner: "문",
-        status: "입고",
-        referenceNo: "",
-        memo: "",
-        lotNo: "C3",
+        storageLocation: "클래스인 사무실",
+        isFree: true,
         unitPrice: 155.555,
         amountUsd: 311.11,
-        amountCny: null,
-        storageLocation: "클래스인 사무실",
-        importer: "클래스인",
         serials: ["SN1", "SN2"],
-      },
-      {
-        productName: "신제품 X",
-        movementType: "inbound",
-        quantity: 1,
-        occurredAt: "2026-09-15",
-        fromLocation: "",
-        toLocation: "인천 더조은",
-        owner: "문",
-        status: "입고",
-        referenceNo: "",
-        memo: "",
-        lotNo: "C3",
-        unitPrice: null,
-        amountUsd: null,
-        amountCny: null,
-        storageLocation: "인천 더조은",
-        importer: "클래스인",
-        serials: [],
-      },
+      }),
     ])
     expect(buildInboundMovements(draft({ rows: [row({ key: "x", quantity: "1" })] }))).toHaveLength(1)
+  })
+
+  it("물류번호 관리 안 하는 품목은 lotNo 를 싣지 않는다", () => {
+    const [pen] = buildInboundMovements(
+      draft({ rows: [row({ key: "pen", itemId: itemId("A1"), productName: "A1", lotTracked: false, quantity: "10" })] })
+    )
+    expect(pen).not.toHaveProperty("lotNo")
+    expect(pen).toMatchObject({ productName: "A1", quantity: 10, isFree: false })
+  })
+
+  it("유상·무상이 끝내 비면 그 줄을 보내지 않는다(유상으로 추정하지 않는다)", () => {
+    expect(buildInboundMovements(draft({ isFree: null, rows: [row({ key: "a", quantity: "1" })] }))).toEqual([])
+  })
+
+  it("고객사 직배송: 줄마다 고객사 직송 입고 바로 뒤에 같은 날짜·물류번호의 설치 완료 출고를 붙인다", () => {
+    const submission = buildInboundSubmission(
+      draft({
+        owner: "문",
+        delivery: "direct",
+        defaultStorage: "",
+        directCustomer: { id: "cust-1", name: "수학의정석 학원" },
+        directOutboundType: "sales",
+        rows: [
+          row({ key: "board", quantity: "2", unitPrice: "2500", memo: "직납" }),
+          row({ key: "pen", itemId: itemId("A1"), productName: "A1", lotTracked: false, quantity: "4" }),
+        ],
+      })
+    )
+    expect(submission.rowKeys).toEqual(["board", "board", "pen", "pen"])
+    expect(submission.movements.map((line) => line.movementType)).toEqual(["inbound", "outbound", "inbound", "outbound"])
+    expect(submission.movements[0]).toEqual(
+      inboundBase({ quantity: 2, toLocation: "고객사 직송", storageLocation: "고객사 직송", memo: "직납", unitPrice: 2500, amountUsd: 5000 })
+    )
+    expect(submission.movements[1]).toEqual({
+      itemId: itemId('86" IFP'),
+      productName: '86" IFP',
+      movementType: "outbound",
+      quantity: 2,
+      occurredAt: "2026-09-15",
+      fromLocation: "고객사 직송",
+      toLocation: "수학의정석 학원",
+      customerId: "cust-1",
+      outboundType: "sales",
+      owner: "문",
+      status: "설치 완료",
+      referenceNo: "",
+      memo: "직납",
+      lotNo: "C3",
+      unitPrice: null,
+      amountUsd: null,
+      amountCny: null,
+      storageLocation: "",
+      importer: "",
+      serials: [],
+    })
+    expect(submission.movements[3]).not.toHaveProperty("lotNo")
+    expect(submission.movements[3]).toMatchObject({ movementType: "outbound", fromLocation: "고객사 직송", quantity: 4, customerId: "cust-1" })
+  })
+
+  it("입고만 저장된 직배송 줄은 다시 저장할 때 출고 줄만 보낸다", () => {
+    const submission = buildInboundSubmission(
+      draft({
+        delivery: "direct",
+        directCustomer: { id: "cust-1", name: "수학의정석 학원" },
+        directOutboundType: "as",
+        rows: [row({ key: "board", quantity: "2", inboundSaved: true })],
+      })
+    )
+    expect(submission.rowKeys).toEqual(["board"])
+    expect(submission.movements).toHaveLength(1)
+    expect(submission.movements[0]).toMatchObject({ movementType: "outbound", outboundType: "as" })
   })
 
   it("보관처가 끝내 비어 있으면 창고로 보낸다(도착 위치 null 로 재고에서 사라지지 않게)", () => {
@@ -678,11 +794,11 @@ describe("전송 형식", () => {
     expect(payload.storageLocation).toBe("창고")
   })
 
-  it("전송 키는 movements API readMovementInput 이 읽는 필드와 같다", () => {
+  it("전송 키는 movements API 가 읽는 필드다(§7-3 새 필드 포함)", () => {
     const [payload] = buildInboundMovements(draft({ rows: [row({ key: "a", quantity: "1" })] }))
-    expect(Object.keys(payload).sort()).toEqual(MOVEMENT_KEYS)
+    expect(Object.keys(payload).sort()).toEqual([...LEGACY_KEYS, "isFree"].sort())
     const route = readFileSync(join(process.cwd(), "app/api/admin/hardware/movements/route.ts"), "utf8")
-    for (const key of MOVEMENT_KEYS) {
+    for (const key of [...LEGACY_KEYS, ...PROCESS_KEYS]) {
       expect(route).toContain(`body, "${key}"`)
     }
   })
@@ -695,20 +811,21 @@ describe("저장 결과·샘플 유닛 등록", () => {
         rows: [
           row({ key: "board", quantity: "40" }),
           row({ key: "s1", itemId: itemId("S1"), productName: "S1", quantity: "2", storage: "클래스인 사무실" }),
-          row({ key: "new", itemId: undefined, productName: "신제품 X", quantity: "1", storage: "클래스인" }),
+          row({ key: "t1", itemId: itemId("T1"), productName: "T1", quantity: "1", storage: "클래스인 사무실" }),
         ],
       })
     )
     const outcome = resolveInboundSaveOutcome(submission, [
       { index: 0, ok: true, movement: { id: "mv-board", item_id: itemId('86" IFP') } },
       { index: 1, ok: false, error: "수량은 1 이상 정수여야 합니다." },
-      { index: 2, ok: true, movement: { id: "mv-new", item_id: "item-created" } },
+      { index: 2, ok: true, movement: { id: "mv-t1", item_id: itemId("T1") } },
     ])
     expect(outcome.failedErrors).toEqual({ s1: "수량은 1 이상 정수여야 합니다." })
     expect(outcome.savedUnits).toBe(41)
+    expect(outcome.inboundOnlyRowKeys).toEqual([])
     expect(outcome.savedLines).toEqual([
       { rowKey: "board", itemId: itemId('86" IFP'), productName: '86" IFP', quantity: 40, storage: "인천 더조은", movementId: "mv-board" },
-      { rowKey: "new", itemId: "item-created", productName: "신제품 X", quantity: 1, storage: "클래스인", movementId: "mv-new" },
+      { rowKey: "t1", itemId: itemId("T1"), productName: "T1", quantity: 1, storage: "클래스인 사무실", movementId: "mv-t1" },
     ])
   })
 
@@ -717,12 +834,48 @@ describe("저장 결과·샘플 유닛 등록", () => {
     expect(resolveInboundSaveOutcome(submission, []).failedErrors).toEqual({ a: "서버 응답에 이 줄의 결과가 없습니다." })
   })
 
+  it("직배송: 입고·출고가 모두 저장돼야 저장된 행이고, 입고만 저장되면 출고 재시도 대상으로 돌려준다", () => {
+    const submission = buildInboundSubmission(
+      draft({
+        delivery: "direct",
+        directCustomer: { id: "cust-1", name: "수학의정석 학원" },
+        directOutboundType: "sales",
+        rows: [row({ key: "board", quantity: "2" }), row({ key: "t1", itemId: itemId("T1"), productName: "T1", quantity: "3" })],
+      })
+    )
+    const outcome = resolveInboundSaveOutcome(submission, [
+      { index: 0, ok: true, movement: { id: "in-board", item_id: itemId('86" IFP') } },
+      { index: 1, ok: true, movement: { id: "out-board" } },
+      { index: 2, ok: true, movement: { id: "in-t1" } },
+      { index: 3, ok: false, error: "T1 C3 잔여는 0대입니다(요청 3대)." },
+    ])
+    expect(outcome.savedUnits).toBe(5)
+    expect(outcome.savedLines.map((line) => [line.rowKey, line.storage])).toEqual([["board", "고객사 직송"]])
+    expect(outcome.inboundOnlyRowKeys).toEqual(["t1"])
+    expect(outcome.failedErrors.t1).toContain("입고는 저장했고 직배송 출고가 실패했습니다: T1 C3 잔여는 0대입니다(요청 3대).")
+
+    // 다시 저장(출고만) 성공 → 그 행도 끝난다.
+    const retry = buildInboundSubmission(
+      draft({
+        delivery: "direct",
+        directCustomer: { id: "cust-1", name: "수학의정석 학원" },
+        directOutboundType: "sales",
+        rows: [row({ key: "t1", itemId: itemId("T1"), productName: "T1", quantity: "3", inboundSaved: true })],
+      })
+    )
+    const retried = resolveInboundSaveOutcome(retry, [{ index: 0, ok: true, movement: { id: "out-t1" } }])
+    expect(retried.failedErrors).toEqual({})
+    expect(retried.savedUnits).toBe(0)
+    expect(retried.savedLines.map((line) => line.rowKey)).toEqual(["t1"])
+  })
+
   it("사무실 보관 줄만 office 유닛 등록 요청으로 바꾸고 서버 상한 60대씩 나눈다", () => {
     const payloads = buildSampleRegisterPayloads(
       [
         { rowKey: "a", itemId: itemId('86" IFP'), productName: '86" IFP', quantity: 40, storage: "인천 더조은", movementId: "mv-a" },
         { rowKey: "b", itemId: itemId("T1"), productName: "T1", quantity: 130, storage: "클래스인 사무실", movementId: "mv-b" },
         { rowKey: "c", productName: "신제품 X", quantity: 1, storage: "ClassIn" },
+        { rowKey: "d", itemId: itemId("S1"), productName: "S1", quantity: 1, storage: "고객사 직송" },
       ],
       { lot: "C3", occurredAt: "2026-09-15", owner: "문" }
     )
@@ -786,7 +939,11 @@ describe("행 만들기", () => {
     expect(createInboundRow({ key: "b", productName: "신제품 X", lastPrices: prices })).toMatchObject({
       unitPrice: "",
       unitPriceSuggested: false,
+      lotTracked: true,
+      isFree: null,
+      memo: "",
     })
+    expect(createInboundRow({ key: "c", itemId: itemId("A1"), productName: "A1", lotTracked: false })).toMatchObject({ lotTracked: false })
   })
 })
 

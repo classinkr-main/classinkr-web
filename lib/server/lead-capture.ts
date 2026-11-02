@@ -592,7 +592,7 @@ export interface LeadCaptureEffectToggles {
   externalForwards: boolean
   /** 이메일 + 마케팅 동의일 때 구독자 upsert */
   subscriberUpsert: boolean
-  /** 이메일이 있을 때 자동화 on_submit 규칙 */
+  /** 이메일과 마케팅 수신 동의가 있을 때 자동화 on_submit 규칙 */
   automationOnSubmit: boolean
   /** 인앱 lead.created 알림(context.suppressLeadCreatedNotification 도 계속 따른다) */
   leadCreatedNotification: boolean
@@ -672,7 +672,8 @@ export async function runLeadCaptureEffects(
     .map((result) => (result as PromiseRejectedResult).reason?.message)
     .filter(Boolean)
 
-  if (toggles.automationOnSubmit && body.email) {
+  // 제출 자동화는 캠페인 메일 발송과 예약을 포함하므로 선택 동의가 있을 때만 실행한다.
+  if (toggles.automationOnSubmit && body.email && body.marketingConsent === true) {
     void triggerOnSubmitRules({
       email: body.email,
       name: body.name,
@@ -689,7 +690,7 @@ export async function runLeadCaptureEffects(
       void sendServerConversion({
         eventId: conversionEventId ?? `lead:${savedLeadId}`,
         metaEventName:
-          body.source === "newsletter" ? "CompleteRegistration" : "Lead",
+          body.source === "newsletter" && body.marketingConsent ? "CompleteRegistration" : "Lead",
         ga4EventName: "generate_lead",
         requestMeta: context.requestMeta ?? null,
         sourceUrl: body.currentPage ?? body.landingPage ?? context.requestMeta?.sourceUrl,

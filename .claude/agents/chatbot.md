@@ -32,4 +32,4 @@ npm run check:alpha-db
 
 - 모델 호출이 실패하거나 잘린 경우 검색 raw chunk를 공개 답변으로 내보내지 않는다. 내부 출처 표현·원본 URL·PII도 제거한다.
 - non-stream과 stream의 안전 게이트·fallback을 다르게 만들지 않는다. 잘못된 JSON/body는 500이 아니라 400 계열로 응답한다.
-- AI 초안을 자동 게시·자동 발송하지 않는다. 내비 표시 여부나 `nav_preset`을 보안 경계로 쓰지 않는다.
+- AI 초안을 자동 게시·자동 발송하지 않는다. 내비 표시 여부나 사이드바 배치(`nav_overrides`·숨김)를 보안 경계로 쓰지 않는다.

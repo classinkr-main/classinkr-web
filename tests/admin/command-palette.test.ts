@@ -161,11 +161,14 @@ describe("admin command palette — 2026-09-25 탭 정리", () => {
   })
 
   it("reaches 캠페인 관리 and 마케팅 프로젝트 exactly once (child fallback never duplicates a nav item)", () => {
-    for (const href of ["/admin/campaigns/manage", "/admin/campaigns/projects"]) {
+    // 2026-10 마케팅 프로젝트는 캠페인 관리의 "프로젝트" 탭이 됐다 — ⌘K 는 그 탭을 바로 연다.
+    for (const href of ["/admin/campaigns/manage", "/admin/campaigns/manage?view=projects"]) {
       expect(byHref(href), href).toHaveLength(1)
       expect(byHref(href)[0]?.group).toBe("마케팅·분석")
     }
-    expect(search("프로젝트").map((cmd) => cmd.href)).toContain("/admin/campaigns/projects")
+    expect(byHref("/admin/campaigns/manage?view=projects")[0]?.label).toBe("마케팅 프로젝트")
+    expect(byHref("/admin/campaigns/projects")).toHaveLength(0)
+    expect(search("프로젝트").map((cmd) => cmd.href)).toContain("/admin/campaigns/manage?view=projects")
   })
 
   it("offers '내 사이드바 편집' as an event command, not a navigation", () => {

@@ -12,7 +12,7 @@
 - [파트너 포털 구형 견적 작성기](../../components/partner-portal/crud/QuoteEditor.tsx)
 - [파트너 단독 견적 편집기](../../app/partner/(portal)/quote-editor/[id]/page.tsx)
 - [견적 라이프사이클 실행안](./quote-lifecycle-execution-plan.md)
-- [문서 허브 와이어프레임](./partner-portal-document-hub-wireframes.md)
+- [문서 허브 와이어프레임](../archive/partner-portal-document-hub-wireframes.md)
 - [견적 문서 스펙](../hardware-ops/quote-document-spec.md)
 
 ## 1. 현재 UX 진단

@@ -59,6 +59,7 @@ import {
   extractMarkdownHeadings,
 } from "@/lib/blog-markdown"
 import { normalizeBlogSlug, sanitizeBlogSlugInput } from "@/lib/blog-slug-route"
+import { splitBlogAiDraft } from "@/lib/blog-ai-prompts"
 import { leadMagnetOptions } from "@/lib/lead-magnets"
 import { getLeadMagnetGateLabel, getLeadMagnetStatusLabel } from "@/lib/lead-magnets-helpers"
 import { sanitizePublicImageUrl } from "@/lib/safe-public-url"
@@ -247,6 +248,7 @@ type AiMediaReplacement = {
 
 const HISTORY_LIMIT = 50
 // 편집 내용은 700ms 디바운스로 localStorage(draftStorageKey)에 계속 남는다 — 서버 저장 실패를 알릴 때 함께 안내한다.
+const AI_REFERENCE_PLACEHOLDER = "고객 인터뷰 메모, 기능 설명, 원문 링크·발췌, 꼭 넣을 핵심 메시지를 붙여넣으세요. 근거가 없으면 [확인 필요]로 표시됩니다."
 const LOCAL_DRAFT_NOTICE = "작성 중인 내용은 이 브라우저에 임시 보관돼 있습니다."
 const MAX_IMAGE_UPLOAD_BYTES = 5 * 1024 * 1024
 const SOFT_INPUT_CLASS =
@@ -508,6 +510,14 @@ export default function BlogPostEditor({
 
   const [form, setForm] = useState<BlogPostInput>(initialForm)
   const [tagsInput, setTagsInput] = useState(initialForm.tags.join(", "))
+  // 서버에 마지막으로 저장된 내용. 브라우저 임시 보관(localStorage)과 별개로, 지금 내용이 이것과 다르면
+  // '저장 안 됨'이다 — 헤더 상태와 나가기 경고가 이 값을 본다.
+  const [serverSnapshot, setServerSnapshot] = useState(() =>
+    JSON.stringify({ form: initialForm, tagsInput: initialForm.tags.join(", ") })
+  )
+  // 저장하지 않고 나가려던 앱 안 주소(사이드바·'← 블로그' 등). 값이 있으면 확인 창을 띄운다.
+  const [pendingLeaveHref, setPendingLeaveHref] = useState<string | null>(null)
+  const allowLeaveRef = useRef(false)
   const [draftState, setDraftState] = useState<DraftState>("saved")
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [uploadingField, setUploadingField] = useState<"imageUrl" | "heroImageUrl" | null>(null)
@@ -610,6 +620,51 @@ export default function BlogPostEditor({
   ]
   const contentCharacterCount = form.contentMarkdown.trim().length
   const blogStatusLabel = BLOG_STATUS_OPTIONS.find((option) => option.value === form.status)?.label ?? form.status
+  const hasUnsavedChanges = useMemo(
+    () => JSON.stringify({ form, tagsInput }) !== serverSnapshot,
+    [form, tagsInput, serverSnapshot]
+  )
+
+  // 저장하지 않은 변경이 있으면 나가기 전에 묻는다.
+  // - 새로고침·탭 닫기·주소 직접 이동: 브라우저 기본 확인 창(beforeunload)
+  // - 앱 안 링크: Next 가 페이지를 바꿔 beforeunload 가 안 뜨므로, 클릭을 캡처 단계에서 먼저 잡아 확인 창을 띄운다.
+  //   (브라우저 뒤로 가기는 Next 라우터가 막을 방법을 주지 않아 잡지 못한다 — 대신 임시 보관본이 남는다.)
+  useEffect(() => {
+    if (!hasUnsavedChanges) return
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (allowLeaveRef.current) return
+      event.preventDefault()
+      event.returnValue = ""
+    }
+    const onClickCapture = (event: MouseEvent) => {
+      if (allowLeaveRef.current || event.defaultPrevented || event.button !== 0) return
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+      const anchor = event.target instanceof Element ? event.target.closest<HTMLAnchorElement>("a[href]") : null
+      if (!anchor || anchor.target === "_blank" || anchor.hasAttribute("download")) return
+      // 본문 편집 영역 안의 링크는 이동이 아니라 커서 놓기다.
+      if (anchor.closest('[contenteditable="true"]')) return
+      const url = new URL(anchor.href, window.location.href)
+      if (url.origin !== window.location.origin) return
+      if (url.pathname === window.location.pathname && url.search === window.location.search) return
+      event.preventDefault()
+      event.stopPropagation()
+      setPendingLeaveHref(`${url.pathname}${url.search}${url.hash}`)
+    }
+    window.addEventListener("beforeunload", onBeforeUnload)
+    document.addEventListener("click", onClickCapture, true)
+    return () => {
+      window.removeEventListener("beforeunload", onBeforeUnload)
+      document.removeEventListener("click", onClickCapture, true)
+    }
+  }, [hasUnsavedChanges])
+
+  const leaveWithoutSaving = () => {
+    if (!pendingLeaveHref) return
+    allowLeaveRef.current = true
+    const href = pendingLeaveHref
+    setPendingLeaveHref(null)
+    router.push(href)
+  }
   const blogStatusTone =
     form.status === "published"
       ? "bg-[#ECFDF5] text-[#084734]"
@@ -1012,6 +1067,7 @@ export default function BlogPostEditor({
       undoStackRef.current = []
       redoStackRef.current = []
       localStorage.removeItem(draftStorageKey)
+      setServerSnapshot(JSON.stringify({ form: nextForm, tagsInput: nextForm.tags.join(", ") }))
       setDraftState("saved")
       setLastSavedAt(new Date())
       setNotice(nextStatus === "published" ? "발행까지 완료했습니다." : "저장했습니다.")
@@ -1040,6 +1096,46 @@ export default function BlogPostEditor({
     setAiState(null)
   }
 
+  // 초안 글 끝에서 이어 줄 행동. 연결한 자료가 있으면 그 자료, 없으면 서버 기본(상담·쇼룸).
+  const draftClosingFor = (slug?: string) => {
+    const magnet = slug ? leadOptions.find((opt) => opt.slug === slug) : undefined
+    return magnet ? `자료 '${magnet.title}' 받기` : ""
+  }
+  const draftContextLine = [
+    form.category && `카테고리 ${form.category}`,
+    form.targetReader.trim() && `독자 ‘${form.targetReader.trim()}’`,
+    form.tags.length > 0 && `태그 ${form.tags.slice(0, 4).join(", ")}`,
+    form.leadMagnetSlug && draftClosingFor(form.leadMagnetSlug) && "글 끝에 연결 자료 안내",
+  ].filter(Boolean).join(" · ")
+
+  // AI 초안 → 제목·본문 + 빈 요약 칸. 한 번의 편집으로 묶어 되돌리기 한 번에 이전 글로 돌아간다.
+  const applyAiDraft = (raw: string) => {
+    const draft = splitBlogAiDraft(raw)
+    updateEditor((snapshot) => {
+      const f = snapshot.form
+      const title = draft.title || f.title
+      return {
+        ...snapshot,
+        form: {
+          ...f,
+          title,
+          // 제목 칸 직접 입력과 같은 규칙: SEO 제목은 비었을 때만, 슬러그는 손대지 않았을 때만 따라간다.
+          seoTitle: f.seoTitle || title,
+          slug: snapshot.slugEdited ? f.slug : normalizeBlogSlug(title),
+          contentMarkdown: draft.body,
+          excerpt: f.excerpt.trim() ? f.excerpt : draft.excerpt,
+          seoDescription: f.seoDescription.trim() ? f.seoDescription : draft.seoDescription,
+          benefitItems: f.benefitItems.some((item) => item.trim()) || draft.benefits.length === 0 ? f.benefitItems : draft.benefits,
+        },
+      }
+    })
+    const imageSlots = (draft.body.match(/\[이미지:[^\]]*\]/g) ?? []).length
+    const checks = (draft.body.match(/\[확인 필요[^\]]*\]/g) ?? []).length
+    const todo = [imageSlots && `이미지 자리 ${imageSlots}곳`, checks && `[확인 필요] ${checks}곳`].filter(Boolean).join(", ")
+    setNotice(`AI 초안을 적용했습니다.${todo ? ` 발행 전에 ${todo}을 채워 주세요.` : ""} 되돌리기(⌘Z)로 이전 글로 돌아갈 수 있습니다.`)
+    setAiState(null)
+  }
+
   const handleAiAction = async (action: AiAction, params?: { topic: string; tone: string; length: string; reference?: string }, contentOverride?: string) => {
     aiAbortRef.current?.abort()
     const controller = new AbortController()
@@ -1060,8 +1156,19 @@ export default function BlogPostEditor({
         signal: controller.signal,
         body: JSON.stringify(
           action === "draft" && params
-            ? { action, category: current.category, topic: params.topic, tone: params.tone, length: params.length, reference: params.reference ?? "" }
-            : { action, title: current.title, content: requestContent, category: current.category }
+            ? {
+                action,
+                category: current.category,
+                topic: params.topic,
+                tone: params.tone,
+                length: params.length,
+                reference: params.reference ?? "",
+                // 편집기에 이미 적은 독자·태그·연결 자료를 초안에 반영한다(따로 묻지 않는다).
+                audience: current.targetReader,
+                keywords: current.tags,
+                closing: draftClosingFor(current.leadMagnetSlug),
+              }
+            : { action, title: current.title, content: requestContent, category: current.category, selection: contentOverride !== undefined }
         ),
       })
       if (res.status === 401) {
@@ -1306,14 +1413,14 @@ export default function BlogPostEditor({
     void handleSubmit("published", { publishNow: true })
   }
 
-  const draftStatusText =
-    draftState === "dirty"
-      ? "수정됨"
-      : draftState === "saving"
-      ? "저장 중…"
-      : lastSavedAt
-      ? `${lastSavedAt.getHours().toString().padStart(2, "0")}:${lastSavedAt.getMinutes().toString().padStart(2, "0")} 임시 저장`
-      : "임시 저장됨"
+  // '임시 저장'(이 브라우저 보관)과 '저장'(서버·사이트 반영)을 헷갈리지 않게, 서버 기준으로 먼저 말한다.
+  // 헤더 폭이 좁아 짧게 쓰고, 임시 보관 시각은 마우스를 올리면 보여준다.
+  const draftStatusText = !hasUnsavedChanges ? (mode === "create" ? "작성 전" : "저장됨") : "저장 안 됨"
+  const draftStatusHint = !hasUnsavedChanges
+    ? "사이트에 저장된 내용과 같습니다."
+    : draftState === "saved" && lastSavedAt
+    ? `저장 버튼을 눌러야 사이트에 반영됩니다. ${lastSavedAt.getHours().toString().padStart(2, "0")}:${lastSavedAt.getMinutes().toString().padStart(2, "0")}에 이 브라우저에 임시 보관했습니다.`
+    : "저장 버튼을 눌러야 사이트에 반영됩니다."
   const showStartPanel =
     mode === "create" && !startPanelDismissed && form.contentMarkdown === EMPTY_DRAFT_MARKDOWN
   const invalid = {
@@ -1328,6 +1435,45 @@ export default function BlogPostEditor({
       className="min-h-screen bg-[#FAFAF8]"
       style={{ ["--editor-header-h" as string]: "64px" }}
     >
+
+      {/* ── 저장하지 않고 나가기 확인 ── */}
+      {pendingLeaveHref && (
+        <div
+          className="fixed inset-0 z-[90] flex items-center justify-center bg-black/40 p-4"
+          onClick={() => setPendingLeaveHref(null)}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") setPendingLeaveHref(null)
+          }}
+        >
+          <div
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="leave-confirm-title"
+            aria-describedby="leave-confirm-desc"
+            onClick={(event) => event.stopPropagation()}
+            className="w-full max-w-[420px] rounded-2xl border border-[#e8e8e4] bg-white p-6 shadow-2xl"
+          >
+            <h2 id="leave-confirm-title" className="text-[16px] font-semibold text-[#111110]">
+              저장하지 않은 변경사항이 있습니다
+            </h2>
+            <p id="leave-confirm-desc" className="mt-2 text-[14px] leading-6 text-[#615D59]">
+              지금 나가면 수정한 내용이 사이트에 반영되지 않습니다. 작성 중인 내용은 이 브라우저에 임시 보관돼, 이 글을 다시 열면 이어서 쓸 수 있습니다.
+            </p>
+            <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <Button variant="outline" onClick={leaveWithoutSaving} className="text-[#8F2C2C]">
+                저장하지 않고 나가기
+              </Button>
+              <Button
+                autoFocus
+                onClick={() => setPendingLeaveHref(null)}
+                className="bg-[#084734] text-white hover:bg-[#065c41]"
+              >
+                계속 편집
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Template Modal ── */}
       {showTemplateModal && (
@@ -1631,6 +1777,7 @@ export default function BlogPostEditor({
                 <button
                   type="button"
                   onClick={closeAiPanel}
+                  aria-label="AI 결과 닫기"
                   className="flex h-8 w-8 items-center justify-center rounded-xl border border-[#e8e8e4] text-[#1a1a1a]/40 hover:text-[#111110] transition-colors"
                 >
                   <X className="h-4 w-4" />
@@ -1649,7 +1796,9 @@ export default function BlogPostEditor({
               {(aiState.status === "streaming" || aiState.status === "done") && (
                 <div className="prose prose-sm max-w-none">
                   <pre className="whitespace-pre-wrap font-sans text-[13px] leading-7 text-[#1a1a1a]/80">
-                    {aiState.result}
+                    {aiState.action === "draft"
+                      ? aiState.result.replace("<!--meta", "── 적용하면 요약 칸에 들어갈 내용 ──").replace(/\n?-->\s*$/, "")
+                      : aiState.result}
                     {aiState.status === "streaming" && (
                       <span className="ml-0.5 inline-block h-4 w-0.5 animate-pulse bg-[#084734]" />
                     )}
@@ -1676,18 +1825,7 @@ export default function BlogPostEditor({
                   {aiState.action === "draft" ? (
                     <Button
                       size="sm"
-                      onClick={() => {
-                        const lines = aiState.result.split("\n")
-                        const titleLine = lines.find((l) => l.startsWith("# "))
-                        const extractedTitle = titleLine ? titleLine.replace(/^#\s+/, "").trim() : ""
-                        const body = lines
-                          .filter((l) => !l.startsWith("# ") || l !== titleLine)
-                          .join("\n")
-                          .trimStart()
-                        updateForm("contentMarkdown", body)
-                        if (extractedTitle) updateForm("title", extractedTitle)
-                        setAiState(null)
-                      }}
+                      onClick={() => applyAiDraft(aiState.result)}
                       className="bg-[#084734] text-white hover:bg-[#084734]/90"
                     >
                       <Check className="mr-1.5 h-3.5 w-3.5" />
@@ -1921,10 +2059,14 @@ export default function BlogPostEditor({
             <span className={`hidden shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold sm:inline-flex ${blogStatusTone}`}>
               {blogStatusLabel}
             </span>
-            <span className="hidden shrink-0 items-center gap-1.5 text-[12px] sm:inline-flex" role="status">
+            <span
+              className={`hidden shrink-0 items-center gap-1.5 text-[12px] sm:inline-flex ${hasUnsavedChanges ? "font-medium text-[#7A520F]" : ""}`}
+              role="status"
+              title={draftStatusHint}
+            >
               <span
                 aria-hidden="true"
-                className={`h-1.5 w-1.5 rounded-full ${draftState === "saved" ? "bg-[#084734]" : "bg-[#A8741A]"}`}
+                className={`h-1.5 w-1.5 rounded-full ${hasUnsavedChanges ? "bg-[#A8741A]" : "bg-[#084734]"}`}
               />
               {draftStatusText}
             </span>
@@ -2533,7 +2675,7 @@ export default function BlogPostEditor({
                         type="text"
                         value={draftInput.topic}
                         onChange={(event) => setDraftInput((prev) => ({ ...prev, topic: event.target.value }))}
-                        placeholder="예: 학원 운영 효율화 방법, 학부모 소통 노하우"
+                        placeholder="예: 결석생 보강을 녹화 수업으로 대신하는 방법"
                         className={`h-10 px-3 ${SOFT_SELECT_CLASS}`}
                       />
                     </div>
@@ -2574,8 +2716,21 @@ export default function BlogPostEditor({
                       초안 만들기
                     </button>
                   </div>
-                  <p className="mt-2 text-[11px] text-[#615D59]">
-                    결과를 창에서 확인한 뒤 ‘에디터에 적용’을 눌러야 본문에 들어갑니다.
+                  <details className="mt-2 group">
+                    <summary className="cursor-pointer text-[12px] font-medium text-[#31302E] marker:text-[#A39E98]">
+                      참고 자료 붙여넣기 <span className="font-normal text-[#A39E98]">(선택 · 사실·수치는 여기서만 씁니다)</span>
+                    </summary>
+                    <textarea
+                      aria-label="참고 자료"
+                      rows={3}
+                      value={draftInput.reference}
+                      onChange={(event) => setDraftInput((prev) => ({ ...prev, reference: event.target.value }))}
+                      placeholder={AI_REFERENCE_PLACEHOLDER}
+                      className={`mt-2 min-h-[84px] px-3 py-2 leading-relaxed ${SOFT_TEXTAREA_CLASS}`}
+                    />
+                  </details>
+                  <p className="mt-2 text-[11px] leading-relaxed text-[#615D59]">
+                    {draftContextLine ? `함께 반영: ${draftContextLine}. ` : ""}결과를 창에서 확인한 뒤 ‘에디터에 적용’을 눌러야 본문에 들어갑니다.
                   </p>
                 </form>
               </section>
@@ -2637,7 +2792,7 @@ export default function BlogPostEditor({
                         type="text"
                         value={draftInput.topic}
                         onChange={(event) => setDraftInput((prev) => ({ ...prev, topic: event.target.value }))}
-                        placeholder="예: 학원 운영 효율화 방법, 학부모 소통 노하우…"
+                        placeholder="예: 결석생 보강을 녹화 수업으로 대신하는 방법"
                         className={`h-10 px-3 ${SOFT_SELECT_CLASS}`}
                       />
                     </div>
@@ -2673,14 +2828,14 @@ export default function BlogPostEditor({
                     </div>
                     <div>
                       <label htmlFor="ai-draft-reference" className="mb-1 block text-[12px] text-[#615D59]">
-                        참고 자료 <span className="text-[#A39E98]">(선택)</span>
+                        참고 자료 <span className="text-[#A39E98]">(선택 · 사실·수치는 여기서만 씁니다)</span>
                       </label>
                       <textarea
                         id="ai-draft-reference"
                         rows={3}
                         value={draftInput.reference}
                         onChange={(event) => setDraftInput((prev) => ({ ...prev, reference: event.target.value }))}
-                        placeholder={"세부 내용, 통계, 링크, 핵심 포인트 등을 붙여넣으세요."}
+                        placeholder={AI_REFERENCE_PLACEHOLDER}
                         className={`min-h-[84px] px-3 py-2 leading-relaxed ${SOFT_TEXTAREA_CLASS}`}
                       />
                     </div>
@@ -2692,6 +2847,11 @@ export default function BlogPostEditor({
                       {aiState?.action === "draft" && isAiBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
                       초안 생성
                     </button>
+                    <p className="text-[11px] leading-relaxed text-[#615D59]">
+                      {draftContextLine
+                        ? `함께 반영: ${draftContextLine}`
+                        : "상세 설정의 추천 독자·태그·연결 자료를 채우면 초안에도 반영됩니다."}
+                    </p>
                   </form>
 
                   <div className="space-y-2">

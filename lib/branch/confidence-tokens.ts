@@ -1,7 +1,7 @@
 // 확도 신호 색 토큰 SSOT — DESIGN.md "확도 신호 토큰 (Confidence scale)" 절과 1:1.
 // REV 3단 확도(확정/고확도/예정)의 색·라벨·틴트 메타는 이 맵이 유일한 정본이다.
 // 소비처(SalesLedgerWorkbench·SalesLedgerCharts·ledger/*)는 여기서 import만 하고
-// 확도 맥락에서 색 리터럴(#084734·#1E5DA8·#A8741A)을 재정의하지 않는다.
+// 확도 맥락에서 색 리터럴(#C8102E·#1E5DA8·#A8741A)을 재정의하지 않는다.
 //
 // 고확도 파랑 #1E5DA8은 냉색 금지 원칙(DESIGN.md §7-2)의 유일한 예외 토큰 —
 // 2026-07-10 운영자 결정으로 '확도 신호 전용'으로 공식화됐다(교체 아님).
@@ -38,14 +38,15 @@ export const CONFIDENCE_TOKENS: Record<ConfidenceKey, ConfidenceToken> = {
   confirmed: {
     key: "confirmed",
     label: "확정",
-    color: "#084734", // Classin Green — Success·Info 상태 축과 동일
-    strongColor: "#084734",
-    textClass: "text-[#084734]",
-    textStrongClass: "text-[#084734]",
-    bgClass: "bg-[#084734]",
-    tintBg: "#ECFDF5",
-    tintBorder: "#BDEFD8",
-    chipClass: "border-[#BDEFD8] bg-[#ECFDF5] text-[#084734]",
+    // 확정 크림슨 — 2026-10-21 운영자 결정(확정은 붉은색). Danger(#B43E3E 벽돌)와 다른 색상·채도로 분리했다.
+    color: "#C8102E",
+    strongColor: "#C8102E",
+    textClass: "text-[#C8102E]",
+    textStrongClass: "text-[#C8102E]",
+    bgClass: "bg-[#C8102E]",
+    tintBg: "#FFF0F1",
+    tintBorder: "#FFC9CF",
+    chipClass: "border-[#FFC9CF] bg-[#FFF0F1] text-[#C8102E]",
   },
   "high-confidence": {
     key: "high-confidence",

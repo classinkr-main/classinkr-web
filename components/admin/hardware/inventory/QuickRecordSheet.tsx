@@ -25,11 +25,23 @@ import {
 
 import CustomerPicker from "./CustomerPicker"
 import ProductPicker from "./ProductPicker"
+import type { HardwareCustomerOption } from "./hardware-lookups"
+import type { HardwareViewer } from "./movement-permissions"
+import type { OutboundV2DraftState, OutboundV2Field } from "./outbound-v2-model"
+import {
+  BasketLineLotSelect,
+  CrmCustomerField,
+  ExpectedReturnField,
+  LotPickerField,
+  OutboundTypeField,
+  OwnerField,
+  RequiredMark,
+} from "./OutboundV2Fields"
+import type { LotLookupEntry } from "./use-hardware-lots"
 import {
   customerLabel,
   DETAIL_PRESET_KEYS,
   ENTRY_PRESETS,
-  formatLotLabel,
   formatNumber,
   isDraftPlanned,
   isSampleOutbound,
@@ -65,7 +77,33 @@ const SHEET_INPUT_CLASS = `mt-1 ${SHEET_FIELD_INPUT_CLASS}`
 const SHEET_LABEL_CLASS = "text-[12px] font-semibold text-[#615D59]"
 const SHEET_SECTION_TITLE_CLASS = "text-[13px] font-bold text-[#111110]"
 
+/**
+ * 재고관리 프로세스 입력(출고 v2·입고 유무상·조정 방향) — 부모가 use-outbound-v2-draft 상태와 로트 조회를 묶어 넘긴다.
+ * 규칙은 outbound-v2-model.ts, 계약은 docs/active/hardware-inventory-process-gap-2026-10-28.md §7.
+ */
+export interface QuickRecordProcess {
+  viewer: HardwareViewer | null | undefined
+  state: OutboundV2DraftState
+  patch: (next: Partial<OutboundV2DraftState>) => void
+  /** 지금 폼이 고객사로 가는 출고인가(유형·고객 필수). */
+  customerOutbound: boolean
+  /** 지금 폼에 물류번호 고르기를 보일지(창고발 출고 + 관리 품목). */
+  showLotPicker: boolean
+  lotEntry: LotLookupEntry | undefined
+  /** 저장을 한 번 시도한 뒤에만 칸별 문구를 보인다. */
+  fieldErrors: Partial<Record<OutboundV2Field, string>>
+  /** 입고관리 권한 — false 면 입고·조정을 숨긴다(undefined 구응답은 연다). */
+  canInboundAdjust: boolean
+  selectCustomer: (option: HardwareCustomerOption | null, displayName: string) => void
+  setCustomerFreeText: (value: string) => void
+  setOwnerChoice: (name: string, userId: string | null) => void
+  openReturnSheet: () => void
+  basketLotEntry: (draft: HardwareMovementDraft) => LotLookupEntry | undefined
+  setQuickCartLineLot: (index: number, lotNo: string) => void
+}
+
 interface QuickRecordSheetProps {
+  process: QuickRecordProcess
   formRef: RefObject<HTMLFormElement | null>
   sheetPanelRef: RefObject<HTMLElement | null>
   reduceMotion: boolean | null
@@ -145,7 +183,6 @@ interface QuickRecordSheetProps {
   availabilityWarning: string | null
   status: string
   setStatus: Dispatch<SetStateAction<string>>
-  fifoPreview: { plan: Array<{ lot: string; quantity: number }>; shortage: number } | null
   inboundDraftWarnings: string[]
   unitPrice: string
   setUnitPrice: Dispatch<SetStateAction<string>>
@@ -160,7 +197,6 @@ interface QuickRecordSheetProps {
   serialsText: string
   setSerialsText: Dispatch<SetStateAction<string>>
   owner: string
-  setOwner: Dispatch<SetStateAction<string>>
   referenceNo: string
   setReferenceNo: Dispatch<SetStateAction<string>>
   memo: string
@@ -188,7 +224,6 @@ interface QuickRecordSheetProps {
   removeQuickCartItem: (index: number) => void
   clearQuickCart: () => void
   submitQuickCart: () => void | Promise<void>
-  previewFifoForDraft: (draft: HardwareMovementDraft) => { plan: Array<{ lot: string; quantity: number }>; shortage: number } | null
   toggleStayOpenAfterSave: () => void
 }
 
@@ -254,7 +289,6 @@ export default function QuickRecordSheet(props: QuickRecordSheetProps) {
     availabilityWarning,
     status,
     setStatus,
-    fifoPreview,
     inboundDraftWarnings,
     unitPrice,
     setUnitPrice,
@@ -269,7 +303,6 @@ export default function QuickRecordSheet(props: QuickRecordSheetProps) {
     serialsText,
     setSerialsText,
     owner,
-    setOwner,
     referenceNo,
     setReferenceNo,
     memo,
@@ -297,8 +330,8 @@ export default function QuickRecordSheet(props: QuickRecordSheetProps) {
     removeQuickCartItem,
     clearQuickCart,
     submitQuickCart,
-    previewFifoForDraft,
     toggleStayOpenAfterSave,
+    process,
   } = props
   // quickCartSaving은 busy 파생값 — 원본과 동일한 1줄 계산(추가 prop 없이 busy만으로 재구성).
   const quickCartSaving = busy === "movement"
@@ -455,7 +488,9 @@ export default function QuickRecordSheet(props: QuickRecordSheetProps) {
                         반환·샘플 배정·수리·조정 — 자주 쓰지 않는 예외 처리입니다. 한 건씩 저장하세요.
                       </p>
                       <div className="grid grid-cols-1 gap-2 min-[360px]:grid-cols-2">
-                        {ENTRY_PRESETS.filter((option) => DETAIL_PRESET_KEYS.has(option.key)).map((option) => {
+                        {ENTRY_PRESETS.filter(
+                          (option) => DETAIL_PRESET_KEYS.has(option.key) && (option.key !== "adjust" || process.canInboundAdjust)
+                        ).map((option) => {
                           const Icon = option.icon
                           const active = activePresetKey === option.key
                           return (
@@ -463,7 +498,8 @@ export default function QuickRecordSheet(props: QuickRecordSheetProps) {
                               key={option.key}
                               type="button"
                               aria-pressed={active}
-                              onClick={() => applyPreset(option.key)}
+                              // 고객 회수는 원 출고 건에 연결해야 한다 — 회수 등록 시트로 넘긴다(정의서 §회수).
+                              onClick={() => (option.key === "return" ? process.openReturnSheet() : applyPreset(option.key))}
                               className={`cursor-pointer rounded-lg border px-3 py-2.5 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.99] motion-reduce:active:scale-100 ${
                                 active
                                   ? "border-[#084734] bg-[#ECFDF5] text-[#084734]"
@@ -483,8 +519,11 @@ export default function QuickRecordSheet(props: QuickRecordSheetProps) {
                     ) : (
                     // 빠른 기록 2축 — 입고 | 출고. 출고는 하위 실제|예정|샘플 세그먼트.
                     <div className="space-y-2.5">
-                      <div className="grid grid-cols-2 gap-1.5 rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-1" role="tablist" aria-label="입출고 유형">
-                        {([["outbound", "출고", ArrowUpFromLine], ["inbound", "입고", ArrowDownToLine]] as const).map(([axis, label, Icon]) => {
+                      <div className={`grid ${process.canInboundAdjust ? "grid-cols-2" : "grid-cols-1"} gap-1.5 rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-1`} role="tablist" aria-label="입출고 유형">
+                        {([["outbound", "출고", ArrowUpFromLine], ["inbound", "입고", ArrowDownToLine]] as const)
+                          // 입고는 입고관리 권한자만(정의서 §권한). 구응답은 열어 둔다.
+                          .filter(([axis]) => axis === "outbound" || process.canInboundAdjust)
+                          .map(([axis, label, Icon]) => {
                           const active = axis === "inbound" ? movementType === "inbound" : movementType === "outbound"
                           // 활성 톤 = 원장 배지 색(출고 Danger·입고 Success) — 방향 오입력을 색으로도 잡는다.
                           const activeTone = axis === "inbound" ? "bg-[#ECFDF5] text-[#084734]" : "bg-[#FCE9E9] text-[#B43E3E]"
@@ -508,12 +547,13 @@ export default function QuickRecordSheet(props: QuickRecordSheetProps) {
                       {movementType === "outbound" && (
                         // 경쟁 박스 대신 세그먼트+저대비 캡션 한 줄 — 앰버 틴트는 실제 경고에만 남긴다(HW-5).
                         <div className="space-y-2">
-                          <div className="grid grid-cols-3 gap-1.5" role="tablist" aria-label="출고 방식">
+                          <div className="grid grid-cols-3 gap-1.5" role="tablist" aria-label="진행 상태">
                             {([
                               // 활성 톤 = 저장 후 원장 배지 색(실제 Danger·예정 Warning·샘플 중립)과 같은 어휘.
-                              ["actual", "실제", "즉시 재고 반영", "border-[#F2B8B8] bg-[#FCE9E9] text-[#B43E3E]"],
-                              ["planned", "예정", "가용에서 미리 차감", "border-[#ECD29C] bg-[#FBF1E0] text-[#A8741A]"],
-                              ["sample", "샘플", "사무실·창고 반출", "border-[rgba(0,0,0,0.16)] bg-[#F6F5F4] text-[#31302E]"],
+                              // 진행 상태(정의서 고정값) — 설치 완료 | 배송 예정. 샘플 풀은 내부 이동(사무실 → 샘플)이다.
+                              ["actual", "설치 완료", "즉시 재고 반영", "border-[#F2B8B8] bg-[#FCE9E9] text-[#B43E3E]"],
+                              ["planned", "배송 예정", "가용에서 미리 차감", "border-[#ECD29C] bg-[#FBF1E0] text-[#A8741A]"],
+                              ["sample", "샘플 풀", "사무실 샘플 반출", "border-[rgba(0,0,0,0.16)] bg-[#F6F5F4] text-[#31302E]"],
                             ] as const).map(([mode, label, hint, activeTone]) => {
                               const active = outboundMode === mode
                               return (
@@ -535,10 +575,10 @@ export default function QuickRecordSheet(props: QuickRecordSheetProps) {
                           </div>
                           <p className="px-0.5 text-[11px] font-semibold text-[#615D59]">
                             {outboundMode === "actual"
-                              ? "실제 출고는 즉시 재고에 반영되고, 판매 건이면 저장 시 CRM 오더 확인이 뜹니다."
+                              ? "설치 완료는 즉시 재고에 반영되고, 판매 건이면 저장 시 CRM 오더 확인이 뜹니다."
                               : outboundMode === "planned"
-                                ? "예정은 가용(창고 − 예정)에서만 미리 차감합니다. 확정은 홈 › 예상 출고에서 하세요."
-                                : "샘플 대여는 사무실·창고에서 반출되며 CRM 연동 없이 저장됩니다."}
+                                ? "배송 예정은 가용(창고 − 예정)에서만 미리 차감합니다. 확정은 홈 › 예상 출고에서 하세요."
+                                : "사무실 샘플 풀 반출(내부 이동)입니다. 고객사 샘플 출고는 '설치 완료·배송 예정'에서 유형 '샘플'로 기록하세요."}
                           </p>
                         </div>
                       )}
@@ -907,7 +947,16 @@ export default function QuickRecordSheet(props: QuickRecordSheetProps) {
                       {/* 입고 작업건에서는 처리일을 상단 공유 헤더로 올렸으므로 여기서는 숨긴다(중복 방지). */}
                       {!inboundBatchLayout && (
                       <div>
-                        <span id="hardware-date-label" className={SHEET_LABEL_CLASS}>처리일</span>
+                        <span id="hardware-date-label" className={SHEET_LABEL_CLASS}>
+                          {movementType === "outbound" && process.customerOutbound ? (
+                            <>
+                              {outboundMode === "planned" ? "출고 예정일" : "출고일"}
+                              <RequiredMark />
+                            </>
+                          ) : (
+                            "처리일"
+                          )}
+                        </span>
                         <input
                           type="date"
                           aria-labelledby="hardware-date-label"
@@ -1094,23 +1143,26 @@ export default function QuickRecordSheet(props: QuickRecordSheetProps) {
                           className={SHEET_INPUT_CLASS}
                         />
                       </label>
+                      {/* 고객사는 CRM 고객에서 고른다(customerId + 표시 이름). CRM에 없는 곳만 직접 입력 — 정의서 §출고. */}
+                      {isCustomerDestination ? (
+                        <div className="min-[400px]:col-span-2">
+                          <CrmCustomerField
+                            mode={process.state.customerMode}
+                            onModeChange={(mode) => process.patch({ customerMode: mode, customerId: null })}
+                            customerId={process.state.customerId}
+                            customerName={toLocation}
+                            onSelect={process.selectCustomer}
+                            onFreeTextChange={process.setCustomerFreeText}
+                            historyCustomers={historyCustomers}
+                            error={process.fieldErrors.customer}
+                          />
+                        </div>
+                      ) : (
                       <div>
                         <span className={SHEET_LABEL_CLASS} id="hardware-destination-label">
-                          {isCustomerDestination ? "도착 (고객사)" : "도착"}
+                          도착
                         </span>
-                        {/* 고객사 칸만 고르는 입력으로 바꾼다 — 창고·샘플 같은 일반 위치는 기존 datalist 그대로. */}
-                        {isCustomerDestination ? (
-                          <div className="mt-1">
-                            <CustomerPicker
-                              value={toLocation}
-                              onChange={setToLocation}
-                              options={historyCustomers}
-                              ariaLabel="도착 고객사"
-                              placeholder="고객사명 — 예: 남명학원"
-                              className={SHEET_FIELD_INPUT_CLASS}
-                            />
-                          </div>
-                        ) : (
+                        {(
                           <input
                             value={toLocation}
                             onChange={(event) => setToLocation(event.target.value)}
@@ -1121,7 +1173,90 @@ export default function QuickRecordSheet(props: QuickRecordSheetProps) {
                           />
                         )}
                       </div>
+                      )}
                     </div>
+                    )}
+
+                    {/* 출고 등록 v2 — 고객 출고는 유형 필수, 샘플은 반납 예정일 필수(정의서 §출고·결정 D4). */}
+                    {movementType === "outbound" && process.customerOutbound && (
+                      <div className="space-y-3">
+                        <OutboundTypeField
+                          value={process.state.outboundType}
+                          onChange={(value) => process.patch({ outboundType: value })}
+                          error={process.fieldErrors.outboundType}
+                        />
+                        {process.state.outboundType === "sample" && (
+                          <ExpectedReturnField
+                            value={process.state.expectedReturnAt}
+                            onChange={(value) => process.patch({ expectedReturnAt: value })}
+                            min={occurredAt || undefined}
+                            error={process.fieldErrors.expectedReturnAt}
+                          />
+                        )}
+                      </div>
+                    )}
+                    {/* 물류번호 — 관리 품목이 창고에서 나갈 때 직접 고른다(잔여 1대 이상만, 결정 D6). FIFO 자동 배정은 없다. */}
+                    {movementType === "outbound" && process.showLotPicker && (
+                      <LotPickerField
+                        entry={process.lotEntry}
+                        value={lotNo}
+                        onChange={setLotNo}
+                        quantity={draftQuantityNumber}
+                        error={process.fieldErrors.lotNo}
+                      />
+                    )}
+                    {movementType === "inbound" && (
+                      <div>
+                        <span className={SHEET_LABEL_CLASS}>
+                          유상 / 무상
+                          <RequiredMark />
+                        </span>
+                        <div className="mt-1 grid grid-cols-2 gap-1.5" role="radiogroup" aria-label="유상 무상">
+                          {([[false, "유상 (매입)"], [true, "무상"]] as const).map(([free, label]) => (
+                            <button
+                              key={label}
+                              type="button"
+                              role="radio"
+                              aria-checked={process.state.isFree === free}
+                              onClick={() => process.patch({ isFree: free })}
+                              className={`min-h-[40px] cursor-pointer rounded-md border px-2 text-[12px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 ${
+                                process.state.isFree === free
+                                  ? "border-[#084734] bg-[#ECFDF5] text-[#084734]"
+                                  : "border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] text-[#615D59] hover:bg-white"
+                              }`}
+                            >
+                              {label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {movementType === "adjust" && (
+                      <div>
+                        <span className={SHEET_LABEL_CLASS}>
+                          조정 방향
+                          <RequiredMark />
+                        </span>
+                        <div className="mt-1 grid grid-cols-2 gap-1.5" role="radiogroup" aria-label="조정 방향">
+                          {([["increase", "＋ 늘리기"], ["decrease", "－ 줄이기"]] as const).map(([direction, label]) => (
+                            <button
+                              key={direction}
+                              type="button"
+                              role="radio"
+                              aria-checked={process.state.adjustDirection === direction}
+                              onClick={() => process.patch({ adjustDirection: direction })}
+                              className={`min-h-[40px] cursor-pointer rounded-md border px-2 text-[12px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 ${
+                                process.state.adjustDirection === direction
+                                  ? "border-[#084734] bg-[#ECFDF5] text-[#084734]"
+                                  : "border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] text-[#615D59] hover:bg-white"
+                              }`}
+                            >
+                              {label}
+                            </button>
+                          ))}
+                        </div>
+                        <p className="mt-1 text-[11px] text-[#A39E98]">수량은 양수로 적고 방향을 고릅니다. 사유는 아래 메모에 필수로 남깁니다.</p>
+                      </div>
                     )}
 
                     {/* 상세 모드는 상태가 핵심 필드(수리중·재고 조정 등) — 자유 텍스트로 앞면에 노출. */}
@@ -1177,20 +1312,6 @@ export default function QuickRecordSheet(props: QuickRecordSheetProps) {
                         </div>
                       </details>
                     )}
-                    {fifoPreview && (
-                      <div className={`rounded-lg border px-3 py-2 text-[11px] font-semibold ${
-                        fifoPreview.shortage > 0
-                          ? "border-[#ECD29C] bg-[#FBF1E0] text-[#7A520F]"
-                          : "border-[#BDEFD8] bg-[#ECFDF5] text-[#084734]"
-                      }`}>
-                        <span className="font-bold">FIFO 자동 배정</span>{" "}
-                        {fifoPreview.plan.length > 0
-                          ? fifoPreview.plan.map((lot) => `${formatLotLabel(lot.lot) ?? lot.lot} ${formatNumber(lot.quantity)}대`).join(" · ")
-                          : "배정 가능한 lot 없음"}
-                        {fifoPreview.shortage > 0 ? ` · 부족 ${formatNumber(fifoPreview.shortage)}대` : ""}
-                      </div>
-                    )}
-
                     {movementType === "inbound" && inboundBatchLayout && (
                       // 입고 작업건 — 단가·매입액·시리얼·보관·수입자는 접이식으로 내려 기본은 간결하게.
                       <details className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8]">
@@ -1390,16 +1511,16 @@ export default function QuickRecordSheet(props: QuickRecordSheetProps) {
 
                     {/* 자주 안 만지는 필드는 접어 둔다 — 담당자는 기억값 프리필, 상태는 프리셋이 채우고,
                         출고 lot은 FIFO 자동 배정이 기본이라 수동 지정만 여기로. */}
-                    <details className="rounded-lg border border-[rgba(0,0,0,0.08)]">
+                    <details className="rounded-lg border border-[rgba(0,0,0,0.08)]" open={movementType === "adjust" || undefined}>
                       <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2.5 text-[12px] font-bold text-[#31302E] transition hover:bg-[#F6F5F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40">
-                        <span>추가 정보 — 담당자 · 상태 · 참조 · 메모{movementType === "outbound" ? " · lot 수동 지정" : ""}</span>
+                        <span>추가 정보 — 담당자{process.customerOutbound ? "" : " · 상태"} · 참조 · 메모{movementType === "adjust" ? " (사유 필수)" : ""}</span>
                         <span className="flex items-center gap-1.5">
                           {owner.trim() ? (
                             <span className="rounded-full bg-[#F6F5F4] px-2 py-0.5 text-[10.5px] font-bold text-[#615D59]">{owner.trim()}</span>
                           ) : null}
-                          {(referenceNo.trim() ? 1 : 0) + (memo.trim() ? 1 : 0) + (movementType === "outbound" && lotNo.trim() ? 1 : 0) > 0 ? (
+                          {(referenceNo.trim() ? 1 : 0) + (memo.trim() ? 1 : 0) > 0 ? (
                             <span className="rounded-full bg-[#ECFDF5] px-2 py-0.5 text-[10.5px] font-bold tabular-nums text-[#084734]">
-                              {(referenceNo.trim() ? 1 : 0) + (memo.trim() ? 1 : 0) + (movementType === "outbound" && lotNo.trim() ? 1 : 0)}
+                              {(referenceNo.trim() ? 1 : 0) + (memo.trim() ? 1 : 0)}
                             </span>
                           ) : null}
                           <ChevronDown className="h-3.5 w-3.5 text-[#A39E98]" />
@@ -1407,17 +1528,10 @@ export default function QuickRecordSheet(props: QuickRecordSheetProps) {
                       </summary>
                       <div className="space-y-3 border-t border-[rgba(0,0,0,0.06)] p-3">
                         {/* 상세 모드(신규)에서는 상태를 앞면 필드로 이미 노출하므로 여기서는 중복 렌더하지 않는다. */}
-                        <div className={`grid grid-cols-1 gap-3 ${sheetView === "detail" && !editingId ? "" : "min-[400px]:grid-cols-2"}`}>
-                          <label className="block">
-                            <span className={SHEET_LABEL_CLASS}>담당자</span>
-                            <input
-                              value={owner}
-                              onChange={(event) => setOwner(event.target.value)}
-                              placeholder="자동 기억됨"
-                              className={SHEET_INPUT_CLASS}
-                            />
-                          </label>
-                          {!(sheetView === "detail" && !editingId) && (
+                        <div className={`grid grid-cols-1 gap-3 ${(sheetView === "detail" && !editingId) || process.customerOutbound ? "" : "min-[400px]:grid-cols-2"}`}>
+                          <OwnerField viewer={process.viewer} owner={owner} ownerUserId={process.state.ownerUserId} onChange={process.setOwnerChoice} />
+                          {/* 고객 출고의 상태는 위 진행 상태(설치 완료·배송 예정)가 정한다 — 자유 입력을 두지 않는다. */}
+                          {!(sheetView === "detail" && !editingId) && !process.customerOutbound && (
                             <label className="block">
                               <span className={SHEET_LABEL_CLASS}>상태</span>
                               <input
@@ -1428,18 +1542,6 @@ export default function QuickRecordSheet(props: QuickRecordSheetProps) {
                             </label>
                           )}
                         </div>
-                        {movementType === "outbound" && (
-                          <label className="block">
-                            <span className={SHEET_LABEL_CLASS}>물량번호 (lot) 수동 지정</span>
-                            <input
-                              value={lotNo}
-                              onChange={(event) => setLotNo(event.target.value)}
-                              placeholder="비우면 FIFO 자동 배정"
-                              list="hardware-lot-options"
-                              className={SHEET_INPUT_CLASS}
-                            />
-                          </label>
-                        )}
                         <label className="block">
                           <span className={SHEET_LABEL_CLASS}>참조 번호</span>
                           <input
@@ -1450,7 +1552,16 @@ export default function QuickRecordSheet(props: QuickRecordSheetProps) {
                           />
                         </label>
                         <label className="block">
-                          <span className={SHEET_LABEL_CLASS}>메모</span>
+                          <span className={SHEET_LABEL_CLASS}>
+                            {movementType === "adjust" ? (
+                              <>
+                                조정 사유
+                                <RequiredMark />
+                              </>
+                            ) : (
+                              "메모"
+                            )}
+                          </span>
                           <textarea
                             value={memo}
                             onChange={(event) => setMemo(event.target.value)}
@@ -1526,7 +1637,8 @@ export default function QuickRecordSheet(props: QuickRecordSheetProps) {
                               </div>
                             )}
                             {quickCart.map((draft, index) => {
-                              const cartFifoPreview = previewFifoForDraft(draft)
+                              // 물류번호는 줄마다 고른다(결정 D6) — 창고에서 나가는 출고 줄만.
+                              const lineLotEntry = draft.movementType === "outbound" ? process.basketLotEntry(draft) : undefined
                               const lineError = quickCartLineErrors[quickCartLineKey(draft)]
                               const linePlanned = isDraftPlanned(draft)
                               const lineSample = isSampleOutbound(draft)
@@ -1556,7 +1668,7 @@ export default function QuickRecordSheet(props: QuickRecordSheetProps) {
                                       {isOutboundLine && (
                                         // 라인별 실제|예정 토글 — draft.isPlanned를 뒤집어 status를 즉시 파생한다.
                                         <span className="inline-flex overflow-hidden rounded-full border border-[rgba(0,0,0,0.08)]" role="group" aria-label="출고 방식">
-                                          {([["actual", "실제"], ["planned", "예정"]] as const).map(([mode, label]) => {
+                                          {([["actual", "설치 완료"], ["planned", "배송 예정"]] as const).map(([mode, label]) => {
                                             const modeActive = mode === "planned" ? linePlanned : !linePlanned
                                             return (
                                               <button
@@ -1586,15 +1698,15 @@ export default function QuickRecordSheet(props: QuickRecordSheetProps) {
                                     {lineError && (
                                       <p className="mt-1 text-[11px] font-bold text-[#8F2C2C]">{lineError}</p>
                                     )}
-                                    {cartFifoPreview && (
-                                      <p className={`mt-1 text-[11px] font-bold ${
-                                        cartFifoPreview.shortage > 0 ? "text-[#7A520F]" : "text-[#084734]"
-                                      }`}>
-                                        FIFO 예상: {cartFifoPreview.plan.length > 0
-                                          ? cartFifoPreview.plan.map((lot) => `${formatLotLabel(lot.lot) ?? lot.lot} ${formatNumber(lot.quantity)}대`).join(" · ")
-                                          : "배정 없음"}
-                                        {cartFifoPreview.shortage > 0 ? ` · 부족 ${formatNumber(cartFifoPreview.shortage)}대` : ""}
-                                      </p>
+                                    {lineLotEntry && (
+                                      <BasketLineLotSelect
+                                        entry={lineLotEntry}
+                                        value={draft.lotNo}
+                                        quantity={draft.quantity}
+                                        disabled={quickCartSaving}
+                                        productName={draft.productName}
+                                        onChange={(value) => process.setQuickCartLineLot(index, value)}
+                                      />
                                     )}
                                   </div>
                                   <button

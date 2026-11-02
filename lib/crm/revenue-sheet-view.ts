@@ -149,8 +149,8 @@ export function buildRevenueSheetCsvRows(rows: ReadonlyArray<AdminCrmRevenueShee
   return [header, ...body]
 }
 
-// 크론은 하루 한 번(lib/branch/sync/schedule.ts)이라 하루를 넘기면 "어제 크론도 실패했다"는 뜻이다 —
-// 여유 2시간을 둔 26시간을 넘으면 기준 시각을 경고 톤으로 보인다.
+// 크론은 하루 3번(KST 09·13·17시, vercel.json /api/cron/sync-branch)이다. 마지막 크론(17시)과 다음 날 첫 크론(09시)
+// 사이가 16시간이라, 여유를 둔 26시간을 넘기면 "하루치 크론이 모두 실패했다"는 뜻 — 기준 시각을 경고 톤으로 보인다.
 export const REVENUE_SHEET_STALE_AFTER_MS = 26 * 60 * 60 * 1000
 
 export function isRevenueSheetSyncStale(latestSyncedAt: string | null | undefined, now: number): boolean {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { computeManualLedgerGap } from "@/lib/admin-crm-revenue-sheet"
+import { computeManualLedgerGap, isSheetWriteAbsorbedByMirror } from "@/lib/admin-crm-revenue-sheet"
 
 // 품질 감사 2026-09-10 — #1(P0, 이중 진실): CRM 매출시트 화면(/admin/crm/deals/rev-sheet)은
 // branch_rev_deals(구글 REV 시트 동기화 산물)만 본다 — 장부 콕핏/입력 레일에서 적용까지 마친
@@ -79,5 +79,66 @@ describe("computeManualLedgerGap — 반영되지 않은 장부 수기 입력 �
     expect(result.newCount).toBe(1)
     expect(result.newAmount).toBe(70_000)
     expect(result.editCount).toBe(0)
+  })
+})
+
+// REV 시트 쓰기(ADR-011) — 반영 때 '2. REV' 에도 쓴 정정은 다음 REV 동기화가 미러(branch_rev_deals)로 들인다.
+// 그 뒤로는 이 화면이 이미 그 값을 갖고 있으므로 "미반영"에서 뺀다(인자를 생략하면 기존과 같다).
+describe("computeManualLedgerGap — 미러에 들어온 시트 쓰기 정정은 미반영에서 뺀다", () => {
+  const rows = [
+    { amount: 100_000, applied_at: "2026-10-20T00:00:00Z", entry_type: "manual-new", draft_id: "d-new" },
+    { amount: 300_000, applied_at: "2026-10-22T00:00:00Z", entry_type: "manual-edit", draft_id: "d-absorbed" },
+    { amount: 500_000, applied_at: "2026-10-21T00:00:00Z", entry_type: "manual-edit", draft_id: "d-pending" },
+    { amount: 700_000, applied_at: "2026-10-19T00:00:00Z", entry_type: "manual-edit", draft_id: null },
+  ]
+
+  it("흡수된 초안 id 의 항목은 건수·금액·최근 적용 시각에서 모두 빠진다", () => {
+    const result = computeManualLedgerGap(rows, new Set(["d-absorbed"]))
+    expect(result).toEqual({
+      count: 3,
+      amount: 1_300_000,
+      newCount: 1,
+      newAmount: 100_000,
+      editCount: 2,
+      latestAppliedAt: "2026-10-21T00:00:00Z",
+    })
+  })
+
+  it("인자를 생략하거나 빈 집합이면 기존과 같다", () => {
+    const before = computeManualLedgerGap(rows)
+    expect(before.count).toBe(4)
+    expect(before.editCount).toBe(3)
+    expect(before.latestAppliedAt).toBe("2026-10-22T00:00:00Z")
+    expect(computeManualLedgerGap(rows, new Set())).toEqual(before)
+  })
+
+  it("draft_id 가 없는 항목은 흡수 집합과 무관하게 남는다", () => {
+    const result = computeManualLedgerGap(rows, new Set(["d-absorbed", "d-pending", "d-new"]))
+    expect(result.count).toBe(1)
+    expect(result.amount).toBe(700_000)
+  })
+})
+
+describe("isSheetWriteAbsorbedByMirror — written 이고 그 뒤에 시작한 REV 동기화가 성공했을 때만", () => {
+  const sync = "2026-10-23T08:00:00.000Z"
+
+  it("written + 동기화 시작 전에 씀 → 흡수", () => {
+    expect(isSheetWriteAbsorbedByMirror({ status: "written", writtenAt: "2026-10-23T07:59:59.000Z" }, sync)).toBe(true)
+  })
+
+  it("동기화 시작과 같은 시각·뒤에 씀 → 아직 미러에 없다", () => {
+    expect(isSheetWriteAbsorbedByMirror({ status: "written", writtenAt: sync }, sync)).toBe(false)
+    expect(isSheetWriteAbsorbedByMirror({ status: "written", writtenAt: "2026-10-23T08:00:01.000Z" }, sync)).toBe(false)
+  })
+
+  it.each(["sending", "refused", "failed", "unknown"] as const)("status %s 는 시트에 확실히 쓴 것이 아니다 → 흡수 아님", (status) => {
+    expect(isSheetWriteAbsorbedByMirror({ status, writtenAt: "2026-10-23T07:00:00.000Z" }, sync)).toBe(false)
+  })
+
+  it("동기화 기록 없음·written_at 없음·날짜 해석 불가 → 흡수 아님(기존 동작 쪽)", () => {
+    expect(isSheetWriteAbsorbedByMirror({ status: "written", writtenAt: "2026-10-23T07:00:00.000Z" }, null)).toBe(false)
+    expect(isSheetWriteAbsorbedByMirror({ status: "written", writtenAt: null }, sync)).toBe(false)
+    expect(isSheetWriteAbsorbedByMirror({ status: "written", writtenAt: "garbage" }, sync)).toBe(false)
+    expect(isSheetWriteAbsorbedByMirror({ status: "written", writtenAt: "2026-10-23T07:00:00.000Z" }, "garbage")).toBe(false)
   })
 })

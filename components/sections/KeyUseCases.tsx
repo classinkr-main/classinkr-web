@@ -73,9 +73,9 @@ export function KeyUseCases({ defaultValue = "classes" }: { defaultValue?: UseCa
                                     "수업 및 숙제 관리, 일괄 생성",
                                 ]}
                                 imageColor="bg-[#ECFDF5]"
-                                imageSrc="/images/use-cases/generated/admin-dashboard-source-1.png"
-                                imageAlt="관리자 출결 대시보드 화면"
-                                imageObjectPosition="48% 42%"
+                                imageSrc="/images/use-cases/generated/comms-source.png"
+                                imageAlt="Classin 반별 수업 기록과 출석·제출 현황 화면"
+                                imageObjectPosition="40% 50%"
                             />
                         </TabsContent>
                         <TabsContent value="comms">

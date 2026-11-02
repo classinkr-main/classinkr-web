@@ -15,6 +15,7 @@ import {
 } from "lucide-react"
 
 import { getDocsContent } from "@/lib/docs-content"
+import { createPublicMetadata } from "@/lib/seo"
 import { Reveal } from "@/components/landing/Reveal"
 import { TrackedLink } from "@/components/TrackedLink"
 import type { DocsArticleSummary } from "@/components/docs"
@@ -34,24 +35,31 @@ import {
   getGuideIntentCards,
   getGuideProductTiles,
   getInstallGuideLinks,
+  readQuery,
   scoreDocsArticle,
+  withSearchNoIndex,
+  type DocsSearchParams,
 } from "./_utils"
 
 const PAGE_DESCRIPTION =
   "클래스인 설치와 가입부터 코스 개설, 수업 진행, 전자칠판 사용법까지 원장·강사·학생이 각자 찾아보는 공식 가이드입니다."
 
-export const metadata: Metadata = {
-  title: "Classin 가이드",
-  description: PAGE_DESCRIPTION,
-  openGraph: {
-    title: "Classin 가이드",
-    description: PAGE_DESCRIPTION,
-    type: "website",
-  },
+interface DocsHomePageProps {
+  searchParams?: Promise<DocsSearchParams>
 }
 
-interface DocsHomePageProps {
-  searchParams?: Promise<{ q?: string }>
+// canonical 은 쿼리 없는 /docs 로 고정한다. 검색어가 붙은 URL 은 색인에서 뺀다(/docs/search 와 같은 정책).
+export async function generateMetadata({ searchParams }: DocsHomePageProps): Promise<Metadata> {
+  const { q } = await (searchParams ?? Promise.resolve<DocsSearchParams>({}))
+
+  return withSearchNoIndex(
+    createPublicMetadata({
+      title: "Classin 가이드",
+      description: PAGE_DESCRIPTION,
+      path: "/docs",
+    }),
+    readQuery(q)
+  )
 }
 
 const SECTION_EYEBROW = "text-[12px] font-semibold uppercase tracking-[0.14em] text-[#615D59]"
@@ -105,10 +113,6 @@ const PRODUCT_TILE_ICONS: Partial<Record<string, LucideIcon>> = {
   updates: History,
 }
 
-function normalizeQuery(value?: string) {
-  return value?.trim().toLowerCase() ?? ""
-}
-
 function GuideArticleRow({
   article,
   query,
@@ -150,10 +154,11 @@ function GuideArticleRow({
 }
 
 export default async function DocsHomePage({ searchParams }: DocsHomePageProps) {
-  const { q } = await (searchParams ?? Promise.resolve<{ q?: string }>({}))
+  const { q: rawQ } = await (searchParams ?? Promise.resolve<DocsSearchParams>({}))
+  const q = readQuery(rawQ)
   const docsContent = await getDocsContent()
   const allDocs = getAllDocsSummaries(docsContent)
-  const query = normalizeQuery(q)
+  const query = q.toLowerCase()
   const searchResults = query
     ? allDocs
         .map((doc) => ({ doc, score: scoreDocsArticle(doc, query) }))
@@ -198,7 +203,7 @@ export default async function DocsHomePage({ searchParams }: DocsHomePageProps) 
           <Search className="h-4 w-4 shrink-0 text-[#A39E98]" aria-hidden />
           <input
             name="q"
-            defaultValue={q ?? ""}
+            defaultValue={q}
             aria-label="가이드 전체 검색"
             placeholder="예: 학생 추가, 비밀번호 변경"
             data-focus-ring="parent"
@@ -296,6 +301,35 @@ export default async function DocsHomePage({ searchParams }: DocsHomePageProps) 
                 </div>
               </div>
             )}
+          </div>
+        </section>
+      )}
+
+      {!query && (
+        <section className="container mx-auto mt-12 max-w-[1080px] px-5" aria-labelledby="feature-guides-heading">
+          <h2 id="feature-guides-heading" className={SECTION_EYEBROW}>기능 소개서</h2>
+          <div className="mt-4 grid gap-6 sm:grid-cols-2">
+            {[
+              { title: "클래스인 기능 소개서", description: "수업·과제·운영 기능을 화면과 함께 살펴보세요.", href: "/classin-feature-guide.html", ctaId: "docs_feature_guide" },
+              { title: "클래스인 AI 기능 소개서", description: "AI 강의 분석·AI 칠판·AI 에이전트의 주요 기능과 사용 방법을 확인하세요.", href: "/classin-ai-feature-guide.html", ctaId: "docs_ai_feature_guide" },
+            ].map((guide) => (
+              <TrackedLink
+                key={guide.href}
+                href={guide.href}
+                prefetch={false}
+                target="_blank"
+                rel="noopener noreferrer"
+                ctaId={guide.ctaId}
+                className="group block border-t border-black/[0.08] pt-5"
+              >
+                <span className="flex items-center justify-between gap-3 text-[16px] font-semibold text-[#111110] group-hover:text-[#084734]">
+                  {guide.title}
+                  <ArrowRight className="h-4 w-4 shrink-0 text-[#084734]" aria-hidden />
+                </span>
+                <p className="mt-2 text-[14px] leading-6 text-[#615D59]">{guide.description}</p>
+                <span className="sr-only">(새 탭)</span>
+              </TrackedLink>
+            ))}
           </div>
         </section>
       )}

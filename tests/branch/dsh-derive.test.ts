@@ -1,17 +1,18 @@
 import { describe, expect, it } from "vitest"
 import {
   aggregateDshTotals,
-  deriveDshMetricsBand,
+  deriveDshComposition,
   deriveDshMonthlyPace,
-  deriveDshScopedMetrics,
+  deriveDshProgress,
+  deriveDshSegments,
   deriveDshWeeklyFromDealMix,
   dshRate,
   dshRateToneClass,
 } from "@/components/admin/branch/ledger/dsh-derive"
 import type { BranchDealMix, BranchDshBreakdownRow } from "@/components/admin/branch/types"
 
-// DSH 렌즈 파생 SSOT(dsh-derive) 검증 — 지표 밴드·월별 페이스가 소비하는 전사 합계·기간
-// 지표·필요 페이스·구성비. 핵심 회귀: breakdown 스코프 중복(전사+팀+멤버)은 합산하면
+// DSH 렌즈 파생 SSOT(dsh-derive) 검증 — 진도 개요·월별 페이스가 소비하는 전사 합계·기간
+// 지표·필요 페이스·구성별 달성·구성비. 핵심 회귀: breakdown 스코프 중복(전사+팀+멤버)은 합산하면
 // 3중 계상이므로 최대-annual 채택 규칙이 모든 파생 경로에서 지켜져야 한다.
 
 const FY_MONTHS = [
@@ -44,7 +45,7 @@ function row(
 // 고정 기준 시각 — 2026-07-15 UTC: FY2026(4월 시작)의 Q2, 회계월 2026-07.
 const NOW = new Date(Date.UTC(2026, 6, 15))
 
-// 지표 밴드·페이스 공용 픽스처:
+// 진도 개요·페이스 공용 픽스처:
 //  - SW/New/Direct  goal 1.2M(월 100k), status 480k(4~7월에만: 80/60/60/280k, Q1 200k·Q2 280k)
 //  - HW/Renew/(미구분) goal 600k(월 50k), status 120k(4월 120k, Q1 120k)
 //  - 스코프 중복: SW/New/Direct goal 400k 멤버 행(월 100k) — 채택되면 안 된다.
@@ -104,81 +105,100 @@ describe("aggregateDshTotals", () => {
   })
 })
 
-describe("deriveDshMetricsBand", () => {
-  it("빈 breakdown은 null(카드가 빈 상태를 그리게)", () => {
-    expect(deriveDshMetricsBand([], NOW)).toBeNull()
-  })
+// 대체된 지표 밴드(deriveDshMetricsBand)의 회귀를 진도 개요 파생으로 옮겼다 — 같은 픽스처·같은 값.
+describe("진도 개요 파생 — 기간 지표·필요 페이스(3중 계상 방지)", () => {
+  const progress = () => deriveDshProgress(aggregateDshTotals(bandFixture()), NOW)
 
   it("연간/현재 분기/현재 월 3종 지표를 오늘(UTC) 기준으로 계산한다", () => {
-    const band = deriveDshMetricsBand(bandFixture(), NOW)!
-    expect(band.fiscalYear).toBe(2026)
-    expect(band.currentQuarter).toBe(2)
-    expect(band.currentMonthKey).toBe("2026-07")
+    const { fiscalYear, currentQuarter, currentMonthKey, annual, quarter, month } = progress()
+    expect(fiscalYear).toBe(2026)
+    expect(currentQuarter).toBe(2)
+    expect(currentMonthKey).toBe("2026-07")
 
-    expect(band.annual.goal).toBe(1_800_000)
-    expect(band.annual.status).toBe(600_000)
-    expect(band.annual.gap).toBe(-1_200_000)
-    expect(band.annual.pct).toBeCloseTo((600_000 / 1_800_000) * 100, 6)
+    expect(annual).toMatchObject({ goal: 1_800_000, status: 600_000 })
+    expect(annual.pct).toBeCloseTo((600_000 / 1_800_000) * 100, 6)
 
     // Q2 = quarters[1]: goal 300k+150k, status 280k+0.
-    expect(band.quarter.goal).toBe(450_000)
-    expect(band.quarter.status).toBe(280_000)
-    expect(band.quarter.pct).toBeCloseTo((280_000 / 450_000) * 100, 6)
+    expect(quarter).toMatchObject({ goal: 450_000, status: 280_000 })
+    expect(quarter.pct).toBeCloseTo((280_000 / 450_000) * 100, 6)
 
     // 2026-07: goal 100k+50k, status 280k — 목표 초과 월.
-    expect(band.month.goal).toBe(150_000)
-    expect(band.month.status).toBe(280_000)
-    expect(band.month.pct).toBeCloseTo((280_000 / 150_000) * 100, 6)
-  })
-
-  it("SW/HW·New/Renew 연간 타일은 채택된 콤보를 차원별로 합산한다", () => {
-    const band = deriveDshMetricsBand(bandFixture(), NOW)!
-    expect(band.software).toMatchObject({ goal: 1_200_000, status: 480_000 })
-    expect(band.software.pct).toBeCloseTo(40, 6)
-    expect(band.hardware).toMatchObject({ goal: 600_000, status: 120_000 })
-    expect(band.hardware.pct).toBeCloseTo(20, 6)
-    // 픽스처상 New=SW 콤보, Renew=HW 콤보와 일치.
-    expect(band.newBiz).toMatchObject({ goal: 1_200_000, status: 480_000 })
-    expect(band.renew).toMatchObject({ goal: 600_000, status: 120_000 })
+    expect(month).toMatchObject({ goal: 150_000, status: 280_000 })
+    expect(month.pct).toBeCloseTo((280_000 / 150_000) * 100, 6)
   })
 
   it("남은 목표·필요 페이스 — 잔여 회계월 수는 당월 포함, 월평균 = 남은 목표 ÷ 잔여 월", () => {
-    const band = deriveDshMetricsBand(bandFixture(), NOW)!
-    expect(band.remaining.amount).toBe(1_200_000)
+    const { remaining } = progress()
+    expect(remaining.amount).toBe(1_200_000)
     // 2026-07..2027-03 = 9개월(당월 포함).
-    expect(band.remaining.monthsLeft).toBe(9)
-    expect(band.remaining.monthlyNeeded).toBeCloseTo(1_200_000 / 9, 6)
+    expect(remaining.monthsLeft).toBe(9)
+    expect(remaining.monthlyNeeded).toBeCloseTo(1_200_000 / 9, 6)
   })
 
   it("이미 달성(남은 목표 ≤ 0)이면 월평균 필요액 0, 회계연도 종료 후 조회면 null", () => {
-    const done = deriveDshMetricsBand(
-      [row("goal", 100_000, monthsOf(100_000 / 12)), row("status", 150_000, monthsOf(150_000 / 12))],
+    const done = deriveDshProgress(
+      aggregateDshTotals([row("goal", 100_000, monthsOf(100_000 / 12)), row("status", 150_000, monthsOf(150_000 / 12))]),
       NOW,
-    )!
+    )
     expect(done.remaining.amount).toBe(-50_000)
     expect(done.remaining.monthlyNeeded).toBe(0)
 
     // FY 창(2026-04..2027-03)이 전부 과거인 시점 — 잔여 월 0, 페이스 산정 불가.
-    const after = deriveDshMetricsBand(bandFixture(), new Date(Date.UTC(2028, 0, 15)))!
+    const after = deriveDshProgress(aggregateDshTotals(bandFixture()), new Date(Date.UTC(2028, 0, 15)))
     expect(after.remaining.monthsLeft).toBe(0)
     expect(after.remaining.monthlyNeeded).toBeNull()
     expect(after.currentMonthKey).toBeNull()
   })
+})
 
-  it("구성비는 Status 연간 기준 — 채널 공란은 (미구분) 세그먼트로 계상된다", () => {
-    const band = deriveDshMetricsBand(bandFixture(), NOW)!
-    expect(band.composition.swHw).toEqual([
+describe("deriveDshSegments / deriveDshComposition — 구성별 달성·구성비 스코프", () => {
+  const totals = (groups: ReturnType<typeof deriveDshSegments>) =>
+    groups.map((group) => [group.category, group.goal, group.status])
+
+  it("채택된 콤보를 연간/현재 분기/현재 월 값으로 카테고리별 합산한다", () => {
+    expect(totals(deriveDshSegments(bandFixture(), NOW, "Y"))).toEqual([
+      ["Software", 1_200_000, 480_000],
+      ["Hardware", 600_000, 120_000],
+    ])
+    // Q2: HW는 실적이 없어도 행을 유지하고 달성률 0%.
+    const quarterly = deriveDshSegments(bandFixture(), NOW, "Q")
+    expect(totals(quarterly)).toEqual([
+      ["Software", 300_000, 280_000],
+      ["Hardware", 150_000, 0],
+    ])
+    expect(quarterly[1].pct).toBe(0)
+    expect(totals(deriveDshSegments(bandFixture(), NOW, "M"))).toEqual([
+      ["Software", 100_000, 280_000],
+      ["Hardware", 50_000, 0],
+    ])
+  })
+
+  it("월 스코프에서 오늘이 회계월 창 밖이면 값 0·달성률 null — 행 구성은 연간 기준 그대로", () => {
+    const monthly = deriveDshSegments(bandFixture(), new Date(Date.UTC(2028, 0, 15)), "M")
+    expect(monthly.map((group) => group.category)).toEqual(["Software", "Hardware"])
+    expect(monthly.every((group) => group.goal === 0 && group.status === 0 && group.pct === null)).toBe(true)
+  })
+
+  it("구성비는 Status 스코프 값 기준 — 채널 공란은 (미구분) 세그먼트로 계상된다", () => {
+    expect(deriveDshComposition([], NOW, "Y")).toBeNull()
+    const yearly = deriveDshComposition(bandFixture(), NOW, "Y")!
+    expect(yearly.swHw).toEqual([
       { label: "SW", value: 480_000 },
       { label: "HW", value: 120_000 },
     ])
-    expect(band.composition.newRenew).toEqual([
+    expect(yearly.newRenew).toEqual([
       { label: "New", value: 480_000 },
       { label: "Renew", value: 120_000 },
     ])
-    expect(band.composition.channel).toEqual([
+    expect(yearly.channel).toEqual([
       { label: "Direct", value: 480_000 },
       { label: "Channel", value: 0 },
       { label: "(미구분)", value: 120_000 },
+    ])
+    // Q2에는 HW 실적이 없다.
+    expect(deriveDshComposition(bandFixture(), NOW, "Q")!.swHw).toEqual([
+      { label: "SW", value: 280_000 },
+      { label: "HW", value: 0 },
     ])
   })
 })
@@ -239,42 +259,6 @@ describe("deriveDshMonthlyPace", () => {
     if (!pace) throw new Error("fixture pace must not be null")
     return pace
   }
-})
-
-describe("deriveDshScopedMetrics", () => {
-  it("Q 스코프: 현재 회계분기(Q2) 값을 dedupe 후 합산한다 — 중복 채택 회귀 포함", () => {
-    const scoped = deriveDshScopedMetrics(bandFixture(), NOW, "Q")
-    if (!scoped) throw new Error("fixture scoped must not be null")
-    expect(scoped.scopeLabel).toBe("Q2")
-    // 중복 멤버 행(annual 400k, Q 100k)이 합산됐다면 goal 550k — 정답은 300k(SW) + 150k(HW).
-    expect(scoped.total.goal).toBe(450_000)
-    expect(scoped.total.status).toBe(280_000)
-    expect(scoped.total.gap).toBe(-170_000)
-    expect(scoped.software.goal).toBe(300_000)
-    expect(scoped.software.pct).toBeCloseTo((280_000 / 300_000) * 100, 6)
-    expect(scoped.hardware.status).toBe(0)
-    // 픽스처에 Channel 콤보가 없다 — 목표 0이면 달성률은 null("–")이어야 한다.
-    expect(scoped.channel.goal).toBe(0)
-    expect(scoped.channel.pct).toBeNull()
-    // 구성비도 같은 스코프(Q2 Status) 기준.
-    expect(scoped.composition.swHw.map((s) => s.value)).toEqual([280_000, 0])
-  })
-
-  it("M 스코프: 현재 회계월(7월) 값 — New/Renew·Direct 축까지 스코프를 따른다", () => {
-    const scoped = deriveDshScopedMetrics(bandFixture(), NOW, "M")
-    if (!scoped) throw new Error("fixture scoped must not be null")
-    expect(scoped.scopeLabel).toBe("7월")
-    expect(scoped.total.goal).toBe(150_000)
-    expect(scoped.total.status).toBe(280_000)
-    expect(scoped.newBiz.status).toBe(280_000)
-    expect(scoped.renew.goal).toBe(50_000)
-    expect(scoped.direct.status).toBe(280_000)
-    expect(scoped.composition.channel.map((s) => s.value)).toEqual([280_000, 0, 0])
-  })
-
-  it("빈 breakdown은 null", () => {
-    expect(deriveDshScopedMetrics([], NOW, "Q")).toBeNull()
-  })
 })
 
 describe("deriveDshWeeklyFromDealMix", () => {

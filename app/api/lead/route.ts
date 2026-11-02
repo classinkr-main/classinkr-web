@@ -20,6 +20,16 @@ export const runtime = "nodejs"
  * 값이 비어 오면 통과시킨다. 유형 없는 제출은 `source_detail` 이 NULL 로 남을 뿐이고,
  * 메타데이터 하나 때문에 실제 상담 요청을 떨어뜨리지 않는다.
  */
+// 정적 랜딩은 문의 유형 대신 고정된 캠페인 식별자를 사용한다.
+// 임의 문자열로 집계를 오염시키지 않도록 실제 배포된 식별자만 허용한다.
+const LANDING_SOURCE_DETAILS = new Set([
+  "landing_segment:enterprise",
+  "landing_segment:managed",
+  "landing_segment:kids",
+  "landing_segment:online",
+  "omo1_diagnosis",
+])
+
 function getInvalidContactTopic(body: unknown): string | null {
   if (!body || typeof body !== "object") return null
   const record = body as Record<string, unknown>
@@ -30,7 +40,7 @@ function getInvalidContactTopic(body: unknown): string | null {
   const trimmed = raw.trim()
   if (!trimmed) return null
 
-  return isContactTopic(trimmed) ? null : trimmed
+  return isContactTopic(trimmed) || LANDING_SOURCE_DETAILS.has(trimmed) ? null : trimmed
 }
 
 export async function POST(req: NextRequest) {

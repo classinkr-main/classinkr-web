@@ -24,6 +24,17 @@ vi.mock("@/lib/repositories/branch-sales-ledger-drafts", () => ({
   isBranchSalesLedgerNonPositiveAmountError: () => false,
 }))
 
+// action=apply 는 반영 서비스(lib/branch/sheet-writeback/apply-service.ts — 여기서는 실제 코드)를 거친다. 스위치가
+// 꺼진(off) 기본 상태에서는 서비스가 초안 저장소의 applyBranchSalesLedgerDraft 만 부른다 — 시트 쓰기 감사 저장소는
+// 실제 supabase 에 붙지 않게 목으로 둔다(켜짐 갈래는 tests/api/branch-ledger-drafts-sheet-write.test.ts).
+const insertSheetWriteAttempts = vi.fn()
+vi.mock("@/lib/repositories/branch-sales-ledger-sheet-writes", () => ({
+  insertSheetWriteAttempts,
+  updateSheetWriteAttempt: vi.fn(),
+  findLedgerEntryIdByDraftId: vi.fn(),
+  isSheetWritesNotReadyError: () => false,
+}))
+
 function mockAdmin() {
   requireVerifiedAdminContext.mockResolvedValue({
     source: "supabase",
@@ -181,6 +192,7 @@ describe("POST /api/admin/branch/ledger-drafts/batch — 생성/수정 묶음", 
 describe("PATCH /api/admin/branch/ledger-drafts/batch — 상태 전이 묶음", () => {
   afterEach(() => {
     vi.clearAllMocks()
+    vi.unstubAllEnvs()
   })
 
   it("ids가 0건이면 400으로 거부하고 저장소를 호출하지 않는다", async () => {
@@ -213,7 +225,11 @@ describe("PATCH /api/admin/branch/ledger-drafts/batch — 상태 전이 묶음",
     expect(updateBranchSalesLedgerDraft).toHaveBeenCalledWith("draft-1", { status: "checked" }, "Tester")
   })
 
-  it('action="apply"는 applyBranchSalesLedgerDraft(id, actor)로 매핑되고, null이면 409를 결과에 담는다', async () => {
+  // REV 시트 쓰기(ADR-011) — 스위치가 꺼져 있으면(기본) 반영 서비스가 지금과 똑같이 applyBranchSalesLedgerDraft(id, actor)
+  // 만 부른다. 응답은 기존 칸 그대로에 sheet(disabled)·summary.sheet·sheetWrite.mode 가 더해진다.
+  it('action="apply"(스위치 꺼짐)는 서비스를 거쳐 applyBranchSalesLedgerDraft(id, actor)로 매핑되고, null이면 409를 결과에 담는다', async () => {
+    vi.stubEnv("BRANCH_REV_SHEET_WRITE_ENABLED", "1")
+    vi.stubEnv("VERCEL_ENV", "preview")
     mockAdmin()
     applyBranchSalesLedgerDraft
       .mockResolvedValueOnce({ id: "draft-1", status: "applied" })
@@ -223,16 +239,47 @@ describe("PATCH /api/admin/branch/ledger-drafts/batch — 상태 전이 묶음",
     const response = await PATCH(patchBatchRequest({ action: "apply", ids: ["draft-1", "draft-2"] }))
     const json = await response.json()
 
+    const disabled = { code: "disabled", message: "시트 쓰기 꺼짐 — 장부에만 반영됨" }
     expect(response.status).toBe(200)
-    expect(json.results[0]).toEqual({ id: "draft-1", ok: true, status: 200, draft: { id: "draft-1", status: "applied" } })
+    expect(json.results[0]).toEqual({
+      id: "draft-1",
+      ok: true,
+      status: 200,
+      draft: { id: "draft-1", status: "applied" },
+      sheet: disabled,
+    })
     expect(json.results[1]).toEqual({
       id: "draft-2",
       ok: false,
       status: 409,
       error: "체크 완료 초안만 적용할 수 있습니다.",
+      sheet: disabled,
     })
-    expect(json.summary).toEqual({ total: 2, succeeded: 1, failed: 1 })
+    expect(json.summary).toEqual({ total: 2, succeeded: 1, failed: 1, sheet: { disabled: 2 } })
+    expect(json.sheetWrite).toEqual({ mode: "off" })
     expect(applyBranchSalesLedgerDraft).toHaveBeenNthCalledWith(1, "draft-1", "Tester")
     expect(applyBranchSalesLedgerDraft).toHaveBeenNthCalledWith(2, "draft-2", "Tester")
+    // 꺼짐이면 시트 쓰기 감사 행도 남기지 않는다.
+    expect(insertSheetWriteAttempts).not.toHaveBeenCalled()
+  })
+
+  it('action="apply"(스위치 꺼짐)에서 저장소가 던진 오류는 기존 번역 그대로(그 밖 500 · 고정 문구)다', async () => {
+    vi.stubEnv("VERCEL_ENV", "")
+    mockAdmin()
+    applyBranchSalesLedgerDraft.mockRejectedValueOnce(new Error("[branch-sales-ledger-drafts] 적용 실패: boom"))
+    const { PATCH } = await import("@/app/api/admin/branch/ledger-drafts/batch/route")
+
+    const response = await PATCH(patchBatchRequest({ action: "apply", ids: ["draft-1"] }))
+    const json = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(json.results[0]).toMatchObject({
+      id: "draft-1",
+      ok: false,
+      status: 500,
+      error: "Failed to update sales ledger draft",
+      sheet: { code: "disabled" },
+    })
+    expect(json.summary).toMatchObject({ total: 1, succeeded: 0, failed: 1 })
   })
 })

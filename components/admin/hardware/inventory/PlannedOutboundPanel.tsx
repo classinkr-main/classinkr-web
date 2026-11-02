@@ -6,6 +6,8 @@ import { CheckCheck, Clock3 } from "lucide-react"
 
 import DeleteConfirmDialog from "@/components/admin/DeleteConfirmDialog"
 import type { AdminListPaginationResult } from "@/lib/admin-list-pagination"
+import type { MovementButton, MovementButtonState } from "./movement-permissions"
+import { CrmCustomerLink, movementOutboundType, OutboundTypeBadge, SampleReturnBadge } from "./OutboundMetaBadges"
 import {
   collectStalePlannedMovementIds,
   elapsedDaysSince,
@@ -14,12 +16,10 @@ import {
   formatNumber,
   PaginationControls,
   resolveConfirmQuantity,
-  resolvePlannedFifoPreview,
   shiftSelectRange,
   todayKey,
   type HardwareDashboard,
   type HardwareMovement,
-  type PlannedFifoPreview,
   type PlannedSelectionConfirmProgress,
   type PlannedSelectionConfirmResult,
 } from "./shared"
@@ -42,8 +42,8 @@ interface PlannedOutboundPanelProps {
   data: HardwareDashboard | null
   plannedMovementQuantity: number
   plannedStaleGroupCount: number
-  // hardware.finalize 표시용 — 없으면 확정 버튼을 비활성+사유 툴팁으로 내린다(강제는 서버 게이트).
-  canFinalize: boolean
+  // 버튼 권한(정의서 §권한·D2) — 배송 예정 수정·확정은 본인 건 또는 입고관리 권한자. 표시만 막고 강제는 서버.
+  movementButtonState: (button: MovementButton, movement: HardwareMovement) => MovementButtonState
   startPlannedEntry: () => void
   plannedConfirmLocked: boolean
   plannedPagination: AdminListPaginationResult<PlannedGroup>
@@ -76,7 +76,7 @@ function PlannedOutboundPanel({
   data,
   plannedMovementQuantity,
   plannedStaleGroupCount,
-  canFinalize,
+  movementButtonState,
   startPlannedEntry,
   plannedConfirmLocked,
   plannedPagination,
@@ -183,6 +183,19 @@ function PlannedOutboundPanel({
 
   const hasPlanned = (data?.plannedMovements.length ?? 0) > 0
 
+  // 여러 건 확정은 모두 내 권한 안일 때만 연다 — 하나라도 막히면 그 품목을 사유에 적는다.
+  const confirmAllState = useCallback(
+    (movements: readonly HardwareMovement[]): MovementButtonState => {
+      for (const movement of movements) {
+        const state = movementButtonState("confirm", movement)
+        if (!state.allowed) return { allowed: false, title: `${movement.product_name}: ${state.title ?? "확정 권한이 없습니다"}` }
+      }
+      return { allowed: true }
+    },
+    [movementButtonState]
+  )
+  const selectionConfirmState = useMemo(() => confirmAllState(selectedMovements), [confirmAllState, selectedMovements])
+
   return (
     <section
       // id: 홈 요약 밴드(SummaryBand)의 "예정 출고 대기" 칸이 앵커 스크롤로 여기를 가리킨다
@@ -198,7 +211,7 @@ function PlannedOutboundPanel({
           </span>
           <span className="min-w-0">
             <span className="block text-[15px] font-bold tracking-[-0.01em] text-[#111110]">예상 출고</span>
-            <span className="mt-1 block text-[12px] text-[#615D59]">배송 예정 물량을 확정하면 현재 lot 재고를 기준으로 FIFO 배정 후 실제 출고로 전환됩니다.</span>
+            <span className="mt-1 block text-[12px] text-[#615D59]">배송 예정을 확정하면 설치 완료로 바뀝니다. 물류번호가 없는 예정은 확정 때 물류번호를 고릅니다.</span>
           </span>
         </div>
         <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
@@ -269,6 +282,7 @@ function PlannedOutboundPanel({
           <div className="divide-y divide-[rgba(0,0,0,0.06)]">
             {plannedPagination.pageItems.map((group) => {
               const elapsed = elapsedDaysSince(group.date)
+              const groupConfirm = confirmAllState(group.items)
               const groupIds = group.items.map((item) => item.id)
               const selectedInGroup = groupIds.filter((id) => selectedIds.has(id)).length
               return (
@@ -314,8 +328,8 @@ function PlannedOutboundPanel({
                     <button
                       type="button"
                       onClick={() => void confirmPlannedGroup(group)}
-                      disabled={plannedConfirmLocked || !canFinalize}
-                      title={canFinalize ? undefined : "출고 확정에는 확정 권한(hardware.finalize)이 필요합니다"}
+                      disabled={plannedConfirmLocked || !groupConfirm.allowed}
+                      title={groupConfirm.title}
                       className="inline-flex h-8 cursor-pointer items-center gap-1 rounded-md bg-[#084734] px-2.5 text-[11px] font-bold text-white shadow-sm transition hover:bg-[#065c41] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.98] motion-reduce:active:scale-100 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       <CheckCheck className="h-3.5 w-3.5" />
@@ -325,9 +339,9 @@ function PlannedOutboundPanel({
                 </div>
                 <div className="mt-2 divide-y divide-[rgba(0,0,0,0.05)] overflow-hidden rounded-lg border border-[rgba(0,0,0,0.06)] bg-[#FAFAF8]">
                   {group.items.map((movement) => {
-                    const confirmQty = resolveConfirmQuantity(movement, confirmQtys)
-                    const stockRow = data?.stock.find((row) => row.itemId === movement.item_id || row.product === movement.product_name)
-                    const fifoPreview = resolvePlannedFifoPreview(movement, stockRow, confirmQty)
+                    const item = data?.items.find((candidate) => candidate.id === movement.item_id)
+                    const editState = movementButtonState("edit", movement)
+                    const confirmState = movementButtonState("confirm", movement)
                     const confirmResult = plannedConfirmResults[movement.id]
                     const checked = selectedIds.has(movement.id)
                     return (
@@ -365,8 +379,11 @@ function PlannedOutboundPanel({
                           <p title={movement.product_name} className="truncate text-[12.5px] font-semibold text-[#111110]">
                             {movement.product_name} <span className="tabular-nums text-[#7A520F]">· {formatNumber(movement.quantity)}대</span>
                           </p>
-                          <p className="mt-1 truncate text-[11px] font-bold">
-                            <PlannedFifoPreviewText preview={fifoPreview} />
+                          <p className="mt-1 flex flex-wrap items-center gap-1 text-[11px] font-bold">
+                            <PlannedLotText lotNo={movement.lot_no} lotTracked={item?.lot_tracked} />
+                            <OutboundTypeBadge type={movementOutboundType(movement)} size="xs" />
+                            <SampleReturnBadge movement={movement} size="xs" />
+                            <CrmCustomerLink movement={movement} />
                           </p>
                           {confirmResult && (
                             <p className={`mt-1 truncate text-[11px] font-bold ${confirmResult.ok ? "text-[#084734]" : "text-[#8F2C2C]"}`}>
@@ -401,7 +418,8 @@ function PlannedOutboundPanel({
                           <button
                             type="button"
                             onClick={() => editMovement(movement)}
-                            disabled={plannedConfirmLocked}
+                            disabled={plannedConfirmLocked || !editState.allowed}
+                            title={editState.title}
                             className="cursor-pointer rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2.5 py-1.5 text-[11px] font-bold text-[#31302E] transition hover:bg-[#F6F5F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-95 motion-reduce:active:scale-100 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50"
                           >
                             수정
@@ -410,8 +428,8 @@ function PlannedOutboundPanel({
                           <button
                             type="button"
                             onClick={() => void confirmPlannedMovement(movement)}
-                            disabled={plannedConfirmLocked || !canFinalize}
-                            title={canFinalize ? undefined : "출고 확정에는 확정 권한(hardware.finalize)이 필요합니다"}
+                            disabled={plannedConfirmLocked || !confirmState.allowed}
+                            title={confirmState.title}
                             className="inline-flex cursor-pointer items-center gap-1 rounded-md border border-[#084734] bg-white px-2.5 py-1.5 text-[11px] font-bold text-[#084734] transition hover:bg-[#ECFDF5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-95 motion-reduce:active:scale-100 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             <CheckCheck className="h-3.5 w-3.5" />
@@ -470,8 +488,8 @@ function PlannedOutboundPanel({
                 <button
                   type="button"
                   onClick={() => setBulkConfirmOpen(true)}
-                  disabled={plannedConfirmLocked || !canFinalize}
-                  title={canFinalize ? undefined : "출고 확정에는 확정 권한(hardware.finalize)이 필요합니다"}
+                  disabled={plannedConfirmLocked || !selectionConfirmState.allowed}
+                  title={selectionConfirmState.title}
                   className="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-md bg-[#084734] px-3.5 text-[12px] font-bold text-white shadow-sm transition hover:bg-[#065c41] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.98] motion-reduce:active:scale-100 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <CheckCheck className="h-3.5 w-3.5" />
@@ -492,7 +510,7 @@ function PlannedOutboundPanel({
         loading={selectionConfirmProgress != null}
         destructive={false}
         title="선택한 예정 출고 확정"
-        description={`${formatNumber(selectedIds.size)}건 ${formatNumber(selectedQuantityTotal)}대를 확정합니다. 로트가 모자란 수량은 로트 미지정으로 기록됩니다.`}
+        description={`${formatNumber(selectedIds.size)}건 ${formatNumber(selectedQuantityTotal)}대를 설치 완료로 확정합니다. 물류번호가 없는 예정은 다음 단계에서 물류번호를 고릅니다.`}
         confirmLabel="확정"
         confirmLoadingLabel="확정 중…"
         cancelLabel="취소"
@@ -502,27 +520,13 @@ function PlannedOutboundPanel({
   )
 }
 
-// FIFO 미리보기 문구 렌더링 — resolvePlannedFifoPreview(shared.tsx, 순수 판정)의 결과를
-// kind별로 다른 색으로 그린다. 매칭된 배정분(matched)은 기존 그대로 Success(그린), 로트
-// 미지정분(unassigned)은 Danger가 아니라 Warning(주황) 톤으로 낮춰 "확정이 막힌다"가 아니라
-// "참고하되 진행된다"는 신호로 읽히게 한다(요청사항 ② — 신정책: 로트가 모자라도 확정은
-// 막히지 않고 나머지가 로트 미지정으로 기록된다).
-function PlannedFifoPreviewText({ preview }: { preview: PlannedFifoPreview }) {
-  if (preview.kind === "assigned") return <span className="text-[#084734]">지정 lot {preview.label}</span>
-  if (preview.kind === "unavailable") return <span className="text-[#084734]">FIFO 예상 없음</span>
-  if (preview.kind === "no-lot-records") {
-    // 로트 잔량 기록 자체가 없는 품목(OPS·케이블 등) — "부족"이 아니라 애초에 lot 추적 대상이
-    // 아니라는 뜻이라 문구로 명확히 구분한다(요청사항 ②).
-    return <span className="text-[#A8741A]">로트 기록 없음 — 로트 미지정으로 출고</span>
-  }
-  return (
-    <>
-      <span className="text-[#084734]">{preview.matchedText ? `FIFO 예상 ${preview.matchedText}` : "FIFO 예상"}</span>
-      {preview.unassignedQty > 0 && (
-        <span className="ml-1 text-[#A8741A]">· 로트 미지정 {formatNumber(preview.unassignedQty)}대</span>
-      )}
-    </>
-  )
+// 물류번호 표시 — 예정 행에 이미 있으면 그 번호, 없으면 확정 때 고른다(결정 D6: FIFO 자동 배정 없음).
+// 수량만 관리하는 품목(lot_tracked === false)은 물류번호가 필요 없다.
+function PlannedLotText({ lotNo, lotTracked }: { lotNo: string | null; lotTracked: boolean | undefined }) {
+  const label = formatLotLabel(lotNo)
+  if (label) return <span className="text-[#084734]">물류번호 {label}</span>
+  if (lotTracked === false) return <span className="text-[#615D59]">수량만 관리</span>
+  return <span className="text-[#A8741A]">확정 때 물류번호 고르기</span>
 }
 
 export default memo(PlannedOutboundPanel)

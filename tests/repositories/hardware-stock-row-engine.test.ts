@@ -425,14 +425,20 @@ describe("computeHardwareStockRow — 30일 출고 추세·재주문점", () => 
 })
 
 describe("computeHardwareStockRow — low/orderRecommended, including promoted-line exclusion", () => {
-  it("flags low when available stock is at or below the reorder point", async () => {
+  it("flags low only when available stock is strictly below the reorder point (정의서: 가용 < 최소재고)", async () => {
     const compute = await loadEngine()
-    const row = compute({
+    const equal = compute({
       item: { ...ITEM, reorder_point: 3 },
       itemMovements: [movement({ movement_type: "inbound", quantity: 3, to_location: "창고" })],
       cutoff30dMs: CUTOFF_30D,
     })
-    expect(row.low).toBe(true)
+    expect(equal.low).toBe(false)
+    const below = compute({
+      item: { ...ITEM, reorder_point: 3 },
+      itemMovements: [movement({ movement_type: "inbound", quantity: 2, to_location: "창고" })],
+      cutoff30dMs: CUTOFF_30D,
+    })
+    expect(below.low).toBe(true)
   })
 
   it("does not flag low above the reorder point", async () => {

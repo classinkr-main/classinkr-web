@@ -52,6 +52,8 @@ function supabaseToLegacy(row: SupaBlogPost): BlogPost & { _uuid: string } {
     date: formatDate(resolveDisplayDateSource(row)),
     publishedAt: row.published_at ?? undefined,
     updatedAt: row.updated_at ?? undefined,
+    // 마이그레이션 미적용 DB·이 컬럼을 select 하지 않은 목록 조회에서는 row 에 키가 없다 — undefined 로 둔다.
+    contentUpdatedAt: row.content_updated_at ?? undefined,
     author: row.author_name ?? "",
     authorRole: row.author_role ?? "",
     authorBio: row.author_bio ?? "",
@@ -296,7 +298,9 @@ export const getPublishedPostBySlug = cache(async function getPublishedPostBySlu
     }
     if (error) throw new Error(`[blog] 공개 글 상세 조회 실패(${slug}): ${error.message}`);
     if (!data) return null;
-    return supabaseToLegacy(data as SupaBlogPost);
+    const row = data as SupaBlogPost;
+    // createdAt 은 JSON-LD datePublished 폴백(published_at 없는 레거시 글)용 — 화면 날짜와 같은 규칙.
+    return { ...supabaseToLegacy(row), createdAt: row.created_at ?? undefined };
   } finally {
     timeout.clear();
   }
@@ -496,26 +500,60 @@ export async function getPublishedSlugsForStaticParams(): Promise<{ slug: string
   }
 }
 
-export async function getPublishedPostsForStaticSitemap(): Promise<BlogPost[]> {
+// 사이트맵·RSS 전용 컬럼 — 공개 날짜 신호(lastmod·lastBuildDate)의 원천인 content_updated_at 을 더 읽는다.
+// 공용 LIST_COLUMNS 에는 넣지 않는다: 마이그레이션 미적용 DB 에서 공개 목록·어드민 목록까지 42703 으로
+// 죽지 않게, 컬럼 없음 폴백을 이 경로 하나에만 둔다(상세는 select * 라 폴백이 필요 없다).
+const SITEMAP_COLUMNS = `${LIST_COLUMNS},content_updated_at`;
+const CONTENT_UPDATED_AT_MIGRATION = "supabase/migrations/20261028_blog_posts_content_updated_at.sql";
 
-  const supabase = createSupabaseAdminClient();
+// 배포 스큐 감지 — 마이그레이션 미적용 DB 에서 content_updated_at select 가 undefined_column(42703)으로
+// 실패하는 경우. 선례: lib/admin-docs.ts isMissingContentLengthColumn.
+export function isMissingContentUpdatedAtColumn(
+  error: { code?: string; message?: string; details?: string; hint?: string } | null | undefined,
+): boolean {
+  if (!error) return false;
+  if (error.code === "42703") return true;
+  const haystack = [error.message, error.details, error.hint].filter(Boolean).join(" ").toLowerCase();
+  return haystack.includes("content_updated_at");
+}
+
+async function querySitemapRows(supabase: BlogSupabaseClient, columns: string) {
   const timeout = createBlogQueryTimeout();
   try {
-    const { data, error } = await supabase
+    return await supabase
       .from("blog_posts")
-      .select(LIST_COLUMNS)
+      .select(columns)
       .in("status", PUBLISHED_STATUS_VALUES)
       .is("deleted_at", null)
       .or(publishedAtVisibleFilter())
       .order("published_at", { ascending: false, nullsFirst: false })
       .order("created_at", { ascending: false })
       .abortSignal(timeout.signal);
-
-    if (error) throw new Error(`[blog] sitemap query failed: ${error.message}`);
-    return (data as unknown as SupaBlogPost[]).map(supabaseToLegacy);
   } finally {
     timeout.clear();
   }
+}
+
+export async function getPublishedPostsForStaticSitemap(): Promise<BlogPost[]> {
+
+  const supabase = createSupabaseAdminClient();
+  let { data, error } = await querySitemapRows(supabase, SITEMAP_COLUMNS);
+
+  if (error && isMissingContentUpdatedAtColumn(error)) {
+    // 마이그레이션 미적용 폴백 — 컬럼을 빼고 다시 읽는다. contentUpdatedAt 이 비므로 날짜 신호는
+    // updated_at 으로 내려간다(적용 전 동작과 같다). 무음 강등이 되지 않게 남긴다.
+    console.warn(
+      `[blog] blog_posts.content_updated_at 컬럼이 없어 updated_at 으로 폴백합니다 — ${CONTENT_UPDATED_AT_MIGRATION} 적용이 필요합니다.`,
+    );
+    ({ data, error } = await querySitemapRows(supabase, LIST_COLUMNS));
+  }
+
+  if (error) throw new Error(`[blog] sitemap query failed: ${error.message}`);
+  // createdAt 은 이 경로(사이트맵·RSS)와 공개 상세에만 싣는다 — 공개 목록 페이로드에는 불필요하다.
+  return ((data ?? []) as unknown as SupaBlogPost[]).map((row) => ({
+    ...supabaseToLegacy(row),
+    createdAt: row.created_at ?? undefined,
+  }));
 }
 
 export async function getRelatedPosts(post: BlogPost, limit = 3): Promise<BlogPost[]> {

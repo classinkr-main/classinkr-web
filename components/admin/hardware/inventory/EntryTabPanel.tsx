@@ -7,7 +7,7 @@
 import type { ComponentProps } from "react"
 import dynamic from "next/dynamic"
 import { motion } from "framer-motion"
-import { Plus } from "lucide-react"
+import { Plus, RotateCcw } from "lucide-react"
 
 import { SectionLoadingFallback, type HardwareTab } from "./shared"
 
@@ -30,6 +30,8 @@ interface EntryTabPanelProps {
   entrySub: "inbound" | "outbound"
   setEntrySub: (value: "inbound" | "outbound") => void
   openFreshSheet: () => void
+  // 회수 등록 — 원 출고 건에 연결된 회수(정의서 §회수). 출고 동작 옆에 둔다.
+  openReturnSheet: () => void
   inboundSearch: ComponentProps<typeof InboundLotsSection>["inboundSearch"]
   setInboundSearch: ComponentProps<typeof InboundLotsSection>["setInboundSearch"]
   inboundLots: ComponentProps<typeof InboundLotsSection>["inboundLots"]
@@ -49,6 +51,7 @@ export default function EntryTabPanel({
   entrySub,
   setEntrySub,
   openFreshSheet,
+  openReturnSheet,
   inboundSearch,
   setInboundSearch,
   inboundLots,
@@ -96,6 +99,15 @@ export default function EntryTabPanel({
             출고 · 기간 집계
           </button>
         </div>
+        <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={openReturnSheet}
+          className="inline-flex items-center gap-1.5 cursor-pointer rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 py-2 text-[12px] font-bold text-[#31302E] transition hover:bg-[#F6F5F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.98] motion-reduce:active:scale-100"
+        >
+          <RotateCcw className="h-3.5 w-3.5" />
+          회수 등록
+        </button>
         <button
           type="button"
           onClick={openFreshSheet}
@@ -104,6 +116,7 @@ export default function EntryTabPanel({
           <Plus className="h-3.5 w-3.5" />
           빠른 기록
         </button>
+        </div>
       </div>
 
       {entrySub === "inbound" && (
