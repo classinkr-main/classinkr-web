@@ -95,7 +95,7 @@ function ToastItem({ toast, onDismiss }: { toast: ToastItem; onDismiss: (id: num
         "pointer-events-auto flex items-center gap-2.5 rounded-xl px-4 py-3 shadow-md text-sm font-medium cursor-pointer select-none",
         "border",
         isSuccess
-          ? "bg-[#ECFDF5] text-[#084734] border-[#084734]/15"
+          ? "bg-fg-accent/8 text-fg-accent border-fg-accent/15"
           : "bg-[#FFF1EC] text-[#B85C33] border-[#B85C33]/15",
       ].join(" ")}
     >
