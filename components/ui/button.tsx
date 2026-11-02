@@ -5,31 +5,31 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
 
 const buttonVariants = cva(
-    "inline-flex items-center justify-center gap-2 whitespace-nowrap text-[15px] font-semibold transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-40 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+    "inline-flex items-center justify-center gap-2 whitespace-nowrap text-[15px] font-semibold transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fg-accent focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-40 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
     {
         variants: {
             variant: {
-                // Primary — Classin Green
+                // Primary — Classin Green (tokens.css --fg-accent: 공개 #0B7A52 · 어드민 #084734)
                 default:
-                    "bg-[#084734] text-white rounded-[6px] hover:bg-[#065c41] active:scale-[0.97] shadow-sm",
+                    "bg-fg-accent text-fg-on-accent rounded-[6px] hover:bg-fg-accent-hover active:scale-[0.97] shadow-sm",
                 // Secondary — warm surface
                 secondary:
-                    "bg-black/5 text-[#111110] rounded-[6px] hover:bg-black/[0.08] active:scale-[0.97]",
+                    "bg-black/5 text-fg-ink rounded-[6px] hover:bg-black/[0.08] active:scale-[0.97]",
                 // Outline — whisper border
                 outline:
-                    "border border-black/[0.08] bg-white text-[#111110] rounded-[6px] hover:bg-[#F6F5F4] active:scale-[0.97] shadow-sm",
+                    "border border-line-hair bg-surface-sheet text-fg-ink rounded-[6px] hover:bg-surface-sunken active:scale-[0.97] shadow-sm",
                 // Ghost — text only
                 ghost:
-                    "text-[#084734] bg-transparent hover:underline underline-offset-4",
-                // Destructive
+                    "text-fg-accent bg-transparent hover:underline underline-offset-4",
+                // Destructive (어드민 전용)
                 destructive:
                     "bg-red-500 text-white rounded-[6px] hover:bg-red-600 active:scale-[0.97] shadow-sm",
                 // Link
                 link:
-                    "text-[#084734] underline-offset-4 hover:underline",
-                // Green surface — pill/badge 스타일 CTA
+                    "text-fg-accent underline-offset-4 hover:underline",
+                // Green surface — 틴트는 accent 불투명도로(새 틴트 토큰 없음)
                 "green-surface":
-                    "bg-[#ECFDF5] text-[#084734] rounded-[6px] hover:bg-[#D1FAE5] active:scale-[0.97]",
+                    "bg-fg-accent/8 text-fg-accent rounded-[6px] hover:bg-fg-accent/14 active:scale-[0.97]",
             },
             size: {
                 default: "h-[38px] px-5 py-2",
@@ -38,6 +38,10 @@ const buttonVariants = cva(
                 xl: "h-12 px-8 text-base",
                 icon: "h-9 w-9 rounded-[6px]",
                 "icon-sm": "h-7 w-7 rounded-[6px]",
+                // 공개 화면(controls): 가드 button-size 가 md·cta·icon-md 만 허용한다
+                md: "h-11 px-5",
+                cta: "h-12 px-7 text-base",
+                "icon-md": "h-11 w-11 rounded-[6px]",
             },
         },
         defaultVariants: {
