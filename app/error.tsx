@@ -30,15 +30,15 @@ export default function GlobalError({
           }}
         >
           <div
-            className="inline-flex items-center justify-center w-14 h-14 rounded-2xl mb-6 mx-auto"
-            style={{ backgroundColor: "#ECFDF5" }}
+            className="inline-flex items-center justify-center w-14 h-14 rounded-2xl mb-6 mx-auto bg-fg-accent/8"
           >
             <svg
               width="28"
               height="28"
               viewBox="0 0 24 24"
               fill="none"
-              stroke="#084734"
+              stroke="currentColor"
+              className="text-fg-accent"
               strokeWidth="2"
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -74,22 +74,14 @@ export default function GlobalError({
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <button
               onClick={reset}
-              className="inline-flex items-center justify-center font-semibold transition-colors"
+              className="inline-flex items-center justify-center font-semibold transition-colors bg-fg-accent text-fg-on-accent hover:bg-fg-accent-hover"
               style={{
-                backgroundColor: "#084734",
-                color: "#ffffff",
                 padding: "10px 24px",
                 borderRadius: "6px",
                 fontSize: "15px",
                 lineHeight: "1.33",
                 border: "none",
                 cursor: "pointer",
-              }}
-              onMouseOver={(e) => {
-                e.currentTarget.style.backgroundColor = "#065c41"
-              }}
-              onMouseOut={(e) => {
-                e.currentTarget.style.backgroundColor = "#084734"
               }}
             >
               다시 시도

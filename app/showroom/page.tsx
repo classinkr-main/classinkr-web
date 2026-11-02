@@ -114,7 +114,7 @@ export default function ShowroomPage() {
         <div className="mx-auto max-w-6xl px-6">
           <div className="grid items-center gap-12 lg:grid-cols-[1.15fr_1fr]">
             <div>
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-[#ECFDF5] px-3 py-1 text-[12px] font-semibold tracking-[0.125px] text-[#084734]">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-fg-accent/8 px-3 py-1 text-[12px] font-semibold tracking-[0.125px] text-fg-accent">
                 <MapPin className="h-3.5 w-3.5" />
                 목동 쇼룸 · 서울 양천구
               </span>
@@ -133,14 +133,14 @@ export default function ShowroomPage() {
               <div className="mt-8 flex flex-wrap items-center gap-3">
                 <a
                   href="#booking"
-                  className="inline-flex h-12 items-center justify-center gap-2 rounded-[6px] bg-[#084734] px-7 text-[15px] font-semibold text-white transition-colors hover:bg-[#065c41]"
+                  className="inline-flex h-12 items-center justify-center gap-2 rounded-[6px] bg-fg-accent px-7 text-[15px] font-semibold text-fg-on-accent transition-colors hover:bg-fg-accent-hover"
                 >
                   방문 날짜 고르기
                   <ArrowRight className="h-4 w-4" />
                 </a>
                 <Link
                   href="/resources/showroom-demo-readiness-kit"
-                  className="inline-flex h-12 items-center justify-center rounded-[6px] border border-black/[0.08] bg-white px-6 text-[15px] font-semibold text-[#084734] transition-colors hover:bg-[#F6F5F4]"
+                  className="inline-flex h-12 items-center justify-center rounded-[6px] border border-black/[0.08] bg-white px-6 text-[15px] font-semibold text-fg-accent transition-colors hover:bg-[#F6F5F4]"
                 >
                   데모 준비 킷 보기
                 </Link>
@@ -154,7 +154,7 @@ export default function ShowroomPage() {
               <dl className="mt-5 space-y-5">
                 {VISIT_FACTS.map((fact) => (
                   <div key={fact.label} className="flex gap-3.5">
-                    <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-[#084734]">
+                    <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-fg-accent">
                       <fact.icon className="h-4 w-4" />
                     </span>
                     <div>
@@ -192,7 +192,7 @@ export default function ShowroomPage() {
                 className="rounded-xl border border-black/[0.08] bg-white p-6 shadow-[rgba(0,0,0,0.04)_0px_4px_18px,rgba(0,0,0,0.027)_0px_2px_7.8px,rgba(0,0,0,0.02)_0px_0.8px_2.9px,rgba(0,0,0,0.01)_0px_0.175px_1px]"
               >
                 <div className="flex items-center justify-between">
-                  <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#ECFDF5] text-[#084734]">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-full bg-fg-accent/8 text-fg-accent">
                     <item.icon className="h-[18px] w-[18px]" />
                   </span>
                   <span className="text-[12px] font-semibold tabular-nums tracking-[0.125px] text-[#A39E98]">
@@ -235,8 +235,8 @@ export default function ShowroomPage() {
               </p>
             </div>
 
-            <div className="rounded-xl border border-black/[0.08] bg-[#ECFDF5] p-6 md:p-8">
-              <p className="text-[12px] font-semibold tracking-[0.125px] text-[#084734]">
+            <div className="rounded-xl border border-black/[0.08] bg-fg-accent/8 p-6 md:p-8">
+              <p className="text-[12px] font-semibold tracking-[0.125px] text-fg-accent">
                 준비물 체크
               </p>
               <ul className="mt-4 space-y-3">
@@ -244,7 +244,7 @@ export default function ShowroomPage() {
                   <li key={point} className="flex gap-3 text-[14px] leading-relaxed text-[#111110]">
                     <span
                       aria-hidden="true"
-                      className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-[#084734]"
+                      className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-fg-accent"
                     />
                     <span>{point}</span>
                   </li>
@@ -256,7 +256,7 @@ export default function ShowroomPage() {
               </p>
               <Link
                 href="/resources/showroom-demo-readiness-kit"
-                className="mt-4 inline-flex items-center gap-1.5 text-[14px] font-semibold text-[#084734] underline underline-offset-4"
+                className="mt-4 inline-flex items-center gap-1.5 text-[14px] font-semibold text-fg-accent underline underline-offset-4"
               >
                 쇼룸 데모 준비 킷
                 <ArrowRight className="h-3.5 w-3.5" />
@@ -296,7 +296,7 @@ export default function ShowroomPage() {
 
               <dl className="mt-6 space-y-5">
                 <div className="flex gap-3.5">
-                  <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#ECFDF5] text-[#084734]">
+                  <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-fg-accent/8 text-fg-accent">
                     <MapPin className="h-4 w-4" />
                   </span>
                   <div>
@@ -308,7 +308,7 @@ export default function ShowroomPage() {
                 </div>
 
                 <div className="flex gap-3.5">
-                  <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#ECFDF5] text-[#084734]">
+                  <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-fg-accent/8 text-fg-accent">
                     <CalendarClock className="h-4 w-4" />
                   </span>
                   <div>
@@ -346,7 +346,7 @@ export default function ShowroomPage() {
       </section>
 
       {/* ── 데모 준비 킷 ── */}
-      <section className="bg-[#ECFDF5] py-16 md:py-24">
+      <section className="bg-fg-accent/8 py-16 md:py-24">
         <div className="mx-auto max-w-3xl px-6 text-center">
           <h2 className="text-[26px] font-bold leading-tight tracking-[-0.625px] text-[#111110] md:text-[32px]">
             방문 전에 준비할 것을 먼저 정리해 두세요
@@ -357,7 +357,7 @@ export default function ShowroomPage() {
           </p>
           <Link
             href="/resources/showroom-demo-readiness-kit"
-            className="mt-7 inline-flex h-12 items-center justify-center gap-2 rounded-[6px] bg-[#084734] px-7 text-[15px] font-semibold text-white transition-colors hover:bg-[#065c41]"
+            className="mt-7 inline-flex h-12 items-center justify-center gap-2 rounded-[6px] bg-fg-accent px-7 text-[15px] font-semibold text-fg-on-accent transition-colors hover:bg-fg-accent-hover"
           >
             쇼룸 데모 준비 킷 받기
             <ArrowRight className="h-4 w-4" />

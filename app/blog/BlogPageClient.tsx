@@ -81,7 +81,7 @@ export default function BlogPageClient({ posts, loadFailed = false }: BlogPageCl
         : { initial: { opacity: 0 }, animate: { opacity: 1 } }
 
     return (
-        <div className="min-h-screen bg-[#FAFAF8] text-[#1a1a1a] selection:bg-[#D1FAE5] selection:text-[#084734]">
+        <div className="min-h-screen bg-[#FAFAF8] text-[#1a1a1a] selection:bg-fg-accent/14 selection:text-fg-accent">
 
             {/* ─── Header ─────────────────────────────────────── */}
             <section className="mx-auto max-w-[1100px] px-4 pt-28 sm:px-6 md:pt-40">
@@ -129,12 +129,12 @@ export default function BlogPageClient({ posts, loadFailed = false }: BlogPageCl
                                     onClick={() => selectCategory(cat)}
                                     className={`inline-flex min-h-11 shrink-0 items-center gap-1.5 border-b-2 text-sm font-medium transition-colors duration-200 ${
                                         isActive
-                                            ? "border-[#084734] text-[#111110]"
+                                            ? "border-fg-accent text-[#111110]"
                                             : "border-transparent text-[#615D59] hover:text-[#111110]"
                                     }`}
                                 >
                                     {cat}
-                                    <span className={`text-xs tabular-nums ${isActive ? "text-[#084734]" : "text-[#A39E98]"}`}>
+                                    <span className={`text-xs tabular-nums ${isActive ? "text-fg-accent" : "text-[#A39E98]"}`}>
                                         {categoryCounts.get(cat) ?? 0}
                                     </span>
                                 </button>
@@ -163,7 +163,7 @@ export default function BlogPageClient({ posts, loadFailed = false }: BlogPageCl
                                     setSearchQuery("")
                                     setLimit(PAGE_SIZE)
                                 }}
-                                className="absolute right-0.5 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full text-[#615D59] transition-colors hover:bg-[#F6F5F4] hover:text-[#084734]"
+                                className="absolute right-0.5 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full text-[#615D59] transition-colors hover:bg-[#F6F5F4] hover:text-fg-accent"
                             >
                                 <X className="h-4 w-4" aria-hidden />
                             </button>
@@ -179,7 +179,7 @@ export default function BlogPageClient({ posts, loadFailed = false }: BlogPageCl
                         <button
                             type="button"
                             onClick={resetFilters}
-                            className="inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-full px-3 text-xs font-semibold text-[#084734] transition-colors hover:bg-[#F6F5F4]"
+                            className="inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-full px-3 text-xs font-semibold text-fg-accent transition-colors hover:bg-[#F6F5F4]"
                         >
                             <RotateCcw className="h-3 w-3" aria-hidden />
                             필터 초기화
@@ -216,7 +216,7 @@ export default function BlogPageClient({ posts, loadFailed = false }: BlogPageCl
                             </div>
                             <div>
                                 <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-[#615D59]">
-                                    <span className="inline-flex items-center gap-1.5 font-medium text-[#084734]">
+                                    <span className="inline-flex items-center gap-1.5 font-medium text-fg-accent">
                                         {createElement(getCategoryIcon(featuredPost.category), { "aria-hidden": true, className: "h-3.5 w-3.5" })}
                                         {featuredPost.category}
                                     </span>
@@ -228,13 +228,13 @@ export default function BlogPageClient({ posts, loadFailed = false }: BlogPageCl
                                         {featuredPost.readTime}
                                     </span>
                                 </p>
-                                <h2 className="mt-3 text-2xl font-bold leading-[1.25] tracking-[-0.03em] text-[#111110] transition-colors group-hover:text-[#084734] md:text-[2rem]">
+                                <h2 className="mt-3 text-2xl font-bold leading-[1.25] tracking-[-0.03em] text-[#111110] transition-colors group-hover:text-fg-accent md:text-[2rem]">
                                     {featuredPost.title}
                                 </h2>
                                 <p className="mt-4 line-clamp-3 text-[15px] leading-relaxed text-[#615D59] md:text-base">
                                     {featuredPost.excerpt}
                                 </p>
-                                <span className="mt-6 inline-flex items-center gap-1.5 text-sm font-semibold text-[#084734]">
+                                <span className="mt-6 inline-flex items-center gap-1.5 text-sm font-semibold text-fg-accent">
                                     읽어보기
                                     <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" aria-hidden />
                                 </span>
@@ -272,7 +272,7 @@ export default function BlogPageClient({ posts, loadFailed = false }: BlogPageCl
                         <button
                             type="button"
                             onClick={() => setLimit((current) => current + PAGE_SIZE)}
-                            className="inline-flex min-h-11 items-center gap-2 rounded-full border border-black/[0.12] px-6 text-sm font-semibold text-[#111110] transition-colors hover:border-[#084734]/40 hover:text-[#084734]"
+                            className="inline-flex min-h-11 items-center gap-2 rounded-full border border-black/[0.12] px-6 text-sm font-semibold text-[#111110] transition-colors hover:border-fg-accent/40 hover:text-fg-accent"
                         >
                             더 보기
                             <span className="text-xs font-medium tabular-nums text-[#A39E98]">
@@ -290,7 +290,7 @@ export default function BlogPageClient({ posts, loadFailed = false }: BlogPageCl
                         <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl border border-black/[0.08]">
                             {createElement(normalizedQuery ? Search : getCategoryIcon(activeCategory), {
                                 "aria-hidden": true,
-                                className: "h-5 w-5 text-[#084734]/70",
+                                className: "h-5 w-5 text-fg-accent/70",
                             })}
                         </div>
                         {loadFailed ? (
@@ -310,7 +310,7 @@ export default function BlogPageClient({ posts, loadFailed = false }: BlogPageCl
                                 <button
                                     type="button"
                                     onClick={resetFilters}
-                                    className="mt-5 inline-flex h-10 items-center justify-center rounded-[6px] bg-[#084734] px-4 text-sm font-semibold text-white transition-colors hover:bg-[#065c41]"
+                                    className="mt-5 inline-flex h-10 items-center justify-center rounded-[6px] bg-fg-accent px-4 text-sm font-semibold text-fg-on-accent transition-colors hover:bg-fg-accent-hover"
                                 >
                                     전체 글 보기
                                 </button>
@@ -332,7 +332,7 @@ export default function BlogPageClient({ posts, loadFailed = false }: BlogPageCl
                             href="/faq"
                             ctaId="blog_hub_faq"
                             prefetch={false}
-                            className="group inline-flex min-h-11 items-center gap-1.5 rounded-[6px] text-sm font-semibold text-[#084734] transition-colors hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8]"
+                            className="group inline-flex min-h-11 items-center gap-1.5 rounded-[6px] text-sm font-semibold text-fg-accent transition-colors hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fg-accent focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8]"
                         >
                             <CircleHelp className="h-4 w-4" aria-hidden />
                             자주 묻는 질문
@@ -342,7 +342,7 @@ export default function BlogPageClient({ posts, loadFailed = false }: BlogPageCl
                             href="/resources"
                             ctaId="blog_hub_resources"
                             prefetch={false}
-                            className="group inline-flex min-h-11 items-center gap-1.5 rounded-[6px] text-sm font-semibold text-[#084734] transition-colors hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8]"
+                            className="group inline-flex min-h-11 items-center gap-1.5 rounded-[6px] text-sm font-semibold text-fg-accent transition-colors hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fg-accent focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8]"
                         >
                             <FolderOpen className="h-4 w-4" aria-hidden />
                             자료실
@@ -380,7 +380,7 @@ export default function BlogPageClient({ posts, loadFailed = false }: BlogPageCl
                             {/* RSS 피드는 이미 있는데 그동안 페이지에 입구가 없었다. */}
                             <a
                                 href="/blog/rss.xml"
-                                className="mt-6 inline-flex items-center gap-1.5 text-xs font-medium text-white/60 underline-offset-4 transition-colors hover:text-[#6EE7B7] hover:underline"
+                                className="mt-6 inline-flex items-center gap-1.5 text-xs font-medium text-white/60 underline-offset-4 transition-colors hover:text-fg-accent hover:underline"
                             >
                                 <Rss className="h-3.5 w-3.5" aria-hidden />
                                 RSS로 구독하기

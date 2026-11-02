@@ -40,8 +40,7 @@ export default function UnsubscribeForm({ email }: Props) {
       <div className="flex flex-col items-center gap-6">
         {/* Green checkmark circle */}
         <div
-          className="flex items-center justify-center w-14 h-14 rounded-full"
-          style={{ background: "#ECFDF5" }}
+          className="flex items-center justify-center w-14 h-14 rounded-full bg-fg-accent/8"
         >
           <svg
             width="28"
@@ -50,10 +49,11 @@ export default function UnsubscribeForm({ email }: Props) {
             fill="none"
             xmlns="http://www.w3.org/2000/svg"
             aria-hidden="true"
+            className="text-fg-accent"
           >
             <path
               d="M6 14.5L11.5 20L22 9"
-              stroke="#084734"
+              stroke="currentColor"
               strokeWidth="2.5"
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -77,8 +77,7 @@ export default function UnsubscribeForm({ email }: Props) {
 
         <Link
           href="/"
-          className="text-[15px] font-semibold transition-opacity hover:opacity-70"
-          style={{ color: "#084734" }}
+          className="text-[15px] font-semibold text-fg-accent transition-opacity hover:opacity-70"
         >
           홈으로
         </Link>
@@ -90,8 +89,7 @@ export default function UnsubscribeForm({ email }: Props) {
     <form onSubmit={handleSubmit} className="flex flex-col items-center gap-6">
       {/* Brand */}
       <span
-        className="text-[13px] font-bold tracking-widest uppercase"
-        style={{ color: "#084734" }}
+        className="text-[13px] font-bold tracking-widest uppercase text-fg-accent"
         aria-label="Classin"
       >
         Classin
@@ -133,14 +131,7 @@ export default function UnsubscribeForm({ email }: Props) {
       <button
         type="submit"
         disabled={status === "loading"}
-        className="w-full py-3 rounded-md text-[15px] font-semibold text-white transition-all active:scale-[0.97] disabled:opacity-60"
-        style={{ background: "#084734" }}
-        onMouseEnter={(e) => {
-          if (status !== "loading") (e.currentTarget as HTMLButtonElement).style.background = "#065c41"
-        }}
-        onMouseLeave={(e) => {
-          ;(e.currentTarget as HTMLButtonElement).style.background = "#084734"
-        }}
+        className="w-full py-3 rounded-md text-[15px] font-semibold bg-fg-accent text-fg-on-accent enabled:hover:bg-fg-accent-hover transition-all active:scale-[0.97] disabled:opacity-60"
       >
         {status === "loading" ? (
           <span className="flex items-center justify-center gap-2">

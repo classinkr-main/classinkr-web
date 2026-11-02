@@ -170,7 +170,7 @@ export default async function BlogDetailPage({
         <header className={mainColumn}>
           <Link
             href="/blog"
-            className="mb-8 inline-flex items-center gap-1.5 text-sm text-[#615D59] transition-colors hover:text-[#084734]"
+            className="mb-8 inline-flex items-center gap-1.5 text-sm text-[#615D59] transition-colors hover:text-fg-accent"
           >
             <ArrowRight className="h-4 w-4 rotate-180" aria-hidden />
             블로그
@@ -179,7 +179,7 @@ export default async function BlogDetailPage({
           {/* 목록의 카테고리 글리프를 상세까지 잇는다 — 같은 부호가 같은 뜻을 유지해야 어휘가 된다.
               채운 알약 대신 글자로만: 카테고리는 그린, 태그는 회색. */}
           <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px]">
-            <span className="inline-flex items-center gap-1.5 font-medium text-[#084734]">
+            <span className="inline-flex items-center gap-1.5 font-medium text-fg-accent">
               {createElement(getCategoryIcon(post.category), {
                 "aria-hidden": true,
                 className: "h-3.5 w-3.5",
@@ -231,8 +231,8 @@ export default async function BlogDetailPage({
           </div>
 
           {benefits.length > 0 && (
-            <section aria-label="이 글에서 다루는 것" className="mt-10 border-l-2 border-[#084734] pl-5">
-              <p className="text-[13px] font-semibold text-[#084734]">이 글에서 다루는 것</p>
+            <section aria-label="이 글에서 다루는 것" className="mt-10 border-l-2 border-fg-accent pl-5">
+              <p className="text-[13px] font-semibold text-fg-accent">이 글에서 다루는 것</p>
               {post.targetReader && (
                 <p className="mt-1 text-[13px] text-[#615D59]">추천 대상: {post.targetReader}</p>
               )}
@@ -262,7 +262,7 @@ export default async function BlogDetailPage({
               <summary className="flex min-h-9 cursor-pointer list-none items-center justify-between text-sm font-semibold text-[#111110] [&::-webkit-details-marker]:hidden">
                 목차
                 <svg
-                  className="h-4 w-4 text-[#084734] transition-transform duration-200 group-open:rotate-180"
+                  className="h-4 w-4 text-fg-accent transition-transform duration-200 group-open:rotate-180"
                   viewBox="0 0 16 16"
                   fill="none"
                   aria-hidden="true"
@@ -275,7 +275,7 @@ export default async function BlogDetailPage({
                   <li key={heading.id}>
                     <a
                       href={`#${heading.id}`}
-                      className={`block text-sm leading-6 text-[#615D59] transition-colors hover:text-[#084734] ${
+                      className={`block text-sm leading-6 text-[#615D59] transition-colors hover:text-fg-accent ${
                         heading.level === 3 ? "pl-4" : ""
                       }`}
                     >
@@ -311,7 +311,7 @@ export default async function BlogDetailPage({
                     fallbackIndex={post.id}
                   />
                 ) : (
-                  <div className="flex h-full items-center justify-center text-[13px] font-semibold text-[#084734]">
+                  <div className="flex h-full items-center justify-center text-[13px] font-semibold text-fg-accent">
                     {authorInitial}
                   </div>
                 )}
@@ -332,7 +332,7 @@ export default async function BlogDetailPage({
           {ctaHref && (
             <div className="mt-12 rounded-2xl border border-black/[0.12] p-6 md:p-8">
               {post.cta.eyebrow ? (
-                <p className="text-[12px] font-semibold text-[#084734]">{post.cta.eyebrow}</p>
+                <p className="text-[12px] font-semibold text-fg-accent">{post.cta.eyebrow}</p>
               ) : null}
               <h2 className="mt-2 text-[1.5rem] font-bold leading-snug tracking-[-0.03em] text-[#111110] md:text-[1.75rem]">
                 {post.cta.title}
@@ -344,7 +344,7 @@ export default async function BlogDetailPage({
                 href={ctaHref}
                 ctaId="blog_detail_cta"
                 tracking={{ slug: post.slug }}
-                className="mt-6 inline-flex items-center gap-2 rounded-[6px] bg-[#084734] px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#065c41] active:scale-[0.97]"
+                className="mt-6 inline-flex items-center gap-2 rounded-[6px] bg-fg-accent px-5 py-3 text-sm font-semibold text-fg-on-accent transition-colors hover:bg-fg-accent-hover active:scale-[0.97]"
               >
                 {post.cta.buttonLabel}
                 <ArrowRight className="h-4 w-4" aria-hidden />
@@ -365,7 +365,7 @@ export default async function BlogDetailPage({
               </h2>
               <Link
                 href="/blog"
-                className="inline-flex shrink-0 items-center gap-1 text-sm font-medium text-[#084734] transition-colors hover:text-[#111110]"
+                className="inline-flex shrink-0 items-center gap-1 text-sm font-medium text-fg-accent transition-colors hover:text-[#111110]"
               >
                 전체 글
                 <ArrowRight className="h-4 w-4" aria-hidden />

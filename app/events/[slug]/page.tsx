@@ -131,7 +131,7 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
       : []
   const googleCalendarUrl = buildGoogleCalendarUrl(event, toAbsoluteUrl(eventPath))
   const ctaButtonClassName =
-    "mt-8 inline-flex items-center gap-2 rounded-full bg-[#084734] px-6 py-3 text-[14px] font-semibold text-white transition-colors hover:bg-[#065c41]"
+    "mt-8 inline-flex items-center gap-2 rounded-full bg-fg-accent px-6 py-3 text-[14px] font-semibold text-fg-on-accent transition-colors hover:bg-fg-accent-hover"
 
   return (
     <div className="min-h-screen bg-[#FAFAF8] text-[#111110]">
@@ -159,7 +159,7 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
         <div className="mx-auto max-w-[1100px]">
           <Link
             href="/events"
-            className="mb-8 inline-flex items-center gap-2 text-sm text-[#1a1a1a]/45 transition-colors hover:text-[#084734]"
+            className="mb-8 inline-flex items-center gap-2 text-sm text-[#1a1a1a]/45 transition-colors hover:text-fg-accent"
           >
             <ArrowRight className="h-4 w-4 rotate-180" />
             행사·프로모션으로 돌아가기
@@ -172,7 +172,7 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
                   {event.category}
                 </span>
                 {event.tag && (
-                  <span className="inline-flex items-center gap-1 rounded-full border border-[#BDEFD8] bg-[#ECFDF5] px-3 py-1 text-[#084734]">
+                  <span className="inline-flex items-center gap-1 rounded-full border border-[#BDEFD8] bg-fg-accent/8 px-3 py-1 text-fg-accent">
                     <Tag className="h-3 w-3" />
                     {event.tag}
                   </span>
@@ -235,7 +235,7 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
                 <div className="mt-4 flex flex-wrap items-center gap-3 text-[13px] text-[#1a1a1a]/45">
                   <a
                     href={`${eventPath}/calendar.ics`}
-                    className="inline-flex items-center gap-1.5 transition-colors hover:text-[#084734]"
+                    className="inline-flex items-center gap-1.5 transition-colors hover:text-fg-accent"
                   >
                     <CalendarPlus className="h-4 w-4" />
                     캘린더에 추가 (.ics)
@@ -245,7 +245,7 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
                     href={googleCalendarUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="transition-colors hover:text-[#084734]"
+                    className="transition-colors hover:text-fg-accent"
                   >
                     구글 캘린더
                   </a>
@@ -285,7 +285,7 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
           {event.status === "마감" && (
             <div className="mt-8 space-y-6">
               <div className="rounded-[24px] border border-[#e8e8e4] bg-white p-6 shadow-sm md:rounded-[32px] md:p-8">
-                <p className="text-[12px] font-medium uppercase tracking-[0.24em] text-[#084734]/55">
+                <p className="text-[12px] font-medium uppercase tracking-[0.24em] text-fg-accent/55">
                   Next Events
                 </p>
                 <h2 className="mt-2 text-[1.5rem] font-semibold tracking-[-0.03em] text-[#111110]">
@@ -308,7 +308,7 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
                         href={`/events/${item.slug}`}
                         className="rounded-2xl border border-[#e8e8e4] bg-white p-5 transition-colors duration-(--motion-fast) ease-soft hover:border-line-strong"
                       >
-                        <span className="inline-flex rounded-full bg-[#f0f7f4] px-2.5 py-1 text-[11px] font-bold text-[#084734]">
+                        <span className="inline-flex rounded-full bg-[#f0f7f4] px-2.5 py-1 text-[11px] font-bold text-fg-accent">
                           {item.status}
                         </span>
                         <p className="mt-3 line-clamp-2 text-[15px] font-bold text-[#111110]">

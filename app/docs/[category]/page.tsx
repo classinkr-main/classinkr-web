@@ -128,14 +128,14 @@ export default async function DocsCategoryPage({
       <section className="container mx-auto max-w-[1080px] px-5">
         <Link
           href="/docs"
-          className="inline-flex origin-left items-center gap-2 text-sm font-medium text-[#1a1a1a]/45 transition-all duration-150 hover:text-[#084734] active:scale-[0.98]"
+          className="inline-flex origin-left items-center gap-2 text-sm font-medium text-[#1a1a1a]/45 transition-all duration-150 hover:text-fg-accent active:scale-[0.98]"
         >
           <ArrowRight className="h-4 w-4 rotate-180" />
           가이드 홈으로 돌아가기
         </Link>
 
         <div className="mt-8 max-w-4xl">
-          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[#084734]">
+          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-fg-accent">
             Classin Guide
           </p>
           <h1 className="mt-4 break-keep text-4xl font-black leading-[1.06] tracking-display md:text-6xl">
@@ -146,7 +146,7 @@ export default async function DocsCategoryPage({
           </p>
         </div>
 
-        <form action={`/docs/${categoryParam}`} method="get" className="mt-10 flex max-w-2xl items-center gap-3 border-b border-black/[0.08] pb-4 transition-colors focus-within:border-[#084734]/40 focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-fg-accent">
+        <form action={`/docs/${categoryParam}`} method="get" className="mt-10 flex max-w-2xl items-center gap-3 border-b border-black/[0.08] pb-4 transition-colors focus-within:border-fg-accent/40 focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-fg-accent">
           <Search className="h-4 w-4 shrink-0 text-[#A39E98]" aria-hidden />
           <input
             name="q"
@@ -158,7 +158,7 @@ export default async function DocsCategoryPage({
           />
           <button
             type="submit"
-            className="-mr-2 shrink-0 rounded-[6px] px-2 py-2.5 text-sm font-semibold text-[#084734]"
+            className="-mr-2 shrink-0 rounded-[6px] px-2 py-2.5 text-sm font-semibold text-fg-accent"
           >
             검색
           </button>
@@ -187,7 +187,7 @@ export default async function DocsCategoryPage({
                 <Link href={article.href} className="group block origin-center transition-all duration-150 active:scale-[0.98] active:opacity-90">
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0">
-                      <p className="break-words text-[16px] font-semibold text-[#111110] group-hover:text-[#084734]">
+                      <p className="break-words text-[16px] font-semibold text-[#111110] group-hover:text-fg-accent">
                         <SearchHighlight text={article.title} query={q} />
                       </p>
                       <p className="mt-1.5 max-w-3xl break-words text-[15px] leading-[26px] text-[#4F4C49]">
@@ -216,7 +216,7 @@ export default async function DocsCategoryPage({
               <div className="mt-4 flex flex-col gap-2 sm:flex-row">
                 <Link
                   href={searchFallbackHref}
-                  className="inline-flex h-10 items-center justify-center gap-2 rounded-[6px] bg-[#084734] px-4 text-sm font-semibold text-white transition-colors hover:bg-[#065c41]"
+                  className="inline-flex h-10 items-center justify-center gap-2 rounded-[6px] bg-fg-accent px-4 text-sm font-semibold text-fg-on-accent transition-colors hover:bg-fg-accent-hover"
                 >
                   전체 가이드에서 다시 검색
                   <ArrowRight className="h-4 w-4" aria-hidden />

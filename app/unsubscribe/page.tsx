@@ -67,8 +67,7 @@ export default async function UnsubscribePage({ searchParams }: Props) {
 
             <Link
               href="/"
-              className="text-[15px] font-semibold transition-opacity hover:opacity-70"
-              style={{ color: "#084734" }}
+              className="text-[15px] font-semibold text-fg-accent transition-opacity hover:opacity-70"
             >
               홈으로
             </Link>

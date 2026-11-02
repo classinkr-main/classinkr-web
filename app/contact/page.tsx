@@ -299,7 +299,7 @@ export default function ContactPage() {
         }
     }
     return (
-        <div className="min-h-screen bg-[#FAFAF8] pb-24 pt-20 font-sans text-[#111110] selection:bg-[#ECFDF5] sm:pb-28 lg:pb-32">
+        <div className="min-h-screen bg-[#FAFAF8] pb-24 pt-20 font-sans text-[#111110] selection:bg-fg-accent/8 sm:pb-28 lg:pb-32">
 
             {/* Header Section */}
             <section className="relative overflow-hidden px-4 pb-7 pt-7 md:pb-8 md:pt-12">
@@ -309,9 +309,9 @@ export default function ContactPage() {
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ duration: 0.6 }}
-                            className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#ECFDF5] text-[#084734] text-sm font-semibold border border-[#D1FAE5]"
+                            className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-fg-accent/8 text-fg-accent text-sm font-semibold border border-fg-accent/14"
                         >
-                            <span className="w-2 h-2 rounded-full bg-[#084734]"></span>
+                            <span className="w-2 h-2 rounded-full bg-fg-accent"></span>
                             상담 및 문의
                         </motion.div>
 
@@ -359,7 +359,7 @@ export default function ContactPage() {
                             <CardContent id="contact-form" className="flex w-full flex-col items-center space-y-5 px-5 py-5 md:px-6 md:py-6">
                                 {submitted ? (
                                     <div className="flex flex-col items-center justify-center space-y-4 py-12 text-center">
-                                        <CheckCircle2 className="h-14 w-14 text-[#084734]" />
+                                        <CheckCircle2 className="h-14 w-14 text-fg-accent" />
                                         <h3 className="text-2xl font-bold text-[#111110]">상담 요청이 접수되었습니다</h3>
                                         <p className="text-[#615D59] text-lg">담당 매니저가 내용을 확인한 뒤 이어서 안내드리겠습니다.</p>
                                         {notice && <p className="text-sm text-[#A39E98] max-w-md">{notice}</p>}
@@ -385,17 +385,17 @@ export default function ContactPage() {
                                 </div>
                                 <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div className="space-y-3 w-full">
-                                        <Label htmlFor="org-name" className="text-[#44514A] font-bold ml-1">학원명 / 기관명 <span className="text-[#084734]">*</span></Label>
+                                        <Label htmlFor="org-name" className="text-[#44514A] font-bold ml-1">학원명 / 기관명 <span className="text-fg-accent">*</span></Label>
                                         <Input id="org-name" name="org-name" placeholder="예: 무궁화 학원" required autoComplete="organization" aria-invalid={errorField === "org-name"} aria-describedby={errorMessageId} className="w-full bg-white border-[#E5E5E0] h-11 rounded-xl shadow-sm text-base" />
                                     </div>
                                     <div className="space-y-3 w-full">
-                                        <Label htmlFor="name" className="text-[#44514A] font-bold ml-1">담당자 성함 <span className="text-[#084734]">*</span></Label>
+                                        <Label htmlFor="name" className="text-[#44514A] font-bold ml-1">담당자 성함 <span className="text-fg-accent">*</span></Label>
                                         <Input id="name" name="name" placeholder="홍길동 원장" required autoComplete="name" aria-invalid={errorField === "name"} aria-describedby={errorMessageId} className="w-full bg-white border-[#E5E5E0] h-11 rounded-xl shadow-sm text-base" />
                                     </div>
                                 </div>
                                 <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div className="space-y-3 w-full">
-                                        <Label htmlFor="phone" className="text-[#44514A] font-bold ml-1">연락처 <span className="text-[#084734]">*</span></Label>
+                                        <Label htmlFor="phone" className="text-[#44514A] font-bold ml-1">연락처 <span className="text-fg-accent">*</span></Label>
                                         <Input
                                             id="phone"
                                             name="phone"
@@ -447,7 +447,7 @@ export default function ContactPage() {
                                     </div>
                                 </div>
                                 <div className="space-y-3 w-full">
-                                    <Label htmlFor="topic" className="text-[#44514A] font-bold ml-1">문의 유형 <span className="text-[#084734]">*</span></Label>
+                                    <Label htmlFor="topic" className="text-[#44514A] font-bold ml-1">문의 유형 <span className="text-fg-accent">*</span></Label>
                                     <select
                                         id="topic"
                                         name="topic"
@@ -472,7 +472,7 @@ export default function ContactPage() {
                                 {showEventPicker && (
                                     <div className="space-y-3 w-full">
                                         <Label htmlFor="event-slug" className="text-[#44514A] font-bold ml-1">
-                                            신청하실 {topic === "세미나 신청" ? "세미나" : "행사"} <span className="text-[#084734]">*</span>
+                                            신청하실 {topic === "세미나 신청" ? "세미나" : "행사"} <span className="text-fg-accent">*</span>
                                         </Label>
                                         {!eventsLoaded ? (
                                             <div className="flex h-11 items-center gap-2 rounded-xl border border-[#E5E5E0] bg-[#F6F5F4] px-4 text-sm text-[#A39E98]">
@@ -532,18 +532,18 @@ export default function ContactPage() {
                                         }}
                                         aria-invalid={!!privacyConsentError}
                                         aria-describedby={privacyConsentError ? "contact-privacy-error" : undefined}
-                                        className="mt-0.5 h-4 w-4 shrink-0 accent-[#084734]"
+                                        className="mt-0.5 h-4 w-4 shrink-0 accent-fg-accent"
                                     />
                                     <span className="text-[#44514A]">
                                         상담 진행을 위한 개인정보 수집·이용에 동의합니다.
-                                        <span className="ml-1 text-[#084734]">*</span>
+                                        <span className="ml-1 text-fg-accent">*</span>
                                         <span className="mt-1 block text-[12px] leading-5 text-[#615D59]">
                                             수집 항목: 이름, 소속 기관, 연락처, 이메일, 문의 내용 · 이용 목적: 도입 상담과 고객 지원 · 보유 기간: 마지막 상담일로부터 최대 3년.{" "}
                                             <Link
                                                 href="/privacy"
                                                 target="_blank"
                                                 rel="noopener noreferrer"
-                                                className="font-medium text-[#084734] underline underline-offset-2"
+                                                className="font-medium text-fg-accent underline underline-offset-2"
                                             >
                                                 개인정보처리방침
                                             </Link>
@@ -560,7 +560,7 @@ export default function ContactPage() {
                                         id="marketing-consent"
                                         name="marketing-consent"
                                         type="checkbox"
-                                        className="mt-0.5 h-4 w-4 shrink-0 accent-[#084734]"
+                                        className="mt-0.5 h-4 w-4 shrink-0 accent-fg-accent"
                                     />
                                     <span>
                                         제품 업데이트와 교육 운영 인사이트를 이메일로 받아보겠습니다.
@@ -570,7 +570,7 @@ export default function ContactPage() {
                                 {error && (
                                     <p id="contact-form-error" role="alert" aria-live="polite" className="text-center text-sm text-[#B43E3E]">{error}</p>
                                 )}
-                                <Button type="submit" disabled={loading} className="w-full h-12 text-base font-bold bg-[#084734] hover:bg-[#065c41] text-white rounded-xl shadow-[0_8px_20px_rgba(8,71,52,0.18)] transition-all mt-4">
+                                <Button type="submit" disabled={loading} className="w-full h-12 text-base font-bold bg-fg-accent hover:bg-fg-accent-hover text-fg-on-accent rounded-xl transition-all mt-4">
                                     {loading ? (
                                         <><Loader2 className="mr-2 h-5 w-5 animate-spin" />상담 요청 접수 중...</>
                                     ) : (

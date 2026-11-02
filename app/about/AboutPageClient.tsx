@@ -205,25 +205,6 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
       {/* ── Hero ─────────────────────────────────────────────── */}
       <section className="relative overflow-hidden pt-32 pb-28 px-6 bg-[#FAFAF8]">
         {/* 배경 비주얼 */}
-        <div
-          aria-hidden
-          className="absolute inset-0 pointer-events-none"
-          style={{
-            background:
-              "radial-gradient(60% 60% at 50% 0%, #ECFDF5 0%, rgba(236,253,245,0) 70%)",
-          }}
-        />
-        <div
-          aria-hidden
-          className="absolute inset-0 pointer-events-none opacity-[0.35]"
-          style={{
-            backgroundImage:
-              "radial-gradient(rgba(8,71,52,0.08) 1px, transparent 1px)",
-            backgroundSize: "22px 22px",
-            maskImage: "radial-gradient(60% 60% at 50% 30%, #000 30%, transparent 80%)",
-            WebkitMaskImage: "radial-gradient(60% 60% at 50% 30%, #000 30%, transparent 80%)",
-          }}
-        />
 
         <div className="relative max-w-[940px] mx-auto text-center">
           <FadeUp>
@@ -231,11 +212,7 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
               initial={{ opacity: 0, scale: 0.96 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-              className="inline-flex items-center gap-1.5 bg-white text-[#084734] text-[12px] font-semibold tracking-[0.125px] px-3.5 py-1.5 rounded-full mb-7 border border-[rgba(8,71,52,0.12)]"
-              style={{
-                boxShadow:
-                  "rgba(8,71,52,0.08) 0px 4px 18px, rgba(8,71,52,0.05) 0px 2px 7.8px",
-              }}
+              className="inline-flex items-center gap-1.5 bg-white text-fg-accent text-[12px] font-semibold tracking-[0.125px] px-3.5 py-1.5 rounded-full mb-7 border border-fg-accent/12"
             >
               글로벌 EdTech 유니콘 · 160개국
             </motion.span>
@@ -245,7 +222,7 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
             <h1 className="text-[44px] sm:text-[58px] lg:text-[72px] font-bold text-[#111110] leading-[1.02] tracking-[-2.25px] mb-7">
               교육을 시스템으로,
               <br />
-              <span className="text-[#084734]">세계를 교실로</span>
+              <span className="text-fg-accent">세계를 교실로</span>
             </h1>
           </FadeUp>
 
@@ -283,11 +260,7 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
       <section className="relative px-6 -mt-6">
         <div className="max-w-[1200px] mx-auto">
           <div
-            className="relative overflow-hidden rounded-[20px] px-6 sm:px-12 py-12 sm:py-14"
-            style={{
-              background:
-                "linear-gradient(135deg, #084734 0%, #0a5a42 50%, #065c41 100%)",
-            }}
+            className="relative overflow-hidden rounded-[20px] px-6 sm:px-12 py-12 sm:py-14 bg-fg-accent"
           >
             <div
               aria-hidden
@@ -369,7 +342,7 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
         <div className="max-w-[1200px] mx-auto">
           <FadeUp>
             <div className="text-center max-w-[680px] mx-auto mb-16">
-              <span className="text-[12px] font-semibold text-[#084734] tracking-[0.125px] uppercase mb-3 block">
+              <span className="text-[12px] font-semibold text-fg-accent tracking-[0.125px] uppercase mb-3 block">
                 Philosophy
               </span>
               <h2 className="text-[36px] sm:text-[44px] font-bold text-[#111110] leading-[1.1] tracking-[-1.5px] mb-5">
@@ -387,7 +360,7 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
                   height={48}
                   className="h-6 w-auto opacity-90"
                 />
-                <p className="text-[14px] font-medium text-[#084734]">
+                <p className="text-[14px] font-medium text-fg-accent">
                   Empowering the Future Through Transformative Learning
                 </p>
               </div>
@@ -400,21 +373,21 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
               return (
                 <FadeUp key={p.eyebrow} delay={i * 0.08}>
                   <div
-                    className="group relative h-full overflow-hidden bg-white border border-[rgba(0,0,0,0.08)] rounded-[16px] p-8 transition-all hover:border-[rgba(8,71,52,0.18)]"
+                    className="group relative h-full overflow-hidden bg-white border border-[rgba(0,0,0,0.08)] rounded-[16px] p-8 transition-all hover:border-fg-accent/18"
                     style={{
                       boxShadow:
                         "rgba(0,0,0,0.04) 0px 4px 18px, rgba(0,0,0,0.027) 0px 2px 7.8px, rgba(0,0,0,0.02) 0px 0.8px 2.9px, rgba(0,0,0,0.01) 0px 0.175px 1px",
                     }}
                   >
-                    <span className="pointer-events-none absolute right-6 top-5 select-none text-[84px] font-black leading-none tracking-[-0.08em] text-[#084734]/10 sm:right-7 sm:top-6 sm:text-[96px]">
+                    <span className="pointer-events-none absolute right-6 top-5 select-none text-[84px] font-black leading-none tracking-[-0.08em] text-fg-accent/10 sm:right-7 sm:top-6 sm:text-[96px]">
                       {p.index}
                     </span>
                     <div className="relative z-10 mb-6 flex items-center">
-                      <div className="w-11 h-11 rounded-full bg-[#ECFDF5] flex items-center justify-center">
-                        <Icon className="w-5 h-5 text-[#084734]" strokeWidth={2} />
+                      <div className="w-11 h-11 rounded-full bg-fg-accent/8 flex items-center justify-center">
+                        <Icon className="w-5 h-5 text-fg-accent" strokeWidth={2} />
                       </div>
                     </div>
-                    <div className="relative z-10 text-[11px] font-semibold text-[#084734] tracking-[0.15em] uppercase mb-3">
+                    <div className="relative z-10 text-[11px] font-semibold text-fg-accent tracking-[0.15em] uppercase mb-3">
                       {p.eyebrow}
                     </div>
                     <h3 className="relative z-10 text-[20px] font-bold text-[#111110] leading-[1.3] tracking-[-0.4px] mb-3 whitespace-pre-line">
@@ -431,7 +404,7 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
             <div className="grid sm:grid-cols-3 gap-3 bg-[#F6F5F4] rounded-[16px] p-5">
               {VALUE_DETAILS.map((v) => (
                 <div key={v.title} className="px-4 py-3">
-                  <div className="text-[14px] font-semibold text-[#084734] mb-1.5">
+                  <div className="text-[14px] font-semibold text-fg-accent mb-1.5">
                     {v.title}
                   </div>
                   <div className="text-[13px] text-[#615D59] leading-[1.6]">{v.desc}</div>
@@ -443,11 +416,11 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
       </section>
 
       {/* ── EEO 제품군 / Products ───────────────────────────── */}
-      <section className="py-28 px-6 bg-[#ECFDF5]">
+      <section className="py-28 px-6 bg-fg-accent/8">
         <div className="max-w-[1000px] mx-auto">
           <FadeUp>
             <div className="text-center max-w-[640px] mx-auto mb-12">
-              <span className="text-[12px] font-semibold text-[#084734] tracking-[0.125px] uppercase mb-3 block">
+              <span className="text-[12px] font-semibold text-fg-accent tracking-[0.125px] uppercase mb-3 block">
                 Our Products
               </span>
               <h2 className="text-[36px] sm:text-[44px] font-bold text-[#111110] leading-[1.1] tracking-[-1.5px] mb-4">
@@ -460,8 +433,7 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
           </FadeUp>
           <FadeUp delay={0.08}>
             <div
-              className="rounded-[20px] border border-[rgba(8,71,52,0.10)] bg-white p-8 sm:p-12"
-              style={{ boxShadow: "rgba(8,71,52,0.06) 0px 12px 36px" }}
+              className="rounded-[20px] border border-fg-accent/10 bg-white p-8 sm:p-12"
             >
               <div className="grid grid-cols-2 items-center justify-items-center gap-x-6 gap-y-10 sm:grid-cols-3 lg:grid-cols-5">
                 {PRODUCT_LOGOS.map((p) => (
@@ -485,7 +457,7 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
         <div className="max-w-[860px] mx-auto">
           <FadeUp>
             <div className="text-center mb-16">
-              <span className="text-[12px] font-semibold text-[#084734] tracking-[0.125px] uppercase mb-3 block">
+              <span className="text-[12px] font-semibold text-fg-accent tracking-[0.125px] uppercase mb-3 block">
                 History
               </span>
               <h2 className="text-[36px] sm:text-[44px] font-bold text-[#111110] leading-[1.1] tracking-[-1.5px] mb-4">
@@ -498,7 +470,7 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
           </FadeUp>
 
           <div className="relative">
-            <div className="absolute left-[20px] top-3 bottom-3 hidden w-px bg-gradient-to-b from-[#084734]/30 via-[#084734]/15 to-transparent sm:block" />
+            <div className="absolute left-[20px] top-3 bottom-3 hidden w-px bg-gradient-to-b from-fg-accent/30 via-fg-accent/15 to-transparent sm:block" />
 
             <div className="flex flex-col gap-5">
               {TIMELINE.map((item, i) => {
@@ -511,8 +483,8 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
                           <span
                             className={`block h-3.5 w-3.5 rounded-full ${
                               isNow
-                                ? "bg-[#084734] ring-4 ring-[#084734]/15"
-                                : "border-2 border-[#084734]/40 bg-white"
+                                ? "bg-fg-accent ring-4 ring-fg-accent/15"
+                                : "border-2 border-fg-accent/40 bg-white"
                             }`}
                           />
                         </span>
@@ -521,13 +493,13 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
                       <div
                         className={`flex-1 rounded-[18px] border p-5 sm:p-6 ${
                           isNow
-                            ? "border-[#084734]/20 bg-[#ECFDF5]"
+                            ? "border-fg-accent/20 bg-fg-accent/8"
                             : "border-[rgba(0,0,0,0.08)] bg-white"
                         }`}
                         style={{ boxShadow: "rgba(0,0,0,0.05) 0px 8px 24px, rgba(0,0,0,0.02) 0px 1px 4px" }}
                       >
                         <div className="mb-2 flex items-center gap-3">
-                          <span className="text-[26px] font-bold leading-none tracking-[-1px] text-[#084734] sm:text-[30px]">
+                          <span className="text-[26px] font-bold leading-none tracking-[-1px] text-fg-accent sm:text-[30px]">
                             {isNow ? "NOW" : item.year}
                           </span>
                           <span className="h-4 w-px bg-[rgba(0,0,0,0.12)]" />
@@ -551,7 +523,7 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
         <div className="max-w-[1200px] mx-auto">
           <FadeUp>
             <div className="text-center max-w-[640px] mx-auto mb-14">
-              <span className="text-[12px] font-semibold text-[#084734] tracking-[0.125px] uppercase mb-3 block">
+              <span className="text-[12px] font-semibold text-fg-accent tracking-[0.125px] uppercase mb-3 block">
                 Global Offices
               </span>
               <h2 className="text-[36px] sm:text-[44px] font-bold text-[#111110] leading-[1.1] tracking-[-1.5px] mb-4">
@@ -569,15 +541,12 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
                 <div
                   className={`group relative h-full rounded-[16px] p-7 transition-all ${
                     office.highlight
-                      ? "bg-[#084734] text-white"
-                      : "bg-white border border-[rgba(0,0,0,0.08)] hover:border-[rgba(8,71,52,0.2)]"
+                      ? "bg-fg-accent text-fg-on-accent"
+                      : "bg-white border border-[rgba(0,0,0,0.08)] hover:border-fg-accent/20"
                   }`}
                   style={
                     office.highlight
-                      ? {
-                          boxShadow:
-                            "rgba(8,71,52,0.18) 0px 16px 40px, rgba(8,71,52,0.1) 0px 4px 12px",
-                        }
+                      ? undefined
                       : {
                           boxShadow:
                             "rgba(0,0,0,0.04) 0px 4px 18px, rgba(0,0,0,0.02) 0px 1px 4px",
@@ -587,12 +556,12 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
                   <div className="flex items-center justify-between mb-6">
                     <div
                       className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                        office.highlight ? "bg-white/15" : "bg-[#ECFDF5]"
+                        office.highlight ? "bg-white/15" : "bg-fg-accent/8"
                       }`}
                     >
                       <MapPin
                         className={`w-4 h-4 ${
-                          office.highlight ? "text-white" : "text-[#084734]"
+                          office.highlight ? "text-white" : "text-fg-accent"
                         }`}
                         strokeWidth={2.2}
                       />
@@ -608,7 +577,7 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
 
                   <div
                     className={`text-[11px] font-semibold tracking-[0.15em] uppercase mb-2 ${
-                      office.highlight ? "text-[#6EE7B7]" : "text-[#084734]"
+                      office.highlight ? "text-[#6EE7B7]" : "text-fg-accent"
                     }`}
                   >
                     {office.role}
@@ -646,7 +615,7 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
         <div className="max-w-[1200px] mx-auto">
           <FadeUp>
             <div className="text-center max-w-[640px] mx-auto mb-14">
-              <span className="text-[12px] font-semibold text-[#084734] tracking-[0.125px] uppercase mb-3 block">
+              <span className="text-[12px] font-semibold text-fg-accent tracking-[0.125px] uppercase mb-3 block">
                 Our Culture
               </span>
               <h2 className="text-[36px] sm:text-[44px] font-bold text-[#111110] leading-[1.1] tracking-[-1.5px] mb-4">
@@ -685,7 +654,7 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
                     <Image src={c.img} alt={c.t} fill className="object-cover" sizes="(max-width: 768px) 100vw, 33vw" />
                   </div>
                   <div className="p-7">
-                    <div className="text-[11px] font-semibold text-[#084734] tracking-[0.12em] uppercase mb-2">
+                    <div className="text-[11px] font-semibold text-fg-accent tracking-[0.12em] uppercase mb-2">
                       {c.en}
                     </div>
                     <h3 className="text-[20px] font-bold text-[#111110] mb-2.5 tracking-[-0.3px]">{c.t}</h3>
@@ -699,11 +668,11 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
       </section>
 
       {/* ── 교육 포럼 / Thought Leadership ─────────────────────── */}
-      <section className="py-28 px-6 bg-[#ECFDF5]">
+      <section className="py-28 px-6 bg-fg-accent/8">
         <div className="max-w-[1000px] mx-auto">
           <FadeUp>
             <div className="text-center max-w-[640px] mx-auto mb-12">
-              <span className="text-[12px] font-semibold text-[#084734] tracking-[0.125px] uppercase mb-3 block">
+              <span className="text-[12px] font-semibold text-fg-accent tracking-[0.125px] uppercase mb-3 block">
                 Thought Leadership
               </span>
               <h2 className="text-[36px] sm:text-[44px] font-bold text-[#111110] leading-[1.1] tracking-[-1.5px] mb-4">
@@ -717,12 +686,11 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
 
           <FadeUp delay={0.08}>
             <div
-              className="bg-white rounded-[20px] border border-[rgba(8,71,52,0.10)] p-7 sm:p-10"
-              style={{ boxShadow: "rgba(8,71,52,0.08) 0px 16px 40px, rgba(8,71,52,0.04) 0px 4px 12px" }}
+              className="bg-white rounded-[20px] border border-fg-accent/10 p-7 sm:p-10"
             >
               <div className="flex flex-col lg:flex-row lg:items-center gap-8 lg:gap-12">
                 <div className="flex-1">
-                  <div className="inline-flex items-center gap-1.5 bg-[#ECFDF5] text-[#084734] text-[12px] font-semibold rounded-full px-3 py-1.5 mb-5">
+                  <div className="inline-flex items-center gap-1.5 bg-fg-accent/8 text-fg-accent text-[12px] font-semibold rounded-full px-3 py-1.5 mb-5">
                     2026 · 부산
                   </div>
                   <h3 className="text-[26px] sm:text-[30px] font-bold text-[#111110] leading-[1.2] tracking-[-0.6px] mb-3">
@@ -735,7 +703,7 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
                     {["한·중·일·베트남 4개국", "6개 세션", "공교육 × 사교육"].map((t) => (
                       <span
                         key={t}
-                        className="text-[12px] font-medium text-[#084734] bg-[#ECFDF5] rounded-full px-3 py-1.5"
+                        className="text-[12px] font-medium text-fg-accent bg-fg-accent/8 rounded-full px-3 py-1.5"
                       >
                         {t}
                       </span>
@@ -743,7 +711,7 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
                   </div>
                   <Link
                     href="/blog/2026-asia-ai-education-forum-in-busan"
-                    className="inline-flex items-center gap-1.5 text-[14px] font-semibold text-[#084734] hover:gap-2.5 transition-all"
+                    className="inline-flex items-center gap-1.5 text-[14px] font-semibold text-fg-accent hover:gap-2.5 transition-all"
                   >
                     현장 리뷰 보기
                     <ArrowUpRight className="w-4 h-4" strokeWidth={2.2} />
@@ -759,7 +727,7 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
                       { k: "CTO", l: "기조 발표" },
                     ].map((s) => (
                       <div key={s.l} className="bg-[#F6F5F4] rounded-[12px] px-4 py-5 text-center">
-                        <div className="text-[22px] font-bold text-[#084734] tracking-[-0.5px] leading-none mb-1.5">
+                        <div className="text-[22px] font-bold text-fg-accent tracking-[-0.5px] leading-none mb-1.5">
                           {s.k}
                         </div>
                         <div className="text-[12px] text-[#615D59] font-medium">{s.l}</div>
@@ -778,7 +746,7 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
         <div className="max-w-[1200px] mx-auto">
           <FadeUp>
             <div className="text-center max-w-[600px] mx-auto mb-14">
-              <span className="text-[12px] font-semibold text-[#084734] tracking-[0.125px] uppercase mb-3 block">
+              <span className="text-[12px] font-semibold text-fg-accent tracking-[0.125px] uppercase mb-3 block">
                 Global Partners
               </span>
               <h2 className="text-[36px] sm:text-[44px] font-bold text-[#111110] leading-[1.1] tracking-[-1.5px] mb-4">
@@ -813,7 +781,7 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
           <FadeUp delay={0.2}>
             <div className="mt-20 pt-16 border-t border-[rgba(0,0,0,0.08)]">
               <div className="text-center max-w-[600px] mx-auto mb-12">
-                <span className="text-[12px] font-semibold text-[#084734] tracking-[0.125px] uppercase mb-3 block">
+                <span className="text-[12px] font-semibold text-fg-accent tracking-[0.125px] uppercase mb-3 block">
                   Partnership
                 </span>
                 <h3 className="text-[28px] sm:text-[34px] font-bold text-[#111110] leading-[1.15] tracking-[-1px] mb-4">
@@ -847,7 +815,7 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
                   { t: "검증된 글로벌 플랫폼", d: "160+ 개국이 신뢰하는 인프라" },
                 ].map((v) => (
                   <div key={v.t} className="px-4 py-2">
-                    <div className="text-[15px] font-bold text-[#084734]">{v.t}</div>
+                    <div className="text-[15px] font-bold text-fg-accent">{v.t}</div>
                     <div className="mt-1 text-[13px] text-[#615D59]">{v.d}</div>
                   </div>
                 ))}
@@ -855,7 +823,7 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
               <div className="text-center mt-10">
                 <Link
                   href="/contact"
-                  className="inline-flex items-center gap-1.5 bg-[#084734] text-white text-[14px] font-semibold rounded-full px-6 py-3 hover:bg-[#0a5a42] transition-colors"
+                  className="inline-flex items-center gap-1.5 bg-fg-accent text-fg-on-accent text-[14px] font-semibold rounded-full px-6 py-3 hover:bg-[#0a5a42] transition-colors"
                 >
                   파트너십 문의하기
                   <ArrowRight className="w-4 h-4" strokeWidth={2.2} />
@@ -872,7 +840,7 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
           <FadeUp>
             <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-12">
               <div>
-                <span className="text-[12px] font-semibold text-[#084734] tracking-[0.125px] uppercase mb-3 block">
+                <span className="text-[12px] font-semibold text-fg-accent tracking-[0.125px] uppercase mb-3 block">
                   Press
                 </span>
                 <h2 className="text-[36px] sm:text-[44px] font-bold text-[#111110] leading-[1.1] tracking-[-1.5px]">
@@ -880,7 +848,7 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
                 </h2>
               </div>
               <div className="flex items-center gap-2 text-[13px] text-[#615D59]">
-                <Newspaper className="w-4 h-4 text-[#084734]" strokeWidth={2} />
+                <Newspaper className="w-4 h-4 text-fg-accent" strokeWidth={2} />
                 국내외 매체에 소개된 클래스인의 이야기
               </div>
             </div>
@@ -901,14 +869,14 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
               const inner = (
                 <>
                   <div className="flex items-center justify-between mb-5">
-                    <span className="text-[11px] font-semibold text-[#084734] bg-[#ECFDF5] rounded-full px-2.5 py-1 tracking-wide">
+                    <span className="text-[11px] font-semibold text-fg-accent bg-fg-accent/8 rounded-full px-2.5 py-1 tracking-wide">
                       {item.category}
                     </span>
                     <span className="text-[12px] text-[#A39E98] font-medium">
                       {item.date}
                     </span>
                   </div>
-                  <div className="text-[13px] font-semibold text-[#084734] mb-2.5 tracking-wide">
+                  <div className="text-[13px] font-semibold text-fg-accent mb-2.5 tracking-wide">
                     {item.outlet}
                   </div>
                   <h3 className="text-[16px] font-semibold text-[#111110] leading-[1.45] tracking-[-0.2px] mb-5">
@@ -916,7 +884,7 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
                   </h3>
                   <div
                     className={`inline-flex items-center gap-1 text-[12px] font-medium ${
-                      hasUrl ? "text-[#084734]" : "text-[#A39E98]"
+                      hasUrl ? "text-fg-accent" : "text-[#A39E98]"
                     }`}
                   >
                     기사 보기
@@ -955,7 +923,7 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
           <FadeUp>
             <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-12">
               <div>
-                <span className="text-[12px] font-semibold text-[#084734] tracking-[0.125px] uppercase mb-3 block">
+                <span className="text-[12px] font-semibold text-fg-accent tracking-[0.125px] uppercase mb-3 block">
                   Community
                 </span>
                 <h2 className="text-[36px] sm:text-[44px] font-bold text-[#111110] leading-[1.1] tracking-[-1.5px]">
@@ -964,7 +932,7 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
               </div>
               <Link
                 href="/blog"
-                className="inline-flex items-center gap-1.5 text-[14px] font-semibold text-[#084734] hover:gap-2.5 transition-all"
+                className="inline-flex items-center gap-1.5 text-[14px] font-semibold text-fg-accent hover:gap-2.5 transition-all"
               >
                 블로그 전체 보기
                 <ArrowRight className="w-4 h-4" strokeWidth={2.2} />
@@ -978,7 +946,7 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
                 <FadeUp key={post.slug} delay={i * 0.07}>
                   <Link
                     href={`/blog/${post.slug}`}
-                    className="group block h-full bg-white rounded-[16px] border border-[rgba(0,0,0,0.08)] overflow-hidden transition-all hover:border-[rgba(8,71,52,0.2)]"
+                    className="group block h-full bg-white rounded-[16px] border border-[rgba(0,0,0,0.08)] overflow-hidden transition-all hover:border-fg-accent/20"
                     style={{
                       boxShadow:
                         "rgba(0,0,0,0.04) 0px 4px 18px, rgba(0,0,0,0.02) 0px 1px 4px",
@@ -999,7 +967,7 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
                         </div>
                       )}
                       {post.category && (
-                        <span className="absolute top-3 left-3 text-[11px] font-semibold text-[#084734] bg-white/95 rounded-full px-2.5 py-1 tracking-wide">
+                        <span className="absolute top-3 left-3 text-[11px] font-semibold text-fg-accent bg-white/95 rounded-full px-2.5 py-1 tracking-wide">
                           {post.category}
                         </span>
                       )}
@@ -1029,7 +997,7 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
                 </p>
                 <Link
                   href="/blog"
-                  className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-[#084734] hover:gap-2.5 transition-all"
+                  className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-fg-accent hover:gap-2.5 transition-all"
                 >
                   블로그로 이동
                   <ArrowRight className="w-3.5 h-3.5" strokeWidth={2.2} />
@@ -1055,7 +1023,7 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
               <TrackedLink
                 href="/contact"
                 ctaId="about_final_contact"
-                className="inline-flex items-center justify-center gap-1.5 bg-[#084734] text-white font-semibold text-[15px] px-7 py-3 rounded-[6px] hover:bg-[#065c41] transition-colors"
+                className="inline-flex items-center justify-center gap-1.5 bg-fg-accent text-fg-on-accent font-semibold text-[15px] px-7 py-3 rounded-[6px] hover:bg-fg-accent-hover transition-colors"
               >
                 도입 문의하기
                 <ArrowRight className="w-4 h-4" strokeWidth={2.2} />

@@ -35,7 +35,7 @@ function PremiumShell({ children }: { children: React.ReactNode }) {
         <div className="mx-auto max-w-[920px]">
           <Link
             href="/premium"
-            className="mb-8 inline-flex items-center gap-2 text-sm text-[#1a1a1a]/45 transition-colors hover:text-[#084734]"
+            className="mb-8 inline-flex items-center gap-2 text-sm text-[#1a1a1a]/45 transition-colors hover:text-fg-accent"
           >
             <ArrowRight className="h-4 w-4 rotate-180" />
             프리미엄 콘텐츠로 돌아가기
@@ -68,7 +68,7 @@ export default async function PremiumDetailPage({ params }: PremiumDetailPagePro
     return (
       <PremiumShell>
         <div className="mb-6">
-          <p className="text-[12px] font-bold uppercase tracking-[0.18em] text-[#084734]/60">Premium</p>
+          <p className="text-[12px] font-bold uppercase tracking-[0.18em] text-fg-accent/60">Premium</p>
           <h1 className="mt-2 text-[1.7rem] font-bold leading-tight tracking-[-0.03em] text-[#111110] md:text-[2.1rem]">
             {content.title}
           </h1>
@@ -96,7 +96,7 @@ export default async function PremiumDetailPage({ params }: PremiumDetailPagePro
           </p>
           <Link
             href="/contact#contact-form"
-            className="mt-5 inline-flex h-10 items-center justify-center rounded-md bg-[#084734] px-4 text-sm font-semibold text-white transition-colors hover:bg-[#065c41]"
+            className="mt-5 inline-flex h-10 items-center justify-center rounded-md bg-fg-accent px-4 text-sm font-semibold text-fg-on-accent transition-colors hover:bg-fg-accent-hover"
           >
             권한 문의하기
           </Link>
@@ -109,7 +109,7 @@ export default async function PremiumDetailPage({ params }: PremiumDetailPagePro
   return (
     <PremiumShell>
       <article className="border border-black/[0.08] bg-white p-6 md:p-10">
-        <p className="text-[12px] font-bold uppercase tracking-[0.18em] text-[#084734]/60">Premium</p>
+        <p className="text-[12px] font-bold uppercase tracking-[0.18em] text-fg-accent/60">Premium</p>
         <h1 className="mt-2 text-[1.85rem] font-bold leading-tight tracking-[-0.03em] text-[#111110] md:text-[2.4rem]">
           {content.title}
         </h1>
@@ -127,7 +127,7 @@ export default async function PremiumDetailPage({ params }: PremiumDetailPagePro
               href={content.external_url}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-[6px] bg-[#084734] px-5 text-sm font-semibold text-white transition-colors hover:bg-[#065c41]"
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-[6px] bg-fg-accent px-5 text-sm font-semibold text-fg-on-accent transition-colors hover:bg-fg-accent-hover"
             >
               콘텐츠 열기
               <ExternalLink className="h-4 w-4" />
@@ -140,7 +140,7 @@ export default async function PremiumDetailPage({ params }: PremiumDetailPagePro
                 href={content.external_url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-[6px] bg-[#084734] px-5 text-sm font-semibold text-white transition-colors hover:bg-[#065c41]"
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-[6px] bg-fg-accent px-5 text-sm font-semibold text-fg-on-accent transition-colors hover:bg-fg-accent-hover"
               >
                 <Film className="h-4 w-4" />
                 영상 보기

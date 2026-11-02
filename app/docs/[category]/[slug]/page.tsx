@@ -163,7 +163,7 @@ export default async function DocsArticlePage({
       />
       <Link
         href={getDocCategoryPath(doc.category)}
-        className="mb-6 inline-flex origin-left items-center gap-2 text-sm font-medium text-[#1a1a1a]/45 transition-all duration-150 hover:text-[#084734] active:scale-[0.98]"
+        className="mb-6 inline-flex origin-left items-center gap-2 text-sm font-medium text-[#1a1a1a]/45 transition-all duration-150 hover:text-fg-accent active:scale-[0.98]"
       >
         <ArrowRight className="h-4 w-4 rotate-180" />
         {category.title}로 돌아가기
@@ -191,7 +191,7 @@ export default async function DocsArticlePage({
         footer={
           <div className="space-y-10">
             <section className="border-t border-black/[0.08] pt-8 print:hidden">
-              <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#084734]">
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-fg-accent">
                 저장 / 인쇄
               </p>
               <h2 className="mt-2 text-xl font-black tracking-card text-[#111110]">
@@ -207,7 +207,7 @@ export default async function DocsArticlePage({
 
             {doc.resources && doc.resources.length > 0 && (
               <section className="border-t border-black/[0.08] pt-8">
-                <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#084734]">
+                <p className="text-xs font-bold uppercase tracking-[0.16em] text-fg-accent">
                   자료
                 </p>
                 <h2 className="mt-2 text-xl font-black tracking-card text-[#111110]">
@@ -220,7 +220,7 @@ export default async function DocsArticlePage({
                         href={resource.href}
                         target="_blank"
                         rel="noreferrer"
-                        className="inline-block origin-left break-words text-[15px] font-bold text-[#084734] underline-offset-4 transition-transform duration-150 hover:underline active:scale-[0.98]"
+                        className="inline-block origin-left break-words text-[15px] font-bold text-fg-accent underline-offset-4 transition-transform duration-150 hover:underline active:scale-[0.98]"
                       >
                         {resource.label}
                       </a>
@@ -245,7 +245,7 @@ export default async function DocsArticlePage({
             </div>
 
             <section className="border-t border-black/[0.08] pt-8 print:hidden">
-              <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#084734]">
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-fg-accent">
                 추가 지원
               </p>
               <h2 className="mt-2 text-xl font-black tracking-card text-[#111110]">
@@ -256,7 +256,7 @@ export default async function DocsArticlePage({
               </p>
               <Link
                 href={contactHref}
-                className="mt-4 inline-flex origin-left items-center gap-2 rounded-[6px] bg-[#084734] px-5 py-2.5 text-sm font-bold text-white transition-all duration-150 hover:bg-[#065c41] active:scale-[0.98]"
+                className="mt-4 inline-flex origin-left items-center gap-2 rounded-[6px] bg-fg-accent px-5 py-2.5 text-sm font-bold text-fg-on-accent transition-all duration-150 hover:bg-fg-accent-hover active:scale-[0.98]"
               >
                 상담 남기기
                 <ArrowRight className="h-4 w-4" />
@@ -264,7 +264,7 @@ export default async function DocsArticlePage({
             </section>
 
             <section className="border-t border-black/[0.08] pt-8">
-              <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#084734]">
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-fg-accent">
                 요약
               </p>
               <h2 className="mt-2 text-xl font-black tracking-card text-[#111110]">
@@ -277,7 +277,7 @@ export default async function DocsArticlePage({
 
             {doc.category !== "start" && (
               <section className="border-t border-black/[0.08] pt-8 print:hidden">
-                <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#084734]">
+                <p className="text-xs font-bold uppercase tracking-[0.16em] text-fg-accent">
                   시작하기
                 </p>
                 <h2 className="mt-2 text-xl font-black tracking-card text-[#111110]">
@@ -285,7 +285,7 @@ export default async function DocsArticlePage({
                 </h2>
                 <Link
                   href="/docs/start"
-                  className="mt-3 inline-flex origin-left items-center gap-1 text-sm font-bold text-[#084734] underline-offset-4 transition-transform duration-150 hover:underline active:scale-[0.98]"
+                  className="mt-3 inline-flex origin-left items-center gap-1 text-sm font-bold text-fg-accent underline-offset-4 transition-transform duration-150 hover:underline active:scale-[0.98]"
                 >
                   클래스인 시작하기 보기
                   <ArrowRight aria-hidden className="arrow-nudge size-4" />
@@ -301,12 +301,12 @@ export default async function DocsArticlePage({
                 {prevDoc ? (
                   <Link
                     href={getDocPath(prevDoc)}
-                    className="group rounded-2xl border border-black/[0.08] bg-white px-5 py-4 transition-colors hover:border-[#084734]/30"
+                    className="group rounded-2xl border border-black/[0.08] bg-white px-5 py-4 transition-colors hover:border-fg-accent/30"
                   >
                     <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#1a1a1a]/35">
                       ← 이전 문서
                     </p>
-                    <p className="mt-1.5 text-[15px] font-bold text-[#111110] transition-colors group-hover:text-[#084734]">
+                    <p className="mt-1.5 text-[15px] font-bold text-[#111110] transition-colors group-hover:text-fg-accent">
                       {prevDoc.title}
                     </p>
                   </Link>
@@ -316,13 +316,13 @@ export default async function DocsArticlePage({
                 {nextDoc ? (
                   <Link
                     href={getDocPath(nextDoc)}
-                    className="group rounded-2xl border border-black/[0.08] bg-white px-5 py-4 text-right transition-colors hover:border-[#084734]/30"
+                    className="group rounded-2xl border border-black/[0.08] bg-white px-5 py-4 text-right transition-colors hover:border-fg-accent/30"
                   >
                     <p className="inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-[0.14em] text-[#1a1a1a]/35">
                       다음 문서
                       <ArrowRight aria-hidden className="arrow-nudge size-4" />
                     </p>
-                    <p className="mt-1.5 text-[15px] font-bold text-[#111110] transition-colors group-hover:text-[#084734]">
+                    <p className="mt-1.5 text-[15px] font-bold text-[#111110] transition-colors group-hover:text-fg-accent">
                       {nextDoc.title}
                     </p>
                   </Link>
@@ -332,7 +332,7 @@ export default async function DocsArticlePage({
 
             {relatedDocs.length > 0 && (
               <section className="border-t border-black/[0.08] pt-8 print:hidden">
-                <p className="text-sm font-bold uppercase tracking-[0.14em] text-[#084734]">
+                <p className="text-sm font-bold uppercase tracking-[0.14em] text-fg-accent">
                   함께 보기
                 </p>
                 <h2 className="mt-2 text-2xl font-black tracking-subhead text-[#111110]">

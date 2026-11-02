@@ -22,14 +22,14 @@ export default function PricingSimulatorKrwPage() {
       <div className="mx-auto max-w-6xl">
         <Link
           href="/pricing/simulator"
-          className="inline-flex items-center gap-2 text-[13px] font-semibold text-[#084734] transition-colors hover:text-[#065c41]"
+          className="inline-flex items-center gap-2 text-[13px] font-semibold text-fg-accent transition-colors hover:text-fg-accent-hover"
         >
           <ArrowLeft className="h-4 w-4" aria-hidden="true" />
           기본 시뮬레이터로 돌아가기
         </Link>
 
         <div className="mt-8 max-w-3xl">
-          <p className="text-[12px] font-semibold uppercase tracking-[0.18em] text-[#084734]/70">
+          <p className="text-[12px] font-semibold uppercase tracking-[0.18em] text-fg-accent/70">
             Pricing Simulator KRW
           </p>
           <h1 className="mt-3 text-[2.35rem] font-semibold leading-[1.08] tracking-tight sm:text-5xl">

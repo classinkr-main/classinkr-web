@@ -24,8 +24,8 @@ const LOCATION_SEARCH_ALIASES = [
 
 function StatusBadge({ status }: { status: EventStatus }) {
   const styles: Record<EventStatus, string> = {
-    "진행 중": "border-[#D1FAE5] bg-[#ECFDF5] text-[#084734]",
-    "예정": "border-[#D1FAE5] bg-white text-[#084734]",
+    "진행 중": "border-fg-accent/14 bg-fg-accent/8 text-fg-accent",
+    "예정": "border-fg-accent/14 bg-white text-fg-accent",
     "마감": "border-black/[0.08] bg-[#F6F5F4] text-[#615D59]",
   }
   return (
@@ -91,7 +91,7 @@ export default function EventsClient({
   }
 
   return (
-    <div className="min-h-screen bg-[#FAFAF8] text-[#1a1a1a] selection:bg-[#D1FAE5] selection:text-[#084734]">
+    <div className="min-h-screen bg-[#FAFAF8] text-[#1a1a1a] selection:bg-fg-accent/14 selection:text-fg-accent">
 
       {/* Hero */}
       <section className="relative px-4 pb-6 pt-28 sm:px-6 md:pt-40">
@@ -135,7 +135,7 @@ export default function EventsClient({
                   진행 중 {activeCount}건
                 </span>
                 <span className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-[#084734]" />
+                  <span className="w-2 h-2 rounded-full bg-fg-accent" />
                   예정 {upcomingCount}건
                 </span>
               </motion.div>
@@ -166,7 +166,7 @@ export default function EventsClient({
                           />
                         </>
                       ) : (
-                        <div className="absolute inset-0 bg-gradient-to-br from-[#08231d] to-[#084734]" />
+                        <div className="absolute inset-0 bg-gradient-to-br from-[#08231d] to-fg-accent" />
                       )}
                       <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-black/10" />
                       <div className="relative z-10 flex h-full min-h-[300px] flex-col p-6 sm:min-h-[340px] md:min-h-[400px] md:p-10">
@@ -198,7 +198,7 @@ export default function EventsClient({
                           {heroHref && (
                             <Link
                               href={heroHref}
-                              className="inline-flex items-center gap-2 bg-white text-[#111110] text-[13px] font-semibold px-6 py-2.5 rounded-lg hover:bg-[#ECFDF5] transition-colors duration-200 shadow-lg"
+                              className="inline-flex items-center gap-2 bg-white text-[#111110] text-[13px] font-semibold px-6 py-2.5 rounded-lg hover:bg-fg-accent/8 transition-colors duration-200 shadow-lg"
                             >
                               자세히 보기
                               <ArrowRight className="w-3.5 h-3.5" />
@@ -237,8 +237,8 @@ export default function EventsClient({
                   }}
                   className={`min-h-11 shrink-0 rounded-full px-4 py-2 text-[13px] font-medium transition-all duration-200 ${
                     isActive
-                      ? "bg-[#084734] text-white shadow-[0_6px_16px_rgba(8,71,52,0.14)]"
-                      : "text-[#615D59] hover:bg-[#ECFDF5] hover:text-[#084734]"
+                      ? "bg-fg-accent text-fg-on-accent"
+                      : "text-[#615D59] hover:bg-fg-accent/8 hover:text-fg-accent"
                   }`}
                 >
                   {cat}
@@ -261,7 +261,7 @@ export default function EventsClient({
                 type="button"
                 aria-label="행사 검색어 지우기"
                 onClick={() => setSearchQuery("")}
-                className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-[#A39E98] transition-colors hover:bg-[#F6F5F4] hover:text-[#084734]"
+                className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-[#A39E98] transition-colors hover:bg-[#F6F5F4] hover:text-fg-accent"
               >
                 <X className="h-3.5 w-3.5" aria-hidden />
               </button>
@@ -303,7 +303,7 @@ export default function EventsClient({
                   </div>
 
                   <div className="flex flex-col gap-1.5">
-                    <h2 className="text-[17px] md:text-[19px] font-semibold leading-snug tracking-[-0.015em] text-[#111110] group-hover:text-[#084734] transition-colors duration-300">
+                    <h2 className="text-[17px] md:text-[19px] font-semibold leading-snug tracking-[-0.015em] text-[#111110] group-hover:text-fg-accent transition-colors duration-300">
                       {event.title}
                     </h2>
                     <p className="text-[13px] text-[#1a1a1a]/50 leading-relaxed line-clamp-2">
@@ -326,7 +326,7 @@ export default function EventsClient({
                       {event.tag && (
                         <>
                           <span className="text-[#1a1a1a]/10">·</span>
-                          <span className="text-[11px] text-[#084734]/70 font-medium flex items-center gap-1">
+                          <span className="text-[11px] text-fg-accent/70 font-medium flex items-center gap-1">
                             <Tag className="w-3 h-3" />
                             {event.tag}
                           </span>
@@ -395,7 +395,7 @@ export default function EventsClient({
                 <button
                   type="button"
                   onClick={resetFilters}
-                  className="inline-flex h-10 items-center justify-center rounded-[6px] bg-[#084734] px-4 text-sm font-semibold text-white transition-colors hover:bg-[#065c41]"
+                  className="inline-flex h-10 items-center justify-center rounded-[6px] bg-fg-accent px-4 text-sm font-semibold text-fg-on-accent transition-colors hover:bg-fg-accent-hover"
                 >
                   전체 행사 보기
                 </button>
@@ -419,7 +419,7 @@ export default function EventsClient({
           <div className="mx-auto max-w-[1100px] px-4 py-16 sm:px-6 md:py-20">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
               <div>
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#ECFDF5] px-3 py-1 text-[12px] font-semibold text-[#084734]">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-fg-accent/8 px-3 py-1 text-[12px] font-semibold text-fg-accent">
                   <LockKeyhole className="h-3.5 w-3.5" />
                   회원 전용 · 다시보기
                 </span>

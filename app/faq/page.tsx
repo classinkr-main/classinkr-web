@@ -18,7 +18,7 @@ export const metadata = createPublicMetadata({
 const PRE_ADOPTION_DOC = getDocBySlug("pre-adoption-faq-22-questions", "start")
 
 const FAQ_LINK_CLASS =
-  "inline-flex items-center justify-center rounded-full border border-black/[0.08] bg-white px-5 py-2.5 text-sm font-semibold text-[#084734] transition-colors hover:bg-[#ECFDF5]"
+  "inline-flex items-center justify-center rounded-full border border-black/[0.08] bg-white px-5 py-2.5 text-sm font-semibold text-fg-accent transition-colors hover:bg-fg-accent/8"
 
 export default function FAQPage() {
   return (
@@ -39,7 +39,7 @@ export default function FAQPage() {
       />
       <div className="min-h-screen bg-white pt-24 md:pt-28">
         <div className="container mx-auto mb-12 text-center md:mb-16">
-          <span className="inline-block py-1 px-3 rounded-full bg-[#ECFDF5] text-[#084734] text-sm font-semibold mb-4">
+          <span className="inline-block py-1 px-3 rounded-full bg-fg-accent/8 text-fg-accent text-sm font-semibold mb-4">
             FAQ
           </span>
           <h1 className="break-keep text-[2.35rem] font-black text-[#111110] md:text-5xl" style={{ letterSpacing: '-1.5px' }}>
@@ -48,13 +48,13 @@ export default function FAQPage() {
           <div className="mt-6 flex flex-col items-center justify-center gap-3 sm:flex-row sm:flex-wrap">
             <Link
               href="/docs/start"
-              className="inline-flex items-center justify-center rounded-full bg-[#084734] px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#065c41]"
+              className="inline-flex items-center justify-center rounded-full bg-fg-accent px-5 py-2.5 text-sm font-semibold text-fg-on-accent transition-colors hover:bg-fg-accent-hover"
             >
               Classin 시작하기 가이드
             </Link>
             <Link
               href="/docs/admin"
-              className="inline-flex items-center justify-center rounded-full border border-black/[0.08] bg-white px-5 py-2.5 text-sm font-semibold text-[#084734] transition-colors hover:bg-[#ECFDF5]"
+              className="inline-flex items-center justify-center rounded-full border border-black/[0.08] bg-white px-5 py-2.5 text-sm font-semibold text-fg-accent transition-colors hover:bg-fg-accent/8"
             >
               관리자 가이드
             </Link>

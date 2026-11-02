@@ -40,8 +40,8 @@ export function ResourcesHubClient({ resources }: ResourcesHubClientProps) {
             </p>
           </div>
 
-          <aside className="border-l-2 border-[#084734] bg-white px-5 py-4 shadow-[0_8px_26px_rgba(17,17,16,0.04)]">
-            <p className="text-[13px] font-bold text-[#084734]">다운로드 흐름</p>
+          <aside className="border-l-2 border-fg-accent bg-white px-5 py-4 shadow-[0_8px_26px_rgba(17,17,16,0.04)]">
+            <p className="text-[13px] font-bold text-fg-accent">다운로드 흐름</p>
             <ol className="mt-3 space-y-2 text-sm leading-6 text-[#615D59]">
               <li>1. 필요한 자료를 선택합니다.</li>
               <li>2. 업무용 정보를 입력합니다.</li>
@@ -53,7 +53,7 @@ export function ResourcesHubClient({ resources }: ResourcesHubClientProps) {
         {featured ? (
           <section className="grid gap-6 border-b border-black/[0.08] py-10 lg:grid-cols-[minmax(0,1fr)_280px] lg:items-center">
             <div>
-              <div className="flex items-center gap-2 text-[13px] font-bold text-[#084734]">
+              <div className="flex items-center gap-2 text-[13px] font-bold text-fg-accent">
                 <FileText className="h-4 w-4" />
                 추천 자료
               </div>
@@ -75,7 +75,7 @@ export function ResourcesHubClient({ resources }: ResourcesHubClientProps) {
               href={`/resources/${featured.slug}#download`}
               ctaId="resources_featured_pdf"
               tracking={{ source: "resources_hub", lead_magnet: featured.slug }}
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-[6px] bg-[#084734] px-5 text-sm font-semibold text-white transition-colors hover:bg-[#065c41]"
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-[6px] bg-fg-accent px-5 text-sm font-semibold text-fg-on-accent transition-colors hover:bg-fg-accent-hover"
             >
               PDF 받기
               <Download className="h-4 w-4" />
@@ -103,13 +103,13 @@ export function ResourcesHubClient({ resources }: ResourcesHubClientProps) {
                 href={`/resources/${resource.slug}#download`}
                 ctaId="resources_pdf_card"
                 tracking={{ source: "resources_hub", lead_magnet: resource.slug }}
-                className="group grid gap-4 border border-black/[0.08] bg-white p-5 transition-colors hover:border-[#084734]/25 hover:bg-[#FFFFFF] md:grid-cols-[160px_minmax(0,1fr)_120px] md:items-center"
+                className="group grid gap-4 border border-black/[0.08] bg-white p-5 transition-colors hover:border-fg-accent/25 hover:bg-[#FFFFFF] md:grid-cols-[160px_minmax(0,1fr)_120px] md:items-center"
               >
-                <div className="text-[13px] font-bold text-[#084734]">
+                <div className="text-[13px] font-bold text-fg-accent">
                   {resource.tierLabel} · {resource.categoryLabel}
                 </div>
                 <div>
-                  <h3 className="text-[18px] font-bold leading-7 tracking-[-0.02em] text-[#111110] group-hover:text-[#084734]">
+                  <h3 className="text-[18px] font-bold leading-7 tracking-[-0.02em] text-[#111110] group-hover:text-fg-accent">
                     {resource.title}
                   </h3>
                   <p className="mt-2 line-clamp-2 text-sm leading-6 text-[#615D59]">
@@ -121,7 +121,7 @@ export function ResourcesHubClient({ resources }: ResourcesHubClientProps) {
                     <span>PDF</span>
                   </div>
                 </div>
-                <span className="inline-flex items-center gap-2 text-sm font-bold text-[#084734] md:justify-end">
+                <span className="inline-flex items-center gap-2 text-sm font-bold text-fg-accent md:justify-end">
                   받기
                   <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
                 </span>
