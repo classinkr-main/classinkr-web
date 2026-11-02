@@ -140,8 +140,8 @@ export function DemoModal({ children, trackingButton }: { children: React.ReactN
             <DialogContent className="site sm:max-w-[560px] overflow-hidden border-[#E4E8E2] bg-[#FBFCF9] p-0">
                 {submitted ? (
                     <div className="flex flex-col items-center justify-center space-y-4 px-8 py-12 text-center">
-                        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#ECFDF5]">
-                            <CheckCircle2 className="h-7 w-7 text-[#084734]" />
+                        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-fg-accent/8">
+                            <CheckCircle2 className="h-7 w-7 text-fg-accent" />
                         </div>
                         <h3 className="text-[24px] font-bold tracking-[-0.03em] text-[#111110]">
                             상담 요청이 접수되었습니다

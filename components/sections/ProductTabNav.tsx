@@ -28,7 +28,7 @@ export function ProductTabNav() {
                                 className={cn(
                                     "inline-flex items-center gap-2 whitespace-nowrap px-3 py-2 rounded-full text-[13px] font-semibold transition-all sm:px-5 sm:text-sm",
                                     isActive
-                                        ? "bg-[#ECFDF5] text-[#084734] shadow-sm"
+                                        ? "bg-fg-accent/8 text-fg-accent shadow-sm"
                                         : "text-[#615D59] hover:text-[#111110] hover:bg-[#F6F5F4]"
                                 )}
                             >

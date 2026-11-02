@@ -42,7 +42,7 @@ export function KeyUseCases({ defaultValue = "classes" }: { defaultValue?: UseCa
                                     "자동 출석 체크",
                                     "수업 자동 녹화 및 자동 업로드",
                                 ]}
-                                imageColor="bg-[#ECFDF5]"
+                                imageColor="bg-fg-accent/8"
                                 imageSrc="/images/use-cases/generated/classes-source.png"
                                 imageAlt="Classin 활동 게시하기 화면"
                                 imageObjectPosition="50% 50%"
@@ -57,7 +57,7 @@ export function KeyUseCases({ defaultValue = "classes" }: { defaultValue?: UseCa
                                     "즉석 첨삭 가능 및 자동 저장",
                                     "학생 즉각 피드백",
                                 ]}
-                                imageColor="bg-[#ECFDF5]"
+                                imageColor="bg-fg-accent/8"
                                 imageSrc="/images/use-cases/generated/homework-source.png"
                                 imageAlt="Classin 숙제 채점 데이터 화면"
                                 imageObjectPosition="52% 45%"
@@ -72,7 +72,7 @@ export function KeyUseCases({ defaultValue = "classes" }: { defaultValue?: UseCa
                                     "수업 및 출결 현황",
                                     "수업 및 숙제 관리, 일괄 생성",
                                 ]}
-                                imageColor="bg-[#ECFDF5]"
+                                imageColor="bg-fg-accent/8"
                                 imageSrc="/images/use-cases/generated/comms-source.png"
                                 imageAlt="Classin 반별 수업 기록과 출석·제출 현황 화면"
                                 imageObjectPosition="40% 50%"
@@ -87,7 +87,7 @@ export function KeyUseCases({ defaultValue = "classes" }: { defaultValue?: UseCa
                                     "실시간 소통 채널",
                                     "일정 및 결제 알림",
                                 ]}
-                                imageColor="bg-[#ECFDF5]"
+                                imageColor="bg-fg-accent/8"
                                 imageSrc="/images/use-cases/generated/comms-source.png"
                                 imageAlt="Classin 반 운영 및 알림 화면"
                                 imageObjectPosition="86% 50%"
@@ -149,7 +149,7 @@ function UseCaseCard({
                         <ul className="space-y-4">
                             {points.map((point, i) => (
                                 <li key={i} className="flex items-center gap-4 group">
-                                    <div className="flex-shrink-0 h-8 w-8 rounded-full bg-[#ECFDF5] flex items-center justify-center text-[#084734]">
+                                    <div className="flex-shrink-0 h-8 w-8 rounded-full bg-fg-accent/8 flex items-center justify-center text-fg-accent">
                                         <Check className="w-5 h-5" strokeWidth={3} />
                                     </div>
                                     <span className="text-[#615D59] font-bold text-lg break-keep">{point}</span>
