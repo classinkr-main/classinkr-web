@@ -18,6 +18,9 @@ const buttonVariants = cva(
                 // Outline — whisper border
                 outline:
                     "border border-line-hair bg-surface-sheet text-fg-ink rounded-[6px] hover:bg-surface-sunken active:scale-[0.97] shadow-sm",
+                // Line — 토큰 경계만(먹 지면·공개 보조 버튼). hover 는 경계를 짙게, 면은 안 바꾼다
+                line:
+                    "border border-line-control bg-transparent text-fg-ink rounded-[6px] hover:border-line-ink active:scale-[0.97]",
                 // Ghost — text only
                 ghost:
                     "text-fg-accent bg-transparent hover:underline underline-offset-4",

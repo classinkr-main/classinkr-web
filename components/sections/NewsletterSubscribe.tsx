@@ -95,7 +95,8 @@ export function NewsletterSubscribe({ variant = "dark", source = "footer_newslet
         <Button
           type="submit"
           disabled={loading}
-          size="default"
+          variant="line"
+          size="md"
           className="h-10 min-w-[82px] rounded-[14px] px-4 text-sm whitespace-nowrap"
         >
           {loading ? (
