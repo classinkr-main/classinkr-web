@@ -76,6 +76,57 @@ export function isAnalyticsTagExcludedPath(pathname: string | null | undefined):
   return hidesPublicChrome(pathname) || isTrackingExcludedPath(pathname)
 }
 
+/* ── GA4 콘텐츠 그룹 ───────────────────────────────────────────────────────
+ * GA4 의 content_group(콘텐츠 그룹) 값. 첫 경로 세그먼트로 고른다. 목록에 없는 공개 경로
+ * (약관·업데이트·프리미엄 등)는 other — 묶음을 바꾸려면 이 표만 고친다.
+ * 객체 대신 Map 인 이유: `/constructor` 같은 경로가 Object.prototype 값을 집어 오지 않게.
+ */
+const CONTENT_GROUP_BY_SEGMENT = new Map([
+  ["product", "product"],
+  ["pricing", "pricing"],
+  ["blog", "blog"],
+  ["resources", "resources"],
+  ["docs", "docs"],
+  ["events", "events"],
+  ["contact", "contact"],
+  ["showroom", "contact"],
+  ["checkout", "checkout"], // 결제 결과(/checkout/success·fail) 포함
+  ["l", "landing"],
+  ["faq", "faq"],
+  ["about", "about"],
+  ["download", "download"],
+])
+
+export function getContentGroup(pathname: string | null | undefined): string {
+  if (pathname === "/") return "home"
+  return CONTENT_GROUP_BY_SEGMENT.get(pathname?.split("/")[1] ?? "") ?? "other"
+}
+
+/* ── 내부(직원) 트래픽 표시 ────────────────────────────────────────────────
+ * 어드민에 로그인한 브라우저의 GA4 hit 에 traffic_type=internal 을 싣는다 — GA4 "내부 트래픽"
+ * 데이터 필터가 이 값으로 직원 방문을 걸러 IP 규칙 없이도 빠진다. /admin 은 추적 제외라
+ * 표시는 어드민 셸(components/admin/AdminShell.tsx)이 남기고, 공개 페이지의 gtag 문맥
+ * (GoogleAdsScript·PageViewTracker)이 읽는다. 로그아웃해도 지우지 않는다(직원 브라우저는
+ * 계속 내부). 값은 "1" 하나뿐이라 개인정보가 아니다.
+ */
+const INTERNAL_TRAFFIC_KEY = "classinkr.internalTraffic"
+
+export function markInternalTraffic(): void {
+  try {
+    window.localStorage.setItem(INTERNAL_TRAFFIC_KEY, "1")
+  } catch {
+    // 저장소가 막힌 브라우저 — 표시 없이 넘어간다.
+  }
+}
+
+export function isInternalTrafficMarked(): boolean {
+  try {
+    return window.localStorage.getItem(INTERNAL_TRAFFIC_KEY) === "1"
+  } catch {
+    return false
+  }
+}
+
 /** 광고 귀속에 필요한 쿼리만 남긴다. 나머지(prefill·email·token·검색어 등)는 모두 버린다. */
 const PASSTHROUGH_PARAM_KEYS = new Set(["gclid", "gbraid", "wbraid", "fbclid", "msclkid"])
 const PASSTHROUGH_PARAM_PREFIXES = ["utm_", "n_"] as const

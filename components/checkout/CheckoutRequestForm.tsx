@@ -375,6 +375,7 @@ export function CheckoutRequestForm({
             request_kind: kind,
             page: sourcePage,
             item_count: submitItems.length,
+            academy_size: form.academySize,
             // 사이드바·모달이 말하는 금액과 같아야 한다 — 설치비를 뺀 값을 보내면
             // 전환 금액이 실제 신청보다 대당 단가만큼 낮게 잡힌다.
             value: itemsSubtotalKrw + installSubtotalKrw,

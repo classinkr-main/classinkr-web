@@ -7,8 +7,10 @@ import {
   NAVER_WCS_ID,
 } from "@/lib/analytics-config"
 import { currentChoice, getAnonymousId } from "@/lib/consent/consent"
+import { isAcademySize } from "@/lib/contact/academy-size"
 import { isSalesContactTopic } from "@/lib/contact/topics"
 import {
+  getContentGroup,
   isTrackingExcludedPath,
   sanitizeTrackingTarget,
   sanitizeTrackingUrl,
@@ -65,6 +67,10 @@ export interface GooglePageContext {
   page_location?: string
   page_referrer?: string
   page_title?: string
+  /** GA4 콘텐츠 그룹(lib/tracking-paths.ts getContentGroup). */
+  content_group?: string
+  /** 직원 브라우저 표시 — GA4 "내부 트래픽" 데이터 필터가 이 값으로 거른다. */
+  traffic_type?: "internal"
 }
 
 interface GtagFunction {
@@ -364,6 +370,8 @@ export const setGooglePageContext = (context: GooglePageContext) => {
   if (context.page_location) payload.page_location = context.page_location
   if (context.page_referrer !== undefined) payload.page_referrer = context.page_referrer
   if (context.page_title) payload.page_title = context.page_title
+  if (context.content_group) payload.content_group = context.content_group
+  if (context.traffic_type) payload.traffic_type = context.traffic_type
   window.gtag("set", payload)
 }
 
@@ -407,10 +415,13 @@ export const trackEvent = (
   }
 
   // gtag 이벤트는 GA4 권장 이벤트명으로 푸시 — 발화 여부는 Consent Mode v2 상태가 결정한다.
+  // content_group 도 page_location 처럼 이벤트마다 싣는다: /checkout 은 PageViewTracker 가
+  // 없어 소프트 내비게이션으로 들어오면 gtag('set') 문맥이 직전 페이지 그룹에 머문다.
   if (!INTERNAL_ONLY_EVENTS.has(eventName) && window.gtag) {
     const ga4Event = getGa4Event(eventName, eventParams)
     window.gtag("event", ga4Event.name, {
       page_location: currentPageLocation(),
+      content_group: getContentGroup(window.location?.pathname),
       ...ga4Event.params,
     })
   }
@@ -551,6 +562,8 @@ export const trackLeadSubmitted = (input: LeadSubmittedInput): boolean => {
     form_type: input.formType,
   }
   if (eventId) params.event_id = eventId
+  // 학원 규모는 선택지 값만 내보낸다 — 자유 입력·변조 값이 GA4·픽셀로 새지 않게.
+  if (!isAcademySize(params.academy_size)) delete params.academy_size
 
   trackEvent("submit_demo_request", params)
 

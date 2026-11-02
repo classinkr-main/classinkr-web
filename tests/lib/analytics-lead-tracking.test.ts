@@ -106,6 +106,7 @@ describe("trackLeadSubmitted", () => {
     const [lead] = gtagEvents("generate_lead")
     expect(lead?.[2]).toEqual({
       page_location: "https://classin.kr/contact?utm_source=naver",
+      content_group: "contact",
       source: "contact_page",
       form_type: "contact",
       lead_source: "contact_page",
@@ -191,6 +192,15 @@ describe("trackLeadSubmitted", () => {
     const input = { formType: "demo" as const, source: "demo_modal", dedupeKey: "lead:blocked" }
     expect(trackLeadSubmitted(input)).toBe(true)
     expect(trackLeadSubmitted(input)).toBe(false)
+  })
+
+  it("keeps only enumerated academy_size values", () => {
+    trackLeadSubmitted({ formType: "contact", source: "contact_page", params: { academy_size: "100~300명" } })
+    trackLeadSubmitted({ formType: "demo", source: "demo_modal", params: { academy_size: "김원장 010-1234-5678" } })
+
+    const [valid, invalid] = gtagEvents("generate_lead").map(([, , params]) => params)
+    expect(valid).toMatchObject({ academy_size: "100~300명" })
+    expect(invalid).not.toHaveProperty("academy_size")
   })
 })
 
