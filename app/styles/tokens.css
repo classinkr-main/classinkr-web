@@ -18,8 +18,8 @@
     --fg-muted: #615D59;
     --fg-placeholder: #78736D;    /* 입력 바탕이 sheet 일 때만 */
     --fg-faint: #A39E98;          /* 장식·비활성 전용. 텍스트 금지 (2.54:1) */
-    --fg-accent: #084734;
-    --fg-accent-hover: #065C41;
+    --fg-accent: #0B7A52;
+    --fg-accent-hover: #0A6E4A;
     --fg-danger: #B43E3E;
     --fg-on-accent: #FAFAF8;
 
@@ -27,7 +27,7 @@
     --line-strong: rgb(17 17 16 / .16);
     --line-ink: #111110;
     --line-control: #8F8A84;
-    --line-link: rgb(8 71 52 / .6);
+    --line-link: rgb(11 122 82 / .75);
 
     /* ── 자간 원값 — typography 소유 (§2-3) ── */
     --trk-poster: -0.03em;
@@ -62,6 +62,14 @@
     /* 50 = Radix Dialog·오버레이 (components/ui/dialog.tsx 공유 기본값, 토큰 아님) */
     --z-skiplink: 60;
     /* 9999 = 토스트 (components/ui/toast.tsx 공유 기본값, 토큰 아님) */
+  }
+
+  /* 공개 강조색(2026-11-02, #0B7A52 · hover #0A6E4A). 어드민·checkout DOM 은 .site 래퍼(AppChrome)가 없어
+     옛 그린을 읽는다 — 공용 components/ui 를 토큰으로 바꿔도 어드민 색은 변하지 않는다. .site 가 있으면(포털 포함) :root 값 */
+  :root:not(:has(.site)) {
+    --fg-accent: #084734;
+    --fg-accent-hover: #065C41;
+    --line-link: rgb(8 71 52 / .6);
   }
 
   @media (width < 40rem) {

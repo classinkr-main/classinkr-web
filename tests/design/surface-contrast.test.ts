@@ -95,10 +95,10 @@ describe("tokens.css 대비", () => {
     })
   })
 
-  // 계산식 자체 점검 — surfaces §2-2·§2-3 표의 손 계산값
+  // 계산식 자체 점검 — surfaces §2-2·§2-3 표의 손 계산값. line-link 는 새 --line-link rgb(11 122 82 / .75) on sheet (2026-11-02)
   it("표의 값과 맞다", () => {
     expect(contrast(root["fg-muted"], root["surface-sheet"])).toBeCloseTo(6.53, 1)
-    expect(contrast(root["line-link"], root["surface-sheet"])).toBeCloseTo(3.49, 1)
+    expect(contrast(root["line-link"], root["surface-sheet"])).toBeCloseTo(3.35, 1)
     expect(contrast(ink["fg-muted"], root["surface-ink"])).toBeCloseTo(6.14, 1)
   })
 })

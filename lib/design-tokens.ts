@@ -7,7 +7,7 @@ export const color = {
   ink: "#111110",         // --surface-ink
   fgBody: "#31302E",      // --fg-body
   fgMuted: "#615D59",     // --fg-muted
-  accent: "#084734",      // --fg-accent
+  accent: "#0B7A52",      // --fg-accent (공개 그린 2026-11-02. 어드민은 tokens.css 유지 블록이 #084734)
   onAccent: "#FAFAF8",    // --fg-on-accent
   lineControl: "#8F8A84", // --line-control
   danger: "#B43E3E",      // --fg-danger
