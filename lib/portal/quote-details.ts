@@ -77,6 +77,7 @@ function normalizeLineItem(value: unknown, index: number): PartnerQuoteLineItemI
     quantity,
     quantityUnit: pickString(item, "quantityUnit", "quantity_unit"),
     unitPrice,
+    originalUnitPrice: pickNumber(item, "originalUnitPrice", "original_unit_price"),
     lineSupplyAmount,
     vatIncluded: pickBoolean(item, "vatIncluded", "vat_included") ?? true,
     lineStatus:

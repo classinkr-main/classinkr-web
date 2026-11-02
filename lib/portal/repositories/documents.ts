@@ -27,6 +27,7 @@ export interface ListPortalDocumentsInput {
   dealId?: string;
   type?: PartnerDocumentKind | "all";
   status?: string;
+  deletedQuotesOnly?: boolean;
 }
 
 export interface ListPortalDocumentsResult {
@@ -104,7 +105,7 @@ function summarize(documents: PartnerDocumentListItem[]): PartnerDocumentSummary
 }
 
 async function listQuoteDocuments(
-  deals: DealListItem[]
+  deals: DealListItem[], deletedOnly = false
 ): Promise<PartnerDocumentListItem[]> {
   if (deals.length === 0) return [];
 
@@ -112,11 +113,20 @@ async function listQuoteDocuments(
   const dealIds = deals.map((deal) => deal.id);
   const dealById = new Map(deals.map((deal) => [deal.id, deal]));
 
-  const { data: documents, error: documentsError } = await supabase
+  const query = supabase
     .from("quote_documents")
     .select("*")
-    .in("deal_id", dealIds)
-    .order("updated_at", { ascending: false });
+    .in("deal_id", dealIds);
+  let { data: documents, error: documentsError } = await (deletedOnly
+    ? query.not("deleted_at", "is", null)
+    : query.is("deleted_at", null)).order("updated_at", { ascending: false });
+
+  if (!deletedOnly && documentsError?.code === "42703") {
+    console.warn("[portal/documents] 견적 삭제함 마이그레이션 미적용")
+    const fallback = await supabase.from("quote_documents").select("*").in("deal_id", dealIds).order("updated_at", { ascending: false });
+    documents = fallback.data;
+    documentsError = fallback.error;
+  }
 
   if (documentsError) throw documentsError;
   const documentRows = (documents ?? []) as QuoteDocument[];
@@ -346,7 +356,7 @@ export async function listPortalDocuments(
   });
 
   const [quoteDocuments, contractDocuments, receiptDocuments] = await Promise.all([
-    type === "all" || type === "quote" ? listQuoteDocuments(deals) : Promise.resolve([]),
+    type === "all" || type === "quote" ? listQuoteDocuments(deals, input.deletedQuotesOnly) : Promise.resolve([]),
     type === "all" || type === "contract" ? listContractDocuments(deals) : Promise.resolve([]),
     type === "all" || type === "receipt" ? listReceiptDocuments(deals) : Promise.resolve([]),
   ]);

@@ -157,11 +157,19 @@ async function listDealLineItems(dealId: string): Promise<DealLineItem[]> {
 
 async function listQuoteDocumentBundles(dealId: string): Promise<QuoteDocumentBundle[]> {
   const supabase = createSupabaseAdminClient();
-  const { data: documents, error: documentsError } = await supabase
+  let { data: documents, error: documentsError } = await supabase
     .from("quote_documents")
     .select("*")
     .eq("deal_id", dealId)
+    .is("deleted_at", null)
     .order("created_at", { ascending: false });
+
+  if (documentsError?.code === "42703") {
+    console.warn("[portal/deals] 견적 삭제함 마이그레이션 미적용")
+    const fallback = await supabase.from("quote_documents").select("*").eq("deal_id", dealId).order("created_at", { ascending: false });
+    documents = fallback.data;
+    documentsError = fallback.error;
+  }
 
   if (documentsError) throw documentsError;
   const documentRows = (documents ?? []) as QuoteDocument[];

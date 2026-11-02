@@ -819,6 +819,7 @@ export function mergeStandardQuoteLineItems(
       quantity,
       quantityUnit: current?.quantityUnit ?? line.quantityUnit ?? "대",
       unitPrice,
+      originalUnitPrice: current?.originalUnitPrice,
       vatIncluded: current?.vatIncluded ?? true,
       lineStatus: current?.lineStatus ?? line.lineStatus,
       billingMode: current?.billingMode ?? line.billingMode,
@@ -994,6 +995,7 @@ export function buildConfigurableStandardQuoteDetails({
       quantity,
       quantityUnit: mainTemplateLine.quantityUnit ?? "대",
       unitPrice: mainExisting?.unitPrice ?? mainTemplateLine.unitPrice,
+      originalUnitPrice: mainExisting?.originalUnitPrice,
       vatIncluded: mainExisting?.vatIncluded ?? true,
       lineStatus: "priced",
       billingMode: "included_in_quote",
@@ -1042,6 +1044,7 @@ export function buildConfigurableStandardQuoteDetails({
         config.lineStatus === "pending_price" || config.lineStatus === "separate_billing"
           ? undefined
           : existingLine?.unitPrice ?? config.unitPrice,
+      originalUnitPrice: keepEditedText ? existingLine?.originalUnitPrice : undefined,
       vatIncluded: existingLine?.vatIncluded ?? true,
       lineStatus: config.lineStatus,
       billingMode: config.billingMode,
