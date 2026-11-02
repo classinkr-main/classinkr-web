@@ -359,7 +359,7 @@ FAQ 추가·보강 초안 — 근거가 코드·문서에 있는 문장만 썼�
 | D6 | 자료실 상세(`/resources/[slug]`) 색인 여부와 PDF 직접 접근(현재 `storagePath` 전부 빈값이라 정적 PDF 가 열림) | 마케팅 | §6 끝 |
 | D7 | 문서 `unlisted` 색인 정책, `value-and-cost-framing` 공개 전환 | 콘텐츠 | §7 |
 | D8 | GA4 로더 단일화(gtag 직접 vs GTM 단독), 동의 모드 기본/고급(10-26 D1) | 마케팅 + 개발 | §8-2 |
-| D9 | 서버 MP generate_lead 유지 여부(브라우저와 이중 집계) | 마케팅 + 개발 | 당분간 브라우저 이벤트만 — Vercel 에서 `GA4_MEASUREMENT_ID`·`GA4_API_SECRET` 을 비워 둔다([런북](./seo-analytics-console-runbook-2026-10-28.md) §5-6). 서버 전송이 필요해지면 이벤트 이름 분리 코드 변경 선행 |
+| D9 | ~~서버 MP generate_lead 유지 여부(브라우저와 이중 집계)~~ **결정됨(2026-11-02): 서버 MP 는 generate_lead 를 보내지 않는다** — 접수·결제 이벤트는 브라우저만, 서버 MP 는 리드 품질 이벤트(`qualify_lead`·`close_convert_lead`)만. 두 변수는 마이그레이션 적용·배포 뒤 넣는다([런북](./seo-analytics-console-runbook-2026-10-28.md) §5-6). 상태→이벤트 매핑 대안은 결정 대기 | 마케팅 + 개발 | §8-2 |
 | D10 | ~~블로그 lastmod 옵션~~ **결정됨(2026-10-28): 옵션 A `content_updated_at`** — 마이그레이션·코드 반영(§11-4), 운영 DB 적용은 [DB 마이그레이션 런북](./db-migration-runbook.md) 순서대로. 문서 `last_reviewed_at` 갱신 규칙은 미결 | 플랫폼 + 콘텐츠 | §7 |
 | D11 | 홈 ProblemCost·Outcomes·SatisfyingClass 수치 출처, LogoBar 34개 기관 동의, 후기 별점 근거, ScienceBased 인용, "유니콘" 실증자료 | 마케팅(최초 반입 `fb5f79f` 작성자), 영업·CS, 법무 | §1-3 |
 | D12 | 정본 도메인(`classin.co.kr` vs `llms.txt`·데이터 삭제 안내의 `classin.ai.kr`), JSON-LD `sameAs` 공식 URL 목록, `foundingDate` 표기 | 인프라·마케팅·경영지원 | §4 |
