@@ -140,7 +140,7 @@ const RULES = [
   { id: "gradient", files: PUBLIC, allow: ["app/styles/utilities.css"], ...warn,
     pattern: /(?<![\w-])bg-(?:gradient|linear|radial|conic)-|(?:linear|radial|conic)-gradient\(/g,
     message: "그라데이션 → 단색 면" },
-  { id: "chart-gradient", files: { roots: ["components/charts/", "components/sections/DashboardPreview"], exts: [".ts", ".tsx"] },
+  { id: "chart-gradient", files: { roots: ["components/charts/"], exts: [".ts", ".tsx"] },
     allow: [], ...warn, pattern: /<(?:linear|radial)Gradient\b/g, message: "차트 그라데이션 → 선·단색" },
   // ── 도판 (imagery)
   { id: "img-unoptimized", files: PUBLIC_TS, allow: [], ...warn, pattern: /\bunoptimized\b/g, message: "next/image unoptimized 금지" },
@@ -174,7 +174,7 @@ const RULES = [
     pattern: /(?<![\w-])shadow(?:-(?!(?:deep|none)(?![\w-]))[\w[]|(?=["'`\s]))/g,
     message: "그림자 → 테두리 hair (shadow-deep·shadow-none 만 허용)" },
   { id: "left-bar", files: PUBLIC, ...warn,
-    allow: ["components/sections/Comparison.tsx", "app/pricing/page.tsx", "components/blog/ArticleToc.tsx", "components/docs/DocsSidebarLayout.tsx", SITE_BASE],
+    allow: ["app/pricing/page.tsx", "components/blog/ArticleToc.tsx", "components/docs/DocsSidebarLayout.tsx", SITE_BASE],
     pattern: /(?<![\w-])border-l-2(?![\w-])|before:w-0\.5|inset_2px_0_0|row-accent/g,
     message: "좌측 2px 바는 세 곳만(C21) — Comparison·/pricing 선택 행·세로 목차" },
 
@@ -220,11 +220,11 @@ const RULES = [
     message: "세리프 없음(V2-A). font-mono 는 코드 렌더러·CodeInputField 만" },
   { id: "paperlogy", files: PUBLIC, allow: ["components/portal/quotes/"], ...error,
     pattern: /Paperlogy/g, message: "Paperlogy 는 견적서(components/portal/quotes/)만" },
-  { id: "scope-display", files: PUBLIC, allow: ["components/sections/Hero.tsx"], ...error,
+  { id: "scope-display", files: PUBLIC, allow: ["components/home/HomeHero.tsx"], ...error,
     pattern: /(?<![-\w])text-display(?![-\w])/g, message: "text-display 는 Hero 만(C10)" },
-  { id: "scope-poster", files: PUBLIC, allow: ["components/sections/Manifesto.tsx"], ...error,
+  { id: "scope-poster", files: PUBLIC, allow: [], ...error,
     pattern: /(?<![-\w])text-poster(?![-\w])/g, message: "text-poster 는 Manifesto 만(C10)" },
-  { id: "scope-folio-null", files: PUBLIC, allow: ["components/sections/Hero.tsx"], ...error,
+  { id: "scope-folio-null", files: PUBLIC, allow: [], ...error,
     pattern: /folio=\{null\}/g, message: "folio={null} 은 Hero 만" },
   { id: "kicker-heading", files: PUBLIC_TSX, allow: [], ...error,
     pattern: /<h[34]\b[^>]*(?<![\w-])text-label(?![\w-])|<h[34]\b[^>]*>\s*<Kicker\b|<Kicker\b[^>]*\bas=\{?["']h[34]["']/g,
@@ -287,7 +287,7 @@ const RULES = [
     pattern: jsxOpen("Input|Textarea|TabsList|TabsTrigger|TabsContent"), check: lacks(/\bvariant=["']site["']/),
     message: "공개 Input·Textarea·Tabs 는 variant=\"site\"" },
   { id: "ink-primary-button", files: PUBLIC_TSX, ...warn, // 휴리스틱: surface-ink 가 있는 파일의 <Button>
-    allow: ["components/sections/Hero.tsx", "components/sections/FinalCTA.tsx", "app/product/sw/page.tsx"], // H02: surface-ink 표지만 먼저 단 파일. 채움 버튼 교체(P3–P5, C14) 때 이 allow 를 지운다
+    allow: ["app/product/sw/page.tsx"], // H02: surface-ink 표지만 먼저 단 파일. 채움 버튼 교체(P3–P5, C14) 때 이 allow 를 지운다
     pattern: jsxOpen("Button"), check: (m, ctx) => ctx.text.includes("surface-ink") && !/\bvariant=["'](?:line|ghost)["']/.test(m[0]),
     message: "먹 지면 위 채움 버튼 0(C14) → variant=\"line\"·\"ghost\"" },
 ];
