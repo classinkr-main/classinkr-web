@@ -202,6 +202,8 @@ export const SCHEMA_CONTRACT_MIGRATIONS = [
   // 장부 반영 → REV 시트 쓰기 감사 기록(2026-10-23). 시트 쓰기 스위치(BRANCH_REV_SHEET_WRITE_ENABLED)가 꺼져 있으면
   // 미적용이어도 영향이 없다 — 켜기 전에 적용한다(warning).
   "supabase/migrations/20261023_branch_rev_sheet_writes.sql",
+  // GA4 리드 품질 신호(2026-11-02) — 제출 시 GA client_id·세션·광고 동의 + qualify/close 발송 선점 시각.
+  "supabase/migrations/20261102_leads_ga_quality_signals.sql",
 ] as const
 
 export const SCHEMA_PROBES: SchemaProbe[] = [
@@ -1022,6 +1024,18 @@ export const SCHEMA_PROBES: SchemaProbe[] = [
     severity: "warning",
     impact:
       "시트 쓰기 스위치가 켜져 있으면 시트에 쓴 뒤 장부 기록이 전부 실패한다(db_apply_failed) — 켜기 전에 반드시 적용한다. 꺼져 있으면 영향 없다.",
+  },
+  // ── GA4 리드 품질 신호(2026-11-02) ─────────────────────────────────────
+  // 리드 저장은 ga_client_id·ga_session_id·ga_ad_consent 를 선택 컬럼으로 다뤄 미적용에도 죽지 않는다.
+  // 다만 그 기간 제출의 client_id 는 다시 얻을 수 없어 품질 신호를 영영 못 보낸다 — naver_ad 와 같은 이유로 blocker.
+  {
+    kind: "table",
+    table: "leads",
+    label: "GA4 리드 품질 신호 컬럼(ga_client_id·ga_session_id·ga_ad_consent·ga_qualify_sent_at·ga_close_sent_at)",
+    columns: ["id", "ga_client_id", "ga_session_id", "ga_ad_consent", "ga_qualify_sent_at", "ga_close_sent_at"],
+    migration: "supabase/migrations/20261102_leads_ga_quality_signals.sql",
+    impact:
+      "제출 시 GA client_id 가 저장되지 않고(리드 저장 자체는 성공), qualify_lead·close_convert_lead 선점 UPDATE 가 실패해 품질 신호가 하나도 나가지 않는다. 그 기간 리드는 사후에 신호를 보낼 방법이 없다.",
   },
 ]
 
