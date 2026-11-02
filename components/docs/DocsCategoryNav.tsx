@@ -1,5 +1,6 @@
 import Link from "next/link"
 
+import { DocsCategoryNavScroller } from "./DocsCategoryNavScroller"
 import { cn } from "./utils"
 
 export interface DocsCategoryNavItem {
@@ -25,7 +26,7 @@ export function DocsCategoryNav({ items, className }: DocsCategoryNavProps) {
       aria-label="가이드 주제"
       className={cn("border-b border-black/[0.08]", className)}
     >
-      <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0 md:overflow-visible">
+      <DocsCategoryNavScroller className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0 md:overflow-visible">
         <div className="flex min-w-max gap-6 md:min-w-0 md:gap-4">
           {items.map((item) => (
             <Link
@@ -58,7 +59,7 @@ export function DocsCategoryNav({ items, className }: DocsCategoryNavProps) {
             </Link>
           ))}
         </div>
-      </div>
+      </DocsCategoryNavScroller>
     </nav>
   )
 }
