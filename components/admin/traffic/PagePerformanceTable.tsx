@@ -14,14 +14,17 @@ export interface PagePerformanceRow {
 
 export interface PagePerformanceTableProps {
   rows: PagePerformanceRow[]
-  formatLabel?: (path: string) => string
+  /** 사이트 전체 페이지뷰 — 주면 페이지뷰 옆에 전체 대비 비중(%)을 붙인다. */
+  totalPageViews?: number
   formatDuration?: (seconds: number) => string
 }
 
 type SortKey = "path" | "pageViews" | "visitors" | "avgDwellSeconds" | "exitRate"
 type SortDirection = "asc" | "desc"
 
-const INITIAL_VISIBLE_ROWS = 5
+const INITIAL_VISIBLE_ROWS = 10
+// 이 이상이면 '들어와서 바로 나가는' 페이지로 본다 — 색으로만 구분하지 않도록 굵기·문구도 같이 바꾼다.
+const HIGH_EXIT_RATE = 60
 
 const DEFAULT_SORT_DIRECTION: Record<SortKey, SortDirection> = {
   path: "asc",
@@ -36,10 +39,43 @@ const PERCENT_FORMATTER = new Intl.NumberFormat("ko-KR", {
   maximumFractionDigits: 1,
 })
 
-function defaultFormatLabel(path: string) {
-  if (path === "/") return "홈"
-  if (path === "__exit__") return "사이트 이탈"
-  return path
+// 공개 사이트 경로 → 사람이 읽는 이름. 모르는 경로는 경로 그대로 보인다.
+const PAGE_NAMES: Record<string, string> = {
+  "/": "홈",
+  "/product": "제품 소개",
+  "/product/sw": "소프트웨어",
+  "/product/hw": "하드웨어 · Classin Board",
+  "/product/ai-report": "녹화·AI 리포트",
+  "/pricing": "가격",
+  "/contact": "상담 신청",
+  "/showroom": "쇼룸",
+  "/blog": "블로그",
+  "/events": "행사",
+  "/updates": "업데이트",
+  "/faq": "FAQ",
+  "/about": "회사 소개",
+  "/docs": "문서센터",
+  "/docs/search": "문서 검색",
+  "/download": "다운로드",
+  "/login": "로그인",
+  "/resources": "자료실",
+  "/privacy": "개인정보처리방침",
+  "/terms": "이용약관",
+  __exit__: "사이트 이탈",
+}
+
+const PREFIX_NAMES: Array<[string, string]> = [
+  ["/blog/", "블로그 글"],
+  ["/docs/", "문서"],
+  ["/events/", "행사 상세"],
+  ["/resources/", "자료"],
+  ["/updates/", "업데이트 글"],
+  ["/l/", "캠페인 랜딩"],
+]
+
+export function pageName(path: string) {
+  if (PAGE_NAMES[path]) return PAGE_NAMES[path]
+  return PREFIX_NAMES.find(([prefix]) => path.startsWith(prefix))?.[1] ?? path
 }
 
 function defaultFormatDuration(seconds: number) {
@@ -55,13 +91,12 @@ function compareRows(
   first: PagePerformanceRow,
   second: PagePerformanceRow,
   sortKey: SortKey,
-  direction: SortDirection,
-  formatLabel: (path: string) => string
+  direction: SortDirection
 ) {
   const multiplier = direction === "asc" ? 1 : -1
   const difference =
     sortKey === "path"
-      ? formatLabel(first.path).localeCompare(formatLabel(second.path), "ko")
+      ? pageName(first.path).localeCompare(pageName(second.path), "ko")
       : first[sortKey] - second[sortKey]
 
   if (difference !== 0) return difference * multiplier
@@ -125,9 +160,42 @@ function SortHeader({
   )
 }
 
+function PageNameCell({ path }: { path: string }) {
+  const name = pageName(path)
+  return (
+    <span className="block min-w-0" title={path}>
+      <span className="block truncate text-[13px] font-semibold text-[#111110]">{name}</span>
+      {name !== path ? (
+        <span className="mt-0.5 block truncate font-mono text-[11px] text-[#8A857F]">{path}</span>
+      ) : null}
+    </span>
+  )
+}
+
+function ViewsBar({ pageViews, maxPageViews }: { pageViews: number; maxPageViews: number }) {
+  return (
+    <span aria-hidden="true" className="mt-1.5 block h-1 overflow-hidden rounded-full bg-[#F0F0EC]">
+      <span
+        className="block h-full rounded-full bg-[#084734]"
+        style={{ width: `${maxPageViews > 0 ? (pageViews / maxPageViews) * 100 : 0}%` }}
+      />
+    </span>
+  )
+}
+
+function ExitRate({ value }: { value: number }) {
+  const high = value >= HIGH_EXIT_RATE
+  return (
+    <span className={high ? "font-bold text-[#B43E3E]" : "font-semibold text-[#111110]"}>
+      {PERCENT_FORMATTER.format(value)}%
+      {high ? <span className="sr-only"> (높음)</span> : null}
+    </span>
+  )
+}
+
 export default function PagePerformanceTable({
   rows,
-  formatLabel = defaultFormatLabel,
+  totalPageViews,
   formatDuration = defaultFormatDuration,
 }: PagePerformanceTableProps) {
   const [sortKey, setSortKey] = useState<SortKey>("pageViews")
@@ -136,14 +204,16 @@ export default function PagePerformanceTable({
   const rowsRegionId = useId()
 
   const sortedRows = useMemo(
-    () =>
-      [...rows].sort((first, second) =>
-        compareRows(first, second, sortKey, sortDirection, formatLabel)
-      ),
-    [formatLabel, rows, sortDirection, sortKey]
+    () => [...rows].sort((first, second) => compareRows(first, second, sortKey, sortDirection)),
+    [rows, sortDirection, sortKey]
   )
   const visibleRows = expanded ? sortedRows : sortedRows.slice(0, INITIAL_VISIBLE_ROWS)
   const hasMoreRows = sortedRows.length > INITIAL_VISIBLE_ROWS
+  const maxPageViews = rows.reduce((max, row) => Math.max(max, row.pageViews), 0)
+  const shareOf = (pageViews: number) =>
+    totalPageViews && totalPageViews > 0
+      ? ` · ${Math.round((pageViews / totalPageViews) * 100)}%`
+      : ""
 
   const handleSort = (nextSortKey: SortKey) => {
     if (sortKey === nextSortKey) {
@@ -170,11 +240,11 @@ export default function PagePerformanceTable({
           <table className="w-full table-fixed border-separate border-spacing-0">
             <caption className="sr-only">페이지별 페이지뷰, 방문자, 평균 체류 시간, 이탈률</caption>
             <colgroup>
-              <col className="w-[40%]" />
-              <col className="w-[15%]" />
-              <col className="w-[15%]" />
-              <col className="w-[17%]" />
+              <col className="w-[34%]" />
+              <col className="w-[24%]" />
               <col className="w-[13%]" />
+              <col className="w-[15%]" />
+              <col className="w-[14%]" />
             </colgroup>
             <thead>
               <tr className="h-11 bg-[#F6F5F4]">
@@ -187,7 +257,7 @@ export default function PagePerformanceTable({
                   onSort={handleSort}
                 />
                 <SortHeader
-                  label="페이지뷰"
+                  label={totalPageViews ? "페이지뷰 · 비중" : "페이지뷰"}
                   sortKey="pageViews"
                   activeSortKey={sortKey}
                   direction={sortDirection}
@@ -218,28 +288,28 @@ export default function PagePerformanceTable({
             </thead>
             <tbody>
               {visibleRows.map((row, index) => (
-                <tr
-                  key={`${row.path}-${index}`}
-                  className="transition-colors hover:bg-[#FAFAF8]"
-                >
+                <tr key={`${row.path}-${index}`} className="transition-colors hover:bg-[#FAFAF8]">
                   <th
                     scope="row"
-                    title={formatLabel(row.path)}
-                    className="border-t border-[rgba(0,0,0,0.08)] px-4 py-3.5 text-left font-mono text-[12px] font-medium text-[#111110]"
+                    className="border-t border-[rgba(0,0,0,0.08)] px-4 py-3 text-left font-normal"
                   >
-                    <span className="block truncate">{formatLabel(row.path)}</span>
+                    <PageNameCell path={row.path} />
                   </th>
-                  <td className="border-t border-[rgba(0,0,0,0.08)] px-4 py-3.5 text-right text-[13px] font-semibold tabular-nums text-[#111110]">
-                    {NUMBER_FORMATTER.format(row.pageViews)}
+                  <td className="border-t border-[rgba(0,0,0,0.08)] px-4 py-3 text-right text-[13px] tabular-nums">
+                    <span className="font-semibold text-[#111110]">
+                      {NUMBER_FORMATTER.format(row.pageViews)}
+                    </span>
+                    <span className="text-[12px] text-[#8A857F]">{shareOf(row.pageViews)}</span>
+                    <ViewsBar pageViews={row.pageViews} maxPageViews={maxPageViews} />
                   </td>
-                  <td className="border-t border-[rgba(0,0,0,0.08)] px-4 py-3.5 text-right text-[13px] tabular-nums text-[#31302E]">
+                  <td className="border-t border-[rgba(0,0,0,0.08)] px-4 py-3 text-right text-[13px] tabular-nums text-[#31302E]">
                     {NUMBER_FORMATTER.format(row.visitors)}
                   </td>
-                  <td className="border-t border-[rgba(0,0,0,0.08)] px-4 py-3.5 text-right text-[13px] tabular-nums text-[#31302E]">
+                  <td className="border-t border-[rgba(0,0,0,0.08)] px-4 py-3 text-right text-[13px] tabular-nums text-[#31302E]">
                     {formatDuration(row.avgDwellSeconds)}
                   </td>
-                  <td className="border-t border-[rgba(0,0,0,0.08)] px-4 py-3.5 text-right text-[13px] font-semibold tabular-nums text-[#111110]">
-                    {PERCENT_FORMATTER.format(row.exitRate)}%
+                  <td className="border-t border-[rgba(0,0,0,0.08)] px-4 py-3 text-right text-[13px] tabular-nums">
+                    <ExitRate value={row.exitRate} />
                   </td>
                 </tr>
               ))}
@@ -253,14 +323,14 @@ export default function PagePerformanceTable({
               key={`${row.path}-${index}`}
               className="min-w-0 rounded-xl border border-[rgba(0,0,0,0.08)] bg-white px-4 py-3.5"
             >
-              <p className="break-words font-mono text-[12px] font-semibold leading-5 text-[#111110]">
-                {formatLabel(row.path)}
-              </p>
+              <PageNameCell path={row.path} />
+              <ViewsBar pageViews={row.pageViews} maxPageViews={maxPageViews} />
               <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3">
                 <div>
-                  <dt className="text-[12px] font-medium text-[#615D59]">PV</dt>
+                  <dt className="text-[12px] font-medium text-[#615D59]">페이지뷰</dt>
                   <dd className="mt-0.5 text-[14px] font-semibold tabular-nums text-[#111110]">
                     {NUMBER_FORMATTER.format(row.pageViews)}
+                    <span className="text-[12px] font-normal text-[#8A857F]">{shareOf(row.pageViews)}</span>
                   </dd>
                 </div>
                 <div>
@@ -277,8 +347,8 @@ export default function PagePerformanceTable({
                 </div>
                 <div>
                   <dt className="text-[12px] font-medium text-[#615D59]">이탈률</dt>
-                  <dd className="mt-0.5 text-[14px] font-semibold tabular-nums text-[#111110]">
-                    {PERCENT_FORMATTER.format(row.exitRate)}%
+                  <dd className="mt-0.5 text-[14px] tabular-nums">
+                    <ExitRate value={row.exitRate} />
                   </dd>
                 </div>
               </dl>

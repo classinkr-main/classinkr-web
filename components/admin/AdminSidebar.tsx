@@ -347,6 +347,9 @@ export const NAV_WARMUP_REQUESTS: Record<string, WarmupEntry[] | (() => WarmupEn
   // 페이지가 실제로 부르는 건 셋뿐이다 — email·events·event-metrics·event-counts는
   // 소비처가 사라졌는데 목록에만 남아 hover마다 헛 요청을 보내고 있었다.
   "/admin/analytics": [
+    // 기본 탭 = 방문자(트래픽 대시보드 임베드) — 기본 기간 30일 집계를 미리 데운다.
+    "/api/admin/traffic-summary?range=30",
+    "/api/admin/marketing/conversions/status",
     "/api/admin/leads?scope=dashboard",
     "/api/admin/subscribers?scope=analytics",
     "/api/admin/blog",

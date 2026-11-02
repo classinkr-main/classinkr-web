@@ -15,6 +15,7 @@ import {
   Users,
 } from "lucide-react"
 import AdminTabs from "@/components/admin/AdminTabs"
+import TrafficDashboard from "@/components/admin/traffic/TrafficDashboard"
 import { StatTile } from "@/components/admin/viz"
 import { adminFetchJsonCached } from "@/lib/admin-client"
 import { useUrlState } from "@/lib/use-url-state"
@@ -22,17 +23,18 @@ import type { LeadRecord } from "@/lib/db"
 import type { BlogPost } from "@/lib/blog-types"
 import type { Subscriber } from "@/lib/marketing-types"
 
-type AnalyticsTab = "leads" | "sources" | "content"
+type AnalyticsTab = "visitors" | "leads" | "sources" | "content"
 
 // /api/admin/subscribers?scope=analytics 응답 행 — 이 화면은 구독자에서
 // 추세(createdAt)·활성 수(status)·소스 롤업(source)만 계산하므로 그 세 필드만 받는다.
 // 같은 조회의 투영이라 롤업 수치는 전체 응답과 동일하다.
 type AnalyticsSubscriberRow = Pick<Subscriber, "createdAt" | "status" | "source">
 
-// Analytics는 리드·소스·콘텐츠 비즈니스 분석 전용 화면이다.
-// 행사 퍼널·이메일 캠페인 성과는 /admin/campaigns, 홈페이지 흐름·트래픽은 /admin/traffic에 단일화되어
-// 중복 탭(campaigns·events·flow·tracking)은 이 화면에서 제거했다(근거: admin-ia-redesign-2026-06-29 §2-🟠4).
+// Analytics = 홈페이지 방문자 → 리드·소스·콘텐츠 분석. 트래픽은 nav에서 내려가 이 화면이 유일한 입구라
+// '방문자' 탭이 /admin/traffic 대시보드를 그대로 임베드한다(2026-11-02, 링크만 있던 상태에서 승격).
+// 행사 퍼널·이메일 캠페인 성과는 /admin/campaigns 에 단일화(근거: admin-ia-redesign-2026-06-29 §2-🟠4).
 const ANALYTICS_TABS: Array<{ key: AnalyticsTab; label: string }> = [
+  { key: "visitors", label: "방문자" },
   { key: "leads", label: "리드" },
   { key: "sources", label: "소스" },
   { key: "content", label: "콘텐츠" },
@@ -247,7 +249,7 @@ const CategoryBarChart = dynamic(
 )
 
 export default function AnalyticsPage() {
-  const [tabParam, setTabParam] = useUrlState("tab", "leads")
+  const [tabParam, setTabParam] = useUrlState("tab", "visitors")
   const [range, setRange] = useState<7 | 14 | 30>(30)
   const [loading, setLoading] = useState(true)
   // 실패한 데이터 축("리드·구독자" 등) — null이면 전부 정상 수신(2026-08-18, 실패≠빈상태).
@@ -256,9 +258,14 @@ export default function AnalyticsPage() {
   const [leads, setLeads] = useState<LeadRecord[]>([])
   const [subscribers, setSubscribers] = useState<AnalyticsSubscriberRow[]>([])
   const [posts, setPosts] = useState<BlogPost[]>([])
+  // 상단 방문자 타일 — 방문자 탭의 대시보드와 같은 URL이라 adminFetchJsonCached 가 요청을 합친다.
+  const [visitorSummary, setVisitorSummary] = useState<{
+    range: number
+    totals: { visitors: number; homeVisitors: number } | null
+  } | null>(null)
   const activeTab: AnalyticsTab = ANALYTICS_TABS.some((tab) => tab.key === tabParam)
     ? (tabParam as AnalyticsTab)
-    : "leads"
+    : "visitors"
 
   useEffect(() => {
     let cancelled = false
@@ -299,6 +306,20 @@ export default function AnalyticsPage() {
       cancelled = true
     }
   }, [reloadKey])
+
+  useEffect(() => {
+    let cancelled = false
+    void fetchJson<{ visitorStats?: { totals: { visitors: number; homeVisitors: number } } }>(
+      `/api/admin/traffic-summary?range=${range}`
+    ).then((data) => {
+      if (!cancelled) setVisitorSummary({ range, totals: data?.visitorStats?.totals ?? null })
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [range, reloadKey])
+  const visitorsLoading = visitorSummary?.range !== range
+  const visitorTotals = visitorSummary?.totals ?? null
 
   const { today, start, previousStart } = getDayWindow(range)
   const nextDay = shiftDays(today, 1)
@@ -400,7 +421,7 @@ export default function AnalyticsPage() {
           <p className="mb-1 text-[11px] font-medium uppercase tracking-widest text-[#1a1a1a]/30">Admin</p>
           <h1 className="text-2xl font-bold tracking-[-0.02em] text-[#111110]">Analytics</h1>
           <p className="mt-2 max-w-2xl text-[13px] text-[#1a1a1a]/45">
-            리드·소스·콘텐츠 비즈니스 분석
+            홈페이지 방문자부터 리드·소스·콘텐츠까지
           </p>
         </div>
         <div className="grid w-full grid-cols-3 gap-1 rounded-lg bg-[#f0f0ec] p-1 sm:w-auto sm:grid-cols-3">
@@ -433,8 +454,18 @@ export default function AnalyticsPage() {
         </div>
       )}
 
-      {/* "오늘 홈 방문자" 카드는 traffic으로 일원화(C3e) — 전용 visitor-stats fetch 제거, 아래 트래픽 크로스링크로 대체. */}
+      {/* 방문자 → 리드 → 전환 → 구독 순서. 공개 콘텐츠 수는 콘텐츠 탭 타일에 이미 있다. */}
       <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatTile
+          icon={<BarChart2 className="w-4 h-4" />}
+          label="홈페이지 방문자"
+          value={visitorsLoading ? "..." : visitorTotals ? visitorTotals.visitors.toLocaleString("ko-KR") : "확인 필요"}
+          hint={
+            visitorsLoading || !visitorTotals
+              ? `${range}일 기준`
+              : `${range}일 · 홈(/) ${visitorTotals.homeVisitors.toLocaleString("ko-KR")}명`
+          }
+        />
         <StatTile
           icon={<Users className="w-4 h-4" />}
           label="최근 리드"
@@ -455,12 +486,6 @@ export default function AnalyticsPage() {
           hint={`최근 ${range}일 +${currentSubscriberCount}`}
           trend={loading ? undefined : subscriberTrend}
         />
-        <StatTile
-          icon={<FileText className="w-4 h-4" />}
-          label="공개 콘텐츠"
-          value={loading ? "..." : publishedPosts.length}
-          hint={`초안 ${draftPosts.length}건`}
-        />
       </div>
 
       {/* Top source/Action/Conversion 인사이트 트리오는 리드 탭 "이번 기간 해석" 패널 1곳으로 통합(중복 렌더 제거). */}
@@ -472,7 +497,7 @@ export default function AnalyticsPage() {
         onValueChange={setTabParam}
       />
 
-      <div className="mb-6 grid gap-3 lg:grid-cols-2">
+      {activeTab !== "visitors" && <div className="mb-6">
         <a
           href="/admin/campaigns"
           className="flex items-center justify-between gap-3 rounded-2xl border border-[#D1FAE5] bg-[#ECFDF5] px-4 py-3.5 transition-colors hover:bg-[#DCFCE9] sm:px-5"
@@ -492,26 +517,9 @@ export default function AnalyticsPage() {
             <ChevronRight className="h-3.5 w-3.5" />
           </span>
         </a>
-        <a
-          href="/admin/traffic"
-          className="flex items-center justify-between gap-3 rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] px-4 py-3.5 transition-colors hover:bg-[#f0f0ec] sm:px-5"
-        >
-          <div className="flex items-center gap-3">
-            <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-[#1a1a1a]/55">
-              <BarChart2 className="h-4 w-4" />
-            </span>
-            <div>
-              <p className="text-[13px] font-semibold text-[#111110]">
-                오늘 방문자, 페이지 흐름, CTA 클릭 계측을 트래픽 화면에 단일화했습니다.
-              </p>
-            </div>
-          </div>
-          <span className="flex shrink-0 items-center gap-1 text-[12px] font-medium text-[#1a1a1a]/55">
-            트래픽 열기
-            <ChevronRight className="h-3.5 w-3.5" />
-          </span>
-        </a>
-      </div>
+      </div>}
+
+      {activeTab === "visitors" && <TrafficDashboard embedded range={range} />}
 
       {activeTab === "leads" && (
         <div className="space-y-6">
@@ -809,7 +817,7 @@ export default function AnalyticsPage() {
           {/* 정적 조언 패널("콘텐츠 전환 준비 상태")은 제거 — CTA 클릭 실측치는 traffic event-counts(click_cta)에 있으므로
               크로스링크로 대체한다. 콘텐츠 단위 실데이터 위젯화(event-counts 소비)는 후속 범위. */}
           <a
-            href="/admin/traffic"
+            href="/admin/analytics?tab=visitors"
             className="flex items-center justify-between gap-3 rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] px-4 py-3.5 transition-colors hover:bg-[#f0f0ec] sm:px-5"
           >
             <div className="flex items-center gap-3">
@@ -817,9 +825,9 @@ export default function AnalyticsPage() {
                 <BarChart2 className="h-4 w-4" />
               </span>
               <div>
-                <p className="text-[13px] font-semibold text-[#111110]">블로그 CTA 클릭 실측은 트래픽에서 봅니다</p>
+                <p className="text-[13px] font-semibold text-[#111110]">블로그 CTA 클릭 실측은 방문자 탭에서 봅니다</p>
                 <p className="mt-0.5 text-[12px] text-[#1a1a1a]/45">
-                  CTA 클릭(click_cta)·다운로드 이벤트 집계가 트래픽 화면에 있습니다. 글 단위 기여 분석은 후속으로 연결합니다.
+                  CTA 클릭(click_cta)·다운로드 이벤트 집계가 방문자 탭 하단에 있습니다. 글 단위 기여 분석은 후속으로 연결합니다.
                 </p>
               </div>
             </div>

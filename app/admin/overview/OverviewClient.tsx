@@ -28,6 +28,7 @@ import {
   Send,
 } from "lucide-react"
 import { adminFetchJsonCached } from "@/lib/admin-client"
+import type { VisitorStatsPayload } from "@/lib/admin-visitor-stats"
 import { StatCard } from "@/components/admin/StatCard"
 import {
   EmptyState,
@@ -350,25 +351,6 @@ interface ChatbotStatsPayload {
   }
 }
 
-interface VisitorStatsPayload {
-  today: {
-    date: string
-    homeVisitors: number
-    homePageViews: number
-  }
-  totals: {
-    homeVisitors: number
-    homePageViews: number
-    visitors: number
-    pageViews: number
-  }
-  daily: Array<{
-    date: string
-    homeVisitors: number
-    homePageViews: number
-  }>
-}
-
 export default function OverviewClient({ initialData }: { initialData: OverviewInitialData }) {
   const [leadOverview, setLeadOverview] = useState<OverviewLeadSummary | null>(null)
   const [subscriberCount, setSubscriberCount] = useState(0)
@@ -383,6 +365,19 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
   const [leadActionKpis, setLeadActionKpis] = useState<LeadActionKpisPayload | null>(null)
   const [osSummary, setOsSummary] = useState<OsSummaryPayload | null>(null)
   const [visitorStats, setVisitorStats] = useState<VisitorStatsPayload | null>(null)
+  // 유입 줄(방문자 → 리드)용 전사 리드 집계. 방문자가 전사 공용이라 리드도 같은 모집단이어야
+  // 나란히 읽힌다 — 화면의 나머지 리드 지표는 그대로 내 담당(owner=__me) 기준.
+  const [companyLeads, setCompanyLeads] = useState<{ state: OverviewSourceState; metrics: AdminLeadsOverviewResponse["overview"]["metrics"] | null }>({ state: "loading", metrics: null })
+  const [companyLeadsKey, setCompanyLeadsKey] = useState(0)
+  useEffect(() => {
+    let cancelled = false
+    void fetchJson<AdminLeadsOverviewResponse>("/api/admin/leads?scope=overview&owner=", { fresh: companyLeadsKey > 0 }).then((data) => {
+      if (!cancelled) setCompanyLeads({ state: data?.overview ? "ready" : "error", metrics: data?.overview?.metrics ?? null })
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [companyLeadsKey])
   const [chatbotStats, setChatbotStats] = useState<ChatbotStatsPayload | null>(null)
   // 여섯 소스 모두 처음엔 "loading"으로 시작한다 — 스트리밍 전환 전에는 initialData가
   // 이미 동기 값이라 seededSourceStates로 ready를 앞당겼지만, 이제 initialData.X는
@@ -795,7 +790,7 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
   // KPI 카드 스파크라인 데이터.
   const sparkLeads = leadOverview?.trends.days30.slice(-14).map((point) => point.count) ?? []
   const sparkRevenue = branchSummary?.monthly_series.revenue_cum ?? []
-  const sparkVisitors = visitorStats?.daily.map((day) => day.homeVisitors) ?? []
+  const sparkVisitors = visitorStats?.daily.map((day) => day.visitors) ?? []
 
   const pipelineCoverage = computePipelineCoverage(branchSummary?.monthly_series)
   const failedRequestSourceLabels = (Object.entries(sourceStates) as Array<
@@ -917,11 +912,27 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
     metric({ id: "renewal", group: "매출·운영", label: "리뉴얼 D-60", value: `${osSummary?.renewal.expiringSoonCount ?? 0}건`, note: osSourceError("renewal") ?? "NEO · 60일 내 만료", href: "/admin/crm/customers/accounts?expiring=1", state: osSourceState("renewal"), tone: (osSummary?.renewal.expiringSoonCount ?? 0) > 0 ? "warning" : "neutral" }, "os"),
     metric({ id: "matching", group: "매출·운영", label: "링크 확정률", value: `${osSummary?.matching.coveragePct ?? 0}%`, note: osSourceError("matching") ?? `확정 ${osSummary?.matching.linked ?? 0}/${osSummary?.matching.total ?? 0} · 검토 ${osSummary?.matching.needsReview ?? 0}`, href: "/admin/crm/matching", state: osSourceState("matching"), progress: osSummary?.matching.coveragePct ?? undefined }, "os"),
     metric({ id: "hardware", group: "매출·운영", label: "86보드 실판매 출고", value: `${osSummary?.hw.boards86 ?? 0}대`, note: osSourceError("hw") ?? "세일즈+프로모션 · 샘플·A/S·예정 제외", reference: `기존 운영 기준 ${osSummary?.hw.target ?? "—"}대`, href: "/admin/hardware", state: osSourceState("hw"), progress: osSummary?.hw.target ? (osSummary.hw.boards86 ?? 0) / osSummary.hw.target * 100 : undefined }, "os"),
-    metric({ id: "visitors", group: "유입·콘텐츠", label: "홈페이지 방문", value: `${visitorStats?.totals.homeVisitors.toLocaleString() ?? 0}명`, note: "최근 7일 · 홈페이지 방문자", href: "/admin/traffic", state: sourceStates.visitor, trend: <Sparkline data={sparkVisitors} /> }, "visitor"),
+    // 이전엔 홈(/) 한 페이지 방문자를 '홈페이지 방문'으로 표기했다 — 사이트 전체 순방문자가 정본, 홈(/)은 보조.
+    metric({ id: "visitors", group: "유입·콘텐츠", label: "홈페이지 방문자", value: `${(visitorStats?.totals.visitors ?? 0).toLocaleString()}명`, note: `최근 7일 · 오늘 ${(visitorStats?.today.visitors ?? 0).toLocaleString()}명 · 홈(/) ${(visitorStats?.totals.homeVisitors ?? 0).toLocaleString()}명`, reference: "분석 쿠키 동의 방문자", href: "/admin/analytics?tab=visitors", state: sourceStates.visitor, trend: <Sparkline data={sparkVisitors} /> }, "visitor"),
     metric({ id: "homepage", group: "유입·콘텐츠", label: "홈페이지 유입", value: `${homepageThisWeek}건`, note: `최근 7일 · 누적 미확인 ${homepageUnconfirmed}건은 확인 게이트와 별도`, href: "/admin/crm/customers/leads?group=homepage&unconfirmed=1", state: sourceStates.leads }, "leads"),
     metric({ id: "chatbot", group: "유입·콘텐츠", label: "챗봇 문의", value: `${chatbotStats?.totals.questionCount ?? 0}건`, note: `최근 7일 · 미해결 ${chatbotStats?.totals.unresolvedCount ?? 0} / 상담연결 ${chatbotStats?.totals.handoffCount ?? 0}`, href: "/admin/chatbot", state: sourceStates.chatbot }, "chatbot"),
     metric({ id: "content", group: "유입·콘텐츠", label: "공개 블로그", value: `${osSummary?.content.blogPublished ?? 0}건`, note: osSourceError("content") ?? "현재 공개 상태", reference: `기존 운영 기준 ${osSummary?.content.target ?? "—"}건`, href: "/admin/blog", state: osSourceState("content"), progress: osSummary?.content.target ? (osSummary.content.blogPublished ?? 0) / osSummary.content.target * 100 : undefined }, "os"),
     metric({ id: "events", group: "유입·콘텐츠", label: "공개 행사", value: `${osSummary?.events.count ?? 0}건`, note: osSourceError("events") ?? "현재 공개 상태", reference: `기존 운영 기준 ${osSummary?.events.target ?? "—"}건`, href: "/admin/events", state: osSourceState("events"), progress: osSummary?.events.target ? (osSummary.events.count ?? 0) / osSummary.events.target * 100 : undefined }, "os"),
+  ]
+  const metricById = (id: string) => metrics.find((row) => row.id === id) as OverviewMetric
+  const visitorDays = visitorStats?.daily ?? []
+  const yesterdayVisitors = visitorDays.length > 1 ? visitorDays[visitorDays.length - 2].visitors : 0
+  // 방문자 → 리드 유입 줄. 방문·리드 모두 전사 기준(위 운영 지표는 내 담당 기준).
+  const company = companyLeads.metrics
+  const retryCompanyLeads = () => {
+    setCompanyLeads({ state: "loading", metrics: null })
+    setCompanyLeadsKey((key) => key + 1)
+  }
+  const inflowMetrics: OverviewMetric[] = [
+    { ...metricById("visitors"), id: "inflow-visitors-today", label: "오늘 방문자", value: `${(visitorStats?.today.visitors ?? 0).toLocaleString()}명`, note: `어제 ${yesterdayVisitors.toLocaleString()}명 · 홈(/) 오늘 ${(visitorStats?.today.homeVisitors ?? 0).toLocaleString()}명` },
+    metricById("visitors"),
+    { id: "inflow-leads", group: "유입", label: "이번 주 리드 · 전사", value: `${(company?.thisWeekLeads ?? 0).toLocaleString()}건`, note: `최근 7일 · 오늘 ${company?.todayLeads ?? 0}건 · 테스트 제외`, href: "/admin/crm/customers/leads?owner=", state: companyLeads.state, onRetry: retryCompanyLeads },
+    { id: "inflow-homepage", group: "유입", label: "홈페이지 문의 · 전사", value: `${(company?.homepageThisWeek ?? 0).toLocaleString()}건`, note: `최근 7일 · 홈페이지 경로 리드 · 오늘 ${company?.homepageToday ?? 0}건`, href: "/admin/crm/customers/leads?group=homepage&owner=", state: companyLeads.state, onRetry: retryCompanyLeads },
   ]
   const heroMetrics = [metrics[0], metrics[4], metrics[6], {
     ...metrics[8], label: "연간 매출 달성", value: branchSummary?.revenue.goal ? `${Math.round(branchSummary.revenue.confirmed / branchSummary.revenue.goal * 100)}%` : "—",
@@ -1002,7 +1013,7 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
         </div>
       ) : null}
 
-      <OverviewBriefing metrics={heroMetrics} summary={<>
+      <OverviewBriefing metrics={heroMetrics} inflow={{ title: "유입 · 방문자 → 리드", metrics: inflowMetrics }} summary={<>
         {unrespondedSignal ? unrespondedSignal.unresponded24hCount > 0 ? <>24시간 넘게 신규 상태인 리드 <span className="text-[#B43E3E]">{unrespondedSignal.unresponded24hCount}건</span>을 확인하세요. </> : <>24시간 이상 신규 상태로 남은 운영 리드는 없습니다. </> : <>리드 후속 현황을 확인하고 있습니다. </>}
         {demos ? <>앞으로 7일 데모 <span className="text-[#084734]">{demos.truncated ? "최소 " : ""}{demos.next7Count}회</span>, </> : <>{operationsLoading ? "데모 일정을 불러오는 중입니다. " : "데모 원천 확인이 필요합니다. "}</>}
         {installations ? <>설치·배송 예정 <span className="text-[#084734]">{installations.units}대</span>가 대기 중입니다.</> : <>{operationsLoading ? "설치·배송 현황을 불러오는 중입니다." : "설치·배송 원천 확인이 필요합니다."}</>}
