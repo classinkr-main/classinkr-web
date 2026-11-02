@@ -39,7 +39,7 @@
 
 ## 4. 지침 & 규칙
 
-- **팔레트**(`DESIGN.md` §2, `globals.css`): 유일 포화색 = ClassIn Green `#084734`(hover `#065c41`). 파랑·보라 금지. 페이지 bg `#FAFAF8`, 텍스트 `#111110`, 보조 `#615D59`.
+- **팔레트**(`DESIGN.md` §2, `globals.css`): 유일 포화색 = ClassIn Green — 공개 사이트 `#0B7A52`(hover `#0A6E4A`, 토큰 `--fg-accent`·`bg-fg-accent`), 어드민 `#084734`(hover `#065c41`). 공개 화면은 hex 를 쓰지 않고 토큰 유틸만 쓴다. 파랑·보라 금지. 페이지 bg `#FAFAF8`, 텍스트 `#111110`, 보조 `#615D59`.
 - **섹션 배경·레이아웃**: [DESIGN.md](../../../DESIGN.md) §2·§5를 따른다(절·토큰 배지 확인).
 - **보더**: whisper만 — `1px solid rgba(0,0,0,0.08)` / `border-black/[0.08]`(공개 신규 코드는 `border-line-hair`). 두껍게 금지.
 - **타이포**: Pretendard Variable, `word-break: keep-all`. 크기·자간은 [DESIGN.md](../../../DESIGN.md) §3을 따른다(절·토큰 배지 확인).
@@ -56,7 +56,7 @@
 - **CTA 계측 누락 금지**: 계측 안 된 CTA는 전환 데이터 신뢰 불가(PRD 1순위 문제).
 - **성능 패턴 유지**: below-the-fold dynamic import, 히어로 영상 조건부+idle 로드. 무분별 eager 로드 금지.
 - **챗봇/모바일 CTA 라이프사이클**(`AppChrome`): 챗봇은 idle 마운트 후 소프트 내비게이션에도 언마운트 안 됨(대화 상태 보존). `PublicWidgetBoundary`로 에러 격리.
-- **a11y**: 포커스 링 `focus-visible:ring-2 ring-[#084734]`, 장식 아이콘 `aria-hidden`, 모바일 letter-spacing 0.
+- **a11y**: 포커스 링은 site-base 보증 outline 하나(컴포넌트별 ring 금지), 장식 아이콘 `aria-hidden`, 모바일 letter-spacing 0.
 - **Hero sticky 레이아웃**: `sticky top-[76px]` + `100svh` — 헤더 높이(76px/md:80px) 변경 시 동반 수정.
 - `app/l/[slug]/route.ts`는 `public/l/`의 **수기 정적 HTML** 서빙(React 아님). 별도 운영물.
 

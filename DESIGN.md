@@ -1,7 +1,7 @@
 # Design System — Classin (Notion base × Apple whitespace × Classin Green)
 
 Notion의 구조/타이포그래피 철학을 기반으로, Apple의 넉넉한 공백감과
-Classin 브랜드 그린(`#084734`)을 액센트로 오버라이드한 시스템.
+Classin 브랜드 그린(공개 `#0B7A52` · 어드민 `#084734`)을 액센트로 오버라이드한 시스템.
 
 > **적용 범위.** 이 문서는 공개 셸(`.site`)과 어드민이 함께 쓴다. 절 제목에 `[public]`·`[admin]`·`[공통]` 배지를 단다. 토큰에는 상태 배지를 단다: `in force`(코드에 있음) · `target`(스펙 확정, 구현 전) · `retired`(새 사용 금지). 공개 셸 기반(레이아웃·레이어·토큰 배선)의 정본은 [system.md](docs/active/public-site-design-language-2026-10-26/system.md)다.
 >
@@ -23,8 +23,8 @@ Classin 브랜드 그린(`#084734`)을 액센트로 오버라이드한 시스템
 공개 화면은 아래 '공개 화면 색 토큰'의 20색을 유틸로 쓴다. 그 위의 팔레트 값은 어드민에서 그대로 유효하다.
 
 ### Primary
-- **Classin Green** (`#084734`): Primary CTA, 링크, 인터랙티브 액센트 — 유일한 포화 컬러
-- **Green Hover** (`#065c41`): 버튼 hover/active 상태 `[admin] in force`. 공개 화면 hover는 밝아지지 않고 짙어지는 `#073D2D`다 `[public] target`(2026-10-28)
+- **Classin Green** (`#084734` `[admin] in force` · 공개 화면 `#0B7A52` `[public] in force` 2026-11-02, 토큰 `--fg-accent`): Primary CTA, 링크, 인터랙티브 액센트 — 유일한 포화 컬러
+- **Green Hover** (`#065c41`): 버튼 hover/active 상태 `[admin] in force`. 공개 화면 hover는 밝아지지 않고 짙어지는 `#0A6E4A`다 `[public] in force`(2026-11-02, `--fg-accent-hover`)
 - **Page White** (`#FAFAF8`): 페이지 배경 `[admin] in force`. 공개 화면 paper는 `#F9F8F5`다 `[public] target`(V15-A)
 - **Near Black** (`#111110`): 헤딩, 본문 텍스트 (현재 프로젝트 기존값 유지)
 
@@ -72,12 +72,12 @@ Classin 브랜드 그린(`#084734`)을 액센트로 오버라이드한 시스템
 | `--fg-muted` | `#615D59` | `text-fg-muted` | 6.53 / 6.14 / 5.82 | 보조 글자(13px 이상)·카드 범주·지역 라벨 |
 | `--fg-placeholder` | `#78736D` | `placeholder:text-fg-placeholder` | 4.70(sheet) | 플레이스홀더. 흰 입력 바탕 위에서만 |
 | `--fg-faint` | `#A39E98` | `text-fg-faint` | 2.66 / 2.50 / 2.37 | 장식 글리프·비활성 표시. **텍스트 금지** |
-| `--fg-accent` | `#084734` | `text-fg-accent`, `bg-fg-accent` | 10.71 / 10.08 / 9.56 | 누를 수 있는 것에만: 링크·포커스·현재 위치·primary 채움. 제목·Kicker·라벨에는 쓰지 않는다 |
-| `--fg-accent-hover` | `#073D2D` | `hover:text-fg-accent-hover`, `hover:bg-fg-accent-hover` | 12.25 / 11.53 / 10.93 | hover(밝아지지 않고 짙어진다) |
+| `--fg-accent` | `#0B7A52` | `text-fg-accent`, `bg-fg-accent` | 5.36 / 5.13 / 4.92 | 누를 수 있는 것에만: 링크·포커스·현재 위치·primary 채움. 제목·Kicker·라벨에는 쓰지 않는다 |
+| `--fg-accent-hover` | `#0A6E4A` | `hover:text-fg-accent-hover`, `hover:bg-fg-accent-hover` | 6.28 / 6.01 / 5.77 | hover(밝아지지 않고 짙어진다) |
 | `--fg-danger` | `#B43E3E` | `text-fg-danger` | 5.68 / 5.35 / 5.07 | 오류(공개 화면 오류색 하나) |
-| `--fg-on-accent` | `#FAFAF8` | `text-fg-on-accent` | `#084734` 위 10.25 · `#073D2D` 위 11.72 | 그린 채움 위 글자 |
+| `--fg-on-accent` | `#FAFAF8` | `text-fg-on-accent` | `#0B7A52` 위 5.13 · `#0A6E4A` 위 6.01 | 그린 채움 위 글자 |
 
-- 그린 배급(2026-10-28): 비상호작용 그린 표지(잉크 밑줄·● 묶음·좌측 2px 바·차트 강조·인용 여는 따옴표)는 뷰포트당 2개 이하, 그린 채움은 primary 1개다. 링크·버튼·포커스·index-tab은 세지 않는다. 공개 그린 글자·채움 상태값은 OKLCH L ≤ .36(밝은 지면) 또는 C ≤ .07(먹 위)이다. `#0E5038`로 옮기지 않는다(L .385로 오히려 밝다).
+- 그린 배급(2026-10-28): 비상호작용 그린 표지(잉크 밑줄·● 묶음·좌측 2px 바·차트 강조·인용 여는 따옴표)는 뷰포트당 2개 이하, 그린 채움은 primary 1개다. 링크·버튼·포커스·index-tab은 세지 않는다. 공개 그린 글자·채움은 `#0B7A52`(2026-11-02 확정, 밝은 지면 AA 통과)다. 밝은 지면 대비 4.5 아래로 내려가는 더 밝은 값은 쓰지 않는다. 어드민은 `#084734` 그대로이며 `tokens.css`의 `:root:not(:has(.site))` 블록이 맡는다.
 
 **선 5**
 
@@ -87,7 +87,7 @@ Classin 브랜드 그린(`#084734`)을 액센트로 오버라이드한 시스템
 | `--line-strong` | `rgb(17 17 16 / .16)` | `border-line-strong` | 1.41 | 장식선(표 머리 아래·링크 카드 hover) |
 | `--line-ink` | `#111110` | `border-line-ink` | — | 먹선 1px(Act 머리·표 상단 등 닫힌 목록) |
 | `--line-control` | `#8A857F` | `border-line-control` | 3.66 / 3.44 / 3.26 | 조작 경계(입력·line 버튼·칩·스위치)·도해 정보선 |
-| `--line-link` | `rgb(8 71 52 / .6)` | `decoration-line-link` | 3.51 / 3.43 / 3.36 | 링크 밑줄 |
+| `--line-link` | `rgb(11 122 82 / .75)` | `decoration-line-link` | 3.35 / 3.25 / 3.16 | 링크 밑줄 |
 
 - 헤어라인 두께(2026-10-28): 기본 1px, 2dppx 이상 화면에서는 .5px + α .14, 먹 위 .5px + α .20, `prefers-contrast: more`에서는 1px + α .32. masthead·조작 경계·2px 바는 그대로다. iPhone 실기기와 DPR1 모니터에서 함께 확인한다.
 - 고대비(`prefers-contrast: more`)에서는 hair가 `/.32`, strong이 `#8A857F`로 바뀐다.
