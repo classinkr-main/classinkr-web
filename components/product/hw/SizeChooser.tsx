@@ -49,7 +49,7 @@ export default function SizeChooser() {
     <section className="bg-white py-24 md:py-32 px-6">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
-        <p className="text-xs tracking-[0.2em] text-[#084734] font-semibold uppercase">
+        <p className="text-xs tracking-[0.2em] text-fg-accent font-semibold uppercase">
           CHOOSE YOUR SIZE
         </p>
         <h2
@@ -78,13 +78,13 @@ export default function SizeChooser() {
             >
               {/* Badge */}
               {size.badge && (
-                <span className="absolute top-5 right-5 bg-[#084734] text-white text-xs font-bold tracking-wider uppercase px-3 py-1.5 rounded-full z-10">
+                <span className="absolute top-5 right-5 bg-fg-accent text-fg-on-accent text-xs font-bold tracking-wider uppercase px-3 py-1.5 rounded-full z-10">
                   {size.badge}
                 </span>
               )}
 
               {/* Image area */}
-              <div className="relative mx-5 mt-5 aspect-[15/10] overflow-hidden rounded-[22px] bg-gradient-to-br from-[#ECFDF5] to-[#F6F5F4]">
+              <div className="relative mx-5 mt-5 aspect-[15/10] overflow-hidden rounded-[22px] bg-gradient-to-br from-fg-accent/8 to-[#F6F5F4]">
                 <Image
                   src={size.imageSrc}
                   alt={size.imageAlt}
@@ -122,7 +122,7 @@ export default function SizeChooser() {
                   href="/contact#contact-form"
                   ctaId="hw_size_demo"
                   tracking={{ model: size.inches }}
-                  className="mt-7 flex w-full items-center justify-center gap-2 rounded-md bg-[#084734] py-3 text-center text-sm font-semibold text-white transition hover:bg-[#065c41]"
+                  className="mt-7 flex w-full items-center justify-center gap-2 rounded-md bg-fg-accent py-3 text-center text-sm font-semibold text-fg-on-accent transition hover:bg-fg-accent-hover"
                 >
                   이 사이즈로 데모 신청
                   <ArrowRight aria-hidden className="arrow-nudge size-4" />
@@ -139,7 +139,7 @@ export default function SizeChooser() {
             <TrackedLink
               href="/contact#contact-form"
               ctaId="hw_size_110_inquiry"
-              className="text-[#084734] underline underline-offset-2"
+              className="text-fg-accent underline underline-offset-2"
             >
               별도 문의
             </TrackedLink>

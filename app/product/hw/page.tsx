@@ -70,8 +70,8 @@ const lineupCards = [
         size: '86"',
         rec: "10명 이상 교실",
         badge: "BEST",
-        cardClass: "border-[#084734] text-[#111110]",
-        badgeClass: "border border-[#084734]/30 text-[#084734]",
+        cardClass: "border-fg-accent text-[#111110]",
+        badgeClass: "border border-fg-accent/30 text-fg-accent",
         sizeClass: "text-[#615D59]",
         recClass: "text-[#615D59]",
     },
@@ -120,9 +120,9 @@ function ComparisonSection() {
         {
             title: "Classin Board",
             problems: ["분필처럼 자연스럽고, 지워도 남는다", "SW 생태계 완전 통합", "시공간을 넘는 교육 연결"],
-            bg: "bg-[#ECFDF5]",
-            border: "border-[#084734]/20",
-            iconColor: "text-[#084734]",
+            bg: "bg-fg-accent/8",
+            border: "border-fg-accent/20",
+            iconColor: "text-fg-accent",
             highlight: true,
         },
     ]
@@ -131,11 +131,11 @@ function ComparisonSection() {
         <section className="py-24 md:py-32 bg-white">
             <div className="container mx-auto px-4 lg:px-8">
                 <motion.div className="text-center mb-16" {...fadeUp}>
-                    <p className="text-sm font-semibold text-[#084734] tracking-wider uppercase mb-3">Why Classin Board</p>
+                    <p className="text-sm font-semibold text-fg-accent tracking-wider uppercase mb-3">Why Classin Board</p>
                     <h2 className="text-3xl md:text-4xl lg:text-5xl text-[#1a1a19] leading-tight">
                         도구를 바꾸는 게 아니라,
                         <br className="hidden sm:block" />{" "}
-                        <span className="text-[#084734]">교육의 방식</span>을 바꿉니다
+                        <span className="text-fg-accent">교육의 방식</span>을 바꿉니다
                     </h2>
                 </motion.div>
 
@@ -146,9 +146,9 @@ function ComparisonSection() {
                             initial={{ opacity: 0, y: 40 }}
                             animate={inView ? { opacity: 1, y: 0 } : {}}
                             transition={{ duration: 0.5, delay: i * 0.15 }}
-                            className={`rounded-2xl border ${item.border} ${item.bg} p-6 sm:p-8 ${item.highlight ? "ring-2 ring-[#084734]/20 shadow-lg shadow-[#084734]/5 md:scale-[1.02]" : ""}`}
+                            className={`rounded-2xl border ${item.border} ${item.bg} p-6 sm:p-8 ${item.highlight ? "ring-2 ring-fg-accent/20 shadow-lg md:scale-[1.02]" : ""}`}
                         >
-                            <h3 className={`text-xl font-bold mb-6 ${item.highlight ? "text-[#084734]" : "text-[#111110]"}`}>
+                            <h3 className={`text-xl font-bold mb-6 ${item.highlight ? "text-fg-accent" : "text-[#111110]"}`}>
                                 {item.title}
                             </h3>
                             <ul className="space-y-4">
@@ -179,11 +179,11 @@ function ComparisonSection() {
 
 /* ── Section: Feature Block (reusable) ───────────────────────────── */
 function FeatureSection({
-    tag, title, desc, features, reverse = false, accent = "#084734", children, visualClassName = "",
+    tag, title, desc, features, reverse = false, children, visualClassName = "",
 }: {
     tag: string; title: React.ReactNode; desc: React.ReactNode
     features: { icon: React.ReactNode; label: string; detail: string }[]
-    reverse?: boolean; accent?: string; children?: React.ReactNode; visualClassName?: string
+    reverse?: boolean; children?: React.ReactNode; visualClassName?: string
 }) {
     return (
         <section className="py-24 md:py-32">
@@ -192,7 +192,7 @@ function FeatureSection({
                     {/* Text side */}
                     <div className="flex-1 max-w-xl">
                         <motion.div {...fadeUp}>
-                            <p className="text-sm font-semibold tracking-wider uppercase mb-3" style={{ color: accent }}>{tag}</p>
+                            <p className="text-sm font-semibold tracking-wider uppercase mb-3 text-fg-accent">{tag}</p>
                             <h2 className="text-3xl md:text-4xl lg:text-[2.75rem] text-[#1a1a19] leading-tight mb-6">
                                 {title}
                             </h2>
@@ -202,8 +202,7 @@ function FeatureSection({
                         <div className="space-y-6">
                             {features.map((f, i) => (
                                 <motion.div key={i} {...stagger(i)} className="flex items-start gap-4">
-                                    <div className="flex items-center justify-center shrink-0"
-                                        style={{ color: accent }}>
+                                    <div className="flex items-center justify-center shrink-0 text-fg-accent">
                                         {f.icon}
                                     </div>
                                     <div>
@@ -325,9 +324,9 @@ function FeatureTabSection() {
         <section className="py-24 md:py-32 bg-white">
             <div className="container mx-auto px-4 lg:px-8">
                 <motion.div className="text-center mb-12" {...fadeUp}>
-                    <p className="text-sm font-semibold text-[#084734] tracking-wider uppercase mb-3">FEATURES</p>
+                    <p className="text-sm font-semibold text-fg-accent tracking-wider uppercase mb-3">FEATURES</p>
                     <h2 className="text-3xl md:text-4xl text-[#1a1a19] leading-tight">
-                        하나의 보드, <span className="text-[#084734]">다섯 가지 경험</span>
+                        하나의 보드, <span className="text-fg-accent">다섯 가지 경험</span>
                     </h2>
                     <p className="text-lg text-[#615D59] mt-4 max-w-xl mx-auto">
                         탭을 눌러 각 기능을 빠르게 확인하세요.
@@ -342,8 +341,8 @@ function FeatureTabSection() {
                             onClick={() => setActive(i)}
                             className={`px-5 py-2.5 rounded-full text-sm font-semibold transition-all ${
                                 active === i
-                                    ? "bg-[#084734] text-white shadow-md"
-                                    : "bg-[#F6F5F4] text-[#615D59] hover:bg-[#ECFDF5]"
+                                    ? "bg-fg-accent text-fg-on-accent shadow-md"
+                                    : "bg-[#F6F5F4] text-[#615D59] hover:bg-fg-accent/8"
                             }`}
                         >
                             {t.label}
@@ -374,7 +373,7 @@ function FeatureTabSection() {
 
                     {/* Content */}
                     <div>
-                        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#ECFDF5] text-[#084734] text-xs font-bold mb-5 border border-[#084734]/15">
+                        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-fg-accent/8 text-fg-accent text-xs font-bold mb-5 border border-fg-accent/15">
                             {tab.badge}
                         </div>
                         <h3 className="text-2xl md:text-3xl text-[#1a1a19] mb-8 leading-snug">
@@ -383,8 +382,8 @@ function FeatureTabSection() {
                         <ul className="space-y-4">
                             {tab.points.map((p, i) => (
                                 <li key={i} className="flex items-start gap-3">
-                                    <div className="w-5 h-5 rounded-full bg-[#ECFDF5] flex items-center justify-center shrink-0 mt-0.5">
-                                        <svg className="w-3 h-3 text-[#084734]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                    <div className="w-5 h-5 rounded-full bg-fg-accent/8 flex items-center justify-center shrink-0 mt-0.5">
+                                        <svg className="w-3 h-3 text-fg-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                                             <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                                         </svg>
                                     </div>
@@ -414,11 +413,11 @@ function ProductAnatomySection() {
         <section className="py-24 md:py-32 bg-[#FDFCF8]">
             <div className="container mx-auto px-4 lg:px-8">
                 <motion.div className="text-center mb-16" {...fadeUp}>
-                    <p className="text-sm font-semibold text-[#084734] tracking-wider uppercase mb-3">PRODUCT DESIGN</p>
+                    <p className="text-sm font-semibold text-fg-accent tracking-wider uppercase mb-3">PRODUCT DESIGN</p>
                     <h2 className="text-3xl md:text-4xl lg:text-5xl text-[#1a1a19] leading-tight">
                         디테일에서 완성되는
                         <br />
-                        <span className="text-[#084734]">수업의 몰입도</span>
+                        <span className="text-fg-accent">수업의 몰입도</span>
                     </h2>
                     <p className="text-lg text-[#615D59] mt-4 max-w-xl mx-auto">
                         110mm의 초슬림 바디부터 사용자 중심의 제스처바까지.
@@ -468,7 +467,7 @@ function FullWidthPointSection({
     eyebrow: string; statement: React.ReactNode; sub?: string; dark?: boolean; image?: string; contentClassName?: string
 }) {
     return (
-        <section className={`relative min-h-[65vh] flex items-center justify-center overflow-hidden ${dark ? "bg-[#0d1a12]" : "bg-[#084734]"}`}>
+        <section className={`relative min-h-[65vh] flex items-center justify-center overflow-hidden ${dark ? "bg-[#0d1a12]" : "bg-fg-accent"}`}>
             {image && (
                 <Image src={image} alt="" fill className="object-cover" sizes="100vw" />
             )}
@@ -527,16 +526,16 @@ function LessonTimelineSection() {
         <section className="py-24 md:py-32 bg-[#FDFCF8]">
             <div className="container mx-auto px-4 lg:px-8">
                 <motion.div className="text-center mb-16" {...fadeUp}>
-                    <p className="text-sm font-semibold text-[#084734] tracking-wider uppercase mb-3">A Day With Classin Board</p>
+                    <p className="text-sm font-semibold text-fg-accent tracking-wider uppercase mb-3">A Day With Classin Board</p>
                     <h2 className="text-3xl md:text-4xl lg:text-5xl text-[#1a1a19] leading-tight">
                         교사의 하루가
                         <br />
-                        <span className="text-[#084734]">이렇게 달라집니다</span>
+                        <span className="text-fg-accent">이렇게 달라집니다</span>
                     </h2>
                 </motion.div>
 
                 <div className="max-w-2xl mx-auto relative">
-                    <div className="absolute left-[5.25rem] top-5 bottom-5 w-px bg-gradient-to-b from-[#084734]/40 via-[#084734]/20 to-transparent hidden sm:block" />
+                    <div className="absolute left-[5.25rem] top-5 bottom-5 w-px bg-gradient-to-b from-fg-accent/40 via-fg-accent/20 to-transparent hidden sm:block" />
 
                     <div className="space-y-10">
                         {timelineSteps.map((step, i) => (
@@ -545,7 +544,7 @@ function LessonTimelineSection() {
                                     <span className="text-[11px] font-bold tabular-nums text-[#A39E98] leading-none">{step.time}</span>
                                 </div>
                                 <div className="relative shrink-0 z-10">
-                                    <div className="w-9 h-9 rounded-full bg-[#ECFDF5] border border-[#084734]/25 flex items-center justify-center text-[#084734]">
+                                    <div className="w-9 h-9 rounded-full bg-fg-accent/8 border border-fg-accent/25 flex items-center justify-center text-fg-accent">
                                         {step.icon}
                                     </div>
                                 </div>
@@ -582,11 +581,11 @@ function TestimonialSection() {
         <section className="py-24 md:py-32 bg-white">
             <div className="container mx-auto px-4 lg:px-8">
                 <motion.div className="text-center mb-14" {...fadeUp}>
-                    <p className="text-sm font-semibold text-[#084734] tracking-wider uppercase mb-3">VOICES FROM THE FIELD</p>
+                    <p className="text-sm font-semibold text-fg-accent tracking-wider uppercase mb-3">VOICES FROM THE FIELD</p>
                     <h2 className="text-3xl md:text-4xl text-[#1a1a19] leading-tight">
                         클래스인으로 수업을 바꾼
                         <br />
-                        <span className="text-[#084734]">현장의 목소리</span>
+                        <span className="text-fg-accent">현장의 목소리</span>
                     </h2>
                 </motion.div>
 
@@ -602,7 +601,7 @@ function TestimonialSection() {
                             </p>
                             <div className="border-t border-black/[0.08] pt-5">
                                 <div className="font-bold text-[#111110] text-sm">{t.name}</div>
-                                <div className="inline-flex mt-2 px-2.5 py-1 rounded-full bg-[#ECFDF5] text-[#084734] text-[10px] font-bold border border-[#084734]/15">
+                                <div className="inline-flex mt-2 px-2.5 py-1 rounded-full bg-fg-accent/8 text-fg-accent text-[10px] font-bold border border-fg-accent/15">
                                     {t.badge}
                                 </div>
                             </div>
@@ -651,11 +650,11 @@ function SpaceScenarioSection() {
         <section className="py-24 md:py-32 bg-[#FDFCF8]">
             <div className="container mx-auto px-4 lg:px-8">
                 <motion.div className="text-center mb-12" {...fadeUp}>
-                    <p className="text-sm font-semibold text-[#084734] tracking-wider uppercase mb-3">LINEUP × SPACE</p>
+                    <p className="text-sm font-semibold text-fg-accent tracking-wider uppercase mb-3">LINEUP × SPACE</p>
                     <h2 className="text-3xl md:text-4xl lg:text-5xl text-[#1a1a19] leading-tight">
                         공간에 딱 맞는
                         <br />
-                        <span className="text-[#084734]">최적의 모델을 만나보세요</span>
+                        <span className="text-fg-accent">최적의 모델을 만나보세요</span>
                     </h2>
                     <p className="text-lg text-[#615D59] mt-4 max-w-xl mx-auto">
                         설치 공간을 선택하면 최적 모델과 사용 시나리오를 확인할 수 있습니다.
@@ -669,7 +668,7 @@ function SpaceScenarioSection() {
                             onClick={() => setActive(i)}
                             className={`px-6 py-2.5 rounded-full text-sm font-bold transition-all ${
                                 active === i
-                                    ? "bg-[#084734] text-white shadow-md"
+                                    ? "bg-fg-accent text-fg-on-accent shadow-md"
                                     : "bg-white border border-black/[0.08] text-[#615D59] hover:border-black/20"
                             }`}
                         >
@@ -696,7 +695,7 @@ function SpaceScenarioSection() {
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/10 to-transparent" />
                         {scenario.badge && (
-                            <div className="absolute top-4 left-4 text-[10px] font-bold tracking-wider bg-[#084734] text-white px-3 py-1 rounded-full">
+                            <div className="absolute top-4 left-4 text-[10px] font-bold tracking-wider bg-fg-accent text-fg-on-accent px-3 py-1 rounded-full">
                                 {scenario.badge}
                             </div>
                         )}
@@ -715,7 +714,7 @@ function SpaceScenarioSection() {
                             <br />어떤 공간에 어울릴까요?
                         </h3>
                         <p className="text-[#615D59] leading-relaxed mb-8">{scenario.story}</p>
-                        <Button asChild className="h-12 rounded-full bg-[#084734] px-8 text-sm font-bold text-white shadow-md transition-all hover:bg-[#065c41] hover:shadow-lg group">
+                        <Button asChild className="h-12 rounded-full bg-fg-accent px-8 text-sm font-bold text-fg-on-accent shadow-md transition-all hover:bg-fg-accent-hover hover:shadow-lg group">
                             <Link
                                 href={scenario.sku ? `/checkout?type=hw&sku=${scenario.sku}` : "/contact#contact-form"}
                                 onClick={() => trackEvent("click_cta", {
@@ -739,14 +738,14 @@ function SpaceScenarioSection() {
 /* ── Main Page Component ─────────────────────────────────────────── */
 export default function ProductHWPage() {
     return (
-        <div className="bg-[#FDFCF8] min-h-screen text-[#111110] font-sans selection:bg-[#D1FAE5] pt-20">
+        <div className="bg-[#FDFCF8] min-h-screen text-[#111110] font-sans selection:bg-fg-accent/14 pt-20">
 
             {/* ================================================================
                 ACT 1 — HERO: 익숙함을 넘어서
             ================================================================ */}
             <section className="relative overflow-hidden">
                 {/* Subtle background gradient */}
-                <div className="absolute inset-0 bg-gradient-to-b from-[#FDFCF8] via-[#ECFDF5] to-[#FDFCF8] pointer-events-none" />
+                <div className="absolute inset-0 bg-gradient-to-b from-[#FDFCF8] via-fg-accent/8 to-[#FDFCF8] pointer-events-none" />
 
                 <div className="container mx-auto px-4 lg:px-8 pt-12 md:pt-24 pb-20 md:pb-32 relative">
                     <div className="max-w-6xl mx-auto text-center">
@@ -755,7 +754,7 @@ export default function ProductHWPage() {
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ duration: 0.7 }}
                         >
-                            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#ECFDF5] text-[#084734] text-sm font-semibold mb-8 border border-[#084734]/10">
+                            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-fg-accent/8 text-fg-accent text-sm font-semibold mb-8 border border-fg-accent/10">
                                 <Layers className="w-3.5 h-3.5" />
                                 Classin Board S Series
                             </div>
@@ -766,7 +765,7 @@ export default function ProductHWPage() {
                             >
                                 하나의 스튜디오가
                                 <br />
-                                <span className="text-[#084734]">교실에 들어섭니다.</span>
+                                <span className="text-fg-accent">교실에 들어섭니다.</span>
                             </h1>
 
                             <p className="text-lg md:text-xl lg:text-2xl text-[#615D59] leading-relaxed font-medium max-w-3xl mx-auto mb-12">
@@ -788,7 +787,7 @@ export default function ProductHWPage() {
                                 { value: "실시간", label: "판서 즉시 전체 공유" },
                             ].map((m, i) => (
                                 <div key={i} className="text-center">
-                                    <div className="text-2xl md:text-3xl font-sans font-bold tabular-nums tracking-tight text-[#084734]">{m.value}</div>
+                                    <div className="text-2xl md:text-3xl font-sans font-bold tabular-nums tracking-tight text-fg-accent">{m.value}</div>
                                     <div className="text-xs md:text-sm text-[#A39E98] mt-1 font-medium">{m.label}</div>
                                 </div>
                             ))}
@@ -819,7 +818,7 @@ export default function ProductHWPage() {
                 <div className="container mx-auto px-4 lg:px-8">
                     <div className="mx-auto grid max-w-5xl gap-6 border-y border-black/[0.08] py-8 md:grid-cols-[0.9fr_1.4fr] md:py-10">
                         <div>
-                            <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#084734]">Classin Board</p>
+                            <p className="text-xs font-bold uppercase tracking-[0.16em] text-fg-accent">Classin Board</p>
                             <h2 id="classin-board-summary" className="mt-3 text-2xl font-bold leading-tight text-[#111110] md:text-3xl">
                                 Classin Board는 교실 수업을 기록 가능한 스튜디오로 바꿉니다
                             </h2>
@@ -831,9 +830,9 @@ export default function ProductHWPage() {
                                 수업 종료 후 복습 콘텐츠와 학부모 공유 자료로 이어집니다.
                             </p>
                             <ul className="mt-6 grid gap-3 text-sm font-semibold text-[#31302E] sm:grid-cols-3">
-                                <li className="rounded-[8px] bg-[#ECFDF5] px-4 py-3 text-[#084734]">판서: PDF로 저장</li>
-                                <li className="rounded-[8px] bg-[#ECFDF5] px-4 py-3 text-[#084734]">녹화: AI 카메라 추적</li>
-                                <li className="rounded-[8px] bg-[#ECFDF5] px-4 py-3 text-[#084734]">공유: Classin과 연동</li>
+                                <li className="rounded-[8px] bg-fg-accent/8 px-4 py-3 text-fg-accent">판서: PDF로 저장</li>
+                                <li className="rounded-[8px] bg-fg-accent/8 px-4 py-3 text-fg-accent">녹화: AI 카메라 추적</li>
+                                <li className="rounded-[8px] bg-fg-accent/8 px-4 py-3 text-fg-accent">공유: Classin과 연동</li>
                             </ul>
                         </div>
                     </div>
@@ -910,7 +909,7 @@ export default function ProductHWPage() {
             <div className="bg-white">
                 <FeatureSection
                     tag="WRITING EXPERIENCE"
-                    title={<>쓰는 순간,<br />전자칠판이란 걸 <span className="text-[#084734]">잊게 됩니다</span></>}
+                    title={<>쓰는 순간,<br />전자칠판이란 걸 <span className="text-fg-accent">잊게 됩니다</span></>}
                     desc={<>분필의 마찰감을 재현한 표면 코팅과 0.03초 초저지연이 만나,<br />손끝을 따라오는 가장 자연스러운 디지털 필기를 경험하세요.</>}
                     features={[
                         {
@@ -951,7 +950,7 @@ export default function ProductHWPage() {
             ================================================================ */}
             <FeatureSection
                 tag="DISPLAY QUALITY"
-                title={<>맨 뒷자리 학생도,<br /><span className="text-[#084734]">맨 앞자리</span>와 같은 화면을 봅니다</>}
+                title={<>맨 뒷자리 학생도,<br /><span className="text-fg-accent">맨 앞자리</span>와 같은 화면을 봅니다</>}
                 desc={<>풀 라미네이션 패널과 정밀 코팅 기술이 만들어내는 선명함. 조명 반사 없이,<br />어느 각도에서든 또렷한 화면을 제공합니다.</>}
                 reverse
                 features={[
@@ -993,7 +992,7 @@ export default function ProductHWPage() {
                         className="absolute -bottom-3 -left-3 bg-white rounded-2xl shadow-lg border border-black/[0.08] px-4 py-2.5"
                     >
                         <div className="text-xs text-[#A39E98] mb-0.5">빛 투과율</div>
-                        <div className="text-lg font-bold text-[#084734] font-mono">90%+</div>
+                        <div className="text-lg font-bold text-fg-accent font-mono">90%+</div>
                     </motion.div>
                 </motion.div>
             </FeatureSection>
@@ -1004,7 +1003,7 @@ export default function ProductHWPage() {
             <div className="bg-white">
                 <FeatureSection
                     tag="INSTANT SHARING"
-                    title={<>판서가 끝나기도 전에,<br />학생 기기에 <span className="text-[#084734]">도착합니다</span></>}
+                    title={<>판서가 끝나기도 전에,<br />학생 기기에 <span className="text-fg-accent">도착합니다</span></>}
                     desc={<>실시간 판서 동기화로 모든 학생이 같은 내용을 동시에 봅니다.<br />수업이 끝나면 자동 저장. 결석한 학생도 놓칠 수 없습니다.</>}
                     visualClassName="lg:max-w-[660px] lg:-ml-14"
                     features={[
@@ -1062,10 +1061,9 @@ export default function ProductHWPage() {
             ================================================================ */}
             <FeatureSection
                 tag="BEYOND CLASSROOM"
-                title={<>같은 교실에 없어도,<br /><span className="text-[#084734]">같은 수업</span>을 합니다</>}
+                title={<>같은 교실에 없어도,<br /><span className="text-fg-accent">같은 수업</span>을 합니다</>}
                 desc="AI 카메라와 고성능 마이크가 물리적 거리를 지웁니다. 교실 학생과 원격 학생이 하나의 캔버스에서 함께 배우는 하이브리드 수업."
                 reverse
-                accent="#084734"
                 visualClassName="lg:max-w-[640px]"
                 features={[
                     {
@@ -1087,8 +1085,7 @@ export default function ProductHWPage() {
             >
                 {/* Hybrid classroom visual — looping interactive learning video */}
                 <motion.div {...fadeUp} className="relative">
-                    <div className="absolute -inset-7 rounded-[2rem] bg-[radial-gradient(circle_at_35%_20%,rgba(8,71,52,0.18),transparent_46%),radial-gradient(circle_at_80%_75%,rgba(8,71,52,0.14),transparent_45%)] blur-2xl" />
-                    <div className="relative rounded-[1.55rem] bg-gradient-to-br from-white via-[#F2EFE7] to-[#CFC8BA] p-[4px] shadow-[0_32px_90px_rgba(8,71,52,0.18)] ring-1 ring-black/5">
+                    <div className="relative rounded-[1.55rem] bg-gradient-to-br from-white via-[#F2EFE7] to-[#CFC8BA] p-[4px] ring-1 ring-black/5">
                         <div className="relative aspect-video overflow-hidden rounded-[1.25rem] bg-black shadow-inner">
                             <video
                                 src="/video/Interactive%20Learning%20with%20ClassIn.mp4"
@@ -1195,9 +1192,9 @@ export default function ProductHWPage() {
             <section className="py-24 md:py-32">
                 <div className="container mx-auto px-4 lg:px-8">
                     <motion.div className="text-center mb-16" {...fadeUp}>
-                        <p className="text-sm font-semibold text-[#084734] tracking-wider uppercase mb-3">LINEUP</p>
+                        <p className="text-sm font-semibold text-fg-accent tracking-wider uppercase mb-3">LINEUP</p>
                         <h2 className="text-3xl md:text-4xl lg:text-5xl text-[#1a1a19] leading-tight">
-                            모든 공간에 맞는 <span className="text-[#084734]">사이즈</span>
+                            모든 공간에 맞는 <span className="text-fg-accent">사이즈</span>
                         </h2>
                         <p className="text-lg text-[#615D59] mt-4 max-w-xl mx-auto">
                             소규모 스터디룸부터 대형 강당까지, 공간에 최적화된 모델을 선택하세요.
@@ -1231,7 +1228,7 @@ export default function ProductHWPage() {
                     {/* Detailed spec table */}
                     <motion.div {...fadeUp} className="max-w-5xl mx-auto">
                         <div className="text-center mb-8">
-                            <p className="text-sm font-semibold text-[#084734] tracking-wider uppercase mb-3">SPECIFICATIONS</p>
+                            <p className="text-sm font-semibold text-fg-accent tracking-wider uppercase mb-3">SPECIFICATIONS</p>
                             <h3 className="text-2xl md:text-3xl font-bold text-[#1a1a19] leading-tight mb-3">
                                 클래스인 제품 상세 스펙
                             </h3>
@@ -1247,7 +1244,7 @@ export default function ProductHWPage() {
                                         <tr className="bg-[#FAFAF8] border-b border-black/[0.08]">
                                             <th className="text-left py-4 px-6 font-semibold text-[#615D59] w-44">사양</th>
                                             <th className="text-center py-4 px-4 font-bold text-[#111110]">S110</th>
-                                            <th className="text-center py-4 px-4 font-bold text-[#084734]">S86</th>
+                                            <th className="text-center py-4 px-4 font-bold text-fg-accent">S86</th>
                                             <th className="text-center py-4 px-4 font-bold text-[#111110]">S75</th>
                                             <th className="text-center py-4 px-4 font-bold text-[#111110]">S65</th>
                                         </tr>
@@ -1255,8 +1252,8 @@ export default function ProductHWPage() {
                                     <tbody>
                                         {specGroups.map((group) => (
                                             <Fragment key={group.category}>
-                                                <tr className="bg-[#ECFDF5] border-y border-[#084734]/10">
-                                                    <td colSpan={5} className="py-2.5 px-6 text-[11px] font-bold tracking-[0.16em] uppercase text-[#084734]">
+                                                <tr className="bg-fg-accent/8 border-y border-fg-accent/10">
+                                                    <td colSpan={5} className="py-2.5 px-6 text-[11px] font-bold tracking-[0.16em] uppercase text-fg-accent">
                                                         {group.category}
                                                     </td>
                                                 </tr>
@@ -1290,11 +1287,11 @@ export default function ProductHWPage() {
             <section className="py-24 md:py-32 bg-gradient-to-b from-white to-[#FDFCF8] border-t border-black/[0.08]">
                 <div className="container mx-auto px-4 text-center">
                     <motion.div {...fadeUp}>
-                        <p className="text-sm font-semibold text-[#084734] tracking-wider uppercase mb-3">EXPERIENCE</p>
+                        <p className="text-sm font-semibold text-fg-accent tracking-wider uppercase mb-3">EXPERIENCE</p>
                         <h2 className="text-3xl md:text-4xl lg:text-5xl text-[#1a1a19] mb-4 leading-tight">
                             압도적인 몰입감,
                             <br />
-                            <span className="text-[#084734]">직접 써보는 순간 확신이 됩니다</span>
+                            <span className="text-fg-accent">직접 써보는 순간 확신이 됩니다</span>
                         </h2>
                         <p className="text-lg text-[#615D59] mb-10 max-w-xl mx-auto leading-relaxed">
                             직접 써보는 것만큼 확실한 비교는 없습니다.
@@ -1302,7 +1299,7 @@ export default function ProductHWPage() {
                         </p>
 
                         <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                            <Button asChild className="h-14 rounded-full bg-[#084734] px-10 text-base font-bold text-white shadow-[0_8px_20px_rgba(8,71,52,0.24)] transition-all hover:bg-[#065c41] hover:shadow-[0_12px_25px_rgba(8,71,52,0.32)] group">
+                            <Button asChild className="h-14 rounded-full bg-fg-accent px-10 text-base font-bold text-fg-on-accent transition-all hover:bg-fg-accent-hover group">
                                 <Link
                                     href="/contact#contact-form"
                                     onClick={() => trackEvent("click_cta", { button: "hw_final_inquiry", page: "/product/hw" })}
@@ -1327,7 +1324,7 @@ export default function ProductHWPage() {
                             <TrackedLink
                                 href={HW_SPEC_FAQ_DOC_HREF}
                                 ctaId="hw_spec_faq_doc"
-                                className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-[#084734] transition-colors hover:text-[#065c41] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#084734]"
+                                className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-fg-accent transition-colors hover:text-fg-accent-hover focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-fg-accent"
                             >
                                 사양·설치 환경 FAQ 보기
                                 <ArrowRight className="h-4 w-4" aria-hidden="true" />
@@ -1335,7 +1332,7 @@ export default function ProductHWPage() {
                             <TrackedLink
                                 href="/faq"
                                 ctaId="hw_faq_more"
-                                className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-[#084734] transition-colors hover:text-[#065c41] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#084734]"
+                                className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-fg-accent transition-colors hover:text-fg-accent-hover focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-fg-accent"
                             >
                                 전체 FAQ 보기
                                 <ArrowRight className="h-4 w-4" aria-hidden="true" />

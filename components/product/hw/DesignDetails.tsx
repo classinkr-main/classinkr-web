@@ -61,7 +61,7 @@ export default function DesignDetails() {
           initial="hidden"
           animate={inView ? "visible" : "hidden"}
           transition={transition(0)}
-          className="text-xs tracking-[0.2em] text-[#084734] font-semibold uppercase"
+          className="text-xs tracking-[0.2em] text-fg-accent font-semibold uppercase"
         >
           PHYSICAL DETAILS
         </motion.p>

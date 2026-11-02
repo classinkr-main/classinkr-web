@@ -77,7 +77,7 @@ export default function LatencyProof() {
             initial="hidden"
             animate={copyInView ? "visible" : "hidden"}
             transition={{ duration: 0.6, ease: easing, delay: 0 }}
-            className="text-xs tracking-[0.2em] text-[#084734] font-semibold uppercase"
+            className="text-xs tracking-[0.2em] text-fg-accent font-semibold uppercase"
           >
             RESPONSE LATENCY
           </motion.p>
@@ -118,7 +118,7 @@ export default function LatencyProof() {
             <p className="text-sm text-[#615D59]">
               육안으로 지연을 느낄 수 없는 한계점 0.1초.
             </p>
-            <p className="mt-2 text-base font-bold text-[#084734]">
+            <p className="mt-2 text-base font-bold text-fg-accent">
               클래스인 보드는 그 한계를 넘어선 0.03초
             </p>
           </motion.div>
@@ -143,7 +143,7 @@ export default function LatencyProof() {
                 <span
                   className={
                     row.highlight
-                      ? "text-[#084734] font-bold text-base"
+                      ? "text-fg-accent font-bold text-base"
                       : "text-[#615D59] text-base"
                   }
                 >
@@ -152,7 +152,7 @@ export default function LatencyProof() {
                 <span
                   className={
                     row.highlight
-                      ? "text-[#084734] font-bold text-base"
+                      ? "text-fg-accent font-bold text-base"
                       : "text-[#615D59] text-base"
                   }
                 >

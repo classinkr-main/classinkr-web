@@ -65,7 +65,7 @@ export default function ValueAnchor() {
           initial="hidden"
           whileInView="visible"
           viewport={{ once: true, margin: "-80px" }}
-          className="text-xs tracking-[0.2em] text-[#6EE7B7] font-semibold uppercase"
+          className="text-xs tracking-[0.2em] text-fg-accent font-semibold uppercase"
         >
           ALL-IN-ONE PROMISE
         </motion.p>
@@ -111,7 +111,7 @@ export default function ValueAnchor() {
           style={{ transition: "box-shadow 0.15s" }}
         >
           <div className="flex items-center justify-between mb-5">
-            <p className="text-[10px] uppercase tracking-widest text-[#6EE7B7] font-semibold">INCLUDED</p>
+            <p className="text-[10px] uppercase tracking-widest text-fg-accent font-semibold">INCLUDED</p>
             <span className="text-[10px] text-white/30 font-medium">{items.length}가지 포함</span>
           </div>
 
@@ -127,7 +127,7 @@ export default function ValueAnchor() {
                 className="flex items-center gap-3"
               >
                 <Check
-                  className="w-3.5 h-3.5 text-[#6EE7B7] shrink-0"
+                  className="w-3.5 h-3.5 text-fg-accent shrink-0"
                   aria-hidden="true"
                 />
                 <span className="text-sm font-semibold text-white/90 leading-snug">
