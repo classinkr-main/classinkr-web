@@ -92,7 +92,7 @@ export function DocsNavDrawer({
         onClick={open}
         aria-haspopup="dialog"
         aria-expanded={isOpen}
-        className="inline-flex h-11 items-center gap-2 rounded-[6px] border border-black/[0.16] bg-white px-3.5 text-sm font-semibold text-[#111110] transition-colors duration-150 hover:border-[#084734]/40 hover:text-[#084734] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8]"
+        className="inline-flex h-11 items-center gap-2 rounded-[6px] border border-black/[0.16] bg-white px-3.5 text-sm font-semibold text-[#111110] transition-colors duration-150 hover:border-fg-accent/40 hover:text-fg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fg-accent focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8]"
       >
         <PanelLeftOpen className="h-4 w-4" aria-hidden />
         {label}
@@ -113,7 +113,7 @@ export function DocsNavDrawer({
               type="button"
               onClick={close}
               aria-label="목록 닫기"
-              className="inline-flex h-11 w-11 items-center justify-center rounded-[6px] text-[#615D59] transition-colors duration-150 hover:bg-black/[0.05] hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]"
+              className="inline-flex h-11 w-11 items-center justify-center rounded-[6px] text-[#615D59] transition-colors duration-150 hover:bg-black/[0.05] hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fg-accent"
             >
               <X className="h-5 w-5" aria-hidden />
             </button>

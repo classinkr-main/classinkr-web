@@ -85,7 +85,7 @@ function groupMedia(media: DocMedia[]): MediaGroup[] {
 }
 
 const FIGURE_CLASS =
-  "min-w-0 overflow-hidden rounded-lg border border-black/[0.08] bg-white ring-offset-2 ring-offset-[#FAFAF8] has-[a:focus-visible]:ring-2 has-[a:focus-visible]:ring-[#084734]"
+  "min-w-0 overflow-hidden rounded-lg border border-black/[0.08] bg-white ring-offset-2 ring-offset-[#FAFAF8] has-[a:focus-visible]:ring-2 has-[a:focus-visible]:ring-fg-accent"
 
 function Caption({ text, dense }: { text?: string; dense?: boolean }) {
   if (!text) return null

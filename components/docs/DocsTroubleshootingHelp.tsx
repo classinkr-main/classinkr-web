@@ -5,7 +5,7 @@ import { DocsAskChatbotButton } from "./DocsAskChatbotButton"
 import { cn } from "./utils"
 
 const FOCUS_RING =
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fg-accent focus-visible:ring-offset-2 focus-visible:ring-offset-white"
 
 /**
  * 문제 해결 문서 끝의 "그래도 안 되면" 안내.
@@ -28,7 +28,7 @@ export function DocsTroubleshootingHelp({
         className
       )}
     >
-      <p className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.14em] text-[#084734]">
+      <p className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.14em] text-fg-accent">
         <LifeBuoy className="h-4 w-4" aria-hidden />
         추가 지원
       </p>
@@ -49,7 +49,7 @@ export function DocsTroubleshootingHelp({
         <DocsAskChatbotButton
           prefill={`'${docTitle}' 문서대로 해 봤는데 해결되지 않았어요. `}
           className={cn(
-            "inline-flex min-h-11 origin-center items-center gap-2 rounded-[6px] bg-[#084734] px-5 text-sm font-bold text-white transition-colors duration-150 hover:bg-[#065c41] active:scale-[0.98]",
+            "inline-flex min-h-11 origin-center items-center gap-2 rounded-[6px] bg-fg-accent px-5 text-sm font-bold text-fg-on-accent transition-colors duration-150 hover:bg-fg-accent-hover active:scale-[0.98]",
             FOCUS_RING
           )}
         >
@@ -59,7 +59,7 @@ export function DocsTroubleshootingHelp({
         <Link
           href={contactHref}
           className={cn(
-            "group inline-flex min-h-11 origin-center items-center gap-2 rounded-[6px] border border-[#084734]/30 px-5 text-sm font-bold text-[#084734] transition-colors duration-150 hover:border-[#084734]/60 active:scale-[0.98]",
+            "group inline-flex min-h-11 origin-center items-center gap-2 rounded-[6px] border border-fg-accent/30 px-5 text-sm font-bold text-fg-accent transition-colors duration-150 hover:border-fg-accent/60 active:scale-[0.98]",
             FOCUS_RING
           )}
         >

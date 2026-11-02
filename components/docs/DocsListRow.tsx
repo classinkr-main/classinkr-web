@@ -10,7 +10,7 @@ import type { DocsArticleSummary } from "./types"
 import { cn } from "./utils"
 
 const FOCUS_RING =
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8]"
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fg-accent focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8]"
 
 export type DocsListRowMeta = "kind" | "category" | "readTime" | "images" | "updatedAt"
 
@@ -22,7 +22,7 @@ const DEFAULT_META: readonly DocsListRowMeta[] = ["kind", "category", "readTime"
  */
 export function DocsKindLabel({ kind }: { kind?: DocsArticleSummary["kind"] }) {
   if (!kind || kind === "howto") return null
-  return <span className="font-semibold text-[#084734]">{DOC_LIST_KIND_LABELS[kind]}</span>
+  return <span className="font-semibold text-fg-accent">{DOC_LIST_KIND_LABELS[kind]}</span>
 }
 
 function buildMeta(article: DocsArticleSummary, meta: readonly DocsListRowMeta[]) {
@@ -156,7 +156,7 @@ export function DocsListRow({
           </span>
         ) : null}
         <span className="block min-w-0 flex-1">
-          <span className="block break-keep text-[16px] font-semibold leading-snug text-[#111110] transition-colors duration-150 group-hover:text-[#084734]">
+          <span className="block break-keep text-[16px] font-semibold leading-snug text-[#111110] transition-colors duration-150 group-hover:text-fg-accent">
             <SearchHighlight text={article.title} query={query} />
           </span>
           <span className="mt-1.5 line-clamp-2 break-words text-[15px] leading-[26px] text-[#4F4C49]">
@@ -175,7 +175,7 @@ export function DocsListRow({
         ) : null}
         <ArrowRight
           aria-hidden
-          className="mt-1 h-4 w-4 shrink-0 text-[#A39E98] transition-[color,transform] duration-150 group-hover:translate-x-0.5 group-hover:text-[#084734]"
+          className="mt-1 h-4 w-4 shrink-0 text-[#A39E98] transition-[color,transform] duration-150 group-hover:translate-x-0.5 group-hover:text-fg-accent"
         />
       </Link>
     </li>
@@ -216,14 +216,14 @@ export function DocsCompactRow({
           </span>
         ) : null}
         <span className="block min-w-0 flex-1">
-          <span className="block break-keep text-[15px] font-semibold leading-snug text-[#111110] transition-colors duration-150 group-hover:text-[#084734]">
+          <span className="block break-keep text-[15px] font-semibold leading-snug text-[#111110] transition-colors duration-150 group-hover:text-fg-accent">
             {article.title}
           </span>
           <MetaLine parts={buildMeta(article, meta)} className="mt-1" />
         </span>
         <ArrowRight
           aria-hidden
-          className="h-4 w-4 shrink-0 self-center text-[#A39E98] transition-[color,transform] duration-150 group-hover:translate-x-0.5 group-hover:text-[#084734]"
+          className="h-4 w-4 shrink-0 self-center text-[#A39E98] transition-[color,transform] duration-150 group-hover:translate-x-0.5 group-hover:text-fg-accent"
         />
       </Link>
     </li>

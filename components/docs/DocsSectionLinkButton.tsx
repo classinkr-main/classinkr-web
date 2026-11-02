@@ -67,9 +67,9 @@ export function DocsSectionLinkButton({
         aria-label={`'${title}' 섹션 링크 복사`}
         title="이 섹션 링크 복사"
         className={cn(
-          "inline-flex h-9 w-9 items-center justify-center rounded-[6px] transition-[opacity,color,background-color] duration-150 hover:bg-black/[0.05] hover:text-[#084734] focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]",
+          "inline-flex h-9 w-9 items-center justify-center rounded-[6px] transition-[opacity,color,background-color] duration-150 hover:bg-black/[0.05] hover:text-fg-accent focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fg-accent",
           copied
-            ? "text-[#084734] opacity-100"
+            ? "text-fg-accent opacity-100"
             : "text-[#615D59] opacity-100 pointer-fine:opacity-0 pointer-fine:group-hover/heading:opacity-100"
         )}
       >

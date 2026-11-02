@@ -98,7 +98,7 @@ export function DocsTableOfContents({
 
   return (
     <aside className={cn("relative z-10 bg-[#FAFAF8] pb-4", className)}>
-      <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#084734]">{title}</p>
+      <p className="text-xs font-bold uppercase tracking-[0.14em] text-fg-accent">{title}</p>
       <nav className="mt-3" aria-label="문서 목차">
         <ol className="border-l border-black/[0.08]">
           {items.map((item) => {
@@ -111,9 +111,9 @@ export function DocsTableOfContents({
                   aria-current={isActive ? "location" : undefined}
                   onClick={() => setActiveId(item.id)}
                   className={cn(
-                    "-ml-px block break-keep border-l-2 py-1.5 pl-3 text-sm leading-5 transition-colors duration-150 [overflow-wrap:anywhere] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]",
+                    "-ml-px block break-keep border-l-2 py-1.5 pl-3 text-sm leading-5 transition-colors duration-150 [overflow-wrap:anywhere] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fg-accent",
                     isActive
-                      ? "border-[#084734] font-semibold text-[#111110]"
+                      ? "border-fg-accent font-semibold text-[#111110]"
                       : "border-transparent text-[#615D59] hover:border-black/[0.16] hover:text-[#111110]"
                   )}
                 >
@@ -154,9 +154,9 @@ export function DocsInlineToc({ items, title = "이 문서의 순서", className
         className
       )}
     >
-      <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 rounded-lg px-4 py-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8] [&::-webkit-details-marker]:hidden">
+      <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 rounded-lg px-4 py-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fg-accent focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8] [&::-webkit-details-marker]:hidden">
         <span className="flex min-w-0 items-center gap-2.5 text-sm font-bold text-[#111110]">
-          <ListOrdered className="h-4 w-4 shrink-0 text-[#084734]" aria-hidden />
+          <ListOrdered className="h-4 w-4 shrink-0 text-fg-accent" aria-hidden />
           {title}
           <span className="font-medium tabular-nums text-[#615D59]">{items.length}개</span>
         </span>
@@ -174,7 +174,7 @@ export function DocsInlineToc({ items, title = "이 문서의 순서", className
                 onClick={() => {
                   if (detailsRef.current) detailsRef.current.open = false
                 }}
-                className="flex gap-3 rounded-md px-2 py-2.5 text-[15px] leading-6 text-[#31302E] transition-colors duration-150 hover:bg-[#F6F5F4] hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]"
+                className="flex gap-3 rounded-md px-2 py-2.5 text-[15px] leading-6 text-[#31302E] transition-colors duration-150 hover:bg-[#F6F5F4] hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fg-accent"
               >
                 <span className="w-6 shrink-0 text-[13px] font-semibold leading-6 tabular-nums text-[#615D59]">
                   {String(index + 1).padStart(2, "0")}
