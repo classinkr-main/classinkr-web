@@ -799,7 +799,7 @@ function HardwareTeaserSection() {
                                 </div>
                             ))}
                         </div>
-                        <Link href="/product/hw" className="inline-flex items-center gap-2 bg-[#6EE7B7] hover:bg-[#D1FAE5] text-[#084734] font-bold text-sm px-6 py-3 rounded-full transition-all">
+                        <Link href="/product/hw" className="inline-flex items-center gap-2 border border-line-control text-fg-ink hover:border-line-ink font-bold text-sm px-6 py-3 rounded-full transition-all">
                             하드웨어 상세 보기 <ArrowRight className="w-4 h-4" />
                         </Link>
                     </motion.div>
@@ -1413,7 +1413,7 @@ export default function ProductPage() {
                             <p className="mb-12 text-[11px] font-medium text-white/50">서비스 국가 수 · EEO 공식 소개 기준</p>
 
                             <div className="flex flex-col items-stretch justify-center gap-3 sm:flex-row sm:items-center sm:gap-4">
-                                <Button asChild className="h-[3.25rem] rounded-full bg-[#084734] px-7 text-base font-bold text-white transition-all hover:bg-[#065c41] group sm:h-14 sm:px-8">
+                                <Button asChild variant="line" size="cta" className="h-[3.25rem] rounded-full px-7 text-base font-bold transition-all group sm:h-14 sm:px-8">
                                     <Link
                                         href={CHECKOUT_HREF}
                                         onClick={() => trackCheckoutClick("sw_final_checkout")}

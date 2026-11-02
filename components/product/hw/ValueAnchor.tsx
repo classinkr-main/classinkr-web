@@ -153,7 +153,7 @@ export default function ValueAnchor() {
           <TrackedLink
             href="/contact#contact-form"
             ctaId="hw_value_anchor_demo"
-            className="inline-flex items-center gap-2 bg-[#6EE7B7] hover:bg-white text-[#0D1A12] font-bold px-10 py-4 rounded-md text-base transition-all active:scale-[0.98]"
+            className="inline-flex items-center gap-2 border border-line-control text-fg-ink hover:border-line-ink font-bold px-10 py-4 rounded-md text-base transition-all active:scale-[0.98]"
           >
             데모 신청하고 직접 사용해보기
             <ArrowRight aria-hidden className="arrow-nudge size-4" />
