@@ -82,7 +82,7 @@ H1·리드는 `lib/classin-positioning.ts`의 `heroHeadline`·`oneLine`을 쓴�
 
 - 바탕 `bg-surface-paper` ↔ `bg-surface-sunken` 교차(1·3·5 paper, 2·4 sunken). 카드는 `bg-surface-sheet border border-line-hair rounded-xl`. 채움·파스텔 카드 금지, 그라데이션·emoji·핑 애니메이션·사진·차트 금지(히어로 1장 제외).
 - 강조색은 **누를 수 있는 것에만**: 주 CTA 채움(`Button` 기본 variant), 링크 글자(`text-fg-accent`), 화살표, 포커스 링. 제목·칩·라벨·단계 번호에는 쓰지 않는다. 키커·단계 라벨은 `text-label text-fg-muted`, H1 구절은 먹 굵기. 틴트 토큰을 새로 만들지 않는다.
-- 타이포는 토큰 스케일만: H1 `text-display`, H2 `text-h2`, 카드 제목 `text-h3`, 본문 `text-body text-fg-body`, 라벨 `text-label text-fg-muted`, 숫자 `text-h3 tabular-nums`, 캡션 `text-note text-fg-muted`. `break-keep`. 모바일 자간 0은 토큰이 처리한다.
+- 타이포는 토큰 스케일만: H1 `text-h1`(컴팩트 — display 72px는 25자 헤드라인이 3줄이 된다), H2 `text-h2`, 카드 제목 `text-h3`, 본문 `text-body text-fg-body`, 라벨 `text-label text-fg-muted`, 숫자 `text-h3 tabular-nums`, 캡션 `text-note text-fg-muted`. `break-keep`. 모바일 자간 0은 토큰이 처리한다.
 - 여백: 섹션 `py-14 md:py-20`(56/80px). 컨테이너 `mx-auto max-w-[1040px] px-5`. 제목 블록과 본문 사이 `mt-8 md:mt-10`. 카드 3열은 `grid gap-4 md:grid-cols-3`.
 - 모션: 2~5화면 루트만 `components/landing/Reveal.tsx`로 감싼다(은은한 상승 1회). 히어로는 모션 없음. 카드·항목 순차 등장 금지.
 - 시각물: 히어로 `/images/hero-dashboard.webp`(1536×1024) 한 장, `priority`, `sizes="(min-width: 1040px) 960px, 100vw"`, `rounded-xl border border-line-hair`. 다른 화면은 시각물 없음 → 스크린샷 플레이스홀더 문제가 사라진다.
@@ -111,9 +111,9 @@ H1·리드는 `lib/classin-positioning.ts`의 `heroHeadline`·`oneLine`을 쓴�
 
 ### 3-2. 토큰·색
 
-- `app/styles/tokens.css`: `--fg-accent: #0B7A52`, `--fg-accent-hover: #0A6E4A`, `--line-link: rgb(11 122 82 / .6)`. `.surface-ink` 블록은 그대로.
+- `app/styles/tokens.css`: `:root`의 `--fg-accent: #0B7A52`, `--fg-accent-hover: #0A6E4A`, `--line-link: rgb(11 122 82 / .75)`(밑줄 대비 ≈3.2 유지). 그리고 **어드민 유지 블록** `:root:not(:has(.site)) { --fg-accent: #084734; --fg-accent-hover: #065C41; --line-link: rgb(8 71 52 / .6); }`을 같은 파일에 더한다 — `.site`는 `AppChrome`이 공개 크롬에만 두는 래퍼라, 공개 DOM(포털 포함)은 새 그린, 어드민·checkout DOM은 옛 그린을 읽는다. 덕분에 공용 `components/ui/**`를 토큰으로 바꿔도 어드민 색이 변하지 않는다. `.surface-ink` 블록은 그대로.
 - `lib/design-tokens.ts` 미러의 `accent`를 같은 커밋에서 바꾼다(`tests/lib/design-tokens.test.ts`가 대조).
-- `components/ui/button.tsx`: `#084734`·`#065c41`·`#ECFDF5`·`#D1FAE5`·`#111110`·`#F6F5F4` 리터럴을 토큰 유틸로 바꾼다(`bg-fg-accent`, `hover:bg-fg-accent-hover`, `text-fg-on-accent`, `focus-visible:ring-fg-accent`, `text-fg-accent`, `bg-fg-accent/8`, `hover:bg-fg-accent/14`, `text-fg-ink`, `hover:bg-surface-sunken`). 공용 버튼이라 색 변경이 사이트 전체 버튼에 흐른다. 어드민도 이 버튼을 쓰지만 어드민 DOM에는 `tokens.css` `:root` 값이 똑같이 걸리므로 어드민 버튼도 새 그린이 된다 — 이것은 받아들인다(버튼 하나만 두 색으로 유지하는 비용이 더 크다). 어드민의 다른 hex 2,600곳은 그대로다.
+- `components/ui/button.tsx`: `#084734`·`#065c41`·`#ECFDF5`·`#D1FAE5`·`#111110`·`#F6F5F4`·`black/[0.08]`·`bg-white` 리터럴을 토큰 유틸로 바꾼다(`bg-fg-accent`, `hover:bg-fg-accent-hover`, `text-fg-on-accent`, `focus-visible:ring-fg-accent`, `text-fg-accent`, `bg-fg-accent/8`, `hover:bg-fg-accent/14`, `text-fg-ink`, `border-line-hair`, `bg-surface-sheet`, `hover:bg-surface-sunken`). 공용 버튼이라 색 변경이 공개 사이트 전체 버튼에 흐르고, 어드민은 위 유지 블록 덕에 옛 그린 그대로다. `destructive`(red-500)는 어드민 전용이라 손대지 않는다.
 - `DESIGN.md` §2 Primary와 `docs/active/playbook/01-home-front.md` §4 팔레트 줄: 공개 사이트 강조색 `#0B7A52`(hover `#0A6E4A`), 어드민은 `#084734` 유지라고 적는다.
 - `scripts/check-design-tokens.mjs`의 allow 목록에 `#084734`가 있으면 공개 범위에서는 뺀다.
 
@@ -128,7 +128,8 @@ H1·리드는 `lib/classin-positioning.ts`의 `heroHeadline`·`oneLine`을 쓴�
 | `components/ui/**` | 130 | 아래 규칙 |
 | `app/about`, `app/contact`, `app/pricing/**`, `app/resources/**`, `app/docs/**`, `app/blog/**`, `app/events/**`, `app/showroom`, `app/download`, `app/updates`, `app/faq`, `app/premium/**`, `app/terms`, `app/privacy`, `app/unsubscribe`, `app/data-deletion`, `app/account`, `app/share/**`, `app/*.tsx` | 약 330 | 아래 규칙 |
 | `components/{landing,product,docs,blog,seminars,showroom,events,premium,legal,consent,auth,billing,account,media,seo}/**` | 약 230 | 아래 규칙 |
-| `app/globals.css` 공개 블록 | `--primary`·`--primary-hover`·`--accent-foreground`·`--ring`·`.rich-editor-*`·`[data-admin-crm]` 등은 어드민·shadcn 공용이라 **건드리지 않는다**. 공개 화면 전용 규칙만 `var(--fg-accent)` 참조로 | — |
+| `app/globals.css` | `--primary`·`--primary-hover`·`--accent-foreground`·`--ring`·`.rich-editor-*`·`[data-admin-crm]`·`.admin-nav-progress`는 어드민·shadcn 공용이라 **건드리지 않는다**(15곳 전부 그쪽이다) | 0 |
+| 제외 | `components/ui/card.tsx`(`tests/ui/card.test.tsx`가 옛 출력을 박제), `components/{billing,checkout,portal,auth,account}/**`·`app/{checkout,receipt,share,account,auth}/**`(`.site` 밖이라 토큰이 옛 그린을 주어 의미 없음, 가드 범위 밖), `lib/**` | — |
 
 치환 규칙: `text-[#084734]`→`text-fg-accent`, `bg-[#084734]`→`bg-fg-accent`, `hover:bg-[#065c41]`→`hover:bg-fg-accent-hover`, `hover:text-[#065c41]`→`hover:text-fg-accent-hover`, `border/ring/outline/divide-[#084734]`→`…-fg-accent`, `bg-[#084734]/N`→`bg-fg-accent/N`, 액센트 채움 위 `text-white`→`text-fg-on-accent`, `bg-[#ECFDF5]`→`bg-fg-accent/8`, `bg-[#D1FAE5]`→`bg-fg-accent/14`, `rgba(8,71,52,a)` 그림자→`color-mix(in srgb, var(--fg-accent) a%, transparent)` 또는 제거, 인라인 `style={{ color: '#084734' }}`→클래스. `.surface-ink` 안의 `#6EE7B7`은 `text-fg-accent`(먹 지면이 변수로 민트를 준다). hex→hex 치환 금지(가드 정책). 어드민 공용 컴포넌트(`components/ui/**`)는 토큰 유틸이 어드민 DOM에서도 `:root` 값을 읽으므로 안전하다. 파일 묶음마다 `npm run check:design-tokens`로 확인한다.
 
@@ -139,7 +140,7 @@ H1·리드는 `lib/classin-positioning.ts`의 `heroHeadline`·`oneLine`을 쓴�
 ### 3-5. 브랜치·병합
 
 - 작업 위치: 워크트리 `classin_home-design-p0`(`design/p1-visual`, `.env.local` 심링크 있음).
-- 선행: 로컬 `main`(3bf9b41c, origin/main보다 159 커밋 앞 — 사용자의 10-30 통합 커밋)을 `design/p1-visual`에 병합. `merge-tree` 결과 충돌 14개. 해결 정책: 디자인 언어 문서 8개(add/add)는 design 쪽(`git checkout --ours`), `AGENTS.md`·`docs/README.md`는 양쪽 합침, `Hero.tsx`·`ProblemCost.tsx`는 main 쪽(어차피 삭제), `app/product/sw/page.tsx`·`components/AppChrome.tsx`·`components/ui/FloatingChatbot.tsx`는 양쪽 변경을 손으로 합친다. 병합 뒤 게이트와 `npx vitest run`이 필수다(AGENTS.md).
+- 선행: **`origin/main`(b4bec0d5, 2026-10-30, 운영 배포본 = PR #48·#50 개인정보 핫픽스 포함)** 을 `design/p1-visual`에 병합한다. 로컬 `main`은 쓰지 않는다 — origin/main보다 159 커밋 뒤이고(핫픽스 없음) 다른 세션이 오늘도 커밋 중(d9b786c3)이라 기준이 흔들린다. `merge-tree` 결과 충돌 22파일. 해결 정책(HEAD=design, theirs=origin/main): 디자인 언어 문서 8개(add/add)와 `scripts/check-design-tokens.mjs`(규칙 레지스트리판)는 **ours**; `app/contact/page.tsx`·`app/product/sw/page.tsx`(정직성 수정으로 SlotDigit·"200개 고객사" 삭제)·`components/sections/{DemoModal,Hero,ProblemCost,KeyUseCases}.tsx`·`components/showroom/SlotPicker.tsx`·`AGENTS.md`는 **theirs**; `components/ui/FloatingChatbot.tsx`는 ours(`z-(--z-chatbot)`); `app/layout.tsx`(viewport + verification 둘 다)·`components/AppChrome.tsx`(design의 skip link·`.site` 래퍼·`cn` + main의 `hidesPublicChrome`/`isTrackingExcludedPath`/`ContactLinkTracker`/`showGoogleTag`)·`DESIGN.md`(design 두 줄 + main의 Form Label 한 줄)·`docs/README.md`(design 세 줄 + main의 신규 항목 세 개)는 **양쪽 합침**. 병합 뒤 게이트와 `npx vitest run`이 필수다(AGENTS.md).
 - 완료 후 PR → `main` 스쿼시(저장소 관례). 운영 배포는 사용자가 실행한다.
 
 ## 4. 검증
