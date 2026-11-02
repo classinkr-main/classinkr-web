@@ -73,9 +73,16 @@ export interface GooglePageContext {
   traffic_type?: "internal"
 }
 
+/** Google Ads 향상된 전환에 싣는 해시 연락처(SHA-256 hex). 원문은 절대 넣지 않는다. */
+export interface AdsUserData {
+  sha256_email_address?: string
+  sha256_phone_number?: string
+}
+
 interface GtagFunction {
   (command: "event", eventName: GoogleAnalyticsEventName, params?: AnalyticsParams): void
   (command: "set", params: GooglePageContext): void
+  (command: "set", target: "user_data", params: AdsUserData): void
 }
 
 type MetaPixelOptions = {
@@ -522,6 +529,12 @@ export interface LeadSubmittedInput {
   transactionId?: string | null
   /** /contact 문의 유형. 영업 유형('도입 상담')일 때만 Google Ads 전환을 보낸다. */
   contactTopic?: string | null
+  /**
+   * 폼에 입력한 연락처 원문 — Google Ads 향상된 전환용. params 와 섞지 않는다: 마케팅 동의가
+   * 있을 때만 브라우저에서 정규화·SHA-256 한 값이 gtag user_data 로 가고, 원문은 dataLayer·
+   * GA4·내부 적재·콘솔 어디에도 남지 않는다.
+   */
+  userData?: { email?: string | null; phone?: string | null }
   params?: AnalyticsParams
 }
 
@@ -546,7 +559,7 @@ function adsConversionLabel(input: LeadSubmittedInput): string | null {
  * 리드 접수 성공 직후 1회 — 내부 이름은 submit_demo_request(어드민 지표 호환), GA4 는
  * generate_lead + form_type. Google Ads 전환도 같은 중복 방지 안에서 보낸다.
  *
- * @returns 실제로 보냈으면 true
+ * @returns 보냈으면 true. 해시 연락처를 싣는 경우 Ads 전환만 해시가 끝난 뒤(수 ms) 나간다.
  */
 export const trackLeadSubmitted = (input: LeadSubmittedInput): boolean => {
   if (typeof window === "undefined") return false
@@ -567,12 +580,73 @@ export const trackLeadSubmitted = (input: LeadSubmittedInput): boolean => {
 
   trackEvent("submit_demo_request", params)
 
-  trackAdsConversion(adsConversionLabel(input), {
+  const label = adsConversionLabel(input)
+  const conversion: AnalyticsParams = {
     transaction_id: input.transactionId ?? undefined,
     event_id: eventId,
     event_slug: typeof params.event_slug === "string" ? params.event_slug : undefined,
-  })
+  }
+
+  // 향상된 전환 — ad_user_data 와 같은 원천(마케팅 동의)이 있고 보낼 전환(라벨)이 있을 때만 해시
+  // 연락처를 붙인다. 전환은 해시 뒤에 한 번만 보내고, 해시가 실패하면 user_data 없이 보낸다.
+  if (label && input.userData && currentChoice().marketing && window.gtag) {
+    void hashAdsUserData(input.userData)
+      .catch(() => null)
+      .then((userData) => {
+        if (userData) window.gtag?.("set", "user_data", userData)
+        trackAdsConversion(label, conversion)
+      })
+  } else {
+    trackAdsConversion(label, conversion)
+  }
   return true
+}
+
+/* ── Google Ads 향상된 전환 — 연락처 정규화·해시 ──────────────────────────
+ * 정규화 규칙은 Google Ads 도움말 "Google 태그로 향상된 전환 설정"을 따른다: 앞뒤 공백 제거,
+ * 소문자, gmail.com·googlemail.com 은 @ 앞 마침표 제거, 전화는 E.164, 해시는 SHA-256 hex.
+ */
+
+export function normalizeEmailForAds(email: string | null | undefined): string | null {
+  const value = email?.trim().toLowerCase() ?? ""
+  const at = value.lastIndexOf("@")
+  if (at <= 0 || at === value.length - 1) return null
+  const domain = value.slice(at + 1)
+  return domain === "gmail.com" || domain === "googlemail.com"
+    ? `${value.slice(0, at).replace(/\./g, "")}@${domain}`
+    : value
+}
+
+/**
+ * 국내 번호(0…)와 +82 표기만 E.164(+82…)로 바꾼다. "+82 010-…" 처럼 0 을 남긴 입력도 받는다.
+ * 형식을 모르는 번호는 null — 지어낸 번호의 해시는 매칭을 흐린다.
+ */
+export function normalizePhoneForAds(phone: string | null | undefined): string | null {
+  const digits = phone?.replace(/\D/g, "") ?? ""
+  const national = digits.startsWith("82")
+    ? digits.slice(2).replace(/^0/, "")
+    : digits.startsWith("0")
+      ? digits.slice(1)
+      : ""
+  return /^[1-9]\d{7,9}$/.test(national) ? `+82${national}` : null
+}
+
+async function sha256Hex(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value))
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("")
+}
+
+/** 정규화 → SHA-256. 쓸 값이 하나도 없으면 null. crypto.subtle 이 없으면(비보안 문맥) reject. */
+export async function hashAdsUserData(
+  input: NonNullable<LeadSubmittedInput["userData"]>
+): Promise<AdsUserData | null> {
+  const email = normalizeEmailForAds(input.email)
+  const phone = normalizePhoneForAds(input.phone)
+  if (!email && !phone) return null
+  const userData: AdsUserData = {}
+  if (email) userData.sha256_email_address = await sha256Hex(email)
+  if (phone) userData.sha256_phone_number = await sha256Hex(phone)
+  return userData
 }
 
 /**

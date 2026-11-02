@@ -371,6 +371,7 @@ export function CheckoutRequestForm({
           source: "checkout_request",
           dedupeKey: payload.requestId,
           transactionId: payload.requestId,
+          userData: { email, phone: form.phone },
           params: {
             request_kind: kind,
             page: sourcePage,

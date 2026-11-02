@@ -17,6 +17,9 @@ vi.mock("@/lib/analytics-config", () => ({
 }))
 
 import {
+  hashAdsUserData,
+  normalizeEmailForAds,
+  normalizePhoneForAds,
   setGooglePageContext,
   trackEvent,
   trackFormStart,
@@ -201,6 +204,66 @@ describe("trackLeadSubmitted", () => {
     const [valid, invalid] = gtagEvents("generate_lead").map(([, , params]) => params)
     expect(valid).toMatchObject({ academy_size: "100~300명" })
     expect(invalid).not.toHaveProperty("academy_size")
+  })
+})
+
+describe("Google Ads enhanced conversions", () => {
+  const userData = { email: " Kim.Test@Gmail.com ", phone: "010-1234-5678" }
+  // shasum -a 256 로 따로 구한 값: "kimtest@gmail.com", "+821012345678"
+  const EMAIL_HASH = "9bd77db5f43c3f07872f01027c45e25ad66bcf06de2fec5bc6db0e38b8e32918"
+  const PHONE_HASH = "2efdd01fdf56e3f07de56acd9d40beb256d5983aec5f6d597c2c48354f35f9e0"
+
+  it("normalizes per Google's rules before hashing", async () => {
+    expect(normalizeEmailForAds("Kim.Test@naver.com")).toBe("kim.test@naver.com")
+    expect(normalizeEmailForAds("not-an-email")).toBeNull()
+    expect(normalizePhoneForAds("+82 010-1234-5678")).toBe("+821012345678")
+    expect(normalizePhoneForAds("02-123-4567")).toBe("+8221234567")
+    expect(normalizePhoneForAds("1588-1234")).toBeNull()
+    expect(await hashAdsUserData(userData)).toEqual({
+      sha256_email_address: EMAIL_HASH,
+      sha256_phone_number: PHONE_HASH,
+    })
+    expect(await hashAdsUserData({ email: "", phone: null })).toBeNull()
+  })
+
+  it("sets hashed user_data right before the single conversion when marketing consent is granted", async () => {
+    consent.marketing = true
+    expect(
+      trackLeadSubmitted({ formType: "demo", source: "demo_modal", dedupeKey: "lead:ec", userData })
+    ).toBe(true)
+
+    await vi.waitFor(() => expect(gtagEvents("conversion")).toHaveLength(1))
+    const calls = gtag.mock.calls as unknown as GtagCall[]
+    const setIndex = calls.findIndex(([command, target]) => command === "set" && target === "user_data")
+    expect(calls[setIndex]?.[2]).toEqual({ sha256_email_address: EMAIL_HASH, sha256_phone_number: PHONE_HASH })
+    expect(calls[setIndex + 1]?.[1]).toBe("conversion")
+
+    // 원문은 gtag·dataLayer 어디에도 없다.
+    const dataLayer = (window as unknown as { dataLayer: unknown[] }).dataLayer
+    expect(JSON.stringify([calls, dataLayer])).not.toMatch(/gmail|kim\.test|1234-5678|01012345678/i)
+  })
+
+  it("sends the conversion without user_data when marketing consent is missing", () => {
+    trackLeadSubmitted({ formType: "demo", source: "demo_modal", dedupeKey: "lead:no-ec", userData })
+
+    expect(gtagEvents("conversion")).toHaveLength(1)
+    expect(gtag.mock.calls.some(([, target]) => target === "user_data")).toBe(false)
+  })
+
+  it("sends no user_data for a lead that has no Ads conversion (support topic)", async () => {
+    consent.marketing = true
+    trackLeadSubmitted({
+      formType: "contact",
+      source: "contact_page",
+      dedupeKey: "lead:support-ec",
+      contactTopic: "계정/접속/기술 지원",
+      userData,
+    })
+
+    // 해시는 비동기라 잠깐 기다린 뒤 "없음"을 확인한다.
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(gtagEvents("conversion")).toHaveLength(0)
+    expect(gtag.mock.calls.some(([, target]) => target === "user_data")).toBe(false)
   })
 })
 
