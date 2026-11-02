@@ -14,7 +14,7 @@ import {
 import { useConsent } from "@/lib/consent/useConsent"
 
 const primaryBtn =
-  "inline-flex h-8 min-w-0 items-center justify-center rounded-md bg-[#084734] px-2 text-[12px] font-bold text-white transition-colors hover:bg-[#065c41] sm:h-9 sm:px-4 sm:text-[13px]"
+  "inline-flex h-8 min-w-0 items-center justify-center rounded-md bg-fg-accent px-2 text-[12px] font-bold text-fg-on-accent transition-colors hover:bg-fg-accent-hover sm:h-9 sm:px-4 sm:text-[13px]"
 const ghostBtn =
   "inline-flex h-8 min-w-0 items-center justify-center rounded-md border border-black/[0.08] bg-white px-2 text-[12px] font-semibold text-[#3f4a44] transition-colors hover:bg-[#F6F5F4] sm:h-9 sm:px-4 sm:text-[13px]"
 
@@ -38,7 +38,7 @@ function ConsentRow({
         checked={checked}
         disabled={disabled}
         onChange={(e) => onChange?.(e.target.checked)}
-        className="mt-0.5 h-4 w-4 shrink-0 accent-[#084734] disabled:opacity-50"
+        className="mt-0.5 h-4 w-4 shrink-0 accent-fg-accent disabled:opacity-50"
       />
       <span className="flex flex-col">
         <span className="text-[13px] font-semibold text-[#111110]">{label}</span>
@@ -135,7 +135,7 @@ export function ConsentBanner() {
                 <Link
                   href="/privacy"
                   prefetch={false}
-                  className="font-medium text-[#084734] underline underline-offset-2"
+                  className="font-medium text-fg-accent underline underline-offset-2"
                 >
                   개인정보처리방침
                 </Link>

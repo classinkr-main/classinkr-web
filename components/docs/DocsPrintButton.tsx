@@ -12,7 +12,7 @@ export function DocsPrintButton({ label = "PDF로 저장" }: { label?: string })
     <button
       type="button"
       onClick={() => window.print()}
-      className="inline-flex origin-left items-center gap-2 rounded-[6px] border border-[#084734]/30 px-5 py-2.5 text-sm font-bold text-[#084734] transition-all duration-150 hover:bg-[#ECFDF5] active:scale-[0.98]"
+      className="inline-flex origin-left items-center gap-2 rounded-[6px] border border-fg-accent/30 px-5 py-2.5 text-sm font-bold text-fg-accent transition-all duration-150 hover:bg-fg-accent/8 active:scale-[0.98]"
     >
       <Printer className="h-4 w-4" aria-hidden />
       {label}

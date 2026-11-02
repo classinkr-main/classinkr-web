@@ -31,7 +31,7 @@ export function SeminarPoster({ seed, posterUrl, className, children }: SeminarP
   const ringScale = 0.9 + (hash % 5) * 0.06 // 0.9–1.14
 
   return (
-    <div className={cn("relative overflow-hidden bg-[#ECFDF5]", className)}>
+    <div className={cn("relative overflow-hidden bg-fg-accent/8", className)}>
       {posterUrl ? (
         <>
           <div
@@ -65,7 +65,7 @@ export function SeminarPoster({ seed, posterUrl, className, children }: SeminarP
           />
           {/* 동심 링 워터마크 */}
           <svg
-            className="absolute left-1/2 top-1/2 h-[150%] w-[150%] -translate-x-1/2 -translate-y-1/2 text-[#084734]"
+            className="absolute left-1/2 top-1/2 h-[150%] w-[150%] -translate-x-1/2 -translate-y-1/2 text-fg-accent"
             viewBox="0 0 200 200"
             fill="none"
             aria-hidden

@@ -37,7 +37,7 @@ export function ReadingProgress() {
     <div className="pointer-events-none fixed inset-x-0 top-0 z-(--z-header) h-[3px]" aria-hidden="true">
       <div
         ref={barRef}
-        className="h-full origin-left bg-[#084734]"
+        className="h-full origin-left bg-fg-accent"
         style={{ transform: "scaleX(0)" }}
       />
     </div>

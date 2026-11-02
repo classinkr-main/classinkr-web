@@ -16,7 +16,7 @@ export function SeminarCard({ seminar }: SeminarCardProps) {
       className="flex flex-col overflow-hidden rounded-[16px] border border-black/[0.08] bg-white shadow-[rgba(0,0,0,0.04)_0px_4px_18px,rgba(0,0,0,0.02)_0px_1px_4px] transition-colors duration-(--motion-fast) ease-soft hover:border-line-strong"
     >
       <SeminarPoster seed={seminar.slug} posterUrl={seminar.posterUrl} className="aspect-video w-full">
-        <span className="absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-white/85 px-2.5 py-1 text-[11px] font-semibold text-[#084734] shadow-sm">
+        <span className="absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-white/85 px-2.5 py-1 text-[11px] font-semibold text-fg-accent shadow-sm">
           <LockKeyhole className="h-3 w-3" />
           회원 전용
         </span>
@@ -27,7 +27,7 @@ export function SeminarCard({ seminar }: SeminarCardProps) {
           </span>
         ) : null}
         <span className="absolute inset-0 grid place-items-center">
-          <span className="flex h-14 w-14 items-center justify-center rounded-full bg-white/85 text-[#084734] shadow-[0_8px_24px_rgba(8,71,52,0.25)]">
+          <span className="flex h-14 w-14 items-center justify-center rounded-full bg-white/85 text-fg-accent">
             <Play className="h-6 w-6 translate-x-0.5 fill-current" />
           </span>
         </span>
@@ -35,7 +35,7 @@ export function SeminarCard({ seminar }: SeminarCardProps) {
 
       <div className="flex flex-1 flex-col p-5">
         {seminar.presenter ? (
-          <span className="text-[12px] font-semibold uppercase tracking-[0.08em] text-[#084734]/70">
+          <span className="text-[12px] font-semibold uppercase tracking-[0.08em] text-fg-accent/70">
             {seminar.presenter}
           </span>
         ) : null}
@@ -45,7 +45,7 @@ export function SeminarCard({ seminar }: SeminarCardProps) {
         <p className="mt-2 line-clamp-2 flex-1 text-[14px] leading-6 text-[#615D59]">
           {seminar.description}
         </p>
-        <span className="mt-4 inline-flex items-center gap-1.5 border-t border-black/[0.06] pt-3 text-[14px] font-semibold text-[#084734]">
+        <span className="mt-4 inline-flex items-center gap-1.5 border-t border-black/[0.06] pt-3 text-[14px] font-semibold text-fg-accent">
           영상 보기
           <ArrowRight className="arrow-nudge h-4 w-4" />
         </span>

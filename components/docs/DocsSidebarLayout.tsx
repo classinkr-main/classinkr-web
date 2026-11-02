@@ -13,15 +13,15 @@ export interface DocsSidebarProps {
 export function DocsSidebar({ groups, title = "가이드", className }: DocsSidebarProps) {
     return (
         <aside className={cn("relative z-10 border-b border-black/[0.08] bg-[#FAFAF8] pb-4", className)}>
-            <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#084734]">
+            <p className="text-xs font-bold uppercase tracking-[0.14em] text-fg-accent">
                 {title}
             </p>
             {/* 기사 페이지에서도 검색으로 바로 진입할 수 있는 입구 */}
             <Link
                 href="/docs#docs-search"
-                className="mt-3 flex items-center gap-2 rounded-xl border border-black/[0.08] bg-white px-3 py-2 text-sm text-[#615D59] transition-colors hover:border-[#084734]/25 hover:text-[#111110]"
+                className="mt-3 flex items-center gap-2 rounded-xl border border-black/[0.08] bg-white px-3 py-2 text-sm text-[#615D59] transition-colors hover:border-fg-accent/25 hover:text-[#111110]"
             >
-                <svg className="h-4 w-4 shrink-0 text-[#084734]" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <svg className="h-4 w-4 shrink-0 text-fg-accent" viewBox="0 0 16 16" fill="none" aria-hidden="true">
                     <circle cx="7" cy="7" r="4.5" stroke="currentColor" strokeWidth="1.5" />
                     <path d="M10.5 10.5L14 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
                 </svg>
@@ -71,7 +71,7 @@ export function DocsTableOfContents({
 
     return (
         <aside className={cn("relative z-10 border-b border-black/[0.08] bg-[#FAFAF8] pb-4", className)}>
-            <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#084734]">
+            <p className="text-xs font-bold uppercase tracking-[0.14em] text-fg-accent">
                 {title}
             </p>
             <nav className="mt-3 space-y-1" aria-label="문서 목차">
@@ -79,7 +79,7 @@ export function DocsTableOfContents({
                     <a
                         key={item.id}
                         href={`#${item.id}`}
-                        className="block origin-left break-words border-l border-transparent py-1.5 pl-3 text-sm leading-5 text-[#615D59] transition-all duration-150 hover:border-[#084734]/25 hover:text-[#111110] active:scale-[0.98]"
+                        className="block origin-left break-words border-l border-transparent py-1.5 pl-3 text-sm leading-5 text-[#615D59] transition-all duration-150 hover:border-fg-accent/25 hover:text-[#111110] active:scale-[0.98]"
                     >
                         {item.title}
                     </a>
@@ -125,7 +125,7 @@ export function DocsSidebarLayout({
                             <summary className="flex cursor-pointer list-none items-center justify-between text-sm font-bold text-[#111110] lg:hidden [&::-webkit-details-marker]:hidden">
                                 다른 가이드 보기
                                 <svg
-                                    className="h-4 w-4 text-[#084734] transition-transform duration-200 group-open:rotate-180"
+                                    className="h-4 w-4 text-fg-accent transition-transform duration-200 group-open:rotate-180"
                                     viewBox="0 0 16 16"
                                     fill="none"
                                     aria-hidden="true"

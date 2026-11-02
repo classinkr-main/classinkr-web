@@ -60,7 +60,7 @@ export function SeminarPlayer({ slug, youtubeId, title, isPlaceholder }: Seminar
           }}
         />
         <span className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
-        <span className="relative flex h-[72px] w-[72px] items-center justify-center rounded-full bg-white/90 text-[#084734] shadow-[0_10px_30px_rgba(0,0,0,0.35)]">
+        <span className="relative flex h-[72px] w-[72px] items-center justify-center rounded-full bg-white/90 text-fg-accent shadow-[0_10px_30px_rgba(0,0,0,0.35)]">
           <Play className="h-7 w-7 translate-x-0.5 fill-current" />
         </span>
         <span className="absolute bottom-4 left-5 right-5 text-left text-[13px] font-semibold text-white/90">

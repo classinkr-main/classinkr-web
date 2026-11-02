@@ -73,7 +73,7 @@ export function DocsArticleFeedback({
       <div className="flex flex-col gap-3">
         <div className="flex flex-col gap-4 md:flex-row md:items-center">
           <div className="flex min-w-0 items-center gap-4">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center text-[#084734]">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center text-fg-accent">
               {isSaved ? (
                 <CheckCircle2 className="h-5 w-5" aria-hidden />
               ) : (
@@ -97,8 +97,8 @@ export function DocsArticleFeedback({
               className={cn(
                 "inline-flex min-h-8 origin-center items-center justify-center gap-1.5 border-b border-transparent px-0 text-sm font-semibold transition-all duration-150 active:scale-[0.97]",
                 rating === "helpful"
-                  ? "border-[#084734] text-[#084734]"
-                  : "text-[#31302E] hover:border-[#084734]/30 hover:text-[#084734]",
+                  ? "border-fg-accent text-fg-accent"
+                  : "text-[#31302E] hover:border-fg-accent/30 hover:text-fg-accent",
                 isSaving ? "cursor-wait opacity-70" : ""
               )}
             >
@@ -148,7 +148,7 @@ export function DocsArticleFeedback({
               type="button"
               onClick={() => void submitFeedback("not_helpful")}
               disabled={isSaving}
-              className="inline-flex min-h-11 origin-center items-center justify-center gap-2 border-b border-[#084734] px-0 text-sm font-semibold text-[#084734] transition-all duration-150 hover:text-[#065c41] active:scale-[0.97] disabled:cursor-wait disabled:opacity-70"
+              className="inline-flex min-h-11 origin-center items-center justify-center gap-2 border-b border-fg-accent px-0 text-sm font-semibold text-fg-accent transition-all duration-150 hover:text-fg-accent-hover active:scale-[0.97] disabled:cursor-wait disabled:opacity-70"
             >
               {isSaving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
               의견 보내기

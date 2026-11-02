@@ -40,19 +40,19 @@ export function DocsCategoryNav({ items, className }: DocsCategoryNavProps) {
               className={cn(
                 "group flex min-w-[132px] flex-col border-b-2 px-0 pb-3 pt-1 text-left transition-colors duration-150 md:min-w-0 md:flex-1",
                 item.isActive
-                  ? "border-[#084734] text-[#084734]"
-                  : "border-transparent text-[#615D59] hover:border-[#084734]/30 hover:text-[#111110]"
+                  ? "border-fg-accent text-fg-accent"
+                  : "border-transparent text-[#615D59] hover:border-fg-accent/30 hover:text-[#111110]"
               )}
             >
               <span
                 className={cn(
                   "text-[11px] font-semibold leading-4",
-                  item.isActive ? "text-[#084734]" : "text-[#615D59] group-hover:text-[#084734]"
+                  item.isActive ? "text-fg-accent" : "text-[#615D59] group-hover:text-fg-accent"
                 )}
               >
                 {item.meta}
               </span>
-              <span className="mt-1 break-keep text-[15px] font-bold leading-5 text-[#111110] group-hover:text-[#084734]">
+              <span className="mt-1 break-keep text-[15px] font-bold leading-5 text-[#111110] group-hover:text-fg-accent">
                 {item.label}
               </span>
             </Link>

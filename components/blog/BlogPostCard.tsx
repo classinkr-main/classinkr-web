@@ -38,13 +38,13 @@ export function BlogPostCard({ post, sizes }: BlogPostCardProps) {
       <p className="mt-4 flex items-center gap-1.5 text-[12px] text-[#615D59]">
         {createElement(getCategoryIcon(post.category), {
           "aria-hidden": true,
-          className: "h-3.5 w-3.5 text-[#A39E98] transition-colors group-hover:text-[#084734]",
+          className: "h-3.5 w-3.5 text-[#A39E98] transition-colors group-hover:text-fg-accent",
         })}
         <span className="font-medium text-[#31302E]">{post.category}</span>
         <span aria-hidden className="text-[#A39E98]">·</span>
         <span>{post.date}</span>
       </p>
-      <h3 className="mt-2 line-clamp-2 text-[17px] font-semibold leading-snug tracking-[-0.015em] text-[#111110] transition-colors group-hover:text-[#084734]">
+      <h3 className="mt-2 line-clamp-2 text-[17px] font-semibold leading-snug tracking-[-0.015em] text-[#111110] transition-colors group-hover:text-fg-accent">
         {post.title}
       </h3>
       <p className="mt-2 line-clamp-2 text-[14px] leading-relaxed text-[#615D59]">{post.excerpt}</p>

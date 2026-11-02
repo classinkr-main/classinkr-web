@@ -174,11 +174,11 @@ export function LeadMagnetGate({ leadMagnet, postSlug }: Props) {
         nextPath={resumeNextPath}
         title="로그인 후 자료 받기"
       />
-      <div className="h-1 w-full bg-[#084734]" />
+      <div className="h-1 w-full bg-fg-accent" />
       <div className="grid gap-7 p-6 md:grid-cols-[minmax(0,1fr)_360px] md:items-center md:gap-10 md:p-10">
         {/* 좌측: 자료 소개 + 체크리스트 미리보기 */}
         <div>
-          <span className="inline-flex w-fit items-center gap-2 text-[12px] font-bold uppercase tracking-[0.16em] text-[#084734]">
+          <span className="inline-flex w-fit items-center gap-2 text-[12px] font-bold uppercase tracking-[0.16em] text-fg-accent">
             <FileText className="h-3.5 w-3.5" />
             {leadMagnet.ctaCopy.eyebrow} · {getLeadMagnetPublicGateLabel(leadMagnet.gate)}
           </span>
@@ -198,12 +198,12 @@ export function LeadMagnetGate({ leadMagnet, postSlug }: Props) {
           <ul className="mt-5 grid gap-2.5">
             {leadMagnet.deliverables.slice(0, 4).map((item) => (
               <li key={item} className="flex items-start gap-2.5 text-[14px] leading-6 text-[#1a1a1a]/75">
-                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[#084734]" />
+                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-fg-accent" />
                 {item}
               </li>
             ))}
           </ul>
-          <p className="mt-5 text-[12px] font-semibold text-[#084734]/70">
+          <p className="mt-5 text-[12px] font-semibold text-fg-accent/70">
             {getLeadMagnetTierLabel(leadMagnet.tier)} 자료 · {getLeadMagnetPublicGateLabel(leadMagnet.gate)}
           </p>
         </div>
@@ -213,7 +213,7 @@ export function LeadMagnetGate({ leadMagnet, postSlug }: Props) {
           {submitted || !usesEmailGate ? (
             <div className="flex flex-col items-center gap-4 py-2 text-center">
               <div className="flex h-12 w-12 items-center justify-center border border-black/[0.08] bg-white">
-                <CheckCircle2 className="h-7 w-7 text-[#084734]" />
+                <CheckCircle2 className="h-7 w-7 text-fg-accent" />
               </div>
               <div className="space-y-1">
                 <p className="text-lg font-bold text-[#111110]">
@@ -229,7 +229,7 @@ export function LeadMagnetGate({ leadMagnet, postSlug }: Props) {
                 type="button"
                 disabled={!leadMagnet.published || downloading}
                 onClick={() => void handleDownload()}
-                className="h-11 w-full rounded-[6px] bg-[#084734] font-semibold text-white hover:bg-[#065c41]"
+                className="h-11 w-full rounded-[6px] bg-fg-accent font-semibold text-fg-on-accent hover:bg-fg-accent-hover"
               >
                 {downloading ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -262,7 +262,7 @@ export function LeadMagnetGate({ leadMagnet, postSlug }: Props) {
               <Button
                 type="submit"
                 disabled={loading}
-                className="h-11 w-full rounded-[6px] bg-[#084734] font-semibold text-white hover:bg-[#065c41]"
+                className="h-11 w-full rounded-[6px] bg-fg-accent font-semibold text-fg-on-accent hover:bg-fg-accent-hover"
               >
                 {loading ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
