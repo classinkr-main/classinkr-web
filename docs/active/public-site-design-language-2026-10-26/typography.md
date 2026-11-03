@@ -474,6 +474,8 @@ export function cn(...inputs: ClassValue[]) { return twMerge(clsx(inputs)) }
 
 ### 3-1. 공개 스코프(C17, system 소유 — 타이포 관점의 요점)
 
+> **2026-11-03 갱신(DESIGN.md V20-A)** — 공개 화면 서체는 Pretendard 단독(§2-1)에서 IBM Plex Sans KR(+ Pretendard 폴백)로 바뀌었고, `text-h1`·`h2`·`h3`·`body-l`·`body`·`numeral`의 크기·행간·자간(§2-2 스케일 표)도 V20-A 값으로 교체됐다. 이 서체와 여섯 토큰 값의 현행 정본은 DESIGN.md §3이다. 이 문서의 해당 값은 이력으로만 읽는다. (옛 표기 '값은 typography §3-1 표'는 머리말 대응표대로 §2-2다.)
+
 - 표지는 클래스 `site` 하나다. 붙는 곳: AppChrome 공개 분기의 `<div className="site contents">`(SSR), 공개 DialogContent 5곳(DemoModal, NewsletterModal, EventSignupModal, PublicLoginDialog, CheckoutRequestForm), 토스트 뷰포트(`!isInternalPath(pathname) && "site"`). `isInternalPath`는 `lib/internal-path.ts`로 옮긴다.
 - display:contents라 박스가 생기지 않고, 상속과 `:where(.site)` 셀렉터는 그대로 작동한다.
 - 타이포 쪽 추가 1건: AppChrome `<main>`(HEAD 122)의 `selection:bg-primary/20 selection:text-primary` 유틸은 utilities 레이어라 base의 `::selection`을 이긴다. 공개 분기에서는 이 두 클래스를 빼고, 비공개 화면에만 남긴다.

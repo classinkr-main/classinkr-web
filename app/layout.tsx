@@ -1,5 +1,9 @@
 import type { Metadata, Viewport } from "next";
 import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
+import "@fontsource/ibm-plex-sans-kr/400.css";
+import "@fontsource/ibm-plex-sans-kr/500.css";
+import "@fontsource/ibm-plex-sans-kr/600.css";
+import "@fontsource/ibm-plex-sans-kr/700.css";
 import "./globals.css";
 import { color } from "@/lib/design-tokens";
 import { ToastProvider } from "@/components/ui/toast";

@@ -226,30 +226,43 @@ REV 매출의 3단 확도(확정/고확도/예정)는 본질 기능이라 서로
 - **Deep Shadow**: 5레이어, 최대 opacity 0.05, 52px blur. 공개 화면에서는 떠 있는 레이어(Dialog·드롭다운·토스트·모바일 메뉴)에만 쓴다 `target`.
 - 공개 화면 지면은 평면이다. 카드·Frame·표·컨트롤·섹션·헤더·하단 플로팅 CTA의 그림자는 0이다(X05) `target`.
 - 예외 하나(2026-10-28): '제품 렌더' 이미지 안에 구운 접지 그림자 1개(α ≤ .18, 띄움 0, 색 후광·림 라이트·반사 바닥 0)는 이미지 내용으로 허용한다. CSS `box-shadow`·`drop-shadow` 규칙은 그대로다.
+- 예외 둘째(V20-A, 2026-11-03): 홈의 실제 제품 창 캡처 2곳에만 `plate-window` 유틸(`app/styles/utilities.css`: 반경 4px + 받침 그림자 `0 8px 24px rgb(17 17 16 / .10)`, 강제 색상 모드에서는 그림자 대신 1px 윤곽선)을 쓴다. 그 밖의 그림자 0 규칙은 그대로다.
 
 ---
 
 ## 3. 타이포그래피 (Notion 기반) [공통]
 
 ### 폰트 패밀리 — `in force`
-- **Pretendard Variable**(라틴 글리프는 Inter 기반) + 시스템 폴백. 실제 스택은 `app/styles/tokens.css`의 `--font-sans`다: `"Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, sans-serif`.
+- **공개 화면(`.site`): IBM Plex Sans KR**(400·500·600·700) + Pretendard 폴백 — `in force (2026-11-03, V20-A)`. 스택은 `"IBM Plex Sans KR", "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, sans-serif`다. 정의는 `app/styles/tokens.css`의 `--font-sans`(`@theme`, `inline` 아님 — `inline`이면 Tailwind가 값을 `html`·`.font-sans`에 리터럴로 박아 어드민 되돌리기가 먹지 않는다)다. 자체 호스팅이고(`@fontsource/ibm-plex-sans-kr` 5.3.0, `app/layout.tsx`에서 굵기별 CSS 4개 import, 조각마다 `unicode-range` + `font-display: swap`) 라틴·숫자도 같은 서체다.
+- **어드민·checkout(`.site` 래퍼 없음): Pretendard Variable 유지**(라틴 글리프는 Inter 기반) + 시스템 폴백. `tokens.css`의 `:root:not(:has(.site))` 블록이 `--font-sans`를 `"Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, sans-serif`로 되돌린다. 밀도 높은 숫자 화면이라 바꾸지 않는다. 공개 화면에서도 Pretendard는 폴백이라 계속 싣는다.
+- 「공개도 Pretendard 하나」라는 옛 결정(§9 V2-A·V18-A)은 공개 화면에서 V20-A로 대체됐다. 세리프(명조)를 쓰지 않는 결정은 그대로다.
 - 사실 정정(2026-10-27): 이전 표기 `Inter, -apple-system, system-ui, Segoe UI, Helvetica, Arial, sans-serif`는 실제와 달랐다. Inter를 따로 싣지 않는다.
 - 로딩은 자체 호스팅이다(V1-A, 2026-11-03 in force): `pretendard` npm 패키지의 dynamic-subset CSS를 `app/layout.tsx`에서 import 한다. jsDelivr 링크는 없다(`next.config.ts` CSP의 jsdelivr 허용은 `public/l/**` 정적 페이지가 떼기 전까지 남는다).
 
 ### 공개 화면 글자 토큰 — `[public] target`
-- 15종: `text-poster`·`text-display`·`text-h1`·`text-h2`·`text-h3`·`text-body-l`·`text-body`·`text-article`·`text-ui`·`text-caption`·`text-note`·`text-label`·`text-folio`·`text-numeral`·`text-quote`. 토큰 하나가 크기·행간·자간·굵기를 함께 든다. 값의 정본은 [typography 스펙 §3-1](docs/active/public-site-design-language-2026-10-26/typography.md)이다.
+- 15종: `text-poster`·`text-display`·`text-h1`·`text-h2`·`text-h3`·`text-body-l`·`text-body`·`text-article`·`text-ui`·`text-caption`·`text-note`·`text-label`·`text-folio`·`text-numeral`·`text-quote`. 토큰 하나가 크기·행간·자간·굵기를 함께 든다. 값의 정본은 [typography 스펙 §2-2 표](docs/active/public-site-design-language-2026-10-26/typography.md)(옛 표기 §3-1)다. 단 `text-h1`·`h2`·`h3`·`body-l`·`body`·`numeral` 여섯의 크기·행간·자간은 V20-A(2026-11-03)로 교체돼 아래 표가 현행 정본이다 `in force`.
 - `text-display`는 Hero H1, `text-poster`는 Manifesto 전용이다.
 - **굵기(V13-A · 2026-10-28)**: poster 700(Manifesto 한 곳), display·h1·h2·h3·numeral 600. 크게 쓰되 가볍게, 크게 소리 내는 곳은 하나다. 14px 이하에서 600은 라벨·폼 라벨·버튼·'예시' 태그에만 쓴다.
-- **크기**: `text-h1`은 36→56px(`clamp(2.25rem, 1.75rem + 2.1vw, 3.5rem)`). 요금 시뮬레이터(`/pricing/simulator`·`/krw`) 결과 금액은 `text-h2`다(`/pricing` 카드에는 금액이 없다).
-- **자간(2026-10-28)** — 모바일은 0이 아니라 줄인 음수다. 아래 표가 정본이고, 표 밖 값과 −0.035em보다 좁은 자간은 쓰지 않는다(이전의 '한글 700 이상 −0.03em 상한'을 대체).
+- **크기(V20-A · 2026-11-03, `in force`)**: 시안 B-T2(테크 SaaS) 스케일이다. 요금 시뮬레이터(`/pricing/simulator`·`/krw`) 결과 금액은 `text-h2`다(`/pricing` 카드에는 금액이 없다).
+
+| 토큰 | 크기 | 범위(px) | 행간 | 굵기 | 자간(데스크톱) |
+|---|---|---|---|---|---|
+| h1 | `clamp(2.25rem, 1.6rem + 2.6vw, 3.75rem)` | 36 → 60 | 1.15 | 600 | −0.02em |
+| h2 | `clamp(1.75rem, 1.5rem + 1vw, 2.375rem)` | 28 → 38 | 1.2 | 600 | −0.02em |
+| h3 | `clamp(1.25rem, 1rem + 1vw, 1.875rem)` | 20 → 30 | 1.25 | 600 | −0.015em |
+| body-l | `clamp(1.0625rem, 1rem + 0.25vw, 1.125rem)` | 17 → 18 | 1.8 | 400 | — |
+| body | `1rem` | 16 | 1.8 | 400 | — |
+| numeral | `clamp(2rem, 1.6rem + 1.6vw, 2.75rem)` | 32 → 44 | 1 | 600 | −0.02em |
+
+- **자간(2026-10-28 · h1~numeral 데스크톱 열은 V20-A 2026-11-03에 교체)** — 모바일은 0이 아니라 줄인 음수다. 아래 표가 정본이고, 표 밖 값과 −0.035em보다 좁은 자간은 쓰지 않는다(이전의 '한글 700 이상 −0.03em 상한'을 대체).
 
 | 토큰 | 데스크톱 | 모바일(`width < 40rem`) |
 |---|---|---|
 | poster | −0.035em | −0.025em |
 | display | −0.035em | −0.022em |
-| h1 | −0.03em | −0.018em |
-| h2 | −0.025em | −0.014em |
-| h3 | −0.01em | −0.006em |
+| h1 | −0.02em | −0.018em |
+| h2 | −0.02em | −0.014em |
+| h3 | −0.015em | −0.006em |
 | numeral | −0.02em | −0.015em |
 
 - 레거시 h1–h4·`.tracking-*` 모바일 `letter-spacing: 0 !important`는 어드민 전용으로 옮겼다(2026-11-03, `tokens.css`의 `body:not(:has(.site))`). 공개 화면은 이 표를 따른다.
@@ -302,14 +315,14 @@ REV 매출의 3단 확도(확정/고확도/예정)는 본질 기능이라 서로
 - Background: `#084734`
 - Text: `#ffffff`
 - Padding: `8px 20px`
-- Radius: `6px`
+- Radius: 어드민·checkout `6px` · 공개 화면 `4px` — 토큰 `--radius-control`(`app/styles/tokens.css`, V20-A 2026-11-03 `in force`). `components/ui/button.tsx`·`input.tsx`가 `rounded-(--radius-control)`로 읽고, 어드민 값은 `:root:not(:has(.site))` 블록이 6px로 되돌린다
 - Hover: `#065c41` — 공개 화면은 `#073D2D` `target`(2026-10-28)
 - Active: `scale(0.97)`
 
 **Secondary** — `[admin] in force` · 공개 화면은 `line` 변형(투명 + 1px `#8A857F`) `target`
 - Background: `rgba(0,0,0,0.05)`
 - Text: `#111110`
-- Radius: `6px`
+- Radius: `--radius-control`(공개 4px · 어드민 6px, 위 Primary 참조)
 - Hover: `rgba(0,0,0,0.08)`
 
 **Ghost**
@@ -339,9 +352,9 @@ REV 매출의 3단 확도(확정/고확도/예정)는 본질 기능이라 서로
 - Shadow: Card Shadow 참조
 - Hover: 섀도 강도 살짝 증가
 
-### 인풋 — `[admin] in force` · 공개 화면은 박스형(V8-A, 1px `#8A857F`, r6, 글자 16px, controls 스펙) `target`
+### 인풋 — `[admin] in force` · 공개 화면은 박스형(V8-A, 1px `#8A857F`, r4(V20-A로 r6에서 내림), 글자 16px, controls 스펙) `target`
 - Border: `1px solid #E5E5E0`
-- Radius: `6px`
+- Radius: `--radius-control`(공개 4px · 어드민 6px)
 - Focus: `2px solid #084734` outline
 
 ---
@@ -437,12 +450,12 @@ z는 토큰으로만 쌓는다(X09). 지금의 리터럴(`z-40`·`z-50`·`z-[60]
 
 ### Border Radius 스케일
 - `4px`: 인풋, 작은 기능성 UI
-- `6px`: 버튼
+- `6px`: 버튼 `[admin] in force` · 공개 화면 컨트롤은 `4px`(`--radius-control`, V20-A 2026-11-03)
 - `8px`: 작은 카드, 인라인 요소 — `[public] retired`
 - `12px`: 표준 카드 — `[public] retired`
 - `16px`: 히어로 카드, 피처 블록 — `[public] retired`
 - `9999px`: 뱃지, 필 태그 — `[public] retired`(비상호작용 pill 0, V9-A). 공개 화면은 필터 칩·상태 점·스위치 썸만(스위치 트랙은 6px)
-- **공개 화면 반경은 셋뿐이다(V14-A · 2026-10-28)**: `0` — 카드·Figure·Frame·표·띠·IconFrame·도해 노드(물건) / `6px` — 버튼·입력·스위치(누르는 것)와 Dialog·드롭다운·토스트·모바일 메뉴(떠 있는 층) / 원형 — 필터 칩·상태 점·스위치 썸(기존 챗봇 런처는 chatbot 파트 합의 전까지). 둥근 모서리는 '누를 수 있음'을 뜻한다. 공유 `card.tsx`의 legacy family는 바이트 그대로 둔다.
+- **공개 화면 반경은 이 종류뿐이다(V14-A · 2026-10-28, 컨트롤 값은 V20-A 2026-11-03에 조정)**: `0` — 카드·Figure·Frame·표·띠·IconFrame·도해 노드(물건) / `4px`(`--radius-control`) — 버튼·입력·스위치(누르는 것) / `6px` — Dialog·드롭다운·토스트·모바일 메뉴(떠 있는 층) / 원형 — 필터 칩·상태 점·스위치 썸(기존 챗봇 런처는 chatbot 파트 합의 전까지). 둥근 모서리는 '누를 수 있음'을 뜻한다. 공유 `card.tsx`의 legacy family는 바이트 그대로 둔다.
 
 ---
 
@@ -488,7 +501,7 @@ z는 토큰으로만 쌓는다(X09). 지금의 리터럴(`z-40`·`z-50`·`z-[60]
 13. 표기는 `lib/format.ts`로 한다(§8).
 14. (public) 카드 hover는 경계 hair→strong(들어갈 때 160ms, 나올 때 320ms)과 화살표 2px뿐이다. 들림·확대·그림자·채움·제목 색 변화는 금지한다.
 15. (public) 그린은 누를 수 있는 것(링크·버튼·포커스·현재 위치)에만 쓴다. 제목 속 그린 0, 비상호작용 그린 표지는 뷰포트당 2개 이하, 그린 채움은 primary 1개(§2).
-16. (public) 둥근 모서리는 누르거나 떠 있는 것에만(r6). 카드·도판·표·띠는 r0, 칩·점은 원형(§5 반경).
+16. (public) 둥근 모서리는 누르거나 떠 있는 것에만(컨트롤 r4 · 떠 있는 층 r6, V20-A). 카드·도판·표·띠는 r0, 칩·점은 원형(§5 반경).
 17. (public) 제목은 600, Manifesto(poster)만 700. 섹션 머리는 왼쪽 레일의 먹 Kicker이고 가운데 정렬은 쓰지 않는다(§3).
 18. (public) 도판은 출처 장부(`data/image-credits.json`)를 거친 것만 싣는다. 흰 화면 캡처는 sunken 매트(20px, ≥64rem 32px) 위에 r0 + hair로, 풀블리드 0, 같은 파일은 페이지당 1회. 출처를 밝힐 수 없는 도판에 라벨을 짐작해 달지 않는다.
 19. (public) 숫자와 후기는 증거로만: 사실 레지스트리 + 각주, 별표 마스킹 금지(서술형 익명 또는 실명), 체크아웃과 요금 시뮬레이터 밖 금액 0, 측정하지 않은 약속 문구(응답 시간 등) 0.
@@ -519,7 +532,7 @@ z는 토큰으로만 쌓는다(X09). 지금의 리터럴(`z-40`·`z-50`·`z-[60]
 | 결정 | 선택 | 날짜 | 근거 | 보드 스크린샷 경로 |
 |---|---|---|---|---|
 | V1 Pretendard 로딩 | A 자체 호스팅 | 2026-10-27 | 기기 간 글꼴 동일성. iPhone 4G LCP가 나빠지면 B(시스템 우선)로 전환(비용 0) | [시안 캔버스](https://claude.ai/artifact/QShWLdYRgZCZTy957gHtyx) |
-| V2 인용 세리프 | A 세리프 없음(Pretendard 500) | 2026-10-27 | 추가 0바이트 | [시안 캔버스](https://claude.ai/artifact/QShWLdYRgZCZTy957gHtyx) |
+| V2 인용 세리프 | A 세리프 없음(Pretendard 500 — 공개 화면 서체는 2026-11-03 V20-A로 IBM Plex Sans KR 500) | 2026-10-27 | 추가 0바이트 | [시안 캔버스](https://claude.ai/artifact/QShWLdYRgZCZTy957gHtyx) |
 | V3 홈 Hero | A 지면 표지(paper, 7/5, 실제 화면 캡처, 영상 없음) | 2026-10-27 | LCP·가독성·모바일 첫 화면 CTA. ~~도판 출처 확인 전에는 현 도판 유지~~ → 2026-10-28 V11-A로 바뀜: 출처를 확인한 캡처 전에는 무도판 표지 | [시안 캔버스](https://claude.ai/artifact/QShWLdYRgZCZTy957gHtyx) |
 | V4 배경 리듬·공감 Act | A 서사 먹 Manifesto 1곳 + Footer, ProblemCost 정성 장부 | 2026-10-27 | 다크가 하나여야 전환점이 선다 | [시안 캔버스](https://claude.ai/artifact/QShWLdYRgZCZTy957gHtyx) |
 | V5 FinalCTA | A sunken 띠 + 이중 괘선 + primary 52 + 텍스트 링크 | 2026-10-27 | 먹 위 채움 버튼 0으로 정리 | [시안 캔버스](https://claude.ai/artifact/QShWLdYRgZCZTy957gHtyx) |
@@ -530,12 +543,13 @@ z는 토큰으로만 쌓는다(X09). 지금의 리터럴(`z-40`·`z-50`·`z-[60]
 | V10 홈 목차 | A 11지면(Hero · LogoBar 띠 · 01 선언 · 02 공감 · 부록 진단표 · Manifesto · 03 흐름 · 04 화면 · 05 기록 · 06 확신 · FinalCTA) | 2026-10-28 | 같은 주장이 다섯 섹션에서 반복된다. 목차가 짧아야 여백과 증거가 무게를 얻는다. 결정 CTA 5곳 유지 + CTA 띠 1, 홈 경유 리드 7일 −10%면 되돌림 | [캔버스 '고급화 V10–V18' · V10](https://claude.ai/artifact/QShWLdYRgZCZTy957gHtyx) |
 | V11 캡처 전 Hero | A 무도판 비대칭 표지(H1 1–9칸, 덱·CTA 8–12칸, LCP = H1) | 2026-10-28 | 출처를 확인할 수 없는 도판은 정직 라벨을 달 수 없다. V3 보충 문장을 대체한다(운영자 재승인 포함) | [캔버스 · V11](https://claude.ai/artifact/QShWLdYRgZCZTy957gHtyx) |
 | V12 섹션 머리 그린 | A 바 없음, 먹 라벨(폴리오 13/500 회색 + 라벨 13/600 먹) | 2026-10-28 | 그린 대시 + 색 라벨은 흔한 템플릿 머리. 그린은 누를 수 있는 것에만 | [캔버스 · V12·V13](https://claude.ai/artifact/QShWLdYRgZCZTy957gHtyx) |
-| V13 제목 굵기 | A 제목 600, Manifesto(poster)만 700, h1 56px | 2026-10-28 | 모든 제목이 700이면 외치는 인상. 크게 쓰되 가볍게. 가변 폰트라 바이트 0 | [캔버스 · V12·V13](https://claude.ai/artifact/QShWLdYRgZCZTy957gHtyx) |
+| V13 제목 굵기 | A 제목 600, Manifesto(poster)만 700, h1 56px(크기는 2026-11-03 V20-A로 60px) | 2026-10-28 | 모든 제목이 700이면 외치는 인상. 크게 쓰되 가볍게. 가변 폰트라 바이트 0 | [캔버스 · V12·V13](https://claude.ai/artifact/QShWLdYRgZCZTy957gHtyx) |
 | V14 모서리 | A 누를 수 있는 것·떠 있는 층만 r6, 물건 r0, 칩·점 원형 | 2026-10-28 | hair + r12 흰 카드는 'AI가 만든 느낌'. 반경이 장식이 아니라 정보가 된다 | [캔버스 · V14·V16](https://claude.ai/artifact/QShWLdYRgZCZTy957gHtyx) |
 | V15 종이와 먹 | A paper `#F9F8F5` · sunken `#F3F2EE` · skeleton `#EFEEE9` · 조작 경계 `#8A857F` · 먹 면 `#1A1917`(글자 `#111110` 유지) | 2026-10-28 | 지면·띠·사진 흰점을 한 종이 온도로. 먹 위 본문 9.14:1. 대안 B(먹 `#2B2926`)는 7.89:1 | [캔버스 · V15](https://claude.ai/artifact/QShWLdYRgZCZTy957gHtyx) |
 | V16 흰 화면 캡처 | A sunken 매트(20px, ≥64rem 32px) + 캡처 r0·hair, 모바일 전폭 | 2026-10-28 | 흰 위 흰 경계(1.06:1)가 사라진다. 그림자·색 없이 '보여 주는 물건'으로 세운다 | [캔버스 · V14·V16](https://claude.ai/artifact/QShWLdYRgZCZTy957gHtyx) |
 | V17 움직임 | A 인쇄된 표지 + 잉크 템포(밑줄 240ms 뒤 900ms, 모먼트 900ms `--ease-fade`, hover 160/320ms, 오버레이 닫힘 160ms) | 2026-10-28 | 정지한 지면에 잉크 한 획이 서명이 된다. 손에는 즉각, 떼면 여운 | [캔버스 · V17](https://claude.ai/artifact/QShWLdYRgZCZTy957gHtyx) |
-| V18 명조 디스플레이 | A 지금은 Pretendard 하나(V2-A 유지) | 2026-10-28 | 문구가 바뀌는 동안 서브셋을 계속 다시 만들어야 한다. 인용 4개·Manifesto 문구 확정 뒤 같은 보드로 재판정 | [캔버스 · V18](https://claude.ai/artifact/QShWLdYRgZCZTy957gHtyx) |
+| V18 명조 디스플레이 | A 지금은 Pretendard 하나(V2-A 유지) — 공개 화면 서체는 2026-11-03 V20-A로 대체(세리프 없음은 유지) | 2026-10-28 | 문구가 바뀌는 동안 서브셋을 계속 다시 만들어야 한다. 인용 4개·Manifesto 문구 확정 뒤 같은 보드로 재판정 | [캔버스 · V18](https://claude.ai/artifact/QShWLdYRgZCZTy957gHtyx) |
 | V19 홈 도판 | A 도판 7장(히어로 전자칠판 사진 1 · 작동 방식 실제 캡처·교실 사진 3 · 사례 사진 3), 히어로는 세로 쌓기(텍스트 → 960 도판) 유지, 섹션 리듬 `compact` 등재 | 2026-11-03 | 작동 방식·사례는 출처를 확인한 실제 화면·교실 사진이라 V11-A의 무도판 조건이 풀린다. 히어로는 '처음에는 전자칠판이 필요하다'는 사용자 결정으로 기존 사진을 유지한다. 코스 화면은 수업 전 카드로. 이름은 블러 | [홈 스펙 v3](docs/superpowers/specs/2026-10-30-home-landing-redesign-design.md) |
+| V20 공개 글꼴·타입 | A IBM Plex Sans KR(400–700) + T2 스케일(h1 60·h2 38·h3 30·본문 18/1.8), 컨트롤 반경 4px, 창 캡처 그림자 1종(plate-window) | 2026-11-03 | 사용자가 시안 B-T2(테크 SaaS)를 골라 공개 사이트 전체 적용을 지시. 어드민은 밀도 높은 숫자 화면이라 Pretendard 유지 | [캔버스 · B-T2](https://claude.ai/artifact/Sqstbv5y41VNEviU2gxX1U) |
 
 - V10–V18의 규칙 개정 전문은 [고급화 기획 §5](docs/active/public-site-premium-elevation-2026-10-28.md)에, 결정 없이 함께 채택한 변경은 같은 문서 §4에 있다. 디자인과 별개인 정직성·개인정보 핫픽스(H)는 같은 문서 §7이다.

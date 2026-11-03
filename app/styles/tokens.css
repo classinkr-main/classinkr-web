@@ -29,12 +29,12 @@
     --line-control: #8F8A84;
     --line-link: rgb(11 122 82 / .75);
 
-    /* ── 자간 원값 — typography 소유 (§2-3) ── */
+    /* ── 자간 원값 — typography 소유 (§2-3). h1~num 데스크톱 값은 V20-A(2026-11-03) ── */
     --trk-poster: -0.03em;
     --trk-display: -0.03em;
-    --trk-h1: -0.025em;
+    --trk-h1: -0.02em;
     --trk-h2: -0.02em;
-    --trk-h3: -0.01em;
+    --trk-h3: -0.015em;
     --trk-num: -0.02em;
     --trk-label: 0.02em;          /* 13px 가독 — 모바일 유지 */
     --trk-abbr: 0.06em;           /* 13px 이하 라벨 안 라틴 대문자 약어(AI·HW)만 */
@@ -52,6 +52,9 @@
     --stroke-pen: 1.5px;
     --stroke-accent: 2px;
 
+    /* ── 컨트롤 반경 — controls 소유. 공개 4px(V20-A, 2026-11-03). 어드민·checkout 은 아래 블록이 6px ── */
+    --radius-control: 4px;
+
     /* ── 레이아웃·레이어 — system 소유 (§4) ── */
     --header-h: 76px;
     --z-subnav: 30;
@@ -65,11 +68,14 @@
   }
 
   /* 공개 강조색(2026-11-02, #0B7A52 · hover #0A6E4A). 어드민·checkout DOM 은 .site 래퍼(AppChrome)가 없어
-     옛 그린을 읽는다 — 공용 components/ui 를 토큰으로 바꿔도 어드민 색은 변하지 않는다. .site 가 있으면(포털 포함) :root 값 */
+     옛 그린을 읽는다 — 공용 components/ui 를 토큰으로 바꿔도 어드민 색은 변하지 않는다. .site 가 있으면(포털 포함) :root 값.
+     컨트롤 반경(6px)과 글꼴(Pretendard)도 같은 이유로 여기서 되돌린다(V20-A, 2026-11-03) */
   :root:not(:has(.site)) {
     --fg-accent: #084734;
     --fg-accent-hover: #065C41;
     --line-link: rgb(8 71 52 / .6);
+    --radius-control: 6px;
+    --font-sans: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   }
 
   @media (width < 40rem) {
@@ -145,6 +151,7 @@
   --color-line-link: var(--line-link);
 
   /* 글자 15종 — typography 소유(§2-2 표). 이름 목록은 lib/utils.ts TEXT_SCALE 과 같다(tests/lib/cn.test.ts).
+     h1·h2·h3·body-l·body·numeral 값은 V20-A(2026-11-03)로 교체됐다 — 현행 정본은 DESIGN.md §3.
      text-ui 에는 --font-weight 를 두지 않는다(탭·내비 500, 버튼 600 은 요소가 정한다). */
   --text-poster: clamp(3rem, 1.5rem + 6vw, 6.5rem);          /* 48 → 104 · Manifesto 전용 */
   --text-poster--line-height: 1.05;
@@ -156,27 +163,27 @@
   --text-display--letter-spacing: var(--trk-display);
   --text-display--font-weight: 600;
 
-  --text-h1: clamp(2.25rem, 1.75rem + 2.1vw, 3.5rem);        /* 36 → 56 */
-  --text-h1--line-height: 1.2;
+  --text-h1: clamp(2.25rem, 1.6rem + 2.6vw, 3.75rem);        /* 36 → 60 */
+  --text-h1--line-height: 1.15;
   --text-h1--letter-spacing: var(--trk-h1);
   --text-h1--font-weight: 600;
 
-  --text-h2: clamp(1.75rem, 1.45rem + 1.2vw, 2.5rem);        /* 28 → 40 */
-  --text-h2--line-height: 1.25;
+  --text-h2: clamp(1.75rem, 1.5rem + 1vw, 2.375rem);         /* 28 → 38 */
+  --text-h2--line-height: 1.2;
   --text-h2--letter-spacing: var(--trk-h2);
   --text-h2--font-weight: 600;
 
-  --text-h3: clamp(1.25rem, 1.15rem + 0.4vw, 1.5rem);        /* 20 → 24 */
-  --text-h3--line-height: 1.4;
+  --text-h3: clamp(1.25rem, 1rem + 1vw, 1.875rem);           /* 20 → 30 */
+  --text-h3--line-height: 1.25;
   --text-h3--letter-spacing: var(--trk-h3);
   --text-h3--font-weight: 600;
 
-  --text-body-l: clamp(1.0625rem, 1rem + 0.25vw, 1.1875rem); /* 17 → 19 */
-  --text-body-l--line-height: 1.75;
+  --text-body-l: clamp(1.0625rem, 1rem + 0.25vw, 1.125rem);  /* 17 → 18 */
+  --text-body-l--line-height: 1.8;
   --text-body-l--font-weight: 400;
 
   --text-body: 1rem;                                         /* 16 */
-  --text-body--line-height: 1.75;
+  --text-body--line-height: 1.8;
   --text-body--font-weight: 400;
 
   --text-article: 1.0625rem;                                 /* 17 */
@@ -203,7 +210,7 @@
   --text-folio--line-height: 1.4;
   --text-folio--font-weight: 500;
 
-  --text-numeral: clamp(2.5rem, 1.9rem + 2.4vw, 4rem);       /* 40 → 64 + tabular-nums */
+  --text-numeral: clamp(2rem, 1.6rem + 1.6vw, 2.75rem);      /* 32 → 44 + tabular-nums */
   --text-numeral--line-height: 1;
   --text-numeral--letter-spacing: var(--trk-num);
   --text-numeral--font-weight: 600;
@@ -235,8 +242,12 @@
 
   --animate-skeleton: skeleton-blink 1.6s ease-in-out infinite;   /* keyframes 는 site-base.css 보증 구간 안(④ 부속, §13-3) */
   /* --animate-fade-in·--animate-dialog-in 은 controls P2 PR 에서 넣는다(§13-2) */
+}
 
-  /* globals.css @theme inline 에서 그대로 옮긴 현행 값(화면 변화 0).
-     typography §2-1 목표 스택(설치형 Pretendard 제외)은 폰트 PR 에서 바꾼다. */
-  --font-sans: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+/* 글꼴 — 공개 = IBM Plex Sans KR(V20-A, 2026-11-03), 어드민·checkout(.site 없음)은 위 :root:not(:has(.site)) 가 Pretendard 로 되돌린다.
+   일부러 inline 이 아니다: inline 이면 Tailwind 가 값을 리터럴로 html(--default-font-family)과 .font-sans 에 박아 넣어
+   어드민 덮어쓰기가 닿지 않는다(AppChrome <main> 이 font-sans 를 직접 단다). 평범한 @theme 라야 둘 다 var(--font-sans) 로 남는다.
+   Plex 400·500·600·700 은 app/layout.tsx 가 @fontsource 로 싣는다. Pretendard 는 폴백이자 어드민 글꼴이라 계속 싣는다 */
+@theme {
+  --font-sans: "IBM Plex Sans KR", "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
 }
