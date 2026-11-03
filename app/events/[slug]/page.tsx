@@ -12,6 +12,7 @@ import {
   listCachedPublicEvents,
   listCachedPublicEventSlugs,
 } from "@/lib/repositories/public-events"
+import { getEventRouteSegment, resolveEventRouteSlug } from "@/lib/event-slug-route"
 import { JsonLd } from "@/components/seo/JsonLd"
 import {
   DEFAULT_OG_IMAGE_PATH,
@@ -25,6 +26,7 @@ import { ResourcesRecommendation } from "@/components/sections/ResourcesRecommen
 import { NEUTRAL_BLUR_DATA_URL } from "@/lib/image-blur"
 import { CalendarPlus } from "lucide-react"
 import {
+  buildPublicEventMetaDescription,
   formatPublicEventDate,
   formatPublicEventSchedule,
   getEffectivePublicEventEndIso,
@@ -38,14 +40,6 @@ interface EventDetailPageProps {
 }
 
 const readPublicEventBySlug = cache((slug: string) => getCachedPublicEventBySlug(slug))
-
-function decodeEventSlugParam(slug: string): string {
-  try {
-    return decodeURIComponent(slug)
-  } catch {
-    return slug
-  }
-}
 
 // ISO → 구글 캘린더 URL용 UTC 포맷 (YYYYMMDDTHHMMSSZ)
 function toCalendarUtc(iso: string): string {
@@ -80,22 +74,24 @@ function buildGoogleCalendarUrl(event: {
 
 export async function generateStaticParams() {
   const slugs = await listCachedPublicEventSlugs()
-  return slugs.map((slug) => ({ slug }))
+  // 한글 슬러그는 proxy 가 rewrite 하는 토큰 경로로 사전 생성한다(원문 경로는 요청이 닿지 않는다).
+  return slugs.map((slug) => ({ slug: getEventRouteSegment(slug) }))
 }
 
 export async function generateMetadata({ params }: EventDetailPageProps): Promise<Metadata> {
   const { slug: rawSlug } = await params
-  const slug = decodeEventSlugParam(rawSlug)
+  const slug = resolveEventRouteSlug(rawSlug)
   const event = await readPublicEventBySlug(slug)
   if (!event) return { title: "행사를 찾을 수 없습니다" }
   const canonical = toAbsoluteUrl(`/events/${event.slug ?? slug}`)
+  const description = buildPublicEventMetaDescription(event)
   return {
     title: event.title,
-    description: event.description ?? undefined,
+    description,
     alternates: { canonical },
     openGraph: {
       title: event.title,
-      description: event.description ?? undefined,
+      description,
       url: canonical,
       // 행사 이미지가 없으면 기본 브랜드 OG 이미지로 폴백한다(공유 카드에 이미지가 아예 빠지지 않게).
       images: [{ url: event.imageUrl || toAbsoluteUrl(DEFAULT_OG_IMAGE_PATH) }],
@@ -105,7 +101,7 @@ export async function generateMetadata({ params }: EventDetailPageProps): Promis
 
 export default async function EventDetailPage({ params }: EventDetailPageProps) {
   const { slug: rawSlug } = await params
-  const slug = decodeEventSlugParam(rawSlug)
+  const slug = resolveEventRouteSlug(rawSlug)
   const event = await readPublicEventBySlug(slug)
 
   if (!event) notFound()
@@ -131,7 +127,7 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
       : []
   const googleCalendarUrl = buildGoogleCalendarUrl(event, toAbsoluteUrl(eventPath))
   const ctaButtonClassName =
-    "mt-8 inline-flex items-center gap-2 rounded-full bg-[#084734] px-6 py-3 text-[14px] font-semibold text-white transition-colors hover:bg-[#065c41]"
+    "mt-8 inline-flex items-center gap-2 rounded-full bg-fg-accent px-6 py-3 text-[14px] font-semibold text-fg-on-accent transition-colors hover:bg-fg-accent-hover"
 
   return (
     <div className="min-h-screen bg-[#FAFAF8] text-[#111110]">
@@ -159,7 +155,7 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
         <div className="mx-auto max-w-[1100px]">
           <Link
             href="/events"
-            className="mb-8 inline-flex items-center gap-2 text-sm text-[#1a1a1a]/45 transition-colors hover:text-[#084734]"
+            className="mb-8 inline-flex items-center gap-2 text-sm text-[#1a1a1a]/45 transition-colors hover:text-fg-accent"
           >
             <ArrowRight className="h-4 w-4 rotate-180" />
             행사·프로모션으로 돌아가기
@@ -172,7 +168,7 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
                   {event.category}
                 </span>
                 {event.tag && (
-                  <span className="inline-flex items-center gap-1 rounded-full border border-[#BDEFD8] bg-[#ECFDF5] px-3 py-1 text-[#084734]">
+                  <span className="inline-flex items-center gap-1 rounded-full border border-[#BDEFD8] bg-fg-accent/8 px-3 py-1 text-fg-accent">
                     <Tag className="h-3 w-3" />
                     {event.tag}
                   </span>
@@ -235,7 +231,7 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
                 <div className="mt-4 flex flex-wrap items-center gap-3 text-[13px] text-[#1a1a1a]/45">
                   <a
                     href={`${eventPath}/calendar.ics`}
-                    className="inline-flex items-center gap-1.5 transition-colors hover:text-[#084734]"
+                    className="inline-flex items-center gap-1.5 transition-colors hover:text-fg-accent"
                   >
                     <CalendarPlus className="h-4 w-4" />
                     캘린더에 추가 (.ics)
@@ -245,7 +241,7 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
                     href={googleCalendarUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="transition-colors hover:text-[#084734]"
+                    className="transition-colors hover:text-fg-accent"
                   >
                     구글 캘린더
                   </a>
@@ -285,7 +281,7 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
           {event.status === "마감" && (
             <div className="mt-8 space-y-6">
               <div className="rounded-[24px] border border-[#e8e8e4] bg-white p-6 shadow-sm md:rounded-[32px] md:p-8">
-                <p className="text-[12px] font-medium uppercase tracking-[0.24em] text-[#084734]/55">
+                <p className="text-[12px] font-medium uppercase tracking-[0.24em] text-fg-accent/55">
                   Next Events
                 </p>
                 <h2 className="mt-2 text-[1.5rem] font-semibold tracking-[-0.03em] text-[#111110]">
@@ -306,12 +302,12 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
                       <Link
                         key={item.id}
                         href={`/events/${item.slug}`}
-                        className="group rounded-2xl border border-[#e8e8e4] bg-white p-5 transition-all hover:-translate-y-0.5 hover:border-[#084734]/25"
+                        className="rounded-2xl border border-[#e8e8e4] bg-white p-5 transition-colors duration-(--motion-fast) ease-soft hover:border-line-strong"
                       >
-                        <span className="inline-flex rounded-full bg-[#f0f7f4] px-2.5 py-1 text-[11px] font-bold text-[#084734]">
+                        <span className="inline-flex rounded-full bg-[#f0f7f4] px-2.5 py-1 text-[11px] font-bold text-fg-accent">
                           {item.status}
                         </span>
-                        <p className="mt-3 line-clamp-2 text-[15px] font-bold text-[#111110] transition-colors group-hover:text-[#084734]">
+                        <p className="mt-3 line-clamp-2 text-[15px] font-bold text-[#111110]">
                           {item.title}
                         </p>
                         <p className="mt-2 text-[12px] text-[#1a1a1a]/40">
@@ -342,7 +338,7 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
                   >
                     <button
                       type="button"
-                      className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-semibold text-[#111110] transition-transform hover:-translate-y-0.5"
+                      className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-semibold text-[#111110]"
                     >
                       {event.ctaLabel}
                       <ArrowRight className="h-4 w-4" />
@@ -353,7 +349,7 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
                     href={ctaHref}
                     ctaId="event_detail_bottom_cta"
                     tracking={{ event_slug: event.slug, event_id: event.id }}
-                    className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-semibold text-[#111110] transition-transform hover:-translate-y-0.5"
+                    className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-semibold text-[#111110]"
                   >
                     {event.ctaLabel}
                     <ArrowRight className="h-4 w-4" />

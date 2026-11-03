@@ -302,7 +302,7 @@ function NumberInput({
           step={step}
           value={value}
           onChange={(event) => onChange(readNumber(event.target.value, min, max))}
-          className="h-12 w-full rounded-lg border border-black/[0.08] bg-white px-3 pr-12 text-[15px] font-semibold text-[#111110] outline-none transition focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15"
+          className="h-12 w-full rounded-lg border border-black/[0.08] bg-white px-3 pr-12 text-[15px] font-semibold text-[#111110] outline-none transition"
         />
         <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[12px] font-semibold text-[#A39E98]">
           {unit}
@@ -327,7 +327,7 @@ function SegmentButton({
       onClick={onClick}
       className={`rounded-lg border px-3 py-2 text-[13px] font-semibold transition ${
         active
-          ? "border-[#084734] bg-[#ECFDF5] text-[#084734]"
+          ? "border-fg-accent bg-fg-accent/8 text-fg-accent"
           : "border-black/[0.08] bg-white text-[#615D59] hover:border-black/[0.16] hover:text-[#111110]"
       }`}
     >
@@ -372,11 +372,11 @@ function SummaryCard({
   return (
     <div
       className={`rounded-lg border bg-white p-4 ${
-        active ? "border-[#084734] shadow-[0_16px_36px_rgba(8,71,52,0.10)]" : "border-black/[0.08]"
+        active ? "border-fg-accent" : "border-black/[0.08]"
       }`}
     >
       <div className="flex items-center gap-2 text-[12px] font-semibold text-[#615D59]">
-        <span className={active ? "text-[#084734]" : "text-[#A39E98]"}>{icon}</span>
+        <span className={active ? "text-fg-accent" : "text-[#A39E98]"}>{icon}</span>
         {label}
       </div>
       <p className="mt-3 text-[24px] font-semibold tracking-tight text-[#111110]">{value}</p>
@@ -523,7 +523,7 @@ export function PricingCalculator({
               시간은 10분 이하 무료, 이후 30분 단위로 청구됩니다.
             </p>
           </div>
-          <div className="rounded-lg border border-[#D1FAE5] bg-[#ECFDF5] p-4 text-[13px] leading-6 text-[#084734]">
+          <div className="rounded-lg border border-fg-accent/14 bg-fg-accent/8 p-4 text-[13px] leading-6 text-fg-accent">
             <div className="flex gap-2">
               <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
               <p>
@@ -552,7 +552,7 @@ export function PricingCalculator({
                     onMouseEnter={() => setIsStudentHelpOpen(true)}
                     onMouseLeave={() => setIsStudentHelpOpen(false)}
                   >
-                    <summary className="flex cursor-pointer list-none items-center gap-2 text-[13px] font-semibold text-[#31302E] outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/20 [&::-webkit-details-marker]:hidden">
+                    <summary className="flex cursor-pointer list-none items-center gap-2 text-[13px] font-semibold text-[#31302E] outline-none [&::-webkit-details-marker]:hidden">
                       온스테이지 학생 수
                       <Info className="h-4 w-4 text-[#A39E98]" aria-hidden="true" />
                     </summary>
@@ -565,7 +565,7 @@ export function PricingCalculator({
                       사용됩니다.
                     </div>
                   </details>
-                  <span className="rounded-lg bg-[#ECFDF5] px-3 py-1.5 text-[18px] font-semibold text-[#084734]">
+                  <span className="rounded-lg bg-fg-accent/8 px-3 py-1.5 text-[18px] font-semibold text-fg-accent">
                     {onStageStudentsNum}명
                   </span>
                 </div>
@@ -575,7 +575,7 @@ export function PricingCalculator({
                   step={1}
                   value={onStageStudents}
                   onValueChange={(value) => setOnStageStudents([Math.min(value[0] ?? 0, 12)])}
-                  className="py-3 [&>span:first-child]:h-2.5 [&>span:first-child]:!bg-[#E5E5E0] [&_[role=slider]]:h-6 [&_[role=slider]]:w-6 [&_[role=slider]]:border-[3px] [&_[role=slider]]:border-[#084734] [&_[role=slider]]:bg-white"
+                  className="py-3 [&>span:first-child]:h-2.5 [&>span:first-child]:!bg-[#E5E5E0] [&_[role=slider]]:h-6 [&_[role=slider]]:w-6 [&_[role=slider]]:border-[3px] [&_[role=slider]]:border-fg-accent [&_[role=slider]]:bg-white"
                 />
                 {onStageStudentsNum > connectedStudents ? (
                   <p className="text-[12px] leading-5 text-[#615D59]">
@@ -616,7 +616,7 @@ export function PricingCalculator({
                   step={1}
                   value={teachers}
                   onValueChange={setTeachers}
-                  className="py-3 [&>span:first-child]:h-2.5 [&>span:first-child]:!bg-[#E5E5E0] [&_[role=slider]]:h-6 [&_[role=slider]]:w-6 [&_[role=slider]]:border-[3px] [&_[role=slider]]:border-[#084734] [&_[role=slider]]:bg-white"
+                  className="py-3 [&>span:first-child]:h-2.5 [&>span:first-child]:!bg-[#E5E5E0] [&_[role=slider]]:h-6 [&_[role=slider]]:w-6 [&_[role=slider]]:border-[3px] [&_[role=slider]]:border-fg-accent [&_[role=slider]]:bg-white"
                 />
               </div>
 
@@ -672,7 +672,7 @@ export function PricingCalculator({
 
             <div className="rounded-lg border border-black/[0.08] bg-[#F6F5F4] p-4">
               <div className="flex items-start gap-3">
-                <TimerReset className="mt-0.5 h-4 w-4 text-[#084734]" aria-hidden="true" />
+                <TimerReset className="mt-0.5 h-4 w-4 text-fg-accent" aria-hidden="true" />
                 <div>
                   <p className="text-[13px] font-semibold text-[#111110]">
                     1회 {formatMinutes(classDurationMinutes)} → 청구 {formatMinutes(pricing.billableMinutesPerClass)}
@@ -711,7 +711,7 @@ export function PricingCalculator({
                     type="checkbox"
                     checked={hasDualCamera}
                     onChange={(event) => setHasDualCamera(event.target.checked)}
-                    className="h-4 w-4 accent-[#084734]"
+                    className="h-4 w-4 accent-fg-accent"
                   />
                   1v1 듀얼 카메라 사용
                 </label>
@@ -791,9 +791,9 @@ export function PricingCalculator({
             <div className="rounded-lg border border-black/[0.08] bg-white p-5">
               <div className="flex items-start gap-3">
                 {pricing.recommendation === "consult" ? (
-                  <AlertCircle className="mt-0.5 h-5 w-5 text-[#084734]" aria-hidden="true" />
+                  <AlertCircle className="mt-0.5 h-5 w-5 text-fg-accent" aria-hidden="true" />
                 ) : (
-                  <CheckCircle2 className="mt-0.5 h-5 w-5 text-[#084734]" aria-hidden="true" />
+                  <CheckCircle2 className="mt-0.5 h-5 w-5 text-fg-accent" aria-hidden="true" />
                 )}
                 <div>
                   <p className="text-[15px] font-semibold text-[#111110]">
@@ -816,7 +816,7 @@ export function PricingCalculator({
 
             <div className="rounded-lg border border-black/[0.08] bg-white p-5">
               <div className="flex items-center gap-2">
-                <Clock3 className="h-4 w-4 text-[#084734]" aria-hidden="true" />
+                <Clock3 className="h-4 w-4 text-fg-accent" aria-hidden="true" />
                 <h3 className="text-[15px] font-semibold text-[#111110]">Business 소모량 상세</h3>
               </div>
               <div className="mt-4">
@@ -871,7 +871,7 @@ export function PricingCalculator({
 
             <div className="rounded-lg border border-black/[0.08] bg-white p-5">
               <div className="flex items-center gap-2">
-                <Video className="h-4 w-4 text-[#084734]" aria-hidden="true" />
+                <Video className="h-4 w-4 text-fg-accent" aria-hidden="true" />
                 <h3 className="text-[15px] font-semibold text-[#111110]">구독형 판정</h3>
               </div>
               <div className="mt-4 grid gap-3 text-[13px] leading-6 text-[#615D59]">
@@ -900,7 +900,7 @@ export function PricingCalculator({
               </div>
             </div>
 
-            <div className="rounded-lg border border-[#D1FAE5] bg-[#ECFDF5] p-4 text-[12px] leading-5 text-[#084734]">
+            <div className="rounded-lg border border-fg-accent/14 bg-fg-accent/8 p-4 text-[12px] leading-5 text-fg-accent">
               <div className="flex gap-2">
                 <Database className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
                 <p>

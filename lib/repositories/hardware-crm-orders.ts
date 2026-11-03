@@ -353,11 +353,18 @@ async function listLegacyQuoteCandidates(input: HardwareCrmOrderCandidateInput):
 
 async function listPortalQuoteCandidates(input: HardwareCrmOrderCandidateInput): Promise<HardwareCrmOrderCandidate[]> {
   const sb = createSupabaseAdminClient()
-  const { data: documents, error: documentsError } = await sb
+  let { data: documents, error: documentsError } = await sb
     .from("quote_documents")
     .select("id,deal_id,quote_number,current_version_id,status,updated_at,created_at")
+    .is("deleted_at", null)
     .order("updated_at", { ascending: false })
     .limit(40)
+  if (documentsError?.code === "42703") {
+    console.warn("[hardware-crm-orders] 견적 삭제함 마이그레이션 미적용")
+    const fallback = await sb.from("quote_documents").select("id,deal_id,quote_number,current_version_id,status,updated_at,created_at").order("updated_at", { ascending: false }).limit(40)
+    documents = fallback.data
+    documentsError = fallback.error
+  }
   if (documentsError) throw documentsError
 
   const documentRows = (documents ?? []) as Array<{

@@ -8,11 +8,11 @@ import {
 } from "@/lib/seo"
 
 export const metadata = createPublicMetadata({
-  title: "Classin Board 전자칠판",
+  title: "학원 전자칠판 Classin Board — 판서·AI 카메라 녹화",
   description:
     "Classin Board는 판서, 4K AI 카메라 자동 추적, 수업 영상 업로드, 판서 PDF 공유, Classin 소프트웨어 연동을 제공하는 교육용 전자칠판입니다.",
   path: "/product/hw",
-  keywords: ["Classin Board", "교육용 전자칠판", "AI 카메라", "스마트 교실", "판서 PDF"],
+  keywords: ["Classin Board", "클래스인 전자칠판", "학원 전자칠판", "교육용 전자칠판", "AI 카메라", "수업 녹화", "판서 PDF"],
 })
 
 export default function HardwareLayout({ children }: { children: React.ReactNode }) {

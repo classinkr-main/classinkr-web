@@ -47,7 +47,7 @@ export function PremiumDownloadButton({ slug, label = "프리미엄 파일 내�
         type="button"
         onClick={handleDownload}
         disabled={loading}
-        className="inline-flex h-11 items-center justify-center gap-2 rounded-[6px] bg-[#084734] px-5 text-sm font-semibold text-white transition-colors hover:bg-[#065c41] disabled:opacity-60"
+        className="inline-flex h-11 items-center justify-center gap-2 rounded-[6px] bg-fg-accent px-5 text-sm font-semibold text-fg-on-accent transition-colors hover:bg-fg-accent-hover disabled:opacity-60"
       >
         {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
         {label}

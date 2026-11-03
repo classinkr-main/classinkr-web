@@ -73,7 +73,7 @@ export function DocsArticleFeedback({
       <div className="flex flex-col gap-3">
         <div className="flex flex-col gap-4 md:flex-row md:items-center">
           <div className="flex min-w-0 items-center gap-4">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center text-[#084734]">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center text-fg-accent">
               {isSaved ? (
                 <CheckCircle2 className="h-5 w-5" aria-hidden />
               ) : (
@@ -95,10 +95,10 @@ export function DocsArticleFeedback({
               onClick={() => void submitFeedback("helpful", "")}
               disabled={isSaving}
               className={cn(
-                "inline-flex min-h-8 origin-center items-center justify-center gap-1.5 border-b border-transparent px-0 text-sm font-semibold transition-all duration-150 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]",
+                "inline-flex min-h-8 origin-center items-center justify-center gap-1.5 border-b border-transparent px-0 text-sm font-semibold transition-all duration-150 active:scale-[0.97]",
                 rating === "helpful"
-                  ? "border-[#084734] text-[#084734]"
-                  : "text-[#31302E] hover:border-[#084734]/30 hover:text-[#084734]",
+                  ? "border-fg-accent text-fg-accent"
+                  : "text-[#31302E] hover:border-fg-accent/30 hover:text-fg-accent",
                 isSaving ? "cursor-wait opacity-70" : ""
               )}
             >
@@ -114,7 +114,7 @@ export function DocsArticleFeedback({
               onClick={() => setRating("not_helpful")}
               disabled={isSaving}
               className={cn(
-                "inline-flex min-h-8 origin-center items-center justify-center gap-1.5 border-b border-transparent px-0 text-sm font-semibold transition-all duration-150 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]",
+                "inline-flex min-h-8 origin-center items-center justify-center gap-1.5 border-b border-transparent px-0 text-sm font-semibold transition-all duration-150 active:scale-[0.97]",
                 rating === "not_helpful"
                   ? "border-[#B85C33] text-[#B85C33]"
                   : "text-[#31302E] hover:border-[#B85C33]/30 hover:text-[#B85C33]",
@@ -139,7 +139,7 @@ export function DocsArticleFeedback({
             onChange={(event) => setComment(event.target.value)}
             maxLength={500}
             rows={3}
-            className="mt-2 w-full resize-none border-b border-black/[0.08] bg-transparent px-0 py-3 text-sm leading-6 text-[#111110] outline-none transition-colors placeholder:text-[#A39E98] focus:border-[#084734]/40"
+            className="mt-2 w-full resize-none border-b border-black/[0.08] bg-transparent px-0 py-3 text-sm leading-6 text-[#111110] outline-none transition-colors placeholder:text-[#A39E98]"
             placeholder="빠진 단계, 실제 화면과 다른 부분, 찾기 어려웠던 내용을 적어 주세요"
           />
           <div className="mt-3 flex items-center justify-between gap-3">
@@ -148,7 +148,7 @@ export function DocsArticleFeedback({
               type="button"
               onClick={() => void submitFeedback("not_helpful")}
               disabled={isSaving}
-              className="inline-flex min-h-11 origin-center items-center justify-center gap-2 border-b border-[#084734] px-0 text-sm font-semibold text-[#084734] transition-all duration-150 hover:text-[#065c41] active:scale-[0.97] disabled:cursor-wait disabled:opacity-70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]"
+              className="inline-flex min-h-11 origin-center items-center justify-center gap-2 border-b border-fg-accent px-0 text-sm font-semibold text-fg-accent transition-all duration-150 hover:text-fg-accent-hover active:scale-[0.97] disabled:cursor-wait disabled:opacity-70"
             >
               {isSaving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
               의견 보내기

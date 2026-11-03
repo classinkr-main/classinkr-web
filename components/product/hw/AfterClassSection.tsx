@@ -26,9 +26,7 @@ const cards = [
         headline: "결석한 날 밤도,\n완전한 수업입니다",
         detail:
             "영상과 판서 노트가 함께 저장됩니다. 집에서 영상을 틀면 교사의 설명이, 옆에 PDF를 열면 판서가 — 교실과 똑같은 복습 환경이 펼쳐집니다.",
-        accent: "#084734",
-        bg: "#ECFDF5",
-        borderColor: "rgba(8,71,52,0.12)",
+        surface: "bg-fg-accent/8 border-fg-accent/12",
     },
     {
         icon: Users,
@@ -36,9 +34,7 @@ const cards = [
         headline: "\"오늘 뭘 배웠어?\"\n이제 직접 확인합니다",
         detail:
             "수업 종료 후 판서 PDF가 자동으로 공유됩니다. 학부모는 자녀가 어떤 내용을 배웠는지, 어디까지 진행됐는지 그대로 볼 수 있습니다.",
-        accent: "#084734",
-        bg: "#FFFFFF",
-        borderColor: "rgba(0,0,0,0.08)",
+        surface: "bg-surface-sheet border-line-hair",
     },
     {
         icon: Star,
@@ -46,9 +42,7 @@ const cards = [
         headline: "내 수업을 돌아보면\n다음 수업이 달라집니다",
         detail:
             "AI 카메라가 녹화한 수업 영상을 교사 스스로 복기합니다. 어느 순간 학생 집중이 흩어졌는지, 판서 흐름이 자연스러웠는지 — 성찰이 성장이 됩니다.",
-        accent: "#084734",
-        bg: "#F6F5F4",
-        borderColor: "rgba(0,0,0,0.08)",
+        surface: "bg-surface-sunken border-line-hair",
     },
 ]
 
@@ -58,7 +52,7 @@ export default function AfterClassSection() {
             <div className="container mx-auto px-4 lg:px-8">
                 {/* Header */}
                 <motion.div {...fadeUp} className="text-center mb-16">
-                    <span className="inline-flex items-center px-3 py-1 rounded-full bg-[#ECFDF5] border border-[#084734]/15 text-xs font-semibold tracking-widest text-[#084734] uppercase mb-5">
+                    <span className="inline-flex items-center px-3 py-1 rounded-full bg-fg-accent/8 border border-fg-accent/15 text-xs font-semibold tracking-widest text-fg-accent uppercase mb-5">
                         After Class
                     </span>
                     <h2
@@ -67,7 +61,7 @@ export default function AfterClassSection() {
                     >
                         수업이 끝나도,
                         <br />
-                        <span className="text-[#084734]">배움은 계속됩니다</span>
+                        <span className="text-fg-accent">배움은 계속됩니다</span>
                     </h2>
                     <p className="text-base sm:text-lg text-[#615D59] max-w-xl mx-auto leading-relaxed">
                         Classin Board가 만든 결과물은 교실 밖에서도 살아 숨쉽니다.
@@ -84,10 +78,8 @@ export default function AfterClassSection() {
                             <motion.div
                                 key={card.perspective}
                                 {...stagger(i)}
-                                className="rounded-2xl p-8 flex flex-col gap-5"
+                                className={`rounded-2xl p-8 flex flex-col gap-5 border ${card.surface}`}
                                 style={{
-                                    background: card.bg,
-                                    border: `1px solid ${card.borderColor}`,
                                     boxShadow:
                                         "rgba(0,0,0,0.04) 0px 4px 18px, rgba(0,0,0,0.027) 0px 2px 7.8px, rgba(0,0,0,0.02) 0px 0.8px 2.9px",
                                 }}
@@ -95,14 +87,12 @@ export default function AfterClassSection() {
                                 {/* Icon + perspective badge */}
                                 <div className="flex items-center gap-3">
                                     <div
-                                        className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
-                                        style={{ background: "#ECFDF5" }}
+                                        className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 bg-fg-accent/8"
                                     >
-                                        <Icon className="w-5 h-5" style={{ color: card.accent }} />
+                                        <Icon className="w-5 h-5 text-fg-accent" />
                                     </div>
                                     <span
-                                        className="text-xs font-semibold tracking-wider uppercase"
-                                        style={{ color: card.accent }}
+                                        className="text-xs font-semibold tracking-wider uppercase text-fg-accent"
                                     >
                                         {card.perspective}
                                     </span>
@@ -130,7 +120,7 @@ export default function AfterClassSection() {
                     <TrackedLink
                         href="/product/ai-report"
                         ctaId="hw_ai_report_deep_dive"
-                        className="inline-flex items-center gap-2 rounded-md border border-[#084734]/25 px-5 py-3 text-sm font-semibold text-[#084734] hover:bg-[#ECFDF5] transition-colors"
+                        className="inline-flex items-center gap-2 rounded-md border border-fg-accent/25 px-5 py-3 text-sm font-semibold text-fg-accent hover:bg-fg-accent/8 transition-colors"
                     >
                         녹화 · AI 리포트 자세히 보기
                         <ArrowRight className="w-4 h-4" />

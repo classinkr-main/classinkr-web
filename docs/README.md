@@ -112,7 +112,9 @@ Admin 관련 작업은 [Admin 지침 맵](./active/admin-guidance-map.md)에서 
 - [active/public-site-audit-motion-plan-2026-10-26.md](./active/public-site-audit-motion-plan-2026-10-26.md)
   - **공개 사이트 전수 점검 + 모션·디자인 디벨롭 기획.** 홈·셸·제품·콘텐츠·전환·랜딩·쿠키 동의의 P0~P2(운영 재현 표기), 운영자 결정 D1~D8, 모션 토큰·Act별 안무·Phase 0~3, 실행 웨이브 W0~W4
 - [active/public-site-design-language-2026-10-26.md](./active/public-site-design-language-2026-10-26.md)
-  - **공개 사이트 디자인 언어 「편집 지면 · OS판」(승인 대기).** 폰트·색·표면·카드 모션·아이콘·이미지·컨트롤·레이아웃의 방향과 운영자 결정 V1~V9, 정본 규칙 C01~C28·X01~X16, 구현 단계 P0~P5와 되돌림 기준. 상세 스펙 7종은 같은 이름 폴더
+  - **공개 사이트 디자인 언어 「편집 지면 · OS판」(V1~V9·V10~V18 A 확정, P0·P1 커밋).** 폰트·색·표면·카드 모션·아이콘·이미지·컨트롤·레이아웃의 방향과 운영자 결정 V1~V9, 정본 규칙 C01~C28·X01~X16, 구현 단계 P0~P5와 되돌림 기준. 상세 스펙 7종은 같은 이름 폴더
+- [active/public-site-premium-elevation-2026-10-28.md](./active/public-site-premium-elevation-2026-10-28.md)
+  - **디자인 언어 위의 고급화 기획(V10~V18 A 확정 2026-10-28).** 홈 11지면 목차·왼쪽 레일 조판·그린과 반경의 배급·종이와 먹 값·도판 출처 장부·잉크 한 획 모션, 규칙 개정안과 P2~P5 편입, 디자인과 별개인 정직성·개인정보 핫픽스(H)
 - [active/seo-aeo-improvement-worklist-2026-10-28.md](./active/seo-aeo-improvement-worklist-2026-10-28.md)
   - **SEO·AEO 개선 워크리스트.** 외부 예비 진단(2026-10-27)을 코드와 대조해 수치·Zoom 비교·요금 조건·홈 메타·허브 링크·답변형 FAQ·canonical/lastmod·GA4 계측을 항목별로 "반영 / 코드 가능 / 사람 확인 / 콘솔"로 분류. 결정 대기 D1~D13, 운영자 콘솔 체크리스트, 90일 실행 순서
 - [active/seo-analytics-console-runbook-2026-10-28.md](./active/seo-analytics-console-runbook-2026-10-28.md)

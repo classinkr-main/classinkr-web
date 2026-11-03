@@ -48,16 +48,34 @@ export function Header() {
         setIsMobileMenuOpen(false)
     }, [pathname])
 
+    // 넓힘 닫기: md 이상에선 토글이 숨으므로 열린 메뉴(inert·플로팅 숨김)를 닫는다
+    React.useEffect(() => {
+        const mq = window.matchMedia("(min-width: 48rem)")
+        const close = () => { if (mq.matches) setIsMobileMenuOpen(false) }
+        mq.addEventListener("change", close)
+        return () => mq.removeEventListener("change", close)
+    }, [])
+
+    // 모바일 메뉴가 열리면 본문·푸터를 inert로 (숨김은 site-base CSS)
+    React.useEffect(() => {
+        const targets = [
+            document.getElementById("main"),
+            ...document.querySelectorAll<HTMLElement>("[data-inert-with-menu]"),
+        ].filter((el): el is HTMLElement => el !== null)
+        targets.forEach((el) => { el.inert = isMobileMenuOpen })
+        return () => targets.forEach((el) => { el.inert = false })
+    }, [isMobileMenuOpen])
+
     return (
         <header
             className={cn(
-                "fixed top-0 left-0 right-0 z-50 transition-all duration-300",
+                "fixed inset-x-0 top-0 z-(--z-header) flex h-(--header-h) items-center transition-[background-color,border-color,box-shadow] duration-300",
                 isScrolled
-                    ? "bg-white/95 border-b border-black/[0.08] shadow-[0_8px_24px_rgba(0,0,0,0.06)] py-4"
-                    : "bg-white/80 py-6"
+                    ? "bg-white/95 border-b border-black/[0.08] shadow-[0_8px_24px_rgba(0,0,0,0.06)]"
+                    : "bg-white/80"
             )}
         >
-            <div className="container relative z-10 mx-auto flex items-center justify-between gap-4">
+            <div className="container relative z-10 mx-auto flex h-full items-center justify-between gap-4">
                 <Link href="/" prefetch={false} className="flex items-center gap-2">
                     <Image
                         src="/images/logo.png"
@@ -101,8 +119,8 @@ export function Header() {
                                     className={cn(
                                         "flex min-h-11 items-center justify-between rounded-[8px] px-3 text-[15px] font-semibold transition-colors md:min-h-0 md:rounded-none md:px-0",
                                         isActive
-                                            ? "bg-[#ECFDF5] text-[#084734] md:bg-transparent"
-                                            : "text-[#111110] hover:bg-[#F6F5F4] hover:text-[#084734] md:hover:bg-transparent"
+                                            ? "bg-fg-accent/8 text-fg-accent md:bg-transparent"
+                                            : "text-[#111110] hover:bg-[#F6F5F4] hover:text-fg-accent md:hover:bg-transparent"
                                     )}
                                 >
                                     {item.name}
@@ -120,7 +138,7 @@ export function Header() {
                                                     className={cn(
                                                         "inline-flex min-h-11 items-center justify-center gap-2 whitespace-nowrap rounded-[8px] border px-3 text-sm font-semibold transition-colors",
                                                         isTabActive
-                                                            ? "border-[#084734]/20 bg-[#ECFDF5] text-[#084734]"
+                                                            ? "border-fg-accent/20 bg-fg-accent/8 text-fg-accent"
                                                             : "border-black/[0.08] bg-white text-[#615D59] hover:bg-[#F6F5F4]"
                                                     )}
                                                 >
@@ -131,7 +149,7 @@ export function Header() {
                                         })}
                                     </div>
                                 ) : null}
-                                <div className="pointer-events-none absolute top-full left-1/2 z-40 hidden w-48 -translate-x-1/2 pt-3 opacity-0 transition-all duration-200 group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:translate-y-0 group-focus-within:opacity-100 md:block">
+                                <div className="pointer-events-none absolute top-full left-1/2 z-10 hidden w-48 -translate-x-1/2 pt-3 opacity-0 transition-all duration-200 group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:translate-y-0 group-focus-within:opacity-100 md:block">
                                     <div className="translate-y-1 rounded-2xl border border-black/[0.08] bg-white p-1.5 shadow-[0_12px_28px_rgba(0,0,0,0.08)] transition-transform duration-200 group-hover:translate-y-0 group-focus-within:translate-y-0">
                                         <div className="flex flex-col gap-1">
                                             {productTabs.map((tab) => {
@@ -144,7 +162,7 @@ export function Header() {
                                                         className={cn(
                                                             "inline-flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-semibold transition-all whitespace-nowrap",
                                                             isTabActive
-                                                                ? "bg-[#ECFDF5] text-[#084734] shadow-sm"
+                                                                ? "bg-fg-accent/8 text-fg-accent shadow-sm"
                                                                 : "text-[#615D59] hover:text-[#111110] hover:bg-[#F6F5F4]"
                                                         )}
                                                     >
@@ -166,8 +184,8 @@ export function Header() {
                                 className={cn(
                                     "flex min-h-11 w-full items-center rounded-[8px] px-3 text-[15px] font-semibold transition-colors md:min-h-0 md:w-auto md:rounded-none md:px-0",
                                     isActive
-                                        ? "bg-[#ECFDF5] text-[#084734] md:bg-transparent"
-                                        : "text-[#111110] hover:bg-[#F6F5F4] hover:text-[#084734] md:hover:bg-transparent"
+                                        ? "bg-fg-accent/8 text-fg-accent md:bg-transparent"
+                                        : "text-[#111110] hover:bg-[#F6F5F4] hover:text-fg-accent md:hover:bg-transparent"
                                 )}
                             >
                                 {item.name}
@@ -183,7 +201,7 @@ export function Header() {
                                 prefetch={false}
                                 ctaId="gnb_mobile_showroom"
                                 onClick={() => setIsMobileMenuOpen(false)}
-                                className="flex min-h-11 w-full items-center justify-center rounded-[8px] border border-[#084734]/30 bg-[#ECFDF5] px-4 text-[15px] font-semibold text-[#084734] transition-colors hover:bg-[#D1FAE5]"
+                                className="flex min-h-11 w-full items-center justify-center rounded-[8px] border border-fg-accent/30 bg-fg-accent/8 px-4 text-[15px] font-semibold text-fg-accent transition-colors hover:bg-fg-accent/14"
                             >
                                 쇼룸 예약
                             </TrackedLink>
@@ -201,7 +219,7 @@ export function Header() {
                                 prefetch={false}
                                 ctaId="gnb_mobile_contact"
                                 onClick={() => setIsMobileMenuOpen(false)}
-                                className="inline-flex min-h-11 w-full items-center justify-center rounded-[8px] bg-[#084734] px-4 text-[15px] font-semibold text-white shadow-sm transition-colors hover:bg-[#065c41]"
+                                className="inline-flex min-h-11 w-full items-center justify-center rounded-[8px] bg-fg-accent px-4 text-[15px] font-semibold text-fg-on-accent shadow-sm transition-colors hover:bg-fg-accent-hover"
                             >
                                 도입 문의
                             </TrackedLink>
@@ -217,7 +235,7 @@ export function Header() {
                         href="/showroom"
                         prefetch={false}
                         ctaId="gnb_showroom"
-                        className="hidden font-semibold text-[15px] text-[#084734] transition-colors hover:text-[#065c41] lg:flex"
+                        className="hidden font-semibold text-[15px] text-fg-accent transition-colors hover:text-fg-accent-hover lg:flex"
                     >
                         쇼룸 예약
                     </TrackedLink>
@@ -225,7 +243,7 @@ export function Header() {
                         href="/download"
                         prefetch={false}
                         ctaId="gnb_download"
-                        className="hidden font-semibold text-[15px] text-[#615D59] transition-colors hover:text-[#084734] md:flex"
+                        className="hidden font-semibold text-[15px] text-[#615D59] transition-colors hover:text-fg-accent md:flex"
                     >
                         다운로드
                     </TrackedLink>
@@ -233,7 +251,7 @@ export function Header() {
                         href="/contact"
                         prefetch={false}
                         ctaId="gnb_contact"
-                        className="inline-flex items-center justify-center whitespace-nowrap rounded-[6px] bg-[#084734] px-5 py-2 text-[15px] font-semibold text-white shadow-sm transition-all hover:bg-[#065c41] active:scale-[0.97]"
+                        className="inline-flex items-center justify-center whitespace-nowrap rounded-[6px] bg-fg-accent px-5 py-2 text-[15px] font-semibold text-fg-on-accent shadow-sm transition-all hover:bg-fg-accent-hover active:scale-[0.97]"
                     >
                         도입 문의
                     </TrackedLink>

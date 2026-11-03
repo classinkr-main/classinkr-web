@@ -204,9 +204,19 @@ export const SCHEMA_CONTRACT_MIGRATIONS = [
   "supabase/migrations/20261023_branch_rev_sheet_writes.sql",
   // GA4 리드 품질 신호(2026-11-02) — 제출 시 GA client_id·세션·광고 동의 + qualify/close 발송 선점 시각.
   "supabase/migrations/20261102_leads_ga_quality_signals.sql",
+  "supabase/migrations/20261102074146_quote_soft_delete.sql",
 ] as const
 
 export const SCHEMA_PROBES: SchemaProbe[] = [
+  {
+    kind: "table",
+    table: "quote_documents",
+    label: "견적 삭제함",
+    columns: ["id", "deleted_at"],
+    migration: "supabase/migrations/20261102074146_quote_soft_delete.sql",
+    severity: "blocker",
+    impact: "견적 목록과 삭제·복구 기능에 삭제 표시 컬럼이 필요합니다.",
+  },
   {
     kind: "table",
     table: "email_campaigns",

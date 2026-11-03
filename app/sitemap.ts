@@ -3,6 +3,7 @@ import type { MetadataRoute } from "next"
 import { resolveBlogContentModifiedAt } from "@/lib/blog-types"
 import { getDocCategoryPath, getDocPath, type DocArticle } from "@/lib/docs"
 import { getDocsContent, listListedDocsFromContent } from "@/lib/docs-content"
+import { getDocSitemapImages } from "@/lib/docs-structured-data"
 import { getPublishedPostsForStaticSitemap } from "@/lib/repositories/blog"
 import { listCachedPublicEvents } from "@/lib/repositories/public-events"
 import { getPublishedSeminars } from "@/lib/seminars/catalog"
@@ -13,27 +14,29 @@ const staticRoutes: Array<{
   changeFrequency: MetadataRoute.Sitemap[number]["changeFrequency"]
   priority: number
   // 근거가 되는 날짜가 없는 경로는 생략한다(임의 날짜를 만들어 넣지 않는다).
+  // 값은 그 페이지 파일의 마지막 내용 변경 커밋 날짜다(2026-11-03 git 기준 갱신). 페이지 문구를 고치면 같이 고친다.
   lastModified?: string
 }> = [
-  { path: "/", changeFrequency: "weekly", priority: 1, lastModified: "2026-05-20" },
+  { path: "/", changeFrequency: "weekly", priority: 1, lastModified: "2026-10-28" },
   { path: "/docs", changeFrequency: "weekly", priority: 1, lastModified: "2026-05-20" },
-  { path: "/product", changeFrequency: "weekly", priority: 0.9, lastModified: "2026-05-20" },
-  { path: "/product/sw", changeFrequency: "weekly", priority: 0.9, lastModified: "2026-05-20" },
-  { path: "/product/hw", changeFrequency: "weekly", priority: 0.9, lastModified: "2026-05-20" },
-  { path: "/product/ai-report", changeFrequency: "monthly", priority: 0.8, lastModified: "2026-08-28" },
-  { path: "/pricing", changeFrequency: "monthly", priority: 0.8, lastModified: "2026-06-10" },
-  { path: "/contact", changeFrequency: "monthly", priority: 0.8, lastModified: "2026-04-01" },
-  { path: "/showroom", changeFrequency: "monthly", priority: 0.8, lastModified: "2026-08-29" },
-  { path: "/privacy", changeFrequency: "yearly", priority: 0.5, lastModified: "2026-04-01" },
-  { path: "/terms", changeFrequency: "yearly", priority: 0.5, lastModified: "2026-04-01" },
-  { path: "/data-deletion", changeFrequency: "yearly", priority: 0.5, lastModified: "2026-04-01" },
+  { path: "/docs/first-week", changeFrequency: "monthly", priority: 0.7, lastModified: "2026-10-29" },
+  { path: "/product", changeFrequency: "weekly", priority: 0.9, lastModified: "2026-06-14" },
+  { path: "/product/sw", changeFrequency: "weekly", priority: 0.9, lastModified: "2026-11-03" },
+  { path: "/product/hw", changeFrequency: "weekly", priority: 0.9, lastModified: "2026-11-03" },
+  { path: "/product/ai-report", changeFrequency: "monthly", priority: 0.8, lastModified: "2026-09-10" },
+  { path: "/pricing", changeFrequency: "monthly", priority: 0.8, lastModified: "2026-11-03" },
+  { path: "/contact", changeFrequency: "monthly", priority: 0.8, lastModified: "2026-10-28" },
+  { path: "/showroom", changeFrequency: "monthly", priority: 0.8, lastModified: "2026-09-22" },
+  { path: "/privacy", changeFrequency: "yearly", priority: 0.5, lastModified: "2026-06-14" },
+  { path: "/terms", changeFrequency: "yearly", priority: 0.5, lastModified: "2026-06-14" },
+  { path: "/data-deletion", changeFrequency: "yearly", priority: 0.5, lastModified: "2026-06-16" },
   { path: "/blog", changeFrequency: "daily", priority: 0.8, lastModified: "2026-04-01" },
   { path: "/events", changeFrequency: "weekly", priority: 0.7, lastModified: "2026-04-01" },
   { path: "/resources", changeFrequency: "monthly", priority: 0.7 },
   { path: "/download", changeFrequency: "weekly", priority: 0.8 },
-  { path: "/updates", changeFrequency: "weekly", priority: 0.7, lastModified: "2026-04-01" },
-  { path: "/faq", changeFrequency: "monthly", priority: 0.7, lastModified: "2026-05-20" },
-  { path: "/about", changeFrequency: "monthly", priority: 0.5, lastModified: "2026-04-01" },
+  { path: "/updates", changeFrequency: "weekly", priority: 0.7, lastModified: "2026-10-27" },
+  { path: "/faq", changeFrequency: "monthly", priority: 0.7, lastModified: "2026-11-03" },
+  { path: "/about", changeFrequency: "monthly", priority: 0.5, lastModified: "2026-09-10" },
 ]
 
 // 배포 때만 만들어지면 스크립트로 공개한 글이 다음 배포까지 빠진다(2026-10-26: 공개 42편 중 19편만 노출).
@@ -152,22 +155,32 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     return dedupeByUrl([...staticEntries, ...blogEntries, ...eventEntries, ...seminarEntries])
   }
 
-  const docsCategoryEntries: MetadataRoute.Sitemap = docsContent.categories.map((category) => ({
-    url: toAbsoluteUrl(getDocCategoryPath(category.id)),
-    lastModified:
-      latestDate(
-        listedDocs.filter((doc) => doc.category === category.id).map((doc) => doc.updatedAt)
-      ) ?? undefined,
-    changeFrequency: "monthly",
-    priority: 0.75,
-  }))
+  // 공개 문서가 없는 주제 허브는 빈 페이지라 싣지 않는다(허브 쪽도 noindex — app/docs/[category]/page.tsx).
+  const categoriesWithDocs = new Set(listedDocs.map((doc) => doc.category))
+  const docsCategoryEntries: MetadataRoute.Sitemap = docsContent.categories
+    .filter((category) => categoriesWithDocs.has(category.id))
+    .map((category) => ({
+      url: toAbsoluteUrl(getDocCategoryPath(category.id)),
+      lastModified:
+        latestDate(
+          listedDocs.filter((doc) => doc.category === category.id).map((doc) => doc.updatedAt)
+        ) ?? undefined,
+      changeFrequency: "monthly",
+      priority: 0.75,
+    }))
 
-  const docsArticleEntries: MetadataRoute.Sitemap = listedDocs.map((doc) => ({
-    url: resolveDocSitemapUrl(doc),
-    lastModified: new Date(doc.updatedAt),
-    changeFrequency: "monthly",
-    priority: doc.featured ? 0.8 : 0.65,
-  }))
+  // 이미지 사이트맵: 공개·색인 문서의 화면 사진(문서당 최대 5장). 정식 주소가 다른 문서를 가리키는 문서는
+  // getDocSitemapImages 가 빈 배열을 돌려준다(그 사진은 정식 주소 페이지에 없을 수 있다).
+  const docsArticleEntries: MetadataRoute.Sitemap = listedDocs.map((doc) => {
+    const images = getDocSitemapImages(doc)
+    return {
+      url: resolveDocSitemapUrl(doc),
+      lastModified: new Date(doc.updatedAt),
+      changeFrequency: "monthly",
+      priority: doc.featured ? 0.8 : 0.65,
+      ...(images.length > 0 ? { images } : {}),
+    }
+  })
 
   return dedupeByUrl([
     ...staticEntries,

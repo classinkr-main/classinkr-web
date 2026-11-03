@@ -233,7 +233,7 @@ const WAVEFORM_HEIGHTS = [
 
 function Eyebrow({ children }: { children: React.ReactNode }) {
     return (
-        <span className="inline-flex items-center px-3 py-1 rounded-full bg-[#ECFDF5] border border-[#084734]/15 text-xs font-semibold tracking-widest text-[#084734] uppercase">
+        <span className="inline-flex items-center px-3 py-1 rounded-full bg-fg-accent/8 border border-fg-accent/15 text-xs font-semibold tracking-widest text-fg-accent uppercase">
             {children}
         </span>
     )
@@ -242,7 +242,7 @@ function Eyebrow({ children }: { children: React.ReactNode }) {
 /** 반복되던 민트 채움 대신 헤어라인 아웃라인 — 넓은 면은 뉴트럴로 두는 원칙 */
 function OutlineIcon({ children }: { children: React.ReactNode }) {
     return (
-        <div className="w-12 h-12 rounded-xl border border-black/[0.08] bg-white text-[#084734] flex items-center justify-center shrink-0">
+        <div className="w-12 h-12 rounded-xl border border-black/[0.08] bg-white text-fg-accent flex items-center justify-center shrink-0">
             {children}
         </div>
     )
@@ -253,7 +253,7 @@ function ContactCta({ ctaId, children }: { ctaId: string; children: React.ReactN
         <TrackedLink
             href="/contact#contact-form"
             ctaId={ctaId}
-            className="inline-flex items-center justify-center gap-2 rounded-md bg-[#084734] px-7 py-3.5 text-base font-semibold text-white hover:bg-[#065c41] transition-colors"
+            className="inline-flex items-center justify-center gap-2 rounded-md bg-fg-accent px-7 py-3.5 text-base font-semibold text-fg-on-accent hover:bg-fg-accent-hover transition-colors"
         >
             {children}
             <ArrowRight className="w-4 h-4" />
@@ -273,7 +273,7 @@ function HeroSection() {
                     <h1 className="mt-7 text-4xl sm:text-5xl md:text-6xl font-bold text-[#111110] leading-[1.15]">
                         수업이 끝나면,
                         <br />
-                        그 수업이 어땠는지 <span className="text-[#084734]">아무도 모릅니다</span>
+                        그 수업이 어땠는지 <span className="text-fg-accent">아무도 모릅니다</span>
                     </h1>
                     <p className="mt-7 text-base sm:text-lg text-[#615D59] leading-relaxed max-w-2xl mx-auto">
                         이제는 다릅니다. 온라인 수업도, 대면 교실 수업도 자동으로 녹화되고,
@@ -331,14 +331,14 @@ function HeroSection() {
 ================================================================ */
 function PipelineSection() {
     return (
-        <section id="pipeline" className="py-28 md:py-36 bg-[#F6F5F4] scroll-mt-20">
+        <section id="pipeline" className="py-28 md:py-36 bg-[#F6F5F4]">
             <div className="container mx-auto px-4 lg:px-8">
                 <motion.div {...fadeUp} className="max-w-2xl mx-auto text-center mb-20 md:mb-24">
                     <Eyebrow>전체 흐름</Eyebrow>
                     <h2 className="mt-6 text-3xl sm:text-4xl md:text-5xl font-bold text-[#111110] leading-tight">
                         수업 한 번이,
                         <br />
-                        <span className="text-[#084734]">리포트 한 장이 되기까지</span>
+                        <span className="text-fg-accent">리포트 한 장이 되기까지</span>
                     </h2>
                     <p className="mt-6 text-base sm:text-lg text-[#615D59] leading-relaxed">
                         원장님이 해야 할 일은 없습니다. 네 단계 모두 수업과 동시에 진행됩니다.
@@ -354,7 +354,7 @@ function PipelineSection() {
                             )}
                             <div className="flex flex-col items-center lg:items-start">
                                 <div className="relative">
-                                    <div className="w-[60px] h-[60px] rounded-2xl bg-white border border-black/[0.08] flex items-center justify-center text-[#084734]">
+                                    <div className="w-[60px] h-[60px] rounded-2xl bg-white border border-black/[0.08] flex items-center justify-center text-fg-accent">
                                         <step.Icon className="w-8 h-8" />
                                     </div>
                                 </div>
@@ -379,14 +379,14 @@ function RecordingSection() {
     const prefersReduced = useReducedMotion()
 
     return (
-        <section id="auto-recording" className="py-28 md:py-36 bg-white scroll-mt-20">
+        <section id="auto-recording" className="py-28 md:py-36 bg-white">
             <div className="container mx-auto px-4 lg:px-8">
                 <motion.div {...fadeUp} className="max-w-2xl mx-auto text-center mb-20">
                     <Eyebrow>Step 1 — 자동 녹화</Eyebrow>
                     <h2 className="mt-6 text-3xl sm:text-4xl md:text-5xl font-bold text-[#111110] leading-tight">
                         누르지 않아도,
                         <br />
-                        <span className="text-[#084734]">녹화되고 있습니다</span>
+                        <span className="text-fg-accent">녹화되고 있습니다</span>
                     </h2>
                     <p className="mt-6 text-base sm:text-lg text-[#615D59] leading-relaxed">
                         녹화는 사람이 챙기는 순간 구멍이 납니다. Classin은 수업 자체가
@@ -414,10 +414,10 @@ function RecordingSection() {
                             </div>
                             <div className="p-8 sm:p-9">
                                 <div className="flex items-center gap-3 mb-6">
-                                    <div className="w-10 h-10 rounded-xl bg-[#ECFDF5] flex items-center justify-center shrink-0">
-                                        <path.icon className="w-5 h-5 text-[#084734]" />
+                                    <div className="w-10 h-10 rounded-xl bg-fg-accent/8 flex items-center justify-center shrink-0">
+                                        <path.icon className="w-5 h-5 text-fg-accent" />
                                     </div>
-                                    <span className="text-xs font-semibold tracking-wider uppercase text-[#084734]">
+                                    <span className="text-xs font-semibold tracking-wider uppercase text-fg-accent">
                                         {path.badge}
                                     </span>
                                 </div>
@@ -428,7 +428,7 @@ function RecordingSection() {
                                 <ul className="space-y-2.5 pt-6 border-t border-black/[0.06]">
                                     {path.points.map((point) => (
                                         <li key={point} className="flex items-start gap-2.5 text-sm text-[#31302E]">
-                                            <CheckCircle2 className="w-4 h-4 text-[#084734] shrink-0 mt-0.5" />
+                                            <CheckCircle2 className="w-4 h-4 text-fg-accent shrink-0 mt-0.5" />
                                             {point}
                                         </li>
                                     ))}
@@ -510,7 +510,7 @@ function RecordingSection() {
                                 {...stagger(2)}
                                 className="absolute -bottom-5 -left-2 sm:-left-6 flex items-center gap-2 rounded-xl bg-white border border-black/[0.06] shadow-xl px-4 py-3"
                             >
-                                <CheckCircle2 className="w-4 h-4 text-[#084734]" />
+                                <CheckCircle2 className="w-4 h-4 text-fg-accent" />
                                 <span className="text-xs font-semibold text-[#31302E]">클라우드 저장 완료</span>
                             </motion.div>
                         </motion.div>
@@ -525,7 +525,7 @@ function RecordingSection() {
                                 key={item.label}
                                 className="flex-1 flex items-center justify-center gap-2.5 rounded-xl bg-[#FAFAF8] border border-black/[0.08] px-5 py-4"
                             >
-                                <item.icon className="w-4 h-4 text-[#084734] shrink-0" />
+                                <item.icon className="w-4 h-4 text-fg-accent shrink-0" />
                                 <span className="text-sm font-semibold text-[#31302E] whitespace-nowrap">{item.label}</span>
                             </div>
                         ))}
@@ -555,7 +555,7 @@ function ReportSection() {
                             <h2 className="mt-6 text-3xl sm:text-4xl md:text-5xl font-bold text-[#111110] leading-tight">
                                 60분 수업이,
                                 <br />
-                                <span className="text-[#084734]">읽을 수 있는 리포트가 됩니다</span>
+                                <span className="text-fg-accent">읽을 수 있는 리포트가 됩니다</span>
                             </h2>
                             <p className="mt-6 text-base sm:text-lg text-[#615D59] leading-relaxed mb-12">
                                 녹화가 끝나면 음성인식이 수업 내용을 텍스트로 옮기고, AI가 핵심만
@@ -583,10 +583,10 @@ function ReportSection() {
                             <div className="rounded-[12px] bg-white border border-black/[0.08] shadow-[0_4px_24px_rgba(0,0,0,0.06)] p-5 sm:p-6">
                                 <div className="flex items-center justify-between gap-3 mb-1">
                                     <div className="flex items-center gap-2">
-                                        <span className="w-2 h-2 rounded-full bg-[#084734]" />
+                                        <span className="w-2 h-2 rounded-full bg-fg-accent" />
                                         <span className="text-sm font-bold text-[#111110]">AI 수업 리포트</span>
                                     </div>
-                                    <span className="rounded-full bg-[#F6F5F4] px-2.5 py-1 text-[10px] font-semibold text-[#A39E98] tracking-wider uppercase">
+                                    <span className="rounded-sm border border-dashed border-line-control bg-surface-sheet px-2 py-0.5 text-note font-medium text-fg-muted">
                                         예시 화면
                                     </span>
                                 </div>
@@ -600,31 +600,31 @@ function ReportSection() {
                                                 animate={prefersReduced ? undefined : { scaleY: [1, 1.5, 0.7, 1] }}
                                                 transition={{ repeat: Infinity, duration: 1.3, delay: i * 0.045 }}
                                                 style={{ height }}
-                                                className="w-[3px] rounded-full bg-[#084734]/50 origin-bottom"
+                                                className="w-[3px] rounded-full bg-fg-accent/50 origin-bottom"
                                             />
                                         ))}
                                     </div>
                                     <div className="mt-3 flex items-center gap-1.5 text-[11px] font-medium text-[#615D59]">
-                                        <Mic className="w-3 h-3 text-[#084734]" />
+                                        <Mic className="w-3 h-3 text-fg-accent" />
                                         음성인식으로 수업 전체를 텍스트로 변환
                                     </div>
                                 </div>
 
                                 <div className="space-y-3">
                                     <motion.div {...stagger(0)} className="rounded-xl border border-black/[0.06] p-4">
-                                        <div className="text-[11px] font-bold text-[#084734] tracking-wider uppercase mb-1.5">수업 요약</div>
+                                        <div className="text-[11px] font-bold text-fg-accent tracking-wider uppercase mb-1.5">수업 요약</div>
                                         <p className="text-[13px] text-[#31302E] leading-relaxed">
                                             이차함수의 그래프 개형과 꼭짓점 공식을 다뤘습니다. 후반 20분은
                                             기출 3문항을 함께 풀며 표준형 변환 과정을 반복 연습했습니다.
                                         </p>
                                     </motion.div>
                                     <motion.div {...stagger(1)} className="rounded-xl border border-black/[0.06] p-4">
-                                        <div className="text-[11px] font-bold text-[#084734] tracking-wider uppercase mb-2">오늘 다룬 개념</div>
+                                        <div className="text-[11px] font-bold text-fg-accent tracking-wider uppercase mb-2">오늘 다룬 개념</div>
                                         <div className="flex flex-wrap gap-1.5">
                                             {["이차함수 표준형", "꼭짓점 공식", "판별식"].map((concept) => (
                                                 <span
                                                     key={concept}
-                                                    className="rounded-full bg-[#ECFDF5] px-2.5 py-1 text-xs font-semibold text-[#084734]"
+                                                    className="rounded-full bg-fg-accent/8 px-2.5 py-1 text-xs font-semibold text-fg-accent"
                                                 >
                                                     {concept}
                                                 </span>
@@ -632,13 +632,13 @@ function ReportSection() {
                                         </div>
                                     </motion.div>
                                     <motion.div {...stagger(2)} className="rounded-xl border border-black/[0.06] p-4">
-                                        <div className="text-[11px] font-bold text-[#084734] tracking-wider uppercase mb-1.5">진도 · 다음 수업</div>
+                                        <div className="text-[11px] font-bold text-fg-accent tracking-wider uppercase mb-1.5">진도 · 다음 수업</div>
                                         <p className="text-[13px] text-[#31302E] leading-relaxed">
                                             교재 84–91p 완료 · 다음 수업은 92p 연습문제부터 시작
                                         </p>
                                     </motion.div>
                                     <motion.div {...stagger(3)} className="rounded-xl border border-black/[0.06] p-4">
-                                        <div className="text-[11px] font-bold text-[#084734] tracking-wider uppercase mb-1.5">과제 안내</div>
+                                        <div className="text-[11px] font-bold text-fg-accent tracking-wider uppercase mb-1.5">과제 안내</div>
                                         <p className="text-[13px] text-[#31302E] leading-relaxed">
                                             유형 문제집 5단원 12문항, 다음 수업 전까지
                                         </p>
@@ -659,14 +659,14 @@ function ReportSection() {
 ================================================================ */
 function BenefitsSection() {
     return (
-        <section className="py-28 md:py-40 bg-[#ECFDF5]">
+        <section className="py-28 md:py-40 bg-fg-accent/8">
             <div className="container mx-auto px-4 lg:px-8">
                 <motion.div {...fadeUp} className="max-w-2xl mx-auto text-center mb-24 md:mb-28">
                     <Eyebrow>우리 학원에 무엇이 남는가</Eyebrow>
                     <h2 className="mt-6 text-3xl sm:text-4xl md:text-5xl font-bold text-[#111110] leading-tight">
                         기능이 아니라,
                         <br />
-                        <span className="text-[#084734]">학원이 얻는 것</span>
+                        <span className="text-fg-accent">학원이 얻는 것</span>
                     </h2>
                     <p className="mt-6 text-base sm:text-lg text-[#615D59] leading-relaxed">
                         녹화와 리포트가 학원 운영에서 실제로 무엇을 바꾸는지, 원장님의 손익으로 정리했습니다.
@@ -695,16 +695,16 @@ function BenefitsSection() {
                                 </div>
                             </div>
                             <div className="flex-1 min-w-0">
-                                <span className="block text-4xl font-bold text-[#084734]/25 tabular-nums leading-none mb-5">
+                                <span className="block text-4xl font-bold text-fg-accent/25 tabular-nums leading-none mb-5">
                                     {benefit.numeral}
                                 </span>
                                 <h3 className="text-2xl md:text-3xl font-bold text-[#111110] leading-snug mb-5">
                                     {benefit.title}
                                 </h3>
                                 <p className="text-base text-[#615D59] leading-[1.85] mb-8">{benefit.body}</p>
-                                <ul className="space-y-3 pt-7 border-t border-[#084734]/12">
+                                <ul className="space-y-3 pt-7 border-t border-fg-accent/12">
                                     {benefit.gains.map((gain) => (
-                                        <li key={gain} className="flex items-start gap-3 text-[15px] font-medium text-[#084734]">
+                                        <li key={gain} className="flex items-start gap-3 text-[15px] font-medium text-fg-accent">
                                             <ArrowRight className="w-4 h-4 shrink-0 mt-1" />
                                             {gain}
                                         </li>
@@ -731,7 +731,7 @@ function ScenarioSection() {
                     <h2 className="mt-6 text-3xl sm:text-4xl md:text-5xl font-bold text-[#111110] leading-tight">
                         원장실에서,
                         <br />
-                        <span className="text-[#084734]">학원의 모든 수업이 보입니다</span>
+                        <span className="text-fg-accent">학원의 모든 수업이 보입니다</span>
                     </h2>
                 </motion.div>
 
@@ -744,8 +744,8 @@ function ScenarioSection() {
                         >
                             {/* 카드에서는 아이콘 컨테이너 없이 아이콘만 — 반복을 피한 세 번째 처리 */}
                             <div className="flex items-center gap-2.5">
-                                <card.icon className="w-[18px] h-[18px] text-[#084734]" />
-                                <span className="text-xs font-semibold tracking-wider uppercase text-[#084734]">
+                                <card.icon className="w-[18px] h-[18px] text-fg-accent" />
+                                <span className="text-xs font-semibold tracking-wider uppercase text-fg-accent">
                                     {card.badge}
                                 </span>
                             </div>
@@ -763,7 +763,7 @@ function ScenarioSection() {
                                     <span className="text-xs text-[#A39E98] leading-relaxed">{card.before}</span>
                                 </div>
                                 <div className="flex items-start gap-3">
-                                    <span className="text-[10px] font-bold tracking-wider uppercase text-[#084734] shrink-0 w-12 pt-0.5">
+                                    <span className="text-[10px] font-bold tracking-wider uppercase text-fg-accent shrink-0 w-12 pt-0.5">
                                         Classin
                                     </span>
                                     <span className="text-xs text-[#31302E] font-medium leading-relaxed">{card.after}</span>
@@ -789,7 +789,7 @@ function QaSection() {
                     <h2 className="mt-6 text-3xl sm:text-4xl md:text-5xl font-bold text-[#111110] leading-tight">
                         도입 전에,
                         <br />
-                        <span className="text-[#084734]">가장 많이 받는 질문들</span>
+                        <span className="text-fg-accent">가장 많이 받는 질문들</span>
                     </h2>
                     <p className="mt-6 text-base sm:text-lg text-[#615D59] leading-relaxed">
                         상담에서 실제로 반복되는 질문을 그대로 옮겼습니다.
@@ -804,7 +804,7 @@ function QaSection() {
                             className="py-9 md:py-10 border-t border-black/[0.08] last:border-b"
                         >
                             <div className="flex gap-5 md:gap-7">
-                                <span className="text-sm font-bold text-[#084734] tabular-nums shrink-0 pt-1">
+                                <span className="text-sm font-bold text-fg-accent tabular-nums shrink-0 pt-1">
                                     Q{i + 1}
                                 </span>
                                 <div className="flex-1 min-w-0">
@@ -837,7 +837,7 @@ function ClosingSection() {
                     <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold text-[#111110] leading-tight">
                         녹화는 쌓이고,
                         <br />
-                        <span className="text-[#084734]">리포트는 학원의 자산이 됩니다</span>
+                        <span className="text-fg-accent">리포트는 학원의 자산이 됩니다</span>
                     </h2>
                     <p className="mt-7 text-base sm:text-lg text-[#615D59] leading-relaxed">
                         강사가 바뀌어도 수업 기록은 학원에 남습니다. 좋은 수업이 개인기가 아니라
@@ -871,7 +871,7 @@ function ClosingSection() {
                         <TrackedLink
                             href="/product/sw"
                             ctaId="ai_report_to_sw"
-                            className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#615D59] hover:text-[#084734] transition-colors"
+                            className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#615D59] hover:text-fg-accent transition-colors"
                         >
                             Classin 소프트웨어 전체 보기
                             <ArrowRight className="w-3.5 h-3.5" />
@@ -879,7 +879,7 @@ function ClosingSection() {
                         <TrackedLink
                             href="/product/hw"
                             ctaId="ai_report_to_hw"
-                            className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#615D59] hover:text-[#084734] transition-colors"
+                            className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#615D59] hover:text-fg-accent transition-colors"
                         >
                             Classin Board 전자칠판 보기
                             <ArrowRight className="w-3.5 h-3.5" />
@@ -893,7 +893,7 @@ function ClosingSection() {
 
 export default function AiReportPage() {
     return (
-        <main className="bg-[#FAFAF8]">
+        <div className="bg-[#FAFAF8]">
             <HeroSection />
             <PipelineSection />
             <RecordingSection />
@@ -902,6 +902,6 @@ export default function AiReportPage() {
             <ScenarioSection />
             <QaSection />
             <ClosingSection />
-        </main>
+        </div>
     )
 }

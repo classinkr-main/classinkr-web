@@ -3,7 +3,7 @@ import * as React from "react"
 import { cn } from "@/lib/utils"
 
 export const marketingFieldClassName =
-  "h-12 rounded-[18px] border-[#D8DDD6] bg-white px-4 text-[15px] text-[#111110] placeholder:text-[#8A948D] shadow-[0_1px_2px_rgba(8,15,12,0.04)] focus-visible:border-[#084734] focus-visible:ring-4 focus-visible:ring-[#084734]/10"
+  "h-12 rounded-[18px] border-[#D8DDD6] bg-white px-4 text-[15px] text-[#111110] placeholder:text-[#8A948D] shadow-[0_1px_2px_rgba(8,15,12,0.04)] focus-visible:border-fg-accent focus-visible:ring-4 focus-visible:ring-fg-accent/10"
 
 export const marketingSurfaceClassName =
   "rounded-[28px] border border-[#E4E8E2] bg-white shadow-[0_18px_50px_rgba(15,23,42,0.06)]"
@@ -75,7 +75,7 @@ export function FormCheckbox({
     >
       <input
         type="checkbox"
-        className="mt-0.5 h-4 w-4 rounded border-[#BCC6BE] text-[#084734] focus:ring-[#084734]"
+        className="mt-0.5 h-4 w-4 rounded border-[#BCC6BE] text-fg-accent focus:ring-fg-accent"
         {...props}
       />
       <span className="space-y-1">

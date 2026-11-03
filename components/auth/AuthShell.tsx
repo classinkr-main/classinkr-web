@@ -2,7 +2,7 @@ import Image from "next/image"
 
 /** 인증 화면 공용 입력 필드 클래스 — 4개 화면(로그인/가입/비번찾기/재설정)에서 동일하게 쓴다. */
 export const AUTH_INPUT_CLASS =
-  "h-12 w-full rounded-[6px] border border-black/[0.12] bg-white px-3.5 text-[14px] text-[#111110] outline-none transition-colors placeholder:text-[#A39E98] focus:border-[#084734] focus:ring-1 focus:ring-[#084734]/20 disabled:opacity-60"
+  "h-12 w-full rounded-[6px] border border-black/[0.12] bg-white px-3.5 text-[14px] text-[#111110] transition-colors placeholder:text-[#A39E98] disabled:opacity-60"
 
 interface AuthShellProps {
   title: string

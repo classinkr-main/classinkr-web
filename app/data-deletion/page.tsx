@@ -51,7 +51,7 @@ export default function DataDeletionPage() {
             href="https://www.classin.com/agreement/?type=privacy"
             target="_blank"
             rel="noreferrer"
-            className="font-semibold text-[#084734] underline underline-offset-4"
+            className="font-semibold text-fg-accent underline underline-offset-4"
           >
             ClassIn 개인정보처리방침(글로벌)
           </a>
@@ -83,7 +83,7 @@ export default function DataDeletionPage() {
           items={[
             <span key="email">
               수신 주소:{" "}
-              <a href="mailto:classinkr@classin.com" className="font-semibold text-[#084734] underline underline-offset-4">
+              <a href="mailto:classinkr@classin.com" className="font-semibold text-fg-accent underline underline-offset-4">
                 classinkr@classin.com
               </a>
             </span>,
@@ -120,7 +120,7 @@ export default function DataDeletionPage() {
       <LegalSection title="7. 개인정보처리방침">
         <p>
           Classin의 개인정보 처리 기준, 보관 기간, 제3자 도구 사용 내역은{" "}
-          <Link href="/privacy" className="font-semibold text-[#084734] underline underline-offset-4">
+          <Link href="/privacy" className="font-semibold text-fg-accent underline underline-offset-4">
             개인정보처리방침
           </Link>
           에서 확인할 수 있습니다. ClassIn 소프트웨어 자체의 개인정보 처리는 EEO의{" "}
@@ -128,7 +128,7 @@ export default function DataDeletionPage() {
             href="https://www.classin.com/agreement/?type=privacy"
             target="_blank"
             rel="noreferrer"
-            className="font-semibold text-[#084734] underline underline-offset-4"
+            className="font-semibold text-fg-accent underline underline-offset-4"
           >
             ClassIn 개인정보처리방침(글로벌)
           </a>

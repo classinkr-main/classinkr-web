@@ -6,7 +6,7 @@
     "dev": "next dev --port 3888",
     "prebuild": "npm run check:vercel-crons && npm run check:design-tokens",
     "build": "next build",
-    "postbuild": "npm run check:public-content",
+    "postbuild": "npm run check:public-content && node scripts/check-design-tokens.mjs --budget",
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit --incremental false",
@@ -33,6 +33,7 @@
     "rev:row-ids": "npx tsx scripts/assign-rev-row-ids.ts"
   },
   "dependencies": {
+    "@fontsource/ibm-plex-sans-kr": "5.3.0",
     "@google/generative-ai": "^0.24.1",
     "@next/third-parties": "^16.2.4",
     "@radix-ui/react-accordion": "^1.2.12",
@@ -60,6 +61,7 @@
     "lucide-react": "^0.562.0",
     "next": "^16.2.4",
     "papaparse": "^5.5.3",
+    "pretendard": "1.3.9",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "recharts": "^3.7.0",

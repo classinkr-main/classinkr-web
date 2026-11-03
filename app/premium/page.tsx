@@ -27,11 +27,11 @@ export default async function PremiumHubPage() {
     <div className="min-h-screen bg-[#FAFAF8] text-[#111110]">
       <section className="px-4 pb-20 pt-28 sm:px-6 md:pt-36">
         <div className="mx-auto max-w-[1120px]">
-          <div className="border border-black/[0.08] bg-[#ECFDF5] p-6 md:p-10">
-            <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-white text-[#084734]">
+          <div className="border border-black/[0.08] bg-fg-accent/8 p-6 md:p-10">
+            <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-white text-fg-accent">
               <LockKeyhole className="h-5 w-5" aria-hidden="true" />
             </div>
-            <p className="mt-5 text-[12px] font-bold uppercase tracking-[0.18em] text-[#084734]/70">
+            <p className="mt-5 text-[12px] font-bold uppercase tracking-[0.18em] text-fg-accent/70">
               Premium
             </p>
             <h1 className="mt-2 text-[1.85rem] font-bold leading-[1.12] tracking-[-0.03em] text-[#111110] md:text-[2.4rem]">
@@ -52,7 +52,7 @@ export default async function PremiumHubPage() {
             {items.length === 0 ? (
               <p className="border border-black/[0.08] bg-white p-6 text-sm leading-7 text-[#615D59]">
                 아직 공개된 프리미엄 콘텐츠가 없습니다. 준비되는 대로 이곳에서 안내해 드립니다.
-                지금 바로 필요한 자료는 <Link href="/resources?tier=advanced" className="font-semibold text-[#084734] underline">심화 자료실</Link>에서 확인하실 수 있습니다.
+                지금 바로 필요한 자료는 <Link href="/resources?tier=advanced" className="font-semibold text-fg-accent underline">심화 자료실</Link>에서 확인하실 수 있습니다.
               </p>
             ) : (
               <div className="grid gap-3">
@@ -64,20 +64,20 @@ export default async function PremiumHubPage() {
                       key={item.slug}
                       href={`/premium/${item.slug}`}
                       prefetch={false}
-                      className="group flex items-start gap-4 border border-black/[0.08] bg-white p-5 transition-colors hover:border-[#084734]/25"
+                      className="group flex items-start gap-4 border border-black/[0.08] bg-white p-5 transition-colors hover:border-fg-accent/25"
                     >
-                      <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-[#ECFDF5] text-[#084734]">
+                      <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-fg-accent/8 text-fg-accent">
                         <Icon className="h-4 w-4" aria-hidden="true" />
                       </span>
                       <span className="min-w-0 flex-1">
-                        <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] font-semibold text-[#084734]/70">
+                        <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] font-semibold text-fg-accent/70">
                           <span>{meta.label}</span>
                           <span className="text-[#A39E98]">·</span>
                           <span className="inline-flex items-center gap-1 text-[#A39E98]">
                             <LockKeyhole className="h-3 w-3" /> 로그인 필요
                           </span>
                         </span>
-                        <span className="mt-1 block text-[16px] font-bold text-[#111110] group-hover:text-[#084734]">
+                        <span className="mt-1 block text-[16px] font-bold text-[#111110] group-hover:text-fg-accent">
                           {item.title}
                         </span>
                         {item.summary ? (
@@ -86,7 +86,7 @@ export default async function PremiumHubPage() {
                           </span>
                         ) : null}
                       </span>
-                      <ArrowRight className="mt-1 h-4 w-4 shrink-0 text-[#084734] opacity-0 transition-opacity group-hover:opacity-100" />
+                      <ArrowRight className="mt-1 h-4 w-4 shrink-0 text-fg-accent opacity-0 transition-opacity group-hover:opacity-100" />
                     </Link>
                   )
                 })}

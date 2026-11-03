@@ -138,8 +138,12 @@ describe("blog detail JSON-LD", () => {
     expect(blogPage).toContain("datePublished: resolveBlogPublishedAt(post)")
     expect(blogPage).not.toContain("dateModified: post.updatedAt")
 
+    // 문서 상세 JSON-LD 는 lib/docs-structured-data.ts 가 만든다(Article, 문제 해결 문서는 TechArticle).
     const docsPage = read("app/docs/[category]/[slug]/page.tsx")
-    expect(docsPage).toContain("createArticleJsonLd(")
+    expect(docsPage).toContain("createDocStructuredData(")
     expect(docsPage).not.toContain('"BlogPosting"')
+    const docsStructuredData = read("lib/docs-structured-data.ts")
+    expect(docsStructuredData).toContain("createArticleJsonLd(")
+    expect(docsStructuredData).not.toContain('"BlogPosting"')
   })
 })
