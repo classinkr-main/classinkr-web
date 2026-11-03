@@ -61,8 +61,8 @@ const MANUAL_ONLY: CoverageCell = {
   note: "수기 입력 — channel_budgets · 행사별 광고비",
 }
 
-/** 집행 데이터 축: 미연동 → 연동했는데 아직 안 쌓임 → 쌓임. 셋을 구분한다. */
-function spendCell(
+/** 집행 데이터 축: 미연동 → 연동했는데 아직 안 쌓임 → 쌓임. 셋을 구분한다. 데이터 › Google Ads 헤더도 쓴다. */
+export function spendCell(
   entry: ChannelCoverageInput["live"][number] | undefined,
   configHint: string
 ): CoverageCell {

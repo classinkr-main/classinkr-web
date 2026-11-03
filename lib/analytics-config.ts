@@ -21,6 +21,8 @@ export const GA4_MEASUREMENT_ID = getConfiguredAnalyticsId(
 
 // Google Ads 글로벌 태그 ID (gtag.js). 공개 페이지 공통 로드(components/GoogleAdsScript.tsx가
 // /admin 경로를 걸러 로드한다 — app/layout.tsx에는 두지 않는다. 그 파일의 주석 참조).
+// ⚠️ 주 계정 395의 태그가 아니다(924 계정 추정). 395는 GA4 generate_lead 가져오기로 리드를 받으므로
+//    395 태그(AW-18551599540)로 바꾸거나 추가하지 않는다 — 중복 집계. docs/active/google-ads-accounts-2026-11-03.md §4
 export const GOOGLE_ADS_ID = "AW-18252550128"
 
 // 과거 GA4_ID(NEXT_PUBLIC_GA_ID만 읽음)는 app/layout.tsx의 중복 gtag 인라인 스크립트 전용

@@ -9,6 +9,7 @@ import { ChannelBudgetTable } from "@/components/admin/campaigns/ChannelBudgetTa
 import type { ChannelEfficiencyRow } from "@/components/admin/campaigns/ChannelEfficiencyChart"
 import { EventMetricsQuickTable } from "@/components/admin/campaigns/EventMetricsQuickTable"
 import { EventListSection, type EventListSectionProps } from "@/components/admin/campaigns/events/EventListSection"
+import GoogleAdsPanel from "@/components/admin/campaigns/google/GoogleAdsPanel"
 import AdLeadsPanel from "@/components/admin/campaigns/leads/AdLeadsPanel"
 import MetaCampaignPanel from "@/components/admin/campaigns/meta/MetaCampaignPanel"
 import { UpdatesFeed, type UpdateSubmitInput } from "@/components/admin/campaigns/perf/UpdatesFeed"
@@ -26,7 +27,7 @@ import type { CampaignAggregate, MetaCampaignDashboard, MetaCampaignRow, MetaDat
 
 // "데이터" 탭(3층) — 목록·입력·내보내기. 표·폼·CSV만. Meta 재개/중지, 리드 전환, 예산 저장,
 // 성과 입력, 업데이트 기록 같은 **쓰기 액션은 이 층에서만** 일어난다(기획 §3.5).
-// 신규 리드 · 광고 리드 · Meta 캠페인 · 예산·성과 입력 · 업데이트 로그 · 주간 보고서.
+// 신규 리드 · 광고 리드 · Meta 캠페인 · Google Ads(정적 기록) · 예산·성과 입력 · 업데이트 로그 · 주간 보고서.
 
 export interface DataTabProps {
   period: PerfPeriodKey
@@ -89,7 +90,7 @@ export default function DataTab({
   setEditing,
   eventList,
 }: DataTabProps) {
-  const { data: perf, reload: reloadPerf } = usePerf(period, refreshNonce)
+  const { data: perf, error: perfError, reload: reloadPerf } = usePerf(period, refreshNonce)
   const sectionIds = useMemo(() => DATA_SECTIONS.map((section) => section.id), [])
   // 첫 섹션(신규 리드)은 리드 도착 뒤 높이가 잡히므로 그때 해시 착지를 시도한다.
   useScrollToHash(!adLeadsLoading, sectionIds)
@@ -178,6 +179,14 @@ export default function DataTab({
             onRefresh={onRefreshMeta}
             onToggleStatus={onToggleMetaStatus}
           />
+        </HubSection>
+
+        <HubSection
+          id="google"
+          title="Google Ads"
+          description="API 미연동이라 계정 점검 기록(정적) — 계정 구조 · 395 결제·쿠폰 · 캠페인 계획 · 전환 추적(GA4) · 남은 일"
+        >
+          <GoogleAdsPanel channelLive={perf?.channelLive ?? null} perfFailed={!perf && perfError != null} />
         </HubSection>
 
         <HubSection
