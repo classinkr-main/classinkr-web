@@ -414,14 +414,7 @@
   h3 { letter-spacing: -0.02em; }
   h4 { letter-spacing: -0.01em; }
 
-  @media (max-width: 640px) {
-    h1,
-    h2,
-    h3,
-    h4 {
-      letter-spacing: 0 !important;
-    }
-  }
+  /* 모바일 자간 0 덮어쓰기(h1–h4 · .tracking-*)는 어드민 전용으로 app/styles/tokens.css 로 옮겼다(DESIGN.md §3) */
 }
 
 @layer utilities {
@@ -465,15 +458,6 @@
   .tracking-section  { letter-spacing: -0.03em; }   /* 48px section heading */
   .tracking-subhead  { letter-spacing: -0.02em; }   /* 32px subheading */
   .tracking-card     { letter-spacing: -0.015em; }  /* 22px card title */
-
-  @media (max-width: 640px) {
-    .tracking-display,
-    .tracking-section,
-    .tracking-subhead,
-    .tracking-card {
-      letter-spacing: 0 !important;
-    }
-  }
 }
 
 @keyframes fadeInUp {

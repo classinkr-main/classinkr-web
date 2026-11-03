@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
 import "./globals.css";
 import { color } from "@/lib/design-tokens";
 import { ToastProvider } from "@/components/ui/toast";
@@ -87,18 +88,6 @@ export default function RootLayout({
           네트워크 요청이 없는 로컬 dataLayer 설정이라 그대로 둔다 — 공개 페이지의 Consent
           Mode 동작에 영향 없음.
         */}
-        <link rel="preconnect" href="https://cdn.jsdelivr.net" crossOrigin="anonymous" />
-        <link
-          rel="preload"
-          href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css"
-          as="style"
-          crossOrigin="anonymous"
-        />
-        <link
-          rel="stylesheet"
-          href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css"
-          crossOrigin="anonymous"
-        />
       </head>
       <body>
         <ToastProvider>

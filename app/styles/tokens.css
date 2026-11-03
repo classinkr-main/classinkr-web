@@ -75,6 +75,13 @@
   @media (width < 40rem) {
     :root { --trk-poster: 0; --trk-display: 0; --trk-h1: 0; --trk-h2: 0; --trk-h3: 0; --trk-num: 0; }
   }
+
+  /* 레거시 모바일 자간 0 덮어쓰기 — 어드민·checkout 전용(.site 래퍼 없음). 공개 사이트는 위 --trk-* 와 DESIGN.md §3 의 자간을 따른다 */
+  @media (width < 40rem) {
+    body:not(:has(.site)) :is(h1, h2, h3, h4, .tracking-display, .tracking-section, .tracking-subhead, .tracking-card) {
+      letter-spacing: 0 !important;
+    }
+  }
   @media (width >= 48rem) {
     :root { --header-h: 80px; }
   }
@@ -147,17 +154,17 @@
   --text-display: clamp(2.5rem, 1.75rem + 3.2vw, 4.5rem);    /* 40 → 72 · Hero H1 전용 */
   --text-display--line-height: 1.12;
   --text-display--letter-spacing: var(--trk-display);
-  --text-display--font-weight: 700;
+  --text-display--font-weight: 600;
 
-  --text-h1: clamp(2rem, 1.6rem + 1.6vw, 3rem);              /* 32 → 48 */
+  --text-h1: clamp(2.25rem, 1.75rem + 2.1vw, 3.5rem);        /* 36 → 56 */
   --text-h1--line-height: 1.2;
   --text-h1--letter-spacing: var(--trk-h1);
-  --text-h1--font-weight: 700;
+  --text-h1--font-weight: 600;
 
   --text-h2: clamp(1.75rem, 1.45rem + 1.2vw, 2.5rem);        /* 28 → 40 */
   --text-h2--line-height: 1.25;
   --text-h2--letter-spacing: var(--trk-h2);
-  --text-h2--font-weight: 700;
+  --text-h2--font-weight: 600;
 
   --text-h3: clamp(1.25rem, 1.15rem + 0.4vw, 1.5rem);        /* 20 → 24 */
   --text-h3--line-height: 1.4;
