@@ -42,7 +42,6 @@ function emitBeginCheckoutConversion(req: NextRequest, order: SoftwareCheckoutOr
   void sendServerConversion({
     eventId: conversionEventId,
     metaEventName: "InitiateCheckout",
-    ga4EventName: "begin_checkout",
     requestMeta: getMarketingRequestMeta(req, {
       sourceUrl,
       fbclid: getRawPrepareValue(order, "fbclid"),

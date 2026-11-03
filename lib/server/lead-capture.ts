@@ -493,8 +493,16 @@ export async function submitLeadCapture(
       // 제출 전에 쌓인 익명 활동을 이 리드로 귀속한다 — 신규 저장과 동일 경로(scheduleIdentityStitch).
       if (body.anonymousId) scheduleIdentityStitch(existingId, body.anonymousId, context)
     } else {
+      // 리드 품질 신호(lib/marketing/lead-quality-signal.ts)가 나중에 MP 로 보낼 결합 키 — 쿠키 동의의
+      // 분석 항목이 켜진 제출만 남긴다. client_id 는 이 요청의 _ga 쿠키에만 있어 지금 못 남기면 끝이다.
+      // (consent 까지 ?. — 여기서 던지면 리드 저장 전이라 접수 자체가 실패한다.)
+      const meta = context.requestMeta
+      const ga = meta?.consent?.analytics && meta.gaClientId
+        ? { ga_client_id: meta.gaClientId, ga_session_id: meta.gaSessionId ?? undefined, ga_ad_consent: meta.consent.marketing }
+        : {}
       try {
         const savedLead = await saveLead({
+          ...ga,
           ...body,
           notes,
           source_detail: body.sourceDetail,
@@ -691,7 +699,6 @@ export async function runLeadCaptureEffects(
         eventId: conversionEventId ?? `lead:${savedLeadId}`,
         metaEventName:
           body.source === "newsletter" && body.marketingConsent ? "CompleteRegistration" : "Lead",
-        ga4EventName: "generate_lead",
         requestMeta: context.requestMeta ?? null,
         sourceUrl: body.currentPage ?? body.landingPage ?? context.requestMeta?.sourceUrl,
         user: {

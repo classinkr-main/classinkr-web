@@ -52,7 +52,8 @@ export function isTrackingExcludedPath(pathname: string | null | undefined): boo
  * `/checkout` 은 두 결정이 겹친다. round2 D11(2026-09-22)은 GTM·페이지뷰·픽셀·동의 배너까지
  * 되살렸고, 추적 경계 정리(2026-10-28)는 gtag 만 남기고 URL 을 정화하며 나머지의 기존 제외를
  * 유지했다. 통합 병합에서 10-28 쪽을 따른다 — 결제 전환(begin_checkout·purchase)은 gtag 와
- * 서버 전환(app/api/billing/checkout/prepare·confirm 의 MP·CAPI)으로 나간다
+ * 서버 전환(app/api/billing/checkout/prepare·confirm 의 Meta CAPI)으로 나간다. GA4 는 gtag 만 —
+ * 서버 MP 로 또 보내면 두 번 잡힌다(lib/marketing/server-conversions.ts sendServerConversion)
  * (docs/active/contact-showroom-checkout-develop-round2-2026-09-20.md §8 D11).
  */
 

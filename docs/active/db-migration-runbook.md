@@ -240,6 +240,14 @@ npm run check:db --  --strict
 
 2026-10-30 적용 기록: `20261028_branch_sync_runs_runtime.sql` → `20261023_distributor_settlements.sql` → `20261028_blog_posts_content_updated_at.sql` 순서로 서울 프로젝트에 적용했다(Management API query, 모두 HTTP 201). 블로그 파일은 운영 배포 직전에 적용했다 — 백필 UPDATE 가 기존 `blog_posts_updated_at` 트리거로 모든 글의 `updated_at` 을 적용 시각으로 미는데, 옛 코드는 사이트맵·RSS 에 `updated_at` 을 쓰기 때문이다(새 코드는 `content_updated_at`). 적용 후 확인: 총판 세 표 RLS 켜짐·정책 0(service_role 전용), `branch_sync_runs.runtime` 있음, `blog_posts.content_updated_at` 있음·트리거 두 개(`blog_posts_content_updated_at`·`blog_posts_updated_at`)·NULL 0/50. `20261023_branch_rev_sheet_writes.sql` 은 이미 적용돼 있었다. `check:db` 에 남은 경고는 `compass_meta_submissions_v`(Compass 쪽 표가 먼저 있어야 하는 브리지 뷰)뿐이다.
 
+### 2026-11-02 GA4 리드 품질 신호 — 서울 프로젝트 미적용
+
+[검색·분석 콘솔 런북](./seo-analytics-console-runbook-2026-10-28.md) §5-6. **코드 배포 전에 적용한다.**
+
+| 파일 | 하는 일 | 미적용 시 | 확인 |
+| --- | --- | --- | --- |
+| `20261102_leads_ga_quality_signals.sql` | `leads` 에 `ga_client_id`·`ga_session_id`(text)·`ga_ad_consent`(boolean)·`ga_qualify_sent_at`·`ga_close_sent_at`(timestamptz)를 더한다. 전부 NULL 허용 추가 컬럼, 백필 없음, 멱등(`IF NOT EXISTS`) | 리드 저장은 그대로 된다(GA 세 컬럼을 덜고 다시 저장 — utm·gclid 는 지킨다). 다만 GA client_id 가 안 남아 그 기간 리드는 품질 신호를 영영 못 보내고, `GA4_*` 변수를 넣으면 선점 UPDATE 가 실패해 신호가 하나도 안 나간다 | `npm run check:db` 의 `leads` GA4 리드 품질 신호 프로브(blocker), 또는 `select count(*) from information_schema.columns where table_name = 'leads' and column_name like 'ga\_%';` → `5` |
+
 ## 적용 보류 중인 마이그레이션
 
 `check:db`에 걸리지 않는(프로브가 없는) 파일이라도, 아래 파일은 **파일명 순서대로 일괄 적용하지 않는다.**
