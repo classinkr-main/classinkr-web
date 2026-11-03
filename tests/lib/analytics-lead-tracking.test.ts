@@ -234,6 +234,21 @@ describe("trackEvent GA4 params", () => {
     expect(JSON.stringify(download)).not.toMatch(/token|signature|@/)
   })
 
+  it("counts an email-gated material as lead_magnet_signup, but not an ungated brochure", () => {
+    trackEvent("download_materials", {
+      asset_id: "academy-system-checklist",
+      lead_magnet: "academy-system-checklist",
+      gate: "email",
+      source: "resource_pdf_download",
+    })
+    trackEvent("download_materials", { asset_id: "sw_brochure", page: "/product/sw" })
+
+    expect(gtagEvents("file_download")).toHaveLength(2)
+    const signups = gtagEvents("lead_magnet_signup")
+    expect(signups).toHaveLength(1)
+    expect(signups[0]?.[2]).toMatchObject({ lead_magnet: "academy-system-checklist", gate: "email" })
+  })
+
   it("skipMarketingPixels keeps GA4 but leaves Meta untouched", () => {
     consent.marketing = true
     const fbq = vi.fn()
