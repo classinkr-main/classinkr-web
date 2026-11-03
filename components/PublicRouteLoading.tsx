@@ -1,13 +1,22 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { usePathname } from "next/navigation"
+
+import { isInternalPath } from "@/lib/internal-path"
 
 type LoadingPhase = "quiet" | "visible" | "delayed"
 
 function SkeletonBlock({ className = "" }: { className?: string }) {
+  // 루트 loading 이라 결제·영수증 이동 중에도 뜬다 → 그쪽은 옛 shimmer 유지
+  const internal = isInternalPath(usePathname() ?? "")
   return (
     <div
-      className={`animate-shimmer rounded-lg bg-[linear-gradient(90deg,#ecece7_0%,#fafaf8_38%,#ecece7_76%)] bg-[length:200%_100%] ${className}`}
+      className={`${
+        internal
+          ? "animate-shimmer rounded-lg bg-[linear-gradient(90deg,#ecece7_0%,#fafaf8_38%,#ecece7_76%)] bg-[length:200%_100%]"
+          : "animate-skeleton rounded-lg bg-surface-skeleton"
+      } ${className}`}
     />
   )
 }

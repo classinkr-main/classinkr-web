@@ -16,10 +16,10 @@ export function LegalArticle({
   children,
 }: LegalArticleProps) {
   return (
-    <main className="min-h-screen bg-[#FAFAF8] pt-24 text-[#111110] md:pt-28">
+    <div className="min-h-screen bg-[#FAFAF8] pt-24 text-[#111110] md:pt-28">
       <section className="border-b border-black/[0.08] bg-white">
         <div className="container mx-auto max-w-4xl px-5 py-12 md:px-6 md:py-16">
-          <p className="mb-4 text-sm font-semibold text-[#084734]">{eyebrow}</p>
+          <p className="mb-4 text-sm font-semibold text-fg-accent">{eyebrow}</p>
           <h1 className="text-3xl font-black leading-tight md:text-5xl">{title}</h1>
           <p className="mt-5 max-w-3xl text-base leading-7 text-[#615D59] md:text-lg md:leading-8">
             {description}
@@ -31,7 +31,7 @@ export function LegalArticle({
       <article className="container mx-auto max-w-4xl px-5 py-10 md:px-6 md:py-14">
         <div className="space-y-5">{children}</div>
       </article>
-    </main>
+    </div>
   )
 }
 
@@ -51,7 +51,7 @@ export function LegalList({ items }: { items: ReactNode[] }) {
     <ul className="space-y-2">
       {items.map((item, index) => (
         <li key={index} className="flex gap-3">
-          <span className="mt-[0.7em] h-1.5 w-1.5 shrink-0 rounded-full bg-[#084734]" />
+          <span className="mt-[0.7em] h-1.5 w-1.5 shrink-0 rounded-full bg-fg-accent" />
           <span>{item}</span>
         </li>
       ))}
@@ -61,7 +61,7 @@ export function LegalList({ items }: { items: ReactNode[] }) {
 
 export function LegalNotice({ children }: { children: ReactNode }) {
   return (
-    <div className="rounded-lg border border-[#084734]/15 bg-[#ECFDF5] p-4 text-sm leading-7 text-[#084734] md:p-5">
+    <div className="rounded-lg border border-fg-accent/15 bg-fg-accent/8 p-4 text-sm leading-7 text-fg-accent md:p-5">
       {children}
     </div>
   )

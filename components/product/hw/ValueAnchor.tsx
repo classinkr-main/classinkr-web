@@ -1,7 +1,7 @@
 "use client";
 
 import { motion, type Variants } from "framer-motion";
-import { Check } from "lucide-react";
+import { ArrowRight, Check } from "lucide-react";
 import { TrackedLink } from "@/components/TrackedLink";
 
 const items = [
@@ -55,16 +55,7 @@ const itemFadeUp: Variants = {
 
 export default function ValueAnchor() {
   return (
-    <section className="bg-[#0D1A12] text-white min-h-screen flex items-center px-6 py-20 md:py-24 relative overflow-hidden">
-      {/* Background glows */}
-      <div
-        aria-hidden="true"
-        className="absolute -top-32 -left-32 w-[480px] h-[480px] rounded-full bg-[#084734]/30 blur-3xl pointer-events-none"
-      />
-      <div
-        aria-hidden="true"
-        className="absolute -bottom-32 -right-32 w-[480px] h-[480px] rounded-full bg-[#084734]/30 blur-3xl pointer-events-none"
-      />
+    <section className="surface-ink bg-[#0D1A12] text-white min-h-screen flex items-center px-6 py-20 md:py-24 relative overflow-x-clip">
 
       <div className="w-full max-w-5xl mx-auto text-center relative z-10">
         {/* Eyebrow */}
@@ -74,7 +65,7 @@ export default function ValueAnchor() {
           initial="hidden"
           whileInView="visible"
           viewport={{ once: true, margin: "-80px" }}
-          className="text-xs tracking-[0.2em] text-[#6EE7B7] font-semibold uppercase"
+          className="text-xs tracking-[0.2em] text-fg-accent font-semibold uppercase"
         >
           ALL-IN-ONE PROMISE
         </motion.p>
@@ -116,11 +107,11 @@ export default function ValueAnchor() {
           whileInView="visible"
           viewport={{ once: true, margin: "-80px" }}
           whileTap={{ scale: 0.985 }}
-          className="mt-10 max-w-xl mx-auto bg-white/[0.05] backdrop-blur-sm border border-white/10 rounded-2xl p-6 md:p-8 text-left cursor-default"
+          className="mt-10 max-w-xl mx-auto bg-white/[0.05] border border-white/10 rounded-2xl p-6 md:p-8 text-left cursor-default"
           style={{ transition: "box-shadow 0.15s" }}
         >
           <div className="flex items-center justify-between mb-5">
-            <p className="text-[10px] uppercase tracking-widest text-[#6EE7B7] font-semibold">INCLUDED</p>
+            <p className="text-[10px] uppercase tracking-widest text-fg-accent font-semibold">INCLUDED</p>
             <span className="text-[10px] text-white/30 font-medium">{items.length}가지 포함</span>
           </div>
 
@@ -136,7 +127,7 @@ export default function ValueAnchor() {
                 className="flex items-center gap-3"
               >
                 <Check
-                  className="w-3.5 h-3.5 text-[#6EE7B7] shrink-0"
+                  className="w-3.5 h-3.5 text-fg-accent shrink-0"
                   aria-hidden="true"
                 />
                 <span className="text-sm font-semibold text-white/90 leading-snug">
@@ -162,9 +153,10 @@ export default function ValueAnchor() {
           <TrackedLink
             href="/contact#contact-form"
             ctaId="hw_value_anchor_demo"
-            className="inline-block bg-[#6EE7B7] hover:bg-white text-[#0D1A12] font-bold px-10 py-4 rounded-md text-base transition-all hover:scale-[1.02] active:scale-[0.98]"
+            className="inline-flex items-center gap-2 border border-line-control text-fg-ink hover:border-line-ink font-bold px-10 py-4 rounded-md text-base transition-all active:scale-[0.98]"
           >
-            데모 신청하고 직접 사용해보기 →
+            데모 신청하고 직접 사용해보기
+            <ArrowRight aria-hidden className="arrow-nudge size-4" />
           </TrackedLink>
           <p className="text-sm text-white/50">
             30일 만족 보장 — 사용해보고 결정하세요.

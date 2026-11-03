@@ -43,7 +43,7 @@ export function ArticleToc({ headings }: { headings: BlogHeading[] }) {
                   heading.level === 3 ? "pl-6" : "pl-4"
                 } ${
                   active
-                    ? "border-[#084734] font-medium text-[#111110]"
+                    ? "border-fg-accent font-medium text-[#111110]"
                     : "border-transparent text-[#615D59] hover:text-[#111110]"
                 }`}
               >

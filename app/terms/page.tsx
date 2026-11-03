@@ -120,11 +120,11 @@ export default function TermsPage() {
       <LegalSection title="9. 개인정보 보호">
         <p>
           회사는 개인정보를{" "}
-          <Link href="/privacy" className="font-semibold text-[#084734] underline underline-offset-4">
+          <Link href="/privacy" className="font-semibold text-fg-accent underline underline-offset-4">
             개인정보처리방침
           </Link>
           에 따라 처리합니다. Meta 연동 또는 외부 플랫폼 데이터 삭제 요청은{" "}
-          <Link href="/data-deletion" className="font-semibold text-[#084734] underline underline-offset-4">
+          <Link href="/data-deletion" className="font-semibold text-fg-accent underline underline-offset-4">
             사용자 데이터 삭제 안내
           </Link>
           를 따릅니다. ClassIn 소프트웨어에서 처리되는 개인정보는 EEO의{" "}
@@ -132,7 +132,7 @@ export default function TermsPage() {
             href="https://www.classin.com/agreement/?type=privacy"
             target="_blank"
             rel="noreferrer"
-            className="font-semibold text-[#084734] underline underline-offset-4"
+            className="font-semibold text-fg-accent underline underline-offset-4"
           >
             ClassIn 개인정보처리방침(글로벌)
           </a>
@@ -165,7 +165,7 @@ export default function TermsPage() {
                 href="https://www.classin.com/agreement/?type=user"
                 target="_blank"
                 rel="noreferrer"
-                className="font-semibold text-[#084734] underline underline-offset-4"
+                className="font-semibold text-fg-accent underline underline-offset-4"
               >
                 ClassIn 이용약관(글로벌)
               </a>
@@ -181,13 +181,13 @@ export default function TermsPage() {
           items={[
             <span key="email">
               이메일:{" "}
-              <a href="mailto:classinkr@classin.com" className="font-semibold text-[#084734] underline underline-offset-4">
+              <a href="mailto:classinkr@classin.com" className="font-semibold text-fg-accent underline underline-offset-4">
                 classinkr@classin.com
               </a>
             </span>,
             <span key="contact">
               문의 페이지:{" "}
-              <Link href="/contact#contact-form" className="font-semibold text-[#084734] underline underline-offset-4">
+              <Link href="/contact#contact-form" className="font-semibold text-fg-accent underline underline-offset-4">
                 /contact
               </Link>
             </span>,

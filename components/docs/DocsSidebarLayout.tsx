@@ -26,15 +26,15 @@ export function DocsSidebar({ groups, title = "가이드", className }: DocsSide
 
     return (
         <aside className={cn("relative z-10 bg-[#FAFAF8] pb-4", className)}>
-            <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#084734]">
+            <p className="text-xs font-bold uppercase tracking-[0.14em] text-fg-accent">
                 {title}
             </p>
             {/* 기사 페이지에서도 검색으로 바로 진입할 수 있는 입구 */}
             <Link
                 href="/docs#docs-search"
-                className="mt-3 flex min-h-10 items-center gap-2 rounded-lg border border-black/[0.08] bg-white px-3 py-2 text-sm text-[#615D59] transition-colors duration-150 hover:border-black/[0.16] hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]"
+                className="mt-3 flex min-h-10 items-center gap-2 rounded-lg border border-black/[0.08] bg-white px-3 py-2 text-sm text-[#615D59] transition-colors duration-150 hover:border-black/[0.16] hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fg-accent"
             >
-                <svg className="h-4 w-4 shrink-0 text-[#084734]" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <svg className="h-4 w-4 shrink-0 text-fg-accent" viewBox="0 0 16 16" fill="none" aria-hidden="true">
                     <circle cx="7" cy="7" r="4.5" stroke="currentColor" strokeWidth="1.5" />
                     <path d="M10.5 10.5L14 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
                 </svg>
@@ -48,7 +48,7 @@ export function DocsSidebar({ groups, title = "가이드", className }: DocsSide
                         return (
                             <li key={group.title}>
                                 <details open={isActiveGroup || !hasActive} className="group/category">
-                                    <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-2 rounded-lg px-2 py-2 text-sm font-bold text-[#111110] transition-colors duration-150 hover:bg-[#F6F5F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] [&::-webkit-details-marker]:hidden">
+                                    <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-2 rounded-lg px-2 py-2 text-sm font-bold text-[#111110] transition-colors duration-150 hover:bg-[#F6F5F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fg-accent [&::-webkit-details-marker]:hidden">
                                         <span className="min-w-0 break-keep">{group.title}</span>
                                         <span className="flex shrink-0 items-center gap-1 text-xs font-medium tabular-nums text-[#615D59]">
                                             {group.links.length}
@@ -65,7 +65,7 @@ export function DocsSidebar({ groups, title = "가이드", className }: DocsSide
                                                     href={link.href}
                                                     aria-current={link.isActive ? "page" : undefined}
                                                     className={cn(
-                                                        "block origin-left break-keep rounded-lg py-2 pl-4 pr-3 text-sm leading-6 transition-colors duration-150 [overflow-wrap:anywhere] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]",
+                                                        "block origin-left break-keep rounded-lg py-2 pl-4 pr-3 text-sm leading-6 transition-colors duration-150 [overflow-wrap:anywhere] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fg-accent",
                                                         link.isActive
                                                             ? "bg-[#F6F5F4] font-semibold text-[#111110]"
                                                             : "text-[#615D59] hover:bg-[#F6F5F4] hover:text-[#111110]"

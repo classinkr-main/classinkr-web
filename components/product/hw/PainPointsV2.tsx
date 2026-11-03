@@ -55,7 +55,7 @@ export default function PainPointsV2() {
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div>
-          <p className="text-xs tracking-[0.2em] text-[#084734] font-semibold uppercase">
+          <p className="text-xs tracking-[0.2em] text-fg-accent font-semibold uppercase">
             FROM PAIN TO POWER
           </p>
           <h2
@@ -100,13 +100,13 @@ export default function PainPointsV2() {
               </div>
 
               {/* Solution card */}
-              <div className="bg-[#ECFDF5] border border-[#084734]/15 rounded-2xl p-6 flex items-start gap-4">
+              <div className="bg-fg-accent/8 border border-fg-accent/15 rounded-2xl p-6 flex items-start gap-4">
                 <Check
-                  className="w-6 h-6 text-[#084734] shrink-0 mt-0.5"
+                  className="w-6 h-6 text-fg-accent shrink-0 mt-0.5"
                   strokeWidth={2.5}
                 />
                 <div>
-                  <h4 className="font-bold text-base text-[#084734]">
+                  <h4 className="font-bold text-base text-fg-accent">
                     {item.solutionTitle}
                   </h4>
                   <p className="text-sm text-[#0d4734]/85 mt-1">

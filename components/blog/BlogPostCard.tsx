@@ -23,7 +23,7 @@ export function BlogPostCard({ post, sizes }: BlogPostCardProps) {
   return (
     <Link
       href={`/blog/${post.slug}`}
-      className="group block rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-4 focus-visible:ring-offset-[#FAFAF8]"
+      className="group block rounded-xl"
     >
       <div className="relative aspect-[4/3] overflow-hidden rounded-xl bg-[#F0F0EC] ring-1 ring-black/[0.06]">
         <BlogThumb
@@ -31,20 +31,20 @@ export function BlogPostCard({ post, sizes }: BlogPostCardProps) {
           alt={post.thumbnailAlt || post.title}
           category={post.category}
           sizes={sizes}
-          className="object-cover transition-transform duration-500 ease-out group-hover:scale-[1.03] motion-reduce:transition-none motion-reduce:group-hover:scale-100"
+          className="object-cover"
           fallbackIndex={post.id}
         />
       </div>
       <p className="mt-4 flex items-center gap-1.5 text-[12px] text-[#615D59]">
         {createElement(getCategoryIcon(post.category), {
           "aria-hidden": true,
-          className: "h-3.5 w-3.5 text-[#A39E98] transition-colors group-hover:text-[#084734]",
+          className: "h-3.5 w-3.5 text-[#A39E98] transition-colors group-hover:text-fg-accent",
         })}
         <span className="font-medium text-[#31302E]">{post.category}</span>
         <span aria-hidden className="text-[#A39E98]">·</span>
         <span>{post.date}</span>
       </p>
-      <h3 className="mt-2 line-clamp-2 text-[17px] font-semibold leading-snug tracking-[-0.015em] text-[#111110] transition-colors group-hover:text-[#084734]">
+      <h3 className="mt-2 line-clamp-2 text-[17px] font-semibold leading-snug tracking-[-0.015em] text-[#111110] transition-colors group-hover:text-fg-accent">
         {post.title}
       </h3>
       <p className="mt-2 line-clamp-2 text-[14px] leading-relaxed text-[#615D59]">{post.excerpt}</p>

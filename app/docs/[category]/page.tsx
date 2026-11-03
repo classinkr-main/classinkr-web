@@ -40,7 +40,7 @@ import { DocsSearchLogger } from "@/components/docs/DocsSearchLogger"
 const DOCS_CONTACT_HREF = `/contact?topic=${encodeURIComponent("계정/접속/기술 지원")}&prefill=${encodeURIComponent("가이드에서 찾지 못한 내용을 문의하고 싶습니다.")}#contact-form`
 
 const FOCUS_RING =
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8]"
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fg-accent focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8]"
 
 function formatCategoryHeading(title: string): string {
   const bracketMatch = title.match(/^\[(.+?)\]/)
@@ -171,14 +171,14 @@ export default async function DocsCategoryPage({
       <section className="container mx-auto max-w-[1080px] px-5">
         <Link
           href="/docs"
-          className={`inline-flex items-center gap-2 rounded-[6px] text-sm font-medium text-[#615D59] transition-colors duration-150 hover:text-[#084734] ${FOCUS_RING}`}
+          className={`inline-flex items-center gap-2 rounded-[6px] text-sm font-medium text-[#615D59] transition-colors duration-150 hover:text-fg-accent ${FOCUS_RING}`}
         >
           <ArrowRight className="h-4 w-4 rotate-180" aria-hidden />
           가이드 홈으로 돌아가기
         </Link>
 
         <div className="mt-8 max-w-4xl">
-          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[#084734]">
+          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-fg-accent">
             Classin Guide
           </p>
           <h1 className="mt-4 break-keep text-4xl font-black leading-[1.06] tracking-display md:text-6xl">
@@ -192,7 +192,7 @@ export default async function DocsCategoryPage({
         <form
           action={categoryPath}
           method="get"
-          className="mt-10 flex max-w-2xl items-center gap-3 border-b border-black/[0.08] pb-4 transition-colors focus-within:border-[#084734]/40"
+          className="mt-10 flex max-w-2xl items-center gap-3 border-b border-black/[0.08] pb-4 transition-colors focus-within:border-fg-accent/40"
         >
           <Search className="h-4 w-4 shrink-0 text-[#A39E98]" aria-hidden />
           <input
@@ -204,7 +204,7 @@ export default async function DocsCategoryPage({
           />
           <button
             type="submit"
-            className={`-mr-2 shrink-0 rounded-[6px] px-2 py-2.5 text-sm font-semibold text-[#084734] ${FOCUS_RING}`}
+            className={`-mr-2 shrink-0 rounded-[6px] px-2 py-2.5 text-sm font-semibold text-fg-accent ${FOCUS_RING}`}
           >
             검색
           </button>
@@ -216,7 +216,7 @@ export default async function DocsCategoryPage({
               “{q}” 검색 결과 {filteredDocs.length}개
               <Link
                 href={categoryPath}
-                className={`ml-3 font-semibold text-[#084734] underline-offset-4 hover:underline ${FOCUS_RING}`}
+                className={`ml-3 font-semibold text-fg-accent underline-offset-4 hover:underline ${FOCUS_RING}`}
               >
                 검색 지우기
               </Link>
@@ -262,7 +262,7 @@ export default async function DocsCategoryPage({
                   >
                     <span
                       aria-hidden
-                      className={`text-[10px] leading-none ${isActive ? "text-[#084734]" : "text-[#A39E98]"}`}
+                      className={`text-[10px] leading-none ${isActive ? "text-fg-accent" : "text-[#A39E98]"}`}
                     >
                       {isActive ? "●" : "○"}
                     </span>
@@ -328,7 +328,7 @@ export default async function DocsCategoryPage({
               <div className="mt-4 flex flex-col gap-2 sm:flex-row">
                 <Link
                   href={searchFallbackHref}
-                  className={`inline-flex h-10 items-center justify-center gap-2 rounded-[6px] bg-[#084734] px-4 text-sm font-semibold text-white transition-colors hover:bg-[#065c41] ${FOCUS_RING}`}
+                  className={`inline-flex h-10 items-center justify-center gap-2 rounded-[6px] bg-fg-accent px-4 text-sm font-semibold text-fg-on-accent transition-colors hover:bg-fg-accent-hover ${FOCUS_RING}`}
                 >
                   전체 가이드에서 다시 검색
                   <ArrowRight className="h-4 w-4" aria-hidden />

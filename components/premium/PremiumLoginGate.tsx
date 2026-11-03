@@ -10,7 +10,7 @@ export function PremiumLoginGate({ nextPath }: { nextPath: string }) {
 
   return (
     <div className="border border-black/[0.08] bg-white p-6">
-      <div className="flex h-10 w-10 items-center justify-center rounded-md bg-[#ECFDF5] text-[#084734]">
+      <div className="flex h-10 w-10 items-center justify-center rounded-md bg-fg-accent/8 text-fg-accent">
         <LockKeyhole className="h-5 w-5" aria-hidden="true" />
       </div>
       <h2 className="mt-4 text-xl font-bold text-[#111110]">프리미엄 콘텐츠</h2>
@@ -20,7 +20,7 @@ export function PremiumLoginGate({ nextPath }: { nextPath: string }) {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="mt-5 inline-flex h-10 items-center justify-center rounded-md bg-[#084734] px-4 text-sm font-semibold text-white hover:bg-[#065c41]"
+        className="mt-5 inline-flex h-10 items-center justify-center rounded-md bg-fg-accent px-4 text-sm font-semibold text-fg-on-accent hover:bg-fg-accent-hover"
       >
         Google 로그인으로 프리미엄 콘텐츠 보기
       </button>

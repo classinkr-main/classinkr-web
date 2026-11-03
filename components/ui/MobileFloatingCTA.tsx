@@ -98,22 +98,12 @@ export function MobileFloatingCTA() {
                         animate={{ opacity: 1, y: 0 }}
                         exit={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: 12 }}
                         transition={{ duration: 0.28, ease: "easeOut" }}
-                        className="fixed bottom-[calc(env(safe-area-inset-bottom)+1rem+6px)] left-3 z-40 max-w-[calc(100vw-6.5rem)]"
+                        className="fixed bottom-[calc(env(safe-area-inset-bottom)+1rem+6px)] left-3 z-(--z-floating) max-w-[calc(100vw-6.5rem)]"
                     >
-                        {/* 은은한 펄스: 알약 테두리에서 바깥으로 옅게 번졌다 사라지는 링, 느린 주기. */}
-                        {!shouldReduceMotion ? (
-                            <motion.span
-                                aria-hidden
-                                className="pointer-events-none absolute inset-0 rounded-full"
-                                initial={{ boxShadow: "0 0 0 0 rgba(8,71,52,0.16)" }}
-                                animate={{ boxShadow: ["0 0 0 0 rgba(8,71,52,0.16)", "0 0 0 10px rgba(8,71,52,0)"] }}
-                                transition={{ duration: 2.4, ease: "easeOut", repeat: Infinity, repeatDelay: 1.8 }}
-                            />
-                        ) : null}
                         <TrackedLink
                             href={cta.href}
                             ctaId={cta.ctaId}
-                            className="relative flex h-11 items-center gap-2 rounded-full border border-[#084734]/15 bg-white/85 px-4 text-sm font-semibold text-[#0e5038] shadow-[0_6px_20px_rgba(43,41,38,0.10)] backdrop-blur-md transition-colors active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40"
+                            className="relative flex h-11 items-center gap-2 rounded-full border border-line-control bg-surface-paper px-4 text-sm font-semibold text-fg-accent transition-colors"
                         >
                             <cta.Icon className="h-4 w-4 shrink-0" aria-hidden />
                             <span className="truncate">{cta.label}</span>

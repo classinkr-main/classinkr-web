@@ -18,11 +18,11 @@ import { getAllDocsSummaries, readQuery, type DocsSearchParams } from "../_utils
 const DOCS_CONTACT_HREF = `/contact?topic=${encodeURIComponent("계정/접속/기술 지원")}&prefill=${encodeURIComponent("가이드에서 찾지 못한 내용을 문의하고 싶습니다.")}#contact-form`
 
 const FOCUS_RING =
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8]"
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fg-accent focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8]"
 
 const SECTION_EYEBROW = "text-[12px] font-semibold uppercase tracking-[0.14em] text-[#615D59]"
 
-const TEXT_ACTION = `inline-flex items-center gap-1 text-[14px] font-semibold text-[#084734] ${FOCUS_RING}`
+const TEXT_ACTION = `inline-flex items-center gap-1 text-[14px] font-semibold text-fg-accent ${FOCUS_RING}`
 
 export const metadata: Metadata = {
   title: "가이드 검색",
@@ -50,7 +50,7 @@ function SearchResultRow({ result }: { result: DocsSearchResult<DocsArticleSumma
     <li className="group flex items-start gap-4 border-b border-black/[0.06] py-6 transition-colors duration-150 hover:border-black/[0.16]">
       <div className="min-w-0 flex-1">
         <Link href={doc.href} className={`block rounded-[4px] ${FOCUS_RING}`}>
-          <span className="block break-keep text-[16px] font-semibold leading-snug text-[#111110] transition-colors duration-150 group-hover:text-[#084734]">
+          <span className="block break-keep text-[16px] font-semibold leading-snug text-[#111110] transition-colors duration-150 group-hover:text-fg-accent">
             <SearchHighlight text={doc.title} query={highlight} />
           </span>
           <span className="mt-1.5 line-clamp-2 block break-words text-[15px] leading-[26px] text-[#4F4C49]">
@@ -78,7 +78,7 @@ function SearchResultRow({ result }: { result: DocsSearchResult<DocsArticleSumma
                 key={section.id}
                 href={`${doc.href}#${section.id}`}
                 aria-label={`${doc.title} — ${section.title}`}
-                className={`inline-flex min-w-0 max-w-full items-baseline gap-1 rounded-[4px] font-medium text-[#084734] underline decoration-[#084734]/25 underline-offset-4 transition-colors hover:decoration-[#084734] ${FOCUS_RING}`}
+                className={`inline-flex min-w-0 max-w-full items-baseline gap-1 rounded-[4px] font-medium text-fg-accent underline decoration-fg-accent/25 underline-offset-4 transition-colors hover:decoration-fg-accent ${FOCUS_RING}`}
               >
                 <CornerDownRight className="h-3.5 w-3.5 shrink-0 translate-y-[2px]" aria-hidden />
                 <span className="break-keep">{section.title}</span>
@@ -112,7 +112,7 @@ function TopicLinks({ label, topics }: { label: string; topics: readonly string[
         <Link
           key={topic}
           href={searchHref(topic)}
-          className={`-my-1 rounded-[4px] py-1 text-[13px] font-medium text-[#615D59] underline-offset-4 transition-colors hover:text-[#084734] hover:underline ${FOCUS_RING}`}
+          className={`-my-1 rounded-[4px] py-1 text-[13px] font-medium text-[#615D59] underline-offset-4 transition-colors hover:text-fg-accent hover:underline ${FOCUS_RING}`}
         >
           {topic}
         </Link>
@@ -158,7 +158,7 @@ export default async function DocsSearchPage({ searchParams }: DocsSearchPagePro
         <div className="max-w-[880px]">
           <Link
             href="/docs"
-            className={`inline-flex items-center gap-2 rounded-[4px] text-sm text-[#615D59] transition-colors hover:text-[#084734] ${FOCUS_RING}`}
+            className={`inline-flex items-center gap-2 rounded-[4px] text-sm text-[#615D59] transition-colors hover:text-fg-accent ${FOCUS_RING}`}
           >
             <ArrowRight className="h-4 w-4 rotate-180" aria-hidden />
             가이드 홈으로
@@ -171,7 +171,7 @@ export default async function DocsSearchPage({ searchParams }: DocsSearchPagePro
             action="/docs/search"
             method="get"
             role="search"
-            className="mt-7 flex items-center gap-3 border-b border-black/[0.08] pb-4 transition-colors focus-within:border-[#084734]/40"
+            className="mt-7 flex items-center gap-3 border-b border-black/[0.08] pb-4 transition-colors focus-within:border-fg-accent/40"
           >
             <Search className="h-4 w-4 shrink-0 text-[#A39E98]" aria-hidden />
             <input
@@ -185,7 +185,7 @@ export default async function DocsSearchPage({ searchParams }: DocsSearchPagePro
             />
             <button
               type="submit"
-              className={`-mr-2 shrink-0 rounded-[6px] px-2 py-2.5 text-sm font-semibold text-[#084734] ${FOCUS_RING}`}
+              className={`-mr-2 shrink-0 rounded-[6px] px-2 py-2.5 text-sm font-semibold text-fg-accent ${FOCUS_RING}`}
             >
               검색
             </button>
@@ -194,7 +194,7 @@ export default async function DocsSearchPage({ searchParams }: DocsSearchPagePro
           {query ? (
             <p className="mt-4 text-[13px] text-[#615D59]">
               “{query}” 검색 결과{" "}
-              <span className="font-semibold text-[#084734]">{results.length}개</span>
+              <span className="font-semibold text-fg-accent">{results.length}개</span>
             </p>
           ) : (
             <p className="mt-4 text-[15px] leading-7 text-[#615D59]">
@@ -242,7 +242,7 @@ export default async function DocsSearchPage({ searchParams }: DocsSearchPagePro
                   <Link
                     key={suggestion}
                     href={searchHref(suggestion)}
-                    className={`rounded-[4px] font-semibold text-[#084734] underline decoration-[#084734]/25 underline-offset-4 transition-colors hover:decoration-[#084734] ${FOCUS_RING}`}
+                    className={`rounded-[4px] font-semibold text-fg-accent underline decoration-fg-accent/25 underline-offset-4 transition-colors hover:decoration-fg-accent ${FOCUS_RING}`}
                   >
                     {suggestion}
                   </Link>

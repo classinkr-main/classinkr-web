@@ -25,8 +25,8 @@ export function ContactFastTrack() {
     >
         <div className="relative overflow-hidden rounded-[16px] border border-[#E5E5E0] bg-white p-5 shadow-[0_20px_60px_rgba(0,0,0,0.05)] md:rounded-[16px] md:p-8">
             {/* Decorative background elements */}
-            <div className="absolute top-0 right-0 w-64 h-64 bg-[#ECFDF5] rounded-full blur-[80px] -mr-20 -mt-20 pointer-events-none" />
-            <div className="absolute bottom-0 left-0 w-64 h-64 bg-[#ECFDF5] rounded-full blur-[80px] -ml-20 -mb-20 pointer-events-none" />
+            <div className="absolute top-0 right-0 w-64 h-64 bg-fg-accent/8 rounded-full blur-[80px] -mr-20 -mt-20 pointer-events-none" />
+            <div className="absolute bottom-0 left-0 w-64 h-64 bg-fg-accent/8 rounded-full blur-[80px] -ml-20 -mb-20 pointer-events-none" />
             
             <div className="relative z-10 flex flex-col items-center justify-between gap-7 md:flex-row md:gap-10">
                 <div className="flex-1 space-y-4 text-center md:text-left">
@@ -50,7 +50,7 @@ export function ContactFastTrack() {
                             target={kakaoChannelUrl ? "_blank" : undefined}
                             rel={kakaoChannelUrl ? "noopener noreferrer" : undefined}
                             onClick={() => trackEvent("click_cta", { button: kakaoChannelUrl ? "contact_kakao_fast_track" : "contact_form_fast_track" })}
-                            className="inline-flex items-center gap-2 text-[#084734] font-bold hover:text-[#065c41] transition-colors group"
+                            className="inline-flex items-center gap-2 text-fg-accent font-bold hover:text-fg-accent-hover transition-colors group"
                         >
                             {kakaoChannelUrl ? "모바일로 바로 열기" : "문의 폼 바로가기"}
                             <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
@@ -62,8 +62,8 @@ export function ContactFastTrack() {
                     스캔해도 아무 일이 없는 블록이 폼 위를 차지한다. */}
                 {kakaoChannelUrl ? (
                 <div className="shrink-0 flex flex-col items-center gap-4">
-                    <div className="rounded-[16px] border border-[#084734]/25 bg-[#ECFDF5] p-1.5 shadow-[0_18px_45px_rgba(8,71,52,0.12)] sm:rounded-[16px] sm:p-2">
-                        <div className="w-40 h-40 md:h-48 md:w-48 bg-white rounded-[12px] flex items-center justify-center relative overflow-hidden ring-1 ring-[#084734]/10">
+                    <div className="rounded-[16px] border border-fg-accent/25 bg-fg-accent/8 p-1.5 sm:rounded-[16px] sm:p-2">
+                        <div className="w-40 h-40 md:h-48 md:w-48 bg-white rounded-[12px] flex items-center justify-center relative overflow-hidden ring-1 ring-fg-accent/10">
                             <Image
                                 src="/qr-code.png"
                                 alt="카카오톡 상담 QR코드"

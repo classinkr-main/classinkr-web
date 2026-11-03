@@ -1,5 +1,11 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
+import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
+import "@fontsource/ibm-plex-sans-kr/400.css";
+import "@fontsource/ibm-plex-sans-kr/500.css";
+import "@fontsource/ibm-plex-sans-kr/600.css";
+import "@fontsource/ibm-plex-sans-kr/700.css";
 import "./globals.css";
+import { color } from "@/lib/design-tokens";
 import { ToastProvider } from "@/components/ui/toast";
 import { AppChrome } from "@/components/AppChrome";
 import { JsonLd } from "@/components/seo/JsonLd";
@@ -16,6 +22,12 @@ import {
   SITE_URL,
 } from "@/lib/seo";
 import { CLASSIN_POSITIONING } from "@/lib/classin-positioning";
+
+// 루트라 어드민에도 적용된다. 강제 다크 UA 의 자동 반전을 끄고, iOS 브라우저 크롬을 paper 로 칠한다.
+export const viewport: Viewport = {
+  themeColor: color.paper,
+  colorScheme: "only light",
+};
 
 // 검색엔진 소유확인 메타태그. 검색 콘솔(Google Search Console, 네이버 서치어드바이저)에서 발급한 값을
 // 환경변수로 넣는다. 비밀 값이 아니며(페이지 소스에 그대로 노출된다), 비어 있으면 태그 자체를 내보내지 않는다.
@@ -60,7 +72,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ko" className="scroll-smooth" data-scroll-behavior="smooth">
+    <html lang="ko" className="motion-safe:scroll-smooth" data-scroll-behavior="smooth">
       <head>
         <JsonLd data={[createOrganizationJsonLd(), createWebsiteJsonLd()]} />
         {/* Google Consent Mode v2 — 기본 거부(denied). GTM 로드 전에 실행되어야 함. */}
@@ -80,18 +92,6 @@ export default function RootLayout({
           네트워크 요청이 없는 로컬 dataLayer 설정이라 그대로 둔다 — 공개 페이지의 Consent
           Mode 동작에 영향 없음.
         */}
-        <link rel="preconnect" href="https://cdn.jsdelivr.net" crossOrigin="anonymous" />
-        <link
-          rel="preload"
-          href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css"
-          as="style"
-          crossOrigin="anonymous"
-        />
-        <link
-          rel="stylesheet"
-          href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css"
-          crossOrigin="anonymous"
-        />
       </head>
       <body>
         <ToastProvider>

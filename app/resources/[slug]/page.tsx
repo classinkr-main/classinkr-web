@@ -33,7 +33,7 @@ interface ResourcePageProps {
 const WARM_BAND = "border-t border-black/[0.06] bg-[#F6F5F4]"
 const WHITE_BAND = "bg-white"
 const BAND_INNER = "mx-auto max-w-[1120px] px-5 py-14 sm:px-8 md:py-20"
-const BAND_EYEBROW = "text-[13px] font-bold tracking-[0.02em] text-[#084734]"
+const BAND_EYEBROW = "text-[13px] font-bold tracking-[0.02em] text-fg-accent"
 const BAND_TITLE =
   "mt-3 text-[1.9rem] font-bold tracking-[-0.03em] text-[#111110]"
 
@@ -114,7 +114,7 @@ export default async function ResourcePage({ params }: ResourcePageProps) {
           </h2>
           <p className="mt-4 text-[15px] leading-7 text-[#615D59]">{storyGuide.body}</p>
           {storyGuide.takeaway ? (
-            <p className="mt-5 border-l-2 border-[#084734] bg-white px-4 py-3 text-[14px] font-semibold leading-7 text-[#31302E]">
+            <p className="mt-5 border-l-2 border-fg-accent bg-white px-4 py-3 text-[14px] font-semibold leading-7 text-[#31302E]">
               {storyGuide.takeaway}
             </p>
           ) : null}
@@ -122,7 +122,7 @@ export default async function ResourcePage({ params }: ResourcePageProps) {
         <ol className="divide-y divide-black/[0.08] border-y border-black/[0.08]">
           {storyGuide.beats.map((beat, index) => (
             <li key={beat} className="grid grid-cols-[34px_minmax(0,1fr)] gap-3 py-4">
-              <span className="text-[13px] font-bold tabular-nums text-[#084734]">
+              <span className="text-[13px] font-bold tabular-nums text-fg-accent">
                 {String(index + 1).padStart(2, "0")}
               </span>
               <span className="text-[14px] leading-6 text-[#31302E]">{beat}</span>
@@ -145,10 +145,10 @@ export default async function ResourcePage({ params }: ResourcePageProps) {
             <div
               key={band.range}
               className={`grid grid-cols-[96px_minmax(0,1fr)] items-baseline gap-4 px-5 py-4 ${
-                i === magnet.scoreBands.length - 1 ? "bg-[#ECFDF5]/60" : "bg-white"
+                i === magnet.scoreBands.length - 1 ? "bg-fg-accent/5" : "bg-white"
               }`}
             >
-              <span className="text-[13px] font-bold tabular-nums text-[#084734]">
+              <span className="text-[13px] font-bold tabular-nums text-fg-accent">
                 {band.range}
               </span>
               <div>
@@ -201,11 +201,11 @@ export default async function ResourcePage({ params }: ResourcePageProps) {
               {col.items.map((item, i) => (
                 <li key={item} className="flex gap-3 text-[14px] leading-6 text-[#615D59]">
                   {col.ordered ? (
-                    <span className="text-[13px] font-bold tabular-nums text-[#084734]">
+                    <span className="text-[13px] font-bold tabular-nums text-fg-accent">
                       {i + 1}
                     </span>
                   ) : (
-                    <span className="mt-2.5 h-1 w-1 shrink-0 rounded-full bg-[#084734]" />
+                    <span className="mt-2.5 h-1 w-1 shrink-0 rounded-full bg-fg-accent" />
                   )}
                   <span>{item}</span>
                 </li>
@@ -235,11 +235,11 @@ export default async function ResourcePage({ params }: ResourcePageProps) {
                 {card.challenge}
               </p>
               <p className="mt-2 text-[13px] leading-6 text-[#615D59]">
-                <span className="font-semibold text-[#084734]">변화 </span>
+                <span className="font-semibold text-fg-accent">변화 </span>
                 {card.change}
               </p>
               {card.quote ? (
-                <p className="mt-3 border-l-2 border-[#084734]/25 pl-3 text-[13px] italic leading-6 text-[#31302E]">
+                <p className="mt-3 border-l-2 border-fg-accent/25 pl-3 text-[13px] italic leading-6 text-[#31302E]">
                   {card.quote}
                 </p>
               ) : null}
@@ -265,7 +265,7 @@ export default async function ResourcePage({ params }: ResourcePageProps) {
               className="grid gap-4 border-b border-black/[0.08] py-6 md:grid-cols-[220px_minmax(0,1fr)] md:gap-8 md:py-7"
             >
               <div>
-                <p className="text-[12px] font-bold tabular-nums text-[#084734]">
+                <p className="text-[12px] font-bold tabular-nums text-fg-accent">
                   {String(index + 1).padStart(2, "0")}
                 </p>
                 <p className="mt-1 text-[15px] font-bold leading-6 text-[#111110]">
@@ -295,7 +295,7 @@ export default async function ResourcePage({ params }: ResourcePageProps) {
   const expertBand = expertVoice ? (
     <div>
       <p className={BAND_EYEBROW}>현장 한마디</p>
-      <blockquote className="mt-4 max-w-3xl border-l-2 border-[#084734]/30 pl-5 text-[17px] leading-8 text-[#31302E] md:text-[19px]">
+      <blockquote className="mt-4 max-w-3xl border-l-2 border-fg-accent/30 pl-5 text-[17px] leading-8 text-[#31302E] md:text-[19px]">
         {expertVoice.comment}
       </blockquote>
       <p className="mt-4 text-[13px] font-semibold text-[#615D59]">
@@ -320,7 +320,7 @@ export default async function ResourcePage({ params }: ResourcePageProps) {
             <tr className="border-b border-black/[0.12]">
               <th className="px-4 py-3 text-left font-bold text-[#111110]">항목</th>
               {worksheet.columns.map((col) => (
-                <th key={col} className="px-3 py-3 text-left font-bold text-[#084734]">
+                <th key={col} className="px-3 py-3 text-left font-bold text-fg-accent">
                   {col}
                 </th>
               ))}
@@ -351,7 +351,7 @@ export default async function ResourcePage({ params }: ResourcePageProps) {
         </table>
       </div>
       {worksheet.formula ? (
-        <p className="mt-5 border-l-2 border-[#084734] pl-3 text-[13px] leading-7 text-[#31302E]">
+        <p className="mt-5 border-l-2 border-fg-accent pl-3 text-[13px] leading-7 text-[#31302E]">
           {worksheet.formula}
         </p>
       ) : null}
@@ -371,10 +371,10 @@ export default async function ResourcePage({ params }: ResourcePageProps) {
         {magnet.actionPlan.map((step, i) => (
           <div key={step.day} className="bg-white p-6">
             <div className="flex items-center gap-2">
-              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#084734] text-[11px] font-bold text-white">
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-fg-accent text-[11px] font-bold text-fg-on-accent">
                 {i + 1}
               </span>
-              <span className="text-[12px] font-bold uppercase tracking-[0.1em] text-[#084734]">
+              <span className="text-[12px] font-bold uppercase tracking-[0.1em] text-fg-accent">
                 {step.day}
               </span>
             </div>
@@ -382,7 +382,7 @@ export default async function ResourcePage({ params }: ResourcePageProps) {
             <ul className="mt-3 space-y-2">
               {step.tasks.map((task) => (
                 <li key={task} className="flex gap-2 text-[12.5px] leading-5 text-[#615D59]">
-                  <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#084734]/70" />
+                  <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-fg-accent/70" />
                   <span>{task}</span>
                 </li>
               ))}
@@ -410,11 +410,11 @@ export default async function ResourcePage({ params }: ResourcePageProps) {
                 gate: magnet.gate,
                 destination: link.href,
               }}
-              className="group rounded-[10px] border border-black/[0.08] bg-white p-4 transition-colors hover:border-[#084734]/25"
+              className="group rounded-[10px] border border-black/[0.08] bg-white p-4 transition-colors duration-(--motion-fast) ease-soft hover:border-line-strong"
             >
               <span className="flex items-center justify-between gap-3">
                 <span>
-                  <span className="block text-sm font-bold text-[#111110] group-hover:text-[#084734]">
+                  <span className="block text-sm font-bold text-[#111110]">
                     {link.label}
                   </span>
                   {link.description ? (
@@ -423,7 +423,7 @@ export default async function ResourcePage({ params }: ResourcePageProps) {
                     </span>
                   ) : null}
                 </span>
-                <ExternalLink className="h-4 w-4 shrink-0 text-[#084734]" />
+                <ExternalLink className="h-4 w-4 shrink-0 text-fg-accent" />
               </span>
             </TrackedLink>
           ))}
@@ -446,9 +446,9 @@ export default async function ResourcePage({ params }: ResourcePageProps) {
                 lead_magnet: magnet.slug,
                 destination: item.slug,
               }}
-              className="group rounded-[10px] border border-black/[0.08] bg-white p-4 transition-colors hover:border-[#084734]/25"
+              className="group rounded-[10px] border border-black/[0.08] bg-white p-4 transition-colors duration-(--motion-fast) ease-soft hover:border-line-strong"
             >
-              <span className="block text-sm font-bold text-[#111110] group-hover:text-[#084734]">
+              <span className="block text-sm font-bold text-[#111110]">
                 {item.title}
               </span>
               <span className="mt-1 block text-[13px] leading-6 text-[#615D59]">
@@ -466,7 +466,7 @@ export default async function ResourcePage({ params }: ResourcePageProps) {
                 lead_magnet: magnet.slug,
                 destination: cta.href,
               }}
-              className="group rounded-[10px] border border-[#084734]/20 bg-[#084734] p-4 text-white transition-colors hover:bg-[#065c41]"
+              className="group rounded-[10px] border border-fg-accent/20 bg-fg-accent p-4 text-fg-on-accent transition-colors hover:bg-fg-accent-hover"
             >
               <span className="block text-sm font-bold">{cta.label}</span>
               {cta.description ? (
@@ -502,7 +502,7 @@ export default async function ResourcePage({ params }: ResourcePageProps) {
         <div className="mx-auto max-w-[1120px] px-5 pb-14 pt-28 sm:px-8 md:pt-32">
           <Link
             href="/resources"
-            className="mb-8 inline-flex items-center gap-2 text-sm text-[#1a1a1a]/45 transition-colors hover:text-[#084734]"
+            className="mb-8 inline-flex items-center gap-2 text-sm text-[#1a1a1a]/45 transition-colors hover:text-fg-accent"
           >
             <ArrowRight className="h-4 w-4 rotate-180" />
             자료실로 돌아가기
@@ -512,7 +512,7 @@ export default async function ResourcePage({ params }: ResourcePageProps) {
           <div className="grid gap-10 lg:min-h-[560px] lg:grid-cols-[minmax(0,1fr)_384px] lg:gap-14">
             <div className="flex max-w-2xl flex-col">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="inline-flex items-center rounded-full bg-[#ECFDF5] px-3 py-1 text-[12px] font-semibold tracking-[0.01em] text-[#084734]">
+                <span className="inline-flex items-center rounded-full bg-fg-accent/8 px-3 py-1 text-[12px] font-semibold tracking-[0.01em] text-fg-accent">
                   {getLeadMagnetCategoryLabel(magnet.category)} · {getLeadMagnetTierLabel(magnet.tier)}
                 </span>
                 <span className="text-[12px] font-semibold text-[#A39E98]">
@@ -551,11 +551,11 @@ export default async function ResourcePage({ params }: ResourcePageProps) {
       </section>
 
       {/* ── WHAT'S INSIDE (green accent strip) ──────────── */}
-      <section className="border-b border-black/[0.08] bg-[#ECFDF5]/50">
+      <section className="border-b border-black/[0.08] bg-fg-accent/4">
         <div className="mx-auto max-w-[1120px] px-5 py-10 sm:px-8">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-10">
             <div className="shrink-0 lg:w-52">
-              <p className="text-[12px] font-bold uppercase tracking-[0.16em] text-[#084734]">
+              <p className="text-[12px] font-bold uppercase tracking-[0.16em] text-fg-accent">
                 이 PDF에 담긴 것
               </p>
               <p className="mt-2 text-[13px] leading-6 text-[#615D59]">{magnet.formatLabel}</p>
@@ -563,7 +563,7 @@ export default async function ResourcePage({ params }: ResourcePageProps) {
             <ul className="grid flex-1 gap-x-8 gap-y-3 sm:grid-cols-2">
               {magnet.deliverables.map((item) => (
                 <li key={item} className="flex gap-2.5 text-[14px] leading-6 text-[#31302E]">
-                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[#084734]" />
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-fg-accent" />
                   <span>{item}</span>
                 </li>
               ))}
@@ -575,7 +575,7 @@ export default async function ResourcePage({ params }: ResourcePageProps) {
       {/* ── CENTERPIECE — checklist (white) ─────────────── */}
       <section
         id="resource-checklist"
-        className="scroll-mt-24 border-b border-black/[0.06] bg-white"
+        className="border-b border-black/[0.06] bg-white"
       >
         <div className="mx-auto max-w-[1120px] px-5 py-16 sm:px-8 md:py-20">
           <div className="max-w-2xl">
@@ -603,7 +603,7 @@ export default async function ResourcePage({ params }: ResourcePageProps) {
               >
                 <div className="lg:sticky lg:top-24 lg:self-start">
                   <div className="flex items-baseline gap-3">
-                    <span className="text-[13px] font-bold tabular-nums text-[#084734]">
+                    <span className="text-[13px] font-bold tabular-nums text-fg-accent">
                       {String(sectionIndex + 1).padStart(2, "0")}
                     </span>
                     <div className="h-px flex-1 bg-black/[0.08]" />
@@ -658,7 +658,7 @@ export default async function ResourcePage({ params }: ResourcePageProps) {
                   lead_magnet: magnet.slug,
                   gate: magnet.gate,
                 }}
-                className="mt-8 inline-flex items-center gap-2 rounded-[6px] bg-white px-5 py-3 text-sm font-semibold text-[#111110] transition-transform hover:-translate-y-0.5"
+                className="mt-8 inline-flex items-center gap-2 rounded-[6px] bg-white px-5 py-3 text-sm font-semibold text-[#111110]"
               >
                 무료 상담 신청하기
                 <ArrowRight className="h-4 w-4" />

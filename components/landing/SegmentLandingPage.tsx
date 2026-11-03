@@ -89,14 +89,10 @@ export function SegmentLandingPage({ page }: { page: SegmentLandingPageData }) {
           Concise · pointed · bold · minimal. One primary CTA, a demoted
           ghost link, and the board photo as the single focal visual. */}
       <section className="relative overflow-hidden px-4 pb-20 pt-32 sm:px-6 md:pb-28 md:pt-40">
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-x-0 top-0 h-[420px] bg-[radial-gradient(ellipse_70%_60%_at_85%_0%,rgba(8,71,52,0.06),transparent_62%)]"
-        />
         <div className="relative mx-auto grid max-w-[1180px] items-center gap-12 lg:grid-cols-[1.05fr_0.95fr] lg:gap-16">
           <div>
             <Reveal>
-              <p className="inline-flex items-center rounded-full border border-[#084734]/15 bg-[#ECFDF5] px-3.5 py-1.5 text-[12px] font-bold tracking-[0.04em] text-[#084734]">
+              <p className="inline-flex items-center rounded-full border border-fg-accent/15 bg-fg-accent/8 px-3.5 py-1.5 text-[12px] font-bold tracking-[0.04em] text-fg-accent">
                 {page.themeLabel}
               </p>
             </Reveal>
@@ -104,7 +100,7 @@ export function SegmentLandingPage({ page }: { page: SegmentLandingPageData }) {
             <Reveal delay={60}>
               <h1 className="mt-7 max-w-[16ch] text-[2.85rem] font-bold leading-[1.04] tracking-display text-[#111110] sm:text-[3.9rem] lg:text-[4.4rem]">
                 {page.hero.title}{" "}
-                <strong className="font-extrabold text-[#084734]">
+                <strong className="font-extrabold text-fg-accent">
                   {page.hero.titleAccent}
                 </strong>
               </h1>
@@ -122,7 +118,7 @@ export function SegmentLandingPage({ page }: { page: SegmentLandingPageData }) {
                   href={page.hero.primaryCta.href}
                   ctaId={page.hero.primaryCta.ctaId}
                   tracking={{ segment: page.segmentId, surface: "hero_primary" }}
-                  className="group inline-flex min-h-[3.25rem] items-center justify-center gap-2 rounded-[6px] bg-[#084734] px-7 text-[15px] font-semibold text-white shadow-[0_10px_30px_-8px_rgba(8,71,52,0.45)] transition-all hover:bg-[#065c41] hover:shadow-[0_14px_38px_-8px_rgba(8,71,52,0.5)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 active:scale-[0.97]"
+                  className="group inline-flex min-h-[3.25rem] items-center justify-center gap-2 rounded-[6px] bg-fg-accent px-7 text-[15px] font-semibold text-fg-on-accent transition-all hover:bg-fg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fg-accent focus-visible:ring-offset-2 active:scale-[0.97]"
                 >
                   {page.hero.primaryCta.label}
                   <ArrowRight
@@ -134,7 +130,7 @@ export function SegmentLandingPage({ page }: { page: SegmentLandingPageData }) {
                   href={page.hero.secondaryCta.href}
                   ctaId={page.hero.secondaryCta.ctaId}
                   tracking={{ segment: page.segmentId, surface: "hero_secondary" }}
-                  className="group inline-flex items-center gap-1.5 border-b border-transparent pb-0.5 text-[15px] font-semibold text-[#615D59] transition-colors hover:border-[#084734] hover:text-[#084734] focus-visible:outline-none focus-visible:text-[#084734]"
+                  className="group inline-flex items-center gap-1.5 border-b border-transparent pb-0.5 text-[15px] font-semibold text-[#615D59] transition-colors hover:border-fg-accent hover:text-fg-accent focus-visible:outline-none focus-visible:text-fg-accent"
                 >
                   {page.hero.secondaryCta.label}
                   <ArrowRight
@@ -181,7 +177,7 @@ export function SegmentLandingPage({ page }: { page: SegmentLandingPageData }) {
                 {page.hero.visualNotes.map((note) => (
                   <li key={note} className="flex gap-2.5">
                     <CheckCircle2
-                      className="mt-0.5 h-4 w-4 shrink-0 text-[#084734]"
+                      className="mt-0.5 h-4 w-4 shrink-0 text-fg-accent"
                       aria-hidden="true"
                     />
                     <span>{note}</span>
@@ -218,10 +214,10 @@ export function SegmentLandingPage({ page }: { page: SegmentLandingPageData }) {
                 {index < page.flow.steps.length - 1 ? (
                   <span
                     aria-hidden="true"
-                    className="absolute left-[3.25rem] top-[1.1rem] hidden h-px w-[calc(100%-2rem)] bg-gradient-to-r from-[#084734]/25 to-transparent lg:block"
+                    className="absolute left-[3.25rem] top-[1.1rem] hidden h-px w-[calc(100%-2rem)] bg-gradient-to-r from-fg-accent/25 to-transparent lg:block"
                   />
                 ) : null}
-                <div className="relative flex h-9 w-9 items-center justify-center rounded-full bg-[#084734] text-[13px] font-bold text-white shadow-[0_6px_16px_-6px_rgba(8,71,52,0.6)]">
+                <div className="relative flex h-9 w-9 items-center justify-center rounded-full bg-fg-accent text-[13px] font-bold text-fg-on-accent">
                   {index + 1}
                 </div>
                 <h3 className="mt-6 text-[19px] font-bold leading-snug tracking-card text-[#111110]">
@@ -240,7 +236,7 @@ export function SegmentLandingPage({ page }: { page: SegmentLandingPageData }) {
           <div className="lg:sticky lg:top-28">
             <SectionHeading heading={page.proof.heading} body={page.proof.body} align="left" />
             <Reveal delay={120}>
-              <p className="mt-7 rounded-[12px] border border-[#084734]/12 bg-[#ECFDF5] p-5 text-[14px] leading-7 text-[#084734]">
+              <p className="mt-7 rounded-[12px] border border-fg-accent/12 bg-fg-accent/8 p-5 text-[14px] leading-7 text-fg-accent">
                 {page.carefulNote}
               </p>
             </Reveal>
@@ -256,7 +252,7 @@ export function SegmentLandingPage({ page }: { page: SegmentLandingPageData }) {
       </section>
 
       {/* ───────────────────────── DECISION ───────────────────────── */}
-      <section className="bg-[#ECFDF5] px-4 py-20 sm:px-6 md:py-28">
+      <section className="bg-fg-accent/8 px-4 py-20 sm:px-6 md:py-28">
         <div className="mx-auto max-w-[1120px]">
           <SectionHeading heading={page.decision.heading} body={page.decision.body} />
           <Reveal>
@@ -267,7 +263,7 @@ export function SegmentLandingPage({ page }: { page: SegmentLandingPageData }) {
                   className="group grid gap-3 border-b border-black/[0.08] px-6 py-6 transition-colors last:border-b-0 hover:bg-[#FAFAF8] md:grid-cols-[200px_1fr] md:items-baseline md:gap-8 md:px-8"
                 >
                   <div className="flex items-center gap-3">
-                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#ECFDF5] text-[12px] font-bold text-[#084734]">
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-fg-accent/8 text-[12px] font-bold text-fg-accent">
                       {String(index + 1).padStart(2, "0")}
                     </span>
                     <span className="text-[15px] font-bold tracking-card text-[#111110]">
@@ -283,9 +279,9 @@ export function SegmentLandingPage({ page }: { page: SegmentLandingPageData }) {
       </section>
 
       {/* ───────────────────────── FINAL CTA ───────────────────────── */}
-      <section className="bg-[#ECFDF5] px-4 pb-24 pt-4 text-[#111110] sm:px-6 md:pb-32">
+      <section className="bg-fg-accent/8 px-4 pb-24 pt-4 text-[#111110] sm:px-6 md:pb-32">
         <Reveal>
-          <div className="mx-auto max-w-[1120px] overflow-hidden rounded-[24px] border border-[#084734]/14 bg-gradient-to-br from-white to-[#F6F5F4] p-8 shadow-deep sm:p-12 md:p-14">
+          <div className="mx-auto max-w-[1120px] overflow-hidden rounded-[24px] border border-fg-accent/14 bg-gradient-to-br from-white to-[#F6F5F4] p-8 shadow-deep sm:p-12 md:p-14">
             <div className="grid gap-10 md:grid-cols-[1fr_auto] md:items-end">
               <div>
                 <h2 className="max-w-3xl text-[2rem] font-bold leading-[1.1] tracking-section sm:text-[2.85rem]">
@@ -300,7 +296,7 @@ export function SegmentLandingPage({ page }: { page: SegmentLandingPageData }) {
                   href={page.finalCta.primaryCta.href}
                   ctaId={page.finalCta.primaryCta.ctaId}
                   tracking={{ segment: page.segmentId, surface: "final_primary" }}
-                  className="group inline-flex min-h-[3.25rem] items-center justify-center gap-2 rounded-[6px] bg-[#084734] px-7 text-[15px] font-semibold text-white shadow-[0_10px_30px_-8px_rgba(8,71,52,0.45)] transition-all hover:bg-[#065c41] hover:shadow-[0_14px_38px_-8px_rgba(8,71,52,0.5)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 active:scale-[0.97]"
+                  className="group inline-flex min-h-[3.25rem] items-center justify-center gap-2 rounded-[6px] bg-fg-accent px-7 text-[15px] font-semibold text-fg-on-accent transition-all hover:bg-fg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fg-accent focus-visible:ring-offset-2 active:scale-[0.97]"
                 >
                   {page.finalCta.primaryCta.label}
                   <ArrowRight
@@ -312,7 +308,7 @@ export function SegmentLandingPage({ page }: { page: SegmentLandingPageData }) {
                   href={page.finalCta.secondaryCta.href}
                   ctaId={page.finalCta.secondaryCta.ctaId}
                   tracking={{ segment: page.segmentId, surface: "final_secondary" }}
-                  className="inline-flex min-h-[3.25rem] items-center justify-center rounded-[6px] border border-black/[0.08] bg-white px-7 text-[15px] font-semibold text-[#111110] shadow-sm transition-colors hover:bg-[#F6F5F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2"
+                  className="inline-flex min-h-[3.25rem] items-center justify-center rounded-[6px] border border-black/[0.08] bg-white px-7 text-[15px] font-semibold text-[#111110] shadow-sm transition-colors hover:bg-[#F6F5F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fg-accent focus-visible:ring-offset-2"
                 >
                   {page.finalCta.secondaryCta.label}
                 </TrackedLink>
@@ -354,8 +350,8 @@ function InsightCard({ item, compact = false }: { item: SegmentItem; compact?: b
   const Icon = item.icon
 
   return (
-    <article className="group h-full rounded-[14px] border border-black/[0.08] bg-white p-6 shadow-card transition-all duration-300 hover:-translate-y-1 hover:border-[#084734]/15 hover:shadow-deep">
-      <div className="flex h-11 w-11 items-center justify-center rounded-[10px] bg-[#ECFDF5] text-[#084734] transition-colors group-hover:bg-[#D1FAE5]">
+    <article className="group h-full rounded-[14px] border border-black/[0.08] bg-white p-6 shadow-card transition-all duration-300 hover:-translate-y-1 hover:border-fg-accent/15 hover:shadow-deep">
+      <div className="flex h-11 w-11 items-center justify-center rounded-[10px] bg-fg-accent/8 text-fg-accent transition-colors group-hover:bg-fg-accent/14">
         <Icon className="h-5 w-5" aria-hidden="true" />
       </div>
       <h3

@@ -10,27 +10,27 @@ const pillars = [
     tag: "SMART BOARD",
     title: "50페이지 무한 판서",
     desc: "지우지 않고 넘기세요. 50페이지 캔버스에 공간 걱정 없이 수업하고, 쓰는 즉시 전 학생 기기에 실시간 동기화됩니다.",
-    accent: "bg-[#084734]",
-    accentLight: "bg-[#ECFDF5]",
-    accentText: "text-[#084734]",
+    accent: "bg-fg-accent",
+    accentLight: "bg-fg-accent/8",
+    accentText: "text-fg-accent",
   },
   {
     icon: Camera,
     tag: "AI CAMERA",
     title: "수업 영상, 자동으로 완성",
     desc: "4K AI 카메라가 교사를 자동 추적하며 수업을 녹화합니다. 수업이 끝나는 순간, 편집 없이 수업 영상이 즉시 업로드됩니다.",
-    accent: "bg-[#084734]",
-    accentLight: "bg-[#ECFDF5]",
-    accentText: "text-[#084734]",
+    accent: "bg-fg-accent",
+    accentLight: "bg-fg-accent/8",
+    accentText: "text-fg-accent",
   },
   {
     icon: Layers,
     tag: "SW ECOSYSTEM",
     title: "판서 + 영상, 한 번에 복습",
     desc: "50페이지 판서 노트는 PDF로, 수업 영상은 LMS에 자동 저장. 학생은 수업 직후부터 영상과 판서를 동시에 복습합니다.",
-    accent: "bg-[#084734]",
-    accentLight: "bg-[#ECFDF5]",
-    accentText: "text-[#084734]",
+    accent: "bg-fg-accent",
+    accentLight: "bg-fg-accent/8",
+    accentText: "text-fg-accent",
   },
 ];
 
@@ -50,13 +50,13 @@ export default function ClassroomStudioSection() {
       <div className="container mx-auto px-4 lg:px-8">
         {/* Header */}
         <motion.div className="text-center mb-8" {...fadeUp}>
-          <p className="text-sm font-semibold text-[#084734] tracking-wider uppercase mb-3">
+          <p className="text-sm font-semibold text-fg-accent tracking-wider uppercase mb-3">
             CLASSROOM STUDIO
           </p>
           <h2 className="text-3xl md:text-4xl lg:text-5xl text-[#1a1a19] leading-tight">
             보드, 카메라, 소프트웨어.
             <br />
-            <span className="text-[#084734]">하나의 수업 스튜디오</span>가 됩니다.
+            <span className="text-fg-accent">하나의 수업 스튜디오</span>가 됩니다.
           </h2>
         </motion.div>
 
@@ -80,9 +80,9 @@ export default function ClassroomStudioSection() {
                 initial={{ opacity: 0, y: 40 }}
                 animate={inView ? { opacity: 1, y: 0 } : {}}
                 transition={{ duration: 0.5, delay: i * 0.15 }}
-                className="rounded-2xl border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-8 hover:shadow-lg hover:border-[#084734]/20 transition-all duration-300 group"
+                className="rounded-2xl border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-8"
               >
-                <div className={`w-12 h-12 rounded-xl ${p.accentLight} flex items-center justify-center mb-5 group-hover:scale-105 transition-transform`}>
+                <div className={`w-12 h-12 rounded-xl ${p.accentLight} flex items-center justify-center mb-5`}>
                   <Icon className={`w-6 h-6 ${p.accentText}`} />
                 </div>
                 <div className="text-[10px] font-bold text-[#A39E98] uppercase tracking-[0.15em] mb-3">

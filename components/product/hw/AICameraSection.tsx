@@ -16,7 +16,7 @@ const capabilities = [
 export default function AICameraSection() {
   return (
     <section className="bg-[#050708] text-white py-24 md:py-32 px-6 overflow-hidden relative">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_66%_45%,rgba(110,231,183,0.08),transparent_34%),linear-gradient(90deg,rgba(13,26,18,0.95)_0%,rgba(5,7,8,1)_62%)]" />
+      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(90deg,rgba(13,26,18,0.95)_0%,rgba(5,7,8,1)_62%)]" />
       <div className="relative max-w-7xl mx-auto grid lg:grid-cols-[0.9fr_1.1fr] gap-12 lg:gap-16 items-center">
         {/* Left copy */}
         <div>

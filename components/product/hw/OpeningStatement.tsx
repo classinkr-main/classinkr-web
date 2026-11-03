@@ -54,7 +54,7 @@ export default function OpeningStatement() {
             className="text-[2rem] sm:text-4xl md:text-5xl lg:text-[3.75rem] xl:text-[4.25rem] font-bold tracking-tight text-[#111110]"
             style={{ lineHeight: 1.1, letterSpacing: "-0.045em" }}
           >
-            나머지는 <span className="text-[#084734]">Classin</span>이 알아서 합니다.
+            나머지는 <span className="text-fg-accent">Classin</span>이 알아서 합니다.
           </motion.p>
         </div>
 

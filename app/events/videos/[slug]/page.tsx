@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
 import Link from "next/link"
 import { notFound } from "next/navigation"
-import { ArrowRight, CalendarDays, CheckCircle2, Clock, LockKeyhole, Sparkles, User } from "lucide-react"
+import { ArrowRight, CalendarDays, CheckCircle2, Clock, LockKeyhole, User } from "lucide-react"
 
 import { JsonLd } from "@/components/seo/JsonLd"
 import { SeminarCard } from "@/components/seminars/SeminarCard"
@@ -70,7 +70,7 @@ export default async function EventVideoPage({ params }: EventVideoPageProps) {
           <div className="mx-auto max-w-[920px]">
             <Link
               href="/events"
-              className="mb-8 inline-flex items-center gap-2 text-sm text-[#1a1a1a]/45 transition-colors hover:text-[#084734]"
+              className="mb-8 inline-flex items-center gap-2 text-sm text-[#1a1a1a]/45 transition-colors hover:text-fg-accent"
             >
               <ArrowRight className="h-4 w-4 rotate-180" />
               행사로 돌아가기
@@ -79,11 +79,11 @@ export default async function EventVideoPage({ params }: EventVideoPageProps) {
             <span
               className={
                 isMember
-                  ? "inline-flex items-center gap-1.5 rounded-full bg-[#ECFDF5] px-3 py-1 text-[12px] font-semibold text-[#084734]"
+                  ? "inline-flex items-center gap-1.5 rounded-full bg-fg-accent/8 px-3 py-1 text-[12px] font-semibold text-fg-accent"
                   : "inline-flex items-center gap-1.5 rounded-full border border-black/[0.08] bg-white px-3 py-1 text-[12px] font-semibold text-[#615D59]"
               }
             >
-              {isMember ? <Sparkles className="h-3.5 w-3.5" /> : <LockKeyhole className="h-3.5 w-3.5" />}
+              {isMember ? null : <LockKeyhole className="h-3.5 w-3.5" />}
               {isMember ? "회원 시청 가능" : "회원 전용 영상"}
             </span>
 
@@ -97,18 +97,18 @@ export default async function EventVideoPage({ params }: EventVideoPageProps) {
             <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 text-[13px] font-medium text-[#615D59]">
               {seminar.presenter ? (
                 <span className="inline-flex items-center gap-1.5">
-                  <User className="h-4 w-4 text-[#084734]/60" />
+                  <User className="h-4 w-4 text-fg-accent/60" />
                   {seminar.presenter}
                 </span>
               ) : null}
               {seminar.durationLabel ? (
                 <span className="inline-flex items-center gap-1.5">
-                  <Clock className="h-4 w-4 text-[#084734]/60" />
+                  <Clock className="h-4 w-4 text-fg-accent/60" />
                   {seminar.durationLabel}
                 </span>
               ) : null}
               <span className="inline-flex items-center gap-1.5">
-                <CalendarDays className="h-4 w-4 text-[#084734]/60" />
+                <CalendarDays className="h-4 w-4 text-fg-accent/60" />
                 {formatPublishedAt(seminar.publishedAt)}
               </span>
             </div>
@@ -138,7 +138,7 @@ export default async function EventVideoPage({ params }: EventVideoPageProps) {
                 <ul className="mt-4 grid gap-3 sm:grid-cols-2">
                   {seminar.highlights.map((item) => (
                     <li key={item} className="flex gap-2 text-[14px] leading-6 text-[#615D59]">
-                      <CheckCircle2 className="mt-1 h-4 w-4 shrink-0 text-[#084734]" />
+                      <CheckCircle2 className="mt-1 h-4 w-4 shrink-0 text-fg-accent" />
                       {item}
                     </li>
                   ))}
@@ -169,7 +169,7 @@ export default async function EventVideoPage({ params }: EventVideoPageProps) {
               </p>
               <Link
                 href="/contact#contact-form"
-                className="mt-6 inline-flex items-center gap-2 rounded-[6px] bg-white px-5 py-3 text-sm font-semibold text-[#111110] transition-transform hover:-translate-y-0.5"
+                className="mt-6 inline-flex items-center gap-2 rounded-[6px] bg-white px-5 py-3 text-sm font-semibold text-[#111110]"
               >
                 무료 상담 신청하기
                 <ArrowRight className="h-4 w-4" />

@@ -17,7 +17,7 @@ const opsEnergyModuleImage = "/images/product/hw/ops/ops-glass-energy-module-bla
 export default function AllInOneStatement() {
   return (
     <section className="relative isolate flex min-h-[660px] items-center overflow-hidden bg-[#010302] px-6 py-24 text-white md:py-32">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_76%_42%,rgba(110,231,183,0.16)_0%,rgba(8,42,26,0.18)_30%,transparent_60%),radial-gradient(ellipse_at_42%_76%,rgba(255,255,255,0.035)_0%,transparent_42%),linear-gradient(90deg,#010302_0%,#020504_48%,#030706_100%)]" />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_42%_76%,rgba(255,255,255,0.035)_0%,transparent_42%),linear-gradient(90deg,#010302_0%,#020504_48%,#030706_100%)]" />
       <div className="pointer-events-none absolute inset-x-0 top-0 h-36 bg-gradient-to-b from-black via-black/70 to-transparent" />
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-44 bg-gradient-to-t from-black via-black/70 to-transparent" />
 
@@ -28,14 +28,13 @@ export default function AllInOneStatement() {
           maskImage: "linear-gradient(90deg, transparent 0%, transparent 22%, rgba(0,0,0,0.18) 38%, rgba(0,0,0,0.72) 55%, #000 68%, #000 100%)",
         }}
       >
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_58%_48%,rgba(110,231,183,0.16)_0%,rgba(110,231,183,0.06)_34%,transparent_66%)] blur-2xl" />
         <Image
           src={opsEnergyModuleImage}
           alt=""
           fill
           sizes="72vw"
           priority={false}
-          className="object-cover object-center opacity-95 mix-blend-screen"
+          className="object-cover object-center opacity-95"
         />
         <div className="absolute inset-0 bg-[linear-gradient(90deg,#010302_0%,rgba(1,3,2,0.96)_11%,rgba(1,3,2,0.68)_25%,rgba(1,3,2,0.16)_48%,rgba(1,3,2,0.24)_76%,rgba(1,3,2,0.56)_100%)]" />
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_62%_52%,transparent_0%,transparent_43%,rgba(1,3,2,0.44)_76%,#010302_100%)]" />
@@ -54,7 +53,7 @@ export default function AllInOneStatement() {
             alt="Classin 로고가 빛나는 글래스모피즘 OPS 모듈이 전자칠판에 에너지를 전달하는 3D 비유 이미지"
             fill
             sizes="92vw"
-            className="object-cover opacity-95 mix-blend-screen"
+            className="object-cover opacity-95"
           />
           <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(1,3,2,0.08)_0%,transparent_50%,rgba(1,3,2,0.58)_100%)]" />
         </div>
@@ -83,7 +82,7 @@ export default function AllInOneStatement() {
             {capabilities.map((capability) => (
               <li
                 key={capability}
-                className="rounded-[14px] border border-white/[0.12] bg-white/[0.08] px-4 py-3 text-sm text-white/[0.78] backdrop-blur-sm"
+                className="rounded-[14px] border border-white/[0.12] bg-white/[0.08] px-4 py-3 text-sm text-white/[0.78]"
               >
                 {capability}
               </li>
