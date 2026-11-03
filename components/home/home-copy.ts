@@ -27,7 +27,7 @@ export const HOME_COPY = {
     link: { label: "우리 학원 운영 누수 진단하기", href: "/resources/academy-system-checklist" },
   },
   how: {
-    heading: "첫 수업부터 바로 생기는 것",
+    heading: "도입하면 바로 달라지는 세 가지",
     linkLabel: "자세히 보기",
     steps: [
       {
