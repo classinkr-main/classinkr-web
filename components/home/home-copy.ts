@@ -27,7 +27,7 @@ export const HOME_COPY = {
     link: { label: "우리 학원 운영 누수 진단하기", href: "/resources/academy-system-checklist" },
   },
   how: {
-    heading: "수업 전·중·후를 하나의 흐름으로",
+    heading: "첫 수업부터 바로 생기는 것",
     linkLabel: "자세히 보기",
     steps: [
       {
@@ -40,17 +40,17 @@ export const HOME_COPY = {
       },
       {
         phase: "수업 중",
-        product: "Classin Board",
-        title: "판서·녹화·자료가 칠판 한 대에서",
-        body: "전자칠판에 카메라와 소프트웨어가 함께 있어, 수업을 하면 판서와 녹화 기록이 남습니다.",
+        product: "자동 녹화",
+        title: "수업만 하면 녹화가 저절로 쌓입니다",
+        body: "보드로 수업을 시작하면 칠판과 AI 카메라 녹화가 함께 시작되고, 끝나면 클라우드에 저장됩니다. 결석 보강·복습 영상이 그날 바로 생깁니다.",
         href: "/product/hw",
         image: { src: "/images/home/how-during.webp", alt: "교실 벽에 설치된 클래스인 전자칠판" },
       },
       {
         phase: "수업 후",
-        product: "녹화 · AI 리포트",
-        title: "상담 준비가 기록 확인으로 끝납니다",
-        body: "녹화와 AI 강의 분석이 수업마다 쌓입니다. 강사별 수업 품질을 같은 기준으로 봅니다.",
+        product: "AI 강의 평가",
+        title: "수업이 끝나면 AI가 바로 평가합니다",
+        body: "녹화본을 AI가 분석해 점수와 보고서를 만듭니다. 참관하지 않아도 강사별 수업 품질을 같은 기준으로 봅니다.",
         href: "/product/ai-report",
         image: { src: "/images/home/how-after.webp", alt: "수업 다시보기 창의 AI 강의 분석 탭. 종합 점수와 항목별 평가" },
       },

@@ -79,7 +79,7 @@ describe("홈 5화면", () => {
 
   it.each([
     ["문제", HomeProblem, "강사가 바뀌면, 수업도 바뀝니다.", [CHECKLIST]],
-    ["작동 방식", HomeHow, "수업 전·중·후를 하나의 흐름으로", ["/product/sw", "/product/hw", "/product/ai-report"]],
+    ["작동 방식", HomeHow, "첫 수업부터 바로 생기는 것", ["/product/sw", "/product/hw", "/product/ai-report"]],
     ["증거", HomeProof, "먼저 바꾼 학원들", ["/blog"]],
   ] as const)("%s: H2 + 관문 링크", (_name, Section, heading, hrefs) => {
     const h = html(<Section />)
