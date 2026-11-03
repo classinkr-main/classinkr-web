@@ -62,15 +62,20 @@
 어드민 Google Ads 섹션이 그 집계로 **캠페인 실적 표**(광고비·노출·클릭·전환·전환당 비용)를 그린다. 기간은 허브의 기간 토글을 따른다.
 
 **인증은 공용 서비스 계정** `classin-admin@classin-home.iam.gserviceaccount.com`(Sheets·Calendar와 같은 키)이라 새 비밀 값이 없다.
-남은 것은 사람이 하는 콘솔 작업 세 가지와 환경 변수 하나다. 자세한 확인법은 [런북 §3](ad-channel-activation-runbook-2026-09-14.md).
+자세한 확인법은 [런북 §3](ad-channel-activation-runbook-2026-09-14.md).
 
-1. GCP 프로젝트 `classin-home`에 Google Ads API 사용 설정 + 개요 페이지에서 **Explorer** 등급 신청(대부분 자동 승인)
-2. Google Ads 395 › 관리자 › 액세스 및 보안에 위 서비스 계정을 **읽기 전용** 사용자로 추가
-3. 로컬에서 `npm run check:google-ads`로 확인 — 막힌 단계를 알려 준다
-4. Vercel에 `GOOGLE_ADS_CUSTOMER_ID=3951743288`(주 계정 395) 넣고 재배포 — 켜는 스위치. 이 브랜치의 서비스 계정 인증 코드도 함께 배포돼야 한다
+1. ✅ GCP 프로젝트 `classin-home`에 Google Ads API 사용 설정 + **Explorer** 등급 신청 — 11/3 완료(자동 승인)
+2. ✅ Google Ads 395 › 관리자 › 액세스 및 보안에 위 서비스 계정을 **읽기 전용** 사용자로 추가 — 11/3 완료
+3. ✅ 로컬 확인 — `npm run check:google-ads` 읽기 성공(KRW), 크론과 같은 `fetchGoogleAdsDaily` 경로로
+   11/3 `유튜브 전반성장_1102` 1행(₩3,030 · 노출 649 · 클릭 2)까지 받아 왔다
+4. ⬜ PR #55 배포 + Vercel에 `GOOGLE_ADS_CUSTOMER_ID=3951743288`(주 계정 395) 넣고 재배포 — 켜는 스위치.
+   서비스 계정 인증과 아래 pageSize 수정이 운영에 있어야 하므로 **배포가 먼저**다
 
-11/3 진단: 토큰 발급은 되고, 1단계에서 막힌다(`SERVICE_DISABLED`). 어드민 Google Ads 섹션 헤더의 'API …' 표시와
-남은 일의 'API 연동 ①~③'은 실제 설정값을 읽으므로, 켜면 저절로 바뀌고 사라진다. API 버전 `v25`는 2027년 8월 지원 종료 예정이다.
+실호출에서 찾은 버그: 9/14 클라이언트가 search 본문에 `pageSize`를 보내 `PAGE_SIZE_NOT_SUPPORTED`로 요청 전체가
+거부됐다(현행 API는 페이지 1만 행 고정). 자격증명이 있었어도 크론은 매번 실패했을 것이다 — 11/3 수정, 테스트로 잠갔다.
+
+어드민 Google Ads 섹션 헤더의 'API …' 표시와 남은 일의 'API 연동' 줄은 실제 설정값을 읽으므로, 켜면 저절로 바뀌고 사라진다.
+API 버전 `v25`는 2027년 8월 지원 종료 예정이다.
 
 ## 6. 남은 일 (사용자)
 

@@ -2,9 +2,11 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 
 import {
   buildDailyInsightsQuery,
+  fetchGoogleAdsDaily,
   isGoogleAdsConfigured,
   mapGoogleAdsRow,
   normalizeCustomerId,
+  resetGoogleAdsTokenCache,
 } from "@/lib/google/ads"
 import {
   chunk,
@@ -109,6 +111,29 @@ describe("Google Ads — 연동 판정", () => {
     expect(isGoogleAdsConfigured()).toBe(false)
     stub({ ...serviceAccount, GOOGLE_ADS_CUSTOMER_ID: "395-174-3288" })
     expect(isGoogleAdsConfigured()).toBe(true)
+  })
+
+  it("search 본문에 pageSize 를 싣지 않는다 — 현행 API 는 PAGE_SIZE_NOT_SUPPORTED 로 요청을 거부한다", async () => {
+    stub({ GOOGLE_ADS_CUSTOMER_ID: "395-174-3288", GOOGLE_ADS_REFRESH_TOKEN: "r", GOOGLE_ADS_CLIENT_ID: "c", GOOGLE_ADS_CLIENT_SECRET: "s" })
+    resetGoogleAdsTokenCache()
+    const searchBodies: string[] = []
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (url.includes("oauth2")) return new Response(JSON.stringify({ access_token: "t", expires_in: 3600 }))
+        searchBodies.push(String(init?.body))
+        const row = { campaign: { id: 1, name: "C" }, segments: { date: "2026-11-03" }, metrics: { costMicros: "3029890000", impressions: "649", clicks: "2" }, customer: { currencyCode: "KRW" } }
+        return new Response(JSON.stringify({ results: [row] }))
+      })
+    )
+    try {
+      const result = await fetchGoogleAdsDaily({ since: "2026-11-01", until: "2026-11-03" })
+      expect(JSON.parse(searchBodies[0])).not.toHaveProperty("pageSize")
+      expect(result).toMatchObject({ currency: "KRW", truncated: false, rows: [{ campaignId: "1", spend: 3029.89, impressions: 649 }] })
+    } finally {
+      vi.unstubAllGlobals()
+      resetGoogleAdsTokenCache()
+    }
   })
 
   it("refresh_token 이 있는데 OAuth 클라이언트가 빠지면 서비스 계정으로 몰래 넘어가지 않는다", () => {

@@ -180,11 +180,12 @@ export const GOOGLE_ADS_TRACKING_RULES: readonly string[] = [
   "뉴스레터 구독도 generate_lead 로 잡힌다 — 문의만 세는 이벤트로 나누는 일은 나중 과제",
 ]
 
-/** Google Ads API 를 켜는 사용자 단계 — 화면은 API 가 미연동일 때만 보여 준다. 근거: 문서 §5. */
+/**
+ * Google Ads API 를 켜는 남은 사용자 단계 — 화면은 API 가 미연동일 때만 보여 준다. 근거: 문서 §5.
+ * 콘솔 작업(API 사용 설정·Explorer 승인·395에 서비스 계정 읽기 전용 추가)은 11/3 끝났다.
+ */
 export const GOOGLE_ADS_API_STEPS: readonly string[] = [
-  "API 연동 ① GCP 프로젝트 classin-home 에 Google Ads API 사용 설정 + Explorer 등급 신청",
-  "API 연동 ② 395 › 관리자 › 액세스 및 보안에 classin-admin@classin-home.iam.gserviceaccount.com 을 읽기 전용으로 추가",
-  "API 연동 ③ Vercel 에 GOOGLE_ADS_CUSTOMER_ID=3951743288 넣고 재배포",
+  "API 연동: Vercel 에 GOOGLE_ADS_CUSTOMER_ID=3951743288 넣고 재배포 (콘솔 작업은 11/3 완료)",
 ]
 
 /** 사용자가 직접 해야 남은 일 — 이게 끝나야 395 캠페인이 돈다. */

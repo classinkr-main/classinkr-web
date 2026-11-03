@@ -133,7 +133,7 @@ refresh_token 발급·만료가 없어 **새 비밀 값이 필요 없다.** 접�
 
 1. GCP `classin-home` 에서 **Google Ads API 사용 설정** —
    `https://console.cloud.google.com/apis/library/googleads.googleapis.com?project=classin-home`
-   (11/3 진단: 미사용이라 `SERVICE_DISABLED`, 프로젝트 번호 876787918822)
+   (11/3 완료 — 그 전에는 `SERVICE_DISABLED`, 프로젝트 번호 876787918822. 2·3단계도 11/3 완료, 남은 것은 5단계)
 2. 같은 프로젝트의 Google Ads API **개요 페이지 → 액세스 신청(Apply for access)** → **Explorer**.
    대부분 자동 승인이다. Test 등급으로는 테스트 계정만 읽힌다.
 3. Google Ads **395** → 관리자 → 액세스 및 보안 → 사용자 **+** → 서비스 계정 이메일 → **읽기 전용** → 추가
@@ -165,6 +165,7 @@ curl -sS -H "Authorization: Bearer $CRON_SECRET" \
 | `CLOUD_PROJECT_NOT_APPROVED_FOR_PRODUCTION` | 아직 Test 등급 | 2단계 Explorer 승인 확인 |
 | `USER_PERMISSION_DENIED` / `PERMISSION_DENIED` | 서비스 계정이 광고 계정 사용자에 없다 | 3단계 |
 | `invalid_grant` | (OAuth 사용 시) refresh_token 만료·취소 | 재발급 |
+| `PAGE_SIZE_NOT_SUPPORTED` | search 본문에 `pageSize` 를 보냈다(현행 API 는 1만 행 고정) | 11/3 수정됨 — 다시 나오면 회귀다 |
 | `login-customer-id` 관련 오류 | MCC 아닌데 보냈거나, MCC인데 안 보냈다 | 해당 env 를 채우거나 **비운다** |
 | 지출이 터무니없이 크다 | `cost_micros` 나눗셈 누락 | 있을 수 없다(순수함수 + 테스트로 잠갔다). 나오면 보고할 것 |
 | `truncated: true` | 페이징 상한(20페이지) 도달 | 결과가 **잘렸다** — 캠페인이 많은 계정이면 상한을 올려야 한다. 그대로 두면 "집행이 줄었다"로 오독된다 |

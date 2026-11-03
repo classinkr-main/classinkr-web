@@ -57,7 +57,7 @@ export interface ChannelCoverageInput {
 }
 
 /** Google 집행 데이터를 켜는 스위치 — 인증은 공용 서비스 계정이라 남는 설정은 고객 ID 하나다. */
-export const GOOGLE_ADS_CONFIG_HINT = "GOOGLE_ADS_CUSTOMER_ID · 395에 서비스 계정 읽기 전용 추가"
+export const GOOGLE_ADS_CONFIG_HINT = "GOOGLE_ADS_CUSTOMER_ID 미설정"
 
 const MANUAL_ONLY: CoverageCell = {
   state: "manual",

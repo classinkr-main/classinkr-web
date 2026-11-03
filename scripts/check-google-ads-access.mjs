@@ -62,7 +62,16 @@ if (res.ok) {
   console.log(`✓ 읽기 성공 — ${customer.descriptiveName ?? "(이름 없음)"} · ${customer.currencyCode ?? "통화 미상"}`)
   console.log("→ ③ Vercel 에 GOOGLE_ADS_CUSTOMER_ID 를 넣고 재배포하면 다음 크론(05:35 KST)부터 쌓입니다")
 } else {
-  console.log(`✗ ${res.status} ${body.slice(0, 500)}`)
+  // 본문은 길다 — 상태·오류 코드·메시지 앞부분만 보인다(판정은 전체 본문으로 한다).
+  let reason = body.slice(0, 300)
+  try {
+    const error = JSON.parse(body).error
+    const codes = (error.details ?? []).flatMap((d) => (d.errors ?? []).map((e) => JSON.stringify(e.errorCode)))
+    reason = `${error.status} ${codes.join(", ")} — ${String(error.message ?? "").slice(0, 160)}`
+  } catch {
+    // JSON 이 아니면 본문 앞부분을 그대로 보인다
+  }
+  console.log(`✗ ${res.status} ${reason}`)
   console.log(`→ ${nextStep(body)}`)
   process.exitCode = 1
 }

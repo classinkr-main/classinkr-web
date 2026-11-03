@@ -39,8 +39,11 @@ const TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token"
 /** access_token 은 보통 1시간 만료 — 만료 5분 전에 갱신한다(경계에서 401 을 맞지 않게). */
 const TOKEN_REFRESH_MARGIN_MS = 5 * 60_000
 
-/** search 페이지 크기와 안전 상한 — 일수 × 캠페인 수라 한 페이지로 안 끝날 수 있다. */
-const PAGE_SIZE = 1_000
+/**
+ * search 페이지 안전 상한 — 일수 × 캠페인 수라 한 페이지로 안 끝날 수 있다.
+ * 페이지 크기는 API 가 1만 행으로 고정한다. pageSize 를 보내면 PAGE_SIZE_NOT_SUPPORTED 로
+ * 요청 전체가 거부된다(2026-11-03 실호출로 확인).
+ */
 const PAGE_CAP = 20
 
 export interface GoogleAdsDailyRow {
@@ -282,7 +285,7 @@ export async function fetchGoogleAdsDaily({
     const response = await fetch(url, {
       method: "POST",
       headers,
-      body: JSON.stringify({ query, pageSize: PAGE_SIZE, pageToken }),
+      body: JSON.stringify({ query, pageToken }),
       cache: "no-store",
     })
     const text = await response.text()
