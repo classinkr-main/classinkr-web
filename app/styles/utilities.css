@@ -162,11 +162,12 @@
   }
 }
 
-/* 창 캡처 전용 받침 그림자 — 그림자 0(V14-A)의 유일한 예외(V20-A, 2026-11-03). 홈 창 캡처 2곳만 쓴다 */
+/* 창 캡처 전용 받침 그림자 — 그림자 0(V14-A)의 유일한 예외(V20-A, 2026-11-03). 홈 창 캡처 2곳만 쓴다.
+   box-shadow 가 아니라 drop-shadow 다: 창 이미지가 제 모서리(투명 알파)를 갖고 있어 그림자가 창 모양을 그대로 따른다.
+   CSS 반경을 두지 않는다(두면 둥근 창 모서리 밖에 상자 그림자가 한 겹 더 생긴다) */
 @utility plate-window {
-  border-radius: 4px;
-  box-shadow: 0 8px 24px rgb(17 17 16 / .10);
-  @media (forced-colors: active) { box-shadow: none; outline: 1px solid CanvasText; }
+  filter: drop-shadow(0 8px 24px rgb(17 17 16 / .12));
+  @media (forced-colors: active) { filter: none; outline: 1px solid CanvasText; }
 }
 
 /* 늘어나는 차트 SVG(preserveAspectRatio="none")의 데이터 선 */

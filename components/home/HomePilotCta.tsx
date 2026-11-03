@@ -1,33 +1,34 @@
 "use client"
 
-import Link from "next/link"
 import { ArrowRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { DemoModal } from "@/components/sections/DemoModal"
 import { TrackedLink } from "@/components/TrackedLink"
 import { Reveal } from "@/components/landing/Reveal"
+import { GatewayLink } from "./GatewayLink"
 import { HOME_COPY } from "./home-copy"
 
 const { pilot } = HOME_COPY
 
+// 먹 지면 — surface-ink 가 글자·선 토큰을 다시 정의하고 강조색은 민트가 된다. 채움 버튼 금지(C14) → line
 export function HomePilotCta() {
   return (
-    <section className="bg-surface-paper py-14 md:py-20">
+    <section className="surface-ink py-20 md:py-32">
       <Reveal className="mx-auto max-w-[1040px] px-4 sm:px-6">
-        <h2 className="text-h2 text-fg-ink break-keep">{pilot.heading}</h2>
-        <ol className="mt-8 grid gap-4 md:mt-10 md:grid-cols-3">
-          {pilot.steps.map((step, i) => (
-            <li key={step.title} className="rounded-xl border border-line-hair bg-surface-sheet p-6">
-              <p className="text-label tabular-nums text-fg-muted">{i + 1}</p>
-              <h3 className="mt-2 text-h3 text-fg-ink break-keep">{step.title}</h3>
+        <h2 className="text-h2 text-fg-ink break-keep text-balance">{pilot.heading}</h2>
+        <ol className="mt-10 grid gap-8 md:grid-cols-3">
+          {pilot.steps.map((step) => (
+            <li key={step.title}>
+              <h3 className="text-body-l font-semibold text-fg-ink break-keep">{step.title}</h3>
               <p className="mt-2 text-body text-fg-body break-keep">{step.body}</p>
             </li>
           ))}
         </ol>
-        <p className="mt-6 text-caption text-fg-muted break-keep">{pilot.honest}</p>
-        <div className="mt-8 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:gap-5">
+        <p className="mt-10 text-caption text-fg-muted break-keep">{pilot.honest}</p>
+
+        <div className="mt-10 flex flex-col items-start gap-4 sm:flex-row sm:items-center">
           <DemoModal trackingButton="final_consultation">
-            <Button size="cta" className="w-full rounded-lg sm:w-auto">
+            <Button variant="line" size="cta" className="w-full sm:w-auto">
               {pilot.primaryCta}
               <ArrowRight aria-hidden className="arrow-nudge" />
             </Button>
@@ -36,17 +37,19 @@ export function HomePilotCta() {
             href={pilot.secondaryHref}
             ctaId="final_lead_magnet"
             tracking={{ source: "home_final_cta", lead_magnet: "academy-system-checklist" }}
-            className="inline-flex items-center gap-1 text-ui font-semibold text-fg-accent hover:underline underline-offset-4"
+            className="inline-flex min-h-11 items-center gap-1 text-ui font-semibold text-fg-accent hover:underline underline-offset-4"
           >
             {pilot.secondaryCta}
             <ArrowRight aria-hidden className="size-4 arrow-nudge" />
           </TrackedLink>
         </div>
-        <nav aria-label="다음 페이지" className="mt-8 flex flex-wrap gap-x-6 gap-y-2 border-t border-line-hair pt-6">
+        <p className="mt-4 text-caption text-fg-muted break-keep">{pilot.trust}</p>
+
+        <nav aria-label={pilot.pagesLabel} className="mt-10 flex flex-wrap gap-x-8 gap-y-3">
           {pilot.pages.map((page) => (
-            <Link key={page.href} href={page.href} className="text-ui text-fg-muted hover:text-fg-ink">
+            <GatewayLink key={page.href} href={page.href}>
               {page.label}
-            </Link>
+            </GatewayLink>
           ))}
         </nav>
       </Reveal>

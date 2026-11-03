@@ -1,13 +1,17 @@
-// components/home/home-copy.ts — 홈 5화면 카피 SSOT (스펙 §2-3). H1·리드는 lib/classin-positioning.ts 의
-// heroHeadline·oneLine 을 쓴다. 숫자 4개는 docs/active/brand-canon/company-facts.md 의 EEO 공식 수치.
+// components/home/home-copy.ts — 홈 카피 SSOT (스펙 §8, 캔버스 B-T2). H1 은 lib/classin-positioning.ts 의 heroHeadline.
+// 숫자 4개는 docs/active/brand-canon/company-facts.md 의 EEO 공식 수치. 학원 34곳은 옛 LogoBar 목록 그대로.
 export const HOME_COPY = {
   hero: {
-    kicker: "학원 수업 운영 OS",
+    lead: "전자칠판·녹화·교안·LMS·관리자 데이터를 한 흐름으로 묶는 수업 시스템 OS입니다.",
     primaryCta: "파일럿 상담 신청",
     secondaryCta: "34문항 운영 진단지 받기",
     secondaryHref: "/resources/academy-system-checklist#download",
-    imageAlt: "불 꺼진 교실 벽의 대형 전자칠판 화면에 푸른 지구가 떠 있는 장면",
-    image: { src: "/images/hero-dashboard.webp", width: 1536, height: 1024 },
+    image: {
+      src: "/images/home/hero-board.webp",
+      width: 1408,
+      height: 807,
+      alt: "Classin 전자칠판. 화면에 푸른 지구가 떠 있다",
+    },
     stats: [
       { value: "3,000만+", label: "월간 수업" },
       { value: "5,000만+", label: "교사 · 학습자" },
@@ -16,44 +20,107 @@ export const HOME_COPY = {
     ],
     statsCaption: "EEO 공식 기준 · 전 세계 누적",
   },
-  problem: {
-    heading: "강사가 바뀌면, 수업도 바뀝니다.",
-    scenes: [
-      { title: "에이스 강사가 퇴사했습니다.", body: "그 반 20명의 수업 품질은 누가 지킵니까." },
-      { title: "같은 교재, 같은 시간.", body: "반마다 성적이 다른데, 어느 반이 왜 다른지 모릅니다." },
-      { title: "상담마다 같은 질문.", body: "\"복습은 어떻게 하나요?\"에 매번 말로만 답합니다." },
+  academies: {
+    caption: "이미 시스템화를 선택한 학원들",
+    listLabel: "도입 학원",
+    pauseLabel: "학원 목록 흐름 멈추기",
+    playLabel: "학원 목록 흐름 다시 재생",
+    names: [
+      "부천 정율사관",
+      "부산 과사람",
+      "부산 예림학원",
+      "강남 세정학원",
+      "평택 윤유경플러스",
+      "부산 KJ 영재센터",
+      "청라 케슬에듀",
+      "익산 U2M수학",
+      "서울 올파이 학원",
+      "청주 이미숙국어",
+      "대구 학문당",
+      "천안 제이스칸",
+      "부산 라임라잇수학",
+      "12inEdu",
+      "노원 국풍2000",
+      "제주 더솔루션",
+      "광교 U2M",
+      "평촌 에스키어학원",
+      "한국학원대학교",
+      "고양 킹콩수학",
+      "모나르떼",
+      "아신대학교",
+      "디지털미디어고등학교",
+      "표창원범죄연구소",
+      "홍성 STC세임잉글리쉬",
+      "부산 미소에듀",
+      "인천 에듀엠학원",
+      "수원 미지원교육",
+      "동대문 수학의힘",
+      "부천 진수학",
+      "동탄 남명학원",
+      "의정부 권경욱어학원",
+      "서울 라플라스수학",
+      "서울 두드림학원",
     ],
-    closing: "수업은 개인기가 아니라, 시스템입니다.",
-    link: { label: "우리 학원 운영 누수 진단하기", href: "/resources/academy-system-checklist" },
   },
-  how: {
+  gains: {
     heading: "도입하면 바로 달라지는 세 가지",
     linkLabel: "자세히 보기",
-    steps: [
-      {
-        phase: "수업 전",
-        product: "EDB 교안",
-        title: "누가 들어가도 같은 수업",
-        body: "에이스 강사의 판서와 자료를 코스 파일로 남깁니다. 다음 강사는 그 파일을 그대로 엽니다.",
-        href: "/product/sw",
-        image: { src: "/images/home/how-before.webp", alt: "클래스인 코스 화면. 주차별 수업·학습 자료·숙제·시험이 한 과정 안에 정리돼 있다" },
-      },
+    // 화면 순서 = 수업 중 → 후 → 전. titleEmphasis 는 페이지의 유일한 밑줄 강조, caption 은 실제 화면 캡처에만
+    rows: [
       {
         phase: "수업 중",
         product: "자동 녹화",
         title: "수업만 하면 녹화가 저절로 쌓입니다",
+        titleEmphasis: "저절로",
         body: "보드로 수업을 시작하면 칠판과 AI 카메라 녹화가 함께 시작되고, 끝나면 클라우드에 저장됩니다. 결석 보강·복습 영상이 그날 바로 생깁니다.",
+        checks: ["칠판 화면과 AI 카메라를 함께 녹화", "수업이 끝나면 클라우드에 자동 저장", "결석 보강·복습 링크로 바로 공유"],
         href: "/product/hw",
-        image: { src: "/images/home/how-during.webp", alt: "교실 벽에 설치된 클래스인 전자칠판" },
+        image: {
+          src: "/images/home/board-class.webp",
+          width: 1408,
+          height: 807,
+          alt: "Classin 전자칠판 위의 개인칠판 수업 화면. 왼쪽은 교사 판서, 오른쪽은 학생별 풀이",
+        },
+        caption: null,
       },
       {
         phase: "수업 후",
         product: "AI 강의 평가",
         title: "수업이 끝나면 AI가 바로 평가합니다",
+        titleEmphasis: null,
         body: "녹화본을 AI가 분석해 점수와 보고서를 만듭니다. 참관하지 않아도 강사별 수업 품질을 같은 기준으로 봅니다.",
+        checks: ["수업마다 점수와 보고서 자동 생성", "강사별 수업 품질을 같은 기준으로", "참관 없이 수업 활성도 확인"],
         href: "/product/ai-report",
-        image: { src: "/images/home/how-after.webp", alt: "수업 다시보기 창의 AI 강의 분석 탭. 종합 점수와 항목별 평가" },
+        image: { src: "/images/home/win-ai.webp", width: 1062, height: 700, alt: "AI 강의 분석 창. 종합 점수와 항목별 평가" },
+        caption: "실제 화면 · AI 강의 분석",
       },
+      {
+        phase: "수업 전",
+        product: "EDB 교안",
+        title: "누가 들어가도 같은 수업",
+        titleEmphasis: null,
+        body: "에이스 강사의 판서와 자료를 코스 파일로 남깁니다. 다음 강사는 그 파일을 그대로 엽니다.",
+        checks: ["에이스 강사의 판서·자료를 코스 파일로", "다음 강사가 그대로 열어 수업", "신규 강사 온보딩 기준"],
+        href: "/product/sw",
+        image: {
+          src: "/images/home/win-activity.webp",
+          width: 940,
+          height: 722,
+          alt: "활동 게시 창. 수업·숙제·시험·녹화 수업·학습 자료를 코스에 올린다",
+        },
+        caption: "실제 화면 · 활동 게시",
+      },
+    ],
+  },
+  roles: {
+    heading: "역할마다 달라지는 것",
+    caption: "역할별 도입 전후 비교",
+    columns: { role: "역할", before: "Before", after: "After" },
+    rows: [
+      { role: "관리자", before: "강사 품질과 학생 이탈 위험에 대한 데이터 부재.", after: "권한에 맞는 수업 기록과 운영 정보를 확인." },
+      { role: "강사", before: "채점, 수업 준비, 학부모 상담 문자에 파묻힘.", after: "수업 자료와 판서를 다시 활용하고 반복 업무를 정리." },
+      { role: "학생", before: "과제 피드백이 늦어져 학습 의욕 저하.", after: "과제와 수업 자료를 활용해 복습과 피드백을 이어감." },
+      { role: "학부모", before: "성적표가 나올 때까지 아이의 상태를 알 수 없음.", after: "수업과 과제 기록을 바탕으로 상담 자료를 준비." },
     ],
   },
   proof: {
@@ -77,8 +144,16 @@ export const HOME_COPY = {
     ],
     link: { label: "도입 이야기 더 보기", href: "/blog" },
   },
+  explore: {
+    heading: "상담 전에 둘러보기",
+    items: [
+      { title: "처음 알아보기", body: "학원 수업 운영을 살펴볼 자료부터 확인하세요.", href: "/resources" },
+      { title: "도입 검토하기", body: "도입 기간과 요금, 연동에 관한 질문을 살펴보세요.", href: "/faq" },
+      { title: "이미 사용 중이신가요?", body: "설치부터 수업 준비와 문제 해결까지 안내합니다.", href: "/docs" },
+    ],
+  },
   pilot: {
-    heading: "1개 교실, 90일 파일럿부터",
+    heading: "1개 교실 파일럿부터",
     steps: [
       { title: "대표 수업 선정", body: "가장 손이 많이 가는 수업 하나를 고릅니다." },
       { title: "교실 설치 · 온보딩", body: "보드 설치와 강사 온보딩을 함께 진행합니다." },
@@ -88,6 +163,8 @@ export const HOME_COPY = {
     primaryCta: "파일럿 상담 신청",
     secondaryCta: "34문항 운영 진단지 받기",
     secondaryHref: "/resources/academy-system-checklist#download",
+    trust: "대표 수업 하나로 상담 받아보기 ∙ 도입 범위는 상담에서 함께 정합니다",
+    pagesLabel: "다음 페이지",
     pages: [
       { label: "목동 쇼룸", href: "/showroom" },
       { label: "가격", href: "/pricing" },

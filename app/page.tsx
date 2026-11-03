@@ -16,10 +16,12 @@ export const metadata: Metadata = createPublicMetadata({
   keywords: ["클래스인", "Classin", "학원 전자칠판", "수업 녹화", "학원 수업 운영", "수업 시스템 OS", "EDB"],
 })
 
-// 2~5화면은 폴드 아래 — 첫 청크에서 뺀다
-const HomeProblem = dynamic(() => import("@/components/home/HomeProblem").then((m) => ({ default: m.HomeProblem })))
-const HomeHow = dynamic(() => import("@/components/home/HomeHow").then((m) => ({ default: m.HomeHow })))
+// 히어로 아래는 폴드 아래 — 첫 청크에서 뺀다
+const HomeAcademies = dynamic(() => import("@/components/home/HomeAcademies").then((m) => ({ default: m.HomeAcademies })))
+const HomeGains = dynamic(() => import("@/components/home/HomeGains").then((m) => ({ default: m.HomeGains })))
+const HomeRoles = dynamic(() => import("@/components/home/HomeRoles").then((m) => ({ default: m.HomeRoles })))
 const HomeProof = dynamic(() => import("@/components/home/HomeProof").then((m) => ({ default: m.HomeProof })))
+const HomeExplore = dynamic(() => import("@/components/home/HomeExplore").then((m) => ({ default: m.HomeExplore })))
 const HomePilotCta = dynamic(() => import("@/components/home/HomePilotCta").then((m) => ({ default: m.HomePilotCta })))
 
 export default function LandingPage() {
@@ -35,11 +37,13 @@ export default function LandingPage() {
           createBreadcrumbJsonLd([{ name: "홈", path: "/" }]),
         ]}
       />
-      {/* 5화면 관문: 히어로+신뢰 → 문제 → 작동 방식 → 증거 → 파일럿+CTA (스펙 §2-2) */}
+      {/* 히어로+숫자 → 학원 띠 → 이득 3행 → 역할별 표 → 증거 → 둘러보기 → 파일럿 먹 띠 (스펙 §8, 캔버스 B-T2) */}
       <HomeHero />
-      <HomeProblem />
-      <HomeHow />
+      <HomeAcademies />
+      <HomeGains />
+      <HomeRoles />
       <HomeProof />
+      <HomeExplore />
       <HomePilotCta />
     </>
   )

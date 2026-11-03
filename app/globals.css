@@ -743,7 +743,7 @@
   50% { opacity: 0.6; transform: scale(1.8); }
 }
 
-/* LogoBar 인라인 style 이 이 이름을 쓴다 — LogoBar 정적 목록(P1) 뒤 삭제 */
+/* 홈 학원 롤링 띠(components/home/HomeAcademies.tsx, animate-[marquee_…])가 이 이름을 쓴다(2026-11-03 사용자 요청으로 롤링 유지) */
 @keyframes marquee {
   0% { transform: translateX(0); }
   100% { transform: translateX(-50%); }
