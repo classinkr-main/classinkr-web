@@ -13,7 +13,7 @@ const { pilot } = HOME_COPY
 export function HomePilotCta() {
   return (
     <section className="bg-surface-paper py-14 md:py-20">
-      <Reveal className="mx-auto max-w-[1040px] px-5">
+      <Reveal className="mx-auto max-w-[1040px] px-4 sm:px-6">
         <h2 className="text-h2 text-fg-ink break-keep">{pilot.heading}</h2>
         <ol className="mt-8 grid gap-4 md:mt-10 md:grid-cols-3">
           {pilot.steps.map((step, i) => (

@@ -234,7 +234,7 @@ REV 매출의 3단 확도(확정/고확도/예정)는 본질 기능이라 서로
 ### 폰트 패밀리 — `in force`
 - **Pretendard Variable**(라틴 글리프는 Inter 기반) + 시스템 폴백. 실제 스택은 `app/styles/tokens.css`의 `--font-sans`다: `"Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, sans-serif`.
 - 사실 정정(2026-10-27): 이전 표기 `Inter, -apple-system, system-ui, Segoe UI, Helvetica, Arial, sans-serif`는 실제와 달랐다. Inter를 따로 싣지 않는다.
-- `[public] target` 로딩은 자체 호스팅으로 바꾼다(V1-A). 지금은 jsDelivr에서 받는다.
+- 로딩은 자체 호스팅이다(V1-A, 2026-11-03 in force): `pretendard` npm 패키지의 dynamic-subset CSS를 `app/layout.tsx`에서 import 한다. jsDelivr 링크는 없다(`next.config.ts` CSP의 jsdelivr 허용은 `public/l/**` 정적 페이지가 떼기 전까지 남는다).
 
 ### 공개 화면 글자 토큰 — `[public] target`
 - 15종: `text-poster`·`text-display`·`text-h1`·`text-h2`·`text-h3`·`text-body-l`·`text-body`·`text-article`·`text-ui`·`text-caption`·`text-note`·`text-label`·`text-folio`·`text-numeral`·`text-quote`. 토큰 하나가 크기·행간·자간·굵기를 함께 든다. 값의 정본은 [typography 스펙 §3-1](docs/active/public-site-design-language-2026-10-26/typography.md)이다.
@@ -252,7 +252,7 @@ REV 매출의 3단 확도(확정/고확도/예정)는 본질 기능이라 서로
 | h3 | −0.01em | −0.006em |
 | numeral | −0.02em | −0.015em |
 
-- 레거시 `globals.css`의 h1–h4 모바일 `letter-spacing: 0 !important`가 이 표를 덮는다. P2 첫 커밋에서 어드민 전용으로 옮긴다.
+- 레거시 h1–h4·`.tracking-*` 모바일 `letter-spacing: 0 !important`는 어드민 전용으로 옮겼다(2026-11-03, `tokens.css`의 `body:not(:has(.site))`). 공개 화면은 이 표를 따른다.
 - **숫자**: 단독 디스플레이 숫자(`text-numeral`)는 비례 숫자, 표·가격·차트·폴리오·날짜는 `tabular-nums`(X14 개정).
 - **강조**: 제목(h1–h3·display·poster) 안 그린은 0이다. 구절 강조는 굵기 대비나 잉크 밑줄(2px, 페이지당 1)만 쓴다. 본문 그린 구절도 쓰지 않는다(밑줄 없는 링크와 구분되지 않는다). 가드 `heading-accent`를 P2에서 warn 래칫으로 새로 둔다.
 - **섹션 머리(V12-A)**: 1px 먹 masthead 아래 왼쪽 레일에 Kicker = 폴리오 13/500 `#615D59` → 12px → 라벨 13/600 `#111110`. 그린 바·그린 라벨 없음. 제목은 본문 칸(4–12)에서 시작하고, 공개 h1/h2 가운데 정렬은 쓰지 않는다(StateBlock·Dialog 제외).
@@ -369,7 +369,7 @@ REV 매출의 3단 확도(확정/고확도/예정)는 본질 기능이라 서로
 - `max-w-page` 1296px: 모든 섹션의 안쪽 컨테이너(거터를 빼면 lg 콘텐츠 1200).
 - `max-w-article` 45rem(720px): 블로그·문서·법무 본문 칼럼.
 - `max-w-measure` 38em: 읽는 문단. 덱 34em · 헤딩 18em · Display 14em · 인용 24em.
-- wide 컨테이너는 없다. 공개 화면에 `.container`(1400px)를 새로 쓰지 않는다. 풀블리드 이미지도 없다. 큰 도판은 콘텐츠 폭 plate(1200, 16:9 · 모바일 4:5, 글자 없음)로 두고 예산은 홈 0 · SW ≤1 · HW ≤2다(2026-10-28).
+- wide 컨테이너는 없다. 공개 화면에 `.container`(1400px)를 새로 쓰지 않는다. 풀블리드 이미지도 없다. 큰 도판은 콘텐츠 폭 plate(1200, 16:9 · 모바일 4:5, 글자 없음)로 두고 예산은 홈 7(실제 캡처·사진만, 이름 블러, 2026-11-03) · SW ≤1 · HW ≤2다(2026-10-28).
 
 **간격·섹션 리듬**
 - 새 spacing 토큰은 없다. Tailwind 기본 `--spacing`(0.25rem)의 배수만 쓴다.
@@ -379,6 +379,7 @@ REV 매출의 3단 확도(확정/고확도/예정)는 본질 기능이라 서로
 |---|---|---|---|---|
 | `base`(기본) | 64 | 96 | `py-16 md:py-24` | 일반 섹션 |
 | `act` | 80 | 128 | `py-20 md:py-32` | 홈 Act 01–06, 제품 장 머리 |
+| `compact` | 56 | 80 | `py-14 md:py-20` | 홈 관문 5화면(2026-11-02 v2) |
 | `band` | 40 | 48 | `py-10 md:py-12` | LogoBar(홈 중간 CTA 띠는 04 화면 Section 안 마지막 요소라 rhythm 없음) |
 | `none` | 0 | 0 | — | Hero 등 |
 
@@ -386,7 +387,7 @@ REV 매출의 3단 확도(확정/고확도/예정)는 본질 기능이라 서로
 
 **그리드**
 - 섹션(2026-10-28): ≥64rem에서 12칸(칸 약 78, 간격 24). 레일 1–3칸(Kicker·목차·짧은 주), 본문 4–12칸(제목 18em·덱 34em·본문 38em), 여백 10–12칸(본문이 4–9칸일 때 캡션·출처). 도판·카드 그리드·표는 1–12칸이나 4–12칸. 64rem 미만은 1열이고 Kicker를 제목 위 12px에 쌓는다.
-- Hero(V11-A): 출처를 확인한 실제 화면 캡처가 커밋되기 전에는 무도판 비대칭 표지다. H1은 1–9칸, 덱·CTA는 8–12칸에 H1 마지막 줄 아래 40px부터, LCP는 H1이다. 캡처가 들어오면 12칼럼 7 + 5(V3-A), `gap-12`로 바꾼다. 그 아래는 1열(텍스트 → 도판). 상단 여백은 `calc(var(--header-h) + 48px)`, ≥48rem에서 `+ 80px`.
+- Hero(V11-A): 출처를 확인한 실제 화면 캡처가 커밋되기 전에는 무도판 비대칭 표지다. H1은 1–9칸, 덱·CTA는 8–12칸에 H1 마지막 줄 아래 40px부터, LCP는 H1이다. 캡처가 들어오면 12칼럼 7 + 5(V3-A), `gap-12`로 바꾼다. 그 아래는 1열(텍스트 → 도판). 상단 여백은 `calc(var(--header-h) + 48px)`, ≥48rem에서 `+ 80px`. 홈은 코스 화면 글자가 5칸에서 읽히지 않아 세로 쌓기(텍스트 → 960 도판)를 유지한다(2026-11-03, V19-A).
 - 카드 그리드: 1열 → ≥40rem 2열 → ≥64rem 3열.
 
 **헤더·앵커**
@@ -535,5 +536,6 @@ z는 토큰으로만 쌓는다(X09). 지금의 리터럴(`z-40`·`z-50`·`z-[60]
 | V16 흰 화면 캡처 | A sunken 매트(20px, ≥64rem 32px) + 캡처 r0·hair, 모바일 전폭 | 2026-10-28 | 흰 위 흰 경계(1.06:1)가 사라진다. 그림자·색 없이 '보여 주는 물건'으로 세운다 | [캔버스 · V14·V16](https://claude.ai/artifact/QShWLdYRgZCZTy957gHtyx) |
 | V17 움직임 | A 인쇄된 표지 + 잉크 템포(밑줄 240ms 뒤 900ms, 모먼트 900ms `--ease-fade`, hover 160/320ms, 오버레이 닫힘 160ms) | 2026-10-28 | 정지한 지면에 잉크 한 획이 서명이 된다. 손에는 즉각, 떼면 여운 | [캔버스 · V17](https://claude.ai/artifact/QShWLdYRgZCZTy957gHtyx) |
 | V18 명조 디스플레이 | A 지금은 Pretendard 하나(V2-A 유지) | 2026-10-28 | 문구가 바뀌는 동안 서브셋을 계속 다시 만들어야 한다. 인용 4개·Manifesto 문구 확정 뒤 같은 보드로 재판정 | [캔버스 · V18](https://claude.ai/artifact/QShWLdYRgZCZTy957gHtyx) |
+| V19 홈 도판 | A 도판 7장(히어로 코스 화면 1 · 작동 방식 3 · 사례 3)을 실제 캡처·사진으로 채움, 히어로는 세로 쌓기(텍스트 → 960 도판) 유지, 섹션 리듬 `compact` 등재 | 2026-11-03 | 출처를 확인한 실제 화면·교실 사진이라 V11-A의 무도판 조건이 풀린다. 코스 화면 글자는 5칸에서 읽히지 않아 7 + 5 대신 세로로 쌓는다. 이름은 블러 | [홈 스펙 v3](docs/superpowers/specs/2026-10-30-home-landing-redesign-design.md) |
 
 - V10–V18의 규칙 개정 전문은 [고급화 기획 §5](docs/active/public-site-premium-elevation-2026-10-28.md)에, 결정 없이 함께 채택한 변경은 같은 문서 §4에 있다. 디자인과 별개인 정직성·개인정보 핫픽스(H)는 같은 문서 §7이다.

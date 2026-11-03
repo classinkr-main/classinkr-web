@@ -15,7 +15,7 @@ const [h1Lead, h1Rest] = CLASSIN_POSITIONING.heroHeadline.split(", ")
 export function HomeHero() {
   return (
     <section className="bg-surface-paper pt-(--header-h)">
-      <div className="mx-auto max-w-[1040px] px-5 pb-14 pt-14 md:pb-20 md:pt-20">
+      <div className="mx-auto max-w-[1040px] px-4 sm:px-6 pb-14 pt-14 md:pb-20 md:pt-20">
         <div className="mx-auto max-w-[800px] text-center">
           <p className="text-label text-fg-muted">{hero.kicker}</p>
           <h1 className="mt-4 text-h1 text-fg-ink break-keep">
@@ -44,10 +44,10 @@ export function HomeHero() {
         {/* LCP 는 H1. priority(preload) 는 가드가 막는다 — eager 로드만 */}
         <div className="mx-auto mt-12 max-w-[960px] overflow-hidden rounded-xl border border-line-hair bg-surface-sheet md:mt-14">
           <Image
-            src="/images/hero-dashboard.webp"
+            src={hero.image.src}
             alt={hero.imageAlt}
-            width={1536}
-            height={1024}
+            width={hero.image.width}
+            height={hero.image.height}
             loading="eager"
             sizes="(min-width: 1040px) 960px, 100vw"
             className="h-auto w-full"

@@ -7,7 +7,7 @@ const { problem } = HOME_COPY
 export function HomeProblem() {
   return (
     <section className="bg-surface-sunken py-14 md:py-20">
-      <Reveal className="mx-auto max-w-[1040px] px-5">
+      <Reveal className="mx-auto max-w-[1040px] px-4 sm:px-6">
         <h2 className="text-h2 text-fg-ink break-keep">{problem.heading}</h2>
         <ul className="mt-8 grid gap-4 md:mt-10 md:grid-cols-3">
           {problem.scenes.map((scene) => (
