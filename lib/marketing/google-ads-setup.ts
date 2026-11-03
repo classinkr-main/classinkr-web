@@ -156,7 +156,7 @@ export const GOOGLE_ADS_TRACKING: readonly GoogleAdsTrackingFact[] = [
   },
   {
     label: "기본 전환",
-    value: "'ClassIn KR Web (web) generate_lead' — 리드 양식 제출 · 1회 집계 · 클릭 후 90일 · 데이터 기반 기여",
+    value: "'ClassIn KR Web (web) generate_lead'(GA4 가져오기) — 리드 양식 제출 · 1회 집계 · 클릭 후 90일 · 데이터 기반 기여. #52 배포 때 보조로 내린다",
     tone: "ok",
   },
   {
@@ -166,17 +166,17 @@ export const GOOGLE_ADS_TRACKING: readonly GoogleAdsTrackingFact[] = [
   },
   {
     label: "사이트 태그",
-    value: "AW-18252550128 (395 아님 · 924 추정) — 상담 폼 성공 시 generate_lead 와 함께 이 태그로 전환 발송",
+    value: "지금은 924 태그 AW-18252550128 — 상담 폼 성공 시 924로 전환 발송. PR #52 배포 때 395 태그로 바꾼다 (11/3 결정)",
   },
   {
     label: "395 태그",
-    value: "AW-18551599540 은 사이트에 없다 — 395의 '도입 상담 신청'·'쇼룸 예약 완료' 전환은 작동하지 않는다",
+    value: "AW-18551599540 — PR #52 배포 후 '도입 상담 신청'·'쇼룸 예약 완료' 전환이 들어온다. 그 전까지 두 전환은 0",
     tone: "warn",
   },
 ]
 
 export const GOOGLE_ADS_TRACKING_RULES: readonly string[] = [
-  "395 태그나 전환 호출을 사이트에 넣지 않는다 — 395는 GA4 가져오기로 리드를 받으므로 중복 집계된다",
+  "기본 전환은 하나만 — #52 배포 때 GA4 가져오기 generate_lead 를 보조로 내린다. 둘 다 기본이면 같은 문의가 입찰에 두 번 잡힌다",
   "뉴스레터 구독도 generate_lead 로 잡힌다 — 문의만 세는 이벤트로 나누는 일은 나중 과제",
 ]
 
@@ -188,9 +188,9 @@ export const GOOGLE_ADS_API_STEPS: readonly string[] = [
   "API 연동: Vercel 에 GOOGLE_ADS_CUSTOMER_ID=3951743288 넣고 재배포 (콘솔 작업은 11/3 완료)",
 ]
 
-/** 사용자가 직접 해야 남은 일 — 이게 끝나야 395 캠페인이 돈다. */
+/** 사용자가 직접 해야 남은 일 — 근거: 문서 §6. */
 export const GOOGLE_ADS_TODO: readonly string[] = [
   "395에 카드 등록 + 충전 (최소 ₩347,777)",
-  "924 중복 유튜브 캠페인을 끌지 결정",
+  "PR #52 배포 때: 924 캠페인(실적 최대화·유튜브) 일시중지 · 395 GA4 가져오기 전환을 보조로",
   "C1 수정 · C2~C4 생성 진행 승인",
 ]

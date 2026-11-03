@@ -39,8 +39,8 @@
 - raw IP와 불필요한 PII를 저장하지 않는다. 이벤트 파라미터는 allowlist와 redaction을 통과해야 한다.
 - 새 이벤트는 `lib/analytics.ts`의 타입과 `/api/track/event`의 이벤트/파라미터 allowlist를 함께 갱신한다.
 - `trackEvent`의 dataLayer, gtag, 내부 적재와 GTM 태깅이 중복 집계되지 않는지 확인한다.
-- Google Ads 주 계정 395는 GA4 `generate_lead` 가져오기로 리드를 받는다. 395 태그(`AW-18551599540`)나 그 전환 호출을 사이트에 넣지 않는다 — 중복 집계된다.
-  사이트의 `GOOGLE_ADS_ID`(`AW-18252550128`)는 다른 계정(924 추정) 것이다. 계정·캠페인·전환 현황은 [Google Ads 현황(2026-11-03)](../google-ads-accounts-2026-11-03.md).
+- Google Ads 운영 계정은 395 하나다(11/3 결정 — 사이트 태그는 PR #52로 `AW-18551599540`). 라벨 전환과 GA4 가져오기 `generate_lead`를 둘 다 기본 전환으로 두지 않는다 — 중복 집계된다.
+  계정·캠페인·전환 현황은 [Google Ads 현황(2026-11-03)](../google-ads-accounts-2026-11-03.md).
 
 ### CRM과 매출
 
