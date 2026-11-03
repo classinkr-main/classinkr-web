@@ -93,7 +93,7 @@ export const GOOGLE_ADS_CAMPAIGN_PLAN: readonly GoogleAdsPlannedCampaign[] = [
     key: "C2",
     goal: "리드",
     type: "디맨드젠",
-    settings: "전환 목표 generate_lead",
+    settings: "맞춤 목표 'C2 리드' — 자료 신청 ₩5,000 · 도입 상담 신청 ₩50,000 · 쇼룸 예약 완료 ₩100,000 · 전환 가치 극대화 · #52·#57 배포 뒤 시작",
     dailyBudget: 14_000,
     start: "2026-11-09",
     end: "2026-12-31",
@@ -147,7 +147,7 @@ export const GOOGLE_ADS_TRACKING: readonly GoogleAdsTrackingFact[] = [
   },
   {
     label: "주요 이벤트",
-    value: "generate_lead (lead_type: demo_request · newsletter) — 최근 7일 0건",
+    value: "generate_lead (lead_type: demo_request · newsletter) — 최근 7일 0건 · lead_magnet_signup(자료 신청) 11/3 추가, PR #57 배포 뒤부터 집계",
   },
   {
     label: "395 연결",
