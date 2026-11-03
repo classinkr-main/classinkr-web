@@ -98,6 +98,26 @@ const lineupCards = [
 ]
 
 /* ── Section: Comparison ─────────────────────────────────────────── */
+// 화면 아래쪽 자동재생 영상(약 3MB)은 autoPlay 때문에 preload 와 무관하게 첫 로드에 통째로 받아졌다(Lighthouse 실측).
+// 화면 근처에 오기 전에는 src 를 주지 않는다. 자리는 부모의 aspect-video 가 잡고 있어 레이아웃이 밀리지 않는다.
+function InViewLoopVideo({ src, ariaLabel }: { src: string; ariaLabel: string }) {
+    const ref = useRef<HTMLVideoElement>(null)
+    const near = useInView(ref, { once: true, margin: "300px" })
+    return (
+        <video
+            ref={ref}
+            src={near ? src : undefined}
+            className="h-full w-full object-cover"
+            autoPlay
+            muted
+            loop
+            playsInline
+            preload="none"
+            aria-label={ariaLabel}
+        />
+    )
+}
+
 function ComparisonSection() {
     const ref = useRef(null)
     const inView = useInView(ref, { once: true, margin: "-100px" })
@@ -1096,15 +1116,9 @@ export default function ProductHWPage() {
                     <div className="absolute -inset-7 rounded-[2rem] bg-[radial-gradient(circle_at_35%_20%,rgba(8,71,52,0.18),transparent_46%),radial-gradient(circle_at_80%_75%,rgba(8,71,52,0.14),transparent_45%)] blur-2xl" />
                     <div className="relative rounded-[1.55rem] bg-gradient-to-br from-white via-[#F2EFE7] to-[#CFC8BA] p-[4px] shadow-[0_32px_90px_rgba(8,71,52,0.18)] ring-1 ring-black/5">
                         <div className="relative aspect-video overflow-hidden rounded-[1.25rem] bg-black shadow-inner">
-                            <video
+                            <InViewLoopVideo
                                 src="/video/Interactive%20Learning%20with%20ClassIn.mp4"
-                                className="h-full w-full object-cover"
-                                autoPlay
-                                muted
-                                loop
-                                playsInline
-                                preload="metadata"
-                                aria-label="Classin 인터랙티브 러닝 수업 영상"
+                                ariaLabel="Classin 인터랙티브 러닝 수업 영상"
                             />
                             <div className="pointer-events-none absolute inset-0 rounded-[1.25rem] ring-1 ring-white/25" />
                             <div className="pointer-events-none absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-white/20 to-transparent" />
@@ -1155,7 +1169,7 @@ export default function ProductHWPage() {
                             },
                             {
                                 icon: <Layers className="w-8 h-8" />,
-                                title: "20+ 강의 도구",
+                                title: "30+ 수업 도구",
                                 desc: "타이머, 투표, 퀴즈, 그룹토론 등 30+ 수업 도구가 칠판 위에서 바로 실행됩니다.",
                             },
                             {
