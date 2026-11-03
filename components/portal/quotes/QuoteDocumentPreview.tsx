@@ -74,7 +74,10 @@ export default function QuoteDocumentPreview({ quote, documentNumber, title, edi
         <thead><tr><th>No.</th><th>품목 / 세부내역</th><th>수량</th><th>단가</th><th>공급가액</th></tr></thead>
         <tbody>{(quote.lineItems ?? []).map((line, index) => <tr key={`${index}-${line.itemCode}`}>
           <td>{line.lineNumber ?? index + 1}</td>
-          <td><strong>{line.itemName}</strong>{line.itemDescription && <p>{line.itemDescription}</p>}</td>
+          <td><strong>{line.itemName}</strong>{line.itemDescription && <p>{line.itemDescription}</p>}
+            {line.originalUnitPrice != null && line.unitPrice != null && line.originalUnitPrice > line.unitPrice &&
+              <p>정가 {money(line.originalUnitPrice)}원 · 할인 −{money(line.originalUnitPrice - line.unitPrice)}원 / {line.quantityUnit || "개"}</p>}
+          </td>
           <td>{line.quantity ?? "–"}{line.quantityUnit}</td>
           <td>{money(line.unitPrice)}</td><td>{lineAmount(line)}</td>
         </tr>)}</tbody>
