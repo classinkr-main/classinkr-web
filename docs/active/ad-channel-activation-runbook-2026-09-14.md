@@ -133,7 +133,7 @@ refresh_token 발급·만료가 없어 **새 비밀 값이 필요 없다.** 접�
 
 1. GCP `classin-home` 에서 **Google Ads API 사용 설정** —
    `https://console.cloud.google.com/apis/library/googleads.googleapis.com?project=classin-home`
-   (11/3 완료 — 그 전에는 `SERVICE_DISABLED`, 프로젝트 번호 876787918822. 2·3단계도 11/3 완료, 남은 것은 5단계)
+   (11/3 완료 — 그 전에는 `SERVICE_DISABLED`, 프로젝트 번호 876787918822. 2~4단계와 5단계 환경 변수 추가도 11/3 완료, 남은 것은 PR #55 배포)
 2. 같은 프로젝트의 Google Ads API **개요 페이지 → 액세스 신청(Apply for access)** → **Explorer**.
    대부분 자동 승인이다. Test 등급으로는 테스트 계정만 읽힌다.
 3. Google Ads **395** → 관리자 → 액세스 및 보안 → 사용자 **+** → 서비스 계정 이메일 → **읽기 전용** → 추가
