@@ -2,7 +2,7 @@
 // 숫자 4개는 docs/active/brand-canon/company-facts.md 의 EEO 공식 수치. 학원 34곳은 옛 LogoBar 목록 그대로.
 export const HOME_COPY = {
   hero: {
-    lead: "전자칠판·녹화·교안·LMS·관리자 데이터를 한 흐름으로 묶는 수업 시스템 OS입니다.",
+    lead: "Classin은 전자칠판 하나에 수업 녹화, AI 강의 평가, 교안·숙제·시험 관리를 묶었습니다. 강사가 바뀌어도 같은 수업이 이어집니다.",
     primaryCta: "파일럿 상담 신청",
     secondaryCta: "34문항 운영 진단지 받기",
     secondaryHref: "/resources/academy-system-checklist#download",
