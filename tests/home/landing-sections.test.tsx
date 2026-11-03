@@ -35,7 +35,7 @@ const imgs = (h: string) => h.match(/<img[^>]*>/g) ?? []
 const alts = (h: string) => imgs(h).map((tag) => tag.match(/alt="([^"]*)"/)?.[1] ?? "")
 
 describe("홈 5화면", () => {
-  it("히어로: H1·주 CTA 1회·진단지 링크·숫자 4개·제품 이미지", () => {
+  it("히어로: H1·주 CTA 1회·진단지 링크·숫자 4개·전자칠판 이미지", () => {
     const h = html(<HomeHero />)
     expect(h).toContain("<h1")
     expect(h).toContain("학원의 시스템으로")
@@ -43,7 +43,7 @@ describe("홈 5화면", () => {
     expect(h).toContain(`href="${CHECKLIST}#download"`)
     for (const v of ["3,000만+", "5,000만+", "6만+", "160+"]) expect(h).toContain(v)
     expect(imgs(h)).toHaveLength(1)
-    expect(h).toContain('src="/images/home/hero-course.webp"')
+    expect(h).toContain('src="/images/hero-dashboard.webp"')
     expect(alts(h)).toEqual([HOME_COPY.hero.imageAlt])
     expect(h).toContain('loading="eager"')
     expect(h).not.toContain("priority")

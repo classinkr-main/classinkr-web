@@ -173,8 +173,8 @@ H1·리드는 `lib/classin-positioning.ts`의 `heroHeadline`·`oneLine`을 쓴�
 ### 7-1 도판 7장 (모두 실제 화면·사진, 이름은 원본에서 블러)
 | 자리 | 파일(`public/images/home/`) | 원본 | 비고 |
 |---|---|---|---|
-| 히어로 | `hero-course.webp` 1503×944 | 드라이브 `수업과정.png`(10-15, 블러본) | 코스 한 과정에 주차별 수업·자료·숙제·시험. 세로 쌓기 유지(7+5 분할이면 글자가 안 읽힘) |
-| 작동 방식 · 수업 전 | `how-before.webp` 1200×754 | 드라이브 `수업활동.png` | 활동 게시 모달 |
+| 히어로 | 기존 `images/hero-dashboard.webp` 1536×1024 | 기존 | 전자칠판 사진 유지(사용자 결정 11-03 "처음에는 전자칠판이 필요"). 세로 쌓기 |
+| 작동 방식 · 수업 전 | `how-before.webp` 1200×754 | 드라이브 `수업과정.png`(10-15, 블러본) | 코스 한 과정에 주차별 수업·자료·숙제·시험 |
 | 작동 방식 · 수업 중 | `how-during.webp` 1200×750 | 드라이브 `11층칠판설치(4).jpg` 보드 중심 16:10 크롭 | 실제 교실, 사람 없음 |
 | 작동 방식 · 수업 후 | `how-after.webp` 1174×734 | 드라이브 `리포트.png` 상하 트림 | AI 강의 분석 탭 |
 | 사례 3 | 기존 `case-studies/{cheongju-imisook-korean-v3.jpg, busan-gwasaram.jpg, daechi-sejeong.webp}` | 이미 공개 중 | 새 파일 없음 |

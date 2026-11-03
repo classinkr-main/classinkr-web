@@ -6,8 +6,8 @@ export const HOME_COPY = {
     primaryCta: "파일럿 상담 신청",
     secondaryCta: "34문항 운영 진단지 받기",
     secondaryHref: "/resources/academy-system-checklist#download",
-    imageAlt: "클래스인 코스 화면. 주차별 수업·학습 자료·숙제·시험이 한 과정 안에 정리돼 있다",
-    image: { src: "/images/home/hero-course.webp", width: 1503, height: 944 },
+    imageAlt: "불 꺼진 교실 벽의 대형 전자칠판 화면에 푸른 지구가 떠 있는 장면",
+    image: { src: "/images/hero-dashboard.webp", width: 1536, height: 1024 },
     stats: [
       { value: "3,000만+", label: "월간 수업" },
       { value: "5,000만+", label: "교사 · 학습자" },
@@ -36,7 +36,7 @@ export const HOME_COPY = {
         title: "누가 들어가도 같은 수업",
         body: "에이스 강사의 판서와 자료를 코스 파일로 남깁니다. 다음 강사는 그 파일을 그대로 엽니다.",
         href: "/product/sw",
-        image: { src: "/images/home/how-before.webp", alt: "활동 게시 창. 수업·숙제·시험·녹화 수업·학습 자료를 코스에 올리는 화면" },
+        image: { src: "/images/home/how-before.webp", alt: "클래스인 코스 화면. 주차별 수업·학습 자료·숙제·시험이 한 과정 안에 정리돼 있다" },
       },
       {
         phase: "수업 중",
