@@ -165,3 +165,32 @@ H1·리드는 `lib/classin-positioning.ts`의 `heroHeadline`·`oneLine`을 쓴�
 3. `components/home/` 5개 + `home-copy.ts` + `app/page.tsx` + 섹션 삭제 + 홈 테스트.
 4. 공개 사이트 hex → 토큰(3-3), 묶음별로 가드 확인.
 5. 게이트·vitest·브라우저 스크린샷, 설계와 대조, PR.
+
+## 7. v3 — 폰트·여백·실제 화면·직접 문구 (2026-11-03, PR #54 위에 `design/home-v3`)
+
+사용자 요청: "폰트, 여백, 직접 UI 화면, 직접적인 개선(적용·다가오는 문구·시각·이득)". §5의 "사례 사진의 홈 복귀 금지"는 이 절이 대체한다(실제 캡처·사진에 한함).
+
+### 7-1 도판 7장 (모두 실제 화면·사진, 이름은 원본에서 블러)
+| 자리 | 파일(`public/images/home/`) | 원본 | 비고 |
+|---|---|---|---|
+| 히어로 | `hero-course.webp` 1503×944 | 드라이브 `수업과정.png`(10-15, 블러본) | 코스 한 과정에 주차별 수업·자료·숙제·시험. 세로 쌓기 유지(7+5 분할이면 글자가 안 읽힘) |
+| 작동 방식 · 수업 전 | `how-before.webp` 1200×754 | 드라이브 `수업활동.png` | 활동 게시 모달 |
+| 작동 방식 · 수업 중 | `how-during.webp` 1200×750 | 드라이브 `11층칠판설치(4).jpg` 보드 중심 16:10 크롭 | 실제 교실, 사람 없음 |
+| 작동 방식 · 수업 후 | `how-after.webp` 1174×734 | 드라이브 `리포트.png` 상하 트림 | AI 강의 분석 탭 |
+| 사례 3 | 기존 `case-studies/{cheongju-imisook-korean-v3.jpg, busan-gwasaram.jpg, daechi-sejeong.webp}` | 이미 공개 중 | 새 파일 없음 |
+
+가공 스크립트: 세션 스크래치 `home-images.mjs`(sharp, webp q82). 드라이브 접근은 공용 서비스 계정 읽기 전용.
+
+### 7-2 문구 — 카드마다 '적용 한 줄 + 이득 한 줄'
+- 작동 방식 카드: `phase`(수업 전·중·후) → `product`(EDB 교안 / Classin Board / 녹화 · AI 리포트) → 제목은 이득, 본문은 적용. 숫자·과장어·`→` 없음. 출석·결제는 "별도 시스템"이므로 이득에 끌어오지 않는다.
+- H1·리드는 `lib/classin-positioning.ts` 정본 그대로. 사례 3건은 숫자 없이 유지(출처 있는 수치만 허용).
+
+### 7-3 폰트
+- Pretendard Variable 자체 호스팅: `pretendard` npm 패키지의 dynamic-subset CSS를 `app/layout.tsx`에서 import, jsDelivr preconnect·preload·stylesheet 3개 제거.
+- `tokens.css`를 DESIGN.md §3 정본으로: `text-h1` 36→56, display·h1·h2 굵기 600. 레거시 `globals.css` 모바일 `letter-spacing: 0 !important` 두 블록은 어드민(`.site` 없는 DOM)으로 한정.
+
+### 7-4 여백
+- 홈 5화면 측면 거터 `px-5` → 시스템값 `px-4 sm:px-6`. 섹션 리듬 56/80은 DESIGN.md §5-A 표에 `compact`로 등재. 컨테이너 1040 유지.
+
+### 7-5 검증
+§4와 같다. 추가: 홈 `<img>` 7개 모두 alt 있음·`priority` 0, 데스크톱 문서 높이 4,600px 이하.
