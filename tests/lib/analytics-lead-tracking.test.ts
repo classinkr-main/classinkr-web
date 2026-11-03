@@ -9,6 +9,7 @@ vi.mock("@/lib/consent/consent", () => ({
 
 vi.mock("@/lib/analytics-config", () => ({
   GOOGLE_ADS_DEMO_CONVERSION_LABEL: "demo-label",
+  GOOGLE_ADS_SHOWROOM_CONVERSION_LABEL: "showroom-label",
   GOOGLE_ADS_ID: "AW-TEST",
   KAKAO_PIXEL_ID: null,
   NAVER_LEAD_CONVERSION_TYPE: null,
@@ -97,6 +98,7 @@ describe("trackLeadSubmitted", () => {
       dedupeKey: "lead:abc",
       eventId: "lead:abc",
       transactionId: "abc",
+      contactTopic: "도입 상담",
       params: { lead_id: "abc", stored: true, event_slug: "fall-seminar" },
     })
 
@@ -104,6 +106,7 @@ describe("trackLeadSubmitted", () => {
     const [lead] = gtagEvents("generate_lead")
     expect(lead?.[2]).toEqual({
       page_location: "https://classin.kr/contact?utm_source=naver",
+      content_group: "contact",
       source: "contact_page",
       form_type: "contact",
       lead_source: "contact_page",
@@ -147,6 +150,25 @@ describe("trackLeadSubmitted", () => {
     expect(storage.map.get("classinkr.leadTracked.booking-1")).toBe("1")
   })
 
+  it("routes each form to its Ads conversion label and skips non-sales leads", () => {
+    const sendTo = () => gtagEvents("conversion").map(([, , params]) => params?.send_to)
+    const send = (input: Parameters<typeof trackLeadSubmitted>[0]) => {
+      gtag.mockClear()
+      expect(trackLeadSubmitted(input)).toBe(true)
+      return sendTo()
+    }
+
+    expect(send({ formType: "showroom", source: "showroom_booking", dedupeKey: "r1" })).toEqual(["AW-TEST/showroom-label"])
+    expect(send({ formType: "demo", source: "demo_modal", dedupeKey: "r2" })).toEqual(["AW-TEST/demo-label"])
+    expect(send({ formType: "contact", source: "contact_page", dedupeKey: "r3", contactTopic: "도입 상담" })).toEqual(["AW-TEST/demo-label"])
+    // 지원 문의·유형 없음·행사·HW 주문은 GA4 리드로만 남고 광고 전환은 보내지 않는다.
+    expect(send({ formType: "contact", source: "contact_page", dedupeKey: "r4", contactTopic: "계정/접속/기술 지원" })).toEqual([])
+    expect(send({ formType: "contact", source: "contact_page", dedupeKey: "r5" })).toEqual([])
+    expect(send({ formType: "event", source: "contact_page", dedupeKey: "r6" })).toEqual([])
+    expect(send({ formType: "checkout_request", source: "checkout_request", dedupeKey: "r7" })).toEqual([])
+    expect(gtagEvents("generate_lead")).toHaveLength(1)
+  })
+
   it("respects a key already recorded in sessionStorage (e.g. after a reload)", () => {
     storage.setItem("classinkr.leadTracked.req-9", "1")
     expect(
@@ -170,6 +192,15 @@ describe("trackLeadSubmitted", () => {
     const input = { formType: "demo" as const, source: "demo_modal", dedupeKey: "lead:blocked" }
     expect(trackLeadSubmitted(input)).toBe(true)
     expect(trackLeadSubmitted(input)).toBe(false)
+  })
+
+  it("keeps only enumerated academy_size values", () => {
+    trackLeadSubmitted({ formType: "contact", source: "contact_page", params: { academy_size: "100~300명" } })
+    trackLeadSubmitted({ formType: "demo", source: "demo_modal", params: { academy_size: "김원장 010-1234-5678" } })
+
+    const [valid, invalid] = gtagEvents("generate_lead").map(([, , params]) => params)
+    expect(valid).toMatchObject({ academy_size: "100~300명" })
+    expect(invalid).not.toHaveProperty("academy_size")
   })
 })
 
@@ -201,6 +232,21 @@ describe("trackEvent GA4 params", () => {
       page_path: "/resources/academy-system-checklist",
     })
     expect(JSON.stringify(download)).not.toMatch(/token|signature|@/)
+  })
+
+  it("counts an email-gated material as lead_magnet_signup, but not an ungated brochure", () => {
+    trackEvent("download_materials", {
+      asset_id: "academy-system-checklist",
+      lead_magnet: "academy-system-checklist",
+      gate: "email",
+      source: "resource_pdf_download",
+    })
+    trackEvent("download_materials", { asset_id: "sw_brochure", page: "/product/sw" })
+
+    expect(gtagEvents("file_download")).toHaveLength(2)
+    const signups = gtagEvents("lead_magnet_signup")
+    expect(signups).toHaveLength(1)
+    expect(signups[0]?.[2]).toMatchObject({ lead_magnet: "academy-system-checklist", gate: "email" })
   })
 
   it("skipMarketingPixels keeps GA4 but leaves Meta untouched", () => {

@@ -282,11 +282,13 @@ export default function ContactPage() {
                 dedupeKey: data.conversionEventId ?? data.leadId,
                 eventId: data.conversionEventId,
                 transactionId: data.leadId,
+                contactTopic: topicValue,
                 params: {
                     lead_id: data.leadId,
                     stored: data.stored,
                     event_slug: selectedEvent?.slug,
                     lead_magnet: leadMagnet || undefined,
+                    academy_size: formData.get("size") as string,
                 },
             })
             toast.success("상담 요청이 접수되었어요")

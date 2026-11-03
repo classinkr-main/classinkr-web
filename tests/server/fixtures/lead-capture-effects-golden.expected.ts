@@ -14,6 +14,8 @@ export const GOLDEN_EFFECT_LOGS: Record<string, unknown[]> = {
     [
       "saveLead",
       {
+        "ga_client_id": "GA1.1.1111111111.1789000000",
+        "ga_ad_consent": true,
         "source": "contact_page",
         "name": "골든 문의자",
         "org": "골든 테스트학원",
@@ -138,7 +140,6 @@ export const GOLDEN_EFFECT_LOGS: Record<string, unknown[]> = {
       {
         "eventId": "lead:lead-golden-contact",
         "metaEventName": "Lead",
-        "ga4EventName": "generate_lead",
         "requestMeta": {
           "clientIp": "203.0.113.10",
           "userAgent": "golden-agent/1.0",
@@ -290,7 +291,6 @@ export const GOLDEN_EFFECT_LOGS: Record<string, unknown[]> = {
       {
         "eventId": "lead:lead-golden-demo",
         "metaEventName": "Lead",
-        "ga4EventName": "generate_lead",
         "requestMeta": null,
         "sourceUrl": "https://classin.kr/demo",
         "user": {
@@ -460,7 +460,6 @@ export const GOLDEN_EFFECT_LOGS: Record<string, unknown[]> = {
       {
         "eventId": "lead:lead-golden-meta",
         "metaEventName": "Lead",
-        "ga4EventName": "generate_lead",
         "requestMeta": null,
         "user": {
           "email": "test.lead@example.com",
@@ -768,7 +767,6 @@ export const GOLDEN_EFFECT_LOGS: Record<string, unknown[]> = {
       {
         "eventId": "lead:lead-golden-delivery",
         "metaEventName": "Lead",
-        "ga4EventName": "generate_lead",
         "requestMeta": null,
         "sourceUrl": "https://classin.kr/contact",
         "user": {
@@ -903,7 +901,6 @@ export const GOLDEN_EFFECT_LOGS: Record<string, unknown[]> = {
       {
         "eventId": "lead:lead-golden-suppressed",
         "metaEventName": "Lead",
-        "ga4EventName": "generate_lead",
         "requestMeta": null,
         "sourceUrl": "https://classin.kr/demo",
         "user": {

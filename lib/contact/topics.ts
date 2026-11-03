@@ -45,3 +45,8 @@ const CONTACT_TOPIC_VALUE_SET: ReadonlySet<string> = new Set(
 export function isContactTopic(value: unknown): value is string {
   return typeof value === "string" && CONTACT_TOPIC_VALUE_SET.has(value)
 }
+
+/** 영업(sales) 유형인지. 광고 전환은 이 유형만 센다 — 지원·행사 문의가 입찰 학습에 섞이지 않게. */
+export function isSalesContactTopic(value: unknown): boolean {
+  return CONTACT_TOPICS.some((topic) => topic.value === value && topic.group === "sales")
+}

@@ -112,6 +112,7 @@ export function DemoModal({ children, trackingButton }: { children: React.ReactN
                 params: {
                     lead_id: data.leadId,
                     stored: data.stored,
+                    academy_size: formData.get("size") as string,
                 },
             })
             toast.success("상담 요청이 접수되었어요")

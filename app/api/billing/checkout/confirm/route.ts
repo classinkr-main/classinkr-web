@@ -53,7 +53,6 @@ function emitPurchaseConversion(req: NextRequest, order: SoftwareCheckoutOrder) 
   void sendServerConversion({
     eventId: conversionEventId,
     metaEventName: "Purchase",
-    ga4EventName: "purchase",
     requestMeta: getMarketingRequestMeta(req, {
       sourceUrl,
       fbclid: getRawPrepareValue(order, "fbclid"),

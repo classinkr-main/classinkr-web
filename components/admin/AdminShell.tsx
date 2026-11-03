@@ -22,6 +22,7 @@ import { clearAdminSessionStorage } from "@/lib/admin-client"
 import { isAdminAuthBypassEnabled } from "@/lib/admin-env"
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser"
 import { hasSupabaseBrowserEnv } from "@/lib/supabase/public-env"
+import { markInternalTraffic } from "@/lib/tracking-paths"
 
 // 셸이 실제로 그리는 데 쓰는 필드. 서버 세션(AdminShellSession)에서 파생시켜
 // 두 모양이 조용히 어긋나는 걸 컴파일러가 잡게 한다.
@@ -168,6 +169,12 @@ export default function AdminShell({
 
     return readCachedSession()
   })
+
+  // 세션이 있는 브라우저 = 직원 브라우저. 공개 페이지의 GA4 hit 에 traffic_type=internal 이
+  // 실리게 표시를 남긴다(lib/tracking-paths.ts). 로그아웃해도 지우지 않는다.
+  useEffect(() => {
+    if (session) markInternalTraffic()
+  }, [session])
 
   useEffect(() => {
     if (isLoginPage) return

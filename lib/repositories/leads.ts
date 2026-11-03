@@ -19,6 +19,10 @@ import { summarizeLeadResponseStatus } from "@/lib/crm/lead-response-status";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { Lead, LeadInsert, LeadUpdate } from "@/lib/supabase/database.types";
 import { parseNaverAd, type NaverAdAttribution } from "@/lib/naver-ad-params";
+import {
+  leadQualitySignalForLeadStatus,
+  scheduleLeadQualitySignal,
+} from "@/lib/marketing/lead-quality-signal";
 
 // 기존 타입 re-export (호환성)
 export type { LeadStatus } from "@/lib/supabase/database.types";
@@ -46,8 +50,18 @@ const IS_PRODUCTION_RUNTIME =
  * database.types.ts는 다른 작업과 충돌을 피하려 재생성하지 않았다. 생성 타입에 없는
  * 컬럼 하나만 구조적으로 얹어 쓴다 — any 캐스팅 없이 타입이 계속 성립한다.
  */
-type LeadInsertWithInflow = LeadInsert & { last_inflow_at?: string | null };
+type LeadInsertWithInflow = LeadInsert & { last_inflow_at?: string | null } & LeadGaCapture;
 type LeadRowWithInflow = Lead & { last_inflow_at?: string | null };
+
+/**
+ * 제출 시 GA 식별자(20261102 마이그레이션) — 같은 이유로 생성 타입 대신 구조적으로 얹는다. 저장만 하고 읽지
+ * 않는다(LeadRecord 에 없음). 읽기·발송 선점은 lib/marketing/lead-quality-signal.ts 가 직접 한다.
+ */
+export interface LeadGaCapture {
+  ga_client_id?: string | null;
+  ga_session_id?: string | null;
+  ga_ad_consent?: boolean | null;
+}
 
 const OPTIONAL_LEAD_INSERT_COLUMNS = [
   "branch",
@@ -74,6 +88,10 @@ const OPTIONAL_LEAD_INSERT_COLUMNS = [
   "naver_ad",
   // 마이그레이션 미적용 환경에서도 리드 저장이 통째로 죽지 않게 선택 컬럼으로 다룬다.
   "last_inflow_at",
+  // 20261102 마이그레이션(GA4 리드 품질 신호). 미적용이면 GA 식별자만 덜고 저장한다.
+  "ga_client_id",
+  "ga_session_id",
+  "ga_ad_consent",
 ] as const satisfies readonly (keyof LeadInsertWithInflow)[];
 
 interface SupabaseColumnError {
@@ -231,9 +249,12 @@ function isMissingLeadColumn(error: SupabaseColumnError, column: keyof LeadInser
 function stripOptionalLeadColumns(insert: LeadInsertWithInflow, error?: SupabaseColumnError) {
   const fallbackInsert: Partial<LeadInsertWithInflow> = { ...insert };
 
-  const named = error
+  const named: (keyof LeadInsertWithInflow)[] = error
     ? OPTIONAL_LEAD_INSERT_COLUMNS.filter((column) => isMissingLeadColumn(error, column))
     : [];
+  // GA 식별자 세 컬럼은 한 마이그레이션이라 함께 없다. 오류는 한 번에 하나만 지목하므로 묶음째 덜어야
+  // 두 번째 실패 → "선택 컬럼 전부 덜기"(utm·gclid 까지 유실)로 내려가지 않는다.
+  if (named.some((column) => column.startsWith("ga_"))) named.push("ga_client_id", "ga_session_id", "ga_ad_consent");
   const doomed = named.length > 0 ? named : OPTIONAL_LEAD_INSERT_COLUMNS;
 
   for (const column of doomed) {
@@ -773,7 +794,7 @@ export async function findLeadsByContacts(contacts: {
 /* ─── CREATE ─── */
 
 export async function saveLead(
-  lead: Omit<LeadRecord, "id" | "status">
+  lead: Omit<LeadRecord, "id" | "status"> & LeadGaCapture
 ): Promise<LeadRecord> {
   assertDurableLeadStorage();
 
@@ -827,6 +848,10 @@ export async function saveLead(
     // 새 행 대신 touchLeadInflow()로 이 컬럼만 갱신한다(응대 대상 소스 한정. 그 밖의 소스와
     // 어드민 수기 등록·챗봇·캡처 경로는 여전히 제출마다 한 행이다).
     last_inflow_at: lead.last_inflow_at ?? new Date().toISOString(),
+    // 분석 동의 제출만 호출부(lib/server/lead-capture.ts)가 채운다 — 나머지 경로는 NULL.
+    ga_client_id: lead.ga_client_id ?? null,
+    ga_session_id: lead.ga_session_id ?? null,
+    ga_ad_consent: lead.ga_ad_consent ?? null,
   };
 
   const { data, error } = await supabase
@@ -990,6 +1015,11 @@ export async function updateLead(
     return null;
   }
   if (!data) return null;
+  // 상태 쓰기는 단건 PATCH·전환(convertLeadToCrm)·단체 전환이 모두 여기로 온다 — 품질 신호를 한 곳에서 건다.
+  // 응답 뒤로 미루고(after) 리드당 한 번만 나간다. MKT 반영 크론(applyCompassLeadStatusSync)은
+  // 연락중·종료만 쓰는데 둘 다 신호 대상이 아니라 걸지 않는다.
+  const signal = patch.status ? leadQualitySignalForLeadStatus(patch.status) : null;
+  if (signal) scheduleLeadQualitySignal(id, signal);
   return returnAfterLeadMutation(supabaseToLegacy(data as Lead));
 }
 

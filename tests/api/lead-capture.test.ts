@@ -184,9 +184,10 @@ describe("submitLeadCapture duplicate handling", () => {
       expect.objectContaining({
         eventId: "lead:lead-1",
         metaEventName: "Lead",
-        ga4EventName: "generate_lead",
       })
     )
+    // generate_lead 는 브라우저만 보낸다 — 서버 MP 까지 보내면 GA4 에 두 번 잡힌다(런북 §5-6).
+    expect(sendServerConversion.mock.calls[0][0]).not.toHaveProperty("ga4EventName")
   })
 
   it("does not collapse different lead-magnet submissions from the same email", async () => {
