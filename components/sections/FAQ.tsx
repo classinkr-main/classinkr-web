@@ -15,14 +15,21 @@ function findCategoryByItemId(id: string) {
     return PUBLIC_FAQ_CATEGORIES.find((category) => category.items.some((item) => item.id === id))
 }
 
-// 숨은 탭(display:none) 안의 질문은 scrollIntoView 가 듣지 않으니, 보일 때까지 대상을 남겨 둔다.
-function revealPendingItem(pendingIdRef: RefObject<string | null>) {
+// 숨은 곳(탭 전환이 아직 반영되기 전, 스트리밍된 본문이 아직 드러나기 전)의 질문은 scrollIntoView 가 듣지 않는다.
+// 보일 때까지 프레임마다 다시 본다(60fps 기준 약 5초). 시간이 아니라 프레임으로 세어, 백그라운드 탭에서 열린 링크도 탭을 볼 때 펼쳐진다.
+const REVEAL_MAX_FRAMES = 300
+
+function revealPendingItem(pendingIdRef: RefObject<string | null>, frame = 0) {
     const id = pendingIdRef.current
-    const el = id ? document.getElementById(id) : null
-    if (!(el instanceof HTMLDetailsElement) || el.offsetParent === null) return
-    pendingIdRef.current = null
-    el.open = true
-    el.scrollIntoView({ block: "center" })
+    if (!id) return
+    const el = document.getElementById(id)
+    if (el instanceof HTMLDetailsElement && el.offsetParent !== null) {
+        pendingIdRef.current = null
+        el.open = true
+        el.scrollIntoView({ block: "center" })
+        return
+    }
+    if (frame < REVEAL_MAX_FRAMES) requestAnimationFrame(() => revealPendingItem(pendingIdRef, frame + 1))
 }
 
 export function FAQ() {
@@ -43,11 +50,6 @@ export function FAQ() {
         window.addEventListener("hashchange", readHash)
         return () => window.removeEventListener("hashchange", readHash)
     }, [])
-
-    // 다른 탭의 질문이면 탭 전환이 화면에 반영된 뒤에야 펼치고 스크롤할 수 있다.
-    useEffect(() => {
-        revealPendingItem(pendingIdRef)
-    }, [tab])
 
     return (
         <section id="faq" className="py-16 md:py-24 bg-white relative">
