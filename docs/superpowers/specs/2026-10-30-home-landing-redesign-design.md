@@ -194,3 +194,27 @@ H1·리드는 `lib/classin-positioning.ts`의 `heroHeadline`·`oneLine`을 쓴�
 
 ### 7-5 검증
 §4와 같다. 추가: 홈 `<img>` 7개 모두 alt 있음·`priority` 0, 데스크톱 문서 높이 4,600px 이하.
+
+## 8. v4 — 시안 B 구조 + T2 타이포(IBM Plex Sans KR) 전체 사이트 (2026-11-03 사용자 선택)
+
+시안 캔버스 https://claude.ai/artifact/Sqstbv5y41VNEviU2gxX1U 의 `B-T2`가 정본. 홈 구조는 B, 글꼴·두께·여백은 T2를 공개 사이트 전체에 적용한다.
+
+### 8-1 홈 화면 순서 (헤더·푸터 제외 8)
+1. 히어로 — v3 그대로(가운데 정렬, 전자칠판 사진 960, 숫자 4).
+2. 학원 롤링 띠 — 캡션 "이미 시스템화를 선택한 학원들" + 옛 LogoBar 학원명 34곳이 왼쪽으로 흐름(양끝 마스크, `prefers-reduced-motion`이면 정지).
+3. 섹션 머리 "수업 전 · 중 · 후" / "도입하면 바로 달라지는 세 가지".
+4~6. 이득 3행, 이미지·글 좌우 교차(이미지 55%): 수업 중 · 자동 녹화(`gain-recording.webp`, 액자) / 수업 후 · AI 강의 평가(`win-ai.webp`, 창만 + 옅은 그림자, 캡션 "실제 화면 · AI 강의 분석") / 수업 전 · EDB 교안(`win-activity.webp` 대화창만 + 그림자, 최대 480, 캡션 "실제 화면 · 활동 게시"). 각 행 = 라벨(phase · product) → 제목 → 본문 → 체크 3 → "자세히 보기".
+7. 역할마다 달라지는 것 — 관리자/강사/학생/학부모 Before·After 표(옛 Outcomes 문구 그대로).
+8. 먼저 바꾼 학원들 — v3 그대로.
+9. 상담 전에 둘러보기 — 처음 알아보기 `/resources` · 도입 검토하기 `/faq` · 이미 사용 중이신가요? `/docs`.
+10. 파일럿 먹 띠 — 제목 "1개 교실 파일럿부터"(90일 없음), 3단계, 정직 문구, CTA 2, 신뢰 줄 "대표 수업 하나로 상담 받아보기 ∙ 도입 범위는 상담에서 함께 정합니다", 페이지 링크 3.
+- 이득 3행 문구·체크 3줄은 캔버스 B 본문 그대로. 문제 3장면 화면은 뺀다(진단지 링크는 히어로·파일럿에 남음).
+
+### 8-2 T2 타이포 — 공개 사이트 전체
+- 글꼴: `IBM Plex Sans KR`(400·500·600·700, `@fontsource/ibm-plex-sans-kr` 자체 호스팅) → 폴백 Pretendard Variable → 시스템. DESIGN.md "Pretendard 하나"(V2-A·V18-A) 결정은 V20-A로 교체. 어드민은 `.site` 밖이라 영향 없음(폰트 토큰은 공개 전용으로 분기하지 않는다 — 어드민도 같은 스택을 상속하므로 어드민 글꼴도 바뀐다. 사용자 "전체 사이트" 지시의 범위를 공개 사이트로 읽고, 어드민은 `:root:not(:has(.site))`에서 `--font-sans`를 Pretendard로 되돌려 둔다).
+- 토큰: `text-h1` 36→60px 행간 1.15 자간 −0.02em · `text-h2` 28→38px 행간 1.2 자간 −0.02em · `text-h3` 20→30px 행간 1.25 · `text-body-l` 18px 행간 1.8 · `text-body` 16px 행간 1.8 · `text-label` 12px/600 자간 +0.04em · `text-numeral` 44px/600. 굵기는 display·h1·h2·h3 600 유지.
+- 버튼·입력 모서리 6px → 8px. 창 캡처 전용 그림자 유틸 `.plate-window`(`0 12px 32px rgb(17 17 16 / .14), 0 1px 2px rgb(17 17 16 / .08)`)를 `app/styles/utilities.css`에 두고 홈 창 캡처 2곳에만 쓴다(V14-A 그림자 0의 유일한 예외, V20-A).
+- 섹션 리듬: 홈 `compact` 56/80 → 80/112(`py-20 md:py-28`), 히어로 상단 `+ 96px`.
+
+### 8-3 검증
+§4·§7-5와 같다. 추가: 모든 공개 페이지에서 `font-family` 계산값이 Plex로 시작, 어드민은 Pretendard. 홈 `<img>` 7개 alt·`priority` 0, 롤링 띠는 reduced-motion에서 정지.
