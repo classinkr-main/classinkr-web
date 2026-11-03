@@ -338,12 +338,6 @@ export const NAV_WARMUP_REQUESTS: Record<string, WarmupEntry[] | (() => WarmupEn
   // app/admin/hardware/page.tsx의 RSC 프리페치가 GET /api/admin/hardware 전체를 이미 같은
   // 조립 함수(getHardwareDashboard)로 서버에서 계산한다 — click만 건너뛴다.
   "/admin/hardware": ["/api/admin/hardware"],
-  "/admin/traffic": [
-    // 3중 스캔(visitor-stats/homepage-flow/event-counts)은 단일 집계 traffic-summary로 대체됨 —
-    // warm 키도 페이지 소비 URL과 일치해야 적중한다(Wave 3-A).
-    "/api/admin/traffic-summary?range=30",
-    "/api/admin/marketing/conversions/status",
-  ],
   // 페이지가 실제로 부르는 건 셋뿐이다 — email·events·event-metrics·event-counts는
   // 소비처가 사라졌는데 목록에만 남아 hover마다 헛 요청을 보내고 있었다.
   "/admin/analytics": [

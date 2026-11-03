@@ -233,7 +233,7 @@ describe("admin command palette — 숨긴 탭도 ⌘K 에서 검색된다", () 
     expect(commands.map((cmd) => cmd.href)).toEqual(expect.arrayContaining(allNavHrefs))
     // 숨길 수 있는 부모의 자식 명령(CS 콘솔 → 가이드 문서 등)도 함께 남는다.
     expect(commands.map((cmd) => cmd.href)).toEqual(
-      expect.arrayContaining(["/admin/docs", "/admin/channel-talk", "/admin/events", "/admin/traffic"])
+      expect.arrayContaining(["/admin/docs", "/admin/channel-talk", "/admin/events", "/admin/analytics?tab=visitors"])
     )
     expect(commands.map((cmd) => cmd.label)).toContain("내 사이드바 편집")
   })
@@ -256,7 +256,7 @@ describe("admin command palette access parity", () => {
 
   it("inherits Analytics access for traffic", () => {
     // 전면 공개(2026-09-10) 이후 Analytics 는 전원에게 열려 있으므로 흡수된 트래픽 명령도 항상 뜬다.
-    expect(hrefsFor()).toContain("/admin/traffic")
+    expect(hrefsFor()).toContain("/admin/analytics?tab=visitors")
   })
 
   it("기타로 접힌 항목도 ⌘K 에서는 그대로 찾을 수 있다", () => {

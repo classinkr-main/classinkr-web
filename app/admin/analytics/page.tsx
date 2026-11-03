@@ -31,7 +31,7 @@ type AnalyticsTab = "visitors" | "leads" | "sources" | "content"
 type AnalyticsSubscriberRow = Pick<Subscriber, "createdAt" | "status" | "source">
 
 // Analytics = 홈페이지 방문자 → 리드·소스·콘텐츠 분석. 트래픽은 nav에서 내려가 이 화면이 유일한 입구라
-// '방문자' 탭이 /admin/traffic 대시보드를 그대로 임베드한다(2026-11-02, 링크만 있던 상태에서 승격).
+// '방문자' 탭이 방문자/트래픽의 유일한 화면이다 — /admin/traffic·⌘K '방문자·트래픽'도 이 탭으로 온다(2026-11-03).
 // 행사 퍼널·이메일 캠페인 성과는 /admin/campaigns 에 단일화(근거: admin-ia-redesign-2026-06-29 §2-🟠4).
 const ANALYTICS_TABS: Array<{ key: AnalyticsTab; label: string }> = [
   { key: "visitors", label: "방문자" },
@@ -519,7 +519,7 @@ export default function AnalyticsPage() {
         </a>
       </div>}
 
-      {activeTab === "visitors" && <TrafficDashboard embedded range={range} />}
+      {activeTab === "visitors" && <TrafficDashboard range={range} />}
 
       {activeTab === "leads" && (
         <div className="space-y-6">

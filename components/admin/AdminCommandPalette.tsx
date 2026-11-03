@@ -105,7 +105,7 @@ const PALETTE_CHILD_COMMANDS: Record<string, Array<Omit<AdminCommand, "group">>>
     { label: "새 블로그 글 작성", href: "/admin/blog/new", keywords: "새글 작성 write new post 블로그" },
   ],
   "/admin/analytics": [
-    { label: "방문자·트래픽", href: "/admin/traffic", keywords: "방문자 트래픽 홈페이지 흐름 전환 traffic visitor" },
+    { label: "방문자·트래픽", href: "/admin/analytics?tab=visitors", keywords: "방문자 트래픽 홈페이지 흐름 전환 traffic visitor" },
   ],
   // CS 진입점 단일화(2026-08-18) — 사이드바 cs 섹션이 CS 콘솔 1항목이 되면서 가이드 문서·내부 CS의
   // nav 항목도 콘솔 가로 메뉴로 흡수됐다. URL은 전부 그대로이므로 ⌘K 도달성은 자식 커맨드로 보존한다

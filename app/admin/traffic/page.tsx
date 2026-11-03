@@ -1,6 +1,11 @@
-import TrafficDashboard from "@/components/admin/traffic/TrafficDashboard"
+import { redirect } from "next/navigation"
 
-// 같은 화면이 Analytics '방문자' 탭에도 임베드된다(embedded). 이 독립 경로는 기존 링크·북마크용.
-export default function TrafficPage() {
-  return <TrafficDashboard />
+// 방문자/트래픽은 Analytics '방문자' 탭 하나로 합쳤다(2026-11-03). 이 경로는 옛 링크·북마크용 리다이렉트.
+export default async function TrafficPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ detail?: string }>
+}) {
+  const { detail } = await searchParams
+  redirect(`/admin/analytics?tab=visitors${detail === "diagnostics" ? "&detail=diagnostics" : ""}`)
 }

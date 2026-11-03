@@ -242,10 +242,10 @@ function formatUpdatedAt(value: string | null) {
   }).format(date)
 }
 
-function replaceTrafficQuery(range: RangeDays | null, detailTab: TrafficDetailTab) {
+// 전환 성과/계측 진단 하위 탭만 URL(?detail=)에 남긴다 — 기간은 Analytics 화면이 쥔다.
+function replaceDetailQuery(detailTab: TrafficDetailTab) {
   if (typeof window === "undefined") return
   const url = new URL(window.location.href)
-  if (range != null) url.searchParams.set("range", String(range))
   if (detailTab === "diagnostics") {
     url.searchParams.set("detail", "diagnostics")
   } else {
@@ -370,22 +370,11 @@ function InsightItem({
   )
 }
 
-export type TrafficRangeDays = RangeDays
-
 /**
- * embedded: Analytics '방문자' 탭 안에 들어갈 때. 페이지 헤더·자체 기간 버튼을 숨기고
- * 기간은 바깥(range prop)이 쥔다 — 한 화면에 기간 선택기가 둘이면 어느 쪽이 숫자를 정하는지 헷갈린다.
+ * Analytics '방문자' 탭 본문. 방문자/트래픽의 유일한 화면이다 — /admin/traffic 은 이 탭으로
+ * 리다이렉트한다(2026-11-03). 기간은 Analytics 상단 버튼(range prop)이 쥔다.
  */
-export default function TrafficDashboard({
-  embedded = false,
-  range: controlledRange,
-}: {
-  embedded?: boolean
-  range?: RangeDays
-} = {}) {
-  const [ownRange, setRange] = useState<RangeDays>(30)
-  const range = controlledRange ?? ownRange
-  const [rangeReady, setRangeReady] = useState(false)
+export default function TrafficDashboard({ range }: { range: RangeDays }) {
   const [detailTab, setDetailTab] =
     useState<TrafficDetailTab>("conversions")
   const [visitorStats, setVisitorStats] = useState<VisitorStats | null>(null)
@@ -405,28 +394,13 @@ export default function TrafficDashboard({
   const [reloadKey, setReloadKey] = useState(0)
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    const requestedRange = Number(params.get("range"))
-    const requestedTab =
-      params.get("detail") === "diagnostics"
-        ? "diagnostics"
-        : "conversions"
-
-    queueMicrotask(() => {
-      if (
-        requestedRange === 7 ||
-        requestedRange === 14 ||
-        requestedRange === 30
-      ) {
-        setRange(requestedRange)
-      }
-      setDetailTab(requestedTab)
-      setRangeReady(true)
-    })
+    // ?detail=diagnostics 딥링크(옛 /admin/traffic 북마크가 리다이렉트로 넘겨준 것 포함)
+    if (new URLSearchParams(window.location.search).get("detail") === "diagnostics") {
+      queueMicrotask(() => setDetailTab("diagnostics"))
+    }
   }, [])
 
   useEffect(() => {
-    if (!rangeReady) return
     let cancelled = false
 
     const load = async () => {
@@ -456,7 +430,7 @@ export default function TrafficDashboard({
     return () => {
       cancelled = true
     }
-  }, [range, rangeReady, reloadKey])
+  }, [range, reloadKey])
 
   const todayIndex =
     visitorStats?.daily.findIndex(
@@ -522,14 +496,9 @@ export default function TrafficDashboard({
     : []
   const connectedTrackingCount = trackingChecks.filter(Boolean).length
 
-  const handleRangeChange = (nextRange: RangeDays) => {
-    setRange(nextRange)
-    replaceTrafficQuery(nextRange, detailTab)
-  }
-
   const handleDetailTabChange = (nextTab: TrafficDetailTab) => {
     setDetailTab(nextTab)
-    replaceTrafficQuery(embedded ? null : range, nextTab)
+    replaceDetailQuery(nextTab)
   }
 
   const loadingValue = loading ? "—" : null
@@ -541,7 +510,7 @@ export default function TrafficDashboard({
         : `어제 대비 ${visitorTrend > 0 ? "+" : ""}${visitorTrend}명`
 
   return (
-    <div className={embedded ? "" : "px-4 pt-8 pb-16 sm:px-6 sm:pt-10 sm:pb-20 lg:px-8"}>
+    <div>
       {loadError && !loading && (
         <div className="mb-5 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#F2B8B8] bg-[#FCE9E9] px-3 py-2 text-[13px] text-[#B43E3E]">
           <span>트래픽 집계를 불러오지 못했습니다 — 아래 0으로 보이는 수치는 실측이 아닙니다.</span>
@@ -554,53 +523,11 @@ export default function TrafficDashboard({
           </button>
         </div>
       )}
-      {embedded ? (
-        <p className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-[#615D59]">
-          <span>분석 쿠키에 동의한 방문자의 자체 DB 집계 · 날짜 기준 {tz}</span>
-          <span aria-hidden="true">·</span>
-          <span>최근 업데이트 {formatUpdatedAt(generatedAt)}</span>
-        </p>
-      ) : (
-      <header className="mb-6 flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
-        <div>
-          <h1 className="text-[26px] font-bold tracking-[-0.035em] text-[#111110]">
-            방문자 / 트래픽
-          </h1>
-          <p className="mt-2 max-w-3xl text-[13px] leading-6 text-[#615D59]">
-            홈페이지 방문자 수와 페이지별 흐름·이탈, 전환 추적 상태를
-            운영 판단 순서로 봅니다. 분석 쿠키에 동의한 방문자의 자체 DB
-            집계이며, 날짜 기준은 {tz}입니다.
-          </p>
-          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-[#615D59]">
-            <span>최근 업데이트 {formatUpdatedAt(generatedAt)}</span>
-            <span aria-hidden="true">·</span>
-            <span>자체 수집 client_events</span>
-          </div>
-        </div>
-
-        <div
-          className="grid w-full grid-cols-3 gap-1 rounded-lg bg-[#F0F0EC] p-1 xl:w-auto"
-          aria-label="조회 기간"
-          role="group"
-        >
-          {([7, 14, 30] as const).map((value) => (
-            <button
-              key={value}
-              type="button"
-              aria-pressed={range === value}
-              onClick={() => handleRangeChange(value)}
-              className={`min-h-11 rounded-md px-4 text-[13px] font-semibold whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 ${
-                range === value
-                  ? "bg-white text-[#111110] shadow-[0_1px_4px_rgba(17,17,16,0.08)]"
-                  : "text-[#615D59] hover:text-[#111110]"
-              }`}
-            >
-              {value}일
-            </button>
-          ))}
-        </div>
-      </header>
-      )}
+      <p className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-[#615D59]">
+        <span>분석 쿠키에 동의한 방문자의 자체 DB 집계 · 날짜 기준 {tz}</span>
+        <span aria-hidden="true">·</span>
+        <span>최근 업데이트 {formatUpdatedAt(generatedAt)}</span>
+      </p>
 
       <section
         aria-labelledby="traffic-summary-title"
