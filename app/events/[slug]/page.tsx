@@ -12,6 +12,7 @@ import {
   listCachedPublicEvents,
   listCachedPublicEventSlugs,
 } from "@/lib/repositories/public-events"
+import { getEventRouteSegment, resolveEventRouteSlug } from "@/lib/event-slug-route"
 import { JsonLd } from "@/components/seo/JsonLd"
 import {
   DEFAULT_OG_IMAGE_PATH,
@@ -39,14 +40,6 @@ interface EventDetailPageProps {
 }
 
 const readPublicEventBySlug = cache((slug: string) => getCachedPublicEventBySlug(slug))
-
-function decodeEventSlugParam(slug: string): string {
-  try {
-    return decodeURIComponent(slug)
-  } catch {
-    return slug
-  }
-}
 
 // ISO → 구글 캘린더 URL용 UTC 포맷 (YYYYMMDDTHHMMSSZ)
 function toCalendarUtc(iso: string): string {
@@ -81,12 +74,13 @@ function buildGoogleCalendarUrl(event: {
 
 export async function generateStaticParams() {
   const slugs = await listCachedPublicEventSlugs()
-  return slugs.map((slug) => ({ slug }))
+  // 한글 슬러그는 proxy 가 rewrite 하는 토큰 경로로 사전 생성한다(원문 경로는 요청이 닿지 않는다).
+  return slugs.map((slug) => ({ slug: getEventRouteSegment(slug) }))
 }
 
 export async function generateMetadata({ params }: EventDetailPageProps): Promise<Metadata> {
   const { slug: rawSlug } = await params
-  const slug = decodeEventSlugParam(rawSlug)
+  const slug = resolveEventRouteSlug(rawSlug)
   const event = await readPublicEventBySlug(slug)
   if (!event) return { title: "행사를 찾을 수 없습니다" }
   const canonical = toAbsoluteUrl(`/events/${event.slug ?? slug}`)
@@ -107,7 +101,7 @@ export async function generateMetadata({ params }: EventDetailPageProps): Promis
 
 export default async function EventDetailPage({ params }: EventDetailPageProps) {
   const { slug: rawSlug } = await params
-  const slug = decodeEventSlugParam(rawSlug)
+  const slug = resolveEventRouteSlug(rawSlug)
   const event = await readPublicEventBySlug(slug)
 
   if (!event) notFound()

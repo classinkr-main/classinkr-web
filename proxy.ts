@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server"
 
 import { isAdminAuthBypassEnabled } from "@/lib/admin-env"
 import { getBlogSlugTokenRewritePath } from "@/lib/blog-slug-route"
+import { getEventSlugTokenRewritePath } from "@/lib/event-slug-route"
 import { updateSupabaseSession, type VerifiedSupabaseUser } from "@/lib/supabase/middleware"
 import { getSupabaseBrowserEnv, hasSupabaseBrowserEnv } from "@/lib/supabase/public-env"
 
@@ -187,10 +188,10 @@ function redirectToAdminLogin(request: NextRequest) {
   return response
 }
 
-// 한글 등 헤더에 못 싣는 슬러그의 블로그 글은 ASCII 토큰 경로로 rewrite 한다 — ISR 암묵 캐시
-// 태그가 x-next-cache-tags 응답 헤더에 실려 Vercel 에서 500 나던 사고(lib/blog-slug-route.ts).
+// 한글 등 헤더에 못 싣는 슬러그의 블로그 글·행사 상세는 ASCII 토큰 경로로 rewrite 한다 — ISR 암묵 캐시
+// 태그가 x-next-cache-tags 응답 헤더에 실려 Vercel 에서 500 나던 사고(lib/blog-slug-route.ts, lib/event-slug-route.ts).
 // 주소창 URL 은 그대로다. 세션 갱신 결과(요청 쿠키·Set-Cookie)는 next() 응답과 똑같이 잇는다.
-function rewriteToBlogSlugToken(request: NextRequest, sessionResponse: NextResponse, pathname: string) {
+function rewriteToSlugToken(request: NextRequest, sessionResponse: NextResponse, pathname: string) {
   const url = request.nextUrl.clone()
   url.pathname = pathname
   const response = NextResponse.rewrite(url, { request })
@@ -207,9 +208,11 @@ export async function proxy(request: NextRequest) {
 
   const { response, user } = await updateSupabaseSession(request)
 
-  const blogSlugTokenPath = getBlogSlugTokenRewritePath(request.nextUrl.pathname)
-  if (blogSlugTokenPath) {
-    return rewriteToBlogSlugToken(request, response, blogSlugTokenPath)
+  const slugTokenPath =
+    getBlogSlugTokenRewritePath(request.nextUrl.pathname) ??
+    getEventSlugTokenRewritePath(request.nextUrl.pathname)
+  if (slugTokenPath) {
+    return rewriteToSlugToken(request, response, slugTokenPath)
   }
 
   if (!isProtectedAdminPath(request.nextUrl.pathname)) {

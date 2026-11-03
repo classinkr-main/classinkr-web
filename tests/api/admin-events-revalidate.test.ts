@@ -22,6 +22,7 @@ vi.mock("next/cache", () => ({
 import { revalidatePublicEventSurfaces } from "@/app/api/admin/events/_revalidate"
 import { PUBLIC_EVENTS_CACHE_TAG } from "@/lib/repositories/public-events"
 import { ADMIN_CALENDAR_EVENTS_CACHE_TAG } from "@/lib/admin-calendar/cache-tags"
+import { encodeBlogSlugToken } from "@/lib/blog-slug-route"
 
 beforeEach(() => {
   mocks.revalidatePath.mockClear()
@@ -51,5 +52,13 @@ describe("revalidatePublicEventSurfaces — 캘린더 태그 동반 무효화", 
     expect(mocks.revalidatePath).toHaveBeenCalledWith("/sitemap.xml")
     expect(mocks.revalidatePath).toHaveBeenCalledWith("/events/winter-fair")
     expect(mocks.revalidatePath).toHaveBeenCalledWith("/events/winter-fair/calendar.ics")
+  })
+
+  it("한글 슬러그 상세는 ISR 캐시가 붙는 proxy rewrite 토큰 경로를 재검증한다", () => {
+    const slug = "classin-meets-gwang-ju-광주-세미나-v0txw"
+    revalidatePublicEventSurfaces(slug)
+
+    expect(mocks.revalidatePath).toHaveBeenCalledWith(`/events/${encodeBlogSlugToken(slug)}`)
+    expect(mocks.revalidatePath).not.toHaveBeenCalledWith(`/events/${slug}`)
   })
 })
