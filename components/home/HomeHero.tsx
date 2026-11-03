@@ -42,16 +42,30 @@ export function HomeHero() {
           </div>
         </div>
 
-        {/* 투명 컷아웃(그림자는 이미지 안) — 액자·테두리·바탕·반경 없음. LCP 는 H1, priority(preload) 는 가드가 막는다 */}
-        <Image
-          src={hero.image.src}
-          alt={hero.image.alt}
-          width={hero.image.width}
-          height={hero.image.height}
-          loading="eager"
-          sizes="(min-width: 1040px) 960px, 100vw"
-          className="mx-auto mt-16 h-auto w-full max-w-[960px]"
-        />
+        {/* 전자칠판 = 틀(빈 검은 화면) + 화면 두 장, 둘 다 투명 컷아웃(그림자는 이미지 안) — 액자·테두리·바탕·반경 없음.
+            페이지가 열리면 화면만 240ms 뒤 켜진다(data-moment="hero-screen", site-base.css). 틀과 제목은 처음부터 정지.
+            화면 사각형 = 틀 1408×807 안의 (58,43) 1291×681. LCP 는 H1, priority(preload) 는 가드가 막는다 */}
+        <div className="relative mx-auto mt-16 w-full max-w-[960px]">
+          <Image
+            src={hero.board.frame.src}
+            alt={hero.board.alt}
+            width={hero.board.frame.width}
+            height={hero.board.frame.height}
+            loading="eager"
+            sizes="(min-width: 1040px) 960px, 100vw"
+            className="h-auto w-full"
+          />
+          <div data-moment="hero-screen" className="absolute left-[4.119%] top-[5.328%] h-[84.387%] w-[91.69%]">
+            <Image
+              src={hero.board.screen.src}
+              alt=""
+              fill
+              loading="eager"
+              sizes="(min-width: 1040px) 880px, 92vw"
+              className="object-cover"
+            />
+          </div>
+        </div>
 
         <dl className="mt-16 grid grid-cols-2 gap-y-10 md:grid-cols-4">
           {hero.stats.map((s) => (

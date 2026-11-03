@@ -169,6 +169,22 @@
       transition: opacity var(--motion-slow) var(--ease-soft) 240ms;
     }
 
+    /* ⑥ 홈 — 히어로 전자칠판 화면 켜짐. JS 0, 940ms 에 끝난다. 홈 Hero 의 모먼트는 이것 하나(틀·제목은 정지, V21-A) */
+    :where(.site) [data-moment="hero-screen"] {
+      animation: panel-in var(--motion-slow) var(--ease-soft) 240ms both;
+    }
+    /* ⑦ 홈 — 이득 1행 먹 밑줄 한 단어. Reveal 조상이 들어오면 240ms 뒤 스민다(그리기 아님, 색만) */
+    :where(.site) [data-reveal="out"] [data-moment="ink-word"] { text-decoration-color: transparent; }
+    :where(.site) [data-reveal="in"] [data-moment="ink-word"] {
+      transition: text-decoration-color var(--motion-slow) var(--ease-soft) 240ms;
+    }
+    /* ⑧ 홈 — 창 캡처가 행 등장 240ms 뒤 제자리로 들어온다. transform·opacity 만(위치 유틸은 translate 속성이라 겹치지 않는다) */
+    :where(.site) [data-reveal="out"] [data-moment="window-in"] { opacity: 0; transform: translateX(32px); }
+    :where(.site) [data-reveal="out"] [data-moment="window-up"] { opacity: 0; transform: translateY(24px); }
+    :where(.site) [data-reveal="in"] :is([data-moment="window-in"], [data-moment="window-up"]) {
+      transition: opacity var(--motion-slow) var(--ease-soft) 240ms, transform var(--motion-slow) var(--ease-soft) 240ms;
+    }
+
     /* 탭 패널 교체 — 첫 페인트 제외 */
     :where(.site) [data-switched] [role="tabpanel"][data-state="active"] {
       animation: panel-in var(--motion-base) var(--ease-soft);

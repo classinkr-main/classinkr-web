@@ -6,11 +6,11 @@ export const HOME_COPY = {
     primaryCta: "파일럿 상담 신청",
     secondaryCta: "34문항 운영 진단지 받기",
     secondaryHref: "/resources/academy-system-checklist#download",
-    image: {
-      src: "/images/home/hero-board.webp",
-      width: 1408,
-      height: 807,
+    // 전자칠판 = 틀(빈 검은 화면, Codex 생성) + 화면(지구) 두 장. 화면 사각형은 틀 기준 백분율(HomeHero)
+    board: {
       alt: "Classin 전자칠판. 화면에 푸른 지구가 떠 있다",
+      frame: { src: "/images/home/hero-board-frame.webp", width: 1408, height: 807 },
+      screen: { src: "/images/home/hero-board-screen.webp", width: 1291, height: 681 },
     },
     stats: [
       { value: "3,000만+", label: "월간 수업" },
@@ -82,6 +82,7 @@ export const HOME_COPY = {
           alt: "Classin 전자칠판 위의 개인칠판 수업 화면. 왼쪽은 교사 판서, 오른쪽은 학생별 풀이",
         },
         caption: null,
+        photo: null,
       },
       {
         phase: "수업 후",
@@ -93,6 +94,7 @@ export const HOME_COPY = {
         href: "/product/ai-report",
         image: { src: "/images/home/win-ai.webp", width: 1062, height: 700, alt: "AI 강의 분석 창. 종합 점수와 항목별 평가" },
         caption: "실제 화면 · AI 강의 분석",
+        photo: null,
       },
       {
         phase: "수업 전",
@@ -108,7 +110,14 @@ export const HOME_COPY = {
           height: 722,
           alt: "활동 게시 창. 수업·숙제·시험·녹화 수업·학습 자료를 코스에 올린다",
         },
-        caption: "실제 화면 · 활동 게시",
+        caption: "목동 쇼룸 · 실제 화면(활동 게시)",
+        // 어느 교실(목동 쇼룸)에서 열어도 같은 코스 — 사진 위에 활동 게시 창을 겹친다
+        photo: {
+          src: "/images/home/showroom-classroom.webp",
+          width: 928,
+          height: 608,
+          alt: "목동 쇼룸 교실. 벽에 Classin 전자칠판 두 대가 나란히 걸려 있다",
+        },
       },
     ],
   },

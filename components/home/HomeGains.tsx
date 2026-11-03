@@ -16,6 +16,7 @@ const LAYOUT = [
     figure: "lg:w-[55%]",
     frame: null,
     sizes: "(min-width: 1040px) 550px, (min-width: 1024px) 55vw, 100vw",
+    moment: null,
   },
   {
     section: "overflow-x-clip bg-surface-sunken py-20 md:py-32",
@@ -23,13 +24,16 @@ const LAYOUT = [
     figure: "lg:w-[60%] lg:-mr-28",
     frame: "plate-window",
     sizes: "(min-width: 1040px) 600px, (min-width: 1024px) 60vw, 100vw",
+    moment: "window-in",
   },
   {
     section: "overflow-x-clip bg-surface-paper py-20 md:py-32",
     row: "lg:flex-row",
     figure: "lg:w-[55%]",
-    frame: "plate-window max-w-[600px] lg:-ml-24",
-    sizes: "(min-width: 640px) 600px, 100vw",
+    // 3행은 쇼룸 사진 위에 창을 겹친다(아래 photo 분기). frame 은 겹친 창의 틀
+    frame: "plate-window absolute -bottom-10 right-0 w-[60%] lg:-bottom-14 lg:-right-10",
+    sizes: "(min-width: 1024px) 400px, 60vw",
+    moment: "window-up",
   },
 ] as const
 
@@ -55,15 +59,34 @@ export function HomeGains() {
             className="h-auto w-full"
           />
         )
-        // 페이지의 유일한 강조 = 먹 밑줄 한 단어(강조색은 누를 수 있는 것에만)
+        // 페이지의 유일한 강조 = 먹 밑줄 한 단어(강조색은 누를 수 있는 것에만). 밑줄 색은 글자색(currentColor = fg-ink)을 따른다 —
+        // decoration-* 색 유틸을 달면 utilities 레이어가 이겨 site-base 의 '스밈' 무장(transparent)이 듣지 않는다
         const [before, after] = row.titleEmphasis ? row.title.split(row.titleEmphasis) : [row.title, ""]
 
         return (
           <section key={row.href} className={layout.section}>
             <Reveal className={`${CONTAINER} flex flex-col gap-10 lg:items-center lg:gap-14 ${layout.row}`}>
-              {/* 1행은 투명 컷아웃이라 틀이 없다. 창 캡처만 plate-window(창 모양을 따르는 그림자 하나) */}
+              {/* 1행은 투명 컷아웃이라 틀이 없다. 창 캡처만 plate-window(창 모양을 따르는 그림자 하나). 창은 행 등장 240ms 뒤 제자리로 들어온다(data-moment) */}
               <figure className={`lg:shrink-0 ${layout.figure}`}>
-                {layout.frame ? <div className={layout.frame}>{image}</div> : image}
+                {row.photo ? (
+                  // 사진은 r0(V14-A)·틀 없음, lg 부터 왼쪽 가장자리로 흘러나간다. 창은 오른쪽 아래로 겹쳐 사진 밖으로 조금 나온다
+                  <div className="relative mb-10 lg:-ml-24 lg:mb-14">
+                    <Image
+                      src={row.photo.src}
+                      alt={row.photo.alt}
+                      width={row.photo.width}
+                      height={row.photo.height}
+                      sizes="(min-width: 1024px) 640px, 100vw"
+                      loading="lazy"
+                      className="h-auto w-full"
+                    />
+                    <div data-moment={layout.moment} className={layout.frame ?? undefined}>{image}</div>
+                  </div>
+                ) : layout.frame ? (
+                  <div data-moment={layout.moment ?? undefined} className={layout.frame}>{image}</div>
+                ) : (
+                  image
+                )}
                 {row.caption && <figcaption className="mt-3 text-note text-fg-muted">{row.caption}</figcaption>}
               </figure>
 
@@ -74,7 +97,7 @@ export function HomeGains() {
                 <h3 className="mt-3 text-h3 text-fg-ink break-keep text-balance">
                   {before}
                   {row.titleEmphasis && (
-                    <span className="underline decoration-fg-ink decoration-2 underline-offset-[0.2em]">{row.titleEmphasis}</span>
+                    <span data-moment="ink-word" className="underline decoration-2 underline-offset-[0.2em]">{row.titleEmphasis}</span>
                   )}
                   {after}
                 </h3>

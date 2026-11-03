@@ -44,7 +44,7 @@ const hrefs = (h: string, list: readonly string[]) => {
 }
 
 describe("홈", () => {
-  it("히어로: H1 하나·주 CTA 1회·진단지·숫자 4개·전자칠판 컷아웃 1장(eager, priority 없음)", () => {
+  it("히어로: H1 하나·주 CTA 1회·진단지·숫자 4개·전자칠판 틀+화면 2장(eager, priority 없음)·화면 켜짐 모먼트", () => {
     const h = html(<HomeHero />)
     expect(count(h, /<h1[\s>]/g)).toBe(1)
     // 두 구절을 블록으로 나눠도 읽히는 문장은 heroHeadline 그대로(쉼표 뒤 공백 포함)
@@ -53,11 +53,14 @@ describe("홈", () => {
     hrefs(h, [CHECKLIST])
     for (const v of ["3,000만+", "5,000만+", "6만+", "160+"]) expect(h).toContain(v)
     const tags = imgs(h)
-    expect(tags).toHaveLength(1)
-    expect(attr(tags[0], "src")).toBe("/images/home/hero-board.webp")
-    expect(attr(tags[0], "alt")).toBe(HOME_COPY.hero.image.alt)
-    expect(attr(tags[0], "loading")).toBe("eager")
-    expect(tags[0]).not.toContain("priority")
+    expect(tags.map((t) => attr(t, "src"))).toEqual(["/images/home/hero-board-frame.webp", "/images/home/hero-board-screen.webp"])
+    expect(attr(tags[0], "alt")).toBe(HOME_COPY.hero.board.alt)
+    expect(attr(tags[1], "alt")).toBe("") // 화면 층은 틀 그림의 일부 — 설명은 틀 하나
+    for (const t of tags) {
+      expect(attr(t, "loading")).toBe("eager")
+      expect(t).not.toContain("priority")
+    }
+    expect(count(h, /data-moment="hero-screen"/g)).toBe(1)
   })
 
   it("학원 띠: 34곳 목록 + aria-hidden 복제 한 벌 + 멈춤 버튼", () => {
@@ -74,7 +77,7 @@ describe("홈", () => {
     expect(h).toMatch(/<button[^>]*aria-label="학원 목록 흐름 멈추기"/)
   })
 
-  it("이득 3행: H2 하나·H3 셋·도판 3장·관문 링크·밑줄 강조 하나·창 그림자 둘", () => {
+  it("이득 3행: H2 하나·H3 셋·도판 4장(3행 쇼룸 사진+창)·관문 링크·밑줄 강조 하나·창 그림자 둘·모먼트 셋", () => {
     const h = html(<HomeGains />)
     expect(count(h, /<h2[\s>]/g)).toBe(1)
     expect(h).toContain(HOME_COPY.gains.heading)
@@ -83,12 +86,14 @@ describe("홈", () => {
     expect(tags.map((t) => attr(t, "src"))).toEqual([
       "/images/home/board-class.webp",
       "/images/home/win-ai.webp",
+      "/images/home/showroom-classroom.webp",
       "/images/home/win-activity.webp",
     ])
     for (const t of tags) expect(attr(t, "alt")?.trim(), t).toBeTruthy()
     hrefs(h, ["/product/hw", "/product/ai-report", "/product/sw"])
-    expect([...h.matchAll(/<span class="underline[^"]*">([^<]*)<\/span>/g)].map((m) => m[1])).toEqual(["저절로"])
+    expect([...h.matchAll(/<span[^>]*class="underline[^"]*">([^<]*)<\/span>/g)].map((m) => m[1])).toEqual(["저절로"])
     expect(count(h, /plate-window/g)).toBe(2)
+    for (const m of ["ink-word", "window-in", "window-up"]) expect(count(h, new RegExp(`data-moment="${m}"`, "g")), m).toBe(1)
   })
 
   it("역할: 실제 표(본문 4행)", () => {
@@ -121,6 +126,11 @@ describe("홈", () => {
     expect(count(h, /파일럿 상담 신청/g)).toBe(1)
     hrefs(h, ["/showroom", "/pricing", "/resources", CHECKLIST])
     expect(h).not.toContain("90일")
+  })
+
+  it("페이지 전체 모먼트는 예산(6) 안이다", () => {
+    const total = SECTIONS.reduce((n, Section) => n + count(html(<Section />), /\sdata-moment="/g), 0)
+    expect(total).toBe(4)
   })
 
   it("어느 화면에도 priority 이미지가 없다", () => {
