@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 
+import { SOFTWARE_PLANS } from "@/lib/billing/plans"
 import { CLASSIN_POSITIONING } from "@/lib/classin-positioning"
 import {
   COMPANY_LEGAL_NAME,
@@ -8,6 +9,7 @@ import {
   createArticleJsonLd,
   createOrganizationJsonLd,
   createPublicMetadata,
+  createSoftwareOffersJsonLd,
   createSiteVerification,
   createWebsiteJsonLd,
   isOrganizationAuthor,
@@ -108,8 +110,23 @@ describe("site-level JSON-LD", () => {
       addressRegion: "서울특별시",
       addressCountry: "KR",
     })
-    expect(org).not.toHaveProperty("sameAs")
-    expect(org).not.toHaveProperty("foundingDate")
+    // 브랜드 정본 company-facts §1 ✅ 값과 사용자 확인 공식 채널만 싣는다(2026-11-03).
+    expect(org.foundingDate).toBe("2022-10")
+    expect(org.sameAs).toEqual(["https://blog.naver.com/classinkorea"])
+    expect(org.parentOrganization).toMatchObject({ name: "EEO", legalName: "Empower Education Online" })
+  })
+
+  it("SoftwareApplication 가격은 plans.ts 셀프서브 플랜에서 파생하고 요금 페이지를 가리킨다", () => {
+    const offers = createSoftwareOffersJsonLd()
+    const selfServe = SOFTWARE_PLANS.flatMap((plan) => (plan.selfServe && plan.monthly ? [plan.monthly.amount] : []))
+    expect(offers).toMatchObject({
+      "@type": "AggregateOffer",
+      priceCurrency: "USD",
+      lowPrice: String(Math.min(...selfServe)),
+      highPrice: String(Math.max(...selfServe)),
+      offerCount: selfServe.length,
+      url: `${SITE_URL}/pricing`,
+    })
   })
 
   it("WebSite 는 대체 이름을 갖고 SearchAction 이 noindex 검색 결과 페이지를 가리킨다", () => {

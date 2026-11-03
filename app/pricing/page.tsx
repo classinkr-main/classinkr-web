@@ -1,6 +1,10 @@
 import { ArrowRight, CheckCircle2 } from "lucide-react"
+import { JsonLd } from "@/components/seo/JsonLd"
 import { TrackedLink } from "@/components/TrackedLink"
 import { getDocBySlug, getDocPath } from "@/lib/docs"
+import { createBreadcrumbJsonLd, createWebPageJsonLd, SOFTWARE_PRODUCT_ID } from "@/lib/seo"
+
+import { PRICING_DESCRIPTION } from "./pricing-copy"
 
 // 요금 문서가 비공개로 바뀌거나 slug 가 바뀌면 깨진 링크 대신 항목을 뺀다.
 const PRICING_FAQ_DOC = getDocBySlug("software-pricing-quote-bundle-faq", "software")
@@ -38,6 +42,21 @@ const MORE_LINKS = [
 
 export default function PricingPage() {
   return (
+    <>
+    <JsonLd
+      data={[
+        createWebPageJsonLd({
+          path: "/pricing",
+          name: "Classin 요금제·도입 견적",
+          description: PRICING_DESCRIPTION,
+          mainEntity: { "@id": SOFTWARE_PRODUCT_ID },
+        }),
+        createBreadcrumbJsonLd([
+          { name: "홈", path: "/" },
+          { name: "요금제", path: "/pricing" },
+        ]),
+      ]}
+    />
     <main className="min-h-screen bg-[#FAFAF8] px-4 py-24 text-[#111110] sm:px-6 lg:py-28">
       <div className="mx-auto max-w-5xl">
         <div className="max-w-3xl">
@@ -136,5 +155,6 @@ export default function PricingPage() {
         </nav>
       </div>
     </main>
+    </>
   )
 }

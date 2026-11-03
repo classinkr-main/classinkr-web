@@ -25,6 +25,7 @@ import { ResourcesRecommendation } from "@/components/sections/ResourcesRecommen
 import { NEUTRAL_BLUR_DATA_URL } from "@/lib/image-blur"
 import { CalendarPlus } from "lucide-react"
 import {
+  buildPublicEventMetaDescription,
   formatPublicEventDate,
   formatPublicEventSchedule,
   getEffectivePublicEventEndIso,
@@ -89,13 +90,14 @@ export async function generateMetadata({ params }: EventDetailPageProps): Promis
   const event = await readPublicEventBySlug(slug)
   if (!event) return { title: "행사를 찾을 수 없습니다" }
   const canonical = toAbsoluteUrl(`/events/${event.slug ?? slug}`)
+  const description = buildPublicEventMetaDescription(event)
   return {
     title: event.title,
-    description: event.description ?? undefined,
+    description,
     alternates: { canonical },
     openGraph: {
       title: event.title,
-      description: event.description ?? undefined,
+      description,
       url: canonical,
       // 행사 이미지가 없으면 기본 브랜드 OG 이미지로 폴백한다(공유 카드에 이미지가 아예 빠지지 않게).
       images: [{ url: event.imageUrl || toAbsoluteUrl(DEFAULT_OG_IMAGE_PATH) }],

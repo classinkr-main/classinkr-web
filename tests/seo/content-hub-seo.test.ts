@@ -57,6 +57,30 @@ describe("robots", () => {
       expect(rule.disallow).toEqual(expect.arrayContaining(["/api", "/admin"]))
     }
   })
+
+  it("names AI answer and training crawlers explicitly and allows both (2026-11-03 policy)", async () => {
+    const { default: robots } = await import("@/app/robots")
+    const { rules } = robots()
+    const list = Array.isArray(rules) ? rules : [rules]
+    const aiRule = list.find((rule) => Array.isArray(rule.userAgent) && rule.userAgent.includes("GPTBot"))
+
+    expect(aiRule?.userAgent).toEqual(
+      expect.arrayContaining([
+        "OAI-SearchBot",
+        "ChatGPT-User",
+        "Claude-SearchBot",
+        "Claude-User",
+        "PerplexityBot",
+        "Perplexity-User",
+        "GPTBot",
+        "ClaudeBot",
+        "Google-Extended",
+        "Applebot-Extended",
+        "CCBot",
+      ])
+    )
+    expect(aiRule?.disallow).not.toContain("/")
+  })
 })
 
 describe("static docs categories", () => {
@@ -169,9 +193,8 @@ describe("sitemap", () => {
 
     expect(byUrl.get(`${SITE_URL}/docs`)?.lastModified).toEqual(new Date("2026-09-15"))
     expect(byUrl.get(`${SITE_URL}/docs/start`)?.lastModified).toEqual(new Date("2026-09-15"))
-    // 문서가 없는 카테고리는 날짜를 지어내지 않고 생략한다.
-    expect(byUrl.get(`${SITE_URL}/docs/updates`)).toBeDefined()
-    expect(byUrl.get(`${SITE_URL}/docs/updates`)?.lastModified).toBeUndefined()
+    // 공개 문서가 없는 카테고리 허브는 빈 페이지라 사이트맵에 싣지 않는다(2026-11-03, 운영 빈 허브 6개).
+    expect(byUrl.has(`${SITE_URL}/docs/updates`)).toBe(false)
 
     expect(byUrl.has(`${SITE_URL}/docs/start/a`)).toBe(true)
     expect(byUrl.has(`${SITE_URL}/docs/start/b`)).toBe(false)

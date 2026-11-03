@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button"
 import { trackEvent } from "@/lib/analytics"
 import { formatUsd, getSelfServeSoftwarePlan, getSoftwarePlan } from "@/lib/billing/plans"
 import { BROCHURE_URL } from "@/lib/marketing-links"
+import { PRODUCT_SW_FAQS } from "@/lib/product-sw-faq"
 import { TESTIMONIALS } from "@/lib/testimonials"
 import { motion, useInView, useMotionValue, useTransform, useScroll, useMotionValueEvent, animate } from "framer-motion"
 import {
@@ -949,33 +950,6 @@ function AIFeaturesSection() {
 /* ── [D] 도입 프로세스 섹션 → components/product/sw/OnboardingRoadmap.tsx 로 추출됨 ──────────── */
 
 /* ── [E] FAQ 섹션 ────────────────────────────────────────────── */
-const FAQS = [
-    {
-        q: "Zoom과 비교해서 실제로 어떻게 다른가요?",
-        a: "Zoom은 비즈니스 회의를 위해 설계됐습니다. 학생이 화면 안에서 직접 참여(판서, 문제 풀기, 퀴즈 대결)하는 기능이 없습니다. Classin은 수업 전용으로 설계돼 30가지 교육 도구, LMS, 자동 녹화까지 하나로 통합되어 있습니다.",
-    },
-    {
-        q: "기존 학원 시스템과 연동이 가능한가요?",
-        a: "Google Classroom, Canvas, Moodle 등 주요 LMS와의 연동을 지원합니다. 자체 시스템이 있는 경우 API를 통한 커스텀 연동도 가능하며, 도입 시 전담 팀이 설정을 도와드립니다.",
-    },
-    {
-        q: "학생들이 사용하기 어렵지 않나요?",
-        a: "별도 앱 설치 없이 웹 브라우저에서 접속 가능합니다. 처음 수업 전 5분 안내로 학생 대부분이 바로 사용할 수 있으며, 모바일에서도 동일하게 작동합니다.",
-    },
-    {
-        q: "인터넷 속도가 느린 환경에서도 괜찮나요?",
-        a: "수업 환경의 네트워크 상태와 기기 사양에 따라 연결 품질이 달라질 수 있습니다. 도입 전 실제 교실 환경에서 확인해 주세요.",
-    },
-    {
-        q: "수업 녹화본의 저작권은 누가 갖나요?",
-        a: "수업 녹화본의 저작권은 해당 기관과 강사에게 있습니다. Classin은 앱 내 재생만 허용하고 외부 다운로드를 차단하며, 재생 시 워터마크를 제공해 무단 배포를 막습니다.",
-    },
-    {
-        q: "요금제는 어떻게 구성되나요?",
-        a: "학원 규모, 수강생 수, 필요 기능에 따라 맞춤 요금제를 제공합니다. 소규모 학원부터 대형 교육 그룹까지 적합한 플랜이 있으며, 2주 무료 체험 후 결정하실 수 있습니다.",
-    },
-]
-
 function FAQSection() {
     const [openItems, setOpenItems] = useState<number[]>([])
     return (
@@ -989,7 +963,7 @@ function FAQSection() {
                 </motion.div>
 
                 <div className="space-y-3">
-                    {FAQS.map((faq, i) => (
+                    {PRODUCT_SW_FAQS.map((faq, i) => (
                         <motion.div
                             key={i}
                             initial={{ opacity: 0, y: 15 }}
@@ -1254,7 +1228,7 @@ const INCLUDED = [
     "LMS (숙제 · 출결 · 성적 · 평가)",
     "학습 데이터 리포트 및 분석",
     "1:1부터 최대 1,000명 대형 강의까지",
-    "12개 언어 지원 · 160개국 서비스",
+    "160+개국 서비스 (EEO 공식 소개 기준)",
     "AI 첨삭 · AI 과제 생성 · AI 교안",
     "전담 고객 지원 · 전문가 온보딩",
 ]
