@@ -84,7 +84,7 @@ export async function updateQuoteDocument(
 }
 
 export async function getQuoteDocument(
-  id: string
+  id: string, includeDeleted = false
 ): Promise<QuoteDocument | null> {
   const supabase = createSupabaseAdminClient();
 
@@ -94,8 +94,20 @@ export async function getQuoteDocument(
     .eq("id", id)
     .single();
 
-  if (error) return null;
+  if (error || (!includeDeleted && data?.deleted_at)) return null;
   return data as QuoteDocument;
+}
+
+/** 원본·버전·계약을 보존하는 삭제 및 복구. 조건부 갱신으로 중복 요청을 구분한다. */
+export async function setQuoteDeleted(id: string, deleted: boolean): Promise<QuoteDocument | null> {
+  const supabase = createSupabaseAdminClient();
+  const query = supabase.from("quote_documents")
+    .update({ deleted_at: deleted ? new Date().toISOString() : null })
+    .eq("id", id);
+  const { data, error } = await (deleted ? query.is("deleted_at", null) : query.not("deleted_at", "is", null))
+    .select("*").maybeSingle();
+  if (error) throw error;
+  return data as QuoteDocument | null;
 }
 
 /* ─── Version CRUD ──────────────────────────────────────── */

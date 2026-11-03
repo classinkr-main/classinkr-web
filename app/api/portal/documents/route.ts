@@ -28,6 +28,7 @@ export async function GET(req: NextRequest) {
   const customerId = searchParams.get("customer_id") ?? undefined;
   const dealId = searchParams.get("deal_id") ?? undefined;
   const status = searchParams.get("status") ?? undefined;
+  const deletedQuotesOnly = ctx.type === "admin" && type === "quote" && searchParams.get("deleted") === "only";
 
   try {
     const payload = await listPortalDocuments({
@@ -36,6 +37,7 @@ export async function GET(req: NextRequest) {
       dealId,
       type,
       status,
+      deletedQuotesOnly,
     });
 
     const response = NextResponse.json({
@@ -46,6 +48,9 @@ export async function GET(req: NextRequest) {
     return response;
   } catch (error) {
     console.error("[portal/documents] GET error:", error);
+    if (deletedQuotesOnly && typeof error === "object" && error !== null && "code" in error && error.code === "42703") {
+      return NextResponse.json({ error: "견적 삭제함 DB 마이그레이션이 필요합니다." }, { status: 503 });
+    }
     return NextResponse.json({ error: "문서 목록 조회 실패" }, { status: 500 });
   }
 }

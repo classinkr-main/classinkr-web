@@ -34,6 +34,8 @@ import {
 } from "@/lib/seo"
 
 import {
+  buildDocMetaDescription,
+  buildDocSeoTitle,
   formatDocDate,
   getDocsNavGroups,
   toArticleSections,
@@ -67,19 +69,17 @@ export async function generateMetadata({
   }
 
   const shouldIndex = !doc.noindex
-  // 관리자가 적은 검색 제목(seoTitle)은 루트 템플릿(`%s | Classin`)을 그대로 탄다. 기본 제목은 "문서명 | Classin 가이드" 에서
-  // 끝내고 템플릿을 건너뛴다(그렇지 않으면 "… | Classin 가이드 | Classin" 으로 접미사가 겹친다). 공유 카드 제목도 같은 값이다.
-  const seoTitle = doc.seoTitle?.trim()
-  const defaultTitle = `${doc.title} | Classin 가이드`
-  const socialTitle = seoTitle || defaultTitle
-  const metaDescription = doc.seoDescription?.trim() || doc.description
+  // 제목은 템플릿(`%s | Classin`)을 건너뛴 완성형 하나로 탭·공유 카드에 같이 쓴다(접미사 중복 방지 — buildDocSeoTitle).
+  const categoryTitle = docsContent.categories.find((item) => item.id === doc.category)?.title
+  const socialTitle = buildDocSeoTitle(doc, categoryTitle)
+  const metaDescription = buildDocMetaDescription(doc)
   const canonicalPath = doc.canonicalPath?.trim() || getDocPath(doc)
   const canonicalUrl = toAbsoluteUrl(canonicalPath)
   // 문서에 실린 화면 사진 가운데 공유 카드 비율에 맞는 첫 장. 없으면 기본 브랜드 이미지.
   const shareImage = pickDocShareImage(doc)
 
   return {
-    title: seoTitle || { absolute: defaultTitle },
+    title: { absolute: socialTitle },
     description: metaDescription,
     keywords: doc.keywords,
     alternates: { canonical: canonicalUrl },

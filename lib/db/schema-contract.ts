@@ -202,9 +202,19 @@ export const SCHEMA_CONTRACT_MIGRATIONS = [
   // 장부 반영 → REV 시트 쓰기 감사 기록(2026-10-23). 시트 쓰기 스위치(BRANCH_REV_SHEET_WRITE_ENABLED)가 꺼져 있으면
   // 미적용이어도 영향이 없다 — 켜기 전에 적용한다(warning).
   "supabase/migrations/20261023_branch_rev_sheet_writes.sql",
+  "supabase/migrations/20261102074146_quote_soft_delete.sql",
 ] as const
 
 export const SCHEMA_PROBES: SchemaProbe[] = [
+  {
+    kind: "table",
+    table: "quote_documents",
+    label: "견적 삭제함",
+    columns: ["id", "deleted_at"],
+    migration: "supabase/migrations/20261102074146_quote_soft_delete.sql",
+    severity: "blocker",
+    impact: "견적 목록과 삭제·복구 기능에 삭제 표시 컬럼이 필요합니다.",
+  },
   {
     kind: "table",
     table: "email_campaigns",

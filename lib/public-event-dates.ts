@@ -1,4 +1,4 @@
-import type { EventStatus } from "@/lib/types/public-events"
+import type { EventStatus, PublicEvent } from "@/lib/types/public-events"
 
 export const PUBLIC_EVENT_TIME_ZONE = "Asia/Seoul"
 export const DEFAULT_PUBLIC_EVENT_DURATION_MS = 2 * 60 * 60 * 1000
@@ -234,4 +234,19 @@ export function getPublicEventTimePart(iso: string): string {
   const parts = getZonedParts(iso)
   if (!parts) return ""
   return `${parts.hour}:${parts.minute}`
+}
+
+// 행사 description 이 비거나 너무 짧으면(운영 3건 0자, 1건 6자) 검색 스니펫이 비어 보인다.
+// 어드민이 적은 문장을 앞에 두고 일정·장소 문장을 덧붙인다. 40자 이상이면 손대지 않는다.
+const MIN_EVENT_DESCRIPTION_LENGTH = 40
+
+export function buildPublicEventMetaDescription(
+  event: Pick<PublicEvent, "title" | "description" | "startsAt" | "endsAt" | "sessionDates" | "location">
+): string {
+  const written = event.description?.replace(/\s+/g, " ").trim() ?? ""
+  if (written.length >= MIN_EVENT_DESCRIPTION_LENGTH) return written
+  const schedule = formatPublicEventSchedule(event.startsAt, event.endsAt, event.sessionDates)
+  const where = event.location?.trim() ? `, ${event.location.trim()}` : ""
+  const fallback = `${event.title} — ${schedule}${where}. 일정과 신청 방법을 확인하세요.`
+  return written ? `${written}. ${fallback}` : fallback
 }

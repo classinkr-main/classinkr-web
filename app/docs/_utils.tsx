@@ -129,6 +129,29 @@ export function withSearchNoIndex(metadata: Metadata, query: string): Metadata {
   return query ? { ...metadata, robots: { index: false, follow: true } } : metadata
 }
 
+// 관리자가 적은 검색 제목에 "| ClassIn 가이드" 같은 브랜드 접미사가 이미 붙어 있어 루트 템플릿과 겹쳤다(운영 77건).
+// 접미사를 걷어 내고 "문서명 — 카테고리 | Classin" 하나로 맞춘다. 카테고리를 넣으면 강사·학생 "프로필 설정" 처럼
+// 이름이 같은 문서도 제목이 갈린다.
+const DOC_TITLE_BRAND_SUFFIX = /\s*[|｜·—–-]\s*(?:class\s?in|클래스\s?인)(?:\s*(?:korea|코리아))?(?:\s*(?:가이드|guide))?\s*$/i
+
+export function buildDocSeoTitle(doc: Pick<DocArticle, "title" | "seoTitle">, categoryTitle?: string): string {
+  let base = doc.seoTitle?.trim() || doc.title.trim()
+  while (DOC_TITLE_BRAND_SUFFIX.test(base)) base = base.replace(DOC_TITLE_BRAND_SUFFIX, "").trim()
+  const category = categoryTitle?.trim()
+  return category ? `${base} — ${category} | Classin` : `${base} | Classin 가이드`
+}
+
+// 검색 설명이 너무 짧으면(예: "클래스인 6.0.8 업데이트") 스니펫이 비어 보인다. 문서 요약(chatbotSummary)으로 채운다.
+const MIN_DOC_DESCRIPTION_LENGTH = 40
+
+export function buildDocMetaDescription(doc: Pick<DocArticle, "description" | "seoDescription" | "chatbotSummary">): string {
+  const preferred = doc.seoDescription?.trim() || doc.description.trim()
+  if (preferred.length >= MIN_DOC_DESCRIPTION_LENGTH) return preferred
+  const summary = doc.chatbotSummary?.replace(/\s+/g, " ").trim() ?? ""
+  if (summary.length <= preferred.length) return preferred
+  return summary.length > 150 ? `${summary.slice(0, 149).trimEnd()}…` : summary
+}
+
 export function formatDocDate(date: string) {
   return new Date(date).toLocaleDateString("ko-KR", {
     year: "numeric",

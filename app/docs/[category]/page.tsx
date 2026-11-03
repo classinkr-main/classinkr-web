@@ -13,6 +13,7 @@ import {
   getDocsByCategoryFromContent,
   getDocsContent,
   resolveDocsRedirect,
+  listListedDocsFromContent,
 } from "@/lib/docs-content"
 import {
   DOC_LIST_KIND_LABELS,
@@ -81,7 +82,9 @@ export async function generateMetadata({
 
   // title 에 사이트 접미사를 넣지 않는다 — 루트 템플릿(`%s | Classin`)과 createPublicMetadata 의 OG 제목이
   // 이미 "| Classin" 을 붙인다. canonical 은 쿼리 없는 카테고리 경로, 검색어·유형 필터가 붙은 URL 은 색인에서 뺀다.
-  return withSearchNoIndex(
+  // 공개 문서가 하나도 없는 주제는 빈 페이지라 색인에서 뺀다(사이트맵에서도 뺀다 — app/sitemap.ts).
+  const hasListedDocs = listListedDocsFromContent(docsContent).some((doc) => doc.category === category.id)
+  const metadata = withSearchNoIndex(
     createPublicMetadata({
       title: category.title,
       description: category.description,
@@ -89,6 +92,7 @@ export async function generateMetadata({
     }),
     readQuery(q) || readQuery(type)
   )
+  return hasListedDocs ? metadata : { ...metadata, robots: { index: false, follow: true } }
 }
 
 export default async function DocsCategoryPage({

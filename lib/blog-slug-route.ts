@@ -130,17 +130,23 @@ export function resolveBlogRouteSlug(rawParam: string) {
  * pathname 은 NextURL.pathname(퍼센트 인코딩 상태)을 받는다.
  */
 export function getBlogSlugTokenRewritePath(pathname: string): string | null {
-  const match = /^\/blog\/([^/]+)\/?$/.exec(pathname)
-  if (!match) return null
+  return getSlugTokenRewritePath(pathname, BLOG_PATH_PREFIX)
+}
+
+/** `<prefix><세그먼트>` 한 단계 경로 공용판 — 행사 상세(lib/event-slug-route.ts)도 같은 규칙을 쓴다. */
+export function getSlugTokenRewritePath(pathname: string, prefix: string): string | null {
+  if (!pathname.startsWith(prefix)) return null
+  const segment = pathname.slice(prefix.length).replace(/\/$/, "")
+  if (!segment || segment.includes("/")) return null
 
   let slug: string
   try {
-    slug = decodeURIComponent(match[1])
+    slug = decodeURIComponent(segment)
   } catch {
     return null
   }
   if (isHeaderSafeBlogSlug(slug)) return null
-  return `${BLOG_PATH_PREFIX}${encodeBlogSlugToken(slug)}`
+  return `${prefix}${encodeBlogSlugToken(slug)}`
 }
 
 /** 공개 URL 경로(canonical·OG·JSON-LD·공유). 비ASCII 는 퍼센트 인코딩된다. */

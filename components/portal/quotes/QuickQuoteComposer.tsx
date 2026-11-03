@@ -2011,6 +2011,9 @@ export default function QuickQuoteComposer({
             onChange={(event) => updateLine(sheet.line, lineIndex, { itemDescription: event.target.value })}
             className={`${EDITABLE_CLASS} w-full text-[11.5px] text-[#78736D]`}
           />
+          {line.originalUnitPrice != null && line.unitPrice != null && line.originalUnitPrice > line.unitPrice && (
+            <span className="text-[11px] text-[#78736D]">정가 {formatStandardQuoteCurrency(line.originalUnitPrice)}원 · 할인 −{formatStandardQuoteCurrency(line.originalUnitPrice - line.unitPrice)}원 / {line.quantityUnit || "개"}</span>
+          )}
         </span>
         <span role="cell" className="flex flex-col items-end">
           {informational ? (
@@ -2049,6 +2052,23 @@ export default function QuickQuoteComposer({
             >
               {changePct >= 0 ? `${changePct}% 할인` : `${Math.abs(changePct)}% 인상`} · 정가로
             </button>
+          )}
+          {!informational && !pending && !isRechargeLine && (
+            line.originalUnitPrice == null ? (
+              <button type="button" className="text-[10.5px] text-[#78736D] underline"
+                onClick={() => updateLine(sheet.line, lineIndex, { originalUnitPrice: Math.max(listPrice ?? 0, line.unitPrice ?? 0) })}>
+                할인 내역 추가
+              </button>
+            ) : (
+              <label className="text-[10.5px] text-[#78736D]">
+                할인 전 단가
+                <input aria-label={`${line.itemName} 할인 전 단가`} inputMode="numeric"
+                  value={formatStandardQuoteCurrency(line.originalUnitPrice)}
+                  onChange={(event) => updateLine(sheet.line, lineIndex, { originalUnitPrice: parseNumericInput(event.target.value) ?? 0 })}
+                  className={`${EDITABLE_CLASS} w-full text-right tabular-nums`} />
+                <button type="button" onClick={() => updateLine(sheet.line, lineIndex, { originalUnitPrice: undefined })}>할인 내역 삭제</button>
+              </label>
+            )
           )}
         </span>
         <span role="cell" className="flex items-center justify-center gap-0.5">
