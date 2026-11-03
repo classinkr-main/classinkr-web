@@ -56,6 +56,9 @@ export interface ChannelCoverageInput {
   kakaoPixelSet: boolean
 }
 
+/** Google 집행 데이터를 켜는 스위치 — 인증은 공용 서비스 계정이라 남는 설정은 고객 ID 하나다. */
+export const GOOGLE_ADS_CONFIG_HINT = "GOOGLE_ADS_CUSTOMER_ID · 395에 서비스 계정 읽기 전용 추가"
+
 const MANUAL_ONLY: CoverageCell = {
   state: "manual",
   note: "수기 입력 — channel_budgets · 행사별 광고비",
@@ -102,7 +105,7 @@ export function buildChannelCoverage(input: ChannelCoverageInput): ChannelCovera
     },
     {
       channel: "google",
-      spendData: spendCell(byChannel.get("google"), "GOOGLE_ADS_* 자격증명"),
+      spendData: spendCell(byChannel.get("google"), GOOGLE_ADS_CONFIG_HINT),
       leadAttribution: {
         state: "live",
         note: "gclid 저장 + google/cpc 채널 폴백",

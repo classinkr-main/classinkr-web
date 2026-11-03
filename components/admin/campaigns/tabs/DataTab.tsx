@@ -184,9 +184,9 @@ export default function DataTab({
         <HubSection
           id="google"
           title="Google Ads"
-          description="API 미연동이라 계정 점검 기록(정적) — 계정 구조 · 395 결제·쿠폰 · 캠페인 계획 · 전환 추적(GA4) · 남은 일"
+          description="API 연동 시 캠페인 실적(일 1회 동기화) + 계정 점검 기록 — 계정 구조 · 395 결제·쿠폰 · 캠페인 계획 · 전환 추적(GA4) · 남은 일"
         >
-          <GoogleAdsPanel channelLive={perf?.channelLive ?? null} perfFailed={!perf && perfError != null} />
+          <GoogleAdsPanel perf={perf} perfFailed={!perf && perfError != null} />
         </HubSection>
 
         <HubSection

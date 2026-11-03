@@ -6,6 +6,8 @@
   `supabase/migrations/20260914_*.sql` 3건 적용.
   자격증명이 없으면 크론은 503으로 조용히 서고 화면은 해당 채널을 **미연동**으로 표기한다 —
   없는 데이터를 0으로 포장하지 않는다.
+- **2026-11-03 정정** — Google 인증 기본값을 공용 서비스 계정(`GOOGLE_SERVICE_ACCOUNT_EMAIL`·`GOOGLE_PRIVATE_KEY`)으로 바꿨고(OAuth refresh_token 은 선택),
+  신청할 접근 등급은 아래 본문의 'Reporting'이 아니라 **Explorer** 다(Reporting 은 Standard 등급의 허용 용도). 런북 §3이 정본이다.
 - **활성화 절차와 단계별 확인법은 [활성화 런북](ad-channel-activation-runbook-2026-09-14.md)에 따로 있다.**
   이 문서는 "왜 이렇게 만들었나", 런북은 "켜고 나서 켜졌는지 어떻게 아나".
 - 소유: 마케팅/그로스/CRM 파트 ([playbook/04-growth-crm.md](playbook/04-growth-crm.md))

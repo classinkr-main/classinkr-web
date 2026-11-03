@@ -125,22 +125,31 @@ curl -sS -H "Authorization: Bearer $CRON_SECRET" \
 **OAuth 자격증명을 발급한 Google Cloud 프로젝트**에 붙는다. 예전 안내문(매니저 계정에서
 토큰 신청)은 전부 옛말이다.
 
-1. Google Cloud 프로젝트 생성 → **Google Ads API 활성화**
-2. OAuth 2.0 클라이언트(웹) 발급 → offline access 로 `refresh_token` 1회 획득
-3. Cloud Console 에서 그 프로젝트의 **API 접근 등급 신청**.
-   읽기 집계만 하므로 **Reporting 등급으로 충분하다** — 승인이 빠르다.
-4. 광고 계정이 MCC 하위인지 확인 → 맞으면 `LOGIN_CUSTOMER_ID` 도 채운다
+**2026-11-03 갱신 — 기본 인증은 공용 서비스 계정이다.** Sheets·Calendar 가 쓰는
+`classin-admin@classin-home.iam.gserviceaccount.com`(GCP 프로젝트 `classin-home`,
+`GOOGLE_SERVICE_ACCOUNT_EMAIL`·`GOOGLE_PRIVATE_KEY`)을 그대로 쓴다. 구글 공식 시작 가이드의 방식이고
+refresh_token 발급·만료가 없어 **새 비밀 값이 필요 없다.** 접근 등급은 **Explorer** 면 된다
+(실제 계정에 하루 2,880회, 크론은 하루 1회). 'Reporting'은 Standard 등급에만 붙는 허용 용도라 신청 대상이 아니다.
+
+1. GCP `classin-home` 에서 **Google Ads API 사용 설정** —
+   `https://console.cloud.google.com/apis/library/googleads.googleapis.com?project=classin-home`
+   (11/3 진단: 미사용이라 `SERVICE_DISABLED`, 프로젝트 번호 876787918822)
+2. 같은 프로젝트의 Google Ads API **개요 페이지 → 액세스 신청(Apply for access)** → **Explorer**.
+   대부분 자동 승인이다. Test 등급으로는 테스트 계정만 읽힌다.
+3. Google Ads **395** → 관리자 → 액세스 및 보안 → 사용자 **+** → 서비스 계정 이메일 → **읽기 전용** → 추가
+   (서비스 계정은 '이메일 전용' 등급을 쓸 수 없다)
+4. 1~3을 한 뒤 로컬에서 `npm run check:google-ads` — 막힌 단계를 알려 준다(읽기 전용, 배포 불필요)
+5. Vercel 환경 변수 `GOOGLE_ADS_CUSTOMER_ID=3951743288` → 재배포. **이 값이 켜는 스위치다.**
 
 ```
-GOOGLE_ADS_CLIENT_ID=
-GOOGLE_ADS_CLIENT_SECRET=
-GOOGLE_ADS_REFRESH_TOKEN=
-GOOGLE_ADS_CUSTOMER_ID=          # 하이픈 없이 숫자만
-GOOGLE_ADS_LOGIN_CUSTOMER_ID=    # MCC 하위일 때만. 아니면 비워 둔다
+GOOGLE_ADS_CUSTOMER_ID=3951743288   # 주 계정 395 (기존 924 아님). 하이픈 없이 숫자만
+GOOGLE_ADS_LOGIN_CUSTOMER_ID=       # MCC 하위일 때만. 아니면 비워 둔다
 ```
 
-`GOOGLE_ADS_CUSTOMER_ID`는 주 계정 **395-174-3288 → `3951743288`** 이다(2026-11-03 기준, 기존 924 계정이 아니다).
-켜고 나면 어드민 마케팅 › 데이터 › Google Ads 헤더의 'API …' 표시가 `미연동`에서 바뀐다.
+OAuth(사용자 위임)를 쓰려면 `GOOGLE_ADS_CLIENT_ID`·`GOOGLE_ADS_CLIENT_SECRET`·`GOOGLE_ADS_REFRESH_TOKEN`을 넣는다 —
+refresh_token 이 있으면 서비스 계정 대신 그쪽을 쓴다. 동의 화면이 '테스트' 상태면 refresh_token 이 7일 뒤 만료되니 '프로덕션'으로 둔다.
+
+켜고 나면 어드민 마케팅 › 데이터 › Google Ads 헤더의 'API …' 표시가 `미연동`에서 바뀌고, 첫 동기화 뒤 캠페인 실적 표가 뜬다.
 
 **확인**
 
@@ -151,9 +160,11 @@ curl -sS -H "Authorization: Bearer $CRON_SECRET" \
 
 | 증상 | 원인 | 조치 |
 |---|---|---|
-| `503 · configured:false` | env 넷 중 하나가 비었다 | 값 확인 후 재배포 |
-| `invalid_grant` | refresh_token 만료·취소 | 재발급 |
-| `PERMISSION_DENIED` / `USER_PERMISSION_DENIED` | 등급 미승인이거나 계정 접근 없음 | 승인 상태 확인 |
+| `503 · configured:false` | `GOOGLE_ADS_CUSTOMER_ID` 가 비었거나 서비스 계정 env 가 없다 | 값 확인 후 재배포 |
+| `SERVICE_DISABLED` | 프로젝트에 Google Ads API 미사용 설정 | 1단계 |
+| `CLOUD_PROJECT_NOT_APPROVED_FOR_PRODUCTION` | 아직 Test 등급 | 2단계 Explorer 승인 확인 |
+| `USER_PERMISSION_DENIED` / `PERMISSION_DENIED` | 서비스 계정이 광고 계정 사용자에 없다 | 3단계 |
+| `invalid_grant` | (OAuth 사용 시) refresh_token 만료·취소 | 재발급 |
 | `login-customer-id` 관련 오류 | MCC 아닌데 보냈거나, MCC인데 안 보냈다 | 해당 env 를 채우거나 **비운다** |
 | 지출이 터무니없이 크다 | `cost_micros` 나눗셈 누락 | 있을 수 없다(순수함수 + 테스트로 잠갔다). 나오면 보고할 것 |
 | `truncated: true` | 페이징 상한(20페이지) 도달 | 결과가 **잘렸다** — 캠페인이 많은 계정이면 상한을 올려야 한다. 그대로 두면 "집행이 줄었다"로 오독된다 |

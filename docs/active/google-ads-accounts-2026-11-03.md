@@ -58,8 +58,19 @@
 
 ## 5. Google Ads API — 집행 데이터 자동 수집
 
-코드는 들어가 있다(크론 `/api/cron/sync-google-ads` → `google_ads_daily`, [런북 §3](ad-channel-activation-runbook-2026-09-14.md)). 자격증명이 없어 미연동이다.
-켤 때 `GOOGLE_ADS_CUSTOMER_ID`는 **주 계정 395 → `3951743288`** 이다. 어드민 Google Ads 섹션 헤더의 'API …' 표시는 실제 연동 여부를 읽으므로 켜면 저절로 바뀐다.
+코드는 다 들어가 있다. 크론 `/api/cron/sync-google-ads`(매일 05:35 KST, trailing 7일)가 `google_ads_daily`에 쌓고,
+어드민 Google Ads 섹션이 그 집계로 **캠페인 실적 표**(광고비·노출·클릭·전환·전환당 비용)를 그린다. 기간은 허브의 기간 토글을 따른다.
+
+**인증은 공용 서비스 계정** `classin-admin@classin-home.iam.gserviceaccount.com`(Sheets·Calendar와 같은 키)이라 새 비밀 값이 없다.
+남은 것은 사람이 하는 콘솔 작업 세 가지와 환경 변수 하나다. 자세한 확인법은 [런북 §3](ad-channel-activation-runbook-2026-09-14.md).
+
+1. GCP 프로젝트 `classin-home`에 Google Ads API 사용 설정 + 개요 페이지에서 **Explorer** 등급 신청(대부분 자동 승인)
+2. Google Ads 395 › 관리자 › 액세스 및 보안에 위 서비스 계정을 **읽기 전용** 사용자로 추가
+3. 로컬에서 `npm run check:google-ads`로 확인 — 막힌 단계를 알려 준다
+4. Vercel에 `GOOGLE_ADS_CUSTOMER_ID=3951743288`(주 계정 395) 넣고 재배포 — 켜는 스위치. 이 브랜치의 서비스 계정 인증 코드도 함께 배포돼야 한다
+
+11/3 진단: 토큰 발급은 되고, 1단계에서 막힌다(`SERVICE_DISABLED`). 어드민 Google Ads 섹션 헤더의 'API …' 표시와
+남은 일의 'API 연동 ①~③'은 실제 설정값을 읽으므로, 켜면 저절로 바뀌고 사라진다. API 버전 `v25`는 2027년 8월 지원 종료 예정이다.
 
 ## 6. 남은 일 (사용자)
 

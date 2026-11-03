@@ -1,7 +1,8 @@
-import { describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 
 import {
   buildDailyInsightsQuery,
+  isGoogleAdsConfigured,
   mapGoogleAdsRow,
   normalizeCustomerId,
 } from "@/lib/google/ads"
@@ -83,6 +84,38 @@ describe("Google Ads — 고객 ID · GAQL", () => {
 
   it("노출 0 행을 제외한다 — '집행 없음'과 '캠페인 부재'가 섞이지 않게", () => {
     expect(buildDailyInsightsQuery("2026-09-01", "2026-09-02")).toContain("metrics.impressions > 0")
+  })
+})
+
+describe("Google Ads — 연동 판정", () => {
+  const stub = (env: Record<string, string>) => {
+    for (const key of [
+      "GOOGLE_ADS_CUSTOMER_ID",
+      "GOOGLE_ADS_REFRESH_TOKEN",
+      "GOOGLE_ADS_CLIENT_ID",
+      "GOOGLE_ADS_CLIENT_SECRET",
+      "GOOGLE_SERVICE_ACCOUNT_EMAIL",
+      "GOOGLE_PRIVATE_KEY",
+    ]) {
+      vi.stubEnv(key, env[key] ?? "")
+    }
+  }
+  afterEach(() => vi.unstubAllEnvs())
+
+  const serviceAccount = { GOOGLE_SERVICE_ACCOUNT_EMAIL: "sa@p.iam.gserviceaccount.com", GOOGLE_PRIVATE_KEY: "-----BEGIN PRIVATE KEY-----\\nx" }
+
+  it("공용 서비스 계정이 있어도 고객 ID 가 없으면 꺼져 있다 — 고객 ID 가 켜는 스위치", () => {
+    stub(serviceAccount)
+    expect(isGoogleAdsConfigured()).toBe(false)
+    stub({ ...serviceAccount, GOOGLE_ADS_CUSTOMER_ID: "395-174-3288" })
+    expect(isGoogleAdsConfigured()).toBe(true)
+  })
+
+  it("refresh_token 이 있는데 OAuth 클라이언트가 빠지면 서비스 계정으로 몰래 넘어가지 않는다", () => {
+    stub({ ...serviceAccount, GOOGLE_ADS_CUSTOMER_ID: "3951743288", GOOGLE_ADS_REFRESH_TOKEN: "r" })
+    expect(isGoogleAdsConfigured()).toBe(false)
+    stub({ GOOGLE_ADS_CUSTOMER_ID: "3951743288", GOOGLE_ADS_REFRESH_TOKEN: "r", GOOGLE_ADS_CLIENT_ID: "c", GOOGLE_ADS_CLIENT_SECRET: "s" })
+    expect(isGoogleAdsConfigured()).toBe(true)
   })
 })
 
