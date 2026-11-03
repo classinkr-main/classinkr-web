@@ -7,8 +7,10 @@ import {
   NAVER_WCS_ID,
 } from "@/lib/analytics-config"
 import { currentChoice, getAnonymousId } from "@/lib/consent/consent"
+import { isAcademySize } from "@/lib/contact/academy-size"
 import { isSalesContactTopic } from "@/lib/contact/topics"
 import {
+  getContentGroup,
   isTrackingExcludedPath,
   sanitizeTrackingTarget,
   sanitizeTrackingUrl,
@@ -59,12 +61,17 @@ type GoogleAnalyticsEventName =
   | "select_content"
   | "video_start"
   | "conversion"
+  | "lead_magnet_signup"
 
 /** gtag('set') 로 고정하는 페이지 문맥 — 이후 모든 hit(자동 이벤트 포함)이 이 값을 쓴다. */
 export interface GooglePageContext {
   page_location?: string
   page_referrer?: string
   page_title?: string
+  /** GA4 콘텐츠 그룹(lib/tracking-paths.ts getContentGroup). */
+  content_group?: string
+  /** 직원 브라우저 표시 — GA4 "내부 트래픽" 데이터 필터가 이 값으로 거른다. */
+  traffic_type?: "internal"
 }
 
 interface GtagFunction {
@@ -364,6 +371,8 @@ export const setGooglePageContext = (context: GooglePageContext) => {
   if (context.page_location) payload.page_location = context.page_location
   if (context.page_referrer !== undefined) payload.page_referrer = context.page_referrer
   if (context.page_title) payload.page_title = context.page_title
+  if (context.content_group) payload.content_group = context.content_group
+  if (context.traffic_type) payload.traffic_type = context.traffic_type
   window.gtag("set", payload)
 }
 
@@ -407,12 +416,22 @@ export const trackEvent = (
   }
 
   // gtag 이벤트는 GA4 권장 이벤트명으로 푸시 — 발화 여부는 Consent Mode v2 상태가 결정한다.
+  // content_group 도 page_location 처럼 이벤트마다 싣는다: /checkout 은 PageViewTracker 가
+  // 없어 소프트 내비게이션으로 들어오면 gtag('set') 문맥이 직전 페이지 그룹에 머문다.
   if (!INTERNAL_ONLY_EVENTS.has(eventName) && window.gtag) {
     const ga4Event = getGa4Event(eventName, eventParams)
-    window.gtag("event", ga4Event.name, {
+    const ga4Params = {
       page_location: currentPageLocation(),
+      content_group: getContentGroup(window.location?.pathname),
       ...ga4Event.params,
-    })
+    }
+    window.gtag("event", ga4Event.name, ga4Params)
+    // 이메일을 받고 내준 자료(gate=email)는 "자료 신청"으로 한 번 더 센다 — GA4 주요 이벤트
+    // lead_magnet_signup 이고, Google Ads 리드 캠페인(C2) 맞춤 목표가 이것을 입찰에 쓴다.
+    // 제품 소개서처럼 이메일 없이 받는 다운로드(gate 없음)는 file_download 로만 남는다.
+    if (eventName === "download_materials" && eventParams.gate === "email") {
+      window.gtag("event", "lead_magnet_signup", ga4Params)
+    }
   }
 
   if (options?.skipMarketingPixels) return
@@ -551,6 +570,8 @@ export const trackLeadSubmitted = (input: LeadSubmittedInput): boolean => {
     form_type: input.formType,
   }
   if (eventId) params.event_id = eventId
+  // 학원 규모는 선택지 값만 내보낸다 — 자유 입력·변조 값이 GA4·픽셀로 새지 않게.
+  if (!isAcademySize(params.academy_size)) delete params.academy_size
 
   trackEvent("submit_demo_request", params)
 

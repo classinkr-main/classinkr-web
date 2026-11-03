@@ -333,6 +333,7 @@ export default function ContactPage() {
                     stored: data.stored,
                     event_slug: selectedEvent?.slug,
                     lead_magnet: leadMagnet || undefined,
+                    academy_size: formData.get("size") as string,
                 },
             })
             toast.success("상담 요청이 접수되었어요")

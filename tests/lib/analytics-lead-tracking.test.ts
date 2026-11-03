@@ -106,6 +106,7 @@ describe("trackLeadSubmitted", () => {
     const [lead] = gtagEvents("generate_lead")
     expect(lead?.[2]).toEqual({
       page_location: "https://classin.kr/contact?utm_source=naver",
+      content_group: "contact",
       source: "contact_page",
       form_type: "contact",
       lead_source: "contact_page",
@@ -192,6 +193,15 @@ describe("trackLeadSubmitted", () => {
     expect(trackLeadSubmitted(input)).toBe(true)
     expect(trackLeadSubmitted(input)).toBe(false)
   })
+
+  it("keeps only enumerated academy_size values", () => {
+    trackLeadSubmitted({ formType: "contact", source: "contact_page", params: { academy_size: "100~300명" } })
+    trackLeadSubmitted({ formType: "demo", source: "demo_modal", params: { academy_size: "김원장 010-1234-5678" } })
+
+    const [valid, invalid] = gtagEvents("generate_lead").map(([, , params]) => params)
+    expect(valid).toMatchObject({ academy_size: "100~300명" })
+    expect(invalid).not.toHaveProperty("academy_size")
+  })
 })
 
 describe("trackEvent GA4 params", () => {
@@ -222,6 +232,21 @@ describe("trackEvent GA4 params", () => {
       page_path: "/resources/academy-system-checklist",
     })
     expect(JSON.stringify(download)).not.toMatch(/token|signature|@/)
+  })
+
+  it("counts an email-gated material as lead_magnet_signup, but not an ungated brochure", () => {
+    trackEvent("download_materials", {
+      asset_id: "academy-system-checklist",
+      lead_magnet: "academy-system-checklist",
+      gate: "email",
+      source: "resource_pdf_download",
+    })
+    trackEvent("download_materials", { asset_id: "sw_brochure", page: "/product/sw" })
+
+    expect(gtagEvents("file_download")).toHaveLength(2)
+    const signups = gtagEvents("lead_magnet_signup")
+    expect(signups).toHaveLength(1)
+    expect(signups[0]?.[2]).toMatchObject({ lead_magnet: "academy-system-checklist", gate: "email" })
   })
 
   it("skipMarketingPixels keeps GA4 but leaves Meta untouched", () => {

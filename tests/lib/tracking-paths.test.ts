@@ -3,10 +3,13 @@ import { join } from "node:path"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 import {
+  getContentGroup,
   hidesPublicChrome,
   isAnalyticsTagExcludedPath,
+  isInternalTrafficMarked,
   isPassthroughTrackingParam,
   isTrackingExcludedPath,
+  markInternalTraffic,
   sanitizeTrackingPath,
   sanitizeTrackingTarget,
   sanitizeTrackingUrl,
@@ -267,6 +270,51 @@ describe("isPassthroughTrackingParam", () => {
     expect(isPassthroughTrackingParam("prefill")).toBe(false)
     expect(isPassthroughTrackingParam("email")).toBe(false)
     expect(isPassthroughTrackingParam("")).toBe(false)
+  })
+})
+
+describe("getContentGroup", () => {
+  it.each([
+    ["/", "home"],
+    ["/product", "product"],
+    ["/product/hw", "product"],
+    ["/pricing/simulator/krw", "pricing"],
+    ["/blog/한글-글", "blog"],
+    ["/resources/academy-system-checklist", "resources"],
+    ["/docs/first-week", "docs"],
+    ["/events/videos/fall", "events"],
+    ["/contact", "contact"],
+    ["/showroom", "contact"],
+    ["/checkout/success", "checkout"],
+    ["/l/test1", "landing"],
+    ["/faq", "faq"],
+    ["/about", "about"],
+    ["/download", "download"],
+    ["/privacy", "other"],
+    ["/products", "other"],
+    ["/constructor", "other"],
+    ["", "other"],
+    [null, "other"],
+  ])("%s → %s", (pathname, group) => {
+    expect(getContentGroup(pathname)).toBe(group)
+  })
+})
+
+describe("internal traffic marker", () => {
+  it("marks the browser and reads it back", () => {
+    vi.stubGlobal("window", { localStorage: createStorage() })
+    expect(isInternalTrafficMarked()).toBe(false)
+    markInternalTraffic()
+    expect(isInternalTrafficMarked()).toBe(true)
+  })
+
+  it("survives a blocked storage", () => {
+    const blocked = () => {
+      throw new Error("blocked")
+    }
+    vi.stubGlobal("window", { localStorage: { getItem: blocked, setItem: blocked } })
+    expect(() => markInternalTraffic()).not.toThrow()
+    expect(isInternalTrafficMarked()).toBe(false)
   })
 })
 
