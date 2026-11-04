@@ -29,6 +29,7 @@ SBS_IDS = {254760684: 20, 254760685: 13}   # SBS 본관(20층)·별관 way id �
 STATION_M = (316, 323)       # 오목교역(5호선) 역 노드
 EXITS_M = {1: (210, 288), 2: (208, 165), 8: (188, 322)}
 PARK_M = (155, -60)          # 오목공원
+SCHOOL_ID = 253469955        # 목운중학교(amenity=school). 쇼룸 바로 건너편, 오목공원 남쪽 긴 건물의 서쪽 부분
 
 
 def fetch(path):
@@ -39,6 +40,7 @@ def fetch(path):
          f'way["landuse"~"grass|park|forest"]({s},{w},{n},{e});'
          f'way["building"]({s},{w},{n},{e});'
          f'way["railway"="subway"]({s},{w},{n},{e});'
+         f'way["amenity"="school"]({s},{w},{n},{e});'
          ");out geom tags;")
     body = urllib.parse.urlencode({"data": q}).encode()
     for url in OVERPASS:
@@ -118,6 +120,7 @@ def main():
     ways = [e for e in osm["elements"] if e["type"] == "way" and "geometry" in e]
 
     roads, foot, parks, pitches, buildings, subway = [], [], [], [], [], []
+    school = school_m = None
     for e in ways:
         t = e.get("tags", {})
         pm = [m(g["lat"], g["lon"]) for g in e["geometry"]]
@@ -125,6 +128,9 @@ def main():
         if not in_view(pp):
             continue
         closed = pp[:-1] if pp[0] == pp[-1] else pp
+        if e["id"] == SCHOOL_ID:
+            school, school_m = closed, (pm[:-1] if pm[0] == pm[-1] else pm)
+            continue
         h = t.get("highway")
         if h in ("footway", "cycleway", "steps", "path", "pedestrian"):
             foot.append(pp)
@@ -141,7 +147,16 @@ def main():
             mp = pm[:-1] if pm[0] == pm[-1] else pm
             role = "sbs" if e["id"] in SBS_IDS else "office" if pip(OFFICE_M, mp) else "hyundai" if pip(HYUNDAI_M, mp) else ""
             buildings.append({"id": e["id"], "poly": poly, "type": t["building"], "role": role,
-                              "levels": t.get("building:levels")})
+                              "levels": t.get("building:levels"), "m": mp})
+    # 학교 부지는 OSM 에서 건물 일부와 겹친다 → 그 건물(host) 지붕 위에 학교 부분만 다른 색으로 덮는다
+    school_host = None
+    if school_m:
+        xs = [x for x, _ in school_m]; ys = [y for _, y in school_m]
+        probe = [(x, y) for x in range(int(min(xs)), int(max(xs)) + 1, 2) for y in range(int(min(ys)), int(max(ys)) + 1, 2)
+                 if pip((x, y), school_m)]
+        hits = [(sum(pip(q, b["m"]) for q in probe), b) for b in buildings]
+        n, b = max(hits, key=lambda t: t[0]) if hits else (0, None)
+        school_host = b if n else None   # ㄷ자라 중심점이 건물 밖일 수 있어 겹치는 점 수로 고른다
 
     WR = {"trunk": 13, "primary": 12, "secondary": 10, "tertiary": 8, "primary_link": 6, "secondary_link": 6,
           "tertiary_link": 5, "residential": 5, "unclassified": 5, "living_street": 4, "service": 3}
@@ -264,6 +279,10 @@ def main():
             out.append(f'<path d="{d_line(q, True)}" fill="{col}" stroke="{col}" stroke-width=".4" stroke-linejoin="round"/>')
         top = [(x, y - hg) for x, y in poly]
         out.append(f'<path d="{d_line(top, True)}" fill="{roof}" stroke="{stroke}" stroke-width=".6" stroke-linejoin="round"/>')
+        if b is school_host:
+            st = [(x, y - hg) for x, y in school]
+            out.append(f'<path d="{d_line(st, True)}" fill="#F1D7C6" stroke="#D7AC92" stroke-width=".8" stroke-linejoin="round"/>')
+            tops["school"] = [(sum(x for x, _ in st) / len(st), sum(y for _, y in st) / len(st), min(y for _, y in st))]
         if b["role"]:
             cx = sum(x for x, _ in top) / len(top); cy = sum(y for _, y in top) / len(top)
             tops.setdefault(b["role"], []).append((cx, cy, min(y for _, y in top)))
@@ -279,6 +298,7 @@ def main():
         "exits": {k: pct(px(v)) for k, v in EXITS_M.items()},
         "park": pct(px(PARK_M)),
         "hyundai_roof": pct(tops["hyundai"][0][:2]) if "hyundai" in tops else None,
+        "school_roof": pct(tops["school"][0][:2]) if "school" in tops else None,
         "roads": {},
     }
     for h, p, name in roads:

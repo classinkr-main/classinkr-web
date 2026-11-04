@@ -7,6 +7,7 @@ import { trackEvent } from "@/lib/analytics"
 
 /**
  * 문의 화면의 목동 쇼룸 일러스트 지도(미니어처 3D 도시, V22-A).
+ * 랜드마크: 쇼룸(그린)·SBS(금색)·목운중학교(벽돌색 지붕)·오목교역(배지·출구·5호선 점선).
  *
  * 바탕 세 장(땅·나무·건물)은 OpenStreetMap 데이터로 만든 정적 SVG다
  * (scripts/contact-map/generate_mokdong_map.py). 아래 % 위치는 그 스크립트가 출력한 값이다 —
@@ -27,6 +28,7 @@ const SBS_ROOF = at(59.47, 9.67)
 const STATION = at(81.02, 90.7)
 const PARK = at(50.93, 34.02)
 const HYUNDAI_ROOF = at(81.99, 54.81)
+const SCHOOL_ROOF = at(40.44, 47.78)
 const EXITS = [
   { no: 2, style: at(60.84, 67.32), main: true },
   { no: 1, style: at(61.21, 85.52), main: false },
@@ -107,7 +109,7 @@ export function ContactMap() {
           data-moment="contact-map"
           data-cm-phase={phase === "idle" ? undefined : phase}
           role="img"
-          aria-label="목동 쇼룸 위치 그림 지도. 현대드림타워(목동동로 233-1)는 오목공원 서쪽, SBS 남서쪽에 있고 오목교역 2번 출구에서 약 350m 거리입니다."
+          aria-label="목동 쇼룸 위치 그림 지도. 현대드림타워(목동동로 233-1)는 목운중학교 바로 앞, 오목공원 서쪽, SBS 남서쪽에 있고 오목교역 2번 출구에서 약 350m 거리입니다."
           className="relative isolate aspect-[396/500] w-full overflow-hidden rounded-xl border border-line-hair bg-surface-sunken"
         >
           <div data-cm="ground" className="absolute inset-0 bg-[url(/images/contact/mokdong-map-ground.svg)] bg-cover bg-no-repeat" />
@@ -130,6 +132,7 @@ export function ContactMap() {
           ))}
           <MapLabel style={PARK}>오목공원</MapLabel>
           <MapLabel style={HYUNDAI_ROOF}>현대백화점</MapLabel>
+          <MapLabel style={SCHOOL_ROOF}>목운중학교</MapLabel>
           <MapLabel style={SBS_ROOF} className="border-line-ink px-2.5 text-fg-ink">SBS</MapLabel>
 
           {/* 오목교역: 5호선 선로·역 범위는 바탕(ground)에 있고, 여기서는 역 이름과 가까운 출구 번호를 얹는다 */}
