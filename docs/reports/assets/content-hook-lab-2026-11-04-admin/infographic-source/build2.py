@@ -1,6 +1,6 @@
 """Round-2 infographics (same flat-cartoon theme as drafts/infographics/build.py)."""
 import os
-SRC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "drafts", "infographics", "build.py")
+SRC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "content-hook-lab-2026-11-03", "infographic-source", "build.py")
 code = open(SRC, encoding="utf-8").read().split("# ---------- A.")[0]
 g = {"__file__": __file__}; exec(code, g); globals().update({k: v for k, v in g.items() if not k.startswith("__")})
 OUT = os.path.dirname(os.path.abspath(__file__))
