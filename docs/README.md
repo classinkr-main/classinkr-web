@@ -119,6 +119,8 @@ Admin 관련 작업은 [Admin 지침 맵](./active/admin-guidance-map.md)에서 
   - **SEO·AEO 개선 워크리스트.** 외부 예비 진단(2026-10-27)을 코드와 대조해 수치·Zoom 비교·요금 조건·홈 메타·허브 링크·답변형 FAQ·canonical/lastmod·GA4 계측을 항목별로 "반영 / 코드 가능 / 사람 확인 / 콘솔"로 분류. 결정 대기 D1~D13, 운영자 콘솔 체크리스트, 90일 실행 순서
 - [active/seo-analytics-console-runbook-2026-10-28.md](./active/seo-analytics-console-runbook-2026-10-28.md)
   - **검색·분석 콘솔 실행 런북.** GSC 도메인 속성·네이버 서치어드바이저·GA4(향상된 측정 OFF·데이터 수정·맞춤 측정기준·주요 이벤트·MP 중복 결정)·GTM 점검·Google Ads·Vercel 환경변수를 순서·값·검증 시나리오와 함께 정리
+- [active/meta-crm-stage-signal-2026-11-04.md](./active/meta-crm-stage-signal-2026-11-04.md)
+  - **메타 리드 영업 단계 → Meta 전환 리드 신호(기본 꺼짐).** 보내는 단계·시각·멱등 규칙, Meta 스펙 요약, dryRun 결과, 법무·이벤트 관리자 확인 항목과 켜는 순서
 - [active/integration-followups-2026-10-28.md](./active/integration-followups-2026-10-28.md)
   - **2026-10-28 통합 병합 기록.** main + 열린 PR 7건(#34·#38~#42·#44) + 10-28 핫픽스를 한 브랜치로 합치며 내린 결정(정본 선택·순서·모듈 통합), 운영 적용 대기 마이그레이션 4건, 병합 중 드러난 후속 과제 F1~F10. §7 에 10-30 상태(PR #45 로 main 병합 완료, 운영 배포·마이그레이션·Vercel env 대기, 사람이 할 배포 절차)
 - [active/docs-center-db-design.md](./active/docs-center-db-design.md)
