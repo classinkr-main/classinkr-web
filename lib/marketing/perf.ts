@@ -455,6 +455,12 @@ export interface MarketingPerfResponse {
    */
   channelLive: PerfChannelLive[]
   /**
+   * Google Ads 캠페인별 이 기간 합계(google_ads_daily) — 데이터 › Google Ads 표의 원천.
+   * channelLive 의 google 칸과 같은 행에서 나오므로 합이 맞는다. 광고비 내림차순.
+   * 배포 직후 옛 캐시 항목에는 없을 수 있어 선택 필드다.
+   */
+  googleCampaigns?: PerfGoogleCampaign[]
+  /**
    * 귀속 폭포 — 이 기간 리드가 "어느 광고가 데려왔나"까지 가는 길에서 어디서 끊기는지.
    * 위 funnel(광고 리드의 단계 전환)과 다른 축이다: 저쪽은 "리드가 고객이 되는 과정",
    * 이쪽은 "리드에 출처를 붙일 수 있는가". 둘을 같은 카드에 섞으면 안 된다.
@@ -468,6 +474,12 @@ export interface MarketingPerfResponse {
  * spend=null)와 "조회됐고 집행이 없다"(spend=0)를 셋 다 구분한다 — 화면이 0 과 미측정을
  * 같은 칸에 그리지 않게 하는 것이 이 타입의 목적이다.
  */
+/** Google Ads 캠페인 한 줄 — 그 캠페인 행만 접은 채널 요약(campaignCount 는 1). */
+export interface PerfGoogleCampaign extends ChannelSpendSummary {
+  campaignId: string
+  campaignName: string | null
+}
+
 export interface PerfChannelLive extends ChannelSpendSummary {
   /** env 자격증명이 설정돼 있는가. false 면 화면은 '미연동'으로 그린다. */
   configured: boolean
