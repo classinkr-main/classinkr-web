@@ -60,11 +60,13 @@ export const COMPASS_STAGE_LABEL: Record<string, string> = {
 }
 
 /**
- * Compass 인바운드 유입 경로(crm.leads.channel) — 고객이 먼저 온 것(채널톡·다이렉트·워크인·소개).
- * 정본은 Compass lib/taxonomy/defs.ts CHANNELS 중 group = 'inbound'. Compass 는 이 경로를 일반 트랙으로 보고
+ * Compass 인바운드 유입 경로(crm.leads.channel) — 고객이 먼저 온 것(채널톡·다이렉트·워크인·소개·홈페이지).
+ * 정본은 Compass lib/taxonomy/defs.ts CHANNELS 중 group = 'inbound'(워크인은 'field' — 집계 제외는 같다). Compass 는 이 경로를 일반 트랙으로 보고
  * 마케팅 성과·마케팅 유입 집계에서 뺀다(lib/channels.ts mktLeadCond).
+ * 'homepage'(2026-11-04, Compass ADR-0081) — 우리 홈페이지 폼 리드를 lib/server/compass-lead-push.ts 가 Compass 로 민 것. 여기 없으면
+ * 「오늘 유입」이 같은 사람을 어드민 홈페이지 리드 + Compass 마케팅 신규로 두 번 센다.
  */
-export const COMPASS_INBOUND_CHANNELS = ["channeltalk", "direct", "walkin", "referral"] as const
+export const COMPASS_INBOUND_CHANNELS = ["channeltalk", "direct", "walkin", "referral", "homepage"] as const
 
 /** Compass 가져오기(import) 채널 — 유입이 아니라 다른 시스템(NEO 한국팀)에서 **들여온** 스텁의 표식(Compass ADR-0015,
  *  lib/taxonomy/defs.ts CHANNELS group='import'). Compass 는 이 채널도 mktLeadCond 에서 뺀다(lib/channels.ts

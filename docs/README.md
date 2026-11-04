@@ -144,6 +144,8 @@ Admin 관련 작업은 [Admin 지침 맵](./active/admin-guidance-map.md)에서 
   - Compass 마케팅 앱과 공유하는 Supabase DB의 동기화·스키마·거버넌스 감사, 도메인별 통폐합 판정과 4단계 로드맵
 - [active/compass-integration-2026-09-14.md](./active/compass-integration-2026-09-14.md)
   - **Compass ↔ 어드민 리드·CRM 연동 2차.** 전화 키 함수·링크/연락/역브리지 뷰 마이그레이션 적용 순서(Compass 배포 → 서울 적용 → 20260902 재실행), NEO lead 생성 닫기, 연락 상태 동기화 정렬 메모
+- [active/compass-home-lead-push-2026-11-04.md](./active/compass-home-lead-push-2026-11-04.md)
+  - **홈페이지 폼 리드 → Compass 밀어 넣기.** 저장 직후 `POST /api/webhook/home-lead`(전용 토큰·HTTPS), 보내는 소스·본문·멱등 키·실패 처리, Compass 쪽 규칙(인바운드 「홈페이지」·알림톡은 어드민 몫)과 켜는 순서
 - [active/compass-kr-team-sync.md](./active/compass-kr-team-sync.md)
   - KR Team의 Compass 월별 과정지표·현재 팀 명부·매출 조정 읽기 계약, 전용 토큰 설정과 검증·배포 순서
 - [active/kr-data-source-contract.md](./active/kr-data-source-contract.md)

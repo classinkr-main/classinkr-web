@@ -78,6 +78,11 @@
   정규화한다(utm·클릭ID·네이버 `n_*` 묶음). 새 미러링 경로도 이 함수를 쓰고, 폼은 `collectLeadAttribution()`을
   평평하게 한 번만 보낸다.
 - 접수 확인 문자·알림톡(`lib/messaging/customer-receipt.ts`)은 `SOLAPI_API`·`SOLAPI_SECRET`이 있으면 **고객에게 실발송**된다.
+- 홈페이지 폼 리드(`WEBSITE_FORM_LEAD_SOURCES` = 데모·문의·쇼룸 예약·도입 신청)는 저장 직후 Compass `POST /api/webhook/home-lead` 로도 민다
+  (`lib/server/compass-lead-push.ts` — `COMPASS_BRIDGE_URL` + `COMPASS_LEAD_WEBHOOK_TOKEN` 둘 다 있고 HTTPS 일 때만, 아니면 조용히 건너뛴다). 재문의 병합은
+  `kind: "reinflow"`, `event_id` 는 전환 이벤트 id 와 같은 값(Compass 멱등 표식). 실패는 응답 `warnings`·「리드 전달 경고」로만 — 저장을 막지 않는다. 뉴스레터·Meta 리드폼은
+  보내지 않는다(Meta 는 Compass 가 직접 받는다). Compass 쪽 규칙(인바운드 「홈페이지」 경로·재유입·알림톡은 어드민 몫)은 그 저장소 `docs/adr/0081-*.md`. 흐름을 바꾸면
+  `npx vitest run tests/server/compass-lead-push.test.ts` 도 함께 실행한다.
   새 환경에 키를 넣거나 접수 경로를 바꿀 때는 `MESSAGING_DRY_RUN=1`로 먼저 확인한다.
 - 마케팅/채널톡 스크립트 도메인을 추가할 때는 `next.config.ts`의 CSP를 directive별로 갱신하고 `/contact` 응답 헤더를 확인한다.
 
