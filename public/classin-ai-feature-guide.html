@@ -170,6 +170,8 @@ footer{margin-top:64px;padding-top:18px;border-top:1px solid var(--line);font-si
 .xlink:hover{text-decoration:none;border-color:var(--accent)}
 .xlink b{color:var(--accent-ink);font-weight:600;white-space:nowrap}
 .toc a.ext{color:var(--accent-ink)}
+.more{display:inline-flex;align-items:center;gap:4px;align-self:flex-start;color:var(--accent-ink);font-weight:600;font-size:14px;line-height:1.5}
+.sh .more{grid-column:2;justify-self:start;margin-top:10px}
 .card{scroll-margin-top:84px}
 .card:target{outline:2px solid var(--accent);outline-offset:3px}
 /* 마지막 문의 CTA */
@@ -270,7 +272,7 @@ footer{margin-top:64px;padding-top:18px;border-top:1px solid var(--line);font-si
           </ul>
         </div>
       </div>
-      <a class="xlink" href="https://classin.co.kr/classin-feature-guide.html" target="_blank" rel="noopener" style="margin:14px 0 0"><span>수업 진행·자료·녹화·학습 관리·운영 등 AI 밖의 기능은 클래스인 기능 소개서에 정리했습니다.</span><b>기능 소개서 보기 ↗</b></a>
+      <a class="xlink" href="https://classin.co.kr/classin-feature-guide.html" target="_blank" rel="noopener" style="margin:14px 0 0"><span>수업 진행·자료·녹화·학습 관리·운영 등 AI 밖의 기능은 클래스인 기능 소개서에 정리했습니다.</span><b>AI 외 기능 더 자세히 보기 ↗</b></a>
     </section>
 
     <div class="mfilters">
@@ -402,8 +404,8 @@ function bodyHTML(c){
       ${c.e?`<dt>지원 환경</dt><dd>${esc(c.e)}</dd>`:""}
       ${c.x?`<dt>참고</dt><dd>${esc(c.x)}</dd>`:""}
       ${links?`<dt>가이드</dt><dd>${links}</dd>`:""}
-      ${c.fg?`<dt>기능 소개서</dt><dd>${c.fg.map(([k,t])=>`<a href="${FG}#${k}" target="_blank" rel="noopener">${esc(t)} ↗</a>`).join(" · ")}</dd>`:""}
-    </dl>`;
+    </dl>
+    ${c.fg?`<a class="more" href="${FG}#${c.fg[0][0]}" target="_blank" rel="noopener">기능 소개서에서 더 보기 ↗</a>`:""}`;
 }
 function cardHTML(c){
   const attrs = `data-text="${esc((c.n+" "+c.d+" "+c.s+" "+c.b.join(" ")+" "+(c.e||"")+" "+(c.x||"")).toLowerCase())}"`;
@@ -420,7 +422,7 @@ function showHTML(s){
 }
 
 document.getElementById("catalog").innerHTML = SECTIONS.map((s,i)=>`<section id="${s.id}">
-  <div class="sh"><span class="n">${String(i+1).padStart(2,"0")}</span><h2>${s.title}</h2><p>${s.desc}${s.fg?` <a href="${FG}#${s.fg[0]}" target="_blank" rel="noopener">기능 소개서의 ${esc(s.fg[1])} ↗</a>`:""}</p></div>
+  <div class="sh"><span class="n">${String(i+1).padStart(2,"0")}</span><h2>${s.title}</h2><p>${s.desc}</p>${s.fg?`<a class="more" href="${FG}#${s.fg[0]}" target="_blank" rel="noopener">기능 소개서에서 더 보기 ↗</a>`:""}</div>
   ${showHTML(s)}
   <div class="subh"><h3>주요 기능</h3><span>무엇을 할 수 있는지</span></div>
   <div class="cards">${s.cards.map(cardHTML).join("")}</div>
@@ -428,7 +430,7 @@ document.getElementById("catalog").innerHTML = SECTIONS.map((s,i)=>`<section id=
 </section>`).join("");
 
 const tocItems = [["overview","00","한눈에 보기"], ...SECTIONS.map((s,i)=>[s.id,String(i+1).padStart(2,"0"),s.title]), ["contact","A","문의"]];
-document.getElementById("toc").innerHTML = tocItems.map(([id,n,t])=>`<li><a href="#${id}" data-id="${id}"><span class="n">${n}</span><span>${t}</span></a></li>` + (id==="ai-agent"?`<li><a class="ext" href="${FG}" target="_blank" rel="noopener"><span class="n"></span><span>기능 소개서 ↗</span></a></li>`:"")).join("");
+document.getElementById("toc").innerHTML = tocItems.map(([id,n,t])=>`<li><a href="#${id}" data-id="${id}"><span class="n">${n}</span><span>${t}</span></a></li>` + (id==="ai-agent"?`<li><a class="ext" href="${FG}" target="_blank" rel="noopener"><span class="n"></span><span>AI 외 기능 더 자세히 보기 ↗</span></a></li>`:"")).join("");
 
 
 /* 검색 (데스크톱 패널·모바일 입력 동기화) */
