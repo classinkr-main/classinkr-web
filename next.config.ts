@@ -85,6 +85,15 @@ const securityHeaders = [
   { key: "Permissions-Policy", value: "geolocation=(), microphone=(), camera=()" },
 ];
 
+// 리드마그넷 PDF 렌더러(lib/lead-magnet-pdf/fonts.ts)가 런타임에 fs 로 읽는 글꼴.
+// 글꼴 파일을 두 PDF 라우트의 함수 번들에 확실히 넣는다(fonts.ts 는 리터럴 경로라 트레이서도 따라가지만 목록을 명시해 둔다).
+// next.config.ts 는 앱 모듈을 import 하지 않으므로 목록을 복제하고,
+// tests/lead-magnets/pdf-tracing.test.ts 가 fonts.ts 의 목록과 같은지 대조한다.
+const leadMagnetPdfFonts = [
+  "./node_modules/pretendard/dist/public/static/alternative/Pretendard-Regular.ttf",
+  "./node_modules/pretendard/dist/public/static/alternative/Pretendard-SemiBold.ttf",
+];
+
 const publicAssetCacheHeaders = [
   {
     key: "Cache-Control",
@@ -107,6 +116,16 @@ const nextConfig: NextConfig = {
   // import(첫 호출 시 로드)와 합쳐져 서버 함수 콜드 스타트 번들이 줄어든다. 출력 파일 트레이싱은
   // external 패키지도 배포 아티팩트에 포함하므로 런타임 해석에는 영향이 없다.
   serverExternalPackages: ["googleapis", "exceljs"],
+  // 키는 라우트 경로 글롭이다. 동적 세그먼트는 대괄호 이스케이프 대신 `*`(한 세그먼트)로 적는다 —
+  // 이스케이프 해석이 번들러(webpack picomatch / Turbopack)마다 달라질 여지를 없앤다.
+  // 공개 PDF 라우트는 렌더 실패 시 public/ 의 예전 생성본 존재를 fs 로 확인하므로 그 파일도 넣는다.
+  outputFileTracingIncludes: {
+    "/api/materials/*/pdf": [
+      ...leadMagnetPdfFonts,
+      "./public/materials/lead-magnets/*.pdf",
+    ],
+    "/api/admin/lead-magnets/pdf-preview": leadMagnetPdfFonts,
+  },
   images: {
     // 기본값은 webp 단독이다. avif를 앞에 두면 지원 브라우저에서 추가로 ~17% 더 줄어든다.
     formats: ["image/avif", "image/webp"],

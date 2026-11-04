@@ -2,6 +2,7 @@ import "server-only"
 
 import type { LeadMagnet, LeadMagnetGate } from "@/lib/lead-magnets"
 import { stitchIdentity } from "@/lib/identity/stitch"
+import { isLegacyGeneratedPdfUrl, leadMagnetPdfRoutePath } from "@/lib/lead-magnet-pdf/links"
 import { getLeadMagnetBySlugFromStore } from "@/lib/repositories/lead-magnets"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 
@@ -39,7 +40,11 @@ function getStoragePath(magnet: LeadMagnet) {
 }
 
 function getFallbackResourceUrl(magnet: LeadMagnet) {
-  return magnet.resourceUrl?.trim() || `/resources/${magnet.slug}`
+  const resourceUrl = magnet.resourceUrl?.trim()
+  // 예전 오프라인 생성본(public/materials/lead-magnets/<slug>.pdf)에는 어드민 수정이 반영되지 않는다.
+  // 같은 자료를 저장소의 현재 내용으로 그리는 라우트로 보낸다(렌더 실패 시 그 라우트가 정적본으로 넘긴다).
+  if (isLegacyGeneratedPdfUrl(resourceUrl, magnet.slug)) return leadMagnetPdfRoutePath(magnet.slug)
+  return resourceUrl || `/resources/${magnet.slug}`
 }
 
 async function resolveDestinationUrl(magnet: LeadMagnet) {
