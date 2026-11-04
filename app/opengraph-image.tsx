@@ -1,7 +1,7 @@
 import { ImageResponse } from "next/og"
 import { color } from "@/lib/design-tokens"
 
-export const alt = "클래스인 Classin — 수업 녹화·AI 강의 평가까지 되는 학원 전자칠판"
+export const alt = "클래스인 Classin 학원 전자칠판. 칠판은 지워져도, 수업은 남습니다"
 export const size = { width: 1200, height: 630 }
 export const contentType = "image/png"
 
@@ -82,8 +82,8 @@ export default function OGImage() {
             flexDirection: "column",
           }}
         >
-          <span>수업하면 녹화되고,</span>
-          <span>끝나면 평가되는 학원 전자칠판</span>
+          <span>칠판은 지워져도,</span>
+          <span>수업은 남습니다</span>
         </h1>
 
         {/* Sub text */}
@@ -99,8 +99,8 @@ export default function OGImage() {
             flexDirection: "column",
           }}
         >
-          <span>수업 녹화 · AI 강의 평가 · 교안·숙제·시험 관리까지</span>
-          <span>전자칠판 하나로, 클래스인 Classin</span>
+          <span>학원 전자칠판 · 수업 녹화 · AI 강의 평가</span>
+          <span>클래스인 Classin</span>
         </p>
 
         {/* Bottom right accent */}
