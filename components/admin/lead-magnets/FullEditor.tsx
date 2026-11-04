@@ -12,6 +12,7 @@ import { AlertTriangle, CheckCircle2, Copy, ExternalLink, Loader2, RefreshCw, Tr
 
 import { useDialogFocus } from "@/components/admin/use-dialog-focus"
 import { adminFetch } from "@/lib/admin-client"
+import { isHandcraftedLeadMagnetPdf, leadMagnetPdfRoutePath, legacyLeadMagnetPdfPath } from "@/lib/lead-magnet-pdf/links"
 import type { LeadMagnet, LeadMagnetCategory, LeadMagnetGate, LeadMagnetStatus, LeadMagnetTier } from "@/lib/lead-magnets"
 import type { LeadMagnetQualityArea, LeadMagnetQualityIssue } from "@/lib/lead-magnet-quality"
 import {
@@ -499,7 +500,10 @@ export default function FullEditor({
   )
 }
 
-/** PDF 화면 — 왼쪽 실제 PDF 미리보기(저장 전 초안 그대로), 오른쪽 PDF 에만 나오는 내용 편집 */
+/**
+ * PDF 화면 — 왼쪽 실제 PDF 미리보기(저장 전 초안 그대로), 오른쪽 PDF 에만 나오는 내용 편집.
+ * 사이트 CSP 가 iframe·object 로 PDF 를 띄우는 것을 막으므로(frame-ancestors·object-src) 새 탭으로 연다.
+ */
 function PdfWorkspace({ draft, update, magnets }: { draft: LeadMagnet; update: UpdateDraft; magnets: readonly LeadMagnet[] }) {
   const [pdfUrl, setPdfUrl] = useState<string | null>(null)
   const [renderedFrom, setRenderedFrom] = useState<string | null>(null)
@@ -513,6 +517,8 @@ function PdfWorkspace({ draft, update, magnets }: { draft: LeadMagnet; update: U
   }, [pdfUrl])
 
   const render = async () => {
+    // 팝업 차단을 피하려고 누른 순간 빈 탭을 먼저 연다 — PDF 가 오면 그 탭으로 보낸다
+    const tab = window.open("", "_blank")
     setRendering(true)
     setRenderError("")
     try {
@@ -523,9 +529,12 @@ function PdfWorkspace({ draft, update, magnets }: { draft: LeadMagnet; update: U
       })
       if (!response.ok) throw new Error(String(response.status))
       const blob = await response.blob()
-      setPdfUrl(URL.createObjectURL(blob))
+      const url = URL.createObjectURL(blob)
+      setPdfUrl(url)
       setRenderedFrom(draftJson)
+      if (tab) tab.location.href = url
     } catch {
+      tab?.close()
       setRenderError("PDF 미리보기를 만들지 못했습니다. 잠시 뒤 다시 눌러 주세요.")
     } finally {
       setRendering(false)
@@ -537,6 +546,8 @@ function PdfWorkspace({ draft, update, magnets }: { draft: LeadMagnet; update: U
   const setGuide = (patch: Partial<typeof guide>) => update((d) => ({ ...d, pdfGuide: { ...(d.pdfGuide ?? emptyPdfGuide()), ...patch } }))
   const setStory = (patch: Partial<typeof story>) => update((d) => ({ ...d, storyGuide: { ...(d.storyGuide ?? emptyStoryGuide()), ...patch } }))
   const related = new Set(guide.relatedMagnets)
+  const handcrafted = isHandcraftedLeadMagnetPdf(draft.slug)
+  const savedPdfHref = handcrafted ? legacyLeadMagnetPdfPath(draft.slug) : leadMagnetPdfRoutePath(draft.slug)
 
   return (
     <div className="flex flex-wrap items-start gap-4">
@@ -545,7 +556,11 @@ function PdfWorkspace({ draft, update, magnets }: { draft: LeadMagnet; update: U
           <div className="min-w-0">
             <p className="text-[13px] font-bold text-[#111110]">실제 PDF 미리보기</p>
             <p className={`text-[12px] ${stale ? "text-[#A8741A]" : "text-[#615D59]"}`}>
-              {stale ? "미리보기 뒤에 바뀐 내용이 있습니다" : "저장 전 초안 그대로 만듭니다. 받는 사람이 받는 PDF와 같습니다."}
+              {stale
+                ? "미리보기 뒤에 바뀐 내용이 있습니다"
+                : handcrafted
+                  ? "저장 전 초안으로 자동 생성하면 이렇게 나옵니다."
+                  : "저장 전 초안 그대로 새 탭에 만듭니다. 저장하면 받는 사람의 PDF도 몇 분 안에 바뀝니다."}
             </p>
           </div>
           <div className="flex gap-2">
@@ -554,7 +569,7 @@ function PdfWorkspace({ draft, update, magnets }: { draft: LeadMagnet; update: U
               {pdfUrl ? "다시 만들기" : "PDF 미리보기 만들기"}
             </button>
             {draft.published ? (
-              <a href={`/api/materials/${encodeURIComponent(draft.slug)}/pdf`} target="_blank" rel="noopener noreferrer" className="inline-flex h-9 items-center gap-1.5 rounded-md bg-black/[0.05] px-3 text-[13px] font-semibold text-[#111110]">
+              <a href={savedPdfHref} target="_blank" rel="noopener noreferrer" className="inline-flex h-9 items-center gap-1.5 rounded-md bg-black/[0.05] px-3 text-[13px] font-semibold text-[#111110]">
                 저장된 PDF
                 <ExternalLink className="h-3.5 w-3.5" />
               </a>
@@ -567,15 +582,34 @@ function PdfWorkspace({ draft, update, magnets }: { draft: LeadMagnet; update: U
             {renderError}
           </p>
         ) : null}
-        {pdfUrl ? (
-          <iframe title="PDF 미리보기" src={pdfUrl} className="h-[78vh] w-full rounded-[10px] border border-[#E8E8E4] bg-white" />
-        ) : (
-          <div className="flex h-[50vh] items-center justify-center rounded-[10px] border border-dashed border-[#D5D2CB] bg-white px-6 text-center text-[13px] leading-6 text-[#615D59]">
-            「PDF 미리보기 만들기」를 누르면 지금 초안으로 PDF를 그려 여기에 보여 줍니다.
-            <br />
-            문항·담긴 것·점수 해석·실행 플랜은 「자료 페이지」 화면에서 고친 내용이 그대로 들어갑니다.
-          </div>
-        )}
+        {handcrafted ? (
+          <p className="rounded-[10px] border border-[#ECD29C] bg-[#FBF1E0] px-4 py-3 text-[13px] leading-6 text-[#7A520F]">
+            이 자료는 따로 만든 PDF 파일을 그대로 보냅니다. 여기서 고친 내용은 받는 사람의 PDF에 들어가지 않습니다(자료 페이지·블로그 상자에는 들어갑니다).
+            자동 생성 PDF로 바꿀지는 따로 정합니다.
+          </p>
+        ) : null}
+        <div className="flex min-h-[40vh] flex-col items-center justify-center gap-3 rounded-[10px] border border-dashed border-[#D5D2CB] bg-white px-6 py-10 text-center text-[13px] leading-6 text-[#615D59]">
+          {pdfUrl ? (
+            <>
+              <p className="font-semibold text-[#111110]">새 탭에서 PDF 미리보기를 열었습니다.</p>
+              <div className="flex flex-wrap justify-center gap-2">
+                <a href={pdfUrl} target="_blank" rel="noopener noreferrer" className="inline-flex h-9 items-center gap-1.5 rounded-md bg-black/[0.05] px-3 font-semibold text-[#111110]">
+                  다시 열기
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </a>
+                <a href={pdfUrl} download={`${draft.slug}-미리보기.pdf`} className="inline-flex h-9 items-center rounded-md bg-black/[0.05] px-3 font-semibold text-[#111110]">
+                  내려받기
+                </a>
+              </div>
+            </>
+          ) : (
+            <p>
+              「PDF 미리보기 만들기」를 누르면 지금 초안으로 PDF를 그려 새 탭에 엽니다.
+              <br />
+              문항·담긴 것·점수 해석·실행 플랜은 「자료 페이지」 화면에서 고친 내용이 그대로 들어갑니다.
+            </p>
+          )}
+        </div>
       </section>
 
       <section aria-label="PDF에만 나오는 내용" className="min-w-0 flex-[1_1_360px] space-y-4 rounded-[10px] bg-white p-4">

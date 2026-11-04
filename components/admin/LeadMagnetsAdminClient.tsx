@@ -326,7 +326,7 @@ export default function LeadMagnetsAdminClient({ initialLeadMagnets, initialStor
           : [...prev, data.leadMagnet]
       )
       loadIntoEditor(data.leadMagnet)
-      setNotice("저장했습니다. 자료실·블로그 신청 상자·PDF에 반영됩니다.")
+      setNotice("저장했습니다. 자료실·블로그 신청 상자에 바로, PDF에는 몇 분 안에 반영됩니다.")
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "저장하지 못했습니다.")
     } finally {
