@@ -167,6 +167,13 @@ td:first-child{white-space:nowrap}
 .note{font-size:12.5px;color:var(--muted);margin:10px 4px 0}
 
 footer{margin-top:64px;padding-top:18px;border-top:1px solid var(--line);font-size:12px;color:var(--muted)}
+/* 다른 소개서로 가는 연결 */
+.xlink{display:flex;align-items:center;justify-content:space-between;gap:8px 20px;flex-wrap:wrap;margin:0 0 22px;padding:14px 18px;border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:12px;background:var(--surface);color:var(--ink);font-size:14px;line-height:1.55}
+.xlink:hover{text-decoration:none;border-color:var(--accent)}
+.xlink b{color:var(--accent-ink);font-weight:600;white-space:nowrap}
+.toc a.ext{color:var(--accent-ink)}
+.card{scroll-margin-top:84px}
+.card:target{outline:2px solid var(--accent);outline-offset:3px}
 /* 마지막 문의 CTA */
 .cta{margin-top:14px;background:var(--hero-bg);color:var(--hero-fg);border:1px solid var(--hero-line);border-radius:24px;padding:40px 44px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:22px 40px;align-items:center}
 .cta .kicker{font-size:12.5px;font-weight:600;letter-spacing:.02em;color:var(--hero-accent);margin-bottom:10px}
@@ -285,6 +292,7 @@ footer{margin-top:64px;padding-top:18px;border-top:1px solid var(--line);font-si
 
 <script>
 const G = "https://docs.channel.io/classinkorea/ko/articles/";
+const AIG = "https://classin.co.kr/classin-ai-feature-guide.html";
 const L = {
   sdrive: ["공유 드라이브 관리", G+"%EA%B3%B5%EC%9C%A0-%EB%93%9C%EB%9D%BC%EC%9D%B4%EB%B8%8C-%EA%B4%80%EB%A6%AC-9ec52eb9"],
   webpb:  ["웹 라이브 & 플레이백", G+"%EC%9B%B9-%EB%9D%BC%EC%9D%B4%EB%B8%8C%ED%94%8C%EB%A0%88%EC%9D%B4%EB%B0%B1-4a66c187"],
@@ -367,15 +375,16 @@ const SECTIONS = [
   {n:"API 연동", d:"기관 시스템과 계정·수업·데이터 연동", s:"기존 학원 관리 시스템에서 바로 수업을 개설하고 싶을 때", b:["이중 입력 없이 기존 시스템과 연결","기존 시스템에서 바로 수업 입장"], r:["관리자"], c:"ask", x:"연동 방식·범위는 담당 매니저와 별도 상담"},
  ]},
  {id:"ai", title:"AI 기능", desc:"수업 중 문항 출제부터 녹화 요약, 강의 품질 점검까지 수업 데이터 위에서 동작하는 AI입니다.",
+   more:{href:AIG, t:"AI 기능마다 켜는 곳, 사용 순서, 실제 화면은 AI 기능 소개서에 따로 정리했습니다.", cta:"AI 기능 소개서 보기"},
   show:[{k:"aiplay", cap:"다시보기 화면의 AI 탭 — AI 강의 분석·AI 요약·AI 스크립트"}], cards:[
-  {n:"AI 강의 분석", d:"녹화된 실시간 수업을 4개 영역 11개 항목으로 진단", s:"강사 코칭을 감이 아닌 근거로 하고 싶을 때", b:["지식 설명·사고 수준·학생 학습·수업 구조 등 항목별 점수","신규 강사 온보딩 피드백 자료","보고서 다운로드로 강사 면담에 활용"], r:["관리자"], e:"실시간 수업 대상", c:"req", x:"관리자 일반 설정에서 직접 ON. 보고서 한국어 설정 가능", img:"aireport", cap:"AI 강의 분석 보고서 예시"},
-  {n:"숙제 AI 채점", d:"제출된 숙제에 AI가 점수·총평 초안 작성", s:"서술형 숙제 채점 초안 작성에 시간이 많이 들 때", b:["채점 초안 작성 시간 절감","오답 분석·해설까지 초안으로 제공","강사는 검토·수정에 집중"], r:["강사"], c:"base", x:"강사가 확인 후 게시해야 학생에게 공개. 최종 점수는 강사 검토 권장", img:"aigrade", cap:"숙제 채점 화면 — 우측에 AI 초안"},
-  {n:"AI 칠판", d:"수업 중 텍스트·판서 캡처·음성으로 문항 출제, AI 채점과 실시간 답안 현황 제공", s:"설명 직후 반 전체가 이해했는지 바로 확인하고 싶을 때", b:["주관식·O/X·말하기 문항을 즉석 출제","답안 현황과 학습 진단으로 반 전체 이해도 파악"], r:["강사","학생"], e:"PC (학생 태블릿 포함), 교사·학생 앱 6.0.9 이상", c:"req"},
-  {n:"교실 안 AgentIn", d:"수업 중 교실을 나가지 않고 AI 에이전트에게 바로 질문", s:"수업 중 예시나 연습 문제가 더 필요할 때", b:["예시·연습 문제를 즉석 생성","에이전트 스토어에서 과목별 에이전트 선택"], r:["강사"], e:"PC. 학생 사용은 기본 숨김", c:"req"},
-  {n:"AI 내용 요약", d:"녹화된 수업을 과목에 맞는 에이전트가 요약", s:"수업마다 복습 노트를 만들어 주고 싶을 때", b:["복습 자료가 수업마다 자동 생성","학생은 요약으로 핵심부터 확인"], r:["강사","학생"], c:"base", x:"수업 생성 시 ON. 에이전트 변경은 이후 녹화분부터 적용"},
+  {n:"AI 강의 분석", ai:[["ai-analysis","AI 강의 분석"]], d:"녹화된 실시간 수업을 4개 영역 11개 항목으로 진단", s:"강사 코칭을 감이 아닌 근거로 하고 싶을 때", b:["지식 설명·사고 수준·학생 학습·수업 구조 등 항목별 점수","신규 강사 온보딩 피드백 자료","보고서 다운로드로 강사 면담에 활용"], r:["관리자"], e:"실시간 수업 대상", c:"req", x:"관리자 일반 설정에서 직접 ON. 보고서 한국어 설정 가능", img:"aireport", cap:"AI 강의 분석 보고서 예시"},
+  {n:"숙제 AI 채점", ai:[["ai-agent-5","서술형 숙제 AI 채점"]], d:"제출된 숙제에 AI가 점수·총평 초안 작성", s:"서술형 숙제 채점 초안 작성에 시간이 많이 들 때", b:["채점 초안 작성 시간 절감","오답 분석·해설까지 초안으로 제공","강사는 검토·수정에 집중"], r:["강사"], c:"base", x:"강사가 확인 후 게시해야 학생에게 공개. 최종 점수는 강사 검토 권장", img:"aigrade", cap:"숙제 채점 화면 — 우측에 AI 초안"},
+  {n:"AI 칠판", ai:[["ai-board","AI 칠판"]], d:"수업 중 텍스트·판서 캡처·음성으로 문항 출제, AI 채점과 실시간 답안 현황 제공", s:"설명 직후 반 전체가 이해했는지 바로 확인하고 싶을 때", b:["주관식·O/X·말하기 문항을 즉석 출제","답안 현황과 학습 진단으로 반 전체 이해도 파악"], r:["강사","학생"], e:"PC (학생 태블릿 포함), 교사·학생 앱 6.0.9 이상", c:"req"},
+  {n:"교실 안 AgentIn", ai:[["ai-agent-6","교실 안 AgentIn"]], d:"수업 중 교실을 나가지 않고 AI 에이전트에게 바로 질문", s:"수업 중 예시나 연습 문제가 더 필요할 때", b:["예시·연습 문제를 즉석 생성","에이전트 스토어에서 과목별 에이전트 선택"], r:["강사"], e:"PC. 학생 사용은 기본 숨김", c:"req"},
+  {n:"AI 내용 요약", ai:[["ai-agent-2","AI 내용 요약 에이전트"]], d:"녹화된 수업을 과목에 맞는 에이전트가 요약", s:"수업마다 복습 노트를 만들어 주고 싶을 때", b:["복습 자료가 수업마다 자동 생성","학생은 요약으로 핵심부터 확인"], r:["강사","학생"], c:"base", x:"수업 생성 시 ON. 에이전트 변경은 이후 녹화분부터 적용"},
   {n:"AI 스크립트", d:"수업 음성을 텍스트로 전사", s:"수업에서 한 설명을 글로 다시 찾고 싶을 때", b:["수업 내용을 텍스트로 검색·정리","교안·자료 제작에 재활용"], r:["강사","학생"], c:"base", x:"무료 버전에서도 제공"},
   {n:"실시간 자막 번역", d:"수업 음성을 실시간 자막으로 변환·번역", s:"외국어 수업이나 다국적 학생 수업을 할 때", b:["놓친 설명을 자막으로 다시 확인","언어 장벽 완화"], r:["강사","학생"], c:"req", x:"수업 생성 시 ON, AI 크레딧 차감, 시범 제공 단계"},
-  {n:"AI 어학 활동 3종", d:"따라 읽기·받아쓰기·외워 말하기, AI 즉시 점수·피드백", s:"학생 한 명씩 발음을 듣고 채점하느라 시간이 부족할 때", b:["말하기·듣기 과제 채점 시간 절감","학생은 제출 즉시 점수 확인"], r:["강사","학생"], e:"PC·Android·iOS. 콘텐츠는 직접 입력·AI 생성·엑셀 가져오기", c:"base"},
+  {n:"AI 어학 활동 3종", ai:[["ai-agent-1","AI 말하기"],["ai-agent-3","AI 숙제 생성"],["ai-agent-4","받아쓰기 · 외워 말하기"]], d:"따라 읽기·받아쓰기·외워 말하기, AI 즉시 점수·피드백", s:"학생 한 명씩 발음을 듣고 채점하느라 시간이 부족할 때", b:["말하기·듣기 과제 채점 시간 절감","학생은 제출 즉시 점수 확인"], r:["강사","학생"], e:"PC·Android·iOS. 콘텐츠는 직접 입력·AI 생성·엑셀 가져오기", c:"base"},
   {n:"AI 수업 리스크 모니터링", d:"수업 발언에서 30개 위험 태그를 탐지해 0~10점 위험 점수 표시", s:"모든 녹화를 돌려볼 수 없지만 수업 내 위험 발언은 챙겨야 할 때", b:["위험 점수가 높은 수업만 골라 확인","민원 대응 전 사전 점검"], r:["관리자"], e:"녹화 ON 수업 대상, 웹 관리자 콘솔에서 설정", c:"req", x:"관리자 일반 설정에서 직접 ON, 수업 1회당 AI 크레딧 차감"},
  ]},
  {id:"env", title:"접속 환경 · 이용 조건", desc:"학생과 강사가 가진 기기 그대로 수업에 참여합니다.", cards:[
@@ -400,6 +409,7 @@ function bodyHTML(c){
       ${c.e?`<dt>지원 환경</dt><dd>${esc(c.e)}</dd>`:""}
       ${c.x?`<dt>참고</dt><dd>${esc(c.x)}</dd>`:""}
       ${links?`<dt>가이드</dt><dd>${links}</dd>`:""}
+      ${c.ai?`<dt>AI 소개서</dt><dd>${c.ai.map(([k,t])=>`<a href="${AIG}#${k}" target="_blank" rel="noopener">${esc(t)} ↗</a>`).join(" · ")}</dd>`:""}
     </dl>`;
 }
 function cardHTML(c){
@@ -414,12 +424,15 @@ function showHTML(s){
 
 document.getElementById("catalog").innerHTML = SECTIONS.map((s,i)=>`<section id="${s.id}">
   <div class="sh"><span class="n">${String(i+1).padStart(2,"0")}</span><h2>${s.title}</h2><p>${s.desc}</p></div>
+  ${s.more?`<a class="xlink" href="${s.more.href}" target="_blank" rel="noopener"><span>${s.more.t}</span><b>${s.more.cta} ↗</b></a>`:""}
   ${showHTML(s)}
   <div class="cards">${s.cards.map(cardHTML).join("")}</div>
 </section>`).join("");
 
 const tocItems = [["overview","00","한눈에 보기"], ...SECTIONS.map((s,i)=>[s.id,String(i+1).padStart(2,"0"),s.title]), ["spec","A","시작 전 환경"],["contact","B","문의"]];
-document.getElementById("toc").innerHTML = tocItems.map(([id,n,t])=>`<li><a href="#${id}" data-id="${id}"><span class="n">${n}</span><span>${t}</span></a></li>`).join("");
+/* 카드마다 앵커를 단다(AI 기능 소개서가 #ai-2 처럼 이 번호로 연결한다) */
+SECTIONS.forEach(s=>document.querySelectorAll("#"+s.id+" .card").forEach((el,j)=>el.id=s.id+"-"+(j+1)));
+document.getElementById("toc").innerHTML = tocItems.map(([id,n,t])=>`<li><a href="#${id}" data-id="${id}"><span class="n">${n}</span><span>${t}</span></a></li>` + (id==="ai"?`<li><a class="ext" href="${AIG}" target="_blank" rel="noopener"><span class="n"></span><span>AI 기능 소개서 ↗</span></a></li>`:"")).join("");
 
 
 /* 검색 (데스크톱 패널·모바일 입력 동기화) */
@@ -449,6 +462,23 @@ document.addEventListener("click",e=>{
   if(!lb.hidden && (e.target===lb||e.target.id==="lb-close"||e.target===lbImg)) lb.hidden=true;
 });
 document.addEventListener("keydown",e=>{if(e.key==="Escape")lb.hidden=true;});
+/* 다른 소개서의 기능 링크(#ai-2 등)로 들어오면 그 카드로 바로 이동한다.
+   부드러운 스크롤은 위쪽 이미지가 늦게 로드되며 목표가 밀려 빗나가므로 끄고, 몇 초 동안 위치를 다시 맞춘다.
+   읽는 사람이 직접 스크롤하면 바로 멈춘다. */
+(()=>{
+  if(!location.hash) return;
+  const t=document.getElementById(decodeURIComponent(location.hash.slice(1)));
+  if(!t) return;
+  const root=document.documentElement, prev=root.style.scrollBehavior;
+  root.style.scrollBehavior="auto";
+  let stop=false;
+  ["wheel","touchstart","keydown","mousedown"].forEach(ev=>addEventListener(ev,()=>{stop=true;},{once:true,passive:true}));
+  const align=()=>{if(!stop)t.scrollIntoView({block:"start"});};
+  align();
+  const ro=new ResizeObserver(align); ro.observe(document.body);
+  addEventListener("load",align);
+  setTimeout(()=>{ro.disconnect();root.style.scrollBehavior=prev;},3000);
+})();
 </script>
 
 </body>

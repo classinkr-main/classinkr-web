@@ -165,6 +165,13 @@ td:first-child{white-space:nowrap}
 .note{font-size:12.5px;color:var(--muted);margin:10px 4px 0}
 
 footer{margin-top:64px;padding-top:18px;border-top:1px solid var(--line);font-size:12px;color:var(--muted)}
+/* 다른 소개서로 가는 연결 */
+.xlink{display:flex;align-items:center;justify-content:space-between;gap:8px 20px;flex-wrap:wrap;margin:0 0 22px;padding:14px 18px;border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:12px;background:var(--surface);color:var(--ink);font-size:14px;line-height:1.55}
+.xlink:hover{text-decoration:none;border-color:var(--accent)}
+.xlink b{color:var(--accent-ink);font-weight:600;white-space:nowrap}
+.toc a.ext{color:var(--accent-ink)}
+.card{scroll-margin-top:84px}
+.card:target{outline:2px solid var(--accent);outline-offset:3px}
 /* 마지막 문의 CTA */
 .cta{margin-top:14px;background:var(--hero-bg);color:var(--hero-fg);border:1px solid var(--hero-line);border-radius:24px;padding:40px 44px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:22px 40px;align-items:center}
 .cta .kicker{font-size:12.5px;font-weight:600;letter-spacing:.02em;color:var(--hero-accent);margin-bottom:10px}
@@ -263,6 +270,7 @@ footer{margin-top:64px;padding-top:18px;border-top:1px solid var(--line);font-si
           </ul>
         </div>
       </div>
+      <a class="xlink" href="https://classin.co.kr/classin-feature-guide.html" target="_blank" rel="noopener" style="margin:14px 0 0"><span>수업 진행·자료·녹화·학습 관리·운영 등 AI 밖의 기능은 클래스인 기능 소개서에 정리했습니다.</span><b>기능 소개서 보기 ↗</b></a>
     </section>
 
     <div class="mfilters">
@@ -287,6 +295,7 @@ footer{margin-top:64px;padding-top:18px;border-top:1px solid var(--line);font-si
 
 <script>
 const G = "https://docs.channel.io/classinkorea/ko/articles/";
+const FG = "https://classin.co.kr/classin-feature-guide.html";
 const L = {
   sdrive: ["공유 드라이브 관리", G+"%EA%B3%B5%EC%9C%A0-%EB%93%9C%EB%9D%BC%EC%9D%B4%EB%B8%8C-%EA%B4%80%EB%A6%AC-9ec52eb9"],
   webpb:  ["웹 라이브 & 플레이백", G+"%EC%9B%B9-%EB%9D%BC%EC%9D%B4%EB%B8%8C%ED%94%8C%EB%A0%88%EC%9D%B4%EB%B0%B1-4a66c187"],
@@ -305,7 +314,7 @@ const IMG = {aiEval:"data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAMC
 
 /* c: base=기본 제공, req=별도 활성화, ask=플랜·환경별 상이 / img: 하이라이트 카드 화면 */
 const SECTIONS = [
- {id:"ai-analysis", title:"AI 강의 분석", desc:"실시간 수업이 끝나면 AI가 녹화본을 분석해 점수와 보고서를 만듭니다. 원장님이 수업을 직접 참관하지 않아도 강사별 수업 품질을 같은 기준으로 확인합니다.",
+ {id:"ai-analysis", fg:["ai-1","AI 강의 분석"], title:"AI 강의 분석", desc:"실시간 수업이 끝나면 AI가 녹화본을 분석해 점수와 보고서를 만듭니다. 원장님이 수업을 직접 참관하지 않아도 강사별 수업 품질을 같은 기준으로 확인합니다.",
   show:[{k:"aiEval", cap:"AI 강의 분석 보고서 — 종합 점수, 역량 레이더 차트, 평가 차원별 득점"},{k:"aiReportPage", cap:"AI 강의 분석 보고서 — 종합 점수, 수업 시간 배분, 활동 순서도"}], cards:[
   {n:"AI 수업 진단", d:"녹화된 실시간 수업을 4개 영역 11개 항목으로 진단해 종합 점수 산출", s:"강사 코칭을 감이 아닌 근거로 하고 싶을 때", b:["잘된 장면(핵심 강점)과 보완할 점(핵심 리스크)을 근거와 함께 정리","다음 수업에서 바꿀 행동을 교사 성장 처방으로 제시","참관 없이 모든 수업을 같은 기준으로 점검"], r:["관리자","강사"], e:"클래스인 실시간 수업 녹화본 (직접 업로드한 영상 제외)", c:"req", x:"보고서 한국어 제공", img:"aiScores", cap:"AI 강의 분석 보고서 — 핵심 강점, 핵심 리스크, 교사 성장 처방"},
   {n:"맞춤 분석 에이전트", d:"기관 평가 기준을 반영한 에이전트로 수업 분석", s:"학원 자체 강의 평가표로 수업을 분석하고 싶을 때", b:["학원 평가표의 항목·배점·차트를 그대로 반영","템플릿 기반은 차트 포함 보고서, 처음부터 설계하면 텍스트 보고서","만든 에이전트를 기관 강사 수업에 공통 적용"], r:["관리자"], c:"req", x:"AgentIn·강의 분석 권한 개통 필요", img:"aiTemplate", cap:"AgentIn 템플릿 목록 — 「수업 분석」 템플릿"},
@@ -327,7 +336,7 @@ const SECTIONS = [
    {t:"수업에 적용", d:"수업 생성 → AI 강의 분석 ON → 「AgentIn 에이전트 추가」에서 만든 에이전트 선택"},
   ]},
  ]},
- {id:"ai-board", title:"AI 칠판", desc:"수업 중 문항을 내면 학생 각자의 칠판으로 배포되고, 학생이 쓴 답을 AI가 바로 채점합니다. 모범 답안 작성부터 반 전체 진단까지 수업을 멈추지 않고 이어집니다.",
+ {id:"ai-board", fg:["ai-3","AI 칠판"], title:"AI 칠판", desc:"수업 중 문항을 내면 학생 각자의 칠판으로 배포되고, 학생이 쓴 답을 AI가 바로 채점합니다. 모범 답안 작성부터 반 전체 진단까지 수업을 멈추지 않고 이어집니다.",
   show:[{k:"abStats", cap:"답안 현황 — 참여 인원, 점수 분포, 학습 요소별 정답률, AI 지도 제안"}], cards:[
   {n:"즉석 문항 출제 · AI 모범 답안", d:"수업 중 바로 문항을 내면 AI가 모범 답안과 채점 기준 작성", s:"설명 직후 반 전체가 이해했는지 바로 확인하고 싶을 때", b:["주관식·객관식·말하기 3가지 유형","텍스트·음성·화면 캡처·사진으로 문항 입력","채점 기준을 넣을수록 채점 정확도 향상"], r:["강사"], e:"PC·ClassIn X, 강사·학생 앱 6.0.9 이상", c:"req", img:"abAnswer", cap:"AI가 작성한 참고 답안과 채점 기준"},
   {n:"실시간 답안 확인 · AI 채점", d:"학생이 쓰는 답안을 실시간으로 보고, 제출 즉시 AI가 채점", s:"누가 어디서 막혔는지 수업 중에 보고 싶을 때", b:["손글씨 풀이까지 그대로 표시","점수·상세 분석·종합 제안 자동 작성","제출 상태·소요 시간·성적으로 학생 파악"], r:["강사"], c:"req", x:"AI 채점은 참고용. 최종 판단은 강사", img:"abLive", cap:"답안 상세 — 학생 손글씨 답안과 AI 채점 결과"},
@@ -346,14 +355,14 @@ const SECTIONS = [
    {t:"답안 현황 확인", d:"답안 현황 탭에서 점수 분포·학습 요소·지도 제안 확인, 새 문항 게시하기로 다음 문항"},
   ]},
  ]},
- {id:"ai-agent", title:"AI 에이전트", desc:"숙제 만들기와 채점, 수업 중 질문, 수업 요약을 목적별 AI 에이전트가 맡습니다. 학원 기준에 맞는 에이전트를 직접 만들 수도 있습니다.",
+ {id:"ai-agent", fg:["ai","AI 기능"], title:"AI 에이전트", desc:"숙제 만들기와 채점, 수업 중 질문, 수업 요약을 목적별 AI 에이전트가 맡습니다. 학원 기준에 맞는 에이전트를 직접 만들 수도 있습니다.",
   cards:[
-  {n:"AI 말하기 (따라 읽기)", d:"학생이 단어·문장을 소리 내어 읽으면 AI가 발음을 평가해 점수와 피드백 제공", s:"학생 한 명씩 발음을 듣고 채점하느라 시간이 부족할 때", b:["정확도·유창성·완성도 기준으로 자동 채점","문장별 별점, 발음이 부족한 단어는 색으로 표시","학생 녹음 다시 듣기, 미제출자 명단 복사"], r:["강사","학생"], e:"PC·Android·iOS · 영어·중국어", c:"base", img:"spResult", cap:"따라 읽기 결과 — 학생별 점수, 문장별 발음 평가"},
-  {n:"AI 내용 요약 에이전트", d:"과목·수업 성격에 맞는 에이전트로 녹화 수업 요약", s:"수업마다 복습 노트를 만들어 주고 싶을 때", b:["과목에 맞춘 요약 방식","수업마다 복습 노트 자동 생성","같은 코스 그룹 강사끼리 에이전트 목록 공유"], r:["강사","학생"], e:"PC·ClassIn X·모바일", c:"base", x:"에이전트 변경은 이후 녹화분부터 적용", img:"agSummary", cap:"AI 요약 에이전트가 지정된 수업 설정"},
-  {n:"AI 숙제 생성", d:"따라 읽기·받아쓰기·외워 말하기 연습 콘텐츠를 AI가 자동 생성", s:"매번 연습 문장을 새로 만들기 번거로울 때", b:["주제에 맞는 연습 단어·문장 자동 생성","받아쓰기는 단어 입력 시 관련 이미지 자동 생성"], r:["강사"], e:"PC·Android·iOS", c:"base"},
-  {n:"받아쓰기 · 외워 말하기", d:"받아쓰기는 공책 사진, 외워 말하기는 암송 음성을 AI가 채점", s:"듣기·암기 과제를 매번 직접 확인하기 어려울 때", b:["받아쓰기는 사진 제출만으로 정확도 채점","외워 말하기는 본문 암송 정확도 채점"], r:["강사","학생"], e:"PC·Android·iOS", c:"base"},
-  {n:"서술형 숙제 AI 채점", d:"제출된 숙제에 AI가 점수·총평 초안 작성", s:"서술형 숙제 채점 초안 작성에 시간이 많이 들 때", b:["오답 분석·해설까지 초안으로 제공","강사는 검토·수정에 집중"], r:["강사"], c:"base", x:"강사가 확인 후 게시해야 학생에게 공개"},
-  {n:"교실 안 AgentIn", d:"수업 중 교실을 나가지 않고 AI 에이전트에게 질문", s:"수업 중 예시나 연습 문제가 더 필요할 때", b:["예시·설명·연습 문제를 즉석 생성","과목별 에이전트를 골라 사용","학생에게도 사용 허용 가능 (기본 숨김)"], r:["강사"], e:"PC·ClassIn X. PC는 음성 입력 미지원", c:"req"},
+  {n:"AI 말하기 (따라 읽기)", fg:[["ai-8","AI 어학 활동 3종"]], d:"학생이 단어·문장을 소리 내어 읽으면 AI가 발음을 평가해 점수와 피드백 제공", s:"학생 한 명씩 발음을 듣고 채점하느라 시간이 부족할 때", b:["정확도·유창성·완성도 기준으로 자동 채점","문장별 별점, 발음이 부족한 단어는 색으로 표시","학생 녹음 다시 듣기, 미제출자 명단 복사"], r:["강사","학생"], e:"PC·Android·iOS · 영어·중국어", c:"base", img:"spResult", cap:"따라 읽기 결과 — 학생별 점수, 문장별 발음 평가"},
+  {n:"AI 내용 요약 에이전트", fg:[["ai-5","AI 내용 요약"]], d:"과목·수업 성격에 맞는 에이전트로 녹화 수업 요약", s:"수업마다 복습 노트를 만들어 주고 싶을 때", b:["과목에 맞춘 요약 방식","수업마다 복습 노트 자동 생성","같은 코스 그룹 강사끼리 에이전트 목록 공유"], r:["강사","학생"], e:"PC·ClassIn X·모바일", c:"base", x:"에이전트 변경은 이후 녹화분부터 적용", img:"agSummary", cap:"AI 요약 에이전트가 지정된 수업 설정"},
+  {n:"AI 숙제 생성", fg:[["ai-8","AI 어학 활동 3종"]], d:"따라 읽기·받아쓰기·외워 말하기 연습 콘텐츠를 AI가 자동 생성", s:"매번 연습 문장을 새로 만들기 번거로울 때", b:["주제에 맞는 연습 단어·문장 자동 생성","받아쓰기는 단어 입력 시 관련 이미지 자동 생성"], r:["강사"], e:"PC·Android·iOS", c:"base"},
+  {n:"받아쓰기 · 외워 말하기", fg:[["ai-8","AI 어학 활동 3종"]], d:"받아쓰기는 공책 사진, 외워 말하기는 암송 음성을 AI가 채점", s:"듣기·암기 과제를 매번 직접 확인하기 어려울 때", b:["받아쓰기는 사진 제출만으로 정확도 채점","외워 말하기는 본문 암송 정확도 채점"], r:["강사","학생"], e:"PC·Android·iOS", c:"base"},
+  {n:"서술형 숙제 AI 채점", fg:[["ai-2","숙제 AI 채점"]], d:"제출된 숙제에 AI가 점수·총평 초안 작성", s:"서술형 숙제 채점 초안 작성에 시간이 많이 들 때", b:["오답 분석·해설까지 초안으로 제공","강사는 검토·수정에 집중"], r:["강사"], c:"base", x:"강사가 확인 후 게시해야 학생에게 공개"},
+  {n:"교실 안 AgentIn", fg:[["ai-4","교실 안 AgentIn"]], d:"수업 중 교실을 나가지 않고 AI 에이전트에게 질문", s:"수업 중 예시나 연습 문제가 더 필요할 때", b:["예시·설명·연습 문제를 즉석 생성","과목별 에이전트를 골라 사용","학생에게도 사용 허용 가능 (기본 숨김)"], r:["강사"], e:"PC·ClassIn X. PC는 음성 입력 미지원", c:"req"},
   {n:"맞춤 에이전트", d:"기관 기준을 담은 채점·분석용 에이전트", s:"우리 학원만의 채점·평가 방식을 AI에 적용하고 싶을 때", b:["AI 칠판 채점·강의 분석에 연결해 사용","본인·기관 전용 또는 스토어 공개"], r:["관리자"], c:"req", x:"AgentIn 권한 개통 필요"},
  ], how:[
   {g:"AI 말하기 숙제 내기 (받아쓰기·외워 말하기도 같은 순서)", steps:[
@@ -393,6 +402,7 @@ function bodyHTML(c){
       ${c.e?`<dt>지원 환경</dt><dd>${esc(c.e)}</dd>`:""}
       ${c.x?`<dt>참고</dt><dd>${esc(c.x)}</dd>`:""}
       ${links?`<dt>가이드</dt><dd>${links}</dd>`:""}
+      ${c.fg?`<dt>기능 소개서</dt><dd>${c.fg.map(([k,t])=>`<a href="${FG}#${k}" target="_blank" rel="noopener">${esc(t)} ↗</a>`).join(" · ")}</dd>`:""}
     </dl>`;
 }
 function cardHTML(c){
@@ -410,7 +420,7 @@ function showHTML(s){
 }
 
 document.getElementById("catalog").innerHTML = SECTIONS.map((s,i)=>`<section id="${s.id}">
-  <div class="sh"><span class="n">${String(i+1).padStart(2,"0")}</span><h2>${s.title}</h2><p>${s.desc}</p></div>
+  <div class="sh"><span class="n">${String(i+1).padStart(2,"0")}</span><h2>${s.title}</h2><p>${s.desc}${s.fg?` <a href="${FG}#${s.fg[0]}" target="_blank" rel="noopener">기능 소개서의 ${esc(s.fg[1])} ↗</a>`:""}</p></div>
   ${showHTML(s)}
   <div class="subh"><h3>주요 기능</h3><span>무엇을 할 수 있는지</span></div>
   <div class="cards">${s.cards.map(cardHTML).join("")}</div>
@@ -418,7 +428,7 @@ document.getElementById("catalog").innerHTML = SECTIONS.map((s,i)=>`<section id=
 </section>`).join("");
 
 const tocItems = [["overview","00","한눈에 보기"], ...SECTIONS.map((s,i)=>[s.id,String(i+1).padStart(2,"0"),s.title]), ["contact","A","문의"]];
-document.getElementById("toc").innerHTML = tocItems.map(([id,n,t])=>`<li><a href="#${id}" data-id="${id}"><span class="n">${n}</span><span>${t}</span></a></li>`).join("");
+document.getElementById("toc").innerHTML = tocItems.map(([id,n,t])=>`<li><a href="#${id}" data-id="${id}"><span class="n">${n}</span><span>${t}</span></a></li>` + (id==="ai-agent"?`<li><a class="ext" href="${FG}" target="_blank" rel="noopener"><span class="n"></span><span>기능 소개서 ↗</span></a></li>`:"")).join("");
 
 
 /* 검색 (데스크톱 패널·모바일 입력 동기화) */
@@ -452,6 +462,23 @@ document.addEventListener("keydown",e=>{if(e.key==="Escape")lb.hidden=true;});
 /* 기능 인덱스 — 카드에 앵커를 달고 섹션별 목록 생성 */
 SECTIONS.forEach(s=>document.querySelectorAll("#"+s.id+" .card").forEach((el,j)=>el.id=s.id+"-"+(j+1)));
 document.getElementById("fidx").innerHTML = SECTIONS.map((s,i)=>`<div><h4><span class="n">${String(i+1).padStart(2,"0")}</span><a href="#${s.id}">${esc(s.title)}</a></h4><ol>${s.cards.map((c,j)=>`<li><a href="#${s.id}-${j+1}">${esc(c.n)}</a></li>`).join("")}${s.how?`<li><a href="#${s.id}-how" style="color:var(--accent-ink)">사용 방법 →</a></li>`:""}</ol></div>`).join("");
+/* 다른 소개서의 기능 링크(#ai-2 등)로 들어오면 그 카드로 바로 이동한다.
+   부드러운 스크롤은 위쪽 이미지가 늦게 로드되며 목표가 밀려 빗나가므로 끄고, 몇 초 동안 위치를 다시 맞춘다.
+   읽는 사람이 직접 스크롤하면 바로 멈춘다. */
+(()=>{
+  if(!location.hash) return;
+  const t=document.getElementById(decodeURIComponent(location.hash.slice(1)));
+  if(!t) return;
+  const root=document.documentElement, prev=root.style.scrollBehavior;
+  root.style.scrollBehavior="auto";
+  let stop=false;
+  ["wheel","touchstart","keydown","mousedown"].forEach(ev=>addEventListener(ev,()=>{stop=true;},{once:true,passive:true}));
+  const align=()=>{if(!stop)t.scrollIntoView({block:"start"});};
+  align();
+  const ro=new ResizeObserver(align); ro.observe(document.body);
+  addEventListener("load",align);
+  setTimeout(()=>{ro.disconnect();root.style.scrollBehavior=prev;},3000);
+})();
 </script>
 
 </body></html>
