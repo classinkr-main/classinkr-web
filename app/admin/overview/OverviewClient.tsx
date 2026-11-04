@@ -72,6 +72,8 @@ import type { EmailCampaign } from "@/lib/marketing-types"
 import type { BugReport } from "@/lib/bugs-data"
 import type { PatchNote } from "@/lib/patch-notes-data"
 import { OverviewBriefing, OverviewOperationsPanels, OverviewScorecard, type OverviewMetric } from "@/components/admin/overview/OverviewWorkspace"
+import { OverviewNowBand } from "@/components/admin/overview/OverviewNowBand"
+import { useLiveIntake } from "@/components/admin/overview/useLiveIntake"
 import type { OverviewOperationsSummary } from "@/lib/admin/overview/operations-summary"
 
 const OVERVIEW_FETCH_TIMEOUT_MS = 12_000
@@ -241,6 +243,10 @@ const LeadTrendChart = dynamic(
   () => import("@/components/admin/overview/OverviewCharts").then((m) => m.LeadTrendChart),
   { ssr: false, loading: () => <Skeleton className="h-[180px]" /> }
 )
+const VisitorTrendChart = dynamic(
+  () => import("@/components/admin/overview/OverviewCharts").then((m) => m.VisitorTrendChart),
+  { ssr: false, loading: () => <Skeleton className="h-[120px]" /> }
+)
 const SourcePie = dynamic(
   () => import("@/components/admin/overview/OverviewCharts").then((m) => m.SourcePie),
   { ssr: false, loading: () => <Skeleton className="h-[140px]" /> }
@@ -353,6 +359,7 @@ interface ChatbotStatsPayload {
 interface VisitorStatsPayload {
   today: {
     date: string
+    visitors: number
     homeVisitors: number
     homePageViews: number
   }
@@ -398,6 +405,28 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
   const [operationsLoading, setOperationsLoading] = useState(true)
   const [operationsRefreshKey, setOperationsRefreshKey] = useState(0)
   const retryOperations = () => { setOperationsLoading(true); setOperationsRefreshKey((value) => value + 1) }
+  // "지금" 띠의 오늘 문의 — 마케팅 허브 '오늘 유입'과 같은 응답·캐시 슬롯(전사, 1분 갱신).
+  const liveIntake = useLiveIntake({ refreshKey })
+  // 방문·문의 2단 추이의 30일 방문 — 첫 화면은 7일 방문(프리페치 레인)만 받으므로 30일을 고를 때만 따로 읽는다.
+  const [visitorStats30, setVisitorStats30] = useState<VisitorStatsPayload | null>(null)
+  const [visitor30Failed, setVisitor30Failed] = useState(false)
+  const [visitor30Retry, setVisitor30Retry] = useState(0)
+  useEffect(() => {
+    if (chartRange !== 30 || visitorStats30) return
+    let cancelled = false
+    void fetchJson<VisitorStatsPayload>("/api/admin/visitor-stats?range=30").then((data) => {
+      if (cancelled) return
+      if (data) {
+        setVisitorStats30(data)
+        setVisitor30Failed(false)
+      } else {
+        setVisitor30Failed(true)
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [chartRange, visitorStats30, visitor30Retry])
 
   // 기존 스트리밍 레인을 기다리지 않고 운영 두 소스를 독립 조회한다.
   useEffect(() => {
@@ -680,17 +709,13 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
     }
   }, [refreshKey])
 
+  // 내 담당 범위 — 진행 중 리드·전환율. 유입 계열은 아래 전사(companyLeads)를 쓴다.
   const {
     newLeads,
     contactedLeads,
     converted,
-    closedLeads,
     activePipelineLeads,
     convRate,
-    todayLeads,
-    thisWeekLeads,
-    homepageThisWeek,
-    homepageUnconfirmed,
   } = leadOverview?.metrics ?? {
     newLeads: 0,
     contactedLeads: 0,
@@ -709,14 +734,44 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
     homepageTotal: 0,
     homepageUnconfirmed: 0,
   }
-  const pieData = leadOverview?.sources ?? []
-  const recentLeads = leadOverview?.recentLeads ?? []
+  // 유입 계열(추이·유입 경로·퍼널·최근 유입·이번 주 유입·홈페이지 유입)은 전사로 읽는다 — 새 문의는 담당이
+  // 비어 들어와 "내 담당"으로 거르면 사라진다(기획 2026-11-04 §3.2). 진행 중 리드·전환율·매출은 내 담당 그대로.
+  // 배포 직후 옛 응답(company 없음)이 오면 내 담당 값으로 폴백한다.
+  const companyLeads = leadOverview?.company ?? leadOverview ?? null
+  const companyMetrics = companyLeads?.metrics ?? null
+  const companyFunnel = {
+    newLeads: companyMetrics?.newLeads ?? 0,
+    contactedLeads: companyMetrics?.contactedLeads ?? 0,
+    converted: companyMetrics?.converted ?? 0,
+    closedLeads: companyMetrics?.closedLeads ?? 0,
+  }
+  const companyTodayLeads = companyMetrics?.todayLeads ?? 0
+  const companyThisWeekLeads = companyMetrics?.thisWeekLeads ?? 0
+  const companyHomepageThisWeek = companyMetrics?.homepageThisWeek ?? 0
+  const companyHomepageUnconfirmed = companyMetrics?.homepageUnconfirmed ?? 0
+  const pieData = companyLeads?.sources ?? []
+  const recentLeads = companyLeads?.recentLeads ?? []
 
   const chartData = useMemo(
-    () => (chartRange === 7 ? leadOverview?.trends.days7 : leadOverview?.trends.days30) ?? [],
-    [leadOverview, chartRange]
+    () => (chartRange === 7 ? companyLeads?.trends.days7 : companyLeads?.trends.days30) ?? [],
+    [companyLeads, chartRange]
   )
   const chartTotal = useMemo(() => chartData.reduce((sum, point) => sum + point.count, 0), [chartData])
+  // 홈 방문 일별 — 문의 추이와 같은 개수·같은 끝(오늘)이라 syncId 로 같은 날짜끼리 겹친다.
+  const visitorSource = chartRange === 7 ? visitorStats : visitorStats30
+  const visitorChartData = useMemo(
+    () =>
+      (visitorSource?.daily ?? []).slice(-chartRange).map((day) => {
+        const [, month, date] = day.date.split("-").map(Number)
+        return { label: `${month}/${date}`, count: day.homeVisitors }
+      }),
+    [visitorSource, chartRange]
+  )
+  const visitorChartTotal = visitorChartData.reduce((sum, point) => sum + point.count, 0)
+  const visitorChartState: OverviewSourceState =
+    chartRange === 7 ? sourceStates.visitor : visitorStats30 ? "ready" : visitor30Failed ? "error" : "loading"
+  // 참고 문의율 — 방문(client_events)과 문의(leads)는 모집단이 달라 퍼널로 부르지 않는다.
+  const inquiryRate = visitorChartState === "ready" && visitorChartTotal > 0 ? (chartTotal / visitorChartTotal) * 100 : null
 
   const publishedBlogPostCount = blogOverview?.publishedPosts ?? 0
   const ctaCoverage = blogOverview?.ctaCoverage ?? 0
@@ -744,11 +799,12 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
   const { connections, missingConnections } = deriveConnections(integrationStatus)
 
   // 세일즈 퍼널 시각화용 단계 (MiniFunnel) — 각 단계는 해당 필터가 켜진 리드 보드로 착지한다.
+  // 전사 퍼널 — 리드 보드 기본 범위(전체 담당자)와 같은 모집단이라 눌러서 나오는 건수와 같다.
   const funnelStages: FunnelStage[] = [
-    { label: STATUS_LABEL.new, value: newLeads, tone: newLeads > 0 ? "caution" : "brand", href: "/admin/crm/customers/leads?filter=new" },
-    { label: STATUS_LABEL.contacted, value: contactedLeads, href: "/admin/crm/customers/leads?filter=contacted" },
-    { label: STATUS_LABEL.converted, value: converted, href: "/admin/crm/customers/leads?filter=converted" },
-    { label: STATUS_LABEL.closed, value: closedLeads, tone: "neutral", href: "/admin/crm/customers/leads?filter=closed" },
+    { label: STATUS_LABEL.new, value: companyFunnel.newLeads, tone: companyFunnel.newLeads > 0 ? "caution" : "brand", href: "/admin/crm/customers/leads?filter=new" },
+    { label: STATUS_LABEL.contacted, value: companyFunnel.contactedLeads, href: "/admin/crm/customers/leads?filter=contacted" },
+    { label: STATUS_LABEL.converted, value: companyFunnel.converted, href: "/admin/crm/customers/leads?filter=converted" },
+    { label: STATUS_LABEL.closed, value: companyFunnel.closedLeads, tone: "neutral", href: "/admin/crm/customers/leads?filter=closed" },
   ]
 
   // '미응답' 수치는 이 화면 전체에서 resolveUnrespondedSignal 하나로만 산출한다(단일 정의·단일 수치).
@@ -774,8 +830,8 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
     buildOperationalAlerts({
       unrespondedCount: unrespondedSignal?.unrespondedCount ?? 0,
       unresponded24hCount: unrespondedSignal?.unresponded24hCount ?? 0,
-      todayLeads,
-      thisWeekLeads,
+      todayLeads: companyTodayLeads,
+      thisWeekLeads: companyThisWeekLeads,
       latestFailedCampaign,
       missingConnectionLabels: missingConnections.map((connection) => connection.label),
       openBugs,
@@ -794,6 +850,7 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
 
   // KPI 카드 스파크라인 데이터.
   const sparkLeads = leadOverview?.trends.days30.slice(-14).map((point) => point.count) ?? []
+  const sparkCompanyLeads = companyLeads?.trends.days30.slice(-14).map((point) => point.count) ?? []
   const sparkRevenue = branchSummary?.monthly_series.revenue_cum ?? []
   const sparkVisitors = visitorStats?.daily.map((day) => day.homeVisitors) ?? []
 
@@ -904,10 +961,10 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
   const metric = (row: Omit<OverviewMetric, "onRetry">, source: OverviewSourceKey): OverviewMetric =>
     ({ ...row, onRetry: () => retrySource(source) })
   const metrics: OverviewMetric[] = [
-    metric({ id: "leads", group: "리드", label: "진행 중 리드", value: `${activePipelineLeads.toLocaleString()}건`, note: `테스트·미확인 제외 · 신규 ${newLeads} / 연락중 ${contactedLeads}`, href: "/admin/crm/customers/leads", state: sourceStates.leads, trend: <Sparkline data={sparkLeads} /> }, "leads"),
-    metric({ id: "response", group: "리드", label: "24h+ 신규 상태", value: `${unrespondedSignal?.unresponded24hCount ?? 0}건`, note: "응답 이벤트 대리 지표 · 운영 리드 · 테스트 제외", href: "/admin/crm/customers/leads?filter=unresponded_24h&focus=risk", state: unrespondedSignal ? "ready" : sourceStates.leadActions, reference: "24시간 이내 후속 확인", tone: (unrespondedSignal?.unresponded24hCount ?? 0) > 0 ? "danger" : "neutral" }, "leadActions"),
-    metric({ id: "inflow", group: "리드", label: "이번 주 유입", value: `${thisWeekLeads}건`, note: `오늘 ${todayLeads}건 · 테스트 제외`, href: "/admin/crm/customers/leads", state: sourceStates.leads, trend: <Sparkline data={sparkLeads.slice(7)} /> }, "leads"),
-    metric({ id: "conversion", group: "리드", label: "리드 전환율", value: `${convRate}%`, note: `현재 누적 · 전환 ${converted}건`, href: "/admin/crm/customers/leads?filter=converted", state: sourceStates.leads }, "leads"),
+    metric({ id: "leads", group: "리드", label: "진행 중 리드", value: `${activePipelineLeads.toLocaleString()}건`, note: `테스트·미확인 제외 · 신규 ${newLeads} / 연락중 ${contactedLeads}`, href: "/admin/crm/customers/leads?owner=__me", state: sourceStates.leads, trend: <Sparkline data={sparkLeads} /> }, "leads"),
+    metric({ id: "response", group: "리드", label: "24h+ 신규 상태", value: `${unrespondedSignal?.unresponded24hCount ?? 0}건`, note: "내 담당 · 응답 이벤트 대리 지표 · 운영 리드 · 테스트 제외", href: "/admin/crm/customers/leads?filter=unresponded_24h&focus=risk&owner=__me", state: unrespondedSignal ? "ready" : sourceStates.leadActions, reference: "24시간 이내 후속 확인", tone: (unrespondedSignal?.unresponded24hCount ?? 0) > 0 ? "danger" : "neutral" }, "leadActions"),
+    metric({ id: "inflow", group: "리드", label: "이번 주 유입", value: `${companyThisWeekLeads}건`, note: `전사 · 오늘 ${companyTodayLeads}건 · 테스트 제외`, href: "/admin/crm/customers/leads?sort=newest&unconfirmed=1", state: sourceStates.leads, trend: <Sparkline data={sparkCompanyLeads.slice(7)} /> }, "leads"),
+    metric({ id: "conversion", group: "리드", label: "리드 전환율", value: `${convRate}%`, note: `내 담당 · 현재 누적 · 전환 ${converted}건`, href: "/admin/crm/customers/leads?filter=converted&owner=__me", state: sourceStates.leads }, "leads"),
     { id: "demos", group: "데모", label: "데모 예정", value: `${demos?.truncated ? "≥" : ""}${demos?.upcomingCount ?? 0}회`, note: `오늘부터 30일 · 오늘 ${demos?.todayCount ?? 0} / 7일 ${demos?.next7Count ?? 0}`, href: "https://mkt.classin.co.kr/leads", state: operationsState("demos"), onRetry: retryOperations },
     { id: "demo-results", group: "데모", label: "데모 완료 기록", value: `${demos?.truncated ? "≥" : ""}${demos?.doneThisMonth ?? 0}회`, note: `이번 달 · 결과 미기록 ${demos?.unrecordedThisMonth ?? 0}회`, reference: "Compass done 상태만", href: "https://mkt.classin.co.kr/leads", state: operationsState("demos"), tone: (demos?.unrecordedThisMonth ?? 0) > 0 ? "warning" : "neutral", onRetry: retryOperations },
     { id: "installations", group: "설치·배송", label: "설치·배송 예정", value: `${installations?.units ?? 0}대`, note: `미확정 출고 ${installations?.count ?? 0}건 · 품목 행 기준`, href: "/admin/hardware#hardware-section-planned", state: operationsState("installations"), onRetry: retryOperations },
@@ -918,7 +975,7 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
     metric({ id: "matching", group: "매출·운영", label: "링크 확정률", value: `${osSummary?.matching.coveragePct ?? 0}%`, note: osSourceError("matching") ?? `확정 ${osSummary?.matching.linked ?? 0}/${osSummary?.matching.total ?? 0} · 검토 ${osSummary?.matching.needsReview ?? 0}`, href: "/admin/crm/matching", state: osSourceState("matching"), progress: osSummary?.matching.coveragePct ?? undefined }, "os"),
     metric({ id: "hardware", group: "매출·운영", label: "86보드 실판매 출고", value: `${osSummary?.hw.boards86 ?? 0}대`, note: osSourceError("hw") ?? "세일즈+프로모션 · 샘플·A/S·예정 제외", reference: `기존 운영 기준 ${osSummary?.hw.target ?? "—"}대`, href: "/admin/hardware", state: osSourceState("hw"), progress: osSummary?.hw.target ? (osSummary.hw.boards86 ?? 0) / osSummary.hw.target * 100 : undefined }, "os"),
     metric({ id: "visitors", group: "유입·콘텐츠", label: "홈페이지 방문", value: `${visitorStats?.totals.homeVisitors.toLocaleString() ?? 0}명`, note: "최근 7일 · 홈페이지 방문자", href: "/admin/traffic", state: sourceStates.visitor, trend: <Sparkline data={sparkVisitors} /> }, "visitor"),
-    metric({ id: "homepage", group: "유입·콘텐츠", label: "홈페이지 유입", value: `${homepageThisWeek}건`, note: `최근 7일 · 누적 미확인 ${homepageUnconfirmed}건은 확인 게이트와 별도`, href: "/admin/crm/customers/leads?group=homepage&unconfirmed=1", state: sourceStates.leads }, "leads"),
+    metric({ id: "homepage", group: "유입·콘텐츠", label: "홈페이지 유입", value: `${companyHomepageThisWeek}건`, note: `전사 · 최근 7일 · 누적 미확인 ${companyHomepageUnconfirmed}건은 확인 게이트와 별도`, href: "/admin/crm/customers/leads?group=homepage&unconfirmed=1", state: sourceStates.leads }, "leads"),
     metric({ id: "chatbot", group: "유입·콘텐츠", label: "챗봇 문의", value: `${chatbotStats?.totals.questionCount ?? 0}건`, note: `최근 7일 · 미해결 ${chatbotStats?.totals.unresolvedCount ?? 0} / 상담연결 ${chatbotStats?.totals.handoffCount ?? 0}`, href: "/admin/chatbot", state: sourceStates.chatbot }, "chatbot"),
     metric({ id: "content", group: "유입·콘텐츠", label: "공개 블로그", value: `${osSummary?.content.blogPublished ?? 0}건`, note: osSourceError("content") ?? "현재 공개 상태", reference: `기존 운영 기준 ${osSummary?.content.target ?? "—"}건`, href: "/admin/blog", state: osSourceState("content"), progress: osSummary?.content.target ? (osSummary.content.blogPublished ?? 0) / osSummary.content.target * 100 : undefined }, "os"),
     metric({ id: "events", group: "유입·콘텐츠", label: "공개 행사", value: `${osSummary?.events.count ?? 0}건`, note: osSourceError("events") ?? "현재 공개 상태", reference: `기존 운영 기준 ${osSummary?.events.target ?? "—"}건`, href: "/admin/events", state: osSourceState("events"), progress: osSummary?.events.target ? (osSummary.events.count ?? 0) / osSummary.events.target * 100 : undefined }, "os"),
@@ -961,13 +1018,13 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
       {/* 헤더 — eyebrow·소개문은 제거(사이드바가 위치를, 섹션이 내용을 이미 말한다).
           확보한 공간은 숫자에게 주고, 우측은 상시 바로가기만 남긴다. */}
       <div className="relative mb-7 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-        <div><h1 className="text-2xl font-bold tracking-[-0.02em] text-[#111110]">Overview</h1><p className="mt-2 text-xs text-[#615D59]">내 담당 리드·데모·설치·매출 기준 · 방문·콘텐츠·시스템 지표는 전사 공용</p></div>
+        <div><h1 className="text-2xl font-bold tracking-[-0.02em] text-[#111110]">Overview</h1><p className="mt-2 text-xs text-[#615D59]">새 문의·방문·유입 추이는 전사 · 진행 중 리드·데모·설치·매출은 내 담당</p></div>
         <div className="flex flex-wrap items-center gap-2">
           {[
+            { href: "/admin/crm/customers/leads?sort=newest&unconfirmed=1", label: "문의 목록" },
+            { href: "/admin/traffic", label: "방문 분석" },
             { href: "/admin/crm", label: "CRM" },
-            { href: "/admin/campaigns", label: "캠페인" },
             { href: "/admin/branch/ledger", label: "매출 장부" },
-            { href: "/admin/calendar", label: "캘린더" },
           ].map((link) => (
             <Link
               key={link.href}
@@ -1002,8 +1059,18 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
         </div>
       ) : null}
 
+      <OverviewNowBand
+        visitorState={sourceStates.visitor}
+        visitorToday={visitorStats ? { visitors: visitorStats.today.visitors, homeVisitors: visitorStats.today.homeVisitors } : null}
+        onVisitorRetry={() => retrySource("visitor")}
+        leadState={sourceStates.leads}
+        companyMetrics={companyMetrics}
+        onLeadRetry={() => retrySource("leads")}
+        intake={liveIntake}
+      />
+
       <OverviewBriefing metrics={heroMetrics} summary={<>
-        {unrespondedSignal ? unrespondedSignal.unresponded24hCount > 0 ? <>24시간 넘게 신규 상태인 리드 <span className="text-[#B43E3E]">{unrespondedSignal.unresponded24hCount}건</span>을 확인하세요. </> : <>24시간 이상 신규 상태로 남은 운영 리드는 없습니다. </> : <>리드 후속 현황을 확인하고 있습니다. </>}
+        {unrespondedSignal ? unrespondedSignal.unresponded24hCount > 0 ? <>24시간 넘게 신규 상태인 내 리드 <span className="text-[#B43E3E]">{unrespondedSignal.unresponded24hCount}건</span>을 확인하세요. </> : <>24시간 이상 신규 상태로 남은 내 담당 리드는 없습니다. </> : <>리드 후속 현황을 확인하고 있습니다. </>}
         {demos ? <>앞으로 7일 데모 <span className="text-[#084734]">{demos.truncated ? "최소 " : ""}{demos.next7Count}회</span>, </> : <>{operationsLoading ? "데모 일정을 불러오는 중입니다. " : "데모 원천 확인이 필요합니다. "}</>}
         {installations ? <>설치·배송 예정 <span className="text-[#084734]">{installations.units}대</span>가 대기 중입니다.</> : <>{operationsLoading ? "설치·배송 현황을 불러오는 중입니다." : "설치·배송 원천 확인이 필요합니다."}</>}
       </>} />
@@ -1027,7 +1094,7 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
         </div>
       </section>
 
-      <OverviewOperationsPanels leadState={sourceStates.leads} onLeadRetry={() => retrySource("leads")} leads={sourceStates.leads === "ready" ? { new: newLeads, contacted: contactedLeads, converted, closed: closedLeads } : null} operations={operations} loading={operationsLoading} onRetry={retryOperations} />
+      <OverviewOperationsPanels leadState={sourceStates.leads} onLeadRetry={() => retrySource("leads")} leads={sourceStates.leads === "ready" ? { new: companyFunnel.newLeads, contacted: companyFunnel.contactedLeads, converted: companyFunnel.converted, closed: companyFunnel.closedLeads } : null} operations={operations} loading={operationsLoading} onRetry={retryOperations} />
 
       <div className="grid grid-cols-1 gap-6 mb-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <section
@@ -1037,14 +1104,16 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
         >
           <div className="mb-5 flex items-start justify-between gap-4">
             <div>
-              <h2 id="overview-lead-trend-heading" className="text-[14px] font-semibold text-[#111110]">문의 유입 추이</h2>
-              <p className="text-[11px] text-[#1a1a1a]/40 mt-0.5">
-                최근 {chartRange}일 · 문의 접수 {chartTotal}건
+              <h2 id="overview-lead-trend-heading" className="text-[14px] font-semibold text-[#111110]">방문·문의 추이</h2>
+              <p className="mt-0.5 text-[11px] text-[#615D59]">
+                전사 · 최근 {chartRange}일 · 문의 {chartTotal}건
+                {visitorChartState === "ready" ? ` · 홈 방문 ${visitorChartTotal.toLocaleString("ko-KR")}명` : ""}
+                {inquiryRate != null ? ` · 참고 문의율 ${inquiryRate.toFixed(1)}%` : ""}
               </p>
             </div>
             <div
               role="group"
-              aria-label="문의 유입 추이 기간"
+              aria-label="방문·문의 추이 기간"
               className="flex rounded-lg border border-[#e8e8e4] bg-[#fafaf8] p-0.5"
             >
               {([7, 30] as const).map((range) => (
@@ -1076,8 +1145,29 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
               <p className="mt-1 text-[11px] text-[#1a1a1a]/35">문의가 들어오면 일별 추이가 표시됩니다.</p>
             </div>
           ) : (
-            <LeadTrendChart data={chartData} range={chartRange} />
+            <>
+              <p className="mb-1 text-[11px] font-semibold text-[#615D59]">문의 · 건</p>
+              <LeadTrendChart data={chartData} range={chartRange} height={150} syncId="overview-inflow" />
+            </>
           )}
+          <div className="mt-4 border-t border-[#f0f0ec] pt-3">
+            <div className="mb-1 flex items-center justify-between gap-2">
+              <p className="text-[11px] font-semibold text-[#615D59]">홈 방문 · 명</p>
+              <Link href="/admin/traffic" className="text-[11px] font-semibold text-[#084734] hover:underline">
+                방문 분석 →
+              </Link>
+            </div>
+            {visitorChartState === "loading" ? (
+              <Skeleton className="h-[110px]" />
+            ) : visitorChartState === "error" ? (
+              <div className="h-[110px]">
+                <KpiUnavailable label="방문 추이" onRetry={() => (chartRange === 7 ? retrySource("visitor") : setVisitor30Retry((value) => value + 1))} />
+              </div>
+            ) : (
+              <VisitorTrendChart data={visitorChartData} height={110} syncId="overview-inflow" />
+            )}
+            <p className="mt-2 text-[11px] text-[#615D59]">방문은 사이트 자체 집계(client_events), 문의는 리드 기준이라 모집단이 달라 참고로만 봅니다.</p>
+          </div>
         </section>
 
         <section
@@ -1087,7 +1177,7 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
         >
           <div className="mb-4">
             <h2 id="overview-source-heading" className="text-[14px] font-semibold text-[#111110]">주요 유입 경로</h2>
-            <p className="text-[11px] text-[#1a1a1a]/40 mt-0.5">전체 기간</p>
+            <p className="text-[11px] text-[#1a1a1a]/40 mt-0.5">전사 · 전체 기간</p>
           </div>
           {sourceStates.leads === "loading" ? (
             <Skeleton className="h-[180px]" />
@@ -1118,7 +1208,7 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
 
       <div className="overflow-hidden rounded-2xl border border-[#e8e8e4] bg-white shadow-[0_1px_0_rgba(17,17,16,0.02)]">
         <div className="flex flex-col gap-3 border-b border-[#e8e8e4] px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-          <h2 className="text-[14px] font-semibold text-[#111110]">세일즈 퍼널 / 최근 유입</h2>
+          <h2 className="text-[14px] font-semibold text-[#111110]">세일즈 퍼널 / 최근 유입 <span className="text-[11px] font-normal text-[#615D59]">전사</span></h2>
           <Link href="/admin/crm/customers/leads" className="text-[12px] text-[#1a1a1a]/40 hover:text-[#111110] transition-colors flex items-center gap-1">
             전체 보기 <ArrowUpRight className="w-3 h-3" />
           </Link>

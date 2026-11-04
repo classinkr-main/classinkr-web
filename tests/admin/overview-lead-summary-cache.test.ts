@@ -38,11 +38,27 @@ describe("Overview lead summary server cache", () => {
 
     expect(mocks.unstableCache).toHaveBeenCalledWith(
       expect.any(Function),
-      ["admin-leads-overview-v2"],
+      ["admin-leads-overview-v3"],
       { revalidate: 30, tags: ["admin-leads-overview"] }
     )
     expect(mocks.getDashboardLeads).toHaveBeenCalledTimes(1)
     expect(summary.metrics.total).toBe(1)
     expect(summary.recentLeads).toHaveLength(1)
+    expect(summary.company.metrics.total).toBe(1)
+  })
+
+  it("reads the full snapshot once and scopes the owner view in memory", async () => {
+    mocks.getDashboardLeads.mockResolvedValue([
+      { id: "mine", source: "contact_page", timestamp: "2026-08-27T00:00:00.000Z", status: "new", assigned_to: "Somang" },
+      { id: "unassigned", source: "contact_page", timestamp: "2026-08-27T00:00:00.000Z", status: "new" },
+    ])
+
+    const { getCachedOverviewLeadSummary } = await import("@/lib/admin/overview/lead-summary-cache")
+    const summary = await getCachedOverviewLeadSummary(["Somang"])
+
+    expect(mocks.getDashboardLeads).toHaveBeenCalledTimes(1)
+    expect(mocks.getDashboardLeads).toHaveBeenCalledWith()
+    expect(summary.metrics.total).toBe(1)
+    expect(summary.company.metrics.total).toBe(2)
   })
 })

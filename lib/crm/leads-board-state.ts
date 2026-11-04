@@ -9,6 +9,8 @@ import {
 } from "@/lib/crm/lead-attribution"
 import { isLeadAwaitingResponse } from "@/lib/crm/lead-response-status"
 import { matchesLeadSearch } from "@/lib/crm/lead-ranking"
+import { matchesDataOwner } from "@/lib/crm/personal-owner"
+import { branchMemberOwnerAliases } from "@/lib/branch/member-names"
 
 // 리드 보드의 순수 규칙 — 뷰 축·필터 축·컬럼 분배·시간 술어.
 //
@@ -64,6 +66,44 @@ export function isUnrespondedLead(lead: LeadRecord) {
 // 어드민 수기 등록은 생성 시점에 confirmed_at이 채워져 항상 false.
 export function isUnconfirmedLead(lead: LeadRecord) {
   return !lead.confirmed_at
+}
+
+// ─── 데이터 범위 축 (담당자) ───────────────────────────────────
+// URL `?owner=` 값. 빈 값 = 전체 담당자, `__me` = 내 담당, `__unassigned` = 담당 없음, 그 밖 = 그 담당자.
+//
+// 기본값은 전체 담당자다(2026-11-04). 공개 폼 리드는 담당이 비어 들어오고 자동 배정이 없어서, 기본을
+// "내 담당"으로 두면 새 문의가 보드 첫 화면에서 통째로 사라졌다. 담당 배정 규칙이 생기면 다시 정한다 —
+// docs/active/admin-lead-visitor-glance-plan-2026-11-04.md D3.
+
+export const LEAD_OWNER_ALL = ""
+export const LEAD_OWNER_ME = "__me"
+export const LEAD_OWNER_UNASSIGNED = "__unassigned"
+export const LEAD_OWNER_DEFAULT = LEAD_OWNER_ALL
+/** 계정이 CRM 담당과 연결되지 않았을 때의 내 담당 키 — 어떤 리드와도 맞지 않는다. */
+const NO_CURRENT_OWNER_KEY = "__no_current_admin_owner__"
+
+export function resolveLeadOwnerScope(raw: string | null | undefined): string {
+  return raw ?? LEAD_OWNER_DEFAULT
+}
+
+export function isUnassignedLead(lead: Pick<LeadRecord, "assigned_to">) {
+  return !lead.assigned_to?.trim()
+}
+
+export function selectLeadsForOwnerScope<T extends Pick<LeadRecord, "assigned_to">>(
+  leads: readonly T[],
+  owner: string,
+  currentOwnerKeys: readonly string[]
+): T[] {
+  if (owner === LEAD_OWNER_ALL) return [...leads]
+  if (owner === LEAD_OWNER_UNASSIGNED) return leads.filter(isUnassignedLead)
+  const keys =
+    owner === LEAD_OWNER_ME
+      ? currentOwnerKeys.length
+        ? currentOwnerKeys
+        : [NO_CURRENT_OWNER_KEY]
+      : branchMemberOwnerAliases(owner)
+  return leads.filter((lead) => matchesDataOwner(lead.assigned_to, keys))
 }
 
 // ─── 필터 축 ───────────────────────────────────────────────────

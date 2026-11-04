@@ -1,6 +1,6 @@
 # 어드민 첫 화면 "방문·문의" 바로 보기 기획 (2026-11-04)
 
-상태: 기획 제언 — 결정 대기(§6)
+상태: P0·P1 구현(2026-11-04, §8) — D7(담당 원천)만 결정 대기
 범위: `/admin/overview` 최상단, 사이드바(CRM 배지·마케팅 배치), CRM 리드 보드 기본 범위, 문의 도착 알림
 상위 문서: [Admin OS 운영 결정](admin-os-operating-decisions-2026-07-11.md) › [어드민 탭 재구성](admin-tab-restructure-2026-07-29.md) › [Admin Overview 운영 브리핑](admin-overview-workspace.md)
 관련 문서: [마케팅 탭 재구성](marketing-tab-dashboard-restructure-2026-09-14.md)(오늘 유입 카드) · [어드민 사용 실측](admin-usage-triage-2026-09-25.md)(D2·D7) · [CRM 탭 디벨롭](crm-tab-develop-plan-2026-09-12.md)
@@ -197,3 +197,35 @@ Overview                                     [문의 목록] [방문 분석] [CR
 ### 2026-11-04 — 기획 제언 작성
 
 코드 대조로 원인 4가지(내 담당 필터·확인 게이트·위치·알림)를 확인하고 P0~P2 제안과 결정 항목 D1~D8을 정리했다. 구현 없음.
+
+### 2026-11-04 — P0·P1 구현 (D1~D6·D8 권장안 그대로)
+
+시안(Design 캔버스)을 확인한 뒤 권장안으로 구현했다. 시안의 짙은 녹색 채움(행 단위 "확인" 버튼·배지)은 쓰지 않기로 했다 —
+새 배지·칸의 강조는 리드 보드 '미확인 수신함'과 같은 호박색(DESIGN.md Warning)이다.
+
+| 항목 | 구현 | 위치 |
+| --- | --- | --- |
+| 리드 요약 전사 묶음 | 한 번 읽은 전량에서 내 담당(최상위)과 전사(`company`)를 함께 집계. `unrespondedUnconfirmedCount`(응대 전 ∧ 미확인) 추가. 서버 캐시 키 v3 | `lib/admin/overview/lead-summary.ts`, `lead-summary-cache.ts` |
+| 사이드바 배지 원천 | `GET /api/admin/leads?scope=badge` — 같은 30초 캐시의 전사 응대 전·24h+·미확인 수 | `app/api/admin/leads/route.ts` |
+| 오늘 유입 소스 분해 | 항목에 `sourceKind`·`adminLeadId`, 결과에 `todayBySource`. 접힌 항목은 어드민 쪽 그룹이 이긴다. 서버 캐시 키 v4 | `lib/marketing/intake-feed.ts`, `intake-today.ts` |
+| Overview "지금" 띠 | 헤더 아래 4칸 + 오늘 들어온 문의 5줄, 1분 갱신(화면이 보일 때만), 칸별 실패 격리 | `components/admin/overview/OverviewNowBand.tsx`, `useLiveIntake.ts` |
+| Overview 범위 | 유입 계열(추이·유입 경로·리드 현황 패널·퍼널·최근 유입·이번 주 유입·홈페이지 유입) = 전사. 진행 중 리드·전환율·브리핑의 24h 문장 = 내 담당(링크에 `owner=__me`) | `app/admin/overview/OverviewClient.tsx` |
+| 방문·문의 2단 추이 | 위 문의(건) · 아래 홈 방문(명), `syncId` 로 크로스헤어 공유, 참고 문의율. 30일은 고를 때만 방문 30일을 읽는다 | `OverviewClient.tsx`, `OverviewCharts.tsx` |
+| 헤더 바로가기 | 문의 목록 · 방문 분석 · CRM · 매출 장부 | `OverviewClient.tsx` |
+| 리드 보드 범위 | 기본 = 전체 담당자, "미배정 · 진행 중 N" 선택지, 내 담당 0건이면 미배정 안내 | `lib/crm/leads-board-state.ts`(`selectLeadsForOwnerScope`), `LeadsBoardClient.tsx` |
+| 사이드바 | CRM 숫자 배지(데스크톱·모바일 메뉴·하단 바 점), 마케팅 허브 상시(상시 10 · 기타 5 · 숨김 1) | `AdminSidebar.tsx`, `useAdminNavCounts.ts`, `admin-nav-access.ts` |
+| ⌘K | 오늘 문의 · 응대 전 문의 · 미배정 리드, 방문자 검색어 | `AdminCommandPalette.tsx` |
+| 새 문의 알림 | 어드민 전역 우하단 토스트(첫 조회는 기준점만, 같은 문의 한 번), 띠 머리와 토스트에서 켬/끔(이 브라우저에만 저장) | `AdminNewInquiryToast.tsx`, `new-inquiry-alert-pref.ts`, `AdminShell.tsx` |
+
+계획과 달라진 점:
+
+- **셋째 칸 이름이 "아직 안 본 문의" → "응대 전 문의"** 다. 리드 보드의 '응대 전' 카드와 같은 술어(신규 · 응대 대상 소스 · 테스트 제외)라
+  칸 숫자와 눌렀을 때 목록 수가 같다. "미확인"만 세면 보드에 맞는 착지 필터가 없어 숫자가 어긋난다. 미확인 건수는 칸 보조 줄에 둔다(D4 변경).
+- 사이드바 배지도 같은 "응대 전" 수다.
+- 리드 현황 패널·퍼널도 전사로 옮겼다 — 착지하는 리드 보드의 기본 범위가 전체가 되어 같은 모집단이어야 한다.
+
+남은 것: D7(담당 원천 — Compass 담당 읽기 / 라우팅 규칙 / 수기). "내 담당"의 뜻을 어드민 전체에서 바꾸는 결정이라 구현하지 않았다.
+그 전까지 Overview 히어로 '진행 중 리드'·내 담당 리드 보드는 0에 가깝다.
+
+검증: `npm run typecheck` · `npx eslint app components lib --max-warnings=0` · `npm run build` 통과. `npx vitest run` 10,393건 통과,
+2건 실패(`tests/marketing/meta-instagram-dashboard-cache.test.ts`, `tests/server/cron-auth.test.ts`)는 이 변경 전 트리에서도 같은 샌드박스 환경에서 실패한다.
