@@ -14,19 +14,19 @@ import {
 import { useConsent } from "@/lib/consent/useConsent"
 import { cn } from "@/lib/utils"
 
-// 말풍선 왼쪽의 그림 — 쿠키 먹는 정글 갈매기(Gemini 3 Pro Image 생성, 2026-11-04, DESIGN.md 결정 로그 V22).
+// 말풍선 왼쪽의 그림 — 쿠키 먹는 정글 갈매기(DESIGN.md 결정 로그 V22).
 // 192px 정사각 투명 WebP 를 48px 로 보인다. 바꿀 때는 이 경로 하나만 고친다
 const MASCOT_SRC = "/images/consent/gull-cookie.webp"
 
-// 작은 컨트롤 — 보이는 높이 28px, 누르는 영역은 hit-area 로 44px
+// 컴팩트 컨트롤 — 보이는 높이 24px(min-h-6), 누르는 영역은 hit-area 로 44px 보장
 const BTN =
-  "hit-area inline-flex min-h-7 flex-1 items-center justify-center rounded-(--radius-control) px-2.5 text-note font-semibold transition-colors duration-(--motion-fast) disabled:opacity-40"
+  "hit-area inline-flex min-h-6 flex-1 items-center justify-center rounded-(--radius-control) px-2 text-note font-semibold transition-colors duration-(--motion-fast) ease-soft disabled:opacity-40"
 const PRIMARY_BTN = `${BTN} bg-fg-accent text-fg-on-accent hover:bg-fg-accent-hover`
-const LINE_BTN = `${BTN} border border-line-control text-fg-ink hover:border-line-ink`
+const SUBTLE_BTN = `${BTN} border border-line-strong bg-surface-sunken text-fg-body hover:border-line-ink hover:text-fg-ink`
 
 const OPTIONAL_ROWS: Array<{ key: keyof ConsentChoice; label: string; desc: string }> = [
   { key: "analytics", label: "분석", desc: "사이트 개선" },
-  { key: "marketing", label: "마케팅", desc: "광고 성과 확인" },
+  { key: "marketing", label: "마케팅", desc: "광고 성과" },
 ]
 
 /**
@@ -89,7 +89,7 @@ export function ConsentBanner() {
       aria-label="쿠키 사용 동의"
       data-consent-banner
       data-inert-with-menu="hide"
-      className="fixed bottom-[calc(env(safe-area-inset-bottom)+12px)] left-3 z-(--z-consent) flex max-w-[calc(100vw-24px)] items-end gap-1.5 sm:bottom-6 sm:left-6"
+      className="group fixed bottom-[calc(env(safe-area-inset-bottom)+12px)] left-3 z-(--z-consent) flex max-w-[calc(100vw-24px)] items-end gap-1 sm:bottom-5 sm:left-5"
     >
       <Image
         src={MASCOT_SRC}
@@ -97,46 +97,54 @@ export function ConsentBanner() {
         width={192}
         height={192}
         aria-hidden="true"
-        className="-mb-1 size-12 shrink-0 object-contain"
+        className="-mb-0.5 size-12 shrink-0 select-none object-contain transition-transform duration-(--motion-base) ease-soft group-hover:-rotate-6"
       />
 
-      {/* 말풍선 — 꼬리는 그림 쪽(왼쪽 아래)으로. 꼬리가 잘리지 않게 스크롤은 안쪽 상자가 맡는다 */}
-      <div className="relative w-[248px] max-w-full rounded-md border border-line-hair bg-surface-sheet shadow-deep before:absolute before:-left-[5px] before:bottom-4 before:size-2.5 before:rotate-45 before:border-b before:border-l before:border-line-hair before:bg-surface-sheet">
-        <div className="relative max-h-[calc(100dvh-24px)] overflow-y-auto px-3 py-2.5">
-          <div className="flex items-center justify-between gap-2">
+      {/* 말풍선 — 꼬리는 갈매기 부리·볼 쪽(왼쪽 아래)을 향한다. 꼬리가 잘리지 않게 스크롤은 안쪽 상자가 맡는다 */}
+      <div
+        className={cn(
+          "relative max-w-full rounded-md border border-line-strong bg-surface-sheet shadow-deep before:absolute before:-left-[5px] before:bottom-3.5 before:size-2 before:rotate-45 before:border-b before:border-l before:border-line-strong before:bg-surface-sheet",
+          expanded ? "w-[232px]" : "w-[212px]",
+        )}
+      >
+        <div className="relative max-h-[calc(100dvh-24px)] overflow-y-auto px-2.5 py-2">
+          <div className="flex items-center justify-between gap-1.5">
             <p className="text-label text-fg-ink">쿠키 조금만 쓸게요</p>
             <button
               type="button"
               onClick={toggleSettings}
               aria-expanded={expanded}
               aria-controls={panelId}
-              className="hit-area -mr-1 inline-flex items-center gap-0.5 px-1 text-note text-fg-muted transition-colors duration-(--motion-fast) hover:text-fg-ink"
+              className="hit-area -mr-1 inline-flex items-center gap-0.5 px-1 text-note text-fg-muted transition-colors duration-(--motion-fast) ease-soft hover:text-fg-ink"
             >
               설정
               <ChevronDown
                 aria-hidden
-                className={cn("size-3.5 transition-transform duration-(--motion-fast)", expanded && "rotate-180")}
+                className={cn("size-3 transition-transform duration-(--motion-fast) ease-soft", expanded && "rotate-180")}
               />
             </button>
           </div>
           <p className="mt-0.5 text-note text-fg-muted break-keep">
-            선택 쿠키는 동의하실 때만 켜요.{" "}
-            <Link href="/privacy" prefetch={false} className="link-body whitespace-nowrap">
+            선택 쿠키는 동의 시에만 켜요 ·{" "}
+            <Link href="/privacy" prefetch={false} className="link-quiet text-fg-body whitespace-nowrap">
               자세히
             </Link>
           </p>
 
           {expanded ? (
-            <ul id={panelId} className="mt-2 divide-y divide-line-hair border-t border-line-hair">
-              <li className="flex items-center justify-between gap-3 py-1.5 text-note text-fg-muted">
+            <ul id={panelId} className="mt-1.5 divide-y divide-line-hair border-t border-line-hair">
+              <li className="flex items-center justify-between gap-2 py-1 text-note text-fg-muted">
                 <span>
-                  <span className="mr-1.5 font-semibold text-fg-ink">필수</span>보안·페이지 이동
+                  <span className="mr-1.5 font-semibold text-fg-ink">필수</span>보안·이동
                 </span>
-                <span className="shrink-0">항상 켜짐</span>
+                <span className="inline-flex shrink-0 items-center gap-1 text-fg-body">
+                  <span aria-hidden className="status-dot" />
+                  항상 켜짐
+                </span>
               </li>
               {OPTIONAL_ROWS.map((row) => (
                 <li key={row.key}>
-                  <label className="flex cursor-pointer items-center justify-between gap-3 py-1.5 text-note text-fg-muted">
+                  <label className="flex cursor-pointer items-center justify-between gap-2 py-1 text-note text-fg-muted transition-colors duration-(--motion-fast) ease-soft hover:text-fg-ink">
                     <span>
                       <span className="mr-1.5 font-semibold text-fg-ink">{row.label}</span>
                       {row.desc}
@@ -153,35 +161,33 @@ export function ConsentBanner() {
           ) : null}
 
           {failed ? (
-            <p role="alert" className="mt-1.5 text-note text-fg-danger">
+            <p role="alert" className="mt-1 text-note text-fg-danger">
               저장하지 못했어요. 다시 눌러 주세요.
             </p>
           ) : null}
 
-          <div className="mt-2 flex gap-1.5">
+          <div className="mt-1.5 flex gap-1">
+            <button
+              type="button"
+              onClick={() => void commitChoice(DENIED_CHOICE)}
+              disabled={saving}
+              className={SUBTLE_BTN}
+            >
+              필수만
+            </button>
             {expanded ? (
               <button type="button" onClick={() => void commitChoice(draft)} disabled={saving} className={PRIMARY_BTN}>
                 선택 저장
               </button>
             ) : (
-              <>
-                <button
-                  type="button"
-                  onClick={() => void commitChoice(DENIED_CHOICE)}
-                  disabled={saving}
-                  className={LINE_BTN}
-                >
-                  필수만
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void commitChoice(GRANTED_CHOICE)}
-                  disabled={saving}
-                  className={PRIMARY_BTN}
-                >
-                  모두 동의
-                </button>
-              </>
+              <button
+                type="button"
+                onClick={() => void commitChoice(GRANTED_CHOICE)}
+                disabled={saving}
+                className={PRIMARY_BTN}
+              >
+                모두 동의
+              </button>
             )}
           </div>
         </div>
