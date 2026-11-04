@@ -14,8 +14,9 @@ import {
 import { useConsent } from "@/lib/consent/useConsent"
 import { cn } from "@/lib/utils"
 
-// 말풍선 왼쪽의 그림. 정사각 투명 PNG/WebP 를 이 경로 하나로 바꾸면 된다
-const MASCOT_SRC = "/images/consent/cookie-crayon.png"
+// 말풍선 왼쪽의 그림 — 쿠키 먹는 정글 갈매기(Gemini 3 Pro Image 생성, 2026-11-04, DESIGN.md 결정 로그 V22).
+// 192px 정사각 투명 WebP 를 48px 로 보인다. 바꿀 때는 이 경로 하나만 고친다
+const MASCOT_SRC = "/images/consent/gull-cookie.webp"
 
 // 작은 컨트롤 — 보이는 높이 28px, 누르는 영역은 hit-area 로 44px
 const BTN =
@@ -93,8 +94,8 @@ export function ConsentBanner() {
       <Image
         src={MASCOT_SRC}
         alt=""
-        width={96}
-        height={96}
+        width={192}
+        height={192}
         aria-hidden="true"
         className="-mb-1 size-12 shrink-0 object-contain"
       />
