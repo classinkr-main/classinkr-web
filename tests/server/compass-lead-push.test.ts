@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import type { LeadPayload } from "@/lib/lead-types"
 
-// 홈페이지 폼 리드 → Compass 밀어 넣기(lib/server/compass-lead-push.ts, Compass ADR-0081).
+// 홈페이지 폼 리드 → Compass 밀어 넣기(lib/server/compass-lead-push.ts, Compass ADR-0082).
 // 대상(env·HTTPS) · 소스 판정 · 본문 모양 · 헤더 · 실패 throw, 그리고 runLeadCaptureEffects 안에서 폼 소스만 보내고 실패가 warnings 로 가는지.
 
 const BASE: LeadPayload = {

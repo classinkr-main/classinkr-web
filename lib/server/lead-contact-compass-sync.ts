@@ -3,7 +3,7 @@
 //
 // 실행 자리는 전용 크론 app/api/cron/lead-contact-sync 다(매일 5분 간격, vercel.json).
 //  * 쓰기 범위는 public.leads 뿐이다(status·confirmed_at·assigned_to). Compass 는 브리지 뷰로 읽기만 한다.
-//  * 매칭은 링크 우선(compass_lead_refs_v system='home_lead' — Compass 가 홈페이지 폼 리드를 받으며 건다, Compass ADR-0081)
+//  * 매칭은 링크 우선(compass_lead_refs_v system='home_lead' — Compass 가 홈페이지 폼 리드를 받으며 건다, Compass ADR-0082)
 //    + 전화 키 폴백(lib/compass/lead-contact-sync). 링크 조회·링크 행 조회·전화 키 조회·활동 조회 중 하나라도 끊기거나 행 상한에 닿으면
 //    이번 실행 전체를 건너뛴다 — 반쪽 결과로 판정하면 처리된 리드를 흘려보내거나(누락) 대표 행이 바뀌어 잘못 종료한다. 다음 실행이 따라잡는다.
 //  * 담당(2026-11-04): Compass 담당(콜 담당 → BD 담당 → 오너)을 어드민 담당자 명단(ownerKey·표시명·별칭)으로 풀어 어드민 담당이

@@ -320,7 +320,7 @@ export interface CompassHomeLeadRefRow {
   external_id: string
 }
 
-/** Compass crm.lead_refs.system — 홈페이지 폼 리드를 Compass 로 민 뒤 Compass 가 거는 링크(Compass ADR-0081, lib/homeLeadIngest.ts). */
+/** Compass crm.lead_refs.system — 홈페이지 폼 리드를 Compass 로 민 뒤 Compass 가 거는 링크(Compass ADR-0082, lib/homeLeadIngest.ts). */
 export const COMPASS_HOME_LEAD_REF_SYSTEM = "home_lead"
 
 /** external_id(UUID 36자) in(...) 한 번에 싣는 수 — URL 길이 상한 대비. */

@@ -5,7 +5,7 @@ import { postJson } from "@/lib/server/post-json"
 
 // 홈페이지 폼 리드를 Compass(mkt.classin.co.kr)에도 찍는다 — 저장 직후 `POST /api/webhook/home-lead` 한 번 (2026-11-04).
 //
-// 설계(Compass 저장소 ADR-0081):
+// 설계(Compass 저장소 ADR-0082):
 //  * 어드민이 정본(public.leads), Compass 는 사본이다. 어드민은 crm 스키마에 쓰지 않고 HTTP 로만 넘긴다(compass-integration-2026-09-14.md §0 의
 //    "교차 쓰기 0건" 그대로). Compass 가 전화·이메일 동일인 판정, 재유입, crm.lead_refs(system='home_lead') 링크를 한다.
 //  * 대상은 공개 폼 소스만(WEBSITE_FORM_LEAD_SOURCES — 데모·문의·쇼룸 예약·도입 신청). 뉴스레터는 상담이 아니고, Meta 리드폼은 Compass 가

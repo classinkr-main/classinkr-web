@@ -200,7 +200,7 @@ describe("Compass 마케팅 채널 — mktLeadCond 등가", () => {
     ["direct", false],
     ["walkin", false],
     ["referral", false],
-    // 우리 홈페이지 폼 리드를 Compass 로 민 것(Compass ADR-0081) — 어드민 홈페이지 리드와 같은 사람이라 Compass 마케팅 신규로 다시 세면 두 번이다
+    // 우리 홈페이지 폼 리드를 Compass 로 민 것(Compass ADR-0082) — 어드민 홈페이지 리드와 같은 사람이라 Compass 마케팅 신규로 다시 세면 두 번이다
     ["homepage", false],
     // NEO 에서 들여온 스텁(channel='neo')은 유입이 아니다 — Compass ADR-0015. 오늘 만들어진 스텁이 "오늘 유입"에 잡히면 안 된다.
     ["neo", false],

@@ -3,7 +3,7 @@ import "server-only"
 // 어드민 리드 ↔ Compass 리드 매칭의 한 자리 — **링크 우선, 전화 키 폴백**(연동 2차 compass-integration-2026-09-14.md §4-4, 2026-11-04 구현).
 //
 //  * 링크: Compass 가 홈페이지 폼 리드를 받으며 거는 crm.lead_refs(system='home_lead', external_id=어드민 리드 id) —
-//    compass_lead_refs_v 로 읽는다(Compass ADR-0081). 전화가 없거나 자리표시·더미 번호인 리드도 정확히 붙는다.
+//    compass_lead_refs_v 로 읽는다(Compass ADR-0082). 전화가 없거나 자리표시·더미 번호인 리드도 정확히 붙는다.
 //  * 전화 키: 예전 규칙 그대로(normalizePhoneKey → compass_leads_v.phone_key). 링크가 없는 옛 리드·수동 등록 리드가 이 길로 붙는다.
 //    자리표시·더미 번호 가드(joinableCompassPhoneKey)는 여기서 걸지 않는다 — 고객 360·타임라인은 사람이 보는 단건 화면이라 예전과 같이
 //    번호 그대로 붙이고, 자동 반영(크론)은 자기 쪽 compassLookupPhoneKeys 가 가드를 건다(2026-10-12 브리지 감사 4번).
