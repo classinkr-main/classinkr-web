@@ -39,9 +39,9 @@ describe("compassLeadPushTarget · env 둘 + HTTPS 일 때만", () => {
     [{ COMPASS_BRIDGE_URL: "http://localhost:3001", COMPASS_LEAD_WEBHOOK_TOKEN: "tok" }, "HTTP(로컬)는 운영 Compass 로 밀지 않는다"],
     [{ COMPASS_BRIDGE_URL: "https://user:pw@mkt.example.test", COMPASS_LEAD_WEBHOOK_TOKEN: "tok" }, "자격이 박힌 URL"],
     [{ COMPASS_BRIDGE_URL: "not a url", COMPASS_LEAD_WEBHOOK_TOKEN: "tok" }, "URL 아님"],
-  ])("%j → null (%s)", async (env) => {
+  ] as Array<[Record<string, string | undefined>, string]>)("%j → null (%s)", async (env) => {
     const { compassLeadPushTarget } = await import("@/lib/server/compass-lead-push")
-    expect(compassLeadPushTarget(env as NodeJS.ProcessEnv)).toBeNull()
+    expect(compassLeadPushTarget(env)).toBeNull()
   })
 })
 
@@ -131,7 +131,7 @@ describe("pushLeadToCompass", () => {
 
 describe("runLeadCaptureEffects 안에서", () => {
   const postJson = vi.fn()
-  const settings = { googleSheetWebhookUrl: "", leadWebhookUrl: "", channelTalkWebhookUrl: "" }
+  const settings = { googleSheetWebhookUrl: "", leadWebhookUrl: "", channelTalkWebhookUrl: "", webhookEnabled: {} }
 
   async function loadEffects() {
     vi.resetModules()

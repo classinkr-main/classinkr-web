@@ -83,6 +83,8 @@
   `kind: "reinflow"`, `event_id` 는 전환 이벤트 id 와 같은 값(Compass 멱등 표식). 실패는 응답 `warnings`·「리드 전달 경고」로만 — 저장을 막지 않는다. 뉴스레터·Meta 리드폼은
   보내지 않는다(Meta 는 Compass 가 직접 받는다). Compass 쪽 규칙(인바운드 「홈페이지」 경로·재유입·알림톡은 어드민 몫)은 그 저장소 `docs/adr/0081-*.md`. 흐름을 바꾸면
   `npx vitest run tests/server/compass-lead-push.test.ts` 도 함께 실행한다.
+- 되받기(Compass → 어드민)는 **링크 우선·전화 키 폴백**(`lib/compass/admin-lead-links.ts`) — 5분 크론·리드 보드 칩·고객 360 셋이 같은 매칭을 쓴다. 크론은 Compass 담당을
+  어드민 `assigned_to` 가 **비어 있을 때만** 채운다(사람이 고른 담당은 덮지 않는다). 매칭·담당 규칙을 바꾸면 그 문서 §4 와 `tests/compass/lead-contact-sync.test.ts` 를 같이 고친다.
   새 환경에 키를 넣거나 접수 경로를 바꿀 때는 `MESSAGING_DRY_RUN=1`로 먼저 확인한다.
 - 마케팅/채널톡 스크립트 도메인을 추가할 때는 `next.config.ts`의 CSP를 directive별로 갱신하고 `/contact` 응답 헤더를 확인한다.
 

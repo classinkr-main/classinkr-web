@@ -1,10 +1,13 @@
-// 리드 상태 MKT(Compass) 5분 주기 반영 — 조회 → 판정 → 조건부 반영 → 감사 기록.
-// 설계: docs/superpowers/specs/2026-09-14-lead-contact-compass-sync-design.md
+// 리드 상태·담당 MKT(Compass) 5분 주기 반영 — 조회 → 판정 → 조건부 반영 → 감사 기록.
+// 설계: docs/superpowers/specs/2026-09-14-lead-contact-compass-sync-design.md · 2차(링크·담당) docs/active/compass-home-lead-push-2026-11-04.md §4
 //
 // 실행 자리는 전용 크론 app/api/cron/lead-contact-sync 다(매일 5분 간격, vercel.json).
-//  * 쓰기 범위는 public.leads 뿐이다. Compass 는 브리지 뷰로 읽기만 한다.
-//  * 브리지 조회가 하나라도 끊기거나 행 상한에 닿으면 이번 실행 전체를 건너뛴다 — 반쪽 결과로
-//    판정하면 처리된 리드를 흘려보내거나(누락) 대표 행이 바뀌어 잘못 종료한다. 다음 실행이 따라잡는다.
+//  * 쓰기 범위는 public.leads 뿐이다(status·confirmed_at·assigned_to). Compass 는 브리지 뷰로 읽기만 한다.
+//  * 매칭은 링크 우선(compass_lead_refs_v system='home_lead' — Compass 가 홈페이지 폼 리드를 받으며 건다, Compass ADR-0081)
+//    + 전화 키 폴백(lib/compass/lead-contact-sync). 링크 조회·링크 행 조회·전화 키 조회·활동 조회 중 하나라도 끊기거나 행 상한에 닿으면
+//    이번 실행 전체를 건너뛴다 — 반쪽 결과로 판정하면 처리된 리드를 흘려보내거나(누락) 대표 행이 바뀌어 잘못 종료한다. 다음 실행이 따라잡는다.
+//  * 담당(2026-11-04): Compass 담당(콜 담당 → BD 담당 → 오너)을 어드민 담당자 명단(ownerKey·표시명·별칭)으로 풀어 어드민 담당이
+//    **비어 있는** 리드에만 채운다. 명단이 건강하지 않으면(health.ok false) 담당 반영만 건너뛰고 상태 반영은 그대로 한다.
 //  * 쓰기는 마감 시각(writeDeadlineAt) 전에만 시작하고 덩어리 사이에서도 멈춘다 — 크론 응답이
 //    나간 뒤에 쓰기가 시작되면 결과가 보고되지도, 캐시 무효화가 반영되지도 않는다.
 //  * 실제로 바뀐 행은 성공·실패·중단과 무관하게 감사 기록에 남긴다(복구의 근거).
@@ -13,19 +16,27 @@
 import "server-only"
 
 import { logAudit } from "@/lib/auth/audit"
-import { getCompassActivitySignals, getCompassLeadsByPhoneKeys } from "@/lib/compass/bridge"
+import { getCompassLinksForAdminLeads } from "@/lib/compass/admin-lead-links"
+import { getCompassActivitySignals, getCompassLeadsByIds, getCompassLeadsByPhoneKeys } from "@/lib/compass/bridge"
 import {
   COMPASS_HUMAN_ACTIVITY_KINDS,
   compassLeadIdsNeedingActivityCheck,
   compassLookupPhoneKeys,
   humanTouchedCompassLeadIds,
   planCompassLeadStatusSync,
+  planCompassOwnerSync,
+  type CompassLinkIndex,
+  type CompassOwnerSyncPlan,
 } from "@/lib/compass/lead-contact-sync"
 import type { CompassOverlaySource } from "@/lib/compass/overlay"
+import { listAdminUserDirectoryCached, ownerLookupKeys } from "@/lib/repositories/admin-users"
 import {
+  applyCompassLeadOwnerSync,
   applyCompassLeadStatusSync,
+  CompassLeadOwnerSyncError,
   CompassLeadStatusSyncError,
   getLeadsForCompassContactSync,
+  type CompassLeadOwnerSyncResult,
   type CompassLeadStatusSyncResult,
 } from "@/lib/repositories/leads"
 
@@ -34,14 +45,20 @@ export type LeadContactSyncStatus = "ok" | "bridge_down" | "failed" | "timeout"
 export interface LeadContactSyncReport {
   status: LeadContactSyncStatus
   dryRun: boolean
-  /** 판정에 넣은 어드민 리드 수(전화가 있는 신규·연락함) */
+  /** 판정에 넣은 어드민 리드 수(신규·연락함 — 전화가 없는 리드도 링크로 붙을 수 있어 포함) */
   scanned: number
-  /** 전화 키로 Compass 리드가 붙은 수 */
+  /** 링크 또는 전화 키로 Compass 리드가 붙은 수 */
   matched: number
+  /** 그중 Compass 링크(home_lead)로 붙은 수 */
+  linked: number
   toContacted: number
   toClosed: number
+  /** 담당이 비어 있어 Compass 담당을 채울 리드 수 */
+  toAssigned: number
   /** 조건부 UPDATE 로 실제 바뀐 수 — 판정과 쓰기 사이에 사람이 바꾼 행은 빠진다 */
-  applied: { contacted: number; closed: number }
+  applied: { contacted: number; closed: number; assigned: number }
+  /** 담당 반영 진단 — conflicts: 어드민 담당이 이미 다른 사람(덮지 않음) · unmapped: Compass 담당 이름을 명단으로 못 풂 · skipped: 명단 문제로 담당 반영 전체를 건너뜀 */
+  owner: { conflicts: number; unmapped: number; skipped?: string }
   error?: string
 }
 
@@ -55,15 +72,20 @@ const WRITE_MARGIN_MS = 3_000
 const AUDIT_ACTOR_NAME = "MKT(Compass) 자동 반영"
 const AUDIT_ACTION = "lead.status.compass_sync"
 
+const NO_OWNER_PLAN: CompassOwnerSyncPlan = { assign: [], conflicts: 0, unmapped: 0 }
+
 function emptyReport(dryRun: boolean, status: LeadContactSyncStatus, error?: string): LeadContactSyncReport {
   return {
     status,
     dryRun,
     scanned: 0,
     matched: 0,
+    linked: 0,
     toContacted: 0,
     toClosed: 0,
-    applied: { contacted: 0, closed: 0 },
+    toAssigned: 0,
+    applied: { contacted: 0, closed: 0, assigned: 0 },
+    owner: { conflicts: 0, unmapped: 0 },
     ...(error ? { error } : {}),
   }
 }
@@ -72,9 +94,16 @@ function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
-async function recordAudit(result: CompassLeadStatusSyncResult, error?: string): Promise<void> {
-  if (result.contacted.length === 0 && result.closed.length === 0) return
-  // 복구 근거 — 바뀐 id, 종료 전 상태, 새로 찍은 도장(id·시각). 기록 실패는 logAudit 이 삼킨다.
+const EMPTY_STATUS: CompassLeadStatusSyncResult = { contacted: [], closed: [], stamped: [], confirmedAt: "", stoppedEarly: false }
+const EMPTY_OWNER: CompassLeadOwnerSyncResult = { assigned: [], stoppedEarly: false }
+
+async function recordAudit(
+  result: CompassLeadStatusSyncResult,
+  owner: CompassLeadOwnerSyncResult,
+  error?: string
+): Promise<void> {
+  if (result.contacted.length === 0 && result.closed.length === 0 && owner.assigned.length === 0) return
+  // 복구 근거 — 바뀐 id, 종료 전 상태, 새로 찍은 도장(id·시각), 채운 담당(id·ownerKey). 기록 실패는 logAudit 이 삼킨다.
   await logAudit({
     actorUserId: null,
     actorDisplayName: AUDIT_ACTOR_NAME,
@@ -85,10 +114,33 @@ async function recordAudit(result: CompassLeadStatusSyncResult, error?: string):
       closed: result.closed,
       stamped: result.stamped,
       confirmedAt: result.confirmedAt,
-      ...(result.stoppedEarly ? { stoppedEarly: true } : {}),
+      ...(owner.assigned.length ? { assigned: owner.assigned } : {}),
+      ...(result.stoppedEarly || owner.stoppedEarly ? { stoppedEarly: true } : {}),
       ...(error ? { error } : {}),
     },
   })
+}
+
+/**
+ * Compass 담당 이름 → 어드민 CRM ownerKey. 어드민 담당자 명단(ownerKey·표시명·별칭·NEO id)을 소문자·trim 으로 맞춘다 —
+ * bulk-assign 이 사람이 고른 담당을 ownerKey 로 정규화하는 것과 같은 열쇠다. 명단이 건강하지 않으면 null(담당 반영 건너뜀).
+ */
+async function loadOwnerResolver(): Promise<{ resolve: (name: string) => string | null } | { skipped: string }> {
+  let directory: Awaited<ReturnType<typeof listAdminUserDirectoryCached>>
+  try {
+    directory = await listAdminUserDirectoryCached()
+  } catch (error) {
+    return { skipped: `담당자 명단 조회 실패: ${messageOf(error)}` }
+  }
+  if (!directory.health.ok) return { skipped: directory.health.message ?? "담당자 명단 상태가 안전하지 않음" }
+  const byKey = new Map<string, string>()
+  for (const owner of directory.crmOwners) {
+    for (const key of ownerLookupKeys(owner)) {
+      const normalized = key.trim().toLowerCase()
+      if (normalized && !byKey.has(normalized)) byKey.set(normalized, owner.ownerKey)
+    }
+  }
+  return { resolve: (name) => byKey.get(name.trim().toLowerCase()) ?? null }
 }
 
 export async function syncLeadContactFromCompass(
@@ -105,66 +157,121 @@ export async function syncLeadContactFromCompass(
   }
   if (leads.length === 0) return emptyReport(dryRun, "ok")
 
-  const keys = compassLookupPhoneKeys(leads)
+  const bridgeDown = (error?: string): LeadContactSyncReport => ({ ...emptyReport(dryRun, "bridge_down", error), scanned: leads.length })
+
+  // ① 링크(home_lead) — 어드민 리드 id → Compass 리드 id. 링크된 행은 id 로 읽는다(전화 키와 무관하게 붙는다).
+  const linkResult = await getCompassLinksForAdminLeads(leads.map((lead) => lead.id))
+  if (linkResult.down) return bridgeDown(linkResult.error)
+  const links: CompassLinkIndex = linkResult.links
+  const linkedIds = [...new Set([...links.values()].flat())]
   const compassRows: CompassOverlaySource[] = []
-  for (let index = 0; index < keys.length; index += PHONE_KEY_CHUNK) {
-    const result = await getCompassLeadsByPhoneKeys(keys.slice(index, index + PHONE_KEY_CHUNK))
-    if (result.down) return { ...emptyReport(dryRun, "bridge_down", result.error), scanned: leads.length }
-    if (result.rows.length >= COMPASS_ROW_CAP) {
-      return {
-        ...emptyReport(dryRun, "bridge_down", `Compass 리드 조회가 행 상한(${COMPASS_ROW_CAP})에 닿아 잘렸을 수 있음`),
-        scanned: leads.length,
-      }
+  const seenRowIds = new Set<number>()
+  const addRows = (rows: readonly CompassOverlaySource[]) => {
+    for (const row of rows) {
+      if (seenRowIds.has(row.id)) continue
+      seenRowIds.add(row.id)
+      compassRows.push(row)
     }
-    compassRows.push(...result.rows)
+  }
+  if (linkedIds.length > 0) {
+    const linkedRows = await getCompassLeadsByIds(linkedIds)
+    if (linkedRows.down) return bridgeDown(linkedRows.error)
+    addRows(linkedRows.rows)
   }
 
-  const needActivity = compassLeadIdsNeedingActivityCheck(leads, compassRows)
+  // ② 전화 키 폴백 — 예전 규칙 그대로.
+  const keys = compassLookupPhoneKeys(leads)
+  for (let index = 0; index < keys.length; index += PHONE_KEY_CHUNK) {
+    const result = await getCompassLeadsByPhoneKeys(keys.slice(index, index + PHONE_KEY_CHUNK))
+    if (result.down) return bridgeDown(result.error)
+    if (result.rows.length >= COMPASS_ROW_CAP) {
+      return bridgeDown(`Compass 리드 조회가 행 상한(${COMPASS_ROW_CAP})에 닿아 잘렸을 수 있음`)
+    }
+    addRows(result.rows)
+  }
+
+  const needActivity = compassLeadIdsNeedingActivityCheck(leads, compassRows, links)
   let touched: ReadonlyMap<number, number> = new Map()
   if (needActivity.length > 0) {
     const activity = await getCompassActivitySignals(needActivity, COMPASS_HUMAN_ACTIVITY_KINDS)
-    if (activity.down) return { ...emptyReport(dryRun, "bridge_down", activity.error), scanned: leads.length }
+    if (activity.down) return bridgeDown(activity.error)
     touched = humanTouchedCompassLeadIds(activity.rows)
   }
 
-  const plan = planCompassLeadStatusSync(leads, compassRows, touched)
+  const plan = planCompassLeadStatusSync(leads, compassRows, touched, links)
+
+  // ③ 담당 — 명단으로 풀 수 있을 때만. 명단 문제는 상태 반영을 막지 않는다.
+  let ownerPlan: CompassOwnerSyncPlan = NO_OWNER_PLAN
+  let ownerSkipped: string | undefined
+  if (plan.matched > 0) {
+    const resolver = await loadOwnerResolver()
+    if ("skipped" in resolver) ownerSkipped = resolver.skipped
+    else ownerPlan = planCompassOwnerSync(leads, compassRows, resolver.resolve, links)
+  }
+
   const report: LeadContactSyncReport = {
     status: "ok",
     dryRun,
     scanned: plan.scanned,
     matched: plan.matched,
+    linked: plan.linked,
     toContacted: plan.contacted.length,
     toClosed: plan.closed.length,
-    applied: { contacted: 0, closed: 0 },
+    toAssigned: ownerPlan.assign.length,
+    applied: { contacted: 0, closed: 0, assigned: 0 },
+    owner: { conflicts: ownerPlan.conflicts, unmapped: ownerPlan.unmapped, ...(ownerSkipped ? { skipped: ownerSkipped } : {}) },
   }
-  if (dryRun || (plan.contacted.length === 0 && plan.closed.length === 0)) return report
+  const nothingToWrite = plan.contacted.length === 0 && plan.closed.length === 0 && ownerPlan.assign.length === 0
+  if (dryRun || nothingToWrite) return report
   if (Date.now() >= writeDeadlineAt) {
     return { ...report, status: "timeout", error: "쓰기 마감이 지나 이번 실행은 반영하지 않음" }
   }
+  const shouldContinue = () => Date.now() < writeDeadlineAt
 
-  let result: CompassLeadStatusSyncResult
-  try {
-    result = await applyCompassLeadStatusSync(
-      { contactedIds: plan.contacted, closedIds: plan.closed.map((item) => item.id) },
-      { now: options.now ?? new Date(), shouldContinue: () => Date.now() < writeDeadlineAt }
-    )
-  } catch (error) {
-    const message = messageOf(error)
-    if (error instanceof CompassLeadStatusSyncError) {
-      await recordAudit(error.partial, message)
+  // ④ 상태 — 실패하면 담당 반영은 시작하지 않는다(바뀐 행은 기록).
+  let statusResult: CompassLeadStatusSyncResult = { ...EMPTY_STATUS, confirmedAt: (options.now ?? new Date()).toISOString() }
+  if (plan.contacted.length > 0 || plan.closed.length > 0) {
+    try {
+      statusResult = await applyCompassLeadStatusSync(
+        { contactedIds: plan.contacted, closedIds: plan.closed.map((item) => item.id) },
+        { now: options.now ?? new Date(), shouldContinue }
+      )
+    } catch (error) {
+      const message = messageOf(error)
+      if (error instanceof CompassLeadStatusSyncError) {
+        await recordAudit(error.partial, EMPTY_OWNER, message)
+        return {
+          ...report,
+          status: "failed",
+          error: message,
+          applied: { contacted: error.partial.contacted.length, closed: error.partial.closed.length, assigned: 0 },
+        }
+      }
+      return { ...report, status: "failed", error: message }
+    }
+  }
+
+  // ⑤ 담당 — 비어 있는 행만(WHERE assigned_to is null). 상태 쓰기가 마감으로 멈췼으면 시작하지 않는다.
+  let ownerResult: CompassLeadOwnerSyncResult = EMPTY_OWNER
+  if (ownerPlan.assign.length > 0 && !statusResult.stoppedEarly) {
+    try {
+      ownerResult = await applyCompassLeadOwnerSync(ownerPlan.assign, { shouldContinue })
+    } catch (error) {
+      const message = messageOf(error)
+      const partial = error instanceof CompassLeadOwnerSyncError ? error.partial : EMPTY_OWNER
+      await recordAudit(statusResult, partial, message)
       return {
         ...report,
         status: "failed",
         error: message,
-        applied: { contacted: error.partial.contacted.length, closed: error.partial.closed.length },
+        applied: { contacted: statusResult.contacted.length, closed: statusResult.closed.length, assigned: partial.assigned.length },
       }
     }
-    return { ...report, status: "failed", error: message }
   }
 
-  await recordAudit(result)
-  report.applied = { contacted: result.contacted.length, closed: result.closed.length }
-  if (result.stoppedEarly) {
+  await recordAudit(statusResult, ownerResult)
+  report.applied = { contacted: statusResult.contacted.length, closed: statusResult.closed.length, assigned: ownerResult.assigned.length }
+  if (statusResult.stoppedEarly || ownerResult.stoppedEarly) {
     return { ...report, status: "timeout", error: "쓰기 마감으로 남은 덩어리를 다음 실행에 넘김" }
   }
   return report

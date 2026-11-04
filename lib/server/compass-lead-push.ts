@@ -58,7 +58,7 @@ export function isCompassPushSource(source: string | null | undefined): boolean 
 }
 
 /** env 둘이 다 있고 HTTPS 오리진일 때만 대상. 아니면 null(보내지 않는다). 토큰은 돌려주는 객체 밖으로 내지 않는다 */
-export function compassLeadPushTarget(env: NodeJS.ProcessEnv = process.env): CompassLeadPushTarget | null {
+export function compassLeadPushTarget(env: Record<string, string | undefined> = process.env): CompassLeadPushTarget | null {
   const base = env.COMPASS_BRIDGE_URL?.trim()
   const token = env.COMPASS_LEAD_WEBHOOK_TOKEN?.trim()
   if (!base || !token) return null

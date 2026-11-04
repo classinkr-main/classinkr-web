@@ -41,3 +41,19 @@
 - `tests/server/compass-lead-push.test.ts` — 대상 판정(env·HTTPS) · 소스 판정 · 본문 모양 · 헤더에 토큰 · 2xx 아니면 throw · `runLeadCaptureEffects` 에서 폼 소스만 보내고 뉴스레터·Meta 는 안 보내며 실패가 `errors` 로 간다 · 재문의는 `reinflow`.
 - `tests/compass/normalize.test.ts` — `homepage` 가 마케팅 제외 목록에 있다.
 - 기존 `tests/api/lead-capture.test.ts`·`tests/server/lead-capture-effects*.test.ts` — env 가 없으면 호출 순서·골든 로그가 그대로다.
+
+## 4. 되받기 — Compass 담당자·기록을 어드민에 (2026-11-04 2차)
+
+설계자 "compass에서 담당자 지정됐고, 추가 기록 찍힌 것들도 같이 트래킹 겸 적용이 돼야 됨". 어드민이 Compass 를 되받는 길은 셋이고 전부 **링크 우선·전화 키 폴백**으로 바꿨다
+(`lib/compass/admin-lead-links.ts` — Compass 가 홈페이지 폼 리드를 받으며 거는 `crm.lead_refs(system='home_lead', external_id=어드민 리드 id)` 를 `compass_lead_refs_v` 로 읽는다. 전화가 없거나 더미 번호인 리드도 붙는다).
+
+| 길 | 어디 | 무엇이 바뀌었나 |
+|---|---|---|
+| 5분 크론 `/api/cron/lead-contact-sync` | `lib/server/lead-contact-compass-sync.ts` · `lib/compass/lead-contact-sync.ts` | 전화 없는 신규·연락함 리드도 대상(링크로 붙는다). **담당 반영**: Compass 담당(콜 담당 → BD 담당 → 오너)을 어드민 담당자 명단(ownerKey·표시명·별칭)으로 풀어 어드민 `assigned_to` 가 **비어 있을 때만** 채운다(`WHERE assigned_to IS NULL`). 이미 다른 담당이면 `owner.conflicts` 로 세기만 한다(사람이 고른 담당은 덮지 않는다 — 데이터 소유 범위를 바꾼다). 명단으로 못 푸는 이름은 `owner.unmapped`, 명단이 건강하지 않으면 담당 반영만 `owner.skipped`. 감사 기록 `payload.assigned`. 기록(콜·메모·미팅…)은 예전처럼 상태(`contacted`) 판정의 근거다 |
+| 리드 보드·캠페인 신규 리드 탭의 Compass 칩 | `/api/admin/compass/leads-overlay` · `components/admin/compass/use-compass-overlay.ts` | 요청에 `leadIds` 를 같이 보내고 응답 `byLeadId` 를 먼저 본다. 칩의 「콜 담당」이 Compass 담당이다. 매칭 수는 화면 리드 기준 |
+| 고객 360·타임라인 | `lib/repositories/crm-customer-360.ts` · `crm-customer-timeline.ts` | 리드 360 은 링크 ∪ 전화 키로 Compass 리드를 찾아 활동(콜·문자·미팅·메모·재유입·단계 변경·폼 답변)을 병합한다. NEO 360 은 전화 키만 |
+
+- 보고서 칸(크론 응답): `linked`(링크로 붙은 리드 수) · `toAssigned` · `applied.assigned` · `owner.{conflicts,unmapped,skipped}`. `?dryRun=true` 로 먼저 본다.
+- **담당을 덮지 않는 이유**: 어드민 `assigned_to` 는 데이터 소유 범위(`matchesDataOwner`)의 열쇠다. Compass 담당이 바뀌어도 어드민에서 사람이 고른 담당은 그대로고, 차이는 `owner.conflicts` 와 칩의 「콜 …」로 보인다. 늘 따라가게 하려면 이 결정을 바꾸는 일이다(설계자 몫).
+- 되돌리기: `audit_logs`(`lead.status.compass_sync`) `payload.assigned` 의 id 를 `assigned_to = null` 로(현재 값이 그 `to` 일 때만).
+- 테스트: `tests/compass/admin-lead-links.test.ts` · `tests/compass/lead-contact-sync.test.ts`(링크 매칭·담당 계획) · `tests/server/lead-contact-compass-sync.test.ts`(링크·담당·명단 불량·부분 실패) · `tests/compass/leads-overlay-route.test.ts`(byLeadId) · `tests/crm/customer-360-compass.test.ts`(전화 없는 리드의 링크 매칭).
