@@ -254,7 +254,7 @@ npm run check:db --  --strict
 
 | 파일 | 하는 일 | 미적용 시 | 확인 |
 | --- | --- | --- | --- |
-| `20261104_meta_crm_signal_events.sql` | 보낸 기록 원장 `meta_crm_signal_events`(PK `dedupe_key`, 단계·메타 리드 번호·Compass 리드 id·event_time·sent_at, 연락처 없음)를 만든다. RLS deny-all, 멱등(`IF NOT EXISTS`) | 꺼져 있으면 영향 없다. 켜면 크론이 원장을 읽지 못해 아무것도 보내지 않고 500 을 낸다(dryRun 은 빈 원장으로 센다) | `npm run check:db` 의 `meta_crm_signal_events` 프로브(warning), 또는 `select to_regclass('public.meta_crm_signal_events') is not null;` → `true` |
+| `20261104_meta_crm_signal_events.sql` | 예약·발송 원장 `meta_crm_signal_events`(PK 메타 리드 번호+단계, event_time·reserved_at·sent_at, 연락처 없음)를 만든다. RLS deny-all, 멱등(`IF NOT EXISTS`) | 꺼져 있으면 영향 없다. 켜면 크론이 원장을 읽지 못해 아무것도 보내지 않고 500 을 낸다(dryRun 은 빈 원장으로 센다) | `npm run check:db` 의 `meta_crm_signal_events` 프로브(warning), 또는 `select to_regclass('public.meta_crm_signal_events') is not null;` → `true` |
 
 ## 적용 보류 중인 마이그레이션
 

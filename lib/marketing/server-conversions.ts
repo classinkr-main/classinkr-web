@@ -237,8 +237,8 @@ async function sendMetaConversion(input: ServerConversionInput) {
  * access_token 이 URL 에 실리므로 URL 을 로그에 남기지 않는다.
  *
  * user_data.lead_id 는 JSON 숫자여야 한다(Meta 예시가 따옴표 없는 숫자). 15–17자리라 JS number 로는 2^53 을 넘어
- * 끝자리가 깨지므로 호출부는 숫자 문자열로 넘기고, 직렬화 뒤 따옴표만 뗀다. JSON.stringify 는 문자열 안의 따옴표를
- * \" 로 바꾸므로 `"lead_id":"` 는 실제 키 자리에서만 나온다.
+ * 끝자리가 깨지므로 호출부는 user_data 의 **첫 키**로 숫자 문자열을 넘기고, 직렬화 뒤 따옴표만 뗀다. JSON.stringify 는
+ * 문자열 안의 따옴표를 \" 로 바꾸므로 이 모양은 실제 키 자리에서만 나온다. custom_data.lead_id(웹사이트 리드 UUID)는 건드리지 않는다.
  */
 export async function postMetaCapiEvents(
   events: Record<string, unknown>[]
@@ -259,7 +259,7 @@ export async function postMetaCapiEvents(
   const response = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body).replace(/"lead_id":"(\d{15,17})"/g, '"lead_id":$1'),
+    body: JSON.stringify(body).replace(/"user_data":\{"lead_id":"(\d{15,17})"/g, '"user_data":{"lead_id":$1'),
     signal: conversionFetchSignal(),
   })
   const error = response.ok ? "" : (await response.text().catch(() => "")).slice(0, 300)

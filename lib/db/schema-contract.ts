@@ -1054,8 +1054,8 @@ export const SCHEMA_PROBES: SchemaProbe[] = [
   {
     kind: "table",
     table: "meta_crm_signal_events",
-    label: "메타 리드 단계 신호 보낸 기록(같은 리드·같은 단계 한 번)",
-    columns: ["dedupe_key", "stage", "leadgen_id", "compass_lead_id", "event_time", "sent_at"],
+    label: "메타 리드 단계 신호 예약·발송 기록(같은 메타 리드·같은 단계 한 번)",
+    columns: ["leadgen_id", "stage", "event_time", "reserved_at", "sent_at"],
     migration: "supabase/migrations/20261104_meta_crm_signal_events.sql",
     severity: "warning",
     impact:
