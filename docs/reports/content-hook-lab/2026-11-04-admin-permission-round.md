@@ -49,3 +49,20 @@
 - 자료: [스토리지] > [공유 드라이브]에 과목·학년·레벨별 폴더, 폴더마다 구성원과 권한을 따로 준다. 클라우드 드라이브는 개인·공유로 나뉜다.
 - 녹화: 교사로 등록된 계정만 켤 수 있고(보안·개인정보 보호), 녹화본은 관리자 콘솔에서 열람·다운로드, 워터마크로 저작권 보호.
 - 쓰면 안 되는 표현: 유출을 "막는다/차단한다" 단정(→ "줄인다", "위험을 낮춘다"), 수업 모니터링 때 강사·학생에게 알림이 가지 않는다는 점을 후킹으로 쓰는 것(몰래 보기로 읽힘), 오프라인 출결 해결 암시, 권한별 열람 범위·보관기간·업로드 이력처럼 제품팀 확인 전 기능.
+
+## 4. 사람 검토와 초안 (2026-11-04)
+
+- 탑1·미들1은 그대로 진행.
+- 탑2는 "내용은 좋은데 제목 다시" → 방향 "학부모가 요청하기 전에 안심시키는 법"으로 **학부모가 묻기 전에 먼저 안심시키는 법**.
+- 미들2는 "수업 누수가 없기 위한 5가지 같은 카피" → **수업 누수 없는 학원을 위한 5가지**. 자료를 `academy-system-checklist`(수업 운영 누수 진단표)로 바꿔 이름을 맞췄다.
+- 탑1은 기존 초안 `teacher-leaves-lesson-materials-check`(교안을 못 찾는 문제)와 겹치지 않게 "교안이 학원 밖으로 나가는 길 3가지"로 각도를 나눴다.
+- 다듬은 두 제목은 블라인드 심사를 다시 거치지 않았다(사람 지시로 확정).
+
+| 단계 | 제목 | slug | 어드민 | 자료 |
+| --- | --- | --- | --- | --- |
+| TOFU | 강사가 그만두면 교안도 같이 나가나요? | `teacher-leaves-lesson-plans-access` | `/admin/blog/d578d94e-8a6f-4695-b570-895778489b61/edit` | academy-admin-dashboard-template |
+| TOFU | 학부모가 묻기 전에 먼저 안심시키는 법 | `reassure-parents-before-they-ask` | `/admin/blog/f84d4381-8759-4c58-9d3b-695b7fce31e7/edit` | parent-replay-retention-script-kit |
+| MOFU | 교안·녹화본 유출 줄이는 권한 설정 4단계 | `lesson-material-leak-permission-4-steps` | `/admin/blog/dd2addf1-5a03-4da6-b616-f58c1484fd18/edit` | academy-admin-dashboard-template |
+| MOFU | 수업 누수 없는 학원을 위한 5가지 | `class-leak-free-academy-5-checks` | `/admin/blog/29775238-a7d6-457c-9388-aaa0f236d90f/edit` | academy-system-checklist |
+
+이미지: [assets](../assets/content-hook-lab-2026-11-04-admin/) — 대표 이미지는 Figma 이미지 생성(애니메이션풍, 클래스인 칠판 스탠드·벽걸이), 인포그래픽은 지난 초안과 같은 플랫 카툰 HTML을 Playwright로 렌더(`infographic-source/build2.py`는 `drafts/infographics/build.py`의 헬퍼를 불러 쓴다).
