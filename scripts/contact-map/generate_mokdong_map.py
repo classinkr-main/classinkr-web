@@ -29,7 +29,7 @@ SBS_IDS = {254760684: 20, 254760685: 13}   # SBS 본관(20층)·별관 way id �
 STATION_M = (316, 323)       # 오목교역(5호선) 역 노드
 EXITS_M = {1: (210, 288), 2: (208, 165), 8: (188, 322)}
 PARK_M = (155, -60)          # 오목공원
-SCHOOL_ID = 253469955        # 목운중학교(amenity=school). 쇼룸 바로 건너편, 오목공원 남쪽 긴 건물의 서쪽 부분
+SCHOOL_ID = 253469955        # 목운중학교(amenity=school). OSM 경계는 건물 일부뿐이라 그 건물 + 남쪽 운동장 블록 전체를 학교로 칠한다
 
 
 def fetch(path):
@@ -148,7 +148,7 @@ def main():
             role = "sbs" if e["id"] in SBS_IDS else "office" if pip(OFFICE_M, mp) else "hyundai" if pip(HYUNDAI_M, mp) else ""
             buildings.append({"id": e["id"], "poly": poly, "type": t["building"], "role": role,
                               "levels": t.get("building:levels"), "m": mp})
-    # 학교 부지는 OSM 에서 건물 일부와 겹친다 → 그 건물(host) 지붕 위에 학교 부분만 다른 색으로 덮는다
+    # 학교 부지는 OSM 에서 건물 일부와만 겹친다 → 가장 많이 겹치는 건물(host)이 학교 건물이다
     school_host = None
     if school_m:
         xs = [x for x, _ in school_m]; ys = [y for _, y in school_m]
@@ -157,6 +157,8 @@ def main():
         hits = [(sum(pip(q, b["m"]) for q in probe), b) for b in buildings]
         n, b = max(hits, key=lambda t: t[0]) if hits else (0, None)
         school_host = b if n else None   # ㄷ자라 중심점이 건물 밖일 수 있어 겹치는 점 수로 고른다
+        if school_host:
+            school_host["role"] = "school"
 
     WR = {"trunk": 13, "primary": 12, "secondary": 10, "tertiary": 8, "primary_link": 6, "secondary_link": 6,
           "tertiary_link": 5, "residential": 5, "unclassified": 5, "living_street": 4, "service": 3}
@@ -164,6 +166,40 @@ def main():
              "primary_link", "tertiary", "secondary", "primary", "trunk"]
     roads.sort(key=lambda r: order.index(r[0]) if r[0] in order else 0)
     rw = lambda h: WR.get(h, 3) * S * 1.3
+
+    # 목운중학교 블록: 학교 건물 + 남쪽 운동장을 도로 방향(10.4°)에 맞춘 사각형으로 감싸고, 네 변을 각각 둘레 도로까지 민다.
+    # 도로가 그 위에 그려져 경계가 정리된다
+    school_block = None
+    if school_host:
+        hb = school_host["poly"]
+        hx0, hx1 = min(x for x, _ in hb), max(x for x, _ in hb)
+        hy0, hy1 = min(y for _, y in hb), max(y for _, y in hb)
+        ctr = lambda pc: (sum(x for x, _ in pc) / len(pc), sum(y for _, y in pc) / len(pc))
+        fields = [pc for pc in pitches if hx0 - 10 < ctr(pc)[0] < hx1 + 10 and hy0 < ctr(pc)[1] < hy1 + 60]
+        pts = hb + [q for pc in fields for q in pc]
+        a = math.radians(10.4)
+        ca, sa = math.cos(a), math.sin(a)
+        to_uv = lambda q: (q[0] * ca + q[1] * sa, -q[0] * sa + q[1] * ca)
+        to_xy = lambda u, v: (u * ca - v * sa, u * sa + v * ca)
+        uv = [to_uv(q) for q in pts]
+        u0, u1 = min(u for u, _ in uv), max(u for u, _ in uv)
+        v0, v1 = min(v for _, v in uv), max(v for _, v in uv)
+        main = [(rp, rw(rh)) for rh, rp, _ in roads if rh != "service"]
+        on_road = lambda q: any(poly_dist(q, rp, closed=False) < wd / 2 for rp, wd in main)
+
+        def push(side_pts, du, dv):
+            t = 0.0
+            while t < 30 and not any(on_road(to_xy(u + du * t, v + dv * t)) for u, v in side_pts):
+                t += 0.5
+            return t
+
+        fr = (0.25, 0.5, 0.75)
+        tn = push([(u0 + (u1 - u0) * k, v0) for k in fr], 0, -1)
+        ts = push([(u0 + (u1 - u0) * k, v1) for k in fr], 0, 1)
+        tw = push([(u0, v0 + (v1 - v0) * k) for k in fr], -1, 0)
+        te = push([(u1, v0 + (v1 - v0) * k) for k in fr], 1, 0)
+        u0, u1, v0, v1 = u0 - tw, u1 + te, v0 - tn, v1 + ts
+        school_block = [to_xy(u0, v0), to_xy(u1, v0), to_xy(u1, v1), to_xy(u0, v1)]
 
     # ---- 나무: 공원 안 + 큰길 가로수 ----
     random.seed(7)
@@ -216,6 +252,8 @@ def main():
 
     # ---- ground: 공원·운동장·산책길·도로·5호선·역 범위 ----
     g = []
+    if school_block:
+        g.append(f'<path d="{d_line(school_block, True)}" fill="#F4E4D2" stroke="#E4C8AA" stroke-width="1" stroke-linejoin="round"/>')
     g += [f'<path d="{d_line(p, True)}" fill="#D2E2C2" stroke="#BCD1A9" stroke-width="1"/>' for p in parks]
     g += [f'<path d="{d_line(p, True)}" fill="#C5DBB2" stroke="#FFFFFF" stroke-opacity=".8" stroke-width="1"/>' for p in pitches]
     g += [f'<path d="{d_line(p)}" fill="none" stroke="#F4EFE4" stroke-width="1.6" stroke-linecap="round"/>' for p in foot]
@@ -245,6 +283,7 @@ def main():
         "office": ("#0B7A52", "#086444", "#075638", "#06513A", "rgba(40,50,30,.16)"),
         "sbs": ("#F2D7A4", "#E2BF83", "#D2AC6B", "#C9A060", "rgba(70,55,30,.16)"),
         "hyundai": ("#FBF4E8", "#E6D6BE", "#D8C5A8", "#D6C6AD", "rgba(70,55,30,.13)"),
+        "school": ("#FCEFE2", "#EED8C4", "#E2C8B0", "#E0C4A8", "rgba(70,55,30,.12)"),
     }
     TYPE_H = {"apartments": 13, "commercial": 11, "school": 6, "residential": 7, "house": 5, "retail": 7,
               "tower": 16, "public": 8, "roof": 3, "yes": 8}
@@ -279,10 +318,6 @@ def main():
             out.append(f'<path d="{d_line(q, True)}" fill="{col}" stroke="{col}" stroke-width=".4" stroke-linejoin="round"/>')
         top = [(x, y - hg) for x, y in poly]
         out.append(f'<path d="{d_line(top, True)}" fill="{roof}" stroke="{stroke}" stroke-width=".6" stroke-linejoin="round"/>')
-        if b is school_host:
-            st = [(x, y - hg) for x, y in school]
-            out.append(f'<path d="{d_line(st, True)}" fill="#F1D7C6" stroke="#D7AC92" stroke-width=".8" stroke-linejoin="round"/>')
-            tops["school"] = [(sum(x for x, _ in st) / len(st), sum(y for _, y in st) / len(st), min(y for _, y in st))]
         if b["role"]:
             cx = sum(x for x, _ in top) / len(top); cy = sum(y for _, y in top) / len(top)
             tops.setdefault(b["role"], []).append((cx, cy, min(y for _, y in top)))
@@ -299,6 +334,8 @@ def main():
         "park": pct(px(PARK_M)),
         "hyundai_roof": pct(tops["hyundai"][0][:2]) if "hyundai" in tops else None,
         "school_roof": pct(tops["school"][0][:2]) if "school" in tops else None,
+        "school_block": pct((sum(x for x, _ in school_block) / len(school_block), sum(y for _, y in school_block) / len(school_block))) if school_block else None,
+        "school_block_px": [[round(x), round(y)] for x, y in school_block] if school_block else None,
         "roads": {},
     }
     for h, p, name in roads:
