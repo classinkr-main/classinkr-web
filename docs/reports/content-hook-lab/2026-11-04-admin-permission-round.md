@@ -66,3 +66,12 @@
 | MOFU | 수업 누수 없는 학원을 위한 5가지 | `class-leak-free-academy-5-checks` | `/admin/blog/29775238-a7d6-457c-9388-aaa0f236d90f/edit` | academy-system-checklist |
 
 이미지: [assets](../assets/content-hook-lab-2026-11-04-admin/) — 대표 이미지는 Figma 이미지 생성(애니메이션풍, 클래스인 칠판 스탠드·벽걸이), 인포그래픽은 지난 초안과 같은 플랫 카툰 HTML을 Playwright로 렌더(`infographic-source/build2.py`는 `drafts/infographics/build.py`의 헬퍼를 불러 쓴다).
+
+### 이미지 수정 (사람 검토)
+
+"전자칠판 사진은 스탠드 모양을 잡거나 벽걸이로, 패드·모바일 화면 방향 고려" 지적으로 대표 이미지 3장을 다시 만들었다. 기준은 [루틴 §9](../../active/content-hook-lab/README.md)에 남겼다.
+
+- 탑1: 스탠드가 직선 기둥 카트형 → 승인된 클래스인 스탠드 모양으로. 나가는 강사를 가운데 쪽으로 옮겨 4:3 카드에서도 보이게.
+- 탑2: 태블릿·휴대폰 화면이 카메라를 향함 → 원장은 어깨 너머로 가로 태블릿, 학부모는 옆모습으로 세로 휴대폰. 뒤 칠판은 카메라가 달린 벽걸이.
+- 미들2: 직선 기둥 스탠드 → 카메라가 달린 벽걸이, 클립보드는 원장 쪽을 향하게, 인물을 가운데 쪽으로.
+- 미들1(벽걸이)은 그대로. 이전 초안 4편 이미지도 점검: 탑1 `teacher-leaves-lesson-materials-check`의 나가는 강사는 4:3 카드에서 거의 잘린다(칠판은 보임).
