@@ -64,6 +64,8 @@ Admin 관련 작업은 [Admin 지침 맵](./active/admin-guidance-map.md)에서 
   - **하드웨어 C방식/H방식 총판 정산.** 총판용 견적서 발행(고객 동의·설치 완료·직접), 원가 미수금, 방식별 매출 원장 초안 시점
 - [active/erp-blueprint-2026-06-22.md](./active/erp-blueprint-2026-06-22.md)
   - 어드민 → 지사 운영 OS(ERP) 청사진 & 실행 로드맵(Account 360 스파인·귀속·노션 캘린더 라이브 연동·거버넌스 결정)
+- [active/ai-team-operating-system-plan-2026-11-04.md](./active/ai-team-operating-system-plan-2026-11-04.md)
+  - **AI 팀 운영 체계 기획.** 지사 업무 10개 기능군 전수 지도, 헌법·오케스트레이터 1·운영 에이전트 7·스킬·도구 5층 구조, 4등급 승인 게이트, 운영 리듬, Phase 0~3 로드맵, 빅테크 에이전트 설계 가이드 요약(부록 A)과 저장소 기능 인벤토리(부록 B)
 - [active/marketing-tab-dashboard-restructure-2026-09-14.md](./active/marketing-tab-dashboard-restructure-2026-09-14.md)
   - **마케팅 허브(/admin/campaigns) 실행 로드맵.** 한눈에·상세·데이터 3층 IA, 컴포넌트 재배치표, 개선 후보 ID(G/D/T/N), 확정 결정, 진척 기록. Compass(mkt.classin.co.kr)와의 역할 경계 정본
 - [active/admin-usage-triage-2026-09-25.md](./active/admin-usage-triage-2026-09-25.md)
