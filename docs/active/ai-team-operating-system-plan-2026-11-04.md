@@ -3,6 +3,7 @@
 > 작성일: 2026-11-04
 > 문서 성격: 기획(설계) 단계. 코드·테이블·크론을 바꾸지 않는다. 지사 운영 전 영역(마케팅·세일즈·CS·콘텐츠·하드웨어 물류·행정·재무·HR·데모·예산·보고)을 AI 에이전트 팀이 **어떻게 나눠 맡고, 어떤 지침으로 묶이고, 어디서 사람이 승인하는지**를 정한다.
 > 입력: 이 저장소의 운영 문서(`docs/active/`, `docs/hardware-ops/`, `.claude/agents/`, `.codex/skills/`), Notion 워크스페이스(Unicorn TF 예산·본사보고, 주간/월간 보고, BD·Hecto 물류, Solution/Task 구분), Anthropic·OpenAI·Google·Microsoft의 에이전트 설계 가이드와 실무자 커뮤니티 조사(부록 A).
+> 축소 착수안(마케팅·세일즈 먼저): [ai-team-marketing-sales-starter-2026-11-04.md](./ai-team-marketing-sales-starter-2026-11-04.md)
 > 상위 문서: [운영 캐논](./classin-operating-canon-2026-07-02.md) · [역할 분담·시너지 전략](./role-synergy-strategy-2026-07-04.md) · [자동화·데이터화 설계](./classin-automation-design-plan-2026-07-03.md) · [ERP 청사진](./erp-blueprint-2026-06-22.md) · [파트별 플레이북](./playbook/README.md) · [브랜드 캐논](./brand-canon/README.md)
 
 ---
