@@ -3454,7 +3454,7 @@ export function buildHardwareStockAlerts(rows: readonly HardwareStockRow[]): Har
         product: row.product,
         title: "원본 점검 필요",
         detail: `창고 ${row.warehouseStock}대 · 가용 ${row.availableStock}대 — ${
-          isPromotedProduct(row.product) ? "promoted 판정 또는 시트 수치 정리 필요" : "원본 유형·시트 수치 정리 필요"
+          isPromotedProduct(row.product) ? "판촉형 판정 또는 시트 수치 정리 필요" : "원본 유형·시트 수치 정리 필요"
         }`,
       })
     } else if (row.availableStock < 0) {

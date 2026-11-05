@@ -72,6 +72,7 @@ import {
   type ProductFilterKey,
   type QuickCartSaveSummary,
   type SampleSource,
+  outboundRecordLabel,
 } from "./inventory/shared"
 import ImportFreshnessStrip, { judgeImportFreshness } from "./inventory/ImportFreshnessStrip"
 import SheetSyncMenu from "./inventory/SheetSyncMenu"
@@ -3237,7 +3238,7 @@ export default function HardwareInventoryClient({
       // 성공 노티스에 경로(출발→도착)를 병기해 방금 기록한 이동을 즉시 확인할 수 있게 한다.
       const routeHint = `${draft.fromLocation || "-"} → ${draft.toLocation || (draft.movementType === "outbound" ? "고객" : "-")}`
       setNotice(
-        `${draft.productName} · ${activePreset.label} ${formatNumber(draft.quantity)}대 (${routeHint})를 기록했습니다.${
+        `${draft.productName} · ${outboundRecordLabel(activePreset, draft.outboundType)} ${formatNumber(draft.quantity)}대 (${routeHint})를 기록했습니다.${
           crmCandidate ? " CRM 오더와 연결했습니다." : ""
         }`
       )

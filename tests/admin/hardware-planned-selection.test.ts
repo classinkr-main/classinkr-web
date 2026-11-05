@@ -234,3 +234,13 @@ describe("judgeImportFreshness", () => {
     expect(result.failed).toBe(true)
   })
 })
+
+describe("outboundRecordLabel", () => {
+  it("판매 출고 프리셋은 고른 출고 유형으로 부른다 — A/S 출고가 '판매 출고'로 적히던 것", async () => {
+    const { outboundRecordLabel } = await import("@/components/admin/hardware/inventory/shared")
+    const sale = { key: "sale", label: "판매 출고" }
+    expect(outboundRecordLabel(sale, "as")).toBe("A/S 출고")
+    expect(outboundRecordLabel(sale, "")).toBe("판매 출고")
+    expect(outboundRecordLabel({ key: "planned", label: "배송 예정" }, "sales")).toBe("배송 예정")
+  })
+})

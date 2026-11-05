@@ -386,6 +386,17 @@ export const SALE_TYPE_META: Record<OutboundSaleType, { label: string; tone: str
   as: { label: "A/S", tone: "bg-[#FCE9E9] text-[#B43E3E]" },
 }
 
+/**
+ * 저장 알림·입력 미리보기의 기록 이름 — 판매 출고 프리셋은 고른 출고 유형으로 부른다("A/S 출고" 등).
+ * 프리셋 이름만 쓰면 A/S·샘플 출고도 "판매 출고"로 적혔다(2026-11-05 점검).
+ */
+export function outboundRecordLabel(preset: { key: string; label: string }, outboundType: string | null | undefined): string {
+  if (preset.key === "sale" && outboundType && outboundType in SALE_TYPE_META) {
+    return `${SALE_TYPE_META[outboundType as OutboundSaleType].label} 출고`
+  }
+  return preset.label
+}
+
 export function outboundSaleType(movement: HardwareMovement): OutboundSaleType | null {
   if (movement.movement_type !== "outbound") return null
   // 서버가 정한 유형(칸 → 시트 유형 열·메모 추정)이 있으면 그것이 정본이다(resolveOutboundType).

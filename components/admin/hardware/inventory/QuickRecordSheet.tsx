@@ -61,6 +61,7 @@ import {
   type HardwareStockRow,
   type QuickCartSaveSummary,
   type SampleSource,
+  outboundRecordLabel,
 } from "./shared"
 
 // 시트 전용 옵션·클래스 토큰 — 구조 분해(#6) 전 HardwareInventoryClient.tsx 모듈 스코프에 있었으나
@@ -1588,7 +1589,7 @@ export default function QuickRecordSheet(props: QuickRecordSheetProps) {
                       <div className="border-t border-[rgba(0,0,0,0.08)] pt-3">
                         <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#615D59]">입력 미리보기</p>
                         <p className="mt-1 text-[13px] font-bold text-[#111110]">
-                          {customProduct.trim() || selectedItem?.name || "품목 선택"} · {activePreset.label} · {formatNumber(Number(quantity) || 0)}대
+                          {customProduct.trim() || selectedItem?.name || "품목 선택"} · {outboundRecordLabel(activePreset, process.state.outboundType)} · {formatNumber(Number(quantity) || 0)}대
                         </p>
                         <p className="mt-1 text-[11px] font-semibold text-[#615D59]">
                           {fromLocation || "-"} → {toLocation || (isCustomerDestination ? "고객사 미입력" : "-")} · {status || "상태 미정"}
