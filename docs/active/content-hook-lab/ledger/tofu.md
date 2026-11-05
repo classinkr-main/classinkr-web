@@ -97,3 +97,4 @@
 | 2026-11-04 | 5 | 88.0 (루프 2, 명확성 +5 포함) · 최종 루프 83.0 | [2026-11-04-tofu.md](../../../reports/content-hook-lab/2026-11-04-tofu.md) |
 | 2026-11-04 (대시보드·권한) | 2 | 85.7 (루프 1) · 최종 루프 80.6 | [2026-11-04-admin-permission-round.md](../../../reports/content-hook-lab/2026-11-04-admin-permission-round.md) |
 | 2026-11-05 | 5 | 88.6 (루프 1, 명확성 +5 포함) · 최종 루프 86.8 | [2026-11-05-tofu.md](../../../reports/content-hook-lab/2026-11-05-tofu.md) |
+| 2026-11-05 (온라인) | 2 | 77.0 (루프 1) · 루프 2 74.6 | [2026-11-05-online-round.md](../../../reports/content-hook-lab/2026-11-05-online-round.md) |

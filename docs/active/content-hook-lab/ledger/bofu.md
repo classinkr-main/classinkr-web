@@ -95,3 +95,4 @@
 | 2026-11-03 | 5 | 82.1 (루프 4) · 최종 루프 81.6 | [2026-11-03-bofu.md](../../../reports/content-hook-lab/2026-11-03-bofu.md) |
 | 2026-11-04 | 5 | 89.2 (루프 4, 명확성 +5 포함) · 최종 루프 88.6 | [2026-11-04-bofu.md](../../../reports/content-hook-lab/2026-11-04-bofu.md) |
 | 2026-11-05 | 5 | 88.0 (루프 5, 명확성 +5 포함) · 최종 루프 88.0 | [2026-11-05-bofu.md](../../../reports/content-hook-lab/2026-11-05-bofu.md) |
+| 2026-11-05 (온라인) | 2 | 85.0 (루프 1) · 루프 2 80.6 | [2026-11-05-online-round.md](../../../reports/content-hook-lab/2026-11-05-online-round.md) |
