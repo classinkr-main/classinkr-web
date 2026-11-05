@@ -673,7 +673,7 @@ export async function runLeadCaptureEffects(
 
   // Compass(mkt.classin.co.kr)에도 찍는다 — 공개 폼 리드만, 저장이 됐을 때만(어드민 리드 id 가 Compass 쪽 링크 키다). env 둘이 없으면 조용히 건너뛴다.
   // 재문의 병합이면 kind=reinflow — Compass 가 같은 사람을 재유입으로 올린다. 실패는 다른 외부 전달과 같이 errors(warnings·인시던트)로.
-  // 설계는 lib/server/compass-lead-push.ts 머리말과 Compass 저장소 ADR-0082.
+  // 설계는 lib/server/compass-lead-push.ts 머리말과 Compass 저장소 ADR-0083.
   if (toggles.externalForwards && stored && savedLeadId && isCompassPushSource(body.source) && compassLeadPushTarget()) {
     deliveryTasks.push(
       pushLeadToCompass(body, {
