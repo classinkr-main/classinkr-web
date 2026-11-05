@@ -31,9 +31,9 @@ function Cell({ cell, strong }: { cell: SalesDashboardCellView; strong?: boolean
     <span className="inline-flex flex-col items-end leading-tight">
       <span className="whitespace-nowrap">
         <span className={strong ? "font-bold text-[#111110]" : "font-semibold text-[#31302E]"}>{cell.installed || "0"}</span>
-        {cell.planned && <span className="ml-1 font-semibold text-[#B45309]">/ {cell.planned}</span>}
+        {cell.planned && <span className="ml-1 font-semibold text-[#A8741A]">/ {cell.planned}</span>}
       </span>
-      {cell.returned && <span className="whitespace-nowrap text-[10px] font-semibold text-[#A39E98]">{cell.returned}</span>}
+      {cell.returned && <span className="whitespace-nowrap text-[11px] font-semibold text-[#A39E98]">{cell.returned}</span>}
     </span>
   )
 }
@@ -88,7 +88,7 @@ function SalesDashboardSection({ reloadKey, onOpenDetail }: SalesDashboardSectio
         <div className="min-w-0">
           <p className="text-[15px] font-bold tracking-[-0.01em] text-[#111110]">판매대시보드</p>
           <p className="mt-1 text-[12px] text-[#615D59]">
-            세일즈·프로모션 출고(A/S·샘플·내부 이동 제외) · 칸 = 설치 완료 <span className="font-semibold text-[#B45309]">/ +배송 예정</span> · 회수는 빼지 않고 따로 표시
+            세일즈·프로모션 출고(A/S·샘플·내부 이동 제외) · 칸 = 설치 완료 <span className="font-semibold text-[#A8741A]">/ +배송 예정</span> · 회수는 빼지 않고 따로 표시
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -119,13 +119,13 @@ function SalesDashboardSection({ reloadKey, onOpenDetail }: SalesDashboardSectio
       {view && (
         <div className="flex flex-wrap gap-x-6 gap-y-1 px-5 pt-4 text-[12px] font-semibold text-[#615D59]">
           <span>설치 완료 <span className="text-[18px] font-bold tabular-nums text-[#111110]">{view.headline.installed}</span>대</span>
-          <span>배송 예정 <span className="text-[18px] font-bold tabular-nums text-[#B45309]">+{view.headline.planned}</span>대</span>
+          <span>배송 예정 <span className="text-[18px] font-bold tabular-nums text-[#A8741A]">+{view.headline.planned}</span>대</span>
           <span>회수 <span className="text-[18px] font-bold tabular-nums text-[#615D59]">{view.headline.returned}</span>대</span>
         </div>
       )}
 
       {error && (
-        <p role="alert" className="mx-5 mt-4 rounded-md bg-[#FEF2F2] px-3 py-2 text-[12px] font-semibold text-[#B91C1C]">
+        <p role="alert" className="mx-5 mt-4 rounded-md bg-[#FCE9E9] px-3 py-2 text-[12px] font-semibold text-[#B43E3E]">
           판매대시보드를 불러오지 못했습니다: {error}
         </p>
       )}
@@ -163,7 +163,7 @@ function SalesDashboardSection({ reloadKey, onOpenDetail }: SalesDashboardSectio
                     }`}
                   >
                     {row.groupLabel && row.kind === "item" && (
-                      <span className="mr-1.5 rounded bg-[#F6F5F4] px-1.5 py-0.5 text-[10px] font-bold text-[#615D59]">{row.groupLabel}</span>
+                      <span className="mr-1.5 rounded bg-[#F6F5F4] px-1.5 py-0.5 text-[11px] font-bold text-[#615D59]">{row.groupLabel}</span>
                     )}
                     {row.label}
                   </th>

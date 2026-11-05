@@ -100,7 +100,7 @@ function OutboundPeriodSection({
                 {bucket.typeChips.length > 1 || (bucket.typeChips[0] && bucket.typeChips[0].type !== "sales") ? (
                   <div className="mt-1.5 flex flex-wrap gap-1.5">
                     {bucket.typeChips.map((entry) => (
-                      <span key={entry.type} className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-bold ${SALE_TYPE_META[entry.type].tone}`}>
+                      <span key={entry.type} className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold ${SALE_TYPE_META[entry.type].tone}`}>
                         {entry.label}
                         <span className="tabular-nums">{formatNumber(entry.qty)}</span>
                       </span>
@@ -112,7 +112,7 @@ function OutboundPeriodSection({
                 <div className="px-5 pb-4">
                   <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.04em] text-[#615D59]">고객사별 모음</p>
                   <div className="overflow-hidden rounded-lg border border-[rgba(0,0,0,0.06)]">
-                    <div className="grid grid-cols-[minmax(0,1fr)_58px_40px_88px_40px] gap-2.5 bg-[#F6F5F4] px-3.5 py-2 text-[10.5px] font-bold uppercase tracking-[0.04em] text-[#615D59]">
+                    <div className="grid grid-cols-[minmax(0,1fr)_58px_40px_88px_40px] gap-2.5 bg-[#F6F5F4] px-3.5 py-2 text-[11px] font-bold uppercase tracking-[0.04em] text-[#615D59]">
                       <span>고객사</span>
                       <span>날짜</span>
                       <span className="text-right">수량</span>

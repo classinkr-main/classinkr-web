@@ -256,7 +256,7 @@ function OrderApprovalSection({ onChanged, stockRows }: OrderApprovalSectionProp
   if (unavailable) {
     return (
       <section className={`${SECTION_CARD_CLASS} px-4 py-3`}>
-        <p className="text-[13px] font-bold text-[#111110]">하드웨어 승인 대기</p>
+        <p className="text-[13px] font-bold text-[#111110]">하드웨어 오더 승인</p>
         <p className="mt-0.5 text-[11.5px] font-semibold text-[#A39E98]">{unavailable}</p>
       </section>
     )
@@ -272,7 +272,7 @@ function OrderApprovalSection({ onChanged, stockRows }: OrderApprovalSectionProp
       >
         <span className="min-w-0">
           <span id="hardware-order-approval-title" className="block text-[13px] font-bold text-[#111110]">
-            하드웨어 승인 대기
+            하드웨어 오더 승인
             {pendingCount != null ? (
               <span
                 className={`ml-1.5 rounded-full px-2 py-0.5 text-[11px] font-bold tabular-nums ${

@@ -246,7 +246,7 @@ function PlannedOutboundPanel({
         // 항상 노출하고 대상이 없을 때만 개별적으로 비활성화한다(레이아웃이 선택 여부에 따라
         // 들쭉날쭉하지 않게).
         <div className="flex flex-wrap items-center gap-2 border-b border-[rgba(0,0,0,0.06)] bg-[#FAFAF8] px-5 py-2">
-          <span className="text-[10.5px] font-bold uppercase tracking-[0.05em] text-[#A39E98]">빠른 선택</span>
+          <span className="text-[11px] font-bold uppercase tracking-[0.05em] text-[#A39E98]">빠른 선택</span>
           <button
             type="button"
             onClick={() => setSelectedIds(new Set(allPlanned.map((movement) => movement.id)))}
@@ -263,7 +263,7 @@ function PlannedOutboundPanel({
             title="예정일로부터 30일 이상 미확정인 건만 선택합니다"
             className="cursor-pointer rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2.5 py-1 text-[11px] font-bold text-[#31302E] transition hover:bg-[#F6F5F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50"
           >
-            30일+ 미확정 선택{staleIds.length > 0 ? ` (${formatNumber(staleIds.length)}건)` : ""}
+            30일+ 미확정 선택{staleIds.length > 0 ? ` (${formatNumber(staleIds.length)}줄)` : ""}
           </button>
           <button
             type="button"
@@ -317,7 +317,7 @@ function PlannedOutboundPanel({
                   <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
                     {elapsed != null && elapsed >= PLANNED_AGING_WARN_DAYS && (
                       <span
-                        className={`rounded-full px-2 py-0.5 text-[10.5px] font-bold tabular-nums ${
+                        className={`rounded-full px-2 py-0.5 text-[11px] font-bold tabular-nums ${
                           elapsed >= PLANNED_AGING_DANGER_DAYS ? "bg-[#FCE9E9] text-[#8F2C2C]" : "bg-[#FBF1E0] text-[#7A520F]"
                         }`}
                         title="예정일로부터 경과한 일수 — 오래 방치된 예정은 확정하거나 정리하세요"
@@ -397,7 +397,7 @@ function PlannedOutboundPanel({
                         <div className="flex flex-wrap items-center justify-end gap-1.5">
                           {/* 라벨 없는 인풋 2개(수량·날짜)가 나란히 있으면 용도를 추측해야 한다 — 마이크로 라벨로 명시. */}
                           <label className="flex cursor-pointer items-center gap-1" title="확정 수량 (부분 확정 가능)">
-                            <span className="text-[10.5px] font-bold text-[#A39E98]">수량</span>
+                            <span className="text-[11px] font-bold text-[#A39E98]">수량</span>
                             <input
                               type="number"
                               min={1}
@@ -409,7 +409,7 @@ function PlannedOutboundPanel({
                             />
                           </label>
                           <label className="flex cursor-pointer items-center gap-1" title="출고 확정일">
-                            <span className="text-[10.5px] font-bold text-[#A39E98]">확정일</span>
+                            <span className="text-[11px] font-bold text-[#A39E98]">확정일</span>
                             <input
                               type="date"
                               value={confirmDates[movement.id] ?? todayKey()}
@@ -466,7 +466,7 @@ function PlannedOutboundPanel({
                   </span>
                 ) : (
                   <label className="flex cursor-pointer items-center gap-1.5" title="선택한 건에 공통 적용할 확정일">
-                    <span className="text-[10.5px] font-bold text-[#A39E98]">확정일</span>
+                    <span className="text-[11px] font-bold text-[#A39E98]">확정일</span>
                     <input
                       type="date"
                       value={bulkConfirmDate}

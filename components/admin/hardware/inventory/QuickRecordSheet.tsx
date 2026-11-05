@@ -366,7 +366,7 @@ export default function QuickRecordSheet(props: QuickRecordSheetProps) {
                         </p>
                         {/* 유형 배지 + 중립 경로 — 저장될 기록의 원장 배지 색을 미리 보여준다. */}
                         <p className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] font-semibold text-[#615D59]">
-                          <span className={`inline-flex rounded-full px-2 py-0.5 text-[10.5px] font-bold ${presetTone(activePresetKey, movementType)}`}>
+                          <span className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-bold ${presetTone(activePresetKey, movementType)}`}>
                             {activePreset.label}
                           </span>
                           <span>{activePreset.from || "—"} → {activePreset.to || "고객사 입력"}</span>
@@ -396,7 +396,7 @@ export default function QuickRecordSheet(props: QuickRecordSheetProps) {
                           >
                             {label}
                             {mode === "batch" && quickCart.length > 0 ? (
-                              <span className="ml-1.5 rounded-full bg-[#ECFDF5] px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-[#084734]">
+                              <span className="ml-1.5 rounded-full bg-[#ECFDF5] px-1.5 py-0.5 text-[11px] font-bold tabular-nums text-[#084734]">
                                 {formatNumber(quickCart.length)}
                               </span>
                             ) : null}
@@ -568,7 +568,7 @@ export default function QuickRecordSheet(props: QuickRecordSheetProps) {
                                   }`}
                                 >
                                   <span className="text-[12px] font-bold">{label}</span>
-                                  <span className={`text-[10px] leading-tight ${active ? "opacity-80" : "text-[#A39E98]"}`}>{hint}</span>
+                                  <span className={`text-[11px] leading-tight ${active ? "opacity-80" : "text-[#A39E98]"}`}>{hint}</span>
                                 </button>
                               )
                             })}
@@ -590,15 +590,15 @@ export default function QuickRecordSheet(props: QuickRecordSheetProps) {
                       <div className="sticky top-0 z-[5] -mx-5 border-y border-[#BDEFD8] bg-[#ECFDF5] px-5 py-3">
                         <p className="flex items-center gap-1.5 text-[12px] font-bold text-[#084734]">
                           <ArrowDownToLine className="h-3.5 w-3.5" />
-                          입고 lot 공유 정보
+                          입고 물류번호 공유 정보
                         </p>
                         <div className="mt-2 grid grid-cols-1 gap-3 min-[400px]:grid-cols-2">
                           <label className="block">
-                            <span className="text-[12px] font-semibold text-[#31302E]">물량번호 (lot)</span>
+                            <span className="text-[12px] font-semibold text-[#31302E]">물류번호</span>
                             <input
                               value={lotNo}
                               onChange={(event) => setLotNo(event.target.value)}
-                              placeholder="신규 lot — 예: H9"
+                              placeholder="신규 물류번호 — 예: C3"
                               list="hardware-lot-options"
                               className="mt-1 h-10 w-full rounded-md border border-[#BDEFD8] bg-white px-3 text-[13px] font-semibold text-[#111110] outline-none placeholder:text-[#A39E98] focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15"
                             />
@@ -668,7 +668,7 @@ export default function QuickRecordSheet(props: QuickRecordSheetProps) {
 
                     {sheetMode === "batch" && !editingId && !quickCartEnabled && (
                       <p className="border-b border-[rgba(0,0,0,0.08)] pb-3 text-[12px] font-semibold text-[#615D59]">
-                        반납·샘플 반환·샘플 배정·수리·조정은 배치 담기를 지원하지 않습니다 — 단건 기록 모드로 저장하세요.
+                        고객 회수·샘플 반환·샘플 배정·수리·조정은 배치 담기를 지원하지 않습니다 — 단건 기록 모드로 저장하세요.
                       </p>
                     )}
                     {sheetMode === "batch" && quickCartEnabled && !inboundBatchLayout && (
@@ -767,7 +767,7 @@ export default function QuickRecordSheet(props: QuickRecordSheetProps) {
                           품목 추가
                         </p>
                         <p className="text-[11px] font-semibold text-[#615D59]">
-                          담으면 lot·입고일은 유지됩니다
+                          담으면 물류번호·입고일은 유지됩니다
                         </p>
                       </div>
                     )}
@@ -1274,11 +1274,11 @@ export default function QuickRecordSheet(props: QuickRecordSheetProps) {
 
                     {movementType === "inbound" && !inboundBatchLayout && (
                       <label className="block">
-                        <span className={SHEET_LABEL_CLASS}>물량번호 (lot)</span>
+                        <span className={SHEET_LABEL_CLASS}>물류번호</span>
                         <input
                           value={lotNo}
                           onChange={(event) => setLotNo(event.target.value)}
-                          placeholder="신규 lot — 예: H9"
+                          placeholder="신규 물류번호 — 예: C3"
                           list="hardware-lot-options"
                           className={SHEET_INPUT_CLASS}
                         />
@@ -1288,11 +1288,11 @@ export default function QuickRecordSheet(props: QuickRecordSheetProps) {
                     {movementType === "inbound" && !editingId && !inboundBatchLayout && (
                       <details className="border-b border-[rgba(0,0,0,0.08)] pb-3">
                         <summary className="flex cursor-pointer list-none items-center justify-between gap-2 rounded-md py-1 text-[12px] font-bold text-[#31302E] transition hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40">
-                          <span>입고 lot 도우미 — 다음 lot 적용 · 이전 구성 복사</span>
+                          <span>입고 물류번호 도우미 — 다음 번호 적용 · 이전 구성 복사</span>
                           <ChevronDown className="h-3.5 w-3.5 text-[#A39E98]" />
                         </summary>
                         <p className="mt-1 text-[11px] font-semibold text-[#615D59]">
-                          lot·입고일·수입자·보관 장소를 공유해 여러 품목을 담습니다.
+                          물류번호·입고일·수입자·보관 장소를 공유해 여러 품목을 담습니다.
                         </p>
                         <div className="mt-2 flex flex-wrap gap-1.5">
                           <button
@@ -1319,7 +1319,7 @@ export default function QuickRecordSheet(props: QuickRecordSheetProps) {
                           <span>추가 정보 — 단가 · 매입액(USD·CNY) · 시리얼 · 보관 · 수입자</span>
                           <span className="flex items-center gap-1.5">
                             {(unitPrice.trim() ? 1 : 0) + (amountUsd.trim() ? 1 : 0) + (amountCny.trim() ? 1 : 0) + (serialsText.trim() ? 1 : 0) + (storageLocation.trim() ? 1 : 0) + (importer.trim() ? 1 : 0) > 0 ? (
-                              <span className="rounded-full bg-[#ECFDF5] px-2 py-0.5 text-[10.5px] font-bold tabular-nums text-[#084734]">
+                              <span className="rounded-full bg-[#ECFDF5] px-2 py-0.5 text-[11px] font-bold tabular-nums text-[#084734]">
                                 {(unitPrice.trim() ? 1 : 0) + (amountUsd.trim() ? 1 : 0) + (amountCny.trim() ? 1 : 0) + (serialsText.trim() ? 1 : 0) + (storageLocation.trim() ? 1 : 0) + (importer.trim() ? 1 : 0)}
                               </span>
                             ) : null}
@@ -1504,22 +1504,21 @@ export default function QuickRecordSheet(props: QuickRecordSheetProps) {
                           />
                         </label>
                         <p className="text-[11px] leading-relaxed text-[#A39E98]">
-                          달러(USD) 금액만 입력 — ¥(CNY)와 혼동 금지. 참고 병기 전용이며 REV 장부 매출(¥ SSOT)에는 합산되지 않습니다.
+                          달러(USD) 금액만 입력 — ¥(CNY)와 혼동 금지. 참고로만 남기며, 매출은 REV 장부 기준이라 이 금액은 합산되지 않습니다.
                         </p>
                       </div>
                     )}
 
-                    {/* 자주 안 만지는 필드는 접어 둔다 — 담당자는 기억값 프리필, 상태는 프리셋이 채우고,
-                        출고 lot은 FIFO 자동 배정이 기본이라 수동 지정만 여기로. */}
+                    {/* 자주 안 만지는 필드는 접어 둔다 — 담당자는 기억값 프리필, 상태는 프리셋이 채운다. */}
                     <details className="rounded-lg border border-[rgba(0,0,0,0.08)]" open={movementType === "adjust" || undefined}>
                       <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2.5 text-[12px] font-bold text-[#31302E] transition hover:bg-[#F6F5F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40">
                         <span>추가 정보 — 담당자{process.customerOutbound ? "" : " · 상태"} · 참조 · 메모{movementType === "adjust" ? " (사유 필수)" : ""}</span>
                         <span className="flex items-center gap-1.5">
                           {owner.trim() ? (
-                            <span className="rounded-full bg-[#F6F5F4] px-2 py-0.5 text-[10.5px] font-bold text-[#615D59]">{owner.trim()}</span>
+                            <span className="rounded-full bg-[#F6F5F4] px-2 py-0.5 text-[11px] font-bold text-[#615D59]">{owner.trim()}</span>
                           ) : null}
                           {(referenceNo.trim() ? 1 : 0) + (memo.trim() ? 1 : 0) > 0 ? (
-                            <span className="rounded-full bg-[#ECFDF5] px-2 py-0.5 text-[10.5px] font-bold tabular-nums text-[#084734]">
+                            <span className="rounded-full bg-[#ECFDF5] px-2 py-0.5 text-[11px] font-bold tabular-nums text-[#084734]">
                               {(referenceNo.trim() ? 1 : 0) + (memo.trim() ? 1 : 0)}
                             </span>
                           ) : null}
@@ -1650,7 +1649,7 @@ export default function QuickRecordSheet(props: QuickRecordSheetProps) {
                                     <p className="truncate text-[12px] font-bold text-[#111110]">{draft.productName}</p>
                                     <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px] text-[#615D59]">
                                       <span>{MOVEMENT_LABEL[draft.movementType]} · {formatNumber(draft.quantity)}대 · {draft.toLocation || "-"}</span>
-                                      <span className={`inline-flex rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
+                                      <span className={`inline-flex rounded-full px-1.5 py-0.5 text-[11px] font-bold ${
                                         lineSample
                                           ? "bg-[#F6F5F4] text-[#615D59]"
                                           : linePlanned
@@ -1661,7 +1660,7 @@ export default function QuickRecordSheet(props: QuickRecordSheetProps) {
                                       </span>
                                       {lineSample && (
                                         // 샘플 대여는 실제/예정이 없으므로 토글 대신 정적 "샘플" pill만 표시한다.
-                                        <span className="inline-flex rounded-full bg-[#F6F5F4] px-1.5 py-0.5 text-[10px] font-bold text-[#615D59]">
+                                        <span className="inline-flex rounded-full bg-[#F6F5F4] px-1.5 py-0.5 text-[11px] font-bold text-[#615D59]">
                                           샘플
                                         </span>
                                       )}
@@ -1680,7 +1679,7 @@ export default function QuickRecordSheet(props: QuickRecordSheetProps) {
                                                   if (modeActive) return
                                                   toggleQuickCartLinePlanned(index)
                                                 }}
-                                                className={`flex min-h-[40px] cursor-pointer items-center px-2.5 py-0.5 text-[10px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734]/40 disabled:pointer-events-none disabled:opacity-40 sm:min-h-[28px] ${
+                                                className={`flex min-h-[40px] cursor-pointer items-center px-2.5 py-0.5 text-[11px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734]/40 disabled:pointer-events-none disabled:opacity-40 sm:min-h-[28px] ${
                                                   modeActive
                                                     ? mode === "planned"
                                                       ? "bg-[#FBF1E0] text-[#A8741A]"
@@ -1761,7 +1760,7 @@ export default function QuickRecordSheet(props: QuickRecordSheetProps) {
                         </summary>
                         <div className="space-y-3 border-t border-[rgba(0,0,0,0.06)] p-3">
                           <div className="flex flex-wrap items-center justify-between gap-3">
-                            <p className="text-[11px] text-[#615D59]">세트·견적 라인을 담고, 직전 lot 구성을 그대로 복사합니다.</p>
+                            <p className="text-[11px] text-[#615D59]">세트·견적 라인을 담고, 직전 물류번호 구성을 그대로 복사합니다.</p>
                             <div className="inline-flex items-center gap-1.5">
                               <span className="text-[11px] font-semibold text-[#615D59]">세트 배수</span>
                               <div className="grid h-9 grid-cols-[36px_40px_36px] overflow-hidden rounded-md border border-[rgba(0,0,0,0.08)] bg-white">

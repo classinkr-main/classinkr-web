@@ -165,7 +165,7 @@ function PoolTile({
 function PoolCell({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="min-w-0">
-      <span className="block text-[10.5px] font-semibold text-[#A39E98] md:sr-only">{label}</span>
+      <span className="block text-[11px] font-semibold text-[#A39E98] md:sr-only">{label}</span>
       <span className="mt-0.5 flex flex-wrap items-baseline gap-x-1 text-[13px] md:mt-0">{children}</span>
     </div>
   )
@@ -506,7 +506,7 @@ function OfficeSamplePoolSection({
                       {gapTotal > 0 && (
                         <span
                           title={gapDetail(row)}
-                          className="shrink-0 rounded-full border border-[#ECD29C] px-2 py-0.5 text-[10.5px] font-bold tabular-nums text-[#7A520F]"
+                          className="shrink-0 rounded-full border border-[#ECD29C] px-2 py-0.5 text-[11px] font-bold tabular-nums text-[#7A520F]"
                         >
                           원본과 {formatNumber(gapTotal)}대 차이
                         </span>

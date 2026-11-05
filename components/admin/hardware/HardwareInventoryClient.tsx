@@ -1258,7 +1258,7 @@ export default function HardwareInventoryClient({
     if (saleTypeFilter) {
       chips.push({
         key: "saleType",
-        label: `판매유형: ${SALE_TYPE_META[saleTypeFilter].label}`,
+        label: `출고 유형: ${SALE_TYPE_META[saleTypeFilter].label}`,
         onRemove: () => {
           setSaleTypeFilter("")
           setMovementsPage(1)
@@ -1279,7 +1279,7 @@ export default function HardwareInventoryClient({
     if (lotFilter) {
       chips.push({
         key: "lot",
-        label: `물량번호: ${formatLotLabel(lotFilter) ?? lotFilter}`,
+        label: `물류번호: ${formatLotLabel(lotFilter) ?? lotFilter}`,
         onRemove: () => {
           setLotFilter("")
           setMovementsPage(1)
@@ -1597,9 +1597,9 @@ export default function HardwareInventoryClient({
     // nested(그룹 하위) 행은 왼쪽 들여쓰기·낮은 높이·살짝 작은 폰트로 위계를 구분한다.
     const sz = {
       cust: nested ? "text-[11.5px]" : "text-[12.5px]",
-      sub: nested ? "text-[10px]" : "text-[11px]",
+      sub: "text-[11px]",
       prod: nested ? "text-[11px]" : "text-[12px]",
-      qty: nested ? "text-[10.5px]" : "text-[11px]",
+      qty: "text-[11px]",
       meta: nested ? "text-[11px]" : "text-[11.5px]",
     }
     return (
@@ -1654,7 +1654,7 @@ export default function HardwareInventoryClient({
             {MOVEMENT_LABEL[movement.movement_type]} {formatNumber(movement.quantity)}
           </span>
           {planned ? (
-            <span className="inline-flex items-center gap-0.5 rounded-full bg-[#FBF1E0] px-1.5 py-0.5 text-[10px] font-bold text-[#A8741A]">
+            <span className="inline-flex items-center gap-0.5 rounded-full bg-[#FBF1E0] px-1.5 py-0.5 text-[11px] font-bold text-[#A8741A]">
               <Clock3 className="h-2.5 w-2.5" />
               예정
             </span>
@@ -1741,7 +1741,7 @@ export default function HardwareInventoryClient({
   const inboundLotStaleNote = useMemo(() => {
     const freshness = judgeImportFreshness(data?.importRun ?? null)
     if (freshness.level === "ok" || freshness.level === "none" || freshness.daysAgo == null) return null
-    return `시트 이관이 ${formatNumber(freshness.daysAgo)}일 전이라 그 뒤에 들어온 물량번호가 추천에 빠져 있을 수 있어요. 시트의 최신 번호를 확인하세요.`
+    return `시트 이관이 ${formatNumber(freshness.daysAgo)}일 전이라 그 뒤에 들어온 물류번호가 추천에 빠져 있을 수 있어요. 시트의 최신 번호를 확인하세요.`
   }, [data?.importRun])
 
   const inboundLots = useMemo(() => {
@@ -1980,7 +1980,7 @@ export default function HardwareInventoryClient({
           : []),
         ...(detailMovement.movement_type === "outbound"
           ? [
-              { label: "판매유형", value: SALE_TYPE_META[outboundSaleType(detailMovement) ?? "sales"].label },
+              { label: "출고 유형", value: movementOutboundType(detailMovement) ? SALE_TYPE_META[outboundSaleType(detailMovement) ?? "sales"].label : "미상" },
               { label: "매출 (USD)", value: detailMovement.amount_usd != null ? formatCurrency(detailMovement.amount_usd, "USD") : "-" },
             ]
           : []),
@@ -2134,7 +2134,7 @@ export default function HardwareInventoryClient({
   const copyLatestInboundLotToCart = () => {
     const latestLot = inboundLots.latestLot
     if (!latestLot) {
-      setError("복사할 이전 입고 lot이 없습니다.")
+      setError("복사할 이전 입고 물류번호가 없습니다.")
       return
     }
     const targetLot = lotNo.trim() || nextLotSuggestion
@@ -2820,7 +2820,7 @@ export default function HardwareInventoryClient({
         .join(" · ")
       const warnHint = result.warnings.length > 0 ? ` · 경고 ${formatNumber(result.warnings.length)}건` : ""
       setNotice(
-        `원본 가져오기 완료: 물량번호 ${formatNumber(result.parsed.lots.length)}개 · 입고 ${formatNumber(result.parsed.inboundRows)} · 출고 ${formatNumber(result.parsed.outboundRows)} (${typeHint}) → 원본 ${formatNumber(result.import.imported)}건 반영${snapshotHint}${warnHint}.`
+        `원본 가져오기 완료: 물류번호 ${formatNumber(result.parsed.lots.length)}개 · 입고 ${formatNumber(result.parsed.inboundRows)} · 출고 ${formatNumber(result.parsed.outboundRows)} (${typeHint}) → 원본 ${formatNumber(result.import.imported)}건 반영${snapshotHint}${warnHint}.`
       )
       await refresh()
     } catch (err) {
@@ -3497,12 +3497,12 @@ export default function HardwareInventoryClient({
                 <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-[13px] font-bold tracking-[-0.01em]">
                   {tab.label}
                   {tab.id === "home" && plannedCount > 0 ? (
-                    <span className="rounded-full bg-[#FBF1E0] px-1.5 py-0.5 text-[10.5px] font-bold text-[#A8741A]">
+                    <span className="rounded-full bg-[#FBF1E0] px-1.5 py-0.5 text-[11px] font-bold text-[#A8741A]">
                       {formatNumber(plannedCount)}
                     </span>
                   ) : null}
                 </span>
-                <span className="hidden whitespace-nowrap text-[10.5px] font-medium text-[#615D59] min-[420px]:block">{tab.description}</span>
+                <span className="hidden whitespace-nowrap text-[11px] font-medium text-[#615D59] min-[420px]:block">{tab.description}</span>
                 {active && (
                   <span className="absolute inset-x-3 -bottom-px h-[2.5px] rounded-sm bg-[#084734]" />
                 )}

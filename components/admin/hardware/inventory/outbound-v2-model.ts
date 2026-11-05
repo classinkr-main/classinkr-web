@@ -87,7 +87,7 @@ export function outboundV2Issues(input: OutboundV2Input): OutboundV2Issue[] {
 
   if (customer) {
     if (!isDateKey(input.occurredAt)) {
-      issues.push({ field: "occurredAt", message: "출고일을 입력하세요." })
+      issues.push({ field: "occurredAt", message: "출고일(배송 예정일)을 입력하세요." })
     }
     if (!isHardwareOutboundType(input.outboundType)) {
       issues.push({ field: "outboundType", message: "출고 유형(세일즈·프로모션·A/S·샘플)을 고르세요." })

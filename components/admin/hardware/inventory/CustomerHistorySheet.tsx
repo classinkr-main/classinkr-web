@@ -139,9 +139,9 @@ function CustomerHistorySheet({
                         <span className="min-w-0">
                           <span className="flex items-center gap-1.5">
                             <span className="truncate text-[12.5px] font-bold text-[#111110]">{movement.product_name}</span>
-                            <span className={`inline-flex shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-bold ${MOVEMENT_TONE[movement.movement_type]}`}>{MOVEMENT_LABEL[movement.movement_type]}</span>
+                            <span className={`inline-flex shrink-0 rounded-full px-1.5 py-0.5 text-[11px] font-bold ${MOVEMENT_TONE[movement.movement_type]}`}>{MOVEMENT_LABEL[movement.movement_type]}</span>
                             {saleType && saleType !== "sales" ? (
-                              <span className={`inline-flex shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-bold ${SALE_TYPE_META[saleType].tone}`}>{SALE_TYPE_META[saleType].label}</span>
+                              <span className={`inline-flex shrink-0 rounded-full px-1.5 py-0.5 text-[11px] font-bold ${SALE_TYPE_META[saleType].tone}`}>{SALE_TYPE_META[saleType].label}</span>
                             ) : null}
                           </span>
                           <span className="mt-0.5 block text-[11px] tabular-nums text-[#615D59]">

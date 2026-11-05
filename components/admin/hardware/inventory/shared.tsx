@@ -236,7 +236,7 @@ export type HardwareSectionKey = "stock" | "outbound" | "alerts"
 export const MOVEMENT_LABEL: Record<HardwareMovementType, string> = {
   inbound: "입고",
   outbound: "출고",
-  return: "반납",
+  return: "회수",
   transfer: "이동",
   repair: "수리",
   adjust: "조정",
@@ -282,7 +282,7 @@ export const ENTRY_PRESETS: Array<{
   { key: "sampleReturn", movementType: "return", label: "샘플 반환", description: "대여 샘플을 사무실로 회수", icon: RotateCcw, from: "샘플", to: "사무실", status: "샘플 반환" },
   { key: "sampleAssign", movementType: "transfer", label: "샘플 배정", description: "창고 재고를 샘플로 전환", icon: ArrowRightLeft, from: "창고", to: "사무실", status: "샘플 배정" },
   { key: "inbound", movementType: "inbound", label: "입고", description: "창고 재고 증가", icon: ArrowDownToLine, from: "", to: "창고", status: "입고" },
-  { key: "return", movementType: "return", label: "고객 반납", description: "고객·현장에서 창고 회수", icon: RotateCcw, from: "고객", to: "창고", status: "반납" },
+  { key: "return", movementType: "return", label: "고객 회수", description: "고객·현장에서 창고 회수", icon: RotateCcw, from: "고객", to: "창고", status: "반납" },
   { key: "repair", movementType: "repair", label: "수리", description: "예외 상태 처리", icon: Wrench, from: "창고", to: "수리", status: "수리중" },
   { key: "adjust", movementType: "adjust", label: "실사 조정", description: "창고 수량 보정", icon: Settings2, from: "", to: "창고", status: "재고 조정" },
 ]
@@ -380,7 +380,7 @@ export function ledgerHref(customer: string): string {
 export type OutboundSaleType = "sales" | "sample" | "promotion" | "as"
 
 export const SALE_TYPE_META: Record<OutboundSaleType, { label: string; tone: string }> = {
-  sales: { label: "판매", tone: "bg-[#ECFDF5] text-[#084734]" },
+  sales: { label: "세일즈", tone: "bg-[#ECFDF5] text-[#084734]" },
   sample: { label: "샘플", tone: "bg-[#F6F5F4] text-[#615D59]" },
   promotion: { label: "프로모션", tone: "bg-[#FBF1E0] text-[#7A520F]" },
   as: { label: "A/S", tone: "bg-[#FCE9E9] text-[#B43E3E]" },

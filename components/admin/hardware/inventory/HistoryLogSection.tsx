@@ -88,7 +88,7 @@ function HistoryLogSection({
       <div className="overflow-x-auto">
         <div className="min-w-[940px]">
           <div className="grid grid-cols-[84px_1.5fr_1.2fr_96px_84px_1.4fr_92px_22px] items-center gap-3 bg-[#F6F5F4] px-5 py-2.5 text-[11px] font-bold uppercase tracking-[0.04em] text-[#615D59]">
-            <span>물량번호</span>
+            <span>물류번호</span>
             <span>고객사</span>
             <span>품목 · 수량</span>
             <span>날짜</span>
@@ -140,14 +140,14 @@ function HistoryLogSection({
                   <span title={group.owners.join(", ")} className="truncate text-[11.5px] text-[#31302E]">{group.owners.join(", ") || "-"}</span>
                   <span className="flex flex-wrap items-center gap-1">
                     {group.plannedQty > 0 ? (
-                      <span className="inline-flex items-center gap-0.5 rounded-full bg-[#FBF1E0] px-1.5 py-0.5 text-[10px] font-bold text-[#A8741A]">
+                      <span className="inline-flex items-center gap-0.5 rounded-full bg-[#FBF1E0] px-1.5 py-0.5 text-[11px] font-bold text-[#A8741A]">
                         <Clock3 className="h-2.5 w-2.5" />
                         예정 {formatNumber(group.plannedQty)}
                       </span>
                     ) : null}
                     {group.hasMissingLot ? (
-                      <span className="inline-flex rounded-full border border-dashed border-[rgba(0,0,0,0.12)] bg-[#F6F5F4] px-1.5 py-0.5 text-[10px] font-bold text-[#A39E98]">
-                        {isSingle ? "물량번호 미지정" : "미지정 포함"}
+                      <span className="inline-flex rounded-full border border-dashed border-[rgba(0,0,0,0.12)] bg-[#F6F5F4] px-1.5 py-0.5 text-[11px] font-bold text-[#A39E98]">
+                        {isSingle ? "물류번호 미지정" : "미지정 포함"}
                       </span>
                     ) : null}
                   </span>
