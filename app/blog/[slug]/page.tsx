@@ -9,7 +9,7 @@ import { ArticleImageLightbox } from "@/components/blog/ArticleImageLightbox"
 import { ArticleToc } from "@/components/blog/ArticleToc"
 import { BlogPostCard } from "@/components/blog/BlogPostCard"
 import { ReadingProgress } from "@/components/blog/ReadingProgress"
-import { ShareActions } from "@/components/blog/ShareActions"
+import { ShareActions } from "@/components/share/ShareActions"
 import { TrackedLink } from "@/components/TrackedLink"
 import { LeadMagnetGate } from "@/components/blog/LeadMagnetGate"
 import { SafeBlogImage } from "@/components/blog/SafeBlogImage"
@@ -214,7 +214,7 @@ export default async function BlogDetailPage({
                 {post.readTime}
               </span>
             </p>
-            <ShareActions title={post.title} url={toAbsoluteUrl(getBlogPostPath(post.slug))} />
+            <ShareActions title={post.title} url={toAbsoluteUrl(getBlogPostPath(post.slug))} source="blog" label="이 글 공유하기" />
           </div>
 
           {/* 대표 이미지는 글자가 박힌 카드가 많아(정사각·세로형 포함) 자르지 않고 칼럼 폭 액자에 담는다. */}

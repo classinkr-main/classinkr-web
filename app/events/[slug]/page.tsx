@@ -22,6 +22,7 @@ import {
 } from "@/lib/seo"
 import { EventAlertSignup } from "@/components/events/EventAlertSignup"
 import { EventSignupModal } from "@/components/events/EventSignupModal"
+import { ShareActions } from "@/components/share/ShareActions"
 import { ResourcesRecommendation } from "@/components/sections/ResourcesRecommendation"
 import { NEUTRAL_BLUR_DATA_URL } from "@/lib/image-blur"
 import { CalendarPlus } from "lucide-react"
@@ -247,6 +248,15 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
                   </a>
                 </div>
               )}
+
+              {/* 행사 링크는 카카오톡·문자로 가장 많이 돈다 — 카드는 이 주소의 OG(행사 이미지)로 그려진다 */}
+              <ShareActions
+                title={event.title}
+                url={toAbsoluteUrl(eventPath)}
+                source="event"
+                label="이 행사 공유하기"
+                className="mt-6"
+              />
             </div>
 
             {event.imageUrl && (

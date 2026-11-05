@@ -1,4 +1,4 @@
-/* 소셜 로그인 브랜드 글리프 — 외부 자산 없이 인라인 SVG로 구성한다. */
+/* 제3자 브랜드 글리프(소셜 로그인·공유 버튼) — 외부 자산 없이 인라인 SVG로 구성한다. */
 
 export function GoogleGlyph({ className = "h-5 w-5" }: { className?: string }) {
   return (
@@ -43,6 +43,29 @@ export function AppleGlyph({ className = "h-[18px] w-[18px]" }: { className?: st
   return (
     <svg viewBox="0 0 24 24" className={className} fill="currentColor" aria-hidden="true">
       <path d="M17.05 12.04c-.03-2.69 2.2-3.98 2.3-4.04-1.25-1.83-3.2-2.08-3.89-2.11-1.65-.17-3.23.97-4.07.97-.84 0-2.13-.95-3.5-.92-1.8.03-3.46 1.05-4.39 2.66-1.87 3.25-.48 8.06 1.34 10.7.89 1.29 1.95 2.74 3.34 2.69 1.34-.05 1.85-.87 3.47-.87 1.62 0 2.08.87 3.5.84 1.45-.03 2.36-1.32 3.24-2.62 1.02-1.5 1.44-2.95 1.46-3.03-.03-.01-2.8-1.07-2.83-4.24M14.53 4.42c.74-.9 1.24-2.15 1.1-3.42-1.07.04-2.36.71-3.13 1.61-.69.8-1.29 2.07-1.13 3.29 1.19.09 2.42-.61 3.16-1.48" />
+    </svg>
+  )
+}
+
+/**
+ * 인스타그램 — 공유 버튼용 단색 글리프(icons §14: 공식 단색 변형을 확인하기 전까지 브랜드 색은 쓰지 않는다).
+ * 획형이라 lucide 클래스를 달아 공개 화면 획 규칙(:where(.site) svg.lucide)을 그대로 받는다.
+ */
+export function InstagramGlyph({ className = "h-5 w-5" }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className={`lucide ${className}`}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <rect x="3" y="3" width="18" height="18" rx="5" />
+      <circle cx="12" cy="12" r="4" />
+      <circle cx="17.25" cy="6.75" r="1.1" fill="currentColor" stroke="none" />
     </svg>
   )
 }

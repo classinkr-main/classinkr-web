@@ -57,9 +57,10 @@ const contentSecurityPolicy = [
   "base-uri 'self'",
   "object-src 'none'",
   "frame-ancestors 'none'",
-  "form-action 'self'",
-  // GTM/GA, Google Ads 전환, Meta Pixel, 카카오(daumcdn), 채널톡, 토스페이먼츠, 네이버 wcs 스크립트
-  `script-src 'self' 'unsafe-inline'${developmentScriptPolicy} blob: https://www.googletagmanager.com https://www.google-analytics.com https://googleads.g.doubleclick.net https://www.googleadservices.com https://connect.facebook.net https://t1.daumcdn.net https://*.daumcdn.net ${channelTalkScriptSources} https://js.tosspayments.com https://wcs.naver.net`,
+  // 카카오톡 공유(lib/share/kakao-share.ts): 데스크톱은 SDK 가 팝업으로 sharer.kakao.com 에 폼을 POST 한다
+  "form-action 'self' https://sharer.kakao.com",
+  // GTM/GA, Google Ads 전환, Meta Pixel, 카카오(daumcdn·공유 SDK t1.kakaocdn.net), 채널톡, 토스페이먼츠, 네이버 wcs 스크립트
+  `script-src 'self' 'unsafe-inline'${developmentScriptPolicy} blob: https://www.googletagmanager.com https://www.google-analytics.com https://googleads.g.doubleclick.net https://www.googleadservices.com https://connect.facebook.net https://t1.daumcdn.net https://*.daumcdn.net https://t1.kakaocdn.net ${channelTalkScriptSources} https://js.tosspayments.com https://wcs.naver.net`,
   "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com",
   "font-src 'self' data: https://cdn.jsdelivr.net https://fonts.gstatic.com",
   // unsplash(블로그 이미지), Supabase Storage, 픽셀/지도/카카오/Google Ads/네이버 wcs 이미지
@@ -107,6 +108,13 @@ const nextConfig: NextConfig = {
   // import(첫 호출 시 로드)와 합쳐져 서버 함수 콜드 스타트 번들이 줄어든다. 출력 파일 트레이싱은
   // external 패키지도 배포 아티팩트에 포함하므로 런타임 해석에는 영향이 없다.
   serverExternalPackages: ["googleapis", "exceljs"],
+  // 공유 카드 글꼴(lib/og/template.tsx 가 process.cwd() 기준으로 읽는 Pretendard OTF). 루트 OG 는 빌드 때 정적으로
+  // 그려지지만 블로그 OG(/api/og/blog/[slug])는 런타임 함수라, 파일 추적이 경로를 못 따라가도 번들에 들어가게 명시한다.
+  outputFileTracingIncludes: {
+    "/api/og/**": ["./assets/fonts/pretendard-static/**"],
+    "/opengraph-image": ["./assets/fonts/pretendard-static/**"],
+    "/twitter-image": ["./assets/fonts/pretendard-static/**"],
+  },
   images: {
     // 기본값은 webp 단독이다. avif를 앞에 두면 지원 브라우저에서 추가로 ~17% 더 줄어든다.
     formats: ["image/avif", "image/webp"],

@@ -555,7 +555,7 @@ export function IconFrame({ icon, frame = 40, active = false, className }:
 - **현황 [실측]:**
   - 로고는 래스터 `/images/logo.png`이고 Header·Footer·AuthShell, 그리고 **/admin/login(`app/admin/login/page.tsx:141`)**이 쓴다.
   - 파비콘 계열은 `app/icon.png`·`apple-icon.png`·`favicon.ico`다. manifest는 없다.
-  - OG(`app/opengraph-image.tsx:54`)는 'C' 글자 배지를 그리고 fontFamily는 `sans-serif`다.
+  - OG는 2026-11-05에 'C' 배지를 버리고 텍스트 워드마크로 바뀌었다(`lib/og/template.tsx`, typography §2-1). 이전에는 'C' 글자 배지 + `sans-serif`였다.
   - 저장소에 로고 SVG 원본이 없다. 방향 문서 기준 로고는 에메랄드(#00A070)라 #084734 UI 옆에서 두 초록이 어긋나 보인다.
 - **이미 확정된 것(차단과 무관):**
   - theme-color는 `--surface-paper` 미러(V15-A 뒤 `#F9F8F5`), `colorScheme: 'only light'`, 값은 `lib/design-tokens.ts`에서 import(C27, surfaces 소유). manifest는 만들지 않는다.
@@ -570,6 +570,7 @@ export function IconFrame({ icon, frame = 40, active = false, className }:
   - 소셜 로그인 버튼의 글리프는 각 플랫폼이 공식 허용하는 색·변형을 따른다(controls §3.5, DESIGN.md '외부 브랜드 예외'). 가드 hex 허용 목록은 `brand-glyphs`와 `SocialLoginRow`만이다.
   - 높이 44 통일만 이 스펙이 강제하고, 글리프 크기는 20(`size-5`)으로 통일한다. 현행 기본값 h-5·h-3.5·h-4·h-[18px] [코드]은 호출부에서 `size-5`로 맞춘다.
   - `app/download/DownloadPageClient.tsx:21-30`의 AppleGlyph 중복은 brand-glyphs 한 곳으로 합친다.
+  - **공유 버튼 글리프(2026-11-05):** 블로그·행사 공유 묶음(`components/share/ShareActions.tsx`)은 같은 파일의 `KakaoGlyph`(채움)와 `InstagramGlyph`(획형, `lucide` 클래스로 공개 획 규칙을 받는다)를 단색(`currentColor`)으로 쓴다. 링크 복사 `Link2`→`Check`, 문자 `MessageCircleMore`, 공유 시트 `Share2`. 버튼은 controls의 `line icon-md`, 글리프 20px. 브랜드 색은 쓰지 않는다.
   - **푸터 SNS 글리프:** 현재 푸터에 SNS 링크가 0개다 [실측]. 링크를 두기로 하면(controls §3.6, 열린 질문) 네이버 블로그·카카오 채널·유튜브 3종을 같은 파일에 단색(`currentColor`) 글리프로 등록한다. 먹 위 `--fg-muted`, hover `--fg-ink`, 20px, 박스 44, `aria-label`='{채널명} (새 창)'. 브랜드 색은 쓰지 않는다(공식 단색 변형 허용을 확인한 뒤).
 
 ### 15. 공유 컴포넌트 격리 (C17)

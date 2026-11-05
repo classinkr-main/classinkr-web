@@ -157,6 +157,7 @@
 
 **OG 이미지(C28 + 폴드: OG 템플릿·정적 Pretendard 보관소)**
 - 사실[코드]: `app/opengraph-image.tsx:19`와 `app/api/og/blog/[slug]/route.tsx:54`는 `fontFamily: "sans-serif"`만 있고 `fonts` 옵션이 없다. 실제로 어떤 한글 글꼴로 그려지는지는 확인하지 않았다. 이전 판의 'Noto Sans KR 400' 서술은 삭제한다.
+- **구현(2026-11-05, T10 + P5 SY-4 카드 재구성)**: 아래 목표대로 `lib/og/template.tsx`(공용 카드 `OgCard`·`renderOgImage`, 글꼴 모듈 스코프 1회 로드)와 `assets/fonts/pretendard-static/`(Regular·Bold·OFL, pretendard 1.3.9)를 두고 두 OG 경로가 이 템플릿을 쓴다. 카드는 paper 지면 · 텍스트 워드마크 + 먹 괘선 · Kicker(그린 점 1 + 범주) · 먹 700 제목 2줄이다. 홈 제목은 `heroHeadline`을 수동 개행한 두 줄(`lib/og/home-card.ts`, 테스트가 헤드라인과 대조), 블로그는 글 제목 한 문자열을 2줄에서 자른다(`lineClamp`). 폰트 추적은 `next.config.ts` `outputFileTracingIncludes`. 그 전에는 sans-serif 대체 글꼴 때문에 카카오톡 카드에서 띄어쓰기가 사라졌다('운영의새로운'). 배포 뒤 카카오 공유 디버거에서 OG 캐시를 지운다.
 - 목표
   - `assets/fonts/pretendard-static/`에 `Pretendard-Regular.otf`·`Pretendard-Bold.otf`(Bold 1,576,660B [실측])와 OFL을 둔다. **이 경로는 아직 없다[코드]** — C28 구현(T10)에서 새로 만든다. SemiBold는 PDF 작업 때 추가한다.
   - `lib/og/template.tsx` 한 파일에 기본·블로그 두 변형을 둔다. 두 경로가 이 템플릿을 쓴다. 색은 `lib/design-tokens.ts`에서 import한다.
