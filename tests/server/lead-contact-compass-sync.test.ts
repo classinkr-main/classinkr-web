@@ -352,7 +352,7 @@ describe("syncLeadContactFromCompass", () => {
   })
 })
 
-/* 링크 우선 매칭 + 담당 반영(2026-11-04, Compass ADR-0082 되받기). Compass 가 홈페이지 폼 리드를 받으며 거는 lead_refs(home_lead) 링크로
+/* 링크 우선 매칭 + 담당 반영(2026-11-04, Compass ADR-0083 되받기). Compass 가 홈페이지 폼 리드를 받으며 거는 lead_refs(home_lead) 링크로
    전화 없는 리드도 붙고, Compass 담당(콜 담당 → BD 담당 → 오너)은 어드민 담당이 비어 있을 때만 채운다. */
 describe("syncLeadContactFromCompass · 링크 우선 매칭과 담당 반영", () => {
   const LINKED: Fixture = {

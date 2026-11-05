@@ -2,7 +2,7 @@
 
 - 작성: 2026-11-04
 - 상태: 코드 커밋 완료. 운영은 두 서버의 env(아래 §2)를 넣은 뒤부터 동작한다. **DB 마이그레이션은 어드민 쪽에 없다**(Compass 쪽 표 `crm.home_webhook_events` 는 Compass 배포가 만든다).
-- 짝 문서: [compass-integration-2026-09-14.md](./compass-integration-2026-09-14.md)(연동 2차 — 소유 경계·`home_lead` 링크 자리), Compass 저장소 `docs/adr/0082-homepage-inquiries-are-pushed-to-compass.md`(Compass 쪽 결정)
+- 짝 문서: [compass-integration-2026-09-14.md](./compass-integration-2026-09-14.md)(연동 2차 — 소유 경계·`home_lead` 링크 자리), Compass 저장소 `docs/adr/0083-homepage-inquiries-are-pushed-to-compass.md`(Compass 쪽 결정)
 
 ## 0. 한 줄 요약
 
@@ -21,7 +21,7 @@
 - **본문**: `{ event_id, kind: "created"|"reinflow", lead_id(어드민 id), source, source_detail, name, org, phone, email, region(branch), message, role, size, page(current_page ?? landing_page), utm{source,medium,campaign} }`.
   `event_id` 는 전환 이벤트 id 와 같은 값(`lead:<id>` · 재문의 `lead:<id>:reinflow:<시각>`) — Compass 멱등 표식. 같은 전달을 다시 보내도 Compass 리드가 두 건 되지 않는다.
 - **재문의 병합**(같은 연락처가 응대 대상 소스로 다시 옴 → `last_inflow_at` 만 갱신)이면 `kind: "reinflow"`. Compass 도 그 사람을 재유입으로 올린다(새 리드 아님).
-- **Compass 쪽**(그쪽 ADR-0082): 동일인 잠금 → `crm.lead_refs(system='home_lead')` 링크 또는 전화·이메일 동일인 → 새 리드는 `channel='homepage'`(인바운드 — 광고 성과·KPI 리드 밖, 콜 목록 안)
+- **Compass 쪽**(그쪽 ADR-0083): 동일인 잠금 → `crm.lead_refs(system='home_lead')` 링크 또는 전화·이메일 동일인 → 새 리드는 `channel='homepage'`(인바운드 — 광고 성과·KPI 리드 밖, 콜 목록 안)
   + `referrer`=어느 폼(「문의 페이지 · 도입 상담」) · 기존 리드면 재유입(담당·단계·메모 그대로) · 폼 답변은 `system` 기록 · **환영 알림톡은 보내지 않는다**(우리 접수 안내가 간다).
 - **실패**: Compass 가 2xx 가 아니면 `Compass: <status>` 가 응답 `warnings` 와 「리드 전달 경고」 인시던트(WeCom·메일)로 간다. 저장은 막지 않는다. Compass 는 실패 때 표식을 남기지 않으므로
   같은 본문을 다시 보내면 새로 처리된다 — 다만 **자동 재전달은 없다**(사람이 Compass 에서 등록하거나, 다음 재문의가 들어오면 그때 붙는다).

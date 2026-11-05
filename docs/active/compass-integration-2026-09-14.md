@@ -173,7 +173,7 @@ R6 B-3 매칭 순서: ① `compass_lead_refs_v`(`system = 'home_lead'`, `externa
 - ~~`lib/channel-talk-sync.ts` 전화 정규화(국가번호 미처리) 교체 — R6 B-3 권고~~ → 2026-10-12 교체: 채널톡→리드 매칭도 `lib/compass/normalize.ts` `normalizePhoneKey`(= Compass normPhone = SQL `norm_phone_key`)를 쓴다(`tests/channel-talk/channel-talk-sync.test.ts`).
 - `20260910_leads_contact_unique_dedupe.sql` 유니크 인덱스 — `saveLead` 재유입 업서트 전에는 적용 금지(재문의가 502·조용한 유실, R6 G8).
 - Meta leadgen 단일 수신 전환, `home_neo_leads_v`(NEO 리드 상태 역류) — R6 B-5 3주+ 단계. ~~Compass "홈페이지 문의" 인박스~~ → 2026-11-04 다른 모양으로 구현: 어드민이 저장 직후
-  Compass `POST /api/webhook/home-lead` 로 밀어 넣고 Compass 가 `crm.lead_refs(system='home_lead')` 로 잇는다([compass-home-lead-push-2026-11-04.md](./compass-home-lead-push-2026-11-04.md), Compass ADR-0082).
+  Compass `POST /api/webhook/home-lead` 로 밀어 넣고 Compass 가 `crm.lead_refs(system='home_lead')` 로 잇는다([compass-home-lead-push-2026-11-04.md](./compass-home-lead-push-2026-11-04.md), Compass ADR-0083).
 - 미확인: 마이그레이션은 로컬 임시 PG 17(스텁 테이블)로만 검증했다 — 서울 인스턴스(Supabase 기본 권한 포함)에서는 §2 확인 쿼리로 본다.
   `crm.lead_refs`·`crm.lead_contact_facts_v` 의 컬럼은 Compass 명세 기준이며, Compass 가 이름을 바꾸면 2번 재실행이 오류로 멈춘다(조용히 틀리지 않음).
   `crm_write_requests` 에 lead create 요청이 실제로 쌓인 적이 있는지는 DB 를 보지 않아 모른다(§3 쿼리).
