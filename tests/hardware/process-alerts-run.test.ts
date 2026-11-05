@@ -141,6 +141,7 @@ describe("하드웨어 일일 알림 실행", () => {
   afterEach(() => {
     vi.restoreAllMocks()
     vi.resetModules()
+    vi.unstubAllEnvs()
   })
 
   async function loadRunner(options: {
@@ -148,8 +149,11 @@ describe("하드웨어 일일 알림 실행", () => {
     processColumns?: boolean
     alreadySent?: boolean | Error
     deliveryResults?: Array<{ channel: string; status: string; errorMessage?: string }>
+    enabled?: boolean
   } = {}) {
     vi.resetModules()
+    // 기본은 꺼짐(2026-11-05 결정) — 발송 경로 시험은 켜고 돈다.
+    vi.stubEnv("HARDWARE_PROCESS_ALERTS", options.enabled === false ? "" : "on")
     const emitNotificationEvent = vi.fn().mockResolvedValue({
       id: "event-1",
       deliveryResults: options.deliveryResults ?? [{ channel: "wecom_webhook", status: "sent" }],
@@ -239,16 +243,18 @@ describe("하드웨어 일일 알림 실행", () => {
     expect(emitNotificationEvent).toHaveBeenCalledTimes(1)
   })
 
-  it("HARDWARE_PROCESS_ALERTS=off 면 원장도 읽지 않고 disabled", async () => {
-    vi.stubEnv("HARDWARE_PROCESS_ALERTS", "off")
-    try {
-      const { runHardwareProcessAlerts, emitNotificationEvent } = await loadRunner()
-      const report = await runHardwareProcessAlerts({ now: NOW })
-      expect(report).toMatchObject({ status: "disabled", dateKey: "2026-10-28" })
-      expect(emitNotificationEvent).not.toHaveBeenCalled()
-    } finally {
-      vi.unstubAllEnvs()
-    }
+  it("기본은 꺼짐 — env 를 켜지 않으면 원장도 읽지 않고 disabled(운영자 결정 2026-11-05)", async () => {
+    const { runHardwareProcessAlerts, emitNotificationEvent } = await loadRunner({ enabled: false })
+    const report = await runHardwareProcessAlerts({ now: NOW })
+    expect(report).toMatchObject({ status: "disabled", dateKey: "2026-10-28" })
+    expect(emitNotificationEvent).not.toHaveBeenCalled()
+  })
+
+  it("꺼져 있어도 dryRun 미리보기는 된다", async () => {
+    const { runHardwareProcessAlerts, emitNotificationEvent } = await loadRunner({ enabled: false })
+    const report = await runHardwareProcessAlerts({ now: NOW, dryRun: true })
+    expect(report.status).toBe("preview")
+    expect(emitNotificationEvent).not.toHaveBeenCalled()
   })
 
   it("프로세스 칸이 없는 DB 에서도 배송 예정은 보낸다", async () => {

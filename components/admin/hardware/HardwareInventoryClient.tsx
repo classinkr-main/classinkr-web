@@ -4,6 +4,7 @@ import type { FormEvent, KeyboardEvent as ReactKeyboardEvent } from "react"
 import dynamic from "next/dynamic"
 import { use, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react"
 import { AnimatePresence, useReducedMotion } from "framer-motion"
+import { isInternalLocation } from "@/lib/hardware/locations"
 import {
   Camera,
   ChevronRight,
@@ -207,16 +208,18 @@ function defaultEntryItemId(items: HardwareItem[]): string {
 
 // 출고 기간 집계 버킷 키/라벨 — shared.periodKey로 이동(분기·연간 회계연도 SSOT, 테스트 포함).
 
-// 확정 판매·설치 출고만 남긴다(무효·예정·샘플·수리 제외) — 입출고 탭 기간별 출고 집계(outboundBuckets,
-// 고객사·매출 펼침용 최근 원장 기준). FY 판매 수치는 서버 판매대시보드(SalesDashboardSection)가 정본이다.
+// 확정 세일즈·프로모션 출고만 남긴다 — 입출고 탭 기간별 출고 집계(outboundBuckets, 고객사·매출 펼침용 최근 원장
+// 기준). 판매대시보드와 같은 규칙(2026-11-05 결정 "세일즈 + 프로모션 따로"): A/S·샘플 유형과 내부 이동(창고·샘플·
+// 사무실·수리, lib/hardware/locations.ts)은 뺀다. 예전 정규식은 "대치수리학원" 같은 고객사를 수리로 뺐다.
+// FY 판매 수치는 서버 판매대시보드(SalesDashboardSection)가 정본이다.
 function confirmedSalesMovements(movements: HardwareMovement[]): HardwareMovement[] {
-  return movements.filter(
-    (movement) =>
-      movement.movement_type === "outbound" &&
-      !movement.voided_at &&
-      !/예정|예약|대기/.test(movement.status ?? "") &&
-      !/샘플|사무실|수리|sample|repair/i.test(`${movement.to_location ?? ""} ${movement.status ?? ""}`)
-  )
+  return movements.filter((movement) => {
+    if (movement.movement_type !== "outbound" || movement.voided_at) return false
+    if (/예정|예약|대기/.test(movement.status ?? "")) return false
+    if (!movement.customer_id && isInternalLocation(movement.to_location)) return false
+    const type = outboundSaleType(movement) ?? "sales"
+    return type === "sales" || type === "promotion"
+  })
 }
 
 // 제품 칩용 단축명 (기간 집계 칩에서 길이 절약).
@@ -1817,7 +1820,7 @@ export default function HardwareInventoryClient({
       revenue: number
       hasRevenue: boolean
       byProduct: Map<string, number>
-      byCustomer: Map<string, { qty: number; revenue: number; firstDate: string | null; lastDate: string | null }>
+      byCustomer: Map<string, { qty: number; promotionQty: number; revenue: number; firstDate: string | null; lastDate: string | null }>
       byType: Map<OutboundSaleType, number>
     }
     const buckets = new Map<string, BucketAgg>()
@@ -1829,14 +1832,16 @@ export default function HardwareInventoryClient({
       const saleType = outboundSaleType(movement) ?? "sales"
       // 매출은 실판매(sales)만 잡는다. 프로모션/A/S는 $0이라 자연히 제외되지만 명시적으로 가드한다.
       const revenue = saleType === "sales" && movement.amount_usd != null ? movement.amount_usd : 0
-      bucket.total += movement.quantity
+      // 막대·합계는 세일즈만, 프로모션은 유형 칩·고객사 줄에 따로(2026-11-05 결정).
+      if (saleType !== "promotion") bucket.total += movement.quantity
       bucket.revenue += revenue
       if (saleType === "sales" && movement.amount_usd != null) bucket.hasRevenue = true
       bucket.byProduct.set(movement.product_name, (bucket.byProduct.get(movement.product_name) ?? 0) + movement.quantity)
       bucket.byType.set(saleType, (bucket.byType.get(saleType) ?? 0) + movement.quantity)
       const customer = customerLabel(movement.to_location)
-      const entry = bucket.byCustomer.get(customer) ?? { qty: 0, revenue: 0, firstDate: null, lastDate: null }
-      entry.qty += movement.quantity
+      const entry = bucket.byCustomer.get(customer) ?? { qty: 0, promotionQty: 0, revenue: 0, firstDate: null, lastDate: null }
+      if (saleType === "promotion") entry.promotionQty += movement.quantity
+      else entry.qty += movement.quantity
       entry.revenue += revenue
       // date는 YYYY-MM-DD 문자열이라 사전식 비교가 곧 시간순 비교.
       if (!entry.firstDate || date < entry.firstDate) entry.firstDate = date
@@ -1860,7 +1865,7 @@ export default function HardwareInventoryClient({
         .filter((entry) => entry.qty > 0),
       customers: Array.from(bucket.byCustomer.entries())
         .sort((a, b) => b[1].revenue - a[1].revenue || b[1].qty - a[1].qty)
-        .map(([name, value]) => ({ name, qty: value.qty, revenue: value.revenue, hasRevenue: value.revenue > 0, dateLabel: formatDateSpan(value.firstDate, value.lastDate) })),
+        .map(([name, value]) => ({ name, qty: value.qty, promotionQty: value.promotionQty, revenue: value.revenue, hasRevenue: value.revenue > 0, dateLabel: formatDateSpan(value.firstDate, value.lastDate) })),
     }))
   }, [data?.movements, outPeriod])
 

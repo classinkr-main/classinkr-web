@@ -17,7 +17,8 @@ import { hasProcessAlertBeenSent, listProcessAlertLedger } from "@/lib/repositor
 // 웹훅 주소·외부 오류 원문은 결과·로그에 싣지 않는다.
 // 끄기: 설정 > 웹훅에서 운영 방(wecomOpsWebhookUrl)을 끄면 보내지 않고 channel_off 로 끝난다(운영 방 알림 전체,
 // 크론 실패로 적지 않는다).
-// 이 알림만 끄려면 env HARDWARE_PROCESS_ALERTS=off — 원장도 읽지 않고 disabled 로 끝난다.
+// 기본은 꺼짐(운영자 결정 2026-11-05: "보내지 않기" — 화면의 30일+ 미확정 배지만 쓴다). 다시 켜려면 env
+// HARDWARE_PROCESS_ALERTS=on. 꺼져 있으면 원장도 읽지 않고 disabled 로 끝난다(dryRun 미리보기는 그대로 된다).
 
 export interface HardwareProcessAlertReport {
   status: "sent" | "empty" | "already_sent" | "preview" | "disabled" | "channel_off"
@@ -52,7 +53,7 @@ function summarize(selection: ProcessAlertSelection) {
 }
 
 export function isHardwareProcessAlertsDisabled(env: NodeJS.ProcessEnv = process.env) {
-  return /^(off|0|false|disabled)$/i.test((env.HARDWARE_PROCESS_ALERTS ?? "").trim())
+  return !/^(on|1|true|enabled)$/i.test((env.HARDWARE_PROCESS_ALERTS ?? "").trim())
 }
 
 export async function runHardwareProcessAlerts(
@@ -60,7 +61,7 @@ export async function runHardwareProcessAlerts(
 ): Promise<HardwareProcessAlertReport> {
   const dryRun = options.dryRun === true
   const now = options.now ?? new Date()
-  if (isHardwareProcessAlertsDisabled()) {
+  if (!dryRun && isHardwareProcessAlertsDisabled()) {
     return {
       status: "disabled",
       dryRun,

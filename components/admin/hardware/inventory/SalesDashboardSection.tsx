@@ -33,6 +33,7 @@ function Cell({ cell, strong }: { cell: SalesDashboardCellView; strong?: boolean
         <span className={strong ? "font-bold text-[#111110]" : "font-semibold text-[#31302E]"}>{cell.installed || "0"}</span>
         {cell.planned && <span className="ml-1 font-semibold text-[#A8741A]">/ {cell.planned}</span>}
       </span>
+      {cell.promotion && <span className="whitespace-nowrap text-[11px] font-semibold text-[#7A520F]">{cell.promotion}</span>}
       {cell.returned && <span className="whitespace-nowrap text-[11px] font-semibold text-[#A39E98]">{cell.returned}</span>}
     </span>
   )
@@ -88,7 +89,7 @@ function SalesDashboardSection({ reloadKey, onOpenDetail }: SalesDashboardSectio
         <div className="min-w-0">
           <p className="text-[15px] font-bold tracking-[-0.01em] text-[#111110]">판매대시보드</p>
           <p className="mt-1 text-[12px] text-[#615D59]">
-            세일즈·프로모션 출고(A/S·샘플·내부 이동 제외) · 칸 = 설치 완료 <span className="font-semibold text-[#A8741A]">/ +배송 예정</span> · 회수는 빼지 않고 따로 표시
+            세일즈 출고(A/S·샘플·내부 이동 제외) · 칸 = 설치 완료 <span className="font-semibold text-[#A8741A]">/ +배송 예정</span> · 프로모션·회수는 칸 아래에 따로 표시
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -118,8 +119,14 @@ function SalesDashboardSection({ reloadKey, onOpenDetail }: SalesDashboardSectio
 
       {view && (
         <div className="flex flex-wrap gap-x-6 gap-y-1 px-5 pt-4 text-[12px] font-semibold text-[#615D59]">
-          <span>설치 완료 <span className="text-[18px] font-bold tabular-nums text-[#111110]">{view.headline.installed}</span>대</span>
+          <span>세일즈 설치 완료 <span className="text-[18px] font-bold tabular-nums text-[#111110]">{view.headline.installed}</span>대</span>
           <span>배송 예정 <span className="text-[18px] font-bold tabular-nums text-[#A8741A]">+{view.headline.planned}</span>대</span>
+          {view.headline.hasPromotion && (
+            <span>
+              프로모션 <span className="text-[18px] font-bold tabular-nums text-[#7A520F]">{view.headline.promotionInstalled}</span>대
+              {view.headline.promotionPlanned !== "0" && <span className="ml-1 font-semibold text-[#A8741A]">/ +{view.headline.promotionPlanned}</span>}
+            </span>
+          )}
           <span>회수 <span className="text-[18px] font-bold tabular-nums text-[#615D59]">{view.headline.returned}</span>대</span>
         </div>
       )}
