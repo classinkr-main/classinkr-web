@@ -28,7 +28,7 @@ const SBS_ROOF = at(59.47, 9.67)
 const STATION = at(81.02, 90.7)
 const PARK = at(50.93, 34.02)
 const HYUNDAI_ROOF = at(81.99, 54.81)
-const SCHOOL_ROOF = at(43.65, 47.89)
+const SCHOOL_ROOF = at(49, 47.89) // 지붕 가운데(43.65)보다 조금 오른쪽 — 사용자 요청
 const EXITS = [
   { no: 2, style: at(60.84, 67.32), main: true },
   { no: 1, style: at(61.21, 85.52), main: false },
@@ -132,14 +132,7 @@ export function ContactMap() {
           ))}
           <MapLabel style={PARK}>오목공원</MapLabel>
           <MapLabel style={HYUNDAI_ROOF}>현대백화점</MapLabel>
-          {/* 목운중학교는 블록 전체(건물 + 운동장)가 연한 색 바탕이라 이름은 배경 없는 글자로 얹는다 */}
-          <span
-            data-cm="label"
-            style={SCHOOL_ROOF}
-            className="absolute -translate-x-1/2 -translate-y-1/2 whitespace-nowrap text-label text-fg-ink"
-          >
-            목운중학교
-          </span>
+          <MapLabel style={SCHOOL_ROOF}>목운중학교</MapLabel>
           <MapLabel style={SBS_ROOF} className="border-line-ink px-2.5 text-fg-ink">SBS</MapLabel>
 
           {/* 오목교역: 5호선 선로·역 범위는 바탕(ground)에 있고, 여기서는 역 이름과 가까운 출구 번호를 얹는다 */}
