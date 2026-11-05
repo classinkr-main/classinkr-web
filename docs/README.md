@@ -70,6 +70,8 @@ Admin 관련 작업은 [Admin 지침 맵](./active/admin-guidance-map.md)에서 
   - **어드민 사용 실측·탭 정리.** 운영 DB 읽기 전용 집계로 본 화면별 사람 사용 흔적(Home 어드민 쓰기 ≈0, 매니저 업무는 Compass), 멈춘 원천(NEO env 누락·시트 권한), 기본 숨김·매니저별 숨기기, 심폐소생 Top 5, 결정 대기 D1~D8
 - [active/crm-tab-develop-plan-2026-09-12.md](./active/crm-tab-develop-plan-2026-09-12.md)
   - **CRM 탭 실행 로드맵.** 5작업면·돈흐름·데이터층의 현황 진단, 정책-코드 불일치 총괄, 개선 후보 ID(H/C/R/D)와 4 Wave 실행 순서, 사용자 결정 항목, 문서 정리 제안
+- [active/crm-inquiry-notable-plan-2026-11-05.md](./active/crm-inquiry-notable-plan-2026-11-05.md)
+  - **CRM 문의·특이사항 바로 보기 시안 4개(선택 대기).** 홈페이지 문의·빠른 리드가 안 보이고 특이사항이 먼저 오지 않으며 타고 들어가는 게 많은 이유(코드 근거), 공통 바닥 F1~F6(특이사항 규칙 하나·재문의 내용 연결 등), 시안 A 현황 띠 · B 리드 수신함 2단 · C 시트형 표 · D 전역 패널 비교, 권장(B + A 축소), 결정 D1~D7. 목업 [mockups/crm-inquiry-notable-2026-11-05.html](./active/mockups/crm-inquiry-notable-2026-11-05.html)
 - [active/internal-crm-backend-operating-plan-2026-06-26.md](./active/internal-crm-backend-operating-plan-2026-06-26.md)
   - 자체 CRM 백엔드/운영 기준. 시트·OCRM·HQ CRM은 참고/동기화 원천으로 두고, Admin CRM의 고객 스파인·회의록·녹음·다음 액션 구조를 정의
 - [active/internal-cs-ai-bridge.md](./active/internal-cs-ai-bridge.md)

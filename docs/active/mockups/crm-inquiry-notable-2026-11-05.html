@@ -1,0 +1,1027 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CRM 문의·특이사항 시안</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&display=swap">
+<style>
+/* 공통 — 어드민 토큰(DESIGN.md)만 쓴다. 라이트 단일 테마. */
+body{margin:0}
+.cv{font-family:"Pretendard Variable",Pretendard,"Noto Sans KR",-apple-system,BlinkMacSystemFont,system-ui,sans-serif;color:#111110;background:#FAFAF8;font-size:13px;line-height:1.5;-webkit-font-smoothing:antialiased;box-sizing:border-box}
+.cv *{box-sizing:border-box}
+:where(.cv) a{color:#084734;text-decoration:none;font-weight:600}
+:where(.cv) a:hover{text-decoration:underline}
+.cv button{font:inherit;color:inherit;cursor:pointer}
+.cv :is(a,button,input,summary):focus-visible{outline:2px solid #084734;outline-offset:2px;border-radius:6px}
+.cv h1,.cv h2,.cv h3,.cv p{margin:0}
+.num{font-variant-numeric:tabular-nums}
+.sub{color:#615D59}
+.dim{color:#615D59;font-size:12px}
+.strong{font-weight:700}
+.warn{color:#7A520F}
+.danger{color:#8F2C2C}
+.ok{color:#084734}
+.sample{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:#7A520F;border:1px solid #ECD29C;border-radius:6px;padding:2px 8px;background:#FFFFFF}
+.shell{display:flex;flex-wrap:wrap;align-items:flex-start;background:#FFFFFF;border:1px solid #E8E8E4;border-radius:16px;overflow:hidden;box-shadow:rgba(0,0,0,0.04) 0 4px 18px,rgba(0,0,0,0.027) 0 2px 7.8px,rgba(0,0,0,0.02) 0 0.8px 2.9px}
+.side{flex:0 0 208px;max-width:100%;background:#F6F5F4;border-right:1px solid #E8E8E4;padding:18px 12px;display:flex;flex-direction:column;gap:2px;align-self:stretch}
+.side .brand{font-weight:700;font-size:14px;padding:4px 10px 14px}
+.side .it{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:36px;padding:0 10px;border-radius:8px;color:#31302E;font-weight:500;font-size:13px}
+.side .it.on{background:#FFFFFF;color:#111110;font-weight:700;box-shadow:0 1px 2px rgba(0,0,0,0.06)}
+.side .cnt{min-width:22px;text-align:center;font-size:11px;font-weight:700;color:#7A520F;border:1px solid #ECD29C;border-radius:999px;padding:0 6px;background:#FFFFFF}
+.main{flex:999 1 640px;min-width:0;background:#FAFAF8}
+.ph{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px 20px;padding:24px 28px 14px}
+.ph h1{font-size:26px;font-weight:700;letter-spacing:-0.02em;line-height:1.2}
+.ph .meta{font-size:12px;color:#615D59;margin-top:4px}
+.tabs{display:flex;flex-wrap:wrap;gap:2px 18px;padding:0 28px;border-bottom:1px solid #E8E8E4}
+.tab{display:inline-flex;align-items:center;gap:6px;min-height:44px;font-size:14px;font-weight:600;color:#615D59;border-bottom:2px solid transparent;margin-bottom:-1px}
+.tab.on{color:#111110;border-bottom-color:#111110}
+.tab .cnt{font-size:11px;font-weight:700;color:#7A520F}
+.subtabs{display:flex;flex-wrap:wrap;gap:6px;padding:12px 28px 0}
+.st{display:inline-flex;align-items:center;min-height:32px;padding:0 12px;border-radius:8px;font-size:12px;font-weight:600;color:#615D59;border:1px solid transparent}
+.st.on{background:#FFFFFF;color:#111110;border-color:#E8E8E4}
+.body{padding:18px 28px 32px;display:flex;flex-direction:column;gap:18px}
+.card{background:#FFFFFF;border:1px solid #E8E8E4;border-radius:12px}
+.card-h{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 16px;padding:14px 18px;border-bottom:1px solid #E8E8E4}
+.card-h h2{font-size:15px;font-weight:700}
+.card-h .note{font-size:12px;color:#615D59}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:36px;padding:0 12px;border-radius:6px;font-size:12px;font-weight:700;border:1px solid #E8E8E4;background:#FFFFFF;color:#111110;white-space:nowrap}
+.btn.primary{background:#084734;border-color:#084734;color:#FFFFFF}
+.btn.soft{background:rgba(0,0,0,0.05);border-color:transparent}
+.btn.sm{min-height:32px;padding:0 10px;font-size:12px}
+.btn svg,.ic{width:14px;height:14px;flex:none}
+.seg{display:inline-flex;border:1px solid #E8E8E4;border-radius:8px;padding:3px;background:#FFFFFF;gap:2px;flex-wrap:wrap}
+.seg button{border:0;background:none;min-height:30px;padding:0 10px;border-radius:6px;font-size:12px;font-weight:600;color:#615D59}
+.seg button.on{background:#111110;color:#FFFFFF}
+.chip{display:inline-flex;align-items:center;gap:6px;min-height:30px;padding:0 10px;border-radius:999px;border:1px solid #E8E8E4;background:#FFFFFF;font-size:12px;font-weight:600;color:#31302E;white-space:nowrap}
+.chip.on{border-color:#111110;color:#111110}
+.chip .n{font-weight:700}
+.dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex:none}
+.d-home{background:#1D9E75}.d-meta{background:#378ADD}.d-intake{background:#17868F}.d-res{background:#BA7517}.d-etc{background:#888780}
+.src{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:#31302E;white-space:nowrap}
+.flag{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:700;white-space:nowrap}
+.flag svg{width:13px;height:13px}
+.flag.w{color:#7A520F}.flag.d{color:#8F2C2C}.flag.g{color:#084734}.flag.n{color:#31302E}
+.reason{font-size:13px;color:#31302E}
+.msg{background:#F6F5F4;border-radius:8px;padding:10px 12px;font-size:13px;color:#31302E;line-height:1.6}
+.msg.clamp{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px 18px}
+.kv dt{font-size:11px;font-weight:600;color:#615D59}
+.kv dd{margin:2px 0 0;font-size:13px;font-weight:600;color:#111110}
+.cv dl{margin:0}
+.list{list-style:none;margin:0;padding:0}
+.time{font-size:12px;color:#615D59;font-variant-numeric:tabular-nums;white-space:nowrap}
+.name{font-size:14px;font-weight:700;color:#111110}
+.org{font-size:12px;color:#615D59}
+.who{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 8px;min-width:0}
+.acts{display:flex;flex-wrap:wrap;gap:6px}
+.big{font-size:32px;font-weight:700;letter-spacing:-0.03em;line-height:1;font-variant-numeric:tabular-nums}
+.big small{font-size:14px;font-weight:600;letter-spacing:0;margin-left:2px}
+.kbd{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 5px;border:1px solid #E8E8E4;border-bottom-width:2px;border-radius:4px;font-size:11px;font-weight:600;color:#615D59;background:#FFFFFF}
+.sel{background:#F6F5F4}
+.cap{font-size:11px;color:#615D59}
+@media (max-width:900px){.side{flex:1 1 100%;flex-direction:row;overflow-x:auto;border-right:0;border-bottom:1px solid #E8E8E4;padding:8px}.side .brand{display:none}.side .it{flex:none}}
+.row-hit{display:block;color:inherit;font-weight:400;text-decoration:none;padding:12px 16px}
+.row-hit:hover{background:#FBFBFA;text-decoration:none}
+.row-top{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 8px}
+.row-foot{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:4px 10px;margin-top:6px}
+.li{border-top:1px solid #E8E8E4}
+.li:first-child{border-top:0}
+.more-row{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 16px;border-top:1px solid #E8E8E4;font-size:12px}
+/* Main.dc.html */
+.a-lanes{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:0;border-top:1px solid #E8E8E4}
+.a-lane{display:flex;flex-direction:column;min-width:0;border-left:1px solid #E8E8E4}
+.a-lane:first-child{border-left:0}
+.a-lane-h{display:flex;align-items:flex-end;justify-content:space-between;gap:10px;padding:14px 16px 12px;border-bottom:1px solid #E8E8E4}
+.a-lane-h .lbl{font-size:13px;font-weight:700;color:#31302E}
+.a-lane-h .def{font-size:11px;color:#615D59;margin-top:2px}
+.a-open{background:#FBFBFA;padding:4px 16px 16px;display:flex;flex-direction:column;gap:12px}
+.a-open .kv{grid-template-columns:repeat(auto-fit,minmax(120px,1fr))}
+.a-below{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+.a-ghost{background:#FFFFFF;border:1px dashed #D6D3CC;border-radius:12px;padding:14px 16px;min-height:88px}
+.a-ghost h3{font-size:13px;font-weight:700;color:#31302E}
+.a-tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:10px}
+.a-tile{border:1px solid #E8E8E4;border-radius:8px;padding:8px 10px}
+.a-tile b{display:block;font-size:18px;font-variant-numeric:tabular-nums}
+.a-legend{display:flex;flex-wrap:wrap;gap:6px 16px;padding:10px 18px;border-top:1px solid #E8E8E4;background:#FBFBFA;border-radius:0 0 12px 12px}
+
+/* B-Inbox.dc.html */
+.b-tool{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px 16px}
+.b-search{display:flex;align-items:center;gap:8px;min-height:36px;padding:0 12px;border:1px solid #E5E5E0;border-radius:6px;background:#FFFFFF;color:#615D59;font-size:12px;flex:1 1 220px;max-width:360px}
+.b-split{display:flex;flex-wrap:wrap;align-items:stretch;background:#FFFFFF;border:1px solid #E8E8E4;border-radius:12px;overflow:hidden}
+.b-list{flex:1 1 380px;max-width:100%;border-right:1px solid #E8E8E4;min-width:0}
+.b-detail{flex:999 1 520px;min-width:0;display:flex;flex-direction:column}
+.b-grp{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;background:#F6F5F4;border-top:1px solid #E8E8E4;border-bottom:1px solid #E8E8E4;font-size:12px;font-weight:700;color:#31302E}
+.b-grp:first-child{border-top:0}
+.b-row{display:grid;grid-template-columns:10px minmax(0,1fr) auto;gap:4px 10px;align-items:baseline;padding:11px 16px;color:inherit;font-weight:400;text-decoration:none;border-top:1px solid #F0F0EC}
+.b-row:hover{background:#FBFBFA;text-decoration:none}
+.b-row.on{background:#F6F5F4;box-shadow:inset 3px 0 0 #111110}
+.b-unread{width:7px;height:7px;border-radius:50%;background:#A8741A;align-self:center}
+.b-read{width:7px;height:7px}
+.b-line2{grid-column:2 / 4;display:flex;gap:8px;align-items:baseline;min-width:0}
+.b-ex{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#615D59;font-size:12px;min-width:0}
+.b-dh{padding:18px 22px 14px;border-bottom:1px solid #E8E8E4;display:flex;flex-direction:column;gap:12px}
+.b-dh h2{font-size:20px;font-weight:700;letter-spacing:-0.01em}
+.b-bar{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.b-pick{display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:0 10px;border:1px solid #E5E5E0;border-radius:6px;background:#FFFFFF;font-size:12px;font-weight:600;color:#111110}
+.b-pick .k{color:#615D59;font-weight:500}
+.b-sec{padding:16px 22px;border-bottom:1px solid #E8E8E4;display:flex;flex-direction:column;gap:10px}
+.b-sec h3{font-size:13px;font-weight:700;color:#31302E;display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.b-note{display:flex;flex-direction:column;gap:8px}
+.b-note li{display:grid;grid-template-columns:auto minmax(0,1fr);gap:2px 10px;align-items:baseline}
+.b-tl li{display:grid;grid-template-columns:92px minmax(0,1fr);gap:4px 14px;padding:8px 0;border-top:1px solid #F0F0EC}
+.b-tl li:first-child{border-top:0;padding-top:0}
+.b-comp{display:flex;flex-wrap:wrap;gap:6px;align-items:center;border:1px solid #E5E5E0;border-radius:8px;padding:8px}
+.b-comp .ph-in{flex:1 1 200px;color:#615D59;font-size:12px;padding:0 6px}
+.b-fold{display:flex;justify-content:space-between;align-items:center;width:100%;min-height:44px;padding:12px 22px;color:#31302E;font-size:12px;font-weight:600;background:#FFFFFF;border:0;border-bottom:1px solid #E8E8E4;text-align:left}
+.b-foot{display:flex;flex-wrap:wrap;gap:6px 14px;padding:10px 16px;border-top:1px solid #E8E8E4;background:#FBFBFA}
+
+/* C-Sheet.dc.html */
+.c-views{display:flex;flex-wrap:wrap;gap:4px;border-bottom:1px solid #E8E8E4}
+.c-view{display:inline-flex;align-items:center;gap:6px;min-height:40px;padding:0 14px;font-size:13px;font-weight:600;color:#615D59;border-bottom:2px solid transparent;margin-bottom:-1px;background:none;border-top:0;border-left:0;border-right:0}
+.c-view.on{color:#111110;border-bottom-color:#111110}
+.c-view .n{font-weight:700;font-variant-numeric:tabular-nums}
+.c-tool{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;justify-content:space-between}
+.c-pick{display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:0 10px;border:1px solid #E5E5E0;border-radius:6px;background:#FFFFFF;font-size:12px;font-weight:600;color:#111110}
+.c-pick .k{color:#615D59;font-weight:500}
+.c-box{background:#FFFFFF;border:1px solid #E8E8E4;border-radius:12px;overflow:hidden}
+.c-bulk{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;padding:8px 14px;background:#F6F5F4;border-bottom:1px solid #E8E8E4;font-size:12px}
+.c-scroll{overflow-x:auto}
+.c-t{width:100%;border-collapse:collapse;min-width:1080px}
+.c-t th{position:sticky;top:0;background:#FBFBFA;text-align:left;font-size:11px;font-weight:700;color:#615D59;padding:9px 10px;border-bottom:1px solid #E8E8E4;white-space:nowrap}
+.c-t td{padding:10px 10px;border-bottom:1px solid #F0F0EC;vertical-align:top;font-size:13px}
+.c-t tr.hot td:first-child{box-shadow:inset 2px 0 0 #B43E3E}
+.c-t tr.mid td:first-child{box-shadow:inset 2px 0 0 #A8741A}
+.c-t tr.open td{background:#F6F5F4;border-bottom:0}
+.c-t tr.exp td{background:#F6F5F4;padding:4px 14px 16px 52px}
+.c-ex{display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden;color:#31302E;max-width:320px}
+.c-why{display:flex;flex-direction:column;gap:2px;max-width:260px}
+.c-why .cap{white-space:normal}
+.c-chk{width:16px;height:16px;accent-color:#084734;margin:2px 0 0}
+.c-exp{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:14px 24px}
+@media (max-width:900px){.c-exp{grid-template-columns:minmax(0,1fr)}}
+.c-foot{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px;padding:10px 14px;font-size:12px;color:#615D59}
+
+/* D-Panel.dc.html */
+.d-stage{flex:999 1 640px;min-width:0;display:flex;flex-wrap:wrap;align-items:stretch;background:#EFEEEA}
+.d-under{flex:999 1 360px;min-width:0;opacity:0.45;background:#FAFAF8;pointer-events:none}
+.d-under .gr{height:12px;border-radius:4px;background:#E8E8E4}
+.d-under .rowx{display:grid;grid-template-columns:90px minmax(0,1fr) 120px 90px;gap:14px;padding:14px 18px;border-top:1px solid #E8E8E4;align-items:center}
+.d-panel{flex:1 1 470px;max-width:100%;background:#FFFFFF;border-left:1px solid #E8E8E4;display:flex;flex-direction:column;box-shadow:rgba(0,0,0,0.05) -12px 0 52px,rgba(0,0,0,0.03) -2px 0 8px}
+.d-ph{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:18px 20px 10px}
+.d-ph h2{font-size:18px;font-weight:700}
+.d-x{display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:6px;border:1px solid #E8E8E4;background:#FFFFFF}
+.d-x svg{width:16px;height:16px}
+.d-tabs{display:flex;gap:4px;padding:0 20px;border-bottom:1px solid #E8E8E4}
+.d-tab{display:inline-flex;align-items:center;gap:6px;min-height:40px;padding:0 10px;font-size:13px;font-weight:600;color:#615D59;border:0;background:none;border-bottom:2px solid transparent;margin-bottom:-1px}
+.d-tab.on{color:#111110;border-bottom-color:#111110}
+.d-tab .n{font-weight:700;font-variant-numeric:tabular-nums}
+.d-filters{display:flex;flex-wrap:wrap;gap:6px;padding:10px 20px}
+.d-cards{display:flex;flex-direction:column;gap:10px;padding:4px 16px 16px;background:#FAFAF8;flex:1}
+.d-card{background:#FFFFFF;border:1px solid #E8E8E4;border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:10px}
+.d-card.new{box-shadow:inset 0 0 0 1px #ECD29C}
+.d-info{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:12px;color:#615D59}
+.d-foot{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px;padding:12px 20px;border-top:1px solid #E8E8E4}
+.d-entry{display:flex;flex-wrap:wrap;gap:6px 14px;padding:0 20px 10px;font-size:11px;color:#615D59}
+
+body{margin:0;background:#FAFAF8}
+.doc{max-width:1520px;margin:0 auto;padding:32px clamp(16px,3vw,40px) 64px;font-family:"Pretendard Variable",Pretendard,"Noto Sans KR",-apple-system,BlinkMacSystemFont,system-ui,sans-serif;color:#111110;font-size:14px;line-height:1.6}
+.doc h1{font-size:26px;letter-spacing:-0.02em;margin:0 0 6px}
+.doc .lede{color:#615D59;max-width:80ch;margin:0}
+.doc .toc{display:flex;flex-wrap:wrap;gap:8px;margin:18px 0 8px;padding:0;list-style:none}
+.doc .toc a{display:inline-flex;align-items:center;min-height:36px;padding:0 12px;border:1px solid #E8E8E4;border-radius:6px;background:#FFFFFF;color:#111110;font-weight:600;font-size:13px;text-decoration:none}
+.doc .toc a:hover{border-color:#111110}
+.doc .now{background:#FFFFFF;border:1px solid #E8E8E4;border-radius:12px;padding:16px 20px;margin-top:18px}
+.doc .now ul,.doc .draft-note ul{margin:6px 0 0;padding-left:18px}
+.doc .draft{margin-top:44px}
+.doc .draft h2{font-size:20px;letter-spacing:-0.01em;margin:0 0 8px}
+.doc .draft-note{background:#FFFFFF;border:1px solid #E8E8E4;border-radius:12px;padding:14px 18px;margin-bottom:14px;color:#31302E}
+.doc .draft-note p{margin:0}
+.doc .draft-note p:first-child{font-weight:700;color:#111110}
+</style>
+</head>
+<body>
+<div class="doc">
+<h1>CRM 문의·특이사항 시안</h1>
+<p class="lede">기획 정본은 <code>docs/active/crm-inquiry-notable-plan-2026-11-05.md</code>다. 이 파일은 시안 4개를 한 장에 모은 것이다. 수치·이름·학원명은 전부 샘플이다(2026-11-05 14:32 기준으로 가정).</p>
+<ul class="toc"><li><a href="#draft-a">시안 A · 현황 맨 위 &#x27;먼저 볼 것&#x27;</a></li><li><a href="#draft-b">시안 B · 리드 수신함 2단</a></li><li><a href="#draft-c">시안 C · 시트형 표 + 특이사항 열</a></li><li><a href="#draft-d">시안 D · 어디서나 여는 문의 패널</a></li></ul>
+<section class="now"><p>지금 경로 (main + PR #65 기준)</p>
+<ul><li>오늘 들어온 홈페이지 문의 원문 보기: 사이드바 CRM → 고객DB → 리드 → (PR 전: 범위 &#x27;전체 담당자&#x27;로 변경) → 미확인 카드 → 상세 패널 7번째 블록 &#x27;제출 메시지&#x27;까지 스크롤. 약 4~7번 클릭 + 긴 스크롤 2번.</li><li>리드 행·보드 카드·Overview 띠 어디에도 문의 내용 미리보기가 없다.</li><li>재문의는 기존 리드에 합쳐지고 새 문의 내용은 기록 이벤트에만 남아, 리드 보드·상세 패널에서 보이지 않는다.</li><li>&#x27;특이사항&#x27;은 고객 360 상세의 활동 탭 안 &#x27;특이사항 피드&#x27;(위험 기록만)뿐이다. 리드에는 없다.</li><li>확인·담당·팔로업·상태는 상세 패널 안에서만 바꿀 수 있다(묶음 작업 제외).</li></ul>
+<p>4개 시안은 같은 샘플 데이터(2026-11-05 14:32 기준)를 쓴다. 이름·학원명은 가상이다.</p></section>
+<section class="draft" id="draft-a">
+<h2>시안 A · 현황 맨 위 &#x27;먼저 볼 것&#x27;</h2>
+<div class="draft-note"><p>A · 바꾸는 곳: CRM 현황(업무 현황) 맨 위만</p>
+<ul><li>사이드바 CRM 한 번으로 &#x27;새 문의 · 특이사항 · 늦어진 응대&#x27; 세 줄을 본다. 문의 내용 두 줄 미리보기.</li><li>행을 누르면 그 자리에서 펼쳐 전체 내용과 확인·담당·전화를 처리한다(상세 패널 안 열림).</li><li>기존 현황 패널(오늘 연락·주간 등)은 아래로 내려간다.</li><li>클릭: 원문 보기 1 → 0(미리보기) / 조치 1.</li><li>장점: 변경 범위가 가장 작고 PR #65의 CRM 배지가 그대로 착지한다. 단점: 현황이 더 길어지고, 하루 20건이 넘으면 띠가 목록 역할을 못 한다.</li></ul></div>
+<div class="cv" style="padding: 24px clamp(16px, 3vw, 40px) 48px; min-height: 100%">
+<div class="shell">
+<nav class="side" aria-label="어드민 메뉴">
+<div class="brand">Classin Admin</div>
+<a class="it" href="#">Overview</a>
+<a class="it" href="#">캘린더</a>
+<a class="it" href="#">KR Team</a>
+<a class="it" href="#">매출 장부</a>
+<a class="it on" href="#" aria-current="page">CRM <span class="cnt num" title="응대 전 문의 8건">8</span></a>
+<a class="it" href="#">견적</a>
+<a class="it" href="#">하드웨어</a>
+<a class="it" href="#">CS 콘솔</a>
+<a class="it" href="#">콘텐츠</a>
+<a class="it" href="#">마케팅</a>
+</nav>
+<main class="main">
+<header class="ph">
+<div>
+<h1>CRM 홈</h1>
+<p class="meta">맨 위 '먼저 볼 것'은 전사 기준 · 아래 패널은 지금처럼 내 담당 · 14:32 기준</p>
+</div>
+<div class="acts">
+<span class="sample">샘플 데이터</span>
+<button type="button" class="btn">고객 검색 <span class="kbd">⌘K</span></button>
+<button type="button" class="btn">기록 추가</button>
+<button type="button" class="btn primary">리드 등록</button>
+</div>
+</header>
+<nav class="tabs" aria-label="CRM 작업면">
+<a class="tab on" href="#" aria-current="page">현황</a>
+<a class="tab" href="#">고객DB</a>
+<a class="tab" href="#">검수</a>
+<a class="tab" href="#" style="font-size: 12px">숨긴 탭 3 · 보기</a>
+</nav>
+<div class="subtabs">
+<a class="st on" href="#">업무 현황</a>
+<a class="st" href="#">전체 분석</a>
+<a class="st" href="#">지역 분석</a>
+</div>
+<div class="body">
+
+<section class="card" aria-labelledby="a-first">
+<div class="card-h">
+<div style="display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px">
+<h2 id="a-first">먼저 볼 것</h2>
+<span class="note">전사 · 오늘·어제 들어온 문의와 특이사항 · 1분마다 갱신</span>
+</div>
+<div class="acts" style="align-items: center">
+<div class="seg" role="group" aria-label="유입">
+<button type="button" class="on">전체</button>
+<button type="button">홈페이지 4</button>
+<button type="button">광고 2</button>
+<button type="button">접수 2</button>
+</div>
+<button type="button" class="btn soft sm">새 문의 알림 켬</button>
+</div>
+</div>
+
+<div class="a-lanes">
+
+<div class="a-lane">
+<div class="a-lane-h">
+<div>
+<p class="lbl">새 문의</p>
+<p class="def">오늘 들어온 문의 · 최근순 · 내용 미리보기</p>
+</div>
+<div style="text-align: right">
+<p class="big">7<small>건</small></p>
+<p class="dim ok strong" style="margin-top: 4px">▲ 2 <span class="sub" style="font-weight: 400">어제 이 시각 5건</span></p>
+</div>
+</div>
+<ul class="list">
+<li class="li">
+<a class="row-hit sel" href="#" aria-expanded="true">
+<div class="row-top"><span class="time">14:21</span><span class="name">김○○</span><span class="org">해냄수학학원</span></div>
+<div class="row-foot" style="margin-top: 4px"><span class="src"><span class="dot d-home"></span>홈페이지 · 도입 상담</span><span class="flag g">견적 요청 · 방문 희망 11/11</span></div>
+</a>
+<div class="a-open">
+<p class="msg">중등 수학 전문이고 원생 200명 정도입니다. 전자칠판 3대랑 수업 녹화까지 같이 견적 받고 싶어요. 다음 주 화요일 오후에 쇼룸 방문 가능할까요?</p>
+<dl class="kv">
+<div><dt>학원 규모</dt><dd>100~300명</dd></div>
+<div><dt>직책</dt><dd>원장</dd></div>
+<div><dt>연락처</dt><dd class="num">010-****-1824</dd></div>
+<div><dt>담당</dt><dd class="warn">미배정</dd></div>
+</dl>
+<div class="acts">
+<button type="button" class="btn primary sm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>확인하고 나에게 배정</button>
+<button type="button" class="btn sm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>전화</button>
+<button type="button" class="btn sm">담당 지정</button>
+<button type="button" class="btn sm">내일 팔로업</button>
+</div>
+<p class="cap">상세 패널을 열지 않고 여기서 처리 · <a href="#">리드 전체 기록 →</a></p>
+</div>
+</li>
+<li class="li">
+<a class="row-hit" href="#">
+<div class="row-top"><span class="time">13:58</span><span class="name">이○○</span><span class="org">리드영어</span></div>
+<p class="msg clamp" style="margin-top: 6px">관심: 장비 구매 · 지역: 경기 분당 · 연락 가능 시간: 오후</p>
+<div class="row-foot"><span class="src"><span class="dot d-meta"></span>Meta 리드폼</span><span class="flag w">재문의 2회째</span></div>
+</a>
+</li>
+<li class="li">
+<a class="row-hit" href="#">
+<div class="row-top"><span class="time">11:02</span><span class="name">박○○</span><span class="org">온새미국어</span></div>
+<p class="msg clamp" style="margin-top: 6px">11/7(금) 15:00 · 2명 · 보고 싶은 것: AI 강의 평가, 녹화 · 원장님과 같이 갑니다.</p>
+<div class="row-foot"><span class="src"><span class="dot d-intake"></span>쇼룸 예약</span><span class="flag w">방문 D-2</span></div>
+</a>
+</li>
+<li class="li">
+<a class="row-hit" href="#">
+<div class="row-top"><span class="time">10:15</span><span class="name">최○○</span><span class="org">바른과학</span></div>
+<p class="msg clamp" style="margin-top: 6px">소프트웨어 12개월 · 30석 · ₩3,960,000 · 결제 전에 통화로 계정 수 조정 상담 원함</p>
+<div class="row-foot"><span class="src"><span class="dot d-intake"></span>도입 신청</span><span class="flag g">결제 전 상담 요청</span></div>
+</a>
+</li>
+<li class="li">
+<a class="row-hit" href="#">
+<div class="row-top"><span class="time">09:40</span><span class="name">정○○</span><span class="org">다온수학</span></div>
+<p class="msg clamp" style="margin-top: 6px">상담 목표: 온라인 보강 수업 · 희망 시점: 11/6(목) 오전</p>
+<div class="row-foot"><span class="src"><span class="dot d-home"></span>데모 신청</span><span class="flag w">희망일 내일</span></div>
+</a>
+</li>
+</ul>
+<div class="more-row"><span class="dim">08:12 윤○○ · 07:30 서○○</span><a href="#">오늘 문의 7건 모두 →</a></div>
+</div>
+
+<div class="a-lane">
+<div class="a-lane-h">
+<div>
+<p class="lbl">특이사항</p>
+<p class="def">내용상 먼저 볼 이유가 있는 리드·고객 · 사유 한 줄</p>
+</div>
+<div style="text-align: right">
+<p class="big">11<small>건</small></p>
+<p class="dim" style="margin-top: 4px">리드 8 · 고객 3</p>
+</div>
+</div>
+<ul class="list">
+<li class="li"><a class="row-hit" href="#">
+<div class="row-foot" style="margin-top: 0"><span class="flag w"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>재문의 2회째</span><span class="time">오늘 13:58</span></div>
+<div class="row-top" style="margin-top: 4px"><span class="name">이○○</span><span class="org">리드영어 · Meta 리드폼</span></div>
+<p class="reason" style="margin-top: 4px">10/21 첫 문의 때 연락 기록이 없습니다. 같은 번호로 다시 들어왔습니다.</p>
+</a></li>
+<li class="li"><a class="row-hit" href="#">
+<div class="row-foot" style="margin-top: 0"><span class="flag d"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>위험 기록</span><span class="time">11/4 상담</span></div>
+<div class="row-top" style="margin-top: 4px"><span class="name">이음수학</span><span class="org">목동 · 고객 · 담당 김○○</span></div>
+<p class="reason" style="margin-top: 4px">"녹화 오류가 반복돼 재계약 보류" — 상담 기록에 위험 표시.</p>
+</a></li>
+<li class="li"><a class="row-hit" href="#">
+<div class="row-foot" style="margin-top: 0"><span class="flag w"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>방문 D-2</span><span class="time">오늘 11:02</span></div>
+<div class="row-top" style="margin-top: 4px"><span class="name">박○○</span><span class="org">온새미국어 · 쇼룸 예약</span></div>
+<p class="reason" style="margin-top: 4px">11/7(금) 15:00 목동 쇼룸, 담당이 없습니다.</p>
+</a></li>
+<li class="li"><a class="row-hit" href="#">
+<div class="row-foot" style="margin-top: 0"><span class="flag n">지원 문의 · CS로</span><span class="time">오늘 08:12</span></div>
+<div class="row-top" style="margin-top: 4px"><span class="name">윤○○</span><span class="org">시냇가영어 · 홈페이지</span></div>
+<p class="reason" style="margin-top: 4px">문의 유형 '계정/접속/기술 지원' — 쓰고 있는 고객일 수 있습니다.</p>
+</a></li>
+<li class="li"><a class="row-hit" href="#">
+<div class="row-foot" style="margin-top: 0"><span class="flag w">만료 임박 D-12</span><span class="time">12/17 만료</span></div>
+<div class="row-top" style="margin-top: 4px"><span class="name">늘봄어학원</span><span class="org">VIP 고객 · 담당 최○○</span></div>
+<p class="reason" style="margin-top: 4px">재계약 연락 기록이 30일째 없습니다.</p>
+</a></li>
+<li class="li"><a class="row-hit" href="#">
+<div class="row-foot" style="margin-top: 0"><span class="flag d">미수 ₩1,200,000</span><span class="time">45일째</span></div>
+<div class="row-top" style="margin-top: 4px"><span class="name">큰나무학원</span><span class="org">고객 · 담당 박○○</span></div>
+</a></li>
+</ul>
+<div class="more-row"><span class="dim">견적 요청 2 · 대형 학원 1 · 결제 전 1</span><a href="#">특이사항 11건 모두 →</a></div>
+</div>
+
+<div class="a-lane">
+<div class="a-lane-h">
+<div>
+<p class="lbl">늦어진 응대</p>
+<p class="def">24h+ 미응답 · 부재 반복 · 팔로업 지남</p>
+</div>
+<div style="text-align: right">
+<p class="big danger">4<small>건</small></p>
+<p class="dim" style="margin-top: 4px">48h+ 1건</p>
+</div>
+</div>
+<ul class="list">
+<li class="li"><a class="row-hit" href="#">
+<div class="row-foot" style="margin-top: 0"><span class="flag d"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>27시간 미응답</span><span class="time">어제 11:05</span></div>
+<div class="row-top" style="margin-top: 4px"><span class="name">한○○</span><span class="org">미래탐구 · 홈페이지 · 미배정</span></div>
+<p class="msg clamp" style="margin-top: 6px">지금 ○○보드 쓰는데 교체하면 기존 장비 처리나 비용이 어떻게 되나요?</p>
+<p class="cap warn strong" style="margin-top: 4px">경쟁 제품 사용 중 언급</p>
+</a></li>
+<li class="li"><a class="row-hit" href="#">
+<div class="row-foot" style="margin-top: 0"><span class="flag d">52시간 미응답</span><span class="time">11/3 10:20</span></div>
+<div class="row-top" style="margin-top: 4px"><span class="name">조○○</span><span class="org">하늘수학 · Meta 리드폼 · 미배정</span></div>
+</a></li>
+<li class="li"><a class="row-hit" href="#">
+<div class="row-foot" style="margin-top: 0"><span class="flag w">부재 2회</span><span class="time">11/3 유입</span></div>
+<div class="row-top" style="margin-top: 4px"><span class="name">강○○</span><span class="org">숲속독서 · Meta 리드폼 · 담당 박○○</span></div>
+<p class="reason" style="margin-top: 4px">11/4·11/5 전화 부재. 문자 안내 기록 없음.</p>
+</a></li>
+<li class="li"><a class="row-hit" href="#">
+<div class="row-foot" style="margin-top: 0"><span class="flag w">팔로업 3일 지남</span><span class="time">11/2 예정</span></div>
+<div class="row-top" style="margin-top: 4px"><span class="name">문○○</span><span class="org">새길영수 · 데모 신청 · 담당 최○○</span></div>
+</a></li>
+</ul>
+<div class="more-row"><span class="dim">응대 전 문의 전체 8건</span><a href="#">늦어진 응대 4건 모두 →</a></div>
+</div>
+
+</div>
+<div class="a-legend">
+<span class="flag w">● 확인·일정이 필요한 것</span>
+<span class="flag d">● 놓치면 손실이 나는 것</span>
+<span class="flag g">● 구매 신호</span>
+<span class="flag n">● 다른 팀으로 넘길 것</span>
+<span class="cap">한 행에 사유 하나만 표시 — 여러 개면 가장 급한 것</span>
+</div>
+</section>
+
+<section aria-label="기존 현황 패널 — 아래로 이동">
+<p class="cap" style="margin-bottom: 8px">↓ 지금 현황에 있던 패널은 그대로, 아래로 내려간다 (내 담당 기준)</p>
+<div class="a-below">
+<div class="a-ghost">
+<h3>리드 요약</h3>
+<div class="a-tiles">
+<div class="a-tile"><span class="cap">미확인 유입</span><b class="warn">6</b></div>
+<div class="a-tile"><span class="cap">응답 대기 리드</span><b>8</b></div>
+<div class="a-tile"><span class="cap">기한 지난 팔로업</span><b>2</b></div>
+<div class="a-tile"><span class="cap">연락 중</span><b>14</b></div>
+</div>
+</div>
+<div class="a-ghost">
+<h3>오늘 연락</h3>
+<p class="dim" style="margin-top: 6px">신규 응대 2 · 돈 임박 2 · 다시 움직임 1</p>
+</div>
+<div class="a-ghost">
+<h3>고객 찾기 · 내일 이후 할 일</h3>
+<p class="dim" style="margin-top: 6px">설치·방문 일정 · 고객 건강도</p>
+</div>
+<div class="a-ghost">
+<h3>매출·수금 현황 · 전사 참고</h3>
+<p class="dim" style="margin-top: 6px">인식 매출 · 미수 · Neo CRM 팀 리포트</p>
+</div>
+</div>
+</section>
+
+</div>
+</main>
+</div>
+</div>
+</section>
+<section class="draft" id="draft-b">
+<h2>시안 B · 리드 수신함 2단</h2>
+<div class="draft-note"><p>B · 바꾸는 곳: 고객DB › 리드 화면을 메일함처럼(목록 + 오른쪽 상세 고정)</p>
+<ul><li>왼쪽: &#x27;특이사항 있음 → 오늘 → 어제&#x27; 묶음, 홈페이지·광고·접수 탭. 행마다 문의 내용 한 줄.</li><li>오른쪽: 특이사항 요약 → 문의 내용(유형·희망 일시·품목을 칸으로) → 확인·담당·팔로업·상태 한 줄 → 연락 기록 → 재문의 내역.</li><li>상세 패널(드로어)을 없앤다. 위아래 키(J/K)로 다음 문의.</li><li>클릭: 원문 보기 4~7 → 2(CRM 배지 → 행).</li><li>장점: &#x27;타고 들어가는&#x27; 구조 자체를 없앤다. 단점: 리드 화면 재구성이라 작업량이 가장 크다.</li></ul></div>
+<div class="cv" style="padding: 24px clamp(16px, 3vw, 40px) 48px; min-height: 100%">
+<div class="shell">
+<nav class="side" aria-label="어드민 메뉴">
+<div class="brand">Classin Admin</div>
+<a class="it" href="#">Overview</a>
+<a class="it" href="#">캘린더</a>
+<a class="it" href="#">KR Team</a>
+<a class="it" href="#">매출 장부</a>
+<a class="it on" href="#" aria-current="page">CRM <span class="cnt num" title="응대 전 문의 8건">8</span></a>
+<a class="it" href="#">견적</a>
+<a class="it" href="#">하드웨어</a>
+<a class="it" href="#">CS 콘솔</a>
+<a class="it" href="#">콘텐츠</a>
+<a class="it" href="#">마케팅</a>
+</nav>
+<main class="main">
+<header class="ph">
+<div>
+<h1>리드</h1>
+<p class="meta">CRM 배지를 누르면 바로 여기 · 전체 담당자 · 14:32 기준</p>
+</div>
+<div class="acts" style="align-items: center">
+<span class="sample">샘플 데이터</span>
+<div class="seg" role="group" aria-label="보기">
+<button type="button" class="on">수신함</button>
+<button type="button">콘솔</button>
+<button type="button">보드</button>
+</div>
+<button type="button" class="btn primary">리드 등록</button>
+</div>
+</header>
+<nav class="tabs" aria-label="CRM 작업면">
+<a class="tab" href="#">현황</a>
+<a class="tab on" href="#" aria-current="page">고객DB</a>
+<a class="tab" href="#">검수</a>
+</nav>
+<div class="subtabs">
+<a class="st" href="#">통합</a>
+<a class="st on" href="#">리드</a>
+<a class="st" href="#">접수</a>
+<a class="st" href="#">원천 고객</a>
+<a class="st" href="#">세그먼트</a>
+<a class="st" href="#">지도</a>
+</div>
+<div class="body">
+
+<div class="b-tool">
+<div class="acts" role="group" aria-label="유입">
+<button type="button" class="chip on">응대 대상 전체 <span class="n num">10</span></button>
+<button type="button" class="chip"><span class="dot d-home"></span>홈페이지 <span class="n num">5</span></button>
+<button type="button" class="chip"><span class="dot d-meta"></span>광고 <span class="n num">3</span></button>
+<button type="button" class="chip"><span class="dot d-intake"></span>쇼룸·도입 신청 <span class="n num">2</span></button>
+</div>
+<div class="acts" style="align-items: center; flex: 1 1 320px; justify-content: flex-end">
+<label class="b-search"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><input type="search" aria-label="문의 검색" placeholder="이름·기관·연락처·문의 내용 검색" style="border: 0; outline: 0; background: none; flex: 1; min-width: 0; font: inherit; color: #111110"></label>
+<button type="button" class="b-pick"><span class="k">범위</span>전체 담당자</button>
+</div>
+</div>
+
+<div class="b-split">
+<section class="b-list" aria-label="문의 목록">
+<div class="b-grp"><span>특이사항 있음 · 먼저</span><span class="num">7</span></div>
+<a class="b-row" href="#">
+<span class="b-unread" title="미확인"></span>
+<span class="who"><span class="name">한○○</span><span class="org">미래탐구</span></span>
+<span class="time">어제 11:05</span>
+<span class="b-line2"><span class="flag d">27시간 미응답</span><span class="b-ex">지금 ○○보드 쓰는데 교체하면 기존 장비 처리나…</span></span>
+</a>
+<a class="b-row on" href="#" aria-current="true">
+<span class="b-unread" title="미확인"></span>
+<span class="who"><span class="name">이○○</span><span class="org">리드영어</span></span>
+<span class="time">13:58</span>
+<span class="b-line2"><span class="flag w">재문의 2회째</span><span class="b-ex">관심: 장비 구매 · 경기 분당 · 오후 연락</span></span>
+</a>
+<a class="b-row" href="#">
+<span class="b-unread" title="미확인"></span>
+<span class="who"><span class="name">박○○</span><span class="org">온새미국어</span></span>
+<span class="time">11:02</span>
+<span class="b-line2"><span class="flag w">방문 D-2</span><span class="b-ex">쇼룸 11/7(금) 15:00 · 2명 · AI 강의 평가</span></span>
+</a>
+<a class="b-row" href="#">
+<span class="b-unread" title="미확인"></span>
+<span class="who"><span class="name">정○○</span><span class="org">다온수학</span></span>
+<span class="time">09:40</span>
+<span class="b-line2"><span class="flag w">희망일 내일</span><span class="b-ex">데모 · 온라인 보강 수업 · 11/6(목) 오전</span></span>
+</a>
+<a class="b-row" href="#">
+<span class="b-unread" title="미확인"></span>
+<span class="who"><span class="name">김○○</span><span class="org">해냄수학학원</span></span>
+<span class="time">14:21</span>
+<span class="b-line2"><span class="flag g">견적 요청</span><span class="b-ex">전자칠판 3대랑 수업 녹화까지 같이 견적…</span></span>
+</a>
+<a class="b-row" href="#">
+<span class="b-unread" title="미확인"></span>
+<span class="who"><span class="name">최○○</span><span class="org">바른과학</span></span>
+<span class="time">10:15</span>
+<span class="b-line2"><span class="flag g">결제 전 상담</span><span class="b-ex">도입 신청 · SW 12개월 30석 · ₩3,960,000</span></span>
+</a>
+<a class="b-row" href="#">
+<span class="b-unread" title="미확인"></span>
+<span class="who"><span class="name">윤○○</span><span class="org">시냇가영어</span></span>
+<span class="time">08:12</span>
+<span class="b-line2"><span class="flag n">지원 문의 · CS로</span><span class="b-ex">선생님 계정이 로그인이 안 됩니다.</span></span>
+</a>
+<div class="b-grp"><span>오늘 · 그 밖</span><span class="num">1</span></div>
+<a class="b-row" href="#">
+<span class="b-unread" title="미확인"></span>
+<span class="who"><span class="name">서○○</span><span class="org">한빛학원</span></span>
+<span class="time">07:30</span>
+<span class="b-line2"><span class="src"><span class="dot d-meta"></span>Meta</span><span class="b-ex">관심: 기능 설명 · 서울 노원</span></span>
+</a>
+<div class="b-grp"><span>어제</span><span class="num">2</span></div>
+<a class="b-row" href="#">
+<span class="b-read"></span>
+<span class="who"><span class="name">오○○</span><span class="org">새벽국어</span></span>
+<span class="time">어제 16:40</span>
+<span class="b-line2"><span class="dim">담당 최○○ · 연락 중</span><span class="b-ex">수업 녹화 기능만 따로 쓸 수 있나요?</span></span>
+</a>
+<a class="b-row" href="#">
+<span class="b-read"></span>
+<span class="who"><span class="name">임○○</span><span class="org">초록과학</span></span>
+<span class="time">어제 09:20</span>
+<span class="b-line2"><span class="dim">담당 박○○ · 연락 중</span><span class="b-ex">관심: 설명회 참석 · 경기 일산</span></span>
+</a>
+<div class="b-foot">
+<span class="cap"><span class="kbd">J</span> <span class="kbd">K</span> 위아래</span>
+<span class="cap"><span class="kbd">E</span> 확인</span>
+<span class="cap"><span class="kbd">A</span> 나에게 배정</span>
+<span class="cap"><span class="kbd">F</span> 내일 팔로업</span>
+</div>
+</section>
+
+<section class="b-detail" aria-label="선택한 문의">
+<div class="b-dh">
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 16px; align-items: flex-start">
+<div>
+<h2>이○○ · 리드영어</h2>
+<p class="dim" style="margin-top: 4px"><span class="src"><span class="dot d-meta"></span>Meta 리드폼 · '칠판은 지워져도' 소재</span> · 오늘 13:58 (34분 전) · <span class="warn strong">미확인</span> · 010-****-5531</p>
+</div>
+<div class="acts">
+<a class="btn sm" href="#">Compass ↗</a>
+<a class="btn sm" href="#">고객 360 ↗</a>
+</div>
+</div>
+<div class="b-bar">
+<button type="button" class="btn primary sm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>확인</button>
+<button type="button" class="b-pick"><span class="k">담당</span>미배정 → 나</button>
+<button type="button" class="b-pick"><span class="k">팔로업</span>오늘 · 내일 · 다음 주</button>
+<button type="button" class="b-pick"><span class="k">상태</span>신규</button>
+<button type="button" class="btn sm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>전화</button>
+<button type="button" class="btn sm">문자</button>
+</div>
+</div>
+
+<div class="b-sec">
+<h3>특이사항 <span class="cap" style="font-weight: 500">규칙으로 찾음 · 근거 표시</span></h3>
+<ul class="list b-note">
+<li><span class="flag w"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>재문의 2회째</span><span class="reason">10/21 첫 문의 뒤 연락 기록 없이 같은 번호로 다시 들어왔습니다. <span class="cap">근거: 재유입 시각 · 연락 기록 0건</span></span></li>
+<li><span class="flag g">관심 변화</span><span class="reason">첫 문의 '설명회 참석' → 이번 '장비 구매'. <span class="cap">근거: Meta 폼 답변 두 번</span></span></li>
+</ul>
+</div>
+
+<div class="b-sec">
+<h3>이번 문의 내용</h3>
+<dl class="kv">
+<div><dt>관심</dt><dd>장비 구매</dd></div>
+<div><dt>지역</dt><dd>경기 분당</dd></div>
+<div><dt>연락 가능 시간</dt><dd>오후</dd></div>
+<div><dt>학원 규모</dt><dd>100~300명</dd></div>
+</dl>
+<p class="cap">캠페인 '11월 전환' · 광고세트 '학원장 관심사' · 소재 '칠판은 지워져도'</p>
+</div>
+
+<div class="b-sec">
+<h3>문의 이력 <span class="cap" style="font-weight: 500">재문의 내용까지 한 줄에</span></h3>
+<ul class="list b-tl">
+<li><span class="time">11/5 13:58</span><span><span class="strong">재문의</span> · Meta 리드폼 · 관심 '장비 구매'</span></li>
+<li><span class="time">10/21 09:12</span><span><span class="strong">첫 문의</span> · Meta 리드폼 · 관심 '설명회 참석' · <span class="danger strong">연락 기록 없음</span></span></li>
+</ul>
+</div>
+
+<div class="b-sec">
+<h3>연락 기록 <span class="cap" style="font-weight: 500">0건</span></h3>
+<div class="b-comp">
+<button type="button" class="btn soft sm">전화</button>
+<button type="button" class="btn soft sm">문자</button>
+<button type="button" class="btn soft sm">카카오</button>
+<span class="ph-in">결과: 연결됨 · 부재중 · 콜백 요청 · 미팅 확정 — 한 줄 메모</span>
+<button type="button" class="btn sm">기록</button>
+</div>
+</div>
+
+<button type="button" class="b-fold"><span>연락처 · 사이트 활동 · 광고 귀속(UTM·클릭 ID)</span><span class="sub">펼치기 ▾</span></button>
+</section>
+</div>
+
+</div>
+</main>
+</div>
+</div>
+</section>
+<section class="draft" id="draft-c">
+<h2>시안 C · 시트형 표 + 특이사항 열</h2>
+<div class="draft-note"><p>C · 바꾸는 곳: 리드 콘솔 목록의 열과 기본 보기</p>
+<ul><li>저장된 보기 탭: 오늘 문의 · 특이사항 · 응대 지연 · 재문의 · 접수 일정 · 전체.</li><li>열: 시간 · 유입 · 이름/기관 · 문의 내용(한 줄) · 특이사항(사유 글) · 담당 · 응대 · 다음 할 일. &#x27;특이사항 먼저&#x27; 정렬이 기본.</li><li>행을 누르면 표 안에서 펼침(전체 내용 + 빠른 조치).</li><li>클릭: 원문 보기 → 2~3.</li><li>장점: 시트에 익숙한 팀이 한 화면에 많이 본다. 단점: 열이 많아 휴대폰에서는 카드로 바뀐다.</li></ul></div>
+<div class="cv" style="padding: 24px clamp(16px, 3vw, 40px) 48px; min-height: 100%">
+<div class="shell">
+<nav class="side" aria-label="어드민 메뉴">
+<div class="brand">Classin Admin</div>
+<a class="it" href="#">Overview</a>
+<a class="it" href="#">캘린더</a>
+<a class="it" href="#">KR Team</a>
+<a class="it" href="#">매출 장부</a>
+<a class="it on" href="#" aria-current="page">CRM <span class="cnt num" title="응대 전 문의 8건">8</span></a>
+<a class="it" href="#">견적</a>
+<a class="it" href="#">하드웨어</a>
+<a class="it" href="#">CS 콘솔</a>
+<a class="it" href="#">콘텐츠</a>
+<a class="it" href="#">마케팅</a>
+</nav>
+<main class="main">
+<header class="ph">
+<div>
+<h1>리드</h1>
+<p class="meta">시트처럼 한 화면에 · 저장된 보기 · 전체 담당자 · 14:32 기준</p>
+</div>
+<div class="acts" style="align-items: center">
+<span class="sample">샘플 데이터</span>
+<div class="seg" role="group" aria-label="보기">
+<button type="button" class="on">표</button>
+<button type="button">보드</button>
+</div>
+<button type="button" class="btn">CSV</button>
+<button type="button" class="btn primary">리드 등록</button>
+</div>
+</header>
+<nav class="tabs" aria-label="CRM 작업면">
+<a class="tab" href="#">현황</a>
+<a class="tab on" href="#" aria-current="page">고객DB</a>
+<a class="tab" href="#">검수</a>
+</nav>
+<div class="subtabs">
+<a class="st" href="#">통합</a>
+<a class="st on" href="#">리드</a>
+<a class="st" href="#">접수</a>
+<a class="st" href="#">원천 고객</a>
+<a class="st" href="#">세그먼트</a>
+<a class="st" href="#">지도</a>
+</div>
+<div class="body">
+
+<div class="c-views" role="tablist" aria-label="저장된 보기">
+<button type="button" role="tab" aria-selected="true" class="c-view on">특이사항 먼저 <span class="n">7</span></button>
+<button type="button" role="tab" aria-selected="false" class="c-view">오늘 문의 <span class="n">7</span></button>
+<button type="button" role="tab" aria-selected="false" class="c-view">응대 지연 <span class="n danger">4</span></button>
+<button type="button" role="tab" aria-selected="false" class="c-view">재문의 <span class="n">2</span></button>
+<button type="button" role="tab" aria-selected="false" class="c-view">쇼룸·데모 일정 <span class="n">3</span></button>
+<button type="button" role="tab" aria-selected="false" class="c-view">미배정 <span class="n warn">9</span></button>
+<button type="button" role="tab" aria-selected="false" class="c-view">진행 중 전체 <span class="n">46</span></button>
+<button type="button" class="c-view">+ 보기 저장</button>
+</div>
+
+<div class="c-tool">
+<div class="acts" role="group" aria-label="유입">
+<button type="button" class="chip on">유입 전체</button>
+<button type="button" class="chip"><span class="dot d-home"></span>홈페이지</button>
+<button type="button" class="chip"><span class="dot d-meta"></span>광고</button>
+<button type="button" class="chip"><span class="dot d-intake"></span>쇼룸·도입 신청</button>
+</div>
+<div class="acts" style="align-items: center">
+<button type="button" class="c-pick"><span class="k">정렬</span>특이사항 급한 순</button>
+<button type="button" class="c-pick"><span class="k">범위</span>전체 담당자</button>
+<button type="button" class="c-pick">열 고르기</button>
+</div>
+</div>
+
+<div class="c-box">
+<div class="c-bulk">
+<span class="strong">2건 선택</span>
+<button type="button" class="btn sm">확인</button>
+<button type="button" class="btn sm">담당 지정</button>
+<button type="button" class="btn sm">내일 팔로업</button>
+<button type="button" class="btn sm">종료</button>
+<span class="cap">미확인도 확인과 배정을 한 번에</span>
+</div>
+<div class="c-scroll">
+<table class="c-t">
+<thead>
+<tr>
+<th scope="col"><span class="sub">선택</span></th>
+<th scope="col">들어온 시각</th>
+<th scope="col">유입</th>
+<th scope="col">이름 · 기관</th>
+<th scope="col">문의 내용</th>
+<th scope="col">특이사항</th>
+<th scope="col">담당</th>
+<th scope="col">응대</th>
+<th scope="col">다음 할 일</th>
+</tr>
+</thead>
+<tbody>
+<tr class="hot">
+<td><input class="c-chk" type="checkbox" aria-label="한○○ 선택"></td>
+<td class="time">어제 11:05</td>
+<td><span class="src"><span class="dot d-home"></span>홈페이지</span><br><span class="cap">도입 상담</span></td>
+<td><span class="name">한○○</span><br><span class="org">미래탐구</span></td>
+<td><span class="c-ex">지금 ○○보드 쓰는데 교체하면 기존 장비 처리나 비용이 어떻게 되나요?</span></td>
+<td><div class="c-why"><span class="flag d">27시간 미응답</span><span class="cap">경쟁 제품 사용 중 언급</span></div></td>
+<td class="warn strong">미배정</td>
+<td class="danger strong num">27h</td>
+<td><button type="button" class="btn sm">나에게 배정</button></td>
+</tr>
+<tr class="mid">
+<td><input class="c-chk" type="checkbox" aria-label="이○○ 선택"></td>
+<td class="time">13:58</td>
+<td><span class="src"><span class="dot d-meta"></span>Meta 리드폼</span></td>
+<td><span class="name">이○○</span><br><span class="org">리드영어</span></td>
+<td><span class="c-ex">관심: 장비 구매 · 지역: 경기 분당 · 연락 가능 시간: 오후</span></td>
+<td><div class="c-why"><span class="flag w">재문의 2회째</span><span class="cap">10/21 첫 문의 때 연락 기록 없음</span></div></td>
+<td class="warn strong">미배정</td>
+<td class="num">34분</td>
+<td><button type="button" class="btn sm">확인</button></td>
+</tr>
+<tr class="mid">
+<td><input class="c-chk" type="checkbox" checked aria-label="박○○ 선택"></td>
+<td class="time">11:02</td>
+<td><span class="src"><span class="dot d-intake"></span>쇼룸 예약</span></td>
+<td><span class="name">박○○</span><br><span class="org">온새미국어</span></td>
+<td><span class="c-ex">11/7(금) 15:00 · 2명 · 보고 싶은 것: AI 강의 평가, 녹화</span></td>
+<td><div class="c-why"><span class="flag w">방문 D-2</span><span class="cap">담당 없이 방문 예정</span></div></td>
+<td class="warn strong">미배정</td>
+<td class="num">3h</td>
+<td><button type="button" class="btn sm">담당 지정</button></td>
+</tr>
+<tr class="mid">
+<td><input class="c-chk" type="checkbox" checked aria-label="정○○ 선택"></td>
+<td class="time">09:40</td>
+<td><span class="src"><span class="dot d-home"></span>데모 신청</span></td>
+<td><span class="name">정○○</span><br><span class="org">다온수학</span></td>
+<td><span class="c-ex">상담 목표: 온라인 보강 수업 · 희망 시점: 11/6(목) 오전</span></td>
+<td><div class="c-why"><span class="flag w">희망일 내일</span><span class="cap">데모 일정 미확정</span></div></td>
+<td class="warn strong">미배정</td>
+<td class="num">5h</td>
+<td><button type="button" class="btn sm">일정 잡기</button></td>
+</tr>
+<tr class="open">
+<td><input class="c-chk" type="checkbox" aria-label="김○○ 선택"></td>
+<td class="time">14:21</td>
+<td><span class="src"><span class="dot d-home"></span>홈페이지</span><br><span class="cap">도입 상담</span></td>
+<td><span class="name">김○○</span><br><span class="org">해냄수학학원</span></td>
+<td><button type="button" class="btn soft sm" aria-expanded="true">접기 ▴</button></td>
+<td><div class="c-why"><span class="flag g">견적 요청</span><span class="cap">방문 희망 11/11 · 원생 100~300명</span></div></td>
+<td class="warn strong">미배정</td>
+<td class="num">11분</td>
+<td><button type="button" class="btn sm">견적 작성</button></td>
+</tr>
+<tr class="exp">
+<td colspan="9">
+<div class="c-exp">
+<div style="display: flex; flex-direction: column; gap: 10px">
+<p class="msg">중등 수학 전문이고 원생 200명 정도입니다. 전자칠판 3대랑 수업 녹화까지 같이 견적 받고 싶어요. 다음 주 화요일 오후에 쇼룸 방문 가능할까요?</p>
+<div class="acts">
+<button type="button" class="btn primary sm">확인하고 나에게 배정</button>
+<button type="button" class="btn sm">전화</button>
+<button type="button" class="btn sm">쇼룸 일정 제안</button>
+<button type="button" class="btn sm">견적 작성</button>
+<a class="btn sm" href="#">전체 기록 ↗</a>
+</div>
+</div>
+<dl class="kv" style="grid-template-columns: repeat(2, minmax(0, 1fr))">
+<div><dt>문의 유형</dt><dd>도입 상담</dd></div>
+<div><dt>직책</dt><dd>원장</dd></div>
+<div><dt>학원 규모</dt><dd>100~300명</dd></div>
+<div><dt>연락처</dt><dd class="num">010-****-1824</dd></div>
+<div><dt>이전 문의</dt><dd>없음</dd></div>
+<div><dt>사이트 활동</dt><dd>가격·쇼룸 페이지 4회</dd></div>
+</dl>
+</div>
+</td>
+</tr>
+<tr>
+<td><input class="c-chk" type="checkbox" aria-label="최○○ 선택"></td>
+<td class="time">10:15</td>
+<td><span class="src"><span class="dot d-intake"></span>도입 신청</span></td>
+<td><span class="name">최○○</span><br><span class="org">바른과학</span></td>
+<td><span class="c-ex">소프트웨어 12개월 · 30석 · ₩3,960,000 · 결제 전 통화로 계정 수 조정 상담</span></td>
+<td><div class="c-why"><span class="flag g">결제 전 상담</span><span class="cap">신청 금액 ₩3,960,000</span></div></td>
+<td class="warn strong">미배정</td>
+<td class="num">4h</td>
+<td><button type="button" class="btn sm">전화</button></td>
+</tr>
+<tr>
+<td><input class="c-chk" type="checkbox" aria-label="윤○○ 선택"></td>
+<td class="time">08:12</td>
+<td><span class="src"><span class="dot d-home"></span>홈페이지</span><br><span class="cap">기술 지원</span></td>
+<td><span class="name">윤○○</span><br><span class="org">시냇가영어</span></td>
+<td><span class="c-ex">선생님 계정이 로그인이 안 됩니다.</span></td>
+<td><div class="c-why"><span class="flag n">지원 문의</span><span class="cap">쓰고 있는 고객일 수 있음</span></div></td>
+<td class="warn strong">미배정</td>
+<td class="num">6h</td>
+<td><button type="button" class="btn sm">CS로 넘기기</button></td>
+</tr>
+<tr>
+<td><input class="c-chk" type="checkbox" aria-label="서○○ 선택"></td>
+<td class="time">07:30</td>
+<td><span class="src"><span class="dot d-meta"></span>Meta 리드폼</span></td>
+<td><span class="name">서○○</span><br><span class="org">한빛학원</span></td>
+<td><span class="c-ex">관심: 기능 설명 · 지역: 서울 노원</span></td>
+<td><span class="sub">—</span></td>
+<td class="warn strong">미배정</td>
+<td class="num">7h</td>
+<td><button type="button" class="btn sm">확인</button></td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="c-foot">
+<span>오늘·어제 문의 중 특이사항 7건 먼저, 그다음 들어온 순 · 지난 리드의 응대 지연 3건은 '응대 지연' 보기 · 고객 특이사항(위험 기록·만료·미수) 3건은 '통합'</span>
+<a href="#">특이사항 규칙 보기</a>
+</div>
+</div>
+
+</div>
+</main>
+</div>
+</div>
+</section>
+<section class="draft" id="draft-d">
+<h2>시안 D · 어디서나 여는 문의 패널</h2>
+<div class="draft-note"><p>D · 바꾸는 곳: 어드민 전체(사이드바 CRM 배지 · ⌘K · 새 문의 알림)</p>
+<ul><li>어느 화면에서든 배지를 누르면 오른쪽에 &#x27;새 문의 · 특이사항 · 내 할 일&#x27; 패널이 열린다. 하던 화면은 그대로.</li><li>카드에 문의 전문, 특이사항, 버튼(확인 · 나에게 배정 · 전화 · 내일 팔로업 · Compass).</li><li>클릭: 원문 보기 → 1.</li><li>장점: 다른 일을 하다가도 바로 응대. 단점: 어드민 셸(공통) 변경이라 다른 파트와 조율이 필요하고, 깊은 이력은 결국 리드 화면으로 가야 한다.</li></ul></div>
+<div class="cv" style="padding: 24px clamp(16px, 3vw, 40px) 48px; min-height: 100%">
+<div class="shell">
+<nav class="side" aria-label="어드민 메뉴">
+<div class="brand">Classin Admin</div>
+<a class="it" href="#">Overview</a>
+<a class="it" href="#">캘린더</a>
+<a class="it" href="#">KR Team</a>
+<a class="it" href="#">매출 장부</a>
+<a class="it" href="#" style="box-shadow: inset 0 0 0 2px #111110; background: #FFFFFF">CRM <span class="cnt num" title="응대 전 문의 8건 · 누르면 패널">8</span></a>
+<a class="it on" href="#" aria-current="page">견적</a>
+<a class="it" href="#">하드웨어</a>
+<a class="it" href="#">CS 콘솔</a>
+<a class="it" href="#">콘텐츠</a>
+<a class="it" href="#">마케팅</a>
+</nav>
+
+<div class="d-stage">
+<div class="d-under" aria-hidden="true">
+<div class="ph">
+<div>
+<h1>견적</h1>
+<p class="meta">하던 화면은 그대로 둔다</p>
+</div>
+</div>
+<div style="padding: 0 28px 28px">
+<div class="card">
+<div class="rowx"><span class="gr"></span><span class="gr"></span><span class="gr"></span><span class="gr"></span></div>
+<div class="rowx"><span class="gr"></span><span class="gr" style="width: 70%"></span><span class="gr"></span><span class="gr"></span></div>
+<div class="rowx"><span class="gr"></span><span class="gr" style="width: 85%"></span><span class="gr"></span><span class="gr"></span></div>
+<div class="rowx"><span class="gr"></span><span class="gr" style="width: 60%"></span><span class="gr"></span><span class="gr"></span></div>
+<div class="rowx"><span class="gr"></span><span class="gr" style="width: 75%"></span><span class="gr"></span><span class="gr"></span></div>
+<div class="rowx"><span class="gr"></span><span class="gr" style="width: 50%"></span><span class="gr"></span><span class="gr"></span></div>
+</div>
+</div>
+</div>
+
+<aside class="d-panel" aria-label="문의·특이사항 패널">
+<div class="d-ph">
+<div>
+<h2>문의 · 특이사항</h2>
+<p class="dim" style="margin-top: 2px">전사 · 14:32 기준 · 1분마다 갱신</p>
+</div>
+<div class="acts" style="align-items: center">
+<span class="sample">샘플 데이터</span>
+<button type="button" class="d-x" aria-label="패널 닫기"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+</div>
+</div>
+<div class="d-entry">
+<span>여는 곳: 사이드바 CRM 배지</span>
+<span><span class="kbd">⌘K</span> '문의'</span>
+<span>새 문의 알림의 '보기'</span>
+</div>
+<div class="d-tabs" role="tablist" aria-label="패널 보기">
+<button type="button" role="tab" aria-selected="true" class="d-tab on">새 문의 <span class="n">7</span></button>
+<button type="button" role="tab" aria-selected="false" class="d-tab">특이사항 <span class="n">11</span></button>
+<button type="button" role="tab" aria-selected="false" class="d-tab">늦어진 응대 <span class="n danger">4</span></button>
+<button type="button" role="tab" aria-selected="false" class="d-tab">내 할 일 <span class="n">3</span></button>
+</div>
+<div class="d-filters">
+<button type="button" class="chip on">전체</button>
+<button type="button" class="chip"><span class="dot d-home"></span>홈페이지 4</button>
+<button type="button" class="chip"><span class="dot d-meta"></span>광고 2</button>
+<button type="button" class="chip"><span class="dot d-intake"></span>쇼룸·도입 2</button>
+<button type="button" class="chip">미확인만</button>
+</div>
+<div class="d-cards">
+
+<article class="d-card new">
+<div class="row-foot" style="margin-top: 0">
+<div class="who"><span class="name">김○○</span><span class="org">해냄수학학원 · 원장</span></div>
+<span class="time">14:21 · 11분 전</span>
+</div>
+<div class="row-foot" style="margin-top: 0"><span class="src"><span class="dot d-home"></span>홈페이지 · 도입 상담</span><span class="flag g">견적 요청 · 방문 희망 11/11</span></div>
+<p class="msg">중등 수학 전문이고 원생 200명 정도입니다. 전자칠판 3대랑 수업 녹화까지 같이 견적 받고 싶어요. 다음 주 화요일 오후에 쇼룸 방문 가능할까요?</p>
+<div class="d-info"><span>100~300명</span><span class="num">010-****-1824</span><span class="warn strong">미확인 · 미배정</span></div>
+<div class="acts">
+<button type="button" class="btn primary sm">확인하고 나에게 배정</button>
+<button type="button" class="btn sm">전화</button>
+<button type="button" class="btn sm">내일 팔로업</button>
+<a class="btn sm" href="#">전체 기록 ↗</a>
+</div>
+</article>
+
+<article class="d-card new">
+<div class="row-foot" style="margin-top: 0">
+<div class="who"><span class="name">이○○</span><span class="org">리드영어</span></div>
+<span class="time">13:58 · 34분 전</span>
+</div>
+<div class="row-foot" style="margin-top: 0"><span class="src"><span class="dot d-meta"></span>Meta 리드폼</span><span class="flag w">재문의 2회째</span></div>
+<p class="reason">10/21 첫 문의('설명회 참석') 때 연락 기록이 없습니다. 이번엔 '장비 구매'.</p>
+<p class="msg">관심: 장비 구매 · 지역: 경기 분당 · 연락 가능 시간: 오후</p>
+<div class="acts">
+<button type="button" class="btn primary sm">확인하고 나에게 배정</button>
+<button type="button" class="btn sm">전화</button>
+<a class="btn sm" href="#">Compass ↗</a>
+</div>
+</article>
+
+<article class="d-card">
+<div class="row-foot" style="margin-top: 0">
+<div class="who"><span class="name">박○○</span><span class="org">온새미국어</span></div>
+<span class="time">11:02</span>
+</div>
+<div class="row-foot" style="margin-top: 0"><span class="src"><span class="dot d-intake"></span>쇼룸 예약</span><span class="flag w">방문 D-2</span></div>
+<p class="msg clamp">11/7(금) 15:00 · 2명 · 보고 싶은 것: AI 강의 평가, 녹화 · 원장님과 같이 갑니다.</p>
+</article>
+
+<article class="d-card">
+<div class="row-foot" style="margin-top: 0">
+<div class="who"><span class="name">최○○</span><span class="org">바른과학</span></div>
+<span class="time">10:15</span>
+</div>
+<div class="row-foot" style="margin-top: 0"><span class="src"><span class="dot d-intake"></span>도입 신청</span><span class="flag g">결제 전 상담</span></div>
+<p class="msg clamp">소프트웨어 12개월 · 30석 · ₩3,960,000 · 결제 전에 통화로 계정 수 조정 상담 원함</p>
+</article>
+
+</div>
+<div class="d-foot">
+<a href="#">리드 화면에서 모두 보기 →</a>
+<button type="button" class="btn soft sm">새 문의 알림 켬</button>
+</div>
+</aside>
+</div>
+</div>
+</div>
+</section>
+</div>
+</body>
+</html>
