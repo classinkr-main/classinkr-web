@@ -1,11 +1,11 @@
 # CRM 문의·특이사항 바로 보기 — 시안 4개 (2026-11-05)
 
-상태: 시안 제안 — 운영자 선택 대기(구현 없음)
+상태: **B 선택(2026-11-05)** — 리드 종류 라벨 확정판(§10) · 구현 대기
 범위: `/admin/crm`(현황), `/admin/crm/customers/leads`(리드), 고객 360, 사이드바 CRM 배지
 기준 코드: main `0ec54574` + 열린 PR #65(Overview "지금" 띠 · 리드 보드 기본 범위 "전체 담당자" · CRM 문의 배지 · 새 문의 알림)가 병합됐다고 가정
 상위 문서: [Admin OS 운영 결정](admin-os-operating-decisions-2026-07-11.md) › [어드민 탭 재구성](admin-tab-restructure-2026-07-29.md) › [CRM 탭 디벨롭 기획](crm-tab-develop-plan-2026-09-12.md)
 관련: PR #65의 `admin-lead-visitor-glance-plan-2026-11-04.md`(첫 화면 방문·문의 — 병합 전), [리드 콘솔·보드 설계](crm-lead-console-board-design-2026-08-21.md), [Compass 홈페이지 리드 연동](compass-home-lead-push-2026-11-04.md)
-시안: [mockups/crm-inquiry-notable-2026-11-05.html](mockups/crm-inquiry-notable-2026-11-05.html) — 4개 시안을 한 장에 모은 실물 비율 목업. 수치·이름·학원명은 전부 샘플이다.
+시안: [mockups/crm-inquiry-notable-2026-11-05.html](mockups/crm-inquiry-notable-2026-11-05.html) — 4개 시안과 B 확정판(종류 라벨 수신함 · 라벨 사양)을 한 장에 모은 실물 비율 목업. 수치·이름·학원명은 전부 샘플이다.
 
 ---
 
@@ -182,7 +182,7 @@ CRM에서 홈페이지 문의가 안 보이는 이유는 셋이다. ① 새 문�
 
 | # | 질문 | 선택지 | 권장 |
 | --- | --- | --- | --- |
-| D1 | 어느 시안으로 갈까 | A / B / C / D / 조합 | B + A 축소판 |
+| D1 | 어느 시안으로 갈까 | A / B / C / D / 조합 | **결정(2026-11-05): B.** 추가 요구 "홈페이지 · 리드마그넷(구독) · 문의 · 행사 신청이 잘 라벨링되게" → §10. A 축소판은 W2에서 다시 판단 |
 | D2 | '빠른 리드'의 뜻 | 응대 대상 전체 / Meta 리드폼만 / 카카오 FAST TRACK(리드 행 없음 — 별도 작업) | 응대 대상 전체 |
 | D3 | 특이사항 범위 | 리드만 / 리드 + 고객(위험 기록·만료·미수) | 리드 + 고객, 출처 표시 |
 | D4 | 본문 키워드 규칙(경쟁 제품·해지·견적) | 1단계부터 / 2단계 / 안 함 | 2단계 — 구조 필드(유형·규모·일시) 먼저, 키워드는 근거 문장 표시와 함께 |
@@ -196,10 +196,11 @@ PR #65의 D7(담당 원천)은 이 문서와 별개다. 그 결정 전까지 시
 
 | 단계 | 내용 | 분량 | 파트 |
 | --- | --- | --- | --- |
-| W0 | 공통 바닥 F1(키워드 제외)·F2·F3·F4(행 미리보기·상세 순서)·F5·F6 | 3~4일 | 그로스·CRM |
-| W1 | 리드 '수신함' 보기(목록 묶음 · 고정 상세 · 빠른 조치 줄 · 문의 이력 · 키보드). 먼저 `LeadsBoardClient`·`LeadDrawer` 분할 | 1~1.5주 | 그로스·CRM |
+| W0 | 공통 바닥 F1(키워드 제외)·F2·F3·F4(행 미리보기·상세 순서)·F5·F6 + 종류 라벨 L1·L2(§10.3 — 지금 화면의 내부 값 노출도 바로 사라진다) | 4~5일 | 그로스·CRM |
+| W1 | 리드 '수신함' 보기(종류 탭 · 채널 칩 · 묶음 · 고정 상세 · 빠른 조치 줄 · 접점 이력 · 키보드 = L4·L5). 먼저 `LeadsBoardClient`·`LeadDrawer` 분할. D8이 정해지면 L3 | 1.5~2주 | 그로스·CRM |
 | W2 | 현황 맨 위 축소 띠(A) + CRM 배지·토스트 '보기' 착지를 수신함으로(D5) | 2~3일 | 그로스·CRM + 어드민 코어(배지 착지) |
 | W3 | 콘솔(표)에 특이사항 열·저장된 보기(C 흡수), 키워드 규칙(D4) | 3~4일 | 그로스·CRM |
+| W3+ | L6 — 기존 '유입' 칩·Overview 오늘 유입 분해를 종류·채널로 맞춤(PR #65 병합 뒤) | 1~2일 | 그로스·CRM |
 | 보류 | 전역 패널(D) — W2 뒤 실사용 보고 판단 | — | 어드민 코어 |
 
 마이그레이션은 W0~W3 모두 없다(D7을 해결 버튼으로 가면 그때 `crm_customer_events` 상태 컬럼이 필요하다 — CRM 탭 기획 R5와 같은 작업).
@@ -211,11 +212,80 @@ PR #65의 D7(담당 원천)은 이 문서와 별개다. 그 결정 전까지 시
 - 특이사항 사유는 한 행에 하나, 상세에 근거와 함께. 같은 리드는 현황 띠·수신함·콘솔에서 같은 사유를 낸다(F1 한 함수).
 - 조회 실패를 0으로 표시하지 않는다(PR #65 '확인 필요' 규칙 유지). 375px에서 가로 스크롤 없음. 색·보더·모서리는 [DESIGN.md](../../DESIGN.md) 토큰만.
 - 기본 품질 게이트(`npm run typecheck` → `npx eslint app components lib --max-warnings=0` → `npm run build`) + 가까운 테스트:
-  `tests/crm/leads-board-state.test.ts`, `tests/crm/lead-ranking.test.ts`, `tests/crm/lead-response-status.test.ts`, `tests/compass/lead-reinflow.test.ts`, `tests/admin/crm-role-matrix.test.ts`, F1 규칙 신규 단위 테스트.
+  `tests/crm/leads-board-state.test.ts`, `tests/crm/lead-ranking.test.ts`, `tests/crm/lead-response-status.test.ts`, `tests/compass/lead-reinflow.test.ts`, `tests/admin/crm-role-matrix.test.ts`, F1 규칙 신규 단위 테스트, `tests/crm/lead-kind.test.ts`(L1 신규).
+- 종류 라벨: 화면 어디에도 내부 값(`showroom_booking`, `event_alert:…`, `chatbot_assist_registration`, `hero_demo` 등)이 보이지 않는다. 같은 리드는 수신함·콘솔·보드·현황에서 같은 종류 라벨을 낸다(L1 한 함수).
 - 실제 문의로 확인할 때는 Preview에서 `MESSAGING_DRY_RUN=1`(AGENTS 리드 제출 규칙).
 
-## 10. 진척 기록
+## 10. B 확정 — 리드 종류 라벨 (2026-11-05)
+
+운영자가 B(리드 수신함)를 골랐고, "홈페이지, 리드마그넷(구독), 문의, 행사 신청 류가 잘 라벨링될 수 있도록"을 덧붙였다.
+시안: 목업의 'B 확정' 두 장 — 종류 라벨 수신함(행사 신청 선택 상태), 리드 종류 라벨 사양(행 모양 · 판정 · 지금 화면).
+
+### 10.1 지금 라벨이 섞이는 곳 (코드 근거)
+
+| 문제 | 근거 |
+| --- | --- |
+| **행사 신청이 문의와 같은 소스로 저장된다.** 리드 보드에 '홈페이지 · 문의' + 초록 칩 '행사 신청'으로 보이고, 응대 전 · 24h+ · Overview '응대 전 문의' · 사이드바 CRM 배지 숫자에 섞인다 | `components/events/EventSignupModal.tsx`(`source: "contact_page"`, `sourceDetail: "행사 신청"`), `lib/crm/lead-response-status.ts` `isLeadAwaitingResponse`(소스만 본다) |
+| 챗봇 대리 행사 접수도 `contact_page` + `chatbot_assist_registration` — 내부 값이 칩에 그대로 | `lib/chatbot/service.ts`(`[LEAD_SUBMIT:…]` 처리) |
+| 홈 리드마그넷(`home_lead_magnet`)·하단 체크리스트 CTA(`home_final_cta`)·챗봇 미리보기(`teaser`)가 '홈페이지' 묶음 — 문의와 같은 초록 점 | `lib/crm/lead-attribution.ts` `SOURCE_GROUP_BY_SOURCE` |
+| 행사 알림 구독은 `newsletter` + `event_alert:{slug}`, 자료 받으며 구독은 `resource_pdf_download:{slug}` — 상세가 내부 값 | `components/events/EventAlertSignup.tsx`, `app/resources/[slug]/ResourceDownloadForm.tsx` |
+| 데모 신청 상세가 누른 버튼 id(`hero_demo` 등) 그대로 | `components/sections/DemoModal.tsx`(`sourceDetail: trackingButton`), `getLeadSourceDetail` |
+| 쇼룸 예약·도입 신청은 라벨이 없어 원시 키 | `lead-attribution.ts` `SOURCE_LABEL` |
+| '유입' 칩 8묶음(메타·홈페이지·접수·자료실·뉴스레터·채널톡·챗봇·수기)이 채널과 종류를 섞는다 | `lead-attribution.ts` `SOURCE_GROUP_*` |
+
+### 10.2 라벨 체계 — 종류 × 채널
+
+**종류(무엇을 남겼나)** 가 행의 첫 라벨이고, **채널(어디서)** 은 색점 + 둘째 줄 글이다. '홈페이지'는 종류가 아니라 채널이다 — 같은 홈페이지에서 문의 · 쇼룸 예약 · 리드마그넷이 모두 들어온다.
+
+| 종류 | 묶음 | 응대 시계 | 판정(저장 값) | 둘째 줄 예 |
+| --- | --- | --- | --- | --- |
+| 문의 | 응대할 문의 | 켜짐 | `contact_page` 이면서 문의 유형이 행사·세미나가 아니고 행사 토큰 없음 | 홈페이지 문의 폼 · 도입 상담 |
+| 데모 신청 | 응대할 문의 | 켜짐 | `demo_modal` | 홈페이지 첫 화면 버튼 · 온라인 데모 |
+| 쇼룸 예약 | 응대할 문의 | 켜짐 | `showroom_booking` | 홈페이지 쇼룸 예약 · 11/7(금) 15:00 · 2명 |
+| 도입 신청 | 응대할 문의 | 켜짐 | `checkout_request`(상세 `checkout_request:{종류}`) | 홈페이지 구매 신청 · SW 12개월 30석 |
+| 광고 리드폼 | 응대할 문의 | 켜짐 | `meta_lead_ads` | Meta · 소재명 · 관심 |
+| 행사 신청 | 행사 신청 | 따로(D8) | `contact_page` + 문의 유형 '행사 신청'·'세미나 신청' 또는 메모 첫 줄 `[event:slug]` · `contact_page` + `chatbot_assist_registration` · `seminar`·`event`·`team_event` | 행사 페이지 · 11/12 대치 설명회 / 챗봇 대리 접수 · 행사명 |
+| 리드마그넷 | 자료·구독 | 없음 | `resource_*` · `lead_magnet` · `blog_lead_magnet` · `materials_direct` · `home_lead_magnet` · `home_final_cta` | 자료실 · 자료명 / 홈페이지 하단 · 체크리스트 |
+| 구독 | 자료·구독 | 없음 | `newsletter`(상세 `event_alert:` = 행사 알림, `resource_pdf_download:` = 자료 받으며 구독) | 블로그 · 뉴스레터 / 행사 페이지 · 행사 알림 |
+| 채팅 상담 | 그 밖 | 없음 | `chatbot` · `teaser` · `channel_talk` · `channel_talk_mining` | 챗봇 · 채널톡 |
+| 직접 등록 | 그 밖 | — | `admin_manual` · `manual` | 수기 · 등록한 사람 |
+
+채널: 홈페이지 · 행사 페이지 · 블로그 · 자료실 · Meta · 챗봇 · 채널톡 · 수기.
+
+화면 규칙:
+
+- 행 = `[종류 라벨] 이름 · 기관 · 시각` / `채널 점 · 채널 · 상세` / `특이사항 하나 · 내용 한 줄`. 종류 라벨은 아이콘 + 글자, 1px 선 상자, 채움 없음([DESIGN.md](../../DESIGN.md) 어드민 라벨 단순화). 색은 상태(특이사항)에만 쓴다.
+- 목록 위 탭 = 종류(전체 · 문의 · 데모·쇼룸·도입 신청 · 광고 리드폼 · 행사 신청 · 리드마그넷 · 구독), 그 아래 칩 = 채널. 둘을 겹쳐 '홈페이지 × 리드마그넷'처럼 거른다.
+- 목록 묶음: 특이사항 먼저 → 응대할 문의 → 행사 신청 → 자료·구독.
+- 한 사람이 여러 번 남기면: 응대 대상 소스는 같은 연락처면 기존 리드에 합쳐진다(재유입 병합 — 규칙은 그대로). 행 라벨 = 가장 최근 종류 + '이전 N', 상세 '접점 이력'에 종류 라벨을 붙여 전부. 리드마그넷·구독은 행이 따로 생기므로 연락처·이메일로 묶어 접점 이력에 넣는다.
+- 종류별 상세: 행사 신청 → 행사 카드(행사 · 일시·장소 · 이 행사 신청 수 · 신청 경로) + `참석 안내 문자` · `응대 대상으로 올리기`. 리드마그넷 → 받은 자료 · 사이트 활동. 구독 → 구독 종류 · 동의 시각. 문의 계열 → §4 B의 상세.
+- 내부 값은 화면에 내보내지 않는다. 사전에 없는 값은 '기타 (원래 값)'으로 감싸 보이고 테스트가 잡는다.
+
+### 10.3 구현 단위
+
+| ID | 내용 | 파일 | 스키마 |
+| --- | --- | --- | --- |
+| L1 | `lib/crm/lead-kind.ts` — `leadKind(lead)` → `{ kind, family, clock, channel, detailLabel }` 순수 함수. 모든 source 값·상세 접두를 표로 고정하는 단위 테스트 | 새 파일, `tests/crm/lead-kind.test.ts` | 없음 |
+| L2 | 상세 값 사람말 사전(`hero_demo` · `final_consultation` · `event_alert:` · `chatbot_assist_registration` · `resource_pdf_download:` · `checkout_request:`) — 행사·자료 slug는 이름으로 바꿔 보인다 | `lead-kind.ts`, 행사·자료 repository 읽기 | 없음 |
+| L3 | (D8 결정 뒤) 응대 시계 판정을 `family === "respond"`로 — 행사 신청을 응대 전·24h+에서 뺀다. 재유입 병합 집합(`RESPONSE_TARGET_SOURCES`)은 건드리지 않는다. Overview·배지·보드 숫자가 함께 바뀌므로 PR #65 테스트도 갱신 | `lead-response-status.ts`, `lib/admin/overview/lead-summary.ts` | 없음 |
+| L4 | 수신함 종류 탭 · 채널 칩 · 묶음 정렬 · 행 3줄 · 종류별 상세 머리와 빠른 조치 | `components/admin/crm/leads/**` | 없음 |
+| L5 | 접점 이력 — 합쳐진 리드의 `site_inflow` 이벤트 + 같은 연락처·이메일의 자료·구독 행 | `lib/repositories/lead-activity.ts` | 없음 |
+| L6 | 기존 '유입' 8묶음 칩 · Overview 오늘 유입 소스 분해(PR #65 `intake-feed` `sourceKind`)를 종류·채널로 맞춤 | `lead-attribution.ts`, `lib/marketing/intake-feed.ts` | 없음 |
+
+### 10.4 추가 결정
+
+| # | 질문 | 선택지 | 권장 |
+| --- | --- | --- | --- |
+| D8 | 행사 신청을 응대 전·24h+ 숫자에서 뺄까 | 뺀다(참석 확인 흐름) / 지금처럼 센다 | 뺀다. 질문이 따로 있으면 '응대 대상으로 올리기'로 개별 편입 |
+| D9 | 참석 상태(신청됨·참석 확정·참석·불참·취소)를 저장할까 | 저장(스키마) / 안 함 | 1단계 안 함 — 라벨·행사 카드만. 필요해지면 콘텐츠 파트의 행사 데이터와 함께 |
+| D10 | 채팅 상담(챗봇·채널톡)을 수신함에 넣을까 | 넣음 / '그 밖'으로 접음 | '그 밖'으로 접음 |
+
+## 11. 진척 기록
 
 ### 2026-11-05 — 시안 4개 작성
 
 main + PR #65를 코드 대조해 원인(범위·확인 게이트, 특이사항 개념 부재, 드로어 깊이)을 확인하고 시안 A~D와 공통 바닥 F1~F6, 결정 항목 D1~D7을 정리했다. 목업은 `mockups/crm-inquiry-notable-2026-11-05.html`. 구현 없음.
+
+### 2026-11-05 — B 선택, 리드 종류 라벨 확정판
+
+운영자가 B를 골랐다. "홈페이지 · 리드마그넷(구독) · 문의 · 행사 신청이 잘 라벨링되게" 요구에 따라 종류 × 채널 라벨 체계(§10)와 시안 두 장(종류 라벨 수신함, 라벨 사양)을 더했다. 코드 대조로 행사 신청이 문의 소스로 저장돼 응대 숫자에 섞이는 것, 홈 리드마그넷이 '홈페이지' 묶음인 것, 내부 값 노출 여섯 군데를 확인했다. 결정 D8~D10 추가. 구현 없음.
