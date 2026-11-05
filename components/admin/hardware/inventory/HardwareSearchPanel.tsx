@@ -43,6 +43,10 @@ interface HardwareSearchPanelProps {
   // 버튼 권한 — 배송 예정 확정은 본인 건 또는 입고관리 권한자(정의서 §권한). 강제는 서버 게이트.
   movementButtonState: (button: MovementButton, movement: HardwareMovement) => MovementButtonState
   setCustomerDetail: Dispatch<SetStateAction<string | null>>
+  /** 기록 생성 역할(viewer.canWrite). 없으면 출고·예정 바로가기를 내린다 — 다른 섹션과 같은 기준. */
+  canWrite?: boolean
+  /** 입고관리 권한(viewer.canManageInventory !== false). 없으면 입고 바로가기를 내린다. */
+  canInbound?: boolean
 }
 
 function HardwareSearchPanel({
@@ -61,6 +65,8 @@ function HardwareSearchPanel({
   plannedConfirmLocked,
   movementButtonState,
   setCustomerDetail,
+  canWrite = true,
+  canInbound = true,
 }: HardwareSearchPanelProps) {
   return (
     <section className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white p-4 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
@@ -119,9 +125,15 @@ function HardwareSearchPanel({
                     가용 {formatNumber(row.availableStock)} · 예정 {formatNumber(row.plannedOut)} · 창고 {formatNumber(row.warehouseStock)}
                   </p>
                   <div className="mt-1.5 inline-flex rounded-md border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-0.5">
-                    <QuickMoveButton kind="sale" bare product={row.product} onClick={() => prepareQuickEntry(row.itemId, "sale")} />
-                    <QuickMoveButton kind="planned" bare product={row.product} onClick={() => prepareQuickEntry(row.itemId, "planned")} />
-                    <QuickMoveButton kind="inbound" bare product={row.product} onClick={() => prepareQuickEntry(row.itemId, "inbound")} />
+                    {canWrite ? (
+                      <>
+                        <QuickMoveButton kind="sale" bare product={row.product} onClick={() => prepareQuickEntry(row.itemId, "sale")} />
+                        <QuickMoveButton kind="planned" bare product={row.product} onClick={() => prepareQuickEntry(row.itemId, "planned")} />
+                      </>
+                    ) : null}
+                    {canWrite && canInbound ? (
+                      <QuickMoveButton kind="inbound" bare product={row.product} onClick={() => prepareQuickEntry(row.itemId, "inbound")} />
+                    ) : null}
                   </div>
                 </div>
               ))}

@@ -67,6 +67,8 @@ export interface ProcessLineInput {
 /** 회수가 가리키는 원 출고 — 저장소가 읽어 넘긴다. */
 export interface ReturnOriginal {
   id: string
+  /** admin_manual | sheet_import — 시트 이관 행은 가져오기마다 지워지고 다시 생긴다(id 가 바뀐다). */
+  source?: string
   item_id: string
   product_name: string
   movement_type: string
@@ -222,7 +224,11 @@ function prepareOutbound(input: ProcessLineInput, ctx: ProcessLineContext, actor
   }
   next.status = isPlannedProgressStatus(input.status) ? HARDWARE_PROGRESS_STATUS.planned : HARDWARE_PROGRESS_STATUS.installed
 
-  if (ctx.lotTracked === true) {
+  // 물류번호 직접 선택은 창고에서 나가는 출고만 — 화면(outbound-v2-model isWarehouseSource)과 같은 조건.
+  // 사무실·샘플 풀에 있던 물량을 고객사로 보낼 때는 물류번호 칸이 없어 저장할 방법이 없었다(2026-11-05 점검).
+  // 물류번호 잔여는 위치를 보지 않는 값이라, 사무실 출발 출고를 잔여로 막으면 같은 물량을 두 번 빼게 된다.
+  const fromWarehouse = !clean(input.fromLocation) || ctx.origin === "warehouse"
+  if (ctx.lotTracked === true && fromWarehouse) {
     const allocations = input.lotAllocations ?? []
     if (allocations.length > 0) {
       // 나눠 고른 경우 — 번호·수량 모양과 합계만 본다. 번호별 잔여는 저장소가 막는다.
@@ -261,6 +267,14 @@ function prepareReturn(input: ProcessLineInput, ctx: ProcessLineContext, actor: 
 
   const original = ctx.returnOriginal
   if (!original) throw new MovementRuleError("회수할 원 출고 건을 찾을 수 없습니다.", 404)
+  // 시트 이관 행은 매시간 가져오기가 지우고 다시 싣는다. 회수가 그 행을 가리키면 원 출고 연결(FK)이 지우기를
+  // 막아 그 뒤 가져오기가 전부 실패한다(2026-11-05 점검). 시트 이관 기간에는 시트 출고의 회수를 시트에 적는다.
+  if (original.source === "sheet_import") {
+    throw new MovementRuleError(
+      "시트에서 기록된 출고는 시트 이관 기간 동안 회수도 시트에 적어 주세요. 앱에서 등록한 출고만 여기서 회수할 수 있습니다.",
+      422
+    )
+  }
   if (original.voided_at) throw new MovementRuleError("취소된 출고는 회수할 수 없습니다.", 422)
   if (original.movement_type !== "outbound" || isPlannedProgressStatus(original.status)) {
     throw new MovementRuleError("실제 출고(설치 완료)된 건만 회수할 수 있습니다.", 422)

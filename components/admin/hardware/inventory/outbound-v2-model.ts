@@ -163,7 +163,7 @@ export const INITIAL_OUTBOUND_V2_STATE: OutboundV2DraftState = {
 /** 드래프트·전송 본문에 얹는 새 칸. undefined 인 칸은 JSON 에 실리지 않는다. */
 export interface ProcessDraftFields {
   outboundType?: HardwareOutboundType
-  customerId?: string
+  customerId?: string | null
   expectedReturnAt?: string
   ownerUserId?: string
   isFree?: boolean
@@ -183,6 +183,8 @@ export function processDraftFields(
   if (context.movementType === "outbound" && isCustomerOutbound(context)) {
     if (isHardwareOutboundType(state.outboundType)) fields.outboundType = state.outboundType
     if (state.customerMode === "crm" && state.customerId) fields.customerId = state.customerId
+    // 직접 입력("CRM에 없는 곳")으로 바꾸면 고객 연결을 지운다 — 칸을 빼면 수정 때 예전 CRM 고객이 그대로 남았다.
+    else if (state.customerMode === "free") fields.customerId = null
     if (state.outboundType === "sample" && state.expectedReturnAt.trim()) fields.expectedReturnAt = state.expectedReturnAt.trim()
   }
   if (context.movementType === "inbound" && state.isFree != null) fields.isFree = state.isFree
@@ -216,7 +218,7 @@ export function outboundV2InputFromDraft(
     toLocation: string
     lotNo: string
     outboundType?: HardwareOutboundType
-    customerId?: string
+    customerId?: string | null
     expectedReturnAt?: string
   },
   lot: LotRequirement,

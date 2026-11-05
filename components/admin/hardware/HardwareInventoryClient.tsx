@@ -27,7 +27,7 @@ import {
 import {
   customerLabel,
   DETAIL_PRESET_KEYS,
-  elapsedDaysSince,
+  plannedGroupAgeDays,
   ENTRY_PRESETS,
   formatCurrency,
   formatDate,
@@ -1366,7 +1366,7 @@ export default function HardwareInventoryClient({
   // 예정일로부터 30일 이상 미확정으로 방치된 딜 수 — 큐가 묵으면 판매 요약이 0으로 보이는
   // 원인이 되므로 패널 헤더에서 바로 드러낸다(페이지가 아닌 전체 큐 기준).
   const plannedStaleGroupCount = useMemo(
-    () => plannedGroups.filter((group) => (elapsedDaysSince(group.date) ?? 0) >= 30).length,
+    () => plannedGroups.filter((group) => plannedGroupAgeDays(group.items) >= 30).length,
     [plannedGroups]
   )
 
@@ -1887,6 +1887,10 @@ export default function HardwareInventoryClient({
     let latestTime = -Infinity
     for (const movement of data?.movements ?? []) {
       if (movement.voided_at || movement.source !== "admin_manual") continue
+      // 복제는 출고·이동 연속 입력용이다. 입고는 입고표, 회수는 원 출고를 고르는 회수 등록으로 해야
+      // 새 규칙(C 순번·무상 여부·회수 연결)을 지킨다. 재고 조정은 입고관리 권한자만 복제한다.
+      if (movement.movement_type === "inbound" || movement.movement_type === "return") continue
+      if (movement.movement_type === "adjust" && !canInboundAdjust) continue
       const time = new Date(movement.occurred_at ?? movement.created_at).getTime()
       if (Number.isFinite(time) && time >= latestTime) {
         latestTime = time
@@ -1894,7 +1898,7 @@ export default function HardwareInventoryClient({
       }
     }
     return latest
-  }, [data?.movements])
+  }, [canInboundAdjust, data?.movements])
 
   const historyLots = useMemo(() => {
     const set = new Set<string>()
@@ -2360,6 +2364,8 @@ export default function HardwareInventoryClient({
 
       const key = event.key.toLowerCase()
       if (key !== "i" && key !== "o") return
+      // 읽기 역할은 기록을 만들 수 없다 — 다른 쓰기 버튼과 같이 단축키도 막는다. 입고(i)는 입고관리 권한자만.
+      if (!canWriteHardware || (key === "i" && !canInboundAdjust)) return
       event.preventDefault()
       if (key === "i") openInboundSheet()
       else openSheet("sale")
@@ -2378,6 +2384,8 @@ export default function HardwareInventoryClient({
     plannedSelectionCount,
     openInboundSheet,
     openSheet,
+    canWriteHardware,
+    canInboundAdjust,
   ])
 
   const prepareQuickEntry = useCallback((itemId: string, presetKey: string) => {
@@ -2472,7 +2480,9 @@ export default function HardwareInventoryClient({
     setSerialsText("")
     // 유형·고객·담당은 같은 고객 연속 입력이라 따라오고, 물류번호·반납일은 건 단위라 다시 고른다.
     loadOutboundV2FromMovement(movement)
-    patchOutboundV2({ expectedReturnAt: "" })
+    // 다른 사람이 만든 기록이면 그 담당 계정이 실려 일반 사용자는 저장 때 403 이 났다 — 담당 지정 권한이
+    // 없으면 담당을 비워 서버가 본인으로 채우게 한다.
+    patchOutboundV2(viewer?.canManageInventory === true ? { expectedReturnAt: "" } : { expectedReturnAt: "", ownerUserId: null })
     setNotice(`직전 기록(${movement.product_name})을 복제했습니다. 수량·경로를 확인하고 저장하세요.`)
   }
 
@@ -2715,17 +2725,20 @@ export default function HardwareInventoryClient({
   const reviewHomeRecord = (draft: HomeRecordDraft) => {
     if (!canWriteHardware || plannedConfirmLocked || sheetOpen || inboundSheet.open || pendingMovement) return
     if (draft.preset === "inbound" && !canInboundAdjust) return
+    // 입고는 입고표로 — 다른 입고 진입점과 같다. 옛 단건 입고 폼은 H 순번 물류번호를 제안하고 무상 여부·
+    // 직배송이 없어, 새 규칙(C 순번·무상 여부 필수)에서 저장이 거절됐다(2026-11-05 점검).
+    if (draft.preset === "inbound") {
+      openInboundSheet(draft.itemId)
+      return
+    }
     // 홈 입력을 기존 단건 검토 폼에 전달한다. 저장·CRM·로트 검증은 기존 경로가 담당한다.
     openSheet(draft.preset, draft.itemId, "single")
     setQuantity(draft.quantity)
     setOccurredAt(draft.date)
     setMemo(draft.memo)
-    if (draft.preset === "inbound") setFromLocation(draft.source.trim())
-    else {
-      setToLocation(draft.customer.trim())
-      // 홈 칸은 과거 출고처 자유 입력이다 — 이름을 지우지 않게 직접 입력으로 넘기고, 시트에서 CRM 고객으로 바꿀 수 있다.
-      if (draft.customer.trim()) patchOutboundV2({ customerMode: "free" })
-    }
+    setToLocation(draft.customer.trim())
+    // 홈 칸은 과거 출고처 자유 입력이다 — 이름을 지우지 않게 직접 입력으로 넘기고, 시트에서 CRM 고객으로 바꿀 수 있다.
+    if (draft.customer.trim()) patchOutboundV2({ customerMode: "free" })
   }
 
   const adjustQuantity = (delta: number) => {
@@ -3628,6 +3641,7 @@ export default function HardwareInventoryClient({
               setEntrySub={setEntrySub}
               openFreshSheet={openFreshSheet}
               openReturnSheet={() => setReturnSheetOpen(true)}
+              canWrite={canWriteHardware}
               inboundSearch={inboundSearch}
               setInboundSearch={setInboundSearch}
               inboundLots={inboundLots}
@@ -3882,7 +3896,7 @@ export default function HardwareInventoryClient({
 
       {/* 예정 출고를 선택 중이면 숨긴다 — 이 버튼(fixed bottom-6 right-6)이 하단 일괄 작업 바의
           "선택 확정" 버튼을 덮는다(1440px 실측). 선택 중엔 그 바가 이 화면의 주 작업면이다. */}
-      {!sheetOpen && !inboundSheet.open && !pendingMovement && !voidTarget && !detailId && !customerDetail && !sampleUnitSheetId && plannedSelectionCount === 0 && (
+      {canWriteHardware && !sheetOpen && !inboundSheet.open && !pendingMovement && !voidTarget && !detailId && !customerDetail && !sampleUnitSheetId && plannedSelectionCount === 0 && (
         <button
           type="button"
           onClick={openFreshSheet}

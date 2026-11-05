@@ -1,6 +1,6 @@
 import "server-only"
 
-import { emitNotificationEvent } from "@/lib/notifications/emit-event"
+import { emitNotificationEvent, WEBHOOK_DISABLED_REASON } from "@/lib/notifications/emit-event"
 import {
   HARDWARE_PROCESS_ALERT_EVENT_TYPE,
   HARDWARE_PROCESS_ALERT_SOURCE,
@@ -15,11 +15,12 @@ import { hasProcessAlertBeenSent, listProcessAlertLedger } from "@/lib/repositor
 // 하드웨어 일일 알림 실행 — /api/cron/dispatch/[slot] 의 고정 슬롯(HARDWARE_PROCESS_ALERT_UTC_SLOT)이 부른다.
 // 하루 한 통, 운영 WeCom 방(wecom_webhook). 같은 날 이미 나갔으면 다시 보내지 않는다(source_id = KST 날짜).
 // 웹훅 주소·외부 오류 원문은 결과·로그에 싣지 않는다.
-// 끄기: 설정 > 웹훅에서 운영 방(wecomOpsWebhookUrl)을 끄면 발송이 skipped 로 멈춘다(운영 방 알림 전체).
+// 끄기: 설정 > 웹훅에서 운영 방(wecomOpsWebhookUrl)을 끄면 보내지 않고 channel_off 로 끝난다(운영 방 알림 전체,
+// 크론 실패로 적지 않는다).
 // 이 알림만 끄려면 env HARDWARE_PROCESS_ALERTS=off — 원장도 읽지 않고 disabled 로 끝난다.
 
 export interface HardwareProcessAlertReport {
-  status: "sent" | "empty" | "already_sent" | "preview" | "disabled"
+  status: "sent" | "empty" | "already_sent" | "preview" | "disabled" | "channel_off"
   dryRun: boolean
   dateKey: string
   stalePlannedCount: number
@@ -120,9 +121,19 @@ export async function runHardwareProcessAlerts(
       sampleCheckAvailable: selection.sampleCheckAvailable,
     },
     channels: ["wecom_webhook"],
-    // 크론 결과가 실제 발송 여부를 말하게 한다 — 방이 꺼져 있거나 HTTP 실패면 잡이 failed 가 된다.
-    requireSuccessfulDelivery: true,
   })
 
-  return { ...base, status: "sent", eventId: event.id == null ? null : String(event.id) }
+  // 운영 방(웹훅)이 설정에서 꺼져 있으면 보내지 않은 것이지 실패가 아니다 — 잡을 failed 로 적으면 매일 08시
+  // 크론이 실패로 남았다(2026-10-29~11-05). HTTP 실패 등 진짜 실패만 던져 잡을 failed 로 만든다.
+  const results: Array<{ channel: string; status: string; errorMessage?: string }> = event.deliveryResults ?? []
+  const eventId = event.id == null ? null : String(event.id)
+  if (results.length > 0 && results.every((result) => result.status === "skipped" && result.errorMessage === WEBHOOK_DISABLED_REASON)) {
+    return { ...base, status: "channel_off", eventId }
+  }
+  const failed = results.filter((result) => result.status !== "sent")
+  if (failed.length > 0) {
+    throw new Error(failed.map((result) => `${result.channel}: ${result.errorMessage ?? result.status}`).join("; "))
+  }
+
+  return { ...base, status: "sent", eventId }
 }

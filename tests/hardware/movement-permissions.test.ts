@@ -87,3 +87,14 @@ describe("버튼 권한 — 정의서 §권한 · D2", () => {
     expect(canRecordInboundOrAdjust(undefined)).toBe(true)
   })
 })
+
+describe("시트에서 가져온 기록", () => {
+  it("입고관리 권한자에게도 수정·취소를 막는다 — 서버가 늘 거절한다", async () => {
+    const { movementButtonState, SHEET_ROW_TITLE } = await import("@/components/admin/hardware/inventory/movement-permissions")
+    const viewer = { canFinalize: true, canWrite: true, canManageInventory: true, userId: "u-boss", name: "이왕찬" }
+    const sheetRow = { movement_type: "outbound" as const, status: "설치 완료", planned: false, source: "sheet_import" as const, owner: null, owner_user_id: null, created_by_user_id: null }
+    expect(movementButtonState("edit", sheetRow, viewer)).toEqual({ allowed: false, title: SHEET_ROW_TITLE })
+    expect(movementButtonState("void", sheetRow, viewer)).toEqual({ allowed: false, title: SHEET_ROW_TITLE })
+    expect(movementButtonState("confirm", { ...sheetRow, status: "배송 예정", planned: true }, viewer).allowed).toBe(true)
+  })
+})

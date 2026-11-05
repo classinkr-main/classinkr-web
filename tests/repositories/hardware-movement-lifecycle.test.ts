@@ -538,7 +538,7 @@ describe("updateHardwareMovement", () => {
 
     await expect(
       updateHardwareMovement("m1", validInput, { canFinalize: false })
-    ).rejects.toThrow("실제 반영된 기록 수정은 확정 권한(hardware.finalize)이 필요합니다.")
+    ).rejects.toThrow("실제 반영된 기록 수정은 입고관리 권한자만 할 수 있습니다.")
     expect(operations.some((op) => op.method === "update")).toBe(false)
   })
 
@@ -551,7 +551,7 @@ describe("updateHardwareMovement", () => {
 
     await expect(
       updateHardwareMovement("m1", { ...validInput, status: "출고" }, { canFinalize: false })
-    ).rejects.toThrow("예정을 실제 출고로 바꾸는 확정은 확정 권한(hardware.finalize)이 필요합니다.")
+    ).rejects.toThrow("배송 예정을 실제 출고로 바꾸려면 확정 버튼을 쓰세요")
     expect(operations.some((op) => op.method === "update")).toBe(false)
   })
 

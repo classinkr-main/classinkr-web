@@ -1325,6 +1325,7 @@ async function loadReturnOriginals(ids: readonly string[]): Promise<Map<string, 
 
   return new Map(((data ?? []) as HardwareMovement[]).map((row) => [row.id, {
     id: row.id,
+    source: row.source,
     item_id: row.item_id,
     product_name: row.product_name,
     movement_type: row.movement_type,
@@ -1849,8 +1850,9 @@ async function planProcessConfirm(
       ? input.lotAllocations
       : cleanString(input.lotNo)
         ? [{ lotNo: cleanString(input.lotNo) as string, quantity: effectiveQty }]
-        : cleanString(planned.lot_no)
-          ? [{ lotNo: cleanString(planned.lot_no) as string, quantity: effectiveQty }]
+        : movementLotKey(planned)
+          // 시트 이관 행은 물류No 를 reference_no 에 싣는다 — lot_no 만 보면 번호가 있는데도 고르라고 막았다.
+          ? [{ lotNo: movementLotKey(planned) as string, quantity: effectiveQty }]
           : null
   if (!requested) {
     throw new MovementRuleError(`${planned.product_name}은(는) 확정할 때 물류번호를 골라야 합니다.`)
@@ -2065,10 +2067,10 @@ export async function updateHardwareMovement(
     }
   } else if (options?.canFinalize === false) {
     if (!wasPlanned) {
-      throw new Error("실제 반영된 기록 수정은 확정 권한(hardware.finalize)이 필요합니다.")
+      throw new Error("실제 반영된 기록 수정은 입고관리 권한자만 할 수 있습니다.")
     }
     if (!staysPlanned) {
-      throw new Error("예정을 실제 출고로 바꾸는 확정은 확정 권한(hardware.finalize)이 필요합니다.")
+      throw new Error("배송 예정을 실제 출고로 바꾸려면 확정 버튼을 쓰세요(입고관리 권한자는 수정으로도 바꿀 수 있습니다).")
     }
   }
 
@@ -2224,6 +2226,8 @@ async function listRealizedCustomerOutbounds(): Promise<ReturnCandidateRow[]> {
       .from("hardware_movements")
       .select(columns)
       .eq("movement_type", "outbound")
+      // 앱에서 등록한 출고만 — 시트 이관 행은 가져오기마다 지워지고 다시 생겨 회수 연결이 가져오기를 막는다.
+      .eq("source", "admin_manual")
       .is("voided_at", null)
       .order("id", { ascending: true })
       .limit(limit)

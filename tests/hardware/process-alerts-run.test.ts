@@ -147,14 +147,21 @@ describe("하드웨어 일일 알림 실행", () => {
     rows?: ProcessAlertMovementRow[]
     processColumns?: boolean
     alreadySent?: boolean | Error
+    deliveryResults?: Array<{ channel: string; status: string; errorMessage?: string }>
   } = {}) {
     vi.resetModules()
-    const emitNotificationEvent = vi.fn().mockResolvedValue({ id: "event-1", deliveryResults: [] })
+    const emitNotificationEvent = vi.fn().mockResolvedValue({
+      id: "event-1",
+      deliveryResults: options.deliveryResults ?? [{ channel: "wecom_webhook", status: "sent" }],
+    })
     const hasProcessAlertBeenSent = vi.fn(async () => {
       if (options.alreadySent instanceof Error) throw options.alreadySent
       return options.alreadySent === true
     })
-    vi.doMock("@/lib/notifications/emit-event", () => ({ emitNotificationEvent }))
+    vi.doMock("@/lib/notifications/emit-event", () => ({
+      emitNotificationEvent,
+      WEBHOOK_DISABLED_REASON: "관리자가 끈 채널입니다.",
+    }))
     vi.doMock("@/lib/repositories/hardware-process-alerts", () => ({
       listProcessAlertLedger: vi.fn().mockResolvedValue({
         rows: options.rows ?? [staleRow("a"), staleRow("b", { owner: "박담당" })],
@@ -178,10 +185,25 @@ describe("하드웨어 일일 알림 실행", () => {
       source: "hardware_process_alerts",
       sourceId: "2026-10-28",
       channels: ["wecom_webhook"],
-      requireSuccessfulDelivery: true,
       routeUrl: "/admin/hardware",
     })
     expect(emitNotificationEvent.mock.calls[0][0].message).toContain("■ 김담당")
+  })
+
+  it("운영 방이 설정에서 꺼져 있으면 channel_off — 실패가 아니다(매일 크론이 실패로 남던 문제)", async () => {
+    const { runHardwareProcessAlerts } = await loadRunner({
+      deliveryResults: [{ channel: "wecom_webhook", status: "skipped", errorMessage: "관리자가 끈 채널입니다." }],
+    })
+
+    await expect(runHardwareProcessAlerts({ now: NOW })).resolves.toMatchObject({ status: "channel_off", eventId: "event-1" })
+  })
+
+  it("HTTP 실패 같은 진짜 실패는 던진다 — 잡이 failed 로 남는다", async () => {
+    const { runHardwareProcessAlerts } = await loadRunner({
+      deliveryResults: [{ channel: "wecom_webhook", status: "failed", errorMessage: "HTTP 500" }],
+    })
+
+    await expect(runHardwareProcessAlerts({ now: NOW })).rejects.toThrow("wecom_webhook: HTTP 500")
   })
 
   it("dryRun 은 미리보기만 — 보내지도, 중복 확인도 하지 않는다", async () => {

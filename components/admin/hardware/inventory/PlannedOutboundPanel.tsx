@@ -6,11 +6,13 @@ import { CheckCheck, Clock3 } from "lucide-react"
 
 import DeleteConfirmDialog from "@/components/admin/DeleteConfirmDialog"
 import type { AdminListPaginationResult } from "@/lib/admin-list-pagination"
+import { plannedLotKey } from "./lot-allocation-model"
 import type { MovementButton, MovementButtonState } from "./movement-permissions"
 import { CrmCustomerLink, movementOutboundType, OutboundTypeBadge, SampleReturnBadge } from "./OutboundMetaBadges"
 import {
   collectStalePlannedMovementIds,
   elapsedDaysSince,
+  plannedGroupAgeDays,
   formatDate,
   formatLotLabel,
   formatNumber,
@@ -281,7 +283,8 @@ function PlannedOutboundPanel({
         <>
           <div className="divide-y divide-[rgba(0,0,0,0.06)]">
             {plannedPagination.pageItems.map((group) => {
-              const elapsed = elapsedDaysSince(group.date)
+              // 매일 알림과 같은 기준(예정일, 없으면 등록일) — 결정 D9.
+              const elapsed = group.items.length > 0 ? plannedGroupAgeDays(group.items) : elapsedDaysSince(group.date)
               const groupConfirm = confirmAllState(group.items)
               const groupIds = group.items.map((item) => item.id)
               const selectedInGroup = groupIds.filter((id) => selectedIds.has(id)).length
@@ -380,7 +383,7 @@ function PlannedOutboundPanel({
                             {movement.product_name} <span className="tabular-nums text-[#7A520F]">· {formatNumber(movement.quantity)}대</span>
                           </p>
                           <p className="mt-1 flex flex-wrap items-center gap-1 text-[11px] font-bold">
-                            <PlannedLotText lotNo={movement.lot_no} lotTracked={item?.lot_tracked} />
+                            <PlannedLotText lotNo={plannedLotKey(movement)} lotTracked={item?.lot_tracked} />
                             <OutboundTypeBadge type={movementOutboundType(movement)} size="xs" />
                             <SampleReturnBadge movement={movement} size="xs" />
                             <CrmCustomerLink movement={movement} />

@@ -20,7 +20,7 @@ import {
 } from "lucide-react"
 
 import type { AdminListPaginationResult } from "@/lib/admin-list-pagination"
-import type { HardwareOutboundType, HardwareReportGroup } from "@/lib/hardware/inventory-process"
+import { plannedAgeDays, type HardwareOutboundType, type HardwareReportGroup } from "@/lib/hardware/inventory-process"
 import { fiscalQuarter } from "@/lib/branch/fiscal"
 // 아래 "export { ... } from" 재수출과 별개로, 이 파일 자체(PRODUCT_FILTER_OPTIONS)가 로컬에서
 // 써야 해서 일반 import도 함께 둔다 — re-export만으로는 이 모듈 스코프에 바인딩이 생기지 않는다.
@@ -222,7 +222,7 @@ export interface HardwareMovementDraft {
   // 재고관리 프로세스 칸(계약 §7-3) — 어떤 칸을 싣는지는 outbound-v2-model processDraftFields 가 정한다.
   // 옛 바구니(보관된 초안)에는 없다.
   outboundType?: HardwareOutboundType
-  customerId?: string
+  customerId?: string | null
   expectedReturnAt?: string
   ownerUserId?: string
   isFree?: boolean
@@ -627,12 +627,29 @@ export function resolveConfirmQuantity(
 // (감사 2026-09-14, 일괄 체크). 딜(그룹) 단위가 아니라 개별 확정 대상(HardwareMovement.id)
 // 단위로 판정한다 — 그룹 키 자체가 고객+담당자+예정일+lot 조합이라 그룹의 date는 구성원 전체가
 // 공유하는 값이므로, 개별 판정과 기존 그룹 판정(plannedStaleGroupCount)은 항상 같은 결과를 낸다.
+// 배송 예정 경과일 — 매일 알림(lib/hardware/process-alerts.ts)과 같은 기준(plannedAgeDays, 결정 D9):
+// 예정일이 있으면 예정일, 없으면 등록일. 예전 화면은 날짜 없는 예정을 0일로 세서, 오더 승인으로 만든
+// 날짜 없는 배송 예정이 화면에서는 끝까지 "30일+"에 걸리지 않았다(2026-11-05 점검).
+// 시트 이관 행은 가져올 때마다 등록일이 새로 찍혀, 날짜가 없으면 여전히 경과일이 0 에 가깝다.
+export function plannedMovementAgeDays(movement: Pick<HardwareMovement, "occurred_at" | "created_at">, now: Date = new Date()): number {
+  return plannedAgeDays(movement, now)
+}
+
+/** 딜(묶음) 경과일 — 묶음 안 가장 오래된 예정 기준. */
+export function plannedGroupAgeDays(
+  movements: ReadonlyArray<Pick<HardwareMovement, "occurred_at" | "created_at">>,
+  now: Date = new Date()
+): number {
+  return movements.reduce((max, movement) => Math.max(max, plannedAgeDays(movement, now)), 0)
+}
+
 export function collectStalePlannedMovementIds(
-  movements: Array<Pick<HardwareMovement, "id" | "occurred_at">>,
-  dangerDays: number
+  movements: Array<Pick<HardwareMovement, "id" | "occurred_at" | "created_at">>,
+  dangerDays: number,
+  now: Date = new Date()
 ): string[] {
   return movements
-    .filter((movement) => (elapsedDaysSince(movement.occurred_at) ?? 0) >= dangerDays)
+    .filter((movement) => plannedAgeDays(movement, now) >= dangerDays)
     .map((movement) => movement.id)
 }
 

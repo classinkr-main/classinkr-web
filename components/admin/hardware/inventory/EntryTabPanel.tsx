@@ -32,6 +32,8 @@ interface EntryTabPanelProps {
   openFreshSheet: () => void
   // 회수 등록 — 원 출고 건에 연결된 회수(정의서 §회수). 출고 동작 옆에 둔다.
   openReturnSheet: () => void
+  /** 기록 생성 역할 — 없으면 회수 등록·빠른 기록 버튼을 내린다(강제는 서버). 구응답은 열어 둔다. */
+  canWrite?: boolean
   inboundSearch: ComponentProps<typeof InboundLotsSection>["inboundSearch"]
   setInboundSearch: ComponentProps<typeof InboundLotsSection>["setInboundSearch"]
   inboundLots: ComponentProps<typeof InboundLotsSection>["inboundLots"]
@@ -52,6 +54,7 @@ export default function EntryTabPanel({
   setEntrySub,
   openFreshSheet,
   openReturnSheet,
+  canWrite = true,
   inboundSearch,
   setInboundSearch,
   inboundLots,
@@ -99,6 +102,7 @@ export default function EntryTabPanel({
             출고 · 기간 집계
           </button>
         </div>
+        {canWrite ? (
         <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
@@ -117,6 +121,7 @@ export default function EntryTabPanel({
           빠른 기록
         </button>
         </div>
+        ) : null}
       </div>
 
       {entrySub === "inbound" && (

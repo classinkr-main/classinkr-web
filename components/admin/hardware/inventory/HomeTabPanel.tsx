@@ -234,6 +234,8 @@ export default function HomeTabPanel({
       plannedConfirmLocked={plannedConfirmLocked}
       movementButtonState={movementButtonState}
       setCustomerDetail={setCustomerDetail}
+      canWrite={canWriteHardware}
+      canInbound={data?.viewer?.canManageInventory !== false}
     />
 
     {/* 사무실·샘플 재고 풀(2026-09-15) — 예전 "재고 위치 맵" 자리. 위치 맵의 남은/나간 샘플은 원장 위치 잔량이었는데,
@@ -244,7 +246,7 @@ export default function HomeTabPanel({
       sampleUnits={sampleUnits}
       sampleUnitsLoading={sampleUnitsLoading}
       sampleUnitsError={sampleUnitsError}
-      canWrite
+      canWrite={canWriteHardware}
       todayKey={todayKey()}
       onLoan={(_productName, _availableUnitIds, itemId) => prepareQuickEntry(itemId ?? "", "sample")}
       onReturn={(_productName, itemId) => prepareQuickEntry(itemId ?? "", "sampleReturn")}
