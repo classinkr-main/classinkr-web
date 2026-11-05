@@ -172,6 +172,8 @@ footer{margin-top:64px;padding-top:18px;border-top:1px solid var(--line);font-si
 .xlink:hover{text-decoration:none;border-color:var(--accent)}
 .xlink b{color:var(--accent-ink);font-weight:600;white-space:nowrap}
 .toc a.ext{color:var(--accent-ink)}
+.more{display:inline-flex;align-items:center;gap:4px;align-self:flex-start;color:var(--accent-ink);font-weight:600;font-size:14px;line-height:1.5}
+.sh .more{grid-column:2;justify-self:start;margin-top:10px}
 .card{scroll-margin-top:84px}
 .card:target{outline:2px solid var(--accent);outline-offset:3px}
 /* 마지막 문의 CTA */
@@ -375,7 +377,7 @@ const SECTIONS = [
   {n:"API 연동", d:"기관 시스템과 계정·수업·데이터 연동", s:"기존 학원 관리 시스템에서 바로 수업을 개설하고 싶을 때", b:["이중 입력 없이 기존 시스템과 연결","기존 시스템에서 바로 수업 입장"], r:["관리자"], c:"ask", x:"연동 방식·범위는 담당 매니저와 별도 상담"},
  ]},
  {id:"ai", title:"AI 기능", desc:"수업 중 문항 출제부터 녹화 요약, 강의 품질 점검까지 수업 데이터 위에서 동작하는 AI입니다.",
-   more:{href:AIG, t:"AI 기능마다 켜는 곳, 사용 순서, 실제 화면은 AI 기능 소개서에 따로 정리했습니다.", cta:"AI 기능 소개서 보기"},
+   more:{href:AIG, t:"AI 기능마다 켜는 곳, 사용 순서, 실제 화면은 AI 기능 소개서에 따로 정리했습니다.", cta:"AI 기능 소개서에서 더 자세히 보기"},
   show:[{k:"aiplay", cap:"다시보기 화면의 AI 탭 — AI 강의 분석·AI 요약·AI 스크립트"}], cards:[
   {n:"AI 강의 분석", ai:[["ai-analysis","AI 강의 분석"]], d:"녹화된 실시간 수업을 4개 영역 11개 항목으로 진단", s:"강사 코칭을 감이 아닌 근거로 하고 싶을 때", b:["지식 설명·사고 수준·학생 학습·수업 구조 등 항목별 점수","신규 강사 온보딩 피드백 자료","보고서 다운로드로 강사 면담에 활용"], r:["관리자"], e:"실시간 수업 대상", c:"req", x:"관리자 일반 설정에서 직접 ON. 보고서 한국어 설정 가능", img:"aireport", cap:"AI 강의 분석 보고서 예시"},
   {n:"숙제 AI 채점", ai:[["ai-agent-5","서술형 숙제 AI 채점"]], d:"제출된 숙제에 AI가 점수·총평 초안 작성", s:"서술형 숙제 채점 초안 작성에 시간이 많이 들 때", b:["채점 초안 작성 시간 절감","오답 분석·해설까지 초안으로 제공","강사는 검토·수정에 집중"], r:["강사"], c:"base", x:"강사가 확인 후 게시해야 학생에게 공개. 최종 점수는 강사 검토 권장", img:"aigrade", cap:"숙제 채점 화면 — 우측에 AI 초안"},
@@ -409,8 +411,8 @@ function bodyHTML(c){
       ${c.e?`<dt>지원 환경</dt><dd>${esc(c.e)}</dd>`:""}
       ${c.x?`<dt>참고</dt><dd>${esc(c.x)}</dd>`:""}
       ${links?`<dt>가이드</dt><dd>${links}</dd>`:""}
-      ${c.ai?`<dt>AI 소개서</dt><dd>${c.ai.map(([k,t])=>`<a href="${AIG}#${k}" target="_blank" rel="noopener">${esc(t)} ↗</a>`).join(" · ")}</dd>`:""}
-    </dl>`;
+    </dl>
+    ${c.ai?`<a class="more" href="${AIG}#${c.ai[0][0]}" target="_blank" rel="noopener">${esc(c.n)} 더 자세히 보기 ↗</a>`:""}`;
 }
 function cardHTML(c){
   const attrs = `data-text="${esc((c.n+" "+c.d+" "+c.s+" "+c.b.join(" ")+" "+(c.e||"")+" "+(c.x||"")).toLowerCase())}"`;
@@ -432,7 +434,7 @@ document.getElementById("catalog").innerHTML = SECTIONS.map((s,i)=>`<section id=
 const tocItems = [["overview","00","한눈에 보기"], ...SECTIONS.map((s,i)=>[s.id,String(i+1).padStart(2,"0"),s.title]), ["spec","A","시작 전 환경"],["contact","B","문의"]];
 /* 카드마다 앵커를 단다(AI 기능 소개서가 #ai-2 처럼 이 번호로 연결한다) */
 SECTIONS.forEach(s=>document.querySelectorAll("#"+s.id+" .card").forEach((el,j)=>el.id=s.id+"-"+(j+1)));
-document.getElementById("toc").innerHTML = tocItems.map(([id,n,t])=>`<li><a href="#${id}" data-id="${id}"><span class="n">${n}</span><span>${t}</span></a></li>` + (id==="ai"?`<li><a class="ext" href="${AIG}" target="_blank" rel="noopener"><span class="n"></span><span>AI 기능 소개서 ↗</span></a></li>`:"")).join("");
+document.getElementById("toc").innerHTML = tocItems.map(([id,n,t])=>`<li><a href="#${id}" data-id="${id}"><span class="n">${n}</span><span>${t}</span></a></li>` + (id==="ai"?`<li><a class="ext" href="${AIG}" target="_blank" rel="noopener"><span class="n"></span><span>AI 기능 더 자세히 보기 ↗</span></a></li>`:"")).join("");
 
 
 /* 검색 (데스크톱 패널·모바일 입력 동기화) */
