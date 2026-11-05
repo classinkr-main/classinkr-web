@@ -35,7 +35,7 @@ function SummaryBand({ data, plannedMovementQuantity, plannedStaleGroupCount }: 
         <Headline value={formatNumber(totals?.availableStock ?? 0)} unit="대" negative={(totals?.availableStock ?? 0) < 0} />
       </SummaryTile>
 
-      <SummaryTile href="#hardware-section-planned" label="예정 출고 대기" title="예상 출고 섹션으로 이동">
+      <SummaryTile href="#hardware-section-planned" label="배송 예정" title="배송 예정 섹션으로 이동">
         <Headline value={formatNumber(plannedCount)} unit={`건 · ${formatNumber(plannedMovementQuantity)}대`} />
         {/* 30일+ 미확정 — PlannedOutboundPanel 헤더 배지와 같은 수치(plannedStaleGroupCount)를
             재사용한다. 큐가 묵으면 판매 요약이 0으로 보이는 원인이라 여기서도 놓치면 안 된다. */}

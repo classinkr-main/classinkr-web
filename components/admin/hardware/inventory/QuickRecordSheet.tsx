@@ -578,7 +578,7 @@ export default function QuickRecordSheet(props: QuickRecordSheetProps) {
                             {outboundMode === "actual"
                               ? "설치 완료는 즉시 재고에 반영되고, 판매 건이면 저장 시 CRM 오더 확인이 뜹니다."
                               : outboundMode === "planned"
-                                ? "배송 예정은 가용(창고 − 예정)에서만 미리 차감합니다. 확정은 홈 › 예상 출고에서 하세요."
+                                ? "배송 예정은 가용(창고 − 예정)에서만 미리 차감합니다. 확정은 홈 › 배송 예정에서 하세요."
                                 : "사무실 샘플 풀 반출(내부 이동)입니다. 고객사 샘플 출고는 '설치 완료·배송 예정'에서 유형 '샘플'로 기록하세요."}
                           </p>
                         </div>
@@ -951,7 +951,7 @@ export default function QuickRecordSheet(props: QuickRecordSheetProps) {
                         <span id="hardware-date-label" className={SHEET_LABEL_CLASS}>
                           {movementType === "outbound" && process.customerOutbound ? (
                             <>
-                              {outboundMode === "planned" ? "출고 예정일" : "출고일"}
+                              {outboundMode === "planned" ? "배송 예정일" : "출고일"}
                               <RequiredMark />
                             </>
                           ) : (

@@ -170,7 +170,7 @@ function HardwareSearchPanel({
           </div>
 
           <div className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-3">
-            <p className="text-[12px] font-bold text-[#111110]">예정 출고</p>
+            <p className="text-[12px] font-bold text-[#111110]">배송 예정</p>
             <div className="mt-2 space-y-2">
               {hardwareSearchResults.planned.length === 0 ? (
                 <p className="text-[11px] text-[#A39E98]">결과 없음</p>

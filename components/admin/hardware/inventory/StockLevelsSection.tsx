@@ -118,7 +118,7 @@ function StockLevelsSection({
           <summary className="flex h-9 cursor-pointer list-none items-center gap-1.5 rounded-md border border-[rgba(0,0,0,0.08)] px-3 text-[12px] font-semibold focus-visible:outline-2 focus-visible:outline-[#084734]"><Filter className="h-3.5 w-3.5" />필터{filterCount ? ` (${filterCount})` : ""}</summary>
           <div className="absolute right-0 top-full z-20 mt-2 w-52 space-y-3 rounded-md border border-[rgba(0,0,0,0.08)] bg-white p-4 text-[12px] shadow-lg">
             <label className="flex items-center gap-2"><input type="checkbox" checked={needsAttention} onChange={event => { setNeedsAttention(event.target.checked); setStockPage(1) }} />부족·주문 검토만</label>
-            <label className="flex items-center gap-2"><input type="checkbox" checked={plannedOnly} onChange={event => { setPlannedOnly(event.target.checked); setStockPage(1) }} />예정 출고 있는 품목</label>
+            <label className="flex items-center gap-2"><input type="checkbox" checked={plannedOnly} onChange={event => { setPlannedOnly(event.target.checked); setStockPage(1) }} />배송 예정 있는 품목</label>
             <button type="button" onClick={() => { setNeedsAttention(false); setPlannedOnly(false); setStockPage(1) }} className="text-[#084734]">필터 초기화</button>
           </div>
         </details>

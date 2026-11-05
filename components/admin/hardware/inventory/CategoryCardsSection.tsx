@@ -70,7 +70,7 @@ function CategoryCardsSection({ categoryCards, etcSummary }: { categoryCards: Ca
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-[11px] text-[#615D59]">예정 출고</dt>
+                  <dt className="text-[11px] text-[#615D59]">배송 예정</dt>
                   <dd className={`mt-1 text-[20px] font-bold tabular-nums ${card.planned > 0 ? "text-[#A8741A]" : "text-[#615D59]"}`}>
                     {formatNumber(card.planned)}<span className="ml-1 text-[11px] font-medium">대</span>
                   </dd>

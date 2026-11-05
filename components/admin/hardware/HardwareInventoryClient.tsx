@@ -178,7 +178,7 @@ function withDerivedMovementViews(response: HardwareDashboardResponse): Hardware
 // 활성 탭은 본문 배경(#FAFAF8)으로 채워 #EBE8E2 스트립에서 앞으로 튀어나온 것처럼 보이게 한다.
 // 아이콘은 부제가 역할을 대신하므로 두지 않는다(레퍼런스와 동일한 에디토리얼 톤).
 const HARDWARE_TABS: Array<{ id: HardwareTab; label: string; description: string }> = [
-  { id: "home", label: "홈", description: "현황 · 예상 출고" },
+  { id: "home", label: "홈", description: "현황 · 배송 예정" },
   { id: "entry", label: "입출고", description: "입고 · 출고 기록" },
   { id: "history", label: "내역", description: "전체 원본" },
 ]
@@ -2564,7 +2564,7 @@ export default function HardwareInventoryClient({
       movement,
       ...readPlannedConfirmInput(movement),
     }))
-    if (!window.confirm(`${group.customer} 예정 출고 ${formatNumber(group.items.length)}개 품목을 확정할까요?`)) return
+    if (!window.confirm(`${group.customer} 배송 예정 ${formatNumber(group.items.length)}개 품목을 확정할까요?`)) return
     const groupAllocations = await pickConfirmLots(plannedSnapshot.map((entry) => ({ movement: entry.movement, quantity: entry.qty })))
     if (!groupAllocations) return
     setConfirmingGroupKey(group.key)
@@ -2595,7 +2595,7 @@ export default function HardwareInventoryClient({
       setNotice(
         failed > 0
           ? `${group.customer} 출고 확정: ${formatNumber(success)}건 성공, ${formatNumber(failed)}건 실패`
-          : `${group.customer} 예정 출고 ${formatNumber(success)}건을 모두 확정했습니다.`
+          : `${group.customer} 배송 예정 ${formatNumber(success)}건을 모두 확정했습니다.`
       )
       if (success > 0) {
         invalidateLots()
@@ -2655,7 +2655,7 @@ export default function HardwareInventoryClient({
         setNotice(
           failedIds.length > 0
             ? `선택 출고 확정: ${formatNumber(successIds.length)}건 성공, ${formatNumber(failedIds.length)}건 실패`
-            : `선택한 예정 출고 ${formatNumber(successIds.length)}건을 모두 확정했습니다.`
+            : `선택한 배송 예정 ${formatNumber(successIds.length)}건을 모두 확정했습니다.`
         )
         if (successIds.length > 0) {
           invalidateLots()
@@ -3450,7 +3450,7 @@ export default function HardwareInventoryClient({
               하드웨어
             </h1>
             <p className="mt-2 max-w-[760px] text-[13px] leading-relaxed text-[#615D59]">
-              제품별 재고와 출고 예정을 확인하고, 입출고 기록을 관리합니다.
+              제품별 재고와 배송 예정을 확인하고, 입출고 기록을 관리합니다.
             </p>
           </div>
           <div className="flex flex-wrap items-center justify-start gap-3 lg:max-w-[640px] lg:justify-end">

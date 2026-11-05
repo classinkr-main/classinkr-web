@@ -212,7 +212,7 @@ function PlannedOutboundPanel({
             <Clock3 className="h-4 w-4" />
           </span>
           <span className="min-w-0">
-            <span className="block text-[15px] font-bold tracking-[-0.01em] text-[#111110]">예상 출고</span>
+            <span className="block text-[15px] font-bold tracking-[-0.01em] text-[#111110]">배송 예정</span>
             <span className="mt-1 block text-[12px] text-[#615D59]">배송 예정을 확정하면 설치 완료로 바뀝니다. 물류번호가 없는 예정은 확정 때 물류번호를 고릅니다.</span>
           </span>
         </div>
@@ -237,7 +237,7 @@ function PlannedOutboundPanel({
             className="inline-flex items-center gap-1.5 cursor-pointer rounded-md bg-[#084734] px-3 py-2 text-[12px] font-bold text-white shadow-sm transition hover:bg-[#065c41] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.98] motion-reduce:active:scale-100 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Clock3 className="h-3.5 w-3.5" />
-            예상 출고 등록
+            배송 예정 등록
           </button>
         </div>
       </div>
@@ -251,7 +251,7 @@ function PlannedOutboundPanel({
             type="button"
             onClick={() => setSelectedIds(new Set(allPlanned.map((movement) => movement.id)))}
             disabled={plannedConfirmLocked}
-            title="현재 페이지가 아니라 대기 중인 예정 출고 전체를 선택합니다"
+            title="현재 페이지가 아니라 대기 중인 배송 예정 전체를 선택합니다"
             className="cursor-pointer rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2.5 py-1 text-[11px] font-bold text-[#31302E] transition hover:bg-[#F6F5F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50"
           >
             전체 선택 (전체 {formatNumber(allPlanned.length)}건)
@@ -277,7 +277,7 @@ function PlannedOutboundPanel({
       )}
       {(data?.plannedMovements.length ?? 0) === 0 ? (
         <p className="px-5 py-10 text-center text-[13px] text-[#615D59]">
-          현재 배송 예정 기록이 없습니다. 예상 출고 등록으로 미리 차감할 물량을 잡아두세요.
+          현재 배송 예정 기록이 없습니다. 배송 예정 등록으로 미리 차감할 물량을 잡아두세요.
         </p>
       ) : (
         <>
@@ -512,7 +512,7 @@ function PlannedOutboundPanel({
         onConfirm={() => void runConfirmSelection()}
         loading={selectionConfirmProgress != null}
         destructive={false}
-        title="선택한 예정 출고 확정"
+        title="선택한 배송 예정 확정"
         description={`${formatNumber(selectedIds.size)}건 ${formatNumber(selectedQuantityTotal)}대를 설치 완료로 확정합니다. 물류번호가 없는 예정은 다음 단계에서 물류번호를 고릅니다.`}
         confirmLabel="확정"
         confirmLoadingLabel="확정 중…"
