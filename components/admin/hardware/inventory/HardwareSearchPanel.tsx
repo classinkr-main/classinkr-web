@@ -72,12 +72,12 @@ function HardwareSearchPanel({
               value={hardwareSearch}
               onChange={(event) => setHardwareSearch(event.target.value)}
               aria-label="하드웨어 통합 검색"
-              placeholder="제품·lot·고객·담당자 검색"
+              placeholder="제품·물류번호·고객·담당자 검색"
               className="h-11 w-full rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] pl-9 pr-3 text-[13px] text-[#111110] outline-none focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15"
             />
           </label>
           <div className="mt-2 flex flex-wrap gap-1.5">
-            {["부족 품목", "오늘 출고", "오래된 lot", "내 담당"].map((chip) => (
+            {["부족 품목", "오늘 출고", "오래된 물류번호", "내 담당"].map((chip) => (
               <button
                 key={chip}
                 type="button"
@@ -129,7 +129,7 @@ function HardwareSearchPanel({
           </div>
 
           <div className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-3">
-            <p className="text-[12px] font-bold text-[#111110]">Lot</p>
+            <p className="text-[12px] font-bold text-[#111110]">물류번호</p>
             <div className="mt-2 space-y-2">
               {hardwareSearchResults.lots.length === 0 ? (
                 <p className="text-[11px] text-[#A39E98]">결과 없음</p>
@@ -181,7 +181,7 @@ function HardwareSearchPanel({
                     })}
                     disabled={plannedConfirmLocked || !confirmState.allowed}
                     title={confirmState.title}
-                    className="mt-1.5 cursor-pointer rounded-md border border-[#084734] bg-white px-2 py-1 text-[10.5px] font-bold text-[#084734] transition hover:bg-[#ECFDF5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-95 motion-reduce:active:scale-100 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50"
+                    className="mt-1.5 cursor-pointer rounded-md border border-[#084734] bg-white px-2 py-1 text-[11px] font-bold text-[#084734] transition hover:bg-[#ECFDF5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-95 motion-reduce:active:scale-100 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     출고 확정
                   </button>

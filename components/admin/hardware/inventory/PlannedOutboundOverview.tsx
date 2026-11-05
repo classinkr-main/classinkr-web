@@ -14,7 +14,7 @@ export default function PlannedOutboundOverview({ plannedPagination, startPlanne
     <section className="min-w-0 border border-[rgba(0,0,0,0.08)] bg-white" aria-label="출고 예정 요약">
       <div className="flex items-center justify-between gap-3 border-b border-[rgba(0,0,0,0.08)] px-4 py-4">
         <h2 className="text-[16px] font-bold text-[#111110]">출고 예정</h2>
-        <span className="text-[12px] text-[#615D59]">{formatNumber(plannedPagination.totalItems)}묶음</span>
+        <span className="text-[12px] text-[#615D59]">{formatNumber(plannedPagination.totalItems)}딜</span>
       </div>
       <div className="divide-y divide-[rgba(0,0,0,0.08)] px-4">
         {groups.length ? groups.map((group) => (
@@ -32,7 +32,7 @@ export default function PlannedOutboundOverview({ plannedPagination, startPlanne
         <button type="button" onClick={startPlannedEntry} disabled={plannedConfirmLocked} className="min-h-11 text-[12px] font-semibold text-[#084734] disabled:opacity-50">예정 등록</button>
         <a href="#hardware-section-planned" className="inline-flex min-h-11 items-center gap-1 text-[12px] font-semibold text-[#084734]">전체 확인 <ArrowRight className="h-3.5 w-3.5" /></a>
       </div>
-      <p className="px-4 pb-3 text-[11px] text-[#615D59]">현재 페이지 최대 5묶음 · 예정은 확정 출고와 구분됩니다.</p>
+      <p className="px-4 pb-3 text-[11px] text-[#615D59]">예정은 확정 출고와 구분됩니다.</p>
     </section>
   )
 }

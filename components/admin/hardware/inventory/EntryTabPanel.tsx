@@ -85,7 +85,7 @@ export default function EntryTabPanel({
               entrySub === "inbound" ? "bg-[#ECFDF5] text-[#084734]" : "text-[#615D59] hover:text-[#111110]"
             }`}
           >
-            입고 · 물량번호
+            입고 · 물류번호
           </button>
           <button
             type="button"

@@ -68,7 +68,7 @@ export default function HomeQuickRecord({ data, draft, setDraft, customers, disa
           </> : null}
         </div>
         <button type="submit" disabled={disabled || !valid} className="h-11 w-full rounded-md bg-[#084734] text-[13px] font-semibold text-white hover:bg-[#065C41] disabled:opacity-40">{mode.label} 내용 검토</button>
-        <p className="text-[11px] leading-relaxed text-[#615D59]">상세 검토 후 저장 · 로트·금액 확인</p>
+        <p className="text-[11px] leading-relaxed text-[#615D59]">상세 검토 후 저장 · 물류번호·금액 확인</p>
       </form>
     </aside>
   )
