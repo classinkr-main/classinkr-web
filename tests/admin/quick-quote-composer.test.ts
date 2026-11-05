@@ -130,11 +130,15 @@ describe("admin quick quote composer shell", () => {
   })
 
   it("distinguishes standalone SW from packages and provides recharge price edit with under-2M confirmation modal", () => {
-    // 패키지 상품 분리 (online_suite, recording_studio, bundle은 package)
+    // 패키지 상품 분리 (녹화 세트 86"/75", bundle은 package)
     expect(source).toContain('group: "package"')
     expect(source).toContain('group: "software"')
-    expect(source).toContain('badge: "학원 패키지"')
+    expect(source).toContain('badge: "녹화 패키지"')
     expect(source).toContain('badge: "SW 단독"')
+    // 구독형 AI Suite(월 40만원)는 판매 중단 — 빠른 추가 목록·유형 탭에서 빠졌다.
+    expect(source).not.toContain('badge: "학원 패키지"')
+    expect(source).not.toContain('label: "AI Suite · HW+SW 통합"')
+    expect(source).toContain('templateId: "recording_studio_75"')
 
     // ClassIn Business 충전형 전용 직접 금액 수정
     expect(source).toContain("충전 금액 설정")
@@ -164,12 +168,13 @@ describe("admin quotes shell — SW/HW 일급 개념", () => {
     expect(pageSource).toContain('label: "SW 견적 코드"')
   })
 
-  it("작성 진입은 SW 단독/HW/AI Suite와 HW 프리셋 드롭다운이다", () => {
+  it("작성 진입은 SW 단독/HW와 HW 프리셋 드롭다운이다(AI Suite 판매 중단)", () => {
     expect(pageSource).toContain("SW 단독 견적서")
     expect(pageSource).toContain("HW 견적서")
     expect(pageSource).toContain('onSelect("business_recharge")')
     expect(pageSource).toContain('onSelect("new")')
-    expect(pageSource).toContain('onSelect("online_suite")')
+    expect(pageSource).not.toContain('onSelect("online_suite")')
+    expect(pageSource).toContain('action: "recording_studio_75"')
     expect(pageSource).toContain("HARDWARE_QUOTE_PRESETS")
     expect(pageSource).toContain('aria-label="HW 견적 템플릿 선택"')
     // 유형이 드러나지 않던 단일 버튼은 유형별 진입으로 대체됐다.

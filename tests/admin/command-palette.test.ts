@@ -111,7 +111,6 @@ describe("admin command palette — 2026-09-25 탭 정리", () => {
   it.each([
     ["빠른 견적 작성", "app/admin/quotes/new/page.tsx"],
     ["녹화 세트 견적", "app/admin/quotes/recording-studio/page.tsx"],
-    ["AI Suite 견적", "app/admin/quotes/ai-suite/page.tsx"],
   ])("%s 는 스텁을 거치지 않고 스텁이 보내는 최종 URL로 간다", (label, stubPath) => {
     // 스텁(북마크 보호용으로 유지)의 redirect 목적지를 읽어 그대로 비교한다 — 스텁 목적지가
     // 바뀌면 이 테스트가 팔레트도 함께 바꾸라고 알려 준다.
