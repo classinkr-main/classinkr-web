@@ -2,7 +2,7 @@
 
 import { motion, useReducedMotion } from "framer-motion"
 import {
-    ArrowRight, BadgeCheck, CalendarX, CheckCircle2, Cloud, Copyright,
+    ArrowRight, CalendarX, CheckCircle2, Cloud,
     Download, Eye, Lock, Mic, MonitorPlay, Play, Sparkles, Users,
     Laptop, Presentation, Video, FileText,
 } from "lucide-react"
@@ -10,6 +10,7 @@ import {
 import Image from "next/image"
 
 import { TrackedLink } from "@/components/TrackedLink"
+import { RECORDING_COPY } from "@/components/recording/recording-copy"
 import { AI_REPORT_QA } from "@/lib/ai-report-content"
 import { trackEvent } from "@/lib/analytics"
 import { BROCHURE_URL } from "@/lib/marketing-links"
@@ -143,10 +144,11 @@ const RECORDING_FEATURES = [
     },
 ]
 
+// 시청 설정은 학원이 켜고 끄는 항목이다 — 다운로드·워터마크를 '항상'으로 쓰지 않는다. 머리글·안내 문장은 녹화 랜딩 정본(RECORDING_COPY.control)
 const TRUST_ITEMS = [
-    { icon: BadgeCheck, label: "재생 시 워터마크 표시" },
-    { icon: Lock, label: "외부 다운로드 차단" },
-    { icon: Copyright, label: "저작권은 기관과 강사에게" },
+    { icon: Users, label: "볼 수 있는 사람" },
+    { icon: Eye, label: "시청 횟수 · 기간" },
+    { icon: Lock, label: "화면 녹화 방지" },
 ]
 
 const REPORT_POINTS = [
@@ -269,7 +271,7 @@ function HeroSection() {
         <section className="pt-20 pb-28 md:pt-28 md:pb-40">
             <div className="container mx-auto px-4 lg:px-8">
                 <motion.div {...fadeUp} className="max-w-3xl mx-auto text-center">
-                    <Eyebrow>녹화 · AI 리포트</Eyebrow>
+                    <Eyebrow>AI 강의 평가</Eyebrow>
                     <h1 className="mt-7 text-4xl sm:text-5xl md:text-6xl font-bold text-[#111110] leading-[1.15]">
                         수업이 끝나면,
                         <br />
@@ -517,8 +519,11 @@ function RecordingSection() {
                     </div>
                 </div>
 
-                {/* 신뢰 라인 */}
+                {/* 시청 설정 — 자세한 항목은 /product/recording */}
                 <motion.div {...fadeUp} className="mt-28 max-w-3xl mx-auto">
+                    <p className="mb-5 text-center text-body-l font-semibold text-fg-ink break-keep">
+                        {RECORDING_COPY.control.heading}
+                    </p>
                     <div className="flex flex-col sm:flex-row items-stretch justify-center gap-3">
                         {TRUST_ITEMS.map((item) => (
                             <div
@@ -531,8 +536,18 @@ function RecordingSection() {
                         ))}
                     </div>
                     <p className="mt-5 text-center text-xs text-[#A39E98]">
-                        녹화본은 앱 내 재생만 허용됩니다. 저작권은 기관과 강사에게 있습니다.
+                        {RECORDING_COPY.control.note}
                     </p>
+                    <div className="mt-8 text-center">
+                        <TrackedLink
+                            href="/product/recording"
+                            ctaId="ai_report_to_recording"
+                            className="inline-flex min-h-11 items-center gap-1 text-ui font-semibold text-fg-accent hover:underline underline-offset-4"
+                        >
+                            수업 녹화 자세히 보기
+                            <ArrowRight aria-hidden className="size-4 arrow-nudge" />
+                        </TrackedLink>
+                    </div>
                 </motion.div>
             </div>
         </section>

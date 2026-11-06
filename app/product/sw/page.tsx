@@ -1701,12 +1701,13 @@ export default function ProductPage() {
                                 ))}
                             </div>
                             <motion.div {...fadeUp} className="mt-8">
+                                {/* 녹화 랜딩은 메뉴가 아니라 링크로 들어간다(소프트웨어·홈·챗봇) */}
                                 <TrackedLink
-                                    href="/product/ai-report"
-                                    ctaId="sw_ai_report_deep_dive"
+                                    href="/product/recording"
+                                    ctaId="sw_recording_deep_dive"
                                     className="inline-flex items-center gap-2 rounded-md border border-fg-accent/25 px-5 py-3 text-sm font-semibold text-fg-accent hover:bg-fg-accent/8 transition-colors"
                                 >
-                                    녹화 · AI 리포트 자세히 보기
+                                    수업 녹화 자세히 보기
                                     <ArrowRight className="w-4 h-4" />
                                 </TrackedLink>
                             </motion.div>
