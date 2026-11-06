@@ -1,14 +1,11 @@
 import type { Metadata } from "next"
 import Image from "next/image"
-import { ArrowRight } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { DemoModal } from "@/components/sections/DemoModal"
-import { TrackedLink } from "@/components/TrackedLink"
 import { Reveal } from "@/components/landing/Reveal"
 import { GatewayLink } from "@/components/home/GatewayLink"
 import { HomePilotCta } from "@/components/home/HomePilotCta"
 import { JsonLd } from "@/components/seo/JsonLd"
 import { RECORDING_COPY } from "@/components/recording/recording-copy"
+import { RecordingHeroCta } from "@/components/recording/RecordingHeroCta"
 import { createBreadcrumbJsonLd, createPublicMetadata, createWebPageJsonLd } from "@/lib/seo"
 
 const PATH = "/product/recording"
@@ -55,24 +52,8 @@ export default function RecordingPage() {
             <span className="block">{hero.title[1]}</span>
           </h1>
           <p className="mt-6 max-w-measure text-body-l text-fg-body break-keep">{hero.lead}</p>
-          <div className="mt-8 flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:gap-7">
-            <DemoModal trackingButton="recording_hero_demo">
-              <Button size="cta" className="w-full shadow-none sm:w-auto">
-                {hero.primaryCta}
-                <ArrowRight aria-hidden className="arrow-nudge" />
-              </Button>
-            </DemoModal>
-            <TrackedLink
-              href={hero.secondaryHref}
-              ctaId="recording_hero_lead_magnet"
-              tracking={{ source: "recording_hero", lead_magnet: "academy-system-checklist" }}
-              className="inline-flex min-h-11 items-center gap-1 text-ui font-semibold text-fg-accent hover:underline underline-offset-4"
-            >
-              {hero.secondaryCta}
-              <ArrowRight aria-hidden className="size-4 arrow-nudge" />
-            </TrackedLink>
-          </div>
-          {/* 실제 창 캡처는 홈과 같은 plate-window(창 모양 그림자 하나) */}
+          <RecordingHeroCta />
+          {/* 실제 창 캡처는 홈과 같은 plate-window(창 모양 그림자 하나). 데스크톱 첫 화면의 가장 큰 그림이라 eager(priority 는 쓰지 않는다) */}
           <figure className="mt-12 max-w-[880px] md:mt-14">
             <Image
               src={hero.image.src}
@@ -80,6 +61,7 @@ export default function RecordingPage() {
               width={hero.image.width}
               height={hero.image.height}
               sizes="(min-width: 1040px) 880px, 100vw"
+              loading="eager"
               className="plate-window h-auto w-full"
             />
             <figcaption className={CAPTION}>{hero.caption}</figcaption>
