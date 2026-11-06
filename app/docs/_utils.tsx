@@ -296,7 +296,8 @@ export function getDocsCategoryNavItems(
         categoryId: category.id,
         href: getDocCategoryPath(category.id),
         label: copy?.label ?? getFallbackCategoryLabel(category),
-        meta: `${copy?.scope ?? "가이드"} · ${articleCount}개`,
+        // 탭에는 문서 개수를 붙이지 않는다 — 주제 성격(scope)만 보인다.
+        meta: copy?.scope ?? "가이드",
         description: copy?.summary ?? category.description,
         isActive: category.id === activeCategoryId,
       }

@@ -415,7 +415,7 @@ export default async function DocsHomePage({ searchParams }: DocsHomePageProps) 
                   key={step.href}
                   article={step}
                   index={String(index + 1).padStart(2, "0")}
-                  meta={["readTime", "images"]}
+                  meta={[]}
                 />
               ))}
             </ol>
@@ -455,7 +455,7 @@ export default async function DocsHomePage({ searchParams }: DocsHomePageProps) 
                 <DocsListRow
                   key={link.href}
                   article={link.summary}
-                  meta={["category", "readTime", "images"]}
+                  meta={["category"]}
                   thumbnailFrom="lg"
                 />
               ))}

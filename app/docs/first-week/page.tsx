@@ -133,7 +133,7 @@ export default async function FirstWeekGuidePage() {
                         key={doc.href}
                         article={doc}
                         showDate={false}
-                        meta={["readTime", "images"]}
+                        meta={[]}
                       />
                     ))}
                   </ul>
@@ -184,7 +184,7 @@ export default async function FirstWeekGuidePage() {
                     key={link.href}
                     article={link.summary}
                     showDate={false}
-                    meta={["category", "images"]}
+                    meta={["category"]}
                   />
                 ))}
               </ul>

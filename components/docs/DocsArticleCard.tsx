@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { ArrowRight, Clock } from "lucide-react"
+import { ArrowRight } from "lucide-react"
 
 import { DocsKindLabel } from "./DocsListRow"
 import type { DocsArticleSummary } from "./types"
@@ -14,11 +14,9 @@ export function DocsArticleCard({
     description,
     href,
     category,
-    readTime,
     updatedAt,
     tags = [],
     kind,
-    imageCount,
     className,
 }: DocsArticleCardProps) {
     return (
@@ -34,13 +32,6 @@ export function DocsArticleCard({
                     <div className="flex flex-wrap items-center gap-2 text-[13px] text-[#615D59]">
                         <DocsKindLabel kind={kind} />
                         {category ? <span>{category}</span> : null}
-                        {readTime ? (
-                            <span className="inline-flex items-center gap-1">
-                                <Clock aria-hidden className="h-3.5 w-3.5" />
-                                {readTime}
-                            </span>
-                        ) : null}
-                        {imageCount ? <span>사진 {imageCount}장</span> : null}
                         {updatedAt ? <span>업데이트 {updatedAt}</span> : null}
                     </div>
                     <h3 className="mt-2 break-words text-[16px] font-semibold leading-snug tracking-card text-[#111110] transition-colors group-hover:text-fg-accent">
