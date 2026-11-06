@@ -30,6 +30,18 @@ describe("resolveOutboundType", () => {
     expect(resolveOutboundType({ movement_type: "inbound", outbound_type: "sales" })).toBeNull()
   })
 
+  it("앞의 글이 이긴다 — 시트 유형 열이 비고·고객사 이름보다 먼저다", () => {
+    const raw = { values: Array.from({ length: 13 }, (_, index) => (index === 11 ? "Sales" : null)) }
+    expect(resolveOutboundType({ movement_type: "outbound", raw, memo: "Sales · 데모 후 구매 전환", to_location: "OO수리과학학원" })).toBe("sales")
+    expect(resolveOutboundType({ movement_type: "outbound", memo: "교체 설치" })).toBe("as")
+  })
+
+  it("고객사 이름 속 수리·영문 rma 는 A/S 로 보지 않는다", () => {
+    expect(inferOutboundTypeFromText("OO수리과학학원")).toBeNull()
+    expect(inferOutboundTypeFromText("Pharmacy Academy")).toBeNull()
+    expect(inferOutboundTypeFromText("RMA 교환")).toBe("as")
+  })
+
   it("단어 속 as(ClassIn·Master)는 A/S 로 보지 않는다", () => {
     expect(inferOutboundTypeFromText("ClassIn Master 납품")).toBe("sales")
   })

@@ -128,7 +128,7 @@
 ### 3.5 상세 · 데이터 층
 
 - **상세**: 스티키 섹션 내비(캠페인 · 소재 · 퍼널·채널 · 행사 · 메시지). 각 섹션은 기존 컴포넌트를 옮겨 그대로 쓰고, 섹션 헤더에 정의 한 줄만 둔다. 차트 위주.
-- **데이터**: 섹션 내비(신규 리드 · 광고 리드 · Meta 캠페인 · 예산·성과 입력 · 업데이트 로그 · 주간 보고서). 표·폼·내보내기(`CampaignExportButton`)만. Meta 재개/중지, 리드 전환, 예산 저장 같은 **쓰기 액션은 이 층에서만** 한다.
+- **데이터**: 섹션 내비(신규 리드 · 광고 리드 · Meta 캠페인 · Google Ads · 예산·성과 입력 · 업데이트 로그 · 주간 보고서). Google Ads는 API 연동 시 캠페인 실적 표(google_ads_daily) + 정적 계정 점검 기록이다(§10 2026-11-03). 표·폼·내보내기(`CampaignExportButton`)만. Meta 재개/중지, 리드 전환, 예산 저장 같은 **쓰기 액션은 이 층에서만** 한다.
 - 두 층 모두 기간 축은 탭 띠의 토글 하나를 따른다(행사 기간 필터 `active|30d|90d|all`은 행사 섹션 안으로 내린다).
 
 ## 4. 개선 후보 총람
@@ -232,6 +232,17 @@ npx vitest run tests/campaigns
 - [어드민 탭 재구성](admin-tab-restructure-2026-07-29.md) §4의 "캠페인 — 메타 광고를 기본 탭으로"는 코드(2026-08-21 요약 기본)와 어긋난다. 이 문서 채택과 무관하게 정정한다.
 
 ## 10. 진척 기록
+
+### 2026-11-05 — 후속 기획: 광고 탭(운영 중 · 캠페인 · 주간)
+
+운영 중 광고·캠페인 분석·월~일 주간 분석을 한 탭으로 모으는 후속 기획을 [별도 문서](marketing-ads-campaign-weekly-plan-2026-11-05.md)로 냈다(결정 대기). 채택되면 이 문서 §3.1의 상세 층에서 캠페인·소재 섹션이, 데이터 층에서 주간 보고서 섹션이 새 "광고" 탭으로 옮겨 간다.
+
+### 2026-11-03 — 데이터 › Google Ads 섹션
+
+- Meta 캠페인 바로 다음에 `google` 섹션(`DATA_SECTIONS`)을 넣었다. `google/GoogleAdsPanel.tsx`가 계정 구조(주 계정 395 · 기존 924 · 미사용 145), 395 결제·쿠폰, 캠페인 계획 C1~C4, 전환 추적(GA4 → 395 기본 전환 `generate_lead`), 남은 일을 그린다.
+- Google Ads API 자격증명이 없어 값은 정적 데이터(`lib/marketing/google-ads-setup.ts`)다. 정본은 [Google Ads 현황(2026-11-03)](google-ads-accounts-2026-11-03.md). 헤더의 'API …' 표시만 perf `channelLive`의 실제 연동 여부를 읽는다(`channel-coverage.ts`의 `spendCell` 재사용).
+- API 연동 시: perf 응답에 `googleCampaigns`(google_ads_daily 캠페인별 기간 합계, 선택 필드)를 더해 같은 섹션 위쪽에 캠페인 실적 표를 그린다. 인증은 공용 서비스 계정(`lib/google/ads.ts`), 켜는 스위치는 `GOOGLE_ADS_CUSTOMER_ID`. 콘솔 단계 점검은 `npm run check:google-ads`.
+- 테스트: `tests/campaigns/google-ads-panel.test.tsx`(계획 합계·렌더·API 상태·실적 표), `tests/marketing/ad-channel-clients.test.ts`(연동 판정).
 
 ### 2026-09-14 — Wave 0·1·2 + N1·N2·G10·G11 구현
 

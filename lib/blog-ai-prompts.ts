@@ -69,9 +69,9 @@ const BLOG_VOICE = [
 ]
 
 // company-facts.md §3 ✅ 수치만. 투자·유니콘은 같은 문서가 '노출 전 법무 검토'를 걸어 둬서 뺐다.
-const COMPANY_SCALE =
+export const COMPANY_SCALE =
   "교육자·학습자 5,000만+, 160+개국, 교육기관 6만+, 월 3,000만+ 수업, 누적 2억+ 수업"
-const COMPANY_SCALE_SOURCE = "전 세계 누적 · EEO 공식 소개 기준"
+export const COMPANY_SCALE_SOURCE = "전 세계 누적 · EEO 공식 소개 기준"
 
 function bullets(lines: readonly string[]) {
   return lines.map((line) => `- ${line}`).join("\n")

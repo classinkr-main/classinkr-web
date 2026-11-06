@@ -3,14 +3,19 @@ import { NextRequest, NextResponse } from "next/server"
 
 const requireVerifiedAdminContext = vi.fn()
 const getCompassLeadsByPhoneKeys = vi.fn()
+const getCompassHomeLeadRefs = vi.fn()
+const getCompassLeadsByIds = vi.fn()
 
 vi.mock("@/lib/admin-auth", () => ({
   CRM_STAFF_ADMIN_API_ROLES: ["SUPER_ADMIN", "ADMIN", "BRANCH"],
   requireVerifiedAdminContext,
 }))
 
+// 링크(home_lead) 조회는 lib/compass/admin-lead-links(진짜)가 이 두 브리지 함수로 한다.
 vi.mock("@/lib/compass/bridge", () => ({
   getCompassLeadsByPhoneKeys,
+  getCompassHomeLeadRefs,
+  getCompassLeadsByIds,
 }))
 
 function postRequest(body: unknown) {
@@ -30,6 +35,8 @@ describe("POST /api/admin/compass/leads-overlay", () => {
   beforeEach(() => {
     requireVerifiedAdminContext.mockResolvedValue({ source: "supabase", role: "ADMIN", userId: "admin-1" })
     getCompassLeadsByPhoneKeys.mockResolvedValue({ rows: [], down: false })
+    getCompassHomeLeadRefs.mockResolvedValue({ rows: [], down: false })
+    getCompassLeadsByIds.mockResolvedValue({ rows: [], down: false })
   })
 
   afterEach(() => {
@@ -54,12 +61,56 @@ describe("POST /api/admin/compass/leads-overlay", () => {
   it("키가 없으면 조회 없이 빈 맵 — down은 false다(장애가 아니다)", async () => {
     const response = await callPost({ phoneKeys: [] })
     expect(getCompassLeadsByPhoneKeys).not.toHaveBeenCalled()
+    expect(getCompassHomeLeadRefs).not.toHaveBeenCalled()
     await expect(response.json()).resolves.toEqual({
       overlay: {},
+      byLeadId: {},
       down: false,
       requested: 0,
       matched: 0,
+      matchedByLink: 0,
     })
+  })
+
+  it("리드 id 를 보내면 Compass 링크(home_lead)로 붙은 행을 byLeadId 로 돌려준다 — 전화 키 없이도 붙는다", async () => {
+    getCompassHomeLeadRefs.mockResolvedValue({
+      rows: [
+        { lead_id: 9, external_id: "6f1c2b3a-0000-4000-8000-000000000001" },
+        { lead_id: 11, external_id: "6f1c2b3a-0000-4000-8000-000000000002" },
+      ],
+      down: false,
+    })
+    getCompassLeadsByIds.mockResolvedValue({
+      rows: [
+        { id: 9, phone_key: null, stage: "demo", caller: "진소망", next_action: "장문 메모는 싣지 않는다" },
+        { id: 11, phone_key: "01099990000", stage: "contact" },
+      ],
+      down: false,
+    })
+    const response = await callPost({
+      phoneKeys: [],
+      leadIds: ["6f1c2b3a-0000-4000-8000-000000000001", "6f1c2b3a-0000-4000-8000-000000000002", "no-such-link", "010-1234-5678 원장", 42],
+    })
+    expect(getCompassLeadsByPhoneKeys).not.toHaveBeenCalled()
+    expect(getCompassHomeLeadRefs).toHaveBeenCalledWith(["6f1c2b3a-0000-4000-8000-000000000001", "6f1c2b3a-0000-4000-8000-000000000002", "no-such-link"])
+    expect(getCompassLeadsByIds).toHaveBeenCalledWith([9, 11])
+    const data = await response.json()
+    expect(data.down).toBe(false)
+    expect(data.matchedByLink).toBe(2)
+    expect(data.byLeadId["6f1c2b3a-0000-4000-8000-000000000001"]).toMatchObject({ compassLeadId: 9, stage: "demo", caller: "진소망", url: "https://mkt.classin.co.kr/leads?open=9" })
+    expect(data.byLeadId["6f1c2b3a-0000-4000-8000-000000000002"]).toMatchObject({ compassLeadId: 11 })
+    expect(data.byLeadId["no-such-link"]).toBeUndefined()
+    expect(JSON.stringify(data)).not.toContain("장문 메모")
+  })
+
+  it("링크 조회가 끊기면 전체를 down 으로 알린다 — 전화 키 매칭만으로 반쪽을 그리지 않는다", async () => {
+    getCompassLeadsByPhoneKeys.mockResolvedValue({ rows: [{ id: 1, phone_key: "01012345678", stage: "contact" }], down: false })
+    getCompassHomeLeadRefs.mockResolvedValue({ rows: [], down: true, error: "refs view missing" })
+    const response = await callPost({ phoneKeys: ["01012345678"], leadIds: ["6f1c2b3a-0000-4000-8000-000000000001"] })
+    const data = await response.json()
+    expect(data.down).toBe(true)
+    expect(data.overlay).toEqual({})
+    expect(data.byLeadId).toEqual({})
   })
 
   it("긴 키 목록은 나눠 던지고 합친다 — in(...) URL 폭발 방지", async () => {

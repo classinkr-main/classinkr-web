@@ -8,21 +8,19 @@ export default function NotFound() {
     >
       <div className="w-full max-w-md text-center">
         <div
-          className="rounded-2xl p-10 mx-auto"
+          className="rounded-2xl p-10 mx-auto bg-fg-accent/8"
           style={{
-            backgroundColor: "#ECFDF5",
             border: "1px solid rgba(0,0,0,0.08)",
             boxShadow:
               "rgba(0,0,0,0.04) 0px 4px 18px, rgba(0,0,0,0.027) 0px 2px 7.8px, rgba(0,0,0,0.02) 0px 0.8px 2.9px, rgba(0,0,0,0.01) 0px 0.175px 1px",
           }}
         >
           <p
-            className="font-semibold mb-3"
+            className="font-semibold mb-3 text-fg-accent"
             style={{
               fontSize: "64px",
               lineHeight: 1,
               letterSpacing: "-2.125px",
-              color: "#084734",
             }}
           >
             404
@@ -52,10 +50,8 @@ export default function NotFound() {
           </p>
           <Link
             href="/"
-            className="inline-flex items-center justify-center font-semibold transition-colors"
+            className="inline-flex items-center justify-center font-semibold transition-colors bg-fg-accent text-fg-on-accent"
             style={{
-              backgroundColor: "#084734",
-              color: "#ffffff",
               padding: "10px 24px",
               borderRadius: "6px",
               fontSize: "15px",

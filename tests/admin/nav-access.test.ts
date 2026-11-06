@@ -125,26 +125,29 @@ const EVERY_LEGACY_PRESET = ["staff", "sales", "marketing", "cs", "lead", "branc
 
 describe("resolveNavPlacement — 전원 공통 배치", () => {
   // 시안 스위치 꺼짐(기본, 기획 D13) 기준 — 켜면 AI 올인원이 더해져 10(tests/admin/nav-ai-preview.test.tsx).
-  it("상시 9개는 DEFAULT_PRIMARY_HREFS 그대로다", () => {
+  it("상시 10개는 DEFAULT_PRIMARY_HREFS 그대로다", () => {
+    // 2026-11-04 마케팅 허브가 기타에서 상시로 올라왔다(방문·문의 바로 보기 기획 D6) — 9 → 10.
     for (const href of DEFAULT_PRIMARY_HREFS) {
       expect(resolveNavPlacement(href, ctx()), href).toBe("primary")
     }
-    expect(DEFAULT_PRIMARY_HREFS).toHaveLength(9)
+    expect(DEFAULT_PRIMARY_HREFS).toHaveLength(10)
+    expect(DEFAULT_PRIMARY_HREFS).toContain("/admin/campaigns")
   })
 
-  it("나머지 7개의 자리는 전부 기타다 — 그중 1개는 기본 숨김이라 처음엔 목록에 없다", () => {
+  it("나머지 6개의 자리는 전부 기타다 — 그중 1개는 기본 숨김이라 처음엔 목록에 없다", () => {
     // 2026-10 마케팅 프로젝트가 캠페인 관리의 탭이 되며 기본 숨김 2 → 1, 기타 자리 8 → 7.
+    // 2026-11-04 마케팅 허브가 상시로 올라가며 기타 자리 7 → 6.
     const rest = ADMIN_NAV.map((item) => item.href).filter(
       (href) => !DEFAULT_PRIMARY_HREFS.includes(href)
     )
-    expect(rest).toHaveLength(7)
+    expect(rest).toHaveLength(6)
     // resolveNavPlacement 는 "보일 때 앉는 자리"다 — 기본 숨김 항목도 다시 표시하면 기타로 간다.
     for (const href of rest) {
       expect(resolveNavPlacement(href, ctx()), href).toBe("folded")
     }
     const hiddenByDefault = rest.filter((href) => isNavHidden(href, ctx()))
     expect(hiddenByDefault.sort()).toEqual([...DEFAULT_HIDDEN_HREFS].sort())
-    expect(rest.length - hiddenByDefault.length).toBe(6)
+    expect(rest.length - hiddenByDefault.length).toBe(5)
   })
 
   // 이 테스트가 "모든 매니저가 같은 사이드바를 본다"를 고정한다.
@@ -198,17 +201,18 @@ describe("normalizeNavOverrides — 레거시 deny 처리", () => {
 })
 
 describe("resolveNavAccess", () => {
-  it("상시 9 / 기타 6 / 숨김 1(기본 숨김) 로 나눈다", () => {
+  it("상시 10 / 기타 5 / 숨김 1(기본 숨김) 로 나눈다", () => {
     // 2026-09-25 전까지는 "기타 9"였다 — 마케팅 프로젝트·운영 상태가 기본 숨김으로 빠졌다.
     // 2026-10 마케팅 프로젝트는 캠페인 관리의 "프로젝트" 탭이 되며 항목 자체가 빠졌다(숨김 2 → 1).
     // 2026-09-29 AI 올인원이 상시에 더해졌지만 시안 스위치가 꺼져 있으면(기본, 기획 D13) 빠진다 —
     // 2026-10-26 콘텐츠가 기타에서 상시로 올라왔다 — 상시 9, 세 칸을 합치면 16 전부다.
-    // 켜짐(상시 10·17)은 tests/admin/nav-ai-preview.test.tsx.
+    // 2026-11-04 마케팅 허브가 기타에서 상시로 올라왔다 — 상시 10 · 기타 5.
+    // 켜짐(상시 11·17)은 tests/admin/nav-ai-preview.test.tsx.
     const { primary, folded, hidden } = resolveNavAccess(ctx())
-    expect(primary).toHaveLength(9)
-    expect(folded.flatMap((group) => group.items)).toHaveLength(6)
+    expect(primary).toHaveLength(10)
+    expect(folded.flatMap((group) => group.items)).toHaveLength(5)
     expect(hidden.map((item) => item.href)).toEqual(["/admin/ops"])
-    expect(primary.length + 6 + hidden.length).toBe(ADMIN_NAV.length)
+    expect(primary.length + 5 + hidden.length).toBe(ADMIN_NAV.length)
   })
 
   it("Overview 가 상시 첫 항목이고 home 이 첫 그룹이다", () => {

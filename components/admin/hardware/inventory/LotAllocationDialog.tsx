@@ -155,7 +155,17 @@ export function useLotAllocationPrompt(items: readonly HardwareItem[] | undefine
 
 export type LotAllocationDialogState = ReturnType<typeof useLotAllocationPrompt>["dialog"]
 
-export default function LotAllocationDialog({ state }: { state: LotAllocationDialogState }) {
+export default function LotAllocationDialog({
+  state,
+  title = "확정할 물류번호 고르기",
+  confirmLabel = "이대로 확정",
+}: {
+  state: LotAllocationDialogState
+  /** 머리 제목 — 확정이 아닌 흐름(CRM 배송 예정 등록)은 자기 말로 바꾼다. */
+  title?: string
+  /** 마지막 버튼 글자. */
+  confirmLabel?: string
+}) {
   const { rows, notice, setInput, autofill, close } = state
   const panelRef = useRef<HTMLDivElement | null>(null)
   const open = rows != null
@@ -201,7 +211,7 @@ export default function LotAllocationDialog({ state }: { state: LotAllocationDia
         <div className="flex items-start justify-between gap-3 border-b border-[rgba(0,0,0,0.08)] px-5 py-4">
           <div>
             <p id="lot-allocation-title" className="text-[15px] font-bold text-[#111110]">
-              확정할 물류번호 고르기
+              {title}
             </p>
             <p className="mt-1 text-[12px] text-[#615D59]">물류번호 관리 품목입니다. 수량을 잔여 있는 물류번호에 나눠 담으세요(잔여 1대 이상만 보입니다).</p>
           </div>
@@ -282,7 +292,7 @@ export default function LotAllocationDialog({ state }: { state: LotAllocationDia
               onClick={() => close(new Map(computed.map((row) => [row.entry.key, row.allocations])))}
               className="cursor-pointer rounded-md bg-[#084734] px-3.5 py-2 text-[12px] font-bold text-white transition hover:bg-[#065c41] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              이대로 확정
+              {confirmLabel}
             </button>
           </div>
         </div>

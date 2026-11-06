@@ -68,7 +68,7 @@ export default function PrivacyPage() {
             href="https://www.classin.com/agreement/?type=privacy"
             target="_blank"
             rel="noreferrer"
-            className="font-semibold text-[#084734] underline underline-offset-4"
+            className="font-semibold text-fg-accent underline underline-offset-4"
           >
             ClassIn 개인정보처리방침(글로벌)
           </a>
@@ -152,19 +152,19 @@ export default function PrivacyPage() {
           items={[
             <span key="email">
               이메일:{" "}
-              <a href="mailto:classinkr@classin.com" className="font-semibold text-[#084734] underline underline-offset-4">
+              <a href="mailto:classinkr@classin.com" className="font-semibold text-fg-accent underline underline-offset-4">
                 classinkr@classin.com
               </a>
             </span>,
             <span key="contact">
               문의 페이지:{" "}
-              <Link href="/contact#contact-form" className="font-semibold text-[#084734] underline underline-offset-4">
+              <Link href="/contact#contact-form" className="font-semibold text-fg-accent underline underline-offset-4">
                 /contact
               </Link>
             </span>,
             <span key="meta">
               Meta 관련 데이터 삭제 요청:{" "}
-              <Link href="/data-deletion" className="font-semibold text-[#084734] underline underline-offset-4">
+              <Link href="/data-deletion" className="font-semibold text-fg-accent underline underline-offset-4">
                 /data-deletion
               </Link>
             </span>,
@@ -177,7 +177,7 @@ export default function PrivacyPage() {
           ClassIn 개인 계정은 앱 설정의 계정 해지 메뉴에서 직접 삭제할 수 있으며, 기관 계정은 이메일로 삭제를
           요청할 수 있습니다. 계정 삭제는 되돌릴 수 없으며, 수업과 과제 기록, 채팅 내용, 클라우드 드라이브
           데이터 등 관련 정보가 합리적인 기간 안에 함께 삭제됩니다. Meta 연동 데이터와 마케팅 데이터 삭제는{" "}
-          <Link href="/data-deletion" className="font-semibold text-[#084734] underline underline-offset-4">
+          <Link href="/data-deletion" className="font-semibold text-fg-accent underline underline-offset-4">
             사용자 데이터 삭제 안내
           </Link>
           를 따릅니다.

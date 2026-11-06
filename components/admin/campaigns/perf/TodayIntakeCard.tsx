@@ -43,7 +43,7 @@ function formatKstTime(iso: string): string {
  * 프로미스 콜백 안으로만 두면 규칙이 요구하는 모양(외부 시스템 구독 → 콜백에서 갱신)이 되고,
  * 정리 함수의 ignore 플래그가 레이스도 함께 막는다(늦게 온 응답이 최신을 덮지 않는다).
  */
-function useIntakeToday(
+export function useIntakeToday(
   refreshNonce: number,
   initialData?: IntakeFeedResult | null,
   initialGeneratedAt?: number

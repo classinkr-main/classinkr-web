@@ -66,9 +66,9 @@
 | `NEXT_PUBLIC_NAVER_WCS_ID` | 네이버 애널리틱스 공통키 | 네이버 로그분석·전환이 안 돈다 |
 | `NEXT_PUBLIC_NAVER_LEAD_CONVERSION_TYPE` | 네이버 검색광고 전환 유형 문자열 | 리드 전환이 네이버로 안 간다([활성화 런북](ad-channel-activation-runbook-2026-09-14.md) §4) |
 | `NEXT_PUBLIC_GOOGLE_ADS_DEMO_CONVERSION_LABEL` | Google Ads 전환 액션 라벨(AW- 접두 제외) | Ads 전환이 안 나간다(같은 런북 §3) |
-| `GA4_MEASUREMENT_ID`, `GA4_API_SECRET` | GA4 Measurement Protocol 비밀키 | 서버 측 generate_lead 가 안 나간다 — **§5-6 결정 전에는 비워 둔다** |
+| `GA4_MEASUREMENT_ID`, `GA4_API_SECRET` | 측정 ID `G-6MWTJ8C0L2`(웹 스트림과 같은 값)와 Measurement Protocol API 비밀(관리 → 데이터 스트림 → 웹 → Measurement Protocol API 비밀). 서버 전용 — `NEXT_PUBLIC_` 아님 | 리드 품질 이벤트(`qualify_lead`·`close_convert_lead`)가 안 나간다. 접수 이벤트(`generate_lead`)는 이 변수와 무관하게 브라우저만 보낸다 — **마이그레이션 적용·코드 배포 뒤에 넣는다(§5-6)** |
 
-- **2026-10-30 확인(Vercel API)**: 운영에 있는 것은 `NEXT_PUBLIC_GTM_ID`, `NEXT_PUBLIC_META_PIXEL_ID`, `NEXT_PUBLIC_GOOGLE_ADS_DEMO_CONVERSION_LABEL`, `NEXT_PUBLIC_SUPABASE_URL` 뿐이다. `NEXT_PUBLIC_GA4_MEASUREMENT_ID`, `GOOGLE_SITE_VERIFICATION`, `NAVER_SITE_VERIFICATION`, `NEXT_PUBLIC_NAVER_WCS_ID`, `NEXT_PUBLIC_NAVER_LEAD_CONVERSION_TYPE` 은 아직 없다(= GA4 로 아무것도 안 가고, 소유확인 메타태그도 안 나간다). `GA4_MEASUREMENT_ID`·`GA4_API_SECRET` 은 §5-6 결정대로 비어 있는 것이 맞다.
+- **2026-10-30 확인(Vercel API)**: 운영에 있는 것은 `NEXT_PUBLIC_GTM_ID`, `NEXT_PUBLIC_META_PIXEL_ID`, `NEXT_PUBLIC_GOOGLE_ADS_DEMO_CONVERSION_LABEL`, `NEXT_PUBLIC_SUPABASE_URL` 뿐이다. `NEXT_PUBLIC_GA4_MEASUREMENT_ID`, `GOOGLE_SITE_VERIFICATION`, `NAVER_SITE_VERIFICATION`, `NEXT_PUBLIC_NAVER_WCS_ID`, `NEXT_PUBLIC_NAVER_LEAD_CONVERSION_TYPE` 은 아직 없다(= GA4 로 아무것도 안 가고, 소유확인 메타태그도 안 나간다). `GA4_MEASUREMENT_ID`·`GA4_API_SECRET` 은 그때 결정대로 비어 있었다 — 2026-11-02 코드 변경(서버 MP 는 리드 품질 이벤트만) 뒤에는 §5-6 순서대로 넣는다.
 - 소유확인 값(`*_SITE_VERIFICATION`)은 비밀이 아니다(페이지 소스에 그대로 노출된다). 값이 비어 있으면 태그 자체를 내보내지 않는다(`app/layout.tsx` → `createSiteVerification`).
 - 운영 배포는 main push 가 아니라 Promote to Production 이다(AGENTS.md "인프라 현황"). 재빌드 뒤 라이브에서 §8 을 돈다.
 
@@ -180,14 +180,33 @@ prefill, email, token, checkoutToken, paymentKey, orderId, q
 
 ### 5-5. 주요 이벤트(key event)
 
-관리 → 이벤트 → `generate_lead` 를 주요 이벤트로 지정한다. **이것 하나만** 지정한다. `contact_start`, `showroom_start`, `click_to_call`, `click_email`, `pricing_view`, `file_download` 는 퍼널 분석용 보조 이벤트로 두고 주요 이벤트로 올리지 않는다(버튼 클릭을 성과로 세지 않기 위해).
+관리 → 이벤트 → `generate_lead` 를 주요 이벤트로 지정한다. 브라우저 이벤트 중에서는 **이것 하나만** 지정한다. `contact_start`, `showroom_start`, `click_to_call`, `click_email`, `pricing_view`, `file_download` 는 퍼널 분석용 보조 이벤트로 두고 주요 이벤트로 올리지 않는다(버튼 클릭을 성과로 세지 않기 위해).
 
-### 5-6. 서버 Measurement Protocol — 지금은 끈 상태를 유지
+서버가 보내는 리드 품질 이벤트 `qualify_lead`·`close_convert_lead`(§5-6)도 주요 이벤트다 — 2026-11-02 기준 속성에 이미 만들어 두었다.
 
-서버는 `GA4_MEASUREMENT_ID` 와 `GA4_API_SECRET` 이 **둘 다 있을 때만** `/api/lead`·뉴스레터 접수 성공 뒤 MP 로 `generate_lead` 를 한 번 더 보낸다. 브라우저도 같은 접수에 `generate_lead` 를 보내므로 둘 다 켜면 **문의가 두 배**로 잡힌다(GA4 는 `event_id` 로 중복을 걸러 주지 않고, 서버 쪽에는 `form_type` 도 없다).
+### 5-6. 서버 Measurement Protocol — 리드 품질 이벤트만 보낸다(2026-11-02)
 
-- 결정: 당분간 브라우저 이벤트만 쓴다. Vercel 에서 두 변수를 비워 둔다(이미 값이 있으면 지우고 재배포).
-- 서버 전송이 꼭 필요해지면(광고 차단 보정 등) 그때 서버 이벤트 이름을 `generate_lead_server` 처럼 분리하거나 브라우저 쪽을 끄는 코드 변경을 먼저 한다(워크리스트 D9).
+Google Ads 가 폼 제출 수가 아니라 **좋은 리드**에 맞춰 입찰하도록, 영업 단계가 바뀌면 서버가 MP 로 GA4 권장 리드 이벤트를 보낸다. 서버 MP 는 **브라우저가 보낼 수 없는 이 두 이벤트만** 보낸다.
+
+| 이벤트 | 언제 나가나 | 거는 자리 |
+|---|---|---|
+| `qualify_lead` | 리드 상태가 `converted`(전환 — 고객·거래로 전환. 단건·단체 전환, 상태 직접 변경 모두) | `updateLead`(`lib/repositories/leads.ts`) |
+| `close_convert_lead` | 그 리드가 전환·연결된 고객(`crm_source_links` 확정 lead→customer 링크)의 딜이 `confirmed`(확정 — 오더 승인) 이후 단계(`installation`·`payment`·`closed`)에 닿음 | `updateDeal`(`lib/portal/repositories/deals.ts`) |
+
+- 접수·결제 이벤트(`generate_lead`·`begin_checkout`·`purchase`)는 **브라우저(gtag)만** 보낸다. 예전에는 두 변수가 있으면 서버도 같은 이름을 MP 로 한 번 더 보냈고, GA4 는 `event_id` 로 중복을 걸러 주지 않아 두 배로 잡혔다 — 그래서 변수를 비워 두고 있었다(워크리스트 D9). 이제 `sendServerConversion`(`lib/marketing/server-conversions.ts`)은 Meta CAPI 만 보낸다.
+- 매핑 정본은 `lib/marketing/lead-quality-signal.ts` 의 `LEAD_QUALITY_SIGNAL_TRIGGERS` 하나다. 연락중(`contacted`)은 연락 기록일 뿐이라, 딜 계약(`contract`)은 견적에서 계약서 초안을 만든 단계일 뿐이라 넣지 않았다. 리드 `closed` 는 이탈(Compass lost)이다.
+  - 결정 대기 대안: qualify 를 더 이르게(딜 `quote` — 견적 단계) / close 를 더 이르게(딜 `contract`, 또는 계약서 서명 완료) / close 를 고객 단위 대신 전환이 만든 딜 하나로 좁히기.
+- 결합 키는 제출 때 남긴다: `_ga` 쿠키 client_id → `leads.ga_client_id`, `_ga_6MWTJ8C0L2` 쿠키 세션 ID → `ga_session_id`, 쿠키 동의 마케팅 항목 → `ga_ad_consent`. **쿠키 동의의 분석 항목이 켜진 제출만** 남는다. 그래서 분석 비동의, 이 기능 배포 전 리드, Meta 리드애즈, 도입 신청·쇼룸 예약 미러(요청 쿠키를 넘기지 않는 경로), 재문의 병합(기존 리드 값 유지)은 신호가 나가지 않는다.
+- 보내는 본문: `client_id` + `consent.ad_user_data`·`ad_personalization`(`ga_ad_consent`) + 파라미터 `session_id`(있을 때)·`engagement_time_msec: 1`.
+- 리드당 이벤트별 한 번: 보내기 전에 `ga_qualify_sent_at`/`ga_close_sent_at` 이 비어 있는 행만 조건부 UPDATE 로 선점한다. GA 가 2xx 가 아닌 응답을 주면 선점을 풀어 다음 같은 전이(예: 확정 → 설치)에서 다시 보낸다. 네트워크 오류·시간 초과는 받았는지 몰라 선점을 유지한다(두 번 세느니 한 번 놓친다).
+- 상태 변경 응답을 막지 않는다(응답 뒤 `after()`). 건너뜀·실패는 런타임 로그 `[lead-quality-signal]` 에 리드 id 만 남는다.
+
+켜는 순서(뒤집지 않는다):
+
+1. 마이그레이션 `supabase/migrations/20261102_leads_ga_quality_signals.sql` 을 서울 프로젝트에 적용하고 `npm run check:db` 로 확인한다. 코드보다 늦으면 그 사이 리드의 client_id 가 안 남아 영영 신호를 못 보낸다.
+2. 코드 운영 배포(Promote to Production).
+3. Vercel Production 에 `GA4_MEASUREMENT_ID=G-6MWTJ8C0L2`, `GA4_API_SECRET` 을 넣고 다시 배포한다. 로컬 `.env.local` 에는 넣지 않는다 — 로컬은 운영 DB 를 보므로 로컬에서 상태를 바꾸면 운영 GA4 로 나간다.
+4. 확인한다고 실제 리드를 시험 삼아 전환하지 않는다(되돌릴 수 없다). 영업이 실제로 전환한 뒤 런타임 로그와 GA4 실시간·이벤트 보고서에서 `qualify_lead` 를 본다. Google Ads 로 가져오는 일은 §7.
 
 ### 5-7. 그 밖의 설정
 
@@ -216,8 +235,12 @@ prefill, email, token, checkoutToken, paymentKey, orderId, q
 
 ## 7. Google Ads
 
+- **계정(2026-11-03 결정)**: 운영 계정은 `395-174-3288`(태그 `AW-18551599540`, PR #52)이다. GA4 속성(`G-6MWTJ8C0L2`)은 395 와 예전 계정 `924-032-2833`(태그 `AW-18252550128`) 둘 다에 연결돼 있다. #52 를 배포할 때 함께 한다:
+  1. 924 의 실적 최대화·유튜브 캠페인을 일시중지한다 — 사이트 전환이 395 로 옮겨 가 924 는 전환 신호 없이 돈만 쓴다.
+  2. 395 의 "ClassIn KR Web (web) generate_lead"(GA4 가져오기)를 기본 → 보조로 내린다 — 라벨 전환 '도입 상담 신청'·'쇼룸 예약 완료'와 같은 문의가 입찰에 두 번 잡힌다. 배포 전에는 이것이 395 의 유일한 문의 전환이라 그대로 둔다.
 - 기본 전환은 하나만: gtag 전환 라벨(`NEXT_PUBLIC_GOOGLE_ADS_DEMO_CONVERSION_LABEL`)로 들어오는 전환과 "GA4 에서 가져온 generate_lead" 를 둘 다 기본 전환으로 두면 입찰에 두 번 반영된다. 라벨 전환을 기본으로, GA4 가져오기는 보조(관찰)로 둔다.
 - 라벨 발급·검증 절차는 [활성화 런북](ad-channel-activation-runbook-2026-09-14.md) §3 을 따른다.
+- `qualify_lead`·`close_convert_lead`(§5-6)를 GA4 에서 가져올 때: 둘 다 영업 단계가 바뀔 때만 나가서 건수가 적고 클릭보다 며칠~몇 주 늦다. 가져온 전환 액션의 클릭 후 전환 기간(기본 30일)과 GA4 주요 이벤트 전환 확인 기간을 넘기면 광고에 귀속되지 않으니 기간을 길게(최대 90일) 잡는다. 기본·보조 여부는 마케팅이 정한다.
 
 ---
 

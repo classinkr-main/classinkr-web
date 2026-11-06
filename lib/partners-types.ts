@@ -364,6 +364,8 @@ export interface PartnerQuoteLineItemInput {
   itemName: string
   itemDescription?: string
   unitPrice?: number
+  /** 발행 시 명시한 할인 전 단가. 카탈로그 가격과 독립적으로 보관한다. */
+  originalUnitPrice?: number
   quantity?: number
   quantityUnit?: string
   lineSupplyAmount?: number

@@ -184,11 +184,10 @@ export function SlotPicker({
                   }}
                   className={[
                     "rounded-lg border px-3 py-2.5 text-left transition-colors",
-                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]",
                     booked
                       ? "cursor-not-allowed border-black/[0.08] bg-[#F6F5F4]"
                       : selected
-                        ? "border-[#084734]/60 bg-[#ECFDF5]/60"
+                        ? "border-fg-accent/60 bg-fg-accent/5"
                         : invalid
                           ? "border-[#B43E3E] bg-white hover:bg-[#F6F5F4]"
                           : "border-black/[0.08] bg-white hover:bg-[#F6F5F4]",
@@ -196,7 +195,7 @@ export function SlotPicker({
                 >
                   <span
                     className={`block text-[14px] font-semibold tabular-nums ${
-                      booked ? "text-[#A39E98]" : selected ? "text-[#084734]" : "text-[#111110]"
+                      booked ? "text-[#A39E98]" : selected ? "text-fg-accent" : "text-[#111110]"
                     }`}
                   >
                     {slot.time}

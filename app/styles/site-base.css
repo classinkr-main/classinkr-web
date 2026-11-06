@@ -1,0 +1,258 @@
+/* app/styles/site-base.css — 공개 셸 규칙(system §3-4). 모든 셀렉터는 :where(.site) 또는 :root:has(.site) 로 시작한다.
+   P1: (a) base 규칙과 보증 4개가 공개 화면에 걸린다. .reveal-anim 은 globals.css 에서 옮겨 온 것이라 끝 상태가 같다.
+   P0 예외(system §8-1): 동작 줄이기 off 에서 Reveal 상승 18→12px, 마운트 때 이미 보이는 요소는 무장하지 않는다(/docs·/l/test1–3). */
+
+@layer base {
+  /* (a) — system: 앵커 착지(헤더 아래 16px, 휴대폰 서브내비 +44px) */
+  :root:has(.site) { color-scheme: light; scroll-padding-top: calc(var(--header-h) + 16px); }
+  @media (width < 48rem) {
+    :root:has(.site):has([data-subnav]) { scroll-padding-top: calc(var(--header-h) + 16px + 44px); }
+  }
+
+  /* typography — code·kbd·pre·samp 규칙은 preflight 에 져서 넣지 않는다 */
+  :where(.site) {
+    overflow-wrap: break-word;
+    font-synthesis: none;               /* 가짜 굵게·기울임 금지 */
+  }
+  :where(.site) :where(h1, h2, h3, h4) { text-wrap: balance; }
+  :where(.site) :where(.text-article, .text-body-l, .text-quote, figcaption) { text-wrap: pretty; }
+  :where(.site) :where(blockquote) { hanging-punctuation: first; }          /* Safari 만 */
+  :where(.site) :where(em) { font-style: normal; font-weight: 600; }        /* 색은 상속 */
+  :where(.site) :where(mark) {
+    background: none;
+    color: inherit;
+    font-weight: 600;
+    text-decoration: underline 2px var(--fg-accent);
+    text-underline-offset: 0.2em;
+    text-decoration-skip-ink: none;
+  }
+  :where(.site) ::selection { background: #D1FAE5; color: #111110; }      /* 한 줄 유지(가드 notSelection 은 줄 단위) */
+
+  /* icons — 크기와 무관하게 화면상 --stroke-pen */
+  :where(.site) svg.lucide {
+    stroke-width: var(--stroke-pen);
+    flex-shrink: 0;
+  }
+  :where(.site) svg.lucide :where(path, line, polyline, polygon, circle, rect, ellipse) {
+    vector-effect: non-scaling-stroke;
+  }
+
+  /* controls — 체크박스·라디오 20px·accent, 문단 안 클래스 없는 링크 = 본문 링크(X12) */
+  :where(.site) :is(input[type="checkbox"]:not([role="switch"]), input[type="radio"]) {
+    inline-size: 20px;
+    block-size: 20px;
+    margin: 0;
+    flex-shrink: 0;
+    accent-color: var(--fg-accent);
+  }
+  :where(.site) :where(p, li, dd, td, figcaption, blockquote) > a:not([class]) {
+    @apply link-body;
+  }
+
+  /* 동시 노출(system §4-7) — 배너·챗봇·모바일 메뉴가 열리면 플로팅을 숨긴다(포커스도 빠진다) */
+  :where(.site):has([data-consent-banner]) [data-hide-with-banner] { display: none; }
+  :where(.site):has(#classin-chatbot-dialog) [data-hide-with-chat] { display: none; }
+  :where(.site):has([aria-controls="site-mobile-menu"][aria-expanded="true"]) [data-inert-with-menu="hide"] { display: none; }
+}
+
+@layer components {
+  /* (b) 컴포넌트 규칙. 소비처가 생기는 PR 에서 채운다:
+     table-paper·스위치(controls P2) */
+
+  /* ── icons §10 상태 점 ● ○ – — 정지 표지. 점 옆에는 항상 13px 이상 글자, 점은 aria-hidden.
+     기본 규칙에 transition 을 두지 않는다(○→● 전이는 .os-node·.success-panel 소유 셀렉터만). 첫 소비처: /download '이 기기' */
+  :where(.site) .status-dot {
+    display: inline-block;
+    inline-size: 7px;
+    block-size: 7px;
+    border-radius: 9999px;
+    border: var(--stroke-pen) solid var(--fg-accent);
+    background: var(--fg-accent);
+    vertical-align: calc(0.355em - 3.5px);        /* 한글 잉크 중심 */
+    flex-shrink: 0;
+  }
+  :where(.site) .status-dot[data-state="off"] {   /* ○ 꺼짐·대기 */
+    background: transparent;
+    border-color: var(--line-control);
+  }
+  :where(.site) .status-dot[data-state="na"] {    /* – 해당 없음 */
+    block-size: var(--stroke-pen);
+    border: 0;
+    background: var(--line-control);
+    vertical-align: calc(0.355em - var(--stroke-pen) / 2);
+  }
+  @media (forced-colors: active) {
+    :where(.site) .status-dot:not([data-state="off"]) {
+      forced-color-adjust: none;
+      border-color: CanvasText;
+      background: CanvasText;
+    }
+  }
+
+  /* ── cards_motion — 정적 모양(모든 상태에서 같다) ── */
+  :where(.site) .os-node {                          /* 수업 OS 지도 노드 */
+    position: relative;
+    border: 1px solid var(--line-strong);
+    border-radius: 8px;
+    background: var(--surface-sheet);               /* 모눈이 라벨 뒤로 지나가지 않게 */
+  }
+  :where(.site) .os-node::after {                   /* 현재 탭 열의 액센트 윤곽(조작 전환) */
+    content: ""; position: absolute; inset: -1px; border-radius: inherit;
+    border: 1px solid var(--fg-accent); opacity: 0; pointer-events: none;
+    transition: opacity var(--motion-base) var(--ease-soft);
+  }
+  :where(.site) [data-current] .os-node::after { opacity: 1; }
+
+  :where(.site) .row-accent { position: relative; }  /* C21 ① — Comparison Classin 열 셀 */
+  :where(.site) .row-accent::before {
+    content: ""; position: absolute; inset: 0 auto 0 0; width: 2px;
+    background: var(--fg-accent); pointer-events: none;
+  }
+
+  /* 사례 캐러셀(X06). 위치 계산은 cards_motion, 상태 값은 imagery. --offset 은 인라인 style */
+  :where(.site) .case-slide {
+    transform: translateX(calc(-50% + var(--offset, 0) * (min(82vw, 480px) + 24px)));
+  }
+  :where(.site) .case-slide[data-pos="near"] { opacity: .72; }
+  :where(.site) .case-slide[data-pos="near"] .case-body { opacity: 0; }
+  :where(.site) .case-slide[data-pos="far"]  { opacity: 0; pointer-events: none; }
+
+  @media (forced-colors: active) {
+    :where(.site) .row-accent::before { forced-color-adjust: none; background: CanvasText; }
+    :where(.site) .os-node::after { border-color: Highlight; }
+  }
+
+  /* ── imagery — 차트·펜 도해. 클래스로 둬야 forced-colors 가 덮을 수 있다 ── */
+  :where(.site) .chart-accent  { stroke: var(--fg-accent);    stroke-width: var(--stroke-accent); }
+  :where(.site) .chart-compare { stroke: var(--line-control); stroke-width: var(--stroke-pen); }
+
+  /* path·line 은 선, rect 노드 윤곽은 dg-box, circle 은 단자 점(채움). --line-strong 은 도해에 쓰지 않는다 */
+  :where(.site) :is(.dg-line, .dg-box) { fill: none; stroke: var(--line-control); stroke-width: var(--stroke-pen);   vector-effect: non-scaling-stroke; }
+  :where(.site) .dg-accent { fill: none; stroke: var(--fg-accent);    stroke-width: var(--stroke-accent); vector-effect: non-scaling-stroke; }
+  :where(.site) circle.dg-line   { fill: var(--line-control); stroke: none; }
+  :where(.site) circle.dg-accent { fill: var(--fg-accent);    stroke: none; }
+
+  @media (forced-colors: active) {
+    :where(.site) :is(.chart-accent, .dg-accent) { stroke: Highlight; }
+    :where(.site) .chart-compare { stroke: GrayText; }
+    :where(.site) :is(.dg-line, .dg-box) { stroke: CanvasText; }
+    :where(.site) circle.dg-accent { fill: Highlight; }
+    :where(.site) circle.dg-line { fill: CanvasText; }
+  }
+
+  @keyframes ink-fade  { from { text-decoration-color: transparent; } }
+  @keyframes panel-in  { from { opacity: 0; } }
+  @keyframes scrub-in  { from { opacity: 0.18; } to { opacity: 1; } }
+
+  /* ── 모션 무장 — cards_motion 소유(X07). 미완 상태는 이 블록 하나에만 있다 → SSR·no-JS·reduced 는 항상 완성 ── */
+  @media (prefers-reduced-motion: no-preference) {
+    /* Reveal. globals.css 의 옛 .reveal-anim 을 대신한다.
+       끝 상태(in)에는 규칙을 두지 않는다 — 기본값 opacity 1·transform none 이 곧 완성 상태다.
+       bare 는 reveal-anim 클래스가 없어서 자식 무장만 일어난다 */
+    :where(.site) .reveal-anim {
+      transition: opacity var(--motion-slow) var(--ease-soft), transform var(--motion-slow) var(--ease-soft);
+    }
+    :where(.site) .reveal-anim[data-reveal="out"] { opacity: 0; transform: translateY(var(--motion-rise)); }
+
+    /* ① Hero 잉크 밑줄 — JS 0. 940ms 에 끝난다 */
+    :where(.site) [data-moment="hero-underline"] .ink-underline {
+      animation: ink-fade var(--motion-slow) var(--ease-soft) 240ms both;
+    }
+    /* 그 외 페이지의 잉크 밑줄 1개 — Reveal 조상 */
+    :where(.site) [data-reveal="out"] .ink-underline { text-decoration-color: transparent; }
+    :where(.site) [data-reveal="in"] .ink-underline {
+      transition: text-decoration-color var(--motion-slow) var(--ease-soft) 240ms;
+    }
+
+    /* ② Manifesto 스크럽 — 조상에 overflow hidden/auto/scroll 금지(clip 만 허용) */
+    @supports (animation-timeline: view()) {
+      @media (height >= 500px) {
+        :where(.site) [data-moment="manifesto"] h2 > span {
+          animation: scrub-in linear both;
+          animation-timeline: view();               /* 반드시 animation 단축 속성 뒤 */
+          animation-range: entry 10% cover 40%;
+        }
+        :where(.site) [data-moment="manifesto"] .ink-underline-scrub {
+          animation: ink-fade linear both;
+          animation-timeline: view();
+          animation-range: cover 30% cover 50%;
+        }
+      }
+    }
+
+    /* ③ ●점등 — 점만 흐렸다 켠다. 라벨·윤곽은 흐리지 않는다 */
+    :where(.site) [data-reveal="out"] .os-node .status-dot { opacity: 0.25; }
+    :where(.site) [data-reveal="in"] .os-node .status-dot {
+      transition: opacity var(--motion-slow) var(--ease-soft) calc(var(--i, 0) * var(--motion-stagger));
+    }
+    :where(.site) [data-reveal="out"] [data-current] .os-node::after { opacity: 0; }
+
+    /* ④ 차트 opacity 순차(C06, 값 imagery) — 비교 0 → 강조 240 → 끝점·라벨 480ms */
+    :where(.site) [data-reveal="out"] [data-seq] { opacity: 0; }
+    :where(.site) [data-reveal="in"] [data-seq] { transition: opacity var(--motion-slow) var(--ease-soft); }
+    :where(.site) [data-reveal="in"] [data-seq="1"] { transition-delay: 240ms; }
+    :where(.site) [data-reveal="in"] [data-seq="2"] { transition-delay: 480ms; }
+
+    /* ⑤ 행 액센트 — 전 행 동시, 표 등장 뒤 240ms */
+    :where(.site) [data-reveal="out"] .row-accent::before { opacity: 0; }
+    :where(.site) [data-reveal="in"] .row-accent::before {
+      transition: opacity var(--motion-slow) var(--ease-soft) 240ms;
+    }
+
+    /* ⑥ 홈 — 히어로 전자칠판 화면 켜짐. JS 0, 940ms 에 끝난다. 홈 Hero 의 모먼트는 이것 하나(틀·제목은 정지, V21-A) */
+    :where(.site) [data-moment="hero-screen"] {
+      animation: panel-in var(--motion-slow) var(--ease-soft) 240ms both;
+    }
+    /* ⑦ 홈 — 이득 1행 먹 밑줄 한 단어. Reveal 조상이 들어오면 240ms 뒤 스민다(그리기 아님, 색만) */
+    :where(.site) [data-reveal="out"] [data-moment="ink-word"] { text-decoration-color: transparent; }
+    :where(.site) [data-reveal="in"] [data-moment="ink-word"] {
+      transition: text-decoration-color var(--motion-slow) var(--ease-soft) 240ms;
+    }
+    /* ⑧ 홈 — 창 캡처가 행 등장 240ms 뒤 제자리로 들어온다. transform·opacity 만(위치 유틸은 translate 속성이라 겹치지 않는다) */
+    :where(.site) [data-reveal="out"] [data-moment="window-in"] { opacity: 0; transform: translateX(32px); }
+    :where(.site) [data-reveal="out"] [data-moment="window-up"] { opacity: 0; transform: translateY(24px); }
+    :where(.site) [data-reveal="in"] :is([data-moment="window-in"], [data-moment="window-up"]) {
+      transition: opacity var(--motion-slow) var(--ease-soft) 240ms, transform var(--motion-slow) var(--ease-soft) 240ms;
+    }
+
+    /* 탭 패널 교체 — 첫 페인트 제외 */
+    :where(.site) [data-switched] [role="tabpanel"][data-state="active"] {
+      animation: panel-in var(--motion-base) var(--ease-soft);
+    }
+
+    /* 사례 캐러셀 — 수동 넘김 이동만, scale 0. reduced 에서는 즉시 이동 */
+    :where(.site) .case-slide { transition: transform var(--motion-base) var(--ease-soft), opacity var(--motion-base) var(--ease-soft); }
+    :where(.site) .case-body  { transition: opacity var(--motion-base) var(--ease-soft); }
+
+    /* 블로그 본문 이미지(로딩 상태 한정). JS 마운트 뒤 img.complete === false 일 때만 data-loading */
+    :where(.site) img[data-loading] { opacity: 0; }
+    :where(.site) img[data-loaded] { opacity: 1; transition: opacity var(--motion-slow) var(--ease-soft); }
+
+    /* 제품 페이지 배경 루프 영상: 포스터 위 페이드인 */
+    :where(.site) video[data-loop][data-ready="false"] { opacity: 0; }
+    :where(.site) video[data-loop][data-ready="true"]  { opacity: 1; transition: opacity var(--motion-slow) var(--ease-soft); }
+  }
+}
+
+/* ── guarantee:start — 무레이어 보증. 닫힌 목록 4개. 이 구간 밖의 무레이어 규칙은 가드가 거부한다 ── */
+/* ① 포커스 outline */
+:where(.site) :where(a[href], button, input, select, textarea, summary, [role=tab], [tabindex]:not([tabindex="-1"])):not([data-focus-ring=parent]):focus-visible {
+  outline: 2px solid var(--fg-accent);
+  outline-offset: 2px;
+}
+/* ② 입력 16px — iOS 확대 방지 */
+:where(.site) :where(input:not([type=checkbox], [type=radio], [type=range], [type=color], [type=file], [type=submit], [type=button], [type=reset], [type=image], [type=hidden]), select, textarea) {
+  font-size: max(16px, 1em);
+}
+/* ③ autofill 덮개 */
+:where(.site) :where(input, select, textarea):-webkit-autofill {
+  -webkit-box-shadow: inset 0 0 0 1000px var(--surface-sheet);
+  -webkit-text-fill-color: var(--fg-ink);
+  caret-color: var(--fg-ink);
+}
+@keyframes skeleton-blink { 50% { opacity: .4; } }      /* ④ 부속(이름 정의라 4개 집계 밖). X08·animate-skeleton 공용 */
+/* ④ reduced 스피너 — globals.css 전역 reduced !important 를 이겨야 해서 !important */
+@media (prefers-reduced-motion: reduce) {
+  :where(.site) .animate-spin { animation: skeleton-blink 1.6s ease-in-out infinite !important; }
+}
+/* ── guarantee:end ── */

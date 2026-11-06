@@ -1,5 +1,6 @@
 import type { Metadata } from "next"
 
+import { SOFTWARE_PLANS } from "@/lib/billing/plans"
 import { CLASSIN_POSITIONING } from "@/lib/classin-positioning"
 import { BOARD_MODEL_NAMES, BOARD_SPEC_MODELS } from "@/lib/hardware/board-specs"
 
@@ -33,6 +34,11 @@ const COMPANY_ADDRESS = {
   addressRegion: "서울특별시",
   addressCountry: "KR",
 } as const
+
+// 브랜드 정본(docs/active/brand-canon/company-facts.md §1 ✅): 한국 법인 2022-10 설립, 모회사 EEO(Empower Education Online).
+export const COMPANY_FOUNDING_DATE = "2022-10"
+// 공식 채널(2026-11-03 사용자 확인). 유튜브·카카오 채널 등은 공식 주소가 확인되면 추가한다.
+export const ORGANIZATION_SAME_AS = ["https://blog.naver.com/classinkorea"] as const
 
 export const ORGANIZATION_ID = `${SITE_URL}/#organization`
 export const WEBSITE_ID = `${SITE_URL}/#website`
@@ -126,6 +132,14 @@ export function createOrganizationJsonLd(): JsonLdNode {
     description: CLASSIN_POSITIONING.oneLine,
     url: SITE_URL,
     logo: toAbsoluteUrl("/images/logo.png"),
+    foundingDate: COMPANY_FOUNDING_DATE,
+    sameAs: [...ORGANIZATION_SAME_AS],
+    parentOrganization: {
+      "@type": "Organization",
+      name: "EEO",
+      legalName: "Empower Education Online",
+      url: "https://www.classin.com",
+    },
     address: {
       "@type": "PostalAddress",
       ...COMPANY_ADDRESS,
@@ -351,6 +365,19 @@ export function createEventJsonLd({
   }
 }
 
+// 화면에 금액을 공개하는 셀프서브 플랜만 싣는다(Enterprise 는 맞춤 견적). 금액 정본은 lib/billing/plans.ts — 여기서 다시 적지 않는다.
+export function createSoftwareOffersJsonLd(): JsonLdNode {
+  const prices = SOFTWARE_PLANS.flatMap((plan) => (plan.selfServe && plan.monthly ? [plan.monthly.amount] : []))
+  return {
+    "@type": "AggregateOffer",
+    priceCurrency: "USD",
+    lowPrice: String(Math.min(...prices)),
+    highPrice: String(Math.max(...prices)),
+    offerCount: prices.length,
+    url: toAbsoluteUrl("/pricing"),
+  }
+}
+
 export function createSoftwareProductJsonLd(): JsonLdNode {
   return {
     "@context": "https://schema.org",
@@ -373,14 +400,7 @@ export function createSoftwareProductJsonLd(): JsonLdNode {
       "학습 데이터 리포트",
       "학부모 소통과 알림",
     ],
-    offers: {
-      "@type": "AggregateOffer",
-      priceCurrency: "USD",
-      lowPrice: "99",
-      highPrice: "199",
-      offerCount: 3,
-      url: toAbsoluteUrl("/product/sw"),
-    },
+    offers: createSoftwareOffersJsonLd(),
   }
 }
 

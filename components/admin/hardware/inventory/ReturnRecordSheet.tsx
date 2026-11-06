@@ -192,7 +192,7 @@ function ReturnRecordSheetBody({ onClose, onSaved, reduceMotion, initialQuery }:
             ) : lookupError ? (
               <p className="px-3 py-3 text-[12px] font-semibold text-[#8F2C2C]">회수 후보를 불러오지 못했습니다: {lookupError}</p>
             ) : candidates.length === 0 ? (
-              <p className="px-3 py-3 text-[12px] text-[#615D59]">회수할 수 있는 출고가 없습니다.</p>
+              <p className="px-3 py-3 text-[12px] text-[#615D59]">회수할 수 있는 출고가 없습니다. 앱에서 등록한 출고만 여기서 회수합니다 — 시트에 기록된 출고의 회수는 시트 이관 기간 동안 시트에 적어 주세요.</p>
             ) : (
               <ul className="max-h-72 divide-y divide-[rgba(0,0,0,0.05)] overflow-y-auto">
                 {candidates.map((row) => {

@@ -3,7 +3,10 @@ import "server-only"
 import { createHash, createHmac } from "node:crypto"
 import type { NextRequest } from "next/server"
 
-import { GOOGLE_ADS_ID } from "@/lib/analytics-config"
+import {
+  GA4_MEASUREMENT_ID as BROWSER_GA4_MEASUREMENT_ID,
+  GOOGLE_ADS_ID,
+} from "@/lib/analytics-config"
 import {
   ANONYMOUS_ID_COOKIE,
   CONSENT_COOKIE,
@@ -11,7 +14,6 @@ import {
 } from "@/lib/consent/consent"
 
 type MetaStandardEvent = "Lead" | "CompleteRegistration" | "InitiateCheckout" | "Purchase"
-type Ga4ServerEvent = "generate_lead" | "begin_checkout" | "purchase"
 const CONVERSION_FETCH_TIMEOUT_MS = 2_500
 
 export interface MarketingRequestMeta {
@@ -19,7 +21,10 @@ export interface MarketingRequestMeta {
   userAgent: string | null
   sourceUrl: string | null
   anonymousId: string | null
+  /** 진짜 _ga 쿠키에서 읽은 GA4 client_id. 쿠키가 없거나 모양이 다르면 null. */
   gaClientId: string | null
+  /** _ga_<측정 ID> 쿠키의 세션 ID. 측정 ID 미설정·쿠키 없음이면 null. */
+  gaSessionId: string | null
   fbp: string | null
   fbc: string | null
   consent: {
@@ -31,7 +36,6 @@ export interface MarketingRequestMeta {
 interface ServerConversionInput {
   eventId: string
   metaEventName: MetaStandardEvent
-  ga4EventName: Ga4ServerEvent
   requestMeta?: MarketingRequestMeta | null
   sourceUrl?: string | null
   user?: {
@@ -86,13 +90,28 @@ function getClientIp(req: NextRequest) {
   )
 }
 
-function parseGaClientId(value: string | undefined) {
-  if (!value) return null
-  const parts = value.split(".")
-  if (parts.length >= 4 && parts[0] === "GA1") {
-    return parts.slice(-2).join(".")
-  }
-  return value.trim() || null
+/**
+ * _ga = GA1.<도메인 단계>.<난수>.<최초 방문 초> → client_id 는 뒤 두 칸. 모양이 다르면 null —
+ * 원문을 client_id 로 보내면 어느 브라우저와도 안 이어지는 유령 사용자가 생긴다.
+ */
+export function parseGaClientId(value: string | null | undefined) {
+  const parts = value?.trim().split(".") ?? []
+  return parts.length >= 4 && /^GA\d+$/.test(parts[0]) ? parts.slice(-2).join(".") : null
+}
+
+/**
+ * _ga_<측정 ID 뒤쪽> 쿠키의 세션 ID — 접두(GSn.n.) 뒤 첫 숫자열.
+ *   GS1.1.1700000000.3.1.1700000100.0.0.0           → 1700000000
+ *   GS2.1.s1700000000$o3$g1$t1700000100$j60$l0$h0  → 1700000000 (값 앞 글자 하나는 건너뛴다)
+ */
+export function parseGaSessionId(value: string | null | undefined) {
+  return value?.trim().match(/^GS\d+\.\d+\.[a-z]?(\d+)/i)?.[1] ?? null
+}
+
+/** 세션 쿠키 이름은 측정 ID 를 따른다(G-6MWTJ8C0L2 → _ga_6MWTJ8C0L2). MP 와 같은 스트림이어야 하므로 MP 쪽 ID 우선. */
+function gaSessionCookieName() {
+  const measurementId = readEnv("GA4_MEASUREMENT_ID") ?? BROWSER_GA4_MEASUREMENT_ID
+  return measurementId ? `_ga_${measurementId.replace(/^G-/i, "")}` : null
 }
 
 function buildFbc(fbclid: string | null | undefined) {
@@ -113,7 +132,10 @@ export function getMarketingRequestMeta(
 ): MarketingRequestMeta {
   const consent = parseConsent(req.cookies.get(CONSENT_COOKIE)?.value ?? null)
   const anonymousId = req.cookies.get(ANONYMOUS_ID_COOKIE)?.value?.trim() || null
-  const gaClientId = parseGaClientId(req.cookies.get("_ga")?.value) ?? anonymousId
+  // 익명 ID 로 대신 채우지 않는다 — 리드에 저장해 나중에 MP 로 보낼 값이라 진짜 GA client_id 만 쓴다.
+  const gaClientId = parseGaClientId(req.cookies.get("_ga")?.value)
+  const sessionCookie = gaSessionCookieName()
+  const gaSessionId = sessionCookie ? parseGaSessionId(req.cookies.get(sessionCookie)?.value) : null
   const fbc = req.cookies.get("_fbc")?.value?.trim() || buildFbc(options.fbclid)
 
   return {
@@ -125,6 +147,7 @@ export function getMarketingRequestMeta(
       req.nextUrl.origin,
     anonymousId,
     gaClientId,
+    gaSessionId,
     fbp: req.cookies.get("_fbp")?.value?.trim() || null,
     fbc,
     consent: {
@@ -186,21 +209,45 @@ async function sendMetaConversion(input: ServerConversionInput) {
   const externalId = input.user?.externalId ?? input.requestMeta.anonymousId
   if (externalId) userData.external_id = [sha256(externalId)]
 
-  const body: Record<string, unknown> = {
-    data: [
-      {
-        event_name: input.metaEventName,
-        event_time: Math.floor(Date.now() / 1000),
-        event_id: input.eventId,
-        action_source: "website",
-        event_source_url: input.sourceUrl ?? input.requestMeta.sourceUrl ?? undefined,
-        user_data: Object.fromEntries(
-          Object.entries(userData).filter(([, value]) => value !== undefined && value !== null)
-        ),
-        custom_data: compactCustomData(input.customData),
-      },
-    ],
+  const response = await postMetaCapiEvents([
+    {
+      event_name: input.metaEventName,
+      event_time: Math.floor(Date.now() / 1000),
+      event_id: input.eventId,
+      action_source: "website",
+      event_source_url: input.sourceUrl ?? input.requestMeta.sourceUrl ?? undefined,
+      user_data: Object.fromEntries(
+        Object.entries(userData).filter(([, value]) => value !== undefined && value !== null)
+      ),
+      custom_data: compactCustomData(input.customData),
+    },
+  ])
+
+  if (response && !response.ok) {
+    throw new Error(`Meta CAPI ${response.status}: ${response.error}`)
   }
+
+  return { skipped: false as const }
+}
+
+/**
+ * Meta CAPI 이벤트 묶음 1회 POST(`/{dataset}/events`). 데이터셋·토큰이 없으면 보내지 않고 null.
+ * 보냈으면 HTTP 결과(ok=false 면 Meta 가 받지 않았다 — 묶음 안 하나만 틀려도 묶음 전체를 버린다)와 오류 본문 앞부분.
+ * 네트워크 오류·시간 초과는 던진다 — 받았는지 모른다. META_TEST_EVENT_CODE 가 있으면 테스트 이벤트로 보낸다.
+ * access_token 이 URL 에 실리므로 URL 을 로그에 남기지 않는다.
+ *
+ * user_data.lead_id 는 JSON 숫자여야 한다(Meta 예시가 따옴표 없는 숫자). 15–17자리라 JS number 로는 2^53 을 넘어
+ * 끝자리가 깨지므로 호출부는 user_data 의 **첫 키**로 숫자 문자열을 넘기고, 직렬화 뒤 따옴표만 뗀다. JSON.stringify 는
+ * 문자열 안의 따옴표를 \" 로 바꾸므로 이 모양은 실제 키 자리에서만 나온다. custom_data.lead_id(웹사이트 리드 UUID)는 건드리지 않는다.
+ */
+export async function postMetaCapiEvents(
+  events: Record<string, unknown>[]
+): Promise<{ ok: boolean; status: number; error: string } | null> {
+  const metaDatasetOrPixelId = readEnv("META_DATASET_ID") ?? readEnv("NEXT_PUBLIC_META_PIXEL_ID")
+  const accessToken = readEnv("META_CAPI_ACCESS_TOKEN") ?? readEnv("META_ACCESS_TOKEN")
+  if (!metaDatasetOrPixelId || !accessToken) return null
+
+  const body: Record<string, unknown> = { data: events }
   const testEventCode = readEnv("META_TEST_EVENT_CODE")
   if (testEventCode) body.test_event_code = testEventCode
 
@@ -212,72 +259,60 @@ async function sendMetaConversion(input: ServerConversionInput) {
   const response = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+    body: JSON.stringify(body).replace(/"user_data":\{"lead_id":"(\d{15,17})"/g, '"user_data":{"lead_id":$1'),
     signal: conversionFetchSignal(),
   })
-
-  if (!response.ok) {
-    const text = await response.text().catch(() => "")
-    throw new Error(`Meta CAPI ${response.status}: ${text.slice(0, 300)}`)
-  }
-
-  return { skipped: false as const }
+  const error = response.ok ? "" : (await response.text().catch(() => "")).slice(0, 300)
+  return { ok: response.ok, status: response.status, error }
 }
 
-async function sendGa4ServerEvent(input: ServerConversionInput) {
+/**
+ * GA4 Measurement Protocol 로 이벤트 1건. GA4_MEASUREMENT_ID·GA4_API_SECRET 이 없으면 보내지 않고 null.
+ * 보냈으면 HTTP 결과(ok=false 면 Google 이 받지 않았다). 네트워크 오류·시간 초과는 던진다 — 받았는지 모른다.
+ * api_secret 이 URL 에 실리므로 URL 을 로그에 남기지 않는다.
+ */
+export async function sendGa4MeasurementProtocolEvent(event: {
+  clientId: string
+  /** 쿠키 동의 마케팅 항목 → consent.ad_user_data·ad_personalization */
+  adConsent: boolean
+  name: string
+  params: Record<string, string | number>
+}): Promise<{ ok: boolean; status: number } | null> {
   const measurementId = readEnv("GA4_MEASUREMENT_ID")
   const apiSecret = readEnv("GA4_API_SECRET")
-  const clientId = input.requestMeta?.gaClientId
-  if (!measurementId || !apiSecret || !clientId || !input.requestMeta?.consent.analytics) {
-    return { skipped: true as const, reason: "ga4_not_configured_or_no_consent" }
-  }
+  if (!measurementId || !apiSecret) return null
 
   const url = new URL("https://www.google-analytics.com/mp/collect")
   url.searchParams.set("measurement_id", measurementId)
   url.searchParams.set("api_secret", apiSecret)
 
+  const consent = event.adConsent ? "GRANTED" : "DENIED"
   const response = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      client_id: clientId,
-      consent: {
-        ad_user_data: input.requestMeta.consent.marketing ? "GRANTED" : "DENIED",
-        ad_personalization: input.requestMeta.consent.marketing ? "GRANTED" : "DENIED",
-      },
-      events: [
-        {
-          name: input.ga4EventName,
-          params: {
-            event_id: input.eventId,
-            ...compactCustomData(input.customData),
-          },
-        },
-      ],
+      client_id: event.clientId,
+      consent: { ad_user_data: consent, ad_personalization: consent },
+      events: [{ name: event.name, params: event.params }],
     }),
     signal: conversionFetchSignal(),
   })
-
-  if (!response.ok) {
-    const text = await response.text().catch(() => "")
-    throw new Error(`GA4 MP ${response.status}: ${text.slice(0, 300)}`)
-  }
-
-  return { skipped: false as const }
+  return { ok: response.ok, status: response.status }
 }
 
+/**
+ * 접수·결제 서버 전환 — Meta CAPI 만 보낸다(브라우저 픽셀과 event_id 로 중복이 걸러진다).
+ *
+ * GA4 는 여기서 보내지 않는다. 같은 접수·결제에 브라우저(gtag)가 generate_lead·begin_checkout·purchase 를
+ * 이미 보내고 GA4 는 event_id 로 중복을 걸러 주지 않아, 서버 MP 까지 나가면 두 배로 잡힌다
+ * (docs/active/seo-analytics-console-runbook-2026-10-28.md §5-6). 서버 MP 는 브라우저가 보낼 수 없는
+ * 리드 품질 이벤트(lib/marketing/lead-quality-signal.ts)에만 쓴다.
+ */
 export async function sendServerConversion(input: ServerConversionInput) {
-  const [meta, ga4] = await Promise.allSettled([
-    sendMetaConversion(input),
-    sendGa4ServerEvent(input),
-  ])
-
-  if (meta.status === "rejected") {
-    console.warn("[marketing-conversions] Meta CAPI failed:", meta.reason)
+  try {
+    return await sendMetaConversion(input)
+  } catch (error) {
+    console.warn("[marketing-conversions] Meta CAPI failed:", error)
+    return null
   }
-  if (ga4.status === "rejected") {
-    console.warn("[marketing-conversions] GA4 Measurement Protocol failed:", ga4.reason)
-  }
-
-  return { meta, ga4 }
 }

@@ -96,11 +96,11 @@ export default function ProductPage() {
           ]),
         ]}
       />
-      <main className="min-h-screen bg-[#FAFAF8] pt-28">
+      <div className="min-h-screen bg-[#FAFAF8] pt-28">
         <section className="border-b border-black/[0.08] bg-white py-16 md:py-24">
           <div className="container mx-auto px-4">
             <div className="max-w-3xl">
-              <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#084734]">Product Overview</p>
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-fg-accent">Product Overview</p>
               <h1 className="mt-4 text-4xl font-black leading-tight text-[#111110] md:text-6xl">
                 Classin 제품 구성
               </h1>
@@ -119,14 +119,14 @@ export default function ProductPage() {
                 <article key={product.name} className="rounded-lg border border-black/[0.08] bg-white p-6 shadow-[0_12px_34px_rgba(17,17,16,0.05)] md:p-8">
                   <div className="flex items-start justify-between gap-5">
                     <div>
-                      <div className="inline-flex h-11 w-11 items-center justify-center rounded-[8px] bg-[#ECFDF5] text-[#084734]">
+                      <div className="inline-flex h-11 w-11 items-center justify-center rounded-[8px] bg-fg-accent/8 text-fg-accent">
                         <product.icon className="h-5 w-5" />
                       </div>
                       <h2 className="mt-5 text-2xl font-black text-[#111110]">{product.name}</h2>
                     </div>
                     <Link
                       href={product.href}
-                      className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-[#084734]/15 px-4 py-2 text-sm font-bold text-[#084734] transition-colors hover:bg-[#ECFDF5]"
+                      className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-fg-accent/15 px-4 py-2 text-sm font-bold text-fg-accent transition-colors hover:bg-fg-accent/8"
                     >
                       자세히 보기
                       <ArrowRight className="h-4 w-4" />
@@ -153,7 +153,7 @@ export default function ProductPage() {
         <section className="border-t border-black/[0.08] bg-[#F6F5F4] py-14 md:py-20">
           <div className="container mx-auto px-4">
             <div className="max-w-3xl">
-              <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#084734]">EEO Product Family</p>
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-fg-accent">EEO Product Family</p>
               <h2 className="mt-4 text-3xl font-black leading-tight text-[#111110] md:text-4xl">
                 EEO 글로벌 제품군
               </h2>
@@ -162,7 +162,7 @@ export default function ProductPage() {
                 Classin 소프트웨어와 Classin Board는 아래 제품군 위에서 운영됩니다.
               </p>
             </div>
-            <div className="mt-10 overflow-hidden rounded-lg border border-black/[0.08] bg-[#ECFDF5]">
+            <div className="mt-10 overflow-hidden rounded-lg border border-black/[0.08] bg-fg-accent/8">
               <Image
                 src="/images/brand/eeo-family.png"
                 alt="EEO 제품군 — Classin · Classin X · TeacherIn · Flowin · NOBOOK"
@@ -175,7 +175,7 @@ export default function ProductPage() {
               {productFamily.map((product) => (
                 <div
                   key={product.en}
-                  className="group rounded-lg border border-black/[0.08] bg-white p-6 transition-all hover:-translate-y-0.5 hover:border-[#084734]/20 hover:shadow-[0_14px_34px_rgba(17,17,16,0.07)]"
+                  className="rounded-lg border border-black/[0.08] bg-white p-6"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <Image
@@ -188,7 +188,7 @@ export default function ProductPage() {
                     <span
                       className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${
                         product.tone === "green"
-                          ? "bg-[#ECFDF5] text-[#084734]"
+                          ? "bg-fg-accent/8 text-fg-accent"
                           : "bg-[#F6F5F4] text-[#615D59]"
                       }`}
                     >
@@ -205,7 +205,7 @@ export default function ProductPage() {
             </div>
           </div>
         </section>
-      </main>
+      </div>
     </>
   )
 }

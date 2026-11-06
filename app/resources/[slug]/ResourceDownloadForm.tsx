@@ -49,7 +49,7 @@ const initialForm: DownloadFormState = {
 }
 
 const inputClassName =
-  "h-10 rounded-[6px] border-black/[0.08] bg-white text-[14px] focus-visible:border-[#084734]/50 focus-visible:ring-[#084734]/10"
+  "h-10 rounded-[6px] border-black/[0.08] bg-white text-[14px]"
 
 export function ResourceDownloadForm({ resource }: ResourceDownloadFormProps) {
   const [form, setForm] = useState<DownloadFormState>(initialForm)
@@ -236,7 +236,7 @@ export function ResourceDownloadForm({ resource }: ResourceDownloadFormProps) {
   }
 
   return (
-    <div id="download" className="scroll-mt-28 lg:h-full">
+    <div id="download" className="lg:h-full">
       <PublicLoginDialog
         open={loginDialogOpen}
         onOpenChange={setLoginDialogOpen}
@@ -247,7 +247,7 @@ export function ResourceDownloadForm({ resource }: ResourceDownloadFormProps) {
       <aside className="flex flex-col rounded-[14px] border border-black/[0.08] bg-white p-5 shadow-[0_18px_50px_rgba(17,17,16,0.07)] lg:h-full lg:max-h-[660px] lg:min-h-0">
       {submitted ? (
         <div className="flex min-h-[360px] flex-col justify-center text-center lg:min-h-0 lg:flex-1">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center border border-black/[0.08] bg-white text-[#084734]">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center border border-black/[0.08] bg-white text-fg-accent">
             <CheckCircle2 className="h-6 w-6" />
           </div>
           <h2 className="mt-5 text-xl font-bold text-[#111110]">자료 신청이 완료되었습니다.</h2>
@@ -261,7 +261,7 @@ export function ResourceDownloadForm({ resource }: ResourceDownloadFormProps) {
         </div>
       ) : isLoginGate ? (
         <div className="flex min-h-[360px] flex-col justify-center text-center lg:min-h-0 lg:flex-1">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg bg-[#ECFDF5] text-[#084734]">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg bg-fg-accent/8 text-fg-accent">
             <LockKeyhole className="h-6 w-6" />
           </div>
           <h2 className="mt-5 text-2xl font-bold tracking-[-0.03em] text-[#111110]">
@@ -308,7 +308,7 @@ export function ResourceDownloadForm({ resource }: ResourceDownloadFormProps) {
       ) : (
         <>
           <div className="shrink-0">
-            <p className="flex items-center gap-1.5 text-[12px] font-bold uppercase tracking-[0.14em] text-[#084734]">
+            <p className="flex items-center gap-1.5 text-[12px] font-bold uppercase tracking-[0.14em] text-fg-accent">
               <Download className="h-3.5 w-3.5" />
               {resource.hasPdfFile ? "무료 PDF 받기" : "PDF 자료 신청"}
             </p>
@@ -443,7 +443,7 @@ export function ResourceDownloadForm({ resource }: ResourceDownloadFormProps) {
                   type="checkbox"
                   checked={form.privacyConsent}
                   onChange={(event) => updateField("privacyConsent", event.target.checked)}
-                  className="mt-0.5 h-4 w-4 accent-[#084734]"
+                  className="mt-0.5 h-4 w-4 accent-fg-accent"
                   required
                 />
                 <span>
@@ -458,7 +458,7 @@ export function ResourceDownloadForm({ resource }: ResourceDownloadFormProps) {
                   type="checkbox"
                   checked={form.marketingConsent}
                   onChange={(event) => updateField("marketingConsent", event.target.checked)}
-                  className="mt-0.5 h-4 w-4 accent-[#084734]"
+                  className="mt-0.5 h-4 w-4 accent-fg-accent"
                 />
                 <span>[선택] Classin 교육 인사이트·제품 소식 수신에 동의합니다. 언제든 수신거부할 수 있습니다.</span>
               </label>

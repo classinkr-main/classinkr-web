@@ -1,7 +1,11 @@
 "use client"
 
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react"
+import { usePathname } from "next/navigation"
 import { AlertCircle, CheckCircle2 } from "lucide-react"
+
+import { isInternalPath } from "@/lib/internal-path"
+import { cn } from "@/lib/utils"
 
 type ToastType = "success" | "error"
 
@@ -40,16 +44,30 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   return (
     <ToastContext.Provider value={value}>
       {children}
-      <div
-        aria-live="polite"
-        aria-atomic="false"
-        className="fixed top-4 right-4 z-[9999] flex flex-col gap-2 pointer-events-none"
-      >
-        {toasts.map((toast) => (
-          <ToastItem key={toast.id} toast={toast} onDismiss={remove} />
-        ))}
-      </div>
+      <ToastViewport toasts={toasts} onDismiss={remove} />
     </ToastContext.Provider>
+  )
+}
+
+// 경로 구독은 뷰포트에만 둔다. Provider 가 이동마다 다시 그려지면 useToast 값이 바뀐다.
+function ToastViewport({ toasts, onDismiss }: { toasts: ToastItem[]; onDismiss: (id: number) => void }) {
+  const pathname = usePathname()
+
+  return (
+    <div
+      aria-live="polite"
+      aria-atomic="false"
+      className={cn(
+        "fixed top-4 right-4 z-[9999] flex flex-col gap-2 pointer-events-none", // 공유 기본값, 불변
+        // 공개 경로만 .site 표지 + 위치(PC 헤더 아래, 휴대폰 하단 가운데)
+        !isInternalPath(pathname) &&
+          "site md:top-[calc(var(--header-h)+16px)] max-md:inset-x-4 max-md:top-auto max-md:items-center max-md:bottom-[calc(env(safe-area-inset-bottom)+80px)]",
+      )}
+    >
+      {toasts.map((toast) => (
+        <ToastItem key={toast.id} toast={toast} onDismiss={onDismiss} />
+      ))}
+    </div>
   )
 }
 
@@ -77,7 +95,7 @@ function ToastItem({ toast, onDismiss }: { toast: ToastItem; onDismiss: (id: num
         "pointer-events-auto flex items-center gap-2.5 rounded-xl px-4 py-3 shadow-md text-sm font-medium cursor-pointer select-none",
         "border",
         isSuccess
-          ? "bg-[#ECFDF5] text-[#084734] border-[#084734]/15"
+          ? "bg-fg-accent/8 text-fg-accent border-fg-accent/15"
           : "bg-[#FFF1EC] text-[#B85C33] border-[#B85C33]/15",
       ].join(" ")}
     >

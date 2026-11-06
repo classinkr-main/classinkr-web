@@ -386,8 +386,11 @@ export default function HardwareQuotesPanel({
   const [selectedId, setSelectedId] = useState<string | null>(() =>
     typeof window === "undefined" ? null : new URLSearchParams(window.location.search).get("quote")
   )
+  const [showDeleted, setShowDeleted] = useState(false)
+  const [changingDeletionId, setChangingDeletionId] = useState<string | null>(null)
   const [details, setDetails] = useState<Record<string, DetailState>>({})
   const handledQuickActionKeyRef = useRef<string | null>(null)
+  const quoteLoadSequenceRef = useRef(0)
 
   // 견적 작성기의 "공급자 담당자" 드롭다운 후보. 어드민 전용 훅이라 여기서 읽어 주입한다
   // (컴포저는 포털에서도 쓰이므로 admin-client 를 직접 import 하지 않는다).
@@ -496,12 +499,13 @@ export default function HardwareQuotesPanel({
     [quotes]
   )
 
-  async function loadQuotes() {
+  async function loadQuotes(deletedOnly = false) {
+    const sequence = ++quoteLoadSequenceRef.current
     setLoading(true)
     setLoadError(null)
 
     try {
-      const response = await portalFetch("/api/portal/documents?type=quote")
+      const response = await portalFetch(`/api/portal/documents?type=quote${deletedOnly ? "&deleted=only" : ""}`, { cache: "no-store" })
       const payload = (await response.json().catch(() => null)) as
         | (DocumentsPayload & { error?: string })
         | null
@@ -510,14 +514,37 @@ export default function HardwareQuotesPanel({
         throw new Error(payload?.error ?? "견적서 목록을 불러오지 못했습니다.")
       }
 
+      if (sequence !== quoteLoadSequenceRef.current) return
+
       const nextQuotes = (Array.isArray(payload?.documents) ? payload.documents : []).map(mapDocumentToQuoteRow)
       setQuotes(nextQuotes)
       // 목록이 바뀌면 상세(품목)도 다시 받는다 — 버전이 올라갔을 수 있다.
       setDetails({})
     } catch (error) {
+      if (sequence !== quoteLoadSequenceRef.current) return
       setLoadError(error instanceof Error ? error.message : "견적서 목록을 불러오지 못했습니다.")
     } finally {
-      setLoading(false)
+      if (sequence === quoteLoadSequenceRef.current) setLoading(false)
+    }
+  }
+
+  async function changeQuoteDeletion(quote: HardwareQuoteRow, deleted: boolean) {
+    if (changingDeletionId) return
+    const message = deleted
+      ? `${quote.quoteNumber} 견적서를 삭제하시겠습니까?\n목록에서 숨기고 공유 링크를 중지합니다. 삭제함에서 복구할 수 있습니다.`
+      : `${quote.quoteNumber} 견적서를 복구하시겠습니까?\n유효기간이 남은 기존 공유 링크가 다시 열립니다.`
+    if (!window.confirm(message)) return
+    setChangingDeletionId(quote.id)
+    setNotice(null)
+    try {
+      await adminFetchJson(`/api/admin/quotes/${quote.id}`, { method: deleted ? "DELETE" : "POST" })
+      setSelectedId(null)
+      setNotice({ tone: "success", message: deleted ? `${quote.quoteNumber}을 삭제했습니다.` : `${quote.quoteNumber}을 복구했습니다.` })
+      await loadQuotes(showDeleted)
+    } catch (error) {
+      setNotice({ tone: "error", message: error instanceof Error ? error.message : "견적서 상태 변경에 실패했습니다." })
+    } finally {
+      setChangingDeletionId(null)
     }
   }
 
@@ -573,7 +600,7 @@ export default function HardwareQuotesPanel({
   // id 별 캐시라 응답이 늦게 와도 다른 견적에 섞이지 않는다 — 취소 없이 한 번만 받는다.
   const selectedQuoteId = selectedQuote?.id ?? null
   useEffect(() => {
-    if (!selectedQuoteId || details[selectedQuoteId]) return
+    if (showDeleted || !selectedQuoteId || details[selectedQuoteId]) return
     setDetails((current) => ({ ...current, [selectedQuoteId]: { status: "loading" } }))
     fetchQuoteDetail(selectedQuoteId)
       .then((detail) => {
@@ -583,7 +610,7 @@ export default function HardwareQuotesPanel({
         const message = error instanceof Error ? error.message : "견적 상세를 불러오지 못했습니다."
         setDetails((current) => ({ ...current, [selectedQuoteId]: { status: "error", message } }))
       })
-  }, [selectedQuoteId, details])
+  }, [selectedQuoteId, details, showDeleted])
 
   useEffect(() => {
     if (!quickAction) return
@@ -699,7 +726,7 @@ export default function HardwareQuotesPanel({
   function handleSelect(quote: HardwareQuoteRow) {
     // 좁은 화면에는 상세 패널이 없다 — 기존 직접 보기로 연다.
     if (typeof window !== "undefined" && !window.matchMedia(DESKTOP_QUERY).matches) {
-      openAdminQuoteView(quote.id)
+      if (!showDeleted) openAdminQuoteView(quote.id)
       return
     }
     setSelectedId(quote.id)
@@ -768,6 +795,14 @@ export default function HardwareQuotesPanel({
   }
 
   function renderDetail(quote: HardwareQuoteRow) {
+    if (showDeleted) return (
+      <section aria-label="삭제된 견적 상세" className="flex flex-col gap-4 px-7 py-6">
+        <h2 className="text-lg font-bold">{quote.quoteNumber} · {quote.customerName}</h2>
+        <p className="text-sm text-[#615D59]">{quote.title} · {formatMoney(quote.totalAmount)}</p>
+        <p className="text-sm text-[#615D59]">삭제된 견적서는 고객 공유 링크에서 열 수 없습니다.</p>
+        <div><button type="button" className={OUTLINE_STRONG_BUTTON} disabled={Boolean(changingDeletionId)} onClick={() => void changeQuoteDeletion(quote, false)}>복구</button></div>
+      </section>
+    )
     const key = getQuoteQueueKey(quote)
     const group = QUOTE_QUEUE_GROUPS.find((item) => item.key === key)
     const nextAction = getNextActionCopy(quote, key)
@@ -803,6 +838,7 @@ export default function HardwareQuotesPanel({
           <div className="text-right">
             <p className="text-2xl font-bold tracking-[-0.02em] tabular-nums text-[#111110]">{formatMoney(quote.totalAmount)}</p>
             <p className="text-[11.5px] text-[#78736D]">VAT 별도</p>
+            <button type="button" className={`${GHOST_BUTTON} mt-2`} disabled={Boolean(changingDeletionId)} onClick={() => void changeQuoteDeletion(quote, true)}>견적 삭제</button>
           </div>
         </div>
 
@@ -928,6 +964,13 @@ export default function HardwareQuotesPanel({
 
   return (
     <div className="mx-auto max-w-7xl space-y-4 p-4 sm:px-6 sm:py-5">
+      <button type="button" className={GHOST_BUTTON} aria-pressed={showDeleted} onClick={() => {
+        const next = !showDeleted
+        setShowDeleted(next)
+        setSelectedId(null)
+        setQuotes([])
+        void loadQuotes(next)
+      }}>{showDeleted ? "견적 목록" : "삭제함"}</button>
       {notice && (
         <div
           role="status"
@@ -945,7 +988,7 @@ export default function HardwareQuotesPanel({
           <AlertCircle className="h-5 w-5 text-[#B43E3E]" />
           <p className="mt-3 text-sm font-medium text-[#111110]">견적서 목록을 불러오지 못했습니다.</p>
           <p className="mt-1 text-xs text-[#B43E3E]">{loadError}</p>
-          <button type="button" onClick={() => void loadQuotes()} className={`${GHOST_BUTTON} mt-4`}>
+          <button type="button" onClick={() => void loadQuotes(showDeleted)} className={`${GHOST_BUTTON} mt-4`}>
             다시 시도
           </button>
         </div>
@@ -957,8 +1000,8 @@ export default function HardwareQuotesPanel({
       ) : quotes.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-lg border border-[#e8e8e4] bg-white px-6 py-16 text-center">
           <FileText className="h-5 w-5 text-[#615D59]" />
-          <p className="mt-3 text-sm font-medium text-[#111110]">저장된 견적서가 없습니다.</p>
-          <p className="mt-1 text-xs text-[#78736D]">견적서를 만들면 여기서 다음 할 일 순서로 정리됩니다.</p>
+          <p className="mt-3 text-sm font-medium text-[#111110]">{showDeleted ? "삭제된 견적서가 없습니다." : "저장된 견적서가 없습니다."}</p>
+          {!showDeleted && <><p className="mt-1 text-xs text-[#78736D]">견적서를 만들면 여기서 다음 할 일 순서로 정리됩니다.</p>
           <button
             type="button"
             onClick={() => {
@@ -969,7 +1012,7 @@ export default function HardwareQuotesPanel({
           >
             <Plus className="h-3.5 w-3.5" />
             첫 견적서 작성
-          </button>
+          </button></>}
         </div>
       ) : (
         <div className="flex overflow-hidden rounded-[10px] border border-[#e8e8e4] bg-white">
@@ -1008,7 +1051,7 @@ export default function HardwareQuotesPanel({
                 <span className="flex-1" />
                 <button
                   type="button"
-                  onClick={() => void loadQuotes()}
+                  onClick={() => void loadQuotes(showDeleted)}
                   disabled={loading}
                   title="새로고침"
                   aria-label="새로고침"
@@ -1048,8 +1091,8 @@ export default function HardwareQuotesPanel({
                     const selected = quote.id === selectedQuote?.id
                     const status = getQueueStatus(quote, group.key)
                     return (
+                      <div key={quote.id}>
                       <button
-                        key={quote.id}
                         type="button"
                         onClick={() => handleSelect(quote)}
                         aria-pressed={selected}
@@ -1075,6 +1118,13 @@ export default function HardwareQuotesPanel({
                           <span className={`whitespace-nowrap ${status.className}`}>{status.text}</span>
                         </span>
                       </button>
+                      <div className="px-4 pb-2 lg:hidden">
+                        <button type="button" className={GHOST_BUTTON} disabled={Boolean(changingDeletionId)}
+                          onClick={() => void changeQuoteDeletion(quote, !showDeleted)}>
+                          {showDeleted ? "복구" : "견적 삭제"}
+                        </button>
+                      </div>
+                      </div>
                     )
                   })}
                 </section>

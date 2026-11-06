@@ -3284,7 +3284,8 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
               </div>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto">
+            {/* 미리보기: 어드민 포커스 링 폴백 + TOC 점프 착지 여백 */}
+            <div data-admin-crm className="min-h-0 flex-1 scroll-pt-28 overflow-y-auto">
               <section className="px-4 py-6 sm:px-6 lg:px-8">
                 <div className="grid gap-8 lg:grid-cols-[240px_minmax(0,1fr)] xl:grid-cols-[260px_minmax(0,1fr)_220px]">
                   <div className="lg:sticky lg:top-6 lg:self-start">

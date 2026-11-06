@@ -92,7 +92,7 @@ export default async function SharedQuotePage({ params }: PageProps) {
   }).catch(() => null)
 
   return (
-    <main data-quote-viewer="true" className="min-h-screen bg-[#F6F5F4] px-4 py-10 print:bg-white print:px-0 print:py-0 sm:px-6 sm:py-16">
+    <div data-quote-viewer="true" className="min-h-screen bg-[#F6F5F4] px-4 py-10 print:bg-white print:px-0 print:py-0 sm:px-6 sm:py-16">
       <article className="mx-auto max-w-[210mm] overflow-hidden rounded-2xl border border-black/8 bg-white shadow-sm print:max-w-none print:rounded-none print:border-0 print:shadow-none">
         <header className="border-b border-black/8 px-6 py-6 sm:px-10 sm:py-8">
           <div className="flex items-center justify-between gap-4">
@@ -159,6 +159,6 @@ export default async function SharedQuotePage({ params }: PageProps) {
           이 견적은 담당자가 발급한 안전한 공유 링크입니다. 문의는 담당자에게 직접 회신해 주세요.
         </footer>
       </article>
-    </main>
+    </div>
   )
 }

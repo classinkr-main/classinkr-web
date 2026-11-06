@@ -28,11 +28,11 @@ export function SeminarLockedPreview({ slug, title, posterUrl }: SeminarLockedPr
 
         {/* 프로스티드 글래스 CTA 패널 */}
         <div className="absolute inset-0 grid place-items-center p-5">
-          <div className="w-full max-w-sm rounded-[14px] border border-white/60 bg-white/80 p-6 text-center shadow-[0_18px_50px_rgba(8,71,52,0.16)] backdrop-blur-md">
-            <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#ECFDF5] text-[#084734] ring-1 ring-[#084734]/12">
+          <div className="w-full max-w-sm rounded-[14px] border border-white/60 bg-white/80 p-6 text-center backdrop-blur-md">
+            <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-fg-accent/8 text-fg-accent ring-1 ring-fg-accent/12">
               <LockKeyhole className="h-5 w-5" />
             </span>
-            <p className="mt-4 text-[12px] font-bold uppercase tracking-[0.14em] text-[#084734]/70">
+            <p className="mt-4 text-[12px] font-bold uppercase tracking-[0.14em] text-fg-accent/70">
               회원 전용 영상
             </p>
             <h2 className="mt-1.5 text-[18px] font-bold leading-snug tracking-[-0.02em] text-[#111110]">
@@ -44,7 +44,7 @@ export function SeminarLockedPreview({ slug, title, posterUrl }: SeminarLockedPr
             <button
               type="button"
               onClick={() => setDialogOpen(true)}
-              className="mt-5 inline-flex h-11 w-full items-center justify-center rounded-[8px] bg-[#084734] px-5 text-[15px] font-semibold text-white shadow-sm transition-all hover:bg-[#065c41] active:scale-[0.98]"
+              className="mt-5 inline-flex h-11 w-full items-center justify-center rounded-[8px] bg-fg-accent px-5 text-[15px] font-semibold text-fg-on-accent shadow-sm transition-all hover:bg-fg-accent-hover active:scale-[0.98]"
             >
               로그인하고 전체 보기
             </button>

@@ -61,6 +61,7 @@ type GoogleAnalyticsEventName =
   | "select_content"
   | "video_start"
   | "conversion"
+  | "lead_magnet_signup"
 
 /** gtag('set') 로 고정하는 페이지 문맥 — 이후 모든 hit(자동 이벤트 포함)이 이 값을 쓴다. */
 export interface GooglePageContext {
@@ -426,11 +427,18 @@ export const trackEvent = (
   // 없어 소프트 내비게이션으로 들어오면 gtag('set') 문맥이 직전 페이지 그룹에 머문다.
   if (!INTERNAL_ONLY_EVENTS.has(eventName) && window.gtag) {
     const ga4Event = getGa4Event(eventName, eventParams)
-    window.gtag("event", ga4Event.name, {
+    const ga4Params = {
       page_location: currentPageLocation(),
       content_group: getContentGroup(window.location?.pathname),
       ...ga4Event.params,
-    })
+    }
+    window.gtag("event", ga4Event.name, ga4Params)
+    // 이메일을 받고 내준 자료(gate=email)는 "자료 신청"으로 한 번 더 센다 — GA4 주요 이벤트
+    // lead_magnet_signup 이고, Google Ads 리드 캠페인(C2) 맞춤 목표가 이것을 입찰에 쓴다.
+    // 제품 소개서처럼 이메일 없이 받는 다운로드(gate 없음)는 file_download 로만 남는다.
+    if (eventName === "download_materials" && eventParams.gate === "email") {
+      window.gtag("event", "lead_magnet_signup", ga4Params)
+    }
   }
 
   if (options?.skipMarketingPixels) return

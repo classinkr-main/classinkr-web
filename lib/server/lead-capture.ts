@@ -19,6 +19,7 @@ import {
 } from "@/lib/repositories/leads"
 import { upsertSubscriber } from "@/lib/repositories/marketing"
 import { getResolvedSettings } from "@/lib/repositories/settings"
+import { compassLeadPushTarget, isCompassPushSource, pushLeadToCompass } from "@/lib/server/compass-lead-push"
 import { postJson } from "@/lib/server/post-json"
 import { isWebhookEnabled } from "@/lib/webhook-settings"
 import { parseEventToken, setEventToken } from "@/lib/types/event-metrics"
@@ -493,8 +494,16 @@ export async function submitLeadCapture(
       // 제출 전에 쌓인 익명 활동을 이 리드로 귀속한다 — 신규 저장과 동일 경로(scheduleIdentityStitch).
       if (body.anonymousId) scheduleIdentityStitch(existingId, body.anonymousId, context)
     } else {
+      // 리드 품질 신호(lib/marketing/lead-quality-signal.ts)가 나중에 MP 로 보낼 결합 키 — 쿠키 동의의
+      // 분석 항목이 켜진 제출만 남긴다. client_id 는 이 요청의 _ga 쿠키에만 있어 지금 못 남기면 끝이다.
+      // (consent 까지 ?. — 여기서 던지면 리드 저장 전이라 접수 자체가 실패한다.)
+      const meta = context.requestMeta
+      const ga = meta?.consent?.analytics && meta.gaClientId
+        ? { ga_client_id: meta.gaClientId, ga_session_id: meta.gaSessionId ?? undefined, ga_ad_consent: meta.consent.marketing }
+        : {}
       try {
         const savedLead = await saveLead({
+          ...ga,
           ...body,
           notes,
           source_detail: body.sourceDetail,
@@ -662,6 +671,19 @@ export async function runLeadCaptureEffects(
     deliveryTasks.push(sendToChannelTalk(body, settings.channelTalkWebhookUrl))
   }
 
+  // Compass(mkt.classin.co.kr)에도 찍는다 — 공개 폼 리드만, 저장이 됐을 때만(어드민 리드 id 가 Compass 쪽 링크 키다). env 둘이 없으면 조용히 건너뛴다.
+  // 재문의 병합이면 kind=reinflow — Compass 가 같은 사람을 재유입으로 올린다. 실패는 다른 외부 전달과 같이 errors(warnings·인시던트)로.
+  // 설계는 lib/server/compass-lead-push.ts 머리말과 Compass 저장소 ADR-0083.
+  if (toggles.externalForwards && stored && savedLeadId && isCompassPushSource(body.source) && compassLeadPushTarget()) {
+    deliveryTasks.push(
+      pushLeadToCompass(body, {
+        leadId: savedLeadId,
+        kind: merged ? "reinflow" : "created",
+        eventId: conversionEventId ?? `lead:${savedLeadId}`,
+      })
+    )
+  }
+
   if (toggles.subscriberUpsert && body.email && body.marketingConsent === true) {
     deliveryTasks.push(syncToSubscriberDB(body))
   }
@@ -691,7 +713,6 @@ export async function runLeadCaptureEffects(
         eventId: conversionEventId ?? `lead:${savedLeadId}`,
         metaEventName:
           body.source === "newsletter" && body.marketingConsent ? "CompleteRegistration" : "Lead",
-        ga4EventName: "generate_lead",
         requestMeta: context.requestMeta ?? null,
         sourceUrl: body.currentPage ?? body.landingPage ?? context.requestMeta?.sourceUrl,
         user: {

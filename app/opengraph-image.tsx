@@ -1,4 +1,5 @@
 import { ImageResponse } from "next/og"
+import { color } from "@/lib/design-tokens"
 
 export const alt = "클래스인 Classin — 학원 전자칠판·수업 녹화·운영 플랫폼"
 export const size = { width: 1200, height: 630 }
@@ -28,7 +29,7 @@ export default function OGImage() {
             left: 0,
             right: 0,
             height: 6,
-            backgroundColor: "#084734",
+            backgroundColor: color.accent,
           }}
         />
 
@@ -46,13 +47,13 @@ export default function OGImage() {
               width: 48,
               height: 48,
               borderRadius: 12,
-              backgroundColor: "#084734",
+              backgroundColor: color.accent,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
             }}
           >
-            <span style={{ color: "#ffffff", fontSize: 28, fontWeight: 700 }}>C</span>
+            <span style={{ color: color.onAccent, fontSize: 28, fontWeight: 700 }}>C</span>
           </div>
           <span
             style={{
@@ -118,7 +119,7 @@ export default function OGImage() {
               padding: "6px 16px",
               fontSize: 14,
               fontWeight: 600,
-              color: "#084734",
+              color: color.accent,
               letterSpacing: "0.125px",
             }}
           >

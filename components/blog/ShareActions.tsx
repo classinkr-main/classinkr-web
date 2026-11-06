@@ -54,7 +54,7 @@ export function ShareActions({ title, url }: ShareActionsProps) {
       <button
         type="button"
         onClick={handleCopy}
-        className="inline-flex items-center gap-1.5 rounded-full border border-[#e8e8e4] bg-white px-4 py-2 text-[13px] font-medium text-[#1a1a1a]/60 transition-colors hover:border-[#084734]/30 hover:text-[#084734]"
+        className="inline-flex items-center gap-1.5 rounded-full border border-[#e8e8e4] bg-white px-4 py-2 text-[13px] font-medium text-[#1a1a1a]/60 transition-colors hover:border-fg-accent/30 hover:text-fg-accent"
       >
         {copied ? <Check className="h-3.5 w-3.5" /> : <Link2 className="h-3.5 w-3.5" />}
         {copied ? "복사됨" : "링크 복사"}
@@ -63,7 +63,7 @@ export function ShareActions({ title, url }: ShareActionsProps) {
         <button
           type="button"
           onClick={handleNativeShare}
-          className="inline-flex items-center gap-1.5 rounded-full border border-[#e8e8e4] bg-white px-4 py-2 text-[13px] font-medium text-[#1a1a1a]/60 transition-colors hover:border-[#084734]/30 hover:text-[#084734]"
+          className="inline-flex items-center gap-1.5 rounded-full border border-[#e8e8e4] bg-white px-4 py-2 text-[13px] font-medium text-[#1a1a1a]/60 transition-colors hover:border-fg-accent/30 hover:text-fg-accent"
         >
           <Share2 className="h-3.5 w-3.5" />
           공유

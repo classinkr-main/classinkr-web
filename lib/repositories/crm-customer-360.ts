@@ -6,8 +6,9 @@ import {
   type NeoCrmCustomerEeoAccount,
   type NeoCrmCustomerMoneyItem,
 } from "@/lib/admin-crm-customers-neo"
-import { getCompassActivitiesByLeadIds, getCompassLeadsByPhoneKeys } from "@/lib/compass/bridge"
-import { compassLeadUrl, normalizePhoneKey } from "@/lib/compass/normalize"
+import { getCompassLeadsForAdminLead } from "@/lib/compass/admin-lead-links"
+import { getCompassActivitiesByLeadIds } from "@/lib/compass/bridge"
+import { compassLeadUrl } from "@/lib/compass/normalize"
 import { pickRepresentativeCompassRow } from "@/lib/compass/overlay"
 import {
   toCompassTimelineEntries,
@@ -159,7 +160,7 @@ export interface Customer360Risk {
  * `down`은 "활동이 없다"가 아니라 "브리지가 끊겨 확인할 수 없다"는 뜻이다 — 화면은 둘을 구분한다.
  */
 export interface Customer360Compass {
-  /** 전화 정규화 키로 매칭된 Compass 리드 id들 */
+  /** 매칭된 Compass 리드 id들 — Compass 링크(home_lead, 리드 360 만) ∪ 전화 정규화 키(lib/compass/admin-lead-links.ts) */
   leadIds: number[]
   /**
    * 대표 리드 딥링크(매칭 리드가 하나도 없으면 null). 같은 전화에 Compass 리드가 여러 건이면
@@ -462,15 +463,12 @@ const EMPTY_COMPASS: Customer360Compass = { leadIds: [], href: null, entries: []
 const COMPASS_ENDED_STAGES: ReadonlySet<string> = new Set(["lost"])
 
 /**
- * 전화 하나로 Compass 활동을 끌어온다: 전화 → normalizePhoneKey → compass_leads_v →
- * compass_activities_v. 360은 단건 화면이라 추가 쿼리 2회를 허용한다.
- * 전화가 없으면 조회 자체를 하지 않는다(추측 매칭 금지).
+ * Compass 활동을 끌어온다: 리드 360 은 Compass 링크(home_lead — 어드민 리드 id) ∪ 전화 키, NEO 360 은 전화 키만
+ * (lib/compass/admin-lead-links.ts) → compass_leads_v → compass_activities_v. 360은 단건 화면이라 추가 쿼리를 허용한다.
+ * 링크도 전화도 없으면 조회 자체를 하지 않는다(추측 매칭 금지).
  */
-async function loadCompassActivity(phone: string | null | undefined): Promise<Customer360Compass> {
-  const key = normalizePhoneKey(phone)
-  if (!key) return EMPTY_COMPASS
-
-  const leads = await getCompassLeadsByPhoneKeys([key])
+async function loadCompassActivity(input: { leadId: string | null; phone: string | null | undefined }): Promise<Customer360Compass> {
+  const leads = await getCompassLeadsForAdminLead({ leadId: input.leadId, phone: input.phone })
   if (leads.down) return { ...EMPTY_COMPASS, down: true }
   const leadIds = leads.rows.map((row) => row.id)
   if (leadIds.length === 0) return EMPTY_COMPASS
@@ -910,7 +908,7 @@ export async function getCrmCustomer360(
 
   // 제품 매출 요약 — 고객명(header.name)을 계정키로 REV/HW 원장에 조인. 비핵심이라 실패해도
   // 드로어 전체를 막지 않게 unmatched 폴백으로 흡수하고 경고만 남긴다.
-  // Compass 활동은 전화 조인이라 contacts 가 정해진 뒤에야 갈 수 있다 — 같은 단계에서 병렬로 묶는다.
+  // Compass 활동은 링크(리드 id) ∪ 전화 조인이라 contacts 가 정해진 뒤에야 갈 수 있다 — 같은 단계에서 병렬로 묶는다.
   // CT9 — 연락 로그 원본을 읽을 리드: 리드 360 은 자기, NEO 360 은 확정 연결 리드.
   const historyLeadIds = !found ? [] : parsed.source === "lead" ? [parsed.entityId] : linkedLeadIds.leadIds
   const [
@@ -924,7 +922,9 @@ export async function getCrmCustomer360(
     found && header?.name
       ? getCrmAccountProductSummary(moneyAccountName)
       : Promise.resolve(EMPTY_CRM_ACCOUNT_PRODUCT_SUMMARY),
-    found ? loadCompassActivity(contacts?.phone) : Promise.resolve(EMPTY_COMPASS),
+    found
+      ? loadCompassActivity({ leadId: parsed.source === "lead" ? parsed.entityId : null, phone: contacts?.phone })
+      : Promise.resolve(EMPTY_COMPASS),
     // M2·M4 — 품목별 대수·미매칭 출고 후보. neo 계정만 accountId를 넘긴다(리드는 조인 대상이
     // 아니라는 사실 자체를 note로 밝힌다 — crm-account-money.ts의 accountId===null 분기).
     found && header?.name

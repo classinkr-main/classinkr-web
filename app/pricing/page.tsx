@@ -1,6 +1,10 @@
 import { ArrowRight, CheckCircle2 } from "lucide-react"
+import { JsonLd } from "@/components/seo/JsonLd"
 import { TrackedLink } from "@/components/TrackedLink"
 import { getDocBySlug, getDocPath } from "@/lib/docs"
+import { createBreadcrumbJsonLd, createWebPageJsonLd, SOFTWARE_PRODUCT_ID } from "@/lib/seo"
+
+import { PRICING_DESCRIPTION } from "./pricing-copy"
 
 // 요금 문서가 비공개로 바뀌거나 slug 가 바뀌면 깨진 링크 대신 항목을 뺀다.
 const PRICING_FAQ_DOC = getDocBySlug("software-pricing-quote-bundle-faq", "software")
@@ -38,10 +42,25 @@ const MORE_LINKS = [
 
 export default function PricingPage() {
   return (
-    <main className="min-h-screen bg-[#FAFAF8] px-4 py-24 text-[#111110] sm:px-6 lg:py-28">
+    <>
+    <JsonLd
+      data={[
+        createWebPageJsonLd({
+          path: "/pricing",
+          name: "Classin 요금제·도입 견적",
+          description: PRICING_DESCRIPTION,
+          mainEntity: { "@id": SOFTWARE_PRODUCT_ID },
+        }),
+        createBreadcrumbJsonLd([
+          { name: "홈", path: "/" },
+          { name: "요금제", path: "/pricing" },
+        ]),
+      ]}
+    />
+    <div className="min-h-screen bg-[#FAFAF8] px-4 py-24 text-[#111110] sm:px-6 lg:py-28">
       <div className="mx-auto max-w-5xl">
         <div className="max-w-3xl">
-          <p className="text-[12px] font-semibold uppercase tracking-[0.18em] text-[#084734]/70">
+          <p className="text-[12px] font-semibold uppercase tracking-[0.18em] text-fg-accent/70">
             Pricing
           </p>
           <h1 className="mt-3 text-[2.35rem] font-semibold leading-[1.08] tracking-tight sm:text-5xl">
@@ -86,7 +105,7 @@ export default function PricingPage() {
               <ul className="mt-5 space-y-2 text-sm text-[#44514A]">
                 {item.points.map((point) => (
                   <li key={point} className="flex items-center gap-2">
-                    <CheckCircle2 className="h-4 w-4 text-[#084734]" aria-hidden="true" />
+                    <CheckCircle2 className="h-4 w-4 text-fg-accent" aria-hidden="true" />
                     {point}
                   </li>
                 ))}
@@ -95,7 +114,7 @@ export default function PricingPage() {
                 href={item.href}
                 ctaId={`pricing_${item.title}`}
                 tracking={{ destination: item.href }}
-                className="mt-7 inline-flex items-center gap-2 text-sm font-semibold text-[#084734] transition-colors hover:text-[#111110]"
+                className="mt-7 inline-flex items-center gap-2 text-sm font-semibold text-fg-accent transition-colors hover:text-[#111110]"
               >
                 {item.cta}
                 <ArrowRight className="h-4 w-4" aria-hidden="true" />
@@ -118,23 +137,24 @@ export default function PricingPage() {
                 <TrackedLink
                   href={link.href}
                   ctaId={link.ctaId}
-                  className="group flex h-full items-start justify-between gap-4 rounded-[12px] border border-black/[0.08] bg-white px-5 py-4 transition-colors hover:border-[#084734]/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8]"
+                  className="group flex h-full items-start justify-between gap-4 rounded-[12px] border border-black/[0.08] bg-white px-5 py-4 transition-colors hover:border-fg-accent/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fg-accent focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8]"
                 >
                   <span className="min-w-0">
-                    <span className="block text-sm font-semibold text-[#111110] group-hover:text-[#084734]">
+                    <span className="block text-sm font-semibold text-[#111110] group-hover:text-fg-accent">
                       {link.title}
                     </span>
                     <span className="mt-1 block break-keep text-[13px] leading-5 text-[#615D59]">
                       {link.description}
                     </span>
                   </span>
-                  <ArrowRight className="mt-0.5 h-4 w-4 shrink-0 text-[#084734]" aria-hidden="true" />
+                  <ArrowRight className="mt-0.5 h-4 w-4 shrink-0 text-fg-accent" aria-hidden="true" />
                 </TrackedLink>
               </li>
             ))}
           </ul>
         </nav>
       </div>
-    </main>
+    </div>
+    </>
   )
 }

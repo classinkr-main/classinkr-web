@@ -1,6 +1,10 @@
 "server-only";
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import {
+  leadQualitySignalForDealStage,
+  scheduleLeadQualitySignalForCustomer,
+} from "@/lib/marketing/lead-quality-signal";
 import type {
   InsertDeal,
   UpdateDeal,
@@ -157,11 +161,19 @@ async function listDealLineItems(dealId: string): Promise<DealLineItem[]> {
 
 async function listQuoteDocumentBundles(dealId: string): Promise<QuoteDocumentBundle[]> {
   const supabase = createSupabaseAdminClient();
-  const { data: documents, error: documentsError } = await supabase
+  let { data: documents, error: documentsError } = await supabase
     .from("quote_documents")
     .select("*")
     .eq("deal_id", dealId)
+    .is("deleted_at", null)
     .order("created_at", { ascending: false });
+
+  if (documentsError?.code === "42703") {
+    console.warn("[portal/deals] 견적 삭제함 마이그레이션 미적용")
+    const fallback = await supabase.from("quote_documents").select("*").eq("deal_id", dealId).order("created_at", { ascending: false });
+    documents = fallback.data;
+    documentsError = fallback.error;
+  }
 
   if (documentsError) throw documentsError;
   const documentRows = (documents ?? []) as QuoteDocument[];
@@ -448,7 +460,12 @@ export async function updateDeal(
     .single();
 
   if (error) throw error;
-  return data as Deal;
+  const deal = data as Deal;
+  // 딜 단계는 견적→계약 전환·오더 승인(확정)·출고(설치)·수기 변경이 모두 이 함수를 지난다 — 품질 신호를 한 곳에서 건다.
+  // 대상은 이 딜의 고객으로 전환·연결된 리드다. 응답 뒤로 미루고 리드당 한 번만 나간다.
+  const signal = input.current_stage ? leadQualitySignalForDealStage(input.current_stage) : null;
+  if (signal) scheduleLeadQualitySignalForCustomer(deal.customer_id, signal);
+  return deal;
 }
 
 // 딜 삭제 안전 가드: 견적/계약/정산/설치 자식이 하나라도 있으면 true.

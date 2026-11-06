@@ -26,7 +26,7 @@ export function OutboundTypeBadge({ type, size = "sm" }: { type: HardwareOutboun
   if (!type) return null
   return (
     <span
-      className={`inline-flex shrink-0 rounded-full font-bold ${size === "xs" ? "px-1.5 py-0.5 text-[10px]" : "px-2 py-0.5 text-[11px]"} ${SALE_TYPE_META[type].tone}`}
+      className={`inline-flex shrink-0 rounded-full font-bold ${size === "xs" ? "px-1.5 py-0.5 text-[11px]" : "px-2 py-0.5 text-[11px]"} ${SALE_TYPE_META[type].tone}`}
     >
       {HARDWARE_OUTBOUND_TYPE_LABELS[type]}
     </span>
@@ -39,7 +39,7 @@ export function SampleReturnBadge({ movement, size = "sm" }: { movement: Pick<Ha
   return (
     <span
       title={overdue ? "반납 예정일이 지났습니다" : "샘플 반납 예정일"}
-      className={`inline-flex shrink-0 rounded-full font-bold tabular-nums ${size === "xs" ? "px-1.5 py-0.5 text-[10px]" : "px-2 py-0.5 text-[11px]"} ${
+      className={`inline-flex shrink-0 rounded-full font-bold tabular-nums ${size === "xs" ? "px-1.5 py-0.5 text-[11px]" : "px-2 py-0.5 text-[11px]"} ${
         overdue ? "bg-[#FCE9E9] text-[#8F2C2C]" : "bg-[#F6F5F4] text-[#615D59]"
       }`}
     >
@@ -60,7 +60,7 @@ export function CrmCustomerLink({ movement, className }: { movement: Pick<Hardwa
       onClick={(event) => event.stopPropagation()}
       className={
         className ??
-        "inline-flex shrink-0 items-center rounded-full border border-[#BDEFD8] bg-[#ECFDF5] px-2 py-0.5 text-[10.5px] font-bold text-[#084734] transition hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40"
+        "inline-flex shrink-0 items-center rounded-full border border-[#BDEFD8] bg-[#ECFDF5] px-2 py-0.5 text-[11px] font-bold text-[#084734] transition hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40"
       }
       title="CRM 고객 목록에서 열기"
     >

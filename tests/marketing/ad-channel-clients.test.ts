@@ -1,9 +1,12 @@
-import { describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 
 import {
   buildDailyInsightsQuery,
+  fetchGoogleAdsDaily,
+  isGoogleAdsConfigured,
   mapGoogleAdsRow,
   normalizeCustomerId,
+  resetGoogleAdsTokenCache,
 } from "@/lib/google/ads"
 import {
   chunk,
@@ -83,6 +86,61 @@ describe("Google Ads — 고객 ID · GAQL", () => {
 
   it("노출 0 행을 제외한다 — '집행 없음'과 '캠페인 부재'가 섞이지 않게", () => {
     expect(buildDailyInsightsQuery("2026-09-01", "2026-09-02")).toContain("metrics.impressions > 0")
+  })
+})
+
+describe("Google Ads — 연동 판정", () => {
+  const stub = (env: Record<string, string>) => {
+    for (const key of [
+      "GOOGLE_ADS_CUSTOMER_ID",
+      "GOOGLE_ADS_REFRESH_TOKEN",
+      "GOOGLE_ADS_CLIENT_ID",
+      "GOOGLE_ADS_CLIENT_SECRET",
+      "GOOGLE_SERVICE_ACCOUNT_EMAIL",
+      "GOOGLE_PRIVATE_KEY",
+    ]) {
+      vi.stubEnv(key, env[key] ?? "")
+    }
+  }
+  afterEach(() => vi.unstubAllEnvs())
+
+  const serviceAccount = { GOOGLE_SERVICE_ACCOUNT_EMAIL: "sa@p.iam.gserviceaccount.com", GOOGLE_PRIVATE_KEY: "-----BEGIN PRIVATE KEY-----\\nx" }
+
+  it("공용 서비스 계정이 있어도 고객 ID 가 없으면 꺼져 있다 — 고객 ID 가 켜는 스위치", () => {
+    stub(serviceAccount)
+    expect(isGoogleAdsConfigured()).toBe(false)
+    stub({ ...serviceAccount, GOOGLE_ADS_CUSTOMER_ID: "395-174-3288" })
+    expect(isGoogleAdsConfigured()).toBe(true)
+  })
+
+  it("search 본문에 pageSize 를 싣지 않는다 — 현행 API 는 PAGE_SIZE_NOT_SUPPORTED 로 요청을 거부한다", async () => {
+    stub({ GOOGLE_ADS_CUSTOMER_ID: "395-174-3288", GOOGLE_ADS_REFRESH_TOKEN: "r", GOOGLE_ADS_CLIENT_ID: "c", GOOGLE_ADS_CLIENT_SECRET: "s" })
+    resetGoogleAdsTokenCache()
+    const searchBodies: string[] = []
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (url.includes("oauth2")) return new Response(JSON.stringify({ access_token: "t", expires_in: 3600 }))
+        searchBodies.push(String(init?.body))
+        const row = { campaign: { id: 1, name: "C" }, segments: { date: "2026-11-03" }, metrics: { costMicros: "3029890000", impressions: "649", clicks: "2" }, customer: { currencyCode: "KRW" } }
+        return new Response(JSON.stringify({ results: [row] }))
+      })
+    )
+    try {
+      const result = await fetchGoogleAdsDaily({ since: "2026-11-01", until: "2026-11-03" })
+      expect(JSON.parse(searchBodies[0])).not.toHaveProperty("pageSize")
+      expect(result).toMatchObject({ currency: "KRW", truncated: false, rows: [{ campaignId: "1", spend: 3029.89, impressions: 649 }] })
+    } finally {
+      vi.unstubAllGlobals()
+      resetGoogleAdsTokenCache()
+    }
+  })
+
+  it("refresh_token 이 있는데 OAuth 클라이언트가 빠지면 서비스 계정으로 몰래 넘어가지 않는다", () => {
+    stub({ ...serviceAccount, GOOGLE_ADS_CUSTOMER_ID: "3951743288", GOOGLE_ADS_REFRESH_TOKEN: "r" })
+    expect(isGoogleAdsConfigured()).toBe(false)
+    stub({ GOOGLE_ADS_CUSTOMER_ID: "3951743288", GOOGLE_ADS_REFRESH_TOKEN: "r", GOOGLE_ADS_CLIENT_ID: "c", GOOGLE_ADS_CLIENT_SECRET: "s" })
+    expect(isGoogleAdsConfigured()).toBe(true)
   })
 })
 

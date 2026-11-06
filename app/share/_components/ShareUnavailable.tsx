@@ -14,7 +14,7 @@ export function ShareUnavailable({ variant, documentLabel, expiresAt }: Props) {
   const expiredAt = formatDate(expiresAt)
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[#F6F5F4] px-6">
+    <div className="flex min-h-screen items-center justify-center bg-[#F6F5F4] px-6">
       <div className="max-w-md rounded-2xl border border-black/8 bg-white p-8 text-center shadow-sm">
         <h1 className="text-lg font-medium text-[#1a1a1a]">{title}</h1>
         {variant === "expired" && expiredAt ? (
@@ -31,6 +31,6 @@ export function ShareUnavailable({ variant, documentLabel, expiresAt }: Props) {
           </p>
         )}
       </div>
-    </main>
+    </div>
   )
 }

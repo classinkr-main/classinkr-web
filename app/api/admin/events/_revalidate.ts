@@ -2,6 +2,7 @@ import { revalidatePath, revalidateTag } from "next/cache"
 
 import { PUBLIC_EVENTS_CACHE_TAG } from "@/lib/repositories/public-events"
 import { ADMIN_CALENDAR_EVENTS_CACHE_TAG } from "@/lib/admin-calendar/cache-tags"
+import { getEventRouteSegment } from "@/lib/event-slug-route"
 
 export function revalidatePublicEventSurfaces(...slugs: Array<string | null | undefined>) {
   revalidateTag(PUBLIC_EVENTS_CACHE_TAG, "max")
@@ -14,7 +15,8 @@ export function revalidatePublicEventSurfaces(...slugs: Array<string | null | un
   revalidatePath("/sitemap.xml")
 
   for (const slug of new Set(slugs.filter((value): value is string => Boolean(value)))) {
-    revalidatePath(`/events/${slug}`)
+    // 한글 슬러그 상세의 ISR 캐시는 proxy rewrite 토큰 경로에 붙는다(lib/event-slug-route.ts).
+    revalidatePath(`/events/${getEventRouteSegment(slug)}`)
     revalidatePath(`/events/${slug}/calendar.ics`)
   }
 }

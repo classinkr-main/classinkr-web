@@ -367,7 +367,7 @@ export async function convertQuoteToContract(
     .eq("id", quoteDocId)
     .single();
 
-  if (quoteDocError || !quoteDoc) {
+  if (quoteDocError || !quoteDoc || quoteDoc.deleted_at) {
     throw new Error("견적 문서를 찾을 수 없습니다");
   }
 

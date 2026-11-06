@@ -20,8 +20,6 @@ import DeleteConfirmDialog from "@/components/admin/DeleteConfirmDialog"
 import CrmNoticeBanner, { type CrmNoticeTone } from "@/components/admin/crm/CrmNoticeBanner"
 import FreshnessCaption from "@/components/admin/crm/FreshnessCaption"
 import LeadTrackingPanel from "@/components/admin/crm/leads/LeadTrackingPanel"
-import { matchesDataOwner } from "@/lib/crm/personal-owner"
-import { branchMemberOwnerAliases } from "@/lib/branch/member-names"
 import { useCrmOwners } from "@/components/admin/crm/useCrmOwners"
 import { useVisibleCount } from "@/components/admin/ui/ShowMore"
 import { MOBILE_TOUCH_TARGET_CLASS } from "@/components/admin/crm/home/shared"
@@ -33,7 +31,13 @@ import type { LeadRecord, LeadStatus } from "@/lib/repositories/leads"
 import type { ContactLogRecord, ContactLogType, ContactLogResult } from "@/lib/repositories/contact-logs"
 import type { PublicEvent } from "@/lib/types/public-events"
 import {
+  LEAD_OWNER_ALL,
+  LEAD_OWNER_ME,
+  LEAD_OWNER_UNASSIGNED,
+  isUnassignedLead,
   matchesLeadScopeFilters,
+  resolveLeadOwnerScope,
+  selectLeadsForOwnerScope,
   selectScopedUnconfirmedLeads,
   type LeadScopeCriteria,
 } from "@/lib/crm/leads-board-state"
@@ -337,11 +341,22 @@ export default function LeadsBoardClient() {
   const convertResultPanelRef = useRef<HTMLDivElement>(null)
   const toastMeasureRef = useRef<HTMLDivElement>(null)
   const { owners: crmOwners, health: crmOwnerHealth, currentOwner: crmCurrentOwner, currentOwnerKeys } = useCrmOwners()
-  const dataOwner = searchParams.get("owner") ?? "__me"
-  const leads = useMemo(() => {
-    const keys = dataOwner === "" ? undefined : dataOwner === "__me" ? (currentOwnerKeys.length ? currentOwnerKeys : ["__no_current_admin_owner__"]) : branchMemberOwnerAliases(dataOwner)
-    return allLeads.filter(lead => matchesDataOwner(lead.assigned_to, keys))
-  }, [allLeads, currentOwnerKeys, dataOwner])
+  // 데이터 범위 — 기본은 전체 담당자(새 문의는 담당이 비어 들어온다). 판정은 leads-board-state 가 정본.
+  const dataOwner = resolveLeadOwnerScope(searchParams.get("owner"))
+  const leads = useMemo(
+    () => selectLeadsForOwnerScope(allLeads, dataOwner, currentOwnerKeys),
+    [allLeads, currentOwnerKeys, dataOwner]
+  )
+  const setDataOwner = useCallback((value: string) => {
+    const params = new URLSearchParams(searchParams.toString())
+    params.set("owner", value)
+    window.history.replaceState(null, "", `?${params.toString()}`)
+  }, [searchParams])
+  // 담당 없는 진행 중 리드 수 — 범위 선택지 라벨과 "내 담당 0건" 안내가 같은 수를 쓴다.
+  const unassignedActiveCount = useMemo(
+    () => allLeads.filter((lead) => isActiveLead(lead.status) && isUnassignedLead(lead)).length,
+    [allLeads]
+  )
   // Compass(마케팅팀 앱) 콜 상태 병기 — 읽기 전용 오버레이. 우리 리드 상태는 건드리지 않는다.
   const compass = useCompassOverlay(leads)
   // A안 — 리드 → NEO 계정 등록 확정 리드 id(고객 360 crmRegistered 와 같은 링크 집합). 목록·드로어가 360 과 같은
@@ -1971,16 +1986,32 @@ export default function LeadsBoardClient() {
 
       <label className="mb-3 flex flex-wrap items-center gap-2 text-[12px] text-[#615D59]">
         데이터 범위
-        <select aria-label="리드 담당자 범위" value={dataOwner} onChange={event => {
-          const params = new URLSearchParams(searchParams.toString())
-          params.set("owner", event.target.value)
-          window.history.replaceState(null, "", `?${params.toString()}`)
-        }} className="min-h-11 rounded-lg border border-black/[0.08] bg-white px-3">
-          <option value="__me">내 담당{crmCurrentOwner ? ` · ${crmCurrentOwner.displayName}` : " · 계정 연결 확인"}</option>
-          <option value="">전체 담당자</option>
+        <select aria-label="리드 담당자 범위" value={dataOwner} onChange={event => setDataOwner(event.target.value)} className="min-h-11 rounded-lg border border-black/[0.08] bg-white px-3">
+          <option value={LEAD_OWNER_ALL}>전체 담당자</option>
+          <option value={LEAD_OWNER_UNASSIGNED}>미배정 · 진행 중 {unassignedActiveCount.toLocaleString("ko-KR")}</option>
+          <option value={LEAD_OWNER_ME}>내 담당{crmCurrentOwner ? ` · ${crmCurrentOwner.displayName}` : " · 계정 연결 확인"}</option>
           {crmOwners.map(owner => <option key={owner.ownerKey} value={owner.ownerKey}>{owner.displayName}</option>)}
         </select>
       </label>
+
+      {/* 내 담당이 비었는데 담당 없는 리드가 있으면 빈 화면 대신 그쪽으로 안내한다 — 새 문의는 담당이 비어 들어온다. */}
+      {!loading && dataOwner === LEAD_OWNER_ME && leads.length === 0 && unassignedActiveCount > 0 && (
+        <div role="status" className="mb-4 flex flex-col items-start gap-2 rounded-xl border border-[#ECD29C] bg-white px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-[14px] font-bold text-[#111110]">내 담당 리드가 없습니다</p>
+            <p className="mt-0.5 text-[12px] text-[#615D59]">
+              담당이 정해지지 않은 진행 중 리드가 {unassignedActiveCount.toLocaleString("ko-KR")}건 있습니다. 담당이 비어 있는 리드는 &lsquo;내 담당&rsquo;에 보이지 않습니다.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setDataOwner(LEAD_OWNER_UNASSIGNED)}
+            className="min-h-11 shrink-0 rounded-lg border border-[#ECD29C] bg-[#FBF1E0] px-3 text-[12px] font-semibold text-[#7A520F] hover:bg-[#ECD29C]"
+          >
+            미배정 {unassignedActiveCount.toLocaleString("ko-KR")}건 보기
+          </button>
+        </div>
+      )}
 
       {/* 세그먼트 칩(S1, Compass 정리 라운드 2026-09-20) — 필터 카드 위, 검색·다른 필터와 AND.
           "메타 광고/인계/기존/고객"을 한 번에 고른다. 인계·기존은 Compass 오버레이가 있어야

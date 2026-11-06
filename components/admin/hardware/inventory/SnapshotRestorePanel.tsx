@@ -72,7 +72,7 @@ function SnapshotRestorePanel({ canFinalize, onRestored }: SnapshotRestorePanelP
         { method: "POST" }
       )
       setRestoreNotice(
-        `${formatDate(target.createdAt)} 스냅샷으로 복원했습니다 — 시트 이관 원본 ${formatNumber(result.restore.restoredCount)}행.`
+        `${formatDate(target.createdAt)} 백업으로 복원했습니다 — 시트 이관 원본 ${formatNumber(result.restore.restoredCount)}행.`
       )
       setConfirmTarget(null)
       setLoaded(false)
@@ -107,7 +107,7 @@ function SnapshotRestorePanel({ canFinalize, onRestored }: SnapshotRestorePanelP
         <div className="border-t border-[rgba(0,0,0,0.08)] px-5 py-4">
           {!canFinalize && (
             <p className="mb-3 rounded-md bg-[#F6F5F4] px-3 py-2 text-[11px] font-semibold text-[#615D59]">
-              되돌리기는 확정 권한(hardware.finalize)이 있어야 실행할 수 있습니다. 목록 조회만 가능합니다.
+              되돌리기는 확정 권한이 있어야 실행할 수 있습니다. 목록 조회만 가능합니다.
             </p>
           )}
           {restoreNotice && (
@@ -133,7 +133,7 @@ function SnapshotRestorePanel({ canFinalize, onRestored }: SnapshotRestorePanelP
                   <div className="min-w-0">
                     <p className="text-[12.5px] font-bold text-[#111110]">
                       {formatDate(snapshot.createdAt)}
-                      <span className="ml-1.5 font-mono text-[10.5px] font-semibold text-[#A39E98]">{snapshot.checksum.slice(0, 8)}</span>
+                      <span className="ml-1.5 font-mono text-[11px] font-semibold text-[#A39E98]">{snapshot.checksum.slice(0, 8)}</span>
                     </p>
                     <p className="mt-0.5 text-[11px] text-[#615D59]">
                       되돌리면 시트 이관 {formatNumber(snapshot.previousMovementCount)}행으로 복원됩니다(현재 이 백업 시점의 이관분 {formatNumber(snapshot.candidateMovementCount)}행을 대체).
@@ -144,7 +144,7 @@ function SnapshotRestorePanel({ canFinalize, onRestored }: SnapshotRestorePanelP
                     type="button"
                     onClick={() => setConfirmTarget(snapshot)}
                     disabled={!canFinalize || restoringId != null}
-                    title={!canFinalize ? "확정 권한(hardware.finalize)이 필요합니다" : undefined}
+                    title={!canFinalize ? "확정 권한이 필요합니다" : undefined}
                     className="inline-flex h-9 shrink-0 cursor-pointer items-center justify-center rounded-md border border-[#B43E3E] px-3 text-[11.5px] font-bold text-[#B43E3E] transition hover:bg-[#FCE9E9] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B43E3E]/40 active:scale-[0.98] motion-reduce:active:scale-100 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     이 시점으로 되돌리기
@@ -172,7 +172,7 @@ function SnapshotRestorePanel({ canFinalize, onRestored }: SnapshotRestorePanelP
               <h2 className="text-[15px] font-bold tracking-[-0.01em] text-[#111110]">백업으로 되돌리기</h2>
               <p className="mt-1 text-[12px] leading-relaxed text-[#615D59]">
                 {formatDate(confirmTarget.createdAt)} 백업으로 되돌립니다. 지금의 시트 이관 원본(이 백업 이후 이관분)은
-                사라지고 {formatNumber(confirmTarget.previousMovementCount)}행으로 대체됩니다. 수기 기록(admin_manual)은
+                사라지고 {formatNumber(confirmTarget.previousMovementCount)}행으로 대체됩니다. 수기 기록은
                 영향받지 않습니다. 되돌릴 수 없는 동작입니다.
               </p>
             </div>

@@ -55,7 +55,7 @@ export default function HomeQuickRecord({ data, draft, setDraft, customers, disa
             </div>
           </div>
           <div className="grid grid-cols-[48px_minmax(0,1fr)] items-center gap-2"><p className="text-[12px] font-semibold text-[#615D59]">{draft.preset === "inbound" ? "공급사" : "고객사"}</p><CustomerPicker value={party} onChange={value => update(draft.preset === "inbound" ? { source: value } : { customer: value })} options={draft.preset === "inbound" ? [] : customers} ariaLabel="빠른 기록 거래처" disabled={disabled} className={FIELD} placeholder={draft.preset === "inbound" ? "공급사 또는 출발지 (선택)" : "고객 검색 또는 입력"} /></div>
-          <div className="grid grid-cols-[48px_minmax(0,1fr)] items-center gap-2"><label htmlFor="hardware-home-date" className="text-[12px] font-semibold text-[#615D59]">{draft.preset === "planned" ? "출고 예정일" : "일자"}</label><input id="hardware-home-date" type="date" required className={FIELD} value={draft.date} onChange={event => update({ date: event.target.value })} /></div>
+          <div className="grid grid-cols-[48px_minmax(0,1fr)] items-center gap-2"><label htmlFor="hardware-home-date" className="text-[12px] font-semibold text-[#615D59]">{draft.preset === "planned" ? "배송 예정일" : "일자"}</label><input id="hardware-home-date" type="date" required className={FIELD} value={draft.date} onChange={event => update({ date: event.target.value })} /></div>
           <details className="text-[12px] text-[#615D59]"><summary className="cursor-pointer py-1">메모 추가</summary><textarea aria-label="빠른 기록 메모" rows={2} className={`${FIELD} mt-2 h-auto py-2`} value={draft.memo} onChange={event => update({ memo: event.target.value })} /></details>
         </fieldset>
         <div className="space-y-2 rounded-md bg-[#F6F5F4] p-3 text-[12px]" aria-live="polite" aria-label="재고 변화 미리보기">
@@ -68,7 +68,7 @@ export default function HomeQuickRecord({ data, draft, setDraft, customers, disa
           </> : null}
         </div>
         <button type="submit" disabled={disabled || !valid} className="h-11 w-full rounded-md bg-[#084734] text-[13px] font-semibold text-white hover:bg-[#065C41] disabled:opacity-40">{mode.label} 내용 검토</button>
-        <p className="text-[11px] leading-relaxed text-[#615D59]">상세 검토 후 저장 · 로트·금액 확인</p>
+        <p className="text-[11px] leading-relaxed text-[#615D59]">상세 검토 후 저장 · 물류번호·금액 확인</p>
       </form>
     </aside>
   )
