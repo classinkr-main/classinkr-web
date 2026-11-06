@@ -13,6 +13,7 @@
  */
 
 import type { ChatbotCategory, ChatbotIntent } from "@/lib/chatbot/classification"
+import { FIELD_SYMPTOM_TOPICS } from "@/lib/chatbot/symptom-topics-field"
 import { getDocPath, listDocs, type DocArticle } from "@/lib/docs"
 
 export const SYMPTOM_TRIAGE_SOURCE_SCORE = 400
@@ -107,7 +108,7 @@ export function normalizeTriageText(value: string) {
 }
 
 // 증상 주제 목록. 위에서부터 먼저 맞는 주제를 쓴다(좁은 주제 → 넓은 주제 순).
-export const SYMPTOM_TOPICS: SymptomTopic[] = [
+const BASE_SYMPTOM_TOPICS: SymptomTopic[] = [
   // ─── 기관(계정) 인증 ────────────────────────────────────────────
   {
     id: "proxy-registration-password",
@@ -374,6 +375,12 @@ export const SYMPTOM_TOPICS: SymptomTopic[] = [
     doc: { category: "teacher", slug: "recording-troubleshooting" },
     steps: [{ heading: "녹화 옵션이 꺼져 있었을 때", take: 5 }],
     intro: "녹화 옵션은 수업을 만들 때 켭니다. 옵션이 아예 보이지 않으면 계정 인증 상태를 확인해야 합니다.",
+    branches: [
+      {
+        text: "녹화는 유료 요금제를 결제하고 계정 인증까지 마친 학원에서, 학원에 교사로 등록된 계정만 켤 수 있어요. 결제했는데도 선생님 화면에 녹화가 없으면 ① 그 선생님이 교사로 등록돼 있는지 ② 학원 계정 인증이 끝났는지 ③ 앱이 최신 버전인지(업데이트 뒤 다시 로그인) 순서로 봐 주세요. 요금제에 들어 있는 기능 범위는 담당자가 계약 기준으로 확인해 드려요.",
+        when: /돈|결제|유료|요금|선생님들|강사들|교사들/,
+      },
+    ],
     suggestedQuestions: ["기관 인증이 안 돼요", "녹화가 안 돼요", "현장 녹화 카메라 설정 어떻게 해요?"],
   },
   {
@@ -477,7 +484,7 @@ export const SYMPTOM_TOPICS: SymptomTopic[] = [
         when: /^(?!.*(?:관리자|대시보드|설정에서|코스\s*설정)).*(?:아이|학생|제가|저는|우리\s*애|보다가|보려니|봤는데)/,
         doc: { category: "student", slug: "class-join-replay" },
         steps: [{ heading: "다시보기가 안 보일 때", pick: [1, 0, 3] }],
-        intro: "'시청 횟수 초과'나 '기간 만료'가 뜨면, 학원이 코스에 다시보기 시청 횟수나 기간을 정해 둔 경우예요. 중간에 멈췄다 다시 열어도 한 번으로 셀 수 있어요.",
+        intro: "'시청 횟수 초과'나 '기간 만료'가 뜨면, 학원이 코스에 다시보기 시청 횟수나 기간을 정해 둔 경우예요. 횟수를 어떻게 세는지는 공개 안내에 따로 나와 있지 않아, 남은 횟수가 걱정되시면 학원에 먼저 물어봐 주세요.",
       },
     ],
     branches: [
@@ -504,6 +511,10 @@ export const SYMPTOM_TOPICS: SymptomTopic[] = [
     branches: [
       "수업이 끝난 뒤 코스에 들어온 학생이라면, 학원 관리자가 [일반 설정] > [수업 다시보기]에서 새로 가입한 학생의 이전 수업 시청을 허용해야 합니다.",
       { text: "그래도 안 보이면 선생님이나 학원에 다시보기 기간이 남았는지 물어보세요.", unless: /관리자|대시보드|설정/ },
+      {
+        text: "녹화도 됐고 학생 계정도 맞다면, 관리자 대시보드 [기관 관리] > [코스 관리] > 그 코스의 [설정] 탭에서 [다시 보기 유효 기간]과 [시청 횟수 제한]이 막고 있지 않은지 봐 주세요.",
+        when: /관리자|대시보드|설정|우리\s*학생|학생(?:이|들이|한테|에게)/,
+      },
     ],
     suggestedQuestions: ["녹화본이 안 보여요", "다시보기 기간이 지났대요", "수업 끝나고 코스에 가입한 학생이 이전 강의를 못 봐요"],
     menuLine: "다시보기가 안 보일 때: 그 수업이 녹화됐는지, 학생이 학원에 등록된 아이디로 로그인했는지 봅니다.",
@@ -555,6 +566,12 @@ export const SYMPTOM_TOPICS: SymptomTopic[] = [
     doc: { category: "hardware", slug: "board-basic-operation" },
     steps: [{ heading: "무선 미러링으로 기기 화면 띄우기", take: 4 }],
     intro: "미러링이 안 되면 보드와 기기가 같은 Wi-Fi에 연결돼 있는지부터 확인해 주세요.",
+    branches: [
+      {
+        text: "띄웠다 사라졌다를 반복하면 무선 신호가 약할 가능성이 커요. 휴대폰을 보드와 공유기 가까이 두고 다시 연결해 보세요. 수업 중 끊기면 안 되는 자료는 HDMI 선으로 연결해 띄우는 게 가장 안정적이에요.",
+        when: /끊|사라|자꾸|띄웠다|됐다\s*안/,
+      },
+    ],
     suggestedQuestions: ["HDMI 연결했는데 화면이 안 나와요", "전자칠판 터치가 안 돼요", "전자칠판 화면이 안 켜져요"],
   },
   {
@@ -570,13 +587,19 @@ export const SYMPTOM_TOPICS: SymptomTopic[] = [
   },
   {
     id: "board-touch",
-    subject: /터치|(?:펜|필기|판서|글씨)\s*(?:가|이)?\s*(?:안\s*(?:써|쓰|돼|되|나|그|적|먹)|안써|안돼|안되|안먹)|(?:글씨|글자)\s*(?:가|이)?\s*안\s*(?:써|쓰|적|그려)|(?:글씨|판서|필기).{0,24}(?:옆에\s*(?:써|그려|찍)|어긋|밀려|빗나|위치)|(?:칠판|티비|보드).{0,20}(?:펜|글씨|판서|필기).{0,20}(?:늦게|지연|따라)/,
+    subject: /터치|(?:칠판|티비|tv|보드|화면).{0,24}(?:눌러도|만져도|손으로\s*(?:눌|만))|(?:펜|필기|판서|글씨)\s*(?:가|이)?\s*(?:안\s*(?:써|쓰|돼|되|나|그|적|먹)|안써|안돼|안되|안먹)|(?:글씨|글자)\s*(?:가|이)?\s*안\s*(?:써|쓰|적|그려)|(?:글씨|판서|필기).{0,24}(?:옆에\s*(?:써|그려|찍)|어긋|밀려|빗나|위치)|(?:칠판|티비|보드).{0,20}(?:펜|글씨|판서|필기).{0,20}(?:늦게|지연|따라)/,
     symptom: new RegExp(`${SYMPTOM_RE.source}|튀|인식|먹|반응|밀려|어긋|옆에\\s*(?:써|그려|찍)|빗나|위치|늦게|지연|따라와|따라오`),
     exclude: /스펙|사양|몇\s*점/,
     category: "hardware",
     doc: { category: "hardware", slug: "board-writing-touch" },
     steps: [{ heading: "터치가 튀거나 안 먹힐 때", take: 5 }],
     intro: "터치가 튀거나 안 먹으면 화면 테두리(베젤)부터 확인해 주세요. 적외선 터치라 테두리가 가려지면 인식이 흔들립니다.",
+    branches: [
+      {
+        text: "위쪽이나 한쪽처럼 같은 자리만 계속 반응이 없으면, 그쪽 테두리를 닦고 보드를 껐다 켜 보세요. 그래도 같으면 증상을 영상으로 찍어 A/S로 접수해 주세요. 보드를 직접 열거나 분해하지는 마세요.",
+        when: /위쪽|아래쪽|한쪽|일부|부분|가장자리|모서리|윗부분|아랫부분/,
+      },
+    ],
     contactHeading: "",
     suggestedQuestions: ["미러링이 안 돼요", "전자칠판 화면이 안 켜져요", "HDMI 연결했는데 화면이 안 나와요"],
   },
@@ -634,7 +657,26 @@ export const SYMPTOM_TOPICS: SymptomTopic[] = [
     category: "troubleshooting",
     doc: { category: "start", slug: "camera-mic-troubleshooting" },
     steps: [{ heading: "소리가 작거나 웅웅거릴 때", pick: [0, 1, 3] }],
-    branches: ["마이크를 바꿔도 같다면 다른 인터넷이나 휴대폰 핫스팟으로 바꿔 다시 들어가 보세요. 바꾼 뒤 괜찮다면 원래 쓰던 네트워크가 원인입니다."],
+    variants: [
+      {
+        // 듣는 쪽(학생·학부모): 선생님 말이 끊기거나 지지직거린다.
+        when: /(?:애|아이|자녀|학생).{0,30}(?:듣|수업)|선생님\s*(?:말|목소리|소리)|들리|들려/,
+        doc: { category: "student", slug: "class-join-replay" },
+        steps: [{ heading: "수업 중에 튕기거나 끊길 때", pick: [0, 1, 3] }],
+        intro:
+          "신경 쓰이셨죠. 듣는 쪽에서 지지직거리거나 선생님 말이 뚝뚝 끊기면, 아이 쪽 인터넷이 불안정한 경우가 가장 흔해요. 아래 순서로 봐 주세요.",
+      },
+    ],
+    branches: [
+      {
+        text: "마이크를 바꿔도 같다면 다른 인터넷이나 휴대폰 핫스팟으로 바꿔 다시 들어가 보세요. 바꾼 뒤 괜찮다면 원래 쓰던 네트워크가 원인입니다.",
+        unless: /(?:애|아이|자녀|학생).{0,30}(?:듣|수업)|선생님\s*(?:말|목소리|소리)|들리|들려/,
+      },
+      {
+        text: "이어폰을 끼고 들으면 주변 소리와 섞이지 않아 더 또렷하게 들려요. 아이 기기의 클래스인도 최신 버전인지 확인해 주세요.",
+        when: /(?:애|아이|자녀|학생).{0,30}(?:듣|수업)|선생님\s*(?:말|목소리|소리)|들리|들려/,
+      },
+    ],
     intro: "목소리가 로봇처럼 들리거나 깨지면 마이크 설정과 네트워크를 함께 봐야 해요. 마이크를 바꿔도 같다면 네트워크 쪽일 가능성이 큽니다.",
     contactHeading: "그래도 안 되면 문의할 때 알려 줄 정보",
     suggestedQuestions: ["수업 중에 계속 튕겨요", "소리가 울리고 하울링이 나요", "마이크가 안 돼요"],
@@ -1236,10 +1278,20 @@ export const SYMPTOM_TOPICS: SymptomTopic[] = [
   {
     id: "homework-photo",
     subject: /(?:숙제|과제).{0,12}(?:사진|파일|첨부|이미지|업로드|올라|올리|붙)|(?:사진|파일|첨부|이미지).{0,12}(?:숙제|과제)|사진\s*(?:이|가)?\s*(?:안\s*(?:붙|올라)|올라가지|붙지)/,
+    symptom: new RegExp(`${SYMPTOM_RE.source}|누워|돌아가|돌아갔|회전|옆으로|뒤집|거꾸로`),
     category: "troubleshooting",
     doc: { category: "student", slug: "homework-submit-troubleshooting" },
     steps: [{ heading: "사진이 안 붙거나 올라가지 않을 때", take: 4 }],
     intro: "숙제 사진이 안 붙거나 올라가지 않으면 앱의 사진·카메라 접근 권한부터 확인해 주세요.",
+    variants: [
+      {
+        when: /누워|돌아가|돌아갔|회전|옆으로|뒤집|거꾸로/,
+        doc: { category: "student", slug: "course-submit-activity" },
+        steps: [{ heading: "휴대폰으로 숙제 사진 올리기", pick: [3, 4] }],
+        intro:
+          "사진이 옆으로 누워 있으면 휴대폰 사진 앱(갤러리)에서 먼저 똑바로 돌려 저장한 뒤 다시 붙여 주세요. 이미 냈다면 고쳐서 다시 내면 되는데, 다시 내면 선생님이 준 점수와 피드백은 지워져요.",
+      },
+    ],
     branches: [
       { text: "업로드가 계속 돌기만 하면 클래스인을 완전히 종료했다가 다시 열어 제출해 보세요.", when: /업로드\s*중|계속\s*돌|로딩|안\s*넘어/ },
       { text: "마감이 걱정되면 지금 상황을 선생님께 먼저 알려 두세요.", when: /마감|오늘|밤|늦|불안|걱정/ },
@@ -1264,6 +1316,12 @@ export const SYMPTOM_TOPICS: SymptomTopic[] = [
     doc: { category: "student", slug: "homework-submit-troubleshooting" },
     steps: [{ heading: "먼저 확인할 것", take: 5 }],
     intro: "숙제 제출이 안 되면 아래를 차례로 확인해 주세요. [초안 저장]은 제출이 아닙니다.",
+    branches: [
+      {
+        text: "사진을 붙인 뒤 마지막 [숙제 제출]까지 눌러야 제출돼요. [초안 저장]만 된 상태면 선생님 화면에는 미제출로 보입니다. 숙제 화면에 초록색 [제출하기] 버튼이 그대로 있으면 아직 제출 전이에요. 확인한 화면을 찍어 선생님께 상황을 함께 알려 주세요.",
+        when: /안\s*냈다|미제출|혼났|분명|올렸는데|냈는데|낸\s*줄/,
+      },
+    ],
     suggestedQuestions: ["숙제 사진이 안 올라가요", "숙제 다시 냈더니 점수가 사라졌어요", "앱이 자꾸 멈춰요"],
   },
 
@@ -1478,6 +1536,9 @@ export const SYMPTOM_TOPICS: SymptomTopic[] = [
   },
 ]
 
+// 페르소나 평가에서 나온 좁은 현장 주제를 먼저 본다(위에서부터 먼저 맞는 주제를 쓴다).
+export const SYMPTOM_TOPICS: SymptomTopic[] = [...FIELD_SYMPTOM_TOPICS, ...BASE_SYMPTOM_TOPICS]
+
 const VAGUE_MENU_TOPIC_IDS = [
   "login-fail",
   "app-frozen",
@@ -1676,7 +1737,9 @@ export function buildSymptomTopicAnswer(
   const contactItems = options.compact ? [] : collectContactItems(doc, topic)
   const closing = topic.handoff
     ? ""
-    : contactItems.length > 0
+    : topic.howto && contactItems.length === 0
+      ? "따라 하다 막히는 부분이 있으면 담당자 상담으로 이어 드릴게요."
+      : contactItems.length > 0
       ? `그래도 안 되면 담당자 상담으로 이어 드릴게요. 상담할 때 이 정보를 함께 알려 주시면 더 빨리 확인합니다: ${contactItems.join(", ")}.`
       : "그래도 안 되면 담당자 상담으로 이어 드릴게요."
 
@@ -1745,12 +1808,41 @@ export function buildVagueErrorAnswer(): SymptomTriageResult {
  * 증상 질문이면 결정형 답변을, 아니면 null 을 돌려준다.
  * 호출부(service.ts)는 Figma 가이드의 알려진 의도(known intent)가 맞으면 그쪽을 먼저 쓴다.
  */
+// "1) … 2) …", "…그리고 …도", "두 가지 여쭙니다"처럼 두 번째 질문이 분명한 경우만 둘째 주제를 찾는다.
+const MULTI_QUESTION_RE = /(?:^|\s)(?:2\s*\)|2\.|②)|두\s*가지|하나\s*더|그리고|또한|아울러|추가로|또\s|같이\s*(?:문의|여쭤)/
+const CLAUSE_SPLIT_RE = /\s*(?:\d\s*\)|[①②③]|그리고|또한|아울러|추가로|[?？.。!！])\s*/
+
+function findSecondaryTopic(question: string, primary: SymptomTopic): SymptomTopic | null {
+  if (!MULTI_QUESTION_RE.test(question)) return null
+  const clauses = question.split(CLAUSE_SPLIT_RE).map((clause) => clause.trim()).filter((clause) => clause.length >= 6)
+  for (const clause of clauses) {
+    const candidate = findSymptomTopic(clause)
+    if (!candidate || candidate.id === primary.id) continue
+    const sameSection =
+      candidate.doc.slug === primary.doc.slug && candidate.steps[0]?.heading === primary.steps[0]?.heading
+    if (!sameSection) return candidate
+  }
+  return null
+}
+
 export function resolveSymptomTriage(
   question: string,
   options: Omit<SymptomAnswerOptions, "question"> = {}
 ): SymptomTriageResult | null {
   const topic = findSymptomTopic(question)
-  if (topic) return buildSymptomTopicAnswer(topic, { ...options, question })
+  if (topic) {
+    const result = buildSymptomTopicAnswer(topic, { ...options, question })
+    if (!result) return null
+    const secondary = findSecondaryTopic(question, topic)
+    if (!secondary) return result
+    // 둘째 질문은 그 주제의 첫 문단(문서 근거)만 짧게 붙이고, 자세한 단계는 추천 질문으로 이어 준다.
+    const secondaryFollowUp = secondary.suggestedQuestions[0]
+    return {
+      ...result,
+      answer: `${result.answer}\n\n함께 물어보신 내용도 짧게 답드리면, ${secondary.intro}`,
+      suggestedQuestions: [...new Set([secondaryFollowUp, ...result.suggestedQuestions].filter(Boolean))].slice(0, 3),
+    }
+  }
   if (isVagueErrorQuestion(question)) return buildVagueErrorAnswer()
   return null
 }

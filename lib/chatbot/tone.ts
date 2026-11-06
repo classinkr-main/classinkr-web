@@ -13,6 +13,8 @@ export interface ConversationTone {
   apologetic: boolean
   terse: boolean
   english: boolean
+  /** 다른 창·지난 문의를 전제로 묻는다("다른 창에서 챗봇이…", "지난주에 문의했잖아요"). */
+  priorContext: "bot" | "inquiry" | null
 }
 
 const ANGRY_RE =
@@ -20,9 +22,15 @@ const ANGRY_RE =
 const REPEATED_RE =
   /몇\s*번째|(?:두|세|네|다섯)\s*번째|또\s*(?:문의|연락|물어|말씀)|계속\s*(?:문의|물어|말|연락)|여러\s*번\s*(?:문의|말|연락)|매번|번번이|몇\s*번을/
 const ANXIOUS_RE =
-  /어떡하|어떻게\s*해야\s*(?:하|할|돼|되)|걱정|불안|큰일|급해요|급합니다|급한데|당황|무서|난감|혹시\s*제가/
+  /어떡하|어떻게\s*해야\s*(?:하|할|돼|되)|걱정|불안|큰일|급해요|급합니다|급한데|당황|무서|난감|혹시\s*제가|혼났|속상/
 const APOLOGETIC_RE = /^(?:\S+\s+)?죄송|죄송한데|죄송합니다만|실수할까|제가\s*(?:뭔가|뭘|뭐|혹시)?\s*잘못/
 const SLANG_RE = /ㅋㅋ|ㅠ|ㅜ|어케|어캐|ㄱㄱ|ㅇㅇ|뭐임|머임/
+// 들뜬 느낌표("첫 수업이었어요!!")는 화가 난 신호가 아니다.
+const POSITIVE_RE = /축하|설레|떨려|떨리|신나|기뻐|기쁘|좋아요|좋았|고마|감사|ㅋㅋ|최고|first\s*class|첫\s*수업|드디어/
+const PRIOR_BOT_RE =
+  /(?:다른|이전|지난)\s*(?:창|채팅|대화|세션)|(?:아까|전에|지난번|저번).{0,12}(?:챗봇|봇|답변)|챗봇이\s*(?:알려|말해|답|안내)/
+const PRIOR_INQUIRY_RE =
+  /(?:지난주|지난번|저번|전에|예전에|어제|며칠\s*전|지난달).{0,20}(?:문의|물어|물었|말씀|연락|접수|얘기|말했)|(?:문의|접수)\s*했(?:잖아|는데|었는데|었잖아)/
 const ENGLISH_LEAD_RE = /^(?:hi|hello|hey|can you|could you|how do|how can|how to|my |i |is there|why)/i
 
 export function detectConversationTone(question: string): ConversationTone {
@@ -33,25 +41,44 @@ export function detectConversationTone(question: string): ConversationTone {
   const latinWords = words.filter((word) => /[a-z]{2,}/i.test(word) && !/[가-힣]/.test(word)).length
 
   const repeated = REPEATED_RE.test(text)
+  const excitedNotAngry = POSITIVE_RE.test(text)
   return {
-    // 느낌표 두 개 이상, 또는 "~입니까!" 같은 따지는 어미는 화가 난 신호로 본다.
-    angry: ANGRY_RE.test(text) || exclamations >= 2 || (exclamations >= 1 && /(?:니까|겁니까|입니까|습니까)\s*[!?！]|저만\s*이런/.test(text)),
+    // 느낌표 두 개 이상, 또는 "~입니까!" 같은 따지는 어미는 화가 난 신호로 본다(들뜬 느낌표는 뺀다).
+    angry:
+      ANGRY_RE.test(text) ||
+      (!excitedNotAngry &&
+        (exclamations >= 2 || (exclamations >= 1 && /(?:니까|겁니까|입니까|습니까)\s*[!?！]|저만\s*이런/.test(text)))),
     repeated,
     anxious: ANXIOUS_RE.test(text),
     apologetic: APOLOGETIC_RE.test(text),
     terse: compact.length <= 10 || (SLANG_RE.test(text) && compact.length <= 24),
     english: ENGLISH_LEAD_RE.test(text) || (latinWords >= 3 && latinWords / Math.max(1, words.length) >= 0.34),
+    priorContext: PRIOR_BOT_RE.test(text) ? "bot" : PRIOR_INQUIRY_RE.test(text) ? "inquiry" : null,
   }
 }
 
-export function toneOpener(tone: ConversationTone): string | null {
+export const PRIOR_BOT_LINE =
+  "다른 창이나 이전 대화에서 드린 답은 제가 볼 수 없어서, 그 내용이 맞는지 여기서 확인해 드릴 수 없어요. 공식 문서와 다르다면 공식 문서와 기술지원 안내를 기준으로 봐 주세요."
+export const PRIOR_INQUIRY_LINE = "지난 문의 내용은 이 채팅에서 볼 수 없어요. 상담원이 이어받아 확인해 드릴게요."
+
+function priorContextLine(tone: ConversationTone) {
+  if (tone.priorContext === "bot") return PRIOR_BOT_LINE
+  if (tone.priorContext === "inquiry") return PRIOR_INQUIRY_LINE
+  return null
+}
+
+export function toneOpener(tone: ConversationTone, forHandoff = false): string | null {
   if (tone.angry || tone.repeated) {
     return tone.repeated
       ? "같은 문제로 여러 번 문의하시게 해 드려 정말 죄송합니다."
       : "불편을 드려 정말 죄송합니다."
   }
   if (tone.anxious) return "많이 당황하셨죠. 같이 차근차근 확인해 볼게요."
-  if (tone.apologetic) return "죄송해하지 않으셔도 돼요. 처음엔 누구나 헷갈리는 부분이라 순서대로 알려 드릴게요."
+  if (tone.apologetic) {
+    return forHandoff
+      ? "죄송해하지 않으셔도 돼요."
+      : "죄송해하지 않으셔도 돼요. 처음엔 누구나 헷갈리는 부분이라 순서대로 알려 드릴게요."
+  }
   return null
 }
 
@@ -75,14 +102,24 @@ export function applyToneToAnswer(
   options: { englishSummary?: string; offerHandoff: boolean }
 ) {
   let next = answer
-  const opener = toneOpener(tone)
+  // 상담 연결 답에는 "순서대로 알려 드릴게요" 같은 안내형 첫마디가 어울리지 않는다.
+  const opener = toneOpener(tone, /\[(?:실시간 상담 연결|도입 상담 남기기)\]/.test(answer) && !/^\d\.\s/m.test(answer))
   const alreadyToned = EMPATHY_START_RE.test(next) || next.startsWith("In short:") || next.startsWith("I'll answer")
+  const prior = priorContextLine(tone)
+  if (prior && !next.includes(prior)) {
+    // 지난 대화를 아는 척하지 않는다. 볼 수 없다는 사실을 먼저 밝힌다.
+    next = alreadyToned && next.includes(HANDOFF_NOW_LINE)
+      ? next.replace(HANDOFF_NOW_LINE, `${HANDOFF_NOW_LINE} ${prior}`)
+      : `${prior}\n\n${next}`
+  }
   if (options.offerHandoff && !next.includes("[실시간 상담 연결]")) {
     // 화난·반복 문의는 사과 바로 다음에 상담 연결을 먼저 내민다(긴 조치 목록 끝에 숨기지 않는다).
     next = next
-      .replace(/\n\n그래도 안 되면 담당자 상담으로 이어 드릴게요\.(?: 상담할 때[^\n]*)?$/, "")
-      .replace(/그래도 안 되면 담당자 상담으로 이어 드릴게요\.\s*/, "")
-    next = alreadyToned || !opener ? `${HANDOFF_NOW_LINE}\n\n${next}` : `${opener} ${HANDOFF_NOW_LINE}\n\n먼저 해 보실 수 있는 조치도 함께 남겨 둘게요.\n\n${next}`
+      .replace(/\n\n(?:그래도 안 되면|따라 하다 막히는 부분이 있으면) 담당자 상담으로 이어 드릴게요\.(?: 상담할 때[^\n]*)?$/, "")
+      .replace(/(?:그래도 안 되면|따라 하다 막히는 부분이 있으면) 담당자 상담으로 이어 드릴게요\.\s*/, "")
+    const head = prior && next.startsWith(prior) ? `${HANDOFF_NOW_LINE} ${prior}` : HANDOFF_NOW_LINE
+    if (prior && next.startsWith(prior)) next = next.slice(prior.length).replace(/^\n\n/, "")
+    next = alreadyToned || !opener ? `${head}\n\n${next}` : `${opener} ${head}\n\n먼저 해 보실 수 있는 조치도 함께 남겨 둘게요.\n\n${next}`
   } else if (opener && !alreadyToned) {
     next = `${opener}\n\n${next}`
   }
@@ -133,6 +170,15 @@ const SLANG_GLOSSES: [RegExp, string][] = [
   [/업뎃|업뎃트|업데트/g, "업데이트"],
   [/쌤/g, "선생님"],
   [/안켜짐|안켜져/g, "안 켜져요"],
+  [/로긴/g, "로그인"],
+  [/안\s*대(?:여|요|염)|안\s*되여|안\s*됨여/g, "안 돼요"],
+  [/(^|\s)다보기/g, "$1다시보기"],
+  [/잇음/g, "있음"],
+  [/잇어요/g, "있어요"],
+  [/알려\s*주셈|알려\s*줘셈|알려\s*주삼/g, "알려주세요"],
+  [/(?<!안\s?)됨\s*\?/g, "되나요?"],
+  [/(^|\s)샘(?=들|\s|이|한테|께|은|도)/g, "$1선생님"],
+  [/딴\s*애들/g, "다른 애들"],
 ]
 
 export function glossForRouting(question: string) {

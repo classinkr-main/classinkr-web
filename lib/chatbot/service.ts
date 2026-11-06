@@ -2258,7 +2258,7 @@ function buildSuggestedQuestions(category: string) {
 function wantsImmediateHumanHandoff(question: NormalizedQuestion) {
   const text = question.redacted.toLowerCase()
   const explicitHandoff =
-    /상담\s*(?:받|받고|하고|하고\s*싶|할래|신청|연결|이어|부탁|필요|문의|원해|원함)|상담받|상담할래|상담하고\s*싶|상담\s*(?:원|사)|담당자.{0,10}(?:상담|연결|연락|통화|배정|문의)|매니저.{0,10}(?:상담|연결|연락|통화|문의)|상담원.{0,10}(?:상담|연결|연락|통화|문의)|(?:상담|연결|연락|통화|문의).{0,10}(?:담당자|매니저|상담원)|전담\s*매니저|연락\s*(?:주세요|받고|하고|원해|원함|가능)|전화\s*(?:주세요|받고|하고|원해|원함|가능)|통화\s*(?:하고|원해|원함|가능)|미팅\s*(?:잡|하고|원해|원함)|데모\s*(?:신청|보고|받|연결|원해|원함|요청)|데모.{0,10}신청|시연.{0,10}신청|시연\s*(?:신청|보고|연결|원해|원함)|쇼룸\s*(?:방문|데모|신청|예약|연결|체험|보|보러)|채널톡\s*(?:연결|상담|문의)|구매\s*상담|도입\s*(?:상담|문의|검토)|사람\s*(?:이랑|하고|한테|과)\s*(?:연결|통화|이야기|얘기|대화|상담)|사람\s*(?:연결|이랑\s*얘기)|(?:진짜|실제|살아\s*있는)\s*사람|사람\s*(?:바꿔|불러|연결)|직원\s*(?:연결|분|이랑|하고)|상담사\s*(?:연결|분|님)|상담원\s*(?:분|님|이랑|하고)|챗봇\s*말고|봇\s*말고/.test(text)
+    /상담\s*(?:받|받고|하고|하고\s*싶|할래|신청|연결|이어|부탁|필요|문의|원해|원함)|상담받|상담할래|상담하고\s*싶|상담\s*(?:원|사)|담당자.{0,10}(?:상담|연결|연락|통화|배정|문의)|매니저.{0,10}(?:상담|연결|연락|통화|문의)|상담원.{0,10}(?:상담|연결|연락|통화|문의)|(?:상담|연결|연락|통화|문의).{0,10}(?:담당자|매니저|상담원)|전담\s*매니저|연락\s*(?:주세요|받고|하고|원해|원함|가능)|전화\s*(?:주세요|받고|하고|원해|원함|가능)|통화\s*(?:하고|원해|원함|가능)|미팅\s*(?:잡|하고|원해|원함)|데모\s*(?:신청|보고|받|연결|원해|원함|요청)|데모.{0,10}신청|시연.{0,10}신청|시연\s*(?:신청|보고|연결|원해|원함)|쇼룸\s*(?:방문|데모|신청|예약|연결|체험|보|보러)|채널톡\s*(?:연결|상담|문의)|구매\s*상담|도입\s*(?:상담|문의|검토)|사람\s*(?:이랑|하고|한테|과)\s*(?:연결|통화|이야기|얘기|대화|상담)|사람\s*(?:연결|이랑\s*얘기)|(?:진짜|실제|살아\s*있는)\s*사람|사람\s*(?:바꿔|불러|연결)|직원\s*(?:연결|분|이랑|하고)|상담사\s*(?:연결|분|님)|상담원\s*(?:분|님|이랑|하고)|챗봇\s*말고|봇\s*말고|책임자|윗사람|상급자|대표\s*(?:바꿔|연결|나와|불러)|보상\s*(?:어떻게|해\s*주|받|요구|안\s*해)|통화\s*(?:할\s*수|할수|가능|되|돼)|전화\s*(?:로\s*(?:상담|설명|도와)|상담|해\s*주실|해줄)|원격\s*(?:지원|제어|상담|으로)|화면\s*(?:을\s*)?(?:보면서|같이\s*보)/.test(text)
   const contextualInquiry =
     /문의/.test(text) && /담당자|매니저|상담원|채널톡|쇼룸|연락|전화|통화|구매|도입|시연|데모/.test(text)
 
@@ -2284,18 +2284,27 @@ function wantsHumanConsultation(question: NormalizedQuestion) {
 
 function buildImmediateHandoffResponse(
   category: string,
-  handoffIntent: HandoffIntent
+  handoffIntent: HandoffIntent,
+  text = ""
 ): Omit<ChatbotQueryResponse, "answerEventId" | "sessionId" | "warning" | "handoffIntent"> {
   const isSupport = handoffIntent === "support"
   return {
     answer: [
+      /보상|배상|환불/.test(text)
+        ? "보상이나 환불은 제가 채팅에서 약속드릴 수 없어요. 담당자가 이번 상황을 확인한 뒤 직접 안내드립니다."
+        : null,
+      /통화|전화|원격|화면\s*(?:을\s*)?(?:보면서|같이)/.test(text)
+        ? "설명이 서툴러도 괜찮아요. 전화나 화면을 함께 보는 원격 지원이 되는지는 상담원이 상황을 보고 안내해 드려요."
+        : null,
       isSupport
         ? "네, 담당자 상담으로 바로 연결해 드릴게요. 아래 [실시간 상담 연결]을 누르시면 상담원이 지금까지의 대화를 보고 이어서 도와드립니다."
         : "네, 담당자 상담으로 이어 드릴게요. 아래 [도입 상담 남기기]로 연락받을 방법을 남기시면 담당자가 연락드립니다.",
       isSupport
         ? "기다리시는 동안 문제가 생긴 화면, 쓰는 기기, 생긴 시각을 정리해 두시면 더 빨리 확인합니다. 비밀번호는 보내지 않으셔도 돼요."
         : "데모와 쇼룸 방문은 홈페이지 문의 페이지(/contact)나 쇼룸 예약(/showroom)에서도 바로 신청할 수 있어요. 여러 분이 함께 보실 예정이면 신청할 때 인원을 적어 주세요.",
-    ].join("\n\n"),
+    ]
+      .filter(Boolean)
+      .join("\n\n"),
     answerMode: "handoff",
     confidence: 0.72,
     needsHandoff: true,
@@ -2458,7 +2467,7 @@ function getComparisonAnswer(question: NormalizedQuestion, top: ChatbotSource) {
     return [
       "네, 좋은 질문이에요. 같은 '전자칠판'처럼 보여도 Classin Board는 화면·판서에서 끝나지 않고 수업 운영 흐름 전체로 이어지는 게 가장 큰 차이예요.",
       "일반 전자칠판이 화면 출력과 판서 중심이라면, Classin Board는 이렇게 달라요.\n- 윈도우 OPS 내장이라 외부 PC·노트북 없이 보드 하나로 수업을 구동해요\n- EDB 칠판 파일로 판서·이미지·자료를 최대 50페이지까지 저장하고 다음 수업에 그대로 재사용해요\n- 녹화·복습·LMS·관리자 데이터까지 한 흐름으로 이어져요",
-      "카메라·마이크도 내장이라 따로 장비를 붙일 필요가 줄어요. 어떤 점이 제일 궁금하신지 알려주시면 그 기준으로 더 좁혀 비교해드릴게요.",
+      "어떤 점이 제일 궁금하신지 알려주시면 그 기준으로 더 좁혀 비교해드릴게요.",
     ].join("\n\n")
   }
 
@@ -2490,6 +2499,17 @@ function getEdbAnswer() {
     "EDB, 이디비는 Classin에서 쓰는 칠판 파일이에요.",
     "판서, 이미지, 텍스트를 상호작용 가능한 상태로 저장해 두고 다시 불러올 수 있어서, 선생님이 만든 교안이나 활동 자료를 다음 수업에서도 그대로 재사용할 수 있습니다.",
     "쉽게 말하면 한 번 만든 칠판 수업 자료를 파일처럼 저장하고, 불러오고, 공유하는 구조예요.",
+  ].join("\n\n")
+}
+
+// "S75랑 S86 기능 차이"처럼 표준 두 모델을 견주는 질문.
+const BOARD_MODEL_COMPARE_RE = /(?=.*s\s*75)(?=.*s\s*86)(?=.*(?:차이|비교|다른|다르|뭐가\s*달))/
+
+function getBoardModelCompareAnswer() {
+  return [
+    "S75와 S86은 화면 크기와 본체 크기·무게만 달라요. 규격서 기준으로 4K 해상도, 16:9 화면, 60Hz, 명암비 4000:1, 3mm AG/AF 유리, 50점 적외선 터치, 내장 OPS(Windows) 같은 기능 사양은 같습니다.",
+    "- S75 — 75인치 · 본체 1,718.18 × 1,000.2 × 113.1mm · 54kg\n- S86 — 86인치 · 본체 1,964.08 × 1,139.02 × 113.1mm · 69.5kg",
+    "그래서 고르는 기준은 기능보다 교실 크기와 맨 뒷자리까지의 거리예요. 교실 넓이와 학생 수를 알려 주시면 맞는 모델을 같이 좁혀 드리고, 상세 규격서가 필요하시면 상담에서 보내 드릴게요.",
   ].join("\n\n")
 }
 
@@ -2867,6 +2887,7 @@ function formatConsumerAnswer({
     return getHardwareBoardLineupAnswer(HARDWARE_BIG_MODEL_RE.test(question.redacted.toLowerCase()))
   }
   if (isHardwareSpecsQuestion(question) && top.urlPath.includes("/docs/hardware/board-lineup-specs")) {
+    if (BOARD_MODEL_COMPARE_RE.test(question.redacted.toLowerCase())) return getBoardModelCompareAnswer()
     return getHardwareSpecsAnswer(HARDWARE_BIG_MODEL_RE.test(question.redacted.toLowerCase()))
   }
   if (isComparisonQuestion(question) && top.urlPath.includes("/docs/start/academy-system-os-positioning")) {
@@ -3526,6 +3547,21 @@ const SITE_ISSUE_RE =
   /(?:홈페이지|사이트|웹사이트|문의\s*페이지|예약\s*(?:폼|페이지)|신청\s*(?:폼|양식)|폼|양식).{0,24}(?:영상|동영상|폼|양식|버튼|페이지|신청|제출)?.{0,16}(?:안\s*(?:돼|되|나|열|눌|넘어)|재생\s*(?:이\s*)?안|반응\s*(?:이\s*)?없|아무\s*반응|오류|에러|멈)/
 const SHOWROOM_RE = /쇼룸|실물.{0,10}(?:보|볼|확인)|직접\s*(?:보고|보러|볼|만져|체험)|보러\s*갈|어디\s*가면\s*(?:볼|보)/
 const QUOTE_FIX_RE = /견적서?.{0,24}(?:잘못|틀려|틀렸|다르게|다르|수정|오류|빠졌|빠져|대로\s*안)/
+const EXAM_ANSWER_RE =
+  /(?:시험|퀴즈|문제|숙제)\s*(?:의\s*)?(?:답|정답|답안)\s*(?:좀\s*)?(?:알려|가르쳐|보여|줘|주세요|주셈)|(?:^|\s)(?:정답|답)\s*(?:좀\s*)?(?:알려|가르쳐)\s*(?:줘|주세요|주셈)/
+const ACCOUNT_DELETE_RE =
+  /(?:계정|아이디).{0,20}(?:삭제|탈퇴|지워|없애)|회원\s*탈퇴|(?:영상|녹화|사진|기록|개인\s*정보).{0,30}(?:지워|삭제)\s*(?:달라|해\s*달|해\s*주|요청|가능|할\s*수)/
+const INVOICE_MISSING_RE =
+  /(?:세금\s*)?계산서.{0,24}(?:안\s*(?:왔|와|오)|안왔|안와|못\s*받|누락|언제\s*(?:와|오|나와)|찾)|(?:증빙|영수증).{0,12}(?:안\s*(?:왔|와)|못\s*받)/
+const PAYMENT_FAIL_RE =
+  /결제\s*(?:실패|오류|거절|승인\s*(?:안|실패))|결제\s*(?:가|이)?\s*안\s*(?:돼|되|됐)|카드\s*(?:를\s*)?(?:바꿨|바꿔|변경|교체|만료|정지).{0,30}(?:결제|자동|문자|실패)|결제\s*(?:수단|카드).{0,10}(?:바꾸|변경|교체)/
+const VAT_RE = /(?=.*(?:부가세|부가가치세|\bvat\b))(?=.*(?:견적|가격|금액|포함|별도|요금))/
+const DISCOUNT_RE =
+  /(?:할인|깎|네고|약정).{0,30}(?:얼마|몇\s*%|퍼센트|까지|해\s*주|해줘|가능|되나|내려)|(?:경쟁사|타사|다른\s*(?:회사|업체)).{0,40}(?:할인|싸|저렴|%)/
+const TRIAL_FEATURE_LOCK_RE =
+  /체험.{0,30}(?:녹화|웹\s*라이브|라이브|기능|버튼).{0,24}(?:잠겨|잠김|잠금|막혀|막힘|안\s*(?:돼|되|보|눌|켜)|없|회색|못)/
+const SHOWROOM_CONFIRM_RE =
+  /(?:확정|예약).{0,20}(?:문자|연락|메일|알림|카톡).{0,12}(?:안\s*(?:와|왔|옴|오)|안와|안왔|없)|확정\s*(?:문자|연락)/
 const FAR_REGION_RE = /부산|대구|광주|대전|울산|제주|강원|경남|경북|전남|전북|충남|충북|지방|멀어|먼\s*곳/
 
 type QuickAnswer = Omit<ChatbotCore, "question" | "latencyMs">
@@ -3557,6 +3593,117 @@ function buildServiceQuickAnswer(question: NormalizedQuestion): QuickAnswer | nu
       "demo",
       "onboarding",
       ["데모를 한번 보고 싶어요", "쇼룸 방문은 어떻게 예약해요?", "도입 상담을 받아보고 싶습니다"]
+    )
+  }
+  const direct = (answer: string[], category: string, suggestedQuestions: string[]): QuickAnswer => {
+    const response = {
+      answer: answer.join("\n\n"),
+      answerMode: "direct_answer" as const,
+      confidence: 0.82,
+      needsHandoff: false,
+      sources: [],
+      suggestedQuestions,
+      unresolved: false,
+    }
+    deterministicFinalResponses.add(response)
+    return { response, category, intent: "docs_lookup", handoffIntent: "support" }
+  }
+
+  if (EXAM_ANSWER_RE.test(text)) {
+    return direct(
+      [
+        "시험 정답은 알려 드릴 수 없어요. 스스로 풀어 봐야 실력이 되니까요.",
+        "대신 시험 화면이 안 열리거나, 제출이 안 되거나, 응시하다 화면이 멈추는 것처럼 막히는 문제는 바로 도와 드릴게요. 어떤 화면에서 막혔는지 짧게 알려 주세요.",
+      ],
+      "classroom",
+      ["숙제 제출이 안 돼요", "앱이 자꾸 멈춰요", "다시보기는 어디서 봐요?"]
+    )
+  }
+  if (
+    ACCOUNT_DELETE_RE.test(text) &&
+    /그만|탈퇴|아이(?!디|패드|폰)|자녀|우리\s*애|개인\s*정보|내\s*정보/.test(text) &&
+    !/코스|클래스\s*탈퇴|반\s*탈퇴/.test(text)
+  ) {
+    return make(
+      [
+        "아이 계정과 지금까지 찍힌 녹화 영상은 관리하는 곳이 달라서 나눠서 확인하셔야 해요.",
+        "녹화 영상은 학원 스토리지에 저장되고, 보관 기간과 삭제는 학원 관리자가 정해요. 지워 달라고 하시려면 학원에 먼저 요청해 주세요.",
+        "아이 클래스인 계정 자체를 없애는(탈퇴) 순서는 공개 안내에 정리돼 있지 않아요. 아래 [실시간 상담 연결]로 요청해 주시면 담당자가 본인 확인 절차와 함께 안내해 드립니다. 바로 삭제된다고 약속드리기는 어려워요.",
+        "개인정보 처리 기준은 공식 개인정보처리방침을 따릅니다.",
+      ],
+      "support",
+      "admin",
+      ["다시보기는 어디서 봐요?", "로그인이 안 돼요", "담당자 상담으로 이어주세요"]
+    )
+  }
+  if (INVOICE_MISSING_RE.test(text)) {
+    return make(
+      [
+        "이번 달 계산서가 아직 안 보이시는군요. 발행됐는지는 이 채팅에서 바로 확인할 수 없어서, 먼저 이것부터 봐 주세요.",
+        "1. 계산서를 받기로 한 이메일의 받은편지함과 스팸함을 확인합니다.\n2. 학원 회계 담당자분이 다른 메일 주소로 받기로 하셨는지 확인합니다.",
+        "메일에도 없으면 아래 [실시간 상담 연결]에 '몇 월분 세금계산서 발행 확인'이라고 남겨 주세요. 담당자가 발행 상태를 확인해 안내해 드립니다. 사업자 정보는 채팅창에 적지 않으셔도 돼요.",
+      ],
+      "support",
+      "billing",
+      ["영수증은 어디서 받나요?", "환불 규정이 어떻게 되나요?", "담당자 상담으로 이어주세요"]
+    )
+  }
+  if (PAYMENT_FAIL_RE.test(text)) {
+    return make(
+      [
+        "결제 실패 문자를 받으셨다면 걱정되셨겠어요. 결제가 안 됐을 때 수업이 언제부터 어떻게 제한되는지는 계약과 결제 방식마다 달라서 여기서 단정하지 않을게요.",
+        "결제 카드 변경은 학원 계정의 결제 정보를 담당자가 확인해야 해요. 아래 [실시간 상담 연결]에 '결제 카드 변경·결제 실패 확인'이라고 남겨 주세요. 수업 일정이 가까우면 그것도 함께 알려 주시면 먼저 확인해 드립니다.",
+        "카드 번호 같은 결제 정보는 채팅창에 적지 마세요.",
+      ],
+      "support",
+      "billing",
+      ["영수증은 어디서 받나요?", "환불 규정이 어떻게 되나요?", "담당자 상담으로 이어주세요"]
+    )
+  }
+  if (VAT_RE.test(text)) {
+    return make(
+      [
+        "견적서에 부가세 포함인지 별도인지 적혀 있지 않았다니 헷갈리셨겠어요. 그 부분은 분명히 적혀 있어야 하는 게 맞습니다.",
+        "부가세 포함 여부는 그 견적서를 만든 담당자가 확정해 드려야 해서 제가 단정하지 않을게요. 아래 [도입 상담 남기기]에 '견적서 부가세 포함 여부 확인'이라고 남겨 주시면, 담당자가 표기를 바로잡은 견적서로 다시 안내드립니다.",
+      ],
+      "demo",
+      "billing",
+      ["견적 구성이 어떻게 되나요?", "영수증은 어디서 받나요?", "데모를 한번 보고 싶어요"]
+    )
+  }
+  if (DISCOUNT_RE.test(text)) {
+    return make(
+      [
+        "할인율이나 약정 조건은 제가 채팅에서 약속드릴 수 없어요. 학원 규모와 구성, 약정 기간을 보고 견적 상담에서 정해집니다.",
+        "견적을 빨리 받으시려면 아래 [도입 상담 남기기]에 이것만 남겨 주세요.\n- 학생 수와 강사 수, 동시에 여는 수업 수\n- 전자칠판이 필요한 교실 수와 설치 형태(벽걸이·스탠드)\n- 검토 중인 약정 기간과 비교 중인 조건",
+        "다른 회사 조건과 견줘 보시는 건 당연해요. 받으신 조건을 담당자에게 그대로 알려 주시면 그 기준으로 비교해 안내드립니다.",
+      ],
+      "demo",
+      "billing",
+      ["견적 구성이 어떻게 되나요?", "데모를 한번 보고 싶어요", "전자칠판 스펙 알려줘"]
+    )
+  }
+  if (TRIAL_FEATURE_LOCK_RE.test(text)) {
+    return make(
+      [
+        "체험해 보시는데 녹화 버튼이 잠겨 있으면 답답하셨겠어요. 녹화와 웹 라이브는 유료 요금제를 결제하고 계정 인증까지 마친 학원에서 열리는 기능이라, 체험 계정에서는 잠겨 보일 수 있어요.",
+        "녹화까지 직접 보고 결정하실 수 있게 아래 [도입 상담 남기기]에 '체험 중 녹화 기능 확인 요청'이라고 남겨 주세요. 담당자가 데모로 녹화·다시보기 흐름을 보여 드리거나 체험 범위를 넓힐 수 있는지 안내드립니다.",
+        "목동 쇼룸(/showroom)에서 녹화부터 다시보기까지 직접 해 보실 수도 있어요.",
+      ],
+      "demo",
+      "onboarding",
+      ["데모를 한번 보고 싶어요", "쇼룸 방문은 어떻게 예약해요?", "무료 체험판 있나요?"]
+    )
+  }
+  if (SHOWROOM_RE.test(text) && SHOWROOM_CONFIRM_RE.test(text)) {
+    return make(
+      [
+        "쇼룸 예약 확정 문자가 아직 안 오셨군요. 확정 연락이 없으면 예약이 아직 확정되지 않았을 수 있어서, 그냥 오셔도 된다고 말씀드리기는 어려워요.",
+        "헛걸음하시지 않도록 방문 전에 아래 [실시간 상담 연결]에 '쇼룸 방문 예약 확인'이라고 남겨 주세요. 담당자가 예약 상태를 확인해 드립니다.",
+      ],
+      "support",
+      "onboarding",
+      ["쇼룸 방문은 어떻게 예약해요?", "데모를 한번 보고 싶어요", "전자칠판 스펙 알려줘"]
     )
   }
   if (QUOTE_FIX_RE.test(text)) {
@@ -3843,7 +3990,7 @@ function applyConversationTone(core: ChatbotCore) {
   if (PROMPT_OR_SECURITY_ABUSE_RE.test(text) || CRIMINAL_ABUSE_RE.test(text) || TOKEN_WASTE_RE.test(text)) return
   if (isGreetingOnly(core.question)) return
   const tone = detectConversationTone(core.question.redacted)
-  const offerHandoff = tone.angry || tone.repeated
+  const offerHandoff = tone.angry || tone.repeated || tone.priorContext === "inquiry"
   core.response.answer = applyToneToAnswer(core.response.answer, tone, {
     englishSummary: core.englishSummary,
     offerHandoff,
@@ -3937,12 +4084,12 @@ async function buildChatbotCoreBase(
     const text = question.redacted.toLowerCase()
     const salesRequest = /도입|데모|시연|견적|구매|쇼룸|체험\s*신청|미팅/.test(text)
     const supportContext =
-      /연락이\s*없|감감무소식|답이\s*없|회신|오류|에러|안\s*(?:돼|되|됨)|환불|고장|문제|장애|불만|항의/.test(text) ||
+      /연락이\s*없|감감무소식|답이\s*없|회신|오류|에러|안\s*(?:돼|되|됨)|환불|고장|문제|장애|불만|항의|보상|책임자|원격|화면\s*(?:을\s*)?(?:보면서|같이)/.test(text) ||
       (/사람|상담원|직원|챗봇\s*말고|봇\s*말고/.test(text) && !salesRequest)
     const handoffIntent: HandoffIntent = tone.angry || tone.repeated || supportContext ? "support" : classifiedHandoff
     return {
       question,
-      response: buildImmediateHandoffResponse(category, handoffIntent),
+      response: buildImmediateHandoffResponse(category, handoffIntent, text),
       category,
       intent,
       handoffIntent,
