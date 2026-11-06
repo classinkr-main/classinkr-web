@@ -25,6 +25,7 @@ import { TrackedLink } from "@/components/TrackedLink"
 
 // below-the-fold 섹션은 dynamic import로 메인 번들에서 분리 (SSR은 유지되어 초기 HTML 동일)
 const OnboardingRoadmap = nextDynamic(() => import("@/components/product/sw/OnboardingRoadmap"))
+const AIFeatureShowcase = nextDynamic(() => import("@/components/product/sw/AIFeatureShowcase"))
 
 const CHECKOUT_ENABLED = process.env.NEXT_PUBLIC_SW_CHECKOUT_ENABLED === "true"
 const CHECKOUT_HREF = CHECKOUT_ENABLED ? "/checkout" : "/contact#contact-form"
@@ -828,74 +829,7 @@ function HardwareTeaserSection() {
     )
 }
 
-/* ── [C] AI 기능 섹션 ────────────────────────────────────────── */
-const AI_FEATURES = [
-    { title: "AI 첨삭", desc: "학생 제출 과제를 AI가 즉시 분석·채점. 교사의 채점 시간을 획기적으로 줄입니다." },
-    { title: "AI 과제 생성", desc: "학습 수준과 목표에 맞는 맞춤형 과제를 자동으로 만들어줍니다." },
-    { title: "AI 작문 도우미", desc: "작문 주제와 조건을 입력하면 수준별 예시 답안과 첨삭 가이드를 제공합니다." },
-    { title: "AI 수식 풀이", desc: "수학·과학 문제의 정답과 풀이 과정을 AI가 즉시 생성합니다." },
-    { title: "AI 문서 정리", desc: "수업 자료 자동 요약, 보고서 작성, 학습 노트 정리를 AI가 처리합니다." },
-    { title: "AI 이미지 생성", desc: "아이디어를 입력하면 수업에 필요한 시각 자료를 자동으로 생성합니다." },
-    { title: "AI 교안 자동화", desc: "학습 목표를 입력하면 전체 수업 계획안을 자동으로 작성해줍니다." },
-    { title: "AI 질의응답", desc: "과목·언어 관계없이 학생 질문에 24시간 즉시 답변. 자기주도 학습을 지원합니다." },
-]
-
-function AIFeaturesSection() {
-    return (
-        <section className="py-24 md:py-32 bg-[#F6F5F4]">
-            <div className="container mx-auto px-4 lg:px-8 max-w-6xl">
-                <motion.div className="text-center mb-14" {...fadeUp}>
-                    <span className="inline-flex items-center gap-1.5 bg-fg-accent text-[#6EE7B7] text-xs font-bold px-3 py-1.5 rounded-full mb-5">
-                        AI-Powered
-                    </span>
-                    <h2 className="text-3xl md:text-4xl lg:text-5xl font-sans text-[#1a1a19] leading-tight mb-4">
-                        AI가 교사의 시간을<br /><span className="text-fg-accent">돌려드립니다</span>
-                    </h2>
-                    <p className="text-lg text-[#615D59] max-w-xl mx-auto">
-                        채점, 교안 작성, 자료 정리 — 반복적인 작업은 AI에게 맡기고
-                        교사는 가르치는 일에만 집중할 수 있습니다.
-                    </p>
-                </motion.div>
-
-                <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                    {AI_FEATURES.map((f, i) => (
-                        <motion.div
-                            key={f.title}
-                            initial={{ opacity: 0, y: 20 }}
-                            whileInView={{ opacity: 1, y: 0 }}
-                            viewport={{ once: true }}
-                            transition={{ delay: i * 0.07 }}
-                            className="bg-white rounded-2xl border border-[rgba(0,0,0,0.06)] p-6 relative overflow-hidden"
-                        >
-                            <h3 className="text-sm font-bold text-[#111110] mb-1.5 tracking-tight">{f.title}</h3>
-                            <p className="text-xs text-[#615D59] leading-relaxed">{f.desc}</p>
-                        </motion.div>
-                    ))}
-                </div>
-
-                <motion.div
-                    initial={{ opacity: 0 }}
-                    whileInView={{ opacity: 1 }}
-                    viewport={{ once: true }}
-                    transition={{ delay: 0.5 }}
-                    className="mt-10 bg-fg-accent rounded-2xl p-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-fg-on-accent"
-                >
-                    <div>
-                        <p className="font-bold text-base mb-0.5">AI 기능 범위는 상담에서 안내합니다</p>
-                        <p className="text-white/50 text-sm">기본 제공 기능과 따로 켜는 기능(AI 강의 분석·AI 칠판)을 학원에 맞춰 정합니다.</p>
-                    </div>
-                    <Link
-                        href="/contact#contact-form"
-                        onClick={() => trackEvent("click_cta", { button: "sw_ai_consult", page: "/product/sw" })}
-                        className="shrink-0 inline-flex items-center gap-2 bg-white text-fg-accent font-bold text-sm px-5 py-2.5 rounded-full hover:bg-white/90 transition-colors"
-                    >
-                        도입 상담 받기 <ArrowRight className="w-4 h-4" />
-                    </Link>
-                </motion.div>
-            </div>
-        </section>
-    )
-}
+/* ── [C] AI 기능 섹션 → components/product/sw/AIFeatureShowcase.tsx 로 추출됨 (LearningCycle 바로 뒤) ── */
 
 /* ── [D] 도입 프로세스 섹션 → components/product/sw/OnboardingRoadmap.tsx 로 추출됨 ──────────── */
 
@@ -1175,7 +1109,7 @@ const INCLUDED = [
     "학습 데이터 리포트 및 분석",
     "1:1부터 최대 1,000명 대형 강의까지",
     "160+개국 서비스 (EEO 공식 소개 기준)",
-    "AI 첨삭 · AI 과제 생성 · AI 교안",
+    "AI 숙제 채점 · AI 수업 요약 · AI 어학 연습",
     "전담 고객 지원 · 전문가 온보딩",
 ]
 
@@ -1517,6 +1451,8 @@ export default function ProductPage() {
 
             <LearningCycleSection />
 
+            <AIFeatureShowcase />
+
             {/* ================================================================
                 양방향 블랙보드 (SVG path animation, animated cursors)
             ================================================================ */}
@@ -1732,18 +1668,6 @@ export default function ProductPage() {
                     <ArrowRight className="h-4 w-4" aria-hidden="true" />
                     <span className="sr-only">(새 탭)</span>
                 </TrackedLink>
-                <TrackedLink
-                    href="/classin-ai-feature-guide.html"
-                    prefetch={false}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    ctaId="software_ai_feature_guide"
-                    className="inline-flex min-h-12 items-center gap-3 rounded-md border border-black/[0.08] bg-fg-accent/8 px-6 text-sm font-semibold text-fg-accent transition-colors hover:bg-fg-accent/14 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-fg-accent"
-                >
-                    AI 기능 자세히 보기
-                    <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                    <span className="sr-only">(새 탭)</span>
-                </TrackedLink>
             </div>
 
             <HardwareTeaserSection />
@@ -1889,8 +1813,6 @@ export default function ProductPage() {
                     </div>
                 </div>
             </section>
-
-            <AIFeaturesSection />
 
             <CaseStudiesSection />
 
