@@ -19,6 +19,9 @@ const stagger = (i: number) => ({
     transition: { duration: 0.55, delay: 0.1 + i * 0.13, ease },
 })
 
+const DEEP_LINK =
+    "inline-flex items-center gap-2 rounded-md border border-fg-accent/25 px-5 py-3 text-sm font-semibold text-fg-accent hover:bg-fg-accent/8 transition-colors"
+
 const cards = [
     {
         icon: BookOpen,
@@ -115,15 +118,23 @@ export default function AfterClassSection() {
                     })}
                 </div>
 
-                {/* 녹화·AI 리포트 딥다이브 진입 */}
-                <motion.div {...fadeUp} className="mt-10 text-center">
-                    <TrackedLink
-                        href="/product/ai-report"
-                        ctaId="hw_ai_report_deep_dive"
-                        className="inline-flex items-center gap-2 rounded-md border border-fg-accent/25 px-5 py-3 text-sm font-semibold text-fg-accent hover:bg-fg-accent/8 transition-colors"
-                    >
-                        녹화 · AI 리포트 자세히 보기
+                {/* 수업 후 더 보기 — 녹화는 랜딩으로, AI 는 기능 소개서(새 탭)로 */}
+                <motion.div {...fadeUp} className="mt-10 flex flex-wrap justify-center gap-3">
+                    <TrackedLink href="/product/recording" ctaId="hw_recording_deep_dive" className={DEEP_LINK}>
+                        수업 녹화 자세히 보기
                         <ArrowRight className="w-4 h-4" />
+                    </TrackedLink>
+                    <TrackedLink
+                        href="/classin-ai-feature-guide.html"
+                        prefetch={false}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        ctaId="hw_ai_feature_guide"
+                        className={DEEP_LINK}
+                    >
+                        AI 기능 소개서 보기
+                        <ArrowRight className="w-4 h-4" aria-hidden="true" />
+                        <span className="sr-only">(새 탭)</span>
                     </TrackedLink>
                 </motion.div>
             </div>

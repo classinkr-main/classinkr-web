@@ -23,7 +23,7 @@ const staticRoutes: Array<{
   { path: "/docs/first-week", changeFrequency: "monthly", priority: 0.7, lastModified: "2026-10-29" },
   { path: "/product", changeFrequency: "weekly", priority: 0.9, lastModified: "2026-06-14" },
   { path: "/product/sw", changeFrequency: "weekly", priority: 0.9, lastModified: "2026-11-06" },
-  { path: "/product/hw", changeFrequency: "weekly", priority: 0.9, lastModified: "2026-11-03" },
+  { path: "/product/hw", changeFrequency: "weekly", priority: 0.9, lastModified: "2026-11-06" },
   { path: "/product/ai-report", changeFrequency: "monthly", priority: 0.8, lastModified: "2026-11-06" },
   { path: "/pricing", changeFrequency: "monthly", priority: 0.8, lastModified: "2026-11-03" },
   { path: "/contact", changeFrequency: "monthly", priority: 0.8, lastModified: "2026-10-28" },
