@@ -327,10 +327,10 @@ function CampaignHighlights({ campaigns }: { campaigns: WeeklyAdLeadCampaignRow[
           <p className="mt-0.5 text-[10.5px] text-[#615D59]">Meta 플랫폼 귀속 리드 기준</p>
         </div>
         <Link
-          href={campaignHubHref({ tab: "detail", section: "campaigns" })}
+          href={campaignHubHref({ tab: "ads", section: "campaigns" })}
           className="inline-flex items-center gap-1 text-[10.5px] font-semibold text-[#084734] hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734]"
         >
-          상세 › 캠페인 <ArrowUpRight className="h-3 w-3" aria-hidden />
+          광고 › 우산 캠페인 <ArrowUpRight className="h-3 w-3" aria-hidden />
         </Link>
       </div>
 

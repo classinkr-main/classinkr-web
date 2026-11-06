@@ -1,5 +1,6 @@
 "use client"
 
+import { AdChannelStrip } from "@/components/admin/campaigns/ads/AdChannelCards"
 import { useCallback, useEffect, useMemo } from "react"
 import dynamic from "next/dynamic"
 import Link from "next/link"
@@ -24,7 +25,7 @@ import { describeVerdictStatus, resolveVerdictStatus } from "@/lib/marketing/ver
 // "한눈에" 탭(1층) = 마케팅 대시보드의 첫 화면.
 //
 // 2026-09-14 재구성: 우측 384px 레일의 콕핏 2단을 버리고 전폭 밴드 순서로 다시 조립했다 —
-//   판정 → 숫자 4 → 추이·지금 → 근거(퍼널·Top 3) → 참조(Compass) → 각주.
+//   판정 → 숫자 4 → 추이·지금 → 근거(퍼널·광고 채널) → 참조(Compass) → 각주.
 // 아래로 갈수록 참조 정보다. 소재별 CPL·업데이트 피드·주간 보고서 본문·채널 믹스는 상세·데이터
 // 층으로 갔다(기획 docs/active/marketing-tab-dashboard-restructure-2026-09-14.md §3.2).
 //
@@ -35,10 +36,6 @@ import { describeVerdictStatus, resolveVerdictStatus } from "@/lib/marketing/ver
 const DailyTrendSection = dynamic(
   () => import("@/components/admin/campaigns/perf/DailyTrendSection").then((m) => m.DailyTrendSection),
   { ssr: false, loading: () => <ChartSkeleton className="h-[380px]" /> }
-)
-const CampaignScoreboard = dynamic(
-  () => import("@/components/admin/campaigns/perf/CampaignScoreboard").then((m) => m.CampaignScoreboard),
-  { ssr: false, loading: () => <ChartSkeleton className="h-[220px]" /> }
 )
 
 /* ─── 브리핑 콘텐츠 — AI payload 우선, 실패 시 규칙 기반 폴백 ───────────────────── */
@@ -335,7 +332,7 @@ export default function SummaryTab({
 
   // 이 기간 미컨택 광고 리드 — "지금" 카드 발치의 다음 행동. 기간 축이라 기간 라벨을 함께 쓴다.
   const uncontacted = data ? Math.max(0, data.funnel.adLeads - data.funnel.contacted) : 0
-  const detailCampaignsHref = campaignHubHref({ tab: "detail", section: "campaigns", perf: period })
+  const adsHref = campaignHubHref({ tab: "ads", perf: period })
   const detailFunnelHref = campaignHubHref({ tab: "detail", section: "funnel", perf: period })
   const newLeadsHref = campaignHubHref({ tab: "data", section: "new-leads", perf: period })
 
@@ -419,7 +416,7 @@ export default function SummaryTab({
             />
           </div>
 
-          {/* 4. 근거 — 가로 퍼널 + Top 3 캠페인. 전체 스코어보드·세로 퍼널·채널 믹스는 상세 층. */}
+          {/* 4. 근거 — 가로 퍼널 + 광고 채널 3칸(2026-11-06, 우산 캠페인 Top 3 자리). 캠페인 전체는 광고 탭. */}
           <FunnelCard
             funnel={data.funnel}
             metaMeasured={metaMeasured}
@@ -430,7 +427,7 @@ export default function SummaryTab({
               </Link>
             }
           />
-          <CampaignScoreboard rows={data.scoreboard} compact limit={3} moreHref={detailCampaignsHref} />
+          {data.adBoard && <AdChannelStrip board={data.adBoard} href={adsHref} />}
 
           {/* 5. 참조 — Compass 파이프라인 3칸. 권한 밖 계정(403)에는 빈 자리를 보여주지 않는다. */}
           {!compass.forbidden && (

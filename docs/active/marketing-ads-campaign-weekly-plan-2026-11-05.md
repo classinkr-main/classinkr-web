@@ -1,6 +1,6 @@
 # 마케팅 탭 — 운영 중 광고 · 캠페인 분석 · 주간(월~일) 분석 기획 (2026-11-05)
 
-상태: 기획 제언 — 결정 대기(§6). 시안: [마케팅 광고 탭 시안](https://claude.ai/artifact/Aya58jKbdJYLfi4CBHiNx8)(운영 중 · 캠페인 분석 · 주간 분석 · 모바일, 예시 숫자)
+상태: 기획 제언 — D1 결정·채널 카드 구현(2026-11-06, §8), D2~D8 결정 대기(§6). 시안: [마케팅 광고 탭 시안](https://claude.ai/artifact/Aya58jKbdJYLfi4CBHiNx8)(운영 중 · 캠페인 분석 · 주간 분석 · 모바일, 예시 숫자)
 범위: `/admin/campaigns` 허브의 광고·캠페인 성과 화면, 주간 보고서, perf·주간 API, 광고 데이터 원천
 상위 문서: [마케팅 탭 재구성](marketing-tab-dashboard-restructure-2026-09-14.md)(허브 3층 IA·Compass 경계 정본) ·
 [마케팅 퍼포먼스 대시보드 설계](marketing-performance-dashboard-design-2026-08-20.md)(데이터 스파인·정직 규칙)
@@ -193,6 +193,21 @@ Compass `/dashboard`(Meta 파이프라인)·`/ads`(캠페인·소재 월별 집�
 - 기본 품질 게이트 + `npx vitest run tests/campaigns tests/marketing`.
 
 ## 8. 진척 기록
+
+### 2026-11-06 — D1 결정(새 "광고" 탭) + 채널 카드(시안 C) 구현
+
+- 사용자 결정: **D1 = 새 탭 "광고"**(한눈에 · 광고 · 상세 · 데이터 · 메시지). 화면 모양은 시안 3개 중 **C 채널 카드**
+  ([시안](mockups/campaign-channel-tree-2026-11-06.html) — A 트리 표 · B 타임라인 · C 채널 카드).
+- 광고 탭 = ① 채널 카드 3장(Google 395 + 924 접힘 · Meta · 유튜브 스튜디오), 캠페인 줄마다 상태(운영·예정·보류·일시중지·종료) ·
+  기간·일 예산 · 기간 집행 · **우리 DB 리드**·리드당 비용·연락률, 플랫폼 리드·전환은 회색 참고 ② 상세에서 옮긴 우산 캠페인 스코어보드 + Meta 라이브 차트.
+  옛 링크 `?tab=meta`·`?tab=detail#campaigns`는 `?tab=ads#campaigns`로 착지한다.
+- 한눈에의 우산 캠페인 Top 3 자리는 "광고 채널" 3칸 띠로 바꿨다(우산 18개 중 15개가 휴면이라 Top 3 가 대표성이 없었다).
+- 계획(예정·보류·기간·일 예산)은 코드 계획표 `lib/marketing/google-ads-setup.ts`(`GOOGLE_ADS_CAMPAIGNS`), 운영 여부·집행은
+  `google_ads_daily`·`meta_insights_daily`(최근 2일 안 집행 = 운영). 둘이 어긋나면 "⚠ 계획과 다름".
+- DB 리드 짝짓기(`lib/marketing/ad-board.ts`, perf 응답 `adBoard`): Meta = `utm_campaign` 이름(옛 이름 포함)·ID, 그 밖 =
+  ① 랜딩 `gad_campaignid` ② `utm_campaign` 이름 ③ `gclid` 만 있으면 '캠페인 미상' 칸. 11/6 기준 Meta 218/218 짝지음.
+  **gclid → 395 click_view 조회는 아직 안 한다**(395 클릭에서 온 사이트 리드가 0건이라 지금은 결과가 같다 — C2 시작 뒤 필요해지면 붙인다).
+- D2~D8(주 단위 기간·주간 분석)은 미착수.
 
 ### 2026-11-05 — 기획 제언 작성
 

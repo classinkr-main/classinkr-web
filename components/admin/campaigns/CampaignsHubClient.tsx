@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import dynamic from "next/dynamic"
 import { useRouter } from "next/navigation"
-import { Mail, RefreshCw } from "lucide-react"
+import { Mail, Megaphone, RefreshCw } from "lucide-react"
 import AdminTabs from "@/components/admin/AdminTabs"
 import { PeriodToggle } from "@/components/admin/PeriodToggle"
 import { ChartSkeleton } from "@/components/admin/viz"
@@ -14,7 +14,7 @@ import type { EventListSectionProps } from "@/components/admin/campaigns/events/
 import { adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
 import { eventTokenValues } from "@/lib/events/attribution"
 import type { MarketingGlanceInitialData } from "@/lib/marketing/glance-initial-data"
-import { CAMPAIGN_TABS, resolveCampaignTab, type CampaignTab } from "@/lib/marketing/hub-tabs"
+import { CAMPAIGN_TABS, movedSectionTab, resolveCampaignTab, type CampaignTab } from "@/lib/marketing/hub-tabs"
 import { PERF_PERIOD_KEYS, PERF_PERIOD_LABEL, isPerfPeriodKey, type PerfPeriodKey } from "@/lib/marketing/perf"
 import { parseMessagePrefill, stripMessagePrefillParams, type MessagePrefill } from "@/lib/message-prefill"
 import { parseSegmentHandoff, stripSegmentHandoffParams, type SegmentHandoff } from "@/lib/crm/segment-handoff"
@@ -56,6 +56,9 @@ const EmailTab = dynamic(() => import("@/components/admin/campaigns/tabs/EmailTa
   ),
 })
 const SummaryTab = dynamic(() => import("@/components/admin/campaigns/tabs/SummaryTab"), {
+  loading: () => <ChartSkeleton className="h-[480px]" />,
+})
+const AdsTab = dynamic(() => import("@/components/admin/campaigns/tabs/AdsTab"), {
   loading: () => <ChartSkeleton className="h-[480px]" />,
 })
 const DetailTab = dynamic(() => import("@/components/admin/campaigns/tabs/DetailTab"), {
@@ -151,6 +154,16 @@ export default function CampaignsHubClient({ initialData }: { initialData: Marke
       `${window.location.pathname}${query ? `?${query}` : ""}${resolvedTab.anchor ? `#${resolvedTab.anchor}` : ""}`
     )
   }, [resolvedTab])
+
+  // 옮긴 섹션의 옛 해시 링크(?tab=detail#campaigns → 광고 탭) — 해시는 마운트 뒤에만 보인다.
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const target = movedSectionTab(activeTab, window.location.hash.slice(1))
+    if (!target) return
+    const params = new URLSearchParams(window.location.search)
+    params.set("tab", target)
+    window.history.replaceState(null, "", `${window.location.pathname}?${params.toString()}${window.location.hash}`)
+  }, [activeTab])
 
   const selectTab = useCallback((next: string) => {
     if (typeof window === "undefined") return
@@ -314,10 +327,11 @@ export default function CampaignsHubClient({ initialData }: { initialData: Marke
     void loadMeta({ force: true })
   }, [loadMeta])
 
+  // Meta 라이브 대시보드는 광고(차트)·데이터(표) 전용 — 한눈에는 perf 스냅샷 축만 쓴다.
+  const needsMeta = activeTab === "ads" || activeTab === "data"
   useEffect(() => {
-    // Meta 라이브 대시보드는 상세(차트)·데이터(표) 층 전용 — 한눈에는 perf 스냅샷 축만 쓴다.
-    if (needsCore) loadMeta()
-  }, [needsCore, loadMeta])
+    if (needsMeta) loadMeta()
+  }, [needsMeta, loadMeta])
 
   const loadAdLeads = useCallback(async ({ force = false }: { force?: boolean } = {}) => {
     setAdLeadsLoading(true)
@@ -542,19 +556,26 @@ export default function CampaignsHubClient({ initialData }: { initialData: Marke
   const refreshLoading =
     activeTab === "summary"
       ? perfLoading
-      : activeTab === "detail"
-        ? perfLoading || metaLoading || loading
-        : activeTab === "data"
-          ? adLeadsLoading || metaLoading || loading
-          : false
+      : activeTab === "ads"
+        ? perfLoading || metaLoading
+        : activeTab === "detail"
+          ? perfLoading || loading
+          : activeTab === "data"
+            ? adLeadsLoading || metaLoading || loading
+            : false
   const refreshCurrent = useCallback(() => {
     if (activeTab === "summary") {
       setPerfRefreshNonce((nonce) => nonce + 1)
       return
     }
+    if (activeTab === "ads") {
+      setPerfRefreshNonce((nonce) => nonce + 1)
+      void loadMeta({ force: true })
+      return
+    }
     if (activeTab === "detail") {
       setPerfRefreshNonce((nonce) => nonce + 1)
-      void Promise.all([loadMeta({ force: true }), load({ force: true })])
+      void load({ force: true })
       return
     }
     if (activeTab === "data") {
@@ -563,7 +584,7 @@ export default function CampaignsHubClient({ initialData }: { initialData: Marke
     }
   }, [activeTab, load, loadAdLeads, loadMeta])
 
-  const showPerfToggle = activeTab === "summary" || activeTab === "detail"
+  const showPerfToggle = activeTab === "summary" || activeTab === "ads" || activeTab === "detail"
 
   const eventListProps: EventListSectionProps = {
     loading,
@@ -625,7 +646,13 @@ export default function CampaignsHubClient({ initialData }: { initialData: Marke
               value: tab.id,
               label: tab.label,
               title: tab.title,
-              icon: tab.tier ? <TierMark tier={tab.tier} /> : <Mail className="h-3.5 w-3.5" />,
+              icon: tab.tier ? (
+                <TierMark tier={tab.tier} />
+              ) : tab.id === "ads" ? (
+                <Megaphone className="h-3.5 w-3.5" />
+              ) : (
+                <Mail className="h-3.5 w-3.5" />
+              ),
             }))}
             value={activeTab}
             onValueChange={selectTab}
@@ -667,8 +694,8 @@ export default function CampaignsHubClient({ initialData }: { initialData: Marke
               />
             )}
 
-            {activeTab === "detail" && (
-              <DetailTab
+            {activeTab === "ads" && (
+              <AdsTab
                 period={perfPeriod}
                 refreshNonce={perfRefreshNonce}
                 metaDashboard={metaDashboard}
@@ -676,6 +703,13 @@ export default function CampaignsHubClient({ initialData }: { initialData: Marke
                 metaError={metaError}
                 metaDatePreset={metaDatePreset}
                 onMetaDatePresetChange={setMetaDatePreset}
+              />
+            )}
+
+            {activeTab === "detail" && (
+              <DetailTab
+                period={perfPeriod}
+                refreshNonce={perfRefreshNonce}
                 coreLoading={loading}
                 coreError={error}
                 filtered={filtered}
