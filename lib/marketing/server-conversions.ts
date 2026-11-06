@@ -209,21 +209,45 @@ async function sendMetaConversion(input: ServerConversionInput) {
   const externalId = input.user?.externalId ?? input.requestMeta.anonymousId
   if (externalId) userData.external_id = [sha256(externalId)]
 
-  const body: Record<string, unknown> = {
-    data: [
-      {
-        event_name: input.metaEventName,
-        event_time: Math.floor(Date.now() / 1000),
-        event_id: input.eventId,
-        action_source: "website",
-        event_source_url: input.sourceUrl ?? input.requestMeta.sourceUrl ?? undefined,
-        user_data: Object.fromEntries(
-          Object.entries(userData).filter(([, value]) => value !== undefined && value !== null)
-        ),
-        custom_data: compactCustomData(input.customData),
-      },
-    ],
+  const response = await postMetaCapiEvents([
+    {
+      event_name: input.metaEventName,
+      event_time: Math.floor(Date.now() / 1000),
+      event_id: input.eventId,
+      action_source: "website",
+      event_source_url: input.sourceUrl ?? input.requestMeta.sourceUrl ?? undefined,
+      user_data: Object.fromEntries(
+        Object.entries(userData).filter(([, value]) => value !== undefined && value !== null)
+      ),
+      custom_data: compactCustomData(input.customData),
+    },
+  ])
+
+  if (response && !response.ok) {
+    throw new Error(`Meta CAPI ${response.status}: ${response.error}`)
   }
+
+  return { skipped: false as const }
+}
+
+/**
+ * Meta CAPI 이벤트 묶음 1회 POST(`/{dataset}/events`). 데이터셋·토큰이 없으면 보내지 않고 null.
+ * 보냈으면 HTTP 결과(ok=false 면 Meta 가 받지 않았다 — 묶음 안 하나만 틀려도 묶음 전체를 버린다)와 오류 본문 앞부분.
+ * 네트워크 오류·시간 초과는 던진다 — 받았는지 모른다. META_TEST_EVENT_CODE 가 있으면 테스트 이벤트로 보낸다.
+ * access_token 이 URL 에 실리므로 URL 을 로그에 남기지 않는다.
+ *
+ * user_data.lead_id 는 JSON 숫자여야 한다(Meta 예시가 따옴표 없는 숫자). 15–17자리라 JS number 로는 2^53 을 넘어
+ * 끝자리가 깨지므로 호출부는 user_data 의 **첫 키**로 숫자 문자열을 넘기고, 직렬화 뒤 따옴표만 뗀다. JSON.stringify 는
+ * 문자열 안의 따옴표를 \" 로 바꾸므로 이 모양은 실제 키 자리에서만 나온다. custom_data.lead_id(웹사이트 리드 UUID)는 건드리지 않는다.
+ */
+export async function postMetaCapiEvents(
+  events: Record<string, unknown>[]
+): Promise<{ ok: boolean; status: number; error: string } | null> {
+  const metaDatasetOrPixelId = readEnv("META_DATASET_ID") ?? readEnv("NEXT_PUBLIC_META_PIXEL_ID")
+  const accessToken = readEnv("META_CAPI_ACCESS_TOKEN") ?? readEnv("META_ACCESS_TOKEN")
+  if (!metaDatasetOrPixelId || !accessToken) return null
+
+  const body: Record<string, unknown> = { data: events }
   const testEventCode = readEnv("META_TEST_EVENT_CODE")
   if (testEventCode) body.test_event_code = testEventCode
 
@@ -235,16 +259,11 @@ async function sendMetaConversion(input: ServerConversionInput) {
   const response = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+    body: JSON.stringify(body).replace(/"user_data":\{"lead_id":"(\d{15,17})"/g, '"user_data":{"lead_id":$1'),
     signal: conversionFetchSignal(),
   })
-
-  if (!response.ok) {
-    const text = await response.text().catch(() => "")
-    throw new Error(`Meta CAPI ${response.status}: ${text.slice(0, 300)}`)
-  }
-
-  return { skipped: false as const }
+  const error = response.ok ? "" : (await response.text().catch(() => "")).slice(0, 300)
+  return { ok: response.ok, status: response.status, error }
 }
 
 /**
