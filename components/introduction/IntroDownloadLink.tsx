@@ -11,7 +11,16 @@ import { cn } from "@/lib/utils"
  * 소개서 PDF 내려받기. 이메일 없이 바로 받는 자료라 제품 페이지 소개서와 같은
  * download_materials(asset_id) 하나만 남긴다(app/product/hw·sw 와 같은 관례).
  */
-export function IntroDownloadLink({ download, className }: { download: IntroDownload; className?: string }) {
+export function IntroDownloadLink({
+  download,
+  className,
+  source = "introduction",
+}: {
+  download: IntroDownload
+  className?: string
+  /** 계측 source 값 — 페이지마다 구분한다(예: introduction_proof) */
+  source?: string
+}) {
   const file = getIntroAsset(download.asset)
   return (
     <a
@@ -21,7 +30,7 @@ export function IntroDownloadLink({ download, className }: { download: IntroDown
         trackEvent("download_materials", {
           asset_id: download.id,
           page: window.location.pathname,
-          source: "introduction",
+          source,
         })
       }
       className={cn(

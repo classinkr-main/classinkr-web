@@ -101,7 +101,7 @@ export function ProofProduct() {
 
           <div className="mt-8 grid gap-3">
             {hardware.downloads.map((download) => (
-              <IntroDownloadLink key={download.id} download={download} />
+              <IntroDownloadLink source="introduction_proof" key={download.id} download={download} />
             ))}
           </div>
         </div>
