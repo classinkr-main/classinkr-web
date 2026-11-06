@@ -25,7 +25,7 @@ import { describeVerdictStatus, resolveVerdictStatus } from "@/lib/marketing/ver
 // "한눈에" 탭(1층) = 마케팅 대시보드의 첫 화면.
 //
 // 2026-09-14 재구성: 우측 384px 레일의 콕핏 2단을 버리고 전폭 밴드 순서로 다시 조립했다 —
-//   판정 → 숫자 4 → 추이·지금 → 근거(퍼널·광고 채널) → 참조(Compass) → 각주.
+//   광고 채널 → 판정 → 숫자 4 → 추이·지금 → 근거(퍼널) → 참조(Compass) → 각주.
 // 아래로 갈수록 참조 정보다. 소재별 CPL·업데이트 피드·주간 보고서 본문·채널 믹스는 상세·데이터
 // 층으로 갔다(기획 docs/active/marketing-tab-dashboard-restructure-2026-09-14.md §3.2).
 //
@@ -369,6 +369,9 @@ export default function SummaryTab({
             </div>
           )}
 
+          {/* 0. 광고 채널 — 탭 맨 위(2026-11-06 사용자 지시). 누르면 광고 탭. */}
+          {data.adBoard && <AdChannelStrip board={data.adBoard} href={adsHref} />}
+
           {/* 1. 판정 — 화면의 주어. */}
           <BriefingCard
             {...briefing}
@@ -416,7 +419,7 @@ export default function SummaryTab({
             />
           </div>
 
-          {/* 4. 근거 — 가로 퍼널 + 광고 채널 3칸(2026-11-06, 우산 캠페인 Top 3 자리). 캠페인 전체는 광고 탭. */}
+          {/* 4. 근거 — 가로 퍼널. 세로 퍼널·채널 믹스는 상세 층. */}
           <FunnelCard
             funnel={data.funnel}
             metaMeasured={metaMeasured}
@@ -427,7 +430,6 @@ export default function SummaryTab({
               </Link>
             }
           />
-          {data.adBoard && <AdChannelStrip board={data.adBoard} href={adsHref} />}
 
           {/* 5. 참조 — Compass 파이프라인 3칸. 권한 밖 계정(403)에는 빈 자리를 보여주지 않는다. */}
           {!compass.forbidden && (

@@ -201,7 +201,7 @@ Compass `/dashboard`(Meta 파이프라인)·`/ads`(캠페인·소재 월별 집�
 - 광고 탭 = ① 채널 카드 3장(Google 395 + 924 접힘 · Meta · 유튜브 스튜디오), 캠페인 줄마다 상태(운영·예정·보류·일시중지·종료) ·
   기간·일 예산 · 기간 집행 · **우리 DB 리드**·리드당 비용·연락률, 플랫폼 리드·전환은 회색 참고 ② 상세에서 옮긴 우산 캠페인 스코어보드 + Meta 라이브 차트.
   옛 링크 `?tab=meta`·`?tab=detail#campaigns`는 `?tab=ads#campaigns`로 착지한다.
-- 한눈에의 우산 캠페인 Top 3 자리는 "광고 채널" 3칸 띠로 바꿨다(우산 18개 중 15개가 휴면이라 Top 3 가 대표성이 없었다).
+- 한눈에의 우산 캠페인 Top 3 는 내리고 "광고 채널" 3칸 띠를 탭 맨 위(판정 위)에 뒀다(우산 18개 중 15개가 휴면이라 Top 3 가 대표성이 없었다).
 - 계획(예정·보류·기간·일 예산)은 코드 계획표 `lib/marketing/google-ads-setup.ts`(`GOOGLE_ADS_CAMPAIGNS`), 운영 여부·집행은
   `google_ads_daily`·`meta_insights_daily`(최근 2일 안 집행 = 운영). 둘이 어긋나면 "⚠ 계획과 다름".
 - DB 리드 짝짓기(`lib/marketing/ad-board.ts`, perf 응답 `adBoard`): Meta = `utm_campaign` 이름(옛 이름 포함)·ID, 그 밖 =
