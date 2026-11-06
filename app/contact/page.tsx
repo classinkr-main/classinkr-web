@@ -288,6 +288,8 @@ export default function ContactPage() {
                 eventId: data.conversionEventId,
                 transactionId: data.leadId,
                 contactTopic: topicValue,
+                adConsent: isAdConsentGiven(adConsent),
+                userData: { email: formData.get("email") as string, phone },
                 params: {
                     lead_id: data.leadId,
                     stored: data.stored,
