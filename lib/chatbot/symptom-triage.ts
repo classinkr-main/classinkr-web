@@ -66,6 +66,8 @@ export interface SymptomTopic {
 export interface SymptomTriageResult {
   kind: "topic" | "vague"
   topicId: string
+  /** 사용법·점검표 주제(화난 말투여도 상담 연결부터 밀지 않는다). */
+  howto?: boolean
   overridesKnownIntent: boolean
   englishSummary?: string
   needsHandoff: boolean
@@ -87,7 +89,7 @@ export interface SymptomTriageResult {
 
 // 공통 증상 표현. 질문은 normalizeTriageText 를 거친 소문자·공백 정리본이다.
 const SYMPTOM_RE =
-  /안\s*(?:돼|되|됨|됩|됐|됬|와|왔|오|옴|떠|뜨|뜸|뜬|보|켜|나|들|열|먹|올라|붙|잡|가져|갔|간|가요|넘어|움직|눌|생겨|만들|바뀌|맞|써|쓰|적|그려|그어|잡혀)|검은\s*화면|까만\s*화면|까맣|검게\s*(?:나|보)|못\s*(?:하|해|보|봐|들|받|찾|열|올|넣|쓰|써)|(?:지|진|되|돼|켜|보|나|열|들)\s*않|않(?:아요|아서|습니다|네요|음|는데|아)|멈춰|멈췄|멈춤|멈추|멈춥|멈춘|먹통|튕|끊|꺼져|꺼짐|꺼지|꺼졌|오류|에러|error|버그|실패|반려|거절|막혀|막힘|막혔|막아|이상해|이상하|이상한|이상함|느려|느림|느리|깨져|깨짐|깨지|사라졌|사라져|사라짐|없어졌|없어져|없다고|없대|없어요|없습니다|없네|없음|안돼|안되|안됨|안나|안들|안보|안떠|안뜨|안켜|안와|문제\s*(?:가|있|생|발생)/
+  /안\s*(?:돼|되|된|됨|됩|됐|됬|와|왔|오|옴|떠|뜨|뜸|뜬|보|켜|나|들|열|먹|올라|붙|잡|가져|갔|간|가요|넘어|움직|눌|생겨|만들|바뀌|맞|써|쓰|적|그려|그어|잡혀)|검은\s*화면|까만\s*화면|까맣|검게\s*(?:나|보)|못\s*(?:하|해|보|봐|들|받|찾|열|올|넣|쓰|써)|(?:지|진|되|돼|켜|보|나|열|들)\s*않|않(?:아요|아서|습니다|네요|음|는데|아)|멈춰|멈췄|멈춤|멈추|멈춥|멈춘|먹통|튕|끊|꺼져|꺼짐|꺼지|꺼졌|오류|에러|error|버그|실패|반려|거절|막혀|막힘|막혔|막아|이상해|이상하|이상한|이상함|느려|느림|느리|깨져|깨짐|깨지|사라졌|사라져|사라짐|없어졌|없어져|없다고|없대|없어요|없습니다|없네|없음|안돼|안되|안된|안됨|안나|안들|안보|안떠|안뜨|안켜|안와|문제\s*(?:가|있|생|발생)/
 
 // 대상 없는 오류·불만 표현.
 const GENERIC_ERROR_RE = /오류|에러|error|버그|bug|문제|이상|고장|먹통|작동|동작|안\s*(?:돼|되|됨)|안돼|안되|안됨|실행\s*(?:이|가)?\s*안/
@@ -450,7 +452,11 @@ const BASE_SYMPTOM_TOPICS: SymptomTopic[] = [
     doc: { category: "software", slug: "lesson-activities" },
     steps: [{ heading: "실시간 수업과 녹화 수업", pick: [2] }],
     intro: "녹화 수업(학습 활동)은 강사가 고급 설정에서 재생 속도 조절을 켜 두면 배속으로 볼 수 있어요.",
-    branches: ["지금 보는 영상에 배속 메뉴가 없으면 선생님이 재생 속도 조절을 꺼 둔 것일 수 있으니 선생님께 물어보세요."],
+    branches: [
+      "지금 보는 영상에 배속 메뉴가 없으면 선생님이 재생 속도 조절을 꺼 둔 것일 수 있으니 선생님께 물어보세요.",
+      { text: "2배속에서 목소리가 어색하게 들리면 1.5배속 정도로 낮춰 보세요.", when: /소리|목소리|이상/ },
+      { text: "다시보기 영상에 자막을 붙이는 기능은 공개 안내에 없어요. 6.0.9부터 수업 중 실시간 자막 번역이 있지만 기본으로 꺼져 있어 학원이 켜야 합니다.", when: /자막/ },
+    ],
     contactHeading: "",
     suggestedQuestions: ["다시보기가 안 떠요", "다시보기 기간이 지났대요", "숙제는 어떻게 내요?"],
   },
@@ -476,12 +482,19 @@ const BASE_SYMPTOM_TOPICS: SymptomTopic[] = [
     requireSymptom: false,
     exclude: /막|못\s*받게|제한하고\s*싶|설정하고\s*싶|방법/,
     category: "troubleshooting",
-    doc: { category: "admin", slug: "replay-troubleshooting" },
-    steps: [{ heading: "코스 설정에서 기간이나 횟수가 막혀 있을 때", take: 5 }],
-    intro: "다시보기는 코스 설정의 유효 기간과 시청 횟수 제한 안에서만 열립니다.",
+    // 학생·학부모가 묻는 경우가 기본이다. 관리자·설정을 말할 때만 대시보드 설정 단계를 준다.
+    doc: { category: "student", slug: "class-join-replay" },
+    steps: [{ heading: "다시보기가 안 보일 때", pick: [1, 0, 3] }],
+    intro: "다시보기는 학원이 코스에 정한 다시보기 기간과 시청 횟수 안에서만 열려요.",
     variants: [
       {
-        when: /^(?!.*(?:관리자|대시보드|설정에서|코스\s*설정)).*(?:아이|학생|제가|저는|우리\s*애|보다가|보려니|봤는데)/,
+        when: /관리자|대시보드|설정에서|코스\s*설정|우리\s*학생|학생(?:이|들이|들한테|에게)\s/,
+        doc: { category: "admin", slug: "replay-troubleshooting" },
+        steps: [{ heading: "코스 설정에서 기간이나 횟수가 막혀 있을 때", take: 5 }],
+        intro: "다시보기는 코스 설정의 유효 기간과 시청 횟수 제한 안에서만 열립니다.",
+      },
+      {
+        when: /시청\s*횟수|횟수\s*(?:를|가)?\s*초과|기간\s*만료/,
         doc: { category: "student", slug: "class-join-replay" },
         steps: [{ heading: "다시보기가 안 보일 때", pick: [1, 0, 3] }],
         intro: "'시청 횟수 초과'나 '기간 만료'가 뜨면, 학원이 코스에 다시보기 시청 횟수나 기간을 정해 둔 경우예요. 횟수를 어떻게 세는지는 공개 안내에 따로 나와 있지 않아, 남은 횟수가 걱정되시면 학원에 먼저 물어봐 주세요.",
@@ -561,7 +574,7 @@ const BASE_SYMPTOM_TOPICS: SymptomTopic[] = [
   {
     id: "board-mirroring",
     subject:
-      /미러링|캐스트|무선\s*(?:연결|화면|으로\s*(?:띄우|띄워|연결))|화면\s*미러|(?:휴대폰|폰|노트북|태블릿|아이패드).{0,10}화면.{0,14}(?:칠판|티비|tv|보드|전자칠판).{0,10}(?:띄우|띄워|연결|안\s*나|안\s*떠)|(?:칠판|티비|tv).{0,10}(?:에\s*)?(?:띄우|띄워)|연결할\s*(?:기계|기기)\s*목록/,
+      /미러링|캐스트|무선\s*(?:연결|화면|으로\s*(?:띄우|띄워|연결))|화면\s*미러|(?:핸드폰|휴대폰|폰)\s*(?:거|화면)?\s*(?:를|을)?\s*(?:칠판에\s*)?(?:띄우|띄워)|(?:휴대폰|폰|노트북|태블릿|아이패드).{0,10}화면.{0,14}(?:칠판|티비|tv|보드|전자칠판).{0,10}(?:띄우|띄워|연결|안\s*나|안\s*떠)|(?:칠판|티비|tv).{0,10}(?:에\s*)?(?:띄우|띄워)|연결할\s*(?:기계|기기)\s*목록/,
     category: "hardware",
     doc: { category: "hardware", slug: "board-basic-operation" },
     steps: [{ heading: "무선 미러링으로 기기 화면 띄우기", take: 4 }],
@@ -1090,7 +1103,13 @@ const BASE_SYMPTOM_TOPICS: SymptomTopic[] = [
     category: "admin",
     doc: { category: "admin", slug: "teacher-onboarding" },
     steps: [{ heading: "강사가 그만둘 때", take: 4 }],
-    intro: "그만둔 강사는 계정을 지우는 대신 코스를 넘기고 비활성화합니다. 순서대로 하면 수업 기록과 자료가 학원에 남습니다.",
+    intro: "그만둔 강사는 계정을 지우는 대신 맡던 코스를 다른 강사에게 넘기고 비활성화해요. 이 순서를 지키면 반 운영이 끊기지 않습니다.",
+    branches: [
+      {
+        text: "그 반의 녹화와 숙제가 그대로 남는지는 공개 안내에 명확히 나와 있지 않아 단정하지 않을게요. 걱정되시면 정리 전에 꼭 남길 녹화본을 관리자 대시보드에서 내려받고, [스토리지]에서 보호 잠금을 걸어 두세요.",
+        when: /날아|지워|없어|남아|사라|보존|백업/,
+      },
+    ],
     contactHeading: "",
     suggestedQuestions: ["코스 담당 교사를 바꾸고 싶어요", "교사 추가가 안 돼요", "하위 계정 설정 방법 알려줘"],
   },
@@ -1556,7 +1575,7 @@ const VAGUE_MENU_TOPIC_IDS = [
 
 // 대상 없는 오류 질문을 가리기 위한 '의미 없는 토큰'. 조사·어미를 뗀 뒤 비교한다.
 const GENERIC_TOKEN_RE =
-  /^(?:안녕하세요|안녕|안녕하십니까|선생님|쌤|상담사님|담당자님|매니저님|관리자님|저기요|저|제가|저희|혹시|그|여기|네|아|음|클래스인|클래스|classin|class|in|앱|어플|어플리케이션|프로그램|이거|그거|저거|이게|그게|저게|여기|거기|뭔가|무언가|뭐|뭐가|왜|지금|계속|자꾸|자꾸만|갑자기|또|또다시|다시|자주|좀|너무|진짜|정말|완전|오늘|방금|아까|요즘|에러|오류|error|버그|bug|문제|이상|고장|작동|동작|먹통|안|못|잘|코드|메시지|메세지|창|알림|팝업|화면에|해결|도와|도와주세요|도와줘|부탁|부탁해요|부탁드려요|어떻게|해야|하나요|할까요|되나요|돼요|되요|돼|됨|됩니다|되네요|돼서|되서|안돼|안돼요|안됨|안되요|안되네요|안되는데|떠요|떠|뜸|뜨네요|떴어요|나요|나와요|나네요|납니다|났어요|났습니다|생겨요|생겼어요|생깁니다|발생|발생해요|발생했어요|있어요|있습니다|있음|있네요|있는데|해요|하네요|합니다|했어요|요|ㅠ|ㅠㅠ|ㅜ|ㅜㅜ|ㅠㅠㅠ|헬프|help|급해요|급합니다|확인|부탁드립니다|봐주세요|들어가지지|들어가지지가|들어가져요|들어가요|들어가|안들어가져요|않아요|않습니다|않네요|않음|않고)$/
+  /^(?:안녕하세요|안녕|안녕하십니까|선생님|쌤|상담사님|담당자님|매니저님|관리자님|저기요|저|제가|저희|혹시|그|여기|네|아|음|클래스인|클래스|classin|class|in|앱|어플|어플리케이션|프로그램|이거|그거|저거|이게|그게|저게|여기|거기|뭔가|무언가|뭐|뭐가|왜|지금|계속|자꾸|자꾸만|갑자기|또|또다시|다시|자주|좀|너무|진짜|정말|완전|오늘|방금|아까|요즘|에러|오류|error|버그|bug|문제|이상|고장|작동|동작|먹통|안|못|잘|코드|메시지|메세지|창|알림|팝업|화면에|해결|도와|도와주세요|도와줘|부탁|부탁해요|부탁드려요|어떻게|해야|하나요|할까요|되나요|돼요|되요|돼|됨|됩니다|되네요|돼서|되서|안돼|안돼요|안됨|안되요|안되네요|안되는데|떠요|떠|뜸|뜨네요|떴어요|나요|나와요|나네요|납니다|났어요|났습니다|생겨요|생겼어요|생깁니다|발생|발생해요|발생했어요|있어요|있습니다|있음|있네요|있는데|해요|하네요|합니다|했어요|요|ㅠ|ㅠㅠ|ㅜ|ㅜㅜ|ㅠㅠㅠ|헬프|help|급해요|급합니다|확인|부탁드립니다|짜증|짜증나|짜증나요|짜증나네|진짜로|다|전부|하나도|다안돼|다안되|다안됨|봐주세요|들어가지지|들어가지지가|들어가져요|들어가요|들어가|안들어가져요|않아요|않습니다|않네요|않음|않고)$/
 
 const GENERIC_TOKEN_PREFIX_RE = /^(?:에러|오류|버그|문제|이상|고장|먹통|작동|동작|안돼|안되|안됨)/
 
@@ -1716,6 +1735,8 @@ function intentForCategory(category: ChatbotCategory): ChatbotIntent {
 export interface SymptomAnswerOptions {
   /** 짧게 묻는 사람(학생·급한 사용자)에게는 단계 3개와 짧은 맺음말만. */
   compact?: boolean
+  /** 화난 사람: 대상 없는 오류 질문에 긴 메뉴 대신 한 가지만 묻는다. */
+  upset?: boolean
   /** 원 질문(조건부 분기·변형 선택용). */
   question?: string
 }
@@ -1764,6 +1785,7 @@ export function buildSymptomTopicAnswer(
   return {
     kind: "topic",
     topicId: topic.id,
+    howto: topic.howto === true,
     overridesKnownIntent: topic.overridesKnownIntent === true,
     englishSummary: topic.en,
     needsHandoff: topic.handoff === true,
@@ -1788,7 +1810,27 @@ export function buildSymptomTopicAnswer(
   }
 }
 
-export function buildVagueErrorAnswer(): SymptomTriageResult {
+export function buildVagueErrorAnswer(options: { compact?: boolean } = {}): SymptomTriageResult {
+  if (options.compact) {
+    // 화가 나 짧게 말한 사람에게는 긴 메뉴 대신 한 가지만 묻는다.
+    return {
+      kind: "vague",
+      topicId: "vague-error",
+      overridesKnownIntent: false,
+      englishSummary: "Tell me one thing that isn't working (login, joining class, sound/camera, recording), or tap 상담원 연결 to talk to a person.",
+      needsHandoff: true,
+      answer: [
+        "어떤 게 안 되는지 하나만 알려 주시면 바로 그것부터 볼게요. 로그인, 수업 입장, 소리·카메라, 녹화 중 어디가 막혔나요?",
+        "바로 사람과 얘기하고 싶으시면 아래 [실시간 상담 연결]을 눌러 주세요.",
+      ].join("\n\n"),
+      answerMode: "clarifying_question",
+      confidence: 0.5,
+      category: "troubleshooting",
+      intent: "troubleshooting",
+      source: null,
+      suggestedQuestions: ["로그인이 안 돼요", "수업 중에 계속 튕겨요", "담당자 상담으로 이어주세요"],
+    }
+  }
   const menuLines = VAGUE_MENU_TOPIC_IDS.map((id) => SYMPTOM_TOPICS.find((topic) => topic.id === id)?.menuLine)
     .filter((line): line is string => Boolean(line))
     .map((line) => `- ${line}`)
@@ -1819,8 +1861,9 @@ export function buildVagueErrorAnswer(): SymptomTriageResult {
  * 호출부(service.ts)는 Figma 가이드의 알려진 의도(known intent)가 맞으면 그쪽을 먼저 쓴다.
  */
 // "1) … 2) …", "…그리고 …도", "두 가지 여쭙니다"처럼 두 번째 질문이 분명한 경우만 둘째 주제를 찾는다.
-const MULTI_QUESTION_RE = /(?:^|\s)(?:2\s*\)|2\.|②)|두\s*가지|하나\s*더|그리고|또한|아울러|추가로|또\s|같이\s*(?:문의|여쭤)/
-const CLAUSE_SPLIT_RE = /\s*(?:\d\s*\)|[①②③]|그리고|또한|아울러|추가로|[?？.。!！])\s*/
+const MULTI_QUESTION_RE =
+  /(?:^|\s)(?:\(?2\s*\)|2\.|②)|두\s*(?:가지|건|개)|둘\s*다|하나\s*더|하나는|그리고|또한|아울러|추가로|거기다|게다가|이번엔|또\s|같이\s*(?:문의|여쭤)|있고\s/
+const CLAUSE_SPLIT_RE = /\s*(?:\(?\d\s*\)|[①②③]|그리고|또한|아울러|추가로|거기다|게다가|이번엔|하나는|있고|[?？.。!！,，])\s*/
 
 function findSecondaryTopic(question: string, primary: SymptomTopic): SymptomTopic | null {
   if (!MULTI_QUESTION_RE.test(question)) return null
@@ -1830,7 +1873,9 @@ function findSecondaryTopic(question: string, primary: SymptomTopic): SymptomTop
     if (!candidate || candidate.id === primary.id) continue
     const sameSection =
       candidate.doc.slug === primary.doc.slug && candidate.steps[0]?.heading === primary.steps[0]?.heading
-    if (!sameSection) return candidate
+    const sameFamily = candidate.id.split("-")[0] === primary.id.split("-")[0]
+    const crossDevice = primary.category === "hardware" && candidate.category !== "hardware"
+    if (!sameSection && !sameFamily && !crossDevice) return candidate
   }
   return null
 }
@@ -1845,14 +1890,23 @@ export function resolveSymptomTriage(
     if (!result) return null
     const secondary = findSecondaryTopic(question, topic)
     if (!secondary) return result
-    // 둘째 질문은 그 주제의 첫 문단(문서 근거)만 짧게 붙이고, 자세한 단계는 추천 질문으로 이어 준다.
+    // 둘째 질문은 그 주제의 첫 문단과 첫 단계(문서 근거)만 짧게 붙이고, 자세한 단계는 추천 질문으로 이어 준다.
     const secondaryFollowUp = secondary.suggestedQuestions[0]
+    const secondaryAnswer = buildSymptomTopicAnswer(secondary, { compact: true, question })
+    const secondaryFirstStep = secondaryAnswer?.answer.match(/^1\. (.+)$/m)?.[1]
+    const secondaryText = [
+      `함께 물어보신 내용도 짧게 답드리면, ${secondary.intro}`,
+      secondaryFirstStep && !secondary.intro.includes(secondaryFirstStep.slice(0, 20)) ? `- ${secondaryFirstStep}` : null,
+    ]
+      .filter(Boolean)
+      .join("\n")
     return {
       ...result,
-      answer: `${result.answer}\n\n함께 물어보신 내용도 짧게 답드리면, ${secondary.intro}`,
+      needsHandoff: result.needsHandoff || secondary.handoff === true,
+      answer: `${result.answer}\n\n${secondaryText}`,
       suggestedQuestions: [...new Set([secondaryFollowUp, ...result.suggestedQuestions].filter(Boolean))].slice(0, 3),
     }
   }
-  if (isVagueErrorQuestion(question)) return buildVagueErrorAnswer()
+  if (isVagueErrorQuestion(question)) return buildVagueErrorAnswer({ compact: options.upset })
   return null
 }
