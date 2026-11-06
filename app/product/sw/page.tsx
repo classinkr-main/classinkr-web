@@ -1413,6 +1413,11 @@ export default function ProductPage() {
                 </div>
             </section>
 
+            {/* ================================================================
+                STORY CTA — "줌 열고, 녹화 누르고..." (히어로 바로 아래)
+            ================================================================ */}
+            <FinalCTASection />
+
             <section aria-labelledby="classin-software-summary" className="bg-white py-12 md:py-16">
                 <div className="container mx-auto px-4 lg:px-8">
                     <div className="mx-auto grid max-w-5xl gap-6 border-y border-black/[0.08] py-8 md:grid-cols-[0.9fr_1.4fr] md:py-10">
@@ -1931,11 +1936,6 @@ export default function ProductPage() {
             <TypographyHookSection />
             <FutureVision1Section />
             <FutureVision2Section />
-
-            {/* ================================================================
-                FINAL CTA
-            ================================================================ */}
-            <FinalCTASection />
 
         </div>
     )
