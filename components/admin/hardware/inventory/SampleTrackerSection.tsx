@@ -291,7 +291,11 @@ function SampleTrackerSection({ units, latestEvents, loading, error, stock, onOp
         </div>
       ) : filtered.length === 0 ? (
         <p className="px-5 pb-8 pt-4 text-center text-[13px] text-[#615D59]">
-          {units && units.length > 0 ? "해당 상태의 유닛이 없습니다." : "등록된 샘플 유닛이 없습니다. 위 등록 버튼으로 현재 잔량을 유닛화하세요."}
+          {units && units.length > 0
+            ? "해당 상태의 유닛이 없습니다."
+            : integrity && integrity.missingCount > 0
+              ? `등록된 샘플 유닛이 없습니다. 위 '원본 차이 ${formatNumber(integrity.missingCount)}대 확인'으로 원본 잔량을 유닛으로 등록하세요.`
+              : "등록된 샘플 유닛이 없습니다. 원본에 사무실·대여 샘플 잔량이 있으면 위에 '원본 차이 확인' 버튼이 나타납니다."}
         </p>
       ) : (
         <div className="border-t border-[rgba(0,0,0,0.06)]">
@@ -311,7 +315,7 @@ function SampleTrackerSection({ units, latestEvents, loading, error, stock, onOp
                 <span className="hidden truncate text-[12.5px] font-semibold text-[#31302E] sm:block">{unit.product_name}</span>
                 <span className="min-w-0">
                   <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                    <span className={`rounded-full px-2 py-0.5 text-[10.5px] font-bold ${meta.tone}`}>{meta.label}</span>
+                    <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${meta.tone}`}>{meta.label}</span>
                     <span className="truncate text-[12.5px] font-semibold text-[#111110]">
                       {unit.status === "loaned" ? unit.current_customer ?? "고객 미상" : ""}
                     </span>

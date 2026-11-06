@@ -20,7 +20,7 @@ describe("admin overview accessibility contract", () => {
     expect(overviewSource).toContain("aria-expanded={alertsExpanded}")
     expect(overviewSource).toContain('aria-controls="overview-operational-alerts"')
     expect(overviewSource).toContain('role="group"')
-    expect(overviewSource).toContain('aria-label="문의 유입 추이 기간"')
+    expect(overviewSource).toContain('aria-label="방문·문의 추이 기간"')
   })
 
   it("announces asynchronous section state without removing semantic links", () => {

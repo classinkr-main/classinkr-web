@@ -7,6 +7,7 @@ import AdminSidebar from "@/components/admin/AdminSidebar"
 import AdminCommandPaletteLauncher from "@/components/admin/AdminCommandPaletteLauncher"
 import AdminNavProgress from "@/components/admin/AdminNavProgress"
 import AdminAiLauncher from "@/components/admin/ai/AdminAiLauncher"
+import AdminNewInquiryToast from "@/components/admin/AdminNewInquiryToast"
 import { isAdminAiWidgetHidden } from "@/components/admin/ai/page-context"
 import { useAdminAiState } from "@/components/admin/ai/use-admin-ai"
 import type { NavOverrides } from "@/components/admin/admin-nav-access"
@@ -429,6 +430,8 @@ export default function AdminShell({
           />
         ) : null}
         {session && aiPreview ? <AdminAiLauncher /> : null}
+        {/* 새 문의 화면 안 알림 — 개인 설정으로 끌 수 있다(기획 2026-11-04 §3.5). */}
+        {session ? <AdminNewInquiryToast /> : null}
       </div>
     </AdminNavPreferencesProvider>
   )

@@ -26,23 +26,42 @@ export interface OverviewMetric {
   onRetry: () => void
 }
 
-export function OverviewBriefing({ summary, metrics }: { summary: ReactNode; metrics: OverviewMetric[] }) {
+function BriefingMetricRow({ metrics, size }: { metrics: OverviewMetric[]; size: "lg" | "md" }) {
+  return (
+    <div className="grid grid-cols-2 lg:grid-cols-4">
+      {metrics.map((metric) => (
+        <div key={metric.id} className={`min-w-0 border-l ${BORDER} px-4 py-3 first:border-l-0 first:pl-0 sm:px-6 [&:nth-child(3)]:border-l-0 [&:nth-child(3)]:pl-0 lg:[&:nth-child(3)]:border-l lg:[&:nth-child(3)]:pl-6`}>
+          <Link href={metric.href} className="block hover:opacity-75">
+            <p className="text-xs text-[#615D59]">{metric.label}</p>
+            <p aria-busy={metric.state === "loading"} className={`font-bold leading-none tracking-[-0.04em] tabular-nums text-[#111110] ${size === "lg" ? "mt-3 text-[30px] sm:text-[38px]" : "mt-2 text-[24px] sm:text-[28px]"}`}>{metric.state === "ready" ? metric.value : metric.state === "error" ? "확인 필요" : "—"}</p>
+            <p className={`mt-3 text-xs leading-relaxed ${TONES[metric.tone ?? "neutral"]}`}>{metric.state === "ready" ? metric.note : metric.state === "loading" ? "불러오는 중" : "조회 실패 · 0건이 아닙니다"}</p>
+          </Link>
+          {metric.state === "error" && <Retry label={metric.label} onRetry={metric.onRetry} />}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+export function OverviewBriefing({ summary, metrics, inflow }: {
+  summary: ReactNode
+  metrics: OverviewMetric[]
+  /** 방문자 → 리드 유입 줄. 운영 지표 아래에 한 줄 더 붙는다. */
+  inflow?: { title: string; metrics: OverviewMetric[] }
+}) {
   return (
     <section aria-labelledby="overview-briefing-heading" className={`mb-10 rounded-2xl border ${BORDER} bg-white px-5 py-7 shadow-[0_4px_18px_rgba(0,0,0,0.04)] sm:px-9 sm:py-9`}>
       <h2 id="overview-briefing-heading" className="text-xs font-semibold text-[#084734]">오늘의 요약</h2>
       <p className="mt-3 max-w-4xl text-xl font-semibold leading-relaxed tracking-[-0.025em] text-[#111110] sm:text-[26px]">{summary}</p>
-      <div className={`mt-7 grid grid-cols-2 border-t ${BORDER} pt-5 lg:grid-cols-4`}>
-        {metrics.map((metric) => (
-          <div key={metric.id} className={`min-w-0 border-l ${BORDER} px-4 py-3 first:border-l-0 first:pl-0 sm:px-6 [&:nth-child(3)]:border-l-0 [&:nth-child(3)]:pl-0 lg:[&:nth-child(3)]:border-l lg:[&:nth-child(3)]:pl-6`}>
-            <Link href={metric.href} className="block hover:opacity-75">
-              <p className="text-xs text-[#615D59]">{metric.label}</p>
-              <p aria-busy={metric.state === "loading"} className="mt-3 text-[30px] font-bold leading-none tracking-[-0.04em] tabular-nums text-[#111110] sm:text-[38px]">{metric.state === "ready" ? metric.value : metric.state === "error" ? "확인 필요" : "—"}</p>
-              <p className={`mt-3 text-xs leading-relaxed ${TONES[metric.tone ?? "neutral"]}`}>{metric.state === "ready" ? metric.note : metric.state === "loading" ? "불러오는 중" : "조회 실패 · 0건이 아닙니다"}</p>
-            </Link>
-            {metric.state === "error" && <Retry label={metric.label} onRetry={metric.onRetry} />}
-          </div>
-        ))}
+      <div className={`mt-7 border-t ${BORDER} pt-5`}>
+        <BriefingMetricRow metrics={metrics} size="lg" />
       </div>
+      {inflow ? (
+        <div className={`mt-5 border-t ${BORDER} pt-5`}>
+          <p className="mb-1 text-xs font-semibold text-[#084734]">{inflow.title}</p>
+          <BriefingMetricRow metrics={inflow.metrics} size="md" />
+        </div>
+      ) : null}
     </section>
   )
 }
@@ -71,7 +90,7 @@ export function OverviewOperationsPanels({ leads, leadState, onLeadRetry, operat
   const installations = operations?.installations.data
   const total = leads ? leads.new + leads.contacted + leads.converted + leads.closed : 0
   return <div className="mb-10 grid gap-5 xl:grid-cols-3" aria-busy={loading || leadState === "loading"}>
-    <Panel title="리드 현황" href="/admin/crm/customers/leads" note="Admin 리드 · 테스트·미확인 제외 · 현재 상태 분포. Compass 데모 건수와 모집단이 다릅니다.">
+    <Panel title="리드 현황" href="/admin/crm/customers/leads" note="전사 Admin 리드 · 테스트·미확인 제외 · 현재 상태 분포. Compass 데모 건수와 모집단이 다릅니다.">
       {leads ? <>
         <p className="text-[32px] font-bold tracking-[-0.04em] tabular-nums text-[#111110]">{(leads.new + leads.contacted).toLocaleString()}<span className="ml-2 text-xs font-normal tracking-normal text-[#615D59]">진행 중</span></p>
         <div className="mt-5 space-y-3">{[

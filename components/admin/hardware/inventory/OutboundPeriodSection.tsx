@@ -24,7 +24,7 @@ interface OutboundBucket {
   pct: string
   chips: Array<{ product: string; qty: number }>
   typeChips: Array<{ type: OutboundSaleType; label: string; qty: number }>
-  customers: Array<{ name: string; qty: number; revenue: number; hasRevenue: boolean; dateLabel: string }>
+  customers: Array<{ name: string; qty: number; promotionQty: number; revenue: number; hasRevenue: boolean; dateLabel: string }>
 }
 
 interface OutboundPeriodSectionProps {
@@ -49,7 +49,7 @@ function OutboundPeriodSection({
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[rgba(0,0,0,0.08)] px-5 py-4">
         <div>
           <p className="text-[15px] font-bold tracking-[-0.01em] text-[#111110]">기간별 출고 집계</p>
-          <p className="mt-1 text-[12px] text-[#615D59]">확정 출고(샘플·수리 제외) 기준 기간 집계. 행을 열면 고객사별 출고·매출이 펼쳐지고, 고객사를 누르면 거래이력이 열립니다. 매출은 실판매(Sales) 기준이며 시트 재가져오기 후 반영됩니다. 분기·연은 회계연도(4월 시작~3월 종료) 기준입니다.</p>
+          <p className="mt-1 text-[12px] text-[#615D59]">확정 세일즈 출고 기준 기간 집계(A/S·샘플·내부 이동 제외, 프로모션은 칩과 고객사 줄에 따로). 행을 열면 고객사별 출고·매출이 펼쳐지고, 고객사를 누르면 거래이력이 열립니다. 매출은 실판매(Sales) 기준이며 시트 재가져오기 후 반영됩니다. 분기·연은 회계연도(4월 시작~3월 종료) 기준입니다.</p>
         </div>
         <div className="inline-flex rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-0.5">
           {([["month", "월"], ["quarter", "분기"], ["year", "연"]] as const).map(([key, label]) => (
@@ -100,7 +100,7 @@ function OutboundPeriodSection({
                 {bucket.typeChips.length > 1 || (bucket.typeChips[0] && bucket.typeChips[0].type !== "sales") ? (
                   <div className="mt-1.5 flex flex-wrap gap-1.5">
                     {bucket.typeChips.map((entry) => (
-                      <span key={entry.type} className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-bold ${SALE_TYPE_META[entry.type].tone}`}>
+                      <span key={entry.type} className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold ${SALE_TYPE_META[entry.type].tone}`}>
                         {entry.label}
                         <span className="tabular-nums">{formatNumber(entry.qty)}</span>
                       </span>
@@ -112,7 +112,7 @@ function OutboundPeriodSection({
                 <div className="px-5 pb-4">
                   <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.04em] text-[#615D59]">고객사별 모음</p>
                   <div className="overflow-hidden rounded-lg border border-[rgba(0,0,0,0.06)]">
-                    <div className="grid grid-cols-[minmax(0,1fr)_58px_40px_88px_40px] gap-2.5 bg-[#F6F5F4] px-3.5 py-2 text-[10.5px] font-bold uppercase tracking-[0.04em] text-[#615D59]">
+                    <div className="grid grid-cols-[minmax(0,1fr)_58px_40px_88px_40px] gap-2.5 bg-[#F6F5F4] px-3.5 py-2 text-[11px] font-bold uppercase tracking-[0.04em] text-[#615D59]">
                       <span>고객사</span>
                       <span>날짜</span>
                       <span className="text-right">수량</span>
@@ -129,7 +129,12 @@ function OutboundPeriodSection({
                           onClick={() => setCustomerDetail(customer.name)}
                           className="col-span-4 grid cursor-pointer grid-cols-subgrid items-center gap-2.5 py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734]/40"
                         >
-                          <span title={customer.name} className="truncate text-[12.5px] font-semibold text-[#111110]">{customer.name}</span>
+                          <span className="flex min-w-0 flex-col">
+                            <span title={customer.name} className="truncate text-[12.5px] font-semibold text-[#111110]">{customer.name}</span>
+                            {customer.promotionQty > 0 && (
+                              <span className="text-[11px] font-semibold text-[#7A520F]">프로모션 {formatNumber(customer.promotionQty)}대</span>
+                            )}
+                          </span>
                           <span className="truncate text-[12px] tabular-nums text-[#615D59]">{customer.dateLabel}</span>
                           <span className="text-right text-[13px] font-bold tabular-nums text-[#111110]">{formatNumber(customer.qty)}대</span>
                           <span className="text-right text-[12.5px] font-bold tabular-nums text-[#084734]">{customer.hasRevenue ? formatCurrency(customer.revenue, "USD") : "-"}</span>

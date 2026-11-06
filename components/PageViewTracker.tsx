@@ -3,7 +3,7 @@
 import { usePathname, useSearchParams } from "next/navigation"
 import { useEffect, useRef } from "react"
 
-import { setGooglePageContext, trackEvent, trackInternalEvent } from "@/lib/analytics"
+import { replayPageViewAfterConsent, setGooglePageContext, trackEvent, type AnalyticsParams } from "@/lib/analytics"
 import { currentChoice } from "@/lib/consent/consent"
 import { useConsent } from "@/lib/consent/useConsent"
 import { collectLeadAttribution } from "@/lib/marketing-attribution"
@@ -25,19 +25,16 @@ export function PageViewTracker() {
   const search = searchParams.toString()
   const { choice } = useConsent()
   const lastTrackedKeyRef = useRef<string | null>(null)
-  // 분석 동의 없이 추적된 페이지뷰 — 나중에 같은 페이지에서 동의하면 내부 적재만 한 번 채운다.
-  const pendingInternalRef = useRef<{
-    path: string
-    title: string
-    referrer: string | undefined
-  } | null>(null)
+  // 분석 동의 없이 추적된 페이지뷰 — 나중에 같은 페이지에서 동의하면 내부 적재·GA4 page_view 를 한 번 채운다.
+  // 동의 전에는 Google 태그가 없고 trackEvent 도 GA4 를 건너뛰므로, 안 채우면 랜딩 페이지가 GA4 에서 빠진다.
+  const pendingPageViewRef = useRef<AnalyticsParams | null>(null)
   // 광고 귀속 파라미터만 남긴 경로. 이걸 중복 키로 쓰므로 `?prefill=` 을 replaceState 로
   // 지우는 것 같은 쿼리 정리는 새 페이지뷰가 되지 않는다.
   const path = sanitizeTrackingPath(`${pathname}${search ? `?${search}` : ""}`)
 
   useEffect(() => {
     // 동의 플래그는 키에 넣지 않는다 — 넣으면 배너에서 동의하는 순간 같은 페이지의
-    // GA4 page_view 가 한 번 더 나간다. 동의 변경은 아래 effect 가 내부 적재로만 다룬다.
+    // GA4 page_view 가 한 번 더 나간다. 동의 변경은 아래 effect 가 pending 으로 한 번만 다룬다.
     if (lastTrackedKeyRef.current === path) return
     lastTrackedKeyRef.current = path
 
@@ -57,26 +54,25 @@ export function PageViewTracker() {
       // 다른 탭에서 어드민에 로그인한 직원 브라우저도 다음 이동부터 내부로 잡힌다.
       ...(isInternalTrafficMarked() ? { traffic_type: "internal" as const } : {}),
     })
-    trackEvent("page_view", {
+    const pageViewParams: AnalyticsParams = {
       path,
       title: pageTitle,
       referrer: documentReferrer,
       page_title: pageTitle,
       page_location: pageLocation || undefined,
       page_referrer: pageReferrer,
-    })
+    }
+    trackEvent("page_view", pageViewParams)
     previousTrackedLocation = pageLocation || previousTrackedLocation
-    // trackEvent 가 내부 적재 여부를 정하는 기준(currentChoice)과 같은 값으로 판단한다.
-    pendingInternalRef.current = currentChoice().analytics
-      ? null
-      : { path, title: pageTitle, referrer: documentReferrer }
+    // trackEvent 가 내부 적재·GA4 여부를 정하는 기준(currentChoice)과 같은 값으로 판단한다.
+    pendingPageViewRef.current = currentChoice().analytics ? null : pageViewParams
   }, [path])
 
   useEffect(() => {
-    const pending = pendingInternalRef.current
+    const pending = pendingPageViewRef.current
     if (!choice.analytics || !pending || pending.path !== path) return
-    pendingInternalRef.current = null
-    trackInternalEvent("page_view", pending)
+    pendingPageViewRef.current = null
+    replayPageViewAfterConsent(pending)
   }, [choice.analytics, path])
 
   useEffect(() => {

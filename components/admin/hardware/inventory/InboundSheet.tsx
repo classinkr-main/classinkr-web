@@ -923,7 +923,7 @@ function InboundSheetPanel({
               // 조용히 되살리지 않는다 — 어제 쓰다 만 물량번호가 오늘 저장으로 새면 원장이 틀어진다.
               <div role="status" className="border-l-2 border-[#A8741A] bg-white py-2 pl-3 pr-2">
                 <p className="text-[12.5px] font-semibold text-[#111110]">
-                  작성 중이던 입고표가 있습니다 — <span className={MONO_META_CLASS}>{restorable.lot || "물량번호 없음"}</span>{" "}
+                  작성 중이던 입고표가 있습니다 — <span className={MONO_META_CLASS}>{restorable.lot || "물류번호 없음"}</span>{" "}
                   {formatNumber(restorable.rows.filter((row) => row.quantity.trim() !== "").length)}줄
                 </p>
                 <div className="mt-1.5 flex flex-wrap gap-1.5">
@@ -1254,7 +1254,7 @@ function InboundSheetPanel({
               </div>
               <div
                 aria-hidden
-                className={`hidden gap-2 border-y border-[rgba(0,0,0,0.06)] bg-[#F6F5F4] px-4 py-1.5 text-[10.5px] font-bold uppercase tracking-[0.04em] text-[#615D59] sm:grid ${TABLE_GRID_CLASS}`}
+                className={`hidden gap-2 border-y border-[rgba(0,0,0,0.06)] bg-[#F6F5F4] px-4 py-1.5 text-[11px] font-bold uppercase tracking-[0.04em] text-[#615D59] sm:grid ${TABLE_GRID_CLASS}`}
               >
                 <span>품목</span>
                 <span className="text-right">수량</span>
@@ -1497,7 +1497,7 @@ function InboundSheetPanel({
                         <div role="group" aria-labelledby={promoGroupLabelId}>
                           <p
                             id={promoGroupLabelId}
-                            className="border-y border-[rgba(0,0,0,0.06)] bg-[#F6F5F4] px-3 py-1 text-[10.5px] font-bold uppercase tracking-[0.04em] text-[#615D59]"
+                            className="border-y border-[rgba(0,0,0,0.06)] bg-[#F6F5F4] px-3 py-1 text-[11px] font-bold uppercase tracking-[0.04em] text-[#615D59]"
                           >
                             판촉·기타
                           </p>

@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest"
 
 import {
   buildCompassDuplicateReport,
+  buildCompassOverlayByLeadId,
   buildCompassOverlayMap,
   formatCompassDay,
   summarizeCompassEntry,
+  toCompassOverlayLeadIds,
   toCompassPhoneKeys,
   type CompassOverlaySource,
 } from "@/lib/compass/overlay"
@@ -167,5 +169,32 @@ describe("toCompassPhoneKeys", () => {
       { phone: "asdf" },
     ])
     expect(keys).toEqual(["01011112222", "01033334444"])
+  })
+})
+
+describe("buildCompassOverlayByLeadId · 어드민 리드 id → 대표 1건(Compass 링크 home_lead, 2026-11-04)", () => {
+  const rows = [
+    { id: 9, phone_key: null, stage: "demo", caller: "진소망", updated_at: "2026-09-01T00:00:00Z" },
+    { id: 11, phone_key: "01099990000", stage: "contact", updated_at: "2026-09-10T00:00:00Z" },
+  ]
+
+  it("링크마다 행을 찾아 칩 페이로드로 — 전화 키가 없는 행도 붙는다", () => {
+    const overlay = buildCompassOverlayByLeadId(new Map([["lead-g", [9]]]), rows)
+    expect(overlay["lead-g"]).toMatchObject({ compassLeadId: 9, stage: "demo", caller: "진소망", url: "https://mkt.classin.co.kr/leads?open=9" })
+  })
+
+  it("한 어드민 리드에 Compass 행이 여럿이면 칩과 같은 대표 행 규칙(최근성 → id)으로 하나", () => {
+    const overlay = buildCompassOverlayByLeadId(new Map([["lead-h", [9, 11]]]), rows)
+    expect(overlay["lead-h"].compassLeadId).toBe(11)
+  })
+
+  it("행이 없는 링크는 넣지 않는다", () => {
+    expect(buildCompassOverlayByLeadId(new Map([["lead-x", [99]]]), rows)).toEqual({})
+  })
+})
+
+describe("toCompassOverlayLeadIds", () => {
+  it("빈 id 는 버리고 중복 제거·정렬한다", () => {
+    expect(toCompassOverlayLeadIds([{ id: "b" }, { id: " a " }, { id: "" }, {}, { id: "b" }])).toEqual(["a", "b"])
   })
 })

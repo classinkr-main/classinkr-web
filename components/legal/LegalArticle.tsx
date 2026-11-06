@@ -35,9 +35,12 @@ export function LegalArticle({
   )
 }
 
-export function LegalSection({ title, children }: { title: string; children: ReactNode }) {
+export function LegalSection({ id, title, children }: { id?: string; title: string; children: ReactNode }) {
   return (
-    <section className="rounded-lg border border-black/[0.08] bg-white p-5 shadow-[rgba(0,0,0,0.03)_0px_4px_18px] md:p-7">
+    <section
+      id={id}
+      className="scroll-mt-28 rounded-lg border border-black/[0.08] bg-white p-5 shadow-[rgba(0,0,0,0.03)_0px_4px_18px] md:p-7"
+    >
       <h2 className="text-xl font-bold leading-snug text-[#111110] md:text-2xl">{title}</h2>
       <div className="mt-4 space-y-3 text-sm leading-7 text-[#615D59] md:text-[15px] md:leading-8">
         {children}
@@ -63,6 +66,45 @@ export function LegalNotice({ children }: { children: ReactNode }) {
   return (
     <div className="rounded-lg border border-fg-accent/15 bg-fg-accent/8 p-4 text-sm leading-7 text-fg-accent md:p-5">
       {children}
+    </div>
+  )
+}
+
+/** 가로로 넘치면 표 안에서만 스크롤한다(overflow-hidden 금지 — 375px 에서 칸이 잘린다). 첫 칸은 행 제목. */
+export function LegalTable({ headers, rows }: { headers: ReactNode[]; rows: ReactNode[][] }) {
+  return (
+    <div className="overflow-x-auto rounded-md border border-black/[0.08]">
+      <table
+        className="w-full border-collapse text-left text-[13px] leading-6 md:text-sm"
+        style={{ minWidth: `${headers.length * 9}rem` }}
+      >
+        <thead className="bg-[#FAFAF8] text-[#111110]">
+          <tr>
+            {headers.map((header, index) => (
+              <th key={index} scope="col" className="border-b border-black/[0.08] px-3 py-2 font-semibold">
+                {header}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, rowIndex) => (
+            <tr key={rowIndex} className="border-b border-black/[0.06] align-top last:border-b-0">
+              {row.map((cell, cellIndex) =>
+                cellIndex === 0 ? (
+                  <th key={cellIndex} scope="row" className="px-3 py-2 font-semibold text-[#111110]">
+                    {cell}
+                  </th>
+                ) : (
+                  <td key={cellIndex} className="px-3 py-2">
+                    {cell}
+                  </td>
+                )
+              )}
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   )
 }

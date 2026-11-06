@@ -63,8 +63,12 @@ describe("buildOverviewLeadSummary", () => {
       homepageUnconfirmed: expected.homepageUnconfirmed,
       unrespondedCount: expectedUnresponded.unrespondedCount,
       unresponded24hCount: expectedUnresponded.unresponded24hCount,
+      // lead(0)·lead(1)은 확인됨, lead(3)은 종료라 응대 전이 아니다 — 응대 전이면서 미확인인 리드는 없다.
+      unrespondedUnconfirmedCount: 0,
       topBranch: expected.topBranch,
     })
+    // 담당 범위를 주지 않으면 전사 묶음이 같은 값이다.
+    expect(summary.company.metrics).toEqual(summary.metrics)
     expect(summary.sources).toEqual(expected.pieData)
     expect(summary.recentLeads.map((item) => item.id)).toEqual(
       expected.recentLeads.map((item) => item.id)
@@ -83,6 +87,26 @@ describe("buildOverviewLeadSummary", () => {
 
     expect(summary.metrics.unrespondedCount).toBe(2)
     expect(summary.metrics.unresponded24hCount).toBe(1)
+  })
+
+  it("scopes the owner view and keeps an all-owner company block from the same snapshot", () => {
+    const leads = [
+      lead(0, { id: "mine", assigned_to: "Somang", status: "contacted" }),
+      lead(0, { id: "unseen-1", confirmed_at: undefined }),
+      lead(2, { id: "unseen-2", source: "demo_modal", confirmed_at: undefined }),
+      lead(1, { id: "seen-new" }),
+      lead(1, { id: "newsletter", source: "newsletter", confirmed_at: undefined }),
+    ]
+    const summary = buildOverviewLeadSummary(leads, NOW, ["Somang"])
+
+    expect(summary.metrics.total).toBe(1)
+    expect(summary.metrics.unrespondedCount).toBe(0)
+    expect(summary.company.metrics.total).toBe(5)
+    // 응대 전 = 신규 · 응대 대상 소스(뉴스레터 제외) — 확인 여부와 무관
+    expect(summary.company.metrics.unrespondedCount).toBe(3)
+    // 그중 아직 아무도 확인하지 않은 건
+    expect(summary.company.metrics.unrespondedUnconfirmedCount).toBe(2)
+    expect(summary.company.recentLeads.map((item) => item.id)).toContain("unseen-1")
   })
 
   it("returns chart-compatible 7/30 day buckets with the same dayCount keys", () => {

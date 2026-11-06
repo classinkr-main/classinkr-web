@@ -458,4 +458,33 @@ describe("buildIntakeFeed", () => {
     expect(result.todayCount).toBe(0)
     expect(result.yesterdayCount).toBe(0)
   })
+
+  it("오늘 건수를 소스별로 가르고, 접힌 항목은 어드민 쪽 그룹이 이긴다", () => {
+    const windows = resolveIntakeWindows(NOW)
+    const result = buildIntakeFeed({
+      adminLeads: [
+        lead({ id: "home-1", source: "contact_page", phone: "010-1111-2222" }),
+        lead({ id: "home-2", source: "demo_modal" }),
+        lead({ id: "showroom", source: "showroom_booking" }),
+        lead({ id: "meta-admin", source: "meta_lead_ads" }),
+        lead({ id: "newsletter", source: "newsletter" }),
+      ],
+      compassLeads: [
+        // 같은 전화의 홈페이지 문의 — 어드민 쪽(홈페이지)으로 센다
+        compassNew({ phone_key: "01011112222" }),
+        // Compass 에만 있는 마케팅 리드 — 광고
+        compassNew({ phone_key: "01033334444" }),
+      ],
+      windows,
+    })
+
+    expect(result.todayCount).toBe(6)
+    expect(result.todayBySource).toEqual({ homepage: 2, ad: 2, intake: 1, resources: 0, other: 1 })
+    const folded = result.items.find((item) => item.origins.length === 2)
+    expect(folded?.sourceKind).toBe("homepage")
+    expect(folded?.adminLeadId).toBe("home-1")
+    const compassOnly = result.items.find((item) => item.origins.length === 1 && item.origins[0] === "compass")
+    expect(compassOnly?.sourceKind).toBe("ad")
+    expect(compassOnly?.adminLeadId).toBeNull()
+  })
 })

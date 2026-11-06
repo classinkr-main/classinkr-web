@@ -50,7 +50,7 @@ const IS_PRODUCTION_RUNTIME =
  * database.types.ts는 다른 작업과 충돌을 피하려 재생성하지 않았다. 생성 타입에 없는
  * 컬럼 하나만 구조적으로 얹어 쓴다 — any 캐스팅 없이 타입이 계속 성립한다.
  */
-type LeadInsertWithInflow = LeadInsert & { last_inflow_at?: string | null } & LeadGaCapture;
+type LeadInsertWithInflow = LeadInsert & { last_inflow_at?: string | null } & LeadGaCapture & LeadAdConsentCapture;
 type LeadRowWithInflow = Lead & { last_inflow_at?: string | null };
 
 /**
@@ -62,6 +62,18 @@ export interface LeadGaCapture {
   ga_session_id?: string | null;
   ga_ad_consent?: boolean | null;
 }
+
+/**
+ * 맞춤형 광고 활용 동의 기록(20261106 마이그레이션) — 같은 이유로 구조적으로 얹는다. 체크 칸이 있던 폼만
+ * 채운다(lib/server/lead-capture.ts buildAdConsentFields). NULL = 체크 칸 없는 폼 또는 그 이전 리드.
+ */
+export interface LeadAdConsentCapture {
+  ad_consent?: boolean | null;
+  ad_consent_at?: string | null;
+  ad_consent_version?: string | null;
+}
+
+const AD_CONSENT_COLUMNS = ["ad_consent", "ad_consent_at", "ad_consent_version"] as const;
 
 const OPTIONAL_LEAD_INSERT_COLUMNS = [
   "branch",
@@ -92,6 +104,8 @@ const OPTIONAL_LEAD_INSERT_COLUMNS = [
   "ga_client_id",
   "ga_session_id",
   "ga_ad_consent",
+  // 20261106 마이그레이션(맞춤형 광고 활용 동의). 미적용이면 동의 기록만 덜고 저장한다.
+  ...AD_CONSENT_COLUMNS,
 ] as const satisfies readonly (keyof LeadInsertWithInflow)[];
 
 interface SupabaseColumnError {
@@ -224,9 +238,15 @@ function isMissingOptionalLeadColumn(error: SupabaseColumnError) {
 
   if (!haystack) return false;
 
-  return OPTIONAL_LEAD_INSERT_COLUMNS.some((column) =>
-    haystack.includes(column.toLowerCase())
-  );
+  return OPTIONAL_LEAD_INSERT_COLUMNS.some((column) => mentionsColumn(haystack, column));
+}
+
+/**
+ * 컬럼 이름을 낱말 단위로 찾는다. 부분 문자열로 찾으면 "ga_ad_consent" 누락 오류에 "ad_consent" 도
+ * 걸려(그 반대로 "ad_consent_at" 에 "ad_consent" 도) 멀쩡한 컬럼 묶음까지 덜어낸다.
+ */
+function mentionsColumn(haystack: string, column: string) {
+  return new RegExp(`(^|[^a-z0-9_])${column.toLowerCase()}($|[^a-z0-9_])`).test(haystack);
 }
 
 function isMissingLeadColumn(error: SupabaseColumnError, column: keyof LeadInsertWithInflow) {
@@ -235,7 +255,7 @@ function isMissingLeadColumn(error: SupabaseColumnError, column: keyof LeadInser
     .join(" ")
     .toLowerCase();
 
-  return Boolean(haystack) && haystack.includes(String(column).toLowerCase());
+  return Boolean(haystack) && mentionsColumn(haystack, String(column));
 }
 
 /**
@@ -246,15 +266,21 @@ function isMissingLeadColumn(error: SupabaseColumnError, column: keyof LeadInser
  * 잃었다 — 없는 컬럼 하나 때문에 멀쩡한 귀속 데이터를 버리는 셈이다.
  * 오류 메시지가 컬럼을 지목하면 그것만 덜고, 못 짚으면 예전처럼 전부 덜어낸다.
  */
-function stripOptionalLeadColumns(insert: LeadInsertWithInflow, error?: SupabaseColumnError) {
+function stripOptionalLeadColumns(
+  insert: Partial<LeadInsertWithInflow>,
+  error?: SupabaseColumnError
+) {
   const fallbackInsert: Partial<LeadInsertWithInflow> = { ...insert };
 
+  // 이미 덜어낸 컬럼을 또 지목하면(지목이 엇나감) 진전이 없으니 전부 덜기로 내려간다.
   const named: (keyof LeadInsertWithInflow)[] = error
-    ? OPTIONAL_LEAD_INSERT_COLUMNS.filter((column) => isMissingLeadColumn(error, column))
+    ? OPTIONAL_LEAD_INSERT_COLUMNS.filter((column) => column in insert && isMissingLeadColumn(error, column))
     : [];
   // GA 식별자 세 컬럼은 한 마이그레이션이라 함께 없다. 오류는 한 번에 하나만 지목하므로 묶음째 덜어야
   // 두 번째 실패 → "선택 컬럼 전부 덜기"(utm·gclid 까지 유실)로 내려가지 않는다.
   if (named.some((column) => column.startsWith("ga_"))) named.push("ga_client_id", "ga_session_id", "ga_ad_consent");
+  // 광고 동의 세 컬럼도 한 마이그레이션이다 — 같은 이유로 묶음째 덜어낸다.
+  if (named.some((column) => column.startsWith("ad_consent"))) named.push(...AD_CONSENT_COLUMNS);
   const doomed = named.length > 0 ? named : OPTIONAL_LEAD_INSERT_COLUMNS;
 
   for (const column of doomed) {
@@ -624,27 +650,36 @@ export async function getBoardLeads(): Promise<LeadRecord[]> {
  * 판정은 lib/compass/lead-contact-sync, 실행은 lib/server/lead-contact-compass-sync.
  * JSON 폴백 모드(로컬 픽스처)는 반영하지 않으므로 대상도 없다.
  */
-export async function getLeadsForCompassContactSync(): Promise<
-  Array<{ id: string; phone: string; status: LeadRecord["status"]; created_at: string | null; last_inflow_at: string | null }>
-> {
+export interface CompassContactSyncLeadRow {
+  id: string;
+  /** 전화가 없는 리드도 대상이다(2026-11-04) — Compass 링크(home_lead)로 붙을 수 있다. 매칭 못 하면 판정에서 그냥 빠진다. */
+  phone: string | null;
+  status: LeadRecord["status"];
+  created_at: string | null;
+  last_inflow_at: string | null;
+  /** 어드민 담당(CRM ownerKey) — Compass 담당 반영은 이 값이 비어 있을 때만 채운다. */
+  assigned_to: string | null;
+}
+
+export async function getLeadsForCompassContactSync(): Promise<CompassContactSyncLeadRow[]> {
   if (!USE_SUPABASE) return [];
 
   // created_at·last_inflow_at — 판정이 "이 문의보다 오래된 Compass 상태"를 거르는 기준(lib/compass/lead-contact-sync leadInflowAtMs).
-  const rows = await fetchAllLeadRows("id, phone, status, created_at, last_inflow_at", "MKT 연락 반영 대상 조회");
-  const targets: Array<{ id: string; phone: string; status: LeadRecord["status"]; created_at: string | null; last_inflow_at: string | null }> = [];
+  const rows = await fetchAllLeadRows("id, phone, status, created_at, last_inflow_at, assigned_to", "MKT 연락 반영 대상 조회");
+  const targets: CompassContactSyncLeadRow[] = [];
   // offset 페이지 사이에 새 리드가 끼면 경계 행이 두 번 올 수 있다 — 판정 건수가 부풀지 않게 접는다.
   const seen = new Set<string>();
   for (const row of rows) {
     if (seen.has(row.id)) continue;
     seen.add(row.id);
     if (row.status !== "new" && row.status !== "contacted") continue;
-    if (!row.phone?.trim()) continue;
     targets.push({
       id: row.id,
-      phone: row.phone,
+      phone: row.phone?.trim() ? row.phone : null,
       status: row.status,
       created_at: row.created_at ?? null,
       last_inflow_at: (row as { last_inflow_at?: string | null }).last_inflow_at ?? null,
+      assigned_to: row.assigned_to?.trim() ? row.assigned_to : null,
     });
   }
   return targets;
@@ -794,7 +829,7 @@ export async function findLeadsByContacts(contacts: {
 /* ─── CREATE ─── */
 
 export async function saveLead(
-  lead: Omit<LeadRecord, "id" | "status"> & LeadGaCapture
+  lead: Omit<LeadRecord, "id" | "status"> & LeadGaCapture & LeadAdConsentCapture
 ): Promise<LeadRecord> {
   assertDurableLeadStorage();
 
@@ -852,6 +887,10 @@ export async function saveLead(
     ga_client_id: lead.ga_client_id ?? null,
     ga_session_id: lead.ga_session_id ?? null,
     ga_ad_consent: lead.ga_ad_consent ?? null,
+    // 체크 칸이 있던 폼만 호출부가 채운다 — 나머지는 NULL(체크 칸 없음).
+    ad_consent: lead.ad_consent ?? null,
+    ad_consent_at: lead.ad_consent_at ?? null,
+    ad_consent_version: lead.ad_consent_version ?? null,
   };
 
   const { data, error } = await supabase
@@ -871,46 +910,33 @@ export async function saveLead(
         error.message
       );
 
-      // 1차 재시도 — 오류가 지목한 컬럼만 덜어낸다. 나머지 귀속 데이터는 지킨다.
-      const fallback = await supabase
-        .from("leads")
-        .insert(stripOptionalLeadColumns(insert, error))
-        .select()
-        .single();
-
-      if (!fallback.error) {
-        return returnAfterLeadMutation(supabaseToLegacy(fallback.data as Lead));
-      }
-      if (isUniqueViolation(fallback.error)) {
-        throw new LeadDuplicateError();
-      }
-
-      // 2차 재시도 — 여러 컬럼이 한꺼번에 없으면(마이그레이션 여러 개 미적용) 오류가
-      // 한 번에 하나씩만 지목한다. 이때는 예전처럼 선택 컬럼을 전부 덜어 저장을 살린다.
-      // 리드를 잃는 것보다 귀속을 잃는 게 낫다.
-      if (isMissingOptionalLeadColumn(fallback.error)) {
-        console.warn(
-          "[leads] still missing optional columns; retrying with core lead fields only:",
-          fallback.error.message
-        );
-
-        const bare = await supabase
+      // 재시도 — 오류가 지목한 컬럼 묶음만 덜어낸다. 마이그레이션 여러 개가 미적용이면 PostgREST 가
+      // 한 번에 하나씩만 지목하므로, 덜어낸 것을 쌓아 가며 다시 넣는다(ga_* 다음 ad_consent* …).
+      // 그래야 utm·gclid·notes 같은 멀쩡한 귀속 데이터를 지킨다. 지목을 못 하면 선택 컬럼을 전부
+      // 덜어 저장을 살린다 — 리드를 잃는 것보다 귀속을 잃는 게 낫다. 매 회 컬럼이 하나 이상 줄어 끝난다.
+      let attemptInsert: Partial<LeadInsertWithInflow> = insert;
+      let lastError: SupabaseColumnError = error;
+      for (;;) {
+        attemptInsert = stripOptionalLeadColumns(attemptInsert, lastError);
+        const retry = await supabase
           .from("leads")
-          .insert(stripOptionalLeadColumns(insert))
+          .insert(attemptInsert)
           .select()
           .single();
 
-        if (bare.error) {
-          if (isUniqueViolation(bare.error)) {
-            throw new LeadDuplicateError();
-          }
-          throw new Error(`[leads] 저장 실패: ${bare.error.message}`);
+        if (!retry.error) {
+          return returnAfterLeadMutation(supabaseToLegacy(retry.data as Lead));
         }
-
-        return returnAfterLeadMutation(supabaseToLegacy(bare.data as Lead));
+        if (isUniqueViolation(retry.error)) {
+          throw new LeadDuplicateError();
+        }
+        const hasOptionalLeft = OPTIONAL_LEAD_INSERT_COLUMNS.some((column) => column in attemptInsert);
+        if (!hasOptionalLeft || !isMissingOptionalLeadColumn(retry.error)) {
+          throw new Error(`[leads] 저장 실패: ${retry.error.message}`);
+        }
+        console.warn("[leads] still missing optional columns; retrying without the next named columns:", retry.error.message);
+        lastError = retry.error;
       }
-
-      throw new Error(`[leads] 저장 실패: ${fallback.error.message}`);
     }
 
     throw new Error(`[leads] 저장 실패: ${error.message}`);
@@ -1058,6 +1084,40 @@ export async function touchLeadInflow(id: string, at?: string): Promise<LeadReco
       console.warn("[leads] last_inflow_at 컬럼이 없어 재유입 시각 갱신을 건너뜁니다:", error.message);
     } else {
       console.warn("[leads] touchLeadInflow 실패:", error.message);
+    }
+    return null;
+  }
+  if (!data) return null;
+
+  return returnAfterLeadMutation(supabaseToLegacy(data as LeadRowWithInflow));
+}
+
+/**
+ * 재유입 병합 전용 — 맞춤형 광고 활용 동의 기록만 최신 제출 값으로 바꾼다(touchLeadInflow 와 같은 모양).
+ * 컬럼(20261106 마이그레이션)이 없는 배포 창에서는 warn 만 남기고 null 을 돌려준다 — 접수는 막지 않는다.
+ */
+export async function updateLeadAdConsent(
+  id: string,
+  fields: LeadAdConsentCapture
+): Promise<LeadRecord | null> {
+  if (!USE_SUPABASE) {
+    // JSON 폴백은 스키마가 없어 그대로 합친다. LeadRecord 에는 이 필드가 없어(읽지 않음) 넓혀서 넘긴다.
+    return updateLead(id, fields as Partial<LeadRecord>);
+  }
+
+  const supabase = createSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("leads")
+    .update(fields)
+    .eq("id", id)
+    .select()
+    .single();
+
+  if (error) {
+    if (AD_CONSENT_COLUMNS.some((column) => isMissingLeadColumn(error, column))) {
+      console.warn("[leads] ad_consent 컬럼이 없어 광고 동의 갱신을 건너뜁니다:", error.message);
+    } else {
+      console.warn("[leads] updateLeadAdConsent 실패:", error.message);
     }
     return null;
   }
@@ -1224,6 +1284,81 @@ export async function applyCompassLeadStatusSync(
   } finally {
     // 중간에 실패·중단해도 이미 바뀐 행이 있으면 다음 읽기가 옛 상태를 보지 않게 한다.
     if (result.contacted.length > 0 || result.closed.length > 0) invalidateLeadReadCaches();
+  }
+  return result;
+}
+
+export interface CompassLeadOwnerSyncResult {
+  /** 실제로 채운 행 — to 는 저장한 CRM ownerKey */
+  assigned: Array<{ id: string; to: string }>;
+  /** shouldContinue가 false를 돌려 남은 덩어리를 시작하지 않았다 */
+  stoppedEarly: boolean;
+}
+
+/** 담당 반영 도중 실패. partial은 실패 전까지 DB가 실제로 채운 행이다. */
+export class CompassLeadOwnerSyncError extends Error {
+  readonly partial: CompassLeadOwnerSyncResult;
+
+  constructor(message: string, partial: CompassLeadOwnerSyncResult) {
+    super(message);
+    this.name = "CompassLeadOwnerSyncError";
+    this.partial = partial;
+  }
+}
+
+/**
+ * Compass 담당을 어드민 담당(assigned_to)에 채운다 — lib/server/lead-contact-compass-sync 전용(2026-11-04).
+ *
+ * 위 applyCompassLeadStatusSync 와 같은 자세의 좁은 예외다: 사전조건을 WHERE 에 건다 — **assigned_to 가 비어 있는 행만**.
+ * 계획과 쓰기 사이에 사람이 담당을 골랐으면 그 행은 조용히 빠진다(돌려주는 id 에 없다). 이미 있는 담당은 어떤 값이든 덮지 않는다 —
+ * 어드민 담당은 데이터 소유 범위(matchesDataOwner)를 정하는 값이라 덮으면 그 사람 화면에서 리드가 사라진다.
+ * 저장값은 호출부가 어드민 담당자 명단으로 푼 CRM ownerKey 다(bulk-assign 과 같은 정규값). JSON 폴백 모드에서는 아무것도 하지 않는다.
+ */
+export async function applyCompassLeadOwnerSync(
+  assignments: ReadonlyArray<{ id: string; to: string }>,
+  options: { shouldContinue?: () => boolean } = {}
+): Promise<CompassLeadOwnerSyncResult> {
+  const result: CompassLeadOwnerSyncResult = { assigned: [], stoppedEarly: false };
+  if (!USE_SUPABASE || assignments.length === 0) return result;
+
+  const supabase = createSupabaseAdminClient();
+  const shouldContinue = options.shouldContinue ?? (() => true);
+
+  // 담당마다 id 를 모아 담당별 UPDATE — 같은 리드가 두 번 들어와도 한 번만 쓴다.
+  const byOwner = new Map<string, string[]>();
+  const seen = new Set<string>();
+  for (const { id, to } of assignments) {
+    const leadId = id.trim();
+    const owner = to.trim();
+    if (!leadId || !owner || seen.has(leadId)) continue;
+    seen.add(leadId);
+    const list = byOwner.get(owner);
+    if (list) list.push(leadId);
+    else byOwner.set(owner, [leadId]);
+  }
+
+  try {
+    owners: for (const [to, ids] of byOwner) {
+      for (let index = 0; index < ids.length; index += LEAD_ID_UPDATE_CHUNK) {
+        if (!shouldContinue()) {
+          result.stoppedEarly = true;
+          break owners;
+        }
+        const chunk = ids.slice(index, index + LEAD_ID_UPDATE_CHUNK);
+        const { data, error } = await supabase
+          .from("leads")
+          .update({ assigned_to: to })
+          .in("id", chunk)
+          .is("assigned_to", null)
+          .select("id");
+        if (error) throw new Error(`[leads] MKT 담당 반영 실패: ${error.message}`);
+        for (const row of (data ?? []) as Array<{ id: string }>) result.assigned.push({ id: row.id, to });
+      }
+    }
+  } catch (error) {
+    throw new CompassLeadOwnerSyncError(error instanceof Error ? error.message : String(error), result);
+  } finally {
+    if (result.assigned.length > 0) invalidateLeadReadCaches();
   }
   return result;
 }

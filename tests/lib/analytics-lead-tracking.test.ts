@@ -17,10 +17,13 @@ vi.mock("@/lib/analytics-config", () => ({
 }))
 
 import {
+  hashAdsUserData,
+  normalizeEmailForAds,
+  normalizePhoneForAds,
   setGooglePageContext,
   trackEvent,
   trackFormStart,
-  trackInternalEvent,
+  replayPageViewAfterConsent,
   trackLeadSubmitted,
 } from "@/lib/analytics"
 
@@ -76,6 +79,12 @@ afterEach(() => {
 })
 
 describe("trackLeadSubmitted", () => {
+  // GA4 이벤트는 분석 동의, Ads 전환은 마케팅 동의가 있어야 나간다 — 이 묶음은 둘 다 켜고 본다.
+  beforeEach(() => {
+    consent.analytics = true
+    consent.marketing = true
+  })
+
   it("sends nothing when the server did not store the submission", () => {
     const sent = trackLeadSubmitted({
       formType: "contact",
@@ -204,7 +213,85 @@ describe("trackLeadSubmitted", () => {
   })
 })
 
+describe("Google Ads enhanced conversions", () => {
+  const userData = { email: " Kim.Test@Gmail.com ", phone: "010-1234-5678" }
+  // shasum -a 256 로 따로 구한 값: "kimtest@gmail.com", "+821012345678"
+  const EMAIL_HASH = "9bd77db5f43c3f07872f01027c45e25ad66bcf06de2fec5bc6db0e38b8e32918"
+  const PHONE_HASH = "2efdd01fdf56e3f07de56acd9d40beb256d5983aec5f6d597c2c48354f35f9e0"
+
+  it("normalizes per Google's rules before hashing", async () => {
+    expect(normalizeEmailForAds("Kim.Test@naver.com")).toBe("kim.test@naver.com")
+    expect(normalizeEmailForAds("not-an-email")).toBeNull()
+    expect(normalizePhoneForAds("+82 010-1234-5678")).toBe("+821012345678")
+    expect(normalizePhoneForAds("02-123-4567")).toBe("+8221234567")
+    expect(normalizePhoneForAds("1588-1234")).toBeNull()
+    expect(await hashAdsUserData(userData)).toEqual({
+      sha256_email_address: EMAIL_HASH,
+      sha256_phone_number: PHONE_HASH,
+    })
+    expect(await hashAdsUserData({ email: "", phone: null })).toBeNull()
+  })
+
+  it("sets hashed user_data right before the single conversion when marketing consent and the form ad consent are both given", async () => {
+    consent.marketing = true
+    expect(
+      trackLeadSubmitted({ formType: "demo", source: "demo_modal", dedupeKey: "lead:ec", userData, adConsent: true })
+    ).toBe(true)
+
+    await vi.waitFor(() => expect(gtagEvents("conversion")).toHaveLength(1))
+    const calls = gtag.mock.calls as unknown as GtagCall[]
+    const setIndex = calls.findIndex(([command, target]) => command === "set" && target === "user_data")
+    expect(calls[setIndex]?.[2]).toEqual({ sha256_email_address: EMAIL_HASH, sha256_phone_number: PHONE_HASH })
+    expect(calls[setIndex + 1]?.[1]).toBe("conversion")
+
+    // 원문은 gtag·dataLayer 어디에도 없다.
+    const dataLayer = (window as unknown as { dataLayer: unknown[] }).dataLayer
+    expect(JSON.stringify([calls, dataLayer])).not.toMatch(/gmail|kim\.test|1234-5678|01012345678/i)
+  })
+
+  it("sends neither the conversion nor user_data when marketing consent is missing", async () => {
+    trackLeadSubmitted({ formType: "demo", source: "demo_modal", dedupeKey: "lead:no-ec", userData, adConsent: true })
+
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(gtagEvents("conversion")).toHaveLength(0)
+    expect(gtag.mock.calls.some(([, target]) => target === "user_data")).toBe(false)
+  })
+
+  it("sends the conversion without user_data when the form ad consent is not given (cookie marketing consent alone is not enough)", async () => {
+    consent.marketing = true
+    trackLeadSubmitted({ formType: "demo", source: "demo_modal", dedupeKey: "lead:cookie-only", userData, adConsent: false })
+    trackLeadSubmitted({ formType: "demo", source: "demo_modal", dedupeKey: "lead:cookie-only-undef", userData })
+
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(gtagEvents("conversion")).toHaveLength(2)
+    expect(gtag.mock.calls.some(([, target]) => target === "user_data")).toBe(false)
+  })
+
+  it("sends no user_data for a lead that has no Ads conversion (support topic)", async () => {
+    consent.marketing = true
+    trackLeadSubmitted({
+      formType: "contact",
+      source: "contact_page",
+      dedupeKey: "lead:support-ec",
+      contactTopic: "계정/접속/기술 지원",
+      userData,
+      adConsent: true,
+    })
+
+    // 해시는 비동기라 잠깐 기다린 뒤 "없음"을 확인한다.
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(gtagEvents("conversion")).toHaveLength(0)
+    expect(gtag.mock.calls.some(([, target]) => target === "user_data")).toBe(false)
+  })
+})
+
 describe("trackEvent GA4 params", () => {
+  // GA4 이벤트는 분석 동의, Ads 전환은 마케팅 동의가 있어야 나간다 — 이 묶음은 둘 다 켜고 본다.
+  beforeEach(() => {
+    consent.analytics = true
+    consent.marketing = true
+  })
+
   it("infers form_type for newsletter call sites that do not pass it", () => {
     trackEvent("submit_newsletter", { source: "event_alert:fall-seminar" })
     trackEvent("submit_newsletter", { source: "footer" })
@@ -303,6 +390,12 @@ describe("trackEvent GA4 params", () => {
 })
 
 describe("trackFormStart", () => {
+  // GA4 이벤트는 분석 동의, Ads 전환은 마케팅 동의가 있어야 나간다 — 이 묶음은 둘 다 켜고 본다.
+  beforeEach(() => {
+    consent.analytics = true
+    consent.marketing = true
+  })
+
   it("fires once per tab session for each form", () => {
     trackFormStart("contact_start", "contact")
     trackFormStart("contact_start", "contact")
@@ -315,6 +408,30 @@ describe("trackFormStart", () => {
   })
 })
 
+describe("consent gating", () => {
+  it("keeps GA4 events out of gtag without analytics consent but still pushes dataLayer", () => {
+    consent.marketing = true
+    trackEvent("click_cta", { button: "hero" })
+
+    expect(gtagEvents()).toHaveLength(0)
+    expect((window as unknown as { dataLayer: unknown[] }).dataLayer).toHaveLength(1)
+  })
+
+  it("sends the Ads conversion only with marketing consent", () => {
+    consent.analytics = true
+    trackLeadSubmitted({ formType: "demo", source: "demo_modal", dedupeKey: "g1" })
+    expect(gtagEvents("generate_lead")).toHaveLength(1)
+    expect(gtagEvents("conversion")).toHaveLength(0)
+
+    consent.analytics = false
+    consent.marketing = true
+    gtag.mockClear()
+    trackLeadSubmitted({ formType: "demo", source: "demo_modal", dedupeKey: "g2" })
+    expect(gtagEvents("generate_lead")).toHaveLength(0)
+    expect(gtagEvents("conversion")).toHaveLength(1)
+  })
+})
+
 describe("page context helpers", () => {
   it("setGooglePageContext forwards only provided values to gtag('set')", () => {
     setGooglePageContext({ page_location: "https://classin.kr/pricing", page_referrer: "" })
@@ -324,13 +441,25 @@ describe("page context helpers", () => {
     })
   })
 
-  it("trackInternalEvent never touches gtag and needs analytics consent", () => {
-    trackInternalEvent("page_view", { path: "/pricing" })
+  it("replayPageViewAfterConsent needs analytics consent, then sends internal + one GA4 page_view", () => {
+    const params = { path: "/pricing", page_location: "https://classin.kr/pricing", page_title: "가격" }
+    replayPageViewAfterConsent(params)
     expect(fetchMock).not.toHaveBeenCalled()
+    expect(gtag).not.toHaveBeenCalled()
 
     consent.analytics = true
-    trackInternalEvent("page_view", { path: "/pricing" })
+    replayPageViewAfterConsent(params)
     expect(fetchMock).toHaveBeenCalledTimes(1)
-    expect(gtag).not.toHaveBeenCalled()
+    expect(gtagEvents("page_view")).toHaveLength(1)
+    expect(gtag).toHaveBeenCalledWith("event", "page_view", expect.objectContaining({
+      page_location: "https://classin.kr/pricing",
+      page_title: "가격",
+    }))
+  })
+
+  it("trackEvent page_view skips GA4 without analytics consent (replay fills it later)", () => {
+    consent.marketing = true
+    trackEvent("page_view", { path: "/pricing" })
+    expect(gtagEvents("page_view")).toHaveLength(0)
   })
 })

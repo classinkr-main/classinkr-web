@@ -25,6 +25,9 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 //
 // 규칙(D10):
 //  - 세일즈 + 프로모션만 센다(resolveOutboundType). 유형을 끝까지 모르는 행(시트 행)은 세일즈로 센다.
+//    둘은 **따로** 센다(운영자 결정 2026-11-05 "세일즈 + 프로모션 따로"): installed·planned 는 세일즈만,
+//    promotionInstalled·promotionPlanned 는 프로모션. 시트 판매대시보드가 프로모션을 빼고 세는 것과 맞춰 읽을 수
+//    있게 주 숫자는 세일즈다.
 //  - 창고·샘플·사무실·수리로 가는 출고(내부 이동)는 세지 않는다. 회수는 출발지가 내부면 세지 않는다.
 //  - 설치 완료 = 예정이 아닌 출고, 배송 예정 = 예정 출고. 둘 다 occurred_at 의 달에 넣는다.
 //    날짜 없는 행은 "날짜 미정" 칸 — 현재 FY 에만 보인다(어느 FY 인지 모르는 열린 건이라서).
@@ -42,8 +45,12 @@ export interface SalesDashboardCounts {
   installed: number
   /** 배송 예정 수량. */
   planned: number
-  /** 회수 수량(판매에서 빼지 않는다). */
+  /** 회수 수량(판매에서 빼지 않는다). 세일즈·프로모션 회수 합. */
   returned: number
+  /** 프로모션 설치 완료 — 세일즈와 따로 센다(2026-11-05 결정). */
+  promotionInstalled: number
+  /** 프로모션 배송 예정. */
+  promotionPlanned: number
 }
 
 export interface SalesDashboardLine {
@@ -110,7 +117,7 @@ export interface SalesDashboardItemInput {
 const INTERNAL_DESTINATIONS = new Set(["warehouse", "sample", "office", "repair"])
 
 function emptyCounts(): SalesDashboardCounts {
-  return { installed: 0, planned: 0, returned: 0 }
+  return { installed: 0, planned: 0, returned: 0, promotionInstalled: 0, promotionPlanned: 0 }
 }
 
 function emptyLine(): SalesDashboardLine {
@@ -125,6 +132,8 @@ function addCounts(target: SalesDashboardCounts, source: SalesDashboardCounts) {
   target.installed += source.installed
   target.planned += source.planned
   target.returned += source.returned
+  target.promotionInstalled += source.promotionInstalled
+  target.promotionPlanned += source.promotionPlanned
 }
 
 function addLine(target: SalesDashboardLine, source: SalesDashboardLine) {
@@ -134,7 +143,8 @@ function addLine(target: SalesDashboardLine, source: SalesDashboardLine) {
 }
 
 function lineHasCounts(line: SalesDashboardLine) {
-  return line.total.installed !== 0 || line.total.planned !== 0 || line.total.returned !== 0
+  const total = line.total
+  return total.installed !== 0 || total.planned !== 0 || total.returned !== 0 || total.promotionInstalled !== 0 || total.promotionPlanned !== 0
 }
 
 function isReportGroup(value: unknown): value is HardwareReportGroup {
@@ -211,7 +221,9 @@ export function classifySalesDashboardMovement(movement: SalesDashboardMovementI
   }
 
   if (isReturn) return "returned"
-  return isPlannedProgressStatus(movement.status) ? "planned" : "installed"
+  const planned = isPlannedProgressStatus(movement.status)
+  if (type === "promotion") return planned ? "promotionPlanned" : "promotionInstalled"
+  return planned ? "planned" : "installed"
 }
 
 function sheetTypeValues(sheetType: string): unknown[] {

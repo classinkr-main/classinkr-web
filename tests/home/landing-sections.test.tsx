@@ -11,6 +11,10 @@ vi.mock("next/image", () => ({
     // eslint-disable-next-line @next/next/no-img-element, jsx-a11y/alt-text -- 테스트 목. alt 는 rest 로 넘어간다
     <img {...(rest as object)} data-priority={priority ? "true" : undefined} />
   ),
+  // 히어로 포스터 <picture> 아트 디렉션용. 최적화 URL 대신 원본 경로를 그대로 돌려준다
+  getImageProps: ({ src, sizes, loading, alt }: Record<string, unknown>) => ({
+    props: { src, srcSet: `${src} 640w`, sizes, loading, alt },
+  }),
 }))
 vi.mock("next/link", () => ({
   // eslint-disable-next-line @typescript-eslint/no-unused-vars -- prefetch 는 <a> 에 넘기지 않으려고 버린다
@@ -44,22 +48,38 @@ const hrefs = (h: string, list: readonly string[]) => {
 }
 
 describe("홈", () => {
-  it("히어로: H1 하나·주 CTA 1회·진단지·숫자 4개·전자칠판 틀+화면 2장(eager, priority 없음)·화면 켜짐 모먼트", () => {
+  it("히어로: 먹 영상 무대(H1 display·line 버튼·포스터 한 장·멈춤 버튼) + 시트(전자칠판 틀+화면·숫자 4개·화면 켜짐 모먼트)", () => {
     const h = html(<HomeHero />)
     expect(count(h, /<h1[\s>]/g)).toBe(1)
     // 두 구절을 블록으로 나눠도 읽히는 문장은 heroHeadline 그대로(쉼표 뒤 공백 포함)
     expect(h.match(/<h1[^>]*>([\s\S]*?)<\/h1>/)?.[1].replace(/<[^>]+>/g, "")).toBe(CLASSIN_POSITIONING.heroHeadline)
+    expect(h).toMatch(/<h1 class="text-display[\s"]/)
     expect(count(h, /파일럿 상담 신청/g)).toBe(1)
     hrefs(h, [CHECKLIST])
     for (const v of ["3,000만+", "5,000만+", "6만+", "160+"]) expect(h).toContain(v)
+
+    // 무대: 먹 지면, 채움 버튼 0(C14). 영상은 SSR 에 없다(데스크톱·움직임 허용에서 idle 로 붙는다). 멈춤 버튼(WCAG 2.2.2)
+    expect(h).toContain("surface-ink")
+    expect(h).not.toContain("bg-fg-accent")
+    expect(h).not.toContain("<video")
+    expect(h).toMatch(/<button[^>]*aria-label="배경 영상 멈추기"/)
+    // 포스터는 기기별 한 장(<picture>) — md 이상 가로, 그 아래 세로
+    expect(h).toContain(`<source media="(min-width: 48rem)" srcSet="${HOME_COPY.hero.video.poster} 640w"`)
+
     const tags = imgs(h)
-    expect(tags.map((t) => attr(t, "src"))).toEqual(["/images/home/hero-board-frame.webp", "/images/home/hero-board-screen.webp"])
-    expect(attr(tags[0], "alt")).toBe(HOME_COPY.hero.board.alt)
-    expect(attr(tags[1], "alt")).toBe("") // 화면 층은 틀 그림의 일부 — 설명은 틀 하나
-    for (const t of tags) {
-      expect(attr(t, "loading")).toBe("eager")
-      expect(t).not.toContain("priority")
-    }
+    expect(tags.map((t) => attr(t, "src"))).toEqual([
+      HOME_COPY.hero.video.posterMobile,
+      "/images/home/hero-board-frame.webp",
+      "/images/home/hero-board-screen.webp",
+    ])
+    const [poster, frame, screen] = tags
+    expect(attr(poster, "alt")).toBe("")
+    expect(attr(poster, "loading")).toBe("eager")
+    expect(attr(frame, "alt")).toBe(HOME_COPY.hero.board.alt)
+    expect(attr(screen, "alt")).toBe("") // 화면 층은 틀 그림의 일부 — 설명은 틀 하나
+    // 칠판은 시트 안 = 첫 화면 아래 → lazy(next/image 기본)
+    for (const t of [frame, screen]) expect(attr(t, "loading")).toBeUndefined()
+    for (const t of tags) expect(t).not.toContain("priority")
     expect(count(h, /data-moment="hero-screen"/g)).toBe(1)
   })
 

@@ -21,7 +21,7 @@
 import { toBusinessStorageDateTime, getBusinessDateParts } from "@/lib/business-time"
 import { compassInflowInWindow, type CompassInflowEvent } from "@/lib/compass/inflow-window"
 import { isCompassMarketingChannel, normalizePhoneKey } from "@/lib/compass/normalize"
-import { getMetaAdInfo, isTestLead } from "@/lib/crm/lead-attribution"
+import { getLeadSourceGroup, getMetaAdInfo, isTestLead } from "@/lib/crm/lead-attribution"
 import { leadInflowInWindow, type LeadInflowEvent } from "@/lib/crm/lead-reinflow"
 import { shiftDays } from "@/lib/marketing/perf"
 import type { LeadRecord } from "@/lib/repositories/leads"
@@ -83,6 +83,38 @@ export interface CompassIntakeLead {
 
 export type IntakeOrigin = "admin" | "compass"
 
+/**
+ * 오늘 유입의 소스 분해 축 — Overview "지금" 띠의 "홈페이지 3 · 광고 3 · 쇼룸 1" 줄.
+ * 어드민 리드는 유입 그룹(getLeadSourceGroup)에서 접고, Compass 에만 있는 리드는 마케팅 채널(광고)이다.
+ * 두 원천이 접힌 항목은 어드민 쪽 그룹이 이긴다(웹사이트 폼 어휘가 더 구체적이다).
+ */
+export type IntakeSourceKind = "homepage" | "ad" | "intake" | "resources" | "other"
+
+export const INTAKE_SOURCE_KIND_ORDER: readonly IntakeSourceKind[] = ["homepage", "ad", "intake", "resources", "other"]
+
+export const INTAKE_SOURCE_KIND_LABEL: Record<IntakeSourceKind, string> = {
+  homepage: "홈페이지",
+  ad: "광고",
+  intake: "쇼룸·도입 신청",
+  resources: "자료",
+  other: "기타",
+}
+
+export function intakeSourceKindOfLead(lead: LeadRecord): IntakeSourceKind {
+  switch (getLeadSourceGroup(lead)) {
+    case "homepage":
+      return "homepage"
+    case "meta":
+      return "ad"
+    case "intake":
+      return "intake"
+    case "resources":
+      return "resources"
+    default:
+      return "other"
+  }
+}
+
 export interface IntakeFeedItem {
   /**
    * 표시용 안정 키 — 기여한 원천의 레코드 id로만 만든다(`c:<compassId>` 또는 `a:<leadId>`).
@@ -100,6 +132,10 @@ export interface IntakeFeedItem {
   /** 어느 원천에서 왔는지. 2개면 두 원천이 같은 사람을 잡았다는 뜻. */
   origins: IntakeOrigin[]
   compassLeadId: number | null
+  /** 기여한 첫 어드민 리드 id — 리드 보드 딥링크(`?lead=`)용. Compass 에만 있으면 null. */
+  adminLeadId: string | null
+  /** 소스 분해 축(IntakeSourceKind). */
+  sourceKind: IntakeSourceKind
   /**
    * 재유입인가 — 이 창에서 "이미 있던 리드가 다시 들어왔다"(생성은 창 밖, 최신 재유입이 창 안).
    *  - Compass: 최신 재유입(last_inflow_at)이 창 안.
@@ -119,6 +155,8 @@ export interface IntakeFeedResult {
   todayReinflowCount: number
   /** 어제 00:00 KST~같은 시각, 중복 접은 뒤 건수. */
   yesterdayCount: number
+  /** 오늘 창(todayCount)의 소스별 건수 — 합이 todayCount 와 같다. */
+  todayBySource: Record<IntakeSourceKind, number>
   /** todayCount − yesterdayCount. 두 원천이 모두 미측정이면 null. */
   delta: number | null
   /** 오늘 창에서 두 원천이 겹쳐 1건으로 접힌 수 — 합계가 단순 덧셈이 아닌 이유를 밝힌다. */
@@ -148,6 +186,8 @@ interface Bucket {
   compassLeadId: number | null
   /** 표시 키 산출용 — 이 버킷에 기여한 첫 어드민 리드 id. */
   adminLeadId: string | null
+  /** 먼저 기여한 원천의 소스 축 — 어드민 루프가 먼저 돌므로 접힌 항목은 어드민 쪽이 이긴다. */
+  sourceKind: IntakeSourceKind | null
   /** 기여한 유입(어드민·Compass) 중 하나라도 재유입이면 true. */
   reinflow: boolean
 }
@@ -190,6 +230,7 @@ function foldInto(map: Map<string, Bucket>, foldKey: string, atMs: number, at: s
     origins: new Set<IntakeOrigin>(),
     compassLeadId: null,
     adminLeadId: null,
+    sourceKind: null,
     reinflow: false,
   }
   map.set(foldKey, created)
@@ -255,6 +296,7 @@ export function buildIntakeFeed({
       const bucket = foldInto(map, key, event.atMs, event.at)
       bucket.origins.add("admin")
       if (bucket.adminLeadId == null) bucket.adminLeadId = lead.id
+      if (bucket.sourceKind == null) bucket.sourceKind = intakeSourceKindOfLead(lead)
       if (event.kind === "reinflow") bucket.reinflow = true
       fill(bucket, "name", clean(lead.name))
       fill(bucket, "org", clean(lead.org))
@@ -281,6 +323,7 @@ export function buildIntakeFeed({
       const bucket = foldInto(map, key, event.atMs, event.at)
       bucket.origins.add("compass")
       if (bucket.compassLeadId == null) bucket.compassLeadId = lead.id
+      if (bucket.sourceKind == null) bucket.sourceKind = "ad"
       if (event.kind === "reinflow") bucket.reinflow = true
       fill(bucket, "name", clean(lead.name))
       fill(bucket, "org", clean(lead.academy))
@@ -308,19 +351,24 @@ export function buildIntakeFeed({
       // 표시 순서를 고정한다(Set 삽입 순서에 화면이 흔들리지 않게).
       origins: (["admin", "compass"] as const).filter((origin) => bucket.origins.has(origin)),
       compassLeadId: bucket.compassLeadId,
+      adminLeadId: bucket.adminLeadId,
+      sourceKind: bucket.sourceKind ?? "other",
       reinflow: bucket.reinflow,
     }))
 
   let overlapCount = 0
   let todayReinflowCount = 0
+  const todayBySource: Record<IntakeSourceKind, number> = { homepage: 0, ad: 0, intake: 0, resources: 0, other: 0 }
   for (const bucket of today.values()) {
     if (bucket.origins.size > 1) overlapCount += 1
     if (bucket.reinflow) todayReinflowCount += 1
+    todayBySource[bucket.sourceKind ?? "other"] += 1
   }
 
   return {
     todayCount: today.size,
     todayReinflowCount,
+    todayBySource,
     yesterdayCount: yesterday.size,
     // 양쪽 다 미측정이면 0−0=0 이 아니라 "비교 불가"다.
     delta: measured ? today.size - yesterday.size : null,

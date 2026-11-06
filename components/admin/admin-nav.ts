@@ -91,7 +91,7 @@ const ADMIN_AI_NAV_ITEM: AdminNavItem = { href: ADMIN_AI_HREF, label: "AI 올인
 
 // IA 재편(2026-07-04): 6섹션 → 4섹션 병합. "너무 세분화" 해소 — 비즈니스 분석(Analytics)은
 // marketing으로, 매출 성과(KR Team·매출 장부)는 sales로 옮겨 잡탕이던 "분석" 섹션을 해체.
-// 트래픽은 nav에서만 내렸고 /admin/traffic 독립 화면을 유지한다. Analytics가 그 화면으로 링크한다.
+// 트래픽은 Analytics '방문자' 탭으로 흡수됐다 — /admin/traffic 은 그 탭으로 리다이렉트만 한다(2026-11-03).
 // 섹션 부제(설명 줄)는 사이드바에서 미렌더 — 시각 밀도만 낮춘다(팔레트 그룹은 label만 사용).
 // (이전 재편) 자료 퍼널=/lead-magnets 통일, 하드웨어=SCM 운영 콘솔이라 system, 챗봇→docs?tab=gaps 흡수.
 // (2026-07-17) CS 탭 외부/내부 이원화 — "챗봇 운영·보강 큐" 겸직 항목을 "챗봇 운영"(/admin/chatbot,
@@ -157,7 +157,7 @@ export const ADMIN_NAV: AdminNavItem[] = [
   { href: "/admin/lead-magnets", label: "자료 퍼널", icon: Magnet, section: "marketing", category: "growth", keywords: "자료 퍼널 리드마그넷 material funnel download lead magnet" },
   // (2026-07-29 탭 재구성) 공개 행사(/admin/events)는 캘린더 항목으로 흡수됐다 —
   // 캘린더는 이미 source: "event"로 공개 행사를 그리고 있어 화면 병합이 아니라 nav 항목만 내린 것이다.
-  // 방문자/트래픽(/admin/traffic)은 nav에서만 내렸다. 화면·라우트는 독립 유지하며 Analytics가 링크한다.
+  // 방문자/트래픽은 이 항목의 '방문자' 탭(기본 탭)이다. /admin/traffic 은 리다이렉트만 남았다(2026-11-03).
   { href: "/admin/analytics", label: "Analytics", icon: BarChart2, section: "marketing", category: "growth", keywords: "analytics 분석 통계 방문자 트래픽 traffic 추적 pixel 계측 홈페이지 흐름" },
 
   // 운영·시스템 — Overview는 맨 위 "home" 범주로 옮겨졌다(2026-09-01, 배열 상단 주석 참조).

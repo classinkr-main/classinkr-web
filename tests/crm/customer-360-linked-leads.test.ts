@@ -198,6 +198,9 @@ async function load(options: HarnessOptions) {
   vi.doMock("@/lib/compass/bridge", () => ({
     getCompassLeadsByPhoneKeys: vi.fn().mockResolvedValue({ rows: options.compassLeads ?? [], down: false }),
     getCompassActivitiesByLeadIds: vi.fn().mockResolvedValue({ rows: [], down: false }),
+    // 링크(home_lead) 우선 매칭(lib/compass/admin-lead-links) — 이 하네스는 링크가 없는 고객이다.
+    getCompassHomeLeadRefs: vi.fn().mockResolvedValue({ rows: [], down: false }),
+    getCompassLeadsByIds: vi.fn().mockResolvedValue({ rows: [], down: false }),
   }))
 
   const repo = await import("@/lib/repositories/crm-customer-360")

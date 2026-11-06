@@ -131,6 +131,12 @@ describe("고객사 출고", () => {
     expect(legacyReturn.input.returnOfMovementId).toBeUndefined()
   })
 
+  it("창고가 아닌 곳(사무실)에서 고객사로 보내면 물류번호를 요구하지 않는다 — 화면과 같은 조건", () => {
+    const fromOffice = prepareProcessLine(outbound({ fromLocation: "사무실", lotNo: null }), ctx({ origin: "office" }))
+    expect(fromOffice.strictLot).toBe(false)
+    expect(prepareProcessLine(outbound({ fromLocation: "창고" }), ctx({ origin: "warehouse" })).strictLot).toBe(true)
+  })
+
   it("사무실·샘플 풀·수리 이동은 예전 흐름(유형·물류번호 선택 없음)", () => {
     const internal = prepareProcessLine(line({ toLocation: "사무실", status: "사무실 배정" }), ctx({ destination: "office" }))
     expect(internal.strictLot).toBe(false)
@@ -168,6 +174,13 @@ describe("회수", () => {
       toLocation: "창고",
       status: "회수",
     })
+  })
+
+  it("시트 이관 행은 회수 원 출고로 고를 수 없다 — 회수 연결이 매시간 가져오기의 지우기를 막는다", () => {
+    const error = ruleError(() => prepareProcessLine(ret(), ctx({ origin: "customer", returnOriginal: { ...original, source: "sheet_import" } })))
+    expect(error.status).toBe(422)
+    expect(error.message).toContain("시트에 적어")
+    expect(prepareProcessLine(ret(), ctx({ origin: "customer", returnOriginal: { ...original, source: "admin_manual" } })).input.returnOfMovementId).toBe("out-1")
   })
 
   it("남은 수량까지만, 취소·예정 출고는 막는다", () => {

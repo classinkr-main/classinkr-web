@@ -300,7 +300,9 @@ describe("createHardwareMovementsBatch", () => {
       const results = await createHardwareMovementsBatch(directShip(3), { actor: MANAGER })
 
       expect(results[0].ok).toBe(true)
-      expect(results[1]).toMatchObject({ ok: false, error: expect.stringContaining("C3 잔여는 2대") })
+      // 직배송 출고는 "고객사 직송"에서 나가 창고 출발이 아니다 — 새 직접 선택 규칙 대신 예전 지정 물류번호
+      // 잔여 검사가 막는다(문구만 다르다).
+      expect(results[1]).toMatchObject({ ok: false, error: expect.stringMatching(/C3.*(잔여는 2대|가능 2대)/) })
     })
 
     it("CRM 오더 한 줄을 물류번호 둘로 나누면 행 둘, 둘째 행 참조에 접미사를 단다", async () => {

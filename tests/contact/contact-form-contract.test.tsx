@@ -124,3 +124,17 @@ describe("문의 폼 디자인 정합", () => {
     expect(html).not.toMatch(/\btext-red-\d/)
   })
 })
+
+describe("맞춤형 광고 활용 동의", () => {
+  const html = renderContact()
+
+  it("뉴스레터 수신과 다른 두 칸이고, 기본으로 비어 있다", () => {
+    for (const name of ["ad-consent-provide", "ad-consent-transfer"]) {
+      const chunk = fieldOf(html, name)
+      expect(chunk, name).toBeDefined()
+      expect(chunk?.split(">")[0], name).not.toContain("checked")
+    }
+    expect(fieldOf(html, "marketing-consent")).toBeDefined()
+    expect(html.match(/<a[^>]*href="\/privacy#ad-consent"[^>]*>/)?.[0]).toContain('target="_blank"')
+  })
+})

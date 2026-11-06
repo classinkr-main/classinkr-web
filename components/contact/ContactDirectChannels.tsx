@@ -77,7 +77,7 @@ export function ContactDirectChannels() {
                 </div>
             </div>
 
-            {/* 지도 — 남는 세로 공간을 일러스트 지도가 채운다(V22-A) */}
+            {/* 지도 — 남는 세로 공간을 일러스트 지도가 채운다(V24-A) */}
             <div className="mt-auto pt-6 border-t border-[#E5E5E0]">
                 <ContactMap />
             </div>

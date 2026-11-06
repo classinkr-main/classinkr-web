@@ -300,6 +300,9 @@ async function loadCustomer360(options?: {
   vi.doMock("@/lib/compass/bridge", () => ({
     getCompassLeadsByPhoneKeys: vi.fn().mockResolvedValue({ rows: [], down: false }),
     getCompassActivitiesByLeadIds: vi.fn().mockResolvedValue({ rows: [], down: false }),
+    // 링크(home_lead) 우선 매칭(lib/compass/admin-lead-links) — 이 하네스는 링크가 없는 고객이다.
+    getCompassHomeLeadRefs: vi.fn().mockResolvedValue({ rows: [], down: false }),
+    getCompassLeadsByIds: vi.fn().mockResolvedValue({ rows: [], down: false }),
   }))
   // CT9 — 연락 로그 원본·계정→리드 확정 링크를 직접 읽는다. 이 하네스는 둘 다 없는 고객이다.
   vi.doMock("@/lib/supabase/admin", () => ({

@@ -3,6 +3,8 @@
 import {
   Area,
   AreaChart,
+  Bar,
+  BarChart,
   Cell,
   Pie,
   PieChart,
@@ -23,10 +25,24 @@ export interface TrendPoint {
   count: number
 }
 
-export function LeadTrendChart({ data, range }: { data: TrendPoint[]; range: 7 | 30 }) {
+/**
+ * syncId 를 주면 같은 값을 가진 다른 차트(방문 추이)와 크로스헤어·툴팁이 같은 날짜로 움직인다 —
+ * 두 스케일을 한 판에 얹는 이중축 대신 위아래 2단으로 나눠 그리기 위한 것(마케팅 재구성 G5와 같은 방식).
+ */
+export function LeadTrendChart({
+  data,
+  range,
+  height = 180,
+  syncId,
+}: {
+  data: TrendPoint[]
+  range: 7 | 30
+  height?: number
+  syncId?: string
+}) {
   return (
-    <ResponsiveContainer width="100%" height={180}>
-      <AreaChart data={data} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
+    <ResponsiveContainer width="100%" height={height}>
+      <AreaChart data={data} syncId={syncId} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
         <GreenAreaDefs />
         <CartesianGrid {...gridProps} />
         <XAxis dataKey="label" tick={axisTick} axisLine={false} tickLine={false} minTickGap={24} />
@@ -42,6 +58,21 @@ export function LeadTrendChart({ data, range }: { data: TrendPoint[]; range: 7 |
           activeDot={{ r: 5, fill: CHART.brand, strokeWidth: 0 }}
         />
       </AreaChart>
+    </ResponsiveContainer>
+  )
+}
+
+/** 홈 방문자 일별 막대 — 문의 추이(위 2단의 아래)와 x축·크로스헤어를 공유한다. 맥락 축이라 웜 그레이로 물린다. */
+export function VisitorTrendChart({ data, height = 120, syncId }: { data: TrendPoint[]; height?: number; syncId?: string }) {
+  return (
+    <ResponsiveContainer width="100%" height={height}>
+      <BarChart data={data} syncId={syncId} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
+        <CartesianGrid {...gridProps} />
+        <XAxis dataKey="label" tick={axisTick} axisLine={false} tickLine={false} minTickGap={24} />
+        <YAxis tick={axisTick} axisLine={false} tickLine={false} allowDecimals={false} />
+        <Tooltip content={<ChartTooltip suffix="명" />} cursor={{ fill: CHART.grid }} />
+        <Bar dataKey="count" name="홈 방문" fill={CHART.barMuted} radius={[3, 3, 0, 0]} maxBarSize={28} />
+      </BarChart>
     </ResponsiveContainer>
   )
 }

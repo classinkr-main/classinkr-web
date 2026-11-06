@@ -1,7 +1,7 @@
 import { ImageResponse } from "next/og"
 import { color } from "@/lib/design-tokens"
 
-export const alt = "클래스인 Classin — 학원 전자칠판·수업 녹화·운영 플랫폼"
+export const alt = "클래스인 Classin 학원 전자칠판. 칠판은 지워져도, 수업은 남습니다"
 export const size = { width: 1200, height: 630 }
 export const contentType = "image/png"
 
@@ -76,12 +76,14 @@ export default function OGImage() {
             lineHeight: 1.04,
             letterSpacing: "-2.125px",
             margin: 0,
-            maxWidth: 820,
+            maxWidth: 1000,
+            // satori 는 <br /> 를 줄바꿈으로 그리지 않는다 — 줄마다 블록으로 쌓는다
+            display: "flex",
+            flexDirection: "column",
           }}
         >
-          학원 전자칠판·수업 녹화
-          <br />
-          운영 플랫폼, 클래스인
+          <span>칠판은 지워져도,</span>
+          <span>수업은 남습니다</span>
         </h1>
 
         {/* Sub text */}
@@ -92,12 +94,13 @@ export default function OGImage() {
             color: "#615D59",
             lineHeight: 1.4,
             marginTop: 28,
-            maxWidth: 640,
+            maxWidth: 820,
+            display: "flex",
+            flexDirection: "column",
           }}
         >
-          전자칠판, 수업 녹화, 교안, LMS와 관리자 데이터를
-          <br />
-          한 흐름으로 연결하는 클래스인
+          <span>학원 전자칠판 · 수업 녹화 · AI 강의 평가</span>
+          <span>클래스인 Classin</span>
         </p>
 
         {/* Bottom right accent */}

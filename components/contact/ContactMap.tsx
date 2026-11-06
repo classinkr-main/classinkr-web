@@ -6,7 +6,7 @@ import { ArrowUpRight } from "lucide-react"
 import { trackEvent } from "@/lib/analytics"
 
 /**
- * 문의 화면의 목동 쇼룸 일러스트 지도(미니어처 3D 도시, V22-A).
+ * 문의 화면의 목동 쇼룸 일러스트 지도(미니어처 3D 도시, V24-A).
  * 랜드마크: 쇼룸(그린)·SBS(금색)·목운중학교(블록 전체 연한 살구색)·오목교역(배지·출구·5호선 점선).
  *
  * 바탕 세 장(땅·나무·건물)은 OpenStreetMap 데이터로 만든 정적 SVG다

@@ -141,20 +141,31 @@ describe("하드웨어 일일 알림 실행", () => {
   afterEach(() => {
     vi.restoreAllMocks()
     vi.resetModules()
+    vi.unstubAllEnvs()
   })
 
   async function loadRunner(options: {
     rows?: ProcessAlertMovementRow[]
     processColumns?: boolean
     alreadySent?: boolean | Error
+    deliveryResults?: Array<{ channel: string; status: string; errorMessage?: string }>
+    enabled?: boolean
   } = {}) {
     vi.resetModules()
-    const emitNotificationEvent = vi.fn().mockResolvedValue({ id: "event-1", deliveryResults: [] })
+    // 기본은 꺼짐(2026-11-05 결정) — 발송 경로 시험은 켜고 돈다.
+    vi.stubEnv("HARDWARE_PROCESS_ALERTS", options.enabled === false ? "" : "on")
+    const emitNotificationEvent = vi.fn().mockResolvedValue({
+      id: "event-1",
+      deliveryResults: options.deliveryResults ?? [{ channel: "wecom_webhook", status: "sent" }],
+    })
     const hasProcessAlertBeenSent = vi.fn(async () => {
       if (options.alreadySent instanceof Error) throw options.alreadySent
       return options.alreadySent === true
     })
-    vi.doMock("@/lib/notifications/emit-event", () => ({ emitNotificationEvent }))
+    vi.doMock("@/lib/notifications/emit-event", () => ({
+      emitNotificationEvent,
+      WEBHOOK_DISABLED_REASON: "관리자가 끈 채널입니다.",
+    }))
     vi.doMock("@/lib/repositories/hardware-process-alerts", () => ({
       listProcessAlertLedger: vi.fn().mockResolvedValue({
         rows: options.rows ?? [staleRow("a"), staleRow("b", { owner: "박담당" })],
@@ -178,10 +189,25 @@ describe("하드웨어 일일 알림 실행", () => {
       source: "hardware_process_alerts",
       sourceId: "2026-10-28",
       channels: ["wecom_webhook"],
-      requireSuccessfulDelivery: true,
       routeUrl: "/admin/hardware",
     })
     expect(emitNotificationEvent.mock.calls[0][0].message).toContain("■ 김담당")
+  })
+
+  it("운영 방이 설정에서 꺼져 있으면 channel_off — 실패가 아니다(매일 크론이 실패로 남던 문제)", async () => {
+    const { runHardwareProcessAlerts } = await loadRunner({
+      deliveryResults: [{ channel: "wecom_webhook", status: "skipped", errorMessage: "관리자가 끈 채널입니다." }],
+    })
+
+    await expect(runHardwareProcessAlerts({ now: NOW })).resolves.toMatchObject({ status: "channel_off", eventId: "event-1" })
+  })
+
+  it("HTTP 실패 같은 진짜 실패는 던진다 — 잡이 failed 로 남는다", async () => {
+    const { runHardwareProcessAlerts } = await loadRunner({
+      deliveryResults: [{ channel: "wecom_webhook", status: "failed", errorMessage: "HTTP 500" }],
+    })
+
+    await expect(runHardwareProcessAlerts({ now: NOW })).rejects.toThrow("wecom_webhook: HTTP 500")
   })
 
   it("dryRun 은 미리보기만 — 보내지도, 중복 확인도 하지 않는다", async () => {
@@ -217,16 +243,18 @@ describe("하드웨어 일일 알림 실행", () => {
     expect(emitNotificationEvent).toHaveBeenCalledTimes(1)
   })
 
-  it("HARDWARE_PROCESS_ALERTS=off 면 원장도 읽지 않고 disabled", async () => {
-    vi.stubEnv("HARDWARE_PROCESS_ALERTS", "off")
-    try {
-      const { runHardwareProcessAlerts, emitNotificationEvent } = await loadRunner()
-      const report = await runHardwareProcessAlerts({ now: NOW })
-      expect(report).toMatchObject({ status: "disabled", dateKey: "2026-10-28" })
-      expect(emitNotificationEvent).not.toHaveBeenCalled()
-    } finally {
-      vi.unstubAllEnvs()
-    }
+  it("기본은 꺼짐 — env 를 켜지 않으면 원장도 읽지 않고 disabled(운영자 결정 2026-11-05)", async () => {
+    const { runHardwareProcessAlerts, emitNotificationEvent } = await loadRunner({ enabled: false })
+    const report = await runHardwareProcessAlerts({ now: NOW })
+    expect(report).toMatchObject({ status: "disabled", dateKey: "2026-10-28" })
+    expect(emitNotificationEvent).not.toHaveBeenCalled()
+  })
+
+  it("꺼져 있어도 dryRun 미리보기는 된다", async () => {
+    const { runHardwareProcessAlerts, emitNotificationEvent } = await loadRunner({ enabled: false })
+    const report = await runHardwareProcessAlerts({ now: NOW, dryRun: true })
+    expect(report.status).toBe("preview")
+    expect(emitNotificationEvent).not.toHaveBeenCalled()
   })
 
   it("프로세스 칸이 없는 DB 에서도 배송 예정은 보낸다", async () => {
