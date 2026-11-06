@@ -85,7 +85,8 @@ export const HOME_COPY = {
         titleEmphasis: "저절로",
         body: "보드로 수업을 시작하면 칠판과 AI 카메라 녹화가 함께 시작되고, 끝나면 클라우드에 저장됩니다. 결석 보강·복습 영상이 그날 바로 생깁니다.",
         checks: ["칠판 화면과 AI 카메라를 함께 녹화", "수업이 끝나면 클라우드에 자동 저장", "결석 보강·복습 링크로 바로 공유"],
-        href: "/product/hw",
+        // 녹화 수업 랜딩(2026-11-06). 전자칠판(/product/hw)은 그 페이지 작동 방식에서 잇는다
+        href: "/product/recording",
         image: {
           src: "/images/home/board-class.webp",
           width: 1408,
