@@ -4,12 +4,12 @@ import Image from "next/image";
 import { useRef } from "react";
 import { motion, useInView } from "framer-motion";
 
-const COMPARISON_ROWS = [
-  { label: "일반 IFP", value: "80~120ms", highlight: false },
-  { label: "고급 IFP", value: "30~50ms", highlight: false },
-  { label: "Classin Board", value: "30ms", highlight: true },
-  { label: "분필 (참고)", value: "0ms", highlight: false },
-] as const;
+import { BOARD_SPEC_GROUPS } from "@/lib/hardware/board-specs";
+
+// 규격서 값만 보여 준다(정본 lib/hardware/board-specs.ts). 네 모델 공통 값이라 86" 열을 쓴다.
+const TOUCH_ROWS = (BOARD_SPEC_GROUPS.find((group) => group.category === "터치 방식")?.rows ?? [])
+  .filter((row) => row.label !== "측면 제스처바")
+  .map((row) => ({ label: row.label, value: row.s86, highlight: row.label === "응답 속도" }));
 
 const fadeUp = {
   hidden: { opacity: 0, y: 28 },
@@ -47,7 +47,7 @@ export default function LatencyProof() {
 
             {/* Floating badge */}
             <div className="absolute top-5 right-5 z-10 bg-white/10 backdrop-blur rounded-full px-4 py-2 text-white text-xs font-medium">
-              0.03s response
+              2ms touch response
             </div>
 
             <Image
@@ -116,10 +116,10 @@ export default function LatencyProof() {
             className="mt-8 rounded-2xl border border-black/[0.08] bg-white/70 px-5 py-4"
           >
             <p className="text-sm text-[#615D59]">
-              육안으로 지연을 느낄 수 없는 한계점 0.1초.
+              Classin Board 규격서 기준 터치 응답 속도
             </p>
             <p className="mt-2 text-base font-bold text-fg-accent">
-              클래스인 보드는 그 한계를 넘어선 0.03초
+              2ms · 50점 적외선 멀티터치
             </p>
           </motion.div>
 
@@ -131,11 +131,11 @@ export default function LatencyProof() {
             transition={{ duration: 0.6, ease: easing, delay: 0.5 }}
             className="mt-8"
           >
-            {COMPARISON_ROWS.map((row, i) => (
+            {TOUCH_ROWS.map((row, i) => (
               <div
                 key={row.label}
                 className={`flex justify-between py-3 ${
-                  i < COMPARISON_ROWS.length - 1
+                  i < TOUCH_ROWS.length - 1
                     ? "border-b border-black/[0.08]"
                     : ""
                 }`}

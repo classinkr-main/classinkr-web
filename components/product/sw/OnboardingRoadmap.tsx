@@ -29,9 +29,9 @@ const steps: Step[] = [
     },
     {
         num: "02",
-        duration: "2주 무료",
-        title: "2주 무료 체험",
-        desc: "설치 없이 브라우저에서 바로 시작. 실제 수업 환경에서 모든 기능을 직접 검증해보세요.",
+        duration: "1개 교실부터",
+        title: "시연 · 파일럿",
+        desc: "목동 쇼룸에서 우리 학원 교안으로 시연하고, 1개 교실 파일럿으로 실제 수업에서 먼저 확인합니다.",
         Icon: Sparkles,
     },
     {
@@ -63,10 +63,10 @@ export default function OnboardingRoadmap() {
                     <h2 className="text-3xl md:text-4xl lg:text-5xl font-sans text-[#1a1a19] leading-tight">
                         복잡한 도입은 끝났습니다,
                         <br />
-                        <span className="text-fg-accent">브라우저만 있으면 시작됩니다</span>
+                        <span className="text-fg-accent">상담부터 첫 수업까지 네 단계</span>
                     </h2>
                     <p className="text-lg text-[#A39E98] mt-4 max-w-xl mx-auto">
-                        별도 설치도, 긴 셋업도 없습니다. 상담받은 그 주, 바로 첫 수업을 시작할 수 있습니다.
+                        상담, 시연·파일럿, 팀 온보딩, 수업 시작. 단계마다 전담 매니저가 함께합니다.
                     </p>
                 </motion.div>
 

@@ -5,9 +5,9 @@ import { motion, useInView } from "framer-motion";
 
 const LABELS = [
   "OPS 내장",
-  "AI 카메라",
+  "AI 카메라 연동",
   "4K 디스플레이",
-  "0.03s 응답",
+  "2ms 터치 응답",
 ] as const;
 
 const fadeUp = {

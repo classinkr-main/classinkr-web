@@ -30,8 +30,9 @@ const AIFeatureShowcase = nextDynamic(() => import("@/components/product/sw/AIFe
 
 const CHECKOUT_ENABLED = process.env.NEXT_PUBLIC_SW_CHECKOUT_ENABLED === "true"
 const CHECKOUT_HREF = CHECKOUT_ENABLED ? "/checkout" : "/contact#contact-form"
-const CHECKOUT_CTA_LABEL = CHECKOUT_ENABLED ? "지금 바로 결제 시작" : "지금 무료로 시작하기"
-const CHECKOUT_SUB_LABEL = CHECKOUT_ENABLED ? "카드·네이버페이로 즉시 시작" : "설치 없이 바로 체험 · 카드 등록 불필요"
+// 무료 범위를 적은 문서가 없어 결제가 꺼져 있을 때는 상담으로 받는다(2026-11-03 결정 N5).
+const CHECKOUT_CTA_LABEL = CHECKOUT_ENABLED ? "지금 바로 결제 시작" : "도입 상담 받기"
+const CHECKOUT_SUB_LABEL = CHECKOUT_ENABLED ? "카드·네이버페이로 즉시 시작" : "목동 쇼룸 시연 · 1개 교실 파일럿부터"
 
 const trackCheckoutClick = (location: string) => {
     if (CHECKOUT_ENABLED) {
@@ -315,7 +316,7 @@ const CINEMATIC_CASES = [
         name: "Acadsoc · 1:1 ESL 플랫폼",
         quote: "Classin 이전에도 여러 화상 툴을 써봤습니다. 하지만 영업 데모를 할 때 학생과 교사 모두 Classin에 가장 빠르게 반응했어요.",
         person: "Acadsoc 서비스 팀",
-        before: { label: "도입 전", items: ["학생 이탈률 높음", "수업 집중도 측정 불가", "다른 플랫폼으로 전전"] },
+        before: { label: "도입 전", items: ["학생 이탈률 높음", "수업 반응 확인이 어려움", "다른 플랫폼으로 전전"] },
         after: { label: "도입 후", items: ["영업 데모 1순위 채택", "학생·교사 반응이 가장 빠름"] },
         accentBg: "bg-[#F6F5F4]",
         accentText: "text-[#31302E]",
@@ -461,7 +462,7 @@ function TypographyHookSection() {
 const FUTURE_ITEMS = [
     { title: "국경 없는 교실", desc: "서울의 학생이 핀란드 교사에게 배우고, 부산의 학원이 도쿄와 협업 수업을 합니다." },
     { title: "AI 보조 교사", desc: "AI가 개별 학습 데이터를 분석해 실시간으로 교사에게 학생별 맞춤 피드백을 제안합니다." },
-    { title: "실시간 학습 진단", desc: "수업 중 학생의 집중도와 이해도를 실시간으로 파악해 교사가 즉각 대응할 수 있습니다." },
+    { title: "실시간 학습 진단", desc: "학생이 먼저 풀고 AI가 채점합니다. 반 전체 정답률을 보고 교사가 바로 짚어 줍니다." },
     { title: "지식의 재활용", desc: "한 번 만든 수업 콘텐츠가 전 세계 동료 교사들과 공유되고 발전합니다." },
 ]
 
@@ -575,7 +576,7 @@ const CYCLE_PHASES = [
         color: "bg-fg-accent/8 border-fg-accent/14",
         accent: "text-fg-accent",
         old: ["교사 혼자 판서", "학생은 영상만 시청", "출석 수동으로 체크"],
-        now: ["학생이 직접 화면에서 문제 풀기", "30+ 도구로 쌍방향 수업", "자동 출석 체크 + 집중도 측정"],
+        now: ["학생이 직접 화면에서 문제 풀기", "30+ 도구로 쌍방향 수업", "입·퇴장 기록으로 출결 확인"],
     },
     {
         phase: "수업 후",
@@ -663,8 +664,8 @@ function HardwareTeaserSection() {
                         </p>
                         <div className="space-y-3 mb-10">
                             {[
-                                { label: "4K@120Hz AI 전자칠판", sub: "20포인트 멀티터치 · 눈부심 방지" },
-                                { label: "모션 트래킹 AI 카메라", sub: "120° 앵글 · 자동 줌·포커스 · 4K 녹화" },
+                                { label: "4K 전자칠판 Classin Board", sub: "50점 멀티터치 · AG 눈부심 방지 유리" },
+                                { label: "AI 추적 카메라 (선택 구성)", sub: "Cam T1 강사 추적 · S1 학생 기립 인식" },
                                 { label: "AI 디노이즈 천장형 마이크", sub: "32개 마이크 내장 · 80㎡ 커버리지" },
                             ].map((item) => (
                                 <div key={item.label} className="flex items-start gap-3">
@@ -884,7 +885,7 @@ const CASES = [
         tag: "학원 운영",
         name: "부천 정율사관학원",
         headline: "타지역 학생을 온라인으로 끌어들이다",
-        body: "오프라인 수업만 하던 입시학원이 Classin의 하이브리드 강의를 도입한 뒤, 부천 외 지역 학생 유치가 가능해졌습니다. 학생이 화면에서 직접 판서하며 풀이하는 방식으로 집중도가 올라갔고, TeacherIn으로 저장한 수업 콘티 덕분에 신규 강사 온보딩 시간도 크게 단축됐습니다.",
+        body: "오프라인 수업만 하던 입시학원이 Classin의 하이브리드 강의를 도입한 뒤, 부천 외 지역 학생 유치가 가능해졌습니다. 학생이 화면에서 직접 판서하며 풀이하는 방식으로 수업 참여가 늘었고, TeacherIn으로 저장한 수업 콘티 덕분에 신규 강사 온보딩 시간도 크게 단축됐습니다.",
         results: [
             { label: "타지역 학생 유치", value: "가능" },
             { label: "학생 참여도", value: "급상승" },
@@ -1111,11 +1112,11 @@ function PricingValueSection() {
                                 {CHECKOUT_CTA_LABEL} <ArrowRight className="w-4 h-4" />
                             </Link>
                             <Link
-                                href="/contact#contact-form"
-                                onClick={() => trackEvent("click_cta", { button: "sw_pricing_consultation", page: "/product/sw" })}
+                                href={CHECKOUT_ENABLED ? "/contact#contact-form" : "/showroom#booking"}
+                                onClick={() => trackEvent("click_cta", { button: CHECKOUT_ENABLED ? "sw_pricing_consultation" : "sw_pricing_showroom", page: "/product/sw" })}
                                 className="inline-flex items-center justify-center gap-2 rounded-full border border-white/20 bg-white/[0.04] px-5 py-2.5 text-sm font-bold text-white transition-all hover:bg-white/[0.08] whitespace-nowrap"
                             >
-                                도입 상담
+                                {CHECKOUT_ENABLED ? "도입 상담" : "목동 쇼룸 예약"}
                             </Link>
                         </div>
                     </div>
@@ -1294,7 +1295,7 @@ export default function ProductPage() {
                                     <tbody>
                                         {[
                                             { label: "주요 목적", zoom: "비즈니스 회의 · 정보 전달", classin: "실시간 상호작용 수업 · 교육" },
-                                            { label: "판서 기능", zoom: "기본적인 그리기 위주", classin: "레이어 기반 전문 교구 활용" },
+                                            { label: "판서 기능", zoom: "기본적인 그리기 위주", classin: "기하도형·측정 도구 등 교과 도구" },
                                             { label: "학생 참여", zoom: "채팅 또는 음소거 해제", classin: "교재 직접 조작 · 능동 참여" },
                                             { label: "수업 도구", zoom: "화면 공유 + 기본 그리기", classin: "30여 가지 인터랙티브 도구" },
                                             { label: "수업 활동", zoom: "없음 (별도 앱 필요)", classin: "10가지 참여형 수업 활동" },
@@ -1356,7 +1357,7 @@ export default function ProductPage() {
                             <div className="space-y-5">
                                 {[
                                     { icon: <Users className="w-5 h-5" />, label: "학생 동시 판서", detail: "여러 학생이 동시에 같은 화면에서 필기합니다. 그룹 토론과 협업이 자연스럽게." },
-                                    { icon: <Layers className="w-5 h-5" />, label: "레이어 기반 교구", detail: "단순 그리기가 아닌, 레이어·도형·수식 편집기를 갖춘 전문 교육 도구." },
+                                    { icon: <Layers className="w-5 h-5" />, label: "STEM 작도·실험 도구", detail: "단순 그리기가 아닌, 기하도형·측정 도구·물리·화학 가상 실험을 칠판 위에서 바로 씁니다." },
                                     { icon: <BookOpen className="w-5 h-5" />, label: "교재 위에 직접 풀기", detail: "PDF, PPT 교재를 올리고 그 위에 바로 필기. 종이 프린트가 필요 없습니다." },
                                 ].map((f, i) => (
                                     <motion.div key={i} {...stagger(i)} className="flex items-center gap-4 bg-white border border-[rgba(0,0,0,0.06)] rounded-xl p-4 shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
@@ -1609,12 +1610,12 @@ export default function ProductPage() {
                             <motion.div {...fadeUp}>
                                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-fg-accent/5 text-fg-accent text-sm font-bold mb-6"><BarChart3 className="w-4 h-4" />데이터 & LMS</div>
                                 <h2 className="text-3xl md:text-5xl font-sans text-[#1a1a19] mb-6 leading-tight">수업이 끝나도<br /><span className="text-fg-accent">학습은 계속됩니다</span></h2>
-                                <p className="text-lg text-[#615D59] leading-relaxed font-medium mb-10">자동 녹화, 학습 데이터 분석, 숙제·출결·평가까지. 수업 전후의 모든 학사 행정을 하나의 플랫폼에서.</p>
+                                <p className="text-lg text-[#615D59] leading-relaxed font-medium mb-10">수업 녹화, 학습 보고서, 숙제·출결·평가까지. 수업 전후의 학사 행정을 하나의 플랫폼에서.</p>
                             </motion.div>
                             <div className="space-y-5">
                                 {[
-                                    { icon: <Video className="w-5 h-5" />, label: "자동 녹화 · 복습", detail: "수업 종료 후 클라우드에 자동 저장. 학생이 언제든 다시 볼 수 있습니다." },
-                                    { icon: <BarChart3 className="w-5 h-5" />, label: "학습 데이터 리포트", detail: "집중도, 발언 횟수, 참여 시간을 데이터로. 학부모 상담이 객관적으로 바뀝니다." },
+                                    { icon: <Video className="w-5 h-5" />, label: "수업 녹화 · 복습", detail: "녹화를 켠 수업은 끝난 뒤 처리 시간을 거쳐 다시보기에 올라갑니다. 학생이 언제든 다시 봅니다." },
+                                    { icon: <BarChart3 className="w-5 h-5" />, label: "학습 보고서", detail: "판서·녹화·입퇴장 기록이 수업마다 보고서로 남습니다. 학부모 상담에 근거가 생깁니다." },
                                     { icon: <FileText className="w-5 h-5" />, label: "LMS 올인원", detail: "숙제 제출, 평가, 출결 관리 — 별도 LMS 없이 Classin 안에서 모두 해결." },
                                 ].map((f, i) => (
                                     <motion.div key={i} {...stagger(i)} className="flex items-center gap-4 bg-white border border-[rgba(0,0,0,0.06)] rounded-xl p-4 shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
@@ -1664,7 +1665,7 @@ export default function ProductPage() {
                                     {/* Mini stat row */}
                                     <div className="grid grid-cols-3 gap-3">
                                         {[
-                                            { label: "집중도", value: "87%", color: "text-[#6EE7B7]" },
+                                            { label: "숙제 제출", value: "7/7", color: "text-[#6EE7B7]" },
                                             { label: "발언", value: "12회", color: "text-[#6EE7B7]" },
                                             { label: "참여 시간", value: "48분", color: "text-fg-accent" },
                                         ].map((s, i) => (
@@ -1690,8 +1691,8 @@ export default function ProductPage() {
 
                             {/* Floating data tags */}
                             <motion.div initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }} transition={{ delay: 1 }} className="absolute -right-2 md:-right-6 top-8 bg-white rounded-xl shadow-lg border border-black/[0.06] px-3 py-2 z-20 animate-float-tag">
-                                <div className="text-[10px] text-[#A39E98]">집중도</div>
-                                <div className="text-sm font-sans font-bold tabular-nums text-fg-accent">87%</div>
+                                <div className="text-[10px] text-[#A39E98]">숙제 제출</div>
+                                <div className="text-sm font-sans font-bold tabular-nums text-fg-accent">7/7</div>
                             </motion.div>
                         </div>
                     </div>

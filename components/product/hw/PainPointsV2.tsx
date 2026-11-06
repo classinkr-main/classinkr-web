@@ -7,17 +7,17 @@ const items = [
   {
     pain: "PC, HDMI, 캠코더, 마이크 케이블이 책상 위에 산처럼 쌓였습니다.",
     solutionTitle: "OPS 내장 PC",
-    solutionDesc: "보드 안에 i5/i7 PC가 내장되어 있어 케이블과 본체가 필요 없습니다.",
+    solutionDesc: "보드에 Intel Core i5 OPS 컴퓨터를 꽂아 쓰므로 케이블과 본체가 필요 없습니다.",
   },
   {
     pain: "강의 영상 촬영 시 강사가 프레임 밖으로 나가서 보조 인력이 캠을 따라다녀야 합니다.",
-    solutionTitle: "4K AI 트래킹 카메라",
-    solutionDesc: "강사를 자동 인식하고 추적하여 운영 인력 부담을 줄여줍니다.",
+    solutionTitle: "AI 추적 카메라 (선택 구성)",
+    solutionDesc: "함께 구성하면 강사를 자동 인식하고 추적해 운영 인력 부담을 줄여줍니다.",
   },
   {
     pain: "전자 펜의 반응이 한 박자 늦어 결국 다시 분필로 돌아갑니다.",
-    solutionTitle: "0.03s 응답 패널",
-    solutionDesc: "사람이 지연을 느끼는 한계의 1/3 수준으로, 분필보다 빠른 반응 속도를 제공합니다.",
+    solutionTitle: "터치 응답 2ms",
+    solutionDesc: "50점 적외선 터치가 펜 끝을 바로 따라옵니다(규격서 기준).",
   },
   {
     pain: "뒷자리 학생은 형광등 반사 때문에 칠판이 안 보인다고 합니다.",
