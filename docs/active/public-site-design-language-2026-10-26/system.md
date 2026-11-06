@@ -397,6 +397,7 @@
 | `app/global-error.tsx` | 스코프·레이아웃 CSS 없음, 'Inter' 선언 | 인라인 `<style>`에 `color.*` 6개 + 시스템 한글 스택(Apple SD Gothic Neo, Malgun Gothic) | P2(셸) |
 | 이메일 `lib/email.ts` | 인라인 `#a39e98` 12/11px 등 | 착수할 때 `lib/design-tokens.ts` import, parity 테스트에 편입 | 백로그 |
 | 리드마그넷 PDF `scripts/generate-lead-magnet-pdfs.py` | 파이썬 상수 | 착수할 때 `scripts/design-tokens.json`을 테스트로 대조(손으로 적음) | 백로그(문서면) |
+| 리드마그넷 워크북 PDF `scripts/render-lead-magnet-workbook-pdf.mjs` | CSS 리터럴(2026-11-06 시안 B안, IBM Plex Sans KR). 누수 진단표부터 적용하고 그 슬러그는 파이썬 생성기가 건너뛴다 | 다른 자료로 넓힐 때 위 파이썬 생성기와 같은 값으로 대조 | 백로그(문서면) |
 | 정적 랜딩 `public/l/*` 6종 | 생성 HTML, 자체 팔레트. `app/l/[slug]/route.ts`가 서빙하고, 이 HTML과 `scripts/generate-segment-landings.mjs`가 `public/images`를 참조한다 | 지금은 폰트만 맞춘다(typography §2-6). 팔레트 이관 때 `public/css/site-tokens.css`. 이미지 정리 스캔에는 반드시 넣는다(§8-2) | 백로그(growth-crm) |
 
 ```ts

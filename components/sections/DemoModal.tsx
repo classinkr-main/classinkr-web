@@ -148,7 +148,9 @@ export function DemoModal({ children, trackingButton }: { children: React.ReactN
     return (
         <Dialog open={open} onOpenChange={handleOpenChange}>
             <DialogTrigger asChild>{children}</DialogTrigger>
-            <DialogContent className="site sm:max-w-[560px] overflow-hidden border-[#E4E8E2] bg-[#FBFCF9] p-0">
+            {/* overflow-hidden 을 주면 DialogContent 기본의 overflow-y-auto 를 덮어써 화면보다 긴 폼 아래가 잘린다.
+                둥근 모서리는 overflow-y-auto 도 똑같이 자른다. 스크롤바는 얇게 */}
+            <DialogContent className="site sm:max-w-[560px] border-[#E4E8E2] bg-[#FBFCF9] p-0 [scrollbar-width:thin]">
                 {submitted ? (
                     <div className="flex flex-col items-center justify-center space-y-4 px-8 py-12 text-center">
                         <div className="flex h-14 w-14 items-center justify-center rounded-full bg-fg-accent/8">
@@ -213,8 +215,9 @@ export function DemoModal({ children, trackingButton }: { children: React.ReactN
                                     <div className="grid gap-2">
                                         <FormLabel htmlFor="size">운영 규모</FormLabel>
                                         {/* 자유 입력이던 자리다 — 같은 leads.size 컬럼에 버킷 값과
-                                            자유 문자열이 섞여 규모별 집계가 둘로 쪼개졌다. */}
-                                        <select id="size" name="size" required aria-invalid={!!error} aria-describedby="demo-error" className={fieldClassName} defaultValue="">
+                                            자유 문자열이 섞여 규모별 집계가 둘로 쪼개졌다.
+                                            Input 과 달리 select 는 기본 w-full·border 가 없다 — 없으면 가장 긴 선택지 폭으로 칸 밖까지 나간다 */}
+                                        <select id="size" name="size" required aria-invalid={!!error} aria-describedby="demo-error" className={`${fieldClassName} w-full min-w-0 border`} defaultValue="">
                                             <option value="" disabled>{ACADEMY_SIZE_PLACEHOLDER}</option>
                                             {ACADEMY_SIZE_OPTIONS.map((option) => (
                                                 <option key={option} value={option}>
@@ -237,11 +240,11 @@ export function DemoModal({ children, trackingButton }: { children: React.ReactN
                                 <div className="grid gap-5 md:grid-cols-2">
                                     <div className="grid gap-2">
                                         <FormLabel htmlFor="goal">상담 우선순위</FormLabel>
-                                        <Input id="goal" name="goal" placeholder="예: 출결 관리, 온라인 수업 전환, 하드웨어 견적" required aria-invalid={!!error} aria-describedby="demo-error" className={fieldClassName} />
+                                        <Input id="goal" name="goal" placeholder="예: 녹화, 칠판 견적" required aria-invalid={!!error} aria-describedby="demo-error" className={fieldClassName} />
                                     </div>
                                     <div className="grid gap-2">
                                         <FormLabel htmlFor="timeline">희망 시점</FormLabel>
-                                        <Input id="timeline" name="timeline" placeholder="예: 2주 내 상담 / 여름학기 전 도입" aria-invalid={!!error} aria-describedby="demo-error" className={fieldClassName} />
+                                        <Input id="timeline" name="timeline" placeholder="예: 2주 안, 방학 전" aria-invalid={!!error} aria-describedby="demo-error" className={fieldClassName} />
                                     </div>
                                 </div>
                             </div>

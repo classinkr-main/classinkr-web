@@ -685,6 +685,60 @@ export async function getLeadsForCompassContactSync(): Promise<CompassContactSyn
   return targets;
 }
 
+/**
+ * Compass 전달 대조(lib/server/compass-lead-reconcile.ts) 대상 — 기간 안에 저장된 홈페이지 폼·뉴스레터 리드.
+ * 소스 판정(isCompassPushSource — 뉴스레터는 leadMagnet 이 붙은 것만)은 호출부가 한다. 전달 본문을 다시 짓는 데 필요한 칸만 읽는다.
+ * JSON 폴백 모드(로컬 픽스처)는 Compass 로 보내지 않으므로 대상도 없다.
+ */
+export interface CompassPushCandidateRow {
+  id: string;
+  source: string;
+  created_at: string;
+  name: string | null;
+  org: string | null;
+  role: string | null;
+  size: string | null;
+  email: string | null;
+  phone: string | null;
+  branch: string | null;
+  message: string | null;
+  notes: string | null;
+  source_detail: string | null;
+  lead_magnet: string | null;
+  utm_source: string | null;
+  utm_medium: string | null;
+  utm_campaign: string | null;
+  landing_page: string | null;
+  current_page: string | null;
+}
+
+const COMPASS_PUSH_CANDIDATE_COLUMNS =
+  "id, source, created_at, name, org, role, size, email, phone, branch, message, notes, source_detail, lead_magnet, utm_source, utm_medium, utm_campaign, landing_page, current_page";
+
+/** 한 번에 읽는 상한 — 홈페이지 폼 리드는 하루 몇 건이라 넉넉한 폭주 방지선이다. */
+export const COMPASS_PUSH_CANDIDATE_LIMIT = 200;
+
+export async function getCompassPushCandidateLeads(input: {
+  sources: readonly string[];
+  /** 이 시각 이후(포함)에 저장된 리드 */
+  since: string;
+  /** 이 시각 이전(포함)에 저장된 리드 — 방금 들어와 실시간 전달이 아직 진행 중인 리드를 빼려고 둔다 */
+  until: string;
+}): Promise<CompassPushCandidateRow[]> {
+  if (!USE_SUPABASE || input.sources.length === 0) return [];
+  const supabase = createSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("leads")
+    .select(COMPASS_PUSH_CANDIDATE_COLUMNS)
+    .in("source", [...input.sources])
+    .gte("created_at", input.since)
+    .lte("created_at", input.until)
+    .order("created_at", { ascending: true })
+    .limit(COMPASS_PUSH_CANDIDATE_LIMIT);
+  if (error) throw new LeadQueryError("Compass 전달 대조 대상 조회", error);
+  return (data ?? []) as unknown as CompassPushCandidateRow[];
+}
+
 export async function getLeadById(id: string): Promise<LeadRecord | null> {
   if (!USE_SUPABASE) {
     const { getLeads: jsonGetLeads } = await import("@/lib/db");
