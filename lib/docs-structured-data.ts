@@ -409,7 +409,15 @@ const LEADING_QUESTION = /^([^?？]{2,200}[?？])\s+/
  * 질문 문장이 여러 개 이어지면 모두 질문으로 묶는다. 화면 버튼 이름 안의 물음표([비밀번호를 잊으셨나요?])는 질문으로 보지 않는다.
  */
 export function splitLeadingQuestion(text: string): { question: string; answer: string } | null {
-  let rest = docMarkdownToPlainText(text)
+  return splitLeadingQuestionText(docMarkdownToPlainText(text))
+}
+
+/**
+ * splitLeadingQuestion 과 같은 규칙으로 나누되 마크다운을 지우지 않는다.
+ * 화면에서 답 안의 링크·굵게를 살려 Q/A 로 나눠 보여 줄 때 쓴다.
+ */
+export function splitLeadingQuestionText(text: string): { question: string; answer: string } | null {
+  let rest = text.trim()
   const questions: string[] = []
 
   for (let match = LEADING_QUESTION.exec(rest); match; match = LEADING_QUESTION.exec(rest)) {
