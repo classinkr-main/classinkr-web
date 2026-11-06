@@ -76,8 +76,9 @@ const contentSecurityPolicy = [
   `img-src 'self' data: blob: https://images.unsplash.com ${supabaseImageSources} ${siteImageSources} https://www.facebook.com https://*.kakao.com https://*.daumcdn.net https://www.googletagmanager.com https://*.google-analytics.com https://maps.google.com ${googleAdsSources} ${naverWcsSources} ${channelTalkDefaultSources}`,
   // Supabase API/Realtime, GA4/Google Ads 수집, 네이버 wcs 로그 전송, 채널톡 웹소켓, 토스 결제
   `connect-src 'self' ${supabaseHttp} ${supabaseWs} ${googleAnalyticsConnectSources} ${googleAdsSources} https://www.facebook.com https://*.kakao.com ${naverWcsSources} ${channelTalkConnectSources} https://*.tosspayments.com https://cdn.jsdelivr.net`,
-  // GTM 미리보기, 구글 지도 embed, 토스 결제창
-  "frame-src 'self' https://www.googletagmanager.com https://maps.google.com https://www.google.com https://*.channel.io https://*.channel.app https://*.tosspayments.com https://*.toss.im",
+  // GTM 미리보기, 구글 지도 embed, 토스 결제창, YouTube 개인정보 보호 모드 임베드
+  // (서비스 소개서·세미나 다시보기 — 누른 뒤에만 iframe 을 띄운다. 썸네일은 자체 호스팅이라 img-src 는 그대로다)
+  "frame-src 'self' https://www.googletagmanager.com https://maps.google.com https://www.google.com https://www.youtube-nocookie.com https://*.channel.io https://*.channel.app https://*.tosspayments.com https://*.toss.im",
   "media-src 'self' data: blob: https://cdn.channel.io",
   "worker-src 'self' blob:",
   "upgrade-insecure-requests",
