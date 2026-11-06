@@ -28,6 +28,7 @@ import { JsonLd } from "@/components/seo/JsonLd"
 import {
   createArticleJsonLd,
   createBreadcrumbJsonLd,
+  getBlogOgImagePath,
   toAbsoluteUrl,
 } from "@/lib/seo"
 
@@ -71,7 +72,7 @@ export async function generateMetadata({
   const ogImage =
     post.heroImageUrl ||
     post.imageUrl ||
-    toAbsoluteUrl(`/api/og/blog/${encodeURIComponent(post.slug)}`)
+    toAbsoluteUrl(getBlogOgImagePath(post.slug))
   // 공개 URL 은 늘 원래 슬러그(퍼센트 인코딩) 기준 — rewrite 토큰 경로는 밖으로 내보내지 않는다.
   const canonical = toAbsoluteUrl(getBlogPostPath(post.slug))
   return {

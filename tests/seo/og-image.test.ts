@@ -121,4 +121,14 @@ describe("share card URL", () => {
     expect(og[0].url).toBe(`https://classin.co.kr/opengraph-image?v=${OG_IMAGE_VERSION}`)
     expect(metadata.twitter?.images).toEqual([`https://classin.co.kr/twitter-image?v=${OG_IMAGE_VERSION}`])
   })
+
+  it("versions the blog title-card URL with the same OG_IMAGE_VERSION and the blog page uses it", async () => {
+    const { OG_IMAGE_VERSION, getBlogOgImagePath } = await import("@/lib/seo")
+    expect(getBlogOgImagePath("학원 녹화/기준")).toBe(
+      `/api/og/blog/${encodeURIComponent("학원 녹화/기준")}?v=${OG_IMAGE_VERSION}`
+    )
+    const page = readFileSync("app/blog/[slug]/page.tsx", "utf8")
+    expect(page).toContain("toAbsoluteUrl(getBlogOgImagePath(post.slug))")
+    expect(page).not.toMatch(/`\/api\/og\/blog\//)
+  })
 })

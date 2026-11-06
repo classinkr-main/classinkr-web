@@ -17,6 +17,7 @@ import { ImageResponse } from "next/og"
 
 import { color } from "@/lib/design-tokens"
 import { fitLine, fitTitle } from "@/lib/og/fit-text"
+import { parseFontMetrics, type FontMetrics } from "@/lib/og/font-metrics"
 
 export const OG_IMAGE_SIZE = { width: 1200, height: 630 } as const
 export const OG_IMAGE_CONTENT_TYPE = "image/png"
@@ -52,17 +53,20 @@ const KICKER_GAP = 40
 const TITLE_GAP = 14
 const TITLE_SIZE = 64
 const TITLE_LINE_HEIGHT = 1.3
-/** 제목 한 줄 최대 폭(맞춤 계산용). 줄 상자는 좌우 96px 안쪽이라 폭 어림 오차를 흡수한다 */
+/** 제목 한 줄 최대 폭(맞춤 계산용). 줄 상자(좌우 96px 안쪽)보다 좁혀, 글꼴에 없어 1em 로 어림한 글자(이모지·한자)의 오차를 흡수한다 */
 const TITLE_MEASURE = 936
 const KICKER_MEASURE = 720
 const LINE_BOX = W - 96 * 2
 
 type OgFont = { name: string; data: Buffer; weight: 400 | 700; style: "normal" }
 type OgLogo = { src: string; width: number; height: number }
+/** 글줄 맞춤에 쓰는 실제 전진폭 — 범주는 400, 제목은 700 으로 그리므로 각각 */
+type OgMetrics = { regular: FontMetrics; bold: FontMetrics }
 
 // 인스턴스당 한 번만 읽는다(블로그 경로는 요청마다 다시 읽지 않는다). 실패하면 다음 요청이 다시 시도한다.
 let fontsPromise: Promise<OgFont[]> | null = null
 let logoPromise: Promise<OgLogo> | null = null
+let metricsPromise: Promise<OgMetrics> | null = null
 
 export function loadOgFonts(): Promise<OgFont[]> {
   if (!fontsPromise) {
@@ -80,6 +84,19 @@ export function loadOgFonts(): Promise<OgFont[]> {
       })
   }
   return fontsPromise
+}
+
+/** 카드가 싣는 두 글꼴 파일의 cmap·hmtx 에서 읽은 전진폭(글꼴 버퍼를 함께 쓴다) */
+export function loadOgMetrics(): Promise<OgMetrics> {
+  if (!metricsPromise) {
+    metricsPromise = loadOgFonts()
+      .then(([regular, bold]) => ({ regular: parseFontMetrics(regular.data), bold: parseFontMetrics(bold.data) }))
+      .catch((error: unknown) => {
+        metricsPromise = null
+        throw error
+      })
+  }
+  return metricsPromise
 }
 
 /** 먹 단색 락업. 크기는 PNG 머리(IHDR)에서 읽어 스크립트로 다시 만들어도 비율이 맞는다 */
@@ -197,9 +214,14 @@ export interface TitlePlateContent {
 }
 
 /** 블로그 카드: 같은 액자·가운데 축에 새 마크 → 범주 → 제목 2줄 */
-export function TitlePlateCard({ logo, kicker, title }: TitlePlateContent & { logo: OgLogo }) {
-  const lines = fitTitle(title, TITLE_SIZE, TITLE_MEASURE)
-  const kickerText = kicker?.trim() ? fitLine(kicker, KICKER_SIZE, KICKER_MEASURE) : ""
+export function TitlePlateCard({
+  logo,
+  metrics,
+  kicker,
+  title,
+}: TitlePlateContent & { logo: OgLogo; metrics: OgMetrics }) {
+  const lines = fitTitle(title, TITLE_SIZE, TITLE_MEASURE, metrics.bold)
+  const kickerText = kicker?.trim() ? fitLine(kicker, KICKER_SIZE, KICKER_MEASURE, metrics.regular) : ""
 
   return (
     <Plate>
@@ -219,17 +241,18 @@ export function TitlePlateCard({ logo, kicker, title }: TitlePlateContent & { lo
         <BirdMark logo={logo} />
         {kickerText ? (
           <div style={{ marginTop: KICKER_GAP, display: "flex", width: LINE_BOX, justifyContent: "center", overflow: "hidden" }}>
-            <span style={{ fontSize: KICKER_SIZE, fontWeight: 400, lineHeight: 1, whiteSpace: "nowrap", color: color.fgMuted }}>
+            <span style={{ flexShrink: 0, fontSize: KICKER_SIZE, fontWeight: 400, lineHeight: 1, whiteSpace: "nowrap", color: color.fgMuted }}>
               {kickerText}
             </span>
           </div>
         ) : null}
         <div style={{ marginTop: TITLE_GAP, display: "flex", flexDirection: "column", alignItems: "center" }}>
           {lines.map((line, index) => (
-            // 줄마다 따로 가운데. 폭 어림이 빗나가 넘쳐도 양옆이 같이 잘려 축과 96px 여백은 지켜진다
+            // 줄마다 따로 가운데. 글자 줄은 줄어들지 않게(flexShrink 0) 두어, 혹시 넘쳐도 양옆이 같이 잘려 축과 96px 여백이 지켜진다
             <div key={index} style={{ display: "flex", width: LINE_BOX, justifyContent: "center", overflow: "hidden" }}>
               <span
                 style={{
+                  flexShrink: 0,
                   fontSize: TITLE_SIZE,
                   fontWeight: 700,
                   lineHeight: TITLE_LINE_HEIGHT,
@@ -253,6 +276,6 @@ export async function renderHomeOgImage(): Promise<ImageResponse> {
 }
 
 export async function renderTitleOgImage(content: TitlePlateContent): Promise<ImageResponse> {
-  const [fonts, logo] = await Promise.all([loadOgFonts(), loadOgLogo()])
-  return new ImageResponse(<TitlePlateCard logo={logo} {...content} />, { ...OG_IMAGE_SIZE, fonts })
+  const [fonts, logo, metrics] = await Promise.all([loadOgFonts(), loadOgLogo(), loadOgMetrics()])
+  return new ImageResponse(<TitlePlateCard logo={logo} metrics={metrics} {...content} />, { ...OG_IMAGE_SIZE, fonts })
 }

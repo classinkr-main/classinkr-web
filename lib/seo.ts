@@ -11,11 +11,16 @@ export const SITE_NAME = "Classin"
 // 검색어 "전자칠판"·"수업 녹화"는 남긴다(D1 근거). 정본 설명: docs/active/classin-korea-positioning-guidelines.md §11
 export const DEFAULT_SITE_TITLE = "클래스인 Classin | 수업 녹화·AI 강의 평가까지 되는 학원 전자칠판"
 // 공유 카드 이미지 버전. 카카오톡·페이스북은 og:image 를 주소 단위로 오래 캐시하므로, 카드 디자인
-// (lib/og/template.tsx)을 바꾸면 이 값을 올려 새 주소로 다시 받게 한다. 페이지 스크랩 캐시는 배포 뒤
+// (lib/og/template.tsx)을 바꾸면 이 값을 올려 새 주소로 다시 받게 한다(기본 카드·블로그 카드 공통). 페이지 스크랩 캐시는 배포 뒤
 // 카카오 공유 디버거(developers.kakao.com › 도구 › 공유 디버거)에서 따로 지운다.
 export const OG_IMAGE_VERSION = "20261106"
 export const DEFAULT_OG_IMAGE_PATH = `/opengraph-image?v=${OG_IMAGE_VERSION}`
 export const DEFAULT_TWITTER_IMAGE_PATH = `/twitter-image?v=${OG_IMAGE_VERSION}`
+
+/** 히어로 이미지가 없는 블로그 글의 공유 카드(/api/og/blog/[slug]). 기본 카드와 같은 버전을 붙여, 카드를 바꾸면 함께 다시 받게 한다 */
+export function getBlogOgImagePath(slug: string): string {
+  return `/api/og/blog/${encodeURIComponent(slug)}?v=${OG_IMAGE_VERSION}`
+}
 
 interface PublicMetadataOptions {
   title?: string
