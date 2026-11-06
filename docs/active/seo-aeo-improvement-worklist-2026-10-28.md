@@ -54,7 +54,7 @@
 | 1629·2042 "150+", 1308 "160+", 1426 "160개국" / 1426 "12개 언어" | 같은 페이지 안 국가 수 3종. 언어 수는 company-facts 상 미확정(공식 5) | "160+ · 전 세계 누적 · EEO 공식 소개 기준" 하나로 | 코드 가능 |
 | 1630 "도입 학원 2,400+", 562·585 "200개 기업 고객사", 588 "98% 응답률", 537 1,560,000 에서 4.2초마다 +1 카운터 | 국내 수 단정 금지(`docs/active/brand-canon/company-facts.md`), 가짜 라이브 데이터 | 삭제 또는 EEO 공식 5수치로 교체 | 사람 확인(데이터 소유자) |
 | 1146-1147 (`FAQS[1]`) "Google Classroom, Canvas, Moodle 등 주요 LMS와의 연동을 지원" | company-facts 39행 "미확인", 같은 페이지 1486행은 Canvas 를 "별도 구독" 으로 분류(자기모순) | `lib/public-faq.ts:60-62` 패턴(apiStages)으로 교체, 제품명 삭제 | 코드 가능 |
-| 1158-1159 (`FAQS[4]`), `lib/ai-report-content.ts:20-22` "외부 다운로드 차단", "워터마크" | `lib/internal-cs-chat/knowledge.ts:144` "관리자 설정과 계약 범위에 따라 다름", `lib/docs.ts` 871·1643·3278 은 관리자가 녹화를 내려받는다고 안내 | "관리자 설정과 계약 범위에 따라 다름" 으로 정정 | 코드 가능 |
+| 1158-1159 (`FAQS[4]`), `lib/ai-report-content.ts:20-22` "외부 다운로드 차단", "워터마크" | `lib/internal-cs-chat/knowledge.ts:144` "관리자 설정과 계약 범위에 따라 다름", `lib/docs.ts` 871·1643·3278 은 관리자가 녹화를 내려받는다고 안내 | "관리자 설정과 계약 범위에 따라 다름" 으로 정정 | 완료(2026-11-06) — SW FAQ 는 `lib/product-sw-faq.ts`, ai-report 는 신뢰 줄·Q&A 를 '학원이 정합니다' + 계약 범위 안내로. 테스트 `tests/seo/aeo-geo-surfaces.test.tsx` |
 | 1121-1122 "AI 기능 모두 기본 포함" | `docs/active/classin-609-update.html:986` 일부 AI 기능 기본 비활성 | 조건 표기 | 코드 가능 |
 | 1418-1429 INCLUDED "최대 1,000명", "전담 고객 지원" | `lib/billing/plans.ts` Standard 는 반별 50명·이메일 지원 | 플랜별 features/limits 를 plans.ts 에서 렌더 | 코드 가능 |
 | 1163, `OnboardingRoadmap.tsx:31-35`, `lib/docs.ts:1088` "2주 무료 체험" | 챗봇(`lib/chatbot/service.ts:1355`)은 비단정. 정책 문서 없음 | 체험 조건(대상·기간·카드) 확정 전까지 단정 금지 | 사람 확인 |

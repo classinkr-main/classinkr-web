@@ -2,6 +2,7 @@ import Link from "next/link"
 import Image from "next/image"
 import { ArrowRight, CheckCircle2, Pencil, Presentation } from "lucide-react"
 
+import { GatewayLink } from "@/components/home/GatewayLink"
 import { JsonLd } from "@/components/seo/JsonLd"
 import { createBreadcrumbJsonLd, createPublicMetadata, createWebPageJsonLd } from "@/lib/seo"
 
@@ -29,6 +30,8 @@ const products = [
     summary: "판서, AI 카메라 녹화, 수업 영상 업로드, 판서 PDF 공유를 Classin 소프트웨어와 함께 제공합니다.",
     fit: "교실 판서와 녹화, 복습 공유까지 한 번에 정리하고 싶은 학원",
     points: ["65·75·86·110인치", "4K AI 카메라", "50점 터치", "수업 기록 공유"],
+    // 녹화는 제품이 아니라 보드로 하는 일 — 카드를 늘리지 않고 보드 카드에서 잇는다
+    related: { label: "수업 녹화 자세히 보기", href: "/product/recording" },
   },
 ]
 
@@ -144,6 +147,11 @@ export default function ProductPage() {
                       </li>
                     ))}
                   </ul>
+                  {product.related ? (
+                    <GatewayLink href={product.related.href} className="mt-6 min-h-11">
+                      {product.related.label}
+                    </GatewayLink>
+                  ) : null}
                 </article>
               ))}
             </div>
