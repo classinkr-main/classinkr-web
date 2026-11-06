@@ -194,7 +194,7 @@ export function KpiStrip({
   const deltaBasis = prevBasisLabel(period)
 
   const perf = period.key
-  const campaignsHref = campaignHubHref({ tab: "detail", section: "campaigns", perf })
+  const campaignsHref = campaignHubHref({ tab: "ads", perf })
   const adLeadsHref = campaignHubHref({ tab: "data", section: "ad-leads", perf })
 
   // 전환율 0% 경고 — "측정 안 됨"이 아니라 "광고 리드가 실제로 들어왔는데 아직 한 건도 전환되지

@@ -8,26 +8,28 @@
 // 옛 탭 id(leads/events/meta)는 삭제하지 않고 새 층의 섹션 앵커로 매핑한다 — 탭 재구성 P1
 // "삭제하지 않는다, 접는다": 딥링크·⌘K·외부 문서의 링크가 계속 착지해야 한다.
 
-export type CampaignTab = "summary" | "detail" | "data" | "email"
+export type CampaignTab = "summary" | "ads" | "detail" | "data" | "email"
 
 export interface CampaignTabDef {
   id: CampaignTab
   label: string
-  /** 정보 층 번호(1~3). 메시지는 층이 아니라 도구라 없다. */
+  /** 정보 층 번호(1~3). 광고(채널 보기)와 메시지(도구)는 층이 아니라 없다. */
   tier: 1 | 2 | 3 | null
   /** 탭 버튼 title(호버 설명) — 띠를 2줄로 만들지 않기 위해 상시 노출하지 않는다. */
   title: string
 }
 
 export const CAMPAIGN_TABS: readonly CampaignTabDef[] = [
-  { id: "summary", label: "한눈에", tier: 1, title: "판정 · 핵심 숫자 4 · 오늘 유입 · 추이 · 퍼널 · Top 3" },
-  { id: "detail", label: "상세", tier: 2, title: "캠페인 · 소재 · 퍼널·채널 · 행사 · 메시지 성과" },
+  { id: "summary", label: "한눈에", tier: 1, title: "판정 · 핵심 숫자 4 · 오늘 유입 · 추이 · 퍼널 · 광고 채널" },
+  // 2026-11-06 — 채널 › 캠페인(계획·운영·DB 리드). 상세의 캠페인 섹션이 이리로 왔다.
+  { id: "ads", label: "광고", tier: null, title: "채널(Google 395 · Meta · 유튜브 스튜디오) › 캠페인 · 상태 · 기간·예산 · 우리 DB 리드" },
+  { id: "detail", label: "상세", tier: 2, title: "소재 · 퍼널·채널 · 행사 · 메시지 성과" },
   { id: "data", label: "데이터", tier: 3, title: "신규 리드 · 광고 리드 · Meta 캠페인 · Google Ads · 예산·성과 입력 · 업데이트 로그 · 주간 보고서" },
   { id: "email", label: "메시지", tier: null, title: "구독자 · 발송(이메일 라이브 · 문자·카카오 준비 중) · 이력" },
 ]
 
 export function isCampaignTab(value: string | null | undefined): value is CampaignTab {
-  return value === "summary" || value === "detail" || value === "data" || value === "email"
+  return value === "summary" || value === "ads" || value === "detail" || value === "data" || value === "email"
 }
 
 export interface HubSectionDef {
@@ -35,9 +37,14 @@ export interface HubSectionDef {
   label: string
 }
 
+/** 광고 탭 섹션 — 채널 카드 + 상세에서 옮겨 온 우산 캠페인·Meta 차트. */
+export const ADS_SECTIONS: readonly HubSectionDef[] = [
+  { id: "channels", label: "채널 · 캠페인" },
+  { id: "campaigns", label: "우산 캠페인 · Meta 차트" },
+]
+
 /** 상세(2층) 섹션 — 렌더 순서 = 내비 순서. id 는 앵커(#id)이자 레거시 매핑의 착지점이다. */
 export const DETAIL_SECTIONS: readonly HubSectionDef[] = [
-  { id: "campaigns", label: "캠페인" },
   { id: "creatives", label: "소재" },
   { id: "funnel", label: "퍼널·채널" },
   { id: "events", label: "행사" },
@@ -57,12 +64,20 @@ export const DATA_SECTIONS: readonly HubSectionDef[] = [
 
 /**
  * 옛 탭 id → 새 층 + 섹션. 옛 "광고" 탭은 차트(상세)와 표·입력(데이터)을 함께 담고 있었다 —
- * 기본 착지는 상세 › 캠페인이고, 예산표를 뜻하던 링크는 코드에서 data#budgets 로 직접 바꿨다.
+ * 기본 착지는 광고 › 우산 캠페인(2026-11-06 상세에서 옮김)이고, 예산표를 뜻하던 링크는 코드에서 data#budgets 로 직접 바꿨다.
  */
 const LEGACY_TAB_MAP: Record<string, { tab: CampaignTab; anchor: string }> = {
   leads: { tab: "data", anchor: "new-leads" },
   events: { tab: "detail", anchor: "events" },
-  meta: { tab: "detail", anchor: "campaigns" },
+  meta: { tab: "ads", anchor: "campaigns" },
+}
+
+/**
+ * 다른 탭으로 옮긴 섹션 — 옛 해시 링크(?tab=detail#campaigns)를 새 탭으로 보낸다.
+ * 해시는 서버가 모르므로 호출부(클라이언트 효과)가 마운트 뒤 URL 을 고친다.
+ */
+export function movedSectionTab(tab: CampaignTab, hash: string | null | undefined): CampaignTab | null {
+  return tab === "detail" && hash === "campaigns" ? "ads" : null
 }
 
 export interface ResolvedCampaignTab {
@@ -83,7 +98,7 @@ export function resolveCampaignTab(raw: string | null | undefined): ResolvedCamp
 /** 섹션 id 가 그 층의 것인지 — 임의 해시(#foo)로 스크롤 시도하지 않게 거른다. */
 export function isHubSection(tab: CampaignTab, id: string | null | undefined): boolean {
   if (!id) return false
-  const sections = tab === "detail" ? DETAIL_SECTIONS : tab === "data" ? DATA_SECTIONS : []
+  const sections = tab === "ads" ? ADS_SECTIONS : tab === "detail" ? DETAIL_SECTIONS : tab === "data" ? DATA_SECTIONS : []
   return sections.some((section) => section.id === id)
 }
 
