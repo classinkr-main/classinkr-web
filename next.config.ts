@@ -108,12 +108,12 @@ const nextConfig: NextConfig = {
   // import(첫 호출 시 로드)와 합쳐져 서버 함수 콜드 스타트 번들이 줄어든다. 출력 파일 트레이싱은
   // external 패키지도 배포 아티팩트에 포함하므로 런타임 해석에는 영향이 없다.
   serverExternalPackages: ["googleapis", "exceljs"],
-  // 공유 카드 글꼴(lib/og/template.tsx 가 process.cwd() 기준으로 읽는 Pretendard OTF). 루트 OG 는 빌드 때 정적으로
-  // 그려지지만 블로그 OG(/api/og/blog/[slug])는 런타임 함수라, 파일 추적이 경로를 못 따라가도 번들에 들어가게 명시한다.
+  // 공유 카드 글꼴·로고(lib/og/template.tsx 가 process.cwd() 기준으로 읽는 Pretendard OTF·먹 락업 PNG). 루트 OG 는 빌드 때
+  // 정적으로 그려지지만 블로그 OG(/api/og/blog/[slug])는 런타임 함수라, 파일 추적이 경로를 못 따라가도 번들에 들어가게 명시한다.
   outputFileTracingIncludes: {
-    "/api/og/**": ["./assets/fonts/pretendard-static/**"],
-    "/opengraph-image": ["./assets/fonts/pretendard-static/**"],
-    "/twitter-image": ["./assets/fonts/pretendard-static/**"],
+    "/api/og/**": ["./assets/fonts/pretendard-static/**", "./assets/og/**"],
+    "/opengraph-image": ["./assets/fonts/pretendard-static/**", "./assets/og/**"],
+    "/twitter-image": ["./assets/fonts/pretendard-static/**", "./assets/og/**"],
   },
   images: {
     // 기본값은 webp 단독이다. avif를 앞에 두면 지원 브라우저에서 추가로 ~17% 더 줄어든다.
