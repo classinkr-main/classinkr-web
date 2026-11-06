@@ -141,15 +141,15 @@ function renderAnswer(answer: string): ReactNode {
     )
 }
 
-const QA_MARK_CLASS =
-    "mt-px inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-[6px] text-label leading-none"
+// Q·A 는 배경 없이 글자색으로만 나눈다. 줄 기준선에 맞춰 첫 줄과 나란히 둔다.
+const QA_MARK_CLASS = "w-5 shrink-0 text-body-l font-bold leading-none"
 
-// 자주 묻는 질문 항목. 질문은 굵은 글자 + 채운 Q 표시, 답은 본문색 + 테두리 A 표시로 나눈다.
+// 자주 묻는 질문 항목. 질문은 굵은 글자 + 강조색 Q, 답은 본문색 + 흐린 A 로 나눈다.
 function QuestionAnswerItem({ question, answer }: { question: ReactNode; answer: string }) {
     return (
         <li className="py-5 first:pt-0 last:pb-0">
-            <div className="flex gap-3">
-                <span aria-hidden className={cn(QA_MARK_CLASS, "bg-fg-accent text-fg-on-accent")}>
+            <div className="flex items-baseline gap-2.5">
+                <span aria-hidden className={cn(QA_MARK_CLASS, "text-fg-accent")}>
                     Q
                 </span>
                 <p className="min-w-0 break-keep text-body font-bold text-fg-ink [overflow-wrap:anywhere]">
@@ -157,8 +157,8 @@ function QuestionAnswerItem({ question, answer }: { question: ReactNode; answer:
                     {typeof question === "string" ? renderInlineMarkdown(question) : question}
                 </p>
             </div>
-            <div className="mt-2 flex gap-3">
-                <span aria-hidden className={cn(QA_MARK_CLASS, "border border-line-strong bg-surface-sheet text-fg-muted")}>
+            <div className="mt-2 flex items-baseline gap-2.5">
+                <span aria-hidden className={cn(QA_MARK_CLASS, "text-fg-muted")}>
                     A
                 </span>
                 <p className="min-w-0 break-keep text-ui leading-[26px] text-fg-body [overflow-wrap:anywhere]">
