@@ -225,7 +225,7 @@ export function LeadMagnetGate({ leadMagnet, postSlug }: Props) {
           <h2 className="mt-4 text-[1.55rem] font-bold leading-snug tracking-[-0.03em] text-[#111110] md:text-[1.9rem]">
             {leadMagnet.ctaCopy.title}
           </h2>
-          <p className="mt-3 text-[15px] leading-7 text-[#1a1a1a]/65">
+          <p className="mt-3 text-ui leading-7 text-[#1a1a1a]/65">
             {leadMagnet.summary}
           </p>
 
@@ -237,7 +237,7 @@ export function LeadMagnetGate({ leadMagnet, postSlug }: Props) {
 
           <ul className="mt-5 grid gap-2.5">
             {leadMagnet.deliverables.slice(0, 4).map((item) => (
-              <li key={item} className="flex items-start gap-2.5 text-[14px] leading-6 text-[#1a1a1a]/75">
+              <li key={item} className="flex items-start gap-2.5 text-caption leading-6 text-[#1a1a1a]/75">
                 <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-fg-accent" />
                 {item}
               </li>
@@ -275,7 +275,8 @@ export function LeadMagnetGate({ leadMagnet, postSlug }: Props) {
                 type="button"
                 disabled={!leadMagnet.published || downloading}
                 onClick={() => void handleDownload()}
-                className="h-11 w-full rounded-[6px] bg-fg-accent font-semibold text-fg-on-accent hover:bg-fg-accent-hover"
+                size="md"
+                className="w-full rounded-[6px] bg-fg-accent font-semibold text-fg-on-accent hover:bg-fg-accent-hover"
               >
                 {downloading ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -284,16 +285,16 @@ export function LeadMagnetGate({ leadMagnet, postSlug }: Props) {
                 )}
                 {downloaded ? "다시 받기" : "자료 받기"}
               </Button>
-              {error && <p className="text-sm text-[#B85C33]">{error}</p>}
+              {error && <p className="text-caption text-fg-danger">{error}</p>}
             </div>
           ) : memory ? (
             <div className="flex flex-col gap-4 py-2">
               <div className="space-y-1">
-                <p className="text-sm font-semibold text-[#111110]">
+                <p className="text-caption font-semibold text-fg-ink">
                   {alreadyUnlocked ? "이미 받은 자료입니다" : "저장된 이메일로 바로 받기"}
                 </p>
-                <p className="flex items-center gap-1.5 text-sm leading-6 text-[#615D59]">
-                  <Mail className="h-4 w-4 shrink-0 text-[#A39E98]" />
+                <p className="flex items-center gap-1.5 text-caption leading-6 text-fg-muted">
+                  <Mail className="h-4 w-4 shrink-0 text-fg-faint" />
                   {maskEmail(memory.email)}
                 </p>
               </div>
@@ -302,7 +303,8 @@ export function LeadMagnetGate({ leadMagnet, postSlug }: Props) {
                 type="button"
                 disabled={!leadMagnet.published || loading || downloading}
                 onClick={() => void handleRememberedDownload()}
-                className="h-11 w-full rounded-[6px] bg-fg-accent font-semibold text-fg-on-accent hover:bg-fg-accent-hover"
+                size="md"
+                className="w-full rounded-[6px] bg-fg-accent font-semibold text-fg-on-accent hover:bg-fg-accent-hover"
               >
                 {loading || downloading ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -312,7 +314,7 @@ export function LeadMagnetGate({ leadMagnet, postSlug }: Props) {
                 자료 받기
               </Button>
 
-              {error && <p className="text-sm text-[#B85C33]">{error}</p>}
+              {error && <p className="text-caption text-fg-danger">{error}</p>}
 
               {alreadyUnlocked ? null : (
                 <p className="text-center text-[10px] leading-relaxed text-[#A39E98]">
@@ -327,14 +329,14 @@ export function LeadMagnetGate({ leadMagnet, postSlug }: Props) {
                   forgetRememberedMaterialAccess()
                   setError("")
                 }}
-                className="self-center text-[13px] font-semibold text-[#615D59] underline underline-offset-4 hover:text-[#111110]"
+                className="self-center text-note font-semibold text-fg-muted underline underline-offset-4 hover:text-fg-ink"
               >
                 다른 이메일로 받기
               </button>
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-3">
-              <p className="text-sm font-semibold text-[#111110]">
+              <p className="text-caption font-semibold text-fg-ink">
                 PDF로 자료 받기
               </p>
               <div className="relative">
@@ -349,12 +351,13 @@ export function LeadMagnetGate({ leadMagnet, postSlug }: Props) {
                 />
               </div>
 
-              {error && <p className="text-sm text-[#B85C33]">{error}</p>}
+              {error && <p className="text-caption text-fg-danger">{error}</p>}
 
               <Button
                 type="submit"
                 disabled={loading}
-                className="h-11 w-full rounded-[6px] bg-fg-accent font-semibold text-fg-on-accent hover:bg-fg-accent-hover"
+                size="md"
+                className="w-full rounded-[6px] bg-fg-accent font-semibold text-fg-on-accent hover:bg-fg-accent-hover"
               >
                 {loading ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
