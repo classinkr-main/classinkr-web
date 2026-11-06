@@ -176,7 +176,7 @@ function SampleUnitSheet({ unit, onClose, onChanged, reduceMotion }: SampleUnitS
                 </p>
                 <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[12px] font-semibold text-[#615D59]">
                   <span>{unit.product_name}</span>
-                  {statusMeta && <span className={`rounded-full px-2 py-0.5 text-[10.5px] font-bold ${statusMeta.tone}`}>{statusMeta.label}</span>}
+                  {statusMeta && <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${statusMeta.tone}`}>{statusMeta.label}</span>}
                   {unit.status === "loaned" && (
                     <span className="truncate">
                       {unit.current_customer ?? "고객 미상"}

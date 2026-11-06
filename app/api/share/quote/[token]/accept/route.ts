@@ -49,7 +49,7 @@ function notifyQuoteAccepted(input: {
       `버전 v${input.version.version_number} · 합계 ${input.version.total_amount.toLocaleString("ko-KR")}원`,
       "계약 전환을 진행해 주세요.",
       ...(input.hardwareApprovalPending
-        ? ["하드웨어 포함 — 하드웨어 탭의 '하드웨어 승인 대기'에서 승인 권한자가 승인하면 오더번호와 배송 예정이 생깁니다."]
+        ? ["하드웨어 포함 — 하드웨어 탭의 '하드웨어 오더 승인'에서 승인 권한자가 승인하면 오더번호와 배송 예정이 생깁니다."]
         : []),
     ].join("\n"),
     routeUrl: `/admin/quotes/${input.document.id}/view`,

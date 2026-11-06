@@ -158,7 +158,7 @@ export default function HistoryTabPanel({
                   setMovementsPage(1)
                 }}
                 aria-label="하드웨어 원본 검색"
-                placeholder="품목·고객사·물량번호·담당자·특이사항 검색"
+                placeholder="품목·고객사·물류번호·담당자·특이사항 검색"
                 className="h-10 w-full rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] pl-9 pr-3 text-[13px] text-[#111110] outline-none focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15"
               />
             </label>
@@ -176,7 +176,7 @@ export default function HistoryTabPanel({
                 <Settings2 className="h-3.5 w-3.5" />
                 상세 필터
                 {advancedHistoryFilterCount > 0 && (
-                  <span className="inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-[#084734] px-1 text-[10px] font-bold text-white">
+                  <span className="inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-[#084734] px-1 text-[11px] font-bold text-white">
                     {advancedHistoryFilterCount}
                   </span>
                 )}
@@ -308,7 +308,7 @@ export default function HistoryTabPanel({
             </button>
           </div>
           <div className="mt-2.5 flex flex-wrap items-center gap-2">
-            <span className="w-12 shrink-0 text-[12px] font-bold text-[#111110]">판매유형</span>
+            <span className="w-12 shrink-0 whitespace-nowrap text-[12px] font-bold text-[#111110]">출고 유형</span>
             <button
               type="button"
               onClick={() => {
@@ -459,7 +459,7 @@ export default function HistoryTabPanel({
           ) : null}
           {historyLots.length > 0 ? (
             <div className="mt-2.5 flex flex-wrap items-center gap-2">
-              <span className="shrink-0 text-[12px] font-bold text-[#111110]">물류No</span>
+              <span className="shrink-0 text-[12px] font-bold text-[#111110]">물류번호</span>
               <button
                 type="button"
                 onClick={() => {

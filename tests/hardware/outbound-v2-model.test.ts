@@ -133,9 +133,11 @@ describe("전송 칸 고르기", () => {
     })
   })
 
-  it("샘플이 아니면 반납일을, 직접 입력이면 고객 id 를 싣지 않는다", () => {
+  it("샘플이 아니면 반납일을 싣지 않고, 직접 입력이면 고객 연결을 지운다(null)", () => {
+    // 수정 때 "CRM에 없는 곳"으로 바꾸면 예전 CRM 고객이 남지 않게 null 을 보낸다(서버가 칸을 비운다).
     expect(processDraftFields({ ...state, outboundType: "sales", customerMode: "free" }, { movementType: "outbound", toLocation: "현장" })).toEqual({
       outboundType: "sales",
+      customerId: null,
       ownerUserId: "user-2",
     })
   })

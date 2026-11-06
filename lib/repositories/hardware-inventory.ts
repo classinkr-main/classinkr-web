@@ -23,6 +23,7 @@ import {
   type ProcessLineInput,
   type ReturnOriginal,
 } from "@/lib/hardware/movement-rules"
+import { classifyDestination, normalizeLocationName } from "@/lib/hardware/locations"
 import { isPromotedProduct } from "@/lib/hardware/product"
 import { normalizedAccountKey } from "@/lib/branch/account-key"
 import {
@@ -366,38 +367,8 @@ function normalizeProductName(value: string) {
   return value.replace(/\s+/g, " ").trim()
 }
 
-// 클래스인 본사(사무실·쇼룸) 보관분은 사무실 재고다(운영자 결정 2026-09-15). 시트 보관처에는 "클래스인"으로
-// 적힌다. 영문 "ClassIn"은 아래 수리 규칙보다 먼저 판정해야 한다.
-const OFFICE_LOCATION_PATTERN = /사무실|office|클래스인|class\s*in/i
-// 수리 위치는 수리를 뜻하는 표기에만 맞춘다. 예전 /수리|a\/?s/ 는 단어 안의 "as"(ClassIn·Master)와
-// 고객사 이름("대치수리학원"·"수리논술")까지 수리 위치로 보냈다.
-const REPAIR_LOCATION_PATTERN =
-  /repair|a\/s|(?:^|[^a-z])as(?:\s*센터)?(?:$|[^a-z])|수리(?!\s*(?:학원|논술|영역|수학|과학|탐구|교육|아카데미))/i
-
-export function normalizeLocationName(value: unknown): string | null {
-  const text = cleanString(value)
-  if (!text) return null
-  if (/샘플|대여|데모|demo|sample/i.test(text)) return DEFAULT_SAMPLE_LOCATION
-  if (OFFICE_LOCATION_PATTERN.test(text)) return "사무실"
-  if (REPAIR_LOCATION_PATTERN.test(text)) return DEFAULT_REPAIR_LOCATION
-  if (/창고|warehouse/i.test(text)) return DEFAULT_STOCK_LOCATION
-  // FPL(풀필먼트) 위탁 창고 — 판매 가능한 창고 풀에 속한다(2026-08 운영 확정: 인천 더조은).
-  // 시트에는 사이트명이 그대로 적히므로 창고로 정규화하고, 원문은 storage_location·raw에 보존한다.
-  if (/인천\s*더조은|\bfpl\b/i.test(text)) return DEFAULT_STOCK_LOCATION
-  if (/^외부\/?고객$|^고객$|고객사/i.test(text)) return DEFAULT_CUSTOMER_LOCATION
-  return text
-}
-
-export function classifyDestination(value: unknown): "warehouse" | "sample" | "office" | "repair" | "customer" | "other" {
-  const location = normalizeLocationName(value)
-  if (!location) return "other"
-  if (location === DEFAULT_STOCK_LOCATION) return "warehouse"
-  if (location === DEFAULT_SAMPLE_LOCATION) return "sample"
-  if (location === "사무실") return "office"
-  if (location === DEFAULT_REPAIR_LOCATION) return "repair"
-  if (location === DEFAULT_CUSTOMER_LOCATION) return "customer"
-  return "other"
-}
+// 위치 정규화 규칙은 lib/hardware/locations.ts 한 곳 — 화면(출고 기간 집계 등)도 같은 함수를 쓴다.
+export { classifyDestination, normalizeLocationName } from "@/lib/hardware/locations"
 
 function isSampleLikeText(...values: unknown[]) {
   return values.some((value) => /샘플|대여|데모|demo|sample/i.test(cleanString(value) ?? ""))
@@ -1325,6 +1296,7 @@ async function loadReturnOriginals(ids: readonly string[]): Promise<Map<string, 
 
   return new Map(((data ?? []) as HardwareMovement[]).map((row) => [row.id, {
     id: row.id,
+    source: row.source,
     item_id: row.item_id,
     product_name: row.product_name,
     movement_type: row.movement_type,
@@ -1849,8 +1821,9 @@ async function planProcessConfirm(
       ? input.lotAllocations
       : cleanString(input.lotNo)
         ? [{ lotNo: cleanString(input.lotNo) as string, quantity: effectiveQty }]
-        : cleanString(planned.lot_no)
-          ? [{ lotNo: cleanString(planned.lot_no) as string, quantity: effectiveQty }]
+        : movementLotKey(planned)
+          // 시트 이관 행은 물류No 를 reference_no 에 싣는다 — lot_no 만 보면 번호가 있는데도 고르라고 막았다.
+          ? [{ lotNo: movementLotKey(planned) as string, quantity: effectiveQty }]
           : null
   if (!requested) {
     throw new MovementRuleError(`${planned.product_name}은(는) 확정할 때 물류번호를 골라야 합니다.`)
@@ -2065,10 +2038,10 @@ export async function updateHardwareMovement(
     }
   } else if (options?.canFinalize === false) {
     if (!wasPlanned) {
-      throw new Error("실제 반영된 기록 수정은 확정 권한(hardware.finalize)이 필요합니다.")
+      throw new Error("실제 반영된 기록 수정은 입고관리 권한자만 할 수 있습니다.")
     }
     if (!staysPlanned) {
-      throw new Error("예정을 실제 출고로 바꾸는 확정은 확정 권한(hardware.finalize)이 필요합니다.")
+      throw new Error("배송 예정을 실제 출고로 바꾸려면 확정 버튼을 쓰세요(입고관리 권한자는 수정으로도 바꿀 수 있습니다).")
     }
   }
 
@@ -2224,6 +2197,8 @@ async function listRealizedCustomerOutbounds(): Promise<ReturnCandidateRow[]> {
       .from("hardware_movements")
       .select(columns)
       .eq("movement_type", "outbound")
+      // 앱에서 등록한 출고만 — 시트 이관 행은 가져오기마다 지워지고 다시 생겨 회수 연결이 가져오기를 막는다.
+      .eq("source", "admin_manual")
       .is("voided_at", null)
       .order("id", { ascending: true })
       .limit(limit)
@@ -3450,7 +3425,7 @@ export function buildHardwareStockAlerts(rows: readonly HardwareStockRow[]): Har
         product: row.product,
         title: "원본 점검 필요",
         detail: `창고 ${row.warehouseStock}대 · 가용 ${row.availableStock}대 — ${
-          isPromotedProduct(row.product) ? "promoted 판정 또는 시트 수치 정리 필요" : "원본 유형·시트 수치 정리 필요"
+          isPromotedProduct(row.product) ? "판촉형 판정 또는 시트 수치 정리 필요" : "원본 유형·시트 수치 정리 필요"
         }`,
       })
     } else if (row.availableStock < 0) {

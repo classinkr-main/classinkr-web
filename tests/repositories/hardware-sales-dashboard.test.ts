@@ -100,7 +100,7 @@ function row(dashboard: Awaited<ReturnType<typeof aggregate>>, name: string) {
 }
 
 describe("aggregateHardwareSalesDashboard", () => {
-  it("세일즈·프로모션·유형 모름은 세고 A/S·샘플은 뺀다", async () => {
+  it("세일즈·유형 모름은 주 숫자로, 프로모션은 따로 세고 A/S·샘플은 뺀다(2026-11-05 결정)", async () => {
     const dashboard = await aggregate([
       movement({ quantity: 2, outbound_type: "sales" }),
       movement({ quantity: 3, outbound_type: "promotion" }),
@@ -113,8 +113,10 @@ describe("aggregateHardwareSalesDashboard", () => {
       movement({ quantity: 13, outbound_type: null, sheet_type: "Promotion" }),
     ])
     const board86 = row(dashboard, '86" IFP')!
-    expect(board86.months[1].installed).toBe(2 + 3 + 7 + 13) // 5월 = FY 2번째 칸
-    expect(board86.total.installed).toBe(25)
+    expect(board86.months[1].installed).toBe(2 + 7) // 5월 = FY 2번째 칸 — 세일즈 + 유형 모름
+    expect(board86.months[1].promotionInstalled).toBe(3 + 13)
+    expect(board86.total.installed).toBe(9)
+    expect(board86.total.promotionInstalled).toBe(16)
   })
 
   it("창고·샘플·사무실·수리로 가는 내부 이동은 세지 않는다(CRM 고객이 붙으면 센다)", async () => {
@@ -138,12 +140,12 @@ describe("aggregateHardwareSalesDashboard", () => {
     ]
     const current = await aggregate(rows, 2026)
     const board = row(current, '86" IFP')!
-    expect(board.months[7]).toEqual({ installed: 9, planned: 3, returned: 0 }) // 11월
-    expect(board.undated).toEqual({ installed: 5, planned: 2, returned: 0 })
-    expect(board.total).toEqual({ installed: 14, planned: 5, returned: 0 })
+    expect(board.months[7]).toEqual({ installed: 9, planned: 3, returned: 0, promotionInstalled: 0, promotionPlanned: 0 }) // 11월
+    expect(board.undated).toEqual({ installed: 5, planned: 2, returned: 0, promotionInstalled: 0, promotionPlanned: 0 })
+    expect(board.total).toEqual({ installed: 14, planned: 5, returned: 0, promotionInstalled: 0, promotionPlanned: 0 })
 
     const previous = await aggregate(rows, 2025)
-    expect(row(previous, '86" IFP')!.total).toEqual({ installed: 0, planned: 0, returned: 0 })
+    expect(row(previous, '86" IFP')!.total).toEqual({ installed: 0, planned: 0, returned: 0, promotionInstalled: 0, promotionPlanned: 0 })
   })
 
   it("회수는 판매에서 빼지 않고 따로 센다(샘플 반납·A/S 회수는 제외)", async () => {
@@ -154,7 +156,7 @@ describe("aggregateHardwareSalesDashboard", () => {
       movement({ movement_type: "return", quantity: 1, from_location: "샘플", to_location: "창고", status: "반납", outbound_type: null }),
     ])
     const board = row(dashboard, '86" IFP')!
-    expect(board.total).toEqual({ installed: 4, planned: 0, returned: 1 })
+    expect(board.total).toEqual({ installed: 4, planned: 0, returned: 1, promotionInstalled: 0, promotionPlanned: 0 })
     expect(board.months[1].returned).toBe(1)
   })
 

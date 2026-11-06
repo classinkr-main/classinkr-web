@@ -56,17 +56,33 @@ export const HARDWARE_FIXED_REPORT_GROUPS: readonly HardwareReportGroup[] = ["bo
 // 시트 가져오기 행은 outbound_type 칸이 비어 있다. 시트 "유형" 열은 memo 앞머리("유형 · 비고")와
 // raw.values[11] 에 남는다. 새 칸이 비어 있으면 이 텍스트로 추정한다(추정 실패 = null).
 const SAMPLE_TEXT = /샘플|대여|데모|demo|sample/i
-const AS_TEXT = /a\s*\/\s*s|(?:^|[^a-z])as(?:$|[^a-z])|교체|불량|rma|수리(?!\s*(?:학원|논술))/i
+// "수리"는 고객사 이름(대치수리학원·수리논술·OO수리과학학원)에 흔하다 — 위치 정규화(REPAIR_LOCATION_PATTERN)와
+// 같은 예외를 둔다. rma 는 단어로만(영문 고객사 이름 속 "Pharmacy" 등 제외).
+const AS_TEXT = /a\s*\/\s*s|(?:^|[^a-z])as(?:$|[^a-z])|교체|불량|\brma\b|수리(?!\s*(?:학원|논술|영역|수학|과학|탐구|교육|아카데미))/i
 const PROMOTION_TEXT = /프로모|promo|판촉|증정|무상|무료/i
 const SALES_TEXT = /세일즈|판매|sales|매출|납품/i
 
-export function inferOutboundTypeFromText(...values: Array<string | null | undefined>): HardwareOutboundType | null {
-  const text = values.filter((value): value is string => typeof value === "string" && value.trim() !== "").join(" ")
+/** 글 하나에서 유형을 고른다. 샘플 → A/S → 프로모션 → 세일즈 순서로 본다. */
+function classifyOutboundTypeText(value: string | null | undefined): HardwareOutboundType | null {
+  const text = typeof value === "string" ? value.trim() : ""
   if (!text) return null
   if (SAMPLE_TEXT.test(text)) return "sample"
   if (AS_TEXT.test(text)) return "as"
   if (PROMOTION_TEXT.test(text)) return "promotion"
   if (SALES_TEXT.test(text)) return "sales"
+  return null
+}
+
+/**
+ * 여러 글에서 유형을 고른다 — **앞의 글이 이긴다**. 예전에는 글을 모두 이어 붙여 한 번에 봐서, 시트 유형이
+ * "Sales"인데 비고에 "데모"·"교체"가 있거나 고객사 이름에 "수리"가 들어가면 샘플·A/S 로 빠졌다
+ * (2026-11-05 점검). 앞의 글에서 못 정하면 다음 글을 본다.
+ */
+export function inferOutboundTypeFromText(...values: Array<string | null | undefined>): HardwareOutboundType | null {
+  for (const value of values) {
+    const type = classifyOutboundTypeText(value)
+    if (type) return type
+  }
   return null
 }
 

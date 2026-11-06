@@ -283,7 +283,7 @@ export function notifyHardwareOrderApprovalRequested(order: SalesOrder) {
       `견적 ${order.quoteNumber ?? "-"} · 담당자 승인 처리${order.requestedBy ? ` (${order.requestedBy})` : ""}`,
       products ? `품목: ${products}` : null,
       unmapped.length ? `재고 품목 확인 필요: ${unmapped.join(", ")}` : null,
-      "하드웨어 탭 '하드웨어 승인 대기'에서 이왕찬·지사장이 승인하면 오더번호와 배송 예정이 생깁니다.",
+      "하드웨어 탭 '하드웨어 오더 승인'에서 이왕찬·지사장이 승인하면 오더번호와 배송 예정이 생깁니다.",
     ]
       .filter(Boolean)
       .join("\n"),
@@ -649,7 +649,7 @@ export function notifyHardwareOrderRejected(order: SalesOrder, options: { remind
     message: [
       `견적 ${order.quoteNumber ?? "-"} · ${order.decidedBy ?? "-"} 반려`,
       order.decisionReason ? `사유: ${order.decisionReason}` : null,
-      "견적을 고쳐 새 버전으로 승인받으면 하드웨어 승인 대기로 다시 올라옵니다. 같은 버전은 고객이 다시 눌러도 올라오지 않습니다.",
+      "견적을 고쳐 새 버전으로 승인받으면 하드웨어 오더 승인의 승인 대기로 다시 올라옵니다. 같은 버전은 고객이 다시 눌러도 올라오지 않습니다.",
       reminder && options.remindedBy ? `다시 알린 사람: ${options.remindedBy}` : null,
     ]
       .filter(Boolean)

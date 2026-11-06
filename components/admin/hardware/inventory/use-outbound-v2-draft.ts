@@ -21,7 +21,9 @@ export function outboundV2StateFromMovement(movement: HardwareMovement): Outboun
     expectedReturnAt: movement.expected_return_at?.slice(0, 10) ?? "",
     ownerUserId: movement.owner_user_id ?? null,
     isFree: movement.is_free ?? null,
-    adjustDirection: movement.quantity < 0 ? "decrease" : "increase",
+    // 조정 방향은 위치로 기록된다(출발만 있으면 줄임 — 서버 lotDeltaOf 와 같은 규칙). 수량은 늘 양수라
+    // 예전처럼 quantity < 0 으로 보면 줄임 조정을 복제·수정할 때 늘림으로 바뀌었다(2026-11-05 점검).
+    adjustDirection: movement.from_location && !movement.to_location ? "decrease" : "increase",
   }
 }
 
