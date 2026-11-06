@@ -26,6 +26,8 @@ async function loadLeadCapture(options?: {
   const touchLeadInflow = vi.fn().mockResolvedValue(null)
   // 재유입 병합 중 행사 토큰을 새길 때만 호출된다(notes 의 [event:slug] 줄).
   const updateLead = vi.fn().mockResolvedValue(null)
+  // 재유입 병합 중 맞춤형 광고 동의 기록을 최신 제출로 바꿀 때만 호출된다.
+  const updateLeadAdConsent = vi.fn().mockResolvedValue(null)
   const createCrmCustomerEvent = vi.fn().mockResolvedValue(undefined)
   const emitNotificationEvent = vi.fn().mockResolvedValue(undefined)
   const postJson = vi.fn().mockResolvedValue({ ok: true, status: 200 })
@@ -55,6 +57,7 @@ async function loadLeadCapture(options?: {
     findLeadsByContacts,
     touchLeadInflow,
     updateLead,
+    updateLeadAdConsent,
   }))
   vi.doMock("@/lib/repositories/marketing", () => ({
     upsertSubscriber: vi.fn().mockResolvedValue(undefined),
@@ -76,6 +79,7 @@ async function loadLeadCapture(options?: {
     findLeadsByContacts,
     touchLeadInflow,
     updateLead,
+    updateLeadAdConsent,
     createCrmCustomerEvent,
     emitNotificationEvent,
     postJson,
@@ -107,8 +111,95 @@ describe("submitLeadCapture duplicate handling", () => {
     expect(triggerOnSubmitRules).toHaveBeenCalledTimes(marketingConsent ? 1 : 0)
     expect(sendServerConversion).toHaveBeenCalledWith(expect.objectContaining({
       metaEventName: marketingConsent ? "CompleteRegistration" : "Lead",
-      user: expect.objectContaining({ allowHashedUserData: marketingConsent }),
+      // 마케팅 수신 동의만으로는 해시 연락처를 보내지 않는다 — 맞춤형 광고 활용 동의(adConsent)가 따로 필요하다.
+      user: expect.objectContaining({ allowHashedUserData: false }),
     }))
+  })
+
+  it.each([
+    [{ marketingConsent: true }, false],
+    [{ marketingConsent: true, adConsent: false }, false],
+    [{ marketingConsent: false, adConsent: true }, true],
+    [{ adConsent: "true" }, false],
+  ])("sends hashed contacts only when adConsent === true (%o)", async (consent, expected) => {
+    const { submitLeadCapture, saveLead, sendServerConversion } = await loadLeadCapture()
+    saveLead.mockResolvedValue({ id: "lead-ad" })
+
+    const response = await submitLeadCapture({ ...baseLead, ...consent })
+
+    expect(response.status).toBe(200)
+    expect(sendServerConversion).toHaveBeenCalledWith(expect.objectContaining({
+      metaEventName: "Lead",
+      user: expect.objectContaining({ allowHashedUserData: expected }),
+    }))
+  })
+
+  it("parses adConsent as boolean or undefined", async () => {
+    const { buildLeadPayload } = await loadLeadCapture()
+    expect(buildLeadPayload({ ...baseLead, adConsent: true }).adConsent).toBe(true)
+    expect(buildLeadPayload({ ...baseLead, adConsent: false }).adConsent).toBe(false)
+    expect(buildLeadPayload({ ...baseLead, adConsent: "true" }).adConsent).toBeUndefined()
+    expect(buildLeadPayload(baseLead).adConsent).toBeUndefined()
+  })
+
+  it.each([true, false])("stores ad consent fields on a new lead when adConsent is %s", async (adConsent) => {
+    const { submitLeadCapture, saveLead } = await loadLeadCapture()
+    const { AD_CONSENT_VERSION } = await import("@/lib/consent/ad-consent")
+    saveLead.mockResolvedValue({ id: "lead-ad" })
+
+    await submitLeadCapture({ ...baseLead, adConsent })
+
+    expect(saveLead).toHaveBeenCalledWith(expect.objectContaining({
+      ad_consent: adConsent,
+      ad_consent_at: expect.any(String),
+      ad_consent_version: AD_CONSENT_VERSION,
+    }))
+  })
+
+  it("omits ad consent fields when the form had no checkbox", async () => {
+    const { submitLeadCapture, saveLead } = await loadLeadCapture()
+    saveLead.mockResolvedValue({ id: "lead-no-box" })
+
+    await submitLeadCapture(baseLead)
+
+    const saved = saveLead.mock.calls[0][0]
+    expect(saved).not.toHaveProperty("ad_consent")
+    expect(saved).not.toHaveProperty("ad_consent_at")
+    expect(saved).not.toHaveProperty("ad_consent_version")
+  })
+
+  it("does not drop a resubmission with changed ad consent as a duplicate", async () => {
+    const { submitLeadCapture, saveLead } = await loadLeadCapture()
+    saveLead.mockResolvedValue({ id: "lead-dup" })
+
+    await submitLeadCapture({ ...baseLead, adConsent: false })
+    await submitLeadCapture({ ...baseLead, adConsent: true })
+
+    expect(saveLead).toHaveBeenCalledTimes(2)
+  })
+
+  it("records a withdrawal sent back within the duplicate window (false → true → false)", async () => {
+    const { submitLeadCapture, saveLead, updateLeadAdConsent, sendServerConversion } = await loadLeadCapture()
+    saveLead.mockResolvedValueOnce({ id: "lead-first" }).mockResolvedValueOnce({ id: "lead-second" })
+
+    await submitLeadCapture({ ...baseLead, adConsent: false })
+    await submitLeadCapture({ ...baseLead, adConsent: true })
+    const third = await submitLeadCapture({ ...baseLead, adConsent: false })
+
+    expect(third.body).toMatchObject({ ok: true, stored: false })
+    expect(saveLead).toHaveBeenCalledTimes(2)
+    expect(sendServerConversion).toHaveBeenCalledTimes(2)
+    expect(updateLeadAdConsent).toHaveBeenCalledWith("lead-second", expect.objectContaining({ ad_consent: false }))
+  })
+
+  it("does not rewrite consent on a plain double submit", async () => {
+    const { submitLeadCapture, saveLead, updateLeadAdConsent } = await loadLeadCapture()
+    saveLead.mockResolvedValue({ id: "lead-dup" })
+
+    await submitLeadCapture({ ...baseLead, adConsent: true })
+    await submitLeadCapture({ ...baseLead, adConsent: true })
+
+    expect(updateLeadAdConsent).not.toHaveBeenCalled()
   })
 
   it("normalizes a region value so Meta city can be stored in leads.branch", async () => {
@@ -408,6 +499,7 @@ describe("submitLeadCapture reinflow merge", () => {
       saveLead,
       findLeadsByContacts,
       touchLeadInflow,
+      updateLeadAdConsent,
       createCrmCustomerEvent,
       emitNotificationEvent,
     } = await loadLeadCapture()
@@ -434,6 +526,8 @@ describe("submitLeadCapture reinflow merge", () => {
     expect(saveLead).not.toHaveBeenCalled()
     expect(touchLeadInflow).toHaveBeenCalledTimes(1)
     expect(touchLeadInflow).toHaveBeenCalledWith("lead-existing-new", expect.any(String))
+    // 체크 칸이 없던 제출은 기존 동의 기록을 건드리지 않는다.
+    expect(updateLeadAdConsent).not.toHaveBeenCalled()
     expect(createCrmCustomerEvent).toHaveBeenCalledTimes(1)
     expect(createCrmCustomerEvent).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -450,6 +544,44 @@ describe("submitLeadCapture reinflow merge", () => {
         title: expect.stringContaining("재문의 · "),
       })
     )
+  })
+
+  it.each([true, false])("updates ad consent on the merged lead to the latest submission (%s)", async (adConsent) => {
+    const { submitLeadCapture, saveLead, findLeadsByContacts, updateLeadAdConsent } = await loadLeadCapture()
+    const { AD_CONSENT_VERSION } = await import("@/lib/consent/ad-consent")
+    findLeadsByContacts.mockResolvedValue([
+      {
+        id: "lead-existing-ad",
+        phone: baseLead.phone,
+        source: baseLead.source,
+        status: "new",
+        timestamp: "2026-09-01T00:00:00.000Z",
+      },
+    ])
+
+    const result = await submitLeadCapture({ ...baseLead, adConsent })
+
+    expect(result.body).toMatchObject({ ok: true, merged: true })
+    expect(saveLead).not.toHaveBeenCalled()
+    expect(updateLeadAdConsent).toHaveBeenCalledWith("lead-existing-ad", {
+      ad_consent: adConsent,
+      ad_consent_at: expect.any(String),
+      ad_consent_version: AD_CONSENT_VERSION,
+    })
+  })
+
+  it("still accepts a merged submission when the ad consent update throws", async () => {
+    const { submitLeadCapture, findLeadsByContacts, updateLeadAdConsent } = await loadLeadCapture()
+    vi.spyOn(console, "warn").mockImplementation(() => {})
+    findLeadsByContacts.mockResolvedValue([
+      { id: "lead-existing-ad", phone: baseLead.phone, source: baseLead.source, status: "new", timestamp: "2026-09-01T00:00:00.000Z" },
+    ])
+    updateLeadAdConsent.mockRejectedValue(new Error("column ad_consent does not exist"))
+
+    const result = await submitLeadCapture({ ...baseLead, adConsent: true })
+
+    expect(result.status).toBe(200)
+    expect(result.body).toMatchObject({ ok: true, merged: true })
   })
 
   it("does not merge into a closed-status lead — stores a new lead instead", async () => {

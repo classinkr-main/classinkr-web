@@ -34,15 +34,18 @@ function initialPageContext() {
   }
 }
 
-export function GoogleAdsScript() {
+/**
+ * analytics = '분석' 동의. 태그는 분석·마케팅 어느 쪽 동의로도 붙지만, GA4 config 는 분석 동의가 있을
+ * 때만 건다 — 마케팅만 동의한 방문자에게 GA4 를 붙이면 analytics_storage denied 상태로도 향상된 측정
+ * 자동 이벤트·user_engagement 가 쿠키 없는 핑으로 나간다. 나중에 분석을 켜면 GA4 스크립트가 그때
+ * 마운트돼 config 가 한 번 돈다(next/script 는 같은 id 를 다시 돌리지 않는다).
+ */
+export function GoogleAdsScript({ analytics }: { analytics: boolean }) {
   const pathname = usePathname()
 
   // 경계는 lib/tracking-paths.ts — /admin 포함. /checkout 은 결제 전환 때문에 남긴다.
   if (isTrackingExcludedPath(pathname)) return null
 
-  const ga4Config = GA4_MEASUREMENT_ID
-    ? `gtag('config',${JSON.stringify(GA4_MEASUREMENT_ID)},{send_page_view:false});`
-    : ""
   const pageContext = `gtag('set',${toInlineJson(initialPageContext())});`
 
   return (
@@ -53,8 +56,13 @@ export function GoogleAdsScript() {
         strategy="afterInteractive"
       />
       <Script id="gtag-ads-init" strategy="afterInteractive">
-        {`window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());${pageContext}gtag('config',${JSON.stringify(GOOGLE_ADS_ID)},{send_page_view:false});${ga4Config}`}
+        {`window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());${pageContext}gtag('config',${JSON.stringify(GOOGLE_ADS_ID)},{send_page_view:false});`}
       </Script>
+      {analytics && GA4_MEASUREMENT_ID ? (
+        <Script id="gtag-ga4-init" strategy="afterInteractive">
+          {`gtag('config',${JSON.stringify(GA4_MEASUREMENT_ID)},{send_page_view:false});`}
+        </Script>
+      ) : null}
     </>
   )
 }

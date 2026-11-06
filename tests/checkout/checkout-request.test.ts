@@ -637,6 +637,17 @@ describe("submitCheckoutRequest — 저장 · 리드 연동 · 알림", () => {
     ])
   })
 
+  it.each([true, false, undefined])("맞춤형 광고 동의 %s 를 그대로 리드 미러에 넘긴다", async (adConsent) => {
+    const { submitCheckoutRequest, submitLeadCapture } = await loadWithMockedNotifications()
+    const deferred = createDeferred()
+
+    await submitCheckoutRequest({ ...VALID_PAYLOAD, adConsent }, deferred.context)
+    await deferred.flush()
+
+    expect(submitLeadCapture.mock.calls[0][0].adConsent).toBe(adConsent)
+    expect(submitLeadCapture.mock.calls[0][0].marketingConsent).toBe(false)
+  })
+
   it("ops 알림을 정확히 1건만 보낸다", async () => {
     const { submitCheckoutRequest, emitNotificationEvent } =
       await loadWithMockedNotifications()

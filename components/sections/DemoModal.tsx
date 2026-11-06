@@ -18,6 +18,8 @@ import {
 } from "@/components/ui/marketing-form"
 import { Input } from "@/components/ui/input"
 import { ACADEMY_SIZE_OPTIONS, ACADEMY_SIZE_PLACEHOLDER } from "@/lib/contact/academy-size"
+import { AdConsentCheckbox } from "@/components/consent/AdConsentCheckbox"
+import { EMPTY_AD_CONSENT, isAdConsentGiven } from "@/lib/consent/ad-consent"
 
 export function DemoModal({ children, trackingButton }: { children: React.ReactNode; trackingButton?: string }) {
     const [open, setOpen] = useState(false)
@@ -26,6 +28,7 @@ export function DemoModal({ children, trackingButton }: { children: React.ReactN
     const [error, setError] = useState("")
     const [warning, setWarning] = useState("")
     const [marketingConsent, setMarketingConsent] = useState(false)
+    const [adConsent, setAdConsent] = useState(EMPTY_AD_CONSENT)
     const formRef = useRef<HTMLFormElement>(null)
     const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
     const formStartTrackedRef = useRef(false)
@@ -37,6 +40,7 @@ export function DemoModal({ children, trackingButton }: { children: React.ReactN
         setError("")
         setWarning("")
         setMarketingConsent(false)
+        setAdConsent(EMPTY_AD_CONSENT)
         formRef.current?.reset()
     }
 
@@ -94,6 +98,7 @@ export function DemoModal({ children, trackingButton }: { children: React.ReactN
                 phone: formData.get("phone") as string,
                 message: message || undefined,
                 marketingConsent,
+                adConsent: isAdConsentGiven(adConsent),
                 website: (formData.get("website") as string) || undefined,
             })
             setWarning(
@@ -109,6 +114,7 @@ export function DemoModal({ children, trackingButton }: { children: React.ReactN
                 dedupeKey: data.conversionEventId ?? data.leadId,
                 eventId: data.conversionEventId,
                 transactionId: data.leadId,
+                adConsent: isAdConsentGiven(adConsent),
                 userData: {
                     email: formData.get("email") as string,
                     phone: formData.get("phone") as string,
@@ -245,6 +251,11 @@ export function DemoModal({ children, trackingButton }: { children: React.ReactN
                                 onChange={(e) => setMarketingConsent(e.target.checked)}
                                 label={<>제품 업데이트와 교육 운영 인사이트를 이메일로 받아보겠습니다 <span className="text-[#6C776F]">(선택)</span></>}
                                 description="상담 일정 안내와 별도로 신규 기능, 웨비나, 운영 사례를 받아볼 수 있습니다."
+                            />
+                            <AdConsentCheckbox
+                                value={adConsent}
+                                onChange={setAdConsent}
+                                className="rounded-[20px] border-[#E4E8E2] bg-[#F7FAF7] py-3.5"
                             />
 
                             <div className="space-y-3">

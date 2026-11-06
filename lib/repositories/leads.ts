@@ -50,7 +50,7 @@ const IS_PRODUCTION_RUNTIME =
  * database.types.ts는 다른 작업과 충돌을 피하려 재생성하지 않았다. 생성 타입에 없는
  * 컬럼 하나만 구조적으로 얹어 쓴다 — any 캐스팅 없이 타입이 계속 성립한다.
  */
-type LeadInsertWithInflow = LeadInsert & { last_inflow_at?: string | null } & LeadGaCapture;
+type LeadInsertWithInflow = LeadInsert & { last_inflow_at?: string | null } & LeadGaCapture & LeadAdConsentCapture;
 type LeadRowWithInflow = Lead & { last_inflow_at?: string | null };
 
 /**
@@ -62,6 +62,18 @@ export interface LeadGaCapture {
   ga_session_id?: string | null;
   ga_ad_consent?: boolean | null;
 }
+
+/**
+ * 맞춤형 광고 활용 동의 기록(20261106 마이그레이션) — 같은 이유로 구조적으로 얹는다. 체크 칸이 있던 폼만
+ * 채운다(lib/server/lead-capture.ts buildAdConsentFields). NULL = 체크 칸 없는 폼 또는 그 이전 리드.
+ */
+export interface LeadAdConsentCapture {
+  ad_consent?: boolean | null;
+  ad_consent_at?: string | null;
+  ad_consent_version?: string | null;
+}
+
+const AD_CONSENT_COLUMNS = ["ad_consent", "ad_consent_at", "ad_consent_version"] as const;
 
 const OPTIONAL_LEAD_INSERT_COLUMNS = [
   "branch",
@@ -92,6 +104,8 @@ const OPTIONAL_LEAD_INSERT_COLUMNS = [
   "ga_client_id",
   "ga_session_id",
   "ga_ad_consent",
+  // 20261106 마이그레이션(맞춤형 광고 활용 동의). 미적용이면 동의 기록만 덜고 저장한다.
+  ...AD_CONSENT_COLUMNS,
 ] as const satisfies readonly (keyof LeadInsertWithInflow)[];
 
 interface SupabaseColumnError {
@@ -224,9 +238,15 @@ function isMissingOptionalLeadColumn(error: SupabaseColumnError) {
 
   if (!haystack) return false;
 
-  return OPTIONAL_LEAD_INSERT_COLUMNS.some((column) =>
-    haystack.includes(column.toLowerCase())
-  );
+  return OPTIONAL_LEAD_INSERT_COLUMNS.some((column) => mentionsColumn(haystack, column));
+}
+
+/**
+ * 컬럼 이름을 낱말 단위로 찾는다. 부분 문자열로 찾으면 "ga_ad_consent" 누락 오류에 "ad_consent" 도
+ * 걸려(그 반대로 "ad_consent_at" 에 "ad_consent" 도) 멀쩡한 컬럼 묶음까지 덜어낸다.
+ */
+function mentionsColumn(haystack: string, column: string) {
+  return new RegExp(`(^|[^a-z0-9_])${column.toLowerCase()}($|[^a-z0-9_])`).test(haystack);
 }
 
 function isMissingLeadColumn(error: SupabaseColumnError, column: keyof LeadInsertWithInflow) {
@@ -235,7 +255,7 @@ function isMissingLeadColumn(error: SupabaseColumnError, column: keyof LeadInser
     .join(" ")
     .toLowerCase();
 
-  return Boolean(haystack) && haystack.includes(String(column).toLowerCase());
+  return Boolean(haystack) && mentionsColumn(haystack, String(column));
 }
 
 /**
@@ -246,15 +266,21 @@ function isMissingLeadColumn(error: SupabaseColumnError, column: keyof LeadInser
  * 잃었다 — 없는 컬럼 하나 때문에 멀쩡한 귀속 데이터를 버리는 셈이다.
  * 오류 메시지가 컬럼을 지목하면 그것만 덜고, 못 짚으면 예전처럼 전부 덜어낸다.
  */
-function stripOptionalLeadColumns(insert: LeadInsertWithInflow, error?: SupabaseColumnError) {
+function stripOptionalLeadColumns(
+  insert: Partial<LeadInsertWithInflow>,
+  error?: SupabaseColumnError
+) {
   const fallbackInsert: Partial<LeadInsertWithInflow> = { ...insert };
 
+  // 이미 덜어낸 컬럼을 또 지목하면(지목이 엇나감) 진전이 없으니 전부 덜기로 내려간다.
   const named: (keyof LeadInsertWithInflow)[] = error
-    ? OPTIONAL_LEAD_INSERT_COLUMNS.filter((column) => isMissingLeadColumn(error, column))
+    ? OPTIONAL_LEAD_INSERT_COLUMNS.filter((column) => column in insert && isMissingLeadColumn(error, column))
     : [];
   // GA 식별자 세 컬럼은 한 마이그레이션이라 함께 없다. 오류는 한 번에 하나만 지목하므로 묶음째 덜어야
   // 두 번째 실패 → "선택 컬럼 전부 덜기"(utm·gclid 까지 유실)로 내려가지 않는다.
   if (named.some((column) => column.startsWith("ga_"))) named.push("ga_client_id", "ga_session_id", "ga_ad_consent");
+  // 광고 동의 세 컬럼도 한 마이그레이션이다 — 같은 이유로 묶음째 덜어낸다.
+  if (named.some((column) => column.startsWith("ad_consent"))) named.push(...AD_CONSENT_COLUMNS);
   const doomed = named.length > 0 ? named : OPTIONAL_LEAD_INSERT_COLUMNS;
 
   for (const column of doomed) {
@@ -803,7 +829,7 @@ export async function findLeadsByContacts(contacts: {
 /* ─── CREATE ─── */
 
 export async function saveLead(
-  lead: Omit<LeadRecord, "id" | "status"> & LeadGaCapture
+  lead: Omit<LeadRecord, "id" | "status"> & LeadGaCapture & LeadAdConsentCapture
 ): Promise<LeadRecord> {
   assertDurableLeadStorage();
 
@@ -861,6 +887,10 @@ export async function saveLead(
     ga_client_id: lead.ga_client_id ?? null,
     ga_session_id: lead.ga_session_id ?? null,
     ga_ad_consent: lead.ga_ad_consent ?? null,
+    // 체크 칸이 있던 폼만 호출부가 채운다 — 나머지는 NULL(체크 칸 없음).
+    ad_consent: lead.ad_consent ?? null,
+    ad_consent_at: lead.ad_consent_at ?? null,
+    ad_consent_version: lead.ad_consent_version ?? null,
   };
 
   const { data, error } = await supabase
@@ -880,46 +910,33 @@ export async function saveLead(
         error.message
       );
 
-      // 1차 재시도 — 오류가 지목한 컬럼만 덜어낸다. 나머지 귀속 데이터는 지킨다.
-      const fallback = await supabase
-        .from("leads")
-        .insert(stripOptionalLeadColumns(insert, error))
-        .select()
-        .single();
-
-      if (!fallback.error) {
-        return returnAfterLeadMutation(supabaseToLegacy(fallback.data as Lead));
-      }
-      if (isUniqueViolation(fallback.error)) {
-        throw new LeadDuplicateError();
-      }
-
-      // 2차 재시도 — 여러 컬럼이 한꺼번에 없으면(마이그레이션 여러 개 미적용) 오류가
-      // 한 번에 하나씩만 지목한다. 이때는 예전처럼 선택 컬럼을 전부 덜어 저장을 살린다.
-      // 리드를 잃는 것보다 귀속을 잃는 게 낫다.
-      if (isMissingOptionalLeadColumn(fallback.error)) {
-        console.warn(
-          "[leads] still missing optional columns; retrying with core lead fields only:",
-          fallback.error.message
-        );
-
-        const bare = await supabase
+      // 재시도 — 오류가 지목한 컬럼 묶음만 덜어낸다. 마이그레이션 여러 개가 미적용이면 PostgREST 가
+      // 한 번에 하나씩만 지목하므로, 덜어낸 것을 쌓아 가며 다시 넣는다(ga_* 다음 ad_consent* …).
+      // 그래야 utm·gclid·notes 같은 멀쩡한 귀속 데이터를 지킨다. 지목을 못 하면 선택 컬럼을 전부
+      // 덜어 저장을 살린다 — 리드를 잃는 것보다 귀속을 잃는 게 낫다. 매 회 컬럼이 하나 이상 줄어 끝난다.
+      let attemptInsert: Partial<LeadInsertWithInflow> = insert;
+      let lastError: SupabaseColumnError = error;
+      for (;;) {
+        attemptInsert = stripOptionalLeadColumns(attemptInsert, lastError);
+        const retry = await supabase
           .from("leads")
-          .insert(stripOptionalLeadColumns(insert))
+          .insert(attemptInsert)
           .select()
           .single();
 
-        if (bare.error) {
-          if (isUniqueViolation(bare.error)) {
-            throw new LeadDuplicateError();
-          }
-          throw new Error(`[leads] 저장 실패: ${bare.error.message}`);
+        if (!retry.error) {
+          return returnAfterLeadMutation(supabaseToLegacy(retry.data as Lead));
         }
-
-        return returnAfterLeadMutation(supabaseToLegacy(bare.data as Lead));
+        if (isUniqueViolation(retry.error)) {
+          throw new LeadDuplicateError();
+        }
+        const hasOptionalLeft = OPTIONAL_LEAD_INSERT_COLUMNS.some((column) => column in attemptInsert);
+        if (!hasOptionalLeft || !isMissingOptionalLeadColumn(retry.error)) {
+          throw new Error(`[leads] 저장 실패: ${retry.error.message}`);
+        }
+        console.warn("[leads] still missing optional columns; retrying without the next named columns:", retry.error.message);
+        lastError = retry.error;
       }
-
-      throw new Error(`[leads] 저장 실패: ${fallback.error.message}`);
     }
 
     throw new Error(`[leads] 저장 실패: ${error.message}`);
@@ -1067,6 +1084,40 @@ export async function touchLeadInflow(id: string, at?: string): Promise<LeadReco
       console.warn("[leads] last_inflow_at 컬럼이 없어 재유입 시각 갱신을 건너뜁니다:", error.message);
     } else {
       console.warn("[leads] touchLeadInflow 실패:", error.message);
+    }
+    return null;
+  }
+  if (!data) return null;
+
+  return returnAfterLeadMutation(supabaseToLegacy(data as LeadRowWithInflow));
+}
+
+/**
+ * 재유입 병합 전용 — 맞춤형 광고 활용 동의 기록만 최신 제출 값으로 바꾼다(touchLeadInflow 와 같은 모양).
+ * 컬럼(20261106 마이그레이션)이 없는 배포 창에서는 warn 만 남기고 null 을 돌려준다 — 접수는 막지 않는다.
+ */
+export async function updateLeadAdConsent(
+  id: string,
+  fields: LeadAdConsentCapture
+): Promise<LeadRecord | null> {
+  if (!USE_SUPABASE) {
+    // JSON 폴백은 스키마가 없어 그대로 합친다. LeadRecord 에는 이 필드가 없어(읽지 않음) 넓혀서 넘긴다.
+    return updateLead(id, fields as Partial<LeadRecord>);
+  }
+
+  const supabase = createSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("leads")
+    .update(fields)
+    .eq("id", id)
+    .select()
+    .single();
+
+  if (error) {
+    if (AD_CONSENT_COLUMNS.some((column) => isMissingLeadColumn(error, column))) {
+      console.warn("[leads] ad_consent 컬럼이 없어 광고 동의 갱신을 건너뜁니다:", error.message);
+    } else {
+      console.warn("[leads] updateLeadAdConsent 실패:", error.message);
     }
     return null;
   }

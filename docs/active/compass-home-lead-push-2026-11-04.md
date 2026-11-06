@@ -21,7 +21,7 @@
 - **본문**: `{ event_id, kind: "created"|"reinflow", lead_id(어드민 id), source, source_detail, name, org, phone, email, region(branch), message, role, size, page(current_page ?? landing_page), utm{source,medium,campaign} }`.
   `event_id` 는 전환 이벤트 id 와 같은 값(`lead:<id>` · 재문의 `lead:<id>:reinflow:<시각>`) — Compass 멱등 표식. 같은 전달을 다시 보내도 Compass 리드가 두 건 되지 않는다.
 - **재문의 병합**(같은 연락처가 응대 대상 소스로 다시 옴 → `last_inflow_at` 만 갱신)이면 `kind: "reinflow"`. Compass 도 그 사람을 재유입으로 올린다(새 리드 아님).
-- **Compass 쪽**(그쪽 ADR-0083): 동일인 잠금 → `crm.lead_refs(system='home_lead')` 링크 또는 전화·이메일 동일인 → 새 리드는 `channel='homepage'`(인바운드 — 광고 성과·KPI 리드 밖, 콜 목록 안)
+- **Compass 쪽**(그쪽 ADR-0087): 동일인 잠금 → `crm.lead_refs(system='home_lead')` 링크 또는 전화·이메일 동일인 → 새 리드는 `channel='homepage'`(인바운드 — 광고 성과·KPI 리드 밖, 콜 목록 안)
   + `referrer`=어느 폼(「문의 페이지 · 도입 상담」) · 기존 리드면 재유입(담당·단계·메모 그대로) · 폼 답변은 `system` 기록 · **환영 알림톡은 보내지 않는다**(우리 접수 안내가 간다).
 - **실패**: Compass 가 2xx 가 아니면 `Compass: <status>` 가 응답 `warnings` 와 「리드 전달 경고」 인시던트(WeCom·메일)로 간다. 저장은 막지 않는다. Compass 는 실패 때 표식을 남기지 않으므로
   같은 본문을 다시 보내면 새로 처리된다 — 다만 **자동 재전달은 없다**(사람이 Compass 에서 등록하거나, 다음 재문의가 들어오면 그때 붙는다).
@@ -57,3 +57,9 @@
 - **담당을 덮지 않는 이유**: 어드민 `assigned_to` 는 데이터 소유 범위(`matchesDataOwner`)의 열쇠다. Compass 담당이 바뀌어도 어드민에서 사람이 고른 담당은 그대로고, 차이는 `owner.conflicts` 와 칩의 「콜 …」로 보인다. 늘 따라가게 하려면 이 결정을 바꾸는 일이다(설계자 몫).
 - 되돌리기: `audit_logs`(`lead.status.compass_sync`) `payload.assigned` 의 id 를 `assigned_to = null` 로(현재 값이 그 `to` 일 때만).
 - 테스트: `tests/compass/admin-lead-links.test.ts` · `tests/compass/lead-contact-sync.test.ts`(링크 매칭·담당 계획) · `tests/server/lead-contact-compass-sync.test.ts`(링크·담당·명단 불량·부분 실패) · `tests/compass/leads-overlay-route.test.ts`(byLeadId) · `tests/crm/customer-360-compass.test.ts`(전화 없는 리드의 링크 매칭).
+
+## 2026-11-06 자료 신청·행사 신청 추가
+
+설계자 "홈페이지 연동(홈페이지 문의/ 자료등록/ 행사 신청) 뜰 수 있게". 자료 신청(`newsletter` + `leadMagnet`, `app/resources/[slug]/ResourceDownloadForm.tsx`)도 보낸다 —
+`isCompassPushSource(source, leadMagnet)`. 본문에 `event_slug`·`lead_magnet` 을 싣고, Compass 가 경로를 「행사 신청 · slug」·「자료 신청 · slug」로 적는다(Compass ADR-0087).
+블로그 자료 게이트(`/api/newsletter/subscribe`)는 리드를 만들지 않아 대상이 아니다.

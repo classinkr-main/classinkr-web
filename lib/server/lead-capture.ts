@@ -1,6 +1,7 @@
 import "server-only"
 
 import { triggerOnSubmitRules } from "@/lib/automation-engine"
+import { AD_CONSENT_VERSION } from "@/lib/consent/ad-consent"
 import { isSiteFormLead } from "@/lib/crm/capture/origin"
 import { RESPONSE_TARGET_SOURCES } from "@/lib/crm/lead-attribution"
 import type { LeadPayload, LeadSource } from "@/lib/lead-types"
@@ -15,6 +16,8 @@ import {
   saveLead,
   touchLeadInflow,
   updateLead,
+  updateLeadAdConsent,
+  type LeadAdConsentCapture,
   type LeadRecord,
 } from "@/lib/repositories/leads"
 import { upsertSubscriber } from "@/lib/repositories/marketing"
@@ -59,6 +62,8 @@ const recentSubmissions = new Map<
   {
     status: RecentSubmissionStatus
     updatedAt: number
+    /** accepted 제출이 저장·병합한 리드 — 창 안에서 동의만 바꿔 다시 낸 제출이 기록을 고친다. */
+    leadId?: string
   }
 >()
 
@@ -77,6 +82,8 @@ function getSubmissionKey(body: LeadPayload) {
     body.source,
     context.trim().toLowerCase(),
     contact.trim().toLowerCase(),
+    // 동의를 바꿔 다시 낸 제출은 중복으로 버리지 않는다.
+    body.adConsent === true ? "ad" : "",
   ].join(":")
 }
 
@@ -93,11 +100,30 @@ function getRecentSubmissionStatus(key: string) {
   return recentSubmissions.get(key)?.status ?? null
 }
 
-function markSubmission(key: string, status: RecentSubmissionStatus) {
+function markSubmission(key: string, status: RecentSubmissionStatus, leadId?: string) {
   recentSubmissions.set(key, {
     status,
     updatedAt: Date.now(),
+    leadId,
   })
+}
+
+/**
+ * 60초 창 안의 중복 제출이 동의 값을 이전 제출과 다르게 냈으면(false→true→false 처럼 이미 보낸 값으로
+ * 되돌림) 접수는 버리되 동의 기록은 최신 선택으로 고친다. 키 끝 ":ad" 만 다른 짝 항목이 더 최근이면
+ * 마지막으로 기록된 값이 지금과 다르다는 뜻이다. 해시는 다시 보내지 않는다.
+ */
+async function applyDuplicateAdConsent(key: string, body: LeadPayload) {
+  if (typeof body.adConsent !== "boolean") return
+  const hit = recentSubmissions.get(key)
+  const sibling = recentSubmissions.get(key.endsWith(":ad") ? key.slice(0, -2) : `${key}ad`)
+  if (!hit || !sibling?.leadId || sibling.status !== "accepted" || sibling.updatedAt < hit.updatedAt) return
+  try {
+    await updateLeadAdConsent(sibling.leadId, buildAdConsentFields(body))
+  } catch (error) {
+    console.warn("[lead-capture] duplicate ad consent update failed:", error)
+  }
+  markSubmission(key, "accepted", sibling.leadId)
 }
 
 function clearSubmission(key: string | null) {
@@ -218,6 +244,8 @@ export function buildLeadPayload(raw: unknown): LeadPayload {
     message: normalizeString(body.message),
     timestamp: new Date().toISOString(),
     marketingConsent: body.marketingConsent === true,
+    // 체크 칸이 없는 폼은 아예 보내지 않는다 — undefined 를 false 로 바꾸면 "보고 비워 둠"으로 잘못 남는다.
+    adConsent: typeof body.adConsent === "boolean" ? body.adConsent : undefined,
     eventSlug: normalizeString(body.eventSlug),
     sourceDetail: normalizeString(body.sourceDetail ?? body.source_detail),
     leadMagnet: normalizeTrackingSlug(body.leadMagnet ?? body.lead_magnet),
@@ -276,6 +304,16 @@ export function buildLeadPayload(raw: unknown): LeadPayload {
   payload.leadMagnet ??= inferLeadMagnet(payload.sourceDetail)
 
   return payload
+}
+
+/** 체크 칸이 있던 제출만 동의 기록을 남긴다(값·받은 시각·문구 버전). 없던 폼은 {} — 컬럼이 NULL 로 남는다. */
+export function buildAdConsentFields(body: LeadPayload): LeadAdConsentCapture {
+  if (typeof body.adConsent !== "boolean") return {}
+  return {
+    ad_consent: body.adConsent,
+    ad_consent_at: body.timestamp,
+    ad_consent_version: AD_CONSENT_VERSION,
+  }
 }
 
 function buildLeadNotificationTitle(body: LeadPayload) {
@@ -384,6 +422,7 @@ export async function submitLeadCapture(
 
       if (recentStatus === "accepted") {
         console.warn(`[lead-capture] duplicate submission dropped (source=${body.source})`)
+        await applyDuplicateAdConsent(submissionKey, body)
         return { status: 200, body: { ok: true, stored: false, warnings: [] } }
       }
 
@@ -464,6 +503,17 @@ export async function submitLeadCapture(
         console.warn("[lead-capture] touchLeadInflow failed:", error)
       }
 
+      // 동의 기록은 최신 제출이 이긴다(체크를 비우고 다시 내면 false 로 철회). 체크 칸이 없던 제출은 건드리지 않는다.
+      // updateLeadAdConsent 는 컬럼이 없으면 warn 만 남긴다 — 여기서도 접수를 막지 않는다.
+      const adConsentFields = buildAdConsentFields(body)
+      if (Object.keys(adConsentFields).length > 0) {
+        try {
+          await updateLeadAdConsent(existingId, adConsentFields)
+        } catch (error) {
+          console.warn("[lead-capture] reinflow ad consent update failed:", error)
+        }
+      }
+
       // 행사 신청이면 기존 리드에 행사 토큰을 새긴다(토큰이 없던 리드만 — 다른 행사 토큰이 있는
       // 리드는 위에서 병합 대상에서 뺐다). notes 는 이 토큰 줄 외에는 건드리지 않는다.
       if (body.eventSlug && parseEventToken(reinflowTarget.notes).token !== body.eventSlug) {
@@ -505,6 +555,7 @@ export async function submitLeadCapture(
         const savedLead = await saveLead({
           ...ga,
           ...body,
+          ...buildAdConsentFields(body),
           notes,
           source_detail: body.sourceDetail,
           lead_magnet: body.leadMagnet,
@@ -564,7 +615,7 @@ export async function submitLeadCapture(
       }
     }
 
-    if (submissionKey) markSubmission(submissionKey, "accepted")
+    if (submissionKey) markSubmission(submissionKey, "accepted", savedLeadId)
 
     return {
       status: 200,
@@ -673,8 +724,8 @@ export async function runLeadCaptureEffects(
 
   // Compass(mkt.classin.co.kr)에도 찍는다 — 공개 폼 리드만, 저장이 됐을 때만(어드민 리드 id 가 Compass 쪽 링크 키다). env 둘이 없으면 조용히 건너뛴다.
   // 재문의 병합이면 kind=reinflow — Compass 가 같은 사람을 재유입으로 올린다. 실패는 다른 외부 전달과 같이 errors(warnings·인시던트)로.
-  // 설계는 lib/server/compass-lead-push.ts 머리말과 Compass 저장소 ADR-0083.
-  if (toggles.externalForwards && stored && savedLeadId && isCompassPushSource(body.source) && compassLeadPushTarget()) {
+  // 설계는 lib/server/compass-lead-push.ts 머리말과 Compass 저장소 ADR-0087.
+  if (toggles.externalForwards && stored && savedLeadId && isCompassPushSource(body.source, body.leadMagnet) && compassLeadPushTarget()) {
     deliveryTasks.push(
       pushLeadToCompass(body, {
         leadId: savedLeadId,
@@ -719,7 +770,8 @@ export async function runLeadCaptureEffects(
           email: body.email,
           phone: body.phone,
           externalId: savedLeadId,
-          allowHashedUserData: body.marketingConsent === true,
+          // 해시 연락처는 맞춤형 광고 활용 동의(두 칸 모두)가 있을 때만. 마케팅 수신 동의로는 보내지 않는다.
+          allowHashedUserData: body.adConsent === true,
         },
         customData: {
           lead_id: savedLeadId,

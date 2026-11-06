@@ -12,6 +12,8 @@ import { formatDesiredDateLabel } from "@/components/checkout/request-date"
 import { SlotPicker } from "@/components/showroom/SlotPicker"
 import { ACADEMY_SIZE_OPTIONS } from "@/lib/contact/academy-size"
 import { getAnonymousId } from "@/lib/consent/consent"
+import { EMPTY_AD_CONSENT, isAdConsentGiven, type AdConsentValue } from "@/lib/consent/ad-consent"
+import { AdConsentCheckbox } from "@/components/consent/AdConsentCheckbox"
 import { collectLeadAttribution } from "@/lib/marketing-attribution"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -156,6 +158,8 @@ interface FormState {
   interests: string[]
   memo: string
   consent: boolean
+  /** 맞춤형 광고 활용 동의(선택) — 두 칸 모두 골라야 동의다 */
+  adConsent: AdConsentValue
   /** honeypot — 사람은 볼 수 없는 필드다. */
   website: string
 }
@@ -173,6 +177,7 @@ const EMPTY_FORM: FormState = {
   interests: [],
   memo: "",
   consent: false,
+  adConsent: EMPTY_AD_CONSENT,
   website: "",
 }
 
@@ -460,6 +465,7 @@ export function ShowroomBookingForm({ interests }: Props) {
           ...(memo ? { memo } : {}),
           sourcePage: "/showroom",
           consent: true,
+          adConsent: isAdConsentGiven(form.adConsent),
           // 광고 유입 귀속 — 이 폼은 lib/submitLead.ts·/api/lead 를 거치지 않아 귀속이 붙지 않았다.
           // 도입신청 폼과 같은 규약으로 평평하게 태운다(서버 sanitizeLeadAttribution 이 네이버 n_* 까지 고른다).
           // getAnonymousId 는 분석 동의가 있을 때만 값을 낸다.
@@ -487,6 +493,7 @@ export function ShowroomBookingForm({ interests }: Props) {
           source: "showroom_booking",
           dedupeKey: payload.bookingId,
           transactionId: payload.bookingId,
+          adConsent: isAdConsentGiven(form.adConsent),
           userData: { email, phone: form.phone },
           params: {
             page: "/showroom",
@@ -990,6 +997,11 @@ export function ShowroomBookingForm({ interests }: Props) {
           {errors.consent ? (
             <p className="text-[11px] text-[#B43E3E]">{errors.consent}</p>
           ) : null}
+          <AdConsentCheckbox
+            value={form.adConsent}
+            onChange={(next) => update("adConsent", next)}
+            className="rounded-lg px-3 py-3 text-[12px]"
+          />
         </div>
 
         {formNotice ? (
