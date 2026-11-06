@@ -199,9 +199,11 @@
       transition: opacity var(--motion-slow) var(--ease-soft) 240ms;
     }
 
-    /* ⑥ 홈 — 히어로 전자칠판 화면 켜짐. JS 0, 940ms 에 끝난다. 홈 Hero 의 모먼트는 이것 하나(틀·제목은 정지, V21-A) */
-    :where(.site) [data-moment="hero-screen"] {
-      animation: panel-in var(--motion-slow) var(--ease-soft) 240ms both;
+    /* ⑥ 홈 — 전자칠판 화면 켜짐. 히어로 시트가 칠판을 화면에 들여오면(Reveal bare) 화면 층만 240ms 뒤 켜진다.
+       틀은 정지(V21-A). 히어로 무대의 움직임은 배경 영상 하나다(V23-A, 데스크톱 · 멈춤 버튼) */
+    :where(.site) [data-reveal="out"] [data-moment="hero-screen"] { opacity: 0; }
+    :where(.site) [data-reveal="in"] [data-moment="hero-screen"] {
+      transition: opacity var(--motion-slow) var(--ease-soft) 240ms;
     }
     /* ⑦ 홈 — 이득 1행 먹 밑줄 한 단어. Reveal 조상이 들어오면 240ms 뒤 스민다(그리기 아님, 색만) */
     :where(.site) [data-reveal="out"] [data-moment="ink-word"] { text-decoration-color: transparent; }

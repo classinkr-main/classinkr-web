@@ -262,3 +262,13 @@ H1·리드는 `lib/classin-positioning.ts`의 `heroHeadline`·`oneLine`을 쓴�
 - 리드 `Classin 전자칠판은 판서를 교안 파일로, 수업을 녹화로 남기고, 수업이 끝나면 AI가 강의를 평가합니다.`
 - 탭 제목·검색 설명은 §8-7 설명형 그대로 둔다(검색어는 H1 과 따로 맞춘다). 공유 카드 이미지는 새 H1 + `학원 전자칠판 · 수업 녹화 · AI 강의 평가` / `클래스인 Classin`.
 - 기록용 다른 후보: `에이스 강사가 떠나도, 수업은 남습니다`(광고·`/l/*` 캠페인 랜딩 후보) · `한 강사의 명강의를, 모든 반의 수업으로` · `수업은 선생님이, 정리는 AI가` · `수업만 하세요. 기록은 칠판이 남깁니다` · `좋은 수업은 퇴사하지 않습니다`. `참관하지 않아도, 모든 수업이 보입니다`는 감시 주의 표현이라 제외.
+
+### 8-9 히어로 영상 무대 (2026-11-06, 사용자 "이전에 있던 히어로 랜딩은 필요할 것 같은데 시안 확인" → 캔버스 히어로 시안 A 선택, DESIGN.md V23-A)
+- 구조: 래퍼(`pt-(--header-h)`) 안에 먹 무대 `<section class="surface-ink">`(최소 높이 100svh − 헤더, 높이 40rem 이상에서 `sticky top-(--header-h)`) + 시트(`-mt-6 rounded-t-xl bg-surface-paper z-10`). sticky 는 래퍼 안에서만 붙어, 시트가 무대를 덮은 뒤 함께 올라간다. 낮은 화면(가로 휴대폰)은 붙이지 않는다 — 붙이면 무대 아래쪽 CTA 가 시트에 가려 닿지 않는다.
+- 무대 배경: 포스터 `<picture>`(md 이상 `hero-video-poster.webp` 1280×640 = 영상 첫 장면 / 휴대폰 `hero-video-poster-mobile.webp` 720×1280 = 12초 교실 장면 세로 자름, `getImageProps`, eager, priority 없음) 위에 `HeroVideoBackdrop`(포스터 없이 영상만, `(min-width: 64rem) and (prefers-reduced-motion: no-preference)`, idle 로드, `preload="auto"`). 둘 다 `opacity-40` 래퍼 안이라 먹 바탕과 섞여 단색 스크림이 된다(덮개·그라데이션 없음).
+- 영상 `public/video/home-hero-720p.mp4`: 옛 `home-hero.mp4`(1920×1080 · 20Mbps · 35MB, §3-1에서 삭제)를 `crop=1920:960:0:60,scale=1280:-2,fps=25`, libx264 crf 27, 무음, faststart 로 다시 뽑아 1.2MB.
+- 글자: H1 `text-display`(40→72px) 흰색. 리드 `text-body-l` 흰색(영상 위 대비 — 먹 지면 본문색 72%는 밝은 장면에서 4.5:1 에 못 미친다), md 이상 "남기고," 뒤 줄바꿈(`hero.lead` 두 구절). CTA `Button variant="line"`(C14) + 진단지 링크 흰색(민트보다 장면 변화에 안정적).
+- 멈춤 버튼(WCAG 2.2.2): 무대 오른쪽 아래, `motion-safe:lg` 에서만 보인다(영상이 도는 조건과 같다). `HeroVideoBackdrop` 에 `paused` prop, `posterSrc` 는 선택값이 됐다(`/product/sw` 는 그대로).
+- 시트: 전자칠판(틀+화면, 첫 화면 아래라 lazy) · 숫자 4개 · 출처 캡션. `hero-screen` 모먼트는 페이지 로드 대신 `Reveal bare` 로 칠판이 화면에 들어올 때 켜진다(site-base ⑥). 모먼트 수는 그대로 4.
+- LCP 는 H1 이 아니라 포스터다(가로 32KB · 세로 34KB, eager, 기기별 한 장만 받는다 — 로컬 프로덕션 빌드에서 LCP 요소 = 포스터 img 확인). priority·fetchPriority 는 여전히 쓰지 않는다.
+- 시안과 다른 점: 버튼 테두리는 먹 지면 토큰(`line-control`, 흰색 40%)을 따른다. 스크롤 안내 '아래로'는 넣지 않았다(시트 24px 노출이 단서).
