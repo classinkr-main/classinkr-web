@@ -107,7 +107,9 @@ export function ConsentBanner() {
           expanded ? "w-[232px]" : "w-[212px]",
         )}
       >
-        <div className="relative max-h-[calc(100dvh-24px)] overflow-y-auto px-2.5 py-2">
+        {/* 아래 여백 12px — 버튼(24px)의 hit-area(44px)가 아래로 10px 나온다. 8px 이면 2px 가 넘쳐
+            스크롤 상자가 생기고, 스크롤바를 늘 보이는 설정에서는 처음부터 옆에 스크롤바가 떴다 */}
+        <div className="relative max-h-[calc(100dvh-24px)] overflow-y-auto px-2.5 pb-3 pt-2">
           <div className="flex items-center justify-between gap-1.5">
             <p className="text-label text-fg-ink">쿠키 조금만 쓸게요</p>
             <button
