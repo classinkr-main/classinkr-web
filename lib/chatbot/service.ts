@@ -665,7 +665,7 @@ const COMPARISON_RE =
 // 정책: 트리거로 비교 의도만 인식하고, 답변에서는 브랜드명을 노출하거나 타사 사양·우열을 단정하지 않는다.
 // 대신 '일반 전자칠판 대비' Classin Board 차별점(내장 OPS·EDB·녹화/복습/LMS·관리자 데이터)으로 전환한다.
 const COMPETITOR_BOARD_RE =
-  /넥소|nexo|삼성\s*플립|samsung\s*flip|뷰소닉|viewsonic|프로메테안|promethean|맥스허브|maxhub|아하\s*(보드|칠판)|시중\s*(전자\s*)?칠판|타사\s*(전자\s*)?칠판|다른\s*(회사|브랜드|업체)\s*(의\s*)?(전자\s*)?칠판|(삼성|lg|엘지)\s*(전자칠판|칠판|보드|플립|패널)/i
+  /다른\s*(?:회사|브랜드|업체|제품).{0,16}(?:전자\s*)?(?:칠판|보드)|왜\s*(?:이렇게\s*)?비싸|넥소|nexo|삼성\s*플립|samsung\s*flip|뷰소닉|viewsonic|프로메테안|promethean|맥스허브|maxhub|아하\s*(보드|칠판)|시중\s*(전자\s*)?칠판|타사\s*(전자\s*)?칠판|다른\s*(회사|브랜드|업체)\s*(의\s*)?(전자\s*)?칠판|(삼성|lg|엘지)\s*(전자칠판|칠판|보드|플립|패널)/i
 
 const IDENTITY_RE =
   /(classin|클래스인).*(뭐야|뭐예요|뭐에요|무엇|뭔가요|뭔데|뭐임|뭐\s*하는|어떤\s*(서비스|제품|솔루션|도구|플랫폼)|소개|설명)|(뭐야|뭐예요|뭐에요|무엇|뭔가요|뭔데|뭐임|뭐\s*하는|어떤\s*(서비스|제품|솔루션|도구|플랫폼)|소개|설명).*(classin|클래스인)/
@@ -719,7 +719,7 @@ const HARDWARE_BOARD_LINEUP_EXCERPT =
 const HARDWARE_BOARD_LINEUP_STANDARD_EXCERPT =
   "Classin Board 전자칠판은 보통 75인치(S75)와 86인치(S86)를 표준으로 가장 많이 선택합니다. 일반 강의실 대부분은 이 두 모델로 시작하며, 학생 수와 맨 뒷자리 시야, 이동형 스탠드/벽걸이, 카메라·마이크 필요 여부로 고릅니다. 대형 강의실·강당·설명회처럼 더 큰 공간이라면 추가 라인업도 있으니 상담에서 공간에 맞춰 안내해 드립니다."
 const HARDWARE_SPECS_STANDARD_EXCERPT =
-  "Classin Board는 75인치(S75)와 86인치(S86)가 표준 모델입니다. 두 모델 모두 4K(3840×2160) 해상도, 16:9 화면, 178도 시야각, 밝기 350cd/m² 이상, 50점 적외선 터치, 내장 OPS(Windows OS), Wi-Fi ax/BT5.0, 2×15W 스피커를 기준으로 봅니다. 외형 치수(가로×세로×두께)는 S75가 1,730.63×1,015.22×95.5mm, S86이 1,976.63×1,153.31×95.5mm이고 베젤은 22mm 슬림입니다. 더 큰 공간을 위한 추가 라인업은 상담에서 공간·예산에 맞춰 안내해 드립니다."
+  "Classin Board는 75인치(S75)와 86인치(S86)가 표준 모델입니다. 두 모델 모두 4K(3840×2160) 해상도, 16:9 화면, 178도 시야각, 밝기 350cd/m² 이상, 50점 적외선 터치, 내장 OPS(Windows OS), Wi-Fi ax/BT5.0, 2×15W 스피커를 기준으로 봅니다. 본체 치수(가로×세로×두께, 규격서 기준)는 S75가 1,718.18×1,000.2×113.1mm(54kg), S86이 1,964.08×1,139.02×113.1mm(69.5kg)입니다. 더 큰 공간을 위한 추가 라인업은 상담에서 공간·예산에 맞춰 안내해 드립니다."
 
 const HARDWARE_TROUBLE_EXCERPT =
   "전자칠판 화면이 안 나오면 전원 플러그와 멀티탭, 오른쪽 측면 하단 전원 버튼, 대기 모드, 입력 소스(OPS/HDMI), HDMI 케이블과 외부 기기 화면 출력을 순서대로 확인합니다. 연기, 냄새, 액체 유입, 파손이 있으면 전원을 분리하고 A/S로 연결합니다."
@@ -788,13 +788,14 @@ function isReceiptQuestion(question: NormalizedQuestion) {
 
 function getReceiptAnswer() {
   return [
-    "세금계산서와 영수증은 학원 계정의 결제 내역을 보고 담당자가 발급해 드려요. 상담 채널(홈페이지 하단 채팅)이나 담당 매니저에게 세금계산서 발급을 요청해 주세요.",
+    "세금계산서와 영수증은 학원 계정의 결제 내역을 보고 담당자가 발급해 드려요. 상담 채널(홈페이지 하단 채팅)이나 담당 매니저에게 세금계산서 발급을 요청해 주세요. 카드 외 결제 방법(계좌이체 등)도 같은 곳에서 함께 확인해 드립니다.",
     "아직 결제 전이라면 결제하기 전에 상담 채널에서 발급 방법을 먼저 정해 두시는 게 좋아요. 결제 뒤에 찾다가 학원 회계와 어긋나는 경우가 많습니다.",
     "사업자 정보는 이 채팅창에 적지 마시고 상담 채널에서 담당자에게 전달해 주세요.",
   ].join("\n\n")
 }
 
-const TRIAL_LIMIT_RE = /체험.{0,24}(?:제한|막혀|막힘|못\s*(?:넣|만들|써|쓰)|안\s*(?:돼|되)|몇\s*명|인원|기능\s*(?:제한|차이))/
+const TRIAL_LIMIT_RE =
+  /체험.{0,24}(?:제한|막혀|막힘|못\s*(?:넣|만들|써|쓰)|안\s*(?:돼|되)|몇\s*명|인원|기능\s*(?:제한|차이)|끝났|끝나|종료|만료|짧|기간)/
 const ACCOUNT_PLAN_RE =
   /(?:지금|현재|우리\s*학원|저희\s*학원|저희가|우리가).{0,20}(?:요금제|플랜|계약|라이선스).{0,24}(?:몇\s*명|한도|인원|최대|확인|남았|언제까지)/
 
@@ -805,6 +806,12 @@ function isAccountPlanOrTrialLimitQuestion(question: NormalizedQuestion) {
 
 function getAccountPlanOrTrialLimitAnswer(question: NormalizedQuestion) {
   const text = question.redacted.toLowerCase()
+  if (TRIAL_LIMIT_RE.test(text) && /끝났|끝나|종료|만료|짧|기간/.test(text)) {
+    return [
+      "공식 안내 기준으로 무료 체험은 2주예요. 신청한 지 얼마 안 됐는데 체험이 끝났다고 나온다면, 계정 상태를 담당자가 확인해 드려야 해요.",
+      "아래 [도입 상담 남기기]로 체험을 신청한 아이디와 신청한 날짜를 남겨 주세요. 체험 기간을 확인하고 이어서 쓸 수 있는 방법을 안내드립니다.",
+    ].join("\n\n")
+  }
   if (TRIAL_LIMIT_RE.test(text)) {
     return [
       "체험 계정에서 넣을 수 있는 인원과 쓸 수 있는 기능은 체험 조건에 따라 달라서, 담당자가 계정을 보고 확인해 드려요.",
@@ -831,8 +838,11 @@ function isAssignmentQuestion(question: NormalizedQuestion) {
   return /과제|숙제|시험/.test(text) && /내|제출|부여|등록|만들|방법/.test(text)
 }
 
+const AI_DATA_POLICY_RE = /\bai\b.{0,30}(?:학습|훈련|데이터|외부).{0,16}(?:쓰|사용|활용|보내|전송|들어)|(?:음성|영상).{0,20}(?:ai|인공지능).{0,16}(?:학습|훈련)/i
+
 function isPrivacyProcessingQuestion(question: NormalizedQuestion) {
-  return /개인정보.*(처리|보관|관리|방침|유출|보호|보안)|데이터.*(처리|보관|지역|유출|보안)/.test(question.redacted.toLowerCase())
+  const text = question.redacted.toLowerCase()
+  return /개인정보.*(처리|보관|관리|방침|유출|보호|보안)|데이터.*(처리|보관|지역|유출|보안)/.test(text) || AI_DATA_POLICY_RE.test(text)
 }
 
 function isRecordingOptionComparisonQuestion(question: NormalizedQuestion) {
@@ -898,6 +908,7 @@ function isIdentityQuestion(question: NormalizedQuestion) {
 
 function isHardwareSpecsQuestion(question: NormalizedQuestion) {
   const text = question.redacted.toLowerCase()
+  if (COMPETITOR_BOARD_RE.test(text)) return false
   return (
     isBoardTargeted(text) &&
     HARDWARE_SPECS_RE.test(text) &&
@@ -1130,7 +1141,7 @@ function buildCuratedSources(question: NormalizedQuestion) {
       "start",
       "pre-adoption-faq-22-questions",
       "확인 필요한 정책·계약 항목",
-      "ClassIn 플랜 해지 시 환불 규정은 계약 형태(연간/월간)에 따르며, 미사용 기간에 대해 내부 규정 기준에 맞춰 환불 절차가 진행됩니다.",
+      "환불 가능 여부와 절차는 학원 계정의 계약 내용을 보고 담당자가 확인해 안내합니다.",
       310,
       "billing"
     )
@@ -2395,6 +2406,27 @@ function getStepCriteriaByCategory(category: string) {
   }
 }
 
+function trimExcerptToSentence(excerpt: string) {
+  const withoutEllipsis = excerpt.replace(/\s*(?:\.\.\.|…)\s*$/, "").trim()
+  if (withoutEllipsis === excerpt.trim()) return withoutEllipsis
+  const sentences = withoutEllipsis.match(/[^.!?。]*[.!?。]/g)
+  return sentences && sentences.length > 0 ? sentences.join("").trim() : withoutEllipsis
+}
+
+// 질문 성격(증상·사용법·구매)에 맞는 다음 행동. 카테고리별 고정 문구는 구매·도입 질문에만 쓴다
+// (터치 문제에 "설치 장소, 희망 대수를 알려주세요"처럼 엉뚱한 되묻기를 붙이지 않는다).
+function getContextualNextStep(question: NormalizedQuestion, category: string) {
+  const text = question.redacted.toLowerCase()
+  if (/견적|가격|요금|비용|도입|구매|체험|데모|상담/.test(text)) return getConciseNextStep(category)
+  if (/안\s*(?:돼|되|됨|됐|나|들|보|켜|떠|와)|안돼|안되|안됨|오류|에러|끊|튕|멈|이상|못\s*(?:하|해|들|보|봐)/.test(text)) {
+    return "화면에 뜬 문구와 쓰는 기기(PC·휴대폰·전자칠판)를 알려 주시면 더 정확히 안내드릴게요. 급하면 \"상담원 연결\"이라고 남겨 주세요."
+  }
+  if (/어떻게|방법|어디|하는\s*법|순서/.test(text)) {
+    return "막히는 화면이나 메뉴 이름을 알려 주시면 그 단계부터 더 자세히 안내드릴게요."
+  }
+  return getConciseNextStep(category)
+}
+
 function getConciseNextStep(category: string) {
   switch (category) {
     case "billing":
@@ -2433,7 +2465,10 @@ function getComparisonAnswer(question: NormalizedQuestion, top: ChatbotSource) {
   return [
     "네, 좋은 질문이에요. Classin은 Zoom이나 일반 전자칠판과 달리 '수업 운영 흐름' 전체에 초점이 있어요.",
     "Zoom이 회의 중심이라면 Classin은 판서·녹화·복습·LMS를 하나로 연결하고,\n일반 전자칠판이 화면·판서에 머무는 것과 달리 EDB 교안과 관리자 데이터까지 이어줘요.",
-    PRICING_INFO_RE.test(text)
+    /할인|깎|네고/.test(text)
+      ? "할인은 채팅에서 약속드리지 않고, 교실 수와 구성(전자칠판 대수·설치 형태·소프트웨어)을 보고 견적에서 안내드려요. 문의 페이지(/contact)에서 견적을 요청해 주세요."
+      : null,
+    PRICING_INFO_RE.test(text) || /비싸|원대|만\s*원/.test(text)
       ? "가격은 Zoom처럼 계정 요금만 놓고 비교하기보다, 녹화·숙제·복습·관리를 따로 쓰던 도구 비용까지 같이 놓고 봐야 정확해요. 금액은 규모에 따라 견적으로 안내드리고, 문의 페이지(/contact)에서 신청하시면 됩니다."
       : null,
     top.heading === "핵심 포지셔닝"
@@ -2463,8 +2498,8 @@ function getHardwareSpecsAnswer(revealBig: boolean) {
     return [
       "네, Classin Board 사양 정리해드릴게요.",
       "표준 모델은 75인치(S75)와 86인치(S86)예요. 공통 기준은 4K · 16:9 · 178도 시야각 · 밝기 350cd/m² 이상 · 50점 적외선 터치 · 내장 OPS(Windows OS)입니다.",
-      "외형 치수(가로×세로×두께)는 이렇게 봐요.\n- S75 — 1,730.63 × 1,015.22mm · 두께 95.5mm · 54kg\n- S86 — 1,976.63 × 1,153.31mm · 두께 95.5mm · 69.5kg",
-      "두께 95.5mm에 베젤 22mm 슬림이라 벽걸이든 이동형 스탠드든 공간 부담이 적어요. 더 큰 공간을 위한 추가 라인업은 교실 크기랑 설치 방식만 알려주시면 상담에서 맞춰 안내해 드릴게요.",
+      "본체 치수(가로×세로×두께, 규격서 기준)는 이렇게 봐요.\n- S75 — 1,718.18 × 1,000.2mm · 두께 113.1mm · 54kg\n- S86 — 1,964.08 × 1,139.02mm · 두께 113.1mm · 69.5kg",
+      "벽걸이 브래킷과 이동형 스탠드 중 무엇이 견적에 들어가는지는 설치 형태에 따라 정해요. 더 큰 공간을 위한 추가 라인업은 교실 크기랑 설치 방식만 알려주시면 상담에서 맞춰 안내해 드릴게요.",
     ].join("\n\n")
   }
   return [
@@ -2544,7 +2579,7 @@ function getSoftwarePricingAnswer() {
   return [
     "소프트웨어 요금제는 강사 계정 수와 학원 규모로 고릅니다. 공식 안내 기준으로 Pro는 1인 강사용, 강사가 두 명 이상인 학원은 비즈니스를 권하고, Enterprise는 대형 기관이나 전자칠판을 함께 들이는 기관을 위한 맞춤 계약이에요.",
     "월 금액과 할인은 강사 수와 운영 규모에 따라 달라 정확한 금액은 단정하지 않고 견적으로 안내드려요. 전자칠판을 함께 들이면 장비·설치까지 묶어 견적을 냅니다.",
-    "견적과 2주 무료 체험은 홈페이지 문의 페이지(/contact)에서 신청하시면 담당자가 규모에 맞춰 안내드려요.",
+    "견적과 2주 무료 체험은 홈페이지 문의 페이지(/contact)에서 신청하시면 담당자가 규모에 맞춰 안내드려요. 신청할 때 전자칠판 대수, 강사·학생 수, 교실 수, 설치 형태(벽걸이·스탠드)를 적어 주시면 견적이 빨라집니다.",
   ].join("\n\n")
 }
 
@@ -2635,8 +2670,15 @@ function getPolicyConfirmationAnswer(question: NormalizedQuestion) {
 
   if (isRefundQuestion(question)) {
     return [
-      "환불은 계약 형태(연간·월간)와 남은 기간을 보고 담당자가 확인해 안내드려요. 채팅에서 바로 금액이나 환불 여부를 약속드릴 수는 없어 죄송합니다.",
-      "아래 [실시간 상담 연결]로 환불 요청을 남겨 주시면 계약 내용을 확인한 뒤 절차를 안내드립니다. 결제한 학원명과 결제 시기를 함께 알려 주시면 더 빨리 확인합니다.",
+      "환불 가능 여부와 절차는 학원 계정의 계약 내용을 보고 담당자가 확인해 안내드려요. 채팅에서 바로 환불 여부나 금액을 약속드릴 수는 없어 죄송합니다.",
+      "아래 [실시간 상담 연결]을 누르시면 상담원에게 바로 환불 요청을 접수할 수 있어요. 결제한 학원명과 결제 시기를 함께 말씀해 주시면 더 빨리 확인합니다.",
+    ].join("\n\n")
+  }
+
+  if (AI_DATA_POLICY_RE.test(text)) {
+    return [
+      "AI 기능을 켰을 때 수업 음성·영상이 어떻게 처리되는지는 채팅에서 추측으로 말씀드리지 않고, 공식 정책(개인정보처리방침)과 계약 문서로 확인해 드려요.",
+      "조항 근거가 필요하시면 상담 채널(홈페이지 하단 채팅)이나 담당 매니저에게 문서로 요청해 주세요. AI 기능은 관리자 대시보드 일반 설정의 [부가가치 서비스]에서 켜고 끌 수 있어요.",
     ].join("\n\n")
   }
 
@@ -2909,16 +2951,14 @@ function formatConsumerAnswer({
   const normalizedExcerpt = top.excerpt.replace(/\s+/g, " ").trim().toLowerCase()
   const excerptStartsWithHeading =
     headingText.length > 0 && normalizedExcerpt.startsWith(headingText.replace(/\s+/g, " ").toLowerCase())
-  const heading =
-    headingText && headingText !== "요약" && !isMetaHeading && !excerptStartsWithHeading
-      ? `${headingText}: `
-      : ""
-  // doc_suggestion(약한 출처) 폴백만 따뜻하게 재구성한다. direct_answer/handoff 는 기존 그대로 둔다.
+  // 검색 발췌는 220자에서 잘려 "..."로 끝날 수 있다 — 문장 끝까지만 쓰고, "제목: " 접두어는 붙이지 않는다.
+  const sentenceSafeExcerpt = trimExcerptToSentence(top.excerpt)
+  // doc_suggestion(약한 출처) 폴백만 따뜻하게 재구성한다. direct_answer/handoff 는 발췌를 그대로 쓴다.
   const summary =
     answerMode === "doc_suggestion"
-      ? buildDocSuggestionSummary(top.excerpt, headingText, { isMetaHeading, excerptStartsWithHeading })
-      : `${heading}${top.excerpt}`
-  const nextStep = getConciseNextStep(category)
+      ? buildDocSuggestionSummary(sentenceSafeExcerpt, headingText, { isMetaHeading, excerptStartsWithHeading })
+      : sentenceSafeExcerpt
+  const nextStep = getContextualNextStep(question, category)
 
   return [
     summary,
@@ -3482,6 +3522,71 @@ async function generateUsableAnswerWithProgressiveModels(
 }
 
 // 이미 손으로 다듬은 큐레이션 템플릿 직답은 Gemini 재작성을 건너뛴다(즉시 응답·드리프트 방지).
+const SITE_ISSUE_RE =
+  /(?:홈페이지|사이트|웹사이트|문의\s*페이지|예약\s*(?:폼|페이지)|신청\s*(?:폼|양식)|폼|양식).{0,24}(?:영상|동영상|폼|양식|버튼|페이지|신청|제출)?.{0,16}(?:안\s*(?:돼|되|나|열|눌|넘어)|재생\s*(?:이\s*)?안|반응\s*(?:이\s*)?없|아무\s*반응|오류|에러|멈)/
+const SHOWROOM_RE = /쇼룸|실물.{0,10}(?:보|볼|확인)|직접\s*(?:보고|보러|볼|만져|체험)|보러\s*갈|어디\s*가면\s*(?:볼|보)/
+const QUOTE_FIX_RE = /견적서?.{0,24}(?:잘못|틀려|틀렸|다르게|다르|수정|오류|빠졌|빠져|대로\s*안)/
+const FAR_REGION_RE = /부산|대구|광주|대전|울산|제주|강원|경남|경북|전남|전북|충남|충북|지방|멀어|먼\s*곳/
+
+type QuickAnswer = Omit<ChatbotCore, "question" | "latencyMs">
+
+// 영업·사이트 관련 자주 오는 요청을 공개 정보로 바로 답한다(쇼룸 예약, 견적서 수정, 사이트 오류).
+function buildServiceQuickAnswer(question: NormalizedQuestion): QuickAnswer | null {
+  const text = question.redacted.toLowerCase()
+  const make = (answer: string[], handoffIntent: HandoffIntent, category: string, suggestedQuestions: string[]): QuickAnswer => {
+    const response = {
+      answer: answer.join("\n\n"),
+      answerMode: "handoff" as const,
+      confidence: 0.82,
+      needsHandoff: true,
+      sources: [],
+      suggestedQuestions,
+      unresolved: false,
+    }
+    deterministicFinalResponses.add(response)
+    return { response, category, intent: handoffIntent === "demo" ? "sales_consulting" : "troubleshooting", handoffIntent }
+  }
+
+  if (SITE_ISSUE_RE.test(text) && /홈페이지|사이트|웹사이트|폼|양식|예약|신청|데모\s*영상/.test(text)) {
+    return make(
+      [
+        "홈페이지 화면이 제대로 움직이지 않는다면 먼저 이렇게 해 보세요.",
+        "1. 페이지를 새로고침합니다.\n2. 다른 브라우저(크롬·엣지 등)나 시크릿 창으로 다시 열어 봅니다.\n3. 광고 차단 같은 브라우저 확장 프로그램을 잠시 끄고 다시 시도합니다.",
+        "그래도 안 되면 신청은 아래 상담 연결로 바로 남기셔도 돼요. 담당자가 대신 접수하고 연락드립니다.",
+      ],
+      "demo",
+      "onboarding",
+      ["데모를 한번 보고 싶어요", "쇼룸 방문은 어떻게 예약해요?", "도입 상담을 받아보고 싶습니다"]
+    )
+  }
+  if (QUOTE_FIX_RE.test(text)) {
+    return make(
+      [
+        "견적서가 요청하신 내용과 다르게 왔다면 담당자가 바로 고쳐 다시 보내 드려요. 번거롭게 해 드려 죄송합니다.",
+        "아래 [도입 상담 남기기]로 견적서를 받은 날짜와 바꿀 내용(예: 전자칠판 3대)을 남겨 주세요.",
+      ],
+      "demo",
+      "billing",
+      ["견적 구성이 어떻게 되나요?", "전자칠판 스펙 알려줘", "데모를 한번 보고 싶어요"]
+    )
+  }
+  if (SHOWROOM_RE.test(text) && !/폼|양식|제출|버튼/.test(text)) {
+    return make(
+      [
+        "Classin Board는 목동 쇼룸에서 직접 보고 써 보실 수 있어요. 방문은 홈페이지 쇼룸 예약(/showroom)에서 날짜를 고르시면 됩니다.",
+        FAR_REGION_RE.test(text)
+          ? "목동까지 오시기 어려우시면 아래 [도입 상담 남기기]로 지역을 남겨 주세요. 담당자가 온라인 데모 등 볼 수 있는 방법을 안내드려요."
+          : "여러 분이 함께 보실 예정이면 예약할 때 인원을 적어 주세요.",
+        "도입 조건이나 견적이 궁금하시면 아래 [도입 상담 남기기]로 남겨 주세요. 담당자가 방문 전에 안내드립니다.",
+      ],
+      "demo",
+      "onboarding",
+      ["데모를 한번 보고 싶어요", "전자칠판 스펙 알려줘", "견적 구성이 어떻게 되나요?"]
+    )
+  }
+  return null
+}
+
 // 증상 트리아지 답변처럼 이미 최종본인 결정형 응답. stream 경로에서도 Gemini 재작성을 건너뛴다.
 const deterministicFinalResponses = new WeakSet<object>()
 
@@ -3801,6 +3906,11 @@ async function buildChatbotCoreBase(
     }
   }
 
+  const quickAnswer = buildServiceQuickAnswer(question)
+  if (quickAnswer) {
+    return { question, ...quickAnswer, latencyMs: elapsedSince(startedAt) }
+  }
+
   if (isEnglishSupportRequest(question.redacted)) {
     return {
       question,
@@ -3821,7 +3931,15 @@ async function buildChatbotCoreBase(
   }
 
   if (wantsImmediateHumanHandoff(question)) {
-    const { category, intent, handoffIntent } = classifyChatbotQuestion(question.redacted)
+    const { category, intent, handoffIntent: classifiedHandoff } = classifyChatbotQuestion(question.redacted)
+    // 사람 연결 요청·항의·회신 누락은 실시간 상담(지원)으로, 도입·데모·견적 요청만 도입 상담으로 보낸다.
+    const tone = detectConversationTone(question.redacted)
+    const text = question.redacted.toLowerCase()
+    const salesRequest = /도입|데모|시연|견적|구매|쇼룸|체험\s*신청|미팅/.test(text)
+    const supportContext =
+      /연락이\s*없|감감무소식|답이\s*없|회신|오류|에러|안\s*(?:돼|되|됨)|환불|고장|문제|장애|불만|항의/.test(text) ||
+      (/사람|상담원|직원|챗봇\s*말고|봇\s*말고/.test(text) && !salesRequest)
+    const handoffIntent: HandoffIntent = tone.angry || tone.repeated || supportContext ? "support" : classifiedHandoff
     return {
       question,
       response: buildImmediateHandoffResponse(category, handoffIntent),

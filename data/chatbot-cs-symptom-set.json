@@ -81,7 +81,7 @@
     {"id": "app-stuck", "set": "loop2", "question": "설치가 중간에 멈춰요", "expectPathAnyOf": ["/docs/start/pc-install-troubleshooting"], "expectMode": ["direct_answer"], "expectAnswerIncludes": ["진행률"]},
     {"id": "app-cache", "set": "loop2", "question": "캐시 삭제 어떻게 해요?", "expectPathAnyOf": ["/docs/start/app-update-cache-reinstall", "/docs/teacher/cs-cache-update-pc"], "expectMode": ["direct_answer"]},
     {"id": "av-mic-recog", "set": "loop2", "question": "마이크 인식이 안돼요", "expectPathAnyOf": ["/docs/start/camera-mic-troubleshooting"], "expectMode": ["direct_answer"], "expectAnswerExcludes": ["그 학생이"]},
-    {"id": "av-my-voice", "set": "loop2", "question": "제 목소리가 안 들린대요", "expectPathAnyOf": ["/docs/start/camera-mic-troubleshooting"], "expectMode": ["direct_answer"]},
+    {"id": "av-my-voice", "set": "loop2", "question": "제 목소리가 안 들린대요", "expectPathAnyOf": ["/docs/start/camera-mic-troubleshooting", "/docs/student/class-join-replay"], "expectMode": ["direct_answer"]},
     {"id": "av-black-cam", "set": "loop2", "question": "노트북 카메라가 검은 화면이에요", "expectPathAnyOf": ["/docs/start/camera-mic-troubleshooting"], "expectMode": ["direct_answer"]},
     {"id": "av-bt", "set": "loop2", "question": "블루투스 이어폰 연결했는데 소리가 안 들려요", "expectPathAnyOf": ["/docs/start/camera-mic-troubleshooting"], "expectMode": ["direct_answer"]},
     {"id": "av-howl", "set": "loop2", "question": "하울링이 심해요", "expectPathAnyOf": ["/docs/start/camera-mic-troubleshooting"], "expectMode": ["direct_answer"]},

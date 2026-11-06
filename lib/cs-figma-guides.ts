@@ -1164,6 +1164,8 @@ function hasCourseWideChatControlIntent(normalizedQuestion: string) {
 }
 
 function hasCourseCreateOrCloseIntent(normalizedQuestion: string) {
+  // "실수로 코스를 삭제했는데 복구되나요"는 만들고 닫는 순서가 아니라 복구 문의다.
+  if (/복구|되돌|살릴|실수로|없어진|사라진|날아/.test(normalizedQuestion)) return false
   const asksAboutCourse = /코스/.test(normalizedQuestion)
   const asksAboutLifecycle = /생성|만들|종료|삭제/.test(normalizedQuestion)
   const asksProcedure = /방법|순서|어디|생성|만들|종료|삭제/.test(normalizedQuestion)

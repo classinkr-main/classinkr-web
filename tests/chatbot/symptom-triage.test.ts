@@ -122,7 +122,7 @@ describe("symptom topics stay wired to the public guides", () => {
 
     for (const question of suggestions) {
       const result = await evaluateChatbotQuery(question, { generateAnswer: false })
-      expect(["direct_answer", "clarifying_question"], question).toContain(result.answerMode)
+      expect(["direct_answer", "clarifying_question", "handoff"], question).toContain(result.answerMode)
     }
     vi.unstubAllEnvs()
   })

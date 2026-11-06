@@ -9,6 +9,7 @@ export interface ChatbotSelfKnowledgeEntry {
     | "privacy_boundary"
     | "identity"
     | "emotional_concern"
+    | "small_talk"
     | "event_inquiry"
     | "event_apply_assist"
     | "tutor_pricing_recommend"
@@ -125,6 +126,16 @@ export const CHATBOT_SELF_KNOWLEDGE_ENTRIES: ChatbotSelfKnowledgeEntry[] = [
     ],
   },
   {
+    key: "small_talk",
+    match:
+      /^(?:\S+\s*){0,3}(?:수업\s*)?(?:듣기|하기|가기|공부하기|일어나기)\s*싫|^(?:\S+\s*){0,2}(?:졸려|심심해|배고파|피곤해)(?:요)?\s*(?:ㅋ|ㅠ|ㅎ)*\s*$/,
+    answer: [
+      "그런 날도 있죠. 조금만 힘내 보세요!",
+      "수업 들어가기, 다시보기, 숙제 내기처럼 클래스인 쓰다가 막히는 게 있으면 짧게 물어봐 주세요. 바로 도와드릴게요.",
+    ],
+    suggestedQuestions: ["다시보기가 안 떠요", "숙제는 어떻게 내요?", "수업 입장이 안 돼요"],
+  },
+  {
     key: "emotional_concern",
     match:
       /(?:잘\s*될까|걱정|불안|두려|힘들지|안\s*따라|이탈|기계치|적응|망칠까|귀찮|부담|복잡|헤맬|싫어할|의구심|의심|과연|충돌|혼란|과도기|꼬일까|기존\s*시스템|원래\s*쓰던|바꾸면|반발|반대|이중\s*작업|두\s*번\s*입력|두번\s*입력)/i,
@@ -157,7 +168,7 @@ export const CHATBOT_SELF_KNOWLEDGE_ENTRIES: ChatbotSelfKnowledgeEntry[] = [
   {
     key: "event_apply_assist",
     match:
-      /(?:신청이\s*안|모르겠|헤매|도와줘|대신\s*신청|대리\s*신청|신청해\s*주|직접\s*해\s*주|신청해줘|접수해줘|대신\s*접수)/i,
+      /(?=.*(?:세미나|설명회|행사|웨비나|이벤트|컨퍼런스|박람회))(?:신청이\s*안|모르겠|헤매|도와줘|대신\s*신청|대리\s*신청|신청해\s*주|직접\s*해\s*주|신청해줘|접수해줘|대신\s*접수)/i,
     answer: [
       "홈페이지를 통한 세미나 신청이 원활하지 않으시거나 번거로우시다면 제가 대신 접수를 도와드릴 수 있습니다.",
       "대리 신청 접수를 위해 아래의 4가지 필수 정보를 이 채팅창에 함께 적어서 남겨주시겠어요?",
@@ -239,7 +250,7 @@ const CHATBOT_CONTEXT_REQUIRED_KEYS = new Set<ChatbotSelfKnowledgeEntry["key"]>(
 ])
 
 const CHATBOT_CONTEXT_RE =
-  /너|넌|네가|니가|네\s|니\s|챗봇|봇|\bai\b|인공지능|상담\s*가이드|이\s*대화|대화\s*(?:내용|기록|이력)|채팅\s*(?:내용|기록)|(?:내|제)\s*(?:질문|대화|답변|채팅|상담)|상담\s*내용|지침|프롬프트|내가\s*(?:요청|물어|말|질문|뭐라)|나눈\s*(?:대화|이야기)|방금|아까|기억|내\s*이름|나에\s*대해|나를/i
+  /너|넌|네가|니가|네\s|니\s|챗봇|봇|(?:ai|인공지능)\s*(?:챗봇|상담|너|넌)|상담\s*가이드|이\s*대화|대화\s*(?:내용|기록|이력)|채팅\s*(?:내용|기록)|(?:내|제)\s*(?:질문|대화|답변|채팅|상담)|상담\s*내용|지침|프롬프트|내가\s*(?:요청|물어|말|질문|뭐라)|나눈\s*(?:대화|이야기)|방금|아까|기억|내\s*이름|나에\s*대해|나를/i
 
 const ADOPTION_CONTEXT_RE =
   /도입|전환|바꾸면|바꿔도|갈아타|선생님들|강사들|강사진|적응|기존\s*(?:시스템|프로그램|방식|lms|erp)|원래\s*쓰던|lms|erp|이중\s*(?:작업|입력)|두\s*번\s*입력|반발|반대/i

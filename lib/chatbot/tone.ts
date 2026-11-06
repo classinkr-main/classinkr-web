@@ -34,7 +34,8 @@ export function detectConversationTone(question: string): ConversationTone {
 
   const repeated = REPEATED_RE.test(text)
   return {
-    angry: ANGRY_RE.test(text) || (exclamations >= 2 && repeated) || exclamations >= 3,
+    // 느낌표 두 개 이상, 또는 "~입니까!" 같은 따지는 어미는 화가 난 신호로 본다.
+    angry: ANGRY_RE.test(text) || exclamations >= 2 || (exclamations >= 1 && /(?:니까|겁니까|입니까|습니까)\s*[!?！]|저만\s*이런/.test(text)),
     repeated,
     anxious: ANXIOUS_RE.test(text),
     apologetic: APOLOGETIC_RE.test(text),
@@ -96,7 +97,14 @@ const ROUTING_GLOSSES: [RegExp, string][] = [
   [/\blog\s*-?\s*in\b|\bsign\s*in\b/i, "로그인"],
   [/\bsign\s*-?\s*up\b|\bregister\b/i, "회원가입"],
   [/\bpassword\b/i, "비밀번호"],
-  [/\bverification\s*code\b|\bcode\b.{0,12}\b(?:not|never)\b/i, "인증코드"],
+  [/\bverification\s*code\b/i, "인증코드"],
+  [/\bcode\b/i, "코드"],
+  [/\bwrong\b|\bincorrect\b|\binvalid\b/i, "틀려요"],
+  [/\bwhere\b/i, "어디"],
+  [/\bchange\b|\breset\b/i, "바꾸기"],
+  [/\becho(?:es|ing)?\b|\bhowl(?:ing)?\b|\bfeedback\s*noise\b/i, "울림"],
+  [/\bppt\b|\bpowerpoint\b|\bslides?\b/i, "PPT"],
+  [/\banimation\b/i, "애니메이션"],
   [/\bcamera\b|\bwebcam\b|\bcam\b/i, "카메라"],
   [/\bmic\b|\bmicrophone\b/i, "마이크"],
   [/\bsound\b|\baudio\b|\bvoice\b|\bcan'?t hear\b/i, "소리"],
@@ -122,6 +130,9 @@ const ROUTING_GLOSSES: [RegExp, string][] = [
 const SLANG_GLOSSES: [RegExp, string][] = [
   [/어케|어캐|어떠케/g, "어떻게"],
   [/ㅇㄷ(?:서)?/g, "어디서"],
+  [/업뎃|업뎃트|업데트/g, "업데이트"],
+  [/쌤/g, "선생님"],
+  [/안켜짐|안켜져/g, "안 켜져요"],
 ]
 
 export function glossForRouting(question: string) {
@@ -129,7 +140,7 @@ export function glossForRouting(question: string) {
   for (const [pattern, replacement] of SLANG_GLOSSES) text = text.replace(pattern, replacement)
   for (const [pattern, korean] of ROUTING_GLOSSES) {
     const global = new RegExp(pattern.source, pattern.flags.includes("g") ? pattern.flags : `${pattern.flags}g`)
-    text = text.replace(global, (match) => `${match} ${korean}`)
+    text = text.replace(global, korean)
   }
   return text
 }

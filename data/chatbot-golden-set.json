@@ -77,7 +77,7 @@
     { "id": "symptom-vague-error", "question": "에러나요", "expectCategory": "troubleshooting", "expectMode": ["clarifying_question"], "expectSources": false },
     { "id": "symptom-recording-fail", "question": "녹화가 안 돼요", "expectCategory": "troubleshooting", "expectMode": ["direct_answer"], "expectPathIncludes": "/docs/teacher/recording-troubleshooting" },
     { "id": "symptom-mic-fail", "question": "마이크가 안 돼요", "expectCategory": "troubleshooting", "expectMode": ["direct_answer"], "expectPathIncludes": "/docs/start/camera-mic-troubleshooting" },
-    { "id": "symptom-replay-missing", "question": "다시보기가 안 떠요", "expectCategory": "troubleshooting", "expectMode": ["direct_answer"], "expectPathIncludes": "/docs/admin/replay-troubleshooting" },
+    { "id": "symptom-replay-missing", "question": "다시보기가 안 떠요", "expectCategory": "troubleshooting", "expectMode": ["direct_answer"], "expectPathIncludes": "/docs/student/class-join-replay" },
     { "id": "symptom-app-frozen", "question": "클래스인이 자꾸 멈춰요", "expectCategory": "troubleshooting", "expectMode": ["direct_answer"], "expectPathIncludes": "/docs/start/app-update-cache-reinstall" }
   ]
 }
