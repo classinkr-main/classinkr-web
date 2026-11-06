@@ -25,6 +25,7 @@ const staticRoutes: Array<{
   { path: "/product/sw", changeFrequency: "weekly", priority: 0.9, lastModified: "2026-11-03" },
   { path: "/product/hw", changeFrequency: "weekly", priority: 0.9, lastModified: "2026-11-03" },
   { path: "/product/ai-report", changeFrequency: "monthly", priority: 0.8, lastModified: "2026-09-10" },
+  { path: "/product/recording", changeFrequency: "monthly", priority: 0.8, lastModified: "2026-11-06" },
   { path: "/pricing", changeFrequency: "monthly", priority: 0.8, lastModified: "2026-11-03" },
   { path: "/contact", changeFrequency: "monthly", priority: 0.8, lastModified: "2026-10-28" },
   { path: "/showroom", changeFrequency: "monthly", priority: 0.8, lastModified: "2026-09-22" },
