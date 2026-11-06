@@ -19,7 +19,7 @@
 - **대체:** 순서는 번호(C24 상한 안), 수치는 숫자, 상태는 점(● ○ –), AI는 라틴 글자 'AI'(`tracking-abbr`). Sparkles 퇴역. 타일·채움 원·그라데이션·이모지·글자 기호 금지. 도해 노드에도 아이콘 원을 두지 않는다(SY-3).
 - **움직임:** CTA·링크 카드 화살표 2px(controls의 `arrow-nudge`)와 대기 스피너, 그리고 닫힌 목록 2곳(OS 지도 `.os-node`·폼 성공 패널 `.success-panel`)의 상태 점 ○→● 색 전이 1회뿐. reduced에서 이동·전이 0, 스피너는 opacity 점멸(X08).
 - **격리:** 공유 컴포넌트(button·dialog·toast)의 기본 문자열(클래스·prop·import)은 예외 없이 바꾸지 않는다. 공개 화면 적용은 C17의 소비 방식 셋(`:where(.site)` 접두 CSS · 공유 컴포넌트의 `[.site_&]:` 변형 또는 새 size·variant · `:root:has(.site)`)으로만 한다.
-- **브랜드 마크:** 벡터 원본과 단색화 승인 전까지 **차단**. theme-color(`--surface-paper` 미러, V15-A 뒤 `#F9F8F5`)와 viewport는 surfaces가 이미 확정(C27), manifest 없음. OG는 먹 단색 공식 락업(2026-11-06 운영자 결정, DESIGN.md §9 V25 — §14). 그 전의 텍스트 워드마크(C28)는 대체됐다.
+- **브랜드 마크:** 벡터 원본과 단색화 승인 전까지 **차단**. theme-color(`--surface-paper` 미러, V15-A 뒤 `#F9F8F5`)와 viewport는 surfaces가 이미 확정(C27), manifest 없음. OG는 먹 단색 공식 락업(2026-11-06 운영자 결정, DESIGN.md §9 V26 — §14). 그 전의 텍스트 워드마크(C28)는 대체됐다.
 
 ---
 
@@ -555,11 +555,11 @@ export function IconFrame({ icon, frame = 40, active = false, className }:
 - **현황 [실측]:**
   - 로고는 래스터 `/images/logo.png`이고 Header·Footer·AuthShell, 그리고 **/admin/login(`app/admin/login/page.tsx:141`)**이 쓴다.
   - 파비콘 계열은 `app/icon.png`·`apple-icon.png`·`favicon.ico`다. manifest는 없다.
-  - OG는 2026-11-05에 'C' 배지를 버리고 텍스트 워드마크로, 2026-11-06에 운영자 결정 C′(DESIGN.md §9 V25)로 **먹 단색 공식 락업**으로 바뀌었다. 락업은 공식 래스터(`public/images/logo_raw.png.png`)의 모양(알파)을 그대로 두고 색만 먹으로 채운 `assets/og/classin-lockup-ink.png`(`scripts/build-og-lockup.mjs`)이며, 블로그 카드의 새 마크도 이 파일을 창으로 잘라 쓴다. 손으로 다시 그리지 않았다. 아래 '목표(차단)'의 브랜드팀 단색화 승인은 OG 한정으로 운영자 결정이 앞섰다 — 승인되지 않으면 원색 락업으로 그 파일만 바꾼다. 파비콘·헤더 로고는 그대로 차단 상태다.
+  - OG는 2026-11-05에 'C' 배지를 버리고 텍스트 워드마크로, 2026-11-06에 운영자 결정 C′(DESIGN.md §9 V26)로 **먹 단색 공식 락업**으로 바뀌었다. 락업은 공식 래스터(`public/images/logo_raw.png.png`)의 모양(알파)을 그대로 두고 색만 먹으로 채운 `assets/og/classin-lockup-ink.png`(`scripts/build-og-lockup.mjs`)이며, 블로그 카드의 새 마크도 이 파일을 창으로 잘라 쓴다. 손으로 다시 그리지 않았다. 아래 '목표(차단)'의 브랜드팀 단색화 승인은 OG 한정으로 운영자 결정이 앞섰다 — 승인되지 않으면 원색 락업으로 그 파일만 바꾼다. 파비콘·헤더 로고는 그대로 차단 상태다.
   - 저장소에 로고 SVG 원본이 없다. 방향 문서 기준 로고는 에메랄드(#00A070)라 #084734 UI 옆에서 두 초록이 어긋나 보인다.
 - **이미 확정된 것(차단과 무관):**
   - theme-color는 `--surface-paper` 미러(V15-A 뒤 `#F9F8F5`), `colorScheme: 'only light'`, 값은 `lib/design-tokens.ts`에서 import(C27, surfaces 소유). manifest는 만들지 않는다.
-  - OG 'C' 배지는 폐기했다. 그 뒤 쓰던 텍스트 워드마크(C28)는 2026-11-06 먹 단색 락업(V25, 위 현황)으로 대체됐다. OG 템플릿(`lib/og/template.tsx`)은 typography 소유다.
+  - OG 'C' 배지는 폐기했다. 그 뒤 쓰던 텍스트 워드마크(C28)는 2026-11-06 먹 단색 락업(V26, 위 현황)으로 대체됐다. OG 템플릿(`lib/og/template.tsx`)은 typography 소유다.
 - **목표(차단):** 브랜드팀의 공식 벡터 원본, ClassIn 글로벌 브랜드 가이드의 변형 허용 여부, 'UI 그린 #084734 단색화' 승인이 선행 조건이다. PNG를 손으로 트레이싱하지 않는다.
   - 단색 로고 컴포넌트 1개: `components/brand/ClassinLogo.tsx`, 인라인 SVG, `fill="currentColor"`. 먹 지면에서는 `text-fg-ink`(#FAFAF8 자동). 밝은 지면의 색(그린 `text-fg-accent` 또는 먹)은 미정이다 — 워드마크 열린 질문(고급화 §12-8, 열린 질문 2)과 함께 정한다(2026-10-28).
   - 같은 path로 `app/icon.svg`(정적 파일이라 hex 리터럴), `app/apple-icon.tsx`(ImageResponse, `lib/design-tokens.ts` import), OG 템플릿의 마크를 맞춘다.
@@ -654,7 +654,7 @@ export function IconFrame({ icon, frame = 40, active = false, className }:
 | `app/about/AboutPageClient.tsx` 14곳 | strokeWidth 1.5~2.5, Sparkles w-3 | prop 삭제, Sparkles 삭제, 12px → 16 | P5 |
 | Sparkles 사용 공개 파일 [실측 2026-10-26]: `app/about/AboutPageClient.tsx`, `app/product/sw/page.tsx`, `app/product/ai-report/page.tsx`, `app/updates/page.tsx`, `app/events/videos/[slug]/page.tsx`, `components/sections/NewsletterModal.tsx`, `components/sections/DemoModal.tsx`, `components/product/sw/OnboardingRoadmap.tsx`, `lib/blog-categories.ts`(+ notifications 계열은 공개 여부 확인) | AI·장식 혼용 | 삭제. AI는 'AI' 글자 | P1(블로그 카테고리는 블로그 세션 뒤) |
 | `components/ui/ClassInAIIcon.tsx`, `components/ui/FloatingChatbot.tsx:258,814,1363,1693` | duotone 3색, 보조 스파클, 획 1.75, 13/22/28px, drop-shadow, variant | §14대로 재작성. 호출부 16/24, variant·drop-shadow 삭제 | P5(승인 후) |
-| Header·Footer·AuthShell `/images/logo.png`, `app/icon.png`·`apple-icon.png`·`favicon.ico`, `app/opengraph-image.tsx` | 에메랄드 래스터, OG 'C' 배지 | `ClassinLogo` 단색(§14, 차단). OG는 끝남: 'C' 배지 폐기 → 먹 단색 락업(2026-11-06, V25, `lib/og/template.tsx`) | 차단(OG 제외) |
+| Header·Footer·AuthShell `/images/logo.png`, `app/icon.png`·`apple-icon.png`·`favicon.ico`, `app/opengraph-image.tsx` | 에메랄드 래스터, OG 'C' 배지 | `ClassinLogo` 단색(§14, 차단). OG는 끝남: 'C' 배지 폐기 → 먹 단색 락업(2026-11-06, V26, `lib/og/template.tsx`) | 차단(OG 제외) |
 | `lib/blog-categories.ts:1-31` | 제품 = Sparkles, BarChart3 | `Package`, `ChartColumn` | 블로그 세션 뒤 |
 | `app/download/DownloadPageClient.tsx:21-30` + `components/auth/brand-glyphs.tsx:42` | AppleGlyph 중복 | brand-glyphs 한 곳 | P5 |
 | `app/global-error.tsx:56` | ⚠ 글자 | `TriangleAlert` 24 `absoluteStrokeWidth strokeWidth={1.5}`(셸 밖 예외) | P1 |
