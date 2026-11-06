@@ -418,14 +418,14 @@ export function createHardwareProductJsonLd(): JsonLdNode {
     manufacturer: { "@id": ORGANIZATION_ID },
     category: "교육용 전자칠판",
     description:
-      "Classin Board는 판서, 4K AI 카메라 자동 추적, 수업 영상 업로드, 판서 PDF 공유, Classin 소프트웨어 연동을 제공하는 교육용 전자칠판입니다.",
+      "Classin Board는 판서, 판서 PDF 저장, 수업 녹화, Classin 소프트웨어 연동을 제공하는 학원 전자칠판입니다. AI 추적 카메라를 함께 구성하면 강사를 따라가는 현장 녹화도 남깁니다.",
     // 모델명 정본은 lib/hardware/board-specs.ts 다. 여기에 다시 적으면 검색엔진이
     // 읽는 면에서 조용히 갈라진다(BS86A ↔ BS86C 로 실제 갈라진 적이 있다).
     model: BOARD_SPEC_MODELS.map((model) => BOARD_MODEL_NAMES[model]),
     additionalProperty: [
       { "@type": "PropertyValue", name: "화면 크기", value: "65, 75, 86, 110인치" },
       { "@type": "PropertyValue", name: "터치 포인트", value: "최대 50점" },
-      { "@type": "PropertyValue", name: "AI 카메라", value: "4K 자동 트래킹 녹화" },
+      { "@type": "PropertyValue", name: "AI 추적 카메라", value: "선택 구성(Cam T1 강사 추적·S1 학생 인식)" },
       { "@type": "PropertyValue", name: "소프트웨어", value: "Classin 소프트웨어 연동" },
       { "@type": "PropertyValue", name: "수업 기록", value: "판서 PDF 및 수업 영상 공유" },
     ],

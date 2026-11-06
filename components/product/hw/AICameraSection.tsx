@@ -1,21 +1,21 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Crosshair, ZoomIn, PenLine, Users } from "lucide-react";
+import { Clapperboard, Crosshair, PenLine, Users, Video, ZoomIn } from "lucide-react";
 import Image from "next/image";
 
 const capabilities = [
-  { icon: Crosshair, label: "자동 강사 추적" },
-  { icon: ZoomIn, label: "자동 줌·팬" },
-  { icon: PenLine, label: "판서 자동 캡처" },
-  { icon: Users, label: "학생 멀티 앵글" },
-  { icon: Crosshair, label: "수업 영상 자동 생성" },
-  { icon: ZoomIn, label: "복습 영상 즉시 배포" },
+  { icon: Crosshair, label: "강사 자동 추적 (T1)" },
+  { icon: PenLine, label: "판서 클로즈업 (T1)" },
+  { icon: Users, label: "학생 기립 인식 (S1)" },
+  { icon: ZoomIn, label: "거리 자동 확대·축소 (S1)" },
+  { icon: Video, label: "수업 녹화와 따로 저장" },
+  { icon: Clapperboard, label: "다시보기에서 골라 보기" },
 ];
 
 export default function AICameraSection() {
   return (
-    <section className="bg-[#050708] text-white py-24 md:py-32 px-6 overflow-hidden relative">
+    <section id="ai-tracking-camera" aria-labelledby="ai-tracking-camera-title" className="scroll-mt-24 bg-[#050708] text-white py-24 md:py-32 px-6 overflow-hidden relative">
       <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(90deg,rgba(13,26,18,0.95)_0%,rgba(5,7,8,1)_62%)]" />
       <div className="relative max-w-7xl mx-auto grid lg:grid-cols-[0.9fr_1.1fr] gap-12 lg:gap-16 items-center">
         {/* Left copy */}
@@ -23,10 +23,11 @@ export default function AICameraSection() {
           <p
             className="text-xs font-semibold uppercase tracking-[0.2em] text-[#6EE7B7]"
           >
-            BUILT-IN AI TRACKING
+            AI 추적 카메라 · 선택 구성
           </p>
 
           <h2
+            id="ai-tracking-camera-title"
             className="text-4xl md:text-5xl lg:text-[3.5rem] mt-4 leading-tight"
             style={{ letterSpacing: "-1.5px" }}
           >
@@ -36,7 +37,10 @@ export default function AICameraSection() {
           </h2>
 
           <p className="text-lg text-white/70 mt-6 leading-relaxed">
-            카메라 감독 없이도 만드는 트래킹 강의 촬영과 자동녹화 시스템
+            Classin Cam T1(강사 추적)·S1(학생 인식)은 보드와 따로 구성하는 카메라입니다.
+            함께 구성하면 카메라 감독 없이 강사를 따라가는 현장 녹화를 남깁니다. 현장 녹화는
+            녹화 옵션을 켠 수업에서 교실 입장 뒤 준비 시간이 지나면 시작하고, 영상은 수업이 끝난 뒤
+            처리 시간을 거쳐 다시보기에 올라갑니다.
           </p>
 
           <ul className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -59,7 +63,7 @@ export default function AICameraSection() {
         >
           <Image
             src="/images/product/hw/camera/camera-dual-premium-blended.webp"
-            alt="Classin Board AI 트래킹 카메라 클로즈업"
+            alt="Classin Cam AI 추적 카메라 클로즈업"
             width={1402}
             height={1122}
             sizes="(max-width: 1024px) 100vw, 58vw"

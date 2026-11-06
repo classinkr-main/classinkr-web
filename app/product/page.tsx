@@ -26,9 +26,9 @@ const products = [
     name: "Classin Board",
     href: "/product/hw",
     icon: Presentation,
-    summary: "판서, AI 카메라 녹화, 수업 영상 업로드, 판서 PDF 공유를 Classin 소프트웨어와 함께 제공합니다.",
+    summary: "판서, 판서 PDF 공유, 수업 녹화를 Classin 소프트웨어와 함께 제공합니다. AI 추적 카메라는 교실에 맞춰 함께 구성합니다.",
     fit: "교실 판서와 녹화, 복습 공유까지 한 번에 정리하고 싶은 학원",
-    points: ["65·75·86·110인치", "4K AI 카메라", "50점 터치", "수업 기록 공유"],
+    points: ["65·75·86·110인치", "AI 추적 카메라 선택", "50점 터치", "수업 기록 공유"],
   },
 ]
 

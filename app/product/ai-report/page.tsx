@@ -2,7 +2,7 @@
 
 import { motion, useReducedMotion } from "framer-motion"
 import {
-    ArrowRight, BadgeCheck, CalendarX, CheckCircle2, Cloud, Copyright,
+    ArrowRight, CalendarX, CheckCircle2, Cloud,
     Download, Eye, Lock, Mic, MonitorPlay, Play, Sparkles, Users,
     Laptop, Presentation, Video, FileText,
 } from "lucide-react"
@@ -90,7 +90,7 @@ function IconReport({ className }: LineIconProps) {
 
 const PIPELINE_STEPS = [
     { Icon: IconLesson, label: "수업", note: "온라인이든 대면이든" },
-    { Icon: IconRecord, label: "자동 녹화", note: "누르지 않아도" },
+    { Icon: IconRecord, label: "수업 녹화", note: "녹화 옵션을 켠 수업" },
     { Icon: IconVoice, label: "음성인식", note: "말한 내용을 텍스트로" },
     { Icon: IconReport, label: "AI 리포트", note: "읽을 수 있는 한 장" },
 ]
@@ -109,17 +109,17 @@ const RECORDING_PATHS = [
         title: "Classin 소프트웨어가 녹화합니다",
         detail:
             "화면, 음성, 판서가 그대로 담깁니다. 별도 녹화 프로그램이나 저장 장치가 필요 없습니다.",
-        points: ["화면 · 음성 · 판서 동시 기록", "수업 종료와 동시에 클라우드 저장"],
+        points: ["화면 · 음성 · 판서 동시 기록", "수업이 끝나면 처리 시간을 거쳐 다시보기로"],
         image: "/images/product/hw/features/feature-interactive.webp",
         imageAlt: "원격 학생 화면이 상단에 표시된 Classin 보드 앞에서 수업하는 강사",
     },
     {
         icon: Presentation,
         badge: "대면 교실 수업",
-        title: "전자칠판과 AI 카메라가 녹화합니다",
+        title: "전자칠판이 판서를, 추적 카메라가 교실을 녹화합니다",
         detail:
-            "AI 카메라가 강사를 자동으로 따라가며 촬영하고, 칠판 판서까지 함께 캡처합니다. 촬영 담당자가 필요 없습니다.",
-        points: ["강사 자동 추적 촬영 · 자동 줌", "판서 자동 캡처 · 수업 영상 자동 생성"],
+            "Classin Board의 수업 녹화로 판서와 자료 화면이 남습니다. AI 추적 카메라를 함께 구성하면 현장 녹화로 강사를 따라가며 교실 장면도 남깁니다. 촬영 담당자가 따로 필요 없습니다.",
+        points: ["판서·자료 화면은 수업 녹화로", "AI 추적 카메라(선택 구성)는 현장 녹화로"],
         image: "/images/case-studies/busan-gwasaram.jpg",
         imageAlt: "전자칠판 두 대에 판서하며 대면 수업을 진행하는 학원 교실",
     },
@@ -128,25 +128,25 @@ const RECORDING_PATHS = [
 const RECORDING_FEATURES = [
     {
         icon: Video,
-        label: "빠짐없이 쌓입니다",
-        detail: "강사가 잊어도, 바쁜 날에도 누락되는 수업이 없습니다. 모든 수업이 자동으로 기록됩니다.",
+        label: "수업마다 쌓입니다",
+        detail: "녹화 옵션은 수업을 만들 때 걸어 둡니다. 강사는 교실에 들어가며 [즉시 녹화]를 누르고, 녹화 아이콘이 초록색인지 한 번 확인합니다.",
     },
     {
         icon: Cloud,
         label: "클라우드 저장",
-        detail: "종료와 동시에 클라우드에 저장됩니다. 파일을 옮기고 정리하고 공유하는 업무가 사라집니다.",
+        detail: "수업이 끝나면 처리 시간을 거쳐 Classin 스토리지에 저장됩니다. 파일을 옮기고 정리하는 업무가 줄어듭니다.",
     },
     {
         icon: MonitorPlay,
         label: "앱 내 재생",
-        detail: "학생은 앱에서 바로 다시 봅니다. 결석 보강도, 시험 전 복습도 링크 하나면 됩니다.",
+        detail: "학생은 앱의 다시보기로 봅니다. 결석 보강도, 시험 전 복습도 다시보기로 이어집니다.",
     },
 ]
 
 const TRUST_ITEMS = [
-    { icon: BadgeCheck, label: "재생 시 워터마크 표시" },
-    { icon: Lock, label: "외부 다운로드 차단" },
-    { icon: Copyright, label: "저작권은 기관과 강사에게" },
+    { icon: Lock, label: "인증한 학원의 교사 계정만 녹화" },
+    { icon: Users, label: "다시보기 범위는 코스 설정으로" },
+    { icon: Download, label: "내려받기는 관리자 콘솔에서" },
 ]
 
 const REPORT_POINTS = [
@@ -162,8 +162,8 @@ const REPORT_POINTS = [
     },
     {
         icon: Sparkles,
-        label: "모든 수업에 쌓입니다",
-        detail: "특정 수업만이 아니라, 녹화된 수업마다 리포트가 기록으로 남습니다.",
+        label: "분석을 켠 수업마다 쌓입니다",
+        detail: "AI 강의 분석을 켠 학원에서는 녹화한 실시간 수업마다 리포트가 기록으로 남습니다.",
     },
 ]
 
@@ -188,7 +188,7 @@ const BENEFITS = [
     {
         numeral: "03",
         title: "매주 반복되던 일이 사라집니다",
-        body: "녹화 파일을 찾아 옮기고, 결석생 보강 시간을 따로 잡고, 무슨 수업이었는지 강사에게 다시 묻는 일 — 학원에서 매주 반복되는 이 업무들이 자동으로 처리됩니다.",
+        body: "녹화 파일을 찾아 옮기고, 결석생 보강 시간을 따로 잡고, 무슨 수업이었는지 강사에게 다시 묻는 일 — 학원에서 매주 반복되는 이 업무들이 줄어듭니다.",
         gains: ["강사가 수업에 쓸 시간이 늘어납니다", "실장의 응대 업무가 가벼워집니다"],
         image: "/images/product/ai-report/benefit-time.png",
         imageAlt: "시계 둘레를 되돌아가는 화살표로 시간이 돌아옴을 나타낸 선화 일러스트",
@@ -203,7 +203,7 @@ const SCENARIO_CARDS = [
         detail:
             "모든 수업을 참관할 수는 없습니다. 리포트로 수업 흐름을 먼저 파악하고, 필요한 수업만 녹화로 확인하세요. 코칭에 근거가 생깁니다.",
         before: "가끔 참관하거나, 강사 말에 의존",
-        after: "전 수업 리포트로 확인 후 필요한 수업만 열람",
+        after: "녹화한 수업의 리포트로 먼저 확인하고 필요한 수업만 열람",
     },
     {
         icon: Users,
@@ -276,9 +276,9 @@ function HeroSection() {
                         그 수업이 어땠는지 <span className="text-fg-accent">아무도 모릅니다</span>
                     </h1>
                     <p className="mt-7 text-base sm:text-lg text-[#615D59] leading-relaxed max-w-2xl mx-auto">
-                        이제는 다릅니다. 온라인 수업도, 대면 교실 수업도 자동으로 녹화되고,
-                        음성인식이 수업 내용을 리포트로 정리합니다. 원장님이 교실에 없어도,
-                        학원의 모든 수업이 보이기 시작합니다.
+                        이제는 다릅니다. 온라인 수업도, 대면 교실 수업도 녹화로 남기고,
+                        AI 강의 분석을 켜면 음성인식이 수업 내용을 리포트로 정리합니다. 원장님이 교실에 없어도,
+                        학원의 수업이 보이기 시작합니다.
                     </p>
                 </motion.div>
 
@@ -341,7 +341,7 @@ function PipelineSection() {
                         <span className="text-fg-accent">리포트 한 장이 되기까지</span>
                     </h2>
                     <p className="mt-6 text-base sm:text-lg text-[#615D59] leading-relaxed">
-                        원장님이 해야 할 일은 없습니다. 네 단계 모두 수업과 동시에 진행됩니다.
+                        녹화 옵션과 AI 강의 분석을 한 번 켜 두면, 수업이 끝난 뒤 처리 시간을 거쳐 녹화와 리포트가 차례로 만들어집니다.
                     </p>
                 </motion.div>
 
@@ -373,7 +373,7 @@ function PipelineSection() {
 }
 
 /* ================================================================
-   섹션 3 — 자동 녹화 딥다이브
+   섹션 3 — 수업 녹화 딥다이브
 ================================================================ */
 function RecordingSection() {
     const prefersReduced = useReducedMotion()
@@ -382,15 +382,15 @@ function RecordingSection() {
         <section id="auto-recording" className="py-28 md:py-36 bg-white">
             <div className="container mx-auto px-4 lg:px-8">
                 <motion.div {...fadeUp} className="max-w-2xl mx-auto text-center mb-20">
-                    <Eyebrow>Step 1 — 자동 녹화</Eyebrow>
+                    <Eyebrow>Step 1 — 수업 녹화</Eyebrow>
                     <h2 className="mt-6 text-3xl sm:text-4xl md:text-5xl font-bold text-[#111110] leading-tight">
-                        누르지 않아도,
+                        한 번 켜 두면,
                         <br />
-                        <span className="text-fg-accent">녹화되고 있습니다</span>
+                        <span className="text-fg-accent">수업이 녹화로 남습니다</span>
                     </h2>
                     <p className="mt-6 text-base sm:text-lg text-[#615D59] leading-relaxed">
-                        녹화는 사람이 챙기는 순간 구멍이 납니다. Classin은 수업 자체가
-                        녹화의 시작 버튼입니다.
+                        수업을 만들 때 녹화 옵션을 켜 두면, 강사는 교실에 들어가며 [즉시 녹화]만 누릅니다.
+                        카메라 현장 녹화는 수업 준비 시간이 지나면 자동으로 시작합니다.
                     </p>
                 </motion.div>
 
@@ -473,7 +473,7 @@ function RecordingSection() {
                                             transition={{ repeat: Infinity, duration: 1.6 }}
                                             className="w-2 h-2 rounded-full bg-[#6EE7B7]"
                                         />
-                                        <span className="text-[11px] font-semibold text-white/70">자동 녹화 중</span>
+                                        <span className="text-[11px] font-semibold text-white/70">녹화 중</span>
                                     </div>
                                 </div>
 
@@ -531,7 +531,7 @@ function RecordingSection() {
                         ))}
                     </div>
                     <p className="mt-5 text-center text-xs text-[#A39E98]">
-                        녹화본은 앱 내 재생만 허용됩니다. 저작권은 기관과 강사에게 있습니다.
+                        녹화본은 앱에서 교사와 학생이 보고, 관리자 콘솔에서 열람하거나 내려받습니다.
                     </p>
                 </motion.div>
             </div>
@@ -557,9 +557,13 @@ function ReportSection() {
                                 <br />
                                 <span className="text-fg-accent">읽을 수 있는 리포트가 됩니다</span>
                             </h2>
-                            <p className="mt-6 text-base sm:text-lg text-[#615D59] leading-relaxed mb-12">
-                                녹화가 끝나면 음성인식이 수업 내용을 텍스트로 옮기고, AI가 핵심만
+                            <p className="mt-6 text-base sm:text-lg text-[#615D59] leading-relaxed mb-4">
+                                AI 강의 분석을 켜 두면, 녹화가 끝난 뒤 음성인식이 수업 내용을 텍스트로 옮기고 AI가 핵심만
                                 리포트로 정리합니다. 다시 듣지 않아도, 읽으면 됩니다.
+                            </p>
+                            <p className="mb-12 text-caption text-fg-muted">
+                                AI 강의 분석은 관리자가 켜는 선택 기능이고, Classin 실시간 수업 녹화본만 분석합니다.
+                                보고서는 한국어로 나옵니다.
                             </p>
                         </motion.div>
                         <div className="space-y-5">
@@ -731,7 +735,7 @@ function ScenarioSection() {
                     <h2 className="mt-6 text-3xl sm:text-4xl md:text-5xl font-bold text-[#111110] leading-tight">
                         원장실에서,
                         <br />
-                        <span className="text-fg-accent">학원의 모든 수업이 보입니다</span>
+                        <span className="text-fg-accent">학원의 수업이 보입니다</span>
                     </h2>
                 </motion.div>
 
