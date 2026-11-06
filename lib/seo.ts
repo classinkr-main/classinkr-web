@@ -398,7 +398,7 @@ export function createSoftwareProductJsonLd(): JsonLdNode {
       "실시간 온라인 수업",
       "30여 가지 수업 도구",
       "과제 제출 및 자동채점",
-      "AI 첨삭과 과제 생성",
+      "AI 칠판 채점과 AI 강의 분석",
       "학습 데이터 리포트",
       "학부모 소통과 알림",
     ],
