@@ -17,17 +17,21 @@ export function SeminarLockedPreview({ slug, title, posterUrl }: SeminarLockedPr
 
   return (
     <>
-      <div className="relative overflow-hidden rounded-[16px] border border-black/[0.08] shadow-[rgba(0,0,0,0.04)_0px_4px_18px]">
+      {/* 높이 = 16:9 와 안내 카드 중 큰 쪽. 예전엔 16:9 상자에 카드를 absolute 로 얹어, 상자가 카드보다 낮은
+          휴대폰(375px 에서 193px, 카드 약 350px)에서 카드 위아래가 overflow-hidden 에 잘렸다.
+          그래서 16:9 받침과 카드를 한 grid 칸에 겹쳐 두고, 포스터는 배경으로 깐다 */}
+      <div className="relative grid overflow-hidden rounded-[16px] border border-black/[0.08] shadow-[rgba(0,0,0,0.04)_0px_4px_18px]">
         {/* 흐림 처리된 브랜드 백드롭 — 영상 ID 는 비회원에게 출력되지 않는다 */}
         <SeminarPoster
           seed={slug}
           posterUrl={posterUrl}
-          className="aspect-video w-full scale-105 blur-[2px]"
+          className="absolute inset-0 h-full w-full scale-105 blur-[2px]"
         />
         <div className="absolute inset-0 bg-white/35" />
+        <div aria-hidden="true" className="aspect-video w-full [grid-area:1/1]" />
 
         {/* 프로스티드 글래스 CTA 패널 */}
-        <div className="absolute inset-0 grid place-items-center p-5">
+        <div className="relative grid place-items-center p-5 [grid-area:1/1]">
           <div className="w-full max-w-sm rounded-[14px] border border-white/60 bg-white/80 p-6 text-center backdrop-blur-md">
             <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-fg-accent/8 text-fg-accent ring-1 ring-fg-accent/12">
               <LockKeyhole className="h-5 w-5" />
