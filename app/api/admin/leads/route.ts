@@ -38,6 +38,18 @@ export async function GET(req: NextRequest) {
     if (scope === "overview") {
       return adminCachedJson({ overview: await getCachedOverviewLeadSummary(await dataOwnerFromRequest(new URL(req.url), admin)) })
     }
+    // badge: 사이드바 CRM 숫자 배지 — 어느 화면에서나 부르므로 전사 응대 전 건수 두 개만 싣는다.
+    // Overview와 같은 서버 캐시(30초)를 읽는다. 담당 범위가 없으므로 최상위 = 전사다.
+    if (scope === "badge") {
+      const { metrics } = await getCachedOverviewLeadSummary()
+      return adminCachedJson({
+        badge: {
+          unresponded: metrics.unrespondedCount,
+          unresponded24h: metrics.unresponded24hCount,
+          unconfirmed: metrics.unrespondedUnconfirmedCount,
+        },
+      })
+    }
 
     const leads = scope === "dashboard"
       ? await getDashboardLeads()

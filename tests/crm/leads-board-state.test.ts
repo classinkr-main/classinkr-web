@@ -3,6 +3,11 @@ import { describe, expect, it } from "vitest"
 import {
   BOARD_COLUMN_KEYS,
   CONFIRMATION_GATE_EXEMPT_FILTERS,
+  LEAD_OWNER_ALL,
+  LEAD_OWNER_ME,
+  LEAD_OWNER_UNASSIGNED,
+  resolveLeadOwnerScope,
+  selectLeadsForOwnerScope,
   LEADS_VIEW_DEFAULT,
   appliesAcrossBoardColumns,
   applyLeadsViewParam,
@@ -233,5 +238,33 @@ describe("미확인 수신함 모집단", () => {
   it("상태 축은 적용하지 않는다 — 미확인은 상태와 직교한 큐다", () => {
     const leads = [lead({ id: "n", status: "new" }), lead({ id: "c", status: "contacted" })]
     expect(selectScopedUnconfirmedLeads(leads, ANY).map((l) => l.id)).toEqual(["n", "c"])
+  })
+})
+
+describe("selectLeadsForOwnerScope — 리드 보드 데이터 범위", () => {
+  const rows = [
+    { id: "mine", assigned_to: "Somang" },
+    { id: "other", assigned_to: "Han" },
+    { id: "blank", assigned_to: "  " },
+    { id: "none", assigned_to: undefined },
+  ]
+  const ids = (list: Array<{ id: string }>) => list.map((row) => row.id)
+
+  it("기본값은 전체 담당자다 — 담당 없이 들어온 새 문의가 첫 화면에서 빠지지 않는다", () => {
+    expect(resolveLeadOwnerScope(null)).toBe(LEAD_OWNER_ALL)
+    expect(ids(selectLeadsForOwnerScope(rows, resolveLeadOwnerScope(null), []))).toEqual(["mine", "other", "blank", "none"])
+  })
+
+  it("미배정은 담당이 비었거나 공백뿐인 리드만 남긴다", () => {
+    expect(ids(selectLeadsForOwnerScope(rows, LEAD_OWNER_UNASSIGNED, ["Somang"]))).toEqual(["blank", "none"])
+  })
+
+  it("내 담당은 계정의 담당 키로, 계정 연결이 없으면 아무것도 고르지 않는다", () => {
+    expect(ids(selectLeadsForOwnerScope(rows, LEAD_OWNER_ME, ["Somang"]))).toEqual(["mine"])
+    expect(selectLeadsForOwnerScope(rows, LEAD_OWNER_ME, [])).toEqual([])
+  })
+
+  it("특정 담당자 값은 별칭까지 같은 사람으로 본다", () => {
+    expect(ids(selectLeadsForOwnerScope(rows, "Han", []))).toEqual(["other"])
   })
 })

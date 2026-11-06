@@ -66,6 +66,10 @@ Admin 관련 작업은 [Admin 지침 맵](./active/admin-guidance-map.md)에서 
   - 어드민 → 지사 운영 OS(ERP) 청사진 & 실행 로드맵(Account 360 스파인·귀속·노션 캘린더 라이브 연동·거버넌스 결정)
 - [active/marketing-tab-dashboard-restructure-2026-09-14.md](./active/marketing-tab-dashboard-restructure-2026-09-14.md)
   - **마케팅 허브(/admin/campaigns) 실행 로드맵.** 한눈에·상세·데이터 3층 IA, 컴포넌트 재배치표, 개선 후보 ID(G/D/T/N), 확정 결정, 진척 기록. Compass(mkt.classin.co.kr)와의 역할 경계 정본
+- [active/marketing-ads-campaign-weekly-plan-2026-11-05.md](./active/marketing-ads-campaign-weekly-plan-2026-11-05.md)
+  - **마케팅 탭 운영 중 광고 · 캠페인 분석 · 주간(월~일) 분석 기획(결정 대기).** 흩어진 캠페인 화면·리드 기준 세 가지·주간 보고서 한계 진단, "광고" 탭(운영 중 · 캠페인 · 주간) 제안, 주 기간·8주 추이 API, 데이터 보강(상태 조회·리드 광고 id), 결정 D1~D8
+- [active/admin-lead-visitor-glance-plan-2026-11-04.md](./active/admin-lead-visitor-glance-plan-2026-11-04.md)
+  - **어드민 첫 화면 방문·문의 바로 보기 기획(결정 대기).** Overview 리드 숫자가 "내 담당·확인됨"만 세어 새 문의가 0으로 보이는 원인, 최상단 "지금" 띠·전사 범위·사이드바 문의 배지(P0), 방문·문의 추이·화면 안 알림(P1), 담당 원천(P2), 결정 D1~D8
 - [active/admin-usage-triage-2026-09-25.md](./active/admin-usage-triage-2026-09-25.md)
   - **어드민 사용 실측·탭 정리.** 운영 DB 읽기 전용 집계로 본 화면별 사람 사용 흔적(Home 어드민 쓰기 ≈0, 매니저 업무는 Compass), 멈춘 원천(NEO env 누락·시트 권한), 기본 숨김·매니저별 숨기기, 심폐소생 Top 5, 결정 대기 D1~D8
 - [active/crm-tab-develop-plan-2026-09-12.md](./active/crm-tab-develop-plan-2026-09-12.md)
