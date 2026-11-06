@@ -256,6 +256,16 @@ npm run check:db --  --strict
 | --- | --- | --- | --- |
 | `20261104_meta_crm_signal_events.sql` | 예약·발송 원장 `meta_crm_signal_events`(PK 메타 리드 번호+단계, event_time·reserved_at·sent_at, 연락처 없음)를 만든다. RLS deny-all, 멱등(`IF NOT EXISTS`) | 꺼져 있으면 영향 없다. 켜면 크론이 원장을 읽지 못해 아무것도 보내지 않고 500 을 낸다(dryRun 은 빈 원장으로 센다) | `npm run check:db` 의 `meta_crm_signal_events` 프로브(warning), 또는 `select to_regclass('public.meta_crm_signal_events') is not null;` → `true` |
 
+### 2026-11-06 Google Ads 캠페인 유형 · 유튜브 조회수 — 서울 프로젝트 적용 완료(2026-11-06)
+
+[Google Ads 계정 현황](./google-ads-accounts-2026-11-03.md) §5. **코드 배포 전에 적용한다** — 크론 upsert 가 새 칸을 쓴다.
+
+| 파일 | 하는 일 | 미적용 시 | 확인 |
+| --- | --- | --- | --- |
+| `20261106_google_ads_daily_channel_video.sql` | `google_ads_daily` 에 `channel_type`(text, `campaign.advertising_channel_type` 원문)·`video_views`(bigint, `metrics.video_trueview_views`)를 더한다. NULL 허용 추가 칸, 백필 없음(크론이 trailing 7일을 다시 받는다), 멱등(`IF NOT EXISTS`) | 새 코드가 배포되면 크론 upsert 가 칸을 못 찾아 **매일 실패**한다 — Google 집행이 그날부터 쌓이지 않는다. Compass 광고 탭 「구글」은 유형·조회수 칸을 읽지 못한다 | `npm run check:db` 의 `google_ads_daily` 캠페인 유형·조회수 프로브(blocker), 또는 `select count(*) from information_schema.columns where table_name = 'google_ads_daily' and column_name in ('channel_type','video_views');` → `2` |
+
+- 서울 프로젝트 적용 확인(2026-11-06): Supabase `apply_migration` 이름 `google_ads_daily_channel_video` — 두 칸 생김, 기존 6줄 그대로(두 칸 NULL), RLS 켜짐·정책 0. 운영 중인 옛 크론 코드는 새 칸을 쓰지 않아 그대로 돈다 — 새 코드 배포 뒤 첫 크론부터 지난 7일이 채워진다.
+
 ## 적용 보류 중인 마이그레이션
 
 `check:db`에 걸리지 않는(프로브가 없는) 파일이라도, 아래 파일은 **파일명 순서대로 일괄 적용하지 않는다.**
