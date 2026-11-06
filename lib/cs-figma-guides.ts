@@ -117,6 +117,9 @@ export const CURATED_CS_FIGMA_GUIDES: CsFigmaGuide[] = [
     keywords: [
       "수업 녹화 데이터",
       "녹화 다운로드",
+      "녹화본 다운로드",
+      "녹화본 내려받기",
+      "녹화 영상 다운로드",
       "녹화 공유",
       "수업 리소스",
       "녹화된 수업 비디오",
@@ -1311,6 +1314,13 @@ function findKnownCsFigmaIntentSlug(normalizedQuestion: string) {
   if (hasElectronicBoardLogReportProcedureIntent(normalizedQuestion)) return "cs-figma-digest-1516"
   if (hasClassinXReinstallProcedureIntent(normalizedQuestion)) return "cs-figma-digest-1863"
   return null
+}
+
+// 사람이 확인한 '알려진 의도' 가이드 slug. 증상 트리아지(lib/chatbot/symptom-triage.ts)보다 먼저 쓴다.
+export function findCsFigmaKnownIntentSlug(question: string) {
+  const normalized = normalizeGuideText(question)
+  if (!normalized) return null
+  return findKnownCsFigmaIntentSlug(normalized)
 }
 
 const POLICY_BOUNDARY_ALLOWED_KNOWN_INTENT_SLUGS = new Set([

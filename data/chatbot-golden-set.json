@@ -72,6 +72,12 @@
     { "id": "cs-late-joiner-replay-missing", "question": "학생이 1강 다시보기가 안 뜬다고 합니다", "expectCategory": "classroom", "expectMode": ["direct_answer"], "expectPathIncludes": "/docs/admin/cs-figma-digest-1054", "expectHeadingIncludes": "사용 순서 안내" },
     { "id": "cs-late-joiner-replay-after-class", "question": "수업 끝나고 코스에 가입한 학생이 이전 강의를 못 봐요", "expectCategory": "classroom", "expectMode": ["direct_answer"], "expectPathIncludes": "/docs/admin/cs-figma-digest-1054", "expectHeadingIncludes": "사용 순서 안내" },
     { "id": "company-intro", "question": "클래스인 회사 소개해줘", "expectCategory": "onboarding", "expectMode": ["direct_answer", "doc_suggestion", "handoff"], "expectPathIncludes": "/docs/start/company-overview" },
-    { "id": "company-products", "question": "클래스인 제품 라인이 어떻게 되나요?", "expectCategory": "onboarding", "expectMode": ["direct_answer", "doc_suggestion", "handoff"], "expectPathIncludes": "/docs/start/company-overview" }
+    { "id": "company-products", "question": "클래스인 제품 라인이 어떻게 되나요?", "expectCategory": "onboarding", "expectMode": ["direct_answer", "doc_suggestion", "handoff"], "expectPathIncludes": "/docs/start/company-overview" },
+    { "id": "symptom-institution-register", "question": "기관 등록 안됨", "expectCategory": "admin", "expectMode": ["direct_answer"], "expectPathIncludes": "/docs/admin/account-verification", "expectHeadingIncludes": "인증이 반려되거나 늦어지는 경우" },
+    { "id": "symptom-vague-error", "question": "에러나요", "expectCategory": "troubleshooting", "expectMode": ["clarifying_question"], "expectSources": false },
+    { "id": "symptom-recording-fail", "question": "녹화가 안 돼요", "expectCategory": "troubleshooting", "expectMode": ["direct_answer"], "expectPathIncludes": "/docs/teacher/recording-troubleshooting" },
+    { "id": "symptom-mic-fail", "question": "마이크가 안 돼요", "expectCategory": "troubleshooting", "expectMode": ["direct_answer"], "expectPathIncludes": "/docs/start/camera-mic-troubleshooting" },
+    { "id": "symptom-replay-missing", "question": "다시보기가 안 떠요", "expectCategory": "troubleshooting", "expectMode": ["direct_answer"], "expectPathIncludes": "/docs/admin/replay-troubleshooting" },
+    { "id": "symptom-app-frozen", "question": "클래스인이 자꾸 멈춰요", "expectCategory": "troubleshooting", "expectMode": ["direct_answer"], "expectPathIncludes": "/docs/start/app-update-cache-reinstall" }
   ]
 }

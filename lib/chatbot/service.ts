@@ -32,12 +32,15 @@ import {
 import {
   buildCsFigmaGuideSuggestedQuestions,
   findCsFigmaGuideForQuestion,
+  findCsFigmaKnownIntentSlug,
   formatCsFigmaGuideAnswer,
   getCsFigmaGuideDocPath,
   isCsFigmaSymptomQuestion,
   sanitizeGuideStep,
+  type CsFigmaGuide,
 } from "@/lib/cs-figma-guides"
 import { getCsFigmaEnrichment } from "@/lib/cs-figma-enrichments"
+import { resolveSymptomTriage, type SymptomTriageResult } from "@/lib/chatbot/symptom-triage"
 
 // CS 사용 가이드 직답의 출처 식별용 내부 헤딩(피그마/CS 표현 미노출)
 const CS_FIGMA_GUIDE_SOURCE_HEADING = "사용 순서 안내"
@@ -660,8 +663,9 @@ const IDENTITY_EXCLUSION_RE =
   /가격|요금|견적|결제|환불|취소|영수증|세금|계산서|청구|구독|하드웨어|전자칠판|클래스인\s*보드|classin\s*board|\bboard\b|설치|납품|배송|\bas\b|a\/s|수리|고장|파손|오류|에러|안됨|안\s*돼|로그인|계정|비밀번호|접속|권한|장애|끊김/
 
 // 명시적 보드 단어(전자칠판/보드/칠판/모델명)는 무조건 하드웨어 타깃으로 본다.
+// '대시보드'의 '보드'는 전자칠판이 아니다 — "관리자 대시보드에 인증 메시지가 떠요"가 보드 스펙으로 새던 원인.
 const HARDWARE_TARGET_RE =
-  /classin\s*board|클래스인\s*보드|classin.*하드웨어|클래스인.*하드웨어|전자칠판|하드웨어|\bboard\b|보드|칠판|s65|s75|s86|s98|s110|bs65|bs75|bs86|bscp98|bs110/i
+  /classin\s*board|클래스인\s*보드|classin.*하드웨어|클래스인.*하드웨어|전자칠판|하드웨어|\bboard\b|(?<!대시\s?)보드|칠판|s65|s75|s86|s98|s110|bs65|bs75|bs86|bscp98|bs110/i
 
 // 모델·사이즈처럼 일반적인 제품 단어는 결제/계정 같은 다른 도메인 신호가 없을 때만 보드 질문으로 본다.
 const GENERIC_PRODUCT_RE = /모델|라인업|사이즈|인치|크기/i
@@ -712,8 +716,9 @@ const HARDWARE_TROUBLE_EXCERPT =
 const HARDWARE_UNCONFIRMED_DETAIL_EXCERPT =
   "공개 스펙 기준으로는 모델별 화면 크기, OPS, 터치, 전력 같은 핵심 사양을 우선 안내할 수 있습니다. 색상, 마감, 보증 기간, 제조·재고 조건처럼 공급 조건에 따라 달라질 수 있는 세부 옵션은 최신 견적·납품 기준 확인이 필요합니다."
 
+// "안 돼/안됨"만으로는 로그인 문제로 보지 않는다 — "기관 등록 안됨", "녹화 안 돼요"가 로그인 답변으로 새던 원인.
 const LOGIN_TROUBLE_RE =
-  /로그인|접속|비밀번호|패스워드|인증\s*코드|인증코드|아이디|계정.*(안|오류|에러|문제)|안\s*(들어가|돼|됨|되|됩니다)|재설정/i
+  /로그인|접속|비밀번호|패스워드|인증\s*코드|인증코드|아이디|계정(?!\s*(?:인증|삭제|탈퇴)).{0,12}(안|오류|에러|문제)|재설정/i
 
 const LIVE_CLASS_TROUBLE_RE =
   /수업.*(나가|나감|튕김|튕겨|끊김|끊겨|입장\s*안|접속\s*안)|화면\s*공유.*(끊김|끊겨|오류|에러|안\s*됨|안\s*돼)|소리.*(안\s*들|끊김|끊겨)|마이크.*(안\s*됨|안\s*돼|끊김)/i
@@ -927,7 +932,7 @@ function isTrialOrPilotQuestion(question: NormalizedQuestion) {
 
 // 설치 형태(스탠드/벽걸이)와 설치 가능/기간. 하드웨어 장애와는 분리한다.
 const INSTALL_FORM_RE = /스탠드|벽걸이|벽\s*부착|벽\s*설치|이동형|거치(대|형)?/i
-const INSTALL_HW_CONTEXT_RE = /전자칠판|클래스인\s*보드|classin\s*board|\bboard\b|보드|칠판|하드웨어|교실|벽면|s\s*(?:65|75|86|98|110)\b/i
+const INSTALL_HW_CONTEXT_RE = /전자칠판|클래스인\s*보드|classin\s*board|\bboard\b|(?<!대시\s?)보드|칠판|하드웨어|교실|벽면|s\s*(?:65|75|86|98|110)\b/i
 const INSTALL_INTENT_RE = /가능|돼|되나|될까|할\s*수|하나요|해야|방식|유형|형태|환경|기간|일정|얼마|어떻게|어디/i
 function isInstallFormQuestion(question: NormalizedQuestion) {
   const text = question.redacted.toLowerCase()
@@ -3385,6 +3390,37 @@ async function generateUsableAnswerWithProgressiveModels(
 }
 
 // 이미 손으로 다듬은 큐레이션 템플릿 직답은 Gemini 재작성을 건너뛴다(즉시 응답·드리프트 방지).
+// 증상 트리아지 답변처럼 이미 최종본인 결정형 응답. stream 경로에서도 Gemini 재작성을 건너뛴다.
+const deterministicFinalResponses = new WeakSet<object>()
+
+function resolveSymptomTriageForQuestion(
+  question: NormalizedQuestion,
+  csFigmaGuide: CsFigmaGuide | null
+): SymptomTriageResult | null {
+  const triage = resolveSymptomTriage(question.redacted)
+  if (!triage) return null
+  const isKnownFigmaIntent =
+    csFigmaGuide !== null && findCsFigmaKnownIntentSlug(question.redacted) === csFigmaGuide.slug
+  if (isKnownFigmaIntent && !triage.overridesKnownIntent) return null
+  return triage
+}
+
+function buildSymptomTriageResponse(
+  triage: SymptomTriageResult
+): Omit<ChatbotQueryResponse, "answerEventId" | "sessionId" | "warning" | "handoffIntent"> {
+  const response: Omit<ChatbotQueryResponse, "answerEventId" | "sessionId" | "warning" | "handoffIntent"> = {
+    answer: sanitizePublicAnswerText(triage.answer),
+    answerMode: triage.answerMode,
+    confidence: triage.confidence,
+    needsHandoff: false,
+    sources: triage.source ? [triage.source] : [],
+    suggestedQuestions: triage.suggestedQuestions,
+    unresolved: triage.answerMode !== "direct_answer",
+  }
+  deterministicFinalResponses.add(response)
+  return response
+}
+
 function isCuratedTemplateQuestion(question: NormalizedQuestion) {
   return (
     isHardwareSpecsQuestion(question) ||
@@ -3416,6 +3452,7 @@ function shouldUseAiFinalAnswer(
   question: NormalizedQuestion,
   category: string
 ) {
+  if (deterministicFinalResponses.has(response)) return false
   if (category === "general" && !isDomainRelatedQuestion(question, category)) return false
   if (wantsImmediateHumanHandoff(question)) return false
   if (response.answerMode === "clarifying_question" && question.tokens.length < 2) return false
@@ -3652,6 +3689,21 @@ async function buildChatbotCore(
   }
 
   const csFigmaGuide = findCsFigmaGuideForQuestion(question.redacted)
+  // 증상형 질문("녹화 안 돼요", "기관 등록 안됨", "에러나요")은 공개 문제 해결 문서 섹션으로 바로 답한다.
+  // Figma 가이드의 알려진 의도(예: 늦게 가입한 학생 다시보기)가 맞으면 그 가이드를 먼저 쓴다.
+  const symptomTriage = resolveSymptomTriageForQuestion(question, csFigmaGuide)
+  if (symptomTriage) {
+    const response = buildSymptomTriageResponse(symptomTriage)
+    return {
+      question,
+      response,
+      category: symptomTriage.category,
+      intent: symptomTriage.intent,
+      handoffIntent: "support",
+      latencyMs: elapsedSince(startedAt),
+    }
+  }
+
   if (csFigmaGuide) {
     const { category, intent, handoffIntent } = classifyChatbotQuestion(question.redacted, [
       csFigmaGuide.category,
