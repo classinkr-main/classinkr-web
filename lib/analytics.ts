@@ -90,10 +90,12 @@ type MetaPixelOptions = {
   eventID?: string
 }
 
+// t1.daumcdn.net/adfit/static/kp.js 의 실제 메서드 이름. "참여" 이벤트는 participation 이다
+// (participate 는 없다 — 이 이름으로 부르면 마케팅 동의 방문자의 CTA 클릭마다 TypeError 가 났다).
 interface KakaoPixelClient {
   pageView: () => void
   completeRegistration: () => void
-  participate: (params: { tag: EventNames }) => void
+  participation: (params: { tag: EventNames }) => void
 }
 
 declare global {
@@ -471,22 +473,28 @@ export const trackEvent = (
 
   if (!consent.marketing || !window.kakaoPixel || !KAKAO_PIXEL_ID) return
 
-  const kakaoPixel = window.kakaoPixel(KAKAO_PIXEL_ID)
+  // 외부 SDK 라 모양이 바뀌어도 여기서 멈춘다. trackEvent 는 CTA 클릭 핸들러 안에서 불리므로
+  // 여기서 던지면 상담 모달이 안 열리고, 자료 페이지(view_resource)는 통째로 오류 화면이 된다.
+  try {
+    const kakaoPixel = window.kakaoPixel(KAKAO_PIXEL_ID)
 
-  switch (eventName) {
-    case "submit_demo_request":
-    case "submit_newsletter":
-      kakaoPixel.completeRegistration()
-      break
-    case "click_cta":
-    case "download_materials":
-    case "view_resource":
-    case "view_demo_video":
-    case "begin_checkout":
-      kakaoPixel.participate({ tag: eventName })
-      break
-    default:
-      break
+    switch (eventName) {
+      case "submit_demo_request":
+      case "submit_newsletter":
+        kakaoPixel.completeRegistration()
+        break
+      case "click_cta":
+      case "download_materials":
+      case "view_resource":
+      case "view_demo_video":
+      case "begin_checkout":
+        kakaoPixel.participation({ tag: eventName })
+        break
+      default:
+        break
+    }
+  } catch (error) {
+    console.warn("[analytics] Kakao Pixel 호출 실패", error)
   }
 }
 
