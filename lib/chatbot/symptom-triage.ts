@@ -1862,7 +1862,7 @@ export function buildVagueErrorAnswer(options: { compact?: boolean } = {}): Symp
  */
 // "1) … 2) …", "…그리고 …도", "두 가지 여쭙니다"처럼 두 번째 질문이 분명한 경우만 둘째 주제를 찾는다.
 const MULTI_QUESTION_RE =
-  /(?:^|\s)(?:\(?2\s*\)|2\.|②)|두\s*(?:가지|건|개)|둘\s*다|하나\s*더|하나는|그리고|또한|아울러|추가로|거기다|게다가|이번엔|또\s|같이\s*(?:문의|여쭤)|있고\s/
+  /(?:^|\s)(?:\(?2\s*\)|2\.|②)|두\s*(?:가지|건|개)|둘\s*다|하나\s*더|하나는|그리고|또한|아울러|추가로|거기다|게다가|이번엔|같이\s*(?:문의|여쭤)|있고\s/
 const CLAUSE_SPLIT_RE = /\s*(?:\(?\d\s*\)|[①②③]|그리고|또한|아울러|추가로|거기다|게다가|이번엔|하나는|있고|[?？.。!！,，])\s*/
 
 function findSecondaryTopic(question: string, primary: SymptomTopic): SymptomTopic | null {

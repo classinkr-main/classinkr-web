@@ -177,9 +177,8 @@ export const FIELD_SYMPTOM_TOPICS: SymptomTopic[] = [
     variants: [
       {
         when: /천장|dt2/,
-        doc: { category: "hardware", slug: "mic-dt2-pro" },
-        steps: [{ heading: "설치 후 세팅 순서", take: 4 }],
-        intro: "천장 마이크를 쓰신다면 클래스인 교실 설정에서 마이크와 스피커가 그 천장 마이크(DT2 Pro)로 골라져 있어야 목소리가 녹화에 담겨요.",
+        steps: [{ heading: "녹화본에 소리가 없을 때", pick: [2, 1, 3] }],
+        intro: "천장 마이크를 쓰신다면, 칠판 화면에서 고른 마이크가 그 천장 마이크인지부터 봐 주세요. '사용 안 함'이나 다른 마이크로 골라져 있으면 목소리가 녹화에 담기지 않아요.",
       },
       {
         when: /묻혀|섞여|학생(?:들)?\s*소리/,
@@ -343,8 +342,8 @@ export const FIELD_SYMPTOM_TOPICS: SymptomTopic[] = [
     category: "admin",
     doc: { category: "admin", slug: "statistics-data" },
     steps: [{ heading: "통계 파일 내려받기", pick: [0, 1, 2] }],
-    intro: "코스별 출석은 통계 파일로 한 번에 받을 수 있어요. 숙제 제출률까지 한 화면에 모아 보는 메뉴는 공개 안내에 없어서, 출석과 숙제를 나눠 보시면 돼요.",
-    branches: ["숙제 제출 현황은 각 코스의 숙제 활동을 열어 위쪽 제출 현황을 보거나, 코스의 [성적] > [학습 활동]에서 학생별로 봐요."],
+    intro: "코스별 출석은 통계 파일로 한 번에 받고, 숙제는 관리자 대시보드 [학습 관리] > [숙제 관리]에서 반별로 봐요. 출석과 숙제를 한 파일로 합쳐 주는 메뉴는 공개 안내에 없어서 두 곳을 함께 보시면 됩니다. 출석은 이렇게 받아요.",
+    branches: ["숙제는 [학습 관리] > [숙제 관리]에서 반별 미제출 현황을 보고, 학생별로는 코스의 [성적] > [학습 활동]에서 봐요."],
     suggestedQuestions: ["통계 파일은 어디서 받아요?", "학생이 다시보기를 봤는지 어디서 봐요?", "담당자 상담으로 이어주세요"],
   },
   {
@@ -731,7 +730,7 @@ export const FIELD_SYMPTOM_TOPICS: SymptomTopic[] = [
     intro:
       "두 계정을 하나로 합치는 기능은 공개 안내에 없어서 합칠 수 있다고 말씀드리지 않을게요. 대신 학생이 앞으로 쓸 계정 하나를 정해 그 계정을 코스에 넣고, 안 쓸 계정은 코스에서 빼는 방법이 있어요.",
     branches: [
-      "쓸 계정은 [기관 관리] > [학생]에서 학생으로 추가한 뒤 코스 [구성원]에 넣어 주세요. 안 쓸 계정은 아래처럼 코스에서 삭제합니다.",
+      "쓸 계정은 [기관 관리] > [학생]에서 학생으로 추가한 뒤 코스 [구성원]에 넣어 주세요. 안 쓸 계정은 위 순서대로 코스에서 삭제합니다.",
       "기록 이전처럼 꼭 합쳐야 하는 사정이 있으면 상담 채널로 문의해 주세요.",
     ],
     en: "There's no documented way to merge two accounts. Keep the account the student actually uses, add it to the course, and remove the unused one from the course.",

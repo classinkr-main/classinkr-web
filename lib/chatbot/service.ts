@@ -4338,8 +4338,8 @@ function applyConversationTone(core: ChatbotCore) {
   if (PROMPT_OR_SECURITY_ABUSE_RE.test(text) || CRIMINAL_ABUSE_RE.test(text) || TOKEN_WASTE_RE.test(text)) return
   if (isGreetingOnly(core.question)) return
   const tone = detectConversationTone(core.question.redacted)
-  const offerHandoff =
-    (tone.angry && !core.howtoAnswer) || tone.repeated || (tone.priorContext === "inquiry" && !core.howtoAnswer)
+  // 지난 문의를 전제로 한 질문은 "볼 수 없다"는 줄만 붙이고, 상담 연결은 화난·반복 문의일 때만 앞세운다.
+  const offerHandoff = (tone.angry && !core.howtoAnswer) || tone.repeated
   core.response.answer = applyToneToAnswer(core.response.answer, tone, {
     englishSummary: core.englishSummary,
     offerHandoff,
