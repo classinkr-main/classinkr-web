@@ -1,4 +1,4 @@
-import { ChevronDown } from "lucide-react"
+import { ArrowRight, ChevronDown } from "lucide-react"
 
 import type { IntroBlock, IntroListItem } from "@/lib/introduction/content"
 import { cn } from "@/lib/utils"
@@ -50,7 +50,7 @@ function IntroBlockView({ block, videoSource, depth }: { block: IntroBlock; vide
       return <IntroList items={block.items} />
     case "quote":
       return (
-        <blockquote className="max-w-measure border-l-2 border-line-ink pl-5 text-body-l text-fg-ink">
+        <blockquote className="max-w-measure border-l border-line-ink pl-5 text-body-l text-fg-ink">
           <Emphasis text={block.text} />
         </blockquote>
       )
@@ -105,9 +105,11 @@ export function IntroList({ items, nested = false }: { items: IntroListItem[]; n
     >
       {items.map((item, index) => (
         <li key={index} className="flex gap-3">
-          <span aria-hidden="true" className={cn("shrink-0 select-none text-fg-faint", nested ? "w-3" : "w-3 pt-px")}>
-            {nested ? "→" : "•"}
-          </span>
+          {nested ? (
+            <ArrowRight aria-hidden="true" className="mt-[0.3em] size-3.5 shrink-0 text-fg-faint" />
+          ) : (
+            <span aria-hidden="true" className="mt-[0.75em] size-1 shrink-0 bg-fg-muted" />
+          )}
           <div className="min-w-0">
             <Emphasis text={item.text} />
             {item.children?.length ? <IntroList items={item.children} nested /> : null}
@@ -148,7 +150,7 @@ export function IntroToggle({
         </span>
         <ChevronDown
           aria-hidden="true"
-          className="size-5 shrink-0 text-fg-muted transition-transform duration-300 group-open:rotate-180 motion-reduce:transition-none"
+          className="size-5 shrink-0 text-fg-muted transition-transform duration-(--motion-base) ease-soft group-open:rotate-180 motion-reduce:transition-none"
         />
       </summary>
       <div className="pb-10 pt-2">

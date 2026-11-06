@@ -224,7 +224,7 @@ export const INTRO_SOFTWARE = {
       media: {
         kind: "image",
         asset: "feature-ai",
-        alt: "학생이 쓴 영어 단락 구조 설명에 AI 피드백이 붙은 화면",
+        alt: "AI 튜터가 영어 단락 쓰기 구조(PEEL)를 단계별로 설명하는 화면",
       },
       points: [
         {
@@ -378,7 +378,7 @@ export const INTRO_SOFTWARE = {
                 rows: [
                   ["미디어 스트림 수", "≥ 2", "주의 전환 비용 증가(+0.3–0.4초), false memory 증가"],
                   ["오프태스크 툴", "4개", "학습 및 메모리 성과 유의미하게 떨어짐"],
-                  ["MMT 빈도", "많을수록", "작업 기억, 지속 주의력, 실행 기능 ↓"],
+                  ["MMT 빈도", "많을수록", "작업 기억, 지속 주의력, 실행 기능 저하"],
                 ],
               },
             },
@@ -458,7 +458,7 @@ export const INTRO_SOFTWARE = {
               ["녹화 및 수업 보관", "모든 수업 자동 녹화 + 판서 + 채팅까지 클라우드 보관", "Meet의 경우 수동 녹화 또는 유료 플랜 필요"],
               [
                 "출결 + 활동 분석",
-                "자동 출석, 발언 로그, 채팅 기록, 참여 점수화 가능 → 학생 관리 강화",
+                "자동 출석, 발언 로그, 채팅 기록, 참여 점수화로 학생 관리 강화",
                 "Analytics는 과제 위주, 실시간 활동 분석 미흡",
               ],
               ["생태계 통합", "수업·시험·자료·보고서 **완전 통합** + LTI/CED API", "Drive, Docs, Slides, Chromebook Class tools"],
@@ -746,7 +746,7 @@ export const INTRO_SMART_CLASSROOM = {
       type: "toggle",
       title: "수업 집중도 & 편의성 강화 기능",
       blocks: [
-        { type: "image", asset: "hw-focus", alt: "전자칠판 화면을 슬라이딩 바로 나눠 수업 자료와 판서를 함께 띄운 모습" },
+        { type: "image", asset: "hw-focus", alt: "태양계 탐구 수업 화면을 띄운 클래스인 X 전자칠판" },
         {
           type: "list",
           items: [

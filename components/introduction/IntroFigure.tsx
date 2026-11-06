@@ -11,18 +11,19 @@ interface IntroFigureProps {
   caption?: string
   /** next/image sizes — 기본은 본문 폭(최대 1200px) */
   sizes?: string
-  priority?: boolean
   className?: string
   imageClassName?: string
 }
 
-/** 소개서 사진·화면 한 장. 공개 화면 규칙대로 반경 0·그림자 0, 테두리는 hair 한 줄이다. */
+/**
+ * 소개서 사진·화면 한 장. 공개 화면 규칙대로 반경 0·그림자 0, 테두리는 hair 한 줄이다.
+ * priority 는 두지 않는다 — LCP 는 H1 이다(scripts/check-design-tokens.mjs img-priority).
+ */
 export function IntroFigure({
   asset,
   alt,
   caption,
   sizes = "(min-width: 1296px) 1200px, (min-width: 768px) calc(100vw - 96px), calc(100vw - 32px)",
-  priority,
   className,
   imageClassName,
 }: IntroFigureProps) {
@@ -35,7 +36,6 @@ export function IntroFigure({
         width={file.width}
         height={file.height}
         sizes={sizes}
-        priority={priority}
         className={cn("h-auto w-full border border-line-hair bg-surface-sheet", imageClassName)}
       />
       {caption ? (
