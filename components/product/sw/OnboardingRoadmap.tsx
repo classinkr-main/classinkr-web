@@ -56,14 +56,14 @@ export default function OnboardingRoadmap() {
             <div className="container mx-auto px-4 lg:px-8 max-w-5xl">
                 <motion.div className="text-center mb-16" {...fadeUp}>
                     <div className="flex items-center gap-3 mb-4 justify-center">
-                        <div className="h-px w-5 bg-[#084734]/40 shrink-0" />
-                        <p className="text-[11px] font-bold text-[#084734] tracking-[0.2em] uppercase whitespace-nowrap">GET STARTED</p>
-                        <div className="h-px w-5 bg-[#084734]/40 shrink-0" />
+                        <div className="h-px w-5 bg-fg-accent/40 shrink-0" />
+                        <p className="text-[11px] font-bold text-fg-accent tracking-[0.2em] uppercase whitespace-nowrap">GET STARTED</p>
+                        <div className="h-px w-5 bg-fg-accent/40 shrink-0" />
                     </div>
                     <h2 className="text-3xl md:text-4xl lg:text-5xl font-sans text-[#1a1a19] leading-tight">
                         복잡한 도입은 끝났습니다,
                         <br />
-                        <span className="text-[#084734]">브라우저만 있으면 시작됩니다</span>
+                        <span className="text-fg-accent">브라우저만 있으면 시작됩니다</span>
                     </h2>
                     <p className="text-lg text-[#A39E98] mt-4 max-w-xl mx-auto">
                         별도 설치도, 긴 셋업도 없습니다. 상담받은 그 주, 바로 첫 수업을 시작할 수 있습니다.
@@ -73,9 +73,9 @@ export default function OnboardingRoadmap() {
                 <div className="relative">
                     {/* Connecting line — desktop only */}
                     <div className="hidden lg:block absolute top-7 left-[12%] right-[12%] h-px pointer-events-none">
-                        <div className="absolute inset-0 border-t border-dashed border-[#084734]/15" />
+                        <div className="absolute inset-0 border-t border-dashed border-fg-accent/15" />
                         <motion.div
-                            className="absolute inset-0 border-t border-[#084734]/50"
+                            className="absolute inset-0 border-t border-fg-accent/50"
                             style={{ transformOrigin: "left" }}
                             initial={{ scaleX: 0 }}
                             whileInView={{ scaleX: 1 }}
@@ -94,20 +94,20 @@ export default function OnboardingRoadmap() {
                                     whileInView={{ opacity: 1, y: 0 }}
                                     viewport={{ once: true }}
                                     transition={{ delay: i * 0.12, duration: 0.5 }}
-                                    className="group flex flex-col items-center text-center"
+                                    className="flex flex-col items-center text-center"
                                 >
                                     <div className="relative mb-5 z-10 shrink-0">
-                                        <div className="w-14 h-14 rounded-full bg-white border border-[#084734]/30 text-[#084734] flex items-center justify-center transition-all duration-200 ease-out group-hover:scale-105 group-hover:bg-[#084734] group-hover:border-[#084734] group-hover:text-white group-hover:shadow-[0_10px_24px_rgba(8,71,52,0.22)]">
+                                        <div className="w-14 h-14 rounded-full bg-white border border-fg-accent/30 text-fg-accent flex items-center justify-center">
                                             <Icon
-                                                className="w-6 h-6 transition-transform duration-200 ease-out group-hover:scale-110"
+                                                className="w-6 h-6"
                                                 strokeWidth={1.75}
                                             />
                                         </div>
-                                        <span className="absolute -top-1 -right-1 w-6 h-6 rounded-full bg-[#084734] text-white text-[10px] font-sans font-bold tabular-nums flex items-center justify-center shadow-sm">
+                                        <span className="absolute -top-1 -right-1 w-6 h-6 rounded-full bg-fg-accent text-fg-on-accent text-[10px] font-sans font-bold tabular-nums flex items-center justify-center shadow-sm">
                                             {step.num}
                                         </span>
                                     </div>
-                                    <span className="inline-block bg-[#ECFDF5] border border-[rgba(8,71,52,0.2)] text-[#084734] text-[10px] font-sans font-bold tabular-nums px-3 py-1 rounded-full mb-3 tracking-wide">
+                                    <span className="inline-block bg-fg-accent/8 border border-fg-accent/20 text-fg-accent text-[10px] font-sans font-bold tabular-nums px-3 py-1 rounded-full mb-3 tracking-wide">
                                         {step.duration}
                                     </span>
                                     <h3 className="text-base font-bold text-[#111110] mb-2">{step.title}</h3>

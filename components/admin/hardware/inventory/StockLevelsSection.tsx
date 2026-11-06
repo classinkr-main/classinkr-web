@@ -118,7 +118,7 @@ function StockLevelsSection({
           <summary className="flex h-9 cursor-pointer list-none items-center gap-1.5 rounded-md border border-[rgba(0,0,0,0.08)] px-3 text-[12px] font-semibold focus-visible:outline-2 focus-visible:outline-[#084734]"><Filter className="h-3.5 w-3.5" />필터{filterCount ? ` (${filterCount})` : ""}</summary>
           <div className="absolute right-0 top-full z-20 mt-2 w-52 space-y-3 rounded-md border border-[rgba(0,0,0,0.08)] bg-white p-4 text-[12px] shadow-lg">
             <label className="flex items-center gap-2"><input type="checkbox" checked={needsAttention} onChange={event => { setNeedsAttention(event.target.checked); setStockPage(1) }} />부족·주문 검토만</label>
-            <label className="flex items-center gap-2"><input type="checkbox" checked={plannedOnly} onChange={event => { setPlannedOnly(event.target.checked); setStockPage(1) }} />예정 출고 있는 품목</label>
+            <label className="flex items-center gap-2"><input type="checkbox" checked={plannedOnly} onChange={event => { setPlannedOnly(event.target.checked); setStockPage(1) }} />배송 예정 있는 품목</label>
             <button type="button" onClick={() => { setNeedsAttention(false); setPlannedOnly(false); setStockPage(1) }} className="text-[#084734]">필터 초기화</button>
           </div>
         </details>
@@ -175,7 +175,7 @@ function StockLevelsSection({
                           // 물류번호별 잔여 — 서버 resolveHardwareLotBalances(출고·확정이 쓰는 같은 해석기)가 낸 값이다.
                           // 화면에서 따로 합산하지 않는다. 합이 창고와 다를 수 있다(로트 없는 증가분은 귀속되지 않는다).
                           <div className="mt-1.5 flex flex-wrap items-center gap-1">
-                            <span className="text-[10px] font-bold tracking-[0.05em] text-[#A39E98]">물류번호 잔여</span>
+                            <span className="text-[11px] font-bold tracking-[0.05em] text-[#A39E98]">물류번호 잔여</span>
                             {(expandedLots.has(row.itemId) ? row.lotBalances : row.lotBalances.slice(0, LOT_CHIP_LIMIT)).map((lot) => (
                               <span
                                 key={lot.lot}
@@ -205,7 +205,7 @@ function StockLevelsSection({
                             {(() => {
                               const lotTotal = row.lotBalances.reduce((total, lot) => total + lot.quantity, 0)
                               return lotTotal !== row.availableStock ? (
-                                <span className="text-[10.5px] text-[#A39E98]" title="물류번호 잔여 합계는 배송 예정까지 뺀 값입니다. 물류번호 없이 기록된 증가분은 어느 번호에도 들어가지 않습니다.">
+                                <span className="text-[11px] text-[#A39E98]" title="물류번호 잔여 합계는 배송 예정까지 뺀 값입니다. 물류번호 없이 기록된 증가분은 어느 번호에도 들어가지 않습니다.">
                                   합 {formatNumber(lotTotal)}대
                                 </span>
                               ) : null

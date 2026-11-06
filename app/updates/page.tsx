@@ -7,7 +7,7 @@ import {
   getDocsByCategoryFromContent,
   getDocsContent,
 } from "@/lib/docs-content"
-import { ExternalLink, Tag, Calendar, ArrowRight, BookOpen, Sparkles } from "lucide-react"
+import { ExternalLink, Tag, Calendar, ArrowRight, BookOpen } from "lucide-react"
 import { createPublicMetadata } from "@/lib/seo"
 
 export const revalidate = 3600
@@ -39,7 +39,7 @@ function renderBody(body: string) {
       <ul key={key++} className="space-y-1 my-3 ml-1">
         {listItems.map((item, i) => (
           <li key={i} className="flex items-start gap-2 text-[14px] text-[#1a1a1a]/70">
-            <span className="mt-1.5 w-1 h-1 rounded-full bg-[#084734]/40 shrink-0" />
+            <span className="mt-1.5 w-1 h-1 rounded-full bg-fg-accent/40 shrink-0" />
             <span>{item}</span>
           </li>
         ))}
@@ -54,7 +54,7 @@ function renderBody(body: string) {
 
     if (trimmed.startsWith("### ")) {
       flushList()
-      elements.push(<h3 key={key++} className="text-[13px] font-semibold text-[#084734] uppercase tracking-wide mt-4 mb-2">{trimmed.slice(4)}</h3>)
+      elements.push(<h3 key={key++} className="text-[13px] font-semibold text-fg-accent uppercase tracking-wide mt-4 mb-2">{trimmed.slice(4)}</h3>)
     } else if (trimmed.startsWith("## ")) {
       flushList()
       elements.push(<h2 key={key++} className="text-[15px] font-bold text-[#111110] mt-5 mb-2">{trimmed.slice(3)}</h2>)
@@ -100,7 +100,7 @@ export default async function UpdatesPage() {
 
         {/* 헤더 */}
         <div className="mb-10">
-          <p className="text-[11px] font-semibold text-[#084734] uppercase tracking-widest mb-3">Changelog</p>
+          <p className="text-[11px] font-semibold text-fg-accent uppercase tracking-widest mb-3">Changelog</p>
           <h1 className="text-[32px] font-bold text-[#111110] tracking-[-0.03em] leading-tight mb-3">
             업데이트 내역
           </h1>
@@ -122,13 +122,13 @@ export default async function UpdatesPage() {
               href="/classin-ai-feature-guide.html"
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex min-h-11 items-center gap-2 text-[14px] font-semibold text-[#084734] hover:underline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#084734]"
+              className="inline-flex min-h-11 items-center gap-2 text-[14px] font-semibold text-fg-accent hover:underline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-fg-accent"
             >
               AI 기능 소개서 보기
               <ExternalLink className="h-4 w-4" aria-hidden />
               <span className="sr-only">(새 탭)</span>
             </a>
-            <Link href="/docs/software/classin-ai-feature-guide" className="inline-flex min-h-11 items-center gap-2 text-[14px] font-semibold text-[#084734] hover:underline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#084734]">
+            <Link href="/docs/software/classin-ai-feature-guide" className="inline-flex min-h-11 items-center gap-2 text-[14px] font-semibold text-fg-accent hover:underline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-fg-accent">
               가이드 안내 읽기
               <ArrowRight className="h-4 w-4" aria-hidden />
             </Link>
@@ -136,9 +136,9 @@ export default async function UpdatesPage() {
         </section>
 
         {/* ClassIn 6.0.9 & AI 강의평가 하이라이트 배너 */}
-        <div className="mb-12 overflow-hidden rounded-3xl border border-[#084734]/20 bg-gradient-to-br from-[#084734] via-[#063c2c] to-[#04281c] p-6 text-white shadow-md sm:p-8">
+        <div className="mb-12 overflow-hidden rounded-3xl border border-fg-accent/20 bg-gradient-to-br from-fg-accent via-[#063c2c] to-[#04281c] p-6 text-white shadow-md sm:p-8">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="inline-flex items-center gap-1 rounded-full bg-[#ECFDF5] px-3 py-0.5 text-[11px] font-bold uppercase tracking-wider text-[#084734]">
+            <span className="inline-flex items-center gap-1 rounded-full bg-fg-accent/8 px-3 py-0.5 text-[11px] font-bold uppercase tracking-wider text-fg-accent">
               Major Release
             </span>
             <span className="rounded-full bg-white/15 px-2.5 py-0.5 text-[11px] font-semibold text-white/90">
@@ -161,9 +161,8 @@ export default async function UpdatesPage() {
               href="/classin-609-update.html"
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-[13px] font-bold text-[#084734] shadow-sm transition hover:bg-[#ECFDF5]"
+              className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-[13px] font-bold text-fg-accent shadow-sm transition hover:bg-fg-accent/8"
             >
-              <Sparkles className="h-4 w-4 text-[#084734]" />
               비주얼 인터랙티브 가이드 보기
             </a>
             <Link
@@ -180,7 +179,7 @@ export default async function UpdatesPage() {
           <section className="mb-10">
             <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
               <div>
-                <p className="text-[12px] font-semibold uppercase tracking-[0.16em] text-[#084734]">
+                <p className="text-[12px] font-semibold uppercase tracking-[0.16em] text-fg-accent">
                   Docs
                 </p>
                 <h2 className="mt-1 text-[20px] font-bold tracking-[-0.02em] text-[#111110]">
@@ -189,7 +188,7 @@ export default async function UpdatesPage() {
               </div>
               <Link
                 href="/docs/updates"
-                className="inline-flex items-center gap-1 text-[12px] font-semibold text-[#084734] transition-colors hover:text-[#065c41]"
+                className="inline-flex items-center gap-1 text-[12px] font-semibold text-fg-accent transition-colors hover:text-fg-accent-hover"
               >
                 전체 보기
                 <ArrowRight className="h-3.5 w-3.5" aria-hidden />
@@ -200,10 +199,10 @@ export default async function UpdatesPage() {
                 <Link
                   key={`${doc.category}-${doc.slug}`}
                   href={getDocPathFromContent(doc)}
-                  className="group block rounded-2xl border border-black/[0.08] bg-white px-5 py-5 transition-colors hover:border-[#084734]/20 sm:px-6"
+                  className="group block rounded-2xl border border-black/[0.08] bg-white px-5 py-5 transition-colors hover:border-fg-accent/20 sm:px-6"
                 >
                   <div className="mb-2 flex flex-wrap items-center gap-2">
-                    <span className="inline-flex items-center gap-1.5 rounded-lg bg-[#ECFDF5] px-2.5 py-1 text-[12px] font-bold text-[#084734]">
+                    <span className="inline-flex items-center gap-1.5 rounded-lg bg-fg-accent/8 px-2.5 py-1 text-[12px] font-bold text-fg-accent">
                       <BookOpen className="h-3 w-3" aria-hidden />
                       업데이트 문서
                     </span>
@@ -212,7 +211,7 @@ export default async function UpdatesPage() {
                       {formatDate(doc.updatedAt)}
                     </span>
                     {idx === 0 && (
-                      <span className="rounded-full bg-[#084734] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+                      <span className="rounded-full bg-fg-accent px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-fg-on-accent">
                         Latest
                       </span>
                     )}
@@ -223,7 +222,7 @@ export default async function UpdatesPage() {
                   <p className="mt-1.5 line-clamp-2 text-[14px] leading-relaxed text-[#1a1a1a]/55">
                     {doc.description}
                   </p>
-                  <span className="mt-3 inline-flex items-center gap-1 text-[12px] font-semibold text-[#084734]">
+                  <span className="mt-3 inline-flex items-center gap-1 text-[12px] font-semibold text-fg-accent">
                     문서 보기
                     <ArrowRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
                   </span>
@@ -246,7 +245,7 @@ export default async function UpdatesPage() {
                 className="group block rounded-2xl border border-[#e8e8e4] bg-white px-5 py-5 transition-colors hover:border-[#c8c8c4] sm:px-8 sm:py-6"
               >
                 <div className="mb-2 flex flex-wrap items-center gap-2">
-                  <span className="flex items-center gap-1.5 rounded-lg bg-[#f0f7f4] px-2.5 py-1 text-[12px] font-bold text-[#084734]">
+                  <span className="flex items-center gap-1.5 rounded-lg bg-[#f0f7f4] px-2.5 py-1 text-[12px] font-bold text-fg-accent">
                     <Tag className="h-3 w-3" />제품
                   </span>
                   <span className="flex items-center gap-1 text-[12px] text-[#1a1a1a]/35">
@@ -259,7 +258,7 @@ export default async function UpdatesPage() {
                 <p className="line-clamp-2 text-[14px] leading-relaxed text-[#1a1a1a]/55">
                   {post.excerpt}
                 </p>
-                <span className="mt-3 inline-flex items-center gap-1 text-[12px] font-semibold text-[#084734]">
+                <span className="mt-3 inline-flex items-center gap-1 text-[12px] font-semibold text-fg-accent">
                   자세히 보기
                   <ArrowRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
                 </span>
@@ -282,7 +281,7 @@ export default async function UpdatesPage() {
         {releases.length > 0 && (
           <section>
             <div className="mb-4">
-              <p className="text-[12px] font-semibold uppercase tracking-[0.16em] text-[#084734]">
+              <p className="text-[12px] font-semibold uppercase tracking-[0.16em] text-fg-accent">
                 Release Notes
               </p>
               <h2 className="mt-1 text-[20px] font-bold tracking-[-0.02em] text-[#111110]">
@@ -297,14 +296,14 @@ export default async function UpdatesPage() {
                 >
                   {/* 최신 뱃지 */}
                   {idx === 0 && (
-                    <span className="mb-3 inline-flex rounded-full bg-[#084734] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white sm:absolute sm:right-6 sm:top-5 sm:mb-0">
+                    <span className="mb-3 inline-flex rounded-full bg-fg-accent px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-fg-on-accent sm:absolute sm:right-6 sm:top-5 sm:mb-0">
                       Latest
                     </span>
                   )}
 
                   {/* 태그 + 날짜 */}
                   <div className="mb-3 flex flex-wrap items-center gap-2 sm:gap-3">
-                    <span className="flex items-center gap-1.5 text-[12px] font-bold text-[#084734] bg-[#f0f7f4] px-2.5 py-1 rounded-lg">
+                    <span className="flex items-center gap-1.5 text-[12px] font-bold text-fg-accent bg-[#f0f7f4] px-2.5 py-1 rounded-lg">
                       <Tag className="w-3 h-3" />{release.tag_name}
                     </span>
                     <span className="flex items-center gap-1 text-[12px] text-[#1a1a1a]/35">
@@ -329,7 +328,7 @@ export default async function UpdatesPage() {
                     href={release.html_url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 mt-5 text-[12px] text-[#1a1a1a]/35 hover:text-[#084734] transition-colors"
+                    className="inline-flex items-center gap-1.5 mt-5 text-[12px] text-[#1a1a1a]/35 hover:text-fg-accent transition-colors"
                   >
                     <ExternalLink className="w-3 h-3" />GitHub에서 보기
                   </a>

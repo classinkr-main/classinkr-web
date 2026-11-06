@@ -5,8 +5,8 @@ import { Printer } from "lucide-react"
 import { cn } from "./utils"
 
 const VARIANT_CLASS = {
-  line: "rounded-[6px] border border-[#084734]/30 px-5 py-2.5 font-bold text-[#084734] hover:bg-[#ECFDF5]",
-  ghost: "-mx-1 rounded-[6px] px-1 py-1 font-semibold text-[#615D59] hover:text-[#084734]",
+  line: "rounded-[6px] border border-fg-accent/30 px-5 py-2.5 font-bold text-fg-accent hover:bg-fg-accent/8",
+  ghost: "-mx-1 rounded-[6px] px-1 py-1 font-semibold text-[#615D59] hover:text-fg-accent",
 } as const
 
 /**
@@ -29,7 +29,7 @@ export function DocsPrintButton({
       type="button"
       onClick={() => window.print()}
       className={cn(
-        "inline-flex origin-left items-center gap-2 text-sm transition-colors duration-150 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8] print:hidden",
+        "inline-flex origin-left items-center gap-2 text-sm transition-colors duration-150 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fg-accent focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8] print:hidden",
         VARIANT_CLASS[variant],
         className
       )}

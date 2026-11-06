@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useEffect, useRef, useState } from "react"
-import { CheckCircle2, Loader2, Sparkles } from "lucide-react"
+import { CheckCircle2, Loader2 } from "lucide-react"
 
 import { trackEvent, trackFormStart, trackLeadSubmitted } from "@/lib/analytics"
 import { submitLead } from "@/lib/submitLead"
@@ -25,7 +25,6 @@ export function DemoModal({ children, trackingButton }: { children: React.ReactN
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState("")
     const [warning, setWarning] = useState("")
-    const [shake, setShake] = useState(false)
     const [marketingConsent, setMarketingConsent] = useState(false)
     const formRef = useRef<HTMLFormElement>(null)
     const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -113,6 +112,7 @@ export function DemoModal({ children, trackingButton }: { children: React.ReactN
                 params: {
                     lead_id: data.leadId,
                     stored: data.stored,
+                    academy_size: formData.get("size") as string,
                 },
             })
             toast.success("상담 요청이 접수되었어요")
@@ -120,8 +120,6 @@ export function DemoModal({ children, trackingButton }: { children: React.ReactN
         } catch (err) {
             const msg = err instanceof Error ? err.message : "상담 요청을 제출하지 못했습니다. 잠시 후 다시 시도해 주세요."
             setError(msg)
-            setShake(true)
-            setTimeout(() => setShake(false), 200)
         } finally {
             setLoading(false)
         }
@@ -135,16 +133,16 @@ export function DemoModal({ children, trackingButton }: { children: React.ReactN
         trackFormStart("contact_start", "demo")
     }
 
-    const fieldClassName = `${marketingFieldClassName}${shake ? " animate-shake" : ""}`
+    const fieldClassName = marketingFieldClassName
 
     return (
         <Dialog open={open} onOpenChange={handleOpenChange}>
             <DialogTrigger asChild>{children}</DialogTrigger>
-            <DialogContent className="sm:max-w-[560px] overflow-hidden border-[#E4E8E2] bg-[#FBFCF9] p-0">
+            <DialogContent className="site sm:max-w-[560px] overflow-hidden border-[#E4E8E2] bg-[#FBFCF9] p-0">
                 {submitted ? (
                     <div className="flex flex-col items-center justify-center space-y-4 px-8 py-12 text-center">
-                        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#ECFDF5]">
-                            <CheckCircle2 className="h-7 w-7 text-[#084734]" />
+                        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-fg-accent/8">
+                            <CheckCircle2 className="h-7 w-7 text-fg-accent" />
                         </div>
                         <h3 className="text-[24px] font-bold tracking-[-0.03em] text-[#111110]">
                             상담 요청이 접수되었습니다
@@ -165,7 +163,6 @@ export function DemoModal({ children, trackingButton }: { children: React.ReactN
                     <>
                         <DialogHeader className="border-b border-[#E7ECE5] bg-[linear-gradient(180deg,#F6FBF7_0%,#FBFCF9_100%)] px-8 py-7">
                             <div className="mb-3 inline-flex w-fit items-center gap-2 rounded-full border border-[#DCE9E1] bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#0E7A49]">
-                                <Sparkles className="h-3.5 w-3.5" />
                                 Consultation
                             </div>
                             <DialogTitle className="text-[28px] leading-[1.1] tracking-[-0.04em] text-[#111110]">

@@ -1,13 +1,6 @@
 import type { Metadata } from "next"
-import { Hero } from "@/components/sections/Hero"
-import { LogoBar } from "@/components/sections/LogoBar"
-import { EraVision } from "@/components/sections/EraVision"
-import { HomeEntitySummary } from "@/components/sections/HomeEntitySummary"
-import { HomeLeadMagnet } from "@/components/sections/HomeLeadMagnet"
-import { ProblemCost } from "@/components/sections/ProblemCost"
-import { Manifesto } from "@/components/sections/Manifesto"
-import { GlobalScale } from "@/components/sections/GlobalScale"
 import dynamic from "next/dynamic"
+import { HomeHero } from "@/components/home/HomeHero"
 import { JsonLd } from "@/components/seo/JsonLd"
 import { createBreadcrumbJsonLd, createPublicMetadata, createWebPageJsonLd, DEFAULT_SITE_TITLE } from "@/lib/seo"
 import { CLASSIN_POSITIONING } from "@/lib/classin-positioning"
@@ -23,16 +16,13 @@ export const metadata: Metadata = createPublicMetadata({
   keywords: ["클래스인", "Classin", "학원 전자칠판", "수업 녹화", "학원 수업 운영", "수업 시스템 OS", "EDB"],
 })
 
-const Outcomes = dynamic(() => import("@/components/sections/Outcomes").then(m => ({ default: m.Outcomes })))
-const SolutionOverview = dynamic(() => import("@/components/sections/SolutionOverview").then(m => ({ default: m.SolutionOverview })))
-const KeyUseCases = dynamic(() => import("@/components/sections/KeyUseCases").then(m => ({ default: m.KeyUseCases })))
-const DashboardPreview = dynamic(() => import("@/components/sections/DashboardPreview").then(m => ({ default: m.DashboardPreview })))
-const ScienceBased = dynamic(() => import("@/components/sections/ScienceBased").then(m => ({ default: m.ScienceBased })))
-const SatisfyingClass = dynamic(() => import("@/components/sections/SatisfyingClass").then(m => ({ default: m.SatisfyingClass })))
-const CaseStudies = dynamic(() => import("@/components/sections/CaseStudies").then(m => ({ default: m.CaseStudies })))
-const TestimonialWall = dynamic(() => import("@/components/sections/TestimonialWall").then(m => ({ default: m.TestimonialWall })))
-const Comparison = dynamic(() => import("@/components/sections/Comparison").then(m => ({ default: m.Comparison })))
-const FinalCTA = dynamic(() => import("@/components/sections/FinalCTA").then(m => ({ default: m.FinalCTA })))
+// 히어로 아래는 폴드 아래 — 첫 청크에서 뺀다
+const HomeAcademies = dynamic(() => import("@/components/home/HomeAcademies").then((m) => ({ default: m.HomeAcademies })))
+const HomeGains = dynamic(() => import("@/components/home/HomeGains").then((m) => ({ default: m.HomeGains })))
+const HomeRoles = dynamic(() => import("@/components/home/HomeRoles").then((m) => ({ default: m.HomeRoles })))
+const HomeProof = dynamic(() => import("@/components/home/HomeProof").then((m) => ({ default: m.HomeProof })))
+const HomeExplore = dynamic(() => import("@/components/home/HomeExplore").then((m) => ({ default: m.HomeExplore })))
+const HomePilotCta = dynamic(() => import("@/components/home/HomePilotCta").then((m) => ({ default: m.HomePilotCta })))
 
 export default function LandingPage() {
   return (
@@ -47,37 +37,14 @@ export default function LandingPage() {
           createBreadcrumbJsonLd([{ name: "홈", path: "/" }]),
         ]}
       />
-      {/* Act 1: 선언 — 에이스 강사 없이도 1등 학원 */}
-      <Hero />
-      <LogoBar />
-      <HomeEntitySummary />
-
-      {/* Act 2: 시대 — 기술과 교육의 결합 */}
-      <EraVision />
-
-      {/* Act 3: 공감 — 원장이 겪는 현실 */}
-      <ProblemCost />
-      <HomeLeadMagnet />
-
-      {/* Act 3: 전환점 — 수업은 개인기가 아니다 */}
-      <Manifesto />
-
-      {/* Act 4: 솔루션 — 어떻게 시스템으로 만드나 */}
-      <SolutionOverview />
-      <KeyUseCases />
-
-      {/* Act 5: 증거 — 데이터·과학·사례 */}
-      <DashboardPreview />
-      <ScienceBased />
-      <SatisfyingClass />
-      <CaseStudies />
-      <GlobalScale />
-      <TestimonialWall />
-      <Outcomes />
-
-      {/* Act 6: 확신 — 전환 결정 */}
-      <Comparison />
-      <FinalCTA />
+      {/* 히어로+숫자 → 학원 띠 → 이득 3행 → 역할별 표 → 증거 → 둘러보기 → 파일럿 먹 띠 (스펙 §8, 캔버스 B-T2) */}
+      <HomeHero />
+      <HomeAcademies />
+      <HomeGains />
+      <HomeRoles />
+      <HomeProof />
+      <HomeExplore />
+      <HomePilotCta />
     </>
   )
 }

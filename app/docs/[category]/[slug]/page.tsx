@@ -178,7 +178,7 @@ export default async function DocsArticlePage({
       topBar={
         <Link
           href={getDocCategoryPath(doc.category)}
-          className="group inline-flex min-h-11 origin-left items-center gap-2 text-sm font-medium text-[#615D59] transition-colors duration-150 hover:text-[#084734] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8]"
+          className="group inline-flex min-h-11 origin-left items-center gap-2 text-sm font-medium text-[#615D59] transition-colors duration-150 hover:text-fg-accent active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fg-accent focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8]"
         >
           <ArrowLeft
             className="h-4 w-4 shrink-0 transition-transform duration-150 group-hover:-translate-x-0.5"
@@ -204,7 +204,7 @@ export default async function DocsArticlePage({
         eyebrow={category.title}
         badge={
           isTroubleshooting ? (
-            <span className="inline-flex items-center gap-1.5 rounded-[6px] border border-[#084734]/30 px-2 py-0.5 text-xs font-bold text-[#084734]">
+            <span className="inline-flex items-center gap-1.5 rounded-[6px] border border-fg-accent/30 px-2 py-0.5 text-xs font-bold text-fg-accent">
               <Wrench className="h-3.5 w-3.5" aria-hidden />
               문제 해결
             </span>
@@ -241,7 +241,7 @@ export default async function DocsArticlePage({
 
             {doc.resources && doc.resources.length > 0 && (
               <section className="border-t border-black/[0.08] pt-8">
-                <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#084734]">
+                <p className="text-xs font-bold uppercase tracking-[0.16em] text-fg-accent">
                   자료
                 </p>
                 <h2 className="mt-2 text-xl font-black tracking-card text-[#111110]">
@@ -254,7 +254,7 @@ export default async function DocsArticlePage({
                         href={resource.href}
                         target="_blank"
                         rel="noreferrer"
-                        className="inline-block origin-left break-words text-[15px] font-bold text-[#084734] underline-offset-4 transition-transform duration-150 hover:underline active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8]"
+                        className="inline-block origin-left break-words text-[15px] font-bold text-fg-accent underline-offset-4 transition-transform duration-150 hover:underline active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fg-accent focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8]"
                       >
                         {resource.label}
                       </a>
@@ -270,7 +270,7 @@ export default async function DocsArticlePage({
             )}
 
             <section className="border-t border-black/[0.08] pt-8">
-              <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#084734]">
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-fg-accent">
                 요약
               </p>
               <h2 className="mt-2 text-xl font-black tracking-card text-[#111110]">
@@ -295,7 +295,7 @@ export default async function DocsArticlePage({
             {/* 문제 해결 문서는 본문 바로 뒤 "그래도 안 되면" 안내가 같은 역할을 한다. */}
             {!isTroubleshooting ? (
               <section className="border-t border-black/[0.08] pt-8 print:hidden">
-                <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#084734]">
+                <p className="text-xs font-bold uppercase tracking-[0.16em] text-fg-accent">
                   추가 지원
                 </p>
                 <h2 className="mt-2 text-xl font-black tracking-card text-[#111110]">
@@ -306,7 +306,7 @@ export default async function DocsArticlePage({
                 </p>
                 <Link
                   href={contactHref}
-                  className="mt-4 inline-flex origin-left items-center gap-2 rounded-[6px] bg-[#084734] px-5 py-2.5 text-sm font-bold text-white transition-colors duration-150 hover:bg-[#065c41] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8]"
+                  className="mt-4 inline-flex origin-left items-center gap-2 rounded-[6px] bg-fg-accent px-5 py-2.5 text-sm font-bold text-fg-on-accent transition-colors duration-150 hover:bg-fg-accent-hover active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fg-accent focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8]"
                 >
                   상담 남기기
                   <ArrowRight className="h-4 w-4" aria-hidden />
@@ -316,7 +316,7 @@ export default async function DocsArticlePage({
 
             {doc.category !== "start" && (
               <section className="border-t border-black/[0.08] pt-8 print:hidden">
-                <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#084734]">
+                <p className="text-xs font-bold uppercase tracking-[0.16em] text-fg-accent">
                   시작하기
                 </p>
                 <h2 className="mt-2 text-xl font-black tracking-card text-[#111110]">
@@ -324,7 +324,7 @@ export default async function DocsArticlePage({
                 </h2>
                 <Link
                   href="/docs/start"
-                  className="mt-3 inline-flex origin-left text-sm font-bold text-[#084734] underline-offset-4 transition-transform duration-150 hover:underline active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8]"
+                  className="mt-3 inline-flex origin-left text-sm font-bold text-fg-accent underline-offset-4 transition-transform duration-150 hover:underline active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fg-accent focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8]"
                 >
                   클래스인 시작하기 보기 →
                 </Link>
@@ -333,7 +333,7 @@ export default async function DocsArticlePage({
 
             {relatedDocs.length > 0 && (
               <section className="border-t border-black/[0.08] pt-8 print:hidden">
-                <p className="text-sm font-bold uppercase tracking-[0.14em] text-[#084734]">
+                <p className="text-sm font-bold uppercase tracking-[0.14em] text-fg-accent">
                   함께 보기
                 </p>
                 <h2 className="mt-2 text-2xl font-black tracking-subhead text-[#111110]">

@@ -13,26 +13,26 @@ export const metadata = createPublicMetadata({
 
 export default function PricingSimulatorPage() {
   return (
-    <main className="min-h-screen bg-[#F6F5F4] px-4 pb-20 pt-32 text-[#111110] sm:px-6 lg:pb-24 lg:pt-36">
+    <div className="min-h-screen bg-[#F6F5F4] px-4 pb-20 pt-32 text-[#111110] sm:px-6 lg:pb-24 lg:pt-36">
       <div className="mx-auto max-w-6xl">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <Link
             href="/pricing"
-            className="inline-flex items-center gap-2 text-[13px] font-semibold text-[#084734] transition-colors hover:text-[#065c41]"
+            className="inline-flex items-center gap-2 text-[13px] font-semibold text-fg-accent transition-colors hover:text-fg-accent-hover"
           >
             <ArrowLeft className="h-4 w-4" aria-hidden="true" />
             요금 안내로 돌아가기
           </Link>
           <Link
             href="/pricing/simulator/krw"
-            className="inline-flex items-center text-[13px] font-semibold text-[#084734] transition-colors hover:text-[#065c41]"
+            className="inline-flex items-center text-[13px] font-semibold text-fg-accent transition-colors hover:text-fg-accent-hover"
           >
             KRW 원화 버전 보기
           </Link>
         </div>
 
         <div className="mt-8 max-w-3xl">
-          <p className="text-[12px] font-semibold uppercase tracking-[0.18em] text-[#084734]/70">
+          <p className="text-[12px] font-semibold uppercase tracking-[0.18em] text-fg-accent/70">
             Pricing Simulator
           </p>
           <h1 className="mt-3 text-[2.35rem] font-semibold leading-[1.08] tracking-tight sm:text-5xl">
@@ -47,6 +47,6 @@ export default function PricingSimulatorPage() {
           <PricingCalculator />
         </section>
       </div>
-    </main>
+    </div>
   )
 }

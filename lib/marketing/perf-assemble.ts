@@ -26,6 +26,7 @@ import {
   fromGoogle,
   fromMeta,
   fromNaver,
+  indexByCampaign,
   LIVE_AD_CHANNELS,
   summarizeChannel,
   type AdInsightRow,
@@ -46,6 +47,7 @@ import {
   shiftDays,
   type MarketingPerfResponse,
   type PerfChannelLive,
+  type PerfGoogleCampaign,
   type PerfKpi,
   type PerfPeriodKey,
   type PerfScoreboardRow,
@@ -238,6 +240,18 @@ export async function assembleMarketingPerf(
   }
   const channelLive = LIVE_AD_CHANNELS.map(buildChannelLive)
   const channelLiveByKey = new Map(channelLive.map((entry) => [entry.channel, entry]))
+
+  // Google 캠페인별 이 기간 합계 — channelLive 의 google 칸과 같은 행이라 합이 맞는다.
+  // 행은 date asc 로 오므로 마지막 행의 이름이 최신 이름이다.
+  const googleCampaigns: PerfGoogleCampaign[] = [
+    ...indexByCampaign(liveRowsByChannel.google?.filter((r) => r.date >= period.since) ?? []),
+  ]
+    .map(([campaignId, rows]) => ({
+      ...summarizeChannel("google", rows),
+      campaignId,
+      campaignName: rows[rows.length - 1].campaignName,
+    }))
+    .sort((a, b) => (b.spend ?? 0) - (a.spend ?? 0))
 
   // ── 리드: created_at(KST 일자)으로 현재/직전 기간 분할 ──
   const currentLeads: LeadRecord[] = []
@@ -514,6 +528,7 @@ export async function assembleMarketingPerf(
     leadDailyBySource: aggregateLeadDailyBySource(currentLeadDaily),
     channelMix,
     channelLive,
+    googleCampaigns,
     // currentLeads 는 이미 이 기간으로 잘렸고 테스트 리드도 빠져 있다 — 폭포는 기간 필터를
     // 하지 않으므로(테스트 리드만 다시 거른다) 그대로 넘긴다.
     // 소스 실패(leads === null)면 빈 배열이라 전 단계 0 · 비율 null 로 정직하게 떨어진다.

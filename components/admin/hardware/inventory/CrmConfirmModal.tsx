@@ -127,7 +127,7 @@ export default function CrmConfirmModal({
               />
             </label>
             <p className="mt-1.5 text-[11px] leading-relaxed text-[#A39E98]">
-              달러(USD) 참고 병기 — REV 장부 매출(¥ SSOT)에 합산되지 않습니다.
+              달러(USD) 참고 병기 — 매출은 REV 장부 기준이라 이 금액은 합산되지 않습니다.
               {selectedCrmCandidate?.amount != null
                 ? " 선택 후보 금액은 통화가 달라(원·위안 혼재) 자동 입력하지 않습니다 — 달러 금액을 직접 입력하세요."
                 : ""}

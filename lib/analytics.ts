@@ -1,12 +1,16 @@
 import {
   GOOGLE_ADS_DEMO_CONVERSION_LABEL,
   GOOGLE_ADS_ID,
+  GOOGLE_ADS_SHOWROOM_CONVERSION_LABEL,
   KAKAO_PIXEL_ID,
   NAVER_LEAD_CONVERSION_TYPE,
   NAVER_WCS_ID,
 } from "@/lib/analytics-config"
 import { currentChoice, getAnonymousId } from "@/lib/consent/consent"
+import { isAcademySize } from "@/lib/contact/academy-size"
+import { isSalesContactTopic } from "@/lib/contact/topics"
 import {
+  getContentGroup,
   isTrackingExcludedPath,
   sanitizeTrackingTarget,
   sanitizeTrackingUrl,
@@ -57,12 +61,17 @@ type GoogleAnalyticsEventName =
   | "select_content"
   | "video_start"
   | "conversion"
+  | "lead_magnet_signup"
 
 /** gtag('set') 로 고정하는 페이지 문맥 — 이후 모든 hit(자동 이벤트 포함)이 이 값을 쓴다. */
 export interface GooglePageContext {
   page_location?: string
   page_referrer?: string
   page_title?: string
+  /** GA4 콘텐츠 그룹(lib/tracking-paths.ts getContentGroup). */
+  content_group?: string
+  /** 직원 브라우저 표시 — GA4 "내부 트래픽" 데이터 필터가 이 값으로 거른다. */
+  traffic_type?: "internal"
 }
 
 interface GtagFunction {
@@ -362,6 +371,8 @@ export const setGooglePageContext = (context: GooglePageContext) => {
   if (context.page_location) payload.page_location = context.page_location
   if (context.page_referrer !== undefined) payload.page_referrer = context.page_referrer
   if (context.page_title) payload.page_title = context.page_title
+  if (context.content_group) payload.content_group = context.content_group
+  if (context.traffic_type) payload.traffic_type = context.traffic_type
   window.gtag("set", payload)
 }
 
@@ -405,12 +416,22 @@ export const trackEvent = (
   }
 
   // gtag 이벤트는 GA4 권장 이벤트명으로 푸시 — 발화 여부는 Consent Mode v2 상태가 결정한다.
+  // content_group 도 page_location 처럼 이벤트마다 싣는다: /checkout 은 PageViewTracker 가
+  // 없어 소프트 내비게이션으로 들어오면 gtag('set') 문맥이 직전 페이지 그룹에 머문다.
   if (!INTERNAL_ONLY_EVENTS.has(eventName) && window.gtag) {
     const ga4Event = getGa4Event(eventName, eventParams)
-    window.gtag("event", ga4Event.name, {
+    const ga4Params = {
       page_location: currentPageLocation(),
+      content_group: getContentGroup(window.location?.pathname),
       ...ga4Event.params,
-    })
+    }
+    window.gtag("event", ga4Event.name, ga4Params)
+    // 이메일을 받고 내준 자료(gate=email)는 "자료 신청"으로 한 번 더 센다 — GA4 주요 이벤트
+    // lead_magnet_signup 이고, Google Ads 리드 캠페인(C2) 맞춤 목표가 이것을 입찰에 쓴다.
+    // 제품 소개서처럼 이메일 없이 받는 다운로드(gate 없음)는 file_download 로만 남는다.
+    if (eventName === "download_materials" && eventParams.gate === "email") {
+      window.gtag("event", "lead_magnet_signup", ga4Params)
+    }
   }
 
   if (options?.skipMarketingPixels) return
@@ -507,7 +528,26 @@ export interface LeadSubmittedInput {
   eventId?: string | null
   /** Google Ads 전환의 transaction_id(리드 id 또는 접수번호). */
   transactionId?: string | null
+  /** /contact 문의 유형. 영업 유형('도입 상담')일 때만 Google Ads 전환을 보낸다. */
+  contactTopic?: string | null
   params?: AnalyticsParams
+}
+
+/**
+ * 폼 → Google Ads 전환 라벨. 입찰은 쇼룸·도입 상담만 학습한다.
+ * 행사 신청·HW 주문 신청·지원 문의는 null(보내지 않음) — 보조 전환이 필요해지면 라벨을 더한다.
+ */
+function adsConversionLabel(input: LeadSubmittedInput): string | null {
+  switch (input.formType) {
+    case "showroom":
+      return GOOGLE_ADS_SHOWROOM_CONVERSION_LABEL
+    case "demo":
+      return GOOGLE_ADS_DEMO_CONVERSION_LABEL
+    case "contact":
+      return isSalesContactTopic(input.contactTopic) ? GOOGLE_ADS_DEMO_CONVERSION_LABEL : null
+    default:
+      return null
+  }
 }
 
 /**
@@ -530,14 +570,15 @@ export const trackLeadSubmitted = (input: LeadSubmittedInput): boolean => {
     form_type: input.formType,
   }
   if (eventId) params.event_id = eventId
+  // 학원 규모는 선택지 값만 내보낸다 — 자유 입력·변조 값이 GA4·픽셀로 새지 않게.
+  if (!isAcademySize(params.academy_size)) delete params.academy_size
 
   trackEvent("submit_demo_request", params)
 
-  const eventSlug = typeof params.event_slug === "string" ? params.event_slug : undefined
-  trackDemoRequestAdsConversion({
-    leadId: input.transactionId ?? undefined,
-    eventId,
-    eventSlug,
+  trackAdsConversion(adsConversionLabel(input), {
+    transaction_id: input.transactionId ?? undefined,
+    event_id: eventId,
+    event_slug: typeof params.event_slug === "string" ? params.event_slug : undefined,
   })
   return true
 }
@@ -591,20 +632,5 @@ export const trackAdsConversion = (
     send_to: `${GOOGLE_ADS_ID}/${label}`,
     page_location: currentPageLocation(),
     ...(params ?? {}),
-  })
-}
-
-/**
- * 리드 전환은 trackLeadSubmitted 를 거쳐 부른다 — 직접 부르면 stored=false·중복 방지를 건너뛴다.
- */
-export const trackDemoRequestAdsConversion = (params: {
-  leadId?: string | null
-  eventId?: string | null
-  eventSlug?: string | null
-}) => {
-  trackAdsConversion(GOOGLE_ADS_DEMO_CONVERSION_LABEL, {
-    transaction_id: params.leadId ?? undefined,
-    event_id: params.eventId ?? undefined,
-    event_slug: params.eventSlug ?? undefined,
   })
 }

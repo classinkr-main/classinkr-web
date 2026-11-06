@@ -17,7 +17,7 @@ export function ClassInAIIcon({
   className,
   ...props
 }: ClassInAIIconProps) {
-  const color = variant === "white" ? "#FFFFFF" : "#084734"
+  const color = variant === "white" ? "#FFFFFF" : "currentColor"
 
   return (
     <svg
@@ -26,7 +26,7 @@ export function ClassInAIIcon({
       viewBox="0 0 24 24"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
-      className={cn("shrink-0 transition-transform", className)}
+      className={cn("shrink-0 transition-transform", variant !== "white" && "text-fg-accent", className)}
       aria-hidden="true"
       {...props}
     >

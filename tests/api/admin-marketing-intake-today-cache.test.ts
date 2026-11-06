@@ -114,7 +114,7 @@ describe("GET /api/admin/marketing/intake-today — unstable_cache 배선", () =
     await import("@/app/api/admin/marketing/intake-today/route")
 
     const call = unstableCacheCalls.find((c) => c.options?.revalidate === 20)
-    expect(call?.keyParts).toEqual(["marketing-intake-today-v3"])
+    expect(call?.keyParts).toEqual(["marketing-intake-today-v4"])
   })
 
   it("재문의 병합 리드(예전 생성·오늘 last_inflow_at)를 오늘 재유입으로 싣는다", async () => {

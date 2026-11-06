@@ -256,7 +256,7 @@ function CrmOrderBacklogSection({ canWrite, onRegistered }: CrmOrderBacklogSecti
                       <span className="truncate">{entry.productName}</span>
                       <span className="tabular-nums text-[#615D59]">{formatNumber(entry.quantity ?? 0)}대</span>
                       {entry.ledgerOverlap ? (
-                        <span className="rounded-full border border-[#ECD29C] bg-[#FBF1E0] px-2 py-0.5 text-[10.5px] font-bold text-[#7A520F]">
+                        <span className="rounded-full border border-[#ECD29C] bg-[#FBF1E0] px-2 py-0.5 text-[11px] font-bold text-[#7A520F]">
                           원본에 겹침 의심 {formatNumber(entry.ledgerOverlap.quantity)}대
                         </span>
                       ) : null}
@@ -298,7 +298,7 @@ function CrmOrderBacklogSection({ canWrite, onRegistered }: CrmOrderBacklogSecti
           </ul>
         </div>
       ) : null}
-      <LotAllocationDialog state={lotPrompt.dialog} />
+      <LotAllocationDialog state={lotPrompt.dialog} title="배송 예정에 넣을 물류번호 고르기" confirmLabel="이대로 등록" />
       <LotAllocationPreparing preparing={lotPrompt.preparing} />
     </section>
   )

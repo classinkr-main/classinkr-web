@@ -12,7 +12,7 @@
 - `app/page.tsx` — 홈. 6-Act 스토리 구조로 섹션 조립(Hero→LogoBar→…→Comparison→FinalCTA), below-the-fold는 `next/dynamic`.
 - `app/layout.tsx` — 루트 레이아웃. 글로벌 메타데이터, Consent Mode v2 `beforeInteractive` 스크립트, Pretendard preload, `<AppChrome>` 래핑.
 - `components/AppChrome.tsx` — 공개/내부 경로 분기(`isInternalPath`), 헤더/푸터/챗봇/모바일 CTA/Consent/애널리틱스를 idle 타이밍에 마운트하는 클라이언트 셸.
-- `app/globals.css` — Tailwind 4 `@theme` 토큰, 브랜드 컬러/radius 변수, 섹션 배경 유틸(`.section-white/warm/green`), `.border-whisper`, 모션 keyframes, `prefers-reduced-motion` 처리, 인쇄 스타일.
+- `app/globals.css` — 어드민·레거시 `@theme` 토큰, 브랜드 컬러/radius 변수, 섹션 배경 유틸(`.section-warm`만 남음), 모션 keyframes, `prefers-reduced-motion` 처리, 인쇄 스타일.
 - `lib/classin-positioning.ts` — `CLASSIN_POSITIONING`/`CLASSIN_CHATBOT_REFERENCE`. 히어로 카피·메타·강점·경쟁비교·정직한 한계·챗봇 톤의 **단일 카피 소스(SSOT)**.
 - `lib/seo.ts` — `createPublicMetadata`(canonical/OG/twitter) + JSON-LD 빌더. 기본 `SITE_URL=https://classin.co.kr`.
 - `components/seo/JsonLd.tsx` — JSON-LD 주입.
@@ -39,10 +39,10 @@
 
 ## 4. 지침 & 규칙
 
-- **팔레트**(`DESIGN.md` §2, `globals.css`): 유일 포화색 = ClassIn Green `#084734`(hover `#065c41`). 파랑·보라 금지. 페이지 bg `#FAFAF8`, 텍스트 `#111110`, 보조 `#615D59`.
-- **섹션 배경 교차**: `#FFFFFF` ↔ `#F6F5F4`(웜) ↔ `#ECFDF5`(그린). 유틸 `.section-white/warm/green`.
-- **보더**: whisper만 — `1px solid rgba(0,0,0,0.08)` / `border-black/[0.08]` / `.border-whisper`. 두껍게 금지.
-- **타이포**: Pretendard Variable, `word-break: keep-all`. 헤딩 음수 letter-spacing, **모바일(≤640px)은 letter-spacing 0 강제**.
+- **팔레트**(`DESIGN.md` §2, `globals.css`): 유일 포화색 = ClassIn Green — 공개 사이트 `#0B7A52`(hover `#0A6E4A`, 토큰 `--fg-accent`·`bg-fg-accent`), 어드민 `#084734`(hover `#065c41`). 공개 화면은 hex 를 쓰지 않고 토큰 유틸만 쓴다. 파랑·보라 금지. 페이지 bg `#FAFAF8`, 텍스트 `#111110`, 보조 `#615D59`.
+- **섹션 배경·레이아웃**: [DESIGN.md](../../../DESIGN.md) §2·§5를 따른다(절·토큰 배지 확인).
+- **보더**: whisper만 — `1px solid rgba(0,0,0,0.08)` / `border-black/[0.08]`(공개 신규 코드는 `border-line-hair`). 두껍게 금지.
+- **타이포**: Pretendard Variable, `word-break: keep-all`. 크기·자간은 [DESIGN.md](../../../DESIGN.md) §3을 따른다(절·토큰 배지 확인).
 - **radius**: 버튼 6px, 표준카드 12px, 히어로/피처 16px, 배지 9999px.
 - **모션·시각 취향**(운영 합의): AI 느낌의 파스텔 채움 박스 거부 → 아웃라인/좌측 액센트바/타이포 강조 선호. **넓은 면은 뉴트럴, 그린은 액센트로만**. 모션은 은은·길게·바깥 투명도. `prefers-reduced-motion` 존중. **시안을 먼저 보여주고** 합의 후 진행.
 - **카피/포지셔닝**: "수업 시스템 OS" 중심. 약점(결제·오프라인 출석·고급 리포트)은 과장 없이 연동/별도 시스템으로. **가격은 단정 금지 → 상담 연결**. 국내 기관·보드 수 단정 금지(글로벌 수치는 "EEO 공식 기준"으로만).
@@ -56,7 +56,7 @@
 - **CTA 계측 누락 금지**: 계측 안 된 CTA는 전환 데이터 신뢰 불가(PRD 1순위 문제).
 - **성능 패턴 유지**: below-the-fold dynamic import, 히어로 영상 조건부+idle 로드. 무분별 eager 로드 금지.
 - **챗봇/모바일 CTA 라이프사이클**(`AppChrome`): 챗봇은 idle 마운트 후 소프트 내비게이션에도 언마운트 안 됨(대화 상태 보존). `PublicWidgetBoundary`로 에러 격리.
-- **a11y**: 포커스 링 `focus-visible:ring-2 ring-[#084734]`, 장식 아이콘 `aria-hidden`, 모바일 letter-spacing 0.
+- **a11y**: 포커스 링은 site-base 보증 outline 하나(컴포넌트별 ring 금지), 장식 아이콘 `aria-hidden`, 모바일 letter-spacing 0.
 - **Hero sticky 레이아웃**: `sticky top-[76px]` + `100svh` — 헤더 높이(76px/md:80px) 변경 시 동반 수정.
 - `app/l/[slug]/route.ts`는 `public/l/`의 **수기 정적 HTML** 서빙(React 아님). 별도 운영물.
 
@@ -83,7 +83,7 @@ npm run typecheck
 npx eslint app components lib --max-warnings=0
 npm run build
 ```
-수동 확인: 배경 교차·whisper 보더·그린 액센트 한정·radius 준수 / 모바일 letter-spacing 0·히어로 sticky·모바일 CTA / canonical·OG·JSON-LD·sitemap·noindex / CTA `trackEvent` 발화 / 포커스 링·reduced-motion / 포지셔닝(가격·기관수 단정 금지) 위반 여부.
+수동 확인: [DESIGN.md](../../../DESIGN.md) 준수(절·토큰 배지 확인) / 히어로 sticky·모바일 CTA / canonical·OG·JSON-LD·sitemap·noindex / CTA `trackEvent` 발화 / 포커스 링·reduced-motion / 포지셔닝(가격·기관수 단정 금지) 위반 여부.
 
 ## 9. 작업 시작 시 먼저 읽을 것
 

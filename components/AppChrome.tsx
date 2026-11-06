@@ -6,6 +6,7 @@ import { Component, useEffect, useState, type ReactNode } from "react"
 
 import { RouteTransition } from "@/components/transitions/RouteTransition"
 import { useConsent } from "@/lib/consent/useConsent"
+import { cn } from "@/lib/utils"
 import { hidesPublicChrome, isTrackingExcludedPath } from "@/lib/tracking-paths"
 
 const ConditionalHeader = dynamic(() =>
@@ -120,10 +121,26 @@ export function AppChrome({ children }: { children: ReactNode }) {
     return () => window.clearTimeout(fallbackTimeout)
   }, [pathname])
 
-  return (
+  const chrome = (
     <>
+      {showPublicChrome ? (
+        <a
+          href="#main"
+          className="sr-only focus-visible:not-sr-only focus-visible:fixed focus-visible:left-4 focus-visible:top-4 focus-visible:z-(--z-skiplink) focus-visible:inline-flex focus-visible:min-h-11 focus-visible:items-center focus-visible:rounded-md focus-visible:bg-surface-sheet focus-visible:px-5 focus-visible:text-ui focus-visible:font-semibold focus-visible:text-fg-ink"
+        >
+          본문 바로가기
+        </a>
+      ) : null}
       {showPublicChrome ? <ConditionalHeader /> : null}
-      <main className="min-h-screen bg-background font-sans antialiased selection:bg-primary/20 selection:text-primary">
+      {/* 공개만 스킵 링크 목적지, selection 유틸은 어드민만(공개는 site-base) */}
+      <main
+        id={showPublicChrome ? "main" : undefined}
+        tabIndex={showPublicChrome ? -1 : undefined}
+        className={cn(
+          "min-h-screen bg-background font-sans antialiased",
+          !showPublicChrome && "selection:bg-primary/20 selection:text-primary",
+        )}
+      >
         {showPublicChrome ? (
           <RouteTransition className="min-h-screen">{children}</RouteTransition>
         ) : (
@@ -152,16 +169,24 @@ export function AppChrome({ children }: { children: ReactNode }) {
           채워지면 null로 되돌아가지 않으므로, 소프트 내비게이션 중에도 언마운트되지
           않아 대화·열림 상태가 보존된다. MobileFloatingCTA는 기존대로 페이지마다
           재평가한다. */}
+      {/* 동시 노출 표지: 숨김은 site-base CSS(:has)가 맡는다. 언마운트하지 않는다 */}
       {showPublicChrome && readyPath !== null ? (
-        <PublicWidgetBoundary resetKey={`chatbot:${readyPath}`}>
-          <FloatingChatbot />
-        </PublicWidgetBoundary>
+        <div data-hide-with-banner data-inert-with-menu="hide">
+          <PublicWidgetBoundary resetKey={`chatbot:${readyPath}`}>
+            <FloatingChatbot />
+          </PublicWidgetBoundary>
+        </div>
       ) : null}
       {showMobileFloatingCta && readyPath === pathname ? (
-        <PublicWidgetBoundary resetKey={`mobile-cta:${pathname}`}>
-          <MobileFloatingCTA />
-        </PublicWidgetBoundary>
+        <div data-hide-with-banner data-hide-with-chat data-inert-with-menu="hide">
+          <PublicWidgetBoundary resetKey={`mobile-cta:${pathname}`}>
+            <MobileFloatingCTA />
+          </PublicWidgetBoundary>
+        </div>
       ) : null}
     </>
   )
+
+  // 공개 분기만 .site 스코프로 감싼다(display: contents라 상자 없음). 어드민 DOM은 그대로.
+  return showPublicChrome ? <div className="site contents">{chrome}</div> : chrome
 }

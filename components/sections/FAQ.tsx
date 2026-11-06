@@ -72,7 +72,7 @@ export function FAQ() {
                                 <TabsTrigger
                                     key={category.key}
                                     value={category.key}
-                                    className="rounded-full px-5 py-2.5 text-sm font-semibold text-[#615D59] data-[state=active]:bg-white data-[state=active]:text-[#084734] data-[state=active]:shadow-none"
+                                    className="rounded-full px-5 py-2.5 text-sm font-semibold text-[#615D59] data-[state=active]:bg-white data-[state=active]:text-fg-accent data-[state=active]:shadow-none"
                                 >
                                     {category.label}
                                 </TabsTrigger>
@@ -87,7 +87,7 @@ export function FAQ() {
                                 className="mt-8 data-[state=inactive]:hidden"
                             >
                                 <div className="mb-8 rounded-[28px] border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-6 md:p-8">
-                                    <div className="text-[12px] font-semibold uppercase tracking-[0.125px] text-[#084734]">
+                                    <div className="text-[12px] font-semibold uppercase tracking-[0.125px] text-fg-accent">
                                         {category.eyebrow}
                                     </div>
                                     <h3 className="mt-3 text-2xl md:text-3xl font-bold leading-tight text-[#111110] break-keep" style={{ letterSpacing: "-0.8px" }}>
@@ -100,7 +100,7 @@ export function FAQ() {
                                         {category.highlights.map((highlight) => (
                                             <span
                                                 key={highlight}
-                                                className="inline-flex items-center rounded-full border border-[#084734]/10 bg-white px-3.5 py-1.5 text-[13px] font-medium text-[#084734]"
+                                                className="inline-flex items-center rounded-full border border-fg-accent/10 bg-white px-3.5 py-1.5 text-[13px] font-medium text-fg-accent"
                                             >
                                                 {highlight}
                                             </span>
@@ -116,9 +116,9 @@ export function FAQ() {
                                             name={`faq-${category.key}`}
                                             className="group scroll-mt-32 border-b border-[rgba(0,0,0,0.08)]"
                                         >
-                                            <summary className="flex cursor-pointer list-none items-center justify-between gap-4 py-8 text-left text-xl lg:text-2xl font-bold text-[#111110] hover:text-[#084734] transition-colors break-keep [&::-webkit-details-marker]:hidden">
+                                            <summary className="flex cursor-pointer list-none items-center justify-between gap-4 py-8 text-left text-xl lg:text-2xl font-bold text-[#111110] hover:text-fg-accent transition-colors break-keep [&::-webkit-details-marker]:hidden">
                                                 {faq.question}
-                                                <ChevronDown className="h-4 w-4 shrink-0 transition-transform duration-300 group-open:rotate-180" />
+                                                <ChevronDown className="h-4 w-4 shrink-0 transition-transform duration-(--motion-base) ease-soft group-open:rotate-180" />
                                             </summary>
                                             <div className="text-[#615D59] text-lg leading-relaxed pb-8 break-keep">
                                                 {faq.answer}
@@ -126,7 +126,7 @@ export function FAQ() {
                                                     <div className="mt-5">
                                                         <Link
                                                             href={faq.guideHref}
-                                                            className="inline-flex items-center rounded-full border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] px-4 py-2 text-sm font-semibold text-[#084734] transition-colors hover:bg-[#ECFDF5]"
+                                                            className="inline-flex items-center rounded-full border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] px-4 py-2 text-sm font-semibold text-fg-accent transition-colors hover:bg-fg-accent/8"
                                                         >
                                                             3단계 가이드 보기
                                                         </Link>

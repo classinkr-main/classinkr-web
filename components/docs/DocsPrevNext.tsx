@@ -35,7 +35,7 @@ export function findPrevNextDocs(groups: DocsNavGroup[]): DocsPrevNextLinks | nu
 }
 
 const ROW_CLASS =
-  "group flex min-w-0 flex-col gap-1.5 py-5 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8]"
+  "group flex min-w-0 flex-col gap-1.5 py-5 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fg-accent focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8]"
 
 /** 본문 끝의 이전·다음 문서 — 카드 대신 괘선 두 칸으로 둔다. */
 export function DocsPrevNext({ links, className }: { links: DocsPrevNextLinks | null; className?: string }) {
@@ -57,7 +57,7 @@ export function DocsPrevNext({ links, className }: { links: DocsPrevNextLinks | 
               />
               이전 문서
             </span>
-            <span className="break-keep text-base font-bold leading-6 text-[#111110] transition-colors duration-150 [overflow-wrap:anywhere] group-hover:text-[#084734]">
+            <span className="break-keep text-base font-bold leading-6 text-[#111110] transition-colors duration-150 [overflow-wrap:anywhere] group-hover:text-fg-accent">
               {prev.title}
             </span>
           </Link>
@@ -81,7 +81,7 @@ export function DocsPrevNext({ links, className }: { links: DocsPrevNextLinks | 
                 aria-hidden
               />
             </span>
-            <span className="break-keep text-base font-bold leading-6 text-[#111110] transition-colors duration-150 [overflow-wrap:anywhere] group-hover:text-[#084734]">
+            <span className="break-keep text-base font-bold leading-6 text-[#111110] transition-colors duration-150 [overflow-wrap:anywhere] group-hover:text-fg-accent">
               {next.title}
             </span>
           </Link>

@@ -54,6 +54,7 @@ import { ADMIN_OPEN_NAV_EDITOR_EVENT, saveMyNavOverrides } from "./my-nav-prefer
 // active 판정은 nav-active.ts로 추출됨 — CS 콘솔
 // 가로 메뉴(cs/CsConsoleNav)와 같은 판정을 공유한다. 여기서는 클로저 인자만 채워 넘긴다.
 import { isNavActive as matchNavActive } from "./nav-active"
+import { formatNavCount, useAdminNavCounts, type AdminNavCount } from "./useAdminNavCounts"
 
 // 본인 사이드바 편집 드로어 — 열 때만 내려받는다(사이드바는 모든 어드민 화면에 실린다).
 const MyNavEditorDrawer = dynamic(() => import("./settings/MyNavEditorDrawer"), {
@@ -423,6 +424,30 @@ interface Props {
   onNavOverridesChange?: (next: Record<string, NavOverrideValue>) => void
 }
 
+// 숫자 배지(동적) — 정적 문자열 badge(MVP·시안)와 별개다. 미확인 표시와 같은 호박색 톤
+// (리드 보드 '미확인 수신함'·DESIGN.md Warning)이고, 짙은 녹색 채움은 쓰지 않는다.
+function NavCountBadge({ value }: { value: AdminNavCount }) {
+  return (
+    <span
+      aria-label={value.label}
+      title={value.label}
+      className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full border border-[#ECD29C] bg-[#FBF1E0] px-1.5 text-[11px] font-bold tabular-nums text-[#7A520F]"
+    >
+      {formatNavCount(value.count)}
+    </span>
+  )
+}
+
+/** 접힌 사이드바에서는 아이콘 위 점으로만 알린다. 수는 title·스크린 리더 텍스트가 말한다. */
+function NavCountDot({ value }: { value: AdminNavCount }) {
+  return (
+    <>
+      <span aria-hidden="true" className="absolute right-1 top-1 h-2 w-2 rounded-full border border-white bg-[#A8741A]" />
+      <span className="sr-only">{value.label}</span>
+    </>
+  )
+}
+
 export default function AdminSidebar(props: Props) {
   // useSearchParams(쿼리 인지형 active 매칭)는 프리렌더 시 Suspense 경계를 요구한다.
   // 사이드바는 클라이언트 컴포넌트지만 정적 프리렌더 대상이 될 수 있어 자체 경계로 감싼다.
@@ -438,6 +463,7 @@ function AdminSidebarContent({ role, name, email, navOverrides, onNavOverridesCh
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const router = useRouter()
+  const navCounts = useAdminNavCounts()
   const prefetchedHrefs = useRef(new Set<string>())
   const warmedHrefs = useRef(new Set<string>())
   const warmupTimerRef = useRef<number | null>(null)
@@ -933,6 +959,7 @@ function AdminSidebarContent({ role, name, email, navOverrides, onNavOverridesCh
                                 <item.icon className="h-4 w-4" />
                               </span>
                               <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                              {navCounts[item.href] ? <NavCountBadge value={navCounts[item.href]} /> : null}
                               {item.badge ? (
                                 <span className={`rounded px-1.5 py-0.5 text-[10px] font-normal ${
                                   isActive ? "bg-[#D1FAE5] text-[#084734]" : "bg-[#e8e8e4] text-[#1a1a1a]/50"
@@ -1053,7 +1080,7 @@ function AdminSidebarContent({ role, name, email, navOverrides, onNavOverridesCh
               onPointerDown={() => warmAdminTab(item.href)}
               onTouchStart={() => warmAdminTab(item.href)}
               onClick={() => warmAdminTab(item.href, "click")}
-              className={`flex min-h-[52px] flex-col items-center justify-center gap-1 rounded-md px-1 text-[10px] font-medium leading-none transition-colors ${
+              className={`relative flex min-h-[52px] flex-col items-center justify-center gap-1 rounded-md px-1 text-[10px] font-medium leading-none transition-colors ${
                 isActive
                   ? "bg-[#ECFDF5] text-[#084734]"
                   : "text-[#1a1a1a]/55 hover:bg-[#f5f5f2] hover:text-[#111110]"
@@ -1063,6 +1090,7 @@ function AdminSidebarContent({ role, name, email, navOverrides, onNavOverridesCh
                 <item.icon className="h-4 w-4" />
               </span>
               <span className="max-w-full truncate">{item.label}</span>
+              {navCounts[item.href] ? <NavCountDot value={navCounts[item.href]} /> : null}
             </Link>
           )
         })}
@@ -1182,7 +1210,7 @@ function AdminSidebarContent({ role, name, email, navOverrides, onNavOverridesCh
                           onClick={() => {
                             warmAdminTab(item.href, "click")
                           }}
-                          className={`group flex items-center gap-2.5 rounded-lg text-[13px] font-medium transition-colors ${
+                          className={`group relative flex items-center gap-2.5 rounded-lg text-[13px] font-medium transition-colors ${
                             effectiveCollapsed ? "justify-center px-2 py-2.5" : "px-3 py-2"
                           } ${
                             isActive
@@ -1193,9 +1221,11 @@ function AdminSidebarContent({ role, name, email, navOverrides, onNavOverridesCh
                           <span className={isActive ? "text-[#084734]" : "text-[#1a1a1a]/40 group-hover:text-[#111110]"}>
                             <item.icon className="h-4 w-4" />
                           </span>
+                          {effectiveCollapsed && navCounts[item.href] ? <NavCountDot value={navCounts[item.href]} /> : null}
                           {!effectiveCollapsed && (
                             <>
                               <span className="flex-1">{item.label}</span>
+                              {navCounts[item.href] ? <NavCountBadge value={navCounts[item.href]} /> : null}
                               {item.badge && (
                                 <span className={`rounded px-1.5 py-0.5 text-[10px] font-normal ${
                                   isActive ? "bg-[#D1FAE5] text-[#084734]" : "bg-[#e8e8e4] text-[#1a1a1a]/50"

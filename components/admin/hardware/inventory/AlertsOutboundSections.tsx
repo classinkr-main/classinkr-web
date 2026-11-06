@@ -38,10 +38,9 @@ interface AlertsOutboundSectionsProps {
 }
 
 // 서버 buildHardwareStockAlerts 의 알림 종류 → 카드 머리 꼬리표. 구응답(kind 없음)은 꼬리표 없이 보인다.
+// 제목이 이미 같은 말을 하는 종류(가용 재고 음수·최소재고 미만)는 꼬리표를 달지 않는다.
 const ALERT_KIND_TAG: Partial<Record<NonNullable<HardwareAlert["kind"]>, string>> = {
   ledger_check: "창고 음수",
-  negative_available: "가용 음수",
-  low: "가용 < 최소재고",
   order: "추세 기준",
 }
 
@@ -85,7 +84,7 @@ function AlertsOutboundSections({
                         <p className="text-[12px] font-bold">
                           {alert.product} · {alert.title}
                           {alert.kind && ALERT_KIND_TAG[alert.kind] ? (
-                            <span className="ml-1.5 rounded bg-white/70 px-1.5 py-0.5 text-[10.5px] font-semibold">{ALERT_KIND_TAG[alert.kind]}</span>
+                            <span className="ml-1.5 rounded bg-white/70 px-1.5 py-0.5 text-[11px] font-semibold">{ALERT_KIND_TAG[alert.kind]}</span>
                           ) : null}
                         </p>
                         <p className="mt-1 text-[11px] opacity-95">{alert.detail}</p>

@@ -3,6 +3,7 @@
 - 상태: **활성화 대기**. 코드는 전부 들어갔다([연동 설계](ad-channel-google-naver-integration-2026-09-14.md) §0 참조).
 - 대상: 자격증명을 발급하고 환경변수를 채우는 사람.
 - 소유: 마케팅/그로스/CRM 파트 ([playbook/04-growth-crm.md](playbook/04-growth-crm.md))
+- Google Ads 계정 구조(주 계정 395)·캠페인 계획·전환 현황: [Google Ads 현황(2026-11-03)](google-ads-accounts-2026-11-03.md)
 
 **이 문서가 있는 이유:** 광고 연동은 "설정했다"와 "실제로 데이터가 쌓인다" 사이가 멀다.
 네이버는 검수를 안 하면 스크립트가 붙어도 조용히 0이고, Google 은 전환 라벨이 없으면
@@ -46,7 +47,13 @@ CHECK 확장을 진짜 확인하려면 `/admin/campaigns/manage` 에서 캠페�
 
 ## 1. Google Ads 전환 액션 — 가장 싸고 효과가 크다
 
-**지금 전환이 한 건도 안 나가고 있다.** gtag.js 는 전 공개 페이지에 로드되는데
+> **2026-11-03 갱신 — 이 단계는 끝났다.** 운영 번들에 전환 라벨이 들어가 있다(11/3 확인). 다만 이 태그
+> `AW-18252550128`은 924 계정 것이다. 11/3 결정으로 운영 계정을 395로 통일해, PR #52가 사이트 태그를
+> 395 것(`AW-18551599540`)과 그 계정의 라벨로 바꾼다. #52 배포 때 395의 GA4 가져오기 `generate_lead`를
+> 보조 전환으로 내려야 중복 집계가 안 된다.
+> 자세한 것은 [Google Ads 현황(2026-11-03)](google-ads-accounts-2026-11-03.md) §4. 아래는 9/14 당시 기록이다.
+
+**(9/14 당시) 지금 전환이 한 건도 안 나가고 있다.** gtag.js 는 전 공개 페이지에 로드되는데
 (`AW-18252550128`), 전환 액션 라벨이 없어서 `trackAdsConversion()` 이 조기 반환한다.
 
 1. Google Ads → 목표 → 전환 → 전환 액션 만들기 (웹사이트, "도입문의 제출")
@@ -119,19 +126,31 @@ curl -sS -H "Authorization: Bearer $CRON_SECRET" \
 **OAuth 자격증명을 발급한 Google Cloud 프로젝트**에 붙는다. 예전 안내문(매니저 계정에서
 토큰 신청)은 전부 옛말이다.
 
-1. Google Cloud 프로젝트 생성 → **Google Ads API 활성화**
-2. OAuth 2.0 클라이언트(웹) 발급 → offline access 로 `refresh_token` 1회 획득
-3. Cloud Console 에서 그 프로젝트의 **API 접근 등급 신청**.
-   읽기 집계만 하므로 **Reporting 등급으로 충분하다** — 승인이 빠르다.
-4. 광고 계정이 MCC 하위인지 확인 → 맞으면 `LOGIN_CUSTOMER_ID` 도 채운다
+**2026-11-03 갱신 — 기본 인증은 공용 서비스 계정이다.** Sheets·Calendar 가 쓰는
+`classin-admin@classin-home.iam.gserviceaccount.com`(GCP 프로젝트 `classin-home`,
+`GOOGLE_SERVICE_ACCOUNT_EMAIL`·`GOOGLE_PRIVATE_KEY`)을 그대로 쓴다. 구글 공식 시작 가이드의 방식이고
+refresh_token 발급·만료가 없어 **새 비밀 값이 필요 없다.** 접근 등급은 **Explorer** 면 된다
+(실제 계정에 하루 2,880회, 크론은 하루 1회). 'Reporting'은 Standard 등급에만 붙는 허용 용도라 신청 대상이 아니다.
+
+1. GCP `classin-home` 에서 **Google Ads API 사용 설정** —
+   `https://console.cloud.google.com/apis/library/googleads.googleapis.com?project=classin-home`
+   (11/3 완료 — 그 전에는 `SERVICE_DISABLED`, 프로젝트 번호 876787918822. 2~4단계와 5단계 환경 변수 추가도 11/3 완료, 남은 것은 PR #55 배포)
+2. 같은 프로젝트의 Google Ads API **개요 페이지 → 액세스 신청(Apply for access)** → **Explorer**.
+   대부분 자동 승인이다. Test 등급으로는 테스트 계정만 읽힌다.
+3. Google Ads **395** → 관리자 → 액세스 및 보안 → 사용자 **+** → 서비스 계정 이메일 → **읽기 전용** → 추가
+   (서비스 계정은 '이메일 전용' 등급을 쓸 수 없다)
+4. 1~3을 한 뒤 로컬에서 `npm run check:google-ads` — 막힌 단계를 알려 준다(읽기 전용, 배포 불필요)
+5. Vercel 환경 변수 `GOOGLE_ADS_CUSTOMER_ID=3951743288` → 재배포. **이 값이 켜는 스위치다.**
 
 ```
-GOOGLE_ADS_CLIENT_ID=
-GOOGLE_ADS_CLIENT_SECRET=
-GOOGLE_ADS_REFRESH_TOKEN=
-GOOGLE_ADS_CUSTOMER_ID=          # 하이픈 없이 숫자만
-GOOGLE_ADS_LOGIN_CUSTOMER_ID=    # MCC 하위일 때만. 아니면 비워 둔다
+GOOGLE_ADS_CUSTOMER_ID=3951743288   # 주 계정 395 (기존 924 아님). 하이픈 없이 숫자만
+GOOGLE_ADS_LOGIN_CUSTOMER_ID=       # MCC 하위일 때만. 아니면 비워 둔다
 ```
+
+OAuth(사용자 위임)를 쓰려면 `GOOGLE_ADS_CLIENT_ID`·`GOOGLE_ADS_CLIENT_SECRET`·`GOOGLE_ADS_REFRESH_TOKEN`을 넣는다 —
+refresh_token 이 있으면 서비스 계정 대신 그쪽을 쓴다. 동의 화면이 '테스트' 상태면 refresh_token 이 7일 뒤 만료되니 '프로덕션'으로 둔다.
+
+켜고 나면 어드민 마케팅 › 데이터 › Google Ads 헤더의 'API …' 표시가 `미연동`에서 바뀌고, 첫 동기화 뒤 캠페인 실적 표가 뜬다.
 
 **확인**
 
@@ -142,9 +161,12 @@ curl -sS -H "Authorization: Bearer $CRON_SECRET" \
 
 | 증상 | 원인 | 조치 |
 |---|---|---|
-| `503 · configured:false` | env 넷 중 하나가 비었다 | 값 확인 후 재배포 |
-| `invalid_grant` | refresh_token 만료·취소 | 재발급 |
-| `PERMISSION_DENIED` / `USER_PERMISSION_DENIED` | 등급 미승인이거나 계정 접근 없음 | 승인 상태 확인 |
+| `503 · configured:false` | `GOOGLE_ADS_CUSTOMER_ID` 가 비었거나 서비스 계정 env 가 없다 | 값 확인 후 재배포 |
+| `SERVICE_DISABLED` | 프로젝트에 Google Ads API 미사용 설정 | 1단계 |
+| `CLOUD_PROJECT_NOT_APPROVED_FOR_PRODUCTION` | 아직 Test 등급 | 2단계 Explorer 승인 확인 |
+| `USER_PERMISSION_DENIED` / `PERMISSION_DENIED` | 서비스 계정이 광고 계정 사용자에 없다 | 3단계 |
+| `invalid_grant` | (OAuth 사용 시) refresh_token 만료·취소 | 재발급 |
+| `PAGE_SIZE_NOT_SUPPORTED` | search 본문에 `pageSize` 를 보냈다(현행 API 는 1만 행 고정) | 11/3 수정됨 — 다시 나오면 회귀다 |
 | `login-customer-id` 관련 오류 | MCC 아닌데 보냈거나, MCC인데 안 보냈다 | 해당 env 를 채우거나 **비운다** |
 | 지출이 터무니없이 크다 | `cost_micros` 나눗셈 누락 | 있을 수 없다(순수함수 + 테스트로 잠갔다). 나오면 보고할 것 |
 | `truncated: true` | 페이징 상한(20페이지) 도달 | 결과가 **잘렸다** — 캠페인이 많은 계정이면 상한을 올려야 한다. 그대로 두면 "집행이 줄었다"로 오독된다 |

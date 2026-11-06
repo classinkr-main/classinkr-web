@@ -96,7 +96,7 @@ function MovementDetailSheet({
                   {detailLotLabel ? (
                     <span className="inline-flex rounded-md bg-[#ECFDF5] px-2 py-0.5 text-[12px] font-bold text-[#084734]">{detailLotLabel}</span>
                   ) : (
-                    <span className="inline-flex rounded-md border border-dashed border-[rgba(0,0,0,0.14)] bg-[#F6F5F4] px-2 py-0.5 text-[12px] font-bold text-[#A39E98]">물량번호 미지정</span>
+                    <span className="inline-flex rounded-md border border-dashed border-[rgba(0,0,0,0.14)] bg-[#F6F5F4] px-2 py-0.5 text-[12px] font-bold text-[#A39E98]">물류번호 미지정</span>
                   )}
                   {isPlannedMovement(detailMovement) ? (
                     <span className="inline-flex items-center gap-0.5 rounded-full bg-[#FBF1E0] px-2 py-0.5 text-[11px] font-bold text-[#A8741A]">
@@ -193,7 +193,7 @@ function MovementDetailSheet({
                   </p>
                   <p className="mt-1 text-[11.5px] text-[#615D59]">
                     {detailMovement.movement_type === "inbound"
-                      ? `${detailMovement.importer ?? "공급사"} · 물량번호 ${detailLotLabel ?? "-"} 입고 건입니다.`
+                      ? `${detailMovement.importer ?? "공급사"} · 물류번호 ${detailLotLabel ?? "-"} 입고 건입니다.`
                       : "출고 기록 시 CRM 실제 오더와 연동하면 여기에 표시됩니다."}
                   </p>
                 </div>

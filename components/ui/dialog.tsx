@@ -64,7 +64,7 @@ const DialogContent = React.forwardRef<
                     "absolute right-4 top-4 rounded-lg p-1.5",
                     "text-[#A39E98] hover:text-[#111110] hover:bg-black/[0.05]",
                     "transition-all duration-150",
-                    "focus:outline-none focus:ring-2 focus:ring-[#084734] focus:ring-offset-1",
+                    "focus:outline-none focus:ring-2 focus:ring-fg-accent focus:ring-offset-1",
                     "disabled:pointer-events-none"
                 )}
             >

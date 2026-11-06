@@ -50,17 +50,17 @@ export function SeminarPlayer({ slug, youtubeId, title, isPlaceholder }: Seminar
             hqdefault 를 아래에 깔고 그 위에 maxres 를 얹어, 고화질이 있으면 덮고
             없으면 hqdefault 가 비치도록 한다(포스터가 검게 비는 것 방지). */}
         <span
-          className="absolute inset-0 bg-cover bg-center opacity-65 transition-all duration-500 group-hover:scale-105 group-hover:opacity-75"
+          className="absolute inset-0 bg-cover bg-center opacity-65 transition-all duration-500 group-hover:opacity-75"
           style={{ backgroundImage: `url(https://i.ytimg.com/vi/${youtubeId}/hqdefault.jpg)` }}
         />
         <span
-          className="absolute inset-0 bg-cover bg-center opacity-65 transition-all duration-500 group-hover:scale-105 group-hover:opacity-75"
+          className="absolute inset-0 bg-cover bg-center opacity-65 transition-all duration-500 group-hover:opacity-75"
           style={{
             backgroundImage: `url(https://i.ytimg.com/vi/${youtubeId}/maxresdefault.jpg)`,
           }}
         />
         <span className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
-        <span className="relative flex h-[72px] w-[72px] items-center justify-center rounded-full bg-white/90 text-[#084734] shadow-[0_10px_30px_rgba(0,0,0,0.35)] backdrop-blur-sm transition-transform duration-300 group-hover:scale-110">
+        <span className="relative flex h-[72px] w-[72px] items-center justify-center rounded-full bg-white/90 text-fg-accent shadow-[0_10px_30px_rgba(0,0,0,0.35)]">
           <Play className="h-7 w-7 translate-x-0.5 fill-current" />
         </span>
         <span className="absolute bottom-4 left-5 right-5 text-left text-[13px] font-semibold text-white/90">

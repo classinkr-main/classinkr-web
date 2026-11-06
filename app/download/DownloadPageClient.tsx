@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import Image from "next/image"
-import { Download, Smartphone } from "lucide-react"
+import { ArrowRight, Download, Smartphone } from "lucide-react"
 
 import { TrackedLink } from "@/components/TrackedLink"
 import {
@@ -75,7 +75,7 @@ function BoardGlyph({ className }: { className?: string }) {
       <rect x="2.75" y="3.6" width="18.5" height="12.2" rx="2" />
       <path d="M9.3 15.8v3.7M14.7 15.8v3.7" />
       <path d="M7 19.5h10" />
-      <path d="M6.3 8.1c1.5-1.3 2.9.9 4.4-.3" stroke="#084734" />
+      <path d="M6.3 8.1c1.5-1.3 2.9.9 4.4-.3" className="stroke-fg-accent" />
       <path d="M6.3 11.6h4.2" />
       <rect x="14.9" y="6.5" width="3.5" height="2.7" rx="0.8" strokeWidth="1.4" />
       <rect x="14.9" y="10.5" width="3.5" height="2.7" rx="0.8" strokeWidth="1.4" />
@@ -110,8 +110,8 @@ function DownloadButton({
         : "rounded-[6px] px-3.5 py-2 text-[13px]"
   const lookClass =
     appearance === "solid"
-      ? "bg-[#084734] text-white shadow-sm hover:bg-[#065c41]"
-      : "border border-[#084734]/25 bg-white text-[#084734] hover:bg-[#ECFDF5]"
+      ? "bg-fg-accent text-fg-on-accent shadow-sm hover:bg-fg-accent-hover"
+      : "border border-fg-accent/25 bg-white text-fg-accent hover:bg-fg-accent/8"
   return (
     <TrackedLink
       href={variant.href}
@@ -119,7 +119,7 @@ function DownloadButton({
       tracking={{ platform: platform.id, variant: variant.label, version: CLASSIN_VERSION }}
       target="_blank"
       rel="noopener noreferrer"
-      className={`inline-flex items-center justify-center gap-2 whitespace-nowrap font-semibold transition-all duration-200 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 ${sizeClass} ${lookClass}`}
+      className={`inline-flex items-center justify-center gap-2 whitespace-nowrap font-semibold transition-all duration-200 active:scale-[0.98] ${sizeClass} ${lookClass}`}
     >
       {label ?? variant.label}
     </TrackedLink>
@@ -290,7 +290,7 @@ export function DownloadPageClient() {
     <div className="relative isolate overflow-hidden">
       {/* 배경 — 상단 민트 글로우 + 웜 블롭 (넓은 면은 뉴트럴, 그린은 은은한 액센트) */}
       <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[680px]">
-        <div className="absolute left-[8%] top-[-260px] h-[520px] w-[780px] rounded-full bg-[#ECFDF5] opacity-60 blur-3xl" />
+        <div className="absolute left-[8%] top-[-260px] h-[520px] w-[780px] rounded-full bg-fg-accent/8 opacity-60 blur-3xl" />
         <div className="absolute right-[4%] top-[160px] h-[280px] w-[280px] rounded-full bg-[#F6F5F4] opacity-90 blur-3xl" />
       </div>
 
@@ -299,7 +299,7 @@ export function DownloadPageClient() {
         <div className="container mx-auto max-w-[1080px] px-5">
           <div className="grid items-center gap-10 md:grid-cols-[1fr_minmax(0,500px)] md:gap-14">
             <div>
-              <p className="hero-soft-enter hero-soft-enter-badge text-[12px] font-semibold uppercase tracking-[0.18em] text-[#084734]">
+              <p className="hero-soft-enter hero-soft-enter-badge text-[12px] font-semibold uppercase tracking-[0.18em] text-fg-accent">
                 Download
               </p>
               <h1 className="hero-soft-enter hero-soft-enter-title mt-3 text-[2.25rem] font-bold leading-[1.12] text-[#111110] md:text-[2.75rem]">
@@ -314,8 +314,8 @@ export function DownloadPageClient() {
               <p className="hero-soft-enter hero-soft-enter-copy mt-1.5 text-[13.5px] text-[#615D59]">
                 {hero.requirement}
                 {detected ? (
-                  <span className="ml-2 inline-flex items-center gap-1.5 rounded-full bg-[#ECFDF5] px-2.5 py-0.5 align-middle text-[11px] font-semibold text-[#084734]">
-                    <span className="h-1 w-1 rounded-full bg-[#084734]" aria-hidden="true" />
+                  <span className="ml-2 inline-flex items-center gap-1.5 rounded-full bg-fg-accent/8 px-2.5 py-0.5 align-middle text-[11px] font-semibold text-fg-accent">
+                    <span className="h-1 w-1 rounded-full bg-fg-accent" aria-hidden="true" />
                     지금 사용 중인 기기
                   </span>
                 ) : null}
@@ -327,7 +327,7 @@ export function DownloadPageClient() {
                 {hero.helper}
               </p>
               <p className="hero-soft-enter hero-soft-enter-actions mt-6 inline-flex items-center gap-2 rounded-full border border-black/[0.08] bg-white px-3.5 py-1.5 text-[12px] font-medium text-[#615D59]">
-                <span className="h-1.5 w-1.5 rounded-full bg-[#084734]" aria-hidden="true" />
+                <span className="h-1.5 w-1.5 rounded-full bg-fg-accent" aria-hidden="true" />
                 현재 버전 {CLASSIN_VERSION} · 설치 후 로그인하면 준비 끝
               </p>
             </div>
@@ -439,7 +439,7 @@ export function DownloadPageClient() {
                     <p className="mt-1 text-[13.5px] text-[#615D59]">{classinx.note}</p>
                   </div>
                 </div>
-                <div className="mt-4 h-[3px] w-9 rounded-full bg-[#084734]" aria-hidden="true" />
+                <div className="mt-4 h-[3px] w-9 rounded-full bg-fg-accent" aria-hidden="true" />
                 <p className="mt-4 text-[14px] leading-6 text-[#615D59]">
                   오프라인 교실 수업을 클라우드로 확장합니다. 교실 전자칠판(IFP)에 설치하는
                   Windows 전용 앱입니다.
@@ -498,16 +498,17 @@ export function DownloadPageClient() {
             <TrackedLink
               href="/contact"
               ctaId="download_help_contact"
-              className="inline-flex items-center justify-center rounded-[6px] bg-[#084734] px-5 py-2.5 text-[14px] font-semibold text-white shadow-sm transition-colors hover:bg-[#065c41] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2"
+              className="inline-flex items-center justify-center rounded-[6px] bg-fg-accent px-5 py-2.5 text-[14px] font-semibold text-fg-on-accent shadow-sm transition-colors hover:bg-fg-accent-hover"
             >
               도입 상담 받기
             </TrackedLink>
             <TrackedLink
               href="/faq"
               ctaId="download_help_faq"
-              className="inline-flex items-center justify-center rounded-[6px] px-4 py-2.5 text-[14px] font-semibold text-[#084734] transition-colors hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2"
+              className="inline-flex items-center justify-center gap-1 rounded-[6px] px-4 py-2.5 text-[14px] font-semibold text-fg-accent transition-colors hover:underline"
             >
-              자주 묻는 질문 →
+              자주 묻는 질문
+              <ArrowRight aria-hidden className="arrow-nudge size-4" />
             </TrackedLink>
           </div>
         </div>

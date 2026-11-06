@@ -5,10 +5,13 @@ import {
   COMPASS_HUMAN_ACTIVITY_KINDS,
   compassLeadIdsNeedingActivityCheck,
   compassLookupPhoneKeys,
+  compassOwnerOf,
+  compassRowsForLead,
   decideLeadStatusFromCompass,
   humanTouchedCompassLeadIds,
   leadInflowAtMs,
   planCompassLeadStatusSync,
+  planCompassOwnerSync,
 } from "@/lib/compass/lead-contact-sync"
 import type { CompassOverlaySource } from "@/lib/compass/overlay"
 
@@ -286,5 +289,110 @@ describe("compassLeadIdsNeedingActivityCheck", () => {
       ]
     )
     expect(ids).toEqual([1, 2])
+  })
+})
+
+/* 링크 우선 매칭(2026-11-04) — Compass 가 홈페이지 폼 리드를 받으며 거는 lead_refs(home_lead): 어드민 리드 id → Compass 리드 id.
+   전화 키와 합집합이고, 전화가 없거나 더미인 리드도 링크로 붙는다. */
+describe("링크 우선 매칭 · compassRowsForLead · plan/activity 에 links 를 넘긴다", () => {
+  const linkedRow = row({ id: 9, phone_key: null, stage: "demo" })
+  const otherRow = row({ id: 11, phone_key: "01099990000", stage: "contact" })
+  const phoneRow = row({ id: 1, stage: "new" })
+
+  it("전화 없는 리드도 링크로 붙는다 — 링크가 없으면 빈 배열", () => {
+    const links = new Map([["g", [9]]])
+    expect(compassRowsForLead({ id: "g", phone: null }, [linkedRow, phoneRow], links)).toEqual([linkedRow])
+    expect(compassRowsForLead({ id: "x", phone: null }, [linkedRow, phoneRow], links)).toEqual([])
+    expect(compassRowsForLead({ id: "x", phone: "010-1234-5678" }, [linkedRow, phoneRow], links)).toEqual([]) // 더미 번호는 키가 아니다
+  })
+
+  it("링크 행과 전화 키 행은 합집합이고 같은 Compass 행은 한 번만", () => {
+    const links = new Map([["h", [11, 1]]])
+    expect(compassRowsForLead({ id: "h", phone: KEY_DASHED }, [phoneRow, otherRow, linkedRow], links)).toEqual([otherRow, phoneRow])
+  })
+
+  it("planCompassLeadStatusSync · 링크로만 붙은 신규 리드가 Compass 에서 데모면 연락함, linked 수를 센다", () => {
+    const links = new Map([["g", [9]]])
+    const plan = planCompassLeadStatusSync(
+      [
+        { id: "g", phone: null, status: "new" },
+        { id: "a", phone: KEY_DASHED, status: "new" },
+      ],
+      [linkedRow, row({ id: 1, stage: "lost" })],
+      NONE,
+      links
+    )
+    expect(plan).toEqual({ scanned: 2, matched: 2, linked: 1, contacted: ["g"], closed: [{ id: "a", from: "new" }] })
+  })
+
+  it("links 를 안 넘기면 예전처럼 전화 키만으로 매칭한다", () => {
+    const plan = planCompassLeadStatusSync([{ id: "g", phone: null, status: "new" }], [linkedRow], NONE)
+    expect(plan).toEqual({ scanned: 1, matched: 0, linked: 0, contacted: [], closed: [] })
+  })
+
+  it("compassLeadIdsNeedingActivityCheck · 링크 행이 전부 신규면 그 id 의 활동을 본다", () => {
+    const links = new Map([["g", [9]]])
+    const stillNew = row({ id: 9, phone_key: null, stage: "new" })
+    expect(compassLeadIdsNeedingActivityCheck([{ id: "g", phone: null, status: "new" }], [stillNew], links)).toEqual([9])
+    expect(compassLeadIdsNeedingActivityCheck([{ id: "g", phone: null, status: "new" }], [linkedRow], links)).toEqual([])
+  })
+})
+
+/* 담당 반영(2026-11-04) — Compass 담당을 어드민 담당(assigned_to)이 비어 있을 때만 채운다. */
+describe("담당 반영 · compassOwnerOf · planCompassOwnerSync", () => {
+  const resolve = (name: string) => ({ 진소망: "jin.somang", 황찬우: "hwang.chanwoo" } as Record<string, string>)[name] ?? null
+
+  it("Compass 담당은 콜 담당 → BD 담당 → 오너 순 · 공백은 비운 것", () => {
+    expect(compassOwnerOf({ caller: " 진소망 ", bd_owner: "박한", owner: "문준혁" })).toBe("진소망")
+    expect(compassOwnerOf({ caller: "  ", bd_owner: "박한", owner: "문준혁" })).toBe("박한")
+    expect(compassOwnerOf({ caller: null, bd_owner: null, owner: "문준혁" })).toBe("문준혁")
+    expect(compassOwnerOf({ caller: null, bd_owner: null, owner: null })).toBeNull()
+  })
+
+  it("비어 있는 담당만 채운다 · 이미 다른 담당이면 conflicts · 같은 담당(ownerKey·대소문자 무관)이면 아무것도 아니다", () => {
+    const rows = [row({ id: 1, stage: "demo", caller: "진소망" })]
+    const plan = planCompassOwnerSync(
+      [
+        { id: "a", phone: KEY_DASHED, status: "new" },
+        { id: "b", phone: KEY_INTL, status: "contacted", assigned_to: "kim.cs" },
+        { id: "c", phone: KEY_DASHED, status: "new", assigned_to: "JIN.SOMANG" },
+      ],
+      rows,
+      resolve
+    )
+    expect(plan).toEqual({ assign: [{ id: "a", to: "jin.somang", owner: "진소망" }], conflicts: 1, unmapped: 0 })
+  })
+
+  it("명단으로 못 푸는 이름은 unmapped · 대표 행에 담당이 없으면 아무것도 하지 않는다 · 전환·종료 리드는 건드리지 않는다", () => {
+    expect(planCompassOwnerSync([{ id: "a", phone: KEY_DASHED, status: "new" }], [row({ id: 1, caller: "모르는사람" })], resolve)).toEqual({
+      assign: [],
+      conflicts: 0,
+      unmapped: 1,
+    })
+    expect(planCompassOwnerSync([{ id: "a", phone: KEY_DASHED, status: "new" }], [row({ id: 1 })], resolve)).toEqual({ assign: [], conflicts: 0, unmapped: 0 })
+    for (const status of ["converted", "closed"] as const) {
+      expect(planCompassOwnerSync([{ id: "a", phone: KEY_DASHED, status }], [row({ id: 1, caller: "진소망" })], resolve).assign).toEqual([])
+    }
+  })
+
+  it("담당은 칩·상태와 같은 대표 행(최근성 → id)에서 읽고, 링크로만 붙은 리드도 채운다", () => {
+    const rows = [
+      row({ id: 1, stage: "demo", caller: "황찬우", updated_at: "2026-09-01T00:00:00Z" }),
+      row({ id: 2, stage: "demo", caller: "진소망", updated_at: "2026-09-10T00:00:00Z" }),
+      row({ id: 9, phone_key: null, stage: "contact", bd_owner: "황찬우" }),
+    ]
+    const plan = planCompassOwnerSync(
+      [
+        { id: "a", phone: KEY_DASHED, status: "new" },
+        { id: "g", phone: null, status: "new" },
+      ],
+      rows,
+      resolve,
+      new Map([["g", [9]]])
+    )
+    expect(plan.assign).toEqual([
+      { id: "a", to: "jin.somang", owner: "진소망" },
+      { id: "g", to: "hwang.chanwoo", owner: "황찬우" },
+    ])
   })
 })

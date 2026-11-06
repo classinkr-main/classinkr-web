@@ -25,7 +25,7 @@ export function ContactDirectChannels() {
 
             <div className="space-y-5">
                 <div className="flex items-start gap-4">
-                    <div className="w-10 h-10 rounded-full border border-[#E5E5E0] bg-white flex items-center justify-center shrink-0 text-[#084734]">
+                    <div className="w-10 h-10 rounded-full border border-[#E5E5E0] bg-white flex items-center justify-center shrink-0 text-fg-accent">
                         <Phone className="w-[17px] h-[17px]" strokeWidth={1.8} />
                     </div>
                     <div>
@@ -35,7 +35,7 @@ export function ContactDirectChannels() {
                         <a
                             href="tel:02-6958-8566"
                             data-track-location="contact_page"
-                            className="text-[#615D59] font-medium hover:text-[#084734] transition-colors"
+                            className="text-[#615D59] font-medium hover:text-fg-accent transition-colors"
                         >
                             02-6958-8566
                         </a>
@@ -44,17 +44,17 @@ export function ContactDirectChannels() {
                 </div>
                 
                 <div className="flex items-start gap-4">
-                    <div className="w-10 h-10 rounded-full border border-[#E5E5E0] bg-white flex items-center justify-center shrink-0 text-[#084734]">
+                    <div className="w-10 h-10 rounded-full border border-[#E5E5E0] bg-white flex items-center justify-center shrink-0 text-fg-accent">
                         <Mail className="w-[17px] h-[17px]" strokeWidth={1.8} />
                     </div>
                     <div>
                         <h4 className="font-bold text-[#111110] mb-0.5 text-sm">이메일 문의</h4>
-                        <a href="mailto:classinkr@classin.com" data-track-location="contact_page" className="text-[#615D59] font-medium hover:text-[#084734] transition-colors">classinkr@classin.com</a>
+                        <a href="mailto:classinkr@classin.com" data-track-location="contact_page" className="text-[#615D59] font-medium hover:text-fg-accent transition-colors">classinkr@classin.com</a>
                     </div>
                 </div>
 
                 <div className="flex items-start gap-4">
-                    <div className="w-10 h-10 rounded-full border border-[#E5E5E0] bg-white flex items-center justify-center shrink-0 text-[#084734]">
+                    <div className="w-10 h-10 rounded-full border border-[#E5E5E0] bg-white flex items-center justify-center shrink-0 text-fg-accent">
                         <MapPin className="w-[17px] h-[17px]" strokeWidth={1.8} />
                     </div>
                     <div>
@@ -67,7 +67,7 @@ export function ContactDirectChannels() {
                         <Link
                             href="/showroom"
                             onClick={() => trackEvent("click_cta", { button: "contact_showroom_booking", page: "/contact" })}
-                            className="mt-2 inline-flex items-center gap-1.5 rounded-[6px] text-sm font-semibold text-[#084734] underline underline-offset-4 transition-colors hover:text-[#065c41] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]"
+                            className="mt-2 inline-flex items-center gap-1.5 rounded-[6px] text-sm font-semibold text-fg-accent underline underline-offset-4 transition-colors hover:text-fg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fg-accent"
                         >
                             쇼룸 방문 예약하기
                             <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />

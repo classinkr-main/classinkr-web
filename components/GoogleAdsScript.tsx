@@ -4,7 +4,12 @@ import { usePathname } from "next/navigation"
 import Script from "next/script"
 
 import { GA4_MEASUREMENT_ID, GOOGLE_ADS_ID } from "@/lib/analytics-config"
-import { isTrackingExcludedPath, sanitizeTrackingUrl } from "@/lib/tracking-paths"
+import {
+  getContentGroup,
+  isInternalTrafficMarked,
+  isTrackingExcludedPath,
+  sanitizeTrackingUrl,
+} from "@/lib/tracking-paths"
 
 /** 인라인 스크립트에 JSON 을 넣을 때 `</script>` 조기 종료를 막는다. */
 function toInlineJson(value: unknown) {
@@ -16,6 +21,7 @@ function toInlineJson(value: unknown) {
  * 정화된 주소를 쓰게 한다. config 파라미터로 넣지 않는 이유: config 범위 값은 set 보다
  * 우선해서, 소프트 내비게이션마다 PageViewTracker 가 set 으로 바꾸는 page_location 을
  * 랜딩 주소로 덮어 버린다(향상된 측정 자동 이벤트·user_engagement 가 첫 페이지로 묶인다).
+ * content_group·traffic_type(직원 브라우저)도 같은 set 으로 config 보다 먼저 건다.
  */
 function initialPageContext() {
   if (typeof window === "undefined") return {}
@@ -23,6 +29,8 @@ function initialPageContext() {
   return {
     ...(pageLocation ? { page_location: pageLocation } : {}),
     page_referrer: sanitizeTrackingUrl(document.referrer),
+    content_group: getContentGroup(window.location.pathname),
+    ...(isInternalTrafficMarked() ? { traffic_type: "internal" } : {}),
   }
 }
 

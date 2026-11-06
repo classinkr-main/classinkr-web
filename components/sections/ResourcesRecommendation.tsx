@@ -7,7 +7,7 @@ export function ResourcesRecommendation({ surface }: { surface: string }) {
     <div className="mt-12 rounded-[24px] border border-black/[0.08] bg-[#F6F5F4] p-6 md:p-8">
       <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
         <div className="flex items-start gap-4">
-          <span className="mt-0.5 inline-flex h-11 w-11 flex-none items-center justify-center rounded-[12px] bg-white text-[#084734]">
+          <span className="mt-0.5 inline-flex h-11 w-11 flex-none items-center justify-center rounded-[12px] bg-white text-fg-accent">
             <FileText className="h-5 w-5" />
           </span>
           <div>
@@ -25,7 +25,7 @@ export function ResourcesRecommendation({ surface }: { surface: string }) {
         <TrackedLink
           href="/resources"
           ctaId={`resources_reco_${surface}`}
-          className="inline-flex flex-none items-center justify-center gap-2 rounded-[8px] bg-[#084734] px-5 py-3 text-[14px] font-semibold text-white shadow-sm transition-colors hover:bg-[#065c41]"
+          className="inline-flex flex-none items-center justify-center gap-2 rounded-[8px] bg-fg-accent px-5 py-3 text-[14px] font-semibold text-fg-on-accent shadow-sm transition-colors hover:bg-fg-accent-hover"
         >
           자료 받아보기
           <ArrowRight className="h-4 w-4" />

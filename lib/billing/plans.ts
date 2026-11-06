@@ -139,9 +139,7 @@ export function formatUsd(amount: number) {
   return `$${amount.toLocaleString("en-US")}`
 }
 
-export function formatKrw(amount: number) {
-  return `${amount.toLocaleString("ko-KR")}원`
-}
+export { formatKRW as formatKrw } from "@/lib/format"
 
 export function getBillingCycleLabel(cycle: BillingCycle) {
   return cycle === "monthly" ? "월간" : "연간"

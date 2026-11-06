@@ -67,6 +67,10 @@ const PALETTE_CHILD_COMMANDS: Record<string, Array<Omit<AdminCommand, "group">>>
     // 보조 탭 라벨("원천 고객")로도 찾혀야 한다 — 보조 탭을 숨긴 사람의 ⌘K 진입로(2026-09-25).
     { label: "고객 (Accounts)", href: "/admin/crm/customers/accounts", keywords: "원천 고객 neo 거래처 account customer" },
     { label: "리드", href: "/admin/crm/customers/leads", keywords: "리드 잠재고객 lead 문의" },
+    // 방문·문의 바로 보기(2026-11-04) — Overview "지금" 띠의 칸과 같은 착지. 리드 보드 기본 범위는 전체 담당자다.
+    { label: "오늘 문의", href: "/admin/crm/customers/leads?sort=newest&unconfirmed=1", keywords: "오늘 문의 새 문의 최근 유입 홈페이지 문의 신규 리드 today inquiry new lead" },
+    { label: "응대 전 문의", href: "/admin/crm/customers/leads?filter=unresponded", keywords: "응대 전 미응답 미처리 문의 응대 대기 안 본 문의 unresponded" },
+    { label: "미배정 리드", href: "/admin/crm/customers/leads?owner=__unassigned", keywords: "미배정 담당 없음 배정 unassigned owner" },
     // 고객 보조 탭(CrmSubnav)과 같은 라벨. 2026-09-20·21 신설 화면이라 ⌘K 도달이 빠져 있었다.
     { label: "접수", href: "/admin/crm/customers/intake", keywords: "접수 쇼룸 예약 도입 신청 접수 큐 intake showroom booking application queue" },
     // 세그먼트 허브(C안 ②, 2026-09-25) — 고객DB 보조 탭 "세그먼트"와 같은 라벨. 리드 보드의 리드
@@ -105,7 +109,7 @@ const PALETTE_CHILD_COMMANDS: Record<string, Array<Omit<AdminCommand, "group">>>
     { label: "새 블로그 글 작성", href: "/admin/blog/new", keywords: "새글 작성 write new post 블로그" },
   ],
   "/admin/analytics": [
-    { label: "방문자·트래픽", href: "/admin/analytics?tab=visitors", keywords: "방문자 트래픽 홈페이지 흐름 전환 traffic visitor" },
+    { label: "방문자·트래픽", href: "/admin/analytics?tab=visitors", keywords: "방문자 오늘 방문 방문 분석 트래픽 홈페이지 흐름 전환 traffic visitor" },
   ],
   // CS 진입점 단일화(2026-08-18) — 사이드바 cs 섹션이 CS 콘솔 1항목이 되면서 가이드 문서·내부 CS의
   // nav 항목도 콘솔 가로 메뉴로 흡수됐다. URL은 전부 그대로이므로 ⌘K 도달성은 자식 커맨드로 보존한다

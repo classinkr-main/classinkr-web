@@ -75,7 +75,8 @@ export const getCachedIntakeToday = unstable_cache(
   // v2(2026-09-14): 응답에 reinflow·todayReinflowCount 가 붙고 Compass 신규가 들어온다 — 옛 모양 캐시를 재사용하지 않게.
   // v3(2026-09-21): 어드민 리드도 유입 축(생성 또는 재문의 last_inflow_at)으로 세고 재유입을 표시한다 — 같은 모양이지만
   // 옛 값은 재문의가 빠진 건수라 섞이지 않게 키를 올린다.
-  () => shareInFlight("marketing-intake-today-v3", loadIntakeToday),
-  ["marketing-intake-today-v3"],
+  // v4(2026-11-04): 항목에 sourceKind·adminLeadId, 결과에 todayBySource 가 붙는다(Overview "지금" 띠의 소스 분해).
+  () => shareInFlight("marketing-intake-today-v4", loadIntakeToday),
+  ["marketing-intake-today-v4"],
   { revalidate: 20, tags: [INTAKE_TODAY_CACHE_TAG] }
 )

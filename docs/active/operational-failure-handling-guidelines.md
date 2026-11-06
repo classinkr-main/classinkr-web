@@ -40,7 +40,7 @@
   - 멱등: `source = hardware_process_alerts`, `source_id = KST 날짜`. 그날 발송 성공(`notification_delivery_logs.status = sent`)
     기록이 있으면 `already_sent`. 확인 자체가 실패하면 보낸다(하루를 통째로 놓치지 않게).
   - 상한: 줄 20개, 본문 1,700바이트(WeCom 텍스트 2,048바이트 한도). 넘으면 "외 N건". 담당자 머리줄 건수는 전체.
-  - 끄기: 운영 방 토글(운영 방 알림 전체) 또는 env `HARDWARE_PROCESS_ALERTS=off`(이 알림만, `disabled`).
+  - 기본 꺼짐(2026-11-05 운영자 결정). 켜기: env `HARDWARE_PROCESS_ALERTS=on`. 켜도 운영 방 토글이 꺼져 있으면 보내지 않고 `channel_off`(크론 실패 아님).
   - 확인: `GET /api/cron/dispatch/23?dryRun=true`(Bearer)의 `hardwareAlertsPreview` 로 보낼 내용을 먼저 본다.
     처음 켜는 날은 시트의 날짜 있는 오래된 예정이 한꺼번에 실릴 수 있다 — 상한이 자른다.
   - 테스트: `tests/hardware/process-alerts.test.ts` · `tests/hardware/process-alerts-run.test.ts` ·

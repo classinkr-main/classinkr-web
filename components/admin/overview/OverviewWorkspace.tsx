@@ -90,7 +90,7 @@ export function OverviewOperationsPanels({ leads, leadState, onLeadRetry, operat
   const installations = operations?.installations.data
   const total = leads ? leads.new + leads.contacted + leads.converted + leads.closed : 0
   return <div className="mb-10 grid gap-5 xl:grid-cols-3" aria-busy={loading || leadState === "loading"}>
-    <Panel title="리드 현황" href="/admin/crm/customers/leads" note="Admin 리드 · 테스트·미확인 제외 · 현재 상태 분포. Compass 데모 건수와 모집단이 다릅니다.">
+    <Panel title="리드 현황" href="/admin/crm/customers/leads" note="전사 Admin 리드 · 테스트·미확인 제외 · 현재 상태 분포. Compass 데모 건수와 모집단이 다릅니다.">
       {leads ? <>
         <p className="text-[32px] font-bold tracking-[-0.04em] tabular-nums text-[#111110]">{(leads.new + leads.contacted).toLocaleString()}<span className="ml-2 text-xs font-normal tracking-normal text-[#615D59]">진행 중</span></p>
         <div className="mt-5 space-y-3">{[

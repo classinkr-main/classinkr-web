@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { CheckCircle2, Loader2, Mail, ArrowRight, Sparkles } from "lucide-react"
+import { CheckCircle2, Loader2, Mail, ArrowRight } from "lucide-react"
 import { trackEvent } from "@/lib/analytics"
 import { collectLeadAttribution } from "@/lib/marketing-attribution"
 import { cn } from "@/lib/utils"
@@ -115,6 +115,7 @@ export function NewsletterModal({
 
       <DialogContent
         className={cn(
+          "site",
           "sm:max-w-[460px] shadow-2xl border p-0 overflow-hidden",
           isDark
             ? "bg-[#1C1B1A] border-white/[0.08] text-white"
@@ -122,7 +123,7 @@ export function NewsletterModal({
         )}
       >
         {/* 상단 액센트 바 */}
-        <div className="h-1 w-full bg-gradient-to-r from-[#084734] via-[#6EE7B7] to-[#084734]" />
+        <div className="h-1 w-full bg-gradient-to-r from-fg-accent via-[#6EE7B7] to-fg-accent" />
 
         <div className="px-6 pb-6 pt-5">
           <DialogHeader className="space-y-2 mb-5">
@@ -132,10 +133,9 @@ export function NewsletterModal({
                   "inline-flex items-center gap-1.5 text-[11px] font-bold px-3.5 py-1 rounded-full w-fit mb-1 tracking-[0.04em]",
                   isDark
                     ? "bg-[#1a3a2a]/80 text-[#6EE7B7] border border-[#6EE7B7]/15 shadow-[0_1px_8px_rgba(110,231,183,0.08)]"
-                    : "bg-gradient-to-r from-[#ECFDF5] to-[#D1FAE5]/60 text-[#084734] border border-[#084734]/8 shadow-[0_1px_6px_rgba(8,71,52,0.06)]"
+                    : "bg-fg-accent/8 text-fg-accent border border-fg-accent/8"
                 )}
               >
-                <Sparkles className="w-3 h-3" />
                 {badge}
               </span>
             )}
@@ -181,8 +181,8 @@ export function NewsletterModal({
                   className={cn(
                     "pl-10 h-11 transition-all",
                     isDark
-                      ? "bg-white/[0.06] border-white/[0.08] text-white placeholder:text-white/40 focus-visible:border-[#6EE7B7]/50 focus-visible:ring-[#6EE7B7]/15"
-                      : "border-black/[0.08] focus-visible:border-[#084734]/50 focus-visible:ring-[#084734]/10"
+                      ? "bg-white/[0.06] border-white/[0.08] text-white placeholder:text-white/40"
+                      : "border-black/[0.08]"
                   )}
                 />
               </div>
@@ -214,8 +214,8 @@ export function NewsletterModal({
                 className={cn(
                   "w-full h-11 font-semibold transition-all",
                   isDark
-                    ? "bg-[#084734] hover:bg-[#065c41] text-white"
-                    : "bg-[#084734] hover:bg-[#065c41] text-white"
+                    ? "bg-fg-accent hover:bg-fg-accent-hover text-fg-on-accent"
+                    : "bg-fg-accent hover:bg-fg-accent-hover text-fg-on-accent"
                 )}
               >
                 {loading ? (
@@ -258,13 +258,13 @@ function SuccessState({
       <div
         className={cn(
           "w-14 h-14 rounded-full flex items-center justify-center",
-          isDark ? "bg-[#1a3a2a]" : "bg-[#ECFDF5]"
+          isDark ? "bg-[#1a3a2a]" : "bg-fg-accent/8"
         )}
       >
         <CheckCircle2
           className={cn(
             "w-7 h-7",
-            isDark ? "text-[#6EE7B7]" : "text-[#084734]"
+            isDark ? "text-[#6EE7B7]" : "text-fg-accent"
           )}
         />
       </div>
@@ -287,8 +287,8 @@ function SuccessState({
             className={cn(
               "w-full h-11 font-semibold",
               isDark
-                ? "bg-[#084734] hover:bg-[#065c41] text-white"
-                : "bg-[#084734] hover:bg-[#084734]/90 text-white"
+                ? "bg-fg-accent hover:bg-fg-accent-hover text-fg-on-accent"
+                : "bg-fg-accent hover:bg-fg-accent/90 text-fg-on-accent"
             )}
           >
             <a href={successCta.href} target="_blank" rel="noopener noreferrer">

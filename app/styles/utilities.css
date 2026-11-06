@@ -1,0 +1,177 @@
+/* app/styles/utilities.css — @utility 만(system §3-3). 정적 모양만 선언하고 transform·opacity·animation 은 쓰지 않는다.
+   명시 예외 3개: index-tab 막대의 opacity 전이, arrow-nudge, 링크 160ms 색 전이.
+   forced-colors 대응은 각 유틸 안에 중첩한다. 본문은 소유 스펙에서 옮겼다.
+   @utility 는 스캔 대상 파일에 이름이 나올 때만 출력된다(기획 문서·가드 스크립트는 globals.css 의 @source not 으로 뺐다).
+   2026-10-27 기준 공개·어드민 DOM 사용 0건(P0 화면 변화 0). */
+
+/* ── surfaces (§3-11) ── */
+
+/* Act·장 머리 괘선(X04). 정적이고 긋기 애니메이션은 없다.
+   ::before 의 border-top 이라 forced-colors 에서 CanvasText 로 자동 대체된다 */
+@utility masthead {
+  position: relative;
+  padding-top: 16px;
+  &::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto 0;
+    border-top: 1px solid var(--line-ink);
+  }
+}
+
+/* CTA 띠 윗선: 1px 먹 + 3px 간격 + 1px hair. forced-colors 에서는 먹 border 만 남는다 */
+@utility rule-double {
+  border-top: 1px solid var(--line-ink);
+  background-image: linear-gradient(var(--line-hair), var(--line-hair));
+  background-size: 100% 1px;
+  background-position: 0 3px;
+  background-repeat: no-repeat;
+}
+
+/* 도해 figure 의 모눈(C19). 선은 셀 끝에 긋는다. 바탕색은 요소의 bg-* 가 맡는다 */
+@utility pattern-grid {
+  background-image:
+    linear-gradient(to right, transparent calc(100% - 1px), var(--line-hair) 0),
+    linear-gradient(to bottom, transparent calc(100% - 1px), var(--line-hair) 0);
+  background-size: 48px 48px;
+  @media (width >= 40rem) { background-size: 56px 56px; }
+  @media (prefers-contrast: more) { background-image: none; }  /* 고대비에서는 장식 소거 */
+}
+
+/* ── controls (§4) ── */
+
+/* 히트 영역 44×44 이상. ::before 를 쓰므로 같은 요소에 before: 유틸을 겹치지 않는다 */
+@utility hit-area {
+  position: relative;
+  &::before {
+    content: "";
+    position: absolute;
+    inset-inline-start: 50%;
+    inset-block-start: 50%;
+    inline-size: max(100%, 44px);
+    block-size: max(100%, 44px);
+    translate: -50% -50%;
+  }
+}
+
+/* 화살표 2px(명시 예외). 조상 a·button·summary 의 hover(hover 기기)·focus-visible 에 반응한다 */
+@utility arrow-nudge {
+  transition: translate var(--motion-fast) var(--ease-soft);
+  @media (hover: hover) {
+    :is(a, button, summary):hover & { translate: 2px 0; }
+  }
+  :is(a, button, summary):focus-visible & { translate: 2px 0; }
+  @media (prefers-reduced-motion: reduce) {
+    translate: none !important;   /* 전역 reduced 블록은 전이 시간만 줄이고 이동은 막지 못한다 */
+  }
+}
+
+/* 본문 링크(X12) */
+@utility link-body {
+  color: var(--fg-accent);
+  text-decoration-line: underline;
+  text-decoration-thickness: 1px;
+  text-decoration-color: var(--line-link);
+  text-underline-offset: 0.22em;
+  text-decoration-skip-ink: auto;
+  transition: color var(--motion-fast) var(--ease-soft), text-decoration-color var(--motion-fast) var(--ease-soft);
+  @media (hover: hover) {
+    &:hover { color: var(--fg-accent-hover); text-decoration-color: currentColor; }
+  }
+  &:focus-visible { color: var(--fg-accent-hover); text-decoration-color: currentColor; }
+}
+
+/* 조용한 링크(X12): 푸터·보조 내비·Breadcrumb. 평소 밑줄이 투명하다. 색은 호출부가 정한다 */
+@utility link-quiet {
+  text-decoration-line: underline;
+  text-decoration-thickness: 1px;
+  text-decoration-color: transparent;
+  text-underline-offset: 0.22em;
+  transition: color var(--motion-fast) var(--ease-soft), text-decoration-color var(--motion-fast) var(--ease-soft);
+  @media (hover: hover) {
+    &:hover { color: var(--fg-ink); text-decoration-color: currentColor; }
+  }
+  &:focus-visible { color: var(--fg-ink); text-decoration-color: currentColor; }
+}
+
+/* 색인 탭(C12). 활성·비활성 모두 500 → 폭 변화 0 */
+@utility index-tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-block-size: 44px;
+  white-space: nowrap;
+  font-size: --theme(--text-ui);
+  line-height: --theme(--text-ui--line-height);
+  font-weight: 500;
+  color: var(--fg-muted);
+  transition: color var(--motion-fast) var(--ease-soft);
+  &::after {
+    content: "";
+    position: absolute;
+    inset-inline: 0;
+    inset-block-end: 0;
+    block-size: 2px;
+    background: var(--fg-accent);
+    opacity: 0;
+    transition: opacity var(--motion-fast) var(--ease-soft);
+  }
+  @media (hover: hover) {
+    &:hover { color: var(--fg-ink); }               /* hover 는 색만 */
+  }
+  &:is([aria-current="page"], [aria-current="true"], [aria-selected="true"], [aria-pressed="true"]) {
+    color: var(--fg-ink);
+    &::after { opacity: 1; }
+  }
+  @media (forced-colors: active) {
+    &::after { forced-color-adjust: none; background: CanvasText; }
+  }
+}
+
+/* 네이티브 select 화살표. data URI 는 CSS 안에만 둔다. 여백은 클래스(pr-10)로 준다 */
+@utility select-chevron {
+  appearance: none;
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  background-size: 16px 16px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23615D59' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+}
+
+/* ── typography (③) — 모양만. 등장 모션은 site-base.css components(cards_motion) ── */
+
+/* white-space:nowrap 금지 — 줄이 바뀌면 줄마다 밑줄. 먹 위에서는 --fg-accent 가 #6EE7B7(C01) */
+@utility ink-underline {
+  text-decoration: underline 2px var(--fg-accent);
+  text-underline-offset: 0.14em;
+  text-decoration-skip-ink: none;
+}
+/* Manifesto 둘째 줄 전용 — 정적 모양은 ink-underline 과 같다 */
+@utility ink-underline-scrub {
+  text-decoration: underline 2px var(--fg-accent);
+  text-underline-offset: 0.14em;
+  text-decoration-skip-ink: none;
+}
+
+/* ── imagery (§2) ── */
+
+/* 사진 위에 겹치는 1px 가장자리. position:relative 는 Figure 래퍼가 건다 */
+@utility fig-edge {
+  &::after {
+    content: ""; position: absolute; inset: 0; z-index: 1;
+    border: 1px solid var(--line-hair); border-radius: inherit; pointer-events: none;
+  }
+}
+
+/* 창 캡처 전용 받침 그림자 — 그림자 0(V14-A)의 유일한 예외(V20-A, 2026-11-03). 홈 창 캡처 2곳만 쓴다.
+   box-shadow 가 아니라 drop-shadow 다: 창 이미지가 제 모서리(투명 알파)를 갖고 있어 그림자가 창 모양을 그대로 따른다.
+   CSS 반경을 두지 않는다(두면 둥근 창 모서리 밖에 상자 그림자가 한 겹 더 생긴다) */
+@utility plate-window {
+  filter: drop-shadow(0 8px 24px rgb(17 17 16 / .12));
+  @media (forced-colors: active) { filter: none; outline: 1px solid CanvasText; }
+}
+
+/* 늘어나는 차트 SVG(preserveAspectRatio="none")의 데이터 선 */
+@utility chart-stroke {
+  fill: none; vector-effect: non-scaling-stroke;
+  stroke-linecap: round; stroke-linejoin: round;
+}

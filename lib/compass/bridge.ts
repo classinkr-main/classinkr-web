@@ -314,6 +314,78 @@ export async function getCompassLeadsByPhoneKeys(
   }
 }
 
+/** 어드민 리드 → Compass 리드 링크 한 행(compass_lead_refs_v, system='home_lead'). external_id 가 어드민 public.leads.id 다. */
+export interface CompassHomeLeadRefRow {
+  lead_id: number
+  external_id: string
+}
+
+/** Compass crm.lead_refs.system — 홈페이지 폼 리드를 Compass 로 민 뒤 Compass 가 거는 링크(Compass ADR-0083, lib/homeLeadIngest.ts). */
+export const COMPASS_HOME_LEAD_REF_SYSTEM = "home_lead"
+
+/** external_id(UUID 36자) in(...) 한 번에 싣는 수 — URL 길이 상한 대비. */
+const HOME_LEAD_REF_CHUNK = 100
+
+/**
+ * 어드민 리드 id 목록 → Compass 리드 링크(system='home_lead') — 링크 우선 매칭(연동 2차 §4-4)의 첫 단계.
+ * 전화 키 매칭(getCompassLeadsByPhoneKeys)과 달리 자리표시·더미 번호·전화 없는 리드도 붙는다 — Compass 가 그 어드민 리드로 만든
+ * 리드가 정확히 어느 행인지 Compass 자신이 적은 값이기 때문이다. 60초 메모(down은 10초) — id 집합(정렬·중복 제거)이 키다.
+ */
+export async function getCompassHomeLeadRefs(adminLeadIds: string[]): Promise<CompassResult<CompassHomeLeadRefRow>> {
+  const ids = [...new Set(adminLeadIds.map((id) => id?.trim()).filter((id): id is string => Boolean(id)))].sort()
+  if (ids.length === 0) return ok([])
+  const cacheKey = `homeRefs:${foldLongKey(ids.join(","))}`
+  try {
+    return await memoize(
+      cacheKey,
+      async () => {
+        const sb = createSupabaseAdminClient()
+        const rows: CompassHomeLeadRefRow[] = []
+        for (let index = 0; index < ids.length; index += HOME_LEAD_REF_CHUNK) {
+          const chunk = ids.slice(index, index + HOME_LEAD_REF_CHUNK)
+          const { data, error } = await sb
+            .from("compass_lead_refs_v")
+            .select("lead_id, external_id")
+            .eq("system", COMPASS_HOME_LEAD_REF_SYSTEM)
+            .in("external_id", chunk)
+          if (error) return downResult(error)
+          rows.push(...((data ?? []) as CompassHomeLeadRefRow[]))
+        }
+        return ok(rows)
+      },
+      { ttlMs: TTL_MS, downTtlMs: TTL_DOWN_MS, isDown: isCompassResultDown, copy: copyCompassResult },
+    )
+  } catch (error) {
+    return downResult(error)
+  }
+}
+
+/** Compass 리드 id 목록 → compass_leads_v 행 전부(링크로 찾은 리드의 칩·상태·담당 읽기). 60초 메모(down은 10초). */
+export async function getCompassLeadsByIds(leadIds: number[]): Promise<CompassResult<CompassLeadRow>> {
+  const ids = [...new Set(leadIds)].filter((id) => Number.isInteger(id)).sort((a, b) => a - b)
+  if (ids.length === 0) return ok([])
+  const cacheKey = `leads:byId:${foldLongKey(ids.join(","))}`
+  try {
+    return await memoize(
+      cacheKey,
+      async () => {
+        const sb = createSupabaseAdminClient()
+        const rows: CompassLeadRow[] = []
+        for (let index = 0; index < ids.length; index += LEAD_ID_CHUNK) {
+          const chunk = ids.slice(index, index + LEAD_ID_CHUNK)
+          const { data, error } = await sb.from("compass_leads_v").select("*").in("id", chunk)
+          if (error) return downResult(error)
+          rows.push(...((data ?? []) as CompassLeadRow[]))
+        }
+        return ok(rows)
+      },
+      { ttlMs: TTL_MS, downTtlMs: TTL_DOWN_MS, isDown: isCompassResultDown, copy: copyCompassResult },
+    )
+  } catch (error) {
+    return downResult(error)
+  }
+}
+
 /** getCompassLeadPhoneKeysByIds 행 — 조인에 필요한 두 컬럼만(이름·학원 등 PII 는 읽지 않는다). */
 export interface CompassLeadPhoneKeyRow {
   id: number

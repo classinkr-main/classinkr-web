@@ -13,6 +13,8 @@ export interface SalesDashboardCellView {
   planned: string | null
   /** 회수 "회수 2" — 0이면 null. */
   returned: string | null
+  /** 프로모션 "프로모션 2 / +1" — 세일즈와 따로(2026-11-05 결정). 0이면 null. */
+  promotion: string | null
   empty: boolean
 }
 
@@ -39,13 +41,21 @@ export interface SalesDashboardColumn {
 
 const numberFormat = new Intl.NumberFormat("ko-KR")
 
+function formatPromotion(counts: SalesDashboardCounts): string | null {
+  if (counts.promotionInstalled === 0 && counts.promotionPlanned === 0) return null
+  const planned = counts.promotionPlanned !== 0 ? ` / +${numberFormat.format(counts.promotionPlanned)}` : ""
+  return `프로모션 ${numberFormat.format(counts.promotionInstalled)}${planned}`
+}
+
 export function formatSalesCell(counts: SalesDashboardCounts, options: { showZero?: boolean } = {}): SalesDashboardCellView {
-  const empty = counts.installed === 0 && counts.planned === 0 && counts.returned === 0
+  const promotion = formatPromotion(counts)
+  const empty = counts.installed === 0 && counts.planned === 0 && counts.returned === 0 && promotion == null
   const showInstalled = counts.installed !== 0 || counts.planned !== 0 || options.showZero
   return {
     installed: showInstalled ? numberFormat.format(counts.installed) : "",
     planned: counts.planned !== 0 ? `+${numberFormat.format(counts.planned)}` : null,
     returned: counts.returned !== 0 ? `회수 ${numberFormat.format(counts.returned)}` : null,
+    promotion,
     empty,
   }
 }
@@ -118,11 +128,16 @@ export function buildSalesDashboardRows(dashboard: Pick<HardwareSalesDashboard, 
 
 /** 머리 요약 — FY 설치 완료·배송 예정·회수 합. */
 export function salesDashboardHeadline(dashboard: Pick<HardwareSalesDashboard, "grandTotal">) {
-  const { installed, planned, returned } = dashboard.grandTotal.total
+  const { installed, planned, returned, promotionInstalled, promotionPlanned } = dashboard.grandTotal.total
+  const undated = dashboard.grandTotal.undated
   return {
     installed: numberFormat.format(installed),
     planned: numberFormat.format(planned),
     returned: numberFormat.format(returned),
-    hasUndated: dashboard.grandTotal.undated.installed + dashboard.grandTotal.undated.planned + dashboard.grandTotal.undated.returned !== 0,
+    promotionInstalled: numberFormat.format(promotionInstalled),
+    promotionPlanned: numberFormat.format(promotionPlanned),
+    hasPromotion: promotionInstalled + promotionPlanned !== 0,
+    hasUndated:
+      undated.installed + undated.planned + undated.returned + undated.promotionInstalled + undated.promotionPlanned !== 0,
   }
 }

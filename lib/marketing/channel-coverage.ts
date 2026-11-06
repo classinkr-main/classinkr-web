@@ -56,13 +56,16 @@ export interface ChannelCoverageInput {
   kakaoPixelSet: boolean
 }
 
+/** Google 집행 데이터를 켜는 스위치 — 인증은 공용 서비스 계정이라 남는 설정은 고객 ID 하나다. */
+export const GOOGLE_ADS_CONFIG_HINT = "GOOGLE_ADS_CUSTOMER_ID 미설정"
+
 const MANUAL_ONLY: CoverageCell = {
   state: "manual",
   note: "수기 입력 — channel_budgets · 행사별 광고비",
 }
 
-/** 집행 데이터 축: 미연동 → 연동했는데 아직 안 쌓임 → 쌓임. 셋을 구분한다. */
-function spendCell(
+/** 집행 데이터 축: 미연동 → 연동했는데 아직 안 쌓임 → 쌓임. 셋을 구분한다. 데이터 › Google Ads 헤더도 쓴다. */
+export function spendCell(
   entry: ChannelCoverageInput["live"][number] | undefined,
   configHint: string
 ): CoverageCell {
@@ -102,7 +105,7 @@ export function buildChannelCoverage(input: ChannelCoverageInput): ChannelCovera
     },
     {
       channel: "google",
-      spendData: spendCell(byChannel.get("google"), "GOOGLE_ADS_* 자격증명"),
+      spendData: spendCell(byChannel.get("google"), GOOGLE_ADS_CONFIG_HINT),
       leadAttribution: {
         state: "live",
         note: "gclid 저장 + google/cpc 채널 폴백",

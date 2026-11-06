@@ -45,7 +45,7 @@ MKT팀은 리드를 Compass에서 처리한다. 어드민은 그 결과를 모�
 
 ## 3. 판정 규칙
 
-**매칭 키**: 전화 키 하나만 쓴다. `normalizePhoneKey`(`lib/compass/normalize.ts`)는 `compass_leads_v.phone_key` 와 같은 식이다. 9자리 미만 키는 매칭하지 않는다. `0` 같은 잘못된 번호끼리 붙는 것을 막기 위해서다.
+**매칭 키**(2026-11-04 2차에서 바뀜 — [compass-home-lead-push-2026-11-04.md](../../active/compass-home-lead-push-2026-11-04.md) §4: Compass 링크 `home_lead` 가 먼저고 전화 키는 폴백, 담당 반영이 더해졌다. 아래는 1차 설계 원문): 전화 키 하나만 쓴다. `normalizePhoneKey`(`lib/compass/normalize.ts`)는 `compass_leads_v.phone_key` 와 같은 식이다. 9자리 미만 키는 매칭하지 않는다. `0` 같은 잘못된 번호끼리 붙는 것을 막기 위해서다.
 
 **대표 행**: 같은 전화 키에 Compass 리드가 여러 건이면 최근성으로 한 건을 고른다. 기준은 `last_inflow_at` → `updated_at` → `created_at` 순 내림차순이고, 동률이면 id가 큰 쪽이다. Compass 칩(`buildCompassOverlayMap`)과 같은 행이 나오게 규칙을 공유한다. 복제하지 않는다.
 

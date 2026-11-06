@@ -7,7 +7,12 @@ import { setGooglePageContext, trackEvent, trackInternalEvent } from "@/lib/anal
 import { currentChoice } from "@/lib/consent/consent"
 import { useConsent } from "@/lib/consent/useConsent"
 import { collectLeadAttribution } from "@/lib/marketing-attribution"
-import { sanitizeTrackingPath, sanitizeTrackingUrl } from "@/lib/tracking-paths"
+import {
+  getContentGroup,
+  isInternalTrafficMarked,
+  sanitizeTrackingPath,
+  sanitizeTrackingUrl,
+} from "@/lib/tracking-paths"
 
 // 직전에 추적한 앱 내부 URL(정화본). 소프트 내비게이션에서는 document.referrer 가 첫 진입
 // 리퍼러로 고정돼 있어 page_referrer 를 직접 이어 줘야 한다. 트래커가 다시 마운트돼도
@@ -48,6 +53,9 @@ export function PageViewTracker() {
       page_location: pageLocation,
       page_referrer: pageReferrer ?? "",
       page_title: pageTitle,
+      content_group: getContentGroup(window.location.pathname),
+      // 다른 탭에서 어드민에 로그인한 직원 브라우저도 다음 이동부터 내부로 잡힌다.
+      ...(isInternalTrafficMarked() ? { traffic_type: "internal" as const } : {}),
     })
     trackEvent("page_view", {
       path,

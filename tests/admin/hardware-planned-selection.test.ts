@@ -66,21 +66,29 @@ describe("collectStalePlannedMovementIds", () => {
   it("keeps only movements whose elapsed days meet the threshold", () => {
     const old = new Date(Date.now() - 40 * 86400000).toISOString()
     const recent = new Date(Date.now() - 5 * 86400000).toISOString()
+    const created = new Date(Date.now() - 1 * 86400000).toISOString()
     const ids = collectStalePlannedMovementIds(
       [
-        { id: "stale-1", occurred_at: old },
-        { id: "fresh-1", occurred_at: recent },
+        { id: "stale-1", occurred_at: old, created_at: created },
+        { id: "fresh-1", occurred_at: recent, created_at: created },
       ],
       30
     )
     expect(ids).toEqual(["stale-1"])
   })
 
-  it("excludes movements with no date instead of treating them as stale", () => {
-    // 날짜 미정 예정 건은 경과일을 알 수 없다 — elapsedDaysSince(null) ?? 0으로 안전하게
-    // "방치 아님" 취급한다(방치 아닌데 방치로 단정해 잘못 선택되는 사고 방지).
-    const ids = collectStalePlannedMovementIds([{ id: "undated-1", occurred_at: null }], 30)
-    expect(ids).toEqual([])
+  it("날짜 없는 예정은 등록일로 센다 — 매일 알림과 같은 기준(결정 D9)", () => {
+    // 오더 승인으로 만든 배송 예정은 예정일이 비어 있다. 예전에는 0일로 세서 화면에서 끝까지 안 걸렸다.
+    const now = new Date("2026-11-05T00:00:00Z")
+    const ids = collectStalePlannedMovementIds(
+      [
+        { id: "undated-old", occurred_at: null, created_at: "2026-10-01T00:00:00Z" },
+        { id: "undated-new", occurred_at: null, created_at: "2026-10-30T00:00:00Z" },
+      ],
+      30,
+      now
+    )
+    expect(ids).toEqual(["undated-old"])
   })
 })
 
@@ -224,5 +232,15 @@ describe("judgeImportFreshness", () => {
     })
     expect(result.level).toBe("danger")
     expect(result.failed).toBe(true)
+  })
+})
+
+describe("outboundRecordLabel", () => {
+  it("판매 출고 프리셋은 고른 출고 유형으로 부른다 — A/S 출고가 '판매 출고'로 적히던 것", async () => {
+    const { outboundRecordLabel } = await import("@/components/admin/hardware/inventory/shared")
+    const sale = { key: "sale", label: "판매 출고" }
+    expect(outboundRecordLabel(sale, "as")).toBe("A/S 출고")
+    expect(outboundRecordLabel(sale, "")).toBe("판매 출고")
+    expect(outboundRecordLabel({ key: "planned", label: "배송 예정" }, "sales")).toBe("배송 예정")
   })
 })

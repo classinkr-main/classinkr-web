@@ -47,7 +47,7 @@ export function EventAlertSignup({ eventSlug }: EventAlertSignupProps) {
 
   if (submitted) {
     return (
-      <div className="flex items-center gap-2 rounded-2xl border border-[#BDEFD8] bg-[#ECFDF5] px-5 py-4 text-[14px] font-medium text-[#084734]">
+      <div className="flex items-center gap-2 rounded-2xl border border-[#BDEFD8] bg-fg-accent/8 px-5 py-4 text-[14px] font-medium text-fg-accent">
         <CheckCircle2 className="h-4 w-4 shrink-0" />
         다음 행사가 열리면 이메일로 알려드릴게요.
       </div>
@@ -74,12 +74,12 @@ export function EventAlertSignup({ eventSlug }: EventAlertSignupProps) {
         onChange={(e) => setEmail(e.target.value)}
         placeholder="이메일 주소"
         aria-label="다음 행사 알림 받을 이메일"
-        className="h-11 flex-1 rounded-xl border border-[#e0e0dc] bg-white px-4 text-[14px] shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-[#084734]"
+        className="h-11 flex-1 rounded-xl border border-[#e0e0dc] bg-white px-4 text-[14px] shadow-sm transition-colors"
       />
       <button
         type="submit"
         disabled={loading}
-        className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl bg-[#084734] px-5 text-[14px] font-bold text-white transition-colors hover:bg-[#065c41] disabled:opacity-60"
+        className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl bg-fg-accent px-5 text-[14px] font-bold text-fg-on-accent transition-colors hover:bg-fg-accent-hover disabled:opacity-60"
       >
         {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bell className="h-4 w-4" />}
         다음 행사 알림 받기

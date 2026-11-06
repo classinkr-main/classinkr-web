@@ -44,7 +44,7 @@ function formatDashTitle(title: ReactNode) {
 const INLINE_MARKDOWN_PATTERN = /\[([^\]]+)\]\(([^)\s]+)\)|\*\*([^*]+)\*\*/g
 
 const INLINE_LINK_CLASS =
-    "font-semibold text-[#084734] underline decoration-[#084734]/30 underline-offset-4 transition-colors duration-150 hover:decoration-[#084734] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8]"
+    "font-semibold text-fg-accent underline decoration-fg-accent/30 underline-offset-4 transition-colors duration-150 hover:decoration-fg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fg-accent focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8]"
 
 function renderInlineMarkdown(text: string): ReactNode {
     const parts: ReactNode[] = []
@@ -115,7 +115,7 @@ function PathStepChips({ path }: { path: string }) {
                         <span
                             className={cn(
                                 "inline-flex items-center rounded-[6px] border border-black/[0.08] bg-white px-2 py-0.5 text-[13px]",
-                                isButton ? "font-semibold text-[#084734]" : "font-medium text-[#31302E]"
+                                isButton ? "font-semibold text-fg-accent" : "font-medium text-[#31302E]"
                             )}
                         >
                             {label}
@@ -180,7 +180,7 @@ export function DocsArticle({
                 {eyebrow || badge ? (
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
                         {eyebrow ? (
-                            <p className="text-sm font-bold uppercase tracking-[0.16em] text-[#084734]">
+                            <p className="text-sm font-bold uppercase tracking-[0.16em] text-fg-accent">
                                 {eyebrow}
                             </p>
                         ) : null}
@@ -212,7 +212,7 @@ export function DocsArticle({
                         className="scroll-mt-28 border-b border-black/[0.08] pb-8 last:border-b-0"
                     >
                         {section.eyebrow ? (
-                            <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#084734]">
+                            <p className="text-xs font-bold uppercase tracking-[0.14em] text-fg-accent">
                                 {section.eyebrow}
                             </p>
                         ) : null}
@@ -241,7 +241,7 @@ export function DocsArticle({
                                 section.callout.tone === "warning"
                                     ? "border-amber-300 text-amber-950"
                                     : section.callout.tone === "success"
-                                        ? "border-[#D1FAE5] text-[#084734]"
+                                        ? "border-fg-accent/14 text-fg-accent"
                                             : "border-black/[0.08] text-[#31302E]"
                                 )}
                             >

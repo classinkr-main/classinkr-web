@@ -4,8 +4,9 @@
 // 계약:
 //  * 병합 금지·병기만 — 여기서 만드는 값은 어떤 자체 리드 필드도 덮어쓰지 않는다.
 //    화면은 우리 상태 옆에 Compass 상태를 나란히 보여줄 뿐이다.
-//  * 키는 normalizePhoneKey 산출값 하나뿐이다. 이메일 조인은 뷰가 email_key를 주지만
-//    Compass 리드의 이메일 채움률이 낮아(콜 중심 원장) 전화 키만 계약으로 삼는다.
+//  * 키는 둘 — ① 어드민 리드 id(Compass 가 홈페이지 폼 리드를 받으며 건 crm.lead_refs(home_lead) 링크, 2026-11-04, byLeadId)
+//    ② normalizePhoneKey 산출값(옛 리드·수동 등록 리드의 폴백). 이메일 조인은 뷰가 email_key를 주지만
+//    Compass 리드의 이메일 채움률이 낮아(콜 중심 원장) 계약으로 삼지 않는다.
 //  * 장문(note/memo/next_action 본문)은 싣지 않는다 — 어드민에 Compass 텍스트를 복제하지 않는다.
 
 import {
@@ -59,12 +60,17 @@ export type CompassOverlayMap = Record<string, CompassOverlayEntry>
 
 /** 오버레이 API 응답 계약. down=true면 화면은 칩을 그리지 않고 "연결 끊김"으로 강등한다. */
 export interface CompassOverlayResponse {
+  /** phone_key → 대표 1건(전화 키 폴백) */
   overlay: CompassOverlayMap
+  /** 어드민 리드 id → 대표 1건(Compass 링크 home_lead — 2026-11-04). 옛 응답엔 없을 수 있다 */
+  byLeadId?: CompassOverlayMap
   down: boolean
-  /** 클라이언트가 보낸 키 수 */
+  /** 클라이언트가 보낸 전화 키 수 */
   requested: number
-  /** 실제로 매칭된 키 수 */
+  /** 실제로 매칭된 전화 키 수 */
   matched: number
+  /** 링크로 매칭된 어드민 리드 수 */
+  matchedByLink?: number
 }
 
 /** 단계 라벨 — 사전에 없는 값이 오면 지어내지 않고 원값을 그대로 보여 준다. */
@@ -137,22 +143,44 @@ export function buildCompassOverlayMap(rows: CompassOverlaySource[]): CompassOve
   }
 
   const overlay: CompassOverlayMap = {}
-  for (const [key, row] of best) {
-    overlay[key] = {
-      compassLeadId: row.id,
-      academy: row.academy?.trim() || null,
-      name: row.name?.trim() || null,
-      stage: row.stage?.trim() || null,
-      careStage: row.care_stage?.trim() || null,
-      owner: row.owner?.trim() || null,
-      caller: row.caller?.trim() || null,
-      bdOwner: row.bd_owner?.trim() || null,
-      nextActionAt: row.next_action_at ?? null,
-      demoAt: row.demo_at ?? null,
-      neocrmRegisteredAt: row.neocrm_registered_at ?? null,
-      lastInflowAt: row.last_inflow_at ?? null,
-      url: compassLeadUrl(row.id),
-    }
+  for (const [key, row] of best) overlay[key] = toCompassOverlayEntry(row)
+  return overlay
+}
+
+/** 브리지 행 → 칩 페이로드. 장문(note·memo·next_action 본문)은 싣지 않는다. */
+export function toCompassOverlayEntry(row: CompassOverlaySource): CompassOverlayEntry {
+  return {
+    compassLeadId: row.id,
+    academy: row.academy?.trim() || null,
+    name: row.name?.trim() || null,
+    stage: row.stage?.trim() || null,
+    careStage: row.care_stage?.trim() || null,
+    owner: row.owner?.trim() || null,
+    caller: row.caller?.trim() || null,
+    bdOwner: row.bd_owner?.trim() || null,
+    nextActionAt: row.next_action_at ?? null,
+    demoAt: row.demo_at ?? null,
+    neocrmRegisteredAt: row.neocrm_registered_at ?? null,
+    lastInflowAt: row.last_inflow_at ?? null,
+    url: compassLeadUrl(row.id),
+  }
+}
+
+/**
+ * 어드민 리드 id → 대표 1건 맵(Compass 링크 home_lead). links 는 어드민 리드 id → 링크된 Compass 리드 id 목록,
+ * rows 는 그 id 들의 브리지 행. 한 어드민 리드에 Compass 리드가 여럿 붙었으면(어드민 리드 둘이 합쳐진 경우 등) 칩과 같은
+ * 대표 행 규칙(pickRepresentativeCompassRow)으로 하나를 고른다. 행이 없는 링크는 넣지 않는다.
+ */
+export function buildCompassOverlayByLeadId(
+  links: ReadonlyMap<string, readonly number[]>,
+  rows: readonly CompassOverlaySource[]
+): CompassOverlayMap {
+  const byId = new Map(rows.map((row) => [row.id, row] as const))
+  const overlay: CompassOverlayMap = {}
+  for (const [leadId, compassIds] of links) {
+    const candidates = compassIds.map((id) => byId.get(id)).filter((row): row is CompassOverlaySource => Boolean(row))
+    const representative = pickRepresentativeCompassRow(candidates)
+    if (representative) overlay[leadId] = toCompassOverlayEntry(representative)
   }
   return overlay
 }
@@ -262,6 +290,16 @@ export function buildCompassDuplicateReport(
 
   // 여기까지 왔다는 건 행을 실제로 받아 봤다는 뜻 — 장애 판정은 조회 계층(호출부)이 한다.
   return { first, count, down: false }
+}
+
+/** 화면에 로드된 리드 id 들을 오버레이 링크 조회 키로 접는다(중복 제거·정렬). 빈 id 는 버린다. */
+export function toCompassOverlayLeadIds(leads: Array<{ id?: string | null }>): string[] {
+  const ids = new Set<string>()
+  for (const lead of leads) {
+    const id = lead.id?.trim()
+    if (id) ids.add(id)
+  }
+  return Array.from(ids).sort()
 }
 
 /** 화면에 로드된 리드 전화들을 오버레이 조회 키로 접는다(중복 제거·정렬로 요청을 안정화). */

@@ -69,7 +69,7 @@ const HELP_TROUBLESHOOTING_ORDER = [
 const HELP_TROUBLESHOOTING_LIMIT = 4
 
 const FOCUS_RING =
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8]"
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fg-accent focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8]"
 
 export default async function FirstWeekGuidePage() {
   const docsContent = await getDocsContent()
@@ -82,12 +82,12 @@ export default async function FirstWeekGuidePage() {
       <div className="container mx-auto max-w-[1080px] px-5">
         <Link
           href="/docs"
-          className={`inline-flex items-center gap-2 rounded-[6px] text-sm font-medium text-[#615D59] transition-colors duration-150 hover:text-[#084734] ${FOCUS_RING}`}
+          className={`inline-flex items-center gap-2 rounded-[6px] text-sm font-medium text-[#615D59] transition-colors duration-150 hover:text-fg-accent ${FOCUS_RING}`}
         >
           <ArrowRight className="h-4 w-4 rotate-180" aria-hidden />
           가이드 홈으로 돌아가기
         </Link>
-        <p className="mt-8 text-[12px] font-semibold uppercase tracking-[0.14em] text-[#084734]">
+        <p className="mt-8 text-[12px] font-semibold uppercase tracking-[0.14em] text-fg-accent">
           첫 수업 준비
         </p>
         <h1 className="mt-4 max-w-3xl break-keep text-4xl font-black leading-[1.08] tracking-display md:text-6xl">
@@ -111,7 +111,7 @@ export default async function FirstWeekGuidePage() {
                 className="grid gap-6 border-t border-black/[0.08] py-10 md:grid-cols-2 md:gap-12"
               >
                 <div>
-                  <p className="text-[12px] font-semibold tabular-nums tracking-[0.12em] text-[#084734]">
+                  <p className="text-[12px] font-semibold tabular-nums tracking-[0.12em] text-fg-accent">
                     {stage.day}
                   </p>
                   <h2 className="mt-3 break-keep text-xl font-bold sm:text-2xl">{stage.title}</h2>
@@ -140,7 +140,7 @@ export default async function FirstWeekGuidePage() {
                 ) : (
                   <Link
                     href="/docs"
-                    className={`self-start text-sm font-semibold text-[#084734] underline underline-offset-4 ${FOCUS_RING}`}
+                    className={`self-start text-sm font-semibold text-fg-accent underline underline-offset-4 ${FOCUS_RING}`}
                   >
                     전체 가이드에서 찾아보기
                   </Link>
@@ -163,7 +163,7 @@ export default async function FirstWeekGuidePage() {
                 증상별로 먼저 해 볼 것을 화면과 함께 담았습니다. 그래도 풀리지 않으면 상황을 남겨 주세요.
                 담당 매니저가 연락드립니다.
               </p>
-              <div className="mt-5 flex flex-wrap gap-x-6 gap-y-3 text-[14px] font-semibold text-[#084734]">
+              <div className="mt-5 flex flex-wrap gap-x-6 gap-y-3 text-[14px] font-semibold text-fg-accent">
                 <Link
                   href="/docs#troubleshooting"
                   className={`inline-flex items-center gap-1 ${FOCUS_RING}`}
