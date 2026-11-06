@@ -6,7 +6,7 @@ import { formatUsd, getSelfServeSoftwarePlan, getSoftwarePlan } from "@/lib/bill
 import { BROCHURE_URL } from "@/lib/marketing-links"
 import { PRODUCT_SW_FAQS } from "@/lib/product-sw-faq"
 import { TESTIMONIALS } from "@/lib/testimonials"
-import { motion, useInView, useMotionValue, useScroll, useMotionValueEvent, animate } from "framer-motion"
+import { motion, useInView, useMotionValue, animate } from "framer-motion"
 import {
     Play, ArrowRight, Monitor, Layers, MousePointerClick,
     Clock, Users, PenTool, Dice1, FileText, Layout, Video,
@@ -17,11 +17,12 @@ import {
 import Link from "next/link"
 import Image from "next/image"
 import nextDynamic from "next/dynamic"
-import { useRef, useEffect, useState, useMemo, useSyncExternalStore } from "react"
+import { useRef, useEffect, useState } from "react"
 
 import { HeroVideoBackdrop } from "@/components/media/HeroVideoBackdrop"
 import { KeyUseCases } from "@/components/sections/KeyUseCases"
 import { TrackedLink } from "@/components/TrackedLink"
+import { StoryCtaSection } from "@/components/product/sw/StoryCtaSection"
 
 // below-the-fold 섹션은 dynamic import로 메인 번들에서 분리 (SSR은 유지되어 초기 HTML 동일)
 const OnboardingRoadmap = nextDynamic(() => import("@/components/product/sw/OnboardingRoadmap"))
@@ -38,10 +39,6 @@ const trackCheckoutClick = (location: string) => {
         trackEvent("click_cta", { button: location, page: "/product/sw", destination: "contact_form" })
     }
 }
-// SSR/hydration 불일치 없이 클라이언트 마운트 여부를 읽는다 (effect 내 setState 회피)
-const noopSubscribe = () => () => {}
-const useIsClient = () => useSyncExternalStore(noopSubscribe, () => true, () => false)
-
 const HERO_CLASSROOM_VIDEO_SRC = "/video/쿼드러닝 수업_클립1.mp4"
 const BLACKBOARD_VIDEO_SRC = "/video/클립2.mp4"
 // 640px 미만(폰)에서는 데이터 절약을 위해 영상 대신 포스터만 보여준다.
@@ -191,21 +188,6 @@ function EyebrowTag({ children, center = true, dark = false }: { children: React
     )
 }
 
-function seededFraction(seed: number) {
-    const value = Math.sin(seed * 9999) * 10000
-    return value - Math.floor(value)
-}
-
-function createParticles(count: number) {
-    return Array.from({ length: count }, (_, i) => ({
-        x: seededFraction(i + 1) * 100,
-        size: 3 + seededFraction(i + 101) * 5,
-        duration: 8 + seededFraction(i + 201) * 10,
-        delayStart: seededFraction(i + 301) * 6,
-        key: i,
-    }))
-}
-
 /* ── CountUp Hook ────────────────────────────────────────────────── */
 function useCountUp(target: number, trigger: boolean, duration = 2) {
     const [value, setValue] = useState(0)
@@ -217,58 +199,6 @@ function useCountUp(target: number, trigger: boolean, duration = 2) {
         return unsub
     }, [trigger, target, duration, mv])
     return value
-}
-
-/* ── StatCard ────────────────────────────────────────────────────── */
-function StatCard({ value, suffix, label, delay, trigger }: { value: number; suffix: string; label: string; delay: number; trigger: boolean }) {
-    const display = useCountUp(value, trigger, 2)
-    return (
-        <motion.div
-            className="bg-white rounded-2xl border border-black/[0.08] shadow-[0_2px_20px_rgba(0,0,0,0.04)] p-5 sm:p-6 text-center flex-1 min-w-[140px] border-t-2 border-t-fg-accent"
-            initial={{ opacity: 0, y: 25, rotateX: 8 }}
-            animate={trigger ? { opacity: 1, y: 0, rotateX: 0 } : {}}
-            transition={{ type: "spring", stiffness: 200, damping: 25, delay }}
-            style={{ perspective: 800 }}
-        >
-            <div className="text-2xl sm:text-3xl font-sans font-bold tabular-nums text-[#111110] mb-1">
-                {value >= 100 ? display.toLocaleString() : display}{suffix}
-            </div>
-            <div className="text-xs sm:text-sm text-[#A39E98] font-medium leading-snug whitespace-pre-line">{label}</div>
-        </motion.div>
-    )
-}
-
-/* ── Ambient particle ────────────────────────────────────────────── */
-function formatParticleValue(value: number) {
-    return value.toFixed(3).replace(/\.?0+$/, "")
-}
-
-function AmbientParticle({
-    x,
-    size,
-    duration,
-    delayStart,
-    className = "",
-}: {
-    x: number
-    size: number
-    duration: number
-    delayStart: number
-    className?: string
-}) {
-    return (
-        <motion.div
-            className={`absolute rounded-full bg-[#6EE7B7]/15 pointer-events-none ${className}`}
-            style={{
-                left: `${formatParticleValue(x)}%`,
-                bottom: "-10%",
-                width: `${formatParticleValue(size)}px`,
-                height: `${formatParticleValue(size)}px`,
-            }}
-            animate={{ y: [0, -600, -1200], opacity: [0, 0.5, 0] }}
-            transition={{ duration, delay: delayStart, repeat: Infinity, ease: "easeInOut" }}
-        />
-    )
 }
 
 /* ── Avatar with initials ────────────────────────────────────────── */
@@ -361,61 +291,6 @@ function TestimonialCard({
                 &ldquo;{quote}&rdquo;
             </p>
         </motion.div>
-    )
-}
-
-/* ── Final CTA Section ───────────────────────────────────────────── */
-function FinalCTASection() {
-    const sectionRef = useRef<HTMLElement>(null)
-    const { scrollYProgress } = useScroll({ target: sectionRef, offset: ["start end", "end start"] })
-    const [phase, setPhase] = useState(0)
-    const particlesMounted = useIsClient()
-
-    useMotionValueEvent(scrollYProgress, "change", (v) => {
-        if (v >= 0.55 && phase < 3) setPhase(3)
-        else if (v >= 0.35 && phase < 2) setPhase(2)
-        else if (v >= 0.15 && phase < 1) setPhase(1)
-    })
-
-    const particles = useMemo(() => createParticles(15), [])
-
-
-    return (
-        <section ref={sectionRef} className="relative py-32 md:py-44 overflow-x-clip" style={{ minHeight: "100vh" }}>
-            <div className="absolute inset-0 bg-gradient-to-b from-[#F0FDF9] via-[#F0FDF9] to-[#FDFCF8]"></div>
-            <div className="absolute top-0 left-0 right-0 h-44 md:h-60 bg-gradient-to-b from-[#FDFCF8] via-[#F0FDF9]/85 to-transparent pointer-events-none"></div>
-            <motion.div className="absolute inset-0 pointer-events-none" initial={{ opacity: 0 }} animate={phase >= 1 ? { opacity: 1 } : {}} transition={{ duration: 1 }}>
-                {particlesMounted
-                    ? particles.map(({ key, ...rest }) => (
-                        <AmbientParticle key={key} className={key >= 8 ? "hidden sm:block" : ""} {...rest} />
-                    ))
-                    : null}
-            </motion.div>
-
-            <div className="container mx-auto px-4 text-center max-w-5xl relative z-10">
-                <motion.p initial={{ opacity: 0, y: 20 }} animate={phase >= 1 ? { opacity: 1, y: 0 } : {}} transition={{ duration: 0.7 }} className="text-xl sm:text-2xl md:text-3xl text-[#615D59] font-sans font-medium leading-relaxed mb-3">줌 열고, 녹화 누르고, 숙제 올리고, 각각 연락하고...</motion.p>
-                <motion.p initial={{ opacity: 0, y: 20 }} animate={phase >= 1 ? { opacity: 1, y: 0 } : {}} transition={{ duration: 0.7, delay: 0.35 }} className="text-xl sm:text-2xl md:text-3xl text-[#31302E] font-sans font-semibold mb-8">수업 하나에 도구만 네 개...</motion.p>
-                <motion.p initial={{ opacity: 0, filter: "blur(4px)" }} animate={phase >= 1 ? { opacity: 1, filter: "blur(0px)" } : {}} transition={{ duration: 0.8, delay: 0.7 }} className="text-lg sm:text-xl md:text-2xl text-fg-accent font-sans font-medium italic mb-10">가르치는 일에만 집중할 수 있다면?</motion.p>
-                <motion.div initial={{ opacity: 0, y: 10 }} animate={phase >= 1 ? { opacity: 1, y: 0 } : {}} transition={{ duration: 0.5, delay: 1.0 }} className="flex items-center justify-center gap-2 mb-14">
-                    <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-fg-accent/8 border border-[#BDEFD8]/60 text-sm font-medium text-fg-accent"><Clock className="w-3.5 h-3.5" />되찾은 수업 시간</div>
-                </motion.div>
-
-                <p className="mx-auto mb-8 max-w-xl text-base leading-relaxed text-[#615D59]">수업 도구, 녹화, 과제와 복습을 한 흐름으로 살펴보세요.</p>
-
-                <motion.div className="w-full max-w-sm mx-auto h-px bg-gradient-to-r from-transparent via-[#6EE7B7]/30 to-transparent mb-14 mt-14" initial={{ scaleX: 0 }} animate={phase >= 3 ? { scaleX: 1 } : {}} transition={{ duration: 0.6 }} style={{ originX: 0.5 }} />
-                <div className="grid grid-cols-2 gap-3 sm:gap-4 mb-14 max-w-xl mx-auto">
-                    <StatCard value={30} suffix="+" label="인터랙티브 수업 도구" delay={0.1} trigger={phase >= 3} />
-                    <StatCard value={10} suffix="가지" label={"참여형\n수업 활동"} delay={0.2} trigger={phase >= 3} />
-                </div>
-                <motion.p initial={{ opacity: 0, letterSpacing: "0.3em" }} animate={phase >= 3 ? { opacity: 1, letterSpacing: "0.05em" } : {}} transition={{ delay: 0.5, duration: 0.8 }} className="text-lg sm:text-xl font-sans text-[#615D59] font-medium mb-10">수업만을 위해 만든 플랫폼, 다음은 당신의 교실입니다</motion.p>
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={phase >= 3 ? { opacity: 1, y: 0 } : {}} transition={{ delay: 0.7, type: "spring", stiffness: 200, damping: 25 }} className="flex flex-col items-center gap-4">
-                    <Button asChild className="h-14 rounded-full bg-fg-accent px-10 text-base font-bold text-fg-on-accent transition-all hover:bg-fg-accent-hover group">
-                        <Link href={CHECKOUT_HREF} onClick={() => trackCheckoutClick("sw_story_checkout")}>{CHECKOUT_CTA_LABEL}<ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" /></Link>
-                    </Button>
-                    <p className="text-xs sm:text-sm text-[#A39E98] font-medium">{CHECKOUT_SUB_LABEL}</p>
-                </motion.div>
-            </div>
-        </section>
     )
 }
 
@@ -1416,7 +1291,12 @@ export default function ProductPage() {
             {/* ================================================================
                 STORY CTA — "줌 열고, 녹화 누르고..." (히어로 바로 아래)
             ================================================================ */}
-            <FinalCTASection />
+            <StoryCtaSection
+                ctaHref={CHECKOUT_HREF}
+                ctaLabel={CHECKOUT_CTA_LABEL}
+                ctaSubLabel={CHECKOUT_SUB_LABEL}
+                onCtaClick={() => trackCheckoutClick("sw_story_checkout")}
+            />
 
             <section aria-labelledby="classin-software-summary" className="bg-white py-12 md:py-16">
                 <div className="container mx-auto px-4 lg:px-8">
