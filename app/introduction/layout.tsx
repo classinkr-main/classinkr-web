@@ -1,18 +1,9 @@
 import type { ReactNode } from "react"
 
-import { INTRO_PATH } from "@/lib/introduction/content"
-import { createPublicMetadata } from "@/lib/seo"
-
-// 영업 자료(소개서)라 검색에 내지 않는다 — 제품 페이지와 내용이 겹치고 원문의 타사 비교표를 그대로 싣는다.
-// 그래서 sitemap·헤더·푸터에도 넣지 않는다. robots(noindex, nofollow)는 하위 /introduction/cases 까지 이어진다.
-export const metadata = createPublicMetadata({
-  title: "클래스인 서비스 소개서 — 가장 교실다운 AI 교육 플랫폼",
-  description:
-    "클래스인 소프트웨어 특장점, 클래스인 X AI 스마트 교실 구성과 하드웨어 스펙, 학원·학교의 수업 영상과 스마트 교실 사례를 한 페이지에 모은 서비스 소개서입니다. 소개서 PDF도 내려받을 수 있습니다.",
-  path: INTRO_PATH,
-  noIndex: true,
-})
-
+// /introduction 아래 쪽의 검색 정책 — 레이아웃은 메타를 두지 않고, 쪽마다 자기 createPublicMetadata 를 둔다.
+// - /introduction(대표 랜딩): 색인 + sitemap. 메타는 app/introduction/page.tsx.
+// - /introduction/full(문서형 원문 — 타사 비교표 포함)·/story·/proof·/cases/**: noIndex: true, sitemap 제외.
+// 새 하위 쪽을 만들면 반드시 자기 메타(canonical·noIndex)를 둔다 — 여기서 noindex 를 일괄로 걸지 않는다.
 export default function IntroductionLayout({ children }: { children: ReactNode }) {
   return children
 }

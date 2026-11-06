@@ -28,6 +28,7 @@ const staticRoutes: Array<{
   { path: "/pricing", changeFrequency: "monthly", priority: 0.8, lastModified: "2026-11-03" },
   { path: "/contact", changeFrequency: "monthly", priority: 0.8, lastModified: "2026-10-28" },
   { path: "/showroom", changeFrequency: "monthly", priority: 0.8, lastModified: "2026-09-22" },
+  { path: "/introduction", changeFrequency: "monthly", priority: 0.7, lastModified: "2026-11-06" },
   { path: "/privacy", changeFrequency: "yearly", priority: 0.5, lastModified: PRIVACY_EFFECTIVE.iso },
   { path: "/terms", changeFrequency: "yearly", priority: 0.5, lastModified: "2026-06-14" },
   { path: "/data-deletion", changeFrequency: "yearly", priority: 0.5, lastModified: "2026-06-16" },
