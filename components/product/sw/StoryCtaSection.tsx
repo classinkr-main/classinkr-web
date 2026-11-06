@@ -49,10 +49,11 @@ export function StoryCtaSection({ ctaHref, ctaLabel, ctaSubLabel, onCtaClick }: 
                     </div>
                 </div>
 
-                {/* 대조: 왼쪽은 따로 노는 도구 4행(hair로 끊김), 오른쪽은 끊김 없는 패널 하나(먹 테두리) = Classin 한 번에.
+                {/* 대조: 왼쪽은 따로 노는 도구 4행(hair로 끊김), 오른쪽은 끊김 없는 패널 하나(초록 테두리) = Classin 한 번에.
                     한 격자에 행을 명시해 좌우 행 높이를 맞추고, 패널 면은 3열 1~5행을 덮는 배경 요소가 맡는다 */}
                 <div className="grid grid-cols-[1fr_auto_1fr] grid-rows-[auto_repeat(4,auto)] gap-x-3 sm:gap-x-4">
-                    <div aria-hidden className="col-start-3 row-span-5 row-start-1 border border-line-ink bg-surface-sheet" />
+                    {/* 강조 패널: 초록은 테두리에만(면은 sheet 그대로), 아우라 = 가드 허용 shadow-deep + 옅은 초록 outline(ring 은 box-shadow 라 shadow-deep 와 겹치면 사라진다) */}
+                    <div aria-hidden className="col-start-3 row-span-5 row-start-1 border-2 border-fg-accent bg-surface-sheet shadow-deep outline-[6px] outline-solid outline-fg-accent/12" />
 
                     <p className="col-start-1 row-start-1 self-end border-b border-line-hair pb-3 text-label text-fg-muted">지금 · 도구 4개</p>
                     <div className="relative col-start-3 row-start-1 px-4 pb-3 pt-5 sm:px-5">
