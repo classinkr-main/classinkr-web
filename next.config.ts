@@ -232,6 +232,17 @@ const nextConfig: NextConfig = {
         headers: publicAssetCacheHeaders,
       },
       {
+        // 자료실 PDF 는 브라우저 뷰어 탭으로 열지 않고 내려받는다(어카운트 '다시 받기'·메일 링크처럼
+        // 주소로 바로 들어오는 경우 포함). 파일 이름은 링크의 download 속성이 정한다.
+        source: "/materials/:path*",
+        headers: [
+          {
+            key: "Content-Disposition",
+            value: "attachment",
+          },
+        ],
+      },
+      {
         source: "/(.*)",
         headers: securityHeaders,
       },
