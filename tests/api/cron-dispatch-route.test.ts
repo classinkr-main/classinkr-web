@@ -6,9 +6,30 @@ import { mergeNotificationSchedule } from "@/lib/notifications/schedule"
 async function loadRoute(
   leadDaily?: Record<string, unknown>,
   segmentsReport?: Record<string, unknown> | Error,
-  options: { settingsError?: Error; hardwareReport?: Record<string, unknown> | Error } = {}
+  options: {
+    settingsError?: Error
+    hardwareReport?: Record<string, unknown> | Error
+    compassReport?: Record<string, unknown> | Error
+  } = {}
 ) {
   vi.resetModules()
+
+  // Compass 전달 대조 — 매 슬롯 맨 앞에서 돈다(결과는 ran 이 아니라 compassLeadReconcile 칸).
+  const reconcileCompassLeadPush = vi.fn(async (runOptions: { dryRun?: boolean }) => {
+    if (options.compassReport instanceof Error) throw options.compassReport
+    return {
+      status: runOptions.dryRun ? "preview" : "in_sync",
+      dryRun: runOptions.dryRun === true,
+      candidates: 0,
+      missing: 0,
+      sent: 0,
+      failed: 0,
+      deferred: 0,
+      leads: [],
+      ...(options.compassReport ?? {}),
+    }
+  })
+  vi.doMock("@/lib/server/compass-lead-reconcile", () => ({ reconcileCompassLeadPush }))
 
   // 저장 세그먼트 매일 잡(KST 06시 = UTC 슬롯 21) — 동적 import 라 모듈 팩토리 실행 여부로 "다른 슬롯은 불러오지도
   // 않는다"를 확인한다.
@@ -81,6 +102,7 @@ async function loadRoute(
     segmentsModuleLoaded,
     runHardwareProcessAlerts,
     hardwareModuleLoaded,
+    reconcileCompassLeadPush,
   }
 }
 
@@ -322,7 +344,11 @@ describe("고정 슬롯 잡 — 저장 세그먼트 매일 평가·자동 태그
     const response = await GET(request("02"), context("02"))
 
     expect(response.status).toBe(503)
-    expect(await response.json()).toEqual({ ok: false, error: "Notification settings unavailable." })
+    expect(await response.json()).toEqual({
+      ok: false,
+      error: "Notification settings unavailable.",
+      compassLeadReconcile: expect.objectContaining({ job: "compassLeadReconcile" }),
+    })
     expect(runCrmSegmentDaily).not.toHaveBeenCalled()
     expect(segmentsModuleLoaded).not.toHaveBeenCalled()
   })
@@ -353,7 +379,11 @@ describe("고정 슬롯 잡 — 저장 세그먼트 매일 평가·자동 태그
     otherSlot.previewLeadMorningBrief.mockRejectedValueOnce(new Error("preview boom"))
     const otherResponse = await otherSlot.GET(request("02?dryRun=true"), context("02"))
     expect(otherResponse.status).toBe(503)
-    expect(await otherResponse.json()).toEqual({ ok: false, error: "Report preview unavailable." })
+    expect(await otherResponse.json()).toEqual({
+      ok: false,
+      error: "Report preview unavailable.",
+      compassLeadReconcile: expect.objectContaining({ job: "compassLeadReconcile", status: "preview" }),
+    })
     expect(otherSlot.runCrmSegmentDaily).not.toHaveBeenCalled()
   })
 
@@ -499,5 +529,102 @@ describe("고정 슬롯 잡 — 하드웨어 일일 알림(UTC 23 = KST 08시)",
       ran: [],
       hardwareAlertsPreview: { job: "hardwareProcessAlerts", status: "preview", detail: { dryRun: true } },
     })
+  })
+})
+
+describe("매 슬롯 잡 — Compass 전달 대조", () => {
+  const previousCronSecret = process.env.CRON_SECRET
+
+  afterEach(() => {
+    if (previousCronSecret === undefined) delete process.env.CRON_SECRET
+    else process.env.CRON_SECRET = previousCronSecret
+    vi.restoreAllMocks()
+    vi.resetModules()
+  })
+
+  it("알림 잡이 없는 슬롯에서도 돌고, 결과는 ran 이 아니라 compassLeadReconcile 칸에 싣는다", async () => {
+    process.env.CRON_SECRET = "test-cron-secret"
+    const { GET, reconcileCompassLeadPush, sendLeadMorningBrief } = await loadRoute()
+
+    const response = await GET(request("05"), context("05"))
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(reconcileCompassLeadPush).toHaveBeenCalledWith(expect.objectContaining({ dryRun: false }))
+    expect(sendLeadMorningBrief).not.toHaveBeenCalled()
+    expect(body.ran).toEqual([])
+    expect(body.compassLeadReconcile).toMatchObject({ job: "compassLeadReconcile", status: "in_sync" })
+  })
+
+  it("알림 잡과 같은 슬롯이면 둘 다 돌고 ran 은 예전 그대로", async () => {
+    process.env.CRON_SECRET = "test-cron-secret"
+    const { GET, reconcileCompassLeadPush } = await loadRoute()
+
+    const body = await (await GET(request("02"), context("02"))).json()
+
+    expect(reconcileCompassLeadPush).toHaveBeenCalledOnce()
+    expect(body.ran.map((result: { job: string }) => result.job)).toEqual(["leadDaily"])
+    expect(body.ok).toBe(true)
+  })
+
+  it("대조가 failed 면 응답 ok=false·500 — 알림 잡 결과는 그대로", async () => {
+    process.env.CRON_SECRET = "test-cron-secret"
+    const { GET, sendLeadMorningBrief } = await loadRoute(undefined, undefined, {
+      compassReport: { status: "failed", reason: "compass_links_unavailable" },
+    })
+
+    const response = await GET(request("02"), context("02"))
+    const body = await response.json()
+
+    expect(response.status).toBe(500)
+    expect(body.ok).toBe(false)
+    expect(sendLeadMorningBrief).toHaveBeenCalledOnce()
+    expect(body.ran[0]).toMatchObject({ job: "leadDaily", status: "sent" })
+    expect(body.compassLeadReconcile).toMatchObject({ status: "failed", detail: { reason: "compass_links_unavailable" } })
+  })
+
+  it("대조 모듈이 던지면 failed 와 고정 문구만", async () => {
+    process.env.CRON_SECRET = "test-cron-secret"
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    const { GET } = await loadRoute(undefined, undefined, { compassReport: new Error("boom https://secret") })
+
+    const response = await GET(request("05"), context("05"))
+    const body = await response.json()
+
+    expect(response.status).toBe(500)
+    expect(body.compassLeadReconcile).toEqual({ job: "compassLeadReconcile", status: "failed", error: "Compass lead reconcile failed." })
+    expect(JSON.stringify(body)).not.toContain("secret")
+  })
+
+  it("dryRun 은 대조도 미리보기로만 돈다", async () => {
+    process.env.CRON_SECRET = "test-cron-secret"
+    const { GET, reconcileCompassLeadPush } = await loadRoute()
+
+    const response = await GET(request("05?dryRun=true"), context("05"))
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(reconcileCompassLeadPush).toHaveBeenCalledWith(expect.objectContaining({ dryRun: true }))
+    expect(body.compassLeadReconcile).toMatchObject({ status: "preview", detail: { dryRun: true } })
+  })
+
+  it("설정 읽기 실패로 503 인 슬롯에도 대조는 돌고 결과를 싣는다", async () => {
+    process.env.CRON_SECRET = "test-cron-secret"
+    const { GET, reconcileCompassLeadPush } = await loadRoute(undefined, undefined, { settingsError: new Error("settings down") })
+
+    const response = await GET(request("05"), context("05"))
+    const body = await response.json()
+
+    expect(response.status).toBe(503)
+    expect(reconcileCompassLeadPush).toHaveBeenCalledOnce()
+    expect(body.compassLeadReconcile).toMatchObject({ status: "in_sync" })
+  })
+
+  it("인증 실패면 대조도 돌지 않는다", async () => {
+    process.env.CRON_SECRET = "test-cron-secret"
+    const { GET, reconcileCompassLeadPush } = await loadRoute()
+
+    expect((await GET(request("05", "wrong"), context("05"))).status).toBe(401)
+    expect(reconcileCompassLeadPush).not.toHaveBeenCalled()
   })
 })

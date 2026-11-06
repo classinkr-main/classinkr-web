@@ -17,6 +17,9 @@ ROOT = Path(__file__).resolve().parents[1]
 DATA_PATH = ROOT / "data" / "lead-magnets.json"
 PUBLIC_DIR = ROOT / "public"
 OUTPUT_DIR = PUBLIC_DIR / "materials" / "lead-magnets"
+# 워크북 템플릿(HTML → Chromium, scripts/render-lead-magnet-workbook-pdf.mjs)으로 만드는 자료.
+# 여기서 다시 만들면 새 디자인을 옛 디자인으로 덮어쓰므로 건너뛴다. 그 스크립트의 WORKBOOK_SLUGS 와 같게 둔다.
+WORKBOOK_SLUGS = {"academy-system-checklist"}
 
 SITE_URL = os.environ.get("NEXT_PUBLIC_SITE_URL", "https://classin.ai.kr").rstrip("/")
 # 폰트 탐색 경로 — macOS·Windows·Linux 순으로 폴백한다.
@@ -772,6 +775,9 @@ def main() -> None:
         if not magnet.get("published"):
             continue
         if selected_slugs and magnet.get("slug") not in selected_slugs:
+            continue
+        if magnet.get("slug") in WORKBOOK_SLUGS:
+            print(f"skip {magnet.get('slug')}: scripts/render-lead-magnet-workbook-pdf.mjs 로 만든다(워크북 템플릿).")
             continue
         paths.append(build_pdf(magnet, magnets_by_slug))
 
