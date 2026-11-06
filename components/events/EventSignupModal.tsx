@@ -24,6 +24,8 @@ import {
     marketingSurfaceClassName,
 } from "@/components/ui/marketing-form"
 import { Input } from "@/components/ui/input"
+import { AdConsentCheckbox } from "@/components/consent/AdConsentCheckbox"
+import { EMPTY_AD_CONSENT, isAdConsentGiven } from "@/lib/consent/ad-consent"
 
 interface EventSignupModalProps {
     eventSlug: string
@@ -50,6 +52,7 @@ export function EventSignupModal({
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState("")
     const [marketingConsent, setMarketingConsent] = useState(false)
+    const [adConsent, setAdConsent] = useState(EMPTY_AD_CONSENT)
     const formRef = useRef<HTMLFormElement>(null)
     const toast = useToast()
 
@@ -60,6 +63,7 @@ export function EventSignupModal({
             setSubmitted(false)
             setError("")
             setMarketingConsent(false)
+            setAdConsent(EMPTY_AD_CONSENT)
             formRef.current?.reset()
         }
         setOpen(nextOpen)
@@ -82,6 +86,7 @@ export function EventSignupModal({
                 email: (formData.get("email") as string) || undefined,
                 message: `문의 유형: 행사 신청\n신청 행사: ${eventTitle}`,
                 marketingConsent,
+                adConsent: isAdConsentGiven(adConsent),
                 eventSlug,
                 website: (formData.get("website") as string) || undefined,
             })
@@ -177,6 +182,11 @@ export function EventSignupModal({
                                 checked={marketingConsent}
                                 onChange={(e) => setMarketingConsent(e.target.checked)}
                                 label={<>행사·웨비나 소식을 이메일로 받아보겠습니다 <span className="text-[#6C776F]">(선택)</span></>}
+                            />
+                            <AdConsentCheckbox
+                                value={adConsent}
+                                onChange={setAdConsent}
+                                className="rounded-[20px] border-[#E4E8E2] bg-[#F7FAF7] py-3.5"
                             />
 
                             <div className="space-y-3">

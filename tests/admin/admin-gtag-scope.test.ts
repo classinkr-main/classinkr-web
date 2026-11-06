@@ -63,7 +63,7 @@ describe("어드민 gtag/GTM 차단 — 루트 레이아웃 우회 재발 방지
     const source = read("components/AppChrome.tsx")
 
     expect(source).toContain("isTrackingExcludedPath(pathname)")
-    expect(source).toMatch(/\{showGoogleTag \? <GoogleAdsScript \/> : null\}/)
+    expect(source).toMatch(/\{showGoogleTag \? <GoogleAdsScript analytics=\{consentChoice.analytics\} \/> : null\}/)
   })
 
   it("GTMScript도 추적 제외 경로(/admin 포함)에서 렌더를 멈추는 가드를 유지한다", () => {

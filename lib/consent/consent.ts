@@ -27,8 +27,12 @@ export const CONSENT_CHANGE_EVENT = "cln:consent-change"
 /** 푸터 "쿠키 설정" 등에서 배너 재오픈 요청 */
 export const OPEN_CONSENT_EVENT = "cln:open-consent"
 
-export const CONSENT_POLICY_VERSION =
-  process.env.NEXT_PUBLIC_CONSENT_POLICY_VERSION?.trim() || "2026-06-14"
+/**
+ * 동의한 쿠키 정책 버전. 개인정보처리방침의 쿠키 항목(app/privacy/page.tsx #cookies)과 함께 올린다 —
+ * 값이 바뀌면 모든 방문자에게 배너가 다시 뜬다. env 로 덮지 않는다(운영 env 가 옛 값을 고정하면
+ * 재동의가 무음으로 빠진다).
+ */
+export const CONSENT_POLICY_VERSION = "2026-11-06"
 
 /** 13개월 (KR PIPA / EU 권고 상한) */
 export const CONSENT_COOKIE_MAX_AGE = 60 * 60 * 24 * 391

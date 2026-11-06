@@ -61,6 +61,11 @@ export interface LeadPayload {
   message?: string
   timestamp: string
   marketingConsent?: boolean
+  /**
+   * 맞춤형 광고 활용 동의(선택, lib/consent/ad-consent.ts) — 두 칸(제3자 제공·국외 이전)을 모두
+   * 선택했을 때만 true. undefined = 그 폼에 체크 칸이 없었다. 해시 연락처는 이 값이 true 일 때만 보낸다.
+   */
+  adConsent?: boolean
   eventSlug?: string
   sourceDetail?: string
   leadMagnet?: string

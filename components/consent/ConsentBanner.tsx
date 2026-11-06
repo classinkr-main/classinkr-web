@@ -21,12 +21,12 @@ const MASCOT_SRC = "/images/consent/gull-cookie.webp"
 // 컴팩트 컨트롤 — 보이는 높이 24px(min-h-6), 누르는 영역은 hit-area 로 44px 보장
 const BTN =
   "hit-area inline-flex min-h-6 flex-1 items-center justify-center rounded-(--radius-control) px-2 text-note font-semibold transition-colors duration-(--motion-fast) ease-soft disabled:opacity-40"
-const PRIMARY_BTN = `${BTN} bg-fg-accent text-fg-on-accent hover:bg-fg-accent-hover`
-const SUBTLE_BTN = `${BTN} border border-line-strong bg-surface-sunken text-fg-body hover:border-line-ink hover:text-fg-ink`
+// 거절(필수만)과 동의(모두 동의·선택 저장)는 같은 모양이다 — 한쪽만 눈에 띄게 두지 않는다
+const CHOICE_BTN = `${BTN} border border-line-strong bg-surface-sunken text-fg-body hover:border-line-ink hover:text-fg-ink`
 
 const OPTIONAL_ROWS: Array<{ key: keyof ConsentChoice; label: string; desc: string }> = [
-  { key: "analytics", label: "분석", desc: "사이트 개선" },
-  { key: "marketing", label: "마케팅", desc: "광고 성과" },
+  { key: "analytics", label: "분석", desc: "방문 통계 · Google(미국)" },
+  { key: "marketing", label: "마케팅", desc: "광고·상담창 · Google·Meta(미국), 카카오, 채널톡" },
 ]
 
 /**
@@ -126,7 +126,7 @@ export function ConsentBanner() {
           </div>
           <p className="mt-0.5 text-note text-fg-muted break-keep">
             선택 쿠키는 동의 시에만 켜요 ·{" "}
-            <Link href="/privacy" prefetch={false} className="link-quiet text-fg-body whitespace-nowrap">
+            <Link href="/privacy#cookies" prefetch={false} className="link-quiet text-fg-body whitespace-nowrap">
               자세히
             </Link>
           </p>
@@ -157,6 +157,11 @@ export function ConsentBanner() {
                   </label>
                 </li>
               ))}
+              <li className="py-1 text-note">
+                <Link href="/privacy#overseas" prefetch={false} className="link-quiet text-fg-body">
+                  보내는 곳·항목·기간 자세히
+                </Link>
+              </li>
             </ul>
           ) : null}
 
@@ -171,12 +176,12 @@ export function ConsentBanner() {
               type="button"
               onClick={() => void commitChoice(DENIED_CHOICE)}
               disabled={saving}
-              className={SUBTLE_BTN}
+              className={CHOICE_BTN}
             >
               필수만
             </button>
             {expanded ? (
-              <button type="button" onClick={() => void commitChoice(draft)} disabled={saving} className={PRIMARY_BTN}>
+              <button type="button" onClick={() => void commitChoice(draft)} disabled={saving} className={CHOICE_BTN}>
                 선택 저장
               </button>
             ) : (
@@ -184,7 +189,7 @@ export function ConsentBanner() {
                 type="button"
                 onClick={() => void commitChoice(GRANTED_CHOICE)}
                 disabled={saving}
-                className={PRIMARY_BTN}
+                className={CHOICE_BTN}
               >
                 모두 동의
               </button>

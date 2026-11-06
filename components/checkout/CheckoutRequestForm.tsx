@@ -34,6 +34,8 @@ import {
 } from "@/components/checkout/request-date"
 import { ACADEMY_SIZE_OPTIONS, ACADEMY_SIZE_PLACEHOLDER } from "@/lib/contact/academy-size"
 import { getAnonymousId } from "@/lib/consent/consent"
+import { EMPTY_AD_CONSENT, isAdConsentGiven, type AdConsentValue } from "@/lib/consent/ad-consent"
+import { AdConsentCheckbox } from "@/components/consent/AdConsentCheckbox"
 import { collectLeadAttribution } from "@/lib/marketing-attribution"
 import type { CheckoutRequestItem } from "@/lib/billing/hardware-catalog"
 import { trackLeadSubmitted } from "@/lib/analytics"
@@ -91,6 +93,8 @@ type FormState = {
   memo: string
   desiredDate: string
   consent: boolean
+  /** 맞춤형 광고 활용 동의(선택) — 두 칸 모두 골라야 동의다 */
+  adConsent: AdConsentValue
   /** honeypot — 사람에게는 보이지 않는 필드다. */
   website: string
 }
@@ -107,6 +111,7 @@ const EMPTY_FORM: FormState = {
   memo: "",
   desiredDate: "",
   consent: false,
+  adConsent: EMPTY_AD_CONSENT,
   website: "",
 }
 
@@ -344,6 +349,7 @@ export function CheckoutRequestForm({
           ...(memo ? { memo } : {}),
           sourcePage,
           consent: true,
+          adConsent: isAdConsentGiven(form.adConsent),
           // 광고 유입 귀속 — 이 폼은 lib/submitLead.ts·/api/lead 를 안 거치므로 보내지 않으면 서버가
           // 알 방법이 없다. 평평하게 태우면 서버의 sanitizeLeadAttribution 이 utm·클릭ID·네이버 n_*
           // 묶음(naverAd)을 골라 리드 미러링에 이어 준다.
@@ -815,6 +821,11 @@ export function CheckoutRequestForm({
               {errors.consent ? (
                 <p className="-mt-2 text-[11px] text-[#B43E3E]">{errors.consent}</p>
               ) : null}
+              <AdConsentCheckbox
+                value={form.adConsent}
+                onChange={(next) => update("adConsent", next)}
+                className="rounded-lg px-3 py-3 text-[12px]"
+              />
 
               {formError ? (
                 <div

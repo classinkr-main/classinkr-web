@@ -18,6 +18,8 @@ import {
 } from "@/lib/contact/academy-size"
 import { ContactDirectChannels } from "@/components/contact/ContactDirectChannels"
 import { ContactFastTrack } from "@/components/contact/ContactFastTrack"
+import { AdConsentCheckbox } from "@/components/consent/AdConsentCheckbox"
+import { EMPTY_AD_CONSENT, isAdConsentGiven } from "@/lib/consent/ad-consent"
 import { CONTACT_TOPICS, EVENT_CONTACT_TOPICS, isContactTopic } from "@/lib/contact/topics"
 import type { PublicEvent } from "@/lib/types/public-events"
 
@@ -72,6 +74,7 @@ export default function ContactPage() {
     const [message, setMessage] = useState("")
     const [privacyConsent, setPrivacyConsent] = useState(false)
     const [privacyConsentError, setPrivacyConsentError] = useState("")
+    const [adConsent, setAdConsent] = useState(EMPTY_AD_CONSENT)
     // 어떤 필드 때문에 막혔는지. 이게 없으면 에러 하나에 6개 필드가 동시에 흔들리고
     // 스크린리더에도 전부 잘못된 것으로 읽힌다.
     const [errorField, setErrorField] = useState<string | null>(null)
@@ -168,6 +171,7 @@ export default function ContactPage() {
         setMessage("")
         setPrivacyConsent(false)
         setPrivacyConsentError("")
+        setAdConsent(EMPTY_AD_CONSENT)
         // 이걸 비우지 않으면 두 번째 문의에 첫 제출의 lead_magnet 이 재첨부되고,
         // 서버 중복키 context 가 leadMagnet 이라 정상 재문의가 409 로 막힐 수 있다.
         setLeadMagnet("")
@@ -265,6 +269,7 @@ export default function ContactPage() {
                 size: (formData.get("size") as string) || undefined,
                 message,
                 marketingConsent: formData.get("marketing-consent") === "on",
+                adConsent: isAdConsentGiven(adConsent),
                 eventSlug: selectedEvent?.slug ?? undefined,
                 leadMagnet: leadMagnet || undefined,
                 website: (formData.get("website") as string) || undefined,
@@ -569,6 +574,7 @@ export default function ContactPage() {
                                         <span className="ml-1 text-[#A39E98]">(선택)</span>
                                     </span>
                                 </label>
+                                <AdConsentCheckbox value={adConsent} onChange={setAdConsent} />
                                 {error && (
                                     <p id="contact-form-error" role="alert" aria-live="polite" className="text-center text-sm text-[#B43E3E]">{error}</p>
                                 )}
