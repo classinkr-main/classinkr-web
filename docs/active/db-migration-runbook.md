@@ -266,6 +266,15 @@ npm run check:db --  --strict
 
 - 서울 프로젝트 적용 확인(2026-11-06): Supabase `apply_migration` 이름 `google_ads_daily_channel_video` — 두 칸 생김, 기존 6줄 그대로(두 칸 NULL), RLS 켜짐·정책 0. 운영 중인 옛 크론 코드는 새 칸을 쓰지 않아 그대로 돈다 — 새 코드 배포 뒤 첫 크론부터 지난 7일이 채워진다.
 
+### 2026-11-06 쇼룸 예약 Compass 확정 — 서울 프로젝트 미적용
+
+[쇼룸 신청 → Compass 컨펌 → 확정 문자](./showroom-compass-confirm-2026-11-06.md) §3. **코드 배포 전에 적용한다** — 확정 크론이 새 칸·뷰 칸을 쓴다.
+`crm.lead_demos.at` 은 Compass 가 2026-10-01 에 만든 칸이라 운영에 이미 있다.
+
+| 파일 | 하는 일 | 미적용 시 | 확인 |
+| --- | --- | --- | --- |
+| `20261106_showroom_booking_compass_confirm.sql` | `showroom_bookings` 에 `requested_visit_date`·`requested_visit_time`·`compass_demo_id`·`confirmation_sent_at`(NULL 허용, 백필 없음) + `compass_demo_id` 부분 유니크 인덱스. `compass_demos_v` 끝에 `at`(회차 시각)을 붙인다(`CREATE OR REPLACE VIEW`, 기존 칸 그대로, service_role SELECT 만). 멱등 | 확정 크론(`lead-contact-sync` 의 `showroomConfirm`)이 매 실행 `failed`(42703)로 건너뛰어 Compass 컨펌이 확정·확정 문자로 이어지지 않는다. 어드민 접수 큐는 새 칸 없이 읽어 그대로 열린다. 어드민 접수 큐에서 확정해도 확정 문자는 보내지 않는다(선점 칸이 없으면 보내지 않는다) | `npm run check:db` 의 `showroom_bookings` 확정 칸·`compass_demos_v` 시각 칸 프로브(warning), 또는 `select count(*) from information_schema.columns where table_name = 'showroom_bookings' and column_name in ('requested_visit_date','requested_visit_time','compass_demo_id','confirmation_sent_at');` → `4` · `select count(*) from information_schema.columns where table_name = 'compass_demos_v' and column_name = 'at';` → `1` |
+
 ## 적용 보류 중인 마이그레이션
 
 `check:db`에 걸리지 않는(프로브가 없는) 파일이라도, 아래 파일은 **파일명 순서대로 일괄 적용하지 않는다.**

@@ -271,11 +271,11 @@ export default function ShowroomPage() {
         <div className="mx-auto max-w-3xl px-6">
           <div className="text-center">
             <h2 className="text-[30px] font-bold leading-tight tracking-[-1px] text-[#111110] md:text-[40px]">
-              방문 예약
+              방문 신청
             </h2>
             <p className="mx-auto mt-4 max-w-xl text-[16px] leading-relaxed text-[#615D59]">
-              원하는 날짜와 시간을 고르고 연락처를 남겨주세요. 담당자가 일정을 확인한 뒤 확정
-              연락을 드립니다.
+              원하는 날짜와 시간을 고르고 연락처를 남겨주세요. 담당자가 일정을 확인해 확정되면
+              문자로 알려드립니다.
             </p>
           </div>
 
@@ -324,8 +324,8 @@ export default function ShowroomPage() {
               </dl>
 
               <p className="mt-6 rounded-xl border border-black/[0.08] bg-[#F6F5F4] px-4 py-3 text-[13px] leading-relaxed text-[#615D59]">
-                정확한 층·호수 안내와 주차 여부는 확정 연락 때 함께 알려드립니다. 방문 당일
-                일정이 바뀌면 남겨주신 연락처로 미리 연락드립니다.
+                정확한 호수는 확정 문자에 함께 적어 드립니다. 주차가 필요하면 확정 문자에 적힌
+                번호로 미리 알려 주세요. 방문 당일 일정이 바뀌면 남겨주신 연락처로 미리 연락드립니다.
               </p>
             </div>
 

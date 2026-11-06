@@ -18,12 +18,27 @@ const REPORT_OK = {
   applied: { contacted: 2, closed: 1 },
 }
 
+// 같은 5분 주기에 이어 도는 쇼룸 확정 동기화(2026-11-06) — 판정만 한 정상 보고서.
+const SHOWROOM_OK = {
+  status: "ok",
+  enabled: false,
+  dryRun: true,
+  scanned: 0,
+  linked: 0,
+  planned: 0,
+  confirmed: 0,
+  confirmedIds: [],
+  messages: { sent: 0, simulated: 0, failed: 0, skipped: 0 },
+}
+
 async function loadRoute() {
   vi.resetModules()
   const syncLeadContactFromCompassWithinBudget = vi.fn().mockResolvedValue(REPORT_OK)
+  const syncShowroomConfirmationsFromCompass = vi.fn().mockResolvedValue(SHOWROOM_OK)
   vi.doMock("@/lib/server/lead-contact-compass-sync", () => ({ syncLeadContactFromCompassWithinBudget }))
+  vi.doMock("@/lib/server/showroom-compass-confirm", () => ({ syncShowroomConfirmationsFromCompass }))
   const { GET } = await import("@/app/api/cron/lead-contact-sync/route")
-  return { GET, syncLeadContactFromCompassWithinBudget }
+  return { GET, syncLeadContactFromCompassWithinBudget, syncShowroomConfirmationsFromCompass }
 }
 
 function request(query = "", secret = "test-cron-secret") {
@@ -69,17 +84,49 @@ describe("리드 연락 반영 전용 크론", () => {
     const response = await GET(request())
 
     expect(response.status).toBe(200)
-    expect(await response.json()).toEqual({ ok: true, ...REPORT_OK })
+    expect(await response.json()).toEqual({ ok: true, ...REPORT_OK, showroomConfirm: SHOWROOM_OK })
     expect(syncLeadContactFromCompassWithinBudget).toHaveBeenCalledWith({ budgetMs: 45_000, dryRun: false })
   })
 
-  it("dryRun=true 면 미리보기로만 돌린다", async () => {
+  it("dryRun=true 면 미리보기로만 돌린다 — 쇼룸 확정도 판정만", async () => {
     process.env.CRON_SECRET = "test-cron-secret"
-    const { GET, syncLeadContactFromCompassWithinBudget } = await loadRoute()
+    const { GET, syncLeadContactFromCompassWithinBudget, syncShowroomConfirmationsFromCompass } = await loadRoute()
 
     await GET(request("?dryRun=true"))
 
     expect(syncLeadContactFromCompassWithinBudget).toHaveBeenCalledWith({ budgetMs: 45_000, dryRun: true })
+    expect(syncShowroomConfirmationsFromCompass).toHaveBeenCalledWith({ dryRun: true })
+  })
+
+  it("리드 반영은 정상인데 쇼룸 확정이 실패·상한 초과·브리지 끊김이면 2xx 가 아닌 코드", async () => {
+    process.env.CRON_SECRET = "test-cron-secret"
+    const { GET, syncShowroomConfirmationsFromCompass } = await loadRoute()
+
+    for (const [status, code] of [
+      ["failed", 500],
+      ["over_cap", 500],
+      ["bridge_down", 503],
+    ] as const) {
+      syncShowroomConfirmationsFromCompass.mockResolvedValueOnce({ ...SHOWROOM_OK, status })
+      const response = await GET(request())
+      expect(response.status).toBe(code)
+      expect(await response.json()).toMatchObject({ ok: false, status: "ok", showroomConfirm: { status } })
+    }
+  })
+
+  it("쇼룸 확정의 예상 못 한 예외가 리드 반영 결과를 지우지 않는다", async () => {
+    process.env.CRON_SECRET = "test-cron-secret"
+    const { GET, syncShowroomConfirmationsFromCompass } = await loadRoute()
+    syncShowroomConfirmationsFromCompass.mockRejectedValueOnce(new Error("boom"))
+
+    const response = await GET(request())
+
+    expect(response.status).toBe(500)
+    expect(await response.json()).toMatchObject({
+      ...REPORT_OK,
+      ok: false,
+      showroomConfirm: { status: "failed", error: "Showroom confirm sync failed." },
+    })
   })
 
   it("건너뜀·실패·시간 초과는 크론 대시보드에서 보이게 2xx 가 아닌 코드로 돌려준다", async () => {

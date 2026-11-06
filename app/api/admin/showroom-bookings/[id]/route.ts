@@ -7,6 +7,7 @@ import {
   isShowroomBookingStatus,
   updateShowroomBookingStatus,
 } from "@/lib/repositories/showroom-bookings"
+import { sendShowroomConfirmationOnce } from "@/lib/server/showroom-compass-confirm"
 import { SHOWROOM_BOOKINGS_LIST_CACHE_TAG } from "../_cache"
 
 const MAX_ASSIGNED_TO_LENGTH = 100
@@ -20,6 +21,10 @@ const MAX_ASSIGNED_TO_LENGTH = 100
  * body: { status: requested|confirmed|completed|no_show|canceled, assignedTo?: string|null }
  *  - 미등록 상태값 → 400 (조용히 삼키지 않는다)
  *  - 없는 id → 404
+ *
+ * confirmed 로 올리면 확정 문자를 한 번 보낸다(2026-11-06) — Compass 「쇼룸 데모」 확정 크론과 같은 함수·같은 선점
+ * (confirmation_sent_at)이라 두 경로가 겹쳐도 한 번이다. 지난 방문·스위치(SHOWROOM_CONFIRM_ENABLED) 꺼짐이면 보내지 않는다.
+ * 결과는 응답의 `confirmationMessage`(sent·simulated·failed·skipped).
  */
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const err = await verifyAdmin(req)
@@ -58,10 +63,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   try {
     const updated = await updateShowroomBookingStatus(id, { status: raw.status, assignedTo })
     if (!updated) return NextResponse.json({ error: "not found" }, { status: 404 })
+    const confirmationMessage =
+      updated.status === "confirmed" ? await sendShowroomConfirmationOnce(updated) : undefined
     // admin-performance-round3-2026-09-10.md §3.3 — 담당자가 상태를 바꾼 직후 같은 화면이
     // 목록을 다시 그린다. {expire:0}으로 다음 조회가 반드시 새 상태를 보게 한다.
     revalidateTag(SHOWROOM_BOOKINGS_LIST_CACHE_TAG, { expire: 0 })
-    return NextResponse.json(updated)
+    return NextResponse.json(confirmationMessage ? { ...updated, confirmationMessage } : updated)
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "쇼룸 예약 상태 변경에 실패했습니다." },

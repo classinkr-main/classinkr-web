@@ -550,11 +550,11 @@ export function ShowroomBookingForm({ interests }: Props) {
         </div>
 
         <h3 className="mt-4 text-[22px] font-bold leading-snug tracking-[-0.25px] text-[#111110]">
-          방문 요청이 접수되었습니다
+          방문 신청이 접수되었습니다
         </h3>
         <p className="mt-2 text-[14px] leading-relaxed text-[#615D59]">
-          요청이 접수되었고 담당자가 확인 후 확정 연락을 드립니다. 아직 방문이 확정된 것은
-          아니며, 남겨주신 연락처로 일정을 확인한 뒤 확정해 드립니다.
+          담당자가 일정을 확인해 확정되면 문자로 알려드립니다. 아직 방문이 확정된 것은
+          아니니, 확정 문자를 받으신 뒤 방문해 주세요.
         </p>
         {/* 이 화면을 닫으면 아무 흔적도 남지 않던 문제 — 접수 확인을 연락처로도 보낸다. */}
         <p className="mt-1.5 text-[13px] leading-relaxed text-[#615D59]">
@@ -1030,11 +1030,11 @@ export function ShowroomBookingForm({ interests }: Props) {
             className="h-12 w-full rounded-lg bg-fg-accent text-[14px] font-semibold text-fg-on-accent hover:bg-fg-accent-hover"
             disabled={isSubmitting || availabilityStatus !== "ready"}
           >
-            {isSubmitting ? "접수 중..." : "방문 예약 요청하기"}
+            {isSubmitting ? "접수 중..." : "방문 신청하기"}
           </Button>
           <p className="text-center text-[11px] leading-relaxed text-[#615D59]">
-            보내신 요청은 담당자 확인 후 확정됩니다. 확정 전까지는 방문이 확정된 것이
-            아닙니다.
+            보내신 신청은 담당자 확인 후 확정되며, 확정되면 문자로 알려드립니다. 확정 전까지는
+            방문이 확정된 것이 아닙니다.
           </p>
         </div>
       </form>

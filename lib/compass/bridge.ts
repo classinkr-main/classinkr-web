@@ -21,6 +21,7 @@ import { fetchSupabasePages } from "@/lib/supabase/pagination"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import { COMPASS_SUMMARY_MAX_ROWS } from "@/lib/compass/summary-contract"
 import { isJoinableCompassPhoneKey } from "@/lib/compass/normalize"
+import { COMPASS_SHOWROOM_DEMO_MEMO, type CompassShowroomDemoRound } from "@/lib/showroom/compass-confirm"
 
 export { normalizePhoneKey, compassLeadUrl } from "@/lib/compass/normalize"
 
@@ -980,6 +981,40 @@ export async function getCompassDemos(
       },
       { ttlMs: TTL_MS, downTtlMs: TTL_DOWN_MS, isDown: isCompassResultDown, copy: copyCompassResult },
     )
+  } catch (error) {
+    return downResult(error)
+  }
+}
+
+/**
+ * 쇼룸 확정 크론용 — 링크된 Compass 리드들의 「쇼룸 데모」·잡힘(booked) 회차 중 fromDay 이후(lib/server/showroom-compass-confirm.ts).
+ * `at`(회차 시각)은 20261106_showroom_booking_compass_confirm.sql 이 뷰 끝에 붙인 칸이다 — 미적용이면 42703 → down(크론이 건너뛴다).
+ * 메모하지 않는다: 크론이 5분마다 새로 읽어야 방금 잡힌 회차를 놓치지 않는다. 리드 id 당 회차는 몇 건이라 행 상한에 닿지 않는다.
+ */
+export async function getCompassShowroomDemoRounds(
+  leadIds: readonly number[],
+  fromDay: string,
+): Promise<CompassResult<CompassShowroomDemoRound>> {
+  const ids = [...new Set(leadIds)].filter((id) => Number.isInteger(id)).sort((a, b) => a - b)
+  if (ids.length === 0) return ok([])
+  try {
+    const sb = createSupabaseAdminClient()
+    const rows: CompassShowroomDemoRound[] = []
+    for (let index = 0; index < ids.length; index += LEAD_ID_CHUNK) {
+      const chunk = ids.slice(index, index + LEAD_ID_CHUNK)
+      const { data, error } = await sb
+        .from("compass_demos_v")
+        .select("id, lead_id, kind, status, owner, memo, at")
+        .in("lead_id", chunk)
+        .eq("kind", "demo")
+        .eq("memo", COMPASS_SHOWROOM_DEMO_MEMO)
+        .eq("status", "booked")
+        .gte("day", fromDay)
+        .order("id", { ascending: true })
+      if (error) return downResult(error)
+      rows.push(...((data ?? []) as CompassShowroomDemoRound[]))
+    }
+    return ok(rows)
   } catch (error) {
     return downResult(error)
   }
