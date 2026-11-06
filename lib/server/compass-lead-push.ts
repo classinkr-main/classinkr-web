@@ -5,11 +5,12 @@ import { postJson } from "@/lib/server/post-json"
 
 // 홈페이지 폼 리드를 Compass(mkt.classin.co.kr)에도 찍는다 — 저장 직후 `POST /api/webhook/home-lead` 한 번 (2026-11-04).
 //
-// 설계(Compass 저장소 ADR-0083):
+// 설계(Compass 저장소 ADR-0087):
 //  * 어드민이 정본(public.leads), Compass 는 사본이다. 어드민은 crm 스키마에 쓰지 않고 HTTP 로만 넘긴다(compass-integration-2026-09-14.md §0 의
 //    "교차 쓰기 0건" 그대로). Compass 가 전화·이메일 동일인 판정, 재유입, crm.lead_refs(system='home_lead') 링크를 한다.
-//  * 대상은 공개 폼 소스만(WEBSITE_FORM_LEAD_SOURCES — 데모·문의·쇼룸 예약·도입 신청). 뉴스레터는 상담이 아니고, Meta 리드폼은 Compass 가
-//    웹훅으로 직접 받으니 보내면 두 번 들어간다.
+//  * 대상은 공개 폼 소스(WEBSITE_FORM_LEAD_SOURCES — 데모·문의·쇼룸 예약·도입 신청, 행사 신청은 contact_page + eventSlug)와
+//    자료 신청(newsletter + leadMagnet — 2026-11-06 설계자 "자료등록·행사 신청도 Compass 에"). 그냥 뉴스레터 구독은 상담이 아니고,
+//    Meta 리드폼은 Compass 가 웹훅으로 직접 받으니 보내면 두 번 들어간다. event_slug·lead_magnet 이 있으면 Compass 가 경로를 「행사 신청」·「자료 신청」으로 적는다.
 //  * event_id 는 어드민 전환 이벤트 id(`lead:<id>` · `lead:<id>:reinflow:<시각>`)와 같은 값 — Compass 가 멱등 표식으로 쓴다. 같은 전달을 다시 보내도
 //    리드가 두 건 되지 않는다.
 //  * 설정은 env 둘(COMPASS_BRIDGE_URL — KR Team 브리지와 같은 Compass 오리진 · COMPASS_LEAD_WEBHOOK_TOKEN — Compass HOME_LEAD_TOKEN 과 같은 값).
@@ -40,6 +41,10 @@ export interface CompassLeadPushPayload {
   message: string | null
   role: string | null
   size: string | null
+  /** 행사 신청이면 행사 slug — Compass 경로 「행사 신청 · slug」 */
+  event_slug: string | null
+  /** 자료 신청이면 자료 slug — Compass 경로 「자료 신청 · slug」 */
+  lead_magnet: string | null
   page: string | null
   utm: { source: string | null; medium: string | null; campaign: string | null } | null
 }
@@ -52,9 +57,10 @@ export interface CompassLeadPushOptions {
 
 export type CompassLeadPushTarget = { url: string; token: string }
 
-/** 이 리드를 Compass 로 보내는 소스인가 — 공개 폼만(뉴스레터·Meta 리드폼 제외) */
-export function isCompassPushSource(source: string | null | undefined): boolean {
-  return !!source && WEBSITE_FORM_LEAD_SOURCES.has(source)
+/** 이 리드를 Compass 로 보내는가 — 공개 폼 + 자료 신청(뉴스레터 중 leadMagnet 이 붙은 것). 그냥 구독·Meta 리드폼은 제외 */
+export function isCompassPushSource(source: string | null | undefined, leadMagnet?: string | null): boolean {
+  if (!source) return false
+  return WEBSITE_FORM_LEAD_SOURCES.has(source) || (source === "newsletter" && !!leadMagnet?.trim())
 }
 
 /** env 둘이 다 있고 HTTPS 오리진일 때만 대상. 아니면 null(보내지 않는다). 토큰은 돌려주는 객체 밖으로 내지 않는다 */
@@ -95,6 +101,8 @@ export function buildCompassLeadPushPayload(body: LeadPayload, { leadId, kind, e
     message: str(body.message),
     role: str(body.role),
     size: str(body.size),
+    event_slug: str(body.eventSlug),
+    lead_magnet: str(body.leadMagnet),
     page: str(body.currentPage) ?? str(body.landingPage),
     utm: utm.source || utm.medium || utm.campaign ? utm : null,
   }
