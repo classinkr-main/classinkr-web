@@ -207,6 +207,8 @@ export const SCHEMA_CONTRACT_MIGRATIONS = [
   "supabase/migrations/20261102074146_quote_soft_delete.sql",
   // 메타 리드 단계 신호 원장(2026-11-04). META_CRM_SIGNAL_ENABLED 가 꺼져 있으면 영향 없다 — 켜기 전에 적용한다(warning).
   "supabase/migrations/20261104_meta_crm_signal_events.sql",
+  // Google Ads 캠페인 유형 · 유튜브 조회수 칸(2026-11-06) — 크론 upsert 가 이 칸을 쓰므로 코드 배포 전에 적용한다(blocker).
+  "supabase/migrations/20261106_google_ads_daily_channel_video.sql",
 ] as const
 
 export const SCHEMA_PROBES: SchemaProbe[] = [
@@ -330,6 +332,15 @@ export const SCHEMA_PROBES: SchemaProbe[] = [
     migration: "supabase/migrations/20260914_ad_channel_daily.sql",
     impact:
       "크론(/api/cron/sync-google-ads)의 upsert 가 실패해 Google 집행이 쌓이지 않는다 — /admin/campaigns 채널 스트립의 Google 칸이 계속 '미측정'으로 남는다.",
+  },
+  {
+    kind: "table",
+    table: "google_ads_daily",
+    label: "Google Ads 캠페인 유형 · 유튜브 조회수 칸(channel_type, video_views)",
+    columns: ["date", "campaign_id", "channel_type", "video_views"],
+    migration: "supabase/migrations/20261106_google_ads_daily_channel_video.sql",
+    impact:
+      "크론(/api/cron/sync-google-ads)의 upsert 가 이 칸을 못 찾아 매번 실패한다 — Google 집행이 그날부터 쌓이지 않고, Compass 광고 탭 「구글」의 유형·조회수도 비어 있다.",
   },
   {
     kind: "table",
