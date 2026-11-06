@@ -906,9 +906,14 @@ function isIdentityQuestion(question: NormalizedQuestion) {
   return IDENTITY_RE.test(text) && !IDENTITY_EXCLUSION_RE.test(text)
 }
 
+// "칠판 티비 밝기 줄이고 싶어요", "화면에 줄이 생겼어요"처럼 쓰는 법·증상을 묻는 말은 스펙 질문이 아니다.
+const BOARD_USAGE_OR_SYMPTOM_RE =
+  /하고\s*싶|하려면|어떻게\s*(?:해|하|줄|바꾸|끄|켜|나눠)|방법|나눠|보내|공유|저장|생겼|생기|줄이|낮추|켜져\s*있|혼자|녹음|녹화|걸어|세워|이사|벽이|안\s*(?:돼|되|나|먹)|안돼|안되|느려|버벅|늘어|뚱뚱|이상해|이상하|눌러도|반응/
+
 function isHardwareSpecsQuestion(question: NormalizedQuestion) {
   const text = question.redacted.toLowerCase()
   if (COMPETITOR_BOARD_RE.test(text)) return false
+  if (BOARD_USAGE_OR_SYMPTOM_RE.test(text)) return false
   return (
     isBoardTargeted(text) &&
     HARDWARE_SPECS_RE.test(text) &&
@@ -2290,15 +2295,18 @@ function buildImmediateHandoffResponse(
   const isSupport = handoffIntent === "support"
   return {
     answer: [
+      isSupport
+        ? "네, 담당자 상담으로 바로 연결해 드릴게요. 아래 [실시간 상담 연결]을 누르시면 상담원이 지금까지의 대화를 보고 이어서 도와드립니다."
+        : "네, 담당자 상담으로 이어 드릴게요. 아래 [도입 상담 남기기]로 연락받을 방법을 남기시면 담당자가 연락드립니다.",
       /보상|배상|환불/.test(text)
         ? "보상이나 환불은 제가 채팅에서 약속드릴 수 없어요. 담당자가 이번 상황을 확인한 뒤 직접 안내드립니다."
         : null,
       /통화|전화|원격|화면\s*(?:을\s*)?(?:보면서|같이)/.test(text)
-        ? "설명이 서툴러도 괜찮아요. 전화나 화면을 함께 보는 원격 지원이 되는지는 상담원이 상황을 보고 안내해 드려요."
+        ? `${/죄송|잘\s*못하|서툴|모르겠/.test(text) ? "설명이 서툴러도 괜찮아요. " : ""}전화나 화면을 함께 보는 원격 지원이 되는지는 상담원이 상황을 보고 안내해 드려요.`
         : null,
-      isSupport
-        ? "네, 담당자 상담으로 바로 연결해 드릴게요. 아래 [실시간 상담 연결]을 누르시면 상담원이 지금까지의 대화를 보고 이어서 도와드립니다."
-        : "네, 담당자 상담으로 이어 드릴게요. 아래 [도입 상담 남기기]로 연락받을 방법을 남기시면 담당자가 연락드립니다.",
+      /몇\s*시(?:까지|부터)?|운영\s*시간|상담\s*시간|언제까지|주말/.test(text)
+        ? "상담 운영 시간은 공개 안내에 정리돼 있지 않아 단정하지 않을게요. 연결되면 상담원이 바로 안내해 드립니다."
+        : null,
       isSupport
         ? "기다리시는 동안 문제가 생긴 화면, 쓰는 기기, 생긴 시각을 정리해 두시면 더 빨리 확인합니다. 비밀번호는 보내지 않으셔도 돼요."
         : "데모와 쇼룸 방문은 홈페이지 문의 페이지(/contact)나 쇼룸 예약(/showroom)에서도 바로 신청할 수 있어요. 여러 분이 함께 보실 예정이면 신청할 때 인원을 적어 주세요.",
@@ -2691,7 +2699,9 @@ function getPolicyConfirmationAnswer(question: NormalizedQuestion) {
   if (isRefundQuestion(question)) {
     return [
       "환불 가능 여부와 절차는 학원 계정의 계약 내용을 보고 담당자가 확인해 안내드려요. 채팅에서 바로 환불 여부나 금액을 약속드릴 수는 없어 죄송합니다.",
-      "아래 [실시간 상담 연결]을 누르시면 상담원에게 바로 환불 요청을 접수할 수 있어요. 결제한 학원명과 결제 시기를 함께 말씀해 주시면 더 빨리 확인합니다.",
+      /(?:처리|진행)\s*(?:상태|상황|현황)|지났|아직|언제\s*(?:돼|되|처리|들어)/.test(text)
+        ? "이미 요청하신 환불의 처리 상태는 이 채팅에서 조회할 수 없어요. 아래 [실시간 상담 연결]을 누르시면 상담원이 요청 내역을 찾아 진행 상황을 확인해 드립니다."
+        : "아래 [실시간 상담 연결]을 누르시면 상담원에게 바로 환불 요청을 접수할 수 있어요. 결제한 학원명과 결제 시기를 함께 말씀해 주시면 더 빨리 확인합니다.",
     ].join("\n\n")
   }
 
@@ -3562,6 +3572,26 @@ const TRIAL_FEATURE_LOCK_RE =
   /체험.{0,30}(?:녹화|웹\s*라이브|라이브|기능|버튼).{0,24}(?:잠겨|잠김|잠금|막혀|막힘|안\s*(?:돼|되|보|눌|켜)|없|회색|못)/
 const SHOWROOM_CONFIRM_RE =
   /(?:확정|예약).{0,20}(?:문자|연락|메일|알림|카톡).{0,12}(?:안\s*(?:와|왔|옴|오)|안와|안왔|없)|확정\s*(?:문자|연락)/
+const DOUBLE_CHARGE_RE =
+  /(?:결제|빠져|빠졌|출금|청구|돈).{0,10}(?:두\s*번|두번|2번|중복|이중)|(?:두\s*번|두번|2번|중복|이중)\s*(?:결제|빠|출금|청구)/
+const EXPORT_MASK_RE =
+  /(?:번호|휴대폰|전화|연락처).{0,24}(?:별표|\*|가려|마스킹)|(?:별표|마스킹).{0,20}(?:번호|명단|내보내|엑셀)/
+const SECURITY_POLICY_RE = /2단계\s*인증|\b2fa\b|이중\s*인증|비밀번호\s*정책|비밀번호.{0,10}(?:길이|변경\s*주기|복잡도|만료\s*정책)/
+const ONBOARDING_HELP_RE =
+  /(?:누가|직접|와서|방문).{0,10}(?:세팅|설정|설치)\s*(?:좀\s*)?(?:해\s*주|해줘|도와)|세팅\s*(?:좀\s*)?(?:해\s*주|도와|대행)|(?:온보딩|운영\s*교육)\s*(?:지원|도와|받을\s*수)|우리만\s*복잡/
+const ATTENDANCE_SMS_RE = /(?:출결|출석|등원|하원).{0,10}(?:문자|알림|메시지|카톡)/
+const TRIAL_INVITE_RE =
+  /체험.{0,40}(?:선생님|교사|강사).{0,30}(?:초대|등록|추가).{0,10}(?:안\s*(?:돼|되)|안돼|안되|못)/
+const TRIAL_TO_PAID_RE =
+  /체험.{0,30}(?:유료|정식).{0,20}(?:넘어|전환|바꾸)|유료\s*전환.{0,30}(?:데이터|코스|학생|그대로|유지|절차)/
+const QUOTE_VS_PRICE_RE =
+  /견적.{0,30}(?:홈페이지|사이트|가격표|요금표).{0,30}(?:다르|달라|차이)|(?:홈페이지|사이트).{0,20}(?:가격|요금).{0,30}견적.{0,10}(?:다르|달라)/
+const SHOWROOM_DEVICE_RE = /(?:쇼룸|전시).{0,40}(?:데모|받은|우리).{0,40}(?:버벅|느려|느리|다르|같은\s*모델)/
+const ZOOM_WEAKNESS_RE = /(?:zoom|줌).{0,30}(?:보다\s*)?(?:못한|단점|약점|부족|안\s*좋은)|(?:단점|약점|못한\s*게).{0,20}(?:솔직|뭐|말해)/
+const PERSONAL_USE_RE =
+  /(?:개인|혼자|private|과외).{0,24}(?:으로\s*)?(?:쓸\s*수|사용할|쓰고\s*싶|가입|이용)|(?:학원\s*(?:끝나|그만|나오|끝나면)).{0,30}(?:개인|혼자|private)/
+const TRIED_ALREADY_RE =
+  /다\s*해\s*봤|해\s*봤(?:다고|어요|는데|습니다)|소용\s*(?:없|이\s*없)|그래도\s*똑같|매번\s*(?:재부팅|인터넷|껐다)/
 const FAR_REGION_RE = /부산|대구|광주|대전|울산|제주|강원|경남|경북|전남|전북|충남|충북|지방|멀어|먼\s*곳/
 
 type QuickAnswer = Omit<ChatbotCore, "question" | "latencyMs">
@@ -3569,7 +3599,13 @@ type QuickAnswer = Omit<ChatbotCore, "question" | "latencyMs">
 // 영업·사이트 관련 자주 오는 요청을 공개 정보로 바로 답한다(쇼룸 예약, 견적서 수정, 사이트 오류).
 function buildServiceQuickAnswer(question: NormalizedQuestion): QuickAnswer | null {
   const text = question.redacted.toLowerCase()
-  const make = (answer: string[], handoffIntent: HandoffIntent, category: string, suggestedQuestions: string[]): QuickAnswer => {
+  const make = (
+    answer: string[],
+    handoffIntent: HandoffIntent,
+    category: string,
+    suggestedQuestions: string[],
+    englishSummary?: string
+  ): QuickAnswer => {
     const response = {
       answer: answer.join("\n\n"),
       answerMode: "handoff" as const,
@@ -3580,7 +3616,7 @@ function buildServiceQuickAnswer(question: NormalizedQuestion): QuickAnswer | nu
       unresolved: false,
     }
     deterministicFinalResponses.add(response)
-    return { response, category, intent: handoffIntent === "demo" ? "sales_consulting" : "troubleshooting", handoffIntent }
+    return { response, category, intent: handoffIntent === "demo" ? "sales_consulting" : "troubleshooting", handoffIntent, englishSummary }
   }
 
   if (SITE_ISSUE_RE.test(text) && /홈페이지|사이트|웹사이트|폼|양식|예약|신청|데모\s*영상/.test(text)) {
@@ -3624,6 +3660,18 @@ function buildServiceQuickAnswer(question: NormalizedQuestion): QuickAnswer | nu
     /그만|탈퇴|아이(?!디|패드|폰)|자녀|우리\s*애|개인\s*정보|내\s*정보/.test(text) &&
     !/코스|클래스\s*탈퇴|반\s*탈퇴/.test(text)
   ) {
+    if (!/아이(?!디|패드|폰)|자녀|우리\s*애|영상|녹화/.test(text)) {
+      return make(
+        [
+          "탈퇴하면 그 계정으로는 학원 수업에 들어갈 수 없게 돼요. 학원을 계속 다닐 거라면 탈퇴는 한 번 더 생각해 보시는 게 좋아요.",
+          "혹시 알림이 귀찮거나 특정 반 채팅이 부담되는 거라면 탈퇴 대신 코스 설정에서 알림만 끌 수 있어요. 어떤 점 때문에 탈퇴하고 싶은지 알려 주시면 맞는 방법을 찾아 드릴게요.",
+          "그래도 탈퇴하려면 아래 [실시간 상담 연결]로 요청해 주세요. 담당자가 본인 확인 절차와 함께 안내합니다.",
+        ],
+        "support",
+        "admin",
+        ["채팅 알림 끄는 법 알려줘", "로그인이 안 돼요", "담당자 상담으로 이어주세요"]
+      )
+    }
     return make(
       [
         "아이 계정과 지금까지 찍힌 녹화 영상은 관리하는 곳이 달라서 나눠서 확인하셔야 해요.",
@@ -3634,6 +3682,135 @@ function buildServiceQuickAnswer(question: NormalizedQuestion): QuickAnswer | nu
       "support",
       "admin",
       ["다시보기는 어디서 봐요?", "로그인이 안 돼요", "담당자 상담으로 이어주세요"]
+    )
+  }
+  if (DOUBLE_CHARGE_RE.test(text)) {
+    return make(
+      [
+        "이번 달 결제가 두 번 빠진 것처럼 보이면 놀라셨겠어요. 먼저 실제 결제 내역부터 확인해 주세요.",
+        "1. 관리자 대시보드 > [결제] > [결제 개요]에서 날짜별 비용 합계를 봅니다.\n2. 충전형이라면 [결제] > [주문 세부정보]에서 차감 내역을 봅니다.",
+        "중복 결제로 보이면 아래 [실시간 상담 연결]에 '중복 결제 확인'이라고 남겨 주세요. 담당자가 결제 내역을 확인해 안내해 드립니다. 환불 여부와 시점은 확인 전에 약속드리기 어려워요.",
+      ],
+      "support",
+      "billing",
+      ["영수증은 어디서 받나요?", "환불 규정이 어떻게 되나요?", "담당자 상담으로 이어주세요"]
+    )
+  }
+  if (EXPORT_MASK_RE.test(text)) {
+    return make(
+      [
+        "설정을 잘못 건드리셨다기보다, 개인정보 보호를 위해 번호가 가려져 나오는 경우일 수 있어요. 어떤 기준으로 가려지는지는 공개 안내에 없어 단정하지 않을게요.",
+        "원장님(메인 관리자) 계정으로 받아도 같은지 먼저 확인해 보시고, 번호가 꼭 필요하면 아래 [실시간 상담 연결]로 어느 메뉴에서 내려받으셨는지 알려 주세요. 담당자가 확인해 드립니다.",
+        "내려받은 파일에는 학생 정보가 들어 있으니 권한 있는 담당자만 보관해 주세요.",
+      ],
+      "support",
+      "admin",
+      ["학생 추가가 안 돼요", "통계 파일은 어디서 받아요?", "담당자 상담으로 이어주세요"]
+    )
+  }
+  if (SECURITY_POLICY_RE.test(text)) {
+    return make(
+      [
+        "교사 계정에 2단계 인증을 강제하거나 비밀번호 길이·변경 주기를 기관 단위로 정하는 설정은 공개 안내에 없어서, 있다고 말씀드리지 않을게요.",
+        "지금 공개 안내로 할 수 있는 건 권한을 좁게 주는 쪽이에요. 하위 계정에는 꼭 필요한 메뉴만 주고, 그만둔 강사는 교사 비활성화와 하위 계정 삭제를 바로 해 주세요.",
+        "보안 정책 요건이 있으면 아래 [실시간 상담 연결]로 필요한 항목을 알려 주세요. 담당자가 지원 범위를 확인해 드립니다.",
+      ],
+      "support",
+      "admin",
+      ["그만둔 선생님 계정 빼는 법 알려줘요", "실장님한테 관리자 권한 줄 수 있나요?", "담당자 상담으로 이어주세요"]
+    )
+  }
+  if (ONBOARDING_HELP_RE.test(text)) {
+    return make(
+      [
+        "다른 곳은 다 잘 쓰는 것 같은데 우리만 복잡하게 느껴지면 답답하시죠. 처음 세팅이 복잡하게 느껴지는 건 이상한 일이 아니에요.",
+        "클래스인 도입 과정에는 강사 교육과 운영 세팅을 돕는 온보딩 단계가 있어요. 지금 학원 상황에 맞춰 어떤 지원이 되는지는 담당자가 안내해 드려요. 방문 세팅이 되는지는 지역과 일정에 따라 달라 여기서 약속드리기는 어려워요.",
+        "아래 [실시간 상담 연결]로 '운영 세팅 도움 요청'과 함께 가장 막히는 부분(강사 등록, 코스 만들기, 녹화 등)을 남겨 주세요.",
+      ],
+      "support",
+      "onboarding",
+      ["강사 한 명이 여러 반 맡을 수 있나요?", "학생 계정은 어떻게 초대하나요?", "녹화가 안 돼요"]
+    )
+  }
+  if (ATTENDANCE_SMS_RE.test(text)) {
+    return direct(
+      [
+        "출결 문자를 클래스인에서 학부모에게 자동으로 보내는 기능은 공개 안내에 없어서, 있다고 말씀드리지 않을게요.",
+        "클래스인에서 바로 확인할 수 있는 건 수업별 출석 기록이에요. 관리자 대시보드 [결제] > [통계 다운로드]의 [출결 통계]로 수업별 출결 내역을 받고, 진행 중인 수업은 [관리자 기능] > [수업 모니터링]에서 출석을 봅니다.",
+        "다른 학원이 출결 문자를 어떻게 보내는지는 학원마다 달라 말씀드리기 어려워요. 쓰시는 문자 서비스와 연결이 필요하면 담당자에게 API 연동 범위를 물어봐 주세요.",
+      ],
+      "admin",
+      ["통계 파일은 어디서 받아요?", "학생이 다시보기를 봤는지 어디서 봐요?", "담당자 상담으로 이어주세요"]
+    )
+  }
+  if (TRIAL_INVITE_RE.test(text)) {
+    return make(
+      [
+        "체험 중에 테스트가 막히면 답답하시죠. 선생님이 기관에 안 들어가지면 대개 그 선생님이 아직 클래스인에 가입하지 않았거나, 이미 다른 학원(기관)에 교사로 등록돼 있는 경우예요.",
+        "그 선생님이 먼저 클래스인 앱에서 가입했는지, 가입한 아이디를 국가번호(+82)까지 그대로 넣었는지 확인해 주세요.",
+        "체험 계정에서 넣을 수 있는 인원도 체험 조건에 따라 달라요. 아래 [도입 상담 남기기]로 테스트할 선생님 수를 남겨 주시면 담당자가 체험 범위를 확인해 드립니다.",
+      ],
+      "demo",
+      "onboarding",
+      ["무료 체험판 있나요?", "데모를 한번 보고 싶어요", "강사 한 명이 여러 반 맡을 수 있나요?"]
+    )
+  }
+  if (TRIAL_TO_PAID_RE.test(text)) {
+    return make(
+      [
+        "유료 전환은 클래스인 공식 홈페이지에서 메인 관리자로 쓸 아이디로 로그인해 요금제를 고르고, 학원 정보를 입력하는 순서예요. 전환이 끝나면 프로는 바로 정식 서비스가 시작되고, 비즈니스는 체험판으로 시작합니다.",
+        "전환한 날 [계정 정보] > [인증 자료]에서 계정 인증까지 올려 주세요. 인증 전에는 녹화와 웹 라이브가 막혀 있어요.",
+        "체험 때 만든 코스와 학생 데이터가 그대로 이어지는지는 공개 안내에 나와 있지 않아 단정하지 않을게요. 전환 전에 아래 [도입 상담 남기기]로 확인을 요청해 주세요.",
+      ],
+      "demo",
+      "billing",
+      ["프로와 비즈니스 차이가 뭐예요?", "기관 인증이 안 돼요", "견적 구성이 어떻게 되나요?"]
+    )
+  }
+  if (QUOTE_VS_PRICE_RE.test(text)) {
+    return make(
+      [
+        "견적과 홈페이지 가격이 달라 헷갈리셨겠어요. 견적은 실제 구성(전자칠판 대수, 설치 형태, 소프트웨어 범위, 계약 기간)을 반영해 만들기 때문에 홈페이지 기본 안내와 다를 수 있어요.",
+        "어느 쪽이 맞다고 제가 단정할 수는 없어서, 견적을 보낸 담당 영업에 '홈페이지 가격과 차이 나는 항목'을 짚어 달라고 요청해 주세요. 아래 [도입 상담 남기기]로 남기셔도 됩니다.",
+      ],
+      "demo",
+      "billing",
+      ["견적 구성이 어떻게 되나요?", "데모를 한번 보고 싶어요", "전자칠판 스펙 알려줘"]
+    )
+  }
+  if (SHOWROOM_DEVICE_RE.test(text)) {
+    return make(
+      [
+        "쇼룸에서 써 본 것과 받은 기기의 반응이 다르면 걱정되시죠. 같은 모델이어도 앱 버전, 연결한 네트워크, 화면 테두리 상태 같은 사용 환경에 따라 반응이 달라질 수 있어요.",
+        "먼저 화면 테두리(베젤)에 먼지나 물건이 닿아 있지 않은지 보고, 보드의 클래스인을 최신 버전으로 업데이트해 주세요.",
+        "그래도 버벅이면 기기 점검이 필요해요. 아래 [실시간 상담 연결]로 받은 모델과 증상을 알려 주시면 담당자가 확인해 드립니다.",
+      ],
+      "support",
+      "hardware",
+      ["전자칠판 터치가 안 돼요", "전자칠판 스펙 알려줘", "전자칠판 보증 기간이 궁금해요"]
+    )
+  }
+  if (ZOOM_WEAKNESS_RE.test(text)) {
+    return direct(
+      [
+        "솔직하게 말씀드릴게요. 다른 서비스와 우열을 단정하기보다, 도입 전에 따져 보셔야 할 점을 공개 안내 기준으로 정리하면 이래요.",
+        "- 기능이 많은 만큼 처음 익히는 데 시간이 걸려요. 강사 교육과 첫 몇 주의 세팅이 필요합니다.\n- 앱을 설치해서 쓰고, PC는 윈도우 7 이상·인터넷 4Mbps 이상 같은 최소 사양이 필요해요.\n- 녹화와 웹 라이브는 유료 요금제와 계정 인증을 마쳐야 열려요.",
+        "반대로 판서·녹화·과제·관리자 데이터를 한 흐름으로 묶어 학원 운영에 쓰려는 목적이라면 그 부분이 강점이에요. 수업 방식에 맞는지는 데모로 직접 보시길 권해요.",
+      ],
+      "consultation",
+      ["데모를 한번 보고 싶어요", "도입하면 뭐부터 해요?", "견적 구성이 어떻게 되나요?"]
+    )
+  }
+  if (PERSONAL_USE_RE.test(text)) {
+    return make(
+      [
+        "네, 학원 소속이 아니어도 개인 과외 강사로 쓸 수 있어요. 계정 인증 때 인증 방식에서 [개인 교사]를 고르고 신분 증명 서류를 올리는 방식이 따로 있습니다.",
+        "가격은 쓰실 기능과 규모에 따라 달라 여기서 단정하지 않을게요. 아래 [도입 상담 남기기]로 개인 과외 용도와 학생 수를 남겨 주시면 맞는 요금제를 안내해 드려요.",
+      ],
+      "demo",
+      "billing",
+      ["무료 체험판 있나요?", "기관 인증이 안 돼요", "견적 구성이 어떻게 되나요?"],
+      "Yes—you can use ClassIn as an individual tutor: choose [개인 교사] (individual teacher) during account verification. Pricing depends on features and size, so leave a consultation request for a quote."
     )
   }
   if (INVOICE_MISSING_RE.test(text)) {
@@ -4095,6 +4272,24 @@ async function buildChatbotCoreBase(
       handoffIntent,
       latencyMs: elapsedSince(startedAt),
     }
+  }
+
+  const routingTone = detectConversationTone(question.redacted)
+  if ((routingTone.repeated || routingTone.angry) && TRIED_ALREADY_RE.test(question.redacted.toLowerCase())) {
+    const response = {
+      answer: [
+        "기본 조치를 이미 다 해 보셨는데 같은 일이 반복됐다면, 같은 안내를 또 드리지 않을게요. 이제는 기술지원이 기록을 보고 원인을 찾아야 하는 단계예요.",
+        "아래 [실시간 상담 연결]을 누르시고 끊긴 날짜와 시각(여러 번이면 모두), 수업 이름, 쓰는 기기와 네트워크(유선·와이파이·핫스팟)를 알려 주세요. 기술지원이 그 시간대 접속 기록을 보고 확인합니다.",
+      ].join("\n\n"),
+      answerMode: "handoff" as const,
+      confidence: 0.8,
+      needsHandoff: true,
+      sources: [],
+      suggestedQuestions: ["담당자 상담으로 이어주세요", "학원 네트워크에서만 접속이 안 돼요", "앱이 자꾸 멈춰요"],
+      unresolved: false,
+    }
+    deterministicFinalResponses.add(response)
+    return { question, response, category: "troubleshooting", intent: "troubleshooting", handoffIntent: "support", latencyMs: elapsedSince(startedAt) }
   }
 
   const routingText = glossForRouting(question.redacted)

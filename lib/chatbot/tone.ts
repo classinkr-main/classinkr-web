@@ -179,6 +179,7 @@ const SLANG_GLOSSES: [RegExp, string][] = [
   [/(?<!안\s?)됨\s*\?/g, "되나요?"],
   [/(^|\s)샘(?=들|\s|이|한테|께|은|도)/g, "$1선생님"],
   [/딴\s*애들/g, "다른 애들"],
+  [/수업\s*녹음/g, "수업 녹화"],
 ]
 
 export function glossForRouting(question: string) {

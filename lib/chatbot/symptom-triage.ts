@@ -472,7 +472,7 @@ const BASE_SYMPTOM_TOPICS: SymptomTopic[] = [
   },
   {
     id: "replay-period",
-    subject: /(?:다시\s*보기|다시보기|리플레이|플레이백|복습\s*영상).{0,16}(?:기간|횟수|만료|지났|끝났)|시청\s*횟수|횟수\s*(?:를|가)?\s*초과|시청\s*(?:가능\s*)?기간/,
+    subject: /(?:다시\s*보기|다시보기|리플레이|플레이백|복습\s*영상).{0,16}(?:기간|횟수|만료|지났|끝났)|(?:다시\s*보기|다시보기|다시\s*보는).{0,40}(?:어제까지는?\s*(?:됐|되|보였)|목록에서\s*(?:아예\s*)?(?:사라|없어))|시청\s*횟수|횟수\s*(?:를|가)?\s*초과|시청\s*(?:가능\s*)?기간/,
     requireSymptom: false,
     exclude: /막|못\s*받게|제한하고\s*싶|설정하고\s*싶|방법/,
     category: "troubleshooting",
@@ -561,7 +561,7 @@ const BASE_SYMPTOM_TOPICS: SymptomTopic[] = [
   {
     id: "board-mirroring",
     subject:
-      /미러링|캐스트|무선\s*(?:연결|화면)|화면\s*미러|(?:휴대폰|폰|노트북|태블릿|아이패드).{0,10}화면.{0,14}(?:칠판|티비|tv|보드|전자칠판).{0,10}(?:띄우|띄워|연결|안\s*나|안\s*떠)|(?:칠판|티비|tv).{0,10}(?:에\s*)?(?:띄우|띄워)|연결할\s*(?:기계|기기)\s*목록/,
+      /미러링|캐스트|무선\s*(?:연결|화면|으로\s*(?:띄우|띄워|연결))|화면\s*미러|(?:휴대폰|폰|노트북|태블릿|아이패드).{0,10}화면.{0,14}(?:칠판|티비|tv|보드|전자칠판).{0,10}(?:띄우|띄워|연결|안\s*나|안\s*떠)|(?:칠판|티비|tv).{0,10}(?:에\s*)?(?:띄우|띄워)|연결할\s*(?:기계|기기)\s*목록/,
     category: "hardware",
     doc: { category: "hardware", slug: "board-basic-operation" },
     steps: [{ heading: "무선 미러링으로 기기 화면 띄우기", take: 4 }],
@@ -916,7 +916,7 @@ const BASE_SYMPTOM_TOPICS: SymptomTopic[] = [
   },
   {
     id: "network-environment",
-    subject: /네트워크\s*오류|network\s*error|프록시|proxy|방화벽|firewall|포트\s*(?:번호|열|허용|목록)|열어야\s*할|화이트\s*리스트|whitelist|도메인\s*(?:허용|목록)/,
+    subject: /네트워크\s*오류|network\s*error|프록시|proxy|방화벽|firewall|포트\s*(?:번호|열|허용|목록)|열어야\s*할|화이트\s*리스트|whitelist|도메인.{0,8}(?:허용|목록|화이트|열어)|웹\s*필터|필터링\s*(?:솔루션|장비|프로그램)/,
     requireSymptom: false,
     category: "troubleshooting",
     doc: { category: "start", slug: "class-connection-troubleshooting" },
@@ -957,7 +957,13 @@ const BASE_SYMPTOM_TOPICS: SymptomTopic[] = [
     doc: { category: "start", slug: "app-update-cache-reinstall" },
     steps: [{ heading: "먼저 확인할 것", pick: [0, 3] }],
     intro: "오류 코드별 의미는 공개 문서에 정리돼 있지 않아서, 채팅에서 그 코드의 뜻을 확정해 드리기는 어려워요. 먼저 아래 기본 조치를 해 보고, 같은 코드가 나오면 기술지원이 확인해 드립니다.",
-    branches: ["아래 [실시간 상담 연결]로 오류 코드, 앱 버전, 문제가 생긴 시각, 오류 화면 스크린샷을 남겨 주세요. 기술지원이 로그와 함께 확인합니다."],
+    branches: [
+      {
+        text: "PC에서만 IPv6가 켜져 있는 게 차이라면, IPv6를 잠시 끄고 같은 증상이 나는지 비교해 보는 건 원인을 좁히는 테스트로 해 볼 만해요. 다만 이것이 원인이라고 확인된 공개 안내는 없어요.",
+        when: /ipv6/,
+      },
+      "아래 [실시간 상담 연결]로 오류 코드, 앱 버전, 문제가 생긴 시각, 오류 화면 스크린샷을 남겨 주세요. 기술지원이 로그와 함께 확인합니다.",
+    ],
     handoff: true,
     en: "Error code meanings aren't in our public docs; restart and update the app, then send the code, app version, time and a screenshot to support.",
     suggestedQuestions: ["앱이 자꾸 멈춰요", "업데이트가 안 돼요", "수업 입장이 안 돼요"],
@@ -1743,7 +1749,11 @@ export function buildSymptomTopicAnswer(
       ? `그래도 안 되면 담당자 상담으로 이어 드릴게요. 상담할 때 이 정보를 함께 알려 주시면 더 빨리 확인합니다: ${contactItems.join(", ")}.`
       : "그래도 안 되면 담당자 상담으로 이어 드릴게요."
 
-  const stepBlock = steps.map((step, index) => `${index + 1}. ${step}`).join("\n")
+  // 문서에서 중간 단계를 첫 단계로 가져오면 "그래도 끊기면"처럼 앞 단계를 가리키는 말을 뗀다.
+  const stepBlock = steps
+    .map((step, index) => (index === 0 ? step.replace(/^그래도\s+\S+(?:면|으면),?\s+/, "") : step))
+    .map((step, index) => `${index + 1}. ${step}`)
+    .join("\n")
   const branches = pickBranches(topic, text)
   const answer = [variant?.intro ?? topic.intro, stepBlock, ...(options.compact ? branches.slice(0, 1) : branches), closing]
     .filter(Boolean)
