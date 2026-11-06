@@ -36,7 +36,10 @@ describe("chatbot high-intent & pricing flows", () => {
 
       expect(result.answerMode).toBe("direct_answer")
       expect(result.detectedCategory).toBe("billing")
-      expect(result.answer).toContain("Standard")
+      // 공개 요금 FAQ 기준 요금제(Pro·비즈니스·Enterprise)만 말한다. Standard·Plus 는 문서에 없는 이름이었다.
+      expect(result.answer).toContain("Pro")
+      expect(result.answer).toContain("비즈니스")
+      expect(result.answer).not.toMatch(/Standard|Plus/)
       expect(result.answer).toContain("정확한 금액은 단정하지 않고")
       expect(result.answer).not.toMatch(/무조건 \d+원|확정 금액/i)
     })

@@ -230,7 +230,7 @@ describe("chatbot quality regressions", () => {
     const cases = [
       {
         question: "서버는 어디에 있나요? 데이터가 중국으로 가나요?",
-        expected: ["추정으로 답하면 안", "공식 정책", "계약"],
+        expected: ["추측으로 말씀드리지", "공식 정책", "계약"],
         forbidden: ["중국입니다", "한국입니다"],
       },
       {

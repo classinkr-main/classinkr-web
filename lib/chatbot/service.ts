@@ -41,6 +41,13 @@ import {
 } from "@/lib/cs-figma-guides"
 import { getCsFigmaEnrichment } from "@/lib/cs-figma-enrichments"
 import { resolveSymptomTriage, type SymptomTriageResult } from "@/lib/chatbot/symptom-triage"
+import {
+  ENGLISH_SUPPORT_ANSWER,
+  applyToneToAnswer,
+  detectConversationTone,
+  glossForRouting,
+  isEnglishSupportRequest,
+} from "@/lib/chatbot/tone"
 
 // CS 사용 가이드 직답의 출처 식별용 내부 헤딩(피그마/CS 표현 미노출)
 const CS_FIGMA_GUIDE_SOURCE_HEADING = "사용 순서 안내"
@@ -558,7 +565,11 @@ function buildPolicyGuardResponse(question: NormalizedQuestion): {
     }
   }
 
-  const selfKnowledgeEntry = findChatbotSelfKnowledgeEntry(question.redacted)
+  // "챗봇 말고 사람 연결해 주세요"는 자기소개가 아니라 상담 연결로 보낸다.
+  // ("너 사람 상담원 맞아?"처럼 상담원을 언급만 한 정체성 질문은 그대로 자기소개로 답한다.)
+  const selfKnowledgeEntry = EXPLICIT_HUMAN_CONNECTION_RE.test(text)
+    ? null
+    : findChatbotSelfKnowledgeEntry(question.redacted)
   if (selfKnowledgeEntry) {
     const isConcern = selfKnowledgeEntry.key === "emotional_concern"
     const isEvent = selfKnowledgeEntry.key === "event_inquiry" || selfKnowledgeEntry.key === "event_apply_assist"
@@ -628,7 +639,7 @@ const POSITIONING_RE =
 const PRE_ADOPTION_CHECK_RE =
   /도입\s*전.*(22|질문|체크리스트|확인)|22\s*가지\s*질문|22.*도입|구매\s*전.*(질문|체크리스트|확인)|상담\s*전.*(질문|체크리스트|확인)/
 const PRE_ADOPTION_RECORDING_PERMISSION_RE =
-  /(수업\s*녹화|현장\s*녹화|녹화).{0,18}(누가|권한|관리|저장|확인|볼|다운로드)|(누가|권한).{0,18}(수업\s*녹화|현장\s*녹화|녹화)/i
+  /(수업\s*녹화|현장\s*녹화|녹화).{0,18}(누가|권한|관리|저장|확인|볼|다운로드|보여|공유|유출|다른\s*사람)|(누가|권한|다른\s*사람).{0,18}(수업\s*녹화|현장\s*녹화|녹화)/i
 const PRE_ADOPTION_SIGNUP_INFO_RE =
   /(회원\s*가입|가입).{0,20}(개인정보|전화번호|이메일|메일|휴대폰|핸드폰|정보|뭐|무엇)|(개인정보|전화번호|이메일|메일|휴대폰|핸드폰).{0,20}(회원\s*가입|가입)/i
 const PRE_ADOPTION_OFFLINE_BOARD_RE =
@@ -748,7 +759,11 @@ function isPreAdoptionOfflineBoardQuestion(question: NormalizedQuestion) {
 }
 
 function isPreAdoptionPolicyConfirmQuestion(question: NormalizedQuestion) {
-  return PRE_ADOPTION_POLICY_CONFIRM_RE.test(question.redacted)
+  if (!PRE_ADOPTION_POLICY_CONFIRM_RE.test(question.redacted)) return false
+  // "유료 전환하면 한 달에 얼마예요"는 권한 정책이 아니라 가격 질문이다.
+  const withoutPaidSwitch = question.redacted.replace(/유료\s*전환/g, "")
+  if (/얼마|가격|요금|비용/.test(question.redacted) && !PRE_ADOPTION_POLICY_CONFIRM_RE.test(withoutPaidSwitch)) return false
+  return true
 }
 
 function isPreAdoptionHardwareConditionalQuestion(question: NormalizedQuestion) {
@@ -763,6 +778,43 @@ function isPreAdoptionSpecificQuestion(question: NormalizedQuestion) {
     isPreAdoptionPolicyConfirmQuestion(question) ||
     isPreAdoptionHardwareConditionalQuestion(question)
   )
+}
+
+const RECEIPT_RE = /세금\s*계산서|세금계산서|영수증|증빙|청구서|계산서\s*발급/
+
+function isReceiptQuestion(question: NormalizedQuestion) {
+  return RECEIPT_RE.test(question.redacted.toLowerCase())
+}
+
+function getReceiptAnswer() {
+  return [
+    "세금계산서와 영수증은 학원 계정의 결제 내역을 보고 담당자가 발급해 드려요. 상담 채널(홈페이지 하단 채팅)이나 담당 매니저에게 세금계산서 발급을 요청해 주세요.",
+    "아직 결제 전이라면 결제하기 전에 상담 채널에서 발급 방법을 먼저 정해 두시는 게 좋아요. 결제 뒤에 찾다가 학원 회계와 어긋나는 경우가 많습니다.",
+    "사업자 정보는 이 채팅창에 적지 마시고 상담 채널에서 담당자에게 전달해 주세요.",
+  ].join("\n\n")
+}
+
+const TRIAL_LIMIT_RE = /체험.{0,24}(?:제한|막혀|막힘|못\s*(?:넣|만들|써|쓰)|안\s*(?:돼|되)|몇\s*명|인원|기능\s*(?:제한|차이))/
+const ACCOUNT_PLAN_RE =
+  /(?:지금|현재|우리\s*학원|저희\s*학원|저희가|우리가).{0,20}(?:요금제|플랜|계약|라이선스).{0,24}(?:몇\s*명|한도|인원|최대|확인|남았|언제까지)/
+
+function isAccountPlanOrTrialLimitQuestion(question: NormalizedQuestion) {
+  const text = question.redacted.toLowerCase()
+  return TRIAL_LIMIT_RE.test(text) || ACCOUNT_PLAN_RE.test(text)
+}
+
+function getAccountPlanOrTrialLimitAnswer(question: NormalizedQuestion) {
+  const text = question.redacted.toLowerCase()
+  if (TRIAL_LIMIT_RE.test(text)) {
+    return [
+      "체험 계정에서 넣을 수 있는 인원과 쓸 수 있는 기능은 체험 조건에 따라 달라서, 담당자가 계정을 보고 확인해 드려요.",
+      "도입 검토 중이시라면 아래 [도입 상담 남기기]로 학원 규모와 확인하고 싶은 기능(학생 수, 녹화 등)을 남겨 주세요. 체험 범위를 늘리거나 데모로 보여 드릴 수 있는지 함께 안내드립니다.",
+    ].join("\n\n")
+  }
+  return [
+    "지금 쓰시는 요금제의 학생·강사 한도는 계정과 계약마다 달라 담당자가 확인해 드려요.",
+    "관리자 대시보드 [결제] > [결제 개요]에서 지금까지의 결제·비용 내역은 바로 볼 수 있어요. 정확한 한도와 남은 기간은 상담 채널(홈페이지 하단 채팅)이나 담당 매니저에게 학원명과 함께 요청해 주세요.",
+  ].join("\n\n")
 }
 
 function isRefundQuestion(question: NormalizedQuestion) {
@@ -856,6 +908,7 @@ function isHardwareSpecsQuestion(question: NormalizedQuestion) {
 
 function isHardwareBoardLineupQuestion(question: NormalizedQuestion) {
   const text = question.redacted.toLowerCase()
+  if (INSTALL_FORM_RE.test(text)) return false
   return (
     isBoardTargeted(text) &&
     HARDWARE_BOARD_LINEUP_INTENT_RE.test(text) &&
@@ -911,6 +964,8 @@ const TRIAL_OR_PILOT_RE =
 function isPricingInfoQuestion(question: NormalizedQuestion) {
   const text = question.redacted.toLowerCase()
   if (PRICING_EXCLUDE_RE.test(text)) return false
+  if (isComparisonQuestion(question)) return false
+  if (ACCOUNT_PLAN_RE.test(text) || TRIAL_LIMIT_RE.test(text)) return false
   if (isWebLiveBillingQuestion(question)) return false
   if (!PRICING_MONEY_RE.test(text) && PRICING_DURATION_RE.test(text)) return false
   return PRICING_INFO_RE.test(text)
@@ -931,7 +986,7 @@ function isTrialOrPilotQuestion(question: NormalizedQuestion) {
 }
 
 // 설치 형태(스탠드/벽걸이)와 설치 가능/기간. 하드웨어 장애와는 분리한다.
-const INSTALL_FORM_RE = /스탠드|벽걸이|벽\s*부착|벽\s*설치|이동형|거치(대|형)?/i
+const INSTALL_FORM_RE = /스탠드|벽걸이|벽\s*부착|벽\s*설치|벽에\s*(?:거는|걸|다는|달)|바퀴\s*(?:달린|있는)|이동형|이동식|거치(대|형)?/i
 const INSTALL_HW_CONTEXT_RE = /전자칠판|클래스인\s*보드|classin\s*board|\bboard\b|(?<!대시\s?)보드|칠판|하드웨어|교실|벽면|s\s*(?:65|75|86|98|110)\b/i
 const INSTALL_INTENT_RE = /가능|돼|되나|될까|할\s*수|하나요|해야|방식|유형|형태|환경|기간|일정|얼마|어떻게|어디/i
 function isInstallFormQuestion(question: NormalizedQuestion) {
@@ -1057,6 +1112,18 @@ function buildCuratedSources(question: NormalizedQuestion) {
   const sources: ChatbotSource[] = []
   const positioningSource = buildPositioningSource(question)
   if (positioningSource) sources.push(positioningSource)
+
+  if (isAccountPlanOrTrialLimitQuestion(question)) {
+    const source = buildStaticDocSource(
+      "admin",
+      "billing-upgrade",
+      "요금제 한도·체험 범위 확인",
+      "현재 요금제의 학생·강사 한도와 체험 계정의 인원·기능 범위는 계정과 계약 조건에 따라 달라 담당자가 확인합니다.",
+      320,
+      "billing"
+    )
+    if (source) sources.push(source)
+  }
 
   if (isRefundQuestion(question)) {
     const source = buildStaticDocSource(
@@ -1332,7 +1399,7 @@ function buildCuratedSources(question: NormalizedQuestion) {
       "value-and-cost-framing",
       isSoftwarePricing ? "소프트웨어 요금과 플랜 안내" : "요금·견적 구성 안내",
       isSoftwarePricing
-        ? "소프트웨어는 운영 규모에 따라 Standard, Plus, Enterprise처럼 단계가 나뉘고, 구독형·충전형 조건은 기능 범위와 계약에 따라 달라질 수 있습니다. 정확한 금액과 조건은 계정 수, 코스 규모, 필요한 기능 기준으로 확인합니다."
+        ? "공식 안내 기준으로 Pro 요금제는 1인 강사용이고, 강사가 두 명 이상인 학원은 비즈니스 요금제를 권합니다. Enterprise는 대형 기관과 전자칠판을 함께 들이는 기관을 위한 맞춤 계약입니다. 정확한 금액과 할인은 강사 수·운영 규모에 따라 견적으로 안내합니다."
         : "클래스인 비용은 고정가표가 아니라 전자칠판+OPS, 카메라·스탠드/벽걸이 구성, 소프트웨어 사용 범위, 설치·온보딩까지 묶어 구성 기준으로 산정합니다. 정확한 금액은 학원 규모와 구성에 따라 달라집니다.",
       295,
       "billing"
@@ -1400,7 +1467,7 @@ function buildCuratedSources(question: NormalizedQuestion) {
     if (source) sources.push(source)
   }
 
-  if (/세금\s*계산서|세금계산서|영수증|증빙|청구서|계산서\s*발급/.test(text)) {
+  if (isReceiptQuestion(question)) {
     const source = buildStaticDocSource(
       "admin",
       "billing-upgrade",
@@ -1714,6 +1781,8 @@ function mergeCuratedSources(question: NormalizedQuestion, sources: ChatbotSourc
     isBoardOnlyOrPlatformQuestion(question) ||
     isCameraConflictQuestion(question) ||
     isRefundQuestion(question) ||
+    isReceiptQuestion(question) ||
+    isAccountPlanOrTrialLimitQuestion(question) ||
     isCourseCreationQuestion(question) ||
     isAssignmentQuestion(question) ||
     isPrivacyProcessingQuestion(question) ||
@@ -2178,7 +2247,7 @@ function buildSuggestedQuestions(category: string) {
 function wantsImmediateHumanHandoff(question: NormalizedQuestion) {
   const text = question.redacted.toLowerCase()
   const explicitHandoff =
-    /상담\s*(?:받|받고|하고|하고\s*싶|할래|신청|연결|이어|부탁|필요|문의|원해|원함)|상담받|상담할래|상담하고\s*싶|상담\s*(?:원|사)|담당자.{0,10}(?:상담|연결|연락|통화|배정|문의)|매니저.{0,10}(?:상담|연결|연락|통화|문의)|상담원.{0,10}(?:상담|연결|연락|통화|문의)|(?:상담|연결|연락|통화|문의).{0,10}(?:담당자|매니저|상담원)|전담\s*매니저|연락\s*(?:주세요|받고|하고|원해|원함|가능)|전화\s*(?:주세요|받고|하고|원해|원함|가능)|통화\s*(?:하고|원해|원함|가능)|미팅\s*(?:잡|하고|원해|원함)|데모\s*(?:신청|보고|연결|원해|원함)|시연\s*(?:신청|보고|연결|원해|원함)|쇼룸\s*(?:방문|데모|신청|예약|연결|체험|보|보러)|채널톡\s*(?:연결|상담|문의)|구매\s*상담|도입\s*(?:상담|문의|검토)/.test(text)
+    /상담\s*(?:받|받고|하고|하고\s*싶|할래|신청|연결|이어|부탁|필요|문의|원해|원함)|상담받|상담할래|상담하고\s*싶|상담\s*(?:원|사)|담당자.{0,10}(?:상담|연결|연락|통화|배정|문의)|매니저.{0,10}(?:상담|연결|연락|통화|문의)|상담원.{0,10}(?:상담|연결|연락|통화|문의)|(?:상담|연결|연락|통화|문의).{0,10}(?:담당자|매니저|상담원)|전담\s*매니저|연락\s*(?:주세요|받고|하고|원해|원함|가능)|전화\s*(?:주세요|받고|하고|원해|원함|가능)|통화\s*(?:하고|원해|원함|가능)|미팅\s*(?:잡|하고|원해|원함)|데모\s*(?:신청|보고|받|연결|원해|원함|요청)|데모.{0,10}신청|시연.{0,10}신청|시연\s*(?:신청|보고|연결|원해|원함)|쇼룸\s*(?:방문|데모|신청|예약|연결|체험|보|보러)|채널톡\s*(?:연결|상담|문의)|구매\s*상담|도입\s*(?:상담|문의|검토)|사람\s*(?:이랑|하고|한테|과)\s*(?:연결|통화|이야기|얘기|대화|상담)|사람\s*(?:연결|이랑\s*얘기)|(?:진짜|실제|살아\s*있는)\s*사람|사람\s*(?:바꿔|불러|연결)|직원\s*(?:연결|분|이랑|하고)|상담사\s*(?:연결|분|님)|상담원\s*(?:분|님|이랑|하고)|챗봇\s*말고|봇\s*말고/.test(text)
   const contextualInquiry =
     /문의/.test(text) && /담당자|매니저|상담원|채널톡|쇼룸|연락|전화|통화|구매|도입|시연|데모/.test(text)
 
@@ -2190,8 +2259,13 @@ function wantsImmediateHumanHandoff(question: NormalizedQuestion) {
   return false
 }
 
+const EXPLICIT_HUMAN_CONNECTION_RE =
+  /(?:사람|상담원|상담사|직원|담당자|매니저).{0,12}(?:연결|바꿔|불러|통화|이어\s*(?:줘|주세요|주시)|대화하고|얘기하고)|챗봇\s*말고|봇\s*말고|사람\s*(?:이랑|하고|한테|과)\s*(?:이야기|얘기|대화|상담)/
+
 function wantsHumanConsultation(question: NormalizedQuestion) {
   if (wantsImmediateHumanHandoff(question)) return true
+  if (isRefundQuestion(question)) return true
+  if (isAccountPlanOrTrialLimitQuestion(question)) return true
 
   const text = question.redacted.toLowerCase()
   return /견적|데모|시연|미팅|제안|구매|도입\s*검토|도입\s*상담/.test(text)
@@ -2205,11 +2279,11 @@ function buildImmediateHandoffResponse(
   return {
     answer: [
       isSupport
-        ? "상담 연결이 필요한 내용으로 확인했습니다."
-        : "담당자 상담으로 이어드릴게요.",
+        ? "네, 담당자 상담으로 바로 연결해 드릴게요. 아래 [실시간 상담 연결]을 누르시면 상담원이 지금까지의 대화를 보고 이어서 도와드립니다."
+        : "네, 담당자 상담으로 이어 드릴게요. 아래 [도입 상담 남기기]로 연락받을 방법을 남기시면 담당자가 연락드립니다.",
       isSupport
-        ? "담당자가 바로 확인할 수 있게 계정/오류 화면, 결제 상태, 장비 증상처럼 현재 상황을 함께 남겨주세요."
-        : "담당자가 도입 목적, 희망 일정, 수업 운영 방식부터 빠르게 확인할 수 있게 연결 정보를 남겨주세요.",
+        ? "기다리시는 동안 문제가 생긴 화면, 쓰는 기기, 생긴 시각을 정리해 두시면 더 빨리 확인합니다. 비밀번호는 보내지 않으셔도 돼요."
+        : "데모와 쇼룸 방문은 홈페이지 문의 페이지(/contact)나 쇼룸 예약(/showroom)에서도 바로 신청할 수 있어요. 여러 분이 함께 보실 예정이면 신청할 때 인원을 적어 주세요.",
     ].join("\n\n"),
     answerMode: "handoff",
     confidence: 0.72,
@@ -2324,7 +2398,7 @@ function getStepCriteriaByCategory(category: string) {
 function getConciseNextStep(category: string) {
   switch (category) {
     case "billing":
-      return "계정별 조건이 달라질 수 있어요. 결제 수단, 사업자 정보, 필요한 증빙 종류를 알려주시면 더 정확히 이어드릴게요."
+      return "결제·증빙은 계정마다 조건이 달라 담당자가 확인해요. 상담 채널(홈페이지 하단 채팅)이나 담당 매니저에게 필요한 증빙 종류를 말씀해 주세요."
     case "hardware":
       return "설치 장소, 희망 대수, 스탠드/벽걸이 여부를 알려주시면 패키지 범위를 좁혀드릴게요."
     case "troubleshooting":
@@ -2359,6 +2433,9 @@ function getComparisonAnswer(question: NormalizedQuestion, top: ChatbotSource) {
   return [
     "네, 좋은 질문이에요. Classin은 Zoom이나 일반 전자칠판과 달리 '수업 운영 흐름' 전체에 초점이 있어요.",
     "Zoom이 회의 중심이라면 Classin은 판서·녹화·복습·LMS를 하나로 연결하고,\n일반 전자칠판이 화면·판서에 머무는 것과 달리 EDB 교안과 관리자 데이터까지 이어줘요.",
+    PRICING_INFO_RE.test(text)
+      ? "가격은 Zoom처럼 계정 요금만 놓고 비교하기보다, 녹화·숙제·복습·관리를 따로 쓰던 도구 비용까지 같이 놓고 봐야 정확해요. 금액은 규모에 따라 견적으로 안내드리고, 문의 페이지(/contact)에서 신청하시면 됩니다."
+      : null,
     top.heading === "핵심 포지셔닝"
       ? "Zoom, 전자칠판, LMS 중 어떤 기준으로 비교 중이신지 알려주시면 그 부분만 더 좁혀드릴게요."
       : null,
@@ -2458,15 +2535,16 @@ function getPricingAnswer() {
   return [
     "네, 요금은 고정가표보다 '구성 기준'으로 봐요. 보통 이렇게 묶여요.",
     "- 전자칠판 + OPS(윈도우 컴퓨팅)\n- 카메라·마이크·스탠드/벽걸이 구성\n- 소프트웨어 사용 범위(녹화·LMS 등)\n- 설치·온보딩",
-    "교실 수랑 원하는 구성만 알려주시면 견적 범위를 잡아드릴게요.",
+    "소프트웨어만 쓰신다면 1인 강사는 Pro, 강사 두 명 이상은 비즈니스 요금제가 기준이에요(공식 안내 기준). 정확한 금액은 규모에 따라 견적으로 드려요.",
+    "견적은 홈페이지 문의 페이지(/contact)에서 교실 수와 원하는 구성을 남겨 주시면 담당자가 안내드려요.",
   ].join("\n\n")
 }
 
 function getSoftwarePricingAnswer() {
   return [
-    "소프트웨어만 검토하시는 경우에는 전자칠판 패키지와 분리해서 계정 수와 운영 규모 기준으로 보면 됩니다.",
-    "Standard, Plus, Enterprise처럼 필요한 기능과 팀 규모에 따라 단계가 나뉘고, 구독형·충전형 조건은 사용 기능과 계약 방식에 따라 달라질 수 있어요.",
-    "정확한 금액은 단정하지 않고, 강사 수·학생 수·코스 규모·필요 기능을 기준으로 견적에서 확인하는 게 안전합니다.",
+    "소프트웨어 요금제는 강사 계정 수와 학원 규모로 고릅니다. 공식 안내 기준으로 Pro는 1인 강사용, 강사가 두 명 이상인 학원은 비즈니스를 권하고, Enterprise는 대형 기관이나 전자칠판을 함께 들이는 기관을 위한 맞춤 계약이에요.",
+    "월 금액과 할인은 강사 수와 운영 규모에 따라 달라 정확한 금액은 단정하지 않고 견적으로 안내드려요. 전자칠판을 함께 들이면 장비·설치까지 묶어 견적을 냅니다.",
+    "견적과 2주 무료 체험은 홈페이지 문의 페이지(/contact)에서 신청하시면 담당자가 규모에 맞춰 안내드려요.",
   ].join("\n\n")
 }
 
@@ -2506,7 +2584,8 @@ function getRecordingPermissionAnswer() {
   return [
     "수업 녹화와 현장 녹화는 목적이 달라서 먼저 구분해서 봐야 해요.",
     "수업 녹화는 ClassIn 수업 안의 화면·판서·자료 중심이고, 현장 녹화는 카메라 구성이 설정된 경우 교실 뷰나 트래킹 뷰를 다룹니다.",
-    "저장·확인·다운로드는 관리자 또는 권한 받은 계정이 계약·기관 설정 범위 안에서 관리하는 기준으로 안내해야 합니다. 실제 권한 범위는 현재 계정과 계약 조건으로 확인하는 게 맞습니다.",
+    "녹화 여부와 녹화본 보관·다운로드는 학원의 관리자 또는 권한 받은 계정이 관리해요. 수업이 녹화되는지, 누가 녹화본을 볼 수 있는지는 수업을 운영하는 학원에 먼저 확인해 주세요.",
+    "학생이 보는 다시보기는 그 코스에 등록된 학생에게 학원이 정한 기간 동안 열립니다. 더 자세한 보관·삭제 기준은 공식 개인정보처리방침과 담당자 확인으로 안내드려요.",
   ].join("\n\n")
 }
 
@@ -2554,18 +2633,24 @@ function getHardwareConditionalPreAdoptionAnswer(question: NormalizedQuestion) {
 function getPolicyConfirmationAnswer(question: NormalizedQuestion) {
   const text = question.redacted.toLowerCase()
 
+  if (isRefundQuestion(question)) {
+    return [
+      "환불은 계약 형태(연간·월간)와 남은 기간을 보고 담당자가 확인해 안내드려요. 채팅에서 바로 금액이나 환불 여부를 약속드릴 수는 없어 죄송합니다.",
+      "아래 [실시간 상담 연결]로 환불 요청을 남겨 주시면 계약 내용을 확인한 뒤 절차를 안내드립니다. 결제한 학원명과 결제 시기를 함께 알려 주시면 더 빨리 확인합니다.",
+    ].join("\n\n")
+  }
+
   if (/서버|데이터\s*(처리|보관|지역)/.test(text)) {
     return [
-      "서버 위치나 데이터 처리 지역은 추정으로 답하면 안 되는 항목입니다.",
-      "공식 정책, 계약 조건, 개인정보 처리 기준으로 확인해야 하고, 상담에서는 어떤 데이터가 어디에 저장·처리되는지 확인 요청 항목으로 분리하는 게 맞습니다.",
-      "도입 검토 중이라면 서버 위치, 데이터 처리 지역, 보관·삭제 기준을 한 묶음으로 담당자에게 확인하세요.",
+      "서버 위치와 데이터 처리 지역은 채팅에서 추측으로 말씀드리지 않고, 공식 정책(개인정보처리방침)과 계약 문서로 확인해 드려요.",
+      "교육청 점검처럼 근거 문서가 필요하시면 상담 채널(홈페이지 하단 채팅)이나 담당 매니저에게 '서버 위치, 데이터 처리 지역, 보관·삭제 기준'을 문서로 요청해 주세요. 계약 학원이라면 담당 매니저가 확인 자료를 안내드립니다.",
     ].join("\n\n")
   }
 
   if (/콘텐츠\s*소유권|소유권|저작권/.test(text)) {
     return [
       "콘텐츠 소유권은 약관·계약 기준으로 확인해야 하는 항목입니다.",
-      "공개 답변에서는 기관 자료와 접근 권한을 분리 관리한다고 안내하고, 소유권과 서비스 제공을 위한 이용 권한은 최신 계약·정책으로 확인하는 게 안전합니다.",
+      "학원이 올린 자료와 접근 권한은 기관 단위로 따로 관리되고, 소유권과 서비스 제공을 위한 이용 범위는 최신 약관·계약서로 확인해 드려요.",
       "상담에서는 녹화본, EDB 교안, 업로드 자료, 공유 드라이브 자료를 각각 누가 볼 수 있고 어떻게 보관되는지 함께 확인하세요.",
     ].join("\n\n")
   }
@@ -2574,7 +2659,7 @@ function getPolicyConfirmationAnswer(question: NormalizedQuestion) {
     return [
       "스토리지는 사용량 확인과 계약 조건을 나눠 봐야 합니다.",
       "관리자는 권한 범위 안에서 녹화본, 스크린샷, 칠판 파일, 공유 드라이브 등 스토리지 사용량을 확인할 수 있습니다.",
-      "기본 제공 용량, 추가 용량, 1GB당 단가, 장기 보관 조건은 최신 계약 기준으로 확인해야 하므로 숫자를 단정하지 않는 게 맞습니다.",
+      "기본 제공 용량, 추가 용량 단가, 장기 보관 조건은 계약마다 달라 채팅에서 숫자를 단정하지 않고, 담당자가 최신 계약 기준으로 안내드려요.",
     ].join("\n\n")
   }
 
@@ -2605,7 +2690,7 @@ function getPolicyConfirmationAnswer(question: NormalizedQuestion) {
   if (/펜|소모품|팁/.test(text)) {
     return [
       "전용 펜 팁이나 소모품은 구매 가능 여부, 재고, 가격을 최신 공급 조건으로 확인해야 합니다.",
-      "공개 답변에서 금액을 단정하지 말고, 모델명과 필요한 수량을 기준으로 구매 경로와 단가를 확인 요청하는 게 안전합니다.",
+      "채팅에서 금액을 단정하지 않고, 모델명과 필요한 수량을 알려 주시면 담당자가 구매 경로와 단가를 안내드려요.",
       "파손이 잦다면 여분 보관 위치와 교실별 관리 기준도 함께 정해두세요.",
     ].join("\n\n")
   }
@@ -2619,9 +2704,8 @@ function getPolicyConfirmationAnswer(question: NormalizedQuestion) {
   }
 
   return [
-    "이 항목은 최신 계약·정책 확인이 필요한 질문입니다.",
-    "공개 답변에서는 가능한 기능과 확인 필요 범위를 분리하고, 금액·서버·소유권·권한처럼 조건이 바뀔 수 있는 내용은 단정하지 않는 게 맞습니다.",
-    "상담에서는 현재 계정, 계약 조건, 필요한 장비 구성, 보관·권한 기준을 같이 확인하세요.",
+    "이 내용은 계약과 계정 상태에 따라 달라서 담당자가 확인해 안내드려야 해요.",
+    "아래 상담 연결로 남겨 주시면 현재 계정과 계약 기준으로 확인해 드립니다.",
   ].join("\n\n")
 }
 
@@ -2766,6 +2850,12 @@ function formatConsumerAnswer({
   }
   if (isInstallFormQuestion(question) && top.heading === "설치 형태와 현장 점검") {
     return getInstallFormAnswer()
+  }
+  if (top.heading === "요금제 한도·체험 범위 확인") {
+    return getAccountPlanOrTrialLimitAnswer(question)
+  }
+  if (top.heading === "영수증과 결제 증빙 확인") {
+    return getReceiptAnswer()
   }
   if (top.heading === "녹화 저장과 권한 기준") {
     return getRecordingPermissionAnswer()
@@ -3351,6 +3441,8 @@ interface ChatbotCore {
   warning?: string
   latencyMs: number
   retrievalCacheHit?: boolean
+  // 증상 트리아지가 고른 주제의 영어 한 줄 요약(영어 질문에만 붙인다).
+  englishSummary?: string
 }
 
 interface BuildChatbotCoreOptions {
@@ -3394,13 +3486,17 @@ async function generateUsableAnswerWithProgressiveModels(
 const deterministicFinalResponses = new WeakSet<object>()
 
 function resolveSymptomTriageForQuestion(
-  question: NormalizedQuestion,
+  routingText: string,
   csFigmaGuide: CsFigmaGuide | null
 ): SymptomTriageResult | null {
-  const triage = resolveSymptomTriage(question.redacted)
+  const tone = detectConversationTone(routingText)
+  // 짧게 묻거나 화가 난 사람에게는 단계 3개만(이미 여러 번 해 봤을 가능성이 크다).
+  const triage = resolveSymptomTriage(routingText, {
+    compact: (tone.terse || tone.angry || tone.repeated) && !tone.anxious,
+  })
   if (!triage) return null
   const isKnownFigmaIntent =
-    csFigmaGuide !== null && findCsFigmaKnownIntentSlug(question.redacted) === csFigmaGuide.slug
+    csFigmaGuide !== null && findCsFigmaKnownIntentSlug(routingText) === csFigmaGuide.slug
   if (isKnownFigmaIntent && !triage.overridesKnownIntent) return null
   return triage
 }
@@ -3412,7 +3508,7 @@ function buildSymptomTriageResponse(
     answer: sanitizePublicAnswerText(triage.answer),
     answerMode: triage.answerMode,
     confidence: triage.confidence,
-    needsHandoff: false,
+    needsHandoff: triage.needsHandoff,
     sources: triage.source ? [triage.source] : [],
     suggestedQuestions: triage.suggestedQuestions,
     unresolved: triage.answerMode !== "direct_answer",
@@ -3443,6 +3539,7 @@ function isCuratedTemplateQuestion(question: NormalizedQuestion) {
     isS65QuoteQuestion(question) ||
     isBoardOnlyOrPlatformQuestion(question) ||
     isCameraConflictQuestion(question) ||
+    isReceiptQuestion(question) ||
     ((isComparisonQuestion(question) || isIdentityQuestion(question)) && !isApiIntegrationQuestion(question))
   )
 }
@@ -3459,6 +3556,7 @@ function shouldUseAiFinalAnswer(
   if (response.answerMode === "direct_answer" && isCsFigmaGuideResponse(response)) return false
   // 큐레이션 직답은 이미 최종본 — Gemini 재작성(0.8~4.5s)을 건너뛰고 그대로 내보낸다.
   if (response.answerMode === "direct_answer" && isCuratedTemplateQuestion(question)) return false
+  if (isRefundQuestion(question) || isReceiptQuestion(question) || isAccountPlanOrTrialLimitQuestion(question)) return false
   return true
 }
 
@@ -3633,7 +3731,34 @@ async function loadSessionHistory(
 
 // 검색 → 답변 구성 → 필요 시 Gemini 답변 생성까지의 코어. 영속화(persistExchange)는 포함하지 않는다.
 // handleChatbotQuery(실서비스)와 evaluateChatbotQuery(품질 평가)가 공유한다.
+// 질문의 감정·형식 신호에 맞춰 공감 한마디·영어 요약·상담 연결을 붙인다. 여러 번 불러도 결과가 같다.
+// 보안·남용 거절 답변에는 붙이지 않는다.
+function applyConversationTone(core: ChatbotCore) {
+  const text = core.question.redacted.toLowerCase()
+  if (PROMPT_OR_SECURITY_ABUSE_RE.test(text) || CRIMINAL_ABUSE_RE.test(text) || TOKEN_WASTE_RE.test(text)) return
+  if (isGreetingOnly(core.question)) return
+  const tone = detectConversationTone(core.question.redacted)
+  const offerHandoff = tone.angry || tone.repeated
+  core.response.answer = applyToneToAnswer(core.response.answer, tone, {
+    englishSummary: core.englishSummary,
+    offerHandoff,
+  })
+  if (offerHandoff) {
+    core.response.needsHandoff = true
+    core.handoffIntent = "support"
+  }
+}
+
 async function buildChatbotCore(
+  message: unknown,
+  options: BuildChatbotCoreOptions = {}
+): Promise<ChatbotCore> {
+  const core = await buildChatbotCoreBase(message, options)
+  applyConversationTone(core)
+  return core
+}
+
+async function buildChatbotCoreBase(
   message: unknown,
   options: BuildChatbotCoreOptions = {}
 ): Promise<ChatbotCore> {
@@ -3676,6 +3801,25 @@ async function buildChatbotCore(
     }
   }
 
+  if (isEnglishSupportRequest(question.redacted)) {
+    return {
+      question,
+      response: {
+        answer: ENGLISH_SUPPORT_ANSWER,
+        answerMode: "direct_answer",
+        confidence: 0.9,
+        needsHandoff: false,
+        sources: [],
+        suggestedQuestions: ["login not working", "how to invite students", "상담원 연결해 주세요"],
+        unresolved: false,
+      },
+      category: "general",
+      intent: "self_knowledge",
+      handoffIntent: "support",
+      latencyMs: elapsedSince(startedAt),
+    }
+  }
+
   if (wantsImmediateHumanHandoff(question)) {
     const { category, intent, handoffIntent } = classifyChatbotQuestion(question.redacted)
     return {
@@ -3688,10 +3832,11 @@ async function buildChatbotCore(
     }
   }
 
-  const csFigmaGuide = findCsFigmaGuideForQuestion(question.redacted)
+  const routingText = glossForRouting(question.redacted)
+  const csFigmaGuide = findCsFigmaGuideForQuestion(routingText)
   // 증상형 질문("녹화 안 돼요", "기관 등록 안됨", "에러나요")은 공개 문제 해결 문서 섹션으로 바로 답한다.
   // Figma 가이드의 알려진 의도(예: 늦게 가입한 학생 다시보기)가 맞으면 그 가이드를 먼저 쓴다.
-  const symptomTriage = resolveSymptomTriageForQuestion(question, csFigmaGuide)
+  const symptomTriage = resolveSymptomTriageForQuestion(routingText, csFigmaGuide)
   if (symptomTriage) {
     const response = buildSymptomTriageResponse(symptomTriage)
     return {
@@ -3701,6 +3846,7 @@ async function buildChatbotCore(
       intent: symptomTriage.intent,
       handoffIntent: "support",
       latencyMs: elapsedSince(startedAt),
+      englishSummary: symptomTriage.englishSummary,
     }
   }
 
@@ -4012,6 +4158,18 @@ export async function streamChatbotQuery(
     const cachedQuestion = normalizeQuestion(input.message)
     const cached = getCachedAnswer(cachedQuestion)
     if (cached) {
+      // 캐시는 말투 계층 적용 전 사본일 수 있다 — 비스트림과 같은 최종본이 되게 여기서도 적용한다.
+      const cachedCore: ChatbotCore = {
+        question: cachedQuestion,
+        response: cached.response,
+        category: cached.category,
+        intent: cached.intent,
+        handoffIntent: cached.handoffIntent,
+        warning: cached.warning,
+        latencyMs: 0,
+      }
+      applyConversationTone(cachedCore)
+      cached.handoffIntent = cachedCore.handoffIntent
       emit({ type: "replace", answer: cached.response.answer })
       emitMeta(cached.response, cached.category, cached.intent, cached.handoffIntent, cached.warning)
       void persistExchange(
@@ -4037,14 +4195,16 @@ export async function streamChatbotQuery(
 
   // 검색·분류·결정형 초안까지는 기존 코어를 그대로 재사용(중복 방지). Gemini 호출만 스트리밍으로 대체.
   const core = await buildChatbotCore(input.message, { generateAnswer: false })
-  const { question, response, category, intent, handoffIntent, warning } = core
+  const { question, response, category, intent, warning } = core
 
   // 인사·정책 가드 응답은 buildChatbotCore 가 조기 반환한 '최종 답변'이다(정책 가드는 보안 거절 등).
   // 이 경우 AI 재작성을 적용하면 안 된다 — handleChatbotQuery 의 조기 반환 의미와 동일하게 맞춘다.
   const isShortCircuited = isGreetingOnly(question) || Boolean(buildPolicyGuardResponse(question))
   if (!isShortCircuited && shouldUseAiFinalAnswer(response, question, category)) {
     await streamAndApplyFinalAnswer({ question, category, intent, response, historyPromise, emit })
+    applyConversationTone(core)
   }
+  const handoffIntent = core.handoffIntent
 
   finalizeAnswer(response)
 

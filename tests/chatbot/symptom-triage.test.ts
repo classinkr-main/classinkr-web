@@ -136,7 +136,6 @@ describe("symptom triage boundaries", () => {
       "끊김 없는 수업 가능해요?",
       "무료 체험판 있나요?",
       "카메라 몇 대까지 연결 가능해요?",
-      "학생 계정은 어떻게 초대하나요?",
       "업데이트하면 뭐가 좋아지나요?",
       "클래스인 요금이 어떻게 되나요?",
       "학원 등록 서류는 교육청에 뭘 내야 하나요?",
@@ -145,6 +144,12 @@ describe("symptom triage boundaries", () => {
     for (const question of questions) {
       expect(resolveSymptomTriage(question), question).toBeNull()
     }
+  })
+
+  it("answers a few how-to topics that the persona loop showed users ask as symptoms", () => {
+    expect(resolveSymptomTriage("학생 계정은 어떻게 초대하나요?")?.topicId).toBe("invite-howto")
+    expect(resolveSymptomTriage("아이가 놓친 수업 다시보기는 어디서 봐요?")?.topicId).toBe("replay-howto")
+    expect(resolveSymptomTriage("그만둔 선생님 계정 빼는 법 알려줘요")?.topicId).toBe("teacher-leave")
   })
 
   it("asks for the error text when the question names no subject", () => {

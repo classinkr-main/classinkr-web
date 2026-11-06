@@ -43,8 +43,16 @@ export interface SymptomTopic {
   steps: SymptomStepSource[]
   /** 첫 문단. 문서 내용에서 벗어나지 않는 한두 문장. */
   intro: string
-  /** 단계 뒤에 붙는 짧은 분기 안내(모호한 주제용). */
-  branches?: string[]
+  /** 단계 뒤에 붙는 짧은 분기 안내. when 이 있으면 질문이 맞을 때만, unless 가 맞으면 빼고 붙인다. */
+  branches?: (string | { text: string; when?: RegExp; unless?: RegExp })[]
+  /** 질문이 when 에 맞으면 기본 doc/steps 대신 쓴다(예: 태블릿·학생 관점). 위에서부터 첫 번째를 쓴다. */
+  variants?: { when: RegExp; doc?: { category: DocCategory; slug: string }; heading?: string; steps: SymptomStepSource[]; intro?: string }[]
+  /** 영어로 물었을 때 첫 줄에 붙일 한 문장 요약. */
+  en?: string
+  /** 공개 문서로 끝까지 풀 수 없는 주제(네트워크 설정 등)면 상담 연결 버튼을 바로 띄운다. */
+  handoff?: boolean
+  /** 증상이 아닌 사용법 주제(기능 문의 꼴 질문도 받는다). */
+  howto?: boolean
   /** 문의 정보 섹션을 직접 지정할 때. 없으면 문서의 '문의/그래도 안 되면' 섹션을 찾는다. */
   contactHeading?: string
   suggestedQuestions: string[]
@@ -58,6 +66,8 @@ export interface SymptomTriageResult {
   kind: "topic" | "vague"
   topicId: string
   overridesKnownIntent: boolean
+  englishSummary?: string
+  needsHandoff: boolean
   answer: string
   answerMode: "direct_answer" | "clarifying_question"
   confidence: number
@@ -76,7 +86,7 @@ export interface SymptomTriageResult {
 
 // 공통 증상 표현. 질문은 normalizeTriageText 를 거친 소문자·공백 정리본이다.
 const SYMPTOM_RE =
-  /안\s*(?:돼|되|됨|됩|와|왔|오|옴|떠|뜨|뜸|뜬|보|켜|나|들|열|먹|올라|붙|잡|가져|갔|간|가요|넘어|움직|눌|생겨|만들|바뀌|맞|써|쓰|적|그려|그어|잡혀)|검은\s*화면|까만\s*화면|까맣|검게\s*(?:나|보)|못\s*(?:하|해|보|봐|들|받|찾|열|올|넣|쓰|써)|(?:지|진|되|돼|켜|보|나|열|들)\s*않|않(?:아요|아서|습니다|네요|음|는데|아)|멈춰|멈췄|멈춤|멈추|멈춥|먹통|튕|끊|꺼져|꺼짐|꺼지|꺼졌|오류|에러|error|버그|실패|반려|거절|막혀|막힘|막혔|막아|이상해|이상하|이상한|이상함|느려|느림|느리|깨져|깨짐|깨지|사라졌|사라져|사라짐|없어졌|없어져|없다고|없대|없어요|없습니다|없네|없음|안돼|안되|안됨|안나|안들|안보|안떠|안뜨|안켜|안와|문제\s*(?:가|있|생|발생)/
+  /안\s*(?:돼|되|됨|됩|됐|됬|와|왔|오|옴|떠|뜨|뜸|뜬|보|켜|나|들|열|먹|올라|붙|잡|가져|갔|간|가요|넘어|움직|눌|생겨|만들|바뀌|맞|써|쓰|적|그려|그어|잡혀)|검은\s*화면|까만\s*화면|까맣|검게\s*(?:나|보)|못\s*(?:하|해|보|봐|들|받|찾|열|올|넣|쓰|써)|(?:지|진|되|돼|켜|보|나|열|들)\s*않|않(?:아요|아서|습니다|네요|음|는데|아)|멈춰|멈췄|멈춤|멈추|멈춥|멈춘|먹통|튕|끊|꺼져|꺼짐|꺼지|꺼졌|오류|에러|error|버그|실패|반려|거절|막혀|막힘|막혔|막아|이상해|이상하|이상한|이상함|느려|느림|느리|깨져|깨짐|깨지|사라졌|사라져|사라짐|없어졌|없어져|없다고|없대|없어요|없습니다|없네|없음|안돼|안되|안됨|안나|안들|안보|안떠|안뜨|안켜|안와|문제\s*(?:가|있|생|발생)/
 
 // 대상 없는 오류·불만 표현.
 const GENERIC_ERROR_RE = /오류|에러|error|버그|bug|문제|이상|고장|먹통|작동|동작|안\s*(?:돼|되|됨)|안돼|안되|안됨|실행\s*(?:이|가)?\s*안/
@@ -86,7 +96,7 @@ const CAPABILITY_QUESTION_RE =
   /(?:없는|없이).{0,12}(?:가능|되나|돼나|될까|할\s*수|있나|있을까)|가능(?:한가요|해요|할까요|한지|하나요|한가)|(?:되나요|돼나요|될까요|있나요|있을까요|있어요|지원(?:하나요|되나요|돼요|되나))\s*$/
 // 기능 질문이라도 이런 표현이 있으면 실제 증상으로 본다.
 const EXPLICIT_SYMPTOM_RE =
-  /안\s*(?:돼|되|됨|됩|와|떠|뜨|보|켜|나|들|열|써)|안돼|안되|안됨|못\s*\S|오류|에러|실패|멈춰|멈췄|멈춤|튕겨|튕기|튕김|끊겨|끊겼|끊기고|끊어져|먹통|꺼져|꺼짐|반려/
+  /안\s*(?:돼|되|됨|됩|됐|와|떠|뜨|보|켜|나|들|열|써)|안돼|안되|안됨|못\s*\S|오류|에러|실패|멈춰|멈췄|멈춤|멈춥|멈춘|튕겨|튕기|튕김|끊겨|끊겼|끊기고|끊깁|끊어져|먹통|꺼져|꺼짐|반려/
 
 export function normalizeTriageText(value: string) {
   return value
@@ -99,6 +109,21 @@ export function normalizeTriageText(value: string) {
 // 증상 주제 목록. 위에서부터 먼저 맞는 주제를 쓴다(좁은 주제 → 넓은 주제 순).
 export const SYMPTOM_TOPICS: SymptomTopic[] = [
   // ─── 기관(계정) 인증 ────────────────────────────────────────────
+  {
+    id: "proxy-registration-password",
+    subject: /대리\s*등록.{0,30}(?:비밀번호|비번|로그인|모른|모르)|(?:비밀번호|비번).{0,20}대리\s*등록/,
+    requireSymptom: false,
+    category: "admin",
+    doc: { category: "admin", slug: "student-onboarding" },
+    steps: [
+      { heading: "가입 전인 학생은 대리 등록으로", pick: [0] },
+      { heading: "대리 등록했는데 문자가 안 갈 때", take: 3 },
+    ],
+    intro: "대리 등록한 학생은 따로 비밀번호를 정해 주지 않아도 돼요. 공통 기본 비밀번호는 없고, 임시 비밀번호가 학생에게 문자나 이메일로 갑니다.",
+    branches: ["학생에게는 홈페이지가 아니라 설치한 앱에서, 등록한 휴대폰 번호(또는 이메일)와 임시 비밀번호로 로그인하라고 알려 주세요."],
+    contactHeading: "",
+    suggestedQuestions: ["대리 등록했는데 문자가 안 가요", "학생 대리 등록 메뉴가 안 보여요", "학생이 로그인을 못 해요"],
+  },
   {
     id: "proxy-registration-hidden",
     subject: /대리\s*등록/,
@@ -119,12 +144,22 @@ export const SYMPTOM_TOPICS: SymptomTopic[] = [
     exclude: /인증\s*(?:번호|코드|문자)|원격|교육청|교육지원청|대리\s*등록/,
     category: "admin",
     doc: { category: "admin", slug: "account-verification" },
-    steps: [{ heading: "인증이 반려되거나 늦어지는 경우", take: 4 }],
+    steps: [
+      { heading: "인증이 반려되거나 늦어지는 경우", pick: [0, 1, 2] },
+      { heading: "인증 절차", pick: [4] },
+    ],
     intro:
       "기관 등록(계정 인증)이 끝나지 않았다면 아래부터 확인해 주세요. 인증은 메인 관리자 계정으로 [계정 정보] > [인증 자료]에서 하고, 처리는 보통 며칠 걸립니다.",
     branches: [
-      "교사나 학생을 기관에 등록하는 게 안 된다면, 그 사람이 먼저 클래스인에 가입했는지와 국가번호(+82)를 확인해 주세요.",
-      "첫 수업이 코앞이라면 자료를 올린 뒤 상담 채널이나 담당 매니저에게 빠른 처리를 요청하세요.",
+      {
+        text: "교사나 학생을 기관에 등록하는 게 안 된다면, 그 사람이 먼저 클래스인에 가입했는지와 국가번호(+82)를 확인해 주세요.",
+        when: /(?:기관|학원)\s*등록/,
+        unless: /인증|승인|서류|사업자/,
+      },
+      {
+        text: "급하시면 자료를 올린 뒤 상담 채널(홈페이지 하단 채팅)이나 담당 매니저에게 빠른 처리를 요청하세요. 확인하는 대로 처리해 드립니다.",
+        when: /급|첫\s*수업|언제|빨리|며칠|일째|주일|대기|그대로|승인/,
+      },
     ],
     contactHeading: "",
     suggestedQuestions: ["교사 추가가 안 돼요", "학생 추가가 안 돼요", "유료 계정 전환은 어떻게 하나요?"],
@@ -185,7 +220,7 @@ export const SYMPTOM_TOPICS: SymptomTopic[] = [
   },
   {
     id: "login-button",
-    subject: /로그인\s*버튼|로그인\s*(?:이|가)?\s*(?:안\s*눌|눌러도)|버튼\s*(?:이|가)?\s*회색/,
+    subject: /로그인\s*버튼|로그인\s*(?:이|가)?\s*(?:안\s*눌|눌러도)|로그인.{0,10}버튼\s*(?:이|가)?\s*회색/,
     requireSymptom: false,
     exclude: /수업|교실|입장|인증\s*코드|인증코드/,
     category: "troubleshooting",
@@ -197,7 +232,7 @@ export const SYMPTOM_TOPICS: SymptomTopic[] = [
   {
     id: "signup-fail",
     subject: /회원\s*가입|가입/,
-    exclude: /코스\s*(?:에\s*)?가입|반\s*가입|클래스\s*가입|가입\s*허용|qr|큐알|초대/,
+    exclude: /코스\s*(?:에\s*)?가입|반\s*가입|클래스\s*가입|가입\s*허용|qr|큐알|초대|가입\s*(?:했|한|된|은\s*(?:했|됐))|로그인/,
     category: "troubleshooting",
     doc: { category: "start", slug: "signup" },
     steps: [{ heading: "가입이 막힐 때", take: 5 }],
@@ -216,6 +251,46 @@ export const SYMPTOM_TOPICS: SymptomTopic[] = [
   },
 
   // ─── 녹화·다시보기 ───────────────────────────────────────────
+  {
+    id: "recording-camera-missing",
+    subject:
+      /현장\s*녹화.{0,40}(?:카메라|웹캠|영상|얼굴|교실|강사|선생님).{0,16}(?:없|안|빠|만\s*있)|칠판\s*화면만|화면만\s*녹화|(?:카메라|웹캠).{0,12}(?:영상|화면).{0,10}(?:녹화|녹화본).{0,8}(?:없|안|빠)/,
+    requireSymptom: false,
+    category: "troubleshooting",
+    doc: { category: "teacher", slug: "lesson-option-concepts" },
+    steps: [
+      { heading: "수업 녹화와 현장 녹화", pick: [2, 3] },
+      { heading: "처음 세팅할 때의 기본값", pick: [2] },
+    ],
+    intro: "수업 녹화는 칠판·자료가 보이는 교실 화면을, 현장 녹화는 카메라가 찍는 교실 모습을 따로 녹화해요. 칠판 화면만 남았다면 현장 녹화 카메라가 제대로 골라졌는지부터 봐 주세요.",
+    branches: ["두 녹화를 모두 켰다면 학생은 다시보기에서 '수업화면 녹화'와 '라이브 현장녹화' 중 골라 봅니다. 현장녹화 영상을 따로 찾아보세요."],
+    contactHeading: "",
+    suggestedQuestions: ["현장 녹화 카메라 설정 어떻게 해요?", "녹화본에 소리가 없어요", "녹화본이 안 보여요"],
+  },
+  {
+    id: "recording-howto",
+    subject:
+      /(?:녹화|녹음).{0,20}(?:하는\s*법|하는\s*방법|방법|어떻게|하고\s*싶|해서\s*(?:보내|공유)|보내|공유|켜|시작)|(?:어떻게|방법).{0,12}(?:녹화|녹음)/,
+    requireSymptom: false,
+    exclude: /다운|내려받|현장\s*녹화\s*카메라|카메라\s*설정|안\s*(?:돼|되|됨|됐)|안돼|안되|안됨|끊|사라|없어|권한|누가|저장\s*관리|용량|차이|뭐가\s*달라/,
+    category: "classroom",
+    doc: { category: "teacher", slug: "recording-troubleshooting" },
+    heading: "녹화 옵션이 꺼져 있었을 때",
+    steps: [
+      { heading: "녹화 옵션이 꺼져 있었을 때", pick: [0, 1, 2] },
+      { heading: "녹화 아이콘이 초록색으로 바뀌지 않을 때", pick: [2, 3] },
+    ],
+    intro: "수업 녹화는 수업을 만들 때 켭니다. 녹화를 켠 수업은 끝난 뒤 코스에 등록된 학생이 다시보기로 볼 수 있어요.",
+    branches: [
+      {
+        text: "못 온 학생도 코스에 등록돼 있으면 다시보기로 보면 돼요. 파일로 보내야 하면 관리자 대시보드 [수업 녹화 데이터]에서 내려받아 공유합니다.",
+        when: /보내|공유|못\s*온|결석|학생/,
+      },
+    ],
+    contactHeading: "",
+    en: "Turn on [ClassIn 수업 녹화] when you create the lesson and press [즉시 녹화] in class; after class, enrolled students can watch the replay.",
+    suggestedQuestions: ["녹화본 다운로드 방법 알려줘", "현장 녹화 카메라 설정 어떻게 해요?", "학생이 다시보기를 못 봐요"],
+  },
   {
     id: "recording-no-audio",
     subject: /녹화.{0,12}(?:소리|음성|오디오|목소리)|(?:소리|음성|오디오|목소리).{0,12}녹화/,
@@ -268,7 +343,7 @@ export const SYMPTOM_TOPICS: SymptomTopic[] = [
   },
   {
     id: "recording-old-deleted",
-    subject: /(?:예전|이전|지난|옛날|오래된)\s*녹화|녹화(?:본|\s*영상|\s*파일)?.{0,10}(?:사라|지워|삭제)/,
+    subject: /(?:예전|이전|지난달|옛날|오래된|몇\s*달)\s*녹화|녹화(?:본|\s*영상|\s*파일)?.{0,10}(?:지워|삭제|자동\s*삭제)/,
     requireSymptom: false,
     category: "troubleshooting",
     doc: { category: "admin", slug: "recording-file-troubleshooting" },
@@ -279,6 +354,7 @@ export const SYMPTOM_TOPICS: SymptomTopic[] = [
   {
     id: "recording-download",
     subject: /(?:녹화|영상|동영상).{0,12}(?:다운|내려받|저장|받기)|(?:다운|내려받).{0,12}(?:녹화|영상|동영상)/,
+    symptom: new RegExp(`${SYMPTOM_RE.source}|회색|비활성|눌리지|안\\s*눌`),
     category: "troubleshooting",
     doc: { category: "admin", slug: "recording-file-troubleshooting" },
     steps: [{ heading: "내려받기가 안 될 때", take: 4 }],
@@ -287,12 +363,18 @@ export const SYMPTOM_TOPICS: SymptomTopic[] = [
   },
   {
     id: "recording-file-missing",
-    subject: /녹화본|녹화\s*(?:파일|영상|데이터|본)|녹화된\s*(?:영상|수업)/,
+    subject: /녹화본|녹화\s*(?:파일|영상|데이터|본)|녹화된\s*(?:영상|수업)|녹화\s*(?:가|이)?.{0,10}(?:사라|없어|안\s*보|못\s*찾)/,
     symptom: /안\s*(?:보|떠|뜨|나)|안보|안떠|안뜨|없|못\s*찾|사라|안\s*올라|안\s*생/,
     category: "troubleshooting",
     doc: { category: "admin", slug: "recording-file-troubleshooting" },
     steps: [{ heading: "먼저 확인할 것", take: 4 }],
     intro: "녹화본이 안 보이면 그 수업이 실제로 녹화됐는지부터 확인해 주세요.",
+    branches: [
+      {
+        text: "예전에 있던 녹화본이 사라졌다면 [일반 설정] > [저장 설정]의 자동 삭제 기간과, 다른 관리자가 [수업 리소스]에서 지웠는지도 확인해 주세요. 지운 녹화본은 복구되지 않습니다.",
+        when: /사라|없어졌|지워/,
+      },
+    ],
     suggestedQuestions: ["녹화 다운로드가 안 돼요", "예전 녹화본이 사라졌어요", "학생이 다시보기를 못 봐요"],
   },
   {
@@ -305,6 +387,22 @@ export const SYMPTOM_TOPICS: SymptomTopic[] = [
     steps: [{ heading: "먼저 확인할 것", take: 4 }],
     intro: "학생이 녹화 영상(다시보기)을 못 보면 녹화 여부, 학생이 코스에 들어온 시점, 로그인한 아이디를 차례로 확인해 주세요.",
     suggestedQuestions: ["다시보기 기간이 지났대요", "녹화본이 안 보여요", "수업 끝나고 코스에 가입한 학생이 이전 강의를 못 봐요"],
+  },
+  {
+    id: "replay-howto",
+    subject:
+      /(?:다시\s*보기|다시보기|복습\s*영상|지난\s*수업|놓친\s*수업|끝난\s*수업).{0,24}(?:어디|어떻게|보는\s*(?:법|방법|곳)|방법|볼\s*수)|(?:어디서|어떻게).{0,12}(?:다시\s*보기|다시보기)/,
+    requireSymptom: false,
+    howto: true,
+    exclude: /기간|횟수|설정|관리자|대시보드|안\s*(?:보|떠|뜨|나)|안보|안떠|안뜨|못\s*(?:보|봐)|웹\s*라이브/,
+    category: "classroom",
+    doc: { category: "student", slug: "class-join-replay" },
+    steps: [{ heading: "끝난 수업 다시 보기" }],
+    intro: "녹화가 켜진 수업은 끝난 뒤 코스에서 다시 볼 수 있어요.",
+    branches: ["다시보기가 안 보이면 그 수업이 녹화됐는지, 학원이 정한 다시보기 기간이 지나지 않았는지 학원에 물어보세요."],
+    contactHeading: "",
+    en: "If the class was recorded, open the course (or the calendar) and tap the finished class to watch the replay.",
+    suggestedQuestions: ["다시보기가 안 떠요", "다시보기 기간이 지났대요", "숙제는 어떻게 내요?"],
   },
   {
     id: "replay-period",
@@ -321,11 +419,20 @@ export const SYMPTOM_TOPICS: SymptomTopic[] = [
     subject: /다시\s*보기|다시보기|리플레이|플레이백|복습\s*영상|지난\s*수업\s*영상/,
     exclude: /웹\s*라이브|생방송/,
     category: "troubleshooting",
-    doc: { category: "admin", slug: "replay-troubleshooting" },
-    steps: [{ heading: "먼저 확인할 것", take: 4 }],
-    intro: "학생에게 다시보기가 안 보이면 녹화 여부, 학생이 코스에 들어온 시점, 로그인한 아이디를 차례로 확인해 주세요.",
+    doc: { category: "student", slug: "class-join-replay" },
+    steps: [{ heading: "다시보기가 안 보일 때", take: 4 }],
+    intro: "다시보기가 안 보이면 그 수업이 녹화됐는지, 학원이 정한 다시보기 기간이 남았는지부터 확인해 주세요.",
+    variants: [
+      {
+        when: /관리자|대시보드|설정|우리\s*학생|학생(?:이|들이|한테|에게)/,
+        doc: { category: "admin", slug: "replay-troubleshooting" },
+        steps: [{ heading: "먼저 확인할 것", take: 4 }],
+        intro: "학생에게 다시보기가 안 보이면 녹화 여부, 학생이 코스에 들어온 시점, 로그인한 아이디를 차례로 확인해 주세요.",
+      },
+    ],
     branches: [
-      "수업이 끝난 뒤 코스에 들어온 학생이라면, 관리자가 일반 설정의 [수업 다시보기]에서 새로 가입한 학생의 이전 수업 시청을 허용해야 합니다.",
+      "수업이 끝난 뒤 코스에 들어온 학생이라면, 학원 관리자가 [일반 설정] > [수업 다시보기]에서 새로 가입한 학생의 이전 수업 시청을 허용해야 합니다.",
+      { text: "그래도 안 보이면 선생님이나 학원에 다시보기 기간이 남았는지 물어보세요.", unless: /관리자|대시보드|설정/ },
     ],
     suggestedQuestions: ["녹화본이 안 보여요", "다시보기 기간이 지났대요", "수업 끝나고 코스에 가입한 학생이 이전 강의를 못 봐요"],
     menuLine: "다시보기가 안 보일 때: 그 수업이 녹화됐는지, 학생이 학원에 등록된 아이디로 로그인했는지 봅니다.",
@@ -338,6 +445,13 @@ export const SYMPTOM_TOPICS: SymptomTopic[] = [
     doc: { category: "teacher", slug: "recording-troubleshooting" },
     steps: [{ heading: "먼저 확인할 것", take: 5 }],
     intro: "녹화가 안 됐다면 아래 순서로 확인해 주세요.",
+    branches: [
+      {
+        text: "이미 끝난 수업이라면 녹화본을 처리하는 데 시간이 걸릴 수 있으니 잠시 뒤 관리자 대시보드의 [수업 녹화 데이터]를 다시 보세요. 그래도 없으면 담당자가 그 수업 기록을 확인해 드려요.",
+        when: /어제|지난|통째|날아|사라|끝나고|끝난/,
+      },
+    ],
+    en: "Turn on the recording toggle when you create the lesson, then check that the recording icon turns green in class.",
     suggestedQuestions: ["녹화본에 소리가 없어요", "녹화가 중간에 끊겼어요", "녹화본이 안 보여요"],
     menuLine: "녹화가 안 될 때: 수업을 만들 때 녹화 토글을 켰는지, 교실에서 녹화 아이콘이 초록색인지 봅니다.",
   },
@@ -356,7 +470,8 @@ export const SYMPTOM_TOPICS: SymptomTopic[] = [
   // ─── 전자칠판(화면·전원은 기존 하드웨어 점검 경로가 맡는다) ─────────────
   {
     id: "board-mirroring",
-    subject: /미러링|캐스트|무선\s*(?:연결|화면)|화면\s*미러/,
+    subject:
+      /미러링|캐스트|무선\s*(?:연결|화면)|화면\s*미러|(?:휴대폰|폰|노트북|태블릿|아이패드).{0,10}화면.{0,14}(?:칠판|티비|tv|보드|전자칠판).{0,10}(?:띄우|띄워|연결|안\s*나|안\s*떠)|(?:칠판|티비|tv).{0,10}(?:에\s*)?(?:띄우|띄워)|연결할\s*(?:기계|기기)\s*목록/,
     category: "hardware",
     doc: { category: "hardware", slug: "board-basic-operation" },
     steps: [{ heading: "무선 미러링으로 기기 화면 띄우기", take: 4 }],
@@ -365,7 +480,9 @@ export const SYMPTOM_TOPICS: SymptomTopic[] = [
   },
   {
     id: "board-hdmi",
-    subject: /hdmi|외부\s*입력|입력\s*소스|노트북\s*연결/,
+    subject: /hdmi|외부\s*입력|입력\s*소스|노트북\s*연결|(?:노트북|컴퓨터|pc).{0,14}(?:선|케이블)\s*(?:으로|로)?\s*(?:연결|꽂)|선으로\s*연결|어떤\s*선/,
+    requireSymptom: false,
+    exclude: /몇\s*개|스펙|사양|규격|포트\s*수/,
     category: "hardware",
     doc: { category: "hardware", slug: "board-basic-operation" },
     steps: [{ heading: "HDMI 입력으로 전환하기", take: 5 }],
@@ -374,8 +491,8 @@ export const SYMPTOM_TOPICS: SymptomTopic[] = [
   },
   {
     id: "board-touch",
-    subject: /터치|(?:펜|필기|판서|글씨)\s*(?:가|이)?\s*(?:안\s*(?:써|쓰|돼|되|나|그|적|먹)|안써|안돼|안되|안먹)|(?:글씨|글자)\s*(?:가|이)?\s*안\s*(?:써|쓰|적|그려)/,
-    symptom: new RegExp(`${SYMPTOM_RE.source}|튀|인식|먹|반응|밀려|어긋`),
+    subject: /터치|(?:펜|필기|판서|글씨)\s*(?:가|이)?\s*(?:안\s*(?:써|쓰|돼|되|나|그|적|먹)|안써|안돼|안되|안먹)|(?:글씨|글자)\s*(?:가|이)?\s*안\s*(?:써|쓰|적|그려)|(?:글씨|판서|필기).{0,24}(?:옆에\s*(?:써|그려|찍)|어긋|밀려|빗나|위치)/,
+    symptom: new RegExp(`${SYMPTOM_RE.source}|튀|인식|먹|반응|밀려|어긋|옆에\\s*(?:써|그려|찍)|빗나|위치`),
     exclude: /스펙|사양|몇\s*점/,
     category: "hardware",
     doc: { category: "hardware", slug: "board-writing-touch" },
@@ -396,6 +513,34 @@ export const SYMPTOM_TOPICS: SymptomTopic[] = [
     suggestedQuestions: ["카메라가 안 켜져요", "설치했는데 클래스인이 안 켜져요", "마이크가 안 돼요"],
   },
   // ─── 카메라·마이크·소리 ──────────────────────────────────────────
+  {
+    id: "audio-quality",
+    subject: /로봇|기계음|기계\s*소리|찢어지|지지직|목소리.{0,8}끊겨|소리.{0,8}끊겨\s*들|뭉개|울렁/,
+    requireSymptom: false,
+    category: "troubleshooting",
+    doc: { category: "start", slug: "camera-mic-troubleshooting" },
+    steps: [{ heading: "소리가 작거나 웅웅거릴 때", pick: [0, 1, 3] }],
+    branches: ["마이크를 바꿔도 같다면 다른 인터넷이나 휴대폰 핫스팟으로 바꿔 다시 들어가 보세요. 바꾼 뒤 괜찮다면 원래 쓰던 네트워크가 원인입니다."],
+    intro: "목소리가 로봇처럼 들리거나 깨지면 마이크 설정과 네트워크를 함께 봐야 해요. 마이크를 바꿔도 같다면 네트워크 쪽일 가능성이 큽니다.",
+    contactHeading: "그래도 안 되면 문의할 때 알려 줄 정보",
+    suggestedQuestions: ["수업 중에 계속 튕겨요", "소리가 울리고 하울링이 나요", "마이크가 안 돼요"],
+  },
+  {
+    id: "mute-on-entry",
+    subject:
+      /(?:입장|들어오|시작).{0,20}(?:마이크|음소거).{0,12}(?:꺼|끄|off|꺼진|끈)|전체\s*음소거|학생.{0,12}마이크.{0,12}(?:꺼진\s*상태|끈\s*상태|끄고|꺼\s*놓|꺼\s*두|기본으로\s*꺼)/,
+    requireSymptom: false,
+    category: "classroom",
+    doc: { category: "teacher", slug: "lesson-option-concepts" },
+    steps: [
+      { heading: "온스테이지와 스테이지 표시", pick: [1, 2] },
+      { heading: "옵션이 안 보이거나 녹화가 안 될 때", pick: [0] },
+    ],
+    intro: "학생 마이크는 스테이지에 올라온 뒤에도 강사나 조교가 마이크 권한을 줘야 켜져요. 처음부터 조용히 시작하려면 수업을 만들 때 스테이지 옵션을 아래처럼 정하세요.",
+    branches: ["수업 옵션의 [전체 음소거]도 함께 확인해 보세요. 이 옵션은 [기본으로 스테이지 표시]를 켜야 선택됩니다."],
+    contactHeading: "",
+    suggestedQuestions: ["학생 목소리가 안 들려요", "소리가 울리고 하울링이 나요", "온스테이지랑 학생 자동 온스테이지가 뭔가요?"],
+  },
   {
     id: "audio-echo",
     subject: /하울링|웅웅|울려|울림|에코|잡음|소리\s*(?:가|이)?\s*작|소음|지지직/,
@@ -444,6 +589,23 @@ export const SYMPTOM_TOPICS: SymptomTopic[] = [
     doc: { category: "start", slug: "camera-mic-troubleshooting" },
     steps: [{ heading: "선생님 목소리나 수업 소리가 안 들릴 때", take: 4 }],
     intro: "소리가 안 들리면 내 기기에서만 그런지 먼저 가려 주세요. 다른 사람은 잘 들린다면 내 기기의 소리 출력 문제일 가능성이 큽니다.",
+    variants: [
+      {
+        when: /태블릿|패드|아이패드|갤럭시\s*탭|휴대폰|핸드폰|폰으로|모바일|아이폰/,
+        doc: { category: "student", slug: "class-join-replay" },
+        heading: "들어가기 전에 카메라·마이크·스피커 고르기",
+        steps: [
+          { heading: "들어가기 전에 카메라·마이크·스피커 고르기", pick: [2, 3] },
+        ],
+        intro:
+          "태블릿·휴대폰에서 선생님 소리만 안 들리면, 기기 볼륨보다 클래스인 안에서 소리가 나올 장치(스피커)가 맞게 골라졌는지부터 봐 주세요.",
+      },
+    ],
+    branches: [
+      "블루투스 이어폰을 쓰고 있다면 연결을 끊었다가 다시 연결하거나, 빼고 기기 스피커로 들어 보세요.",
+      "같은 수업의 다른 학생도 안 들린다면 선생님 쪽 마이크 문제일 수 있으니 선생님께 알려 주세요.",
+    ],
+    en: "Check the speaker selected inside ClassIn (gear icon or the pre-class device test) and your device volume, and reconnect Bluetooth earphones.",
     suggestedQuestions: ["마이크가 안 돼요", "학생 목소리가 안 들려요", "소리가 울리고 하울링이 나요"],
     menuLine: "카메라·마이크·소리가 안 될 때: 기기 설정에서 클래스인의 카메라·마이크 권한을 허용했는지, 교실에서 쓸 장치를 골랐는지 봅니다.",
   },
@@ -471,11 +633,36 @@ export const SYMPTOM_TOPICS: SymptomTopic[] = [
       { heading: "먼저 확인할 것", pick: [1, 2] },
       { heading: "PC 교실에서 마이크·카메라 다시 고르기", pick: [0, 1, 3] },
     ],
+    symptom: new RegExp(`${SYMPTOM_RE.source}|검은색|까만색|검정|빨간\\s*(?:줄|선)|사선`),
     intro: "카메라가 안 켜지면 권한과 다른 화상 프로그램부터 확인하고, 교실에서 카메라를 다시 골라 주세요.",
+    branches: [
+      {
+        text: "카메라 아이콘에 빨간 줄(사선)이 있으면 꺼진 상태예요. 아이콘을 한 번 눌러 켜고, 그래도 선생님 화면에 안 보이면 학생이 스테이지에 올라와 있는지 선생님께 확인해 달라고 하세요.",
+        when: /빨간|사선|줄이|선생님.{0,10}(?:안\s*보|못\s*보)/,
+      },
+    ],
+    en: "Allow camera access for ClassIn in your device settings, close other video apps (Zoom etc.), then pick your camera in the classroom settings (gear icon).",
     suggestedQuestions: ["마이크가 안 돼요", "소리가 안 나요", "전자칠판 카메라가 안 켜져요"],
   },
 
   // ─── 수업 입장·끊김 ──────────────────────────────────────────────
+  {
+    id: "class-enter-loading",
+    subject: /(?:입장|교실|수업).{0,16}(?:로딩|빙글|무한|계속\s*돌|하얀\s*화면|안\s*넘어)|로딩.{0,10}(?:입장|교실|수업)/,
+    requireSymptom: false,
+    category: "troubleshooting",
+    doc: { category: "start", slug: "class-connection-troubleshooting" },
+    steps: [
+      { heading: "수업 중이라 급하다면 이것부터", take: 2 },
+      { heading: "오래된 버전이 원인일 때", pick: [0, 2] },
+    ],
+    intro: "교실 입장 화면에서 로딩만 돈다면 대부분 네트워크나 앱 상태 문제예요. 앱을 완전히 종료했다가 다시 켜고, 아래 순서로 해 보세요.",
+    branches: [
+      { text: "수업을 놓치게 되더라도 녹화가 켜진 수업은 끝난 뒤 다시보기로 볼 수 있어요.", when: /지났|늦|놓치|시작했|어떡/ },
+    ],
+    en: "If the classroom keeps loading, fully quit and reopen ClassIn, switch to a phone hotspot, and update the app.",
+    suggestedQuestions: ["수업 중에 계속 튕겨요", "업데이트가 안 돼요", "로그인은 되는데 수업이 안 보여요"],
+  },
   {
     id: "class-enter-fail",
     subject:
@@ -513,6 +700,37 @@ export const SYMPTOM_TOPICS: SymptomTopic[] = [
     suggestedQuestions: ["휴대폰 앱 업데이트가 안 돼요", "수업 알림이 안 와요", "앱이 자꾸 멈춰요"],
   },
   {
+    id: "network-environment",
+    subject: /네트워크\s*오류|network\s*error|프록시|proxy|방화벽|firewall|포트\s*(?:번호|열|허용|목록)|열어야\s*할|화이트\s*리스트|whitelist|도메인\s*(?:허용|목록)/,
+    requireSymptom: false,
+    category: "troubleshooting",
+    doc: { category: "start", slug: "class-connection-troubleshooting" },
+    steps: [{ heading: "자꾸 끊기거나 교실에서 튕길 때", pick: [1, 2] }],
+    intro: "같은 기기가 휴대폰 핫스팟에서는 되고 학원 네트워크에서만 안 된다면, 학원 네트워크(방화벽·프록시)가 원인일 가능성이 큽니다.",
+    branches: [
+      "열어야 할 주소·포트 목록은 공개 문서에 없어서, 기술지원이 학원 네트워크 환경을 보고 안내드려요. 아래 [실시간 상담 연결]로 네트워크 구성(프록시·방화벽 사용 여부)과 화면에 뜬 오류 문구를 남겨 주세요.",
+    ],
+    handoff: true,
+    en: "If it works on a phone hotspot but not on your academy network, the firewall/proxy is likely blocking ClassIn; our tech support will tell you what to allow.",
+    suggestedQuestions: ["수업 중에 계속 튕겨요", "로그인이 안 돼요", "앱이 자꾸 멈춰요"],
+  },
+  {
+    id: "screen-share",
+    subject: /화면\s*공유/,
+    symptom: new RegExp(`${SYMPTOM_RE.source}|검은|까만|검게|못\s*봐|안\s*보인대`),
+    exclude: /끊|튕/,
+    category: "troubleshooting",
+    doc: { category: "start", slug: "app-update-cache-reinstall" },
+    steps: [{ heading: "먼저 확인할 것", pick: [0, 1] }],
+    intro: "화면 공유가 학생에게 안 보이거나 검은 화면으로 보이면, 먼저 클래스인을 완전히 종료했다 다시 켜고 최신 버전인지 확인해 주세요.",
+    branches: [
+      "그래도 같다면 기기·운영체제 버전과 공유하려던 화면(전체 화면·특정 창)을 상담 채널에 남겨 주세요. 기술지원이 확인합니다.",
+    ],
+    handoff: true,
+    en: "If students can't see your shared screen (or it's black), fully quit and reopen ClassIn and update it; if it continues, our tech support will check your device.",
+    suggestedQuestions: ["업데이트가 안 돼요", "앱이 자꾸 멈춰요", "카메라가 안 켜져요"],
+  },
+  {
     id: "class-slow",
     subject: /(?:화면|수업|교실|영상).{0,10}(?:느려|느림|느리|버벅|렉|깨져|깨짐|깨지|지연|딜레이)|렉\s*(?:이|가)?\s*(?:걸|심)|버벅/,
     requireSymptom: false,
@@ -525,18 +743,42 @@ export const SYMPTOM_TOPICS: SymptomTopic[] = [
   },
   {
     id: "class-disconnect",
-    subject: /튕|끊기|끊겨|끊김|끊어|끊겼|끊긴|끊어져|나가져|나가집|(?:계속|자꾸|혼자|갑자기)\s*나가|나가요|나갑니다|강제\s*(?:로\s*)?(?:퇴장|종료)|연결\s*(?:이|가)?\s*(?:불안|끊|안)|접속\s*(?:이|가)?\s*(?:불안|끊)/,
+    subject: /튕|끊(?:기|겨|김|어|겼|긴|깁|길)|나가져|나가집|(?:계속|자꾸|혼자|갑자기)\s*나가|나가요|나갑니다|강제\s*(?:로\s*)?(?:퇴장|종료)|연결\s*(?:이|가)?\s*(?:불안|끊|안)|접속\s*(?:이|가)?\s*(?:불안|끊)/,
     requireSymptom: false,
     exclude: /녹화|미러링|무선\s*키보드|마우스/,
     category: "troubleshooting",
     doc: { category: "start", slug: "class-connection-troubleshooting" },
     steps: [{ heading: "자꾸 끊기거나 교실에서 튕길 때", take: 5 }],
     intro: "수업이 끊기거나 튕기면 네트워크와 로그인 기기부터 확인해 주세요. 수업 중이라 급하다면 휴대폰 핫스팟이나 모바일 데이터로 바꿔 다시 들어가세요.",
+    branches: [
+      "앱이 계속 무겁다면 캐시를 지우고 기기 저장 공간을 정리해 보세요. 캐시는 PC 앱 프로필 > [계정 및 설정] > [파일 전송]의 [캐시 파일]에서 지웁니다.",
+      {
+        text: "같은 시간대마다 반복된다면 수업 이름, 문제가 생긴 시각, 쓰는 기기를 상담 채널에 남겨 주세요. 상담원이 그 수업 기록으로 원인을 확인합니다.",
+        when: /마다|반복|매번|번째|계속|자꾸/,
+      },
+    ],
+    en: "Restart your router or switch to a phone hotspot, use only one device per account, and update ClassIn to the latest version.",
     suggestedQuestions: ["수업 화면이 느리고 버벅여요", "학생 목소리가 안 들려요", "업데이트가 안 돼요"],
     menuLine: "수업 중 끊기거나 튕길 때: 공유기를 껐다 켜거나 휴대폰 핫스팟으로 바꿔 다시 들어가고, 한 계정은 기기 1대로만 들어갑니다.",
   },
 
   // ─── 코스 참여·구성원 ────────────────────────────────────────────
+  {
+    id: "invite-howto",
+    subject:
+      /(?:학생|구성원|조교).{0,12}초대\s*(?:하|방법|어떻게|는)|초대.{0,10}(?:방법|어떻게|하는\s*법|하나요)|(?:링크|qr).{0,10}(?:보내|공유).{0,14}(?:되나요|돼요|하면|방법)/,
+    requireSymptom: false,
+    howto: true,
+    exclude: /안\s*(?:돼|되|들어|열)|못\s*(?:들어|와)|초대했|보냈는데/,
+    category: "onboarding",
+    doc: { category: "teacher", slug: "course-members" },
+    steps: [{ heading: "구성원 초대하기", take: 4 }],
+    intro: "학생은 코스 오른쪽 위 [구성원] > [구성원 초대]에서 연락처, 링크, QR 코드로 초대해요. 링크를 보내도 됩니다.",
+    branches: ["학생이 클래스인에 가입돼 있어야 코스에 들어와요. 링크나 QR로 들어오게 하려면 코스 설정 > [코스 관리]의 '코스 가입 허용'을 켜 두세요."],
+    contactHeading: "",
+    en: "Open the course → [구성원] → [구성원 초대] and invite by contact, link, or QR code. Students must already have a ClassIn account, and '코스 가입 허용' must be on for link/QR joins.",
+    suggestedQuestions: ["초대했는데 학생이 못 들어와요", "코스 가입이 안 돼요", "학생 추가가 안 돼요"],
+  },
   {
     id: "invite-not-joining",
     subject: /초대(?:를|했|해|한|하|링크|\s*링크|\s*보냈)|링크\s*(?:를|로)?\s*보냈|qr.{0,8}(?:보냈|줬|드렸)/,
@@ -558,6 +800,31 @@ export const SYMPTOM_TOPICS: SymptomTopic[] = [
     intro: "코스에 들어가지지 않으면 로그인한 아이디와 초대 수락 여부부터 확인해 주세요.",
     contactHeading: "",
     suggestedQuestions: ["초대했는데 학생이 못 들어와요", "로그인은 되는데 수업이 안 보여요", "수업 입장이 안 돼요"],
+  },
+  {
+    id: "teacher-leave",
+    subject:
+      /(?:그만둔|그만두는|퇴사|퇴직|나간|관둔|떠난)\s*(?:선생님|강사|교사|선생)|(?:선생님|강사|교사|선생).{0,12}(?:그만|퇴사|퇴직|비활성|계정\s*(?:을\s*)?(?:빼|삭제|지우|없애|정리))/,
+    requireSymptom: false,
+    category: "admin",
+    doc: { category: "admin", slug: "teacher-onboarding" },
+    steps: [{ heading: "강사가 그만둘 때", take: 4 }],
+    intro: "그만둔 강사는 계정을 지우는 대신 코스를 넘기고 비활성화합니다. 순서대로 하면 수업 기록과 자료가 학원에 남습니다.",
+    contactHeading: "",
+    suggestedQuestions: ["코스 담당 교사를 바꾸고 싶어요", "교사 추가가 안 돼요", "하위 계정 설정 방법 알려줘"],
+  },
+  {
+    id: "teacher-not-seeing-academy",
+    subject:
+      /(?:선생님|강사|교사).{0,16}(?:앱|화면|계정|쪽).{0,16}(?:학원|코스|수업|반).{0,10}(?:안\s*(?:떠|뜨|보|나)|안떠|안보|없|보이지)/,
+    requireSymptom: false,
+    category: "admin",
+    doc: { category: "admin", slug: "teacher-onboarding" },
+    steps: [{ heading: "담당 코스에 배정하기", take: 3 }],
+    intro: "교사로 추가만 하고 코스에 배정하지 않으면 강사 앱에 수업이 보이지 않아요. 코스에 교사로 배정했는지, 강사가 등록한 아이디로 로그인했는지 확인해 주세요.",
+    branches: ["강사가 다른 아이디(예전 이메일 등)로 로그인해 있으면 학원 코스가 안 보입니다. 로그아웃한 뒤 학원에 등록한 휴대폰 번호나 이메일로 다시 로그인하게 해 주세요."],
+    contactHeading: "",
+    suggestedQuestions: ["교사 추가가 안 돼요", "로그인은 되는데 수업이 안 보여요", "코스 담당 교사를 바꾸고 싶어요"],
   },
   {
     id: "teacher-add-fail",
@@ -589,7 +856,10 @@ export const SYMPTOM_TOPICS: SymptomTopic[] = [
     doc: { category: "admin", slug: "student-onboarding" },
     steps: [{ heading: "Excel로 한 번에 300명까지", take: 5 }],
     intro: "Excel 등록이 안 되면 받은 양식을 그대로 쓰고 있는지부터 확인해 주세요. 한 번에 300명까지 올라갑니다.",
-    branches: ["아직 클래스인에 가입하지 않은 학생이 섞여 있다면, 그 학생은 한 명씩 추가하거나 텍스트로 가져올 때 [학생 대리 등록]을 체크해 주세요."],
+    branches: [
+      "휴대폰 번호 칸은 국가번호가 한국(+82)인지, 번호가 빈 줄이나 같은 번호가 두 번 들어가 있지 않은지 확인해 주세요.",
+      "아직 클래스인에 가입하지 않은 학생이 섞여 있다면, 그 학생은 한 명씩 추가하거나 텍스트로 가져올 때 [학생 대리 등록]을 체크해 주세요.",
+    ],
     contactHeading: "",
     suggestedQuestions: ["학생 추가가 안 돼요", "학생 대리 등록 메뉴가 안 보여요", "대리 등록했는데 문자가 안 가요"],
   },
@@ -683,6 +953,21 @@ export const SYMPTOM_TOPICS: SymptomTopic[] = [
   },
 
   // ─── 숙제 ──────────────────────────────────────────────────────
+  {
+    id: "activity-not-visible",
+    subject: /(?:숙제|과제|시험|활동).{0,24}(?:학생|몇\s*명|일부).{0,16}(?:안\s*(?:보|떠|뜨)|안보|안떠|안뜬|없다|보이지)|(?:학생|몇\s*명|일부).{0,16}(?:숙제|과제|시험|활동).{0,16}(?:안\s*(?:보|떠|뜨)|안보|안떠|없다|보이지)/,
+    requireSymptom: false,
+    category: "classroom",
+    doc: { category: "software", slug: "lesson-activities" },
+    steps: [{ heading: "활동을 만들기 전에 정할 것", take: 4 }],
+    intro: "숙제가 일부 학생에게만 안 보이면 그 활동의 게시 대상과, 학생이 코스에 들어온 시점을 먼저 확인해 주세요.",
+    branches: [
+      "활동 편집에서 게시 대상에 그 학생들이 들어 있는지, 학생들이 같은 코스에 들어와 있는지 확인해 주세요.",
+      "그래도 안 보이면 코스 이름과 활동 이름, 안 보이는 학생 수를 상담 채널에 남겨 주세요. 담당자가 확인합니다.",
+    ],
+    contactHeading: "",
+    suggestedQuestions: ["숙제 제출이 안 돼요", "학생 추가가 안 돼요", "초대했는데 학생이 못 들어와요"],
+  },
   {
     id: "homework-photo",
     subject: /(?:숙제|과제).{0,12}(?:사진|파일|첨부|이미지|업로드|올라|올리|붙)|(?:사진|파일|첨부|이미지).{0,12}(?:숙제|과제)|사진\s*(?:이|가)?\s*(?:안\s*(?:붙|올라)|올라가지|붙지)/,
@@ -844,7 +1129,13 @@ export const SYMPTOM_TOPICS: SymptomTopic[] = [
     steps: [{ heading: "잘못된 계정 또는 비밀번호라고 나올 때", take: 4 }],
     intro:
       "로그인이 안 되면 먼저 공식 홈페이지가 아니라 설치한 앱이나 PC 프로그램에서 로그인하는지 확인해 주세요. 홈페이지 로그인은 학원 관리자용입니다.",
-    branches: ["모바일은 비밀번호 칸 아래 [약관 동의]에 체크해야 로그인됩니다."],
+    branches: [
+      "모바일은 비밀번호 칸 아래 [약관 동의]에 체크해야 로그인됩니다.",
+      "비밀번호가 기억나지 않으면 로그인 화면에서 PC는 [비밀번호 변경], 모바일은 [비밀번호를 잊으셨나요?]를 눌러 새로 정합니다.",
+      { text: "이메일로 가입했다면 로그인 화면에서 휴대폰 번호 대신 이메일 로그인으로 바꿔 넣어 주세요.", when: /이메일|email|메일/ },
+      { text: "앱에 '네트워크 오류'가 뜬다면 다른 인터넷이나 휴대폰 핫스팟으로 바꿔 다시 로그인해 보세요.", when: /네트워크|network|프록시|proxy/ },
+    ],
+    en: "Log in with the installed ClassIn app, not the website. For a phone ID choose +82 and enter your number starting with 10 (drop the first 0); if you signed up with email, switch to email login.",
     suggestedQuestions: ["인증번호가 안 와요", "비밀번호를 잊어버렸어요", "계정이 없다고 떠요"],
     menuLine: "로그인이 안 될 때: 홈페이지가 아니라 설치한 앱에서 로그인하고, 휴대폰 번호는 +82를 고른 뒤 10부터 입력합니다.",
   },
@@ -890,15 +1181,26 @@ export function isVagueErrorQuestion(question: string) {
   return tokens.every(isGenericToken)
 }
 
+// "또 날아가면 안 되니까 저장해 두겠다", "보이지 않게 하려면"처럼 금지·목적을 말하는 표현은 증상이 아니다.
+const NON_SYMPTOM_NEGATION_RE =
+  /(?:면|으면)\s*안\s*(?:돼|되)\S*|안\s*(?:되|돼)\s*(?:게|도록)|(?:지|보이지|들리지)\s*않\s*(?:게|도록)|\S*(?:지|진)\s*않(?:나요|을까요|을까|겠죠|겠지요|나|죠)/g
+// 공손한 요청 어미("알 수 있을까요", "여쭤봐도 될까요")는 기능·가능 여부 질문이 아니다.
+const POLITE_REQUEST_RE =
+  /(?:여쭤|물어)\s*봐도\s*될까요|알려\s*주실\s*수\s*있(?:나요|을까요|으실까요)|알\s*수\s*있(?:을까요|나요|을지)|확인할\s*수\s*있(?:을까요|나요)|도와\s*주실\s*수\s*있(?:나요|을까요)/g
+
 export function findSymptomTopic(question: string): SymptomTopic | null {
   const text = normalizeTriageText(question)
   if (!text) return null
-  if (CAPABILITY_QUESTION_RE.test(text) && !EXPLICIT_SYMPTOM_RE.test(text)) return null
+  const symptomText = text.replace(NON_SYMPTOM_NEGATION_RE, " ")
+  const capabilityForm =
+    CAPABILITY_QUESTION_RE.test(text.replace(POLITE_REQUEST_RE, " ").trim()) && !EXPLICIT_SYMPTOM_RE.test(symptomText)
 
   for (const topic of SYMPTOM_TOPICS) {
+    // 기능 문의 꼴("~되나요?")은 사용법 주제만 받는다("끊김 없는 수업 가능해요?"가 끊김 조치로 새지 않게).
+    if (capabilityForm && !topic.howto) continue
     if (!topic.subject.test(text)) continue
     if (topic.exclude?.test(text)) continue
-    if (topic.requireSymptom !== false && !(topic.symptom ?? SYMPTOM_RE).test(text)) continue
+    if (topic.requireSymptom !== false && !(topic.symptom ?? SYMPTOM_RE).test(symptomText)) continue
     return topic
   }
   return null
@@ -906,10 +1208,8 @@ export function findSymptomTopic(question: string): SymptomTopic | null {
 
 // ─── 답변 조립 ────────────────────────────────────────────────────
 
-function findDoc(topic: SymptomTopic) {
-  return listDocs().find(
-    (doc) => doc.category === topic.doc.category && doc.slug === topic.doc.slug
-  )
+function findDocByRef(ref: { category: DocCategory; slug: string }) {
+  return listDocs().find((doc) => doc.category === ref.category && doc.slug === ref.slug)
 }
 
 function findSection(doc: DocArticle, heading: string) {
@@ -938,9 +1238,9 @@ function bodyParagraphs(body: string) {
     .map(toPlainStep)
 }
 
-function collectSteps(doc: DocArticle, topic: SymptomTopic) {
+function collectSteps(doc: DocArticle, stepSources: SymptomStepSource[]) {
   const lines: string[] = []
-  for (const stepSource of topic.steps) {
+  for (const stepSource of stepSources) {
     const section = findSection(doc, stepSource.heading)
     if (!section) continue
     const steps = section.steps && section.steps.length > 0 ? section.steps : bodyParagraphs(section.body)
@@ -1009,27 +1309,53 @@ function intentForCategory(category: ChatbotCategory): ChatbotIntent {
   }
 }
 
-export function buildSymptomTopicAnswer(topic: SymptomTopic): SymptomTriageResult | null {
-  const doc = findDoc(topic)
-  if (!doc) return null
-  const steps = collectSteps(doc, topic)
-  if (steps.length === 0) return null
+export interface SymptomAnswerOptions {
+  /** 짧게 묻는 사람(학생·급한 사용자)에게는 단계 3개와 짧은 맺음말만. */
+  compact?: boolean
+  /** 원 질문(조건부 분기·변형 선택용). */
+  question?: string
+}
 
-  const contactItems = collectContactItems(doc, topic)
+function pickBranches(topic: SymptomTopic, text: string) {
+  return (topic.branches ?? [])
+    .map((branch) => (typeof branch === "string" ? { text: branch } : branch))
+    .filter((branch) => (!branch.when || branch.when.test(text)) && !(branch.unless && branch.unless.test(text)))
+    .map((branch) => branch.text)
+}
+
+export function buildSymptomTopicAnswer(
+  topic: SymptomTopic,
+  options: SymptomAnswerOptions = {}
+): SymptomTriageResult | null {
+  const text = normalizeTriageText(options.question ?? "")
+  const variant = topic.variants?.find((candidate) => candidate.when.test(text))
+  const doc = findDocByRef(variant?.doc ?? topic.doc)
+  if (!doc) return null
+  const stepSources = variant?.steps ?? topic.steps
+  const allSteps = collectSteps(doc, stepSources)
+  if (allSteps.length === 0) return null
+  const steps = options.compact ? allSteps.slice(0, 3) : allSteps
+
+  const contactItems = options.compact ? [] : collectContactItems(doc, topic)
   const closing =
     contactItems.length > 0
       ? `그래도 안 되면 담당자 상담으로 이어 드릴게요. 상담할 때 이 정보를 함께 알려 주시면 더 빨리 확인합니다: ${contactItems.join(", ")}.`
       : "그래도 안 되면 담당자 상담으로 이어 드릴게요."
 
   const stepBlock = steps.map((step, index) => `${index + 1}. ${step}`).join("\n")
-  const answer = [topic.intro, stepBlock, ...(topic.branches ?? []), closing].filter(Boolean).join("\n\n")
-  const sourceHeading = topic.heading ?? topic.steps[0]?.heading ?? "요약"
+  const branches = pickBranches(topic, text)
+  const answer = [variant?.intro ?? topic.intro, stepBlock, ...(options.compact ? branches.slice(0, 1) : branches), closing]
+    .filter(Boolean)
+    .join("\n\n")
+  const sourceHeading = variant?.heading ?? (variant ? variant.steps[0]?.heading : undefined) ?? topic.heading ?? topic.steps[0]?.heading ?? "요약"
   const sourceSection = findSection(doc, sourceHeading)
 
   return {
     kind: "topic",
     topicId: topic.id,
     overridesKnownIntent: topic.overridesKnownIntent === true,
+    englishSummary: topic.en,
+    needsHandoff: topic.handoff === true,
     answer,
     answerMode: "direct_answer",
     confidence: 0.86,
@@ -1060,6 +1386,9 @@ export function buildVagueErrorAnswer(): SymptomTriageResult {
     kind: "vague",
     topicId: "vague-error",
     overridesKnownIntent: false,
+    englishSummary:
+      "Tell me what you were doing and the exact error text (or code), and which device you use. Common fixes: log in with the installed app, fully restart and update the app, or switch to a phone hotspot if class keeps dropping.",
+    needsHandoff: false,
     answer: [
       "어떤 오류인지 조금만 알려 주시면 바로 좁혀 드릴게요. 화면에 뜬 오류 문구(오류 코드가 있으면 숫자까지)와 무엇을 하다가 생겼는지, 쓰는 기기(PC·휴대폰·전자칠판)를 적어 주세요.",
       `자주 있는 경우는 먼저 이렇게 해 보세요.\n${menuLines.join("\n")}`,
@@ -1078,9 +1407,12 @@ export function buildVagueErrorAnswer(): SymptomTriageResult {
  * 증상 질문이면 결정형 답변을, 아니면 null 을 돌려준다.
  * 호출부(service.ts)는 Figma 가이드의 알려진 의도(known intent)가 맞으면 그쪽을 먼저 쓴다.
  */
-export function resolveSymptomTriage(question: string): SymptomTriageResult | null {
+export function resolveSymptomTriage(
+  question: string,
+  options: Omit<SymptomAnswerOptions, "question"> = {}
+): SymptomTriageResult | null {
   const topic = findSymptomTopic(question)
-  if (topic) return buildSymptomTopicAnswer(topic)
+  if (topic) return buildSymptomTopicAnswer(topic, { ...options, question })
   if (isVagueErrorQuestion(question)) return buildVagueErrorAnswer()
   return null
 }
