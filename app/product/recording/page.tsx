@@ -23,7 +23,7 @@ export const metadata: Metadata = createPublicMetadata({
   keywords: ["학원 수업 녹화", "수업 녹화", "AI 카메라 녹화", "결석 보강 영상", "수업 다시보기", "Classin"],
 })
 
-const { hero, how, gains, control } = RECORDING_COPY
+const { hero, how, gains, control, pilot } = RECORDING_COPY
 // 홈 이득 3행과 같은 컨테이너·리듬(80/128) — 히어로만 고정 헤더 높이를 더한다(DESIGN §5-A)
 const CONTAINER = "mx-auto max-w-[1040px] px-4 sm:px-6"
 const KICKER = "text-caption font-medium text-fg-muted"
@@ -193,7 +193,7 @@ export default function RecordingPage() {
         </Reveal>
       </section>
 
-      <HomePilotCta source="recording_final_cta" />
+      <HomePilotCta source="recording_final_cta" heading={pilot.heading} />
     </>
   )
 }

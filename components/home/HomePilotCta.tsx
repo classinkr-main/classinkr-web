@@ -11,12 +11,12 @@ import { HOME_COPY } from "./home-copy"
 const { pilot } = HOME_COPY
 
 // 먹 지면 — surface-ink 가 글자·선 토큰을 다시 정의하고 강조색은 민트가 된다. 채움 버튼 금지(C14) → line
-// 홈 밖(녹화 랜딩)에서도 같은 띠를 쓴다 — 진단지 클릭의 source 만 그 페이지 이름으로 바꾼다
-export function HomePilotCta({ source = "home_final_cta" }: { source?: string }) {
+// 홈 밖(녹화 랜딩)에서도 같은 띠를 쓴다 — 제목과 진단지 클릭의 source 만 그 페이지 것으로 바꾼다
+export function HomePilotCta({ source = "home_final_cta", heading = pilot.heading }: { source?: string; heading?: string }) {
   return (
     <section className="surface-ink py-20 md:py-32">
       <Reveal className="mx-auto max-w-[1040px] px-4 sm:px-6">
-        <h2 className="text-h2 text-fg-ink break-keep text-balance">{pilot.heading}</h2>
+        <h2 className="text-h2 text-fg-ink break-keep text-balance">{heading}</h2>
         <ol className="mt-10 grid gap-8 md:grid-cols-3">
           {pilot.steps.map((step) => (
             <li key={step.title}>

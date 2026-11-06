@@ -51,6 +51,7 @@ describe("녹화 수업 랜딩", () => {
       expect(h, href).toContain(`href="${href}"`)
     }
     expect(h.match(/파일럿 상담 신청/g)).toHaveLength(2)
+    expect(h).toContain(`>${RECORDING_COPY.pilot.heading}</h2>`)
   })
 
   it("다운로드 차단·워터마크를 '항상'으로 단정하지 않는다(관리자 설정·계약 범위에 따라 다름)", () => {

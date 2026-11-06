@@ -2,10 +2,10 @@
 // 근거: 수업을 만들 때 녹화를 켜면 수업 시간에 자동 시작(docs/active/cs-figma-board-digest-2026-06-21.md),
 // 4K AI 카메라 자동 추적(/product/hw), 시청 설정 항목(docs/active/classin-software-feature-inventory.md).
 // 다운로드·워터마크는 관리자 설정·계약 범위에 따라 다르다 — '항상 차단'으로 쓰지 않는다(docs/active/internal-cs-content-arrangement-2026-07-15.md).
-// 캡처는 Drive 원본이고 학생·강사 이름과 사진은 스켈레톤 면으로 가렸다(블러 아님, DESIGN.md).
+// 캡처는 Drive 원본이고 학생·강사 이름과 사진, 수업 날짜·시각은 스켈레톤 면으로 가렸다(블러 아님, DESIGN.md). 캡션에는 가렸다고 적지 않는다(사용자 결정).
 export const RECORDING_COPY = {
   hero: {
-    kicker: "수업 녹화",
+    kicker: "Classin 수업 녹화",
     // 두 구절 — 쉼표 뒤에서 줄을 바꾼다
     title: ["수업만 하면,", "녹화는 저절로 남습니다"],
     lead: "보드로 수업을 시작하면 칠판 화면과 AI 카메라가 함께 녹화합니다. 수업이 끝나면 클라우드에 저장되고, 학생은 그날 바로 다시 봅니다.",
@@ -18,7 +18,7 @@ export const RECORDING_COPY = {
       height: 695,
       alt: "녹화 수업 다시보기 화면. 칠판 판서와 강사 카메라가 함께 담긴 녹화 아래로 학생 참여율, 시청 완료율, 평균 시청 시간이 보인다",
     },
-    caption: "실제 화면 · 녹화 수업 다시보기 (학생 이름은 가렸습니다)",
+    caption: "실제 화면 · 녹화 수업 다시보기",
   },
   how: {
     kicker: "작동 방식",
@@ -47,7 +47,7 @@ export const RECORDING_COPY = {
         height: 524,
         alt: "Classin 앱의 코스 수업 목록. 주차별로 묶인 수업 가운데 끝난 수업마다 오른쪽에 카메라 버튼이 있다",
       },
-      caption: "실제 화면 · 앱의 코스 수업 목록 (강사 이름은 가렸습니다)",
+      caption: "실제 화면 · 앱의 코스 수업 목록",
     },
   },
   gains: {
@@ -59,7 +59,7 @@ export const RECORDING_COPY = {
       height: 693,
       alt: "학생 데이터 화면. 학생 참여율, 시청 완료율, 평균 시청 시간과 학생별 시청 시간·완료율 목록",
     },
-    caption: "실제 화면 · 학생별 시청 기록 (학생 이름은 가렸습니다)",
+    caption: "실제 화면 · 학생별 시청 기록",
     roles: [
       { role: "학생", title: "결석한 날 수업도 그날 봅니다", body: "녹화는 앱의 코스에 남습니다. 시험 전 복습도 같은 녹화로 합니다." },
       { role: "강사", title: "보강 시간을 따로 잡지 않습니다", body: "녹화 링크를 보내고, 남은 질문에만 답합니다." },
@@ -68,7 +68,7 @@ export const RECORDING_COPY = {
   },
   control: {
     kicker: "시청 설정",
-    heading: "누가, 몇 번, 언제까지 볼지 학원이 정합니다",
+    heading: "누가, 몇 번, 언제까지 볼지도 학원이 정합니다",
     items: [
       { title: "볼 수 있는 사람", body: "정규 학생과 교사만 볼지, 코스를 떠난 학생도 볼지 정합니다." },
       { title: "보는 방식", body: "시청 가능 횟수, 열람 기간, 재생 속도와 건너뛰기 허용을 녹화마다 정합니다." },
@@ -77,4 +77,6 @@ export const RECORDING_COPY = {
     note: "설정 항목은 관리자 권한과 계약 범위에 따라 다를 수 있습니다.",
     ai: { text: "녹화가 쌓이면, AI가 그 수업을 평가합니다.", label: "AI 강의 평가 보기", href: "/product/ai-report" },
   },
+  // 마지막 띠는 홈 파일럿 띠(HomePilotCta)를 쓰고 제목만 바꾼다(캔버스 사용자 수정 11-06)
+  pilot: { heading: "체험해보세요" },
 } as const
