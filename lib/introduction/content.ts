@@ -2,6 +2,8 @@
 // 원문은 Notion 공개 페이지 「가장 교실다운 AI 교육 플랫폼, ClassIn」(하위 사례 17쪽 포함)이다.
 // 원문을 그대로 옮기되, 저장소 카피 규칙(docs/active/classin-korea-positioning-guidelines.md)과
 // 부딪히는 문장(AI 튜터 설명·타사 비교 단정)만 고쳤다. 고친 자리는 해당 줄 주석에 남긴다.
+// 과장어(차원이 다른·최적화된·혁신 — typography 스펙 §3-4)는 뜻을 살려 바꿨고, 원문의 "무제한 칠판"은
+// 제품 사실(최대 50페이지 칠판)에 맞췄다. 제3자 YouTube 영상 제목은 원제 그대로 둔다.
 //
 // 문자열 안의 **굵게** 는 화면에서 강조로 그린다(그 외 마크다운은 쓰지 않는다).
 // 표 셀의 줄바꿈("\n")은 셀 안의 줄 목록으로 그린다.
@@ -404,7 +406,7 @@ export const INTRO_SOFTWARE = {
             },
           ],
         },
-        { type: "heading", level: 2, text: "대학 차원의 교육혁신 및 디지털화 전략 가속화" },
+        { type: "heading", level: 2, text: "대학 차원의 교육 전환과 디지털화 전략 가속화" },
         {
           type: "paragraph",
           text: "전 세계적으로 교육부 및 대학 본부 차원에서 **직업 교육 고도화**, **AI 기반 학습**, **글로벌 협업 수업 확대**에 대한 요구가 커지고 있으며, 대학들은 이에 발맞춰 **디지털 기반 수업 환경**을 구축할 필요성이 커지고 있습니다.",
@@ -436,12 +438,12 @@ export const INTRO_SOFTWARE = {
               ["목적", "실시간 수업 + 과제·시험 **올인원 라이브 클래스룸**", "과제·공지·자료 공유 중심 **LMS**"],
               [
                 "실시간 수업",
-                "전용 화상 수업 플랫폼 탑재(2,000명까지, 반응속도 50ms 미만)\n무제한 칠판, 공동 작업 도구, 손들기/발언자 순서 자동화\n수업 전문/최적화",
-                "Google Meet 연동 필요\n실시간 수업 기능은 외부 툴 의존\n칠판 기능 없음\n화상회의 전문/최적화",
+                "전용 화상 수업 플랫폼 탑재(2,000명까지, 반응속도 50ms 미만)\n최대 50페이지 칠판, 공동 작업 도구, 손들기/발언자 순서 자동화\n수업 전용 설계",
+                "Google Meet 연동 필요\n실시간 수업 기능은 외부 툴 의존\n칠판 기능 없음\n화상회의 중심 설계",
               ],
               ["활용 차원", "온/오프라인 **하이브리드**", "온라인 위주"],
               [
-                "교실 수업 최적화",
+                "교실 수업 지원",
                 "전자칠판 연동\nAI 추적 카메라 자동 수업 녹화/백업\n오프라인 + 온라인 통합 수업 지원",
                 "오프라인 수업 관리 기능 없음",
               ],
@@ -476,7 +478,7 @@ export const INTRO_SOFTWARE = {
             rows: [
               ["하드웨어·기기 호환성", "ClassIn X: 스마트보드(65~110\"), AI 카메라, 빔포밍 마이크까지 자체 개발", "전용 하드웨어 없음"],
               [
-                "교실 수업 최적화",
+                "교실 수업 지원",
                 "전자칠판 연동\nAI 추적 카메라 자동 수업 녹화/백업\n오프라인 + 온라인 통합 수업 지원",
                 "오프라인 수업 관리 기능 없음",
               ],
@@ -495,7 +497,7 @@ export const INTRO_SOFTWARE = {
       type: "toggle",
       title: "클래스인 6.0 with AI 자세히 보기",
       blocks: [
-        { type: "heading", level: 2, text: "실시간 수업에 최적화된 인터페이스" },
+        { type: "heading", level: 2, text: "실시간 수업을 위한 인터페이스" },
         {
           type: "list",
           items: [
@@ -721,7 +723,7 @@ export const INTRO_SMART_CLASSROOM = {
     },
     {
       type: "toggle",
-      title: "차원이 다른 터치 & 필기 감도",
+      title: "자연스러운 터치 & 필기 감도",
       blocks: [
         { type: "image", asset: "hw-touch", alt: "스타일러스로 전자칠판에 수식을 쓰는 손 클로즈업" },
         {
@@ -765,7 +767,7 @@ export const INTRO_SMART_CLASSROOM = {
     },
     {
       type: "toggle",
-      title: "하이브리드 환경에 최적화된 장비 내장",
+      title: "하이브리드 수업을 위한 장비 내장",
       blocks: [
         { type: "image", asset: "hw-hybrid", alt: "전자칠판 상단의 AI 음성 추적 카메라와 배열 마이크 수음 범위" },
         {
@@ -915,7 +917,7 @@ export const INTRO_CASES: IntroCase[] = [
     name: "한국디지털미디어고등학교",
     sector: "공교육",
     country: "한국",
-    cover: "cases/korea-digital-media-high-school-3",
+    cover: "cases/korea-digital-media-high-school-1",
     summary: "86인치 ClassIn X 전자칠판과 모션 트래킹 카메라로 교실마다 같은 하이브리드 수업 환경을 만들었습니다.",
     body: [
       {
@@ -977,9 +979,9 @@ export const INTRO_CASES: IntroCase[] = [
     sector: "사교육",
     country: "한국",
     cover: "cases/bucheon-jungyul-1",
-    summary: "모든 교실을 하이브리드로 운영해 부산·대구·대치동 학생도 실시간으로 함께 수업합니다.",
+    summary: "모든 교실을 하이브리드로 운영해, 부산·대구·대치동 등 다른 지역 학생이 실시간으로 함께 참여하기도 합니다.",
     body: [
-      { type: "heading", level: 2, text: "사진" },
+      { type: "heading", level: 2, text: "교실 사진" },
       { type: "image", asset: "cases/bucheon-jungyul-1", alt: "정율사관학원 스마트 교실 전경" },
       {
         type: "imageRow",
@@ -1011,13 +1013,12 @@ export const INTRO_CASES: IntroCase[] = [
         ],
       },
       { type: "heading", level: 2, text: "영상" },
-      { type: "quote", text: "학원 투어 & 정율사관 내 클래스인 시스템 활용 영상" },
       {
         type: "video",
         video: {
           kind: "file",
           video: "cases/bucheon-jungyul-video-1",
-          title: "정율사관학원 투어 & 클래스인 시스템 활용 영상",
+          title: "학원 투어 & 정율사관 내 클래스인 시스템 활용 영상",
           orientation: "landscape",
         },
       },
@@ -1106,7 +1107,7 @@ export const INTRO_CASES: IntroCase[] = [
     sector: "사교육",
     country: "한국",
     cover: "cases/cheonan-jscan-1",
-    summary: "강의실에 클래스인 전자칠판을 설치한 모습입니다.",
+    summary: "강의실 앞면에 클래스인 전자칠판 두 대를 나란히 설치했습니다.",
     body: [{ type: "image", asset: "cases/cheonan-jscan-1", alt: "천안 제이스칸 강의실의 클래스인 전자칠판" }],
   },
   {
@@ -1127,7 +1128,7 @@ export const INTRO_CASES: IntroCase[] = [
     sector: "사교육",
     country: "한국",
     cover: "cases/suwon-mijiwon-1",
-    summary: "강의실에 클래스인 전자칠판을 설치한 모습입니다.",
+    summary: "이동형 스탠드에 클래스인 전자칠판을 올려 강의실에 두었습니다.",
     body: [{ type: "image", asset: "cases/suwon-mijiwon-1", alt: "수원 미지원교육 강의실의 클래스인 전자칠판" }],
   },
   {
@@ -1167,7 +1168,7 @@ export const INTRO_CASES: IntroCase[] = [
     sector: "사교육",
     country: "한국",
     cover: "cases/gwanggyo-u2m-1",
-    summary: "강의실에 클래스인 전자칠판을 설치한 모습입니다.",
+    summary: "기존 칠판 사이에 클래스인 전자칠판을 설치해 함께 씁니다.",
     body: [{ type: "image", asset: "cases/gwanggyo-u2m-1", alt: "광교 U2M 강의실의 클래스인 전자칠판" }],
   },
   {
@@ -1176,7 +1177,7 @@ export const INTRO_CASES: IntroCase[] = [
     sector: "사교육",
     country: "한국",
     cover: "cases/busan-yerim-1",
-    summary: "강의실에 클래스인 전자칠판을 설치한 모습입니다.",
+    summary: "강사가 클래스인 전자칠판에 판서하며 수업하는 강의실입니다.",
     body: [{ type: "image", asset: "cases/busan-yerim-1", alt: "부산 예림학원 강의실의 클래스인 전자칠판" }],
   },
   {
