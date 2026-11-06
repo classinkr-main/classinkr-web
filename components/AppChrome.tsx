@@ -94,7 +94,12 @@ export function AppChrome({ children }: { children: ReactNode }) {
   // 추적 제외 경계(/admin·/share·/unsubscribe·계정·인증·/receipt).
   // gtag(Google Ads·GA4)는 결제 전환 때문에 /checkout 에서도 띄우고, URL 은 정화해서 보낸다.
   const trackingExcluded = isTrackingExcludedPath(pathname)
-  const showGoogleTag = !trackingExcluded
+  // Google 태그(gtag.js)·GTM 은 분석이나 마케팅 동의 뒤에만 불러온다(Consent Mode 기본 모드).
+  // 동의하면 useConsent 구독으로 새로고침 없이 바로 붙는다. 이벤트 단위 게이트는 lib/analytics.
+  // ponytail: 동의를 철회해도 이미 로드된 gtag.js·gtm.js 는 새로고침 전까지 남는다 — 이후 호출은
+  // lib/analytics 게이트와 Consent Mode update(denied)가 막는다.
+  const tagConsent = consentChoice.analytics || consentChoice.marketing
+  const showGoogleTag = !trackingExcluded && tagConsent
   // GTM·페이지뷰·픽셀은 /checkout 도 뺀다(showPublicChrome) — 그 위에 제외 경로를 더한다.
   // = !isAnalyticsTagExcludedPath(pathname). 컴포넌트 단독 가드가 같은 함수를 쓴다.
   const showAnalytics = showPublicChrome && !trackingExcluded
@@ -148,10 +153,10 @@ export function AppChrome({ children }: { children: ReactNode }) {
         )}
       </main>
       {showPublicChrome ? <ConditionalFooter /> : null}
-      {showGoogleTag ? <GoogleAdsScript /> : null}
+      {showGoogleTag ? <GoogleAdsScript analytics={consentChoice.analytics} /> : null}
       {showAnalytics ? (
         <>
-          <GTMScript />
+          {tagConsent ? <GTMScript /> : null}
           <PageViewTracker />
           <ContactLinkTracker />
           {consentChoice.marketing ? (

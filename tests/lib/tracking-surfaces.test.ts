@@ -63,6 +63,12 @@ describe("lead submission wiring", () => {
     expect(source).not.toContain("trackDemoRequestAdsConversion(")
   })
 
+  it.each(leadForms)("%s sends the ad consent as one boolean (both boxes)", (file) => {
+    const source = read(file)
+    expect(source).toContain("<AdConsentCheckbox")
+    expect(source).toMatch(/adConsent: isAdConsentGiven\((form\.)?adConsent\)/)
+  })
+
   it("the contact form passes its topic so only sales inquiries count as Ads conversions", () => {
     expect(read("app/contact/page.tsx")).toContain("contactTopic: topicValue,")
   })

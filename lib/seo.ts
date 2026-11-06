@@ -7,7 +7,9 @@ import { BOARD_MODEL_NAMES, BOARD_SPEC_MODELS } from "@/lib/hardware/board-specs
 export const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL ?? "https://classin.co.kr").replace(/\/$/, "")
 export const SITE_NAME = "Classin"
 // 홈 <title>·루트 기본 제목·공유 카드 기본 제목. 2026-10-28 진단 추천안을 채택해 구매자가 검색하는 범주어를 병기한다.
-export const DEFAULT_SITE_TITLE = "클래스인 Classin | 학원 전자칠판·수업 녹화·운영 플랫폼"
+// 2026-11-03 사용자 결정: "수업 OS"·"운영 플랫폼" 같은 범주어 대신 무엇(학원 전자칠판)과 바로 얻는 것(녹화·AI 강의 평가)을 말한다.
+// 검색어 "전자칠판"·"수업 녹화"는 남긴다(D1 근거). 정본 설명: docs/active/classin-korea-positioning-guidelines.md §11
+export const DEFAULT_SITE_TITLE = "클래스인 Classin | 수업 녹화·AI 강의 평가까지 되는 학원 전자칠판"
 // 공유 카드 이미지 버전. 카카오톡·페이스북은 og:image 를 주소 단위로 오래 캐시하므로, 카드 디자인
 // (lib/og/template.tsx)을 바꾸면 이 값을 올려 새 주소로 다시 받게 한다. 페이지 스크랩 캐시는 배포 뒤
 // 카카오 공유 디버거(developers.kakao.com › 도구 › 공유 디버거)에서 따로 지운다.

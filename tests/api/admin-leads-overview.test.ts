@@ -94,6 +94,19 @@ describe("GET /api/admin/leads overview scope", () => {
     expect(body.overview.recentLeads[0]).not.toHaveProperty("branch")
   })
 
+  it("returns only the all-owner response counts for the sidebar badge", async () => {
+    mocks.getCachedOverviewLeadSummary.mockResolvedValue({
+      ...overviewSummary,
+      metrics: { total: 8, unrespondedCount: 4, unresponded24hCount: 1, unrespondedUnconfirmedCount: 3 },
+    })
+    const response = await GET(request("badge"))
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(mocks.getCachedOverviewLeadSummary).toHaveBeenCalledWith()
+    expect(body).toEqual({ badge: { unresponded: 4, unresponded24h: 1, unconfirmed: 3 } })
+  })
+
   it("preserves the existing dashboard scope response unchanged", async () => {
     const response = await GET(request("dashboard"))
 

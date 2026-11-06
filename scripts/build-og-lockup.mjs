@@ -3,7 +3,7 @@
  *
  * 원본: public/images/logo_raw.png.png(새 마크 + Classin 워드마크, 원색). 둘레 흰 여백을 잘라 내고,
  * 알파(모양)는 그대로 둔 채 색만 먹(#111110, lib/design-tokens.ts 의 color.ink)으로 채운다. 손으로 다시 그리지 않는다.
- * 2026-11-06 운영자 결정(DESIGN.md §9 V22 C′). 원본 로고가 바뀌면 이 스크립트를 다시 돌린다.
+ * 2026-11-06 운영자 결정(DESIGN.md §9 V25 C′). 원본 로고가 바뀌면 이 스크립트를 다시 돌린다.
  *
  * 사용법: node scripts/build-og-lockup.mjs
  */

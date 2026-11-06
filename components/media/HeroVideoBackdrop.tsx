@@ -15,7 +15,8 @@ type HeroVideoSource = {
 type HeroVideoBackdropProps = {
   src?: string
   sources?: HeroVideoSource[]
-  posterSrc: string
+  /** 없으면 포스터를 그리지 않는다 — 부르는 쪽이 <picture> 아트 디렉션 포스터를 아래에 깔 때(홈 히어로) */
+  posterSrc?: string
   posterAlt?: string
   className?: string
   imageClassName?: string
@@ -28,6 +29,8 @@ type HeroVideoBackdropProps = {
   preload?: "none" | "metadata" | "auto"
   ariaHidden?: boolean
   videoAriaLabel?: string
+  /** true 면 영상을 멈춘다. 멈춤 버튼(WCAG 2.2.2)은 부르는 쪽이 둔다 */
+  paused?: boolean
 }
 
 export function HeroVideoBackdrop({
@@ -46,8 +49,10 @@ export function HeroVideoBackdrop({
   preload = "metadata",
   ariaHidden = true,
   videoAriaLabel,
+  paused = false,
 }: HeroVideoBackdropProps) {
   const rootRef = useRef<HTMLDivElement>(null)
+  const videoRef = useRef<HTMLVideoElement>(null)
   const [matchesMedia, setMatchesMedia] = useState(!mediaQuery)
   const [shouldLoadVideo, setShouldLoadVideo] = useState(!mediaQuery && loadStrategy === "immediate")
   const [isVideoReady, setIsVideoReady] = useState(false)
@@ -125,22 +130,33 @@ export function HeroVideoBackdrop({
   const renderVideo = matchesMedia && shouldLoadVideo && !hasVideoError && (src || sources?.length)
   const markVideoReady = () => setIsVideoReady(true)
 
+  // 멈춤·재생. 영상이 새로 붙을 때(renderVideo)도 다시 맞춘다 — 멈춘 채로 붙으면 autoPlay 를 바로 멈춘다
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video) return
+    if (paused) video.pause()
+    else video.play().catch(() => {})
+  }, [paused, renderVideo])
+
   return (
     <div ref={rootRef} className={cn("relative overflow-hidden", className)}>
-      <Image
-        src={posterSrc}
-        alt={posterAlt}
-        fill
-        priority={priority}
-        loading={priority ? "eager" : "lazy"}
-        fetchPriority={priority ? "high" : "auto"}
-        sizes={sizes}
-        aria-hidden={posterAlt ? undefined : true}
-        className={cn("object-cover", imageClassName)}
-      />
+      {posterSrc ? (
+        <Image
+          src={posterSrc}
+          alt={posterAlt}
+          fill
+          priority={priority}
+          loading={priority ? "eager" : "lazy"}
+          fetchPriority={priority ? "high" : "auto"}
+          sizes={sizes}
+          aria-hidden={posterAlt ? undefined : true}
+          className={cn("object-cover", imageClassName)}
+        />
+      ) : null}
 
       {renderVideo ? (
         <video
+          ref={videoRef}
           className={cn(
             "absolute inset-0 h-full w-full object-cover opacity-0 transition-opacity duration-700 ease-out",
             isVideoReady && "opacity-100",

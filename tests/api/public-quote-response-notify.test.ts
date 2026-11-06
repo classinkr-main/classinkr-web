@@ -303,14 +303,14 @@ describe("POST /api/share/quote/[token]/accept — 담당자 알림", () => {
       quoteDocumentId: DOCUMENT.id,
       acceptedVia: "customer_link",
     })
-    expect(emitNotificationEvent.mock.calls[0][0].message).toContain("하드웨어 승인 대기")
+    expect(emitNotificationEvent.mock.calls[0][0].message).toContain("하드웨어 오더 승인")
   })
 
   it("하드웨어가 없어 바로 오더번호가 붙으면 승인 안내를 붙이지 않는다", async () => {
     const { route, emitNotificationEvent } = await loadRoute({ order: { status: "approved" } })
 
     await route.POST(buildRequest(), { params: Promise.resolve({ token: "tok123" }) })
-    expect(emitNotificationEvent.mock.calls[0][0].message).not.toContain("하드웨어 승인 대기")
+    expect(emitNotificationEvent.mock.calls[0][0].message).not.toContain("하드웨어 오더 승인")
   })
 
   it("이미 수락된 견적도 오더를 다시 보장한다(멱등)", async () => {
@@ -352,7 +352,7 @@ describe("POST /api/share/quote/[token]/accept — 담당자 알림", () => {
     expect(response.status).toBe(200)
     expect(issueDistributorSettlementOnAcceptSafely).toHaveBeenCalledTimes(1)
     expect(emitNotificationEvent).toHaveBeenCalledTimes(1)
-    expect(emitNotificationEvent.mock.calls[0][0].message).not.toContain("하드웨어 승인 대기")
+    expect(emitNotificationEvent.mock.calls[0][0].message).not.toContain("하드웨어 오더 승인")
   })
 
   it("총판 견적서 발행이 실패해도(null) 오더와 하드웨어 승인 안내는 그대로 남는다", async () => {
@@ -365,7 +365,7 @@ describe("POST /api/share/quote/[token]/accept — 담당자 알림", () => {
 
     expect(response.status).toBe(200)
     expect(ensureSalesOrderForAcceptedQuoteSafely).toHaveBeenCalledTimes(1)
-    expect(emitNotificationEvent.mock.calls[0][0].message).toContain("하드웨어 승인 대기")
+    expect(emitNotificationEvent.mock.calls[0][0].message).toContain("하드웨어 오더 승인")
   })
 
   it("이미 수락된 견적이면 오더와 총판 견적서 발행을 둘 다 다시 보장한다", async () => {

@@ -126,7 +126,7 @@ describe("saveLead", () => {
     })
   })
 
-  it("여러 컬럼이 없으면 2차로 선택 컬럼을 전부 덜어 저장을 살린다", async () => {
+  it("여러 컬럼이 없으면 지목된 컬럼을 쌓아 덜며 다시 넣고, 나머지 귀속은 지킨다", async () => {
     vi.resetModules()
     process.env.USE_SUPABASE_LEADS = "true"
 
@@ -185,11 +185,14 @@ describe("saveLead", () => {
     // 재계산을 트리거한다(admin-performance-plan-2026-09-02.md §4.4의 "max" 컨벤션).
     expect(cacheMocks.revalidateTag).toHaveBeenCalledWith("admin-crm-unified-snapshot", "max")
     expect(insert).toHaveBeenCalledTimes(3)
-    // 2차 재시도는 선택 컬럼을 전부 덜어낸다 — 리드를 잃는 것보다 귀속을 잃는 게 낫다.
+    // 2차 재시도는 1차에 덜어낸 것에 새로 지목된 컬럼을 더 덜어낸다 — 지목되지 않은 귀속은 남는다.
     expect(insert.mock.calls[2]?.[0]).not.toHaveProperty("anonymous_id")
     expect(insert.mock.calls[2]?.[0]).not.toHaveProperty("landing_page")
-    expect(insert.mock.calls[2]?.[0]).not.toHaveProperty("source_detail")
-    expect(insert.mock.calls[2]?.[0]).toMatchObject({ source: "contact_page", name: "Codex Test" })
+    expect(insert.mock.calls[2]?.[0]).toMatchObject({
+      source: "contact_page",
+      name: "Codex Test",
+      source_detail: "도입 상담",
+    })
   })
 
   it("does not retry non-schema storage failures", async () => {

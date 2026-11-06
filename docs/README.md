@@ -66,6 +66,10 @@ Admin 관련 작업은 [Admin 지침 맵](./active/admin-guidance-map.md)에서 
   - 어드민 → 지사 운영 OS(ERP) 청사진 & 실행 로드맵(Account 360 스파인·귀속·노션 캘린더 라이브 연동·거버넌스 결정)
 - [active/marketing-tab-dashboard-restructure-2026-09-14.md](./active/marketing-tab-dashboard-restructure-2026-09-14.md)
   - **마케팅 허브(/admin/campaigns) 실행 로드맵.** 한눈에·상세·데이터 3층 IA, 컴포넌트 재배치표, 개선 후보 ID(G/D/T/N), 확정 결정, 진척 기록. Compass(mkt.classin.co.kr)와의 역할 경계 정본
+- [active/marketing-ads-campaign-weekly-plan-2026-11-05.md](./active/marketing-ads-campaign-weekly-plan-2026-11-05.md)
+  - **마케팅 탭 운영 중 광고 · 캠페인 분석 · 주간(월~일) 분석 기획(결정 대기).** 흩어진 캠페인 화면·리드 기준 세 가지·주간 보고서 한계 진단, "광고" 탭(운영 중 · 캠페인 · 주간) 제안, 주 기간·8주 추이 API, 데이터 보강(상태 조회·리드 광고 id), 결정 D1~D8
+- [active/admin-lead-visitor-glance-plan-2026-11-04.md](./active/admin-lead-visitor-glance-plan-2026-11-04.md)
+  - **어드민 첫 화면 방문·문의 바로 보기 기획(결정 대기).** Overview 리드 숫자가 "내 담당·확인됨"만 세어 새 문의가 0으로 보이는 원인, 최상단 "지금" 띠·전사 범위·사이드바 문의 배지(P0), 방문·문의 추이·화면 안 알림(P1), 담당 원천(P2), 결정 D1~D8
 - [active/admin-usage-triage-2026-09-25.md](./active/admin-usage-triage-2026-09-25.md)
   - **어드민 사용 실측·탭 정리.** 운영 DB 읽기 전용 집계로 본 화면별 사람 사용 흔적(Home 어드민 쓰기 ≈0, 매니저 업무는 Compass), 멈춘 원천(NEO env 누락·시트 권한), 기본 숨김·매니저별 숨기기, 심폐소생 Top 5, 결정 대기 D1~D8
 - [active/crm-tab-develop-plan-2026-09-12.md](./active/crm-tab-develop-plan-2026-09-12.md)
@@ -119,6 +123,8 @@ Admin 관련 작업은 [Admin 지침 맵](./active/admin-guidance-map.md)에서 
   - **SEO·AEO 개선 워크리스트.** 외부 예비 진단(2026-10-27)을 코드와 대조해 수치·Zoom 비교·요금 조건·홈 메타·허브 링크·답변형 FAQ·canonical/lastmod·GA4 계측을 항목별로 "반영 / 코드 가능 / 사람 확인 / 콘솔"로 분류. 결정 대기 D1~D13, 운영자 콘솔 체크리스트, 90일 실행 순서
 - [active/seo-analytics-console-runbook-2026-10-28.md](./active/seo-analytics-console-runbook-2026-10-28.md)
   - **검색·분석 콘솔 실행 런북.** GSC 도메인 속성·네이버 서치어드바이저·GA4(향상된 측정 OFF·데이터 수정·맞춤 측정기준·주요 이벤트·MP 중복 결정)·GTM 점검·Google Ads·Vercel 환경변수를 순서·값·검증 시나리오와 함께 정리
+- [active/meta-crm-stage-signal-2026-11-04.md](./active/meta-crm-stage-signal-2026-11-04.md)
+  - **메타 리드 영업 단계 → Meta 전환 리드 신호(기본 꺼짐).** 보내는 단계·시각·멱등 규칙, Meta 스펙 요약, dryRun 결과, 법무·이벤트 관리자 확인 항목과 켜는 순서
 - [active/integration-followups-2026-10-28.md](./active/integration-followups-2026-10-28.md)
   - **2026-10-28 통합 병합 기록.** main + 열린 PR 7건(#34·#38~#42·#44) + 10-28 핫픽스를 한 브랜치로 합치며 내린 결정(정본 선택·순서·모듈 통합), 운영 적용 대기 마이그레이션 4건, 병합 중 드러난 후속 과제 F1~F10. §7 에 10-30 상태(PR #45 로 main 병합 완료, 운영 배포·마이그레이션·Vercel env 대기, 사람이 할 배포 절차)
 - [active/docs-center-db-design.md](./active/docs-center-db-design.md)

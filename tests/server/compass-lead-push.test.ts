@@ -60,6 +60,14 @@ describe("isCompassPushSource · 공개 폼 소스만", () => {
     const { isCompassPushSource } = await import("@/lib/server/compass-lead-push")
     expect(isCompassPushSource(source)).toBe(expected)
   })
+
+  it("자료 신청(뉴스레터 + leadMagnet)은 보낸다 · 빈 leadMagnet·다른 소스의 leadMagnet 은 소스 규칙 그대로", async () => {
+    const { isCompassPushSource } = await import("@/lib/server/compass-lead-push")
+    expect(isCompassPushSource("newsletter", "ai-class-guide")).toBe(true)
+    expect(isCompassPushSource("newsletter", "  ")).toBe(false)
+    expect(isCompassPushSource("newsletter", null)).toBe(false)
+    expect(isCompassPushSource("meta_lead_ads", "ai-class-guide")).toBe(false)
+  })
 })
 
 describe("buildCompassLeadPushPayload · Compass parseHomeLeadBody 가 읽는 모양", () => {
@@ -79,9 +87,13 @@ describe("buildCompassLeadPushPayload · Compass parseHomeLeadBody 가 읽는 �
       message: "칠판 두 대",
       role: "원장",
       size: "30",
+      event_slug: null,
+      lead_magnet: null,
       page: "https://classin.co.kr/contact",
       utm: { source: "google", medium: "cpc", campaign: null },
     })
+    const ev = buildCompassLeadPushPayload({ ...BASE, eventSlug: " meets-july-seoul ", leadMagnet: "ai-class-guide" }, { leadId: "L3", kind: "created", eventId: "lead:L3" })
+    expect([ev.event_slug, ev.lead_magnet]).toEqual(["meets-july-seoul", "ai-class-guide"])
     const bare = buildCompassLeadPushPayload(
       { source: "demo_modal", timestamp: BASE.timestamp, phone: "010-0000-1002", landingPage: "https://classin.co.kr/l/x", name: "  " },
       { leadId: "L2", kind: "reinflow", eventId: "lead:L2:reinflow:2026-11-04T01:00:00.000Z" }

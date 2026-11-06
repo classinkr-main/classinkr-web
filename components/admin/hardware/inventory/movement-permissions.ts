@@ -10,6 +10,7 @@ import { isPlannedMovement } from "./shared"
 export type HardwareViewer = NonNullable<HardwareDashboard["viewer"]>
 
 export const OWN_OR_MANAGER_TITLE = "본인 건 또는 입고관리 권한자만 할 수 있습니다"
+export const SHEET_ROW_TITLE = "시트에서 가져온 기록은 시트에서 고칩니다 — 다음 가져오기 때 반영됩니다"
 export const MANAGER_ONLY_TITLE = "실현 기록(설치 완료·회수·입고·조정) 수정·취소는 입고관리 권한자만 할 수 있습니다"
 
 /**
@@ -53,6 +54,11 @@ export function movementButtonState(
   const planned = isPlannedMovement(movement as HardwareMovement)
   const action = actionFor(button, planned)
   if (!action) return { allowed: false, title: "배송 예정만 확정할 수 있습니다" }
+  // 시트에서 가져온 기록은 서버가 수정·취소를 늘 거절한다(가져오기가 시트대로 다시 싣는다). 권한자에게도
+  // 버튼이 열려 있다가 누르면 실패하던 것을 미리 막는다(2026-11-05 점검).
+  if (movement.source === "sheet_import" && (button === "edit" || button === "void")) {
+    return { allowed: false, title: SHEET_ROW_TITLE }
+  }
   const actor = viewerActor(viewer)
   if (!actor) {
     if (planned) return { allowed: true }

@@ -555,7 +555,7 @@ export function IconFrame({ icon, frame = 40, active = false, className }:
 - **현황 [실측]:**
   - 로고는 래스터 `/images/logo.png`이고 Header·Footer·AuthShell, 그리고 **/admin/login(`app/admin/login/page.tsx:141`)**이 쓴다.
   - 파비콘 계열은 `app/icon.png`·`apple-icon.png`·`favicon.ico`다. manifest는 없다.
-  - OG는 2026-11-05에 'C' 배지를 버리고 텍스트 워드마크로, 2026-11-06에 운영자 결정 C′(DESIGN.md §9 V22)로 **먹 단색 공식 락업**으로 바뀌었다. 락업은 공식 래스터(`public/images/logo_raw.png.png`)의 모양(알파)을 그대로 두고 색만 먹으로 채운 `assets/og/classin-lockup-ink.png`(`scripts/build-og-lockup.mjs`)이며, 블로그 카드의 새 마크도 이 파일을 창으로 잘라 쓴다. 손으로 다시 그리지 않았다. 아래 '목표(차단)'의 브랜드팀 단색화 승인은 OG 한정으로 운영자 결정이 앞섰다 — 승인되지 않으면 원색 락업으로 그 파일만 바꾼다. 파비콘·헤더 로고는 그대로 차단 상태다.
+  - OG는 2026-11-05에 'C' 배지를 버리고 텍스트 워드마크로, 2026-11-06에 운영자 결정 C′(DESIGN.md §9 V25)로 **먹 단색 공식 락업**으로 바뀌었다. 락업은 공식 래스터(`public/images/logo_raw.png.png`)의 모양(알파)을 그대로 두고 색만 먹으로 채운 `assets/og/classin-lockup-ink.png`(`scripts/build-og-lockup.mjs`)이며, 블로그 카드의 새 마크도 이 파일을 창으로 잘라 쓴다. 손으로 다시 그리지 않았다. 아래 '목표(차단)'의 브랜드팀 단색화 승인은 OG 한정으로 운영자 결정이 앞섰다 — 승인되지 않으면 원색 락업으로 그 파일만 바꾼다. 파비콘·헤더 로고는 그대로 차단 상태다.
   - 저장소에 로고 SVG 원본이 없다. 방향 문서 기준 로고는 에메랄드(#00A070)라 #084734 UI 옆에서 두 초록이 어긋나 보인다.
 - **이미 확정된 것(차단과 무관):**
   - theme-color는 `--surface-paper` 미러(V15-A 뒤 `#F9F8F5`), `colorScheme: 'only light'`, 값은 `lib/design-tokens.ts`에서 import(C27, surfaces 소유). manifest는 만들지 않는다.

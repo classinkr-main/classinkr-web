@@ -24,6 +24,10 @@
       "schedule": "*/10 * * * *"
     },
     {
+      "path": "/api/cron/meta-crm-signal",
+      "schedule": "40 * * * *"
+    },
+    {
       "path": "/api/cron/sync-branch",
       "schedule": "0 0,4,8 * * *"
     },

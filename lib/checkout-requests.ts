@@ -159,6 +159,8 @@ export interface NormalizedCheckoutRequest {
    */
   attribution: LeadAttributionPayload
   anonymousId: string | null
+  /** 맞춤형 광고 활용 동의(두 칸 모두 = true). 체크 칸 없는 옛 번들은 undefined — false 로 지어내지 않는다. */
+  adConsent?: boolean
 }
 
 export type CheckoutRequestValidation =
@@ -392,6 +394,7 @@ export function normalizeCheckoutRequest(
       sourcePage: normalizeText(body.sourcePage, MAX_SOURCE_PAGE_LENGTH),
       attribution: sanitizeLeadAttribution(body),
       anonymousId: normalizeText(body.anonymousId, MAX_NAME_LENGTH),
+      adConsent: typeof body.adConsent === "boolean" ? body.adConsent : undefined,
     },
   }
 }
@@ -658,6 +661,7 @@ async function mirrorToLeadQueue(
       // 없을 때만 수집기의 currentPage 로 물러난다. tests/checkout·tests/showroom 이 이 순서를 고정한다.
       currentPage: request.sourcePage ?? request.attribution.currentPage,
       anonymousId: request.anonymousId ?? undefined,
+      adConsent: request.adConsent,
     },
     { suppressLeadCreatedNotification: true }
   )

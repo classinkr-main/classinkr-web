@@ -21,7 +21,18 @@ import {
   getLeadMagnetPublicGateLabel,
   getLeadMagnetTierLabel,
 } from "@/lib/lead-magnets-helpers"
-import { MaterialDownloadError, requestMaterialDownload } from "@/lib/materials-client"
+import {
+  forgetRememberedMaterialAccess,
+  hasUnlockedMaterial,
+  maskEmail,
+  rememberMaterialAccess,
+  useRememberedMaterialAccess,
+} from "@/lib/material-access-memory"
+import {
+  MaterialDownloadError,
+  deliverMaterialDownload,
+  requestMaterialDownload,
+} from "@/lib/materials-client"
 
 interface Props {
   leadMagnet: LeadMagnet
@@ -47,13 +58,51 @@ export function LeadMagnetGate({ leadMagnet, postSlug }: Props) {
   const [downloading, setDownloading] = useState(false)
   const [loginDialogOpen, setLoginDialogOpen] = useState(false)
   const [submitted, setSubmitted] = useState(false)
+  const [downloaded, setDownloaded] = useState(false)
   const [error, setError] = useState("")
   const [resumeNextPath, setResumeNextPath] = useState<string | undefined>(undefined)
   const resumedRef = useRef(false)
 
+  // 이 기기에서 이미 자료를 신청한 이메일 — 다시 입력하지 않고 받는다(lib/material-access-memory.ts).
+  const memory = useRememberedMaterialAccess()
+
   const source = leadMagnet.sourceDetail
   const itemCount = getLeadMagnetItemCount(leadMagnet)
   const usesEmailGate = leadMagnet.gate === "email"
+  const alreadyUnlocked = hasUnlockedMaterial(memory, leadMagnet.slug)
+
+  // 구독 신청(리드 1행). 성공하면 이 기기에 이메일과 자료를 기억한다.
+  const subscribeEmail = async (emailValue: string): Promise<boolean> => {
+    const res = await fetch("/api/newsletter/subscribe", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: emailValue,
+        source,
+        leadMagnet: leadMagnet.slug,
+        attribution: collectLeadAttribution(),
+      }),
+    })
+    const data = await res.json()
+
+    if (res.ok && data.ok) {
+      // 60초 내 같은 이메일 재제출은 서버가 stored:false 로 돌려준다 — 구독 전환으로 다시 세지 않는다.
+      if (data.stored !== false) {
+        trackEvent("submit_newsletter", {
+          source: "blog_lead_magnet",
+          form_type: "lead_magnet",
+          lead_magnet: leadMagnet.slug,
+          post_slug: postSlug,
+          gate: leadMagnet.gate,
+          event_id: data.conversionEventId,
+        })
+      }
+      rememberMaterialAccess({ email: emailValue }, leadMagnet.slug)
+      return true
+    }
+    setError(data.error || "신청에 실패했습니다. 잠시 후 다시 시도해주세요.")
+    return false
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -63,34 +112,7 @@ export function LeadMagnetGate({ leadMagnet, postSlug }: Props) {
     setError("")
 
     try {
-      const res = await fetch("/api/newsletter/subscribe", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email,
-          source,
-          leadMagnet: leadMagnet.slug,
-          attribution: collectLeadAttribution(),
-        }),
-      })
-      const data = await res.json()
-
-      if (res.ok && data.ok) {
-        // 60초 내 같은 이메일 재제출은 서버가 stored:false 로 돌려준다 — 구독 전환으로 다시 세지 않는다.
-        if (data.stored !== false) {
-          trackEvent("submit_newsletter", {
-            source: "blog_lead_magnet",
-            form_type: "lead_magnet",
-            lead_magnet: leadMagnet.slug,
-            post_slug: postSlug,
-            gate: leadMagnet.gate,
-            event_id: data.conversionEventId,
-          })
-        }
-        setSubmitted(true)
-      } else {
-        setError(data.error || "신청에 실패했습니다. 잠시 후 다시 시도해주세요.")
-      }
+      if (await subscribeEmail(email.trim())) setSubmitted(true)
     } catch {
       setError("네트워크 오류가 발생했습니다.")
     } finally {
@@ -98,7 +120,7 @@ export function LeadMagnetGate({ leadMagnet, postSlug }: Props) {
     }
   }
 
-  const handleDownload = useCallback(async () => {
+  const handleDownload = useCallback(async (emailOverride?: string) => {
     if (downloading || !leadMagnet.published) return
 
     setDownloading(true)
@@ -106,7 +128,7 @@ export function LeadMagnetGate({ leadMagnet, postSlug }: Props) {
     try {
       const result = await requestMaterialDownload({
         slug: leadMagnet.slug,
-        email: submitted ? email : undefined,
+        email: emailOverride ?? (submitted ? email : undefined),
         source: "blog_lead_magnet",
         postSlug,
       })
@@ -124,7 +146,8 @@ export function LeadMagnetGate({ leadMagnet, postSlug }: Props) {
         },
         { skipMarketingPixels: true }
       )
-      window.location.assign(result.url)
+      // PDF 주소로 이동하지 않고 그 자리에서 내려받는다(Chrome 뷰어 탭 방지, 글 화면 유지).
+      if (deliverMaterialDownload(result, leadMagnet.title) === "downloaded") setDownloaded(true)
     } catch (downloadError) {
       if (
         downloadError instanceof MaterialDownloadError &&
@@ -142,7 +165,24 @@ export function LeadMagnetGate({ leadMagnet, postSlug }: Props) {
     } finally {
       setDownloading(false)
     }
-  }, [downloading, leadMagnet.gate, leadMagnet.published, leadMagnet.slug, submitted, email, postSlug])
+  }, [downloading, leadMagnet.gate, leadMagnet.published, leadMagnet.slug, leadMagnet.title, submitted, email, postSlug])
+
+  // 저장된 이메일로 받기 — 이미 받은 자료는 신청 없이 바로, 처음 받는 자료는 같은 이메일로 신청한 뒤 받는다.
+  const handleRememberedDownload = async () => {
+    if (!memory || loading) return
+    setLoading(true)
+    setError("")
+    try {
+      if (!alreadyUnlocked && !(await subscribeEmail(memory.email))) return
+      setEmail(memory.email)
+      setSubmitted(true)
+      await handleDownload(memory.email)
+    } catch {
+      setError("네트워크 오류가 발생했습니다.")
+    } finally {
+      setLoading(false)
+    }
+  }
 
   useEffect(() => {
     if (resumedRef.current) return
@@ -217,12 +257,18 @@ export function LeadMagnetGate({ leadMagnet, postSlug }: Props) {
               </div>
               <div className="space-y-1">
                 <p className="text-lg font-bold text-[#111110]">
-                  {submitted ? "신청이 완료되었습니다!" : getLeadMagnetPublicGateLabel(leadMagnet.gate)}
+                  {downloaded
+                    ? "다운로드를 시작했습니다"
+                    : submitted
+                      ? "신청이 완료되었습니다!"
+                      : getLeadMagnetPublicGateLabel(leadMagnet.gate)}
                 </p>
                 <p className="text-sm leading-6 text-[#1a1a1a]/55">
-                  {leadMagnet.published
-                    ? "아래 버튼을 눌러 자료를 바로 확인하세요."
-                    : "자료 공개 준비가 끝나면 이메일로 안내드릴게요."}
+                  {!leadMagnet.published
+                    ? "자료 공개 준비가 끝나면 이메일로 안내드릴게요."
+                    : downloaded
+                      ? "다운로드 폴더를 확인해 주세요. 받지 못했다면 아래 버튼을 다시 누르면 됩니다."
+                      : "아래 버튼을 눌러 자료를 바로 받으세요."}
                 </p>
               </div>
               <Button
@@ -236,9 +282,55 @@ export function LeadMagnetGate({ leadMagnet, postSlug }: Props) {
                 ) : (
                   <Download className="h-4 w-4" />
                 )}
-                자료 받기
+                {downloaded ? "다시 받기" : "자료 받기"}
               </Button>
               {error && <p className="text-sm text-[#B85C33]">{error}</p>}
+            </div>
+          ) : memory ? (
+            <div className="flex flex-col gap-4 py-2">
+              <div className="space-y-1">
+                <p className="text-sm font-semibold text-[#111110]">
+                  {alreadyUnlocked ? "이미 받은 자료입니다" : "저장된 이메일로 바로 받기"}
+                </p>
+                <p className="flex items-center gap-1.5 text-sm leading-6 text-[#615D59]">
+                  <Mail className="h-4 w-4 shrink-0 text-[#A39E98]" />
+                  {maskEmail(memory.email)}
+                </p>
+              </div>
+
+              <Button
+                type="button"
+                disabled={!leadMagnet.published || loading || downloading}
+                onClick={() => void handleRememberedDownload()}
+                className="h-11 w-full rounded-[6px] bg-fg-accent font-semibold text-fg-on-accent hover:bg-fg-accent-hover"
+              >
+                {loading || downloading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Download className="h-4 w-4" />
+                )}
+                자료 받기
+              </Button>
+
+              {error && <p className="text-sm text-[#B85C33]">{error}</p>}
+
+              {alreadyUnlocked ? null : (
+                <p className="text-center text-[10px] leading-relaxed text-[#A39E98]">
+                  자료 신청 시 Classin의 교육 인사이트·제품 소식을 이메일로 받아보는 것에
+                  동의합니다. 언제든 수신거부할 수 있습니다.
+                </p>
+              )}
+
+              <button
+                type="button"
+                onClick={() => {
+                  forgetRememberedMaterialAccess()
+                  setError("")
+                }}
+                className="self-center text-[13px] font-semibold text-[#615D59] underline underline-offset-4 hover:text-[#111110]"
+              >
+                다른 이메일로 받기
+              </button>
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-3">

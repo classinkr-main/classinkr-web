@@ -4,6 +4,7 @@ import { resolveBlogContentModifiedAt } from "@/lib/blog-types"
 import { getDocCategoryPath, getDocPath, type DocArticle } from "@/lib/docs"
 import { getDocsContent, listListedDocsFromContent } from "@/lib/docs-content"
 import { getDocSitemapImages } from "@/lib/docs-structured-data"
+import { PRIVACY_EFFECTIVE } from "@/lib/legal/privacy-dates"
 import { getPublishedPostsForStaticSitemap } from "@/lib/repositories/blog"
 import { listCachedPublicEvents } from "@/lib/repositories/public-events"
 import { getPublishedSeminars } from "@/lib/seminars/catalog"
@@ -27,7 +28,7 @@ const staticRoutes: Array<{
   { path: "/pricing", changeFrequency: "monthly", priority: 0.8, lastModified: "2026-11-03" },
   { path: "/contact", changeFrequency: "monthly", priority: 0.8, lastModified: "2026-10-28" },
   { path: "/showroom", changeFrequency: "monthly", priority: 0.8, lastModified: "2026-09-22" },
-  { path: "/privacy", changeFrequency: "yearly", priority: 0.5, lastModified: "2026-06-14" },
+  { path: "/privacy", changeFrequency: "yearly", priority: 0.5, lastModified: PRIVACY_EFFECTIVE.iso },
   { path: "/terms", changeFrequency: "yearly", priority: 0.5, lastModified: "2026-06-14" },
   { path: "/data-deletion", changeFrequency: "yearly", priority: 0.5, lastModified: "2026-06-16" },
   { path: "/blog", changeFrequency: "daily", priority: 0.8, lastModified: "2026-04-01" },
