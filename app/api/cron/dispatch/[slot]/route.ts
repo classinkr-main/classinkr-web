@@ -44,12 +44,21 @@ export const maxDuration = 60
  * 예정일 지남, 담당자별 한 통, docs/active/hardware-inventory-process-gap-2026-10-28.md §6 D9). 세그먼트 잡과 같은
  * 격리 규칙(설정 실패와 묶지 않음·동적 import·dryRun 은 hardwareAlertsPreview)을 따른다. 같은 날 두 번 보내지 않는다
  * (lib/server/hardware-process-alerts.ts — 그날 발송 성공 기록이 있으면 already_sent).
+ *
+ * 매 슬롯 잡: Compass 전달 대조(lib/server/compass-lead-reconcile.ts, 2026-11-06) — 실시간 전달이 놓친 홈페이지 폼 리드를
+ * 매시 다시 민다. 슬롯마다 맨 앞에서 COMPASS_RECONCILE_BUDGET_MS 안에 돌고(평소엔 조회 두 번이라 1초 안팎), 결과는 `ran` 이 아니라
+ * 응답의 `compassLeadReconcile` 칸에 싣는다 — 알림 잡의 설정 실패·503 규칙과 묶지 않는다. failed 면 응답 ok 가 false(500)다.
+ * dryRun 은 보내지 않고 다시 밀 대상만 싣는다. 같은 리드를 두 번 보내도 Compass 가 event_id 로 한 번만 받는다.
  */
+
+/** Compass 대조 시간 예산 — 건당 전달 상한 6초, 뒤 잡(아침 카드·세그먼트·하드웨어)의 몫을 남긴다. */
+const COMPASS_RECONCILE_BUDGET_MS = 20_000
 
 type DispatchJobKey =
   | NotificationScheduleJobKey
   | "crmSegmentsDaily"
   | "hardwareProcessAlerts"
+  | "compassLeadReconcile"
   | "notificationSettings"
 
 const SETTINGS_UNAVAILABLE_ERROR = "Notification settings unavailable."
@@ -138,6 +147,21 @@ async function runHardwareProcessAlertsJob(dryRun: boolean): Promise<JobRunResul
   }
 }
 
+/**
+ * Compass 전달 대조. env 가 없으면 skipped, 놓친 리드가 없으면 in_sync(둘 다 실패 아님). 응답에는 건수와 어드민 리드 id·닫힌
+ * 오류 문구만 싣는다(이름·연락처 없음). 던지면 failed — 오류는 이름만 로그로 남긴다.
+ */
+async function runCompassLeadReconcileJob(dryRun: boolean): Promise<JobRunResult> {
+  try {
+    const { reconcileCompassLeadPush } = await import("@/lib/server/compass-lead-reconcile")
+    const report = await reconcileCompassLeadPush({ dryRun, timeBudgetMs: COMPASS_RECONCILE_BUDGET_MS })
+    return { job: "compassLeadReconcile", status: report.status, detail: report }
+  } catch (error) {
+    console.error("[cron/dispatch] compassLeadReconcile failed:", error instanceof Error ? error.name : "Error")
+    return { job: "compassLeadReconcile", status: "failed", error: "Compass lead reconcile failed." }
+  }
+}
+
 export async function GET(
   request: NextRequest,
   context: { params: Promise<{ slot: string }> }
@@ -165,6 +189,11 @@ export async function GET(
     )
   }
 
+  const dryRun = request.nextUrl.searchParams.get("dryRun") === "true"
+  // 매 슬롯 잡 — 알림 설정과 무관하게 맨 앞에서 돈다(설정 실패·503 경로에도 결과를 싣는다).
+  const compassLeadReconcile = await runCompassLeadReconcileJob(dryRun)
+  const compassFailed = compassLeadReconcile.status === "failed"
+
   const kstHour = utcSlotToKstHour(slot)
   const runsSegments = slot === CRM_SEGMENT_DAILY_UTC_SLOT
   const runsHardwareAlerts = slot === HARDWARE_PROCESS_ALERT_UTC_SLOT
@@ -179,7 +208,10 @@ export async function GET(
     notificationSchedule = null
   }
   if (!notificationSchedule && !runsFixedJobs) {
-    return NextResponse.json({ ok: false, error: SETTINGS_UNAVAILABLE_ERROR }, { status: 503 })
+    return NextResponse.json(
+      { ok: false, error: SETTINGS_UNAVAILABLE_ERROR, compassLeadReconcile },
+      { status: 503 }
+    )
   }
 
   const schedule = notificationSchedule
@@ -187,7 +219,7 @@ export async function GET(
     ? NOTIFICATION_SCHEDULE_JOB_KEYS.filter((job) => schedule[job].deliveryHourKst === kstHour)
     : []
 
-  if (request.nextUrl.searchParams.get("dryRun") === "true") {
+  if (dryRun) {
     let preview: Awaited<ReturnType<typeof previewLeadMorningBrief>> | null = null
     let previewError: string | null = schedule ? null : SETTINGS_UNAVAILABLE_ERROR
     if (schedule && due.length) {
@@ -198,7 +230,7 @@ export async function GET(
       }
     }
     if (previewError && !runsFixedJobs) {
-      return NextResponse.json({ ok: false, error: previewError }, { status: 503 })
+      return NextResponse.json({ ok: false, error: previewError, compassLeadReconcile }, { status: 503 })
     }
     // 세그먼트 자동 태그 미리보기(쓰기 0) — 서로 막지 않는다: 알림 미리보기가 실패해도 싣고, 세그먼트 미리보기
     // 실패는 잡 결과에 failed 로만.
@@ -206,7 +238,7 @@ export async function GET(
     const hardwareAlertsPreview = runsHardwareAlerts ? await runHardwareProcessAlertsJob(true) : undefined
     return NextResponse.json(
       {
-        ok: !previewError,
+        ok: !previewError && !compassFailed,
         dryRun: true,
         slot,
         kstHour,
@@ -215,9 +247,10 @@ export async function GET(
         ...(previewError ? { error: previewError } : {}),
         ...(segmentsPreview ? { segmentsPreview } : {}),
         ...(hardwareAlertsPreview ? { hardwareAlertsPreview } : {}),
+        compassLeadReconcile,
         ran: [],
       },
-      { status: previewError ? 503 : 200 }
+      { status: previewError ? 503 : compassFailed ? 500 : 200 }
     )
   }
 
@@ -236,7 +269,7 @@ export async function GET(
   if (runsSegments) ran.push(await runCrmSegmentsDailyJob(false, requestStartedAt))
   if (runsHardwareAlerts) ran.push(await runHardwareProcessAlertsJob(false))
 
-  const ok = ran.every((result) => result.status !== "failed")
+  const ok = ran.every((result) => result.status !== "failed") && !compassFailed
 
-  return NextResponse.json({ ok, slot, kstHour, ran }, { status: ok ? 200 : 500 })
+  return NextResponse.json({ ok, slot, kstHour, ran, compassLeadReconcile }, { status: ok ? 200 : 500 })
 }
