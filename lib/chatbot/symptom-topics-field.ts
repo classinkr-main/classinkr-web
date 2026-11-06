@@ -15,6 +15,27 @@ const UPDATE_FROM_STORE =
 export const FIELD_SYMPTOM_TOPICS: SymptomTopic[] = [
   // ─── 페르소나 5회차 ───────────────────────────────────────────────
   {
+    id: "password-change-howto",
+    subject: /비밀번호\s*(?:를|을)?\s*(?:바꾸|바꿀|바꿔|변경|새로\s*정)/,
+    exclude: /정책|길이|주기|2단계|잊|기억|틀|모르/,
+    requireSymptom: false,
+    howto: true,
+    category: "troubleshooting",
+    doc: { category: "start", slug: "password-change-pc" },
+    steps: [{ heading: "비밀번호 변경 화면 열기", take: 2 }],
+    intro: "비밀번호는 공식 홈페이지가 아니라 설치한 클래스인의 로그인 화면에서 바꿔요.",
+    variants: [
+      {
+        when: /휴대폰|폰|모바일|태블릿|아이패드|앱/,
+        doc: { category: "start", slug: "password-change-mobile" },
+        steps: [{ heading: "비밀번호 변경 화면 열기", take: 2 }],
+      },
+    ],
+    branches: ["그다음 화면에서 아이디를 넣고 인증코드를 받아 새 비밀번호를 정하면 돼요."],
+    en: "Change it in the installed ClassIn app, not the website: on the login screen tap [비밀번호 변경] (PC) or [비밀번호를 잊으셨나요?] (mobile), get a verification code, and set a new password.",
+    suggestedQuestions: ["인증코드가 안 와요", "로그인이 안 돼요", "비밀번호를 잊어버렸어요"],
+  },
+  {
     id: "board-turns-off-no-sound",
     subject: /(?:칠판|티비|tv|보드).{0,30}(?:켜면|켰는데|켜도).{0,30}(?:금방|바로|곧|자꾸)\s*(?:꺼|꺼져|꺼지)/,
     requireSymptom: false,
