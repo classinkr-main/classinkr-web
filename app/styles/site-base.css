@@ -57,7 +57,37 @@
 
 @layer components {
   /* (b) 컴포넌트 규칙. 소비처가 생기는 PR 에서 채운다:
-     table-paper·스위치(controls P2), status-dot(icons P1) */
+     table-paper·스위치(controls P2) */
+
+  /* ── icons §10 상태 점 ● ○ – — 정지 표지. 점 옆에는 항상 13px 이상 글자, 점은 aria-hidden.
+     기본 규칙에 transition 을 두지 않는다(○→● 전이는 .os-node·.success-panel 소유 셀렉터만). 첫 소비처: /download '이 기기' */
+  :where(.site) .status-dot {
+    display: inline-block;
+    inline-size: 7px;
+    block-size: 7px;
+    border-radius: 9999px;
+    border: var(--stroke-pen) solid var(--fg-accent);
+    background: var(--fg-accent);
+    vertical-align: calc(0.355em - 3.5px);        /* 한글 잉크 중심 */
+    flex-shrink: 0;
+  }
+  :where(.site) .status-dot[data-state="off"] {   /* ○ 꺼짐·대기 */
+    background: transparent;
+    border-color: var(--line-control);
+  }
+  :where(.site) .status-dot[data-state="na"] {    /* – 해당 없음 */
+    block-size: var(--stroke-pen);
+    border: 0;
+    background: var(--line-control);
+    vertical-align: calc(0.355em - var(--stroke-pen) / 2);
+  }
+  @media (forced-colors: active) {
+    :where(.site) .status-dot:not([data-state="off"]) {
+      forced-color-adjust: none;
+      border-color: CanvasText;
+      background: CanvasText;
+    }
+  }
 
   /* ── cards_motion — 정적 모양(모든 상태에서 같다) ── */
   :where(.site) .os-node {                          /* 수업 OS 지도 노드 */
