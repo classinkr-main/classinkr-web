@@ -1,7 +1,7 @@
 # 홈페이지 폼 리드 → Compass 밀어 넣기
 
 - 작성: 2026-11-04
-- 상태: 코드 커밋 완료. 운영은 두 서버의 env(아래 §2)를 넣은 뒤부터 동작한다. **DB 마이그레이션은 어드민 쪽에 없다**(Compass 쪽 표 `crm.home_webhook_events` 는 Compass 배포가 만든다).
+- 상태: 운영 동작 중(2026-11-06 14:39 KST 부터 — 그 전엔 두 서버 모두 토큰 env 가 없어 조용히 건너뛰었다, 아래 "2026-11-06 운영 켜기"). 매시 대조로 놓친 리드를 다시 민다(아래 "2026-11-06 매시 대조"). **DB 마이그레이션은 어드민 쪽에 없다**(Compass 쪽 표 `crm.home_webhook_events` 는 Compass 배포가 만든다).
 - 짝 문서: [compass-integration-2026-09-14.md](./compass-integration-2026-09-14.md)(연동 2차 — 소유 경계·`home_lead` 링크 자리), Compass 저장소 `docs/adr/0083-homepage-inquiries-are-pushed-to-compass.md`(Compass 쪽 결정)
 
 ## 0. 한 줄 요약
@@ -24,7 +24,7 @@
 - **Compass 쪽**(그쪽 ADR-0087): 동일인 잠금 → `crm.lead_refs(system='home_lead')` 링크 또는 전화·이메일 동일인 → 새 리드는 `channel='homepage'`(인바운드 — 광고 성과·KPI 리드 밖, 콜 목록 안)
   + `referrer`=어느 폼(「문의 페이지 · 도입 상담」) · 기존 리드면 재유입(담당·단계·메모 그대로) · 폼 답변은 `system` 기록 · **환영 알림톡은 보내지 않는다**(우리 접수 안내가 간다).
 - **실패**: Compass 가 2xx 가 아니면 `Compass: <status>` 가 응답 `warnings` 와 「리드 전달 경고」 인시던트(WeCom·메일)로 간다. 저장은 막지 않는다. Compass 는 실패 때 표식을 남기지 않으므로
-  같은 본문을 다시 보내면 새로 처리된다 — 다만 **자동 재전달은 없다**(사람이 Compass 에서 등록하거나, 다음 재문의가 들어오면 그때 붙는다).
+  같은 본문을 다시 보내면 새로 처리된다. 2026-11-06 부터 매시 대조(아래 절)가 링크 없는 최근 리드를 다시 민다 — 그 전엔 자동 재전달이 없었다.
 - **보내지 않는 경우**(조용히): env 둘 중 하나가 없다 · `COMPASS_BRIDGE_URL` 이 HTTPS 가 아니다(로컬 `http://localhost` — 운영 Compass 로 밀지 않게) · 소스가 위 넷이 아니다 · 저장이 실패했다.
 
 ## 2. 켜는 순서
@@ -63,3 +63,27 @@
 설계자 "홈페이지 연동(홈페이지 문의/ 자료등록/ 행사 신청) 뜰 수 있게". 자료 신청(`newsletter` + `leadMagnet`, `app/resources/[slug]/ResourceDownloadForm.tsx`)도 보낸다 —
 `isCompassPushSource(source, leadMagnet)`. 본문에 `event_slug`·`lead_magnet` 을 싣고, Compass 가 경로를 「행사 신청 · slug」·「자료 신청 · slug」로 적는다(Compass ADR-0087).
 블로그 자료 게이트(`/api/newsletter/subscribe`)는 리드를 만들지 않아 대상이 아니다.
+
+## 2026-11-06 운영 켜기
+
+- 증상: "자료 신청(가이드) 내역이 Compass 에 안 찍힌다". 원인은 코드가 아니라 env — 어드민 `COMPASS_LEAD_WEBHOOK_TOKEN` 과 Compass `HOME_LEAD_TOKEN` 이
+  **둘 다** Vercel 운영 env 에 없었다. 어드민은 env 가 없으면 조용히 건너뛰어(위 "보내지 않는 경우") 경고도 인시던트도 없었다.
+- 조치: 같은 값의 토큰을 두 프로젝트 production env 에 `sensitive` 로 넣고 Compass → 어드민 순서로 재배포(코드는 그대로). 빈 본문으로 확인 — 맞는 토큰 400(`event_id required`) · 틀린 토큰 401.
+- 지난 리드: 홈페이지 폼 리드 22건(자료 신청 14·문의 8, 2026-07~11) 모두 같은 날 Compass 에 **원래 접수 시각으로** 옮겨졌다(`home_lead` 링크 22 · 폼 답변 기록 · 없던 6명은 새 리드).
+  웹훅으로 다시 밀지 않은 이유: Compass 는 받은 시각(now)으로 기록하므로 옛 리드를 밀면 22명 전원이 "오늘 재유입"이 되어 KPI 달·연락 텀이 틀어진다.
+
+## 2026-11-06 매시 대조
+
+설계자 "실시간 연동 + 최소 하루 3번 싱크". 실시간 전달은 제출 순간 한 번뿐이라 Compass 가 잠깐 내려가면 그 리드가 빠졌다. 그래서 매시 다시 맞춘다.
+
+- 실행: `app/api/cron/dispatch/[slot]` 매 슬롯 맨 앞(하루 24회 — 크론 자리가 40개로 차 있어 새 크론 없이 디스패처에 얹었다). 결과는 응답 `compassLeadReconcile` 칸(`ran` 과 따로), `failed` 면 응답 500.
+- 본체: `lib/server/compass-lead-reconcile.ts` `reconcileCompassLeadPush`.
+  - 대상 = 최근 72시간에 저장된 홈페이지 폼 리드(`isCompassPushSource`) 중 Compass 링크(`compass_lead_refs_v` `home_lead`)가 없는 것. 방금(10분 이내) 들어온 리드는 실시간 전달 몫이라 뺀다.
+  - 본문은 저장된 행으로 다시 짓고(`compassPayloadFromLeadRow` — 행사 slug 는 notes `[event:…]` 토큰), `event_id` 는 실시간과 같은 `lead:<id>` — 겹쳐 가도 Compass 가 한 번만 받는다.
+  - 링크를 못 읽으면 아무것도 보내지 않는다(`failed` · `compass_links_unavailable`) — "링크 없음"으로 오인해 이미 받은 리드를 다시 밀지 않게.
+  - 72시간보다 오래된 리드는 밀지 않는다 — 날짜가 틀어지므로 사람이 원래 날짜로 옮긴다(위 22건 선례).
+  - 한 번에 5건·시간 예산 20초. 남은 건은 다음 시간에(`deferred`). 응답에는 건수와 어드민 리드 id·닫힌 오류 문구(`Compass: <상태>` 또는 오류 이름)만 — 이름·연락처·주소·토큰 없음.
+  - 재문의 병합(기존 리드에 합친 재유입)의 전달 실패는 대상이 아니다(리드 행에 이미 링크가 있다) — 「리드 전달 경고」로만 보인다.
+- 확인: `GET /api/cron/dispatch/<HH>?dryRun=true`(Bearer `CRON_SECRET`) — `compassLeadReconcile.detail` 의 `candidates`·`linked`·`missing`, 보내지 않는다.
+- Compass ADR-0087 결정 7("매시 대조·자동 재전달은 두지 않는다 — 재검토 조건")을 어드민 쪽에서 바꾼 것이다. Compass 쪽 코드는 그대로(멱등 표식이 겹친 전달을 막는다).
+- 테스트: `tests/server/compass-lead-reconcile.test.ts`(대상·링크 down·미리보기·본문·event_id·실패 문구·상한·기간) · `tests/api/cron-dispatch-route.test.ts`(매 슬롯·ran 분리·failed 500·503 경로·dryRun).

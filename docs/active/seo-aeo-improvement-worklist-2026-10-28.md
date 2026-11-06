@@ -155,6 +155,7 @@
 - 바꿀 때 손댈 곳: `app/page.tsx`(absoluteTitle), `lib/classin-positioning.ts:11-12`(description 은 layout·page·WebPage JSON-LD 공용), `app/page.tsx:43` WebPage name, `app/opengraph-image.tsx` 문구, `lib/seo.ts:7` DEFAULT_SITE_TITLE, `public/llms.txt`.
 - **결정(2026-10-28): A안 채택·적용.** `lib/seo.ts` `DEFAULT_SITE_TITLE`(홈 `<title>`·루트 기본·공유 카드 기본 제목)과 `lib/classin-positioning.ts` `metadataDescription` 을 진단안으로 바꿨고, 홈 WebPage JSON-LD name·OG 이미지 문구·키워드를 같이 맞췄다. 본문·히어로·FAQ·챗봇의 카테고리명은 "수업 시스템 OS" 그대로이며, 예외 규칙은 [포지셔닝 가이드](./classin-korea-positioning-guidelines.md) §11 에 적었다. `public/llms.txt` 는 도메인 결정(D12) 뒤에 손본다.
 - 변경 뒤 Search Console 에서 검색어별 노출·CTR 을 4주 이상 비교한다.
+- **2026-11-03 갱신(사용자 결정)**: 제목을 `클래스인 Classin | 수업 녹화·AI 강의 평가까지 되는 학원 전자칠판`, description 을 "수업하면 녹화되고 끝나면 AI가 강의를 평가하는 학원 전자칠판, 클래스인. …"으로 바꿨다("운영 플랫폼"·"수업 OS"는 처음 온 원장이 이해하지 못해 놓친다는 판단). 검색어 "전자칠판"·"녹화"는 유지. 비교 기준일은 이 날짜부터 다시 4주.
 
 ### 4-3. 구조화 데이터
 

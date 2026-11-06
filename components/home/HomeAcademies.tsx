@@ -10,7 +10,8 @@ const { academies } = HOME_COPY
 // 두 벌 폭이 정확히 같아야 이음매가 튀지 않는다. 동작 줄이기에서는 흐름을 끄고 한 벌을 여러 줄로 펼친다
 const LIST =
   "flex gap-14 pr-14 motion-reduce:flex-wrap motion-reduce:justify-center motion-reduce:gap-x-8 motion-reduce:gap-y-2 motion-reduce:px-4"
-const NAME = "whitespace-nowrap text-caption font-medium text-fg-muted"
+// 학원 이름은 본문 크기(16px) — 14px 은 작아 잘 안 읽힌다는 요청(2026-11-06). 위 안내 문구는 14px 그대로
+const NAME = "whitespace-nowrap text-body font-medium text-fg-muted"
 
 export function HomeAcademies() {
   const [paused, setPaused] = useState(false)
@@ -32,7 +33,8 @@ export function HomeAcademies() {
 
       <div className="mt-5 overflow-hidden">
         <div
-          className="flex w-max animate-[marquee_80s_linear_infinite] motion-reduce:w-auto motion-reduce:animate-none"
+          // 글자가 커져 트랙이 길어진 만큼 시간을 늘려(80 → 90초) 흐르는 속도는 그대로 둔다
+          className="flex w-max animate-[marquee_90s_linear_infinite] motion-reduce:w-auto motion-reduce:animate-none"
           style={{ animationPlayState: paused ? "paused" : "running" }}
         >
           <ul aria-label={academies.listLabel} className={LIST}>

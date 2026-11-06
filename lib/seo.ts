@@ -7,7 +7,9 @@ import { BOARD_MODEL_NAMES, BOARD_SPEC_MODELS } from "@/lib/hardware/board-specs
 export const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL ?? "https://classin.co.kr").replace(/\/$/, "")
 export const SITE_NAME = "Classin"
 // 홈 <title>·루트 기본 제목·공유 카드 기본 제목. 2026-10-28 진단 추천안을 채택해 구매자가 검색하는 범주어를 병기한다.
-export const DEFAULT_SITE_TITLE = "클래스인 Classin | 학원 전자칠판·수업 녹화·운영 플랫폼"
+// 2026-11-03 사용자 결정: "수업 OS"·"운영 플랫폼" 같은 범주어 대신 무엇(학원 전자칠판)과 바로 얻는 것(녹화·AI 강의 평가)을 말한다.
+// 검색어 "전자칠판"·"수업 녹화"는 남긴다(D1 근거). 정본 설명: docs/active/classin-korea-positioning-guidelines.md §11
+export const DEFAULT_SITE_TITLE = "클래스인 Classin | 수업 녹화·AI 강의 평가까지 되는 학원 전자칠판"
 export const DEFAULT_OG_IMAGE_PATH = "/opengraph-image"
 export const DEFAULT_TWITTER_IMAGE_PATH = "/twitter-image"
 

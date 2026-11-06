@@ -2,10 +2,21 @@
 // 숫자 4개는 docs/active/brand-canon/company-facts.md 의 EEO 공식 수치. 학원 34곳은 옛 LogoBar 목록 그대로.
 export const HOME_COPY = {
   hero: {
-    lead: "전자칠판·녹화·교안·LMS·관리자 데이터를 한 흐름으로 묶는 수업 시스템 OS입니다.",
+    // H1 "칠판은 지워져도, 수업은 남습니다"의 근거 — 무엇이 어떻게 남는지(아래 이득 3행과 같은 순서의 말).
+    // 두 구절 — md 이상에서 "남기고," 뒤에서 줄을 바꾼다(휴대폰은 이어 흐른다)
+    lead: ["Classin 전자칠판은 판서를 교안 파일로, 수업을 녹화로 남기고,", "수업이 끝나면 AI가 강의를 평가합니다."] as const,
     primaryCta: "파일럿 상담 신청",
     secondaryCta: "34문항 운영 진단지 받기",
     secondaryHref: "/resources/academy-system-checklist#download",
+    // 첫 화면 영상 무대(V23-A · 2026-11-06 캔버스 Hero-A). 옛 홈 수업 영상(1920×1080 · 35MB)의 위아래 검은 띠를 잘라
+    // 1280×640 · 25fps · 무음 · 1.2MB 로 다시 뽑았다. 포스터 = 첫 장면(가로 1280×640) · 12초 교실 장면 세로 자름(휴대폰 720×1280)
+    video: {
+      src: "/video/home-hero-720p.mp4",
+      poster: "/images/home/hero-video-poster.webp",
+      posterMobile: "/images/home/hero-video-poster-mobile.webp",
+      pauseLabel: "배경 영상 멈추기",
+      playLabel: "배경 영상 다시 재생",
+    },
     // 전자칠판 = 틀(빈 검은 화면, Codex 생성) + 화면(지구) 두 장. 화면 사각형은 틀 기준 백분율(HomeHero)
     board: {
       alt: "Classin 전자칠판. 화면에 푸른 지구가 떠 있다",

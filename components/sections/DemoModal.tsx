@@ -18,6 +18,8 @@ import {
 } from "@/components/ui/marketing-form"
 import { Input } from "@/components/ui/input"
 import { ACADEMY_SIZE_OPTIONS, ACADEMY_SIZE_PLACEHOLDER } from "@/lib/contact/academy-size"
+import { AdConsentCheckbox } from "@/components/consent/AdConsentCheckbox"
+import { EMPTY_AD_CONSENT, isAdConsentGiven } from "@/lib/consent/ad-consent"
 
 export function DemoModal({ children, trackingButton }: { children: React.ReactNode; trackingButton?: string }) {
     const [open, setOpen] = useState(false)
@@ -26,6 +28,7 @@ export function DemoModal({ children, trackingButton }: { children: React.ReactN
     const [error, setError] = useState("")
     const [warning, setWarning] = useState("")
     const [marketingConsent, setMarketingConsent] = useState(false)
+    const [adConsent, setAdConsent] = useState(EMPTY_AD_CONSENT)
     const formRef = useRef<HTMLFormElement>(null)
     const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
     const formStartTrackedRef = useRef(false)
@@ -37,6 +40,7 @@ export function DemoModal({ children, trackingButton }: { children: React.ReactN
         setError("")
         setWarning("")
         setMarketingConsent(false)
+        setAdConsent(EMPTY_AD_CONSENT)
         formRef.current?.reset()
     }
 
@@ -94,6 +98,7 @@ export function DemoModal({ children, trackingButton }: { children: React.ReactN
                 phone: formData.get("phone") as string,
                 message: message || undefined,
                 marketingConsent,
+                adConsent: isAdConsentGiven(adConsent),
                 website: (formData.get("website") as string) || undefined,
             })
             setWarning(
@@ -109,6 +114,11 @@ export function DemoModal({ children, trackingButton }: { children: React.ReactN
                 dedupeKey: data.conversionEventId ?? data.leadId,
                 eventId: data.conversionEventId,
                 transactionId: data.leadId,
+                adConsent: isAdConsentGiven(adConsent),
+                userData: {
+                    email: formData.get("email") as string,
+                    phone: formData.get("phone") as string,
+                },
                 params: {
                     lead_id: data.leadId,
                     stored: data.stored,
@@ -138,7 +148,9 @@ export function DemoModal({ children, trackingButton }: { children: React.ReactN
     return (
         <Dialog open={open} onOpenChange={handleOpenChange}>
             <DialogTrigger asChild>{children}</DialogTrigger>
-            <DialogContent className="site sm:max-w-[560px] overflow-hidden border-[#E4E8E2] bg-[#FBFCF9] p-0">
+            {/* overflow-hidden 을 주면 DialogContent 기본의 overflow-y-auto 를 덮어써 화면보다 긴 폼 아래가 잘린다.
+                둥근 모서리는 overflow-y-auto 도 똑같이 자른다. 스크롤바는 얇게 */}
+            <DialogContent className="site sm:max-w-[560px] border-[#E4E8E2] bg-[#FBFCF9] p-0 [scrollbar-width:thin]">
                 {submitted ? (
                     <div className="flex flex-col items-center justify-center space-y-4 px-8 py-12 text-center">
                         <div className="flex h-14 w-14 items-center justify-center rounded-full bg-fg-accent/8">
@@ -203,8 +215,9 @@ export function DemoModal({ children, trackingButton }: { children: React.ReactN
                                     <div className="grid gap-2">
                                         <FormLabel htmlFor="size">운영 규모</FormLabel>
                                         {/* 자유 입력이던 자리다 — 같은 leads.size 컬럼에 버킷 값과
-                                            자유 문자열이 섞여 규모별 집계가 둘로 쪼개졌다. */}
-                                        <select id="size" name="size" required aria-invalid={!!error} aria-describedby="demo-error" className={fieldClassName} defaultValue="">
+                                            자유 문자열이 섞여 규모별 집계가 둘로 쪼개졌다.
+                                            Input 과 달리 select 는 기본 w-full·border 가 없다 — 없으면 가장 긴 선택지 폭으로 칸 밖까지 나간다 */}
+                                        <select id="size" name="size" required aria-invalid={!!error} aria-describedby="demo-error" className={`${fieldClassName} w-full min-w-0 border`} defaultValue="">
                                             <option value="" disabled>{ACADEMY_SIZE_PLACEHOLDER}</option>
                                             {ACADEMY_SIZE_OPTIONS.map((option) => (
                                                 <option key={option} value={option}>
@@ -227,11 +240,11 @@ export function DemoModal({ children, trackingButton }: { children: React.ReactN
                                 <div className="grid gap-5 md:grid-cols-2">
                                     <div className="grid gap-2">
                                         <FormLabel htmlFor="goal">상담 우선순위</FormLabel>
-                                        <Input id="goal" name="goal" placeholder="예: 출결 관리, 온라인 수업 전환, 하드웨어 견적" required aria-invalid={!!error} aria-describedby="demo-error" className={fieldClassName} />
+                                        <Input id="goal" name="goal" placeholder="예: 녹화, 칠판 견적" required aria-invalid={!!error} aria-describedby="demo-error" className={fieldClassName} />
                                     </div>
                                     <div className="grid gap-2">
                                         <FormLabel htmlFor="timeline">희망 시점</FormLabel>
-                                        <Input id="timeline" name="timeline" placeholder="예: 2주 내 상담 / 여름학기 전 도입" aria-invalid={!!error} aria-describedby="demo-error" className={fieldClassName} />
+                                        <Input id="timeline" name="timeline" placeholder="예: 2주 안, 방학 전" aria-invalid={!!error} aria-describedby="demo-error" className={fieldClassName} />
                                     </div>
                                 </div>
                             </div>
@@ -241,6 +254,11 @@ export function DemoModal({ children, trackingButton }: { children: React.ReactN
                                 onChange={(e) => setMarketingConsent(e.target.checked)}
                                 label={<>제품 업데이트와 교육 운영 인사이트를 이메일로 받아보겠습니다 <span className="text-[#6C776F]">(선택)</span></>}
                                 description="상담 일정 안내와 별도로 신규 기능, 웨비나, 운영 사례를 받아볼 수 있습니다."
+                            />
+                            <AdConsentCheckbox
+                                value={adConsent}
+                                onChange={setAdConsent}
+                                className="rounded-[20px] border-[#E4E8E2] bg-[#F7FAF7] py-3.5"
                             />
 
                             <div className="space-y-3">

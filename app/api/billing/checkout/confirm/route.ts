@@ -62,7 +62,8 @@ function emitPurchaseConversion(req: NextRequest, order: SoftwareCheckoutOrder) 
       email: order.buyerEmail,
       phone: order.buyerPhone,
       externalId: order.orderId,
-      allowHashedUserData: true,
+      // 결제 패널에는 맞춤형 광고 활용 동의 칸이 없다 — 해시 연락처를 보내지 않는다.
+      allowHashedUserData: false,
     },
     customData: {
       transaction_id: order.orderId,

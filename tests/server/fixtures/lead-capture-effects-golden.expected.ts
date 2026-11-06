@@ -158,7 +158,7 @@ export const GOLDEN_EFFECT_LOGS: Record<string, unknown[]> = {
           "email": "golden.contact@example.com",
           "phone": "010-0000-1001",
           "externalId": "lead-golden-contact",
-          "allowHashedUserData": true
+          "allowHashedUserData": false
         },
         "customData": {
           "lead_id": "lead-golden-contact",
@@ -465,7 +465,7 @@ export const GOLDEN_EFFECT_LOGS: Record<string, unknown[]> = {
           "email": "test.lead@example.com",
           "phone": "010-0000-0001",
           "externalId": "lead-golden-meta",
-          "allowHashedUserData": true
+          "allowHashedUserData": false
         },
         "customData": {
           "lead_id": "lead-golden-meta",
@@ -773,7 +773,7 @@ export const GOLDEN_EFFECT_LOGS: Record<string, unknown[]> = {
           "email": "golden.contact@example.com",
           "phone": "010-0000-1001",
           "externalId": "lead-golden-delivery",
-          "allowHashedUserData": true
+          "allowHashedUserData": false
         },
         "customData": {
           "lead_id": "lead-golden-delivery",

@@ -244,6 +244,27 @@ describe("submitShowroomBooking", () => {
     })
   })
 
+  it.each([true, false, undefined])("맞춤형 광고 동의 %s 를 그대로 리드 미러에 넘긴다", async (adConsent) => {
+    const { mod, submitLeadCapture } = await loadBookings()
+    const defer = immediateDefer()
+
+    const normalized = mod.normalizeShowroomBooking({ ...VALID_BODY, adConsent })
+    expect(normalized.ok && normalized.value.adConsent).toBe(adConsent)
+
+    await mod.submitShowroomBooking({ ...VALID_BODY, adConsent }, { deferTask: defer.deferTask })
+    await defer.settle()
+
+    expect(submitLeadCapture.mock.calls[0][0].adConsent).toBe(adConsent)
+    // 방문 예약 동의는 연락 목적 — 마케팅 수신 동의로 승격하지 않는다.
+    expect(submitLeadCapture.mock.calls[0][0].marketingConsent).toBe(false)
+  })
+
+  it("문자열 adConsent 는 동의로 보지 않는다(undefined)", async () => {
+    const { mod } = await loadBookings()
+    const normalized = mod.normalizeShowroomBooking({ ...VALID_BODY, adConsent: "true" })
+    expect(normalized.ok && normalized.value.adConsent).toBeUndefined()
+  })
+
   it("sourcePage 가 있으면 currentPage 는 그 값이다", async () => {
     const { mod, submitLeadCapture } = await loadBookings()
     const defer = immediateDefer()
