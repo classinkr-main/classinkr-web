@@ -258,7 +258,7 @@ export function DemoModal({ children, trackingButton }: { children: React.ReactN
                             <AdConsentCheckbox
                                 value={adConsent}
                                 onChange={setAdConsent}
-                                className="rounded-[20px] border-[#E4E8E2] bg-[#F7FAF7] py-3.5"
+                                className="rounded-xl bg-surface-paper py-3.5"
                             />
 
                             <div className="space-y-3">
