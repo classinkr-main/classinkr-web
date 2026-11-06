@@ -89,9 +89,9 @@ export const HANDOFF_NOW_LINE =
 
 const EMPATHY_START_RE = /^(?:불편을|같은 문제로|많이 당황|죄송|걱정|괜찮)/
 
-export function englishLeadLine(englishSummary?: string) {
+export function englishLeadLine(englishSummary?: string, hasSteps = true) {
   return englishSummary
-    ? `In short: ${englishSummary} (Detailed steps are below in Korean. Type "상담원 연결" anytime to talk to a person.)`
+    ? `In short: ${englishSummary} (${hasSteps ? "Detailed steps are below in Korean. " : ""}Type "상담원 연결" anytime to talk to a person.)`
     : `I'll answer in Korean below. If anything is unclear, type "상담원 연결" to talk to a person, or ask again with a short phrase like "login not working".`
 }
 
@@ -127,7 +127,7 @@ export function applyToneToAnswer(
     next = `${opener}\n\n${next}`
   }
   if (tone.english && !/^(?:In short:|I'll answer|Yes —)/.test(next)) {
-    next = `${englishLeadLine(options.englishSummary)}\n\n${next}`
+    next = `${englishLeadLine(options.englishSummary, /^\d\.\s/m.test(next))}\n\n${next}`
   }
   return next
 }

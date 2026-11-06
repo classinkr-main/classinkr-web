@@ -460,9 +460,9 @@ export const FIELD_SYMPTOM_TOPICS: SymptomTopic[] = [
     doc: { category: "start", slug: "class-connection-troubleshooting" },
     steps: [{ heading: "화면이 깨지거나 느릴 때", pick: [0, 1, 2] }],
     intro:
-      "괜찮아요, 천천히 같이 봐요. 클래스인 문제인지 노트북 문제인지는 이렇게 나눠 볼 수 있어요. 휴대폰 핫스팟이나 다른 기기로 들어가도 느리면 네트워크 쪽, 다른 기기에서는 괜찮으면 노트북 쪽일 가능성이 커요.",
+      "괜찮아요, 천천히 같이 봐요. 클래스인 문제인지 노트북 문제인지는 이렇게 나눠 볼 수 있어요. 휴대폰 핫스팟으로 바꿨더니 괜찮아지면 원래 쓰던 인터넷 쪽, 같은 인터넷에서 다른 기기는 괜찮은데 이 노트북만 느리면 노트북 쪽일 가능성이 커요.",
     branches: ["학원에 IT 담당자가 있으면 같이 봐 달라고 하셔도 좋아요. 언제든 '상담원 연결'이라고 쓰시면 사람이 이어서 도와드려요."],
-    en: "Don't worry. To tell whether it's ClassIn or your laptop: if it's also slow on a phone hotspot or another device, it's the network; if other devices are fine, it's likely the laptop. Close other programs and update the app. Type 상담원 연결 anytime.",
+    en: "Don't worry. If it gets better after switching to a phone hotspot, your original network is the cause; if other devices are fine on the same network but this laptop is slow, it's likely the laptop. Close other programs and update the app. Type 상담원 연결 anytime.",
     suggestedQuestions: ["수업 중에 계속 튕겨요", "앱이 자꾸 멈춰요", "화면이 이상하게 나와요"],
   },
   {
