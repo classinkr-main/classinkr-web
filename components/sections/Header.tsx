@@ -7,7 +7,7 @@ import { usePathname } from "next/navigation"
 import { TrackedLink } from "@/components/TrackedLink"
 import { SessionNavEntry } from "@/components/auth/SessionNavEntry"
 import { cn } from "@/lib/utils"
-import { Menu, X, Pencil, Presentation, Video } from "lucide-react"
+import { Menu, X, Pencil, Presentation } from "lucide-react"
 
 const navItems = [
     { name: "제품 소개", href: "/product" },
@@ -20,7 +20,6 @@ const navItems = [
 const productTabs = [
     { name: "Classin 소프트웨어", href: "/product/sw", icon: Pencil },
     { name: "Classin Board", href: "/product/hw", icon: Presentation },
-    { name: "수업 녹화", href: "/product/recording", icon: Video },
 ]
 
 const HEADER_SCROLL_THRESHOLD = 10
