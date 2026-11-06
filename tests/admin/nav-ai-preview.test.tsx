@@ -117,14 +117,15 @@ describe("isAdminAiPreviewEnabled — 글자 그대로 \"1\" 만 켠다", () => 
 })
 
 describe("꺼짐(기본) — 시안이 운영 화면 어디에도 드러나지 않는다", () => {
-  it("ADMIN_NAV·상시 목록에 AI 올인원이 없다 — 16개, 상시 9", async () => {
+  it("ADMIN_NAV·상시 목록에 AI 올인원이 없다 — 16개, 상시 10", async () => {
     const { nav, access } = await loadWithFlag("")
     const hrefs = nav.ADMIN_NAV.map((item) => item.href)
     expect(hrefs).not.toContain("/admin/ai")
     // 2026-10 마케팅 프로젝트가 캠페인 관리의 탭이 되며 17 → 16.
     expect(nav.ADMIN_NAV).toHaveLength(16)
     expect(access.DEFAULT_PRIMARY_HREFS).not.toContain("/admin/ai")
-    expect(access.DEFAULT_PRIMARY_HREFS).toHaveLength(9)
+    // 2026-11-04 마케팅 허브가 상시로 올라와 9 → 10.
+    expect(access.DEFAULT_PRIMARY_HREFS).toHaveLength(10)
   })
 
   it("사이드바 자리·⌘K 원천(accessible)·편집기 행 어디에도 없다", async () => {
@@ -139,6 +140,7 @@ describe("꺼짐(기본) — 시안이 운영 화면 어디에도 드러나지 �
       "/admin/quotes",
       "/admin/hardware",
       "/admin/chatbot",
+      "/admin/campaigns",
       "/admin/blog",
     ])
     const accessible = access.getAccessibleAdminNavItems(resolved).map((item) => item.href)
@@ -188,17 +190,17 @@ describe("켜짐(NEXT_PUBLIC_ADMIN_AI_PREVIEW=1) — 시안 미리보기", () =>
     expect(blocks).toEqual(["home", "customer", "growth", "system"])
   })
 
-  it("상시 10 / 기타 6 / 숨김 1 — 상시 첫 묶음(home)이 Overview·AI 올인원이다", async () => {
+  it("상시 11 / 기타 5 / 숨김 1 — 상시 첫 묶음(home)이 Overview·AI 올인원이다", async () => {
     const { access } = await loadWithFlag("1")
-    expect(access.DEFAULT_PRIMARY_HREFS).toHaveLength(10)
+    expect(access.DEFAULT_PRIMARY_HREFS).toHaveLength(11)
     expect(access.DEFAULT_PRIMARY_HREFS[1]).toBe("/admin/ai")
     const resolved = access.resolveAdminNavAccess({ role: "ADMIN", overrides: {} })
-    expect(resolved.primary).toHaveLength(10)
+    expect(resolved.primary).toHaveLength(11)
     expect(resolved.primaryGroups[0]?.items.map((item) => item.href)).toEqual([
       "/admin/overview",
       "/admin/ai",
     ])
-    expect(resolved.folded.flatMap((group) => group.items)).toHaveLength(6)
+    expect(resolved.folded.flatMap((group) => group.items)).toHaveLength(5)
     expect(resolved.hidden).toHaveLength(1)
     expect(access.getAccessibleAdminNavItems(resolved).map((item) => item.href)).toContain("/admin/ai")
   })

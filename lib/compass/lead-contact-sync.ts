@@ -3,8 +3,12 @@
 //
 // 러프한 연동이다 — 콜 기록을 복제하지 않고 상태 한 칸만 MKT 처리 결과에 맞춘다.
 //  * 한 방향만: new → contacted, new·contacted → closed. 전환·종료는 건드리지 않고 되돌리지 않는다.
-//  * 매칭 키는 전화 정규화 키 하나(normalizePhoneKey = compass_leads_v.phone_key 식) — 자리표시·더미 번호는 키가 아니다
-//    (joinableCompassPhoneKey, Compass ADR-0018 과 같은 규칙).
+//  * 매칭은 **링크 우선, 전화 키 폴백**(2026-11-04, 연동 2차 §4-4): Compass 가 홈페이지 폼 리드를 받으며 거는 crm.lead_refs(home_lead)
+//    링크(어드민 리드 id → Compass 리드 id, lib/compass/admin-lead-links.ts)가 있으면 그 행이 먼저고, 전화 정규화 키
+//    (normalizePhoneKey = compass_leads_v.phone_key 식 — 자리표시·더미 번호는 키가 아니다, joinableCompassPhoneKey·Compass ADR-0018)로
+//    붙는 행을 합친다. 링크로만 붙는 리드(전화 없음·더미 번호)도 상태·담당 반영 대상이다.
+//  * 담당자(2026-11-04): Compass 담당(콜 담당 → BD 담당 → 오너)을 어드민 담당(assigned_to)이 **비어 있을 때만** 채운다 — 어드민에서 사람이
+//    고른 담당은 덮지 않는다(데이터 소유 범위를 바꾼다). 이름은 어드민 담당자 명단(ownerKey·별칭)으로 풀고, 못 풀면 건너뛴다.
 //  * 이탈 판정은 Compass 칩과 같은 대표 행(pickRepresentativeCompassRow) 기준이다.
 //  * **홈페이지 문의보다 오래된 Compass 상태는 근거가 아니다**(2026-10-12). 홈페이지 리드는 Compass 로 전달되지 않으므로
 //    Compass 의 종료(lost)·활동이 이 문의 **이전** 것이면 이 문의를 처리한 것이 아니다 — 종료된 고객의 재문의가 담당자 손길
@@ -41,6 +45,8 @@ export interface CompassSyncLead {
   id: string
   phone?: string | null
   status: LeadStatus
+  /** 어드민 담당(CRM ownerKey). 담당 반영은 이 값이 비어 있을 때만 채운다. */
+  assigned_to?: string | null
   /** 홈페이지 리드 생성 시각 — 이 문의보다 오래된 Compass 근거를 거르는 기준의 재료. 없으면 시각을 따지지 않는다. */
   created_at?: string | null
   /** 재유입 축(자체 원천 재제출 시 갱신) — created_at 과 함께 max 를 기준 시각으로 쓴다. */
@@ -97,11 +103,17 @@ function afterInflow(atMs: number | null, inflowMs: number | null): boolean {
   return atMs != null && atMs >= inflowMs
 }
 
+/** 어드민 리드 id → 링크된 Compass 리드 id(lib/compass/admin-lead-links.ts). 비어 있으면 전화 키만으로 매칭한다(옛 동작). */
+export type CompassLinkIndex = ReadonlyMap<string, readonly number[]>
+const NO_LINKS: CompassLinkIndex = new Map()
+
 export interface CompassLeadStatusSyncPlan {
   /** 판정에 넣은 어드민 리드 수 */
   scanned: number
-  /** 전화 키로 Compass 행이 하나라도 붙은 리드 수 */
+  /** 링크 또는 전화 키로 Compass 행이 하나라도 붙은 리드 수 */
   matched: number
+  /** 그중 링크(home_lead)로 붙은 리드 수 */
+  linked: number
   contacted: string[]
   /** from = 바뀌기 전 상태 — 감사 기록과 복구의 근거 */
   closed: Array<{ id: string; from: "new" | "contacted" }>
@@ -174,26 +186,64 @@ export function compassLookupPhoneKeys<T extends Pick<CompassSyncLead, "phone">>
   return [...keys]
 }
 
-function matchedGroup(
-  lead: Pick<CompassSyncLead, "phone">,
-  groups: Map<string, CompassOverlaySource[]>
-): CompassOverlaySource[] | undefined {
+/** 매칭 결과 — 링크 행 ∪ 전화 키 행(Compass 리드 id 로 중복 제거). 어느 쪽에서 왔는지(linked)를 같이 돌려준다. */
+interface MatchedRows {
+  rows: CompassOverlaySource[]
+  linked: boolean
+}
+
+function matchedRows(
+  lead: Pick<CompassSyncLead, "id" | "phone">,
+  groups: Map<string, CompassOverlaySource[]>,
+  rowsById: Map<number, CompassOverlaySource>,
+  links: CompassLinkIndex
+): MatchedRows | undefined {
+  const seen = new Set<number>()
+  const rows: CompassOverlaySource[] = []
+  let linked = false
+  for (const id of links.get(lead.id) ?? []) {
+    const row = rowsById.get(id)
+    if (!row || seen.has(row.id)) continue
+    seen.add(row.id)
+    rows.push(row)
+    linked = true
+  }
   const key = lookupKeyOf(lead)
-  return key ? groups.get(key) : undefined
+  for (const row of key ? groups.get(key) ?? [] : []) {
+    if (seen.has(row.id)) continue
+    seen.add(row.id)
+    rows.push(row)
+  }
+  return rows.length ? { rows, linked } : undefined
+}
+
+const indexById = (rows: readonly CompassOverlaySource[]) => new Map(rows.map((row) => [row.id, row] as const))
+
+/** 리드 한 건에 붙는 Compass 행(링크 ∪ 전화 키) — 오케스트레이터·화면이 같은 규칙으로 읽을 수 있게 내보낸다. */
+export function compassRowsForLead(
+  lead: Pick<CompassSyncLead, "id" | "phone">,
+  compassRows: readonly CompassOverlaySource[],
+  links: CompassLinkIndex = NO_LINKS
+): CompassOverlaySource[] {
+  return matchedRows(lead, groupByPhoneKey(compassRows), indexById(compassRows), links)?.rows ?? []
 }
 
 /** 어드민 리드 전체에 판정을 돌려 바꿀 목록을 만든다. */
 export function planCompassLeadStatusSync(
   leads: readonly CompassSyncLead[],
   compassRows: readonly CompassOverlaySource[],
-  touched: ReadonlyMap<number, number>
+  touched: ReadonlyMap<number, number>,
+  links: CompassLinkIndex = NO_LINKS
 ): CompassLeadStatusSyncPlan {
   const groups = groupByPhoneKey(compassRows)
-  const plan: CompassLeadStatusSyncPlan = { scanned: leads.length, matched: 0, contacted: [], closed: [] }
+  const rowsById = indexById(compassRows)
+  const plan: CompassLeadStatusSyncPlan = { scanned: leads.length, matched: 0, linked: 0, contacted: [], closed: [] }
   for (const lead of leads) {
-    const group = matchedGroup(lead, groups)
-    if (!group) continue
+    const match = matchedRows(lead, groups, rowsById, links)
+    if (!match) continue
+    const group = match.rows
     plan.matched += 1
+    if (match.linked) plan.linked += 1
     const next = decideLeadStatusFromCompass(lead, group, touched)
     if (next === "contacted") plan.contacted.push(lead.id)
     if (next === "closed" && (lead.status === "new" || lead.status === "contacted")) {
@@ -210,17 +260,83 @@ export function planCompassLeadStatusSync(
  */
 export function compassLeadIdsNeedingActivityCheck(
   leads: readonly CompassSyncLead[],
-  compassRows: readonly CompassOverlaySource[]
+  compassRows: readonly CompassOverlaySource[],
+  links: CompassLinkIndex = NO_LINKS
 ): number[] {
   const groups = groupByPhoneKey(compassRows)
+  const rowsById = indexById(compassRows)
   const ids = new Set<number>()
   for (const lead of leads) {
     if (lead.status !== "new") continue
-    const group = matchedGroup(lead, groups)
+    const group = matchedRows(lead, groups, rowsById, links)?.rows
     if (!group) continue
     const inflowMs = leadInflowAtMs(lead)
     if (group.some((row) => handledByStageAfter(row, inflowMs))) continue
     for (const row of group) ids.add(row.id)
   }
   return [...ids].sort((a, b) => a - b)
+}
+
+/* ── 담당자 반영(2026-11-04) ──────────────────────────────────────────────────────────────────────────── */
+
+/** Compass 행의 담당 — 콜 담당(caller, 실제 통화 주체) → BD 담당(bd_owner, 인계 뒤) → 오너(owner, BD 시트). 비면 null.
+ *  칩(lib/compass/overlay summarizeCompassEntry)이 콜 담당을 먼저 보는 것과 같은 순서다. */
+export function compassOwnerOf(row: Pick<CompassOverlaySource, "caller" | "bd_owner" | "owner">): string | null {
+  for (const candidate of [row.caller, row.bd_owner, row.owner]) {
+    const name = candidate?.trim()
+    if (name) return name
+  }
+  return null
+}
+
+export interface CompassOwnerAssignment {
+  /** 어드민 리드 id */
+  id: string
+  /** 채울 어드민 담당(CRM ownerKey — 어드민 담당자 명단으로 푼 값) */
+  to: string
+  /** Compass 쪽 담당 이름 원문(감사 기록용) */
+  owner: string
+}
+
+export interface CompassOwnerSyncPlan {
+  assign: CompassOwnerAssignment[]
+  /** 어드민 담당이 이미 다른 사람으로 돼 있어 건드리지 않은 리드 수(사람이 고른 값은 덮지 않는다) */
+  conflicts: number
+  /** Compass 담당 이름을 어드민 명단으로 풀지 못한 리드 수(명단에 없는 이름·옛 표기) */
+  unmapped: number
+}
+
+const normalizeOwnerLookup = (value: string | null | undefined) => value?.trim().toLowerCase() ?? ""
+
+/**
+ * 담당 반영 계획 — 상태 판정과 같은 매칭(링크 ∪ 전화 키)·같은 대표 행 위에서, 어드민 담당이 **비어 있는** 신규·연락함 리드만 채운다.
+ * resolveOwnerKey 는 Compass 담당 이름 → 어드민 CRM ownerKey(어드민 담당자 명단의 ownerKey·표시명·별칭으로 푼다). null 이면 unmapped.
+ * 전환·종료 리드는 건드리지 않는다(상태 반영과 같은 경계). 대표 행에 담당이 없으면 아무것도 하지 않는다(없는 담당을 지어내지 않는다).
+ */
+export function planCompassOwnerSync(
+  leads: readonly CompassSyncLead[],
+  compassRows: readonly CompassOverlaySource[],
+  resolveOwnerKey: (compassOwner: string) => string | null,
+  links: CompassLinkIndex = NO_LINKS
+): CompassOwnerSyncPlan {
+  const groups = groupByPhoneKey(compassRows)
+  const rowsById = indexById(compassRows)
+  const plan: CompassOwnerSyncPlan = { assign: [], conflicts: 0, unmapped: 0 }
+  for (const lead of leads) {
+    if (lead.status !== "new" && lead.status !== "contacted") continue
+    const match = matchedRows(lead, groups, rowsById, links)
+    if (!match) continue
+    const representative = pickRepresentativeCompassRow(match.rows)
+    const owner = representative ? compassOwnerOf(representative) : null
+    if (!owner) continue
+    const to = resolveOwnerKey(owner)?.trim() || null
+    if (!to) {
+      plan.unmapped += 1
+      continue
+    }
+    const current = lead.assigned_to?.trim() ?? ""
+    if (!current) plan.assign.push({ id: lead.id, to, owner })
+    else if (normalizeOwnerLookup(current) !== normalizeOwnerLookup(to)) plan.conflicts += 1
+  }
+  return plan
 }

@@ -183,7 +183,7 @@ describe("compassLeadUrl", () => {
 
 describe("Compass 마케팅 채널 — mktLeadCond 등가", () => {
   it("인바운드 목록은 Compass lib/taxonomy/defs.ts CHANNELS(group='inbound')와 같다", () => {
-    expect([...COMPASS_INBOUND_CHANNELS]).toEqual(["channeltalk", "direct", "walkin", "referral"])
+    expect([...COMPASS_INBOUND_CHANNELS]).toEqual(["channeltalk", "direct", "walkin", "referral", "homepage"])
   })
 
   it("가져오기 목록은 Compass CHANNELS(group=import)와 같다", () => {
@@ -191,7 +191,7 @@ describe("Compass 마케팅 채널 — mktLeadCond 등가", () => {
   })
 
   it("마케팅 제외 목록 = 인바운드 + 가져오기(neo) — Compass lib/channels.ts mktLeadCond 의 배열과 같은 순서", () => {
-    expect([...COMPASS_NON_MARKETING_CHANNELS]).toEqual(["channeltalk", "direct", "walkin", "referral", "neo"])
+    expect([...COMPASS_NON_MARKETING_CHANNELS]).toEqual(["channeltalk", "direct", "walkin", "referral", "homepage", "neo"])
   })
 
   it.each([
@@ -200,6 +200,8 @@ describe("Compass 마케팅 채널 — mktLeadCond 등가", () => {
     ["direct", false],
     ["walkin", false],
     ["referral", false],
+    // 우리 홈페이지 폼 리드를 Compass 로 민 것(Compass ADR-0083) — 어드민 홈페이지 리드와 같은 사람이라 Compass 마케팅 신규로 다시 세면 두 번이다
+    ["homepage", false],
     // NEO 에서 들여온 스텁(channel='neo')은 유입이 아니다 — Compass ADR-0015. 오늘 만들어진 스텁이 "오늘 유입"에 잡히면 안 된다.
     ["neo", false],
     ["sms", true],

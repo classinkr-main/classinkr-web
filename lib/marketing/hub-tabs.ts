@@ -22,7 +22,7 @@ export interface CampaignTabDef {
 export const CAMPAIGN_TABS: readonly CampaignTabDef[] = [
   { id: "summary", label: "한눈에", tier: 1, title: "판정 · 핵심 숫자 4 · 오늘 유입 · 추이 · 퍼널 · Top 3" },
   { id: "detail", label: "상세", tier: 2, title: "캠페인 · 소재 · 퍼널·채널 · 행사 · 메시지 성과" },
-  { id: "data", label: "데이터", tier: 3, title: "신규 리드 · 광고 리드 · Meta 캠페인 · 예산·성과 입력 · 업데이트 로그 · 주간 보고서" },
+  { id: "data", label: "데이터", tier: 3, title: "신규 리드 · 광고 리드 · Meta 캠페인 · Google Ads · 예산·성과 입력 · 업데이트 로그 · 주간 보고서" },
   { id: "email", label: "메시지", tier: null, title: "구독자 · 발송(이메일 라이브 · 문자·카카오 준비 중) · 이력" },
 ]
 
@@ -49,6 +49,7 @@ export const DATA_SECTIONS: readonly HubSectionDef[] = [
   { id: "new-leads", label: "신규 리드" },
   { id: "ad-leads", label: "광고 리드" },
   { id: "meta", label: "Meta 캠페인" },
+  { id: "google", label: "Google Ads" },
   { id: "budgets", label: "예산·성과 입력" },
   { id: "updates", label: "업데이트 로그" },
   { id: "weekly", label: "주간 보고서" },

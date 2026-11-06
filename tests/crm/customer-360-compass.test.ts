@@ -32,6 +32,10 @@ async function loadRepository(options?: {
     created_at?: string | null
   }>
   compassLeadsDown?: boolean
+  /** Compass 링크(home_lead) — 어드민 리드 id → Compass 리드 id. 전화 없는 리드도 이 길로 붙는다(2026-11-04). */
+  compassRefs?: Array<{ lead_id: number; external_id: string }>
+  /** 링크로 찾은 Compass 행(id 조회) — 없으면 compassLeads 에서 id 로 찾는다 */
+  compassLeadsById?: Array<{ id: number; phone_key: string | null; stage?: string | null }>
   compassActivities?: Array<{
     id: number
     lead_id: number
@@ -162,6 +166,11 @@ async function loadRepository(options?: {
       rows: options?.compassActivities ?? [],
       down: Boolean(options?.compassActivitiesDown),
     }),
+    getCompassHomeLeadRefs: vi.fn().mockResolvedValue({ rows: options?.compassRefs ?? [], down: false }),
+    getCompassLeadsByIds: vi.fn(async (ids: number[]) => ({
+      rows: (options?.compassLeadsById ?? options?.compassLeads ?? []).filter((row) => ids.includes(row.id)),
+      down: false,
+    })),
   }))
 
   return import("@/lib/repositories/crm-customer-360")
@@ -379,5 +388,39 @@ describe("고객 360 — 기록 위치 판정 입력(A안)", () => {
         leadStatus: result.leadStatus,
       }).reason
     ).toBe("compass_down")
+  })
+})
+
+describe("고객 360 — Compass 링크(home_lead) 우선 매칭(2026-11-04)", () => {
+  it("전화가 없는 리드도 Compass 가 건 링크로 활동이 붙는다 — 전화 키 조회는 하지 않는다", async () => {
+    const { getCrmCustomer360 } = await loadRepository({
+      phone: null,
+      compassRefs: [{ lead_id: 77, external_id: "lead-1" }],
+      compassLeadsById: [{ id: 77, phone_key: null, stage: "demo" }],
+      compassActivities: [activity(1, "call", "2026-08-25T00:00:00.000Z")],
+    })
+
+    const result = await getCrmCustomer360({ source: "lead", entityId: "lead-1", targetType: "lead" }, { now: NOW })
+
+    const bridge = await import("@/lib/compass/bridge")
+    expect(bridge.getCompassHomeLeadRefs).toHaveBeenCalledWith(["lead-1"])
+    expect(bridge.getCompassLeadsByPhoneKeys).not.toHaveBeenCalled()
+    expect(result.compass.leadIds).toEqual([77])
+    expect(result.compass.href).toBe("https://mkt.classin.co.kr/leads?open=77")
+    expect(result.compass.stage).toBe("demo")
+    expect(result.compass.entries).toHaveLength(1)
+  })
+
+  it("링크 행과 전화 키 행이 다르면 둘 다 붙고 대표 행은 최근성으로 고른다", async () => {
+    const { getCrmCustomer360 } = await loadRepository({
+      compassRefs: [{ lead_id: 90, external_id: "lead-1" }],
+      compassLeadsById: [{ id: 90, phone_key: null, stage: "contact", last_inflow_at: "2026-08-27T00:00:00.000Z" } as never],
+      compassLeads: [{ id: 77, phone_key: "01012345678", stage: "demo", last_inflow_at: "2026-08-01T00:00:00.000Z" }],
+    })
+
+    const result = await getCrmCustomer360({ source: "lead", entityId: "lead-1", targetType: "lead" }, { now: NOW })
+
+    expect(result.compass.leadIds.sort()).toEqual([77, 90])
+    expect(result.compass.href).toBe("https://mkt.classin.co.kr/leads?open=90")
   })
 })

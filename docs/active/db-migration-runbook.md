@@ -248,6 +248,14 @@ npm run check:db --  --strict
 | --- | --- | --- | --- |
 | `20261102_leads_ga_quality_signals.sql` | `leads` 에 `ga_client_id`·`ga_session_id`(text)·`ga_ad_consent`(boolean)·`ga_qualify_sent_at`·`ga_close_sent_at`(timestamptz)를 더한다. 전부 NULL 허용 추가 컬럼, 백필 없음, 멱등(`IF NOT EXISTS`) | 리드 저장은 그대로 된다(GA 세 컬럼을 덜고 다시 저장 — utm·gclid 는 지킨다). 다만 GA client_id 가 안 남아 그 기간 리드는 품질 신호를 영영 못 보내고, `GA4_*` 변수를 넣으면 선점 UPDATE 가 실패해 신호가 하나도 안 나간다 | `npm run check:db` 의 `leads` GA4 리드 품질 신호 프로브(blocker), 또는 `select count(*) from information_schema.columns where table_name = 'leads' and column_name like 'ga\_%';` → `5` |
 
+### 2026-11-04 메타 리드 단계 신호 — 서울 프로젝트 미적용
+
+[메타 리드 단계 신호](./meta-crm-stage-signal-2026-11-04.md) §5. 기능이 꺼져 있는 동안은 급하지 않다 — **`META_CRM_SIGNAL_ENABLED` 를 켜기 전에 적용한다.**
+
+| 파일 | 하는 일 | 미적용 시 | 확인 |
+| --- | --- | --- | --- |
+| `20261104_meta_crm_signal_events.sql` | 예약·발송 원장 `meta_crm_signal_events`(PK 메타 리드 번호+단계, event_time·reserved_at·sent_at, 연락처 없음)를 만든다. RLS deny-all, 멱등(`IF NOT EXISTS`) | 꺼져 있으면 영향 없다. 켜면 크론이 원장을 읽지 못해 아무것도 보내지 않고 500 을 낸다(dryRun 은 빈 원장으로 센다) | `npm run check:db` 의 `meta_crm_signal_events` 프로브(warning), 또는 `select to_regclass('public.meta_crm_signal_events') is not null;` → `true` |
+
 ## 적용 보류 중인 마이그레이션
 
 `check:db`에 걸리지 않는(프로브가 없는) 파일이라도, 아래 파일은 **파일명 순서대로 일괄 적용하지 않는다.**

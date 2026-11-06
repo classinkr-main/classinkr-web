@@ -1,8 +1,9 @@
 import "server-only"
 
 import { getNeoCrmCustomerDetail } from "@/lib/admin-crm-customers-neo"
-import { getCompassActivityPage, getCompassLeadsByPhoneKeys } from "@/lib/compass/bridge"
-import { compassLeadUrl, normalizePhoneKey } from "@/lib/compass/normalize"
+import { getCompassLeadsForAdminLead } from "@/lib/compass/admin-lead-links"
+import { getCompassActivityPage } from "@/lib/compass/bridge"
+import { compassLeadUrl } from "@/lib/compass/normalize"
 import { pickRepresentativeCompassRow } from "@/lib/compass/overlay"
 import { toCompassTimelineEntries } from "@/lib/crm/compass-timeline"
 import type { Customer360Compass, ParsedCustomerKey } from "./crm-customer-360"
@@ -32,9 +33,8 @@ export async function getCrmCustomerTimeline(
 
   const loadCompass = async (): Promise<Customer360Compass> => {
     const empty: Customer360Compass = { leadIds: [], href: null, entries: [], down: false }
-    const key = normalizePhoneKey(phone)
-    if (!key) return empty
-    const leads = await getCompassLeadsByPhoneKeys([key])
+    // 360 첫 창(loadCompassActivity)과 같은 매칭 — 리드는 Compass 링크(home_lead) ∪ 전화 키, NEO 계정은 전화 키만.
+    const leads = await getCompassLeadsForAdminLead({ leadId: customer.source === "lead" ? customer.entityId : null, phone })
     if (leads.down || leads.truncated) return { ...empty, down: true }
     const ids = leads.rows.map((row) => row.id)
     if (!ids.length) return empty

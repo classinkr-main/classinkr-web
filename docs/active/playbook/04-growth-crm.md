@@ -39,6 +39,8 @@
 - raw IP와 불필요한 PII를 저장하지 않는다. 이벤트 파라미터는 allowlist와 redaction을 통과해야 한다.
 - 새 이벤트는 `lib/analytics.ts`의 타입과 `/api/track/event`의 이벤트/파라미터 allowlist를 함께 갱신한다.
 - `trackEvent`의 dataLayer, gtag, 내부 적재와 GTM 태깅이 중복 집계되지 않는지 확인한다.
+- Google Ads 운영 계정은 395 하나다(11/3 결정 — 사이트 태그는 PR #52로 `AW-18551599540`). 라벨 전환과 GA4 가져오기 `generate_lead`를 둘 다 기본 전환으로 두지 않는다 — 중복 집계된다.
+  계정·캠페인·전환 현황은 [Google Ads 현황(2026-11-03)](../google-ads-accounts-2026-11-03.md).
 
 ### CRM과 매출
 
@@ -105,7 +107,7 @@ npx vitest run tests/crm
    [CRM 탭 품질 감사(2026-08-06)](../crm-tab-quality-audit-2026-08-06.md) —
    항목별 채점, 고친 결함, 90선에 못 미친 채 남긴 항목(큐 스코어링 비용, 필터 URL 소유권)
 0. 컨택·쇼룸·체크아웃 작업이면 [컨택·쇼룸 예약·구매 신청 2차 기획(2026-09-20)](../contact-showroom-checkout-develop-round2-2026-09-20.md)에서 쇼룸 진입 경로·접수 확정 어드민 화면·퍼널 뒤쪽 귀속 결손을 먼저 확인한다.
-0. 광고 채널 동기화 작업이면 [광고 채널 Google·네이버 연동 설계(2026-09-14)](../ad-channel-google-naver-integration-2026-09-14.md)와 [광고 채널 활성화 런북(2026-09-14)](../ad-channel-activation-runbook-2026-09-14.md)을 먼저 확인한다 — 전자는 "왜 이렇게 만들었나", 후자는 "켜고 나서 켜졌는지 어떻게 아나".
+0. 광고 채널 동기화 작업이면 [광고 채널 Google·네이버 연동 설계(2026-09-14)](../ad-channel-google-naver-integration-2026-09-14.md)와 [광고 채널 활성화 런북(2026-09-14)](../ad-channel-activation-runbook-2026-09-14.md)을 먼저 확인한다 — 전자는 "왜 이렇게 만들었나", 후자는 "켜고 나서 켜졌는지 어떻게 아나". Google Ads 계정 구조·캠페인 계획·전환 현황은 [Google Ads 현황(2026-11-03)](../google-ads-accounts-2026-11-03.md)이 정본이다(어드민 마케팅 › 데이터 › Google Ads가 같은 내용을 보여 준다).
 1. `lib/server/lead-capture.ts`
 2. `lib/consent/consent.ts`, `lib/analytics.ts`, `app/api/track/event/route.ts`
 3. `lib/admin-crm-revenue.ts`, `lib/crm-source-linking.ts`

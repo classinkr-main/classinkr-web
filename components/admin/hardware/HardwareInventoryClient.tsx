@@ -4,6 +4,7 @@ import type { FormEvent, KeyboardEvent as ReactKeyboardEvent } from "react"
 import dynamic from "next/dynamic"
 import { use, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react"
 import { AnimatePresence, useReducedMotion } from "framer-motion"
+import { isInternalLocation } from "@/lib/hardware/locations"
 import {
   Camera,
   ChevronRight,
@@ -27,7 +28,7 @@ import {
 import {
   customerLabel,
   DETAIL_PRESET_KEYS,
-  elapsedDaysSince,
+  plannedGroupAgeDays,
   ENTRY_PRESETS,
   formatCurrency,
   formatDate,
@@ -72,6 +73,7 @@ import {
   type ProductFilterKey,
   type QuickCartSaveSummary,
   type SampleSource,
+  outboundRecordLabel,
 } from "./inventory/shared"
 import ImportFreshnessStrip, { judgeImportFreshness } from "./inventory/ImportFreshnessStrip"
 import SheetSyncMenu from "./inventory/SheetSyncMenu"
@@ -176,7 +178,7 @@ function withDerivedMovementViews(response: HardwareDashboardResponse): Hardware
 // 활성 탭은 본문 배경(#FAFAF8)으로 채워 #EBE8E2 스트립에서 앞으로 튀어나온 것처럼 보이게 한다.
 // 아이콘은 부제가 역할을 대신하므로 두지 않는다(레퍼런스와 동일한 에디토리얼 톤).
 const HARDWARE_TABS: Array<{ id: HardwareTab; label: string; description: string }> = [
-  { id: "home", label: "홈", description: "현황 · 예상 출고" },
+  { id: "home", label: "홈", description: "현황 · 배송 예정" },
   { id: "entry", label: "입출고", description: "입고 · 출고 기록" },
   { id: "history", label: "내역", description: "전체 원본" },
 ]
@@ -206,16 +208,18 @@ function defaultEntryItemId(items: HardwareItem[]): string {
 
 // 출고 기간 집계 버킷 키/라벨 — shared.periodKey로 이동(분기·연간 회계연도 SSOT, 테스트 포함).
 
-// 확정 판매·설치 출고만 남긴다(무효·예정·샘플·수리 제외) — 입출고 탭 기간별 출고 집계(outboundBuckets,
-// 고객사·매출 펼침용 최근 원장 기준). FY 판매 수치는 서버 판매대시보드(SalesDashboardSection)가 정본이다.
+// 확정 세일즈·프로모션 출고만 남긴다 — 입출고 탭 기간별 출고 집계(outboundBuckets, 고객사·매출 펼침용 최근 원장
+// 기준). 판매대시보드와 같은 규칙(2026-11-05 결정 "세일즈 + 프로모션 따로"): A/S·샘플 유형과 내부 이동(창고·샘플·
+// 사무실·수리, lib/hardware/locations.ts)은 뺀다. 예전 정규식은 "대치수리학원" 같은 고객사를 수리로 뺐다.
+// FY 판매 수치는 서버 판매대시보드(SalesDashboardSection)가 정본이다.
 function confirmedSalesMovements(movements: HardwareMovement[]): HardwareMovement[] {
-  return movements.filter(
-    (movement) =>
-      movement.movement_type === "outbound" &&
-      !movement.voided_at &&
-      !/예정|예약|대기/.test(movement.status ?? "") &&
-      !/샘플|사무실|수리|sample|repair/i.test(`${movement.to_location ?? ""} ${movement.status ?? ""}`)
-  )
+  return movements.filter((movement) => {
+    if (movement.movement_type !== "outbound" || movement.voided_at) return false
+    if (/예정|예약|대기/.test(movement.status ?? "")) return false
+    if (!movement.customer_id && isInternalLocation(movement.to_location)) return false
+    const type = outboundSaleType(movement) ?? "sales"
+    return type === "sales" || type === "promotion"
+  })
 }
 
 // 제품 칩용 단축명 (기간 집계 칩에서 길이 절약).
@@ -1258,7 +1262,7 @@ export default function HardwareInventoryClient({
     if (saleTypeFilter) {
       chips.push({
         key: "saleType",
-        label: `판매유형: ${SALE_TYPE_META[saleTypeFilter].label}`,
+        label: `출고 유형: ${SALE_TYPE_META[saleTypeFilter].label}`,
         onRemove: () => {
           setSaleTypeFilter("")
           setMovementsPage(1)
@@ -1279,7 +1283,7 @@ export default function HardwareInventoryClient({
     if (lotFilter) {
       chips.push({
         key: "lot",
-        label: `물량번호: ${formatLotLabel(lotFilter) ?? lotFilter}`,
+        label: `물류번호: ${formatLotLabel(lotFilter) ?? lotFilter}`,
         onRemove: () => {
           setLotFilter("")
           setMovementsPage(1)
@@ -1366,7 +1370,7 @@ export default function HardwareInventoryClient({
   // 예정일로부터 30일 이상 미확정으로 방치된 딜 수 — 큐가 묵으면 판매 요약이 0으로 보이는
   // 원인이 되므로 패널 헤더에서 바로 드러낸다(페이지가 아닌 전체 큐 기준).
   const plannedStaleGroupCount = useMemo(
-    () => plannedGroups.filter((group) => (elapsedDaysSince(group.date) ?? 0) >= 30).length,
+    () => plannedGroups.filter((group) => plannedGroupAgeDays(group.items) >= 30).length,
     [plannedGroups]
   )
 
@@ -1597,9 +1601,9 @@ export default function HardwareInventoryClient({
     // nested(그룹 하위) 행은 왼쪽 들여쓰기·낮은 높이·살짝 작은 폰트로 위계를 구분한다.
     const sz = {
       cust: nested ? "text-[11.5px]" : "text-[12.5px]",
-      sub: nested ? "text-[10px]" : "text-[11px]",
+      sub: "text-[11px]",
       prod: nested ? "text-[11px]" : "text-[12px]",
-      qty: nested ? "text-[10.5px]" : "text-[11px]",
+      qty: "text-[11px]",
       meta: nested ? "text-[11px]" : "text-[11.5px]",
     }
     return (
@@ -1654,7 +1658,7 @@ export default function HardwareInventoryClient({
             {MOVEMENT_LABEL[movement.movement_type]} {formatNumber(movement.quantity)}
           </span>
           {planned ? (
-            <span className="inline-flex items-center gap-0.5 rounded-full bg-[#FBF1E0] px-1.5 py-0.5 text-[10px] font-bold text-[#A8741A]">
+            <span className="inline-flex items-center gap-0.5 rounded-full bg-[#FBF1E0] px-1.5 py-0.5 text-[11px] font-bold text-[#A8741A]">
               <Clock3 className="h-2.5 w-2.5" />
               예정
             </span>
@@ -1741,7 +1745,7 @@ export default function HardwareInventoryClient({
   const inboundLotStaleNote = useMemo(() => {
     const freshness = judgeImportFreshness(data?.importRun ?? null)
     if (freshness.level === "ok" || freshness.level === "none" || freshness.daysAgo == null) return null
-    return `시트 이관이 ${formatNumber(freshness.daysAgo)}일 전이라 그 뒤에 들어온 물량번호가 추천에 빠져 있을 수 있어요. 시트의 최신 번호를 확인하세요.`
+    return `시트 이관이 ${formatNumber(freshness.daysAgo)}일 전이라 그 뒤에 들어온 물류번호가 추천에 빠져 있을 수 있어요. 시트의 최신 번호를 확인하세요.`
   }, [data?.importRun])
 
   const inboundLots = useMemo(() => {
@@ -1816,7 +1820,7 @@ export default function HardwareInventoryClient({
       revenue: number
       hasRevenue: boolean
       byProduct: Map<string, number>
-      byCustomer: Map<string, { qty: number; revenue: number; firstDate: string | null; lastDate: string | null }>
+      byCustomer: Map<string, { qty: number; promotionQty: number; revenue: number; firstDate: string | null; lastDate: string | null }>
       byType: Map<OutboundSaleType, number>
     }
     const buckets = new Map<string, BucketAgg>()
@@ -1828,14 +1832,16 @@ export default function HardwareInventoryClient({
       const saleType = outboundSaleType(movement) ?? "sales"
       // 매출은 실판매(sales)만 잡는다. 프로모션/A/S는 $0이라 자연히 제외되지만 명시적으로 가드한다.
       const revenue = saleType === "sales" && movement.amount_usd != null ? movement.amount_usd : 0
-      bucket.total += movement.quantity
+      // 막대·합계는 세일즈만, 프로모션은 유형 칩·고객사 줄에 따로(2026-11-05 결정).
+      if (saleType !== "promotion") bucket.total += movement.quantity
       bucket.revenue += revenue
       if (saleType === "sales" && movement.amount_usd != null) bucket.hasRevenue = true
       bucket.byProduct.set(movement.product_name, (bucket.byProduct.get(movement.product_name) ?? 0) + movement.quantity)
       bucket.byType.set(saleType, (bucket.byType.get(saleType) ?? 0) + movement.quantity)
       const customer = customerLabel(movement.to_location)
-      const entry = bucket.byCustomer.get(customer) ?? { qty: 0, revenue: 0, firstDate: null, lastDate: null }
-      entry.qty += movement.quantity
+      const entry = bucket.byCustomer.get(customer) ?? { qty: 0, promotionQty: 0, revenue: 0, firstDate: null, lastDate: null }
+      if (saleType === "promotion") entry.promotionQty += movement.quantity
+      else entry.qty += movement.quantity
       entry.revenue += revenue
       // date는 YYYY-MM-DD 문자열이라 사전식 비교가 곧 시간순 비교.
       if (!entry.firstDate || date < entry.firstDate) entry.firstDate = date
@@ -1859,7 +1865,7 @@ export default function HardwareInventoryClient({
         .filter((entry) => entry.qty > 0),
       customers: Array.from(bucket.byCustomer.entries())
         .sort((a, b) => b[1].revenue - a[1].revenue || b[1].qty - a[1].qty)
-        .map(([name, value]) => ({ name, qty: value.qty, revenue: value.revenue, hasRevenue: value.revenue > 0, dateLabel: formatDateSpan(value.firstDate, value.lastDate) })),
+        .map(([name, value]) => ({ name, qty: value.qty, promotionQty: value.promotionQty, revenue: value.revenue, hasRevenue: value.revenue > 0, dateLabel: formatDateSpan(value.firstDate, value.lastDate) })),
     }))
   }, [data?.movements, outPeriod])
 
@@ -1887,6 +1893,10 @@ export default function HardwareInventoryClient({
     let latestTime = -Infinity
     for (const movement of data?.movements ?? []) {
       if (movement.voided_at || movement.source !== "admin_manual") continue
+      // 복제는 출고·이동 연속 입력용이다. 입고는 입고표, 회수는 원 출고를 고르는 회수 등록으로 해야
+      // 새 규칙(C 순번·무상 여부·회수 연결)을 지킨다. 재고 조정은 입고관리 권한자만 복제한다.
+      if (movement.movement_type === "inbound" || movement.movement_type === "return") continue
+      if (movement.movement_type === "adjust" && !canInboundAdjust) continue
       const time = new Date(movement.occurred_at ?? movement.created_at).getTime()
       if (Number.isFinite(time) && time >= latestTime) {
         latestTime = time
@@ -1894,7 +1904,7 @@ export default function HardwareInventoryClient({
       }
     }
     return latest
-  }, [data?.movements])
+  }, [canInboundAdjust, data?.movements])
 
   const historyLots = useMemo(() => {
     const set = new Set<string>()
@@ -1976,7 +1986,7 @@ export default function HardwareInventoryClient({
           : []),
         ...(detailMovement.movement_type === "outbound"
           ? [
-              { label: "판매유형", value: SALE_TYPE_META[outboundSaleType(detailMovement) ?? "sales"].label },
+              { label: "출고 유형", value: movementOutboundType(detailMovement) ? SALE_TYPE_META[outboundSaleType(detailMovement) ?? "sales"].label : "미상" },
               { label: "매출 (USD)", value: detailMovement.amount_usd != null ? formatCurrency(detailMovement.amount_usd, "USD") : "-" },
             ]
           : []),
@@ -2130,7 +2140,7 @@ export default function HardwareInventoryClient({
   const copyLatestInboundLotToCart = () => {
     const latestLot = inboundLots.latestLot
     if (!latestLot) {
-      setError("복사할 이전 입고 lot이 없습니다.")
+      setError("복사할 이전 입고 물류번호가 없습니다.")
       return
     }
     const targetLot = lotNo.trim() || nextLotSuggestion
@@ -2360,6 +2370,8 @@ export default function HardwareInventoryClient({
 
       const key = event.key.toLowerCase()
       if (key !== "i" && key !== "o") return
+      // 읽기 역할은 기록을 만들 수 없다 — 다른 쓰기 버튼과 같이 단축키도 막는다. 입고(i)는 입고관리 권한자만.
+      if (!canWriteHardware || (key === "i" && !canInboundAdjust)) return
       event.preventDefault()
       if (key === "i") openInboundSheet()
       else openSheet("sale")
@@ -2378,6 +2390,8 @@ export default function HardwareInventoryClient({
     plannedSelectionCount,
     openInboundSheet,
     openSheet,
+    canWriteHardware,
+    canInboundAdjust,
   ])
 
   const prepareQuickEntry = useCallback((itemId: string, presetKey: string) => {
@@ -2472,7 +2486,9 @@ export default function HardwareInventoryClient({
     setSerialsText("")
     // 유형·고객·담당은 같은 고객 연속 입력이라 따라오고, 물류번호·반납일은 건 단위라 다시 고른다.
     loadOutboundV2FromMovement(movement)
-    patchOutboundV2({ expectedReturnAt: "" })
+    // 다른 사람이 만든 기록이면 그 담당 계정이 실려 일반 사용자는 저장 때 403 이 났다 — 담당 지정 권한이
+    // 없으면 담당을 비워 서버가 본인으로 채우게 한다.
+    patchOutboundV2(viewer?.canManageInventory === true ? { expectedReturnAt: "" } : { expectedReturnAt: "", ownerUserId: null })
     setNotice(`직전 기록(${movement.product_name})을 복제했습니다. 수량·경로를 확인하고 저장하세요.`)
   }
 
@@ -2548,7 +2564,7 @@ export default function HardwareInventoryClient({
       movement,
       ...readPlannedConfirmInput(movement),
     }))
-    if (!window.confirm(`${group.customer} 예정 출고 ${formatNumber(group.items.length)}개 품목을 확정할까요?`)) return
+    if (!window.confirm(`${group.customer} 배송 예정 ${formatNumber(group.items.length)}개 품목을 확정할까요?`)) return
     const groupAllocations = await pickConfirmLots(plannedSnapshot.map((entry) => ({ movement: entry.movement, quantity: entry.qty })))
     if (!groupAllocations) return
     setConfirmingGroupKey(group.key)
@@ -2579,7 +2595,7 @@ export default function HardwareInventoryClient({
       setNotice(
         failed > 0
           ? `${group.customer} 출고 확정: ${formatNumber(success)}건 성공, ${formatNumber(failed)}건 실패`
-          : `${group.customer} 예정 출고 ${formatNumber(success)}건을 모두 확정했습니다.`
+          : `${group.customer} 배송 예정 ${formatNumber(success)}건을 모두 확정했습니다.`
       )
       if (success > 0) {
         invalidateLots()
@@ -2639,7 +2655,7 @@ export default function HardwareInventoryClient({
         setNotice(
           failedIds.length > 0
             ? `선택 출고 확정: ${formatNumber(successIds.length)}건 성공, ${formatNumber(failedIds.length)}건 실패`
-            : `선택한 예정 출고 ${formatNumber(successIds.length)}건을 모두 확정했습니다.`
+            : `선택한 배송 예정 ${formatNumber(successIds.length)}건을 모두 확정했습니다.`
         )
         if (successIds.length > 0) {
           invalidateLots()
@@ -2715,17 +2731,20 @@ export default function HardwareInventoryClient({
   const reviewHomeRecord = (draft: HomeRecordDraft) => {
     if (!canWriteHardware || plannedConfirmLocked || sheetOpen || inboundSheet.open || pendingMovement) return
     if (draft.preset === "inbound" && !canInboundAdjust) return
+    // 입고는 입고표로 — 다른 입고 진입점과 같다. 옛 단건 입고 폼은 H 순번 물류번호를 제안하고 무상 여부·
+    // 직배송이 없어, 새 규칙(C 순번·무상 여부 필수)에서 저장이 거절됐다(2026-11-05 점검).
+    if (draft.preset === "inbound") {
+      openInboundSheet(draft.itemId)
+      return
+    }
     // 홈 입력을 기존 단건 검토 폼에 전달한다. 저장·CRM·로트 검증은 기존 경로가 담당한다.
     openSheet(draft.preset, draft.itemId, "single")
     setQuantity(draft.quantity)
     setOccurredAt(draft.date)
     setMemo(draft.memo)
-    if (draft.preset === "inbound") setFromLocation(draft.source.trim())
-    else {
-      setToLocation(draft.customer.trim())
-      // 홈 칸은 과거 출고처 자유 입력이다 — 이름을 지우지 않게 직접 입력으로 넘기고, 시트에서 CRM 고객으로 바꿀 수 있다.
-      if (draft.customer.trim()) patchOutboundV2({ customerMode: "free" })
-    }
+    setToLocation(draft.customer.trim())
+    // 홈 칸은 과거 출고처 자유 입력이다 — 이름을 지우지 않게 직접 입력으로 넘기고, 시트에서 CRM 고객으로 바꿀 수 있다.
+    if (draft.customer.trim()) patchOutboundV2({ customerMode: "free" })
   }
 
   const adjustQuantity = (delta: number) => {
@@ -2807,7 +2826,7 @@ export default function HardwareInventoryClient({
         .join(" · ")
       const warnHint = result.warnings.length > 0 ? ` · 경고 ${formatNumber(result.warnings.length)}건` : ""
       setNotice(
-        `원본 가져오기 완료: 물량번호 ${formatNumber(result.parsed.lots.length)}개 · 입고 ${formatNumber(result.parsed.inboundRows)} · 출고 ${formatNumber(result.parsed.outboundRows)} (${typeHint}) → 원본 ${formatNumber(result.import.imported)}건 반영${snapshotHint}${warnHint}.`
+        `원본 가져오기 완료: 물류번호 ${formatNumber(result.parsed.lots.length)}개 · 입고 ${formatNumber(result.parsed.inboundRows)} · 출고 ${formatNumber(result.parsed.outboundRows)} (${typeHint}) → 원본 ${formatNumber(result.import.imported)}건 반영${snapshotHint}${warnHint}.`
       )
       await refresh()
     } catch (err) {
@@ -3224,7 +3243,7 @@ export default function HardwareInventoryClient({
       // 성공 노티스에 경로(출발→도착)를 병기해 방금 기록한 이동을 즉시 확인할 수 있게 한다.
       const routeHint = `${draft.fromLocation || "-"} → ${draft.toLocation || (draft.movementType === "outbound" ? "고객" : "-")}`
       setNotice(
-        `${draft.productName} · ${activePreset.label} ${formatNumber(draft.quantity)}대 (${routeHint})를 기록했습니다.${
+        `${draft.productName} · ${outboundRecordLabel(activePreset, draft.outboundType)} ${formatNumber(draft.quantity)}대 (${routeHint})를 기록했습니다.${
           crmCandidate ? " CRM 오더와 연결했습니다." : ""
         }`
       )
@@ -3431,7 +3450,7 @@ export default function HardwareInventoryClient({
               하드웨어
             </h1>
             <p className="mt-2 max-w-[760px] text-[13px] leading-relaxed text-[#615D59]">
-              제품별 재고와 출고 예정을 확인하고, 입출고 기록을 관리합니다.
+              제품별 재고와 배송 예정을 확인하고, 입출고 기록을 관리합니다.
             </p>
           </div>
           <div className="flex flex-wrap items-center justify-start gap-3 lg:max-w-[640px] lg:justify-end">
@@ -3484,12 +3503,12 @@ export default function HardwareInventoryClient({
                 <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-[13px] font-bold tracking-[-0.01em]">
                   {tab.label}
                   {tab.id === "home" && plannedCount > 0 ? (
-                    <span className="rounded-full bg-[#FBF1E0] px-1.5 py-0.5 text-[10.5px] font-bold text-[#A8741A]">
+                    <span className="rounded-full bg-[#FBF1E0] px-1.5 py-0.5 text-[11px] font-bold text-[#A8741A]">
                       {formatNumber(plannedCount)}
                     </span>
                   ) : null}
                 </span>
-                <span className="hidden whitespace-nowrap text-[10.5px] font-medium text-[#615D59] min-[420px]:block">{tab.description}</span>
+                <span className="hidden whitespace-nowrap text-[11px] font-medium text-[#615D59] min-[420px]:block">{tab.description}</span>
                 {active && (
                   <span className="absolute inset-x-3 -bottom-px h-[2.5px] rounded-sm bg-[#084734]" />
                 )}
@@ -3628,6 +3647,7 @@ export default function HardwareInventoryClient({
               setEntrySub={setEntrySub}
               openFreshSheet={openFreshSheet}
               openReturnSheet={() => setReturnSheetOpen(true)}
+              canWrite={canWriteHardware}
               inboundSearch={inboundSearch}
               setInboundSearch={setInboundSearch}
               inboundLots={inboundLots}
@@ -3882,7 +3902,7 @@ export default function HardwareInventoryClient({
 
       {/* 예정 출고를 선택 중이면 숨긴다 — 이 버튼(fixed bottom-6 right-6)이 하단 일괄 작업 바의
           "선택 확정" 버튼을 덮는다(1440px 실측). 선택 중엔 그 바가 이 화면의 주 작업면이다. */}
-      {!sheetOpen && !inboundSheet.open && !pendingMovement && !voidTarget && !detailId && !customerDetail && !sampleUnitSheetId && plannedSelectionCount === 0 && (
+      {canWriteHardware && !sheetOpen && !inboundSheet.open && !pendingMovement && !voidTarget && !detailId && !customerDetail && !sampleUnitSheetId && plannedSelectionCount === 0 && (
         <button
           type="button"
           onClick={openFreshSheet}

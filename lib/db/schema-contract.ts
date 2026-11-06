@@ -205,6 +205,8 @@ export const SCHEMA_CONTRACT_MIGRATIONS = [
   // GA4 리드 품질 신호(2026-11-02) — 제출 시 GA client_id·세션·광고 동의 + qualify/close 발송 선점 시각.
   "supabase/migrations/20261102_leads_ga_quality_signals.sql",
   "supabase/migrations/20261102074146_quote_soft_delete.sql",
+  // 메타 리드 단계 신호 원장(2026-11-04). META_CRM_SIGNAL_ENABLED 가 꺼져 있으면 영향 없다 — 켜기 전에 적용한다(warning).
+  "supabase/migrations/20261104_meta_crm_signal_events.sql",
 ] as const
 
 export const SCHEMA_PROBES: SchemaProbe[] = [
@@ -1046,6 +1048,18 @@ export const SCHEMA_PROBES: SchemaProbe[] = [
     migration: "supabase/migrations/20261102_leads_ga_quality_signals.sql",
     impact:
       "제출 시 GA client_id 가 저장되지 않고(리드 저장 자체는 성공), qualify_lead·close_convert_lead 선점 UPDATE 가 실패해 품질 신호가 하나도 나가지 않는다. 그 기간 리드는 사후에 신호를 보낼 방법이 없다.",
+  },
+  // ── 메타 리드 단계 신호(2026-11-04) ────────────────────────────────────
+  // 기본 꺼짐(META_CRM_SIGNAL_ENABLED). 표가 없으면 크론이 보내지 않고 failed 로 알린다 — 켜기 전에 적용한다.
+  {
+    kind: "table",
+    table: "meta_crm_signal_events",
+    label: "메타 리드 단계 신호 예약·발송 기록(같은 메타 리드·같은 단계 한 번)",
+    columns: ["leadgen_id", "stage", "event_time", "reserved_at", "sent_at"],
+    migration: "supabase/migrations/20261104_meta_crm_signal_events.sql",
+    severity: "warning",
+    impact:
+      "META_CRM_SIGNAL_ENABLED 를 켜도 크론이 원장을 읽지 못해 아무것도 보내지 않는다(cron/meta-crm-signal 500). 꺼져 있으면 영향 없다.",
   },
 ]
 

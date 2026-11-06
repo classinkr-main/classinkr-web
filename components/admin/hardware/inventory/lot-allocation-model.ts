@@ -88,9 +88,29 @@ export function confirmLotPayload(allocations: readonly LotAllocation[]): { lotN
  * (lotTracked)로 최종 판정한다.
  */
 export function plannedRowMayNeedLot(
-  movement: { lot_no: string | null },
+  movement: PlannedLotSource,
   item: { lot_tracked?: boolean } | null | undefined
 ): boolean {
-  if ((movement.lot_no ?? "").trim()) return false
+  if (plannedLotKey(movement)) return false
   return item?.lot_tracked !== false
+}
+
+export interface PlannedLotSource {
+  lot_no: string | null
+  source?: string | null
+  reference_no?: string | null
+}
+
+/**
+ * 예정 행의 물류번호 — 수기 기록은 lot_no, 시트 이관 행은 물류No 를 reference_no 에 싣는다(서버
+ * movementLotKey 와 같은 규칙). 시트 행에 번호가 있는데 "확정 때 물류번호 고르기"로 보이던 것을 고친다.
+ */
+export function plannedLotKey(movement: PlannedLotSource): string | null {
+  const direct = (movement.lot_no ?? "").trim()
+  if (direct) return direct
+  if (movement.source === "sheet_import") {
+    const reference = (movement.reference_no ?? "").trim()
+    if (reference) return reference
+  }
+  return null
 }

@@ -10,8 +10,8 @@ import {
 } from "@/components/admin/hardware/inventory/sales-dashboard-view"
 import type { SalesDashboardCounts, SalesDashboardLine } from "@/lib/repositories/hardware-sales-dashboard"
 
-function counts(installed = 0, planned = 0, returned = 0): SalesDashboardCounts {
-  return { installed, planned, returned }
+function counts(installed = 0, planned = 0, returned = 0, promotionInstalled = 0, promotionPlanned = 0): SalesDashboardCounts {
+  return { installed, planned, returned, promotionInstalled, promotionPlanned }
 }
 
 function line(total: SalesDashboardCounts, monthIndex = 0): SalesDashboardLine {
@@ -30,6 +30,12 @@ describe("formatSalesCell", () => {
   it("빈 칸은 비우고, 합계 칸은 0을 보인다", () => {
     expect(formatSalesCell(counts())).toMatchObject({ installed: "", planned: null, empty: true })
     expect(formatSalesCell(counts(), { showZero: true })).toMatchObject({ installed: "0", empty: true })
+  })
+
+  it("프로모션은 세일즈와 따로 적는다(2026-11-05 결정)", () => {
+    expect(formatSalesCell(counts(9, 3, 0, 2, 1))).toMatchObject({ installed: "9", planned: "+3", promotion: "프로모션 2 / +1" })
+    expect(formatSalesCell(counts(0, 0, 0, 4))).toMatchObject({ installed: "", promotion: "프로모션 4", empty: false })
+    expect(formatSalesCell(counts(5))).toMatchObject({ promotion: null })
   })
 
   it("회수는 따로 적는다", () => {
@@ -85,10 +91,13 @@ describe("buildSalesDashboardRows", () => {
   })
 
   it("머리 요약은 FY 합계를 쓴다", () => {
-    expect(salesDashboardHeadline({ grandTotal: line(counts(1234, 5, 2)) })).toEqual({
+    expect(salesDashboardHeadline({ grandTotal: line(counts(1234, 5, 2, 7, 1)) })).toEqual({
       installed: "1,234",
       planned: "5",
       returned: "2",
+      promotionInstalled: "7",
+      promotionPlanned: "1",
+      hasPromotion: true,
       hasUndated: false,
     })
   })

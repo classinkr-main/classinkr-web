@@ -12,6 +12,8 @@ interface FakeLeadRow {
   status: "new" | "contacted" | "converted" | "closed"
   confirmed_at: string | null
   created_at: string
+  /** 어드민 담당(CRM ownerKey) — Compass 담당 반영은 비어 있을 때만 채운다(2026-11-04) */
+  assigned_to?: string | null
 }
 
 interface UpdateCall {
@@ -128,11 +130,11 @@ describe("리드 상태 MKT 반영 저장소", () => {
   })
 
   describe("getLeadsForCompassContactSync", () => {
-    it("전화가 있는 신규·연락함 리드만 id·전화·상태·시각으로 돌려준다", async () => {
+    it("신규·연락함 리드를 id·전화·상태·시각·담당으로 돌려준다 — 전화 없는 리드도 대상(Compass 링크로 붙는다, 2026-11-04)", async () => {
       const table = fakeLeadsTable([
         lead({ id: "new-with-phone" }),
-        lead({ id: "contacted-with-phone", status: "contacted" }),
-        lead({ id: "new-blank-phone", phone: "  " }),
+        lead({ id: "contacted-with-phone", status: "contacted", assigned_to: "kim.cs" }),
+        lead({ id: "new-blank-phone", phone: "  ", assigned_to: "  " }),
         lead({ id: "new-null-phone", phone: null }),
         lead({ id: "converted", status: "converted" }),
         lead({ id: "closed", status: "closed" }),
@@ -142,9 +144,12 @@ describe("리드 상태 MKT 반영 저장소", () => {
       const leads = await repo.getLeadsForCompassContactSync()
 
       // created_at·last_inflow_at 도 싣는다 — 판정이 "문의보다 오래된 Compass 상태"를 거르는 기준(없으면 null).
+      // 전화·담당은 빈 글자를 null 로 접는다. 전환·종료는 대상이 아니다.
       expect(leads).toEqual([
-        { id: "new-with-phone", phone: "010-1234-5678", status: "new", created_at: "2026-09-01T00:00:00.000Z", last_inflow_at: null },
-        { id: "contacted-with-phone", phone: "010-1234-5678", status: "contacted", created_at: "2026-09-01T00:00:00.000Z", last_inflow_at: null },
+        { id: "new-with-phone", phone: "010-1234-5678", status: "new", created_at: "2026-09-01T00:00:00.000Z", last_inflow_at: null, assigned_to: null },
+        { id: "contacted-with-phone", phone: "010-1234-5678", status: "contacted", created_at: "2026-09-01T00:00:00.000Z", last_inflow_at: null, assigned_to: "kim.cs" },
+        { id: "new-blank-phone", phone: null, status: "new", created_at: "2026-09-01T00:00:00.000Z", last_inflow_at: null, assigned_to: null },
+        { id: "new-null-phone", phone: null, status: "new", created_at: "2026-09-01T00:00:00.000Z", last_inflow_at: null, assigned_to: null },
       ])
       expect(table.from).toHaveBeenCalled()
     })
@@ -156,6 +161,75 @@ describe("리드 상태 MKT 반영 저장소", () => {
       const leads = await repo.getLeadsForCompassContactSync()
 
       expect(leads.map((row) => row.id)).toEqual(["dup", "other"])
+    })
+  })
+
+  describe("applyCompassLeadOwnerSync", () => {
+    it("담당이 비어 있는 행만 채운다 — 그사이 사람이 고른 담당은 그대로 두고, 채운 행만 돌려준다", async () => {
+      const table = fakeLeadsTable([
+        lead({ id: "a" }),
+        lead({ id: "b", assigned_to: "kim.cs" }),
+        lead({ id: "c", assigned_to: null }),
+        lead({ id: "d" }),
+      ])
+      const repo = await loadRepository(table)
+
+      const result = await repo.applyCompassLeadOwnerSync([
+        { id: "a", to: "jin.somang" },
+        { id: "b", to: "jin.somang" },
+        { id: "c", to: "hwang.chanwoo" },
+        { id: "a", to: "hwang.chanwoo" }, // 같은 리드가 두 번 — 먼저 온 담당 한 번만
+      ])
+
+      expect(result).toEqual({
+        assigned: [
+          { id: "a", to: "jin.somang" },
+          { id: "c", to: "hwang.chanwoo" },
+        ],
+        stoppedEarly: false,
+      })
+      expect(table.rows.map((row) => [row.id, row.assigned_to ?? null])).toEqual([
+        ["a", "jin.somang"],
+        ["b", "kim.cs"],
+        ["c", "hwang.chanwoo"],
+        ["d", null],
+      ])
+      // 담당별 UPDATE 하나씩 — 둘 다 `assigned_to is null` 조건을 건다(fake 테이블의 is 필터가 b 를 걸러 냈다)
+      expect(table.updates.map((update) => update.values)).toEqual([{ assigned_to: "jin.somang" }, { assigned_to: "hwang.chanwoo" }])
+    })
+
+    it("빈 입력이면 DB 를 만지지 않는다", async () => {
+      const table = fakeLeadsTable([lead({ id: "a" })])
+      const repo = await loadRepository(table)
+      expect(await repo.applyCompassLeadOwnerSync([])).toEqual({ assigned: [], stoppedEarly: false })
+      expect(table.from).not.toHaveBeenCalled()
+    })
+
+    it("UPDATE 실패는 partial 을 담아 던진다 — 실패 전까지 채운 행이 남는다", async () => {
+      const table = fakeLeadsTable([lead({ id: "a" }), lead({ id: "c" })], { failUpdateCall: 2, failError: { message: "owner denied" } })
+      const repo = await loadRepository(table)
+
+      await expect(
+        repo.applyCompassLeadOwnerSync([
+          { id: "a", to: "jin.somang" },
+          { id: "c", to: "hwang.chanwoo" },
+        ])
+      ).rejects.toMatchObject({ name: "CompassLeadOwnerSyncError", partial: { assigned: [{ id: "a", to: "jin.somang" }] } })
+    })
+
+    it("shouldContinue 가 false 면 다음 담당 덩어리를 시작하지 않는다(stoppedEarly)", async () => {
+      const table = fakeLeadsTable([lead({ id: "a" }), lead({ id: "c" })])
+      const repo = await loadRepository(table)
+      let calls = 0
+      const result = await repo.applyCompassLeadOwnerSync(
+        [
+          { id: "a", to: "jin.somang" },
+          { id: "c", to: "hwang.chanwoo" },
+        ],
+        { shouldContinue: () => calls++ < 1 }
+      )
+      expect(result).toEqual({ assigned: [{ id: "a", to: "jin.somang" }], stoppedEarly: true })
+      expect(table.rows.find((row) => row.id === "c")?.assigned_to ?? null).toBeNull()
     })
   })
 

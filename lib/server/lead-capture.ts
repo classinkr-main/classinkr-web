@@ -19,6 +19,7 @@ import {
 } from "@/lib/repositories/leads"
 import { upsertSubscriber } from "@/lib/repositories/marketing"
 import { getResolvedSettings } from "@/lib/repositories/settings"
+import { compassLeadPushTarget, isCompassPushSource, pushLeadToCompass } from "@/lib/server/compass-lead-push"
 import { postJson } from "@/lib/server/post-json"
 import { isWebhookEnabled } from "@/lib/webhook-settings"
 import { parseEventToken, setEventToken } from "@/lib/types/event-metrics"
@@ -668,6 +669,19 @@ export async function runLeadCaptureEffects(
 
   if (toggles.externalForwards && settings.channelTalkWebhookUrl && isWebhookEnabled(settings.webhookEnabled, "channelTalkWebhookUrl")) {
     deliveryTasks.push(sendToChannelTalk(body, settings.channelTalkWebhookUrl))
+  }
+
+  // Compass(mkt.classin.co.kr)에도 찍는다 — 공개 폼 리드만, 저장이 됐을 때만(어드민 리드 id 가 Compass 쪽 링크 키다). env 둘이 없으면 조용히 건너뛴다.
+  // 재문의 병합이면 kind=reinflow — Compass 가 같은 사람을 재유입으로 올린다. 실패는 다른 외부 전달과 같이 errors(warnings·인시던트)로.
+  // 설계는 lib/server/compass-lead-push.ts 머리말과 Compass 저장소 ADR-0087.
+  if (toggles.externalForwards && stored && savedLeadId && isCompassPushSource(body.source, body.leadMagnet) && compassLeadPushTarget()) {
+    deliveryTasks.push(
+      pushLeadToCompass(body, {
+        leadId: savedLeadId,
+        kind: merged ? "reinflow" : "created",
+        eventId: conversionEventId ?? `lead:${savedLeadId}`,
+      })
+    )
   }
 
   if (toggles.subscriberUpsert && body.email && body.marketingConsent === true) {
