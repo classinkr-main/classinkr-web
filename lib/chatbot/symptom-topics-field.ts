@@ -25,6 +25,7 @@ export const FIELD_SYMPTOM_TOPICS: SymptomTopic[] = [
       "시험이 내일인데 녹화본이 이틀째 처리 중이면 정말 급하시죠. 수업이 끝난 뒤 처리 시간이 조금 걸리는 건 정상이지만, 이틀째 그대로라면 기다리기만 할 상황이 아니에요. 바로 담당자 확인을 요청해 주세요.",
     branches: [
       "아래 [실시간 상담 연결]로 코스 이름, 수업 날짜, '녹화본 처리 지연·시험 일정 급함'을 함께 남겨 주시면 담당자가 그 녹화본부터 확인합니다. 처리 완료 시점은 확인 전에 약속드리기 어려워요.",
+      "기다리는 동안 학생들은 그 수업의 학습 보고서에서 판서를 먼저 볼 수 있어요.",
     ],
     handoff: true,
     suggestedQuestions: ["녹화본이 안 보여요", "녹화 다운로드가 안 돼요", "담당자 상담으로 이어주세요"],
@@ -37,7 +38,10 @@ export const FIELD_SYMPTOM_TOPICS: SymptomTopic[] = [
     requireSymptom: false,
     category: "troubleshooting",
     doc: { category: "admin", slug: "recording-file-troubleshooting" },
-    steps: [{ heading: "먼저 확인할 것", pick: [1, 2, 0] }],
+    steps: [
+      { heading: "먼저 확인할 것", pick: [1, 2, 0] },
+      { heading: "수업 녹화 데이터에서 녹화본 찾기", pick: [0] },
+    ],
     intro:
       "선생님이 녹화를 켰다고 했는데 녹화본이 안 보이면, 아직 처리 중이거나 목록 필터에 가려진 경우일 수 있어요. 누구 실수로 단정하기 전에 아래부터 봐 주세요.",
     branches: ["그래도 없으면 담당자가 그 수업의 녹화 기록을 확인해 드려요. 다만 복구할 수 있다고 미리 약속드리기는 어려워요."],
@@ -65,7 +69,7 @@ export const FIELD_SYMPTOM_TOPICS: SymptomTopic[] = [
     ],
     branches: [
       { text: "온라인 학생 얼굴은 스테이지에 올라와 카메라를 켠 학생만 수업 녹화에 담겨요. 스테이지 밖 학생은 카메라와 마이크가 꺼져 있어 녹화에도 나오지 않습니다.", unless: /(?:제|내|선생님)\s*얼굴\s*(?:은|이)?\s*(?:안\s*나|없|빠)/ },
-      "한쪽만 보였다면 다시보기에서 다른 녹화를 골라 보세요. 그래도 한쪽만 있으면 상담원이 그 수업의 녹화 기록을 확인해 드릴게요.",
+      "둘 다 켰다면 관리자 대시보드에서 그 수업의 [관리] > [수업 녹화 데이터]를 열어 보세요. [동영상 화면]에 '교실'(수업 녹화)과 '현장 녹화' 클립이 따로 있어요. 한쪽만 있으면 상담원이 그 수업의 녹화 기록을 확인해 드릴게요.",
     ],
     en: "Class recording captures the ClassIn screen (board, materials, and the on-stage camera area); field recording captures what the classroom camera sees. Online students appear only if they're on stage with their camera on.",
     suggestedQuestions: ["현장 녹화 카메라 설정 어떻게 해요?", "학생을 무대에 올리는 방법 알려줘", "녹화본이 안 보여요"],
@@ -114,10 +118,10 @@ export const FIELD_SYMPTOM_TOPICS: SymptomTopic[] = [
     doc: { category: "teacher", slug: "course-activities" },
     steps: [{ heading: "녹화 수업과 학습 자료 올리기", pick: [2, 5] }],
     intro:
-      "속상하셨겠어요. 막을 수 있는 범위부터 솔직하게 말씀드리면, 화면을 찍거나 다른 기기로 녹화하는 것까지 완전히 막는 방법은 없어요. 대신 퍼질 여지를 줄이는 설정은 있습니다.",
+      "속상하셨겠어요. 막을 수 있는 범위부터 솔직하게 말씀드리면, 화면을 찍거나 다른 기기로 녹화하는 것까지 완전히 막는다고 보장할 수는 없어요. 녹화는 워터마크로 저작권을 보호하고, 퍼질 여지를 줄이는 설정이 따로 있습니다.",
     branches: [
       "수업 녹화 다시보기는 관리자 대시보드 [기관 관리] > [코스 관리] > [설정]의 [다시 보기 유효 기간]과 [시청 횟수 제한]으로 볼 수 있는 기간과 횟수를 좁혀 주세요.",
-      "재생 화면 링크는 로그인 없이 열리니 링크로 보내지 말고 코스 안에서만 보게 해 주세요.",
+      "재생 화면 링크는 로그인 없이 열리니 링크로 보내지 말고 코스 안에서만 보게 해 주세요. 학습 자료로 올린 파일은 [고급 설정]의 파일 다운로드 허용을 꺼 둘 수 있어요.",
       "이미 퍼진 영상 처리나 추가 보호 기능이 필요하면 아래 [실시간 상담 연결]로 담당자와 상의해 주세요.",
     ],
     handoff: true,
@@ -357,13 +361,9 @@ export const FIELD_SYMPTOM_TOPICS: SymptomTopic[] = [
     requireSymptom: false,
     howto: true,
     category: "classroom",
-    doc: { category: "software", slug: "classroom-tools" },
-    steps: [{ heading: "판서하고 자료를 보여 줄 때", pick: [0] }],
-    intro:
-      "종이로 뽑지 않아도 돼요. 수업 중 본 칠판에 쓴 판서는 수업이 끝나면 학습 보고서에 담겨 학생에게 가서, 학생이 휴대폰 클래스인 앱에서 볼 수 있어요.",
-    branches: [
-      "수업 밖에서 따로 나눠 주고 싶으면 판서를 EDB 파일로 저장해 두고, 코스의 [학습 자료]로 올려 학생이 보게 할 수 있어요.",
-    ],
+    doc: { category: "hardware", slug: "board-writing-touch" },
+    steps: [{ heading: "수업이 끝난 뒤 판서 넘기기", pick: [0, 1] }],
+    intro: "종이로 뽑지 않아도 돼요. 칠판에 쓴 판서는 파일로 저장하거나 휴대폰으로 바로 받을 수 있어요.",
     suggestedQuestions: ["보고서는 어디서 봐요?", "드라이브에 자료가 안 올라가요", "전자칠판 터치가 안 돼요"],
   },
   {
@@ -549,12 +549,12 @@ export const FIELD_SYMPTOM_TOPICS: SymptomTopic[] = [
     requireSymptom: false,
     category: "hardware",
     doc: { category: "hardware", slug: "board-basic-operation" },
-    steps: [{ heading: "A/S를 접수할 때 보낼 것", pick: [0, 2] }],
+    steps: [{ heading: "A/S를 접수할 때 보낼 것", pick: [0, 1, 2] }],
     intro:
       "화면에 줄이 생기면 먼저 보드를 완전히 껐다 켜 보시고, 입력(소스) 버튼으로 내장 컴퓨터(OPS)와 HDMI를 바꿔도 같은 자리에 줄이 남는지 봐 주세요. 그래도 줄이 남으면 화면 쪽 문제일 수 있어 A/S로 접수해야 해요. 접수할 때는 이것을 함께 보내 주세요.",
     branches: [
       "무상 A/S는 구매일부터 기본 1년(프로모션 적용 시 최대 2년)이라, 구매일을 함께 확인해 두시면 좋아요. 보드를 직접 열거나 분해하지는 마세요.",
-      "아래 [실시간 상담 연결]로 바로 접수할 수 있어요.",
+      "아래 [실시간 상담 연결]로 바로 접수할 수 있어요. 보드 번호 같은 정보는 채팅창에 적지 말고 상담원 안내에 따라 전달해 주세요.",
     ],
     handoff: true,
     suggestedQuestions: ["전자칠판 보증 기간이 궁금해요", "전자칠판 터치가 안 돼요", "전자칠판 화면이 안 켜져요"],
@@ -824,7 +824,7 @@ export const FIELD_SYMPTOM_TOPICS: SymptomTopic[] = [
     doc: { category: "teacher", slug: "lesson-option-concepts" },
     steps: [{ heading: "수업 녹화와 현장 녹화", pick: [2, 5] }],
     intro:
-      "녹화 해상도를 직접 고르는 설정이나 해상도 상한은 공개 안내에 수치로 나와 있지 않아 단정하지 않을게요. 대신 화질에 영향을 주는 확인 사항은 이렇습니다.",
+      "녹화본 해상도를 직접 고르는 설정은 공개 안내에서 찾을 수 없어, 해상도가 제한되는지 단정하지 않을게요. 대신 화질에 영향을 주는 확인 사항은 이렇습니다.",
     branches: [
       "칠판 글씨를 또렷하게 남기는 게 목적이라면, 교실 뒤편 카메라보다 [수업 녹화](교실 화면 녹화)를 함께 켜 두는 편이 확실해요. 판서와 띄운 자료가 화면 그대로 남습니다.",
       "카메라는 칠판에 가깝고 정면에 가까운 자리에 두고, 창문이나 조명이 카메라 쪽을 비추는 자리는 피해 주세요.",
@@ -981,7 +981,7 @@ export const FIELD_SYMPTOM_TOPICS: SymptomTopic[] = [
     doc: { category: "software", slug: "classroom-tools" },
     steps: [
       { heading: "판서하고 자료를 보여 줄 때", pick: [0, 2] },
-      { heading: "학생이 직접 풀고 답하게 하려면", pick: [1] },
+      { heading: "학생이 직접 풀고 답하게 하려면", pick: [1, 0] },
     ],
     intro:
       "학생에게 판서가 안 보이고 나만 보였다면, 지금 쓰던 곳이 학생과 함께 보는 본 칠판이었는지, 수업 전 준비실이었는지부터 나눠 봐 주세요. 칠판 영역은 이렇게 나뉩니다.",
@@ -1168,9 +1168,10 @@ export const FIELD_SYMPTOM_TOPICS: SymptomTopic[] = [
       /(?:mac|맥|macos|맥북|아이맥).{0,30}(?:업데이트|업그레이드).{0,30}(?:권한|실패|안\s*(?:돼|되)|안돼|안되|막|오류)|(?:업데이트|설치).{0,20}권한\s*(?:부족|없|오류)/,
     requireSymptom: false,
     category: "troubleshooting",
-    doc: { category: "start", slug: "app-update-cache-reinstall" },
-    steps: [{ heading: "그래도 안 되면 지우고 다시 설치하기", pick: [5, 4] }],
-    intro: "앱 안의 업데이트가 '권한 부족'으로 실패하면, 지금 앱을 지우고 공식 홈페이지 설치 파일로 다시 까는 쪽이 확실해요.",
+    doc: { category: "start", slug: "pc-install" },
+    steps: [{ heading: "맥에 설치하기", pick: [0, 1, 2, 3, 4] }],
+    intro:
+      "앱 안의 업데이트가 '권한 부족'으로 실패하면, [응용 프로그램] 폴더의 ClassIn을 휴지통으로 옮긴 뒤 공식 홈페이지 설치 파일로 다시 까는 쪽이 확실해요. 다시 설치할 때는 이 순서예요.",
     branches: [
       "새로 받은 파일이 열리지 않으면 맥 보안 설정이 막는 경우일 수 있어요. 시스템 설정의 [개인정보 보호 및 보안]에 클래스인 차단 안내가 떴는지 확인해 주세요.",
     ],
@@ -1190,6 +1191,7 @@ export const FIELD_SYMPTOM_TOPICS: SymptomTopic[] = [
       "작년에 사신 보드가 아직 무상 A/S 기간인지는 구매일과 적용된 프로모션에 따라 달라서 여기서 단정할 수 없어요. 기준은 이렇습니다.",
     branches: [
       "정확한 기간은 구매 계약서나 거래명세서의 구매일로 확인하시고, A/S 접수는 아래 [실시간 상담 연결]이나 홈페이지 상담 채널로 하시면 돼요. 접수할 때 구매일과 증상이 처음 생긴 날을 알려 주시면 빨라요.",
+      "접수할 때 필요한 보드 번호는 오른쪽 전원 버튼을 누른 뒤 [Setting] → [about]에서 볼 수 있어요. 채팅창에는 적지 말고 상담원 안내에 따라 전달해 주세요.",
       "보드를 직접 열거나 분해하지는 마세요. 조치 방법은 접수 뒤 안내해 드립니다.",
     ],
     handoff: true,
@@ -1242,7 +1244,10 @@ export const FIELD_SYMPTOM_TOPICS: SymptomTopic[] = [
     ],
     intro:
       "칠판(전자칠판)에 깔린 수업 프로그램은 클래스인 X(ClassIn X)예요. 그림을 누르면 하얀 화면만 나오다 꺼지면 아래 순서로 해 보세요. 재설치는 학원 관리 담당자와 함께 하시면 더 편해요.",
-    branches: ["다시 설치하면 로그인을 새로 해야 하니 로그인 정보를 미리 챙겨 두세요."],
+    branches: [
+      "앱이 잠깐이라도 열리면 먼저 화면 아래 톱니바퀴 > [설정 더 보기] > [소프트웨어 정보]에서 최신 버전으로 올려 보세요. 그래도 같으면 다시 설치합니다.",
+      "다시 설치하면 로그인을 새로 해야 하니 로그인 정보를 미리 챙겨 두세요.",
+    ],
     suggestedQuestions: ["전자칠판 화면이 안 켜져요", "전자칠판 터치가 안 돼요", "업데이트하고 나서 안 열려요"],
   },
 ]

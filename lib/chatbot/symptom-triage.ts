@@ -1755,7 +1755,7 @@ export function buildSymptomTopicAnswer(
     .map((step, index) => `${index + 1}. ${step}`)
     .join("\n")
   const branches = pickBranches(topic, text)
-  const answer = [variant?.intro ?? topic.intro, stepBlock, ...(options.compact ? branches.slice(0, 1) : branches), closing]
+  const answer = [variant?.intro ?? topic.intro, stepBlock, ...(options.compact ? branches.slice(0, 2) : branches), closing]
     .filter(Boolean)
     .join("\n\n")
   const sourceHeading = variant?.heading ?? (variant ? variant.steps[0]?.heading : undefined) ?? topic.heading ?? topic.steps[0]?.heading ?? "요약"
