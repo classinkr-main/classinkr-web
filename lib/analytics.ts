@@ -53,7 +53,7 @@ export type LeadFormType = "contact" | "demo" | "event" | "showroom" | "checkout
 export type NewsletterFormType = "newsletter" | "resource" | "event_alert" | "lead_magnet"
 
 type AnalyticsParamValue = string | number | boolean | null | undefined
-type AnalyticsParams = Record<string, AnalyticsParamValue>
+export type AnalyticsParams = Record<string, AnalyticsParamValue>
 type GoogleAnalyticsEventName =
   | EventNames
   | "generate_lead"
@@ -385,6 +385,27 @@ export interface TrackEventOptions {
   skipMarketingPixels?: boolean
 }
 
+// gtag 이벤트는 GA4 권장 이벤트명으로 푸시 — 분석 동의 확인은 호출부가 한다. window.gtag 는 layout
+// 부트스트랩이 늘 정의하므로, 동의 전에 부르면 큐에 쌓였다가 태그가 로드될 때 그대로 재생된다.
+// content_group 도 page_location 처럼 이벤트마다 싣는다: /checkout 은 PageViewTracker 가
+// 없어 소프트 내비게이션으로 들어오면 gtag('set') 문맥이 직전 페이지 그룹에 머문다.
+function sendGa4Event(eventName: EventNames, eventParams: AnalyticsParams) {
+  if (INTERNAL_ONLY_EVENTS.has(eventName) || !window.gtag) return
+  const ga4Event = getGa4Event(eventName, eventParams)
+  const ga4Params = {
+    page_location: currentPageLocation(),
+    content_group: getContentGroup(window.location?.pathname),
+    ...ga4Event.params,
+  }
+  window.gtag("event", ga4Event.name, ga4Params)
+  // 이메일을 받고 내준 자료(gate=email)는 "자료 신청"으로 한 번 더 센다 — GA4 주요 이벤트
+  // lead_magnet_signup 이고, Google Ads 리드 캠페인(C2) 맞춤 목표가 이것을 입찰에 쓴다.
+  // 제품 소개서처럼 이메일 없이 받는 다운로드(gate 없음)는 file_download 로만 남는다.
+  if (eventName === "download_materials" && eventParams.gate === "email") {
+    window.gtag("event", "lead_magnet_signup", ga4Params)
+  }
+}
+
 export const trackEvent = (
   eventName: EventNames,
   params?: AnalyticsParams,
@@ -415,24 +436,9 @@ export const trackEvent = (
     sendInternalTracking(eventName, eventParams)
   }
 
-  // gtag 이벤트는 GA4 권장 이벤트명으로 푸시 — 발화 여부는 Consent Mode v2 상태가 결정한다.
-  // content_group 도 page_location 처럼 이벤트마다 싣는다: /checkout 은 PageViewTracker 가
-  // 없어 소프트 내비게이션으로 들어오면 gtag('set') 문맥이 직전 페이지 그룹에 머문다.
-  if (!INTERNAL_ONLY_EVENTS.has(eventName) && window.gtag) {
-    const ga4Event = getGa4Event(eventName, eventParams)
-    const ga4Params = {
-      page_location: currentPageLocation(),
-      content_group: getContentGroup(window.location?.pathname),
-      ...ga4Event.params,
-    }
-    window.gtag("event", ga4Event.name, ga4Params)
-    // 이메일을 받고 내준 자료(gate=email)는 "자료 신청"으로 한 번 더 센다 — GA4 주요 이벤트
-    // lead_magnet_signup 이고, Google Ads 리드 캠페인(C2) 맞춤 목표가 이것을 입찰에 쓴다.
-    // 제품 소개서처럼 이메일 없이 받는 다운로드(gate 없음)는 file_download 로만 남는다.
-    if (eventName === "download_materials" && eventParams.gate === "email") {
-      window.gtag("event", "lead_magnet_signup", ga4Params)
-    }
-  }
+  // gtag(GA4) 이벤트는 분석 동의가 있을 때만 부른다. 동의 전 page_view 는 PageViewTracker 가
+  // 동의 순간 replayPageViewAfterConsent 로 한 번 채운다.
+  if (consent.analytics) sendGa4Event(eventName, eventParams)
 
   if (options?.skipMarketingPixels) return
 
@@ -478,13 +484,17 @@ export const trackEvent = (
 }
 
 /**
- * 내부 적재만 다시 보낸다(gtag·픽셀 없음). 동의를 나중에 준 방문자의 현재 페이지뷰를
- * 내부 DB 에 남기는 용도 — GA4 page_view 를 한 번 더 쏘면 같은 페이지가 두 번 집계된다.
+ * 동의를 나중에 준 방문자의 현재 페이지뷰를 한 번 채운다 — 내부 적재 + GA4 page_view.
+ * 첫 발화 때는 분석 동의가 없어 trackEvent 가 둘 다 건너뛰었으므로 두 번 집계되지 않는다.
+ * dataLayer 푸시는 첫 발화 때 이미 나갔고 page_view 는 픽셀 매핑이 없어 여기서 다시 보내지 않는다.
+ * gtag.js 가 아직 로드 전이면 layout 부트스트랩 큐에 쌓였다가 GA4 config 뒤 재생된다.
  */
-export const trackInternalEvent = (eventName: EventNames, params?: AnalyticsParams) => {
+export const replayPageViewAfterConsent = (params: AnalyticsParams) => {
   if (typeof window === "undefined") return
   if (!currentChoice().analytics) return
-  sendInternalTracking(eventName, normalizeEventParams(eventName, params))
+  const eventParams = normalizeEventParams("page_view", params)
+  sendInternalTracking("page_view", eventParams)
+  sendGa4Event("page_view", eventParams)
 }
 
 /* ── 리드 접수 ──────────────────────────────────────────────────────────── */
@@ -620,13 +630,14 @@ export const trackNaverConversion = (type: string | null = NAVER_LEAD_CONVERSION
 /**
  * Google Ads 전환 이벤트 발화. `label`은 Google Ads 전환 액션의 전환 라벨이며,
  * send_to = `${GOOGLE_ADS_ID}/${label}` 형태로 전송된다. 라벨이 없으면 아무 것도 하지 않는다.
- * 실제 발화 여부는 Consent Mode v2(ad_storage) 상태가 결정한다.
+ * 마케팅 동의가 없으면 부르지 않는다(동의 전 호출은 gtag 큐에 쌓였다가 태그 로드 때 재생된다).
  */
 export const trackAdsConversion = (
   label: string | null | undefined,
   params?: AnalyticsParams
 ) => {
   if (typeof window === "undefined" || !label || !window.gtag) return
+  if (!currentChoice().marketing) return
 
   window.gtag("event", "conversion", {
     send_to: `${GOOGLE_ADS_ID}/${label}`,

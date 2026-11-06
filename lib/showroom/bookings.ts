@@ -98,6 +98,8 @@ export interface NormalizedShowroomBooking {
    */
   attribution: LeadAttributionPayload
   anonymousId: string | null
+  /** 맞춤형 광고 활용 동의(두 칸 모두 = true). 체크 칸 없는 옛 번들은 undefined — false 로 지어내지 않는다. */
+  adConsent?: boolean
 }
 
 export type ShowroomBookingValidation =
@@ -173,6 +175,7 @@ export function normalizeShowroomBooking(raw: unknown): ShowroomBookingValidatio
       memo: normalizeMultilineText(body.memo, MAX_MEMO_LENGTH),
       attribution: sanitizeLeadAttribution(body),
       anonymousId: normalizeText(body.anonymousId, MAX_NAME_LENGTH),
+      adConsent: typeof body.adConsent === "boolean" ? body.adConsent : undefined,
       sourcePage: normalizeText(body.sourcePage, MAX_SOURCE_PAGE_LENGTH),
     },
   }
@@ -360,6 +363,7 @@ async function mirrorToLeadQueue(
       // 없을 때만 수집기의 currentPage 로 물러난다. tests/showroom/bookings.test.ts 가 이 순서를 고정한다.
       currentPage: booking.sourcePage ?? booking.attribution.currentPage,
       anonymousId: booking.anonymousId ?? undefined,
+      adConsent: booking.adConsent,
     },
     { suppressLeadCreatedNotification: true }
   )

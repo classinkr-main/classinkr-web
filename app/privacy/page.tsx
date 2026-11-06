@@ -1,38 +1,310 @@
 import Link from "next/link"
 
-import { LegalArticle, LegalList, LegalNotice, LegalSection } from "@/components/legal/LegalArticle"
+import {
+  LegalArticle,
+  LegalList,
+  LegalNotice,
+  LegalSection,
+  LegalTable,
+} from "@/components/legal/LegalArticle"
+import { AD_CONSENT_DETAILS, AD_CONSENT_TITLE } from "@/lib/consent/ad-consent"
+import { PRIVACY_EFFECTIVE } from "@/lib/legal/privacy-dates"
 import { createPublicMetadata } from "@/lib/seo"
 
 export const metadata = createPublicMetadata({
   title: "개인정보처리방침",
   description:
-    "Classin 웹사이트와 도입 상담, 뉴스레터, Meta 연동 과정에서 처리되는 개인정보 항목, 이용 목적, 보관 기간, 삭제 요청 방법을 안내합니다. ClassIn 소프트웨어에서 처리되는 개인정보는 글로벌 운영사 EEO의 개인정보처리방침을 함께 따릅니다.",
+    "Classin 웹사이트의 상담·쇼룸 예약·도입 신청·행사·뉴스레터에서 처리하는 개인정보 항목, 이용 목적, 맞춤형 광고 활용 동의(선택), 제3자 제공·처리 위탁·국외 이전, 쿠키, 보관 기간, 삭제 요청 방법을 안내합니다. ClassIn 소프트웨어에서 처리되는 개인정보는 글로벌 운영사 EEO의 개인정보처리방침을 함께 따릅니다.",
   path: "/privacy",
 })
+
+const linkClass = "font-semibold text-fg-accent underline underline-offset-4"
+const EEO_PRIVACY_URL = "https://www.classin.com/agreement/?type=privacy"
+
+const GOOGLE = "Google LLC"
+const GOOGLE_CONTACT = "googlekrsupport@google.com"
+const GOOGLE_COUNTRY = "미국 등 Google 시설이 있는 국가"
+const NEOCRM = "北京仁科互动网络技术有限公司 (销售易 운영사, Beijing Ingage App Internet Technology)"
+const NEOCRM_ITEMS = "고객사 정보(기관명, 담당자 이름·휴대폰 번호·이메일), 상담·계약·매출 기록"
+const CONSENT_BASIS_HASH = "쿠키 설정 '마케팅' 동의, 해시값은 맞춤형 광고 활용 동의(개인정보 보호법 제17조제1항제1호)"
+const ENTRUST_BASIS = "처리위탁·보관, 이 방침에 공개(제28조의8제1항제3호가목)"
+
+const THIRD_PARTY_ROWS = [
+  [
+    `${GOOGLE} (Google Ads)`,
+    "광고 성과 측정, 맞춤형 광고",
+    "쿠키 식별값, 접속 IP, 브라우저 정보, 방문 페이지, 전환 정보(신청 종류, 리드·예약 번호, 행사 이름, 시각). 맞춤형 광고 활용 동의 시 이메일·휴대폰 번호의 해시값",
+    "해시값: 일치하지 않은 값은 삭제, 일치한 값은 암호화 보관(Google Ads 데이터 처리 약관). 그 밖의 정보: Google 개인정보처리방침",
+    CONSENT_BASIS_HASH,
+  ],
+  [
+    "Meta Platforms, Inc.",
+    "광고 성과 측정, 광고 대상 선정",
+    "Meta 쿠키 식별값(_fbp, _fbc), 접속 IP, 브라우저 정보, 페이지 주소, 이벤트(페이지 조회, 상담 신청, 자료 신청), 리드 번호와 그 해시값, 신청 출처와 유형, 원생 규모 구간, 쇼룸 방문 희망 일시와 인원. 맞춤형 광고 활용 동의 시 이메일·휴대폰 번호의 해시값",
+    "연락처 해시값: 매칭 후 삭제. 그 밖의 정보: Meta 개인정보처리방침",
+    CONSENT_BASIS_HASH,
+  ],
+  [
+    "주식회사 카카오 (카카오 픽셀)",
+    "광고 성과 측정",
+    "방문 페이지 주소, 이벤트 종류, 쿠키 식별값, 접속 IP, 브라우저 정보",
+    "카카오 개인정보 처리방침",
+    "쿠키 설정 '마케팅' 동의(개인정보 보호법 제17조제1항제1호)",
+  ],
+]
+
+const ENTRUST_ROWS = [
+  ["Vercel Inc.", "웹사이트 호스팅과 서버 실행", "웹사이트로 주고받는 모든 정보"],
+  ["Supabase Pte. Ltd.", "데이터베이스, 로그인, 파일 저장", "이 방침에 적은 모든 항목"],
+  ["Plus Five Five, Inc. (Resend)", "이메일 발송", "이메일 주소, 이름, 소속 기관, 직책, 메일 내용"],
+  [
+    `${GOOGLE} (Google Analytics)`,
+    "웹사이트 이용 통계",
+    "쿠키 식별값, 접속 IP, 브라우저와 기기 정보, 방문 페이지, 이벤트",
+  ],
+  [
+    `${GOOGLE} (Google Workspace)`,
+    "사내 알림 메일, 설명회 참석 명단 관리, 일정 관리",
+    "이름, 소속 기관, 직책, 휴대폰 번호, 이메일, 참석 지역과 회차, 소식 수신 선택값, 일정 참석자 이메일",
+  ],
+  [
+    `${GOOGLE} (Google Gemini API)`,
+    "챗봇 답변 생성, 사내 상담 지원, 자동 메일 문구 작성",
+    "챗봇 질문과 대화, 상담 내용과 고객이 보낸 이미지, 메일 받는 분의 이름·소속 기관·직책·원생 규모",
+  ],
+  [NEOCRM, "고객 관리(상담·계약 이력 관리)", NEOCRM_ITEMS],
+  [
+    "주식회사 채널코퍼레이션 (채널톡)",
+    "상담 채팅, 챗봇 상담원 연결",
+    "이름, 이메일, 휴대폰 번호, 질문과 대화 내용, 챗봇 식별값, 페이지 주소",
+  ],
+  ["토스페이먼츠 주식회사", "온라인 결제", "이름, 이메일, 휴대폰 번호, 주문과 결제 정보"],
+  [
+    "솔라피 주식회사 (재수탁: 주식회사 카카오 — 알림톡 전달)",
+    "문자와 카카오 알림톡 발송",
+    "휴대폰 번호, 접수 안내 내용(방문 일시, 신청 품목과 금액, 희망일)",
+  ],
+]
+
+const OVERSEAS_ROWS = [
+  [
+    `${GOOGLE} — Google Ads (${GOOGLE_CONTACT})`,
+    GOOGLE_COUNTRY,
+    "쿠키 식별값, 접속 IP, 브라우저 정보, 방문 페이지, 전환 정보. 맞춤형 광고 활용 동의 시 이메일·휴대폰 번호의 해시값",
+    "'마케팅' 동의 뒤 페이지를 이용할 때와 신청 직후, 브라우저의 Google 태그가 전송",
+    "광고 성과 측정, 맞춤형 광고",
+    "해시값: 불일치 값은 삭제, 일치 값은 암호화 보관(Google Ads 데이터 처리 약관). 그 밖의 정보: Google 개인정보처리방침",
+    "동의(제17조제1항제1호, 제28조의8제1항제1호): 쿠키 '마케팅' 동의, 해시값은 맞춤형 광고 활용 동의",
+  ],
+  [
+    `${GOOGLE} — Google Analytics (${GOOGLE_CONTACT})`,
+    GOOGLE_COUNTRY,
+    "쿠키 식별값, 접속 IP, 브라우저와 기기 정보, 방문 페이지와 유입 경로, 이벤트",
+    "'분석' 동의 뒤 페이지를 이용할 때, 브라우저의 Google 태그가 전송",
+    "웹사이트 이용 통계",
+    "Google Analytics 데이터 보관 설정 기간",
+    "동의(제28조의8제1항제1호): 쿠키 '분석' 동의",
+  ],
+  [
+    `${GOOGLE} — Google 태그 관리자 (${GOOGLE_CONTACT})`,
+    GOOGLE_COUNTRY,
+    "접속 IP, 브라우저 정보, 페이지 이벤트",
+    "'분석' 또는 '마케팅' 동의 뒤 공개 페이지(결제 화면 제외)를 열 때, 브라우저가 전송",
+    "태그 관리",
+    "Google 개인정보처리방침",
+    "동의(제28조의8제1항제1호): 쿠키 '분석' 또는 '마케팅' 동의",
+  ],
+  [
+    `${GOOGLE} — Google Workspace (${GOOGLE_CONTACT})`,
+    GOOGLE_COUNTRY,
+    "이름, 소속 기관, 직책, 휴대폰 번호, 이메일, 참석 지역과 회차, 소식 수신 선택값",
+    "접수할 때, 회사 서버가 API로 전송",
+    "사내 알림, 설명회 명단과 일정 관리",
+    "위탁 계약이 끝날 때까지. 개별 기록은 6항 기간이 지나면 지웁니다.",
+    ENTRUST_BASIS,
+  ],
+  [
+    `${GOOGLE} — Google Gemini API (${GOOGLE_CONTACT})`,
+    GOOGLE_COUNTRY,
+    "챗봇 질문과 대화, 상담 내용과 이미지, 메일 받는 분의 이름·소속 기관·직책·원생 규모",
+    "질문하거나 상담을 지원하거나 문구를 만들 때, 회사 서버가 API로 전송",
+    "챗봇 답변, 사내 상담 지원, 메일 문구 작성",
+    "위탁 계약이 끝날 때까지. Google 쪽 기록 보관은 Gemini API 약관을 따릅니다.",
+    "처리위탁, 이 방침에 공개(제28조의8제1항제3호가목)",
+  ],
+  [
+    "Meta Platforms, Inc. (1 Meta Way, Menlo Park, CA 94025, USA)",
+    "미국",
+    "Meta 쿠키 식별값, 접속 IP, 브라우저 정보, 페이지 주소, 이벤트, 리드 번호와 그 해시값, 신청 출처와 유형, 원생 규모 구간, 쇼룸 방문 희망 일시와 인원. 맞춤형 광고 활용 동의 시 이메일·휴대폰 번호의 해시값",
+    "'마케팅' 동의 뒤 페이지를 이용할 때 Meta 픽셀이 전송, 신청 직후 회사 서버가 Meta 전환 API로 전송",
+    "광고 성과 측정, 광고 대상 선정",
+    "연락처 해시값: 매칭 후 삭제. 그 밖의 정보: Meta 개인정보처리방침",
+    "동의(제17조제1항제1호, 제28조의8제1항제1호): 쿠키 '마케팅' 동의, 해시값은 맞춤형 광고 활용 동의",
+  ],
+  [
+    `${NEOCRM} (privacyofficer@neocrm.com)`,
+    "중국",
+    NEOCRM_ITEMS,
+    "상담·계약 정보를 고객 관리 시스템에 기록할 때, 네트워크로 전송",
+    "고객 관리(상담·계약 이력 관리)",
+    "위탁 계약이 끝날 때까지. 개별 기록은 6항 기간",
+    ENTRUST_BASIS,
+  ],
+  [
+    "Vercel Inc. (privacy@vercel.com)",
+    "미국 (서버 실행 위치: 서울)",
+    "웹사이트로 주고받는 모든 정보",
+    "웹사이트를 이용할 때, 네트워크로 전송",
+    "웹사이트 호스팅과 서버 실행",
+    "위탁 계약이 끝날 때까지. 접속 로그는 Vercel 보관 기간",
+    ENTRUST_BASIS,
+  ],
+  [
+    "Supabase Pte. Ltd. (privacy@supabase.com)",
+    "싱가포르 (저장 위치: 서울 리전. 2026년 9월 14일까지의 백업 사본: 싱가포르 리전)",
+    "이 방침에 적은 모든 항목",
+    "저장할 때, 네트워크로 전송",
+    "데이터베이스, 로그인, 파일 저장",
+    "위탁 계약이 끝날 때까지. 개별 기록은 6항 기간. 싱가포르 리전의 백업 사본은 쓰기를 막아 두었고, 6항의 백업 파기 기준에 따라 파기합니다.",
+    ENTRUST_BASIS,
+  ],
+  [
+    "Plus Five Five, Inc. — Resend (support@resend.com)",
+    "미국",
+    "이메일 주소, 이름, 소속 기관, 직책, 메일 내용",
+    "메일을 보낼 때, 회사 서버가 API로 전송",
+    "이메일 발송",
+    "위탁 계약이 끝날 때까지. 발송 기록은 Resend 보관 기간",
+    "처리위탁, 이 방침에 공개(제28조의8제1항제3호가목)",
+  ],
+]
+
+const COOKIE_ROWS = [
+  ["cln_consent (391일)", "쿠키", "회사", "쿠키 선택값, 선택 일시, 정책 버전", "쿠키 선택 기억", "항상 (필수)"],
+  [
+    "cln_aid (391일)",
+    "쿠키",
+    "회사",
+    "무작위 익명 식별값",
+    "방문 통계, 신청 전 활동을 신청 기록과 연결",
+    "'분석' 동의. 끄면 바로 지움",
+  ],
+  [
+    "광고 유입 정보",
+    "브라우저 저장소",
+    "회사",
+    "캠페인 정보(utm 값), 광고 클릭 식별값(gclid, fbclid, msclkid, ttclid), 네이버 검색광고 파라미터, 첫 방문·현재·이전 페이지 주소",
+    "신청이 어느 광고에서 왔는지 확인",
+    "항상",
+  ],
+  [
+    "classinkr_chatbot_anonymous_id",
+    "브라우저 저장소",
+    "회사",
+    "챗봇 식별값",
+    "챗봇 대화 이어가기, 채널톡 상담 연결",
+    "챗봇을 쓸 때",
+  ],
+  [
+    "Google 태그 (Google Analytics 4, Google Ads)",
+    "자바스크립트, 쿠키",
+    GOOGLE,
+    "쿠키 식별값, 접속 IP, 브라우저와 기기 정보, 방문 페이지와 유입 경로, 이벤트, 전환 정보",
+    "이용 통계('분석'), 광고 성과 측정과 맞춤형 광고('마케팅')",
+    "'분석' 또는 '마케팅'에 동의한 뒤에만 불러옵니다. 이용 통계는 '분석', 광고 전환은 '마케팅' 동의 때만 보냅니다.",
+  ],
+  [
+    "Google 태그 관리자",
+    "자바스크립트",
+    GOOGLE,
+    "접속 IP, 브라우저 정보, 페이지 이벤트",
+    "태그 관리",
+    "'분석' 또는 '마케팅' 동의 뒤, 공개 페이지(결제 화면 제외)",
+  ],
+  [
+    "Meta 픽셀",
+    "자바스크립트, 쿠키(_fbp, _fbc)",
+    "Meta Platforms, Inc.",
+    "페이지 주소, 이전 페이지, 이벤트, 쿠키 식별값, 접속 IP, 브라우저 정보, 7항의 신청 정보",
+    "광고 성과 측정, 광고 대상 선정",
+    "'마케팅' 동의",
+  ],
+  [
+    "카카오 픽셀",
+    "자바스크립트",
+    "주식회사 카카오",
+    "방문 페이지 주소, 이벤트 종류, 쿠키 식별값, 접속 IP, 브라우저 정보",
+    "광고 성과 측정",
+    "'마케팅' 동의",
+  ],
+  [
+    "채널톡 상담창",
+    "자바스크립트",
+    "주식회사 채널코퍼레이션",
+    "챗봇 식별값, 페이지 주소, 상담 연결 때 질문과 대화 요약",
+    "상담 연결",
+    "'마케팅'에 동의하면 모든 페이지에서 미리 불러옵니다(상담창은 숨김). 또는 '실시간 상담 연결'을 누를 때",
+  ],
+  [
+    "Google 지도",
+    "외부 콘텐츠",
+    GOOGLE,
+    "접속 IP, 브라우저 정보, Google 쿠키",
+    "쇼룸 위치 표시",
+    "쇼룸 페이지와 문의 페이지를 열 때",
+  ],
+  [
+    "외부 글꼴과 이미지 (Google Fonts, jsDelivr, Unsplash)",
+    "외부 콘텐츠",
+    `${GOOGLE}, jsDelivr, Unsplash`,
+    "접속 IP, 브라우저 정보",
+    "일부 행사 소개 페이지의 글꼴, 블로그 이미지 표시",
+    "해당 페이지를 열 때",
+  ],
+]
+
+const CHANGE_ROWS = [
+  [
+    "이메일·휴대폰 번호 해시값을 광고 플랫폼에 보내는 것",
+    "적지 않음",
+    "맞춤형 광고 활용 동의(선택)를 받은 경우에만 Google·Meta에 보냄 (5항)",
+  ],
+  ["광고 플랫폼", "Meta 픽셀·카카오 픽셀·Google Analytics 이름만 적음", "Google Ads, Meta, 카카오와 보내는 항목을 적음 (4·7·10항)"],
+  ["제3자 제공", "항목 없음", "신설 (7항)"],
+  ["처리 위탁", "업체 이름만 적고 '등'으로 줄임", "수탁자별 업무와 항목을 표로 적음 (8항)"],
+  ["국외 이전", "항목 없음", "신설 (9항)"],
+  ["쿠키와 태그", "일반 설명", "태그별 표와 거부 방법 (10항)"],
+  [
+    "수집 항목",
+    "상담·뉴스레터·결제 중심",
+    "폼별 항목, 소셜 로그인, 챗봇, Meta 리드 광고, 통화 녹음, 광고 유입 정보 추가 (2항)",
+  ],
+  ["보유 기간", "상담 3년, 뉴스레터", "항목별 기간과 파기 방법 추가 (6항)"],
+  ["개인정보 보호책임자", "없음", "신설 (15항)"],
+]
 
 export default function PrivacyPage() {
   return (
     <LegalArticle
       eyebrow="Privacy Policy"
       title="개인정보처리방침"
-      description="이이오클래스인코리아 유한회사는 Classin 웹사이트와 상담, 계약, 마케팅, 고객지원 과정에서 필요한 최소한의 개인정보를 처리하며, 관련 법령과 내부 보호 기준에 따라 안전하게 관리합니다."
-      lastUpdated="2026년 6월 14일"
+      description="이이오클래스인코리아 유한회사는 Classin 웹사이트에서 상담, 계약, 마케팅, 고객 지원에 필요한 개인정보만 처리합니다. 이 방침에는 어떤 정보를 받는지, 어디에 쓰는지, 누구에게 맡기거나 보내는지, 언제 지우는지를 적었습니다."
+      lastUpdated={PRIVACY_EFFECTIVE.ko}
     >
       <LegalNotice>
         ClassIn 소프트웨어(앱) 자체에서 처리되는 개인정보는 글로벌 운영사 EEO의{" "}
-        <a
-          href="https://www.classin.com/agreement/?type=privacy"
-          target="_blank"
-          rel="noreferrer"
-          className="font-semibold underline underline-offset-4"
-        >
+        <a href={EEO_PRIVACY_URL} target="_blank" rel="noreferrer" className="font-semibold underline underline-offset-4">
           ClassIn 개인정보처리방침(글로벌)
         </a>
         을 함께 따릅니다. Meta 앱 심사와 관련된 데이터 삭제 요청 안내는{" "}
         <Link href="/data-deletion" className="font-semibold underline underline-offset-4">
           사용자 데이터 삭제 안내
         </Link>
-        에서 확인할 수 있습니다.
+        에서 확인할 수 있습니다. {PRIVACY_EFFECTIVE.ko}에 바뀐 내용은{" "}
+        <a href="#changes" className="font-semibold underline underline-offset-4">
+          16. 방침 변경과 시행일
+        </a>
+        에 있습니다.
       </LegalNotice>
 
       <LegalSection title="1. 개인정보 처리자">
@@ -51,10 +323,19 @@ export default function PrivacyPage() {
       <LegalSection title="2. 처리하는 개인정보 항목">
         <LegalList
           items={[
-            "도입 상담 및 문의: 이름, 소속 기관, 연락처, 이메일, 문의 내용, 상담 진행 기록",
-            "뉴스레터 및 마케팅 수신 동의: 이메일 주소, 수신 동의 일시, 수신 거부 기록",
-            "계약 및 결제: 계약 담당자 정보, 사업자 정보, 견적 및 결제 관련 정보, 세금계산서 발행에 필요한 정보",
-            "웹사이트 이용 기록: 접속 로그, 쿠키, 기기 및 브라우저 정보, 페이지 조회 및 전환 이벤트",
+            "상담 신청(상담 신청 창, 문의 페이지): 이름, 소속 기관, 직책, 원생 규모, 휴대폰 번호, 이메일, 문의 유형, 문의 내용, 희망 도입 시기, 상담 진행 기록",
+            "상담 통화 녹음: 직원이 상담 통화를 녹음한 경우 그 녹음 파일",
+            "Meta 리드 광고(인스턴트 양식)로 신청한 경우: Meta에서 받은 이름, 휴대폰 번호, 이메일, 양식 답변, 광고·캠페인 식별값",
+            "쇼룸 방문 예약: 기관명, 이름, 휴대폰 번호, 이메일, 직책, 원생 규모, 방문 희망 날짜와 시간, 방문 인원, 관심 분야, 메모",
+            "도입 신청: 기관명, 이름, 휴대폰 번호, 이메일, 직책, 원생 규모, 신청 품목과 금액, 희망일, 메모. 하드웨어 신청은 설치 방식과 설치·배송 주소도 받습니다.",
+            "행사·설명회 신청: 이름, 소속 기관, 휴대폰 번호, 이메일, 신청 행사. 설명회는 직책, 참석 지역과 회차, 소식 수신 선택값도 받습니다.",
+            "자료 신청과 뉴스레터: 이메일, 이름, 학원명, 직책, 원생 규모, 휴대폰 번호, 신청 자료, 수신 동의 일시, 수신 거부 기록",
+            "맞춤형 광고 활용 동의(선택): 동의 여부, 동의 일시, 동의 문구 버전. 동의하면 이메일과 휴대폰 번호를 해시값으로 바꿔 광고 플랫폼에 보냅니다. 회사는 해시값도 개인정보로 다룹니다. 자세한 내용은 5항에 있습니다.",
+            "회원 가입과 로그인: 이메일, 비밀번호, 이름, 마케팅 수신 선택값. 카카오 로그인은 카카오 회원 식별값, 이메일, 별명을 받습니다. 네이버 로그인은 네이버 회원 식별값, 이름, 별명, 이메일, 휴대폰 번호를 받습니다. Google·Apple 로그인은 계정 식별값과 이메일 등 각 서비스가 넘겨주는 계정 정보를 받습니다.",
+            "계약과 결제: 계약 담당자 정보, 사업자 정보, 견적과 결제 정보, 세금계산서 발행 정보. 온라인 결제 때는 이름, 이메일, 휴대폰 번호, 주문 정보를 받습니다.",
+            "챗봇과 상담 채팅: 질문과 대화 내용, 브라우저에 저장한 챗봇 식별값, 질문한 페이지 주소. 상담원 연결 때는 이름, 이메일, 휴대폰 번호를 받습니다.",
+            "광고 유입 정보: 캠페인 정보(utm 값), 광고 클릭 식별값(gclid, fbclid, msclkid, ttclid), 네이버 검색광고 파라미터, 첫 방문 페이지와 신청 페이지 주소, 이전 페이지 주소. 브라우저에 저장해 두었다가 신청할 때 함께 받습니다.",
+            "웹사이트 이용 기록: 접속 IP 주소, 브라우저와 기기 정보, 쿠키 식별값, 페이지 조회와 클릭 같은 이벤트, 쿠키 선택 기록(선택 항목, 정책 버전, 브라우저 정보, IP 주소의 해시값, 익명 식별값). 쿠키 설정에서 '분석'을 켜면 Google Analytics 쿠키 식별값(client_id, session_id)을 신청 기록과 함께 저장합니다.",
             "Meta 연동 또는 광고 API 이용 시: Meta가 제공하는 앱 범위 식별자, 연결된 페이지 또는 광고 자산 정보, 권한 토큰, 이벤트 처리 로그",
           ]}
         />
@@ -64,12 +345,7 @@ export default function PrivacyPage() {
         <p>
           ClassIn 앱과 웹 서비스를 이용하면 글로벌 운영사 EEO가 서비스 제공에 필요한 정보를 처리합니다. 주요
           항목은 다음과 같으며, 구체적인 처리 기준은 EEO의{" "}
-          <a
-            href="https://www.classin.com/agreement/?type=privacy"
-            target="_blank"
-            rel="noreferrer"
-            className="font-semibold text-fg-accent underline underline-offset-4"
-          >
+          <a href={EEO_PRIVACY_URL} target="_blank" rel="noreferrer" className={linkClass}>
             ClassIn 개인정보처리방침(글로벌)
           </a>
           을 따릅니다.
@@ -88,45 +364,139 @@ export default function PrivacyPage() {
       <LegalSection title="4. 이용 목적">
         <LegalList
           items={[
-            "도입 상담, 견적 산출, 계약 체결 및 고객 지원",
-            "제품 안내, 업데이트 공지, 뉴스레터 발송 및 수신 거부 처리",
-            "결제 처리, 세금계산서 발행, 정산 및 분쟁 대응",
-            "웹사이트 품질 개선, 보안 점검, 부정 이용 방지",
-            "Meta 광고 및 분석 도구 연동, 캠페인 성과 측정, 사용자가 요청한 Meta 관련 기능 제공",
+            "도입 상담, 쇼룸 방문 예약, 도입 신청 처리, 견적 산출, 계약 체결, 고객 지원",
+            "행사·설명회 신청 접수와 안내",
+            "자료 제공, 뉴스레터와 제품 소식 발송(수신에 동의한 분만), 수신 거부 처리",
+            "결제 처리, 세금계산서 발행, 정산, 분쟁 대응",
+            "회원 가입, 로그인, 계정 관리",
+            "챗봇 답변과 상담원 연결",
+            "고객 관리: 상담·계약 이력을 고객 관리 시스템에 기록",
+            "웹사이트 이용 통계와 품질 개선. 쿠키 설정에서 '분석'을 켠 경우에만 합니다.",
+            "보안 점검과 부정 이용 방지",
+            "광고 성과 측정과 맞춤형 광고: Google Ads, Meta, 카카오의 광고 태그를 씁니다. 쿠키 설정에서 '마케팅'을 켠 경우에만 합니다.",
+            "맞춤형 광고 활용(선택 동의): 이메일과 휴대폰 번호의 해시값을 Google(광고 성과 측정)과 Meta(광고 성과 측정, 광고 대상 선정)에 보냅니다. 5항의 동의를 받은 경우에만 합니다.",
+            "Meta 광고 및 분석 도구 연동, 사용자가 요청한 Meta 관련 기능 제공",
           ]}
         />
       </LegalSection>
 
-      <LegalSection title="5. 보관 기간">
+      <LegalSection id="ad-consent" title="5. 맞춤형 광고 활용 동의(선택)">
         <p>
-          개인정보는 수집 및 이용 목적이 달성되면 지체 없이 파기합니다. 다만 관계 법령에 따라 보관이
-          필요한 정보, 분쟁 대응에 필요한 최소 정보, 사용자가 별도로 동의한 정보는 해당 기간 동안 보관할
-          수 있습니다. 백업에 보관된 정보는 안전하게 격리한 뒤 삭제가 가능한 시점에 파기합니다.
+          상담 신청 창, 문의 페이지, 쇼룸 방문 예약, 행사 신청, 도입 신청 화면에 &lsquo;{AD_CONSENT_TITLE}&rsquo;
+          체크 칸이 두 개 있습니다. ① 맞춤형 광고를 위한 개인정보 제3자 제공(Google·Meta) ② 같은 정보의 국외
+          이전(미국 등)입니다. 두 칸 모두 처음에는 비어 있고, 뉴스레터 수신 동의와는 따로 받습니다.
+        </p>
+        <p>
+          두 칸을 모두 선택하고 쿠키 설정의 &lsquo;마케팅&rsquo;도 켠 경우에만 보냅니다. 하나라도 꺼져 있으면
+          보내지 않습니다. 동의하지 않아도 상담, 예약, 신청은 똑같이 처리됩니다.
+        </p>
+        <LegalList items={[...AD_CONSENT_DETAILS]} />
+        <LegalList
+          items={[
+            "같은 신호에 실리는 나머지 정보(신청 종류, 리드 번호, 시각, 쿠키 식별값, 접속 IP)는 7항에 있습니다.",
+            "Google에 보내는 해시값은 브라우저의 Google 태그에 설정되어 전환과 함께 갑니다. 회사는 전환을 보낸 뒤 이 값을 지우지만, 그 사이 같은 페이지에서 나가는 다른 Google 태그 요청에 함께 실릴 수 있습니다.",
+            "지금 신청별로 보내는 곳: 상담 신청 창 — Google, Meta. 문의 페이지 — Meta(문의 유형이 '도입 상담'이면 Google도). 행사 신청 — Meta. 쇼룸 방문 예약 — Google. 도입 신청 — 지금은 어느 곳에도 보내지 않습니다. 보내는 곳이 바뀌면 이 목록을 고칩니다.",
+            "고객 명단을 광고 플랫폼에 올리는 기능은 지금 쓰지 않습니다. 쓰게 되면 동의 문구를 고쳐 다시 동의를 받습니다.",
+            "회사가 남기는 기록: 동의 여부, 동의 일시, 동의 문구 버전. 해시값은 회사가 저장하지 않습니다.",
+            "철회: classinkr@classin.com 또는 문의 페이지로 요청하면 지체 없이 동의 기록을 '철회'로 바꾸고 그때부터 보내지 않습니다. 웹사이트 페이지 아래 '쿠키 설정'(결제·신청 화면 제외)에서 '마케팅'을 꺼도 그때부터 보내지 않습니다. 다음 신청에서 체크 칸을 비워 두면 그 신청부터 동의하지 않은 것으로 기록합니다.",
+            "이미 보낸 해시값은 받는 곳의 보유 기간을 따릅니다.",
+          ]}
+        />
+      </LegalSection>
+
+      <LegalSection title="6. 보유 기간과 파기">
+        <p>
+          개인정보는 목적을 달성하면 지체 없이 파기합니다. 전자 기록은 복구할 수 없는 방법으로 지웁니다. 법령에
+          따라 보관해야 하는 정보는 그 기간 동안 따로 보관합니다. 백업에 남은 정보는 격리해 두었다가 지울 수
+          있는 시점에 지웁니다.
         </p>
         <LegalList
           items={[
-            "상담 및 문의 기록: 마지막 상담일로부터 최대 3년",
+            "상담 신청, Meta 리드 광고 신청, 쇼룸 방문 예약, 도입 신청, 행사 신청 기록: 마지막 상담일로부터 최대 3년",
+            "고객 관리 시스템(销售易)의 고객사·상담·계약 기록: 해당 상담·계약 기록과 같은 기간",
+            "상담 통화 녹음 파일: 해당 상담 기록과 같은 기간",
+            "맞춤형 광고 활용 동의 기록(철회 기록 포함): 해당 상담 기록과 같은 기간",
+            "챗봇 대화와 상담 채팅 기록: 마지막 대화일로부터 최대 3년",
             "뉴스레터 구독 정보: 수신 거부 또는 삭제 요청 시까지",
-            "계약, 결제, 세무 관련 기록: 관련 법령에서 정한 기간",
-            "보안 로그 및 분석 로그: 목적 달성 후 통계화하거나 합리적인 보관 기간 이후 삭제",
+            "회원 계정 정보: 탈퇴 또는 삭제 요청 시까지",
+            "계약, 결제, 세무 기록(장부, 세금계산서와 증빙): 5년(국세기본법 제85조의3, 부가가치세법 제71조)",
+            "설명회 참석 명단(스프레드시트): 행사가 끝나면 파기합니다. 상담 기록으로 옮긴 정보는 상담 기록 기간을 따릅니다.",
+            "쿠키 선택값(cln_consent)과 익명 식별값(cln_aid): 브라우저에 391일(약 13개월) 저장합니다. cln_aid는 '분석'을 끄면 바로 지웁니다.",
+            "서버에 남는 쿠키 선택 기록: 선택일로부터 3년",
+            "보안 로그와 분석 로그: 목적을 달성하면 통계로 바꾸거나 지웁니다.",
+            "2026년 9월 14일까지의 데이터 백업 사본(Supabase 싱가포르 리전): 새 정보를 저장하지 않도록 쓰기를 막아 둔 백업입니다. 위 백업 기준에 따라 파기합니다.",
             "Meta 플랫폼 데이터: 사용자가 권한을 철회하거나 삭제를 요청하면 법령상 보관이 필요한 경우를 제외하고 삭제 또는 익명화",
           ]}
         />
       </LegalSection>
 
-      <LegalSection title="6. 제3자 도구와 처리 위탁">
+      <LegalSection title="7. 개인정보의 제3자 제공">
+        <p>회사는 아래 경우에만 개인정보를 제3자에게 제공합니다. 그 밖에는 법령에 근거가 있는 경우에만 제공합니다.</p>
         <p>
-          서비스 운영을 위해 클라우드 호스팅, 데이터베이스, 이메일, 결제, 분석, 고객 상담 도구를 사용할 수
-          있습니다. 주요 도구에는 Vercel, Supabase, Resend, Google Analytics/Tag Manager, Meta Pixel,
-          Kakao Pixel, Toss Payments, Channel Talk 등이 포함될 수 있습니다.
+          Google과 Meta는 매칭과 측정에서는 회사가 맡긴 처리자로 일합니다. 다만 각 사 약관상 자체 목적으로 쓰는
+          부분이 있어, 회사는 이 전송을 제3자 제공으로 보고 동의를 받습니다. Google과 Meta는 국외 사업자라 9항
+          국외 이전에도 적었습니다.
         </p>
-        <p>
-          각 도구는 서비스 제공, 보안, 결제, 통계 분석, 고객 응대 등 필요한 목적 범위 안에서만 사용되며,
-          회사는 처리 목적과 보관 범위를 최소화하기 위해 노력합니다.
-        </p>
+        <LegalTable headers={["제공받는 자", "목적", "항목", "보유 기간", "근거"]} rows={THIRD_PARTY_ROWS} />
       </LegalSection>
 
-      <LegalSection title="7. 아동의 개인정보">
+      <LegalSection title="8. 개인정보 처리 위탁">
+        <p>회사는 아래 업체에 개인정보 처리 업무를 맡깁니다. 수탁자가 바뀌면 이 표를 바로 고칩니다.</p>
+        <LegalTable headers={["수탁자", "맡기는 업무", "처리하는 정보"]} rows={ENTRUST_ROWS} />
+        <p>
+          주식회사 채널코퍼레이션은 일부 업무를 다른 업체(국외 업체 포함)에 다시 맡깁니다. 내용은{" "}
+          <a href="https://channel.io/ko/privacy" target="_blank" rel="noreferrer" className={linkClass}>
+            채널톡 개인정보 처리방침
+          </a>
+          에서 확인할 수 있습니다.
+        </p>
+        <p>국외 업체에 맡기는 업무는 9항에 국가와 기간을 함께 적었습니다.</p>
+      </LegalSection>
+
+      <LegalSection id="overseas" title="9. 개인정보의 국외 이전">
+        <p>회사는 아래와 같이 개인정보를 국외로 보내거나 국외 업체에 맡깁니다. 모든 전송은 암호화 통신을 씁니다.</p>
+        <p>
+          Google 서비스의 국가는 Google과 하위처리자의 시설이 있는 국가입니다. 데이터센터 목록은{" "}
+          <a
+            href="https://www.google.com/about/datacenters/locations/"
+            target="_blank"
+            rel="noreferrer"
+            className={linkClass}
+          >
+            Google 데이터센터 위치
+          </a>
+          에 있습니다.
+        </p>
+        <LegalTable
+          headers={["이전받는 자(연락처)", "국가", "이전 항목", "시기와 방법", "목적", "보유 기간", "근거"]}
+          rows={OVERSEAS_ROWS}
+        />
+        <LegalList
+          items={[
+            "해시값을 보내지 않으려면: 신청서의 '맞춤형 광고 활용 동의 (선택)' 체크 칸을 비워 두거나, 5항의 방법으로 철회하세요. 상담과 신청에는 불이익이 없습니다.",
+            "광고·통계 태그를 끄려면: 처음 뜨는 쿠키 안내에서 '필수만'을 누르거나, 웹사이트 페이지 아래 '쿠키 설정'에서 '분석'과 '마케팅'을 끄세요. 웹사이트 이용에는 불이익이 없습니다.",
+            "호스팅, 데이터베이스, 이메일, 고객 관리, 사내 업무 도구(Vercel, Supabase, Resend, 销售易, Google Workspace)는 웹사이트와 상담 기록을 저장·처리하는 데 꼭 필요합니다. 이전을 거부하면 상담 기록을 남길 수 없어 상담 진행이 어렵습니다. 전화로 상담해도 상담 기록은 같은 데이터베이스(Supabase)에 저장됩니다. 이미 이전된 정보의 삭제는 classinkr@classin.com으로 요청할 수 있습니다.",
+            "챗봇 대화는 챗봇을 쓸 때만 Gemini로 보냅니다. 상담 채팅 내용과 보낸 이미지, 자동 메일을 받는 분의 이름·소속 기관·직책·원생 규모는 상담 지원과 메일 문구 작성에 쓰여 챗봇을 쓰지 않아도 보낼 수 있습니다. 원하지 않으면 classinkr@classin.com으로 처리 정지를 요청하세요.",
+          ]}
+        />
+      </LegalSection>
+
+      <LegalSection id="cookies" title="10. 쿠키와 행태정보">
+        <p>
+          Classin 웹사이트는 쿠키, 브라우저 저장소, 외부 태그를 씁니다. 분석·마케팅 쿠키와 광고·통계 태그는 처음
+          뜨는 쿠키 안내에서 고른 대로만 켭니다. 다만 아래 표에서 켜지는 조건이 &lsquo;항상&rsquo;이거나
+          &lsquo;페이지를 열 때&rsquo;인 항목은 선택과 관계없이 동작합니다.
+        </p>
+        <LegalTable headers={["이름", "종류", "사업자", "수집 정보", "목적", "켜지는 조건"]} rows={COOKIE_ROWS} />
+        <p>
+          거부 방법: 쿠키 안내에서 &lsquo;필수만&rsquo;을 누르세요. 나중에 바꾸려면 웹사이트 페이지 아래
+          &lsquo;쿠키 설정&rsquo;을 누르세요. 브라우저 설정에서 쿠키를 막거나 지울 수도 있습니다. 이 경우 일부
+          기능이 동작하지 않을 수 있습니다.
+        </p>
+        <p>회사는 만 14세 미만 아동을 대상으로 맞춤형 광고를 하지 않습니다.</p>
+      </LegalSection>
+
+      <LegalSection title="11. 아동의 개인정보">
         <p>
           회사는 만 14세 미만 아동의 개인정보를 원칙적으로 수집하지 않으며, 수집이 필요한 경우 법정대리인의
           동의를 받아 처리합니다. 글로벌 ClassIn 제품은 미성년자(지역에 따라 만 16세 또는 만 13세 미만) 이용 시
@@ -134,68 +504,97 @@ export default function PrivacyPage() {
         </p>
       </LegalSection>
 
-      <LegalSection title="8. 쿠키와 분석 기술">
+      <LegalSection title="12. 정보주체의 권리">
         <p>
-          Classin 웹사이트는 접속 통계, 광고 성과 측정, 사용자 경험 개선을 위해 쿠키와 유사 기술을 사용할 수
-          있습니다. 사용자는 브라우저 설정에서 쿠키 저장을 제한하거나 삭제할 수 있습니다. 단, 일부 기능은
-          정상적으로 동작하지 않을 수 있습니다.
-        </p>
-      </LegalSection>
-
-      <LegalSection title="9. 정보주체의 권리">
-        <p>
-          사용자는 자신의 개인정보에 대해 열람, 정정, 삭제, 처리 정지, 동의 철회를 요청할 수 있습니다.
-          요청은 이메일 또는 문의 페이지를 통해 접수할 수 있으며, 회사는 본인 확인 후 관련 법령에 따라
+          사용자는 자신의 개인정보에 대해 열람, 정정, 삭제, 처리 정지, 동의 철회를 요청할 수 있습니다. 요청은
+          이메일 또는 문의 페이지를 통해 접수할 수 있으며, 회사는 본인 확인 후 관련 법령에 따라 지체 없이
           처리합니다.
         </p>
         <LegalList
           items={[
             <span key="email">
               이메일:{" "}
-              <a href="mailto:classinkr@classin.com" className="font-semibold text-fg-accent underline underline-offset-4">
+              <a href="mailto:classinkr@classin.com" className={linkClass}>
                 classinkr@classin.com
               </a>
             </span>,
             <span key="contact">
               문의 페이지:{" "}
-              <Link href="/contact#contact-form" className="font-semibold text-fg-accent underline underline-offset-4">
+              <Link href="/contact#contact-form" className={linkClass}>
                 /contact
               </Link>
             </span>,
             <span key="meta">
               Meta 관련 데이터 삭제 요청:{" "}
-              <Link href="/data-deletion" className="font-semibold text-fg-accent underline underline-offset-4">
+              <Link href="/data-deletion" className={linkClass}>
                 /data-deletion
               </Link>
             </span>,
+            <span key="ad-consent">
+              맞춤형 광고 활용 동의 철회: 이메일이나 문의 페이지로 요청하세요.{" "}
+              <a href="#ad-consent" className={linkClass}>
+                5항
+              </a>
+              에 처리 방법이 있습니다.
+            </span>,
+            "쿠키 선택 변경: 웹사이트 페이지 아래 '쿠키 설정'",
           ]}
         />
       </LegalSection>
 
-      <LegalSection title="10. 계정 해지와 데이터 삭제">
+      <LegalSection title="13. 계정 해지와 데이터 삭제">
         <p>
           ClassIn 개인 계정은 앱 설정의 계정 해지 메뉴에서 직접 삭제할 수 있으며, 기관 계정은 이메일로 삭제를
           요청할 수 있습니다. 계정 삭제는 되돌릴 수 없으며, 수업과 과제 기록, 채팅 내용, 클라우드 드라이브
           데이터 등 관련 정보가 합리적인 기간 안에 함께 삭제됩니다. Meta 연동 데이터와 마케팅 데이터 삭제는{" "}
-          <Link href="/data-deletion" className="font-semibold text-fg-accent underline underline-offset-4">
+          <Link href="/data-deletion" className={linkClass}>
             사용자 데이터 삭제 안내
           </Link>
           를 따릅니다.
         </p>
       </LegalSection>
 
-      <LegalSection title="11. 안전성 확보 조치">
+      <LegalSection title="14. 안전성 확보 조치">
         <p>
-          회사는 개인정보 접근 권한 관리, 전송 구간 암호화, 관리자 접근 제한, 로그 점검, 불필요한 정보의
-          삭제 또는 익명화 등 개인정보 보호를 위한 합리적인 관리적, 기술적 조치를 적용합니다.
+          회사는 개인정보 접근 권한 관리, 전송 구간 암호화, 관리자 접근 제한, 로그 점검, 불필요한 정보의 삭제
+          또는 익명화 등 개인정보 보호를 위한 합리적인 관리적, 기술적 조치를 적용합니다.
         </p>
       </LegalSection>
 
-      <LegalSection title="12. 방침 변경">
+      <LegalSection title="15. 개인정보 보호책임자와 고충 처리">
+        <p>개인정보 보호 문의, 열람·삭제 요청, 고충 처리는 아래에서 받습니다.</p>
+        <LegalList
+          items={[
+            "개인정보 보호책임자: 구옌 (대표자)",
+            <span key="email">
+              이메일:{" "}
+              <a href="mailto:classinkr@classin.com" className={linkClass}>
+                classinkr@classin.com
+              </a>
+            </span>,
+            "전화: 02-6958-8566",
+          ]}
+        />
+      </LegalSection>
+
+      <LegalSection id="changes" title="16. 방침 변경과 시행일">
+        <p>이 개인정보처리방침은 {PRIVACY_EFFECTIVE.ko}부터 적용합니다.</p>
         <p>
-          이 개인정보처리방침은 서비스, 법령, 운영 정책 변경에 따라 수정될 수 있습니다. 중요한 변경이 있는
-          경우 웹사이트 공지 또는 개별 안내를 통해 알립니다.
+          서비스, 법령, 운영 정책이 바뀌면 이 방침을 고칩니다. 처리 항목이나 목적이 바뀌면 개정 전 또는 개정과
+          동시에 바뀐 내용을 아래처럼 비교해 알립니다.
         </p>
+        <LegalTable headers={["항목", "이전 (2026년 6월 14일 방침)", "개정"]} rows={CHANGE_ROWS} />
+        <LegalList
+          items={[
+            `${PRIVACY_EFFECTIVE.ko} 개정: 맞춤형 광고 활용 동의(선택) 신설, Google Ads 명시, 광고 태그별 보내는 항목 명시, 처리 위탁 업체를 표로 공개, 제3자 제공·국외 이전·개인정보 보호책임자 항목 신설, 쿠키와 태그별 안내, 수집 항목과 보유 기간 구체화`,
+            <span key="prev">
+              이전 버전: 2026년 6월 14일 ~ {PRIVACY_EFFECTIVE.prevEndKo} 적용 —{" "}
+              <Link href="/privacy/2026-06-14" className={linkClass}>
+                이전 방침 보기
+              </Link>
+            </span>,
+          ]}
+        />
       </LegalSection>
     </LegalArticle>
   )
