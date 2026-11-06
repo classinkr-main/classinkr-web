@@ -1000,7 +1000,7 @@ export function ShowroomBookingForm({ interests }: Props) {
           <AdConsentCheckbox
             value={form.adConsent}
             onChange={(next) => update("adConsent", next)}
-            className="rounded-lg px-3 py-3 text-[12px]"
+            className="rounded-lg px-3 py-3 text-note"
           />
         </div>
 
