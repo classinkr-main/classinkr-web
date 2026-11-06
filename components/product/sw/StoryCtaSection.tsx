@@ -1,9 +1,9 @@
 import Link from "next/link"
-import { ArrowRight, Video, CircleDot, Upload, MessageCircle, type LucideIcon } from "lucide-react"
+import { ArrowRight, Check, Video, CircleDot, Upload, MessageCircle, type LucideIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Reveal } from "@/components/landing/Reveal"
 
-// 히어로 바로 아래 문제 제기 → 답 섹션(컴팩트). 왼쪽은 카피 + CTA, 오른쪽은 '지금 → Classin' 4행 대조 목록.
+// 히어로 바로 아래 문제 제기 → 답 섹션(컴팩트). 왼쪽은 카피 + CTA, 오른쪽은 '도구 4개 → Classin으로 한 번에' 대조.
 // 지면 paper, 장식·카운트업 없음, 왼쪽 정렬. 숫자(30+·10가지)는 바로 위 히어로와 겹쳐 두지 않는다.
 
 type Row = { verb: string; tool: string; icon: LucideIcon; unified: string }
@@ -32,9 +32,11 @@ export function StoryCtaSection({ ctaHref, ctaLabel, ctaSubLabel, onCtaClick }: 
                     <h2 id="sw-story-heading" className="mt-2 text-h2 text-fg-ink break-keep text-balance">
                         수업 하나에 도구만 네 개.
                         <br />
-                        <span className="underline decoration-2 underline-offset-[0.2em]">가르치는 일</span>에만 <span className="whitespace-nowrap">집중할 수 있다면?</span>
+                        <span className="underline decoration-2 underline-offset-[0.2em]">Classin으로 한 번에.</span>
                     </h2>
-                    <p className="mt-4 text-body text-fg-body break-keep">수업만을 위해 만든 플랫폼, 다음은 당신의 교실입니다.</p>
+                    <p className="mt-4 text-body-l text-fg-body break-keep">
+                        가르치는 일에만 집중할 수 있다면? 수업만을 위해 만든 플랫폼, 다음은 당신의 교실입니다.
+                    </p>
 
                     <div className="mt-8 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:gap-5">
                         <Button asChild size="cta" className="w-full sm:w-auto">
@@ -47,34 +49,40 @@ export function StoryCtaSection({ ctaHref, ctaLabel, ctaSubLabel, onCtaClick }: 
                     </div>
                 </div>
 
-                {/* 대조 목록: 따로 쓰던 도구(왼쪽, 흐림) → Classin 한 화면(오른쪽, 먹) */}
-                <div className="masthead">
-                    <div aria-hidden className="grid grid-cols-[1fr_auto_1fr] gap-4 pb-3 text-label">
-                        <span className="text-fg-muted">지금</span>
-                        <span className="w-4" />
-                        <span className="text-fg-ink">Classin 한 화면</span>
+                {/* 대조: 왼쪽은 따로 노는 도구 4행(hair로 끊김), 오른쪽은 끊김 없는 패널 하나(먹 테두리) = Classin 한 번에.
+                    한 격자에 행을 명시해 좌우 행 높이를 맞추고, 패널 면은 3열 1~5행을 덮는 배경 요소가 맡는다 */}
+                <div className="grid grid-cols-[1fr_auto_1fr] grid-rows-[auto_repeat(4,auto)] gap-x-3 sm:gap-x-4">
+                    <div aria-hidden className="col-start-3 row-span-5 row-start-1 border border-line-ink bg-surface-sheet" />
+
+                    <p className="col-start-1 row-start-1 self-end border-b border-line-hair pb-3 text-label text-fg-muted">지금 · 도구 4개</p>
+                    <div className="relative col-start-3 row-start-1 px-4 pb-3 pt-5 sm:px-5">
+                        <p className="text-label text-fg-muted">도구 1개</p>
+                        <p className="mt-1 text-h3 text-fg-ink break-keep">Classin으로 <span className="whitespace-nowrap">한 번에</span></p>
                     </div>
-                    <ul className="divide-y divide-line-hair border-t border-line-hair">
-                        {ROWS.map((row) => {
-                            const Icon = row.icon
-                            return (
-                                <li key={row.verb} className="grid grid-cols-[1fr_auto_1fr] items-center gap-4 py-4">
-                                    <div className="flex items-start gap-3">
-                                        <Icon aria-hidden className="mt-0.5 size-5 shrink-0 text-fg-muted" />
-                                        <div>
-                                            <p className="text-ui font-medium text-fg-muted break-keep">{row.verb}</p>
-                                            <p className="mt-0.5 text-note text-fg-muted break-keep">{row.tool}</p>
-                                        </div>
+
+                    {ROWS.map((row, i) => {
+                        const Icon = row.icon
+                        const gridRow = { gridRowStart: i + 2 }
+                        return (
+                            <div key={row.verb} className="contents">
+                                <div style={gridRow} className="col-start-1 flex items-start gap-3 border-b border-line-hair py-4">
+                                    <Icon aria-hidden className="mt-0.5 size-5 shrink-0 text-fg-muted" />
+                                    <div>
+                                        <p className="text-ui font-medium text-fg-muted break-keep">{row.verb}</p>
+                                        <p className="mt-0.5 text-note text-fg-muted break-keep">{row.tool}</p>
                                     </div>
-                                    <ArrowRight aria-hidden className="size-4 text-fg-muted" />
-                                    <p className="text-body-l font-semibold text-fg-ink break-keep">
+                                </div>
+                                <ArrowRight aria-hidden style={gridRow} className="col-start-2 size-4 self-center text-fg-muted" />
+                                <p style={gridRow} className={`relative col-start-3 flex items-center gap-2.5 self-stretch px-4 text-body-l font-semibold text-fg-ink break-keep sm:px-5 ${i === ROWS.length - 1 ? "pb-5" : ""}`}>
+                                    <Check aria-hidden className="size-[18px] shrink-0" />
+                                    <span>
                                         <span className="sr-only">{row.verb} 대신 </span>
                                         {row.unified}
-                                    </p>
-                                </li>
-                            )
-                        })}
-                    </ul>
+                                    </span>
+                                </p>
+                            </div>
+                        )
+                    })}
                 </div>
             </Reveal>
         </section>
