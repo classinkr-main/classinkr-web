@@ -2464,6 +2464,24 @@ function trimExcerptToSentence(excerpt: string) {
   return sentences && sentences.length > 0 ? sentences.join("").trim() : withoutEllipsis
 }
 
+// getStepCriteriaByCategory가 범주별 단계를 따로 갖고 있는 범주. 나머지는 일반 되묻기를 쓴다.
+const STEP_CRITERIA_CATEGORIES = new Set(["troubleshooting", "billing", "hardware", "onboarding", "admin", "classroom"])
+
+// 짧거나 대상이 모호한 질문("그거 받았는데 안 열림")에 되물을 말. 묻는 사람(학생·학부모 / 학원)에 맞는 예를 든다.
+function buildGeneralClarify(question: NormalizedQuestion) {
+  const text = question.redacted.toLowerCase()
+  const vagueRef = /그거|그게|그걸|그것|이거|저거|그\s*(?:파일|링크|앱)/.test(text)
+  const lead = vagueRef
+    ? "말씀하신 '그거'가 무엇인지 한 가지만 알려 주시면 바로 도와드릴게요."
+    : "어떤 상황인지 한 가지만 더 알려 주시면 바로 도와드릴게요."
+  const example = LEARNER_VOICE_RE.test(text) || /학생|애들|친구|수업\s*듣/.test(text)
+    ? "예를 들면 수업 들어가기, 다시보기, 숙제 내기, 앱 설치·로그인, 선생님이 보낸 파일 열기 가운데 어느 쪽인가요?"
+    : /샘들|선생님들|강사|원장|학원|관리자|직원|실장/.test(text)
+      ? "예를 들면 강사·학생 등록, 수업·녹화 설정, 저장 공간, 결제·요금, 전자칠판 가운데 어느 쪽인가요?"
+      : "예를 들면 수업 입장·소리·화면 같은 사용 문제, 녹화·숙제 같은 기능, 결제·요금, 도입 상담 가운데 어느 쪽인가요?"
+  return [lead, example]
+}
+
 // 학생·학부모 목소리의 질문. 이런 질문에는 영업형 되묻기("설치 장소, 희망 대수", "수업 전·중·후")를 붙이지 않는다.
 const LEARNER_VOICE_RE =
   /우리\s*(?:아이|애)|아이가|애가|딸이|아들이|학생인데|저\s*학생|쌤이|선생님이\s*(?:내|저|우리)|엄마가|엄마한테|숙제|과제|시험|다시\s*보기|다보기/
@@ -3078,17 +3096,21 @@ function composeAnswer(
     }
 
     const fallbackCriteria = getStepCriteriaByCategory(category)
+    // 분류가 안 된 질문에 "도입·운영·계정·결제 중 어디냐"를 되묻지 않는다. 묻는 사람에 맞는 예를 들어 하나만 묻는다.
+    const generalClarify = !needsConsultation && !STEP_CRITERIA_CATEGORIES.has(category) ? buildGeneralClarify(question) : null
     return {
-      answer: [
-        needsConsultation
-          ? "상담이 필요한 내용으로 확인했습니다."
-          : category === "troubleshooting"
-            ? "원인을 바로 단정하기보다 상황을 조금만 더 좁히는 게 좋겠습니다."
-            : category === "billing" || category === "hardware"
-              ? "계약, 결제, 장비 상태에 따라 달라질 수 있어 지금은 확정해서 말하기 어렵습니다."
-            : "지금 바로 확정하기 어려워요. 현재 상황을 한 문장만 더 알려주세요.",
-        fallbackCriteria.steps.slice(0, 2).map((step, index) => `${index + 1}. ${step}`).join("\n"),
-      ].join("\n\n"),
+      answer: generalClarify
+        ? generalClarify.join("\n\n")
+        : [
+            needsConsultation
+              ? "상담이 필요한 내용으로 확인했습니다."
+              : category === "troubleshooting"
+                ? "원인을 바로 단정하기보다 상황을 조금만 더 좁히는 게 좋겠습니다."
+                : category === "billing" || category === "hardware"
+                  ? "계약, 결제, 장비 상태에 따라 달라질 수 있어 지금은 확정해서 말하기 어렵습니다."
+                  : "지금 바로 확정하기 어려워요. 현재 상황을 한 문장만 더 알려주세요.",
+            fallbackCriteria.steps.slice(0, 2).map((step, index) => `${index + 1}. ${step}`).join("\n"),
+          ].join("\n\n"),
       answerMode: needsHandoff ? "handoff" : "fallback",
       confidence: needsHandoff ? 0.4 : 0.15,
       needsHandoff,
