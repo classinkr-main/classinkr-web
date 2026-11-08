@@ -46,9 +46,11 @@ describe("persona eval set", () => {
     vi.restoreAllMocks()
   })
 
-  it("keeps 300 unique cases from 10 personas balanced by gender", () => {
+  it("keeps unique cases (60 per round) from 10 personas balanced by gender", () => {
     const ids = evalSet.cases.map((testCase) => testCase.id)
-    expect(new Set(ids).size).toBe(300)
+    expect(new Set(ids).size).toBe(ids.length)
+    expect(ids.length).toBeGreaterThanOrEqual(300)
+    expect(ids.length % 60).toBe(0)
     expect(evalSet.personas).toHaveLength(10)
     expect(evalSet.personas.filter((persona) => persona.gender === "여")).toHaveLength(5)
     expect(evalSet.personas.filter((persona) => persona.gender === "남")).toHaveLength(5)

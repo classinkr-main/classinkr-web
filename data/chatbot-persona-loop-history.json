@@ -1,0 +1,11 @@
+{
+ "description": "챗봇 페르소나 상호 평가 루프 회차 기록. 회차 N은 새 질문 묶음 N(수정 전 답)과 묶음 N-1(직전 수정 후 다시 받은 답)을 두 심사관이 따로 채점하고, 엇갈린 행만 서로 다시 본 뒤 둘 다 통과한 문항 수를 센다. 실행 순서는 scripts/chatbot-persona-loop/README.md.",
+ "rounds": [
+  { "round": 1, "date": "2026-11-06", "fresh": { "batch": 1, "pass": 1, "n": 60 }, "rerun": null, "agreement": 98.3, "kappa": 0.66 },
+  { "round": 2, "date": "2026-11-06", "fresh": { "batch": 2, "pass": 6, "n": 60 }, "rerun": { "batch": 1, "pass": 29, "n": 60 }, "agreement": 93.3, "kappa": 0.85 },
+  { "round": 3, "date": "2026-11-06", "fresh": { "batch": 3, "pass": 1, "n": 60 }, "rerun": { "batch": 2, "pass": 30, "n": 60 }, "agreement": 95.8, "kappa": 0.9 },
+  { "round": 4, "date": "2026-11-06", "fresh": { "batch": 4, "pass": 1, "n": 60 }, "rerun": { "batch": 3, "pass": 45, "n": 60 }, "agreement": 96.7, "kappa": 0.93 },
+  { "round": 5, "date": "2026-11-06", "fresh": { "batch": 5, "pass": 0, "n": 60 }, "rerun": { "batch": 4, "pass": 45, "n": 60 }, "agreement": 92.5, "kappa": 0.84 },
+  { "round": "5-final", "date": "2026-11-06", "fresh": null, "rerun": { "batch": 5, "pass": 37, "n": 60 }, "agreement": 86.7, "kappa": null }
+ ]
+}

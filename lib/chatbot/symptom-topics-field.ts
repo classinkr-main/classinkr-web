@@ -1492,6 +1492,8 @@ export const FIELD_SYMPTOM_TOPICS: SymptomTopic[] = [
     id: "homework-feedback-hidden",
     subject:
       /(?:첨삭|피드백|코멘트|빨간\s*(?:펜|표시)|펜으로\s*표시).{0,24}(?:안\s*보|안보|안\s*나|안\s*떠|없|사라|못\s*봐|못\s*본)/,
+    // "다시 냈더니 점수·피드백이 사라졌어요"는 재제출 주제(homework-score-lost)가 맡는다.
+    exclude: /다시\s*(?:냈|내니|제출)|고쳐\s*(?:냈|제출)|재\s*제출/,
     requireSymptom: false,
     category: "troubleshooting",
     doc: { category: "teacher", slug: "course-activities" },
