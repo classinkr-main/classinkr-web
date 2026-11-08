@@ -2474,7 +2474,7 @@ function buildGeneralClarify(question: NormalizedQuestion) {
   const lead = vagueRef
     ? "말씀하신 '그거'가 무엇인지 한 가지만 알려 주시면 바로 도와드릴게요."
     : "어떤 상황인지 한 가지만 더 알려 주시면 바로 도와드릴게요."
-  const example = LEARNER_VOICE_RE.test(text) || /학생|애들|친구|수업\s*듣/.test(text)
+  const example = LEARNER_VOICE_RE.test(text) || /학생|애들|친구|수업\s*듣|쌤/.test(text)
     ? "예를 들면 수업 들어가기, 다시보기, 숙제 내기, 앱 설치·로그인, 선생님이 보낸 파일 열기 가운데 어느 쪽인가요?"
     : /샘들|선생님들|강사|원장|학원|관리자|직원|실장/.test(text)
       ? "예를 들면 강사·학생 등록, 수업·녹화 설정, 저장 공간, 결제·요금, 전자칠판 가운데 어느 쪽인가요?"

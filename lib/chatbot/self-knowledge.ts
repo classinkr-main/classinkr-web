@@ -152,7 +152,7 @@ export const CHATBOT_SELF_KNOWLEDGE_ENTRIES: ChatbotSelfKnowledgeEntry[] = [
   {
     key: "emotional_concern",
     match:
-      /(?:잘\s*될까|걱정|불안|두려|힘들지|안\s*따라|이탈|기계치|적응|망칠까|귀찮|부담|복잡|헤맬|싫어할|의구심|의심|과연|충돌|혼란|과도기|꼬일까|기존\s*시스템|원래\s*쓰던|바꾸면|반발|반대(?!로)|이중\s*작업|두\s*번\s*입력|두번\s*입력)/i,
+      /(?:잘\s*될까|걱정|불안|두려|힘들지|안\s*따라|이탈|기계치|적응|망칠까|귀찮|부담|복잡|헤맬|싫어할|의구심|의심|과연|충돌|혼란|과도기|꼬일까|기존\s*시스템|원래\s*쓰던|(?:시스템|프로그램|툴|도구|플랫폼|클래스인|classin)\S{0,3}\s*바꾸면|반발|반대(?!로)|이중\s*작업|두\s*번\s*입력|두번\s*입력)/i,
     answer: [
       "새로운 도구의 도입은 당연히 낯설고 여러 걱정이 앞서실 수 있습니다. 특히 규모가 있는 학원일수록 기존 시스템(LMS, ERP 등)과의 충돌 여부나 강사 전환 과도기 피로감에 대해 신중해지는 것은 당연합니다.",
       "하지만 기존 방식(유인물 인쇄, 단순 화상 도구)을 고수하며 교재 준비와 행정 처리에 매일 쏟는 선생님들의 시간과 지점 확장 한계는 장기적으로 가장 큰 '숨은 기회비용'이 되기도 합니다. 클래스인은 기존 시스템을 허물지 않고 API 연동을 통해 '수업 도구 엔진'만 결합하여 강사들의 이중 입력 리소스를 즉시 줄여줍니다.",
@@ -235,17 +235,24 @@ export function findChatbotSelfKnowledgeEntry(question: string) {
     }
   }
   // "특정 학생의 채팅 기록"처럼 학원 데이터인 채팅·대화 기록은 챗봇과의 대화가 아니다.
-  const hasChatbotContext = CHATBOT_CONTEXT_RE.test(normalized.replace(STUDENT_RECORD_RE, " "))
+  const contextText = normalized.replace(STUDENT_RECORD_RE, " ")
+  // "아까·방금·기억"은 제품 이야기("아까 녹화한 기록")에도 흔해서, 제품 낱말이 없을 때만 챗봇과의 대화로 본다.
+  const hasChatbotContext =
+    CHATBOT_CONTEXT_RE.test(contextText) || (CHATBOT_WEAK_CONTEXT_RE.test(contextText) && !PRODUCT_NOUN_RE.test(contextText))
+  // "이 챗봇 안내대로 권한을 바꿨는데…"는 챗봇 자체가 아니라 제품 문제를 묻는 말이다.
+  const refersToEarlierBotAdvice = PRIOR_BOT_ADVICE_RE.test(contextText) && PRODUCT_NOUN_RE.test(contextText)
   const hasProductProblem = PRODUCT_PROBLEM_RE.test(normalized)
   return (
     CHATBOT_SELF_KNOWLEDGE_ENTRIES.find((entry) => {
       if (!entry.match.test(question)) return false
       // "화면 기록 권한", "수업 기록"처럼 제품 이야기에 섞인 단어로 챗봇 자기소개가 나가지 않게 한다.
-      if (CHATBOT_CONTEXT_REQUIRED_KEYS.has(entry.key) && !hasChatbotContext) return false
+      if (CHATBOT_CONTEXT_REQUIRED_KEYS.has(entry.key) && (!hasChatbotContext || refersToEarlierBotAdvice)) return false
       // 학원이 여는 학부모 설명회에 나눠 줄 자료를 묻는 말은 클래스인 행사 문의가 아니다.
       if (entry.key === "event_inquiry" && /자료|안내문|나눠\s*(?:드릴|줄)|배포/.test(normalized)) return false
       // 학원이 여는 설명회·행사를 클래스인으로 진행하는 방법(웹 라이브 명단, 칠판 화면 송출)은 기능 질문이다.
       if (entry.key === "event_inquiry" && EVENT_PRODUCT_USE_RE.test(normalized)) return false
+      // "설명회에서 그런 질문이 나오면…"처럼 행사를 지나가며 말한 것은 행사 문의가 아니다. 일정·신청을 물을 때만 쓴다.
+      if (entry.key === "event_inquiry" && !EVENT_ASK_RE.test(normalized)) return false
       if (entry.key === "emotional_concern") {
         // 도입·전환을 걱정하는 원장님 질문에만 쓴다. 학부모의 아이 걱정, 신입 실장의 실수 걱정,
         // 장애 증상 질문은 해당 안내로 보낸다(이 답은 도입 영업 문구다).
@@ -269,13 +276,23 @@ const CHATBOT_CONTEXT_REQUIRED_KEYS = new Set<ChatbotSelfKnowledgeEntry["key"]>(
   "model_boundary",
 ])
 
+// 상대(챗봇)를 부르는 말은 낱말로만 본다. '너무'의 '너', '있으니 제'의 '니'는 챗봇을 부르는 말이 아니다.
 const CHATBOT_CONTEXT_RE =
-  /너|넌|네가|니가|네\s|니\s|챗봇|봇|(?:ai|인공지능)\s*(?:챗봇|상담|너|넌)|상담\s*가이드|이\s*대화|대화\s*(?:내용|기록|이력)|채팅\s*(?:내용|기록)|(?:내|제)\s*(?:질문|대화|답변|채팅|상담)|상담\s*내용|지침|프롬프트|내가\s*(?:요청|물어|말|질문|뭐라)|나눈\s*(?:대화|이야기)|방금|아까|기억|내\s*이름|나에\s*대해|나를/i
+  /(?:^|[^가-힣])(?:너|넌|니|네)(?=[^가-힣]|가|는|도|한테|랑|의|$)|챗봇|(?<!로)봇|(?:ai|인공지능)\s*(?:챗봇|상담|너|넌)|상담\s*가이드|이\s*대화|대화\s*(?:내용|기록|이력)|채팅\s*(?:내용|기록)|(?:내|제)\s*(?:질문|대화|답변|채팅|상담)|상담\s*내용|지침|프롬프트|내가\s*(?:요청|물어|말|질문|뭐라)|나눈\s*(?:대화|이야기)|내\s*이름|나에\s*대해|나를/i
 
 const ADOPTION_CONTEXT_RE =
-  /도입|전환|바꾸면|바꿔도|갈아타|선생님들|강사들|강사진|적응|기존\s*(?:시스템|프로그램|방식|lms|erp)|원래\s*쓰던|lms|erp|이중\s*(?:작업|입력)|두\s*번\s*입력|반발|반대(?!로|편|쪽)/i
+  /도입|전환|(?:시스템|프로그램|툴|도구|플랫폼|클래스인|classin)\S{0,3}\s*(?:바꾸면|바꿔도)|갈아타|선생님들|강사들|강사진|적응|기존\s*(?:시스템|프로그램|방식|lms|erp)|원래\s*쓰던|lms|erp|이중\s*(?:작업|입력)|두\s*번\s*입력|반발|반대(?!로|편|쪽)/i
+
+const CHATBOT_WEAK_CONTEXT_RE = /방금|아까|기억/
+
+const PRIOR_BOT_ADVICE_RE = /(?:챗봇|(?<!로)봇|여기|이\s*채팅)\s*(?:에서|이|의|가)?\s*(?:안내|알려|말|답)\S*?\s*(?:대로|받고|받은)/
+
+const PRODUCT_NOUN_RE = /수업|녹화|숙제|과제|시험|칠판|보드|코스|학생|강사|결제|요금|계정|로그인|앱|화면|카메라|마이크|권한|공유/
 
 const STUDENT_RECORD_RE = /(?:학생|자녀|아이|수업|반|코스)\S*\s*(?:의\s*)?(?:채팅|대화)\s*(?:내용|기록)/g
+
+const EVENT_ASK_RE =
+  /일정|신청|참석|참가|언제|어디서|등록|열리|열려|개최|모집|(?:설명회|세미나|웨비나|행사|박람회|컨퍼런스|포럼)\s*(?:는|가|이|도)?\s*(?:있나요|있어요|있습니까|있나|있을까|해요|하나요|하세요|안내)/
 
 const EVENT_PRODUCT_USE_RE = /웹\s*라이브|라이브로|칠판|보드|프로젝터|hdmi|송출|중계|시청자|참석\s*확인|명단/i
 
