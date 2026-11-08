@@ -53,6 +53,19 @@ describe("conversation tone", () => {
     expect(applyToneToAnswer(original, tone, { offerHandoff: false })).toBe(original)
   })
 
+  it("counts how often a problem recurs apart from how often the visitor asked", () => {
+    expect(detectConversationTone("로그인할때마다 인증번호 받으래 오늘만 네번째임ㅡㅡ").repeated).toBe(false)
+    expect(detectConversationTone("이게 벌써 두 번째 문의입니다! 왜 아직도 안 됩니까!").repeated).toBe(true)
+    expect(detectConversationTone("또 문의드려요. 녹화가 또 끊겼어요").repeated).toBe(true)
+  })
+
+  it("reads '지난번 이 채팅에서'·'어제 이 챗봇이'·'저번에 여기서' as an earlier chat with the bot", () => {
+    expect(detectConversationTone("지난번 이 채팅에서 녹화본은 7일 뒤에 지워진다고 했잖아요").priorContext).toBe("bot")
+    expect(detectConversationTone("어제 이 챗봇이 S86 무게가 40kg라고 했잖아요").priorContext).toBe("bot")
+    expect(detectConversationTone("저번에 여기서 절전을 켜 두라고 하셔서 켰어요").priorContext).toBe("bot")
+    expect(detectConversationTone("원장님이 저번에 여기서 물어봤다던데요").priorContext).toBeNull()
+  })
+
   it("says it cannot see earlier chats only once", () => {
     const tone = detectConversationTone("지난주에 전화드렸을 때 기사님이 오신다고 했는데 아직도 안 오셨어요.")
     expect(tone.priorContext).toBe("inquiry")

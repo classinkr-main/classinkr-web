@@ -463,7 +463,8 @@ const TOKEN_WASTE_RE =
 function isUnsupportedAcademyPaymentFeatureQuestion(question: NormalizedQuestion) {
   const text = question.redacted.toLowerCase()
   // 체험·구독 요금의 자동 결제처럼 클래스인 자체 결제를 묻는 말은 학원비 결제 기능 문의가 아니다.
-  if (/체험|구독|요금제|해지|카드\s*등록|(?:내|제)\s*카드|웹\s*라이브|라이브|특강|시청/.test(text)) return false
+  // 카드 명세서에 찍힌 낯선 결제를 묻는 말도 클래스인 쪽 결제 확인이다.
+  if (/체험|구독|요금제|해지|카드\s*등록|(?:내|제)\s*카드|웹\s*라이브|라이브|특강|시청|명세서|빠져나|기억에?\s*없|정기\s*결제|자동\s*결제/.test(text)) return false
   return (
     ACADEMY_PAYMENT_ACTION_RE.test(text) &&
     ACADEMY_PAYMENT_SUBJECT_RE.test(text) &&
@@ -2470,13 +2471,14 @@ const STEP_CRITERIA_CATEGORIES = new Set(["troubleshooting", "billing", "hardwar
 // 짧거나 대상이 모호한 질문("그거 받았는데 안 열림")에 되물을 말. 묻는 사람(학생·학부모 / 학원)에 맞는 예를 든다.
 function buildGeneralClarify(question: NormalizedQuestion) {
   const text = question.redacted.toLowerCase()
-  const vagueRef = /그거|그게|그걸|그것|이거|저거|그\s*(?:파일|링크|앱)/.test(text)
+  // 긴 질문 속 '이거'는 대개 앞에서 이미 말한 것을 가리키므로 '그거가 뭐냐'고 되묻지 않는다.
+  const vagueRef = /그거|그게|그걸|그것|이거|저거|그\s*(?:파일|링크|앱)/.test(text) && text.replace(/\s+/g, "").length <= 40
   const lead = vagueRef
     ? "말씀하신 '그거'가 무엇인지 한 가지만 알려 주시면 바로 도와드릴게요."
     : "어떤 상황인지 한 가지만 더 알려 주시면 바로 도와드릴게요."
   const example = LEARNER_VOICE_RE.test(text) || /학생|애들|친구|수업\s*듣|쌤/.test(text)
     ? "예를 들면 수업 들어가기, 다시보기, 숙제 내기, 앱 설치·로그인, 선생님이 보낸 파일 열기 가운데 어느 쪽인가요?"
-    : /샘들|선생님들|강사|원장|학원|관리자|직원|실장/.test(text)
+    : /샘들|선생님들|강사|원장|학원|관리자|직원|실장|경리|세무|정산|마감/.test(text)
       ? "예를 들면 강사·학생 등록, 수업·녹화 설정, 저장 공간, 결제·요금, 전자칠판 가운데 어느 쪽인가요?"
       : "예를 들면 수업 입장·소리·화면 같은 사용 문제, 녹화·숙제 같은 기능, 결제·요금, 도입 상담 가운데 어느 쪽인가요?"
   return [lead, example]

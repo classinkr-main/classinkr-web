@@ -256,7 +256,13 @@ export function findChatbotSelfKnowledgeEntry(question: string) {
       if (entry.key === "emotional_concern") {
         // 도입·전환을 걱정하는 원장님 질문에만 쓴다. 학부모의 아이 걱정, 신입 실장의 실수 걱정,
         // 장애 증상 질문은 해당 안내로 보낸다(이 답은 도입 영업 문구다).
-        if (!ADOPTION_CONTEXT_RE.test(normalized) || hasProductProblem || PERSONAL_WORRY_RE.test(normalized)) {
+        // 이미 쓰고 있는 학원("들여놓은 지 3년")의 걱정은 도입 영업 문구가 아니라 제품 안내로 보낸다.
+        if (
+          !ADOPTION_CONTEXT_RE.test(normalized) ||
+          hasProductProblem ||
+          PERSONAL_WORRY_RE.test(normalized) ||
+          EXISTING_CUSTOMER_RE.test(normalized)
+        ) {
           return false
         }
       }
@@ -279,6 +285,8 @@ const CHATBOT_CONTEXT_REQUIRED_KEYS = new Set<ChatbotSelfKnowledgeEntry["key"]>(
 // 상대(챗봇)를 부르는 말은 낱말로만 본다. '너무'의 '너', '있으니 제'의 '니'는 챗봇을 부르는 말이 아니다.
 const CHATBOT_CONTEXT_RE =
   /(?:^|[^가-힣])(?:너|넌|니|네)(?=[^가-힣]|가|는|도|한테|랑|의|$)|챗봇|(?<!로)봇|(?:ai|인공지능)\s*(?:챗봇|상담|너|넌)|상담\s*가이드|이\s*대화|대화\s*(?:내용|기록|이력)|채팅\s*(?:내용|기록)|(?:내|제)\s*(?:질문|대화|답변|채팅|상담)|상담\s*내용|지침|프롬프트|내가\s*(?:요청|물어|말|질문|뭐라)|나눈\s*(?:대화|이야기)|내\s*이름|나에\s*대해|나를/i
+
+const EXISTING_CUSTOMER_RE = /들여놓은\s*지|들인\s*지|쓴\s*지\s*\S{0,4}(?:년|달|개월)|사용한\s*지|이미\s*(?:쓰고|사용)/
 
 const ADOPTION_CONTEXT_RE =
   /도입|전환|(?:시스템|프로그램|툴|도구|플랫폼|클래스인|classin)\S{0,3}\s*(?:바꾸면|바꿔도)|갈아타|선생님들|강사들|강사진|적응|기존\s*(?:시스템|프로그램|방식|lms|erp)|원래\s*쓰던|lms|erp|이중\s*(?:작업|입력)|두\s*번\s*입력|반발|반대(?!로|편|쪽)/i

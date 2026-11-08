@@ -23,6 +23,10 @@ const ANGRY_RE =
   /도대체|말이\s*(?:됩니까|돼요|되나요|됩니다|돼)|짜증|화가\s*(?:나|납)|(?<!대)화나(?:요|네|서|고|는|죠)|화났|어이(?:가)?\s*없|황당|아깝|최악|엉망|책임\s*(?:지|져)|언제\s*(?:고쳐|해결)|장난\s*(?:해|합)|돈\s*(?:낸|내고|냈)|환불해\s*(?:주|줘)|이게\s*뭐(?:예요|에요|야|냐|입니까)/
 const REPEATED_RE =
   /몇\s*번째|(?:두|세|네|다섯)\s*번째\s*(?:문의|연락|전화|말씀|요청|끊|튕|같은|똑같|이에요|예요|입니다)|(?:벌써|이번이|오늘만|이번\s*주만|이번\s*주에만)[^.!?]{0,8}(?:두|세|네|다섯)\s*번째|또\s*(?:문의|연락|물어|말씀)|계속\s*(?:문의|물어|말|연락)|여러\s*번\s*(?:문의|말|연락)|매번\s*(?:문의|물어|말|연락|똑같|같은|재부팅|인터넷)|번번이|몇\s*번을/
+// "오늘만 네 번째"처럼 횟수만 세는 말은 같은 일이 반복된다는 뜻이지, 여러 번 문의했다는 뜻이 아니다.
+// 문의·연락을 함께 말할 때만 반복 문의로 본다.
+const REPEAT_COUNT_RE = /몇\s*번째|(?:두|세|네|다섯)\s*번째/
+const INQUIRY_WORD_RE = /문의|연락|전화|말씀|요청|물어|물었|여쭤|상담|접수|얘기|말했|말하/
 // "어떻게 해야 하나요"만으로는 불안으로 보지 않는다(그냥 방법을 묻는 말이 많다).
 const ANXIOUS_RE =
   /어떡하|어떻게\s*해야\s*할지\s*(?:모르|막막)|걱정|불안|큰일|급해요|급합니다|급한데|당황|무서|난감|혹시\s*제가|혼났|속상|미치겠|울고/
@@ -33,7 +37,7 @@ const SLANG_RE = /ㅋㅋ|ㅠ|ㅜ|어케|어캐|ㄱㄱ|ㅇㅇ|뭐임|머임/
 // 들뜬 느낌표("첫 수업이었어요!!")는 화가 난 신호가 아니다.
 const POSITIVE_RE = /축하|설레|떨려|떨리|신나|기뻐|기쁘|좋아요|좋았|고마|감사|ㅋㅋ|ㅎㅎ|최고|first\s*class|첫\s*수업|드디어|good\s*job|great|awesome/i
 const PRIOR_BOT_RE =
-  /\byou\s+(?:told|said|mentioned)\b|\b(?:yesterday|last\s*time|earlier|before),?\s+you\b|(?:다른|이전|지난)\s*(?:창|채팅|대화|세션)|(?:아까|전에|지난번|저번).{0,12}(?:챗봇|봇|답변)|챗봇이\s*(?:알려|말해|답|안내)/
+  /\byou\s+(?:told|said|mentioned)\b|\b(?:yesterday|last\s*time|earlier|before),?\s+you\b|(?:다른|이전|지난)\s*(?:창|채팅|대화|세션)|(?:아까|전에|지난번|저번).{0,12}(?:챗봇|봇|답변)|챗봇이\s*(?:알려|말해|답|안내)|(?:지난번|저번|어제|아까|지난주|며칠\s*전)(?:에)?\s*(?:이\s*)?(?:여기서|여기에서|채팅에서|챗봇이|챗봇한테|챗봇에서|봇이)/
 const PRIOR_INQUIRY_RE =
   /(?:지난주|지난번|저번|전에|예전에|어제|며칠\s*전|지난달|아까|\d+\s*(?:주|일|달|개월)\s*전)[^.!?]{0,20}(?:문의|물어|물었|여쭤|말씀|연락(?:했|드렸|을\s*드|드린|이\s*왔|받)|접수|얘기|말했|말한|통화|안내받|알려\s*주신|알려준|알려\s*준|전화\s*(?:드렸|했|드린)|상담\s*(?:때|에서|받|했)|받은\s*(?:답변|안내|메일)|메일로\s*받)|(?:지난번|저번|어제|아까)\s*(?:에\s*)?(?:그거|그\s*거)|(?:지난번|저번|어제|아까)(?:이랑|하고|과|처럼)\s*(?:또|(?:똑같은|같은)\s*(?:문제|증상|오류|현상)|same)|(?:문의|접수)\s*했(?:잖아|는데|었는데|었잖아)|happened\s*again|same\s*problem|(?:^|\s)또\s*(?:그래요|그럽니다|그러네|됨|돼요|됐어요|안\s*(?:돼|되)(?!\S*면))|아직도\s*안\s*고쳐/
 const QUOTED_SPEECH_RE = /['"‘’“”][^'"‘’“”]{1,60}['"‘’“”]/g
@@ -49,7 +53,7 @@ export function detectConversationTone(question: string): ConversationTone {
   const words = text.split(/\s+/).filter(Boolean)
   const latinWords = words.filter((word) => /[a-z]{2,}/i.test(word) && !/[가-힣]/.test(word)).length
 
-  const repeated = REPEATED_RE.test(text)
+  const repeated = REPEATED_RE.test(text) && (INQUIRY_WORD_RE.test(text) || !REPEAT_COUNT_RE.test(text))
   const excitedNotAngry = POSITIVE_RE.test(text)
   return {
     // 느낌표 두 개 이상, 또는 "~입니까!" 같은 따지는 어미는 화가 난 신호로 본다(들뜬 느낌표는 뺀다).
@@ -111,7 +115,7 @@ export const HANDOFF_NOW_LINE =
 
 const EMPATHY_START_RE = /^(?:불편을|같은 문제로|많이 당황|죄송|걱정|괜찮)/
 // 답의 첫 문장이 이미 공감·사과로 시작하면 말투 계층이 첫마디를 또 붙이지 않는다.
-const EMPATHY_FIRST_SENTENCE_RE = /놀라|놀랐|당황|속상|답답|걱정|신경\s*쓰|불편|죄송|기다리셨|급하시|힘드셨|불안하|민망|곤란하|화나셨|무서운|이해돼/
+const EMPATHY_FIRST_SENTENCE_RE = /놀라|놀랐|당황|초조|언짢|불쾌|억울|속상|답답|걱정|신경\s*쓰|불편|죄송|기다리셨|급하시|힘드셨|불안하|민망|곤란하|화나셨|무서운|이해돼/
 
 function startsWithEmpathy(answer: string) {
   if (EMPATHY_START_RE.test(answer)) return true
