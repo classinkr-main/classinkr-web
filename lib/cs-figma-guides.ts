@@ -117,6 +117,9 @@ export const CURATED_CS_FIGMA_GUIDES: CsFigmaGuide[] = [
     keywords: [
       "수업 녹화 데이터",
       "녹화 다운로드",
+      "녹화본 다운로드",
+      "녹화본 내려받기",
+      "녹화 영상 다운로드",
       "녹화 공유",
       "수업 리소스",
       "녹화된 수업 비디오",
@@ -362,6 +365,10 @@ export const CURATED_CS_FIGMA_GUIDES: CsFigmaGuide[] = [
     keywords: [
       "숙제 업로드",
       "숙제 제출",
+      "숙제 올리",
+      "숙제 올림",
+      "숙제 내는",
+      "숙제 사진",
       "모바일",
       "사진 첨부",
       "제출하기",
@@ -763,6 +770,12 @@ export const CURATED_CS_FIGMA_GUIDES: CsFigmaGuide[] = [
       "코스 구성원 추가",
       "코스 구성원 삭제",
       "코스 멤버 추가",
+      "반을 옮기",
+      "반 이동",
+      "다른 반으로",
+      "코스 이동",
+      "다른 코스에 넣",
+      "코스에서 빼",
       "코스 멤버 삭제",
       "구성원 및 그룹 구성",
       "코스 초대 링크",
@@ -1109,6 +1122,7 @@ function hasRecordingDownloadIntent(normalizedQuestion: string) {
 }
 
 function hasAppDownloadIntent(normalizedQuestion: string) {
+  if (/설치\s*(?:없이|안\s*하고|하지\s*않고)|앱\s*없이|없이\s*(?:링크|웹)/.test(normalizedQuestion)) return false
   const asksDownload = /다운로드|설치|내려받/.test(normalizedQuestion)
   const asksApp = /클래스인|classin|앱|pc|windows|윈도우/.test(normalizedQuestion)
   const asksRecording = /녹화|녹화본|수업자료|pdf|리소스/.test(normalizedQuestion)
@@ -1150,6 +1164,8 @@ function hasCourseWideChatControlIntent(normalizedQuestion: string) {
 }
 
 function hasCourseCreateOrCloseIntent(normalizedQuestion: string) {
+  // "실수로 코스를 삭제했는데 복구되나요"는 만들고 닫는 순서가 아니라 복구 문의다.
+  if (/복구|되돌|살릴|실수로|없어진|사라진|날아/.test(normalizedQuestion)) return false
   const asksAboutCourse = /코스/.test(normalizedQuestion)
   const asksAboutLifecycle = /생성|만들|종료|삭제/.test(normalizedQuestion)
   const asksProcedure = /방법|순서|어디|생성|만들|종료|삭제/.test(normalizedQuestion)
@@ -1313,14 +1329,42 @@ function findKnownCsFigmaIntentSlug(normalizedQuestion: string) {
   return null
 }
 
+// 사람이 확인한 '알려진 의도' 가이드 slug. 증상 트리아지(lib/chatbot/symptom-triage.ts)보다 먼저 쓴다.
+export function findCsFigmaKnownIntentSlug(question: string) {
+  const normalized = normalizeGuideText(question)
+  if (!normalized) return null
+  return findKnownCsFigmaIntentSlug(normalized)
+}
+
 const POLICY_BOUNDARY_ALLOWED_KNOWN_INTENT_SLUGS = new Set([
   "cs-figma-digest-919",
   "cs-figma-digest-940",
   "cs-figma-digest-1294",
 ])
 
+type FigmaMatchExplain = { slug: string; score: number; strong: number; weak: number; tokens: number; title: boolean; known: boolean }
+let explainSink: FigmaMatchExplain[] | null = null
+
+// 진단용: 상위 후보 3개와 점수 근거. 운영 경로에서는 쓰지 않는다.
+export function __explainCsFigmaGuideMatchForTests(question: string) {
+  explainSink = []
+  try {
+    const guide = findCsFigmaGuideForQuestion(question)
+    return { picked: guide?.slug ?? null, candidates: explainSink }
+  } finally {
+    explainSink = null
+  }
+}
+
+const POLITE_REQUEST_RE =
+  /(?:여쭤|물어)\s*봐도\s*될까요|알려\s*주실\s*수\s*있(?:나요|을까요|으실까요)|알\s*수\s*있(?:을까요|나요|을지)|확인할\s*수\s*있(?:을까요|나요)|도와\s*주실\s*수\s*있(?:나요|을까요)|가르쳐\s*주실\s*수\s*있(?:나요|을까요)/g
+
+// 전자칠판 질문인데 칠판과 무관한 가이드(회원가입·숙제 등)로 답하지 않게 한다.
+const BOARD_CONTEXT_RE = /전자칠판|칠판\s*(?:티비|tv)|(?<!대시\s?)보드|\bifp\b|classin\s*x|클래스인\s*x/
+const BOARD_GUIDE_RE = /전자칠판|칠판|보드|ifp|classin x|클래스인 x|classinx/
+
 export function findCsFigmaGuideForQuestion(question: string): CsFigmaGuide | null {
-  const normalized = normalizeGuideText(question)
+  const normalized = normalizeGuideText(question).replace(POLITE_REQUEST_RE, " ").replace(/\s+/g, " ").trim()
   if (!normalized) return null
 
   const hasProcedureIntent = PROCEDURE_INTENT_PATTERN.test(normalized)
@@ -1399,6 +1443,7 @@ export function findCsFigmaGuideForQuestion(question: string): CsFigmaGuide | nu
     }
     const knownIntentMatched = knownIntentSlug === guide.slug
     if (knownIntentMatched) score += 36
+    if (BOARD_CONTEXT_RE.test(normalized) && !knownIntentMatched && !BOARD_GUIDE_RE.test(haystack)) score -= 20
 
     return {
       guide,
@@ -1411,17 +1456,20 @@ export function findCsFigmaGuideForQuestion(question: string): CsFigmaGuide | nu
       knownIntentMatched,
     }
   }).sort((left, right) => right.score - left.score)
+  if (explainSink) explainSink.push(...scored.slice(0, 3).map((row) => ({ slug: row.guide.slug, score: row.score, strong: row.strongKeywordHits, weak: row.weakKeywordHits, tokens: row.tokenHits, title: row.titleMatched, known: row.knownIntentMatched })))
 
   const top = scored[0]
   if (!top || top.score < 16) return null
   if (!hasProcedureIntent && !hasSymptomIntent && !knownIntentSlug) return null
+  const tokenCoverage = tokens.length > 0 ? top.tokenHits / tokens.length : 0
+  const matchedByTokensOnly = top.tokenHits >= 3 && tokenCoverage >= 0.6
   if (
     !top.titleMatched &&
     top.strongKeywordHits === 0 &&
     top.weakKeywordHits < 2 &&
     !top.inviteActivationMatched &&
     !top.knownIntentMatched &&
-    top.tokenHits < 3
+    !matchedByTokensOnly
   ) {
     return null
   }
