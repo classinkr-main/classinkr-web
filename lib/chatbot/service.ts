@@ -4356,7 +4356,9 @@ async function buildChatbotCore(
   options: BuildChatbotCoreOptions = {}
 ): Promise<ChatbotCore> {
   const core = await buildChatbotCoreBase(message, options)
-  applyConversationTone(core)
+  // 말투 계층(공감 한마디·[실시간 상담 연결] 안내)은 공개 위젯 화면 문구다. 내부 CS 코파일럿(includeInternalDocs,
+  // 계약 6)은 이 답을 상담원용 근거로 읽으므로 붙이지 않는다.
+  if (!options.includeInternalDocs) applyConversationTone(core)
   return core
 }
 
@@ -4403,12 +4405,17 @@ async function buildChatbotCoreBase(
     }
   }
 
-  const quickAnswer = buildServiceQuickAnswer(question)
+  // 아래 결정형 조기 답변(바로 답·영어 안내·이미 해 봤음·증상 트리아지·지난 대화 되묻기)은 공개 위젯 전용이다.
+  // 내부 CS 코파일럿(includeInternalDocs, 계약 6)은 상담원에게 내부 문서 근거를 줘야 하므로 이 단계들을 건너뛰고
+  // 검색(match_docs_ai_chunks, include_internal)까지 간다 — 공개 위젯 문구로 끝내면 내부 문서 검색이 통째로 빠진다.
+  const publicWidgetShortcuts = !options.includeInternalDocs
+
+  const quickAnswer = publicWidgetShortcuts ? buildServiceQuickAnswer(question) : null
   if (quickAnswer) {
     return { question, ...quickAnswer, latencyMs: elapsedSince(startedAt) }
   }
 
-  if (isEnglishSupportRequest(question.redacted)) {
+  if (publicWidgetShortcuts && isEnglishSupportRequest(question.redacted)) {
     return {
       question,
       response: {
@@ -4448,7 +4455,11 @@ async function buildChatbotCoreBase(
   }
 
   const routingTone = detectConversationTone(question.redacted)
-  if ((routingTone.repeated || routingTone.angry) && TRIED_ALREADY_RE.test(question.redacted.toLowerCase())) {
+  if (
+    publicWidgetShortcuts &&
+    (routingTone.repeated || routingTone.angry) &&
+    TRIED_ALREADY_RE.test(question.redacted.toLowerCase())
+  ) {
     const response = {
       answer: [
         "기본 조치를 이미 다 해 보셨는데 같은 일이 반복됐다면, 같은 안내를 또 드리지 않을게요. 이제는 기술지원이 기록을 보고 원인을 찾아야 하는 단계예요.",
@@ -4469,7 +4480,7 @@ async function buildChatbotCoreBase(
   const csFigmaGuide = findCsFigmaGuideForQuestion(routingText)
   // 증상형 질문("녹화 안 돼요", "기관 등록 안됨", "에러나요")은 공개 문제 해결 문서 섹션으로 바로 답한다.
   // Figma 가이드의 알려진 의도(예: 늦게 가입한 학생 다시보기)가 맞으면 그 가이드를 먼저 쓴다.
-  const symptomTriage = resolveSymptomTriageForQuestion(routingText, csFigmaGuide)
+  const symptomTriage = publicWidgetShortcuts ? resolveSymptomTriageForQuestion(routingText, csFigmaGuide) : null
   if (symptomTriage) {
     const response = buildSymptomTriageResponse(symptomTriage)
     return {
@@ -4485,7 +4496,7 @@ async function buildChatbotCoreBase(
   }
 
   // "저번에 말한 거 또 그래요"처럼 지난 대화를 전제로 한 짧은 질문: 볼 수 없다고 밝히고 한 줄만 되묻는다.
-  if (routingTone.priorContext && question.redacted.replace(/\s+/g, "").length <= 60) {
+  if (publicWidgetShortcuts && routingTone.priorContext && question.redacted.replace(/\s+/g, "").length <= 60) {
     const response = buildPriorContextClarifyResponse(routingText)
     return {
       question,
