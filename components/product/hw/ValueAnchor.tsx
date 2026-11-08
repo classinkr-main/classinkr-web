@@ -10,16 +10,12 @@ const items = [
     desc: "AG/AF 코팅으로 눈부심 없이 선명하게",
   },
   {
-    label: "[판서] 50점 멀티터치 & 0.03s 응답",
+    label: "[판서] 50점 멀티터치 & 2ms 터치 응답",
     desc: "이질감 없는 초밀착 판서 경험",
   },
   {
-    label: "[성능] 고성능 OPS PC 내장 (i5 / i7)",
+    label: "[성능] OPS PC 내장 (Intel Core i5)",
     desc: "선 연결 없는 깔끔한 데스크탑 환경",
-  },
-  {
-    label: "[추적] 4K AI 카메라 & 마이크 어레이",
-    desc: "강사 자동 추적과 고음질 녹화를 동시에",
   },
   {
     label: "[소프트웨어] Classin 전용 라이선스",
@@ -158,9 +154,6 @@ export default function ValueAnchor() {
             데모 신청하고 직접 사용해보기
             <ArrowRight aria-hidden className="arrow-nudge size-4" />
           </TrackedLink>
-          <p className="text-sm text-white/50">
-            30일 만족 보장 — 사용해보고 결정하세요.
-          </p>
         </motion.div>
       </div>
     </section>

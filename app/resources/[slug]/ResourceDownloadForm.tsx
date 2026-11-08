@@ -383,16 +383,17 @@ export function ResourceDownloadForm({ resource }: ResourceDownloadFormProps) {
           <div className="mx-auto flex h-12 w-12 items-center justify-center border border-black/[0.08] bg-white text-fg-accent">
             <CheckCircle2 className="h-6 w-6" />
           </div>
-          <h2 className="mt-5 text-xl font-bold text-[#111110]">PDF 다운로드를 시작했습니다.</h2>
-          <p className="mt-3 text-sm leading-6 text-[#615D59]">
+          <h2 className="mt-5 text-xl font-bold text-fg-ink">PDF 다운로드를 시작했습니다.</h2>
+          <p className="mt-3 text-caption leading-6 text-fg-muted">
             브라우저의 다운로드 폴더를 확인해 주세요. 받지 못했다면 다시 받기를 누르면 됩니다.
             {isLoginGate ? null : " 이 기기에서는 다음에도 정보 입력 없이 바로 받을 수 있습니다."}
           </p>
-          {error ? <p className="mt-4 text-sm leading-6 text-[#B85C33]">{error}</p> : null}
+          {error ? <p className="mt-4 text-caption leading-6 text-fg-danger">{error}</p> : null}
           <Button
             type="button"
             disabled={loading}
-            className="mt-6 h-11 w-full"
+            size="md"
+            className="mt-6 w-full"
             onClick={() => void handleRedownload()}
           >
             {loading ? (
@@ -404,7 +405,7 @@ export function ResourceDownloadForm({ resource }: ResourceDownloadFormProps) {
               </>
             )}
           </Button>
-          <Button type="button" variant="outline" className="mt-2 h-11 w-full" onClick={scrollToChecklist}>
+          <Button type="button" variant="line" size="md" className="mt-2 w-full" onClick={scrollToChecklist}>
             전체 문항 보기
             <ArrowRight className="h-4 w-4" />
           </Button>
@@ -414,11 +415,11 @@ export function ResourceDownloadForm({ resource }: ResourceDownloadFormProps) {
           <div className="mx-auto flex h-12 w-12 items-center justify-center border border-black/[0.08] bg-white text-fg-accent">
             <CheckCircle2 className="h-6 w-6" />
           </div>
-          <h2 className="mt-5 text-xl font-bold text-[#111110]">자료 신청이 완료되었습니다.</h2>
-          <p className="mt-3 text-sm leading-6 text-[#615D59]">
+          <h2 className="mt-5 text-xl font-bold text-fg-ink">자료 신청이 완료되었습니다.</h2>
+          <p className="mt-3 text-caption leading-6 text-fg-muted">
             PDF 파일이 준비되면 같은 화면에서 바로 받을 수 있습니다. 먼저 아래 문항을 확인해 보세요.
           </p>
-          <Button type="button" className="mt-6 h-11 w-full" onClick={scrollToChecklist}>
+          <Button type="button" size="md" className="mt-6 w-full" onClick={scrollToChecklist}>
             전체 문항 보기
             <ArrowRight className="h-4 w-4" />
           </Button>
@@ -428,19 +429,20 @@ export function ResourceDownloadForm({ resource }: ResourceDownloadFormProps) {
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg bg-fg-accent/8 text-fg-accent">
             <LockKeyhole className="h-6 w-6" />
           </div>
-          <h2 className="mt-5 text-2xl font-bold tracking-[-0.03em] text-[#111110]">
+          <h2 className="mt-5 text-2xl font-bold tracking-[-0.03em] text-fg-ink">
             로그인 후 자료 받기
           </h2>
-          <p className="mt-3 text-sm leading-6 text-[#615D59]">
+          <p className="mt-3 text-caption leading-6 text-fg-muted">
             이 자료는 다운로드 기록과 재열람을 위해 공개 사용자 로그인이 필요합니다. 로그인하면
             자료를 바로 받을 수 있습니다.
           </p>
           <ResourceStats itemCount={resource.itemCount} estimatedMinutes={resource.estimatedMinutes} />
-          {error ? <p className="mt-4 text-sm leading-6 text-[#B85C33]">{error}</p> : null}
+          {error ? <p className="mt-4 text-caption leading-6 text-fg-danger">{error}</p> : null}
           <Button
             type="button"
             disabled={loading}
-            className="mt-5 h-11 w-full"
+            size="md"
+            className="mt-5 w-full"
             onClick={() => {
               setError("")
               setLoginDialogOpen(true)
@@ -488,12 +490,13 @@ export function ResourceDownloadForm({ resource }: ResourceDownloadFormProps) {
             </p>
           )}
 
-          {error ? <p className="mt-4 text-sm leading-6 text-[#B85C33]">{error}</p> : null}
+          {error ? <p className="mt-4 text-caption leading-6 text-fg-danger">{error}</p> : null}
 
           <Button
             type="button"
             disabled={loading}
-            className="mt-5 h-11 w-full"
+            size="md"
+            className="mt-5 w-full"
             onClick={() => void handleRememberedDownload()}
           >
             {loading ? (
@@ -662,9 +665,9 @@ export function ResourceDownloadForm({ resource }: ResourceDownloadFormProps) {
                 <span>[선택] Classin 교육 인사이트·제품 소식 수신에 동의합니다. 언제든 수신거부할 수 있습니다.</span>
               </label>
 
-              {error ? <p className="text-sm leading-6 text-[#B85C33]">{error}</p> : null}
+              {error ? <p className="text-caption leading-6 text-fg-danger">{error}</p> : null}
 
-              <Button type="submit" disabled={loading} className="h-11 w-full">
+              <Button type="submit" disabled={loading} size="md" className="w-full">
                 {loading ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (

@@ -11,7 +11,9 @@ import type { GoogleAdsDailyRow } from "@/lib/google/ads"
 
 const sb = () => createSupabaseAdminClient()
 
-export interface GoogleAdsDailyRecord extends GoogleAdsDailyRow {
+export interface GoogleAdsDailyRecord extends Omit<GoogleAdsDailyRow, "videoViews"> {
+  /** NULL = 칸(20261106 마이그레이션)이 생기기 전에 쌓인 행 — "0회"가 아니다. */
+  videoViews: number | null
   /** 계정 통화 — KRW 로 환산하지 않는다(정직 규칙). */
   currency: string | null
   syncedAt: string
@@ -27,6 +29,8 @@ function rowToRecord(row: any): GoogleAdsDailyRecord {
     impressions: Number(row.impressions ?? 0),
     clicks: Number(row.clicks ?? 0),
     conversions: Number(row.conversions ?? 0),
+    channelType: row.channel_type ?? null,
+    videoViews: row.video_views == null ? null : Number(row.video_views),
     currency: row.currency ?? null,
     syncedAt: row.synced_at,
   }
@@ -52,6 +56,9 @@ export async function upsertGoogleAdsDaily(
     impressions: r.impressions,
     clicks: r.clicks,
     conversions: r.conversions,
+    // 20261106 마이그레이션 칸 — 이 코드보다 먼저 운영에 있어야 한다(없으면 upsert 가 칸을 못 찾는다).
+    channel_type: r.channelType,
+    video_views: r.videoViews,
     currency,
     synced_at: syncedAt,
   }))

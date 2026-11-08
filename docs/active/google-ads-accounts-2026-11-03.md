@@ -84,6 +84,12 @@
 실호출에서 찾은 버그: 9/14 클라이언트가 search 본문에 `pageSize`를 보내 `PAGE_SIZE_NOT_SUPPORTED`로 요청 전체가
 거부됐다(현행 API는 페이지 1만 행 고정). 자격증명이 있었어도 크론은 매번 실패했을 것이다 — 11/3 수정, 테스트로 잠갔다.
 
+**캠페인 유형·유튜브 조회수(2026-11-06)**: 크론이 `campaign.advertising_channel_type`(VIDEO·DEMAND_GEN·SEARCH …)과
+`metrics.video_trueview_views`(구글 화면의 'TrueView 조회수')도 받아 `google_ads_daily.channel_type`·`video_views` 에 둔다.
+Compass 광고 탭 「구글」이 같은 DB 에서 이 표를 읽어 유튜브·검색을 가르고 조회당 비용을 낸다. 칸은
+`20261106_google_ads_daily_channel_video.sql` — 서울 프로젝트에 **2026-11-06 적용 완료**([DB 마이그레이션 런북](db-migration-runbook.md)). 남은 것은 코드 운영 배포.
+적용 전에 쌓인 행은 두 칸이 NULL 이고, 크론이 trailing 7일을 다시 받으며 채운다(11/3 행은 11/10 크론까지가 마지막 기회).
+
 어드민 Google Ads 섹션 헤더의 'API …' 표시와 남은 일의 'API 연동' 줄은 실제 설정값을 읽으므로, 켜면 저절로 바뀌고 사라진다.
 API 버전 `v25`는 2027년 8월 지원 종료 예정이다.
 

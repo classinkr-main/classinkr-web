@@ -6,6 +6,7 @@ import type {
   DocsArticleSection,
   DocsArticleSummary,
   DocsCategoryNavItem,
+  DocsChecklistItem,
   DocsNavGroup,
   DocsTocItem,
 } from "@/components/docs"
@@ -20,6 +21,7 @@ import {
 } from "@/lib/docs"
 import type { DocsContent } from "@/lib/docs-content"
 import { buildDocsSearchIndex, scoreDocsSearch } from "@/lib/docs-search"
+import { splitLeadingQuestion, splitLeadingQuestionText } from "@/lib/docs-structured-data"
 import { getDocListKind, getDocListPreview } from "@/lib/docs-list-meta"
 
 const staticDocsContent: DocsContent = {
@@ -184,15 +186,22 @@ export function toArticleSummary(
   }
 }
 
+// 자주 묻는 질문 문서의 "…나요? 네. …" 항목은 질문과 답으로 나눠 Q/A 로 보여 준다.
+// 나누는 규칙은 FAQPage 구조화 데이터(extractDocFaqItems)와 같다.
+function toChecklistItem(step: string, isFaq: boolean): DocsChecklistItem {
+  if (isFaq) {
+    const pair = splitLeadingQuestionText(step) ?? splitLeadingQuestion(step)
+    if (pair) return { label: pair.question, answer: pair.answer, checked: true }
+  }
+  return { label: step, checked: true }
+}
+
 export function toArticleSections(doc: DocArticle): DocsArticleSection[] {
   return doc.sections.map((section, index) => ({
     id: `section-${index + 1}`,
     title: section.heading,
     body: section.body ? <BlogMarkdownRenderer markdown={section.body} /> : null,
-    checklist: section.steps?.map((step) => ({
-      label: step,
-      checked: true,
-    })),
+    checklist: section.steps?.map((step) => toChecklistItem(step, doc.docType === "faq")),
     callout:
       doc.category === "board" && index === 0
         ? {
@@ -296,7 +305,8 @@ export function getDocsCategoryNavItems(
         categoryId: category.id,
         href: getDocCategoryPath(category.id),
         label: copy?.label ?? getFallbackCategoryLabel(category),
-        meta: `${copy?.scope ?? "가이드"} · ${articleCount}개`,
+        // 탭에는 문서 개수를 붙이지 않는다 — 주제 성격(scope)만 보인다.
+        meta: copy?.scope ?? "가이드",
         description: copy?.summary ?? category.description,
         isActive: category.id === activeCategoryId,
       }

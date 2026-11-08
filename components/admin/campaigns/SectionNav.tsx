@@ -39,7 +39,7 @@ export function useActiveSection(ids: readonly string[]): string | null {
 }
 
 /**
- * 해시(#id)로 진입했을 때 그 섹션으로 스크롤한다 — 레거시 탭 매핑(?tab=meta → detail#campaigns)과
+ * 해시(#id)로 진입했을 때 그 섹션으로 스크롤한다 — 레거시 탭 매핑(?tab=meta → ads#campaigns)과
  * 코드 안 딥링크(data#budgets)의 착지 동작. ready 가 참이 된 뒤 한 번만 시도한다(섹션이 데이터
  * 로딩 뒤에 렌더되므로 마운트 직후에는 대상이 없을 수 있다).
  */

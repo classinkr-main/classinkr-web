@@ -19,6 +19,9 @@ const stagger = (i: number) => ({
     transition: { duration: 0.55, delay: 0.1 + i * 0.13, ease },
 })
 
+const DEEP_LINK =
+    "inline-flex items-center gap-2 rounded-md border border-fg-accent/25 px-5 py-3 text-sm font-semibold text-fg-accent hover:bg-fg-accent/8 transition-colors"
+
 const cards = [
     {
         icon: BookOpen,
@@ -33,7 +36,7 @@ const cards = [
         perspective: "학부모",
         headline: "\"오늘 뭘 배웠어?\"\n이제 직접 확인합니다",
         detail:
-            "수업 종료 후 판서 PDF가 자동으로 공유됩니다. 학부모는 자녀가 어떤 내용을 배웠는지, 어디까지 진행됐는지 그대로 볼 수 있습니다.",
+            "판서는 수업 뒤 학습 보고서에 담기고, 학원은 보고서 링크를 학부모에게 전달합니다. 학부모는 자녀가 어떤 내용을 배웠는지, 어디까지 진행됐는지 그대로 볼 수 있습니다.",
         surface: "bg-surface-sheet border-line-hair",
     },
     {
@@ -41,7 +44,7 @@ const cards = [
         perspective: "교사",
         headline: "내 수업을 돌아보면\n다음 수업이 달라집니다",
         detail:
-            "AI 카메라가 녹화한 수업 영상을 교사 스스로 복기합니다. 어느 순간 학생 집중이 흩어졌는지, 판서 흐름이 자연스러웠는지 — 성찰이 성장이 됩니다.",
+            "녹화한 수업 영상을 교사 스스로 복기합니다. 설명이 길어진 대목은 어디였는지, 판서 흐름이 자연스러웠는지 — 성찰이 성장이 됩니다.",
         surface: "bg-surface-sunken border-line-hair",
     },
 ]
@@ -115,15 +118,23 @@ export default function AfterClassSection() {
                     })}
                 </div>
 
-                {/* 녹화·AI 리포트 딥다이브 진입 */}
-                <motion.div {...fadeUp} className="mt-10 text-center">
-                    <TrackedLink
-                        href="/product/ai-report"
-                        ctaId="hw_ai_report_deep_dive"
-                        className="inline-flex items-center gap-2 rounded-md border border-fg-accent/25 px-5 py-3 text-sm font-semibold text-fg-accent hover:bg-fg-accent/8 transition-colors"
-                    >
-                        녹화 · AI 리포트 자세히 보기
+                {/* 수업 후 더 보기 — 녹화는 랜딩으로, AI 는 기능 소개서(새 탭)로 */}
+                <motion.div {...fadeUp} className="mt-10 flex flex-wrap justify-center gap-3">
+                    <TrackedLink href="/product/recording" ctaId="hw_recording_deep_dive" className={DEEP_LINK}>
+                        수업 녹화 자세히 보기
                         <ArrowRight className="w-4 h-4" />
+                    </TrackedLink>
+                    <TrackedLink
+                        href="/classin-ai-feature-guide.html"
+                        prefetch={false}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        ctaId="hw_ai_feature_guide"
+                        className={DEEP_LINK}
+                    >
+                        AI 기능 소개서 보기
+                        <ArrowRight className="w-4 h-4" aria-hidden="true" />
+                        <span className="sr-only">(새 탭)</span>
                     </TrackedLink>
                 </motion.div>
             </div>

@@ -42,6 +42,8 @@ export interface DocsChecklistItem {
     label: ReactNode
     checked?: boolean
     description?: ReactNode
+    /** 자주 묻는 질문 항목이면 label 은 질문, answer 는 답(인라인 마크다운 문자열)이다. Q/A 로 나눠 그린다. */
+    answer?: string
 }
 
 export interface DocsCallout {

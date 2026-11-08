@@ -203,7 +203,7 @@ export default function GoogleAdsPanel({
       <div className="overflow-hidden rounded-2xl border border-[#e8e8e4] bg-white">
         <div className="flex items-center justify-between border-b border-[#e8e8e4] px-4 py-3 sm:px-5">
           <h3 className="text-[14px] font-semibold text-[#111110]">395 캠페인 계획</h3>
-          <Pill tone="warn">승인 대기</Pill>
+          <Pill>쿠폰 계획 · 상태는 광고 탭</Pill>
         </div>
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-[#f0f0ec] text-left text-[12px]">

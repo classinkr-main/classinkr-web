@@ -10,8 +10,17 @@ export const SITE_NAME = "Classin"
 // 2026-11-03 사용자 결정: "수업 OS"·"운영 플랫폼" 같은 범주어 대신 무엇(학원 전자칠판)과 바로 얻는 것(녹화·AI 강의 평가)을 말한다.
 // 검색어 "전자칠판"·"수업 녹화"는 남긴다(D1 근거). 정본 설명: docs/active/classin-korea-positioning-guidelines.md §11
 export const DEFAULT_SITE_TITLE = "클래스인 Classin | 수업 녹화·AI 강의 평가까지 되는 학원 전자칠판"
-export const DEFAULT_OG_IMAGE_PATH = "/opengraph-image"
-export const DEFAULT_TWITTER_IMAGE_PATH = "/twitter-image"
+// 공유 카드 이미지 버전. 카카오톡·페이스북은 og:image 를 주소 단위로 오래 캐시하므로, 카드 디자인
+// (lib/og/template.tsx)을 바꾸면 이 값을 올려 새 주소로 다시 받게 한다(기본 카드·블로그 카드 공통). 페이지 스크랩 캐시는 배포 뒤
+// 카카오 공유 디버거(developers.kakao.com › 도구 › 공유 디버거)에서 따로 지운다.
+export const OG_IMAGE_VERSION = "20261106"
+export const DEFAULT_OG_IMAGE_PATH = `/opengraph-image?v=${OG_IMAGE_VERSION}`
+export const DEFAULT_TWITTER_IMAGE_PATH = `/twitter-image?v=${OG_IMAGE_VERSION}`
+
+/** 히어로 이미지가 없는 블로그 글의 공유 카드(/api/og/blog/[slug]). 기본 카드와 같은 버전을 붙여, 카드를 바꾸면 함께 다시 받게 한다 */
+export function getBlogOgImagePath(slug: string): string {
+  return `/api/og/blog/${encodeURIComponent(slug)}?v=${OG_IMAGE_VERSION}`
+}
 
 interface PublicMetadataOptions {
   title?: string
@@ -398,7 +407,7 @@ export function createSoftwareProductJsonLd(): JsonLdNode {
       "실시간 온라인 수업",
       "30여 가지 수업 도구",
       "과제 제출 및 자동채점",
-      "AI 첨삭과 과제 생성",
+      "AI 칠판 채점과 AI 강의 분석",
       "학습 데이터 리포트",
       "학부모 소통과 알림",
     ],
@@ -418,14 +427,14 @@ export function createHardwareProductJsonLd(): JsonLdNode {
     manufacturer: { "@id": ORGANIZATION_ID },
     category: "교육용 전자칠판",
     description:
-      "Classin Board는 판서, 4K AI 카메라 자동 추적, 수업 영상 업로드, 판서 PDF 공유, Classin 소프트웨어 연동을 제공하는 교육용 전자칠판입니다.",
+      "Classin Board는 판서, 판서 PDF 저장, 수업 녹화, Classin 소프트웨어 연동을 제공하는 학원 전자칠판입니다. AI 추적 카메라를 함께 구성하면 강사를 따라가는 현장 녹화도 남깁니다.",
     // 모델명 정본은 lib/hardware/board-specs.ts 다. 여기에 다시 적으면 검색엔진이
     // 읽는 면에서 조용히 갈라진다(BS86A ↔ BS86C 로 실제 갈라진 적이 있다).
     model: BOARD_SPEC_MODELS.map((model) => BOARD_MODEL_NAMES[model]),
     additionalProperty: [
       { "@type": "PropertyValue", name: "화면 크기", value: "65, 75, 86, 110인치" },
       { "@type": "PropertyValue", name: "터치 포인트", value: "최대 50점" },
-      { "@type": "PropertyValue", name: "AI 카메라", value: "4K 자동 트래킹 녹화" },
+      { "@type": "PropertyValue", name: "AI 추적 카메라", value: "선택 구성(Cam T1 강사 추적·S1 학생 인식)" },
       { "@type": "PropertyValue", name: "소프트웨어", value: "Classin 소프트웨어 연동" },
       { "@type": "PropertyValue", name: "수업 기록", value: "판서 PDF 및 수업 영상 공유" },
     ],

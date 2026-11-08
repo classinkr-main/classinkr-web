@@ -140,16 +140,16 @@ export default async function DocsCategoryPage({
   const categoryPath = getDocCategoryPath(categoryParam)
 
   // 유형 필터는 이 주제에 실제로 있는 유형이 두 가지 이상일 때만 보인다. 없는 유형을 주소로 고르면 전체를 보여 준다.
-  const kindCounts = DOC_LIST_KIND_ORDER.map((kind) => ({
-    kind,
-    count: articleSummaries.filter((article) => article.kind === kind).length,
-  })).filter((item) => item.count > 0)
+  // 공개 화면에는 문서 개수를 보이지 않는다 — 탭·유형 필터·묶음 제목 모두 라벨만 쓴다.
+  const availableKinds = DOC_LIST_KIND_ORDER.filter((kind) =>
+    articleSummaries.some((article) => article.kind === kind)
+  )
   const requestedKind = readQuery(rawType)
   const activeKind: DocListKind | null =
-    !query && isDocListKind(requestedKind) && kindCounts.some((item) => item.kind === requestedKind)
+    !query && isDocListKind(requestedKind) && availableKinds.includes(requestedKind)
       ? requestedKind
       : null
-  const showKindFilter = !query && kindCounts.length > 1
+  const showKindFilter = !query && availableKinds.length > 1
 
   const listedDocs = query
     ? filteredDocs
@@ -162,8 +162,8 @@ export default async function DocsCategoryPage({
     : groupCategoryItems(categoryParam, listedDocs)
   const isGrouped = groups.length > 1
   // 유형을 이미 골랐거나 유형으로 모은 묶음 안에서는 행마다 같은 유형 라벨을 되풀이하지 않는다.
-  const rowMetaWithKind = ["kind", "readTime", "images", "updatedAt"] as const
-  const rowMetaWithoutKind = ["readTime", "images", "updatedAt"] as const
+  const rowMetaWithKind = ["kind", "updatedAt"] as const
+  const rowMetaWithoutKind = ["updatedAt"] as const
 
   return (
     <div className="min-h-screen bg-[#FAFAF8] pt-28 pb-24 text-[#111110] md:pt-36">
@@ -210,23 +210,19 @@ export default async function DocsCategoryPage({
           </button>
         </form>
 
-        <p className="mt-4 text-sm text-[#615D59]">
-          {query ? (
-            <>
-              “{q}” 검색 결과 {filteredDocs.length}개
-              <Link
-                href={categoryPath}
-                className={`ml-3 font-semibold text-fg-accent underline-offset-4 hover:underline ${FOCUS_RING}`}
-              >
-                검색 지우기
-              </Link>
-            </>
-          ) : (
-            <>이 주제의 가이드 {articleSummaries.length}개</>
-          )}
-        </p>
+        {query ? (
+          <p className="mt-4 text-sm text-[#615D59]">
+            “{q}” 검색 결과 {filteredDocs.length}개
+            <Link
+              href={categoryPath}
+              className={`ml-3 font-semibold text-fg-accent underline-offset-4 hover:underline ${FOCUS_RING}`}
+            >
+              검색 지우기
+            </Link>
+          </p>
+        ) : null}
 
-        <DocsCategoryNav items={categoryTabs} className="mt-8" />
+        <DocsCategoryNav items={categoryTabs} className={query ? "mt-8" : "mt-12"} />
       </section>
 
       <section
@@ -238,11 +234,10 @@ export default async function DocsCategoryPage({
             // 유형 고르기는 주소(?type=)로 남긴다 — 자바스크립트 없이도 동작하고, 뒤로 가기로 되돌릴 수 있다.
             <nav aria-label="문서 유형" className="flex flex-wrap items-center gap-x-5 gap-y-2">
               {[
-                { kind: null, label: "전체", count: articleSummaries.length },
-                ...kindCounts.map((item) => ({
-                  kind: item.kind,
-                  label: DOC_LIST_KIND_LABELS[item.kind],
-                  count: item.count,
+                { kind: null, label: "전체" },
+                ...availableKinds.map((kind) => ({
+                  kind,
+                  label: DOC_LIST_KIND_LABELS[kind],
                 })),
               ].map((item) => {
                 const isActive = item.kind === activeKind
@@ -267,9 +262,6 @@ export default async function DocsCategoryPage({
                       {isActive ? "●" : "○"}
                     </span>
                     {item.label}
-                    <span className="tabular-nums text-[13px] font-normal text-[#615D59]">
-                      {item.count}
-                    </span>
                   </Link>
                 )
               })}
@@ -291,12 +283,9 @@ export default async function DocsCategoryPage({
                   {isGrouped ? (
                     <h2
                       id={headingId}
-                      className="flex items-baseline gap-2 border-b border-black/[0.08] pb-3 pt-6 text-[17px] font-bold text-[#111110]"
+                      className="border-b border-black/[0.08] pb-3 pt-6 text-[17px] font-bold text-[#111110]"
                     >
                       {group.label}
-                      <span className="text-[13px] font-normal tabular-nums text-[#615D59]">
-                        {group.items.length}
-                      </span>
                     </h2>
                   ) : (
                     <div className="border-t border-black/[0.08]" aria-hidden />

@@ -41,9 +41,7 @@ function searchHref(query: string) {
 
 function SearchResultRow({ result }: { result: DocsSearchResult<DocsArticleSummary> }) {
   const { doc, sections, highlight } = result
-  const meta = [doc.category, doc.readTime, doc.imageCount ? `사진 ${doc.imageCount}장` : ""].filter(
-    Boolean
-  )
+  const meta = [doc.category].filter(Boolean)
   const showKind = Boolean(doc.kind && doc.kind !== "howto")
 
   return (

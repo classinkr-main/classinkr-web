@@ -1,0 +1,342 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>캠페인 계층 시안</title>
+<style>
+  :root {
+    --ink: #111110; --sub: #615D59; --mute: #84827a; --line: #E8E8E4; --row: #F0F0EC;
+    --page: #FAFAF8; --card: #fff; --green: #084734; --amber: #A8741A; --danger: #B43E3E;
+    --g: #4285F4; --m: #0866FF; --yt: #FF0000;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--page); color: var(--ink); font: 13px/1.5 -apple-system, "Pretendard", "Apple SD Gothic Neo", system-ui, sans-serif; }
+  .wrap { max-width: 1240px; margin: 0 auto; padding: 32px 20px 80px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  h2 { font-size: 17px; margin: 0; }
+  .lede { color: var(--sub); margin: 0 0 24px; }
+  .note { color: var(--mute); font-size: 11.5px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; }
+  .pad { padding: 16px 20px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  @media (max-width: 900px) { .grid2, .grid3 { grid-template-columns: 1fr; } }
+  ul.tight { margin: 8px 0 0; padding-left: 18px; } ul.tight li { margin: 3px 0; }
+  .option { margin-top: 40px; }
+  .option-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 10px; flex-wrap: wrap; }
+  .tag { font-size: 11px; font-weight: 700; letter-spacing: .06em; color: var(--green); border: 1px solid var(--green); border-radius: 4px; padding: 1px 6px; }
+  .tag.plain { color: var(--sub); border-color: var(--line); }
+  .frame { background: var(--page); border: 1px solid var(--line); border-radius: 14px; padding: 18px; overflow-x: auto; }
+  .pros { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 10px; font-size: 12.5px; }
+  .pros b { display: block; font-size: 11px; color: var(--mute); letter-spacing: .04em; margin-bottom: 2px; }
+
+  /* hub chrome */
+  .hub-title { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .hub-title h3 { font-size: 20px; margin: 0; }
+  .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); margin-bottom: 14px; align-items: flex-end; }
+  .tabs span { padding: 7px 12px; color: var(--sub); font-size: 13px; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+  .tabs span.on { color: var(--ink); font-weight: 600; border-color: var(--ink); }
+  .tabs span.new { color: var(--green); font-weight: 600; border-color: var(--green); }
+  .tabs .sp { flex: 1; border: 0; }
+  .period { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; font-size: 12px; background: #fff; }
+  .period i { font-style: normal; padding: 4px 9px; color: var(--sub); }
+  .period i.on { color: var(--ink); font-weight: 600; box-shadow: inset 0 -2px 0 var(--ink); }
+
+  /* status (outline only) */
+  .st { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; white-space: nowrap; }
+  .st::before { content: ""; width: 8px; height: 8px; border-radius: 50%; box-sizing: border-box; flex: none; }
+  .st.run { color: var(--green); font-weight: 600; } .st.run::before { background: var(--green); }
+  .st.pause { color: var(--sub); } .st.pause::before { border: 1.5px solid var(--sub); }
+  .st.hold { color: var(--amber); font-weight: 600; } .st.hold::before { border: 1.5px dashed var(--amber); }
+  .st.plan { color: var(--sub); } .st.plan::before { border: 1.5px dashed var(--mute); }
+  .st.end { color: var(--mute); } .st.end::before { background: var(--line); }
+  .warnmark { color: var(--amber); font-size: 11px; }
+
+  /* tree table */
+  table.tree { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; min-width: 1080px; }
+  .tree th { text-align: left; font-size: 11px; font-weight: 600; color: var(--mute); padding: 9px 10px; border-bottom: 1px solid var(--line); background: #fdfdfc; white-space: nowrap; }
+  .tree th.num, .tree td.num { text-align: right; }
+  .tree th.grp { border-left: 1px solid var(--line); }
+  .tree td { padding: 8px 10px; border-bottom: 1px solid var(--row); vertical-align: middle; font-variant-numeric: tabular-nums; }
+  .tree td.l { border-left: 1px solid var(--line); }
+  .tree tr.ch td { background: #fff; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding-top: 11px; padding-bottom: 11px; }
+  .chname { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 13.5px; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; flex: none; }
+  .chmeta { font-weight: 400; color: var(--mute); font-size: 11.5px; margin-left: 4px; }
+  .cname { padding-left: 26px !important; }
+  .cname b { font-weight: 600; } .cname .k { display: inline-block; min-width: 22px; color: var(--mute); font-size: 11px; font-weight: 700; }
+  .cname small { display: block; color: var(--mute); font-size: 11px; margin-left: 22px; }
+  .muted { color: var(--mute); }
+  .plat { color: var(--mute); font-size: 12px; }
+  .bar { position: relative; height: 8px; width: 150px; background: transparent; border-bottom: 1px solid var(--row); }
+  .bar .seg { position: absolute; top: 1px; height: 6px; border-radius: 2px; }
+  .bar .seg.run { background: var(--green); }
+  .bar .seg.plan { border: 1px dashed var(--mute); }
+  .bar .seg.hold { border: 1px dashed var(--amber); }
+  .bar .seg.pause, .bar .seg.end { background: #D6D3CE; }
+  .bar .today { position: absolute; top: -3px; bottom: -3px; width: 1px; background: var(--ink); }
+  .keys { color: var(--mute); font-size: 11px; white-space: nowrap; }
+  .lead { font-weight: 700; }
+  .lead.zero { color: var(--sub); font-weight: 600; }
+  .expand td { background: #fdfdfc; font-size: 12px; color: var(--sub); padding: 10px 10px 12px 36px; }
+  .expand .crea { display: inline-flex; gap: 6px; margin-right: 14px; } .expand .crea b { color: var(--ink); font-weight: 600; }
+
+  /* glance strip */
+  .strip { display: grid; grid-template-columns: repeat(3, 1fr); background: #fff; border: 1px solid var(--line); border-radius: 12px; }
+  .strip > div { padding: 12px 16px; } .strip > div + div { border-left: 1px solid var(--line); }
+  .strip .h { display: flex; align-items: center; gap: 6px; font-weight: 600; font-size: 12.5px; }
+  .strip .v { font-size: 22px; font-weight: 700; letter-spacing: -.02em; margin-top: 4px; }
+  .strip .v small { font-size: 12px; font-weight: 500; color: var(--sub); margin-left: 6px; letter-spacing: 0; }
+  .strip .s { color: var(--sub); font-size: 11.5px; margin-top: 2px; }
+
+  /* timeline */
+  .tl { background: #fff; border: 1px solid var(--line); border-radius: 12px; min-width: 1080px; }
+  .tl-axis, .tl-row { display: grid; grid-template-columns: 240px 1fr 130px; align-items: center; }
+  .tl-axis { border-bottom: 1px solid var(--line); font-size: 11px; color: var(--mute); }
+  .tl-axis > div { padding: 8px 12px; }
+  .ticks { position: relative; height: 18px; }
+  .ticks span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
+  .tl-lane { border-top: 1px solid var(--line); padding: 8px 12px 2px; display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 12.5px; }
+  .tl-row { min-height: 34px; border-bottom: 1px solid var(--row); }
+  .tl-row > div:first-child { padding: 6px 12px 6px 28px; font-size: 12.5px; }
+  .tl-row > div:last-child { padding: 6px 12px; text-align: right; font-variant-numeric: tabular-nums; }
+  .track { position: relative; height: 34px; }
+  .track .gl { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--row); }
+  .track .now { position: absolute; top: 0; bottom: 0; width: 1.5px; background: var(--ink); }
+  .track .b { position: absolute; top: 9px; height: 16px; border-radius: 3px; font-size: 10.5px; line-height: 16px; padding: 0 6px; white-space: nowrap; overflow: hidden; }
+  .b.run { background: #fff; border: 1.5px solid var(--green); color: var(--green); font-weight: 600; }
+  .b.plan { border: 1.5px dashed var(--mute); color: var(--sub); }
+  .b.hold { border: 1.5px dashed var(--amber); color: var(--amber); font-weight: 600; background: repeating-linear-gradient(135deg, transparent 0 5px, rgba(168,116,26,.08) 5px 7px); }
+  .b.pause, .b.end { background: #EFEEEA; color: var(--sub); border: 1px solid #DDDAD4; }
+
+  /* channel cards */
+  .cc { background: #fff; border: 1px solid var(--line); border-radius: 12px; display: flex; flex-direction: column; }
+  .cc-h { padding: 14px 16px 10px; border-bottom: 1px solid var(--line); }
+  .cc-h .t { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 14px; }
+  .cc-h .m { color: var(--mute); font-size: 11.5px; margin-top: 2px; }
+  .cc-h .nums { display: flex; gap: 18px; margin-top: 10px; }
+  .cc-h .nums div { font-size: 11px; color: var(--sub); } .cc-h .nums b { display: block; font-size: 18px; color: var(--ink); letter-spacing: -.02em; }
+  .cc-list { padding: 4px 0; }
+  .cc-item { padding: 9px 16px; border-bottom: 1px solid var(--row); }
+  .cc-item:last-child { border-bottom: 0; }
+  .cc-item .r1 { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+  .cc-item .r1 b { font-weight: 600; font-size: 12.5px; }
+  .cc-item .r2 { display: flex; justify-content: space-between; color: var(--sub); font-size: 11.5px; margin-top: 3px; font-variant-numeric: tabular-nums; }
+  .cc-sub { padding: 6px 16px 10px; font-size: 11px; color: var(--mute); border-top: 1px solid var(--line); }
+
+  .rules { display: grid; grid-template-columns: 1.2fr 1fr; gap: 16px; }
+  .rules table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .rules td, .rules th { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--row); vertical-align: top; }
+  .rules th { font-size: 11px; color: var(--mute); font-weight: 600; }
+  @media (max-width: 900px) { .rules, .pros { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>마케팅 허브 — 캠페인 계층 시안</h1>
+  <p class="lede"><b>결정(11/6): C안 채널 카드 + 새 "광고" 탭.</b> 2026-11-06 · 숫자는 11/6 운영 DB·광고 스냅샷 실측(최근 30일, 10/8~11/6). 구글 395 는 API, 924 는 권한이 없어 우리 DB 리드만 있다.</p>
+
+  <div class="grid2">
+    <div class="card pad">
+      <h2>지금 화면의 문제</h2>
+      <ul class="tight">
+        <li><b>'캠페인'이 세 가지</b> — 한눈에·상세의 스코어보드는 우산 캠페인 18개(전부 2~7월 Meta, 15개 휴면), 데이터 › Meta 는 라이브 Meta, 데이터 › Google 은 정적 계획표. 채널→캠페인 계층이 어디에도 없다.</li>
+        <li><b>구글이 첫 화면에 없다</b> — 한눈에 광고비·CPL 은 Meta USD 만. 395 의 운영 캠페인 2개(₩41,169)는 데이터 층 맨 아래, 그것도 API 표는 로컬·미설정이면 숨는다.</li>
+        <li><b>Google 섹션이 11/3 기록에 멈춤</b> — '924 집행 중 · 잔액 ₩0 · C1~C4 승인 대기'. 실제는 924 일시중지(11/6), 디맨드젠 시험 운영, C4 보류.</li>
+        <li><b>성과가 플랫폼 숫자</b> — 스코어보드 리드는 Meta 리포트(206), 구글은 전환 칸(0, 동의 뒤에만 태그). DB 리드 짝짓기는 없다 — 그런데 Meta 리드 217건은 utm_campaign 이름으로 <b>217/217</b> 캠페인에 붙는다.</li>
+        <li><b>맨 위 판정이 9/28 AI 브리핑</b> — 5주 지난 문장이 첫 줄. (이번 범위 밖, 따로 고칠 후보)</li>
+      </ul>
+    </div>
+    <div class="card pad">
+      <h2>세 시안 공통 — 규칙</h2>
+      <div class="rules" style="grid-template-columns:1fr; margin-top:8px">
+        <table>
+          <tr><th>DB 리드 짝짓기(위에서 먼저 맞는 것)</th><th>지금 30일</th></tr>
+          <tr><td>① 랜딩 주소 <code>gad_campaignid</code> = 구글 캠페인 ID</td><td>2건(924)</td></tr>
+          <tr><td>② <code>utm_campaign</code> = 캠페인 이름·ID(Meta 는 옛 이름 포함)</td><td>217건(Meta)</td></tr>
+          <tr><td>③ <code>gclid</code> → 395 click_view 조회</td><td>4건 중 395 0</td></tr>
+          <tr><td>캠페인을 못 찾은 것은 채널 아래 'ID 만·gclid 만' 줄로 — 버리지 않는다</td><td>구글 4</td></tr>
+        </table>
+        <table style="margin-top:6px">
+          <tr><th>상태</th><th>뜻</th></tr>
+          <tr><td><span class="st run">운영</span></td><td>최근 2일 안에 집행 있음</td></tr>
+          <tr><td><span class="st pause">일시중지</span> <span class="st end">종료</span></td><td>계획상 멈춤 · 기간 끝남</td></tr>
+          <tr><td><span class="st plan">예정</span> <span class="st hold">보류</span></td><td>계획만(시작 전) · 하기로 했다 미룸</td></tr>
+          <tr><td colspan="2" class="note">계획(예정·보류·기간·일 예산)은 코드의 계획표 한 곳, 운영 여부·집행은 광고 스냅샷이 정한다. 둘이 어긋나면 <span class="warnmark">⚠ 계획과 다름</span>.</td></tr>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ───────────── A ───────────── -->
+  <section class="option" id="a">
+    <div class="option-head"><span class="tag">A안 · 권장</span><h2>채널 › 캠페인 트리 표</h2><span class="note">한 표 안에 채널 묶음 행 + 캠페인 행. 숫자를 나란히 비교하는 데 가장 강하다.</span></div>
+    <div class="frame">
+      <div class="hub-title"><h3>마케팅</h3><span class="period"><i>7일</i><i class="on">30일</i><i>90일</i><i>분기</i><i>이번 달</i></span></div>
+      <div class="tabs"><span>1 한눈에</span><span class="new">광고 · 새 탭</span><span>2 상세</span><span>3 데이터</span><span class="sp"></span><span>메시지</span></div>
+      <table class="tree">
+        <thead>
+          <tr>
+            <th>채널 · 캠페인</th><th>상태</th><th>기간 <span class="muted">(10/15 ─ 12/31, 세로선 = 오늘)</span></th><th class="num">일 예산</th>
+            <th class="num grp">집행 · 30일</th><th class="num">DB 리드</th><th class="num">리드당</th><th class="num">연락</th>
+            <th class="grp">플랫폼 보고(참고)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="ch"><td colspan="3"><div class="chname"><span class="dot" style="background:var(--g)"></span>Google Ads 395-174-3288 <span class="chmeta">KRW · API 읽기 · 11/6 동기화</span></div></td>
+            <td class="num muted">₩28,000</td><td class="num l"><b>₩41,169</b></td><td class="num"><span class="lead zero">0</span></td><td class="num muted">—</td><td class="num muted">—</td><td class="l plat">클릭 129 · 전환 0</td></tr>
+          <tr><td class="cname"><span class="k">C1</span><b>유튜브 전반성장_1102</b><small>동영상 조회 · 인지</small></td><td><span class="st run">운영</span></td>
+            <td><div class="bar"><span class="seg run" style="left:16%;width:84%"></span><span class="today" style="left:29%"></span></div></td>
+            <td class="num">₩8,000</td><td class="num l">₩14,884</td><td class="num"><span class="lead zero">0</span></td><td class="num muted">—</td><td class="num muted">—</td><td class="l plat">노출 4,095 · 클릭 8</td></tr>
+          <tr><td class="cname"><span class="k">시험</span><b>G_DG_[SW]_AI강의분석</b><small>디맨드젠 · 11/18 판정</small></td><td><span class="st run">운영</span></td>
+            <td><div class="bar"><span class="seg run" style="left:26%;width:18%"></span><span class="today" style="left:29%"></span></div></td>
+            <td class="num">₩20,000</td><td class="num l">₩26,285</td><td class="num"><span class="lead zero">0</span></td><td class="num muted">—</td><td class="num muted">—</td><td class="l plat">클릭 121 · 전환 0</td></tr>
+          <tr><td class="cname"><span class="k">C2</span><b>리드 · 디맨드젠</b><small>전환 가치 극대화</small></td><td><span class="st plan">예정</span></td>
+            <td><div class="bar"><span class="seg plan" style="left:31%;width:69%"></span><span class="today" style="left:29%"></span></div></td>
+            <td class="num muted">₩14,000</td><td class="num l muted">—</td><td class="num muted">—</td><td class="num muted">—</td><td class="num muted">—</td><td class="l plat">11/9 시작 예정</td></tr>
+          <tr><td class="cname"><span class="k">C3</span><b>리타게팅 · 디맨드젠</b><small>GA4 잠재고객</small></td><td><span class="st plan">예정</span></td>
+            <td><div class="bar"><span class="seg plan" style="left:51%;width:49%"></span><span class="today" style="left:29%"></span></div></td>
+            <td class="num muted">₩5,000</td><td class="num l muted">—</td><td class="num muted">—</td><td class="num muted">—</td><td class="num muted">—</td><td class="l plat">11/23 시작 예정</td></tr>
+          <tr><td class="cname"><span class="k">C4</span><b>검색</b><small>계획만 · 착지 문구 정리 뒤 재검토</small></td><td><span class="st hold">보류</span></td>
+            <td><div class="bar"><span class="seg hold" style="left:16%;width:84%"></span><span class="today" style="left:29%"></span></div></td>
+            <td class="num muted">₩7,000</td><td class="num l muted">—</td><td class="num muted">—</td><td class="num muted">—</td><td class="num muted">—</td><td class="l plat">11/6 보류 결정</td></tr>
+
+          <tr class="ch"><td colspan="3"><div class="chname"><span class="dot" style="background:var(--g);opacity:.45"></span>Google Ads 924-032-2833 · 그 밖 <span class="chmeta">옛 계정 · API 권한 없음 → 집행 미집계, DB 리드만</span></div></td>
+            <td class="num muted">—</td><td class="num l muted">미집계</td><td class="num"><b class="lead">4</b></td><td class="num muted">—</td><td class="num">3/4</td><td class="l plat">—</td></tr>
+          <tr><td class="cname"><b>Campaign #1</b><small>실적 최대화</small></td><td><span class="st pause">일시중지 11/6</span></td>
+            <td><div class="bar"><span class="seg pause" style="left:0;width:29%"></span><span class="today" style="left:29%"></span></div></td>
+            <td class="num muted">₩10,000</td><td class="num l muted">미집계</td><td class="num muted">—</td><td class="num muted">—</td><td class="num muted">—</td><td class="l keys">자동 짝짓기 키 없음(아래 gclid 2건 추정)</td></tr>
+          <tr><td class="cname"><b>유튜브 채널 광고(쇼츠+메타영상)_261030</b></td><td><span class="st pause">일시중지 11/6</span></td>
+            <td><div class="bar"><span class="seg pause" style="left:21%;width:8%"></span><span class="today" style="left:29%"></span></div></td>
+            <td class="num muted">—</td><td class="num l muted">미집계</td><td class="num muted">—</td><td class="num muted">—</td><td class="num muted">—</td><td class="l plat">—</td></tr>
+          <tr><td class="cname"><b class="muted">캠페인 ID 만 · 395 에 없음</b><small>23961303778 · 23951606550 (10/26·10/27 도입 상담)</small></td><td></td><td></td><td></td><td class="num l"></td><td class="num"><b class="lead">2</b></td><td></td><td class="num">1/2</td><td class="l keys">짝짓기: gad_campaignid</td></tr>
+          <tr><td class="cname"><b class="muted">gclid 만 · 395 클릭 아님</b><small>11/6 자료 신청 · 924 Campaign #1 추정</small></td><td></td><td></td><td></td><td class="num l"></td><td class="num"><b class="lead">2</b></td><td></td><td class="num">2/2</td><td class="l keys">짝짓기: gclid → 395 없음</td></tr>
+
+          <tr class="ch"><td colspan="3"><div class="chname"><span class="dot" style="background:var(--m)"></span>Meta <span class="chmeta">USD · 일 스냅샷 · 리드 광고</span></div></td>
+            <td class="num muted">—</td><td class="num l"><b>$2,924</b></td><td class="num"><b class="lead">217</b></td><td class="num">$13.5</td><td class="num">95%</td><td class="l plat">Meta 리드 246</td></tr>
+          <tr><td class="cname"><b>상시(HW·SW)</b><small>옛 이름 '오프라인 HW/SW' 포함</small></td><td><span class="st run">운영</span></td>
+            <td><div class="bar"><span class="seg run" style="left:0;width:100%"></span><span class="today" style="left:29%"></span></div></td>
+            <td class="num muted">—</td><td class="num l">$2,167</td><td class="num"><b class="lead">179</b></td><td class="num">$12.1</td><td class="num">96%</td><td class="l plat">Meta 리드 206</td></tr>
+          <tr class="expand"><td colspan="9">소재(source_detail) ▸ <span class="crea"><b>AI수업평가_셀프캠_릴스영상</b> 88</span><span class="crea"><b>원장님시간_릴스_희</b> 53</span><span class="crea"><b>원장님시간_릴스영상</b> 30</span><span class="crea">외 3개 8</span> · Compass 에서 이력 ↗</td></tr>
+          <tr><td class="cname"><b>설명회(인천)</b></td><td><span class="st end">종료 10/29</span></td>
+            <td><div class="bar"><span class="seg end" style="left:5%;width:15%"></span><span class="today" style="left:29%"></span></div></td>
+            <td class="num muted">—</td><td class="num l">$512</td><td class="num"><b class="lead">21</b></td><td class="num">$24.4</td><td class="num">95%</td><td class="l plat">Meta 리드 27</td></tr>
+          <tr><td class="cname"><b>설명회(창원)</b><small>옛 이름 'BD_설명회_창원_261020'</small></td><td><span class="st end">종료 10/19</span></td>
+            <td><div class="bar"><span class="seg end" style="left:0;width:6%"></span><span class="today" style="left:29%"></span></div></td>
+            <td class="num muted">—</td><td class="num l">$178</td><td class="num"><b class="lead">10</b></td><td class="num">$17.8</td><td class="num">100%</td><td class="l plat">Meta 리드 10</td></tr>
+          <tr><td class="cname"><b>설명회(제주)</b></td><td><span class="st run">운영</span></td>
+            <td><div class="bar"><span class="seg run" style="left:26%;width:4%"></span><span class="today" style="left:29%"></span></div></td>
+            <td class="num muted">—</td><td class="num l">$8</td><td class="num"><b class="lead">5</b></td><td class="num">$1.6</td><td class="num">60%</td><td class="l plat">Meta 리드 2</td></tr>
+          <tr><td class="cname"><b>상시(브랜드필름)</b><small>영상 교체 11/6 · 검토 중</small></td><td><span class="st run">운영</span></td>
+            <td><div class="bar"><span class="seg run" style="left:25%;width:5%"></span><span class="today" style="left:29%"></span></div></td>
+            <td class="num muted">—</td><td class="num l">$59</td><td class="num"><b class="lead">2</b></td><td class="num">$29.5</td><td class="num">100%</td><td class="l plat">Meta 리드 1</td></tr>
+
+          <tr class="ch"><td colspan="3"><div class="chname"><span class="dot" style="background:var(--yt)"></span>유튜브 스튜디오 <span class="chmeta">프로모션 2개 · 395 선불에서 차감 · API 밖 기록</span></div></td>
+            <td class="num muted">—</td><td class="num l muted">395 에 포함될 수 있음</td><td class="num muted">—</td><td class="num muted">—</td><td class="num muted">—</td><td class="l plat">랜딩 /contact (11/2)</td></tr>
+        </tbody>
+      </table>
+      <p class="note" style="margin:10px 2px 0">채널 행 숫자는 그 채널 통화 그대로의 합계(USD·KRW 를 섞은 총합 없음). 행을 누르면 소재·랜딩별 DB 리드가 펼쳐진다. 재개·중지 같은 쓰기는 지금처럼 데이터 › Meta 캠페인.</p>
+    </div>
+    <div class="pros">
+      <div><b>좋은 점</b>계층·상태·기간·예산·성과가 한 줄에. 채널끼리 리드·리드당 비용을 바로 비교. 11/5 기획의 '광고 탭 › 캠페인 분석' 표와 같은 뼈대라 주간 섹션을 나중에 얹기 쉽다.</div>
+      <div><b>아쉬운 점</b>가로가 넓다(1080px). 모바일은 채널 묶음 카드로 접어야 한다. 기간 막대가 작아 '언제 시작하나'는 B안보다 덜 보인다.</div>
+    </div>
+  </section>
+
+  <!-- ───────────── B ───────────── -->
+  <section class="option" id="b">
+    <div class="option-head"><span class="tag plain">B안</span><h2>채널 레인 타임라인</h2><span class="note">시간축이 주인공. 계획(예정·보류)과 운영이 한눈에, 숫자는 오른쪽 한 칸.</span></div>
+    <div class="frame">
+      <div class="hub-title"><h3>마케팅</h3><span class="period"><i>7일</i><i class="on">30일</i><i>90일</i><i>분기</i><i>이번 달</i></span></div>
+      <div class="tabs"><span>1 한눈에</span><span class="new">광고 · 새 탭</span><span>2 상세</span><span>3 데이터</span><span class="sp"></span><span>메시지</span></div>
+      <div class="tl">
+        <div class="tl-axis"><div>채널 · 캠페인</div><div class="ticks">
+          <span style="left:0%">10/15</span><span style="left:21%">11/1</span><span style="left:29%;color:var(--ink);font-weight:700">오늘 11/6</span><span style="left:47%">11/15</span><span style="left:60%">12/1</span><span style="left:79%">12/15</span><span style="left:100%">12/31</span></div><div style="text-align:right">DB 리드 · 집행 30일</div></div>
+
+        <div class="tl-lane"><span class="dot" style="background:var(--g)"></span>Google 395 <span class="chmeta">KRW · ₩41,169 · DB 리드 0</span></div>
+        <div class="tl-row"><div><b>C1</b> 유튜브 전반성장</div><div class="track"><span class="gl" style="left:21%"></span><span class="gl" style="left:60%"></span><span class="b run" style="left:16%;width:84%">운영 · 일 ₩8,000</span><span class="now" style="left:29%"></span></div><div>0 · ₩14,884</div></div>
+        <div class="tl-row"><div><b>시험</b> 디맨드젠 AI강의분석</div><div class="track"><span class="gl" style="left:21%"></span><span class="gl" style="left:60%"></span><span class="b run" style="left:26%;width:18%">운영 · 일 ₩20,000</span><span class="now" style="left:29%"></span></div><div>0 · ₩26,285</div></div>
+        <div class="tl-row"><div><b>C2</b> 리드 · 디맨드젠</div><div class="track"><span class="gl" style="left:21%"></span><span class="gl" style="left:60%"></span><span class="b plan" style="left:31%;width:69%">예정 11/9~ · 일 ₩14,000</span><span class="now" style="left:29%"></span></div><div class="muted">—</div></div>
+        <div class="tl-row"><div><b>C3</b> 리타게팅</div><div class="track"><span class="gl" style="left:21%"></span><span class="gl" style="left:60%"></span><span class="b plan" style="left:51%;width:49%">예정 11/23~ · 일 ₩5,000</span><span class="now" style="left:29%"></span></div><div class="muted">—</div></div>
+        <div class="tl-row"><div><b>C4</b> 검색</div><div class="track"><span class="gl" style="left:21%"></span><span class="gl" style="left:60%"></span><span class="b hold" style="left:16%;width:84%">보류 · 계획만 · 일 ₩7,000</span><span class="now" style="left:29%"></span></div><div class="muted">—</div></div>
+
+        <div class="tl-lane"><span class="dot" style="background:var(--g);opacity:.45"></span>Google 924 <span class="chmeta">권한 없음 · DB 리드 4</span></div>
+        <div class="tl-row"><div>Campaign #1 · 실적 최대화</div><div class="track"><span class="gl" style="left:21%"></span><span class="gl" style="left:60%"></span><span class="b pause" style="left:0;width:29%">일시중지 11/6</span><span class="now" style="left:29%"></span></div><div>— · 미집계</div></div>
+        <div class="tl-row"><div>유튜브 채널 광고_261030</div><div class="track"><span class="gl" style="left:21%"></span><span class="gl" style="left:60%"></span><span class="b pause" style="left:21%;width:8%">중지</span><span class="now" style="left:29%"></span></div><div>0 · 미집계</div></div>
+
+        <div class="tl-lane"><span class="dot" style="background:var(--m)"></span>Meta <span class="chmeta">USD · $2,924 · DB 리드 217</span></div>
+        <div class="tl-row"><div>상시(HW·SW)</div><div class="track"><span class="gl" style="left:21%"></span><span class="gl" style="left:60%"></span><span class="b run" style="left:0;width:29%">운영 · 상시</span><span class="now" style="left:29%"></span></div><div><b>179</b> · $2,167</div></div>
+        <div class="tl-row"><div>설명회(인천)</div><div class="track"><span class="gl" style="left:21%"></span><span class="gl" style="left:60%"></span><span class="b end" style="left:5%;width:15%">종료 10/29</span><span class="now" style="left:29%"></span></div><div><b>21</b> · $512</div></div>
+        <div class="tl-row"><div>설명회(제주) · 상시(브랜드필름)</div><div class="track"><span class="gl" style="left:21%"></span><span class="gl" style="left:60%"></span><span class="b run" style="left:25%;width:4.5%">운영</span><span class="now" style="left:29%"></span></div><div><b>7</b> · $67</div></div>
+
+        <div class="tl-lane"><span class="dot" style="background:var(--yt)"></span>유튜브 스튜디오 <span class="chmeta">프로모션 2개 · 기록</span></div>
+        <div class="tl-row" style="border-bottom:0"><div class="muted">기간·집행 기록 없음</div><div class="track"><span class="gl" style="left:21%"></span><span class="gl" style="left:60%"></span><span class="now" style="left:29%"></span></div><div class="muted">—</div></div>
+      </div>
+      <p class="note" style="margin:10px 2px 0">막대를 누르면 오른쪽 패널에 일자 집행·DB 리드·짝짓기 근거·소재가 열린다. 리드당 비용·연락률은 패널에서만.</p>
+    </div>
+    <div class="pros">
+      <div><b>좋은 점</b>'다음 주에 뭐가 켜지나(C2 11/9, C3 11/23)'와 '보류가 뭐였나'가 가장 잘 보인다. 계획 회의용.</div>
+      <div><b>아쉬운 점</b>숫자 비교가 약하다(리드당 비용·연락은 패널 안). Meta 상시 캠페인처럼 끝이 없는 막대는 정보가 적다. 구현이 가장 크다.</div>
+    </div>
+  </section>
+
+  <!-- ───────────── C ───────────── -->
+  <section class="option" id="c">
+    <div class="option-head"><span class="tag plain">C안</span><h2>채널 카드 3장</h2><span class="note">채널 하나 = 카드 하나. 표 대신 목록, 한 화면에 다 들어오는 대시보드형.</span></div>
+    <div class="frame">
+      <div class="hub-title"><h3>마케팅</h3><span class="period"><i>7일</i><i class="on">30일</i><i>90일</i><i>분기</i><i>이번 달</i></span></div>
+      <div class="tabs"><span>1 한눈에</span><span>2 상세 › <b style="color:var(--green)">캠페인 자리 교체</b></span><span>3 데이터</span><span class="sp"></span><span>메시지</span></div>
+      <div class="grid3" style="min-width:1000px">
+        <div class="cc">
+          <div class="cc-h"><div class="t"><span class="dot" style="background:var(--g)"></span>Google 395</div><div class="m">KRW · API 읽기 · 11/6 동기화</div>
+            <div class="nums"><div>집행<b>₩41,169</b></div><div>DB 리드<b>0</b></div><div>운영<b>2</b></div></div></div>
+          <div class="cc-list">
+            <div class="cc-item"><div class="r1"><b>C1 유튜브 전반성장</b><span class="st run">운영</span></div><div class="r2"><span>11/3~12/31 · 일 ₩8,000</span><span>₩14,884 · 리드 0</span></div></div>
+            <div class="cc-item"><div class="r1"><b>시험 디맨드젠 AI강의분석</b><span class="st run">운영</span></div><div class="r2"><span>11/5~11/18 · 일 ₩20,000</span><span>₩26,285 · 리드 0</span></div></div>
+            <div class="cc-item"><div class="r1"><b>C2 리드 디맨드젠</b><span class="st plan">예정</span></div><div class="r2"><span>11/9~ · 일 ₩14,000</span><span>—</span></div></div>
+            <div class="cc-item"><div class="r1"><b>C3 리타게팅</b><span class="st plan">예정</span></div><div class="r2"><span>11/23~ · 일 ₩5,000</span><span>—</span></div></div>
+            <div class="cc-item"><div class="r1"><b>C4 검색</b><span class="st hold">보류</span></div><div class="r2"><span>계획만 · 일 ₩7,000</span><span>—</span></div></div>
+          </div>
+          <div class="cc-sub">924(옛 계정) 일시중지 2 · DB 리드 4 ▸ 펼치기</div>
+        </div>
+        <div class="cc">
+          <div class="cc-h"><div class="t"><span class="dot" style="background:var(--m)"></span>Meta</div><div class="m">USD · 리드 광고 · 일 스냅샷</div>
+            <div class="nums"><div>집행<b>$2,924</b></div><div>DB 리드<b>217</b></div><div>리드당<b>$13.5</b></div></div></div>
+          <div class="cc-list">
+            <div class="cc-item"><div class="r1"><b>상시(HW·SW)</b><span class="st run">운영</span></div><div class="r2"><span>상시 · 연락 96%</span><span>$2,167 · 리드 179 · $12.1</span></div></div>
+            <div class="cc-item"><div class="r1"><b>설명회(제주)</b><span class="st run">운영</span></div><div class="r2"><span>11/5~</span><span>$8 · 리드 5</span></div></div>
+            <div class="cc-item"><div class="r1"><b>상시(브랜드필름)</b><span class="st run">운영</span></div><div class="r2"><span>11/4~ · 영상 교체 검토 중</span><span>$59 · 리드 2</span></div></div>
+            <div class="cc-item"><div class="r1"><b>설명회(인천)</b><span class="st end">종료</span></div><div class="r2"><span>10/19~10/29</span><span>$512 · 리드 21 · $24.4</span></div></div>
+            <div class="cc-item"><div class="r1"><b>설명회(창원)</b><span class="st end">종료</span></div><div class="r2"><span>10/13~10/19</span><span>$178 · 리드 10 · $17.8</span></div></div>
+          </div>
+          <div class="cc-sub">소재별은 상세 › 소재 · 재개·중지는 데이터 › Meta</div>
+        </div>
+        <div class="cc">
+          <div class="cc-h"><div class="t"><span class="dot" style="background:var(--yt)"></span>유튜브 스튜디오</div><div class="m">프로모션 2개 · 395 선불 차감 · API 밖</div>
+            <div class="nums"><div>집행<b class="muted">—</b></div><div>DB 리드<b class="muted">—</b></div></div></div>
+          <div class="cc-list">
+            <div class="cc-item"><div class="r1"><b>프로모션 2개</b><span class="st run">운영</span></div><div class="r2"><span>랜딩 /contact (11/2 수정)</span><span>395 집계 포함 여부 확인 필요</span></div></div>
+          </div>
+          <div class="cc-sub">채널 구독·조회는 YouTube 스튜디오 ↗</div>
+        </div>
+      </div>
+      <p class="note" style="margin:10px 2px 0">카드 순서 = 집행이 큰 채널부터가 아니라 고정(Google 395 · Meta · 유튜브 스튜디오). 924 는 Google 카드 안에 접힘.</p>
+    </div>
+    <div class="pros">
+      <div><b>좋은 점</b>스크롤 없이 한 화면, 모바일에서도 카드 그대로. 새 탭 없이 상세 › 캠페인 자리만 바꿔 가장 작은 변경.</div>
+      <div><b>아쉬운 점</b>채널을 가로지른 비교(구글 디맨드젠 vs Meta 리드당)가 눈으로만 된다. 캠페인이 늘면 카드 길이가 제각각.</div>
+    </div>
+  </section>
+
+  <section class="option">
+    <div class="option-head"><span class="tag plain">세 안 공통</span><h2>한눈에 Top 3 → 채널 3줄</h2><span class="note">우산 캠페인 Top 3(휴면 15개 섞임)를 내리고 이 띠로 바꾼다. 누르면 고른 안의 화면으로.</span></div>
+    <div class="strip">
+      <div><div class="h"><span class="dot" style="background:var(--g)"></span>Google 395 <span class="st run" style="margin-left:auto">운영 2</span></div><div class="v">₩41,169<small>DB 리드 0</small></div><div class="s">예정 C2 11/9 · C3 11/23 · 보류 C4</div></div>
+      <div><div class="h"><span class="dot" style="background:var(--m)"></span>Meta <span class="st run" style="margin-left:auto">운영 3</span></div><div class="v">$2,924<small>DB 리드 217 · $13.5</small></div><div class="s">상시(HW·SW) 179 · 설명회(인천) 21</div></div>
+      <div><div class="h"><span class="dot" style="background:var(--yt)"></span>유튜브 스튜디오 <span class="st run" style="margin-left:auto">운영 2</span></div><div class="v" style="color:var(--mute)">—<small>기록만</small></div><div class="s">395 선불 차감 · API 밖</div></div>
+    </div>
+  </section>
+</div>
+</body>
+</html>

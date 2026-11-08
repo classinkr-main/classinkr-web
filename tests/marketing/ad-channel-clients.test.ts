@@ -5,6 +5,7 @@ import {
   fetchGoogleAdsDaily,
   isGoogleAdsConfigured,
   mapGoogleAdsRow,
+  normalizeChannelType,
   normalizeCustomerId,
   resetGoogleAdsTokenCache,
 } from "@/lib/google/ads"
@@ -38,6 +39,8 @@ describe("Google Ads — cost_micros 변환", () => {
       impressions: 5200,
       clicks: 310,
       conversions: 18,
+      channelType: null,
+      videoViews: 0,
     })
   })
 
@@ -67,6 +70,44 @@ describe("Google Ads — cost_micros 변환", () => {
       metrics: { costMicros: "-5", impressions: "abc", clicks: undefined },
     })
     expect(row).toMatchObject({ spend: 0, impressions: 0, clicks: 0 })
+  })
+})
+
+describe("Google Ads — 캠페인 유형 · 유튜브 조회수", () => {
+  it("advertisingChannelType 원문과 videoTrueviewViews(REST 이름)를 옮긴다", () => {
+    const row = mapGoogleAdsRow({
+      campaign: { id: 24421437785, name: "유튜브 전반성장_1102", advertisingChannelType: "VIDEO" },
+      segments: { date: "2026-11-03" },
+      metrics: { costMicros: "4766840000", impressions: "1129", clicks: "4", videoTrueviewViews: "312" },
+    })
+    expect(row).toMatchObject({ channelType: "VIDEO", videoViews: 312, spend: 4766.84 })
+  })
+
+  it("조회수가 응답에서 빠지면(0 이면 생략된다) 0 — 검색 캠페인도 같은 모양", () => {
+    const row = mapGoogleAdsRow({
+      campaign: { id: 1, advertisingChannelType: "SEARCH" },
+      segments: { date: "2026-11-03" },
+      metrics: { impressions: "10" },
+    })
+    expect(row).toMatchObject({ channelType: "SEARCH", videoViews: 0 })
+  })
+
+  it("유형은 열거형 이름만 남긴다 — UNSPECIFIED·UNKNOWN·모양이 다른 값은 null", () => {
+    expect(normalizeChannelType("DEMAND_GEN")).toBe("DEMAND_GEN")
+    expect(normalizeChannelType(" PERFORMANCE_MAX ")).toBe("PERFORMANCE_MAX")
+    expect(normalizeChannelType("UNSPECIFIED")).toBeNull()
+    expect(normalizeChannelType("UNKNOWN")).toBeNull()
+    expect(normalizeChannelType("video")).toBeNull()
+    expect(normalizeChannelType("VIDEO'; drop")).toBeNull()
+    expect(normalizeChannelType(7)).toBeNull()
+    expect(normalizeChannelType(undefined)).toBeNull()
+  })
+
+  it("GAQL 이 유형과 TrueView 조회수를 고른다 — 옛 이름 metrics.video_views 는 v22 부터 거부된다", () => {
+    const query = buildDailyInsightsQuery("2026-11-01", "2026-11-06")
+    expect(query).toMatch(/\bcampaign\.advertising_channel_type\b/)
+    expect(query).toMatch(/\bmetrics\.video_trueview_views\b/)
+    expect(query).not.toMatch(/\bmetrics\.video_views\b/)
   })
 })
 

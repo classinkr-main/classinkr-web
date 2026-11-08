@@ -127,10 +127,57 @@ function PathStepChips({ path }: { path: string }) {
     )
 }
 
+// 답 첫머리의 "네." "아니요." 는 한눈에 보이게 굵게 둔다.
+const ANSWER_VERDICT_PATTERN = /^(네|아니요|아니오)\.(\s+|$)/
+
+function renderAnswer(answer: string): ReactNode {
+    const verdict = ANSWER_VERDICT_PATTERN.exec(answer)
+    if (!verdict) return renderInlineMarkdown(answer)
+    return (
+        <>
+            <strong className="font-semibold text-fg-ink">{verdict[1]}.</strong>{" "}
+            {renderInlineMarkdown(answer.slice(verdict[0].length))}
+        </>
+    )
+}
+
+// Q·A 는 배경 없이 글자색으로만 나눈다. 줄 기준선에 맞춰 첫 줄과 나란히 둔다.
+const QA_MARK_CLASS = "w-5 shrink-0 text-body-l font-bold leading-none"
+
+// 자주 묻는 질문 항목. 질문은 굵은 글자 + 강조색 Q, 답은 본문색 + 흐린 A 로 나눈다.
+function QuestionAnswerItem({ question, answer }: { question: ReactNode; answer: string }) {
+    return (
+        <li className="py-5 first:pt-0 last:pb-0">
+            <div className="flex items-baseline gap-2.5">
+                <span aria-hidden className={cn(QA_MARK_CLASS, "text-fg-accent")}>
+                    Q
+                </span>
+                <p className="min-w-0 break-keep text-body font-bold text-fg-ink [overflow-wrap:anywhere]">
+                    <span className="sr-only">질문: </span>
+                    {typeof question === "string" ? renderInlineMarkdown(question) : question}
+                </p>
+            </div>
+            <div className="mt-2 flex items-baseline gap-2.5">
+                <span aria-hidden className={cn(QA_MARK_CLASS, "text-fg-muted")}>
+                    A
+                </span>
+                <p className="min-w-0 break-keep text-ui leading-[26px] text-fg-body [overflow-wrap:anywhere]">
+                    <span className="sr-only">답: </span>
+                    {renderAnswer(answer)}
+                </p>
+            </div>
+        </li>
+    )
+}
+
 function StepList({ items }: { items: DocsChecklistItem[] }) {
     return (
         <ol className="mt-5 divide-y divide-black/[0.06]">
             {items.map((item, index) => {
+                if (item.answer) {
+                    return <QuestionAnswerItem key={index} question={item.label} answer={item.answer} />
+                }
+
                 const pathValue =
                     typeof item.label === "string" && item.label.startsWith(PATH_STEP_PREFIX)
                         ? item.label.slice(PATH_STEP_PREFIX.length)

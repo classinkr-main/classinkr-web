@@ -272,13 +272,13 @@ const featureTabs: FeatureTab[] = [
         imageFit: "contain",
         imagePanelClassName: "bg-[#05080C]",
         imageClassName: "scale-[1.8] -translate-y-[8%]",
-        badge: "50페이지 무한 캔버스",
+        badge: "최대 50페이지 판서",
         title: "공간 걱정 없이 쓰고, 쓰는 즉시 전달",
         points: [
-            "50페이지 무한 캔버스 — 지우지 않고 이어가는 수업",
-            "0.03초 초저지연 + 50포인트 멀티터치로 분필처럼 자연스러운 판서",
+            "최대 50페이지 — 지우지 않고 이어가는 수업",
+            "터치 응답 2ms · 50점 멀티터치로 자연스러운 판서",
             "쓰는 순간 전 학생 기기에 실시간 동기화 → 필기 대신 수업에 집중",
-            "수업 종료 후 자동 PDF 저장·배포로 결석 학생도 그대로 복습",
+            "판서는 수업 뒤 학습 보고서에 담겨 결석 학생도 그대로 복습",
         ],
     },
     {
@@ -308,15 +308,15 @@ const featureTabs: FeatureTab[] = [
     {
         label: "AI 카메라",
         image: "/images/product/hw/camera/camera-dual-premium-blended.webp",
-        imageAlt: "Classin Board AI 트래킹 카메라 클로즈업",
+        imageAlt: "Classin Cam AI 추적 카메라 클로즈업",
         imageFit: "contain",
         imagePanelClassName: "bg-[#050708]",
         imageClassName: "scale-[1.08]",
-        badge: "수업 영상 자동 생성",
-        title: "수업이 끝나면, 영상도 완성됩니다",
+        badge: "선택 구성 · 현장 녹화",
+        title: "카메라를 더하면, 교실 장면도 남습니다",
         points: [
-            "4K AI 카메라가 교사를 자동 추적하며 수업 전체를 녹화",
-            "수업 종료 즉시 수업 영상 자동 생성 — 별도 편집·업로드 불필요",
+            "AI 추적 카메라(Cam T1)를 함께 구성하면 강사를 따라가며 현장 녹화",
+            "녹화를 켠 수업은 끝난 뒤 처리 시간을 거쳐 다시보기에 올라갑니다 — 따로 편집·업로드하지 않습니다",
             "8배열 마이크 + AI 노이즈캔슬링으로 선명한 음성 전달",
             "교실+원격 학생 동시 판서, 진짜 하이브리드 수업",
         ],
@@ -422,7 +422,7 @@ function FeatureTabSection() {
 function ProductAnatomySection() {
     const physicalSpecs = [
         { label: "두께", value: "단 110mm", sub: "초슬림 알루미늄 바디" },
-        { label: "베젤", value: "22mm 슬림베젤", sub: "화면 집중도 극대화" },
+        { label: "베젤", value: "22mm 슬림베젤", sub: "화면을 더 넓게" },
         { label: "제스처바", value: "양측 탑재", sub: "S110·S86 좌우 모두 지원" },
         { label: "OPS 슬롯", value: "기본 내장", sub: "외장 PC 없이 독립 구동" },
         { label: "NFC", value: "원터치 로그인", sub: "교사 카드 태그 즉시 인증" },
@@ -518,8 +518,8 @@ const timelineSteps = [
     {
         time: "09:00",
         icon: <PenTool className="w-4 h-4" />,
-        title: "[진행] 판서 + AI 카메라 자동 녹화",
-        desc: "칠판에 쓰는 순간 학생 기기에 실시간 반영. 동시에 AI 카메라가 교사를 추적하며 퀄리티 있는 수업과 영상 녹화를 진행합니다.",
+        title: "[진행] 판서 + 수업 녹화",
+        desc: "칠판에 쓰는 순간 학생 기기에 실시간 반영됩니다. 녹화를 켠 수업은 판서 화면이 그대로 녹화되고, AI 추적 카메라를 구성한 교실은 강사를 따라가는 현장 녹화도 남깁니다.",
     },
     {
         time: "09:15",
@@ -530,14 +530,14 @@ const timelineSteps = [
     {
         time: "09:40",
         icon: <Share2 className="w-4 h-4" />,
-        title: "[종료] 판서 PDF + 수업 영상 동시 업로드",
-        desc: "수업이 종료되면 판서 내용과 수업 영상이 동시에 업로드됩니다. 학생들은 필기 걱정 없이 수업에 온전히 집중할 수 있게 됩니다.",
+        title: "[종료] 판서 + 수업 영상 정리",
+        desc: "수업이 끝나면 판서는 학습 보고서에 담기고, 녹화 영상은 처리 시간을 거쳐 다시보기에 올라갑니다. 학생들은 필기 걱정 없이 수업에 온전히 집중할 수 있게 됩니다.",
     },
     {
         time: "방과후",
         icon: <Monitor className="w-4 h-4" />,
         title: "[복습] 수업 영상 + 판서 노트로 복습",
-        desc: "바로 업로드된 강의와 판서 노트를 보며 복습합니다. 결석생도 소외되지 않는 자동화 수업 시스템을 경험해보세요.",
+        desc: "다시보기로 올라온 강의와 판서 노트를 보며 복습합니다. 결석생도 소외되지 않습니다.",
     },
 ]
 
@@ -783,13 +783,14 @@ export default function ProductHWPage() {
                                 className="text-[2.25rem] sm:text-5xl md:text-6xl lg:text-[4.25rem] xl:text-[5rem] font-bold leading-[1.05] mb-10 text-[#1a1a19]"
                                 style={{ letterSpacing: "-0.045em" }}
                             >
+                                <span className="mb-5 block text-h3 text-fg-muted">학원 전자칠판 Classin Board</span>
                                 하나의 스튜디오가
                                 <br />
                                 <span className="text-fg-accent">교실에 들어섭니다.</span>
                             </h1>
 
                             <p className="text-lg md:text-xl lg:text-2xl text-[#615D59] leading-relaxed font-medium max-w-3xl mx-auto mb-12">
-                                보드 위에 쓰면 전원에게 공유되고, AI 카메라가 수업을 녹화하고, 끝나면 영상과 노트가 동시에 올라갑니다.
+                                보드 위에 쓰면 전원에게 공유되고, 녹화를 켠 수업은 판서와 함께 다시보기로 남습니다. AI 추적 카메라를 더하면 교실 장면까지 녹화합니다.
                             </p>
                         </motion.div>
 
@@ -801,9 +802,9 @@ export default function ProductHWPage() {
                             className="flex flex-wrap justify-center gap-8 md:gap-14 mt-4"
                         >
                             {[
-                                { value: "수업 영상", label: "종료 즉시 자동 업로드" },
-                                { value: "50페이지", label: "공간 걱정 없는 무한 판서" },
-                                { value: "AI 카메라", label: "4K 자동 트래킹 녹화" },
+                                { value: "다시보기", label: "녹화를 켠 수업은 영상으로" },
+                                { value: "50페이지", label: "지우지 않고 이어 쓰는 판서" },
+                                { value: "AI 카메라", label: "추적 카메라 선택 구성" },
                                 { value: "실시간", label: "판서 즉시 전체 공유" },
                             ].map((m, i) => (
                                 <div key={i} className="text-center">
@@ -845,15 +846,29 @@ export default function ProductHWPage() {
                         </div>
                         <div>
                             <p className="text-base leading-8 text-[#615D59] md:text-lg">
-                                Classin Board는 판서, 4K AI 카메라 자동 추적, 수업 영상 업로드, 판서 PDF 공유,
-                                Classin 소프트웨어 연동을 제공하는 교육용 전자칠판입니다. 수업 중에 만든 자료가
-                                수업 종료 후 복습 콘텐츠와 학부모 공유 자료로 이어집니다.
+                                Classin Board는 판서, 판서 PDF 저장, 수업 녹화, Classin 소프트웨어 연동을 제공하는
+                                학원 전자칠판입니다. AI 추적 카메라(Cam T1 강사 추적·S1 학생 인식)를 함께 구성하면
+                                강사를 따라가는 현장 녹화도 남깁니다. 수업 중에 만든 자료가 수업 뒤 복습 콘텐츠와
+                                학부모 공유 자료로 이어집니다.
                             </p>
                             <ul className="mt-6 grid gap-3 text-sm font-semibold text-[#31302E] sm:grid-cols-3">
                                 <li className="rounded-[8px] bg-fg-accent/8 px-4 py-3 text-fg-accent">판서: PDF로 저장</li>
-                                <li className="rounded-[8px] bg-fg-accent/8 px-4 py-3 text-fg-accent">녹화: AI 카메라 추적</li>
+                                <li className="rounded-[8px] bg-fg-accent/8 px-4 py-3 text-fg-accent">녹화: 추적 카메라 선택 구성</li>
                                 <li className="rounded-[8px] bg-fg-accent/8 px-4 py-3 text-fg-accent">공유: Classin과 연동</li>
                             </ul>
+                            <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+                                <Button asChild size="md">
+                                    <TrackedLink href="/showroom#booking" ctaId="hw_summary_showroom">
+                                        목동 쇼룸 시연 예약
+                                        <ArrowRight aria-hidden="true" />
+                                    </TrackedLink>
+                                </Button>
+                                <Button asChild variant="line" size="md">
+                                    <TrackedLink href="/contact#contact-form" ctaId="hw_summary_contact">
+                                        도입 상담 받기
+                                    </TrackedLink>
+                                </Button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -875,7 +890,7 @@ export default function ProductHWPage() {
             {/* ALL-IN-ONE STATEMENT — OPS 내장 강조 + 분해도 */}
             <AllInOneStatement />
 
-            {/* AI CAMERA — 트래킹 카메라 (상위 이동: 카메라 비중 UP) */}
+            {/* AI CAMERA — 선택 구성 추적 카메라 (#ai-tracking-camera) */}
             <AICameraSection />
 
             {/* BIG BACKDROP — 베젤 클로즈업 풀블리드 */}
@@ -884,7 +899,7 @@ export default function ProductHWPage() {
             {/* DESIGN DETAILS — 반사·지문·몰입 3카드 */}
             <DesignDetails />
 
-            {/* LATENCY PROOF — 0.03s 시연 */}
+            {/* LATENCY PROOF — 터치 응답 2ms(규격서) */}
             <LatencyProof />
 
             {/* SIZE CHOOSER — 75"/86" 비교 */}
@@ -930,22 +945,22 @@ export default function ProductHWPage() {
                 <FeatureSection
                     tag="WRITING EXPERIENCE"
                     title={<>쓰는 순간,<br />전자칠판이란 걸 <span className="text-fg-accent">잊게 됩니다</span></>}
-                    desc={<>분필의 마찰감을 재현한 표면 코팅과 0.03초 초저지연이 만나,<br />손끝을 따라오는 가장 자연스러운 디지털 필기를 경험하세요.</>}
+                    desc={<>분필의 마찰감을 재현한 표면 코팅과 2ms 터치 응답이 만나,<br />손끝을 따라오는 가장 자연스러운 디지털 필기를 경험하세요.</>}
                     features={[
                         {
                             icon: <Zap className="w-7 h-7" />,
-                            label: "0.03초 초저지연",
-                            detail: "생각의 속도를 따라오는 잉크. 쓰는 즉시 화면에 나타납니다.",
+                            label: "터치 응답 2ms",
+                            detail: "규격서 기준 터치 응답 속도입니다. 쓰는 즉시 화면에 나타납니다.",
                         },
                         {
                             icon: <Hand className="w-7 h-7" />,
-                            label: "50포인트 멀티터치",
+                            label: "50점 멀티터치",
                             detail: "교사와 학생이 동시에 판서. 그룹 활동과 협업이 칠판 위에서 바로.",
                         },
                         {
                             icon: <Maximize className="w-7 h-7" />,
-                            label: "무한 캔버스",
-                            detail: "지우지 마세요, 넘기세요. 최대 50페이지를 단일 파일로 저장합니다.",
+                            label: "최대 50페이지",
+                            detail: "지우지 말고 이어 쓰세요. 한 파일에 최대 50페이지까지 담깁니다.",
                         },
                     ]}
                 >
@@ -1024,7 +1039,7 @@ export default function ProductHWPage() {
                 <FeatureSection
                     tag="INSTANT SHARING"
                     title={<>판서가 끝나기도 전에,<br />학생 기기에 <span className="text-fg-accent">도착합니다</span></>}
-                    desc={<>실시간 판서 동기화로 모든 학생이 같은 내용을 동시에 봅니다.<br />수업이 끝나면 자동 저장. 결석한 학생도 놓칠 수 없습니다.</>}
+                    desc={<>실시간 판서 동기화로 모든 학생이 같은 내용을 동시에 봅니다.<br />수업이 끝나면 판서가 학습 보고서에 남아, 결석한 학생도 놓치지 않습니다.</>}
                     visualClassName="lg:max-w-[660px] lg:-ml-14"
                     features={[
                         {
@@ -1034,8 +1049,8 @@ export default function ProductHWPage() {
                         },
                         {
                             icon: <Layers className="w-7 h-7" />,
-                            label: "원클릭 저장 · 공유",
-                            detail: "수업 종료 후 판서 내용이 PDF로 자동 저장. 학생에게 즉시 배포 가능.",
+                            label: "판서 저장 · 공유",
+                            detail: "판서를 PDF·EDB 파일로 저장해 학생과 나눕니다. 수업 뒤에는 학습 보고서에도 담깁니다.",
                         },
                         {
                             icon: <Users className="w-7 h-7" />,
@@ -1088,8 +1103,8 @@ export default function ProductHWPage() {
                 features={[
                     {
                         icon: <Camera className="w-7 h-7" />,
-                        label: "4K AI 카메라",
-                        detail: "신체 추적 알고리즘으로 교사를 자동 트래킹. 별도 카메라맨이 필요 없습니다.",
+                        label: "AI 추적 카메라 (선택 구성)",
+                        detail: "함께 구성하면 강사를 자동으로 따라 찍습니다. 별도 카메라맨이 필요 없습니다.",
                     },
                     {
                         icon: <Mic className="w-7 h-7" />,
@@ -1335,6 +1350,14 @@ export default function ProductHWPage() {
                         </div>
 
                         <div className="mt-8 flex flex-col items-center justify-center gap-1 sm:flex-row sm:gap-8">
+                            <TrackedLink
+                                href="/showroom#booking"
+                                ctaId="hw_final_showroom"
+                                className="inline-flex min-h-11 items-center gap-2 text-ui font-semibold text-fg-accent transition-colors hover:text-fg-accent-hover"
+                            >
+                                목동 쇼룸 시연 예약
+                                <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                            </TrackedLink>
                             <TrackedLink
                                 href={HW_SPEC_FAQ_DOC_HREF}
                                 ctaId="hw_spec_faq_doc"

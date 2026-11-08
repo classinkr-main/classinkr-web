@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest"
 
 import { buildDocMetaDescription, buildDocSeoTitle } from "@/app/docs/_utils"
 import { FAQ } from "@/components/sections/FAQ"
+import { AI_REPORT_QA } from "@/lib/ai-report-content"
 import { CLASSIN_POSITIONING } from "@/lib/classin-positioning"
 import { buildLlmsTxt } from "@/lib/llms-txt"
 import { PRODUCT_SW_FAQS } from "@/lib/product-sw-faq"
@@ -68,6 +69,16 @@ describe("/product/sw FAQ 정본 문구", () => {
       expect(all).not.toContain(banned)
     }
     expect(all).toContain(CLASSIN_POSITIONING.comparisonPoints[0].point)
+  })
+})
+
+describe("/product/ai-report Q&A 정본 문구", () => {
+  it("녹화 다운로드 차단·앱 전용·저작권 귀속을 늘 그런 것처럼 단정하지 않는다", () => {
+    const all = AI_REPORT_QA.map(({ question, answer }) => `${question} ${answer}`).join("\n")
+    for (const banned of ["외부 다운로드", "다운로드가 차단", "앱 내 재생만", "저작권은"]) {
+      expect(all).not.toContain(banned)
+    }
+    expect(all).toContain("관리자 권한과 계약 범위")
   })
 })
 

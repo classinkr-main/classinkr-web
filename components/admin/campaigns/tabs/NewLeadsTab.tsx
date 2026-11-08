@@ -230,7 +230,7 @@ export default function NewLeadsTab({ leads, loading, error, embedded = false }:
         <header className="mb-4">
           <h2 className="text-[15px] font-bold tracking-[-0.01em] text-[#111110]">신규 리드</h2>
           <p className="mt-1 text-[12px] leading-[1.6] text-[#615D59]">
-            전 소스 신규 유입 — 액션은 연락 체크. 유료 성과는 상세 › 캠페인, 광고 리드 전환은 아래 광고 리드 섹션.
+            전 소스 신규 유입 — 액션은 연락 체크. 유료 성과는 광고 탭, 광고 리드 전환은 아래 광고 리드 섹션.
           </p>
         </header>
       )}

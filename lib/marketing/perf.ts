@@ -3,6 +3,7 @@
 // 정직 규칙: 분모 0/미측정 은 0% 가 아니라 null. 통화 혼합 집행률은 호출부에서 null 로 들어온다.
 // 순수 모듈 유지 — 서버 전용 import 금지(순수 모듈·타입/상수만 허용). 조립은 perf-assemble.ts.
 
+import type { AdBoard } from "@/lib/marketing/ad-board"
 import { getLeadSourceGroup, isTestLead, type LeadSourceGroup } from "@/lib/crm/lead-attribution"
 import type { ChannelSpendSummary, LiveAdChannel } from "@/lib/marketing/ad-insights"
 import type { AttributionFunnel } from "@/lib/marketing/attribution-funnel"
@@ -460,6 +461,11 @@ export interface MarketingPerfResponse {
    * 배포 직후 옛 캐시 항목에는 없을 수 있어 선택 필드다.
    */
   googleCampaigns?: PerfGoogleCampaign[]
+  /**
+   * 광고 탭 채널 카드 — 계획표 + 스냅샷 + 우리 DB 리드 짝짓기(lib/marketing/ad-board.ts).
+   * 배포 직후 옛 캐시 항목에는 없을 수 있어 선택 필드다.
+   */
+  adBoard?: AdBoard
   /**
    * 귀속 폭포 — 이 기간 리드가 "어느 광고가 데려왔나"까지 가는 길에서 어디서 끊기는지.
    * 위 funnel(광고 리드의 단계 전환)과 다른 축이다: 저쪽은 "리드가 고객이 되는 과정",
