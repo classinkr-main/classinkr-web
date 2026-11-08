@@ -70,7 +70,7 @@ const DEVICE_SPLIT_ANSWER_RE =
 const SALES_INTENTS = new Set(["sales_consulting", "tutor_pricing_recommend", "emotional_consulting", "onboarding"])
 const SALES_CATEGORIES = new Set(["consultation", "billing", "onboarding", "hardware"])
 const SUPPORT_SIGNAL_RE =
-  /안\s*(?:돼|되|나|켜|열|보)|안돼|안되|오류|에러|고장|끊|튕|멈|꺼져|환불|해지|위약금|결제\s*(?:실패|오류)|중복|두\s*번|청구|계산서|영수증|증빙|부가세|견적서|계약서|a\s*\/?\s*s|수리|접수/
+  /안\s*(?:돼|되|나|켜|열|보|눌)|안돼|안되|오류|에러|고장|끊|튕|멈|꺼져|비활성|회색|눌리지|환불|해지|위약금|결제\s*(?:실패|오류)|중복|두\s*번|청구|계산서|영수증|증빙|부가세|견적서|계약서|a\s*\/?\s*s|수리|접수/
 
 // 영업 상담에서 알아 두면 견적·구성을 좁힐 수 있는 것. 질문에 이미 있으면 묻지 않는다.
 const SALES_SLOTS: { id: string; present: RegExp; answerAsks: RegExp; line: string }[] = [
@@ -144,10 +144,17 @@ function pickSalesSlot(input: FollowUpInput) {
   return null
 }
 
+// 영업 의도로 분류되지 않은 질문은 구매·도입 신호가 있을 때만 영업 상담으로 본다
+// ("칠판 반사 방지 돼요?", "시험 시작 버튼이 비활성화돼요"에 교실 수나 인원을 묻지 않는다).
+const PURCHASE_SIGNAL_RE =
+  /도입|구매|견적|가격|요금|비용|체험|데모|상담|들이|살까|사려|살\s*거|추천|쇼룸|몇\s*대|여러\s*대|싸게|할인|대수/
+
 function isSalesConversation(input: FollowUpInput) {
   if (input.handoffIntent !== "demo") return false
-  if (SUPPORT_SIGNAL_RE.test(input.question.toLowerCase())) return false
-  return SALES_INTENTS.has(input.intent) || SALES_CATEGORIES.has(input.category)
+  const text = input.question.toLowerCase()
+  if (SUPPORT_SIGNAL_RE.test(text)) return false
+  if (SALES_INTENTS.has(input.intent)) return true
+  return SALES_CATEGORIES.has(input.category) && PURCHASE_SIGNAL_RE.test(text)
 }
 
 // 이 레이어가 붙이는 문장들. 스트리밍 경로처럼 두 번 거쳐도 질문이 하나만 남게, 이미 붙었으면 더 붙이지 않는다.

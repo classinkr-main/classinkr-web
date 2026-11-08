@@ -2464,9 +2464,13 @@ function trimExcerptToSentence(excerpt: string) {
   return sentences && sentences.length > 0 ? sentences.join("").trim() : withoutEllipsis
 }
 
+// 학생·학부모 목소리의 질문. 이런 질문에는 영업형 되묻기("설치 장소, 희망 대수", "수업 전·중·후")를 붙이지 않는다.
+const LEARNER_VOICE_RE =
+  /우리\s*(?:아이|애)|아이가|애가|딸이|아들이|학생인데|저\s*학생|쌤이|선생님이\s*(?:내|저|우리)|엄마가|엄마한테|숙제|과제|시험|다시\s*보기|다보기/
+
 // 질문 성격(증상·사용법·구매)에 맞는 다음 행동. 카테고리별 고정 문구는 구매·도입 질문에만 쓴다
 // (터치 문제에 "설치 장소, 희망 대수를 알려주세요"처럼 엉뚱한 되묻기를 붙이지 않는다).
-function getContextualNextStep(question: NormalizedQuestion, category: string) {
+function getContextualNextStep(question: NormalizedQuestion, category: string): string | null {
   const text = question.redacted.toLowerCase()
   if (/견적|가격|요금|비용|도입|구매|체험|데모|상담/.test(text)) return getConciseNextStep(category)
   if (/안\s*(?:돼|되|됨|됐|나|들|보|켜|떠|와)|안돼|안되|안됨|오류|에러|끊|튕|멈|이상|못\s*(?:하|해|들|보|봐)/.test(text)) {
@@ -2475,6 +2479,8 @@ function getContextualNextStep(question: NormalizedQuestion, category: string) {
   if (/어떻게|방법|어디|하는\s*법|순서/.test(text)) {
     return "막히는 화면이나 메뉴 이름을 알려 주시면 그 단계부터 더 자세히 안내드릴게요."
   }
+  // 수업·칠판의 일반 질문이나 학생·학부모 질문에 영업형 되묻기를 붙이지 않는다(끝 질문은 질문 주도 계층이 정한다).
+  if (LEARNER_VOICE_RE.test(text) || category === "classroom" || category === "hardware") return null
   return getConciseNextStep(category)
 }
 
@@ -3028,7 +3034,7 @@ function formatConsumerAnswer({
   return [
     summary,
     caution,
-    `다음으로는 ${nextStep}`,
+    nextStep ? `다음으로는 ${nextStep}` : null,
   ].filter(Boolean).join("\n\n")
 }
 
