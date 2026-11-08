@@ -31,6 +31,7 @@ const PRIOR_BOT_RE =
   /(?:다른|이전|지난)\s*(?:창|채팅|대화|세션)|(?:아까|전에|지난번|저번).{0,12}(?:챗봇|봇|답변)|챗봇이\s*(?:알려|말해|답|안내)/
 const PRIOR_INQUIRY_RE =
   /(?:지난주|지난번|저번|전에|예전에|어제|며칠\s*전|지난달|아까|\d+\s*(?:주|일|달|개월)\s*전)[^.!?]{0,20}(?:문의|물어|물었|여쭤|말씀|연락(?:했|드렸|을\s*드|드린|이\s*왔|받)|접수|얘기|말했|말한|통화|안내받|알려\s*주신|알려준|알려\s*준|전화\s*(?:드렸|했|드린)|상담\s*(?:때|에서|받|했)|받은\s*(?:답변|안내|메일)|메일로\s*받)|(?:지난번|저번|어제|아까)\s*(?:에\s*)?(?:그거|그\s*거)|(?:지난번|저번|어제|아까)(?:이랑|하고|과|처럼)\s*(?:또|(?:똑같은|같은)\s*(?:문제|증상|오류|현상)|same)|(?:문의|접수)\s*했(?:잖아|는데|었는데|었잖아)|happened\s*again|same\s*problem|(?:^|\s)또\s*(?:그래요|그럽니다|그러네|됨|돼요|됐어요|안\s*(?:돼|되)(?!\S*면))|아직도\s*안\s*고쳐/
+const QUOTED_SPEECH_RE = /['"‘’“”][^'"‘’“”]{1,60}['"‘’“”]/g
 const THIRD_PARTY_PRIOR_RE =
   /(?:원장|선생님|강사|실장|엄마|아빠|부모님|친구|담임|팀장)(?:님)?\s*(?:이|가|께서|한테서|이\s*저한테)\s*['"‘“]?\s*(?:저번|지난번|아까|어제|전에)/
 const ENGLISH_LEAD_RE = /^(?:hi|hello|hey|can you|could you|how do|how can|how to|my |i |is there|why)/i
@@ -56,11 +57,12 @@ export function detectConversationTone(question: string): ConversationTone {
     terse: compact.length <= 10 || (SLANG_RE.test(text) && compact.length <= 24),
     english: ENGLISH_LEAD_RE.test(text) || (latinWords >= 3 && latinWords / Math.max(1, words.length) >= 0.34),
     // "원장님께서 '저번에 말한 그 설정'"처럼 다른 사람과의 지난 대화를 옮긴 말은 우리와의 지난 문의가 아니다.
+    // 따옴표로 옮긴 남의 말("선생님, 그거 또 안 돼요")도 빼고 본다.
     priorContext: THIRD_PARTY_PRIOR_RE.test(text)
       ? null
       : PRIOR_BOT_RE.test(text)
         ? "bot"
-        : PRIOR_INQUIRY_RE.test(text)
+        : PRIOR_INQUIRY_RE.test(text.replace(QUOTED_SPEECH_RE, " "))
           ? "inquiry"
           : null,
   }
@@ -98,6 +100,24 @@ export const HANDOFF_NOW_LINE =
   "지금 바로 담당자와 연결해 드릴게요. 아래 [실시간 상담 연결]을 누르시면 상담원이 이 대화를 보고 이어서 도와드립니다."
 
 const EMPATHY_START_RE = /^(?:불편을|같은 문제로|많이 당황|죄송|걱정|괜찮)/
+// 답의 첫 문장이 이미 공감·사과로 시작하면 말투 계층이 첫마디를 또 붙이지 않는다.
+const EMPATHY_FIRST_SENTENCE_RE = /놀라|당황|속상|답답|걱정|신경\s*쓰|불편|죄송|기다리셨|급하시|힘드셨/
+
+function startsWithEmpathy(answer: string) {
+  if (EMPATHY_START_RE.test(answer)) return true
+  const firstSentence = answer.split(/(?<=[.?!])\s/)[0] ?? ""
+  return firstSentence.length <= 80 && EMPATHY_FIRST_SENTENCE_RE.test(firstSentence)
+}
+
+// 화난·반복 문의에는 공감만으로는 모자라고 불편에 대한 사과가 있어야 한다.
+// 첫 두 문장에 그런 사과가 있을 때만 첫마디를 생략한다("약속드릴 수 없어 죄송합니다"는 사과로 치지 않는다).
+const APOLOGY_SENTENCE_RE = /^(?:정말\s*)?죄송합니다\.?$|(?:불편|기다리|답답|놀라|속상|번거|당황|하셨다니|하셨다면).{0,40}죄송/
+
+function startsWithApology(answer: string) {
+  if (EMPATHY_START_RE.test(answer)) return true
+  const sentences = (answer.split(/\n{2,}/)[0] ?? "").split(/(?<=[.?!])\s+/).slice(0, 2)
+  return sentences.some((sentence) => APOLOGY_SENTENCE_RE.test(sentence.trim()))
+}
 
 export function englishLeadLine(englishSummary?: string, hasSteps = true) {
   return englishSummary
@@ -116,7 +136,10 @@ export function applyToneToAnswer(
   let next = answer
   // 상담 연결 답에는 "순서대로 알려 드릴게요" 같은 안내형 첫마디가 어울리지 않는다.
   const opener = toneOpener(tone, /\[(?:실시간 상담 연결|도입 상담 남기기)\]/.test(answer) && !/^\d\.\s/m.test(answer))
-  const alreadyToned = EMPATHY_START_RE.test(next) || next.startsWith("In short:") || next.startsWith("I'll answer")
+  const alreadyToned =
+    (tone.angry || tone.repeated ? startsWithApology(next) : startsWithEmpathy(next)) ||
+    next.startsWith("In short:") ||
+    next.startsWith("I'll answer")
   const prior = priorContextLine(tone)
   // 답이 이미 "볼 수 없다"고 밝혔다면 같은 말을 한 번 더 붙이지 않는다.
   if (prior && !next.includes(prior) && !/볼\s*수\s*없/.test(next)) {

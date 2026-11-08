@@ -462,6 +462,8 @@ const TOKEN_WASTE_RE =
 
 function isUnsupportedAcademyPaymentFeatureQuestion(question: NormalizedQuestion) {
   const text = question.redacted.toLowerCase()
+  // 체험·구독 요금의 자동 결제처럼 클래스인 자체 결제를 묻는 말은 학원비 결제 기능 문의가 아니다.
+  if (/체험|구독|요금제|해지|카드\s*등록|(?:내|제)\s*카드/.test(text)) return false
   return (
     ACADEMY_PAYMENT_ACTION_RE.test(text) &&
     ACADEMY_PAYMENT_SUBJECT_RE.test(text) &&
