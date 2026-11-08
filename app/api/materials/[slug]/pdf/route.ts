@@ -2,6 +2,11 @@
 // 어드민에서 고친 내용이 CDN 캐시(5분) 뒤 바로 PDF 에 반영된다. 예전 오프라인 생성본(public/)은
 // 렌더가 실패했을 때만 쓰는 폴백이다. 자료 게이트(이메일·로그인)는 /api/materials/[slug]/download 가
 // 맡고, 이 경로는 예전 정적 PDF 와 같은 공개 범위다.
+//
+// 응답은 예전 정적 PDF(/materials/*, next.config.ts 의 attachment 헤더)처럼 내려받기다 — 자료 페이지에서
+// <a download> 로 그 자리에서 받고, 어카운트 「다시 받기」·메일 링크처럼 주소로 바로 들어와도 뷰어 탭이 열리지 않는다(#81).
+// 브라우저 뷰어로 여는 것은 어드민 「저장된 PDF」 보기(?inline=1)뿐이다.
+// 따로 만든 PDF(워크북 등, isHandcraftedLeadMagnetPdf)는 서버 생성본으로 바꾸지 않고 정적 파일로 보낸다.
 import { access } from "fs/promises"
 import path from "path"
 
@@ -9,13 +14,16 @@ import { type NextRequest, NextResponse } from "next/server"
 
 import type { LeadMagnet } from "@/lib/lead-magnets"
 import {
+  isHandcraftedLeadMagnetPdf,
   isSafeLeadMagnetSlug,
+  LEAD_MAGNET_PDF_INLINE_PARAM,
   legacyLeadMagnetPdfPath,
   pdfContentDisposition,
 } from "@/lib/lead-magnet-pdf/links"
 import { renderLeadMagnetPdf } from "@/lib/lead-magnet-pdf/render"
 import { getAllLeadMagnets } from "@/lib/repositories/lead-magnets"
 import { SITE_URL } from "@/lib/seo"
+import { checkRateLimitDistributed, getClientIp } from "@/lib/server/rate-limit"
 
 export const runtime = "nodejs"
 // 실측: 자료 1건 0.1~0.5초(콜드 스타트 포함), 비정상적으로 긴 초안도 1초 안팎.
@@ -26,6 +34,10 @@ interface RouteContext {
 }
 
 const NO_STORE = { "Cache-Control": "no-store" }
+
+// 렌더 함수 호출 상한(IP 당 1분). 같은 주소는 CDN(5분)이 받으므로 여기 닿는 것은 캐시 미스뿐이다 —
+// 질의를 바꿔 캐시를 피하는 반복 요청이 렌더(자료 1건 0.1~0.5초)와 저장소 읽기를 끝없이 부르지 못하게 묶는다.
+const RENDER_RATE_LIMIT = { windowMs: 60_000, max: 30 }
 
 function decodeSlug(raw: string) {
   try {
@@ -58,6 +70,14 @@ async function legacyFallback(req: NextRequest, slug: string, status: 500 | 503)
 }
 
 export async function GET(req: NextRequest, { params }: RouteContext) {
+  const { allowed } = await checkRateLimitDistributed(getClientIp(req), "material-pdf", RENDER_RATE_LIMIT)
+  if (!allowed) {
+    return NextResponse.json(
+      { error: "Too many requests." },
+      { status: 429, headers: { ...NO_STORE, "Retry-After": "60" } }
+    )
+  }
+
   const { slug: rawSlug } = await params
   const slug = decodeSlug(rawSlug)
 
@@ -75,6 +95,16 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ error: "자료를 찾을 수 없습니다." }, { status: 404, headers: NO_STORE })
   }
 
+  // 따로 만든 PDF 는 그 파일 그대로(정적 파일도 attachment). 파일이 없을 때만 아래에서 그린다.
+  if (isHandcraftedLeadMagnetPdf(magnet.slug)) {
+    const handcraftedPath = await findLegacyStaticPdf(magnet.slug)
+    if (handcraftedPath) {
+      return NextResponse.redirect(new URL(handcraftedPath, req.url), { status: 302, headers: NO_STORE })
+    }
+  }
+
+  const disposition = req.nextUrl.searchParams.get(LEAD_MAGNET_PDF_INLINE_PARAM) === "1" ? "inline" : "attachment"
+
   try {
     const bytes = await renderLeadMagnetPdf(magnet, {
       magnetsBySlug: new Map(magnets.map((item) => [item.slug, item])),
@@ -84,7 +114,7 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
       status: 200,
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": pdfContentDisposition(magnet.slug),
+        "Content-Disposition": pdfContentDisposition(magnet.slug, disposition, magnet.title),
         "Content-Length": String(bytes.byteLength),
         "Cache-Control": "public, s-maxage=300, stale-while-revalidate=86400",
       },

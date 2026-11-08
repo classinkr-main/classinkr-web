@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
       status: 200,
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": pdfContentDisposition(magnet.slug),
+        "Content-Disposition": pdfContentDisposition(magnet.slug, "inline"),
         "Content-Length": String(bytes.byteLength),
         "Cache-Control": "private, no-store",
       },

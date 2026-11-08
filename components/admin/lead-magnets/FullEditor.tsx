@@ -12,7 +12,7 @@ import { AlertTriangle, CheckCircle2, Copy, ExternalLink, Loader2, RefreshCw, Tr
 
 import { useDialogFocus } from "@/components/admin/use-dialog-focus"
 import { adminFetch } from "@/lib/admin-client"
-import { isHandcraftedLeadMagnetPdf, leadMagnetPdfRoutePath, legacyLeadMagnetPdfPath } from "@/lib/lead-magnet-pdf/links"
+import { isHandcraftedLeadMagnetPdf, leadMagnetPdfViewPath, legacyLeadMagnetPdfPath } from "@/lib/lead-magnet-pdf/links"
 import type { LeadMagnet, LeadMagnetCategory, LeadMagnetGate, LeadMagnetStatus, LeadMagnetTier } from "@/lib/lead-magnets"
 import type { LeadMagnetQualityArea, LeadMagnetQualityIssue } from "@/lib/lead-magnet-quality"
 import {
@@ -547,7 +547,8 @@ function PdfWorkspace({ draft, update, magnets }: { draft: LeadMagnet; update: U
   const setStory = (patch: Partial<typeof story>) => update((d) => ({ ...d, storyGuide: { ...(d.storyGuide ?? emptyStoryGuide()), ...patch } }))
   const related = new Set(guide.relatedMagnets)
   const handcrafted = isHandcraftedLeadMagnetPdf(draft.slug)
-  const savedPdfHref = handcrafted ? legacyLeadMagnetPdfPath(draft.slug) : leadMagnetPdfRoutePath(draft.slug)
+  // 공개 라우트는 내려받기(attachment)가 기본이라, 새 탭에서 보도록 inline 주소를 쓴다. 따로 만든 PDF 는 정적 파일(내려받기).
+  const savedPdfHref = handcrafted ? legacyLeadMagnetPdfPath(draft.slug) : leadMagnetPdfViewPath(draft.slug)
 
   return (
     <div className="flex flex-wrap items-start gap-4">

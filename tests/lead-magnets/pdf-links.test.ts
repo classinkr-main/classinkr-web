@@ -4,10 +4,13 @@ import { describe, expect, it } from "vitest"
 import {
   absoluteUrl,
   displayUrl,
+  isLeadMagnetPdfRoutePathname,
   isLegacyGeneratedPdfUrl,
   isSafeLeadMagnetSlug,
   leadMagnetPdfRoutePath,
+  leadMagnetPdfViewPath,
   legacyLeadMagnetPdfPath,
+  materialDownloadBaseName,
   pdfContentDisposition,
   toPdfUri,
   withPdfTracking,
@@ -82,6 +85,19 @@ describe("예전 생성본 경로", () => {
     expect(leadMagnetPdfRoutePath("자료")).toBe(`/api/materials/${encodeURIComponent("자료")}/pdf`)
   })
 
+  it("어드민 새 탭 보기 주소만 inline 질의를 단다", () => {
+    expect(leadMagnetPdfViewPath("a-b")).toBe("/api/materials/a-b/pdf?inline=1")
+  })
+
+  it("렌더 라우트 경로를 알아본다(확장자 없는 파일 — #81 그 자리 내려받기)", () => {
+    expect(isLeadMagnetPdfRoutePathname(leadMagnetPdfRoutePath("a-b"))).toBe(true)
+    expect(isLeadMagnetPdfRoutePathname(leadMagnetPdfRoutePath("자료"))).toBe(true)
+    expect(isLeadMagnetPdfRoutePathname("/api/materials/a-b/download")).toBe(false)
+    expect(isLeadMagnetPdfRoutePathname("/api/materials/a/b/pdf")).toBe(false)
+    expect(isLeadMagnetPdfRoutePathname("/x/api/materials/a-b/pdf")).toBe(false)
+    expect(isLeadMagnetPdfRoutePathname("/resources/a-b")).toBe(false)
+  })
+
   it("경로 조작 슬러그를 거른다", () => {
     expect(isSafeLeadMagnetSlug("academy-system-checklist")).toBe(true)
     expect(isSafeLeadMagnetSlug("한글-자료")).toBe(true)
@@ -92,15 +108,36 @@ describe("예전 생성본 경로", () => {
 })
 
 describe("응답 헤더·주석 URI", () => {
-  it("ASCII 슬러그는 계약 그대로 inline; filename=\"<slug>.pdf\"", () => {
-    expect(pdfContentDisposition("academy-system-checklist")).toBe('inline; filename="academy-system-checklist.pdf"')
+  it("제목이 없으면 ASCII 슬러그 이름 — inline/attachment 는 부르는 쪽이 정한다", () => {
+    expect(pdfContentDisposition("academy-system-checklist", "inline")).toBe('inline; filename="academy-system-checklist.pdf"')
+    expect(pdfContentDisposition("academy-system-checklist", "attachment")).toBe(
+      'attachment; filename="academy-system-checklist.pdf"'
+    )
   })
 
   it("한글 슬러그는 filename* 로 싣고 헤더 값은 ASCII 다", () => {
-    const value = pdfContentDisposition("한글-자료")
+    const value = pdfContentDisposition("한글-자료", "inline")
     expect(value).toMatch(/^inline; filename="[\x20-\x7e]+"; filename\*=UTF-8''/)
     expect(/^[\x20-\x7e]+$/.test(value)).toBe(true)
     expect(() => new Headers({ "Content-Disposition": value })).not.toThrow()
+  })
+
+  it("제목을 주면 <a download> 와 같은 제목 이름으로 저장된다(ASCII 대체 이름은 슬러그)", () => {
+    const value = pdfContentDisposition("academy-admin-dashboard-template", "attachment", "학원 운영 대시보드 (템플릿)")
+    expect(value).toBe(
+      `attachment; filename="academy-admin-dashboard-template.pdf"; filename*=UTF-8''${encodeURIComponent("학원 운영 대시보드 ")}%28${encodeURIComponent("템플릿")}%29.pdf`
+    )
+    expect(/^[\x20-\x7e]+$/.test(value)).toBe(true)
+    expect(() => new Headers({ "Content-Disposition": value })).not.toThrow()
+    // filename* 를 되읽으면 원래 제목 이름이다.
+    expect(decodeURIComponent(value.split("filename*=UTF-8''")[1])).toBe("학원 운영 대시보드 (템플릿).pdf")
+  })
+
+  it("파일 이름 몸통은 못 쓰는 글자를 걷고 80자에서 자른다", () => {
+    expect(materialDownloadBaseName('A/B: "키트"?')).toBe("A B 키트")
+    expect(materialDownloadBaseName("  ")).toBe("")
+    expect(materialDownloadBaseName(undefined)).toBe("")
+    expect(materialDownloadBaseName("가".repeat(100))).toHaveLength(80)
   })
 
   it("링크 주석 URI 는 7비트 ASCII", () => {

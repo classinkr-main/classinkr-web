@@ -1,4 +1,5 @@
-// lib/materials.ts — 예전 생성본 경로(resourceUrl)는 그때그때 그리는 PDF 라우트로 보낸다.
+// lib/materials.ts — 예전 스크립트 생성본 경로(resourceUrl)는 그때그때 그리는 PDF 라우트로 보낸다.
+// 따로 만든 PDF(#81 워크북 등)는 정적 파일 그대로.
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 const { getLeadMagnetBySlugFromStore, stitchIdentity, inserts, createSignedUrl } = vi.hoisted(() => ({
@@ -24,13 +25,18 @@ vi.mock("@/lib/supabase/admin", () => ({
 
 import { prepareMaterialDownload } from "@/lib/materials"
 
+// 파이썬 생성기가 만든 자료(public/ 의 Producer 가 ReportLab) — tests/lead-magnets/pdf-handcrafted.test.ts 가 분류를 지킨다.
+const GENERATED = "electronic-whiteboard-classroom-checklist"
+// #81 의 12쪽 워크북(WORKBOOK_SLUGS).
+const WORKBOOK = "academy-system-checklist"
+
 function magnet(overrides: Record<string, unknown>) {
-  return { slug: "academy-system-checklist", title: "자료", published: true, gate: "open", storagePath: "", ...overrides }
+  return { slug: GENERATED, title: "자료", published: true, gate: "open", storagePath: "", ...overrides }
 }
 
 async function destinationFor(overrides: Record<string, unknown>) {
   getLeadMagnetBySlugFromStore.mockResolvedValue(magnet(overrides))
-  const result = await prepareMaterialDownload({ slug: String(overrides.slug ?? "academy-system-checklist") })
+  const result = await prepareMaterialDownload({ slug: String(overrides.slug ?? GENERATED) })
   return result!
 }
 
@@ -41,11 +47,16 @@ afterEach(() => {
 
 describe("prepareMaterialDownload — PDF 목적지", () => {
   it("자기 슬러그의 예전 생성본 경로는 렌더 라우트로 바꾼다", async () => {
-    const result = await destinationFor({ resourceUrl: "/materials/lead-magnets/academy-system-checklist.pdf" })
-    expect(result.destinationUrl).toBe("/api/materials/academy-system-checklist/pdf")
+    const result = await destinationFor({ resourceUrl: `/materials/lead-magnets/${GENERATED}.pdf` })
+    expect(result.destinationUrl).toBe(`/api/materials/${GENERATED}/pdf`)
     expect(result.signed).toBe(false)
     const download = inserts.find((row) => row.table === "material_downloads")
-    expect(download?.payload.destination_url).toBe("/api/materials/academy-system-checklist/pdf")
+    expect(download?.payload.destination_url).toBe(`/api/materials/${GENERATED}/pdf`)
+  })
+
+  it("워크북(따로 만든 PDF)은 정적 파일 그대로 — 서버 생성본으로 바꾸지 않는다(#81)", async () => {
+    const result = await destinationFor({ slug: WORKBOOK, resourceUrl: `/materials/lead-magnets/${WORKBOOK}.pdf` })
+    expect(result.destinationUrl).toBe(`/materials/lead-magnets/${WORKBOOK}.pdf`)
   })
 
   it("다른 슬러그의 생성본 경로·다른 PDF·외부 링크는 그대로 둔다", async () => {
@@ -57,21 +68,21 @@ describe("prepareMaterialDownload — PDF 목적지", () => {
   })
 
   it("resourceUrl 이 비면 자료 상세로", async () => {
-    expect((await destinationFor({ resourceUrl: "" })).destinationUrl).toBe("/resources/academy-system-checklist")
+    expect((await destinationFor({ resourceUrl: "" })).destinationUrl).toBe(`/resources/${GENERATED}`)
   })
 
   it("storagePath 가 있으면 예전처럼 서명 URL 을 쓴다(생성본 경로여도)", async () => {
     const result = await destinationFor({
-      resourceUrl: "/materials/lead-magnets/academy-system-checklist.pdf",
-      storagePath: "lead-magnets/academy-system-checklist.pdf",
+      resourceUrl: `/materials/lead-magnets/${GENERATED}.pdf`,
+      storagePath: `lead-magnets/${GENERATED}.pdf`,
     })
     expect(result.destinationUrl).toBe("https://storage.example/signed")
     expect(result.signed).toBe(true)
-    expect(createSignedUrl).toHaveBeenCalledWith("lead-magnets/academy-system-checklist.pdf", 60, { download: true })
+    expect(createSignedUrl).toHaveBeenCalledWith(`lead-magnets/${GENERATED}.pdf`, 60, { download: true })
   })
 
   it("비공개 자료는 null", async () => {
     getLeadMagnetBySlugFromStore.mockResolvedValue(magnet({ published: false }))
-    expect(await prepareMaterialDownload({ slug: "academy-system-checklist" })).toBeNull()
+    expect(await prepareMaterialDownload({ slug: GENERATED })).toBeNull()
   })
 })
