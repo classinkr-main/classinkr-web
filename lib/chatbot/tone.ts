@@ -142,7 +142,7 @@ export function applyToneToAnswer(
     next.startsWith("I'll answer")
   const prior = priorContextLine(tone)
   // 답이 이미 "볼 수 없다"고 밝혔다면 같은 말을 한 번 더 붙이지 않는다.
-  if (prior && !next.includes(prior) && !/볼\s*수\s*없/.test(next)) {
+  if (prior && !next.includes(prior) && !/볼\s*수\s*없|볼\s*수도/.test(next)) {
     // 지난 대화를 아는 척하지 않는다. 볼 수 없다는 사실을 먼저 밝힌다.
     next = alreadyToned && next.includes(HANDOFF_NOW_LINE)
       ? next.replace(HANDOFF_NOW_LINE, `${HANDOFF_NOW_LINE} ${prior}`)

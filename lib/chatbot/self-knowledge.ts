@@ -241,6 +241,8 @@ export function findChatbotSelfKnowledgeEntry(question: string) {
       if (!entry.match.test(question)) return false
       // "화면 기록 권한", "수업 기록"처럼 제품 이야기에 섞인 단어로 챗봇 자기소개가 나가지 않게 한다.
       if (CHATBOT_CONTEXT_REQUIRED_KEYS.has(entry.key) && !hasChatbotContext) return false
+      // 학원이 여는 학부모 설명회에 나눠 줄 자료를 묻는 말은 클래스인 행사 문의가 아니다.
+      if (entry.key === "event_inquiry" && /자료|안내문|나눠\s*(?:드릴|줄)|배포/.test(normalized)) return false
       if (entry.key === "emotional_concern") {
         // 도입·전환을 걱정하는 원장님 질문에만 쓴다. 학부모의 아이 걱정, 신입 실장의 실수 걱정,
         // 장애 증상 질문은 해당 안내로 보낸다(이 답은 도입 영업 문구다).
