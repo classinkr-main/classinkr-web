@@ -4394,7 +4394,9 @@ function applyConversationTone(core: ChatbotCore) {
   if (isGreetingOnly(core.question)) return
   const tone = detectConversationTone(core.question.redacted)
   // 지난 문의를 전제로 한 질문은 "볼 수 없다"는 줄만 붙이고, 상담 연결은 화난·반복 문의일 때만 앞세운다.
-  const offerHandoff = (tone.angry && !core.howtoAnswer) || tone.repeated
+  // 이미 상담원 대기 중이라고 항의하는 사람에게 "지금 바로 연결해 드릴게요"를 또 약속하지 않는다.
+  const waitingForAgent = /대기\s*(?:순번|번호|중)|순번|상담원\s*연결을?\s*(?:눌렀|했는데|했더니)/.test(text)
+  const offerHandoff = !waitingForAgent && ((tone.angry && !core.howtoAnswer) || tone.repeated)
   core.response.answer = applyToneToAnswer(core.response.answer, tone, {
     englishSummary: core.englishSummary,
     offerHandoff,
