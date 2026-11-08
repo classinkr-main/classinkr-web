@@ -53,8 +53,10 @@
    ```
 
    ```bash
-   NODE_OPTIONS=--max-old-space-size=6144 npx vitest run tests/chatbot
+   NODE_OPTIONS=--max-old-space-size=6144 npx vitest run tests/chatbot tests/channel-talk tests/internal-cs-chat
    ```
+
+   채널톡·내부 CS 테스트도 함께 돌린다. 공개 챗봇 전용 지름길(정해 둔 답·트리아지·말투 처리)이 내부 CS 코파일럿 경로(`includeInternalDocs`)로 새면 여기서 깨진다. 전체 `npx vitest run`에서 `tests/marketing/meta-instagram-dashboard-cache.test.ts`, `tests/server/cron-auth.test.ts`는 이 작업 전부터 실패하던 테스트다.
 
    ```bash
    NODE_OPTIONS=--max-old-space-size=6144 npm run build
