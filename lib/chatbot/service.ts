@@ -787,10 +787,20 @@ function isReceiptQuestion(question: NormalizedQuestion) {
   return RECEIPT_RE.test(question.redacted.toLowerCase())
 }
 
-function getReceiptAnswer() {
+function getReceiptAnswer(question?: NormalizedQuestion) {
+  const text = question?.redacted.toLowerCase() ?? ""
+  // 학부모의 수업료 영수증은 학원이 발급한다. 클래스인 결제 증빙과 섞지 않는다.
+  if (/수업료|교육비|학원비|원비/.test(text) && /학부모|아이|자녀|연말정산|교육비\s*공제/.test(text)) {
+    return [
+      "학원 수업료를 어떻게 내는지와 교육비 영수증(교육비 납입 증명)은 학원이 정하고 발급해요. 수업료를 클래스인 앱에서 내는 기능은 공개 안내에 없어서, 앱으로 결제하라는 안내가 어떤 화면을 말하는지 학원에 먼저 확인해 주세요.",
+      "연말정산용 교육비 공제 서류도 학원에 요청하시면 돼요.",
+    ].join("\n\n")
+  }
   return [
-    "세금계산서와 영수증은 학원 계정의 결제 내역을 보고 담당자가 발급해 드려요. 상담 채널(홈페이지 하단 채팅)이나 담당 매니저에게 세금계산서 발급을 요청해 주세요. 카드 외 결제 방법(계좌이체 등)도 같은 곳에서 함께 확인해 드립니다.",
-    "아직 결제 전이라면 결제하기 전에 상담 채널에서 발급 방법을 먼저 정해 두시는 게 좋아요. 결제 뒤에 찾다가 학원 회계와 어긋나는 경우가 많습니다.",
+    "세금계산서와 영수증은 결제한 계정의 결제 내역을 보고 담당자가 발급해 드려요. 상담 채널(홈페이지 하단 채팅)이나 담당 매니저에게 필요한 증빙(세금계산서·영수증)과 기간을 알려 주세요. 카드 외 결제 방법(계좌이체 등)도 같은 곳에서 함께 확인해 드립니다.",
+    /경비|종합소득세|세무|공제|소득세|부가세\s*신고/.test(text)
+      ? "카드 영수증만으로 경비 처리가 되는지 같은 세무 판단은 제가 단정할 수 없어요. 신고 전에 세무사나 국세청 안내로 확인해 주세요."
+      : "아직 결제 전이라면 결제하기 전에 상담 채널에서 발급 방법을 먼저 정해 두시는 게 좋아요. 결제 뒤에 찾다가 학원 회계와 어긋나는 경우가 많습니다.",
     "사업자 정보는 이 채팅창에 적지 마시고 상담 채널에서 담당자에게 전달해 주세요.",
   ].join("\n\n")
 }
@@ -909,7 +919,7 @@ function isIdentityQuestion(question: NormalizedQuestion) {
 
 // "칠판 티비 밝기 줄이고 싶어요", "화면에 줄이 생겼어요"처럼 쓰는 법·증상을 묻는 말은 스펙 질문이 아니다.
 const BOARD_USAGE_OR_SYMPTOM_RE =
-  /하고\s*싶|하려면|어떻게\s*(?:해|하|줄|바꾸|끄|켜|나눠)|방법|나눠|보내|공유|저장|생겼|생기|줄이|낮추|켜져\s*있|혼자|녹음|녹화|걸어|세워|이사|벽이|안\s*(?:돼|되|나|먹)|안돼|안되|느려|버벅|늘어|뚱뚱|이상해|이상하|눌러도|반응/
+  /하고\s*싶|하려면|어떻게\s*(?:해|하|줄|바꾸|끄|켜|나눠)|방법|나눠|보내|공유|저장|생겼|생기|줄이|낮추|켜져\s*있|혼자|녹음|녹화|걸어|세워|이사|벽이|안\s*(?:돼|되|나|먹)|안돼|안되|느려|버벅|늘어|뚱뚱|이상해|이상하|눌러도|반응|낙서|닦|지워|아세톤|기사|접수|수리|고치|소개|혜택|이벤트|프로모션|할부|분할|나눠\s*내|매달|\bmac\b|802|내부망|와이파이|wi-?fi|권한|판서|학생|매직|업데이트|usb|한글|파일|보증|대체\s*기기|몇\s*년\s*쓰/
 
 function isHardwareSpecsQuestion(question: NormalizedQuestion) {
   const text = question.redacted.toLowerCase()
@@ -926,6 +936,7 @@ function isHardwareSpecsQuestion(question: NormalizedQuestion) {
 function isHardwareBoardLineupQuestion(question: NormalizedQuestion) {
   const text = question.redacted.toLowerCase()
   if (INSTALL_FORM_RE.test(text)) return false
+  if (BOARD_USAGE_OR_SYMPTOM_RE.test(text)) return false
   return (
     isBoardTargeted(text) &&
     HARDWARE_BOARD_LINEUP_INTENT_RE.test(text) &&
@@ -2941,7 +2952,7 @@ function formatConsumerAnswer({
     return getAccountPlanOrTrialLimitAnswer(question)
   }
   if (top.heading === "영수증과 결제 증빙 확인") {
-    return getReceiptAnswer()
+    return getReceiptAnswer(question)
   }
   if (top.heading === "녹화 저장과 권한 기준") {
     return getRecordingPermissionAnswer()

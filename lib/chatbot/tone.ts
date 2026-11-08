@@ -20,7 +20,7 @@ export interface ConversationTone {
 const ANGRY_RE =
   /도대체|말이\s*(?:됩니까|돼요|되나요|됩니다|돼)|짜증|화가\s*(?:나|납)|(?<!대)화나(?:요|네|서|고|는|죠)|화났|어이(?:가)?\s*없|황당|아깝|최악|엉망|책임\s*(?:지|져)|언제\s*(?:고쳐|해결)|장난\s*(?:해|합)|돈\s*(?:낸|내고|냈)|환불해\s*(?:주|줘)|이게\s*뭐(?:예요|에요|야|냐|입니까)/
 const REPEATED_RE =
-  /몇\s*번째|(?:두|세|네|다섯)\s*번째|또\s*(?:문의|연락|물어|말씀)|계속\s*(?:문의|물어|말|연락)|여러\s*번\s*(?:문의|말|연락)|매번|번번이|몇\s*번을/
+  /몇\s*번째|(?:두|세|네|다섯)\s*번째\s*(?:문의|연락|전화|말씀|요청|끊|튕|같은|똑같|이에요|예요|입니다)|(?:벌써|이번이|오늘만|이번\s*주만|이번\s*주에만)[^.!?]{0,8}(?:두|세|네|다섯)\s*번째|또\s*(?:문의|연락|물어|말씀)|계속\s*(?:문의|물어|말|연락)|여러\s*번\s*(?:문의|말|연락)|매번\s*(?:문의|물어|말|연락|똑같|같은|재부팅|인터넷)|번번이|몇\s*번을/
 const ANXIOUS_RE =
   /어떡하|어떻게\s*해야\s*(?:하|할|돼|되)|걱정|불안|큰일|급해요|급합니다|급한데|당황|무서|난감|혹시\s*제가|혼났|속상|미치겠|울고/
 const APOLOGETIC_RE = /^(?:\S+\s+)?죄송|죄송한데|죄송합니다만|실수할까|제가\s*(?:뭔가|뭘|뭐|혹시)?\s*잘못|^sorry\b/i
@@ -30,7 +30,9 @@ const POSITIVE_RE = /축하|설레|떨려|떨리|신나|기뻐|기쁘|좋아요|
 const PRIOR_BOT_RE =
   /(?:다른|이전|지난)\s*(?:창|채팅|대화|세션)|(?:아까|전에|지난번|저번).{0,12}(?:챗봇|봇|답변)|챗봇이\s*(?:알려|말해|답|안내)/
 const PRIOR_INQUIRY_RE =
-  /(?:지난주|지난번|저번|전에|예전에|어제|며칠\s*전|지난달|아까).{0,20}(?:문의|물어|물었|여쭤|말씀|연락|접수|얘기|말했|말한|통화|안내받)|(?:지난번|저번|어제|아까)\s*(?:에\s*)?(?:그거|그\s*거)|(?:지난번|저번|어제|아까)(?:이랑|하고|과|처럼)\s*(?:또|(?:똑같은|같은)\s*(?:문제|증상|오류|현상)|same)|(?:문의|접수)\s*했(?:잖아|는데|었는데|었잖아)|happened\s*again|same\s*problem|(?:^|\s)또\s*(?:그래요|그럽니다|그러네|됨|돼요|됐어요|안\s*(?:돼|되))|아직도\s*안\s*고쳐/
+  /(?:지난주|지난번|저번|전에|예전에|어제|며칠\s*전|지난달|아까|\d+\s*(?:주|일|달|개월)\s*전)[^.!?]{0,20}(?:문의|물어|물었|여쭤|말씀|연락(?:했|드렸|을\s*드|드린|이\s*왔|받)|접수|얘기|말했|말한|통화|안내받|알려\s*주신|알려준|알려\s*준|전화\s*(?:드렸|했|드린)|상담\s*(?:때|에서|받|했)|받은\s*(?:답변|안내|메일)|메일로\s*받)|(?:지난번|저번|어제|아까)\s*(?:에\s*)?(?:그거|그\s*거)|(?:지난번|저번|어제|아까)(?:이랑|하고|과|처럼)\s*(?:또|(?:똑같은|같은)\s*(?:문제|증상|오류|현상)|same)|(?:문의|접수)\s*했(?:잖아|는데|었는데|었잖아)|happened\s*again|same\s*problem|(?:^|\s)또\s*(?:그래요|그럽니다|그러네|됨|돼요|됐어요|안\s*(?:돼|되)(?!\S*면))|아직도\s*안\s*고쳐/
+const THIRD_PARTY_PRIOR_RE =
+  /(?:원장|선생님|강사|실장|엄마|아빠|부모님|친구|담임|팀장)(?:님)?\s*(?:이|가|께서|한테서|이\s*저한테)\s*['"‘“]?\s*(?:저번|지난번|아까|어제|전에)/
 const ENGLISH_LEAD_RE = /^(?:hi|hello|hey|can you|could you|how do|how can|how to|my |i |is there|why)/i
 
 export function detectConversationTone(question: string): ConversationTone {
@@ -53,7 +55,14 @@ export function detectConversationTone(question: string): ConversationTone {
     apologetic: APOLOGETIC_RE.test(text),
     terse: compact.length <= 10 || (SLANG_RE.test(text) && compact.length <= 24),
     english: ENGLISH_LEAD_RE.test(text) || (latinWords >= 3 && latinWords / Math.max(1, words.length) >= 0.34),
-    priorContext: PRIOR_BOT_RE.test(text) ? "bot" : PRIOR_INQUIRY_RE.test(text) ? "inquiry" : null,
+    // "원장님께서 '저번에 말한 그 설정'"처럼 다른 사람과의 지난 대화를 옮긴 말은 우리와의 지난 문의가 아니다.
+    priorContext: THIRD_PARTY_PRIOR_RE.test(text)
+      ? null
+      : PRIOR_BOT_RE.test(text)
+        ? "bot"
+        : PRIOR_INQUIRY_RE.test(text)
+          ? "inquiry"
+          : null,
   }
 }
 
