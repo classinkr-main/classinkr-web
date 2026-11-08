@@ -6,6 +6,7 @@ import {
   summarizeQuoteInteractionLogs,
 } from "@/lib/portal/repositories/activity";
 import { listDealListItems } from "@/lib/portal/repositories/deals";
+import { resolveQuoteVatIncluded } from "@/lib/portal/quote-vat";
 import type {
   ActivityLog,
   ContractDocument,
@@ -53,6 +54,8 @@ type QuoteVersionListRow = Pick<
 > & {
   /** structured_json에서 JSON 경로로 추출한 견적 템플릿 id — SW/HW 배지 확정 판정용. */
   template_id: string | null;
+  /** structured_json에서 JSON 경로로 추출한 VAT 포함 설정("true"/"false", 없으면 null) — 금액 라벨용. */
+  vat_included: string | null;
 };
 
 type ContractVersionListRow = Pick<
@@ -142,8 +145,8 @@ async function listQuoteDocuments(
     supabase
       .from("quote_document_versions")
       .select(
-        // template_id는 JSON 경로 추출 별칭 — structured_json 전체를 목록으로 끌고 오지 않는다(과다 페치 방지).
-        "id, quote_document_id, version_number, title, subtotal, discount_amount, tax_amount, total_amount, valid_until, created_by, created_at, template_id:structured_json->quoteDetails->>templateId"
+        // template_id·vat_included는 JSON 경로 추출 별칭 — structured_json 전체를 목록으로 끌고 오지 않는다(과다 페치 방지).
+        "id, quote_document_id, version_number, title, subtotal, discount_amount, tax_amount, total_amount, valid_until, created_by, created_at, template_id:structured_json->quoteDetails->>templateId, vat_included:structured_json->quoteDetails->>vatIncluded"
       )
       .in("quote_document_id", documentIds)
       .order("version_number", { ascending: false }),
@@ -210,6 +213,11 @@ async function listQuoteDocuments(
       status: document.status,
       version_count: versionsForDocument.length,
       total_amount: currentVersion?.total_amount ?? null,
+      subtotal: currentVersion?.subtotal ?? null,
+      tax_amount: currentVersion?.tax_amount ?? null,
+      vat_included: currentVersion
+        ? resolveQuoteVatIncluded(currentVersion.vat_included, currentVersion.tax_amount)
+        : null,
       updated_at: document.updated_at,
       latest_version_number: currentVersion?.version_number ?? null,
       share_count: sharesForDocument.length,

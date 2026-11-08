@@ -11,6 +11,7 @@ import {
   getTemplateLinePreset,
   STANDARD_QUOTE_SUPPLIER,
   STANDARD_QUOTE_TEMPLATES,
+  isRetiredQuoteTemplate,
   type StandardQuoteTemplateId,
 } from "@/lib/standard-quote-template"
 
@@ -108,7 +109,7 @@ export default function StandardQuoteTemplateEditor({
       <div className="space-y-6">
         <section className="rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] p-4">
           <div className="flex flex-wrap gap-2">
-            {STANDARD_QUOTE_TEMPLATES.map((item) => (
+            {STANDARD_QUOTE_TEMPLATES.filter((item) => !isRetiredQuoteTemplate(item.id) || item.id === templateId).map((item) => (
               <button
                 key={item.id}
                 type="button"

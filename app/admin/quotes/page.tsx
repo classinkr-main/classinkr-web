@@ -93,8 +93,13 @@ const HARDWARE_QUOTE_PRESETS: Array<{
   },
   {
     action: "recording_studio",
-    label: "녹화 세트 견적",
-    description: "86형 보드, T1, 벽걸이, 자동 녹화 1년 패키지",
+    label: '녹화 세트 86" 견적',
+    description: "86형 보드, T1, 벽걸이, 자동 녹화 1년 패키지 · 830만원",
+  },
+  {
+    action: "recording_studio_75",
+    label: '녹화 세트 75" 견적',
+    description: "75형 보드, T1, 벽걸이, 자동 녹화 1년 패키지 · 740만원",
   },
   {
     action: "board_75",
@@ -211,15 +216,6 @@ function QuoteCreateButtons({
         >
           <Plus className="h-4 w-4" />
           HW 견적서
-        </button>
-        <button
-          type="button"
-          onClick={() => onSelect("online_suite")}
-          title="장비와 소프트웨어가 포함된 AI Suite 통합 견적서 1장"
-          className="inline-flex h-9 items-center gap-1.5 border-l border-white/20 bg-[#084734] px-3.5 text-[13px] font-semibold text-white transition-colors hover:bg-[#065c41] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-1"
-        >
-          <Plus className="h-4 w-4" />
-          AI Suite 견적서
         </button>
         <button
           type="button"
