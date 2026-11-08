@@ -801,7 +801,7 @@ function getReceiptAnswer(question?: NormalizedQuestion) {
     ].join("\n\n")
   }
   return [
-    "학원(기관) 계정의 결제 영수증은 관리자 콘솔 [결제] > [영수증 관리]에서 확인할 수 있어요. 세금계산서나 추가 증빙은 결제한 계정의 결제 내역을 보고 담당자가 발급해 드려요. 상담 채널(홈페이지 하단 채팅)이나 담당 매니저에게 필요한 증빙(세금계산서·영수증)과 기간을 알려 주세요. 카드 외 결제 방법(계좌이체 등)도 같은 곳에서 함께 확인해 드립니다.",
+    "학원(기관) 계정의 결제 영수증은 관리자 콘솔 [결제] > [영수증 관리]에서 확인할 수 있어요. 개인 요금제로 직접 결제하셨거나 세금계산서 같은 다른 증빙이 필요하다면, 받을 수 있는지와 방법은 결제한 계정을 보고 결제 담당이 확인해 드려요. 상담 채널(홈페이지 하단 채팅)이나 담당 매니저에게 필요한 증빙과 기간을 알려 주세요. 결제 방법도 같은 곳에서 확인할 수 있어요.",
     /경비|종합소득세|세무|공제|소득세|부가세\s*신고/.test(text)
       ? "카드 영수증만으로 경비 처리가 되는지 같은 세무 판단은 제가 단정할 수 없어요. 신고 전에 세무사나 국세청 안내로 확인해 주세요."
       : "아직 결제 전이라면 결제하기 전에 상담 채널에서 발급 방법을 먼저 정해 두시는 게 좋아요. 결제 뒤에 찾다가 학원 회계와 어긋나는 경우가 많습니다.",
@@ -1174,7 +1174,7 @@ function buildCuratedSources(question: NormalizedQuestion) {
       "teacher",
       "course-activities",
       "코스 생성과 구성원 관리",
-      "ClassIn 대시보드 또는 앱에서 [새 코스 생성]을 눌러 코스를 개설하고 학생들을 초대할 수 있습니다.",
+      "교사는 앱에서 코스를 만들고 학습 활동을 추가하며, 관리자는 웹 대시보드에서 코스·수업·교사·학생을 관리합니다.",
       320,
       "classroom"
     )
@@ -1186,7 +1186,7 @@ function buildCuratedSources(question: NormalizedQuestion) {
       "teacher",
       "course-activities",
       "과제 및 평가 관리",
-      "코스 내 학습 활동에서 [새 과제 추가]를 눌러 과제물 파일이나 텍스트를 첨부하고 게시하여 학생들에게 과제를 낼 수 있습니다.",
+      "코스에서 [새로 만들기] > [숙제]를 누르고 제목과 본문을 쓴 뒤 파일을 붙여 게시하면 학생들에게 숙제가 나갑니다.",
       320,
       "classroom"
     )
@@ -3547,6 +3547,8 @@ interface ChatbotCore {
   // 증상 주제가 정해 둔 확인 질문과 주제 id(질문 주도 층이 쓴다).
   topicFollowUp?: string
   topicId?: string
+  /** 정해 둔 답이 이미 필요한 것을 묻거나 안내하면 영업용 되묻기(규모·도입 시기)를 붙이지 않는다. */
+  suppressSalesFollowUp?: boolean
 }
 
 interface BuildChatbotCoreOptions {
@@ -3697,9 +3699,10 @@ function buildServiceQuickAnswer(question: NormalizedQuestion): QuickAnswer | nu
   // 현장 질문에서 모은 좁은 정해 둔 답(결제 사칭 문자, 해지 후 결제, 보안·개인정보 점검 등)을 먼저 본다.
   const field = findFieldQuickAnswer(text)
   if (field) {
-    return field.handoff
+    const quick = field.handoff
       ? make(field.answer, field.handoff, field.category, field.suggestedQuestions, field.en)
       : direct(field.answer, field.category, field.suggestedQuestions, field.en)
+    return { ...quick, topicId: field.id, suppressSalesFollowUp: !field.salesFollowUp }
   }
 
   if (EXAM_ANSWER_RE.test(text)) {
@@ -4395,6 +4398,7 @@ function applyConversationTone(core: ChatbotCore) {
       tone,
       topicFollowUp: core.topicFollowUp,
       topicId: core.topicId,
+      allowSalesFollowUp: !core.suppressSalesFollowUp,
     })
   )
 }

@@ -21,6 +21,8 @@ export interface FieldQuickAnswer {
   suggestedQuestions: string[]
   /** 영어로 물었을 때 첫 줄에 붙일 요약. */
   en?: string
+  /** true면 끝에 영업용 되묻기(규모·도입 시기)를 붙여도 된다. 기본은 붙이지 않는다(정해 둔 답이 필요한 것을 이미 묻는다). */
+  salesFollowUp?: boolean
 }
 
 const has = (pattern: RegExp) => (text: string) => pattern.test(text)
@@ -108,7 +110,7 @@ export const FIELD_QUICK_ANSWERS: FieldQuickAnswer[] = [
       !/고장|안\s*(?:켜|나|돼|되)|접수|기사|방문|작년|샀는데|산\s*(?:거|보드)/.test(text),
     answer: [
       "공개 안내 기준으로 정품 ClassIn Board의 무상 A/S는 구매일부터 기본 1년이고, 프로모션이 적용되면 최대 2년이에요. 이 기간에는 무상 출장 점검을 받습니다.",
-      "패널 보증 기간을 따로 늘리는 조건, 수리하는 동안 대체 기기를 주는지, 기기를 몇 년 쓰는지 같은 기준은 공개 안내에 없어요. 견적 상담에서 확인하시고 견적서에 서면으로 넣어 달라고 하세요.",
+      "규격서 기준으로 화면 수명은 5만 시간 이상이에요. 패널 보증 기간을 따로 늘리는 조건이나 수리하는 동안 대체 기기를 주는지는 공개 안내에 없어요. 견적 상담에서 확인하시고 견적서에 서면으로 넣어 달라고 하세요.",
       "아래 [도입 상담 남기기]로 원하시는 보증 조건을 남겨 주시면 담당자가 확인해 드려요.",
     ],
     handoff: "demo",
@@ -309,7 +311,7 @@ export const FIELD_QUICK_ANSWERS: FieldQuickAnswer[] = [
     match: all(/퇴사|그만두|그만둔|나간/, /내려받|다운로드|가져갔|유출/, /기록|로그|누가|언제|막/),
     answer: [
       "원장님이 걱정하실 만한 일이에요. 순서대로 정리해 드릴게요.",
-      "1. 관리자 화면에서 누가 언제 무엇을 내려받았는지 보는 기록 기능은 공개 안내에 없어요. 확인이 필요하면 아래 [실시간 상담 연결]로 요청해 주세요.\n2. 지금 바로 할 일은 권한 회수예요. 하위 계정이 있으면 [계정 정보] > [권한 관리]에서 지우고, [기관 관리] > [교사]에서 그 강사를 비활성화합니다. 공유 드라이브 구성원에서도 빼 주세요.\n3. 유출이 의심되면 학원의 개인정보 보호 책임자에게 바로 보고하세요.",
+      "1. 관리자 대시보드 [결제] > [통계 다운로드]로 받은 통계 파일(출결 등)의 다운로드 기록은 [계정 정보] > [통계 이력]에 남아요. 그 강사가 하위 계정으로 통계를 받았는지 여기서 먼저 보세요. 그 밖의 파일을 누가 언제 내려받았는지 보는 기록은 공개 안내에 없어서, 필요하면 아래 [실시간 상담 연결]로 확인을 요청해 주세요.\n2. 지금 바로 할 일은 권한 회수예요. 하위 계정이 있으면 [계정 정보] > [권한 관리]에서 지우고, [기관 관리] > [교사]에서 그 강사를 비활성화합니다. 공유 드라이브 구성원에서도 빼 주세요.\n3. 유출이 의심되면 학원의 개인정보 보호 책임자에게 바로 보고하세요.",
     ],
     handoff: "support",
     category: "admin",
@@ -417,7 +419,7 @@ export const FIELD_QUICK_ANSWERS: FieldQuickAnswer[] = [
     match: all(/시험|테스트|퀴즈/, /부정|커닝|컨닝|화면\s*전환|다른\s*앱|사전|감지/),
     answer: [
       "시험 중에 학생이 다른 앱으로 전환한 것을 감지하거나 기록하는 기능은 공개 안내에 없어요. 그래서 된다고 말씀드리지 않을게요. 정확한 지원 여부가 필요하면 아래 [실시간 상담 연결]로 확인해 드려요.",
-      "공개 안내의 시험 설정으로 할 수 있는 운영 대안은 이래요.\n1. 응시 시간을 짧게 정해 다른 곳을 찾아볼 여유를 줄입니다.\n2. 답안과 설명 공개 시점을 마감 뒤로 두고, 성적 상호 열람을 끕니다([시험] > [설정] > [설정 더 보기]).\n3. 실시간 수업 중에 학생 카메라를 켠 채로 시험을 보게 합니다.",
+      "공개 안내의 시험 설정으로 할 수 있는 운영 대안은 이래요.\n1. 응시 시간을 짧게 정해 다른 곳을 찾아볼 여유를 줄입니다.\n2. 시험을 만들 때 답안과 설명은 공개하지 않도록 정하고, 성적 상호 열람을 끕니다([시험] > [설정] > [설정 더 보기]).\n3. 실시간 수업 중에 학생 카메라를 켠 채로 시험을 보게 합니다.",
       "어떤 방법도 완벽하게 막아 주지는 않으니, 중요한 시험은 문항 순서나 유형을 바꿔 두는 것도 함께 고려해 보세요.",
     ],
     handoff: "support",
@@ -429,7 +431,7 @@ export const FIELD_QUICK_ANSWERS: FieldQuickAnswer[] = [
     match: all(/다시\s*보기|다시보기/, /회색|비활성|안\s*눌려|못\s*바꿔|못\s*바꾸|선택이\s*안/, /설정|공개\s*범위|항목/),
     answer: [
       "다시보기 공개 범위는 학원 관리자가 정하는 설정이에요. 관리자 대시보드 [일반 설정] > [수업 다시보기]와 코스 [설정]의 [다시 보기 유효 기간]에서 바꿉니다.",
-      "학원 소속 강사 계정에서 그 항목이 회색이라면 권한 범위 밖이라 막혀 있을 가능성이 커요. 안내가 틀렸다기보다 계정 권한 문제일 수 있으니, 기관 관리자(원장님)께 바꿔 달라고 하시거나 권한을 받으세요.",
+      "학원 소속 강사 계정에서 그 항목이 회색이라면 권한 범위 밖이라 막혀 있을 가능성이 커요. 기관 관리자(원장님)께 바꿔 달라고 하시거나 권한을 받으세요.",
       "관리자도 바꿀 수 없다면 아래 [실시간 상담 연결]로 어떤 화면에서 회색인지 알려 주세요.",
     ],
     handoff: "support",
@@ -718,6 +720,7 @@ export const FIELD_QUICK_ANSWERS: FieldQuickAnswer[] = [
       "실제 금액은 수업량과 쓰실 기능에 따라 달라 여기서 단정하지 않을게요. 2주 무료 체험으로 먼저 써 보실 수 있고, 아래 [도입 상담 남기기]로 강사·학생 수를 남겨 주시면 맞는 요금으로 안내해 드려요.",
     ],
     handoff: "demo",
+    salesFollowUp: true,
     category: "billing",
     suggestedQuestions: ["무료 체험은 어떻게 신청해요?", "Zoom이랑 뭐가 달라요?", "상담원 연결해 주세요"],
     en: "Our official guide recommends the Pro plan for a solo tutor and the Business plan for academies with 2+ teachers. Exact prices depend on usage and features, so we don't quote them here—start with the 2-week free trial, or tap [도입 상담 남기기] and leave your teacher/student count for a quote.",
@@ -1062,7 +1065,7 @@ export const FIELD_QUICK_ANSWERS: FieldQuickAnswer[] = [
     answer: [
       "처음이셔도 걱정 마세요. 연락처와 미리 정리할 것을 드릴게요.",
       "연락은 아래 [도입 상담 남기기]나 홈페이지 문의 페이지(/contact)로 남기시면 영업 담당자가 연락드려요. 실제 보드를 보고 싶으면 쇼룸 예약(/showroom)도 함께 신청할 수 있어요.",
-      "미팅 전에 정리해 두면 좋은 것:\n- 교실 수와 각 교실 크기, 설치할 벽(벽걸이) 또는 이동형 스탠드 여부\n- 전원·인터넷 위치, 설치할 교실 사진\n- 지금 쓰는 클래스인 계정·요금제, 함께 쓸 강사 수\n- 원하는 도입 시기와 예산 범위",
+      "공개 안내의 '상담 전에 준비하면 좋은 것'을 이번 상황에 맞춰 정리하면 이래요.\n- 지금 쓰는 전자칠판·외장 PC·녹화 프로그램과 지금 쓰는 클래스인 계정·요금제\n- 설치할 세 교실의 사진과 크기, 벽걸이·이동형 스탠드 중 원하는 방식\n- 가장 확인하고 싶은 항목 3개(예: 녹화 저장, 교실 설치, 가격)\n- 견적에 넣을 범위(장비, 카메라·마이크, 스탠드·벽걸이, 설치, 소프트웨어, 온보딩)\n- 원하는 도입 시기",
     ],
     handoff: "demo",
     category: "consultation",
@@ -1175,8 +1178,8 @@ export const FIELD_QUICK_ANSWERS: FieldQuickAnswer[] = [
     id: "smaller-board",
     match: all(/칠판|티비|보드/, /작은|작게|좁아|소형|더\s*작/),
     answer: [
-      "공개 라인업 기준으로 ClassIn Board는 75인치(S75), 86인치(S86), 98인치(S98 Pro), 110인치(S110)이고, 가장 작은 모델이 75인치예요. 이보다 작은 모델은 공개 안내에 없어요.",
-      "공부방처럼 좁은 방이라면 75인치가 들어갈 벽 폭과 거리가 되는지, 벽걸이로 할지 이동형 스탠드로 할지가 중요해요. 아래 [도입 상담 남기기]로 방 크기와 벽 사진을 남겨 주시면 맞는 구성을 확인해 드려요.",
+      "네, 더 작은 모델이 있어요. 65인치 S65가 있고, 제품 페이지 기준으로 S65는 소규모 공부방·교습소에 맞춘 모델이에요. 참고로 S75는 10명 이하 교실, S86은 10명 이상 교실용이에요.",
+      "S65의 자세한 사양과 공급 조건은 상담 때 함께 안내해 드려요. 벽이 한쪽뿐인 좁은 방이라면 벽걸이로 할지 이동형 스탠드로 할지도 정해야 하니, 아래 [도입 상담 남기기]로 방 크기와 벽 사진을 남겨 주세요.",
     ],
     handoff: "demo",
     category: "hardware",
@@ -1395,35 +1398,37 @@ export const FIELD_QUICK_ANSWERS: FieldQuickAnswer[] = [
     match: all(/phone\s*number|전화\s*번호|번호/, /해지|바꾸|change|미국|us\s*number/, /login|로그인|recordings?|녹화/),
     answer: [
       "번호를 해지하기 전에 미리 챙기세요. 클래스인 아이디는 가입할 때 쓴 휴대폰 번호나 이메일이에요.",
-      "1. 로그인 번호를 미국 번호로 바꾸는 방법은 공개 안내에 없어요. 한국 번호를 해지하기 전에 아래 [실시간 상담 연결]로 로그인 수단을 바꿀 수 있는지 꼭 확인하세요. 해지 후에는 인증코드를 받을 수 없게 돼요.\n2. 예전 수업 녹화는 학원 스토리지에 저장되는 학원 자료예요. 계속 볼 수 있는지는 일하던 학원에 확인하세요.",
+      "1. 공개 안내 기준으로 가입한 뒤에는 이메일 아이디를 휴대폰 번호로, 또는 그 반대로 바꿀 수 없어요. 휴대폰 번호를 다른 번호(미국 번호)로 바꾸는 방법도 공개 안내에 없어요. 그래서 한국 번호를 해지하기 전에 아래 [실시간 상담 연결]로 로그인을 어떻게 이어 갈지 꼭 확인하세요. 해지 후에는 인증코드를 받을 수 없게 돼요.\n2. 예전 수업 녹화는 학원 스토리지에 저장되는 학원 자료예요. 계속 볼 수 있는지는 일하던 학원에 확인하세요.",
     ],
     handoff: "support",
     category: "admin",
     suggestedQuestions: ["인증코드가 안 와요", "비밀번호를 바꾸고 싶어요", "상담원 연결해 주세요"],
-    en: "Before you cancel your Korean number: your ClassIn ID is the phone number or email you signed up with. Changing it to a US number isn't covered in our public guide, so tap [실시간 상담 연결] and ask support first—after the number is gone you can't receive verification codes. Your old class recordings are stored in your academy's storage, so ask the academy whether you can keep access.",
+    en: "Before you cancel your Korean number: your ClassIn ID is the phone number or email you signed up with, and the guide says an email ID can't be switched to a phone-number ID (or vice versa) after sign-up. Changing to a US number isn't covered either, so tap [실시간 상담 연결] and ask support first—after the number is gone you can't receive verification codes. Your old recordings are stored in your academy's storage, so ask the academy about access.",
   },
   {
     id: "two-cameras-claimed",
     match: all(/camera|카메라/, /two|두\s*(?:개|대)|동시/, /settings?|설정|where|못\s*찾/),
     answer: [
-      "이전 대화는 제가 볼 수 없어서 그때 어떤 답을 드렸는지 확인할 수 없어요. 그리고 한 수업에서 카메라 두 대를 동시에 띄우는 기능은 공개 안내에 없어서, 된다고 말씀드릴 수 없어요.",
-      "대신 이렇게 할 수 있어요.\n1. 교실 오른쪽 위 마이크 아이콘 옆 삼각형 > [설정] > [카메라]에서 쓸 카메라를 바꿔요. 얼굴과 책상 화면을 번갈아 보여 줄 때 수업 중에 바꾸면 돼요.\n2. 책을 보여 줄 때는 책을 사진으로 찍어 칠판에 띄우는 방법도 있어요.",
+      "이전 대화는 제가 볼 수 없어서 그때 어떤 답을 드렸는지 확인할 수 없어요. 대신 공개 안내 기준으로 말씀드릴게요.",
+      "1. 교실 도구에 보조 카메라(듀얼 POV)가 있어요. 보조 카메라를 연결하면 실물 교구나 손동작(책상 위 책)을 별도 화면으로 비출 수 있어요. 기본 카메라는 얼굴을 비추고, 책상용 카메라는 보조 카메라로 띄우면 돼요.\n2. 교실 도구는 기관 설정에 따라 안 보일 수 있으니, 수업 전에 교실에 들어가 도구에서 보조 카메라가 보이는지 미리 열어 보세요.\n3. 기본 카메라를 바꿀 때는 교실 오른쪽 위 마이크 아이콘 옆 삼각형 > [설정] > [카메라]에서 고릅니다.",
+      "보조 카메라가 안 보이면 학원 관리자나 아래 [실시간 상담 연결]로 확인해 주세요.",
     ],
+    handoff: "support",
     category: "classroom",
     suggestedQuestions: ["camera not working", "카메라 화질이 안 좋아요", "상담원 연결해 주세요"],
-    en: "I can't see earlier chats, so I can't check what was said. Using two cameras at the same time isn't in our public guide, so I can't say it works. You can switch cameras during class: click the triangle next to the mic icon (top right) > [설정] > [카메라] and pick the camera you need.",
+    en: "I can't see earlier chats, so I can't check what was said. Our public guide does list a secondary camera (dual POV) in the classroom tools: connect it to show real objects or your desk in a separate view, while the main camera shows your face. Classroom tools can be hidden by your academy's settings, so open it before class to check. To switch the main camera: triangle next to the mic icon (top right) > [설정] > [카메라].",
   },
   {
     id: "macbook-touch-usb",
     match: all(/macbook|맥북|laptop|노트북/, /touch|터치/, /usb|cable|케이블|control|조작/),
     answer: [
-      "화면은 나오는데 터치로 노트북이 조작되지 않으면 터치 신호가 전달되는 연결이 따로 필요한 경우가 많아요. 다만 어떤 케이블(데이터 지원 USB-C, 보드의 터치용 USB 포트)이 필요한지는 공개 안내에 정리돼 있지 않고 모델마다 다를 수 있어요.",
-      "1. 지금 쓰는 USB-C 케이블이 영상만 되는 케이블인지, 데이터도 되는 케이블인지 확인해 보세요.\n2. 보드에 노트북을 연결하는 단자 근처에 터치용 USB 단자가 따로 있는지 확인해 보세요.\n3. 그래도 안 되면 칠판 모델명(예: S75)을 준비해 아래 [실시간 상담 연결]로 물어보세요.",
+      "화면은 나오는데 터치로 노트북이 조작되지 않으면, 터치 신호가 가는 연결이 빠진 경우예요. 공개 안내 기준으로 외부 기기를 보드 화면에서 터치로 조작하려면 영상 신호와 터치 신호가 둘 다 연결돼 있어야 해요.",
+      "1. HDMI로 연결한다면 HDMI 신호선과 HDMI Touch 선(보드의 HDMI Touch 포트)을 둘 다 연결합니다.\n2. Type-C 하나로 연결한다면, Type-C는 충전·화면(DP) 표시·USB 연결을 지원할 수 있지만 케이블 규격과 길이에 민감해요. 데이터(USB)까지 지원하는 케이블인지, 1.5m 이내인지 확인하세요.\n3. 그래도 안 되면 칠판 모델명(예: S75)을 준비해 아래 [실시간 상담 연결]로 물어보세요.",
     ],
     handoff: "support",
     category: "hardware",
     suggestedQuestions: ["HDMI 연결했는데 화면이 안 나와요", "전자칠판 터치가 안 돼요", "미러링이 안 돼요"],
-    en: "If the picture shows but touch doesn't control your MacBook, the touch signal usually needs a data connection (a data-capable USB-C cable or the board's touch USB port). Which cable your board model needs isn't in our public guide, so check whether your cable supports data, look for a separate touch USB port, and ask support with your board model if it still doesn't work.",
+    en: "To control your MacBook by touching the board, both the video signal and the touch signal must be connected. With HDMI, connect both the HDMI cable and the HDMI Touch cable (the board's HDMI Touch port). With a single Type-C cable, it must support data (USB) as well as video, and the guide recommends 1.5 m or shorter. If it still fails, contact support with your board model.",
   },
   {
     id: "english-receipt",

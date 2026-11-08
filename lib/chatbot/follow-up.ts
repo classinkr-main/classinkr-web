@@ -24,6 +24,8 @@ export interface FollowUpInput {
   /** 증상·사용법 주제가 정해 둔 확인 질문. */
   topicFollowUp?: string
   topicId?: string
+  /** false면 영업용 되묻기(규모·교실·도입 시기)를 붙이지 않는다. */
+  allowSalesFollowUp?: boolean
 }
 
 // 답을 어떻게 이해했는지 밝혀 오해를 막는다. 원 질문에 이 말이 있을 때만.
@@ -31,6 +33,8 @@ export interface FollowUpInput {
 const INTERPRETATIONS: { pattern: RegExp; when?: (input: FollowUpInput) => boolean; line: string; asks?: boolean }[] = [
   {
     pattern: /수업\s*녹음|녹음한\s*(?:걸|것|거)|으로\s*녹음/,
+    // 음성 숙제·말하기 제출처럼 정말 소리를 녹음한 이야기에는 붙이지 않는다.
+    when: (input) => !/숙제|과제|음성|말하기|제출|스피킹/.test(input.question),
     line: "'녹음'은 수업 녹화로 이해하고 답했어요. 소리만 따로 녹음하는 걸 말씀하신 거라면 알려 주세요.",
     asks: true,
   },
@@ -72,13 +76,15 @@ const SUPPORT_SIGNAL_RE =
 const SALES_SLOTS: { id: string; present: RegExp; answerAsks: RegExp; line: string }[] = [
   {
     id: "size",
-    present: /\d+\s*(?:명|개\s*반|반|교실|대|지점|곳)|강사\s*\d|학생\s*\d|규모|1인|혼자/,
+    present:
+      /\d+\s*(?:명|개\s*반|반|교실|대|지점|곳)|(?:한|두|세|네|다섯|여섯|일곱|여덟|아홉|열)\s*(?:명|반|곳|대|지점)|강사\s*\d|학생\s*\d|규모|1인|혼자/,
     answerAsks: /학생\s*수|강사\s*수|몇\s*명|규모/,
     line: "참고로 강사와 학생이 대략 몇 명인지 알려 주시면, 맞는 구성과 요금제를 더 정확히 좁혀 드릴게요.",
   },
   {
     id: "rooms",
-    present: /교실\s*(?:\d|이|은|수|몇)|벽걸이|스탠드|설치\s*(?:장소|형태)|\d+\s*대/,
+    present:
+      /교실\s*(?:\d|이|은|수|몇|(?:한|두|세|네|다섯)\s*(?:곳|개|칸))|벽걸이|스탠드|설치\s*(?:장소|형태)|\d+\s*대|(?:한|두|세|네|다섯)\s*대/,
     answerAsks: /교실\s*수|교실이\s*몇|설치\s*형태|벽걸이·스탠드/,
     line: "전자칠판을 놓을 교실이 몇 곳인지, 벽에 걸지 스탠드로 둘지도 생각해 두셨나요? 알려 주시면 그 기준으로 구성을 잡아 드릴게요.",
   },
@@ -179,7 +185,7 @@ function pickQuestion(input: FollowUpInput): string | null {
   }
 
   // 3) 영업 상담 이어 가기
-  if (isSalesConversation(input)) return pickSalesSlot(input)
+  if (input.allowSalesFollowUp !== false && isSalesConversation(input)) return pickSalesSlot(input)
   return null
 }
 
