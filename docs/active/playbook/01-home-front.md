@@ -75,6 +75,7 @@
 
 - **결제 활성화 플래그**: `NEXT_PUBLIC_SW_CHECKOUT_ENABLED`로 `/product/sw` CTA가 `/checkout` ↔ `/contact#contact-form` 분기.
 - `app/l/test1~3`는 실험/임시 랜딩(운영 정리 후보).
+- `/l/swarm-hw-a`·`/l/swarm-hw-b`·`/l/swarm-sw-a`·`/l/swarm-sw-b`는 커서 군집이 페이지를 짓는 연출 시안이다(noindex, 정적 HTML `public/l/swarm-*`, 공용 엔진 `public/l/swarm/swarm-build.js`). 엔진은 Swarm(Joel Califa)·Swarm Rebuild 의 동작 설명만 보고 새로 짰다 — 두 원본은 라이선스가 없어 코드를 가져오지 않는다.
 
 ## 8. 검증 방법
 

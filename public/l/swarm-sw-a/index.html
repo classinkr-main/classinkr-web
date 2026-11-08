@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<!-- 경로가 슬래시 없이 열리므로 base 도 슬래시 없이 둔다(#링크가 페이지를 다시 부르지 않게). -->
+<base href="/l/swarm-sw-a" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Classin 소프트웨어 — 학생이 들어오면, 수업 화면이 완성됩니다 (시안 SW-A)</title>
+<meta name="description" content="Classin 소프트웨어 랜딩 시안 SW-A. 판서, 온스테이지, 퀴즈, 채팅, 녹화가 한 수업 화면 안에서 움직이는 모습을 학생 커서들이 조립하며 보여 줍니다." />
+<meta name="robots" content="noindex, nofollow" />
+<meta name="theme-color" content="#F9F8F5" />
+<script>
+  (function () {
+    var d = document.documentElement;
+    try {
+      if (matchMedia("(prefers-reduced-motion: reduce)").matches || /[?&]swarm=off\b/.test(location.search)) return;
+    } catch (e) { return; }
+    d.classList.add("sb-on");
+    window.__sbFallback = setTimeout(function () { d.classList.remove("sb-on"); }, 4000);
+  })();
+</script>
+<link rel="stylesheet" href="/l/swarm/base.css" />
+<style>
+  /* ── Hero ── */
+  .hero { padding: clamp(40px, 6vw, 88px) 0 clamp(64px, 8vw, 112px); }
+  .hero-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: clamp(36px, 5vw, 56px); align-items: center; }
+  .hero-grid > * { min-width: 0; }
+  @media (min-width: 1080px) { .hero-grid { grid-template-columns: minmax(0, 4fr) minmax(0, 7fr); } }
+  .hero-copy { display: grid; gap: 22px; justify-items: start; }
+  .hero-copy .display { font-size: clamp(36px, 4.3vw, 62px); }
+  .hero-copy .cta-row { margin-top: 10px; }
+
+  /* 수업 화면 목업(실제 화면을 단순화한 그림) */
+  .app {
+    position: relative; border-radius: 14px; background: var(--surface-sheet); overflow: hidden;
+    box-shadow: 0 0 0 1px var(--line-hair), 0 40px 80px -40px rgb(17 17 16 / .35);
+    font-size: 13px; line-height: 1.4; color: var(--fg-body);
+  }
+  .app-bar { display: flex; align-items: center; gap: 12px; height: 44px; padding: 0 14px; border-bottom: 1px solid var(--line-hair); }
+  .dots { display: flex; gap: 6px; }
+  .dots i { width: 10px; height: 10px; border-radius: 50%; background: #E3E1DB; }
+  .app-title { font-weight: 600; color: var(--fg-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rec { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; padding: 4px 9px; border-radius: 9999px; box-shadow: 0 0 0 1px var(--line-strong); font-weight: 600; color: var(--fg-ink); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .rec i { width: 7px; height: 7px; border-radius: 50%; background: #B43E3E; }
+  .count { color: var(--fg-muted); white-space: nowrap; }
+  @media (max-width: 559px) { .count { display: none; } .app-bar { gap: 8px; padding: 0 10px; } .rec { padding: 3px 7px; font-size: 11.5px; } .stage { gap: 4px; } .tile .nm { font-size: 9px; left: 4px; bottom: 3px; } }
+  .app-body { display: grid; grid-template-columns: minmax(0, 1fr); }
+  @media (min-width: 640px) { .app-body { grid-template-columns: minmax(0, 1fr) 190px; } }
+  .main { display: grid; gap: 10px; padding: 10px; min-width: 0; }
+  .stage { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }
+  .tile { position: relative; aspect-ratio: 4 / 3; border-radius: 6px; background: #2C2B28; overflow: hidden; }
+  .tile .av { position: absolute; left: 50%; top: 44%; transform: translate(-50%, -50%); width: 34%; aspect-ratio: 1; border-radius: 50%; display: grid; place-items: center; background: #F3F2EE; color: #111110; font-weight: 700; font-size: clamp(10px, 1vw, 13px); }
+  .tile .nm { position: absolute; left: 6px; bottom: 5px; font-size: 10.5px; font-weight: 600; color: #FAFAF8; }
+  .tile.t0 { background: #1F3A2F; }
+  .board { position: relative; aspect-ratio: 16 / 8.4; border-radius: 8px; background: #FCFBF8; box-shadow: inset 0 0 0 1px var(--line-hair); background-image: radial-gradient(rgb(17 17 16 / .07) 1px, transparent 1px); background-size: 18px 18px; overflow: hidden; }
+  .bd-text { position: absolute; left: 6%; top: 10%; display: grid; gap: clamp(4px, .8vw, 10px); }
+  .bd-text .h { font-size: clamp(14px, 1.5vw, 20px); font-weight: 700; color: var(--fg-ink); letter-spacing: -0.01em; }
+  .bd-text .eq { font-size: clamp(13px, 1.35vw, 18px); color: var(--fg-ink); font-variant-numeric: tabular-nums; }
+  .bd-text .eq.ans { color: var(--fg-accent); font-weight: 600; }
+  .uline { position: absolute; left: 6%; top: 21.5%; width: 26%; height: 2px; border-radius: 2px; background: var(--fg-ink); }
+  .quiz {
+    position: absolute; right: 4%; top: 10%; width: 40%; padding: 12px 12px 10px; border-radius: 10px; background: var(--surface-sheet);
+    box-shadow: 0 0 0 1px var(--line-hair), 0 16px 30px -16px rgb(17 17 16 / .35); display: grid; gap: 6px;
+  }
+  .quiz .qh { display: flex; justify-content: space-between; gap: 8px; font-size: 11.5px; font-weight: 700; color: var(--fg-ink); }
+  .quiz .qh span { font-weight: 600; color: var(--fg-muted); font-variant-numeric: tabular-nums; }
+  .opt { display: grid; grid-template-columns: 20px 1fr 28px; align-items: center; gap: 6px; font-size: 11px; }
+  .opt .bar { height: 6px; border-radius: 3px; background: var(--surface-skeleton); overflow: hidden; }
+  .opt .bar i { display: block; height: 100%; background: #8A857F; }
+  .opt.on .bar i { background: var(--fg-accent); }
+  .opt b { text-align: right; font-weight: 600; color: var(--fg-muted); font-variant-numeric: tabular-nums; }
+  .dock { position: absolute; left: 50%; bottom: 5%; transform: translateX(-50%); display: flex; gap: 4px; padding: 5px; border-radius: 10px; background: var(--surface-sheet); box-shadow: 0 0 0 1px var(--line-hair), 0 8px 18px -10px rgb(17 17 16 / .3); }
+  .dock .ic { width: clamp(22px, 2.4vw, 30px); height: clamp(22px, 2.4vw, 30px); border-radius: 6px; display: grid; place-items: center; }
+  .dock .ic .ti { width: 70%; height: 70%; }
+  .chat { display: none; border-left: 1px solid var(--line-hair); padding: 10px; gap: 8px; align-content: start; }
+  @media (min-width: 640px) { .chat { display: grid; } }
+  .chat .ch { font-weight: 700; color: var(--fg-ink); padding: 2px 2px 6px; border-bottom: 1px solid var(--line-hair); }
+  .msg { display: grid; gap: 2px; padding: 7px 9px; border-radius: 8px; background: var(--surface-sunken); font-size: 12px; line-height: 1.45; color: var(--fg-ink); }
+  .msg b { font-size: 10.5px; color: var(--fg-muted); font-weight: 600; }
+  .chat-in { margin-top: 4px; padding: 8px 9px; border-radius: 8px; box-shadow: inset 0 0 0 1px var(--line-control); color: #78736D; font-size: 12px; }
+  .ti { display: block; background: var(--fg-ink); -webkit-mask: var(--i) center / contain no-repeat; mask: var(--i) center / contain no-repeat; }
+  .app-cap { margin-top: 12px; }
+
+  /* ── 도구 ── */
+  .tools { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 1px solid var(--line-ink); }
+  @media (min-width: 640px) { .tools { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+  @media (min-width: 1000px) { .tools { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+  .tool { display: grid; gap: 12px; justify-items: start; padding: 20px 14px 22px 0; border-bottom: 1px solid var(--line-hair); }
+  .tool .ti { width: 32px; height: 32px; }
+  .tool span { font-size: 15px; font-weight: 600; color: var(--fg-ink); line-height: 1.35; }
+  .tools-foot { display: flex; flex-wrap: wrap; gap: 8px 16px; justify-content: space-between; margin-top: 20px; }
+
+  /* ── 전·중·후 ── */
+  .flow { position: relative; display: grid; gap: 28px; }
+  @media (min-width: 900px) { .flow { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 32px; } }
+  .flow-line { display: none; }
+  @media (min-width: 900px) { .flow-line { display: block; position: absolute; left: 0; right: 0; top: 7px; height: 1px; background: var(--line-ink); } }
+  .phase { position: relative; display: grid; gap: 12px; align-content: start; padding-top: 0; }
+  @media (min-width: 900px) { .phase { padding-top: 36px; } }
+  .phase .pin { display: none; }
+  @media (min-width: 900px) { .phase .pin { display: block; position: absolute; left: 0; top: 2px; width: 11px; height: 11px; border-radius: 50%; background: var(--surface-paper); box-shadow: inset 0 0 0 1px var(--line-ink); } }
+  .phase .when { font-size: 13px; font-weight: 600; color: var(--fg-muted); }
+  .phase h3 { font-size: 24px; line-height: 1.3; letter-spacing: -0.02em; }
+  .phase ul { display: grid; border-top: 1px solid var(--line-hair); }
+  .phase li { padding: 12px 0; border-bottom: 1px solid var(--line-hair); font-size: 16px; line-height: 1.6; color: var(--fg-body); }
+  .phase li small { display: block; font-size: 13px; color: var(--fg-muted); }
+
+  /* ── 학습 활동 ── */
+  .acts { display: flex; flex-wrap: wrap; gap: 8px; }
+  .act { display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px 10px 12px; border-radius: 9999px; box-shadow: inset 0 0 0 1px var(--line-control); font-size: 15px; font-weight: 600; color: var(--fg-ink); background: var(--surface-sheet); }
+  .act img { width: 22px; height: 22px; }
+
+  /* ── 하이브리드 ── */
+  .wide .frame { aspect-ratio: 1360 / 840; }
+  .wide-cap { display: grid; gap: 14px; margin-top: 22px; }
+  @media (min-width: 900px) { .wide-cap { grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 48px; align-items: start; } }
+</style>
+</head>
+<body>
+
+<header class="masthead">
+  <div class="wrap">
+    <a class="brand" href="/" aria-label="Classin 홈"><img src="/images/logo.png" alt="" width="674" height="244" />Classin</a>
+    <nav class="nav" aria-label="주요 메뉴">
+      <span class="draft-flag">시안 SW-A</span>
+      <a href="/product/sw" aria-current="page">소프트웨어</a>
+      <a href="/product/hw">Classin Board</a>
+      <a href="/pricing">요금</a>
+      <a class="btn btn-primary" href="/contact?topic=%EB%8F%84%EC%9E%85%20%EC%83%81%EB%8B%B4&amp;prefill=Classin%20%EC%86%8C%ED%94%84%ED%8A%B8%EC%9B%A8%EC%96%B4%EB%A1%9C%20%EC%88%98%EC%97%85%20%EC%9A%B4%EC%98%81%EC%9D%84%20%EB%AC%B6%EB%8A%94%20%EB%8F%84%EC%9E%85%20%EC%83%81%EB%8B%B4%EC%9D%84%20%EB%B0%9B%EA%B3%A0%20%EC%8B%B6%EC%8A%B5%EB%8B%88%EB%8B%A4.#contact-form" data-cta-id="swarm_sw_a_header_contact">도입 상담</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <!-- Hero -->
+  <section class="hero">
+    <div class="wrap hero-grid">
+      <div class="hero-copy">
+        <p class="kicker" data-build="text"><span class="idx">Classin 소프트웨어</span><span class="bar" aria-hidden="true"></span>실시간 수업</p>
+        <h1 class="display" data-build="text" data-guide>학생이 들어오면,<br />수업 화면이<br />완성됩니다</h1>
+        <p class="lead" data-build="text">판서, 온스테이지, 퀴즈, 채팅, 녹화. 수업에 필요한 것들이 한 화면 안에서 같이 움직입니다. 현장 교실이든 온라인이든, 둘을 섞은 하이브리드 수업이든 같은 화면으로 진행합니다.</p>
+        <div class="cta-row">
+          <a class="btn btn-primary" data-build="box" href="/contact?topic=%EB%8F%84%EC%9E%85%20%EC%83%81%EB%8B%B4&amp;prefill=Classin%20%EC%86%8C%ED%94%84%ED%8A%B8%EC%9B%A8%EC%96%B4%EB%A1%9C%20%EC%88%98%EC%97%85%20%EC%9A%B4%EC%98%81%EC%9D%84%20%EB%AC%B6%EB%8A%94%20%EB%8F%84%EC%9E%85%20%EC%83%81%EB%8B%B4%EC%9D%84%20%EB%B0%9B%EA%B3%A0%20%EC%8B%B6%EC%8A%B5%EB%8B%88%EB%8B%A4.#contact-form" data-cta-id="swarm_sw_a_hero_contact">도입 상담 받기 <span class="arr" aria-hidden="true">→</span></a>
+          <a class="btn btn-line" data-build="box" href="/pricing" data-cta-id="swarm_sw_a_hero_pricing">요금 보기</a>
+        </div>
+      </div>
+
+      <figure>
+        <div class="app" data-build="box" role="img" aria-label="Classin 수업 화면을 단순화한 그림. 위쪽에 선생님과 학생 다섯 명의 온스테이지 화면, 가운데 칠판에 이차방정식 풀이와 객관식 퀴즈 응답, 오른쪽에 채팅이 있습니다.">
+          <div class="app-bar">
+            <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
+            <span class="app-title" data-build="text">중2 수학 · 이차방정식의 근</span>
+            <span class="rec" data-build="pop"><i></i>녹화 중 00:12:48</span>
+            <span class="count" data-build="text">학생 5명</span>
+          </div>
+          <div class="app-body">
+            <div class="main">
+              <div class="stage">
+                <div class="tile t0" data-build="box" data-build-dup="tile" data-build-retype="off"><span class="av">선생</span><span class="nm">선생님</span></div>
+                <div class="tile" data-build="box" data-build-dup="tile"><span class="av">서연</span><span class="nm">학생 01</span></div>
+                <div class="tile" data-build="box" data-build-dup="tile"><span class="av">민준</span><span class="nm">학생 02</span></div>
+                <div class="tile" data-build="box" data-build-dup="tile"><span class="av">지우</span><span class="nm">학생 03</span></div>
+                <div class="tile" data-build="box" data-build-dup="tile"><span class="av">하윤</span><span class="nm">학생 04</span></div>
+                <div class="tile" data-build="box" data-build-dup="tile"><span class="av">도윤</span><span class="nm">학생 05</span></div>
+              </div>
+              <div class="board" data-build="box">
+                <div class="bd-text">
+                  <span class="h" data-build="text">이차방정식의 근</span>
+                  <span class="eq" data-build="text" data-build-after="prev">x² − 4x + 3 = 0</span>
+                  <span class="eq" data-build="text" data-build-after="prev">(x − 1)(x − 3) = 0</span>
+                  <span class="eq ans" data-build="text" data-build-after="prev">x = 1 또는 x = 3</span>
+                </div>
+                <span class="uline" data-build="line"></span>
+                <div class="quiz" data-build="box">
+                  <p class="qh" data-build="text">객관식 퀴즈 <span>응답 5/5</span></p>
+                  <div class="opt" data-build="text" data-build-dup="opt"><span>①</span><span class="bar"><i style="width:0%"></i></span><b>0</b></div>
+                  <div class="opt on" data-build="text" data-build-dup="opt"><span>②</span><span class="bar"><i style="width:80%"></i></span><b>4</b></div>
+                  <div class="opt" data-build="text" data-build-dup="opt"><span>③</span><span class="bar"><i style="width:20%"></i></span><b>1</b></div>
+                  <div class="opt" data-build="text" data-build-dup="opt"><span>④</span><span class="bar"><i style="width:0%"></i></span><b>0</b></div>
+                </div>
+                <div class="dock" data-build="box">
+                  <span class="ic" data-build="pop"><span class="ti" style="--i:url(/images/product/sw/tool-icons/timer.png)"></span></span>
+                  <span class="ic" data-build="pop"><span class="ti" style="--i:url(/images/product/sw/tool-icons/random-pick.png)"></span></span>
+                  <span class="ic" data-build="pop"><span class="ti" style="--i:url(/images/product/sw/tool-icons/quiz-choice.png)"></span></span>
+                  <span class="ic" data-build="pop"><span class="ti" style="--i:url(/images/product/sw/tool-icons/quiz-buzzer.png)"></span></span>
+                  <span class="ic" data-build="pop"><span class="ti" style="--i:url(/images/product/sw/tool-icons/group-discussion.png)"></span></span>
+                  <span class="ic" data-build="pop"><span class="ti" style="--i:url(/images/product/sw/tool-icons/personal-board.png)"></span></span>
+                </div>
+              </div>
+            </div>
+            <aside class="chat">
+              <p class="ch" data-build="text">채팅</p>
+              <p class="msg" data-build="text" data-build-dup="msg"><b>학생 03</b>인수분해 다시 한 번만요!</p>
+              <p class="msg" data-build="text" data-build-dup="msg"><b>학생 01</b>② 1, 3 맞죠?</p>
+              <p class="msg" data-build="text" data-build-dup="msg"><b>선생님</b>좋아요. 근과 계수의 관계로 확인해 봅시다.</p>
+              <p class="msg" data-build="text" data-build-dup="msg"><b>학생 05</b>판서 저장해 주세요</p>
+              <p class="chat-in" data-build="box">메시지 입력</p>
+            </aside>
+          </div>
+        </div>
+        <figcaption class="note app-cap" data-build="text">수업 화면을 단순화한 그림입니다. 온스테이지 인원은 수업을 만들 때 1v0부터 1v12까지 정합니다.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <!-- 01 도구 -->
+  <section class="section" aria-labelledby="s-tools">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="kicker" data-build="text"><span class="idx">01</span><span class="bar" aria-hidden="true"></span>수업 중</p>
+        <h2 class="title" id="s-tools" data-build="text" data-guide>타이머부터 물리 실험까지,<br />수업 안에서 바로 꺼냅니다</h2>
+        <p class="lead" data-build="text">다른 프로그램으로 넘어가지 않습니다. 칠판 위에서 도구를 꺼내고, 쓰고, 다시 넣습니다.</p>
+      </div>
+      <ul class="tools">
+        <li class="tool" data-build="box" data-build-dup="tool"><i class="ti" style="--i:url(/images/product/sw/tool-icons/timer.png)" aria-hidden="true"></i><span>타이머</span></li>
+        <li class="tool" data-build="box" data-build-dup="tool"><i class="ti" style="--i:url(/images/product/sw/tool-icons/stopwatch.png)" aria-hidden="true"></i><span>스톱워치</span></li>
+        <li class="tool" data-build="box" data-build-dup="tool"><i class="ti" style="--i:url(/images/product/sw/tool-icons/random-pick.png)" aria-hidden="true"></i><span>랜덤 선택</span></li>
+        <li class="tool" data-build="box" data-build-dup="tool"><i class="ti" style="--i:url(/images/product/sw/tool-icons/dice.png)" aria-hidden="true"></i><span>주사위</span></li>
+        <li class="tool" data-build="box" data-build-dup="tool"><i class="ti" style="--i:url(/images/product/sw/tool-icons/quiz-choice.png)" aria-hidden="true"></i><span>객관식 퀴즈</span></li>
+        <li class="tool" data-build="box" data-build-dup="tool"><i class="ti" style="--i:url(/images/product/sw/tool-icons/quiz-buzzer.png)" aria-hidden="true"></i><span>선착순 퀴즈</span></li>
+        <li class="tool" data-build="box" data-build-dup="tool"><i class="ti" style="--i:url(/images/product/sw/tool-icons/group-discussion.png)" aria-hidden="true"></i><span>그룹 토론</span></li>
+        <li class="tool" data-build="box" data-build-dup="tool"><i class="ti" style="--i:url(/images/product/sw/tool-icons/collaboration.png)" aria-hidden="true"></i><span>공동 작업</span></li>
+        <li class="tool" data-build="box" data-build-dup="tool"><i class="ti" style="--i:url(/images/product/sw/tool-icons/personal-board.png)" aria-hidden="true"></i><span>개인 칠판</span></li>
+        <li class="tool" data-build="box" data-build-dup="tool"><i class="ti" style="--i:url(/images/product/sw/tool-icons/sub-board.png)" aria-hidden="true"></i><span>보조 칠판</span></li>
+        <li class="tool" data-build="box" data-build-dup="tool"><i class="ti" style="--i:url(/images/product/sw/tool-icons/laser-pointer.png)" aria-hidden="true"></i><span>레이저 포인터</span></li>
+        <li class="tool" data-build="box" data-build-dup="tool"><i class="ti" style="--i:url(/images/product/sw/tool-icons/live-chat.png)" aria-hidden="true"></i><span>실시간 채팅</span></li>
+        <li class="tool" data-build="box" data-build-dup="tool"><i class="ti" style="--i:url(/images/product/sw/tool-icons/screen-share.png)" aria-hidden="true"></i><span>화면 공유</span></li>
+        <li class="tool" data-build="box" data-build-dup="tool"><i class="ti" style="--i:url(/images/product/sw/tool-icons/mirroring.png)" aria-hidden="true"></i><span>미러링</span></li>
+        <li class="tool" data-build="box" data-build-dup="tool"><i class="ti" style="--i:url(/images/product/sw/tool-icons/sub-camera.png)" aria-hidden="true"></i><span>보조 카메라</span></li>
+        <li class="tool" data-build="box" data-build-dup="tool"><i class="ti" style="--i:url(/images/product/sw/tool-icons/browser.png)" aria-hidden="true"></i><span>브라우저</span></li>
+        <li class="tool" data-build="box" data-build-dup="tool"><i class="ti" style="--i:url(/images/product/sw/tool-icons/multi-browser.png)" aria-hidden="true"></i><span>다방향 브라우저</span></li>
+        <li class="tool" data-build="box" data-build-dup="tool"><i class="ti" style="--i:url(/images/product/sw/tool-icons/video-gallery.png)" aria-hidden="true"></i><span>비디오 갤러리</span></li>
+        <li class="tool" data-build="box" data-build-dup="tool"><i class="ti" style="--i:url(/images/product/sw/tool-icons/material-library.png)" aria-hidden="true"></i><span>수업 자료 라이브러리</span></li>
+        <li class="tool" data-build="box" data-build-dup="tool"><i class="ti" style="--i:url(/images/product/sw/tool-icons/geometry.png)" aria-hidden="true"></i><span>기하도형</span></li>
+        <li class="tool" data-build="box" data-build-dup="tool"><i class="ti" style="--i:url(/images/product/sw/tool-icons/measure.png)" aria-hidden="true"></i><span>측정 도구</span></li>
+        <li class="tool" data-build="box" data-build-dup="tool"><i class="ti" style="--i:url(/images/product/sw/tool-icons/chemistry.png)" aria-hidden="true"></i><span>화학 실험</span></li>
+        <li class="tool" data-build="box" data-build-dup="tool"><i class="ti" style="--i:url(/images/product/sw/tool-icons/physics.png)" aria-hidden="true"></i><span>물리 실험</span></li>
+        <li class="tool" data-build="box" data-build-dup="tool"><i class="ti" style="--i:url(/images/product/sw/tool-icons/go-board.png)" aria-hidden="true"></i><span>바둑 칠판</span></li>
+      </ul>
+      <div class="tools-foot">
+        <p class="note" data-build="text">쓸 수 있는 도구는 수업 형태와 기관 설정에 따라 다를 수 있습니다.</p>
+        <a class="link" data-build="text" href="/product/sw" data-cta-id="swarm_sw_a_tools_more">도구별 쓰임새 보기 →</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- 02 전·중·후 -->
+  <section class="section" aria-labelledby="s-flow">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="kicker" data-build="text"><span class="idx">02</span><span class="bar" aria-hidden="true"></span>수업 전·중·후</p>
+        <h2 class="title" id="s-flow" data-build="text">한 번 만든 수업이<br />다음 수업의 재료가 됩니다</h2>
+      </div>
+      <div class="flow">
+        <span class="flow-line" data-build="line" aria-hidden="true"></span>
+        <div class="phase" data-build="text" data-build-dup="phase">
+          <span class="pin" aria-hidden="true"></span>
+          <span class="when">수업 전</span>
+          <h3>EDB 교안으로 준비</h3>
+          <ul>
+            <li>판서·이미지·텍스트가 살아 있는 칠판 파일<small>최대 50쪽 칠판에 수업 흐름을 미리 깔아 둡니다</small></li>
+            <li>우수 강사의 교안을 템플릿으로<small>같은 과목 강사가 그대로 불러 씁니다</small></li>
+          </ul>
+        </div>
+        <div class="phase" data-build="text" data-build-dup="phase">
+          <span class="pin" aria-hidden="true"></span>
+          <span class="when">수업 중</span>
+          <h3>온스테이지와 상호작용</h3>
+          <ul>
+            <li>학생을 무대에 올려 함께 풀기<small>1v0부터 1v12까지 수업마다 정합니다</small></li>
+            <li>퀴즈·토론·공동 작업으로 참여 확인<small>응답은 그 자리에서 칠판 위에 모입니다</small></li>
+          </ul>
+        </div>
+        <div class="phase" data-build="text" data-build-dup="phase">
+          <span class="pin" aria-hidden="true"></span>
+          <span class="when">수업 후</span>
+          <h3>녹화·복습·과제</h3>
+          <ul>
+            <li>수업 녹화로 다시보기와 보강<small>결석한 학생도 같은 수업을 봅니다</small></li>
+            <li>숙제 AI 자동 채점 지원<small>AI 강의 분석은 관리자가 켜는 선택 기능입니다</small></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 03 학습 활동 -->
+  <section class="section" aria-labelledby="s-acts">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="kicker" data-build="text"><span class="idx">03</span><span class="bar" aria-hidden="true"></span>학습 활동</p>
+        <h2 class="title" id="s-acts" data-build="text">수업 밖 학습도<br />같은 곳에 쌓입니다</h2>
+        <p class="lead" data-build="text">수업에 숙제와 시험, 자료를 붙이면 학생은 한 앱에서 이어서 하고, 강사는 한 화면에서 확인합니다.</p>
+      </div>
+      <ul class="acts">
+        <li class="act" data-build="pop"><img src="/images/product/sw/activity-icons/recorded-class-mono.png" alt="" width="22" height="22" />녹화 수업</li>
+        <li class="act" data-build="pop"><img src="/images/product/sw/activity-icons/quiz-mono.png" alt="" width="22" height="22" />시험</li>
+        <li class="act" data-build="pop"><img src="/images/product/sw/activity-icons/daily-task-mono.png" alt="" width="22" height="22" />일일 과제</li>
+        <li class="act" data-build="pop"><img src="/images/product/sw/activity-icons/learning-materials-mono.png" alt="" width="22" height="22" />학습 자료</li>
+        <li class="act" data-build="pop"><img src="/images/product/sw/activity-icons/discussion-mono.png" alt="" width="22" height="22" />토론</li>
+        <li class="act" data-build="pop"><img src="/images/product/sw/activity-icons/omr-card-mono.png" alt="" width="22" height="22" />OMR 카드</li>
+        <li class="act" data-build="pop"><img src="/images/product/sw/activity-icons/repeat-after-me-mono.png" alt="" width="22" height="22" />따라읽기</li>
+        <li class="act" data-build="pop"><img src="/images/product/sw/activity-icons/scorm-mono.png" alt="" width="22" height="22" />SCORM</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 04 하이브리드 -->
+  <section class="section wide" aria-labelledby="s-hybrid">
+    <div class="wrap">
+      <div class="frame" data-build="media">
+        <img src="/images/product/sw/two-way-blackboard.webp" width="1360" height="840" alt="교실의 학생들과 화면 속 온라인 학생들이 같은 칠판을 보며 수업하는 모습" loading="lazy" />
+      </div>
+      <div class="wide-cap">
+        <h2 class="title" id="s-hybrid" data-build="text">교실에 앉은 학생과<br />집에 있는 학생이 같은 칠판을 봅니다</h2>
+        <p class="lead" data-build="text">Classin Board와 같이 쓰면 현장 교실 판서가 그대로 온라인 수업 화면이 됩니다. 학생은 칠판 화면과 현장 카메라 화면 중 보고 싶은 쪽을 고릅니다.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 끝 CTA -->
+  <section class="final" aria-labelledby="s-final">
+    <div class="wrap">
+      <p class="kicker" data-build="text"><span class="idx">파일럿</span><span class="bar" aria-hidden="true"></span>1개 교실부터</p>
+      <h2 class="title" id="s-final" data-build="text" data-guide>우리 학원 수업 하나로<br />먼저 열어 보세요</h2>
+      <p class="lead" data-build="text">대표 수업 한 개를 Classin 화면으로 옮겨 보고, 강사 온보딩과 EDB 교안 전환 순서를 같이 잡습니다. 결제나 오프라인 출석처럼 지금 쓰는 시스템이 있는 일은 연동 범위부터 정합니다.</p>
+      <div class="cta-row">
+        <a class="btn btn-primary" data-build="box" href="/contact?topic=%EB%8F%84%EC%9E%85%20%EC%83%81%EB%8B%B4&amp;prefill=Classin%20%EC%86%8C%ED%94%84%ED%8A%B8%EC%9B%A8%EC%96%B4%EB%A1%9C%20%EC%88%98%EC%97%85%20%EC%9A%B4%EC%98%81%EC%9D%84%20%EB%AC%B6%EB%8A%94%20%EB%8F%84%EC%9E%85%20%EC%83%81%EB%8B%B4%EC%9D%84%20%EB%B0%9B%EA%B3%A0%20%EC%8B%B6%EC%8A%B5%EB%8B%88%EB%8B%A4.#contact-form" data-cta-id="swarm_sw_a_final_contact">도입 상담 받기 <span class="arr" aria-hidden="true">→</span></a>
+        <a class="btn btn-line" data-build="box" href="/pricing" data-cta-id="swarm_sw_a_final_pricing">요금 보기</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="foot surface-ink">
+  <div class="wrap">
+    <a class="brand" href="/"><img src="/images/logo.png" alt="" width="674" height="244" />Classin</a>
+    <nav aria-label="바닥글">
+      <a href="/product">제품 소개</a>
+      <a href="/product/sw">소프트웨어</a>
+      <a href="/product/hw">Classin Board</a>
+      <a href="/pricing">요금</a>
+      <a href="/privacy">개인정보처리방침</a>
+    </nav>
+    <small>© 2026 Classin Korea · 이 페이지는 랜딩 시안입니다.</small>
+  </div>
+</footer>
+
+<script src="/l/attribution.js"></script>
+<script>
+  window.SWARM_CONFIG = {
+    label: "학생들이 수업에 들어오는 중",
+    agents: [
+      { name: "선생님", tone: "accent" },
+      { name: "학생 01", tone: "ink" },
+      { name: "학생 02", tone: "muted" },
+      { name: "학생 03", tone: "ink" },
+      { name: "학생 04", tone: "paper" },
+      { name: "학생 05", tone: "muted" },
+      { name: "학생 06", tone: "ink" },
+      { name: "학생 07", tone: "paper" }
+    ]
+  };
+</script>
+<script src="/l/swarm/swarm-build.js" defer></script>
+</body>
+</html>

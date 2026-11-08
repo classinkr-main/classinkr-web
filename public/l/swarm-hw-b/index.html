@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<!-- 경로가 슬래시 없이 열리므로 base 도 슬래시 없이 둔다(#링크가 페이지를 다시 부르지 않게). -->
+<base href="/l/swarm-hw-b" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Classin Board — 한 화면에, 쉰 개의 손 (시안 HW-B)</title>
+<meta name="description" content="Classin Board 랜딩 시안 HW-B. 50점 적외선 터치와 2ms 응답을 화면 위 보드에서 직접 써 보며 확인합니다." />
+<meta name="robots" content="noindex, nofollow" />
+<meta name="theme-color" content="#F9F8F5" />
+<script>
+  (function () {
+    var d = document.documentElement;
+    try {
+      if (matchMedia("(prefers-reduced-motion: reduce)").matches || /[?&]swarm=off\b/.test(location.search)) return;
+    } catch (e) { return; }
+    d.classList.add("sb-on");
+    window.__sbFallback = setTimeout(function () { d.classList.remove("sb-on"); }, 4000);
+  })();
+</script>
+<link rel="stylesheet" href="/l/swarm/base.css" />
+<style>
+  /* ── Hero(먹 지면 — 페이지당 서사 한 곳) ── */
+  .hero { padding: clamp(48px, 7vw, 96px) 0 clamp(56px, 7vw, 96px); }
+  .hero-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: clamp(32px, 4.5vw, 56px); align-items: center; }
+  .hero-head { display: grid; gap: 20px; justify-items: center; text-align: center; }
+  .hero-head .lead { margin: 0 auto; text-align: center; }
+  @media (min-width: 1100px) {
+    .hero-grid { grid-template-columns: minmax(0, 4fr) minmax(0, 7fr); }
+    .hero-head { justify-items: start; text-align: left; }
+    .hero-head .lead { margin: 0; text-align: left; font-size: 18px; }
+    .hero-head .display { font-size: clamp(48px, 5vw, 72px); }
+    .ink-cta { justify-content: flex-start; }
+    .board-meta { justify-content: flex-start; }
+  }
+  .hero .kicker .bar { background: var(--line-ink); }
+  .ink-cta { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 6px; }
+  .btn-ink { background: transparent; color: #FAFAF8; border: 1px solid rgb(250 250 248 / .40); }
+  .btn-ink:hover { border-color: #FAFAF8; }
+  .btn-ink.sage { color: var(--fg-accent); border-color: rgb(143 196 172 / .6); }
+  .btn-ink.sage:hover { border-color: var(--fg-accent); }
+
+  .board-wrap { width: 100%; max-width: 1120px; margin: 0 auto; }
+  .board {
+    position: relative; padding: clamp(8px, 1.2vw, 16px); border-radius: clamp(14px, 1.8vw, 24px);
+    background: linear-gradient(180deg, #F1EFEA 0%, #DCD9D2 100%);
+    box-shadow: 0 1px 0 rgb(255 255 255 / .6) inset, 0 40px 80px -40px rgb(0 0 0 / .8);
+  }
+  .screen { position: relative; aspect-ratio: 16 / 9; border-radius: clamp(6px, .8vw, 10px); overflow: hidden; background: radial-gradient(120% 90% at 50% 0%, #1D1D1B 0%, #0E0E0D 70%); }
+  .screen svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: crosshair; }
+  .board.is-pen .screen svg { touch-action: none; }
+  .hud { position: absolute; left: 3%; top: 4%; display: flex; align-items: baseline; gap: 8px; color: rgb(250 250 248 / .56); font-size: clamp(11px, 1.1vw, 14px); font-weight: 600; pointer-events: none; }
+  .hud b { color: #FAFAF8; font-size: clamp(18px, 2.2vw, 30px); letter-spacing: -0.02em; font-variant-numeric: tabular-nums; min-width: 2ch; text-align: right; }
+  .tools { position: absolute; right: 2.5%; top: 3.2%; display: flex; gap: 6px; }
+  .tools button {
+    all: unset; cursor: pointer; padding: 7px 11px; border-radius: 9999px; font-size: clamp(11px, 1vw, 13px); font-weight: 600;
+    color: rgb(250 250 248 / .78); box-shadow: 0 0 0 1px rgb(250 250 248 / .22); background: rgb(17 17 16 / .5);
+  }
+  .tools button:hover { color: #FAFAF8; box-shadow: 0 0 0 1px rgb(250 250 248 / .5); }
+  .tools button:focus-visible { outline: 2px solid #8FC4AC; outline-offset: 2px; }
+  .tools button[aria-pressed="true"] { color: #1A1917; background: #8FC4AC; box-shadow: none; }
+  .hint { position: absolute; left: 50%; bottom: 4%; transform: translateX(-50%); font-size: clamp(11px, 1.05vw, 14px); color: rgb(250 250 248 / .56); white-space: nowrap; pointer-events: none; transition: opacity .4s ease; }
+  .tray { position: absolute; left: 50%; bottom: -1px; transform: translateX(-50%); width: 18%; height: clamp(4px, .5vw, 7px); border-radius: 0 0 6px 6px; background: #C9C5BD; }
+  .board-meta { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 22px; margin-top: 22px; font-size: 14px; color: var(--fg-muted); }
+  .board-meta b { color: var(--fg-ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .chalk { fill: none; stroke: #F4F2EC; stroke-width: 4.5; stroke-linecap: round; stroke-linejoin: round; }
+  .chalk.sage { stroke: #8FC4AC; }
+  .chalk.thin { stroke-width: 3; }
+  .chalk-t { fill: #F4F2EC; font-family: var(--font); font-weight: 500; letter-spacing: 0; }
+  .chalk-t.sage { fill: #8FC4AC; }
+  .dot { fill: #8FC4AC; }
+  .ink-user { fill: none; stroke: #F4F2EC; stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; }
+  .ripple { fill: none; stroke: #8FC4AC; stroke-width: 2.5; }
+  .ripple-c { fill: #8FC4AC; }
+
+  /* ── 숫자 ── */
+  .metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-top: 1px solid var(--line-ink); }
+  @media (min-width: 900px) { .metrics { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+  .metric { padding: 26px 18px 30px 0; border-bottom: 1px solid var(--line-hair); }
+  @media (min-width: 900px) { .metric { border-bottom: 0; } .metric + .metric { padding-left: 18px; border-left: 1px solid var(--line-hair); } }
+  @media (max-width: 899px) { .metric:nth-child(even) { padding-left: 16px; border-left: 1px solid var(--line-hair); } }
+  .metric b { display: block; font-size: clamp(34px, 4.4vw, 56px); line-height: 1; letter-spacing: -0.035em; color: var(--fg-ink); font-variant-numeric: tabular-nums; }
+  .metric b small { font-size: .42em; letter-spacing: -0.01em; margin-left: 2px; }
+  .metric span { display: block; margin-top: 12px; font-size: 15px; line-height: 1.5; color: var(--fg-ink); font-weight: 600; }
+  .metric em { display: block; margin-top: 4px; font-style: normal; font-size: 13px; line-height: 1.5; color: var(--fg-muted); }
+
+  /* ── 펜 끝 ── */
+  .pen { display: grid; gap: clamp(32px, 5vw, 72px); align-items: center; }
+  @media (min-width: 900px) { .pen { grid-template-columns: minmax(0, 6fr) minmax(0, 5fr); } }
+  .pen .frame { aspect-ratio: 16 / 11; background: #EDECE8; }
+  .pen .frame img { object-position: 50% 40%; }
+  .pen-copy { display: grid; gap: 20px; justify-items: start; }
+  .pen-list { width: 100%; display: grid; border-top: 1px solid var(--line-ink); margin-top: 6px; }
+  .pen-list li { display: grid; grid-template-columns: 120px 1fr; gap: 16px; padding: 18px 0; border-bottom: 1px solid var(--line-hair); }
+  .pen-list dt, .pen-list .k { font-size: 14px; font-weight: 600; color: var(--fg-muted); }
+  .pen-list .v { font-size: 16px; line-height: 1.6; color: var(--fg-ink); }
+  .pen-list .v small { display: block; color: var(--fg-muted); font-size: 14px; }
+  @media (max-width: 479px) { .pen-list li { grid-template-columns: 1fr; gap: 4px; } }
+
+  /* ── 보드 속 ── */
+  .inside { display: grid; gap: 16px; }
+  @media (min-width: 860px) { .inside { grid-template-columns: 1fr 1fr; } }
+  .card { display: grid; grid-template-rows: auto 1fr; overflow: hidden; border-radius: 16px; background: var(--surface-sheet); box-shadow: 0 0 0 1px var(--line-hair); }
+  .card .frame { border-radius: 0; aspect-ratio: 16 / 9; }
+  .card-body { display: grid; gap: 10px; align-content: start; padding: 26px 26px 30px; }
+  .card-body h3 { font-size: 22px; line-height: 1.35; letter-spacing: -0.02em; }
+  .card-body p { font-size: 16px; line-height: 1.7; color: var(--fg-body); }
+  .card-body .note { margin-top: 6px; }
+  .mic { display: grid; place-items: center; background: #EDECE8; }
+  .mic svg { width: 62%; height: auto; }
+
+  /* ── 크기 표 ── */
+  .sizes { display: grid; border-top: 1px solid var(--line-ink); }
+  .size-row { display: grid; grid-template-columns: 112px 1fr auto; align-items: center; gap: 16px; padding: 20px 0; border-bottom: 1px solid var(--line-hair); }
+  .size-row .in { white-space: nowrap; font-size: clamp(26px, 3vw, 36px); font-weight: 700; letter-spacing: -0.03em; color: var(--fg-ink); line-height: 1; font-variant-numeric: tabular-nums; }
+  .size-row .room { font-size: 17px; font-weight: 600; color: var(--fg-ink); }
+  .size-row .room small { display: block; margin-top: 2px; font-size: 13px; font-weight: 500; color: var(--fg-muted); font-variant-numeric: tabular-nums; }
+  .size-row .extra { font-size: 14px; color: var(--fg-muted); text-align: right; }
+  @media (max-width: 559px) { .size-row { grid-template-columns: 84px 1fr; } .size-row .extra { grid-column: 2; text-align: left; } }
+</style>
+</head>
+<body>
+
+<header class="masthead">
+  <div class="wrap">
+    <a class="brand" href="/" aria-label="Classin 홈"><img src="/images/logo.png" alt="" width="674" height="244" />Classin</a>
+    <nav class="nav" aria-label="주요 메뉴">
+      <span class="draft-flag">시안 HW-B</span>
+      <a href="/product/sw">소프트웨어</a>
+      <a href="/product/hw" aria-current="page">Classin Board</a>
+      <a href="/showroom">쇼룸</a>
+      <a class="btn btn-primary" href="/showroom" data-cta-id="swarm_hw_b_header_showroom">쇼룸 예약</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <!-- Hero -->
+  <section class="hero surface-ink" aria-labelledby="s-hero">
+    <div class="wrap hero-grid">
+      <div class="hero-head">
+        <p class="kicker" data-build="text"><span class="idx">Classin Board</span><span class="bar" aria-hidden="true"></span>50점 멀티터치</p>
+        <h1 class="display" id="s-hero" data-build="text">한 화면에,<br />쉰 개의 손.</h1>
+        <p class="lead" data-build="text">적외선 50점 터치와 2ms 응답. 여러 학생이 한꺼번에 나와 써도 손마다 따로 인식합니다. 아래 보드에 직접 써 보세요.</p>
+        <div class="ink-cta">
+          <a class="btn btn-ink sage" data-build="box" href="/showroom" data-cta-id="swarm_hw_b_hero_showroom">목동 쇼룸에서 실물로 써 보기 <span class="arr" aria-hidden="true">→</span></a>
+          <a class="btn btn-ink" data-build="box" href="#s-numbers" data-cta-id="swarm_hw_b_hero_specs">숫자로 보기</a>
+        </div>
+      </div>
+
+      <div class="board-wrap">
+        <div class="board" id="board" data-build="scene:board">
+          <div class="screen">
+            <svg id="board-svg" viewBox="0 0 1600 900" role="img" aria-label="칠판 화면. 포물선 그래프, 직각삼각형, 객관식 문제 풀이가 손글씨로 적혀 있고, 마우스나 손가락으로 직접 쓸 수 있습니다.">
+              <defs>
+                <clipPath id="clip-title"><rect class="tclip" x="0" y="0" width="1600" height="900" /></clipPath>
+                <clipPath id="clip-eq"><rect class="tclip" x="0" y="0" width="1600" height="900" /></clipPath>
+                <clipPath id="clip-py"><rect class="tclip" x="0" y="0" width="1600" height="900" /></clipPath>
+                <clipPath id="clip-q"><rect class="tclip" x="0" y="0" width="1600" height="900" /></clipPath>
+              </defs>
+              <!-- 제목 -->
+              <g clip-path="url(#clip-title)" data-clip="clip-title"><text class="chalk-t" x="640" y="132" font-size="44">오늘의 문제</text></g>
+              <path class="chalk sage stroke" data-who="0" d="M630 152 C 720 160, 820 146, 905 154" />
+              <!-- A: 좌표축과 포물선 -->
+              <path class="chalk thin stroke" data-who="0" d="M110 600 L 590 600 M 572 588 L 592 600 L 572 612" />
+              <path class="chalk thin stroke" data-who="0" d="M160 820 L 160 240 M 148 258 L 160 238 L 172 258" />
+              <path class="chalk sage stroke" data-who="1" d="M187 430 Q 340 950 493 430" />
+              <circle class="dot pt" cx="250" cy="600" r="8" />
+              <circle class="dot pt" cx="430" cy="600" r="8" />
+              <g clip-path="url(#clip-eq)" data-clip="clip-eq"><text class="chalk-t" x="196" y="300" font-size="42">y = x² − 4x + 3</text></g>
+              <!-- B: 직각삼각형 -->
+              <path class="chalk stroke" data-who="2" d="M720 720 L 1060 720 L 720 340 Z" />
+              <path class="chalk thin stroke" data-who="3" d="M720 688 L 752 688 L 752 720" />
+              <g clip-path="url(#clip-py)" data-clip="clip-py">
+                <text class="chalk-t" x="690" y="540" font-size="36">a</text>
+                <text class="chalk-t" x="880" y="770" font-size="36">b</text>
+                <text class="chalk-t" x="905" y="512" font-size="36">c</text>
+                <text class="chalk-t sage" x="736" y="838" font-size="40">a² + b² = c²</text>
+              </g>
+              <!-- C: 객관식 -->
+              <g clip-path="url(#clip-q)" data-clip="clip-q">
+                <text class="chalk-t" x="1190" y="330" font-size="36">x² − 4x + 3 = 0 의 해는?</text>
+                <text class="chalk-t" x="1210" y="420" font-size="36">① 0, 2</text>
+                <text class="chalk-t" x="1210" y="500" font-size="36">② 1, 3</text>
+                <text class="chalk-t" x="1210" y="580" font-size="36">③ 2, 4</text>
+                <text class="chalk-t" x="1210" y="660" font-size="36">④ −1, 3</text>
+              </g>
+              <path class="chalk sage stroke" data-who="4" d="M1196 488 C 1194 456, 1250 450, 1316 452 C 1372 454, 1388 476, 1380 500 C 1372 522, 1300 526, 1240 522 C 1206 520, 1192 508, 1200 480" />
+              <path class="chalk sage stroke" data-who="4" d="M1408 478 L 1428 500 L 1470 448" />
+              <path class="chalk thin stroke" data-who="5" d="M1190 740 C 1260 732, 1380 746, 1480 736" />
+              <path class="chalk thin stroke" data-who="5" d="M1420 790 l 12 26 l 28 4 l -20 20 l 5 28 l -25 -13 l -25 13 l 5 -28 l -20 -20 l 28 -4 Z" />
+              <g id="user-ink"></g>
+              <g id="ripples"></g>
+            </svg>
+            <div class="hud" aria-live="off"><span>동시 터치</span><b id="touch-n">0</b><span>/ 50</span></div>
+            <div class="tools">
+              <button type="button" id="pen-toggle" aria-pressed="false">손가락으로 쓰기</button>
+              <button type="button" id="clear-ink">지우기</button>
+            </div>
+            <p class="hint" id="board-hint">마우스나 손가락으로 직접 써 보세요. 여러 손가락도 따로 인식합니다.</p>
+          </div>
+          <span class="tray" aria-hidden="true"></span>
+        </div>
+        <p class="board-meta" data-build="text"><span><b>50점</b> 동시 인식</span><span><b>2ms</b> 응답</span><span><b>1.5mm</b> 펜 끝</span><span><b>4K</b> 3840×2160</span></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 01 숫자 -->
+  <section class="section" id="s-numbers" aria-labelledby="s-num-h">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="kicker" data-build="text"><span class="idx">01</span><span class="bar" aria-hidden="true"></span>판서감</p>
+        <h2 class="title" id="s-num-h" data-build="text" data-guide>판서감은<br />숫자로 먼저 확인합니다</h2>
+      </div>
+      <div class="metrics">
+        <div class="metric" data-build="box" data-build-dup="m"><b>50<small>점</small></b><span>동시 터치</span><em>적외선 터치 · 전 라인업</em></div>
+        <div class="metric" data-build="box" data-build-dup="m"><b>2<small>ms</small></b><span>터치 응답</span><em>펜을 대는 순간 선이 따라옵니다</em></div>
+        <div class="metric" data-build="box" data-build-dup="m"><b>1.5<small>mm</small></b><span>인식 범위</span><em>가는 펜 끝까지 읽습니다</em></div>
+        <div class="metric" data-build="box" data-build-dup="m"><b>4K</b><span>3840×2160</span><em>교실 뒷자리에서도 또렷하게</em></div>
+        <div class="metric" data-build="box" data-build-dup="m"><b>120<small>Hz</small></b><span>주사율 · S110</span><em>S65·S75·S86은 60Hz</em></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 02 펜 끝 -->
+  <section class="section" aria-labelledby="s-pen">
+    <div class="wrap pen">
+      <div class="frame" data-build="media">
+        <img src="/images/product/hw/latency/touch-latency.webp" width="1846" height="1128" alt="Classin Board 전용 펜 끝이 화면에 닿는 순간을 가까이서 본 그림" loading="lazy" />
+      </div>
+      <div class="pen-copy">
+        <p class="kicker" data-build="text"><span class="idx">02</span><span class="bar" aria-hidden="true"></span>쓰는 면</p>
+        <h2 class="title" id="s-pen" data-build="text">유리 위가 아니라,<br />칠판 위처럼</h2>
+        <p class="lead" data-build="text">빛 반사를 줄인 강화유리 위에 펜을 대면 지연 없이 선이 붙습니다. 수업 중 손이 먼저 기억하는 것은 스펙표가 아니라 이 감각입니다.</p>
+        <ul class="pen-list">
+          <li data-build="text" data-build-dup="pen"><span class="k">강화유리</span><span class="v">AG/AF 눈부심·지문 방지<small>S75·S86 3mm · S110 4mm</small></span></li>
+          <li data-build="text" data-build-dup="pen"><span class="k">제스처바</span><span class="v">양옆에서 바로 메뉴 호출<small>S86 · S110</small></span></li>
+          <li data-build="text" data-build-dup="pen"><span class="k">판서 저장</span><span class="v">PDF와 EDB 칠판 파일로 남김<small>다음 반 수업에서 그대로 다시 엽니다</small></span></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 03 보드 속 -->
+  <section class="section" aria-labelledby="s-inside">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="kicker" data-build="text"><span class="idx">03</span><span class="bar" aria-hidden="true"></span>보드 속</p>
+        <h2 class="title" id="s-inside" data-build="text">컴퓨터와 마이크까지,<br />보드 한 대에 들어 있습니다</h2>
+      </div>
+      <div class="inside">
+        <article class="card" data-build="box">
+          <div class="frame" data-build="media"><img src="/images/product/hw/ops/ops-glass-energy-module-black.webp" width="1717" height="916" alt="Classin Board에 끼워 쓰는 OPS 컴퓨터 모듈" loading="lazy" /></div>
+          <div class="card-body">
+            <h3 data-build="text">OPS 컴퓨터 기본 제공</h3>
+            <p data-build="text">윈도우 기반 컴퓨터 모듈이 보드 안에 들어 있습니다. 노트북과 HDMI 없이 전원만 켜면 Classin이 열립니다.</p>
+          </div>
+        </article>
+        <article class="card" data-build="box">
+          <div class="frame mic" data-build="box" aria-hidden="true">
+            <svg viewBox="0 0 400 200" fill="none" stroke="#31302E" stroke-width="2">
+              <rect x="40" y="70" width="320" height="60" rx="30" />
+              <g fill="#31302E" stroke="none">
+                <circle cx="95" cy="100" r="7" /><circle cx="125" cy="100" r="7" /><circle cx="155" cy="100" r="7" /><circle cx="185" cy="100" r="7" />
+                <circle cx="215" cy="100" r="7" /><circle cx="245" cy="100" r="7" /><circle cx="275" cy="100" r="7" /><circle cx="305" cy="100" r="7" />
+              </g>
+              <path d="M200 40 v-22 M170 46 l-12 -18 M230 46 l12 -18" stroke="#8A857F" stroke-linecap="round" />
+            </svg>
+          </div>
+          <div class="card-body">
+            <h3 data-build="text">8배열 마이크 · 2×15W 스피커</h3>
+            <p data-build="text">교실 안 목소리를 보드가 직접 받아 녹화와 온라인 송출에 싣습니다. 큰 강의실은 천장형 마이크를 더해 보강합니다.</p>
+            <p class="note" data-build="text">8배열 마이크는 S65·S75·S86 기준이며 S110은 상담에서 구성을 확인합니다.</p>
+          </div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- 04 크기 -->
+  <section class="section" aria-labelledby="s-sizes">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="kicker" data-build="text"><span class="idx">04</span><span class="bar" aria-hidden="true"></span>크기</p>
+        <h2 class="title" id="s-sizes" data-build="text">손이 닿는 거리에 맞춰 고릅니다</h2>
+      </div>
+      <div class="sizes">
+        <div class="size-row" data-build="text" data-build-dup="size"><span class="in">110″</span><span class="room">대형 강의실 · 강당<small>S110 · BS110A</small></span><span class="extra">120Hz · 4mm 강화유리</span></div>
+        <div class="size-row" data-build="text" data-build-dup="size"><span class="in">86″</span><span class="room">10명 이상 교실<small>S86 · BS86C</small></span><span class="extra">8배열 마이크 · 제스처바</span></div>
+        <div class="size-row" data-build="text" data-build-dup="size"><span class="in">75″</span><span class="room">10명 이하 교실<small>S75 · BS75A</small></span><span class="extra">8배열 마이크</span></div>
+        <div class="size-row" data-build="text" data-build-dup="size"><span class="in">65″</span><span class="room">소규모 공부방 · 교습소<small>S65 · BS65A</small></span><span class="extra">규격서 확인 후 견적</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 끝 CTA -->
+  <section class="final" aria-labelledby="s-final">
+    <div class="wrap">
+      <p class="kicker" data-build="text"><span class="idx">목동 쇼룸</span><span class="bar" aria-hidden="true"></span>방문 예약</p>
+      <h2 class="title" id="s-final" data-build="text" data-guide>쉰 개의 손이 다 필요하진 않습니다.<br />한 번 써 보면 압니다</h2>
+      <p class="lead" data-build="text">쇼룸의 실제 교실 구성에서 판서, 녹화, 자료 불러오기를 직접 해 보세요. 교실 크기와 설치 방식에 맞는 구성은 그 자리에서 함께 정합니다.</p>
+      <div class="cta-row">
+        <a class="btn btn-primary" data-build="box" href="/showroom" data-cta-id="swarm_hw_b_final_showroom">쇼룸 방문 예약 <span class="arr" aria-hidden="true">→</span></a>
+        <a class="btn btn-line" data-build="box" href="/contact?topic=%EB%8F%84%EC%9E%85%20%EC%83%81%EB%8B%B4&amp;prefill=Classin%20Board%20%EB%8F%84%EC%9E%85%EA%B3%BC%20%EA%B5%90%EC%8B%A4%20%EC%84%A4%EC%B9%98%20%EB%B2%94%EC%9C%84%EB%A5%BC%20%EC%83%81%EB%8B%B4%EB%B0%9B%EA%B3%A0%20%EC%8B%B6%EC%8A%B5%EB%8B%88%EB%8B%A4.#contact-form" data-cta-id="swarm_hw_b_final_contact">견적 상담 받기</a>
+      </div>
+      <p class="note" data-build="text">견적은 교실 크기, 설치 방식, 카메라·마이크 구성에 따라 달라 상담에서 안내합니다.</p>
+    </div>
+  </section>
+</main>
+
+<footer class="foot surface-ink">
+  <div class="wrap">
+    <a class="brand" href="/"><img src="/images/logo.png" alt="" width="674" height="244" />Classin</a>
+    <nav aria-label="바닥글">
+      <a href="/product">제품 소개</a>
+      <a href="/product/sw">소프트웨어</a>
+      <a href="/product/hw">Classin Board</a>
+      <a href="/showroom">쇼룸</a>
+      <a href="/privacy">개인정보처리방침</a>
+    </nav>
+    <small>© 2026 Classin Korea · 이 페이지는 랜딩 시안입니다.</small>
+  </div>
+</footer>
+
+<script src="/l/attribution.js"></script>
+<script>
+  /* ── 보드: 직접 쓰기(연출과 무관하게 늘 동작) ───────────────────── */
+  (function () {
+    var board = document.getElementById("board");
+    var svg = document.getElementById("board-svg");
+    var userInk = document.getElementById("user-ink");
+    var counter = document.getElementById("touch-n");
+    var hint = document.getElementById("board-hint");
+    var penBtn = document.getElementById("pen-toggle");
+    var NS = "http://www.w3.org/2000/svg";
+    var live = new Map();
+    window.__boardTouch = { scripted: 0 };
+
+    function show() { counter.textContent = String(Math.min(50, live.size + window.__boardTouch.scripted)); }
+    window.__boardShow = show;
+    function toSvg(e) {
+      var pt = svg.createSVGPoint();
+      pt.x = e.clientX; pt.y = e.clientY;
+      var m = svg.getScreenCTM();
+      return m ? pt.matrixTransform(m.inverse()) : { x: 0, y: 0 };
+    }
+    svg.addEventListener("pointerdown", function (e) {
+      if (e.pointerType === "touch" && !board.classList.contains("is-pen")) return;
+      if (window.__boardBusy) return;
+      e.preventDefault();
+      try { svg.setPointerCapture(e.pointerId); } catch (_) {}
+      var p = toSvg(e);
+      var path = document.createElementNS(NS, "path");
+      path.setAttribute("class", "ink-user");
+      path.setAttribute("d", "M" + p.x.toFixed(1) + " " + p.y.toFixed(1) + " l0.1 0");
+      userInk.appendChild(path);
+      live.set(e.pointerId, { path: path, d: path.getAttribute("d") });
+      hint.style.opacity = "0";
+      show();
+    });
+    svg.addEventListener("pointermove", function (e) {
+      var s = live.get(e.pointerId);
+      if (!s) return;
+      var p = toSvg(e);
+      s.d += " L" + p.x.toFixed(1) + " " + p.y.toFixed(1);
+      s.path.setAttribute("d", s.d);
+    });
+    function end(e) { if (live.delete(e.pointerId)) show(); }
+    svg.addEventListener("pointerup", end);
+    svg.addEventListener("pointercancel", end);
+    document.getElementById("clear-ink").addEventListener("click", function () {
+      userInk.innerHTML = "";
+      hint.style.opacity = "1";
+    });
+    penBtn.addEventListener("click", function () {
+      var on = !board.classList.contains("is-pen");
+      board.classList.toggle("is-pen", on);
+      penBtn.setAttribute("aria-pressed", on ? "true" : "false");
+    });
+  })();
+
+  /* ── 보드 연출: 커서들이 나눠 쓰고, 마지막에 50점이 한꺼번에 닿는다 ── */
+  (function () {
+    var svg = document.getElementById("board-svg");
+    var NS = "http://www.w3.org/2000/svg";
+    var strokes = [].slice.call(svg.querySelectorAll(".stroke"));
+    var pts = [].slice.call(svg.querySelectorAll(".pt"));
+    var clips = [].slice.call(svg.querySelectorAll("[data-clip]"));
+    var ripples = document.getElementById("ripples");
+    var hint = document.getElementById("board-hint");
+    var lens = strokes.map(function (s) { return s.getTotalLength(); });
+
+    function clipRect(g) { return document.querySelector("#" + g.getAttribute("data-clip") + " rect"); }
+    function clipBox(g) {
+      var b = g.getBBox();
+      return b;
+    }
+    function hideAll() {
+      strokes.forEach(function (s, i) { s.style.strokeDasharray = lens[i] + " " + lens[i]; s.style.strokeDashoffset = lens[i]; });
+      pts.forEach(function (p) { p.style.opacity = "0"; });
+      clips.forEach(function (g) { var r = clipRect(g); r.setAttribute("width", "0"); });
+      ripples.innerHTML = "";
+      hint.style.opacity = "0";
+      window.__boardTouch.scripted = 0;
+      window.__boardShow();
+    }
+    function showAll() {
+      strokes.forEach(function (s) { s.style.strokeDasharray = ""; s.style.strokeDashoffset = ""; });
+      pts.forEach(function (p) { p.style.opacity = "1"; });
+      clips.forEach(function (g) { var r = clipRect(g); r.setAttribute("x", "0"); r.setAttribute("width", "1600"); });
+      ripples.innerHTML = "";
+      hint.style.opacity = "1";
+      window.__boardBusy = false;
+      window.__boardTouch.scripted = 0;
+      window.__boardShow();
+    }
+    function toPage(x, y) {
+      var m = svg.getScreenCTM();
+      var pt = svg.createSVGPoint();
+      pt.x = x; pt.y = y;
+      var c = pt.matrixTransform(m);
+      return { x: c.x + window.scrollX, y: c.y + window.scrollY };
+    }
+
+    // 글자 묶음을 왼쪽부터 쓰는 것처럼 드러낸다.
+    function writeText(api, a, g, dur) {
+      var b = clipBox(g);
+      var r = clipRect(g);
+      r.setAttribute("x", String(b.x - 4));
+      r.setAttribute("y", String(b.y - 10));
+      r.setAttribute("height", String(b.height + 20));
+      var start = toPage(b.x, b.y + b.height * 0.75);
+      return a.moveTo(start.x, start.y).then(function () {
+        api.ok();
+        a.mode("pen");
+        a.el.classList.add("is-press");
+        window.__boardTouch.scripted++; window.__boardShow();
+        return api.tween(dur / api.spd(), function (e) {
+          r.setAttribute("width", String((b.width + 8) * e));
+          var p = toPage(b.x + b.width * e, b.y + b.height * (0.55 + 0.25 * Math.sin(e * 40)));
+          a.x = p.x; a.y = p.y;
+        }, api.ease.linear);
+      }).then(function () {
+        a.el.classList.remove("is-press");
+        window.__boardTouch.scripted--; window.__boardShow();
+        api.ok();
+      });
+    }
+
+    function drawStroke(api, a, i) {
+      var s = strokes[i], L = lens[i];
+      var p0 = s.getPointAtLength(0);
+      var start = toPage(p0.x, p0.y);
+      return a.moveTo(start.x, start.y).then(function () {
+        api.ok();
+        a.mode("pen");
+        a.el.classList.add("is-press");
+        window.__boardTouch.scripted++; window.__boardShow();
+        return api.tween(Math.max(260, L * 1.05) / api.spd(), function (e) {
+          s.style.strokeDashoffset = String(L * (1 - e));
+          var q = s.getPointAtLength(L * e);
+          var p = toPage(q.x, q.y);
+          a.x = p.x; a.y = p.y;
+        }, api.ease.inOut);
+      }).then(function () {
+        a.el.classList.remove("is-press");
+        window.__boardTouch.scripted--; window.__boardShow();
+        api.ok();
+      });
+    }
+
+    function burst(api) {
+      // 50점 동시 터치 — 화면 곳곳에 닿는 원이 하나씩 늘어 50에서 멈춘다.
+      var n = 50, made = 0;
+      var cols = 10, rows = 5;
+      var nodes = [];
+      for (var i = 0; i < n; i++) {
+        var cx = 140 + (i % cols) * 147 + (Math.random() - 0.5) * 70;
+        var cy = 210 + Math.floor(i / cols) * 128 + (Math.random() - 0.5) * 50;
+        var g = document.createElementNS(NS, "g");
+        g.style.opacity = "0";
+        g.innerHTML = '<circle class="ripple-c" cx="' + cx + '" cy="' + cy + '" r="7"/><circle class="ripple" cx="' + cx + '" cy="' + cy + '" r="10"/>';
+        ripples.appendChild(g);
+        nodes.push(g);
+      }
+      return api.tween(900 / api.spd(), function (e) {
+        var k = Math.round(e * n);
+        while (made < k) {
+          nodes[made].style.opacity = "1";
+          made++;
+        }
+        window.__boardTouch.scripted = made;
+        window.__boardShow();
+      }, api.ease.out).then(function () {
+        api.ok();
+        return api.tween(700 / api.spd(), function (e) {
+          nodes.forEach(function (g) {
+            var c = g.lastChild;
+            c.setAttribute("r", String(10 + e * 26));
+            g.style.opacity = String(1 - e);
+          });
+        }, api.ease.out);
+      }).then(function () {
+        ripples.innerHTML = "";
+        window.__boardTouch.scripted = 0;
+        window.__boardShow();
+      });
+    }
+
+    async function run(api) {
+      var board = api.el;
+      var a = api.agent;
+      window.__boardBusy = true;
+      hideAll();
+      // 1) 보드 틀을 끌어 그린다.
+      var r = api.rect(board);
+      await a.moveTo(r.x, r.y); api.ok();
+      a.mode("cross");
+      await a.press(); api.ok();
+      var m = api.marquee();
+      await api.tween(Math.min(900, 300 + (r.w + r.h) * 0.28) / api.spd(), function (e) {
+        var rr = api.rect(board);
+        m.set(rr.x, rr.y, rr.w * e, rr.h * e);
+        a.x = rr.x + rr.w * e; a.y = rr.y + rr.h * e;
+      }); api.ok();
+      a.release();
+      api.reveal(board);
+      m.out(80);
+      await api.wait(200); api.ok();
+      // 2) 빌린 커서들이 각자 맡은 부분을 동시에 쓴다.
+      // 다른 부품을 짓던 커서가 손을 놓을 때까지 잠깐(최대 2.4초) 모은다.
+      var crew = [a];
+      var t0 = performance.now();
+      while (crew.length < 6 && performance.now() - t0 < 2400) {
+        var more = api.borrow(6 - crew.length);
+        more.forEach(function (ag, k) {
+          var rr = api.rect(board);
+          ag.moveTo(rr.x + rr.w * (0.2 + 0.15 * (crew.length + k)), rr.y + rr.h * 0.12);
+        });
+        crew = crew.concat(more);
+        if (crew.length < 6) { await api.wait(120); api.ok(); }
+      }
+      try {
+        var byWho = {};
+        strokes.forEach(function (s, i) {
+          var w = +s.getAttribute("data-who") % crew.length;
+          (byWho[w] = byWho[w] || []).push(i);
+        });
+        // 제목·문제는 글씨 먼저, 그래프·도형은 선을 긋고 나서 이름을 붙인다.
+        var textFor = { 0: ["clip-title"], 1: ["clip-eq"], 3: ["clip-py"], 4: ["clip-q"] };
+        var textFirst = { 0: true, 4: true };
+        await Promise.all(crew.map(function (ag, w) {
+          var chain = Promise.resolve();
+          function texts() {
+            (textFor[w] || []).forEach(function (id) {
+              var g = svg.querySelector('[data-clip="' + id + '"]');
+              if (g) chain = chain.then(function () { return writeText(api, ag, g, id === "clip-q" ? 1500 : 700); });
+            });
+          }
+          if (textFirst[w]) texts();
+          (byWho[w] || []).forEach(function (i) { chain = chain.then(function () { return drawStroke(api, ag, i); }); });
+          if (!textFirst[w]) texts();
+          return chain;
+        }));
+        api.ok();
+        clips.forEach(function (g) { clipRect(g).setAttribute("width", "1600"); clipRect(g).setAttribute("x", "0"); });
+        pts.forEach(function (p) { p.style.opacity = "1"; });
+        // 3) 50점.
+        crew.forEach(function (ag) { ag.mode("ptr"); });
+        await burst(api); api.ok();
+      } finally {
+        api.giveBack(crew.slice(1));
+      }
+      showAll();
+    }
+
+    window.SWARM_CONFIG = {
+      label: "학생들이 보드에 쓰는 중",
+      agents: [
+        { name: "선생님", tone: "accent" },
+        { name: "학생 A", tone: "paper" },
+        { name: "학생 B", tone: "paper" },
+        { name: "학생 C", tone: "paper" },
+        { name: "학생 D", tone: "paper" },
+        { name: "학생 E", tone: "paper" },
+        { name: "학생 F", tone: "muted" }
+      ],
+      mobileAgents: 6,
+      scenes: { board: { run: run, reset: hideAll, finish: showAll } }
+    };
+  })();
+</script>
+<script src="/l/swarm/swarm-build.js" defer></script>
+</body>
+</html>

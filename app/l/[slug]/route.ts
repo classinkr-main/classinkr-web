@@ -25,6 +25,11 @@ const LANDING_SLUGS: Record<string, string> = {
   "0730_31": "meets-july",
   landing_meets: "meets-july",
   "landing-meets": "meets-july",
+  // 커서 군집이 페이지를 짓는 연출 시안(noindex). 연출 엔진은 public/l/swarm/swarm-build.js.
+  "swarm-hw-a": "swarm-hw-a",
+  "swarm-hw-b": "swarm-hw-b",
+  "swarm-sw-a": "swarm-sw-a",
+  "swarm-sw-b": "swarm-sw-b",
 }
 
 export const runtime = "nodejs"

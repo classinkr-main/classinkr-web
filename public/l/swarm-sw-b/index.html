@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<!-- 경로가 슬래시 없이 열리므로 base 도 슬래시 없이 둔다(#링크가 페이지를 다시 부르지 않게). -->
+<base href="/l/swarm-sw-b" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Classin 소프트웨어 — 수업이 끝나도, 일은 다음 칸으로 (시안 SW-B)</title>
+<meta name="description" content="Classin 소프트웨어 랜딩 시안 SW-B. 수업이 끝난 뒤의 녹화·다시보기·숙제·리포트가 수업 흐름을 따라 이어지는 모습을 운영자 시점으로 보여 줍니다." />
+<meta name="robots" content="noindex, nofollow" />
+<meta name="theme-color" content="#F9F8F5" />
+<script>
+  (function () {
+    var d = document.documentElement;
+    try {
+      if (matchMedia("(prefers-reduced-motion: reduce)").matches || /[?&]swarm=off\b/.test(location.search)) return;
+    } catch (e) { return; }
+    d.classList.add("sb-on");
+    window.__sbFallback = setTimeout(function () { d.classList.remove("sb-on"); }, 4000);
+  })();
+</script>
+<link rel="stylesheet" href="/l/swarm/base.css" />
+<style>
+  /* ── Hero ── */
+  .hero { padding: clamp(40px, 5.5vw, 80px) 0 clamp(64px, 8vw, 112px); }
+  .hero-head { display: grid; gap: 22px; margin-bottom: clamp(28px, 3.5vw, 44px); }
+  .hero-head .display { font-size: clamp(36px, 5vw, 70px); }
+  .hero-row { display: grid; gap: 22px; align-items: end; }
+  @media (min-width: 960px) { .hero-row { grid-template-columns: minmax(0, 1fr) auto; gap: 48px; } }
+
+  /* 흐름판 */
+  .pipe { position: relative; border-radius: 16px; background: var(--surface-sheet); box-shadow: 0 0 0 1px var(--line-hair), 0 30px 70px -40px rgb(17 17 16 / .35); padding: 16px; }
+  .pipe-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 2px 4px 14px; border-bottom: 1px solid var(--line-hair); }
+  .src { display: inline-flex; align-items: center; gap: 8px; padding: 7px 12px; border-radius: 9999px; box-shadow: inset 0 0 0 1px var(--line-ink); font-size: 14px; font-weight: 600; color: var(--fg-ink); white-space: nowrap; }
+  .src i { width: 7px; height: 7px; border-radius: 50%; background: #B43E3E; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; color: var(--fg-muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .cols { display: grid; gap: 12px; margin-top: 14px; }
+  @media (min-width: 640px) { .cols { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (min-width: 1040px) { .cols { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+  .col { display: grid; gap: 8px; align-content: start; padding: 10px; border-radius: 10px; background: var(--surface-sunken); min-height: 100%; }
+  .col-h { display: flex; justify-content: space-between; align-items: baseline; padding: 2px 4px 6px; font-size: 14px; font-weight: 700; color: var(--fg-ink); }
+  .col-h span { font-size: 12px; font-weight: 600; color: var(--fg-muted); font-variant-numeric: tabular-nums; }
+  .job { display: grid; gap: 6px; padding: 12px 12px 12px; border-radius: 8px; background: var(--surface-sheet); box-shadow: 0 0 0 1px var(--line-hair), 0 1px 2px rgb(17 17 16 / .04); }
+  .job h3 { font-size: 15px; line-height: 1.4; letter-spacing: -0.01em; }
+  .job p { font-size: 13px; line-height: 1.5; color: var(--fg-muted); }
+  .tag { justify-self: start; padding: 3px 8px; border-radius: 9999px; font-size: 11.5px; font-weight: 600; line-height: 1.3; color: var(--fg-ink); box-shadow: inset 0 0 0 1px var(--line-ink); }
+  .tag.ai { box-shadow: inset 0 0 0 1px var(--line-control); color: var(--fg-body); }
+  .tag.opt { box-shadow: none; outline: 1px dashed var(--line-control); outline-offset: -1px; color: var(--fg-body); }
+  .tag.human { box-shadow: none; background: var(--surface-sunken); color: var(--fg-body); }
+  .pipe.is-run .job:not(.is-in) { visibility: hidden; }
+  .pipe-cap { margin-top: 12px; }
+
+  /* ── 역할별 ── */
+  .roles { display: grid; gap: 40px; }
+  @media (min-width: 900px) { .roles { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 32px; } }
+  .role { display: grid; gap: 14px; align-content: start; border-top: 1px solid var(--line-ink); padding-top: 18px; }
+  .role h3 { font-size: 22px; letter-spacing: -0.02em; }
+  .role > p { font-size: 14px; color: var(--fg-muted); }
+  .ba-list { display: grid; }
+  .ba { display: grid; gap: 6px; padding: 16px 0; border-bottom: 1px solid var(--line-hair); }
+  .before { position: relative; justify-self: start; font-size: 15px; line-height: 1.5; color: var(--fg-muted); }
+  .strike { position: absolute; left: -2px; right: -2px; top: 52%; height: 1.5px; background: var(--fg-ink); }
+  .after { font-size: 17px; line-height: 1.55; font-weight: 600; color: var(--fg-ink); }
+
+  /* ── AI ── */
+  .ai-grid { display: grid; gap: 28px; }
+  @media (min-width: 900px) { .ai-grid { grid-template-columns: 1fr 1fr; gap: 24px; } }
+  .ai-card { display: grid; gap: 16px; align-content: start; }
+  .ai-card .frame { aspect-ratio: 1200 / 791; box-shadow: 0 0 0 1px var(--line-hair); background: var(--surface-sheet); }
+  .ai-card .frame img { object-fit: contain; }
+  .ai-card h3 { font-size: 22px; letter-spacing: -0.02em; }
+  .ai-card p { font-size: 16px; line-height: 1.7; color: var(--fg-body); }
+  .ai-card .note { margin-top: -4px; }
+  .areas { display: flex; flex-wrap: wrap; gap: 6px; }
+  .areas span { padding: 5px 10px; border-radius: 9999px; box-shadow: inset 0 0 0 1px var(--line-control); font-size: 13px; font-weight: 600; color: var(--fg-ink); }
+
+  /* ── 경계 ── */
+  .honest { display: grid; gap: clamp(32px, 5vw, 72px); }
+  @media (min-width: 960px) { .honest { grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); } }
+  .honest-copy { display: grid; gap: 18px; align-content: start; }
+  .stages { display: grid; border-top: 1px solid var(--line-ink); counter-reset: st; }
+  .stage { display: grid; grid-template-columns: 56px 1fr; gap: 12px; padding: 20px 0; border-bottom: 1px solid var(--line-hair); }
+  .stage .n { font-size: 13px; font-weight: 600; color: var(--fg-muted); font-variant-numeric: tabular-nums; padding-top: 3px; }
+  .stage h3 { font-size: 18px; letter-spacing: -0.01em; }
+  .stage p { margin-top: 4px; font-size: 15px; line-height: 1.65; color: var(--fg-body); }
+</style>
+</head>
+<body>
+
+<header class="masthead">
+  <div class="wrap">
+    <a class="brand" href="/" aria-label="Classin 홈"><img src="/images/logo.png" alt="" width="674" height="244" />Classin</a>
+    <nav class="nav" aria-label="주요 메뉴">
+      <span class="draft-flag">시안 SW-B</span>
+      <a href="/product/sw" aria-current="page">소프트웨어</a>
+      <a href="/product/hw">Classin Board</a>
+      <a href="/pricing">요금</a>
+      <a class="btn btn-primary" href="/contact?topic=%EC%88%98%EC%97%85%20%EC%9A%B4%EC%98%81%20%EC%83%81%EB%8B%B4&amp;prefill=%EC%88%98%EC%97%85%20%ED%9B%84%20%EB%85%B9%ED%99%94%C2%B7%EB%B3%B5%EC%8A%B5%C2%B7%EC%88%99%EC%A0%9C%20%ED%99%95%EC%9D%B8%20%ED%9D%90%EB%A6%84%EC%9D%84%20Classin%EC%9C%BC%EB%A1%9C%20%EC%A0%95%EB%A6%AC%ED%95%98%EA%B3%A0%20%EC%8B%B6%EC%8A%B5%EB%8B%88%EB%8B%A4.#contact-form" data-cta-id="swarm_sw_b_header_contact">운영 상담</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <!-- Hero -->
+  <section class="hero">
+    <div class="wrap">
+      <div class="hero-head">
+        <p class="kicker" data-build="text"><span class="idx">Classin 소프트웨어</span><span class="bar" aria-hidden="true"></span>수업 운영</p>
+        <h1 class="display" data-build="text" data-guide>수업이 끝나도,<br />일은 다음 칸으로 갑니다</h1>
+        <div class="hero-row">
+          <p class="lead" data-build="text">녹화 저장, 다시보기 안내, 숙제 확인, 수업 리포트. 강사와 실장이 손으로 옮기던 일이 Classin 안에서 수업 흐름을 따라 이어집니다.</p>
+          <div class="cta-row">
+            <a class="btn btn-primary" data-build="box" href="/contact?topic=%EC%88%98%EC%97%85%20%EC%9A%B4%EC%98%81%20%EC%83%81%EB%8B%B4&amp;prefill=%EC%88%98%EC%97%85%20%ED%9B%84%20%EB%85%B9%ED%99%94%C2%B7%EB%B3%B5%EC%8A%B5%C2%B7%EC%88%99%EC%A0%9C%20%ED%99%95%EC%9D%B8%20%ED%9D%90%EB%A6%84%EC%9D%84%20Classin%EC%9C%BC%EB%A1%9C%20%EC%A0%95%EB%A6%AC%ED%95%98%EA%B3%A0%20%EC%8B%B6%EC%8A%B5%EB%8B%88%EB%8B%A4.#contact-form" data-cta-id="swarm_sw_b_hero_contact">수업 운영 상담 받기 <span class="arr" aria-hidden="true">→</span></a>
+            <a class="btn btn-line" data-build="box" href="/pricing" data-cta-id="swarm_sw_b_hero_pricing">요금 보기</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="pipe" id="pipe" data-build="scene:flow">
+        <div class="pipe-top">
+          <span class="src" id="pipe-src"><i aria-hidden="true"></i>수업 종료 · 중2 수학 B반</span>
+          <span class="legend" aria-label="표시 설명">
+            <span><span class="tag">자동</span>수업이 끝나면 이어짐</span>
+            <span><span class="tag ai">AI 초안</span>사람이 확인</span>
+            <span><span class="tag opt">선택</span>관리자가 켬</span>
+          </span>
+        </div>
+        <div class="cols">
+          <section class="col" aria-label="수업 중">
+            <p class="col-h">수업 중 <span>2</span></p>
+            <article class="job"><h3>판서가 EDB 칠판 파일로 남음</h3><p>강사 · 다음 반 수업에서 그대로 엽니다</p><span class="tag">자동</span></article>
+            <article class="job"><h3>출석과 참여가 기록됨</h3><p>관리자 · 수업 데이터로 확인합니다</p><span class="tag">자동</span></article>
+          </section>
+          <section class="col" aria-label="수업 직후">
+            <p class="col-h">수업 직후 <span>2</span></p>
+            <article class="job"><h3>녹화본이 그 수업에 붙음</h3><p>학생 · 앱에서 다시보기</p><span class="tag">자동</span></article>
+            <article class="job"><h3>결석생도 같은 수업으로 보강</h3><p>실장 · 링크를 따로 보내지 않습니다</p><span class="tag">자동</span></article>
+          </section>
+          <section class="col" aria-label="그날 밤">
+            <p class="col-h">그날 밤 <span>2</span></p>
+            <article class="job"><h3>숙제 제출</h3><p>학생 · 수업에 붙은 숙제로 바로 냅니다</p><span class="tag human">학생</span></article>
+            <article class="job"><h3>숙제 채점 초안</h3><p>강사 · 확인하고 고쳐서 돌려줍니다</p><span class="tag ai">AI 초안</span></article>
+          </section>
+          <section class="col" aria-label="다음 수업 전">
+            <p class="col-h">다음 수업 전 <span>2</span></p>
+            <article class="job"><h3>AI 강의 분석 리포트</h3><p>원장 · 4개 영역 11개 항목</p><span class="tag opt">선택</span></article>
+            <article class="job"><h3>지점별 수업 확인</h3><p>관리자 · 권한 범위 안에서 봅니다</p><span class="tag human">사람 확인</span></article>
+          </section>
+        </div>
+      </div>
+      <p class="note pipe-cap" data-build="text">흐름을 단순화한 그림입니다. 결제·오프라인 출석처럼 지금 쓰는 시스템이 맡는 일은 연동 범위를 따로 정합니다.</p>
+    </div>
+  </section>
+
+  <!-- 01 역할별 -->
+  <section class="section" aria-labelledby="s-roles">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="kicker" data-build="text"><span class="idx">01</span><span class="bar" aria-hidden="true"></span>역할별로</p>
+        <h2 class="title" id="s-roles" data-build="text" data-guide>누구의 어떤 일이<br />줄어드는지부터 봅니다</h2>
+      </div>
+      <div class="roles">
+        <div class="role">
+          <h3 data-build="text">원장 · 관리자</h3>
+          <ul class="ba-list">
+            <li class="ba" data-build="box" data-build-dup="ba-1" data-build-retype="off">
+              <p class="before"><span>교실마다 들어가 수업 분위기 확인</span><span class="strike" data-build="line"></span></p>
+              <p class="after" data-build="text" data-build-after="prev">녹화와 수업 데이터로 지점 수업을 봅니다</p>
+            </li>
+            <li class="ba" data-build="box" data-build-dup="ba-1" data-build-retype="off">
+              <p class="before"><span>강사 평가를 감으로</span><span class="strike" data-build="line"></span></p>
+              <p class="after" data-build="text" data-build-after="prev">AI 강의 분석의 같은 항목으로 비교합니다</p>
+            </li>
+          </ul>
+        </div>
+        <div class="role">
+          <h3 data-build="text">실장 · 운영</h3>
+          <ul class="ba-list">
+            <li class="ba" data-build="box" data-build-dup="ba-2" data-build-retype="off">
+              <p class="before"><span>결석생에게 녹화 링크 따로 보내기</span><span class="strike" data-build="line"></span></p>
+              <p class="after" data-build="text" data-build-after="prev">학생이 앱에서 지난 수업을 다시 봅니다</p>
+            </li>
+            <li class="ba" data-build="box" data-build-dup="ba-2" data-build-retype="off">
+              <p class="before"><span>숙제 냈는지 반마다 물어보기</span><span class="strike" data-build="line"></span></p>
+              <p class="after" data-build="text" data-build-after="prev">제출 현황을 한 화면에서 확인합니다</p>
+            </li>
+          </ul>
+        </div>
+        <div class="role">
+          <h3 data-build="text">강사</h3>
+          <ul class="ba-list">
+            <li class="ba" data-build="box" data-build-dup="ba-3" data-build-retype="off">
+              <p class="before"><span>같은 판서를 반마다 처음부터</span><span class="strike" data-build="line"></span></p>
+              <p class="after" data-build="text" data-build-after="prev">EDB 칠판 파일을 다음 반에서 다시 엽니다</p>
+            </li>
+            <li class="ba" data-build="box" data-build-dup="ba-3" data-build-retype="off">
+              <p class="before"><span>숙제 채점을 한 장씩 처음부터</span><span class="strike" data-build="line"></span></p>
+              <p class="after" data-build="text" data-build-after="prev">AI 채점 초안을 보고 확정합니다</p>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 02 AI -->
+  <section class="section" aria-labelledby="s-ai">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="kicker" data-build="text"><span class="idx">02</span><span class="bar" aria-hidden="true"></span>AI</p>
+        <h2 class="title" id="s-ai" data-build="text">AI가 먼저 보고,<br />사람이 확정합니다</h2>
+      </div>
+      <div class="ai-grid">
+        <article class="ai-card">
+          <div class="frame" data-build="media"><img src="/images/product/sw/ai/ai-lesson-analysis.webp" width="1200" height="791" alt="AI 강의 분석 화면. 수업 다시보기 옆에 항목별 점수가 정리되어 있습니다." loading="lazy" /></div>
+          <h3 data-build="text">AI 강의 분석</h3>
+          <p data-build="text">Classin으로 진행한 수업 녹화본을 보고 수업 진단 보고서를 만듭니다. 강사는 자기 수업을 점검하고, 원장은 같은 기준으로 비교합니다.</p>
+          <div class="areas" data-build="text"><span>수업 전달</span><span>수업 분위기</span><span>수업 상호작용</span><span>언어 표현</span></div>
+          <p class="note" data-build="text">4개 영역 11개 항목 · 관리자 설정에서 켜는 선택 기능입니다.</p>
+        </article>
+        <article class="ai-card">
+          <div class="frame" data-build="media"><img src="/images/product/sw/ai/ai-homework-grading.webp" width="1200" height="791" alt="숙제 AI 채점 화면. 학생 답안 옆에 채점 의견이 붙어 있습니다." loading="lazy" /></div>
+          <h3 data-build="text">숙제 AI 채점</h3>
+          <p data-build="text">제출된 숙제를 AI가 먼저 채점해 초안을 붙입니다. 강사는 그 초안을 보고 고치거나 확정해서 학생에게 돌려줍니다.</p>
+          <p class="note" data-build="text">채점 결과는 강사가 확인한 뒤에 학생에게 나갑니다.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- 03 경계 -->
+  <section class="section" aria-labelledby="s-honest">
+    <div class="wrap honest">
+      <div class="honest-copy">
+        <p class="kicker" data-build="text"><span class="idx">03</span><span class="bar" aria-hidden="true"></span>연동</p>
+        <h2 class="title" id="s-honest" data-build="text">모든 일을 대신한다고<br />말하지 않습니다</h2>
+        <p class="lead" data-build="text">결제, 오프라인 출석, 고급 리포트는 학원 운영 방식에 따라 지금 쓰는 시스템을 두고 API 연동이나 맞춤 리포트로 나눠 설계하는 편이 정직합니다.</p>
+      </div>
+      <ol class="stages">
+        <li class="stage" data-build="text" data-build-dup="stage"><span class="n">1단계</span><div><h3>앱 푸시로 안내 정리</h3><p>Classin 앱 알림으로 수업·과제 안내 업무부터 옮깁니다.</p></div></li>
+        <li class="stage" data-build="text" data-build-dup="stage"><span class="n">2단계</span><div><h3>운영 데이터 가져오기</h3><p>데이터 구독과 코스·수업 조회 API로 지금 시스템에 붙입니다.</p></div></li>
+        <li class="stage" data-build="text" data-build-dup="stage"><span class="n">3단계</span><div><h3>필요한 것만 따로 설계</h3><p>SDK, 가상계정, 수업 중계는 공식 API 문서를 기준으로 별도로 잡습니다.</p></div></li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- 끝 CTA -->
+  <section class="final" aria-labelledby="s-final">
+    <div class="wrap">
+      <p class="kicker" data-build="text"><span class="idx">90일</span><span class="bar" aria-hidden="true"></span>파일럿</p>
+      <h2 class="title" id="s-final" data-build="text" data-guide>수업 하나가 끝난 뒤의 일,<br />같이 그려 봅시다</h2>
+      <p class="lead" data-build="text">우리 학원에서 수업이 끝난 뒤 누가 무엇을 하는지 적어 오시면, 어느 칸이 Classin으로 넘어가고 어느 칸이 지금 시스템에 남는지 함께 나눕니다.</p>
+      <div class="cta-row">
+        <a class="btn btn-primary" data-build="box" href="/contact?topic=%EC%88%98%EC%97%85%20%EC%9A%B4%EC%98%81%20%EC%83%81%EB%8B%B4&amp;prefill=%EC%88%98%EC%97%85%20%ED%9B%84%20%EB%85%B9%ED%99%94%C2%B7%EB%B3%B5%EC%8A%B5%C2%B7%EC%88%99%EC%A0%9C%20%ED%99%95%EC%9D%B8%20%ED%9D%90%EB%A6%84%EC%9D%84%20Classin%EC%9C%BC%EB%A1%9C%20%EC%A0%95%EB%A6%AC%ED%95%98%EA%B3%A0%20%EC%8B%B6%EC%8A%B5%EB%8B%88%EB%8B%A4.#contact-form" data-cta-id="swarm_sw_b_final_contact">수업 운영 상담 받기 <span class="arr" aria-hidden="true">→</span></a>
+        <a class="btn btn-line" data-build="box" href="/resources/classin-90-day-adoption-roadmap" data-cta-id="swarm_sw_b_final_roadmap">90일 도입 로드맵 받기</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="foot surface-ink">
+  <div class="wrap">
+    <a class="brand" href="/"><img src="/images/logo.png" alt="" width="674" height="244" />Classin</a>
+    <nav aria-label="바닥글">
+      <a href="/product">제품 소개</a>
+      <a href="/product/sw">소프트웨어</a>
+      <a href="/product/hw">Classin Board</a>
+      <a href="/pricing">요금</a>
+      <a href="/privacy">개인정보처리방침</a>
+    </nav>
+    <small>© 2026 Classin Korea · 이 페이지는 랜딩 시안입니다.</small>
+  </div>
+</footer>
+
+<script src="/l/attribution.js"></script>
+<script>
+  (function () {
+    var pipe = document.getElementById("pipe");
+    var src = document.getElementById("pipe-src");
+    var jobs = [].slice.call(pipe.querySelectorAll(".job"));
+    var heads = [].slice.call(pipe.querySelectorAll(".col-h"));
+
+    function reset() {
+      pipe.classList.add("is-run");
+      jobs.forEach(function (j) { j.classList.remove("is-in"); });
+    }
+    function finish() {
+      pipe.classList.remove("is-run");
+      jobs.forEach(function (j) { j.classList.add("is-in"); });
+    }
+
+    // 「수업 종료」 표에서 일감을 집어 제 칸으로 끌어다 놓는다(⌥-드래그 복제와 같은 손놀림).
+    function carry(api, a, job) {
+      var s = api.rect(src);
+      var gx = Math.min(s.w * 0.5, 60), gy = s.h * 0.5;
+      var ghost;
+      return a.moveTo(s.x + gx, s.y + gy).then(function () {
+        api.ok();
+        return a.press();
+      }).then(function () {
+        api.ok();
+        ghost = api.marquee({ ghost: true });
+        var t = api.rect(job);
+        var d = Math.hypot(t.x - s.x, t.y - s.y);
+        return api.tween(Math.min(950, 320 + d * 0.5) / api.spd(), function (e) {
+          var tt = api.rect(job);
+          var x = s.x + (tt.x - s.x) * e, y = s.y + (tt.y - s.y) * e;
+          var w = s.w + (tt.w - s.w) * e, h = s.h + (tt.h - s.h) * e;
+          ghost.set(x, y, w, h);
+          a.x = x + gx; a.y = y + gy;
+        });
+      }).then(function () {
+        api.ok();
+        a.release();
+        ghost.out(40);
+        job.classList.add("is-in");
+        if (job.animate) job.animate([{ opacity: 0, transform: "translateY(4px)" }, { opacity: 1, transform: "none" }], { duration: 260, easing: "ease-out" });
+        return api.wait(80);
+      });
+    }
+
+    async function run(api) {
+      var a = api.agent;
+      reset();
+      var r = api.rect(pipe);
+      await a.moveTo(r.x, r.y); api.ok();
+      a.mode("cross");
+      await a.press(); api.ok();
+      var m = api.marquee();
+      await api.tween(Math.min(900, 300 + (r.w + r.h) * 0.25) / api.spd(), function (e) {
+        var rr = api.rect(pipe);
+        m.set(rr.x, rr.y, rr.w * e, rr.h * e);
+        a.x = rr.x + rr.w * e; a.y = rr.y + rr.h * e;
+      }); api.ok();
+      a.release();
+      api.reveal(pipe);
+      m.out(80);
+      a.mode("ptr");
+      // 칸 이름은 손이 빈 커서들이 나눠 친다.
+      var crew = [a];
+      var t0 = performance.now();
+      while (crew.length < 5 && performance.now() - t0 < 1600) {
+        crew = crew.concat(api.borrow(5 - crew.length));
+        if (crew.length < 5) { await api.wait(120); api.ok(); }
+      }
+      try {
+        await Promise.all(heads.map(function (hd, i) {
+          var ag = crew[i % crew.length];
+          return api.type(ag, hd, { max: 380 });
+        }));
+        api.ok();
+        crew.forEach(function (ag) { ag.mode("ptr"); });
+        // 왼쪽 칸부터 차례로, 여러 커서가 동시에 나른다.
+        var queue = jobs.slice();
+        await Promise.all(crew.map(function (ag) {
+          function next() {
+            var job = queue.shift();
+            if (!job) return Promise.resolve();
+            return carry(api, ag, job).then(next);
+          }
+          return next();
+        }));
+        api.ok();
+      } finally {
+        api.giveBack(crew.slice(1));
+      }
+      finish();
+    }
+
+    window.SWARM_CONFIG = {
+      label: "수업 뒤의 일을 옮기는 중",
+      agents: [
+        { name: "원장", tone: "accent" },
+        { name: "실장", tone: "ink" },
+        { name: "김 강사", tone: "ink" },
+        { name: "이 강사", tone: "muted" },
+        { name: "조교", tone: "muted" },
+        { name: "학생", tone: "paper" },
+        { name: "학부모", tone: "paper" }
+      ],
+      scenes: { flow: { run: run, reset: reset, finish: finish } }
+    };
+  })();
+</script>
+<script src="/l/swarm/swarm-build.js" defer></script>
+</body>
+</html>
