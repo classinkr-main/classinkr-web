@@ -104,7 +104,7 @@ export const FIELD_QUICK_ANSWERS: FieldQuickAnswer[] = [
     id: "board-warranty-lifetime",
     match: (text) =>
       /칠판|보드|티비|tv/.test(text) &&
-      /보증\s*(?:기간|\d|이|은|조건)|몇\s*년\s*(?:쓰|사용|가)|대체\s*(?:기기|기|품)|수리\s*기간/.test(text) &&
+      /몇\s*년\s*(?:쓰|사용|가)|대체\s*(?:기기|기|품)|수리\s*기간|(?:다른\s*(?:데|곳|회사)|\d\s*년).{0,20}보증|보증.{0,20}(?:\d\s*년|연장)/.test(text) &&
       !/고장|안\s*(?:켜|나|돼|되)|접수|기사|방문|작년|샀는데|산\s*(?:거|보드)/.test(text),
     answer: [
       "공개 안내 기준으로 정품 ClassIn Board의 무상 A/S는 구매일부터 기본 1년이고, 프로모션이 적용되면 최대 2년이에요. 이 기간에는 무상 출장 점검을 받습니다.",
@@ -268,7 +268,10 @@ export const FIELD_QUICK_ANSWERS: FieldQuickAnswer[] = [
   },
   {
     id: "teacher-phone-visible",
-    match: all(/phone\s*number|전화\s*번호|휴대폰\s*번호|번호/, /학생|students?/, /(?:볼|보|알)\s*(?:수|게|면)|see|보여|보이|visible|알면/),
+    match: (text) =>
+      /(?:my|제|내)\s*(?:phone|전화|휴대폰|번호)|can\s*students\s*see|students?\s*.{0,10}(?:my\s*)?(?:phone|number)/.test(text) &&
+      /(?:볼|보|알)\s*(?:수|게|면)|see|보여|보이|visible|알면|알까/.test(text) &&
+      !/(?:학생|student)\s*(?:들\s*)?(?:의\s*)?이름\s*(?:이|대신)|이름\s*대신/.test(text),
     answer: [
       "걱정되실 만해요. 수업과 채팅에서 다른 사람에게 보이는 이름은 닉네임이고, 코스마다 '코스 내 나의 닉네임'을 따로 정할 수 있어요. 다만 공개 안내에는 학원 설정(코스 닉네임 동기화)에 따라 이름 대신 전화번호가 보일 수 있다는 내용이 있어서, 번호가 절대 안 보인다고 단정하지는 않을게요.",
       "1. 코스 설정 > [코스 내 나의 닉네임]에 원하는 이름이 들어가 있는지 확인합니다.\n2. 학생들 화면에 번호가 보이는지는 학원 관리자에게 확인을 부탁합니다.\n3. 그래도 걱정되면 아래 [실시간 상담 연결]로 물어보세요.",
@@ -670,7 +673,7 @@ export const FIELD_QUICK_ANSWERS: FieldQuickAnswer[] = [
   },
   {
     id: "overseas-students",
-    match: all(/미국|해외|외국|abroad|overseas|usa|\bus\b|america/, /student|학생|class|수업|lag|접속|app\s*store|앱스토어/),
+    match: all(/미국|해외|외국|abroad|overseas|\busa\b|america|\bu\.s\./, /student|학생|class|수업|lag|접속|app\s*store|앱스토어/),
     answer: [
       "공개 FAQ 기준으로 해외에서도 VPN 없이 로그인, 학습 활동, 수업 입장이 대부분 돼요(중국·필리핀·싱가포르 등). 다만 외부 프로그램을 막는 보안 내부망이나 앱의 카메라·마이크 접근을 막아 둔 기기에서는 제한될 수 있어요.",
       "끊김이나 지연이 전혀 없다고 보장할 수는 없어요. 미국 학생과 실제 수업 전에 짧은 테스트 수업을 꼭 해 보세요.",
