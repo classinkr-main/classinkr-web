@@ -25,6 +25,8 @@ const MAX_ASSIGNED_TO_LENGTH = 100
  * confirmed 로 올리면 확정 문자를 한 번 보낸다(2026-11-06) — Compass 「쇼룸 데모」 확정 크론과 같은 함수·같은 선점
  * (confirmation_sent_at)이라 두 경로가 겹쳐도 한 번이다. 지난 방문·스위치(SHOWROOM_CONFIRM_ENABLED) 꺼짐이면 보내지 않는다.
  * 결과는 응답의 `confirmationMessage`(sent·simulated·failed·skipped).
+ * 운영 위컴 방의 확정 알림(showroom.booking_confirmed)은 보내지 않는다 — 그 알림은 Compass 로 확정된 건을 팀에 알리는 것이고,
+ * 여기서는 관리자가 어드민에서 직접 확정하고 있다.
  */
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const err = await verifyAdmin(req)

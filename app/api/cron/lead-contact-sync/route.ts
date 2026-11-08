@@ -28,6 +28,8 @@ export const maxDuration = 60
  * 같은 5분 주기에 쇼룸 확정 동기화(lib/server/showroom-compass-confirm.ts, 2026-11-06)를 이어서 돌린다 — Compass 브리지를 읽는
  * 같은 도메인이고 vercel.json 크론 항목이 상한(40)이라 새 항목을 만들지 않았다. 이쪽은 고객 문자(확정 안내)를 보낼 수 있다:
  * 스위치 SHOWROOM_CONFIRM_ENABLED 가 꺼져 있거나 `?dryRun=true` 면 판정만 한다. 결과는 응답의 `showroomConfirm` 칸.
+ * 확정한 예약마다 운영 위컴 방에 확정 알림(showroom.booking_confirmed)도 한 번 남긴다 — 알림 결과는 `showroomConfirm.alerts` 이고,
+ * 알림이 실패해도 응답 코드는 바꾸지 않는다(확정·문자는 이미 끝났다).
  */
 
 /** 반영 예산 — 실측(운영 dry run)은 0.5초 안팎이고, maxDuration 안에 응답 여유를 남긴다. */
@@ -67,6 +69,7 @@ async function runShowroomConfirm(dryRun: boolean): Promise<ShowroomConfirmSyncR
       planned: report.planned,
       confirmed: report.confirmed,
       messages: report.messages,
+      alerts: report.alerts,
     })
     return report
   } catch (error) {

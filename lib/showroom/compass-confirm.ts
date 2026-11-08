@@ -5,8 +5,8 @@
  *  ① 고객이 /showroom 에서 신청 → showroom_bookings.status = requested, 접수 문자("확정되면 문자로 알려드립니다")
  *  ② 신청은 리드로 미러되고 Compass 로 넘어간다(lib/server/compass-lead-push.ts → crm.lead_refs home_lead)
  *  ③ 매니저가 Compass 리드에서 데모 예약 → 방식 「쇼룸 데모」, 날짜·시각, 담당을 고른다 = **컨펌 + 담당 지정**
- *  ④ 어드민 크론(lib/server/showroom-compass-confirm.ts)이 그 회차를 읽어 여기서 짝을 정하고, 예약을 confirmed 로 올린 뒤
- *     확정 문자를 한 번 보낸다.
+ *  ④ 어드민 크론(app/api/cron/lead-contact-sync 가 이어서 도는 lib/server/showroom-compass-confirm.ts)이 그 회차를 읽어
+ *     여기서 짝을 정하고, 예약을 confirmed 로 올린 뒤 확정 문자를 한 번 보내고 운영 위컴 방에 확정 알림을 한 번 남긴다.
  *
  * Compass 에 새 버튼을 두지 않고 이미 쓰는 「데모 예약」을 확정 신호로 쓴다 — 회차가 생기면 Compass 가 쇼룸 구글 캘린더에도
  * 일정을 잡는다(Compass ADR-0086). 교차 쓰기 0건 규칙(compass-integration-2026-09-14.md §0) 그대로 어드민은 뷰로 읽기만 한다.
@@ -17,6 +17,21 @@ export const COMPASS_SHOWROOM_DEMO_MEMO = "쇼룸 데모"
 
 /** 확정 판정 대상 신청의 나이 — 이보다 오래된 신청은 Compass 회차가 생겨도 확정하지 않는다(엉뚱한 옛 신청에 문자 방지). */
 export const SHOWROOM_CONFIRM_LOOKBACK_DAYS = 45
+
+/**
+ * 확정 동기화·확정 문자 스위치 SHOWROOM_CONFIRM_ENABLED(1·true·on). 기본 꺼짐(판정만).
+ * env 만 읽는 순수 판정이라 server-only 모듈 밖에 둔다 — 신청 알림 문구(lib/showroom/bookings.ts)도 이 값으로
+ * "Compass 컨펌 → 자동 확정"과 "어드민 수동 확정" 안내를 가른다. lib/server/showroom-compass-confirm.ts 가 다시 내보낸다.
+ */
+export function isShowroomConfirmEnabled(env: Record<string, string | undefined> = process.env): boolean {
+  return /^(1|true|on)$/i.test(env.SHOWROOM_CONFIRM_ENABLED?.trim() ?? "")
+}
+
+/** 운영 알림용 방문 일시 표기 — "11월 12일 14:00"(신청 알림 lib/showroom/bookings.ts 와 같은 꼴). */
+export function showroomVisitLabel(visitDate: string, visitTime: string): string {
+  const [, month, day] = visitDate.split("-")
+  return `${Number(month)}월 ${Number(day)}일 ${visitTime}`
+}
 
 const KST_OFFSET_MS = 9 * 60 * 60 * 1000
 

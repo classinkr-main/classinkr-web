@@ -85,6 +85,7 @@ function immediateDefer() {
 }
 
 afterEach(() => {
+  vi.unstubAllEnvs()
   vi.restoreAllMocks()
 })
 
@@ -217,6 +218,27 @@ describe("submitShowroomBooking", () => {
       eventType: "showroom.booking_requested",
       channels: ["wecom_webhook"],
     })
+  })
+
+  it("신청 알림은 \"신청\"이고, 할 일 안내(confirmFlow)는 접수 시점의 스위치 SHOWROOM_CONFIRM_ENABLED 를 따른다", async () => {
+    for (const [switchValue, confirmFlow] of [
+      ["1", "compass"],
+      ["", "manual"],
+    ] as const) {
+      vi.stubEnv("SHOWROOM_CONFIRM_ENABLED", switchValue)
+      const { mod, emitNotificationEvent } = await loadBookings()
+      const defer = immediateDefer()
+
+      await mod.submitShowroomBooking(VALID_BODY, { deferTask: defer.deferTask })
+      await defer.settle()
+
+      expect(emitNotificationEvent).toHaveBeenCalledTimes(1)
+      expect(emitNotificationEvent.mock.calls[0][0]).toMatchObject({
+        eventType: "showroom.booking_requested",
+        title: "쇼룸 방문 신청: 무궁화 학원",
+        payload: { confirmFlow },
+      })
+    }
   })
 
   it("귀속과 익명 ID 를 리드 미러에 실어 보낸다", async () => {

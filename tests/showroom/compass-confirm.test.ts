@@ -21,6 +21,7 @@ import {
  *  - 한 회차가 두 신청을 확정하지 않는다
  *  - 크론은 스위치가 꺼져 있으면 판정만, 상한을 넘으면 아무것도 하지 않는다
  *  - 한 건의 실패가 다른 건의 확정·문자를 막거나 다시 보내게 하지 않는다
+ *  - 운영 위컴 확정 알림은 조건부 UPDATE 가 실제로 확정한 예약마다 한 번, 문자 결과를 안 뒤에만 — 알림 실패는 삼키고 센다
  */
 
 const NOW = new Date("2026-11-06T03:00:00.000Z") // KST 11/6 12:00
@@ -337,6 +338,8 @@ interface SyncDeps {
   confirm?: (current: Row, input: Row) => Promise<Row | null>
   claim?: (id: string) => Promise<boolean>
   sendResult?: Row
+  /** 확정 위컴 알림(emitNotificationEvent) — 기본은 운영 방 전달 성공 */
+  emit?: (input: Row) => Promise<unknown>
 }
 
 function record(overrides: Row = {}): Row {
@@ -347,13 +350,20 @@ function record(overrides: Row = {}): Row {
     visitDate: "2026-11-12",
     visitTime: "14:00",
     phone: "010-1234-5678",
+    org: "무궁화 학원",
+    name: "홍길동",
+    role: "원장",
+    visitorCount: 2,
     assignedTo: null,
     createdAt: "2026-11-05T01:00:00.000Z",
     requestedVisitDate: null,
+    requestedVisitTime: null,
     confirmationSentAt: null,
     ...overrides,
   }
 }
+
+const WECOM_SENT = { deliveryResults: [{ channel: "wecom_webhook", status: "sent" }] }
 
 async function loadSync(deps: SyncDeps = {}) {
   vi.resetModules()
@@ -370,6 +380,7 @@ async function loadSync(deps: SyncDeps = {}) {
   const claim = vi.fn(deps.claim ?? (async () => true))
   const send = vi.fn(async () => deps.sendResult ?? { requested: 1, sent: 1, failed: 0, simulated: 0, results: [] })
   const logAudit = vi.fn(async () => undefined)
+  const emit = vi.fn(deps.emit ?? (async () => WECOM_SENT))
 
   vi.doMock("@/lib/repositories/showroom-bookings", () => ({
     listShowroomBookingsAwaitingConfirm: vi.fn(async () => deps.bookings ?? [record()]),
@@ -387,9 +398,10 @@ async function loadSync(deps: SyncDeps = {}) {
   }))
   vi.doMock("@/lib/messaging/customer-receipt", () => ({ sendShowroomBookingConfirmation: send }))
   vi.doMock("@/lib/auth/audit", () => ({ logAudit }))
+  vi.doMock("@/lib/notifications/emit-event", () => ({ emitNotificationEvent: emit }))
 
   const mod = await import("@/lib/server/showroom-compass-confirm")
-  return { mod, confirm, claim, send, logAudit }
+  return { mod, confirm, claim, send, logAudit, emit }
 }
 
 afterEach(() => {
@@ -400,11 +412,13 @@ afterEach(() => {
 describe("syncShowroomConfirmationsFromCompass", () => {
   it("스위치가 꺼져 있으면 판정만 한다 — 확정·문자 0", async () => {
     vi.stubEnv("SHOWROOM_CONFIRM_ENABLED", "")
-    const { mod, confirm, send } = await loadSync()
+    const { mod, confirm, send, emit } = await loadSync()
     const report = await mod.syncShowroomConfirmationsFromCompass({ now: NOW })
     expect(report).toMatchObject({ status: "ok", enabled: false, dryRun: true, scanned: 1, linked: 1, planned: 1, confirmed: 0 })
+    expect(report.alerts).toEqual({ sent: 0, failed: 0, skipped: 0 })
     expect(confirm).not.toHaveBeenCalled()
     expect(send).not.toHaveBeenCalled()
+    expect(emit).not.toHaveBeenCalled()
   })
 
   it("켜져 있으면 확정하고 확정 문자를 한 번 보낸다", async () => {
@@ -423,10 +437,12 @@ describe("syncShowroomConfirmationsFromCompass", () => {
 
   it("?dryRun=true 는 스위치가 켜져 있어도 쓰지 않는다", async () => {
     vi.stubEnv("SHOWROOM_CONFIRM_ENABLED", "true")
-    const { mod, confirm } = await loadSync()
+    const { mod, confirm, emit } = await loadSync()
     const report = await mod.syncShowroomConfirmationsFromCompass({ now: NOW, dryRun: true })
     expect(report).toMatchObject({ enabled: true, dryRun: true, planned: 1, confirmed: 0 })
+    expect(report.alerts).toEqual({ sent: 0, failed: 0, skipped: 0 })
     expect(confirm).not.toHaveBeenCalled()
+    expect(emit).not.toHaveBeenCalled()
   })
 
   it("상한을 넘으면 한 건도 확정·발송하지 않고 over_cap", async () => {
@@ -436,12 +452,13 @@ describe("syncShowroomConfirmationsFromCompass", () => {
     const bookings = Array.from({ length: count }, (_, i) => record({ id: `b${i}`, leadId: `lead-${i}` }))
     const links = new Map(bookings.map((b, i) => [b.leadId as string, [1000 + i]]))
     const rounds = bookings.map((_, i) => round({ id: 5000 + i, lead_id: 1000 + i }))
-    const { mod, confirm, send } = await loadSync({ bookings, links, rounds })
+    const { mod, confirm, send, emit } = await loadSync({ bookings, links, rounds })
     const report = await mod.syncShowroomConfirmationsFromCompass({ now: NOW })
     expect(report.status).toBe("over_cap")
     expect(report.planned).toBe(count)
     expect(confirm).not.toHaveBeenCalled()
     expect(send).not.toHaveBeenCalled()
+    expect(emit).not.toHaveBeenCalled()
   })
 
   it("Compass 링크 조회가 끊기면 이번 실행 전체를 건너뛴다", async () => {
@@ -493,6 +510,147 @@ describe("syncShowroomConfirmationsFromCompass", () => {
     const report = await mod.syncShowroomConfirmationsFromCompass({ now: NOW })
     expect(report.confirmed).toBe(1)
     expect(report.messages.failed).toBe(1)
+  })
+})
+
+describe("syncShowroomConfirmationsFromCompass — 운영 위컴 확정 알림", () => {
+  it("확정한 예약마다 한 번, 문자 결과를 안 뒤에 신청 알림과 같은 운영 방으로 보낸다", async () => {
+    vi.stubEnv("SHOWROOM_CONFIRM_ENABLED", "1")
+    const { mod, send, emit } = await loadSync()
+    const report = await mod.syncShowroomConfirmationsFromCompass({ now: NOW })
+
+    expect(report.confirmed).toBe(1)
+    expect(report.alerts).toEqual({ sent: 1, failed: 0, skipped: 0 })
+    expect(emit).toHaveBeenCalledTimes(1)
+    expect(emit.mock.calls[0][0]).toMatchObject({
+      eventType: "showroom.booking_confirmed",
+      channels: ["wecom_webhook"],
+      categoryTag: "lead",
+      severity: "info",
+      title: "쇼룸 방문 확정: 무궁화 학원",
+      routeUrl: "/admin/crm/customers/leads?lead=lead-1",
+      source: "showroom_booking",
+      sourceId: "booking-1",
+      payload: {
+        bookingId: "booking-1",
+        compassLeadId: 101,
+        compassDemoId: 9001,
+        compassUrl: "https://mkt.classin.co.kr/leads?open=101",
+        visitLabel: "11월 12일 14:00",
+        requestedVisitLabel: null,
+        assignedTo: "진소망",
+        visitorCount: 2,
+        confirmationMessage: "sent",
+      },
+    })
+    // 문자 결과가 정해진 뒤에만 알린다.
+    expect(send.mock.invocationCallOrder[0]).toBeLessThan(emit.mock.invocationCallOrder[0])
+  })
+
+  it("Compass 가 시각을 옮겨 확정했으면 처음 신청 일시를 싣는다", async () => {
+    vi.stubEnv("SHOWROOM_CONFIRM_ENABLED", "1")
+    const { mod, emit } = await loadSync({
+      rounds: [round({ at: "2026-11-13T06:00:00.000Z" })],
+      confirm: async (current, input) => ({
+        ...current,
+        status: "confirmed",
+        assignedTo: input.assignedTo,
+        visitDate: input.visitDate,
+        visitTime: input.visitTime,
+        requestedVisitDate: current.visitDate,
+        requestedVisitTime: current.visitTime,
+      }),
+    })
+    await mod.syncShowroomConfirmationsFromCompass({ now: NOW })
+    expect(emit.mock.calls[0][0]).toMatchObject({
+      payload: { visitLabel: "11월 13일 15:00", requestedVisitLabel: "11월 12일 14:00", moved: "yes" },
+    })
+  })
+
+  it("확정 문자가 실패하면 알림을 warning 으로 올리고 결과를 싣는다", async () => {
+    vi.stubEnv("SHOWROOM_CONFIRM_ENABLED", "1")
+    const { mod, emit } = await loadSync({ sendResult: { requested: 1, sent: 0, failed: 1, simulated: 0, results: [] } })
+    const report = await mod.syncShowroomConfirmationsFromCompass({ now: NOW })
+    expect(report.messages.failed).toBe(1)
+    expect(emit.mock.calls[0][0]).toMatchObject({
+      severity: "warning",
+      notificationType: "action_required",
+      payload: { confirmationMessage: "failed" },
+    })
+  })
+
+  it("조건부 UPDATE 가 확정하지 않았으면(null — 그 사이 사람이 바꿈) 알리지 않는다", async () => {
+    vi.stubEnv("SHOWROOM_CONFIRM_ENABLED", "1")
+    const { mod, send, emit } = await loadSync({ confirm: async () => null })
+    const report = await mod.syncShowroomConfirmationsFromCompass({ now: NOW })
+    expect(report.confirmed).toBe(0)
+    expect(send).not.toHaveBeenCalled()
+    expect(emit).not.toHaveBeenCalled()
+    expect(report.alerts).toEqual({ sent: 0, failed: 0, skipped: 0 })
+  })
+
+  it("확정이 실패한 예약은 알리지 않고, 확정된 예약만 알린다 — 알림은 모든 확정·문자가 끝난 뒤", async () => {
+    vi.stubEnv("SHOWROOM_CONFIRM_ENABLED", "1")
+    const bookings = [
+      record({ id: "ok-1", leadId: "lead-a", createdAt: "2026-11-05T01:00:00.000Z" }),
+      record({ id: "boom", leadId: "lead-b", createdAt: "2026-11-05T02:00:00.000Z" }),
+      record({ id: "ok-2", leadId: "lead-c", createdAt: "2026-11-05T03:00:00.000Z" }),
+    ]
+    const links = new Map([
+      ["lead-a", [1]],
+      ["lead-b", [2]],
+      ["lead-c", [3]],
+    ])
+    const rounds = [round({ id: 11, lead_id: 1 }), round({ id: 22, lead_id: 2 }), round({ id: 33, lead_id: 3 })]
+    const { mod, send, emit } = await loadSync({
+      bookings,
+      links,
+      rounds,
+      confirm: async (current, input) => {
+        if (current.id === "boom") throw new Error("duplicate key value violates unique constraint")
+        return { ...current, status: "confirmed", assignedTo: input.assignedTo }
+      },
+    })
+    const report = await mod.syncShowroomConfirmationsFromCompass({ now: NOW })
+    expect(report.confirmedIds).toEqual(["ok-1", "ok-2"])
+    expect(emit.mock.calls.map(([input]) => (input as { sourceId: string }).sourceId)).toEqual(["ok-1", "ok-2"])
+    expect(report.alerts).toEqual({ sent: 2, failed: 0, skipped: 0 })
+    // 느린 위컴(postJson 8초)이 다음 예약의 확정·문자를 밀지 않게 — 첫 알림은 마지막 문자 뒤에 나간다.
+    expect(send).toHaveBeenCalledTimes(2)
+    expect(Math.min(...emit.mock.invocationCallOrder)).toBeGreaterThan(Math.max(...send.mock.invocationCallOrder))
+  })
+
+  it("알림이 던져도 삼키고 failed 로 센다 — 확정·문자 결과와 상태는 그대로", async () => {
+    vi.stubEnv("SHOWROOM_CONFIRM_ENABLED", "1")
+    const { mod, emit, logAudit } = await loadSync({
+      emit: async () => {
+        throw new Error("settings unavailable")
+      },
+    })
+    const report = await mod.syncShowroomConfirmationsFromCompass({ now: NOW })
+    expect(emit).toHaveBeenCalledTimes(1)
+    expect(report).toMatchObject({ status: "ok", confirmed: 1, confirmedIds: ["booking-1"] })
+    expect(report.messages).toEqual({ sent: 1, simulated: 0, failed: 0, skipped: 0 })
+    expect(report.alerts).toEqual({ sent: 0, failed: 1, skipped: 0 })
+    expect(report.error).toBeUndefined()
+    expect(logAudit).toHaveBeenCalledTimes(1)
+  })
+
+  it("운영 방 전달이 실패·건너뜀이면 그대로 센다(던지지 않는다)", async () => {
+    vi.stubEnv("SHOWROOM_CONFIRM_ENABLED", "1")
+    const failed = await loadSync({
+      emit: async () => ({ deliveryResults: [{ channel: "wecom_webhook", status: "failed", errorMessage: "HTTP 500" }] }),
+    })
+    const failedReport = await failed.mod.syncShowroomConfirmationsFromCompass({ now: NOW })
+    expect(failedReport.status).toBe("ok")
+    expect(failedReport.alerts).toEqual({ sent: 0, failed: 1, skipped: 0 })
+
+    const skipped = await loadSync({
+      emit: async () => ({ deliveryResults: [{ channel: "wecom_webhook", status: "skipped" }] }),
+    })
+    const skippedReport = await skipped.mod.syncShowroomConfirmationsFromCompass({ now: NOW })
+    expect(skippedReport.status).toBe("ok")
+    expect(skippedReport.alerts).toEqual({ sent: 0, failed: 0, skipped: 1 })
   })
 })
 

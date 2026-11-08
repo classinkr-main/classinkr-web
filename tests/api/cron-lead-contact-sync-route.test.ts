@@ -29,6 +29,7 @@ const SHOWROOM_OK = {
   confirmed: 0,
   confirmedIds: [],
   messages: { sent: 0, simulated: 0, failed: 0, skipped: 0 },
+  alerts: { sent: 0, failed: 0, skipped: 0 },
 }
 
 async function loadRoute() {
@@ -112,6 +113,29 @@ describe("리드 연락 반영 전용 크론", () => {
       expect(response.status).toBe(code)
       expect(await response.json()).toMatchObject({ ok: false, status: "ok", showroomConfirm: { status } })
     }
+  })
+
+  it("확정 위컴 알림이 실패해도 응답 코드는 그대로다 — 알림 결과는 showroomConfirm.alerts 로 보인다", async () => {
+    process.env.CRON_SECRET = "test-cron-secret"
+    const { GET, syncShowroomConfirmationsFromCompass } = await loadRoute()
+    const confirmedWithAlertFailure = {
+      ...SHOWROOM_OK,
+      enabled: true,
+      dryRun: false,
+      scanned: 1,
+      linked: 1,
+      planned: 1,
+      confirmed: 1,
+      confirmedIds: ["booking-1"],
+      messages: { sent: 1, simulated: 0, failed: 0, skipped: 0 },
+      alerts: { sent: 0, failed: 1, skipped: 0 },
+    }
+    syncShowroomConfirmationsFromCompass.mockResolvedValueOnce(confirmedWithAlertFailure)
+
+    const response = await GET(request())
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ ok: true, ...REPORT_OK, showroomConfirm: confirmedWithAlertFailure })
   })
 
   it("쇼룸 확정의 예상 못 한 예외가 리드 반영 결과를 지우지 않는다", async () => {
