@@ -30,7 +30,7 @@ const PANICKED_RE = /어떡하|큰일|급해요|급합니다|급한데|당황|�
 const APOLOGETIC_RE = /^(?:\S+\s+)?죄송|죄송한데|죄송합니다만|실수할까|제가\s*(?:뭔가|뭘|뭐|혹시)?\s*잘못|^sorry\b/i
 const SLANG_RE = /ㅋㅋ|ㅠ|ㅜ|어케|어캐|ㄱㄱ|ㅇㅇ|뭐임|머임/
 // 들뜬 느낌표("첫 수업이었어요!!")는 화가 난 신호가 아니다.
-const POSITIVE_RE = /축하|설레|떨려|떨리|신나|기뻐|기쁘|좋아요|좋았|고마|감사|ㅋㅋ|최고|first\s*class|첫\s*수업|드디어/
+const POSITIVE_RE = /축하|설레|떨려|떨리|신나|기뻐|기쁘|좋아요|좋았|고마|감사|ㅋㅋ|ㅎㅎ|최고|first\s*class|첫\s*수업|드디어|good\s*job|great|awesome/i
 const PRIOR_BOT_RE =
   /\byou\s+(?:told|said|mentioned)\b|\b(?:yesterday|last\s*time|earlier|before),?\s+you\b|(?:다른|이전|지난)\s*(?:창|채팅|대화|세션)|(?:아까|전에|지난번|저번).{0,12}(?:챗봇|봇|답변)|챗봇이\s*(?:알려|말해|답|안내)/
 const PRIOR_INQUIRY_RE =
@@ -42,7 +42,8 @@ const ENGLISH_LEAD_RE = /^(?:hi|hello|hey|can you|could you|how do|how can|how t
 
 export function detectConversationTone(question: string): ConversationTone {
   const text = question.trim()
-  const exclamations = (text.match(/[!！]/g) ?? []).length
+  // 따옴표로 옮긴 말('Good job!')의 느낌표는 묻는 사람의 감정이 아니다.
+  const exclamations = (text.replace(QUOTED_SPEECH_RE, " ").match(/[!！]/g) ?? []).length
   const compact = text.replace(/\s+/g, "")
   const words = text.split(/\s+/).filter(Boolean)
   const latinWords = words.filter((word) => /[a-z]{2,}/i.test(word) && !/[가-힣]/.test(word)).length
