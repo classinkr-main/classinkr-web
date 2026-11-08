@@ -61,6 +61,8 @@ export interface SymptomTopic {
   menuLine?: string
   /** Figma 가이드의 알려진 의도(사용법)보다 이 증상 답이 더 구체적일 때 true. */
   overridesKnownIntent?: boolean
+  /** 답을 더 좁히려고 끝에 붙이는 확인 질문(질문 주도). 질문에 이미 그 정보가 있으면(unless) 묻지 않는다. */
+  followUp?: { text: string; unless?: RegExp }
 }
 
 export interface SymptomTriageResult {
@@ -68,6 +70,8 @@ export interface SymptomTriageResult {
   topicId: string
   /** 사용법·점검표 주제(화난 말투여도 상담 연결부터 밀지 않는다). */
   howto?: boolean
+  /** 주제가 정해 둔 확인 질문(이미 답에 필요한 정보가 질문에 있으면 비어 있다). */
+  followUp?: string
   overridesKnownIntent: boolean
   englishSummary?: string
   needsHandoff: boolean
@@ -165,6 +169,7 @@ const BASE_SYMPTOM_TOPICS: SymptomTopic[] = [
       },
     ],
     contactHeading: "",
+    followUp: { text: "지금 [인증 자료] 화면의 상태가 대기인지 반려인지 알려 주시면 다음 단계를 바로 안내할게요.", unless: /반려|대기|거절/ },
     suggestedQuestions: ["교사 추가가 안 돼요", "학생 추가가 안 돼요", "유료 계정 전환은 어떻게 하나요?"],
     menuLine: "기관 등록(계정 인증)이 안 될 때: 메인 관리자 계정으로 [인증 자료]의 빠진 칸과 서류 형식(JPG·PNG, 5MB 이하)을 확인합니다.",
   },
@@ -529,6 +534,7 @@ const BASE_SYMPTOM_TOPICS: SymptomTopic[] = [
         when: /관리자|대시보드|설정|우리\s*학생|학생(?:이|들이|한테|에게)/,
       },
     ],
+    followUp: { text: "학생 화면에서 안 보이는 건지, 관리자 화면에서 녹화본이 안 보이는 건지 알려 주시면 그쪽 순서로 다시 짚어 드릴게요.", unless: /학생|아이|자녀|관리자|대시보드|제가|저는/ },
     suggestedQuestions: ["녹화본이 안 보여요", "다시보기 기간이 지났대요", "수업 끝나고 코스에 가입한 학생이 이전 강의를 못 봐요"],
     menuLine: "다시보기가 안 보일 때: 그 수업이 녹화됐는지, 학생이 학원에 등록된 아이디로 로그인했는지 봅니다.",
   },
@@ -547,6 +553,7 @@ const BASE_SYMPTOM_TOPICS: SymptomTopic[] = [
       },
     ],
     en: "Turn on the recording toggle when you create the lesson, then check that the recording icon turns green in class.",
+    followUp: { text: "안 된 게 교실 화면을 남기는 수업 녹화인지, 카메라로 찍는 현장 녹화인지 알려 주시면 그쪽 확인 순서로 좁혀 드릴게요.", unless: /현장\s*녹화|수업\s*녹화|카메라/ },
     suggestedQuestions: ["녹화본에 소리가 없어요", "녹화가 중간에 끊겼어요", "녹화본이 안 보여요"],
     menuLine: "녹화가 안 될 때: 수업을 만들 때 녹화 토글을 켰는지, 교실에서 녹화 아이콘이 초록색인지 봅니다.",
   },
@@ -783,6 +790,7 @@ const BASE_SYMPTOM_TOPICS: SymptomTopic[] = [
       "같은 수업의 다른 학생도 안 들린다면 선생님 쪽 마이크 문제일 수 있으니 선생님께 알려 주세요.",
     ],
     en: "Check the speaker selected inside ClassIn (gear icon or the pre-class device test) and your device volume, and reconnect Bluetooth earphones.",
+    followUp: { text: "선생님 소리가 안 들리는 건지, 내 목소리가 상대에게 안 가는 건지 알려 주시면 그쪽 순서로 좁혀 드릴게요.", unless: /선생님\s*(?:소리|목소리|말)|내\s*목소리|제\s*목소리|학생\s*(?:소리|목소리)/ },
     suggestedQuestions: ["마이크가 안 돼요", "학생 목소리가 안 들려요", "소리가 울리고 하울링이 나요"],
     menuLine: "카메라·마이크·소리가 안 될 때: 기기 설정에서 클래스인의 카메라·마이크 권한을 허용했는지, 교실에서 쓸 장치를 골랐는지 봅니다.",
   },
@@ -830,6 +838,7 @@ const BASE_SYMPTOM_TOPICS: SymptomTopic[] = [
       },
     ],
     en: "Allow camera access for ClassIn in your device settings, close other video apps (Zoom etc.), then pick your camera in the classroom settings (gear icon).",
+    followUp: { text: "Zoom 같은 다른 화상 프로그램에서는 카메라가 잘 켜지는지 알려 주시면, 기기 문제인지 클래스인 설정 문제인지 나눠 볼 수 있어요.", unless: /zoom|줌|다른\s*(?:프로그램|앱)|팀즈|teams/ },
     suggestedQuestions: ["마이크가 안 돼요", "소리가 안 나요", "전자칠판 카메라가 안 켜져요"],
   },
 
@@ -1039,6 +1048,7 @@ const BASE_SYMPTOM_TOPICS: SymptomTopic[] = [
       },
     ],
     en: "Restart your router or switch to a phone hotspot, use only one device per account, and update ClassIn to the latest version.",
+    followUp: { text: "혼자만 끊기는지, 반 전체가 같이 끊기는지 알려 주시면 원인을 더 좁힐 수 있어요.", unless: /혼자|나만|저만|전체|다\s*같이|모두|애들\s*다|학생들\s*다/ },
     suggestedQuestions: ["수업 화면이 느리고 버벅여요", "학생 목소리가 안 들려요", "업데이트가 안 돼요"],
     menuLine: "수업 중 끊기거나 튕길 때: 공유기를 껐다 켜거나 휴대폰 핫스팟으로 바꿔 다시 들어가고, 한 계정은 기기 1대로만 들어갑니다.",
   },
@@ -1347,6 +1357,7 @@ const BASE_SYMPTOM_TOPICS: SymptomTopic[] = [
         when: /안\s*냈다|미제출|혼났|분명|올렸는데|냈는데|낸\s*줄/,
       },
     ],
+    followUp: { text: "어느 단계에서 막히는지(사진 붙이기, 제출 버튼, 낸 뒤 확인) 알려 주시면 그 단계부터 다시 볼게요.", unless: /사진|버튼|제출\s*후|낸\s*뒤|냈는데|안\s*냈|미제출/ },
     suggestedQuestions: ["숙제 사진이 안 올라가요", "숙제 다시 냈더니 점수가 사라졌어요", "앱이 자꾸 멈춰요"],
   },
 
@@ -1535,6 +1546,7 @@ const BASE_SYMPTOM_TOPICS: SymptomTopic[] = [
     doc: { category: "start", slug: "app-update-cache-reinstall" },
     steps: [{ heading: "먼저 확인할 것", pick: [0, 3, 1, 2] }],
     intro: "클래스인이 멈추거나 화면이 이상하면 아래 순서로 해 보고, 해결되면 거기서 멈추세요.",
+    followUp: { text: "멈추는 때가 앱을 켤 때인지, 수업에 들어갈 때인지, 특정 화면에서인지 알려 주시면 더 정확히 짚어 드릴게요.", unless: /켤\s*때|켜자마자|들어갈\s*때|입장|수업\s*중/ },
     suggestedQuestions: ["업데이트가 안 돼요", "캐시 삭제는 어떻게 해요?", "설치했는데 클래스인이 안 켜져요"],
     menuLine: "앱이 멈추거나 화면이 이상할 때: 클래스인을 완전히 종료했다 다시 켜고, 최신 버전으로 업데이트한 뒤 캐시를 지웁니다.",
   },
@@ -1556,6 +1568,7 @@ const BASE_SYMPTOM_TOPICS: SymptomTopic[] = [
       { text: "앱에 '네트워크 오류'가 뜬다면 다른 인터넷이나 휴대폰 핫스팟으로 바꿔 다시 로그인해 보세요.", when: /네트워크|network|프록시|proxy/ },
     ],
     en: "Log in with the installed ClassIn app, not the website. For a phone ID choose +82 and enter your number starting with 10 (drop the first 0); if you signed up with email, switch to email login.",
+    followUp: { text: "화면에 어떤 문구가 뜨는지(예: '잘못된 계정', 인증코드가 안 옴) 알려 주시면 그 경우에 맞춰 바로 좁혀 드릴게요.", unless: /문구|라고\s*(?:떠|나와|뜨)|인증\s*(?:코드|번호)|비밀번호/ },
     suggestedQuestions: ["인증번호가 안 와요", "비밀번호를 잊어버렸어요", "계정이 없다고 떠요"],
     menuLine: "로그인이 안 될 때: 홈페이지가 아니라 설치한 앱에서 로그인하고, 휴대폰 번호는 +82를 고른 뒤 10부터 입력합니다.",
   },
@@ -1786,6 +1799,8 @@ export function buildSymptomTopicAnswer(
     kind: "topic",
     topicId: topic.id,
     howto: topic.howto === true,
+    followUp:
+      topic.followUp && !(topic.followUp.unless && topic.followUp.unless.test(text)) ? topic.followUp.text : undefined,
     overridesKnownIntent: topic.overridesKnownIntent === true,
     englishSummary: topic.en,
     needsHandoff: topic.handoff === true,

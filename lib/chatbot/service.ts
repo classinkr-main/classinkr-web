@@ -40,6 +40,7 @@ import {
   type CsFigmaGuide,
 } from "@/lib/cs-figma-guides"
 import { getCsFigmaEnrichment } from "@/lib/cs-figma-enrichments"
+import { appendFollowUp, buildFollowUp } from "@/lib/chatbot/follow-up"
 import { resolveSymptomTriage, type SymptomTriageResult } from "@/lib/chatbot/symptom-triage"
 import {
   ENGLISH_SUPPORT_ANSWER,
@@ -3540,6 +3541,9 @@ interface ChatbotCore {
   englishSummary?: string
   // 사용법·점검표 답이면 화난 말투여도 상담 연결부터 앞세우지 않는다.
   howtoAnswer?: boolean
+  // 증상 주제가 정해 둔 확인 질문과 주제 id(질문 주도 층이 쓴다).
+  topicFollowUp?: string
+  topicId?: string
 }
 
 interface BuildChatbotCoreOptions {
@@ -4360,6 +4364,21 @@ function applyConversationTone(core: ChatbotCore) {
     core.response.needsHandoff = true
     core.handoffIntent = "support"
   }
+  // 질문 주도: 정보가 부족하거나 오해 여지가 있거나 영업 상담을 이어 갈 때 끝에 질문 하나를 붙인다.
+  core.response.answer = appendFollowUp(
+    core.response.answer,
+    buildFollowUp({
+      question: core.question.redacted,
+      answer: core.response.answer,
+      category: core.category,
+      intent: core.intent,
+      handoffIntent: core.handoffIntent,
+      answerMode: core.response.answerMode,
+      tone,
+      topicFollowUp: core.topicFollowUp,
+      topicId: core.topicId,
+    })
+  )
 }
 
 async function buildChatbotCore(
@@ -4500,6 +4519,8 @@ async function buildChatbotCoreBase(
       latencyMs: elapsedSince(startedAt),
       englishSummary: symptomTriage.englishSummary,
       howtoAnswer: symptomTriage.howto === true,
+      topicFollowUp: symptomTriage.followUp,
+      topicId: symptomTriage.topicId,
     }
   }
 
