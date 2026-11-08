@@ -1,3 +1,6 @@
+# 런타임 PDF 는 이제 lib/lead-magnet-pdf(app/api/materials/[slug]/pdf)가 저장소의 현재 내용으로 그린다.
+# 이 스크립트는 그 라우트가 렌더에 실패했을 때 쓰는 public/materials/lead-magnets/*.pdf 정적 폴백을
+# 다시 만들 때만 쓴다. 절 순서·문구를 바꾸면 lib/lead-magnet-pdf/sections.ts 도 같이 본다.
 from __future__ import annotations
 
 import json
@@ -18,7 +21,8 @@ DATA_PATH = ROOT / "data" / "lead-magnets.json"
 PUBLIC_DIR = ROOT / "public"
 OUTPUT_DIR = PUBLIC_DIR / "materials" / "lead-magnets"
 # 워크북 템플릿(HTML → Chromium, scripts/render-lead-magnet-workbook-pdf.mjs)으로 만드는 자료.
-# 여기서 다시 만들면 새 디자인을 옛 디자인으로 덮어쓰므로 건너뛴다. 그 스크립트의 WORKBOOK_SLUGS 와 같게 둔다.
+# 여기서 다시 만들면 새 디자인을 옛 디자인으로 덮어쓰므로 건너뛴다. 정본 lib/lead-magnet-pdf/workbook-slugs.mjs 와 같게 둔다
+# (tests/scripts/lead-magnet-workbook-pdf.test.ts 가 대조).
 WORKBOOK_SLUGS = {"academy-system-checklist"}
 
 SITE_URL = os.environ.get("NEXT_PUBLIC_SITE_URL", "https://classin.ai.kr").rstrip("/")

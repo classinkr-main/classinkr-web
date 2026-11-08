@@ -1,6 +1,7 @@
 "use client"
 
 import { getAnonymousId } from "@/lib/consent/consent"
+import { isLeadMagnetPdfRoutePathname, materialDownloadBaseName } from "@/lib/lead-magnet-pdf/links"
 
 export interface MaterialDownloadClientInput {
   slug: string
@@ -32,12 +33,15 @@ const FILE_EXTENSION_PATTERN = /\.(pdf|zip|pptx?|docx?|xlsx?|hwpx?|csv)$/i
 
 /**
  * 다운로드 API 가 돌려준 주소가 '파일'인지 판단한다. 서명 URL(Supabase Storage)은 항상 파일이고,
+ * 같은 출처의 PDF 라우트(/api/materials/<slug>/pdf — 저장된 자료로 그때그때 그린다)도 확장자는 없지만 파일이다.
  * 그 밖에는 경로 확장자로 본다. 파일이 아니면(자료 상세 페이지·외부 문서 링크) 예전처럼 이동한다.
  */
 export function isMaterialFileUrl(url: string, signed: boolean, origin = "http://localhost") {
   if (signed) return true
   try {
-    return FILE_EXTENSION_PATTERN.test(new URL(url, origin).pathname)
+    const destination = new URL(url, origin)
+    if (destination.origin === new URL(origin).origin && isLeadMagnetPdfRoutePathname(destination.pathname)) return true
+    return FILE_EXTENSION_PATTERN.test(destination.pathname)
   } catch {
     return false
   }
@@ -52,12 +56,8 @@ export function buildMaterialDownloadFilename(title: string, url: string, origin
   } catch {
     // 주소를 못 읽으면 PDF 로 둔다.
   }
-  const base = title
-    .replace(/[\\/:*?"<>|\u0000-\u001f]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, 80)
-    .trim()
+  // PDF 라우트의 Content-Disposition 과 같은 이름(lib/lead-magnet-pdf/links.ts) — 브라우저는 그 헤더를 앞세운다.
+  const base = materialDownloadBaseName(title)
   return `${base || "classin-material"}${extension}`
 }
 
