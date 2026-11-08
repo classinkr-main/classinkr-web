@@ -234,7 +234,8 @@ export function findChatbotSelfKnowledgeEntry(question: string) {
       return null
     }
   }
-  const hasChatbotContext = CHATBOT_CONTEXT_RE.test(normalized)
+  // "특정 학생의 채팅 기록"처럼 학원 데이터인 채팅·대화 기록은 챗봇과의 대화가 아니다.
+  const hasChatbotContext = CHATBOT_CONTEXT_RE.test(normalized.replace(STUDENT_RECORD_RE, " "))
   const hasProductProblem = PRODUCT_PROBLEM_RE.test(normalized)
   return (
     CHATBOT_SELF_KNOWLEDGE_ENTRIES.find((entry) => {
@@ -243,6 +244,8 @@ export function findChatbotSelfKnowledgeEntry(question: string) {
       if (CHATBOT_CONTEXT_REQUIRED_KEYS.has(entry.key) && !hasChatbotContext) return false
       // 학원이 여는 학부모 설명회에 나눠 줄 자료를 묻는 말은 클래스인 행사 문의가 아니다.
       if (entry.key === "event_inquiry" && /자료|안내문|나눠\s*(?:드릴|줄)|배포/.test(normalized)) return false
+      // 학원이 여는 설명회·행사를 클래스인으로 진행하는 방법(웹 라이브 명단, 칠판 화면 송출)은 기능 질문이다.
+      if (entry.key === "event_inquiry" && EVENT_PRODUCT_USE_RE.test(normalized)) return false
       if (entry.key === "emotional_concern") {
         // 도입·전환을 걱정하는 원장님 질문에만 쓴다. 학부모의 아이 걱정, 신입 실장의 실수 걱정,
         // 장애 증상 질문은 해당 안내로 보낸다(이 답은 도입 영업 문구다).
@@ -270,9 +273,13 @@ const CHATBOT_CONTEXT_RE =
   /너|넌|네가|니가|네\s|니\s|챗봇|봇|(?:ai|인공지능)\s*(?:챗봇|상담|너|넌)|상담\s*가이드|이\s*대화|대화\s*(?:내용|기록|이력)|채팅\s*(?:내용|기록)|(?:내|제)\s*(?:질문|대화|답변|채팅|상담)|상담\s*내용|지침|프롬프트|내가\s*(?:요청|물어|말|질문|뭐라)|나눈\s*(?:대화|이야기)|방금|아까|기억|내\s*이름|나에\s*대해|나를/i
 
 const ADOPTION_CONTEXT_RE =
-  /도입|전환|바꾸면|바꿔도|갈아타|선생님들|강사들|강사진|적응|기존\s*(?:시스템|프로그램|방식|lms|erp)|원래\s*쓰던|lms|erp|이중\s*(?:작업|입력)|두\s*번\s*입력|반발|반대(?!로)/i
+  /도입|전환|바꾸면|바꿔도|갈아타|선생님들|강사들|강사진|적응|기존\s*(?:시스템|프로그램|방식|lms|erp)|원래\s*쓰던|lms|erp|이중\s*(?:작업|입력)|두\s*번\s*입력|반발|반대(?!로|편|쪽)/i
+
+const STUDENT_RECORD_RE = /(?:학생|자녀|아이|수업|반|코스)\S*\s*(?:의\s*)?(?:채팅|대화)\s*(?:내용|기록)/g
+
+const EVENT_PRODUCT_USE_RE = /웹\s*라이브|라이브로|칠판|보드|프로젝터|hdmi|송출|중계|시청자|참석\s*확인|명단/i
 
 const PRODUCT_PROBLEM_RE =
-  /안\s*(?:돼|되|됨|됐|됩|나|들|보|켜|떠|와)|안돼|안되|안됨|못\s*(?:하|해|들|보|봐)|오류|에러|끊|튕|멈|소리|카메라|마이크|녹화|로그인|접속|화면|회색|비활성|다시\s*보기|다시보기/i
+  /안\s*(?:돼|되|됨|됐|됩|나|들|보|켜|떠|와)|안돼|안되|안됨|못\s*(?:하|해|들|보|봐)|오류|에러|끊|튕|멈|소리|카메라|마이크|녹화|로그인|접속|화면|회색|비활성|다시\s*보기|다시보기|보증|a\/s|떼서|떼어|옮기|옮겨/i
 
 const PERSONAL_WORRY_RE = /아이|자녀|우리\s*애|딸|아들|학부모|실수할|잘못\s*(?:할|누를|한)|처음\s*해|찍히|보여지|유출/i

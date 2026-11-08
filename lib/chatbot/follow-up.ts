@@ -69,8 +69,9 @@ const DEVICE_SPLIT_ANSWER_RE =
 
 const SALES_INTENTS = new Set(["sales_consulting", "tutor_pricing_recommend", "emotional_consulting", "onboarding"])
 const SALES_CATEGORIES = new Set(["consultation", "billing", "onboarding", "hardware"])
+// A/S는 단어 경계로 본다("classin" 안의 'as'를 고장 신호로 읽지 않게).
 const SUPPORT_SIGNAL_RE =
-  /안\s*(?:돼|되|나|켜|열|보|눌)|안돼|안되|오류|에러|고장|끊|튕|멈|꺼져|비활성|회색|눌리지|환불|해지|위약금|결제\s*(?:실패|오류)|중복|두\s*번|청구|계산서|영수증|증빙|부가세|견적서|계약서|a\s*\/?\s*s|수리|접수/
+  /안\s*(?:돼|되|나|켜|열|보|눌)|안돼|안되|오류|에러|고장|끊|튕|멈|꺼져|비활성|회색|눌리지|환불|해지|위약금|결제\s*(?:실패|오류)|중복|두\s*번|청구|계산서|영수증|증빙|부가세|견적서|계약서|(?<![a-z])a\s*\/?\s*s(?![a-z])|수리|접수/
 
 // 영업 상담에서 알아 두면 견적·구성을 좁힐 수 있는 것. 질문에 이미 있으면 묻지 않는다.
 const SALES_SLOTS: { id: string; present: RegExp; answerAsks: RegExp; line: string }[] = [

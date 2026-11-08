@@ -1675,7 +1675,7 @@ export const FIELD_SYMPTOM_TOPICS: SymptomTopic[] = [
   {
     id: "board-warranty",
     subject:
-      /보증\s*(?:기간|기한|됐|되나|남|이\s*남)|무상\s*(?:a\s*\/?\s*s|as|수리|점검)|(?:칠판|보드|티비|tv).{0,30}(?:고장\s*(?:나면|났|시)|a\s*\/?\s*s|수리\s*(?:는|받|접수))|(?:a\s*\/?\s*s|as)\s*(?:기간|접수|센터|연락|전화|신청)|고장\s*나면.{0,20}(?:어디|전화|연락)/,
+      /보증\s*(?:기간|기한|됐|되나|남|이\s*남)|무상\s*(?:(?<![a-z])a\s*\/?\s*s(?![a-z])|수리|점검)|(?:칠판|보드|티비|tv).{0,30}(?:고장\s*(?:나면|났|시)|(?<![a-z])a\s*\/?\s*s(?![a-z])|수리\s*(?:는|받|접수))|(?<![a-z])a\s*\/?\s*s\s*(?:기간|접수|센터|연락|전화|신청)|고장\s*나면.{0,20}(?:어디|전화|연락)/,
     requireSymptom: false,
     category: "hardware",
     doc: { category: "hardware", slug: "board-lineup-specs" },

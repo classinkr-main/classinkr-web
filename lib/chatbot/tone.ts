@@ -10,6 +10,8 @@ export interface ConversationTone {
   angry: boolean
   repeated: boolean
   anxious: boolean
+  /** 불안 중에서도 "어떡하죠·급해요·큰일"처럼 당황한 상태. 아니면 걱정 정도로 본다. */
+  panicked: boolean
   apologetic: boolean
   terse: boolean
   english: boolean
@@ -21,8 +23,10 @@ const ANGRY_RE =
   /도대체|말이\s*(?:됩니까|돼요|되나요|됩니다|돼)|짜증|화가\s*(?:나|납)|(?<!대)화나(?:요|네|서|고|는|죠)|화났|어이(?:가)?\s*없|황당|아깝|최악|엉망|책임\s*(?:지|져)|언제\s*(?:고쳐|해결)|장난\s*(?:해|합)|돈\s*(?:낸|내고|냈)|환불해\s*(?:주|줘)|이게\s*뭐(?:예요|에요|야|냐|입니까)/
 const REPEATED_RE =
   /몇\s*번째|(?:두|세|네|다섯)\s*번째\s*(?:문의|연락|전화|말씀|요청|끊|튕|같은|똑같|이에요|예요|입니다)|(?:벌써|이번이|오늘만|이번\s*주만|이번\s*주에만)[^.!?]{0,8}(?:두|세|네|다섯)\s*번째|또\s*(?:문의|연락|물어|말씀)|계속\s*(?:문의|물어|말|연락)|여러\s*번\s*(?:문의|말|연락)|매번\s*(?:문의|물어|말|연락|똑같|같은|재부팅|인터넷)|번번이|몇\s*번을/
+// "어떻게 해야 하나요"만으로는 불안으로 보지 않는다(그냥 방법을 묻는 말이 많다).
 const ANXIOUS_RE =
-  /어떡하|어떻게\s*해야\s*(?:하|할|돼|되)|걱정|불안|큰일|급해요|급합니다|급한데|당황|무서|난감|혹시\s*제가|혼났|속상|미치겠|울고/
+  /어떡하|어떻게\s*해야\s*할지\s*(?:모르|막막)|걱정|불안|큰일|급해요|급합니다|급한데|당황|무서|난감|혹시\s*제가|혼났|속상|미치겠|울고/
+const PANICKED_RE = /어떡하|큰일|급해요|급합니다|급한데|당황|미치겠|울고|난감|혼났/
 const APOLOGETIC_RE = /^(?:\S+\s+)?죄송|죄송한데|죄송합니다만|실수할까|제가\s*(?:뭔가|뭘|뭐|혹시)?\s*잘못|^sorry\b/i
 const SLANG_RE = /ㅋㅋ|ㅠ|ㅜ|어케|어캐|ㄱㄱ|ㅇㅇ|뭐임|머임/
 // 들뜬 느낌표("첫 수업이었어요!!")는 화가 난 신호가 아니다.
@@ -53,6 +57,7 @@ export function detectConversationTone(question: string): ConversationTone {
         (exclamations >= 2 || (exclamations >= 1 && /(?:니까|겁니까|입니까|습니까)\s*[!?！]|저만\s*이런/.test(text)))),
     repeated,
     anxious: ANXIOUS_RE.test(text),
+    panicked: PANICKED_RE.test(text),
     apologetic: APOLOGETIC_RE.test(text),
     terse: compact.length <= 10 || (SLANG_RE.test(text) && compact.length <= 24),
     english: ENGLISH_LEAD_RE.test(text) || (latinWords >= 3 && latinWords / Math.max(1, words.length) >= 0.34),
@@ -87,7 +92,10 @@ export function toneOpener(tone: ConversationTone, forHandoff = false): string |
       ? "같은 문제로 여러 번 문의하시게 해 드려 정말 죄송합니다."
       : "불편을 드려 정말 죄송합니다."
   }
-  if (tone.anxious) return "많이 당황하셨죠. 같이 차근차근 확인해 볼게요."
+  // "죄송한데요… 걱정입니다"처럼 미안해하며 걱정하는 말에는 사과를 덜어 주는 첫마디가 더 맞다.
+  if (tone.anxious && !(tone.apologetic && !tone.panicked)) {
+    return tone.panicked ? "많이 당황하셨죠. 같이 차근차근 확인해 볼게요." : "걱정되셨겠어요. 같이 차근차근 확인해 볼게요."
+  }
   if (tone.apologetic) {
     return forHandoff
       ? "죄송해하지 않으셔도 돼요."
@@ -101,7 +109,7 @@ export const HANDOFF_NOW_LINE =
 
 const EMPATHY_START_RE = /^(?:불편을|같은 문제로|많이 당황|죄송|걱정|괜찮)/
 // 답의 첫 문장이 이미 공감·사과로 시작하면 말투 계층이 첫마디를 또 붙이지 않는다.
-const EMPATHY_FIRST_SENTENCE_RE = /놀라|당황|속상|답답|걱정|신경\s*쓰|불편|죄송|기다리셨|급하시|힘드셨/
+const EMPATHY_FIRST_SENTENCE_RE = /놀라|당황|속상|답답|걱정|신경\s*쓰|불편|죄송|기다리셨|급하시|힘드셨|불안하|민망|곤란하|화나셨|무서운|이해돼/
 
 function startsWithEmpathy(answer: string) {
   if (EMPATHY_START_RE.test(answer)) return true
@@ -238,6 +246,9 @@ export const ENGLISH_SUPPORT_ANSWER = [
   "If you'd rather talk to a person, type \"상담원 연결\" and I'll connect you to our support team.",
 ].join("\n\n")
 
+// "영어로만 뜹니다", "오류가 영어로 나와요"처럼 화면 언어를 말하는 문장은 영어 상담 요청이 아니다.
 export function isEnglishSupportRequest(question: string) {
-  return /speak\s*english|in\s*english|english\s*(?:please|ok|support)|영어\s*(?:로|가능|돼|되|할\s*줄|지원)|english\s*(?:가능|돼|되)/i.test(question)
+  return /speak\s*english|in\s*english|english\s*(?:please|ok|support)|영어\s*로\s*(?:답|대답|설명|상담|안내|알려|말해|말씀|대화|얘기|이야기|물어|질문|해\s*(?:줘|주|도))|영어\s*(?:가능|돼요|되나요|되요|할\s*줄|지원)|english\s*(?:가능|돼|되)/i.test(
+    question
+  )
 }

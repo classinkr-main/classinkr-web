@@ -152,7 +152,9 @@ describe("chatbot FAQ curation (gap fills)", () => {
       expect(result.answerMode).toBe("direct_answer")
       expect(result.sources[0]?.heading).toBe("학부모 리포트·알림 확인")
       expect(result.answer).toContain("자동 발송")
-      expect(result.answer).toContain("단정하면 안")
+      // 자동 발송을 기본 기능처럼 말하지 않는다(내부 작성 지침 문장이 아니라 고객에게 하는 말로).
+      expect(result.answer).toContain("기본 화면 기능으로 안내돼 있지 않아요")
+      expect(result.answer).not.toContain("단정하면 안")
       expect(result.answer).toContain("SMS")
       expect(result.answer).not.toContain("자동 발송 기본 제공")
       expect(result.answer).not.toContain("자동으로 전송됩니다")

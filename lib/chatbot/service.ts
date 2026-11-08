@@ -2472,36 +2472,21 @@ const LEARNER_VOICE_RE =
 // (터치 문제에 "설치 장소, 희망 대수를 알려주세요"처럼 엉뚱한 되묻기를 붙이지 않는다).
 function getContextualNextStep(question: NormalizedQuestion, category: string): string | null {
   const text = question.redacted.toLowerCase()
-  if (/견적|가격|요금|비용|도입|구매|체험|데모|상담/.test(text)) return getConciseNextStep(category)
+  // 영업 질문의 끝 질문(규모·교실 수·도입 시기)은 질문 주도 계층(follow-up.ts)이 고른다. 결제 증빙 안내만 남긴다.
+  if (/견적|가격|요금|비용|도입|구매|체험|데모|상담/.test(text)) return category === "billing" ? BILLING_NEXT_STEP : null
   if (/안\s*(?:돼|되|됨|됐|나|들|보|켜|떠|와)|안돼|안되|안됨|오류|에러|끊|튕|멈|이상|못\s*(?:하|해|들|보|봐)/.test(text)) {
     return "화면에 뜬 문구와 쓰는 기기(PC·휴대폰·전자칠판)를 알려 주시면 더 정확히 안내드릴게요. 급하면 \"상담원 연결\"이라고 남겨 주세요."
   }
   if (/어떻게|방법|어디|하는\s*법|순서/.test(text)) {
     return "막히는 화면이나 메뉴 이름을 알려 주시면 그 단계부터 더 자세히 안내드릴게요."
   }
-  // 수업·칠판의 일반 질문이나 학생·학부모 질문에 영업형 되묻기를 붙이지 않는다(끝 질문은 질문 주도 계층이 정한다).
-  if (LEARNER_VOICE_RE.test(text) || category === "classroom" || category === "hardware") return null
-  return getConciseNextStep(category)
+  // 범주별 일반 되묻기("오류 화면·브라우저를 알려 주세요", "90일 도입 순서로…")는 질문과 상관없는 군더더기가 되기 쉽다.
+  // 끝 질문은 질문 주도 계층이 정하고, 여기서는 결제 증빙 안내만 남긴다.
+  return category === "billing" && !LEARNER_VOICE_RE.test(text) ? BILLING_NEXT_STEP : null
 }
 
-function getConciseNextStep(category: string) {
-  switch (category) {
-    case "billing":
-      return "결제·증빙은 계정마다 조건이 달라 담당자가 확인해요. 상담 채널(홈페이지 하단 채팅)이나 담당 매니저에게 필요한 증빙 종류를 말씀해 주세요."
-    case "hardware":
-      return "설치 장소, 희망 대수, 스탠드/벽걸이 여부를 알려주시면 패키지 범위를 좁혀드릴게요."
-    case "troubleshooting":
-      return "오류 화면, 사용 기기, 앱/브라우저, 발생 시점을 알려주시면 해결 순서를 더 정확히 잡을 수 있어요."
-    case "onboarding":
-      return "현재 쓰는 전자칠판, 녹화, LMS 도구와 도입 희망 시점을 알려주시면 90일 도입 순서로 좁혀드릴게요."
-    case "admin":
-      return "보고 싶은 데이터와 관리자 권한 범위를 알려주시면 설정/연동 흐름으로 정리해드릴게요."
-    case "classroom":
-      return "수업 전, 수업 중, 수업 후 중 어디가 가장 불편한지 알려주시면 기능 기준으로 좁혀드릴게요."
-    default:
-      return "원하시면 도입, 수업 운영, 계정/오류, 결제 중 어느 쪽인지부터 빠르게 좁혀드릴게요."
-  }
-}
+const BILLING_NEXT_STEP =
+  "결제·증빙은 계정마다 조건이 달라 담당자가 확인해요. 상담 채널(홈페이지 하단 채팅)이나 담당 매니저에게 필요한 증빙 종류를 말씀해 주세요."
 
 function getComparisonAnswer(question: NormalizedQuestion, top: ChatbotSource) {
   const text = question.redacted.toLowerCase()
@@ -2662,8 +2647,8 @@ function getTrialOrPilotAnswer() {
 function getParentReportOrNotificationAnswer() {
   return [
     "학부모 커뮤니케이션은 'Classin 안에서 확인할 수 있는 데이터'와 '자동 발송'을 나눠 봐야 합니다.",
-    "출결, 과제, 성적, 복습 기록, 학습 보고서처럼 상담에 쓸 데이터는 권한 범위 안에서 확인할 수 있어요. 다만 학부모 문자·푸시·상담 리포트가 자동 발송된다고 기본 기능처럼 단정하면 안 됩니다.",
-    "자동 알림이 필요하면 SMS 알림, API, 외부 학원관리 시스템 연동 범위로 따로 확인하는 게 맞습니다.",
+    "출결, 과제, 성적, 복습 기록, 학습 보고서처럼 상담에 쓸 데이터는 권한 범위 안에서 확인할 수 있어요. 학습 보고서는 링크를 복사해 학부모님께 보낼 수 있어요.",
+    "다만 학부모님께 문자·상담 리포트를 자동으로 보내는 건 기본 화면 기능으로 안내돼 있지 않아요. 수업 알림 문자(SMS)는 [일반 설정] > [부가가치 서비스]의 유료 서비스 '스마트 담임 교사'로 학생과 교사에게 자동으로 보낼 수 있으니, 학부모 번호로도 받을 수 있는지는 담당 매니저에게 확인해 보세요. 그 밖의 자동 알림은 공식 API로 클래스인 앱 푸시를 자동화하거나 외부 학원관리 시스템과 연동하는 방식을 상담에서 확인해 보세요.",
   ].join("\n\n")
 }
 
@@ -2831,7 +2816,7 @@ function getGoogleClassroomAnswer() {
 
 function getSiteEntryIntegrationAnswer() {
   return [
-    "자사 사이트의 입장 버튼에서 ClassIn 수업으로 연결하는 건 가능성은 열어두되, 기본 제공 기능처럼 단정하면 안 됩니다.",
+    "자사 사이트의 입장 버튼에서 ClassIn 수업으로 바로 연결하는 건 기본 제공 기능으로 안내돼 있지 않아요. 공식 API로 연결하는 개발 작업이 필요할 수 있어요.",
     "수업 링크, 로그인 방식, 학생 권한, 수업 생성 주체, 반복 시간표, API 또는 운영 자동화 범위를 같이 봐야 해요.",
     "현재 사이트에서 회원 인증을 어떻게 하고 있는지, 수업이 매번 수동 생성인지 반복 일정인지, 충전형/구독형 중 어떤 계약을 검토 중인지 알려주시면 연동 확인 항목으로 좁혀드릴게요.",
   ].join("\n\n")
