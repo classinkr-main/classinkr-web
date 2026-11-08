@@ -340,6 +340,8 @@ interface SyncDeps {
   sendResult?: Row
   /** 확정 위컴 알림(emitNotificationEvent) — 기본은 운영 방 전달 성공 */
   emit?: (input: Row) => Promise<unknown>
+  /** 감사 기록(logAudit) — 기본은 성공 */
+  audit?: () => Promise<unknown>
 }
 
 function record(overrides: Row = {}): Row {
@@ -379,7 +381,7 @@ async function loadSync(deps: SyncDeps = {}) {
   )
   const claim = vi.fn(deps.claim ?? (async () => true))
   const send = vi.fn(async () => deps.sendResult ?? { requested: 1, sent: 1, failed: 0, simulated: 0, results: [] })
-  const logAudit = vi.fn(async () => undefined)
+  const logAudit = vi.fn(deps.audit ?? (async () => undefined))
   const emit = vi.fn(deps.emit ?? (async () => WECOM_SENT))
 
   vi.doMock("@/lib/repositories/showroom-bookings", () => ({
@@ -634,6 +636,22 @@ describe("syncShowroomConfirmationsFromCompass — 운영 위컴 확정 알림",
     expect(report.alerts).toEqual({ sent: 0, failed: 1, skipped: 0 })
     expect(report.error).toBeUndefined()
     expect(logAudit).toHaveBeenCalledTimes(1)
+  })
+
+  it("루프 중간에 예외가 새도(감사 기록 실패) 이미 확정·문자가 끝난 예약의 알림은 나간다", async () => {
+    vi.stubEnv("SHOWROOM_CONFIRM_ENABLED", "1")
+    const { mod, emit, send } = await loadSync({
+      audit: async () => {
+        throw new Error("audit store down")
+      },
+    })
+    await expect(mod.syncShowroomConfirmationsFromCompass({ now: NOW })).rejects.toThrow("audit store down")
+    expect(send).toHaveBeenCalledTimes(1)
+    expect(emit).toHaveBeenCalledTimes(1)
+    expect((emit.mock.calls[0][0] as { eventType: string; sourceId: string })).toMatchObject({
+      eventType: "showroom.booking_confirmed",
+      sourceId: "booking-1",
+    })
   })
 
   it("운영 방 전달이 실패·건너뜀이면 그대로 센다(던지지 않는다)", async () => {

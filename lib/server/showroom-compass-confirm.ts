@@ -286,48 +286,52 @@ export async function syncShowroomConfirmationsFromCompass(
   const byId = new Map(bookings.map((b) => [b.id, b]))
   // 확정 알림은 루프가 끝난 뒤 한꺼번에 — 위컴이 느려도(postJson 8초) 다음 예약의 확정·문자가 밀리지 않는다.
   const confirmedAlerts: ShowroomConfirmedAlertInput[] = []
-  for (const plan of plans) {
-    const current = byId.get(plan.bookingId)
-    if (!current) continue
-    let confirmed: ShowroomBookingRecord | null = null
-    try {
-      confirmed = await confirmShowroomBookingFromCompass(current, plan)
-    } catch (error) {
-      // 23505(같은 회차가 다른 예약을 이미 확정) 등 — 이 건만 건너뛰고 다음으로.
-      console.error("[showroom-confirm] confirm failed:", error instanceof Error ? error.message.slice(0, 120) : "Error")
-      report.status = "failed"
-      report.error = "confirm failed"
-      continue
+  try {
+    for (const plan of plans) {
+      const current = byId.get(plan.bookingId)
+      if (!current) continue
+      let confirmed: ShowroomBookingRecord | null = null
+      try {
+        confirmed = await confirmShowroomBookingFromCompass(current, plan)
+      } catch (error) {
+        // 23505(같은 회차가 다른 예약을 이미 확정) 등 — 이 건만 건너뛰고 다음으로.
+        console.error("[showroom-confirm] confirm failed:", error instanceof Error ? error.message.slice(0, 120) : "Error")
+        report.status = "failed"
+        report.error = "confirm failed"
+        continue
+      }
+      if (!confirmed) continue
+      report.confirmed += 1
+      report.confirmedIds.push(confirmed.id)
+
+      const outcome = await sendShowroomConfirmationOnce(confirmed, now)
+      report.messages[outcome] += 1
+
+      // 이 예약을 이번 실행의 조건부 UPDATE 가 확정했다 — 확정 알림은 이 자리에서만 생긴다(예약당 한 번).
+      // 감사 기록보다 먼저 큐에 넣는다 — 감사 기록이 던져도 이미 확정·문자가 끝난 예약의 알림은 나간다.
+      confirmedAlerts.push({ before: current, confirmed, plan, message: outcome })
+
+      await logAudit({
+        actorUserId: null,
+        actorDisplayName: "Compass 쇼룸 확정 동기화",
+        action: "showroom_booking.confirm_from_compass",
+        targetType: "showroom_booking",
+        targetId: confirmed.id,
+        payload: {
+          compassDemoId: plan.compassDemoId,
+          compassLeadId: plan.compassLeadId,
+          assignedTo: plan.assignedTo,
+          visit: `${plan.visitDate} ${plan.visitTime}`,
+          moved: plan.moved,
+          message: outcome,
+        },
+      })
     }
-    if (!confirmed) continue
-    report.confirmed += 1
-    report.confirmedIds.push(confirmed.id)
-
-    const outcome = await sendShowroomConfirmationOnce(confirmed, now)
-    report.messages[outcome] += 1
-
-    await logAudit({
-      actorUserId: null,
-      actorDisplayName: "Compass 쇼룸 확정 동기화",
-      action: "showroom_booking.confirm_from_compass",
-      targetType: "showroom_booking",
-      targetId: confirmed.id,
-      payload: {
-        compassDemoId: plan.compassDemoId,
-        compassLeadId: plan.compassLeadId,
-        assignedTo: plan.assignedTo,
-        visit: `${plan.visitDate} ${plan.visitTime}`,
-        moved: plan.moved,
-        message: outcome,
-      },
-    })
-
-    // 이 예약을 이번 실행의 조건부 UPDATE 가 확정했다 — 확정 알림은 이 자리에서만 생긴다(예약당 한 번).
-    confirmedAlerts.push({ before: current, confirmed, plan, message: outcome })
+  } finally {
+    // 루프 중간에 예외가 새도 이미 확정된 예약의 알림은 보낸다(emitShowroomConfirmedAlert 는 던지지 않는다).
+    const alertOutcomes = await Promise.all(confirmedAlerts.map(emitShowroomConfirmedAlert))
+    for (const alert of alertOutcomes) report.alerts[alert] += 1
   }
-
-  const alertOutcomes = await Promise.all(confirmedAlerts.map(emitShowroomConfirmedAlert))
-  for (const alert of alertOutcomes) report.alerts[alert] += 1
 
   return report
 }
