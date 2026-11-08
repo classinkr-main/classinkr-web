@@ -7,6 +7,7 @@ export interface ChatbotSelfKnowledgeEntry {
     | "memory_boundary"
     | "source_boundary"
     | "privacy_boundary"
+    | "input_privacy"
     | "identity"
     | "emotional_concern"
     | "small_talk"
@@ -79,6 +80,18 @@ export const CHATBOT_SELF_KNOWLEDGE_ENTRIES: ChatbotSelfKnowledgeEntry[] = [
       "수업 운영 문제를 해결하고 싶어요",
       "담당자 상담으로 이어주세요",
     ],
+  },
+  {
+    // "입력한 내용이 저장되나요? 학원 정보를 넣어도 되나요?" — 저장 여부를 단정하지 않고 처리방침으로 안내한다.
+    key: "input_privacy",
+    match:
+      /(?:입력한|입력하는|적은|쓴)\s*(?:내용|정보|것|거).{0,12}(?:저장|남|보관)|(?:학원|학생|개인)\s*정보.{0,10}(?:입력해도|넣어도|적어도)|입력해도\s*(?:되|돼|괜찮)/,
+    answer: [
+      "저는 AI로 답하는 Classin 상담 가이드예요. 답변은 클래스인 공개 문서(문서센터 안내)를 근거로 합니다.",
+      "입력하신 내용이 저장되는지, 얼마나 보관되고 어디에 쓰이는지는 클래스인 공식 개인정보처리방침을 기준으로 확인해 주세요. 제가 '저장되지 않는다'고 단정할 수는 없어요.",
+      "그래서 판단이 서기 전까지는 학생 이름·연락처 같은 개인정보나 학원 내부 정보는 입력하지 마시고, 일반적인 질문 형태로 물어봐 주세요. 학원 정보를 전달해야 하면 상담 채널에서 담당자에게 직접 전달하시면 됩니다.",
+    ],
+    suggestedQuestions: ["개인정보 처리 기준이 궁금해요", "보안 정책 자료가 있나요?", "담당자 상담으로 이어주세요"],
   },
   {
     key: "source_boundary",
@@ -241,6 +254,7 @@ export function findChatbotSelfKnowledgeEntry(question: string) {
 }
 
 const CHATBOT_CONTEXT_REQUIRED_KEYS = new Set<ChatbotSelfKnowledgeEntry["key"]>([
+  "input_privacy",
   "answer_principles",
   "memory_boundary",
   "source_boundary",
@@ -257,6 +271,6 @@ const ADOPTION_CONTEXT_RE =
   /도입|전환|바꾸면|바꿔도|갈아타|선생님들|강사들|강사진|적응|기존\s*(?:시스템|프로그램|방식|lms|erp)|원래\s*쓰던|lms|erp|이중\s*(?:작업|입력)|두\s*번\s*입력|반발|반대(?!로)/i
 
 const PRODUCT_PROBLEM_RE =
-  /안\s*(?:돼|되|됨|됐|나|들|보|켜|떠|와)|안돼|안되|안됨|못\s*(?:하|해|들|보|봐)|오류|에러|끊|튕|멈|소리|카메라|마이크|녹화|로그인|접속|화면/i
+  /안\s*(?:돼|되|됨|됐|됩|나|들|보|켜|떠|와)|안돼|안되|안됨|못\s*(?:하|해|들|보|봐)|오류|에러|끊|튕|멈|소리|카메라|마이크|녹화|로그인|접속|화면|회색|비활성|다시\s*보기|다시보기/i
 
 const PERSONAL_WORRY_RE = /아이|자녀|우리\s*애|딸|아들|학부모|실수할|잘못\s*(?:할|누를|한)|처음\s*해|찍히|보여지|유출/i

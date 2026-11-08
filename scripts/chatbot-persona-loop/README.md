@@ -38,7 +38,8 @@
 5. **고치기**: 최종 실패 행의 `issue`·`fix_hint`를 모아 고친다. 원칙은 아래와 같다.
    - 답의 사실은 공개 문서(`lib/docs.ts`, `lib/docs-troubleshooting/*.ts`, `lib/cs-figma-guides.ts`, `lib/classin-positioning.ts`)에서만 가져온다. 문서에 없으면 "공개 안내에 없다"고 밝히고 상담으로 넘긴다. 반대로 문서에 있는 것을 없다고 하지 않는다.
    - 좁은 증상·사용법 주제는 `lib/chatbot/symptom-topics-field.ts`에 더한다. 단계는 문서 섹션에서 가져온다.
-   - 정해 둔 문장으로 바로 답할 것(결제·영업·계정 정책)은 `lib/chatbot/service.ts`의 `buildServiceQuickAnswer`에 둔다.
+   - 정해 둔 문장으로 바로 답할 것(결제·영업·계정·보안·개인정보 정책)은 `lib/chatbot/quick-answers-field.ts`에 더한다. 패턴은 좁게 쓰고, 고친 뒤 평가셋 전체 답을 수정 전과 비교해 다른 질문을 가로채지 않는지 본다. 기존 정해 둔 답은 `lib/chatbot/service.ts`의 `buildServiceQuickAnswer`에 있다.
+   - 끝에 붙는 확인 질문(질문 주도)은 `lib/chatbot/follow-up.ts`와 주제의 `followUp`에서 고친다. 질문은 하나만, 식별 정보는 묻지 않는다.
    - 말투·상담 연결은 `lib/chatbot/tone.ts`에서 고친다.
    - 아이디·전화번호·비밀번호·시리얼·카드 번호를 채팅창에 적으라고 하지 않는다. 가격·할인·환불·복구를 약속하지 않는다.
 6. **평가셋에 덧붙이기**: `WORK/batch-N.json`의 문항을 `data/chatbot-persona-eval-set.json`의 `cases`에 붙인다(필드: id, persona, question, intent, must, must_not).

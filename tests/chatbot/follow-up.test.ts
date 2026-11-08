@@ -79,7 +79,7 @@ describe("question-led follow-ups", () => {
   })
 
   it("asks for the device when the steps differ by device and none was named", async () => {
-    const result = await ask("화면 공유가 안 돼요")
+    const result = await ask("선생님 목소리가 안 들려요")
     expect(lastParagraph(result.answer)).toContain(DEVICE)
   })
 
@@ -134,7 +134,7 @@ describe("buildFollowUp", () => {
       { ...base, category: "hardware", question: "전자칠판 구매 상담" },
       { ...base, question: "Zoom 대신 쓰려고요" },
       { ...base, question: "다음 달 개강인데 도입하려고요" },
-      { ...base, topicFollowUp: undefined, category: "troubleshooting", handoffIntent: "support", answer: "PC는 설정에서, 휴대폰은 앱에서 확인해요.", question: "카메라가 안 돼요" },
+      { ...base, topicFollowUp: undefined, category: "troubleshooting", handoffIntent: "support", answer: "1. PC는 설정에서 확인해요.\n2. 휴대폰은 앱에서 확인해요.", question: "카메라가 안 돼요" },
     ]
     for (const input of questions) {
       const followUp = buildFollowUp(input) ?? ""
@@ -186,7 +186,7 @@ describe("buildFollowUp", () => {
         intent: "troubleshooting",
         answerMode: "direct_answer",
         question: "화면 공유가 안 돼요",
-        answer: "PC는 설정에서, 휴대폰은 앱에서 확인해요.",
+        answer: "1. PC는 설정에서 확인해요.\n2. 휴대폰은 앱에서 확인해요.",
       },
     ]
     for (const input of inputs) {
@@ -195,6 +195,34 @@ describe("buildFollowUp", () => {
       const answered = appendFollowUp(input.answer, first)
       expect(buildFollowUp({ ...input, answer: answered }), input.question).toBeNull()
     }
+  })
+
+  it("does not ask for the device when one line already covers every device", () => {
+    const input: FollowUpInput = {
+      ...base,
+      category: "troubleshooting",
+      handoffIntent: "support",
+      intent: "troubleshooting",
+      answerMode: "direct_answer",
+      question: "로그인은 되는데 수업이 안 보여요",
+      answer: "1. 프로필(PC는 왼쪽 아래, 휴대폰 앱은 왼쪽 위)을 눌러 아이디를 봅니다.",
+    }
+    expect(buildFollowUp(input)).toBeNull()
+  })
+
+  it("states a reading and still asks the one missing detail", () => {
+    const followUp = buildFollowUp({
+      ...base,
+      category: "hardware",
+      handoffIntent: "support",
+      intent: "troubleshooting",
+      answerMode: "direct_answer",
+      question: "핸드폰 띄우는 게 안 돼요",
+      answer: "미러링은 같은 와이파이에서 열어요.",
+      topicFollowUp: "버튼이 안 보이는 곳이 칠판인지 휴대폰인지 알려 주세요.",
+    })
+    expect(followUp).toContain("무선 미러링으로 이해하고")
+    expect(followUp).toContain("칠판인지 휴대폰인지")
   })
 
   it("appends once even when called twice", () => {

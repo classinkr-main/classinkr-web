@@ -111,7 +111,7 @@ describe("persona eval set", () => {
   it("answers both parts of explicitly two-part questions", () => {
     const twoPart = ["b5-P01-1", "b5-P03-1", "b5-P08-1"]
     for (const id of twoPart) {
-      expect(answers.get(id)?.answer, id).toContain("함께 물어보신 내용")
+      expect(answers.get(id)?.answer, id).toMatch(/함께 물어보신 내용|두 가지/)
     }
   })
 })

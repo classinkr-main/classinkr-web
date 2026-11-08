@@ -27,19 +27,23 @@ export interface FollowUpInput {
 }
 
 // 답을 어떻게 이해했는지 밝혀 오해를 막는다. 원 질문에 이 말이 있을 때만.
-const INTERPRETATIONS: { pattern: RegExp; when?: (input: FollowUpInput) => boolean; line: string }[] = [
+// asks: 그 문장 자체가 "아니면 알려 주세요"라고 청한다(그러면 다른 질문을 더 붙이지 않는다).
+const INTERPRETATIONS: { pattern: RegExp; when?: (input: FollowUpInput) => boolean; line: string; asks?: boolean }[] = [
   {
     pattern: /수업\s*녹음|녹음한\s*(?:걸|것|거)|으로\s*녹음/,
     line: "'녹음'은 수업 녹화로 이해하고 답했어요. 소리만 따로 녹음하는 걸 말씀하신 거라면 알려 주세요.",
+    asks: true,
   },
   {
     pattern: /(?:^|\s)다보기/,
     line: "'다보기'는 다시보기로 이해했어요. 다른 뜻이면 알려 주세요.",
+    asks: true,
   },
   {
     pattern: /(?:그|그거)\s*서류|서류\s*그거/,
     when: (input) => /verification|institution/.test(input.topicId ?? ""),
     line: "'그 서류'는 기관 인증에 내는 서류(사업자등록증 등)로 이해했어요. 다른 서류라면 알려 주세요.",
+    asks: true,
   },
   {
     pattern: /(?:수업|그)\s*프로그램/,
@@ -55,7 +59,9 @@ const INTERPRETATIONS: { pattern: RegExp; when?: (input: FollowUpInput) => boole
 const DEVICE_RE =
   /\bpc\b|컴퓨터|노트북|맥북|\b맥\b|윈도우|휴대폰|핸드폰|(?:^|\s)폰|아이폰|갤럭시|안드로이드|태블릿|아이패드|패드|전자\s*칠판|칠판|보드|티비|\btv\b|모바일/i
 // 답 안에서 기기별로 순서가 갈린다는 표시.
-const DEVICE_SPLIT_ANSWER_RE = /PC는|PC에서는|휴대폰·태블릿은|휴대폰은|모바일은|안드로이드는|아이폰·아이패드는|전자칠판은/
+// 단계나 줄이 기기 이름으로 시작할 때만(괄호 속 "PC는 왼쪽 아래, 휴대폰은 왼쪽 위"처럼 한 줄에 다 담긴 건 제외).
+const DEVICE_SPLIT_ANSWER_RE =
+  /(?:^|\n)\s*(?:\d+\.\s*|-\s*)?(?:PC는|PC에서는|휴대폰·태블릿은|휴대폰은|모바일은|안드로이드는|아이폰·아이패드는|전자칠판은)/
 
 const SALES_INTENTS = new Set(["sales_consulting", "tutor_pricing_recommend", "emotional_consulting", "onboarding"])
 const SALES_CATEGORIES = new Set(["consultation", "billing", "onboarding", "hardware"])
@@ -154,13 +160,17 @@ export function buildFollowUp(input: FollowUpInput): string | null {
   if (input.topicFollowUp && input.answer.includes(input.topicFollowUp)) return null
   if (ALREADY_ASKS_RE.test(lastParagraphs(input.answer, 2))) return null
 
-  // 1) 오해 막기
-  for (const interpretation of INTERPRETATIONS) {
-    if (!interpretation.pattern.test(input.question)) continue
-    if (interpretation.when && !interpretation.when(input)) continue
-    return interpretation.line
-  }
+  // 1) 오해 막기: 어떻게 이해했는지 밝힌다. 그 문장이 이미 되묻는 꼴이면 여기서 끝낸다.
+  const interpretation = INTERPRETATIONS.find(
+    (candidate) => candidate.pattern.test(input.question) && (!candidate.when || candidate.when(input))
+  )
+  if (interpretation?.asks) return interpretation.line
+  const question = pickQuestion(input)
+  if (interpretation) return question ? `${interpretation.line} ${question}` : interpretation.line
+  return question
+}
 
+function pickQuestion(input: FollowUpInput): string | null {
   // 2) 정보가 부족할 때
   if (input.topicFollowUp) return input.topicFollowUp
   const troubleshooting = input.category === "troubleshooting" || input.handoffIntent === "support"

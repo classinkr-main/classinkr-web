@@ -70,7 +70,8 @@ export const PRIOR_BOT_LINE =
   "다른 창이나 이전 대화에서 드린 답은 제가 볼 수 없어서, 그 내용이 맞는지 여기서 확인해 드릴 수 없어요. 공식 문서와 다르다면 공식 문서와 기술지원 안내를 기준으로 봐 주세요."
 export const REFUND_PROMISE_LINE = "환불이나 보상은 제가 채팅에서 약속드릴 수 없어요. 상담원이 이번 상황을 확인해 안내해 드립니다."
 
-export const PRIOR_INQUIRY_LINE = "지난 문의 내용은 이 채팅에서 볼 수 없어요. 상담원이 이어받아 확인해 드릴게요."
+export const PRIOR_INQUIRY_LINE =
+  "지난 문의나 통화 내용은 이 채팅에서 볼 수 없어요. 그때 내용을 이어서 확인하려면 아래 상담 연결 버튼을 눌러 주세요."
 
 function priorContextLine(tone: ConversationTone) {
   if (tone.priorContext === "bot") return PRIOR_BOT_LINE
@@ -117,7 +118,8 @@ export function applyToneToAnswer(
   const opener = toneOpener(tone, /\[(?:실시간 상담 연결|도입 상담 남기기)\]/.test(answer) && !/^\d\.\s/m.test(answer))
   const alreadyToned = EMPATHY_START_RE.test(next) || next.startsWith("In short:") || next.startsWith("I'll answer")
   const prior = priorContextLine(tone)
-  if (prior && !next.includes(prior)) {
+  // 답이 이미 "볼 수 없다"고 밝혔다면 같은 말을 한 번 더 붙이지 않는다.
+  if (prior && !next.includes(prior) && !/볼\s*수\s*없/.test(next)) {
     // 지난 대화를 아는 척하지 않는다. 볼 수 없다는 사실을 먼저 밝힌다.
     next = alreadyToned && next.includes(HANDOFF_NOW_LINE)
       ? next.replace(HANDOFF_NOW_LINE, `${HANDOFF_NOW_LINE} ${prior}`)

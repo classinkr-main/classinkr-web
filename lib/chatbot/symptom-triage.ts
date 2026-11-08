@@ -62,7 +62,9 @@ export interface SymptomTopic {
   /** Figma 가이드의 알려진 의도(사용법)보다 이 증상 답이 더 구체적일 때 true. */
   overridesKnownIntent?: boolean
   /** 답을 더 좁히려고 끝에 붙이는 확인 질문(질문 주도). 질문에 이미 그 정보가 있으면(unless) 묻지 않는다. */
-  followUp?: { text: string; unless?: RegExp }
+  followUp?: { text: string; when?: RegExp; unless?: RegExp }
+  /** 두 가지를 함께 물은 질문에서 이 주제가 둘째일 때 붙일 한두 문장(첫 문단·첫 단계 대신). */
+  secondaryLine?: string
 }
 
 export interface SymptomTriageResult {
@@ -548,6 +550,10 @@ const BASE_SYMPTOM_TOPICS: SymptomTopic[] = [
     intro: "녹화가 안 됐다면 아래 순서로 확인해 주세요.",
     branches: [
       {
+        text: "관리자라면 관리자 대시보드 수업 목록의 [관리] > [수업 녹화 데이터]에서 그 수업에 남은 녹화(여러 클립으로 나뉜 것 포함)가 있는지 먼저 보세요.",
+        when: /샘\s*(?:한\s*명|들)|강사(?:들)?|원장|관리자|우리\s*학원/,
+      },
+      {
         text: "이미 끝난 수업이라면 녹화본을 처리하는 데 시간이 걸릴 수 있으니 잠시 뒤 관리자 대시보드의 [수업 녹화 데이터]를 다시 보세요. 그래도 없으면 담당자가 그 수업 기록을 확인해 드려요.",
         when: /어제|지난|통째|날아|사라|끝나고|끝난/,
       },
@@ -586,6 +592,11 @@ const BASE_SYMPTOM_TOPICS: SymptomTopic[] = [
     doc: { category: "hardware", slug: "board-basic-operation" },
     steps: [{ heading: "무선 미러링으로 기기 화면 띄우기", take: 4 }],
     intro: "미러링이 안 되면 보드와 기기가 같은 Wi-Fi에 연결돼 있는지부터 확인해 주세요.",
+    followUp: {
+      text: "누르는 버튼이 안 보이는 곳이 칠판 화면인지 휴대폰인지 알려 주시면, 그쪽에서 미러링을 여는 위치를 짚어 드릴게요.",
+      when: /누르는\s*(?:게|거|데)|버튼|아예\s*없|메뉴.{0,6}(?:없|안\s*보)/,
+      unless: /칠판에서|보드에서|티비에서|휴대폰에서|폰에서/,
+    },
     branches: [
       {
         text: "띄웠다 사라졌다를 반복하면 무선 신호가 약할 가능성이 커요. 휴대폰을 보드와 공유기 가까이 두고 다시 연결해 보세요. 수업 중 끊기면 안 되는 자료는 HDMI 선으로 연결해 띄우는 게 가장 안정적이에요.",
@@ -791,6 +802,8 @@ const BASE_SYMPTOM_TOPICS: SymptomTopic[] = [
     ],
     en: "Check the speaker selected inside ClassIn (gear icon or the pre-class device test) and your device volume, and reconnect Bluetooth earphones.",
     followUp: { text: "선생님 소리가 안 들리는 건지, 내 목소리가 상대에게 안 가는 건지 알려 주시면 그쪽 순서로 좁혀 드릴게요.", unless: /선생님\s*(?:소리|목소리|말)|내\s*목소리|제\s*목소리|학생\s*(?:소리|목소리)/ },
+    secondaryLine:
+      "소리는 먼저 기기 볼륨과 음소거를 보고, 클래스인을 완전히 껐다가 교실에 다시 들어가 보세요. PC라면 교실 오른쪽 위 마이크 아이콘 옆 삼각형의 [스피커 선택]에서 소리 낼 장치를 고릅니다.",
     suggestedQuestions: ["마이크가 안 돼요", "학생 목소리가 안 들려요", "소리가 울리고 하울링이 나요"],
     menuLine: "카메라·마이크·소리가 안 될 때: 기기 설정에서 클래스인의 카메라·마이크 권한을 허용했는지, 교실에서 쓸 장치를 골랐는지 봅니다.",
   },
@@ -951,6 +964,10 @@ const BASE_SYMPTOM_TOPICS: SymptomTopic[] = [
       "열어야 할 주소·포트 목록은 공개 문서에 없어서, 기술지원이 학원 네트워크 환경을 보고 안내드려요. 아래 [실시간 상담 연결]로 네트워크 구성(프록시·방화벽 사용 여부)과 화면에 뜬 오류 문구를 남겨 주세요.",
     ],
     handoff: true,
+    followUp: {
+      text: "어떤 증상인지(접속 자체가 안 됨, 들어간 뒤 끊김, 오류 문구가 뜸) 알려 주시면 그 경우로 좁혀 드릴게요.",
+      unless: /접속\s*(?:이\s*)?안|끊|튕|오류|에러|error/,
+    },
     en: "If it works on a phone hotspot but not on your academy network, the firewall/proxy is likely blocking ClassIn; our tech support will tell you what to allow.",
     suggestedQuestions: ["수업 중에 계속 튕겨요", "로그인이 안 돼요", "앱이 자꾸 멈춰요"],
   },
@@ -1116,7 +1133,7 @@ const BASE_SYMPTOM_TOPICS: SymptomTopic[] = [
     intro: "그만둔 강사는 계정을 지우는 대신 맡던 코스를 다른 강사에게 넘기고 비활성화해요. 이 순서를 지키면 반 운영이 끊기지 않습니다.",
     branches: [
       {
-        text: "코스를 넘기는 경로는 관리자 대시보드 [기관 관리] > [코스 관리] > 코스 이름 > [구성원] > [교사로 설정]이에요. 그 반의 녹화와 숙제가 그대로 남는지는 공개 안내에 명확히 나와 있지 않아 단정하지 않을게요. 걱정되시면 정리 전에 꼭 남길 녹화본을 관리자 대시보드에서 내려받고, [스토리지]에서 보호 잠금을 걸어 두세요.",
+        text: "공개 안내 기준으로 강사를 바꿔도 이미 끝난 수업의 기록은 그대로 남고, 녹화본과 학습 활동 파일은 학원 스토리지에 있어서 자동 삭제를 켜 두지 않았다면 저절로 지워지지 않아요. 그래도 꼭 남길 녹화는 정리 전에 관리자 대시보드 [수업 녹화 데이터]에서 내려받고, [스토리지] > [수업 리소스]에서 보호 잠금을 걸어 두면 더 안심이에요. 코스를 넘기는 경로는 [기관 관리] > [코스 관리] > 코스 이름 > [구성원] > [교사로 설정]이에요.",
         when: /날아|지워|없어|남아|사라|보존|백업/,
       },
     ],
@@ -1569,6 +1586,8 @@ const BASE_SYMPTOM_TOPICS: SymptomTopic[] = [
     ],
     en: "Log in with the installed ClassIn app, not the website. For a phone ID choose +82 and enter your number starting with 10 (drop the first 0); if you signed up with email, switch to email login.",
     followUp: { text: "화면에 어떤 문구가 뜨는지(예: '잘못된 계정', 인증코드가 안 옴) 알려 주시면 그 경우에 맞춰 바로 좁혀 드릴게요.", unless: /문구|라고\s*(?:떠|나와|뜨)|인증\s*(?:코드|번호)|비밀번호/ },
+    secondaryLine:
+      "로그인은 공식 홈페이지가 아니라 설치한 앱에서 하고, 휴대폰 번호라면 국가 번호 +82를 골라 010의 맨 앞 0을 빼고 넣어요. 그래도 안 되면 로그인 화면의 [비밀번호 변경](휴대폰은 [비밀번호를 잊으셨나요?])에서 인증코드를 받아 비밀번호를 새로 정하면 돼요.",
     suggestedQuestions: ["인증번호가 안 와요", "비밀번호를 잊어버렸어요", "계정이 없다고 떠요"],
     menuLine: "로그인이 안 될 때: 홈페이지가 아니라 설치한 앱에서 로그인하고, 휴대폰 번호는 +82를 고른 뒤 10부터 입력합니다.",
   },
@@ -1622,7 +1641,7 @@ const NON_SYMPTOM_NEGATION_RE =
   /(?:면|으면)\s*안\s*(?:돼|되)\S*|안\s*(?:되|돼)\s*(?:게|도록)|(?:지|보이지|들리지)\s*않\s*(?:게|도록)|\S*(?:지|진)\s*않(?:나요|을까요|을까|겠죠|겠지요|나|죠)/g
 // 공손한 요청 어미("알 수 있을까요", "여쭤봐도 될까요")는 기능·가능 여부 질문이 아니다.
 const POLITE_REQUEST_RE =
-  /(?:여쭤|물어)\s*봐도\s*될까요|알려\s*주실\s*수\s*있(?:나요|을까요|으실까요)|알\s*수\s*있(?:을까요|나요|을지)|확인할\s*수\s*있(?:을까요|나요)|도와\s*주실\s*수\s*있(?:나요|을까요)/g
+  /(?:여쭤|물어)\s*봐도\s*될까요|알려\s*주실\s*수\s*있(?:나요|을까요|으실까요)|알\s*수\s*있(?:을까요|나요|을지)|확인할\s*수\s*있(?:을까요|나요)|(?:확인|점검|알아\s*볼)할\s*방법(?:이|은)?\s*있(?:을까요|나요|는지)|도와\s*주실\s*수\s*있(?:나요|을까요)/g
 
 export function findSymptomTopic(question: string): SymptomTopic | null {
   const text = normalizeTriageText(question)
@@ -1800,7 +1819,11 @@ export function buildSymptomTopicAnswer(
     topicId: topic.id,
     howto: topic.howto === true,
     followUp:
-      topic.followUp && !(topic.followUp.unless && topic.followUp.unless.test(text)) ? topic.followUp.text : undefined,
+      topic.followUp &&
+      (!topic.followUp.when || topic.followUp.when.test(text)) &&
+      !(topic.followUp.unless && topic.followUp.unless.test(text))
+        ? topic.followUp.text
+        : undefined,
     overridesKnownIntent: topic.overridesKnownIntent === true,
     englishSummary: topic.en,
     needsHandoff: topic.handoff === true,
@@ -1909,7 +1932,9 @@ export function resolveSymptomTriage(
     const secondaryFollowUp = secondary.suggestedQuestions[0]
     const secondaryAnswer = buildSymptomTopicAnswer(secondary, { compact: true, question })
     const secondaryFirstStep = secondaryAnswer?.answer.match(/^1\. (.+)$/m)?.[1]
-    const secondaryText = [
+    const secondaryText = secondary.secondaryLine
+      ? `함께 물어보신 내용도 짧게 답드리면, ${secondary.secondaryLine}`
+      : [
       `함께 물어보신 내용도 짧게 답드리면, ${secondary.intro}`,
       secondaryFirstStep && !secondary.intro.includes(secondaryFirstStep.slice(0, 20)) ? `- ${secondaryFirstStep}` : null,
     ]

@@ -41,6 +41,7 @@ import {
 } from "@/lib/cs-figma-guides"
 import { getCsFigmaEnrichment } from "@/lib/cs-figma-enrichments"
 import { appendFollowUp, buildFollowUp } from "@/lib/chatbot/follow-up"
+import { findFieldQuickAnswer } from "@/lib/chatbot/quick-answers-field"
 import { resolveSymptomTriage, type SymptomTriageResult } from "@/lib/chatbot/symptom-triage"
 import {
   ENGLISH_SUPPORT_ANSWER,
@@ -793,12 +794,12 @@ function getReceiptAnswer(question?: NormalizedQuestion) {
   // 학부모의 수업료 영수증은 학원이 발급한다. 클래스인 결제 증빙과 섞지 않는다.
   if (/수업료|교육비|학원비|원비/.test(text) && /학부모|아이|자녀|연말정산|교육비\s*공제/.test(text)) {
     return [
-      "학원 수업료를 어떻게 내는지와 교육비 영수증(교육비 납입 증명)은 학원이 정하고 발급해요. 수업료를 클래스인 앱에서 내는 기능은 공개 안내에 없어서, 앱으로 결제하라는 안내가 어떤 화면을 말하는지 학원에 먼저 확인해 주세요.",
+      "학원 수업료를 어떻게 내는지와 교육비 영수증(교육비 납입 증명)은 학원이 정하고 발급해요. 공개 안내 기준으로 학원비 결제·정산은 클래스인의 기본 기능이 아니라서, 앱으로 결제하라는 안내가 어떤 앱과 화면을 말하는지 학원에 먼저 확인해 주세요.",
       "연말정산용 교육비 공제 서류도 학원에 요청하시면 돼요.",
     ].join("\n\n")
   }
   return [
-    "세금계산서와 영수증은 결제한 계정의 결제 내역을 보고 담당자가 발급해 드려요. 상담 채널(홈페이지 하단 채팅)이나 담당 매니저에게 필요한 증빙(세금계산서·영수증)과 기간을 알려 주세요. 카드 외 결제 방법(계좌이체 등)도 같은 곳에서 함께 확인해 드립니다.",
+    "학원(기관) 계정의 결제 영수증은 관리자 콘솔 [결제] > [영수증 관리]에서 확인할 수 있어요. 세금계산서나 추가 증빙은 결제한 계정의 결제 내역을 보고 담당자가 발급해 드려요. 상담 채널(홈페이지 하단 채팅)이나 담당 매니저에게 필요한 증빙(세금계산서·영수증)과 기간을 알려 주세요. 카드 외 결제 방법(계좌이체 등)도 같은 곳에서 함께 확인해 드립니다.",
     /경비|종합소득세|세무|공제|소득세|부가세\s*신고/.test(text)
       ? "카드 영수증만으로 경비 처리가 되는지 같은 세무 판단은 제가 단정할 수 없어요. 신고 전에 세무사나 국세청 안내로 확인해 주세요."
       : "아직 결제 전이라면 결제하기 전에 상담 채널에서 발급 방법을 먼저 정해 두시는 게 좋아요. 결제 뒤에 찾다가 학원 회계와 어긋나는 경우가 많습니다.",
@@ -3672,7 +3673,12 @@ function buildServiceQuickAnswer(question: NormalizedQuestion): QuickAnswer | nu
       ["데모를 한번 보고 싶어요", "쇼룸 방문은 어떻게 예약해요?", "도입 상담을 받아보고 싶습니다"]
     )
   }
-  const direct = (answer: string[], category: string, suggestedQuestions: string[]): QuickAnswer => {
+  const direct = (
+    answer: string[],
+    category: string,
+    suggestedQuestions: string[],
+    englishSummary?: string
+  ): QuickAnswer => {
     const response = {
       answer: answer.join("\n\n"),
       answerMode: "direct_answer" as const,
@@ -3683,7 +3689,15 @@ function buildServiceQuickAnswer(question: NormalizedQuestion): QuickAnswer | nu
       unresolved: false,
     }
     deterministicFinalResponses.add(response)
-    return { response, category, intent: "docs_lookup", handoffIntent: "support" }
+    return { response, category, intent: "docs_lookup", handoffIntent: "support", englishSummary }
+  }
+
+  // 현장 질문에서 모은 좁은 정해 둔 답(결제 사칭 문자, 해지 후 결제, 보안·개인정보 점검 등)을 먼저 본다.
+  const field = findFieldQuickAnswer(text)
+  if (field) {
+    return field.handoff
+      ? make(field.answer, field.handoff, field.category, field.suggestedQuestions, field.en)
+      : direct(field.answer, field.category, field.suggestedQuestions, field.en)
   }
 
   if (EXAM_ANSWER_RE.test(text)) {
@@ -4364,6 +4378,8 @@ function applyConversationTone(core: ChatbotCore) {
     core.response.needsHandoff = true
     core.handoffIntent = "support"
   }
+  // 지난 문의·통화를 이어 가려는 사람에게는 상담 연결 버튼을 띄운다(답에서 그 버튼을 가리킨다).
+  if (tone.priorContext === "inquiry") core.response.needsHandoff = true
   // 질문 주도: 정보가 부족하거나 오해 여지가 있거나 영업 상담을 이어 갈 때 끝에 질문 하나를 붙인다.
   core.response.answer = appendFollowUp(
     core.response.answer,
