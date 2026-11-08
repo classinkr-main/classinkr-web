@@ -28,7 +28,7 @@ Compass 에 새 버튼을 만들지 않았다. Compass 저장소는 이번 세�
 
 ## 3. 켜는 순서 (외부 발송 안전 규칙 — operational-failure-handling-guidelines.md §3)
 
-1. **마이그레이션** `20261106_showroom_booking_compass_confirm.sql` 을 서울 프로젝트에 적용한다([db-migration-runbook.md](./db-migration-runbook.md) 2026-11-06 절). 미적용이면 크론은 매번 건너뛰고(failed) 접수 큐는 확정 칸 없이 읽는다.
+1. **마이그레이션** `20261106_showroom_booking_compass_confirm.sql` 을 서울 프로젝트에 적용한다([db-migration-runbook.md](./db-migration-runbook.md) 2026-11-06 절). **2026-11-08 적용 완료.** 미적용이면 크론은 매번 건너뛰고(failed) 접수 큐는 확정 칸 없이 읽는다.
 2. 코드 배포. 스위치 `SHOWROOM_CONFIRM_ENABLED` 는 **비워 둔 채**(기본 꺼짐 — 판정만 하고 쓰지도 보내지도 않는다).
 3. **dry-run 확인**: `GET /api/cron/lead-contact-sync?dryRun=true`(Bearer `CRON_SECRET`) 응답의 `showroomConfirm` — `scanned`·`linked`·`planned` 를 본다. `planned` 가 실제로 Compass 에 쇼룸 데모가 잡힌 신청 수와 맞는지. 켜는 순간 `planned` 만큼 확정·확정 문자·확정 알림이 나간다(10 넘으면 `over_cap` 으로 0건).
 4. Vercel Production 에 `SHOWROOM_CONFIRM_ENABLED=1`. (선택) 알림톡 승인 뒤 `SOLAPI_TEMPLATE_SHOWROOM_CONFIRMED` — 변수 `#{일시}`·`#{담당}`·`#{장소}`. 비어 있으면 문자로 나간다. 이때부터 들어오는 신청의 위컴 알림이 "Compass 컨펌 대기" 안내로 바뀐다(§4).
