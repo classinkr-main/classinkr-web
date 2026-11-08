@@ -848,9 +848,15 @@ function isCourseCreationQuestion(question: NormalizedQuestion) {
   return /코스|클래스/.test(text) && /생성|만들|개설|추가/.test(text)
 }
 
+// "숙제를 어떻게 내요?"처럼 강사가 과제를 만드는 질문에만 강사용 안내를 붙인다.
+// 학생·학부모의 늦은 제출·다시 내기·제출 오류("마감 지났는데 내도 돼요?")는 학생용 문서로 보낸다.
+const STUDENT_SUBMISSION_RE =
+  /늦게|마감|못\s*(?:냈|내)|다시\s*(?:내|제출|해서)|재제출|제출이?\s*안|안\s*(?:올라|내져)|내도\s*(?:돼|되)|받아\s*줌|날아|사라|우리\s*아이|아이가|애가/
+
 function isAssignmentQuestion(question: NormalizedQuestion) {
   const text = question.redacted.toLowerCase()
-  return /과제|숙제|시험/.test(text) && /내|제출|부여|등록|만들|방법/.test(text)
+  if (STUDENT_SUBMISSION_RE.test(text)) return false
+  return /과제|숙제|시험/.test(text) && /내는|내려면|낼\s*수|어떻게\s*내|제출|부여|등록|만들|방법|출제/.test(text)
 }
 
 const AI_DATA_POLICY_RE = /\bai\b.{0,30}(?:학습|훈련|데이터|외부).{0,16}(?:쓰|사용|활용|보내|전송|들어)|(?:음성|영상).{0,20}(?:ai|인공지능).{0,16}(?:학습|훈련)/i
