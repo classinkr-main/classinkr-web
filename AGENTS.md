@@ -78,6 +78,9 @@
   정규화한다(utm·클릭ID·네이버 `n_*` 묶음). 새 미러링 경로도 이 함수를 쓰고, 폼은 `collectLeadAttribution()`을
   평평하게 한 번만 보낸다.
 - 접수 확인 문자·알림톡(`lib/messaging/customer-receipt.ts`)은 `SOLAPI_API`·`SOLAPI_SECRET`이 있으면 **고객에게 실발송**된다.
+- 쇼룸 방문은 신청형이다: 신청(`requested`) → Compass 에서 「쇼룸 데모」 회차로 컨펌·담당 지정 → 5분 크론이 확정하고 **확정 문자**를 한 번 보낸다
+  (`lib/server/showroom-compass-confirm.ts`, 스위치 `SHOWROOM_CONFIRM_ENABLED` — 비어 있으면 판정만). 흐름·켜는 순서는
+  [showroom-compass-confirm-2026-11-06.md](docs/active/showroom-compass-confirm-2026-11-06.md).
 - 홈페이지 폼 리드(`WEBSITE_FORM_LEAD_SOURCES` = 데모·문의·쇼룸 예약·도입 신청, 행사 신청은 `contact_page` + `eventSlug`)와 자료 신청(`newsletter` + `leadMagnet`)은 저장 직후 Compass `POST /api/webhook/home-lead` 로도 민다
   (`lib/server/compass-lead-push.ts` — `COMPASS_BRIDGE_URL` + `COMPASS_LEAD_WEBHOOK_TOKEN` 둘 다 있고 HTTPS 일 때만, 아니면 조용히 건너뛴다). 재문의 병합은
   `kind: "reinflow"`, `event_id` 는 전환 이벤트 id 와 같은 값(Compass 멱등 표식). 실패는 응답 `warnings`·「리드 전달 경고」로 — 저장을 막지 않는다. 놓친 건은 매시 디스패처의 Compass 전달 대조(`lib/server/compass-lead-reconcile.ts` — 최근 72시간·링크 없는 리드만, 같은 `event_id`)가 다시 민다. 그냥 뉴스레터 구독·Meta 리드폼은

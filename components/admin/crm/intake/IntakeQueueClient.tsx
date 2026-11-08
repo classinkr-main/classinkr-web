@@ -42,7 +42,7 @@ const TONE_CLASS: Record<Tone, string> = {
 }
 
 const SHOWROOM_STATUS_META: Record<ShowroomBookingStatus, { label: string; tone: Tone }> = {
-  requested: { label: "접수", tone: "pending" },
+  requested: { label: "신청", tone: "pending" },
   confirmed: { label: "확정", tone: "active" },
   completed: { label: "방문 완료", tone: "done" },
   no_show: { label: "노쇼", tone: "dropped" },
@@ -322,11 +322,14 @@ export default function IntakeQueueClient() {
       setSavingId(id)
       setSaveError(null)
       try {
-        const updated = await adminFetchJson<ShowroomBookingRecord>(
+        const updated = await adminFetchJson<ShowroomBookingRecord & { confirmationMessage?: string }>(
           `/api/admin/showroom-bookings/${id}`,
           { method: "PATCH", body: JSON.stringify({ status }) }
         )
         setBookings((current) => current.map((row) => (row.id === id ? updated : row)))
+        if (updated.confirmationMessage === "failed") {
+          setSaveError("확정으로 바꿨지만 확정 문자를 보내지 못했습니다. 문자 발송 기록을 확인해 주세요.")
+        }
       } catch (error) {
         setSaveError(error instanceof Error ? error.message : "상태를 바꾸지 못했습니다.")
       } finally {
@@ -376,8 +379,13 @@ export default function IntakeQueueClient() {
       <header>
         <h1 className="text-[17px] font-semibold text-[#111110]">접수</h1>
         <p className="mt-1 max-w-[70ch] text-[13px] leading-relaxed text-[#615D59]">
-          공개 화면에서 들어온 쇼룸 방문 예약과 도입 신청을 확정하는 큐입니다. 상태를 바꾸면
+          공개 화면에서 들어온 쇼룸 방문 신청과 도입 신청을 확정하는 큐입니다. 상태를 바꾸면
           고객에게 약속한 &ldquo;담당자 확인 후 연락&rdquo;이 실제로 기록됩니다.
+        </p>
+        <p className="mt-1 max-w-[70ch] text-[13px] leading-relaxed text-[#615D59]">
+          쇼룸 신청은 Compass 리드에서 데모 예약을 <b className="font-semibold text-[#111110]">「쇼룸 데모」</b>로
+          잡고 담당을 고르면 5분 안에 확정으로 바뀌고 고객에게 확정 문자가 나갑니다. 여기서 확정으로 바꿔도
+          같은 문자가 한 번 나갑니다(지난 방문은 보내지 않음).
         </p>
       </header>
 
@@ -388,7 +396,7 @@ export default function IntakeQueueClient() {
       ) : null}
 
       <SectionShell
-        title="쇼룸 방문 예약"
+        title="쇼룸 방문 신청"
         icon={<CalendarClock className="h-4 w-4" aria-hidden />}
         pendingCount={bookingPendingCount}
         totalCount={bookings.length}
@@ -398,7 +406,7 @@ export default function IntakeQueueClient() {
         error={bookingsError}
         onRetry={() => void loadBookings()}
         emptyLabel={
-          bookingsPendingOnly ? "확정을 기다리는 예약이 없습니다." : "접수된 예약이 없습니다."
+          bookingsPendingOnly ? "확정을 기다리는 신청이 없습니다." : "접수된 신청이 없습니다."
         }
         rowCount={visibleBookings.length}
       >
@@ -418,6 +426,29 @@ export default function IntakeQueueClient() {
                     {formatShortDate(row.visitDate)} {row.visitTime}
                   </dd>
                 </div>
+                {row.requestedVisitDate ? (
+                  <div className="flex items-center gap-1">
+                    <dt className="sr-only">처음 신청 일시</dt>
+                    <dd className="text-[#A39E98]">
+                      신청 {formatShortDate(row.requestedVisitDate)} {row.requestedVisitTime ?? ""}
+                    </dd>
+                  </div>
+                ) : null}
+                {row.assignedTo ? (
+                  <div className="flex items-center gap-1">
+                    <dt className="sr-only">담당</dt>
+                    <dd>
+                      담당 <span className="font-medium text-[#111110]">{row.assignedTo}</span>
+                      {row.compassDemoId ? " · Compass" : ""}
+                    </dd>
+                  </div>
+                ) : null}
+                {row.confirmationSentAt ? (
+                  <div className="flex items-center gap-1">
+                    <dt className="sr-only">확정 문자</dt>
+                    <dd>확정 문자 {formatReceivedAt(row.confirmationSentAt)}</dd>
+                  </div>
+                ) : null}
                 <div className="flex items-center gap-1">
                   <dt className="sr-only">방문 인원</dt>
                   <dd>{row.visitorCount}명</dd>

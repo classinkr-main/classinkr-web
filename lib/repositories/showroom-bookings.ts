@@ -17,10 +17,22 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 
 const TABLE = "showroom_bookings"
 
-const COLUMNS =
+const BASE_COLUMNS =
   "id, visit_date, visit_time, duration_minutes, org, name, phone, email, role, " +
   "visitor_count, academy_size, interests, memo, status, assigned_to, confirmed_at, " +
   "google_calendar_event_id, lead_id, source_page, created_at, updated_at"
+
+/**
+ * Compass 확정 칸(20261106_showroom_booking_compass_confirm.sql). 미적용 DB 에서는 42703 이 나므로 읽기는 BASE 로 한 번 더
+ * 시도하고 이 칸들을 null 로 채운다 — 마이그레이션을 깜빡해도 어드민 접수 큐가 죽지 않는다(확정 크론만 건너뛴다).
+ */
+const CONFIRM_COLUMNS = "requested_visit_date, requested_visit_time, compass_demo_id, confirmation_sent_at"
+const COLUMNS = `${BASE_COLUMNS}, ${CONFIRM_COLUMNS}`
+
+function isMissingColumnError(error: { code?: string; message?: string } | null | undefined): boolean {
+  if (!error) return false
+  return error.code === "42703" || error.code === "PGRST204" || /column .* does not exist/i.test(error.message ?? "")
+}
 
 /**
  * 허용 상태 — 마이그레이션의 CHECK 제약과 같은 목록이어야 한다.
@@ -75,6 +87,10 @@ interface ShowroomBookingRow {
   source_page: string | null
   created_at: string
   updated_at: string
+  requested_visit_date?: string | null
+  requested_visit_time?: string | null
+  compass_demo_id?: number | null
+  confirmation_sent_at?: string | null
 }
 
 /** 도메인 표기(camelCase). 화면·API 는 snake_case 행을 직접 보지 않는다. */
@@ -102,6 +118,13 @@ export interface ShowroomBookingRecord {
   sourcePage: string | null
   createdAt: string
   updatedAt: string
+  /** 고객이 처음 신청한 일시 — 확정 시각이 달라 visit_* 를 옮겼을 때만 값이 있다 */
+  requestedVisitDate: string | null
+  requestedVisitTime: string | null
+  /** 이 예약을 확정한 Compass 「쇼룸 데모」 회차 id — 어드민에서 직접 확정했으면 null */
+  compassDemoId: number | null
+  /** 확정 문자 발송(시도) 시각 — null 이면 아직 안 보냈다 */
+  confirmationSentAt: string | null
 }
 
 function toRecord(row: ShowroomBookingRow): ShowroomBookingRecord {
@@ -127,6 +150,10 @@ function toRecord(row: ShowroomBookingRow): ShowroomBookingRecord {
     sourcePage: row.source_page,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    requestedVisitDate: row.requested_visit_date ?? null,
+    requestedVisitTime: row.requested_visit_time ?? null,
+    compassDemoId: row.compass_demo_id ?? null,
+    confirmationSentAt: row.confirmation_sent_at ?? null,
   }
 }
 
@@ -147,24 +174,30 @@ export async function listShowroomBookings(
 ): Promise<ShowroomBookingRecord[]> {
   const supabase = createSupabaseAdminClient()
 
-  let query = supabase
-    .from(TABLE)
-    .select(COLUMNS)
-    .order("visit_date", { ascending: true })
-    .order("visit_time", { ascending: true })
+  const run = (columns: string) => {
+    let query = supabase
+      .from(TABLE)
+      .select(columns)
+      .order("visit_date", { ascending: true })
+      .order("visit_time", { ascending: true })
 
-  if (options.from) query = query.gte("visit_date", options.from)
-  if (options.to) query = query.lte("visit_date", options.to)
-  if (options.status) query = query.eq("status", options.status)
+    if (options.from) query = query.gte("visit_date", options.from)
+    if (options.to) query = query.lte("visit_date", options.to)
+    if (options.status) query = query.eq("status", options.status)
+    return query
+  }
 
-  const { data, error } = await query
+  let { data, error } = await run(COLUMNS)
+  if (isMissingColumnError(error)) ({ data, error } = await run(BASE_COLUMNS))
   if (error) throw new Error(error.message)
   return ((data ?? []) as unknown as ShowroomBookingRow[]).map(toRecord)
 }
 
 export async function getShowroomBooking(id: string): Promise<ShowroomBookingRecord | null> {
   const supabase = createSupabaseAdminClient()
-  const { data, error } = await supabase.from(TABLE).select(COLUMNS).eq("id", id).maybeSingle()
+  const run = (columns: string) => supabase.from(TABLE).select(columns).eq("id", id).maybeSingle()
+  let { data, error } = await run(COLUMNS)
+  if (isMissingColumnError(error)) ({ data, error } = await run(BASE_COLUMNS))
   if (error) throw new Error(error.message)
   return data ? toRecord(data as unknown as ShowroomBookingRow) : null
 }
@@ -206,11 +239,111 @@ export async function updateShowroomBookingStatus(
     .from(TABLE)
     .update(patch)
     .eq("id", id)
+    .select(BASE_COLUMNS)
+    .maybeSingle()
+
+  if (error) throw new Error(error.message)
+  if (!data) return null
+  // 확정 칸은 다시 읽는다(미적용 DB 면 null) — 확정 문자 선점 여부를 호출부가 알아야 한다.
+  return (await getShowroomBooking(id)) ?? toRecord(data as unknown as ShowroomBookingRow)
+}
+
+/* ─── Compass 확정(2026-11-06) ─── */
+
+/**
+ * 확정 크론이 볼 신청 — requested · 어드민 리드 있음 · createdSince 이후 접수.
+ * 확정 칸을 쓰는 경로라 BASE 폴백을 하지 않는다 — 미적용이면 throw 해 크론이 이번 실행을 건너뛴다.
+ */
+export async function listShowroomBookingsAwaitingConfirm(createdSince: string): Promise<ShowroomBookingRecord[]> {
+  const supabase = createSupabaseAdminClient()
+  const { data, error } = await supabase
+    .from(TABLE)
+    .select(COLUMNS)
+    .eq("status", "requested")
+    .not("lead_id", "is", null)
+    .gte("created_at", createdSince)
+    .order("created_at", { ascending: true })
+    .limit(500)
+
+  if (error) throw new Error(error.message)
+  return ((data ?? []) as unknown as ShowroomBookingRow[]).map(toRecord)
+}
+
+/** 이미 다른 예약을 확정한 Compass 회차 id — 한 회차가 두 예약을 확정하지 않게(부분 유니크 인덱스와 같은 규칙). */
+export async function listUsedCompassDemoIds(demoIds: readonly number[]): Promise<Set<number>> {
+  const ids = [...new Set(demoIds)].filter((id) => Number.isInteger(id))
+  if (ids.length === 0) return new Set()
+  const supabase = createSupabaseAdminClient()
+  const { data, error } = await supabase.from(TABLE).select("compass_demo_id").in("compass_demo_id", ids)
+  if (error) throw new Error(error.message)
+  return new Set(
+    ((data ?? []) as { compass_demo_id: number | null }[])
+      .map((row) => row.compass_demo_id)
+      .filter((id): id is number => typeof id === "number")
+  )
+}
+
+export interface ConfirmFromCompassInput {
+  compassDemoId: number
+  visitDate: string
+  visitTime: string
+  assignedTo: string
+}
+
+/**
+ * Compass 회차로 확정 — **requested 일 때만**(조건부 UPDATE). 판정과 쓰기 사이에 사람이 어드민에서 상태를 바꿨으면
+ * 덮지 않고 null 을 돌려준다. 확정 일시가 신청 일시와 다르면 처음 신청 일시를 requested_visit_* 에 한 번만 옮겨 둔다.
+ */
+export async function confirmShowroomBookingFromCompass(
+  current: ShowroomBookingRecord,
+  input: ConfirmFromCompassInput
+): Promise<ShowroomBookingRecord | null> {
+  const moved = current.visitDate !== input.visitDate || current.visitTime !== input.visitTime
+  const patch: Record<string, unknown> = {
+    status: "confirmed",
+    confirmed_at: new Date().toISOString(),
+    assigned_to: input.assignedTo.slice(0, 100),
+    compass_demo_id: input.compassDemoId,
+  }
+  if (moved) {
+    if (!current.requestedVisitDate) {
+      patch.requested_visit_date = current.visitDate
+      patch.requested_visit_time = current.visitTime
+    }
+    patch.visit_date = input.visitDate
+    patch.visit_time = input.visitTime
+  }
+
+  const supabase = createSupabaseAdminClient()
+  const { data, error } = await supabase
+    .from(TABLE)
+    .update(patch)
+    .eq("id", current.id)
+    .eq("status", "requested")
     .select(COLUMNS)
     .maybeSingle()
 
   if (error) throw new Error(error.message)
   return data ? toRecord(data as unknown as ShowroomBookingRow) : null
+}
+
+/**
+ * 확정 문자 선점 — confirmation_sent_at 이 비어 있을 때만 지금 시각을 찍고 true. 크론과 어드민 확정이 겹쳐도
+ * 문자는 한 번만 나간다. 미적용 DB(칸 없음)는 false — 보낸 기록을 남길 수 없으면 보내지 않는다(중복 발송 방지).
+ */
+export async function claimShowroomConfirmationMessage(id: string): Promise<boolean> {
+  const supabase = createSupabaseAdminClient()
+  const { data, error } = await supabase
+    .from(TABLE)
+    .update({ confirmation_sent_at: new Date().toISOString() })
+    .eq("id", id)
+    .is("confirmation_sent_at", null)
+    .select("id")
+    .maybeSingle()
+
+  if (isMissingColumnError(error)) return false
+  if (error) throw new Error(error.message)
+  return Boolean(data)
 }
 
 /**
