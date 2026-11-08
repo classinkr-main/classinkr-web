@@ -38,6 +38,21 @@ describe("conversation tone", () => {
     expect(applyToneToAnswer(original, tone, { offerHandoff: false })).toBe(original)
   })
 
+  it("treats a what-if worry as worry, not panic", () => {
+    const tone = detectConversationTone("집에 둘 칠판을 사고 싶은데 괜히 비싼 걸 샀다가 학원 수업이랑 안 맞으면 어떡하죠?")
+    expect(tone.anxious).toBe(true)
+    expect(tone.panicked).toBe(false)
+    const answer = applyToneToAnswer("사기 전에 이것부터 알려 드릴게요.\n\n1. 집에서는 태블릿으로도 수업에 들어가요.", tone, { offerHandoff: false })
+    expect(answer).not.toContain("당황하셨죠")
+    expect(detectConversationTone("아이가 수업을 20분이나 놓쳤어요… 어떡하죠?").panicked).toBe(true)
+  })
+
+  it("counts '놀랐겠어요' as the answer's own empathy", () => {
+    const tone = detectConversationTone("아이가 빨간 버튼을 눌러서 수업에서 나와졌대요. 울먹이고 있어요… 어떡하죠?")
+    const original = "아이가 많이 놀랐겠어요. 너무 걱정하지 않으셔도 돼요.\n\n1. 다시 들어가도 돼요."
+    expect(applyToneToAnswer(original, tone, { offerHandoff: false })).toBe(original)
+  })
+
   it("says it cannot see earlier chats only once", () => {
     const tone = detectConversationTone("지난주에 전화드렸을 때 기사님이 오신다고 했는데 아직도 안 오셨어요.")
     expect(tone.priorContext).toBe("inquiry")

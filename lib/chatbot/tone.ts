@@ -26,7 +26,8 @@ const REPEATED_RE =
 // "어떻게 해야 하나요"만으로는 불안으로 보지 않는다(그냥 방법을 묻는 말이 많다).
 const ANXIOUS_RE =
   /어떡하|어떻게\s*해야\s*할지\s*(?:모르|막막)|걱정|불안|큰일|급해요|급합니다|급한데|당황|무서|난감|혹시\s*제가|혼났|속상|미치겠|울고/
-const PANICKED_RE = /어떡하|큰일|급해요|급합니다|급한데|당황|미치겠|울고|난감|혼났/
+// "안 맞으면 어떡하죠"처럼 아직 일어나지 않은 일을 걱정하는 말은 당황이 아니라 걱정이다.
+const PANICKED_RE = /(?<!면\s{0,2})어떡하|큰일|급해요|급합니다|급한데|당황|미치겠|울고|난감|혼났/
 const APOLOGETIC_RE = /^(?:\S+\s+)?죄송|죄송한데|죄송합니다만|실수할까|제가\s*(?:뭔가|뭘|뭐|혹시)?\s*잘못|^sorry\b/i
 const SLANG_RE = /ㅋㅋ|ㅠ|ㅜ|어케|어캐|ㄱㄱ|ㅇㅇ|뭐임|머임/
 // 들뜬 느낌표("첫 수업이었어요!!")는 화가 난 신호가 아니다.
@@ -110,7 +111,7 @@ export const HANDOFF_NOW_LINE =
 
 const EMPATHY_START_RE = /^(?:불편을|같은 문제로|많이 당황|죄송|걱정|괜찮)/
 // 답의 첫 문장이 이미 공감·사과로 시작하면 말투 계층이 첫마디를 또 붙이지 않는다.
-const EMPATHY_FIRST_SENTENCE_RE = /놀라|당황|속상|답답|걱정|신경\s*쓰|불편|죄송|기다리셨|급하시|힘드셨|불안하|민망|곤란하|화나셨|무서운|이해돼/
+const EMPATHY_FIRST_SENTENCE_RE = /놀라|놀랐|당황|속상|답답|걱정|신경\s*쓰|불편|죄송|기다리셨|급하시|힘드셨|불안하|민망|곤란하|화나셨|무서운|이해돼/
 
 function startsWithEmpathy(answer: string) {
   if (EMPATHY_START_RE.test(answer)) return true
