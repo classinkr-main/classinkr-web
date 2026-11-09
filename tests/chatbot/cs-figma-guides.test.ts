@@ -377,6 +377,8 @@ describe("CS Figma guide source", () => {
       expect(answer, guide.slug).not.toMatch(/https?:\/\//i)
       expect(answer, guide.slug).not.toMatch(/\[[^\]]+\]\(https?:\/\/[^)]+\)/i)
       expect(answer, guide.slug).not.toContain("원본 캡처:")
+      // 캡처 화면을 글로 옮긴 판독 메모("화면 기준 확인")는 채팅 답에 넣지 않는다.
+      expect(answer, guide.slug).not.toContain("화면 기준 확인")
       for (const sourceImageFile of guide.sourceImageFiles) {
         expect(answer, guide.slug).not.toContain(sourceImageFile)
       }

@@ -1564,8 +1564,10 @@ export function formatCsFigmaGuideAnswer(guide: CsFigmaGuide) {
   }
 
   const stepLines = guide.steps.map((step, index) => `${index + 1}. ${sanitizeGuideStep(step, hiddenTerms)}`)
+  // "화면 기준 확인"은 캡처 화면을 글로 옮긴 판독 메모라(예: "회색 빈 플레이스홀더") 채팅 답에서는 뺀다.
+  // 문서 페이지에서도 단계 사진이 있으면 이 항목을 빼고 있다.
   const deepDiveLines = guide.deepDive
-    .filter((item) => !/순서\s*그대로\s*안내/.test(item.title))
+    .filter((item) => !/순서\s*그대로\s*안내|화면\s*기준\s*확인/.test(item.title))
     .map((item) => {
       const title = sanitizeGuideStep(item.title, hiddenTerms)
       const checks = item.checks

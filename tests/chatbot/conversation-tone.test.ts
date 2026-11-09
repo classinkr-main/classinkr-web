@@ -57,6 +57,9 @@ describe("conversation tone", () => {
     expect(detectConversationTone("로그인할때마다 인증번호 받으래 오늘만 네번째임ㅡㅡ").repeated).toBe(false)
     expect(detectConversationTone("이게 벌써 두 번째 문의입니다! 왜 아직도 안 됩니까!").repeated).toBe(true)
     expect(detectConversationTone("또 문의드려요. 녹화가 또 끊겼어요").repeated).toBe(true)
+    // 다른 사람(매니저)에게 또 물어보기 미안하다는 말은 우리에게 반복 문의한 게 아니다.
+    expect(detectConversationTone("My manager said '쌤, 그거 연동해 주세요~' 연동 means what?? She is so busy, 또 물어보기 미안해요 ㅠㅠ").repeated).toBe(false)
+    expect(detectConversationTone("또 물어봐서 죄송한데 녹화가 또 끊겼어요").repeated).toBe(true)
   })
 
   it("reads '지난번 이 채팅에서'·'어제 이 챗봇이'·'저번에 여기서' as an earlier chat with the bot", () => {

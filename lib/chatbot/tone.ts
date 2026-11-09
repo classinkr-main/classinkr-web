@@ -27,6 +27,7 @@ const REPEATED_RE =
 // 문의·연락을 함께 말할 때만 반복 문의로 본다.
 const REPEAT_COUNT_RE = /몇\s*번째|(?:두|세|네|다섯)\s*번째/
 const INQUIRY_WORD_RE = /문의|연락|전화|말씀|요청|물어|물었|여쭤|상담|접수|얘기|말했|말하/
+const ASK_AGAIN_HESITATION_RE = /또\s*물어보기(?:가)?\s*(?:미안|민망|눈치|어렵|힘들|죄송)|또\s*물어보면\s*(?:미안|민망|눈치)/g
 // "어떻게 해야 하나요"만으로는 불안으로 보지 않는다(그냥 방법을 묻는 말이 많다).
 const ANXIOUS_RE =
   /어떡하|어떻게\s*해야\s*할지\s*(?:모르|막막)|걱정|불안|큰일|급해요|급합니다|급한데|당황|무서|난감|혹시\s*제가|혼났|속상|미치겠|울고/
@@ -53,7 +54,9 @@ export function detectConversationTone(question: string): ConversationTone {
   const words = text.split(/\s+/).filter(Boolean)
   const latinWords = words.filter((word) => /[a-z]{2,}/i.test(word) && !/[가-힣]/.test(word)).length
 
-  const repeated = REPEATED_RE.test(text) && (INQUIRY_WORD_RE.test(text) || !REPEAT_COUNT_RE.test(text))
+  // "바쁘신데 또 물어보기 미안해요"처럼 다른 사람에게 다시 묻기 미안하다는 말은 우리에게 반복 문의한 게 아니다.
+  const repeatText = text.replace(ASK_AGAIN_HESITATION_RE, " ")
+  const repeated = REPEATED_RE.test(repeatText) && (INQUIRY_WORD_RE.test(repeatText) || !REPEAT_COUNT_RE.test(repeatText))
   const excitedNotAngry = POSITIVE_RE.test(text)
   return {
     // 느낌표 두 개 이상, 또는 "~입니까!" 같은 따지는 어미는 화가 난 신호로 본다(들뜬 느낌표는 뺀다).
