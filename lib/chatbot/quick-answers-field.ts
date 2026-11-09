@@ -1303,7 +1303,7 @@ export const FIELD_QUICK_ANSWERS: FieldQuickAnswer[] = [
       // USB 오프라인 업데이트·업데이트 서버 예외 질문은 board-offline-update-whitelist가 맡는다.
       !/오프라인|usb|fqdn|업데이트\s*서버/.test(text),
     answer: [
-      "공개 사양으로 확인되는 건 여기까지예요. ClassIn Board 자체 시스템은 네 모델 모두 Android 11(메모리 4GB, 저장 32GB)이고, 수업은 보드 안의 윈도우 컴퓨터(OPS)에서 해요. S75·S86의 OPS는 Intel Core i5-13420H, 16GB 메모리, 256GB SSD가 기준이에요.",
+      "공개 사양으로 확인되는 건 여기까지예요. 수업은 보드 안의 윈도우 컴퓨터(OPS)에서 하고, OPS는 Windows에 16GB 메모리, 256GB SSD예요(S75·S86 기준, Intel Core i5-13420H). 보드 자체 시스템은 네 모델 모두 Android 11이에요.",
       "보안 패치 배포 주기, Intune·Samsung Knox 같은 MDM 등록(Device Owner 모드) 지원 여부는 공개 안내에 없어요. 내부망 반입 기준에 필요한 공식 답변은 아래 [도입 상담 남기기]로 모델명과 함께 기술 사양 확인을 요청해 주세요.",
     ],
     handoff: "demo",
@@ -5644,7 +5644,7 @@ export const FIELD_QUICK_ANSWERS: FieldQuickAnswer[] = [
     match: all(/ram|램|메모리|저장\s*공간|용량/, /칠판|스펙|사양/, /gb|기가|몇|버전/),
     answer: [
       "모르는 건 모른다고 말씀드릴게요.",
-      "- 공개 규격서 기준(칠판 안 윈도우 OPS): S75·S86은 Intel Core i5-13420H, 16GB 메모리, 256GB SSD이고, S110은 i5-12400, 8GB 메모리, 256GB SSD예요. S65와 최신 공급 사양은 견적 때 스펙 표로 확인해요.\n- 보드 자체 시스템(안드로이드): 공개 규격서 기준 네 모델(S75·S86·S98 Pro·S110) 모두 Android 11, 메모리 4GB, 저장 32GB예요. 수업은 OPS의 윈도우에서 해요.\n- USB·SD카드로 저장공간 늘리기: 칠판에 USB 포트는 있지만, 저장공간을 늘리는 용도로 쓰는 방법과 SD카드 지원은 공개 안내에 없어요.",
+      "- RAM·저장공간: 수업은 칠판 안의 윈도우 컴퓨터(OPS)에서 돌아가요. 공개 규격서 기준 OPS는 Windows에 16GB 메모리, 256GB SSD예요(S75·S86, Intel Core i5-13420H). S110은 i5-12400, 8GB 메모리, 256GB SSD로 안내돼 있고, S65와 최신 공급 사양은 견적 때 스펙 표로 확인해요.\n- 안드로이드 버전: 보드 자체 시스템은 네 모델(S75·S86·S98 Pro·S110) 모두 Android 11이에요. 수업은 OPS의 윈도우에서 해요.\n- USB·SD카드로 저장공간 늘리기: 칠판에 USB 포트는 있지만, 저장공간을 늘리는 용도로 쓰는 방법과 SD카드 지원은 공개 안내에 없어요.",
       "공식 스펙표는 아래 [도입 상담 남기기]로 모델명을 적어 요청해 주세요.",
     ],
     handoff: "demo",
