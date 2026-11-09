@@ -30,7 +30,7 @@ describe("공개 페이지가 연결하는 문서 링크", () => {
   it("/product/hw 가 직접 적은 하드웨어 FAQ 경로는 lib/docs.ts 의 경로와 같다", () => {
     const doc = getDocBySlug("hardware-spec-installation-faq", "hardware")
     expect(doc).toBeDefined()
-    expect(readSource("app/product/hw/page.tsx")).toContain(`"${getDocPath(doc!)}"`)
+    expect(readSource("app/product/hw/ProductHWPageClient.tsx")).toContain(`"${getDocPath(doc!)}"`)
   })
 
   it("/pricing 과 /faq 는 slug 로 문서를 조회해 링크를 만든다", () => {

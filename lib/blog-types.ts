@@ -84,6 +84,13 @@ export const CATEGORIES = [
   "교육 트렌드", "데이터 분석", "원장 인터뷰",
 ] as const
 
+/**
+ * 하드웨어 설치 사례 = 카테고리 "성공 사례" + 태그 "하드웨어"가 붙은 공개 글.
+ * 사례 원본은 블로그(콘텐츠 어드민)이고, /product/hw 는 이 조건에 맞는 최신 글만 읽어 노출한다.
+ */
+export const CASE_STUDY_CATEGORY = "성공 사례" satisfies (typeof CATEGORIES)[number]
+export const HARDWARE_CASE_TAG = "하드웨어"
+
 // 2026-10-26 "제품 업데이트" → "제품"으로 개명. DB에 남은 옛 값(배포 전 저장분 포함)도 같은 칩에 모은다.
 export function normalizeBlogCategory(category: string | null | undefined): string | null {
   return category === "제품 업데이트" ? "제품" : category ?? null

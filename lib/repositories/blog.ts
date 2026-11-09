@@ -19,7 +19,14 @@ import { formatBlogDisplayDate, resolveDisplayDateSource } from "@/lib/blog-disp
 export type { BlogPost, BlogPostInput, BlogPostStatus } from "@/lib/blog-types";
 export { CATEGORIES, BLOG_STATUS_OPTIONS, DEFAULT_BLOG_CTA } from "@/lib/blog-types";
 
-import { DEFAULT_BLOG_CTA, normalizeBlogCategory, type BlogPost, type BlogPostInput } from "@/lib/blog-types";
+import {
+  CASE_STUDY_CATEGORY,
+  DEFAULT_BLOG_CTA,
+  HARDWARE_CASE_TAG,
+  normalizeBlogCategory,
+  type BlogPost,
+  type BlogPostInput,
+} from "@/lib/blog-types";
 import { normalizeBlogSlug } from "@/lib/blog-slug-route";
 import {
   buildAdminBlogOverviewSummary,
@@ -222,7 +229,20 @@ export async function getRecentPublishedPosts(limit = 3): Promise<BlogPost[]> {
   return queryPublishedPosts(Math.max(1, Math.min(12, Math.trunc(limit))));
 }
 
-async function queryPublishedPosts(limit?: number): Promise<BlogPost[]> {
+/**
+ * /product/hw 설치 사례 섹션 — "성공 사례" 카테고리 중 "하드웨어" 태그가 붙은 최신 공개 글.
+ * 사례 원본은 블로그이고, 카테고리·태그 조건은 lib/blog-types.ts 상수 한 곳에서 정한다.
+ */
+export async function getPublishedHardwareCasePosts(limit = 3): Promise<BlogPost[]> {
+  return queryPublishedPosts(Math.max(1, Math.min(12, Math.trunc(limit))), {
+    category: CASE_STUDY_CATEGORY,
+    tag: HARDWARE_CASE_TAG,
+  });
+}
+
+type PublishedPostFilter = { category?: string; tag?: string };
+
+async function queryPublishedPosts(limit?: number, filter: PublishedPostFilter = {}): Promise<BlogPost[]> {
   const supabase = await createSupabaseBlogReadClient();
   for (let attempt = 1; attempt <= PUBLIC_BLOG_QUERY_ATTEMPTS; attempt += 1) {
     const timeout = createBlogQueryTimeout();
@@ -238,6 +258,8 @@ async function queryPublishedPosts(limit?: number): Promise<BlogPost[]> {
       .order("published_at", { ascending: false, nullsFirst: false })
       .order("created_at", { ascending: false });
 
+      if (filter.category) query = query.eq("category", filter.category);
+      if (filter.tag) query = query.contains("tags", [filter.tag]);
       if (limit !== undefined) query = query.limit(limit);
       const { data, error } = await query.abortSignal(timeout.signal);
 
