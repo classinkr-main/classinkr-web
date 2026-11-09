@@ -10,6 +10,7 @@ export type StandardQuoteTemplateId =
   | "board_75"
   | "board_86"
   | "recording_studio"
+  | "recording_studio_75"
   | "online_suite"
   | "business_recharge"
 export type StandardQuoteOptionSelections = Record<string, QuoteOptionSelectionValue | undefined>
@@ -105,6 +106,22 @@ export function isSoftwareQuoteTemplate(templateId?: string | null): boolean {
 }
 
 /**
+ * 판매를 중단한 템플릿. 새 견적 진입점(작성기 목록·유형 탭·메뉴·?action=)에서는 빠지지만,
+ * 이미 만든 견적을 열고 고칠 수 있도록 정의(STANDARD_QUOTE_TEMPLATES)는 남겨 둔다.
+ * - online_suite: 구독형 AI Suite(월 40만원) — 2026-11 판매 중단
+ */
+export const RETIRED_QUOTE_TEMPLATE_IDS: ReadonlySet<StandardQuoteTemplateId> = new Set(["online_suite"])
+
+export function isRetiredQuoteTemplate(templateId?: string | null): boolean {
+  return RETIRED_QUOTE_TEMPLATE_IDS.has(templateId as StandardQuoteTemplateId)
+}
+
+/** 올인원 녹화수업 세트(86"·75"). 같은 옵션·조건 행을 쓴다. */
+export function isRecordingStudioTemplate(templateId?: string | null): boolean {
+  return templateId === "recording_studio" || templateId === "recording_studio_75"
+}
+
+/**
  * 템플릿 제품군에 따른 공급자 스냅샷을 반환한다.
  * - SW(예: online_suite) → 클래스인 + 담당 매니저 연락처
  * - HW → 표준 공급자(퀴드러닝)
@@ -158,8 +175,83 @@ const STANDARD_PRICE_STAND = getProductBySku("stand")?.unit_price ?? 500_000
 const STANDARD_PRICE_WALL_MOUNT = getProductBySku("wall-mount")?.unit_price ?? 500_000
 const STANDARD_PRICE_RECORDING_STUDIO =
   getProductBySku("ai-studio-recording-set")?.unit_price ?? 8_300_000
+const STANDARD_PRICE_RECORDING_STUDIO_75 =
+  getProductBySku("ai-studio-recording-set-75")?.unit_price ?? 7_400_000
 const STANDARD_PRICE_ONLINE_SUITE_MONTHLY =
   getProductBySku("online-suite-monthly")?.unit_price ?? 400_000
+
+/** 올인원 녹화수업 세트 — 86"(830만원)·75"(740만원)가 칠판 크기와 단가만 다르고 옵션·조건은 같다. */
+function recordingStudioTemplate(config: {
+  id: StandardQuoteTemplateId
+  size: '86"' | '75"'
+  itemCode: string
+  unitPrice: number
+  presetIdPrefix: string
+}): StandardQuoteTemplatePreset {
+  const contents = `${config.size} + T1 + 벽걸이 + 자동 녹화 1년`
+  return {
+    id: config.id,
+    label: `올인원 녹화수업 세트 ${config.size}`,
+    description: `${config.size} 전자칠판 + T1 + 벽걸이 + 자동 녹화 1년`,
+    lines: [
+      {
+        itemType: "hardware",
+        itemCode: config.itemCode,
+        itemName: "올인원 녹화수업 세트",
+        itemDescription: `${config.size} Classin 전자칠판 + AI 카메라 + 벽걸이 + 자동 녹화 1년 이용권`,
+        quantity: 1,
+        quantityUnit: "세트",
+        unitPrice: config.unitPrice,
+        quantityEditable: true,
+        priceEditable: true,
+      },
+    ],
+    optionGroups: [
+      {
+        id: "payment_plan",
+        label: "결제 방식",
+        description: "고객에게 보일 결제 조건을 견적서에 바로 반영합니다.",
+        control: "radio",
+        defaultValue: "one_time",
+        options: [
+          { value: "one_time", label: "일시 납부", description: "총액 기준으로 안내합니다." },
+          { value: "12_month", label: "12개월 할부", description: "12개월 할부 가능 문구를 표시합니다." },
+        ],
+      },
+      {
+        id: "delivery_policy",
+        label: "설치 배송비",
+        description: "OMO1 패키지 기준 설치/배송 포함 안내를 표시합니다.",
+        control: "toggle",
+        defaultValue: true,
+        enabledLabel: "포함",
+        disabledLabel: "별도",
+      },
+    ],
+    quickPresets: [
+      {
+        id: `${config.presetIdPrefix}_default`,
+        label: "녹화 세트",
+        description: contents,
+        templateId: config.id,
+        optionSelections: {
+          payment_plan: "one_time",
+          delivery_policy: true,
+        },
+      },
+      {
+        id: `${config.presetIdPrefix}_installment`,
+        label: "12개월 할부형",
+        description: "설치 배송 포함 + 12개월 할부 안내",
+        templateId: config.id,
+        optionSelections: {
+          payment_plan: "12_month",
+          delivery_policy: true,
+        },
+      },
+    ],
+  }
+}
 
 export const STANDARD_QUOTE_TEMPLATES: StandardQuoteTemplatePreset[] = [
   {
@@ -447,68 +539,20 @@ export const STANDARD_QUOTE_TEMPLATES: StandardQuoteTemplatePreset[] = [
       },
     ],
   },
-  {
+  recordingStudioTemplate({
     id: "recording_studio",
-    label: "올인원 녹화수업 세트",
-    description: '86" 전자칠판 + T1 + 벽걸이 + 자동 녹화 1년',
-    lines: [
-      {
-        itemType: "hardware",
-        itemCode: "ai-studio-recording-set",
-        itemName: "올인원 녹화수업 세트",
-        itemDescription: '86" Classin 전자칠판 + AI 카메라 + 벽걸이 + 자동 녹화 1년 이용권',
-        quantity: 1,
-        quantityUnit: "세트",
-        unitPrice: STANDARD_PRICE_RECORDING_STUDIO,
-        quantityEditable: true,
-        priceEditable: true,
-      },
-    ],
-    optionGroups: [
-      {
-        id: "payment_plan",
-        label: "결제 방식",
-        description: "고객에게 보일 결제 조건을 견적서에 바로 반영합니다.",
-        control: "radio",
-        defaultValue: "one_time",
-        options: [
-          { value: "one_time", label: "일시 납부", description: "총액 기준으로 안내합니다." },
-          { value: "12_month", label: "12개월 할부", description: "12개월 할부 가능 문구를 표시합니다." },
-        ],
-      },
-      {
-        id: "delivery_policy",
-        label: "설치 배송비",
-        description: "OMO1 패키지 기준 설치/배송 포함 안내를 표시합니다.",
-        control: "toggle",
-        defaultValue: true,
-        enabledLabel: "포함",
-        disabledLabel: "별도",
-      },
-    ],
-    quickPresets: [
-      {
-        id: "recording_studio_default",
-        label: "녹화 세트",
-        description: '86" + T1 + 벽걸이 + 자동 녹화 1년',
-        templateId: "recording_studio",
-        optionSelections: {
-          payment_plan: "one_time",
-          delivery_policy: true,
-        },
-      },
-      {
-        id: "recording_studio_installment",
-        label: "12개월 할부형",
-        description: "설치 배송 포함 + 12개월 할부 안내",
-        templateId: "recording_studio",
-        optionSelections: {
-          payment_plan: "12_month",
-          delivery_policy: true,
-        },
-      },
-    ],
-  },
+    size: '86"',
+    itemCode: "ai-studio-recording-set",
+    unitPrice: STANDARD_PRICE_RECORDING_STUDIO,
+    presetIdPrefix: "recording_studio",
+  }),
+  recordingStudioTemplate({
+    id: "recording_studio_75",
+    size: '75"',
+    itemCode: "ai-studio-recording-set-75",
+    unitPrice: STANDARD_PRICE_RECORDING_STUDIO_75,
+    presetIdPrefix: "recording_studio_75",
+  }),
   {
     id: "online_suite",
     label: "구독형 AI Suite",
@@ -737,6 +781,7 @@ function getExistingLineMap(existingItems: PartnerQuoteDetailsInput["lineItems"]
 function inferTemplateIdFromItemCode(itemCode?: string | null): StandardQuoteTemplateId {
   if (itemCode === "classin-business-recharge") return "business_recharge"
   if (itemCode === "ai-studio-recording-set") return "recording_studio"
+  if (itemCode === "ai-studio-recording-set-75") return "recording_studio_75"
   if (itemCode === "online-suite-monthly") return "online_suite"
   if (itemCode === "board-75") return "board_75"
   if (itemCode === "board-86") return "board_86"
@@ -1063,7 +1108,7 @@ export function buildConfigurableStandardQuoteDetails({
     readSelectionString(defaultSelections, "installation_mode", "included_quote")
   )
 
-  if (resolvedTemplateId === "recording_studio") {
+  if (isRecordingStudioTemplate(resolvedTemplateId)) {
     const paymentPlan = readSelectionString(selections, "payment_plan", "one_time")
     const deliveryIncluded = readSelectionBoolean(selections, "delivery_policy", true)
 

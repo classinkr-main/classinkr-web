@@ -96,10 +96,10 @@ export interface ShowroomBookingReceipt {
 }
 
 /**
- * 쇼룸 예약 접수 확인.
+ * 쇼룸 방문 신청 접수 확인.
  *
- * 1차가 **요청형**이라(담당자가 확인 후 확정) 문구가 "확정"으로 읽히면 안 된다 —
- * 화면과 같은 약속만 적는다.
+ * 신청형이라(Compass 에서 담당자가 컨펌·담당 지정 → 확정 문자, lib/server/showroom-compass-confirm.ts) 문구가
+ * "확정"으로 읽히면 안 된다 — 화면과 같은 약속만 적는다. 확정 안내는 sendShowroomBookingConfirmation 이 따로 보낸다.
  */
 export async function sendShowroomBookingReceipt(
   receipt: ShowroomBookingReceipt
@@ -110,12 +110,65 @@ export async function sendShowroomBookingReceipt(
     templateEnvKey: "SOLAPI_TEMPLATE_SHOWROOM_BOOKING",
     to: receipt.phone,
     smsText: [
-      "[클래스인] 목동 쇼룸 방문 예약이 접수되었습니다.",
+      "[클래스인] 목동 쇼룸 방문 신청이 접수되었습니다.",
       `희망 일시: ${when}`,
-      "담당자가 확인 후 확정 연락을 드립니다. 확정 전까지 일정은 조정될 수 있습니다.",
+      "담당자가 일정을 확인해 확정되면 문자로 다시 알려드립니다. 확정 전까지 일정은 조정될 수 있습니다.",
     ].join("\n"),
     variables: { "#{일시}": when },
     context: { source: "showroom_booking", refId: receipt.bookingId },
+  })
+}
+
+/** 쇼룸 방문 장소 — 공개 화면(app/showroom)·연락처 데이터(data/offices.json)와 같은 주소 */
+export const SHOWROOM_VISIT_ADDRESS = "서울 양천구 목동동로 233-1, 806호"
+/** 일정 변경·취소 문의 — 지사 대표 번호(공개 화면과 같다) */
+export const SHOWROOM_CONTACT_PHONE = "02-6958-8566"
+
+export interface ShowroomBookingConfirmation {
+  bookingId: string
+  phone: string
+  /** 확정 방문일(KST YYYY-MM-DD) */
+  visitDate: string
+  /** 확정 방문 시각(KST HH:mm) */
+  visitTime: string
+  /** 담당자 이름 — 없으면 줄을 뺀다 */
+  assignedTo: string | null
+}
+
+/** 확정 문자 본문 — 테스트가 고정한다(tests/showroom/compass-confirm.test.ts). */
+export function buildShowroomConfirmationText(confirmation: Omit<ShowroomBookingConfirmation, "bookingId" | "phone">): string {
+  const when = `${formatShortDate(confirmation.visitDate)} ${confirmation.visitTime}`
+  const assignee = confirmation.assignedTo?.trim()
+  return [
+    "[클래스인] 목동 쇼룸 방문이 확정되었습니다.",
+    `일시: ${when}`,
+    assignee ? `담당: ${assignee}` : undefined,
+    `장소: ${SHOWROOM_VISIT_ADDRESS}`,
+    `일정 변경·취소: ${SHOWROOM_CONTACT_PHONE}`,
+  ]
+    .filter(Boolean)
+    .join("\n")
+}
+
+/**
+ * 쇼룸 방문 확정 안내 — Compass 에서 「쇼룸 데모」로 컨펌된 예약(크론)이나 어드민 접수 큐에서 확정한 예약에 한 번 보낸다.
+ * 한 번만 보내는 선점은 호출부가 한다(claimShowroomConfirmationMessage). 알림톡 템플릿 변수: #{일시}·#{담당}·#{장소}.
+ */
+export async function sendShowroomBookingConfirmation(
+  confirmation: ShowroomBookingConfirmation
+): Promise<SendResult> {
+  const when = `${formatShortDate(confirmation.visitDate)} ${confirmation.visitTime}`
+
+  return sendReceipt({
+    templateEnvKey: "SOLAPI_TEMPLATE_SHOWROOM_CONFIRMED",
+    to: confirmation.phone,
+    smsText: buildShowroomConfirmationText(confirmation),
+    variables: {
+      "#{일시}": when,
+      "#{담당}": confirmation.assignedTo?.trim() || "쇼룸 담당자",
+      "#{장소}": SHOWROOM_VISIT_ADDRESS,
+    },
+    context: { source: "showroom_booking_confirmed", refId: confirmation.bookingId },
   })
 }
 

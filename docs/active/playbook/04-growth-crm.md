@@ -11,7 +11,7 @@
 - 영업 운영 화면: 견적·계약·영수증·하드웨어·설치 일정의 어드민 워크플로
 - 어드민 API: 위 화면과 연결된 `app/api/admin/{crm,leads,marketing,marketing-campaigns,marketing-projects,branch,calendar,...}`
 - 데이터 구현: `lib/crm/*`, `lib/branch/*`, `lib/admin-crm-*`, `lib/external-crm/*`, `lib/repositories/`의 리드·CRM·캠페인·캘린더·영업 운영 repository
-- 인입 퍼널: 도입 신청·쇼룸 예약 접수(`components/checkout/`, `components/showroom/`, `lib/checkout-requests.ts`, `lib/showroom/`), 어드민 접수 큐(`/admin/crm/customers/intake`), 태그 관리(`/admin/crm/customers/tags`), 고객 접수 확인 문자·알림톡(`lib/messaging/` — 별도 스위치 없이 `SOLAPI_API`·`SOLAPI_SECRET`이 있으면 **고객에게 실제로 발송된다**. 검증할 때는 `MESSAGING_DRY_RUN=1`을 쓴다)
+- 인입 퍼널: 도입 신청·쇼룸 예약 접수(`components/checkout/`, `components/showroom/`, `lib/checkout-requests.ts`, `lib/showroom/`), 어드민 접수 큐(`/admin/crm/customers/intake`), 쇼룸 신청의 Compass 확정·확정 문자(`lib/server/showroom-compass-confirm.ts` — [흐름](../showroom-compass-confirm-2026-11-06.md)), 태그 관리(`/admin/crm/customers/tags`), 고객 접수 확인 문자·알림톡(`lib/messaging/` — 별도 스위치 없이 `SOLAPI_API`·`SOLAPI_SECRET`이 있으면 **고객에게 실제로 발송된다**. 검증할 때는 `MESSAGING_DRY_RUN=1`을 쓴다)
 
 결제 승인·Toss 검증 같은 결제 기반은 Platform 소유다. 영업 화면의 견적/계약 라이프사이클과 CRM 연결은 Growth 소유다. 모든 어드민 화면/API는 Admin Core의 인증·권한 규약을 따른다. 공개 페이지 셸 `app/checkout`, `app/showroom`은 Home/Front와 공유하고, 결제 승인 자체는 Platform 소유다.
 

@@ -1,7 +1,13 @@
-import { STANDARD_QUOTE_TEMPLATES, type StandardQuoteTemplateId } from "@/lib/standard-quote-template"
+import {
+  isRetiredQuoteTemplate,
+  STANDARD_QUOTE_TEMPLATES,
+  type StandardQuoteTemplateId,
+} from "@/lib/standard-quote-template"
 
 export function normalizeQuoteQuickAction(raw: string | null): "new" | StandardQuoteTemplateId | null {
   if (raw === "new" || raw === "quick" || raw === "quote") return "new"
+  // 판매 중단 템플릿(예: online_suite)은 옛 링크로 들어와도 작성기를 열지 않는다.
+  if (isRetiredQuoteTemplate(raw)) return null
   return STANDARD_QUOTE_TEMPLATES.find((template) => template.id === raw)?.id ?? null
 }
 

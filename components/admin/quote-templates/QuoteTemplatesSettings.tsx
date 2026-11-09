@@ -17,6 +17,7 @@ import {
   getQuoteTemplateCatalogEntry,
   getQuoteTemplateProductLineLabel,
   getQuoteTemplateSupplierLabel,
+  isRetiredQuoteTemplateSku,
   quoteTemplateDiscountPercent,
   type QuoteTemplateDefaults,
   type QuoteTemplateScope,
@@ -201,7 +202,7 @@ export default function QuoteTemplatesSettings() {
   const listTotal =
     draft?.items.reduce((sum, item) => sum + (getQuoteTemplateCatalogEntry(item.sku)?.listPrice ?? 0) * item.quantity, 0) ?? 0
   const addable = draft
-    ? QUOTE_TEMPLATE_CATALOG.filter((entry) => entry.productLine === draft.productLine && !draft.items.some((item) => item.sku === entry.sku))
+    ? QUOTE_TEMPLATE_CATALOG.filter((entry) => entry.productLine === draft.productLine && !isRetiredQuoteTemplateSku(entry.sku) && !draft.items.some((item) => item.sku === entry.sku))
     : []
 
   const groups: Array<{ key: "base" | "team"; label: string; hint: string; items: QuoteTemplateView[] }> = [

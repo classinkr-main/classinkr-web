@@ -17,6 +17,9 @@ const CAMERA_T1_PRICE = catalogPrice("hw-camera-t1", 1_200_000)
 const AI_STUDIO_SET_PRICE = catalogPrice("hw-package-ai-studio", 8_300_000)
 /** 자동 녹화 1년 이용권 — 녹화 세트 단가에서 86\"+T1+벽걸이를 뺀 값(830-630-120-50=30만원). */
 const AI_RECORDING_1Y_PRICE = 300_000
+/** 75" 녹화 세트 — 86" 세트와 같은 구성에서 칠판만 75"(540+120+50+30 = 740만원). */
+const AI_STUDIO_SET_75_PRICE =
+  BOARD_75_PRICE + CAMERA_T1_PRICE + HARDWARE_INSTALL_PRICE_KRW + AI_RECORDING_1Y_PRICE
 
 export const PRODUCT_TEMPLATES = [
   {
@@ -67,6 +70,13 @@ export const PRODUCT_TEMPLATES = [
     description: '86" 전자칠판 + T1 + 벽걸이 + 자동 녹화 1년',
     unit_price: AI_STUDIO_SET_PRICE, // 630+120+50+30 = 830 (hardware-catalog의 hw-package-ai-studio)
   },
+  {
+    key: "ai-studio-recording-set-75",
+    label: '올인원 녹화수업 세트 75"',
+    description: '75" 전자칠판 + T1 + 벽걸이 + 자동 녹화 1년',
+    unit_price: AI_STUDIO_SET_75_PRICE, // 540+120+50+30 = 740
+  },
+  // 구독형 AI Suite 는 2026-11 판매 중단 — 새 견적 진입점은 없고, 기존 견적·정산의 정가 참조용으로만 남긴다.
   {
     key: "online-suite-monthly",
     label: "구독형 AI Suite",

@@ -32,12 +32,25 @@ import {
 import {
   buildCsFigmaGuideSuggestedQuestions,
   findCsFigmaGuideForQuestion,
+  findCsFigmaKnownIntentSlug,
   formatCsFigmaGuideAnswer,
   getCsFigmaGuideDocPath,
   isCsFigmaSymptomQuestion,
   sanitizeGuideStep,
+  type CsFigmaGuide,
 } from "@/lib/cs-figma-guides"
 import { getCsFigmaEnrichment } from "@/lib/cs-figma-enrichments"
+import { appendFollowUp, buildFollowUp } from "@/lib/chatbot/follow-up"
+import { findFieldQuickAnswer } from "@/lib/chatbot/quick-answers-field"
+import { resolveSymptomTriage, type SymptomTriageResult } from "@/lib/chatbot/symptom-triage"
+import {
+  ENGLISH_SUPPORT_ANSWER,
+  PRIOR_INQUIRY_LINE,
+  applyToneToAnswer,
+  detectConversationTone,
+  glossForRouting,
+  isEnglishSupportRequest,
+} from "@/lib/chatbot/tone"
 
 // CS 사용 가이드 직답의 출처 식별용 내부 헤딩(피그마/CS 표현 미노출)
 const CS_FIGMA_GUIDE_SOURCE_HEADING = "사용 순서 안내"
@@ -441,7 +454,7 @@ const CAPABILITY_REQUEST_RE =
   /되나요|돼요|가능|지원|제공|처리|관리|기능|자동|연동|만들|추가|하려고|하고\s*싶|쓸\s*수|사용할\s*수/i
 
 const PROMPT_OR_SECURITY_ABUSE_RE =
-  /sql\s*injection|sqli|union\s+select|drop\s+table|or\s+1\s*=\s*1|information_schema|xp_cmdshell|xss|csrf|ssrf|rce|프롬프트\s*인젝션|system\s*prompt|developer\s*(?:message|instruction)|시스템\s*프롬프트|개발자\s*메시지|(?:개발자|시스템|숨겨진|비공개).{0,12}(?:지침|규칙|지시|명령어?|명령문).{0,16}(?:원문|보여|출력|공개|알려|노출|그대로)|(?:개발자|시스템).{0,10}(?:준|받은).{0,10}(?:지침|규칙|지시|명령어?|명령문).{0,16}(?:원문|보여|출력|공개|알려|노출|그대로)|내부\s*(?:프롬프트|규칙|지시|명령어?|명령문)|(?:프롬프트|prompt|지시문).{0,16}(?:보여|출력|공개|알려|노출|그대로)|(?:보여|출력|공개|알려|노출).{0,16}(?:프롬프트|prompt|지시문)|(?:이전|위|앞선).{0,12}(?:지시|규칙|프롬프트).{0,12}(?:무시|잊어|삭제)|보안.{0,12}(?:뚫|우회|공격)|취약점.{0,12}(?:공격|악용|우회)|해킹.{0,12}(?:방법|공격|뚫|탈취|우회)|(?:비밀번호|토큰|api\s*key|관리자).{0,12}(?:탈취|훔|우회|크랙)/i
+  /sql\s*injection|\bsqli\b|union\s+select|drop\s+table|\bor\s+1\s*=\s*1|information_schema|xp_cmdshell|\bxss\b|\bcsrf\b|\bssrf\b|\brce\b|프롬프트\s*인젝션|system\s*prompt|developer\s*(?:message|instruction)|시스템\s*프롬프트|개발자\s*메시지|(?:개발자|시스템|숨겨진|비공개).{0,12}(?:지침|규칙|지시|명령어?|명령문).{0,16}(?:원문|보여|출력|공개|알려|노출|그대로)|(?:개발자|시스템).{0,10}(?:준|받은).{0,10}(?:지침|규칙|지시|명령어?|명령문).{0,16}(?:원문|보여|출력|공개|알려|노출|그대로)|내부\s*(?:프롬프트|규칙|지시|명령어?|명령문)|(?:프롬프트|prompt|지시문).{0,16}(?:보여|출력|공개|알려|노출|그대로)|(?:보여|출력|공개|알려|노출).{0,16}(?:프롬프트|prompt|지시문)|(?:이전|위|앞선).{0,12}(?:지시|규칙|프롬프트).{0,12}(?:무시|잊어|삭제)|보안.{0,12}(?:뚫|우회|공격)|취약점.{0,12}(?:공격|악용|우회)|해킹.{0,12}(?:방법|공격|뚫|탈취|우회)|(?:비밀번호|토큰|api\s*key|관리자).{0,12}(?:탈취|훔|우회|크랙)/i
 const CRIMINAL_ABUSE_RE =
   /(?:범죄|불법|사기|피싱|스미싱|절도|도둑|마약|폭탄|무기|살인|폭행).{0,18}(?:방법|하는\s*법|계획|도와|만들|제조|우회|탈취|공격|훔|숨기|피하)|(?:방법|하는\s*법|계획).{0,18}(?:범죄|불법|사기|피싱|스미싱|절도|마약|폭탄|무기|살인|폭행)/i
 const TOKEN_WASTE_RE =
@@ -449,6 +462,9 @@ const TOKEN_WASTE_RE =
 
 function isUnsupportedAcademyPaymentFeatureQuestion(question: NormalizedQuestion) {
   const text = question.redacted.toLowerCase()
+  // 체험·구독 요금의 자동 결제처럼 클래스인 자체 결제를 묻는 말은 학원비 결제 기능 문의가 아니다.
+  // 카드 명세서에 찍힌 낯선 결제를 묻는 말도 클래스인 쪽 결제 확인이다.
+  if (/체험|구독|요금제|해지|카드\s*등록|(?:내|제)\s*카드|웹\s*라이브|라이브|특강|시청|명세서|빠져나|기억에?\s*없|정기\s*결제|자동\s*결제/.test(text)) return false
   return (
     ACADEMY_PAYMENT_ACTION_RE.test(text) &&
     ACADEMY_PAYMENT_SUBJECT_RE.test(text) &&
@@ -555,7 +571,11 @@ function buildPolicyGuardResponse(question: NormalizedQuestion): {
     }
   }
 
-  const selfKnowledgeEntry = findChatbotSelfKnowledgeEntry(question.redacted)
+  // "챗봇 말고 사람 연결해 주세요"는 자기소개가 아니라 상담 연결로 보낸다.
+  // ("너 사람 상담원 맞아?"처럼 상담원을 언급만 한 정체성 질문은 그대로 자기소개로 답한다.)
+  const selfKnowledgeEntry = EXPLICIT_HUMAN_CONNECTION_RE.test(text)
+    ? null
+    : findChatbotSelfKnowledgeEntry(question.redacted)
   if (selfKnowledgeEntry) {
     const isConcern = selfKnowledgeEntry.key === "emotional_concern"
     const isEvent = selfKnowledgeEntry.key === "event_inquiry" || selfKnowledgeEntry.key === "event_apply_assist"
@@ -625,7 +645,7 @@ const POSITIONING_RE =
 const PRE_ADOPTION_CHECK_RE =
   /도입\s*전.*(22|질문|체크리스트|확인)|22\s*가지\s*질문|22.*도입|구매\s*전.*(질문|체크리스트|확인)|상담\s*전.*(질문|체크리스트|확인)/
 const PRE_ADOPTION_RECORDING_PERMISSION_RE =
-  /(수업\s*녹화|현장\s*녹화|녹화).{0,18}(누가|권한|관리|저장|확인|볼|다운로드)|(누가|권한).{0,18}(수업\s*녹화|현장\s*녹화|녹화)/i
+  /(수업\s*녹화|현장\s*녹화|녹화).{0,18}(누가|권한|관리|저장|확인|볼|다운로드|보여|공유|유출|다른\s*사람)|(누가|권한|다른\s*사람).{0,18}(수업\s*녹화|현장\s*녹화|녹화)/i
 const PRE_ADOPTION_SIGNUP_INFO_RE =
   /(회원\s*가입|가입).{0,20}(개인정보|전화번호|이메일|메일|휴대폰|핸드폰|정보|뭐|무엇)|(개인정보|전화번호|이메일|메일|휴대폰|핸드폰).{0,20}(회원\s*가입|가입)/i
 const PRE_ADOPTION_OFFLINE_BOARD_RE =
@@ -645,13 +665,13 @@ const CAMERA_CONFLICT_RE =
   /카메라.{0,18}(안\s*켜|꺼|꺼져|권한|한\s*명|한명|1명|문제|오류)|(한\s*명|한명|1명).{0,18}카메라/i
 
 const COMPARISON_RE =
-  /zoom|줌|화상회의|뭐가\s*(달라|다른)|무엇이\s*다르|어떻게\s*다른|다른\s*(점|가요|건가요|거|것|부분|서비스)|차이|비교|차별|차별점|장점|왜\s*(써|쓰|필요|도입)|일반\s*전자칠판|기존\s*전자칠판/
+  /zoom|줌|화상회의|뭐가\s*(달라|다른)|무엇이\s*다르|어떻게\s*다른|다른\s*(점|가요|건가요|거|것|부분|서비스)|차이|비교|차별점|차별화|장점|왜\s*(써|쓰|필요|도입)|일반\s*전자칠판|기존\s*전자칠판/
 
 // 시중 경쟁 전자칠판 브랜드를 콕 집어 묻는 비교 질문 인식용.
 // 정책: 트리거로 비교 의도만 인식하고, 답변에서는 브랜드명을 노출하거나 타사 사양·우열을 단정하지 않는다.
 // 대신 '일반 전자칠판 대비' Classin Board 차별점(내장 OPS·EDB·녹화/복습/LMS·관리자 데이터)으로 전환한다.
 const COMPETITOR_BOARD_RE =
-  /넥소|nexo|삼성\s*플립|samsung\s*flip|뷰소닉|viewsonic|프로메테안|promethean|맥스허브|maxhub|아하\s*(보드|칠판)|시중\s*(전자\s*)?칠판|타사\s*(전자\s*)?칠판|다른\s*(회사|브랜드|업체)\s*(의\s*)?(전자\s*)?칠판|(삼성|lg|엘지)\s*(전자칠판|칠판|보드|플립|패널)/i
+  /다른\s*(?:회사|브랜드|업체|제품).{0,16}(?:전자\s*)?(?:칠판|보드)|왜\s*(?:이렇게\s*)?비싸|넥소|nexo|삼성\s*플립|samsung\s*flip|뷰소닉|viewsonic|프로메테안|promethean|맥스허브|maxhub|아하\s*(보드|칠판)|시중\s*(전자\s*)?칠판|타사\s*(전자\s*)?칠판|다른\s*(회사|브랜드|업체)\s*(의\s*)?(전자\s*)?칠판|(삼성|lg|엘지)\s*(전자칠판|칠판|보드|플립|패널)/i
 
 const IDENTITY_RE =
   /(classin|클래스인).*(뭐야|뭐예요|뭐에요|무엇|뭔가요|뭔데|뭐임|뭐\s*하는|어떤\s*(서비스|제품|솔루션|도구|플랫폼)|소개|설명)|(뭐야|뭐예요|뭐에요|무엇|뭔가요|뭔데|뭐임|뭐\s*하는|어떤\s*(서비스|제품|솔루션|도구|플랫폼)|소개|설명).*(classin|클래스인)/
@@ -660,8 +680,9 @@ const IDENTITY_EXCLUSION_RE =
   /가격|요금|견적|결제|환불|취소|영수증|세금|계산서|청구|구독|하드웨어|전자칠판|클래스인\s*보드|classin\s*board|\bboard\b|설치|납품|배송|\bas\b|a\/s|수리|고장|파손|오류|에러|안됨|안\s*돼|로그인|계정|비밀번호|접속|권한|장애|끊김/
 
 // 명시적 보드 단어(전자칠판/보드/칠판/모델명)는 무조건 하드웨어 타깃으로 본다.
+// '대시보드'의 '보드'는 전자칠판이 아니다 — "관리자 대시보드에 인증 메시지가 떠요"가 보드 스펙으로 새던 원인.
 const HARDWARE_TARGET_RE =
-  /classin\s*board|클래스인\s*보드|classin.*하드웨어|클래스인.*하드웨어|전자칠판|하드웨어|\bboard\b|보드|칠판|s65|s75|s86|s98|s110|bs65|bs75|bs86|bscp98|bs110/i
+  /classin\s*board|클래스인\s*보드|classin.*하드웨어|클래스인.*하드웨어|전자칠판|하드웨어|\bboard\b|(?<!대시\s?)보드|칠판|s65|s75|s86|s98|s110|bs65|bs75|bs86|bscp98|bs110/i
 
 // 모델·사이즈처럼 일반적인 제품 단어는 결제/계정 같은 다른 도메인 신호가 없을 때만 보드 질문으로 본다.
 const GENERIC_PRODUCT_RE = /모델|라인업|사이즈|인치|크기/i
@@ -696,7 +717,7 @@ const HARDWARE_UNCONFIRMED_DETAIL_RE =
   /색상|색깔|컬러|마감|화이트|블랙|검정|흰색|보증\s*기간|보증기간|무상\s*(as|a\/s|수리)|유상\s*(as|a\/s|수리)|원산지|제조사/i
 
 const HARDWARE_SPECS_EXCERPT =
-  "Classin Board는 모델별로 S75, S86, S98 Pro, S110 사양을 우선 확인합니다. 공통으로 4K 해상도, 16:9 화면, 178도 시야각, 밝기 350cd/m² 이상, 50점 적외선 터치, 내장 OPS(Windows OS), Wi-Fi ax/BT5.0, 2×15W 스피커를 기준으로 봅니다. 주요 차이는 화면 크기, 주사율, OPS 구성, 마이크 기재 여부, 무게와 소비전력입니다. S65는 라인업에는 있으나 현재 상세 규격서 확인이 필요합니다."
+  "Classin Board는 모델별로 S75, S86, S98 Pro, S110 사양을 우선 확인합니다. 공통으로 4K 해상도, 16:9 화면, 178도 시야각, 밝기 350cd/m² 이상, 50점 적외선 터치, 내장 OPS(Windows, 16GB 메모리·256GB SSD), Wi-Fi ax/BT5.0, 2×15W 스피커를 기준으로 봅니다. 주요 차이는 화면 크기, 주사율, OPS CPU, 마이크 기재 여부, 무게와 소비전력입니다. S65는 라인업에는 있으나 현재 상세 규격서 확인이 필요합니다."
 
 const HARDWARE_BOARD_LINEUP_EXCERPT =
   "Classin 칠판은 보통 Classin Board 전자칠판 라인업을 뜻합니다. 현재 안내 가능한 주요 모델은 S75, S86, S98 Pro, S110이며, 교실 크기와 맨 뒷자리 시야, 이동형 스탠드/벽걸이, 카메라·마이크 필요 여부로 고릅니다. 75·86인치는 일반 강의실, 98·110인치는 대형 강의실이나 설명회 공간에 더 잘 맞습니다. S65는 라인업에는 있으나 상세 규격 확인이 필요합니다."
@@ -704,7 +725,7 @@ const HARDWARE_BOARD_LINEUP_EXCERPT =
 const HARDWARE_BOARD_LINEUP_STANDARD_EXCERPT =
   "Classin Board 전자칠판은 보통 75인치(S75)와 86인치(S86)를 표준으로 가장 많이 선택합니다. 일반 강의실 대부분은 이 두 모델로 시작하며, 학생 수와 맨 뒷자리 시야, 이동형 스탠드/벽걸이, 카메라·마이크 필요 여부로 고릅니다. 대형 강의실·강당·설명회처럼 더 큰 공간이라면 추가 라인업도 있으니 상담에서 공간에 맞춰 안내해 드립니다."
 const HARDWARE_SPECS_STANDARD_EXCERPT =
-  "Classin Board는 75인치(S75)와 86인치(S86)가 표준 모델입니다. 두 모델 모두 4K(3840×2160) 해상도, 16:9 화면, 178도 시야각, 밝기 350cd/m² 이상, 50점 적외선 터치, 내장 OPS(Windows OS), Wi-Fi ax/BT5.0, 2×15W 스피커를 기준으로 봅니다. 외형 치수(가로×세로×두께)는 S75가 1,730.63×1,015.22×95.5mm, S86이 1,976.63×1,153.31×95.5mm이고 베젤은 22mm 슬림입니다. 더 큰 공간을 위한 추가 라인업은 상담에서 공간·예산에 맞춰 안내해 드립니다."
+  "Classin Board는 75인치(S75)와 86인치(S86)가 표준 모델입니다. 두 모델 모두 4K(3840×2160) 해상도, 16:9 화면, 178도 시야각, 밝기 350cd/m² 이상, 50점 적외선 터치, 내장 OPS(Windows, 16GB 메모리·256GB SSD), Wi-Fi ax/BT5.0, 2×15W 스피커를 기준으로 봅니다. 본체 치수(가로×세로×두께, 규격서 기준)는 S75가 1,718.18×1,000.2×113.1mm(54kg), S86이 1,964.08×1,139.02×113.1mm(69.5kg)입니다. 더 큰 공간을 위한 추가 라인업은 상담에서 공간·예산에 맞춰 안내해 드립니다."
 
 const HARDWARE_TROUBLE_EXCERPT =
   "전자칠판 화면이 안 나오면 전원 플러그와 멀티탭, 오른쪽 측면 하단 전원 버튼, 대기 모드, 입력 소스(OPS/HDMI), HDMI 케이블과 외부 기기 화면 출력을 순서대로 확인합니다. 연기, 냄새, 액체 유입, 파손이 있으면 전원을 분리하고 A/S로 연결합니다."
@@ -712,8 +733,9 @@ const HARDWARE_TROUBLE_EXCERPT =
 const HARDWARE_UNCONFIRMED_DETAIL_EXCERPT =
   "공개 스펙 기준으로는 모델별 화면 크기, OPS, 터치, 전력 같은 핵심 사양을 우선 안내할 수 있습니다. 색상, 마감, 보증 기간, 제조·재고 조건처럼 공급 조건에 따라 달라질 수 있는 세부 옵션은 최신 견적·납품 기준 확인이 필요합니다."
 
+// "안 돼/안됨"만으로는 로그인 문제로 보지 않는다 — "기관 등록 안됨", "녹화 안 돼요"가 로그인 답변으로 새던 원인.
 const LOGIN_TROUBLE_RE =
-  /로그인|접속|비밀번호|패스워드|인증\s*코드|인증코드|아이디|계정.*(안|오류|에러|문제)|안\s*(들어가|돼|됨|되|됩니다)|재설정/i
+  /로그인|접속|비밀번호|패스워드|인증\s*코드|인증코드|아이디|계정(?!\s*(?:인증|삭제|탈퇴)).{0,12}(안|오류|에러|문제)|재설정/i
 
 const LIVE_CLASS_TROUBLE_RE =
   /수업.*(나가|나감|튕김|튕겨|끊김|끊겨|입장\s*안|접속\s*안)|화면\s*공유.*(끊김|끊겨|오류|에러|안\s*됨|안\s*돼)|소리.*(안\s*들|끊김|끊겨)|마이크.*(안\s*됨|안\s*돼|끊김)/i
@@ -743,7 +765,11 @@ function isPreAdoptionOfflineBoardQuestion(question: NormalizedQuestion) {
 }
 
 function isPreAdoptionPolicyConfirmQuestion(question: NormalizedQuestion) {
-  return PRE_ADOPTION_POLICY_CONFIRM_RE.test(question.redacted)
+  if (!PRE_ADOPTION_POLICY_CONFIRM_RE.test(question.redacted)) return false
+  // "유료 전환하면 한 달에 얼마예요"는 권한 정책이 아니라 가격 질문이다.
+  const withoutPaidSwitch = question.redacted.replace(/유료\s*전환/g, "")
+  if (/얼마|가격|요금|비용/.test(question.redacted) && !PRE_ADOPTION_POLICY_CONFIRM_RE.test(withoutPaidSwitch)) return false
+  return true
 }
 
 function isPreAdoptionHardwareConditionalQuestion(question: NormalizedQuestion) {
@@ -760,6 +786,60 @@ function isPreAdoptionSpecificQuestion(question: NormalizedQuestion) {
   )
 }
 
+const RECEIPT_RE = /세금\s*계산서|세금계산서|영수증|증빙|청구서|계산서\s*발급/
+
+function isReceiptQuestion(question: NormalizedQuestion) {
+  return RECEIPT_RE.test(question.redacted.toLowerCase())
+}
+
+function getReceiptAnswer(question?: NormalizedQuestion) {
+  const text = question?.redacted.toLowerCase() ?? ""
+  // 학부모의 수업료 영수증은 학원이 발급한다. 클래스인 결제 증빙과 섞지 않는다.
+  if (/수업료|교육비|학원비|원비/.test(text) && /학부모|아이|자녀|연말정산|교육비\s*공제/.test(text)) {
+    return [
+      "학원 수업료를 어떻게 내는지와 교육비 영수증(교육비 납입 증명)은 학원이 정하고 발급해요. 공개 안내 기준으로 학원비 결제·정산은 클래스인의 기본 기능이 아니라서, 앱으로 결제하라는 안내가 어떤 앱과 화면을 말하는지 학원에 먼저 확인해 주세요.",
+      "연말정산용 교육비 공제 서류도 학원에 요청하시면 돼요.",
+    ].join("\n\n")
+  }
+  return [
+    "학원(기관) 계정의 결제 영수증은 관리자 콘솔 [결제] > [영수증 관리]에서 확인할 수 있어요. 개인 요금제로 직접 결제하셨거나 세금계산서 같은 다른 증빙이 필요하다면, 받을 수 있는지와 방법은 결제한 계정을 보고 결제 담당이 확인해 드려요. 상담 채널(홈페이지 하단 채팅)이나 담당 매니저에게 필요한 증빙과 기간을 알려 주세요. 결제 방법도 같은 곳에서 확인할 수 있어요.",
+    /경비|종합소득세|세무|공제|소득세|부가세\s*신고/.test(text)
+      ? "카드 영수증만으로 경비 처리가 되는지 같은 세무 판단은 제가 단정할 수 없어요. 신고 전에 세무사나 국세청 안내로 확인해 주세요."
+      : "아직 결제 전이라면 결제하기 전에 상담 채널에서 발급 방법을 먼저 정해 두시는 게 좋아요. 결제 뒤에 찾다가 학원 회계와 어긋나는 경우가 많습니다.",
+    "사업자 정보는 이 채팅창에 적지 마시고 상담 채널에서 담당자에게 전달해 주세요.",
+  ].join("\n\n")
+}
+
+const TRIAL_LIMIT_RE =
+  /체험.{0,24}(?:제한|막혀|막힘|못\s*(?:넣|만들|써|쓰)|안\s*(?:돼|되)|몇\s*명|인원|기능\s*(?:제한|차이)|끝났|끝나|종료|만료|짧|기간)/
+const ACCOUNT_PLAN_RE =
+  /(?:지금|현재|우리\s*학원|저희\s*학원|저희가|우리가).{0,20}(?:요금제|플랜|계약|라이선스).{0,24}(?:몇\s*명|한도|인원|최대|확인|남았|언제까지)/
+
+function isAccountPlanOrTrialLimitQuestion(question: NormalizedQuestion) {
+  const text = question.redacted.toLowerCase()
+  return TRIAL_LIMIT_RE.test(text) || ACCOUNT_PLAN_RE.test(text)
+}
+
+function getAccountPlanOrTrialLimitAnswer(question: NormalizedQuestion) {
+  const text = question.redacted.toLowerCase()
+  if (TRIAL_LIMIT_RE.test(text) && /끝났|끝나|종료|만료|짧|기간/.test(text)) {
+    return [
+      "공식 안내 기준으로 무료 체험은 2주예요. 신청한 지 얼마 안 됐는데 체험이 끝났다고 나온다면, 계정 상태를 담당자가 확인해 드려야 해요.",
+      "아래 [도입 상담 남기기]로 학원명과 체험을 신청한 날짜를 남겨 주세요. 계정 정보는 채팅창에 적지 않으셔도 돼요. 체험 기간을 확인하고 이어서 쓸 수 있는 방법을 안내드립니다.",
+    ].join("\n\n")
+  }
+  if (TRIAL_LIMIT_RE.test(text)) {
+    return [
+      "체험 계정에서 넣을 수 있는 인원과 쓸 수 있는 기능은 체험 조건에 따라 달라서, 담당자가 계정을 보고 확인해 드려요.",
+      "도입 검토 중이시라면 아래 [도입 상담 남기기]로 학원 규모와 확인하고 싶은 기능(학생 수, 녹화 등)을 남겨 주세요. 체험 범위를 늘리거나 데모로 보여 드릴 수 있는지 함께 안내드립니다.",
+    ].join("\n\n")
+  }
+  return [
+    "지금 쓰시는 요금제의 학생·강사 한도는 계정과 계약마다 달라 담당자가 확인해 드려요.",
+    "관리자 대시보드 [결제] > [결제 개요]에서 지금까지의 결제·비용 내역은 바로 볼 수 있어요. 정확한 한도와 남은 기간은 상담 채널(홈페이지 하단 채팅)이나 담당 매니저에게 학원명과 함께 요청해 주세요.",
+  ].join("\n\n")
+}
+
 function isRefundQuestion(question: NormalizedQuestion) {
   return /환불|해지/.test(question.redacted.toLowerCase())
 }
@@ -769,13 +849,22 @@ function isCourseCreationQuestion(question: NormalizedQuestion) {
   return /코스|클래스/.test(text) && /생성|만들|개설|추가/.test(text)
 }
 
+// "숙제를 어떻게 내요?"처럼 강사가 과제를 만드는 질문에만 강사용 안내를 붙인다.
+// 학생·학부모의 늦은 제출·다시 내기·제출 오류("마감 지났는데 내도 돼요?")는 학생용 문서로 보낸다.
+const STUDENT_SUBMISSION_RE =
+  /늦게|마감|못\s*(?:냈|내)|다시\s*(?:내|제출|해서)|재제출|제출이?\s*안|안\s*(?:올라|내져)|내도\s*(?:돼|되)|받아\s*줌|날아|사라|우리\s*아이|아이가|애가/
+
 function isAssignmentQuestion(question: NormalizedQuestion) {
   const text = question.redacted.toLowerCase()
-  return /과제|숙제|시험/.test(text) && /내|제출|부여|등록|만들|방법/.test(text)
+  if (STUDENT_SUBMISSION_RE.test(text)) return false
+  return /과제|숙제|시험/.test(text) && /내는|내려면|낼\s*수|어떻게\s*내|제출|부여|등록|만들|방법|출제/.test(text)
 }
 
+const AI_DATA_POLICY_RE = /\bai\b.{0,30}(?:학습|훈련|데이터|외부).{0,16}(?:쓰|사용|활용|보내|전송|들어)|(?:음성|영상).{0,20}(?:ai|인공지능).{0,16}(?:학습|훈련)/i
+
 function isPrivacyProcessingQuestion(question: NormalizedQuestion) {
-  return /개인정보.*(처리|보관|관리|방침|유출|보호|보안)|데이터.*(처리|보관|지역|유출|보안)/.test(question.redacted.toLowerCase())
+  const text = question.redacted.toLowerCase()
+  return /개인정보.*(처리|보관|관리|방침|유출|보호|보안)|데이터.*(처리|보관|지역|유출|보안)/.test(text) || AI_DATA_POLICY_RE.test(text)
 }
 
 function isRecordingOptionComparisonQuestion(question: NormalizedQuestion) {
@@ -839,8 +928,14 @@ function isIdentityQuestion(question: NormalizedQuestion) {
   return IDENTITY_RE.test(text) && !IDENTITY_EXCLUSION_RE.test(text)
 }
 
+// "칠판 티비 밝기 줄이고 싶어요", "화면에 줄이 생겼어요"처럼 쓰는 법·증상을 묻는 말은 스펙 질문이 아니다.
+const BOARD_USAGE_OR_SYMPTOM_RE =
+  /하고\s*싶|하려면|어떻게\s*(?:해|하|줄|바꾸|끄|켜|나눠)|방법|나눠|보내|공유|저장|생겼|생기|줄이|낮추|켜져\s*있|혼자|녹음|녹화|걸어|세워|이사|벽이|안\s*(?:돼|되|나|먹)|안돼|안되|느려|버벅|늘어|뚱뚱|이상해|이상하|눌러도|반응|낙서|닦|지워|아세톤|기사|접수|수리|고치|소개|혜택|이벤트|프로모션|할부|분할|나눠\s*내|매달|\bmac\b|802|내부망|와이파이|wi-?fi|권한|판서|학생|매직|업데이트|usb|한글|파일|보증|대체\s*기기|몇\s*년\s*쓰/
+
 function isHardwareSpecsQuestion(question: NormalizedQuestion) {
   const text = question.redacted.toLowerCase()
+  if (COMPETITOR_BOARD_RE.test(text)) return false
+  if (BOARD_USAGE_OR_SYMPTOM_RE.test(text)) return false
   return (
     isBoardTargeted(text) &&
     HARDWARE_SPECS_RE.test(text) &&
@@ -851,6 +946,8 @@ function isHardwareSpecsQuestion(question: NormalizedQuestion) {
 
 function isHardwareBoardLineupQuestion(question: NormalizedQuestion) {
   const text = question.redacted.toLowerCase()
+  if (INSTALL_FORM_RE.test(text)) return false
+  if (BOARD_USAGE_OR_SYMPTOM_RE.test(text)) return false
   return (
     isBoardTargeted(text) &&
     HARDWARE_BOARD_LINEUP_INTENT_RE.test(text) &&
@@ -906,6 +1003,8 @@ const TRIAL_OR_PILOT_RE =
 function isPricingInfoQuestion(question: NormalizedQuestion) {
   const text = question.redacted.toLowerCase()
   if (PRICING_EXCLUDE_RE.test(text)) return false
+  if (isComparisonQuestion(question)) return false
+  if (ACCOUNT_PLAN_RE.test(text) || TRIAL_LIMIT_RE.test(text)) return false
   if (isWebLiveBillingQuestion(question)) return false
   if (!PRICING_MONEY_RE.test(text) && PRICING_DURATION_RE.test(text)) return false
   return PRICING_INFO_RE.test(text)
@@ -926,8 +1025,8 @@ function isTrialOrPilotQuestion(question: NormalizedQuestion) {
 }
 
 // 설치 형태(스탠드/벽걸이)와 설치 가능/기간. 하드웨어 장애와는 분리한다.
-const INSTALL_FORM_RE = /스탠드|벽걸이|벽\s*부착|벽\s*설치|이동형|거치(대|형)?/i
-const INSTALL_HW_CONTEXT_RE = /전자칠판|클래스인\s*보드|classin\s*board|\bboard\b|보드|칠판|하드웨어|교실|벽면|s\s*(?:65|75|86|98|110)\b/i
+const INSTALL_FORM_RE = /스탠드|벽걸이|벽\s*부착|벽\s*설치|벽에\s*(?:거는|걸|다는|달)|바퀴\s*(?:달린|있는)|이동형|이동식|거치(대|형)?/i
+const INSTALL_HW_CONTEXT_RE = /전자칠판|클래스인\s*보드|classin\s*board|\bboard\b|(?<!대시\s?)보드|칠판|하드웨어|교실|벽면|s\s*(?:65|75|86|98|110)\b/i
 const INSTALL_INTENT_RE = /가능|돼|되나|될까|할\s*수|하나요|해야|방식|유형|형태|환경|기간|일정|얼마|어떻게|어디/i
 function isInstallFormQuestion(question: NormalizedQuestion) {
   const text = question.redacted.toLowerCase()
@@ -1053,12 +1152,24 @@ function buildCuratedSources(question: NormalizedQuestion) {
   const positioningSource = buildPositioningSource(question)
   if (positioningSource) sources.push(positioningSource)
 
+  if (isAccountPlanOrTrialLimitQuestion(question)) {
+    const source = buildStaticDocSource(
+      "admin",
+      "billing-upgrade",
+      "요금제 한도·체험 범위 확인",
+      "현재 요금제의 학생·강사 한도와 체험 계정의 인원·기능 범위는 계정과 계약 조건에 따라 달라 담당자가 확인합니다.",
+      320,
+      "billing"
+    )
+    if (source) sources.push(source)
+  }
+
   if (isRefundQuestion(question)) {
     const source = buildStaticDocSource(
       "start",
       "pre-adoption-faq-22-questions",
       "확인 필요한 정책·계약 항목",
-      "ClassIn 플랜 해지 시 환불 규정은 계약 형태(연간/월간)에 따르며, 미사용 기간에 대해 내부 규정 기준에 맞춰 환불 절차가 진행됩니다.",
+      "환불 가능 여부와 절차는 학원 계정의 계약 내용을 보고 담당자가 확인해 안내합니다.",
       310,
       "billing"
     )
@@ -1070,7 +1181,7 @@ function buildCuratedSources(question: NormalizedQuestion) {
       "teacher",
       "course-activities",
       "코스 생성과 구성원 관리",
-      "ClassIn 대시보드 또는 앱에서 [새 코스 생성]을 눌러 코스를 개설하고 학생들을 초대할 수 있습니다.",
+      "교사는 앱에서 코스를 만들고 학습 활동을 추가하며, 관리자는 웹 대시보드에서 코스·수업·교사·학생을 관리합니다.",
       320,
       "classroom"
     )
@@ -1082,7 +1193,7 @@ function buildCuratedSources(question: NormalizedQuestion) {
       "teacher",
       "course-activities",
       "과제 및 평가 관리",
-      "코스 내 학습 활동에서 [새 과제 추가]를 눌러 과제물 파일이나 텍스트를 첨부하고 게시하여 학생들에게 과제를 낼 수 있습니다.",
+      "코스에서 [새로 만들기] > [숙제]를 누르고 제목과 본문을 쓴 뒤 파일을 붙여 게시하면 학생들에게 숙제가 나갑니다.",
       320,
       "classroom"
     )
@@ -1327,7 +1438,7 @@ function buildCuratedSources(question: NormalizedQuestion) {
       "value-and-cost-framing",
       isSoftwarePricing ? "소프트웨어 요금과 플랜 안내" : "요금·견적 구성 안내",
       isSoftwarePricing
-        ? "소프트웨어는 운영 규모에 따라 Standard, Plus, Enterprise처럼 단계가 나뉘고, 구독형·충전형 조건은 기능 범위와 계약에 따라 달라질 수 있습니다. 정확한 금액과 조건은 계정 수, 코스 규모, 필요한 기능 기준으로 확인합니다."
+        ? "공식 안내 기준으로 Pro 요금제는 1인 강사용이고, 강사가 두 명 이상인 학원은 비즈니스 요금제를 권합니다. Enterprise는 대형 기관과 전자칠판을 함께 들이는 기관을 위한 맞춤 계약입니다. 정확한 금액과 할인은 강사 수·운영 규모에 따라 견적으로 안내합니다."
         : "클래스인 비용은 고정가표가 아니라 전자칠판+OPS, 카메라·스탠드/벽걸이 구성, 소프트웨어 사용 범위, 설치·온보딩까지 묶어 구성 기준으로 산정합니다. 정확한 금액은 학원 규모와 구성에 따라 달라집니다.",
       295,
       "billing"
@@ -1395,7 +1506,7 @@ function buildCuratedSources(question: NormalizedQuestion) {
     if (source) sources.push(source)
   }
 
-  if (/세금\s*계산서|세금계산서|영수증|증빙|청구서|계산서\s*발급/.test(text)) {
+  if (isReceiptQuestion(question)) {
     const source = buildStaticDocSource(
       "admin",
       "billing-upgrade",
@@ -1709,6 +1820,8 @@ function mergeCuratedSources(question: NormalizedQuestion, sources: ChatbotSourc
     isBoardOnlyOrPlatformQuestion(question) ||
     isCameraConflictQuestion(question) ||
     isRefundQuestion(question) ||
+    isReceiptQuestion(question) ||
+    isAccountPlanOrTrialLimitQuestion(question) ||
     isCourseCreationQuestion(question) ||
     isAssignmentQuestion(question) ||
     isPrivacyProcessingQuestion(question) ||
@@ -2173,7 +2286,7 @@ function buildSuggestedQuestions(category: string) {
 function wantsImmediateHumanHandoff(question: NormalizedQuestion) {
   const text = question.redacted.toLowerCase()
   const explicitHandoff =
-    /상담\s*(?:받|받고|하고|하고\s*싶|할래|신청|연결|이어|부탁|필요|문의|원해|원함)|상담받|상담할래|상담하고\s*싶|상담\s*(?:원|사)|담당자.{0,10}(?:상담|연결|연락|통화|배정|문의)|매니저.{0,10}(?:상담|연결|연락|통화|문의)|상담원.{0,10}(?:상담|연결|연락|통화|문의)|(?:상담|연결|연락|통화|문의).{0,10}(?:담당자|매니저|상담원)|전담\s*매니저|연락\s*(?:주세요|받고|하고|원해|원함|가능)|전화\s*(?:주세요|받고|하고|원해|원함|가능)|통화\s*(?:하고|원해|원함|가능)|미팅\s*(?:잡|하고|원해|원함)|데모\s*(?:신청|보고|연결|원해|원함)|시연\s*(?:신청|보고|연결|원해|원함)|쇼룸\s*(?:방문|데모|신청|예약|연결|체험|보|보러)|채널톡\s*(?:연결|상담|문의)|구매\s*상담|도입\s*(?:상담|문의|검토)/.test(text)
+    /상담\s*(?:받|받고|하고|하고\s*싶|할래|신청|연결|이어|부탁|필요|문의|원해|원함)|상담받|상담할래|상담하고\s*싶|상담\s*(?:원|사)|담당자.{0,10}(?:상담|연결|연락|통화|배정|문의)|매니저.{0,10}(?:상담|연결|연락|통화|문의)|상담원.{0,10}(?:상담|연결|연락|통화|문의)|(?:상담|연결|연락|통화|문의).{0,10}(?:담당자|매니저|상담원)|전담\s*매니저|연락\s*(?:주세요|받고|하고|원해|원함|가능)|전화\s*(?:주세요|받고|하고|원해|원함|가능)|통화\s*(?:하고|원해|원함|가능)|미팅\s*(?:잡|하고|원해|원함)|데모\s*(?:신청|보고|받|연결|원해|원함|요청)|데모.{0,10}신청|시연.{0,10}신청|시연\s*(?:신청|보고|연결|원해|원함)|쇼룸\s*(?:방문|데모|신청|예약|연결|체험|보|보러)|채널톡\s*(?:연결|상담|문의)|구매\s*상담|도입\s*(?:상담|문의|검토)|사람\s*(?:이랑|하고|한테|과)\s*(?:연결|통화|이야기|얘기|대화|상담)|사람\s*(?:연결|이랑\s*얘기)|(?:진짜|실제|살아\s*있는)\s*사람|사람\s*(?:바꿔|불러|연결)|직원\s*(?:연결|분|이랑|하고)|상담사\s*(?:연결|분|님)|상담원\s*(?:분|님|이랑|하고)|챗봇\s*말고|봇\s*말고|책임자|윗사람|상급자|대표\s*(?:바꿔|연결|나와|불러)|보상\s*(?:어떻게|해\s*주|받|요구|안\s*해)|통화\s*(?:할\s*수|할수|가능|되|돼)|전화\s*(?:로\s*(?:상담|설명|도와|해결)|상담|해\s*주실|해줄)|원격\s*(?:지원|제어|상담|으로)|화면\s*(?:을\s*)?(?:보면서|같이\s*보)|담당자\s*(?:번호|연락처|전화번호)|(?:번호|연락처)\s*(?:좀\s*)?(?:줘|주세요|알려)|(?:누구|사람|담당자)(?:랑|와|하고)\s*직접\s*(?:얘기|이야기|통화|상담)|사람이\s*답하는|사람(?:은|이)\s*(?:아예\s*)?(?:없|있)/.test(text)
   const contextualInquiry =
     /문의/.test(text) && /담당자|매니저|상담원|채널톡|쇼룸|연락|전화|통화|구매|도입|시연|데모/.test(text)
 
@@ -2185,8 +2298,13 @@ function wantsImmediateHumanHandoff(question: NormalizedQuestion) {
   return false
 }
 
+const EXPLICIT_HUMAN_CONNECTION_RE =
+  /(?:사람|상담원|상담사|직원|담당자|매니저).{0,12}(?:연결|바꿔|불러|통화|이어\s*(?:줘|주세요|주시)|대화하고|얘기하고)|챗봇\s*말고|봇\s*말고|사람\s*(?:이랑|하고|한테|과)\s*(?:이야기|얘기|대화|상담)/
+
 function wantsHumanConsultation(question: NormalizedQuestion) {
   if (wantsImmediateHumanHandoff(question)) return true
+  if (isRefundQuestion(question)) return true
+  if (isAccountPlanOrTrialLimitQuestion(question)) return true
 
   const text = question.redacted.toLowerCase()
   return /견적|데모|시연|미팅|제안|구매|도입\s*검토|도입\s*상담/.test(text)
@@ -2194,18 +2312,42 @@ function wantsHumanConsultation(question: NormalizedQuestion) {
 
 function buildImmediateHandoffResponse(
   category: string,
-  handoffIntent: HandoffIntent
+  handoffIntent: HandoffIntent,
+  text = ""
 ): Omit<ChatbotQueryResponse, "answerEventId" | "sessionId" | "warning" | "handoffIntent"> {
   const isSupport = handoffIntent === "support"
   return {
     answer: [
       isSupport
-        ? "상담 연결이 필요한 내용으로 확인했습니다."
-        : "담당자 상담으로 이어드릴게요.",
+        ? "네, 담당자 상담으로 바로 연결해 드릴게요. 아래 [실시간 상담 연결]을 누르시면 상담원이 지금까지의 대화를 보고 이어서 도와드립니다."
+        : "네, 담당자 상담으로 이어 드릴게요. 아래 [도입 상담 남기기]로 연락받을 방법을 남기시면 담당자가 연락드립니다.",
+      /보상|배상|환불/.test(text)
+        ? "보상이나 환불은 제가 채팅에서 약속드릴 수 없어요. 담당자가 이번 상황을 확인한 뒤 직접 안내드립니다."
+        : null,
+      /통화\s*(?:할\s*수|할수|가능|하고\s*싶|원해|부탁)|전화\s*(?:로\s*해결|로\s*(?:상담|설명)|상담|해\s*주)|원격|화면\s*(?:을\s*)?(?:보면서|같이)/.test(text)
+        ? `${/죄송|잘\s*못하|서툴|모르겠/.test(text) ? "설명이 서툴러도 괜찮아요. " : ""}전화나 화면을 함께 보는 원격 지원이 되는지는 상담원이 상황을 보고 안내해 드려요.`
+        : null,
+      /번호|연락처/.test(text)
+        ? "담당자 개인 연락처는 채팅에서 드릴 수 없어요. 대신 아래 버튼으로 연결하시면 상담원이 물어보실 내용을 한 번에 받아 이어서 도와드려요. 물어볼 내용을 목록으로 적어 두시면 더 빨라요."
+        : null,
+      /(?:챗봇|봇).{0,20}(?:같은|똑같|매번|왜\s*만들)|사람이\s*답하는|사람(?:은|이)\s*(?:아예\s*)?없/.test(text)
+        ? "같은 답만 되풀이해 답답하셨을 텐데 죄송해요. 사람이 직접 답하는 상담도 있어요."
+        : null,
+      /(?:조건|내용|금액).{0,20}(?:다르|달라)/.test(text)
+        ? "어느 조건이 맞는지는 제가 단정할 수 없어요. 통화로 들으신 조건과 메일 내용 중 다른 부분을 정리해 남겨 주시면 담당자가 확인해 드립니다."
+        : null,
+      /학원을?\s*옮|그만\s*(?:쓰|다니)|직접\s*(?:얘기|이야기)/.test(text) && !/(?:챗봇|봇)/.test(text)
+        ? "계속 문제가 생겨 지치셨을 것 같아요. 상담원과 남은 문제를 하나씩 같이 풀어 보시면 좋겠어요."
+        : null,
+      /몇\s*시(?:까지|부터)?|운영\s*시간|상담\s*시간|언제까지|주말/.test(text)
+        ? "상담 운영 시간은 공개 안내에 정리돼 있지 않아 단정하지 않을게요. 연결되면 상담원이 바로 안내해 드립니다."
+        : null,
       isSupport
-        ? "담당자가 바로 확인할 수 있게 계정/오류 화면, 결제 상태, 장비 증상처럼 현재 상황을 함께 남겨주세요."
-        : "담당자가 도입 목적, 희망 일정, 수업 운영 방식부터 빠르게 확인할 수 있게 연결 정보를 남겨주세요.",
-    ].join("\n\n"),
+        ? "기다리시는 동안 문제가 생긴 화면, 쓰는 기기, 생긴 시각을 정리해 두시면 더 빨리 확인합니다. 비밀번호는 보내지 않으셔도 돼요."
+        : "데모와 쇼룸 방문은 홈페이지 문의 페이지(/contact)나 쇼룸 예약(/showroom)에서도 바로 신청할 수 있어요. 여러 분이 함께 보실 예정이면 신청할 때 인원을 적어 주세요.",
+    ]
+      .filter(Boolean)
+      .join("\n\n"),
     answerMode: "handoff",
     confidence: 0.72,
     needsHandoff: true,
@@ -2316,24 +2458,55 @@ function getStepCriteriaByCategory(category: string) {
   }
 }
 
-function getConciseNextStep(category: string) {
-  switch (category) {
-    case "billing":
-      return "계정별 조건이 달라질 수 있어요. 결제 수단, 사업자 정보, 필요한 증빙 종류를 알려주시면 더 정확히 이어드릴게요."
-    case "hardware":
-      return "설치 장소, 희망 대수, 스탠드/벽걸이 여부를 알려주시면 패키지 범위를 좁혀드릴게요."
-    case "troubleshooting":
-      return "오류 화면, 사용 기기, 앱/브라우저, 발생 시점을 알려주시면 해결 순서를 더 정확히 잡을 수 있어요."
-    case "onboarding":
-      return "현재 쓰는 전자칠판, 녹화, LMS 도구와 도입 희망 시점을 알려주시면 90일 도입 순서로 좁혀드릴게요."
-    case "admin":
-      return "보고 싶은 데이터와 관리자 권한 범위를 알려주시면 설정/연동 흐름으로 정리해드릴게요."
-    case "classroom":
-      return "수업 전, 수업 중, 수업 후 중 어디가 가장 불편한지 알려주시면 기능 기준으로 좁혀드릴게요."
-    default:
-      return "원하시면 도입, 수업 운영, 계정/오류, 결제 중 어느 쪽인지부터 빠르게 좁혀드릴게요."
-  }
+function trimExcerptToSentence(excerpt: string) {
+  const withoutEllipsis = excerpt.replace(/\s*(?:\.\.\.|…)\s*$/, "").trim()
+  if (withoutEllipsis === excerpt.trim()) return withoutEllipsis
+  const sentences = withoutEllipsis.match(/[^.!?。]*[.!?。]/g)
+  return sentences && sentences.length > 0 ? sentences.join("").trim() : withoutEllipsis
 }
+
+// getStepCriteriaByCategory가 범주별 단계를 따로 갖고 있는 범주. 나머지는 일반 되묻기를 쓴다.
+const STEP_CRITERIA_CATEGORIES = new Set(["troubleshooting", "billing", "hardware", "onboarding", "admin", "classroom"])
+
+// 짧거나 대상이 모호한 질문("그거 받았는데 안 열림")에 되물을 말. 묻는 사람(학생·학부모 / 학원)에 맞는 예를 든다.
+function buildGeneralClarify(question: NormalizedQuestion) {
+  const text = question.redacted.toLowerCase()
+  // 긴 질문 속 '이거'는 대개 앞에서 이미 말한 것을 가리키므로 '그거가 뭐냐'고 되묻지 않는다.
+  const vagueRef = /그거|그게|그걸|그것|이거|저거|그\s*(?:파일|링크|앱)/.test(text) && text.replace(/\s+/g, "").length <= 40
+  const lead = vagueRef
+    ? "말씀하신 '그거'가 무엇인지 한 가지만 알려 주시면 바로 도와드릴게요."
+    : "어떤 상황인지 한 가지만 더 알려 주시면 바로 도와드릴게요."
+  const example = LEARNER_VOICE_RE.test(text) || /학생|애들|친구|수업\s*듣|쌤/.test(text)
+    ? "예를 들면 수업 들어가기, 다시보기, 숙제 내기, 앱 설치·로그인, 선생님이 보낸 파일 열기 가운데 어느 쪽인가요?"
+    : /샘들|선생님들|강사|원장|학원|관리자|직원|실장|경리|세무|정산|마감/.test(text)
+      ? "예를 들면 강사·학생 등록, 수업·녹화 설정, 저장 공간, 결제·요금, 전자칠판 가운데 어느 쪽인가요?"
+      : "예를 들면 수업 입장·소리·화면 같은 사용 문제, 녹화·숙제 같은 기능, 결제·요금, 도입 상담 가운데 어느 쪽인가요?"
+  return [lead, example]
+}
+
+// 학생·학부모 목소리의 질문. 이런 질문에는 영업형 되묻기("설치 장소, 희망 대수", "수업 전·중·후")를 붙이지 않는다.
+const LEARNER_VOICE_RE =
+  /우리\s*(?:아이|애)|아이가|애가|딸이|아들이|학생인데|저\s*학생|쌤이|선생님이\s*(?:내|저|우리)|엄마가|엄마한테|숙제|과제|시험|다시\s*보기|다보기/
+
+// 질문 성격(증상·사용법·구매)에 맞는 다음 행동. 카테고리별 고정 문구는 구매·도입 질문에만 쓴다
+// (터치 문제에 "설치 장소, 희망 대수를 알려주세요"처럼 엉뚱한 되묻기를 붙이지 않는다).
+function getContextualNextStep(question: NormalizedQuestion, category: string): string | null {
+  const text = question.redacted.toLowerCase()
+  // 영업 질문의 끝 질문(규모·교실 수·도입 시기)은 질문 주도 계층(follow-up.ts)이 고른다. 결제 증빙 안내만 남긴다.
+  if (/견적|가격|요금|비용|도입|구매|체험|데모|상담/.test(text)) return category === "billing" ? BILLING_NEXT_STEP : null
+  if (/안\s*(?:돼|되|됨|됐|나|들|보|켜|떠|와)|안돼|안되|안됨|오류|에러|끊|튕|멈|이상|못\s*(?:하|해|들|보|봐)/.test(text)) {
+    return "화면에 뜬 문구와 쓰는 기기(PC·휴대폰·전자칠판)를 알려 주시면 더 정확히 안내드릴게요. 급하면 \"상담원 연결\"이라고 남겨 주세요."
+  }
+  if (/어떻게|방법|어디|하는\s*법|순서/.test(text)) {
+    return "막히는 화면이나 메뉴 이름을 알려 주시면 그 단계부터 더 자세히 안내드릴게요."
+  }
+  // 범주별 일반 되묻기("오류 화면·브라우저를 알려 주세요", "90일 도입 순서로…")는 질문과 상관없는 군더더기가 되기 쉽다.
+  // 끝 질문은 질문 주도 계층이 정하고, 여기서는 결제 증빙 안내만 남긴다.
+  return category === "billing" && !LEARNER_VOICE_RE.test(text) ? BILLING_NEXT_STEP : null
+}
+
+const BILLING_NEXT_STEP =
+  "결제·증빙은 계정마다 조건이 달라 담당자가 확인해요. 상담 채널(홈페이지 하단 채팅)이나 담당 매니저에게 필요한 증빙 종류를 말씀해 주세요."
 
 function getComparisonAnswer(question: NormalizedQuestion, top: ChatbotSource) {
   const text = question.redacted.toLowerCase()
@@ -2347,13 +2520,19 @@ function getComparisonAnswer(question: NormalizedQuestion, top: ChatbotSource) {
     return [
       "네, 좋은 질문이에요. 같은 '전자칠판'처럼 보여도 Classin Board는 화면·판서에서 끝나지 않고 수업 운영 흐름 전체로 이어지는 게 가장 큰 차이예요.",
       "일반 전자칠판이 화면 출력과 판서 중심이라면, Classin Board는 이렇게 달라요.\n- 윈도우 OPS 내장이라 외부 PC·노트북 없이 보드 하나로 수업을 구동해요\n- EDB 칠판 파일로 판서·이미지·자료를 최대 50페이지까지 저장하고 다음 수업에 그대로 재사용해요\n- 녹화·복습·LMS·관리자 데이터까지 한 흐름으로 이어져요",
-      "카메라·마이크도 내장이라 따로 장비를 붙일 필요가 줄어요. 어떤 점이 제일 궁금하신지 알려주시면 그 기준으로 더 좁혀 비교해드릴게요.",
+      "어떤 점이 제일 궁금하신지 알려주시면 그 기준으로 더 좁혀 비교해드릴게요.",
     ].join("\n\n")
   }
 
   return [
     "네, 좋은 질문이에요. Classin은 Zoom이나 일반 전자칠판과 달리 '수업 운영 흐름' 전체에 초점이 있어요.",
     "Zoom이 회의 중심이라면 Classin은 판서·녹화·복습·LMS를 하나로 연결하고,\n일반 전자칠판이 화면·판서에 머무는 것과 달리 EDB 교안과 관리자 데이터까지 이어줘요.",
+    /할인|깎|네고/.test(text)
+      ? "할인은 채팅에서 약속드리지 않고, 교실 수와 구성(전자칠판 대수·설치 형태·소프트웨어)을 보고 견적에서 안내드려요. 문의 페이지(/contact)에서 견적을 요청해 주세요."
+      : null,
+    PRICING_INFO_RE.test(text) || /비싸|원대|만\s*원/.test(text)
+      ? "가격은 Zoom처럼 계정 요금만 놓고 비교하기보다, 녹화·숙제·복습·관리를 따로 쓰던 도구 비용까지 같이 놓고 봐야 정확해요. 금액은 규모에 따라 견적으로 안내드리고, 문의 페이지(/contact)에서 신청하시면 됩니다."
+      : null,
     top.heading === "핵심 포지셔닝"
       ? "Zoom, 전자칠판, LMS 중 어떤 기준으로 비교 중이신지 알려주시면 그 부분만 더 좁혀드릴게요."
       : null,
@@ -2376,18 +2555,29 @@ function getEdbAnswer() {
   ].join("\n\n")
 }
 
+// "S75랑 S86 기능 차이"처럼 표준 두 모델을 견주는 질문.
+const BOARD_MODEL_COMPARE_RE = /(?=.*s\s*75)(?=.*s\s*86)(?=.*(?:차이|비교|다른|다르|뭐가\s*달))/
+
+function getBoardModelCompareAnswer() {
+  return [
+    "S75와 S86은 화면 크기, 본체 크기·무게, 소비 전력이 달라요. 규격서 기준으로 4K 해상도, 16:9 화면, 60Hz, 명암비 4000:1, 3mm AG/AF 유리, 50점 적외선 터치, 내장 OPS(Windows) 같은 기능 사양은 같습니다.",
+    "- S75 — 75인치 · 본체 1,718.18 × 1,000.2 × 113.1mm · 54kg · 315W\n- S86 — 86인치 · 본체 1,964.08 × 1,139.02 × 113.1mm · 69.5kg · 390W",
+    "그래서 고르는 기준은 기능보다 교실 크기와 맨 뒷자리까지의 거리예요. 교실 넓이와 학생 수를 알려 주시면 맞는 모델을 같이 좁혀 드리고, 상세 규격서가 필요하시면 상담에서 보내 드릴게요.",
+  ].join("\n\n")
+}
+
 function getHardwareSpecsAnswer(revealBig: boolean) {
   if (!revealBig) {
     return [
       "네, Classin Board 사양 정리해드릴게요.",
-      "표준 모델은 75인치(S75)와 86인치(S86)예요. 공통 기준은 4K · 16:9 · 178도 시야각 · 밝기 350cd/m² 이상 · 50점 적외선 터치 · 내장 OPS(Windows OS)입니다.",
-      "외형 치수(가로×세로×두께)는 이렇게 봐요.\n- S75 — 1,730.63 × 1,015.22mm · 두께 95.5mm · 54kg\n- S86 — 1,976.63 × 1,153.31mm · 두께 95.5mm · 69.5kg",
-      "두께 95.5mm에 베젤 22mm 슬림이라 벽걸이든 이동형 스탠드든 공간 부담이 적어요. 더 큰 공간을 위한 추가 라인업은 교실 크기랑 설치 방식만 알려주시면 상담에서 맞춰 안내해 드릴게요.",
+      "표준 모델은 75인치(S75)와 86인치(S86)예요. 공통 기준은 4K · 16:9 · 178도 시야각 · 밝기 350cd/m² 이상 · 50점 적외선 터치 · 내장 OPS(Windows, 16GB 메모리·256GB SSD)입니다.",
+      "본체 치수(가로×세로×두께, 규격서 기준)는 이렇게 봐요.\n- S75 — 1,718.18 × 1,000.2mm · 두께 113.1mm · 54kg\n- S86 — 1,964.08 × 1,139.02mm · 두께 113.1mm · 69.5kg",
+      "벽걸이 브래킷과 이동형 스탠드 중 무엇이 견적에 들어가는지는 설치 형태에 따라 정해요. 더 큰 공간을 위한 추가 라인업은 교실 크기랑 설치 방식만 알려주시면 상담에서 맞춰 안내해 드릴게요.",
     ].join("\n\n")
   }
   return [
     "네, Classin Board 사양 정리해드릴게요.",
-    "공통 기준은 4K · 16:9 · 178도 시야각 · 밝기 350cd/m² 이상 · 50점 적외선 터치 · 내장 OPS(Windows OS)예요.",
+    "공통 기준은 4K · 16:9 · 178도 시야각 · 밝기 350cd/m² 이상 · 50점 적외선 터치 · 내장 OPS(Windows, 16GB 메모리·256GB SSD)예요. 수업은 이 OPS의 윈도우에서 해요.",
     "모델별 핵심 차이예요.",
     "- S75 — 75인치 · 54kg · 315W\n- S86 — 86인치 · 69.5kg · 390W\n- S98 Pro — 98인치 · 89kg · 740W · NFC\n- S110 — 110인치 · 137kg · 850W · 120Hz",
     "교실 크기랑 설치 방식만 알려주시면 어느 모델이 맞을지 같이 좁혀드릴게요. S65는 상세 규격 확인이 필요해요.",
@@ -2453,15 +2643,16 @@ function getPricingAnswer() {
   return [
     "네, 요금은 고정가표보다 '구성 기준'으로 봐요. 보통 이렇게 묶여요.",
     "- 전자칠판 + OPS(윈도우 컴퓨팅)\n- 카메라·마이크·스탠드/벽걸이 구성\n- 소프트웨어 사용 범위(녹화·LMS 등)\n- 설치·온보딩",
-    "교실 수랑 원하는 구성만 알려주시면 견적 범위를 잡아드릴게요.",
+    "소프트웨어만 쓰신다면 1인 강사는 Pro, 강사 두 명 이상은 비즈니스 요금제가 기준이에요(공식 안내 기준). 정확한 금액은 규모에 따라 견적으로 드려요.",
+    "견적은 홈페이지 문의 페이지(/contact)에서 교실 수와 원하는 구성을 남겨 주시면 담당자가 안내드려요.",
   ].join("\n\n")
 }
 
 function getSoftwarePricingAnswer() {
   return [
-    "소프트웨어만 검토하시는 경우에는 전자칠판 패키지와 분리해서 계정 수와 운영 규모 기준으로 보면 됩니다.",
-    "Standard, Plus, Enterprise처럼 필요한 기능과 팀 규모에 따라 단계가 나뉘고, 구독형·충전형 조건은 사용 기능과 계약 방식에 따라 달라질 수 있어요.",
-    "정확한 금액은 단정하지 않고, 강사 수·학생 수·코스 규모·필요 기능을 기준으로 견적에서 확인하는 게 안전합니다.",
+    "소프트웨어 요금제는 강사 계정 수와 학원 규모로 고릅니다. 공식 안내 기준으로 Pro는 1인 강사용, 강사가 두 명 이상인 학원은 비즈니스를 권하고, Enterprise는 대형 기관이나 전자칠판을 함께 들이는 기관을 위한 맞춤 계약이에요.",
+    "월 금액과 할인은 강사 수와 운영 규모에 따라 달라 정확한 금액은 단정하지 않고 견적으로 안내드려요. 전자칠판을 함께 들이면 장비·설치까지 묶어 견적을 냅니다.",
+    "견적과 2주 무료 체험은 홈페이지 문의 페이지(/contact)에서 신청하시면 담당자가 규모에 맞춰 안내드려요. 신청할 때 전자칠판 대수, 강사·학생 수, 교실 수, 설치 형태(벽걸이·스탠드)를 적어 주시면 견적이 빨라집니다.",
   ].join("\n\n")
 }
 
@@ -2476,8 +2667,8 @@ function getTrialOrPilotAnswer() {
 function getParentReportOrNotificationAnswer() {
   return [
     "학부모 커뮤니케이션은 'Classin 안에서 확인할 수 있는 데이터'와 '자동 발송'을 나눠 봐야 합니다.",
-    "출결, 과제, 성적, 복습 기록, 학습 보고서처럼 상담에 쓸 데이터는 권한 범위 안에서 확인할 수 있어요. 다만 학부모 문자·푸시·상담 리포트가 자동 발송된다고 기본 기능처럼 단정하면 안 됩니다.",
-    "자동 알림이 필요하면 SMS 알림, API, 외부 학원관리 시스템 연동 범위로 따로 확인하는 게 맞습니다.",
+    "출결, 과제, 성적, 복습 기록, 학습 보고서처럼 상담에 쓸 데이터는 권한 범위 안에서 확인할 수 있어요. 학습 보고서는 링크를 복사해 학부모님께 보낼 수 있어요.",
+    "다만 학부모님께 문자·상담 리포트를 자동으로 보내는 건 기본 화면 기능으로 안내돼 있지 않아요. 수업 알림 문자(SMS)는 [일반 설정] > [부가가치 서비스]의 유료 서비스 '스마트 담임 교사'로 학생과 교사에게 자동으로 보낼 수 있으니, 학부모 번호로도 받을 수 있는지는 담당 매니저에게 확인해 보세요. 그 밖의 자동 알림은 공식 API로 클래스인 앱 푸시를 자동화하거나 외부 학원관리 시스템과 연동하는 방식을 상담에서 확인해 보세요.",
   ].join("\n\n")
 }
 
@@ -2501,7 +2692,8 @@ function getRecordingPermissionAnswer() {
   return [
     "수업 녹화와 현장 녹화는 목적이 달라서 먼저 구분해서 봐야 해요.",
     "수업 녹화는 ClassIn 수업 안의 화면·판서·자료 중심이고, 현장 녹화는 카메라 구성이 설정된 경우 교실 뷰나 트래킹 뷰를 다룹니다.",
-    "저장·확인·다운로드는 관리자 또는 권한 받은 계정이 계약·기관 설정 범위 안에서 관리하는 기준으로 안내해야 합니다. 실제 권한 범위는 현재 계정과 계약 조건으로 확인하는 게 맞습니다.",
+    "녹화 여부와 녹화본 보관·다운로드는 학원의 관리자 또는 권한 받은 계정이 관리해요. 수업이 녹화되는지, 누가 녹화본을 볼 수 있는지는 수업을 운영하는 학원에 먼저 확인해 주세요.",
+    "학생이 보는 다시보기는 그 코스에 등록된 학생에게 학원이 정한 기간 동안 열립니다. 더 자세한 보관·삭제 기준은 공식 개인정보처리방침과 담당자 확인으로 안내드려요.",
   ].join("\n\n")
 }
 
@@ -2549,18 +2741,33 @@ function getHardwareConditionalPreAdoptionAnswer(question: NormalizedQuestion) {
 function getPolicyConfirmationAnswer(question: NormalizedQuestion) {
   const text = question.redacted.toLowerCase()
 
+  if (isRefundQuestion(question)) {
+    return [
+      "환불 가능 여부와 절차는 학원 계정의 계약 내용을 보고 담당자가 확인해 안내드려요. 채팅에서 바로 환불 여부나 금액을 약속드릴 수는 없어 죄송합니다.",
+      /(?:처리|진행)\s*(?:상태|상황|현황)|지났|아직|언제\s*(?:돼|되|처리|들어)/.test(text)
+        ? "이미 요청하신 환불의 처리 상태는 이 채팅에서 조회할 수 없어요. 아래 [실시간 상담 연결]을 누르시면 상담원이 요청 내역을 찾아 진행 상황을 확인해 드립니다."
+        : "아래 [실시간 상담 연결]을 누르시면 상담원에게 바로 환불 요청을 접수할 수 있어요. 결제한 학원명과 결제 시기를 함께 말씀해 주시면 더 빨리 확인합니다.",
+    ].join("\n\n")
+  }
+
+  if (AI_DATA_POLICY_RE.test(text)) {
+    return [
+      "AI 기능을 켰을 때 수업 음성·영상이 어떻게 처리되는지는 채팅에서 추측으로 말씀드리지 않고, 공식 정책(개인정보처리방침)과 계약 문서로 확인해 드려요.",
+      "조항 근거가 필요하시면 상담 채널(홈페이지 하단 채팅)이나 담당 매니저에게 문서로 요청해 주세요. AI 기능은 관리자 대시보드 일반 설정의 [부가가치 서비스]에서 켜고 끌 수 있어요.",
+    ].join("\n\n")
+  }
+
   if (/서버|데이터\s*(처리|보관|지역)/.test(text)) {
     return [
-      "서버 위치나 데이터 처리 지역은 추정으로 답하면 안 되는 항목입니다.",
-      "공식 정책, 계약 조건, 개인정보 처리 기준으로 확인해야 하고, 상담에서는 어떤 데이터가 어디에 저장·처리되는지 확인 요청 항목으로 분리하는 게 맞습니다.",
-      "도입 검토 중이라면 서버 위치, 데이터 처리 지역, 보관·삭제 기준을 한 묶음으로 담당자에게 확인하세요.",
+      "서버 위치와 데이터 처리 지역은 채팅에서 추측으로 말씀드리지 않고, 공식 정책(개인정보처리방침)과 계약 문서로 확인해 드려요.",
+      "교육청 점검처럼 근거 문서가 필요하시면 상담 채널(홈페이지 하단 채팅)이나 담당 매니저에게 '서버 위치, 데이터 처리 지역, 보관·삭제 기준'을 문서로 요청해 주세요. 계약 학원이라면 담당 매니저가 확인 자료를 안내드립니다.",
     ].join("\n\n")
   }
 
   if (/콘텐츠\s*소유권|소유권|저작권/.test(text)) {
     return [
       "콘텐츠 소유권은 약관·계약 기준으로 확인해야 하는 항목입니다.",
-      "공개 답변에서는 기관 자료와 접근 권한을 분리 관리한다고 안내하고, 소유권과 서비스 제공을 위한 이용 권한은 최신 계약·정책으로 확인하는 게 안전합니다.",
+      "학원이 올린 자료와 접근 권한은 기관 단위로 따로 관리되고, 소유권과 서비스 제공을 위한 이용 범위는 최신 약관·계약서로 확인해 드려요.",
       "상담에서는 녹화본, EDB 교안, 업로드 자료, 공유 드라이브 자료를 각각 누가 볼 수 있고 어떻게 보관되는지 함께 확인하세요.",
     ].join("\n\n")
   }
@@ -2569,7 +2776,7 @@ function getPolicyConfirmationAnswer(question: NormalizedQuestion) {
     return [
       "스토리지는 사용량 확인과 계약 조건을 나눠 봐야 합니다.",
       "관리자는 권한 범위 안에서 녹화본, 스크린샷, 칠판 파일, 공유 드라이브 등 스토리지 사용량을 확인할 수 있습니다.",
-      "기본 제공 용량, 추가 용량, 1GB당 단가, 장기 보관 조건은 최신 계약 기준으로 확인해야 하므로 숫자를 단정하지 않는 게 맞습니다.",
+      "기본 제공 용량, 추가 용량 단가, 장기 보관 조건은 계약마다 달라 채팅에서 숫자를 단정하지 않고, 담당자가 최신 계약 기준으로 안내드려요.",
     ].join("\n\n")
   }
 
@@ -2600,7 +2807,7 @@ function getPolicyConfirmationAnswer(question: NormalizedQuestion) {
   if (/펜|소모품|팁/.test(text)) {
     return [
       "전용 펜 팁이나 소모품은 구매 가능 여부, 재고, 가격을 최신 공급 조건으로 확인해야 합니다.",
-      "공개 답변에서 금액을 단정하지 말고, 모델명과 필요한 수량을 기준으로 구매 경로와 단가를 확인 요청하는 게 안전합니다.",
+      "채팅에서 금액을 단정하지 않고, 모델명과 필요한 수량을 알려 주시면 담당자가 구매 경로와 단가를 안내드려요.",
       "파손이 잦다면 여분 보관 위치와 교실별 관리 기준도 함께 정해두세요.",
     ].join("\n\n")
   }
@@ -2614,9 +2821,8 @@ function getPolicyConfirmationAnswer(question: NormalizedQuestion) {
   }
 
   return [
-    "이 항목은 최신 계약·정책 확인이 필요한 질문입니다.",
-    "공개 답변에서는 가능한 기능과 확인 필요 범위를 분리하고, 금액·서버·소유권·권한처럼 조건이 바뀔 수 있는 내용은 단정하지 않는 게 맞습니다.",
-    "상담에서는 현재 계정, 계약 조건, 필요한 장비 구성, 보관·권한 기준을 같이 확인하세요.",
+    "이 내용은 계약과 계정 상태에 따라 달라서 담당자가 확인해 안내드려야 해요.",
+    "아래 상담 연결로 남겨 주시면 현재 계정과 계약 기준으로 확인해 드립니다.",
   ].join("\n\n")
 }
 
@@ -2630,7 +2836,7 @@ function getGoogleClassroomAnswer() {
 
 function getSiteEntryIntegrationAnswer() {
   return [
-    "자사 사이트의 입장 버튼에서 ClassIn 수업으로 연결하는 건 가능성은 열어두되, 기본 제공 기능처럼 단정하면 안 됩니다.",
+    "자사 사이트의 입장 버튼에서 ClassIn 수업으로 바로 연결하는 건 기본 제공 기능으로 안내돼 있지 않아요. 공식 API로 연결하는 개발 작업이 필요할 수 있어요.",
     "수업 링크, 로그인 방식, 학생 권한, 수업 생성 주체, 반복 시간표, API 또는 운영 자동화 범위를 같이 봐야 해요.",
     "현재 사이트에서 회원 인증을 어떻게 하고 있는지, 수업이 매번 수동 생성인지 반복 일정인지, 충전형/구독형 중 어떤 계약을 검토 중인지 알려주시면 연동 확인 항목으로 좁혀드릴게요.",
   ].join("\n\n")
@@ -2736,6 +2942,7 @@ function formatConsumerAnswer({
     return getHardwareBoardLineupAnswer(HARDWARE_BIG_MODEL_RE.test(question.redacted.toLowerCase()))
   }
   if (isHardwareSpecsQuestion(question) && top.urlPath.includes("/docs/hardware/board-lineup-specs")) {
+    if (BOARD_MODEL_COMPARE_RE.test(question.redacted.toLowerCase())) return getBoardModelCompareAnswer()
     return getHardwareSpecsAnswer(HARDWARE_BIG_MODEL_RE.test(question.redacted.toLowerCase()))
   }
   if (isComparisonQuestion(question) && top.urlPath.includes("/docs/start/academy-system-os-positioning")) {
@@ -2761,6 +2968,12 @@ function formatConsumerAnswer({
   }
   if (isInstallFormQuestion(question) && top.heading === "설치 형태와 현장 점검") {
     return getInstallFormAnswer()
+  }
+  if (top.heading === "요금제 한도·체험 범위 확인") {
+    return getAccountPlanOrTrialLimitAnswer(question)
+  }
+  if (top.heading === "영수증과 결제 증빙 확인") {
+    return getReceiptAnswer(question)
   }
   if (top.heading === "녹화 저장과 권한 기준") {
     return getRecordingPermissionAnswer()
@@ -2814,21 +3027,19 @@ function formatConsumerAnswer({
   const normalizedExcerpt = top.excerpt.replace(/\s+/g, " ").trim().toLowerCase()
   const excerptStartsWithHeading =
     headingText.length > 0 && normalizedExcerpt.startsWith(headingText.replace(/\s+/g, " ").toLowerCase())
-  const heading =
-    headingText && headingText !== "요약" && !isMetaHeading && !excerptStartsWithHeading
-      ? `${headingText}: `
-      : ""
-  // doc_suggestion(약한 출처) 폴백만 따뜻하게 재구성한다. direct_answer/handoff 는 기존 그대로 둔다.
+  // 검색 발췌는 220자에서 잘려 "..."로 끝날 수 있다 — 문장 끝까지만 쓰고, "제목: " 접두어는 붙이지 않는다.
+  const sentenceSafeExcerpt = trimExcerptToSentence(top.excerpt)
+  // doc_suggestion(약한 출처) 폴백만 따뜻하게 재구성한다. direct_answer/handoff 는 발췌를 그대로 쓴다.
   const summary =
     answerMode === "doc_suggestion"
-      ? buildDocSuggestionSummary(top.excerpt, headingText, { isMetaHeading, excerptStartsWithHeading })
-      : `${heading}${top.excerpt}`
-  const nextStep = getConciseNextStep(category)
+      ? buildDocSuggestionSummary(sentenceSafeExcerpt, headingText, { isMetaHeading, excerptStartsWithHeading })
+      : sentenceSafeExcerpt
+  const nextStep = getContextualNextStep(question, category)
 
   return [
     summary,
     caution,
-    `다음으로는 ${nextStep}`,
+    nextStep ? `다음으로는 ${nextStep}` : null,
   ].filter(Boolean).join("\n\n")
 }
 
@@ -2887,17 +3098,21 @@ function composeAnswer(
     }
 
     const fallbackCriteria = getStepCriteriaByCategory(category)
+    // 분류가 안 된 질문에 "도입·운영·계정·결제 중 어디냐"를 되묻지 않는다. 묻는 사람에 맞는 예를 들어 하나만 묻는다.
+    const generalClarify = !needsConsultation && !STEP_CRITERIA_CATEGORIES.has(category) ? buildGeneralClarify(question) : null
     return {
-      answer: [
-        needsConsultation
-          ? "상담이 필요한 내용으로 확인했습니다."
-          : category === "troubleshooting"
-            ? "원인을 바로 단정하기보다 상황을 조금만 더 좁히는 게 좋겠습니다."
-            : category === "billing" || category === "hardware"
-              ? "계약, 결제, 장비 상태에 따라 달라질 수 있어 지금은 확정해서 말하기 어렵습니다."
-            : "지금 바로 확정하기 어려워요. 현재 상황을 한 문장만 더 알려주세요.",
-        fallbackCriteria.steps.slice(0, 2).map((step, index) => `${index + 1}. ${step}`).join("\n"),
-      ].join("\n\n"),
+      answer: generalClarify
+        ? generalClarify.join("\n\n")
+        : [
+            needsConsultation
+              ? "상담이 필요한 내용으로 확인했습니다."
+              : category === "troubleshooting"
+                ? "원인을 바로 단정하기보다 상황을 조금만 더 좁히는 게 좋겠습니다."
+                : category === "billing" || category === "hardware"
+                  ? "계약, 결제, 장비 상태에 따라 달라질 수 있어 지금은 확정해서 말하기 어렵습니다."
+                  : "지금 바로 확정하기 어려워요. 현재 상황을 한 문장만 더 알려주세요.",
+            fallbackCriteria.steps.slice(0, 2).map((step, index) => `${index + 1}. ${step}`).join("\n"),
+          ].join("\n\n"),
       answerMode: needsHandoff ? "handoff" : "fallback",
       confidence: needsHandoff ? 0.4 : 0.15,
       needsHandoff,
@@ -3346,6 +3561,15 @@ interface ChatbotCore {
   warning?: string
   latencyMs: number
   retrievalCacheHit?: boolean
+  // 증상 트리아지가 고른 주제의 영어 한 줄 요약(영어 질문에만 붙인다).
+  englishSummary?: string
+  // 사용법·점검표 답이면 화난 말투여도 상담 연결부터 앞세우지 않는다.
+  howtoAnswer?: boolean
+  // 증상 주제가 정해 둔 확인 질문과 주제 id(질문 주도 층이 쓴다).
+  topicFollowUp?: string
+  topicId?: string
+  /** 정해 둔 답이 이미 필요한 것을 묻거나 안내하면 영업용 되묻기(규모·도입 시기)를 붙이지 않는다. */
+  suppressSalesFollowUp?: boolean
 }
 
 interface BuildChatbotCoreOptions {
@@ -3385,6 +3609,569 @@ async function generateUsableAnswerWithProgressiveModels(
 }
 
 // 이미 손으로 다듬은 큐레이션 템플릿 직답은 Gemini 재작성을 건너뛴다(즉시 응답·드리프트 방지).
+const SITE_ISSUE_RE =
+  /(?:홈페이지|사이트|웹사이트|문의\s*페이지|예약\s*(?:폼|페이지)|신청\s*(?:폼|양식)|폼|양식).{0,24}(?:영상|동영상|폼|양식|버튼|페이지|신청|제출)?.{0,16}(?:안\s*(?:돼|되|나|열|눌|넘어)|재생\s*(?:이\s*)?안|반응\s*(?:이\s*)?없|아무\s*반응|오류|에러|멈)/
+const SHOWROOM_RE = /쇼룸|실물.{0,10}(?:보|볼|확인)|직접\s*(?:보고|보러|볼|만져|체험)|보러\s*갈|어디\s*가면\s*(?:볼|보)/
+const QUOTE_FIX_RE = /견적서?.{0,24}(?:잘못|틀려|틀렸|다르게|다르|수정|오류|빠졌|빠져|대로\s*안)/
+const EXAM_ANSWER_RE =
+  /(?:시험|퀴즈|문제|숙제)\s*(?:의\s*)?(?:답|정답|답안)\s*(?:좀\s*)?(?:알려|가르쳐|보여|줘|주세요|주셈)|(?:^|\s)(?:정답|답)\s*(?:좀\s*)?(?:알려|가르쳐)\s*(?:줘|주세요|주셈)/
+const ACCOUNT_DELETE_RE =
+  /(?:계정|아이디).{0,20}(?:삭제|탈퇴|지워|없애)|회원\s*탈퇴|(?:영상|녹화|사진|기록|개인\s*정보).{0,30}(?:지워|삭제)\s*(?:달라|해\s*달|해\s*주|요청|가능|할\s*수)/
+const INVOICE_MISSING_RE =
+  /(?:세금\s*)?계산서.{0,24}(?:안\s*(?:왔|와|오)|안왔|안와|못\s*받|누락|언제\s*(?:와|오|나와)|찾)|(?:증빙|영수증).{0,12}(?:안\s*(?:왔|와)|못\s*받)/
+const PAYMENT_FAIL_RE =
+  /결제\s*(?:실패|오류|거절|승인\s*(?:안|실패))|결제\s*(?:가|이)?\s*안\s*(?:돼|되|됐)|카드\s*(?:를\s*)?(?:바꿨|바꿔|변경|교체|만료|정지).{0,30}(?:결제|자동|문자|실패)|결제\s*(?:수단|카드).{0,10}(?:바꾸|변경|교체)/
+const VAT_RE = /(?=.*(?:부가세|부가가치세|\bvat\b))(?=.*(?:견적|가격|금액|포함|별도|요금))/
+const DISCOUNT_RE =
+  /(?:할인|깎|네고|약정).{0,30}(?:얼마|몇\s*%|퍼센트|까지|해\s*주|해줘|가능|되나|내려)|(?:경쟁사|타사|다른\s*(?:회사|업체)).{0,40}(?:할인|싸|저렴|%|맞춰|맞출|맞추)|(?:여러\s*대|대량|많이)\s*(?:사면|구매하면|구입하면).{0,20}(?:싸|할인|깎)/
+const TRIAL_FEATURE_LOCK_RE =
+  /체험.{0,30}(?:녹화|웹\s*라이브|라이브|기능|버튼).{0,24}(?:잠겨|잠김|잠금|막혀|막힘|안\s*(?:돼|되|보|눌|켜)|없|회색|못)/
+const SHOWROOM_CONFIRM_RE =
+  /(?:확정|예약).{0,20}(?:문자|연락|메일|알림|카톡).{0,12}(?:안\s*(?:와|왔|옴|오)|안와|안왔|없)|확정\s*(?:문자|연락)/
+const INVOICE_AMOUNT_RE = /(?:계산서|청구|결제)\s*(?:금액|액수)?.{0,20}(?:금액|액수).{0,16}(?:다르|달라|차이|이상|늘)|(?:계산서|청구서).{0,20}(?:다르|달라)/
+const STUDENT_COUNT_BILLING_RE =
+  /(?:대시보드|등록된|목록)\s*(?:의\s*)?학생\s*수.{0,30}(?:안\s*맞|안맞|다르|달라|차이)|학생\s*수\s*(?:로|대로)\s*(?:돈|요금|비용|과금)/
+const INSTALL_DIFFICULTY_RE = /(?:학생|애들|학부모|아이들).{0,20}(?:앱\s*)?설치.{0,20}(?:어려워|어렵|못\s*해|헤매|절반)|설치\s*(?:를|가)?\s*어려워/
+const MIGRATION_RE =
+  /(?:기존|원래)?\s*(?:학생|원생)\s*(?:명단|데이터)?.{0,12}\d+\s*명.{0,30}(?:옮기|이전|넘기|이관)|(?:명단|학생\s*데이터).{0,20}(?:옮기는\s*데|이전|이관).{0,30}(?:얼마나|해\s*줘|해\s*주|그쪽)/
+const FREE_SCOPE_RE = /무료\s*(?:로)?.{0,20}(?:어디까지|범위|뭐까지|얼마나|몇\s*분|까지\s*돼)|(?:공짜|무료)\s*(?:로)?\s*(?:어디까지|뭐)/
+const MULTI_SITE_BOARD_RE = /(?:다른\s*지점|지점).{0,30}(?:칠판|티비|tv|보드|전자칠판).{0,60}(?:연결|같은|호환|싸게|할인)/
+const DOCS_FEEDBACK_RE = /(?:매뉴얼|설명서|기능\s*설명\s*자료|설명\s*자료|가이드).{0,20}(?:부족|없|링크|주세요)|기능\s*요청|피드백\s*(?:은|을|는)?\s*어디/
+const IRREVERSIBLE_RE = /(?:되돌릴|복구할|돌이킬)\s*수\s*(?:있는|없는)\s*(?:것|거|작업)|실수로.{0,20}(?:지우거나|바꿔도).{0,20}(?:되돌|복구)/
+const DPA_RE = /\bdpa\b|처리\s*위탁|위탁\s*계약|수탁사|재위탁/
+const DOUBLE_CHARGE_RE =
+  /(?:결제|빠져|빠졌|출금|청구|돈).{0,10}(?:두\s*번|두번|2번|중복|이중)|(?:두\s*번|두번|2번|중복|이중)\s*(?:결제|빠|출금|청구)/
+const EXPORT_MASK_RE =
+  /(?:번호|휴대폰|전화|연락처).{0,24}(?:별표|\*|가려|마스킹)|(?:별표|마스킹).{0,20}(?:번호|명단|내보내|엑셀)/
+const SECURITY_POLICY_RE = /2단계\s*인증|\b2fa\b|이중\s*인증|비밀번호\s*정책|비밀번호.{0,10}(?:길이|변경\s*주기|복잡도|만료\s*정책)/
+const ONBOARDING_HELP_RE =
+  /(?:누가|직접|와서|방문).{0,10}(?:세팅|설정|설치)\s*(?:좀\s*)?(?:해\s*주|해줘|도와)|세팅\s*(?:좀\s*)?(?:해\s*주|도와|대행)|(?:온보딩|운영\s*교육)\s*(?:지원|도와|받을\s*수)|우리만\s*복잡/
+const ATTENDANCE_SMS_RE = /(?:출결|출석|등원|하원).{0,10}(?:문자|알림|메시지|카톡)/
+const TRIAL_INVITE_RE =
+  /체험.{0,40}(?:선생님|교사|강사).{0,30}(?:초대|등록|추가).{0,10}(?:안\s*(?:돼|되)|안돼|안되|못)/
+const TRIAL_TO_PAID_RE =
+  /체험.{0,30}(?:유료|정식).{0,20}(?:넘어|전환|바꾸)|유료\s*전환.{0,30}(?:데이터|코스|학생|그대로|유지|절차)/
+const QUOTE_VS_PRICE_RE =
+  /견적.{0,30}(?:홈페이지|사이트|가격표|요금표).{0,30}(?:다르|달라|차이)|(?:홈페이지|사이트).{0,20}(?:가격|요금).{0,30}견적.{0,10}(?:다르|달라)/
+const SHOWROOM_DEVICE_RE = /(?:쇼룸|전시).{0,40}(?:데모|받은|우리).{0,40}(?:버벅|느려|느리|다르|같은\s*모델)/
+const ZOOM_WEAKNESS_RE = /(?:zoom|줌).{0,30}(?:보다\s*)?(?:못한|단점|약점|부족|안\s*좋은)|(?:단점|약점|못한\s*게).{0,20}(?:솔직|뭐|말해)/
+const PERSONAL_USE_RE =
+  /(?:개인|혼자|private|과외).{0,24}(?:으로\s*)?(?:쓸\s*수|사용할|쓰고\s*싶|가입|이용)|(?:학원\s*(?:끝나|그만|나오|끝나면)).{0,30}(?:개인|혼자|private)/
+const TRIED_ALREADY_RE =
+  /다\s*해\s*봤|해\s*봤(?:다고|어요|는데|습니다)|소용\s*(?:없|이\s*없)|그래도\s*똑같|매번\s*(?:재부팅|인터넷|껐다)/
+const FAR_REGION_RE = /부산|대구|광주|대전|울산|제주|강원|경남|경북|전남|전북|충남|충북|지방|멀어|먼\s*곳/
+
+type QuickAnswer = Omit<ChatbotCore, "question" | "latencyMs">
+
+// 영업·사이트 관련 자주 오는 요청을 공개 정보로 바로 답한다(쇼룸 예약, 견적서 수정, 사이트 오류).
+function buildServiceQuickAnswer(question: NormalizedQuestion): QuickAnswer | null {
+  const text = question.redacted.toLowerCase()
+  const make = (
+    answer: string[],
+    handoffIntent: HandoffIntent,
+    category: string,
+    suggestedQuestions: string[],
+    englishSummary?: string
+  ): QuickAnswer => {
+    const response = {
+      answer: answer.join("\n\n"),
+      answerMode: "handoff" as const,
+      confidence: 0.82,
+      needsHandoff: true,
+      sources: [],
+      suggestedQuestions,
+      unresolved: false,
+    }
+    deterministicFinalResponses.add(response)
+    return { response, category, intent: handoffIntent === "demo" ? "sales_consulting" : "troubleshooting", handoffIntent, englishSummary }
+  }
+
+  if (SITE_ISSUE_RE.test(text) && /홈페이지|사이트|웹사이트|폼|양식|예약|신청|데모\s*영상/.test(text)) {
+    return make(
+      [
+        "홈페이지 화면이 제대로 움직이지 않는다면 먼저 이렇게 해 보세요.",
+        "1. 페이지를 새로고침합니다.\n2. 다른 브라우저(크롬·엣지 등)나 시크릿 창으로 다시 열어 봅니다.\n3. 광고 차단 같은 브라우저 확장 프로그램을 잠시 끄고 다시 시도합니다.",
+        "그래도 안 되면 신청은 아래 상담 연결로 바로 남기셔도 돼요. 담당자가 대신 접수하고 연락드립니다.",
+      ],
+      "demo",
+      "onboarding",
+      ["데모를 한번 보고 싶어요", "쇼룸 방문은 어떻게 예약해요?", "도입 상담을 받아보고 싶습니다"]
+    )
+  }
+  const direct = (
+    answer: string[],
+    category: string,
+    suggestedQuestions: string[],
+    englishSummary?: string
+  ): QuickAnswer => {
+    const response = {
+      answer: answer.join("\n\n"),
+      answerMode: "direct_answer" as const,
+      confidence: 0.82,
+      needsHandoff: false,
+      sources: [],
+      suggestedQuestions,
+      unresolved: false,
+    }
+    deterministicFinalResponses.add(response)
+    return { response, category, intent: "docs_lookup", handoffIntent: "support", englishSummary }
+  }
+
+  // 현장 질문에서 모은 좁은 정해 둔 답(결제 사칭 문자, 해지 후 결제, 보안·개인정보 점검 등)을 먼저 본다.
+  const field = findFieldQuickAnswer(text)
+  if (field) {
+    const quick = field.handoff
+      ? make(field.answer, field.handoff, field.category, field.suggestedQuestions, field.en)
+      : direct(field.answer, field.category, field.suggestedQuestions, field.en)
+    return { ...quick, topicId: field.id, suppressSalesFollowUp: !field.salesFollowUp }
+  }
+
+  if (EXAM_ANSWER_RE.test(text)) {
+    return direct(
+      [
+        "시험 정답은 알려 드릴 수 없어요. 스스로 풀어 봐야 실력이 되니까요.",
+        "대신 시험 화면이 안 열리거나, 제출이 안 되거나, 응시하다 화면이 멈추는 것처럼 막히는 문제는 바로 도와 드릴게요. 어떤 화면에서 막혔는지 짧게 알려 주세요.",
+      ],
+      "classroom",
+      ["숙제 제출이 안 돼요", "앱이 자꾸 멈춰요", "다시보기는 어디서 봐요?"]
+    )
+  }
+  if (
+    ACCOUNT_DELETE_RE.test(text) &&
+    /그만|탈퇴|아이(?!디|패드|폰)|자녀|우리\s*애|개인\s*정보|내\s*정보/.test(text) &&
+    !/코스|클래스\s*탈퇴|반\s*탈퇴/.test(text)
+  ) {
+    if (!/아이(?!디|패드|폰)|자녀|우리\s*애|영상|녹화/.test(text)) {
+      return make(
+        [
+          "탈퇴하면 그 계정으로는 학원 수업에 들어갈 수 없게 돼요. 학원을 계속 다닐 거라면 탈퇴는 한 번 더 생각해 보시는 게 좋아요.",
+          "혹시 알림이 귀찮거나 특정 반 채팅이 부담되는 거라면 탈퇴 대신 코스 설정에서 알림만 끌 수 있어요. 어떤 점 때문에 탈퇴하고 싶은지 알려 주시면 맞는 방법을 찾아 드릴게요.",
+          "그래도 탈퇴하려면 휴대폰·태블릿 앱에서 왼쪽 위 프로필 이미지 > [계정 및 보안] > [계정 삭제]로 들어가 안내를 끝까지 읽고, 동의 체크 뒤 본인 인증을 하면 됩니다. PC에는 계정 삭제 메뉴가 없어요. 지운 계정은 되돌리기 어려우니, 필요한 자료는 먼저 내려받고 학원에도 미리 알려 주세요.",
+        ],
+        "support",
+        "admin",
+        ["채팅 알림 끄는 법 알려줘", "로그인이 안 돼요", "담당자 상담으로 이어주세요"]
+      )
+    }
+    return make(
+      [
+        "아이 계정과 지금까지 찍힌 녹화 영상은 관리하는 곳이 달라서 나눠서 확인하셔야 해요.",
+        "녹화 영상은 학원 스토리지에 저장되고, 보관 기간과 삭제는 학원 관리자가 정해요. 지워 달라고 하시려면 학원에 먼저 요청해 주세요.",
+        "아이 클래스인 계정을 없애려면 휴대폰·태블릿 앱에서 왼쪽 위 프로필 이미지 > [계정 및 보안] > [계정 삭제]로 들어가 안내를 끝까지 읽고, 동의 체크 뒤 본인 인증을 하면 됩니다. PC에는 계정 삭제 메뉴가 없어요. 지운 계정은 되돌리기 어려우니 필요한 자료는 먼저 내려받아 두세요.",
+        "녹화 영상 삭제는 학원 확인이 필요해 바로 지워진다고 약속드리기는 어려워요. 진행이 막히면 아래 [실시간 상담 연결]로 도와 드릴게요.",
+        "개인정보 처리 기준은 공식 개인정보처리방침을 따릅니다.",
+      ],
+      "support",
+      "admin",
+      ["다시보기는 어디서 봐요?", "로그인이 안 돼요", "담당자 상담으로 이어주세요"]
+    )
+  }
+  if (INVOICE_AMOUNT_RE.test(text)) {
+    return make(
+      [
+        "지난번과 똑같이 결제했는데 계산서 금액이 달라 의아하셨겠어요. 무엇이 붙었는지는 제가 단정할 수 없어서, 먼저 결제 내역부터 비교해 주세요.",
+        "1. 관리자 대시보드 > [결제] > [결제 개요]에서 날짜별 비용 합계를 봅니다.\n2. 충전형이라면 [결제] > [주문 세부정보]에서 차감 내역을 봅니다.",
+        "차이 나는 이유는 담당자가 계약과 결제 내역을 보고 확인해 드려요. 아래 [실시간 상담 연결]에 '계산서 금액 차이 확인'과 두 달의 결제월을 남겨 주세요.",
+      ],
+      "support",
+      "billing",
+      ["영수증은 어디서 받나요?", "이번 달 결제가 두 번 빠졌어요", "담당자 상담으로 이어주세요"]
+    )
+  }
+  if (STUDENT_COUNT_BILLING_RE.test(text)) {
+    return make(
+      [
+        "대시보드 학생 수와 실제 원생 수가 다르면, 그만둔 학생이 목록에 남아 있거나 한 학생이 계정 두 개로 등록된 경우일 수 있어요. [기관 관리] > [학생] 목록에서 먼저 맞춰 봐 주세요.",
+        "요금이 학생 수 기준으로 나가는지는 요금제와 계약마다 달라 제가 단정하지 않을게요. 아래 [실시간 상담 연결]로 '학생 수와 과금 기준 확인'을 남겨 주시면 담당자가 계약 기준으로 안내해 드립니다.",
+      ],
+      "support",
+      "billing",
+      ["학생 추가가 안 돼요", "계정이 두 개가 됐어요", "담당자 상담으로 이어주세요"]
+    )
+  }
+  if (INSTALL_DIFFICULTY_RE.test(text)) {
+    return make(
+      [
+        "체험 중에 학생 절반이 못 들어오셨다면 걱정되시죠. 도입하면 민원이 없을 거라고 장담드리기는 어렵지만, 설치 단계에서 막히는 건 대부분 미리 줄일 수 있어요.",
+        "- 학생에게는 '휴대폰은 앱 스토어·Play 스토어에서 ClassIn 검색 → [받기]/[설치]' 순서를 그대로 보내 주세요. PC는 공식 홈페이지 [다운로드]에서 받습니다.\n- 설치한 뒤에는 학원이 보낸 초대 링크나 QR로 코스에 바로 들어오게 하세요. 링크가 안 열리면 코스 ID로 검색해 들어옵니다.\n- 설명회처럼 듣기만 하는 수업은 앱 없이 링크로 보는 웹 라이브도 쓸 수 있어요.",
+        "도입할 때 학생·학부모 안내와 강사 교육을 어떻게 도와드리는지는 아래 [도입 상담 남기기]로 남겨 주시면 담당자가 안내해 드립니다.",
+      ],
+      "demo",
+      "onboarding",
+      ["학생 계정은 어떻게 초대하나요?", "초대 링크를 눌러도 코스에 못 들어가요", "데모를 한번 보고 싶어요"]
+    )
+  }
+  if (MIGRATION_RE.test(text)) {
+    return make(
+      [
+        "기존 학생 명단은 엑셀로 한 번에 300명까지 올릴 수 있어요. 경로는 관리자 대시보드 [기관 관리] > [학생] > [학생 추가] > [Excel 가져오기]이고, [스텐실 다운로드]로 받은 양식에 이름과 휴대폰 번호(또는 이메일)를 채워 올립니다.",
+        "아직 클래스인에 가입하지 않은 학생은 한 명씩 추가하거나 텍스트로 가져올 때 [학생 대리 등록]을 함께 체크해요. 걸리는 시간은 명단 정리 상태에 따라 달라 단정하지 않을게요.",
+        "명단 이전을 대신 도와드리는지는 아래 [도입 상담 남기기]로 학생 수를 남겨 주시면 담당자가 확인해 드립니다.",
+      ],
+      "demo",
+      "onboarding",
+      ["엑셀로 올렸는데 일부만 들어갔어요", "학생 계정은 어떻게 초대하나요?", "데모를 한번 보고 싶어요"]
+    )
+  }
+  if (FREE_SCOPE_RE.test(text)) {
+    return make(
+      [
+        "딱 잘라 말씀드리면, 클래스인은 회원 가입을 마치면 무료 버전으로 시작하고, 2주 무료 체험도 신청할 수 있어요(/contact). 학원(기관)에서 쓰려면 유료 계정으로 전환해야 합니다.",
+        "녹화와 웹 라이브는 유료 결제와 계정 인증을 마쳐야 열려요. 무료 버전에서 시간 제한이 몇 분인지 같은 세부 범위는 공개 안내에 정리돼 있지 않아 지어 말씀드리지 않을게요.",
+        "정확한 무료·체험 범위는 아래 [도입 상담 남기기]로 확인해 드릴게요.",
+      ],
+      "demo",
+      "billing",
+      ["무료 체험판 있나요?", "프로와 비즈니스 차이가 뭐예요?", "견적 구성이 어떻게 되나요?"]
+    )
+  }
+  if (MULTI_SITE_BOARD_RE.test(text)) {
+    return make(
+      [
+        "다른 지점에도 넣으실 계획이시군요. 지점이 같은 학원(기관) 계정 안에서 운영되면 공유 드라이브와 코스 자료를 함께 쓸 수 있어요. 지금 보드와 다른 모델을 섞어 써도 되는지는 공개 안내에 정리돼 있지 않아 담당자가 확인해 드려요.",
+        "여러 대를 사면 가격이 어떻게 되는지는 견적에서 정해지고, 할인을 약속드릴 수는 없어요. 아래 [도입 상담 남기기]로 지점 수와 교실 수를 남겨 주세요.",
+      ],
+      "demo",
+      "hardware",
+      ["전자칠판 스펙 알려줘", "견적 구성이 어떻게 되나요?", "쇼룸 방문은 어떻게 예약해요?"]
+    )
+  }
+  if (DOCS_FEEDBACK_RE.test(text)) {
+    return make(
+      [
+        "옵션 하나 확인하려고 여러 번 테스트하셨다니 번거로우셨겠어요. 말씀해 주신 의견은 개선에 꼭 필요한 내용이에요.",
+        "지금 볼 수 있는 자료는 홈페이지 문서센터(/docs)의 기능별 안내와, 상담 채널(홈페이지 하단 채팅)에 요청하면 받을 수 있는 기관 교육 코스(녹화 강의)예요.",
+        "기능 요청이나 자료 보완 의견은 아래 [실시간 상담 연결]에 '기능 요청'으로 남겨 주세요. 어떤 옵션을 확인하려다 막혔는지 적어 주시면 그대로 전달됩니다.",
+      ],
+      "support",
+      "general",
+      ["녹화가 안 돼요", "학생을 무대에 올리는 방법 알려줘", "담당자 상담으로 이어주세요"]
+    )
+  }
+  if (IRREVERSIBLE_RE.test(text)) {
+    return direct(
+      [
+        "처음엔 누구나 그래요. 미리 알아 두시면 훨씬 마음이 편해요. 공개 안내 기준으로 되돌리기 어려운 작업은 이것들이에요.",
+        "- 코스 종료(폐강): 종료한 코스는 되살릴 수 없어요.\n- [스토리지]에서 지운 녹화 영상·스크린샷·칠판 내용: 복구되지 않아요.\n- 공유 드라이브에서 지운 파일: 되살릴 수 없어요.\n- 계정 삭제: 되돌리기 어려워요.\n- 학생이 숙제를 고쳐 다시 내면 그 전 점수와 피드백이 지워져요.",
+        "이런 작업은 하기 전에 필요한 영상·자료를 먼저 내려받고, 남길 수업에는 보호 잠금을 걸어 두세요. 확실하지 않으면 실행 전에 원장님이나 상담 채널에 먼저 물어보시면 돼요.",
+      ],
+      "admin",
+      ["코스를 실수로 종료했어요", "예전 녹화본이 사라졌어요", "공유 드라이브 권한 설정 방법 알려줘"]
+    )
+  }
+  if (DPA_RE.test(text)) {
+    return make(
+      [
+        "개인정보 처리 위탁 계약서(DPA) 양식이나 수탁사·재위탁 현황은 공개 문서에 따로 올라와 있지 않아서, 내용을 제가 지어 말씀드리지 않을게요.",
+        "처리 기준은 공식 개인정보처리방침에서 먼저 확인해 주세요. 계약에 필요한 문서는 아래 [도입 상담 남기기]에 'DPA 양식·수탁사 현황 요청'이라고 남겨 주시면 담당자가 제공 가능한 문서를 안내해 드립니다.",
+      ],
+      "demo",
+      "consultation",
+      ["개인정보 처리 기준이 궁금해요", "도입 전 확인 질문을 알려주세요", "견적 구성이 어떻게 되나요?"]
+    )
+  }
+  if (DOUBLE_CHARGE_RE.test(text)) {
+    return make(
+      [
+        "이번 달 결제가 두 번 빠진 것처럼 보이면 놀라셨겠어요. 먼저 실제 결제 내역부터 확인해 주세요.",
+        "1. 관리자 대시보드 > [결제] > [결제 개요]에서 날짜별 비용 합계를 봅니다.\n2. 충전형이라면 [결제] > [주문 세부정보]에서 차감 내역을 봅니다.",
+        "중복 결제로 보이면 아래 [실시간 상담 연결]에 '중복 결제 확인'이라고 남겨 주세요. 담당자가 결제 내역을 확인해 안내해 드립니다. 환불 여부와 시점은 확인 전에 약속드리기 어려워요.",
+      ],
+      "support",
+      "billing",
+      ["영수증은 어디서 받나요?", "환불 규정이 어떻게 되나요?", "담당자 상담으로 이어주세요"]
+    )
+  }
+  if (EXPORT_MASK_RE.test(text)) {
+    return make(
+      [
+        "설정을 잘못 건드리셨다기보다, 개인정보 보호를 위해 번호가 가려져 나오는 경우일 수 있어요. 어떤 기준으로 가려지는지는 공개 안내에 없어 단정하지 않을게요.",
+        "원장님(메인 관리자) 계정으로 받아도 같은지 먼저 확인해 보시고, 번호가 꼭 필요하면 아래 [실시간 상담 연결]로 어느 메뉴에서 내려받으셨는지 알려 주세요. 담당자가 확인해 드립니다.",
+        "내려받은 파일에는 학생 정보가 들어 있으니 권한 있는 담당자만 보관해 주세요.",
+      ],
+      "support",
+      "admin",
+      ["학생 추가가 안 돼요", "통계 파일은 어디서 받아요?", "담당자 상담으로 이어주세요"]
+    )
+  }
+  if (SECURITY_POLICY_RE.test(text)) {
+    return make(
+      [
+        "교사 계정에 2단계 인증을 강제하거나 비밀번호 길이·변경 주기를 기관 단위로 정하는 설정은 공개 안내에 없어서, 있다고 말씀드리지 않을게요.",
+        "지금 공개 안내로 할 수 있는 건 권한을 좁게 주는 쪽이에요. 하위 계정에는 꼭 필요한 메뉴만 주고, 그만둔 강사는 교사 비활성화와 하위 계정 삭제를 바로 해 주세요.",
+        "보안 정책 요건이 있으면 아래 [실시간 상담 연결]로 필요한 항목을 알려 주세요. 담당자가 지원 범위를 확인해 드립니다.",
+      ],
+      "support",
+      "admin",
+      ["그만둔 선생님 계정 빼는 법 알려줘요", "실장님한테 관리자 권한 줄 수 있나요?", "담당자 상담으로 이어주세요"]
+    )
+  }
+  if (ONBOARDING_HELP_RE.test(text)) {
+    return make(
+      [
+        "다른 곳은 다 잘 쓰는 것 같은데 우리만 복잡하게 느껴지면 답답하시죠. 처음 세팅이 복잡하게 느껴지는 건 이상한 일이 아니에요.",
+        "클래스인 도입 과정에는 강사 교육과 운영 세팅을 돕는 온보딩 단계가 있어요. 지금 학원 상황에 맞춰 어떤 지원이 되는지는 담당자가 안내해 드려요. 방문 세팅이 되는지는 여기서 약속드리기 어려워요.",
+        "아래 [실시간 상담 연결]로 '운영 세팅 도움 요청'과 함께 가장 막히는 부분(강사 등록, 코스 만들기, 녹화 등)을 남겨 주세요.",
+      ],
+      "support",
+      "onboarding",
+      ["강사 한 명이 여러 반 맡을 수 있나요?", "학생 계정은 어떻게 초대하나요?", "녹화가 안 돼요"]
+    )
+  }
+  if (ATTENDANCE_SMS_RE.test(text)) {
+    return direct(
+      [
+        "출결 문자를 클래스인에서 학부모에게 자동으로 보내는 기능은 공개 안내에 없어서, 있다고 말씀드리지 않을게요.",
+        "클래스인에서 바로 확인할 수 있는 건 수업별 출석 기록이에요. 관리자 대시보드 [결제] > [통계 다운로드]의 [출결 통계]로 수업별 출결 내역을 받고, 진행 중인 수업은 [관리자 기능] > [수업 모니터링]에서 출석을 봅니다.",
+        "문자로 보내는 기능은 출결이 아니라 수업 알림 쪽에 있어요. [일반 설정] > [부가가치 서비스]의 스마트 담임 교사를 켜면 학생과 교사에게 수업 알림 문자를 보냅니다.",
+        "다른 학원이 출결 문자를 어떻게 보내는지는 학원마다 달라 말씀드리기 어려워요. 쓰시는 문자 서비스와 연결이 필요하면 담당자에게 API 연동 범위를 물어봐 주세요.",
+      ],
+      "admin",
+      ["통계 파일은 어디서 받아요?", "학생이 다시보기를 봤는지 어디서 봐요?", "담당자 상담으로 이어주세요"]
+    )
+  }
+  if (TRIAL_INVITE_RE.test(text)) {
+    return make(
+      [
+        "체험 중에 테스트가 막히면 답답하시죠. 강사는 먼저 클래스인에 가입해 있어야 [기관 관리] > [교사] > [교사 추가]로 등록돼요. 그 선생님이 아직 가입하지 않았을 수 있어요.",
+        "그 선생님이 먼저 클래스인 앱에서 가입했는지, 가입한 아이디를 국가번호(+82)까지 그대로 넣었는지 확인해 주세요.",
+        "체험 계정에서 넣을 수 있는 인원도 체험 조건에 따라 달라요. 아래 [도입 상담 남기기]로 테스트할 선생님 수를 남겨 주시면 담당자가 체험 범위를 확인해 드립니다.",
+      ],
+      "demo",
+      "onboarding",
+      ["무료 체험판 있나요?", "데모를 한번 보고 싶어요", "강사 한 명이 여러 반 맡을 수 있나요?"]
+    )
+  }
+  if (TRIAL_TO_PAID_RE.test(text)) {
+    return make(
+      [
+        "유료 전환은 클래스인 공식 홈페이지에서 메인 관리자로 쓸 아이디로 로그인해 요금제를 고르고, 학원 정보를 입력하는 순서예요. 전환이 끝나면 프로는 바로 정식 서비스가 시작되고, 비즈니스는 체험판으로 시작합니다.",
+        "전환한 날 [계정 정보] > [인증 자료]에서 계정 인증까지 올려 주세요. 인증 전에는 녹화와 웹 라이브가 막혀 있어요.",
+        "체험 때 만든 코스와 학생 데이터가 그대로 이어지는지는 공개 안내에 나와 있지 않아 단정하지 않을게요. 전환 전에 아래 [도입 상담 남기기]로 확인을 요청해 주세요.",
+      ],
+      "demo",
+      "billing",
+      ["프로와 비즈니스 차이가 뭐예요?", "기관 인증이 안 돼요", "견적 구성이 어떻게 되나요?"]
+    )
+  }
+  if (QUOTE_VS_PRICE_RE.test(text)) {
+    return make(
+      [
+        "견적과 홈페이지 가격이 달라 헷갈리셨겠어요. 견적은 실제 구성(전자칠판 대수, 설치 형태, 소프트웨어 범위, 계약 기간)을 반영해 만들기 때문에 홈페이지 기본 안내와 다를 수 있어요.",
+        "어느 쪽이 맞다고 제가 단정할 수는 없어서, 견적을 보낸 담당 영업에 '홈페이지 가격과 차이 나는 항목'을 짚어 달라고 요청해 주세요. 아래 [도입 상담 남기기]로 남기셔도 됩니다.",
+      ],
+      "demo",
+      "billing",
+      ["견적 구성이 어떻게 되나요?", "데모를 한번 보고 싶어요", "전자칠판 스펙 알려줘"]
+    )
+  }
+  if (SHOWROOM_DEVICE_RE.test(text)) {
+    return make(
+      [
+        "쇼룸에서 써 본 것과 받은 기기의 반응이 다르면 걱정되시죠. 같은 모델이어도 앱 버전, 연결한 네트워크, 화면 테두리 상태 같은 사용 환경에 따라 반응이 달라질 수 있어요.",
+        "먼저 화면 테두리(베젤)에 먼지나 물건이 닿아 있지 않은지 보고, 보드의 클래스인을 최신 버전으로 업데이트해 주세요.",
+        "그래도 버벅이면 기기 점검이 필요해요. 아래 [실시간 상담 연결]로 받은 모델과 증상을 알려 주시면 담당자가 확인해 드립니다.",
+      ],
+      "support",
+      "hardware",
+      ["전자칠판 터치가 안 돼요", "전자칠판 스펙 알려줘", "전자칠판 보증 기간이 궁금해요"]
+    )
+  }
+  if (ZOOM_WEAKNESS_RE.test(text)) {
+    return direct(
+      [
+        "솔직하게 말씀드릴게요. 다른 서비스와 우열을 단정하기보다, 도입 전에 따져 보셔야 할 점을 공개 안내 기준으로 정리하면 이래요.",
+        "- 기능이 많은 만큼 처음 익히는 데 시간이 걸려요. 강사 교육과 첫 몇 주의 세팅이 필요합니다.\n- 앱을 설치해서 쓰고, PC는 윈도우 7 이상·인터넷 2Mbps 이상이 최소 사양이에요. 수업을 녹화하는 강사는 인터넷 4Mbps 이상과 더 높은 사양이 필요합니다.\n- 녹화와 웹 라이브는 유료 요금제와 계정 인증을 마쳐야 열려요.\n- 결제, 오프라인 출석, 고급 리포트는 별도 시스템이나 API 연동으로 나눠 설계하는 편이에요.",
+        "반대로 판서·녹화·과제·관리자 데이터를 한 흐름으로 묶어 학원 운영에 쓰려는 목적이라면 그 부분이 강점이에요. 수업 방식에 맞는지는 데모로 직접 보시길 권해요.",
+      ],
+      "consultation",
+      ["데모를 한번 보고 싶어요", "도입하면 뭐부터 해요?", "견적 구성이 어떻게 되나요?"]
+    )
+  }
+  if (PERSONAL_USE_RE.test(text)) {
+    return make(
+      [
+        "네, 학원 소속이 아니어도 개인 과외 강사로 쓸 수 있어요. 공식 안내 기준으로 1인 강사는 프로(Pro) 요금제를 추천하고, 계정 인증 때 인증 방식에서 [개인 교사]를 고르는 방식이 따로 있습니다.",
+        "가격은 쓰실 기능과 규모에 따라 달라 여기서 단정하지 않을게요. 아래 [도입 상담 남기기]로 개인 과외 용도와 학생 수를 남겨 주시면 맞는 요금제를 안내해 드려요.",
+      ],
+      "demo",
+      "billing",
+      ["무료 체험판 있나요?", "기관 인증이 안 돼요", "견적 구성이 어떻게 되나요?"],
+      "Yes—solo tutors can use ClassIn; the Pro plan is the one recommended for a single teacher, and you pick [개인 교사] (individual teacher) during account verification. The price is quoted in a consultation, so leave a request below."
+    )
+  }
+  if (INVOICE_MISSING_RE.test(text)) {
+    return make(
+      [
+        "이번 달 계산서가 아직 안 보이시는군요. 발행됐는지는 이 채팅에서 바로 확인할 수 없어서, 먼저 이것부터 봐 주세요.",
+        "1. 계산서를 받기로 한 이메일의 받은편지함과 스팸함을 확인합니다.\n2. 학원 회계 담당자분이 다른 메일 주소로 받기로 하셨는지 확인합니다.",
+        "메일에도 없으면 아래 [실시간 상담 연결]에 '몇 월분 세금계산서 발행 확인'이라고 남겨 주세요. 담당자가 발행 상태를 확인해 안내해 드립니다. 사업자 정보는 채팅창에 적지 않으셔도 돼요.",
+      ],
+      "support",
+      "billing",
+      ["영수증은 어디서 받나요?", "환불 규정이 어떻게 되나요?", "담당자 상담으로 이어주세요"]
+    )
+  }
+  if (PAYMENT_FAIL_RE.test(text)) {
+    return make(
+      [
+        "결제 실패 문자를 받으셨다면 걱정되셨겠어요. 결제가 안 됐을 때 수업이 언제부터 어떻게 제한되는지는 계약과 결제 방식마다 달라서 여기서 단정하지 않을게요.",
+        "결제 카드 변경은 학원 계정의 결제 정보를 담당자가 확인해야 해요. 아래 [실시간 상담 연결]에 '결제 카드 변경·결제 실패 확인'이라고 남겨 주세요. 수업 일정이 가까우면 그것도 함께 알려 주시면 먼저 확인해 드립니다.",
+        "카드 번호 같은 결제 정보는 채팅창에 적지 마세요.",
+      ],
+      "support",
+      "billing",
+      ["영수증은 어디서 받나요?", "환불 규정이 어떻게 되나요?", "담당자 상담으로 이어주세요"]
+    )
+  }
+  if (VAT_RE.test(text)) {
+    return make(
+      [
+        "견적서에 부가세 포함인지 별도인지 적혀 있지 않았다니 헷갈리셨겠어요. 그 부분은 분명히 적혀 있어야 하는 게 맞습니다.",
+        "부가세 포함 여부는 그 견적서를 만든 담당자가 확정해 드려야 해서 제가 단정하지 않을게요. 아래 [도입 상담 남기기]에 '견적서 부가세 포함 여부 확인'이라고 남겨 주시면, 담당자가 표기를 바로잡은 견적서로 다시 안내드립니다.",
+      ],
+      "demo",
+      "billing",
+      ["견적 구성이 어떻게 되나요?", "영수증은 어디서 받나요?", "데모를 한번 보고 싶어요"]
+    )
+  }
+  if (DISCOUNT_RE.test(text)) {
+    return make(
+      [
+        /맞춰|맞출|맞추/.test(text)
+          ? "다른 회사 견적에 맞춰 드릴 수 있는지도, 할인율이나 약정 조건도 제가 채팅에서 정하거나 약속드릴 수 없어요. 가격은 학원 규모와 구성을 보고 영업 담당자가 견적 상담에서 정합니다."
+          : "할인율이나 약정 조건은 제가 채팅에서 약속드릴 수 없어요. 학원 규모와 구성, 약정 기간을 보고 견적 상담에서 정해집니다.",
+        "견적을 빨리 받으시려면 아래 [도입 상담 남기기]에 이것만 남겨 주세요.\n- 학생 수와 강사 수, 동시에 여는 수업 수\n- 전자칠판이 필요한 교실 수와 설치 형태(벽걸이·스탠드)\n- 검토 중인 약정 기간과 비교 중인 조건",
+        "다른 회사 조건과 견줘 보시는 건 당연해요. 받으신 조건을 담당자에게 그대로 알려 주시면 그 기준으로 비교해 안내드립니다.",
+      ],
+      "demo",
+      "billing",
+      ["견적 구성이 어떻게 되나요?", "데모를 한번 보고 싶어요", "전자칠판 스펙 알려줘"]
+    )
+  }
+  if (TRIAL_FEATURE_LOCK_RE.test(text)) {
+    return make(
+      [
+        "체험해 보시는데 녹화 버튼이 잠겨 있으면 답답하셨겠어요. 녹화와 웹 라이브는 유료 요금제를 결제하고 계정 인증까지 마친 학원에서 열리는 기능이라, 체험 계정에서는 잠겨 보일 수 있어요.",
+        "녹화까지 직접 보고 결정하실 수 있게 아래 [도입 상담 남기기]에 '체험 중 녹화 기능 확인 요청'이라고 남겨 주세요. 담당자가 데모로 녹화·다시보기 흐름을 보여 드리거나 체험 범위를 넓힐 수 있는지 안내드립니다.",
+        "목동 쇼룸(/showroom)에서 녹화부터 다시보기까지 직접 해 보실 수도 있어요.",
+      ],
+      "demo",
+      "onboarding",
+      ["데모를 한번 보고 싶어요", "쇼룸 방문은 어떻게 예약해요?", "무료 체험판 있나요?"]
+    )
+  }
+  if (SHOWROOM_RE.test(text) && SHOWROOM_CONFIRM_RE.test(text)) {
+    return make(
+      [
+        "쇼룸 예약 확정 문자가 아직 안 오셨군요. 확정 연락이 없으면 예약이 아직 확정되지 않았을 수 있어서, 그냥 오셔도 된다고 말씀드리기는 어려워요.",
+        "헛걸음하시지 않도록 방문 전에 아래 [실시간 상담 연결]에 '쇼룸 방문 예약 확인'이라고 남겨 주세요. 담당자가 예약 상태를 확인해 드립니다.",
+      ],
+      "support",
+      "onboarding",
+      ["쇼룸 방문은 어떻게 예약해요?", "데모를 한번 보고 싶어요", "전자칠판 스펙 알려줘"]
+    )
+  }
+  if (QUOTE_FIX_RE.test(text)) {
+    return make(
+      [
+        "견적서가 요청하신 내용과 다르게 왔다면 담당자가 바로 고쳐 다시 보내 드려요. 번거롭게 해 드려 죄송합니다.",
+        "아래 [도입 상담 남기기]로 견적서를 받은 날짜와 바꿀 내용(예: 전자칠판 3대)을 남겨 주세요.",
+      ],
+      "demo",
+      "billing",
+      ["견적 구성이 어떻게 되나요?", "전자칠판 스펙 알려줘", "데모를 한번 보고 싶어요"]
+    )
+  }
+  if (SHOWROOM_RE.test(text) && !/폼|양식|제출|버튼/.test(text)) {
+    return make(
+      [
+        "Classin Board는 목동 쇼룸에서 직접 보고 써 보실 수 있어요. 방문은 홈페이지 쇼룸 예약(/showroom)에서 날짜를 고르시면 됩니다.",
+        FAR_REGION_RE.test(text)
+          ? "목동까지 오시기 어려우시면 아래 [도입 상담 남기기]로 지역을 남겨 주세요. 담당자가 온라인 데모 등 볼 수 있는 방법을 안내드려요."
+          : "여러 분이 함께 보실 예정이면 예약할 때 인원을 적어 주세요.",
+        "도입 조건이나 견적이 궁금하시면 아래 [도입 상담 남기기]로 남겨 주세요. 담당자가 방문 전에 안내드립니다.",
+      ],
+      "demo",
+      "onboarding",
+      ["데모를 한번 보고 싶어요", "전자칠판 스펙 알려줘", "견적 구성이 어떻게 되나요?"]
+    )
+  }
+  return null
+}
+
+// 증상 트리아지 답변처럼 이미 최종본인 결정형 응답. stream 경로에서도 Gemini 재작성을 건너뛴다.
+const deterministicFinalResponses = new WeakSet<object>()
+
+function resolveSymptomTriageForQuestion(
+  routingText: string,
+  csFigmaGuide: CsFigmaGuide | null
+): SymptomTriageResult | null {
+  const tone = detectConversationTone(routingText)
+  // 짧게 묻거나 화가 난 사람에게는 단계 3개만(이미 여러 번 해 봤을 가능성이 크다).
+  const triage = resolveSymptomTriage(routingText, {
+    compact: (tone.terse || tone.angry || tone.repeated) && !tone.anxious,
+    upset: tone.angry || tone.repeated,
+  })
+  if (!triage) return null
+  const isKnownFigmaIntent =
+    csFigmaGuide !== null && findCsFigmaKnownIntentSlug(routingText) === csFigmaGuide.slug
+  if (isKnownFigmaIntent && !triage.overridesKnownIntent) return null
+  return triage
+}
+
+const PRIOR_SUBJECT_HINTS: [RegExp, string, string][] = [
+  [/카메라|camera/i, "카메라", "카메라가 안 켜져요"],
+  [/마이크|mic/i, "마이크", "마이크가 안 돼요"],
+  [/소리|sound|audio/i, "소리", "소리가 안 나요"],
+  [/미러링|띄우|캐스트/, "미러링", "미러링이 안 돼요"],
+  [/녹화|record/i, "녹화", "녹화가 안 돼요"],
+  [/로그인|login/i, "로그인", "로그인이 안 돼요"],
+  [/끊|튕|disconnect/i, "끊김", "수업 중에 계속 튕겨요"],
+]
+
+function buildPriorContextClarifyResponse(
+  routingText: string
+): Omit<ChatbotQueryResponse, "answerEventId" | "sessionId" | "warning" | "handoffIntent"> {
+  const hint = PRIOR_SUBJECT_HINTS.find(([pattern]) => pattern.test(routingText))
+  const hintTriage = hint ? resolveSymptomTriage(hint[2], { compact: true }) : null
+  const hintSteps = hintTriage?.answer.split("\n").filter((line) => /^\d\. /.test(line)).slice(0, 3) ?? []
+  const response = {
+    answer: [
+      PRIOR_INQUIRY_LINE,
+      "어떤 문제가 다시 생겼는지 한 줄로만 알려 주시겠어요? 예: '카메라가 안 켜져요', '수업이 자꾸 끊겨요'.",
+      hint && hintSteps.length > 0 ? `${hint[1]} 문제라면 먼저 이것부터 해 보세요.\n${hintSteps.join("\n")}` : null,
+      "바로 사람과 이어서 보시려면 아래 [실시간 상담 연결]을 눌러 주세요.",
+    ]
+      .filter(Boolean)
+      .join("\n\n"),
+    answerMode: "clarifying_question" as const,
+    confidence: 0.55,
+    needsHandoff: true,
+    sources: [],
+    suggestedQuestions: hint ? [hint[2], "담당자 상담으로 이어주세요", "에러나요"] : ["카메라가 안 켜져요", "수업 중에 계속 튕겨요", "담당자 상담으로 이어주세요"],
+    unresolved: true,
+  }
+  deterministicFinalResponses.add(response)
+  return response
+}
+
+function buildSymptomTriageResponse(
+  triage: SymptomTriageResult
+): Omit<ChatbotQueryResponse, "answerEventId" | "sessionId" | "warning" | "handoffIntent"> {
+  const response: Omit<ChatbotQueryResponse, "answerEventId" | "sessionId" | "warning" | "handoffIntent"> = {
+    answer: sanitizePublicAnswerText(triage.answer),
+    answerMode: triage.answerMode,
+    confidence: triage.confidence,
+    needsHandoff: triage.needsHandoff,
+    sources: triage.source ? [triage.source] : [],
+    suggestedQuestions: triage.suggestedQuestions,
+    unresolved: triage.answerMode !== "direct_answer",
+  }
+  deterministicFinalResponses.add(response)
+  return response
+}
+
 function isCuratedTemplateQuestion(question: NormalizedQuestion) {
   return (
     isHardwareSpecsQuestion(question) ||
@@ -3407,6 +4194,7 @@ function isCuratedTemplateQuestion(question: NormalizedQuestion) {
     isS65QuoteQuestion(question) ||
     isBoardOnlyOrPlatformQuestion(question) ||
     isCameraConflictQuestion(question) ||
+    isReceiptQuestion(question) ||
     ((isComparisonQuestion(question) || isIdentityQuestion(question)) && !isApiIntegrationQuestion(question))
   )
 }
@@ -3416,12 +4204,14 @@ function shouldUseAiFinalAnswer(
   question: NormalizedQuestion,
   category: string
 ) {
+  if (deterministicFinalResponses.has(response)) return false
   if (category === "general" && !isDomainRelatedQuestion(question, category)) return false
   if (wantsImmediateHumanHandoff(question)) return false
   if (response.answerMode === "clarifying_question" && question.tokens.length < 2) return false
   if (response.answerMode === "direct_answer" && isCsFigmaGuideResponse(response)) return false
   // 큐레이션 직답은 이미 최종본 — Gemini 재작성(0.8~4.5s)을 건너뛰고 그대로 내보낸다.
   if (response.answerMode === "direct_answer" && isCuratedTemplateQuestion(question)) return false
+  if (isRefundQuestion(question) || isReceiptQuestion(question) || isAccountPlanOrTrialLimitQuestion(question)) return false
   return true
 }
 
@@ -3596,7 +4386,57 @@ async function loadSessionHistory(
 
 // 검색 → 답변 구성 → 필요 시 Gemini 답변 생성까지의 코어. 영속화(persistExchange)는 포함하지 않는다.
 // handleChatbotQuery(실서비스)와 evaluateChatbotQuery(품질 평가)가 공유한다.
+// 질문의 감정·형식 신호에 맞춰 공감 한마디·영어 요약·상담 연결을 붙인다. 여러 번 불러도 결과가 같다.
+// 보안·남용 거절 답변에는 붙이지 않는다.
+function applyConversationTone(core: ChatbotCore) {
+  const text = core.question.redacted.toLowerCase()
+  if (PROMPT_OR_SECURITY_ABUSE_RE.test(text) || CRIMINAL_ABUSE_RE.test(text) || TOKEN_WASTE_RE.test(text)) return
+  if (isGreetingOnly(core.question)) return
+  const tone = detectConversationTone(core.question.redacted)
+  // 지난 문의를 전제로 한 질문은 "볼 수 없다"는 줄만 붙이고, 상담 연결은 화난·반복 문의일 때만 앞세운다.
+  // 이미 상담원 대기 중이라고 항의하는 사람에게 "지금 바로 연결해 드릴게요"를 또 약속하지 않는다.
+  const waitingForAgent = /대기\s*(?:순번|번호|중)|순번|상담원\s*연결을?\s*(?:눌렀|했는데|했더니)/.test(text)
+  const offerHandoff = !waitingForAgent && ((tone.angry && !core.howtoAnswer) || tone.repeated)
+  core.response.answer = applyToneToAnswer(core.response.answer, tone, {
+    englishSummary: core.englishSummary,
+    offerHandoff,
+    mentionsRefund: /환불|보상|배상/.test(text),
+  })
+  if (offerHandoff) {
+    core.response.needsHandoff = true
+    core.handoffIntent = "support"
+  }
+  // 지난 문의·통화를 이어 가려는 사람에게는 상담 연결 버튼을 띄운다(답에서 그 버튼을 가리킨다).
+  if (tone.priorContext === "inquiry") core.response.needsHandoff = true
+  // 질문 주도: 정보가 부족하거나 오해 여지가 있거나 영업 상담을 이어 갈 때 끝에 질문 하나를 붙인다.
+  core.response.answer = appendFollowUp(
+    core.response.answer,
+    buildFollowUp({
+      question: core.question.redacted,
+      answer: core.response.answer,
+      category: core.category,
+      intent: core.intent,
+      handoffIntent: core.handoffIntent,
+      answerMode: core.response.answerMode,
+      tone,
+      topicFollowUp: core.topicFollowUp,
+      topicId: core.topicId,
+      allowSalesFollowUp: !core.suppressSalesFollowUp,
+    })
+  )
+}
+
 async function buildChatbotCore(
+  message: unknown,
+  options: BuildChatbotCoreOptions = {}
+): Promise<ChatbotCore> {
+  const core = await buildChatbotCoreBase(message, options)
+  // 말투 처리(공감 첫마디·상담 연결 앞세우기)는 공개 챗봇 답에만 붙인다. 내부 CS 코파일럿 근거에는 넣지 않는다.
+  if (!options.includeInternalDocs) applyConversationTone(core)
+  return core
+}
+
+async function buildChatbotCoreBase(
   message: unknown,
   options: BuildChatbotCoreOptions = {}
 ): Promise<ChatbotCore> {
@@ -3639,11 +4479,46 @@ async function buildChatbotCore(
     }
   }
 
-  if (wantsImmediateHumanHandoff(question)) {
-    const { category, intent, handoffIntent } = classifyChatbotQuestion(question.redacted)
+  // 아래 공개 챗봇 전용 지름길(정해 둔 답·영어 안내·증상 트리아지·지난 대화 되묻기)은 검색을 건너뛴다.
+  // 내부 CS 코파일럿(includeInternalDocs, 계약 6)은 내부 문서까지 검색해야 하므로 이 지름길을 쓰지 않는다.
+  const publicShortcuts = !options.includeInternalDocs
+  const quickAnswer = publicShortcuts ? buildServiceQuickAnswer(question) : null
+  if (quickAnswer) {
+    return { question, ...quickAnswer, latencyMs: elapsedSince(startedAt) }
+  }
+
+  if (publicShortcuts && isEnglishSupportRequest(question.redacted)) {
     return {
       question,
-      response: buildImmediateHandoffResponse(category, handoffIntent),
+      response: {
+        answer: ENGLISH_SUPPORT_ANSWER,
+        answerMode: "direct_answer",
+        confidence: 0.9,
+        needsHandoff: false,
+        sources: [],
+        suggestedQuestions: ["login not working", "how to invite students", "상담원 연결해 주세요"],
+        unresolved: false,
+      },
+      category: "general",
+      intent: "self_knowledge",
+      handoffIntent: "support",
+      latencyMs: elapsedSince(startedAt),
+    }
+  }
+
+  if (wantsImmediateHumanHandoff(question)) {
+    const { category, intent, handoffIntent: classifiedHandoff } = classifyChatbotQuestion(question.redacted)
+    // 사람 연결 요청·항의·회신 누락은 실시간 상담(지원)으로, 도입·데모·견적 요청만 도입 상담으로 보낸다.
+    const tone = detectConversationTone(question.redacted)
+    const text = question.redacted.toLowerCase()
+    const salesRequest = /도입|데모|시연|견적|구매|쇼룸|체험\s*신청|미팅/.test(text)
+    const supportContext =
+      /연락이\s*없|감감무소식|답이\s*없|회신|오류|에러|안\s*(?:돼|되|됨)|환불|고장|문제|장애|불만|항의|보상|책임자|원격|화면\s*(?:을\s*)?(?:보면서|같이)/.test(text) ||
+      (/사람|상담원|직원|챗봇\s*말고|봇\s*말고|번호|연락처|물어볼\s*게/.test(text) && !salesRequest)
+    const handoffIntent: HandoffIntent = tone.angry || tone.repeated || supportContext ? "support" : classifiedHandoff
+    return {
+      question,
+      response: buildImmediateHandoffResponse(category, handoffIntent, text),
       category,
       intent,
       handoffIntent,
@@ -3651,7 +4526,64 @@ async function buildChatbotCore(
     }
   }
 
-  const csFigmaGuide = findCsFigmaGuideForQuestion(question.redacted)
+  const routingTone = detectConversationTone(question.redacted)
+  if (
+    publicShortcuts &&
+    (routingTone.repeated || routingTone.angry) &&
+    TRIED_ALREADY_RE.test(question.redacted.toLowerCase())
+  ) {
+    const response = {
+      answer: [
+        "기본 조치를 이미 다 해 보셨는데 같은 일이 반복됐다면, 같은 안내를 또 드리지 않을게요. 이제는 기술지원이 기록을 보고 원인을 찾아야 하는 단계예요.",
+        "아래 [실시간 상담 연결]을 누르시고 끊긴 날짜와 시각(여러 번이면 모두), 수업 이름, 쓰는 기기와 네트워크(유선·와이파이·핫스팟)를 알려 주세요. 기술지원이 그 시간대 접속 기록을 보고 확인합니다.",
+      ].join("\n\n"),
+      answerMode: "handoff" as const,
+      confidence: 0.8,
+      needsHandoff: true,
+      sources: [],
+      suggestedQuestions: ["담당자 상담으로 이어주세요", "학원 네트워크에서만 접속이 안 돼요", "앱이 자꾸 멈춰요"],
+      unresolved: false,
+    }
+    deterministicFinalResponses.add(response)
+    return { question, response, category: "troubleshooting", intent: "troubleshooting", handoffIntent: "support", latencyMs: elapsedSince(startedAt) }
+  }
+
+  const routingText = glossForRouting(question.redacted)
+  const csFigmaGuide = findCsFigmaGuideForQuestion(routingText)
+  // 증상형 질문("녹화 안 돼요", "기관 등록 안됨", "에러나요")은 공개 문제 해결 문서 섹션으로 바로 답한다.
+  // Figma 가이드의 알려진 의도(예: 늦게 가입한 학생 다시보기)가 맞으면 그 가이드를 먼저 쓴다.
+  const symptomTriage = publicShortcuts ? resolveSymptomTriageForQuestion(routingText, csFigmaGuide) : null
+  if (symptomTriage) {
+    const response = buildSymptomTriageResponse(symptomTriage)
+    return {
+      question,
+      response,
+      category: symptomTriage.category,
+      intent: symptomTriage.intent,
+      handoffIntent: "support",
+      latencyMs: elapsedSince(startedAt),
+      englishSummary: symptomTriage.englishSummary,
+      howtoAnswer: symptomTriage.howto === true,
+      topicFollowUp: symptomTriage.followUp,
+      topicId: symptomTriage.topicId,
+    }
+  }
+
+  // "저번에 말한 거 또 그래요"처럼 지난 대화를 전제로 한 짧은 질문: 볼 수 없다고 밝히고 한 줄만 되묻는다.
+  if (publicShortcuts && routingTone.priorContext && question.redacted.replace(/\s+/g, "").length <= 60) {
+    const response = buildPriorContextClarifyResponse(routingText)
+    return {
+      question,
+      response,
+      category: "troubleshooting",
+      intent: "troubleshooting",
+      handoffIntent: "support",
+      latencyMs: elapsedSince(startedAt),
+      englishSummary:
+        "I can't see our earlier chat or past inquiries. Tell me in one line what happened again (e.g., 'camera not working'), or tap 상담원 연결 to talk to a person.",
+    }
+  }
+
   if (csFigmaGuide) {
     const { category, intent, handoffIntent } = classifyChatbotQuestion(question.redacted, [
       csFigmaGuide.category,
@@ -3960,6 +4892,18 @@ export async function streamChatbotQuery(
     const cachedQuestion = normalizeQuestion(input.message)
     const cached = getCachedAnswer(cachedQuestion)
     if (cached) {
+      // 캐시는 말투 계층 적용 전 사본일 수 있다 — 비스트림과 같은 최종본이 되게 여기서도 적용한다.
+      const cachedCore: ChatbotCore = {
+        question: cachedQuestion,
+        response: cached.response,
+        category: cached.category,
+        intent: cached.intent,
+        handoffIntent: cached.handoffIntent,
+        warning: cached.warning,
+        latencyMs: 0,
+      }
+      applyConversationTone(cachedCore)
+      cached.handoffIntent = cachedCore.handoffIntent
       emit({ type: "replace", answer: cached.response.answer })
       emitMeta(cached.response, cached.category, cached.intent, cached.handoffIntent, cached.warning)
       void persistExchange(
@@ -3985,14 +4929,16 @@ export async function streamChatbotQuery(
 
   // 검색·분류·결정형 초안까지는 기존 코어를 그대로 재사용(중복 방지). Gemini 호출만 스트리밍으로 대체.
   const core = await buildChatbotCore(input.message, { generateAnswer: false })
-  const { question, response, category, intent, handoffIntent, warning } = core
+  const { question, response, category, intent, warning } = core
 
   // 인사·정책 가드 응답은 buildChatbotCore 가 조기 반환한 '최종 답변'이다(정책 가드는 보안 거절 등).
   // 이 경우 AI 재작성을 적용하면 안 된다 — handleChatbotQuery 의 조기 반환 의미와 동일하게 맞춘다.
   const isShortCircuited = isGreetingOnly(question) || Boolean(buildPolicyGuardResponse(question))
   if (!isShortCircuited && shouldUseAiFinalAnswer(response, question, category)) {
     await streamAndApplyFinalAnswer({ question, category, intent, response, historyPromise, emit })
+    applyConversationTone(core)
   }
+  const handoffIntent = core.handoffIntent
 
   finalizeAnswer(response)
 

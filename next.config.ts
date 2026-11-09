@@ -77,8 +77,9 @@ const contentSecurityPolicy = [
   `img-src 'self' data: blob: https://images.unsplash.com ${supabaseImageSources} ${siteImageSources} https://www.facebook.com https://*.kakao.com https://*.daumcdn.net https://www.googletagmanager.com https://*.google-analytics.com https://maps.google.com ${googleAdsSources} ${naverWcsSources} ${channelTalkDefaultSources}`,
   // Supabase API/Realtime, GA4/Google Ads 수집, 네이버 wcs 로그 전송, 채널톡 웹소켓, 토스 결제
   `connect-src 'self' ${supabaseHttp} ${supabaseWs} ${googleAnalyticsConnectSources} ${googleAdsSources} https://www.facebook.com https://*.kakao.com ${naverWcsSources} ${channelTalkConnectSources} https://*.tosspayments.com https://cdn.jsdelivr.net`,
-  // GTM 미리보기, 구글 지도 embed, 토스 결제창
-  "frame-src 'self' https://www.googletagmanager.com https://maps.google.com https://www.google.com https://*.channel.io https://*.channel.app https://*.tosspayments.com https://*.toss.im",
+  // GTM 미리보기, 구글 지도 embed, 토스 결제창, YouTube 개인정보 보호 모드 임베드
+  // (서비스 소개서·세미나 다시보기 — 누른 뒤에만 iframe 을 띄운다. 썸네일은 자체 호스팅이라 img-src 는 그대로다)
+  "frame-src 'self' https://www.googletagmanager.com https://maps.google.com https://www.google.com https://www.youtube-nocookie.com https://*.channel.io https://*.channel.app https://*.tosspayments.com https://*.toss.im",
   "media-src 'self' data: blob: https://cdn.channel.io",
   "worker-src 'self' blob:",
   "upgrade-insecure-requests",
@@ -94,6 +95,15 @@ const securityHeaders = [
   { key: "Cross-Origin-Opener-Policy", value: "same-origin-allow-popups" },
   { key: "X-Permitted-Cross-Domain-Policies", value: "none" },
   { key: "Permissions-Policy", value: "geolocation=(), microphone=(), camera=()" },
+];
+
+// 리드마그넷 PDF 렌더러(lib/lead-magnet-pdf/fonts.ts)가 런타임에 fs 로 읽는 글꼴.
+// 글꼴 파일을 두 PDF 라우트의 함수 번들에 확실히 넣는다(fonts.ts 는 리터럴 경로라 트레이서도 따라가지만 목록을 명시해 둔다).
+// next.config.ts 는 앱 모듈을 import 하지 않으므로 목록을 복제하고,
+// tests/lead-magnets/pdf-tracing.test.ts 가 fonts.ts 의 목록과 같은지 대조한다.
+const leadMagnetPdfFonts = [
+  "./node_modules/pretendard/dist/public/static/alternative/Pretendard-Regular.ttf",
+  "./node_modules/pretendard/dist/public/static/alternative/Pretendard-SemiBold.ttf",
 ];
 
 const publicAssetCacheHeaders = [
@@ -120,10 +130,18 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ["googleapis", "exceljs"],
   // 공유 카드 글꼴·로고(lib/og/template.tsx 가 process.cwd() 기준으로 읽는 Pretendard OTF·먹 락업 PNG). 루트 OG 는 빌드 때
   // 정적으로 그려지지만 블로그 OG(/api/og/blog/[slug])는 런타임 함수라, 파일 추적이 경로를 못 따라가도 번들에 들어가게 명시한다.
+  // 리드마그넷 PDF 라우트 키도 라우트 경로 글롭이다. 동적 세그먼트는 대괄호 이스케이프 대신 `*`(한 세그먼트)로 적는다 —
+  // 이스케이프 해석이 번들러(webpack picomatch / Turbopack)마다 달라질 여지를 없앤다.
+  // 공개 PDF 라우트는 렌더 실패 시 public/ 의 예전 생성본 존재를 fs 로 확인하므로 그 파일도 넣는다.
   outputFileTracingIncludes: {
     "/api/og/**": ["./assets/fonts/pretendard-static/**", "./assets/og/**"],
     "/opengraph-image": ["./assets/fonts/pretendard-static/**", "./assets/og/**"],
     "/twitter-image": ["./assets/fonts/pretendard-static/**", "./assets/og/**"],
+    "/api/materials/*/pdf": [
+      ...leadMagnetPdfFonts,
+      "./public/materials/lead-magnets/*.pdf",
+    ],
+    "/api/admin/lead-magnets/pdf-preview": leadMagnetPdfFonts,
   },
   images: {
     // 기본값은 webp 단독이다. avif를 앞에 두면 지원 브라우저에서 추가로 ~17% 더 줄어든다.

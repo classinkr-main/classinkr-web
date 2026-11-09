@@ -25,6 +25,8 @@ import os from "node:os"
 import path from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
 
+import { WORKBOOK_SLUGS } from "../lib/lead-magnet-pdf/workbook-slugs.mjs"
+
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const DATA_PATH = path.join(ROOT, "data", "lead-magnets.json")
 const EBOOK_DIR = path.join(ROOT, "scripts", "lead-magnet-ebooks")
@@ -32,8 +34,12 @@ const PUBLIC_DIR = path.join(ROOT, "public")
 const FONT_DIR = path.join(ROOT, "node_modules", "@fontsource", "ibm-plex-sans-kr")
 const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || "https://classin.co.kr").replace(/\/$/, "")
 
-/** 이 템플릿으로 만드는 자료. 파이썬 생성기(generate-lead-magnet-pdfs.py)의 WORKBOOK_SLUGS 와 같게 둔다. */
-export const WORKBOOK_SLUGS = ["academy-system-checklist", "electronic-whiteboard-classroom-checklist"]
+/**
+ * 이 템플릿으로 만드는 자료. 정본은 lib/lead-magnet-pdf/workbook-slugs.mjs — 런타임 PDF 라우트도 같은 목록을
+ * 「따로 만든 PDF」로 보고 서버 생성본으로 바꾸지 않는다. 파이썬 생성기(generate-lead-magnet-pdfs.py)의
+ * WORKBOOK_SLUGS 와 같게 둔다.
+ */
+export { WORKBOOK_SLUGS }
 
 /** 표지 제목 줄바꿈 — 의미 단위로 끊는다(자동 줄바꿈은 '누수' 한 단어만 위로 올라간다). */
 const COVER_TITLE_LINES = {

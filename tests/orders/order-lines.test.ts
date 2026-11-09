@@ -51,6 +51,22 @@ describe("buildSalesOrderLines", () => {
     expect(lines[1].unmappedHardware).toBe(false)
   })
 
+  it("녹화 세트(86\"·75\")는 보드와 T1 으로 풀어 매핑 실패로 남지 않는다", () => {
+    const lines = buildSalesOrderLines("qd_1", [
+      line({ id: "a", itemCode: "ai-studio-recording-set", itemName: "올인원 녹화수업 세트", quantity: 2 }),
+      line({ id: "b", itemCode: "ai-studio-recording-set-75", itemName: "올인원 녹화수업 세트", quantity: 1 }),
+    ])
+    expect(lines.every((entry) => !entry.unmappedHardware)).toBe(true)
+    expect(lines[0].hardwareProducts).toEqual([
+      { product: '86" IFP', quantity: 2 },
+      { product: "T1", quantity: 2 },
+    ])
+    expect(lines[1].hardwareProducts).toEqual([
+      { product: '75" IFP', quantity: 1 },
+      { product: "T1", quantity: 1 },
+    ])
+  })
+
   it("SKU 가 없으면 품목 이름으로 고르고, 모호하면 매핑 실패로 표시한다", () => {
     const lines = buildSalesOrderLines("qd_1", [
       line({ itemName: '전자칠판 75"' }),

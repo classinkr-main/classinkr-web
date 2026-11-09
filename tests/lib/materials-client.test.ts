@@ -11,6 +11,13 @@ describe("자료 다운로드 전달", () => {
     expect(isMaterialFileUrl("/materials/kit.PDF?v=2", false, ORIGIN)).toBe(true)
   })
 
+  it("같은 출처의 PDF 라우트(/api/materials/<slug>/pdf)는 확장자가 없어도 파일이다", () => {
+    expect(isMaterialFileUrl("/api/materials/academy-admin-dashboard-template/pdf", false, ORIGIN)).toBe(true)
+    expect(isMaterialFileUrl(`${ORIGIN}/api/materials/academy-admin-dashboard-template/pdf`, false, ORIGIN)).toBe(true)
+    expect(isMaterialFileUrl("https://other.example/api/materials/x/pdf", false, ORIGIN)).toBe(false)
+    expect(isMaterialFileUrl("/api/materials/x/download", false, ORIGIN)).toBe(false)
+  })
+
   it("자료 상세·외부 문서 같은 페이지 주소는 파일로 보지 않는다(예전처럼 이동)", () => {
     expect(isMaterialFileUrl("/resources/academy-system-checklist", false, ORIGIN)).toBe(false)
     expect(isMaterialFileUrl("https://docs.channel.io/classinkorea/ko/articles/x", false, ORIGIN)).toBe(false)
@@ -22,5 +29,8 @@ describe("자료 다운로드 전달", () => {
     ).toBe("우리 학원 수업 운영 누수 진단표.pdf")
     expect(buildMaterialDownloadFilename('A/B: "키트"?', "/materials/kit.zip", ORIGIN)).toBe("A B 키트.zip")
     expect(buildMaterialDownloadFilename("  ", "/materials/x", ORIGIN)).toBe("classin-material.pdf")
+    expect(buildMaterialDownloadFilename("학원 운영 대시보드", "/api/materials/academy-admin-dashboard-template/pdf", ORIGIN)).toBe(
+      "학원 운영 대시보드.pdf"
+    )
   })
 })

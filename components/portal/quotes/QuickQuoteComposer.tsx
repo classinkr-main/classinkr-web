@@ -58,6 +58,8 @@ import {
   getStandardQuoteQuickPresets,
   getStandardQuoteTemplate,
   inferStandardQuoteTemplateId,
+  isRecordingStudioTemplate,
+  isRetiredQuoteTemplate,
   isSoftwareQuoteTemplate,
   quoteNoteHasLine,
   resolveQuoteSupplier,
@@ -238,7 +240,7 @@ type QuickAddRailItemId =
   | "board_75"
   | "camera_t1"
   | "recording_studio"
-  | "online_suite"
+  | "recording_studio_75"
   | "business_recharge"
   | "stand"
   | "wall_mount"
@@ -266,13 +268,25 @@ const QUICK_ADD_RAIL_ITEMS: QuickAddRailItem[] = [
   // ── 패키지 상품 (수트 · 번들 · 세트) ─────────────────────────
   {
     id: "recording_studio",
-    label: "올인원 녹화 세트",
-    description: "OMO 830",
+    label: '녹화 세트 86"',
+    description: "T1 + 벽걸이 + 녹화 1년",
     price: getProductBySku("ai-studio-recording-set")?.unit_price ?? 8_300_000,
     group: "package",
     sku: "ai-studio-recording-set",
     templateId: "recording_studio",
     presetId: "recording_studio_default",
+    quantityUnit: "세트",
+    badge: "녹화 패키지",
+  },
+  {
+    id: "recording_studio_75",
+    label: '녹화 세트 75"',
+    description: "T1 + 벽걸이 + 녹화 1년",
+    price: getProductBySku("ai-studio-recording-set-75")?.unit_price ?? 7_400_000,
+    group: "package",
+    sku: "ai-studio-recording-set-75",
+    templateId: "recording_studio_75",
+    presetId: "recording_studio_75_default",
     quantityUnit: "세트",
     badge: "녹화 패키지",
   },
@@ -287,19 +301,6 @@ const QUICK_ADD_RAIL_ITEMS: QuickAddRailItem[] = [
     presetId: "board_86_bundle",
     quantityUnit: "세트",
     badge: "인기 번들",
-  },
-  {
-    id: "online_suite",
-    label: "구독형 AI Suite",
-    description: "월 구독",
-    price: getProductBySku("online-suite-monthly")?.unit_price ?? 400_000,
-    group: "package",
-    sku: "online-suite-monthly",
-    templateId: "online_suite",
-    presetId: "online_suite_default",
-    quantityUnit: "월",
-    badge: "학원 패키지",
-    priceUnit: "/월",
   },
   // ── 소프트웨어(SW) 단독 ────────────────────────────────────
   {
@@ -368,7 +369,7 @@ const QUICK_ADD_RAIL_ITEMS: QuickAddRailItem[] = [
   },
 ]
 
-/** 별도 장비 구매 + Business 충전은 공급자가 달라 2장. AI Suite는 장비 포함 통합 상품이다. */
+/** 별도 장비 구매 + Business 충전은 공급자가 달라 2장. */
 const QUICK_COMBOS: Array<{
   id: string
   label: string
@@ -493,7 +494,7 @@ function sheetSubtotal(sheet: ComposerSheet) {
 function quantityUnitOf(templateId: StandardQuoteTemplateId) {
   return templateId === "online_suite"
     ? "월"
-    : templateId === "recording_studio"
+    : isRecordingStudioTemplate(templateId)
       ? "세트"
       : templateId === "business_recharge"
         ? "건"
@@ -1026,7 +1027,7 @@ export default function QuickQuoteComposer({
   const hiddenTemplateIds = displaySettings?.preferences.hiddenTemplateIds ?? []
   const showRecentQuotes = displaySettings?.preferences.showRecentQuotes ?? true
   const showTemplates = displaySettings?.preferences.showTemplates ?? true
-  const visibleTemplates = STANDARD_QUOTE_TEMPLATES.filter((template) => quoteComposerMode(template.id) === composerMode && !hiddenTemplateIds.includes(`base:${template.id}`))
+  const visibleTemplates = STANDARD_QUOTE_TEMPLATES.filter((template) => !isRetiredQuoteTemplate(template.id) && quoteComposerMode(template.id) === composerMode && !hiddenTemplateIds.includes(`base:${template.id}`))
   const visibleCatalogItems = QUICK_ADD_RAIL_ITEMS.filter((item) => quoteComposerMode(item.templateId) === composerMode)
   const visibleTeamTemplates = (teamTemplates ?? []).filter((template) => quoteComposerMode(inferStandardQuoteTemplateId(template.details)) === composerMode && !hiddenTemplateIds.includes(template.id))
   const templateCount = visibleTeamTemplates.length + visibleTemplates.length
@@ -1349,11 +1350,6 @@ export default function QuickQuoteComposer({
 
   /** 품목 카탈로그: 해당 공급자 견적서가 없으면 새 장을 열고, 있으면 그 표에 행을 더한다. */
   function handleCatalogAdd(item: QuickAddRailItem) {
-    // AI Suite는 장비까지 포함한 단일 패키지. 기존 HW 장에 SW 장을 덧붙이지 않는다.
-    if (item.templateId === "online_suite" && (sheets.length !== 1 || sheets[0].templateId !== "online_suite")) {
-      applyTemplate("online_suite")
-      return
-    }
     setActivePick(null)
     const line = sheetLineOf(item.templateId)
     const sheet = sheets.find((entry) => entry.line === line)
@@ -2482,7 +2478,7 @@ export default function QuickQuoteComposer({
                 (VAT 별도)
               </p>
             )}
-            {sheet.templateId === "recording_studio" && sheet.optionSelections.payment_plan === "12_month" && (
+            {isRecordingStudioTemplate(sheet.templateId) && sheet.optionSelections.payment_plan === "12_month" && (
               <p className="text-right text-[11.5px] text-[#615D59]">
                 12개월 분할 시 월 약{" "}
                 <b className="tabular-nums text-[#111110]">
@@ -2735,7 +2731,6 @@ export default function QuickQuoteComposer({
           {([
             { id: "business_recharge", mode: "software", label: "SW 단독" },
             { id: "board_86", mode: "hardware", label: "HW" },
-            { id: "online_suite", mode: "suite", label: "AI Suite · HW+SW 통합" },
           ] as const).map((choice) => (
             <button
               key={choice.id}
