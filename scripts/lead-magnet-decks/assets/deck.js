@@ -133,9 +133,17 @@
       el.classList.toggle("muted", answered === 0);
     });
     doc.querySelectorAll("[data-band-desc]").forEach(function (el) { el.textContent = answered === 0 ? (el.getAttribute("data-empty") || "") : (band ? band.desc : ""); });
+    doc.querySelectorAll("[data-band-next]").forEach(function (el) { el.textContent = answered === 0 ? (el.getAttribute("data-empty") || "") : (band && band.next ? band.next : ""); });
     // 영역별 막대 + 먼저 손볼 곳
     var order = Object.keys(secs.sections || {}).map(function (k) { var s = secs.sections[k]; return { k: k, r: (per[k] || 0) / s.n, s: s }; });
-    order.sort(function (a, b) { return a.r - b.r || Number(a.k) - Number(b.k); });
+    if (secs.staged) {
+      // 단계형 자료: 아직 다 채우지 못한 단계를 앞 단계부터 권한다.
+      order.sort(function (a, b) { return Number(a.k) - Number(b.k); });
+      var open = order.filter(function (o) { return o.r < 1; });
+      order = open.concat(order.filter(function (o) { return o.r >= 1; }));
+    } else {
+      order.sort(function (a, b) { return a.r - b.r || Number(a.k) - Number(b.k); });
+    }
     doc.querySelectorAll("[data-sub-bar]").forEach(function (el) {
       var k = el.getAttribute("data-sub-bar"), s = secs.sections[k];
       el.style.width = Math.round(((per[k] || 0) / s.n) * 100) + "%";
@@ -144,6 +152,16 @@
     var fixList = doc.querySelector("[data-fix-list]");
     if (fixList) {
       var html = "";
+      if (order.length === 1) {
+        var only = order[0], picked = [];
+        for (var q = 0; q < only.s.items.length && picked.length < 3; q++) { if (!state.c[only.k + "-" + q]) picked.push(only.s.items[q]); }
+        if (!picked.length) picked.push("모든 칸을 채웠습니다. 다음 장의 실행 플랜으로 넘어가세요.");
+        picked.forEach(function (t, i) { html += '<li><span class="num">' + String(i + 1).padStart(2, "0") + '</span><div><b>' + esc(only.s.title) + '</b><p>' + esc(t) + "</p></div></li>"; });
+        fixList.innerHTML = html;
+        fixList.setAttribute("data-ready", answered ? "1" : "0");
+        fixList.classList.toggle("is-empty", answered === 0);
+        return;
+      }
       order.slice(0, 3).forEach(function (o, i) {
         var firstOpen = null;
         for (var j = 0; j < o.s.items.length; j++) { if (!state.c[o.k + "-" + j]) { firstOpen = o.s.items[j]; break; } }

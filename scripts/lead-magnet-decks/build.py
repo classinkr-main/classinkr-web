@@ -31,6 +31,12 @@ MONO = HERE / "assets" / "IBMPlexMono-Medium-latin.woff2"
 LOGO = ROOT / "public" / "images" / "quotes" / "classin-logo.png"
 SITE = "https://classin.co.kr"
 STAGE_KO = {"TOFU": "진단", "MOFU": "설계", "BOFU": "검증"}
+NEXT_STEPS = [
+    "실행 플랜의 첫 단계부터 시작하세요. 흩어진 도구와 반복 업무를 적어 보는 것이 먼저입니다.",
+    "약한 영역 3개를 들고 30분 온라인 상담으로 범위를 좁히세요. ‘상담용 한 장’을 그대로 보내면 됩니다.",
+    "대표 수업 한 편을 들고 쇼룸 데모를 잡을 단계입니다. 약한 영역부터 화면으로 확인합니다.",
+    "파일럿 교실과 일정, 견적 범위를 정할 단계입니다. 도입 상담에서 바로 이야기할 수 있습니다.",
+]
 REPLAY_DECKS = {"parent-replay-retention-script-kit", "classroom-recording-replay-setup-guide", "online-class-timing-check"}
 SOURCE_NOTE = {"night-online-class-remote-academy-guide": "근거: 학원의 설립·운영 및 과외교습에 관한 법률 제24조, 교육지원청 안내. 지역·시점에 따라 다를 수 있어 관할 교육지원청 확인이 우선입니다."}
 
@@ -186,10 +192,7 @@ class Deck:
               <div class="m-title">{e(sec0["title"])}</div>{rows}
               <div class="m-foot"><div><div class="ex">예시 결과 · {e(m["scoreBands"][min(1, nb - 1)]["label"])}</div><div class="m-score">{ex}<small> / {total}</small></div></div><div class="m-bands">{bands}</div></div></div>'''
         stamp_html = f'<div class="cover-stamp"><div><b>{e(stamp[0])}</b>{stamp[1]}</div></div>' if stamp else ""
-        audience = m["audience"].split(",")[0:3]
-        aud = "·".join(a.strip() for a in audience)
-        if len(aud) > 22:
-            aud = aud[:22].rstrip("·, ") + " 등"
+        aud = ov.get("for_") or "·".join(a.strip() for a in m["audience"].split(",")[:3])
         body = f'''<div class="cover-main">
             <div><div class="kicker"><span class="no">No.{ov["no"]:02d}</span><span class="ko">{e(ov["series"])}</span><span>· {e(m["formatLabel"].split(" + ")[0])}</span></div>
             <h1 class="display" style="--cover-size:{cover_size(c["title"])}px">{c["title"]}</h1>
@@ -269,6 +272,7 @@ class Deck:
           <div><div class="eyebrow mono">How to use · 쓰는 법</div>
             <ol class="howto">{how}</ol>
             <div class="chips">{chips}</div>
+            {"<div class='when'><b>이럴 때 쓰세요</b><ul>" + "".join(f"<li>{e(x)}</li>" for x in (pg.get("bestUsedWhen") or [])[:3]) + "</ul></div>" if pg.get("bestUsedWhen") else ""}
             <p class="hint">칸을 누르면 체크됩니다. 인쇄(PDF)하면 빈 칸으로 나와 손으로도 쓸 수 있습니다.</p></div>'''
         self.add("s-inside", body, sect="이 자료 사용법")
 
@@ -283,6 +287,8 @@ class Deck:
             body = f'''<div style="max-width:1500px"><div class="eyebrow mono">Story · {e(sg["eyebrow"])}</div><h2 class="h1" style="font-size:{tsize}px;margin-top:22px">{e(sg["title"])}</h2>
                 <p class="txt" style="margin-top:36px;font-size:27px;max-width:1400px">{e(sg["body"])}</p><div class="takeaway">{e(sg["takeaway"])}</div></div>'''
             self.add("s-story solo", body, sect="한눈에 보기")
+            if not DECK_OPTS.get(self.slug, {}).get("story_beats", True):
+                return
             body = f'''<div style="grid-column:1/-1"><div class="eyebrow mono">Key points · 핵심 {len(sg["beats"][:5])}줄</div><ol class="beats two" style="margin-top:30px">{beats}</ol></div>'''
             self.add("s-story solo", body, sect="한눈에 보기", foot=f'<span class="src">{e(SOURCE_NOTE.get(self.slug, ""))}</span>' if SOURCE_NOTE.get(self.slug) else "")
             return
@@ -341,7 +347,9 @@ class Deck:
         body = f'''<div><div class="eyebrow mono">Result · 우리 학원 점수</div>
             <div class="score-big"><b data-total>0</b><span>/ {total}</span></div>
             <div class="score-state muted" data-band-label data-empty="아직 체크하지 않았습니다">아직 체크하지 않았습니다</div>
+            <div class="band-k">이 구간에서 흔한 모습</div>
             <p class="txt band-desc" data-band-desc data-empty="앞 장의 문항에서 ‘예’인 칸을 누르면 점수와 구간이 바로 계산됩니다."></p>
+            <div class="next-box"><div class="band-k">이 점수에서 다음 한 걸음</div><p data-band-next data-empty="체크를 마치면 여기에 다음 한 걸음이 나옵니다.">체크를 마치면 여기에 다음 한 걸음이 나옵니다.</p></div>
             <div class="score-actions"><a class="btn-primary" href="{e(utm("/showroom", self.slug, "score"))}" target="_blank" rel="noopener">이 결과로 시연 예약 →</a><button class="copy-btn" type="button" data-copy-result>결과 복사하기</button></div>
             <p class="print-note small" style="margin-top:20px">인쇄본: ‘예’ 개수를 세어 오른쪽 구간에 표시하세요.</p></div>
           <div class="bands"><div class="band-bar">{bar}<div class="marker hidden"><span><b data-total>0</b>점</span></div></div>
@@ -367,7 +375,7 @@ class Deck:
         body = f'''<div class="cs-left"><div class="eyebrow mono">Consult sheet · 상담용 한 장</div>
             <h2 class="h2" style="margin-top:18px">체크한 결과가<br><em>상담 메모</em>로 채워졌습니다.</h2>
             <div class="cs-sum"><div><span class="cs-k">총점</span><b class="num"><span data-total>0</span> / {total}</b></div><div><span class="cs-k">구간</span><b data-band-label data-empty="체크 전">체크 전</b></div></div>
-            <div class="cs-k" style="margin-top:28px">{e(opts.get("fix_title", "먼저 손볼 곳 3"))}</div>
+            <div class="cs-k" style="margin-top:28px">{e(opts.get("fix_title", "먼저 손볼 곳 " + str(min(3, len(m["sections"]))) if len(m["sections"]) > 1 else "먼저 채울 칸 3"))}</div>
             <ol class="fix" data-fix-list><li><span class="num">01</span><div><b>가장 낮은 영역</b><p>체크를 마치면, 낮은 영역의 비어 있는 첫 문항이 여기에 정리됩니다.</p></div></li><li><span class="num">02</span><div><b>두 번째 영역</b><p>인쇄본에서는 낮은 영역을 직접 적어 보세요.</p></div></li><li><span class="num">03</span><div><b>세 번째 영역</b><p>이 세 줄이 상담에서 가장 먼저 확인할 질문이 됩니다.</p></div></li></ol></div>
           <div class="cs-right">{flag_box}
             <div class="cs-box"><div class="cs-k">상담 때 챙겨 오면 좋은 것</div><ul class="cs-prep">{prep}</ul></div>
@@ -494,17 +502,19 @@ class Deck:
         nxt = next_magnet(self.slug, self.all)
         rel = [nxt] if nxt else []
         so = DECK_OPTS.get(self.slug, {}).get("showroom", ("우리 수업으로 시연 예약하기", "대표 수업 자료를 가져오시면 판서·녹화·다시보기를 그대로 확인합니다."))
-        acts = [f'''<a class="act primary" href="{e(utm("/showroom", self.slug, "cta_showroom"))}" target="_blank" rel="noopener"><div><div class="k">목동 쇼룸 · 30분</div><div class="t">{e(so[0])}</div><div class="d">{e(so[1])}</div></div><span class="go">→</span></a>''',
+        so_path = so[2] if len(so) > 2 else "/showroom"
+        so_k = so[3] if len(so) > 3 else "목동 쇼룸 · 30분"
+        acts = [f'''<a class="act primary" href="{e(utm(so_path, self.slug, "cta_primary"))}" target="_blank" rel="noopener"><div><div class="k">{e(so_k)}</div><div class="t">{e(so[0])}</div><div class="d">{e(so[1])}</div></div><span class="go">→</span></a>''',
                 f'''<a class="act" href="{e(utm("/contact#contact-form", self.slug, "cta_contact"))}" target="_blank" rel="noopener"><div><div class="k">도입 상담</div><div class="t">결과 해석·견적 상담 받기</div><div class="d">체크 결과로 쇼룸·데모·견적 범위를 함께 정리합니다.</div></div><span class="go">→</span></a>''']
         if rel:
             r = self.all[rel[0]]
             rov = OV.get(rel[0], {})
-            acts.append(f'''<a class="act" href="{e(utm("/resources/" + rel[0], self.slug, "cta_next"))}" target="_blank" rel="noopener"><div><div class="k">다음 자료 · No.{rov.get("no", 0):02d}</div><div class="t">{e(r["title"])}</div><div class="d">{e(r["formatLabel"])}</div></div><span class="go">→</span></a>''')
+            acts.append(f'''<a class="act" href="{e(utm("/resources/" + rel[0], self.slug, "cta_next"))}" target="_blank" rel="noopener"><div><div class="k">다음 자료 · No.{rov.get("no", 0):02d}</div><div class="t">{e(strip_tags(rov["cover"]["title"].replace("<br>", " ")))}</div><div class="d">{e(r["title"])}</div></div><span class="go">→</span></a>''')
         body = f'''<div style="display:flex;flex-direction:column"><div class="eyebrow mono">Next step · 다음 한 걸음</div>
             <h2 class="display" style="font-size:{min(104, cover_size(c["title"], 790))}px">{c["title"]}</h2><p class="lead">{e(c["sub"])}</p>
             <p class="honest">가격·견적은 교실 수와 장비, 요금제에 따라 상담에서 확정합니다. 결제·정산, 오프라인 출입·출석 관리는 지금 쓰는 시스템과 역할을 나눕니다. ClassIn은 수업 전·중·후 흐름을 맡습니다.</p></div>
           <div class="acts">{"".join(acts)}</div>'''
-        self.add("s-cta", body, sect="다음 단계", foot='<span class="src">ClassIn Korea · 서울 목동 쇼룸</span><span class="tag">classin.co.kr</span>', ink=True)
+        self.add("s-cta", body, sect="다음 단계", foot='<span class="src">ClassIn Korea 목동 쇼룸 · 서울 양천구 목동동로 233-1 806호 · 02-6958-8566 · 평일 09:00~18:00</span><span class="tag">classin.co.kr</span>', ink=True)
 
     def extras(self, where: str):
         for x in EXTRAS.get(self.slug, {}).get(where, []):
@@ -543,11 +553,12 @@ class Deck:
     def screen(self):
         if self.slug not in SCREEN:
             return
-        key, title = SCREEN[self.slug]
+        key, title, *rest = SCREEN[self.slug]
         shot = SHOTS[key]
-        uri, w, h = image_data_uri(shot["src"])
+        texts = rest[0] if rest else [t for _, _, t in shot["pins"]]
+        uri, w, h = image_data_uri(shot["src"], crop=shot.get("crop"))
         pins = "".join(f'<span class="pin" style="left:{x}%;top:{y}%">{i + 1}</span>' for i, (x, y, _) in enumerate(shot["pins"]))
-        legend = "".join(f'<li><span class="pin">{i + 1}</span><span>{e(t)}</span></li>' for i, (_, _, t) in enumerate(shot["pins"]))
+        legend = "".join(f'<li><span class="pin">{i + 1}</span><span>{e(t)}</span></li>' for i, t in enumerate(texts))
         body = f'''<div><div class="eyebrow mono">Real screen · 실제 화면</div><h2 class="h2" style="margin-top:18px">{title}</h2><ol class="legend">{legend}</ol></div>
           <figure class="shot"><div class="frame-img"><img src="{uri}" width="{w}" height="{h}" alt="{e(shot["caption"])}">{pins}</div><figcaption>{e(shot["caption"])}</figcaption></figure>'''
         self.add("s-screen", body, sect="실제 화면", foot='<span class="src">사이트에 공개된 실제 화면과 쇼룸 사진입니다. 기능 범위와 요금제별 차이는 상담에서 확인합니다.</span><span class="tag">Real screen</span>')
@@ -565,13 +576,16 @@ class Deck:
             self.worksheet()
         if opts.get("scripts_first"):
             self.scripts()
+        if opts.get("cases_first"):
+            self.cases()
         self.checklists()
         self.flags()
         self.score()
         self.consult()
         if not opts.get("worksheet_first"):
             self.worksheet()
-        self.cases()
+        if not opts.get("cases_first"):
+            self.cases()
         if not opts.get("scripts_first"):
             self.scripts()
         self.plan()
@@ -596,18 +610,21 @@ _FONT_CACHE: dict[str, str] = {}
 _IMG_CACHE: dict[str, tuple[str, int, int]] = {}
 
 
-def image_data_uri(rel: str, max_w: int = 1400) -> tuple[str, int, int]:
-    """공개 이미지를 WebP 로 다시 줄여 data URI 로 넣는다(덱을 단일 파일로 유지)."""
-    if rel in _IMG_CACHE:
-        return _IMG_CACHE[rel]
+def image_data_uri(rel: str, max_w: int = 1400, crop: tuple | None = None) -> tuple[str, int, int]:
+    """공개 이미지를 WebP 로 다시 줄여 data URI 로 넣는다(덱을 단일 파일로 유지). crop 은 (x0, y0, x1, y1) 비율."""
+    ck = f"{rel}|{crop}"
+    if ck in _IMG_CACHE:
+        return _IMG_CACHE[ck]
     from PIL import Image
     im = Image.open(ROOT / rel).convert("RGB")
+    if crop:
+        im = im.crop((round(crop[0] * im.width), round(crop[1] * im.height), round(crop[2] * im.width), round(crop[3] * im.height)))
     if im.width > max_w:
         im = im.resize((max_w, round(im.height * max_w / im.width)), Image.LANCZOS)
     buf = io.BytesIO()
     im.save(buf, "WEBP", quality=80, method=6)
     out = ("data:image/webp;base64," + base64.b64encode(buf.getvalue()).decode(), im.width, im.height)
-    _IMG_CACHE[rel] = out
+    _IMG_CACHE[ck] = out
     return out
 _HANGUL = re.compile(r"([\uac00-\ud7a3][\uac00-\ud7a3\s·,.()?!~]*[\uac00-\ud7a3)]|[\uac00-\ud7a3])")
 
@@ -679,7 +696,12 @@ def render(deck: Deck, theme: str, css: str, js: str, logo: str, embed_fonts: bo
     for b in m["scoreBands"]:
         lo, hi = parse_band(b["range"])
         bands.append(dict(min=lo, max=hi, label=b["label"], desc=b["description"]))
-    data = dict(title=m["title"], max=sum(len(s["items"]) for s in m["sections"]), sections=secs, bands=bands)
+    nb = len(bands)
+    steps = NEXT_STEPS[:1] + NEXT_STEPS[2:] if nb == 3 else NEXT_STEPS
+    for i, b in enumerate(bands):
+        b["next"] = steps[min(i, len(steps) - 1)]
+    data = dict(title=m["title"], max=sum(len(s["items"]) for s in m["sections"]), sections=secs, bands=bands,
+                staged=bool(DECK_OPTS.get(deck.slug, {}).get("staged")))
     body = wrap_kr("".join(frames))
     font_css = ""
     if embed_fonts:

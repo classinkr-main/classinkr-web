@@ -836,3 +836,26 @@ em{font-style:normal;background:linear-gradient(transparent 56%,var(--accent-mar
   .mode-scroll .s-screen .legend{margin-top:16px}
 }
 .act .k{text-transform:none}
+
+/* R6(4회차 전수 QA 반영) */
+.band-k{margin-top:22px;font:600 17px/1.2 var(--sans);color:var(--muted)}
+.s-score .band-desc{margin-top:8px!important}
+.next-box{margin-top:22px;padding:20px 24px;border-radius:16px;background:var(--accent-soft);border:1px solid rgba(11,122,82,.25)}
+.next-box .band-k{margin-top:0;color:var(--accent)}
+.next-box p{margin-top:8px;font:600 23px/1.5 var(--sans);letter-spacing:-.015em;color:var(--ink)}
+.when{margin-top:26px;padding-top:20px;border-top:1px solid var(--hair)}
+.when b{font:650 19px/1.2 var(--sans);color:var(--muted)}
+.when ul{list-style:none;margin-top:12px;display:grid;gap:8px}
+.when li{position:relative;padding-left:20px;font:500 21px/1.5 var(--sans);color:var(--body)}
+.when li::before{content:"";position:absolute;left:2px;top:.62em;width:8px;height:8px;border-radius:50%;background:var(--accent)}
+.scripts[style*="--n:1"] .script{display:grid;grid-template-columns:1.25fr 1fr;grid-template-areas:"sc sc" "ttl ttl" "bub avo" "bub why";column-gap:32px}
+.scripts[style*="--n:1"] .sc{grid-area:sc}.scripts[style*="--n:1"] .ttl{grid-area:ttl}
+.scripts[style*="--n:1"] .bubble{grid-area:bub;font-size:26px}.scripts[style*="--n:1"] .avoid{grid-area:avo;align-self:start}.scripts[style*="--n:1"] .why{grid-area:why;font-size:21px}
+.ws th{white-space:nowrap}
+@media (max-width:760px){
+  .mode-scroll .scripts[style*="--n:1"] .script{display:flex;flex-direction:column}
+  .mode-scroll .scripts[style*="--n:1"] .bubble{font-size:14.5px}.mode-scroll .scripts[style*="--n:1"] .why{font-size:13px}
+  .mode-scroll .next-box{padding:12px 14px}.mode-scroll .next-box p{font-size:14.5px}.mode-scroll .band-k{font-size:12px;margin-top:12px}
+  .mode-scroll .when li{font-size:14px}.mode-scroll .when b{font-size:13px}
+  .mode-scroll .ws th{white-space:normal}
+}
