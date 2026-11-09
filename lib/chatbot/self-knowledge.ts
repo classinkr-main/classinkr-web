@@ -247,6 +247,8 @@ export function findChatbotSelfKnowledgeEntry(question: string) {
       if (!entry.match.test(question)) return false
       // "화면 기록 권한", "수업 기록"처럼 제품 이야기에 섞인 단어로 챗봇 자기소개가 나가지 않게 한다.
       if (CHATBOT_CONTEXT_REQUIRED_KEYS.has(entry.key) && (!hasChatbotContext || refersToEarlierBotAdvice)) return false
+      // 과외 계정의 결제 수단·증빙 명의를 묻는 말은 요금제 추천이 아니라 결제 안내로 보낸다.
+      if (entry.key === "tutor_pricing_recommend" && /법인\s*카드|결제\s*수단|영수증|세금계산서|명의/.test(normalized)) return false
       // 학원이 여는 학부모 설명회에 나눠 줄 자료를 묻는 말은 클래스인 행사 문의가 아니다.
       if (entry.key === "event_inquiry" && /자료|안내문|나눠\s*(?:드릴|줄)|배포/.test(normalized)) return false
       // 학원이 여는 설명회·행사를 클래스인으로 진행하는 방법(웹 라이브 명단, 칠판 화면 송출)은 기능 질문이다.
@@ -293,8 +295,9 @@ const ADOPTION_CONTEXT_RE =
 
 const CHATBOT_WEAK_CONTEXT_RE = /방금|아까|기억/
 
+// "아까 너가 앱 데이터 지우라해서 지웠는데…"처럼 챗봇이 시킨 대로 했다는 말도 제품 문제를 묻는 말이다.
 const PRIOR_BOT_ADVICE_RE =
-  /(?:챗봇|(?<!로)봇|여기|이\s*채팅)\s*(?:에서|이|의|가)?\s*(?:안내|알려|말|답)\S*?\s*(?:대로|받고|받은)|(?:챗봇|(?<!로)봇)\s*(?:의\s*)?(?:답변|안내|대답)(?:에|에서|이|을|대로)/
+  /(?:챗봇|(?<!로)봇|여기|이\s*채팅)\s*(?:에서|이|의|가)?\s*(?:안내|알려|말|답)\S*?\s*(?:대로|받고|받은)|(?:챗봇|(?<!로)봇)\s*(?:의\s*)?(?:답변|안내|대답)(?:에|에서|이|을|대로)|(?:^|[^가-힣])(?:너|니|네)가\s.{0,24}?(?:라\s*해서|라고\s*해서|라길래|라고\s*했|라\s*했)/
 
 const PRODUCT_NOUN_RE = /수업|녹화|숙제|과제|시험|칠판|보드|코스|학생|강사|결제|요금|계정|로그인|앱|화면|카메라|마이크|권한|공유/
 

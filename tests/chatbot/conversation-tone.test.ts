@@ -66,6 +66,12 @@ describe("conversation tone", () => {
     expect(detectConversationTone("원장님이 저번에 여기서 물어봤다던데요").priorContext).toBeNull()
   })
 
+  it("does not read 'too good to throw away' as anger, but does read wasted money as anger", () => {
+    expect(detectConversationTone("칠판을 바꾸고 싶은데, 헌 걸 그냥 버리기는 아깝고요.").angry).toBe(false)
+    expect(detectConversationTone("이런 서비스에 돈 낸 게 아깝습니다! 남은 기간 환불해 주세요!").angry).toBe(true)
+    expect(detectConversationTone("시간 아깝네요 진짜").angry).toBe(true)
+  })
+
   it("says it cannot see earlier chats only once", () => {
     const tone = detectConversationTone("지난주에 전화드렸을 때 기사님이 오신다고 했는데 아직도 안 오셨어요.")
     expect(tone.priorContext).toBe("inquiry")
