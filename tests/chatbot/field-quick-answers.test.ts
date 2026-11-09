@@ -31,6 +31,9 @@ describe("field quick answers", () => {
     expect(
       find("체험 계정으로 동시 접속 약 60명 규모 테스트를 할 수 있는지, 테스트용 기기나 자동화 스크립트로 접속시키는 게 허용되는지, 사전 검증 절차가 있는지 궁금합니다.")
     ).toBe("trial-load-test-automation-tos")
+    // 발표자 뽑기(랜덤 선택) 답은 시험 문항 섞기 질문을 받지 않는다. '선생님'의 '선'은 케이블이 아니다.
+    expect(find("시험 문제 랜덤으로 학생마다 다르게 낼 수 있나요?")).not.toBe("random-student-picker-tool")
+    expect(find("선생님이 칠판 펜 하나 사다 달래요 어디서 사요")).not.toBe("board-cable-too-short-which-to-buy")
     // 화면 안쪽 김서림은 칠판 청소 문제가 아니다("겉을 닦아도"가 있어도).
     expect(find("학원 칠판 화면 안쪽에 뿌옇게 김이 서려서 글씨가 안 보입니다! 겉을 아무리 닦아도 안 없어져요!")).toBe(
       "board-screen-fog-condensation-inside"
