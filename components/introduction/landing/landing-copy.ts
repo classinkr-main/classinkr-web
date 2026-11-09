@@ -161,7 +161,7 @@ export const LANDING_SOFTWARE = {
       label: "소개서 PDF 받기",
       ctaId: "introduction_software_pdf",
     },
-    // 문서형 소개서 원문(noindex)은 이 링크로만 들어간다
+    // 문서형 소개서 원문(/introduction/full)으로 가는 링크
     full: { label: "소개서 전체 보기", href: `${INTRO_PATH}/full`, ctaId: "introduction_full_link" },
   },
 }

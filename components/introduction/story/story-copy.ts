@@ -1,7 +1,7 @@
 // /introduction/story(시안 4 · 문제→해결 스토리) 전용 문구.
 // 사실·숫자는 lib/introduction/content.ts 에 있는 것만 쓴다 — 표·사례 수·영상·사진은 거기서 꺼내 쓰고,
 // 여기에는 이 페이지에서 새로 쓴 헤드라인과 문장 순서만 둔다. **굵게** 는 Emphasis 가 강조로 그린다.
-// 상황별 전달 자료라 검색에 내지 않는다(noindex, sitemap 제외) — 대표 랜딩은 /introduction 이다.
+// 상황별 전달 자료(검색에도 노출) — 대표 랜딩은 /introduction 이다.
 
 import type { IntroAssetKey } from "@/lib/introduction/assets"
 import {

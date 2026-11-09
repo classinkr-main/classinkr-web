@@ -9,12 +9,11 @@ import { PROOF_META, PROOF_PATH } from "@/components/introduction/proof/proof-co
 import { createPublicMetadata } from "@/lib/seo"
 
 // 상황별 전달 자료(시안 5 · 현장 사례 중심). 대표 랜딩은 /introduction 이고 이 쪽은 링크로 건네는 자료라
-// 색인하지 않고 sitemap 에도 넣지 않는다. 상위 layout 의 메타가 내려오므로 이 페이지 메타를 따로 둔다.
+// 검색 노출(운영자 결정 2026-11-09) — sitemap 등록. 레이아웃은 메타를 두지 않으므로 이 페이지 메타를 따로 둔다.
 export const metadata = createPublicMetadata({
   title: PROOF_META.title,
   description: PROOF_META.description,
   path: PROOF_PATH,
-  noIndex: true,
 })
 
 // 서버 컴포넌트. 클라이언트 섬은 CTA·PDF 계측, 영상 재생, 사례 분야 필터뿐이다.

@@ -11,13 +11,12 @@ import { CASE_CONTAINER, CASE_TEXT_LINK, CaseBreadcrumb, CaseClosingCta, CasePag
 const { gallery } = INTRO_CASE_VIDEOS
 const TITLE = "스마트 교실 구성 사례"
 
-// 소개서 하위 쪽은 영업 자료라 색인하지 않는다(제품 쪽과 겹치고 원문의 제3자 서술이 들어 있다). sitemap 에도 넣지 않는다.
+// 검색 노출(운영자 결정 2026-11-09) — sitemap 등록.
 export const metadata = createPublicMetadata({
   title: TITLE,
   description:
     "한국디지털미디어고등학교·아신대학교·정율사관학원 등 ClassIn X 전자칠판과 카메라로 꾸린 스마트 교실의 실제 사진과 수업 영상을 기관별로 모았습니다.",
   path: INTRO_CASES_PATH,
-  noIndex: true,
 })
 
 export default function IntroCasesPage() {

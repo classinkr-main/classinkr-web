@@ -10,13 +10,11 @@ import { STORY_META, STORY_PATH } from "@/components/introduction/story/story-co
 import { createPublicMetadata } from "@/lib/seo"
 
 // 상황별 전달 자료(시안 4 · 문제→해결 스토리) — 대표 랜딩은 /introduction 이다.
-// 링크로만 건네는 쪽이라 검색에 내지 않고(noindex, nofollow) sitemap 에도 넣지 않는다.
-// 레이아웃은 메타를 두지 않으므로 이 쪽이 자기 canonical·noindex 를 반드시 갖는다.
+// 검색 노출(운영자 결정 2026-11-09) — sitemap 등록. 레이아웃은 메타를 두지 않으므로 이 쪽이 자기 canonical 을 갖는다.
 export const metadata = createPublicMetadata({
   title: STORY_META.title,
   description: STORY_META.description,
   path: STORY_PATH,
-  noIndex: true,
 })
 
 // 서버 컴포넌트. 클라이언트 섬은 CTA 계측(TrackedLink)·PDF 계측·영상 재생뿐이다.

@@ -37,12 +37,11 @@ export async function generateMetadata({ params }: IntroCasePageProps): Promise<
   if (!item) {
     return { title: "사례를 찾을 수 없습니다", robots: { index: false, follow: false } }
   }
-  // 소개서 하위 쪽은 영업 자료라 색인하지 않는다(app/introduction/cases/page.tsx 와 같은 이유). sitemap 에도 넣지 않는다.
+  // 검색 노출(운영자 결정 2026-11-09) — 사례 17쪽 모두 sitemap 에 싣는다(app/sitemap.ts).
   return createPublicMetadata({
     title: `${item.name} 스마트 교실 사례`,
     description: `${item.name} — ${stripEmphasis(item.summary)}`,
     path: getIntroCasePath(item.slug),
-    noIndex: true,
     image: getIntroAsset(item.cover).src,
   })
 }

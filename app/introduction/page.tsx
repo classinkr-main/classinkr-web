@@ -9,7 +9,7 @@ import { INTRO_PATH } from "@/lib/introduction/content"
 import { createBreadcrumbJsonLd, createPublicMetadata, createWebPageJsonLd } from "@/lib/seo"
 
 // 대표 랜딩(시안 1 「편집 지면」, 2026-11-06). 검색에 내고 sitemap 에 싣는다 — 타사 비교 문장·표는 이 쪽에 없다.
-// 비교표를 원문대로 싣는 문서형 소개서는 /introduction/full(noindex)로 옮겼다.
+// 비교표를 원문대로 싣는 문서형 소개서는 /introduction/full 로 옮겼다.
 export const metadata = createPublicMetadata({
   title: LANDING_META.title,
   description: LANDING_META.description,
