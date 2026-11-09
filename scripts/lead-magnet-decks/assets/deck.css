@@ -809,3 +809,30 @@ em{font-style:normal;background:linear-gradient(transparent 56%,var(--accent-mar
 .s-score .subs{gap:22px}.s-score .subs .sb{height:16px}.s-score .subs .sb-h{font-size:24px}
 .s-score .band-chips li{padding:18px 18px}
 .plan:not(.dense) .tt{font-size:34px}.plan:not(.dense) li{font-size:23px}.plan:not(.dense) .step{padding:36px 32px}
+
+/* 실제 화면 + 번호 핀 */
+.s-screen .body{display:grid;grid-template-columns:600px 1fr;gap:72px;align-items:start}
+.legend{list-style:none;margin-top:40px;display:grid;gap:14px}
+.legend li{display:grid;grid-template-columns:44px 1fr;gap:16px;align-items:start;padding:18px 0;border-top:1px solid var(--hair);font:550 24px/1.5 var(--sans);letter-spacing:-.015em;color:var(--ink)}
+.pin{display:inline-grid;place-items:center;width:40px;height:40px;border-radius:50%;background:var(--accent);color:#fff;font:600 19px/1 var(--mono);box-shadow:0 0 0 4px rgba(255,255,255,.9),0 6px 16px -6px rgba(0,0,0,.4)}
+.legend .pin{box-shadow:none;width:36px;height:36px;font-size:17px}
+.shot{margin:0;padding:22px;border-radius:24px;background:var(--sunken)}
+.frame-img{position:relative;border-radius:14px;overflow:hidden;background:var(--sheet);box-shadow:0 30px 60px -36px rgba(17,17,16,.45)}
+.frame-img img{display:block;width:100%;height:auto;max-height:690px;object-fit:contain}
+.frame-img .pin{position:absolute;transform:translate(-50%,-50%)}
+.shot figcaption{margin-top:16px;font:500 18px/1.4 var(--sans);color:var(--muted)}
+@media (max-width:760px){
+  .mode-scroll .legend li{grid-template-columns:30px 1fr;gap:10px;font-size:14.5px;padding:10px 0}
+  .mode-scroll .pin{width:26px;height:26px;font-size:12px;box-shadow:0 0 0 2px #fff}
+  .mode-scroll .legend .pin{width:24px;height:24px;font-size:11px}
+  .mode-scroll .shot{padding:10px;border-radius:14px;margin-top:16px}.mode-scroll .shot figcaption{font-size:12px;margin-top:8px}
+}
+@media print{.shot{background:var(--sunken)}}
+@media (max-width:760px){
+  .mode-scroll .scripts.roomy .bubble{font-size:14.5px}.mode-scroll .scripts.roomy .ttl{font-size:18px}
+  .mode-scroll .plan:not(.dense) .step{padding:16px 16px 18px}
+  .mode-scroll .s-consult .h2{font-size:24px!important}
+  .mode-scroll .s-bound .bound{margin-top:18px}.mode-scroll .s-bound .bound .col{padding:18px}.mode-scroll .s-bound .bound ul{gap:10px;margin-top:12px}
+  .mode-scroll .s-screen .legend{margin-top:16px}
+}
+.act .k{text-transform:none}

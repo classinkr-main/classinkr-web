@@ -342,3 +342,47 @@ COPY_FIX = {
     "쇼룸-온라인": "쇼룸·온라인",
     "입니다.' — classinkr@classin.com": "입니다.' 보낼 곳: classinkr@classin.com",
 }
+
+
+# ───────── 실제 화면(사이트에 이미 공개된 실제 화면·쇼룸 사진, 이름·얼굴은 원본에서 흐림 처리됨) ─────────
+# 핀 좌표는 이미지 기준 백분율(x, y).
+SHOTS = {
+    "board": dict(src="public/images/home/board-class.webp", caption="실제 화면 · 개인칠판 수업. 카메라 화면과 이름은 흐림 처리",
+                  pins=[(17, 42, "교사 판서와 문제 자료가 한 칠판에 함께 남습니다."),
+                        (64, 44, "학생마다 푼 개인칠판이 한 화면에 모입니다."),
+                        (26, 86, "페이지로 넘기는 칠판이라 지우지 않고 이어 씁니다(최대 50페이지)."),
+                        (83, 84, "회수한 풀이와 판서는 수업 기록으로 남아 다음 수업에 다시 엽니다.")]),
+    "replay": dict(src="public/images/home/win-ai.webp", caption="실제 화면 · 수업 다시보기 창. 수업명·강사명은 흐림 처리",
+                   pins=[(9, 13, "수업 하나에 다시보기·수업 정보·평가·강의 보고서가 함께 남습니다."),
+                         (24, 52, "칠판 화면과 카메라 녹화를 다시보기로 엽니다."),
+                         (72, 52, "AI 강의 분석은 강사가 스스로 점검하는 보조 자료입니다. 최종 판단은 사람이 합니다."),
+                         (57, 94, "다운로드 허용 여부와 열람 범위는 기관 설정으로 정합니다.")]),
+    "activity": dict(src="public/images/home/win-activity.webp", caption="실제 화면 · 코스에 활동 게시하기",
+                     pins=[(25, 21, "실시간 수업과 수업 뒤 요약이 같은 코스에 올라갑니다."),
+                           (73, 21, "숙제는 사진·음성·영상으로 제출받고, AI 채점은 보조로 씁니다."),
+                           (50, 36, "시험·녹화 수업·학습 자료·OMR 카드도 같은 자리에서 게시합니다."),
+                           (14, 62, "따라 읽기·받아쓰기 같은 AI 활동은 과목에 따라 골라 씁니다.")]),
+    "showroom": dict(src="public/images/home/showroom-classroom.webp", caption="목동 쇼룸 실제 교실 · 서울 양천구",
+                     pins=[(29, 24, "실제 교실 크기로 설치한 ClassIn Board에서 우리 수업을 그대로 엽니다."),
+                           (75, 24, "두 대를 나란히 두고 판서와 자료를 나눠 띄우는 구성도 확인합니다."),
+                           (52, 80, "학생 자리에 앉아 글자 크기와 시야를 직접 봅니다.")]),
+}
+
+SCREEN = {
+    "academy-system-checklist": ("board", "다섯 군데 흩어진 기록이,<br><em>한 칠판</em>에 남습니다."),
+    "academy-software-selection-worksheet": ("board", "판서·풀이·기록이<br><em>한 흐름</em>으로 남는 화면입니다."),
+    "academy-case-match-brief": ("board", "상담에서 가장 먼저<br><em>보여 드리는 화면</em>입니다."),
+    "teacher-edb-onboarding-sop-kit": ("board", "에이스의 판서가,<br><em>다음 강사의 칠판</em>으로 이어집니다."),
+    "electronic-whiteboard-classroom-checklist": ("board", "칠판 뒤에서 일어나는 일,<br><em>실제 화면</em>으로 봅니다."),
+    "classroom-recording-replay-setup-guide": ("replay", "녹화가 끝나면,<br><em>다시보기</em>가 이렇게 남습니다."),
+    "parent-replay-retention-script-kit": ("replay", "학부모에게 보낼 다시보기는,<br><em>여기</em>에서 나옵니다."),
+    "online-class-timing-check": ("replay", "화면만 보는 수업이 아니라,<br>수업 뒤가 <em>기록으로</em> 남습니다."),
+    "academy-admin-dashboard-template": ("replay", "강사에게 묻지 않고,<br><em>수업 기록</em>에서 확인합니다."),
+    "academy-data-automation-brief": ("replay", "자동화의 재료는,<br><em>이미 쌓이는 수업 기록</em>입니다."),
+    "academy-resource-reduction-calculator": ("activity", "반복 업무가 줄어드는 자리,<br><em>활동 게시</em> 한 화면입니다."),
+    "night-online-class-remote-academy-guide": ("activity", "온라인 강좌에 붙일 활동을,<br><em>한 화면</em>에서 고릅니다."),
+    "showroom-demo-readiness-kit": ("showroom", "목동 쇼룸 교실은,<br><em>실제 교실 크기</em>입니다."),
+    "classroom-install-av-readiness-checklist": ("showroom", "설치 전에,<br><em>설치된 교실</em>부터 보세요."),
+    "classin-pre-adoption-questions-checklist": ("showroom", "남은 질문을 지우는 곳,<br><em>목동 쇼룸 교실</em>입니다."),
+    "classin-90-day-adoption-roadmap": ("showroom", "파일럿 교실의 모습을,<br><em>먼저 보고</em> 정합니다."),
+}

@@ -21,7 +21,7 @@ let problems = 0;
 for (const f of files) {
   const url = "file://" + path.resolve(f) + "?mode=present";
   await page.goto(url);
-  await page.evaluate(() => { try { localStorage.clear(); } catch (e) {} });
+  await page.evaluate(() => { try { localStorage.clear(); } catch {} });
   await page.goto(url);
   await page.addStyleTag({ content: ".ui,.progress{display:none!important}" });
   await page.waitForTimeout(300);

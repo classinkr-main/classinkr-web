@@ -22,7 +22,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 sys.path.insert(0, str(HERE))
-from content import COPY_FIX, DECK_OPTS, EXTRAS, OV, PICKS, SCENE_NOTE  # noqa: E402
+from content import COPY_FIX, DECK_OPTS, EXTRAS, OV, PICKS, SCENE_NOTE, SCREEN, SHOTS  # noqa: E402
 
 DATA = ROOT / "data" / "lead-magnets.json"
 OUT = ROOT / "public" / "materials" / "lead-magnets" / "decks"
@@ -540,6 +540,18 @@ class Deck:
                 body = f'''<div style="grid-column:1/-1">{eyebrow}{title}<ol class="tline">{steps}</ol></div>'''
                 self.add("s-tline", body, sect="쇼룸 30분", foot=foot)
 
+    def screen(self):
+        if self.slug not in SCREEN:
+            return
+        key, title = SCREEN[self.slug]
+        shot = SHOTS[key]
+        uri, w, h = image_data_uri(shot["src"])
+        pins = "".join(f'<span class="pin" style="left:{x}%;top:{y}%">{i + 1}</span>' for i, (x, y, _) in enumerate(shot["pins"]))
+        legend = "".join(f'<li><span class="pin">{i + 1}</span><span>{e(t)}</span></li>' for i, (_, _, t) in enumerate(shot["pins"]))
+        body = f'''<div><div class="eyebrow mono">Real screen · 실제 화면</div><h2 class="h2" style="margin-top:18px">{title}</h2><ol class="legend">{legend}</ol></div>
+          <figure class="shot"><div class="frame-img"><img src="{uri}" width="{w}" height="{h}" alt="{e(shot["caption"])}">{pins}</div><figcaption>{e(shot["caption"])}</figcaption></figure>'''
+        self.add("s-screen", body, sect="실제 화면", foot='<span class="src">사이트에 공개된 실제 화면과 쇼룸 사진입니다. 기능 범위와 요금제별 차이는 상담에서 확인합니다.</span><span class="tag">Real screen</span>')
+
     def build(self):
         opts = DECK_OPTS.get(self.slug, {})
         self.cover()
@@ -547,6 +559,7 @@ class Deck:
         self.extras("after_hook")
         self.inside()
         self.story()
+        self.screen()
         self.extras("pre_check")
         if opts.get("worksheet_first"):
             self.worksheet()
@@ -580,6 +593,22 @@ def logo_data_uri() -> str:
 
 
 _FONT_CACHE: dict[str, str] = {}
+_IMG_CACHE: dict[str, tuple[str, int, int]] = {}
+
+
+def image_data_uri(rel: str, max_w: int = 1400) -> tuple[str, int, int]:
+    """공개 이미지를 WebP 로 다시 줄여 data URI 로 넣는다(덱을 단일 파일로 유지)."""
+    if rel in _IMG_CACHE:
+        return _IMG_CACHE[rel]
+    from PIL import Image
+    im = Image.open(ROOT / rel).convert("RGB")
+    if im.width > max_w:
+        im = im.resize((max_w, round(im.height * max_w / im.width)), Image.LANCZOS)
+    buf = io.BytesIO()
+    im.save(buf, "WEBP", quality=80, method=6)
+    out = ("data:image/webp;base64," + base64.b64encode(buf.getvalue()).decode(), im.width, im.height)
+    _IMG_CACHE[rel] = out
+    return out
 _HANGUL = re.compile(r"([\uac00-\ud7a3][\uac00-\ud7a3\s·,.()?!~]*[\uac00-\ud7a3)]|[\uac00-\ud7a3])")
 
 
@@ -743,8 +772,13 @@ h1 em{font-style:normal;color:var(--accent)}
 .how b{display:block;font:700 16px/1.3 var(--sans)}
 .how p{margin:8px 0 0;font:450 14.5px/1.6 var(--sans);color:var(--body)}
 .note{margin-top:28px;font:450 13px/1.6 var(--sans);color:var(--muted);max-width:80ch}
+.ads{margin-top:56px}
+.adgrid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:14px;margin-top:18px}
+.adc{margin:0;min-width:0}.adc img{display:block;width:100%;height:auto;max-width:100%;border-radius:10px;border:1px solid var(--line)}
+.adc figcaption{margin-top:8px;font:500 13px/1.4 var(--sans);color:var(--muted)}
+@media (max-width:1000px){.adgrid{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media (max-width:1000px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.grid.lead-wide>.card:first-child{grid-column:span 2}}
-@media (max-width:760px){.pgrid,.how,.grid{grid-template-columns:1fr}.grid.lead-wide>.card:first-child{grid-column:auto}.picks{padding:16px}}
+@media (max-width:760px){.adgrid{grid-template-columns:repeat(2,minmax(0,1fr))}.pgrid,.how,.grid{grid-template-columns:1fr}.grid.lead-wide>.card:first-child{grid-column:auto}.picks{padding:16px}}
 @media (prefers-reduced-motion:reduce){.thumb{transition:none}}
 """
 
@@ -770,6 +804,14 @@ def build_index(magnets: dict, out: Path, logo: str, artifact: bool = False) -> 
         cnt = sum(1 for s in order if OV[s]["stage"] == key)
         sec += (f'<section class="stage"><div class="stage-head"><div><h2>{ko} · {cnt}종</h2><p class="sub">{sub}</p></div><span class="k">{en}</span></div>'
                 f'<div class="grid{" lead-wide" if cnt == 7 else ""}" style="--cols:{5 if cnt == 5 else 4}">{cards}</div></section>')
+    ads_html = ""
+    if artifact:
+        cells = "".join(
+            f'<figure class="adc"><img src="ads/ad-{slug}-{k}.png" alt="{e(magnets[slug]["title"])} 광고 {k.upper()}" loading="lazy" width="1080" height="1350">'
+            f'<figcaption>No.{OV[slug]["no"]:02d} · {"표지형" if k == "a" else "장면형"}</figcaption></figure>'
+            for slug, _ in PICKS for k in "ab")
+        ads_html = ('<section class="ads"><div class="stage-head"><div><h2>피드 광고 소재 · 4:5</h2><p class="sub">대표 3권 × 표지형·장면형. 3차 심사 권고: 인지·고려는 표지형, 결정은 장면형(리타기팅)부터.</p></div><span class="k">Ads</span></div>'
+                    f'<div class="adgrid">{cells}</div></section>')
     body = f'''<div class="wrap">
 <div class="top"><img src="{logo}" alt=""><b>ClassIn Korea</b><span>원장 노트 시리즈</span></div>
 <h1>원장님이 직접 체크하고,<br><em>우리 수업으로</em> 확인하는 16권</h1>
@@ -777,12 +819,12 @@ def build_index(magnets: dict, out: Path, logo: str, artifact: bool = False) -> 
 <div class="facts"><span>16권 · {sum(len(Deck(magnets[s], OV[s], magnets).build().slides) for s in order)}장</span><span>자가진단 점수 자동 계산</span><span>모바일 세로 보기</span><span>16:9 PDF 저장</span><span>상담 링크 UTM 포함</span></div>
 <section class="picks"><h2>캠페인 대표 3권</h2><p class="sub">블라인드 심사에서 ‘스크롤을 멈추고 폼까지 채울 자료’로 고른 단계별 1권씩입니다.</p><div class="pgrid">{picks}</div></section>
 <div class="stages">{sec}</div>
-<div class="how"><div><b>발표 모드</b><p>←·→ 키나 화면 아래 단추로 넘깁니다. 상담 화면 공유와 설명회에 그대로 씁니다.</p></div>
+{ads_html}<div class="how"><div><b>발표 모드</b><p>←·→ 키나 화면 아래 단추로 넘깁니다. 상담 화면 공유와 설명회에 그대로 씁니다.</p></div>
 <div><b>스크롤·모바일</b><p>폭이 좁으면 자동으로 세로 카드가 됩니다. 메타·인스타 광고에서 들어온 원장님이 폰에서 바로 체크합니다.</p></div>
 <div><b>PDF</b><p>조작 막대의 PDF 단추로 16:9 PDF를 저장합니다. 체크 칸은 빈 칸으로 나와 손으로도 씁니다.</p></div></div>
 <p class="note">사례 학원명은 일부를 가렸고, 가격·국내 도입 수·성과 수치는 싣지 않았습니다. 장면은 이해를 돕기 위한 예시입니다. 체크와 입력은 보는 사람의 브라우저에만 저장됩니다.</p>
 </div>'''
-    pre = subset_font(strip_tags(body) + "원장 노트 시리즈")
+    pre = subset_font(strip_tags(body) + "원장 노트 시리즈 광고 소재 표지형 장면형")
     mono = base64.b64encode(MONO.read_bytes()).decode()
     fonts = (f'@font-face{{font-family:"Pretendard";src:url(data:font/woff2;base64,{pre}) format("woff2");font-weight:100 900;font-display:swap}}'
              f'@font-face{{font-family:"Plex Mono";src:url(data:font/woff2;base64,{mono}) format("woff2");font-weight:500;font-display:swap}}')
@@ -804,6 +846,32 @@ def make_thumbs(src_dir: Path, out: Path):
             im.save(out / "thumbs" / f"{slug}.webp", "WEBP", quality=80, method=6)
 
 
+def deck_css() -> str:
+    """deck.css + EXTRA_CSS, 단 폭 760px 이하(모바일) 블록은 모두 맨 뒤로 옮긴다.
+    뒤에 붙인 데스크톱 다듬기 규칙이 같은 특이도의 모바일 규칙을 덮지 않게 하려는 것이다."""
+    src = (HERE / "assets" / "deck.css").read_text() + EXTRA_CSS
+    head, mobile, i = [], [], 0
+    key = "@media (max-width:760px){"
+    while True:
+        j = src.find(key, i)
+        if j < 0:
+            head.append(src[i:])
+            break
+        head.append(src[i:j])
+        depth, k = 0, j + len(key) - 1
+        while k < len(src):
+            if src[k] == "{":
+                depth += 1
+            elif src[k] == "}":
+                depth -= 1
+                if depth == 0:
+                    break
+            k += 1
+        mobile.append(src[j:k + 1])
+        i = k + 1
+    return "".join(head) + "\n" + "\n".join(mobile)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--theme", default="t-paper")
@@ -816,7 +884,7 @@ def main():
     ap.add_argument("--artifact-index", help="아티팩트용 index 조각을 이 경로에 쓴다")
     a = ap.parse_args()
     magnets = load_magnets()
-    css = (HERE / "assets" / "deck.css").read_text() + EXTRA_CSS
+    css = deck_css()
     js = (HERE / "assets" / "deck.js").read_text()
     logo = logo_data_uri()
     out = Path(a.out)

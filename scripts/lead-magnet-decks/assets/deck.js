@@ -7,8 +7,8 @@
   var slug = deck.getAttribute("data-slug") || "deck";
   var KEY = "classin-lm:" + slug;
   var state = { c: {}, w: {}, f: {} };
-  try { var raw = localStorage.getItem(KEY); if (raw) { var p = JSON.parse(raw); if (p && typeof p === "object") { state.c = p.c || {}; state.w = p.w || {}; state.f = p.f || {}; } } } catch (e) {}
-  function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} }
+  try { var raw = localStorage.getItem(KEY); if (raw) { var p = JSON.parse(raw); if (p && typeof p === "object") { state.c = p.c || {}; state.w = p.w || {}; state.f = p.f || {}; } } } catch {}
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch {} }
 
   var params = new URLSearchParams(location.search);
   var mode = params.get("mode") || (matchMedia("(max-width: 900px)").matches ? "scroll" : "present");
@@ -194,7 +194,7 @@
     b.addEventListener("click", function () { var t = doc.getElementById(b.getAttribute("data-copy")); if (t) copyText(t.getAttribute("data-text") || t.textContent, "문구를 복사했습니다"); });
   });
   function copyText(text, msg) {
-    function fallback() { var ta = doc.createElement("textarea"); ta.value = text; doc.body.appendChild(ta); ta.select(); try { doc.execCommand("copy"); showToast(msg); } catch (e) { showToast("복사하지 못했습니다. 길게 눌러 직접 복사해 주세요"); } doc.body.removeChild(ta); }
+    function fallback() { var ta = doc.createElement("textarea"); ta.value = text; doc.body.appendChild(ta); ta.select(); try { doc.execCommand("copy"); showToast(msg); } catch { showToast("복사하지 못했습니다. 길게 눌러 직접 복사해 주세요"); } doc.body.removeChild(ta); }
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(function () { showToast(msg); }, fallback); else fallback();
   }
 

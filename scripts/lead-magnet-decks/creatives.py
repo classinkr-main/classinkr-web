@@ -13,7 +13,7 @@ import base64
 import re
 from pathlib import Path
 
-from build import DECK_OPTS, HERE, MONO, OV, PICKS, Deck, e, load_magnets, logo_data_uri, strip_tags, subset_font
+from build import DECK_OPTS, MONO, OV, PICKS, Deck, deck_css, e, load_magnets, logo_data_uri, strip_tags, subset_font
 
 AD_CSS = """
 .ad{width:1080px;height:1350px;position:relative;overflow:hidden;background:var(--paper);word-break:keep-all;font-family:var(--sans);color:var(--ink)}
@@ -106,7 +106,7 @@ def main():
     ap.add_argument("--only", nargs="*")
     a = ap.parse_args()
     magnets = load_magnets()
-    css = (HERE / "assets" / "deck.css").read_text()
+    css = deck_css()
     logo = logo_data_uri()
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
