@@ -8,6 +8,7 @@ import { PRIVACY_EFFECTIVE } from "@/lib/legal/privacy-dates"
 import { getPublishedPostsForStaticSitemap } from "@/lib/repositories/blog"
 import { listCachedPublicEvents } from "@/lib/repositories/public-events"
 import { getPublishedSeminars } from "@/lib/seminars/catalog"
+import { INTRO_CASES, getIntroCasePath } from "@/lib/introduction/content"
 import { SITE_URL } from "@/lib/seo"
 
 const staticRoutes: Array<{
@@ -29,6 +30,11 @@ const staticRoutes: Array<{
   { path: "/pricing", changeFrequency: "monthly", priority: 0.8, lastModified: "2026-11-03" },
   { path: "/contact", changeFrequency: "monthly", priority: 0.8, lastModified: "2026-10-28" },
   { path: "/showroom", changeFrequency: "monthly", priority: 0.8, lastModified: "2026-09-22" },
+  { path: "/introduction", changeFrequency: "monthly", priority: 0.7, lastModified: "2026-11-06" },
+  { path: "/introduction/story", changeFrequency: "monthly", priority: 0.6, lastModified: "2026-11-06" },
+  { path: "/introduction/proof", changeFrequency: "monthly", priority: 0.6, lastModified: "2026-11-06" },
+  { path: "/introduction/full", changeFrequency: "monthly", priority: 0.5, lastModified: "2026-11-06" },
+  { path: "/introduction/cases", changeFrequency: "monthly", priority: 0.6, lastModified: "2026-11-06" },
   { path: "/privacy", changeFrequency: "yearly", priority: 0.5, lastModified: PRIVACY_EFFECTIVE.iso },
   { path: "/terms", changeFrequency: "yearly", priority: 0.5, lastModified: "2026-06-14" },
   { path: "/data-deletion", changeFrequency: "yearly", priority: 0.5, lastModified: "2026-06-16" },
@@ -153,8 +159,16 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.5,
   }))
 
+  // 서비스 소개서 사례 17쪽(lib/introduction/content.ts 의 INTRO_CASES). 사진은 2026-11-06 블러 반영본이다.
+  const introCaseEntries: MetadataRoute.Sitemap = INTRO_CASES.map((item) => ({
+    url: toAbsoluteUrl(getIntroCasePath(item.slug)),
+    lastModified: new Date("2026-11-06"),
+    changeFrequency: "monthly",
+    priority: 0.5,
+  }))
+
   if (!docsContent) {
-    return dedupeByUrl([...staticEntries, ...blogEntries, ...eventEntries, ...seminarEntries])
+    return dedupeByUrl([...staticEntries, ...blogEntries, ...eventEntries, ...seminarEntries, ...introCaseEntries])
   }
 
   // 공개 문서가 없는 주제 허브는 빈 페이지라 싣지 않는다(허브 쪽도 noindex — app/docs/[category]/page.tsx).
@@ -189,6 +203,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     ...blogEntries,
     ...eventEntries,
     ...seminarEntries,
+    ...introCaseEntries,
     ...docsCategoryEntries,
     ...docsArticleEntries,
   ])

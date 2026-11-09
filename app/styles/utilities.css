@@ -175,3 +175,33 @@
   fill: none; vector-effect: non-scaling-stroke;
   stroke-linecap: round; stroke-linejoin: round;
 }
+
+/* ── 운영자 예외 (2026-11-06) ── */
+
+/* 형광펜 띠 — 운영자 결정(2026-11-06): /introduction/story 히어로 H1 의 “너무 많은” 한 구절에만 쓴다.
+   공개 화면의 파스텔 mark 퇴역·제목 속 그린 0(DESIGN.md §3)에 대한 범위 한정 예외 하나다. 다른 곳에 쓰지 않는다.
+   글자색은 호출부의 text-fg-accent, 띠는 같은 --fg-accent 를 18% 로 섞은 단색이다(hex 0, 새 색 토큰 0).
+   rule-double 과 같은 방식 — 같은 색 두 정지점(= 단색)을 background-size 로 잘라 글자 아래쪽에 깐다. 그림자·그라데이션 아님.
+   줄이 바뀌면 줄마다 띠와 좌우 여백을 다시 그린다(box-decoration-break: clone).
+   @supports 로 감싼 이유: Tailwind 가 color-mix(var()) 앞에 넣는 대체값이 불투명 var(--fg-accent) 라
+   color-mix 를 모르는 브라우저에서 초록 글자 뒤에 진한 초록 띠가 깔린다. 감싸 두면 그 브라우저에서는 띠 없이 초록 글자만 남는다
+   (조건은 Tailwind 안쪽 블록과 같은 in lab — 바깥을 통과하면 안쪽 18% 값도 반드시 적용된다).
+   강제 색상 모드에서는 배경이 지워지므로 밑줄로 대신한다 */
+@utility marker-accent {
+  background-repeat: no-repeat;
+  background-size: 100% 0.42em;
+  background-position: 0 75%;          /* IBM Plex Sans KR 600 기준 글자 아랫부분에 걸친다(100% 면 밑줄처럼 글자 밑으로 빠진다) */
+  padding-inline: 0.06em;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  @supports (color: color-mix(in lab, red, red)) {
+    background-image: linear-gradient(
+      color-mix(in srgb, var(--fg-accent) 18%, transparent),
+      color-mix(in srgb, var(--fg-accent) 18%, transparent)
+    );
+  }
+  @media (forced-colors: active) {
+    text-decoration: underline 2px;
+    text-underline-offset: 0.14em;
+  }
+}
