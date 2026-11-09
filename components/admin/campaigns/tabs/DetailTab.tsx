@@ -35,6 +35,11 @@ const AdsetPerfCard = dynamic(
   () => import("@/components/admin/campaigns/perf/AdsetPerfCard").then((m) => m.AdsetPerfCard),
   { ssr: false, loading: () => <ChartSkeleton className="h-[260px]" /> }
 )
+// 광고별 전환·결제(Compass CRM 리드 단계 × 집행비) — 같은 client-only 청크 규약.
+const AdConversionCard = dynamic(
+  () => import("@/components/admin/campaigns/perf/AdConversionCard").then((m) => m.AdConversionCard),
+  { ssr: false, loading: () => <ChartSkeleton className="h-[260px]" /> }
+)
 
 export interface DetailTabProps {
   period: PerfPeriodKey
@@ -94,13 +99,14 @@ export default function DetailTab({
         <HubSection
           id="creatives"
           title="소재"
-          description="소재별·광고세트별 지출·CPL(Compass 브리지, Meta 리포트 리드 축) + 리드·전환 랭킹 기반 AI 제안"
+          description="소재별·광고세트별 지출·CPL(Compass 브리지, Meta 리포트 리드 축) · 광고별 전환·결제(CRM 리드 축) + 리드·전환 랭킹 기반 AI 제안"
         >
           <div className="space-y-6">
             <CreativeCplCard period={period} refreshNonce={refreshNonce} />
             {/* 광고세트별 성과 — 소재별 CPL 바로 아래. 같은 질문의 한 단 위 해상도(세트)라 붙여 둔다.
                 3층 재구성 전에는 요약 탭 좌측 컬럼에 있었다 — 소재 카드가 상세 › 소재로 오면서 함께 옮겼다. */}
             <AdsetPerfCard period={period} refreshNonce={refreshNonce} />
+            <AdConversionCard period={period} refreshNonce={refreshNonce} />
             <AiCreativeSuggestSection />
           </div>
         </HubSection>
