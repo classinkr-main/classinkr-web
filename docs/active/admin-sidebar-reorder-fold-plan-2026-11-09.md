@@ -1,6 +1,6 @@
 # 어드민 사이드바 순서 재배치·접기 — 시안 4개 (2026-11-09)
 
-상태: **결정 대기** — 권장 D(상시 고정 + 범주별 접기) · 구현 없음
+상태: **D 선택·구현(2026-11-09)** — 운영자 수정: CS 콘솔은 콘텐츠 밑(§9). 정본은 [탭 재구성 §18](admin-tab-restructure-2026-07-29.md)
 범위: `/admin` 사이드바(데스크톱·접힌 레일·모바일 드로어), 사이드바 편집기 미리보기
 기준 코드: main `7e89bab`, AI 올인원 시안 스위치(`NEXT_PUBLIC_ADMIN_AI_PREVIEW`) 꺼짐 = 16탭
 상위 문서: [Admin 지침 맵](admin-guidance-map.md) › [어드민 탭 재구성](admin-tab-restructure-2026-07-29.md) §12~17
@@ -174,3 +174,38 @@ Overview
 ### 2026-11-09 — 시안 4개 작성
 
 main `7e89bab`의 `ADMIN_NAV`·`DEFAULT_PRIMARY_HREFS`·`AdminSidebar.tsx` 렌더를 대조해 진단 5개, 공통 바닥 F1~F6, 시안 A~D, 결정 D1~D6을 정리했다. 목업은 `mockups/admin-sidebar-reorder-fold-2026-11-09.html`. 구현 없음.
+
+### 2026-11-09 — D안 구현
+
+운영자가 D안을 고르고 "CS 콘솔은 콘텐츠 밑으로"를 더했다. 결정 D2~D6은 권장안 그대로(KR Team·매출 장부 접힘, 펼침은 브라우저 저장, 처음엔 전부 접힘, 편집기 라벨 "접힘", 범주 이름 유지)다. 구현 내용은 §9.
+
+## 9. 구현 결과 (D안 + CS 콘솔 콘텐츠 밑)
+
+§4 D와 달라진 점은 CS 콘솔 자리 하나다. 상시 목록 끝(콘텐츠 바로 밑)에 오도록 범주 연속 블록을 지키며 옮겼다.
+
+```
+Overview
+캘린더 · CRM
+견적·문서 · 하드웨어 재고
+마케팅 · 콘텐츠
+CS 콘솔
+────────
+▸ 주문·매출 2    KR Team · 매출 장부
+▸ 마케팅·분석 3  캠페인 관리 · Analytics · 자료 퍼널
+▸ 시스템 2       설정 · 개발 도구
+▸ 숨긴 탭 1      운영 상태
+```
+
+| 파일 | 변경 |
+| --- | --- |
+| `components/admin/admin-nav.ts` | `ADMIN_NAV` 하루 동선 순서, 범주 `revenue`(주문·매출)·`support`(고객 지원) 추가, `customer` 라벨 "영업·고객", CS 콘솔 `support` |
+| `components/admin/admin-nav-access.ts` | `DEFAULT_PRIMARY_HREFS` 8개, `showPrimaryHeaders` 삭제 |
+| `components/admin/AdminSidebar.tsx` | 상시 소제목 없이 간격, `renderFoldedGroups`(데스크톱·모바일 공용) 범주별 토글, 펼침 키 이전, 레일 "접힌 탭" 버튼 |
+| `components/admin/settings/NavPreferenceEditor.tsx` | 선택지 "기타" → "접힘", 미리보기 "▸ 접힘 N — 주문·매출 2 · …" |
+| 테스트 | `tests/admin/nav-access.test.ts`·`nav-access-ui.test.ts`·`nav-ai-preview.test.tsx`·`sidebar-flat-crm.test.tsx` — 전체 순서·범주 블록·접힘 묶음·강제 펼침·CS 콘솔 위치 고정 |
+
+검증: `npm run typecheck`, `npx eslint app components lib --max-warnings=0`, `npm run build` 통과. `npx vitest run tests/admin` 140파일 통과.
+전체 `npx vitest run`의 실패 2건(`tests/server/cron-auth.test.ts`, `tests/marketing/meta-instagram-dashboard-cache.test.ts`)은 이 변경을 빼도
+똑같이 실패한다 — 작업 컨테이너에 `CRON_SECRET`·`META_*` 환경변수가 들어 있어 생기는 것이다. 로컬 개발 서버(인증 우회)에서 매출 장부 화면의
+주문·매출 강제 펼침, 묶음 토글 기억(새로고침 유지), 옛 "기타" 키 이전을 브라우저로 확인했다.
+

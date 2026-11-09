@@ -171,7 +171,7 @@ tr:last-child th,tr:last-child td{border-bottom:0}
     <p class="eyebrow">어드민 코어 · 사이드바 시안 · 2026-11-09</p>
     <h1>사이드바 순서 재배치와 접기, 시안 4개</h1>
     <p class="lede">지금 사이드바(상시 10 · 기타 5 · 숨김 1)를 하루 동선 순서로 다시 놓고, 접는 방식을 네 가지로 비교합니다. 탭은 하나도 지우지 않습니다. 접거나 숨긴 탭도 ⌘K와 주소로 그대로 열립니다.</p>
-    <p class="rec"><b>권장: D</b><span>자주 쓰는 8개를 소제목 없이 위에 고정하고, 나머지는 범주마다 따로 접습니다. 저장값·API·DB는 그대로입니다.</span></p>
+    <p class="rec"><b>D 선택·구현 (2026-11-09)</b><span>자주 쓰는 8개를 소제목 없이 위에 고정하고, 나머지는 범주마다 따로 접습니다. 운영자 요청으로 CS 콘솔은 콘텐츠 바로 밑입니다. 아래 D 사이드바가 구현된 모습입니다.</span></p>
     <p><span class="sample">CRM 배지 숫자는 예시</span></p>
   </header>
 
@@ -217,7 +217,7 @@ tr:last-child th,tr:last-child td{border-bottom:0}
           <tr><th scope="row">소제목 줄</th><td class="c">3</td><td class="c">3</td><td class="c">4 (토글 겸)</td><td class="c">0</td><td class="c pick">0 (간격만)</td></tr>
           <tr><th scope="row">접는 단위</th><td>기타 1</td><td>기타 1</td><td>범주 4</td><td>기타 1</td><td class="pick">범주 3</td></tr>
           <tr><th scope="row">같은 소제목이 두 번 나옴</th><td class="bad">예</td><td class="bad">예</td><td class="good">아니오</td><td class="good">아니오</td><td class="good pick">아니오</td></tr>
-          <tr><th scope="row">CRM · CS 콘솔 위치</th><td class="c">5 · 8번째</td><td class="c">3 · 4번째</td><td class="c">3 · 4번째</td><td class="c">3 · 4번째</td><td class="c pick">3 · 4번째</td></tr>
+          <tr><th scope="row">CRM · CS 콘솔 위치</th><td class="c">5 · 8번째</td><td class="c">3 · 4번째</td><td class="c">3 · 4번째</td><td class="c">3 · 4번째</td><td class="c pick">3 · 8번째</td></tr>
           <tr><th scope="row">하드웨어 재고까지 누름</th><td class="c">1</td><td class="c">1</td><td class="c">1</td><td class="c">2</td><td class="c pick">1</td></tr>
           <tr><th scope="row">콘텐츠까지 누름</th><td class="c">1</td><td class="c">1</td><td class="c">1</td><td class="c">2</td><td class="c pick">1</td></tr>
           <tr><th scope="row">매출 장부까지 누름</th><td class="c">1</td><td class="c">1</td><td class="c">1</td><td class="c">2</td><td class="c pick">2</td></tr>
@@ -300,9 +300,11 @@ tr:last-child th,tr:last-child td{border-bottom:0}
   };
   var HIDDEN = ['ops'];
   var CAT_NOW = {home:'홈',customer:'고객·매출',growth:'마케팅·분석',system:'시스템'};
-  var CAT_NEW = {home:'홈',sales:'영업·고객',revenue:'주문·매출',growth:'마케팅·분석',system:'시스템'};
+  var CAT_NEW = {home:'홈',sales:'영업·고객',revenue:'주문·매출',growth:'마케팅·분석',support:'고객 지원',system:'시스템'};
   var ORDER_NOW = [['overview','home'],['calendar','customer'],['branch','customer'],['ledger','customer'],['crm','customer'],['quotes','customer'],['hardware','customer'],['chatbot','customer'],['campaigns','growth'],['manage','growth'],['blog','growth'],['magnets','growth'],['analytics','growth'],['ops','system'],['settings','system'],['dev','system']];
   var ORDER_NEW = [['overview','home'],['calendar','sales'],['crm','sales'],['chatbot','sales'],['quotes','revenue'],['hardware','revenue'],['branch','revenue'],['ledger','revenue'],['campaigns','growth'],['manage','growth'],['analytics','growth'],['blog','growth'],['magnets','growth'],['settings','system'],['dev','system'],['ops','system']];
+  /* 구현된 D — CS 콘솔을 콘텐츠 밑에 두려고 고객 지원 범주로 마케팅·분석 뒤에 선언한다. */
+  var ORDER_D = [['overview','home'],['calendar','sales'],['crm','sales'],['quotes','revenue'],['hardware','revenue'],['branch','revenue'],['ledger','revenue'],['campaigns','growth'],['manage','growth'],['analytics','growth'],['blog','growth'],['magnets','growth'],['chatbot','support'],['settings','system'],['dev','system'],['ops','system']];
   var PRIMARY_NOW = ['overview','calendar','branch','ledger','crm','quotes','hardware','chatbot','campaigns','blog'];
 
   var VERSIONS = [
@@ -322,8 +324,8 @@ tr:last-child th,tr:last-child td{border-bottom:0}
       pros:['가장 짧습니다(6줄)','렌더 코드가 거의 그대로입니다','기본값 한 곳만 바꿉니다'],
       cons:['10-26에 상시로 올린 콘텐츠와 재고 담당이 매일 쓰는 하드웨어 재고가 다시 접힙니다','기타가 9개라 펼치면 깁니다','개인 편집에 기대는 몫이 큽니다'],
       size:'S', files:'<code>DEFAULT_PRIMARY_HREFS</code>, 상시 소제목 끄기, 순서, 배치 테스트'},
-    {id:'D', order:ORDER_NEW, cats:CAT_NEW, primary:['overview','calendar','crm','chatbot','quotes','hardware','campaigns','blog'], headers:'gap', fold:'category', pick:true,
-      title:'상시 고정 + 범주별 접기', thesis:'자주 쓰는 8개를 소제목 없이 위에 고정하고, 나머지는 범주마다 따로 접습니다. "기타"라는 이름이 없어집니다.',
+    {id:'D', order:ORDER_D, cats:CAT_NEW, primary:['overview','calendar','crm','chatbot','quotes','hardware','campaigns','blog'], headers:'gap', fold:'category', pick:true,
+      title:'상시 고정 + 범주별 접기', thesis:'자주 쓰는 8개를 소제목 없이 위에 고정하고, 나머지는 범주마다 따로 접습니다. "기타"라는 이름이 없어집니다. 구현본은 CS 콘솔이 콘텐츠 바로 밑입니다.',
       pros:['접힌 묶음 이름이 내용을 말합니다','소제목이 한 번씩만 나옵니다','상시·기타·숨김 저장값, API, DB가 그대로입니다'],
       cons:['KR Team·매출 장부는 한 번 더 눌러야 열립니다(D2)','접힘 토글이 1개에서 3개로 늡니다','렌더 변경은 A·C보다 큽니다'],
       size:'M', files:'F1·F2 순서·범주 + 상시 8개 + 기타 패널을 범주별 토글로(데스크톱·모바일), localStorage 키 이전, 편집기 미리보기 문구'}
@@ -448,7 +450,7 @@ tr:last-child th,tr:last-child td{border-bottom:0}
   function card(v){
     var c = counts(v);
     return '<article class="card'+(v.pick?' pick':'')+'" aria-labelledby="t-'+v.id+'">' +
-      '<div class="card-h"><span class="ltr">'+v.id+'</span><div><h3 id="t-'+v.id+'">'+v.title+(v.pick?'<span class="chip">권장</span>':'')+'</h3><p class="thesis">'+v.thesis+'</p></div></div>' +
+      '<div class="card-h"><span class="ltr">'+v.id+'</span><div><h3 id="t-'+v.id+'">'+v.title+(v.pick?'<span class="chip">선택·구현</span>':'')+'</h3><p class="thesis">'+v.thesis+'</p></div></div>' +
       '<div class="stage" id="mock-'+v.id+'"></div>' +
       '<div class="met"><span>처음 보이는 탭 '+c.first+'</span><span>접힌 탭 '+c.folded+'</span><span>접힘 토글 '+c.toggles+'</span><span>숨김 1</span></div>' +
       '<div class="pc"><div><h4>좋아지는 점</h4><ul>'+v.pros.map(function(t){return '<li>'+t+'</li>';}).join('')+'</ul></div>' +
