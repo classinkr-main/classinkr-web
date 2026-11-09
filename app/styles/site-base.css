@@ -140,6 +140,21 @@
     :where(.site) circle.dg-line { fill: CanvasText; }
   }
 
+  /* ── 쿠키 배너 C '한 입'(V27-A) — 말풍선 오른쪽 위를 베어 문 자국. 움직임이 없어도 자국은 남는다 ── */
+  /* 윤곽 1px 은 필터로 그려 꼬리·자국을 따라간다. 겹쳐 그리므로 불투명(line-strong 을 종이 위에 칠한 값) */
+  :where(.site) .consent-shape {
+    filter: drop-shadow(1px 0 0 #D6D4D0) drop-shadow(-1px 0 0 #D6D4D0) drop-shadow(0 1px 0 #D6D4D0) drop-shadow(0 -1px 0 #D6D4D0)
+      drop-shadow(0 10px 20px rgb(0 0 0 / .06)) drop-shadow(0 2px 4px rgb(0 0 0 / .03));
+  }
+  :where(.site) .consent-bite {
+    --bite: 13px;
+    mask-image: radial-gradient(circle at calc(100% - 3px) 3px, transparent var(--bite), #000 calc(var(--bite) + .5px));
+  }
+  @keyframes cb-rise   { from { opacity: 0; transform: translateY(4px); } }
+  @keyframes cb-hop    { 0% { opacity: 0; transform: translateY(10px); } 55% { opacity: 1; transform: translateY(-3px); } }
+  @keyframes cb-chomp  { from { --bite: 0px; } }
+  @keyframes cb-crumb  { from { opacity: 0; transform: translate(-6px, -3px); } }
+
   @keyframes ink-fade  { from { text-decoration-color: transparent; } }
   @keyframes panel-in  { from { opacity: 0; } }
   @keyframes scrub-in  { from { opacity: 0.18; } to { opacity: 1; } }
@@ -250,6 +265,13 @@
     :where(.site) [data-cm-phase="play"] [data-cm="halo"]       { animation: cm-halo 1400ms ease-out 1900ms 2 both; }
     :where(.site) [data-cm-phase="play"] [data-cm="chip"]       { animation: cm-pop 500ms var(--ease-soft) 2000ms both; }
 
+    /* ⑩ 쿠키 배너(V27-A) — 말풍선이 오르고 갈매기가 뛰어오른 뒤 0.75초에 한 입 베어 문다. 1.2초 안에 끝, 반복 0.
+       backwards 만 쓴다 — 끝난 뒤 transform 을 붙잡으면 갈매기 hover 회전과 섞인다 */
+    :where(.site) .consent-shape { animation: cb-rise var(--motion-base) var(--ease-soft) backwards; }
+    :where(.site) .consent-gull  { animation: cb-hop 500ms var(--ease-soft) 100ms backwards; }
+    :where(.site) .consent-bite  { animation: cb-chomp 220ms cubic-bezier(.3, 1.6, .6, 1) 750ms backwards; }
+    :where(.site) .consent-crumb { animation: cb-crumb 400ms var(--ease-soft) 800ms backwards; }
+
     /* 탭 패널 교체 — 첫 페인트 제외 */
     :where(.site) [data-switched] [role="tabpanel"][data-state="active"] {
       animation: panel-in var(--motion-base) var(--ease-soft);
@@ -291,3 +313,6 @@
   :where(.site) .animate-spin { animation: skeleton-blink 1.6s ease-in-out infinite !important; }
 }
 /* ── guarantee:end ── */
+
+/* 쿠키 배너 한 입(cb-chomp)이 자국 반지름을 보간하려면 등록된 속성이어야 한다. 미지원 브라우저는 0.75초에 바로 베어 문다 */
+@property --bite { syntax: "<length>"; inherits: false; initial-value: 13px; }
