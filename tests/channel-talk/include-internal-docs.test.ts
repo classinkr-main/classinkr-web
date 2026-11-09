@@ -67,10 +67,10 @@ function docsRpcParams(): Record<string, unknown>[] {
 }
 
 describe("evaluateChatbotQuery includeInternalDocs (계약 6 — 공개 경로 무회귀)", () => {
-  // 아래 두 공개 질문은 큐레이션/게이트를 통과해 벡터 RPC(match_docs_ai_chunks)까지 도달한다.
-  // "학생 초대는 어떻게 하나요?"는 증상·사용법 트리아지가 공개 위젯에서 결정형으로 답하므로(검색 없음) 공개 쪽 예시로 쓰지 않는다.
+  // 아래 두 질문은 큐레이션/게이트를 통과해 벡터 RPC(match_docs_ai_chunks)까지 도달한다.
+  // ("학생 초대는 어떻게 하나요?"는 공개 경로에서 증상 트리아지가 문서 섹션으로 바로 답해 RPC까지 가지 않는다.)
   it("공개 경로(옵션 미지정)는 match_docs_ai_chunks 에 include_internal 을 넘기지 않는다", async () => {
-    await evaluateChatbotQuery("수업 일정은 어디서 바꿔요?", { generateAnswer: false })
+    await evaluateChatbotQuery("수업 자료는 어디에 올려 두면 되나요?", { generateAnswer: false })
 
     const params = docsRpcParams()
     expect(params.length).toBeGreaterThan(0)
@@ -90,6 +90,7 @@ describe("evaluateChatbotQuery includeInternalDocs (계약 6 — 공개 경로 �
     }
   })
 
+  // 공개 경로에서는 트리아지가 바로 답하는 질문이어도, 내부 코파일럿 경로는 내부 문서까지 검색해야 한다.
   it("내부 코파일럿 경로(includeInternalDocs:true)만 include_internal:true 를 넘긴다", async () => {
     await evaluateChatbotQuery("학생 초대는 어떻게 하나요?", {
       generateAnswer: false,

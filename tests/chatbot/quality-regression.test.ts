@@ -312,7 +312,8 @@ describe("chatbot quality regressions", () => {
     )
     expect(site.detectedCategory).toBe("admin")
     expect(site.sources[0]?.heading).toBe("사이트 입장 버튼 연동 확인")
-    expect(site.answer).toContain("기본 제공 기능처럼 단정하면 안 됩니다")
+    expect(site.answer).toContain("기본 제공 기능으로 안내돼 있지 않아요")
+    expect(site.answer).not.toContain("단정하면 안")
 
     const s65 = await evaluateChatbotQuery("65인치 견적 받을 수 있나요?", {
       generateAnswer: false,

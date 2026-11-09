@@ -7,6 +7,7 @@ export interface ChatbotSelfKnowledgeEntry {
     | "memory_boundary"
     | "source_boundary"
     | "privacy_boundary"
+    | "input_privacy"
     | "identity"
     | "emotional_concern"
     | "small_talk"
@@ -81,6 +82,18 @@ export const CHATBOT_SELF_KNOWLEDGE_ENTRIES: ChatbotSelfKnowledgeEntry[] = [
     ],
   },
   {
+    // "입력한 내용이 저장되나요? 학원 정보를 넣어도 되나요?" — 저장 여부를 단정하지 않고 처리방침으로 안내한다.
+    key: "input_privacy",
+    match:
+      /(?:입력한|입력하는|적은|쓴)\s*(?:내용|정보|것|거).{0,12}(?:저장|남|보관)|(?:학원|학생|개인)\s*정보.{0,10}(?:입력해도|넣어도|적어도)|입력해도\s*(?:되|돼|괜찮)/,
+    answer: [
+      "저는 AI로 답하는 Classin 상담 가이드예요. 답변은 클래스인 공개 문서(문서센터 안내)를 근거로 합니다.",
+      "입력하신 내용이 저장되는지, 얼마나 보관되고 어디에 쓰이는지는 클래스인 공식 개인정보처리방침을 기준으로 확인해 주세요. 제가 '저장되지 않는다'고 단정할 수는 없어요.",
+      "그래서 판단이 서기 전까지는 학생 이름·연락처 같은 개인정보나 학원 내부 정보는 입력하지 마시고, 일반적인 질문 형태로 물어봐 주세요. 학원 정보를 전달해야 하면 상담 채널에서 담당자에게 직접 전달하시면 됩니다.",
+    ],
+    suggestedQuestions: ["개인정보 처리 기준이 궁금해요", "보안 정책 자료가 있나요?", "담당자 상담으로 이어주세요"],
+  },
+  {
     key: "source_boundary",
     match:
       /(?:어떤|무슨).{0,12}(?:데이터|자료|정보|문서|근거)|(?:데이터|자료|정보|문서|근거).{0,18}(?:참고|사용|이용|활용|써|쓰|봐|보고|기반|출처)|(?:질문|답변|대화|상담\s*내용|상담|로그|기록).{0,18}(?:데이터|학습|사용|이용|활용|써|쓰|공유|전달|외부|제\s*3\s*자|제삼자)|(?:공유|전달|제\s*3\s*자|제삼자).{0,18}(?:질문|답변|대화|상담\s*내용|상담|로그|기록)|(?:너|넌|네(?:\s|가|게|의)|챗봇|봇|상담\s*가이드|ai|인공지능).{0,18}(?:학습|훈련).{0,8}데이터|(?:너|넌|네(?:\s|가|게|의)|챗봇|봇|상담\s*가이드|ai|인공지능).{0,18}(?:최신|실시간|업데이트|언제까지).{0,18}(?:정보|자료|내용|알|반영|업데이트)|뭘\s*보고\s*답/i,
@@ -139,7 +152,7 @@ export const CHATBOT_SELF_KNOWLEDGE_ENTRIES: ChatbotSelfKnowledgeEntry[] = [
   {
     key: "emotional_concern",
     match:
-      /(?:잘\s*될까|걱정|불안|두려|힘들지|안\s*따라|이탈|기계치|적응|망칠까|귀찮|부담|복잡|헤맬|싫어할|의구심|의심|과연|충돌|혼란|과도기|꼬일까|기존\s*시스템|원래\s*쓰던|바꾸면|반발|반대(?!로)|이중\s*작업|두\s*번\s*입력|두번\s*입력)/i,
+      /(?:잘\s*될까|걱정|불안|두려|힘들지|안\s*따라|이탈|기계치|적응|망칠까|귀찮|부담|복잡|헤맬|싫어할|의구심|의심|과연|충돌|혼란|과도기|꼬일까|기존\s*시스템|원래\s*쓰던|(?:시스템|프로그램|툴|도구|플랫폼|클래스인|classin)\S{0,3}\s*바꾸면|반발|반대(?!로)|이중\s*작업|두\s*번\s*입력|두번\s*입력)/i,
     answer: [
       "새로운 도구의 도입은 당연히 낯설고 여러 걱정이 앞서실 수 있습니다. 특히 규모가 있는 학원일수록 기존 시스템(LMS, ERP 등)과의 충돌 여부나 강사 전환 과도기 피로감에 대해 신중해지는 것은 당연합니다.",
       "하지만 기존 방식(유인물 인쇄, 단순 화상 도구)을 고수하며 교재 준비와 행정 처리에 매일 쏟는 선생님들의 시간과 지점 확장 한계는 장기적으로 가장 큰 '숨은 기회비용'이 되기도 합니다. 클래스인은 기존 시스템을 허물지 않고 API 연동을 통해 '수업 도구 엔진'만 결합하여 강사들의 이중 입력 리소스를 즉시 줄여줍니다.",
@@ -182,17 +195,17 @@ export const CHATBOT_SELF_KNOWLEDGE_ENTRIES: ChatbotSelfKnowledgeEntry[] = [
   },
   {
     key: "tutor_pricing_recommend",
+    // 개인 강사·과외라는 말만으로는 요금 추천을 하지 않는다(세금 증빙·사용법 질문이 여기로 새던 원인). 요금을 물을 때만.
     match:
-      /(?:개인\s*강사|과외|공부방|소규모\s*수업|1:1|프리랜서|개인\s*과외)/i,
+      /(?=.*(?:개인\s*강사|과외|공부방|소규모\s*수업|1:1|프리랜서|1인\s*강사))(?=.*(?:요금|가격|플랜|비용|얼마|요금제|구독|추천))/i,
     answer: [
-      "1인 강사나 과외 교사분들께서 부담 없이 시작하실 수 있는 최적의 가성비 요금제가 준비되어 있습니다.",
-      "초기 가입 및 가볍게 시작하시기에는 월 고정 요금의 'Standard 구독 플랜'을 가장 추천해 드립니다. 대규모 기관용 복잡한 관리 기능은 덜어내어 가격을 대폭 낮췄지만, 수업 안에서의 무제한 EDB 판서 판과 복습용 녹화 플레이백 등 클래스인의 100% 필수 강의 교구들을 아무런 제약 없이 제공하여 확실한 수업 퀄리티를 보장받으실 수 있습니다.",
-      "만약 방학 시즌에만 수업이 쏠려 있거나 매달 나가는 월 고정비 자체가 부담스러우시다면, 사용한 실제 수업 시간만큼 크레딧이 차감되는 '충전형(Consumption) 요금제'도 훌륭한 대안입니다. (단, 첫 충전 시의 기준 충전액이 다소 발생할 수 있습니다.) 현재 진행 예정이신 수업이 고정적인 편이신가요, 아니면 특정 시기에만 집중되는 편이신가요?",
+      "공식 안내 기준으로 혼자 가르치는 1인 강사에게는 프로(Pro) 요금제를 추천하고, 강사가 2명 이상인 학원은 비즈니스 요금제를 추천해요.",
+      "실제 금액과 결제 방식(구독형·충전형)은 수업량과 쓰실 기능에 따라 달라 여기서 단정하지 않을게요. 2주 무료 체험으로 먼저 써 보실 수 있고, 맞는 요금제는 아래 [도입 상담 남기기]로 수업 규모를 남겨 주시면 안내해 드립니다.",
     ],
     suggestedQuestions: [
-      "과외나 공부방에서도 EDB 판서 기능을 제한 없이 쓸 수 있나요?",
-      "수업이 유동적인데 충전형 요금제가 유리한가요?",
-      "1인 강사용 Standard 요금과 혜택이 궁금해요",
+      "무료 체험판 있나요?",
+      "프로와 비즈니스 차이가 뭐예요?",
+      "견적 구성이 어떻게 되나요?",
     ],
   },
   {
@@ -221,17 +234,37 @@ export function findChatbotSelfKnowledgeEntry(question: string) {
       return null
     }
   }
-  const hasChatbotContext = CHATBOT_CONTEXT_RE.test(normalized)
+  // "특정 학생의 채팅 기록"처럼 학원 데이터인 채팅·대화 기록은 챗봇과의 대화가 아니다.
+  const contextText = normalized.replace(STUDENT_RECORD_RE, " ")
+  // "아까·방금·기억"은 제품 이야기("아까 녹화한 기록")에도 흔해서, 제품 낱말이 없을 때만 챗봇과의 대화로 본다.
+  const hasChatbotContext =
+    CHATBOT_CONTEXT_RE.test(contextText) || (CHATBOT_WEAK_CONTEXT_RE.test(contextText) && !PRODUCT_NOUN_RE.test(contextText))
+  // "이 챗봇 안내대로 권한을 바꿨는데…"는 챗봇 자체가 아니라 제품 문제를 묻는 말이다.
+  const refersToEarlierBotAdvice = PRIOR_BOT_ADVICE_RE.test(contextText) && PRODUCT_NOUN_RE.test(contextText)
   const hasProductProblem = PRODUCT_PROBLEM_RE.test(normalized)
   return (
     CHATBOT_SELF_KNOWLEDGE_ENTRIES.find((entry) => {
       if (!entry.match.test(question)) return false
       // "화면 기록 권한", "수업 기록"처럼 제품 이야기에 섞인 단어로 챗봇 자기소개가 나가지 않게 한다.
-      if (CHATBOT_CONTEXT_REQUIRED_KEYS.has(entry.key) && !hasChatbotContext) return false
+      if (CHATBOT_CONTEXT_REQUIRED_KEYS.has(entry.key) && (!hasChatbotContext || refersToEarlierBotAdvice)) return false
+      // 과외 계정의 결제 수단·증빙 명의를 묻는 말은 요금제 추천이 아니라 결제 안내로 보낸다.
+      if (entry.key === "tutor_pricing_recommend" && /법인\s*카드|결제\s*수단|영수증|세금계산서|명의/.test(normalized)) return false
+      // 학원이 여는 학부모 설명회에 나눠 줄 자료를 묻는 말은 클래스인 행사 문의가 아니다.
+      if (entry.key === "event_inquiry" && /자료|안내문|나눠\s*(?:드릴|줄)|배포/.test(normalized)) return false
+      // 학원이 여는 설명회·행사를 클래스인으로 진행하는 방법(웹 라이브 명단, 칠판 화면 송출)은 기능 질문이다.
+      if (entry.key === "event_inquiry" && EVENT_PRODUCT_USE_RE.test(normalized)) return false
+      // "설명회에서 그런 질문이 나오면…"처럼 행사를 지나가며 말한 것은 행사 문의가 아니다. 일정·신청을 물을 때만 쓴다.
+      if (entry.key === "event_inquiry" && !EVENT_ASK_RE.test(normalized)) return false
       if (entry.key === "emotional_concern") {
         // 도입·전환을 걱정하는 원장님 질문에만 쓴다. 학부모의 아이 걱정, 신입 실장의 실수 걱정,
         // 장애 증상 질문은 해당 안내로 보낸다(이 답은 도입 영업 문구다).
-        if (!ADOPTION_CONTEXT_RE.test(normalized) || hasProductProblem || PERSONAL_WORRY_RE.test(normalized)) {
+        // 이미 쓰고 있는 학원("들여놓은 지 3년")의 걱정은 도입 영업 문구가 아니라 제품 안내로 보낸다.
+        if (
+          !ADOPTION_CONTEXT_RE.test(normalized) ||
+          hasProductProblem ||
+          PERSONAL_WORRY_RE.test(normalized) ||
+          EXISTING_CUSTOMER_RE.test(normalized)
+        ) {
           return false
         }
       }
@@ -241,6 +274,7 @@ export function findChatbotSelfKnowledgeEntry(question: string) {
 }
 
 const CHATBOT_CONTEXT_REQUIRED_KEYS = new Set<ChatbotSelfKnowledgeEntry["key"]>([
+  "input_privacy",
   "answer_principles",
   "memory_boundary",
   "source_boundary",
@@ -250,13 +284,31 @@ const CHATBOT_CONTEXT_REQUIRED_KEYS = new Set<ChatbotSelfKnowledgeEntry["key"]>(
   "model_boundary",
 ])
 
+// 상대(챗봇)를 부르는 말은 낱말로만 본다. '너무'의 '너', '있으니 제'의 '니'는 챗봇을 부르는 말이 아니다.
 const CHATBOT_CONTEXT_RE =
-  /너|넌|네가|니가|네\s|니\s|챗봇|봇|(?:ai|인공지능)\s*(?:챗봇|상담|너|넌)|상담\s*가이드|이\s*대화|대화\s*(?:내용|기록|이력)|채팅\s*(?:내용|기록)|(?:내|제)\s*(?:질문|대화|답변|채팅|상담)|상담\s*내용|지침|프롬프트|내가\s*(?:요청|물어|말|질문|뭐라)|나눈\s*(?:대화|이야기)|방금|아까|기억|내\s*이름|나에\s*대해|나를/i
+  /(?:^|[^가-힣])(?:너|넌|니|네)(?=[^가-힣]|가|는|도|한테|랑|의|$)|챗봇|(?<!로)봇|(?:ai|인공지능)\s*(?:챗봇|상담|너|넌)|상담\s*가이드|이\s*대화|대화\s*(?:내용|기록|이력)|채팅\s*(?:내용|기록)|(?:내|제)\s*(?:질문|대화|답변|채팅|상담)|상담\s*내용|지침|프롬프트|내가\s*(?:요청|물어|말|질문|뭐라)|나눈\s*(?:대화|이야기)|내\s*이름|나에\s*대해|나를/i
+
+const EXISTING_CUSTOMER_RE = /들여놓은\s*지|들인\s*지|쓴\s*지\s*\S{0,4}(?:년|달|개월)|사용한\s*지|이미\s*(?:쓰고|사용)/
 
 const ADOPTION_CONTEXT_RE =
-  /도입|전환|바꾸면|바꿔도|갈아타|선생님들|강사들|강사진|적응|기존\s*(?:시스템|프로그램|방식|lms|erp)|원래\s*쓰던|lms|erp|이중\s*(?:작업|입력)|두\s*번\s*입력|반발|반대(?!로)/i
+  /도입|전환|(?:시스템|프로그램|툴|도구|플랫폼|클래스인|classin)\S{0,3}\s*(?:바꾸면|바꿔도)|갈아타|선생님들|강사들|강사진|적응|기존\s*(?:시스템|프로그램|방식|lms|erp)|원래\s*쓰던|lms|erp|이중\s*(?:작업|입력)|두\s*번\s*입력|반발|반대(?!로|편|쪽)/i
+
+const CHATBOT_WEAK_CONTEXT_RE = /방금|아까|기억/
+
+// "아까 너가 앱 데이터 지우라해서 지웠는데…"처럼 챗봇이 시킨 대로 했다는 말도 제품 문제를 묻는 말이다.
+const PRIOR_BOT_ADVICE_RE =
+  /(?:챗봇|(?<!로)봇|여기|이\s*채팅)\s*(?:에서|이|의|가)?\s*(?:안내|알려|말|답)\S*?\s*(?:대로|받고|받은)|(?:챗봇|(?<!로)봇)\s*(?:의\s*)?(?:답변|안내|대답)(?:에|에서|이|을|대로)|(?:^|[^가-힣])(?:너|니|네)가\s.{0,24}?(?:라\s*해서|라고\s*해서|라길래|라고\s*했|라\s*했)/
+
+const PRODUCT_NOUN_RE = /수업|녹화|숙제|과제|시험|칠판|보드|코스|학생|강사|결제|요금|계정|로그인|앱|화면|카메라|마이크|권한|공유/
+
+const STUDENT_RECORD_RE = /(?:학생|자녀|아이|수업|반|코스)\S*\s*(?:의\s*)?(?:채팅|대화)\s*(?:내용|기록)/g
+
+const EVENT_ASK_RE =
+  /일정|신청|참석|참가|언제|어디서|등록|열리|열려|개최|모집|(?:설명회|세미나|웨비나|행사|박람회|컨퍼런스|포럼)\s*(?:는|가|이|도)?\s*(?:있나요|있어요|있습니까|있나|있을까|해요|하나요|하세요|안내)/
+
+const EVENT_PRODUCT_USE_RE = /웹\s*라이브|라이브로|칠판|보드|프로젝터|hdmi|송출|중계|시청자|참석\s*확인|명단/i
 
 const PRODUCT_PROBLEM_RE =
-  /안\s*(?:돼|되|됨|됐|나|들|보|켜|떠|와)|안돼|안되|안됨|못\s*(?:하|해|들|보|봐)|오류|에러|끊|튕|멈|소리|카메라|마이크|녹화|로그인|접속|화면/i
+  /안\s*(?:돼|되|됨|됐|됩|나|들|보|켜|떠|와)|안돼|안되|안됨|못\s*(?:하|해|들|보|봐)|오류|에러|끊|튕|멈|소리|카메라|마이크|녹화|로그인|접속|화면|회색|비활성|다시\s*보기|다시보기|보증|a\/s|떼서|떼어|옮기|옮겨/i
 
 const PERSONAL_WORRY_RE = /아이|자녀|우리\s*애|딸|아들|학부모|실수할|잘못\s*(?:할|누를|한)|처음\s*해|찍히|보여지|유출/i

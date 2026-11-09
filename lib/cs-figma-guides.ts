@@ -1050,6 +1050,9 @@ const POLICY_OR_CAPABILITY_QUESTION_PATTERN =
 const RAW_CAPTURE_QUERY_PATTERN = /ai\s*board|new\s*course|빈\s*이미지/
 
 const WEAK_GUIDE_KEYWORDS = new Set([
+  // 제품 이름은 거의 모든 질문에 들어 있어서 가이드를 고르는 근거가 되지 못한다.
+  "classin",
+  "클래스인",
   "pc",
   "word",
   "excel",

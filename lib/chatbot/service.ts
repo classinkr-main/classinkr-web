@@ -40,6 +40,8 @@ import {
   type CsFigmaGuide,
 } from "@/lib/cs-figma-guides"
 import { getCsFigmaEnrichment } from "@/lib/cs-figma-enrichments"
+import { appendFollowUp, buildFollowUp } from "@/lib/chatbot/follow-up"
+import { findFieldQuickAnswer } from "@/lib/chatbot/quick-answers-field"
 import { resolveSymptomTriage, type SymptomTriageResult } from "@/lib/chatbot/symptom-triage"
 import {
   ENGLISH_SUPPORT_ANSWER,
@@ -452,7 +454,7 @@ const CAPABILITY_REQUEST_RE =
   /되나요|돼요|가능|지원|제공|처리|관리|기능|자동|연동|만들|추가|하려고|하고\s*싶|쓸\s*수|사용할\s*수/i
 
 const PROMPT_OR_SECURITY_ABUSE_RE =
-  /sql\s*injection|sqli|union\s+select|drop\s+table|or\s+1\s*=\s*1|information_schema|xp_cmdshell|xss|csrf|ssrf|rce|프롬프트\s*인젝션|system\s*prompt|developer\s*(?:message|instruction)|시스템\s*프롬프트|개발자\s*메시지|(?:개발자|시스템|숨겨진|비공개).{0,12}(?:지침|규칙|지시|명령어?|명령문).{0,16}(?:원문|보여|출력|공개|알려|노출|그대로)|(?:개발자|시스템).{0,10}(?:준|받은).{0,10}(?:지침|규칙|지시|명령어?|명령문).{0,16}(?:원문|보여|출력|공개|알려|노출|그대로)|내부\s*(?:프롬프트|규칙|지시|명령어?|명령문)|(?:프롬프트|prompt|지시문).{0,16}(?:보여|출력|공개|알려|노출|그대로)|(?:보여|출력|공개|알려|노출).{0,16}(?:프롬프트|prompt|지시문)|(?:이전|위|앞선).{0,12}(?:지시|규칙|프롬프트).{0,12}(?:무시|잊어|삭제)|보안.{0,12}(?:뚫|우회|공격)|취약점.{0,12}(?:공격|악용|우회)|해킹.{0,12}(?:방법|공격|뚫|탈취|우회)|(?:비밀번호|토큰|api\s*key|관리자).{0,12}(?:탈취|훔|우회|크랙)/i
+  /sql\s*injection|\bsqli\b|union\s+select|drop\s+table|\bor\s+1\s*=\s*1|information_schema|xp_cmdshell|\bxss\b|\bcsrf\b|\bssrf\b|\brce\b|프롬프트\s*인젝션|system\s*prompt|developer\s*(?:message|instruction)|시스템\s*프롬프트|개발자\s*메시지|(?:개발자|시스템|숨겨진|비공개).{0,12}(?:지침|규칙|지시|명령어?|명령문).{0,16}(?:원문|보여|출력|공개|알려|노출|그대로)|(?:개발자|시스템).{0,10}(?:준|받은).{0,10}(?:지침|규칙|지시|명령어?|명령문).{0,16}(?:원문|보여|출력|공개|알려|노출|그대로)|내부\s*(?:프롬프트|규칙|지시|명령어?|명령문)|(?:프롬프트|prompt|지시문).{0,16}(?:보여|출력|공개|알려|노출|그대로)|(?:보여|출력|공개|알려|노출).{0,16}(?:프롬프트|prompt|지시문)|(?:이전|위|앞선).{0,12}(?:지시|규칙|프롬프트).{0,12}(?:무시|잊어|삭제)|보안.{0,12}(?:뚫|우회|공격)|취약점.{0,12}(?:공격|악용|우회)|해킹.{0,12}(?:방법|공격|뚫|탈취|우회)|(?:비밀번호|토큰|api\s*key|관리자).{0,12}(?:탈취|훔|우회|크랙)/i
 const CRIMINAL_ABUSE_RE =
   /(?:범죄|불법|사기|피싱|스미싱|절도|도둑|마약|폭탄|무기|살인|폭행).{0,18}(?:방법|하는\s*법|계획|도와|만들|제조|우회|탈취|공격|훔|숨기|피하)|(?:방법|하는\s*법|계획).{0,18}(?:범죄|불법|사기|피싱|스미싱|절도|마약|폭탄|무기|살인|폭행)/i
 const TOKEN_WASTE_RE =
@@ -460,6 +462,9 @@ const TOKEN_WASTE_RE =
 
 function isUnsupportedAcademyPaymentFeatureQuestion(question: NormalizedQuestion) {
   const text = question.redacted.toLowerCase()
+  // 체험·구독 요금의 자동 결제처럼 클래스인 자체 결제를 묻는 말은 학원비 결제 기능 문의가 아니다.
+  // 카드 명세서에 찍힌 낯선 결제를 묻는 말도 클래스인 쪽 결제 확인이다.
+  if (/체험|구독|요금제|해지|카드\s*등록|(?:내|제)\s*카드|웹\s*라이브|라이브|특강|시청|명세서|빠져나|기억에?\s*없|정기\s*결제|자동\s*결제/.test(text)) return false
   return (
     ACADEMY_PAYMENT_ACTION_RE.test(text) &&
     ACADEMY_PAYMENT_SUBJECT_RE.test(text) &&
@@ -660,7 +665,7 @@ const CAMERA_CONFLICT_RE =
   /카메라.{0,18}(안\s*켜|꺼|꺼져|권한|한\s*명|한명|1명|문제|오류)|(한\s*명|한명|1명).{0,18}카메라/i
 
 const COMPARISON_RE =
-  /zoom|줌|화상회의|뭐가\s*(달라|다른)|무엇이\s*다르|어떻게\s*다른|다른\s*(점|가요|건가요|거|것|부분|서비스)|차이|비교|차별|차별점|장점|왜\s*(써|쓰|필요|도입)|일반\s*전자칠판|기존\s*전자칠판/
+  /zoom|줌|화상회의|뭐가\s*(달라|다른)|무엇이\s*다르|어떻게\s*다른|다른\s*(점|가요|건가요|거|것|부분|서비스)|차이|비교|차별점|차별화|장점|왜\s*(써|쓰|필요|도입)|일반\s*전자칠판|기존\s*전자칠판/
 
 // 시중 경쟁 전자칠판 브랜드를 콕 집어 묻는 비교 질문 인식용.
 // 정책: 트리거로 비교 의도만 인식하고, 답변에서는 브랜드명을 노출하거나 타사 사양·우열을 단정하지 않는다.
@@ -712,7 +717,7 @@ const HARDWARE_UNCONFIRMED_DETAIL_RE =
   /색상|색깔|컬러|마감|화이트|블랙|검정|흰색|보증\s*기간|보증기간|무상\s*(as|a\/s|수리)|유상\s*(as|a\/s|수리)|원산지|제조사/i
 
 const HARDWARE_SPECS_EXCERPT =
-  "Classin Board는 모델별로 S75, S86, S98 Pro, S110 사양을 우선 확인합니다. 공통으로 4K 해상도, 16:9 화면, 178도 시야각, 밝기 350cd/m² 이상, 50점 적외선 터치, 내장 OPS(Windows OS), Wi-Fi ax/BT5.0, 2×15W 스피커를 기준으로 봅니다. 주요 차이는 화면 크기, 주사율, OPS 구성, 마이크 기재 여부, 무게와 소비전력입니다. S65는 라인업에는 있으나 현재 상세 규격서 확인이 필요합니다."
+  "Classin Board는 모델별로 S75, S86, S98 Pro, S110 사양을 우선 확인합니다. 공통으로 4K 해상도, 16:9 화면, 178도 시야각, 밝기 350cd/m² 이상, 50점 적외선 터치, 내장 OPS(Windows, 16GB 메모리·256GB SSD), Wi-Fi ax/BT5.0, 2×15W 스피커를 기준으로 봅니다. 주요 차이는 화면 크기, 주사율, OPS CPU, 마이크 기재 여부, 무게와 소비전력입니다. S65는 라인업에는 있으나 현재 상세 규격서 확인이 필요합니다."
 
 const HARDWARE_BOARD_LINEUP_EXCERPT =
   "Classin 칠판은 보통 Classin Board 전자칠판 라인업을 뜻합니다. 현재 안내 가능한 주요 모델은 S75, S86, S98 Pro, S110이며, 교실 크기와 맨 뒷자리 시야, 이동형 스탠드/벽걸이, 카메라·마이크 필요 여부로 고릅니다. 75·86인치는 일반 강의실, 98·110인치는 대형 강의실이나 설명회 공간에 더 잘 맞습니다. S65는 라인업에는 있으나 상세 규격 확인이 필요합니다."
@@ -720,7 +725,7 @@ const HARDWARE_BOARD_LINEUP_EXCERPT =
 const HARDWARE_BOARD_LINEUP_STANDARD_EXCERPT =
   "Classin Board 전자칠판은 보통 75인치(S75)와 86인치(S86)를 표준으로 가장 많이 선택합니다. 일반 강의실 대부분은 이 두 모델로 시작하며, 학생 수와 맨 뒷자리 시야, 이동형 스탠드/벽걸이, 카메라·마이크 필요 여부로 고릅니다. 대형 강의실·강당·설명회처럼 더 큰 공간이라면 추가 라인업도 있으니 상담에서 공간에 맞춰 안내해 드립니다."
 const HARDWARE_SPECS_STANDARD_EXCERPT =
-  "Classin Board는 75인치(S75)와 86인치(S86)가 표준 모델입니다. 두 모델 모두 4K(3840×2160) 해상도, 16:9 화면, 178도 시야각, 밝기 350cd/m² 이상, 50점 적외선 터치, 내장 OPS(Windows OS), Wi-Fi ax/BT5.0, 2×15W 스피커를 기준으로 봅니다. 본체 치수(가로×세로×두께, 규격서 기준)는 S75가 1,718.18×1,000.2×113.1mm(54kg), S86이 1,964.08×1,139.02×113.1mm(69.5kg)입니다. 더 큰 공간을 위한 추가 라인업은 상담에서 공간·예산에 맞춰 안내해 드립니다."
+  "Classin Board는 75인치(S75)와 86인치(S86)가 표준 모델입니다. 두 모델 모두 4K(3840×2160) 해상도, 16:9 화면, 178도 시야각, 밝기 350cd/m² 이상, 50점 적외선 터치, 내장 OPS(Windows, 16GB 메모리·256GB SSD), Wi-Fi ax/BT5.0, 2×15W 스피커를 기준으로 봅니다. 본체 치수(가로×세로×두께, 규격서 기준)는 S75가 1,718.18×1,000.2×113.1mm(54kg), S86이 1,964.08×1,139.02×113.1mm(69.5kg)입니다. 더 큰 공간을 위한 추가 라인업은 상담에서 공간·예산에 맞춰 안내해 드립니다."
 
 const HARDWARE_TROUBLE_EXCERPT =
   "전자칠판 화면이 안 나오면 전원 플러그와 멀티탭, 오른쪽 측면 하단 전원 버튼, 대기 모드, 입력 소스(OPS/HDMI), HDMI 케이블과 외부 기기 화면 출력을 순서대로 확인합니다. 연기, 냄새, 액체 유입, 파손이 있으면 전원을 분리하고 A/S로 연결합니다."
@@ -787,10 +792,20 @@ function isReceiptQuestion(question: NormalizedQuestion) {
   return RECEIPT_RE.test(question.redacted.toLowerCase())
 }
 
-function getReceiptAnswer() {
+function getReceiptAnswer(question?: NormalizedQuestion) {
+  const text = question?.redacted.toLowerCase() ?? ""
+  // 학부모의 수업료 영수증은 학원이 발급한다. 클래스인 결제 증빙과 섞지 않는다.
+  if (/수업료|교육비|학원비|원비/.test(text) && /학부모|아이|자녀|연말정산|교육비\s*공제/.test(text)) {
+    return [
+      "학원 수업료를 어떻게 내는지와 교육비 영수증(교육비 납입 증명)은 학원이 정하고 발급해요. 공개 안내 기준으로 학원비 결제·정산은 클래스인의 기본 기능이 아니라서, 앱으로 결제하라는 안내가 어떤 앱과 화면을 말하는지 학원에 먼저 확인해 주세요.",
+      "연말정산용 교육비 공제 서류도 학원에 요청하시면 돼요.",
+    ].join("\n\n")
+  }
   return [
-    "세금계산서와 영수증은 학원 계정의 결제 내역을 보고 담당자가 발급해 드려요. 상담 채널(홈페이지 하단 채팅)이나 담당 매니저에게 세금계산서 발급을 요청해 주세요. 카드 외 결제 방법(계좌이체 등)도 같은 곳에서 함께 확인해 드립니다.",
-    "아직 결제 전이라면 결제하기 전에 상담 채널에서 발급 방법을 먼저 정해 두시는 게 좋아요. 결제 뒤에 찾다가 학원 회계와 어긋나는 경우가 많습니다.",
+    "학원(기관) 계정의 결제 영수증은 관리자 콘솔 [결제] > [영수증 관리]에서 확인할 수 있어요. 개인 요금제로 직접 결제하셨거나 세금계산서 같은 다른 증빙이 필요하다면, 받을 수 있는지와 방법은 결제한 계정을 보고 결제 담당이 확인해 드려요. 상담 채널(홈페이지 하단 채팅)이나 담당 매니저에게 필요한 증빙과 기간을 알려 주세요. 결제 방법도 같은 곳에서 확인할 수 있어요.",
+    /경비|종합소득세|세무|공제|소득세|부가세\s*신고/.test(text)
+      ? "카드 영수증만으로 경비 처리가 되는지 같은 세무 판단은 제가 단정할 수 없어요. 신고 전에 세무사나 국세청 안내로 확인해 주세요."
+      : "아직 결제 전이라면 결제하기 전에 상담 채널에서 발급 방법을 먼저 정해 두시는 게 좋아요. 결제 뒤에 찾다가 학원 회계와 어긋나는 경우가 많습니다.",
     "사업자 정보는 이 채팅창에 적지 마시고 상담 채널에서 담당자에게 전달해 주세요.",
   ].join("\n\n")
 }
@@ -834,9 +849,15 @@ function isCourseCreationQuestion(question: NormalizedQuestion) {
   return /코스|클래스/.test(text) && /생성|만들|개설|추가/.test(text)
 }
 
+// "숙제를 어떻게 내요?"처럼 강사가 과제를 만드는 질문에만 강사용 안내를 붙인다.
+// 학생·학부모의 늦은 제출·다시 내기·제출 오류("마감 지났는데 내도 돼요?")는 학생용 문서로 보낸다.
+const STUDENT_SUBMISSION_RE =
+  /늦게|마감|못\s*(?:냈|내)|다시\s*(?:내|제출|해서)|재제출|제출이?\s*안|안\s*(?:올라|내져)|내도\s*(?:돼|되)|받아\s*줌|날아|사라|우리\s*아이|아이가|애가/
+
 function isAssignmentQuestion(question: NormalizedQuestion) {
   const text = question.redacted.toLowerCase()
-  return /과제|숙제|시험/.test(text) && /내|제출|부여|등록|만들|방법/.test(text)
+  if (STUDENT_SUBMISSION_RE.test(text)) return false
+  return /과제|숙제|시험/.test(text) && /내는|내려면|낼\s*수|어떻게\s*내|제출|부여|등록|만들|방법|출제/.test(text)
 }
 
 const AI_DATA_POLICY_RE = /\bai\b.{0,30}(?:학습|훈련|데이터|외부).{0,16}(?:쓰|사용|활용|보내|전송|들어)|(?:음성|영상).{0,20}(?:ai|인공지능).{0,16}(?:학습|훈련)/i
@@ -909,7 +930,7 @@ function isIdentityQuestion(question: NormalizedQuestion) {
 
 // "칠판 티비 밝기 줄이고 싶어요", "화면에 줄이 생겼어요"처럼 쓰는 법·증상을 묻는 말은 스펙 질문이 아니다.
 const BOARD_USAGE_OR_SYMPTOM_RE =
-  /하고\s*싶|하려면|어떻게\s*(?:해|하|줄|바꾸|끄|켜|나눠)|방법|나눠|보내|공유|저장|생겼|생기|줄이|낮추|켜져\s*있|혼자|녹음|녹화|걸어|세워|이사|벽이|안\s*(?:돼|되|나|먹)|안돼|안되|느려|버벅|늘어|뚱뚱|이상해|이상하|눌러도|반응/
+  /하고\s*싶|하려면|어떻게\s*(?:해|하|줄|바꾸|끄|켜|나눠)|방법|나눠|보내|공유|저장|생겼|생기|줄이|낮추|켜져\s*있|혼자|녹음|녹화|걸어|세워|이사|벽이|안\s*(?:돼|되|나|먹)|안돼|안되|느려|버벅|늘어|뚱뚱|이상해|이상하|눌러도|반응|낙서|닦|지워|아세톤|기사|접수|수리|고치|소개|혜택|이벤트|프로모션|할부|분할|나눠\s*내|매달|\bmac\b|802|내부망|와이파이|wi-?fi|권한|판서|학생|매직|업데이트|usb|한글|파일|보증|대체\s*기기|몇\s*년\s*쓰/
 
 function isHardwareSpecsQuestion(question: NormalizedQuestion) {
   const text = question.redacted.toLowerCase()
@@ -926,6 +947,7 @@ function isHardwareSpecsQuestion(question: NormalizedQuestion) {
 function isHardwareBoardLineupQuestion(question: NormalizedQuestion) {
   const text = question.redacted.toLowerCase()
   if (INSTALL_FORM_RE.test(text)) return false
+  if (BOARD_USAGE_OR_SYMPTOM_RE.test(text)) return false
   return (
     isBoardTargeted(text) &&
     HARDWARE_BOARD_LINEUP_INTENT_RE.test(text) &&
@@ -1159,7 +1181,7 @@ function buildCuratedSources(question: NormalizedQuestion) {
       "teacher",
       "course-activities",
       "코스 생성과 구성원 관리",
-      "ClassIn 대시보드 또는 앱에서 [새 코스 생성]을 눌러 코스를 개설하고 학생들을 초대할 수 있습니다.",
+      "교사는 앱에서 코스를 만들고 학습 활동을 추가하며, 관리자는 웹 대시보드에서 코스·수업·교사·학생을 관리합니다.",
       320,
       "classroom"
     )
@@ -1171,7 +1193,7 @@ function buildCuratedSources(question: NormalizedQuestion) {
       "teacher",
       "course-activities",
       "과제 및 평가 관리",
-      "코스 내 학습 활동에서 [새 과제 추가]를 눌러 과제물 파일이나 텍스트를 첨부하고 게시하여 학생들에게 과제를 낼 수 있습니다.",
+      "코스에서 [새로 만들기] > [숙제]를 누르고 제목과 본문을 쓴 뒤 파일을 붙여 게시하면 학생들에게 숙제가 나갑니다.",
       320,
       "classroom"
     )
@@ -2443,38 +2465,48 @@ function trimExcerptToSentence(excerpt: string) {
   return sentences && sentences.length > 0 ? sentences.join("").trim() : withoutEllipsis
 }
 
+// getStepCriteriaByCategory가 범주별 단계를 따로 갖고 있는 범주. 나머지는 일반 되묻기를 쓴다.
+const STEP_CRITERIA_CATEGORIES = new Set(["troubleshooting", "billing", "hardware", "onboarding", "admin", "classroom"])
+
+// 짧거나 대상이 모호한 질문("그거 받았는데 안 열림")에 되물을 말. 묻는 사람(학생·학부모 / 학원)에 맞는 예를 든다.
+function buildGeneralClarify(question: NormalizedQuestion) {
+  const text = question.redacted.toLowerCase()
+  // 긴 질문 속 '이거'는 대개 앞에서 이미 말한 것을 가리키므로 '그거가 뭐냐'고 되묻지 않는다.
+  const vagueRef = /그거|그게|그걸|그것|이거|저거|그\s*(?:파일|링크|앱)/.test(text) && text.replace(/\s+/g, "").length <= 40
+  const lead = vagueRef
+    ? "말씀하신 '그거'가 무엇인지 한 가지만 알려 주시면 바로 도와드릴게요."
+    : "어떤 상황인지 한 가지만 더 알려 주시면 바로 도와드릴게요."
+  const example = LEARNER_VOICE_RE.test(text) || /학생|애들|친구|수업\s*듣|쌤/.test(text)
+    ? "예를 들면 수업 들어가기, 다시보기, 숙제 내기, 앱 설치·로그인, 선생님이 보낸 파일 열기 가운데 어느 쪽인가요?"
+    : /샘들|선생님들|강사|원장|학원|관리자|직원|실장|경리|세무|정산|마감/.test(text)
+      ? "예를 들면 강사·학생 등록, 수업·녹화 설정, 저장 공간, 결제·요금, 전자칠판 가운데 어느 쪽인가요?"
+      : "예를 들면 수업 입장·소리·화면 같은 사용 문제, 녹화·숙제 같은 기능, 결제·요금, 도입 상담 가운데 어느 쪽인가요?"
+  return [lead, example]
+}
+
+// 학생·학부모 목소리의 질문. 이런 질문에는 영업형 되묻기("설치 장소, 희망 대수", "수업 전·중·후")를 붙이지 않는다.
+const LEARNER_VOICE_RE =
+  /우리\s*(?:아이|애)|아이가|애가|딸이|아들이|학생인데|저\s*학생|쌤이|선생님이\s*(?:내|저|우리)|엄마가|엄마한테|숙제|과제|시험|다시\s*보기|다보기/
+
 // 질문 성격(증상·사용법·구매)에 맞는 다음 행동. 카테고리별 고정 문구는 구매·도입 질문에만 쓴다
 // (터치 문제에 "설치 장소, 희망 대수를 알려주세요"처럼 엉뚱한 되묻기를 붙이지 않는다).
-function getContextualNextStep(question: NormalizedQuestion, category: string) {
+function getContextualNextStep(question: NormalizedQuestion, category: string): string | null {
   const text = question.redacted.toLowerCase()
-  if (/견적|가격|요금|비용|도입|구매|체험|데모|상담/.test(text)) return getConciseNextStep(category)
+  // 영업 질문의 끝 질문(규모·교실 수·도입 시기)은 질문 주도 계층(follow-up.ts)이 고른다. 결제 증빙 안내만 남긴다.
+  if (/견적|가격|요금|비용|도입|구매|체험|데모|상담/.test(text)) return category === "billing" ? BILLING_NEXT_STEP : null
   if (/안\s*(?:돼|되|됨|됐|나|들|보|켜|떠|와)|안돼|안되|안됨|오류|에러|끊|튕|멈|이상|못\s*(?:하|해|들|보|봐)/.test(text)) {
     return "화면에 뜬 문구와 쓰는 기기(PC·휴대폰·전자칠판)를 알려 주시면 더 정확히 안내드릴게요. 급하면 \"상담원 연결\"이라고 남겨 주세요."
   }
   if (/어떻게|방법|어디|하는\s*법|순서/.test(text)) {
     return "막히는 화면이나 메뉴 이름을 알려 주시면 그 단계부터 더 자세히 안내드릴게요."
   }
-  return getConciseNextStep(category)
+  // 범주별 일반 되묻기("오류 화면·브라우저를 알려 주세요", "90일 도입 순서로…")는 질문과 상관없는 군더더기가 되기 쉽다.
+  // 끝 질문은 질문 주도 계층이 정하고, 여기서는 결제 증빙 안내만 남긴다.
+  return category === "billing" && !LEARNER_VOICE_RE.test(text) ? BILLING_NEXT_STEP : null
 }
 
-function getConciseNextStep(category: string) {
-  switch (category) {
-    case "billing":
-      return "결제·증빙은 계정마다 조건이 달라 담당자가 확인해요. 상담 채널(홈페이지 하단 채팅)이나 담당 매니저에게 필요한 증빙 종류를 말씀해 주세요."
-    case "hardware":
-      return "설치 장소, 희망 대수, 스탠드/벽걸이 여부를 알려주시면 패키지 범위를 좁혀드릴게요."
-    case "troubleshooting":
-      return "오류 화면, 사용 기기, 앱/브라우저, 발생 시점을 알려주시면 해결 순서를 더 정확히 잡을 수 있어요."
-    case "onboarding":
-      return "현재 쓰는 전자칠판, 녹화, LMS 도구와 도입 희망 시점을 알려주시면 90일 도입 순서로 좁혀드릴게요."
-    case "admin":
-      return "보고 싶은 데이터와 관리자 권한 범위를 알려주시면 설정/연동 흐름으로 정리해드릴게요."
-    case "classroom":
-      return "수업 전, 수업 중, 수업 후 중 어디가 가장 불편한지 알려주시면 기능 기준으로 좁혀드릴게요."
-    default:
-      return "원하시면 도입, 수업 운영, 계정/오류, 결제 중 어느 쪽인지부터 빠르게 좁혀드릴게요."
-  }
-}
+const BILLING_NEXT_STEP =
+  "결제·증빙은 계정마다 조건이 달라 담당자가 확인해요. 상담 채널(홈페이지 하단 채팅)이나 담당 매니저에게 필요한 증빙 종류를 말씀해 주세요."
 
 function getComparisonAnswer(question: NormalizedQuestion, top: ChatbotSource) {
   const text = question.redacted.toLowerCase()
@@ -2538,14 +2570,14 @@ function getHardwareSpecsAnswer(revealBig: boolean) {
   if (!revealBig) {
     return [
       "네, Classin Board 사양 정리해드릴게요.",
-      "표준 모델은 75인치(S75)와 86인치(S86)예요. 공통 기준은 4K · 16:9 · 178도 시야각 · 밝기 350cd/m² 이상 · 50점 적외선 터치 · 내장 OPS(Windows OS)입니다.",
+      "표준 모델은 75인치(S75)와 86인치(S86)예요. 공통 기준은 4K · 16:9 · 178도 시야각 · 밝기 350cd/m² 이상 · 50점 적외선 터치 · 내장 OPS(Windows, 16GB 메모리·256GB SSD)입니다.",
       "본체 치수(가로×세로×두께, 규격서 기준)는 이렇게 봐요.\n- S75 — 1,718.18 × 1,000.2mm · 두께 113.1mm · 54kg\n- S86 — 1,964.08 × 1,139.02mm · 두께 113.1mm · 69.5kg",
       "벽걸이 브래킷과 이동형 스탠드 중 무엇이 견적에 들어가는지는 설치 형태에 따라 정해요. 더 큰 공간을 위한 추가 라인업은 교실 크기랑 설치 방식만 알려주시면 상담에서 맞춰 안내해 드릴게요.",
     ].join("\n\n")
   }
   return [
     "네, Classin Board 사양 정리해드릴게요.",
-    "공통 기준은 4K · 16:9 · 178도 시야각 · 밝기 350cd/m² 이상 · 50점 적외선 터치 · 내장 OPS(Windows OS)예요.",
+    "공통 기준은 4K · 16:9 · 178도 시야각 · 밝기 350cd/m² 이상 · 50점 적외선 터치 · 내장 OPS(Windows, 16GB 메모리·256GB SSD)예요. 수업은 이 OPS의 윈도우에서 해요.",
     "모델별 핵심 차이예요.",
     "- S75 — 75인치 · 54kg · 315W\n- S86 — 86인치 · 69.5kg · 390W\n- S98 Pro — 98인치 · 89kg · 740W · NFC\n- S110 — 110인치 · 137kg · 850W · 120Hz",
     "교실 크기랑 설치 방식만 알려주시면 어느 모델이 맞을지 같이 좁혀드릴게요. S65는 상세 규격 확인이 필요해요.",
@@ -2635,8 +2667,8 @@ function getTrialOrPilotAnswer() {
 function getParentReportOrNotificationAnswer() {
   return [
     "학부모 커뮤니케이션은 'Classin 안에서 확인할 수 있는 데이터'와 '자동 발송'을 나눠 봐야 합니다.",
-    "출결, 과제, 성적, 복습 기록, 학습 보고서처럼 상담에 쓸 데이터는 권한 범위 안에서 확인할 수 있어요. 다만 학부모 문자·푸시·상담 리포트가 자동 발송된다고 기본 기능처럼 단정하면 안 됩니다.",
-    "자동 알림이 필요하면 SMS 알림, API, 외부 학원관리 시스템 연동 범위로 따로 확인하는 게 맞습니다.",
+    "출결, 과제, 성적, 복습 기록, 학습 보고서처럼 상담에 쓸 데이터는 권한 범위 안에서 확인할 수 있어요. 학습 보고서는 링크를 복사해 학부모님께 보낼 수 있어요.",
+    "다만 학부모님께 문자·상담 리포트를 자동으로 보내는 건 기본 화면 기능으로 안내돼 있지 않아요. 수업 알림 문자(SMS)는 [일반 설정] > [부가가치 서비스]의 유료 서비스 '스마트 담임 교사'로 학생과 교사에게 자동으로 보낼 수 있으니, 학부모 번호로도 받을 수 있는지는 담당 매니저에게 확인해 보세요. 그 밖의 자동 알림은 공식 API로 클래스인 앱 푸시를 자동화하거나 외부 학원관리 시스템과 연동하는 방식을 상담에서 확인해 보세요.",
   ].join("\n\n")
 }
 
@@ -2804,7 +2836,7 @@ function getGoogleClassroomAnswer() {
 
 function getSiteEntryIntegrationAnswer() {
   return [
-    "자사 사이트의 입장 버튼에서 ClassIn 수업으로 연결하는 건 가능성은 열어두되, 기본 제공 기능처럼 단정하면 안 됩니다.",
+    "자사 사이트의 입장 버튼에서 ClassIn 수업으로 바로 연결하는 건 기본 제공 기능으로 안내돼 있지 않아요. 공식 API로 연결하는 개발 작업이 필요할 수 있어요.",
     "수업 링크, 로그인 방식, 학생 권한, 수업 생성 주체, 반복 시간표, API 또는 운영 자동화 범위를 같이 봐야 해요.",
     "현재 사이트에서 회원 인증을 어떻게 하고 있는지, 수업이 매번 수동 생성인지 반복 일정인지, 충전형/구독형 중 어떤 계약을 검토 중인지 알려주시면 연동 확인 항목으로 좁혀드릴게요.",
   ].join("\n\n")
@@ -2941,7 +2973,7 @@ function formatConsumerAnswer({
     return getAccountPlanOrTrialLimitAnswer(question)
   }
   if (top.heading === "영수증과 결제 증빙 확인") {
-    return getReceiptAnswer()
+    return getReceiptAnswer(question)
   }
   if (top.heading === "녹화 저장과 권한 기준") {
     return getRecordingPermissionAnswer()
@@ -3007,7 +3039,7 @@ function formatConsumerAnswer({
   return [
     summary,
     caution,
-    `다음으로는 ${nextStep}`,
+    nextStep ? `다음으로는 ${nextStep}` : null,
   ].filter(Boolean).join("\n\n")
 }
 
@@ -3066,17 +3098,21 @@ function composeAnswer(
     }
 
     const fallbackCriteria = getStepCriteriaByCategory(category)
+    // 분류가 안 된 질문에 "도입·운영·계정·결제 중 어디냐"를 되묻지 않는다. 묻는 사람에 맞는 예를 들어 하나만 묻는다.
+    const generalClarify = !needsConsultation && !STEP_CRITERIA_CATEGORIES.has(category) ? buildGeneralClarify(question) : null
     return {
-      answer: [
-        needsConsultation
-          ? "상담이 필요한 내용으로 확인했습니다."
-          : category === "troubleshooting"
-            ? "원인을 바로 단정하기보다 상황을 조금만 더 좁히는 게 좋겠습니다."
-            : category === "billing" || category === "hardware"
-              ? "계약, 결제, 장비 상태에 따라 달라질 수 있어 지금은 확정해서 말하기 어렵습니다."
-            : "지금 바로 확정하기 어려워요. 현재 상황을 한 문장만 더 알려주세요.",
-        fallbackCriteria.steps.slice(0, 2).map((step, index) => `${index + 1}. ${step}`).join("\n"),
-      ].join("\n\n"),
+      answer: generalClarify
+        ? generalClarify.join("\n\n")
+        : [
+            needsConsultation
+              ? "상담이 필요한 내용으로 확인했습니다."
+              : category === "troubleshooting"
+                ? "원인을 바로 단정하기보다 상황을 조금만 더 좁히는 게 좋겠습니다."
+                : category === "billing" || category === "hardware"
+                  ? "계약, 결제, 장비 상태에 따라 달라질 수 있어 지금은 확정해서 말하기 어렵습니다."
+                  : "지금 바로 확정하기 어려워요. 현재 상황을 한 문장만 더 알려주세요.",
+            fallbackCriteria.steps.slice(0, 2).map((step, index) => `${index + 1}. ${step}`).join("\n"),
+          ].join("\n\n"),
       answerMode: needsHandoff ? "handoff" : "fallback",
       confidence: needsHandoff ? 0.4 : 0.15,
       needsHandoff,
@@ -3529,6 +3565,11 @@ interface ChatbotCore {
   englishSummary?: string
   // 사용법·점검표 답이면 화난 말투여도 상담 연결부터 앞세우지 않는다.
   howtoAnswer?: boolean
+  // 증상 주제가 정해 둔 확인 질문과 주제 id(질문 주도 층이 쓴다).
+  topicFollowUp?: string
+  topicId?: string
+  /** 정해 둔 답이 이미 필요한 것을 묻거나 안내하면 영업용 되묻기(규모·도입 시기)를 붙이지 않는다. */
+  suppressSalesFollowUp?: boolean
 }
 
 interface BuildChatbotCoreOptions {
@@ -3657,7 +3698,12 @@ function buildServiceQuickAnswer(question: NormalizedQuestion): QuickAnswer | nu
       ["데모를 한번 보고 싶어요", "쇼룸 방문은 어떻게 예약해요?", "도입 상담을 받아보고 싶습니다"]
     )
   }
-  const direct = (answer: string[], category: string, suggestedQuestions: string[]): QuickAnswer => {
+  const direct = (
+    answer: string[],
+    category: string,
+    suggestedQuestions: string[],
+    englishSummary?: string
+  ): QuickAnswer => {
     const response = {
       answer: answer.join("\n\n"),
       answerMode: "direct_answer" as const,
@@ -3668,7 +3714,16 @@ function buildServiceQuickAnswer(question: NormalizedQuestion): QuickAnswer | nu
       unresolved: false,
     }
     deterministicFinalResponses.add(response)
-    return { response, category, intent: "docs_lookup", handoffIntent: "support" }
+    return { response, category, intent: "docs_lookup", handoffIntent: "support", englishSummary }
+  }
+
+  // 현장 질문에서 모은 좁은 정해 둔 답(결제 사칭 문자, 해지 후 결제, 보안·개인정보 점검 등)을 먼저 본다.
+  const field = findFieldQuickAnswer(text)
+  if (field) {
+    const quick = field.handoff
+      ? make(field.answer, field.handoff, field.category, field.suggestedQuestions, field.en)
+      : direct(field.answer, field.category, field.suggestedQuestions, field.en)
+    return { ...quick, topicId: field.id, suppressSalesFollowUp: !field.salesFollowUp }
   }
 
   if (EXAM_ANSWER_RE.test(text)) {
@@ -4339,7 +4394,9 @@ function applyConversationTone(core: ChatbotCore) {
   if (isGreetingOnly(core.question)) return
   const tone = detectConversationTone(core.question.redacted)
   // 지난 문의를 전제로 한 질문은 "볼 수 없다"는 줄만 붙이고, 상담 연결은 화난·반복 문의일 때만 앞세운다.
-  const offerHandoff = (tone.angry && !core.howtoAnswer) || tone.repeated
+  // 이미 상담원 대기 중이라고 항의하는 사람에게 "지금 바로 연결해 드릴게요"를 또 약속하지 않는다.
+  const waitingForAgent = /대기\s*(?:순번|번호|중)|순번|상담원\s*연결을?\s*(?:눌렀|했는데|했더니)/.test(text)
+  const offerHandoff = !waitingForAgent && ((tone.angry && !core.howtoAnswer) || tone.repeated)
   core.response.answer = applyToneToAnswer(core.response.answer, tone, {
     englishSummary: core.englishSummary,
     offerHandoff,
@@ -4349,6 +4406,24 @@ function applyConversationTone(core: ChatbotCore) {
     core.response.needsHandoff = true
     core.handoffIntent = "support"
   }
+  // 지난 문의·통화를 이어 가려는 사람에게는 상담 연결 버튼을 띄운다(답에서 그 버튼을 가리킨다).
+  if (tone.priorContext === "inquiry") core.response.needsHandoff = true
+  // 질문 주도: 정보가 부족하거나 오해 여지가 있거나 영업 상담을 이어 갈 때 끝에 질문 하나를 붙인다.
+  core.response.answer = appendFollowUp(
+    core.response.answer,
+    buildFollowUp({
+      question: core.question.redacted,
+      answer: core.response.answer,
+      category: core.category,
+      intent: core.intent,
+      handoffIntent: core.handoffIntent,
+      answerMode: core.response.answerMode,
+      tone,
+      topicFollowUp: core.topicFollowUp,
+      topicId: core.topicId,
+      allowSalesFollowUp: !core.suppressSalesFollowUp,
+    })
+  )
 }
 
 async function buildChatbotCore(
@@ -4356,8 +4431,7 @@ async function buildChatbotCore(
   options: BuildChatbotCoreOptions = {}
 ): Promise<ChatbotCore> {
   const core = await buildChatbotCoreBase(message, options)
-  // 말투 계층(공감 한마디·[실시간 상담 연결] 안내)은 공개 위젯 화면 문구다. 내부 CS 코파일럿(includeInternalDocs,
-  // 계약 6)은 이 답을 상담원용 근거로 읽으므로 붙이지 않는다.
+  // 말투 처리(공감 첫마디·상담 연결 앞세우기)는 공개 챗봇 답에만 붙인다. 내부 CS 코파일럿 근거에는 넣지 않는다.
   if (!options.includeInternalDocs) applyConversationTone(core)
   return core
 }
@@ -4405,17 +4479,15 @@ async function buildChatbotCoreBase(
     }
   }
 
-  // 아래 결정형 조기 답변(바로 답·영어 안내·이미 해 봤음·증상 트리아지·지난 대화 되묻기)은 공개 위젯 전용이다.
-  // 내부 CS 코파일럿(includeInternalDocs, 계약 6)은 상담원에게 내부 문서 근거를 줘야 하므로 이 단계들을 건너뛰고
-  // 검색(match_docs_ai_chunks, include_internal)까지 간다 — 공개 위젯 문구로 끝내면 내부 문서 검색이 통째로 빠진다.
-  const publicWidgetShortcuts = !options.includeInternalDocs
-
-  const quickAnswer = publicWidgetShortcuts ? buildServiceQuickAnswer(question) : null
+  // 아래 공개 챗봇 전용 지름길(정해 둔 답·영어 안내·증상 트리아지·지난 대화 되묻기)은 검색을 건너뛴다.
+  // 내부 CS 코파일럿(includeInternalDocs, 계약 6)은 내부 문서까지 검색해야 하므로 이 지름길을 쓰지 않는다.
+  const publicShortcuts = !options.includeInternalDocs
+  const quickAnswer = publicShortcuts ? buildServiceQuickAnswer(question) : null
   if (quickAnswer) {
     return { question, ...quickAnswer, latencyMs: elapsedSince(startedAt) }
   }
 
-  if (publicWidgetShortcuts && isEnglishSupportRequest(question.redacted)) {
+  if (publicShortcuts && isEnglishSupportRequest(question.redacted)) {
     return {
       question,
       response: {
@@ -4456,7 +4528,7 @@ async function buildChatbotCoreBase(
 
   const routingTone = detectConversationTone(question.redacted)
   if (
-    publicWidgetShortcuts &&
+    publicShortcuts &&
     (routingTone.repeated || routingTone.angry) &&
     TRIED_ALREADY_RE.test(question.redacted.toLowerCase())
   ) {
@@ -4480,7 +4552,7 @@ async function buildChatbotCoreBase(
   const csFigmaGuide = findCsFigmaGuideForQuestion(routingText)
   // 증상형 질문("녹화 안 돼요", "기관 등록 안됨", "에러나요")은 공개 문제 해결 문서 섹션으로 바로 답한다.
   // Figma 가이드의 알려진 의도(예: 늦게 가입한 학생 다시보기)가 맞으면 그 가이드를 먼저 쓴다.
-  const symptomTriage = publicWidgetShortcuts ? resolveSymptomTriageForQuestion(routingText, csFigmaGuide) : null
+  const symptomTriage = publicShortcuts ? resolveSymptomTriageForQuestion(routingText, csFigmaGuide) : null
   if (symptomTriage) {
     const response = buildSymptomTriageResponse(symptomTriage)
     return {
@@ -4492,11 +4564,13 @@ async function buildChatbotCoreBase(
       latencyMs: elapsedSince(startedAt),
       englishSummary: symptomTriage.englishSummary,
       howtoAnswer: symptomTriage.howto === true,
+      topicFollowUp: symptomTriage.followUp,
+      topicId: symptomTriage.topicId,
     }
   }
 
   // "저번에 말한 거 또 그래요"처럼 지난 대화를 전제로 한 짧은 질문: 볼 수 없다고 밝히고 한 줄만 되묻는다.
-  if (publicWidgetShortcuts && routingTone.priorContext && question.redacted.replace(/\s+/g, "").length <= 60) {
+  if (publicShortcuts && routingTone.priorContext && question.redacted.replace(/\s+/g, "").length <= 60) {
     const response = buildPriorContextClarifyResponse(routingText)
     return {
       question,
