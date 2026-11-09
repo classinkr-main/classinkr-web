@@ -52,6 +52,20 @@ describe("field quick answers", () => {
     expect(find("링크로 중계하는 기능(웹 라이브 맞죠?)에서 시청자 채팅을 막고 싶습니다.")).not.toBe("web-live-viewer-chat-spam-controls")
   })
 
+  it("does not read a word inside another word as a different topic (round 20)", () => {
+    // '체크리스트'·'릴리스'의 '리스'는 리스 계약이 아니다.
+    expect(find("학교운영위원회 심의 전에 체크리스트를 채워야 해서 소프트웨어 계약 근거 문서가 필요합니다")).not.toBe(
+      "board-lease-tax-invoice-subscription"
+    )
+    expect(find("칠판 소프트웨어 릴리스 노트는 어디서 봐요? 계약한 칠판 10대 버전 확인용입니다")).not.toBe("board-lease-tax-invoice-subscription")
+    // 'start'의 'star'는 칭찬 스티커가 아니다.
+    expect(find("When I start screen share, my camera turns off. Students can't see my face")).not.toBe("class-rewards-trophy")
+    // '프로그램'의 '램'은 칠판 메모리 사양이 아니다.
+    expect(find("칠판 같은 건지 펜 같은 건지 아니면 돈을 내는 무슨 프로그램인지 몇 개 사야 하나요")).not.toBe("board-ram-storage-android-specs")
+    // '비싼 요금제'의 '싼 요금제'는 낮은 요금제가 아니다.
+    expect(find("비싼 요금제로 바꾸면 끊김이 줄어요?")).not.toBe("downgrade-blocked-during-contract")
+  })
+
   it("keeps round-19 answers from catching neighbouring questions (fact-check)", () => {
     // '자동'만으로 자동 채점 질문을, '탈퇴'만으로 본인 계정 탈퇴 질문을 받지 않는다.
     expect(find("숙제 제출하면 자동으로 채점되나요?")).not.toBe("homework-draft-auto-submit-deadline")
