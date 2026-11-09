@@ -40,6 +40,18 @@ describe("field quick answers", () => {
     )
   })
 
+  it("does not read a word inside another word as a different topic (round 19)", () => {
+    // "그리고"의 '그리'는 화면 공유 위에 그리기가 아니다.
+    expect(
+      find("I wanted to show a Netflix scene ㅎㅎ 근데 screen share 하면 students only see black screen ㅋㅋ 그리고 Netflix 수업에서 보여주는 거 copyright OK예요?")
+    ).toBe("netflix-screen-share-black-drm-copyright")
+    // 'iPad'의 'ip'는 IP 주소가 아니고, '로그인 ID'의 '로그'는 크래시 로그가 아니다.
+    const mdm = "지난주 이 채팅에서 'iPad 앱은 MDM의 Managed App Configuration으로 기관 정보와 로그인 ID를 미리 넣어 배포할 수 있다'는 답을 받았습니다."
+    expect(find(mdm)).toBe("ipad-mdm-appconfig-prior-answer")
+    // 웹 라이브 시청자 채팅을 통째로 끄는 질문은 도배 대응 답이 아니다.
+    expect(find("링크로 중계하는 기능(웹 라이브 맞죠?)에서 시청자 채팅을 막고 싶습니다.")).not.toBe("web-live-viewer-chat-spam-controls")
+  })
+
   it("keeps an admin's parent-account question apart from a parent's follow-up on an earlier bot answer", () => {
     // "원장님께서 하라고 하셨다"는 지난 챗봇 안내가 아니다.
     expect(
