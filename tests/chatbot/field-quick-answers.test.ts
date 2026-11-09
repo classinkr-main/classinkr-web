@@ -52,6 +52,19 @@ describe("field quick answers", () => {
     expect(find("링크로 중계하는 기능(웹 라이브 맞죠?)에서 시청자 채팅을 막고 싶습니다.")).not.toBe("web-live-viewer-chat-spam-controls")
   })
 
+  it("keeps round-19 answers from catching neighbouring questions (fact-check)", () => {
+    // '자동'만으로 자동 채점 질문을, '탈퇴'만으로 본인 계정 탈퇴 질문을 받지 않는다.
+    expect(find("숙제 제출하면 자동으로 채점되나요?")).not.toBe("homework-draft-auto-submit-deadline")
+    expect(find("탈퇴하면 제 정보 다 지워져요?")).not.toBe("former-students-data-retention-law")
+    // 다운로드를 막고 싶다는 관리 질문, 녹화 중에 걸어 다니는 질문, 수업 녹음이 끊긴 질문은 각 답이 아니다.
+    expect(find("강사들이 녹화본을 다운로드 못 하게 제한하고 싶어요")).not.toBe("recording-download-limit-exceeded")
+    expect(find("녹화할 때 강사가 걸어 다니면 카메라가 auto로 따라가나요?")).not.toBe("what-does-recording-geolda-mean")
+    expect(find("지난번 수업 녹음된 부분이 중간에 끊겨서 안 들려요")).not.toBe("voice-homework-length-limit-prior-answer")
+    // 학원 교실 두 곳의 빈 화면은 기관 중복이 아니고, 수업 중 작은 카메라 창은 다시보기 PIP가 아니다.
+    expect(find("학원 교실 두 개에서 칠판 화면이 빈 화면으로 나와요")).not.toBe("duplicate-academy-org-empty-one")
+    expect(find("수업 중에 선생님 영상이 작은 창으로만 보여요 크게 보려면?")).not.toBe("replay-picture-in-picture-pip")
+  })
+
   it("keeps an admin's parent-account question apart from a parent's follow-up on an earlier bot answer", () => {
     // "원장님께서 하라고 하셨다"는 지난 챗봇 안내가 아니다.
     expect(
