@@ -75,6 +75,17 @@ describe("field quick answers", () => {
     expect(find("we want a price protection clause in the 3-year contract")).not.toBe("english-pricing")
   })
 
+  it("keeps round-21 answers from catching neighbouring questions (fact-check)", () => {
+    // '수수료'·'모아서'·'화면'처럼 흔한 말만으로 견적 조건·채점·칠판 잔상 답을 내지 않는다.
+    expect(find("카드로 결제하면 수수료 붙나요? 현금으로 하면 세금계산서 나와요?")).not.toBe("quote-card-surcharge-tax-invoice-cash")
+    expect(find("주관식 채점 결과를 학생별로 모아서 보는 법")).not.toBe("essay-grading-by-question-view")
+    expect(find("노트북 화면에 잔상이 계속 보여요 바꿔야 하나요")).not.toBe("board-toolbar-ghost-image-retention")
+    // AI 칠판의 손글씨 인식, '아이디'의 '아이', '대시보드'의 '보드'는 각 답이 아니다.
+    expect(find("ai 칠판에서 학생이 쓴 한글 손글씨가 텍스트로 잘 인식 안 돼요")).not.toBe("board-handwriting-turns-into-korean-text")
+    expect(find("클래스인 숙제 알림을 카톡으로 받을 수 있나요? 개인 아이디로")).not.toBe("teacher-personal-kakao-homework-parent-worry")
+    expect(find("대시보드에서 출결 통계 인쇄해서 종이로 뽑고 싶어요")).not.toBe("board-print-to-office-printer")
+  })
+
   it("keeps round-19 answers from catching neighbouring questions (fact-check)", () => {
     // '자동'만으로 자동 채점 질문을, '탈퇴'만으로 본인 계정 탈퇴 질문을 받지 않는다.
     expect(find("숙제 제출하면 자동으로 채점되나요?")).not.toBe("homework-draft-auto-submit-deadline")
