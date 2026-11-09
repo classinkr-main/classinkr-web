@@ -28,3 +28,23 @@ describe("lead magnet content quality", () => {
     expect(magnet.pdfGuide?.howToUse.join(" ")).toContain(`${itemCount}개 문항`)
   })
 })
+
+describe("e-book lead magnets match their printed PDFs", () => {
+  // PDF(scripts/lead-magnet-ebooks/*.html)와 자료 페이지가 같은 문항 수·채점 방향을 말해야 한다.
+  it.each([
+    ["academy-system-checklist", 24, "24문항"],
+    ["electronic-whiteboard-classroom-checklist", 15, "15문항"],
+  ])("%s", async (slug, count, label) => {
+    const magnet = leadMagnets.find((item) => item.slug === slug)
+    expect(magnet).toBeTruthy()
+    if (!magnet) return
+
+    expect(getLeadMagnetItemCount(magnet)).toBe(count)
+    expect(magnet.formatLabel).toContain(label)
+    expect(magnet.scoreBands.at(-1)?.range).toContain(`${count}개`)
+
+    const { normalizeLeadMagnet } = await import("@/lib/repositories/lead-magnets")
+    expect(normalizeLeadMagnet(magnet).scoringGuide).toEqual(magnet.scoringGuide)
+    expect(magnet.scoringGuide?.read).toBeTruthy()
+  })
+})

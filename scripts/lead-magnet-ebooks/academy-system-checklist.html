@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>우리 학원 수업 운영 누수 진단표</title>
+<!--
+  리드마그넷 e-book 인쇄 원본 — scripts/render-lead-magnet-workbook-pdf.mjs 가 이 파일을 PDF 로 찍는다.
+  디자인 원본: Claude Design 캔버스 "리드마그넷 상위 2종 디벨롭"(2026-11-09). 쪽은 794×1123(A4), 반경 0·그림자 0.
+  이미지 src 는 public/ 기준 경로, 링크 href 는 사이트 상대 경로로 둔다 — 인쇄 때 file:// 과 utm 붙은 절대 주소로 바꾼다.
+  글꼴(@fontsource IBM Plex Sans KR)은 인쇄 때 FONT_CSS 자리에 넣는다.
+-->
+<style>
+/* FONT_CSS */
+@page{size:794px 1123px;margin:0}
+html,body{margin:0;padding:0}
+a{color:#0B7A52}
+.page{break-after:page}
+.page:last-child{break-after:auto}
+.p1 .badge{flex:none;width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center;background:#1A1917;color:#FFFFFF;font-size:15px;font-weight:700}
+.p1 .area{display:flex;flex-direction:column;gap:8px;padding-top:12px;border-top:1px solid rgba(0,0,0,0.12)}
+.p2 .toc{display:grid;grid-template-columns:56px minmax(0,1fr) 40px;align-items:baseline;gap:12px;padding:11px 0;border-top:1px solid rgba(0,0,0,0.1)}
+.p2 .tn{font-size:26px;font-weight:700;color:#0B7A52;letter-spacing:-0.02em}
+.p2 .tt{font-size:17px;font-weight:700;color:#111110}
+.p2 .ts{display:block;margin-top:2px;font-size:13px;font-weight:400;color:#615D59}
+.p2 .tp{text-align:right;font-size:15px;font-weight:600;color:#111110}
+.p3 .row{display:flex;gap:16px;align-items:flex-start;padding:10px 0;border-top:1px solid rgba(0,0,0,0.08);font-size:15px;line-height:1.6}
+.p3 .box{flex:none;width:20px;height:20px;margin-top:2px;border:1.5px solid #31302E;box-sizing:border-box;background:#FFFFFF}
+.p3 .num{flex:none;width:22px;font-size:13px;font-weight:600;color:#615D59;margin-top:1px}
+.p3 .head{display:flex;justify-content:space-between;align-items:center;padding-bottom:10px;border-bottom:1.5px solid #111110}
+.p3 .tally{font-size:13px;font-weight:600;color:#615D59}
+.p3 .badge{flex:none;width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center;background:#1A1917;color:#FFFFFF;font-size:15px;font-weight:700}
+.p4 .row{display:flex;gap:16px;align-items:flex-start;padding:10px 0;border-top:1px solid rgba(0,0,0,0.08);font-size:15px;line-height:1.6}
+.p4 .box{flex:none;width:20px;height:20px;margin-top:2px;border:1.5px solid #31302E;box-sizing:border-box;background:#FFFFFF}
+.p4 .num{flex:none;width:22px;font-size:13px;font-weight:600;color:#615D59;margin-top:1px}
+.p4 .head{display:flex;justify-content:space-between;align-items:center;padding-bottom:10px;border-bottom:1.5px solid #111110}
+.p4 .tally{font-size:13px;font-weight:600;color:#615D59}
+.p4 .badge{flex:none;width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center;background:#1A1917;color:#FFFFFF;font-size:15px;font-weight:700}
+.p5 .r{display:grid;grid-template-columns:168px repeat(3,minmax(0,1fr));border-top:1px solid rgba(0,0,0,0.1)}
+.p5 .r>div{padding:12px;font-size:13px;line-height:1.55}
+.p5 .r>div.sol{background:#E9F1EC}
+.p5 .r.h>div{padding:8px 12px;font-size:12px;font-weight:700;color:#615D59}
+.p5 .r.h{border-top:0;border-bottom:1.5px solid #111110}
+.p5 .q{display:flex;gap:10px;align-items:flex-start;font-weight:700;color:#111110;font-size:13px;line-height:1.5}
+.p5 .badge{flex:none;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;background:#1A1917;color:#FFFFFF;font-size:13px;font-weight:700}
+.p5 .shot{background:#FFFFFF;border:1px solid rgba(0,0,0,0.1);padding:8px}
+.p5 .shot img{display:block;width:100%;height:96px;object-fit:cover;background:#FFFFFF}
+.p5 .shot p{margin:6px 0 0;font-size:12px;color:#615D59;text-align:center}
+.p6 .cell{display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 0;border-right:1px solid rgba(0,0,0,0.12)}
+.p6 .blank{display:inline-block;min-width:64px;border-bottom:1.5px solid #31302E;height:22px}
+.p6 .band{display:grid;grid-template-columns:110px minmax(0,1fr);gap:20px;padding:12px 0 12px 16px;border-top:1px solid rgba(0,0,0,0.08)}
+.p6 .lvl{display:flex;gap:4px;margin-top:6px}
+.p6 .lvl i{display:block;width:16px;height:6px;background:#D4D0CA}
+.p6 .lvl i.on{background:#0B7A52}
+</style>
+</head>
+<body>
+<!-- 1쪽 · 캔버스 Main -->
+<div class="page p1" style="width: 794px; height: 1123px; position: relative; overflow: hidden; box-sizing: border-box; background: #F9F8F5; font-family: 'IBM Plex Sans KR', sans-serif; color: #31302E; display: flex; flex-direction: column; word-break: keep-all">
+  <div style="position: relative; overflow: hidden; background: #1A1917; color: #FFFFFF; padding: 44px 64px 36px">
+    <div aria-hidden="true" style="position: absolute; top: 0; left: 0; right: 0; height: 6px; background: #0B7A52"></div>
+    <div style="position: relative; display: flex; justify-content: space-between; font-size: 12px; font-weight: 600; letter-spacing: 0.08em; color: #C9C5BF; border-bottom: 1px solid rgba(255,255,255,0.18); padding-bottom: 12px">
+      <span>CLASSIN KOREA · 원장용 진단표</span>
+      <span>1 / 6</span>
+    </div>
+    <div style="position: relative; margin-top: 36px; display: grid; grid-template-columns: minmax(0, 1fr) 196px; gap: 28px; align-items: end">
+      <div>
+        <h1 style="margin: 0; font-size: 42px; line-height: 1.22; font-weight: 700; letter-spacing: -0.02em">우리 학원 수업,<br>어디서 새고 있나요?</h1>
+        <p style="margin: 16px 0 0; padding-left: 12px; border-left: 3px solid #8FC4AC; font-size: 15px; line-height: 1.6; color: #E8E6E2">자료 찾기, 판서 다시 쓰기, 녹화 링크 보내기.<br>매주 반복되는 몇 분이 어디서 새는지 짚어 봅니다.</p>
+      </div>
+      <svg aria-hidden="true" width="196" height="150" viewBox="0 0 196 150" style="display: block; font-family: inherit"><rect x="30" y="16" width="68" height="132" fill="rgba(143,196,172,0.16)"/><text x="16" y="10" text-anchor="middle" font-size="11" font-weight="700" fill="rgba(255,255,255,0.5)">A</text><rect x="4.75" y="22.75" width="22.5" height="22.5" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="1.5"/><rect x="4" y="54" width="24" height="24" fill="#8FC4AC"/><path d="M10 66.5 l4 4 l8 -9" fill="none" stroke="#1A1917" stroke-width="2.2"/><rect x="4.75" y="86.75" width="22.5" height="22.5" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="1.5"/><rect x="4.75" y="118.75" width="22.5" height="22.5" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="1.5"/><text x="48" y="10" text-anchor="middle" font-size="11" font-weight="700" fill="#8FC4AC">B</text><rect x="36" y="22" width="24" height="24" fill="#8FC4AC"/><path d="M42 34.5 l4 4 l8 -9" fill="none" stroke="#1A1917" stroke-width="2.2"/><rect x="36" y="54" width="24" height="24" fill="#8FC4AC"/><path d="M42 66.5 l4 4 l8 -9" fill="none" stroke="#1A1917" stroke-width="2.2"/><rect x="36.75" y="86.75" width="22.5" height="22.5" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="1.5"/><rect x="36" y="118" width="24" height="24" fill="#8FC4AC"/><path d="M42 130.5 l4 4 l8 -9" fill="none" stroke="#1A1917" stroke-width="2.2"/><text x="80" y="10" text-anchor="middle" font-size="11" font-weight="700" fill="#8FC4AC">C</text><rect x="68" y="22" width="24" height="24" fill="#8FC4AC"/><path d="M74 34.5 l4 4 l8 -9" fill="none" stroke="#1A1917" stroke-width="2.2"/><rect x="68.75" y="54.75" width="22.5" height="22.5" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="1.5"/><rect x="68" y="86" width="24" height="24" fill="#8FC4AC"/><path d="M74 98.5 l4 4 l8 -9" fill="none" stroke="#1A1917" stroke-width="2.2"/><rect x="68" y="118" width="24" height="24" fill="#8FC4AC"/><path d="M74 130.5 l4 4 l8 -9" fill="none" stroke="#1A1917" stroke-width="2.2"/><text x="112" y="10" text-anchor="middle" font-size="11" font-weight="700" fill="rgba(255,255,255,0.5)">D</text><rect x="100.75" y="22.75" width="22.5" height="22.5" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="1.5"/><rect x="100.75" y="54.75" width="22.5" height="22.5" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="1.5"/><rect x="100" y="86" width="24" height="24" fill="#8FC4AC"/><path d="M106 98.5 l4 4 l8 -9" fill="none" stroke="#1A1917" stroke-width="2.2"/><rect x="100.75" y="118.75" width="22.5" height="22.5" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="1.5"/><text x="144" y="10" text-anchor="middle" font-size="11" font-weight="700" fill="rgba(255,255,255,0.5)">E</text><rect x="132" y="22" width="24" height="24" fill="#8FC4AC"/><path d="M138 34.5 l4 4 l8 -9" fill="none" stroke="#1A1917" stroke-width="2.2"/><rect x="132.75" y="54.75" width="22.5" height="22.5" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="1.5"/><rect x="132.75" y="86.75" width="22.5" height="22.5" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="1.5"/><rect x="132" y="118" width="24" height="24" fill="#8FC4AC"/><path d="M138 130.5 l4 4 l8 -9" fill="none" stroke="#1A1917" stroke-width="2.2"/><text x="176" y="10" text-anchor="middle" font-size="11" font-weight="700" fill="rgba(255,255,255,0.5)">F</text><rect x="164.75" y="22.75" width="22.5" height="22.5" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="1.5"/><rect x="164.75" y="54.75" width="22.5" height="22.5" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="1.5"/><rect x="164.75" y="86.75" width="22.5" height="22.5" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="1.5"/><rect x="164.75" y="118.75" width="22.5" height="22.5" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="1.5"/></svg>
+    </div>
+    <div style="position: relative; margin-top: 26px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px"><div style="border-top: 1px solid rgba(255,255,255,0.3); padding-top: 10px"><p style="margin: 0; font-size: 12px; font-weight: 600; color: #C9C5BF">진단 문항</p><p style="margin: 4px 0 0; font-size: 34px; line-height: 1.2; font-weight: 700; letter-spacing: -0.02em">24</p><p style="margin: 2px 0 0; font-size: 12px; color: #C9C5BF">영역마다 4문항</p></div><div style="border-top: 1px solid rgba(255,255,255,0.3); padding-top: 10px"><p style="margin: 0; font-size: 12px; font-weight: 600; color: #C9C5BF">진단 영역</p><p style="margin: 4px 0 0; font-size: 34px; line-height: 1.2; font-weight: 700; letter-spacing: -0.02em">6</p><p style="margin: 2px 0 0; font-size: 12px; color: #C9C5BF">준비부터 강사 교체까지</p></div><div style="border-top: 2px solid #8FC4AC; padding-top: 10px"><p style="margin: 0; font-size: 12px; font-weight: 600; color: #C9C5BF">소요 시간</p><p style="margin: 4px 0 0; font-size: 34px; line-height: 1.2; font-weight: 700; letter-spacing: -0.02em">약 10분</p><p style="margin: 2px 0 0; font-size: 12px; color: #C9C5BF">결과는 6쪽에 적기</p></div></div>
+  </div>
+
+  <div style="flex: 1; display: flex; flex-direction: column; padding: 28px 64px 40px">
+    <div style="background: #F3F2EE; padding: 16px">
+      <img src="/images/home/board-class.webp" alt="Classin 보드에서 학생 풀이를 한 화면에 모아 보는 수학 수업 장면" style="display: block; width: 100%; height: 170px; object-fit: cover; object-position: center 45%">
+    </div>
+
+    <div style="margin-top: 24px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px">
+      <div>
+        <span class="badge" style="background: #0B7A52">1</span>
+        <p style="margin: 10px 0 0; font-size: 15px; font-weight: 700; color: #111110">해당되면 체크</p>
+        <p style="margin: 4px 0 0; font-size: 13px; line-height: 1.6; color: #615D59">“가끔 그렇다”도 체크합니다. 정답은 없습니다.</p>
+      </div>
+      <div>
+        <span class="badge" style="background: #0B7A52">2</span>
+        <p style="margin: 10px 0 0; font-size: 15px; font-weight: 700; color: #111110">영역별로 세기</p>
+        <p style="margin: 4px 0 0; font-size: 13px; line-height: 1.6; color: #615D59">A–F 여섯 영역, 영역마다 4문항입니다.</p>
+      </div>
+      <div>
+        <span class="badge" style="background: #0B7A52">3</span>
+        <p style="margin: 10px 0 0; font-size: 15px; font-weight: 700; color: #111110">많은 두 곳만 보기</p>
+        <p style="margin: 4px 0 0; font-size: 13px; line-height: 1.6; color: #615D59">6쪽에 적어 두면 상담이 그 영역부터 시작합니다.</p>
+      </div>
+    </div>
+
+    <p style="margin: 22px 0 10px; font-size: 13px; font-weight: 600; letter-spacing: 0.06em; color: #615D59">진단하는 여섯 영역</p>
+    <div style="display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px">
+      <div class="area"><span class="badge">A</span><span style="font-size: 13px; line-height: 1.5"><b style="color: #111110">수업 준비</b><br>자료·교안</span></div>
+      <div class="area"><span class="badge">B</span><span style="font-size: 13px; line-height: 1.5"><b style="color: #111110">수업 중</b><br>판서·전환</span></div>
+      <div class="area"><span class="badge">C</span><span style="font-size: 13px; line-height: 1.5"><b style="color: #111110">수업 후</b><br>녹화·보강</span></div>
+      <div class="area"><span class="badge">D</span><span style="font-size: 13px; line-height: 1.5"><b style="color: #111110">학생 기록</b><br>학부모 상담</span></div>
+      <div class="area"><span class="badge">E</span><span style="font-size: 13px; line-height: 1.5"><b style="color: #111110">원장 관리</b><br>데이터·권한</span></div>
+      <div class="area"><span class="badge">F</span><span style="font-size: 13px; line-height: 1.5"><b style="color: #111110">강사 교체</b><br>기준 남기기</span></div>
+    </div>
+
+    <div style="margin-top: auto; background: #E9F1EC; padding: 20px 24px">
+      <p style="margin: 0; font-size: 14px; line-height: 1.75; color: #31302E">“상담을 와 보면 점수가 낮은 칸이 곧 가장 손이 많이 가는 업무인 경우가 많습니다. 가장 불안한 항목 두세 개만 들고 오시면 대표 수업 한 편으로 그 부분부터 같이 풀어 드립니다.”</p>
+      <p style="margin: 10px 0 0; font-size: 13px; font-weight: 600; color: #0A5C3E">목동 쇼룸 상담팀 · ClassIn Korea</p>
+    </div>
+  </div>
+  <div aria-hidden="true" style="position: absolute; left: 64px; right: 64px; bottom: 18px; display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; color: #8A857F"><span>CLASSIN KOREA</span><span>classin.co.kr</span></div>
+</div>
+<!-- 2쪽 · 캔버스 SCToc -->
+<div class="page p2" style="width: 794px; height: 1123px; position: relative; overflow: hidden; box-sizing: border-box; padding: 56px 64px 48px; background: #F9F8F5; font-family: 'IBM Plex Sans KR', sans-serif; color: #31302E; display: flex; flex-direction: column; word-break: keep-all">
+  <div aria-hidden="true" style="position: absolute; top: 0; left: 0; right: 0; height: 6px; background: #0B7A52"></div>
+  <div style="display: flex; justify-content: space-between; font-size: 12px; font-weight: 600; letter-spacing: 0.08em; color: #615D59; border-bottom: 1px solid #111110; padding-bottom: 12px">
+    <span style="color: #111110">INTRODUCTION</span>
+    <span>우리 학원 수업 운영 누수 진단표<span style="margin: 0 8px; color: #D4D0CA">|</span>02</span>
+  </div>
+
+  <h2 style="margin: 32px 0 0; font-size: 30px; line-height: 1.3; font-weight: 700; color: #111110; letter-spacing: -0.02em"><span style="font-weight: 400">수업 운영을 장비가 아니라</span><br>흐름으로 봅니다</h2>
+  <p style="margin: 14px 0 0; max-width: 620px; font-size: 16px; line-height: 1.75">이 진단표는 전자칠판 한 대를 고르기 전에, 수업 준비부터 수업 후 관리까지 우리 학원의 운영이 어디서 끊기는지 먼저 보게 하는 자료입니다. 24문항을 체크하면 강사 시간과 원장 관리가 새는 곳이 두 영역으로 좁혀집니다.</p>
+
+  <div style="margin-top: 26px; background: #1A1917; color: #FFFFFF; padding: 22px 24px 20px">
+    <p style="margin: 0 0 16px; font-size: 15px; font-weight: 700">진단표 200% 활용 팁</p>
+    <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px">
+      <div>
+        <p style="margin: 0; font-size: 28px; font-weight: 700; line-height: 1; color: #8FC4AC">01</p>
+        <p style="margin: 10px 0 0; font-size: 15px; font-weight: 700">혼자 말고 함께</p>
+        <p style="margin: 6px 0 0; font-size: 13px; line-height: 1.6; color: #E8E6E2">실장·강사 한 명과 따로 체크한 뒤 비교해 보세요. 자리마다 보이는 누수가 다릅니다.</p>
+      </div>
+      <div>
+        <p style="margin: 0; font-size: 28px; font-weight: 700; line-height: 1; color: #8FC4AC">02</p>
+        <p style="margin: 10px 0 0; font-size: 15px; font-weight: 700">두 영역만 고르기</p>
+        <p style="margin: 6px 0 0; font-size: 13px; line-height: 1.6; color: #E8E6E2">24개를 다 고치려 하지 말고, 체크가 몰린 두 영역을 이번 달 운영 회의 안건으로 올리세요.</p>
+      </div>
+      <div>
+        <p style="margin: 0; font-size: 28px; font-weight: 700; line-height: 1; color: #8FC4AC">03</p>
+        <p style="margin: 10px 0 0; font-size: 15px; font-weight: 700">상담에 그대로</p>
+        <p style="margin: 6px 0 0; font-size: 13px; line-height: 1.6; color: #E8E6E2">표시한 진단표와 대표 수업 교안 1개를 들고 오시면 그 영역부터 시연합니다.</p>
+      </div>
+    </div>
+  </div>
+
+  <h2 style="margin: 32px 0 8px; display: flex; align-items: center; gap: 10px; font-size: 18px; font-weight: 700; color: #111110"><span aria-hidden="true" style="flex: none; width: 9px; height: 9px; background: #0B7A52; transform: rotate(45deg)"></span>목차<span aria-hidden="true" style="flex: 1; height: 1px; background: #D4D0CA"></span></h2>
+  <div class="toc"><span class="tn">01</span><span class="tt">사용법과 여섯 영역<span class="ts">체크하는 법, 진단하는 영역 A–F</span></span><span class="tp">1</span></div>
+  <div class="toc"><span class="tn">02</span><span class="tt">수업 준비 · 수업 중 · 수업 후<span class="ts">A–C 영역 12문항</span></span><span class="tp">3</span></div>
+  <div class="toc"><span class="tn">03</span><span class="tt">학생 기록 · 원장 관리 · 강사 교체<span class="ts">D–F 영역 12문항</span></span><span class="tp">4</span></div>
+  <div class="toc"><span class="tn">04</span><span class="tt">영역별 해결 요약<span class="ts">과제 → 해결 → 효과, 실제 화면과 함께</span></span><span class="tp">5</span></div>
+  <div class="toc" style="border-bottom: 1px solid rgba(0,0,0,0.1)"><span class="tn">05</span><span class="tt">결과 해석과 다음 단계<span class="ts">점수 구간, 이번 주 할 일, 쇼룸 시연</span></span><span class="tp">6</span></div>
+
+  <div style="margin-top: auto; padding: 12px 18px; background: #F3F2EE; font-size: 13px; line-height: 1.65">
+    <b style="color: #111110">일러두기</b> · 점수는 합격선이 아니라 어디부터 손볼지 정하는 출발점입니다. 해결 요약의 기능 설명은 Classin 제품 기준이며, 학원 환경과 이용 범위에 따라 다를 수 있습니다.
+  </div>
+  <div aria-hidden="true" style="position: absolute; left: 64px; right: 64px; bottom: 18px; display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; color: #8A857F"><span>CLASSIN KOREA</span><span>classin.co.kr</span></div>
+</div>
+<!-- 3쪽 · 캔버스 SC2 -->
+<div class="page p3" style="width: 794px; height: 1123px; position: relative; overflow: hidden; box-sizing: border-box; padding: 56px 64px 48px; background: #F9F8F5; font-family: 'IBM Plex Sans KR', sans-serif; color: #31302E; display: flex; flex-direction: column; word-break: keep-all">
+  <div aria-hidden="true" style="position: absolute; top: 0; left: 0; right: 0; height: 6px; background: #0B7A52"></div>
+  <div style="display: flex; justify-content: space-between; font-size: 12px; font-weight: 600; letter-spacing: 0.08em; color: #615D59; border-bottom: 1px solid #111110; padding-bottom: 12px">
+    <span style="color: #111110">02 · CHECK A–C</span>
+    <span>우리 학원 수업 운영 누수 진단표<span style="margin: 0 8px; color: #D4D0CA">|</span>03</span>
+  </div>
+  <div style="margin-top: 24px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px"><span style="background: #1A1917; color: #FFFFFF; padding: 6px 12px; font-size: 13px; font-weight: 600">수업 전 10분, 자료부터 찾고 있다면?</span><span style="font-size: 13px; color: #615D59">지난 2주 동안 한 번이라도 그랬다면 체크하세요.</span></div>
+
+  <div style="margin-top: 24px">
+    <div class="head"><h2 style="margin: 0; display: flex; align-items: center; gap: 12px; font-size: 21px; font-weight: 700; color: #111110"><span class="badge">A</span>수업 준비 <span style="font-size: 15px; font-weight: 500; color: #615D59">자료와 교안</span></h2><span class="tally">체크 ___ / 4</span></div>
+    <div class="row" style="border-top: 0"><span class="box"></span><span class="num">01</span><span>수업 전 자료를 찾느라 폴더, USB, 메신저를 두 군데 이상 뒤진다.</span></div>
+    <div class="row"><span class="box"></span><span class="num">02</span><span>지난 시간 판서는 다시 쓰거나, 캡처 이미지로만 남아 있다.</span></div>
+    <div class="row"><span class="box"></span><span class="num">03</span><span>같은 교재로 수업해도 강사마다 교안 파일이 따로 논다.</span></div>
+    <div class="row"><span class="box"></span><span class="num">04</span><span>새 강사에게 넘길, 실제 수업 흐름이 담긴 교안 파일이 없다.</span></div>
+  </div>
+
+  <div style="margin-top: 24px">
+    <div class="head"><h2 style="margin: 0; display: flex; align-items: center; gap: 12px; font-size: 21px; font-weight: 700; color: #111110"><span class="badge">B</span>수업 중 <span style="font-size: 15px; font-weight: 500; color: #615D59">판서와 자료 전환</span></h2><span class="tally">체크 ___ / 4</span></div>
+    <div class="row" style="border-top: 0"><span class="box"></span><span class="num">05</span><span>판서 공간이 모자라 수업 중에 지우고 다시 쓴다.</span></div>
+    <div class="row"><span class="box"></span><span class="num">06</span><span>자료 화면과 판서 화면을 오가느라 수업 흐름이 끊긴다.</span></div>
+    <div class="row"><span class="box"></span><span class="num">07</span><span>수업 시작 전 노트북, HDMI, 터치 케이블 연결에 매번 손이 간다.</span></div>
+    <div class="row"><span class="box"></span><span class="num">08</span><span>온라인 학생의 채팅, 과제, 테스트가 서로 다른 프로그램에 흩어져 있다.</span></div>
+  </div>
+
+  <div style="margin-top: 24px">
+    <div class="head"><h2 style="margin: 0; display: flex; align-items: center; gap: 12px; font-size: 21px; font-weight: 700; color: #111110"><span class="badge">C</span>수업 후 <span style="font-size: 15px; font-weight: 500; color: #615D59">녹화 · 복습 · 보강</span></h2><span class="tally">체크 ___ / 4</span></div>
+    <div class="row" style="border-top: 0"><span class="box"></span><span class="num">09</span><span>녹화는 하지만 업로드와 링크 배포는 사람이 손으로 한다.</span></div>
+    <div class="row"><span class="box"></span><span class="num">10</span><span>결석생에게 녹화 링크만 보내고, 그날 과제와 판서는 따로 챙긴다.</span></div>
+    <div class="row"><span class="box"></span><span class="num">11</span><span>보강 일정을 맞추느라 강사와 실장 시간이 매주 들어간다.</span></div>
+    <div class="row"><span class="box"></span><span class="num">12</span><span>수업이 끝나면 학생 손에 남는 복습 자료가 없다.</span></div>
+  </div>
+
+  <div style="margin-top: auto; display: grid; grid-template-columns: minmax(0, 1fr) 176px; gap: 20px; align-items: center; padding: 14px 14px 14px 20px; background: #E9F1EC">
+    <div style="font-size: 13px; line-height: 1.6">
+      <p style="margin: 0; font-weight: 700; color: #0A5C3E">A·B가 많다면</p>
+      <p style="margin: 2px 0 0">강사 준비 시간이 새는 중입니다. EDB 교안(판서·이미지·텍스트를 다시 편집 가능한 상태로 저장)과 50페이지 칠판이 이 구간을 줄입니다.</p>
+      <p style="margin: 8px 0 0; font-weight: 700; color: #0A5C3E">C가 많다면</p>
+      <p style="margin: 2px 0 0">수업 후 운영이 새는 중입니다. 녹화가 저장·복습·LMS 배포까지 이어지는지가 기준입니다.</p>
+    </div>
+    <figure style="margin: 0">
+      <img src="/images/product/recording/playback.webp" alt="Classin 녹화 다시보기 화면" style="display: block; width: 176px; height: 116px; object-fit: cover; object-position: left top; border: 1px solid rgba(0,0,0,0.08); background: #FFFFFF">
+      <figcaption style="margin-top: 4px; font-size: 12px; color: #44514A">녹화 다시보기 화면</figcaption>
+    </figure>
+  </div>
+  <div aria-hidden="true" style="position: absolute; left: 64px; right: 64px; bottom: 18px; display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; color: #8A857F"><span>CLASSIN KOREA</span><span>classin.co.kr</span></div>
+</div>
+<!-- 4쪽 · 캔버스 SC3 -->
+<div class="page p4" style="width: 794px; height: 1123px; position: relative; overflow: hidden; box-sizing: border-box; padding: 56px 64px 48px; background: #F9F8F5; font-family: 'IBM Plex Sans KR', sans-serif; color: #31302E; display: flex; flex-direction: column; word-break: keep-all">
+  <div aria-hidden="true" style="position: absolute; top: 0; left: 0; right: 0; height: 6px; background: #0B7A52"></div>
+  <div style="display: flex; justify-content: space-between; font-size: 12px; font-weight: 600; letter-spacing: 0.08em; color: #615D59; border-bottom: 1px solid #111110; padding-bottom: 12px">
+    <span style="color: #111110">03 · CHECK D–F</span>
+    <span>우리 학원 수업 운영 누수 진단표<span style="margin: 0 8px; color: #D4D0CA">|</span>04</span>
+  </div>
+  <div style="margin-top: 24px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px"><span style="background: #1A1917; color: #FFFFFF; padding: 6px 12px; font-size: 13px; font-weight: 600">상담 전마다 기록을 모으고 있다면?</span><span style="font-size: 13px; color: #615D59">원장님 자리에서 보이는 것과 안 보이는 것을 점검합니다.</span></div>
+
+  <div style="margin-top: 24px">
+    <div class="head"><h2 style="margin: 0; display: flex; align-items: center; gap: 12px; font-size: 21px; font-weight: 700; color: #111110"><span class="badge">D</span>학생 기록 <span style="font-size: 15px; font-weight: 500; color: #615D59">학부모 상담</span></h2><span class="tally">체크 ___ / 4</span></div>
+    <div class="row" style="border-top: 0"><span class="box"></span><span class="num">13</span><span>학부모 상담 전, 학생 기록을 여러 곳에서 모아야 한다.</span></div>
+    <div class="row"><span class="box"></span><span class="num">14</span><span>학생 입장·지각·접속 문제를 수업이 끝난 뒤 강사에게 물어봐야 안다.</span></div>
+    <div class="row"><span class="box"></span><span class="num">15</span><span>과제 미제출을 확인하는 방법이 반마다 다르다.</span></div>
+    <div class="row"><span class="box"></span><span class="num">16</span><span>“오늘 수업 어땠어요?”에 기록이 아니라 감으로 답한다.</span></div>
+  </div>
+
+  <div style="margin-top: 24px">
+    <div class="head"><h2 style="margin: 0; display: flex; align-items: center; gap: 12px; font-size: 21px; font-weight: 700; color: #111110"><span class="badge">E</span>원장 관리 <span style="font-size: 15px; font-weight: 500; color: #615D59">데이터와 권한</span></h2><span class="tally">체크 ___ / 4</span></div>
+    <div class="row" style="border-top: 0"><span class="box"></span><span class="num">17</span><span>수업 품질 문제를 학생·학부모 불만이 들어온 뒤에야 안다.</span></div>
+    <div class="row"><span class="box"></span><span class="num">18</span><span>수업 시간, 특이사항, 네트워크 상태를 한 화면에서 볼 수 없다.</span></div>
+    <div class="row"><span class="box"></span><span class="num">19</span><span>수업 상세 기록을 누가 볼 수 있는지 권한 기준이 없다.</span></div>
+    <div class="row"><span class="box"></span><span class="num">20</span><span>장비를 비교할 때 운영에 드는 시간은 빼고 단가만 본다.</span></div>
+  </div>
+
+  <div style="margin-top: 24px">
+    <div class="head"><h2 style="margin: 0; display: flex; align-items: center; gap: 12px; font-size: 21px; font-weight: 700; color: #111110"><span class="badge">F</span>강사 교체·확장 <span style="font-size: 15px; font-weight: 500; color: #615D59">기준 남기기</span></h2><span class="tally">체크 ___ / 4</span></div>
+    <div class="row" style="border-top: 0"><span class="box"></span><span class="num">21</span><span>좋은 수업이 특정 강사의 개인 파일과 메신저에만 남아 있다.</span></div>
+    <div class="row"><span class="box"></span><span class="num">22</span><span>강사가 그만두면 수업 자료와 학생 기록을 회수할 기준이 없다.</span></div>
+    <div class="row"><span class="box"></span><span class="num">23</span><span>새 반, 새 지점을 열 때마다 수업 세팅을 처음부터 다시 한다.</span></div>
+    <div class="row"><span class="box"></span><span class="num">24</span><span>“Zoom이랑 뭐가 달라요?”에 답할 학원 내부 기준 문장이 없다.</span></div>
+  </div>
+
+  <div style="margin-top: auto; display: grid; grid-template-columns: minmax(0, 1fr) 210px; gap: 20px; align-items: center; padding: 14px 14px 14px 20px; background: #E9F1EC">
+    <div style="font-size: 13px; line-height: 1.6">
+      <p style="margin: 0; font-weight: 700; color: #0A5C3E">D·E가 많다면</p>
+      <p style="margin: 2px 0 0">수업을 기록이 아니라 보고로 보고 있습니다. 관리자·허가된 교사 계정으로 수업 시간, 특이사항, 참여 기록을 한 화면에서 보는 것이 기준입니다.</p>
+      <p style="margin: 8px 0 0; font-weight: 700; color: #0A5C3E">F가 많다면</p>
+      <p style="margin: 2px 0 0">학원의 수업 자산이 사람에게 묶여 있습니다.</p>
+    </div>
+    <figure style="margin: 0">
+      <img src="/docs/files/guides/class-monitoring/01-lesson-detail.webp" alt="Classin 관리자 수업 상세 화면 — 학생 수 추이와 입장·퇴장 시간줄" style="display: block; width: 210px; height: 100px; object-fit: cover; object-position: center 60%; border: 1px solid rgba(0,0,0,0.08); background: #FFFFFF">
+      <figcaption style="margin-top: 4px; font-size: 12px; color: #44514A">관리자 수업 상세 화면</figcaption>
+    </figure>
+  </div>
+  <div aria-hidden="true" style="position: absolute; left: 64px; right: 64px; bottom: 18px; display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; color: #8A857F"><span>CLASSIN KOREA</span><span>classin.co.kr</span></div>
+</div>
+<!-- 5쪽 · 캔버스 SCSol -->
+<div class="page p5" style="width: 794px; height: 1123px; position: relative; overflow: hidden; box-sizing: border-box; padding: 56px 64px 48px; background: #F9F8F5; font-family: 'IBM Plex Sans KR', sans-serif; color: #31302E; display: flex; flex-direction: column; word-break: keep-all">
+  <div aria-hidden="true" style="position: absolute; top: 0; left: 0; right: 0; height: 6px; background: #0B7A52"></div>
+  <div style="display: flex; justify-content: space-between; font-size: 12px; font-weight: 600; letter-spacing: 0.08em; color: #615D59; border-bottom: 1px solid #111110; padding-bottom: 12px">
+    <span style="color: #111110">04 · SOLUTIONS</span>
+    <span>우리 학원 수업 운영 누수 진단표<span style="margin: 0 8px; color: #D4D0CA">|</span>05</span>
+  </div>
+
+  <div style="margin-top: 24px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px"><span style="background: #1A1917; color: #FFFFFF; padding: 6px 12px; font-size: 13px; font-weight: 600">체크가 몰린 두 영역, 이제 무엇부터?</span><span style="font-size: 13px; color: #615D59">영역별 핵심 요약</span></div>
+  <h2 style="margin: 14px 0 0; font-size: 26px; line-height: 1.35; font-weight: 700; color: #111110; letter-spacing: -0.02em"><span style="font-weight: 400">체크가 몰린 영역,</span><br>Classin에서는 이렇게 바뀝니다</h2>
+
+  <div style="margin-top: 20px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px">
+    <figure class="shot" style="margin: 0"><img src="/docs/files/guides/classroom-tools/01-expandable-writing-space.webp" alt="Classin 확장 판서 공간 화면" style="object-position: left top"><p><b>A·B</b> 확장 판서 공간</p></figure>
+    <figure class="shot" style="margin: 0"><img src="/images/product/recording/playback.webp" alt="Classin 녹화 다시보기 화면" style="object-position: left top"><p><b>C</b> 녹화 다시보기</p></figure>
+    <figure class="shot" style="margin: 0"><img src="/docs/files/guides/class-monitoring/01-lesson-detail.webp" alt="Classin 관리자 수업 상세 화면" style="object-position: center 60%"><p><b>E</b> 관리자 수업 상세</p></figure>
+  </div>
+  <p style="margin: 6px 0 0; font-size: 12px; color: #615D59">출처 : <a href="/product/recording">Classin 제품 화면 · classin.co.kr</a> ↗</p>
+
+  <div style="margin-top: 20px">
+    <div class="r h"><div>영역</div><div>과제</div><div class="sol" style="color: #0A5C3E">해결 · Classin</div><div>효과</div></div>
+    <div class="r"><div><span class="q"><span class="badge">A</span>수업 10분 전, 자료를 찾고 있나요?</span></div><div>자료와 판서가 폴더, USB, 메신저에 흩어져 있다</div><div class="sol">EDB 교안에 판서·이미지·텍스트를 다시 편집 가능한 상태로 저장</div><div>지난 수업을 그대로 불러와 이어서 수업한다</div></div>
+    <div class="r"><div><span class="q"><span class="badge">B</span>판서를 지우고 다시 쓰고 있나요?</span></div><div>판서 공간이 모자라고 자료·판서 화면을 오간다</div><div class="sol">50페이지 칠판에서 자료와 판서를 한 흐름으로 진행</div><div>지우고 다시 띄우는 시간이 줄어든다</div></div>
+    <div class="r"><div><span class="q"><span class="badge">C</span>녹화 링크를 손으로 보내고 있나요?</span></div><div>녹화 업로드와 링크 배포를 사람이 처리한다</div><div class="sol">녹화가 저장, 복습, LMS 배포까지 이어진다</div><div>결석생도 그날 수업 흐름과 과제를 함께 본다</div></div>
+    <div class="r"><div><span class="q"><span class="badge">D</span>상담 전에 기록을 모으고 있나요?</span></div><div>학생 기록이 상담 전마다 여러 곳에 흩어져 있다</div><div class="sol">수업, 과제, 복습 기록을 학생 단위로 확인</div><div>학부모 상담을 기록을 근거로 진행한다</div></div>
+    <div class="r"><div><span class="q"><span class="badge">E</span>수업 상황을 보고로만 알고 있나요?</span></div><div>수업 품질 문제를 불만이 들어온 뒤에 안다</div><div class="sol">수업 시간, 특이사항, 네트워크, 참여 기록을 한 화면에서</div><div>강사에게 묻기 전에 원장이 먼저 확인한다</div></div>
+    <div class="r" style="border-bottom: 1px solid rgba(0,0,0,0.1)"><div><span class="q"><span class="badge">F</span>좋은 수업이 강사 개인 파일에 있나요?</span></div><div>교안과 기록이 강사 개인 계정에 남는다</div><div class="sol">기관 계정에 교안과 수업 기록을 남긴다</div><div>강사가 바뀌어도 같은 수업 기준을 유지한다</div></div>
+  </div>
+
+  <p style="margin: auto 0 0; font-size: 12px; line-height: 1.6; color: #615D59">화면은 실제 Classin 제품 화면이며 학생·강사 정보는 가렸습니다. 기능 범위는 학원 환경과 이용 범위에 따라 다를 수 있습니다.</p>
+  <div aria-hidden="true" style="position: absolute; left: 64px; right: 64px; bottom: 18px; display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; color: #8A857F"><span>CLASSIN KOREA</span><span>classin.co.kr</span></div>
+</div>
+<!-- 6쪽 · 캔버스 SC4 -->
+<div class="page p6" style="width: 794px; height: 1123px; position: relative; overflow: hidden; box-sizing: border-box; padding: 56px 64px 48px; background: #F9F8F5; font-family: 'IBM Plex Sans KR', sans-serif; color: #31302E; display: flex; flex-direction: column; word-break: keep-all">
+  <div aria-hidden="true" style="position: absolute; top: 0; left: 0; right: 0; height: 6px; background: #0B7A52"></div>
+  <div style="display: flex; justify-content: space-between; font-size: 12px; font-weight: 600; letter-spacing: 0.08em; color: #615D59; border-bottom: 1px solid #111110; padding-bottom: 12px">
+    <span style="color: #111110">05 · NEXT STEP</span>
+    <span>우리 학원 수업 운영 누수 진단표<span style="margin: 0 8px; color: #D4D0CA">|</span>06</span>
+  </div>
+
+  <h2 style="margin: 24px 0 0; font-size: 26px; font-weight: 700; color: #111110">결과 적기</h2>
+  <div style="margin-top: 14px; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); background: #FFFFFF; border: 1px solid rgba(0,0,0,0.12)">
+    <div class="cell"><span style="font-size: 13px; font-weight: 600; color: #615D59">A 준비</span><span class="blank" style="min-width: 40px"></span></div>
+    <div class="cell"><span style="font-size: 13px; font-weight: 600; color: #615D59">B 수업 중</span><span class="blank" style="min-width: 40px"></span></div>
+    <div class="cell"><span style="font-size: 13px; font-weight: 600; color: #615D59">C 수업 후</span><span class="blank" style="min-width: 40px"></span></div>
+    <div class="cell"><span style="font-size: 13px; font-weight: 600; color: #615D59">D 기록</span><span class="blank" style="min-width: 40px"></span></div>
+    <div class="cell"><span style="font-size: 13px; font-weight: 600; color: #615D59">E 관리</span><span class="blank" style="min-width: 40px"></span></div>
+    <div class="cell"><span style="font-size: 13px; font-weight: 600; color: #615D59">F 교체</span><span class="blank" style="min-width: 40px"></span></div>
+    <div class="cell" style="border-right: 0; background: #E9F1EC"><span style="font-size: 13px; font-weight: 700; color: #0A5C3E">합계 /24</span><span class="blank" style="min-width: 40px"></span></div>
+  </div>
+
+  <div style="margin-top: 18px; display: flex; gap: 12px; align-items: baseline; font-size: 15px; flex-wrap: wrap">
+    <span style="font-weight: 600; color: #111110">가장 많이 새는 두 영역</span>
+    <span>①</span><span class="blank" style="min-width: 150px"></span>
+    <span>②</span><span class="blank" style="min-width: 150px"></span>
+  </div>
+  <div style="margin-top: 12px; display: flex; gap: 8px; align-items: baseline; font-size: 15px; flex-wrap: wrap">
+    <span style="font-weight: 600; color: #111110">그 두 영역에 드는 시간</span>
+    <span>주당</span><span class="blank"></span><span>분 × 강사</span><span class="blank" style="min-width: 40px"></span><span>명 =</span><span class="blank"></span><span>시간</span>
+  </div>
+
+  <h2 style="margin: 28px 0 6px; display: flex; align-items: center; gap: 10px; font-size: 17px; font-weight: 700; color: #111110"><span aria-hidden="true" style="flex: none; width: 9px; height: 9px; background: #0B7A52; transform: rotate(45deg)"></span>합계로 보는 지금 상태<span aria-hidden="true" style="flex: 1; height: 1px; background: #D4D0CA"></span></h2>
+  <div class="band"><span style="font-size: 15px; font-weight: 700; color: #111110">0–6개<br><span style="font-weight: 500; color: #615D59">정돈형</span><span class="lvl" aria-hidden="true"><i class="on"></i><i></i><i></i></span></span><span style="font-size: 15px; line-height: 1.65">수업 기준이 잡혀 있습니다. 다음 질문은 새 반·새 지점에 이 기준을 그대로 복제할 수 있느냐입니다.</span></div>
+  <div class="band"><span style="font-size: 15px; font-weight: 700; color: #111110">7–14개<br><span style="font-weight: 500; color: #615D59">부분 누수형</span><span class="lvl" aria-hidden="true"><i class="on"></i><i class="on"></i><i></i></span></span><span style="font-size: 15px; line-height: 1.65">체크가 몰린 두 영역이 강사 시간이 가장 많이 새는 곳입니다. 전체를 바꾸기보다 그 두 곳을 대표 수업 한 편으로 먼저 확인하세요.</span></div>
+  <div class="band" style="border-bottom: 1px solid rgba(0,0,0,0.08)"><span style="font-size: 15px; font-weight: 700; color: #111110">15–24개<br><span style="font-weight: 500; color: #615D59">구조 누수형</span><span class="lvl" aria-hidden="true"><i class="on"></i><i class="on"></i><i class="on"></i></span></span><span style="font-size: 15px; line-height: 1.65">칠판, 녹화, 과제, 학생 관리가 따로 움직이고 있습니다. 한 번에 교체하지 말고 1개 반에서 표준 수업 흐름을 먼저 검증하세요.</span></div>
+
+  <h2 style="margin: 24px 0 12px; display: flex; align-items: center; gap: 10px; font-size: 17px; font-weight: 700; color: #111110"><span aria-hidden="true" style="flex: none; width: 9px; height: 9px; background: #0B7A52; transform: rotate(45deg)"></span>이번 주 할 일<span aria-hidden="true" style="flex: 1; height: 1px; background: #D4D0CA"></span></h2>
+  <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; font-size: 14px; line-height: 1.6">
+    <div style="border-top: 3px solid #D4D0CA; padding-top: 10px"><p style="margin: 0; font-weight: 700; color: #111110">Day 1 · 도구 지도</p><p style="margin: 4px 0 0">칠판, 녹화, 메신저, 과제, 학생 관리 도구를 모두 적습니다.</p></div>
+    <div style="border-top: 3px solid #8A857F; padding-top: 10px"><p style="margin: 0; font-weight: 700; color: #111110">Day 2–4 · 새는 곳 3개</p><p style="margin: 4px 0 0">반복 업무 3개와 원장·강사가 보고 싶은 정보를 나눕니다.</p></div>
+    <div style="border-top: 3px solid #0B7A52; padding-top: 10px"><p style="margin: 0; font-weight: 700; color: #111110">Day 5–7 · 직접 확인</p><p style="margin: 4px 0 0">대표 수업 한 편을 들고 쇼룸에서 그 업무가 줄어드는지 봅니다.</p></div>
+  </div>
+
+  <div style="margin-top: auto; display: grid; grid-template-columns: 240px minmax(0, 1fr); background: #1A1917; color: #FFFFFF">
+    <div style="position: relative; min-height: 200px">
+      <img src="/images/home/showroom-classroom.webp" alt="목동 쇼룸 교실 — 전자칠판 두 대와 책상" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; object-position: center 35%">
+    </div>
+    <div style="padding: 22px 26px">
+      <p style="margin: 0; font-size: 13px; font-weight: 600; color: #C9C5BF">다음 단계 · 목동 쇼룸</p>
+      <p style="margin: 6px 0 0; font-size: 22px; font-weight: 700; line-height: 1.35">우리 수업 그대로 시연해 드립니다</p>
+      <div style="margin-top: 10px; font-size: 14px; line-height: 1.65; color: #E8E6E2">
+        <p style="margin: 0">· 이 진단표 (두 영역 표시)</p>
+        <p style="margin: 0">· 대표 수업 교안 파일 1개</p>
+        <p style="margin: 0">· 지금 쓰는 수업·녹화·관리 도구 목록</p>
+      </div>
+      <div style="margin-top: 12px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; font-size: 12px; line-height: 1.4">
+        <a href="/showroom" style="display: block; padding: 7px 9px; border-radius: 4px; background: #0B7A52; color: #FFFFFF; text-decoration: none"><b style="display: block; font-size: 13px">쇼룸 예약</b>/showroom</a>
+        <a href="/product/recording" style="display: block; padding: 7px 9px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.35); color: #FFFFFF; text-decoration: none"><b style="display: block; font-size: 13px">녹화 수업 보기</b>/product/recording</a>
+        <a href="/contact" style="display: block; padding: 7px 9px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.35); color: #FFFFFF; text-decoration: none"><b style="display: block; font-size: 13px">도입 상담</b>/contact</a>
+      </div>
+      <p style="margin: 6px 0 0; font-size: 12px; color: #8FC4AC">classin.co.kr</p>
+    </div>
+  </div>
+  <div aria-hidden="true" style="position: absolute; left: 64px; right: 64px; bottom: 18px; display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; color: #8A857F"><span>CLASSIN KOREA</span><span>classin.co.kr</span></div>
+</div>
+</body>
+</html>
