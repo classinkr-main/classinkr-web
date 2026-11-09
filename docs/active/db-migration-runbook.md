@@ -277,6 +277,20 @@ npm run check:db --  --strict
 
 - 서울 프로젝트 적용 확인(2026-11-08, 코드 배포 전): Supabase `apply_migration` 이름 `showroom_booking_compass_confirm`(파일 SHA-256 `e48357c0…` 와 같은 문장). 적용 전 `compass_demos_v` 정의가 20260828 판(11칸)·권한 service_role SELECT 뿐인 것을 확인했다. 적용 후: `showroom_bookings` 확정 칸 4개 생김, `compass_demos_v.at` 생김(회차 138행 그대로 읽힘), 권한 service_role SELECT 만, 부분 유니크 인덱스 `showroom_bookings_compass_demo_uniq` 생김. 기존 예약 1건(requested)은 새 칸 NULL. 스위치 `SHOWROOM_CONFIRM_ENABLED` 는 아직 비어 있다 — 켜는 순서는 [쇼룸 확정 문서](./showroom-compass-confirm-2026-11-06.md) §3.
 
+### 2026-11-09 회수 연결이 시트 가져오기를 막지 않게 — 서울 프로젝트 적용 완료(2026-11-09)
+
+**어드민에서 고객 회수를 처음 저장하기 전에 적용한다.** 10-28 파일이 `return_of_movement_id` 를 `ON DELETE RESTRICT` 로 걸어,
+시트 출고를 가리키는 회수가 한 건이라도 생기면 교체 가져오기·스냅샷 복원의 `delete ... where source = 'sheet_import'` 가
+23503 으로 실패한다(매시간 자동 가져오기 포함, 회수를 취소해도 안 풀린다).
+
+| 파일 | 하는 일 | 미적용 시 | 확인 |
+| --- | --- | --- | --- |
+| `20261109_hardware_return_link_survives_sheet_import.sql` | FK 를 `ON DELETE SET NULL` 로 바꾸고, `replace_hardware_sheet_import(jsonb,uuid,uuid)`·`restore_hardware_sheet_import_snapshot(uuid,text)` 가 delete 전에 회수 연결을 원 시트 행 `source_key` 로 잡아 두었다가 다시 넣은 같은 키 행에 되붙인다. 교체 insert 에 `storage_location`(시트 입고 보관처 원문)도 더한다. 함수 본문은 기존과 같고 블록만 추가, 시그니처·권한 그대로, 멱등 | 회수 0건인 동안은 영향 없다. 첫 회수 저장 뒤 시트 가져오기가 전부 실패하고, 재고는 그 시점 원장에 멈춘다. 시트 입고의 보관 장소는 계속 비어 보인다 | `select confdeltype from pg_constraint where conname = 'hardware_movements_return_of_fkey';` → `n` |
+
+2026-11-09 적용 기록: Management API query 로 서울 프로젝트에 적용 — FK `confdeltype` r → n, 교체(3인자)·복원 RPC 에 재연결 블록·`storage_location` 확인, anon 실행 권한 없음.
+
+로컬 Postgres 17 로 검증(2026-11-09): 수정 전 23503 재현, 수정 후 교체 2회·스냅샷 복원 뒤에도 회수가 같은 `source_key` 출고에 붙어 있고, 시트에서 원 줄이 사라지면 실패 없이 연결만 비운다.
+
 ## 적용 보류 중인 마이그레이션
 
 `check:db`에 걸리지 않는(프로브가 없는) 파일이라도, 아래 파일은 **파일명 순서대로 일괄 적용하지 않는다.**

@@ -7,7 +7,7 @@ import { usePathname } from "next/navigation"
 import { TrackedLink } from "@/components/TrackedLink"
 import { SessionNavEntry } from "@/components/auth/SessionNavEntry"
 import { cn } from "@/lib/utils"
-import { Menu, X, Pencil, Presentation } from "lucide-react"
+import { Menu, X, Pencil, Presentation, FileText } from "lucide-react"
 
 const navItems = [
     { name: "제품 소개", href: "/product" },
@@ -20,7 +20,12 @@ const navItems = [
 const productTabs = [
     { name: "Classin 소프트웨어", href: "/product/sw", icon: Pencil },
     { name: "Classin Board", href: "/product/hw", icon: Presentation },
+    // 서비스 소개서 랜딩(/introduction). 상단 1단 메뉴는 md 구간이 빠듯해(아래 주석) 제품 드롭다운에 둔다.
+    { name: "서비스 소개서", href: "/introduction", icon: FileText },
 ]
+
+// 하위 경로(/introduction/story 등)에서도 해당 탭을 현재 위치로 표시한다
+const isTabCurrent = (pathname: string, href: string) => pathname === href || pathname.startsWith(`${href}/`)
 
 const HEADER_SCROLL_THRESHOLD = 10
 
@@ -127,8 +132,10 @@ export function Header() {
                                 </Link>
                                 {isMobileMenuOpen ? (
                                     <div className="mt-2 grid grid-cols-2 gap-2 px-1 md:hidden">
-                                        {productTabs.map((tab) => {
-                                            const isTabActive = pathname === tab.href
+                                        {productTabs.map((tab, index) => {
+                                            const isTabActive = isTabCurrent(pathname, tab.href)
+                                            // 탭 수가 홀수면 마지막 탭이 두 칸을 다 쓴다
+                                            const spansRow = productTabs.length % 2 === 1 && index === productTabs.length - 1
                                             return (
                                                 <Link
                                                     key={tab.href}
@@ -137,6 +144,7 @@ export function Header() {
                                                     onClick={() => setIsMobileMenuOpen(false)}
                                                     className={cn(
                                                         "inline-flex min-h-11 items-center justify-center gap-2 whitespace-nowrap rounded-[8px] border px-3 text-sm font-semibold transition-colors",
+                                                        spansRow && "col-span-2",
                                                         isTabActive
                                                             ? "border-fg-accent/20 bg-fg-accent/8 text-fg-accent"
                                                             : "border-black/[0.08] bg-white text-[#615D59] hover:bg-[#F6F5F4]"
@@ -153,7 +161,7 @@ export function Header() {
                                     <div className="translate-y-1 rounded-2xl border border-black/[0.08] bg-white p-1.5 shadow-[0_12px_28px_rgba(0,0,0,0.08)] transition-transform duration-200 group-hover:translate-y-0 group-focus-within:translate-y-0">
                                         <div className="flex flex-col gap-1">
                                             {productTabs.map((tab) => {
-                                                const isTabActive = pathname === tab.href
+                                                const isTabActive = isTabCurrent(pathname, tab.href)
                                                 return (
                                                     <Link
                                                         key={tab.href}

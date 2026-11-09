@@ -7,6 +7,8 @@ import { fileURLToPath, pathToFileURL } from "node:url"
 
 import { createClient } from "@supabase/supabase-js"
 
+import { planIncrementalSync, readIncrementalConfig, withIncrementalWhere } from "../lib/external-crm/incremental-window.ts"
+
 const PROJECT_ROOT = resolve(fileURLToPath(new URL("..", import.meta.url)))
 const MCP_ROOT_CANDIDATES = [
   resolve(PROJECT_ROOT, "../eeocrm-personal"),
@@ -251,6 +253,21 @@ async function main() {
     for (const row of catalog ?? []) {
       const pageSize = Number(row.page_size ?? 100)
       const maxPages = Number(row.max_pages ?? 20)
+      // 증분이면 최근 변경분만 읽고 stale 표시를 건너뛴다 — 운영 크론과 같은 규칙(lib/external-crm/incremental-window.ts).
+      let plan = { mode: "full" }
+      const incremental = readIncrementalConfig(row.metadata)
+      if (incremental) {
+        const { data: recentRuns, error: runsError } = await sb
+          .from("external_crm_sync_runs")
+          .select("started_at, status, cursor_value, metadata")
+          .eq("source_system", SOURCE_SYSTEM)
+          .eq("object_api_key", row.object_api_key)
+          .order("started_at", { ascending: false })
+          .limit(50)
+        if (runsError) throw runsError
+        plan = planIncrementalSync(incremental, recentRuns ?? [], new Date())
+      }
+      const queryRow = { ...row, where_clause: withIncrementalWhere(row.where_clause, plan) }
       const runId = await createRun(sb, row.object_api_key)
       const syncedAt = new Date().toISOString()
 
@@ -263,7 +280,7 @@ async function main() {
       try {
         for (let page = 0; page < maxPages; page += 1) {
           const offset = page * pageSize
-          const soql = buildQuery(row, pageSize, offset)
+          const soql = buildQuery(queryRow, pageSize, offset)
           const payload = parseToolJson(await client.callTool({ name: "crm_soql_query", arguments: { soql } }))
           const records = getRecordArray(payload)
           pagesScanned += 1
@@ -281,7 +298,7 @@ async function main() {
         }
 
         let staleMarked = null
-        if (!truncated) {
+        if (!truncated && plan.mode === "full") {
           const { data: staleRows, error: staleError } = await sb
             .from("external_crm_records")
             .update({ is_stale: true, stale_at: syncedAt })
@@ -308,7 +325,9 @@ async function main() {
             truncated,
             staleMarked,
             orderBy: resolveOrderBy(row),
-            whereClause: row.where_clause ?? null,
+            whereClause: queryRow.where_clause ?? null,
+            mode: plan.mode,
+            ...(plan.mode === "incremental" ? { sinceMs: plan.sinceMs } : {}),
           },
         })
 
@@ -320,6 +339,7 @@ async function main() {
           pagesScanned,
           truncated,
           staleMarked,
+          mode: plan.mode,
         }
         results.push(result)
         console.log(`[sync] ${row.object_api_key}: ${JSON.stringify(result)}`)
