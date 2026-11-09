@@ -6089,7 +6089,7 @@ export const FIELD_QUICK_ANSWERS: FieldQuickAnswer[] = [
     match: all(/알림/, /눌러|누르면|클릭/, /첫\s*화면|첫화면|홈\s*화면|메인|수업\s*어딨|못\s*찾|지각/),
     answer: [
       "알림 눌러도 첫 화면만 뜨면 이렇게 들어가요.",
-      "1. 앱 아래쪽 탭에서 [할 일]이나 [캘린더]를 열어요. 실시간 수업은 [할 일]이나 코스 화면의 [교실 입장] 버튼으로 들어가요.\n2. 학생은 수업 시작 10분 전부터 들어갈 수 있으니, 10분 전에 [할 일]부터 열어 두면 안 늦어요.\n3. 앱을 최신 버전으로 업데이트하고, 기기 설정에서 Classin 알림이 켜져 있는지도 봐요.",
+      "1. 앱 화면 위쪽 가운데 검은 표시(다이내믹 아일랜드)를 누르면 곧 시작하는 수업으로 바로 들어가요.\n2. 안 보이면 아래쪽 탭에서 [할 일]을 열고 [교실 입장] 버튼을 눌러요.\n3. 학생은 수업 시작 10분 전부터 들어갈 수 있으니, 10분 전에 미리 열어 두면 안 늦어요.\n4. 앱을 최신 버전으로 업데이트하고, 기기 설정에서 Classin 알림이 켜져 있는지도 봐요.",
       "계속 그러면 폰 기종이랑 앱 버전 적어서 상담 채널(홈페이지 하단 채팅)에 알려요.",
     ],
     category: "classroom",
@@ -6547,11 +6547,11 @@ export const FIELD_QUICK_ANSWERS: FieldQuickAnswer[] = [
     answer: [
       "'보강'은 결석하거나 휴강한 수업을 채워 주는 보충 수업이에요(make-up class).",
       "같은 반 코스에 수업을 하나 더 만들지, 따로 수업을 만들지는 학원 운영 방식에 따라 달라요. 매니저께 '같은 반 코스에 보강 수업을 추가할까요, 따로 만들까요?' 먼저 물어보세요.",
-      "수업 만드는 법: 코스 안 [시간표]에서 [수업 생성]을 누르고 수업 이름, 시작 시간, 진행 시간, 수업 교사를 정해 저장해요.",
+      "수업 만드는 법: 코스 오른쪽 위 [새로 만들기] > [수업]을 누르고(코스 [시간표]의 [수업 생성]으로도 돼요) 수업 이름, 시작 시간, 진행 시간, 수업 교사를 정해 저장해요.",
     ],
     category: "classroom",
     suggestedQuestions: ["수업은 어떻게 만들어요?", "반복 수업은 어떻게 만들어요?", "학생을 코스에 넣고 싶어요"],
-    en: "'보강' means a make-up class: an extra class for students who missed one. Whether you add it to the same course or create a separate class depends on your academy's rules, so ask your manager first. To create a class: in the course, open [시간표] (timetable) > [수업 생성] (create class), set the name, start time, length and teacher, then save.",
+    en: "'보강' means a make-up class: an extra class for students who missed one. Whether you add it to the same course or create a separate class depends on your academy's rules, so ask your manager first. To create a class: in the course, tap [새로 만들기] (new) > [수업] (class), set the name, start time, length and teacher, then save.",
   },
   {
     id: "phishing-account-deletion-email",
