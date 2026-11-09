@@ -315,4 +315,6 @@
 /* ── guarantee:end ── */
 
 /* 쿠키 배너 한 입(cb-chomp)이 자국 반지름을 보간하려면 등록된 속성이어야 한다. 미지원 브라우저는 0.75초에 바로 베어 문다 */
-@property --bite { syntax: "<length>"; inherits: false; initial-value: 13px; }
+@layer components {
+  @property --bite { syntax: "<length>"; inherits: false; initial-value: 13px; }
+}
