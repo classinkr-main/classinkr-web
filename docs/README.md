@@ -48,6 +48,8 @@ Admin 관련 작업은 [Admin 지침 맵](./active/admin-guidance-map.md)에서 
   - 현재 아키텍처/스키마 입구
 - [active/chatbot-knowledgebase-faq-analytics-plan.md](./active/chatbot-knowledgebase-faq-analytics-plan.md)
   - 문서/정보 탭 기반 챗봇 지식베이스와 FAQ 통계 설계
+- [active/chatbot-cs-symptom-triage-2026-11-06.md](./active/chatbot-cs-symptom-triage-2026-11-06.md)
+  - **챗봇 증상형 CS 질문 트리아지.** "기관 등록 안됨", "에러나요" 같은 증상 질문을 공개 문제 해결 문서 섹션으로 잇는 규칙, 4회 평가 루프 수치(기준선 32% → 블라인드 43/43), 평가셋·커버리지 검사 재실행 방법
 - [active/docs-center-content-guidelines.md](./active/docs-center-content-guidelines.md)
   - 공개 문서 탭의 가이드/매뉴얼/도움말 작성 지침과 미완성 콘텐츠 처리 규칙
 - [active/classin-software-feature-inventory.md](./active/classin-software-feature-inventory.md)
@@ -74,6 +76,8 @@ Admin 관련 작업은 [Admin 지침 맵](./active/admin-guidance-map.md)에서 
   - **어드민 사용 실측·탭 정리.** 운영 DB 읽기 전용 집계로 본 화면별 사람 사용 흔적(Home 어드민 쓰기 ≈0, 매니저 업무는 Compass), 멈춘 원천(NEO env 누락·시트 권한), 기본 숨김·매니저별 숨기기, 심폐소생 Top 5, 결정 대기 D1~D8
 - [active/crm-tab-develop-plan-2026-09-12.md](./active/crm-tab-develop-plan-2026-09-12.md)
   - **CRM 탭 실행 로드맵.** 5작업면·돈흐름·데이터층의 현황 진단, 정책-코드 불일치 총괄, 개선 후보 ID(H/C/R/D)와 4 Wave 실행 순서, 사용자 결정 항목, 문서 정리 제안
+- [active/crm-inquiry-notable-plan-2026-11-05.md](./active/crm-inquiry-notable-plan-2026-11-05.md)
+  - **CRM 문의·특이사항 바로 보기 — B(리드 수신함) 선택, 종류 라벨 확정판.** 홈페이지 문의·빠른 리드가 안 보이고 특이사항이 먼저 오지 않으며 타고 들어가는 게 많은 이유(코드 근거), 공통 바닥 F1~F6(특이사항 규칙 하나·재문의 내용 연결 등), 시안 A 현황 띠 · B 리드 수신함 2단 · C 시트형 표 · D 전역 패널 비교, B 확정판의 리드 종류 라벨 체계(문의·데모·쇼룸·도입·광고 리드폼·행사 신청·리드마그넷·구독 × 채널, §10), 결정 D1~D10. 목업 [mockups/crm-inquiry-notable-2026-11-05.html](./active/mockups/crm-inquiry-notable-2026-11-05.html)
 - [active/internal-crm-backend-operating-plan-2026-06-26.md](./active/internal-crm-backend-operating-plan-2026-06-26.md)
   - 자체 CRM 백엔드/운영 기준. 시트·OCRM·HQ CRM은 참고/동기화 원천으로 두고, Admin CRM의 고객 스파인·회의록·녹음·다음 액션 구조를 정의
 - [active/internal-cs-ai-bridge.md](./active/internal-cs-ai-bridge.md)
@@ -152,6 +156,8 @@ Admin 관련 작업은 [Admin 지침 맵](./active/admin-guidance-map.md)에서 
   - **Compass ↔ 어드민 리드·CRM 연동 2차.** 전화 키 함수·링크/연락/역브리지 뷰 마이그레이션 적용 순서(Compass 배포 → 서울 적용 → 20260902 재실행), NEO lead 생성 닫기, 연락 상태 동기화 정렬 메모
 - [active/compass-home-lead-push-2026-11-04.md](./active/compass-home-lead-push-2026-11-04.md)
   - **홈페이지 폼 리드 → Compass 밀어 넣기.** 저장 직후 `POST /api/webhook/home-lead`(전용 토큰·HTTPS), 보내는 소스·본문·멱등 키·실패 처리, Compass 쪽 규칙(인바운드 「홈페이지」·알림톡은 어드민 몫)과 켜는 순서
+- [active/showroom-compass-confirm-2026-11-06.md](./active/showroom-compass-confirm-2026-11-06.md)
+  - **쇼룸 방문: 신청 → Compass 컨펌·담당 지정 → 확정 → 확정 문자.** Compass 「쇼룸 데모」 회차를 확정 신호로 읽는 5분 크론, 판정 규칙(링크만·미래 회차·한 회차 한 예약), 확정 문자 선점, 켜는 순서(마이그레이션 → dry-run → `SHOWROOM_CONFIRM_ENABLED`)
 - [active/compass-kr-team-sync.md](./active/compass-kr-team-sync.md)
   - KR Team의 Compass 월별 과정지표·현재 팀 명부·매출 조정 읽기 계약, 전용 토큰 설정과 검증·배포 순서
 - [active/kr-data-source-contract.md](./active/kr-data-source-contract.md)

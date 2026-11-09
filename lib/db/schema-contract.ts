@@ -209,6 +209,9 @@ export const SCHEMA_CONTRACT_MIGRATIONS = [
   "supabase/migrations/20261104_meta_crm_signal_events.sql",
   // Google Ads 캠페인 유형 · 유튜브 조회수 칸(2026-11-06) — 크론 upsert 가 이 칸을 쓰므로 코드 배포 전에 적용한다(blocker).
   "supabase/migrations/20261106_google_ads_daily_channel_video.sql",
+  // 쇼룸 예약 Compass 확정(2026-11-06) — 확정 칸 4개 + compass_demos_v.at. 미적용이면 확정 크론이 건너뛰고(브리지 down)
+  // 어드민 접수 큐는 확정 칸 없이 읽는다(warning). 코드 배포 전에 적용한다.
+  "supabase/migrations/20261106_showroom_booking_compass_confirm.sql",
 ] as const
 
 export const SCHEMA_PROBES: SchemaProbe[] = [
@@ -494,6 +497,26 @@ export const SCHEMA_PROBES: SchemaProbe[] = [
     columns: ["id", "visit_date", "visit_time", "org", "name", "phone", "status", "lead_id"],
     migration: "supabase/migrations/20260829_showroom_bookings.sql",
     impact: "공개 쇼룸 예약 접수(app/api/showroom)가 저장할 곳이 없어 실패하고, 리드 큐 미러링(lead_id)도 되지 않는다.",
+  },
+  // ── 쇼룸 예약 Compass 확정(2026-11-06) ─────────────────────────────────
+  {
+    kind: "table",
+    table: "showroom_bookings",
+    label: "쇼룸 예약 확정 칸(신청 일시 보존·Compass 회차·확정 문자 선점)",
+    columns: ["id", "requested_visit_date", "requested_visit_time", "compass_demo_id", "confirmation_sent_at"],
+    migration: "supabase/migrations/20261106_showroom_booking_compass_confirm.sql",
+    severity: "warning",
+    impact:
+      "Compass 「쇼룸 데모」로 컨펌한 예약이 확정으로 오르지 않고 확정 문자도 나가지 않는다(크론이 매번 건너뜀). 어드민 접수 큐는 확정 칸 없이 읽어 담당·문자 표시만 빠진다.",
+  },
+  {
+    kind: "table",
+    table: "compass_demos_v",
+    label: "Compass 데모 회차 시각(at) 브리지 칸",
+    columns: ["id", "lead_id", "day", "status", "owner", "memo", "at"],
+    migration: "supabase/migrations/20261106_showroom_booking_compass_confirm.sql",
+    severity: "warning",
+    impact: "쇼룸 확정 크론이 회차 시각을 읽지 못해 확정·확정 문자를 건너뛴다.",
   },
   // ── 리드 중복 탐지 + 어드민 핫패스 인덱스(2026-09-02) ───────────────────
   // 인덱스 자체의 존재는 PostgREST/REST 경로로 확인할 수 없다(pg_indexes에 REST로 접근할

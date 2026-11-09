@@ -72,6 +72,15 @@ const SKU_TO_PRODUCTS: Record<string, SalesOrderHardwareProduct[]> = {
     { product: '86" IFP', quantity: 1 },
     { product: "T1", quantity: 1 },
   ],
+  // 올인원 녹화수업 세트 = 보드 + T1 + 벽걸이 설치 + 자동 녹화 1년(설치·이용권은 재고가 아니다).
+  "ai-studio-recording-set": [
+    { product: '86" IFP', quantity: 1 },
+    { product: "T1", quantity: 1 },
+  ],
+  "ai-studio-recording-set-75": [
+    { product: '75" IFP', quantity: 1 },
+    { product: "T1", quantity: 1 },
+  ],
 }
 
 // 재고가 아닌 하드웨어 SKU(설치 작업). 하드웨어 줄이어도 "매핑 실패"로 보지 않는다.

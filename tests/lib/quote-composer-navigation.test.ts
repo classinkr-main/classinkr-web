@@ -1,12 +1,19 @@
 import { describe, expect, it } from "vitest"
 import { clearQuoteComposerIntent, normalizeQuoteQuickAction, quoteComposerMode } from "@/lib/quote-composer-navigation"
-import { buildConfigurableStandardQuoteDetails, STANDARD_QUOTE_TEMPLATES } from "@/lib/standard-quote-template"
+import {
+  buildConfigurableStandardQuoteDetails,
+  isRetiredQuoteTemplate,
+  STANDARD_QUOTE_TEMPLATES,
+} from "@/lib/standard-quote-template"
 
 describe("견적 작성 진입과 종료", () => {
-  it("SW 충전형을 포함해 모든 표준 견적 딥링크를 인식한다", () => {
+  it("SW 충전형을 포함해 판매 중인 표준 견적 딥링크를 인식한다", () => {
     for (const template of STANDARD_QUOTE_TEMPLATES) {
-      expect(normalizeQuoteQuickAction(template.id)).toBe(template.id)
+      expect(normalizeQuoteQuickAction(template.id)).toBe(isRetiredQuoteTemplate(template.id) ? null : template.id)
     }
+    // 구독형 AI Suite 는 판매 중단 — 옛 ?action=online_suite 링크로 작성기를 열지 않는다.
+    expect(normalizeQuoteQuickAction("online_suite")).toBeNull()
+    expect(normalizeQuoteQuickAction("recording_studio_75")).toBe("recording_studio_75")
     expect(normalizeQuoteQuickAction("quick")).toBe("new")
     expect(normalizeQuoteQuickAction("unknown")).toBeNull()
     expect(normalizeQuoteQuickAction(null)).toBeNull()

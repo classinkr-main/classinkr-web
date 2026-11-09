@@ -6,6 +6,7 @@ import {
   canEditQuoteTemplate,
   getQuoteTemplateCatalogEntry,
   isQuoteTemplateVisibleTo,
+  isRetiredQuoteTemplateSku,
   normalizeQuoteTemplateDefaults,
   quoteTemplateDiscountPercent,
   teamQuoteTemplateView,
@@ -54,7 +55,12 @@ describe("카탈로그", () => {
     expect(board).toMatchObject({ kind: "base", productLine: "hardware", supplierLabel: "퀴드러닝", canEdit: false, hasDiscount: false })
     expect(board.items.map((item) => item.sku)).toEqual(["board-86"])
     expect(views.find((view) => view.id === "base:business_recharge")).toMatchObject({ productLine: "software", supplierLabel: "클래스인" })
-    expect(views.find((view) => view.id === "base:online_suite")?.showInMenu).toBe(false)
+    // 판매 중단된 구독형 AI Suite 는 기본 템플릿 목록에서 빠지고, 새 품목 후보에서도 제외된다.
+    expect(views.find((view) => view.id === "base:online_suite")).toBeUndefined()
+    expect(isRetiredQuoteTemplateSku("online-suite-monthly")).toBe(true)
+    expect(views.find((view) => view.id === "base:recording_studio_75")?.items.map((item) => item.sku)).toEqual([
+      "ai-studio-recording-set-75",
+    ])
     expect(views.every((view) => view.items.length > 0)).toBe(true)
   })
 })

@@ -1,0 +1,33 @@
+import { describe, expect, it } from "vitest"
+
+import { findFieldQuickAnswer } from "@/lib/chatbot/quick-answers-field"
+
+// 정해 둔 답은 질문을 소문자로 바꿔 판별한다(서비스와 같은 입력).
+const find = (question: string) => findFieldQuickAnswer(question.toLowerCase())?.id ?? null
+
+describe("field quick answers", () => {
+  it("does not read a word inside another word as a different topic", () => {
+    // "리스크"의 '리스'는 리스 계약이 아니다.
+    expect(
+      find("환율이 오르면 갱신 때 단가가 바뀔 수 있답니다. 우리가 환율 리스크까지 떠안는 겁니까? 3년 내내 원화 고정가로 묶을 수 있는지")
+    ).toBe("contract-currency-exchange-rate")
+    expect(find("칠판을 리스로 들이면 세금계산서는 누가 발행해요?")).toBe("board-lease-tax-invoice-subscription")
+    // "handshake"의 'sha', "로그인"의 '로그'는 설치 파일 서명이나 크래시 로그가 아니다.
+    expect(find("구형 Android 태블릿(Android 7.1.2)에서 로그인 단계에서 'SSL handshake failed' 오류가 뜹니다. iPad는 정상입니다.")).toBe(
+      "android7-ssl-handshake-min-os"
+    )
+    // "프로그램"의 '램'은 칠판 메모리 사양 질문이 아니다.
+    expect(find("칠판 페이지가 스무 장쯤 넘어가면 판서가 늦게 따라오고 몇 명은 튕겨요! 프로그램이 무거워지는 겁니까!")).toBe(
+      "many-board-pages-lag-students-drop"
+    )
+  })
+
+  it("keeps a teacher's two-academy account question apart from a parent's", () => {
+    expect(find("아이가 수학 학원이랑 영어 학원을 다니는데 아이 계정 하나로 두 학원 수업이 다 보이는 건지, 학원마다 계정을 따로 만들어야 하는지요")).toBe(
+      "one-child-account-two-academies"
+    )
+    expect(find("제가 두 학원에서 동시에 강의하는데, 한 계정으로 두 기관 수업을 다 관리할 수 있는지 궁금합니다.")).not.toBe(
+      "one-child-account-two-academies"
+    )
+  })
+})

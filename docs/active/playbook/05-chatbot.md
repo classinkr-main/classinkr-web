@@ -20,6 +20,7 @@
 - `lib/chatbot/service.ts`: 분류, 검색, 답변 조립, fallback, 캐시, streaming
 - `lib/chatbot/llm.ts`: 모델 체인, 생성 설정, 공개 답변 sanitize와 길이 제어
 - `lib/chatbot/classification.ts`: intent와 handoff 분류
+- `lib/chatbot/symptom-triage.ts`: "녹화 안 돼요", "기관 등록 안됨", "에러나요" 같은 증상형 질문을 공개 문제 해결 문서 섹션으로 잇는 결정형 답변. 답변 단계는 문서 섹션에서 그대로 뽑으며, 평가셋은 `data/chatbot-cs-symptom-set.json`
 - `lib/chatbot/page-context.ts`, `teaser-policy.ts`, `pricing-policy.ts`: 공개 UX와 민감 정책
 - `lib/chatbot/channel-handoff.ts`, `doc-gaps.ts`, `eval.ts`, `alpha-readiness.ts`, `alpha-db-contract.ts`
 - `components/admin/cs/CsInquiryDashboard.tsx`, `components/admin/cs/CsConsoleNav.tsx`
@@ -36,6 +37,8 @@
 - 검증된 큐레이션 직답은 임의로 모델이 재작성해 의미를 완화하지 않게 한다.
 - 가격·계약·환불·계정·장애·설치·보안·API 범위는 확인된 정보만 말하고, 필요한 경우 상담 연결로 전환한다.
 - 프롬프트나 검색/응답 계약을 바꾸면 관련 cache version과 골든셋 회귀를 확인한다.
+- 증상형 질문은 "안 돼/안됨" 같은 증상 표현만으로 특정 주제(예: 로그인)에 묶지 않는다. 대상이 없는 오류 질문은 오류 문구·화면·기기를 되묻고, 대상이 있으면 해당 문제 해결 문서 섹션으로 답한다. 트리아지 답변에는 아이디·연락처 같은 식별 정보를 채팅으로 적으라는 안내를 넣지 않는다.
+- 증상 트리아지·말투 계층 같은 공개 위젯 전용 결정형 조기 답변은 내부 CS 코파일럿 경로(`includeInternalDocs`)에서 건너뛴다. 내부 경로는 내부 문서 검색까지 가야 한다(`tests/channel-talk/include-internal-docs.test.ts`).
 
 ### 시간 예산과 오류 처리
 
@@ -66,7 +69,7 @@ npm run build
 npm run check:alpha-db
 ```
 
-변경 범위에 따라 `npx vitest run tests/chatbot`과 골든셋 평가를 실행한다. 특히 다음을 확인한다.
+변경 범위에 따라 `npx vitest run tests/chatbot`과 골든셋 평가를 실행한다. 증상 트리아지·공개 문제 해결 문서의 섹션 제목을 바꾸면 `npx vitest run tests/chatbot/symptom-triage.test.ts`도 실행한다. 특히 다음을 확인한다.
 
 - LLM·벡터 검색 timeout/실패 시 deterministic fallback
 - stream/non-stream의 동일한 안전 게이트

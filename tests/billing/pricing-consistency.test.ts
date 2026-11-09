@@ -112,6 +112,20 @@ describe("하드웨어·수트형·소프트웨어 가격 정합성 검증", () 
       expect(separateLine?.itemDescription).toBe("설치 배송비 별도 협의 · 12개월 할부 가능")
     })
 
+    it("녹화 세트 정가는 86\" 830만원 · 75\" 740만원이고 같은 조건 행을 쓴다", () => {
+      expect(getProductBySku("ai-studio-recording-set")?.unit_price).toBe(8_300_000)
+      expect(getProductBySku("ai-studio-recording-set-75")?.unit_price).toBe(7_400_000)
+
+      const set75 = buildConfigurableStandardQuoteDetails({ templateId: "recording_studio_75" })
+      const main = set75.lineItems?.find((l) => l.itemCode === "ai-studio-recording-set-75")
+      expect(main?.unitPrice).toBe(7_400_000)
+      expect(main?.quantityUnit).toBe("세트")
+      expect(main?.itemDescription).toContain('75"')
+      expect(set75.lineItems?.some((l) => l.itemCode === "recording-studio-condition")).toBe(true)
+      expect(set75.grandTotalAmount).toBe(7_400_000)
+    })
+
+    // 판매 중단(2026-11) — 기존 AI Suite 견적을 열고 고칠 때 쓰는 정의라 계산 규칙은 그대로 지킨다.
     it("구독형 AI Suite 단가는 월 40만원이며 기간별 약정 총액이 조건 행에 표기된다", () => {
       const suiteProduct = getProductBySku("online-suite-monthly")
       expect(suiteProduct?.unit_price).toBe(400_000)

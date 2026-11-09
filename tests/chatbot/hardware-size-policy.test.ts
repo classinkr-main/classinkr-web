@@ -61,8 +61,10 @@ describe("hardware size policy (75/86 standard first, reveal 98/110 on signal)",
       expect(result.answerMode).toBe("direct_answer")
       expect(result.answer).toContain("S75")
       expect(result.answer).toContain("두께")
-      expect(result.answer).toContain("95.5mm")
-      expect(result.answer).toContain("1,730.63")
+      // 공개 문서 '모델별 크기와 화면 사양'(규격서 기준) 수치와 같아야 한다.
+      expect(result.answer).toContain("113.1mm")
+      expect(result.answer).toContain("1,718.18")
+      expect(result.answer).not.toContain("1,730.63")
       // 표준만 치수 공개 — 대형 모델명은 노출하지 않는다.
       expect(result.answer).not.toContain("S110")
       expect(result.answer).not.toContain("S98 Pro")

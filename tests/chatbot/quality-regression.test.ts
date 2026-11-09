@@ -68,15 +68,17 @@ describe("chatbot quality regressions", () => {
       generateAnswer: false,
     })
 
+    // 로그인 증상은 전용 문제 해결 문서(로그인이 안 될 때)의 단계로 답한다(증상 트리아지).
     expect(result.detectedCategory).toBe("troubleshooting")
     expect(result.answerMode).toBe("direct_answer")
     expect(result.needsHandoff).toBe(false)
     expect(result.sources[0]).toMatchObject({
-      title: "비밀번호 변경 (PC)",
-      heading: "로그인/비밀번호 기본 점검",
-      urlPath: "/docs/start/password-change-pc",
+      title: "로그인이 안 될 때",
+      heading: "잘못된 계정 또는 비밀번호라고 나올 때",
+      urlPath: "/docs/start/login-troubleshooting",
     })
     expect(result.answer).toContain("비밀번호")
+    expect(result.answer).toContain("+82")
     expect(result.answer).not.toContain("전자칠판")
   })
 
@@ -89,18 +91,23 @@ describe("chatbot quality regressions", () => {
       "마이크가 안 돼요",
     ]
 
+    // 끊김은 '수업 중 끊기거나 튕길 때', 소리·마이크는 '카메라·마이크가 안 되거나…' 전용 문서로 답한다.
+    const expectedPaths: Record<string, string> = {
+      "학생이 수업에서 계속 나가요": "/docs/start/class-connection-troubleshooting",
+      "수업 중 화면 공유가 계속 끊겨요": "/docs/start/class-connection-troubleshooting",
+      "수업 중 소리가 안 들려요": "/docs/start/camera-mic-troubleshooting",
+      "마이크가 안 돼요": "/docs/start/camera-mic-troubleshooting",
+    }
+
     for (const question of questions) {
       const result = await evaluateChatbotQuery(question, { generateAnswer: false })
 
       expect(result.detectedCategory).toBe("troubleshooting")
       expect(result.answerMode).toBe("direct_answer")
       expect(result.needsHandoff).toBe(false)
-      expect(result.sources[0]).toMatchObject({
-        heading: "수업 중 끊김·소리·마이크 기본 점검",
-        urlPath: "/docs/teacher/classroom-basic-setup",
-      })
-      expect(result.answer).toContain("장비 테스트")
-      expect(result.answer).toContain("오류")
+      expect(result.sources[0]?.urlPath).toBe(expectedPaths[question])
+      expect(result.answer).toMatch(/^1\. /m)
+      expect(result.answer).toContain("담당자 상담")
       expect(result.answer).not.toContain("계정 상태를 확인했습니다")
     }
   })
@@ -223,7 +230,7 @@ describe("chatbot quality regressions", () => {
     const cases = [
       {
         question: "서버는 어디에 있나요? 데이터가 중국으로 가나요?",
-        expected: ["추정으로 답하면 안", "공식 정책", "계약"],
+        expected: ["추측으로 말씀드리지", "공식 정책", "계약"],
         forbidden: ["중국입니다", "한국입니다"],
       },
       {
@@ -305,7 +312,8 @@ describe("chatbot quality regressions", () => {
     )
     expect(site.detectedCategory).toBe("admin")
     expect(site.sources[0]?.heading).toBe("사이트 입장 버튼 연동 확인")
-    expect(site.answer).toContain("기본 제공 기능처럼 단정하면 안 됩니다")
+    expect(site.answer).toContain("기본 제공 기능으로 안내돼 있지 않아요")
+    expect(site.answer).not.toContain("단정하면 안")
 
     const s65 = await evaluateChatbotQuery("65인치 견적 받을 수 있나요?", {
       generateAnswer: false,
