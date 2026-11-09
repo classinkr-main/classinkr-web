@@ -249,6 +249,9 @@ export function findChatbotSelfKnowledgeEntry(question: string) {
       if (CHATBOT_CONTEXT_REQUIRED_KEYS.has(entry.key) && (!hasChatbotContext || refersToEarlierBotAdvice)) return false
       // 과외 계정의 결제 수단·증빙 명의를 묻는 말은 요금제 추천이 아니라 결제 안내로 보낸다.
       if (entry.key === "tutor_pricing_recommend" && /법인\s*카드|결제\s*수단|영수증|세금계산서|명의/.test(normalized)) return false
+      // "여기에 전화번호까지 적었는데 지워 주세요"처럼 이미 적은 개인정보의 삭제·열람을 묻는 말은
+      // 일반 원칙 소개가 아니라 삭제 요청 경로를 알려 주는 정해 둔 답(personal-info-typed-in-chat-delete)으로 보낸다.
+      if (PRIVACY_KEYS.has(entry.key) && TYPED_PERSONAL_INFO_RE.test(normalized)) return false
       // 학원이 여는 학부모 설명회에 나눠 줄 자료를 묻는 말은 클래스인 행사 문의가 아니다.
       if (entry.key === "event_inquiry" && /자료|안내문|나눠\s*(?:드릴|줄)|배포/.test(normalized)) return false
       // 학원이 여는 설명회·행사를 클래스인으로 진행하는 방법(웹 라이브 명단, 칠판 화면 송출)은 기능 질문이다.
@@ -262,6 +265,7 @@ export function findChatbotSelfKnowledgeEntry(question: string) {
         if (
           !ADOPTION_CONTEXT_RE.test(normalized) ||
           hasProductProblem ||
+          API_FIELD_QUESTION_RE.test(normalized) ||
           PERSONAL_WORRY_RE.test(normalized) ||
           EXISTING_CUSTOMER_RE.test(normalized)
         ) {
@@ -287,6 +291,13 @@ const CHATBOT_CONTEXT_REQUIRED_KEYS = new Set<ChatbotSelfKnowledgeEntry["key"]>(
 // 상대(챗봇)를 부르는 말은 낱말로만 본다. '너무'의 '너', '있으니 제'의 '니'는 챗봇을 부르는 말이 아니다.
 const CHATBOT_CONTEXT_RE =
   /(?:^|[^가-힣])(?:너|넌|니|네)(?=[^가-힣]|가|는|도|한테|랑|의|$)|챗봇|(?<!로)봇|(?:ai|인공지능)\s*(?:챗봇|상담|너|넌)|상담\s*가이드|이\s*대화|대화\s*(?:내용|기록|이력)|채팅\s*(?:내용|기록)|(?:내|제)\s*(?:질문|대화|답변|채팅|상담)|상담\s*내용|지침|프롬프트|내가\s*(?:요청|물어|말|질문|뭐라)|나눈\s*(?:대화|이야기)|내\s*이름|나에\s*대해|나를/i
+
+// 이미 적은 개인정보(전화번호·이름)를 두고 묻는 말. "번호를 적었는데 지워 주세요", "이름이랑 번호까지 적어 버렸어요".
+const TYPED_PERSONAL_INFO_RE = /(?:전화\s*번호|번호|이름).{0,20}(?:적어|적었|썼|입력했)/
+const PRIVACY_KEYS = new Set<ChatbotSelfKnowledgeEntry["key"]>(["privacy_boundary", "input_privacy", "memory_boundary"])
+
+// API 응답 필드·시간대처럼 연동 규격을 묻는 기술 질문("의심하고 있습니다")은 도입 걱정이 아니다.
+const API_FIELD_QUESTION_RE = /timezone|time\s*zone|\boffset\b|endpoint|\bresponse\b|\bheader\b|\bparameter\b|iso\s*8601/i
 
 const EXISTING_CUSTOMER_RE = /들여놓은\s*지|들인\s*지|쓴\s*지\s*\S{0,4}(?:년|달|개월)|사용한\s*지|이미\s*(?:쓰고|사용)/
 
