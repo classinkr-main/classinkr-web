@@ -50,8 +50,10 @@ const INTERPRETATIONS: { pattern: RegExp; when?: (input: FollowUpInput) => boole
     asks: true,
   },
   {
-    pattern: /(?:수업|그)\s*프로그램/,
-    when: (input) => /칠판|티비|tv|보드/.test(input.question.toLowerCase()),
+    // "경쟁사 전자칠판이랑 화상수업 프로그램"처럼 다른 회사 제품을 말할 때는 클래스인 X로 읽지 않는다.
+    pattern: /(?<!화상\s*)(?:수업|그)\s*프로그램/,
+    when: (input) =>
+      /칠판|티비|tv|보드/.test(input.question.toLowerCase()) && !/경쟁사|타사|다른\s*회사/.test(input.question),
     line: "'수업 프로그램'은 전자칠판에 깔린 클래스인 X(ClassIn X)로 이해하고 답했어요.",
   },
   {
