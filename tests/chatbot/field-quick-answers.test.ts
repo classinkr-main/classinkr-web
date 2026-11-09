@@ -66,6 +66,15 @@ describe("field quick answers", () => {
     expect(find("비싼 요금제로 바꾸면 끊김이 줄어요?")).not.toBe("downgrade-blocked-during-contract")
   })
 
+  it("does not read a word inside another word as a different topic (round 21)", () => {
+    // '팬리스'(냉각팬 없는 설계)의 '리스'는 리스 계약이 아니다.
+    expect(find("경쟁사 칠판은 팬리스 설계라 조용하다던데 클래스인 칠판 소음 스펙표 있어요?")).not.toBe(
+      "board-lease-tax-invoice-subscription"
+    )
+    // 'price protection'의 price는 영어 요금 문의가 아니다.
+    expect(find("we want a price protection clause in the 3-year contract")).not.toBe("english-pricing")
+  })
+
   it("keeps round-19 answers from catching neighbouring questions (fact-check)", () => {
     // '자동'만으로 자동 채점 질문을, '탈퇴'만으로 본인 계정 탈퇴 질문을 받지 않는다.
     expect(find("숙제 제출하면 자동으로 채점되나요?")).not.toBe("homework-draft-auto-submit-deadline")
