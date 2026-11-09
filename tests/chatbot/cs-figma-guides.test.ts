@@ -314,7 +314,9 @@ describe("CS Figma guide source", () => {
       urlPath: "/docs/admin/cs-figma-digest-1195",
     })
     expect(result.answer).toContain("1. 화면 좌측 상단의 코스 이름을 클릭해 주세요")
-    expect(result.answer).toContain("3단계 주의사항과 안내 화면")
+    // 주의사항 항목은 캡처 묘사를 걷어 낸 주의 문장만 "주의할 점"으로 싣는다.
+    expect(result.answer).toContain("3단계 주의할 점: \"코스 가입 허용\"을 켜 두어야")
+    expect(result.answer).not.toContain("플레이스홀더")
     expect(result.sources[0]?.title).toBe("코스 내 초대 활성화(QR, Link 등)")
   })
 
@@ -379,6 +381,9 @@ describe("CS Figma guide source", () => {
       expect(answer, guide.slug).not.toContain("원본 캡처:")
       // 캡처 화면을 글로 옮긴 판독 메모("화면 기준 확인")는 채팅 답에 넣지 않는다.
       expect(answer, guide.slug).not.toContain("화면 기준 확인")
+      // 주의사항 항목에 섞인 캡처 묘사(빨간 박스, 블러, 빈 이미지 자리, 쿠키 배너)도 '함께 확인할 것'에 싣지 않는다.
+      const extra = answer.split("함께 확인할 것")[1] ?? ""
+      expect(extra, guide.slug).not.toMatch(/빨간\s*(?:박스|화살표|글씨)|블러|플레이스홀더|빈\s*박스|쿠키\s*배너|캡션|스크린샷/)
       for (const sourceImageFile of guide.sourceImageFiles) {
         expect(answer, guide.slug).not.toContain(sourceImageFile)
       }

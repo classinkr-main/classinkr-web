@@ -1517,7 +1517,11 @@ function compactGuideAnswerText(value: string, hiddenTerms: string[], maxLength 
 export function sanitizeGuideStep(value: string, hiddenTerms: string[] = []) {
   const sanitized = sanitizeGuideAnswerText(value, hiddenTerms)
     .replace(/\([^)]*(?:빨간|박스|화살표|주석|강조)[^)]*표시[^)]*\)/g, "")
-    .replace(/\([^)]*(?:빨간\s*박스|화살표|주석|강조|표시)[^)]*\)/g, "")
+    .replace(/\([^)]*(?:빨간|화살표|주석|강조|표시)[^)]*\)/g, "")
+    // 괄호 안에 괄호가 또 있어 위에서 앞부분만 지워지고 남은 꼬리("'가 빨간 박스+빨간 화살표로 표시됨)")를 지운다.
+    .replace(/[^.()]*빨간\s*(?:박스|화살표)[^.()]*\)/g, "")
+    // 대시 뒤에 붙인 캡처 표시 설명("— 빨간 박스로 [학습 활동] 탭 강조")을 지운다.
+    .replace(/\s*[—–]\s*[^—–]*빨간\s*박스[^—–]*$/g, "")
     .replace(/[,，]?\s*예\s*[:：]\s*[\d\s-]{3,}/g, "")
     .replace(/\d{7,}/g, "")
     .replace(/Figma\s*CS\s*캡처\s*보드/gi, "안내 화면")
@@ -1542,6 +1546,20 @@ function flattenEnrichmentBody(body: string, hiddenTerms: string[] = []) {
     .filter(Boolean)
     .join(" ")
   return sanitizeGuideStep(plain, hiddenTerms)
+}
+
+// 생성 가이드의 "주의사항과 원본 캡처" 항목에는 캡처 화면을 옮겨 적은 메모(빨간 박스, 블러 처리, 쿠키 배너,
+// 빈 이미지 자리 등)가 주의 문장과 섞여 있다. 채팅 답에는 화면 묘사가 없는 주의·안내 문장만 남긴다.
+const CS_FIGMA_CAPTURE_NARRATION_RE =
+  /플레이스홀더|export|스크린샷|캡션|캡처|빈\s*박스|빈\s*상태|이미지|사진|모달|다이얼로그|패널|빨간|빨강|주황|노란|분홍|보라|형광|하이라이트|화살표|콜아웃|판독|블러|흐림|마스킹|모자이크|주석|레이어|피그마|figma|캔버스|배지|라벨|알약|워터마크|표시됨|표시되어|표시돼|표시된다|보인다|보임|보이며|보입니다|강조|말풍선|툴팁|드롭다운|[xy]축|예시|new course|파일명|헤딩|타이틀|제목|스텝\s*\d|\d번째|첫\s*(?:번째\s*)?화면|두\s*번째|섹션|쿠키|배너|탭은|탭\s*구성|컬럼|테이블|상태로|상태\s*라벨|선택됨|선택된\s*상태|켜짐|꺼짐|수치|원본|실물|가이드는|가이드다|전문|본문|요지|원문|문구\s*:|안내\s*문구|버튼이|아이콘|위치하|링크\s*텍스트|영역은|추출|senary|realtek|integrated\s*ca|\(\d단계\)|\d단계\s*(?:부연|화면)/i
+const CS_FIGMA_CAUTION_CUE_RE =
+  /해야|하세요|해\s*주세요|주의|반드시|필요|않습니다|않으며|없습니다|생성됩니다|적용됩니다|갱신됩니다|됩니다\.?$|수\s*있(?:습니다|다)|있으니|합니다\.?$/
+
+function pickGuideAnswerChecks(item: CsFigmaGuide["deepDive"][number]) {
+  if (!/원본\s*캡처/.test(item.title)) return item.checks
+  return item.checks.filter(
+    (check) => !CS_FIGMA_CAPTURE_NARRATION_RE.test(check) && CS_FIGMA_CAUTION_CUE_RE.test(check)
+  )
 }
 
 export function formatCsFigmaGuideAnswer(guide: CsFigmaGuide) {
@@ -1569,14 +1587,18 @@ export function formatCsFigmaGuideAnswer(guide: CsFigmaGuide) {
   const deepDiveLines = guide.deepDive
     .filter((item) => !/순서\s*그대로\s*안내|화면\s*기준\s*확인/.test(item.title))
     .map((item) => {
-      const title = sanitizeGuideStep(item.title, hiddenTerms)
-      const checks = item.checks
+      const isCaptureNotes = /원본\s*캡처/.test(item.title)
+      const title = isCaptureNotes ? "주의할 점" : sanitizeGuideStep(item.title, hiddenTerms)
+      const checks = pickGuideAnswerChecks(item)
         .slice(0, 2)
         .map((check) => compactGuideAnswerText(sanitizeGuideStep(check, hiddenTerms), hiddenTerms, 88))
         .filter(Boolean)
         .join(" / ")
+      // 화면 묘사를 걷어 내고 남은 주의 문장이 없으면 그 항목은 싣지 않는다.
+      if (isCaptureNotes && !checks) return ""
       return `- ${item.level} ${title}${checks ? `: ${checks}` : ""}`
     })
+    .filter(Boolean)
 
   return [
     "아래 순서대로 따라 하시면 됩니다.",

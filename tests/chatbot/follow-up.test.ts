@@ -152,6 +152,20 @@ describe("buildFollowUp", () => {
     expect(buildFollowUp({ ...base, intent: "self_knowledge" })).toBeNull()
   })
 
+  it("does not ask sales questions after a screen-guide how-to answer", () => {
+    // "코스 가입 허용"의 '가입'을 도입 상담으로 읽어 학원 규모를 묻던 것.
+    const answer = "아래 순서대로 따라 하시면 됩니다.\n\n1. 화면 좌측 상단의 코스 이름을 클릭해 주세요"
+    expect(
+      buildFollowUp({
+        ...base,
+        intent: "onboarding",
+        answerMode: "direct_answer",
+        question: "코스 가입 허용 QR 초대 링크는 어디서 활성화해요?",
+        answer,
+      })
+    ).toBeNull()
+  })
+
   it("asks about classrooms first for board purchases", () => {
     expect(buildFollowUp({ ...base, category: "hardware", question: "전자칠판 구매하고 싶어요" })).toContain("교실이 몇 곳인지")
   })

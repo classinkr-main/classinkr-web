@@ -152,8 +152,13 @@ function pickSalesSlot(input: FollowUpInput) {
 const PURCHASE_SIGNAL_RE =
   /도입|구매|견적|가격|요금|비용|체험|데모|상담|들이|살까|사려|살\s*거|추천|쇼룸|몇\s*대|여러\s*대|싸게|할인|대수/
 
+// 화면 가이드의 사용 순서 답은 기능 사용법이라 영업용 되묻기를 붙이지 않는다
+// ("코스 가입 허용"의 '가입'을 도입 상담으로 읽어 학원 규모를 묻던 것).
+const PROCEDURE_GUIDE_ANSWER_RE = /(?:^|\n)아래 순서대로 따라 하시면 됩니다/
+
 function isSalesConversation(input: FollowUpInput) {
   if (input.handoffIntent !== "demo") return false
+  if (PROCEDURE_GUIDE_ANSWER_RE.test(input.answer)) return false
   const text = input.question.toLowerCase()
   if (SUPPORT_SIGNAL_RE.test(text)) return false
   if (SALES_INTENTS.has(input.intent)) return true
