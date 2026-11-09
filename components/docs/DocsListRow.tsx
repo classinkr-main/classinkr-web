@@ -12,9 +12,10 @@ import { cn } from "./utils"
 const FOCUS_RING =
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fg-accent focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8]"
 
-export type DocsListRowMeta = "kind" | "category" | "readTime" | "images" | "updatedAt"
+/** 공개 목록에는 읽는 시간·사진 장수를 보이지 않는다 — 유형·주제·날짜만 쓴다. */
+export type DocsListRowMeta = "kind" | "category" | "updatedAt"
 
-const DEFAULT_META: readonly DocsListRowMeta[] = ["kind", "category", "readTime", "images"]
+const DEFAULT_META: readonly DocsListRowMeta[] = ["kind", "category"]
 
 /**
  * 사용법은 목록 대부분이라 라벨을 달지 않는다. 문제 해결·FAQ·업데이트처럼
@@ -33,10 +34,6 @@ function buildMeta(article: DocsArticleSummary, meta: readonly DocsListRowMeta[]
       parts.push({ key: item, node: <DocsKindLabel kind={article.kind} /> })
     } else if (item === "category" && article.category) {
       parts.push({ key: item, node: article.category })
-    } else if (item === "readTime" && article.readTime) {
-      parts.push({ key: item, node: article.readTime })
-    } else if (item === "images" && article.imageCount) {
-      parts.push({ key: item, node: `사진 ${article.imageCount}장` })
     } else if (item === "updatedAt" && article.updatedAt) {
       parts.push({ key: item, node: article.updatedAt })
     }
@@ -192,7 +189,7 @@ function formatMonthDay(iso?: string) {
 export function DocsCompactRow({
   article,
   showDate = true,
-  meta = ["kind", "category", "images"],
+  meta = ["kind", "category"],
 }: {
   article: DocsArticleSummary
   /** 왼쪽 날짜 칸("10월 29일"). 순서 안내처럼 날짜가 의미 없는 목록에서는 끈다. */

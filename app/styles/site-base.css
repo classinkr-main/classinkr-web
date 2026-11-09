@@ -143,6 +143,26 @@
   @keyframes ink-fade  { from { text-decoration-color: transparent; } }
   @keyframes panel-in  { from { opacity: 0; } }
   @keyframes scrub-in  { from { opacity: 0.18; } to { opacity: 1; } }
+  /* ⑨ 문의 지도(V24-A) 전용 */
+  @keyframes cm-rise   { from { opacity: 0; transform: translateY(22px); } }
+  @keyframes cm-settle { from { opacity: 0; transform: translateY(8px); } }
+  @keyframes cm-pop    { from { opacity: 0; transform: translateY(8px) scale(.94); } }
+  @keyframes cm-drift  { from { opacity: 0; transform: translateX(-14px); } 25% { opacity: 1; } to { opacity: 1; transform: translateX(14px); } }
+  @keyframes cm-halo   { from { opacity: .6; transform: scale(.5); } to { opacity: 0; transform: scale(3); } }
+  @keyframes cm-pin-drop {
+    0%   { opacity: 0; transform: translateY(-64px); }
+    50%  { opacity: 1; transform: none; }
+    64%  { transform: translateY(-12px); }
+    78%  { transform: none; }
+    88%  { transform: translateY(-4px); }
+    100% { transform: none; }
+  }
+  @keyframes cm-pin-shadow {
+    0%  { opacity: 0; transform: scale(.3); }
+    50% { opacity: 1; transform: none; }
+    64% { transform: scale(.7); }
+    78% { transform: none; }
+  }
 
   /* ── 모션 무장 — cards_motion 소유(X07). 미완 상태는 이 블록 하나에만 있다 → SSR·no-JS·reduced 는 항상 완성 ── */
   @media (prefers-reduced-motion: no-preference) {
@@ -216,6 +236,19 @@
     :where(.site) [data-reveal="in"] :is([data-moment="window-in"], [data-moment="window-up"]) {
       transition: opacity var(--motion-slow) var(--ease-soft) 240ms, transform var(--motion-slow) var(--ease-soft) 240ms;
     }
+
+    /* ⑨ 문의 — 목동 쇼룸 일러스트 지도(V24-A, 사용자 요청 '애니메이션틱'). 들어오면 도시가 솟고 핀이 떨어져 두 번 튄 뒤
+       멈춘다. 4.8초 안에 모두 끝난다(반복 0, WCAG 2.2.2 멈춤 버튼 불필요). armed 는 ContactMap 이 마운트 뒤에만 단다 */
+    :where(.site) [data-cm-phase="armed"] [data-cm] { opacity: 0; }
+    :where(.site) [data-cm-phase="play"] [data-cm="ground"]     { animation: panel-in 600ms var(--ease-soft) both; }
+    :where(.site) [data-cm-phase="play"] [data-cm="trees"]      { animation: cm-settle var(--motion-slow) var(--ease-soft) 200ms both; }
+    :where(.site) [data-cm-phase="play"] [data-cm="buildings"]  { animation: cm-rise 1000ms var(--ease-soft) 350ms both; }
+    :where(.site) [data-cm-phase="play"] [data-cm="label"]      { animation: panel-in var(--motion-slow) var(--ease-soft) 1300ms both; }
+    :where(.site) [data-cm-phase="play"] [data-cm="cloud"]      { animation: cm-drift 3200ms var(--ease-drift) 1200ms both; }
+    :where(.site) [data-cm-phase="play"] [data-cm="pin"]        { animation: cm-pin-drop 1000ms cubic-bezier(.3, .7, .4, 1) 1150ms both; }
+    :where(.site) [data-cm-phase="play"] [data-cm="pin-shadow"] { animation: cm-pin-shadow 1000ms cubic-bezier(.3, .7, .4, 1) 1150ms both; }
+    :where(.site) [data-cm-phase="play"] [data-cm="halo"]       { animation: cm-halo 1400ms ease-out 1900ms 2 both; }
+    :where(.site) [data-cm-phase="play"] [data-cm="chip"]       { animation: cm-pop 500ms var(--ease-soft) 2000ms both; }
 
     /* 탭 패널 교체 — 첫 페인트 제외 */
     :where(.site) [data-switched] [role="tabpanel"][data-state="active"] {

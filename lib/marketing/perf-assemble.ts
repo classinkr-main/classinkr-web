@@ -32,6 +32,7 @@ import {
   type AdInsightRow,
   type LiveAdChannel,
 } from "@/lib/marketing/ad-insights"
+import { buildAdBoard } from "@/lib/marketing/ad-board"
 import { buildAttributionFunnel } from "@/lib/marketing/attribution-funnel"
 import { detectAnomalies } from "@/lib/marketing/anomaly"
 import { anomalyLoadSince, buildAnomalyCampaignInputs } from "@/lib/marketing/anomaly-input"
@@ -52,6 +53,7 @@ import {
   type PerfPeriodKey,
   type PerfScoreboardRow,
 } from "@/lib/marketing/perf"
+import { GOOGLE_ADS_CAMPAIGNS } from "@/lib/marketing/google-ads-setup"
 import { eventAdSpendFromMetrics } from "@/lib/marketing/project-rollup"
 import { getMetaCampaignDashboard, type MetaCampaignDashboard } from "@/lib/meta/marketing"
 import { latestUpdatesByCampaign, listRecentUpdates } from "@/lib/repositories/campaign-updates"
@@ -270,6 +272,16 @@ export async function assembleMarketingPerf(
       prevLeads.push(lead)
     }
   }
+  // 광고 탭 채널 카드 — 같은 스냅샷 행·같은 기간 리드로 조립한다(새 조회 없음).
+  const adBoard = buildAdBoard({
+    since: period.since,
+    until: period.until,
+    meta: liveRowsByChannel.meta,
+    google: liveRowsByChannel.google,
+    plan: GOOGLE_ADS_CAMPAIGNS,
+    leads: leads ? currentLeads : null,
+  })
+
   const adLeads = currentLeads.filter(isAdLead)
   const prevAdLeads = prevLeads.filter(isAdLead)
   const convertedAdLeads = adLeads.filter(isConvertedLead)
@@ -529,6 +541,7 @@ export async function assembleMarketingPerf(
     channelMix,
     channelLive,
     googleCampaigns,
+    adBoard,
     // currentLeads 는 이미 이 기간으로 잘렸고 테스트 리드도 빠져 있다 — 폭포는 기간 필터를
     // 하지 않으므로(테스트 리드만 다시 거른다) 그대로 넘긴다.
     // 소스 실패(leads === null)면 빈 배열이라 전 단계 0 · 비율 null 로 정직하게 떨어진다.

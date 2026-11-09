@@ -2380,6 +2380,7 @@ export default function LeadsBoardClient() {
           now={now}
           compassLookup={compass.lookup}
           compassDown={compass.down}
+          compassReady={compass.updatedAt != null && !compass.down}
           isCrmRegistered={neoRegistered.has}
           allVisibleSelected={allVisibleSelected}
           selectedVisibleCount={selectedVisibleCount}

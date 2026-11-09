@@ -4,10 +4,11 @@ import Link from "next/link"
 import { motion } from "framer-motion"
 import { ArrowRight, Mail, MapPin, Phone } from "lucide-react"
 
+import { ContactMap } from "@/components/contact/ContactMap"
 import { trackEvent } from "@/lib/analytics"
 
 /**
- * 문의 화면 우측의 직접 연락 경로(전화·이메일·목동 쇼룸·지도).
+ * 문의 화면 우측의 직접 연락 경로(전화·이메일·목동 쇼룸·일러스트 지도 ContactMap).
  *
  * 폼 상태와 얽히지 않은 표현 전용 블록이라 화면에서 떼어냈다 — 750줄짜리 단일 파일에
  * 디자인 위반이 숨어 있던 것이 이 화면의 원래 문제였다.
@@ -76,21 +77,9 @@ export function ContactDirectChannels() {
                 </div>
             </div>
 
-            {/* Map */}
+            {/* 지도 — 남는 세로 공간을 일러스트 지도가 채운다(V24-A) */}
             <div className="mt-auto pt-6 border-t border-[#E5E5E0]">
-                <div className="w-full h-36 bg-[#F6F5F4] rounded-2xl border border-[#E5E5E0] overflow-hidden relative">
-                    <iframe
-                        title="Classin Korea office map"
-                        src="https://maps.google.com/maps?q=서울시+양천구+목동동로+233-1&t=&z=17&ie=UTF8&iwloc=&output=embed"
-                        width="100%"
-                        height="100%"
-                        style={{ border: 0 }}
-                        allowFullScreen={false}
-                        loading="lazy"
-                        referrerPolicy="no-referrer"
-                        className="filter grayscale-[0.2] contrast-[1.05] opacity-90 hover:grayscale-0 hover:opacity-100 transition-all duration-500"
-                    ></iframe>
-                </div>
+                <ContactMap />
             </div>
         </div>
     </motion.div>

@@ -80,9 +80,9 @@
 - 접수 확인 문자·알림톡(`lib/messaging/customer-receipt.ts`)은 `SOLAPI_API`·`SOLAPI_SECRET`이 있으면 **고객에게 실발송**된다.
 - 홈페이지 폼 리드(`WEBSITE_FORM_LEAD_SOURCES` = 데모·문의·쇼룸 예약·도입 신청, 행사 신청은 `contact_page` + `eventSlug`)와 자료 신청(`newsletter` + `leadMagnet`)은 저장 직후 Compass `POST /api/webhook/home-lead` 로도 민다
   (`lib/server/compass-lead-push.ts` — `COMPASS_BRIDGE_URL` + `COMPASS_LEAD_WEBHOOK_TOKEN` 둘 다 있고 HTTPS 일 때만, 아니면 조용히 건너뛴다). 재문의 병합은
-  `kind: "reinflow"`, `event_id` 는 전환 이벤트 id 와 같은 값(Compass 멱등 표식). 실패는 응답 `warnings`·「리드 전달 경고」로만 — 저장을 막지 않는다. 그냥 뉴스레터 구독·Meta 리드폼은
+  `kind: "reinflow"`, `event_id` 는 전환 이벤트 id 와 같은 값(Compass 멱등 표식). 실패는 응답 `warnings`·「리드 전달 경고」로 — 저장을 막지 않는다. 놓친 건은 매시 디스패처의 Compass 전달 대조(`lib/server/compass-lead-reconcile.ts` — 최근 72시간·링크 없는 리드만, 같은 `event_id`)가 다시 민다. 그냥 뉴스레터 구독·Meta 리드폼은
   보내지 않는다(Meta 는 Compass 가 직접 받는다). Compass 쪽 규칙(인바운드 「홈페이지」 경로·재유입·알림톡은 어드민 몫)은 그 저장소 `docs/adr/0087-*.md`. 흐름을 바꾸면
-  `npx vitest run tests/server/compass-lead-push.test.ts` 도 함께 실행한다.
+  `npx vitest run tests/server/compass-lead-push.test.ts tests/server/compass-lead-reconcile.test.ts` 도 함께 실행한다.
 - 되받기(Compass → 어드민)는 **링크 우선·전화 키 폴백**(`lib/compass/admin-lead-links.ts`) — 5분 크론·리드 보드 칩·고객 360 셋이 같은 매칭을 쓴다. 크론은 Compass 담당을
   어드민 `assigned_to` 가 **비어 있을 때만** 채운다(사람이 고른 담당은 덮지 않는다). 매칭·담당 규칙을 바꾸면 그 문서 §4 와 `tests/compass/lead-contact-sync.test.ts` 를 같이 고친다.
   새 환경에 키를 넣거나 접수 경로를 바꿀 때는 `MESSAGING_DRY_RUN=1`로 먼저 확인한다.

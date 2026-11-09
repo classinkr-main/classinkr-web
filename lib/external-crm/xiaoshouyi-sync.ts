@@ -1,5 +1,13 @@
 import "server-only"
 import {
+  planIncrementalSync,
+  readIncrementalConfig,
+  withIncrementalWhere,
+  type IncrementalConfig,
+  type IncrementalPlan,
+  type SyncRunLike,
+} from "@/lib/external-crm/incremental-window"
+import {
   fetchXiaoshouyi,
   getAccessToken,
   getXiaoshouyiConfig,
@@ -23,6 +31,8 @@ interface XiaoshouyiObjectConfig {
   displayNameFields: string[]
   orderBy?: string
   whereClause?: string | null
+  /** 증분 동기화 설정(catalog metadata.incremental) — lib/external-crm/incremental-window.ts */
+  incremental?: IncrementalConfig | null
   ownerFields?: string[]
   statusFields?: string[]
   amountFields?: string[]
@@ -360,6 +370,7 @@ function toCatalogObjectConfig(row: XiaoshouyiQueryCatalogRow): XiaoshouyiObject
     displayNameFields: getMetadataStringArray(metadata, "displayNameFields", known?.displayNameFields ?? ["name"]),
     orderBy: row.order_by,
     whereClause: row.where_clause,
+    incremental: readIncrementalConfig(metadata),
     ownerFields: getMetadataStringArray(metadata, "ownerFields", known?.ownerFields ?? []),
     statusFields: getMetadataStringArray(metadata, "statusFields", known?.statusFields ?? []),
     amountFields: getMetadataStringArray(metadata, "amountFields", known?.amountFields ?? []),
@@ -914,9 +925,23 @@ async function syncXiaoshouyiObject(
 
   try {
     const sb = createSupabaseAdminClient()
+    // 증분이면 최근 변경분만 읽고 stale 표시를 건너뛴다(못 본 행 ≠ 삭제된 행). 규칙: incremental-window.ts
+    let plan: IncrementalPlan = { mode: "full", reason: "증분 설정 없음" }
+    if (object.incremental) {
+      const { data: recentRuns, error: runsError } = await sb
+        .from("external_crm_sync_runs")
+        .select("started_at, status, cursor_value, metadata")
+        .eq("source_system", "xiaoshouyi")
+        .eq("object_api_key", object.objectApiKey)
+        .order("started_at", { ascending: false })
+        .limit(50)
+      if (runsError) throw runsError
+      plan = planIncrementalSync(object.incremental, (recentRuns ?? []) as SyncRunLike[], new Date())
+    }
+    const queryObject: XiaoshouyiObjectConfig = { ...object, whereClause: withIncrementalWhere(object.whereClause, plan) }
     for (let page = 0; page < maxPages; page += 1) {
       const offset = page * pageSize
-      const records = await queryXiaoshouyiRecords(config, token, object, pageSize, offset)
+      const records = await queryXiaoshouyiRecords(config, token, queryObject, pageSize, offset)
       pagesScanned += 1
       rowsScanned += records.length
       nextOffset = offset + records.length
@@ -980,7 +1005,7 @@ async function syncXiaoshouyiObject(
     }
 
     let staleMarked: number | null = null
-    if (!truncated) {
+    if (!truncated && plan.mode === "full") {
       const { data: staleRows, error: staleError } = await sb
         .from("external_crm_records")
         .update({ is_stale: true, stale_at: syncedAt })
@@ -1008,7 +1033,9 @@ async function syncXiaoshouyiObject(
         staleMarked,
         rowsUnchanged,
         orderBy: resolveXiaoshouyiOrderBy(object.fields, object.orderBy),
-        whereClause: object.whereClause ?? null,
+        whereClause: queryObject.whereClause ?? null,
+        mode: plan.mode,
+        ...(plan.mode === "incremental" ? { sinceMs: plan.sinceMs } : {}),
         catalogSource: object.catalogSource ?? "runtime",
         syncPriority: object.syncPriority ?? null,
       },

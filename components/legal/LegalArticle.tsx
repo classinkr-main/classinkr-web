@@ -73,15 +73,15 @@ export function LegalNotice({ children }: { children: ReactNode }) {
 /** 가로로 넘치면 표 안에서만 스크롤한다(overflow-hidden 금지 — 375px 에서 칸이 잘린다). 첫 칸은 행 제목. */
 export function LegalTable({ headers, rows }: { headers: ReactNode[]; rows: ReactNode[][] }) {
   return (
-    <div className="overflow-x-auto rounded-md border border-black/[0.08]">
+    <div className="overflow-x-auto rounded-md border border-line-hair">
       <table
-        className="w-full border-collapse text-left text-[13px] leading-6 md:text-sm"
+        className="w-full border-collapse text-left text-note leading-6 md:text-caption"
         style={{ minWidth: `${headers.length * 9}rem` }}
       >
-        <thead className="bg-[#FAFAF8] text-[#111110]">
+        <thead className="bg-surface-paper text-fg-ink">
           <tr>
             {headers.map((header, index) => (
-              <th key={index} scope="col" className="border-b border-black/[0.08] px-3 py-2 font-semibold">
+              <th key={index} scope="col" className="border-b border-line-hair px-3 py-2 font-semibold">
                 {header}
               </th>
             ))}
@@ -89,10 +89,10 @@ export function LegalTable({ headers, rows }: { headers: ReactNode[]; rows: Reac
         </thead>
         <tbody>
           {rows.map((row, rowIndex) => (
-            <tr key={rowIndex} className="border-b border-black/[0.06] align-top last:border-b-0">
+            <tr key={rowIndex} className="border-b border-line-hair align-top last:border-b-0">
               {row.map((cell, cellIndex) =>
                 cellIndex === 0 ? (
-                  <th key={cellIndex} scope="row" className="px-3 py-2 font-semibold text-[#111110]">
+                  <th key={cellIndex} scope="row" className="px-3 py-2 font-semibold text-fg-ink">
                     {cell}
                   </th>
                 ) : (

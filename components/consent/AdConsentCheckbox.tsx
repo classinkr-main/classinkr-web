@@ -38,14 +38,14 @@ export function AdConsentCheckbox({
       aria-labelledby={`${id}-title`}
       aria-describedby={`${id}-summary`}
       className={cn(
-        "w-full min-w-0 rounded-2xl border border-black/[0.08] px-4 py-3 text-sm text-[#44514A]",
+        "w-full min-w-0 rounded-xl border border-line-hair px-4 py-3 text-caption leading-5 text-fg-body",
         className,
       )}
     >
-      <p id={`${id}-title`} className="font-medium text-[#203127]">
+      <p id={`${id}-title`} className="font-medium text-fg-ink">
         {AD_CONSENT_TITLE}
       </p>
-      <p id={`${id}-summary`} className="mt-1 text-xs leading-5 text-[#615D59] break-keep">
+      <p id={`${id}-summary`} className="mt-1 text-note leading-5 text-fg-muted break-keep">
         {AD_CONSENT_SUMMARY}
       </p>
       <div className="mt-2 space-y-1.5">
@@ -63,8 +63,8 @@ export function AdConsentCheckbox({
           </label>
         ))}
       </div>
-      <details className="mt-2 text-xs leading-5 text-[#615D59]">
-        <summary className="cursor-pointer font-medium text-[#44514A]">받는 곳·항목·기간 보기</summary>
+      <details className="mt-2 text-note leading-5 text-fg-muted">
+        <summary className="cursor-pointer font-medium text-fg-body">받는 곳·항목·기간 보기</summary>
         <ul className="mt-1.5 space-y-1 break-keep [overflow-wrap:anywhere]">
           {AD_CONSENT_DETAILS.map((line) => (
             <li key={line}>{line}</li>
@@ -77,7 +77,7 @@ export function AdConsentCheckbox({
         target="_blank"
         rel="noopener noreferrer"
         prefetch={false}
-        className="mt-1.5 inline-block text-xs font-medium text-fg-accent underline underline-offset-2"
+        className="mt-1.5 inline-block text-note font-medium text-fg-accent underline underline-offset-2"
       >
         개인정보처리방침 5항 보기
       </Link>

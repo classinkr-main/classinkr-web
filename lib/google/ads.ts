@@ -57,6 +57,13 @@ export interface GoogleAdsDailyRow {
   clicks: number
   /** 클릭 시각 귀속. 부분전환이 있어 정수가 아닐 수 있다. */
   conversions: number
+  /**
+   * campaign.advertising_channel_type 원문(VIDEO · DEMAND_GEN · SEARCH · PERFORMANCE_MAX …).
+   * 유튜브 여부를 캠페인 이름으로 추측하지 않으려고 받는다. 모르는 값·UNSPECIFIED·UNKNOWN 은 null.
+   */
+  channelType: string | null
+  /** metrics.video_trueview_views — 구글 화면의 'TrueView 조회수'. 동영상이 아닌 캠페인은 0. */
+  videoViews: number
 }
 
 type GoogleAdsAuth =
@@ -184,13 +191,15 @@ export function resetGoogleAdsTokenCache() {
 /* ─── GAQL ───────────────────────────────────────────────────── */
 
 interface GoogleAdsApiRow {
-  campaign?: { id?: string | number; name?: string }
+  campaign?: { id?: string | number; name?: string; advertisingChannelType?: string }
   segments?: { date?: string }
   metrics?: {
     costMicros?: string | number
     impressions?: string | number
     clicks?: string | number
     conversions?: string | number
+    /** REST JSON 이름 — GAQL 의 metrics.video_trueview_views. 0 이면 응답에서 빠진다. */
+    videoTrueviewViews?: string | number
   }
   customer?: { currencyCode?: string }
 }
@@ -212,6 +221,18 @@ function count(value: unknown): number {
 const round2 = (n: number) => Math.round(n * 100) / 100
 
 /**
+ * advertising_channel_type 은 열거형 이름(대문자·밑줄)으로 온다. 그 모양이 아니거나
+ * 값이 없음을 뜻하는 두 이름이면 null — 표에는 구글이 준 유형만 남긴다.
+ */
+export function normalizeChannelType(value: unknown): string | null {
+  if (typeof value !== "string") return null
+  const v = value.trim()
+  if (!/^[A-Z][A-Z_]{1,39}$/.test(v)) return null
+  if (v === "UNSPECIFIED" || v === "UNKNOWN") return null
+  return v
+}
+
+/**
  * API 행 → 우리 행. 순수 함수라 테스트가 **cost_micros 나눗셈**을 직접 잠근다 —
  * 이 한 줄을 빠뜨리면 지출이 100만 배로 뜬다.
  */
@@ -227,6 +248,8 @@ export function mapGoogleAdsRow(row: GoogleAdsApiRow): GoogleAdsDailyRow | null 
     impressions: count(row.metrics?.impressions),
     clicks: count(row.metrics?.clicks),
     conversions: count(row.metrics?.conversions),
+    channelType: normalizeChannelType(row.campaign?.advertisingChannelType),
+    videoViews: count(row.metrics?.videoTrueviewViews),
   }
 }
 
@@ -240,8 +263,11 @@ function assertIsoDate(value: string, label: string): string {
 
 export function buildDailyInsightsQuery(since: string, until: string): string {
   return [
-    "SELECT campaign.id, campaign.name, segments.date,",
+    // video_trueview_views 는 v22 에서 metrics.video_views 가 바뀐 이름이다(v25 campaign 에서 선택 가능 확인 2026-11-06).
+    // 옛 이름을 쓰면 요청 전체가 거부되므로 API 버전을 올릴 때 이 두 칸을 같이 확인한다.
+    "SELECT campaign.id, campaign.name, campaign.advertising_channel_type, segments.date,",
     "       metrics.cost_micros, metrics.impressions, metrics.clicks, metrics.conversions,",
+    "       metrics.video_trueview_views,",
     "       customer.currency_code",
     "FROM campaign",
     `WHERE segments.date BETWEEN '${assertIsoDate(since, "since")}' AND '${assertIsoDate(until, "until")}'`,
