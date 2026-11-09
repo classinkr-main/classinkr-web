@@ -26,8 +26,8 @@ vi.mock("@/lib/supabase/admin", () => ({
 import { prepareMaterialDownload } from "@/lib/materials"
 
 // 파이썬 생성기가 만든 자료(public/ 의 Producer 가 ReportLab) — tests/lead-magnets/pdf-handcrafted.test.ts 가 분류를 지킨다.
-const GENERATED = "electronic-whiteboard-classroom-checklist"
-// #81 의 12쪽 워크북(WORKBOOK_SLUGS).
+const GENERATED = "academy-software-selection-worksheet"
+// 따로 찍은 6쪽 e-book(WORKBOOK_SLUGS).
 const WORKBOOK = "academy-system-checklist"
 
 function magnet(overrides: Record<string, unknown>) {
