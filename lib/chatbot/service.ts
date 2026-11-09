@@ -455,6 +455,16 @@ const CAPABILITY_REQUEST_RE =
 
 const PROMPT_OR_SECURITY_ABUSE_RE =
   /sql\s*injection|\bsqli\b|union\s+select|drop\s+table|\bor\s+1\s*=\s*1|information_schema|xp_cmdshell|\bxss\b|\bcsrf\b|\bssrf\b|\brce\b|프롬프트\s*인젝션|system\s*prompt|developer\s*(?:message|instruction)|시스템\s*프롬프트|개발자\s*메시지|(?:개발자|시스템|숨겨진|비공개).{0,12}(?:지침|규칙|지시|명령어?|명령문).{0,16}(?:원문|보여|출력|공개|알려|노출|그대로)|(?:개발자|시스템).{0,10}(?:준|받은).{0,10}(?:지침|규칙|지시|명령어?|명령문).{0,16}(?:원문|보여|출력|공개|알려|노출|그대로)|내부\s*(?:프롬프트|규칙|지시|명령어?|명령문)|(?:프롬프트|prompt|지시문).{0,16}(?:보여|출력|공개|알려|노출|그대로)|(?:보여|출력|공개|알려|노출).{0,16}(?:프롬프트|prompt|지시문)|(?:이전|위|앞선).{0,12}(?:지시|규칙|프롬프트).{0,12}(?:무시|잊어|삭제)|보안.{0,12}(?:뚫|우회|공격)|취약점.{0,12}(?:공격|악용|우회)|해킹.{0,12}(?:방법|공격|뚫|탈취|우회)|(?:비밀번호|토큰|api\s*key|관리자).{0,12}(?:탈취|훔|우회|크랙)/i
+// 공격 낱말 없이 "무슨 기준으로 답하는지 알아야 믿고 견적 얘기를 하죠"처럼 답변 기준을 묻는 말.
+// 거절 문구 대신 정해 둔 답(chatbot-system-prompt-request)이 지시문은 보여 주지 않고 근거와 상담 경로를 알려 준다.
+const SINCERE_ANSWER_BASIS_RE = /견적|믿고|신뢰|무슨\s*기준|어떤\s*기준/
+const PROMPT_ATTACK_WORD_RE = /sql|injection|인젝션|xss|csrf|ssrf|\brce\b|무시하고|무시해|우회|탈옥|jailbreak|원문|출력해|그대로\s*출력/i
+
+function isPromptOrSecurityAbuse(text: string) {
+  if (!PROMPT_OR_SECURITY_ABUSE_RE.test(text)) return false
+  return !(SINCERE_ANSWER_BASIS_RE.test(text) && !PROMPT_ATTACK_WORD_RE.test(text))
+}
+
 const CRIMINAL_ABUSE_RE =
   /(?:범죄|불법|사기|피싱|스미싱|절도|도둑|마약|폭탄|무기|살인|폭행).{0,18}(?:방법|하는\s*법|계획|도와|만들|제조|우회|탈취|공격|훔|숨기|피하)|(?:방법|하는\s*법|계획).{0,18}(?:범죄|불법|사기|피싱|스미싱|절도|마약|폭탄|무기|살인|폭행)/i
 const TOKEN_WASTE_RE =
@@ -505,7 +515,7 @@ function buildPolicyGuardResponse(question: NormalizedQuestion): {
     }
   }
 
-  if (PROMPT_OR_SECURITY_ABUSE_RE.test(text)) {
+  if (isPromptOrSecurityAbuse(text)) {
     return {
       response: {
         answer:
@@ -4390,7 +4400,7 @@ async function loadSessionHistory(
 // 보안·남용 거절 답변에는 붙이지 않는다.
 function applyConversationTone(core: ChatbotCore) {
   const text = core.question.redacted.toLowerCase()
-  if (PROMPT_OR_SECURITY_ABUSE_RE.test(text) || CRIMINAL_ABUSE_RE.test(text) || TOKEN_WASTE_RE.test(text)) return
+  if (isPromptOrSecurityAbuse(text) || CRIMINAL_ABUSE_RE.test(text) || TOKEN_WASTE_RE.test(text)) return
   if (isGreetingOnly(core.question)) return
   const tone = detectConversationTone(core.question.redacted)
   // 지난 문의를 전제로 한 질문은 "볼 수 없다"는 줄만 붙이고, 상담 연결은 화난·반복 문의일 때만 앞세운다.
