@@ -6,6 +6,7 @@
 - 대화 기록 JSON: 각 행에 페르소나(성별·나이·역할·성격·말투), 질문, 정답 키(intent·must·must_not), 챗봇 답(answer, answerMode, sources, suggestedQuestions, needsHandoff, llmPathInProduction)
 - 사실 확인용 공개 문서(읽어도 됨): `lib/docs.ts`, `lib/docs-troubleshooting/*.ts`, `lib/cs-figma-guides.ts`, `lib/classin-positioning.ts` (모두 /home/user/classinkr-web 아래)
   - `lib/cs-figma-guides.ts`가 내보내는 `CS_FIGMA_GUIDES`에는 `lib/cs-figma-guides.generated.ts`의 화면 캡처 가이드도 들어간다(문서센터에 unlisted 문서로 공개). 이 생성 가이드도 근거로 쓴다. 단, `INTERNAL_ONLY_CS_FIGMA_DOC_SLUGS`에 든 slug의 가이드는 공개 문서가 아니므로 쓰지 않는다.
+  - `lib/docs.ts` 안이라도 `status: "review"`나 `"draft"`인 문서는 문서센터에 공개되지 않으므로(`lib/docs-content.ts`가 published만 공개) 근거로 쓰지 않는다.
 - 읽지 말 것: `lib/chatbot/` 아래 구현 코드, 다른 심사관의 결과 파일. 구현이 아니라 답변만 보고 판단한다.
 
 ## 항목(각 0·1·2점)
