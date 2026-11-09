@@ -812,13 +812,18 @@ export default function LeadsBoardClient() {
     }
   }
 
+  // 드로어의 단건 담당자 변경 — 대량 배정(bulk-assign)의 안전 코호트 조건(신규·연락중, 미배정,
+  // 30일 이내 등)을 걸지 않는 단건 경로를 쓴다. 그 조건 때문에 전환·종료 리드나 이미 담당이 있는
+  // 리드의 담당을 드로어에서 바꿀 수 없었다. 서버가 담당자 명단·행 단위 낙관적 잠금·감사 로그를 맡는다.
   const handleAssignedTo = async (id: string, name: string) => {
     try {
-      const preview = name ? await requestAssignmentPreview([id]) : undefined
-      if (preview && preview.blockedLeadIds.length > 0) {
-        throw new Error("이 리드는 확인·테스트·중복·최근성 조건 중 하나를 충족하지 않아 바로 배정할 수 없습니다.")
-      }
-      await applyLeadAssignment([id], name || null, preview)
+      const res = await adminFetch(`/api/admin/leads/${id}/assignee`, {
+        method: "PATCH",
+        body: JSON.stringify({ assigned_to: name || null, expectedUpdatedAt: getExpectedUpdatedAt(id) }),
+      })
+      const data = await readAdminResponse<{ lead: LeadRecord }>(res, "담당자를 저장하지 못했습니다.")
+      setLeads((prev) => prev.map((lead) => (lead.id === id ? data.lead : lead)))
+      setSelected((prev) => (prev?.id === id ? data.lead : prev))
       showToast(name ? "담당자를 배정했습니다." : "담당자 배정을 해제했습니다.")
     } catch (err) {
       const error = err instanceof Error ? err : new Error("담당자를 저장하지 못했습니다.")
