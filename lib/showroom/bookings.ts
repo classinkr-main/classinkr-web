@@ -47,6 +47,7 @@ import {
   isValidIsoDate,
   type ShowroomSlotTime,
 } from "@/lib/showroom/slots"
+import { isShowroomConfirmEnabled, showroomVisitLabel } from "@/lib/showroom/compass-confirm"
 
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/
 
@@ -205,8 +206,7 @@ function normalizeInterests(value: unknown): string[] {
 /* ─── 표기 ─── */
 
 export function formatShowroomVisitLabel(booking: NormalizedShowroomBooking) {
-  const [, month, day] = booking.visitDate.split("-")
-  return `${Number(month)}월 ${Number(day)}일 ${booking.visitTime}`
+  return showroomVisitLabel(booking.visitDate, booking.visitTime)
 }
 
 export function buildShowroomBookingLeadMessage(
@@ -227,14 +227,25 @@ export function buildShowroomBookingLeadMessage(
     .join("\n")
 }
 
+/**
+ * 신청 알림(showroom.booking_requested) — 운영 위컴 방 + 인앱.
+ *
+ * 신청형이다(2026-11-06): 이 알림은 "확정"이 아니라 **Compass 컨펌 대기**를 알린다. 팀이 할 일은 스위치
+ * SHOWROOM_CONFIRM_ENABLED 에 따라 갈린다 — 위컴 문구(lib/notifications/emit-event.ts)가 payload.confirmFlow 로 고른다.
+ *  - "compass": Compass 그 리드에 「쇼룸 데모」 회차(날짜·시각·담당)를 넣으면 5분 크론이 확정하고 확정 문자를 보낸다
+ *  - "manual": 스위치가 꺼져 자동 확정·확정 문자가 없다 — 어드민 접수 큐에서 직접 확정하고 고객에게 직접 알린다
+ * autoConfirm 을 넘기지 않으면 지금 env 의 스위치를 읽는다.
+ */
 export function buildShowroomBookingNotification({
   booking,
   bookingId,
   leadId,
+  autoConfirm = isShowroomConfirmEnabled(),
 }: {
   booking: NormalizedShowroomBooking
   bookingId: string
   leadId: string | null
+  autoConfirm?: boolean
 }) {
   return {
     eventType: "showroom.booking_requested" as const,
@@ -242,7 +253,7 @@ export function buildShowroomBookingNotification({
     categoryTag: "lead" as const,
     severity: "info" as const,
     scopeTag: "org_admin" as const,
-    title: `쇼룸 방문 예약: ${booking.org}`,
+    title: `쇼룸 방문 신청: ${booking.org}`,
     message: [booking.name, booking.phone, formatShowroomVisitLabel(booking)].join(" / "),
     // 리드가 만들어졌으면 그 리드로 바로 열고, 아니면 미확인 큐로 보낸다.
     routeUrl: leadId
@@ -267,6 +278,8 @@ export function buildShowroomBookingNotification({
       interests: booking.interests.join(", "),
       memo: booking.memo,
       sourcePage: booking.sourcePage,
+      // 위컴 문구가 안내를 고른다 — 불리언은 위컴 값 정규화에서 빠지므로 문자열로 싣는다.
+      confirmFlow: autoConfirm ? "compass" : "manual",
     },
     channels: NOTIFICATION_CHANNELS,
   }

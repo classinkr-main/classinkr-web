@@ -31,6 +31,7 @@ import type { QuoteTemplateView } from "@/lib/quote-team-templates"
 import type { QuoteTemplateCatalogResponse } from "@/lib/repositories/quote-team-templates"
 import { portalFetch } from "@/lib/portal/portal-fetch"
 import { getQuoteDetailsFromStructuredJson } from "@/lib/portal/quote-details"
+import { describeQuoteVat, resolveQuoteVatIncluded } from "@/lib/portal/quote-vat"
 import type { PartnerDocumentListItem } from "@/lib/portal/types"
 import {
   DEFAULT_HARDWARE_QUOTE_TEMPLATE_ID,
@@ -54,7 +55,12 @@ type HardwareQuoteRow = {
   title: string
   customerName: string
   dealTitle: string
+  /** 최종 금액 — VAT 포함/별도 설정과 무관하게 항상 부가세가 들어간 금액이다. */
   totalAmount: number
+  subtotalAmount: number
+  taxAmount: number
+  /** 견적의 VAT 설정. 금액 라벨을 고정 문구가 아니라 이 값으로 정한다. */
+  vatIncluded: boolean
   status: string
   shareCount: number
   versionCount: number
@@ -215,6 +221,9 @@ function mapDocumentToQuoteRow(document: PartnerDocumentListItem): HardwareQuote
     customerName: document.customer_name ?? "기관 미지정",
     dealTitle: document.deal_title,
     totalAmount: document.total_amount ?? 0,
+    subtotalAmount: document.subtotal ?? document.total_amount ?? 0,
+    taxAmount: document.tax_amount ?? 0,
+    vatIncluded: document.vat_included ?? resolveQuoteVatIncluded(null, document.tax_amount),
     status: document.status,
     shareCount: document.share_count,
     versionCount: document.version_count,
@@ -630,6 +639,12 @@ export default function HardwareQuotesPanel({
       customerName: payload.customer.name,
       dealTitle: payload.deal.title,
       totalAmount: payload.version.total_amount,
+      subtotalAmount: payload.version.subtotal,
+      taxAmount: payload.version.tax_amount,
+      vatIncluded: resolveQuoteVatIncluded(
+        getQuoteDetailsFromStructuredJson(payload.version.structured_json)?.vatIncluded,
+        payload.version.tax_amount
+      ),
       status: payload.share ? "shared" : payload.document.status,
       shareCount: payload.share ? 1 : 0,
       versionCount: 1,
@@ -837,7 +852,7 @@ export default function HardwareQuotesPanel({
           </div>
           <div className="text-right">
             <p className="text-2xl font-bold tracking-[-0.02em] tabular-nums text-[#111110]">{formatMoney(quote.totalAmount)}</p>
-            <p className="text-[11.5px] text-[#78736D]">VAT 별도</p>
+            <p className="text-[11.5px] text-[#78736D]">{describeQuoteVat(quote)}</p>
             <button type="button" className={`${GHOST_BUTTON} mt-2`} disabled={Boolean(changingDeletionId)} onClick={() => void changeQuoteDeletion(quote, true)}>견적 삭제</button>
           </div>
         </div>
@@ -919,6 +934,12 @@ export default function HardwareQuotesPanel({
                       <span className="text-right font-semibold tabular-nums">{line.amount}</span>
                     </div>
                   ))
+                )}
+                {!quote.vatIncluded && (
+                  <div className="grid grid-cols-[minmax(0,1fr)_112px] gap-2 py-2 text-[12.5px] text-[#615D59]">
+                    <span>부가세 (10%)</span>
+                    <span className="text-right tabular-nums">{formatMoney(quote.taxAmount)}</span>
+                  </div>
                 )}
                 <div className="grid grid-cols-[minmax(0,1fr)_112px] gap-2 border-t border-[#31302E] pt-2.5 text-[12.5px] font-bold">
                   <span>합계</span>

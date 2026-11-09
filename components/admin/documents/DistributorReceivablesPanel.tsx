@@ -41,11 +41,12 @@ const ITEM_OPTIONS: Array<{ itemCode: string; itemName: string }> = (() => {
   const seen = new Set<string>()
   const options: Array<{ itemCode: string; itemName: string }> = []
   for (const template of STANDARD_QUOTE_TEMPLATES) {
-    for (const line of template.lines) {
-      if (!line.itemCode || seen.has(line.itemCode) || !isDistributorEligibleLine(line)) continue
+    template.lines.forEach((line, index) => {
+      if (!line.itemCode || seen.has(line.itemCode) || !isDistributorEligibleLine(line)) return
       seen.add(line.itemCode)
-      options.push({ itemCode: line.itemCode, itemName: line.itemName })
-    }
+      // 대표 품목은 템플릿 이름으로 — 녹화 세트 86"·75"처럼 품목명이 같은 세트를 크기로 구분한다.
+      options.push({ itemCode: line.itemCode, itemName: index === 0 ? template.label : line.itemName })
+    })
   }
   return options
 })()

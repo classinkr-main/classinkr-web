@@ -94,8 +94,9 @@ describe("접수 확인 발송", () => {
 
     expect(text).toContain("접수되었습니다")
     expect(text).toContain("9/24(목) 14:00")
-    expect(text).toContain("확인 후 확정 연락")
-    // 요청형이라 이 문자가 확정으로 읽히면 안 된다.
+    expect(text).toContain("신청이 접수되었습니다")
+    expect(text).toContain("확정되면 문자로 다시 알려드립니다")
+    // 신청형이라 이 문자가 확정으로 읽히면 안 된다(확정 안내는 sendShowroomBookingConfirmation 이 따로 보낸다).
     expect(text).not.toContain("확정되었습니다")
   })
 
@@ -134,6 +135,37 @@ describe("접수 확인 발송", () => {
     const text: string = sendSmsMessages.mock.calls[0][0].messages[0].text
 
     expect(text).toContain("$990")
+  })
+
+  it("쇼룸 확정 안내는 확정 문구·담당·호수를 담고, 발송 출처를 접수와 구분한다", async () => {
+    const { mod, sendSmsMessages } = await load()
+
+    await mod.sendShowroomBookingConfirmation({ ...SHOWROOM, assignedTo: "진소망" })
+    const call = sendSmsMessages.mock.calls[0][0]
+    const text: string = call.messages[0].text
+
+    expect(text).toContain("확정되었습니다")
+    expect(text).toContain("9/24(목) 14:00")
+    expect(text).toContain("담당: 진소망")
+    expect(text).toContain("806호")
+    expect(call.context).toEqual({ source: "showroom_booking_confirmed", refId: "booking-1" })
+  })
+
+  it("쇼룸 확정 템플릿이 채워지면 알림톡으로 — 접수 템플릿과 별개다", async () => {
+    process.env.SOLAPI_TEMPLATE_SHOWROOM_CONFIRMED = "KA01TP_CONFIRMED"
+    try {
+      const { mod, sendSmsMessages, sendKakaoAlimtalk } = await load()
+      await mod.sendShowroomBookingConfirmation({ ...SHOWROOM, assignedTo: null })
+      expect(sendSmsMessages).not.toHaveBeenCalled()
+      expect(sendKakaoAlimtalk).toHaveBeenCalledWith(
+        expect.objectContaining({
+          templateId: "KA01TP_CONFIRMED",
+          variables: expect.objectContaining({ "#{일시}": "9/24(목) 14:00", "#{담당}": "쇼룸 담당자" }),
+        })
+      )
+    } finally {
+      delete process.env.SOLAPI_TEMPLATE_SHOWROOM_CONFIRMED
+    }
   })
 
   it("발송 컨텍스트에 어떤 접수인지 남긴다 — message_logs 추적용", async () => {

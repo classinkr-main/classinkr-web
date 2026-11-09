@@ -13,6 +13,7 @@ const PRIMARY_PAGES: Array<{ path: string; title: string; summary: string }> = [
   { path: "/product/hw", title: "Classin Board 전자칠판", summary: "OPS 내장 교육용 전자칠판, AI 카메라 녹화, 판서 PDF 공유" },
   { path: "/product/recording", title: "수업 녹화", summary: "보드 수업 자동 녹화, 클라우드 저장, 다시보기와 학생별 시청 기록" },
   { path: "/product/ai-report", title: "AI 강의 평가", summary: "녹화된 수업을 음성인식과 AI로 정리한 수업 리포트" },
+  { path: "/introduction", title: "서비스 소개서", summary: "클래스인·클래스인 X(AI 스마트 교실) 소개, 수업 영상, 학원·학교 도입 사례 17곳(/introduction/cases)" },
   { path: "/pricing", title: "요금제·도입 견적", summary: "소프트웨어 요금제와 전자칠판·설치 견적 안내" },
   { path: "/faq", title: "자주 묻는 질문", summary: "도입·기능·요금·설치·사용법 질문과 답변" },
   { path: "/docs", title: "가이드", summary: "설치·가입부터 코스 개설, 수업 진행, 전자칠판 사용법까지 공식 사용 안내" },

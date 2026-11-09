@@ -61,6 +61,7 @@ export default function LeadsConsoleList({
   now,
   compassLookup,
   compassDown = false,
+  compassReady = false,
   isCrmRegistered,
   allVisibleSelected,
   selectedVisibleCount,
@@ -95,6 +96,8 @@ export default function LeadsConsoleList({
   compassLookup: ReturnType<typeof useCompassOverlay>["lookup"]
   /** A안 — Compass 오버레이 끊김("매칭 없음"과 다르다). 판정 입력을 리드 드로어와 맞춘다. */
   compassDown?: boolean
+  /** Compass 오버레이를 한 번 이상 성공적으로 읽었다 — 이때만 "매칭 없음"을 MKT 미등록이라고 말할 수 있다. */
+  compassReady?: boolean
   /** A안 — 리드 → NEO 계정 등록 확정 여부(고객 360 crmRegistered 와 같은 원천). 없으면 미등록으로 본다. */
   isCrmRegistered?: (leadId: string) => boolean
   allVisibleSelected: boolean
@@ -247,6 +250,16 @@ export default function LeadsConsoleList({
                     {compassEntry ? (
                       <span className="mt-1 flex">
                         <CompassLeadChip entry={compassEntry} interactive={false} />
+                      </span>
+                    ) : compassReady && unrespondedHours !== null ? (
+                      // Compass 에 없는 미응대 리드 — MKT 연락 반영 크론(lead-contact-sync)이 상태를 바꿔 줄 수 없어
+                      // 직접 응대·종료하지 않으면 미응대로 계속 남는다(2026-11-09: 7~8월 Meta 리드 10건이 이렇게 남아 있었다).
+                      <span
+                        className="mt-1 inline-flex rounded-full border border-[#E8C9A0] bg-[#FBF1E0] px-2 py-0.5 text-[10.5px] font-medium text-[#7A520F]"
+                        title="Compass(MKT)에 없는 리드라 자동 반영되지 않습니다 — 여기서 직접 응대하거나 종료하세요."
+                        data-testid="lead-card-compass-missing"
+                      >
+                        MKT 미등록 · 직접 처리
                       </span>
                     ) : null}
                   </button>

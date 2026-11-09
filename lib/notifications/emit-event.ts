@@ -340,16 +340,37 @@ function buildCheckoutRequestWecomText(input: EmitNotificationEventInput) {
   ]).join("\n")
 }
 
+/** 어드민 쇼룸 접수 큐 — 스위치가 꺼져 수동으로 확정할 때 신청 알림이 가리키는 곳 */
+const SHOWROOM_INTAKE_QUEUE_ROUTE = "/admin/crm/customers/intake"
+
 /**
- * 쇼룸 방문 예약 접수(showroom.booking_requested) — 1차는 요청형이라 담당자가 확정
- * 연락을 해야 끝난다. 창을 열지 않고도 바로 전화할 수 있게 일시·연락처·관심사를 다 편다.
+ * 쇼룸 방문 신청(showroom.booking_requested) — 신청형이라(2026-11-06) 이 알림은 확정이 아니라 **컨펌 대기**다.
+ * 팀이 할 일을 머리 바로 밑에 적고, 창을 열지 않고도 바로 전화할 수 있게 일시·연락처·관심사를 다 편다.
+ *
+ * 할 일은 payload.confirmFlow(lib/showroom/bookings.ts — 스위치 SHOWROOM_CONFIRM_ENABLED)로 가른다.
+ *  - "compass": Compass 그 리드에 「쇼룸 데모」 회차(날짜·시각·담당)를 넣으면 5분 크론이 확정하고 고객에게 확정 문자가 나간다
+ *  - 그 밖(manual·없음): 자동 확정이 꺼져 있다 — 자동 확정·확정 문자를 약속하지 않고 접수 큐의 수동 확정을 안내한다
  */
 function buildShowroomBookingWecomText(input: EmitNotificationEventInput) {
   const role = getPayloadValue(input, "role")
   const name = getPayloadValue(input, "name")
+  const viaCompass = getPayloadValue(input, "confirmFlow") === "compass"
+
+  const guidance = viaCompass
+    ? [
+        "목동 쇼룸 방문 신청이 1건 들어왔습니다 (Compass 컨펌 대기)",
+        "할 일: Compass 에서 이 리드에 데모 회차를 추가하고 방식 「쇼룸 데모」·날짜·시각·담당을 넣어 주세요.",
+        "그러면 다음 5분 동기화에서 확정되고 고객에게 확정 문자가 자동으로 나갑니다.",
+      ]
+    : [
+        "목동 쇼룸 방문 신청이 1건 들어왔습니다 (수동 확정 대기)",
+        "할 일: 자동 확정이 꺼져 있습니다. 고객과 일정을 맞춘 뒤 어드민 접수 큐에서 직접 확정해 주세요.",
+        "확정 문자가 자동으로 나가지 않으니 확정 안내는 고객에게 직접 해 주세요.",
+        labeledLine("접수 큐", formatRouteUrl(SHOWROOM_INTAKE_QUEUE_ROUTE)),
+      ]
 
   return compactLines([
-    "목동 쇼룸 방문 예약이 1건 들어왔습니다 (확정 연락 필요)",
+    ...guidance,
     "",
     labeledLine("희망 일시", getPayloadValue(input, "visitLabel")),
     labeledLine("학원", getPayloadValue(input, "org")),
@@ -363,6 +384,44 @@ function buildShowroomBookingWecomText(input: EmitNotificationEventInput) {
     labeledLine("접수 경로", getPayloadValue(input, "sourcePage")),
     labeledLine("접수 번호", getPayloadValue(input, "bookingId")),
     labeledLine("확인", formatRouteUrl(input.routeUrl)),
+  ]).join("\n")
+}
+
+/** 확정 문자 결과(payload.confirmationMessage) → 운영 방에 보이는 말 */
+const SHOWROOM_CONFIRMATION_MESSAGE_LABEL: Record<string, string> = {
+  sent: "보냄",
+  simulated: "모의 발송 — 실제 문자는 나가지 않음",
+  failed: "실패 — 고객에게 직접 연락 필요",
+  skipped: "보내지 않음 — 이미 보냈거나 지난 방문",
+}
+
+/**
+ * 쇼룸 방문 확정(showroom.booking_confirmed) — Compass 「쇼룸 데모」 회차로 5분 크론이 확정한 예약마다 한 번
+ * (lib/server/showroom-compass-confirm.ts). 신청 알림과 같은 운영 방이다. 확정 일시·담당·확정 문자 결과를 한 장에 펴고,
+ * 문자가 실패했으면 머리에서 바로 보이게 한다(고객은 확정 안내를 못 받았다).
+ */
+function buildShowroomConfirmedWecomText(input: EmitNotificationEventInput) {
+  const role = getPayloadValue(input, "role")
+  const name = getPayloadValue(input, "name")
+  const messageOutcome = getPayloadValue(input, "confirmationMessage")
+  const messageLabel = messageOutcome ? SHOWROOM_CONFIRMATION_MESSAGE_LABEL[messageOutcome] : undefined
+
+  return compactLines([
+    messageOutcome === "failed"
+      ? "목동 쇼룸 방문이 Compass 에서 확정되었습니다 (확정 문자 실패 — 고객에게 직접 연락 필요)"
+      : "목동 쇼룸 방문이 Compass 에서 확정되었습니다",
+    "",
+    labeledLine("확정 일시", getPayloadValue(input, "visitLabel")),
+    labeledLine("처음 신청 일시", getPayloadValue(input, "requestedVisitLabel")),
+    labeledLine("학원", getPayloadValue(input, "org")),
+    labeledLine("고객", name && role ? `${name} (${role})` : name),
+    labeledLine("연락처", getPayloadValue(input, "phone")),
+    labeledLine("담당", getPayloadValue(input, "assignedTo")),
+    labeledLine("방문 인원", peopleLabel(getPayloadValue(input, "visitorCount"))),
+    labeledLine("확정 문자", messageLabel),
+    labeledLine("Compass", getPayloadValue(input, "compassUrl")),
+    labeledLine("확인", formatRouteUrl(input.routeUrl)),
+    labeledLine("접수 번호", getPayloadValue(input, "bookingId")),
   ]).join("\n")
 }
 
@@ -428,6 +487,15 @@ function buildWecomPayload(input: EmitNotificationEventInput) {
       msgtype: "text",
       text: {
         content: buildShowroomBookingWecomText(input),
+      },
+    }
+  }
+
+  if (input.eventType === "showroom.booking_confirmed") {
+    return {
+      msgtype: "text",
+      text: {
+        content: buildShowroomConfirmedWecomText(input),
       },
     }
   }

@@ -35,6 +35,7 @@ export function Footer() {
                         <ul className="space-y-2">
                             <li><Link href="/product/sw" className="hover:text-white transition-colors">소프트웨어</Link></li>
                             <li><Link href="/product/hw" className="hover:text-white transition-colors">하드웨어</Link></li>
+                            <li><Link href="/introduction" className="transition-colors hover:text-fg-ink">서비스 소개서</Link></li>
                             <li>
                                 <TrackedLink href="/pricing" ctaId="footer_pricing" className="hover:text-white transition-colors">
                                     요금 안내

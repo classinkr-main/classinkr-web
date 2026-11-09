@@ -86,13 +86,12 @@ const PALETTE_CHILD_COMMANDS: Record<string, Array<Omit<AdminCommand, "group">>>
     { label: "워크스페이스", href: "/admin/crm/deals/kpi", keywords: "파트너 계약 정산 큐 kpi workspace" },
     { label: "인사이트", href: "/admin/crm/insights", keywords: "crm 인사이트 분석 insight analytics" },
   ],
-  // 견적 빠른 작업은 redirect 스텁(app/admin/quotes/{new,recording-studio,ai-suite}/page.tsx)을
+  // 견적 빠른 작업은 redirect 스텁(app/admin/quotes/{new,recording-studio}/page.tsx)을
   // 거치지 않고 스텁이 보내는 최종 URL로 곧장 간다 — 서버 왕복 한 번과 히스토리 한 칸을 던다.
   // 스텁 파일은 북마크·외부 링크 보호용으로 남아 있다(목적지를 바꾸면 여기도 함께 바꿀 것).
   "/admin/quotes": [
     { label: "빠른 견적 작성", href: "/admin/quotes?tab=hardware&action=new", keywords: "견적 작성 빠른 견적 quick quote" },
     { label: "녹화 세트 견적", href: "/admin/quotes?tab=hardware&action=recording_studio", keywords: "녹화 세트 omo1 studio recording 견적" },
-    { label: "AI Suite 견적", href: "/admin/quotes?tab=hardware&action=online_suite", keywords: "ai suite 구독형 온라인 패키지 견적" },
   ],
   "/admin/campaigns": [
     // 라벨은 허브 탭 이름(lib/marketing/hub-tabs.ts CAMPAIGN_TABS의 email 탭 = "메시지")과 같다.

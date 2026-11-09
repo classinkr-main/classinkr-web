@@ -668,7 +668,7 @@ export const FIELD_SYMPTOM_TOPICS: SymptomTopic[] = [
     requireSymptom: false,
     category: "troubleshooting",
     doc: { category: "teacher", slug: "course-members" },
-    steps: [{ heading: "역할 변경하기 (학생 ↔ 교사)", take: 3 }],
+    steps: [{ heading: "역할 변경하기 (학생·교사)", take: 3 }],
     intro:
       "수업 중에 갑자기 학생으로 바뀌면 칠판도 학생 관리도 막혀 정말 당황스러우셨겠어요. 그 코스에서 내 계정이 교사로 남아 있는지부터 확인해야 해요. 담임 교사나 관리자가 아래처럼 역할을 다시 교사로 바꾸고, 다시 교실에 들어오면 됩니다.",
     branches: [
@@ -1684,7 +1684,7 @@ export const FIELD_SYMPTOM_TOPICS: SymptomTopic[] = [
       "작년에 사신 보드가 아직 무상 A/S 기간인지는 구매일과 적용된 프로모션에 따라 달라서 여기서 단정할 수 없어요. 기준은 이렇습니다.",
     branches: [
       "정확한 기간은 구매 계약서나 거래명세서의 구매일로 확인하시고, A/S 접수는 아래 [실시간 상담 연결]이나 홈페이지 상담 채널로 하시면 돼요. 접수할 때 구매일과 증상이 처음 생긴 날을 알려 주시면 빨라요.",
-      "접수할 때 필요한 보드 번호는 오른쪽 전원 버튼을 누른 뒤 [Setting] → [about]에서 볼 수 있어요. 채팅창에는 적지 말고 상담원 안내에 따라 전달해 주세요.",
+      "접수할 때 필요한 보드 번호는 오른쪽 전원 버튼을 누른 뒤 [Setting] > [about]에서 볼 수 있어요. 채팅창에는 적지 말고 상담원 안내에 따라 전달해 주세요.",
       "보드를 직접 열거나 분해하지는 마세요. 조치 방법은 접수 뒤 안내해 드립니다.",
     ],
     handoff: true,

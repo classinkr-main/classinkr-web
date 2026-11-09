@@ -1085,7 +1085,7 @@ const BASE_SYMPTOM_TOPICS: SymptomTopic[] = [
     intro: "학생은 코스 오른쪽 위 [구성원] > [구성원 초대]에서 연락처, 링크, QR 코드로 초대해요. 링크를 보내도 됩니다.",
     branches: ["학생이 클래스인에 가입돼 있어야 코스에 들어와요. 링크나 QR로 들어오게 하려면 코스 설정 > [코스 관리]의 '코스 가입 허용'을 켜 두세요."],
     contactHeading: "",
-    en: "Open the course → [구성원] → [구성원 초대] and invite by contact, link, or QR code. Students must already have a ClassIn account, and '코스 가입 허용' must be on for link/QR joins.",
+    en: "Open the course > [구성원] > [구성원 초대] and invite by contact, link, or QR code. Students must already have a ClassIn account, and '코스 가입 허용' must be on for link/QR joins.",
     suggestedQuestions: ["초대했는데 학생이 못 들어와요", "코스 가입이 안 돼요", "학생 추가가 안 돼요"],
   },
   {

@@ -2,6 +2,7 @@ import { PRODUCT_TEMPLATES } from "@/lib/product-templates"
 import {
   QUOTE_NOTE_PRESETS,
   STANDARD_QUOTE_TEMPLATES,
+  isRetiredQuoteTemplate,
   isSoftwareQuoteTemplate,
   type QuoteProductLine,
   type StandardQuoteTemplateId,
@@ -198,11 +199,21 @@ function optionDefault(template: StandardQuoteTemplatePreset, groupId: string) {
   return group?.control === "radio" ? group.defaultValue : undefined
 }
 
-// '+ 견적서' 메뉴(app/admin/quotes/page.tsx)는 구독형 AI Suite 를 바로 띄우지 않는다.
-const BASE_TEMPLATES_HIDDEN_FROM_MENU: ReadonlySet<StandardQuoteTemplateId> = new Set(["online_suite"])
+// 판매 중단 템플릿의 대표 품목(예: 구독형 AI Suite online-suite-monthly). 카탈로그에는 남아 있어
+// 기존 팀 템플릿·견적은 그대로 읽히지만, 새로 고르는 품목 목록에는 내놓지 않는다.
+const RETIRED_SKUS = new Set(
+  STANDARD_QUOTE_TEMPLATES.filter((template) => isRetiredQuoteTemplate(template.id)).flatMap((template) =>
+    template.lines.map((line) => line.itemCode).filter((code): code is string => Boolean(code))
+  )
+)
 
+export function isRetiredQuoteTemplateSku(sku: string) {
+  return RETIRED_SKUS.has(sku)
+}
+
+// 판매 중단 템플릿은 기본 템플릿 목록에서 아예 뺀다.
 export function baseQuoteTemplateViews(): QuoteTemplateView[] {
-  return STANDARD_QUOTE_TEMPLATES.map((template) => {
+  return STANDARD_QUOTE_TEMPLATES.filter((template) => !isRetiredQuoteTemplate(template.id)).map((template) => {
     const installation = optionDefault(template, "installation_mode")
     const payment = optionDefault(template, "payment_plan")
     return finishView({
@@ -223,7 +234,7 @@ export function baseQuoteTemplateViews(): QuoteTemplateView[] {
         payment: isPayment(payment) ? payment : DEFAULT_QUOTE_TEMPLATE_DEFAULTS.payment,
       },
       scope: "team",
-      showInMenu: !BASE_TEMPLATES_HIDDEN_FROM_MENU.has(template.id),
+      showInMenu: true,
       ownerName: null,
       updatedAt: null,
       canEdit: false,
