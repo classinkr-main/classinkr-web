@@ -16,6 +16,7 @@
   { "round": 12, "date": "2026-11-08", "fresh": { "batch": 12, "pass": 0, "n": 60 }, "rerun": { "batch": 11, "pass": 56, "n": 60 }, "agreement": 97.5, "kappa": 0.95 },
   { "round": 13, "date": "2026-11-08", "fresh": { "batch": 13, "pass": 0, "n": 60 }, "rerun": { "batch": 12, "pass": 54, "n": 60 }, "agreement": 97.5, "kappa": 0.95 },
   { "round": 14, "date": "2026-11-09", "fresh": { "batch": 14, "pass": 0, "n": 60 }, "rerun": { "batch": 13, "pass": 58, "n": 60 }, "agreement": 98.3, "kappa": 0.97 },
-  { "round": 15, "date": "2026-11-09", "fresh": { "batch": 15, "pass": 0, "n": 60 }, "rerun": { "batch": 14, "pass": 59, "n": 60 }, "agreement": 100, "kappa": 1 }
+  { "round": 15, "date": "2026-11-09", "fresh": { "batch": 15, "pass": 0, "n": 60 }, "rerun": { "batch": 14, "pass": 59, "n": 60 }, "agreement": 100, "kappa": 1 },
+  { "round": 16, "date": "2026-11-09", "fresh": { "batch": 16, "pass": 0, "n": 60 }, "rerun": { "batch": 15, "pass": 60, "n": 60 }, "agreement": 100, "kappa": 1 }
  ]
 }
