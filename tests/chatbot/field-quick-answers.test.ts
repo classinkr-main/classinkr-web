@@ -79,6 +79,27 @@ describe("field quick answers", () => {
     expect(find("수업 중에 선생님 영상이 작은 창으로만 보여요 크게 보려면?")).not.toBe("replay-picture-in-picture-pip")
   })
 
+  it("keeps round-20 answers from catching neighbouring questions (fact-check)", () => {
+    // '빠르게'·'순서'·'둘 다'처럼 흔한 말은 증상이 아니다.
+    expect(find("녹음 숙제 빠르게 채점하는 방법 있어요?")).not.toBe("voice-homework-chipmunk-fast-playback")
+    expect(find("숙제 사진 올리는 순서 알려 주세요")).not.toBe("homework-photos-order-shuffled")
+    expect(find("월 결제랑 연 결제 둘 다 되나요? 어느 쪽이 싸요?")).not.toBe("monthly-to-annual-double-charge-prior-answer")
+    // 지난 안내가 없는 질문에 '지난 대화는 볼 수 없다'로 시작하지 않는다.
+    expect(find("요금제 올렸는데도 수업이 끊겨요 차액 환불돼요?")).not.toBe("upgraded-plan-still-drops-prior-answer")
+    expect(find("학생이 지금 접속 중인지 상태 확인하는 방법 알려 주세요")).not.toBe("invisible-online-status-prior-answer")
+    // 학생·학부모·강사의 역할이 다른 질문은 그 역할의 답으로 보내지 않는다.
+    expect(find("학생인데 ai 튜터 기능 어디서 켜요?")).not.toBe("which-ai-feature-teacher-list")
+    expect(find("학부모인데 학원비 영수증 어디서 받아요?")).not.toBe("student-mom-wants-receipt-in-app")
+    expect(find("아이들이 숙제 마감이 지났다고 하는데 마감 시간 연장할 수 있어요?")).not.toBe("child-homework-deadline-passed-early")
+    expect(find("학생이 수업 중 욕설을 해서 경찰에 신고하려고 하는데 녹화 기록을 보내도 되나요?")).not.toBe(
+      "caller-claims-police-wants-classin-data"
+    )
+    // 'understand'의 stand, 로그인 twice, '막혀요'는 각 답이 아니다.
+    expect(find("i don't understand how to adjust the camera height")).not.toBe("board-height-adjustable-stand-spec")
+    expect(find("the app asks me to log in twice on the website")).not.toBe("paid-twice-iphone-app-and-website")
+    expect(find("카톡으로 받은 자료를 칠판에서 열려고 하는데 막혀요")).not.toBe("teacher-kakaotalk-left-on-board")
+  })
+
   it("keeps an admin's parent-account question apart from a parent's follow-up on an earlier bot answer", () => {
     // "원장님께서 하라고 하셨다"는 지난 챗봇 안내가 아니다.
     expect(
