@@ -17,6 +17,7 @@ import {
 } from "@/components/admin/traffic/TrafficConversionPanel"
 import PagePerformanceTable, { pageName } from "@/components/admin/traffic/PagePerformanceTable"
 import { adminFetchJsonCached } from "@/lib/admin-client"
+import type { PublicPageRequests } from "@/lib/admin/public-page-requests"
 
 type RangeDays = 7 | 14 | 30
 
@@ -378,6 +379,7 @@ export default function TrafficDashboard({ range }: { range: RangeDays }) {
   const [detailTab, setDetailTab] =
     useState<TrafficDetailTab>("conversions")
   const [visitorStats, setVisitorStats] = useState<VisitorStats | null>(null)
+  const [pageRequests, setPageRequests] = useState<{ range: number; data: PublicPageRequests | null } | null>(null)
   const [homepageFlow, setHomepageFlow] = useState<HomepageFlow | null>(null)
   const [leadConversions, setLeadConversions] = useState<TrafficSummary["leadConversions"] | null>(null)
   const [leadConversionsUnavailable, setLeadConversionsUnavailable] = useState(false)
@@ -431,6 +433,17 @@ export default function TrafficDashboard({ range }: { range: RangeDays }) {
       cancelled = true
     }
   }, [range, reloadKey])
+
+  useEffect(() => {
+    let cancelled = false
+    void fetchJson<PublicPageRequests>(`/api/admin/public-page-requests?range=${range}`).then((data) => {
+      if (!cancelled) setPageRequests({ range, data })
+    })
+    return () => { cancelled = true }
+  }, [range, reloadKey])
+
+  const requestsLoading = pageRequests?.range !== range
+  const publicPageRequests = pageRequests?.range === range ? pageRequests.data : null
 
   const todayIndex =
     visitorStats?.daily.findIndex(
@@ -524,10 +537,21 @@ export default function TrafficDashboard({ range }: { range: RangeDays }) {
         </div>
       )}
       <p className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-[#615D59]">
-        <span>분석 쿠키에 동의한 방문자의 자체 DB 집계 · 날짜 기준 {tz}</span>
+        <span>페이지 요청은 동의 여부와 무관 · 아래 방문자와 행동은 분석 동의 기준 · 날짜 기준 {tz}</span>
         <span aria-hidden="true">·</span>
         <span>최근 업데이트 {formatUpdatedAt(generatedAt)}</span>
       </p>
+
+      <section aria-labelledby="page-request-title" className="mb-5 overflow-hidden rounded-2xl border border-black/[0.08] bg-white">
+        <div className="border-b border-black/[0.08] px-4 py-3 sm:px-6">
+          <h2 id="page-request-title" className="text-[15px] font-bold text-[#111110]">전체 페이지 요청</h2>
+          <p className="mt-1 text-[12px] leading-5 text-[#615D59]">공개 페이지의 HTML 요청 · 확인된 봇과 미리 불러오기 제외. 반복 접속과 미확인 봇이 포함될 수 있고, 캐시·페이지 내 이동은 빠질 수 있습니다. 방문자 수와는 다릅니다.</p>
+        </div>
+        <div className="grid grid-cols-2 gap-px bg-black/[0.08]">
+          <DecisionMetric icon={<Eye aria-hidden="true" className="h-4 w-4" />} label="오늘 페이지 요청" value={requestsLoading ? "—" : publicPageRequests ? `${publicPageRequests.today.toLocaleString("ko-KR")}회` : "확인 필요"} hint="오늘 0시부터 · 동의 여부 무관" />
+          <DecisionMetric icon={<Activity aria-hidden="true" className="h-4 w-4" />} label={`${range}일 페이지 요청`} value={requestsLoading ? "—" : publicPageRequests ? `${publicPageRequests.total.toLocaleString("ko-KR")}회` : "확인 필요"} hint={publicPageRequests ? "운영 도메인 기준" : "서버 트래픽 연결 상태를 확인하세요"} />
+        </div>
+      </section>
 
       <section
         aria-labelledby="traffic-summary-title"

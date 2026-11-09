@@ -22,6 +22,7 @@ import { useUrlState } from "@/lib/use-url-state"
 import type { LeadRecord } from "@/lib/db"
 import type { BlogPost } from "@/lib/blog-types"
 import type { Subscriber } from "@/lib/marketing-types"
+import type { PublicPageRequests } from "@/lib/admin/public-page-requests"
 
 type AnalyticsTab = "visitors" | "leads" | "sources" | "content"
 
@@ -263,6 +264,7 @@ export default function AnalyticsPage() {
     range: number
     totals: { visitors: number; homeVisitors: number } | null
   } | null>(null)
+  const [pageRequests, setPageRequests] = useState<{ range: number; data: PublicPageRequests | null } | null>(null)
   const activeTab: AnalyticsTab = ANALYTICS_TABS.some((tab) => tab.key === tabParam)
     ? (tabParam as AnalyticsTab)
     : "visitors"
@@ -318,8 +320,16 @@ export default function AnalyticsPage() {
       cancelled = true
     }
   }, [range, reloadKey])
-  const visitorsLoading = visitorSummary?.range !== range
-  const visitorTotals = visitorSummary?.totals ?? null
+  useEffect(() => {
+    let cancelled = false
+    void fetchJson<PublicPageRequests>(`/api/admin/public-page-requests?range=${range}`).then((data) => {
+      if (!cancelled) setPageRequests({ range, data })
+    })
+    return () => { cancelled = true }
+  }, [range, reloadKey])
+  const visitorsLoading = pageRequests?.range !== range
+  const visitorTotals = visitorSummary?.range === range ? visitorSummary.totals : null
+  const publicPageRequests = pageRequests?.range === range ? pageRequests.data : null
 
   const { today, start, previousStart } = getDayWindow(range)
   const nextDay = shiftDays(today, 1)
@@ -458,12 +468,12 @@ export default function AnalyticsPage() {
       <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatTile
           icon={<BarChart2 className="w-4 h-4" />}
-          label="홈페이지 방문자"
-          value={visitorsLoading ? "..." : visitorTotals ? visitorTotals.visitors.toLocaleString("ko-KR") : "확인 필요"}
+          label="홈페이지 트래픽"
+          value={visitorsLoading ? "..." : publicPageRequests ? `${publicPageRequests.total.toLocaleString("ko-KR")}회` : "확인 필요"}
           hint={
-            visitorsLoading || !visitorTotals
-              ? `${range}일 기준`
-              : `${range}일 · 홈(/) ${visitorTotals.homeVisitors.toLocaleString("ko-KR")}명`
+            visitorsLoading ? `${range}일 기준` : publicPageRequests
+              ? `${range}일 페이지 요청 · 동의 방문 ${visitorTotals?.visitors.toLocaleString("ko-KR") ?? "—"}명`
+              : "페이지 요청 집계를 불러오지 못했습니다"
           }
         />
         <StatTile
