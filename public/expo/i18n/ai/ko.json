@@ -4,7 +4,7 @@
 "‹ Home"
 ],
 "tr": [
-"‹ 홈"
+"‹ 처음으로"
 ]
 },
 {
@@ -32,7 +32,7 @@
 ],
 "tr": [
 "AI가 수업을 ",
-"어떻게 돕는지 보세요"
+"어떻게 돕는지 확인하세요"
 ]
 },
 {
@@ -40,7 +40,7 @@
 "Tap a card to see how each feature works."
 ],
 "tr": [
-"카드를 탭해 기능별 작동 방식을 확인하세요."
+"카드를 탭하면 기능별 시연을 볼 수 있습니다."
 ]
 },
 {
@@ -50,7 +50,7 @@
 "›"
 ],
 "tr": [
-"더 많은 기능",
+"기능 더 보기",
 "{0}",
 "›"
 ]
@@ -72,7 +72,7 @@
 "tr": [
 "더 ",
 "많은",
-" 기능 살펴보기"
+" 기능을 살펴보세요"
 ]
 },
 {
@@ -80,7 +80,7 @@
 "Try a feature yourself, or watch one in a real ClassIn classroom."
 ],
 "tr": [
-"기능을 직접 써 보거나, 실제 ClassIn 교실에서 쓰이는 모습을 보세요."
+"기능을 직접 써 보거나, 실제 클래스인 교실에서 쓰는 모습을 보세요."
 ]
 },
 {
@@ -88,7 +88,7 @@
 "It works for any subject. Choose one to watch."
 ],
 "tr": [
-"어떤 과목에도 활용할 수 있습니다. 볼 과목을 고르세요."
+"모든 과목에 쓸 수 있습니다. 보고 싶은 과목을 고르세요."
 ]
 },
 {
@@ -106,7 +106,7 @@
 ],
 "tr": [
 "휴대폰을 가로로 돌려 주세요",
-"데모는 교실 화면 전체를 보여 주므로 넓은 화면이 필요합니다."
+"교실 화면 전체를 보여 주는 데모라 가로 화면이 필요합니다."
 ]
 },
 {
@@ -122,7 +122,7 @@
 "More in ClassIn"
 ],
 "tr": [
-"ClassIn의 더 많은 기능"
+"클래스인의 더 많은 기능"
 ]
 },
 {
@@ -130,7 +130,7 @@
 "Ask the class. See every answer, live."
 ],
 "tr": [
-"반 전체에 질문하고, 모든 답변을 실시간으로 확인하세요."
+"질문하면 반 전체 답변을 실시간으로 확인합니다."
 ]
 },
 {
@@ -140,7 +140,7 @@
 ],
 "tr": [
 "{0}",
-"반 전체에 질문"
+"반 전체에 질문하기"
 ]
 },
 {
@@ -150,7 +150,7 @@
 ],
 "tr": [
 "{0}",
-"모든 학생이 각자 기기로 답변"
+"학생은 각자 기기로 응답"
 ]
 },
 {
@@ -160,7 +160,7 @@
 ],
 "tr": [
 "{0}",
-"정답자 확인"
+"정답자 바로 확인"
 ]
 },
 {
@@ -168,7 +168,7 @@
 "Ask the class a question"
 ],
 "tr": [
-"반 전체에 질문"
+"반 전체에 질문하기"
 ]
 },
 {
@@ -176,7 +176,7 @@
 "Every student answers on their own device"
 ],
 "tr": [
-"모든 학생이 각자 기기로 답변"
+"학생은 각자 기기로 응답"
 ]
 },
 {
@@ -184,7 +184,7 @@
 "Mark the right answer."
 ],
 "tr": [
-"정답을 표시하세요."
+"정답을 지정하세요."
 ]
 },
 {
@@ -192,7 +192,7 @@
 "You just saw"
 ],
 "tr": [
-"방금 본 내용"
+"방금 본 기능"
 ]
 },
 {
@@ -202,7 +202,7 @@
 ],
 "tr": [
 "✓",
-"반 전체에 질문"
+"반 전체에 질문하기"
 ]
 },
 {
@@ -212,7 +212,7 @@
 ],
 "tr": [
 "✓",
-"모든 학생이 각자 기기로 답변"
+"학생은 각자 기기로 응답"
 ]
 },
 {
@@ -222,7 +222,7 @@
 ],
 "tr": [
 "✓",
-"정답자 확인"
+"정답자 바로 확인"
 ]
 },
 {
@@ -230,7 +230,7 @@
 "Every student answers. You see the whole class at a glance."
 ],
 "tr": [
-"모든 학생이 답하고, 반 전체 결과를 한눈에 봅니다."
+"모든 학생이 답하고, 선생님은 반 전체 결과를 한눈에 봅니다."
 ]
 },
 {
@@ -248,7 +248,7 @@
 ],
 "tr": [
 "수업 중",
-"가르치는 동안"
+"수업하는 동안"
 ]
 },
 {
@@ -264,7 +264,7 @@
 "Students answer, AI marks every one"
 ],
 "tr": [
-"학생이 답하면 AI가 모두 채점"
+"학생이 답하면 AI가 바로 채점"
 ]
 },
 {
@@ -280,7 +280,7 @@
 "Lesson Summary"
 ],
 "tr": [
-"수업 요약"
+"AI 수업 요약"
 ]
 },
 {
@@ -288,7 +288,7 @@
 "AI writes notes and a mind map"
 ],
 "tr": [
-"AI가 노트와 마인드맵 작성"
+"요약 노트와 마인드맵을 AI가 작성"
 ]
 },
 {
@@ -304,7 +304,7 @@
 "Pick an experiment, build it yourself"
 ],
 "tr": [
-"실험을 골라 직접 구성"
+"실험을 골라 직접 장치 구성"
 ]
 },
 {
@@ -322,7 +322,7 @@
 "A scored report on the lesson"
 ],
 "tr": [
-"점수로 보는 수업 리포트"
+"근거와 함께 보는 수업 진단 보고서"
 ]
 },
 {
@@ -338,7 +338,7 @@
 "How each student is doing"
 ],
 "tr": [
-"학생별 학습 현황"
+"학생별 학습 현황 확인"
 ]
 },
 {
@@ -346,7 +346,7 @@
 "Question Generator"
 ],
 "tr": [
-"문제 생성기"
+"AI 출제"
 ]
 },
 {
@@ -354,7 +354,7 @@
 "Practice questions, written by AI"
 ],
 "tr": [
-"AI가 만드는 연습 문제"
+"연습 문제를 AI가 출제"
 ]
 },
 {
@@ -378,7 +378,7 @@
 "Say what you need. ClassIn does it."
 ],
 "tr": [
-"필요한 것을 말하면 ClassIn이 해 줍니다."
+"말로 요청하면 클래스인이 바로 실행합니다."
 ]
 },
 {
@@ -388,7 +388,7 @@
 ],
 "tr": [
 "{0}",
-"음성 비서 호출"
+"음성 도우미 호출"
 ]
 },
 {
@@ -408,7 +408,7 @@
 ],
 "tr": [
 "{0}",
-"손 쓸 필요 없이 ClassIn이 실행"
+"손대지 않아도 클래스인이 실행"
 ]
 },
 {
@@ -416,7 +416,7 @@
 "Call the voice assistant"
 ],
 "tr": [
-"음성 비서 호출"
+"음성 도우미 호출"
 ]
 },
 {
@@ -440,7 +440,7 @@
 "ClassIn does it, hands-free"
 ],
 "tr": [
-"손 쓸 필요 없이 ClassIn이 실행"
+"손대지 않아도 클래스인이 실행"
 ]
 },
 {
@@ -450,7 +450,7 @@
 ],
 "tr": [
 "✓",
-"음성 비서 호출"
+"음성 도우미 호출"
 ]
 },
 {
@@ -470,7 +470,7 @@
 ],
 "tr": [
 "✓",
-"손 쓸 필요 없이 ClassIn이 실행"
+"손대지 않아도 클래스인이 실행"
 ]
 },
 {
@@ -494,7 +494,7 @@
 "Answers students’ questions any time, only from your class materials."
 ],
 "tr": [
-"수업 자료만을 근거로, 학생 질문에 언제든 답합니다."
+"학생 질문에 언제든 답합니다. 근거는 등록한 수업 자료뿐입니다."
 ]
 },
 {
@@ -514,7 +514,7 @@
 ],
 "tr": [
 "{0}",
-"AI가 수업 자료로 답변"
+"AI가 수업 자료를 근거로 답변"
 ]
 },
 {
@@ -524,7 +524,7 @@
 ],
 "tr": [
 "{0}",
-"모든 답변에 출처 표시"
+"답변마다 출처 표시"
 ]
 },
 {
@@ -540,7 +540,7 @@
 "AI answers from your class materials"
 ],
 "tr": [
-"AI가 수업 자료로 답변"
+"AI가 수업 자료를 근거로 답변"
 ]
 },
 {
@@ -548,7 +548,7 @@
 "Every answer shows its source"
 ],
 "tr": [
-"모든 답변에 출처 표시"
+"답변마다 출처 표시"
 ]
 },
 {
@@ -568,7 +568,7 @@
 ],
 "tr": [
 "✓",
-"AI가 수업 자료로 답변"
+"AI가 수업 자료를 근거로 답변"
 ]
 },
 {
@@ -578,7 +578,7 @@
 ],
 "tr": [
 "✓",
-"모든 답변에 출처 표시"
+"답변마다 출처 표시"
 ]
 },
 {
@@ -586,7 +586,7 @@
 "Every answer comes from your own class materials."
 ],
 "tr": [
-"모든 답변은 선생님의 수업 자료에서 나옵니다."
+"모든 답변은 선생님이 등록한 수업 자료에서 나옵니다."
 ]
 },
 {
@@ -594,7 +594,7 @@
 "AI Homework"
 ],
 "tr": [
-"AI 과제"
+"AI 숙제"
 ]
 },
 {
@@ -602,7 +602,7 @@
 "AI writes the homework and marks it. The teacher stays in charge."
 ],
 "tr": [
-"AI가 과제를 출제하고 채점합니다. 최종 판단은 교사가 합니다."
+"AI가 숙제를 만들고 채점 초안을 냅니다. 최종 판단은 선생님이 합니다."
 ]
 },
 {
@@ -612,7 +612,7 @@
 ],
 "tr": [
 "{0}",
-"AI가 과제 출제"
+"AI가 숙제 작성"
 ]
 },
 {
@@ -622,7 +622,7 @@
 ],
 "tr": [
 "{0}",
-"학생이 풀이 사진 제출"
+"학생은 풀이 사진 제출"
 ]
 },
 {
@@ -632,7 +632,7 @@
 ],
 "tr": [
 "{0}",
-"AI가 채점, 교사가 확인"
+"AI가 채점, 선생님이 확정"
 ]
 },
 {
@@ -640,7 +640,7 @@
 "AI marks it, the teacher confirms"
 ],
 "tr": [
-"AI가 채점, 교사가 확인"
+"AI가 채점, 선생님이 확정"
 ]
 },
 {
@@ -648,7 +648,7 @@
 "Now let AI mark Mia’s homework."
 ],
 "tr": [
-"이제 AI에게 Mia의 과제 채점을 맡겨 보세요."
+"이제 AI로 Mia의 숙제를 채점해 보세요."
 ]
 },
 {
@@ -658,7 +658,7 @@
 ],
 "tr": [
 "✓",
-"AI가 과제 출제"
+"AI가 숙제 작성"
 ]
 },
 {
@@ -668,7 +668,7 @@
 ],
 "tr": [
 "✓",
-"학생이 풀이 사진 제출"
+"학생은 풀이 사진 제출"
 ]
 },
 {
@@ -678,7 +678,7 @@
 ],
 "tr": [
 "✓",
-"AI가 채점, 교사가 확인"
+"AI가 채점, 선생님이 확정"
 ]
 },
 {
@@ -686,7 +686,7 @@
 "AI marks in seconds. The teacher confirms the score."
 ],
 "tr": [
-"AI가 몇 초 만에 채점하고, 교사가 점수를 확정합니다."
+"AI가 몇 초 만에 채점하고, 점수는 선생님이 확정합니다."
 ]
 },
 {
@@ -696,7 +696,7 @@
 ],
 "tr": [
 "{0}",
-"교사가 문제, 파일, 마감일로 과제 구성"
+"선생님이 문제·파일·마감일로 과제 구성"
 ]
 },
 {
@@ -716,7 +716,7 @@
 ],
 "tr": [
 "{0}",
-"모든 학생이 각자 기기로 과제 알림 수신"
+"모든 학생 기기에 과제 알림 도착"
 ]
 },
 {
@@ -734,7 +734,7 @@
 ],
 "tr": [
 "✓",
-"보드에서 과제 구성"
+"전자칠판에서 과제 구성"
 ]
 },
 {
@@ -762,7 +762,7 @@
 "Homework, set before the lesson ends."
 ],
 "tr": [
-"수업이 끝나기 전에 과제 배포 완료."
+"수업이 끝나기 전에 과제 배포까지 끝."
 ]
 },
 {
@@ -772,7 +772,7 @@
 ],
 "tr": [
 "{0}",
-"교사가 보드에서 그룹 구성"
+"선생님이 전자칠판에서 그룹 구성"
 ]
 },
 {
@@ -782,7 +782,7 @@
 ],
 "tr": [
 "{0}",
-"ClassIn이 모든 학생을 그룹에 배정"
+"클래스인이 학생을 그룹에 자동 배정"
 ]
 },
 {
@@ -802,7 +802,7 @@
 ],
 "tr": [
 "{0}",
-"그룹별로 태블릿과 노트북으로 협업"
+"그룹별로 태블릿·노트북에서 함께 작업"
 ]
 },
 {
@@ -812,7 +812,7 @@
 ],
 "tr": [
 "{0}",
-"그룹 결과물을 보드에 띄워 모두와 공유"
+"그룹 결과물을 전자칠판에 띄워 모두와 공유"
 ]
 },
 {
@@ -820,7 +820,7 @@
 "Breakout Rooms"
 ],
 "tr": [
-"소그룹실"
+"그룹 토론"
 ]
 },
 {
@@ -830,7 +830,7 @@
 ],
 "tr": [
 "✓",
-"보드에서 그룹 구성"
+"전자칠판에서 그룹 구성"
 ]
 },
 {
@@ -840,7 +840,7 @@
 ],
 "tr": [
 "✓",
-"그룹별 협업"
+"그룹별로 함께 작업"
 ]
 },
 {
@@ -850,7 +850,7 @@
 ],
 "tr": [
 "✓",
-"그룹 결과물을 보드에 공유"
+"그룹 결과물을 전자칠판에 공유"
 ]
 },
 {
@@ -858,7 +858,7 @@
 "Group work, organised and shared in minutes."
 ],
 "tr": [
-"몇 분 만에 그룹 활동을 구성하고 공유합니다."
+"그룹 활동 구성부터 공유까지 몇 분이면 충분합니다."
 ]
 },
 {
@@ -878,7 +878,7 @@
 ],
 "tr": [
 "{0}",
-"제스처로 ClassIn Drive를 열고 파일을 보드에 띄우기"
+"제스처로 ClassIn Drive를 열어 파일을 전자칠판에"
 ]
 },
 {
@@ -964,7 +964,7 @@
 ],
 "tr": [
 "{0}",
-"보드에 짝 맞추기 과제 표시"
+"전자칠판에 짝 맞추기 과제 표시"
 ]
 },
 {
@@ -974,7 +974,7 @@
 ],
 "tr": [
 "{0}",
-"도구함에서 스케치보드 선택"
+"도구함에서 개인 칠판 선택"
 ]
 },
 {
@@ -994,7 +994,7 @@
 ],
 "tr": [
 "{0}",
-"학생마다 각자 기기로 답변"
+"학생은 각자 기기로 답변"
 ]
 },
 {
@@ -1004,7 +1004,7 @@
 ],
 "tr": [
 "{0}",
-"모든 답변이 보드로 모임"
+"모든 답변이 전자칠판으로 모임"
 ]
 },
 {
@@ -1014,7 +1014,7 @@
 ],
 "tr": [
 "✓",
-"도구함에서 스케치보드 선택"
+"도구함에서 개인 칠판 선택"
 ]
 },
 {
@@ -1034,7 +1034,7 @@
 ],
 "tr": [
 "✓",
-"보드에서 모든 답변 확인"
+"전자칠판에서 모든 답변 확인"
 ]
 },
 {
@@ -1142,7 +1142,7 @@
 "A summary and a mind map, ready to share after class."
 ],
 "tr": [
-"수업 후 바로 공유할 수 있는 요약과 마인드맵."
+"수업이 끝나면 바로 공유할 수 있는 요약과 마인드맵."
 ]
 },
 {
@@ -1150,7 +1150,7 @@
 "A scored report on your lesson, after class."
 ],
 "tr": [
-"수업이 끝나면 받는, 점수가 매겨진 수업 리포트."
+"수업이 끝나면 근거를 담은 진단 보고서가 나옵니다."
 ]
 },
 {
@@ -1170,7 +1170,7 @@
 ],
 "tr": [
 "{0}",
-"AI가 5개 교수 영역별로 채점"
+"AI가 교수 영역별로 진단"
 ]
 },
 {
@@ -1188,7 +1188,7 @@
 "AI scores it on five teaching areas"
 ],
 "tr": [
-"AI가 5개 교수 영역별로 채점"
+"AI가 교수 영역별로 진단"
 ]
 },
 {
@@ -1216,7 +1216,7 @@
 ],
 "tr": [
 "✓",
-"AI가 5개 교수 영역별로 채점"
+"AI가 교수 영역별로 진단"
 ]
 },
 {
@@ -1234,7 +1234,7 @@
 "An evidence-based report after each lesson."
 ],
 "tr": [
-"매 수업 후 받는 근거 기반 리포트."
+"수업마다 근거를 담은 진단 보고서."
 ]
 },
 {
@@ -1242,7 +1242,7 @@
 "Students build and run simulated experiments on the Board."
 ],
 "tr": [
-"학생이 보드에서 모의 실험을 직접 구성하고 실행합니다."
+"학생이 전자칠판에서 가상 실험을 직접 구성하고 실행합니다."
 ]
 },
 {
@@ -1344,7 +1344,7 @@
 "Bubbles! No air leaks out, so the device is airtight."
 ],
 "tr": [
-"기포 발생! 공기가 새지 않으니 장치는 기밀 상태입니다."
+"기포가 생깁니다! 공기가 새지 않으니 장치의 기밀성이 확인됩니다."
 ]
 },
 {
@@ -1382,7 +1382,7 @@
 "Lab experiments on the Board, with no materials used."
 ],
 "tr": [
-"재료 없이 보드에서 하는 실험."
+"실험 재료 없이 전자칠판에서 하는 실험."
 ]
 },
 {
@@ -1500,7 +1500,7 @@
 "Every answer marked, and the whole class reviewed."
 ],
 "tr": [
-"모든 답안 채점부터 반 전체 검토까지."
+"모든 답안 채점부터 반 전체 진단까지."
 ]
 },
 {
@@ -1518,7 +1518,7 @@
 ],
 "tr": [
 "{0}",
-"ClassIn이 모든 학생의 학습 기록"
+"클래스인이 학생별 학습 기록"
 ]
 },
 {
@@ -1546,7 +1546,7 @@
 "ClassIn records every student’s work"
 ],
 "tr": [
-"ClassIn이 모든 학생의 학습 기록"
+"클래스인이 학생별 학습 기록"
 ]
 },
 {
@@ -1572,7 +1572,7 @@
 ],
 "tr": [
 "✓",
-"ClassIn이 모든 학생의 학습 기록"
+"클래스인이 학생별 학습 기록"
 ]
 },
 {
@@ -1600,7 +1600,7 @@
 "A clear plan for every student."
 ],
 "tr": [
-"모든 학생을 위한 명확한 지도 계획."
+"학생마다 분명한 지도 계획."
 ]
 },
 {
@@ -1608,7 +1608,7 @@
 "Describe the quiz. AI writes it, with answers."
 ],
 "tr": [
-"퀴즈를 설명하면 AI가 정답까지 작성합니다."
+"원하는 퀴즈를 말하면 AI가 정답까지 출제합니다."
 ]
 },
 {
@@ -1618,7 +1618,7 @@
 ],
 "tr": [
 "{0}",
-"원하는 퀴즈를 쉬운 말로 설명"
+"원하는 퀴즈를 말로 설명"
 ]
 },
 {
@@ -1646,7 +1646,7 @@
 "Describe the quiz in plain words"
 ],
 "tr": [
-"원하는 퀴즈를 쉬운 말로 설명"
+"원하는 퀴즈를 말로 설명"
 ]
 },
 {
@@ -1690,7 +1690,7 @@
 ],
 "tr": [
 "✓",
-"원하는 퀴즈를 쉬운 말로 설명"
+"원하는 퀴즈를 말로 설명"
 ]
 },
 {
@@ -1718,7 +1718,7 @@
 "A full quiz with answers and explanations, ready to publish."
 ],
 "tr": [
-"정답과 해설까지 갖춘, 바로 게시할 수 있는 퀴즈."
+"정답과 해설까지 갖춰 바로 게시할 수 있는 퀴즈."
 ]
 },
 {
@@ -1734,7 +1734,7 @@
 "AI Sketch Board"
 ],
 "tr": [
-"AI 스케치보드"
+"AI 칠판"
 ]
 },
 {
@@ -1742,7 +1742,7 @@
 "Lesson Analysis"
 ],
 "tr": [
-"수업 분석"
+"AI 강의 분석"
 ]
 },
 {
@@ -1796,7 +1796,7 @@
 "Write a function, AI draws the graph"
 ],
 "tr": [
-"함수를 쓰면 AI가 그래프를 그립니다"
+"손으로 쓴 함수를 AI가 그래프로"
 ]
 },
 {
@@ -1804,7 +1804,7 @@
 "Sketch it, AI finds a matching image"
 ],
 "tr": [
-"스케치하면 AI가 어울리는 이미지를 찾아 줍니다"
+"대충 그리면 AI가 맞는 이미지 검색"
 ]
 },
 {
@@ -1820,7 +1820,7 @@
 "Write a character, AI shows the strokes"
 ],
 "tr": [
-"글자를 쓰면 AI가 획순을 보여 줍니다"
+"한자를 쓰면 AI가 필순 안내"
 ]
 },
 {
@@ -1828,7 +1828,7 @@
 "Ask the class, see answers live"
 ],
 "tr": [
-"학급에 질문하고 답을 실시간으로 확인"
+"질문하면 반 전체 응답을 실시간 확인"
 ]
 },
 {
@@ -1844,7 +1844,7 @@
 "Say what you need"
 ],
 "tr": [
-"필요한 것을 말하세요"
+"말로 하면 바로 실행"
 ]
 },
 {
@@ -1852,7 +1852,7 @@
 "AI writes and marks homework"
 ],
 "tr": [
-"AI가 과제를 만들고 채점합니다"
+"숙제 출제부터 채점 초안까지"
 ]
 },
 {
@@ -1860,7 +1860,7 @@
 "Answers with sources, any time"
 ],
 "tr": [
-"출처가 있는 답변, 언제든지"
+"출처와 함께, 언제든 답변"
 ]
 },
 {
@@ -1868,7 +1868,7 @@
 "Watch in a real classroom"
 ],
 "tr": [
-"실제 교실에서 보기"
+"실제 교실 영상"
 ]
 },
 {
@@ -1876,7 +1876,7 @@
 "Split the class into groups"
 ],
 "tr": [
-"학급을 그룹으로 나누기"
+"반을 그룹으로 나눠 활동"
 ]
 },
 {
@@ -1884,7 +1884,7 @@
 "Send work to every device"
 ],
 "tr": [
-"모든 기기로 과제 보내기"
+"모든 학생 기기로 과제 전송"
 ]
 },
 {
@@ -1892,7 +1892,7 @@
 "Four fingers open the tool panel"
 ],
 "tr": [
-"손가락 네 개를 펴면 도구 패널이 열립니다"
+"네 손가락으로 도구 패널 열기"
 ]
 },
 {
@@ -1900,7 +1900,7 @@
 "Everyone works at once"
 ],
 "tr": [
-"모두가 동시에 작업"
+"반 전체가 동시에 풀이"
 ]
 },
 {
@@ -1909,8 +1909,8 @@
 "Generator"
 ],
 "tr": [
-"문제 ",
-"생성기"
+"AI ",
+"출제"
 ]
 },
 {
@@ -2014,7 +2014,7 @@
 "Courses"
 ],
 "tr": [
-"과정"
+"코스"
 ]
 },
 {
@@ -2054,7 +2054,7 @@
 "Class Collabspace"
 ],
 "tr": [
-"수업 협업 공간"
+"반 협업 공간"
 ]
 },
 {
@@ -2070,7 +2070,7 @@
 "Homework Marking Assistant"
 ],
 "tr": [
-"과제 채점 도우미"
+"숙제 채점 도우미"
 ]
 },
 {
@@ -2086,7 +2086,7 @@
 "Answers only from this class’s lessons and materials"
 ],
 "tr": [
-"이 수업의 강의와 자료만 근거로 답변합니다"
+"이 수업의 강의와 자료만 근거로 답합니다"
 ]
 },
 {
@@ -2139,7 +2139,7 @@
 "tr": [
 "1차시: 대표적인 지형 유형",
 "00:07:18 인용",
-"수업 녹화"
+"녹화 수업"
 ]
 },
 {
@@ -2461,7 +2461,7 @@
 "Mini Blackboard"
 ],
 "tr": [
-"미니 칠판"
+"보조 칠판"
 ]
 },
 {
@@ -2469,7 +2469,7 @@
 "Leaderboard"
 ],
 "tr": [
-"순위표"
+"트로피 순위"
 ]
 },
 {
@@ -2501,7 +2501,7 @@
 "Video Gallery"
 ],
 "tr": [
-"영상 갤러리"
+"비디오 갤러리"
 ]
 },
 {
@@ -2517,7 +2517,7 @@
 "Desktop Sharing"
 ],
 "tr": [
-"데스크톱 공유"
+"화면 공유"
 ]
 },
 {
@@ -2533,7 +2533,7 @@
 "Randomizer"
 ],
 "tr": [
-"무작위 추첨"
+"랜덤 선택"
 ]
 },
 {
@@ -2541,7 +2541,7 @@
 "Sketch Board"
 ],
 "tr": [
-"스케치보드"
+"개인 칠판"
 ]
 },
 {
@@ -2549,7 +2549,7 @@
 "Poll"
 ],
 "tr": [
-"투표"
+"객관식 퀴즈"
 ]
 },
 {
@@ -2557,7 +2557,7 @@
 "Responder"
 ],
 "tr": [
-"선착순 응답"
+"선착순 퀴즈"
 ]
 },
 {
@@ -2565,7 +2565,7 @@
 "Breakout Room"
 ],
 "tr": [
-"소그룹실"
+"그룹 토론"
 ]
 },
 {
@@ -2573,7 +2573,7 @@
 "X-Way Browser"
 ],
 "tr": [
-"X-Way 브라우저"
+"다방향 브라우저"
 ]
 },
 {
@@ -2585,7 +2585,7 @@
 "tr": [
 "주관식",
 "객관식",
-"구술"
+"말하기"
 ]
 },
 {
@@ -2621,7 +2621,7 @@
 "AI Sketch Board Grading"
 ],
 "tr": [
-"AI 스케치보드 채점"
+"AI 칠판 채점"
 ]
 },
 {
@@ -2651,7 +2651,7 @@
 "Drag with the left mouse button to capture"
 ],
 "tr": [
-"왼쪽 마우스 버튼을 누른 채 드래그해 캡처"
+"마우스 왼쪽 버튼을 누른 채 드래그해 캡처"
 ]
 },
 {
@@ -2676,7 +2676,7 @@
 "1 lesson"
 ],
 "tr": [
-"1개 수업"
+"수업 1개"
 ]
 },
 {
@@ -2696,7 +2696,7 @@
 "New Course"
 ],
 "tr": [
-"새 과정"
+"새 코스"
 ]
 },
 {
@@ -2736,7 +2736,7 @@
 "About Co-creation"
 ],
 "tr": [
-"공동 창작 소개"
+"공동 작업 안내"
 ]
 },
 {
@@ -2786,7 +2786,7 @@
 "ClassIn AI function updates-New Course-38"
 ],
 "tr": [
-"ClassIn AI 기능 업데이트-새 과정-38"
+"ClassIn AI 기능 업데이트-새 코스-38"
 ]
 },
 {
@@ -2870,7 +2870,7 @@
 ],
 "tr": [
 "출석 3/8",
-"시작 2시간 17…"
+"2시간 17… 전 시작"
 ]
 },
 {
@@ -2879,7 +2879,7 @@
 "Ended"
 ],
 "tr": [
-"ClassIn AI 기능 업데이트-새 과정-35",
+"ClassIn AI 기능 업데이트-새 코스-35",
 "종료됨"
 ]
 },
@@ -2896,8 +2896,8 @@
 "수업 다시보기",
 "수업 정보",
 "수업 피드백",
-"수업 리포트",
-"칠판 노트",
+"수업 보고서",
+"판서 기록",
 "수업 자료"
 ]
 },
@@ -2926,7 +2926,7 @@
 "Transcription"
 ],
 "tr": [
-"수업 분석",
+"강의 분석",
 "요약",
 "녹취록"
 ]
@@ -2984,7 +2984,7 @@
 "Questioning and Feedback Promote Learning"
 ],
 "tr": [
-"발문과 피드백이 학습을 촉진"
+"학습을 이끄는 발문과 피드백"
 ]
 },
 {
@@ -3040,7 +3040,7 @@
 ],
 "tr": [
 "73%",
-"발문과 피드백이 학습을 촉진"
+"학습을 이끄는 발문과 피드백"
 ]
 },
 {
@@ -3058,7 +3058,7 @@
 "Key Highlights"
 ],
 "tr": [
-"주요 강점"
+"핵심 강점"
 ]
 },
 {
@@ -3090,7 +3090,7 @@
 "Pain Point-oriented Introduction"
 ],
 "tr": [
-"문제 중심 소개"
+"현장 고충 중심 소개"
 ]
 },
 {
@@ -3098,7 +3098,7 @@
 "Addresses common classroom pain points including student work projection and real-time content summarization"
 ],
 "tr": [
-"학생 작업물 투사, 실시간 내용 요약 등 교실의 흔한 어려움을 다룹니다"
+"학생 과제 화면 투사, 실시간 내용 요약 등 교실에서 흔히 겪는 고충을 다룹니다"
 ]
 },
 {
@@ -3114,7 +3114,7 @@
 "Key Risks"
 ],
 "tr": [
-"주요 위험"
+"핵심 리스크"
 ]
 },
 {
@@ -3146,7 +3146,7 @@
 "Unfinished Function Demonstration"
 ],
 "tr": [
-"미완료 기능 시연"
+"끝까지 보여 주지 못한 기능 시연"
 ]
 },
 {
@@ -3154,7 +3154,7 @@
 "The virtual experiment module demonstration was interrupted by login failure, the complete function was not shown"
 ],
 "tr": [
-"가상 실험 모듈 시연이 로그인 실패로 중단되어 전체 기능이 공개되지 않았습니다"
+"가상 실험 모듈 시연이 로그인 실패로 중단되어 전체 기능을 보여 주지 못했습니다"
 ]
 },
 {
@@ -3361,8 +3361,8 @@
 "EEO - Test Student"
 ],
 "tr": [
-"ClassonAI Demo",
-"EEO - Test Student"
+"ClassIn AI 데모",
+"EEO - 테스트 학생"
 ]
 },
 {
@@ -3448,7 +3448,7 @@
 "+ 객관식",
 "+ 파일 업로드로 추가",
 "+ 일괄 가져오기",
-"AI 문제 생성기",
+"AI 출제",
 "정답 보기"
 ]
 },
@@ -3634,7 +3634,7 @@
 "{0} : {1}"
 ],
 "tr": [
-"답변 종료",
+"응답 종료",
 "{0} : {1}"
 ]
 },
@@ -3723,7 +3723,7 @@
 "AI Question Generator"
 ],
 "tr": [
-"AI 문제 생성기"
+"AI 출제"
 ]
 },
 {
@@ -3731,7 +3731,7 @@
 "Ask AI to generate questions..."
 ],
 "tr": [
-"AI에게 문제 생성을 요청하세요..."
+"AI에게 출제를 요청하세요..."
 ]
 },
 {
@@ -3739,7 +3739,7 @@
 "Create three trigonometry questions."
 ],
 "tr": [
-"삼각함수 문제를 세 개 만들어 주세요."
+"삼각함수 문제 3개를 만들어 주세요."
 ],
 "typed": true
 },
@@ -3748,7 +3748,7 @@
 "Here are three trigonometry questions for you:"
 ],
 "tr": [
-"삼각함수 문제 세 개를 만들었습니다."
+"삼각함수 문제 3개를 만들었습니다:"
 ],
 "typed": true
 },
@@ -4067,7 +4067,7 @@
 "Content generated by AI. Please review carefully"
 ],
 "tr": [
-"AI가 생성한 내용입니다. 꼼꼼히 검토하세요"
+"AI가 만든 내용입니다. 꼭 검토하세요"
 ]
 },
 {
@@ -4178,7 +4178,7 @@
 "Tap AI Question Generator"
 ],
 "tr": [
-"AI 문제 생성기 탭"
+"AI 출제 탭"
 ]
 },
 {
@@ -4292,7 +4292,7 @@
 "Average time"
 ],
 "tr": [
-"평균 시간"
+"평균 소요 시간"
 ]
 },
 {
@@ -4356,7 +4356,7 @@
 "Teaching suggestion"
 ],
 "tr": [
-"교수 제안"
+"지도 제안"
 ]
 },
 {
@@ -4473,7 +4473,7 @@
 "Lesson 1: Common landform types"
 ],
 "tr": [
-"1과: 일반적인 지형 유형"
+"1차시: 대표적인 지형 유형"
 ]
 },
 {
@@ -4521,7 +4521,7 @@
 "Sketch what you need. AI finds a matching image."
 ],
 "tr": [
-"필요한 것을 스케치하세요. AI가 어울리는 이미지를 찾아 줍니다."
+"필요한 것을 대충 그리면 AI가 맞는 이미지를 찾아 줍니다."
 ]
 },
 {
@@ -4537,7 +4537,7 @@
 "AI finds a matching image"
 ],
 "tr": [
-"AI가 어울리는 이미지를 찾음"
+"AI가 맞는 이미지 검색"
 ]
 },
 {
@@ -4545,7 +4545,7 @@
 "Put it in your lesson"
 ],
 "tr": [
-"수업에 넣기"
+"수업 화면에 넣기"
 ]
 },
 {
@@ -4553,7 +4553,7 @@
 "From a rough sketch to a clear image, without leaving the Board."
 ],
 "tr": [
-"대충 그린 스케치가 보드를 떠나지 않고 선명한 이미지가 됩니다."
+"대충 그린 스케치가 전자칠판 위에서 바로 선명한 이미지로."
 ]
 },
 {
@@ -4561,7 +4561,7 @@
 "Let AI find a matching image."
 ],
 "tr": [
-"AI가 어울리는 이미지를 찾게 하세요."
+"AI에게 맞는 이미지를 찾게 해 보세요."
 ]
 },
 {
@@ -4569,7 +4569,7 @@
 "Let AI find it"
 ],
 "tr": [
-"AI가 찾게 하기"
+"AI로 찾기"
 ]
 },
 {
@@ -4593,7 +4593,7 @@
 "Write a function by hand. AI draws the graph."
 ],
 "tr": [
-"함수를 손으로 쓰세요. AI가 그래프를 그립니다."
+"함수를 손으로 쓰면 AI가 그래프를 그립니다."
 ]
 },
 {
@@ -4609,7 +4609,7 @@
 "AI draws the graph"
 ],
 "tr": [
-"AI가 그래프를 그림"
+"AI가 그래프 작성"
 ]
 },
 {
@@ -4617,7 +4617,7 @@
 "Put it on the Board"
 ],
 "tr": [
-"보드에 올리기"
+"전자칠판에 올리기"
 ]
 },
 {
@@ -4625,7 +4625,7 @@
 "From handwriting to an accurate graph, in one tap."
 ],
 "tr": [
-"손글씨가 탭 한 번으로 정확한 그래프가 됩니다."
+"손글씨 함수가 탭 한 번에 정확한 그래프로."
 ]
 },
 {
@@ -4633,7 +4633,7 @@
 "Let AI turn the handwriting into graphs."
 ],
 "tr": [
-"AI가 손글씨를 그래프로 바꾸게 하세요."
+"AI에게 손글씨를 그래프로 바꾸게 해 보세요."
 ]
 },
 {
@@ -4641,7 +4641,7 @@
 "Let AI draw the graphs"
 ],
 "tr": [
-"AI가 그래프를 그리게 하기"
+"AI로 그래프 그리기"
 ]
 },
 {
@@ -4649,7 +4649,7 @@
 "Write a character. AI shows every stroke, in order."
 ],
 "tr": [
-"글자를 쓰세요. AI가 모든 획을 순서대로 보여 줍니다."
+"한자를 쓰면 AI가 필순대로 한 획씩 보여 줍니다."
 ]
 },
 {
@@ -4657,7 +4657,7 @@
 "Write a character"
 ],
 "tr": [
-"글자 쓰기"
+"한자 쓰기"
 ]
 },
 {
@@ -4665,7 +4665,7 @@
 "AI shows every stroke, in order"
 ],
 "tr": [
-"AI가 모든 획을 순서대로 보여 줌"
+"AI가 필순대로 한 획씩 표시"
 ]
 },
 {
@@ -4673,7 +4673,7 @@
 "Practise it with the class"
 ],
 "tr": [
-"학급과 함께 연습하기"
+"반 전체와 따라 쓰기"
 ]
 },
 {
@@ -4681,7 +4681,7 @@
 "Every stroke of any character, ready to practise."
 ],
 "tr": [
-"어떤 글자든 모든 획을 연습할 수 있게 보여 줍니다."
+"어떤 한자든 필순대로, 바로 연습할 수 있습니다."
 ]
 },
 {
@@ -4689,7 +4689,7 @@
 "Ask AI for the stroke order."
 ],
 "tr": [
-"AI에게 획순을 물어보세요."
+"AI에게 필순을 물어보세요."
 ]
 },
 {
@@ -4697,7 +4697,7 @@
 "Show the stroke order"
 ],
 "tr": [
-"획순 보기"
+"필순 보기"
 ]
 },
 {
@@ -4713,7 +4713,7 @@
 "Talk to ClassIn"
 ],
 "tr": [
-"ClassIn에게 말하기"
+"클래스인에게 말하기"
 ]
 },
 {
@@ -4721,7 +4721,7 @@
 "Split the class into groups, then share their work."
 ],
 "tr": [
-"학급을 그룹으로 나눈 뒤 결과물을 공유하세요."
+"반을 그룹으로 나누고, 결과물을 함께 공유합니다."
 ]
 },
 {
@@ -4729,7 +4729,7 @@
 "Send work to every student, straight from the Board."
 ],
 "tr": [
-"보드에서 바로 모든 학생에게 과제를 보내세요."
+"전자칠판에서 바로 모든 학생에게 과제를 보냅니다."
 ]
 },
 {
@@ -4737,7 +4737,7 @@
 "Teach with your hands: open tools, turn pages and erase with a gesture."
 ],
 "tr": [
-"손으로 가르치세요. 제스처로 도구를 열고, 페이지를 넘기고, 지울 수 있습니다."
+"손짓으로 수업하세요. 제스처로 도구를 열고, 페이지를 넘기고, 지웁니다."
 ]
 },
 {
@@ -4745,7 +4745,7 @@
 "Every student works on their own board at once."
 ],
 "tr": [
-"모든 학생이 각자의 보드에서 동시에 작업합니다."
+"모든 학생이 각자의 칠판에서 동시에 풉니다."
 ]
 },
 {
@@ -4753,7 +4753,7 @@
 "Let AI mark it"
 ],
 "tr": [
-"AI가 채점하게 하기"
+"AI로 채점하기"
 ]
 },
 {
@@ -4769,7 +4769,7 @@
 "Let AI write the quiz"
 ],
 "tr": [
-"AI가 퀴즈를 만들게 하기"
+"AI로 퀴즈 만들기"
 ]
 },
 {
@@ -4785,7 +4785,7 @@
 "Generated by AI"
 ],
 "tr": [
-"AI가 생성함"
+"AI 생성"
 ]
 },
 {
@@ -4865,7 +4865,7 @@
 "Tap AI Sketch Board"
 ],
 "tr": [
-"AI 스케치보드 탭"
+"AI 칠판 탭"
 ]
 },
 {
@@ -4881,7 +4881,7 @@
 "Tap ✓ to confirm the screenshot"
 ],
 "tr": [
-"✓를 탭하여 스크린샷 확정"
+"✓를 탭해 캡처 확정"
 ]
 },
 {
@@ -4889,7 +4889,7 @@
 "Tap to speak the instruction"
 ],
 "tr": [
-"탭하여 지시 말하기"
+"탭하고 지시를 말하세요"
 ]
 },
 {
@@ -4897,7 +4897,7 @@
 "Tap Publish to send it to the class"
 ],
 "tr": [
-"게시를 탭하여 학급에 보내기"
+"게시를 탭해 반 전체에 보내기"
 ]
 },
 {
@@ -4913,7 +4913,7 @@
 "Tap Overview for the whole class"
 ],
 "tr": [
-"개요를 탭하여 학급 전체 보기"
+"개요를 탭해 반 전체 보기"
 ]
 },
 {
@@ -4921,7 +4921,7 @@
 "Tap End Answering"
 ],
 "tr": [
-"답변 종료 탭"
+"응답 종료 탭"
 ]
 },
 {
@@ -4993,7 +4993,7 @@
 "Homework | Ongoing"
 ],
 "tr": [
-"과제 | 진행 중"
+"숙제 | 진행 중"
 ]
 },
 {
@@ -5001,7 +5001,7 @@
 "No deadline · Ms Tan · Submitted 6/6"
 ],
 "tr": [
-"기한 없음 · Ms Tan · 제출 6/6"
+"기한 없음 · Tan 선생님 · 제출 6/6"
 ]
 },
 {
@@ -5017,7 +5017,7 @@
 "13 Nov 15:09 (40 min) · Ms Tan · Present 6/6"
 ],
 "tr": [
-"13 Nov 15:09 (40분) · Ms Tan · 출석 6/6"
+"11월 13일 15:09 (40분) · Tan 선생님 · 출석 6/6"
 ]
 },
 {
@@ -5041,7 +5041,7 @@
 "No deadline · Ms Tan · Watched 4/6"
 ],
 "tr": [
-"기한 없음 · Ms Tan · 시청 4/6"
+"기한 없음 · Tan 선생님 · 시청 4/6"
 ]
 },
 {
@@ -5049,7 +5049,7 @@
 "Recorded Lesson"
 ],
 "tr": [
-"수업 녹화"
+"녹화 수업"
 ]
 },
 {
@@ -5057,7 +5057,7 @@
 "AI chapters and summaries for every recording"
 ],
 "tr": [
-"모든 녹화에 AI 챕터와 요약 제공"
+"녹화마다 AI 챕터와 요약"
 ]
 },
 {
@@ -5065,7 +5065,7 @@
 "Daily practice that builds good habits"
 ],
 "tr": [
-"좋은 습관을 길러 주는 매일 연습"
+"좋은 학습 습관을 만드는 매일 연습"
 ]
 },
 {
@@ -5073,7 +5073,7 @@
 "AI writes the quiz and marks it"
 ],
 "tr": [
-"AI가 퀴즈를 만들고 채점합니다"
+"AI가 퀴즈 출제와 채점"
 ]
 },
 {
@@ -5081,7 +5081,7 @@
 "Answer Card"
 ],
 "tr": [
-"답안 카드"
+"OMR 카드"
 ]
 },
 {
@@ -5089,7 +5089,7 @@
 "AI reads paper answers and marks them"
 ],
 "tr": [
-"AI가 종이 답안을 읽고 채점합니다"
+"AI가 종이 답안을 읽고 채점"
 ]
 },
 {
@@ -5097,7 +5097,7 @@
 "Topic threads for the whole class"
 ],
 "tr": [
-"학급 전체를 위한 주제별 토론"
+"반 전체 주제별 토론"
 ]
 },
 {
@@ -5121,7 +5121,7 @@
 "AI Oral Card"
 ],
 "tr": [
-"AI 구술 카드"
+"AI 말하기 카드"
 ]
 },
 {
@@ -5129,7 +5129,7 @@
 "Speaking practice with AI feedback"
 ],
 "tr": [
-"AI 피드백이 있는 말하기 연습"
+"AI 피드백으로 말하기 연습"
 ]
 },
 {
@@ -5137,7 +5137,7 @@
 "Open Interface (SCORM)"
 ],
 "tr": [
-"오픈 인터페이스(SCORM)"
+"SCORM 연동"
 ]
 },
 {
@@ -5161,7 +5161,7 @@
 "Enter the homework (optional)"
 ],
 "tr": [
-"과제 입력(선택 사항)"
+"숙제 내용 입력(선택)"
 ]
 },
 {
@@ -5177,15 +5177,16 @@
 "Summarise this term’s homework submissions and list the students who need attention."
 ],
 "tr": [
-"이번 학기 과제 제출 현황을 요약하고, 관심이 필요한 학생을 알려 주세요."
-]
+"이번 학기 숙제 제출 현황을 요약하고, 관심이 필요한 학생을 알려 주세요."
+],
+"typed": true
 },
 {
 "en": [
 "Hello Ms Tan, here is this term’s homework summary."
 ],
 "tr": [
-"안녕하세요 Ms Tan, 이번 학기 과제 요약입니다."
+"Tan 선생님, 이번 학기 숙제 요약입니다."
 ]
 },
 {
@@ -5193,7 +5194,7 @@
 "Whole-class submissions"
 ],
 "tr": [
-"학급 전체 제출 현황"
+"반 전체 제출 현황"
 ]
 },
 {
@@ -5337,7 +5338,7 @@
 "Ideal for planes: smooth air, good visibility"
 ],
 "tr": [
-"비행기에 이상적: 부드러운 공기와 좋은 시야"
+"비행기 운항에 적합: 기류가 안정적이고 시야가 좋음"
 ]
 },
 {
@@ -5465,7 +5466,7 @@
 "Classroom Atmosphere and Risk Control"
 ],
 "tr": [
-"교실 분위기와 위험 관리"
+"교실 분위기와 리스크 관리"
 ]
 },
 {
@@ -5609,7 +5610,7 @@
 "Select the character"
 ],
 "tr": [
-"글자 선택"
+"한자 선택"
 ]
 },
 {
@@ -5617,7 +5618,7 @@
 "Tap the stroke agent"
 ],
 "tr": [
-"획순 에이전트 탭"
+"필순 에이전트 탭"
 ]
 },
 {
@@ -5633,7 +5634,7 @@
 "Tap Poll"
 ],
 "tr": [
-"투표 탭"
+"객관식 퀴즈 탭"
 ]
 },
 {
@@ -5761,7 +5762,7 @@
 "All 141 experiments are in ClassIn. For this demo, open the highlighted one."
 ],
 "tr": [
-"ClassIn에는 141개 실험이 모두 있습니다. 이 데모에서는 강조 표시된 실험을 여세요."
+"클래스인에는 실험 141개가 모두 들어 있습니다. 이 데모에서는 강조된 실험을 여세요."
 ]
 },
 {
@@ -5793,7 +5794,7 @@
 "Screen Writing and Formula Recognition"
 ],
 "tr": [
-"화면 필기 및 수식 인식"
+"화면 판서와 수식 인식"
 ]
 },
 {
@@ -5841,7 +5842,7 @@
 "Select what you drew"
 ],
 "tr": [
-"그린 것을 선택"
+"그린 부분 선택"
 ]
 },
 {
@@ -5954,7 +5955,8 @@
 ],
 "tr": [
 "주사위 열기"
-]
+],
+"typed": true
 },
 {
 "en": [
@@ -5969,7 +5971,7 @@
 "I'm listening. Speak your command..."
 ],
 "tr": [
-"듣고 있습니다. 명령을 말씀하세요..."
+"듣고 있어요. 명령을 말씀하세요..."
 ]
 },
 {
@@ -5978,6 +5980,1155 @@
 ],
 "tr": [
 "주사위 여는 중"
+]
+},
+{
+"en": [
+"华文"
+],
+"tr": [
+"중국어"
+]
+},
+{
+"en": [
+"Class"
+],
+"tr": [
+"반"
+]
+},
+{
+"en": [
+"Publish"
+],
+"tr": [
+"게시"
+]
+},
+{
+"en": [
+"Answer"
+],
+"tr": [
+"답안"
+]
+},
+{
+"en": [
+"Average"
+],
+"tr": [
+"평균"
+]
+},
+{
+"en": [
+"Mind Map"
+],
+"tr": [
+"마인드맵"
+]
+},
+{
+"en": [
+"Speech Summary"
+],
+"tr": [
+"발언 요약"
+]
+},
+{
+"en": [
+"Collaborative"
+],
+"tr": [
+"협동"
+]
+},
+{
+"en": [
+"Learning"
+],
+"tr": [
+"학습"
+]
+},
+{
+"en": [
+"Principles"
+],
+"tr": [
+"원리"
+]
+},
+{
+"en": [
+"Benefits"
+],
+"tr": [
+"효과"
+]
+},
+{
+"en": [
+"🗨",
+"No notifications"
+],
+"tr": [
+"🗨",
+"알림 없음"
+]
+},
+{
+"en": [
+"No notifications"
+],
+"tr": [
+"알림 없음"
+]
+},
+{
+"en": [
+"Settings"
+],
+"tr": [
+"설정"
+]
+},
+{
+"en": [
+"Tap the highlighted button."
+],
+"tr": [
+"강조된 버튼을 탭하세요."
+]
+},
+{
+"en": [
+"↻ Play again"
+],
+"tr": [
+"↻ 다시 보기"
+]
+},
+{
+"en": [
+"End"
+],
+"tr": [
+"종료"
+]
+},
+{
+"en": [
+"Highest ratio:"
+],
+"tr": [
+"최다 응답 비율:"
+]
+},
+{
+"en": [
+"Most option:"
+],
+"tr": [
+"최다 선택:"
+]
+},
+{
+"en": [
+"Accuracy Rate:"
+],
+"tr": [
+"정답률:"
+]
+},
+{
+"en": [
+"Correct Answer:"
+],
+"tr": [
+"정답:"
+]
+},
+{
+"en": [
+"Change Answer"
+],
+"tr": [
+"정답 변경"
+]
+},
+{
+"en": [
+"Highest ratio:",
+"{0}%"
+],
+"tr": [
+"최다 응답 비율:",
+"{0}%"
+]
+},
+{
+"en": [
+"Accuracy Rate:",
+"{0}%"
+],
+"tr": [
+"정답률:",
+"{0}%"
+]
+},
+{
+"en": [
+"P{0} 华文 ",
+"Selected {1} students"
+],
+"tr": [
+"초{0} 중국어 ",
+"학생 {1}명 선택됨"
+]
+},
+{
+"en": [
+"P{0} English ",
+"Selected {1} students"
+],
+"tr": [
+"초{0} 영어 ",
+"학생 {1}명 선택됨"
+]
+},
+{
+"en": [
+"AI Classroom ",
+"Selected {0} students"
+],
+"tr": [
+"AI 교실 ",
+"학생 {0}명 선택됨"
+]
+},
+{
+"en": [
+"Selected {0} students"
+],
+"tr": [
+"학생 {0}명 선택됨"
+]
+},
+{
+"en": [
+"“家”字词语练习"
+],
+"tr": [
+"“家” 어휘 연습"
+]
+},
+{
+"en": [
+"出三道“家”的词语题。"
+],
+"tr": [
+"“家”로 어휘 문제 3개를 만들어 주세요."
+],
+"typed": true
+},
+{
+"en": [
+"Here are three 词语 questions for you:"
+],
+"tr": [
+"“家” 어휘 문제 3개를 만들었습니다:"
+],
+"typed": true
+},
+{
+"en": [
+"Explanation: “家”共十画，先写宝盖头，再写下部。"
+],
+"tr": [
+"해설: “家”는 모두 10획입니다. 갓머리(宀)를 먼저 쓰고 아랫부분을 씁니다."
+]
+},
+{
+"en": [
+"Explanation: “家庭”指共同生活的一家人，与“家人”最接近。"
+],
+"tr": [
+"해설: “家庭”은 함께 사는 한 가족을 뜻하므로 “家人”과 뜻이 가장 가깝습니다."
+]
+},
+{
+"en": [
+"Adjectives Quiz"
+],
+"tr": [
+"형용사 퀴즈"
+]
+},
+{
+"en": [
+"1. Which of these words is an adjective?"
+],
+"tr": [
+"1. 다음 중 형용사는?"
+]
+},
+{
+"en": [
+"Create three questions on adjectives for Primary 5."
+],
+"tr": [
+"초등 5학년용 형용사 문제 3개를 만들어 주세요."
+],
+"typed": true
+},
+{
+"en": [
+"Here are three adjective questions for you:"
+],
+"tr": [
+"형용사 문제 3개를 만들었습니다:"
+],
+"typed": true
+},
+{
+"en": [
+"1. Which word is the adjective in: “The quiet girl smiled.”?"
+],
+"tr": [
+"1. “The quiet girl smiled.”에서 형용사는?"
+]
+},
+{
+"en": [
+"Explanation: “Quiet” describes the noun “girl”, so it is the adjective."
+],
+"tr": [
+"해설: “quiet”가 명사 “girl”을 꾸미므로 형용사입니다."
+]
+},
+{
+"en": [
+"2. Choose the correct comparative form of “bright”."
+],
+"tr": [
+"2. “bright”의 올바른 비교급은?"
+]
+},
+{
+"en": [
+"Explanation: Short adjectives form the comparative with -er: bright → brighter."
+],
+"tr": [
+"해설: 짧은 형용사는 -er를 붙여 비교급을 만듭니다. bright → brighter."
+]
+},
+{
+"en": [
+"3. Which sentence uses an adjective correctly?"
+],
+"tr": [
+"3. 형용사를 바르게 쓴 문장은?"
+]
+},
+{
+"en": [
+"Which TWO words are adjectives?"
+],
+"tr": [
+"형용사 두 개를 고르세요."
+]
+},
+{
+"en": [
+"Open the dic"
+],
+"tr": [
+"주사위 열"
+]
+},
+{
+"en": [
+"Sec 3 English Literature"
+],
+"tr": [
+"중3 영어 문학"
+]
+},
+{
+"en": [
+"Sec 3 English Language"
+],
+"tr": [
+"중3 영어"
+]
+},
+{
+"en": [
+"All",
+"Lessons only",
+"New"
+],
+"tr": [
+"전체",
+"수업만",
+"새로 만들기"
+]
+},
+{
+"en": [
+"New"
+],
+"tr": [
+"새로 만들기"
+]
+},
+{
+"en": [
+"Teaching plan",
+"Updated {0} Nov {1}:{2}"
+],
+"tr": [
+"교수 계획",
+"11월 {0}일 {1}:{2} 업데이트"
+]
+},
+{
+"en": [
+"Learning plan",
+"Updated {0} Nov {1}:{2}"
+],
+"tr": [
+"학습 계획",
+"11월 {0}일 {1}:{2} 업데이트"
+]
+},
+{
+"en": [
+"Unit {0} ",
+"({1})"
+],
+"tr": [
+"{0}단원 ",
+"({1})"
+]
+},
+{
+"en": [
+"Lesson 1: Animal Farm — pre-reading homework"
+],
+"tr": [
+"1차시: 『동물농장』 읽기 전 숙제"
+]
+},
+{
+"en": [
+"Lesson 5: Animal Farm, Chapter 1"
+],
+"tr": [
+"5차시: 『동물농장』 1장"
+]
+},
+{
+"en": [
+"Lesson 1: Animal Farm — pre-reading homework",
+"Homework | Ongoing",
+"No deadline · Ms Tan · Submitted 6/6"
+],
+"tr": [
+"1차시: 『동물농장』 읽기 전 숙제",
+"숙제 | 진행 중",
+"기한 없음 · Tan 선생님 · 제출 6/6"
+]
+},
+{
+"en": [
+"Lesson 5: Animal Farm, Chapter 1",
+"Lesson | Ended",
+"13 Nov 15:09 (40 min) · Ms Tan · Present 6/6"
+],
+"tr": [
+"5차시: 『동물농장』 1장",
+"수업 | 종료됨",
+"11월 13일 15:09 (40분) · Tan 선생님 · 출석 6/6"
+]
+},
+{
+"en": [
+"Lesson 5: full-lesson recording",
+"Recording | Ongoing",
+"No deadline · Ms Tan · Watched 4/6"
+],
+"tr": [
+"5차시: 수업 전체 녹화",
+"녹화 | 진행 중",
+"기한 없음 · Tan 선생님 · 시청 4/6"
+]
+},
+{
+"en": [
+"Members",
+"{0} "
+],
+"tr": [
+"멤버",
+"{0} "
+]
+},
+{
+"en": [
+"Announcement",
+"Post now "
+],
+"tr": [
+"공지",
+"지금 게시 "
+]
+},
+{
+"en": [
+"To Do"
+],
+"tr": [
+"할 일"
+]
+},
+{
+"en": [
+"New Activity"
+],
+"tr": [
+"새 활동"
+]
+},
+{
+"en": [
+"Activity types"
+],
+"tr": [
+"활동 유형"
+]
+},
+{
+"en": [
+"Lesson"
+],
+"tr": [
+"수업"
+]
+},
+{
+"en": [
+"Teach live; AI summarises and analyses the lesson"
+],
+"tr": [
+"실시간 수업, AI가 요약·분석"
+]
+},
+{
+"en": [
+"Homework"
+],
+"tr": [
+"숙제"
+]
+},
+{
+"en": [
+"AI marking saves teachers time; data shows how each student grows"
+],
+"tr": [
+"AI 채점으로 선생님 시간 절약, 학생별 성장 데이터 확인"
+]
+},
+{
+"en": [
+"Check-in"
+],
+"tr": [
+"일일 과제"
+]
+},
+{
+"en": [
+"Quiz"
+],
+"tr": [
+"시험"
+]
+},
+{
+"en": [
+"Discussion"
+],
+"tr": [
+"토론"
+]
+},
+{
+"en": [
+"+ Unit topic"
+],
+"tr": [
+"+ 단원 주제"
+]
+},
+{
+"en": [
+"New Homework"
+],
+"tr": [
+"새 숙제"
+]
+},
+{
+"en": [
+"Chapter 1 homework — Animal Farm"
+],
+"tr": [
+"『동물농장』 1장 숙제"
+]
+},
+{
+"en": [
+"+ Choose resources",
+"+ Add answer key"
+],
+"tr": [
+"+ 자료 선택",
+"+ 정답 추가"
+]
+},
+{
+"en": [
+"Time"
+],
+"tr": [
+"기간"
+]
+},
+{
+"en": [
+"Start now"
+],
+"tr": [
+"지금 시작"
+]
+},
+{
+"en": [
+"No deadline"
+],
+"tr": [
+"마감 없음"
+]
+},
+{
+"en": [
+"Grading",
+"Expand "
+],
+"tr": [
+"채점",
+"펼치기 "
+]
+},
+{
+"en": [
+"AI Marking",
+"AI",
+"AI marks each submission against the brief, as a draft for the teacher to confirm"
+],
+"tr": [
+"AI 채점",
+"AI",
+"제출물마다 과제 기준에 맞춰 AI가 채점 초안을 만들고, 선생님이 확정합니다"
+]
+},
+{
+"en": [
+"Points ",
+"{0}"
+],
+"tr": [
+"배점 ",
+"{0}"
+]
+},
+{
+"en": [
+"Save as draft",
+"Publish"
+],
+"tr": [
+"임시 저장",
+"게시"
+]
+},
+{
+"en": [
+"Save as draft"
+],
+"tr": [
+"임시 저장"
+]
+},
+{
+"en": [
+"AI writes the homework"
+],
+"tr": [
+"AI가 숙제 작성"
+]
+},
+{
+"en": [
+"Create after-class homework on Chapter 1 of Animal Farm for Secondary 3."
+],
+"tr": [
+"중3 대상으로 『동물농장』 1장 복습 숙제를 만들어 주세요."
+],
+"typed": true
+},
+{
+"en": [
+"Animal Farm, Chapter 1: after-class homework"
+],
+"tr": [
+"『동물농장』 1장 복습 숙제"
+]
+},
+{
+"en": [
+"1. Vocabulary"
+],
+"tr": [
+"1. 어휘"
+]
+},
+{
+"en": [
+"Explain each word as it is used in Chapter 1: (a) ensconced (b) tyranny (c) comrades"
+],
+"tr": [
+"1장에서 쓰인 뜻으로 각 단어를 설명하세요: (a) ensconced (b) tyranny (c) comrades"
+]
+},
+{
+"en": [
+"(1) What does Old Major’s dream tell the animals? (2) Why does Orwell introduce the animals one by one as they arrive?"
+],
+"tr": [
+"(1) 메이저 영감의 꿈은 동물들에게 무엇을 말하나요? (2) 오웰은 왜 동물들을 도착하는 순서대로 하나씩 소개하나요?"
+]
+},
+{
+"en": [
+"In about 150 words, explain how Old Major persuades the animals to rebel. Use two quotations from the chapter."
+],
+"tr": [
+"메이저 영감이 동물들에게 반란을 설득하는 방식을 150단어 안팎으로 설명하세요. 본문 인용 두 개를 넣으세요."
+]
+},
+{
+"en": [
+"Write your answers neatly in your exercise book and submit a photo on ClassIn by Friday."
+],
+"tr": [
+"답은 공책에 깔끔하게 쓰고, 금요일까지 클래스인에 사진으로 제출하세요."
+]
+},
+{
+"en": [
+"Sec 3 English Literature",
+"New homework: Chapter 1 homework — Animal Farm. Please submit by Friday."
+],
+"tr": [
+"중3 영어 문학",
+"새 숙제: 『동물농장』 1장 숙제. 금요일까지 제출하세요."
+]
+},
+{
+"en": [
+"New homework: Chapter 1 homework — Animal Farm. Please submit by Friday."
+],
+"tr": [
+"새 숙제: 『동물농장』 1장 숙제. 금요일까지 제출하세요."
+]
+},
+{
+"en": [
+"now"
+],
+"tr": [
+"지금"
+]
+},
+{
+"en": [
+"‹ Do Homework"
+],
+"tr": [
+"‹ 숙제하기"
+]
+},
+{
+"en": [
+"Chapter 1 homework — Animal Farm",
+"Ongoing"
+],
+"tr": [
+"『동물농장』 1장 숙제",
+"진행 중"
+]
+},
+{
+"en": [
+"Ongoing"
+],
+"tr": [
+"진행 중"
+]
+},
+{
+"en": [
+"1. Vocabulary · 2. Understanding the text · 3. Reading response"
+],
+"tr": [
+"1. 어휘 · 2. 본문 이해 · 3. 독후 감상"
+]
+},
+{
+"en": [
+"My answer"
+],
+"tr": [
+"내 답안"
+]
+},
+{
+"en": [
+"Save draft",
+"Submit"
+],
+"tr": [
+"임시 저장",
+"제출"
+]
+},
+{
+"en": [
+"Submit"
+],
+"tr": [
+"제출"
+]
+},
+{
+"en": [
+"Not submitted ({0})",
+"To mark ({1})",
+"Returned ({2})",
+"Marked ({3})"
+],
+"tr": [
+"미제출 ({0})",
+"채점 대기 ({1})",
+"반려 ({2})",
+"채점 완료 ({3})"
+]
+},
+{
+"en": [
+"Not submitted ({0})"
+],
+"tr": [
+"미제출 ({0})"
+]
+},
+{
+"en": [
+"To mark ({0})"
+],
+"tr": [
+"채점 대기 ({0})"
+]
+},
+{
+"en": [
+"Returned ({0})"
+],
+"tr": [
+"반려 ({0})"
+]
+},
+{
+"en": [
+"Marked ({0})"
+],
+"tr": [
+"채점 완료 ({0})"
+]
+},
+{
+"en": [
+"Submitted at {0}:{1}"
+],
+"tr": [
+"{0}:{1} 제출"
+]
+},
+{
+"en": [
+"Mark Homework",
+"Chapter 1 homework — Animal Farm"
+],
+"tr": [
+"숙제 채점",
+"『동물농장』 1장 숙제"
+]
+},
+{
+"en": [
+"Mark Homework"
+],
+"tr": [
+"숙제 채점"
+]
+},
+{
+"en": [
+"To mark"
+],
+"tr": [
+"채점 대기"
+]
+},
+{
+"en": [
+"Mia Tan",
+"To mark"
+],
+"tr": [
+"Mia Tan",
+"채점 대기"
+]
+},
+{
+"en": [
+"Leo Lim",
+"To mark"
+],
+"tr": [
+"Leo Lim",
+"채점 대기"
+]
+},
+{
+"en": [
+"Aisha Rahman",
+"To mark"
+],
+"tr": [
+"Aisha Rahman",
+"채점 대기"
+]
+},
+{
+"en": [
+"Ethan Wong",
+"To mark"
+],
+"tr": [
+"Ethan Wong",
+"채점 대기"
+]
+},
+{
+"en": [
+"Chloe Ng",
+"To mark"
+],
+"tr": [
+"Chloe Ng",
+"채점 대기"
+]
+},
+{
+"en": [
+"Ryan Koh",
+"To mark"
+],
+"tr": [
+"Ryan Koh",
+"채점 대기"
+]
+},
+{
+"en": [
+"Mia’s homework"
+],
+"tr": [
+"Mia의 숙제"
+]
+},
+{
+"en": [
+"Mark with AI"
+],
+"tr": [
+"AI로 채점"
+]
+},
+{
+"en": [
+"Write feedback for Mia"
+],
+"tr": [
+"Mia에게 피드백 쓰기"
+]
+},
+{
+"en": [
+"+ Quick comments"
+],
+"tr": [
+"+ 빠른 코멘트"
+]
+},
+{
+"en": [
+"Mark as excellent",
+"Return for correction"
+],
+"tr": [
+"우수 답안으로 표시",
+"수정 요청으로 반려"
+]
+},
+{
+"en": [
+"Done"
+],
+"tr": [
+"완료"
+]
+},
+{
+"en": [
+"You understand Chapter 1 well: your answers are backed by the text and clearly written. A thoughtful response!"
+],
+"tr": [
+"1장을 잘 이해했어요. 본문을 근거로 답을 분명하게 썼네요. 생각이 깊이 담긴 답안입니다!"
+],
+"typed": true
+},
+{
+"en": [
+"★ Strengths: all three vocabulary answers are accurate, and your reading response ties Old Major’s speech closely to the animals’ hardship."
+],
+"tr": [
+"★ 잘한 점: 어휘 세 개를 모두 정확하게 풀었고, 독후 감상에서 메이저 영감의 연설을 동물들의 고된 삶과 잘 연결했어요."
+]
+},
+{
+"en": [
+"✎ Suggestion: add one sentence on how Old Major uses “Comrades” to build unity. It would sharpen your point about persuasion."
+],
+"tr": [
+"✎ 제안: 메이저 영감이 “Comrades(동지들)”라는 말로 결속을 다지는 방식을 한 문장 더 쓰면 설득에 대한 주장이 더 또렷해집니다."
+]
+},
+{
+"en": [
+"✔ Corrections:"
+],
+"tr": [
+"✔ 고칠 점:"
+]
+},
+{
+"en": [
+"• “Old Major is the leader of the farm”: he is the most respected animal, not the farm’s owner or leader."
+],
+"tr": [
+"• “메이저 영감은 농장의 지도자다”: 가장 존경받는 동물일 뿐, 농장의 주인이나 지도자는 아닙니다."
+]
+},
+{
+"en": [
+"• Your answer to 3 uses one quotation; the task asks for two."
+],
+"tr": [
+"• 3번 답에는 인용이 하나뿐입니다. 과제는 두 개를 요구합니다."
+]
+},
+{
+"en": [
+"• Great link between the dream and the rebellion. Well spotted!"
+],
+"tr": [
+"• 꿈과 반란을 연결한 점이 훌륭해요. 잘 짚었습니다!"
+],
+"typed": true
+},
+{
+"en": [
+"The class was set ",
+"{0} assignments",
+" this term. ",
+"{1} of them reached a submission rate above {2}%",
+". One, “Chapter {3} vocabulary”, reached {4}%."
+],
+"tr": [
+"이번 학기에 ",
+"숙제 {0}개",
+"를 냈고, ",
+"그중 {1}개는 제출률이 {2}%를 넘었습니다",
+". “{3}장 어휘” 한 개만 {4}%였습니다."
+]
+},
+{
+"en": [
+"Leo Lim",
+" — ",
+"{0} assignments not submitted",
+": Chapter {1} vocabulary, Chapter {2} reading log, Poetry response {3}."
+],
+"tr": [
+"Leo Lim",
+" — ",
+"숙제 {0}개 미제출",
+": {1}장 어휘, {2}장 독서 기록, 시 감상문 {3}."
+]
+},
+{
+"en": [
+"Suggestion"
+],
+"tr": [
+"제안"
+]
+},
+{
+"en": [
+"Points"
+],
+"tr": [
+"점수"
+]
+},
+{
+"en": [
+"ClassonAI Demo",
+"EEO - Test"
+],
+"tr": [
+"ClassIn AI 데모",
+"EEO - 테스트"
 ]
 }
 ]

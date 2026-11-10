@@ -1,0 +1,1481 @@
+[
+{
+"id": "b1",
+"en": [
+"Who we work with"
+],
+"tr": [
+"함께하는 기관"
+]
+},
+{
+"id": "b2",
+"en": [
+"The solution"
+],
+"tr": [
+"솔루션"
+]
+},
+{
+"id": "b3",
+"en": [
+"Hardware"
+],
+"tr": [
+"하드웨어"
+]
+},
+{
+"id": "b4",
+"en": [
+"Live demo"
+],
+"tr": [
+"라이브 데모"
+]
+},
+{
+"id": "b5",
+"en": [
+"Case studies"
+],
+"tr": [
+"도입 사례"
+]
+},
+{
+"id": "b6",
+"en": [
+"Visit us"
+],
+"tr": [
+"방문 안내"
+]
+},
+{
+"id": "b7",
+"en": [
+"Smart classrooms ",
+"built for ",
+"schools."
+],
+"tr": [
+"교육 현장을 위해 ",
+"만든 ",
+"스마트 교실."
+]
+},
+{
+"id": "b8",
+"en": [
+"Next classroom live demo"
+],
+"tr": [
+"다음 라이브 수업 데모"
+]
+},
+{
+"id": "b9",
+"en": [
+"Teaching a maths lesson with AI Sketch Board and live polls"
+],
+"tr": [
+"AI 칠판과 객관식 퀴즈로 하는 수학 수업"
+]
+},
+{
+"id": "b10",
+"en": [
+"Schools and institutions ",
+"we work with."
+],
+"tr": [
+"함께하는 ",
+"학교와 기관."
+]
+},
+{
+"id": "b11",
+"en": [
+"60,000+",
+"schools and institutions"
+],
+"tr": [
+"60,000+",
+"학교 및 기관"
+]
+},
+{
+"id": "b12",
+"en": [
+"150+",
+"countries and regions"
+],
+"tr": [
+"150+",
+"국가 및 지역"
+]
+},
+{
+"id": "b13",
+"en": [
+"50M+",
+"active teachers and students"
+],
+"tr": [
+"50M+",
+"교사·학생 사용자"
+]
+},
+{
+"id": "b14",
+"en": [
+"Awards and ",
+"recognition."
+],
+"tr": [
+"수상 및 ",
+"선정."
+]
+},
+{
+"id": "b15",
+"en": [
+"2026",
+"Gold"
+],
+"tr": [
+"2026",
+"금상"
+]
+},
+{
+"id": "b16",
+"en": [
+"eLFA Community Outreach Award"
+],
+"tr": [
+"eLFA Community Outreach Award"
+]
+},
+{
+"id": "b17",
+"en": [
+"eLearning Forum Asia (eLFA)"
+],
+"tr": [
+"eLearning Forum Asia (eLFA)"
+]
+},
+{
+"id": "b18",
+"en": [
+"For the SUSS–IAL ClassIn Sandbox, with social enterprise I’m Soul Inc: technology-enabled learning that reaches underserved communities."
+],
+"tr": [
+"사회적 기업 I’m Soul Inc와 함께한 SUSS–IAL ClassIn Sandbox로 수상: 교육 소외 계층에게 닿는 기술 기반 학습."
+]
+},
+{
+"id": "b19",
+"en": [
+"2024",
+"Recipient"
+],
+"tr": [
+"2024",
+"선정"
+]
+},
+{
+"id": "b20",
+"en": [
+"innovSpur Programme"
+],
+"tr": [
+"innovSpur Programme"
+]
+},
+{
+"id": "b21",
+"en": [
+"Institute for Adult Learning (IAL), Singapore"
+],
+"tr": [
+"Institute for Adult Learning (IAL), 싱가포르"
+]
+},
+{
+"id": "b22",
+"en": [
+"ClassIn was selected for the innovSpur Programme to develop its Lifelong Learning Ecosystem, advancing innovation in digital and hybrid adult learning."
+],
+"tr": [
+"클래스인은 평생학습 생태계 구축 프로그램 innovSpur에 선정되어 디지털·하이브리드 성인 학습 혁신을 이끌고 있습니다."
+]
+},
+{
+"id": "b23",
+"en": [
+"How it works"
+],
+"tr": [
+"작동 방식"
+]
+},
+{
+"id": "b24",
+"en": [
+"Three layers. ",
+"One classroom."
+],
+"tr": [
+"세 개의 층, ",
+"하나의 교실."
+]
+},
+{
+"id": "b25",
+"en": [
+"Hardware, software and AI, built by ClassIn to work together."
+],
+"tr": [
+"하드웨어, 소프트웨어, AI. 클래스인이 함께 작동하도록 직접 만들었습니다."
+]
+},
+{
+"id": "b26",
+"en": [
+"1",
+" Hardware"
+],
+"tr": [
+"1",
+" 하드웨어"
+]
+},
+{
+"id": "b27",
+"en": [
+"Smart classroom"
+],
+"tr": [
+"스마트 교실"
+]
+},
+{
+"id": "b28",
+"en": [
+"ClassIn Board",
+"Tracking cameras",
+"Ceiling microphone"
+],
+"tr": [
+"ClassIn Board",
+"추적 카메라",
+"천장 마이크"
+]
+},
+{
+"id": "b29",
+"en": [
+"2",
+" Software"
+],
+"tr": [
+"2",
+" 소프트웨어"
+]
+},
+{
+"id": "b30",
+"en": [
+"ClassIn Platform"
+],
+"tr": [
+"클래스인 플랫폼"
+]
+},
+{
+"id": "b31",
+"en": [
+"Polls",
+"Breakout groups",
+"Sketch Board"
+],
+"tr": [
+"객관식 퀴즈",
+"그룹 토론",
+"개인 칠판"
+]
+},
+{
+"id": "b32",
+"en": [
+"3",
+" AI"
+],
+"tr": [
+"3",
+" AI"
+]
+},
+{
+"id": "b33",
+"en": [
+"ClassIn AI"
+],
+"tr": [
+"ClassIn AI"
+]
+},
+{
+"id": "b34",
+"en": [
+"AI Summary",
+"Subject agents",
+"AI Lesson Analysis"
+],
+"tr": [
+"AI 요약",
+"과목별 에이전트",
+"AI 강의 분석"
+]
+},
+{
+"id": "b35",
+"en": [
+"1",
+"2",
+"Hardware + software",
+"Lessons recorded automatically"
+],
+"tr": [
+"1",
+"2",
+"하드웨어 + 소프트웨어",
+"수업 자동 녹화"
+]
+},
+{
+"id": "b36",
+"en": [
+"2",
+"3",
+"Software + AI",
+"AI marks students’ answers"
+],
+"tr": [
+"2",
+"3",
+"소프트웨어 + AI",
+"AI가 학생 답안 채점"
+]
+},
+{
+"id": "b37",
+"en": [
+"1",
+"3",
+"Hardware + AI",
+"AI analyses the lesson"
+],
+"tr": [
+"1",
+"3",
+"하드웨어 + AI",
+"AI가 강의 분석"
+]
+},
+{
+"id": "b38",
+"en": [
+"Explore the hardware"
+],
+"tr": [
+"하드웨어 살펴보기"
+]
+},
+{
+"id": "b39",
+"en": [
+"Explore the platform"
+],
+"tr": [
+"플랫폼 살펴보기"
+]
+},
+{
+"id": "b40",
+"en": [
+"Explore the AI features"
+],
+"tr": [
+"AI 기능 살펴보기"
+]
+},
+{
+"id": "b41",
+"en": [
+"Future ",
+"Learning Spaces"
+],
+"tr": [
+"미래형 ",
+"학습 공간"
+]
+},
+{
+"id": "b42",
+"en": [
+"Ceiling array microphone"
+],
+"tr": [
+"천장 어레이 마이크"
+]
+},
+{
+"id": "b43",
+"en": [
+"Classroom camera"
+],
+"tr": [
+"교실 카메라"
+]
+},
+{
+"id": "b44",
+"en": [
+"ClassIn Board"
+],
+"tr": [
+"ClassIn Board"
+]
+},
+{
+"id": "b45",
+"en": [
+"Made for teaching. ",
+"Made to work together."
+],
+"tr": [
+"수업을 위해 만들고, ",
+"함께 작동하도록 만들었습니다."
+]
+},
+{
+"id": "b46",
+"en": [
+"1",
+"ClassIn Board"
+],
+"tr": [
+"1",
+"ClassIn Board"
+]
+},
+{
+"id": "b47",
+"en": [
+"2",
+"Cameras"
+],
+"tr": [
+"2",
+"카메라"
+]
+},
+{
+"id": "b48",
+"en": [
+"3",
+"Ceiling microphone"
+],
+"tr": [
+"3",
+"천장 마이크"
+]
+},
+{
+"id": "b49",
+"en": [
+"4",
+"Pencil"
+],
+"tr": [
+"4",
+"펜슬"
+]
+},
+{
+"id": "b50",
+"en": [
+"65″–110″",
+"five sizes"
+],
+"tr": [
+"65″–110″",
+"5가지 크기"
+]
+},
+{
+"id": "b51",
+"en": [
+"4K",
+"50-point touch"
+],
+"tr": [
+"4K",
+"50포인트 터치"
+]
+},
+{
+"id": "b52",
+"en": [
+"Anti-glare",
+"etched glass, clear from both sides"
+],
+"tr": [
+"눈부심 방지",
+"에칭 유리로 양옆에서도 선명"
+]
+},
+{
+"id": "b53",
+"en": [
+"iF Design Award 2023"
+],
+"tr": [
+"iF Design Award 2023"
+]
+},
+{
+"id": "b54",
+"en": [
+"ClassIn Cam T1 and S1"
+],
+"tr": [
+"ClassIn Cam T1·S1"
+]
+},
+{
+"id": "b55",
+"en": [
+"4K",
+"at 30 fps"
+],
+"tr": [
+"4K",
+"30 fps"
+]
+},
+{
+"id": "b56",
+"en": [
+"120°",
+"wide, Cam S1"
+],
+"tr": [
+"120°",
+"광각(Cam S1)"
+]
+},
+{
+"id": "b57",
+"en": [
+"2 lenses",
+"wide-angle and close-up"
+],
+"tr": [
+"렌즈 2개",
+"광각 및 클로즈업"
+]
+},
+{
+"id": "b58",
+"en": [
+"ClassIn Mic DT2 Pro"
+],
+"tr": [
+"ClassIn Mic DT2 Pro"
+]
+},
+{
+"id": "b59",
+"en": [
+"32",
+"built-in microphones in one ceiling mic"
+],
+"tr": [
+"32",
+"천장 마이크 1대에 내장된 마이크 수"
+]
+},
+{
+"id": "b60",
+"en": [
+"80 m²",
+"classroom coverage"
+],
+"tr": [
+"80 m²",
+"교실 커버 면적"
+]
+},
+{
+"id": "b61",
+"en": [
+"3,000+",
+"types of noise filtered"
+],
+"tr": [
+"3,000+",
+"걸러 내는 소음 종류"
+]
+},
+{
+"id": "b62",
+"en": [
+"Good Design Award 2022"
+],
+"tr": [
+"Good Design Award 2022"
+]
+},
+{
+"id": "b63",
+"en": [
+"ClassIn Pencil K1"
+],
+"tr": [
+"ClassIn Pencil K1"
+]
+},
+{
+"id": "b64",
+"en": [
+"Precise writing"
+],
+"tr": [
+"정밀한 필기"
+]
+},
+{
+"id": "b65",
+"en": [
+"Page navigation"
+],
+"tr": [
+"페이지 넘기기"
+]
+},
+{
+"id": "b66",
+"en": [
+"Magnetic charging"
+],
+"tr": [
+"자석식 충전"
+]
+},
+{
+"id": "b67",
+"en": [
+"Your EDUtech live demo"
+],
+"tr": [
+"라이브 데모"
+]
+},
+{
+"id": "b68",
+"en": [
+"What a ClassIn lesson ",
+"looks like."
+],
+"tr": [
+"클래스인 수업은 ",
+"이렇게 진행됩니다."
+]
+},
+{
+"id": "b69",
+"en": [
+"Four moments from a ClassIn lesson."
+],
+"tr": [
+"클래스인 수업의 네 장면."
+]
+},
+{
+"id": "b70",
+"en": [
+"1",
+"Live poll"
+],
+"tr": [
+"1",
+"객관식 퀴즈"
+]
+},
+{
+"id": "b71",
+"en": [
+"2",
+"Breakout groups"
+],
+"tr": [
+"2",
+"그룹 토론"
+]
+},
+{
+"id": "b72",
+"en": [
+"3",
+"Sketch Board"
+],
+"tr": [
+"3",
+"개인 칠판"
+]
+},
+{
+"id": "b73",
+"en": [
+"4",
+"Homework"
+],
+"tr": [
+"4",
+"숙제"
+]
+},
+{
+"id": "b74",
+"en": [
+"Live demo · 1 of 4"
+],
+"tr": [
+"라이브 데모 · 1/4"
+]
+},
+{
+"id": "b75",
+"en": [
+"Live poll"
+],
+"tr": [
+"객관식 퀴즈"
+]
+},
+{
+"id": "b76",
+"en": [
+"Ask the class. Every answer comes in live."
+],
+"tr": [
+"질문하면 반 전체 답변이 실시간으로 들어옵니다."
+]
+},
+{
+"id": "b77",
+"en": [
+"Live demo · 2 of 4"
+],
+"tr": [
+"라이브 데모 · 2/4"
+]
+},
+{
+"id": "b78",
+"en": [
+"Breakout groups"
+],
+"tr": [
+"그룹 토론"
+]
+},
+{
+"id": "b79",
+"en": [
+"Split the class into groups, each with its own workspace."
+],
+"tr": [
+"반을 그룹으로 나누고, 그룹마다 작업 공간을 줍니다."
+]
+},
+{
+"id": "b80",
+"en": [
+"Live demo · 3 of 4"
+],
+"tr": [
+"라이브 데모 · 3/4"
+]
+},
+{
+"id": "b81",
+"en": [
+"Sketch Board"
+],
+"tr": [
+"개인 칠판"
+]
+},
+{
+"id": "b82",
+"en": [
+"One task on the Board. Every student answers on their own device."
+],
+"tr": [
+"전자칠판에 과제를 띄우면, 학생은 각자 기기로 답합니다."
+]
+},
+{
+"id": "b83",
+"en": [
+"Live demo · 4 of 4"
+],
+"tr": [
+"라이브 데모 · 4/4"
+]
+},
+{
+"id": "b84",
+"en": [
+"Homework"
+],
+"tr": [
+"숙제"
+]
+},
+{
+"id": "b85",
+"en": [
+"Work on paper, take a photo, and the teacher checks it on a tablet."
+],
+"tr": [
+"종이에 풀고 사진으로 제출하면, 선생님이 태블릿으로 확인합니다."
+]
+},
+{
+"id": "b86",
+"en": [
+"A student answers a poll on a tablet; on the ClassIn Board all ten answers come in, and the teacher sets the correct answer."
+],
+"tr": [
+"학생이 태블릿으로 퀴즈에 답하면 ClassIn Board에 열 명의 답이 모두 모이고, 선생님이 정답을 지정합니다."
+]
+},
+{
+"id": "b87",
+"en": [
+"The teacher sets up breakout groups on the ClassIn Board, and labels mark the four groups around the room."
+],
+"tr": [
+"선생님이 ClassIn Board에서 그룹을 나누고, 교실 곳곳의 표지판이 네 그룹을 표시합니다."
+]
+},
+{
+"id": "b88",
+"en": [
+"A matching task on the ClassIn Board is sent out, and students complete it on a laptop and a tablet."
+],
+"tr": [
+"ClassIn Board의 짝 맞추기 과제를 보내면, 학생들이 노트북과 태블릿으로 풉니다."
+]
+},
+{
+"id": "b89",
+"en": [
+"A student writes on paper and photographs it with a phone; the teacher receives the submission on a tablet."
+],
+"tr": [
+"학생이 종이에 풀어 휴대폰으로 찍으면, 선생님은 태블릿으로 제출물을 받습니다."
+]
+},
+{
+"id": "b90",
+"en": [
+"ClassIn in schools and ",
+"higher education."
+],
+"tr": [
+"학교·대학·학원의 ",
+"클래스인."
+]
+},
+{
+"id": "b91",
+"en": [
+"Real classrooms, from Singapore to Riyadh."
+],
+"tr": [
+"실제 교실에서 확인한 변화."
+]
+},
+{
+"id": "b92",
+"en": [
+"Secondary school · Singapore",
+"Hwa Chong Institution",
+"Keeping Teachers at the Centre of an ",
+"AI-Enabled",
+" Classroom"
+],
+"tr": [
+"중고등학교 · 싱가포르",
+"Hwa Chong Institution",
+"AI 교실에서도 ",
+"중심은",
+" 선생님"
+]
+},
+{
+"id": "b93",
+"en": [
+"Higher Education · Singapore",
+"Temasek Polytechnic",
+"Making ",
+"Project-Based",
+" Learning Visible"
+],
+"tr": [
+"대학 · 싱가포르",
+"Temasek Polytechnic",
+"한눈에 보는 ",
+"프로젝트 기반",
+" 학습"
+]
+},
+{
+"id": "b94",
+"en": [
+"Higher Education · Singapore",
+"National University of Singapore",
+"Making Every Voice Heard in the Seminar Room"
+],
+"tr": [
+"대학 · 싱가포르",
+"싱가포르국립대학교(NUS)",
+"세미나실의 모든 목소리가 들리게"
+]
+},
+{
+"id": "b95",
+"en": [
+"K–12 International · Riyadh · Bangkok",
+"EtonHouse International Schools",
+"Ready for Teaching from Day One"
+],
+"tr": [
+"K–12 국제학교 · 리야드 · 방콕",
+"EtonHouse International Schools",
+"개교 첫날부터 수업 준비 완료"
+]
+},
+{
+"id": "b96",
+"en": [
+"Secondary school · Singapore"
+],
+"tr": [
+"중고등학교 · 싱가포르"
+]
+},
+{
+"id": "b97",
+"en": [
+"Hwa Chong Institution ",
+"Senior School"
+],
+"tr": [
+"Hwa Chong Institution ",
+"Senior School"
+]
+},
+{
+"id": "b98",
+"en": [
+"Keeping Teachers at the Centre of an ",
+"AI-Enabled",
+" Classroom"
+],
+"tr": [
+"AI 교실에서도 ",
+"중심은",
+" 선생님"
+]
+},
+{
+"id": "b99",
+"en": [
+"The challenge"
+],
+"tr": [
+"도입 전 고민"
+]
+},
+{
+"id": "b100",
+"en": [
+"Teachers need their materials on screen while they work through ideas live, without another complicated workflow."
+],
+"tr": [
+"선생님은 번거로운 절차 없이, 수업 자료를 화면에 띄워 둔 채 실시간으로 설명을 풀어 가야 했습니다."
+]
+},
+{
+"id": "b101",
+"en": [
+"With ClassIn"
+],
+"tr": [
+"클래스인 도입"
+]
+},
+{
+"id": "b102",
+"en": [
+"Course materials stay on one screen while the teacher writes live on the other, with AI tools for maths, science and Chinese."
+],
+"tr": [
+"한 화면엔 수업 자료를, 다른 화면엔 실시간 판서를 띄우고 수학·과학·중국어 AI 도구를 함께 씁니다."
+]
+},
+{
+"id": "b103",
+"en": [
+"The difference"
+],
+"tr": [
+"달라진 점"
+]
+},
+{
+"id": "b104",
+"en": [
+"Teachers move between prepared content and live explanation without switching screens; the AI supports their judgement, not replaces it."
+],
+"tr": [
+"화면을 바꾸지 않고 준비한 자료와 실시간 설명을 오갑니다. AI는 선생님의 판단을 대신하지 않고 돕습니다."
+]
+},
+{
+"id": "b105",
+"en": [
+"Higher Education · Singapore"
+],
+"tr": [
+"대학 · 싱가포르"
+]
+},
+{
+"id": "b106",
+"en": [
+"Temasek Polytechnic ",
+"School of Business"
+],
+"tr": [
+"Temasek Polytechnic ",
+"경영학부"
+]
+},
+{
+"id": "b107",
+"en": [
+"Making ",
+"Project-Based",
+" Learning Visible"
+],
+"tr": [
+"한눈에 보는 ",
+"프로젝트 기반",
+" 학습"
+]
+},
+{
+"id": "b108",
+"en": [
+"Group work was spread across tables and laptops, so sharing an idea meant photographing a whiteboard and interrupting the discussion."
+],
+"tr": [
+"그룹 활동이 테이블과 노트북에 흩어져 있어, 아이디어를 공유하려면 화이트보드를 찍느라 토론을 멈춰야 했습니다."
+]
+},
+{
+"id": "b109",
+"en": [
+"Two flexible learning spaces where interactive displays and simple screen sharing put every group’s work in a common view."
+],
+"tr": [
+"가변형 학습 공간 두 곳에서 인터랙티브 디스플레이와 간편한 화면 공유로 모든 그룹의 결과물을 함께 봅니다."
+]
+},
+{
+"id": "b110",
+"en": [
+"In a Digital Banking lesson, groups move from discussion to presentation and feedback within the same activity."
+],
+"tr": [
+"디지털 뱅킹 수업에서 각 그룹은 하나의 활동 안에서 토론부터 발표, 피드백까지 이어 갑니다."
+]
+},
+{
+"id": "b111",
+"en": [
+"Design render"
+],
+"tr": [
+"디자인 렌더링"
+]
+},
+{
+"id": "b112",
+"en": [
+"National University of Singapore ",
+"Centre for Teaching & Learning (CTLT)"
+],
+"tr": [
+"싱가포르국립대학교(NUS) ",
+"교수학습센터(CTLT)"
+]
+},
+{
+"id": "b113",
+"en": [
+"Making Every Voice Heard in the Seminar Room"
+],
+"tr": [
+"세미나실의 모든 목소리가 들리게"
+]
+},
+{
+"id": "b114",
+"en": [
+"Wireless microphones slow a seminar down: they have to be worn, passed between speakers and kept charged."
+],
+"tr": [
+"무선 마이크는 세미나 흐름을 끊습니다. 몸에 달고, 발언자끼리 건네고, 충전까지 챙겨야 하니까요."
+]
+},
+{
+"id": "b115",
+"en": [
+"Ceiling microphones and in-room speakers capture every voice, with nothing to wear or hold."
+],
+"tr": [
+"천장 마이크와 실내 스피커가 모든 목소리를 담습니다. 몸에 달거나 손에 들 것이 없습니다."
+]
+},
+{
+"id": "b116",
+"en": [
+"The lesson starts without handing out microphones, and the focus stays on the conversation, not the equipment."
+],
+"tr": [
+"마이크를 나눠 줄 필요 없이 바로 시작하고, 장비가 아닌 대화에 집중합니다."
+]
+},
+{
+"id": "b117",
+"en": [
+"K–12 International · Riyadh · Bangkok"
+],
+"tr": [
+"K–12 국제학교 · 리야드 · 방콕"
+]
+},
+{
+"id": "b118",
+"en": [
+"EtonHouse International Schools ",
+"New Campus Openings"
+],
+"tr": [
+"EtonHouse International Schools ",
+"신규 캠퍼스 개교"
+]
+},
+{
+"id": "b119",
+"en": [
+"Ready for Teaching from Day One"
+],
+"tr": [
+"개교 첫날부터 수업 준비 완료"
+]
+},
+{
+"id": "b120",
+"en": [
+"A new campus needs every classroom ready for real lessons on opening day, and teachers trained before they start."
+],
+"tr": [
+"새 캠퍼스는 개교 첫날부터 모든 교실에서 수업이 돼야 하고, 선생님 연수도 그 전에 끝나야 합니다."
+]
+},
+{
+"id": "b121",
+"en": [
+"A standard classroom package of boards, cameras and ceiling microphones, with delivery, installation and teacher training."
+],
+"tr": [
+"전자칠판·카메라·천장 마이크로 된 표준 교실 패키지를 배송·설치·교사 연수까지 함께 제공했습니다."
+]
+},
+{
+"id": "b122",
+"en": [
+"Every classroom has the same setup before students arrive, so teaching starts from day one."
+],
+"tr": [
+"학생이 오기 전에 모든 교실이 같은 환경을 갖춰, 첫날부터 수업을 시작합니다."
+]
+},
+{
+"id": "b123",
+"en": [
+"Experience the full ",
+"ClassIn classroom."
+],
+"tr": [
+"클래스인 교실을 ",
+"직접 체험해 보세요."
+]
+},
+{
+"id": "b124",
+"en": [
+"At our demo rooms in Singapore, or at your institution."
+],
+"tr": [
+"쇼룸에서, 또는 기관으로 찾아가 보여 드립니다."
+]
+},
+{
+"id": "b125",
+"en": [
+"Essential Demo Room",
+"65 Ubi Road, Singapore"
+],
+"tr": [
+"Essential Demo Room",
+"65 Ubi Road, Singapore"
+]
+},
+{
+"id": "b126",
+"en": [
+"Hybrid Classroom",
+"CleanTech Park, Singapore"
+],
+"tr": [
+"Hybrid Classroom",
+"CleanTech Park, Singapore"
+]
+},
+{
+"id": "b127",
+"en": [
+"AI Adventure Room",
+"Lifelong Learning Institute, 11 Eunos Road 8, Singapore 408601"
+],
+"tr": [
+"AI Adventure Room",
+"Lifelong Learning Institute, 11 Eunos Road 8, Singapore 408601"
+]
+},
+{
+"id": "b128",
+"en": [
+"Visit a Demo Room"
+],
+"tr": [
+"쇼룸 방문하기"
+]
+},
+{
+"id": "b129",
+"en": [
+"Scan to book a visit"
+],
+"tr": [
+"QR을 스캔해 방문 예약"
+]
+},
+{
+"id": "b130",
+"en": [
+"EDUtech Asia 2026 · Singapore"
+],
+"tr": [
+"EDUtech Asia 2026 · 싱가포르"
+]
+},
+{
+"id": "b131",
+"en": [
+"Next"
+],
+"tr": [
+"다음"
+]
+},
+{
+"id": "b132",
+"en": [
+"Classroom speakers"
+],
+"tr": [
+"교실 스피커"
+]
+},
+{
+"id": "b133",
+"en": [
+"See how teaching comes together with ClassIn."
+],
+"tr": [
+"클래스인으로 수업이 하나로 이어지는 모습을 확인하세요."
+]
+},
+{
+"en": [
+"Slides"
+],
+"tr": [
+"슬라이드"
+]
+},
+{
+"en": [
+"Switch a slide off to skip it. Saved on this device."
+],
+"tr": [
+"끈 슬라이드는 건너뜁니다. 이 기기에 저장됩니다."
+]
+},
+{
+"en": [
+"Welcome"
+],
+"tr": [
+"환영합니다"
+]
+},
+{
+"en": [
+"Schools and institutions we work with"
+],
+"tr": [
+"함께하는 학교와 기관"
+]
+},
+{
+"en": [
+"Awards and recognition"
+],
+"tr": [
+"수상 및 선정"
+]
+},
+{
+"en": [
+"Three layers, one classroom"
+],
+"tr": [
+"세 개의 층, 하나의 교실"
+]
+},
+{
+"en": [
+"A ClassIn classroom"
+],
+"tr": [
+"클래스인 교실"
+]
+},
+{
+"en": [
+"The devices"
+],
+"tr": [
+"기기"
+]
+},
+{
+"en": [
+"What a ClassIn lesson looks like"
+],
+"tr": [
+"클래스인 수업 장면"
+]
+},
+{
+"en": [
+"Hwa Chong Institution"
+],
+"tr": [
+"Hwa Chong Institution"
+]
+},
+{
+"en": [
+"Temasek Polytechnic"
+],
+"tr": [
+"Temasek Polytechnic"
+]
+},
+{
+"en": [
+"National University of Singapore"
+],
+"tr": [
+"싱가포르국립대학교(NUS)"
+]
+},
+{
+"en": [
+"EtonHouse International Schools"
+],
+"tr": [
+"EtonHouse International Schools"
+]
+},
+{
+"en": [
+"Visit a demo room"
+],
+"tr": [
+"쇼룸 방문"
+]
+},
+{
+"en": [
+"Show all slides"
+],
+"tr": [
+"모든 슬라이드 보기"
+]
+},
+{
+"en": [
+"Done"
+],
+"tr": [
+"완료"
+]
+},
+{
+"en": [
+"Double-tap the top right corner to leave full screen"
+],
+"tr": [
+"오른쪽 위 모서리를 두 번 탭하면 전체 화면이 끝납니다"
+]
+}
+]

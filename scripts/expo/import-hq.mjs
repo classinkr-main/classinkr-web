@@ -84,6 +84,23 @@ const PATCHES = {
   "ai/try.html": [KEEP_ALL],
 }
 
+// 슬라이드(deck)는 자체 번역기를 쓰고 한국어가 번들 안에 JSON.parse(`[...]`)로 박혀 있다.
+// 그 블록을 한국판이 관리하는 i18n/deck/ko.json 으로 바꾼다(번들 해시 파일명이 바뀌어도 맞게).
+const DECK_KO = path.join(OUT, "i18n/deck/ko.json")
+function deckKo(text) {
+  if (!fs.existsSync(DECK_KO)) return text // 처음 가져올 때는 본사 번역 그대로
+  const rows = JSON.stringify(JSON.parse(fs.readFileSync(DECK_KO, "utf8")))
+  const lit = rows.replace(/\\/g, "\\\\").replace(/`/g, "\\`").replace(/\$\{/g, "\\${")
+  let hits = 0
+  const out = text.replace(/(\w+)=JSON\.parse\(`(\[\{"id":"b1"(?:[^`\\]|\\.)*?\])`\)/g, (m, v, body) => {
+    if (!/[가-힯]/.test(body.slice(0, 400))) return m // 한국어 블록만
+    hits++
+    return `${v}=JSON.parse(\`${lit}\`)`
+  })
+  if (hits !== 1) throw new Error(`슬라이드 한국어 블록이 ${hits}번 맞음(1번이어야 함)`)
+  return out
+}
+
 function sh(cmd, argv) {
   return execFileSync(cmd, argv, { stdio: ["ignore", "pipe", "inherit"], maxBuffer: 1 << 28 })
 }
@@ -136,6 +153,7 @@ function importFiles(src) {
     if (TEXT.test(rel)) {
       let text = fs.readFileSync(path.join(src, rel), "utf8").replace(/\r\n/g, "\n")
       text = applyPatches(rel, text)
+      if (/^deck\/assets\/edutech-[\w-]+\.js$/.test(rel)) text = deckKo(text)
       text = text.replace(ABS, `${BASE}/`)
       fs.writeFileSync(dest, text)
     } else {

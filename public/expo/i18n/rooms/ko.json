@@ -4,7 +4,7 @@
 "Smart classroom in {0}D"
 ],
 "tr": [
-"{0}D 스마트 교실"
+"{0}D로 보는 스마트 교실"
 ]
 },
 {
@@ -36,7 +36,7 @@
 "Drag to turn the room"
 ],
 "tr": [
-"드래그해서 교실 회전"
+"드래그해 교실 돌려 보기"
 ]
 },
 {
@@ -76,7 +76,7 @@
 "The same {0} × {1} m room. The ClassIn devices stay where they are; only the furniture moves."
 ],
 "tr": [
-"같은 {0} × {1} m 교실입니다. ClassIn 기기는 그대로 두고 가구만 옮깁니다."
+"같은 {0} × {1} m 교실입니다. 클래스인 장비는 그대로 두고 가구 배치만 바꿉니다."
 ]
 },
 {
@@ -84,7 +84,7 @@
 "{0} seats in rows"
 ],
 "tr": [
-"줄 배치 {0}석"
+"{0}석 줄 배치"
 ]
 },
 {
@@ -92,7 +92,7 @@
 "Desks face the front. Courseware on one Board and live writing on the other."
 ],
 "tr": [
-"책상이 앞을 향합니다. 한 보드에는 수업 자료, 다른 보드에는 실시간 판서."
+"책상이 앞을 향합니다. 한쪽 전자칠판엔 수업 자료, 다른 쪽엔 실시간 판서."
 ]
 },
 {
@@ -108,7 +108,7 @@
 "Each group works at its own table, then casts its work to a Board to share it with the class."
 ],
 "tr": [
-"그룹마다 자기 테이블에서 활동한 뒤, 결과물을 보드로 전송해 반 전체와 공유합니다."
+"모둠마다 테이블에서 활동한 뒤, 결과물을 전자칠판으로 보내 반 전체와 공유합니다."
 ]
 },
 {
@@ -116,7 +116,7 @@
 "An open front"
 ],
 "tr": [
-"트인 앞 공간"
+"앞쪽을 비운 배치"
 ]
 },
 {
@@ -124,7 +124,7 @@
 "Rows set back with a central aisle, so groups can take turns presenting at the Boards."
 ],
 "tr": [
-"좌석 줄을 뒤로 물리고 가운데 통로를 두어, 그룹이 돌아가며 보드 앞에서 발표합니다."
+"좌석을 뒤로 물리고 가운데 통로를 두어, 모둠별로 돌아가며 전자칠판 앞에서 발표합니다."
 ]
 },
 {
@@ -148,7 +148,7 @@
 "Cam S{0} at the front, a camera at the back"
 ],
 "tr": [
-"앞쪽에 Cam S{0}, 뒤쪽에 카메라"
+"앞쪽 Cam S{0}, 뒤쪽 카메라"
 ]
 },
 {
@@ -172,7 +172,7 @@
 "Layout illustration. The seat counts are an example, not a specification."
 ],
 "tr": [
-"배치 예시도입니다. 좌석 수는 예시이며 사양이 아닙니다."
+"배치 예시도입니다. 좌석 수는 예시일 뿐 사양이 아닙니다."
 ]
 },
 {
@@ -188,7 +188,7 @@
 "{0} case studies from schools, universities and medical colleges."
 ],
 "tr": [
-"학교, 대학, 의과대학의 도입 사례 {0}건."
+"학교·학원·대학 도입 사례 {0}건."
 ]
 },
 {
@@ -204,7 +204,7 @@
 "National University of Singapore"
 ],
 "tr": [
-"National University of Singapore"
+"싱가포르국립대학교(NUS)"
 ]
 },
 {
@@ -300,7 +300,7 @@
 "Macau University of Science and Technology"
 ],
 "tr": [
-"Macau University of Science and Technology"
+"마카오과학기술대학교"
 ]
 },
 {
@@ -348,7 +348,7 @@
 "Tianjin Foreign Studies University"
 ],
 "tr": [
-"Tianjin Foreign Studies University"
+"톈진외국어대학교"
 ]
 },
 {
@@ -372,7 +372,7 @@
 "Shanghai University"
 ],
 "tr": [
-"Shanghai University"
+"상하이대학교"
 ]
 },
 {
@@ -396,7 +396,7 @@
 "Tsinghua University High School"
 ],
 "tr": [
-"Tsinghua University High School"
+"칭화대학교 부속고등학교"
 ]
 },
 {
@@ -420,7 +420,7 @@
 "High School Affiliated to Fudan University"
 ],
 "tr": [
-"High School Affiliated to Fudan University"
+"푸단대학교 부속고등학교"
 ]
 },
 {
@@ -452,7 +452,7 @@
 "Shanghai Jiao Tong University"
 ],
 "tr": [
-"Shanghai Jiao Tong University"
+"상하이교통대학교"
 ]
 },
 {
@@ -484,7 +484,7 @@
 "East China Normal University"
 ],
 "tr": [
-"East China Normal University"
+"화둥사범대학교"
 ]
 },
 {
@@ -500,7 +500,7 @@
 "Shanghai International Studies University"
 ],
 "tr": [
-"Shanghai International Studies University"
+"상하이외국어대학교"
 ]
 },
 {
@@ -540,7 +540,7 @@
 "Fudan University"
 ],
 "tr": [
-"Fudan University"
+"푸단대학교"
 ]
 },
 {
@@ -556,7 +556,7 @@
 "Tongji University"
 ],
 "tr": [
-"Tongji University"
+"퉁지대학교"
 ]
 },
 {
@@ -692,7 +692,7 @@
 "Peking University"
 ],
 "tr": [
-"Peking University"
+"베이징대학교"
 ]
 },
 {
@@ -700,7 +700,7 @@
 "Capital Normal University"
 ],
 "tr": [
-"Capital Normal University"
+"수도사범대학교"
 ]
 },
 {
@@ -772,7 +772,7 @@
 "Board"
 ],
 "tr": [
-"보드"
+"전자칠판"
 ]
 },
 {
@@ -804,7 +804,7 @@
 "Drag to look around · tap a device for its specifications"
 ],
 "tr": [
-"드래그해서 둘러보기 · 기기를 탭하면 사양 확인"
+"드래그해 둘러보기 · 장비를 탭하면 사양 확인"
 ]
 },
 {
@@ -850,7 +850,7 @@
 ],
 "tr": [
 "후면 카메라",
-"T{0} 설치 위치"
+"T{0} 설치 자리"
 ]
 },
 {
@@ -878,7 +878,7 @@
 "An {0} × {1} m smart classroom — a design model, not a photo."
 ],
 "tr": [
-"{0} × {1} m 스마트 교실 — 사진이 아닌 디자인 모델입니다."
+"{0} × {1} m 스마트 교실(사진이 아닌 디자인 모델)."
 ]
 },
 {
@@ -1142,7 +1142,7 @@
 ],
 "tr": [
 "다음",
-"Macau University of Science and Technology"
+"마카오과학기술대학교"
 ]
 },
 {
@@ -1202,7 +1202,7 @@
 ],
 "tr": [
 "다음",
-"Tianjin Foreign Studies University"
+"톈진외국어대학교"
 ]
 },
 {
@@ -1244,7 +1244,7 @@
 ],
 "tr": [
 "다음",
-"Shanghai University"
+"상하이대학교"
 ]
 },
 {
@@ -1270,7 +1270,7 @@
 ],
 "tr": [
 "다음",
-"Tsinghua University High School"
+"칭화대학교 부속고등학교"
 ]
 },
 {
@@ -1296,7 +1296,7 @@
 ],
 "tr": [
 "다음",
-"High School Affiliated to Fudan University"
+"푸단대학교 부속고등학교"
 ]
 },
 {
@@ -1356,7 +1356,7 @@
 ],
 "tr": [
 "다음",
-"Shanghai Jiao Tong University"
+"상하이교통대학교"
 ]
 },
 {
@@ -1470,7 +1470,7 @@
 "Sketch Boards"
 ],
 "tr": [
-"스케치보드"
+"개인 칠판"
 ]
 },
 {
@@ -1480,7 +1480,7 @@
 ],
 "tr": [
 "다음",
-"East China Normal University"
+"화둥사범대학교"
 ]
 },
 {
@@ -1496,7 +1496,7 @@
 "Dual-teacher link"
 ],
 "tr": [
-"듀얼 티처 연결"
+"듀얼 티처(원격 협력 수업) 연결"
 ]
 },
 {
@@ -1506,7 +1506,7 @@
 ],
 "tr": [
 "다음",
-"Shanghai International Studies University"
+"상하이외국어대학교"
 ]
 },
 {
@@ -1542,7 +1542,7 @@
 ],
 "tr": [
 "다음",
-"Fudan University"
+"푸단대학교"
 ]
 },
 {
@@ -1552,7 +1552,7 @@
 ],
 "tr": [
 "다음",
-"Tongji University"
+"퉁지대학교"
 ]
 },
 {
@@ -1718,7 +1718,7 @@
 ],
 "tr": [
 "다음",
-"Peking University"
+"베이징대학교"
 ]
 },
 {
@@ -1816,7 +1816,7 @@
 ],
 "tr": [
 "다음",
-"Capital Normal University"
+"수도사범대학교"
 ]
 },
 {
@@ -1826,7 +1826,7 @@
 ],
 "tr": [
 "다음",
-"National University of Singapore"
+"싱가포르국립대학교(NUS)"
 ]
 },
 {
@@ -1866,7 +1866,7 @@
 "Two cameras, two jobs."
 ],
 "tr": [
-"카메라 두 대, 역할 두 가지."
+"카메라 두 대, 역할은 둘."
 ]
 },
 {
@@ -1874,7 +1874,7 @@
 "Choose by who needs to be seen: the teacher and the Board, or the whole class and their answers."
 ],
 "tr": [
-"누구를 보여 줄지에 따라 고르세요. 교사와 보드를 비출지, 학급 전체와 학생들의 답변을 비출지 선택합니다."
+"누구를 보여 줄지로 고르세요. 선생님과 전자칠판인지, 학생 전체와 답변인지."
 ]
 },
 {
@@ -1898,7 +1898,7 @@
 "At the back, facing the teacher and the Boards"
 ],
 "tr": [
-"뒤쪽에서 교사와 보드를 향해 설치"
+"뒤쪽에서 선생님과 전자칠판을 향해 설치"
 ]
 },
 {
@@ -1906,7 +1906,7 @@
 "Follows the teacher, with board-writing detection"
 ],
 "tr": [
-"교사를 따라가며 판서를 감지합니다"
+"선생님을 따라가며 판서를 감지"
 ]
 },
 {
@@ -1914,7 +1914,7 @@
 "Switches between digital close-up and the full view"
 ],
 "tr": [
-"디지털 클로즈업과 전체 화면을 자동으로 전환합니다"
+"디지털 클로즈업과 전체 화면을 자동 전환"
 ]
 },
 {
@@ -1922,7 +1922,7 @@
 "Student positioning"
 ],
 "tr": [
-"학생 포지셔닝"
+"학생 위치 인식"
 ]
 },
 {
@@ -1930,7 +1930,7 @@
 "At the front, facing the class"
 ],
 "tr": [
-"앞쪽에서 학급을 향해 설치"
+"앞쪽에서 학생들을 향해 설치"
 ]
 },
 {
@@ -1938,7 +1938,7 @@
 "Brings students’ answers and discussion to remote viewers"
 ],
 "tr": [
-"학생들의 답변과 토론을 원격 시청자에게 전달합니다"
+"학생 발표와 토론을 원격 참여자에게 전달"
 ]
 },
 {
@@ -1946,7 +1946,7 @@
 "With the T1, captures the lesson from more than one angle"
 ],
 "tr": [
-"T1과 함께 사용하면 수업을 여러 각도에서 담을 수 있습니다"
+"T1과 함께 쓰면 수업을 여러 각도로 담습니다"
 ]
 },
 {
@@ -1970,7 +1970,7 @@
 "USB or network. Your choice."
 ],
 "tr": [
-"USB 또는 네트워크, 선택하세요."
+"USB도, 네트워크도 됩니다."
 ]
 },
 {
@@ -2018,7 +2018,7 @@
 "T1: teacher tracking with board-writing detection · S1: student positioning"
 ],
 "tr": [
-"T1: 판서 감지를 지원하는 교사 추적 · S1: 학생 포지셔닝"
+"T1: 판서 감지 교사 추적 · S1: 학생 위치 인식"
 ]
 },
 {
@@ -2066,7 +2066,7 @@
 "In this room: two 86″ Boards, side by side"
 ],
 "tr": [
-"이 교실: 86″ 보드 두 대를 나란히 설치"
+"이 교실: 86″ 전자칠판 두 대를 나란히"
 ]
 },
 {
@@ -2082,7 +2082,7 @@
 "Write, present and share on one screen."
 ],
 "tr": [
-"하나의 화면에서 쓰고, 발표하고, 공유하세요."
+"쓰고, 발표하고, 공유하는 한 화면."
 ]
 },
 {
@@ -2090,7 +2090,7 @@
 "Sharp 4K detail, and board writing saved for after class."
 ],
 "tr": [
-"선명한 4K 화질, 그리고 수업 후에도 남는 판서 기록."
+"선명한 4K 화질, 수업 뒤에도 남는 판서."
 ]
 },
 {
@@ -2106,7 +2106,7 @@
 "Clear from almost any seat."
 ],
 "tr": [
-"어느 자리에서든 또렷하게."
+"어느 자리에서도 또렷하게."
 ]
 },
 {
@@ -2130,7 +2130,7 @@
 "Ink appears as you write."
 ],
 "tr": [
-"쓰는 대로 잉크가 나타납니다."
+"쓰는 즉시 잉크가 따라옵니다."
 ]
 },
 {
@@ -2186,7 +2186,7 @@
 "Designed to blend into the room."
 ],
 "tr": [
-"교실에 자연스럽게 어우러지도록 설계했습니다."
+"교실에 자연스럽게 어우러지는 디자인."
 ]
 },
 {
@@ -2218,7 +2218,7 @@
 "A 4K camera that clips on."
 ],
 "tr": [
-"클립으로 간단히 다는 4K 카메라."
+"자석으로 붙이는 4K 카메라."
 ]
 },
 {
@@ -2386,7 +2386,7 @@
 "In this room: Cam S1 at the front, above the Boards"
 ],
 "tr": [
-"이 교실: 앞쪽 보드 위에 Cam S1 설치"
+"이 교실: 앞쪽 전자칠판 위에 Cam S1"
 ]
 },
 {
@@ -2394,7 +2394,7 @@
 "In this room: on the rear wall, where the T1 goes"
 ],
 "tr": [
-"이 교실: 뒷벽, T1이 들어가는 자리"
+"이 교실: 뒷벽, T1 설치 자리"
 ]
 },
 {
@@ -2434,7 +2434,7 @@
 "Hands-free audio, from the ceiling."
 ],
 "tr": [
-"천장에서 들려오는 핸즈프리 오디오."
+"천장에서 해결하는 핸즈프리 음향."
 ]
 },
 {
@@ -2458,7 +2458,7 @@
 "Teach hands-free, facing the class."
 ],
 "tr": [
-"학급을 마주 보며 핸즈프리로 수업하세요."
+"학생들을 마주 보며, 손은 자유롭게."
 ]
 },
 {
@@ -2466,7 +2466,7 @@
 "Mounted in the ceiling, it keeps desks and lecterns clear. Teachers face the class and move freely, with nothing to wear or carry."
 ],
 "tr": [
-"천장에 설치되어 책상과 교탁이 깔끔합니다. 교사는 착용하거나 들고 다닐 것 없이 학급을 마주 보며 자유롭게 움직일 수 있습니다."
+"천장에 설치해 책상과 교탁이 깔끔합니다. 선생님은 몸에 달거나 들고 다닐 것 없이 학생들을 마주 보며 자유롭게 움직입니다."
 ]
 },
 {
@@ -2482,7 +2482,7 @@
 "Clear voices, less room noise."
 ],
 "tr": [
-"또렷한 목소리, 줄어든 소음."
+"목소리는 또렷하게, 잡음은 적게."
 ]
 },
 {
@@ -2594,7 +2594,7 @@
 "Voice lift, without the feedback."
 ],
 "tr": [
-"하울링 없이 목소리를 키워 줍니다."
+"하울링 없이 목소리를 키웁니다."
 ]
 },
 {
@@ -2618,7 +2618,7 @@
 "Staff settings"
 ],
 "tr": [
-"관리자 설정"
+"운영자 설정"
 ]
 },
 {
@@ -2691,6 +2691,62 @@
 ],
 "tr": [
 "발표 영역"
+]
+},
+{
+"en": [
+"The challenge"
+],
+"tr": [
+"도입 전 고민"
+]
+},
+{
+"en": [
+"With ClassIn"
+],
+"tr": [
+"클래스인 도입"
+]
+},
+{
+"en": [
+"The difference"
+],
+"tr": [
+"달라진 점"
+]
+},
+{
+"en": [
+"Lecture room"
+],
+"tr": [
+"강의실"
+]
+},
+{
+"en": [
+"Lab"
+],
+"tr": [
+"실험실"
+]
+},
+{
+"en": [
+"Hybrid classroom"
+],
+"tr": [
+"하이브리드 교실"
+]
+},
+{
+"en": [
+"ClassIn Board"
+],
+"tr": [
+"ClassIn Board"
 ]
 }
 ]
