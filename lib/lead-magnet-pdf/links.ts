@@ -83,7 +83,7 @@ const BROWSER_MADE_PDF_SLUGS = [
 /**
  * 파이썬 생성기(reportlab)가 아니라 따로 만든 PDF — 자료 데이터에 없는 표·디자인이 들어 있어
  * 서버 생성본으로 바꾸면 받는 사람의 내용이 줄어든다. 사람이 바꾸기로 정하기 전까지는 이 파일을
- * 그대로 보낸다. 브라우저로 찍은 3종 + 워크북 템플릿 자료(WORKBOOK_SLUGS, #81 의 12쪽 누수 진단표).
+ * 그대로 보낸다. 브라우저로 찍은 3종 + 워크북 템플릿 자료(WORKBOOK_SLUGS — scripts/lead-magnet-ebooks 의 6쪽 e-book 2종).
  * tests/lead-magnets/pdf-handcrafted.test.ts 가 public/ 의 PDF 생성기 정보(Producer 가 ReportLab 이 아닌 것)와 대조한다.
  */
 export const HANDCRAFTED_LEAD_MAGNET_PDF_SLUGS: ReadonlySet<string> = new Set<string>([

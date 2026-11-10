@@ -28,6 +28,7 @@ import type {
   LeadMagnetGate,
   LeadMagnetPdfGuide,
   LeadMagnetScoreBand,
+  LeadMagnetScoringGuide,
   LeadMagnetScriptSample,
   LeadMagnetSection,
   LeadMagnetSourceLink,
@@ -209,6 +210,13 @@ function normalizeStoryGuide(value: unknown): LeadMagnetStoryGuide | undefined {
   return story
 }
 
+function normalizeScoringGuide(value: unknown): LeadMagnetScoringGuide | undefined {
+  const raw = asRecord(value)
+  const mark = stringValue(raw.mark)
+  const read = stringValue(raw.read)
+  return mark && read ? { mark, read } : undefined
+}
+
 function normalizeExpertVoice(value: unknown): LeadMagnetExpertVoice | undefined {
   const raw = asRecord(value)
   const speaker = stringValue(raw.speaker)
@@ -328,6 +336,7 @@ export function normalizeLeadMagnet(input: unknown): LeadMagnet {
     worksheet: normalizeWorksheet(raw.worksheet),
     caseCards: normalizeCaseCards(raw.caseCards),
     scriptSamples: normalizeScriptSamples(raw.scriptSamples),
+    scoringGuide: normalizeScoringGuide(raw.scoringGuide),
     salesPlaybook: {
       intentScore: Math.max(0, Math.min(40, numberValue(salesPlaybook.intentScore, 15))),
       intentLabel: stringValue(salesPlaybook.intentLabel, "자료 관심 리드"),

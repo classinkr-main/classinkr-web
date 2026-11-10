@@ -6,6 +6,7 @@
  * 제목·본문 위계가 서지 않고, 줄간격·체크 칸 같은 워크북 요소를 손으로 좌표를 찍어 그려야 한다.
  * 이 스크립트는 공개 사이트 글꼴(IBM Plex Sans KR, @fontsource)로 시안과 같은 HTML/CSS 를 인쇄한다.
  * WORKBOOK_SLUGS 에 있는 자료만 이 템플릿으로 만들고, 파이썬 생성기는 이 슬러그를 건너뛴다.
+ * scripts/lead-magnet-ebooks/<slug>.html 이 있으면 data 대신 그 인쇄 원본(디자인 캔버스에서 옮긴 6쪽 e-book)을 찍는다.
  *
  * 사용:
  *   node scripts/render-lead-magnet-workbook-pdf.mjs                 # WORKBOOK_SLUGS 전부
@@ -17,6 +18,7 @@
  * 링크는 NEXT_PUBLIC_SITE_URL(기본 https://classin.co.kr) 기준 절대 주소 + utm(pdf/lead_magnet/<slug>).
  */
 
+import { existsSync } from "node:fs"
 import { mkdtemp, readFile, rm, writeFile, mkdir } from "node:fs/promises"
 import { createRequire } from "node:module"
 import os from "node:os"
@@ -27,6 +29,7 @@ import { WORKBOOK_SLUGS } from "../lib/lead-magnet-pdf/workbook-slugs.mjs"
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const DATA_PATH = path.join(ROOT, "data", "lead-magnets.json")
+const EBOOK_DIR = path.join(ROOT, "scripts", "lead-magnet-ebooks")
 const PUBLIC_DIR = path.join(ROOT, "public")
 const FONT_DIR = path.join(ROOT, "node_modules", "@fontsource", "ibm-plex-sans-kr")
 const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || "https://classin.co.kr").replace(/\/$/, "")
@@ -647,6 +650,16 @@ ${pages.join("\n")}
 </html>`
 }
 
+// ── e-book 인쇄 원본 ─────────────────────────────────────────────────────
+
+/** 인쇄 원본의 public 기준 이미지 경로를 file:// 로, 사이트 상대 링크를 utm 붙은 절대 주소로 바꾼다. */
+function buildEbookHtml(source, slug, fontCss) {
+  return source
+    .replace("/* FONT_CSS */", () => fontCss)
+    .replace(/src="\/([^"]+)"/g, (_, rel) => `src="${pathToFileURL(path.join(PUBLIC_DIR, rel)).href}"`)
+    .replace(/href="(\/[^"]*)"/g, (_, href) => `href="${esc(trackedUrl(href, slug))}"`)
+}
+
 // ── 인쇄 ────────────────────────────────────────────────────────────────
 
 function loadPlaywright() {
@@ -704,7 +717,10 @@ async function main() {
     for (const slug of slugs) {
       const magnet = magnetsBySlug.get(slug)
       if (!magnet) throw new Error(`자료를 찾지 못했습니다: ${slug}`)
-      const html = buildWorkbookHtml(magnet, magnetsBySlug, fontCss)
+      const ebookPath = path.join(EBOOK_DIR, `${slug}.html`)
+      const html = existsSync(ebookPath)
+        ? buildEbookHtml(await readFile(ebookPath, "utf8"), slug, fontCss)
+        : buildWorkbookHtml(magnet, magnetsBySlug, fontCss)
       const htmlPath = path.join(workDir, `${slug}.html`)
       await writeFile(htmlPath, html, "utf8")
       if (htmlOut) {

@@ -138,7 +138,7 @@ export default async function ResourcePage({ params }: ResourcePageProps) {
       <div>
         <h2 className={BAND_TITLE.replace("mt-3 ", "")}>점수 해석</h2>
         <p className="mt-3 text-[14px] leading-7 text-[#615D59]">
-          총점보다 낮게 나온 구간을 보세요. 그 영역이 먼저 손볼 운영 병목입니다.
+          {magnet.scoringGuide?.read ?? "총점보다 낮게 나온 구간을 보세요. 그 영역이 먼저 손볼 운영 병목입니다."}
         </p>
         <div className="mt-7 space-y-px overflow-hidden rounded-[10px] border border-black/[0.08]">
           {magnet.scoreBands.map((band, i) => (
@@ -584,14 +584,23 @@ export default async function ResourcePage({ params }: ResourcePageProps) {
               전체 점검 문항
             </h2>
             <div className="mt-4 space-y-3 text-[15px] leading-7 text-[#615D59]">
-              <p>
-                각 문항은 현재 상태가 안정적이면 1점, 불안정하거나 확인이 필요하면 0점으로
-                표시하세요. 애매한 항목은 억지로 긍정 처리하지 않는 편이 좋습니다.
-              </p>
-              <p>
-                총점보다 <span className="font-semibold text-[#31302E]">낮게 나온 영역</span>을 보세요.
-                그 영역이 먼저 손볼 운영 병목이고, ClassIn 상담에서 가장 먼저 검증해야 할 장면입니다.
-              </p>
+              {magnet.scoringGuide ? (
+                <>
+                  <p>{magnet.scoringGuide.mark}</p>
+                  <p>{magnet.scoringGuide.read}</p>
+                </>
+              ) : (
+                <>
+                  <p>
+                    각 문항은 현재 상태가 안정적이면 1점, 불안정하거나 확인이 필요하면 0점으로
+                    표시하세요. 애매한 항목은 억지로 긍정 처리하지 않는 편이 좋습니다.
+                  </p>
+                  <p>
+                    총점보다 <span className="font-semibold text-[#31302E]">낮게 나온 영역</span>을 보세요.
+                    그 영역이 먼저 손볼 운영 병목이고, ClassIn 상담에서 가장 먼저 검증해야 할 장면입니다.
+                  </p>
+                </>
+              )}
             </div>
           </div>
 

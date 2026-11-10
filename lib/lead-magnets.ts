@@ -19,6 +19,14 @@ export interface LeadMagnetScoreBand {
   description: string
 }
 
+/** 자료 페이지의 채점 안내. 없으면 기본 문구(안정적이면 1점, 낮은 영역이 병목)를 쓴다. */
+export interface LeadMagnetScoringGuide {
+  /** 문항을 어떻게 표시하는지 */
+  mark: string
+  /** 결과에서 무엇부터 보는지 — 점수 해석 머리말에도 쓴다 */
+  read: string
+}
+
 export interface LeadMagnetActionStep {
   day: string
   title: string
@@ -149,6 +157,8 @@ export interface LeadMagnet {
   caseCards?: readonly LeadMagnetCaseCard[]
   /** 복붙용 메시지 예시. 파일럿 자료에만 존재. */
   scriptSamples?: readonly LeadMagnetScriptSample[]
+  /** 증상을 세는 진단표처럼 기본 채점(안정=1점)과 방향이 다른 자료만 둔다. */
+  scoringGuide?: LeadMagnetScoringGuide
   ctaCopy: {
     eyebrow: string
     title: string
