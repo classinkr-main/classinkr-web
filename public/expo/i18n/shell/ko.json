@@ -1,0 +1,298 @@
+[
+{
+"en": [
+"Share link"
+],
+"tr": [
+"링크 공유"
+]
+},
+{
+"en": [
+"Expand"
+],
+"tr": [
+"확대"
+]
+},
+{
+"en": [
+"Expand (or double tap)"
+],
+"tr": [
+"확대 (또는 두 번 탭)"
+]
+},
+{
+"en": [
+"Choose what to show"
+],
+"tr": [
+"표시할 항목 선택"
+]
+},
+{
+"en": [
+"Show the tabs"
+],
+"tr": [
+"탭 보기"
+]
+},
+{
+"en": [
+"Show the tabs (or double tap)"
+],
+"tr": [
+"탭 보기 (또는 두 번 탭)"
+]
+},
+{
+"en": [
+"Language"
+],
+"tr": [
+"언어"
+]
+},
+{
+"en": [
+"Use it with no internet"
+],
+"tr": [
+"인터넷 없이 사용하기"
+]
+},
+{
+"en": [
+"Open"
+],
+"tr": [
+"열기:"
+]
+},
+{
+"en": [
+"from the Home Screen, with Wi-Fi on."
+],
+"tr": [
+"홈 화면에서, Wi-Fi를 켠 상태로."
+]
+},
+{
+"en": [
+"Wait until the top bar says"
+],
+"tr": [
+"상단 바에 다음이 표시될 때까지 기다리세요:"
+]
+},
+{
+"en": [
+"(a few minutes). After that, no internet is needed."
+],
+"tr": [
+"(몇 분 소요). 이후에는 인터넷이 필요 없습니다."
+]
+},
+{
+"en": [
+"In"
+],
+"tr": [
+"브라우저:"
+]
+},
+{
+"en": [
+"or"
+],
+"tr": [
+"또는"
+]
+},
+{
+"en": [
+", click"
+],
+"tr": [
+", 클릭:"
+]
+},
+{
+"en": [
+"at the right of the address bar (or the menu, then"
+],
+"tr": [
+"주소창 오른쪽(또는 메뉴 →"
+]
+},
+{
+"en": [
+")."
+],
+"tr": [
+")."
+]
+},
+{
+"en": [
+"from the window that appears (or from the Start menu), with Wi-Fi on."
+],
+"tr": [
+"표시되는 창(또는 시작 메뉴)에서, Wi-Fi를 켠 상태로."
+]
+},
+{
+"en": [
+"OK"
+],
+"tr": [
+"확인"
+]
+},
+{
+"en": [
+"Link copied: {0}"
+],
+"tr": [
+"링크를 복사했습니다: {0}"
+]
+},
+{
+"en": [
+"Preview: not published yet"
+],
+"tr": [
+"미리보기: 아직 게시되지 않음"
+]
+},
+{
+"en": [
+"{0} edition"
+],
+"tr": [
+"{0} 에디션"
+]
+},
+{
+"en": [
+"Ready offline"
+],
+"tr": [
+"오프라인 준비 완료"
+]
+},
+{
+"en": [
+"Not fully saved: connect to Wi-Fi"
+],
+"tr": [
+"저장이 완료되지 않았습니다. Wi-Fi에 연결하세요"
+]
+},
+{
+"en": [
+"Not saved yet: connect to Wi-Fi"
+],
+"tr": [
+"아직 저장되지 않았습니다. Wi-Fi에 연결하세요"
+]
+},
+{
+"en": [
+"Update offline copy ({0} MB)"
+],
+"tr": [
+"오프라인 사본 업데이트 ({0} MB)"
+]
+},
+{
+"en": [
+"Finish saving ({0} MB)"
+],
+"tr": [
+"저장 마치기 ({0} MB)"
+]
+},
+{
+"en": [
+"Save offline ({0} MB)"
+],
+"tr": [
+"오프라인 저장 ({0} MB)"
+]
+},
+{
+"en": [
+"Saving {0} of {1} MB"
+],
+"tr": [
+"{1} MB 중 {0} MB 저장 중"
+]
+},
+{
+"en": [
+"Some files did not save: tap to try again"
+],
+"tr": [
+"일부 파일이 저장되지 않았습니다. 탭하여 다시 시도"
+]
+},
+{
+"en": [
+"Saving stopped: tap to try again"
+],
+"tr": [
+"저장이 중단되었습니다. 탭하여 다시 시도"
+]
+},
+{
+"en": [
+"This browser cannot save for offline"
+],
+"tr": [
+"이 브라우저는 오프라인 저장을 지원하지 않습니다"
+]
+},
+{
+"en": [
+"Use offline"
+],
+"tr": [
+"오프라인 사용"
+]
+},
+{
+"en": [
+"Checking"
+],
+"tr": [
+"확인 중"
+]
+},
+{
+"en": [
+"Offline saving is not available: tap to try again"
+],
+"tr": [
+"오프라인 저장을 사용할 수 없습니다. 탭하여 다시 시도"
+]
+},
+{
+"en": [
+"In Safari, tap ",
+"Share",
+" at the top, then ",
+"Add to Home Screen",
+"."
+],
+"tr": [
+"Safari에서 위쪽의 ",
+"공유",
+" 버튼을 탭한 다음 ",
+"홈 화면에 추가",
+"."
+]
+}
+]

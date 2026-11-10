@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="ClassIn">
+<meta name="theme-color" content="#ffffff">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" href="icons/icon-192.png">
+<title>ClassIn</title>
+<link rel="stylesheet" href="shell.css">
+</head>
+<body>
+<header class="bar">
+  
+  <div class="bar__left">
+    <img class="bar__logo" src="deck/media/logo.svg" alt="ClassIn" width="96" height="26">
+    <button class="sharebtn iconbtn" id="share" type="button" aria-label="Share link" title="Share link"><svg class="shareicon" width="18" height="21" viewBox="0 0 18 21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 13.5V1.5M4.5 6 9 1.5 13.5 6"/><path d="M5.5 9H3a1 1 0 0 0-1 1v8.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V10a1 1 0 0 0-1-1h-2.5"/></svg></button>
+    <button class="sharebtn iconbtn" id="full" type="button" aria-pressed="false" aria-label="Expand" title="Expand (or double tap)"><svg class="fullicon fullicon--in" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9V3h6M15 3h6v6M21 15v6h-6M9 21H3v-6"/></svg><svg class="fullicon fullicon--out" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3v6H3M21 9h-6V3M15 21v-6h6M3 15h6v6"/></svg></button>
+    <div class="lang"><button class="sharebtn langbtn" id="lang" type="button" aria-haspopup="true" aria-expanded="false" aria-label="Language" title="Language"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.7 3.8 5.7 3.8 9s-1.3 6.3-3.8 9c-2.5-2.7-3.8-5.7-3.8-9S9.5 5.7 12 3z"/></svg><span id="lang-now">EN</span></button>
+      <div class="lang__menu" id="lang-menu" role="menu" aria-label="Language" hidden></div></div>
+  </div>
+  <nav class="tabs" role="tablist" aria-label="Choose what to show">
+    <button role="tab" type="button" data-app="ai" aria-selected="true"><span class="tab__long">AI Feature Zone</span><span class="tab__short">AI Zone</span></button>
+    <button role="tab" type="button" data-app="rooms" aria-selected="false"><span class="tab__long">Physical Learning Spaces</span><span class="tab__short">Spaces</span></button>
+    <button role="tab" type="button" data-app="designer" aria-selected="false"><span class="tab__long">Room Designer</span><span class="tab__short">Designer</span></button>
+    <button role="tab" type="button" data-app="deck" aria-selected="false"><span class="tab__long">Slides</span><span class="tab__short">Slides</span></button>
+  </nav>
+  <button class="state" id="state" type="button" aria-live="polite">
+    <span class="state__icon" aria-hidden="true"></span><span class="state__text"></span>
+    <span class="state__bar" aria-hidden="true"><i></i></span>
+  </button>
+</header>
+<button class="handle" id="handle" type="button" aria-label="Show the tabs" title="Show the tabs (or double tap)"><i></i></button>
+<main>
+  <iframe data-app="ai" data-src="ai/index.html" title="AI Feature Zone" allow="autoplay; fullscreen; camera; microphone" allowfullscreen></iframe>
+  <iframe data-app="rooms" data-src="rooms/index.html" title="Physical Learning Spaces" allow="autoplay; fullscreen" allowfullscreen></iframe>
+  <iframe data-app="designer" data-src="deck/room-designer.html" title="Room Designer" allow="autoplay; fullscreen" allowfullscreen></iframe>
+  <iframe data-app="deck" data-src="deck/edutech.html" title="Slides" allow="autoplay; fullscreen" allowfullscreen></iframe>
+  <div class="loading" id="loading" role="status" hidden>
+    <p class="loading__title">Loading <b id="loading-name"></b></p>
+    <div class="loading__bar" aria-hidden="true"><i></i></div>
+    <p class="loading__note" id="loading-note"></p>
+  </div>
+</main>
+<p class="toast" id="toast" role="status"></p>
+<dialog class="sheet" id="sheet">
+  <h2>Use it with no internet</h2>
+  <ol data-for="ipad">
+    <li>In Safari, tap <b>Share</b> <svg class="shareicon" width="18" height="21" viewBox="0 0 18 21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 13.5V1.5M4.5 6 9 1.5 13.5 6"/><path d="M5.5 9H3a1 1 0 0 0-1 1v8.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V10a1 1 0 0 0-1-1h-2.5"/></svg> at the top, then <b>Add to Home Screen</b>.</li>
+    <li>Open <b>ClassIn</b> from the Home Screen, with Wi-Fi on.</li>
+    <li>Wait until the top bar says <b>Ready offline</b> (a few minutes). After that, no internet is needed.</li>
+  </ol>
+  <ol data-for="computer">
+    <li>In <b>Chrome</b> or <b>Edge</b>, click <b>Install</b> at the right of the address bar (or the menu, then <b>Install ClassIn</b>).</li>
+    <li>Open <b>ClassIn</b> from the window that appears (or from the Start menu), with Wi-Fi on.</li>
+    <li>Wait until the top bar says <b>Ready offline</b> (a few minutes). After that, no internet is needed.</li>
+  </ol>
+  <form method="dialog"><button class="sheet__ok">OK</button></form>
+</dialog>
+<script src="text-lang.js"></script>
+<script src="shell.js"></script>
+</body>
+</html>

@@ -1,0 +1,5983 @@
+[
+{
+"en": [
+"‹ Home"
+],
+"tr": [
+"‹ 홈"
+]
+},
+{
+"en": [
+"✕",
+"Back to features"
+],
+"tr": [
+"✕",
+"기능 목록으로"
+]
+},
+{
+"en": [
+"AI EMPOWERS BETTER TEACHING"
+],
+"tr": [
+"AI로 더 나은 수업을"
+]
+},
+{
+"en": [
+"See how AI ",
+"helps you teach"
+],
+"tr": [
+"AI가 수업을 ",
+"어떻게 돕는지 보세요"
+]
+},
+{
+"en": [
+"Tap a card to see how each feature works."
+],
+"tr": [
+"카드를 탭해 기능별 작동 방식을 확인하세요."
+]
+},
+{
+"en": [
+"More features",
+"{0}",
+"›"
+],
+"tr": [
+"더 많은 기능",
+"{0}",
+"›"
+]
+},
+{
+"en": [
+"‹ Main features"
+],
+"tr": [
+"‹ 주요 기능"
+]
+},
+{
+"en": [
+"Even ",
+"more",
+" to explore"
+],
+"tr": [
+"더 ",
+"많은",
+" 기능 살펴보기"
+]
+},
+{
+"en": [
+"Try a feature yourself, or watch one in a real ClassIn classroom."
+],
+"tr": [
+"기능을 직접 써 보거나, 실제 ClassIn 교실에서 쓰이는 모습을 보세요."
+]
+},
+{
+"en": [
+"It works for any subject. Choose one to watch."
+],
+"tr": [
+"어떤 과목에도 활용할 수 있습니다. 볼 과목을 고르세요."
+]
+},
+{
+"en": [
+"‹ Back to features"
+],
+"tr": [
+"‹ 기능 목록으로"
+]
+},
+{
+"en": [
+"Turn your phone sideways",
+"The demo shows a full classroom screen, so it needs the width."
+],
+"tr": [
+"휴대폰을 가로로 돌려 주세요",
+"데모는 교실 화면 전체를 보여 주므로 넓은 화면이 필요합니다."
+]
+},
+{
+"en": [
+"Turn your screen sideways for a bigger view"
+],
+"tr": [
+"화면을 가로로 돌리면 더 크게 볼 수 있습니다"
+]
+},
+{
+"en": [
+"More in ClassIn"
+],
+"tr": [
+"ClassIn의 더 많은 기능"
+]
+},
+{
+"en": [
+"Ask the class. See every answer, live."
+],
+"tr": [
+"반 전체에 질문하고, 모든 답변을 실시간으로 확인하세요."
+]
+},
+{
+"en": [
+"{0}",
+"Ask the class a question"
+],
+"tr": [
+"{0}",
+"반 전체에 질문"
+]
+},
+{
+"en": [
+"{0}",
+"Every student answers on their own device"
+],
+"tr": [
+"{0}",
+"모든 학생이 각자 기기로 답변"
+]
+},
+{
+"en": [
+"{0}",
+"See who got it right"
+],
+"tr": [
+"{0}",
+"정답자 확인"
+]
+},
+{
+"en": [
+"Ask the class a question"
+],
+"tr": [
+"반 전체에 질문"
+]
+},
+{
+"en": [
+"Every student answers on their own device"
+],
+"tr": [
+"모든 학생이 각자 기기로 답변"
+]
+},
+{
+"en": [
+"Mark the right answer."
+],
+"tr": [
+"정답을 표시하세요."
+]
+},
+{
+"en": [
+"You just saw"
+],
+"tr": [
+"방금 본 내용"
+]
+},
+{
+"en": [
+"✓",
+"Ask the class a question"
+],
+"tr": [
+"✓",
+"반 전체에 질문"
+]
+},
+{
+"en": [
+"✓",
+"Every student answers on their own device"
+],
+"tr": [
+"✓",
+"모든 학생이 각자 기기로 답변"
+]
+},
+{
+"en": [
+"✓",
+"See who got it right"
+],
+"tr": [
+"✓",
+"정답자 확인"
+]
+},
+{
+"en": [
+"Every student answers. You see the whole class at a glance."
+],
+"tr": [
+"모든 학생이 답하고, 반 전체 결과를 한눈에 봅니다."
+]
+},
+{
+"en": [
+"Back to features"
+],
+"tr": [
+"기능 목록으로"
+]
+},
+{
+"en": [
+"In class",
+"while you teach"
+],
+"tr": [
+"수업 중",
+"가르치는 동안"
+]
+},
+{
+"en": [
+"Start here"
+],
+"tr": [
+"여기서 시작"
+]
+},
+{
+"en": [
+"Students answer, AI marks every one"
+],
+"tr": [
+"학생이 답하면 AI가 모두 채점"
+]
+},
+{
+"en": [
+"▶ Watch"
+],
+"tr": [
+"▶ 보기"
+]
+},
+{
+"en": [
+"Lesson Summary"
+],
+"tr": [
+"수업 요약"
+]
+},
+{
+"en": [
+"AI writes notes and a mind map"
+],
+"tr": [
+"AI가 노트와 마인드맵 작성"
+]
+},
+{
+"en": [
+"AI Virtual Lab"
+],
+"tr": [
+"AI 가상 실험실"
+]
+},
+{
+"en": [
+"Pick an experiment, build it yourself"
+],
+"tr": [
+"실험을 골라 직접 구성"
+]
+},
+{
+"en": [
+"After class",
+"review and follow up"
+],
+"tr": [
+"수업 후",
+"복습과 후속 지도"
+]
+},
+{
+"en": [
+"A scored report on the lesson"
+],
+"tr": [
+"점수로 보는 수업 리포트"
+]
+},
+{
+"en": [
+"Learning Analytics"
+],
+"tr": [
+"학습 분석"
+]
+},
+{
+"en": [
+"How each student is doing"
+],
+"tr": [
+"학생별 학습 현황"
+]
+},
+{
+"en": [
+"Question Generator"
+],
+"tr": [
+"문제 생성기"
+]
+},
+{
+"en": [
+"Practice questions, written by AI"
+],
+"tr": [
+"AI가 만드는 연습 문제"
+]
+},
+{
+"en": [
+"Choose a subject"
+],
+"tr": [
+"과목 선택"
+]
+},
+{
+"en": [
+"More AI features"
+],
+"tr": [
+"더 많은 AI 기능"
+]
+},
+{
+"en": [
+"Say what you need. ClassIn does it."
+],
+"tr": [
+"필요한 것을 말하면 ClassIn이 해 줍니다."
+]
+},
+{
+"en": [
+"{0}",
+"Call the voice assistant"
+],
+"tr": [
+"{0}",
+"음성 비서 호출"
+]
+},
+{
+"en": [
+"{0}",
+"Say what you need"
+],
+"tr": [
+"{0}",
+"필요한 것을 말로 요청"
+]
+},
+{
+"en": [
+"{0}",
+"ClassIn does it, hands-free"
+],
+"tr": [
+"{0}",
+"손 쓸 필요 없이 ClassIn이 실행"
+]
+},
+{
+"en": [
+"Call the voice assistant"
+],
+"tr": [
+"음성 비서 호출"
+]
+},
+{
+"en": [
+"Tap to call it."
+],
+"tr": [
+"탭해서 호출하세요."
+]
+},
+{
+"en": [
+"“Open the dice.”"
+],
+"tr": [
+"“주사위 열어 줘.”"
+]
+},
+{
+"en": [
+"ClassIn does it, hands-free"
+],
+"tr": [
+"손 쓸 필요 없이 ClassIn이 실행"
+]
+},
+{
+"en": [
+"✓",
+"Call the voice assistant"
+],
+"tr": [
+"✓",
+"음성 비서 호출"
+]
+},
+{
+"en": [
+"✓",
+"Say what you need"
+],
+"tr": [
+"✓",
+"필요한 것을 말로 요청"
+]
+},
+{
+"en": [
+"✓",
+"ClassIn does it, hands-free"
+],
+"tr": [
+"✓",
+"손 쓸 필요 없이 ClassIn이 실행"
+]
+},
+{
+"en": [
+"Open classroom tools by voice."
+],
+"tr": [
+"음성으로 수업 도구를 엽니다."
+]
+},
+{
+"en": [
+"AI Teaching Assistant"
+],
+"tr": [
+"AI 수업 도우미"
+]
+},
+{
+"en": [
+"Answers students’ questions any time, only from your class materials."
+],
+"tr": [
+"수업 자료만을 근거로, 학생 질문에 언제든 답합니다."
+]
+},
+{
+"en": [
+"{0}",
+"A student asks a question"
+],
+"tr": [
+"{0}",
+"학생이 질문"
+]
+},
+{
+"en": [
+"{0}",
+"AI answers from your class materials"
+],
+"tr": [
+"{0}",
+"AI가 수업 자료로 답변"
+]
+},
+{
+"en": [
+"{0}",
+"Every answer shows its source"
+],
+"tr": [
+"{0}",
+"모든 답변에 출처 표시"
+]
+},
+{
+"en": [
+"Be the student: send the question."
+],
+"tr": [
+"학생이 되어 질문을 보내 보세요."
+]
+},
+{
+"en": [
+"AI answers from your class materials"
+],
+"tr": [
+"AI가 수업 자료로 답변"
+]
+},
+{
+"en": [
+"Every answer shows its source"
+],
+"tr": [
+"모든 답변에 출처 표시"
+]
+},
+{
+"en": [
+"✓",
+"A student asks a question"
+],
+"tr": [
+"✓",
+"학생이 질문"
+]
+},
+{
+"en": [
+"✓",
+"AI answers from your class materials"
+],
+"tr": [
+"✓",
+"AI가 수업 자료로 답변"
+]
+},
+{
+"en": [
+"✓",
+"Every answer shows its source"
+],
+"tr": [
+"✓",
+"모든 답변에 출처 표시"
+]
+},
+{
+"en": [
+"Every answer comes from your own class materials."
+],
+"tr": [
+"모든 답변은 선생님의 수업 자료에서 나옵니다."
+]
+},
+{
+"en": [
+"AI Homework"
+],
+"tr": [
+"AI 과제"
+]
+},
+{
+"en": [
+"AI writes the homework and marks it. The teacher stays in charge."
+],
+"tr": [
+"AI가 과제를 출제하고 채점합니다. 최종 판단은 교사가 합니다."
+]
+},
+{
+"en": [
+"{0}",
+"AI writes the homework"
+],
+"tr": [
+"{0}",
+"AI가 과제 출제"
+]
+},
+{
+"en": [
+"{0}",
+"Students send a photo of their work"
+],
+"tr": [
+"{0}",
+"학생이 풀이 사진 제출"
+]
+},
+{
+"en": [
+"{0}",
+"AI marks it, the teacher confirms"
+],
+"tr": [
+"{0}",
+"AI가 채점, 교사가 확인"
+]
+},
+{
+"en": [
+"AI marks it, the teacher confirms"
+],
+"tr": [
+"AI가 채점, 교사가 확인"
+]
+},
+{
+"en": [
+"Now let AI mark Mia’s homework."
+],
+"tr": [
+"이제 AI에게 Mia의 과제 채점을 맡겨 보세요."
+]
+},
+{
+"en": [
+"✓",
+"AI writes the homework"
+],
+"tr": [
+"✓",
+"AI가 과제 출제"
+]
+},
+{
+"en": [
+"✓",
+"Students send a photo of their work"
+],
+"tr": [
+"✓",
+"학생이 풀이 사진 제출"
+]
+},
+{
+"en": [
+"✓",
+"AI marks it, the teacher confirms"
+],
+"tr": [
+"✓",
+"AI가 채점, 교사가 확인"
+]
+},
+{
+"en": [
+"AI marks in seconds. The teacher confirms the score."
+],
+"tr": [
+"AI가 몇 초 만에 채점하고, 교사가 점수를 확정합니다."
+]
+},
+{
+"en": [
+"{0}",
+"The teacher builds the task: questions, a file and a deadline"
+],
+"tr": [
+"{0}",
+"교사가 문제, 파일, 마감일로 과제 구성"
+]
+},
+{
+"en": [
+"{0}",
+"Tap Post to send it to the whole class"
+],
+"tr": [
+"{0}",
+"‘게시’를 탭해 반 전체에 전송"
+]
+},
+{
+"en": [
+"{0}",
+"Every student gets a Task Notice on their own device"
+],
+"tr": [
+"{0}",
+"모든 학생이 각자 기기로 과제 알림 수신"
+]
+},
+{
+"en": [
+"Assign Tasks"
+],
+"tr": [
+"과제 배포"
+]
+},
+{
+"en": [
+"✓",
+"Build the task on the Board"
+],
+"tr": [
+"✓",
+"보드에서 과제 구성"
+]
+},
+{
+"en": [
+"✓",
+"Post it to the whole class"
+],
+"tr": [
+"✓",
+"반 전체에 게시"
+]
+},
+{
+"en": [
+"✓",
+"Students get it on their own device"
+],
+"tr": [
+"✓",
+"학생이 각자 기기로 수신"
+]
+},
+{
+"en": [
+"Homework, set before the lesson ends."
+],
+"tr": [
+"수업이 끝나기 전에 과제 배포 완료."
+]
+},
+{
+"en": [
+"{0}",
+"The teacher sets up the groups on the Board"
+],
+"tr": [
+"{0}",
+"교사가 보드에서 그룹 구성"
+]
+},
+{
+"en": [
+"{0}",
+"ClassIn places every student in a group"
+],
+"tr": [
+"{0}",
+"ClassIn이 모든 학생을 그룹에 배정"
+]
+},
+{
+"en": [
+"{0}",
+"Move anyone, then one tap starts the groups"
+],
+"tr": [
+"{0}",
+"필요하면 학생을 옮기고, 탭 한 번으로 그룹 시작"
+]
+},
+{
+"en": [
+"{0}",
+"The groups work together, on tablets and laptops"
+],
+"tr": [
+"{0}",
+"그룹별로 태블릿과 노트북으로 협업"
+]
+},
+{
+"en": [
+"{0}",
+"A group’s work goes up on the Board for everyone"
+],
+"tr": [
+"{0}",
+"그룹 결과물을 보드에 띄워 모두와 공유"
+]
+},
+{
+"en": [
+"Breakout Rooms"
+],
+"tr": [
+"소그룹실"
+]
+},
+{
+"en": [
+"✓",
+"Set up the groups on the Board"
+],
+"tr": [
+"✓",
+"보드에서 그룹 구성"
+]
+},
+{
+"en": [
+"✓",
+"The groups work together"
+],
+"tr": [
+"✓",
+"그룹별 협업"
+]
+},
+{
+"en": [
+"✓",
+"Share a group’s work on the Board"
+],
+"tr": [
+"✓",
+"그룹 결과물을 보드에 공유"
+]
+},
+{
+"en": [
+"Group work, organised and shared in minutes."
+],
+"tr": [
+"몇 분 만에 그룹 활동을 구성하고 공유합니다."
+]
+},
+{
+"en": [
+"{0}",
+"Four fingers open the tool panel"
+],
+"tr": [
+"{0}",
+"네 손가락으로 도구 패널 열기"
+]
+},
+{
+"en": [
+"{0}",
+"A gesture opens ClassIn Drive, and a file goes onto the Board"
+],
+"tr": [
+"{0}",
+"제스처로 ClassIn Drive를 열고 파일을 보드에 띄우기"
+]
+},
+{
+"en": [
+"{0}",
+"Two fingers turn the page"
+],
+"tr": [
+"{0}",
+"두 손가락으로 페이지 넘기기"
+]
+},
+{
+"en": [
+"{0}",
+"The back of the hand erases"
+],
+"tr": [
+"{0}",
+"손등으로 지우기"
+]
+},
+{
+"en": [
+"Gesture Control"
+],
+"tr": [
+"제스처 제어"
+]
+},
+{
+"en": [
+"✓",
+"Four fingers open the tool panel"
+],
+"tr": [
+"✓",
+"네 손가락으로 도구 패널 열기"
+]
+},
+{
+"en": [
+"✓",
+"A gesture opens ClassIn Drive"
+],
+"tr": [
+"✓",
+"제스처로 ClassIn Drive 열기"
+]
+},
+{
+"en": [
+"✓",
+"Two fingers turn the page"
+],
+"tr": [
+"✓",
+"두 손가락으로 페이지 넘기기"
+]
+},
+{
+"en": [
+"✓",
+"The back of the hand erases"
+],
+"tr": [
+"✓",
+"손등으로 지우기"
+]
+},
+{
+"en": [
+"Open tools, turn pages and erase with a gesture."
+],
+"tr": [
+"제스처로 도구를 열고, 페이지를 넘기고, 지웁니다."
+]
+},
+{
+"en": [
+"{0}",
+"The matching task is on the Board"
+],
+"tr": [
+"{0}",
+"보드에 짝 맞추기 과제 표시"
+]
+},
+{
+"en": [
+"{0}",
+"Pick Sketch Board from the Toolbox"
+],
+"tr": [
+"{0}",
+"도구함에서 스케치보드 선택"
+]
+},
+{
+"en": [
+"{0}",
+"Hand it out to every student"
+],
+"tr": [
+"{0}",
+"모든 학생에게 배포"
+]
+},
+{
+"en": [
+"{0}",
+"Each student answers on their own device"
+],
+"tr": [
+"{0}",
+"학생마다 각자 기기로 답변"
+]
+},
+{
+"en": [
+"{0}",
+"Every answer comes back to the Board"
+],
+"tr": [
+"{0}",
+"모든 답변이 보드로 모임"
+]
+},
+{
+"en": [
+"✓",
+"Pick Sketch Board from the Toolbox"
+],
+"tr": [
+"✓",
+"도구함에서 스케치보드 선택"
+]
+},
+{
+"en": [
+"✓",
+"Hand the task out to every student"
+],
+"tr": [
+"✓",
+"모든 학생에게 과제 배포"
+]
+},
+{
+"en": [
+"✓",
+"See every answer on the Board"
+],
+"tr": [
+"✓",
+"보드에서 모든 답변 확인"
+]
+},
+{
+"en": [
+"The whole class working at once."
+],
+"tr": [
+"반 전체가 동시에 참여합니다."
+]
+},
+{
+"en": [
+"Teach as normal. AI writes the summary and the mind map."
+],
+"tr": [
+"평소처럼 수업하세요. 요약과 마인드맵은 AI가 작성합니다."
+]
+},
+{
+"en": [
+"{0}",
+"Teach your lesson as normal"
+],
+"tr": [
+"{0}",
+"평소처럼 수업"
+]
+},
+{
+"en": [
+"{0}",
+"AI writes the lesson summary"
+],
+"tr": [
+"{0}",
+"AI가 수업 요약 작성"
+]
+},
+{
+"en": [
+"{0}",
+"AI turns it into a mind map"
+],
+"tr": [
+"{0}",
+"AI가 마인드맵으로 정리"
+]
+},
+{
+"en": [
+"Teach your lesson as normal"
+],
+"tr": [
+"평소처럼 수업"
+]
+},
+{
+"en": [
+"AI writes the lesson summary"
+],
+"tr": [
+"AI가 수업 요약 작성"
+]
+},
+{
+"en": [
+"Turn the whole lesson into a mind map."
+],
+"tr": [
+"수업 전체를 마인드맵으로 만들어 보세요."
+]
+},
+{
+"en": [
+"✓",
+"Teach your lesson as normal"
+],
+"tr": [
+"✓",
+"평소처럼 수업"
+]
+},
+{
+"en": [
+"✓",
+"AI writes the lesson summary"
+],
+"tr": [
+"✓",
+"AI가 수업 요약 작성"
+]
+},
+{
+"en": [
+"✓",
+"AI turns it into a mind map"
+],
+"tr": [
+"✓",
+"AI가 마인드맵으로 정리"
+]
+},
+{
+"en": [
+"A summary and a mind map, ready to share after class."
+],
+"tr": [
+"수업 후 바로 공유할 수 있는 요약과 마인드맵."
+]
+},
+{
+"en": [
+"A scored report on your lesson, after class."
+],
+"tr": [
+"수업이 끝나면 받는, 점수가 매겨진 수업 리포트."
+]
+},
+{
+"en": [
+"{0}",
+"Finish your lesson"
+],
+"tr": [
+"{0}",
+"수업 마치기"
+]
+},
+{
+"en": [
+"{0}",
+"AI scores it on five teaching areas"
+],
+"tr": [
+"{0}",
+"AI가 5개 교수 영역별로 채점"
+]
+},
+{
+"en": [
+"{0}",
+"See what went well, with evidence"
+],
+"tr": [
+"{0}",
+"잘된 점을 근거와 함께 확인"
+]
+},
+{
+"en": [
+"AI scores it on five teaching areas"
+],
+"tr": [
+"AI가 5개 교수 영역별로 채점"
+]
+},
+{
+"en": [
+"See what the AI says went well."
+],
+"tr": [
+"AI가 꼽은 잘된 점을 확인해 보세요."
+]
+},
+{
+"en": [
+"✓",
+"Finish your lesson"
+],
+"tr": [
+"✓",
+"수업 마치기"
+]
+},
+{
+"en": [
+"✓",
+"AI scores it on five teaching areas"
+],
+"tr": [
+"✓",
+"AI가 5개 교수 영역별로 채점"
+]
+},
+{
+"en": [
+"✓",
+"See what went well, with evidence"
+],
+"tr": [
+"✓",
+"잘된 점을 근거와 함께 확인"
+]
+},
+{
+"en": [
+"An evidence-based report after each lesson."
+],
+"tr": [
+"매 수업 후 받는 근거 기반 리포트."
+]
+},
+{
+"en": [
+"Students build and run simulated experiments on the Board."
+],
+"tr": [
+"학생이 보드에서 모의 실험을 직접 구성하고 실행합니다."
+]
+},
+{
+"en": [
+"{0}",
+"Pick one of {1} chemistry experiments"
+],
+"tr": [
+"{0}",
+"화학 실험 {1}개 중 하나 선택"
+]
+},
+{
+"en": [
+"{0}",
+"Build it with virtual glassware"
+],
+"tr": [
+"{0}",
+"가상 실험 기구로 장치 구성"
+]
+},
+{
+"en": [
+"{0}",
+"Run it and watch what happens"
+],
+"tr": [
+"{0}",
+"실행하고 결과 관찰"
+]
+},
+{
+"en": [
+"Pick one of {0} chemistry experiments"
+],
+"tr": [
+"화학 실험 {0}개 중 하나 선택"
+]
+},
+{
+"en": [
+"Tap “Check the airtightness of the device”."
+],
+"tr": [
+"“장치의 기밀성 확인”을 탭하세요."
+]
+},
+{
+"en": [
+"Build it with virtual glassware"
+],
+"tr": [
+"가상 실험 기구로 장치 구성"
+]
+},
+{
+"en": [
+"Drag the rubber stopper into the test tube."
+],
+"tr": [
+"고무마개를 시험관에 끌어다 놓으세요."
+]
+},
+{
+"en": [
+"Drag the glass tube onto the stopper."
+],
+"tr": [
+"유리관을 고무마개 위로 끌어다 놓으세요."
+]
+},
+{
+"en": [
+"Drag the beaker under the other end."
+],
+"tr": [
+"비커를 유리관 반대쪽 끝 아래로 끌어다 놓으세요."
+]
+},
+{
+"en": [
+"Tap the water bottle to fill the beaker."
+],
+"tr": [
+"물병을 탭해 비커에 물을 채우세요."
+]
+},
+{
+"en": [
+"Drag the warm towel onto the test tube."
+],
+"tr": [
+"따뜻한 수건을 시험관 위로 끌어다 놓으세요."
+]
+},
+{
+"en": [
+"Bubbles! No air leaks out, so the device is airtight."
+],
+"tr": [
+"기포 발생! 공기가 새지 않으니 장치는 기밀 상태입니다."
+]
+},
+{
+"en": [
+"✓",
+"Pick one of {0} chemistry experiments"
+],
+"tr": [
+"✓",
+"화학 실험 {0}개 중 하나 선택"
+]
+},
+{
+"en": [
+"✓",
+"Build it with virtual glassware"
+],
+"tr": [
+"✓",
+"가상 실험 기구로 장치 구성"
+]
+},
+{
+"en": [
+"✓",
+"Run it and watch what happens"
+],
+"tr": [
+"✓",
+"실행하고 결과 관찰"
+]
+},
+{
+"en": [
+"Lab experiments on the Board, with no materials used."
+],
+"tr": [
+"재료 없이 보드에서 하는 실험."
+]
+},
+{
+"en": [
+"Set a question. Students answer. AI marks every one."
+],
+"tr": [
+"문제를 내면 학생이 답하고, AI가 모두 채점합니다."
+]
+},
+{
+"en": [
+"{0}",
+"Take a question from the slide"
+],
+"tr": [
+"{0}",
+"슬라이드에서 문제 가져오기"
+]
+},
+{
+"en": [
+"{0}",
+"Send it to every student"
+],
+"tr": [
+"{0}",
+"모든 학생에게 전송"
+]
+},
+{
+"en": [
+"{0}",
+"AI marks every answer"
+],
+"tr": [
+"{0}",
+"AI가 모든 답안 채점"
+]
+},
+{
+"en": [
+"Take a question from the slide"
+],
+"tr": [
+"슬라이드에서 문제 가져오기"
+]
+},
+{
+"en": [
+"Send the question to the class."
+],
+"tr": [
+"반 전체에 문제를 보내세요."
+]
+},
+{
+"en": [
+"{0}",
+"Students answer on paper or on a tablet"
+],
+"tr": [
+"{0}",
+"학생이 종이나 태블릿으로 답변"
+]
+},
+{
+"en": [
+"AI marks every answer"
+],
+"tr": [
+"AI가 모든 답안 채점"
+]
+},
+{
+"en": [
+"Then AI reviews the whole class."
+],
+"tr": [
+"이어서 AI가 반 전체 결과를 검토합니다."
+]
+},
+{
+"en": [
+"✓",
+"Take a question from the slide"
+],
+"tr": [
+"✓",
+"슬라이드에서 문제 가져오기"
+]
+},
+{
+"en": [
+"✓",
+"Send it to every student"
+],
+"tr": [
+"✓",
+"모든 학생에게 전송"
+]
+},
+{
+"en": [
+"✓",
+"AI marks every answer"
+],
+"tr": [
+"✓",
+"AI가 모든 답안 채점"
+]
+},
+{
+"en": [
+"Every answer marked, and the whole class reviewed."
+],
+"tr": [
+"모든 답안 채점부터 반 전체 검토까지."
+]
+},
+{
+"en": [
+"See how each student is doing, and what to do next."
+],
+"tr": [
+"학생별 학습 현황과 다음 지도 방향을 확인하세요."
+]
+},
+{
+"en": [
+"{0}",
+"ClassIn records every student’s work"
+],
+"tr": [
+"{0}",
+"ClassIn이 모든 학생의 학습 기록"
+]
+},
+{
+"en": [
+"{0}",
+"AI spots where each student needs help"
+],
+"tr": [
+"{0}",
+"AI가 학생별로 도움이 필요한 부분 파악"
+]
+},
+{
+"en": [
+"{0}",
+"Get a plan to help each student"
+],
+"tr": [
+"{0}",
+"학생별 지도 계획 받기"
+]
+},
+{
+"en": [
+"ClassIn records every student’s work"
+],
+"tr": [
+"ClassIn이 모든 학생의 학습 기록"
+]
+},
+{
+"en": [
+"Ask AI how this student is doing."
+],
+"tr": [
+"이 학생의 학습 현황을 AI에게 물어보세요."
+]
+},
+{
+"en": [
+"Get a plan to help each student"
+],
+"tr": [
+"학생별 지도 계획 받기"
+]
+},
+{
+"en": [
+"✓",
+"ClassIn records every student’s work"
+],
+"tr": [
+"✓",
+"ClassIn이 모든 학생의 학습 기록"
+]
+},
+{
+"en": [
+"✓",
+"AI spots where each student needs help"
+],
+"tr": [
+"✓",
+"AI가 학생별로 도움이 필요한 부분 파악"
+]
+},
+{
+"en": [
+"✓",
+"Get a plan to help each student"
+],
+"tr": [
+"✓",
+"학생별 지도 계획 받기"
+]
+},
+{
+"en": [
+"A clear plan for every student."
+],
+"tr": [
+"모든 학생을 위한 명확한 지도 계획."
+]
+},
+{
+"en": [
+"Describe the quiz. AI writes it, with answers."
+],
+"tr": [
+"퀴즈를 설명하면 AI가 정답까지 작성합니다."
+]
+},
+{
+"en": [
+"{0}",
+"Describe the quiz in plain words"
+],
+"tr": [
+"{0}",
+"원하는 퀴즈를 쉬운 말로 설명"
+]
+},
+{
+"en": [
+"{0}",
+"AI writes questions and answers"
+],
+"tr": [
+"{0}",
+"AI가 문제와 정답 작성"
+]
+},
+{
+"en": [
+"{0}",
+"Publish it to every student"
+],
+"tr": [
+"{0}",
+"모든 학생에게 게시"
+]
+},
+{
+"en": [
+"Describe the quiz in plain words"
+],
+"tr": [
+"원하는 퀴즈를 쉬운 말로 설명"
+]
+},
+{
+"en": [
+"Let AI write this quiz."
+],
+"tr": [
+"이 퀴즈를 AI에게 맡겨 보세요."
+]
+},
+{
+"en": [
+"AI writes questions and answers"
+],
+"tr": [
+"AI가 문제와 정답 작성"
+]
+},
+{
+"en": [
+"Publish it to every student"
+],
+"tr": [
+"모든 학생에게 게시"
+]
+},
+{
+"en": [
+"{0}",
+"Every student gets it on their own device"
+],
+"tr": [
+"{0}",
+"모든 학생이 각자 기기로 수신"
+]
+},
+{
+"en": [
+"✓",
+"Describe the quiz in plain words"
+],
+"tr": [
+"✓",
+"원하는 퀴즈를 쉬운 말로 설명"
+]
+},
+{
+"en": [
+"✓",
+"AI writes questions and answers"
+],
+"tr": [
+"✓",
+"AI가 문제와 정답 작성"
+]
+},
+{
+"en": [
+"✓",
+"Publish it to every student"
+],
+"tr": [
+"✓",
+"모든 학생에게 게시"
+]
+},
+{
+"en": [
+"A full quiz with answers and explanations, ready to publish."
+],
+"tr": [
+"정답과 해설까지 갖춘, 바로 게시할 수 있는 퀴즈."
+]
+},
+{
+"en": [
+"Start"
+],
+"tr": [
+"시작"
+]
+},
+{
+"en": [
+"AI Sketch Board"
+],
+"tr": [
+"AI 스케치보드"
+]
+},
+{
+"en": [
+"Lesson Analysis"
+],
+"tr": [
+"수업 분석"
+]
+},
+{
+"en": [
+"In class"
+],
+"tr": [
+"수업 중"
+]
+},
+{
+"en": [
+"After class"
+],
+"tr": [
+"수업 후"
+]
+},
+{
+"en": [
+"1",
+"2",
+"3",
+"Your turn"
+],
+"tr": [
+"1",
+"2",
+"3",
+"내 차례"
+]
+},
+{
+"en": [
+"AI turns it into a mind map"
+],
+"tr": [
+"AI가 마인드맵으로 만들어 줍니다"
+]
+},
+{
+"en": [
+"Try it yourself"
+],
+"tr": [
+"직접 해 보기"
+]
+},
+{
+"en": [
+"Write a function, AI draws the graph"
+],
+"tr": [
+"함수를 쓰면 AI가 그래프를 그립니다"
+]
+},
+{
+"en": [
+"Sketch it, AI finds a matching image"
+],
+"tr": [
+"스케치하면 AI가 어울리는 이미지를 찾아 줍니다"
+]
+},
+{
+"en": [
+"Stroke Order"
+],
+"tr": [
+"필순"
+]
+},
+{
+"en": [
+"Write a character, AI shows the strokes"
+],
+"tr": [
+"글자를 쓰면 AI가 획순을 보여 줍니다"
+]
+},
+{
+"en": [
+"Ask the class, see answers live"
+],
+"tr": [
+"학급에 질문하고 답을 실시간으로 확인"
+]
+},
+{
+"en": [
+"Voice Assistant"
+],
+"tr": [
+"음성 도우미"
+]
+},
+{
+"en": [
+"Say what you need"
+],
+"tr": [
+"필요한 것을 말하세요"
+]
+},
+{
+"en": [
+"AI writes and marks homework"
+],
+"tr": [
+"AI가 과제를 만들고 채점합니다"
+]
+},
+{
+"en": [
+"Answers with sources, any time"
+],
+"tr": [
+"출처가 있는 답변, 언제든지"
+]
+},
+{
+"en": [
+"Watch in a real classroom"
+],
+"tr": [
+"실제 교실에서 보기"
+]
+},
+{
+"en": [
+"Split the class into groups"
+],
+"tr": [
+"학급을 그룹으로 나누기"
+]
+},
+{
+"en": [
+"Send work to every device"
+],
+"tr": [
+"모든 기기로 과제 보내기"
+]
+},
+{
+"en": [
+"Four fingers open the tool panel"
+],
+"tr": [
+"손가락 네 개를 펴면 도구 패널이 열립니다"
+]
+},
+{
+"en": [
+"Everyone works at once"
+],
+"tr": [
+"모두가 동시에 작업"
+]
+},
+{
+"en": [
+"Question ",
+"Generator"
+],
+"tr": [
+"문제 ",
+"생성기"
+]
+},
+{
+"en": [
+"Mathematics"
+],
+"tr": [
+"수학"
+]
+},
+{
+"en": [
+"Watch"
+],
+"tr": [
+"보기"
+]
+},
+{
+"en": [
+"English"
+],
+"tr": [
+"영어"
+]
+},
+{
+"en": [
+"Windows"
+],
+"tr": [
+"Windows"
+]
+},
+{
+"en": [
+"Files"
+],
+"tr": [
+"파일"
+]
+},
+{
+"en": [
+"Toolbox"
+],
+"tr": [
+"도구함"
+]
+},
+{
+"en": [
+"LMS"
+],
+"tr": [
+"LMS"
+]
+},
+{
+"en": [
+"Material Search"
+],
+"tr": [
+"자료 검색"
+]
+},
+{
+"en": [
+"Function Graph"
+],
+"tr": [
+"함수 그래프"
+]
+},
+{
+"en": [
+"Agent Store"
+],
+"tr": [
+"에이전트 스토어"
+]
+},
+{
+"en": [
+"Back"
+],
+"tr": [
+"뒤로"
+]
+},
+{
+"en": [
+"No Active Class"
+],
+"tr": [
+"진행 중인 수업 없음"
+]
+},
+{
+"en": [
+"Courses"
+],
+"tr": [
+"과정"
+]
+},
+{
+"en": [
+"Sec 1 Geography"
+],
+"tr": [
+"중1 지리"
+]
+},
+{
+"en": [
+"Sec 1 Mathematics"
+],
+"tr": [
+"중1 수학"
+]
+},
+{
+"en": [
+"Materials"
+],
+"tr": [
+"자료"
+]
+},
+{
+"en": [
+"Collaboration"
+],
+"tr": [
+"협업"
+]
+},
+{
+"en": [
+"Class Collabspace"
+],
+"tr": [
+"수업 협업 공간"
+]
+},
+{
+"en": [
+"AI Apps"
+],
+"tr": [
+"AI 앱"
+]
+},
+{
+"en": [
+"Homework Marking Assistant"
+],
+"tr": [
+"과제 채점 도우미"
+]
+},
+{
+"en": [
+"Geography Expert"
+],
+"tr": [
+"지리 전문가"
+]
+},
+{
+"en": [
+"Answers only from this class’s lessons and materials"
+],
+"tr": [
+"이 수업의 강의와 자료만 근거로 답변합니다"
+]
+},
+{
+"en": [
+"Student Chat"
+],
+"tr": [
+"학생 채팅"
+]
+},
+{
+"en": [
+"New Chat"
+],
+"tr": [
+"새 채팅"
+]
+},
+{
+"en": [
+"Ask anything now"
+],
+"tr": [
+"지금 무엇이든 물어보세요"
+]
+},
+{
+"en": [
+"How are karst landforms formed?"
+],
+"tr": [
+"카르스트 지형은 어떻게 만들어지나요?"
+],
+"typed": true
+},
+{
+"en": [
+"Based on 3 sources "
+],
+"tr": [
+"출처 3개 기반 "
+]
+},
+{
+"en": [
+"Lesson 1: Common landform types",
+"Cited at 00:07:18",
+"Recorded lesson"
+],
+"tr": [
+"1차시: 대표적인 지형 유형",
+"00:07:18 인용",
+"수업 녹화"
+]
+},
+{
+"en": [
+"4.1 Common landform types",
+"Cited at 00:18:18",
+"Class"
+],
+"tr": [
+"4.1 대표적인 지형 유형",
+"00:18:18 인용",
+"수업"
+]
+},
+{
+"en": [
+"Knowledge summary",
+"Cited on page 7",
+"Study materials"
+],
+"tr": [
+"지식 요약",
+"7쪽 인용",
+"학습 자료"
+]
+},
+{
+"en": [
+"Karst landforms form when ",
+"groundwater or surface water dissolves soluble rock, especially limestone",
+", and deposits it again elsewhere. This is called ",
+"solution weathering by water",
+". Step by step:"
+],
+"tr": [
+"카르스트 지형은 ",
+"지하수나 지표수가 석회암 같은 가용성 암석을 녹여",
+" 다른 곳에 다시 쌓으면서 만들어집니다. 이 과정을 ",
+"물에 의한 용식 작용",
+"이라고 합니다. 단계별로 보면 다음과 같습니다."
+]
+},
+{
+"en": [
+"1. Soluble rock:",
+" karst needs thick layers of rock that dissolves in water. Limestone is the most common."
+],
+"tr": [
+"1. 가용성 암석:",
+" 카르스트가 생기려면 물에 녹는 두꺼운 암석층이 필요합니다. 가장 흔한 것은 석회암입니다."
+]
+},
+{
+"en": [
+"2. Acidic water:",
+" rainwater absorbs carbon dioxide and becomes a weak acid. H₂O + CO₂ → H₂CO₃; H₂CO₃ + CaCO₃ → Ca(HCO₃)₂, which dissolves."
+],
+"tr": [
+"2. 산성을 띤 물:",
+" 빗물이 이산화탄소를 흡수해 약한 산이 됩니다. H₂O + CO₂ → H₂CO₃; H₂CO₃ + CaCO₃ → Ca(HCO₃)₂, 이 물질은 물에 녹습니다."
+]
+},
+{
+"en": [
+"3. Dissolving and depositing:",
+" water widens cracks into grooves, sinkholes and caves; where it evaporates, stalactites and stalagmites grow."
+],
+"tr": [
+"3. 녹이고 쌓기:",
+" 물이 틈을 넓혀 홈, 싱크홀, 동굴을 만들고, 물이 증발하는 곳에서는 종유석과 석순이 자랍니다."
+]
+},
+{
+"en": [
+"Limestone dissolves along cracks → grooves → stone forests → wide karst plains"
+],
+"tr": [
+"석회암이 틈을 따라 녹음 → 홈 → 석림 → 넓은 카르스트 평원"
+]
+},
+{
+"en": [
+"Summary",
+"Transcript"
+],
+"tr": [
+"요약",
+"녹취록"
+]
+},
+{
+"en": [
+"Surface karst: features and how it develops"
+],
+"tr": [
+"지표 카르스트: 특징과 발달 과정"
+]
+},
+{
+"en": [
+"From solid limestone, running water dissolves grooves (karren) and channels. Channels deepen into stone forests; several join into depressions, which widen into flat, fertile karst plains used for farming and towns."
+],
+"tr": [
+"단단한 석회암에서 흐르는 물이 홈(카렌)과 수로를 녹여 냅니다. 수로는 깊어져 석림이 되고, 여러 개가 합쳐져 와지가 되며, 와지는 넓어져 농사와 마을에 쓰이는 평평하고 비옥한 카르스트 평원이 됩니다."
+]
+},
+{
+"en": [
+"Underground karst and caves"
+],
+"tr": [
+"지하 카르스트와 동굴"
+]
+},
+{
+"en": [
+"Underground karst is mainly caves, with stalactites, stalagmites and columns."
+],
+"tr": [
+"지하 카르스트는 주로 동굴이며, 종유석, 석순, 석주가 있습니다."
+]
+},
+{
+"en": [
+"Beijing 2025 Physics Exam"
+],
+"tr": [
+"2025 베이징 물리 시험"
+]
+},
+{
+"en": [
+"Xiaoou Secondary School"
+],
+"tr": [
+"Xiaoou Secondary School"
+]
+},
+{
+"en": [
+"Lower Secondary Physics",
+"Electricity: Focused Practice"
+],
+"tr": [
+"중학교 물리",
+"전기: 집중 연습"
+]
+},
+{
+"en": [
+"Electric Power: Exam Question 1"
+],
+"tr": [
+"전력: 시험 문제 1"
+]
+},
+{
+"en": [
+"25. The table lists the appliances in a kitchen. They are powered through the power strip shown,"
+],
+"tr": [
+"25. 표는 주방에 있는 가전제품을 나타냅니다. 이 제품들은 그림의 멀티탭으로 전원을 공급받으며,"
+]
+},
+{
+"en": [
+"which allows a maximum current of 10 A. The household supply voltage is 220 V."
+],
+"tr": [
+"멀티탭의 최대 허용 전류는 10 A입니다. 가정용 전원 전압은 220 V입니다."
+]
+},
+{
+"en": [
+"(1) Find the resistance of the rice cooker’s heating element when it works normally."
+],
+"tr": [
+"(1) 밥솥이 정상 작동할 때 발열체의 저항을 구하시오."
+]
+},
+{
+"en": [
+"(2) The fan and rice cooker are already running. One more appliance can be plugged in safely."
+],
+"tr": [
+"(2) 선풍기와 밥솥이 이미 작동 중입니다. 기기 하나를 더 안전하게 꽂을 수 있습니다."
+]
+},
+{
+"en": [
+" Find the total current through the power strip when all three run together."
+],
+"tr": [
+" 세 기기를 모두 함께 켰을 때 멀티탭에 흐르는 전체 전류를 구하시오."
+]
+},
+{
+"en": [
+"(3) At dinner only the rice cooker and the electric griddle run, together, for 30 minutes."
+],
+"tr": [
+"(3) 저녁 식사 때 밥솥과 전기 그릴만 함께 30분 동안 작동합니다."
+]
+},
+{
+"en": [
+" How much electrical energy do they use in total, in kWh?"
+],
+"tr": [
+" 두 기기가 사용한 전기 에너지는 모두 몇 kWh입니까?"
+]
+},
+{
+"en": [
+"Appliance"
+],
+"tr": [
+"가전제품"
+]
+},
+{
+"en": [
+"Qty"
+],
+"tr": [
+"수량"
+]
+},
+{
+"en": [
+"Rated power (W)"
+],
+"tr": [
+"정격 전력 (W)"
+]
+},
+{
+"en": [
+"Rice cooker"
+],
+"tr": [
+"밥솥"
+]
+},
+{
+"en": [
+"Induction hob"
+],
+"tr": [
+"인덕션"
+]
+},
+{
+"en": [
+"Electric fan"
+],
+"tr": [
+"선풍기"
+]
+},
+{
+"en": [
+"Electric griddle"
+],
+"tr": [
+"전기 그릴"
+]
+},
+{
+"en": [
+"Sync scroll"
+],
+"tr": [
+"스크롤 동기화"
+]
+},
+{
+"en": [
+"Recent"
+],
+"tr": [
+"최근"
+]
+},
+{
+"en": [
+"Common Utilities"
+],
+"tr": [
+"자주 쓰는 도구"
+]
+},
+{
+"en": [
+"Timer"
+],
+"tr": [
+"타이머"
+]
+},
+{
+"en": [
+"Dice"
+],
+"tr": [
+"주사위"
+]
+},
+{
+"en": [
+"Stopwatch"
+],
+"tr": [
+"스톱워치"
+]
+},
+{
+"en": [
+"Mini Blackboard"
+],
+"tr": [
+"미니 칠판"
+]
+},
+{
+"en": [
+"Leaderboard"
+],
+"tr": [
+"순위표"
+]
+},
+{
+"en": [
+"Laser Pointer"
+],
+"tr": [
+"레이저 포인터"
+]
+},
+{
+"en": [
+"Secondary Camera"
+],
+"tr": [
+"보조 카메라"
+]
+},
+{
+"en": [
+"Browser"
+],
+"tr": [
+"브라우저"
+]
+},
+{
+"en": [
+"Video Gallery"
+],
+"tr": [
+"영상 갤러리"
+]
+},
+{
+"en": [
+"Mirroring"
+],
+"tr": [
+"미러링"
+]
+},
+{
+"en": [
+"Desktop Sharing"
+],
+"tr": [
+"데스크톱 공유"
+]
+},
+{
+"en": [
+"Remote Desktop"
+],
+"tr": [
+"원격 데스크톱"
+]
+},
+{
+"en": [
+"Randomizer"
+],
+"tr": [
+"무작위 추첨"
+]
+},
+{
+"en": [
+"Sketch Board"
+],
+"tr": [
+"스케치보드"
+]
+},
+{
+"en": [
+"Poll"
+],
+"tr": [
+"투표"
+]
+},
+{
+"en": [
+"Responder"
+],
+"tr": [
+"선착순 응답"
+]
+},
+{
+"en": [
+"Breakout Room"
+],
+"tr": [
+"소그룹실"
+]
+},
+{
+"en": [
+"X-Way Browser"
+],
+"tr": [
+"X-Way 브라우저"
+]
+},
+{
+"en": [
+"Subjective",
+"Objective",
+"Oral"
+],
+"tr": [
+"주관식",
+"객관식",
+"구술"
+]
+},
+{
+"en": [
+"Reference Answer"
+],
+"tr": [
+"모범 답안"
+]
+},
+{
+"en": [
+"Enter a subjective question"
+],
+"tr": [
+"주관식 문제를 입력하세요"
+]
+},
+{
+"en": [
+"G",
+"General Subjective Agent",
+"✓"
+],
+"tr": [
+"G",
+"일반 주관식 에이전트",
+"✓"
+]
+},
+{
+"en": [
+"AI Sketch Board Grading"
+],
+"tr": [
+"AI 스케치보드 채점"
+]
+},
+{
+"en": [
+"＋",
+"AgentIn Agent"
+],
+"tr": [
+"＋",
+"AgentIn 에이전트"
+]
+},
+{
+"en": [
+"G",
+"General Subjective Agent",
+"⌃"
+],
+"tr": [
+"G",
+"일반 주관식 에이전트",
+"⌃"
+]
+},
+{
+"en": [
+"Drag with the left mouse button to capture"
+],
+"tr": [
+"왼쪽 마우스 버튼을 누른 채 드래그해 캡처"
+]
+},
+{
+"en": [
+"On a touchscreen, drag with one finger"
+],
+"tr": [
+"터치스크린에서는 손가락 하나로 드래그"
+]
+},
+{
+"en": [
+"Please complete the following practice question."
+],
+"tr": [
+"다음 연습 문제를 풀어 보세요."
+],
+"typed": true
+},
+{
+"en": [
+"1 lesson"
+],
+"tr": [
+"1개 수업"
+]
+},
+{
+"en": [
+"ClassIn AI",
+"function updates",
+"EEO-Test-Han Gao"
+],
+"tr": [
+"ClassIn AI",
+"기능 업데이트",
+"EEO-Test-Han Gao"
+]
+},
+{
+"en": [
+"New Course"
+],
+"tr": [
+"새 과정"
+]
+},
+{
+"en": [
+"Collabspace"
+],
+"tr": [
+"협업 공간"
+]
+},
+{
+"en": [
+"Collaborative Notes (Sample)"
+],
+"tr": [
+"협업 노트 (샘플)"
+]
+},
+{
+"en": [
+"Timetable (Sample)"
+],
+"tr": [
+"시간표 (샘플)"
+]
+},
+{
+"en": [
+"Class Homepage (Sample)"
+],
+"tr": [
+"학급 홈페이지 (샘플)"
+]
+},
+{
+"en": [
+"About Co-creation"
+],
+"tr": [
+"공동 창작 소개"
+]
+},
+{
+"en": [
+"Trash"
+],
+"tr": [
+"휴지통"
+]
+},
+{
+"en": [
+"Agents"
+],
+"tr": [
+"에이전트"
+]
+},
+{
+"en": [
+"AI Tutor"
+],
+"tr": [
+"AI 튜터"
+]
+},
+{
+"en": [
+"AI Learning Analytics",
+"NEW"
+],
+"tr": [
+"AI 학습 분석",
+"NEW"
+]
+},
+{
+"en": [
+"AI Study Buddy"
+],
+"tr": [
+"AI 학습 친구"
+]
+},
+{
+"en": [
+"ClassIn AI function updates-New Course-38"
+],
+"tr": [
+"ClassIn AI 기능 업데이트-새 과정-38"
+]
+},
+{
+"en": [
+"Lesson | Ongoing",
+"9/4 Today 11:30 Start (3h 0min) | Han Gao-ClassIn | Present 3/8"
+],
+"tr": [
+"수업 | 진행 중",
+"9/4 오늘 11:30 시작 (3시간 0분) | Han Gao-ClassIn | 출석 3/8"
+]
+},
+{
+"en": [
+"Enter",
+"Started 2h 17min"
+],
+"tr": [
+"입장",
+"2시간 17분 전 시작"
+]
+},
+{
+"en": [
+"Member",
+"8 "
+],
+"tr": [
+"멤버",
+"8 "
+]
+},
+{
+"en": [
+"Announcement",
+"Post Now "
+],
+"tr": [
+"공지",
+"지금 게시 "
+]
+},
+{
+"en": [
+"Chat"
+],
+"tr": [
+"채팅"
+]
+},
+{
+"en": [
+"To Do",
+"1"
+],
+"tr": [
+"할 일",
+"1"
+]
+},
+{
+"en": [
+"Next 24 hours"
+],
+"tr": [
+"향후 24시간"
+]
+},
+{
+"en": [
+"Today 11:30 Start (3h 0… Ha…"
+],
+"tr": [
+"오늘 11:30 시작 (3시간 0… Ha…"
+]
+},
+{
+"en": [
+"Present 3/8",
+"Started 2h 17…"
+],
+"tr": [
+"출석 3/8",
+"시작 2시간 17…"
+]
+},
+{
+"en": [
+"ClassIn AI function updates-New Course-35",
+"Ended"
+],
+"tr": [
+"ClassIn AI 기능 업데이트-새 과정-35",
+"종료됨"
+]
+},
+{
+"en": [
+"Class Playback",
+"Lesson Information",
+"Lesson Feedback",
+"Teaching Report",
+"Blackboard Notes",
+"Courseware"
+],
+"tr": [
+"수업 다시보기",
+"수업 정보",
+"수업 피드백",
+"수업 리포트",
+"칠판 노트",
+"수업 자료"
+]
+},
+{
+"en": [
+" Aug-27 Thursday 13:00 (2h 0min)",
+" Han Gao-ClassIn",
+" Show seats in default",
+" 1V8",
+" Record ClassIn Classroom",
+" Web Streaming"
+],
+"tr": [
+" 8월 27일 목요일 13:00 (2시간 0분)",
+" Han Gao-ClassIn",
+" 기본 좌석 표시",
+" 1:8",
+" ClassIn 교실 녹화",
+" 웹 스트리밍"
+]
+},
+{
+"en": [
+"Lesson Analysis",
+"Summary",
+"Transcription"
+],
+"tr": [
+"수업 분석",
+"요약",
+"녹취록"
+]
+},
+{
+"en": [
+"Educational Technology"
+],
+"tr": [
+"교육공학"
+]
+},
+{
+"en": [
+"This is a clearly structured product demonstration of smart classroom equipment covering core functions and pricing."
+],
+"tr": [
+"스마트 교실 장비의 핵심 기능과 가격을 다룬, 구성이 명확한 제품 시연입니다."
+]
+},
+{
+"en": [
+"AI Eval."
+],
+"tr": [
+"AI 평가"
+]
+},
+{
+"en": [
+"Learning Objectives and Achievement"
+],
+"tr": [
+"학습 목표와 성취"
+]
+},
+{
+"en": [
+"Quality of Learning Evidence"
+],
+"tr": [
+"학습 근거의 질"
+]
+},
+{
+"en": [
+"Instructional Design and Classroom Structure"
+],
+"tr": [
+"수업 설계와 교실 구조"
+]
+},
+{
+"en": [
+"Questioning and Feedback Promote Learning"
+],
+"tr": [
+"발문과 피드백이 학습을 촉진"
+]
+},
+{
+"en": [
+"Language Expression and Classroom Atmosphere"
+],
+"tr": [
+"언어 표현과 교실 분위기"
+]
+},
+{
+"en": [
+"Competency Radar Chart"
+],
+"tr": [
+"역량 레이더 차트"
+]
+},
+{
+"en": [
+"93%",
+"Learning Objectives and Achievement"
+],
+"tr": [
+"93%",
+"학습 목표와 성취"
+]
+},
+{
+"en": [
+"84%",
+"Quality of Learning Evidence"
+],
+"tr": [
+"84%",
+"학습 근거의 질"
+]
+},
+{
+"en": [
+"90%",
+"Instructional Design and Classroom Structure"
+],
+"tr": [
+"90%",
+"수업 설계와 교실 구조"
+]
+},
+{
+"en": [
+"73%",
+"Questioning and Feedback Promote Learning"
+],
+"tr": [
+"73%",
+"발문과 피드백이 학습을 촉진"
+]
+},
+{
+"en": [
+"90%",
+"Language Expression and Classroom Atmosphere"
+],
+"tr": [
+"90%",
+"언어 표현과 교실 분위기"
+]
+},
+{
+"en": [
+"Key Highlights"
+],
+"tr": [
+"주요 강점"
+]
+},
+{
+"en": [
+"Structured Function Demo"
+],
+"tr": [
+"체계적인 기능 시연"
+]
+},
+{
+"en": [
+"Demonstrates functions from core hardware to advanced AI features in logical order"
+],
+"tr": [
+"핵심 하드웨어부터 고급 AI 기능까지 논리적 순서로 기능을 시연합니다"
+]
+},
+{
+"en": [
+"Helps audience grasp product advantages and use cases clearly"
+],
+"tr": [
+"청중이 제품의 장점과 활용 사례를 명확히 파악하도록 돕습니다"
+]
+},
+{
+"en": [
+"Pain Point-oriented Introduction"
+],
+"tr": [
+"문제 중심 소개"
+]
+},
+{
+"en": [
+"Addresses common classroom pain points including student work projection and real-time content summarization"
+],
+"tr": [
+"학생 작업물 투사, 실시간 내용 요약 등 교실의 흔한 어려움을 다룹니다"
+]
+},
+{
+"en": [
+"Shows how the product solves practical teaching problems for potential buyers"
+],
+"tr": [
+"잠재 구매자에게 제품이 실제 수업 문제를 어떻게 해결하는지 보여 줍니다"
+]
+},
+{
+"en": [
+"Key Risks"
+],
+"tr": [
+"주요 위험"
+]
+},
+{
+"en": [
+"No Real Student Participation"
+],
+"tr": [
+"실제 학생 참여 없음"
+]
+},
+{
+"en": [
+"The demo has no actual student learning activities"
+],
+"tr": [
+"시연에 실제 학생 학습 활동이 없습니다"
+]
+},
+{
+"en": [
+"Cannot evaluate the actual teaching effect of the product in a real classroom environment"
+],
+"tr": [
+"실제 교실 환경에서 제품의 실제 교육 효과를 평가할 수 없습니다"
+]
+},
+{
+"en": [
+"Unfinished Function Demonstration"
+],
+"tr": [
+"미완료 기능 시연"
+]
+},
+{
+"en": [
+"The virtual experiment module demonstration was interrupted by login failure, the complete function was not shown"
+],
+"tr": [
+"가상 실험 모듈 시연이 로그인 실패로 중단되어 전체 기능이 공개되지 않았습니다"
+]
+},
+{
+"en": [
+"Audience cannot fully understand the operability and value of the subject-specific module"
+],
+"tr": [
+"청중이 과목별 모듈의 활용성과 가치를 충분히 이해하기 어렵습니다"
+]
+},
+{
+"en": [
+"Teacher Growth Prescriptions"
+],
+"tr": [
+"교사 성장 처방"
+]
+},
+{
+"en": [
+"Expected Benefit"
+],
+"tr": [
+"기대 효과"
+]
+},
+{
+"en": [
+"Avoid unexpected technical interruptions, ensure all core functions are fully demonstrated"
+],
+"tr": [
+"예상치 못한 기술적 중단을 피하고 모든 핵심 기능이 온전히 시연되도록 합니다"
+]
+},
+{
+"en": [
+"Applicable Scenario"
+],
+"tr": [
+"적용 상황"
+]
+},
+{
+"en": [
+"Edtech product demonstration for school buyers"
+],
+"tr": [
+"학교 구매 담당자를 위한 에듀테크 제품 시연"
+]
+},
+{
+"en": [
+"Specific Action"
+],
+"tr": [
+"구체적 실행"
+]
+},
+{
+"en": [
+"Complete pre-demo technical setup and testing of all modules before official demonstration"
+],
+"tr": [
+"공식 시연 전에 모든 모듈의 기술 설정과 테스트를 마칩니다"
+]
+},
+{
+"en": [
+"Help buyers intuitively experience how the product works in actual classroom teaching"
+],
+"tr": [
+"구매자가 제품이 실제 수업에서 어떻게 작동하는지 직관적으로 체험하도록 돕습니다"
+]
+},
+{
+"en": [
+"Edtech product demonstration for education stakeholders"
+],
+"tr": [
+"교육 관계자를 위한 에듀테크 제품 시연"
+]
+},
+{
+"en": [
+"Invite on-site teachers or students to join a short hands-on trial of core functions during the demonstration"
+],
+"tr": [
+"시연 중 현장의 교사나 학생을 초대해 핵심 기능을 짧게 직접 체험하게 합니다"
+]
+},
+{
+"en": [
+"Classroom Replay"
+],
+"tr": [
+"수업 다시보기"
+]
+},
+{
+"en": [
+"Teaching Time Distribution Chart"
+],
+"tr": [
+"수업 시간 분포 차트"
+]
+},
+{
+"en": [
+"88%",
+"Teacher Lecture 42m"
+],
+"tr": [
+"88%",
+"교사 강의 42분"
+]
+},
+{
+"en": [
+"12%",
+"Teacher-Student Interaction 6m"
+],
+"tr": [
+"12%",
+"교사-학생 상호작용 6분"
+]
+},
+{
+"en": [
+"0%",
+"Student Independent Work 0min"
+],
+"tr": [
+"0%",
+"학생 독립 학습 0분"
+]
+},
+{
+"en": [
+"1%",
+"Other 0min"
+],
+"tr": [
+"1%",
+"기타 0분"
+]
+},
+{
+"en": [
+"Classroom Timeline Chart"
+],
+"tr": [
+"수업 타임라인 차트"
+]
+},
+{
+"en": [
+"Teacher",
+"Lecture"
+],
+"tr": [
+"교사",
+"강의"
+]
+},
+{
+"en": [
+"Teacher-Student",
+"Interaction"
+],
+"tr": [
+"교사-학생",
+"상호작용"
+]
+},
+{
+"en": [
+"Student",
+"Independent Work"
+],
+"tr": [
+"학생",
+"독립 학습"
+]
+},
+{
+"en": [
+"Other"
+],
+"tr": [
+"기타"
+]
+},
+{
+"en": [
+"Download"
+],
+"tr": [
+"다운로드"
+]
+},
+{
+"en": [
+"ClassonAI Demo",
+"EEO - Test Student"
+],
+"tr": [
+"ClassonAI Demo",
+"EEO - Test Student"
+]
+},
+{
+"en": [
+"1st term"
+],
+"tr": [
+"1학기"
+]
+},
+{
+"en": [
+"2nd term"
+],
+"tr": [
+"2학기"
+]
+},
+{
+"en": [
+"material"
+],
+"tr": [
+"자료"
+]
+},
+{
+"en": [
+"Encouragement and support matter a lot to him."
+],
+"tr": [
+"이 학생에게는 격려와 지지가 매우 중요합니다."
+]
+},
+{
+"en": [
+"Create New Quiz"
+],
+"tr": [
+"새 퀴즈 만들기"
+],
+"typed": true
+},
+{
+"en": [
+"Trigonometric Function Quiz"
+],
+"tr": [
+"삼각함수 퀴즈"
+]
+},
+{
+"en": [
+"Enter description (optional)"
+],
+"tr": [
+"설명 입력 (선택)"
+]
+},
+{
+"en": [
+"Questions: ",
+"5 / 200",
+"Total score: ",
+"25"
+],
+"tr": [
+"문항: ",
+"5 / 200",
+"총점: ",
+"25"
+]
+},
+{
+"en": [
+"+ Multiple Choice",
+"+ Add by Upload",
+"+ Batch Import",
+"AI Question Generator",
+"Show answers"
+],
+"tr": [
+"+ 객관식",
+"+ 파일 업로드로 추가",
+"+ 일괄 가져오기",
+"AI 문제 생성기",
+"정답 보기"
+]
+},
+{
+"en": [
+"Multiple Choice",
+"Easy"
+],
+"tr": [
+"객관식",
+"쉬움"
+]
+},
+{
+"en": [
+"1. What is the value of sin(π/3)?"
+],
+"tr": [
+"1. sin(π/3)의 값은 얼마입니까?"
+]
+},
+{
+"en": [
+"Points",
+"−",
+"5",
+"+",
+"↑ Move Up",
+"↓ Move Down",
+"Delete",
+"···"
+],
+"tr": [
+"배점",
+"−",
+"5",
+"+",
+"↑ 위로",
+"↓ 아래로",
+"삭제",
+"···"
+]
+},
+{
+"en": [
+"Start time"
+],
+"tr": [
+"시작 시간"
+]
+},
+{
+"en": [
+"{0}/{1}/{2} {3}:{4} End"
+],
+"tr": [
+"{0}/{1}/{2} {3}:{4} 종료"
+]
+},
+{
+"en": [
+"Time limit"
+],
+"tr": [
+"제한 시간"
+]
+},
+{
+"en": [
+"No limit"
+],
+"tr": [
+"제한 없음"
+]
+},
+{
+"en": [
+"Scoring scheme"
+],
+"tr": [
+"채점 방식"
+]
+},
+{
+"en": [
+"By question ({0} pts)"
+],
+"tr": [
+"문항별 ({0}점)"
+]
+},
+{
+"en": [
+"More settings"
+],
+"tr": [
+"추가 설정"
+]
+},
+{
+"en": [
+"AI Classroom ",
+"Selected 6 students"
+],
+"tr": [
+"AI 교실 ",
+"학생 6명 선택됨"
+]
+},
+{
+"en": [
+"Unit & Topic"
+],
+"tr": [
+"단원 및 주제"
+]
+},
+{
+"en": [
+"No unit topic"
+],
+"tr": [
+"단원 주제 없음"
+]
+},
+{
+"en": [
+"Preview",
+"Save & Download",
+"Save Draft",
+"Publish"
+],
+"tr": [
+"미리보기",
+"저장 및 다운로드",
+"초안 저장",
+"게시"
+]
+},
+{
+"en": [
+"Question Details",
+"Overview",
+"Answer Details"
+],
+"tr": [
+"문항 상세",
+"개요",
+"답안 상세"
+]
+},
+{
+"en": [
+"Search students"
+],
+"tr": [
+"학생 검색"
+]
+},
+{
+"en": [
+"Name ↑↓",
+"Time ↑↓",
+"Score ↑↓"
+],
+"tr": [
+"이름 ↑↓",
+"시간 ↑↓",
+"점수 ↑↓"
+]
+},
+{
+"en": [
+"No content yet"
+],
+"tr": [
+"아직 내용이 없습니다"
+]
+},
+{
+"en": [
+"End Answering",
+"{0} : {1}"
+],
+"tr": [
+"답변 종료",
+"{0} : {1}"
+]
+},
+{
+"en": [
+"This student's current learning status needs attention. The main issues are low participation and weak learning outcomes.",
+"Below are some specific suggestions for him:"
+],
+"tr": [
+"이 학생의 현재 학습 상태는 주의가 필요합니다. 주요 문제는 낮은 참여도와 부진한 학습 성과입니다.",
+"이 학생을 위한 구체적인 제안은 다음과 같습니다:"
+]
+},
+{
+"en": [
+"1.",
+"Improve attendance and engagement:"
+],
+"tr": [
+"1.",
+"출석과 참여 개선:"
+]
+},
+{
+"en": [
+"The student’s attendance in the \"1st term\" and \"2nd term\" courses is relatively low (37.5% and 25% respectively). It is recommended to communicate with parents, understand the reasons for absence, and encourage him to attend classes on time."
+],
+"tr": [
+"이 학생의 \"1학기\"와 \"2학기\" 과정 출석률은 각각 37.5%와 25%로 비교적 낮습니다. 학부모와 소통해 결석 사유를 파악하고, 제시간에 수업에 참여하도록 격려하는 것이 좋습니다."
+]
+},
+{
+"en": [
+"In class, he almost never raises his hand to interact or earn rewards. Teachers can give him more attention and encouragement, and design questions that may match his strengths or interests so that he participates more and gradually builds confidence."
+],
+"tr": [
+"수업 중에 손을 들어 참여하거나 보상을 받는 일이 거의 없습니다. 교사가 더 관심을 기울이고 격려하며, 이 학생의 강점이나 관심사에 맞는 질문을 설계해 참여를 늘리고 점차 자신감을 키우도록 도울 수 있습니다."
+]
+},
+{
+"en": [
+"2.",
+"Strengthen after-class review and assignment completion:"
+],
+"tr": [
+"2.",
+"수업 후 복습과 과제 완수 강화:"
+]
+},
+{
+"en": [
+"His homework completion rate is 0%, which directly affects knowledge consolidation. It is recommended to clearly explain the importance of homework and set small goals, such as submitting on time first and then improving accuracy."
+],
+"tr": [
+"과제 완수율이 0%여서 지식을 굳히는 데 직접적인 지장이 있습니다. 과제의 중요성을 분명히 설명하고, 먼저 제시간에 제출하고 그다음에 정확도를 높이는 것처럼 작은 목표를 세우는 것이 좋습니다."
+]
+},
+{
+"en": [
+"He also does not participate in lesson recordings or speaking practice, both of which are important for reinforcing learning. It is recommended to create a simple study plan for him and arrange fixed weekly time to watch recordings and practise speaking."
+],
+"tr": [
+"수업 녹화 시청과 말하기 연습에도 참여하지 않는데, 둘 다 학습을 다지는 데 중요합니다. 간단한 학습 계획을 만들어 주고, 매주 정해진 시간에 녹화를 보고 말하기를 연습하도록 하는 것이 좋습니다."
+]
+},
+{
+"en": [
+"3.",
+"Focus on foundational knowledge:"
+],
+"tr": [
+"3.",
+"기초 지식에 집중:"
+]
+},
+{
+"en": [
+"In the classes, quizzes and answer cards he took part in, his accuracy in common basic questions is low (0%–50%). This indicates significant gaps in his understanding of core basics. It is recommended that teachers or parents help him review incorrect answers, identify knowledge gaps, and provide targeted support and practice."
+],
+"tr": [
+"참여한 수업, 퀴즈, 답안 카드에서 일반적인 기초 문제의 정답률이 낮습니다(0%–50%). 핵심 기초에 대한 이해에 큰 공백이 있다는 뜻입니다. 교사나 학부모가 오답을 함께 복습하고, 지식의 빈틈을 찾아 맞춤 지원과 연습을 제공하는 것이 좋습니다."
+]
+},
+{
+"en": [
+"AI Question Generator"
+],
+"tr": [
+"AI 문제 생성기"
+]
+},
+{
+"en": [
+"Ask AI to generate questions..."
+],
+"tr": [
+"AI에게 문제 생성을 요청하세요..."
+]
+},
+{
+"en": [
+"Create three trigonometry questions."
+],
+"tr": [
+"삼각함수 문제를 세 개 만들어 주세요."
+],
+"typed": true
+},
+{
+"en": [
+"Here are three trigonometry questions for you:"
+],
+"tr": [
+"삼각함수 문제 세 개를 만들었습니다."
+],
+"typed": true
+},
+{
+"en": [
+"1. If sin(α) = 3/5 and α is in the second quadrant,",
+"what is the value of cos(α)?"
+],
+"tr": [
+"1. sin(α) = 3/5이고 α가 제2사분면에 있을 때,",
+"cos(α)의 값은 얼마입니까?"
+]
+},
+{
+"en": [
+"Answer: A",
+"Difficulty: ",
+"Medium"
+],
+"tr": [
+"정답: A",
+"난이도: ",
+"보통"
+]
+},
+{
+"en": [
+"Explanation: Since sin(α) = 3/5 and α is in the second quadrant, cos(α) < 0.",
+"Using sin²(α) + cos²(α) = 1, we get cos(α) = -√(1 - (3/5)²) = -√(16/25) = -4/5."
+],
+"tr": [
+"해설: sin(α) = 3/5이고 α가 제2사분면에 있으므로 cos(α) < 0입니다.",
+"sin²(α) + cos²(α) = 1을 이용하면 cos(α) = -√(1 - (3/5)²) = -√(16/25) = -4/5입니다."
+]
+},
+{
+"en": [
+"Not answered"
+],
+"tr": [
+"미응답"
+]
+},
+{
+"en": [
+"AI Marking"
+],
+"tr": [
+"AI 채점"
+]
+},
+{
+"en": [
+"Tim",
+"{0} pts"
+],
+"tr": [
+"Tim",
+"{0}점"
+]
+},
+{
+"en": [
+"Partly correct: Q1 formula wrong, Q3 misses a power term"
+],
+"tr": [
+"부분 정답: 1번 공식 오류, 3번 거듭제곱 항 누락"
+]
+},
+{
+"en": [
+"Leon",
+"{0} pts"
+],
+"tr": [
+"Leon",
+"{0}점"
+]
+},
+{
+"en": [
+"Q1–Q2 fully correct; Q3 time unit not converted"
+],
+"tr": [
+"1~2번 정답, 3번 시간 단위 미환산"
+]
+},
+{
+"en": [
+"Molly",
+"{0} pts"
+],
+"tr": [
+"Molly",
+"{0}점"
+]
+},
+{
+"en": [
+"Fully correct, clear working throughout"
+],
+"tr": [
+"모두 정답, 풀이 과정이 명확함"
+]
+},
+{
+"en": [
+"Ethan",
+"{0} pts"
+],
+"tr": [
+"Ethan",
+"{0}점"
+]
+},
+{
+"en": [
+"Rainie",
+"{0} pts"
+],
+"tr": [
+"Rainie",
+"{0}점"
+]
+},
+{
+"en": [
+"Q1–Q2 fully correct; unit conversion error in Q3"
+],
+"tr": [
+"1~2번 정답, 3번 단위 환산 오류"
+]
+},
+{
+"en": [
+"Flora",
+"{0} pts"
+],
+"tr": [
+"Flora",
+"{0}점"
+]
+},
+{
+"en": [
+"Mostly correct; final current missing in Q2"
+],
+"tr": [
+"대체로 정답, 2번 최종 전류 누락"
+]
+},
+{
+"en": [
+"Hannah",
+"{0} pts"
+],
+"tr": [
+"Hannah",
+"{0}점"
+]
+},
+{
+"en": [
+"Q1–Q2 correct; unit conversion error in Q3"
+],
+"tr": [
+"1~2번 정답, 3번 단위 환산 오류"
+]
+},
+{
+"en": [
+"Hugo",
+"{0} pts"
+],
+"tr": [
+"Hugo",
+"{0}점"
+]
+},
+{
+"en": [
+"Q1 and Q3 correct; Q2 skips the maximum-current check"
+],
+"tr": [
+"1번과 3번 정답, 2번 최대 전류 확인 생략"
+]
+},
+{
+"en": [
+"Ming",
+"{0} pts"
+],
+"tr": [
+"Ming",
+"{0}점"
+]
+},
+{
+"en": [
+"Time: {0}:{1}"
+],
+"tr": [
+"시간: {0}:{1}"
+]
+},
+{
+"en": [
+"4.",
+"Personalised support:"
+],
+"tr": [
+"4.",
+"맞춤형 지원:"
+]
+},
+{
+"en": [
+"Since he appears passive across all activities, he may need one-on-one attention. Teachers can try having short conversations with him to understand the specific difficulties he faces during learning (for example, not understanding the content, not being able to keep up, or lacking interest), and then provide the right support."
+],
+"tr": [
+"모든 활동에서 수동적인 모습을 보이므로 일대일 관심이 필요할 수 있습니다. 교사가 짧은 대화를 나누며 학습 중 겪는 구체적인 어려움(내용을 이해하지 못함, 진도를 따라가지 못함, 흥미가 없음 등)을 파악한 뒤 알맞은 지원을 제공할 수 있습니다."
+]
+},
+{
+"en": [
+"The student’s attendance in the \"1st term\" and \"2nd term\" courses is ",
+"relatively low (37.5% and 25% respectively)",
+". It is recommended to communicate with parents, understand the reasons for absence, and encourage him to attend classes on time."
+],
+"tr": [
+"이 학생의 \"1학기\"와 \"2학기\" 과정 출석률은 ",
+"각각 37.5%와 25%로 비교적 낮습니다",
+". 학부모와 소통해 결석 사유를 파악하고, 제시간에 수업에 참여하도록 격려하는 것이 좋습니다."
+]
+},
+{
+"en": [
+"His homework completion rate is 0%",
+", which directly affects knowledge consolidation. It is recommended to clearly explain the importance of homework and set small goals, such as submitting on time first and then improving accuracy."
+],
+"tr": [
+"이 학생의 과제 완수율은 0%",
+"로, 지식을 굳히는 데 직접적인 지장이 있습니다. 과제의 중요성을 분명히 설명하고, 먼저 제시간에 제출하고 그다음에 정확도를 높이는 것처럼 작은 목표를 세우는 것이 좋습니다."
+]
+},
+{
+"en": [
+"In the classes, quizzes and answer cards he took part in, his ",
+"accuracy in common basic questions is low (0%–50%)",
+". This indicates significant gaps in his understanding of core basics. It is recommended that teachers or parents help him review incorrect answers, identify knowledge gaps, and provide targeted support and practice."
+],
+"tr": [
+"참여한 수업, 퀴즈, 답안 카드에서 ",
+"일반적인 기초 문제의 정답률이 낮습니다(0%–50%)",
+". 핵심 기초에 대한 이해에 큰 공백이 있다는 뜻입니다. 교사나 학부모가 오답을 함께 복습하고, 지식의 빈틈을 찾아 맞춤 지원과 연습을 제공하는 것이 좋습니다."
+]
+},
+{
+"en": [
+"2. Which of the following is correct?"
+],
+"tr": [
+"2. 다음 중 옳은 것은?"
+]
+},
+{
+"en": [
+"Answer: A",
+"Difficulty: ",
+"Easy"
+],
+"tr": [
+"정답: A",
+"난이도: ",
+"쉬움"
+]
+},
+{
+"en": [
+"Explanation: By the cofunction identity, sin(π/2 - α) = cos(α)."
+],
+"tr": [
+"해설: 여각 공식에 따라 sin(π/2 - α) = cos(α)입니다."
+]
+},
+{
+"en": [
+"3. If cos(α) = -1/2 and α is in the third quadrant, what is tan(α)?"
+],
+"tr": [
+"3. cos(α) = -1/2이고 α가 제3사분면에 있을 때, tan(α)는 얼마입니까?"
+]
+},
+{
+"en": [
+"Answer: D",
+"Difficulty: ",
+"Medium"
+],
+"tr": [
+"정답: D",
+"난이도: ",
+"보통"
+]
+},
+{
+"en": [
+"In summary, this student needs to start by improving attendance and participation, then gradually build study habits, while strengthening basic knowledge review and homework completion. Joint encouragement and support from teachers and parents are especially important for him."
+],
+"tr": [
+"종합하면, 이 학생은 먼저 출석과 참여를 개선하고 이후 점차 학습 습관을 만들어 가야 하며, 기초 지식 복습과 과제 완수도 강화해야 합니다. 교사와 학부모가 함께 격려하고 지원하는 것이 특히 중요합니다."
+]
+},
+{
+"en": [
+"Content generated by AI. Please review carefully"
+],
+"tr": [
+"AI가 생성한 내용입니다. 꼼꼼히 검토하세요"
+]
+},
+{
+"en": [
+"Submitted 2026/7/24 16:29:49"
+],
+"tr": [
+"제출 2026/7/24 16:29:49"
+]
+},
+{
+"en": [
+"0:56",
+"Time"
+],
+"tr": [
+"0:56",
+"소요 시간"
+]
+},
+{
+"en": [
+"33",
+"Score"
+],
+"tr": [
+"33",
+"점수"
+]
+},
+{
+"en": [
+"Student answer"
+],
+"tr": [
+"학생 답안"
+]
+},
+{
+"en": [
+"Analysis"
+],
+"tr": [
+"분석"
+]
+},
+{
+"en": [
+"Suggestions"
+],
+"tr": [
+"제안"
+]
+},
+{
+"en": [
+"Only Q1 answered; Q2 and Q3 left blank."
+],
+"tr": [
+"1번만 답했고 2번과 3번은 비어 있습니다."
+],
+"typed": true
+},
+{
+"en": [
+"You correctly used R = U²/P to find the rice cooker’s resistance, 55 Ω. Q2 (total current) and Q3 (energy used) show no working or answer."
+],
+"tr": [
+"R = U²/P를 사용해 밥솥의 저항 55 Ω을 올바르게 구했습니다. 2번(전체 전류)과 3번(사용한 에너지)은 풀이도 답도 없습니다."
+],
+"typed": true
+},
+{
+"en": [
+"Complete Q2: check the maximum power, then find the total current. In Q3, convert the time to hours before working out the energy."
+],
+"tr": [
+"2번을 완성하세요. 최대 전력을 확인한 뒤 전체 전류를 구합니다. 3번에서는 에너지를 구하기 전에 시간을 시간(h) 단위로 환산하세요."
+],
+"typed": true
+},
+{
+"en": [
+"Submission rate"
+],
+"tr": [
+"제출률"
+]
+},
+{
+"en": [
+"Lowest"
+],
+"tr": [
+"최저"
+]
+},
+{
+"en": [
+"Highest"
+],
+"tr": [
+"최고"
+]
+},
+{
+"en": [
+"Tap AI Question Generator"
+],
+"tr": [
+"AI 문제 생성기 탭"
+]
+},
+{
+"en": [
+"☰",
+"Classroom Recording"
+],
+"tr": [
+"☰",
+"수업 녹화"
+]
+},
+{
+"en": [
+"⚗",
+"Demo Mode"
+],
+"tr": [
+"⚗",
+"데모 모드"
+]
+},
+{
+"en": [
+"Speech Summary",
+"{0}:{1}"
+],
+"tr": [
+"발언 요약",
+"{0}:{1}"
+]
+},
+{
+"en": [
+"1. Basic Information"
+],
+"tr": [
+"1. 기본 정보"
+]
+},
+{
+"en": [
+"AI Summary"
+],
+"tr": [
+"AI 요약"
+]
+},
+{
+"en": [
+"Daily"
+],
+"tr": [
+"일간"
+]
+},
+{
+"en": [
+"AI quick organize, save sorting time"
+],
+"tr": [
+"AI가 빠르게 정리해 정리 시간을 줄여 줍니다"
+]
+},
+{
+"en": [
+"Classroom Notes"
+],
+"tr": [
+"수업 노트"
+]
+},
+{
+"en": [
+"Build structure, easy review tracking"
+],
+"tr": [
+"구조를 세워 복습과 추적을 쉽게"
+]
+},
+{
+"en": [
+"Visualize, inspire creative thinking"
+],
+"tr": [
+"시각화로 창의적 사고를 자극"
+]
+},
+{
+"en": [
+"▶",
+"Ready to Record",
+"00:00:00"
+],
+"tr": [
+"▶",
+"녹화 준비",
+"00:00:00"
+]
+},
+{
+"en": [
+"Participants"
+],
+"tr": [
+"참가자"
+]
+},
+{
+"en": [
+"Average time"
+],
+"tr": [
+"평균 시간"
+]
+},
+{
+"en": [
+"Score distribution"
+],
+"tr": [
+"점수 분포"
+]
+},
+{
+"en": [
+"{0}",
+"average"
+],
+"tr": [
+"{0}",
+"평균"
+]
+},
+{
+"en": [
+"Key concepts"
+],
+"tr": [
+"핵심 개념"
+]
+},
+{
+"en": [
+"Using P = U²/R to find resistance",
+"30%"
+],
+"tr": [
+"P = U²/R로 저항 구하기",
+"30%"
+]
+},
+{
+"en": [
+"Checking the maximum allowed current",
+"40%"
+],
+"tr": [
+"허용 최대 전류 확인",
+"40%"
+]
+},
+{
+"en": [
+"Total energy of several appliances",
+"30%"
+],
+"tr": [
+"여러 기기의 총 에너지",
+"30%"
+]
+},
+{
+"en": [
+"Teaching suggestion"
+],
+"tr": [
+"교수 제안"
+]
+},
+{
+"en": [
+"Publish New Question"
+],
+"tr": [
+"새 문제 게시"
+]
+},
+{
+"en": [
+"This brief class, recorded today, lasted approximately one minute and consisted of 13 speech segments. The main topic was ",
+"collaborative learning",
+", focusing on its principles and effectiveness. The atmosphere appeared informative and motivational, with the teacher aiming to highlight the value of group-based learning in an engaging and concise manner."
+],
+"tr": [
+"오늘 녹화된 이 짧은 수업은 약 1분이며 13개의 발언 구간으로 이루어졌습니다. 주제는 ",
+"협동 학습",
+"이었으며, 그 원리와 효과를 중심으로 다루었습니다. 분위기는 유익하고 의욕을 북돋는 편이었고, 교사는 모둠 학습의 가치를 흥미롭고 간결하게 전달하고자 했습니다."
+],
+"typed": true
+},
+{
+"en": [
+"Focus on unit conversion in energy calculations: time must be in hours. Remind students to work out the final current in Q2."
+],
+"tr": [
+"에너지 계산의 단위 환산에 집중하세요. 시간은 시간(h) 단위여야 합니다. 학생들이 2번의 최종 전류를 구하도록 상기시키세요."
+],
+"typed": true
+},
+{
+"en": [
+"Answer: B",
+"Difficulty: ",
+"Easy"
+],
+"tr": [
+"정답: B",
+"난이도: ",
+"쉬움"
+]
+},
+{
+"en": [
+"2. Speech Summary"
+],
+"tr": [
+"2. 발언 요약"
+]
+},
+{
+"en": [
+"The teacher introduced ",
+"collaborative learning",
+" as a powerful approach, shifting learners from passive recipients to active participants in the learning process."
+],
+"tr": [
+"교사는 ",
+"협동 학습",
+"을 학습자를 수동적인 수용자에서 학습 과정의 능동적인 참여자로 바꾸는 강력한 방식으로 소개했습니다."
+],
+"typed": true
+},
+{
+"en": [
+"Tap here"
+],
+"tr": [
+"여기를 탭"
+]
+},
+{
+"en": [
+"Answer: B",
+"Difficulty: ",
+"Medium"
+],
+"tr": [
+"정답: B",
+"난이도: ",
+"보통"
+]
+},
+{
+"en": [
+"Mind Map",
+"{0}:{1}"
+],
+"tr": [
+"마인드맵",
+"{0}:{1}"
+]
+},
+{
+"en": [
+"3. Mind Map"
+],
+"tr": [
+"3. 마인드맵"
+]
+},
+{
+"en": [
+"AI Learning Analytics"
+],
+"tr": [
+"AI 학습 분석"
+]
+},
+{
+"en": [
+"Lesson 1: Common landform types"
+],
+"tr": [
+"1과: 일반적인 지형 유형"
+]
+},
+{
+"en": [
+"Surface karst"
+],
+"tr": [
+"지표 카르스트"
+]
+},
+{
+"en": [
+"Course"
+],
+"tr": [
+"코스"
+]
+},
+{
+"en": [
+"Enter"
+],
+"tr": [
+"입장"
+]
+},
+{
+"en": [
+"Send to all 9 students"
+],
+"tr": [
+"학생 9명 모두에게 보내기"
+]
+},
+{
+"en": [
+"Create the mind map"
+],
+"tr": [
+"마인드맵 만들기"
+]
+},
+{
+"en": [
+"Sketch what you need. AI finds a matching image."
+],
+"tr": [
+"필요한 것을 스케치하세요. AI가 어울리는 이미지를 찾아 줍니다."
+]
+},
+{
+"en": [
+"Sketch what you need"
+],
+"tr": [
+"필요한 것을 스케치"
+]
+},
+{
+"en": [
+"AI finds a matching image"
+],
+"tr": [
+"AI가 어울리는 이미지를 찾음"
+]
+},
+{
+"en": [
+"Put it in your lesson"
+],
+"tr": [
+"수업에 넣기"
+]
+},
+{
+"en": [
+"From a rough sketch to a clear image, without leaving the Board."
+],
+"tr": [
+"대충 그린 스케치가 보드를 떠나지 않고 선명한 이미지가 됩니다."
+]
+},
+{
+"en": [
+"Let AI find a matching image."
+],
+"tr": [
+"AI가 어울리는 이미지를 찾게 하세요."
+]
+},
+{
+"en": [
+"Let AI find it"
+],
+"tr": [
+"AI가 찾게 하기"
+]
+},
+{
+"en": [
+"Show what went well"
+],
+"tr": [
+"잘한 점 보여 주기"
+]
+},
+{
+"en": [
+"Ask AI about this student"
+],
+"tr": [
+"이 학생에 대해 AI에게 묻기"
+]
+},
+{
+"en": [
+"Write a function by hand. AI draws the graph."
+],
+"tr": [
+"함수를 손으로 쓰세요. AI가 그래프를 그립니다."
+]
+},
+{
+"en": [
+"Write a function by hand"
+],
+"tr": [
+"함수를 손으로 쓰기"
+]
+},
+{
+"en": [
+"AI draws the graph"
+],
+"tr": [
+"AI가 그래프를 그림"
+]
+},
+{
+"en": [
+"Put it on the Board"
+],
+"tr": [
+"보드에 올리기"
+]
+},
+{
+"en": [
+"From handwriting to an accurate graph, in one tap."
+],
+"tr": [
+"손글씨가 탭 한 번으로 정확한 그래프가 됩니다."
+]
+},
+{
+"en": [
+"Let AI turn the handwriting into graphs."
+],
+"tr": [
+"AI가 손글씨를 그래프로 바꾸게 하세요."
+]
+},
+{
+"en": [
+"Let AI draw the graphs"
+],
+"tr": [
+"AI가 그래프를 그리게 하기"
+]
+},
+{
+"en": [
+"Write a character. AI shows every stroke, in order."
+],
+"tr": [
+"글자를 쓰세요. AI가 모든 획을 순서대로 보여 줍니다."
+]
+},
+{
+"en": [
+"Write a character"
+],
+"tr": [
+"글자 쓰기"
+]
+},
+{
+"en": [
+"AI shows every stroke, in order"
+],
+"tr": [
+"AI가 모든 획을 순서대로 보여 줌"
+]
+},
+{
+"en": [
+"Practise it with the class"
+],
+"tr": [
+"학급과 함께 연습하기"
+]
+},
+{
+"en": [
+"Every stroke of any character, ready to practise."
+],
+"tr": [
+"어떤 글자든 모든 획을 연습할 수 있게 보여 줍니다."
+]
+},
+{
+"en": [
+"Ask AI for the stroke order."
+],
+"tr": [
+"AI에게 획순을 물어보세요."
+]
+},
+{
+"en": [
+"Show the stroke order"
+],
+"tr": [
+"획순 보기"
+]
+},
+{
+"en": [
+"Set the correct answer"
+],
+"tr": [
+"정답 설정"
+]
+},
+{
+"en": [
+"Talk to ClassIn"
+],
+"tr": [
+"ClassIn에게 말하기"
+]
+},
+{
+"en": [
+"Split the class into groups, then share their work."
+],
+"tr": [
+"학급을 그룹으로 나눈 뒤 결과물을 공유하세요."
+]
+},
+{
+"en": [
+"Send work to every student, straight from the Board."
+],
+"tr": [
+"보드에서 바로 모든 학생에게 과제를 보내세요."
+]
+},
+{
+"en": [
+"Teach with your hands: open tools, turn pages and erase with a gesture."
+],
+"tr": [
+"손으로 가르치세요. 제스처로 도구를 열고, 페이지를 넘기고, 지울 수 있습니다."
+]
+},
+{
+"en": [
+"Every student works on their own board at once."
+],
+"tr": [
+"모든 학생이 각자의 보드에서 동시에 작업합니다."
+]
+},
+{
+"en": [
+"Let AI mark it"
+],
+"tr": [
+"AI가 채점하게 하기"
+]
+},
+{
+"en": [
+"Send the question"
+],
+"tr": [
+"문제 보내기"
+]
+},
+{
+"en": [
+"Let AI write the quiz"
+],
+"tr": [
+"AI가 퀴즈를 만들게 하기"
+]
+},
+{
+"en": [
+"Click or hold to speak"
+],
+"tr": [
+"클릭하거나 길게 눌러 말하기"
+]
+},
+{
+"en": [
+"Generated by AI"
+],
+"tr": [
+"AI가 생성함"
+]
+},
+{
+"en": [
+"Here are the results:"
+],
+"tr": [
+"결과는 다음과 같습니다:"
+]
+},
+{
+"en": [
+"Next:"
+],
+"tr": [
+"다음:"
+]
+},
+{
+"en": [
+"Chemistry Exp."
+],
+"tr": [
+"화학 실험"
+]
+},
+{
+"en": [
+"Number of Answers："
+],
+"tr": [
+"답변 수："
+]
+},
+{
+"en": [
+"Setting Answer"
+],
+"tr": [
+"정답 설정"
+]
+},
+{
+"en": [
+"Exit full screen"
+],
+"tr": [
+"전체 화면 종료"
+]
+},
+{
+"en": [
+"Full screen"
+],
+"tr": [
+"전체 화면"
+]
+},
+{
+"en": [
+"Time:"
+],
+"tr": [
+"시간:"
+]
+},
+{
+"en": [
+"Tap Toolbox"
+],
+"tr": [
+"도구함 탭"
+]
+},
+{
+"en": [
+"Tap AI Sketch Board"
+],
+"tr": [
+"AI 스케치보드 탭"
+]
+},
+{
+"en": [
+"Tap Screenshot"
+],
+"tr": [
+"스크린샷 탭"
+]
+},
+{
+"en": [
+"Tap ✓ to confirm the screenshot"
+],
+"tr": [
+"✓를 탭하여 스크린샷 확정"
+]
+},
+{
+"en": [
+"Tap to speak the instruction"
+],
+"tr": [
+"탭하여 지시 말하기"
+]
+},
+{
+"en": [
+"Tap Publish to send it to the class"
+],
+"tr": [
+"게시를 탭하여 학급에 보내기"
+]
+},
+{
+"en": [
+"Tap a student's answer"
+],
+"tr": [
+"학생의 답안 탭"
+]
+},
+{
+"en": [
+"Tap Overview for the whole class"
+],
+"tr": [
+"개요를 탭하여 학급 전체 보기"
+]
+},
+{
+"en": [
+"Tap End Answering"
+],
+"tr": [
+"답변 종료 탭"
+]
+},
+{
+"en": [
+"2. Understanding the text"
+],
+"tr": [
+"2. 본문 이해"
+]
+},
+{
+"en": [
+"3. Reading response"
+],
+"tr": [
+"3. 독후 감상"
+]
+},
+{
+"en": [
+"Mia Tan"
+],
+"tr": [
+"Mia Tan"
+]
+},
+{
+"en": [
+"Leo Lim"
+],
+"tr": [
+"Leo Lim"
+]
+},
+{
+"en": [
+"Aisha Rahman"
+],
+"tr": [
+"Aisha Rahman"
+]
+},
+{
+"en": [
+"Ethan Wong"
+],
+"tr": [
+"Ethan Wong"
+]
+},
+{
+"en": [
+"Chloe Ng"
+],
+"tr": [
+"Chloe Ng"
+]
+},
+{
+"en": [
+"Ryan Koh"
+],
+"tr": [
+"Ryan Koh"
+]
+},
+{
+"en": [
+"Homework | Ongoing"
+],
+"tr": [
+"과제 | 진행 중"
+]
+},
+{
+"en": [
+"No deadline · Ms Tan · Submitted 6/6"
+],
+"tr": [
+"기한 없음 · Ms Tan · 제출 6/6"
+]
+},
+{
+"en": [
+"Lesson | Ended"
+],
+"tr": [
+"수업 | 종료됨"
+]
+},
+{
+"en": [
+"13 Nov 15:09 (40 min) · Ms Tan · Present 6/6"
+],
+"tr": [
+"13 Nov 15:09 (40분) · Ms Tan · 출석 6/6"
+]
+},
+{
+"en": [
+"Lesson 5: full-lesson recording"
+],
+"tr": [
+"5차시: 수업 전체 녹화"
+]
+},
+{
+"en": [
+"Recording | Ongoing"
+],
+"tr": [
+"녹화 | 진행 중"
+]
+},
+{
+"en": [
+"No deadline · Ms Tan · Watched 4/6"
+],
+"tr": [
+"기한 없음 · Ms Tan · 시청 4/6"
+]
+},
+{
+"en": [
+"Recorded Lesson"
+],
+"tr": [
+"수업 녹화"
+]
+},
+{
+"en": [
+"AI chapters and summaries for every recording"
+],
+"tr": [
+"모든 녹화에 AI 챕터와 요약 제공"
+]
+},
+{
+"en": [
+"Daily practice that builds good habits"
+],
+"tr": [
+"좋은 습관을 길러 주는 매일 연습"
+]
+},
+{
+"en": [
+"AI writes the quiz and marks it"
+],
+"tr": [
+"AI가 퀴즈를 만들고 채점합니다"
+]
+},
+{
+"en": [
+"Answer Card"
+],
+"tr": [
+"답안 카드"
+]
+},
+{
+"en": [
+"AI reads paper answers and marks them"
+],
+"tr": [
+"AI가 종이 답안을 읽고 채점합니다"
+]
+},
+{
+"en": [
+"Topic threads for the whole class"
+],
+"tr": [
+"학급 전체를 위한 주제별 토론"
+]
+},
+{
+"en": [
+"Study Materials"
+],
+"tr": [
+"학습 자료"
+]
+},
+{
+"en": [
+"Share files, links and videos"
+],
+"tr": [
+"파일, 링크, 동영상 공유"
+]
+},
+{
+"en": [
+"AI Oral Card"
+],
+"tr": [
+"AI 구술 카드"
+]
+},
+{
+"en": [
+"Speaking practice with AI feedback"
+],
+"tr": [
+"AI 피드백이 있는 말하기 연습"
+]
+},
+{
+"en": [
+"Open Interface (SCORM)"
+],
+"tr": [
+"오픈 인터페이스(SCORM)"
+]
+},
+{
+"en": [
+"Bring in SCORM courseware"
+],
+"tr": [
+"SCORM 콘텐츠 가져오기"
+]
+},
+{
+"en": [
+"AI Write"
+],
+"tr": [
+"AI 작성"
+]
+},
+{
+"en": [
+"Enter the homework (optional)"
+],
+"tr": [
+"과제 입력(선택 사항)"
+]
+},
+{
+"en": [
+"Apply to activity"
+],
+"tr": [
+"활동에 적용"
+]
+},
+{
+"en": [
+"Summarise this term’s homework submissions and list the students who need attention."
+],
+"tr": [
+"이번 학기 과제 제출 현황을 요약하고, 관심이 필요한 학생을 알려 주세요."
+]
+},
+{
+"en": [
+"Hello Ms Tan, here is this term’s homework summary."
+],
+"tr": [
+"안녕하세요 Ms Tan, 이번 학기 과제 요약입니다."
+]
+},
+{
+"en": [
+"Whole-class submissions"
+],
+"tr": [
+"학급 전체 제출 현황"
+]
+},
+{
+"en": [
+"Students who need attention"
+],
+"tr": [
+"관심이 필요한 학생"
+]
+},
+{
+"en": [
+"Check in with Leo about his workload this week, and set a short catch-up task to get him back on track."
+],
+"tr": [
+"Leo에게 이번 주 학습량이 어떤지 확인하고, 다시 따라올 수 있도록 짧은 보충 과제를 내 주세요."
+]
+},
+{
+"en": [
+"Tap Publish"
+],
+"tr": [
+"게시 탭"
+]
+},
+{
+"en": [
+"Tap Mark with AI"
+],
+"tr": [
+"AI로 채점 탭"
+]
+},
+{
+"en": [
+"What is the difference between the troposphere and the stratosphere? Compare them in a table."
+],
+"tr": [
+"대류권과 성층권의 차이는 무엇인가요? 표로 비교해 주세요."
+]
+},
+{
+"en": [
+"Here are the main differences between the troposphere and the stratosphere:"
+],
+"tr": [
+"대류권과 성층권의 주요 차이는 다음과 같습니다:"
+]
+},
+{
+"en": [
+"Ground to about 12 km (up to 18 km at the equator)"
+],
+"tr": [
+"지면에서 약 12 km까지(적도에서는 최대 18 km)"
+]
+},
+{
+"en": [
+"From the top of the troposphere to about 50 km"
+],
+"tr": [
+"대류권 꼭대기에서 약 50 km까지"
+]
+},
+{
+"en": [
+"Falls as you go higher"
+],
+"tr": [
+"높이 올라갈수록 내려갑니다"
+]
+},
+{
+"en": [
+"Rises as you go higher (ozone absorbs UV)"
+],
+"tr": [
+"높이 올라갈수록 올라갑니다(오존이 자외선을 흡수)"
+]
+},
+{
+"en": [
+"Air movement"
+],
+"tr": [
+"공기의 움직임"
+]
+},
+{
+"en": [
+"Strong vertical mixing and convection"
+],
+"tr": [
+"강한 수직 혼합과 대류"
+]
+},
+{
+"en": [
+"Mostly horizontal, calm and stable"
+],
+"tr": [
+"대부분 수평이며 고요하고 안정적"
+]
+},
+{
+"en": [
+"Almost all clouds, rain and snow"
+],
+"tr": [
+"거의 모든 구름, 비, 눈"
+]
+},
+{
+"en": [
+"Clear, with very little weather"
+],
+"tr": [
+"맑고 날씨 현상이 거의 없음"
+]
+},
+{
+"en": [
+"For people"
+],
+"tr": [
+"사람에게"
+]
+},
+{
+"en": [
+"Where we live and breathe"
+],
+"tr": [
+"우리가 살고 숨 쉬는 곳"
+]
+},
+{
+"en": [
+"Ideal for planes: smooth air, good visibility"
+],
+"tr": [
+"비행기에 이상적: 부드러운 공기와 좋은 시야"
+]
+},
+{
+"en": [
+"Priya Nair"
+],
+"tr": [
+"Priya Nair"
+]
+},
+{
+"en": [
+"Sofia Lee"
+],
+"tr": [
+"Sofia Lee"
+]
+},
+{
+"en": [
+"Troposphere vs stratosphere, in a table?"
+],
+"tr": [
+"대류권과 성층권을 표로 비교하면?"
+]
+},
+{
+"en": [
+"What is the ozone layer for?"
+],
+"tr": [
+"오존층은 무엇을 위한 것인가요?"
+]
+},
+{
+"en": [
+"Why do planes fly in the stratosphere?"
+],
+"tr": [
+"비행기는 왜 성층권에서 날까요?"
+]
+},
+{
+"en": [
+"Ask the question"
+],
+"tr": [
+"질문하기"
+]
+},
+{
+"en": [
+"Open the source"
+],
+"tr": [
+"출처 열기"
+]
+},
+{
+"en": [
+"Tap Student Chat"
+],
+"tr": [
+"학생 채팅 탭"
+]
+},
+{
+"en": [
+"Quality of Knowledge Explanation"
+],
+"tr": [
+"지식 설명의 질"
+]
+},
+{
+"en": [
+"Concepts are accurate and clear, with a noticeable introduction to the textbook."
+],
+"tr": [
+"개념이 정확하고 명확하며, 교재 소개가 눈에 띕니다."
+]
+},
+{
+"en": [
+"Some thought-provoking questions that guide students to think, but the methods are not deep enough."
+],
+"tr": [
+"학생의 사고를 이끄는 생각해 볼 만한 질문이 있지만, 방법이 충분히 깊지는 않습니다."
+]
+},
+{
+"en": [
+"Student Learning Quality"
+],
+"tr": [
+"학생 학습의 질"
+]
+},
+{
+"en": [
+"Student participation is relatively high, but some students are off-task and the opportunity to express is uneven."
+],
+"tr": [
+"학생 참여도는 비교적 높지만, 수업에 집중하지 못하는 학생이 있고 발표 기회가 고르지 않습니다."
+]
+},
+{
+"en": [
+"Teaching Structure and Efficiency"
+],
+"tr": [
+"수업 구성과 효율"
+]
+},
+{
+"en": [
+"The structure is complete, but time is a bit tight, making the pace somewhat rushed."
+],
+"tr": [
+"구성은 완결되어 있으나 시간이 다소 빠듯해 진행이 조금 급합니다."
+]
+},
+{
+"en": [
+"Classroom Atmosphere and Risk Control"
+],
+"tr": [
+"교실 분위기와 위험 관리"
+]
+},
+{
+"en": [
+"The atmosphere is lively and interactive, with no negative remarks."
+],
+"tr": [
+"분위기가 활기차고 상호작용이 활발하며, 부정적인 발언은 없습니다."
+]
+},
+{
+"en": [
+"AI Course Analysis"
+],
+"tr": [
+"AI 수업 분석"
+]
+},
+{
+"en": [
+"Unsaved changes"
+],
+"tr": [
+"저장되지 않은 변경 사항"
+]
+},
+{
+"en": [
+"Automatically analyze the entire teaching process of the course,"
+],
+"tr": [
+"수업의 전체 교수 과정을 자동으로 분석합니다."
+]
+},
+{
+"en": [
+"Selected template: Course Analysis ↗"
+],
+"tr": [
+"선택한 템플릿: 수업 분석 ↗"
+]
+},
+{
+"en": [
+"Analysis Template"
+],
+"tr": [
+"분석 템플릿"
+]
+},
+{
+"en": [
+"Creator Notes"
+],
+"tr": [
+"작성자 메모"
+]
+},
+{
+"en": [
+"Ask anything..."
+],
+"tr": [
+"무엇이든 물어보세요..."
+]
+},
+{
+"en": [
+"Course Analysis Report (Example)"
+],
+"tr": [
+"수업 분석 보고서(예시)"
+]
+},
+{
+"en": [
+"Course Overview"
+],
+"tr": [
+"수업 개요"
+]
+},
+{
+"en": [
+"An Exploration of the New Applications of the Pythagorean Theorem (Example)"
+],
+"tr": [
+"피타고라스 정리의 새로운 활용 탐구(예시)"
+]
+},
+{
+"en": [
+"Junior High Mathematics"
+],
+"tr": [
+"중학교 수학"
+]
+},
+{
+"en": [
+"Comprehensive Analysis"
+],
+"tr": [
+"종합 분석"
+]
+},
+{
+"en": [
+"Full Score"
+],
+"tr": [
+"만점"
+]
+},
+{
+"en": [
+"Score Awarded"
+],
+"tr": [
+"획득 점수"
+]
+},
+{
+"en": [
+"Evaluation Description"
+],
+"tr": [
+"평가 설명"
+]
+},
+{
+"en": [
+"Tap to total it up"
+],
+"tr": [
+"탭하여 합산하기"
+]
+},
+{
+"en": [
+"Select the character"
+],
+"tr": [
+"글자 선택"
+]
+},
+{
+"en": [
+"Tap the stroke agent"
+],
+"tr": [
+"획순 에이전트 탭"
+]
+},
+{
+"en": [
+"Tap this result"
+],
+"tr": [
+"이 결과 탭"
+]
+},
+{
+"en": [
+"Tap Poll"
+],
+"tr": [
+"투표 탭"
+]
+},
+{
+"en": [
+"Tap Setting Answer"
+],
+"tr": [
+"정답 설정 탭"
+]
+},
+{
+"en": [
+"Tap End"
+],
+"tr": [
+"종료 탭"
+]
+},
+{
+"en": [
+"This student's current learning status needs attention. The main issues are"
+],
+"tr": [
+"이 학생의 현재 학습 상태는 관심이 필요합니다. 주요 문제는 다음과 같습니다"
+]
+},
+{
+"en": [
+"In summary, this student needs to start by improving attendance and"
+],
+"tr": [
+"종합하면, 이 학생은 먼저 출석 개선과"
+]
+},
+{
+"en": [
+"Tap for the summary"
+],
+"tr": [
+"탭하여 요약 보기"
+]
+},
+{
+"en": [
+"Large test tube"
+],
+"tr": [
+"큰 시험관"
+]
+},
+{
+"en": [
+"Rubber stopper"
+],
+"tr": [
+"고무 마개"
+]
+},
+{
+"en": [
+"Bendable conduit"
+],
+"tr": [
+"휘어지는 도관"
+]
+},
+{
+"en": [
+"Beaker (250 mL)"
+],
+"tr": [
+"비커(250 mL)"
+]
+},
+{
+"en": [
+"Conical flask (250 mL)"
+],
+"tr": [
+"삼각 플라스크(250 mL)"
+]
+},
+{
+"en": [
+"Long-neck funnel"
+],
+"tr": [
+"긴 목 깔때기"
+]
+},
+{
+"en": [
+"Spring clip"
+],
+"tr": [
+"스프링 클립"
+]
+},
+{
+"en": [
+"Distilled water"
+],
+"tr": [
+"증류수"
+]
+},
+{
+"en": [
+"Small test tube"
+],
+"tr": [
+"작은 시험관"
+]
+},
+{
+"en": [
+"Beaker (100 mL)"
+],
+"tr": [
+"비커(100 mL)"
+]
+},
+{
+"en": [
+"All 141 experiments are in ClassIn. For this demo, open the highlighted one."
+],
+"tr": [
+"ClassIn에는 141개 실험이 모두 있습니다. 이 데모에서는 강조 표시된 실험을 여세요."
+]
+},
+{
+"en": [
+"Core Products and Key Advantages"
+],
+"tr": [
+"핵심 제품과 주요 장점"
+]
+},
+{
+"en": [
+"AI Real-Time Summary and Mind Map Demo"
+],
+"tr": [
+"AI 실시간 요약 및 마인드맵 데모"
+]
+},
+{
+"en": [
+"The presenter demonstrated this year’s new core AI feature: it generates content summaries of the teacher’s lecture and each group’s presentation over any chosen time period, and can create an AI mind map automatically. Unlike traditional meeting tools that only summarise after the meeting, it outputs summaries in real time, supports copying text, exporting to PDF and saving locally or to the cloud, and a QR code opens the content on mobile. It is well suited to group-discussion lessons and supports Chinese recognition."
+],
+"tr": [
+"발표자는 올해 새로 선보이는 핵심 AI 기능을 시연했습니다. 교사의 강의와 각 조의 발표를 원하는 시간 구간별로 요약해 주고, AI 마인드맵도 자동으로 만들 수 있습니다. 회의가 끝난 뒤에야 요약하는 기존 회의 도구와 달리 요약을 실시간으로 출력하며, 텍스트 복사, PDF 내보내기, 로컬 또는 클라우드 저장을 지원하고, QR 코드로 모바일에서도 열 수 있습니다. 조별 토론 수업에 적합하며 중국어 인식을 지원합니다."
+]
+},
+{
+"en": [
+"Screen Writing and Formula Recognition"
+],
+"tr": [
+"화면 필기 및 수식 인식"
+]
+},
+{
+"en": [
+"Image Insertion and Annotation"
+],
+"tr": [
+"이미지 삽입 및 주석"
+]
+},
+{
+"en": [
+"The presenter introduced the practical homework projection and marking feature: student work and paper content can be photographed with the device camera and uploaded straight to the screen, then annotated and explained in front of the class."
+],
+"tr": [
+"발표자는 실용적인 과제 투영·채점 기능을 소개했습니다. 학생 과제와 시험지를 기기 카메라로 촬영해 화면에 바로 올린 뒤, 학급 앞에서 주석을 달고 설명할 수 있습니다."
+]
+},
+{
+"en": [
+"Add by Upload"
+],
+"tr": [
+"파일 업로드로 추가"
+]
+},
+{
+"en": [
+"Batch Import"
+],
+"tr": [
+"일괄 가져오기"
+]
+},
+{
+"en": [
+"Find equipment for an electromagnetism experiment"
+],
+"tr": [
+"전자기학 실험 장비 찾기"
+]
+},
+{
+"en": [
+"Select what you drew"
+],
+"tr": [
+"그린 것을 선택"
+]
+},
+{
+"en": [
+"Tap Material Search"
+],
+"tr": [
+"자료 검색 탭"
+]
+},
+{
+"en": [
+"Here are the results"
+],
+"tr": [
+"결과는 다음과 같습니다"
+]
+},
+{
+"en": [
+"This brief class, recorded today, lasted approximately one minute and"
+],
+"tr": [
+"오늘 녹화된 이 짧은 수업은 약 1분 동안 진행되었으며"
+]
+},
+{
+"en": [
+"The teacher introduced §collaborative learning§ as a powerful approach,"
+],
+"tr": [
+"교사는 §협동 학습§을 효과적인 방식으로 소개하며,"
+]
+},
+{
+"en": [
+"Tap Speech Summary"
+],
+"tr": [
+"발언 요약 탭"
+]
+},
+{
+"en": [
+"Tap Mind Map"
+],
+"tr": [
+"마인드맵 탭"
+]
+},
+{
+"en": [
+"Active participation"
+],
+"tr": [
+"적극적인 참여"
+]
+},
+{
+"en": [
+"Shared responsibility"
+],
+"tr": [
+"공동의 책임"
+]
+},
+{
+"en": [
+"Group dynamics"
+],
+"tr": [
+"그룹 역학"
+]
+},
+{
+"en": [
+"Pairs and teams"
+],
+"tr": [
+"짝과 팀"
+]
+},
+{
+"en": [
+"Whole class"
+],
+"tr": [
+"학급 전체"
+]
+},
+{
+"en": [
+"Deeper understanding"
+],
+"tr": [
+"더 깊은 이해"
+]
+},
+{
+"en": [
+"Critical thinking"
+],
+"tr": [
+"비판적 사고"
+]
+},
+{
+"en": [
+"Open the dice"
+],
+"tr": [
+"주사위 열기"
+]
+},
+{
+"en": [
+"Tap Voice Assistant"
+],
+"tr": [
+"음성 도우미 탭"
+]
+},
+{
+"en": [
+"I'm listening. Speak your command..."
+],
+"tr": [
+"듣고 있습니다. 명령을 말씀하세요..."
+]
+},
+{
+"en": [
+"Opening Dice"
+],
+"tr": [
+"주사위 여는 중"
+]
+}
+]

@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head><script src="/expo/ipad-bridge.js"></script><script src="/expo/i18n.js"></script>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ClassIn Room Designer</title>
+<meta name="description" content="Plan a ClassIn room in 3D: pick a smart classroom, meeting room or lecture hall, size it, choose the ClassIn Boards, cameras and audio, and take away the equipment list.">
+<link rel="icon" href="/expo/deck/media/logo.svg">
+<link rel="preload" as="font" type="font/woff2" href="/expo/deck/fonts/Gilroy-Bold.woff2" crossorigin>
+<link rel="preload" as="font" type="font/woff2" href="/expo/deck/fonts/Gilroy-Regular.woff2" crossorigin>
+<script>/* big screens (2026-10-27): above 1920 x 1000 the page scales up as a whole, so a 2560 monitor or a 4K TV shows the
+   1920 layout larger instead of a narrow column; viewport units divide by --zoom (vite.config.js bigScreenUnits) */
+(function () {
+  var d = document.documentElement;
+  function fit() {
+    var z = Math.min(innerWidth / 1920, innerHeight / 1000);
+    z = z > 1.04 ? Math.round(z * 100) / 100 : 1;
+    d.style.zoom = z > 1 ? z : '';
+    d.style.setProperty('--zoom', z);
+  }
+  fit();
+  addEventListener('resize', fit);
+})();</script>
+  <script type="module" crossorigin src="/expo/deck/assets/room-designer-q7CW_FIc.js"></script>
+  <link rel="modulepreload" crossorigin href="/expo/deck/assets/classin-native-BPPWjaFB.js">
+  <link rel="modulepreload" crossorigin href="/expo/deck/assets/three.module-BneTKOgL.js">
+  <link rel="stylesheet" crossorigin href="/expo/deck/assets/classin-native-Du0xrhR9.css">
+  <link rel="stylesheet" crossorigin href="/expo/deck/assets/room-designer-CGyVlTjA.css">
+</head>
+<body class="dz">
+<!-- The ClassIn Room Designer. App: src/designer/designer.js, rules in src/designer/rules.js, 3D in src/designer/stage.js. -->
+<header class="dz-top">
+  <a class="dz-brand" href="https://classin-website-en.web.app/hardware.html#plan" aria-label="Back to ClassIn Hardware"><img src="/expo/deck/media/logo.svg" alt="ClassIn" width="88" height="24"><span>Room Designer</span></a>
+  <nav class="dz-steps" aria-label="Steps">
+    <button type="button"><i>1</i>Room</button>
+    <button type="button"><i>2</i>Boards</button>
+    <button type="button"><i>3</i>Cameras</button>
+    <button type="button"><i>4</i>Audio</button>
+    <button type="button"><i>5</i>Your plan</button>
+  </nav>
+  <a class="dz-quote" href="https://www.classin.com/contact_sales?source=room_designer" target="_blank" rel="noopener">Contact us</a>
+</header>
+
+<main class="dz-main">
+  <h1 class="dz-sr">ClassIn Room Designer</h1>
+  <section class="dz-stage" aria-label="Your room in 3D">
+    <div class="dz-views" role="group" aria-label="View">
+      <button type="button" data-view="3d" aria-pressed="true">3D</button>
+      <button type="button" data-view="top" aria-pressed="false">From above</button>
+      <button type="button" data-view="s1" aria-pressed="false">Camera view</button>
+      <button type="button" data-view="walk" aria-pressed="false">Walk in</button>
+    </div>
+    <span class="dz-lab" data-at="board" hidden>ClassIn Board</span>
+    <span class="dz-lab" data-at="s1" hidden>Cam S1</span>
+    <span class="dz-lab" data-at="t1" hidden>Cam T1</span>
+    <span class="dz-lab" data-at="mic" hidden>DT2 Pro</span>
+    <span class="dz-lab" data-at="speaker" hidden>SPX2</span>
+    <p class="dz-caption" aria-live="polite"></p>
+    <p class="dz-loading">Loading your room&hellip;</p>
+  </section>
+
+  <aside class="dz-panel" aria-label="Plan your room">
+    <div class="dz-panel__body" tabindex="-1"></div>
+    <footer class="dz-panel__foot">
+      <p class="dz-sum" aria-live="polite"></p>
+      <div class="dz-nav">
+        <button type="button" class="dz-back">Back</button>
+        <button type="button" class="dz-next">Next</button>
+      </div>
+    </footer>
+  </aside>
+</main>
+
+<script src="/expo/made.js"></script><script src="/expo/edition.js"></script></body>
+</html>

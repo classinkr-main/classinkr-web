@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 368 232">
+  <!-- AI Homework card art: a handwritten exercise page, the phone that
+       photographs it, and the AI-marked score, in the menu's mint style. -->
+  <defs>
+    <radialGradient id="blob" cx="50%" cy="52%" r="50%"><stop offset="0" stop-color="#dff3e7"/><stop offset=".72" stop-color="#e9f7ef"/><stop offset="1" stop-color="#f4fbf7" stop-opacity="0"/></radialGradient>
+    <linearGradient id="grn" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2cc281"/><stop offset="1" stop-color="#0c9a61"/></linearGradient>
+    <linearGradient id="ph" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3b4150"/><stop offset="1" stop-color="#1c2029"/></linearGradient>
+    <filter id="sh" x="-20%" y="-20%" width="140%" height="160%"><feDropShadow dx="0" dy="10" stdDeviation="9" flood-color="#1c4a36" flood-opacity=".20"/></filter>
+  </defs>
+  <ellipse cx="184" cy="120" rx="120" ry="104" fill="url(#blob)"/>
+  <circle cx="60" cy="96" r="9" fill="#d6efe0"/><circle cx="316" cy="160" r="11" fill="#ddf2e5"/>
+  <path d="M62 60l-8-10M74 54l-2-12M50 72l-12-4" stroke="#1db56f" stroke-width="4" stroke-linecap="round"/>
+  <g filter="url(#sh)" transform="rotate(-6 150 120)">
+    <rect x="96" y="40" width="130" height="160" rx="10" fill="#fbfaf5"/>
+    <g stroke="#c9d7e6" stroke-width="1.6"><path d="M104 70h114M104 88h114M104 106h114M104 124h114M104 142h114M104 160h114M104 178h114"/></g>
+    <path d="M114 40v160" stroke="#eab0b0" stroke-width="1.6"/>
+    <g fill="none" stroke="#2f4f8a" stroke-width="2.4" stroke-linecap="round"><path d="M122 66q8-5 16 0t16 0t14-2"/><path d="M122 84q10-4 20 0t18-1"/><path d="M122 102q7-4 14 0t14 0t16 0"/><path d="M122 120q9-4 18 0t12-1"/><path d="M122 138q8-5 16 0t16 0t20-1"/></g>
+  </g>
+  <g filter="url(#sh)"><rect x="214" y="70" width="70" height="134" rx="14" fill="url(#ph)"/></g>
+  <rect x="220" y="80" width="58" height="104" rx="8" fill="#eef4ff"/>
+  <rect x="228" y="90" width="42" height="54" rx="4" fill="#fbfaf5"/>
+  <g stroke="#2f4f8a" stroke-width="1.6" stroke-linecap="round"><path d="M233 100h30M233 110h24M233 120h28M233 130h20"/></g>
+  <rect x="228" y="154" width="42" height="14" rx="7" fill="url(#grn)"/>
+  <g filter="url(#sh)"><circle cx="296" cy="72" r="28" fill="#fff"/></g>
+  <circle cx="296" cy="72" r="22" fill="url(#grn)"/>
+  <text x="296" y="79" text-anchor="middle" font-family="Gilroy,Segoe UI,Arial,sans-serif" font-weight="700" font-size="20" fill="#fff">10</text>
+  <path d="M258 44l2.5 6 6 2.5-6 2.5-2.5 6-2.5-6-6-2.5 6-2.5z" fill="#2d7ff9"/>
+</svg>

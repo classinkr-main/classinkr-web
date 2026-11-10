@@ -1,0 +1,1 @@
+import"./classin-native-BPPWjaFB.js";import{n as e,t}from"./blocks-DS47Suv0.js";import{t as n}from"./school-v2-qxjbXjy1.js";import{t as r}from"./header-CQJahORn.js";r(),n(),e(),t();

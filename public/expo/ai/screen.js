@@ -1,0 +1,20 @@
+(function(){const root=document.documentElement;const el=()=>document.fullscreenElement||document.webkitFullscreenElement||null;let shell=null;try{if(window.parent!==window&&window.parent.__ipadToggleFull)shell=window.parent}catch(e){}const isFull=()=>shell?shell.document.body.classList.contains(`expanded`):!!el();const quiet=f=>{try{const r=f();if(r&&r.catch)r.catch(()=>{})}catch(e){}};function enter(){if(isFull())return;if(shell){shell.__ipadToggleFull();return}if(root.requestFullscreen)quiet(()=>root.requestFullscreen({navigationUI:`hide`}));else if(root.webkitRequestFullscreen)quiet(()=>root.webkitRequestFullscreen())}function exit(){if(!isFull())return;if(shell){shell.__ipadCollapse();return}const x=document.exitFullscreen||document.webkitExitFullscreen;if(x)quiet(()=>x.call(document))}window.BoothScreen={isFull,enter,exit};const inApp=/ClassInBoothApp/.test(navigator.userAgent);let framed=true;try{framed=window.top!==window}catch(e){}if(inApp||framed||/[?&]embed=1(&|$)/.test(location.search))return;const kiosk=!/try\.html$/.test(location.pathname);const fromHome=navigator.standalone===true||matchMedia(`(display-mode: standalone), (display-mode: fullscreen)`).matches;const canFull=!fromHome&&!!(document.fullscreenEnabled||document.webkitFullscreenEnabled);const css=`
+#fsbtn{position:fixed;z-index:1003;right:max(10px,env(safe-area-inset-right));bottom:max(10px,env(safe-area-inset-bottom));
+  width:44px;height:44px;padding:0;border:0;border-radius:50%;display:grid;place-items:center;cursor:pointer;color:#1b2624;
+  background:rgba(255,255,255,.9);box-shadow:0 4px 16px rgba(0,0,0,.24);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);
+  transition:background-color .2s}
+#fsbtn:active{background:#fff}
+#fsbtn:focus-visible{outline:3px solid #00AA76;outline-offset:2px}
+
+body:has(#attract.on) #fsbtn,html.booth-fs #fsbtn{display:none}
+#fsbtn svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+#fsbtn .out,#fsbtn.on .in{display:none}
+#fsbtn.on .out{display:block}
+#bs-turn{position:fixed;left:0;right:0;z-index:1002;display:none;justify-content:center;pointer-events:none;
+  bottom:calc(max(10px,env(safe-area-inset-bottom)) + 62px)}
+#bs-turn span{display:inline-flex;align-items:center;gap:10px;max-width:calc(100% - 32px);padding:11px 18px;border-radius:999px;
+  background:rgba(255,255,255,.94);color:#1b2624;box-shadow:0 4px 16px rgba(0,0,0,.2);
+  font:600 15px/1.25 Gilroy,"Segoe UI",system-ui,sans-serif}
+#bs-turn svg{flex:none;width:22px;height:22px;fill:none;stroke:#00734F;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+@media (orientation:portrait) and (min-width:761px){#bs-turn{display:flex}}
+@media (orientation:portrait) and (max-width:760px){#fsbtn{display:none}}   /* an upright phone gets the page's own full "turn sideways" card */`;const style=document.createElement(`style`);style.textContent=css;document.head.appendChild(style);const keep=n=>[`pointerdown`,`pointerup`,`touchstart`,`touchend`,`mousedown`].forEach(ev=>n.addEventListener(ev,e=>e.stopPropagation()));const hint=document.createElement(`div`);hint.id=`bs-turn`;hint.setAttribute(`aria-hidden`,`true`);hint.innerHTML=`<span><svg viewBox="0 0 24 24"><rect x="7" y="3" width="10" height="18" rx="2"/><path d="M3 14a9 9 0 0 0 7 7M21 10a9 9 0 0 0-7-7"/></svg>`+`Turn your screen sideways for a bigger view</span>`;document.body.appendChild(hint);if(!canFull||kiosk)return;const b=document.createElement(`button`);b.id=`fsbtn`;b.type=`button`;b.innerHTML=`<svg class="in" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4H4v5M15 4h5v5M9 20H4v-5M15 20h5v-5"/></svg>`+`<svg class="out" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h5V4M20 9h-5V4M4 15h5v5M20 15h-5v5"/></svg>`;keep(b);b.addEventListener(`click`,e=>{e.stopPropagation();if(isFull())exit();else enter()});document.body.appendChild(b);const sync=()=>{b.classList.toggle(`on`,isFull());b.setAttribute(`aria-label`,isFull()?`Exit full screen`:`Full screen`)};[`fullscreenchange`,`webkitfullscreenchange`].forEach(ev=>document.addEventListener(ev,sync));sync()})();

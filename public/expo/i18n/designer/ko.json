@@ -1,0 +1,672 @@
+[
+{
+"en": [
+"Room Designer"
+],
+"tr": [
+"룸 디자이너"
+]
+},
+{
+"en": [
+"{0}",
+"Room"
+],
+"tr": [
+"{0}",
+"공간"
+]
+},
+{
+"en": [
+"{0}",
+"Boards"
+],
+"tr": [
+"{0}",
+"보드"
+]
+},
+{
+"en": [
+"{0}",
+"Cameras"
+],
+"tr": [
+"{0}",
+"카메라"
+]
+},
+{
+"en": [
+"{0}",
+"Audio"
+],
+"tr": [
+"{0}",
+"오디오"
+]
+},
+{
+"en": [
+"{0}",
+"Your plan"
+],
+"tr": [
+"{0}",
+"내 설계안"
+]
+},
+{
+"en": [
+"Contact us"
+],
+"tr": [
+"문의하기"
+]
+},
+{
+"en": [
+"ClassIn Room Designer"
+],
+"tr": [
+"ClassIn 룸 디자이너"
+]
+},
+{
+"en": [
+"From above"
+],
+"tr": [
+"위에서 보기"
+]
+},
+{
+"en": [
+"Camera view"
+],
+"tr": [
+"카메라 시점"
+]
+},
+{
+"en": [
+"Walk in"
+],
+"tr": [
+"들어가 보기"
+]
+},
+{
+"en": [
+"ClassIn Board"
+],
+"tr": [
+"ClassIn Board"
+]
+},
+{
+"en": [
+"Cam S{0}"
+],
+"tr": [
+"Cam S{0}"
+]
+},
+{
+"en": [
+"Cam T{0}"
+],
+"tr": [
+"Cam T{0}"
+]
+},
+{
+"en": [
+"DT{0} Pro"
+],
+"tr": [
+"DT{0} Pro"
+]
+},
+{
+"en": [
+"SPX{0}"
+],
+"tr": [
+"SPX{0}"
+]
+},
+{
+"en": [
+"Loading your room…"
+],
+"tr": [
+"공간을 불러오는 중…"
+]
+},
+{
+"en": [
+"Step {0} of {1}"
+],
+"tr": [
+"{0}/{1}단계"
+]
+},
+{
+"en": [
+"Your room"
+],
+"tr": [
+"내 공간"
+]
+},
+{
+"en": [
+"Pick a room type and set its size. Seating adjusts automatically to the room dimensions."
+],
+"tr": [
+"공간 유형을 고르고 크기를 설정하세요. 좌석은 공간 크기에 맞춰 자동으로 배치됩니다."
+]
+},
+{
+"en": [
+"Smart classroom",
+"Everyday teaching and hybrid learning"
+],
+"tr": [
+"스마트 교실",
+"일상 수업과 하이브리드 학습"
+]
+},
+{
+"en": [
+"Meeting & seminar room",
+"Discussion and remote collaboration"
+],
+"tr": [
+"회의·세미나실",
+"토론과 원격 협업"
+]
+},
+{
+"en": [
+"Lecture hall",
+"Large classes and presentations"
+],
+"tr": [
+"대형 강의실",
+"대규모 수업과 발표"
+]
+},
+{
+"en": [
+"Width, along the teaching wall"
+],
+"tr": [
+"너비 (교단 쪽 벽)"
+]
+},
+{
+"en": [
+"Length, front to back"
+],
+"tr": [
+"길이 (앞에서 뒤까지)"
+]
+},
+{
+"en": [
+"Ceiling height"
+],
+"tr": [
+"천장 높이"
+]
+},
+{
+"en": [
+"Style"
+],
+"tr": [
+"스타일"
+]
+},
+{
+"en": [
+"Plain white"
+],
+"tr": [
+"깔끔한 흰색"
+]
+},
+{
+"en": [
+"Blue & yellow"
+],
+"tr": [
+"파랑·노랑"
+]
+},
+{
+"en": [
+"{0} m² · {1} seats in {2} rows"
+],
+"tr": [
+"{0} m² · {2}줄 {1}석"
+]
+},
+{
+"en": [
+"{0} m²",
+" · {1} seats · {2} ClassIn devices"
+],
+"tr": [
+"{0} m²",
+" · {1}석 · ClassIn 기기 {2}대"
+]
+},
+{
+"en": [
+"Back"
+],
+"tr": [
+"이전"
+]
+},
+{
+"en": [
+"Next"
+],
+"tr": [
+"다음"
+]
+},
+{
+"en": [
+"Drag to turn the room, scroll or pinch to zoom."
+],
+"tr": [
+"드래그로 회전, 스크롤이나 핀치로 확대·축소."
+]
+},
+{
+"en": [
+"Seen from above, with what the cameras and microphones cover."
+],
+"tr": [
+"위에서 본 모습과 카메라·마이크의 커버 범위."
+]
+},
+{
+"en": [
+"What remote students see: the Cam S{0} view across the room, {1}° wide."
+],
+"tr": [
+"원격 학생이 보는 화면: 교실 전체를 담는 Cam S{0}의 {1}° 화각."
+]
+},
+{
+"en": [
+"Standing at the back. Drag to look around."
+],
+"tr": [
+"뒤쪽에서 본 모습입니다. 드래그해서 둘러보세요."
+]
+},
+{
+"en": [
+"{0} m² · {1} seats round one table"
+],
+"tr": [
+"{0} m² · 테이블 하나에 {1}석"
+]
+},
+{
+"en": [
+"ClassIn Boards"
+],
+"tr": [
+"ClassIn Board"
+]
+},
+{
+"en": [
+"Two Boards let courseware sit on one and live writing on the other."
+],
+"tr": [
+"보드가 2대면 한쪽에는 수업 자료를, 다른 쪽에는 실시간 판서를 띄울 수 있습니다."
+]
+},
+{
+"en": [
+"How many"
+],
+"tr": [
+"수량"
+]
+},
+{
+"en": [
+"One Board"
+],
+"tr": [
+"보드 1대"
+]
+},
+{
+"en": [
+"Two Boards"
+],
+"tr": [
+"보드 2대"
+]
+},
+{
+"en": [
+"Screen size"
+],
+"tr": [
+"화면 크기"
+]
+},
+{
+"en": [
+"{0}″",
+"S{1} · BS{2}A"
+],
+"tr": [
+"{0}″",
+"S{1} · BS{2}A"
+]
+},
+{
+"en": [
+"{0}″",
+"S{1} · BS{2}A",
+"Recommended"
+],
+"tr": [
+"{0}″",
+"S{1} · BS{2}A",
+"추천"
+]
+},
+{
+"en": [
+"Recommended based on the room’s depth ({0} m). The ClassIn Board S series comes in {1}″, {2}″, {3}″, {4}″ and {5}″."
+],
+"tr": [
+"공간 길이({0} m)를 기준으로 추천합니다. ClassIn Board S 시리즈는 {1}″, {2}″, {3}″, {4}″, {5}″ 크기로 제공됩니다."
+]
+},
+{
+"en": [
+"Cameras"
+],
+"tr": [
+"카메라"
+]
+},
+{
+"en": [
+"The floor shows what each camera covers."
+],
+"tr": [
+"바닥에 각 카메라의 촬영 범위가 표시됩니다."
+]
+},
+{
+"en": [
+"Student camera · Cam S{0}",
+"At the front, above the Boards. A {1}° ultra-wide view of every student."
+],
+"tr": [
+"학생 카메라 · Cam S{0}",
+"앞쪽 보드 위에 설치. {1}° 초광각으로 모든 학생을 담습니다."
+]
+},
+{
+"en": [
+"Teacher camera · Cam T{0}",
+"On the rear wall. Follows the teacher, with digital close-up and tracking."
+],
+"tr": [
+"교사 카메라 · Cam T{0}",
+"뒷벽에 설치. 디지털 클로즈업과 트래킹으로 교사를 따라갑니다."
+]
+},
+{
+"en": [
+"Cam S{0}, {1}° ",
+"Cam T{2}, {3}°"
+],
+"tr": [
+"Cam S{0}, {1}° ",
+"Cam T{2}, {3}°"
+]
+},
+{
+"en": [
+"Large hall? ClassIn also makes the OT{0} and OS{1}, which replace the T{2} and S{3} in large halls, with {4}G-SDI output."
+],
+"tr": [
+"대형 강당인가요? ClassIn은 대형 강당용 OT{0}, OS{1}도 제공합니다. T{2}, S{3}을 대체하며 {4}G-SDI 출력을 지원합니다."
+]
+},
+{
+"en": [
+"The {0}D view could not start in this browser. The plan and equipment list still work."
+],
+"tr": [
+"이 브라우저에서는 {0}D 화면을 시작할 수 없습니다. 설계안과 장비 목록은 계속 사용할 수 있습니다."
+]
+},
+{
+"en": [
+"Audio"
+],
+"tr": [
+"오디오"
+]
+},
+{
+"en": [
+"Ceiling microphones and speakers, so nobody passes a microphone around."
+],
+"tr": [
+"천장 마이크와 스피커로, 마이크를 돌려 쓸 필요가 없습니다."
+]
+},
+{
+"en": [
+"ClassIn Mic DT{0} Pro",
+"Recommended",
+"One unit is designed for classrooms of up to {1} m². This room is {2} m², so the ClassIn team confirms the number of units on site."
+],
+"tr": [
+"ClassIn Mic DT{0} Pro",
+"추천",
+"1대가 최대 {1} m² 교실을 커버하도록 설계되었습니다. 이 공간은 {2} m²이므로, ClassIn 팀이 현장에서 설치 수량을 확정합니다."
+]
+},
+{
+"en": [
+"ClassIn Speaker SPX{0}",
+"Recommended",
+"Ceiling speakers that work with the DT{1} Pro for balanced voice lift, without feedback."
+],
+"tr": [
+"ClassIn Speaker SPX{0}",
+"추천",
+"DT{1} Pro와 함께 작동해 하울링 없이 균형 잡힌 음성 증폭을 제공하는 천장 스피커."
+]
+},
+{
+"en": [
+"{0} m pickup distance around each microphone"
+],
+"tr": [
+"마이크당 반경 {0} m 수음 거리"
+]
+},
+{
+"en": [
+"See your plan"
+],
+"tr": [
+"설계안 보기"
+]
+},
+{
+"en": [
+"Your plan"
+],
+"tr": [
+"내 설계안"
+]
+},
+{
+"en": [
+"Smart classroom, {0} m × {1} m, {2} seats."
+],
+"tr": [
+"스마트 교실, {0} m × {1} m, {2}석."
+]
+},
+{
+"en": [
+"Equipment"
+],
+"tr": [
+"장비"
+]
+},
+{
+"en": [
+"Model"
+],
+"tr": [
+"모델"
+]
+},
+{
+"en": [
+"Qty"
+],
+"tr": [
+"수량"
+]
+},
+{
+"en": [
+"S{0} · BS{1}A · {2}″"
+],
+"tr": [
+"S{0} · BS{1}A · {2}″"
+]
+},
+{
+"en": [
+"Student camera"
+],
+"tr": [
+"학생 카메라"
+]
+},
+{
+"en": [
+"ClassIn Cam S{0}"
+],
+"tr": [
+"ClassIn Cam S{0}"
+]
+},
+{
+"en": [
+"Teacher camera"
+],
+"tr": [
+"교사 카메라"
+]
+},
+{
+"en": [
+"ClassIn Cam T{0} · CS{1}A"
+],
+"tr": [
+"ClassIn Cam T{0} · CS{1}A"
+]
+},
+{
+"en": [
+"Ceiling microphone"
+],
+"tr": [
+"천장 마이크"
+]
+},
+{
+"en": [
+"ClassIn Mic DT{0} Pro · MS{1}A"
+],
+"tr": [
+"ClassIn Mic DT{0} Pro · MS{1}A"
+]
+},
+{
+"en": [
+"Ceiling speaker"
+],
+"tr": [
+"천장 스피커"
+]
+},
+{
+"en": [
+"ClassIn Speaker SPX{0} · SPX{1}A"
+],
+"tr": [
+"ClassIn Speaker SPX{0} · SPX{1}A"
+]
+},
+{
+"en": [
+"Contact us about this room"
+],
+"tr": [
+"이 공간에 대해 문의하기"
+]
+},
+{
+"en": [
+"Download the list"
+],
+"tr": [
+"목록 다운로드"
+]
+},
+{
+"en": [
+"Copy a link to this plan"
+],
+"tr": [
+"설계안 링크 복사"
+]
+},
+{
+"en": [
+"A starting estimate with no prices. The ClassIn team confirms the final list after a site visit."
+],
+"tr": [
+"가격이 포함되지 않은 초기 견적입니다. 최종 목록은 ClassIn 팀이 현장 방문 후 확정합니다."
+]
+},
+{
+"en": [
+"Start again"
+],
+"tr": [
+"처음부터 다시"
+]
+}
+]

@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ClassIn iPad check</title>
+<!-- 2026-10-28: Rachel saw no films, 3D or pictures on her iPad. Open classin-ipad.web.app/check.html on the iPad: it
+     tests what the three experiences need (picture format, films, 3D, script features, offline saving) and lists the
+     errors the pages hit on that iPad (kept by ipad-bridge.js), so one screenshot shows what is wrong.
+     Plain old JavaScript on purpose, so it runs on an old iPad too. -->
+<style>
+  body { margin: 0; padding: 28px 24px 40px; font: 16px/1.45 -apple-system, system-ui, sans-serif; color: #1C1F25; background: #fff; }
+  h1 { margin: 0 0 4px; font-size: 24px; }
+  .sub { margin: 0 0 20px; color: #545860; }
+  table { width: 100%; max-width: 900px; border-collapse: collapse; }
+  td { padding: 10px 8px; border-top: 1px solid #E3E6EA; vertical-align: top; }
+  td:first-child { width: 34%; font-weight: 600; }
+  .ok { color: #00734F; } .no { color: #B3261E; } .wait { color: #545860; }
+  pre { white-space: pre-wrap; word-break: break-word; margin: 0; font: 13px/1.4 ui-monospace, Menlo, monospace; color: #545860; }
+  button { margin: 22px 12px 0 0; height: 46px; padding: 0 22px; border: 0; border-radius: 999px; font: 600 16px -apple-system, system-ui, sans-serif; background: #00734F; color: #fff; }
+  button.plain { background: #F2F4F6; color: #1C1F25; }
+  video { width: 1px; height: 1px; opacity: 0.01; position: absolute; }
+</style>
+</head>
+<body>
+<h1>ClassIn iPad check</h1>
+<p class="sub">Wait about 15 seconds, then send a screenshot of this page.</p>
+<table id="t"></table>
+<button type="button" id="copy">Copy report</button><button type="button" class="plain" id="clear">Clear the errors list</button>
+<script>
+(function () {
+  var rows = {}, report = [];
+  var t = document.getElementById('t');
+  function row(key, label) {
+    var tr = document.createElement('tr');
+    tr.innerHTML = '<td>' + label + '</td><td class="wait">checking...</td>';
+    t.appendChild(tr);
+    rows[key] = tr.lastChild;
+  }
+  function set(key, ok, text) {
+    var td = rows[key];
+    td.className = ok === null ? 'wait' : ok ? 'ok' : 'no';
+    td.textContent = (ok === null ? '' : ok ? '✓ ' : '✗ ') + text;
+  }
+  row('device', 'iPad and iPadOS');
+  row('mode', 'Opened from');
+  row('webp', 'Picture format (WebP)');
+  row('pic', 'A picture from the app');
+  row('video', 'Films');
+  row('gl', '3D');
+  row('js', 'Script features');
+  row('sw', 'Offline saving');
+  row('net', 'Internet');
+  row('errors', 'Errors seen in the app');
+
+  var ua = navigator.userAgent;
+  var v = /OS (\d+)[_.](\d+)/.exec(ua) || /Version\/(\d+)\.(\d+)/.exec(ua);
+  var ver = v ? v[1] + '.' + v[2] : 'unknown';
+  var major = v ? +v[1] : 0;
+  var touch = navigator.maxTouchPoints > 1;
+  set('device', major >= 15, (touch ? 'iPad, ' : '') + 'iPadOS / Safari ' + ver + (major && major < 15 ? ' (too old: 15 or newer is needed for the 3D room; 14 or newer for pictures)' : ''));
+  var standalone = navigator.standalone === true || (window.matchMedia && matchMedia('(display-mode: standalone)').matches);
+  set('mode', true, standalone ? 'the Home Screen app' : 'Safari (or another app\'s browser)');
+
+  var w = new Image();
+  w.onload = function () { set('webp', w.width > 0, w.width > 0 ? 'supported' : 'not supported'); };
+  w.onerror = function () { set('webp', false, 'not supported: no pictures can show (iPadOS 14 or newer is needed)'); };
+  w.src = 'data:image/webp;base64,UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEADsD+JaQAA3AAAAAA';
+
+  var t0 = Date.now(), p = new Image();
+  p.onload = function () { set('pic', true, 'loaded in ' + (Date.now() - t0) + ' ms'); };
+  p.onerror = function () { set('pic', false, 'did not load'); };
+  p.src = 'deck/media/logos/hq/nus.webp?check=' + t0;
+
+  var vid = document.createElement('video');
+  vid.muted = true; vid.setAttribute('muted', ''); vid.setAttribute('playsinline', ''); vid.playsInline = true; vid.preload = 'auto';
+  vid.src = 'ai/clips/real_materials.mp4';
+  document.body.appendChild(vid);
+  var vdone = false;
+  function vres(ok, text) { if (!vdone) { vdone = true; set('video', ok, text); } }
+  vid.addEventListener('playing', function () { vres(true, 'play'); });
+  vid.addEventListener('error', function () { vres(false, 'could not load the film (error ' + (vid.error && vid.error.code) + ')'); });
+  var pr = vid.play();
+  if (pr && pr['catch']) pr['catch'](function (e) {
+    vres(false, 'blocked from starting (' + (e && e.name) + '). Low Power Mode stops films from starting: turn it off in Settings > Battery');
+  });
+  setTimeout(function () { vres(false, 'did not start within 12 s (ready state ' + vid.readyState + ')'); }, 12000);
+
+  var c = document.createElement('canvas');
+  var gl2 = null, gl1 = null;
+  try { gl2 = c.getContext('webgl2'); } catch (e) {}
+  if (!gl2) { try { gl1 = c.getContext('webgl') || c.getContext('experimental-webgl'); } catch (e) {} }
+  set('gl', !!gl2, gl2 ? 'WebGL 2 available' : gl1 ? 'only WebGL 1: the 3D room needs WebGL 2 (iPadOS 15 or newer)' : 'no WebGL: 3D is switched off (Lockdown Mode, or a very old iPad)');
+
+  var missing = [];
+  try { new Function('var a = {}; return a?.b ?? 1;'); } catch (e) { missing.push('optional chaining'); }
+  try { new Function('class A { #x = 1; }'); } catch (e) { missing.push('private class fields'); }
+  if (!window.structuredClone) missing.push('structuredClone');
+  if (!Array.prototype.at) missing.push('Array.at');
+  set('js', missing.length === 0, missing.length ? 'missing: ' + missing.join(', ') + ' (the pages may stop part-way)' : 'all present');
+
+  if (!('serviceWorker' in navigator) || !window.caches) set('sw', false, 'not available in this browser');
+  else {
+    caches.open('classin-ipad').then(function (cc) { return cc.keys().then(function (k) {
+      return cc.match('__index').then(function (r) { return r ? r.json() : {}; }).then(function (idx) {
+        var on = !!navigator.serviceWorker.controller;
+        var txt = k.length + ' files saved' + (idx.__complete ? ', complete' : k.length ? ', not complete yet' : '') + (on ? '' : '; offline helper not running here');
+        set('sw', standalone ? !!idx.__complete : true, standalone ? txt : txt + ' (saving happens in the Home Screen app only)');
+      });
+    }); }).catch(function (e) { set('sw', false, 'error: ' + e); });
+  }
+
+  var n0 = Date.now();
+  fetch('version.json?__net=' + n0, { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) {
+    set('net', true, 'online, app version ' + j.version + ' (' + (Date.now() - n0) + ' ms)');
+  })['catch'](function () { set('net', null, 'offline or the site did not answer'); });
+
+  var errs = [];
+  try { errs = JSON.parse(localStorage.getItem('ipad-errors') || '[]'); } catch (e) {}
+  rows.errors.innerHTML = errs.length ? '<pre></pre>' : '';
+  if (errs.length) { rows.errors.className = 'no'; rows.errors.firstChild.textContent = errs.join('\n'); }
+  else set('errors', true, 'none recorded (open each tab once, then come back here)');
+
+  document.getElementById('copy').onclick = function () {
+    var lines = [];
+    for (var i = 0; i < t.rows.length; i++) lines.push(t.rows[i].cells[0].textContent + ': ' + t.rows[i].cells[1].textContent);
+    lines.push('UA: ' + ua);
+    var text = lines.join('\n');
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(function () { alert('Copied. Paste it in the chat.'); });
+    else prompt('Copy this:', text);
+  };
+  document.getElementById('clear').onclick = function () { try { localStorage.removeItem('ipad-errors'); } catch (e) {} location.reload(); };
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,2696 @@
+[
+{
+"en": [
+"Smart classroom in {0}D"
+],
+"tr": [
+"{0}D 스마트 교실"
+]
+},
+{
+"en": [
+"{0}D room"
+],
+"tr": [
+"{0}D 교실"
+]
+},
+{
+"en": [
+"Layouts"
+],
+"tr": [
+"레이아웃"
+]
+},
+{
+"en": [
+"Real classrooms"
+],
+"tr": [
+"실제 교실"
+]
+},
+{
+"en": [
+"Drag to turn the room"
+],
+"tr": [
+"드래그해서 교실 회전"
+]
+},
+{
+"en": [
+"Lecture"
+],
+"tr": [
+"강의형"
+]
+},
+{
+"en": [
+"Group discussion"
+],
+"tr": [
+"그룹 토론형"
+]
+},
+{
+"en": [
+"Presentations"
+],
+"tr": [
+"발표형"
+]
+},
+{
+"en": [
+"One room, three ways to teach"
+],
+"tr": [
+"한 교실, 세 가지 수업 방식"
+]
+},
+{
+"en": [
+"The same {0} × {1} m room. The ClassIn devices stay where they are; only the furniture moves."
+],
+"tr": [
+"같은 {0} × {1} m 교실입니다. ClassIn 기기는 그대로 두고 가구만 옮깁니다."
+]
+},
+{
+"en": [
+"{0} seats in rows"
+],
+"tr": [
+"줄 배치 {0}석"
+]
+},
+{
+"en": [
+"Desks face the front. Courseware on one Board and live writing on the other."
+],
+"tr": [
+"책상이 앞을 향합니다. 한 보드에는 수업 자료, 다른 보드에는 실시간 판서."
+]
+},
+{
+"en": [
+"{0} seats at six round tables"
+],
+"tr": [
+"원형 테이블 6개, {0}석"
+]
+},
+{
+"en": [
+"Each group works at its own table, then casts its work to a Board to share it with the class."
+],
+"tr": [
+"그룹마다 자기 테이블에서 활동한 뒤, 결과물을 보드로 전송해 반 전체와 공유합니다."
+]
+},
+{
+"en": [
+"An open front"
+],
+"tr": [
+"트인 앞 공간"
+]
+},
+{
+"en": [
+"Rows set back with a central aisle, so groups can take turns presenting at the Boards."
+],
+"tr": [
+"좌석 줄을 뒤로 물리고 가운데 통로를 두어, 그룹이 돌아가며 보드 앞에서 발표합니다."
+]
+},
+{
+"en": [
+"In every layout"
+],
+"tr": [
+"모든 레이아웃 공통"
+]
+},
+{
+"en": [
+"Two ClassIn Boards"
+],
+"tr": [
+"ClassIn Board 2대"
+]
+},
+{
+"en": [
+"Cam S{0} at the front, a camera at the back"
+],
+"tr": [
+"앞쪽에 Cam S{0}, 뒤쪽에 카메라"
+]
+},
+{
+"en": [
+"DT{0} Pro ceiling microphone"
+],
+"tr": [
+"DT{0} Pro 천장 마이크"
+]
+},
+{
+"en": [
+"Four SPX{0} ceiling speakers"
+],
+"tr": [
+"SPX{0} 천장 스피커 4대"
+]
+},
+{
+"en": [
+"Layout illustration. The seat counts are an example, not a specification."
+],
+"tr": [
+"배치 예시도입니다. 좌석 수는 예시이며 사양이 아닙니다."
+]
+},
+{
+"en": [
+"Real classrooms."
+],
+"tr": [
+"실제 교실."
+]
+},
+{
+"en": [
+"{0} case studies from schools, universities and medical colleges."
+],
+"tr": [
+"학교, 대학, 의과대학의 도입 사례 {0}건."
+]
+},
+{
+"en": [
+"University · Singapore"
+],
+"tr": [
+"대학교 · 싱가포르"
+]
+},
+{
+"en": [
+"National University of Singapore"
+],
+"tr": [
+"National University of Singapore"
+]
+},
+{
+"en": [
+"{0} rooms"
+],
+"tr": [
+"{0}개 공간"
+]
+},
+{
+"en": [
+"Polytechnic · Singapore"
+],
+"tr": [
+"폴리테크닉 · 싱가포르"
+]
+},
+{
+"en": [
+"Temasek Polytechnic"
+],
+"tr": [
+"Temasek Polytechnic"
+]
+},
+{
+"en": [
+"School of Business"
+],
+"tr": [
+"경영학부"
+]
+},
+{
+"en": [
+"Secondary school · Singapore"
+],
+"tr": [
+"중등학교 · 싱가포르"
+]
+},
+{
+"en": [
+"Hwa Chong Institution"
+],
+"tr": [
+"Hwa Chong Institution"
+]
+},
+{
+"en": [
+"Dual-screen classrooms"
+],
+"tr": [
+"듀얼 스크린 교실"
+]
+},
+{
+"en": [
+"International schools · Riyadh and Bangkok"
+],
+"tr": [
+"국제학교 · 리야드, 방콕"
+]
+},
+{
+"en": [
+"EtonHouse International Schools"
+],
+"tr": [
+"EtonHouse International Schools"
+]
+},
+{
+"en": [
+"New campuses"
+],
+"tr": [
+"신규 캠퍼스"
+]
+},
+{
+"en": [
+"University · Macau"
+],
+"tr": [
+"대학교 · 마카오"
+]
+},
+{
+"en": [
+"Macau University of Science and Technology"
+],
+"tr": [
+"Macau University of Science and Technology"
+]
+},
+{
+"en": [
+"Future Learning Centre"
+],
+"tr": [
+"미래 학습 센터"
+]
+},
+{
+"en": [
+"College · Shanghai"
+],
+"tr": [
+"대학 · 상하이"
+]
+},
+{
+"en": [
+"Shanghai Business School"
+],
+"tr": [
+"Shanghai Business School"
+]
+},
+{
+"en": [
+"Future Digital Learning Centre"
+],
+"tr": [
+"미래 디지털 학습 센터"
+]
+},
+{
+"en": [
+"University · Tianjin"
+],
+"tr": [
+"대학교 · 톈진"
+]
+},
+{
+"en": [
+"Tianjin Foreign Studies University"
+],
+"tr": [
+"Tianjin Foreign Studies University"
+]
+},
+{
+"en": [
+"Smart Classrooms"
+],
+"tr": [
+"스마트 교실"
+]
+},
+{
+"en": [
+"University · Shanghai"
+],
+"tr": [
+"대학교 · 상하이"
+]
+},
+{
+"en": [
+"Shanghai University"
+],
+"tr": [
+"Shanghai University"
+]
+},
+{
+"en": [
+"Multi-screen and Group Teaching Space"
+],
+"tr": [
+"멀티 스크린 그룹 수업 공간"
+]
+},
+{
+"en": [
+"Secondary school · Beijing"
+],
+"tr": [
+"중등학교 · 베이징"
+]
+},
+{
+"en": [
+"Tsinghua University High School"
+],
+"tr": [
+"Tsinghua University High School"
+]
+},
+{
+"en": [
+"Middle- and high-school campuses"
+],
+"tr": [
+"중·고등학교 캠퍼스"
+]
+},
+{
+"en": [
+"Secondary school · Shanghai"
+],
+"tr": [
+"중등학교 · 상하이"
+]
+},
+{
+"en": [
+"High School Affiliated to Fudan University"
+],
+"tr": [
+"High School Affiliated to Fudan University"
+]
+},
+{
+"en": [
+"Recorded classrooms and dual-screen labs"
+],
+"tr": [
+"녹화 교실과 듀얼 스크린 실험실"
+]
+},
+{
+"en": [
+"Shanghai Foreign Language School"
+],
+"tr": [
+"Shanghai Foreign Language School"
+]
+},
+{
+"en": [
+"Voice lift and a Future Learning Space"
+],
+"tr": [
+"음성 증폭과 미래 학습 공간"
+]
+},
+{
+"en": [
+"Shanghai Jiao Tong University"
+],
+"tr": [
+"Shanghai Jiao Tong University"
+]
+},
+{
+"en": [
+"University · Jiangsu"
+],
+"tr": [
+"대학교 · 장쑤"
+]
+},
+{
+"en": [
+"Jiangnan University"
+],
+"tr": [
+"Jiangnan University"
+]
+},
+{
+"en": [
+"Teacher Development and Classroom Co-creation"
+],
+"tr": [
+"교사 역량 개발과 수업 공동 설계"
+]
+},
+{
+"en": [
+"East China Normal University"
+],
+"tr": [
+"East China Normal University"
+]
+},
+{
+"en": [
+"Future Teacher Training Space"
+],
+"tr": [
+"미래 교사 연수 공간"
+]
+},
+{
+"en": [
+"Shanghai International Studies University"
+],
+"tr": [
+"Shanghai International Studies University"
+]
+},
+{
+"en": [
+"Language Teaching and Group Learning"
+],
+"tr": [
+"언어 교육과 그룹 학습"
+]
+},
+{
+"en": [
+"College · China"
+],
+"tr": [
+"대학 · 중국"
+]
+},
+{
+"en": [
+"Xinhua College"
+],
+"tr": [
+"Xinhua College"
+]
+},
+{
+"en": [
+"Regular Teaching and Discussion Classrooms"
+],
+"tr": [
+"일반 수업 및 토론 교실"
+]
+},
+{
+"en": [
+"Fudan University"
+],
+"tr": [
+"Fudan University"
+]
+},
+{
+"en": [
+"Future Learning Space"
+],
+"tr": [
+"미래 학습 공간"
+]
+},
+{
+"en": [
+"Tongji University"
+],
+"tr": [
+"Tongji University"
+]
+},
+{
+"en": [
+"Continuing Education Classrooms"
+],
+"tr": [
+"평생교육 교실"
+]
+},
+{
+"en": [
+"University · Beijing"
+],
+"tr": [
+"대학교 · 베이징"
+]
+},
+{
+"en": [
+"Beijing University of Posts and Telecommunications"
+],
+"tr": [
+"Beijing University of Posts and Telecommunications"
+]
+},
+{
+"en": [
+"University · Guangdong"
+],
+"tr": [
+"대학교 · 광둥"
+]
+},
+{
+"en": [
+"Guangdong Pharmaceutical University"
+],
+"tr": [
+"Guangdong Pharmaceutical University"
+]
+},
+{
+"en": [
+"Medical Seminar and Lab Spaces"
+],
+"tr": [
+"의학 세미나 및 실험 공간"
+]
+},
+{
+"en": [
+"University · Zhuhai"
+],
+"tr": [
+"대학교 · 주하이"
+]
+},
+{
+"en": [
+"Beijing Institute of Technology, Zhuhai Campus"
+],
+"tr": [
+"Beijing Institute of Technology, Zhuhai Campus"
+]
+},
+{
+"en": [
+"Basic Physics Lab Teaching Space"
+],
+"tr": [
+"기초 물리 실험 교육 공간"
+]
+},
+{
+"en": [
+"Medical school · Zhaoqing"
+],
+"tr": [
+"의과대학 · 자오칭"
+]
+},
+{
+"en": [
+"Zhaoqing Medical College"
+],
+"tr": [
+"Zhaoqing Medical College"
+]
+},
+{
+"en": [
+"Lecture and Group Discussion Spaces"
+],
+"tr": [
+"강의 및 그룹 토론 공간"
+]
+},
+{
+"en": [
+"College · Guangdong"
+],
+"tr": [
+"대학 · 광둥"
+]
+},
+{
+"en": [
+"Guangdong Technology College"
+],
+"tr": [
+"Guangdong Technology College"
+]
+},
+{
+"en": [
+"Neusoft Institute Guangdong"
+],
+"tr": [
+"Neusoft Institute Guangdong"
+]
+},
+{
+"en": [
+"Smart Teaching Spaces"
+],
+"tr": [
+"스마트 교육 공간"
+]
+},
+{
+"en": [
+"Peking University"
+],
+"tr": [
+"Peking University"
+]
+},
+{
+"en": [
+"Capital Normal University"
+],
+"tr": [
+"Capital Normal University"
+]
+},
+{
+"en": [
+"Flexible Furniture Teaching Space"
+],
+"tr": [
+"가변형 가구 교육 공간"
+]
+},
+{
+"en": [
+"All rooms"
+],
+"tr": [
+"전체 공간"
+]
+},
+{
+"en": [
+"Group & discussion"
+],
+"tr": [
+"그룹·토론"
+]
+},
+{
+"en": [
+"Lecture & seminar"
+],
+"tr": [
+"강의·세미나"
+]
+},
+{
+"en": [
+"Labs & training"
+],
+"tr": [
+"실험·실습"
+]
+},
+{
+"en": [
+"Next"
+],
+"tr": [
+"다음"
+]
+},
+{
+"en": [
+"Close"
+],
+"tr": [
+"닫기"
+]
+},
+{
+"en": [
+"Touch to explore"
+],
+"tr": [
+"터치해서 살펴보기"
+]
+},
+{
+"en": [
+"Board"
+],
+"tr": [
+"보드"
+]
+},
+{
+"en": [
+"Cameras"
+],
+"tr": [
+"카메라"
+]
+},
+{
+"en": [
+"Microphone"
+],
+"tr": [
+"마이크"
+]
+},
+{
+"en": [
+"Speakers"
+],
+"tr": [
+"스피커"
+]
+},
+{
+"en": [
+"Drag to look around · tap a device for its specifications"
+],
+"tr": [
+"드래그해서 둘러보기 · 기기를 탭하면 사양 확인"
+]
+},
+{
+"en": [
+"Explore"
+],
+"tr": [
+"살펴보기"
+]
+},
+{
+"en": [
+"Reset view"
+],
+"tr": [
+"시점 초기화"
+]
+},
+{
+"en": [
+"ClassIn Board",
+"Two {0}″ in this room"
+],
+"tr": [
+"ClassIn Board",
+"이 교실에 {0}″ 2대"
+]
+},
+{
+"en": [
+"ClassIn Cam S{0}",
+"Student camera"
+],
+"tr": [
+"ClassIn Cam S{0}",
+"학생 카메라"
+]
+},
+{
+"en": [
+"Rear camera",
+"Where the T{0} goes"
+],
+"tr": [
+"후면 카메라",
+"T{0} 설치 위치"
+]
+},
+{
+"en": [
+"DT{0} Pro mic",
+"{1} built-in microphones"
+],
+"tr": [
+"DT{0} Pro 마이크",
+"내장 마이크 {1}개"
+]
+},
+{
+"en": [
+"SPX{0} speakers",
+"Four in the ceiling"
+],
+"tr": [
+"SPX{0} 스피커",
+"천장에 4대"
+]
+},
+{
+"en": [
+"An {0} × {1} m smart classroom — a design model, not a photo."
+],
+"tr": [
+"{0} × {1} m 스마트 교실 — 사진이 아닌 디자인 모델입니다."
+]
+},
+{
+"en": [
+"{0} rooms. Tap one to see it."
+],
+"tr": [
+"{0}개 공간. 탭해서 살펴보세요."
+]
+},
+{
+"en": [
+"Valour House"
+],
+"tr": [
+"Valour House"
+]
+},
+{
+"en": [
+"Office of Human Resources"
+],
+"tr": [
+"인사처"
+]
+},
+{
+"en": [
+"Acacia College"
+],
+"tr": [
+"Acacia College"
+]
+},
+{
+"en": [
+"Ridge View"
+],
+"tr": [
+"Ridge View"
+]
+},
+{
+"en": [
+"CTLT"
+],
+"tr": [
+"CTLT"
+]
+},
+{
+"en": [
+"Group discussion room"
+],
+"tr": [
+"그룹 토론실"
+]
+},
+{
+"en": [
+"Equipment"
+],
+"tr": [
+"장비"
+]
+},
+{
+"en": [
+"{0} ClassIn Board"
+],
+"tr": [
+"ClassIn Board {0}대"
+]
+},
+{
+"en": [
+"Built-in audio"
+],
+"tr": [
+"내장 오디오"
+]
+},
+{
+"en": [
+"Everyday teaching and lectures"
+],
+"tr": [
+"일상 수업과 강의"
+]
+},
+{
+"en": [
+"{0} ClassIn Boards, synced"
+],
+"tr": [
+"ClassIn Board {0}대 연동"
+]
+},
+{
+"en": [
+"Front and rear cameras"
+],
+"tr": [
+"전면·후면 카메라"
+]
+},
+{
+"en": [
+"Ceiling microphone"
+],
+"tr": [
+"천장 마이크"
+]
+},
+{
+"en": [
+"AI pilot classroom"
+],
+"tr": [
+"AI 시범 교실"
+]
+},
+{
+"en": [
+"Camera"
+],
+"tr": [
+"카메라"
+]
+},
+{
+"en": [
+"ClassIn Board on a mobile stand"
+],
+"tr": [
+"이동식 스탠드형 ClassIn Board"
+]
+},
+{
+"en": [
+"Design render"
+],
+"tr": [
+"디자인 렌더링"
+]
+},
+{
+"en": [
+"Centre for Teaching, Learning and Technology: four seminar rooms"
+],
+"tr": [
+"Centre for Teaching, Learning and Technology: 세미나실 4곳"
+]
+},
+{
+"en": [
+"Ceiling-mounted microphones"
+],
+"tr": [
+"천장 설치형 마이크"
+]
+},
+{
+"en": [
+"In-room speakers"
+],
+"tr": [
+"실내 스피커"
+]
+},
+{
+"en": [
+"{0} of {1}"
+],
+"tr": [
+"{0}/{1}"
+]
+},
+{
+"en": [
+"Next",
+"Temasek Polytechnic"
+],
+"tr": [
+"다음",
+"Temasek Polytechnic"
+]
+},
+{
+"en": [
+"Shared displays"
+],
+"tr": [
+"공유 디스플레이"
+]
+},
+{
+"en": [
+"Mobile screens"
+],
+"tr": [
+"이동식 스크린"
+]
+},
+{
+"en": [
+"Next",
+"Hwa Chong Institution"
+],
+"tr": [
+"다음",
+"Hwa Chong Institution"
+]
+},
+{
+"en": [
+"{0} ClassIn Boards in each classroom"
+],
+"tr": [
+"교실마다 ClassIn Board {0}대"
+]
+},
+{
+"en": [
+"Lesson recording"
+],
+"tr": [
+"수업 녹화"
+]
+},
+{
+"en": [
+"Next",
+"EtonHouse International Schools"
+],
+"tr": [
+"다음",
+"EtonHouse International Schools"
+]
+},
+{
+"en": [
+"Interactive boards"
+],
+"tr": [
+"인터랙티브 보드"
+]
+},
+{
+"en": [
+"Ceiling microphones"
+],
+"tr": [
+"천장 마이크"
+]
+},
+{
+"en": [
+"Next",
+"Macau University of Science and Technology"
+],
+"tr": [
+"다음",
+"Macau University of Science and Technology"
+]
+},
+{
+"en": [
+"{0} AI smart boards"
+],
+"tr": [
+"AI 스마트 보드 {0}대"
+]
+},
+{
+"en": [
+"{0} AI cameras"
+],
+"tr": [
+"AI 카메라 {0}대"
+]
+},
+{
+"en": [
+"{0} array microphone"
+],
+"tr": [
+"어레이 마이크 {0}대"
+]
+},
+{
+"en": [
+"Next",
+"Shanghai Business School"
+],
+"tr": [
+"다음",
+"Shanghai Business School"
+]
+},
+{
+"en": [
+"Dual screens at the front"
+],
+"tr": [
+"전면 듀얼 스크린"
+]
+},
+{
+"en": [
+"Wall displays"
+],
+"tr": [
+"벽면 디스플레이"
+]
+},
+{
+"en": [
+"Next",
+"Tianjin Foreign Studies University"
+],
+"tr": [
+"다음",
+"Tianjin Foreign Studies University"
+]
+},
+{
+"en": [
+"Dual screens"
+],
+"tr": [
+"듀얼 스크린"
+]
+},
+{
+"en": [
+"ClassIn Cam T{0} and S{1}, Mic DT{2}"
+],
+"tr": [
+"ClassIn Cam T{0} and S{1}, Mic DT{2}"
+]
+},
+{
+"en": [
+"Third-party recording system"
+],
+"tr": [
+"타사 녹화 시스템"
+]
+},
+{
+"en": [
+"Third-party central control"
+],
+"tr": [
+"타사 중앙 제어"
+]
+},
+{
+"en": [
+"Next",
+"Shanghai University"
+],
+"tr": [
+"다음",
+"Shanghai University"
+]
+},
+{
+"en": [
+"{0} main screens, {1}″"
+],
+"tr": [
+"메인 스크린 {0}대, {1}″"
+]
+},
+{
+"en": [
+"{0} group screens"
+],
+"tr": [
+"그룹 스크린 {0}대"
+]
+},
+{
+"en": [
+"Next",
+"Tsinghua University High School"
+],
+"tr": [
+"다음",
+"Tsinghua University High School"
+]
+},
+{
+"en": [
+"{0} ClassIn Boards"
+],
+"tr": [
+"ClassIn Board {0}대"
+]
+},
+{
+"en": [
+"Automatic lesson recording"
+],
+"tr": [
+"수업 자동 녹화"
+]
+},
+{
+"en": [
+"Next",
+"High School Affiliated to Fudan University"
+],
+"tr": [
+"다음",
+"High School Affiliated to Fudan University"
+]
+},
+{
+"en": [
+"{0} classrooms with everyday lesson recording"
+],
+"tr": [
+"일상 수업 녹화 교실 {0}개"
+]
+},
+{
+"en": [
+"{0}″ large screens"
+],
+"tr": [
+"{0}″ 대형 스크린"
+]
+},
+{
+"en": [
+"Next",
+"Shanghai Foreign Language School"
+],
+"tr": [
+"다음",
+"Shanghai Foreign Language School"
+]
+},
+{
+"en": [
+"Voice lift"
+],
+"tr": [
+"음성 증폭"
+]
+},
+{
+"en": [
+"A main screen and {0} secondary screens"
+],
+"tr": [
+"메인 스크린 1대와 보조 스크린 {0}대"
+]
+},
+{
+"en": [
+"{0}″ large screen"
+],
+"tr": [
+"{0}″ 대형 스크린"
+]
+},
+{
+"en": [
+"Next",
+"Shanghai Jiao Tong University"
+],
+"tr": [
+"다음",
+"Shanghai Jiao Tong University"
+]
+},
+{
+"en": [
+"Lecture halls"
+],
+"tr": [
+"대형 강의실"
+]
+},
+{
+"en": [
+"Zhiyuan College"
+],
+"tr": [
+"Zhiyuan College"
+]
+},
+{
+"en": [
+"School of Medicine"
+],
+"tr": [
+"의과대학"
+]
+},
+{
+"en": [
+"Lecture halls and seminar rooms"
+],
+"tr": [
+"대형 강의실과 세미나실"
+]
+},
+{
+"en": [
+"Large interactive displays"
+],
+"tr": [
+"대형 인터랙티브 디스플레이"
+]
+},
+{
+"en": [
+"Saved digital boardwork"
+],
+"tr": [
+"디지털 판서 저장"
+]
+},
+{
+"en": [
+"Audio-visual support"
+],
+"tr": [
+"시청각 지원"
+]
+},
+{
+"en": [
+"Group displays"
+],
+"tr": [
+"그룹 디스플레이"
+]
+},
+{
+"en": [
+"Medical school · Shanghai"
+],
+"tr": [
+"의과대학 · 상하이"
+]
+},
+{
+"en": [
+"Group screens"
+],
+"tr": [
+"그룹 스크린"
+]
+},
+{
+"en": [
+"ClassIn Cam T{0} and S{1}"
+],
+"tr": [
+"ClassIn Cam T{0} and S{1}"
+]
+},
+{
+"en": [
+"{0} ClassIn Mic DT{1}"
+],
+"tr": [
+"ClassIn Mic DT{1} {0}대"
+]
+},
+{
+"en": [
+"Next",
+"Jiangnan University"
+],
+"tr": [
+"다음",
+"Jiangnan University"
+]
+},
+{
+"en": [
+"Sketch Boards"
+],
+"tr": [
+"스케치보드"
+]
+},
+{
+"en": [
+"Next",
+"East China Normal University"
+],
+"tr": [
+"다음",
+"East China Normal University"
+]
+},
+{
+"en": [
+"Large shared screens"
+],
+"tr": [
+"대형 공유 스크린"
+]
+},
+{
+"en": [
+"Dual-teacher link"
+],
+"tr": [
+"듀얼 티처 연결"
+]
+},
+{
+"en": [
+"Next",
+"Shanghai International Studies University"
+],
+"tr": [
+"다음",
+"Shanghai International Studies University"
+]
+},
+{
+"en": [
+"Dual screens and all-in-one displays"
+],
+"tr": [
+"듀얼 스크린과 일체형 디스플레이"
+]
+},
+{
+"en": [
+"Next",
+"Xinhua College"
+],
+"tr": [
+"다음",
+"Xinhua College"
+]
+},
+{
+"en": [
+"Cameras, sound and recording"
+],
+"tr": [
+"카메라, 음향, 녹화"
+]
+},
+{
+"en": [
+"Next",
+"Fudan University"
+],
+"tr": [
+"다음",
+"Fudan University"
+]
+},
+{
+"en": [
+"Next",
+"Tongji University"
+],
+"tr": [
+"다음",
+"Tongji University"
+]
+},
+{
+"en": [
+"Classroom sound system"
+],
+"tr": [
+"교실 음향 시스템"
+]
+},
+{
+"en": [
+"Next",
+"Beijing University of Posts and Telecommunications"
+],
+"tr": [
+"다음",
+"Beijing University of Posts and Telecommunications"
+]
+},
+{
+"en": [
+"Main screens"
+],
+"tr": [
+"메인 스크린"
+]
+},
+{
+"en": [
+"Group touch screens"
+],
+"tr": [
+"그룹 터치스크린"
+]
+},
+{
+"en": [
+"Next",
+"Guangdong Pharmaceutical University"
+],
+"tr": [
+"다음",
+"Guangdong Pharmaceutical University"
+]
+},
+{
+"en": [
+"Labs and practical teaching"
+],
+"tr": [
+"실험·실습 교육"
+]
+},
+{
+"en": [
+"Large front screen"
+],
+"tr": [
+"전면 대형 스크린"
+]
+},
+{
+"en": [
+"Lab bench displays"
+],
+"tr": [
+"실험대 디스플레이"
+]
+},
+{
+"en": [
+"Next",
+"Beijing Institute of Technology, Zhuhai Campus"
+],
+"tr": [
+"다음",
+"Beijing Institute of Technology, Zhuhai Campus"
+]
+},
+{
+"en": [
+"Workstation screens"
+],
+"tr": [
+"작업대 스크린"
+]
+},
+{
+"en": [
+"Next",
+"Zhaoqing Medical College"
+],
+"tr": [
+"다음",
+"Zhaoqing Medical College"
+]
+},
+{
+"en": [
+"Student-area displays"
+],
+"tr": [
+"학생 구역 디스플레이"
+]
+},
+{
+"en": [
+"Teacher and student cameras"
+],
+"tr": [
+"교사·학생 카메라"
+]
+},
+{
+"en": [
+"Next",
+"Guangdong Technology College"
+],
+"tr": [
+"다음",
+"Guangdong Technology College"
+]
+},
+{
+"en": [
+"Student-area screens"
+],
+"tr": [
+"학생 구역 스크린"
+]
+},
+{
+"en": [
+"Next",
+"Neusoft Institute Guangdong"
+],
+"tr": [
+"다음",
+"Neusoft Institute Guangdong"
+]
+},
+{
+"en": [
+"Interactive all-in-one displays"
+],
+"tr": [
+"인터랙티브 일체형 디스플레이"
+]
+},
+{
+"en": [
+"Existing central control"
+],
+"tr": [
+"기존 중앙 제어"
+]
+},
+{
+"en": [
+"Next",
+"Peking University"
+],
+"tr": [
+"다음",
+"Peking University"
+]
+},
+{
+"en": [
+"Physical Education"
+],
+"tr": [
+"체육"
+]
+},
+{
+"en": [
+"Foreign Languages"
+],
+"tr": [
+"외국어"
+]
+},
+{
+"en": [
+"Health Science Center"
+],
+"tr": [
+"보건과학센터"
+]
+},
+{
+"en": [
+"Digital PE teaching"
+],
+"tr": [
+"디지털 체육 수업"
+]
+},
+{
+"en": [
+"Large smart screens"
+],
+"tr": [
+"대형 스마트 스크린"
+]
+},
+{
+"en": [
+"School of Foreign Languages"
+],
+"tr": [
+"외국어대학"
+]
+},
+{
+"en": [
+"Remote teacher link"
+],
+"tr": [
+"원격 교사 연결"
+]
+},
+{
+"en": [
+"Students’ own devices"
+],
+"tr": [
+"학생 개인 기기"
+]
+},
+{
+"en": [
+"Medical school · Beijing"
+],
+"tr": [
+"의과대학 · 베이징"
+]
+},
+{
+"en": [
+"School of Basic Medical Sciences: medical lab teaching space"
+],
+"tr": [
+"기초의학대학: 의학 실험 교육 공간"
+]
+},
+{
+"en": [
+"Bench displays"
+],
+"tr": [
+"실험대 디스플레이"
+]
+},
+{
+"en": [
+"Next",
+"Capital Normal University"
+],
+"tr": [
+"다음",
+"Capital Normal University"
+]
+},
+{
+"en": [
+"Next",
+"National University of Singapore"
+],
+"tr": [
+"다음",
+"National University of Singapore"
+]
+},
+{
+"en": [
+"Ceiling plan of this 8 by 11 metre room: four SPX2 speakers spread around the DT2 Pro microphone, with the two Boards on the front wall."
+],
+"tr": [
+"이 가로 8m, 세로 11m 교실의 천장 평면도입니다. SPX2 스피커 네 대가 DT2 Pro 마이크 주위에 배치되어 있고, 전면 벽에는 보드 두 대가 있습니다."
+]
+},
+{
+"en": [
+"30 fps video"
+],
+"tr": [
+"30 fps 영상"
+]
+},
+{
+"en": [
+"1/2.8″ CMOS sensor"
+],
+"tr": [
+"1/2.8″ CMOS 센서"
+]
+},
+{
+"en": [
+"No operator"
+],
+"tr": [
+"촬영 담당자 불필요"
+]
+},
+{
+"en": [
+"Two cameras, two jobs."
+],
+"tr": [
+"카메라 두 대, 역할 두 가지."
+]
+},
+{
+"en": [
+"Choose by who needs to be seen: the teacher and the Board, or the whole class and their answers."
+],
+"tr": [
+"누구를 보여 줄지에 따라 고르세요. 교사와 보드를 비출지, 학급 전체와 학생들의 답변을 비출지 선택합니다."
+]
+},
+{
+"en": [
+"ClassIn Cam T1"
+],
+"tr": [
+"ClassIn Cam T1"
+]
+},
+{
+"en": [
+"Teacher tracking"
+],
+"tr": [
+"교사 추적"
+]
+},
+{
+"en": [
+"At the back, facing the teacher and the Boards"
+],
+"tr": [
+"뒤쪽에서 교사와 보드를 향해 설치"
+]
+},
+{
+"en": [
+"Follows the teacher, with board-writing detection"
+],
+"tr": [
+"교사를 따라가며 판서를 감지합니다"
+]
+},
+{
+"en": [
+"Switches between digital close-up and the full view"
+],
+"tr": [
+"디지털 클로즈업과 전체 화면을 자동으로 전환합니다"
+]
+},
+{
+"en": [
+"Student positioning"
+],
+"tr": [
+"학생 포지셔닝"
+]
+},
+{
+"en": [
+"At the front, facing the class"
+],
+"tr": [
+"앞쪽에서 학급을 향해 설치"
+]
+},
+{
+"en": [
+"Brings students’ answers and discussion to remote viewers"
+],
+"tr": [
+"학생들의 답변과 토론을 원격 시청자에게 전달합니다"
+]
+},
+{
+"en": [
+"With the T1, captures the lesson from more than one angle"
+],
+"tr": [
+"T1과 함께 사용하면 수업을 여러 각도에서 담을 수 있습니다"
+]
+},
+{
+"en": [
+"The wedges show each lens’s horizontal field of view, to scale. The digital close-up does not move the camera."
+],
+"tr": [
+"쐐기 모양은 각 렌즈의 수평 화각을 실제 비율로 나타낸 것입니다. 디지털 클로즈업은 카메라를 움직이지 않습니다."
+]
+},
+{
+"en": [
+"The back of the camera: LAN, USB, line-in and DC-in ports."
+],
+"tr": [
+"카메라 뒷면: LAN, USB, 라인 입력, DC 입력 포트가 있습니다."
+]
+},
+{
+"en": [
+"USB or network. Your choice."
+],
+"tr": [
+"USB 또는 네트워크, 선택하세요."
+]
+},
+{
+"en": [
+"Connect to the teaching system over USB 2.0, or over the network with PoE. Power comes from PoE, USB or a DC adapter."
+],
+"tr": [
+"USB 2.0으로 수업 시스템에 연결하거나, PoE로 네트워크에 연결합니다. 전원은 PoE, USB 또는 DC 어댑터로 공급됩니다."
+]
+},
+{
+"en": [
+"Tech specs"
+],
+"tr": [
+"기술 사양"
+]
+},
+{
+"en": [
+"1/2.8″ 4K CMOS, 8.42 MP"
+],
+"tr": [
+"1/2.8″ 4K CMOS, 8.42 MP"
+]
+},
+{
+"en": [
+"4K at 30 fps"
+],
+"tr": [
+"4K, 30 fps"
+]
+},
+{
+"en": [
+"Field of view"
+],
+"tr": [
+"화각"
+]
+},
+{
+"en": [
+"T1: teacher tracking with board-writing detection · S1: student positioning"
+],
+"tr": [
+"T1: 판서 감지를 지원하는 교사 추적 · S1: 학생 포지셔닝"
+]
+},
+{
+"en": [
+"USB 2.0, UVC 1.1 and UAC, USB power"
+],
+"tr": [
+"USB 2.0, UVC 1.1 및 UAC, USB 전원"
+]
+},
+{
+"en": [
+"Size · weight"
+],
+"tr": [
+"크기 · 무게"
+]
+},
+{
+"en": [
+"190 × 76 × 58 mm · under 0.5 kg"
+],
+"tr": [
+"190 × 76 × 58 mm · 0.5 kg 미만"
+]
+},
+{
+"en": [
+"Operating temperature"
+],
+"tr": [
+"작동 온도"
+]
+},
+{
+"en": [
+"ClassIn Board S Series"
+],
+"tr": [
+"ClassIn Board S Series"
+]
+},
+{
+"en": [
+"In this room: two 86″ Boards, side by side"
+],
+"tr": [
+"이 교실: 86″ 보드 두 대를 나란히 설치"
+]
+},
+{
+"en": [
+"The ClassIn Board on its mobile stand, showing a solar-system lesson with a remote speaker."
+],
+"tr": [
+"이동식 스탠드에 놓인 ClassIn Board에 태양계 수업과 원격 발표자가 표시되어 있습니다."
+]
+},
+{
+"en": [
+"Write, present and share on one screen."
+],
+"tr": [
+"하나의 화면에서 쓰고, 발표하고, 공유하세요."
+]
+},
+{
+"en": [
+"Sharp 4K detail, and board writing saved for after class."
+],
+"tr": [
+"선명한 4K 화질, 그리고 수업 후에도 남는 판서 기록."
+]
+},
+{
+"en": [
+"Bursts of coloured ink flowing out of a ClassIn Board screen."
+],
+"tr": [
+"ClassIn Board 화면에서 색색의 잉크가 뿜어져 나오는 모습."
+]
+},
+{
+"en": [
+"Clear from almost any seat."
+],
+"tr": [
+"어느 자리에서든 또렷하게."
+]
+},
+{
+"en": [
+"The LCD is fully bonded to the glass, letting over 90% of the light through with less glare. The glass is etched against glare and fingerprints, and blue light is reduced at the source."
+],
+"tr": [
+"LCD가 유리에 완전히 접합되어 빛의 90% 이상을 투과시키고 반사는 줄입니다. 유리는 눈부심과 지문을 막도록 에칭 처리되었고, 청색광은 원천에서 줄였습니다."
+]
+},
+{
+"en": [
+"A hand writing on the Board with the ClassIn Pencil K1 Pro, notes in white chalk-style ink."
+],
+"tr": [
+"ClassIn Pencil K1 Pro로 보드에 쓰는 손, 흰 분필 느낌의 잉크로 적은 필기."
+]
+},
+{
+"en": [
+"Ink appears as you write."
+],
+"tr": [
+"쓰는 대로 잉크가 나타납니다."
+]
+},
+{
+"en": [
+"Ink follows the pen in 0.03 to 0.06 seconds. The whiteboard holds up to 50 × 10 pages, then saves as one long image for after class."
+],
+"tr": [
+"잉크가 펜을 0.03~0.06초 만에 따라옵니다. 화이트보드는 최대 50 × 10페이지를 담고, 수업 후에는 긴 이미지 한 장으로 저장됩니다."
+]
+},
+{
+"en": [
+"One finger drags"
+],
+"tr": [
+"손가락 하나로 끌기"
+]
+},
+{
+"en": [
+"Two fingers turn the page or box-select"
+],
+"tr": [
+"손가락 두 개로 페이지 넘기기 또는 영역 선택"
+]
+},
+{
+"en": [
+"Four fingers open a shortcut dial"
+],
+"tr": [
+"손가락 네 개로 단축 다이얼 열기"
+]
+},
+{
+"en": [
+"The palm or back of the hand erases"
+],
+"tr": [
+"손바닥이나 손등으로 지우기"
+]
+},
+{
+"en": [
+"A ClassIn Board mounted flush between two whiteboards, with the camera on its top edge."
+],
+"tr": [
+"두 화이트보드 사이에 매끄럽게 설치된 ClassIn Board, 윗면에는 카메라가 있습니다."
+]
+},
+{
+"en": [
+"Designed to blend into the room."
+],
+"tr": [
+"교실에 자연스럽게 어우러지도록 설계했습니다."
+]
+},
+{
+"en": [
+"An even, rounded frame with no holes. The pen snaps onto the frame anywhere, and the ClassIn logo light stays off while you teach."
+],
+"tr": [
+"구멍 없이 고르게 둥근 프레임입니다. 펜은 프레임 어디에나 붙고, 수업하는 동안 ClassIn 로고 조명은 꺼져 있습니다."
+]
+},
+{
+"en": [
+"Design Award"
+],
+"tr": [
+"디자인 어워드"
+]
+},
+{
+"en": [
+"The ClassIn camera clipped to the top of the Board, above a class on a video call."
+],
+"tr": [
+"화상 수업 중인 학급 위, 보드 상단에 클립으로 고정된 ClassIn 카메라."
+]
+},
+{
+"en": [
+"A 4K camera that clips on."
+],
+"tr": [
+"클립으로 간단히 다는 4K 카메라."
+]
+},
+{
+"en": [
+"An optional 4K camera with AI person tracking attaches magnetically to the frame. The 86″ Boards in this room also have an 8-microphone array built in."
+],
+"tr": [
+"AI 인물 추적을 지원하는 4K 카메라(선택 사양)를 프레임에 자석으로 붙입니다. 이 교실의 86″ 보드에는 8마이크 어레이도 내장되어 있습니다."
+]
+},
+{
+"en": [
+"1/2.8″ CMOS camera"
+],
+"tr": [
+"1/2.8″ CMOS 카메라"
+]
+},
+{
+"en": [
+"A ClassIn Board on its mobile stand, with the AI assistant plotting two functions."
+],
+"tr": [
+"이동식 스탠드의 ClassIn Board에서 AI 도우미가 함수 두 개의 그래프를 그리고 있습니다."
+]
+},
+{
+"en": [
+"Five sizes, from 65″ to 110″."
+],
+"tr": [
+"65″부터 110″까지 다섯 가지 크기."
+]
+},
+{
+"en": [
+"Pick a size to see its model and dimensions."
+],
+"tr": [
+"크기를 선택하면 모델과 치수를 볼 수 있습니다."
+]
+},
+{
+"en": [
+"ClassIn Board S65 · BS65A"
+],
+"tr": [
+"ClassIn Board S65 · BS65A"
+]
+},
+{
+"en": [
+"ClassIn Board S75 · BS75A"
+],
+"tr": [
+"ClassIn Board S75 · BS75A"
+]
+},
+{
+"en": [
+"ClassIn Board S86 · BS86A"
+],
+"tr": [
+"ClassIn Board S86 · BS86A"
+]
+},
+{
+"en": [
+"ClassIn Board S98"
+],
+"tr": [
+"ClassIn Board S98"
+]
+},
+{
+"en": [
+"ClassIn Board S110"
+],
+"tr": [
+"ClassIn Board S110"
+]
+},
+{
+"en": [
+"4K, 16:9, 178° viewing angle, full lamination"
+],
+"tr": [
+"4K, 16:9, 시야각 178°, 풀 라미네이션"
+]
+},
+{
+"en": [
+"50-point infrared, 2 ms response, 1.5 mm recognition"
+],
+"tr": [
+"50점 적외선, 응답 2 ms, 인식 1.5 mm"
+]
+},
+{
+"en": [
+"Writing latency"
+],
+"tr": [
+"필기 지연"
+]
+},
+{
+"en": [
+"0.03–0.06 seconds"
+],
+"tr": [
+"0.03~0.06초"
+]
+},
+{
+"en": [
+"Etched anti-glare with anti-fingerprint coating"
+],
+"tr": [
+"에칭 방식 눈부심 방지 및 지문 방지 코팅"
+]
+},
+{
+"en": [
+"Eye care"
+],
+"tr": [
+"눈 보호"
+]
+},
+{
+"en": [
+"2.0 channel, 2 × 15 W speakers"
+],
+"tr": [
+"2.0채널, 15 W 스피커 2개"
+]
+},
+{
+"en": [
+"OPS computer module as standard"
+],
+"tr": [
+"OPS 컴퓨터 모듈 기본 제공"
+]
+},
+{
+"en": [
+"NFC tap"
+],
+"tr": [
+"NFC 탭"
+]
+},
+{
+"en": [
+"Wall mount or mobile cart, ordered separately"
+],
+"tr": [
+"벽걸이 또는 이동식 카트, 별도 구매"
+]
+},
+{
+"en": [
+"In this room: Cam S1 at the front, above the Boards"
+],
+"tr": [
+"이 교실: 앞쪽 보드 위에 Cam S1 설치"
+]
+},
+{
+"en": [
+"In this room: on the rear wall, where the T1 goes"
+],
+"tr": [
+"이 교실: 뒷벽, T1이 들어가는 자리"
+]
+},
+{
+"en": [
+"In this design model the rear camera reuses the S1’s look."
+],
+"tr": [
+"이 디자인 모델에서는 뒤쪽 카메라가 S1의 외형을 그대로 사용합니다."
+]
+},
+{
+"en": [
+"ClassIn Mic DT2 Pro"
+],
+"tr": [
+"ClassIn Mic DT2 Pro"
+]
+},
+{
+"en": [
+"In this room: one, in the centre of the ceiling"
+],
+"tr": [
+"이 교실: 천장 중앙에 한 대"
+]
+},
+{
+"en": [
+"The DT2 Pro ceiling microphone as the class sees it: a square white panel with a diagonal grille."
+],
+"tr": [
+"학급에서 보이는 DT2 Pro 천장 마이크: 대각선 그릴이 있는 정사각형 흰색 패널입니다."
+]
+},
+{
+"en": [
+"Hands-free audio, from the ceiling."
+],
+"tr": [
+"천장에서 들려오는 핸즈프리 오디오."
+]
+},
+{
+"en": [
+"32 built-in microphones in one ceiling mic, with dynamic beamforming."
+],
+"tr": [
+"천장 마이크 하나에 마이크 32개를 내장했고, 동적 빔포밍을 지원합니다."
+]
+},
+{
+"en": [
+"A classroom with the DT2 Pro in the ceiling: the teacher faces the class while a student answers."
+],
+"tr": [
+"천장에 DT2 Pro가 설치된 교실: 학생이 답하는 동안 교사는 학급을 마주 보고 있습니다."
+]
+},
+{
+"en": [
+"Teach hands-free, facing the class."
+],
+"tr": [
+"학급을 마주 보며 핸즈프리로 수업하세요."
+]
+},
+{
+"en": [
+"Mounted in the ceiling, it keeps desks and lecterns clear. Teachers face the class and move freely, with nothing to wear or carry."
+],
+"tr": [
+"천장에 설치되어 책상과 교탁이 깔끔합니다. 교사는 착용하거나 들고 다닐 것 없이 학급을 마주 보며 자유롭게 움직일 수 있습니다."
+]
+},
+{
+"en": [
+"An illustration of several DT2 Pro units linked to cover a larger room."
+],
+"tr": [
+"더 넓은 교실을 커버하도록 DT2 Pro 여러 대를 연결한 모습을 나타낸 그림."
+]
+},
+{
+"en": [
+"Clear voices, less room noise."
+],
+"tr": [
+"또렷한 목소리, 줄어든 소음."
+]
+},
+{
+"en": [
+"Its built-in processor and amplifier use AI noise reduction to filter out air-conditioning, corridor and chair noise, and echo from remote callers. For large halls, units link together."
+],
+"tr": [
+"내장 프로세서와 앰프가 AI 소음 제거로 에어컨, 복도, 의자 소리와 원격 참석자의 에코를 걸러 냅니다. 큰 강당에서는 여러 대를 연결해 사용합니다."
+]
+},
+{
+"en": [
+"Microphone array"
+],
+"tr": [
+"마이크 어레이"
+]
+},
+{
+"en": [
+"32 built-in microphones in one ceiling mic, dynamic beamforming"
+],
+"tr": [
+"천장 마이크 하나에 마이크 32개 내장, 동적 빔포밍"
+]
+},
+{
+"en": [
+"Ceiling array microphone"
+],
+"tr": [
+"천장형 어레이 마이크"
+]
+},
+{
+"en": [
+"360° omnidirectional"
+],
+"tr": [
+"360° 전방향"
+]
+},
+{
+"en": [
+"8 ms minimum system latency"
+],
+"tr": [
+"최소 시스템 지연 8 ms"
+]
+},
+{
+"en": [
+"Flush in a ceiling tile, or suspended with a mounting kit"
+],
+"tr": [
+"천장 패널에 매립하거나, 설치 키트로 매달아 설치"
+]
+},
+{
+"en": [
+"Light or dark"
+],
+"tr": [
+"밝은 색 또는 어두운 색"
+]
+},
+{
+"en": [
+"24 V adapter"
+],
+"tr": [
+"24 V 어댑터"
+]
+},
+{
+"en": [
+"Large rooms"
+],
+"tr": [
+"대형 교실"
+]
+},
+{
+"en": [
+"Units cascade for large halls"
+],
+"tr": [
+"큰 강당에서는 여러 대를 연결해 사용"
+]
+},
+{
+"en": [
+"ClassIn Speaker SPX2"
+],
+"tr": [
+"ClassIn Speaker SPX2"
+]
+},
+{
+"en": [
+"In this room: four, recessed in the ceiling"
+],
+"tr": [
+"이 교실: 천장 매립형 네 대"
+]
+},
+{
+"en": [
+"Voice lift, without the feedback."
+],
+"tr": [
+"하울링 없이 목소리를 키워 줍니다."
+]
+},
+{
+"en": [
+"Recessed ceiling speakers, paired with the DT2 Pro microphone for balanced voice lift."
+],
+"tr": [
+"천장 매립형 스피커를 DT2 Pro 마이크와 함께 사용해 균형 잡힌 음성 증폭을 제공합니다."
+]
+},
+{
+"en": [
+"DT2 Pro"
+],
+"tr": [
+"DT2 Pro"
+]
+},
+{
+"en": [
+"Staff settings"
+],
+"tr": [
+"관리자 설정"
+]
+},
+{
+"en": [
+"After 40 s"
+],
+"tr": [
+"40초 후"
+]
+},
+{
+"en": [
+"After 60 s"
+],
+"tr": [
+"60초 후"
+]
+},
+{
+"en": [
+"Exit full screen"
+],
+"tr": [
+"전체 화면 종료"
+]
+},
+{
+"en": [
+"Full screen"
+],
+"tr": [
+"전체 화면"
+]
+},
+{
+"en": [
+"Two ClassIn Boards + Cam S1"
+],
+"tr": [
+"ClassIn Board 두 대 + Cam S1"
+]
+},
+{
+"en": [
+"DT2 Pro ceiling mic"
+],
+"tr": [
+"DT2 Pro 천장 마이크"
+]
+},
+{
+"en": [
+"Rear camera, on the back wall"
+],
+"tr": [
+"뒤쪽 카메라, 뒷벽에 설치"
+]
+},
+{
+"en": [
+"4 SPX2 speakers"
+],
+"tr": [
+"SPX2 스피커 4대"
+]
+},
+{
+"en": [
+"Presentation area"
+],
+"tr": [
+"발표 영역"
+]
+}
+]

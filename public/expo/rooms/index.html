@@ -1,0 +1,788 @@
+<!doctype html>
+<html lang="en">
+<head><script src="/expo/ipad-bridge.js"></script><script src="/expo/i18n.js"></script>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ClassIn Smart Classroom in 3D – Inspect the Devices</title>
+<meta name="description" content="Walk around a ClassIn smart classroom in 3D and tap each device — the ClassIn Board, tracking cameras, ceiling microphone and speakers — for its specifications and models.">
+<link rel="icon" href="/expo/rooms/media/logo.svg">
+<!-- "Add to Home Screen" on an iPad or phone opens the room full screen, like an app -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="ClassIn Room">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#ffffff">
+<link rel="apple-touch-icon" href="/expo/rooms/media/app-icon-180.png">
+<link rel="preload" as="font" type="font/woff2" href="/expo/rooms/fonts/Gilroy-Bold.woff2" crossorigin>
+<link rel="preload" as="font" type="font/woff2" href="/expo/rooms/fonts/Gilroy-Regular.woff2" crossorigin>
+  <script type="module" crossorigin src="/expo/rooms/assets/room-CTMVnTVF.js"></script>
+  <link rel="stylesheet" crossorigin href="/expo/rooms/assets/room-DZZtOYtw.css">
+</head>
+<body class="xr">
+
+<header class="xr-top">
+  <span class="xr-top__brand"><img src="/expo/rooms/media/logo.svg" alt="ClassIn" width="96" height="26"></span>
+  <h1 class="xr-top__h1">Smart classroom in 3D</h1>
+</header>
+
+<main class="xr-main" id="main">
+  <model-viewer id="room"
+    src="/expo/rooms/media/layers/room-3d.glb"
+    poster="/expo/rooms/media/layers/room-3d.webp"
+    alt="A smart classroom in 3D: two ClassIn Boards on a ribbed teaching wall, tracking cameras front and rear, a ceiling microphone and four ceiling speakers. Drag to look around; the device buttons open each product’s specifications."
+    camera-controls disable-pan disable-tap touch-action="none" interaction-prompt="none"
+    environment-image="legacy" tone-mapping="neutral" shadow-intensity="0"
+    camera-target="0m 1.25m 0m" camera-orbit="62deg 86deg 3.7m" field-of-view="66deg"
+    min-camera-orbit="auto 62deg 1.4m" max-camera-orbit="auto 100deg 3.7m"
+    min-field-of-view="40deg" max-field-of-view="75deg"
+    auto-rotate auto-rotate-delay="15000" rotation-per-second="4deg">
+
+    <button class="xr-pin" type="button" slot="hotspot-board" data-pin="board"
+      data-position="-3.78m 1.77m 1.03m" data-normal="1 0 0"
+      data-orbit="90deg 85deg 3.4m" data-target="-3.85m 1.7m -0.45m" data-fov="52deg"
+      aria-label="ClassIn Board – see the specifications and models">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8"/></svg>
+    </button>
+    <button class="xr-pin" type="button" slot="hotspot-cam-s1" data-pin="cam-s1"
+      data-position="-3.85m 2.47m 0m" data-normal="1 0 0"
+      data-orbit="90deg 83deg 1.3m" data-target="-3.87m 2.42m -0.15m" data-fov="45deg"
+      aria-label="ClassIn Cam S1 – see the specifications">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="10" rx="5"/><circle cx="9" cy="12" r="2.4"/><path d="M15 12h2"/></svg>
+    </button>
+    <button class="xr-pin" type="button" slot="hotspot-cam-rear" data-pin="cam-rear"
+      data-position="3.78m 2.17m 0m" data-normal="-1 0 0"
+      data-orbit="-90deg 82deg 1.9m" data-target="3.8m 2.12m -0.15m" data-fov="48deg"
+      aria-label="Rear camera – see the specifications">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="10" rx="5"/><circle cx="9" cy="12" r="2.4"/><path d="M15 12h2"/></svg>
+    </button>
+    <button class="xr-pin" type="button" slot="hotspot-mic" data-pin="mic"
+      data-position="-1m 2.96m 0m" data-normal="0 -1 0" data-up=""
+      data-orbit="90deg 112deg 2.4m" data-target="-1m 2.95m -0.2m" data-fov="55deg"
+      aria-label="ClassIn Mic DT2 Pro – see the specifications">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0014 0M12 18v3"/></svg>
+    </button>
+    <button class="xr-pin" type="button" slot="hotspot-speaker" data-pin="speaker"
+      data-position="-2.24m 3.2m 2.42m" data-normal="0 -1 0" data-up=""
+      data-orbit="137deg 112deg 2.4m" data-target="-2.24m 3.3m 2.42m" data-fov="50deg"
+      aria-label="ClassIn Speaker SPX2 – see what it does">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2"/></svg>
+    </button>
+
+    <div class="xr-load" slot="progress-bar"><span class="xr-load__bar"></span></div>
+  </model-viewer>
+
+  <button class="xr-full" type="button" aria-label="Full screen">
+    <svg class="xr-full__in" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4H4v5M15 4h5v5M9 20H4v-5M15 20h5v-5"/></svg>
+    <svg class="xr-full__out" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h5V4M20 9h-5V4M4 15h5v5M20 15h-5v5"/></svg>
+  </button>
+
+  <!-- low on the screen on purpose: on a wall-mounted touch screen the top is out of reach -->
+  <div class="xr-view" role="group" aria-label="What to look at">
+    <button type="button" data-view="room" aria-pressed="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M4 7.5l8 4.5 8-4.5M12 12v9"/></svg><span>3D room</span></button>
+    <button type="button" data-view="layouts" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="6" height="6" rx="1.5"/><rect x="14" y="4" width="6" height="6" rx="1.5"/><rect x="4" y="14" width="6" height="6" rx="1.5"/><rect x="14" y="14" width="6" height="6" rx="1.5"/></svg><span>Layouts</span></button>
+    <button type="button" data-view="cases" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="1.8"/><path d="M21 16l-5-5-9 8"/></svg><span>Real classrooms</span></button>
+  </div>
+
+  <section class="xr-layouts" aria-label="Room layouts" tabindex="-1" hidden>
+    <div class="xr-lay">
+      <div class="xr-lay__stage" role="img" aria-label="Layout model of the 8 by 11 metre room. The ClassIn Boards, cameras, ceiling microphone and speakers stay in place while the desks and chairs move between layouts.">
+        <div class="xr-lay__labels" aria-hidden="true"></div>
+        <p class="xr-lay__drag" aria-hidden="true">Drag to turn the room</p>
+        <!-- under the model, within reach, the way a product viewer puts its picker under the product -->
+        <div class="xr-lay__modes" role="group" aria-label="Choose a layout">
+          <button type="button" data-layout="lecture" aria-pressed="true">Lecture</button>
+          <button type="button" data-layout="group" aria-pressed="false">Group discussion</button>
+          <button type="button" data-layout="present" aria-pressed="false">Presentations</button>
+        </div>
+      </div>
+      <div class="xr-lay__panel">
+        <h2 class="xr-lay__t">One room, three ways to teach</h2>
+        <p class="xr-lay__sub">The same 8 × 11 m room. The ClassIn devices stay where they are; only the furniture moves.</p>
+        <div class="xr-lay__desc" aria-live="polite">
+          <article data-layout="lecture"><h3>36 seats in rows</h3><p>Desks face the front. Courseware on one Board and live writing on the other.</p></article>
+          <article data-layout="group" hidden><h3>36 seats at six round tables</h3><p>Each group works at its own table, then casts its work to a Board to share it with the class.</p></article>
+          <article data-layout="present" hidden><h3>An open front</h3><p>Rows set back with a central aisle, so groups can take turns presenting at the Boards.</p></article>
+        </div>
+        <h3 class="xr-lay__kit-t">In every layout</h3>
+        <ul class="xr-lay__kit">
+          <li><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8"/></svg>Two ClassIn Boards</li>
+          <li><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="10" rx="5"/><circle cx="9" cy="12" r="2.4"/><path d="M15 12h2"/></svg>Cam S1 at the front, a camera at the back</li>
+          <li><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0014 0M12 18v3"/></svg>DT2 Pro ceiling microphone</li>
+          <li><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2"/></svg>Four SPX2 ceiling speakers</li>
+        </ul>
+        <p class="xr-lay__note">Layout illustration. The seat counts are an example, not a specification.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="xr-cases" aria-label="Case studies" tabindex="-1" hidden>
+    <div class="xr-cases__in">
+      <header class="xr-cases__head">
+        <h2 class="xr-cases__t">Real classrooms.</h2>
+        <p class="xr-cases__sub">26 case studies from schools, universities and medical colleges.</p>
+      </header>
+      <div class="xr-gal" aria-label="Rooms">
+          <article class="xr-kase xr-kase--multi" data-type="discussion lecture" data-slug="nus" data-show="/expo/rooms/media/room-cases/valor-house.webp" data-show-space="Valour House" tabindex="0" role="button" aria-haspopup="dialog" aria-label="Open the story: National University of Singapore, 5 rooms">
+            <div class="xr-kase__media"><img src="/expo/rooms/media/room-cases/valor-house-sm.webp" alt="A bright room at NUS Valour House with tables and a ClassIn Board on a stand showing a solar-system lesson." loading="lazy" decoding="async"></div>
+            <div class="xr-kase__body">
+              <span class="xr-kase__tag">University · Singapore</span>
+              <h4 class="xr-kase__t">National University of Singapore</h4>
+              <p class="xr-kase__space">5 rooms</p>
+            </div>
+            <span class="xr-kase__hw" aria-label="Equipment across the rooms"><i><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8"/></svg></i><i><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2"/></svg></i><i><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="10" rx="5"/><circle cx="9" cy="12" r="2.4"/><path d="M15 12h2"/></svg></i><i><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0014 0M12 18v3"/></svg></i></span>
+            <span class="xr-kase__more" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span>
+            <template class="xr-kase__story">
+              <div class="xr-room" data-room="0">
+              <div class="xr-story__media"><div class="xr-story__img"><img src="/expo/rooms/media/room-cases/valor-house.webp" alt="A bright room at NUS Valour House with tables and a ClassIn Board on a stand showing a solar-system lesson."></div></div>
+              <div class="xr-story__b">
+                <span class="xr-story__tag">University · Singapore</span>
+                <h3 class="xr-story__t">National University of Singapore</h3>
+                <p class="xr-story__rooms-t">5 rooms. Tap one to see it.</p><div class="xr-story__rooms" role="group" aria-label="Rooms at National University of Singapore"><button type="button" data-room="0" data-type="discussion" aria-pressed="true">Valour House</button><button type="button" data-room="1" data-type="lecture" aria-pressed="false">Office of Human Resources</button><button type="button" data-room="2" data-type="lecture" aria-pressed="false">Acacia College</button><button type="button" data-room="3" data-type="discussion" aria-pressed="false">Ridge View</button><button type="button" data-room="4" data-type="lecture" aria-pressed="false">CTLT</button></div>
+                <p class="xr-story__kind">Group discussion room</p><div class="xr-hw"><p class="xr-hw__t">Equipment</p><ul class="xr-hw__list"><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8"/></svg></span><span class="xr-hw__tx"><b>1 ClassIn Board</b></span></li><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2"/></svg></span><span class="xr-hw__tx"><b>Built-in audio</b></span></li></ul></div>
+              </div>
+              </div>
+              <div class="xr-room" data-room="1" hidden>
+              <div class="xr-story__media"><div class="xr-story__img"><img src="/expo/rooms/media/room-cases/case-nus-ohr.webp" alt="A session in the NUS Office of Human Resources room: people at round tables and three large screens on stands showing the same slide."></div></div>
+              <div class="xr-story__b">
+                <span class="xr-story__tag">University · Singapore</span>
+                <h3 class="xr-story__t">National University of Singapore</h3>
+                <p class="xr-story__rooms-t">5 rooms. Tap one to see it.</p><div class="xr-story__rooms" role="group" aria-label="Rooms at National University of Singapore"><button type="button" data-room="0" data-type="discussion" aria-pressed="false">Valour House</button><button type="button" data-room="1" data-type="lecture" aria-pressed="true">Office of Human Resources</button><button type="button" data-room="2" data-type="lecture" aria-pressed="false">Acacia College</button><button type="button" data-room="3" data-type="discussion" aria-pressed="false">Ridge View</button><button type="button" data-room="4" data-type="lecture" aria-pressed="false">CTLT</button></div>
+                <p class="xr-story__kind">Everyday teaching and lectures</p><div class="xr-hw"><p class="xr-hw__t">Equipment</p><ul class="xr-hw__list"><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8"/></svg></span><span class="xr-hw__tx"><b>3 ClassIn Boards, synced</b></span></li><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="10" rx="5"/><circle cx="9" cy="12" r="2.4"/><path d="M15 12h2"/></svg></span><span class="xr-hw__tx"><b>Front and rear cameras</b></span></li><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0014 0M12 18v3"/></svg></span><span class="xr-hw__tx"><b>Ceiling microphone</b></span></li></ul></div>
+              </div>
+              </div>
+              <div class="xr-room" data-room="2" hidden>
+              <div class="xr-story__media"><div class="xr-story__img"><img src="/expo/rooms/media/room-cases/case-nus-acacia.webp" alt="A ClassIn Board on a mobile stand with a camera on top, in the NUS Acacia pilot classroom."></div></div>
+              <div class="xr-story__b">
+                <span class="xr-story__tag">University · Singapore</span>
+                <h3 class="xr-story__t">National University of Singapore</h3>
+                <p class="xr-story__rooms-t">5 rooms. Tap one to see it.</p><div class="xr-story__rooms" role="group" aria-label="Rooms at National University of Singapore"><button type="button" data-room="0" data-type="discussion" aria-pressed="false">Valour House</button><button type="button" data-room="1" data-type="lecture" aria-pressed="false">Office of Human Resources</button><button type="button" data-room="2" data-type="lecture" aria-pressed="true">Acacia College</button><button type="button" data-room="3" data-type="discussion" aria-pressed="false">Ridge View</button><button type="button" data-room="4" data-type="lecture" aria-pressed="false">CTLT</button></div><p class="xr-story__space">AI pilot classroom</p>
+                <p class="xr-story__kind">Everyday teaching and lectures</p><div class="xr-hw"><p class="xr-hw__t">Equipment</p><ul class="xr-hw__list"><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8"/></svg></span><span class="xr-hw__tx"><b>1 ClassIn Board</b></span></li><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0014 0M12 18v3"/></svg></span><span class="xr-hw__tx"><b>Ceiling microphone</b></span></li><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="10" rx="5"/><circle cx="9" cy="12" r="2.4"/><path d="M15 12h2"/></svg></span><span class="xr-hw__tx"><b>Camera</b></span></li></ul></div>
+              </div>
+              </div>
+              <div class="xr-room" data-room="3" hidden>
+              <div class="xr-story__media"><div class="xr-story__img"><img src="/expo/rooms/media/room-cases/case-nus-ridge-view.webp" alt="A ClassIn Board on a mobile stand in a Ridge View room, with a man standing beside it and tables in front."></div></div>
+              <div class="xr-story__b">
+                <span class="xr-story__tag">University · Singapore</span>
+                <h3 class="xr-story__t">National University of Singapore</h3>
+                <p class="xr-story__rooms-t">5 rooms. Tap one to see it.</p><div class="xr-story__rooms" role="group" aria-label="Rooms at National University of Singapore"><button type="button" data-room="0" data-type="discussion" aria-pressed="false">Valour House</button><button type="button" data-room="1" data-type="lecture" aria-pressed="false">Office of Human Resources</button><button type="button" data-room="2" data-type="lecture" aria-pressed="false">Acacia College</button><button type="button" data-room="3" data-type="discussion" aria-pressed="true">Ridge View</button><button type="button" data-room="4" data-type="lecture" aria-pressed="false">CTLT</button></div>
+                <p class="xr-story__kind">Group discussion room</p><div class="xr-hw"><p class="xr-hw__t">Equipment</p><ul class="xr-hw__list"><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8"/></svg></span><span class="xr-hw__tx"><b>ClassIn Board on a mobile stand</b></span></li></ul></div>
+              </div>
+              </div>
+              <div class="xr-room" data-room="4" hidden>
+              <div class="xr-story__media"><div class="xr-story__img"><img src="/expo/rooms/media/room-cases/case-nus-ctlt-render.webp" alt="A design render of a seminar room at the NUS Centre for Teaching, Learning and Technology, with tables in groups and ClassIn Boards on stands."><span class="xr-render">Design render</span></div></div>
+              <div class="xr-story__b">
+                <span class="xr-story__tag">University · Singapore</span>
+                <h3 class="xr-story__t">National University of Singapore</h3>
+                <p class="xr-story__rooms-t">5 rooms. Tap one to see it.</p><div class="xr-story__rooms" role="group" aria-label="Rooms at National University of Singapore"><button type="button" data-room="0" data-type="discussion" aria-pressed="false">Valour House</button><button type="button" data-room="1" data-type="lecture" aria-pressed="false">Office of Human Resources</button><button type="button" data-room="2" data-type="lecture" aria-pressed="false">Acacia College</button><button type="button" data-room="3" data-type="discussion" aria-pressed="false">Ridge View</button><button type="button" data-room="4" data-type="lecture" aria-pressed="true">CTLT</button></div><p class="xr-story__space">Centre for Teaching, Learning and Technology: four seminar rooms</p>
+                <p class="xr-story__kind">Everyday teaching and lectures</p><div class="xr-hw"><p class="xr-hw__t">Equipment</p><ul class="xr-hw__list"><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0014 0M12 18v3"/></svg></span><span class="xr-hw__tx"><b>Ceiling-mounted microphones</b></span></li><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2"/></svg></span><span class="xr-hw__tx"><b>In-room speakers</b></span></li></ul></div>
+              </div>
+              </div>
+            </template>
+          </article>
+          <article class="xr-kase" data-type="discussion" data-slug="temasek-polytechnic" data-show="/expo/rooms/media/room-cases/tp-business-lesson.webp" tabindex="0" role="button" aria-haspopup="dialog" aria-label="Open the story: Temasek Polytechnic, School of Business">
+            <div class="xr-kase__media"><img src="/expo/rooms/media/room-cases/tp-business-lesson-sm.webp" alt="Temasek Polytechnic students working in groups beside two interactive screens covered in their brand plan." loading="lazy" decoding="async"></div>
+            <div class="xr-kase__body">
+              <span class="xr-kase__tag">Polytechnic · Singapore</span>
+              <h4 class="xr-kase__t">Temasek Polytechnic</h4>
+              <p class="xr-kase__space">School of Business</p>
+            </div>
+            <span class="xr-kase__hw" aria-label="Shared displays; Mobile screens; Ceiling microphone"><i><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8"/></svg></i><i><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="7" width="9" height="7" rx="1.2"/><rect x="12.5" y="7" width="9" height="7" rx="1.2"/><path d="M7 14v3M17 14v3"/></svg></i><i><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0014 0M12 18v3"/></svg></i></span>
+            <span class="xr-kase__more" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span>
+            <template class="xr-kase__story">
+              <div class="xr-story__media"><div class="xr-story__img"><img src="/expo/rooms/media/room-cases/tp-business-lesson.webp" alt="Temasek Polytechnic students working in groups beside two interactive screens covered in their brand plan."></div></div>
+              <div class="xr-story__b">
+                <span class="xr-story__tag">Polytechnic · Singapore</span>
+                <h3 class="xr-story__t">Temasek Polytechnic</h3>
+                <p class="xr-story__space">School of Business</p>
+                <p class="xr-story__kind">Group discussion room</p><div class="xr-hw"><p class="xr-hw__t">Equipment</p><ul class="xr-hw__list"><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8"/></svg></span><span class="xr-hw__tx"><b>Shared displays</b></span></li><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="7" width="9" height="7" rx="1.2"/><rect x="12.5" y="7" width="9" height="7" rx="1.2"/><path d="M7 14v3M17 14v3"/></svg></span><span class="xr-hw__tx"><b>Mobile screens</b></span></li><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0014 0M12 18v3"/></svg></span><span class="xr-hw__tx"><b>Ceiling microphone</b></span></li></ul></div>
+              </div><div class="xr-story__thumbs" role="group" aria-label="More photos of this room"><button type="button" data-src="/expo/rooms/media/room-cases/tp-business-lesson.webp" data-alt="Temasek Polytechnic students working in groups beside two interactive screens covered in their brand plan." aria-label="Photo 1 of 4" aria-current="true"><img src="/expo/rooms/media/room-cases/tp-business-lesson-sm.webp" alt="" loading="lazy" decoding="async"></button><button type="button" data-src="/expo/rooms/media/room-cases/tp-group-board.webp" data-alt="A group at Temasek Polytechnic around a ClassIn Board, one student writing a product idea while the others follow." aria-label="Photo 2 of 4"><img src="/expo/rooms/media/room-cases/tp-group-board-sm.webp" alt="" loading="lazy" decoding="async"></button><button type="button" data-src="/expo/rooms/media/room-cases/tp-board-closeup.webp" data-alt="Close-up of a ClassIn Board at Temasek Polytechnic: a customer-segment analysis in red, with blue notes added during the lesson." aria-label="Photo 3 of 4"><img src="/expo/rooms/media/room-cases/tp-board-closeup-sm.webp" alt="" loading="lazy" decoding="async"></button><button type="button" data-src="/expo/rooms/media/room-cases/temasek-classroom-detail.webp" data-alt="Smart classroom at Temasek Polytechnic, with movable chairs and several teaching display screens." aria-label="Photo 4 of 4"><img src="/expo/rooms/media/room-cases/temasek-classroom-detail-sm.webp" alt="" loading="lazy" decoding="async"></button></div>
+            </template>
+          </article>
+          <article class="xr-kase" data-type="lecture" data-slug="hwa-chong" data-show="/expo/rooms/media/room-cases/hwa-chong-class.webp" tabindex="0" role="button" aria-haspopup="dialog" aria-label="Open the story: Hwa Chong Institution, Dual-screen classrooms">
+            <div class="xr-kase__media"><img src="/expo/rooms/media/room-cases/hwa-chong-class-sm.webp" alt="A lesson at Hwa Chong Institution: students with laptops face two ClassIn Boards while the teacher writes on one." loading="lazy" decoding="async"></div>
+            <div class="xr-kase__body">
+              <span class="xr-kase__tag">Secondary school · Singapore</span>
+              <h4 class="xr-kase__t">Hwa Chong Institution</h4>
+              <p class="xr-kase__space">Dual-screen classrooms</p>
+            </div>
+            <span class="xr-kase__hw" aria-label="2 ClassIn Boards in each classroom; Lesson recording"><i><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8"/></svg></i><i><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5" class="is-fill"/></svg></i></span>
+            <span class="xr-kase__more" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span>
+            <template class="xr-kase__story">
+              <div class="xr-story__media"><div class="xr-story__img"><img src="/expo/rooms/media/room-cases/hwa-chong-class.webp" alt="A lesson at Hwa Chong Institution: students with laptops face two ClassIn Boards while the teacher writes on one."></div></div>
+              <div class="xr-story__b">
+                <span class="xr-story__tag">Secondary school · Singapore</span>
+                <h3 class="xr-story__t">Hwa Chong Institution</h3>
+                <p class="xr-story__space">Dual-screen classrooms</p>
+                <p class="xr-story__kind">Everyday teaching and lectures</p><div class="xr-hw"><p class="xr-hw__t">Equipment</p><ul class="xr-hw__list"><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8"/></svg></span><span class="xr-hw__tx"><b>2 ClassIn Boards in each classroom</b></span></li><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5" class="is-fill"/></svg></span><span class="xr-hw__tx"><b>Lesson recording</b></span></li></ul></div>
+              </div>
+            </template>
+          </article>
+          <article class="xr-kase" data-type="lecture" data-slug="etonhouse-riyadh" data-show="/expo/rooms/media/room-cases/case-etonhouse-classroom.webp" tabindex="0" role="button" aria-haspopup="dialog" aria-label="Open the story: EtonHouse International Schools, New campuses">
+            <div class="xr-kase__media"><img src="/expo/rooms/media/room-cases/case-etonhouse-classroom-sm.webp" alt="An EtonHouse Riyadh classroom: a ClassIn Board on the wall beside a whiteboard, and a round table set out with pencils and crayons." loading="lazy" decoding="async"></div>
+            <div class="xr-kase__body">
+              <span class="xr-kase__tag">International schools · Riyadh and Bangkok</span>
+              <h4 class="xr-kase__t">EtonHouse International Schools</h4>
+              <p class="xr-kase__space">New campuses</p>
+            </div>
+            <span class="xr-kase__hw" aria-label="Interactive boards; Cameras; Ceiling microphones"><i><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8"/></svg></i><i><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="10" rx="5"/><circle cx="9" cy="12" r="2.4"/><path d="M15 12h2"/></svg></i><i><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0014 0M12 18v3"/></svg></i></span>
+            <span class="xr-kase__more" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span>
+            <template class="xr-kase__story">
+              <div class="xr-story__media"><div class="xr-story__img"><img src="/expo/rooms/media/room-cases/case-etonhouse-classroom.webp" alt="An EtonHouse Riyadh classroom: a ClassIn Board on the wall beside a whiteboard, and a round table set out with pencils and crayons."></div></div>
+              <div class="xr-story__b">
+                <span class="xr-story__tag">International schools · Riyadh and Bangkok</span>
+                <h3 class="xr-story__t">EtonHouse International Schools</h3>
+                <p class="xr-story__space">New campuses</p>
+                <p class="xr-story__kind">Everyday teaching and lectures</p><div class="xr-hw"><p class="xr-hw__t">Equipment</p><ul class="xr-hw__list"><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8"/></svg></span><span class="xr-hw__tx"><b>Interactive boards</b></span></li><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="10" rx="5"/><circle cx="9" cy="12" r="2.4"/><path d="M15 12h2"/></svg></span><span class="xr-hw__tx"><b>Cameras</b></span></li><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0014 0M12 18v3"/></svg></span><span class="xr-hw__tx"><b>Ceiling microphones</b></span></li></ul></div>
+              </div>
+            </template>
+          </article>
+          <article class="xr-kase" data-type="discussion" data-slug="macau-university-of-science-and-technology" data-show="/expo/rooms/media/room-cases/macau-roundtable-room-detail.webp" tabindex="0" role="button" aria-haspopup="dialog" aria-label="Open the story: Macau University of Science and Technology, Future Learning Centre">
+            <div class="xr-kase__media"><img src="/expo/rooms/media/room-cases/macau-roundtable-room-detail-sm.webp" alt="Round-table discussion room at the MUST Future Learning Centre, with blue chairs around combined round tables and a teaching screen and whiteboard at the front." loading="lazy" decoding="async"></div>
+            <div class="xr-kase__body">
+              <span class="xr-kase__tag">University · Macau</span>
+              <h4 class="xr-kase__t">Macau University of Science and Technology</h4>
+              <p class="xr-kase__space">Future Learning Centre</p>
+            </div>
+            <span class="xr-kase__hw" aria-label="2 AI smart boards; 2 AI cameras; 1 array microphone"><i><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8"/></svg></i><i><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="10" rx="5"/><circle cx="9" cy="12" r="2.4"/><path d="M15 12h2"/></svg></i><i><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0014 0M12 18v3"/></svg></i></span>
+            <span class="xr-kase__more" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span>
+            <template class="xr-kase__story">
+              <div class="xr-story__media"><div class="xr-story__img"><img src="/expo/rooms/media/room-cases/macau-roundtable-room-detail.webp" alt="Round-table discussion room at the MUST Future Learning Centre, with blue chairs around combined round tables and a teaching screen and whiteboard at the front."></div></div>
+              <div class="xr-story__b">
+                <span class="xr-story__tag">University · Macau</span>
+                <h3 class="xr-story__t">Macau University of Science and Technology</h3>
+                <p class="xr-story__space">Future Learning Centre</p>
+                <p class="xr-story__kind">Group discussion room</p><div class="xr-hw"><p class="xr-hw__t">Equipment</p><ul class="xr-hw__list"><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8"/></svg></span><span class="xr-hw__tx"><b>2 AI smart boards</b></span></li><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="10" rx="5"/><circle cx="9" cy="12" r="2.4"/><path d="M15 12h2"/></svg></span><span class="xr-hw__tx"><b>2 AI cameras</b></span></li><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0014 0M12 18v3"/></svg></span><span class="xr-hw__tx"><b>1 array microphone</b></span></li></ul></div>
+              </div><div class="xr-story__thumbs" role="group" aria-label="More photos of this room"><button type="button" data-src="/expo/rooms/media/room-cases/macau-roundtable-room-detail.webp" data-alt="Round-table discussion room at the MUST Future Learning Centre, with blue chairs around combined round tables and a teaching screen and whiteboard at the front." aria-label="Photo 1 of 4" aria-current="true"><img src="/expo/rooms/media/room-cases/macau-roundtable-room-detail-sm.webp" alt="" loading="lazy" decoding="async"></button><button type="button" data-src="/expo/rooms/media/room-cases/macau-row-classroom-detail.webp" data-alt="Row-layout smart classroom at the Future Learning Centre, with blue chairs facing the front teaching screen and supporting displays in the room." aria-label="Photo 2 of 4"><img src="/expo/rooms/media/room-cases/macau-row-classroom-detail-sm.webp" alt="" loading="lazy" decoding="async"></button><button type="button" data-src="/expo/rooms/media/room-cases/macau-group-room-detail.webp" data-alt="Group collaboration room at the Future Learning Centre, with coloured chairs around group tables and monitors on articulated arms beside the tables." aria-label="Photo 3 of 4"><img src="/expo/rooms/media/room-cases/macau-group-room-detail-sm.webp" alt="" loading="lazy" decoding="async"></button><button type="button" data-src="/expo/rooms/media/room-cases/macau-teaching-console-detail.webp" data-alt="Teacher’s podium at the Future Learning Centre, with a podium display, input devices and a touch control panel." aria-label="Photo 4 of 4"><img src="/expo/rooms/media/room-cases/macau-teaching-console-detail-sm.webp" alt="" loading="lazy" decoding="async"></button></div>
+            </template>
+          </article>
+          <article class="xr-kase" data-type="discussion" data-slug="sbs" data-show="/expo/rooms/media/room-cases/sbs-learning-centre-overview-detail.webp" tabindex="0" role="button" aria-haspopup="dialog" aria-label="Open the story: Shanghai Business School, Future Digital Learning Centre">
+            <div class="xr-kase__media"><img src="/expo/rooms/media/room-cases/sbs-learning-centre-overview-detail-sm.webp" alt="Inside the Future Digital Learning Centre at Shanghai Business School, with light-coloured chairs under ring lights and several screens on the wall." loading="lazy" decoding="async"></div>
+            <div class="xr-kase__body">
+              <span class="xr-kase__tag">College · Shanghai</span>
+              <h4 class="xr-kase__t">Shanghai Business School</h4>
+              <p class="xr-kase__space">Future Digital Learning Centre</p>
+            </div>
+            <span class="xr-kase__hw" aria-label="Dual screens at the front; Wall displays"><i><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8"/></svg></i><i><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="7" width="9" height="7" rx="1.2"/><rect x="12.5" y="7" width="9" height="7" rx="1.2"/><path d="M7 14v3M17 14v3"/></svg></i></span>
+            <span class="xr-kase__more" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span>
+            <template class="xr-kase__story">
+              <div class="xr-story__media"><div class="xr-story__img"><img src="/expo/rooms/media/room-cases/sbs-learning-centre-overview-detail.webp" alt="Inside the Future Digital Learning Centre at Shanghai Business School, with light-coloured chairs under ring lights and several screens on the wall."></div></div>
+              <div class="xr-story__b">
+                <span class="xr-story__tag">College · Shanghai</span>
+                <h3 class="xr-story__t">Shanghai Business School</h3>
+                <p class="xr-story__space">Future Digital Learning Centre</p>
+                <p class="xr-story__kind">Group discussion room</p><div class="xr-hw"><p class="xr-hw__t">Equipment</p><ul class="xr-hw__list"><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8"/></svg></span><span class="xr-hw__tx"><b>Dual screens at the front</b></span></li><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="7" width="9" height="7" rx="1.2"/><rect x="12.5" y="7" width="9" height="7" rx="1.2"/><path d="M7 14v3M17 14v3"/></svg></span><span class="xr-hw__tx"><b>Wall displays</b></span></li></ul></div>
+              </div><div class="xr-story__thumbs" role="group" aria-label="More photos of this room"><button type="button" data-src="/expo/rooms/media/room-cases/sbs-learning-centre-overview-detail.webp" data-alt="Inside the Future Digital Learning Centre at Shanghai Business School, with light-coloured chairs under ring lights and several screens on the wall." aria-label="Photo 1 of 3" aria-current="true"><img src="/expo/rooms/media/room-cases/sbs-learning-centre-overview-detail-sm.webp" alt="" loading="lazy" decoding="async"></button><button type="button" data-src="/expo/rooms/media/room-cases/sbs-learning-centre-tables-detail.webp" data-alt="White combined tables arranged in groups, with teaching displays and lounge seating in the same space." aria-label="Photo 2 of 3"><img src="/expo/rooms/media/room-cases/sbs-learning-centre-tables-detail-sm.webp" alt="" loading="lazy" decoding="async"></button><button type="button" data-src="/expo/rooms/media/room-cases/sbs-wine-culture-class-detail.webp" data-alt="Students facing the front dual screens during a wine culture course at Shanghai Business School." aria-label="Photo 3 of 3"><img src="/expo/rooms/media/room-cases/sbs-wine-culture-class-detail-sm.webp" alt="" loading="lazy" decoding="async"></button></div>
+            </template>
+          </article>
+          <article class="xr-kase" data-type="lecture" data-slug="tianjin-foreign-studies-university" data-show="/expo/rooms/media/room-cases/tianjin-lecture.webp" tabindex="0" role="button" aria-haspopup="dialog" aria-label="Open the story: Tianjin Foreign Studies University, Smart Classrooms">
+            <div class="xr-kase__media"><img src="/expo/rooms/media/room-cases/tianjin-lecture-sm.webp" alt="Tiered classroom at Tianjin Foreign Studies University, with blue seats, front dual screens and suspended repeater screens." loading="lazy" decoding="async"></div>
+            <div class="xr-kase__body">
+              <span class="xr-kase__tag">University · Tianjin</span>
+              <h4 class="xr-kase__t">Tianjin Foreign Studies University</h4>
+              <p class="xr-kase__space">Smart Classrooms</p>
+            </div>
+            <span class="xr-kase__hw" aria-label="Dual screens; ClassIn Cam T1 and S1, Mic DT2; Third-party recording system; Third-party central control"><i><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8"/></svg></i><i><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="10" rx="5"/><circle cx="9" cy="12" r="2.4"/><path d="M15 12h2"/></svg></i><i><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5" class="is-fill"/></svg></i><i><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg></i></span>
+            <span class="xr-kase__more" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span>
+            <template class="xr-kase__story">
+              <div class="xr-story__media"><div class="xr-story__img"><img src="/expo/rooms/media/room-cases/tianjin-lecture.webp" alt="Tiered classroom at Tianjin Foreign Studies University, with blue seats, front dual screens and suspended repeater screens."></div></div>
+              <div class="xr-story__b">
+                <span class="xr-story__tag">University · Tianjin</span>
+                <h3 class="xr-story__t">Tianjin Foreign Studies University</h3>
+                <p class="xr-story__space">Smart Classrooms</p>
+                <p class="xr-story__kind">Everyday teaching and lectures</p><div class="xr-hw"><p class="xr-hw__t">Equipment</p><ul class="xr-hw__list"><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8"/></svg></span><span class="xr-hw__tx"><b>Dual screens</b></span></li><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="10" rx="5"/><circle cx="9" cy="12" r="2.4"/><path d="M15 12h2"/></svg></span><span class="xr-hw__tx"><b>ClassIn Cam T1 and S1, Mic DT2</b></span></li><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5" class="is-fill"/></svg></span><span class="xr-hw__tx"><b>Third-party recording system</b></span></li><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg></span><span class="xr-hw__tx"><b>Third-party central control</b></span></li></ul></div>
+              </div><div class="xr-story__thumbs" role="group" aria-label="More photos of this room"><button type="button" data-src="/expo/rooms/media/room-cases/tianjin-lecture.webp" data-alt="Tiered classroom at Tianjin Foreign Studies University, with blue seats, front dual screens and suspended repeater screens." aria-label="Photo 1 of 3" aria-current="true"><img src="/expo/rooms/media/room-cases/tianjin-lecture-sm.webp" alt="" loading="lazy" decoding="async"></button><button type="button" data-src="/expo/rooms/media/room-cases/tianjin-discussion.webp" data-alt="Panoramic view of a discussion classroom at Tianjin Foreign Studies University." aria-label="Photo 2 of 3"><img src="/expo/rooms/media/room-cases/tianjin-discussion-sm.webp" alt="" loading="lazy" decoding="async"></button><button type="button" data-src="/expo/rooms/media/room-cases/tianjin-row.webp" data-alt="Row-layout smart classroom at Tianjin Foreign Studies University, with neat rows of desks and chairs facing dual screens." aria-label="Photo 3 of 3"><img src="/expo/rooms/media/room-cases/tianjin-row-sm.webp" alt="" loading="lazy" decoding="async"></button></div>
+            </template>
+          </article>
+          <article class="xr-kase" data-type="discussion" data-slug="shu" data-show="/expo/rooms/media/room-cases/shu-b319-presentations-detail.webp" tabindex="0" role="button" aria-haspopup="dialog" aria-label="Open the story: Shanghai University, Multi-screen and Group Teaching Space">
+            <div class="xr-kase__media"><img src="/expo/rooms/media/room-cases/shu-b319-presentations-detail-sm.webp" alt="Room B319 at Shanghai University, with students presenting beside the front screens while classmates take part from their table groups." loading="lazy" decoding="async"></div>
+            <div class="xr-kase__body">
+              <span class="xr-kase__tag">University · Shanghai</span>
+              <h4 class="xr-kase__t">Shanghai University</h4>
+              <p class="xr-kase__space">Multi-screen and Group Teaching Space</p>
+            </div>
+            <span class="xr-kase__hw" aria-label="3 main screens, 110″; 4 group screens"><i><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8"/></svg></i><i><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="7" width="9" height="7" rx="1.2"/><rect x="12.5" y="7" width="9" height="7" rx="1.2"/><path d="M7 14v3M17 14v3"/></svg></i></span>
+            <span class="xr-kase__more" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span>
+            <template class="xr-kase__story">
+              <div class="xr-story__media"><div class="xr-story__img"><img src="/expo/rooms/media/room-cases/shu-b319-presentations-detail.webp" alt="Room B319 at Shanghai University, with students presenting beside the front screens while classmates take part from their table groups."></div></div>
+              <div class="xr-story__b">
+                <span class="xr-story__tag">University · Shanghai</span>
+                <h3 class="xr-story__t">Shanghai University</h3>
+                <p class="xr-story__space">Multi-screen and Group Teaching Space</p>
+                <p class="xr-story__kind">Group discussion room</p><div class="xr-hw"><p class="xr-hw__t">Equipment</p><ul class="xr-hw__list"><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8"/></svg></span><span class="xr-hw__tx"><b>3 main screens, 110″</b></span></li><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="7" width="9" height="7" rx="1.2"/><rect x="12.5" y="7" width="9" height="7" rx="1.2"/><path d="M7 14v3M17 14v3"/></svg></span><span class="xr-hw__tx"><b>4 group screens</b></span></li></ul></div>
+              </div><div class="xr-story__thumbs" role="group" aria-label="More photos of this room"><button type="button" data-src="/expo/rooms/media/room-cases/shu-b319-presentations-detail.webp" data-alt="Room B319 at Shanghai University, with students presenting beside the front screens while classmates take part from their table groups." aria-label="Photo 1 of 3" aria-current="true"><img src="/expo/rooms/media/room-cases/shu-b319-presentations-detail-sm.webp" alt="" loading="lazy" decoding="async"></button><button type="button" data-src="/expo/rooms/media/room-cases/shu-b319-classroom-detail.webp" data-alt="Students seated in groups in Room B319, with course content on the large front screens." aria-label="Photo 2 of 3"><img src="/expo/rooms/media/room-cases/shu-b319-classroom-detail-sm.webp" alt="" loading="lazy" decoding="async"></button><button type="button" data-src="/expo/rooms/media/room-cases/shu-b319-digital-board-detail.webp" data-alt="A teacher writing on a teaching display while another screen keeps the course interface open." aria-label="Photo 3 of 3"><img src="/expo/rooms/media/room-cases/shu-b319-digital-board-detail-sm.webp" alt="" loading="lazy" decoding="async"></button></div>
+            </template>
+          </article>
+          <article class="xr-kase" data-type="lecture" data-slug="tsinghua-hs" data-show="/expo/rooms/media/room-cases/tsinghua-lesson-dual-screen.webp" tabindex="0" role="button" aria-haspopup="dialog" aria-label="Open the story: Tsinghua University High School, Middle- and high-school campuses">
+            <div class="xr-kase__media"><img src="/expo/rooms/media/room-cases/tsinghua-lesson-dual-screen-sm.webp" alt="A lesson at Tsinghua University High School: the teacher works at a ClassIn screen between two chalkboards while students in school jackets follow." loading="lazy" decoding="async"></div>
+            <div class="xr-kase__body">
+              <span class="xr-kase__tag">Secondary school · Beijing</span>
+              <h4 class="xr-kase__t">Tsinghua University High School</h4>
+              <p class="xr-kase__space">Middle- and high-school campuses</p>
+            </div>
+            <span class="xr-kase__hw" aria-label="135 ClassIn Boards; Automatic lesson recording"><i><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8"/></svg></i><i><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5" class="is-fill"/></svg></i></span>
+            <span class="xr-kase__more" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span>
+            <template class="xr-kase__story">
+              <div class="xr-story__media"><div class="xr-story__img"><img src="/expo/rooms/media/room-cases/tsinghua-lesson-dual-screen.webp" alt="A lesson at Tsinghua University High School: the teacher works at a ClassIn screen between two chalkboards while students in school jackets follow."></div></div>
+              <div class="xr-story__b">
+                <span class="xr-story__tag">Secondary school · Beijing</span>
+                <h3 class="xr-story__t">Tsinghua University High School</h3>
+                <p class="xr-story__space">Middle- and high-school campuses</p>
+                <p class="xr-story__kind">Everyday teaching and lectures</p><div class="xr-hw"><p class="xr-hw__t">Equipment</p><ul class="xr-hw__list"><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8"/></svg></span><span class="xr-hw__tx"><b>135 ClassIn Boards</b></span></li><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5" class="is-fill"/></svg></span><span class="xr-hw__tx"><b>Automatic lesson recording</b></span></li></ul></div>
+              </div><div class="xr-story__thumbs" role="group" aria-label="More photos of this room"><button type="button" data-src="/expo/rooms/media/room-cases/tsinghua-lesson-dual-screen.webp" data-alt="A lesson at Tsinghua University High School: the teacher works at a ClassIn screen between two chalkboards while students in school jackets follow." aria-label="Photo 1 of 2" aria-current="true"><img src="/expo/rooms/media/room-cases/tsinghua-lesson-dual-screen-sm.webp" alt="" loading="lazy" decoding="async"></button><button type="button" data-src="/expo/rooms/media/room-cases/tsinghua-group-room.webp" data-alt="A group room at Tsinghua University High School: a six-sided table with tablets, and two ClassIn screens on the wall." aria-label="Photo 2 of 2"><img src="/expo/rooms/media/room-cases/tsinghua-group-room-sm.webp" alt="" loading="lazy" decoding="async"></button></div>
+            </template>
+          </article>
+          <article class="xr-kase" data-type="lecture" data-slug="fdfz" data-show="/expo/rooms/media/room-cases/fdfz-dual-screen-classroom.webp" tabindex="0" role="button" aria-haspopup="dialog" aria-label="Open the story: High School Affiliated to Fudan University, Recorded classrooms and dual-screen labs">
+            <div class="xr-kase__media"><img src="/expo/rooms/media/room-cases/fdfz-dual-screen-classroom-sm.webp" alt="A classroom at the High School Affiliated to Fudan University: two large screens between green chalkboards, with desks set in groups." loading="lazy" decoding="async"></div>
+            <div class="xr-kase__body">
+              <span class="xr-kase__tag">Secondary school · Shanghai</span>
+              <h4 class="xr-kase__t">High School Affiliated to Fudan University</h4>
+              <p class="xr-kase__space">Recorded classrooms and dual-screen labs</p>
+            </div>
+            <span class="xr-kase__hw" aria-label="27 classrooms with everyday lesson recording; Dual screens; 110″ large screens"><i><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5" class="is-fill"/></svg></i><i><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="7" width="9" height="7" rx="1.2"/><rect x="12.5" y="7" width="9" height="7" rx="1.2"/><path d="M7 14v3M17 14v3"/></svg></i></span>
+            <span class="xr-kase__more" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span>
+            <template class="xr-kase__story">
+              <div class="xr-story__media"><div class="xr-story__img"><img src="/expo/rooms/media/room-cases/fdfz-dual-screen-classroom.webp" alt="A classroom at the High School Affiliated to Fudan University: two large screens between green chalkboards, with desks set in groups."></div></div>
+              <div class="xr-story__b">
+                <span class="xr-story__tag">Secondary school · Shanghai</span>
+                <h3 class="xr-story__t">High School Affiliated to Fudan University</h3>
+                <p class="xr-story__space">Recorded classrooms and dual-screen labs</p>
+                <p class="xr-story__kind">Everyday teaching and lectures</p><div class="xr-hw"><p class="xr-hw__t">Equipment</p><ul class="xr-hw__list"><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5" class="is-fill"/></svg></span><span class="xr-hw__tx"><b>27 classrooms with everyday lesson recording</b></span></li><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="7" width="9" height="7" rx="1.2"/><rect x="12.5" y="7" width="9" height="7" rx="1.2"/><path d="M7 14v3M17 14v3"/></svg></span><span class="xr-hw__tx"><b>Dual screens</b></span></li><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="7" width="9" height="7" rx="1.2"/><rect x="12.5" y="7" width="9" height="7" rx="1.2"/><path d="M7 14v3M17 14v3"/></svg></span><span class="xr-hw__tx"><b>110″ large screens</b></span></li></ul></div>
+              </div><div class="xr-story__thumbs" role="group" aria-label="More photos of this room"><button type="button" data-src="/expo/rooms/media/room-cases/fdfz-dual-screen-classroom.webp" data-alt="A classroom at the High School Affiliated to Fudan University: two large screens between green chalkboards, with desks set in groups." aria-label="Photo 1 of 4" aria-current="true"><img src="/expo/rooms/media/room-cases/fdfz-dual-screen-classroom-sm.webp" alt="" loading="lazy" decoding="async"></button><button type="button" data-src="/expo/rooms/media/room-cases/fdfz-lecture-room.webp" data-alt="A lecture room at the High School Affiliated to Fudan University, with a large screen between two whiteboards and rows of wooden desks." aria-label="Photo 2 of 4"><img src="/expo/rooms/media/room-cases/fdfz-lecture-room-sm.webp" alt="" loading="lazy" decoding="async"></button><button type="button" data-src="/expo/rooms/media/room-cases/fdfz-tiered-room-screen.webp" data-alt="A tiered room at the High School Affiliated to Fudan University, with a large screen on the front wall and curved ceiling lights." aria-label="Photo 3 of 4"><img src="/expo/rooms/media/room-cases/fdfz-tiered-room-screen-sm.webp" alt="" loading="lazy" decoding="async"></button><button type="button" data-src="/expo/rooms/media/room-cases/fdfz-tiered-room.webp" data-alt="Rows of tiered wooden desks facing the front of a teaching room at the High School Affiliated to Fudan University." aria-label="Photo 4 of 4"><img src="/expo/rooms/media/room-cases/fdfz-tiered-room-sm.webp" alt="" loading="lazy" decoding="async"></button></div>
+            </template>
+          </article>
+          <article class="xr-kase" data-type="lecture" data-slug="sfls" data-show="/expo/rooms/media/room-cases/sfls-future-learning-space-2026.webp" tabindex="0" role="button" aria-haspopup="dialog" aria-label="Open the story: Shanghai Foreign Language School, Voice lift and a Future Learning Space">
+            <div class="xr-kase__media"><img src="/expo/rooms/media/room-cases/sfls-future-learning-space-2026-sm.webp" alt="The Future Learning Space at Shanghai Foreign Language School: rows of white tables under round ceiling lights, with screens along the walls." loading="lazy" decoding="async"></div>
+            <div class="xr-kase__body">
+              <span class="xr-kase__tag">Secondary school · Shanghai</span>
+              <h4 class="xr-kase__t">Shanghai Foreign Language School</h4>
+              <p class="xr-kase__space">Voice lift and a Future Learning Space</p>
+            </div>
+            <span class="xr-kase__hw" aria-label="Voice lift; A main screen and 2 secondary screens; 110″ large screen"><i><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2"/></svg></i><i><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="7" width="9" height="7" rx="1.2"/><rect x="12.5" y="7" width="9" height="7" rx="1.2"/><path d="M7 14v3M17 14v3"/></svg></i></span>
+            <span class="xr-kase__more" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span>
+            <template class="xr-kase__story">
+              <div class="xr-story__media"><div class="xr-story__img"><img src="/expo/rooms/media/room-cases/sfls-future-learning-space-2026.webp" alt="The Future Learning Space at Shanghai Foreign Language School: rows of white tables under round ceiling lights, with screens along the walls."></div></div>
+              <div class="xr-story__b">
+                <span class="xr-story__tag">Secondary school · Shanghai</span>
+                <h3 class="xr-story__t">Shanghai Foreign Language School</h3>
+                <p class="xr-story__space">Voice lift and a Future Learning Space</p>
+                <p class="xr-story__kind">Everyday teaching and lectures</p><div class="xr-hw"><p class="xr-hw__t">Equipment</p><ul class="xr-hw__list"><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2"/></svg></span><span class="xr-hw__tx"><b>Voice lift</b></span></li><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="7" width="9" height="7" rx="1.2"/><rect x="12.5" y="7" width="9" height="7" rx="1.2"/><path d="M7 14v3M17 14v3"/></svg></span><span class="xr-hw__tx"><b>A main screen and 2 secondary screens</b></span></li><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="7" width="9" height="7" rx="1.2"/><rect x="12.5" y="7" width="9" height="7" rx="1.2"/><path d="M7 14v3M17 14v3"/></svg></span><span class="xr-hw__tx"><b>110″ large screen</b></span></li></ul></div>
+              </div><div class="xr-story__thumbs" role="group" aria-label="More photos of this room"><button type="button" data-src="/expo/rooms/media/room-cases/sfls-future-learning-space-2026.webp" data-alt="The Future Learning Space at Shanghai Foreign Language School: rows of white tables under round ceiling lights, with screens along the walls." aria-label="Photo 1 of 3" aria-current="true"><img src="/expo/rooms/media/room-cases/sfls-future-learning-space-2026-sm.webp" alt="" loading="lazy" decoding="async"></button><button type="button" data-src="/expo/rooms/media/room-cases/sfls-classroom-overview.webp" data-alt="A biology lesson at Shanghai Foreign Language School: students in school jackets work in groups at laptops, with a ClassIn lesson on the screen at the front." aria-label="Photo 2 of 3"><img src="/expo/rooms/media/room-cases/sfls-classroom-overview-sm.webp" alt="" loading="lazy" decoding="async"></button><button type="button" data-src="/expo/rooms/media/room-cases/sfls-classroom-board.webp" data-alt="A teacher helps a group at Shanghai Foreign Language School, with the ClassIn lesson on the screen between two blackboards." aria-label="Photo 3 of 3"><img src="/expo/rooms/media/room-cases/sfls-classroom-board-sm.webp" alt="" loading="lazy" decoding="async"></button></div>
+            </template>
+          </article>
+          <article class="xr-kase xr-kase--multi" data-type="lecture discussion" data-slug="sjtu-all" data-show="/expo/rooms/media/room-cases/sjtu-lecture-hall.webp" data-show-space="Lecture halls" tabindex="0" role="button" aria-haspopup="dialog" aria-label="Open the story: Shanghai Jiao Tong University, 3 rooms">
+            <div class="xr-kase__media"><img src="/expo/rooms/media/room-cases/sjtu-lecture-hall-sm.webp" alt="A large lecture hall at Shanghai Jiao Tong University, with interactive screens showing a lecturer’s mathematical working." loading="lazy" decoding="async"></div>
+            <div class="xr-kase__body">
+              <span class="xr-kase__tag">University · Shanghai</span>
+              <h4 class="xr-kase__t">Shanghai Jiao Tong University</h4>
+              <p class="xr-kase__space">3 rooms</p>
+            </div>
+            <span class="xr-kase__hw" aria-label="Equipment across the rooms"><i><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8"/></svg></i><i><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5" class="is-fill"/></svg></i><i><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2"/></svg></i><i><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="7" width="9" height="7" rx="1.2"/><rect x="12.5" y="7" width="9" height="7" rx="1.2"/><path d="M7 14v3M17 14v3"/></svg></i></span>
+            <span class="xr-kase__more" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span>
+            <template class="xr-kase__story">
+              <div class="xr-room" data-room="0">
+              <div class="xr-story__media"><div class="xr-story__img"><img src="/expo/rooms/media/room-cases/sjtu-lecture-hall.webp" alt="A large lecture hall at Shanghai Jiao Tong University, with interactive screens showing a lecturer’s mathematical working."></div></div>
+              <div class="xr-story__b">
+                <span class="xr-story__tag">University · Shanghai</span>
+                <h3 class="xr-story__t">Shanghai Jiao Tong University</h3>
+                <p class="xr-story__rooms-t">3 rooms. Tap one to see it.</p><div class="xr-story__rooms" role="group" aria-label="Rooms at Shanghai Jiao Tong University"><button type="button" data-room="0" data-type="lecture" aria-pressed="true">Lecture halls</button><button type="button" data-room="1" data-type="discussion" aria-pressed="false">Zhiyuan College</button><button type="button" data-room="2" data-type="discussion" aria-pressed="false">School of Medicine</button></div><p class="xr-story__space">Lecture halls and seminar rooms</p>
+                <p class="xr-story__kind">Everyday teaching and lectures</p><div class="xr-hw"><p class="xr-hw__t">Equipment</p><ul class="xr-hw__list"><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8"/></svg></span><span class="xr-hw__tx"><b>Large interactive displays</b></span></li><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5" class="is-fill"/></svg></span><span class="xr-hw__tx"><b>Saved digital boardwork</b></span></li><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2"/></svg></span><span class="xr-hw__tx"><b>Audio-visual support</b></span></li></ul></div>
+              </div>
+              </div>
+              <div class="xr-room" data-room="1" hidden>
+              <div class="xr-story__media"><div class="xr-story__img"><img src="/expo/rooms/media/room-cases/sjtu-zhiyuan-207-detail.webp" alt="Room 207 at SJTU Zhiyuan College, with green chairs and combined desks, front dual screens and group displays."></div></div>
+              <div class="xr-story__b">
+                <span class="xr-story__tag">University · Shanghai</span>
+                <h3 class="xr-story__t">Shanghai Jiao Tong University</h3>
+                <p class="xr-story__rooms-t">3 rooms. Tap one to see it.</p><div class="xr-story__rooms" role="group" aria-label="Rooms at Shanghai Jiao Tong University"><button type="button" data-room="0" data-type="lecture" aria-pressed="false">Lecture halls</button><button type="button" data-room="1" data-type="discussion" aria-pressed="true">Zhiyuan College</button><button type="button" data-room="2" data-type="discussion" aria-pressed="false">School of Medicine</button></div>
+                <p class="xr-story__kind">Group discussion room</p><div class="xr-hw"><p class="xr-hw__t">Equipment</p><ul class="xr-hw__list"><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8"/></svg></span><span class="xr-hw__tx"><b>Dual screens</b></span></li><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="7" width="9" height="7" rx="1.2"/><rect x="12.5" y="7" width="9" height="7" rx="1.2"/><path d="M7 14v3M17 14v3"/></svg></span><span class="xr-hw__tx"><b>Group displays</b></span></li></ul></div>
+              </div><div class="xr-story__thumbs" role="group" aria-label="More photos of this room"><button type="button" data-src="/expo/rooms/media/room-cases/sjtu-zhiyuan-207-detail.webp" data-alt="Room 207 at SJTU Zhiyuan College, with green chairs and combined desks, front dual screens and group displays." aria-label="Photo 1 of 4" aria-current="true"><img src="/expo/rooms/media/room-cases/sjtu-zhiyuan-207-detail-sm.webp" alt="" loading="lazy" decoding="async"></button><button type="button" data-src="/expo/rooms/media/room-cases/sjtu-classroom-detail.webp" data-alt="A class at SJTU, with the teacher facing grouped seating and teaching content on the front dual screens and a side display." aria-label="Photo 2 of 4"><img src="/expo/rooms/media/room-cases/sjtu-classroom-detail-sm.webp" alt="" loading="lazy" decoding="async"></button><button type="button" data-src="/expo/rooms/media/room-cases/sjtu-zhiyuan-display-detail.webp" data-alt="Two teaching displays side by side on the front wall of a Zhiyuan College classroom, showing slides and digital board writing separately." aria-label="Photo 3 of 4"><img src="/expo/rooms/media/room-cases/sjtu-zhiyuan-display-detail-sm.webp" alt="" loading="lazy" decoding="async"></button><button type="button" data-src="/expo/rooms/media/room-cases/sjtu-global-classroom-detail.webp" data-alt="The Global Classroom at SJTU Zhiyuan College, with two teaching screens at the front and a camera between them." aria-label="Photo 4 of 4"><img src="/expo/rooms/media/room-cases/sjtu-global-classroom-detail-sm.webp" alt="" loading="lazy" decoding="async"></button></div>
+              </div>
+              <div class="xr-room" data-room="2" hidden>
+              <div class="xr-story__media"><div class="xr-story__img"><img src="/expo/rooms/media/room-cases/sjtu-medical-01-detail.webp" alt="Group tables and chairs with mobile display screens at Shanghai Jiao Tong University School of Medicine."></div></div>
+              <div class="xr-story__b">
+                <span class="xr-story__tag">Medical school · Shanghai</span>
+                <h3 class="xr-story__t">Shanghai Jiao Tong University</h3>
+                <p class="xr-story__rooms-t">3 rooms. Tap one to see it.</p><div class="xr-story__rooms" role="group" aria-label="Rooms at Shanghai Jiao Tong University"><button type="button" data-room="0" data-type="lecture" aria-pressed="false">Lecture halls</button><button type="button" data-room="1" data-type="discussion" aria-pressed="false">Zhiyuan College</button><button type="button" data-room="2" data-type="discussion" aria-pressed="true">School of Medicine</button></div><p class="xr-story__space">Future Learning Centre</p>
+                <p class="xr-story__kind">Group discussion room</p><div class="xr-hw"><p class="xr-hw__t">Equipment</p><ul class="xr-hw__list"><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8"/></svg></span><span class="xr-hw__tx"><b>Dual screens</b></span></li><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="7" width="9" height="7" rx="1.2"/><rect x="12.5" y="7" width="9" height="7" rx="1.2"/><path d="M7 14v3M17 14v3"/></svg></span><span class="xr-hw__tx"><b>Group screens</b></span></li><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="10" rx="5"/><circle cx="9" cy="12" r="2.4"/><path d="M15 12h2"/></svg></span><span class="xr-hw__tx"><b>ClassIn Cam T1 and S1</b></span></li><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0014 0M12 18v3"/></svg></span><span class="xr-hw__tx"><b>3 ClassIn Mic DT2</b></span></li></ul></div>
+              </div><div class="xr-story__thumbs" role="group" aria-label="More photos of this room"><button type="button" data-src="/expo/rooms/media/room-cases/sjtu-medical-01-detail.webp" data-alt="Group tables and chairs with mobile display screens at Shanghai Jiao Tong University School of Medicine." aria-label="Photo 1 of 4" aria-current="true"><img src="/expo/rooms/media/room-cases/sjtu-medical-01-detail-sm.webp" alt="" loading="lazy" decoding="async"></button><button type="button" data-src="/expo/rooms/media/room-cases/sjtu-medical-03-detail.webp" data-alt="A teacher explaining at dual screens, combining medical images with board writing." aria-label="Photo 2 of 4"><img src="/expo/rooms/media/room-cases/sjtu-medical-03-detail-sm.webp" alt="" loading="lazy" decoding="async"></button><button type="button" data-src="/expo/rooms/media/room-cases/sjtu-medical-02-detail.webp" data-alt="Medical students seated around group tables during a class." aria-label="Photo 3 of 4"><img src="/expo/rooms/media/room-cases/sjtu-medical-02-detail-sm.webp" alt="" loading="lazy" decoding="async"></button><button type="button" data-src="/expo/rooms/media/room-cases/sjtu-medical-04-detail.webp" data-alt="A teacher giving a medical lecture to students in the academic lecture hall." aria-label="Photo 4 of 4"><img src="/expo/rooms/media/room-cases/sjtu-medical-04-detail-sm.webp" alt="" loading="lazy" decoding="async"></button></div>
+              </div>
+            </template>
+          </article>
+          <article class="xr-kase" data-type="discussion" data-slug="jiangnan" data-show="/expo/rooms/media/room-cases/jiangnan-ppt-collaboration-detail.webp" tabindex="0" role="button" aria-haspopup="dialog" aria-label="Open the story: Jiangnan University, Teacher Development and Classroom Co-creation">
+            <div class="xr-kase__media"><img src="/expo/rooms/media/room-cases/jiangnan-ppt-collaboration-detail-sm.webp" alt="A teacher guides students working together on a laptop." loading="lazy" decoding="async"></div>
+            <div class="xr-kase__body">
+              <span class="xr-kase__tag">University · Jiangsu</span>
+              <h4 class="xr-kase__t">Jiangnan University</h4>
+              <p class="xr-kase__space">Teacher Development and Classroom Co-creation</p>
+            </div>
+            <span class="xr-kase__hw" aria-label="Dual screens; Sketch Boards"><i><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8"/></svg></i><i><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="3" width="12" height="18" rx="2.5"/><path d="M11 18h2"/></svg></i></span>
+            <span class="xr-kase__more" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span>
+            <template class="xr-kase__story">
+              <div class="xr-story__media"><div class="xr-story__img"><img src="/expo/rooms/media/room-cases/jiangnan-ppt-collaboration-detail.webp" alt="A teacher guides students working together on a laptop."></div></div>
+              <div class="xr-story__b">
+                <span class="xr-story__tag">University · Jiangsu</span>
+                <h3 class="xr-story__t">Jiangnan University</h3>
+                <p class="xr-story__space">Teacher Development and Classroom Co-creation</p>
+                <p class="xr-story__kind">Group discussion room</p><div class="xr-hw"><p class="xr-hw__t">Equipment</p><ul class="xr-hw__list"><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8"/></svg></span><span class="xr-hw__tx"><b>Dual screens</b></span></li><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="3" width="12" height="18" rx="2.5"/><path d="M11 18h2"/></svg></span><span class="xr-hw__tx"><b>Sketch Boards</b></span></li></ul></div>
+              </div>
+            </template>
+          </article>
+          <article class="xr-kase" data-type="discussion" data-slug="ecnu" data-show="/expo/rooms/media/room-cases/ecnu-multiscreen-classroom-detail.webp" tabindex="0" role="button" aria-haspopup="dialog" aria-label="Open the story: East China Normal University, Future Teacher Training Space">
+            <div class="xr-kase__media"><img src="/expo/rooms/media/room-cases/ecnu-multiscreen-classroom-detail-sm.webp" alt="ECNU classroom, with screens at the front and on both sides facing students on either side of a central aisle." loading="lazy" decoding="async"></div>
+            <div class="xr-kase__body">
+              <span class="xr-kase__tag">University · Shanghai</span>
+              <h4 class="xr-kase__t">East China Normal University</h4>
+              <p class="xr-kase__space">Future Teacher Training Space</p>
+            </div>
+            <span class="xr-kase__hw" aria-label="Large shared screens; Dual-teacher link"><i><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8"/></svg></i><i><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="M16 10l5-3v10l-5-3"/></svg></i></span>
+            <span class="xr-kase__more" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span>
+            <template class="xr-kase__story">
+              <div class="xr-story__media"><div class="xr-story__img"><img src="/expo/rooms/media/room-cases/ecnu-multiscreen-classroom-detail.webp" alt="ECNU classroom, with screens at the front and on both sides facing students on either side of a central aisle."></div></div>
+              <div class="xr-story__b">
+                <span class="xr-story__tag">University · Shanghai</span>
+                <h3 class="xr-story__t">East China Normal University</h3>
+                <p class="xr-story__space">Future Teacher Training Space</p>
+                <p class="xr-story__kind">Group discussion room</p><div class="xr-hw"><p class="xr-hw__t">Equipment</p><ul class="xr-hw__list"><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8"/></svg></span><span class="xr-hw__tx"><b>Large shared screens</b></span></li><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="M16 10l5-3v10l-5-3"/></svg></span><span class="xr-hw__tx"><b>Dual-teacher link</b></span></li></ul></div>
+              </div><div class="xr-story__thumbs" role="group" aria-label="More photos of this room"><button type="button" data-src="/expo/rooms/media/room-cases/ecnu-multiscreen-classroom-detail.webp" data-alt="ECNU classroom, with screens at the front and on both sides facing students on either side of a central aisle." aria-label="Photo 1 of 2" aria-current="true"><img src="/expo/rooms/media/room-cases/ecnu-multiscreen-classroom-detail-sm.webp" alt="" loading="lazy" decoding="async"></button><button type="button" data-src="/expo/rooms/media/room-cases/ecnu-02-detail.webp" data-alt="A teacher leads a teaching exchange in front of a large screen, with remote participants connected at the top of the screen." aria-label="Photo 2 of 2"><img src="/expo/rooms/media/room-cases/ecnu-02-detail-sm.webp" alt="" loading="lazy" decoding="async"></button></div>
+            </template>
+          </article>
+          <article class="xr-kase" data-type="discussion" data-slug="sisu" data-show="/expo/rooms/media/room-cases/sisu-classroom-detail.webp" tabindex="0" role="button" aria-haspopup="dialog" aria-label="Open the story: Shanghai International Studies University, Language Teaching and Group Learning">
+            <div class="xr-kase__media"><img src="/expo/rooms/media/room-cases/sisu-classroom-detail-sm.webp" alt="A SISU class, with the teacher at dual screens and students seated around the teaching area." loading="lazy" decoding="async"></div>
+            <div class="xr-kase__body">
+              <span class="xr-kase__tag">University · Shanghai</span>
+              <h4 class="xr-kase__t">Shanghai International Studies University</h4>
+              <p class="xr-kase__space">Language Teaching and Group Learning</p>
+            </div>
+            <span class="xr-kase__hw" aria-label="Dual screens and all-in-one displays"><i><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8"/></svg></i></span>
+            <span class="xr-kase__more" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span>
+            <template class="xr-kase__story">
+              <div class="xr-story__media"><div class="xr-story__img"><img src="/expo/rooms/media/room-cases/sisu-classroom-detail.webp" alt="A SISU class, with the teacher at dual screens and students seated around the teaching area."></div></div>
+              <div class="xr-story__b">
+                <span class="xr-story__tag">University · Shanghai</span>
+                <h3 class="xr-story__t">Shanghai International Studies University</h3>
+                <p class="xr-story__space">Language Teaching and Group Learning</p>
+                <p class="xr-story__kind">Group discussion room</p><div class="xr-hw"><p class="xr-hw__t">Equipment</p><ul class="xr-hw__list"><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8"/></svg></span><span class="xr-hw__tx"><b>Dual screens and all-in-one displays</b></span></li></ul></div>
+              </div><div class="xr-story__thumbs" role="group" aria-label="More photos of this room"><button type="button" data-src="/expo/rooms/media/room-cases/sisu-classroom-detail.webp" data-alt="A SISU class, with the teacher at dual screens and students seated around the teaching area." aria-label="Photo 1 of 4" aria-current="true"><img src="/expo/rooms/media/room-cases/sisu-classroom-detail-sm.webp" alt="" loading="lazy" decoding="async"></button><button type="button" data-src="/expo/rooms/media/room-cases/sisu-learning-centre-groups-detail.webp" data-alt="Light-coloured combined tables forming learning groups in the SISU Future Learning Centre, with dual screens at the front." aria-label="Photo 2 of 4"><img src="/expo/rooms/media/room-cases/sisu-learning-centre-groups-detail-sm.webp" alt="" loading="lazy" decoding="async"></button><button type="button" data-src="/expo/rooms/media/room-cases/sisu-learning-centre-seminar-detail.webp" data-alt="Seminar space in the SISU Future Learning Centre, with light-coloured tables and chairs in an enclosed layout and teaching displays on the wall." aria-label="Photo 3 of 4"><img src="/expo/rooms/media/room-cases/sisu-learning-centre-seminar-detail-sm.webp" alt="" loading="lazy" decoding="async"></button><button type="button" data-src="/expo/rooms/media/room-cases/sisu-japanese-phonetics-detail.webp" data-alt="Students seated around the teaching area as the teacher gives a language lesson at dual screens." aria-label="Photo 4 of 4"><img src="/expo/rooms/media/room-cases/sisu-japanese-phonetics-detail-sm.webp" alt="" loading="lazy" decoding="async"></button></div>
+            </template>
+          </article>
+          <article class="xr-kase" data-type="discussion" data-slug="xinhua" data-show="/expo/rooms/media/room-cases/xinhua-01-detail.webp" tabindex="0" role="button" aria-haspopup="dialog" aria-label="Open the story: Xinhua College, Regular Teaching and Discussion Classrooms">
+            <div class="xr-kase__media"><img src="/expo/rooms/media/room-cases/xinhua-01-detail-sm.webp" alt="Discussion classroom at Xinhua College, with combined desks and chairs facing front dual screens." loading="lazy" decoding="async"></div>
+            <div class="xr-kase__body">
+              <span class="xr-kase__tag">College · China</span>
+              <h4 class="xr-kase__t">Xinhua College</h4>
+              <p class="xr-kase__space">Regular Teaching and Discussion Classrooms</p>
+            </div>
+            <span class="xr-kase__hw" aria-label="Dual screens at the front; Group displays; Cameras, sound and recording"><i><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8"/></svg></i><i><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="7" width="9" height="7" rx="1.2"/><rect x="12.5" y="7" width="9" height="7" rx="1.2"/><path d="M7 14v3M17 14v3"/></svg></i><i><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="10" rx="5"/><circle cx="9" cy="12" r="2.4"/><path d="M15 12h2"/></svg></i></span>
+            <span class="xr-kase__more" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span>
+            <template class="xr-kase__story">
+              <div class="xr-story__media"><div class="xr-story__img"><img src="/expo/rooms/media/room-cases/xinhua-01-detail.webp" alt="Discussion classroom at Xinhua College, with combined desks and chairs facing front dual screens."></div></div>
+              <div class="xr-story__b">
+                <span class="xr-story__tag">College · China</span>
+                <h3 class="xr-story__t">Xinhua College</h3>
+                <p class="xr-story__space">Regular Teaching and Discussion Classrooms</p>
+                <p class="xr-story__kind">Group discussion room</p><div class="xr-hw"><p class="xr-hw__t">Equipment</p><ul class="xr-hw__list"><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8"/></svg></span><span class="xr-hw__tx"><b>Dual screens at the front</b></span></li><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="7" width="9" height="7" rx="1.2"/><rect x="12.5" y="7" width="9" height="7" rx="1.2"/><path d="M7 14v3M17 14v3"/></svg></span><span class="xr-hw__tx"><b>Group displays</b></span></li><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="10" rx="5"/><circle cx="9" cy="12" r="2.4"/><path d="M15 12h2"/></svg></span><span class="xr-hw__tx"><b>Cameras, sound and recording</b></span></li></ul></div>
+              </div><div class="xr-story__thumbs" role="group" aria-label="More photos of this room"><button type="button" data-src="/expo/rooms/media/room-cases/xinhua-01-detail.webp" data-alt="Discussion classroom at Xinhua College, with combined desks and chairs facing front dual screens." aria-label="Photo 1 of 3" aria-current="true"><img src="/expo/rooms/media/room-cases/xinhua-01-detail-sm.webp" alt="" loading="lazy" decoding="async"></button><button type="button" data-src="/expo/rooms/media/room-cases/xinhua-02-detail.webp" data-alt="Front dual screens and rows of desks in the row-layout smart classroom at Xinhua College." aria-label="Photo 2 of 3"><img src="/expo/rooms/media/room-cases/xinhua-02-detail-sm.webp" alt="" loading="lazy" decoding="async"></button><button type="button" data-src="/expo/rooms/media/room-cases/xinhua-03-detail.webp" data-alt="Displays arranged around group tables in the discussion classroom." aria-label="Photo 3 of 3"><img src="/expo/rooms/media/room-cases/xinhua-03-detail-sm.webp" alt="" loading="lazy" decoding="async"></button></div>
+            </template>
+          </article>
+          <article class="xr-kase" data-type="discussion" data-slug="fudan" data-show="/expo/rooms/media/room-cases/fudan-teaching-building-detail.webp" tabindex="0" role="button" aria-haspopup="dialog" aria-label="Open the story: Fudan University, Future Learning Space">
+            <div class="xr-kase__media"><img src="/expo/rooms/media/room-cases/fudan-teaching-building-detail-sm.webp" alt="A classroom in Fudan University Teaching Building 4, with yellow and red mobile chairs, white desks and two teaching screens at the front." loading="lazy" decoding="async"></div>
+            <div class="xr-kase__body">
+              <span class="xr-kase__tag">University · Shanghai</span>
+              <h4 class="xr-kase__t">Fudan University</h4>
+              <p class="xr-kase__space">Future Learning Space</p>
+            </div>
+            <span class="xr-kase__hw" aria-label="Dual screens; Group displays"><i><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8"/></svg></i><i><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="7" width="9" height="7" rx="1.2"/><rect x="12.5" y="7" width="9" height="7" rx="1.2"/><path d="M7 14v3M17 14v3"/></svg></i></span>
+            <span class="xr-kase__more" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span>
+            <template class="xr-kase__story">
+              <div class="xr-story__media"><div class="xr-story__img"><img src="/expo/rooms/media/room-cases/fudan-teaching-building-detail.webp" alt="A classroom in Fudan University Teaching Building 4, with yellow and red mobile chairs, white desks and two teaching screens at the front."></div></div>
+              <div class="xr-story__b">
+                <span class="xr-story__tag">University · Shanghai</span>
+                <h3 class="xr-story__t">Fudan University</h3>
+                <p class="xr-story__space">Future Learning Space</p>
+                <p class="xr-story__kind">Group discussion room</p><div class="xr-hw"><p class="xr-hw__t">Equipment</p><ul class="xr-hw__list"><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8"/></svg></span><span class="xr-hw__tx"><b>Dual screens</b></span></li><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="7" width="9" height="7" rx="1.2"/><rect x="12.5" y="7" width="9" height="7" rx="1.2"/><path d="M7 14v3M17 14v3"/></svg></span><span class="xr-hw__tx"><b>Group displays</b></span></li></ul></div>
+              </div><div class="xr-story__thumbs" role="group" aria-label="More photos of this room"><button type="button" data-src="/expo/rooms/media/room-cases/fudan-teaching-building-detail.webp" data-alt="A classroom in Fudan University Teaching Building 4, with yellow and red mobile chairs, white desks and two teaching screens at the front." aria-label="Photo 1 of 2" aria-current="true"><img src="/expo/rooms/media/room-cases/fudan-teaching-building-detail-sm.webp" alt="" loading="lazy" decoding="async"></button><button type="button" data-src="/expo/rooms/media/room-cases/fudan-6204-classroom-detail.webp" data-alt="The Future Learning Centre in Room 6204 at Fudan University: screens on two walls, movable tables and students working on tablets." aria-label="Photo 2 of 2"><img src="/expo/rooms/media/room-cases/fudan-6204-classroom-detail-sm.webp" alt="" loading="lazy" decoding="async"></button></div>
+            </template>
+          </article>
+          <article class="xr-kase" data-type="lecture" data-slug="tongji" data-show="/expo/rooms/media/room-cases/tongji-dual-screen-front.webp" tabindex="0" role="button" aria-haspopup="dialog" aria-label="Open the story: Tongji University, Continuing Education Classrooms">
+            <div class="xr-kase__media"><img src="/expo/rooms/media/room-cases/tongji-dual-screen-front-sm.webp" alt="A Tongji University classroom with two screens at the front, one with slides and one with handwriting, and rows of white desks." loading="lazy" decoding="async"></div>
+            <div class="xr-kase__body">
+              <span class="xr-kase__tag">University · Shanghai</span>
+              <h4 class="xr-kase__t">Tongji University</h4>
+              <p class="xr-kase__space">Continuing Education Classrooms</p>
+            </div>
+            <span class="xr-kase__hw" aria-label="Classroom sound system"><i><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2"/></svg></i></span>
+            <span class="xr-kase__more" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span>
+            <template class="xr-kase__story">
+              <div class="xr-story__media"><div class="xr-story__img"><img src="/expo/rooms/media/room-cases/tongji-dual-screen-front.webp" alt="A Tongji University classroom with two screens at the front, one with slides and one with handwriting, and rows of white desks."></div></div>
+              <div class="xr-story__b">
+                <span class="xr-story__tag">University · Shanghai</span>
+                <h3 class="xr-story__t">Tongji University</h3>
+                <p class="xr-story__space">Continuing Education Classrooms</p>
+                <p class="xr-story__kind">Everyday teaching and lectures</p><div class="xr-hw"><p class="xr-hw__t">Equipment</p><ul class="xr-hw__list"><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2"/></svg></span><span class="xr-hw__tx"><b>Classroom sound system</b></span></li></ul></div>
+              </div><div class="xr-story__thumbs" role="group" aria-label="More photos of this room"><button type="button" data-src="/expo/rooms/media/room-cases/tongji-dual-screen-front.webp" data-alt="A Tongji University classroom with two screens at the front, one with slides and one with handwriting, and rows of white desks." aria-label="Photo 1 of 4" aria-current="true"><img src="/expo/rooms/media/room-cases/tongji-dual-screen-front-sm.webp" alt="" loading="lazy" decoding="async"></button><button type="button" data-src="/expo/rooms/media/room-cases/tongji-dual-screen-side.webp" data-alt="The same Tongji University classroom from the side: two screens at the front and movable white desks." aria-label="Photo 2 of 4"><img src="/expo/rooms/media/room-cases/tongji-dual-screen-side-sm.webp" alt="" loading="lazy" decoding="async"></button><button type="button" data-src="/expo/rooms/media/room-cases/tongji-taihe-room-detail.webp" data-alt="Classroom in the Taihe Building of Tongji University’s School of Continuing Education, with wood-tone desks and dark chairs in rows and large windows along the side." aria-label="Photo 3 of 4"><img src="/expo/rooms/media/room-cases/tongji-taihe-room-detail-sm.webp" alt="" loading="lazy" decoding="async"></button><button type="button" data-src="/expo/rooms/media/room-cases/tongji-taihe-side-detail.webp" data-alt="Side view of a Taihe Building classroom, with a clear aisle linking rows of seats to the teaching area at the front." aria-label="Photo 4 of 4"><img src="/expo/rooms/media/room-cases/tongji-taihe-side-detail-sm.webp" alt="" loading="lazy" decoding="async"></button></div>
+            </template>
+          </article>
+          <article class="xr-kase" data-type="discussion" data-slug="bupt" data-show="/expo/rooms/media/room-cases/bupt-learning-centre-dual-detail.webp" tabindex="0" role="button" aria-haspopup="dialog" aria-label="Open the story: Beijing University of Posts and Telecommunications, Future Learning Centre">
+            <div class="xr-kase__media"><img src="/expo/rooms/media/room-cases/bupt-learning-centre-dual-detail-sm.webp" alt="Classroom in the BUPT Future Learning Centre, with light-coloured desks facing front dual screens and supporting displays at the side." loading="lazy" decoding="async"></div>
+            <div class="xr-kase__body">
+              <span class="xr-kase__tag">University · Beijing</span>
+              <h4 class="xr-kase__t">Beijing University of Posts and Telecommunications</h4>
+              <p class="xr-kase__space">Future Learning Centre</p>
+            </div>
+            <span class="xr-kase__hw" aria-label="Main screens; Group touch screens"><i><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8"/></svg></i><i><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="7" width="9" height="7" rx="1.2"/><rect x="12.5" y="7" width="9" height="7" rx="1.2"/><path d="M7 14v3M17 14v3"/></svg></i></span>
+            <span class="xr-kase__more" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span>
+            <template class="xr-kase__story">
+              <div class="xr-story__media"><div class="xr-story__img"><img src="/expo/rooms/media/room-cases/bupt-learning-centre-dual-detail.webp" alt="Classroom in the BUPT Future Learning Centre, with light-coloured desks facing front dual screens and supporting displays at the side."></div></div>
+              <div class="xr-story__b">
+                <span class="xr-story__tag">University · Beijing</span>
+                <h3 class="xr-story__t">Beijing University of Posts and Telecommunications</h3>
+                <p class="xr-story__space">Future Learning Centre</p>
+                <p class="xr-story__kind">Group discussion room</p><div class="xr-hw"><p class="xr-hw__t">Equipment</p><ul class="xr-hw__list"><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8"/></svg></span><span class="xr-hw__tx"><b>Main screens</b></span></li><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="7" width="9" height="7" rx="1.2"/><rect x="12.5" y="7" width="9" height="7" rx="1.2"/><path d="M7 14v3M17 14v3"/></svg></span><span class="xr-hw__tx"><b>Group touch screens</b></span></li></ul></div>
+              </div><div class="xr-story__thumbs" role="group" aria-label="More photos of this room"><button type="button" data-src="/expo/rooms/media/room-cases/bupt-learning-centre-dual-detail.webp" data-alt="Classroom in the BUPT Future Learning Centre, with light-coloured desks facing front dual screens and supporting displays at the side." aria-label="Photo 1 of 2" aria-current="true"><img src="/expo/rooms/media/room-cases/bupt-learning-centre-dual-detail-sm.webp" alt="" loading="lazy" decoding="async"></button><button type="button" data-src="/expo/rooms/media/room-cases/bupt-learning-centre-overview-detail.webp" data-alt="Classroom in the BUPT Future Learning Centre, with blue chairs and light-coloured desks in rows and several screens at the front and sides." aria-label="Photo 2 of 2"><img src="/expo/rooms/media/room-cases/bupt-learning-centre-overview-detail-sm.webp" alt="" loading="lazy" decoding="async"></button></div>
+            </template>
+          </article>
+          <article class="xr-kase" data-type="lab" data-slug="gdpu" data-show="/expo/rooms/media/room-cases/gdpu-anatomy-discussion-detail.webp" tabindex="0" role="button" aria-haspopup="dialog" aria-label="Open the story: Guangdong Pharmaceutical University, Medical Seminar and Lab Spaces">
+            <div class="xr-kase__media"><img src="/expo/rooms/media/room-cases/gdpu-anatomy-discussion-detail-sm.webp" alt="Students in white lab coats seated in groups at Guangdong Pharmaceutical University, with the course and a remote video feed on the front screen." loading="lazy" decoding="async"></div>
+            <div class="xr-kase__body">
+              <span class="xr-kase__tag">University · Guangdong</span>
+              <h4 class="xr-kase__t">Guangdong Pharmaceutical University</h4>
+              <p class="xr-kase__space">Medical Seminar and Lab Spaces</p>
+            </div>
+            <span class="xr-kase__hw" aria-label="Large front screen; Lab bench displays"><i><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8"/></svg></i><i><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="7" width="9" height="7" rx="1.2"/><rect x="12.5" y="7" width="9" height="7" rx="1.2"/><path d="M7 14v3M17 14v3"/></svg></i></span>
+            <span class="xr-kase__more" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span>
+            <template class="xr-kase__story">
+              <div class="xr-story__media"><div class="xr-story__img"><img src="/expo/rooms/media/room-cases/gdpu-anatomy-discussion-detail.webp" alt="Students in white lab coats seated in groups at Guangdong Pharmaceutical University, with the course and a remote video feed on the front screen."></div></div>
+              <div class="xr-story__b">
+                <span class="xr-story__tag">University · Guangdong</span>
+                <h3 class="xr-story__t">Guangdong Pharmaceutical University</h3>
+                <p class="xr-story__space">Medical Seminar and Lab Spaces</p>
+                <p class="xr-story__kind">Labs and practical teaching</p><div class="xr-hw"><p class="xr-hw__t">Equipment</p><ul class="xr-hw__list"><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8"/></svg></span><span class="xr-hw__tx"><b>Large front screen</b></span></li><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="7" width="9" height="7" rx="1.2"/><rect x="12.5" y="7" width="9" height="7" rx="1.2"/><path d="M7 14v3M17 14v3"/></svg></span><span class="xr-hw__tx"><b>Lab bench displays</b></span></li></ul></div>
+              </div><div class="xr-story__thumbs" role="group" aria-label="More photos of this room"><button type="button" data-src="/expo/rooms/media/room-cases/gdpu-anatomy-discussion-detail.webp" data-alt="Students in white lab coats seated in groups at Guangdong Pharmaceutical University, with the course and a remote video feed on the front screen." aria-label="Photo 1 of 3" aria-current="true"><img src="/expo/rooms/media/room-cases/gdpu-anatomy-discussion-detail-sm.webp" alt="" loading="lazy" decoding="async"></button><button type="button" data-src="/expo/rooms/media/room-cases/gdpu-group-study-detail.webp" data-alt="Students discussing around a table group in the medical seminar room, with a nearby screen showing medical course content." aria-label="Photo 2 of 3"><img src="/expo/rooms/media/room-cases/gdpu-group-study-detail-sm.webp" alt="" loading="lazy" decoding="async"></button><button type="button" data-src="/expo/rooms/media/room-cases/gdpu-laboratory-detail.webp" data-alt="Lab classroom at Guangdong Pharmaceutical University, with lab workstations and several display screens working together." aria-label="Photo 3 of 3"><img src="/expo/rooms/media/room-cases/gdpu-laboratory-detail-sm.webp" alt="" loading="lazy" decoding="async"></button></div>
+            </template>
+          </article>
+          <article class="xr-kase" data-type="lab" data-slug="bit-zhuhai" data-show="/expo/rooms/media/room-cases/bit-zhuhai-physics-dual-detail.webp" tabindex="0" role="button" aria-haspopup="dialog" aria-label="Open the story: Beijing Institute of Technology, Zhuhai Campus, Basic Physics Lab Teaching Space">
+            <div class="xr-kase__media"><img src="/expo/rooms/media/room-cases/bit-zhuhai-physics-dual-detail-sm.webp" alt="Physics lab at BIT Zhuhai, with front dual screens facing rows of lab workstations." loading="lazy" decoding="async"></div>
+            <div class="xr-kase__body">
+              <span class="xr-kase__tag">University · Zhuhai</span>
+              <h4 class="xr-kase__t">Beijing Institute of Technology, Zhuhai Campus</h4>
+              <p class="xr-kase__space">Basic Physics Lab Teaching Space</p>
+            </div>
+            <span class="xr-kase__hw" aria-label="Dual screens; Workstation screens"><i><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8"/></svg></i><i><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="7" width="9" height="7" rx="1.2"/><rect x="12.5" y="7" width="9" height="7" rx="1.2"/><path d="M7 14v3M17 14v3"/></svg></i></span>
+            <span class="xr-kase__more" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span>
+            <template class="xr-kase__story">
+              <div class="xr-story__media"><div class="xr-story__img"><img src="/expo/rooms/media/room-cases/bit-zhuhai-physics-dual-detail.webp" alt="Physics lab at BIT Zhuhai, with front dual screens facing rows of lab workstations."></div></div>
+              <div class="xr-story__b">
+                <span class="xr-story__tag">University · Zhuhai</span>
+                <h3 class="xr-story__t">Beijing Institute of Technology, Zhuhai Campus</h3>
+                <p class="xr-story__space">Basic Physics Lab Teaching Space</p>
+                <p class="xr-story__kind">Labs and practical teaching</p><div class="xr-hw"><p class="xr-hw__t">Equipment</p><ul class="xr-hw__list"><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8"/></svg></span><span class="xr-hw__tx"><b>Dual screens</b></span></li><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="7" width="9" height="7" rx="1.2"/><rect x="12.5" y="7" width="9" height="7" rx="1.2"/><path d="M7 14v3M17 14v3"/></svg></span><span class="xr-hw__tx"><b>Workstation screens</b></span></li></ul></div>
+              </div><div class="xr-story__thumbs" role="group" aria-label="More photos of this room"><button type="button" data-src="/expo/rooms/media/room-cases/bit-zhuhai-physics-dual-detail.webp" data-alt="Physics lab at BIT Zhuhai, with front dual screens facing rows of lab workstations." aria-label="Photo 1 of 2" aria-current="true"><img src="/expo/rooms/media/room-cases/bit-zhuhai-physics-dual-detail-sm.webp" alt="" loading="lazy" decoding="async"></button><button type="button" data-src="/expo/rooms/media/room-cases/bit-zhuhai-physics-lab-detail.webp" data-alt="Lab classroom at BIT Zhuhai, with several groups of physics workstations and displays at the front and side." aria-label="Photo 2 of 2"><img src="/expo/rooms/media/room-cases/bit-zhuhai-physics-lab-detail-sm.webp" alt="" loading="lazy" decoding="async"></button></div>
+            </template>
+          </article>
+          <article class="xr-kase" data-type="discussion" data-slug="zhaoqing-medical" data-show="/expo/rooms/media/room-cases/zhaoqing-group-room-detail.webp" tabindex="0" role="button" aria-haspopup="dialog" aria-label="Open the story: Zhaoqing Medical College, Lecture and Group Discussion Spaces">
+            <div class="xr-kase__media"><img src="/expo/rooms/media/room-cases/zhaoqing-group-room-detail-sm.webp" alt="Group classroom at Zhaoqing Medical College, with light-coloured combined tables forming learning groups and several displays on the walls." loading="lazy" decoding="async"></div>
+            <div class="xr-kase__body">
+              <span class="xr-kase__tag">Medical school · Zhaoqing</span>
+              <h4 class="xr-kase__t">Zhaoqing Medical College</h4>
+              <p class="xr-kase__space">Lecture and Group Discussion Spaces</p>
+            </div>
+            <span class="xr-kase__hw" aria-label="Dual screens; Student-area displays; Teacher and student cameras"><i><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8"/></svg></i><i><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="7" width="9" height="7" rx="1.2"/><rect x="12.5" y="7" width="9" height="7" rx="1.2"/><path d="M7 14v3M17 14v3"/></svg></i><i><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="10" rx="5"/><circle cx="9" cy="12" r="2.4"/><path d="M15 12h2"/></svg></i></span>
+            <span class="xr-kase__more" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span>
+            <template class="xr-kase__story">
+              <div class="xr-story__media"><div class="xr-story__img"><img src="/expo/rooms/media/room-cases/zhaoqing-group-room-detail.webp" alt="Group classroom at Zhaoqing Medical College, with light-coloured combined tables forming learning groups and several displays on the walls."></div></div>
+              <div class="xr-story__b">
+                <span class="xr-story__tag">Medical school · Zhaoqing</span>
+                <h3 class="xr-story__t">Zhaoqing Medical College</h3>
+                <p class="xr-story__space">Lecture and Group Discussion Spaces</p>
+                <p class="xr-story__kind">Group discussion room</p><div class="xr-hw"><p class="xr-hw__t">Equipment</p><ul class="xr-hw__list"><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8"/></svg></span><span class="xr-hw__tx"><b>Dual screens</b></span></li><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="7" width="9" height="7" rx="1.2"/><rect x="12.5" y="7" width="9" height="7" rx="1.2"/><path d="M7 14v3M17 14v3"/></svg></span><span class="xr-hw__tx"><b>Student-area displays</b></span></li><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="10" rx="5"/><circle cx="9" cy="12" r="2.4"/><path d="M15 12h2"/></svg></span><span class="xr-hw__tx"><b>Teacher and student cameras</b></span></li></ul></div>
+              </div><div class="xr-story__thumbs" role="group" aria-label="More photos of this room"><button type="button" data-src="/expo/rooms/media/room-cases/zhaoqing-group-room-detail.webp" data-alt="Group classroom at Zhaoqing Medical College, with light-coloured combined tables forming learning groups and several displays on the walls." aria-label="Photo 1 of 2" aria-current="true"><img src="/expo/rooms/media/room-cases/zhaoqing-group-room-detail-sm.webp" alt="" loading="lazy" decoding="async"></button><button type="button" data-src="/expo/rooms/media/room-cases/zhaoqing-row-classroom-detail.webp" data-alt="Classroom at Zhaoqing Medical College, with light-coloured desks in rows and a central aisle linking the front and back of the room." aria-label="Photo 2 of 2"><img src="/expo/rooms/media/room-cases/zhaoqing-row-classroom-detail-sm.webp" alt="" loading="lazy" decoding="async"></button></div>
+            </template>
+          </article>
+          <article class="xr-kase" data-type="discussion" data-slug="guangdong-ligong" data-show="/expo/rooms/media/room-cases/guangdong-ligong-class-detail.webp" tabindex="0" role="button" aria-haspopup="dialog" aria-label="Open the story: Guangdong Technology College, Future Learning Centre">
+            <div class="xr-kase__media"><img src="/expo/rooms/media/room-cases/guangdong-ligong-class-detail-sm.webp" alt="A class at Guangdong Technology College, with students discussing around light-coloured combined tables and teaching content on several screens." loading="lazy" decoding="async"></div>
+            <div class="xr-kase__body">
+              <span class="xr-kase__tag">College · Guangdong</span>
+              <h4 class="xr-kase__t">Guangdong Technology College</h4>
+              <p class="xr-kase__space">Future Learning Centre</p>
+            </div>
+            <span class="xr-kase__hw" aria-label="Dual screens; Student-area screens"><i><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8"/></svg></i><i><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="7" width="9" height="7" rx="1.2"/><rect x="12.5" y="7" width="9" height="7" rx="1.2"/><path d="M7 14v3M17 14v3"/></svg></i></span>
+            <span class="xr-kase__more" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span>
+            <template class="xr-kase__story">
+              <div class="xr-story__media"><div class="xr-story__img"><img src="/expo/rooms/media/room-cases/guangdong-ligong-class-detail.webp" alt="A class at Guangdong Technology College, with students discussing around light-coloured combined tables and teaching content on several screens."></div></div>
+              <div class="xr-story__b">
+                <span class="xr-story__tag">College · Guangdong</span>
+                <h3 class="xr-story__t">Guangdong Technology College</h3>
+                <p class="xr-story__space">Future Learning Centre</p>
+                <p class="xr-story__kind">Group discussion room</p><div class="xr-hw"><p class="xr-hw__t">Equipment</p><ul class="xr-hw__list"><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8"/></svg></span><span class="xr-hw__tx"><b>Dual screens</b></span></li><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="7" width="9" height="7" rx="1.2"/><rect x="12.5" y="7" width="9" height="7" rx="1.2"/><path d="M7 14v3M17 14v3"/></svg></span><span class="xr-hw__tx"><b>Student-area screens</b></span></li></ul></div>
+              </div><div class="xr-story__thumbs" role="group" aria-label="More photos of this room"><button type="button" data-src="/expo/rooms/media/room-cases/guangdong-ligong-class-detail.webp" data-alt="A class at Guangdong Technology College, with students discussing around light-coloured combined tables and teaching content on several screens." aria-label="Photo 1 of 3" aria-current="true"><img src="/expo/rooms/media/room-cases/guangdong-ligong-class-detail-sm.webp" alt="" loading="lazy" decoding="async"></button><button type="button" data-src="/expo/rooms/media/room-cases/guangdong-ligong-groups-detail.webp" data-alt="Front dual screens facing combined table groups and rows of desks in the Future Learning Centre." aria-label="Photo 2 of 3"><img src="/expo/rooms/media/room-cases/guangdong-ligong-groups-detail-sm.webp" alt="" loading="lazy" decoding="async"></button><button type="button" data-src="/expo/rooms/media/room-cases/guangdong-ligong-rows-detail.webp" data-alt="Classroom with light-coloured desks and chairs facing front dual screens, and hanging displays on both sides serving different rows." aria-label="Photo 3 of 3"><img src="/expo/rooms/media/room-cases/guangdong-ligong-rows-detail-sm.webp" alt="" loading="lazy" decoding="async"></button></div>
+            </template>
+          </article>
+          <article class="xr-kase" data-type="discussion" data-slug="guangdong-neusoft" data-show="/expo/rooms/media/room-cases/guangdong-neusoft-front-detail.webp" tabindex="0" role="button" aria-haspopup="dialog" aria-label="Open the story: Neusoft Institute Guangdong, Smart Teaching Spaces">
+            <div class="xr-kase__media"><img src="/expo/rooms/media/room-cases/guangdong-neusoft-front-detail-sm.webp" alt="Classroom at Neusoft Institute Guangdong, with light-coloured combined tables in groups and front dual screens and side displays facing students." loading="lazy" decoding="async"></div>
+            <div class="xr-kase__body">
+              <span class="xr-kase__tag">College · Guangdong</span>
+              <h4 class="xr-kase__t">Neusoft Institute Guangdong</h4>
+              <p class="xr-kase__space">Smart Teaching Spaces</p>
+            </div>
+            <span class="xr-kase__hw" aria-label="Dual screens; Interactive all-in-one displays; Teacher and student cameras; Existing central control"><i><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8"/></svg></i><i><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="7" width="9" height="7" rx="1.2"/><rect x="12.5" y="7" width="9" height="7" rx="1.2"/><path d="M7 14v3M17 14v3"/></svg></i><i><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="10" rx="5"/><circle cx="9" cy="12" r="2.4"/><path d="M15 12h2"/></svg></i><i><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg></i></span>
+            <span class="xr-kase__more" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span>
+            <template class="xr-kase__story">
+              <div class="xr-story__media"><div class="xr-story__img"><img src="/expo/rooms/media/room-cases/guangdong-neusoft-front-detail.webp" alt="Classroom at Neusoft Institute Guangdong, with light-coloured combined tables in groups and front dual screens and side displays facing students."></div></div>
+              <div class="xr-story__b">
+                <span class="xr-story__tag">College · Guangdong</span>
+                <h3 class="xr-story__t">Neusoft Institute Guangdong</h3>
+                <p class="xr-story__space">Smart Teaching Spaces</p>
+                <p class="xr-story__kind">Group discussion room</p><div class="xr-hw"><p class="xr-hw__t">Equipment</p><ul class="xr-hw__list"><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8"/></svg></span><span class="xr-hw__tx"><b>Dual screens</b></span></li><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="7" width="9" height="7" rx="1.2"/><rect x="12.5" y="7" width="9" height="7" rx="1.2"/><path d="M7 14v3M17 14v3"/></svg></span><span class="xr-hw__tx"><b>Interactive all-in-one displays</b></span></li><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="10" rx="5"/><circle cx="9" cy="12" r="2.4"/><path d="M15 12h2"/></svg></span><span class="xr-hw__tx"><b>Teacher and student cameras</b></span></li><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg></span><span class="xr-hw__tx"><b>Existing central control</b></span></li></ul></div>
+              </div><div class="xr-story__thumbs" role="group" aria-label="More photos of this room"><button type="button" data-src="/expo/rooms/media/room-cases/guangdong-neusoft-front-detail.webp" data-alt="Classroom at Neusoft Institute Guangdong, with light-coloured combined tables in groups and front dual screens and side displays facing students." aria-label="Photo 1 of 2" aria-current="true"><img src="/expo/rooms/media/room-cases/guangdong-neusoft-front-detail-sm.webp" alt="" loading="lazy" decoding="async"></button><button type="button" data-src="/expo/rooms/media/room-cases/guangdong-neusoft-side-detail.webp" data-alt="Side view of the classroom, with combined tables and movable chairs forming a group learning area." aria-label="Photo 2 of 2"><img src="/expo/rooms/media/room-cases/guangdong-neusoft-side-detail-sm.webp" alt="" loading="lazy" decoding="async"></button></div>
+            </template>
+          </article>
+          <article class="xr-kase xr-kase--multi" data-type="lab discussion" data-slug="pku" data-show="/expo/rooms/media/room-cases/pku-digital-sport-01-detail.webp" data-show-space="Physical Education" tabindex="0" role="button" aria-haspopup="dialog" aria-label="Open the story: Peking University, 3 rooms">
+            <div class="xr-kase__media"><img src="/expo/rooms/media/room-cases/pku-digital-sport-01-detail-sm.webp" alt="Teacher and students practising movements together in a Peking University digital PE class." loading="lazy" decoding="async"></div>
+            <div class="xr-kase__body">
+              <span class="xr-kase__tag">University · Beijing</span>
+              <h4 class="xr-kase__t">Peking University</h4>
+              <p class="xr-kase__space">3 rooms</p>
+            </div>
+            <span class="xr-kase__hw" aria-label="Equipment across the rooms"><i><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8"/></svg></i><i><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="M16 10l5-3v10l-5-3"/></svg></i><i><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="3" width="12" height="18" rx="2.5"/><path d="M11 18h2"/></svg></i><i><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="7" width="9" height="7" rx="1.2"/><rect x="12.5" y="7" width="9" height="7" rx="1.2"/><path d="M7 14v3M17 14v3"/></svg></i></span>
+            <span class="xr-kase__more" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span>
+            <template class="xr-kase__story">
+              <div class="xr-room" data-room="0">
+              <div class="xr-story__media"><div class="xr-story__img"><img src="/expo/rooms/media/room-cases/pku-digital-sport-01-detail.webp" alt="Teacher and students practising movements together in a Peking University digital PE class."></div></div>
+              <div class="xr-story__b">
+                <span class="xr-story__tag">University · Beijing</span>
+                <h3 class="xr-story__t">Peking University</h3>
+                <p class="xr-story__rooms-t">3 rooms. Tap one to see it.</p><div class="xr-story__rooms" role="group" aria-label="Rooms at Peking University"><button type="button" data-room="0" data-type="lab" aria-pressed="true">Physical Education</button><button type="button" data-room="1" data-type="discussion" aria-pressed="false">Foreign Languages</button><button type="button" data-room="2" data-type="lab" aria-pressed="false">Health Science Center</button></div><p class="xr-story__space">Digital PE teaching</p>
+                <p class="xr-story__kind">Labs and practical teaching</p><div class="xr-hw"><p class="xr-hw__t">Equipment</p><ul class="xr-hw__list"><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8"/></svg></span><span class="xr-hw__tx"><b>Large smart screens</b></span></li></ul></div>
+              </div><div class="xr-story__thumbs" role="group" aria-label="More photos of this room"><button type="button" data-src="/expo/rooms/media/room-cases/pku-digital-sport-01-detail.webp" data-alt="Teacher and students practising movements together in a Peking University digital PE class." aria-label="Photo 1 of 2" aria-current="true"><img src="/expo/rooms/media/room-cases/pku-digital-sport-01-detail-sm.webp" alt="" loading="lazy" decoding="async"></button><button type="button" data-src="/expo/rooms/media/room-cases/pku-digital-sport-02-detail.webp" data-alt="Students practising movements facing dual screens that show the class." aria-label="Photo 2 of 2"><img src="/expo/rooms/media/room-cases/pku-digital-sport-02-detail-sm.webp" alt="" loading="lazy" decoding="async"></button></div>
+              </div>
+              <div class="xr-room" data-room="1" hidden>
+              <div class="xr-story__media"><div class="xr-story__img"><img src="/expo/rooms/media/room-cases/pku-foreign-languages-02-detail.webp" alt="A remote foreign teacher joining the on-site class at the PKU School of Foreign Languages through the dual screens."></div></div>
+              <div class="xr-story__b">
+                <span class="xr-story__tag">University · Beijing</span>
+                <h3 class="xr-story__t">Peking University</h3>
+                <p class="xr-story__rooms-t">3 rooms. Tap one to see it.</p><div class="xr-story__rooms" role="group" aria-label="Rooms at Peking University"><button type="button" data-room="0" data-type="lab" aria-pressed="false">Physical Education</button><button type="button" data-room="1" data-type="discussion" aria-pressed="true">Foreign Languages</button><button type="button" data-room="2" data-type="lab" aria-pressed="false">Health Science Center</button></div><p class="xr-story__space">School of Foreign Languages</p>
+                <p class="xr-story__kind">Group discussion room</p><div class="xr-hw"><p class="xr-hw__t">Equipment</p><ul class="xr-hw__list"><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8"/></svg></span><span class="xr-hw__tx"><b>Dual screens</b></span></li><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="M16 10l5-3v10l-5-3"/></svg></span><span class="xr-hw__tx"><b>Remote teacher link</b></span></li><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="3" width="12" height="18" rx="2.5"/><path d="M11 18h2"/></svg></span><span class="xr-hw__tx"><b>Students’ own devices</b></span></li></ul></div>
+              </div>
+              </div>
+              <div class="xr-room" data-room="2" hidden>
+              <div class="xr-story__media"><div class="xr-story__img"><img src="/expo/rooms/media/room-cases/pku-medical-01-detail.webp" alt="Lab at the PKU School of Basic Medical Sciences, with front dual screens and lab benches on both sides."></div></div>
+              <div class="xr-story__b">
+                <span class="xr-story__tag">Medical school · Beijing</span>
+                <h3 class="xr-story__t">Peking University</h3>
+                <p class="xr-story__rooms-t">3 rooms. Tap one to see it.</p><div class="xr-story__rooms" role="group" aria-label="Rooms at Peking University"><button type="button" data-room="0" data-type="lab" aria-pressed="false">Physical Education</button><button type="button" data-room="1" data-type="discussion" aria-pressed="false">Foreign Languages</button><button type="button" data-room="2" data-type="lab" aria-pressed="true">Health Science Center</button></div><p class="xr-story__space">School of Basic Medical Sciences: medical lab teaching space</p>
+                <p class="xr-story__kind">Labs and practical teaching</p><div class="xr-hw"><p class="xr-hw__t">Equipment</p><ul class="xr-hw__list"><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8"/></svg></span><span class="xr-hw__tx"><b>Dual screens</b></span></li><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="7" width="9" height="7" rx="1.2"/><rect x="12.5" y="7" width="9" height="7" rx="1.2"/><path d="M7 14v3M17 14v3"/></svg></span><span class="xr-hw__tx"><b>Bench displays</b></span></li></ul></div>
+              </div>
+              </div>
+            </template>
+          </article>
+          <article class="xr-kase" data-type="lecture" data-slug="capital" data-show="/expo/rooms/media/room-cases/capital-normal-classroom-detail.webp" tabindex="0" role="button" aria-haspopup="dialog" aria-label="Open the story: Capital Normal University, Flexible Furniture Teaching Space">
+            <div class="xr-kase__media"><img src="/expo/rooms/media/room-cases/capital-normal-classroom-detail-sm.webp" alt="Capital Normal University classroom, with green movable chairs and white desks in rows and dual screens at the front." loading="lazy" decoding="async"></div>
+            <div class="xr-kase__body">
+              <span class="xr-kase__tag">University · Beijing</span>
+              <h4 class="xr-kase__t">Capital Normal University</h4>
+              <p class="xr-kase__space">Flexible Furniture Teaching Space</p>
+            </div>
+            <span class="xr-kase__hw" aria-label="Dual screens at the front"><i><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8"/></svg></i></span>
+            <span class="xr-kase__more" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span>
+            <template class="xr-kase__story">
+              <div class="xr-story__media"><div class="xr-story__img"><img src="/expo/rooms/media/room-cases/capital-normal-classroom-detail.webp" alt="Capital Normal University classroom, with green movable chairs and white desks in rows and dual screens at the front."></div></div>
+              <div class="xr-story__b">
+                <span class="xr-story__tag">University · Beijing</span>
+                <h3 class="xr-story__t">Capital Normal University</h3>
+                <p class="xr-story__space">Flexible Furniture Teaching Space</p>
+                <p class="xr-story__kind">Everyday teaching and lectures</p><div class="xr-hw"><p class="xr-hw__t">Equipment</p><ul class="xr-hw__list"><li><span class="xr-hw__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8"/></svg></span><span class="xr-hw__tx"><b>Dual screens at the front</b></span></li></ul></div>
+              </div>
+            </template>
+          </article>
+      </div>
+      <div class="xr-gal__bar">
+        <div class="xr-filters" role="group" aria-label="Filter rooms by type"><button type="button" data-filter="all" aria-pressed="true">All rooms</button><button type="button" data-filter="discussion" aria-pressed="false">Group &amp; discussion</button><button type="button" data-filter="lecture" aria-pressed="false">Lecture &amp; seminar</button><button type="button" data-filter="lab" aria-pressed="false">Labs &amp; training</button></div>
+        <div class="xr-gal__nav">
+          <span class="xr-gal__track" aria-hidden="true"><i></i></span>
+          <button class="xr-gal__prev" type="button" aria-label="Previous rooms"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
+          <button class="xr-gal__next" type="button" aria-label="Next rooms"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button>
+        </div>
+      </div>
+    </div>
+    <dialog class="xr-story" aria-label="Case study" tabindex="-1">
+      <div class="xr-story__in"></div>
+      <div class="xr-story__bar">
+        <div class="xr-story__nav">
+          <button class="xr-story__prev" type="button" aria-label="Previous room"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
+          <p class="xr-story__count" aria-live="polite"></p>
+          <button class="xr-story__next" type="button" aria-label="Next room"><span class="xr-story__nx"><small>Next</small><b></b></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button>
+        </div>
+        <button class="xr-story__close" type="button" aria-label="Close the story"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg><span>Close</span></button>
+      </div>
+    </dialog>
+  </section>
+  <!-- the attract slideshow: the rooms themselves, full screen, while nobody touches the screen.
+       Outside the case section so it covers the whole page, rail and bar included. -->
+  <div class="xr-show" hidden>
+    <div class="xr-show__pic"><img alt="" decoding="async"></div>
+    <div class="xr-show__pic"><img alt="" decoding="async"></div>
+    <div class="xr-show__cap">
+      <span class="xr-show__tag"></span>
+      <p class="xr-show__t"></p>
+      <p class="xr-show__space"></p>
+      <span class="xr-show__hw" aria-hidden="true"></span>
+    </div>
+    <p class="xr-show__hint"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 12V5.5a1.5 1.5 0 013 0V11m0-1.5a1.5 1.5 0 013 0V11m0-.5a1.5 1.5 0 013 0V15a6 6 0 01-6 6h-.5a5 5 0 01-4.1-2.1L5 15.5a1.5 1.5 0 012.3-1.9L9 15"/><path d="M5.5 7.5a5 5 0 017-4.6"/></svg>Touch to explore</p>
+  </div>
+
+  <dialog class="xr-spot" aria-label="Device" tabindex="-1">
+    <header class="xr-spot__bar">
+      <p class="xr-spot__room"></p>
+    </header>
+    <div class="xr-spot__track" tabindex="0" aria-roledescription="carousel"></div>
+    <!-- every control in one strip along the bottom, within reach on the booth's touch screen -->
+    <footer class="xr-spot__foot">
+      <div class="xr-spot__nav">
+        <button class="xr-spot__prev" type="button" aria-label="Previous"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
+        <div class="xr-spot__dots" role="group" aria-label="Chapters"></div>
+        <button class="xr-spot__next" type="button" aria-label="Next"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button>
+        <p class="xr-spot__where" aria-live="polite"></p>
+      </div>
+      <nav class="xr-spot__switch" aria-label="Other devices in this room"></nav>
+      <button class="xr-spot__close" type="button" aria-label="Close, back to the room"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>Close</button>
+    </footer>
+  </dialog>
+
+  <div class="xr-dockwrap">
+    <p class="xr-hint" aria-hidden="true">Drag to look around · tap a device for its specifications</p>
+    <div class="xr-focus" role="group" aria-label="Selected device" hidden>
+      <span class="xr-focus__ic" aria-hidden="true"></span>
+      <span class="xr-focus__tx"><b></b><small></small></span>
+      <button class="xr-focus__go" type="button">Explore<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+      <button class="xr-focus__x" type="button" aria-label="Back to the room"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </div>
+    <button class="xr-reset" type="button" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>Reset view</button>
+    <ul class="xr-dock" aria-label="ClassIn devices in this room">
+      <li><button class="xr-chip" type="button" data-pin="board" aria-pressed="false">
+        <span class="xr-chip__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8"/></svg></span>
+        <span class="xr-chip__tx"><b>ClassIn Board</b><small>Two 86″ in this room</small></span>
+      </button></li>
+      <li><button class="xr-chip" type="button" data-pin="cam-s1" aria-pressed="false">
+        <span class="xr-chip__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="10" rx="5"/><circle cx="9" cy="12" r="2.4"/><path d="M15 12h2"/></svg></span>
+        <span class="xr-chip__tx"><b>ClassIn Cam S1</b><small>Student camera</small></span>
+      </button></li>
+      <li><button class="xr-chip" type="button" data-pin="cam-rear" aria-pressed="false">
+        <span class="xr-chip__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="10" rx="5"/><circle cx="9" cy="12" r="2.4"/><path d="M15 12h2"/></svg></span>
+        <span class="xr-chip__tx"><b>Rear camera</b><small>Where the T1 goes</small></span>
+      </button></li>
+      <li><button class="xr-chip" type="button" data-pin="mic" aria-pressed="false">
+        <span class="xr-chip__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0014 0M12 18v3"/></svg></span>
+        <span class="xr-chip__tx"><b>DT2 Pro mic</b><small>32 built-in microphones</small></span>
+      </button></li>
+      <li><button class="xr-chip" type="button" data-pin="speaker" aria-pressed="false">
+        <span class="xr-chip__ic"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2"/></svg></span>
+        <span class="xr-chip__tx"><b>SPX2 speakers</b><small>Four in the ceiling</small></span>
+      </button></li>
+    </ul>
+    <p class="xr-note">An 8 × 11 m smart classroom — a design model, not a photo.</p>
+  </div>
+</main>
+
+
+<script src="/expo/made.js"></script><script src="/expo/edition.js"></script></body>
+</html>
