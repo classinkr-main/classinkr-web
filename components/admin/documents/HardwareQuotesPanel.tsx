@@ -1128,13 +1128,16 @@ export default function HardwareQuotesPanel({
             ) : (
               groups.map((group) => (
                 <section key={group.key} className="border-b border-[#f0f0ec] pb-1.5 last:border-b-0">
-                  <h2 className="flex items-baseline justify-between px-4 pb-1.5 pt-3.5 text-[11.5px] font-semibold text-[#31302E]">
-                    <span className="flex items-center gap-1.5">
-                      <span className={`h-1.5 w-1.5 rounded-full ${TONE_DOT[group.tone]}`} />
+                  {/* 단계 제목 — 행(13px)보다 크고 굵게, 옅은 띠로 단계 묶음을 나눈다. */}
+                  <h2 className="flex items-center justify-between gap-2 border-b border-[#f0f0ec] bg-[#FAFAF8] px-4 py-2.5 text-[14px] font-bold tracking-[-0.01em] text-[#111110]">
+                    <span className="flex items-center gap-2">
+                      <span aria-hidden className={`h-2 w-2 shrink-0 rounded-full ${TONE_DOT[group.tone]}`} />
                       {group.label}
-                      <span className="font-normal tabular-nums text-[#78736D]">{group.items.length}</span>
+                      <span className="rounded-full bg-[#ECEAE6] px-1.5 py-px text-[11.5px] font-semibold tabular-nums text-[#31302E]">
+                        {group.items.length}
+                      </span>
                     </span>
-                    <span className="font-normal tabular-nums text-[#78736D]">{formatMan(group.amount)}원</span>
+                    <span className="text-[12.5px] font-semibold tabular-nums text-[#31302E]">{formatMan(group.amount)}원</span>
                   </h2>
                   {group.items.map((quote) => {
                     const selected = quote.id === selectedQuote?.id
