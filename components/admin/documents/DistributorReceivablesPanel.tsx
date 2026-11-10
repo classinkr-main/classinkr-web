@@ -33,7 +33,13 @@ import {
 // 발행된 총판 견적서의 입금 현황(남은 금액·기한 경과)과 원가 템플릿을 한 화면에서 본다.
 // 입금 기록·발행은 견적 상세의 총판 정산 영역에서 한다 — 행을 누르면 그 견적으로 이동한다.
 
-type ReceivablesPayload = { available: boolean; warning: string | null; receivables: DistributorReceivableRow[] }
+type ReceivablesPayload = {
+  available: boolean
+  warning: string | null
+  receivables: DistributorReceivableRow[]
+  /** 검토 대기 — 설치 완료로 자동 준비된 정산·자동 발행 보류 건(발행 전). */
+  reviews?: DistributorReceivableRow[]
+}
 type TemplatesPayload = { available: boolean; warning: string | null; templates: DistributorPriceTemplate[] }
 
 // 템플릿 품목 후보 — 기본 견적 템플릿의 총판 대상 품목(하드웨어 + AI Suite).
@@ -181,6 +187,7 @@ export default function DistributorReceivablesPanel() {
 
   const warning = receivables?.warning ?? templates?.warning ?? null
   const rows = receivables?.receivables ?? []
+  const reviews = receivables?.reviews ?? []
 
   return (
     <div className="mx-auto max-w-7xl space-y-5 p-4 sm:px-6 sm:py-5">
@@ -231,6 +238,28 @@ export default function DistributorReceivablesPanel() {
                 <dd className="mt-1 text-xl font-bold tabular-nums text-[#084734]">{formatWon(summary.paidAmount)}</dd>
               </div>
             </dl>
+
+            {reviews.length > 0 && (
+              <div aria-label="검토 대기" className="border-b border-[#e8e8e4] bg-[#FFFBF2] px-5 py-3">
+                <p className="text-[12.5px] font-semibold text-[#7A520F]">
+                  검토 대기 {reviews.length}건 — 설치 완료로 자동 준비됐거나 자동 발행이 보류된 정산입니다. 확인 후 발행해 주세요.
+                </p>
+                <ul className="mt-1.5">
+                  {reviews.map((row) => (
+                    <li key={row.id} className="flex flex-wrap items-center justify-between gap-2 border-t border-[#F2E6CC] py-2 first:border-t-0">
+                      <span className="min-w-0 flex-1 text-[12.5px] text-[#31302E]">
+                        <span className="font-semibold">{row.customerName ?? "고객"}</span>
+                        <span className="text-[#78736D]"> · {row.quoteNumber ?? "견적"} · {row.fulfillmentMode}방식</span>
+                        <span className="mt-0.5 block text-[11.5px] text-[#615D59]">{row.reviewRequiredReason}</span>
+                      </span>
+                      <button type="button" onClick={() => openQuote(row.quoteDocumentId)} className={GHOST_BUTTON}>
+                        검토하기
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             {loading && rows.length === 0 ? (
               <p className="flex items-center gap-2 px-5 py-6 text-xs text-[#78736D]">
