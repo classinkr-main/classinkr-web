@@ -54,7 +54,7 @@ export const PRODUCT_TEMPLATES = [
   },
   {
     key: "bundle-86-t1-wall",
-    label: '86" 패키지',
+    label: '86" 번들',
     description: '86" + T1 카메라 + 벽걸이 설치',
     unit_price: BOARD_86_PRICE + CAMERA_T1_PRICE + HARDWARE_INSTALL_PRICE_KRW, // 630+120+50 = 800
   },

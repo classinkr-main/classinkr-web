@@ -486,6 +486,8 @@ export interface PartnerDocumentListItem {
   total_amount: number | null;
   /** 견적 전용 — 현재 버전의 공급가 합계·부가세. total_amount(최종 금액)의 내역 표기용. */
   subtotal?: number | null;
+  /** 견적 전용 — 견적 전체 할인(원). 공급가 = subtotal − discount_amount. */
+  discount_amount?: number | null;
   tax_amount?: number | null;
   /** 견적 전용 — 견적의 VAT 포함 설정(고객 문서와 같은 기준). total_amount 자체는 항상 VAT가 들어간 금액이다. */
   vat_included?: boolean | null;

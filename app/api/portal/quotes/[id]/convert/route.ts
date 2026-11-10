@@ -35,6 +35,14 @@ export async function POST(
       if (f) return f;
     }
 
+    // 계약 전환이 끝난 견적은 archived 가 된다. 다시 전환하면 같은 견적으로 계약서가 두 번 생긴다.
+    if (doc.status === "archived") {
+      return NextResponse.json(
+        { error: "이미 계약으로 전환된 견적입니다. 계약서 탭에서 확인하세요." },
+        { status: 409 }
+      );
+    }
+
     const { contractDocument, version } = await convertQuoteToContract(
       id,
       doc.deal_id,

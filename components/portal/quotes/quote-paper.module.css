@@ -63,6 +63,7 @@
 .totals .grandTotal > :first-child { color: #084734; font-size: 10pt; }
 .grandTotal > :last-child { font-size: 12pt; }
 .pending { color: #B85C33; font-size: 8.5pt; text-align: right; }
+.installment { color: #615D59; font-size: 8.5pt; text-align: right; margin-top: 4pt; }
 .notes { margin: 26pt 0 30pt; }
 .notes section + section { margin-top: 16pt; }
 .notes h3 { margin: 0 0 8pt; font-size: 9.5pt; }
