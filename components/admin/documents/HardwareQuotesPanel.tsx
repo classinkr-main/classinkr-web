@@ -141,6 +141,14 @@ const TONE_DOT: Record<"go" | "warn" | "neutral" | "muted", string> = {
   muted: "bg-[#C9C6C0]",
 }
 
+/** 단계 제목 띠 — 단계 성격(tone)별 파스텔 톤. 계약 전환=민트, 리마인드·발송=살구, 진행=하늘, 보관=회색. */
+const TONE_BAND: Record<"go" | "warn" | "neutral" | "muted", string> = {
+  go: "bg-[#E6F6EE] border-[#CFEBDD]",
+  warn: "bg-[#FDF1DC] border-[#F4E0BC]",
+  neutral: "bg-[#EAF1FB] border-[#D6E3F5]",
+  muted: "bg-[#F2F1EE] border-[#E6E4DF]",
+}
+
 const DESKTOP_QUERY = "(min-width: 1024px)"
 
 function formatMoney(value: number) {
@@ -1128,16 +1136,16 @@ export default function HardwareQuotesPanel({
             ) : (
               groups.map((group) => (
                 <section key={group.key} className="border-b border-[#f0f0ec] pb-1.5 last:border-b-0">
-                  {/* 단계 제목 — 행(13px)보다 크고 굵게, 옅은 띠로 단계 묶음을 나눈다. */}
-                  <h2 className="flex items-center justify-between gap-2 border-b border-[#f0f0ec] bg-[#FAFAF8] px-4 py-2.5 text-[14px] font-bold tracking-[-0.01em] text-[#111110]">
+                  {/* 단계 제목 — 행(13px)보다 크고 아주 굵게, 단계 성격별 파스텔 띠로 묶음을 나눈다. */}
+                  <h2 className={`flex items-center justify-between gap-2 border-b px-4 py-2.5 text-[15.5px] font-extrabold tracking-[-0.015em] text-[#111110] ${TONE_BAND[group.tone]}`}>
                     <span className="flex items-center gap-2">
-                      <span aria-hidden className={`h-2 w-2 shrink-0 rounded-full ${TONE_DOT[group.tone]}`} />
+                      <span aria-hidden className={`h-2.5 w-2.5 shrink-0 rounded-full ${TONE_DOT[group.tone]}`} />
                       {group.label}
-                      <span className="rounded-full bg-[#ECEAE6] px-1.5 py-px text-[11.5px] font-semibold tabular-nums text-[#31302E]">
+                      <span className="rounded-full bg-white/80 px-2 py-px text-[12.5px] font-bold tabular-nums text-[#31302E]">
                         {group.items.length}
                       </span>
                     </span>
-                    <span className="text-[12.5px] font-semibold tabular-nums text-[#31302E]">{formatMan(group.amount)}원</span>
+                    <span className="text-[14px] font-bold tabular-nums text-[#31302E]">{formatMan(group.amount)}원</span>
                   </h2>
                   {group.items.map((quote) => {
                     const selected = quote.id === selectedQuote?.id
