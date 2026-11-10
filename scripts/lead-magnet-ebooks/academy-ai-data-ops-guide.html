@@ -1,0 +1,644 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>AI와 데이터로 학원 운영하기</title>
+<!--
+  리드마그넷 e-book 인쇄 원본 — scripts/render-lead-magnet-workbook-pdf.mjs 가 이 파일을 PDF 로 찍는다.
+  디자인 원본: tmp/ref-design/mock4.html(v4 담백판) + style3.css, 4장 코칭 쪽은 mock2 의 변주 구조. 쪽은 794×1123(A4).
+  이미지 src 는 public/ 기준 경로, 링크 href 는 사이트 상대 경로로 둔다 — 인쇄 때 렌더러가 로컬 파일 경로와 utm 붙은 절대 주소로 바꾼다.
+  글꼴(@fontsource IBM Plex Sans KR)은 인쇄 때 FONT_CSS 자리에 넣는다.
+-->
+<style>
+/* FONT_CSS */
+:root{
+  --ink-900:#07301F; --ink-800:#084734; --ink-600:#0B7A52;
+  --sage:#8FC4AC; --champ:#D7BE8A;
+  --rust:#B85C33; --amber:#D9A441; --danger:#B43E3E;
+  --paper:#F9F8F5; --sheet:#FFFFFF; --sunken:#F3F2EE; --sunken-2:#ECEAE3; --black:#141513;
+  --fg:#111110; --body:#31302E; --muted:#615D59; --hair:rgba(17,17,16,.12);
+}
+@page{size:794px 1123px;margin:0}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:#fff}
+body{font-family:'IBM Plex Sans KR',Pretendard,sans-serif;color:var(--body);word-break:keep-all;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+p,h1,h2,h3,h4,ul,ol{margin:0;padding:0} ul,ol{list-style:none}
+.num{font-variant-numeric:tabular-nums}
+.serif{font-family:'Noto Serif KR',serif}
+.page{position:relative;width:794px;height:1123px;overflow:hidden;background:var(--paper);display:flex;flex-direction:column;padding:44px 56px 34px;break-after:page}
+.page:last-child{break-after:auto}
+.page>*{position:relative;z-index:2}
+.bg{position:absolute;inset:0;z-index:0}
+.dark{background:radial-gradient(900px 600px at 110% -10%,rgba(143,196,172,.2),transparent 60%),radial-gradient(700px 500px at -10% 110%,rgba(215,190,138,.12),transparent 60%),linear-gradient(160deg,var(--ink-800),var(--ink-900));color:#FAFAF8}
+.dots{background-image:radial-gradient(rgba(250,250,248,.15) 1px,transparent 1.2px);background-size:22px 22px;mask-image:linear-gradient(180deg,rgba(0,0,0,.8),transparent 65%)}
+.paper-wash{background:radial-gradient(560px 420px at 100% 0%,rgba(11,122,82,.06),transparent 65%),radial-gradient(420px 320px at 0% 100%,rgba(215,190,138,.14),transparent 65%)}
+/* 모티프: 타일 격자 + 연결선 (워크북 표지의 체크 칸을 잇는다) */
+.tiles{position:absolute;z-index:1}
+
+/* 러닝 헤더·푸터 */
+.run{display:flex;justify-content:space-between;font-size:10.5px;letter-spacing:.06em;color:var(--muted)}
+.run b{color:var(--ink-600);font-weight:600}
+.run .r{display:flex;gap:10px} .run .r i{font-style:normal;color:var(--muted)} .run .r em{font-style:normal;color:var(--fg);font-weight:600}
+.dark .run,.dark .run .r i{color:rgba(250,250,248,.6)} .dark .run b{color:var(--sage)} .dark .run .r em{color:#FAFAF8}
+.footer{margin-top:auto;padding-top:10px;border-top:1px solid var(--hair);display:flex;justify-content:space-between;align-items:center;font-size:10.5px;color:var(--muted)}
+.dark .footer{border-color:rgba(250,250,248,.18);color:rgba(250,250,248,.6)}
+.footer .logo{font-weight:700;color:var(--fg);font-size:12px;letter-spacing:-.01em} .dark .footer .logo{color:#FAFAF8}
+.footer .logo i{display:inline-block;width:9px;height:9px;border-radius:2px;background:var(--ink-600);margin-right:6px;vertical-align:-1px}
+.dark .footer .logo i{background:var(--sage)}
+
+/* 타이포 */
+.secno{font-size:12px;font-weight:700;color:var(--ink-600);letter-spacing:.02em}
+.dark .secno{color:var(--sage)}
+.h1{margin-top:8px;font-size:30px;line-height:1.28;letter-spacing:-.025em;font-weight:700;color:var(--fg)}
+.dark .h1{color:#FAFAF8}
+.h2{margin-top:22px;font-size:17px;font-weight:700;color:var(--fg);padding-left:12px;border-left:3px solid var(--ink-600);line-height:1.4}
+.lead{margin-top:12px;font-size:13.5px;line-height:1.85;color:var(--body);max-width:600px}
+.dark .lead{color:rgba(250,250,248,.8)}
+.body{margin-top:14px;font-size:13px;line-height:1.9;color:var(--body)} .body b{color:var(--fg)}
+.take{margin-top:16px;font-size:15px;font-weight:700;color:var(--fg);line-height:1.5}
+.src{margin-top:8px;font-size:10.5px;color:var(--muted)} .src a{color:var(--ink-600)}
+.chip{display:inline-flex;align-items:center;gap:5px;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:600;border:1px solid}
+.chip.v{color:var(--ink-600);border-color:rgba(11,122,82,.35);background:rgba(11,122,82,.06)}
+.chip.s{color:#7A5A20;border-color:rgba(217,164,65,.5);background:rgba(217,164,65,.12)}
+.chip.e{color:var(--muted);border-color:var(--hair);background:var(--sunken)}
+.chip::before{content:"";width:5px;height:5px;border-radius:50%;background:currentColor}
+.tags{display:flex;gap:8px}
+.tag{padding:5px 12px;font-size:11px;font-weight:600;color:#FAFAF8;border:1px solid rgba(250,250,248,.5);clip-path:polygon(8px 0,calc(100% - 8px) 0,100% 50%,calc(100% - 8px) 100%,8px 100%,0 50%);padding-left:16px;padding-right:16px}
+
+/* 표지 */
+.cover{padding:0}
+.cover-in{height:100%;display:flex;flex-direction:column;padding:44px 56px 40px}
+.brandline{display:flex;justify-content:space-between;align-items:center;font-size:12px;color:rgba(250,250,248,.7)}
+.brandline b{color:#FAFAF8;font-size:13px}
+.vol{margin-top:70px;display:flex;align-items:center;gap:12px;font-size:11.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--champ)}
+.vol::before{content:"";width:34px;height:1px;background:var(--champ)}
+.cover-title{margin-top:16px;font-size:50px;line-height:1.14;letter-spacing:-.03em;font-weight:700;color:#FAFAF8}
+.cover-title em{font-style:normal;color:var(--sage)}
+.cover-sub{margin-top:18px;max-width:440px;font-size:14.5px;line-height:1.85;color:rgba(250,250,248,.8)}
+.find{margin-top:26px;font-family:'Noto Serif KR',serif;font-size:13px;letter-spacing:.2em;color:var(--champ)}
+.methods{margin-top:10px;display:flex;flex-wrap:wrap;gap:6px;max-width:520px}
+.methods span{font-size:10.5px;padding:4px 9px;border-radius:999px;border:1px solid rgba(250,250,248,.22);color:rgba(250,250,248,.78)}
+.board{margin-top:auto;background:rgba(250,250,248,.05);border:1px solid rgba(250,250,248,.16);border-radius:14px;padding:14px 16px}
+.board-head{display:flex;justify-content:space-between;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:rgba(250,250,248,.55)}
+.board-grid{margin-top:10px;display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+.tile{background:rgba(7,48,31,.55);border:1px solid rgba(250,250,248,.08);border-radius:10px;padding:10px 11px 9px}
+.tile .k{font-size:10.5px;color:rgba(250,250,248,.6)} .tile .v{margin-top:4px;font-size:22px;font-weight:600;letter-spacing:-.02em;color:#FAFAF8}
+.tile .d{margin-top:1px;font-size:10.5px;color:var(--sage)} .tile .d.bad{color:#E8A09A}
+.spark{margin-top:7px;height:18px;display:flex;align-items:flex-end;gap:2px}
+.spark i{flex:1;background:rgba(143,196,172,.35);border-radius:2px 2px 0 0} .spark i.on{background:var(--champ)}
+.cover-foot{margin-top:16px;display:flex;justify-content:space-between;font-size:11px;color:rgba(250,250,248,.6)}
+
+/* 간지 (LM 방식: 번호 좌상단, 제목 하단) */
+.divider{padding:0}
+.divider-in{height:100%;display:flex;flex-direction:column;padding:44px 56px 48px}
+.divider .no{margin-top:36px;font-family:'Noto Serif KR',serif;font-size:96px;line-height:1;color:#FAFAF8;letter-spacing:-.04em}
+.divider .no small{display:block;font-family:'IBM Plex Sans KR';font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--champ);margin-bottom:6px}
+.divider .q{margin-top:auto;font-size:13px;color:var(--champ);letter-spacing:.04em}
+.divider .title{margin-top:12px;font-size:40px;line-height:1.22;letter-spacing:-.025em;font-weight:700;color:#FAFAF8;max-width:560px}
+.divider .title em{font-style:normal;color:var(--sage)}
+.divider .desc{margin-top:14px;max-width:520px;font-size:13.5px;line-height:1.85;color:rgba(250,250,248,.75)}
+.divider .tags{margin-top:22px}
+.divider .inside{margin-top:22px;display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:rgba(250,250,248,.14);border:1px solid rgba(250,250,248,.14);border-radius:10px;overflow:hidden}
+.divider .inside div{background:rgba(7,48,31,.5);padding:11px 14px;font-size:11.5px;line-height:1.5;color:rgba(250,250,248,.85)} .divider .inside b{display:block;color:var(--sage);font-size:10px;letter-spacing:.1em;text-transform:uppercase;margin-bottom:3px}
+
+/* 통계 행·표·그림 카드 */
+.stats3{margin-top:18px;display:grid;grid-template-columns:repeat(3,1fr);gap:22px}
+.st{border-top:2px solid var(--fg);padding-top:10px} .st.hi{border-top-color:var(--ink-600)}
+.st .k{font-size:11px;color:var(--muted)} .st .v{margin-top:4px;font-size:28px;font-weight:600;letter-spacing:-.02em;color:var(--fg)} .st.hi .v{color:var(--ink-600)}
+.st .s{margin-top:2px;font-size:10.5px;color:var(--muted)}
+.stats3.sm{margin-top:14px;gap:18px} .stats3.sm .st{border-top:1px solid var(--hair);padding-top:8px} .stats3.sm .v{font-size:17px}
+table.data{width:100%;margin-top:18px;border-collapse:collapse;font-size:12px}
+table.data th{text-align:left;font-weight:600;color:var(--muted);padding:8px 10px;border-top:1px solid var(--hair);border-bottom:1px solid var(--fg)}
+table.data td{padding:9px 10px;border-bottom:1px solid var(--hair);color:var(--body)} table.data td.r,table.data th.r{text-align:right}
+table.data td.g{color:var(--ink-600);font-weight:600} table.data td.hl span{background:rgba(11,122,82,.1);padding:2px 6px;border-radius:4px;color:var(--ink-600);font-weight:600}
+table.data td.d{color:var(--danger);font-weight:600}
+.fig{margin-top:16px;background:var(--sunken);border:1px solid var(--hair);border-radius:12px;padding:16px;display:grid;grid-template-columns:1fr;gap:10px}
+.fig .shot{background:var(--sheet);border-radius:8px;border:1px solid var(--hair);padding:12px;min-height:120px;position:relative}
+.fig .cap{text-align:center;font-size:10.5px;color:var(--muted)}
+.sheetmock{font-size:9.5px;border-collapse:collapse;width:100%} .sheetmock th{background:var(--sunken-2);font-weight:600;padding:4px 6px;text-align:left;border:1px solid var(--hair)} .sheetmock td{padding:4px 6px;border:1px solid var(--hair)} .sheetmock td.flag{background:rgba(180,62,62,.12);color:var(--danger);font-weight:600} .sheetmock td.ok{color:var(--ink-600)}
+.formula{margin-top:8px;font-family:ui-monospace,Menlo,monospace;font-size:9.5px;color:var(--muted);background:var(--sheet);padding:6px 8px;border-radius:6px;border:1px solid var(--hair)}
+
+/* 프레임워크 표 */
+table.fw{width:100%;margin-top:14px;border-collapse:collapse;font-size:11.5px}
+table.fw th{text-align:left;font-weight:600;color:var(--muted);padding:8px 8px;border-top:1px solid var(--hair);border-bottom:1px solid var(--hair);font-size:11px}
+table.fw td{padding:11px 8px;border-bottom:1px solid var(--hair);vertical-align:top;line-height:1.6}
+table.fw td.step{color:var(--ink-600);font-weight:700;white-space:nowrap}
+table.fw td.us{color:var(--fg)}
+.cap{margin-top:6px;text-align:center;font-size:10.5px;color:var(--muted)}
+
+/* FLOW 카드 (먹) */
+.flow{margin-top:18px;background:var(--black);color:#FAFAF8;border-radius:14px;padding:22px 24px 18px}
+.flow .lbl{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--champ);font-weight:600}
+.flow h3{margin-top:4px;font-size:18px;font-weight:700}
+.flow ol{margin-top:14px;position:relative}
+.flow ol::before{content:"";position:absolute;left:15px;top:14px;bottom:22px;border-left:1px dashed rgba(250,250,248,.35)}
+.flow li{position:relative;display:grid;grid-template-columns:32px 1fr auto;gap:14px;align-items:start;padding:7px 0}
+.flow li .n{width:32px;height:32px;border-radius:50%;background:var(--ink-600);display:grid;place-items:center;font-size:11.5px;font-weight:700;position:relative;z-index:1}
+.flow li b{display:block;font-size:13.5px} .flow li p{margin-top:3px;font-size:11.5px;color:rgba(250,250,248,.7);line-height:1.6}
+.flow li .pill{display:inline-flex;align-items:center;gap:4px;padding:5px 10px;border-radius:999px;background:var(--ink-600);color:#FAFAF8;font-size:10.5px;font-weight:600;white-space:nowrap;margin-top:4px}
+.flow li .pill::after{content:"↗";font-size:10px} .flow li .pill.n2{background:rgba(250,250,248,.14)}
+
+/* 섹션 카드 (v2) */
+.tabs{position:absolute;right:0;top:140px;display:flex;flex-direction:column;gap:5px;z-index:3}
+.tabs span{width:28px;height:32px;display:grid;place-items:center;font-size:10px;color:var(--muted);background:var(--sunken-2);border-radius:8px 0 0 8px}
+.tabs span.on{background:var(--ink-800);color:#FAFAF8;font-weight:600}
+.cols{margin-top:16px;display:grid;grid-template-columns:1fr 228px;gap:20px;align-items:start}
+.card{background:var(--sheet);border:1px solid var(--hair);border-radius:12px;padding:14px 16px 12px;position:relative}
+.card+.card{margin-top:10px}
+.card::before{content:"";position:absolute;left:0;top:14px;bottom:14px;width:2px;background:var(--champ);border-radius:2px}
+.card h3{font-size:14px;font-weight:700;color:var(--fg);line-height:1.45;display:flex;gap:8px;align-items:baseline}
+.card h3 .n{font-family:'Noto Serif KR',serif;color:var(--ink-600);font-size:15px}
+.row{margin-top:8px;display:grid;grid-template-columns:52px 1fr;gap:10px;font-size:12px;line-height:1.7}
+.row .l{font-size:10px;font-weight:700;letter-spacing:.06em;padding-top:3px}
+.row.p .l{color:var(--rust)} .row.m .l{color:var(--ink-600)} .row.n .l{color:var(--fg)}
+.row .src{color:var(--muted);margin:0;font-size:11.5px}
+.callout{margin-top:14px;display:grid;grid-template-columns:36px 1fr auto;gap:12px;align-items:center;padding:12px 14px;border-radius:12px;background:linear-gradient(90deg,rgba(11,122,82,.1),rgba(11,122,82,.03));border:1px solid rgba(11,122,82,.2)}
+.callout .ic{width:36px;height:36px;border-radius:10px;background:var(--ink-800);color:#FAFAF8;display:grid;place-items:center;font-weight:700;font-size:12px}
+.callout b{display:block;font-size:12.5px;color:var(--fg)} .callout p{font-size:11.5px;color:var(--muted);line-height:1.55} .callout .go{font-size:11.5px;font-weight:600;color:var(--ink-600);white-space:nowrap}
+.ws{background:var(--sunken);border-radius:12px;padding:14px;border:1px solid var(--hair)}
+.ws h4{font-size:12px;font-weight:700;color:var(--fg);display:flex;justify-content:space-between;align-items:center} .ws small{display:block;margin-top:2px;font-size:10.5px;color:var(--muted)}
+.ws table{width:100%;margin-top:10px;border-collapse:collapse;font-size:10.5px}
+.ws th{text-align:left;font-weight:600;color:var(--muted);padding:4px 0;border-bottom:1px solid rgba(17,17,16,.18)} .ws td{padding:6px 0;border-bottom:1px solid var(--hair)}
+.ws td.v{text-align:right;font-weight:600;color:var(--fg)} .ws td.prev{text-align:right;color:var(--muted)}
+.dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px} .dot.y{background:var(--amber)} .dot.r{background:var(--danger)}
+.ws .rule{margin-top:10px;font-size:10.5px;line-height:1.6;padding:8px 10px;background:var(--sheet);border-radius:8px;border-left:2px solid var(--danger)}
+
+/* 진단 */
+.diag{margin-top:14px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+.dg{background:var(--sheet);border:1px solid var(--hair);border-radius:12px;padding:12px 14px}
+.dg h4{font-size:12px;font-weight:700;color:var(--fg);display:flex;justify-content:space-between;align-items:center}
+.dg h4 span{font-size:10px;color:var(--muted);font-weight:500}
+.dg li{display:grid;grid-template-columns:18px 1fr;gap:8px;margin-top:9px;font-size:11px;line-height:1.55;color:var(--body)}
+.dg li i{width:16px;height:16px;border-radius:4px;border:1.5px solid var(--ink-600);margin-top:1px}
+.dg .sum{margin-top:10px;padding-top:8px;border-top:1px dashed var(--hair);font-size:10.5px;color:var(--muted);display:flex;justify-content:space-between}
+.dg .sum b{color:var(--fg)}
+.bands{margin-top:14px;display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.band{border-radius:12px;padding:12px 14px;background:var(--sunken);border:1px solid var(--hair)}
+.band .r{font-size:10.5px;letter-spacing:.08em;color:var(--muted)}
+.band h4{margin-top:3px;font-size:14px;font-weight:700;color:var(--fg)}
+.band p{margin-top:5px;font-size:11px;line-height:1.65;color:var(--body)}
+.band.on{background:var(--ink-800);border-color:transparent;color:#FAFAF8} .band.on h4,.band.on .r{color:#FAFAF8} .band.on .r{color:var(--sage)} .band.on p{color:rgba(250,250,248,.8)}
+.band .meter{margin-top:8px;height:4px;border-radius:2px;background:rgba(17,17,16,.1);overflow:hidden} .band .meter i{display:block;height:100%;background:var(--ink-600)} .band.on .meter{background:rgba(250,250,248,.2)} .band.on .meter i{background:var(--sage)}
+.bands.four{grid-template-columns:repeat(4,1fr);gap:10px} .bands.four .band{padding:10px 12px} .bands.four h4{font-size:13px} .bands.four p{font-size:10.5px}
+.band .lv{font-family:'Noto Serif KR',serif;font-size:20px;line-height:1;color:var(--champ)}
+.tree{margin-top:10px;background:var(--sunken);border:1px solid var(--hair);border-radius:10px;padding:10px 12px;font-family:ui-monospace,Menlo,monospace;font-size:10px;line-height:1.7;color:var(--body)}
+.tree b{color:var(--ink-600);font-weight:600}
+table.fw td.ok{color:var(--ink-600);font-weight:600} table.fw td.no{color:var(--danger);font-weight:600} table.fw td.cond{color:#7A5A20;font-weight:600}
+.notice{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--sheet);border:1px solid var(--hair);font-size:11.5px;line-height:1.75}
+.notice .lbl{display:block;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-600);font-weight:600;margin-bottom:4px}
+.memo{margin-top:14px;border:1px dashed rgba(17,17,16,.25);border-radius:12px;padding:10px 14px;min-height:64px;font-size:10.5px;color:var(--muted)}
+/* AI 페이지 */
+.three{margin-top:14px;display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.rulecard{background:var(--sheet);border:1px solid var(--hair);border-radius:12px;padding:14px;position:relative}
+.rulecard .n{font-family:'Noto Serif KR',serif;font-size:22px;line-height:1;color:var(--champ)}
+.rulecard h4{margin-top:8px;font-size:13px;font-weight:700;color:var(--fg)}
+.rulecard p{margin-top:5px;font-size:11px;line-height:1.65;color:var(--muted)}
+.rulecard .ex{margin-top:8px;font-size:10.5px;padding:6px 8px;border-radius:6px;background:var(--sunken)} .rulecard .ex s{color:var(--danger)} .rulecard .ex b{color:var(--ink-600)}
+.prompt{margin-top:14px;background:var(--black);color:#E9E8E2;border-radius:14px;padding:16px 18px;font-size:11.5px;line-height:1.75}
+.prompt .top{display:flex;justify-content:space-between;align-items:center;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--champ);font-weight:600}
+.prompt .top span:last-child{letter-spacing:0;text-transform:none;color:rgba(250,250,248,.55)}
+.prompt pre{margin:10px 0 0;white-space:pre-wrap;font-family:'IBM Plex Sans KR',sans-serif;font-size:11.5px;line-height:1.75}
+.prompt pre b{color:var(--sage);font-weight:600}
+.prompt .out{margin-top:10px;padding-top:10px;border-top:1px dashed rgba(250,250,248,.25);display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.prompt .out div{font-size:10.5px;color:rgba(250,250,248,.75);line-height:1.5} .prompt .out b{display:block;color:#FAFAF8;font-size:11px}
+.two{margin-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.listbox{background:var(--sheet);border:1px solid var(--hair);border-radius:12px;padding:12px 14px}
+.listbox h4{font-size:12px;font-weight:700;color:var(--fg);display:flex;justify-content:space-between;align-items:center}
+.listbox li{display:grid;grid-template-columns:16px 1fr;gap:8px;margin-top:7px;font-size:11px;line-height:1.55}
+.listbox li i{font-style:normal;color:var(--ink-600);font-weight:700} .listbox.warn li i{color:var(--rust)}
+/* 클로징 */
+.closing{padding:0}
+.closing-in{height:100%;display:flex;flex-direction:column;padding:44px 56px 48px}
+.closing .q{margin-top:150px;font-size:34px;line-height:1.3;letter-spacing:-.025em;font-weight:700;color:#FAFAF8;max-width:560px}
+.closing .a{margin-top:18px;font-size:22px;line-height:1.5;color:rgba(250,250,248,.85)} .closing .a em{font-style:normal;color:var(--sage);font-weight:700}
+.closing .by{margin-top:auto;font-size:12px;color:rgba(250,250,248,.6)}
+
+/* 마지막 */
+.last{background:var(--black);color:#FAFAF8}
+.last .run,.last .run .r i{color:rgba(250,250,248,.55)} .last .run b{color:var(--champ)}
+.last .h1{color:#FAFAF8;font-size:26px}
+.inside-grid{margin-top:18px;display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.inside-grid div{background:rgba(250,250,248,.06);border:1px solid rgba(250,250,248,.12);border-radius:10px;padding:12px;font-size:11px;line-height:1.55;color:rgba(250,250,248,.8)} .inside-grid b{display:block;color:#FAFAF8;font-size:12px;margin-bottom:3px}
+.blog{margin-top:16px;display:flex;justify-content:space-between;align-items:center;gap:20px;padding:14px 0;border-top:1px solid rgba(250,250,248,.14);border-bottom:1px solid rgba(250,250,248,.14);font-size:12px;line-height:1.6;color:rgba(250,250,248,.8)}
+.blog .lbl{font-size:10.5px;letter-spacing:.12em;color:var(--champ);font-weight:600;display:block;margin-bottom:3px}
+.btn-o{padding:9px 14px;border-radius:999px;border:1px solid rgba(250,250,248,.5);font-size:12px;font-weight:600;white-space:nowrap} .btn-o::after{content:" ↗"}
+.ctabox{margin-top:18px;background:linear-gradient(135deg,var(--ink-800),var(--ink-600));border-radius:16px;padding:24px 26px;display:grid;grid-template-columns:1fr auto;gap:22px;align-items:center}
+.ctabox h3{font-size:22px;line-height:1.35;font-weight:700;letter-spacing:-.02em} .ctabox h3 em{font-style:normal;color:var(--champ)}
+.ctabox .btns{margin-top:16px;display:flex;gap:10px}
+.btn{padding:10px 16px;border-radius:999px;background:#FAFAF8;color:var(--ink-800);font-size:12.5px;font-weight:700} .btn::after{content:" →"}
+.btn.o{background:transparent;color:#FAFAF8;border:1px solid rgba(250,250,248,.6)}
+.ctabox .qr{text-align:center;font-size:10.5px;color:rgba(250,250,248,.8)} .ctabox .qr img{width:96px;height:96px;background:#fff;border-radius:10px;padding:5px;display:block;margin:0 auto 6px}
+.legal{margin-top:auto;padding-top:12px;border-top:1px solid rgba(250,250,248,.14);font-size:10px;line-height:1.65;color:rgba(250,250,248,.5)}
+.legal b{color:rgba(250,250,248,.7);font-weight:600}
+.cover-sub{max-width:460px}
+.plain{margin-top:22px;font-size:12px;line-height:1.8;color:rgba(250,250,248,.7);max-width:460px}
+.plain b{color:#FAFAF8;font-weight:600}
+.inside3{margin-top:auto;display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:rgba(250,250,248,.14);border:1px solid rgba(250,250,248,.14);border-radius:12px;overflow:hidden}
+.inside3 div{background:rgba(7,48,31,.5);padding:14px 16px;font-size:12px;line-height:1.6;color:rgba(250,250,248,.85)}
+.inside3 b{display:block;color:var(--sage);font-size:10.5px;letter-spacing:.08em;margin-bottom:4px}
+.quiet{font-size:11px;color:var(--muted);margin-top:6px}
+a{color:inherit;text-decoration:none}
+/* 4장 코칭 페이지 — mock2 「코칭 페이지(변주)」에서 가져옴. 표의 td.step 과 겹치지 않게 .timeline 아래로 묶는다 */
+.quote{margin-top:18px;padding:18px 22px;border-radius:12px;background:var(--ink-800);color:#FAFAF8;position:relative;overflow:hidden}
+.quote::before{content:"“";position:absolute;left:14px;top:-10px;font-family:'Noto Serif KR',serif;font-size:80px;color:var(--champ);opacity:.5}
+.quote p{font-family:'Noto Serif KR',serif;font-size:17px;line-height:1.7;padding-left:26px}
+.quote small{display:flex;align-items:center;gap:8px;margin-top:8px;padding-left:26px;font-size:11px;color:var(--sage)}
+.quote .chip.v{color:var(--sage);border-color:rgba(143,196,172,.5);background:rgba(143,196,172,.1)}
+.timeline{margin-top:18px;display:grid;grid-template-columns:repeat(3,1fr);gap:12px;position:relative}
+.timeline::before{content:"";position:absolute;left:8%;right:8%;top:17px;height:1px;background:var(--champ)}
+.timeline .step{position:relative;padding-top:44px}
+.timeline .step .b{position:absolute;left:0;top:4px;width:28px;height:28px;border-radius:50%;background:var(--paper);border:2px solid var(--ink-600);color:var(--ink-600);font-size:11px;font-weight:700;display:grid;place-items:center}
+.timeline .step .m{position:absolute;left:36px;top:9px;font-size:10.5px;color:var(--muted)}
+.timeline .step h4{font-size:13.5px;font-weight:700;color:var(--fg)}
+.timeline .step p{margin-top:5px;font-size:11.5px;line-height:1.7;color:var(--muted)}
+.rules{margin-top:18px;display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.rulebox{background:var(--sheet);border:1px solid var(--hair);border-radius:12px;padding:14px 16px}
+.rulebox h4{font-size:12.5px;font-weight:700;color:var(--fg)}
+.rulebox li{display:grid;grid-template-columns:18px 1fr;gap:8px;margin-top:8px;font-size:11.5px;line-height:1.6}
+.rulebox li i{width:16px;height:16px;border-radius:4px;border:1.5px solid var(--ink-600);display:grid;place-items:center;color:var(--ink-600);font-style:normal;font-size:10px;margin-top:2px}
+.script{margin-top:14px;background:var(--sunken);border-radius:12px;padding:12px 14px;border:1px solid var(--hair)}
+.script h4{font-size:11px;letter-spacing:.08em;color:var(--muted)}
+.script .g{margin-top:8px;padding:10px 12px;border-radius:8px;background:var(--sheet);border-left:3px solid var(--ink-600);font-size:11.5px;line-height:1.7;color:var(--fg)}
+.script .a{margin-top:6px;padding:8px 12px;border-radius:8px;font-size:11px;line-height:1.6;color:var(--muted);border-left:3px solid var(--rust);text-decoration:line-through}
+.script .w{margin-top:6px;font-size:10.5px;color:var(--muted)}
+/* 다음 걸음 — 어두운 쪽 위의 망치는 다섯 가지 */
+.last .listbox{margin-top:16px;background:rgba(250,250,248,.06);border-color:rgba(250,250,248,.14)}
+.last .listbox h4{color:#FAFAF8}
+.last .listbox li{color:rgba(250,250,248,.8)}
+</style>
+</head>
+<body>
+
+<!-- 1 표지 -->
+<section class="page cover dark">
+  <div class="bg dots"></div>
+  <svg class="tiles" style="right:-20px;top:120px;width:360px;height:420px" viewBox="0 0 360 420" fill="none">
+    <defs><linearGradient id="g1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8FC4AC" stop-opacity=".9"/><stop offset="1" stop-color="#8FC4AC" stop-opacity=".15"/></linearGradient><linearGradient id="g2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#D7BE8A" stop-opacity=".85"/><stop offset="1" stop-color="#D7BE8A" stop-opacity=".1"/></linearGradient></defs>
+    <g stroke="rgba(250,250,248,.28)" stroke-width="1">
+      <rect x="20" y="20" width="70" height="70" rx="16"/><rect x="110" y="20" width="70" height="70" rx="16" fill="url(#g1)"/><rect x="200" y="20" width="70" height="70" rx="16"/>
+      <rect x="65" y="110" width="70" height="70" rx="16"/><rect x="155" y="110" width="70" height="70" rx="16"/><rect x="245" y="110" width="70" height="70" rx="16" fill="url(#g2)"/>
+      <rect x="20" y="200" width="70" height="70" rx="16" fill="url(#g1)"/><rect x="110" y="200" width="70" height="70" rx="16"/><rect x="200" y="200" width="70" height="70" rx="16"/>
+      <rect x="65" y="290" width="70" height="70" rx="16"/><rect x="155" y="290" width="70" height="70" rx="16" fill="url(#g2)"/><rect x="245" y="290" width="70" height="70" rx="16"/>
+    </g>
+    <g stroke="#FAFAF8" stroke-width="1.2"><path d="M145 55 L280 145 L55 235 L190 325"/></g>
+    <g fill="#FAFAF8"><circle cx="145" cy="55" r="3.5"/><circle cx="280" cy="145" r="3.5"/><circle cx="55" cy="235" r="3.5"/><circle cx="190" cy="325" r="3.5"/></g>
+  </svg>
+  <div class="cover-in">
+    <div class="brandline"><b>ClassIn Korea</b><span>원장을 위한 실무 가이드</span></div>
+    <div class="vol">1권 · 운영</div>
+    <h1 class="cover-title">AI와 데이터로<br>학원 운영하기</h1>
+    <p class="cover-sub">관리 프로그램에 숫자는 이미 쌓여 있습니다. 매주 무엇을 볼지, AI를 어디에 쓰고 어디에 쓰지 않을지 정하는 가이드입니다.</p>
+    <p class="plain"><b>이런 원장님께</b> 강사 3~30명 · 출결·수납은 관리 프로그램으로 처리 중 · ChatGPT로 문제나 문자를 만들어 본 적 있음<br><b>필요한 것</b> 월요일 30분, 엑셀, 쓰던 AI 그대로</p>
+    <div class="inside3">
+      <div><b>진단</b>우리 학원의 AI는 챗봇인가, 시스템인가 — 10문항</div>
+      <div><b>운영</b>월요일에 보는 숫자 5개 · 강사 면담 20분</div>
+      <div><b>AI</b>학생 규칙 · 출제 템플릿 · 원장 주간 루틴</div>
+    </div>
+    <div class="cover-foot"><span>12쪽 · 10분</span><span>classin.co.kr/resources</span></div>
+  </div>
+</section>
+
+<!-- 2 데이터 -->
+<section class="page">
+  <div class="bg paper-wash"></div>
+  <div class="tabs"><span class="on">01</span><span>02</span><span>03</span><span>04</span><span>05</span><span>06</span></div>
+  <div class="run"><b>01 · 데이터</b><span class="r"><i>데이터는 이미 있다</i><em>1-1</em><i>02</i></span></div>
+  <div class="secno" style="margin-top:26px">1-1</div>
+  <h1 class="h1">학원은 늘고, 학생은 줄었습니다</h1>
+  <div class="stats3">
+    <div class="st"><div class="k">학원 사업자 수</div><div class="v num">+56%</div><div class="s">8.3만 → 13.2만</div></div>
+    <div class="st"><div class="k">초중고 학생 수</div><div class="v num">−2.3%</div><div class="s">같은 기간</div></div>
+    <div class="st hi"><div class="k">학원 고를 때 1순위 — 강사</div><div class="v num">80.9%</div><div class="s">학부모 1,550명 설문 · 복수 응답</div></div>
+  </div>
+  <table class="data">
+    <tr><th>학부모가 학원을 고르는 기준</th><th class="r">응답</th><th class="r">원장이 매주 볼 수 있는 숫자</th></tr>
+    <tr><td>강사진의 역량</td><td class="r g">80.9%</td><td class="r hl"><span>강사 면담 횟수 · 수업 기록 유무</span></td></tr>
+    <tr><td>교육 일정</td><td class="r">71.3%</td><td class="r">시간표 변경 건수</td></tr>
+    <tr><td>학생의 의견</td><td class="r">69.8%</td><td class="r hl"><span>숙제 제출률 · 결석</span></td></tr>
+    <tr><td>등하원 거리</td><td class="r">62.4%</td><td class="r">—</td></tr>
+    <tr><td>학원비</td><td class="r">47.7%</td><td class="r">관리 프로그램이 이미 봄</td></tr>
+  </table>
+  <p class="src">출처 — 국세청 사업자 통계 · 교육부 2025 교육기본통계 · 에듀베이션 학부모 설문(2024.6) <span class="chip v">확인됨</span></p>
+  <p class="take">학부모는 강사를 보고 들어옵니다. 그런데 강사가 잘 가르치는지는 대개 숫자가 아니라 인상으로 남습니다.</p>
+  <p class="body">오른쪽 열은 그 인상을 매주 볼 수 있는 숫자로 바꾼 것입니다. 수납·출결처럼 관리 프로그램이 이미 알려주는 것은 뺐습니다. 다음 장의 다섯 개는 여기서 고릅니다.</p>
+  <div class="fig">
+    <div class="shot">
+      <table class="sheetmock">
+        <tr><th>학생</th><th>주차</th><th>결석 연속</th><th>숙제 미제출/월</th><th>상담 응답(h)</th><th>성적 변화</th><th>표시</th></tr>
+        <tr><td>S-014</td><td>45</td><td>2</td><td>1</td><td>12</td><td>−4</td><td class="flag">● 2개</td></tr>
+        <tr><td>S-027</td><td>45</td><td>0</td><td>3</td><td>60</td><td>+2</td><td class="flag">● 2개</td></tr>
+        <tr><td>S-031</td><td>45</td><td>0</td><td>0</td><td>6</td><td>+5</td><td class="ok">—</td></tr>
+      </table>
+      <div class="formula">=IF((C2>=2)+(D2>=3)+(E2>48)+(F2<0)>=2,"●","—")</div>
+    </div>
+    <div class="cap">관리 프로그램에서 출결·과제를 엑셀로 내보낸 뒤 열 4개와 수식 한 줄 (파일 제공)</div>
+  </div>
+  <div class="footer"><span class="logo"><i></i>ClassIn Korea</span><span>1권 운영 · classin.co.kr/resources</span></div>
+</section>
+
+<!-- 3 진단 -->
+<section class="page">
+  <div class="bg paper-wash"></div>
+  <div class="tabs"><span>01</span><span class="on">02</span><span>03</span><span>04</span><span>05</span><span>06</span></div>
+  <div class="run"><b>02 · 진단</b><span class="r"><i>우리 학원의 AI, 챗봇인가 시스템인가</i><em>2-1</em><i>03</i></span></div>
+  <div class="secno" style="margin-top:26px">2-1</div>
+  <h1 class="h1">우리 학원의 AI, 챗봇인가 시스템인가</h1>
+  <p class="lead" style="font-size:13px">해당하면 한 칸. 애매하면 비웁니다. 몇 칸인지보다 <b>어느 묶음이 비었는지</b>가 중요합니다. 비어 있는 묶음의 장을 먼저 읽으면 됩니다.</p>
+  <div class="diag">
+    <div class="dg"><h4>A. 학생·강사 규칙 <span>→ 5-1</span></h4><ul>
+      <li><i></i>학생 AI 규칙이 글로 있다. 언제 되고(개념 질문·오답 설명) 언제 안 되는지(제출 과제) 적혀 있다.</li>
+      <li><i></i>강사들이 AI로 하는 일(출제·채점 초안·문자)을 서로 안다.</li>
+      <li><i></i>학생에게 "쓰지 마"가 아니라 "이렇게 써라"를 말한 적이 있다.</li>
+    </ul><div class="sum"><span>해당</span><b>__ / 3</b></div></div>
+    <div class="dg"><h4>B. 자산·템플릿 <span>→ 5-2</span></h4><ul>
+      <li><i></i>문제 만드는 프롬프트가 학원 템플릿으로 있다. 과목·난이도·형식·검수 기준이 들어 있다.</li>
+      <li><i></i>AI로 만든 문제가 공유 폴더나 LMS에 쌓인다. 강사 개인 PC에만 있지 않다.</li>
+      <li><i></i>학부모 문자·월말 보고 템플릿이 있고, AI 초안은 강사가 고친 뒤 보낸다.</li>
+      <li><i></i>AI에 넣기 전 지우는 항목(이름·연락처·가정사)이 정해져 있다.</li>
+    </ul><div class="sum"><span>해당</span><b>__ / 4</b></div></div>
+    <div class="dg"><h4>C. 원장 루틴 <span>→ 3장 · 5-3</span></h4><ul>
+      <li><i></i>원장이 매주 AI로 하는 일이 하나 이상 정해져 있다.</li>
+      <li><i></i>상담 기록이 사실·숫자·날짜로 남는다. 나중에 AI에 넣어 정리할 수 있다.</li>
+      <li><i></i>AI가 낸 결과를 원본과 대조하는 사람이 정해져 있다.</li>
+    </ul><div class="sum"><span>해당</span><b>__ / 3</b></div></div>
+  </div>
+  <div class="bands four">
+    <div class="band"><div class="lv">0</div><h4>금지·방치</h4><p>두 묶음 이상 0칸. 학생에겐 쓰지 말라 하고, 강사는 각자 쓰고, 원장은 안 쓴다.</p><div class="meter"><i style="width:8%"></i></div></div>
+    <div class="band on"><div class="lv">1</div><h4>개인 도구</h4><p><b>가장 많다.</b> B가 비어 있다. 문제와 문자는 만들지만 개인 계정·개인 PC에 남는다.</p><div class="meter"><i style="width:35%"></i></div></div>
+    <div class="band"><div class="lv">2</div><h4>자산·템플릿</h4><p>B는 있고 C가 비어 있다. 누가 해도 결과가 같지만 원장 일정에는 없다.</p><div class="meter"><i style="width:68%"></i></div></div>
+    <div class="band"><div class="lv">3</div><h4>시스템·루틴</h4><p>세 묶음 모두 2칸 이상. 숫자가 매주 AI 분석과 면담에 쓰인다.</p><div class="meter"><i style="width:95%"></i></div></div>
+  </div>
+  <table class="fw" style="margin-top:14px">
+    <tr><th>비어 있는 묶음</th><th>이번 주에 할 일 (30분)</th><th>4주 뒤 확인</th><th>장</th></tr>
+    <tr><td class="step">A. 규칙</td><td>학생 AI 규칙 3줄을 적어 교실에 붙이고, 학부모에게 문자 한 통</td><td class="us">규칙을 설명할 수 있는 강사 수</td><td>5-1</td></tr>
+    <tr><td class="step">B. 자산</td><td>가장 잘 쓰는 강사의 프롬프트를 받아 학원 템플릿 1호로 저장</td><td class="us">템플릿으로 만든 문제 수</td><td>5-2</td></tr>
+    <tr><td class="step">C. 루틴</td><td>월요일 30분에 운영 분석 프롬프트를 한 번 돌린다</td><td class="us">4주 중 실행한 주 수</td><td>3장 · 5-3</td></tr>
+  </table>
+  <div class="memo">메모 — 우리 학원 단계, 비어 있는 묶음, 이번 달 바꿀 것 하나</div>
+  <p class="src">단계 구분은 이 가이드가 정한 것입니다. 점수는 우선순위를 정하기 위한 것이지 평가가 아닙니다.</p>
+  <div class="footer"><span class="logo"><i></i>ClassIn Korea</span><span>1권 운영 · classin.co.kr/resources</span></div>
+</section>
+
+<!-- 4 간지 -->
+<section class="page divider dark">
+  <div class="bg dots"></div>
+  <svg class="tiles" style="right:40px;top:90px;width:300px;height:330px" viewBox="0 0 300 330" fill="none">
+    <defs><linearGradient id="g3" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8FC4AC" stop-opacity=".9"/><stop offset="1" stop-color="#8FC4AC" stop-opacity=".12"/></linearGradient></defs>
+    <g stroke="rgba(250,250,248,.26)"><rect x="10" y="10" width="64" height="64" rx="14"/><rect x="94" y="10" width="64" height="64" rx="14"/><rect x="178" y="10" width="64" height="64" rx="14" fill="url(#g3)"/><rect x="52" y="94" width="64" height="64" rx="14" fill="url(#g3)"/><rect x="136" y="94" width="64" height="64" rx="14"/><rect x="220" y="94" width="64" height="64" rx="14"/><rect x="10" y="178" width="64" height="64" rx="14"/><rect x="94" y="178" width="64" height="64" rx="14"/><rect x="178" y="178" width="64" height="64" rx="14" fill="url(#g3)"/><rect x="52" y="262" width="64" height="64" rx="14"/><rect x="136" y="262" width="64" height="64" rx="14" fill="url(#g3)"/></g>
+    <path d="M210 42 L84 126 L210 210 L168 294" stroke="#FAFAF8" stroke-width="1.2"/><g fill="#FAFAF8"><circle cx="210" cy="42" r="3.5"/><circle cx="84" cy="126" r="3.5"/><circle cx="210" cy="210" r="3.5"/><circle cx="168" cy="294" r="3.5"/></g>
+  </svg>
+  <div class="divider-in">
+    <div class="run"><b>ClassIn Korea</b><span class="r"><i>1권 운영</i></span></div>
+    <div class="no"><small>장</small>03</div>
+    <div class="q">지난주에 숫자를 몇 개 보셨습니까</div>
+    <h1 class="title">월요일 30분,<br><em>숫자 다섯 개</em></h1>
+    <p class="desc">관리 프로그램에 출결·수납·상담은 다 있습니다. 문제는 매주 같은 숫자를 같은 시간에 보지 않는다는 것입니다. 이 장은 그 다섯 개를 정하는 장입니다.</p>
+    <div class="tags"><span class="tag">#숫자 5개</span><span class="tag">#먼저 오는 신호</span><span class="tag">#짝 지표</span></div>
+    <div class="inside">
+      <div><b>3-1</b>월요일에 보는 숫자 다섯 개</div>
+      <div><b>3-2</b>숫자를 운영으로 바꾸는 질문 네 가지</div>
+      <div><b>3-3</b>첫 30일</div>
+    </div>
+  </div>
+</section>
+
+<!-- 5 숫자 다섯 개 -->
+<section class="page">
+  <div class="bg paper-wash"></div>
+  <div class="tabs"><span>01</span><span>02</span><span class="on">03</span><span>04</span><span>05</span><span>06</span></div>
+  <div class="run"><b>03 · 운영</b><span class="r"><i>월요일 30분, 숫자 다섯 개</i><em>3-1</em><i>05</i></span></div>
+  <div class="secno" style="margin-top:26px">3-1</div>
+  <h1 class="h1" style="font-size:28px">월요일에 보는 숫자 다섯 개</h1>
+  <p class="lead" style="font-size:13px">숫자는 관리 프로그램에 다 있습니다. 정할 것은 세 가지입니다. 어떤 다섯 개를, 언제, 어떻게 말할지.</p>
+  <div class="cols">
+    <div>
+      <div class="card"><h3><span class="n">1.</span>다섯 개를 정하고, 빨간 칸만 말한다</h3>
+        <div class="row p"><span class="l">지금</span><span>퇴원이 생기고 나서 안다. 회의는 길고, 같은 숫자를 사람마다 다르게 말한다.</span></div>
+        <div class="row m"><span class="l">방법</span><span>재원생 증감 · 상담→등록 · 퇴원·휴원과 사유 · 표시된 학생 수 · 이번 주 강사 면담. 각 항목에 기준선 하나. 기준 아래로 내려간 칸만 이야기한다.</span></div>
+        <div class="row n"><span class="l">이번 주</span><span>월요일 시간을 정하고 다섯 칸을 채운다. 전주 비교는 다음 주부터.</span></div></div>
+      <div class="card"><h3><span class="n">2.</span>퇴원보다 먼저 오는 신호 네 개</h3>
+        <div class="row p"><span class="l">지금</span><span>"요즘 좀 안 나오는 것 같다"는 느낌은 있는데 누가, 언제부터인지 모른다.</span></div>
+        <div class="row m"><span class="l">방법</span><span>결석 2주 연속 · 숙제 미제출 월 3회 · 학부모 상담 답장 48시간 넘김 · 성적 2회 연속 하락. 둘 이상이면 표시. <span class="src">결과 지표 앞의 선행 지표를 보라는 그로브(인텔)의 원칙</span></span></div>
+        <div class="row n"><span class="l">이번 주</span><span>엑셀로 내보낸 출결·과제에 열 네 개와 수식 한 줄.</span></div></div>
+      <div class="card"><h3><span class="n">3.</span>두 숫자를 짝으로 본다</h3>
+        <div class="row p"><span class="l">지금</span><span>상담 전환율을 올렸더니 석 달 안에 나가는 학생이 늘었다.</span></div>
+        <div class="row m"><span class="l">방법</span><span>신규 등록률은 3개월 잔존율과, 강사 1인당 학생 수는 학부모 불만 건수와 나란히 본다. 한쪽만 좋아지면 의심한다.</span></div>
+        <div class="row n"><span class="l">이번 주</span><span>보드 아래 두 쌍만 추가. 숫자가 없으면 비워 둔다.</span></div></div>
+      <div class="callout"><div class="ic">CI</div><div><b>ClassIn에서는</b><p>출석·녹화·과제 상태가 관리자 화면에 자동으로 쌓입니다. 신호 네 개 중 세 개는 내보내기 없이 바로 보입니다.</p></div><a class="go" href="/docs/software/admin-monitoring-analytics">자세히 →</a></div>
+    </div>
+    <div><div class="ws"><h4>월요일 보드 <span class="chip e">예시</span></h4><small>첫 주는 값만. 둘째 주부터 전주와 비교.</small>
+      <table><tr><th>항목</th><th style="text-align:right">이번 주</th><th style="text-align:right">전주</th></tr>
+      <tr><td>재원생</td><td class="v num">128</td><td class="prev num">125</td></tr><tr><td>상담→등록</td><td class="v num">4/7</td><td class="prev num">3/6</td></tr><tr><td><span class="dot r"></span>퇴원·휴원</td><td class="v num">2</td><td class="prev num">0</td></tr><tr><td><span class="dot y"></span>표시된 학생</td><td class="v num">5</td><td class="prev num">3</td></tr><tr><td>강사 면담</td><td class="v num">2</td><td class="prev num">1</td></tr></table>
+      <div class="rule">빨간 칸만 말한다. 30분을 넘기지 않는다.</div></div></div>
+  </div>
+  <div class="footer"><span class="logo"><i></i>ClassIn Korea</span><span>1권 운영 · classin.co.kr/resources</span></div>
+</section>
+
+<!-- 6 질문 네 가지 · 첫 30일 -->
+<section class="page">
+  <div class="bg paper-wash"></div>
+  <div class="run"><b>03 · 운영</b><span class="r"><i>월요일 30분, 숫자 다섯 개</i><em>3-2</em><i>06</i></span></div>
+  <div class="secno" style="margin-top:26px">3-2</div>
+  <h1 class="h1" style="font-size:26px">숫자를 운영으로 바꾸는 질문 네 가지</h1>
+  <p class="lead" style="font-size:13px">앞 질문의 답이 다음 질문이 됩니다. 과목이나 규모가 달라도 같습니다.</p>
+  <table class="fw">
+    <tr><th>순서</th><th>질문</th><th>하는 일</th><th>예</th></tr>
+    <tr><td class="step">1. 신호</td><td>퇴원보다 먼저 움직이는 게 무엇인가</td><td>신호 네 개를 정한다</td><td class="us">결석 2주 · 미제출 3회 · 답장 48h · 성적 2회 하락</td></tr>
+    <tr><td class="step">2. 보드</td><td>매주 무엇을 볼 것인가</td><td>숫자 다섯 개, 기준선, 요일과 시간을 고정한다</td><td class="us">월 09:00 · 30분</td></tr>
+    <tr><td class="step">3. 짝</td><td>무엇이 같이 나빠지면 안 되는가</td><td>두 숫자를 나란히 둔다</td><td class="us">등록률 ↔ 3개월 잔존율</td></tr>
+    <tr><td class="step">4. 행동</td><td>빨간 칸이면 누가 무엇을 하는가</td><td>신호별 담당·행동·기한을 미리 적는다</td><td class="us">표시 2개 → 담임이 48시간 안에 전화</td></tr>
+  </table>
+  <div class="flow">
+    <div class="lbl">첫 30일</div><h3>이 순서로</h3>
+    <ol>
+      <li><span class="n">1주</span><div><b>월요일 보드</b><p>다섯 칸을 정하고 이번 주 값만 채운다.</p></div><span class="pill n2">보드 양식</span></li>
+      <li><span class="n">2주</span><div><b>학생 AI 규칙 3줄 · 출제 템플릿 1호</b><p>교실에 붙이고, 가장 잘 쓰는 강사의 프롬프트를 템플릿으로 저장한다.</p></div><span class="pill n2">5-1 · 5-2</span></li>
+      <li><span class="n">3주</span><div><b>강사 면담 20분</b><p>강사가 고른 수업 영상 5분을 같이 보고, 다음 수업에서 바꿀 것 하나를 정한다. 평가와 분리한다고 먼저 말한다.</p></div><span class="pill n2">4장</span></li>
+      <li><span class="n">4주</span><div><b>원장 AI 루틴 첫 실행</b><p>비식별 표로 운영 분석 프롬프트를 한 번 돌리고, 나온 행동 두 개를 보드 옆에 적는다.</p></div><a class="pill" href="/docs/software/admin-monitoring-analytics">ClassIn 학습 데이터</a></li>
+    </ol>
+  </div>
+  <div class="footer"><span class="logo"><i></i>ClassIn Korea</span><span>1권 운영 · classin.co.kr/resources</span></div>
+</section>
+
+<!-- 7 강사 면담 -->
+<section class="page">
+  <div class="bg paper-wash"></div>
+  <div class="tabs"><span>01</span><span>02</span><span>03</span><span class="on">04</span><span>05</span><span>06</span></div>
+  <div class="run"><b>04 · 강사</b><span class="r"><i>강사 면담 20분</i><em>4-1</em><i>07</i></span></div>
+  <div class="secno" style="margin-top:26px">4-1</div>
+  <h1 class="h1" style="font-size:28px">강사가 찍고, 강사가 고르고, 평가와 분리합니다</h1>
+  <div class="quote"><p>교사가 직접 찍고 제출할 영상을 스스로 골랐을 때, 평가 점수는 같았지만 관찰이 더 공정하고 도움이 된다고 느꼈고, 더 자기비판적이 되었다.</p><small>하버드 교육정책연구소 실험, 교사 347명 <span class="chip v">확인됨</span></small></div>
+  <div class="timeline">
+    <div class="step"><span class="b">1</span><span class="m">0–5분</span><h4>같이 본다</h4><p>강사가 고른 5분 클립을 원장과 함께 봅니다. 멈추지 않고 끝까지.</p></div>
+    <div class="step"><span class="b">2</span><span class="m">5–12분</span><h4>하나만 짚는다</h4><p>"3분 40초, 뒤 두 명이 필기를 멈췄습니다" — 사실 하나, 이름 하나.</p></div>
+    <div class="step"><span class="b">3</span><span class="m">12–20분</span><h4>그 자리에서 연습</h4><p>다음 수업에서 바꿀 것 하나를 정하고 1분간 역할 연습합니다.</p></div>
+  </div>
+  <div class="rules">
+    <div class="rulebox"><h4>운영 매뉴얼에 넣는 세 줄</h4><ul>
+      <li><i>✓</i><span>촬영은 강사 본인이 한다.</span></li>
+      <li><i>✓</i><span>제출 영상은 강사가 고른다.</span></li>
+      <li><i>✓</i><span>평가·급여와 분리한다. 성장용으로만 쓴다.</span></li>
+    </ul></div>
+    <div class="rulebox"><h4>격주 면담 30분 안건</h4><ul>
+      <li><i>1</i><span>강사가 적어온 안건 3개 — 원장은 듣는다</span></li>
+      <li><i>2</i><span>내 반의 표시된 학생 명단 공유</span></li>
+      <li><i>3</i><span>지난 2주 '한 가지 시도' 결과 → 다음 2주 하나 합의</span></li>
+    </ul></div>
+  </div>
+  <div class="script">
+    <h4>피드백 한 문장 — 복사해서 쓴다</h4>
+    <div class="g">3교시 15분 중 11분을 설명에 쓰셨어요. 뒤 두 명이 필기를 멈췄습니다. 다음 주엔 7분마다 질문 하나 넣어 볼까요? 제가 뭘 도우면 될까요?</div>
+    <div class="a">수업이 좀 일방적인 것 같아요. 학생들이 지루해해요.</div>
+    <div class="w">사실 없는 인상은 방어를 부릅니다. 부탁 없는 지적은 바뀌지 않습니다. 사실 · 영향 · 부탁 · 지지 순서.</div>
+  </div>
+  <div class="callout"><div class="ic">CI</div><div><b>ClassIn에서는</b><p>수업 녹화가 기본이라 면담용 영상을 따로 찍지 않습니다. AI 강의 분석은 강사가 먼저 자기 수업을 봅니다.</p></div><a class="go" href="/classin-ai-feature-guide.html">자세히 →</a></div>
+  <div class="footer"><span class="logo"><i></i>ClassIn Korea</span><span>1권 운영 · classin.co.kr/resources</span></div>
+</section>
+
+<!-- 8 학생 AI 규칙 -->
+<section class="page">
+  <div class="bg paper-wash"></div>
+  <div class="tabs"><span>01</span><span>02</span><span>03</span><span>04</span><span class="on">05</span><span>06</span></div>
+  <div class="run"><b>05 · AI</b><span class="r"><i>AI를 시스템으로</i><em>5-1</em><i>08</i></span></div>
+  <div class="secno" style="margin-top:26px">5-1</div>
+  <h1 class="h1" style="font-size:28px">학생 AI 규칙 — 금지 대신 세 칸</h1>
+  <p class="lead" style="font-size:13px">학생은 이미 쓰고 있습니다. "쓰지 마"만 있으면 답 베끼기만 남습니다. 규칙은 세 칸이면 됩니다. <b>돼요 · 안 돼요 · 표시해요.</b></p>
+  <table class="fw">
+    <tr><th>과제</th><th>AI</th><th>어디까지</th><th>학생이 남기는 것</th></tr>
+    <tr><td class="step">개념 확인</td><td class="ok">돼요</td><td>모르는 용어와 개념을 설명 듣기, 예시 더 받기</td><td class="us">무엇을 물었는지 한 줄</td></tr>
+    <tr><td class="step">오답 풀이</td><td class="ok">돼요</td><td>혼자 다시 푼 뒤 AI 풀이와 비교</td><td class="us">내 풀이와 다른 점 한 줄</td></tr>
+    <tr><td class="step">서술형</td><td class="cond">표시해요</td><td>개요와 피드백까지. 문장은 직접 쓴다</td><td class="us">"AI: 개요" 표시</td></tr>
+    <tr><td class="step">제출 과제 · 시험</td><td class="no">안 돼요</td><td>답과 풀이 생성 금지</td><td class="us">—</td></tr>
+  </table>
+  <div class="cap">기본안입니다. 과목과 학년에 맞게 행을 바꿔 쓰세요.</div>
+  <div class="three">
+    <div class="rulecard"><div class="n">01</div><h4>교실에 붙이는 세 줄</h4><p><b>돼요</b> 모르는 것 물어보기, 틀린 문제 다시 풀고 비교하기<br><b>안 돼요</b> 제출할 답·풀이·문장 만들기<br><b>표시해요</b> AI 도움 받은 곳 적기</p></div>
+    <div class="rulecard"><div class="n">02</div><h4>강사가 매주 보는 것</h4><p>노트에 질문 한 줄이 있는가. 오답 비교 한 줄이 있는가. 표시 없이 문체가 바뀐 제출물은 그 자리에서 말로 설명하게 한다. 벌점은 없다.</p></div>
+    <div class="rulecard"><div class="n">03</div><h4>과제를 바꾸는 쪽이 빠르다</h4><p>AI가 답을 낼 수 있는 과제는 풀이 과정을 내게 한다. 연습은 AI와, 평가는 AI 없이. 과제 설계가 규칙을 대신한다.</p></div>
+  </div>
+  <div class="notice"><span class="lbl">학부모 안내 문장</span>[학원명]은 AI를 금지하지 않고 규칙으로 씁니다. 개념 질문과 오답 비교에는 쓰고, 제출 과제와 시험에는 쓰지 않습니다. AI 도움을 받은 곳은 아이가 스스로 표시합니다. 규칙은 교실에 붙어 있습니다. 가정에서도 같은 기준으로 봐 주시면 됩니다.</div>
+  <p class="src">참고 — 교육부 생성형 AI 활용 가이드라인(교사 지도 아래 사용, 결과 검증, 출처 표기) <span class="chip s">원문 확인 후 인용</span></p>
+  <div class="callout"><div class="ic">CI</div><div><b>ClassIn에서는</b><p>학생의 AI(AgentIn) 사용 권한을 강사가 수업마다 켜고 끕니다. 연습 시간엔 열고 평가 시간엔 닫습니다. 기본은 꺼짐입니다.</p></div><a class="go" href="/classin-ai-feature-guide.html">자세히 →</a></div>
+  <div class="footer"><span class="logo"><i></i>ClassIn Korea</span><span>1권 운영 · classin.co.kr/resources</span></div>
+</section>
+
+<!-- 9 출제 템플릿 -->
+<section class="page">
+  <div class="bg paper-wash"></div>
+  <div class="tabs"><span>01</span><span>02</span><span>03</span><span>04</span><span class="on">05</span><span>06</span></div>
+  <div class="run"><b>05 · AI</b><span class="r"><i>AI를 시스템으로</i><em>5-2</em><i>09</i></span></div>
+  <div class="secno" style="margin-top:26px">5-2</div>
+  <h1 class="h1" style="font-size:28px">문제 만들기를 학원 것으로</h1>
+  <p class="lead" style="font-size:13px">강사 다섯이 각자 만들면 품질이 다섯 가지고, 퇴사하면 사라집니다. 바꿀 것은 둘입니다. 프롬프트는 학원 템플릿으로, 결과는 문제 은행으로.</p>
+  <div class="prompt">
+    <div class="top"><span>출제 템플릿 1호</span><span>[ ] 안만 바꿉니다 · 검수 전 배포 금지</span></div>
+<pre><b>역할</b> [중2 수학] 출제자. 우리 학원 기준: 풀이 과정을 쓰게 하는 문제, 함정 선지 없음, 계산보다 개념.
+<b>단원</b> [일차함수 — 기울기와 절편]   <b>난이도</b> [중 — 교과서 응용]   <b>형식</b> [서술형 2 · 객관식 3]
+<b>규칙</b> 문제마다 정답·풀이·채점 기준(부분 점수). 오답 선지는 흔한 오개념에서. 숫자는 손으로 풀 수 있게. 교과서 밖 용어 금지.
+<b>출력</b> 표로: 번호 / 문제 / 정답 / 풀이 / 채점 기준 / 확인하는 개념</pre>
+    <div class="out"><div><b>검수 1</b>정답이 맞는가 — 직접 푼다</div><div><b>검수 2</b>오답 선지가 그럴듯한가</div><div><b>검수 3</b>교과서 용어인가</div><div><b>검수 4</b>채점 기준이 부분 점수를 가르는가</div></div>
+  </div>
+  <div class="two">
+    <div class="listbox"><h4>문제 은행 폴더 <span class="chip e">예시</span></h4>
+      <div class="tree">문제은행/<br>&nbsp;&nbsp;<b>중2수학</b>/<br>&nbsp;&nbsp;&nbsp;&nbsp;일차함수/<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<b>중_서술2객3_v1_김OO_검수박OO_2026-11.docx</b><br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;하_객5_v2_…<br>&nbsp;&nbsp;템플릿/ 출제_1호.txt · 학부모문자_월말.txt</div>
+      <p class="quiet">파일명에 난이도·형식·버전·작성자·검수자·월. 검수자 없는 파일은 쓰지 않는다. 이미 쓰는 LMS나 공유 드라이브면 그대로.</p></div>
+    <div class="listbox"><h4>템플릿 1호 만드는 순서</h4><ul>
+      <li><i>1</i><span>가장 잘 쓰는 강사의 프롬프트를 그대로 받는다. 고치지 않는다.</span></li>
+      <li><i>2</i><span>단원·난이도·형식 칸만 비운다. 규칙과 출력 형식은 고정.</span></li>
+      <li><i>3</i><span>강사 둘이 같은 칸으로 돌려 결과를 나란히 본다. 차이가 나는 곳이 템플릿의 빈틈이다.</span></li>
+      <li><i>4</i><span>검수 네 칸을 통과한 것만 은행에 넣는다.</span></li>
+    </ul></div>
+  </div>
+  <div class="callout"><div class="ic">CI</div><div><b>ClassIn에서는</b><p>AI 출제와 AI 숙제 생성 결과가 문제 은행에 바로 쌓이고, 강사가 확인한 뒤 게시합니다.</p></div><a class="go" href="/classin-ai-feature-guide.html">자세히 →</a></div>
+  <div class="footer"><span class="logo"><i></i>ClassIn Korea</span><span>1권 운영 · classin.co.kr/resources</span></div>
+</section>
+
+<!-- 10 원장 루틴 -->
+<section class="page">
+  <div class="bg paper-wash"></div>
+  <div class="tabs"><span>01</span><span>02</span><span>03</span><span>04</span><span class="on">05</span><span>06</span></div>
+  <div class="run"><b>05 · AI</b><span class="r"><i>AI를 시스템으로</i><em>5-3</em><i>10</i></span></div>
+  <div class="secno" style="margin-top:26px">5-3</div>
+  <h1 class="h1" style="font-size:28px">원장의 주간 AI 루틴 — 넣기 전 3초, 프롬프트 둘</h1>
+  <p class="lead" style="font-size:13px">원장이 AI로 할 일은 셋이면 됩니다. 요일을 정해 두면 루틴이 됩니다. 그 전에 학생 정보를 지우는 3초.</p>
+  <div class="three">
+    <div class="rulecard"><div class="n">01</div><h4>이름은 번호로</h4><p>학생·학부모 이름을 번호로 바꿉니다. 대응표는 학원 PC에만.</p><div class="ex"><s>김민준</s> → <b>S-014</b></div></div>
+    <div class="rulecard"><div class="n">02</div><h4>연락처·학교·주소는 지운다</h4><p>분석에 필요 없습니다. 엑셀에 'AI용' 시트를 따로 두고 식별 열을 지운 뒤 복사합니다.</p><div class="ex"><s>목동중 2-3 · 010-…</s> → <b>중2</b></div></div>
+    <div class="rulecard"><div class="n">03</div><h4>가정사·건강·성격 평가는 지운다</h4><p>사실(결석·제출·점수)만 남깁니다.</p><div class="ex"><s>부모님 이혼 후 …</s> → <b>결석 3, 미제출 2</b></div></div>
+  </div>
+  <p class="src">근거 — 개인정보보호위원회 「생성형 AI 개인정보 처리 안내서」(2025.8): 외부 AI 서비스에는 개인정보를 넣지 않는다. 만 14세 미만은 보호자 동의 대상. <span class="chip e">세부 규칙은 전문가 확인 권장</span></p>
+  <div class="prompt">
+    <div class="top"><span>프롬프트 1 · 운영 분석</span><span>비식별한 표를 통째로 붙여 넣는다</span></div>
+<pre><b>역할</b> 학원 운영 컨설턴트. 아래는 최근 4주 표다.
+<b>열</b> 학생번호 / 주차 / 결석 연속 / 숙제 미제출(월) / 상담 답장 시간(h) / 성적 변화 / 표시
+<b>해 줄 것</b> ① 한 줄 요약 ② 눈에 띄는 학생 3명과 근거가 된 행 ③ 이번 주 할 행동 2개(담당·기한) ④ 확신 없는 부분
+<b>하지 말 것</b> 평균·합계 계산(엑셀 값이 정답). 학생 개인 평가. 없는 데이터 추정.
+<b>표</b> [붙여넣기]</pre>
+    <div class="out"><div><b>①</b>요약 한 줄</div><div><b>②</b>학생 3명 + 행 번호</div><div><b>③</b>행동 2개</div><div><b>④</b>확신 없는 것</div></div>
+  </div>
+  <div class="two">
+    <div class="listbox"><h4>요일에 고정하는 세 가지</h4><ul>
+      <li><i>월</i><span><b>운영 분석</b> — 위 프롬프트. 나온 행동 둘을 보드 옆에 적는다.</span></li>
+      <li><i>수</i><span><b>면담 준비</b> — 강사별 수업 기록(녹화·과제 반환·리포트)을 요약해 강점 하나, 근거 하나, 바꿀 것 하나.</span></li>
+      <li><i>말일</i><span><b>월말 보고 검토</b> — 강사가 만든 초안을 사실 2 · 칭찬 1 · 다음 달 1 · 질문 1 순서로 본다.</span></li>
+    </ul></div>
+    <div class="listbox warn"><h4>하지 않는 것</h4><ul>
+      <li><i>✕</i><span>상담 노트 원문을 통째로 넣기</span></li>
+      <li><i>✕</i><span>AI에게 평균·전환율 계산 맡기기. 숫자는 엑셀, 해석은 AI.</span></li>
+      <li><i>✕</i><span>"이 학생 퇴원할까?" 같은 예측. 점검 순서만 정한다.</span></li>
+    </ul></div>
+  </div>
+  <div class="prompt" style="margin-top:12px;padding:12px 16px">
+    <div class="top"><span>프롬프트 2 · 월말 보고 초안</span><span>보내기 전 강사가 고친다</span></div>
+<pre style="margin-top:6px"><b>역할</b> 담임 강사. 아래 사실만으로 학부모 월말 보고를 5문장으로.
+<b>사실</b> 출석 11/12 · 숙제 9/10 · 단원평가 72 → 81 · 오답 다시 푼 횟수 14 · 다음 달: 서술형 1문항
+<b>규칙</b> 점수보다 변화를 먼저. 없는 사실 금지. 칭찬 1 · 사실 2 · 다음 달 1 · 질문 1.</pre>
+  </div>
+  <div class="callout" style="margin-top:10px"><div class="ic">CI</div><div><b>ClassIn에서는</b><p>학습 리포트와 과제 현황이 학생별로 쌓여 '사실' 줄을 손으로 모으지 않습니다. AI 요약·채점 초안은 강사가 확인한 뒤 게시합니다.</p></div><a class="go" href="/docs/software/admin-monitoring-analytics">자세히 →</a></div>
+  <div class="footer"><span class="logo"><i></i>ClassIn Korea</span><span>1권 운영 · classin.co.kr/resources</span></div>
+</section>
+
+<!-- 11 마치며 -->
+<section class="page closing dark">
+  <div class="bg dots"></div>
+  <svg class="tiles" style="right:56px;bottom:120px;width:300px;height:220px" viewBox="0 0 300 220" fill="none">
+    <defs><linearGradient id="g4" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#D7BE8A" stop-opacity=".85"/><stop offset="1" stop-color="#D7BE8A" stop-opacity=".1"/></linearGradient></defs>
+    <g stroke="rgba(250,250,248,.26)"><rect x="10" y="10" width="64" height="64" rx="14"/><rect x="94" y="10" width="64" height="64" rx="14" fill="url(#g4)"/><rect x="178" y="10" width="64" height="64" rx="14"/><rect x="52" y="94" width="64" height="64" rx="14"/><rect x="136" y="94" width="64" height="64" rx="14" fill="url(#g4)"/><rect x="220" y="94" width="64" height="64" rx="14"/></g>
+    <path d="M126 42 L252 126 L84 126" stroke="#FAFAF8" stroke-width="1.2"/><g fill="#FAFAF8"><circle cx="126" cy="42" r="3.5"/><circle cx="252" cy="126" r="3.5"/><circle cx="84" cy="126" r="3.5"/></g>
+  </svg>
+  <div class="closing-in">
+    <div class="run"><b>ClassIn Korea</b><span class="r"><i>마치며</i></span></div>
+    <h1 class="q">지난주, 우리 학원 수업 중<br>몇 개를 직접 보셨습니까</h1>
+    <p class="a">보드 한 장, 규칙 세 줄, 템플릿 하나.<br>다음 주 월요일부터 <em>30분</em>이면 시작됩니다.</p>
+    <div class="by">ClassIn Korea · 원장을 위한 실무 가이드 1권</div>
+  </div>
+</section>
+
+<!-- 12 다음 걸음 -->
+<section class="page last">
+  <div class="run"><b>다음 걸음</b><span class="r"><i>1권 운영</i><i>12</i></span></div>
+  <h1 class="h1" style="margin-top:26px">여기까지는 지금 쓰는 도구로 됩니다.<br>그다음은 수업 안의 데이터입니다.</h1>
+  <p class="lead" style="color:rgba(250,250,248,.75)">관리 프로그램은 교실 밖의 숫자(출결·수납·상담)를 가집니다. 수업 안에서 생기는 것 — 녹화, 과제 반환, 질문, 리포트 — 는 ClassIn에서 수업과 동시에 쌓입니다. 3장의 신호와 4장의 면담 근거가 거기서 나옵니다. 가격과 범위는 상담에서 학원 숫자로 계산해 드립니다.</p>
+  <div class="listbox warn"><h4>망치는 다섯 가지</h4><ul>
+      <li><i>✕</i><span>감시로 시작합니다. 강사 영상·AI 분석을 평가와 분리한다고 먼저 말하지 않으면 다음 단계가 없습니다.</span></li>
+      <li><i>✕</i><span>학생에게 AI를 금지만 합니다. 규칙이 없으면 답 베끼기만 남습니다.</span></li>
+      <li><i>✕</i><span>강사 개인 계정에 자산이 쌓입니다. 퇴사하면 프롬프트와 문제가 같이 나갑니다.</span></li>
+      <li><i>✕</i><span>상담 노트 원문을 AI에 통째로 넣습니다. 이름·연락처·가정사를 지운 사실만 넣습니다.</span></li>
+      <li><i>✕</i><span>"이 학생 퇴원할까?" 같은 예측에 기댑니다. AI는 점검 순서만 정합니다.</span></li>
+  </ul></div>
+  <div class="inside-grid">
+    <div><b>학습 데이터</b>출석·녹화·과제 상태가 관리자 화면에</div>
+    <div><b>수업 녹화</b>기본 제공. 면담용 영상을 따로 찍지 않는다</div>
+    <div><b>AI 강의 분석</b>강사가 먼저 자기 수업을 본다. 4개 영역 11항목</div>
+    <div><b>2권 학습관리</b>학생 단위 — 신호 3개, 건강 점수, 출구표, 상담 기록</div>
+  </div>
+  <div class="blog"><div><span class="lbl">블로그</span>강사 온보딩, 학부모 상담, 전자칠판 도입 기준을 씁니다.</div><a class="btn-o" href="/blog">블로그</a></div>
+  <div class="ctabox">
+    <div><h3>목동 쇼룸에서 30분.<br>우리 반 자료 하나로 <em>녹화 → 리포트 → 면담</em>까지 봅니다.</h3><div class="btns"><a class="btn" href="/showroom">쇼룸 예약</a><a class="btn o" href="/contact#contact-form">무료로 시작</a></div></div>
+    <div class="qr"><img src="/qr-code.png" alt="">쇼룸 예약</div>
+  </div>
+  <div class="legal"><b>안내</b> 이 자료는 무료로 배포됩니다. 인용할 때는 출처(ClassIn Korea 자료실)를 적어 주세요. 통계의 출처는 각 장에 적었습니다. 학원 적용 기준(신호 네 개, 단계 구분)은 이 가이드가 정한 출발점이며 보장이 아닙니다.<br><b>표기</b> ClassIn Korea, 「AI와 데이터로 학원 운영하기」(2026) · 이이오클래스인코리아 · 서울 목동 · classinkr@classin.com</div>
+</section>
+
+</body>
+</html>
