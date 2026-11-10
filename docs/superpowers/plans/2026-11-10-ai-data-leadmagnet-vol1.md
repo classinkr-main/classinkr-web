@@ -166,7 +166,7 @@ JSON 항목은 `lib/lead-magnets.ts`의 `LeadMagnet` 인터페이스를 따른�
   ],
   "deliverables": [
     "10문항 진단과 AI 4단계 판정표",
-    "월요일 보드 다섯 칸과 퇴원보다 먼저 오는 신호 네 개(엑셀 파일)",
+    "월요일 보드 다섯 칸과 퇴원보다 먼저 오는 신호 네 개(CSV 2장)",
     "강사 면담 20분 순서와 피드백 문장",
     "학생 AI 규칙 표(돼요·안 돼요·표시해요)와 학부모 안내 문장",
     "출제 템플릿 1호와 검수 네 칸, 문제 은행 폴더 규칙",
@@ -181,7 +181,7 @@ JSON 항목은 `lib/lead-magnets.ts`의 `LeadMagnet` 인터페이스를 따른�
     "출제 템플릿 1호로 만든 문제 수"
   ],
   "sourceLinks": [
-    { "label": "학습 데이터 — 관리자 화면", "href": "/docs/software/admin-monitoring-analytics", "description": "출석·녹화·과제 상태가 수업과 동시에 쌓입니다. 보드의 신호 네 개 중 세 개가 내보내기 없이 보입니다." },
+    { "label": "관리자 모니터링과 통계 활용", "href": "/docs/software/admin-monitoring-analytics", "description": "출석·녹화·과제 상태가 수업과 동시에 쌓입니다. 보드의 신호 네 개 중 세 개가 내보내기 없이 보입니다." },
     { "label": "AI 기능 소개서", "href": "/classin-ai-feature-guide.html", "description": "AI 강의 분석(강사가 먼저 자기 수업을 봅니다)·AI 출제·AgentIn 학생 권한." },
     { "label": "목동 쇼룸", "href": "/showroom", "description": "우리 반 자료 하나로 녹화 → 리포트 → 면담까지 30분." },
     { "label": "강사 온보딩·EDB 교안 표준화 SOP", "href": "/resources/teacher-edb-onboarding-sop-kit", "description": "강사가 바뀌어도 남는 교안과 온보딩 순서." }
@@ -460,7 +460,7 @@ require("fs").writeFileSync("public/materials/lead-magnets/academy-ai-data-ops-g
 ```
 Expected: 파일 2개 생성. 엑셀로 열어 한글·수식이 보이는지 확인.
 
-파일 구조표의 `.xlsx` 대신 CSV 2장으로 확정한다(의존성 0). JSON `deliverables` 둘째 항목의 "(엑셀 파일)"은 "(CSV 2장)"으로 고친다.
+파일 구조표의 `.xlsx` 대신 CSV 2장으로 확정한다(의존성 0).
 
 - [ ] **Step 5: 기존 PDF 계약 테스트 통과 확인**
 
