@@ -65,6 +65,7 @@
   function applyQuiz() {
     if (!meta.quiz) return;
     doc.querySelectorAll(".opt[data-q]").forEach(function (b) { b.setAttribute("aria-pressed", state.q[b.getAttribute("data-q")] === b.getAttribute("data-t") ? "true" : "false"); });
+    doc.querySelectorAll("[data-qdot]").forEach(function (el) { el.classList.toggle("on", !!state.q[el.getAttribute("data-qdot")]); });
     var counts = {}, answered = 0;
     meta.quiz.types.forEach(function (t) { counts[t.key] = 0; });
     Object.keys(state.q).forEach(function (k) { if (k.indexOf("#") < 0 && counts[state.q[k]] !== undefined) { counts[state.q[k]]++; answered++; } });
@@ -76,6 +77,7 @@
     if (!answered) { doc.querySelectorAll("[data-r]").forEach(function (el) { el.innerHTML = el.getAttribute("data-empty") || ""; }); if (slide) slide.style.removeProperty("--tc"); return; }
     doc.querySelectorAll("[data-r]").forEach(function (el) { var f = el.getAttribute("data-r"); if (top[f] !== undefined) el.innerHTML = top[f]; });
     if (slide) slide.style.setProperty("--tc", top.color);
+    doc.querySelectorAll("[data-consult]").forEach(function (a) { try { var u = new URL(a.href, location.href); u.searchParams.set("utm_term", "type_" + top.key); a.href = u.toString(); } catch (_) {} });
   }
   doc.querySelectorAll("[data-copy-quiz]").forEach(function (b) {
     b.addEventListener("click", function () {
@@ -105,19 +107,24 @@
       var keys = el.getAttribute("data-sum").split(","), out = [];
       keys.forEach(function (k) {
         if (k.indexOf("chips:") === 0) { var pre = k.slice(6); Object.keys(state.c).forEach(function (c) { if (state.c[c] && c.indexOf(pre) === 0) out.push("· " + c.slice(pre.length + 1)); }); }
-        else if (val(k)) out.push(val(k));
+        else { var at = k.indexOf("@"), key = at < 0 ? k : k.slice(0, at), lab = at < 0 ? "" : k.slice(at + 1); if (val(key)) out.push((lab ? lab + " " : "") + val(key)); }
       });
-      el.textContent = out.length ? out.join("\n") : (el.getAttribute("data-empty") || "아직 비어 있습니다");
+      el.textContent = out.length ? out.join(el.getAttribute("data-sep") || "\n") : (el.getAttribute("data-empty") || "아직 비어 있습니다");
       el.classList.toggle("empty", !out.length);
     });
   }
   doc.querySelectorAll("[data-copy-plan]").forEach(function (b) {
     b.addEventListener("click", function () {
-      var lines = ["[" + meta.title + "] 한 장 요약"];
+      var lines = ["[" + meta.title + "] 한 장 요약" + (val("org") ? " · " + val("org") : "") + (val("who") ? " · " + val("who") : "")];
       doc.querySelectorAll(".sm").forEach(function (sm) { var k = sm.querySelector(".k"), v = sm.querySelector(".v"); if (k && v && !v.classList.contains("empty")) lines.push("■ " + k.textContent + "\n" + v.textContent); });
       copyText(lines.join("\n"), "계획 요약을 복사했습니다. 실장님·강사님께 공유하세요");
     });
   });
   function applyAll() { applyFields(); applyChips(); applySummary(); applyQuiz(); }
+  /* 발표 모드에서 2.5초 동안 조작이 없으면 조작 막대를 숨긴다(꼬리말을 가리지 않게). 포커스가 있으면 보인다. */
+  var idleT = null;
+  function wake() { doc.body.classList.remove("idle"); clearTimeout(idleT); idleT = setTimeout(function () { if (mode === "present") doc.body.classList.add("idle"); }, 2500); }
+  ["mousemove", "keydown", "touchstart", "focusin"].forEach(function (ev) { doc.addEventListener(ev, wake, { passive: true }); });
+  wake();
   applyAll(); setMode(mode); go(cur, true);
 })();

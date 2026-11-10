@@ -90,6 +90,8 @@ def opener(s, d):
             + (f'<p class="subcap">{H(s["sub"])}</p>' if s.get("sub") else "")
             + (f'<div class="tags">{tags}</div>' if tags else ""))
     deco = f'<div class="slabbox"></div><div class="bign">{e(s.get("no", ""))}</div>' + s.get("deco", "")
+    if s.get("stat"):
+        deco += f'<div class="ostat"><b>{H(s["stat"][0])}</b><span>{H(s["stat"][1])}</span></div>'
     return body, dict(cls="opener", deco=deco)
 
 
@@ -99,7 +101,10 @@ def editorial(s, d):
     if s.get("sign"):
         n, r = s["sign"]
         sign = f'<div class="sign"><i>C</i><div>{e(n)}<small>{e(r)}</small></div></div>'
-    body = (f'<div><span class="label">{e(s.get("label", "FOREWORD"))}</span><h2 class="disp big" style="margin-top:40px">{H(s["big"])}</h2></div>'
+    ilist = ""
+    if s.get("items"):
+        ilist = '<ol class="ilist">' + "".join(f'<li><span>{i + 1:02d}</span>{H(x)}</li>' for i, x in enumerate(s["items"])) + "</ol>"
+    body = (f'<div class="lcol"><span class="label">{e(s.get("label", "FOREWORD"))}</span><h2 class="disp big" style="margin-top:40px">{H(s["big"])}</h2>{ilist}</div>'
             f'<div class="copy">{paras}{sign}</div>')
     return body, dict(cls="edit", deco='<div class="lefts"></div>')
 
@@ -144,8 +149,10 @@ def _cols(items, maxv=None, unit="%"):
 def chart(s, d):
     kind = s.get("kind", "bars")
     inner = _bars(s["items"], s.get("max"), s.get("unit", "%")) if kind == "bars" else _cols(s["items"], s.get("max"), s.get("unit", "%"))
-    wrap = "bars" if kind == "bars" else ("cols dense" if len(s["items"]) > 6 else "cols")
-    card = f'<div class="chartcard"><div class="ct">{H(s["chart_title"])}</div><div class="{wrap}">{inner}</div></div>'
+    n_it = len(s["items"])
+    wrap = "bars" if kind == "bars" else ("cols dense dense2" if n_it > 9 else "cols dense" if n_it > 6 else "cols")
+    co = f'<div class="callout">{H(s["callout"])}</div>' if s.get("callout") else ""
+    card = f'<div class="chartcard"><div class="ct">{H(s["chart_title"])}</div>{co}<div class="{wrap}">{inner}</div></div>'
     left = ((f'<span class="label" style="align-self:flex-start">{e(s["label"])}</span>' if s.get("label") else "")
             + f'<h2 class="disp h1" style="font-size:{s.get("size", 84)}px">{H(s["title"])}</h2>'
             + "".join(f'<p class="txt">{H(p)}</p>' for p in s.get("paras", [])))
@@ -182,7 +189,8 @@ def pse(s, d):
         shot = f'<figure class="shot"><img src="{uri}" width="{w}" height="{h}" alt="{e(cap)}"><figcaption>{e(cap)}</figcaption></figure>'
     btn = f'<a class="pill-btn" href="{e(utm(s["btn"][1], d["slug"], s["btn"][2]))}" target="_blank" rel="noopener">{e(s["btn"][0])} →</a>' if s.get("btn") else ""
     left = (f'<div style="display:flex;flex-direction:column"><span class="ey">{e(s["eyebrow"])}</span><h2 class="h2">{H(s["title"])}</h2>'
-            f'<div class="sumk"><i></i>{e(s.get("sumk", "핵심 요약"))}</div><div class="rows">{blocks}</div>{btn}</div>')
+            f'<div class="sumk"><i></i>{e(s.get("sumk", "핵심 요약"))}</div><div class="rows">{blocks}</div>'
+            + (f'<div class="ask"><b>우리 학원은?</b><span>{H(s["ask"])}</span></div>' if s.get("ask") else "") + f'{btn}</div>')
     return left + shot, dict(cls="pse", foot=s.get("source", ""))
 
 
@@ -192,7 +200,8 @@ def dialogue(s, d):
     a = s["aside"]
     aside = f'<div class="aside"><div class="k">{e(a["k"])}</div>' + (f'<p>{H(a["p"])}</p>' if a.get("p") else "") + ("<ul>" + "".join(f"<li>{H(x)}</li>" for x in a.get("li", [])) + "</ul>" if a.get("li") else "") + "</div>"
     left = f'<div><span class="kicker">{e(s["kicker"])}</span><h2 class="h2" style="margin-top:14px">{H(s["title"])}</h2><div class="lines">{ls}</div></div>'
-    return left + aside, dict(cls="dlg", foot=s.get("source", ""), deco=s.get("deco", ""))
+    close = f'<div class="closecard"><div class="k">이 대화의 클로징 한 문장</div><p>{H(s["close"])}</p></div>' if s.get("close") else ""
+    return left + f'<div class="asides">{aside}{close}</div>', dict(cls="dlg", foot=s.get("source", ""), deco=s.get("deco", ""))
 
 
 def matrix(s, d):
@@ -248,7 +257,8 @@ def screen(s, d):
 def quiz_q(s, d):
     opts = "".join(f'<button type="button" class="opt" data-q="{s["id"]}" data-t="{t}" aria-pressed="false"><span class="k">{"ABCD"[i]}</span><span>{H(x)}</span></button>'
                    for i, (x, t) in enumerate(s["options"]))
-    body = (f'<div class="qn">Q{s["n"]:02d}<small> / {d["quiz"]["n"]:02d}</small></div><h2 class="h2 qt">{H(s["q"])}</h2>'
+    dots = '<div class="qdots" aria-hidden="true">' + "".join(f'<i data-qdot="q{i + 1}"{" class=cur" if i + 1 == s["n"] else ""}></i>' for i in range(d["quiz"]["n"])) + "</div>"
+    body = (f'<div class="qhead"><div class="qn">Q{s["n"]:02d}<small> / {d["quiz"]["n"]:02d}</small></div>{dots}</div><h2 class="h2 qt">{H(s["q"])}</h2>'
             f'<div class="opts">{opts}</div><p class="qhint">가장 가까운 하나를 고르세요. 고르면 다음 장으로 넘어갑니다. 진행 <span class="num" data-qprog>0 / {d["quiz"]["n"]}</span></p>')
     return body, dict(cls="quiz", deco=s.get("deco", ""))
 
@@ -258,15 +268,17 @@ def quiz_result(s, d):
     bars = "".join(f'<div class="rb"><span>{e(t["plain"])}</span><span class="t"><i data-rbar="{t["key"]}" style="background:{t["color"]}"></i></span><span class="v" data-rval="{t["key"]}">-</span></div>' for t in types)
     left = (f'<div><span class="kicker">RESULT · 우리 학원 운영 유형</span><h2 class="disp rtype" data-r="name" data-empty="아직 고르지 않았습니다">아직 고르지 않았습니다</h2>'
             f'<p class="lead" style="margin-top:20px" data-r="desc" data-empty="앞 장의 10문항에서 하나씩 고르면 유형이 바로 나옵니다."></p>'
-            f'<div class="rbars">{bars}</div><div class="btnrow"><button class="btn acc" type="button" data-copy-quiz>결과 복사하기</button>'
-            f'<a class="btn line" href="{e(utm("/contact#contact-form", d["slug"], "quiz_result"))}" target="_blank" rel="noopener">결과로 상담 받기 →</a></div></div>')
+            f'<div class="rbars">{bars}</div><div class="btnrow"><a class="btn acc" data-consult href="{e(utm("/contact#contact-form", d["slug"], "quiz_result"))}" target="_blank" rel="noopener">이 결과로 상담 받기 →</a>'
+            f'<button class="btn line" type="button" data-copy-quiz>결과 복사하기</button></div></div>')
     right = (f'<div class="rcard" data-result><div class="k">강점</div><p data-r="strength" data-empty="-">-</p><div class="k">놓치기 쉬운 것</div><p data-r="risk" data-empty="-">-</p>'
-             f'<div class="nx"><div class="k">다음 한 걸음</div><p data-r="next" data-empty="결과가 나오면 맞는 자료를 추천해 드립니다.">결과가 나오면 맞는 자료를 추천해 드립니다.</p></div></div>')
+             f'<div class="k">이번 달 할 일 세 가지</div><div class="todo" data-r="todo" data-empty="<p>결과가 나오면 유형별 할 일이 여기에 나옵니다.</p>"><p>결과가 나오면 유형별 할 일이 여기에 나옵니다.</p></div>'
+             f'<div class="nx"><div class="k">함께 보면 좋은 자료</div><p data-r="next" data-empty="-">-</p></div></div>')
     return left + right, dict(cls="result")
 
 
 def quiz_types(s, d):
-    cards = "".join(f'<div class="tyc" style="background:{t["color"]}"><span class="tl">TYPE {"ABCD"[i]}</span><div class="tn">{H(t["name"])}</div><p>{H(t["desc"])}</p><div class="em">{H(t["one"])}</div></div>'
+    cards = "".join(f'<div class="tyc" style="background:{t["color"]}"><span class="tl">TYPE {"ABCD"[i]}</span><div class="tn">{H(t["name"])}</div><p>{H(t["desc"])}</p><div class="em">{H(t["one"])}</div>'
+                    + (f'<div class="lk">{H(t["link"])}</div>' if t.get("link") else "") + "</div>"
                     for i, t in enumerate(d["quiz"]["types"]))
     return f'<span class="kicker">{e(s.get("kicker", "4가지 유형"))}</span><h2 class="h2" style="margin-top:14px">{H(s["title"])}</h2><div class="types">{cards}</div>', dict(cls="qtypes")
 
@@ -336,20 +348,31 @@ def months(s, d):
 
 
 def summary(s, d):
-    cells = "".join(f'<div class="sm"><div class="k">{e(k)}</div><div class="v empty" data-sum="{keys}" data-empty="{e(emp)}">{e(emp)}</div></div>' for k, keys, emp in s["cells"])
-    body = (f'<span class="kicker">{e(s.get("kicker", ""))}</span><h2 class="h2" style="margin-top:14px">{H(s["title"])}</h2>'
-            f'<div class="summary">{cells}</div><div class="btnrow"><button class="btn acc" type="button" data-copy-plan>한 장 요약 복사</button>'
+    cells = ""
+    for c in s["cells"]:
+        k, keys, emp = c[0], c[1], c[2]
+        o = c[3] if len(c) > 3 else {}
+        cells += (f'<div class="sm{" wide" if o.get("wide") else ""}"><div class="k">{e(k)}</div>'
+                  f'<div class="v empty" data-sum="{keys}" data-empty="{e(emp)}"{f" data-sep={chr(34)}{e(o[chr(115)+chr(101)+chr(112)])}{chr(34)}" if o.get("sep") else ""}>{e(emp)}</div></div>')
+    hdr = ""
+    if s.get("header"):
+        hdr = '<div class="sumhdr">' + "".join(f'<label><span>{e(lab)}</span><input data-f="{fid}" placeholder="{e(ph)}"></label>' for fid, lab, ph in s["header"]) + "</div>"
+    body = (f'<div class="sumtop"><div><span class="kicker">{e(s.get("kicker", ""))}</span><h2 class="h2" style="margin-top:14px">{H(s["title"])}</h2></div>{hdr}</div>'
+            f'<div class="summary" style="--n:{s.get("cols", 3)}">{cells}</div><div class="btnrow"><button class="btn acc" type="button" data-copy-plan>한 장 요약 복사</button>'
             f'<a class="btn line" href="{e(utm("/contact#contact-form", d["slug"], "plan_summary"))}" target="_blank" rel="noopener">이 계획으로 상담 받기 →</a></div>')
     return body, dict(cls="sumsl")
 
 
 def cta(s, d):
-    acts = ""
-    for i, (ic, desc, label, href, uc) in enumerate(s["acts"]):
-        acts += (f'<a class="ac{" primary" if i == 0 else ""}" href="{e(utm(href, d["slug"], uc))}" target="_blank" rel="noopener">'
-                 f'<div class="ic"><span>{e(ic)}</span></div><div class="d">{H(desc)}</div><span class="b">{e(label)} →</span></a>')
-    body = (f'<h2 class="disp h1">{H(s["title"])}</h2>' + (f'<p class="lead" style="margin-top:20px">{H(s["sub"])}</p>' if s.get("sub") else "")
-            + f'<div class="acts3">{acts}</div><p class="honest">{H(s.get("honest", ""))}</p>')
+    """주 행동 하나(큰 카드) + 보조 행동 둘(목록). 덱마다 첫 행동을 가장 부담이 적은 다음 단계로 둔다."""
+    acts = s["acts"]
+    ic, desc, label, href, uc = acts[0]
+    pri = (f'<a class="pri" href="{e(utm(href, d["slug"], uc))}" target="_blank" rel="noopener"><span class="k">{e(s.get("pri_k", "추천 다음 단계"))}</span>'
+           f'<b>{H(desc)}</b><span class="go">{e(label)} →</span></a>')
+    sec = "".join(f'<a class="sec" href="{e(utm(h, d["slug"], u))}" target="_blank" rel="noopener"><span class="n">{i + 2:02d}</span><span class="d">{H(ds)}</span><span class="go">{e(lb)} →</span></a>'
+                  for i, (_, ds, lb, h, u) in enumerate(acts[1:]))
+    body = (f'<div class="cta2"><div class="l"><h2 class="disp h1">{H(s["title"])}</h2>' + (f'<p class="lead">{H(s["sub"])}</p>' if s.get("sub") else "")
+            + f'<p class="honest">{H(s.get("honest", ""))}</p></div><div class="r">{pri}<div class="secs">{sec}</div></div></div>')
     return body, dict(cls="cta", dark=s.get("dark", False), deco=s.get("deco", ""))
 
 
@@ -361,6 +384,19 @@ def back(s, d):
 
 def free(s, d):
     return s["html"], dict(cls=s.get("cls", ""), dark=s.get("dark", False), deco=s.get("deco", ""), foot=s.get("source", ""))
+
+
+def compare(s, d):
+    cols = s.get("cols", ["우리 학원 2025", "우리 학원 2026", "메모"])
+    th = "<th>지표</th><th>전국 참고값</th>" + "".join(f"<th>{e(c)}</th>" for c in cols)
+    trs = ""
+    for ri, (lab, nat, src) in enumerate(s["rows"]):
+        trs += (f'<tr><th scope="row">{H(lab)}</th><td class="nat"><b>{H(nat)}</b><small>{H(src)}</small></td>'
+                + "".join(f'<td><input data-f="{s["id"]}r{ri}c{ci}" aria-label="{e(strip_tags(lab))} {e(c)}" placeholder="{e(s.get("ph", {}).get((ri, ci), ""))}"></td>' for ci, c in enumerate(cols)) + "</tr>")
+    body = (f'<span class="kicker">{e(s.get("kicker", ""))}</span><h2 class="h2" style="margin-top:14px;max-width:1600px">{H(s["title"])}</h2>'
+            + (f'<p class="lead" style="margin-top:14px;max-width:1500px">{H(s["lead"])}</p>' if s.get("lead") else "")
+            + f'<table class="cmp"><thead><tr>{th}</tr></thead><tbody>{trs}</tbody></table>')
+    return body, dict(cls="comparel", foot=s.get("source", ""))
 
 
 def columns(s, d):
@@ -428,7 +464,7 @@ R = dict(cover=cover, toc=toc, opener=opener, editorial=editorial, findings=find
          takeaways=takeaways, pse=pse, dialogue=dialogue, matrix=matrix, dodont=dodont, questions=questions, beforeafter=beforeafter,
          steps=steps, screen=screen, quiz_q=quiz_q, quiz_result=quiz_result, quiz_types=quiz_types, form=form, table_form=table_form,
          months=months, summary=summary, cta=cta, back=back, free=free,
-         columns=columns, stack=stack, donut=donut)
+         columns=columns, stack=stack, donut=donut, compare=compare)
 
 
 def render_deck(d: dict, css: str, js: str) -> str:
@@ -447,10 +483,10 @@ def render_deck(d: dict, css: str, js: str) -> str:
     html_body = "".join(frames)
     data = dict(title=d["title"])
     if d.get("quiz"):
-        data["quiz"] = dict(n=d["quiz"]["n"], types=[{k: t[k] for k in ("key", "plain", "name", "desc", "strength", "risk", "next", "color")} for t in d["quiz"]["types"]])
+        data["quiz"] = dict(n=d["quiz"]["n"], types=[{k: t[k] for k in ("key", "plain", "name", "desc", "strength", "risk", "next", "todo", "color")} for t in d["quiz"]["types"]])
     text = strip_tags(html_body) + json.dumps(data, ensure_ascii=False) + d["title"] + "입력과 선택을 모두 지웠습니다문구를 복사했습니다결과를 복사했습니다계획 요약을 복사했습니다. 실장님·강사님께 공유하세요아직 비어 있습니다문항을 먼저 골라 주세요복사하지 못했습니다. 길게 눌러 직접 복사해 주세요"
     if d.get("quiz"):
-        text += "".join(strip_tags(t[k]) for t in d["quiz"]["types"] for k in ("name", "desc", "strength", "risk", "next"))
+        text += "".join(strip_tags(t[k]) for t in d["quiz"]["types"] for k in ("name", "desc", "strength", "risk", "next", "todo"))
     fonts = f'@font-face{{font-family:"Pretendard";src:url(data:font/woff2;base64,{subset_font(text)}) format("woff2");font-weight:100 900;font-display:block}}'
     for fn in THEME_FONTS[d["theme"]]:
         fonts += font_face(fn, text)
@@ -470,7 +506,11 @@ def render_deck(d: dict, css: str, js: str) -> str:
 
 # ───────────────────────── 시리즈 서가(index.html) ─────────────────────────
 # 블라인드 심사로 고른 대표 3종(slug, 고른 이유). 심사 기록: docs/reports/lead-magnet-decks/2026-11-10-insight-r2.md
-PICKS: list[tuple[str, str]] = []
+PICKS: list[tuple[str, str]] = [
+    ("academy-2027-operation-planner", "두 심사 순위 합산 1위. 11~12월 계획 시즌에 맞고, 직접 쓴 계획서가 남아 ‘계획 들고 상담’으로 가장 자연스럽게 이어집니다."),
+    ("academy-operations-report-2027", "공식 통계로 여는 유입용 대표 자료(디자인 심사 2위). 지적된 표현 오류를 원문으로 바로잡고, 우리 학원 숫자 비교표를 더했습니다."),
+    ("parent-consult-closing-guide", "원장 심사 1위. 재등록 상담에서 이번 주에 바로 쓰는 말과 반론 대응을 담아, ‘기록이 필요하다’는 결론으로 이어집니다."),
+]
 REF = {"report": "HubSpot State of Sales", "brief": "검색 데이터 가이드북", "summit": "Dreamforce 핵심요약집",
        "guide": "Sales Closing Guide", "play": "리드 마그넷 유형: 퀴즈·진단", "planner": "리드 마그넷 유형: 템플릿·도구"}
 ORDER = ["academy-operations-report-2027", "2028-admissions-reform-brief", "academy-briefing-summary",
@@ -526,7 +566,7 @@ def build_index(decks: list[dict]) -> str:
 <div class="how"><div><b>발표 모드</b><p>←·→ 키나 아래 조작 막대로 넘깁니다. 설명회·상담 화면 공유에 그대로 씁니다.</p></div>
 <div><b>모바일</b><p>폭이 좁으면 슬라이드가 세로 카드로 다시 흘러갑니다. 광고로 들어온 원장님이 폰에서 바로 읽고 풉니다.</p></div>
 <div><b>입력과 개인정보</b><p>퀴즈 답과 템플릿 입력은 보는 사람의 브라우저에만 저장되고 어디에도 전송되지 않습니다.</p></div></div>
-<p class="note">통계: 국가데이터처·교육부 2025 사교육비조사, 교육부·KEDI 2026 교육기본통계, KEDI 교육통계서비스 사설학원 현황, 통계청 장래인구추계, 교육부 2028 대입제도 개편 확정안, 대교협 2027학년도 시행계획. 대화·장면은 이해를 돕기 위한 예시이며, 가격·도입 수·성과 보장 표현은 싣지 않았습니다.</p>
+<p class="note">통계: 국가데이터처·교육부 2025 사교육비조사, 교육부·KEDI 2026 교육기본통계, KEDI 교육통계서비스 사설학원 현황, 통계청 장래인구추계, 교육부 2028 대입제도 개편 확정안·고교학점제 안착 지원 대책, 대교협 2027·2028학년도 시행계획. 대화·장면은 이해를 돕기 위한 예시이며, 가격·도입 수·성과 보장 표현은 싣지 않았습니다.</p>
 <a class="back" href="../decks/index.html">← 원장 노트 시리즈 16권(체크리스트·워크시트)</a>
 </div>"""
     font = subset_font(strip_tags(body))
