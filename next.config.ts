@@ -97,6 +97,64 @@ const securityHeaders = [
   { key: "Permissions-Policy", value: "geolocation=(), microphone=(), camera=()" },
 ];
 
+// ── /expo: 박람회 키오스크용 ClassIn 쇼케이스(본사 EDUtech Asia 앱 한국판, 정적 PWA — docs/active/expo-showcase-kr.md).
+// 아래 규칙은 headers() 에서 "/(.*)" 뒤에 와서 같은 키(CSP·X-Frame-Options·Permissions-Policy)를 덮는다
+// (Next 는 맞는 규칙을 순서대로 모두 적용하고 같은 키는 나중 값이 이긴다). HSTS·nosniff·Referrer-Policy 등은 공통 값 그대로다.
+// 공통 CSP 와 다른 점과 이유:
+//  - frame-ancestors 'self' / X-Frame-Options SAMEORIGIN: 셸(index.html)이 같은 출처 iframe 4개(ai·rooms·deck 2종)를 탭으로 띄운다.
+//  - 'wasm-unsafe-eval': AI 존 로봇(MediaPipe 포즈 추적, ai/robot/tracker-worker.js)과 3D 교실(Draco 디코더, rooms/draco/)이 WASM 이다.
+//  - worker-src blob: : Draco 디코더가 blob 워커를 만든다. 'unsafe-inline': 본사 HTML 의 인라인 스크립트·스타일과
+//    made.js 의 sandbox srcdoc 슬라이드(부모 CSP 를 물려받는다)가 쓴다 — 본사 파일은 재이식마다 바뀌어 해시로 고정하지 않는다.
+//  - 외부 출처는 YouTube 개인정보 보호 모드 임베드 하나(에디션 슬라이드의 video 레이아웃, made.js video()). Vimeo·Bilibili 변환도
+//    본사 코드에 있지만 한국판에서 쓰지 않아 열지 않는다. 본사 Firestore 는 이식 패치로 정적 JSON(editions/*.json)으로 바꿔 열지 않는다.
+//  - 광고·분석·채널톡 출처는 없다(키오스크 사본에는 추적 스크립트가 없다).
+const expoContentSecurityPolicy = [
+  "default-src 'self'",
+  "base-uri 'self'",
+  "object-src 'none'",
+  "frame-ancestors 'self'",
+  "form-action 'self'",
+  "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'",
+  "style-src 'self' 'unsafe-inline'",
+  "font-src 'self' data:",
+  "img-src 'self' data: blob:",
+  "media-src 'self' data: blob:",
+  // three.js GLTFLoader 가 .glb 안에 든 텍스처를 blob URL 로 만들어 fetch 한다(교실 공간 3D·교실 설계 가구 모델)
+  "connect-src 'self' blob:",
+  "worker-src 'self' blob:",
+  // YouTube 개인정보 보호 모드 임베드(에디션 슬라이드 video 레이아웃)
+  "frame-src 'self' https://www.youtube-nocookie.com",
+  "manifest-src 'self'",
+  "upgrade-insecure-requests",
+].join("; ");
+
+const expoSecurityHeaders = [
+  { key: "Content-Security-Policy", value: expoContentSecurityPolicy },
+  { key: "X-Frame-Options", value: "SAMEORIGIN" },
+  // 카메라: AI 존 로봇 데모(영상만, 마이크는 쓰지 않는다). 클립보드·공유: 셸의 링크 공유 버튼. 전체 화면·자동 재생: 키오스크 영상.
+  {
+    key: "Permissions-Policy",
+    value:
+      "camera=(self), microphone=(), geolocation=(), fullscreen=(self), autoplay=(self), clipboard-write=(self), web-share=(self)",
+  },
+  // 키오스크용 사본이다 — 검색에 노출하지 않는다(robots.txt 로 막으면 이 헤더를 못 읽으니 막지 않는다).
+  { key: "X-Robots-Tag", value: "noindex, nofollow" },
+  // 정적 미디어(이미지·영상·글꼴·3D 모델) 기본값. 파일 이름에 해시가 없어 재이식 때 같은 이름으로 바뀔 수 있으니 하루만 둔다.
+  // 키오스크의 오프라인 저장은 version.json 해시로 ?__net=…&no-store 로 받으므로 이 값의 영향을 받지 않는다.
+  { key: "Cache-Control", value: "public, max-age=86400, stale-while-revalidate=604800" },
+];
+
+// 앱 코드·설정·번역은 재이식·콘텐츠 수정이 바로 보여야 하고, 서로 맞물린다(셸 ↔ 탭 앱, JS 로더 ↔ WASM).
+// 매번 재검증한다(ETag 로 304 가 나므로 비용은 작다). sw.js·version.json·editions·i18n 이 여기에 든다.
+// "/expo" 는 진입 리다이렉트(307) 응답이다 — "/expo/:path*" 가 빈 경로에도 맞아 미디어 캐시 값이 붙으므로 덮는다.
+const expoRevalidateHeaders = [{ key: "Cache-Control", value: "no-cache" }];
+const expoRevalidateSources = [
+  "/expo",
+  "/expo/(.*)\\.(html|js|mjs|css|json|webmanifest|wasm)",
+  "/expo/editions/:path*",
+  "/expo/i18n/:path*",
+];
+
 // 리드마그넷 PDF 렌더러(lib/lead-magnet-pdf/fonts.ts)가 런타임에 fs 로 읽는 글꼴.
 // 글꼴 파일을 두 PDF 라우트의 함수 번들에 확실히 넣는다(fonts.ts 는 리터럴 경로라 트레이서도 따라가지만 목록을 명시해 둔다).
 // next.config.ts 는 앱 모듈을 import 하지 않으므로 목록을 복제하고,
@@ -272,10 +330,25 @@ const nextConfig: NextConfig = {
         source: "/(.*)",
         headers: securityHeaders,
       },
+      // /expo 예외는 반드시 "/(.*)" 뒤에 둔다 — 같은 키는 나중 규칙이 이긴다(위 expoContentSecurityPolicy 주석).
+      // tests/security/expo-headers.test.ts 가 순서와 최종 값을 확인한다.
+      {
+        source: "/expo/:path*",
+        headers: expoSecurityHeaders,
+      },
+      ...expoRevalidateSources.map((source) => ({ source, headers: expoRevalidateHeaders })),
     ];
   },
   async redirects() {
     return [
+      // /expo 셸은 상대 경로(ai/index.html 등)로 탭을 띄우므로 진입 URL 이 파일 경로여야 한다. Next 는 public/ 의
+      // 디렉터리 인덱스를 서빙하지 않고 끝 슬래시를 지운다(/expo/ → 308 → /expo → 여기). 쿼리(?install·?lang 등)는 Next 가 그대로 넘긴다.
+      // 임시(307): 진입 경로를 나중에 바꿀 수 있게 브라우저에 영구 기억시키지 않는다.
+      {
+        source: "/expo",
+        destination: "/expo/index.html",
+        permanent: false,
+      },
       {
         source: "/blog/2026-asia-ai-education-forum-busan",
         destination: "/blog/2026-asia-ai-education-forum-in-busan",

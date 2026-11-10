@@ -1,7 +1,10 @@
 {
-  "name": "ClassIn at EDUtech Asia",
+  "name": "ClassIn 쇼케이스",
   "short_name": "ClassIn",
-  "start_url": "./",
+  "lang": "ko",
+  "dir": "ltr",
+  "id": "./index.html",
+  "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
   "orientation": "landscape",

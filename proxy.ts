@@ -228,8 +228,10 @@ export async function proxy(request: NextRequest) {
   return redirectToAdminLogin(request)
 }
 
+// /expo 는 public/expo 의 정적 쇼케이스 앱(html·json·mp4·woff2·wasm 등 ~500개 파일)이라 세션 갱신·관리자 가드가 필요 없다.
+// /expo 자체는 next.config.ts redirects 가 /expo/index.html 로 보낸다(미들웨어보다 먼저 돈다). /exposure 같은 경로는 그대로 탄다.
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js|map)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml|expo(?:/|$)|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js|map)$).*)",
   ],
 }

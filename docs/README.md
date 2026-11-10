@@ -211,6 +211,8 @@ Admin 관련 작업은 [Admin 지침 맵](./active/admin-guidance-map.md)에서 
   - **Supabase 운영 복구·하드닝 현재 실행 계획.** 2026-09-01 Admin 접속 장애의 인과관계, 즉시 복구, 실패 의미·캐시·권한·토큰 키·CRM 성능 개선의 독립 배포 순서와 종료 조건.
 - [active/cs-ops-standard-runbook-2026-08.md](./active/cs-ops-standard-runbook-2026-08.md)
   - CS 운영 데스크, 문서 보강 큐, 회귀 검수와 채널톡 실제 원인 검토 절차
+- [active/expo-showcase-kr.md](./active/expo-showcase-kr.md)
+  - **박람회 키오스크 쇼케이스(/expo) 정본.** 본사 EDUtech Asia 정적 PWA 한국판의 구조, 재이식 절차(`scripts/expo/import-hq.mjs`), 한국판 소유 파일, 진입 URL·iPad/Chrome 설치·오프라인 저장, 사이트 공통 보안 헤더 예외(iframe·카메라·WASM·noindex)와 이유
 - 2026-10-28 보관 이동(역사 기록, 현재 기준으로 쓰지 않는다)
   - 파트너 포털(`/partner` UI 제거됨): [master-spec](./archive/partner-portal-master-spec.md), [implementation-roadmap](./archive/partner-portal-implementation-roadmap.md), [front-back-contract](./archive/partner-portal-front-back-contract.md), [document-hub-guidelines](./archive/partner-portal-document-hub-guidelines.md), [document-hub-wireframes](./archive/partner-portal-document-hub-wireframes.md). 기능 재배치 판단은 [재분배 기획](./active/partner-portal-redistribution-plan-2026-06-26.md)이 남아 있다.
   - [마케팅 이메일 시스템 구현 스냅샷](./archive/MARKETING_EMAIL_SYSTEM.md)
