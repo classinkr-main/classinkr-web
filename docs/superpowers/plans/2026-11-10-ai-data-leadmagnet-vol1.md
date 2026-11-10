@@ -21,7 +21,7 @@
 | `data/lead-magnets.json` | 자료 메타·문안(공개 페이지·게이트·CRM·워크북 폴백이 읽음) | 항목 1개 추가 |
 | `scripts/lead-magnet-ebooks/academy-ai-data-ops-guide.html` | 12쪽 인쇄 원본(단일 HTML, 스타일 인라인) | 신규 |
 | `public/materials/lead-magnets/academy-ai-data-ops-guide.pdf` | 렌더 결과(정적 배포본) | 생성 |
-| `public/materials/lead-magnets/academy-ai-data-ops-guide-board.xlsx` | 월요일 보드 + 신호 4열 워크시트 | 신규 |
+| `public/materials/lead-magnets/academy-ai-data-ops-guide-board.csv` · `-signals.csv` | 월요일 보드 + 신호 4열 워크시트 | 신규 |
 | `data/blog-posts.json` | 블로그 글 1편(draft, `leadMagnetSlug` 연결) | 항목 1개 추가 |
 | `docs/active/content-hook-lab/shorts-ai-data-ops-guide-2026-11.md` | 쇼츠 대본 3개 | 신규 |
 | `docs/active/content-hook-lab/ledger/tofu.md` | 명예의 전당에 NEW 리드마그넷 등록 | 1행 추가 |
@@ -419,7 +419,7 @@ git commit -m "feat(resources): 1권 「AI와 데이터로 학원 운영하기�
 
 **Files:**
 - Create: `public/materials/lead-magnets/academy-ai-data-ops-guide.pdf` (렌더 결과)
-- Create: `public/materials/lead-magnets/academy-ai-data-ops-guide-board.xlsx`
+- Create: `public/materials/lead-magnets/academy-ai-data-ops-guide-board.csv`, `-signals.csv`
 - Test: `tests/lead-magnets/pdf-handcrafted.test.ts`, `tests/lead-magnets/material-download-contract.test.ts` (기존)
 
 - [ ] **Step 1: 렌더 의존성 준비 (저장소 의존성 아님)**

@@ -5225,6 +5225,8 @@
       "출제 템플릿 1호로 만든 문제 수"
     ],
     "sourceLinks": [
+      { "label": "월요일 보드 양식(CSV)", "href": "/materials/lead-magnets/academy-ai-data-ops-guide-board.csv", "description": "다섯 칸·전주·기준선·메모. 엑셀이나 구글시트에서 엽니다." },
+      { "label": "신호 4열 워크시트(CSV)", "href": "/materials/lead-magnets/academy-ai-data-ops-guide-signals.csv", "description": "결석 연속·숙제 미제출·상담 답장 시간·성적 변화와 표시 수식 한 줄." },
       { "label": "관리자 모니터링과 통계 활용", "href": "/docs/software/admin-monitoring-analytics", "description": "출석·녹화·과제 상태가 수업과 동시에 쌓입니다. 보드의 신호 네 개 중 세 개가 내보내기 없이 보입니다." },
       { "label": "AI 기능 소개서", "href": "/classin-ai-feature-guide.html", "description": "AI 강의 분석(강사가 먼저 자기 수업을 봅니다)·AI 출제·AgentIn 학생 권한." },
       { "label": "목동 쇼룸", "href": "/showroom", "description": "우리 반 자료 하나로 녹화 → 리포트 → 면담까지 30분." },
