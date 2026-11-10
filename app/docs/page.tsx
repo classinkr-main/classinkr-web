@@ -18,7 +18,7 @@ import {
 import { getDocsContent } from "@/lib/docs-content"
 import { pickRecentlyUpdated } from "@/lib/docs-list-meta"
 import { createPublicMetadata } from "@/lib/seo"
-import { searchDocs } from "@/lib/docs-search"
+import { searchDocs, suggestDocsQueries } from "@/lib/docs-search"
 import { TrackedLink } from "@/components/TrackedLink"
 import type { DocsArticleSummary } from "@/components/docs"
 import { DocsSearchLogger } from "@/components/docs/DocsSearchLogger"
@@ -163,6 +163,9 @@ export default async function DocsHomePage({ searchParams }: DocsHomePageProps) 
   const query = q.toLowerCase()
   // 검색 화면(/docs/search)과 같은 함수로 거른다 — 1위보다 훨씬 약하게 스친 문서는 빠진다.
   const searchResults = query ? searchDocs(allDocs, q, { details: false }).map((result) => result.doc) : []
+  // 가이드 홈 검색창이 이 화면(/docs?q=)으로 온다. 0건이면 /docs/search 와 같은 비슷한 검색어를 보인다
+  // (운영 기록 2026-10~11: '녹회' 검색이 모두 0건으로 끝났다 — 비슷한 검색어 제안은 /docs/search 에만 있었다).
+  const searchSuggestions = query && searchResults.length === 0 ? suggestDocsQueries(q, allDocs) : []
 
   const intentCards = getGuideIntentCards(docsContent)
   const productTiles = getGuideProductTiles(docsContent)
@@ -314,6 +317,20 @@ export default async function DocsHomePage({ searchParams }: DocsHomePageProps) 
               </>
             ) : (
               <div className="mt-4">
+                {searchSuggestions.length > 0 ? (
+                  <p className="mb-3 flex flex-wrap items-baseline gap-x-3 gap-y-2 text-[15px]">
+                    <span className="text-[#615D59]">이 검색어로 찾아보세요:</span>
+                    {searchSuggestions.map((suggestion) => (
+                      <Link
+                        key={suggestion}
+                        href={`/docs?q=${encodeURIComponent(suggestion)}`}
+                        className={`font-semibold text-fg-accent underline decoration-fg-accent/25 underline-offset-4 transition-colors hover:decoration-fg-accent ${FOCUS_RING}`}
+                      >
+                        {suggestion}
+                      </Link>
+                    ))}
+                  </p>
+                ) : null}
                 <p className="text-[15px] leading-[26px] text-[#615D59]">
                   맞는 가이드가 없습니다. ‘녹화’, ‘과제’처럼 짧은 단어로 다시 검색하거나, 챗봇에
                   지금 상황을 그대로 물어보세요.

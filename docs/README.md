@@ -52,6 +52,8 @@ Admin 관련 작업은 [Admin 지침 맵](./active/admin-guidance-map.md)에서 
   - **챗봇 증상형 CS 질문 트리아지.** "기관 등록 안됨", "에러나요" 같은 증상 질문을 공개 문제 해결 문서 섹션으로 잇는 규칙, 4회 평가 루프 수치(기준선 32% → 블라인드 43/43), 평가셋·커버리지 검사 재실행 방법
 - [active/docs-center-content-guidelines.md](./active/docs-center-content-guidelines.md)
   - 공개 문서 탭의 가이드/매뉴얼/도움말 작성 지침과 미완성 콘텐츠 처리 규칙
+- [active/docs-guide-tab-redesign-2026-11-10.md](./active/docs-guide-tab-redesign-2026-11-10.md)
+  - **가이드 탭 구조·디자인 디벨롭(결정 대기).** 분류 축 혼재·문제 해결 분산·검색 0건 원인 진단, 시안 A 색인 지면 · B 증상 데스크 · C 수업 흐름 지도 · D 문서 셸, 추천 E(처음이라면 → 안 될 때 → 역할별 사용법), 공통 바닥 F1–F6, 규칙 변경 R1–R6, 문체 기준, 결정 D1–D7. 시안 캔버스는 비공개 artifact
 - [active/classin-software-feature-inventory.md](./active/classin-software-feature-inventory.md)
   - 제품 캡처 기준 소프트웨어 도구·활동 유형·하드웨어 차별점 단일 진실 소스(SSOT)
 - [active/classin-board-s-series-safe-manual-guidelines.md](./active/classin-board-s-series-safe-manual-guidelines.md)
