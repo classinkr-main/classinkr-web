@@ -1,0 +1,95 @@
+{
+  "id": "kr",
+  "name": "Korea",
+  "lang": "ko",
+  "version": 1,
+  "_about": "한국 에디션. edition.js 가 본사(싱가포르) 기본 콘텐츠를 이 값으로 덮는다. 사례 출처: lib/introduction/content.ts INTRO_CASES(서비스 소개서 사례). 쇼룸 정보: data/offices.json(seoul)·app/showroom. 박람회명이 정해지면 footer 를 바꾼다.",
+  "cases": [
+    {
+      "id": "bucheon-jungyul",
+      "tag": "학원 · 경기 부천",
+      "school": "부천 정율사관학원",
+      "unit": "모든 강의실",
+      "title": "부천의 수업에 다른 지역 학생도 실시간으로",
+      "challenge": "수업은 부천에서 열리지만, 학생은 부산·대구·대치동 등 다른 지역에서도 모집됩니다.",
+      "withClassIn": "모든 교실에 전자칠판(86″ 또는 110″)과 전후면 카메라(T1·S1)를 설치해, 모든 수업을 하이브리드로 진행합니다.",
+      "difference": "다른 지역 학생도 실시간으로 함께 참여하고, 촬영한 수업은 녹화 강의로 판매되기도 합니다.",
+      "photo": "/expo/kr/cases/bucheon-jungyul.webp",
+      "alt": "정율사관학원 강의실 — 전자칠판과 원격 참여 화면",
+      "pos": "50% 50%",
+      "roomType": "remote",
+      "inSlides": true,
+      "inRooms": true
+    },
+    {
+      "id": "busan-gwasaram",
+      "tag": "학원 · 부산",
+      "school": "부산 과사람학원",
+      "unit": "듀얼 스크린 강의실",
+      "title": "전자칠판 두 대로, 어느 자리에서든 칠판이 보이게",
+      "challenge": "학생이 교실 어디에 앉아 있더라도 칠판이 잘 보여야 합니다.",
+      "withClassIn": "86″ 전자칠판 두 대를 연결해 듀얼 스크린으로 쓰고, 수업에 따라 확장 화면 또는 복제 화면으로 사용합니다.",
+      "difference": "복제 화면으로 쓰면 교실 어디에 앉아 있어도 칠판에 대한 시야가 확보됩니다.",
+      "photo": "/expo/kr/cases/busan-gwasaram.webp",
+      "alt": "과사람학원 교실 — 듀얼 전자칠판을 복제 화면으로 쓰는 모습",
+      "pos": "72% 50%",
+      "roomType": "lecture",
+      "inSlides": true,
+      "inRooms": true
+    },
+    {
+      "id": "korea-digital-media-high-school",
+      "tag": "공교육 · 고등학교",
+      "school": "한국디지털미디어고등학교",
+      "unit": "하이브리드 교실",
+      "title": "교실마다 같은 하이브리드 수업 환경",
+      "challenge": "어느 교실에서 수업하든 같은 하이브리드 수업 환경이 갖춰져 있어야 합니다.",
+      "withClassIn": "86인치 ClassIn X 전자칠판과 모션 트래킹 카메라를 도입해 교실마다 일관된 하이브리드 수업 환경을 구축했습니다.",
+      "difference": "실시간 판서, 원격 참여, 자동 녹화를 통합해 수업 몰입도와 운영 효율성을 함께 높였습니다.",
+      "photo": "/expo/kr/cases/korea-digital-media-high-school.webp",
+      "alt": "한국디지털미디어고 교실에 설치된 ClassIn X 전자칠판",
+      "pos": "50% 50%",
+      "roomType": "remote",
+      "inSlides": true,
+      "inRooms": true
+    },
+    {
+      "id": "acts-university",
+      "tag": "공교육 · 대학교",
+      "school": "아신대학교",
+      "unit": "스마트 강의실",
+      "title": "해외 교수 초빙 수업도, 원격 참여도 한 강의실에서",
+      "challenge": "해외 교수자를 초빙하고, 학생은 공간 제약 없이 수업에 참여할 수 있어야 합니다.",
+      "withClassIn": "전자칠판, 천장형 마이크(DT1), 전후면 카메라(T1·S1)를 종합적으로 활용합니다.",
+      "difference": "해외 교수자의 수업과 학생의 자유로운 참여가 가능하고, 모든 수업이 실시간으로 녹화돼 복습 자료로 쓰입니다.",
+      "photo": "/expo/kr/cases/acts-university.webp",
+      "alt": "아신대학교 강의실 전자칠판에 띄운 ACTS University × ClassIn 화면",
+      "pos": "50% 50%",
+      "roomType": "lecture",
+      "inSlides": true,
+      "inRooms": true
+    }
+  ],
+  "visit": {
+    "show": false,
+    "url": "https://classin.co.kr/showroom?utm_source=expo&utm_medium=kiosk&utm_content=visit_button#booking"
+  },
+  "own": {
+    "slides": [
+      {
+        "id": "visit-kr",
+        "on": true,
+        "after": "cases",
+        "layout": "words",
+        "title": "목동 쇼룸에서 직접 써 보세요",
+        "text": "서울 양천구 목동동로 233-1, 806호. 교안을 열고, 판서하고, 녹화돼 복습으로 넘어가는 실제 수업 흐름을 평일 60분 상담으로 확인합니다. QR 코드를 찍어 방문 날짜를 고르세요.",
+        "image": "/expo/kr/showroom-qr.png",
+        "alt": "목동 쇼룸 방문 예약 페이지(classin.co.kr/showroom)로 연결되는 QR 코드"
+      }
+    ]
+  },
+  "contact": "https://classin.co.kr/contact?utm_source=expo&utm_medium=kiosk&utm_content=room_designer#contact-form",
+  "aiHidden": ["stroke"],
+  "slidesHidden": ["awards"],
+  "footer": "ClassIn Korea · 클래스인"
+}

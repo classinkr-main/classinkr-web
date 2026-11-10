@@ -53,6 +53,9 @@ const ROOT_DIRS = "deck|ai|rooms|i18n|fonts-i18n|icons|editions|admin|__edition|
 const ROOT_FILES = "sw\\.js|shell\\.js|shell\\.css|text-lang\\.js|edition\\.js|made\\.js|i18n\\.js|ipad-bridge\\.js|version\\.json|manifest\\.webmanifest"
 const ABS = new RegExp(`(?<=[\`"'(=,\\s])/(?=(?:${ROOT_DIRS})/|(?:${ROOT_FILES})(?=[\`"'?#)\\s]))`, "g")
 
+// 한국어 제목이 음절 중간에서 끊기지 않게(본사 CSS 에는 keep-all 이 없다). 영어 화면에는 영향 없다.
+const KEEP_ALL = ["</head>", "<style>body{word-break:keep-all;overflow-wrap:break-word}</style></head>"]
+
 // 각 패치는 정확히 한 번 맞아야 한다. 본사 코드가 바뀌어 안 맞으면 멈추고 알린다.
 const PATCHES = {
   "shell.js": [
@@ -71,6 +74,14 @@ const PATCHES = {
   "i18n.js": [["location.pathname.match(/^\\/(ai|rooms)\\//)", "location.pathname.match(/^\\/expo\\/(ai|rooms)\\//)"]],
   "deck/assets/blocks-DS47Suv0.js": [["r=function(e){return`/`+e}", "r=function(e){return`/expo/`+e}"]],
   "index.html": [['<html lang="en">', '<html lang="ko">']],
+  // edition.js 는 /ai/·/rooms/·…edutech.html 을 루트 기준 경로로 판별한다 — /expo 접두를 떼고 본다.
+  // (없으면 aiHidden, 학습 공간 사례 inRooms 등이 무시된다)
+  "edition.js": [["var path=location.pathname;", "var path=location.pathname.replace(/^\\/expo(?=\\/)/,``);"]],
+  "deck/edutech.html": [KEEP_ALL],
+  "deck/room-designer.html": [KEEP_ALL],
+  "rooms/index.html": [KEEP_ALL],
+  "ai/index.html": [KEEP_ALL],
+  "ai/try.html": [KEEP_ALL],
 }
 
 function sh(cmd, argv) {
