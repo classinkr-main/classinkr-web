@@ -68,6 +68,38 @@ const inputClassName =
 
 class LeadRequestError extends Error {}
 
+/**
+ * 자료를 받은 직후의 다음 걸음 — 쇼룸 예약. 다운로드 화면이 「다시 받기」로만 끝나 자료 리드가
+ * 상담으로 이어질 길이 없었다(2026-11 실측: 자료 CTA 클릭이 홈·다운로드 페이지로 흩어짐).
+ * lead_magnet 을 실어 어드민 자료 지표(lead-magnet-metrics)의 CTA 클릭 칸에 자료별로 잡힌다.
+ */
+function ShowroomNextStep({ slug }: { slug: string }) {
+  return (
+    <div className="mt-6 border-t border-black/[0.08] pt-5 text-left">
+      <p className="text-caption font-bold text-fg-ink">체크 결과, 직접 보면서 확인해 보세요</p>
+      <p className="mt-1 text-caption leading-6 text-fg-muted">
+        목동 쇼룸에서 우리 학원 수업 그대로 Classin을 시연해 드립니다.
+      </p>
+      <Button asChild size="md" className="mt-3 w-full">
+        <a
+          href="/showroom#booking"
+          onClick={() =>
+            trackEvent("click_cta", {
+              button: "resource_showroom_booking",
+              destination: "showroom_booking",
+              lead_magnet: slug,
+              page: window.location.pathname,
+            })
+          }
+        >
+          쇼룸 방문 예약하기
+          <ArrowRight className="h-4 w-4" />
+        </a>
+      </Button>
+    </div>
+  )
+}
+
 function ResourceStats({ itemCount, estimatedMinutes }: { itemCount: number; estimatedMinutes: number }) {
   return (
     <div className="mt-5 grid shrink-0 grid-cols-3 gap-px overflow-hidden rounded-[8px] border border-black/[0.08] bg-black/[0.08] text-center">
@@ -389,11 +421,13 @@ export function ResourceDownloadForm({ resource }: ResourceDownloadFormProps) {
             {isLoginGate ? null : " 이 기기에서는 다음에도 정보 입력 없이 바로 받을 수 있습니다."}
           </p>
           {error ? <p className="mt-4 text-caption leading-6 text-fg-danger">{error}</p> : null}
+          <ShowroomNextStep slug={resource.slug} />
           <Button
             type="button"
+            variant="line"
             disabled={loading}
             size="md"
-            className="mt-6 w-full"
+            className="mt-2 w-full"
             onClick={() => void handleRedownload()}
           >
             {loading ? (
@@ -419,7 +453,8 @@ export function ResourceDownloadForm({ resource }: ResourceDownloadFormProps) {
           <p className="mt-3 text-caption leading-6 text-fg-muted">
             PDF 파일이 준비되면 같은 화면에서 바로 받을 수 있습니다. 먼저 아래 문항을 확인해 보세요.
           </p>
-          <Button type="button" size="md" className="mt-6 w-full" onClick={scrollToChecklist}>
+          <ShowroomNextStep slug={resource.slug} />
+          <Button type="button" variant="line" size="md" className="mt-2 w-full" onClick={scrollToChecklist}>
             전체 문항 보기
             <ArrowRight className="h-4 w-4" />
           </Button>
