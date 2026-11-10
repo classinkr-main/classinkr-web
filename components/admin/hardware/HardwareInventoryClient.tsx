@@ -80,6 +80,7 @@ import SheetSyncMenu from "./inventory/SheetSyncMenu"
 import type { HomeRecordDraft } from "./inventory/home-record-model"
 import LotAllocationDialog, { LotAllocationPreparing, plannedLotRequest, useLotAllocationPrompt } from "./inventory/LotAllocationDialog"
 import { confirmLotPayload, type LotAllocation } from "./inventory/lot-allocation-model"
+import { buildPlannedGroups } from "./inventory/planned-group-model"
 import { canRecordInboundOrAdjust, movementButtonState as resolveMovementButtonState, type MovementButton } from "./inventory/movement-permissions"
 import { CrmCustomerLink, movementOutboundType, OutboundTypeBadge, SampleReturnBadge } from "./inventory/OutboundMetaBadges"
 import { customerOutboundStatus, isCustomerOutbound, processDraftFields } from "./inventory/outbound-v2-model"
@@ -1335,32 +1336,8 @@ export default function HardwareInventoryClient({
     [data?.plannedMovements]
   )
 
-  // 예상 출고를 고객사 딜(고객사+담당자+예정일+물량번호) 단위로 묶어 위계를 만든다:
-  // 고객사(딜) → 하위 품목들. 확정/수정은 품목별로 유지.
-  const plannedGroups = useMemo(() => {
-    const groups = new Map<
-      string,
-      { key: string; customer: string; owner: string | null; date: string | null; lot: string | null; totalQty: number; items: HardwareMovement[] }
-    >()
-    for (const movement of data?.plannedMovements ?? []) {
-      const customer = movement.to_location ?? "도착지 미정"
-      const lot = movementLot(movement)
-      const key = `${customer}|${movement.owner ?? ""}|${movement.occurred_at ?? ""}|${lot ?? ""}`
-      let group = groups.get(key)
-      if (!group) {
-        group = { key, customer, owner: movement.owner, date: movement.occurred_at, lot, totalQty: 0, items: [] }
-        groups.set(key, group)
-      }
-      group.totalQty += movement.quantity
-      group.items.push(movement)
-    }
-    return Array.from(groups.values()).sort((a, b) => {
-      const at = a.date ? new Date(a.date).getTime() : Number.NEGATIVE_INFINITY
-      const bt = b.date ? new Date(b.date).getTime() : Number.NEGATIVE_INFINITY
-      if (at !== bt) return bt - at
-      return a.customer.localeCompare(b.customer, "ko")
-    })
-  }, [data?.plannedMovements])
+  // 예상 출고를 주문(딜) 단위로 묶는다 — 규칙은 buildPlannedGroups(planned-group-model) 주석.
+  const plannedGroups = useMemo(() => buildPlannedGroups(data?.plannedMovements ?? []), [data?.plannedMovements])
 
   const plannedPagination = useMemo(
     () => paginateAdminList(plannedGroups, { currentPage: plannedPage, pageSize: PLANNED_PAGE_SIZE }),

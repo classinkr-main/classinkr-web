@@ -7,6 +7,7 @@ import { CheckCheck, Clock3 } from "lucide-react"
 import DeleteConfirmDialog from "@/components/admin/DeleteConfirmDialog"
 import type { AdminListPaginationResult } from "@/lib/admin-list-pagination"
 import { plannedLotKey } from "./lot-allocation-model"
+import type { PlannedGroup } from "./planned-group-model"
 import type { MovementButton, MovementButtonState } from "./movement-permissions"
 import { CrmCustomerLink, movementOutboundType, OutboundTypeBadge, SampleReturnBadge } from "./OutboundMetaBadges"
 import {
@@ -30,15 +31,6 @@ import {
 const PLANNED_AGING_WARN_DAYS = 14
 const PLANNED_AGING_DANGER_DAYS = 30
 
-interface PlannedGroup {
-  key: string
-  customer: string
-  owner: string | null
-  date: string | null
-  lot: string | null
-  totalQty: number
-  items: HardwareMovement[]
-}
 
 interface PlannedOutboundPanelProps {
   data: HardwareDashboard | null
@@ -310,7 +302,8 @@ function PlannedOutboundPanel({
                       <p title={group.customer} className="truncate text-[13.5px] font-bold text-[#111110]">{group.customer}</p>
                       <p className="mt-0.5 text-[11px] text-[#615D59]">
                         {group.date ? formatDate(group.date) : "일자 미정"} · {group.owner ?? "담당자 미정"}
-                        {group.lot ? ` · ${formatLotLabel(group.lot) ?? group.lot}` : ""}
+                        {group.lot ? ` · ${group.lot}` : ""}
+                        {group.orderNo ? ` · 오더 ${group.orderNo}` : ""}
                       </p>
                     </div>
                   </div>

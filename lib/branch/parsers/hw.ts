@@ -44,12 +44,17 @@ const isPlannedOutboundBg = (bg: CellFormat | null | undefined): boolean => {
   return red >= 0.8 && green < 0.75 && blue < 0.85
 }
 
-// '3.출고 현황'의 기존 열(A~M: 물류No·일자·담당·품목·수량·단가·매출 USD·CNY·고객사·시리얼·진행·유형·비고)은
+// '3.출고 현황'의 기존 열(A~L: 물류No·일자·담당·품목·수량·단가·매출 USD·CNY·고객사·시리얼·진행·유형)은
 // 위치로 읽는다. 오더번호 열(2026-10-22 추가, docs/active/hardware-order-revenue-link-plan-2026-10-22.md §4-4)은
 // 헤더 이름으로 찾는다. 이 열이 기존 열 사이에 끼면 뒤쪽 값이 한 칸씩 밀려 고객사·진행 상태가 조용히
 // 틀어지므로, 그때는 잘못된 값을 싣지 않고 동기화를 멈춘다.
 const OUTBOUND_FIXED_COLUMN_COUNT = 13
 const ORDER_NO_HEADER = /^(오더번호|오더no\.?|orderno\.?|ordernumber)$/i
+// 유형 다음 열은 시트마다 다르다 — 예전엔 M 이 비고였고, 2026-11 시트는 M 결제 여부 · N S/N · O Remarks 다.
+// 위치로 읽으면 결제 여부("완료")가 비고로 들어가고 진짜 비고(88행)가 사라진다(2026-11-10 실측). 헤더 이름으로 찾는다.
+const REMARKS_HEADER = /^(remarks?|비고|메모)$/i
+const PAYMENT_HEADER = /^(결제여부|결제상태|결제)$/i
+const LEGACY_REMARKS_COLUMN = 12
 
 function columnLetter(index: number): string {
   let n = index + 1
@@ -60,6 +65,26 @@ function columnLetter(index: number): string {
     n = Math.floor((n - 1) / 26)
   }
   return letters
+}
+
+function findHeaderColumn(header: readonly FormattedCell[], pattern: RegExp, from = 0): number | null {
+  for (let col = from; col < header.length; col++) {
+    const label = s(header[col]?.value)?.replace(/\s+/g, "")
+    if (label && pattern.test(label)) return col
+  }
+  return null
+}
+
+/**
+ * 출고 탭 뒤쪽 열(비고·결제 여부) 위치. 헤더 이름이 있으면 그 열, 비고 헤더가 없으면 예전 위치(M)를 비고로 본다 —
+ * 단 M 이 결제 여부 헤더면 비고는 없다(결제 값을 비고로 읽지 않는다).
+ */
+export function findOutboundTrailingColumns(header: readonly FormattedCell[]): { remarks: number | null; payment: number | null } {
+  const payment = findHeaderColumn(header, PAYMENT_HEADER, OUTBOUND_FIXED_COLUMN_COUNT - 1)
+  const remarks =
+    findHeaderColumn(header, REMARKS_HEADER, OUTBOUND_FIXED_COLUMN_COUNT - 1) ??
+    (payment === LEGACY_REMARKS_COLUMN ? null : LEGACY_REMARKS_COLUMN)
+  return { remarks, payment }
 }
 
 /** 출고 탭 첫 행(헤더)에서 오더번호 열 위치를 찾는다. 없으면 null — 열을 추가하기 전 시트도 그대로 읽는다. */
@@ -73,6 +98,12 @@ export function findOutboundOrderNoColumn(header: readonly FormattedCell[]): num
 
 export interface HwInboundParsed { logistics_no: string|null; inbound_date: string|null; product: string; quantity: number; unit_price: number|null; amount: number|null; serials: string[]; storage: string|null; importer: string|null; remarks: string|null; raw: unknown }
 export interface HwOutboundParsed { logistics_no: string|null; outbound_date: string|null; owner: string|null; product: string; quantity: number; revenue: number|null; destination: string|null; serials: string[]; progress: string|null; type: string|null; remarks: string|null; raw: unknown }
+
+/** 시트 "결제 여부" 칸 — 부품마다 따로 결제할 때가 있어 줄 단위로 남긴다(예: 86" 완료 · STD1 대기 "월 1개씩 결제"). */
+export function sheetPaymentStatus(raw: unknown): string | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null
+  return s((raw as { payment_status?: unknown }).payment_status)
+}
 export interface HwStockParsed { product: string; category: string|null; quantity: number; raw: unknown }
 export interface HwSalesMonthlyParsed { fiscal_year: number; fiscal_month: number; product: string; quantity: number; raw: unknown }
 
@@ -104,6 +135,7 @@ export function parseInbound(grid: FormattedCell[][]): HwInboundParsed[] {
 export function parseOutbound(grid: FormattedCell[][]): HwOutboundParsed[] {
   const out: HwOutboundParsed[] = []
   const orderNoCol = findOutboundOrderNoColumn(grid[0] ?? [])
+  const trailing = findOutboundTrailingColumns(grid[0] ?? [])
   if (orderNoCol != null && orderNoCol < OUTBOUND_FIXED_COLUMN_COUNT) {
     throw new Error(
       `'3.출고 현황'의 오더번호 열이 ${columnLetter(orderNoCol)}열에 있습니다. 기존 열(A~${columnLetter(OUTBOUND_FIXED_COLUMN_COUNT - 1)}) 사이에 끼우면 ` +
@@ -125,12 +157,13 @@ export function parseOutbound(grid: FormattedCell[][]): HwOutboundParsed[] {
     const progress = s(row[10]?.value) ?? (plannedByColor ? "배송 예정" : null)
     // 손으로 적는 칸이라 대소문자·공백을 정리해 둔다(`ord - 2610-002` → `ORD-2610-002`) — 원장에서 오더와 그대로 맞춘다.
     const orderNo = orderNoCol == null ? null : normalizeOrderNo(s(row[orderNoCol]?.value))
+    const paymentStatus = trailing.payment == null ? null : s(row[trailing.payment]?.value)
     out.push({
       logistics_no: s(row[0]?.value), outbound_date: date(row[1]?.value),
       owner: s(row[2]?.value), product, quantity: n(row[4]?.value) ?? 0,
       revenue: n(row[6]?.value), destination,
       serials: arr(row[9]?.value), progress,
-      type: s(row[11]?.value), remarks: s(row[12]?.value),
+      type: s(row[11]?.value), remarks: trailing.remarks == null ? null : s(row[trailing.remarks]?.value),
       raw: {
         values: rawValues(row),
         destination,
@@ -145,6 +178,7 @@ export function parseOutbound(grid: FormattedCell[][]): HwOutboundParsed[] {
         // 오더번호는 값이 있을 때만 싣는다 — 열이 없는 시트·빈 칸은 raw가 예전과 같게 남는다.
         // raw는 가져오기 RPC가 원장(hardware_movements.raw)까지 그대로 옮긴다.
         ...(orderNo ? { order_no: orderNo } : {}),
+        ...(paymentStatus ? { payment_status: paymentStatus } : {}),
       },
     })
   }

@@ -53,6 +53,40 @@ describe("hw parsers", () => {
     expect(out[0].serials).toEqual(["S1", "S2"])
   })
 
+  // 2026-11 시트: L 유형 · M 결제 여부 · N S/N · O Remarks. 위치로 읽으면 결제 여부("완료")가 비고로 들어갔다.
+  it("outbound reads 비고·결제 여부 by header name when the sheet adds 결제 여부 · S/N before Remarks", () => {
+    const header = [
+      c("물류No."), c("출고일"), c("담당자"), c("제품명"), c("수량"), c("단가(USD)"), c("매출(USD)"), c("매출(CNY)"),
+      c("배송/설치 장소"), c("시리얼 번호"), c("진행 상태"), c("유형"), c("결제 여부"), c("S/N"), c("Remarks"),
+    ]
+    const grid: FormattedCell[][] = [
+      header,
+      [c("H8"), c("2026. 7. 21"), c("Han"), c('86" IFP'), c(2), c(""), c(""), c(""), c("수학의힘 동대문"), c(""), c("설치 완료"), c("Sales"), c("완료"), c(""), c("스터디 공동구매")],
+      [c("C1"), c("2026. 7. 21"), c("Han"), c("STD1"), c(2), c(""), c(""), c(""), c(""), c(""), c("설치 완료"), c("Sales"), c("대기"), c(""), c("월 1개씩 결제 예정")],
+    ]
+    const out = parseOutbound(grid)
+    expect(out.map((row) => row.remarks)).toEqual(["스터디 공동구매", "월 1개씩 결제 예정"])
+    expect(out.map((row) => (row.raw as { payment_status?: string }).payment_status)).toEqual(["완료", "대기"])
+    expect(out[1].destination).toBe("수학의힘 동대문")
+  })
+
+  it("outbound keeps the legacy 비고 position (M) when no header names it, and never reads 결제 여부 as 비고", () => {
+    const legacy: FormattedCell[][] = [
+      Array(13).fill(c("")),
+      [c("H8"), c("2026. 4. 27"), c("Han"), c("T1"), c(1), c(""), c(""), c(""), c("학원"), c(""), c("설치 완료"), c("Sales"), c("메모")],
+    ]
+    expect(parseOutbound(legacy)[0].remarks).toBe("메모")
+    expect(parseOutbound(legacy)[0].raw).not.toHaveProperty("payment_status")
+
+    const paymentOnly = [...Array(12).fill(c("")), c("결제 여부")]
+    const grid: FormattedCell[][] = [
+      paymentOnly,
+      [c("H8"), c("2026. 4. 27"), c("Han"), c("T1"), c(1), c(""), c(""), c(""), c("학원"), c(""), c("설치 완료"), c("Sales"), c("완료")],
+    ]
+    expect(parseOutbound(grid)[0].remarks).toBeNull()
+    expect(parseOutbound(grid)[0].raw).toMatchObject({ payment_status: "완료" })
+  })
+
   it("outbound reads the 오더번호 column by header name into raw.order_no", () => {
     const header = [...Array(13).fill(c("")), c(" 오더 번호 ")]
     const grid: FormattedCell[][] = [

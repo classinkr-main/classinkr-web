@@ -64,7 +64,7 @@ function movementRow(overrides: Record<string, unknown>) {
 
 const MOVEMENT_ROWS = [
   movementRow({ id: "mv-1", raw: BIG_RAW }),
-  movementRow({ id: "mv-2", status: "배송 예정", occurred_at: "2026-08-25T00:00:00.000Z", raw: { sheetRow: { 제품: "86 IFP" } } }),
+  movementRow({ id: "mv-2", status: "배송 예정", occurred_at: "2026-08-25T00:00:00.000Z", raw: { sheetRow: { 제품: "86 IFP" }, order_no: "ORD-2611-001", payment_status: "대기" } }),
   movementRow({ id: "mv-3", movement_type: "inbound", from_location: null, to_location: "창고", occurred_at: "2026-08-10T00:00:00.000Z", raw: null }),
 ]
 
@@ -133,6 +133,9 @@ describe("getHardwareDashboard payload (T5-A)", () => {
     expect(dashboard.movements.find((movement) => movement.id === "mv-2")).toMatchObject({ planned: true, raw: null })
     expect(dashboard.movements.find((movement) => movement.id === "mv-3")).toMatchObject({ planned: false, raw: null })
     expect(withCrm?.planned).toBe(false)
+    // 오더번호·결제 여부는 raw 를 버리기 전에 칸으로 꺼낸다 — 화면이 주문 단위·부품별 결제로 묶는 데 쓴다.
+    expect(dashboard.movements.find((movement) => movement.id === "mv-2")).toMatchObject({ order_no: "ORD-2611-001", payment_status: "대기" })
+    expect(withCrm).toMatchObject({ order_no: null, payment_status: null })
   })
 
   it("does not serialize movement subsets or unread item fields", async () => {

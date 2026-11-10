@@ -71,6 +71,9 @@ export interface HardwareMovement {
   planned?: boolean
   // 물류번호 없는 시트 배송 예정(서버 isUnallocatedSheetPlan) — 가용에서 빼지 않는다. 구응답에는 없다.
   unallocated?: boolean
+  // 오더번호·시트 결제 여부(서버가 raw 에서 꺼내 싣는다). 구응답에는 없다.
+  order_no?: string | null
+  payment_status?: string | null
   created_at: string
   voided_at: string | null
   // 대시보드 payload는 voided 행을 싣지 않으므로 취소 메타(voided_by·void_reason·created_by)도 내려오지 않는다.

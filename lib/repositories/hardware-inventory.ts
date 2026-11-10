@@ -141,6 +141,10 @@ export type HardwareMovementView = Omit<HardwareMovementLedgerRow, "raw"> & {
   planned: boolean
   /** 물류번호 없는 시트 배송 예정 — 가용에서 빼지 않는다(isUnallocatedSheetPlan). */
   unallocated: boolean
+  /** 오더번호(raw.order_no) — 오더 승인 배송 예정·시트 오더번호 열. 화면이 주문 단위로 묶는 열쇠다. */
+  order_no: string | null
+  /** 시트 "결제 여부"(raw.payment_status) — 부품마다 따로 결제할 때가 있어 줄 단위다. 앱 기록은 null. */
+  payment_status: string | null
   /** outbound_type 이 비면 시트 유형·메모로 추정한 값(resolveOutboundType). 출고·회수 외에는 null. */
   outbound_type_resolved: HardwareOutboundType | null
 }
@@ -2757,8 +2761,9 @@ async function readHardwareSheetSource(): Promise<HardwareSheetSource> {
 /**
  * 가져오기 규칙 판 — 시트가 그대로여도 이 값을 올리면 다음 매시간 자동 가져오기가 다시 싣는다.
  * 2: 품목 이름 조회 수정(따옴표·괄호가 든 이름 때문에 행이 빠지던 문제, 2026-10-28).
+ * 3: 출고 비고를 헤더로 읽는다(결제 여부가 비고로 들어가던 문제) · 결제 여부를 줄마다 남긴다(2026-11-10).
  */
-export const HARDWARE_SHEET_IMPORT_LOGIC_VERSION = 2
+export const HARDWARE_SHEET_IMPORT_LOGIC_VERSION = 3
 
 export function checksumHardwareSheetSource(source: {
   inbound: readonly HwInbound[]
@@ -3092,7 +3097,8 @@ export function buildHardwareSheetImportRows(
       return
     }
 
-    const sampleLike = isSampleLikeText(row.type, row.remarks, row.destination, row.progress)
+    // 유형 열이 있으면 유형이 정한다 — 비고는 "샘플에서 세일즈 전환"처럼 샘플이 아닌 행에도 샘플이라는 말이 들어간다.
+    const sampleLike = isSampleLikeText(cleanString(row.type) ? row.type : row.remarks, row.destination, row.progress)
     rows.push({
       item_id: item.id,
       product_name: product,
@@ -3287,6 +3293,12 @@ function extractRawCrmLink(raw: unknown): HardwareMovementView["raw"] {
   return isRecord(crmLink) ? { crmLink } : null
 }
 
+function rawText(raw: unknown, key: string): string | null {
+  if (!isRecord(raw)) return null
+  const value = raw[key]
+  return typeof value === "string" && value.trim() ? value.trim() : null
+}
+
 function toMovementView(movement: HardwareMovementLedgerRow): HardwareMovementView {
   const { raw, ...rest } = movement
   return {
@@ -3294,6 +3306,8 @@ function toMovementView(movement: HardwareMovementLedgerRow): HardwareMovementVi
     raw: extractRawCrmLink(raw),
     planned: isPlannedStatus(movement.status),
     unallocated: isUnallocatedSheetPlan(movement),
+    order_no: rawText(raw, "order_no"),
+    payment_status: rawText(raw, "payment_status"),
     // 추정에는 시트 원본 행(raw.values)이 필요하다 — raw 를 버리기 전에 서버에서 계산해 싣는다.
     outbound_type_resolved: resolveOutboundType(movement),
   }
