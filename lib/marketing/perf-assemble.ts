@@ -29,6 +29,7 @@ import {
   indexByCampaign,
   LIVE_AD_CHANNELS,
   summarizeChannel,
+  summarizeVideo,
   type AdInsightRow,
   type LiveAdChannel,
 } from "@/lib/marketing/ad-insights"
@@ -250,6 +251,7 @@ export async function assembleMarketingPerf(
   ]
     .map(([campaignId, rows]) => ({
       ...summarizeChannel("google", rows),
+      ...summarizeVideo(rows),
       campaignId,
       campaignName: rows[rows.length - 1].campaignName,
     }))

@@ -8,6 +8,9 @@ import {
   LIVE_AD_CHANNELS,
   mergeSameCurrency,
   summarizeChannel,
+  summarizeVideo,
+  googleChannelTypeLabel,
+  type GoogleSnapshotRow as GoogleSnapshotRowForTest,
   type AdInsightRow,
   type ChannelSpendSummary,
 } from "@/lib/marketing/ad-insights"
@@ -255,5 +258,41 @@ describe("AdInsightRow 형태 — 화면이 보는 공통 축", () => {
     ]
     const keys = rows.map((row) => Object.keys(row).sort().join(","))
     expect(new Set(keys).size).toBe(1)
+  })
+})
+
+describe("summarizeVideo — Google 유형 · 조회수 · 조회당 비용(2026-11-10)", () => {
+  const g = (over: Partial<GoogleSnapshotRowForTest> = {}) =>
+    fromGoogle([{ date: "2026-11-05", campaignId: "g1", campaignName: "유튜브", spend: 1000, impressions: 100, clicks: 0, conversions: 0, currency: "KRW", channelType: "VIDEO", videoViews: 100, ...over }])[0]
+
+  it("fromGoogle 이 유형·조회수를 옮긴다 — 다른 채널은 키만 있고 값은 재지 않음(undefined)", () => {
+    expect(g()).toMatchObject({ channelType: "VIDEO", videoViews: 100 })
+    expect(fromMeta([metaRow()])[0].videoViews).toBeUndefined()
+  })
+
+  it("조회수 합 · 조회당 비용 = 광고비 ÷ 조회수 · 유형은 가장 최근 줄", () => {
+    const v = summarizeVideo([g({ date: "2026-11-04", videoViews: 300, spend: 3000 }), g({ date: "2026-11-05", videoViews: 100, spend: 1000 })])
+    expect(v).toEqual({ channelType: "VIDEO", videoViews: 400, viewsPartial: false, costPerView: 10 })
+  })
+
+  it("조회수 칸이 빈 날(칸 생기기 전 줄)이 섞이면 합은 하한이고 조회당 비용은 내지 않는다 — 0회로 세면 싸게 보인다", () => {
+    const v = summarizeVideo([g({ date: "2026-11-03", videoViews: null, channelType: null, spend: 4000 }), g({ date: "2026-11-04", videoViews: 100 })])
+    expect(v).toEqual({ channelType: "VIDEO", videoViews: 100, viewsPartial: true, costPerView: null })
+  })
+
+  it("한 줄도 재지 않았으면 조회수 null · 조회 0회면 조회당 비용 null(0 나눗셈 없음)", () => {
+    expect(summarizeVideo([g({ videoViews: null, channelType: null })])).toEqual({ channelType: null, videoViews: null, viewsPartial: false, costPerView: null })
+    expect(summarizeVideo([g({ channelType: "SEARCH", videoViews: 0 })]).costPerView).toBeNull()
+  })
+
+  it("통화가 섞이면 조회당 비용을 지어내지 않는다", () => {
+    expect(summarizeVideo([g({ currency: "KRW" }), g({ date: "2026-11-06", currency: "USD" })]).costPerView).toBeNull()
+  })
+
+  it("유형 라벨 — 아는 유형은 사람 말, 모르는 유형은 원문, 없으면 null", () => {
+    expect(googleChannelTypeLabel("VIDEO")).toBe("유튜브(동영상)")
+    expect(googleChannelTypeLabel("DEMAND_GEN")).toBe("디맨드젠")
+    expect(googleChannelTypeLabel("SHOPPING")).toBe("SHOPPING")
+    expect(googleChannelTypeLabel(null)).toBeNull()
   })
 })
