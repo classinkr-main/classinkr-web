@@ -13,7 +13,7 @@ const AdjustmentSheet = dynamic(() => import("./AdjustmentSheet"), { loading: ()
 const ItemSettingsSheet = dynamic(() => import("./ItemSettingsSheet"), { loading: () => null })
 
 const LOT_CHIP_LIMIT = 5
-import { buildHardwareStockCsv, filterHomeStock } from "./home-record-model"
+import { buildHardwareStockCsv, filterHomeStock, orderHomeStock } from "./home-record-model"
 import {
   formatAvg,
   formatDate,
@@ -77,8 +77,13 @@ function StockLevelsSection({
   const [query, setQuery] = useState("")
   const [needsAttention, setNeedsAttention] = useState(false)
   const [plannedOnly, setPlannedOnly] = useState(false)
+  const [showHidden, setShowHidden] = useState(false)
   const filteredRows = useMemo(() => filterHomeStock(data?.stock ?? [], query, needsAttention, plannedOnly), [data?.stock, query, needsAttention, plannedOnly])
-  const stockPagination = compact ? paginateAdminList(filteredRows, { currentPage: basePagination.currentPage, pageSize: basePagination.pageSize }) : basePagination
+  // 홈은 86" · 75" · T1 만 펼치고 110" 은 맨 아래, 나머지는 접어 둔다(운영자 지정 2026-11-10, orderHomeStock).
+  // 검색어가 있으면 접힌 품목도 찾아 준다. CSV 는 접힘과 상관없이 검색·필터에 맞는 전 품목을 내보낸다.
+  const searching = query.trim().length > 0
+  const homeStock = useMemo(() => orderHomeStock(filteredRows, showHidden || searching), [filteredRows, showHidden, searching])
+  const stockPagination = compact ? paginateAdminList(homeStock.rows, { currentPage: basePagination.currentPage, pageSize: basePagination.pageSize }) : basePagination
   const filterCount = Number(needsAttention) + Number(plannedOnly)
   const lotTrackedById = useMemo(() => new Map((data?.items ?? []).map((item) => [item.id, item.lot_tracked !== false])), [data?.items])
   const exportStock = () => {
@@ -95,7 +100,7 @@ function StockLevelsSection({
     <section id="hardware-section-stock" className="min-w-0 border border-[rgba(0,0,0,0.08)] bg-white">
       <SectionHeader
         title="제품별 재고"
-        description={compact ? undefined : "창고 = 실물 재고 · 가용 = 창고 − 예정. 최소재고와 최근 출고량을 같이 보고 주문 시점을 판단합니다."}
+        description={compact ? undefined : "창고 = 실물 재고 · 가용 = 창고 − 예정(물류번호 없는 시트 예정은 '미배정'으로 따로 표시하고 빼지 않습니다). 최소재고와 최근 출고량을 같이 보고 주문 시점을 판단합니다."}
         open={openSections.stock}
         onToggle={() => toggleSection("stock")}
         meta={
@@ -220,6 +225,14 @@ function StockLevelsSection({
                       </td>
                       <td className="px-4 py-3.5 text-right text-[13px] font-semibold tabular-nums text-[#7A520F]">
                         {formatNumber(row.plannedOut)}
+                        {(row.unallocatedPlannedOut ?? 0) > 0 ? (
+                          <p
+                            className="mt-1 whitespace-nowrap text-[11px] font-semibold text-[#615D59]"
+                            title="시트에 물류번호 없이 적힌 배송 예정 — 시트 재고현황처럼 가용에서 빼지 않습니다."
+                          >
+                            미배정 {formatNumber(row.unallocatedPlannedOut ?? 0)}
+                          </p>
+                        ) : null}
                       </td>
                       <td className={`px-4 py-3.5 text-right text-[16px] font-bold tabular-nums tracking-[-0.02em] ${row.availableStock < 0 ? "text-[#B43E3E]" : "text-[#111110]"}`}>
                         {formatNumber(row.availableStock)}
@@ -261,6 +274,18 @@ function StockLevelsSection({
               </tbody>
             </table>
           </div>
+          {compact && !searching && homeStock.hiddenCount > 0 ? (
+            <div className="border-t border-[rgba(0,0,0,0.06)] px-5 py-2.5">
+              <button
+                type="button"
+                onClick={() => { setShowHidden(current => !current); setStockPage(1) }}
+                aria-expanded={showHidden}
+                className="cursor-pointer text-[12px] font-semibold text-[#615D59] hover:text-[#084734] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40"
+              >
+                {showHidden ? "그 외 품목 접기" : `그 외 품목 ${formatNumber(homeStock.hiddenCount)}개 보기`}
+              </button>
+            </div>
+          ) : null}
           <PaginationControls pagination={stockPagination} label="품목" onPageChange={setStockPage} />
         </>
       )}

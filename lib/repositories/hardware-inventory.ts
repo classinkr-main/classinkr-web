@@ -139,6 +139,8 @@ export type HardwareMovementLedgerRow = Omit<
 export type HardwareMovementView = Omit<HardwareMovementLedgerRow, "raw"> & {
   raw: { crmLink: Record<string, unknown> } | null
   planned: boolean
+  /** 물류번호 없는 시트 배송 예정 — 가용에서 빼지 않는다(isUnallocatedSheetPlan). */
+  unallocated: boolean
   /** outbound_type 이 비면 시트 유형·메모로 추정한 값(resolveOutboundType). 출고·회수 외에는 null. */
   outbound_type_resolved: HardwareOutboundType | null
 }
@@ -247,7 +249,10 @@ export interface HardwareStockRow {
   reorderPoint: number
   leadTimeDays: number
   warehouseStock: number
+  /** 가용에서 빼는 배송 예정(물류번호가 있는 시트 행 + 앱에서 만든 예정). */
   plannedOut: number
+  /** 물류번호 없는 시트 배송 예정 — 가용에서 빼지 않는다(isUnallocatedSheetPlan). */
+  unallocatedPlannedOut: number
   availableStock: number
   outbound30d: number
   weeklyOutboundAvg: number
@@ -285,8 +290,10 @@ export interface HardwareAlert {
 
 // 미가동(취급 중단) 품목 판정 — 창고가 정확히 0이고 예정·최근 30일 출고가 없으면 "부족" 알림은
 // 상시 소음이다. 음수 창고는 원장 이상 실신호이므로 0 초과·미만이 아닌 0 일치로만 본다.
-export function isDormantStockRow(row: Pick<HardwareStockRow, "warehouseStock" | "plannedOut" | "outbound30d">): boolean {
-  return row.warehouseStock === 0 && row.plannedOut === 0 && row.outbound30d === 0
+export function isDormantStockRow(
+  row: Pick<HardwareStockRow, "warehouseStock" | "plannedOut" | "outbound30d"> & { unallocatedPlannedOut?: number }
+): boolean {
+  return row.warehouseStock === 0 && row.plannedOut === 0 && !row.unallocatedPlannedOut && row.outbound30d === 0
 }
 
 export interface HardwareDashboard {
@@ -304,6 +311,7 @@ export interface HardwareDashboard {
     warehouseStock: number
     availableStock: number
     plannedOut: number
+    unallocatedPlannedOut: number
     outbound30d: number
     lowItems: number
     orderRecommended: number
@@ -423,6 +431,24 @@ function movementLotKey(movement: Pick<HardwareMovement, "lot_no" | "source" | "
     if (ref) return ref
   }
   return null
+}
+
+/**
+ * 물류번호 없이 시트에 적힌 배송 예정 = 아직 물량을 잡지 않은 예정(영업 예상). 시트 재고현황은 출고를
+ * 물류번호 열별로 합산해서 이런 행을 빼지 않는다 — 2026-11-10 실측: 86" 출고 행 합 413 중 물류번호 없는
+ * 배송 예정 73(날짜도 없음, "11월 말 예상"·"도입 희망" 메모) → 재고현황 출고 340, 현재고 44.
+ * 그래서 가용·물류번호 잔여에서 빼지 않고 따로 센다(unallocatedPlannedOut). 앱에서 만든 예정(승인된 오더 등)은
+ * 물류번호가 없어도 잡힌 물량으로 보고 그대로 뺀다.
+ */
+export function isUnallocatedSheetPlan(
+  movement: Pick<HardwareMovement, "lot_no" | "source" | "reference_no" | "movement_type"> & { status?: string | null }
+): boolean {
+  return (
+    movement.source === "sheet_import" &&
+    movement.movement_type === "outbound" &&
+    isPlannedStatus(movement.status) &&
+    !movementLotKey(movement)
+  )
 }
 
 function isCrmReference(value: string | null | undefined) {
@@ -823,7 +849,7 @@ export type HardwareLotLedgerMovement = Pick<
   | "to_location"
   | "occurred_at"
   | "created_at"
->
+> & { status?: string | null }
 
 export interface ResolvedHardwareLot {
   lot: string
@@ -879,6 +905,8 @@ export function resolveHardwareLotBalances(
   let unlottedReduction = 0
 
   for (const movement of movements) {
+    // 물류번호 없는 시트 배송 예정은 물량을 잡지 않았다 — 시트 재고현황처럼 로트에서 빼지 않는다.
+    if (isUnallocatedSheetPlan(movement)) continue
     const delta = lotDeltaOf(movement)
     if (delta === 0) continue
 
@@ -3265,6 +3293,7 @@ function toMovementView(movement: HardwareMovementLedgerRow): HardwareMovementVi
     ...rest,
     raw: extractRawCrmLink(raw),
     planned: isPlannedStatus(movement.status),
+    unallocated: isUnallocatedSheetPlan(movement),
     // 추정에는 시트 원본 행(raw.values)이 필요하다 — raw 를 버리기 전에 서버에서 계산해 싣는다.
     outbound_type_resolved: resolveOutboundType(movement),
   }
@@ -3317,6 +3346,7 @@ export function computeHardwareStockRow(input: HardwareStockRowComputeInput): Ha
   const { item, itemMovements, cutoff30dMs } = input
   const locationBalances = new Map<string, number>()
   let plannedOut = 0
+  let unallocatedPlannedOut = 0
   let outbound30d = 0
 
   for (const movement of itemMovements) {
@@ -3327,8 +3357,10 @@ export function computeHardwareStockRow(input: HardwareStockRowComputeInput): Ha
     } else if (movement.movement_type === "outbound") {
       if (isPlannedStatus(movement.status)) {
         // 배송 예정은 가용에서 빠질 뿐 30일 출고 추세에는 넣지 않는다 — 넣으면 같은 수요가
-        // 가용(예정 차감)과 재주문점(추세) 양쪽에 두 번 반영된다.
-        plannedOut += qty
+        // 가용(예정 차감)과 재주문점(추세) 양쪽에 두 번 반영된다. 물류번호 없는 시트 예정은 시트 재고현황처럼
+        // 가용에서도 빼지 않고 따로 센다(isUnallocatedSheetPlan).
+        if (isUnallocatedSheetPlan(movement)) unallocatedPlannedOut += qty
+        else plannedOut += qty
       } else {
         applyLocationDelta(locationBalances, movement.from_location ?? DEFAULT_STOCK_LOCATION, -qty)
         applyLocationDelta(locationBalances, movement.to_location ?? DEFAULT_CUSTOMER_LOCATION, qty)
@@ -3390,6 +3422,7 @@ export function computeHardwareStockRow(input: HardwareStockRowComputeInput): Ha
     leadTimeDays: item.lead_time_days,
     warehouseStock,
     plannedOut,
+    unallocatedPlannedOut,
     availableStock,
     outbound30d,
     weeklyOutboundAvg,
@@ -3460,7 +3493,15 @@ export function buildHardwareStockAlerts(rows: readonly HardwareStockRow[]): Har
         detail: `최근 30일 출고 ${row.outbound30d}대, 권장 주문 기준 ${row.trendOrderPoint}대`,
       })
     }
-    if (row.plannedOut > 0) {
+    if (row.plannedOut > 0 || row.unallocatedPlannedOut > 0) {
+      const parts = [
+        row.plannedOut > 0 ? `배송 예정 ${row.plannedOut}대가 가용 재고에서 차감됩니다.` : null,
+        row.unallocatedPlannedOut > 0
+          ? `물류번호 없는 예정 ${row.unallocatedPlannedOut}대는 시트처럼 빼지 않았습니다 — 모두 나가면 가용 ${
+              row.availableStock - row.unallocatedPlannedOut
+            }대.`
+          : null,
+      ]
       alerts.push({
         id: `planned-${row.itemId}`,
         kind: "planned",
@@ -3468,7 +3509,7 @@ export function buildHardwareStockAlerts(rows: readonly HardwareStockRow[]): Har
         itemId: row.itemId,
         product: row.product,
         title: "배송 예정 반영",
-        detail: `배송 예정 ${row.plannedOut}대가 가용 재고에서 차감됩니다.`,
+        detail: parts.filter(Boolean).join(" "),
       })
     }
   }
@@ -3546,6 +3587,7 @@ async function getHardwareDashboardUncached(): Promise<HardwareDashboard> {
       warehouseStock: rows.reduce((sum, row) => sum + row.warehouseStock, 0),
       availableStock: rows.reduce((sum, row) => sum + row.availableStock, 0),
       plannedOut: rows.reduce((sum, row) => sum + row.plannedOut, 0),
+      unallocatedPlannedOut: rows.reduce((sum, row) => sum + row.unallocatedPlannedOut, 0),
       outbound30d: rows.reduce((sum, row) => sum + row.outbound30d, 0),
       lowItems: rows.filter((row) => row.low).length,
       orderRecommended: rows.filter((row) => row.orderRecommended).length,
@@ -3564,7 +3606,8 @@ const getHardwareDashboardCached = unstable_cache(
   () => getHardwareDashboardUncached(),
   // v3(2026-09-15): 위치 정규화 변경("클래스인"→사무실, 수리 오탐 제거) — 옛 규칙 결과를 SWR 로 먼저 주지 않게 키를 올린다.
   // v4(2026-10-28): 부족 판정 ≤ → <, 가용 음수 알림 추가.
-  ["hardware-dashboard-v4"],
+  // v5(2026-11-10): 물류번호 없는 시트 배송 예정을 가용·로트에서 빼지 않는다(isUnallocatedSheetPlan).
+  ["hardware-dashboard-v5"],
   { tags: [HARDWARE_INVENTORY_CACHE_TAG], revalidate: 120 }
 )
 

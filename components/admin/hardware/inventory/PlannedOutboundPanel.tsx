@@ -384,6 +384,14 @@ function PlannedOutboundPanel({
                           </p>
                           <p className="mt-1 flex flex-wrap items-center gap-1 text-[11px] font-bold">
                             <PlannedLotText lotNo={plannedLotKey(movement)} lotTracked={item?.lot_tracked} />
+                            {movement.unallocated ? (
+                              <span
+                                className="rounded bg-[#F6F5F4] px-1.5 py-0.5 font-semibold text-[#615D59]"
+                                title="시트에 물류번호 없이 적힌 배송 예정입니다. 시트 재고현황처럼 가용 재고에서 빼지 않습니다."
+                              >
+                                가용 미차감
+                              </span>
+                            ) : null}
                             <OutboundTypeBadge type={movementOutboundType(movement)} size="xs" />
                             <SampleReturnBadge movement={movement} size="xs" />
                             <CrmCustomerLink movement={movement} />

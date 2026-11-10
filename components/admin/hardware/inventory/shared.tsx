@@ -69,6 +69,8 @@ export interface HardwareMovement {
   raw?: unknown
   // 서버 isPlannedStatus 판정(예정/예약/대기/planned) — isPlannedMovement가 status 정규식보다 먼저 본다.
   planned?: boolean
+  // 물류번호 없는 시트 배송 예정(서버 isUnallocatedSheetPlan) — 가용에서 빼지 않는다. 구응답에는 없다.
+  unallocated?: boolean
   created_at: string
   voided_at: string | null
   // 대시보드 payload는 voided 행을 싣지 않으므로 취소 메타(voided_by·void_reason·created_by)도 내려오지 않는다.
@@ -98,6 +100,8 @@ export interface HardwareStockRow {
   leadTimeDays: number
   warehouseStock: number
   plannedOut: number
+  // 물류번호 없는 시트 배송 예정 — 시트 재고현황처럼 가용에서 빼지 않고 따로 센다. 구응답에는 없다.
+  unallocatedPlannedOut?: number
   availableStock: number
   outbound30d: number
   weeklyOutboundAvg: number
@@ -139,6 +143,7 @@ export interface HardwareDashboard {
     warehouseStock: number
     availableStock: number
     plannedOut: number
+    unallocatedPlannedOut?: number
     outbound30d: number
     lowItems: number
     orderRecommended: number

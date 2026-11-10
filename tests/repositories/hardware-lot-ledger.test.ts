@@ -117,9 +117,24 @@ describe("resolveHardwareLotBalances — 해석 규칙", () => {
     const result = resolveHardwareLotBalances([
       sheet("inbound", 3, "H6", { occurred_at: "2025-11-03" }),
       sheet("inbound", 40, "C1", { occurred_at: "2026-07-16" }),
-      sheet("outbound", 5, null, { status: "배송 예정" }),
+      sheet("outbound", 5, null),
     ])
     expect(summary(result.lots)).toEqual(["C1=38"])
+  })
+
+  // 2026-11-10: 시트 재고현황은 출고를 물류번호 열별로 합산한다 — 물류번호 없는 배송 예정은 어느 번호에서도
+  // 빠지지 않는다. 예전처럼 FIFO 로 깎으면 86" 은 그런 예정 73대가 창고 51대를 넘어 모든 번호가 0이 됐고,
+  // 확정·출고 때 고를 물류번호가 하나도 남지 않았다.
+  it("물류번호 없는 시트 배송 예정은 로트를 깎지 않는다 — 앱에서 만든 예정은 그대로 FIFO", async () => {
+    const { resolveHardwareLotBalances } = await load()
+    const result = resolveHardwareLotBalances([
+      sheet("inbound", 3, "H6", { occurred_at: "2025-11-03" }),
+      sheet("inbound", 40, "C1", { occurred_at: "2026-07-16" }),
+      sheet("outbound", 30, null, { status: "배송 예정", occurred_at: null }),
+      sheet("outbound", 2, null, { status: "배송 예정", source: "admin_manual" }),
+    ])
+    expect(summary(result.lots)).toEqual(["H6=1", "C1=40"])
+    expect(result.unattributedReduction).toBe(0)
   })
 
   it("로트 없는 음수 보정도 FIFO 로 차감하고, 양수 보정은 로트에 넣지 않는다", async () => {
@@ -183,7 +198,8 @@ describe("resolveHardwareLotBalances — 해석 규칙", () => {
 
 describe("운영 회귀 — STD1 원장(2026-09-14 실측 압축)", () => {
   // 운영 원장의 로트별 합계를 그대로 재현한다: FY 0 · H3 0 · H4 1 · H5 10 · H6 3 · H8 −9 · C1 30,
-  // 그리고 로트 없는 배송 예정 출고 16대.
+  // 그리고 로트 없는 출고 16대. 09-14 실측의 16대는 물류번호 없는 배송 예정이었다 — 11-10 부터 그런 시트 예정은
+  // 로트를 깎지 않으므로(위 규칙), 여기서는 같은 수량의 로트 없는 실제 출고로 FIFO 규칙만 고정한다.
   const std1 = () => [
     sheet("inbound", 31, "FY24-25", { occurred_at: "2026-08-08" }),
     sheet("outbound", 31, "FY24-25", { occurred_at: "2024-04-01" }),
@@ -198,7 +214,7 @@ describe("운영 회귀 — STD1 원장(2026-09-14 실측 압축)", () => {
     sheet("outbound", 28, "H8"),
     sheet("inbound", 40, "C1", { occurred_at: "2026-07-16" }),
     sheet("outbound", 10, "C1"),
-    sheet("outbound", 16, null, { status: "배송 예정" }),
+    sheet("outbound", 16, null),
   ]
 
   it("H8 이전 로트가 남지 않는다 — 운영자 확인: 현재 재고는 H8·C1 물량뿐", async () => {

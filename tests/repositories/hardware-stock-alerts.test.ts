@@ -12,6 +12,7 @@ type StockRow = {
   leadTimeDays: number
   warehouseStock: number
   plannedOut: number
+  unallocatedPlannedOut: number
   availableStock: number
   outbound30d: number
   weeklyOutboundAvg: number
@@ -56,6 +57,7 @@ function stockRow(overrides: Partial<StockRow> & Pick<StockRow, "itemId">): Stoc
     leadTimeDays: 14,
     warehouseStock,
     plannedOut,
+    unallocatedPlannedOut: 0,
     availableStock: warehouseStock - plannedOut,
     outbound30d: 0,
     weeklyOutboundAvg: 0,
@@ -165,5 +167,17 @@ describe("buildHardwareStockAlerts", () => {
     expect(alerts.filter((alert) => !alert.muted)).toHaveLength(12)
     expect(alerts.filter((alert) => !alert.muted).every((alert) => alert.kind === "negative_available")).toBe(true)
     expect(alerts.filter((alert) => alert.muted)).toHaveLength(12)
+  })
+
+  it("물류번호 없는 예정은 가용에서 빼지 않았다고 알리고, 모두 나갈 때 가용을 같이 보여 준다", async () => {
+    const { buildHardwareStockAlerts } = await loadAlerts()
+    const alerts = buildHardwareStockAlerts([
+      stockRow({ itemId: "86", warehouseStock: 51, plannedOut: 5, unallocatedPlannedOut: 73 }),
+    ])
+    const planned = alerts.find((alert) => alert.kind === "planned")
+    expect(planned?.detail).toBe(
+      "배송 예정 5대가 가용 재고에서 차감됩니다. 물류번호 없는 예정 73대는 시트처럼 빼지 않았습니다 — 모두 나가면 가용 -27대."
+    )
+    expect(alerts.some((alert) => alert.kind === "negative_available")).toBe(false)
   })
 })

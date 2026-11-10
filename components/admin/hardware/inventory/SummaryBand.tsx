@@ -3,6 +3,7 @@
 import { memo } from "react"
 import type { ReactNode } from "react"
 
+import { coreBoardTotals } from "./home-record-model"
 import { formatNumber, type HardwareDashboard } from "./shared"
 
 interface SummaryBandProps {
@@ -24,15 +25,28 @@ function SummaryBand({ data, plannedMovementQuantity, plannedStaleGroupCount }: 
   const totals = data?.totals ?? null
   const plannedCount = data?.plannedMovements.length ?? 0
   const shortageCount = data?.stock.filter(row => row.low || row.orderRecommended).length ?? 0
+  // 창고·가용은 86" · 75" 전자칠판만 보인다(운영자 지정 2026-11-10) — 케이블·터치펜까지 더한 전 품목 합계는
+  // 판단에 쓰이지 않는다. 판촉 라인은 빼고, 같은 크기 품목이 여럿이면 더한다(coreBoardTotals).
+  const boards = coreBoardTotals(data?.stock ?? [])
+  const unallocatedBoards = boards.ifp86.unallocated + boards.ifp75.unallocated
 
   return (
     <section aria-label="하드웨어 재고 요약" className="grid grid-cols-2 gap-y-4 bg-[#F6F5F4] py-5 xl:grid-cols-4">
-      <SummaryTile href="#hardware-section-stock" label="창고 재고" title="현재 재고 섹션으로 이동">
-        <Headline value={formatNumber(totals?.warehouseStock ?? 0)} unit="대" negative={(totals?.warehouseStock ?? 0) < 0} />
+      <SummaryTile href="#hardware-section-stock" label="창고 재고" title="제품별 재고로 이동">
+        <BoardFigures ifp86={boards.ifp86.warehouse} ifp75={boards.ifp75.warehouse} />
       </SummaryTile>
 
-      <SummaryTile href="#hardware-section-stock" label="가용 재고" title="현재 재고 섹션으로 이동">
-        <Headline value={formatNumber(totals?.availableStock ?? 0)} unit="대" negative={(totals?.availableStock ?? 0) < 0} />
+      <SummaryTile href="#hardware-section-stock" label="가용 재고" title="제품별 재고로 이동">
+        <BoardFigures ifp86={boards.ifp86.available} ifp75={boards.ifp75.available} />
+        {/* 가용 = 창고 − 물류번호가 잡힌 배송 예정(시트 재고현황과 같은 기준). 물류번호 없는 예정은 빼지 않는다. */}
+        {unallocatedBoards > 0 && (
+          <p
+            className="mt-2 text-[11px] font-semibold text-[#615D59]"
+            title="시트에 물류번호 없이 적힌 배송 예정은 시트 재고현황처럼 가용에서 빼지 않습니다."
+          >
+            물류번호 없는 예정 {formatNumber(unallocatedBoards)}대 별도
+          </p>
+        )}
       </SummaryTile>
 
       <SummaryTile href="#hardware-section-planned" label="배송 예정" title="배송 예정 섹션으로 이동">
@@ -54,6 +68,30 @@ function SummaryBand({ data, plannedMovementQuantity, plannedStaleGroupCount }: 
       </SummaryTile>
 
     </section>
+  )
+}
+
+function BoardFigures({ ifp86, ifp75 }: { ifp86: number; ifp75: number }) {
+  return (
+    <dl className="mt-3 grid grid-cols-2 gap-x-3">
+      <BoardFigure label={'86"'} value={ifp86} />
+      <BoardFigure label={'75"'} value={ifp75} />
+    </dl>
+  )
+}
+
+function BoardFigure({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="min-w-0">
+      <dt className="text-[11px] font-bold text-[#615D59]">{label}</dt>
+      <dd className="mt-1 flex items-baseline gap-1">
+        {/* 음수 = 원장 이상 신호 — 다른 칸과 같은 규칙(Danger 텍스트만). */}
+        <span className={`text-[28px] font-bold leading-none tracking-[-0.04em] tabular-nums ${value < 0 ? "text-[#B43E3E]" : "text-[#111110]"}`}>
+          {formatNumber(value)}
+        </span>
+        <span className="text-[12px] font-semibold text-[#615D59]">대</span>
+      </dd>
+    </div>
   )
 }
 

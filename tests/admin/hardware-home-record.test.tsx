@@ -1,8 +1,9 @@
 import { renderToStaticMarkup } from "react-dom/server"
 import { describe, expect, it } from "vitest"
-import { buildHardwareStockCsv, filterHomeStock, previewHomeRecord } from "@/components/admin/hardware/inventory/home-record-model"
+import { buildHardwareStockCsv, coreBoardTotals, filterHomeStock, orderHomeStock, previewHomeRecord } from "@/components/admin/hardware/inventory/home-record-model"
 import ImportFreshnessStrip from "@/components/admin/hardware/inventory/ImportFreshnessStrip"
-import type { HardwareStockRow } from "@/components/admin/hardware/inventory/shared"
+import SummaryBand from "@/components/admin/hardware/inventory/SummaryBand"
+import type { HardwareDashboard, HardwareStockRow } from "@/components/admin/hardware/inventory/shared"
 
 const row = (patch: Partial<HardwareStockRow> = {}): HardwareStockRow => ({
   itemId: "75", product: '75" IFP', category: "전자칠판", warehouseStock: 24, plannedOut: 4, availableStock: 20,
@@ -48,4 +49,55 @@ it("경고는 접힌 상세에 보존하고 동기화 성공을 만들어 내지
   expect(html).toContain("<details")
   expect(html).not.toContain("<details open")
   expect(html).not.toContain("정상 범위")
+})
+
+describe("홈 재고표 주력 품목(2026-11-10)", () => {
+  const names = ["A1", '110" IFP', "STD1", "T1(promoted)", '75" IFP', "T1", '86" IFP', '86" IFP(promoted)', "전원 케이블(1m)"]
+  const rows = names.map((product, index) => row({ itemId: String(index), product }))
+
+  it("86 · 75 · T1 만 펼치고 110 은 맨 아래, 나머지는 접는다", () => {
+    const ordered = orderHomeStock(rows, false)
+    expect(ordered.rows.map(r => r.product)).toEqual(['86" IFP', '75" IFP', "T1", '110" IFP'])
+    expect(ordered.hiddenCount).toBe(5)
+  })
+
+  it("펼치면 접힌 품목을 원래 순서로 주력 품목과 110 사이에 넣는다", () => {
+    expect(orderHomeStock(rows, true).rows.map(r => r.product)).toEqual([
+      '86" IFP', '75" IFP', "T1", "A1", "STD1", "T1(promoted)", '86" IFP(promoted)', "전원 케이블(1m)", '110" IFP',
+    ])
+  })
+
+  it("요약 밴드 86 · 75 합계는 판촉 라인을 빼고 미배정 예정을 따로 모은다", () => {
+    const totals = coreBoardTotals([
+      row({ product: '86" IFP', warehouseStock: 51, availableStock: 46, unallocatedPlannedOut: 73 }),
+      row({ product: '86" IFP(promoted)', warehouseStock: 9, availableStock: 9 }),
+      row({ product: '75" IFP', warehouseStock: 14, availableStock: 13 }),
+    ])
+    expect(totals.ifp86).toEqual({ present: true, warehouse: 51, available: 46, unallocated: 73 })
+    expect(totals.ifp75).toEqual({ present: true, warehouse: 14, available: 13, unallocated: 0 })
+  })
+
+  it("배송 예정 필터는 미배정 예정만 있는 품목도 잡는다", () => {
+    expect(filterHomeStock([row({ plannedOut: 0, unallocatedPlannedOut: 4 })], "", false, true)).toHaveLength(1)
+  })
+})
+
+it("요약 밴드 창고·가용 칸은 86 · 75 수치만 보이고 미배정 예정을 따로 적는다", () => {
+  const stock = [
+    row({ itemId: "86", product: '86" IFP', warehouseStock: 51, availableStock: 46, plannedOut: 5, unallocatedPlannedOut: 73 }),
+    row({ itemId: "75", product: '75" IFP', warehouseStock: 16, availableStock: 13, plannedOut: 3 }),
+    row({ itemId: "cable", product: "전원 케이블(1m)", warehouseStock: 113, availableStock: 113, plannedOut: 0 }),
+  ]
+  const data = {
+    stock, items: [], movements: [], recentOutbound: [], plannedMovements: [], alerts: [], importRun: null,
+    totals: { warehouseStock: 180, availableStock: 172, plannedOut: 8, unallocatedPlannedOut: 73, outbound30d: 0, lowItems: 0, orderRecommended: 0 },
+  } as HardwareDashboard
+  const html = renderToStaticMarkup(<SummaryBand data={data} plannedMovementQuantity={81} plannedStaleGroupCount={0} />)
+  expect(html).toContain("86&quot;")
+  expect(html).toContain(">51<")
+  expect(html).toContain(">46<")
+  expect(html).toContain(">16<")
+  expect(html).toContain(">13<")
+  expect(html).not.toContain(">180<")
+  expect(html).toContain("물류번호 없는 예정 73대 별도")
 })

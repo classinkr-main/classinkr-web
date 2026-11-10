@@ -841,11 +841,13 @@ describe("buildHardwareSheetImportRows — 재고현황 보정 목표", () => {
       cutoff30dMs: Date.parse("2026-08-15T00:00:00.000Z"),
     })
 
-    // 실물: H8 5대가 아직 창고에 있고(예정 5 미출고), 예정 합계 8(로트 5 + 미지정 3) → 가용 −3.
+    // 실물: H8 5대가 아직 창고에 있고(예정 5 미출고) → 가용 = 5 − 5 = 0 = 시트 현재고.
     // 예전 규칙(목표 = 현재고 0)이면 창고 0 · 가용 −8 로 로트 지정 예정 5대가 두 번 빠졌다.
+    // 물류번호 없는 예정 3대는 시트 재고현황처럼 가용에서 빼지 않고 따로 센다(2026-11-10, isUnallocatedSheetPlan).
     expect(stockRowResult.warehouseStock).toBe(5)
-    expect(stockRowResult.plannedOut).toBe(8)
-    expect(stockRowResult.availableStock).toBe(-3)
+    expect(stockRowResult.plannedOut).toBe(5)
+    expect(stockRowResult.unallocatedPlannedOut).toBe(3)
+    expect(stockRowResult.availableStock).toBe(0)
   })
 
   it("records the add-back on the reconciliation row when the sheet total still differs", async () => {

@@ -162,10 +162,9 @@ export default function HomeTabPanel({
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.18, ease: [0.2, 0, 0, 1] }}
     >
-    {/* 숫자 요약과 제품군별 게이지를 먼저 보고, 표·출고 작업으로 이어진다. */}
+    {/* 정보 위계(운영자 지정 2026-11-10): 86" · 75" 숫자 → 주력 품목 재고표 → 오늘 처리할 승인·배송 예정 → 판매 →
+        제품군 요약·검색·샘플 → 알림·되돌리기 순. 제품군 카드는 위 두 칸과 겹쳐 판매 요약 아래로 내렸다. */}
     <SummaryBand data={data} plannedMovementQuantity={plannedMovementQuantity} plannedStaleGroupCount={plannedStaleGroupCount} />
-
-    <CategoryCardsSection categoryCards={categoryCards.cards} etcSummary={categoryCards.etcSummary} />
 
     <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
       <StockLevelsSection
@@ -183,13 +182,13 @@ export default function HomeTabPanel({
       <HomeQuickRecord {...homeQuickRecord} />
     </div>
 
-    <details className="border-t border-[rgba(0,0,0,0.08)] pt-3"><summary className="cursor-pointer text-[13px] font-semibold text-[#615D59]">배송 예정 요약 · {plannedPagination.totalItems}딜</summary><div className="mt-3 max-w-xl"><PlannedOutboundOverview plannedPagination={plannedPagination} startPlannedEntry={startPlannedEntry} plannedConfirmLocked={plannedConfirmLocked} /></div></details>
-
     {/* 견적이 승인된 하드웨어 오더 — 승인하면 오더번호와 배송 예정이 생긴다(2026-10-22 연결 로직 S3). */}
     <OrderApprovalSection onChanged={refresh} stockRows={data?.stock} />
 
     {/* 예정 큐 바로 위 — 등록할 것을 먼저 보고, 그 아래에서 확정한다(입력 가속 P2-1). */}
     <CrmOrderBacklogSection canWrite={canWriteHardware} onRegistered={refresh} />
+
+    <details className="border-t border-[rgba(0,0,0,0.08)] pt-3"><summary className="cursor-pointer text-[13px] font-semibold text-[#615D59]">배송 예정 요약 · {plannedPagination.totalItems}딜</summary><div className="mt-3 max-w-xl"><PlannedOutboundOverview plannedPagination={plannedPagination} startPlannedEntry={startPlannedEntry} plannedConfirmLocked={plannedConfirmLocked} /></div></details>
 
     <PlannedOutboundPanel
       data={data}
@@ -217,6 +216,8 @@ export default function HomeTabPanel({
 
     {/* 판매대시보드(정의서) — 서버 집계. 원장 응답(data)이 바뀌면 같이 다시 받는다. */}
     <SalesDashboardSection reloadKey={data} onOpenDetail={openOutboundDetail} />
+
+    <CategoryCardsSection categoryCards={categoryCards.cards} etcSummary={categoryCards.etcSummary} />
 
     <HardwareSearchPanel
       hardwareSearch={hardwareSearch}

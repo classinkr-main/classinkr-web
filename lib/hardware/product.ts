@@ -22,3 +22,16 @@ export function hardwareCardGroup(product: string): HardwareCardGroup {
   if (/\bSTD1\b/i.test(product)) return "stand"
   return "etc"
 }
+
+// 홈 재고표 순서(운영자 지정 2026-11-10) — 86" → 75" → T1 만 기본으로 보이고, 110" 은 맨 아래에 둔다.
+// 그 밖의 품목(판촉 라인·스탠드·액세서리·터치펜 등)은 접어 둔다(null). 숫자가 작을수록 위.
+export const HOME_STOCK_BOTTOM_RANK = 99
+
+export function homeStockRank(product: string): number | null {
+  if (isPromotedProduct(product)) return null
+  if (isCoreIfpProduct(product, "86")) return 0
+  if (isCoreIfpProduct(product, "75")) return 1
+  if (/^T1$/i.test(product.trim())) return 2
+  if (/^110["”]?\s*IFP/i.test(product)) return HOME_STOCK_BOTTOM_RANK
+  return null
+}

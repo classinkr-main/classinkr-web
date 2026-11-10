@@ -487,3 +487,27 @@ describe("computeHardwareStockRow — pass-through item fields", () => {
     })
   })
 })
+
+// 2026-11-10 시트 해석: 시트 재고현황은 출고를 물류번호 열별로 합산한다 — 물류번호 없는 배송 예정(영업 예상)은
+// 빼지 않는다. 원장도 같은 기준으로 가용·물류번호 잔여에서 빼지 않고 unallocatedPlannedOut 으로 따로 센다.
+describe("computeHardwareStockRow — 물류번호 없는 시트 배송 예정", () => {
+  it("가용에서 빼지 않고 따로 세며, 물류번호가 있는 예정과 앱 예정은 그대로 뺀다", async () => {
+    const compute = await loadEngine()
+    const row = compute({
+      item: ITEM,
+      itemMovements: [
+        movement({ movement_type: "inbound", quantity: 50, to_location: "창고", source: "sheet_import", reference_no: "C1" }),
+        movement({ movement_type: "outbound", quantity: 2, status: "배송 예정", source: "sheet_import", reference_no: "C1" }),
+        movement({ movement_type: "outbound", quantity: 40, status: "배송 예정", source: "sheet_import", reference_no: null, occurred_at: null }),
+        movement({ movement_type: "outbound", quantity: 3, status: "배송 예정", source: "admin_manual", reference_no: null }),
+      ],
+      cutoff30dMs: CUTOFF_30D,
+    })
+    expect(row.warehouseStock).toBe(50)
+    expect(row.plannedOut).toBe(5)
+    expect(row.unallocatedPlannedOut).toBe(40)
+    expect(row.availableStock).toBe(45)
+    // 물류번호 잔여: C1 50 − 예정 2 − 앱 예정 3(FIFO) = 45. 미배정 40 은 로트를 깎지 않는다.
+    expect(row.lotBalances).toEqual([{ lot: "C1", quantity: 45 }])
+  })
+})
