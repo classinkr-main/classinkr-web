@@ -458,7 +458,8 @@ export default function HardwareQuotesPanel({
 
     return QUOTE_QUEUE_GROUPS.map((group) => {
       const items = visible.filter((quote) => getQuoteQueueKey(quote) === group.key)
-      return { ...group, items, amount: items.reduce((sum, quote) => sum + quote.totalAmount, 0) }
+      // 단계별 합계 금액은 띠에서 뺐다(아직 쓰지 않고 행 금액과 헷갈린다).
+      return { ...group, items }
     }).filter((group) => group.items.length > 0)
   }, [productLineFilter, quotes, searchTerm])
 
@@ -1137,7 +1138,7 @@ export default function HardwareQuotesPanel({
               groups.map((group) => (
                 <section key={group.key} className="border-b border-[#f0f0ec] pb-1.5 last:border-b-0">
                   {/* 단계 제목 — 행(13px)보다 크고 아주 굵게, 단계 성격별 파스텔 띠로 묶음을 나눈다. */}
-                  <h2 className={`flex items-center justify-between gap-2 border-b px-4 py-2.5 text-[15.5px] font-extrabold tracking-[-0.015em] text-[#111110] ${TONE_BAND[group.tone]}`}>
+                  <h2 className={`flex items-center gap-2 border-b px-4 py-2.5 text-[15.5px] font-extrabold tracking-[-0.015em] text-[#111110] ${TONE_BAND[group.tone]}`}>
                     <span className="flex items-center gap-2">
                       <span aria-hidden className={`h-2.5 w-2.5 shrink-0 rounded-full ${TONE_DOT[group.tone]}`} />
                       {group.label}
@@ -1145,7 +1146,6 @@ export default function HardwareQuotesPanel({
                         {group.items.length}
                       </span>
                     </span>
-                    <span className="text-[14px] font-bold tabular-nums text-[#31302E]">{formatMan(group.amount)}원</span>
                   </h2>
                   {group.items.map((quote) => {
                     const selected = quote.id === selectedQuote?.id
