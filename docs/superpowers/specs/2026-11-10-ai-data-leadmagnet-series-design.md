@@ -1,6 +1,6 @@
 # 리드마그넷 시리즈 「AI와 데이터로 학원 운영하기」 설계
 
-기준일: 2026-11-10 · 상태: 설계 확정(목업 v4 기준) · 다음: 구현 계획
+기준일: 2026-11-10 · 상태: **1권 구현 완료**(2026-11-10, 브랜치 `cloud_11.05`) · 구현 계획: [2026-11-10-ai-data-leadmagnet-vol1.md](../plans/2026-11-10-ai-data-leadmagnet-vol1.md)
 목업: `tmp/ref-design/mock4.html` → `mock4.pdf`(11쪽) · 공통 스타일 `tmp/ref-design/style3.css`
 관련: [리드마그넷 데이터](../../../data/lead-magnets.json) · [워크북 렌더러](../../../scripts/render-lead-magnet-workbook-pdf.mjs) · [포지셔닝 지침](../../active/classin-korea-positioning-guidelines.md) · [보이스 차터](../../active/brand-canon/voice-charter.md) · [콘텐츠 훅 랩](../../active/content-hook-lab/README.md)
 
@@ -82,11 +82,13 @@
 
 **스키마 변경 없음.** 기존 `LeadMagnet` 필드로 전부 표현한다(§4 매핑). 프롬프트·템플릿·학부모 문장은 `scriptSamples`(scenario/good/avoid/why), 교실 세 줄·진단 문항은 `sections`, 폴더 구조와 검수 4칸은 `deliverables`·`consultationPrep` 문자열로 둔다.
 
-**렌더러**: `scripts/render-lead-magnet-workbook-pdf.mjs`에 템플릿 2종 체계를 만든다.
-- `WORKBOOK_SLUGS`(기존 체크리스트 템플릿) 옆에 `EBOOK_SLUGS = ["academy-ai-data-ops-guide"]`.
-- e-book 템플릿은 `tmp/ref-design/style3.css` + `mock4.html` 구조를 이식한다. 페이지 구성은 슬러그별 레이아웃 함수 하나(`renderEbookPages(magnet)`)가 §4 순서로 조립한다. 장별 고정 문안(간지 질문, 콜아웃 문장, 클로징)은 JSON의 `storyGuide`·`sourceLinks.description`에서 읽고, 없으면 비운다.
-- `generate-lead-magnet-pdfs.py`의 `WORKBOOK_SLUGS`에 같은 슬러그를 추가해 파이썬 생성기가 덮어쓰지 않게 한다.
-- 폰트: Plex는 `@fontsource` 파일 URL, Noto Serif KR은 `local()`만. Chromium은 기존 안내(playwright 또는 `LEAD_MAGNET_PDF_CHANNEL=chrome`)대로.
+**렌더러(구현 결과 — 코드 변경 0)**: 저장소에 이미 있는 "e-book 인쇄 원본" 경로를 썼다. `scripts/lead-magnet-ebooks/<slug>.html`이 있으면 `render-lead-magnet-workbook-pdf.mjs`가 그 HTML을 그대로 Chromium으로 찍는다(`/* FONT_CSS */` 치환, `src="/…"`→file://, `href="/…"`→utm 절대주소, 쪽 넘침 검사).
+- 인쇄 원본: `scripts/lead-magnet-ebooks/academy-ai-data-ops-guide.html`(12쪽, 단일 HTML, 794×1123px). 계약 테스트 `tests/lead-magnets/ebook-ai-data-ops-guide.test.ts`.
+- 슬러그 등록: `lib/lead-magnet-pdf/workbook-slugs.mjs`(정본) + `generate-lead-magnet-pdfs.py`(건너뛰기).
+- 렌더 명령: `npm i --no-save playwright-core && LEAD_MAGNET_PDF_CHANNEL=chrome node scripts/render-lead-magnet-workbook-pdf.mjs academy-ai-data-ops-guide`.
+- 폰트: Plex는 `@fontsource` 파일 URL, Noto Serif KR은 로컬 설치본(없으면 serif 폴백 — 장식 용도라 레이아웃 무관).
+- 워크시트: `.xlsx` 대신 CSV 2장(`-board.csv`, `-signals.csv`, BOM 포함).
+- `scoreBands.range`는 콘텐츠 품질 검사(`lib/lead-magnet-quality.ts`)가 0~문항 수로 이어지는 숫자 구간을 요구해 `0~3개 / 4~6개 / 7~8개 / 9~10개`로 두고, 단계 이름은 `label`에("0단계 · 금지·방치" …). 묶음 기준 판정은 description과 PDF에 적는다.
 
 **데이터**: `data/lead-magnets.json`에 항목 추가 → 로컬 `node scripts/import-lead-magnets.mjs`(Supabase 모드일 때) → `public/materials/lead-magnets/academy-ai-data-ops-guide.pdf` → `resourceUrl`.
 
@@ -116,12 +118,15 @@
 
 「AI와 데이터로 학습관리 더 깊고 빠르게」 — 01 성적표는 늦다 / 02 진단「학생을 숫자로 보는가」/ 03 신호 3개면 충분하다(출석·태도/숙제·평가, 단일 규칙) / 04 학생 건강 점수 0~100(출석 30·숙제 25·평가 추세 25·라포 10·자기예측 10, 출발점·3개월 뒤 역검증·학부모 비공개) / 05 매 수업 3문항 출구표·숙달표·복습 예정일·오답 재도전 / 06 상담 1건 = 사실·숫자·판단·다음 행동 4줄 / 07 AI 분석 체인 5단계 / 08 쓰지 말 것(학습 스타일 진단, 마인드셋 과장, 점수 공개, AI 계산) / 첫 4주 · ClassIn(학습 리포트·AI 칠판 반 전체 정답률·숙제 관리).
 
-## 10. 미결
+## 10. 미결 (2026-11-10 구현 후)
 
-1. 표지 중앙 여백 — 비워 둘지, 월요일 보드 예시를 다시 넣을지.
-2. 무료 수업 50회에 AI 강의 분석 포함 여부 — 제품팀 확인 전 CTA·본문에 쓰지 않음.
-3. 교육부 생성형 AI 활용 가이드라인 — 원문 확인 후 5-1 인용 문구 확정.
-4. Noto Serif KR — 빌드 머신에 없으면 Plex 폴백으로 간다(디자인상 허용).
+1. 표지 중앙 여백 — 현재 비워 둠. 보드 예시를 넣으려면 인쇄 원본 1쪽만 수정 후 재렌더.
+2. 무료 수업 50회에 AI 강의 분석 포함 여부 — 제품팀 확인 전 CTA·본문에 쓰지 않음(현재 미기재).
+3. 교육부 생성형 AI 활용 가이드라인 — 5-1에 "원문 확인 후 인용" 칩으로 표기. 원문 확인 뒤 문구 확정.
+4. Noto Serif KR — 로컬 렌더본에는 임베드됨. 다른 머신에서 재렌더하면 serif 폴백.
+5. **운영 반영(사람이 실행)**: 배포 후 `node --env-file=.env.local scripts/import-lead-magnets.mjs --dry-run` → 1건 upsert 확인 → 실행. 블로그 초안(id 12)은 어드민에서 발행.
+6. 블로그 썸네일은 8번 글 것을 임시 공용 — 전용 썸네일 교체.
+7. 쇼츠 3편 촬영 후 2주 뒤 훅 랩 원장 '실측 피드백'에 다운로드·리드 수 기록.
 
 ## 부록 A. 리서치 요약 (2026-11-09, 에이전트 2건)
 
