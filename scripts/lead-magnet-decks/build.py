@@ -839,6 +839,7 @@ def build_index(magnets: dict, out: Path, logo: str, artifact: bool = False) -> 
 <h1>원장님이 직접 체크하고,<br><em>우리 수업으로</em> 확인하는 16권</h1>
 <p class="intro">ClassIn 리드마그넷을 16:9 인터랙티브 덱으로 다시 만들었습니다. 칸을 누르면 점수와 약한 영역이 바로 계산되고, 계산표는 우리 학원 숫자로 채워집니다. 폰에서는 세로 카드로 다시 흘러가고, 데스크톱에서는 발표 화면과 16:9 PDF로 씁니다.</p>
 <div class="facts"><span>16권 · {sum(len(Deck(magnets[s], OV[s], magnets).build().slides) for s in order)}장</span><span>자가진단 점수 자동 계산</span><span>모바일 세로 보기</span><span>16:9 PDF 저장</span><span>상담 링크 UTM 포함</span></div>
+<a href="../insight/index.html" style="display:inline-flex;align-items:center;gap:10px;margin-top:22px;padding:12px 18px;border-radius:999px;background:#0E0F0E;color:#F4F2EA;font-weight:700;font-size:15px;text-decoration:none">새 시리즈 · Insight 6종: 리포트·데이터 브리핑·설명회 요약집·대화형 가이드·진단 테스트·계획 템플릿 →</a>
 <section class="picks"><h2>캠페인 대표 3권</h2><p class="sub">블라인드 심사에서 ‘스크롤을 멈추고 폼까지 채울 자료’로 고른 단계별 1권씩입니다.</p><div class="pgrid">{picks}</div></section>
 <div class="stages">{sec}</div>
 {ads_html}<div class="how"><div><b>발표 모드</b><p>←·→ 키나 화면 아래 단추로 넘깁니다. 상담 화면 공유와 설명회에 그대로 씁니다.</p></div>
