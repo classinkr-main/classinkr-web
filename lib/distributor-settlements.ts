@@ -336,6 +336,11 @@ export function buildDistributorQuoteDetails(
     vatPolicyLabel: undefined,
     specialTerms: settlement.notes?.trim() || customer.specialTerms,
     internalMemo: undefined,
+    // 고객 견적에만 해당하는 값은 넘기지 않는다 — 총판 문서는 원가 줄만으로 다시 계산한다.
+    //  - 견적 할인: 고객 할인이 원가 합계에서 빠지면 '입금 요청 금액'(정산 합계)과 문서 총액이 어긋난다.
+    //  - 구성 옵션: 녹화 세트 12개월 할부처럼 고객 결제 조건(월 납입 안내)이 총판 문서에 찍히지 않게 한다.
+    quoteDiscount: undefined,
+    optionSelections: undefined,
     lineItems,
   })
 }

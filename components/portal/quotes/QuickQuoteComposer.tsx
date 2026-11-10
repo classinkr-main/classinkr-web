@@ -1040,6 +1040,9 @@ export default function QuickQuoteComposer({
         validUntil: shared.validUntil,
         vatIncluded: shared.vatIncluded,
         vatPolicyLabel: undefined,
+        // 장을 짤 때 표준 공급자(퀴드러닝) 기준으로 채워진 값이라, 실제 공급자·담당자로 다시 만들게 비운다
+        // (SW 견적·담당자를 바꾼 HW 견적에 '배철웅/010-…'이 남던 문제).
+        footerContactText: undefined,
         generalNotes: shared.generalNotes,
         specialTerms: shared.specialTerms,
       },
