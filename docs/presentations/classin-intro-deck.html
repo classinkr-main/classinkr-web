@@ -620,6 +620,9 @@ body{margin:0;background:#0B0B0B;color:#fff;font-family:var(--f-ui);overflow:hid
 .s19 figcaption b{font-size:52px;font-weight:800;letter-spacing:-.02em;line-height:1.1;color:#fff}
 .s19 .s19-b figcaption b{font-size:44px}
 
+/* 20쪽에서 돌아올 때는 머리글(PARTNERS·선)을 다시 재생하지 않는다 */
+.s19.is-active[data-from="20"] .s19-h,.s19.is-active[data-from="20"] .s19-rule{animation:none}
+
 /* ── 20쪽 ── */
 .s20 .s20-h{position:absolute;left:92px;top:56px;font-size:120px;font-weight:700;line-height:1;letter-spacing:.02em;color:var(--tan)}
 .s20 .s20-idx{position:absolute;right:96px;top:104px;font-size:30px;font-weight:600;color:#fff;letter-spacing:.04em}
@@ -636,6 +639,9 @@ body{margin:0;background:#0B0B0B;color:#fff;font-family:var(--f-ui);overflow:hid
 .s20 figcaption span{font-size:26px;font-weight:600;color:var(--tan);letter-spacing:.06em}
 .s20 figcaption b{font-size:52px;font-weight:800;letter-spacing:-.02em;line-height:1.1;color:#fff}
 .s20 .s20-b figcaption b{font-size:44px}
+
+/* 19쪽에서 넘어올 때는 머리글(PARTNERS·선)을 다시 재생하지 않는다 */
+.s20.is-active[data-from="19"] .s20-h,.s20.is-active[data-from="19"] .s20-rule{animation:none}
 
 /* ── 21쪽 ── */
 .s21 .s21-t{position:absolute;left:40px;top:60px;margin:0;font:700 204px/250px var(--f-en);letter-spacing:-.03em;color:var(--green);white-space:nowrap;padding-right:30px}
@@ -1017,8 +1023,8 @@ body{margin:0;background:#0B0B0B;color:#fff;font-family:var(--f-ui);overflow:hid
   }
   function show(n){
     n=Math.max(0,Math.min(total-1,n));if(n===cur)return;
-    if(cur>=0)slides[cur].classList.remove('is-active');
-    cur=n;var s=slides[cur];s.classList.add('is-active');countUp(s);
+    var from=cur>=0?slides[cur].getAttribute('data-page'):'';if(cur>=0)slides[cur].classList.remove('is-active');
+    cur=n;var s=slides[cur];s.setAttribute('data-from',from||'');s.classList.add('is-active');countUp(s);
     count.textContent=(cur+1)+' / '+total;prog.style.width=((cur+1)/total*100)+'%';
     try{history.replaceState(null,'','#slide-'+(cur+1))}catch(e){}
   }
