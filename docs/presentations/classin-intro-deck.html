@@ -124,6 +124,19 @@ body{margin:0;background:#0B0B0B;color:#fff;font-family:var(--f-ui);overflow:hid
 .s01 .s01-sub{position:absolute;left:40px;top:592px;font:300 50px/64px var(--f-ko);letter-spacing:-.02em}
 .s01 .s01-brand{position:absolute;left:40px;top:1030px;font:500 24px/32px var(--f-en);letter-spacing:-.01em}
 
+/* 오른쪽 여백: 미래·디지털·교육을 뜻하는 궤도와 노드 */
+.s01 .s01-fx{position:absolute;left:1070px;top:120px;width:800px;height:800px}
+.s01.is-active .s01-dash{animation:l-dash 2.400s linear infinite}
+.s01.is-active .s01-links path{animation:l-dash 3s linear infinite}
+.s01.is-active .s01-core-glow{transform-box:fill-box;transform-origin:center;animation:s01-breathe 5s ease-in-out infinite}
+.s01.is-active .s01-core circle:nth-child(2){transform-box:fill-box;transform-origin:center;animation:s01-spin 30s linear infinite}
+.s01.is-active .s01-node>circle{animation:s01-node 4s ease-in-out infinite}
+.s01.is-active .s01-bit{animation:s01-rise var(--t) linear var(--dl) infinite}
+@keyframes s01-breathe{0%,100%{transform:scale(.92);opacity:.8}50%{transform:scale(1.06);opacity:1}}
+@keyframes s01-spin{to{transform:rotate(360deg)}}
+@keyframes s01-node{0%,100%{stroke-opacity:.5}50%{stroke-opacity:1}}
+@keyframes s01-rise{0%{transform:translateY(60px);opacity:0}15%{opacity:.9}85%{opacity:.9}100%{transform:translateY(-260px);opacity:0}}
+
 /* ── 2쪽 ── */
 .s02 .s02-band{position:absolute;left:0;top:0;width:20px;height:1080px;background:var(--leaf)}
 .s02 .s02-bar{position:absolute;left:57px;top:30px;width:62px;height:16px;background:var(--leaf)}
@@ -560,6 +573,22 @@ body{margin:0;background:#0B0B0B;color:#fff;font-family:var(--f-ui);overflow:hid
   </h1>
   <p class="s01-sub" data-a="up" style="--d:1100ms">기술로 교육을 변혁시키다</p>
   <p class="s01-brand en" data-a="fade" style="--d:1300ms">eeo classin</p>
+  <svg class="s01-fx" viewBox="0 0 800 800" aria-hidden="true" data-a="fade" style="--d:900ms">
+    <defs>
+      <radialGradient id="s01-glow"><stop offset="0" stop-color="#00CD93" stop-opacity=".55"/><stop offset=".45" stop-color="#00CD93" stop-opacity=".12"/><stop offset="1" stop-color="#00CD93" stop-opacity="0"/></radialGradient>
+      <linearGradient id="s01-ring" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#00CD93" stop-opacity=".05"/><stop offset=".5" stop-color="#00CD93" stop-opacity=".7"/><stop offset="1" stop-color="#00CD93" stop-opacity=".05"/></linearGradient>
+      <linearGradient id="s01-fade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#fff"/></linearGradient>
+      <mask id="s01-m"><rect x="0" y="540" width="800" height="260" fill="url(#s01-fade)"/></mask>
+    </defs>
+    <g mask="url(#s01-m)" stroke="#00CD93" stroke-width="1.200" opacity=".45" fill="none"><path d="M400 560L-480 800"/><path d="M400 560L-370 800"/><path d="M400 560L-260 800"/><path d="M400 560L-150 800"/><path d="M400 560L-40 800"/><path d="M400 560L70 800"/><path d="M400 560L180 800"/><path d="M400 560L290 800"/><path d="M400 560L400 800"/><path d="M400 560L510 800"/><path d="M400 560L620 800"/><path d="M400 560L730 800"/><path d="M400 560L840 800"/><path d="M400 560L950 800"/><path d="M400 560L1060 800"/><path d="M400 560L1170 800"/><path d="M400 560L1280 800"/><path d="M252 600H548"/><path d="M134 632H666"/><path d="M-14 672H814"/><path d="M-199 722H999"/><path d="M-429 784H1229"/></g>
+    <circle class="s01-core-glow" cx="400" cy="400" r="300" fill="url(#s01-glow)"/>
+    <g class="s01-links" stroke="#00CD93" stroke-width="1.500" stroke-dasharray="4 8" opacity=".5"><path d="M400 400L140 210"/><path d="M400 400L668 170"/><path d="M400 400L700 610"/><path d="M400 400L118 590"/></g>
+    <g transform="rotate(0 400 400)"><path id="s01-o0" d="M70 400a330 124 0 1 0 660 0a330 124 0 1 0-660 0" fill="none" stroke="url(#s01-ring)" stroke-width="2"/><path class="s01-dash" d="M70 400a330 124 0 1 0 660 0a330 124 0 1 0-660 0" fill="none" stroke="#00CD93" stroke-width="2" stroke-dasharray="3 22" opacity=".55"/><circle r="7" fill="#00CD93"><animateMotion dur="14s" repeatCount="indefinite" begin="-0s"><mpath href="#s01-o0"/></animateMotion></circle><circle r="16" fill="#00CD93" opacity=".18"><animateMotion dur="14s" repeatCount="indefinite" begin="-0s"><mpath href="#s01-o0"/></animateMotion></circle></g><g transform="rotate(60 400 400)"><path id="s01-o1" d="M70 400a330 124 0 1 0 660 0a330 124 0 1 0-660 0" fill="none" stroke="url(#s01-ring)" stroke-width="2"/><path class="s01-dash" d="M70 400a330 124 0 1 0 660 0a330 124 0 1 0-660 0" fill="none" stroke="#00CD93" stroke-width="2" stroke-dasharray="3 22" opacity=".55"/><circle r="6" fill="#00CD93"><animateMotion dur="18s" repeatCount="indefinite" begin="-3s"><mpath href="#s01-o1"/></animateMotion></circle><circle r="15" fill="#00CD93" opacity=".18"><animateMotion dur="18s" repeatCount="indefinite" begin="-3s"><mpath href="#s01-o1"/></animateMotion></circle></g><g transform="rotate(-60 400 400)"><path id="s01-o2" d="M70 400a330 124 0 1 0 660 0a330 124 0 1 0-660 0" fill="none" stroke="url(#s01-ring)" stroke-width="2"/><path class="s01-dash" d="M70 400a330 124 0 1 0 660 0a330 124 0 1 0-660 0" fill="none" stroke="#00CD93" stroke-width="2" stroke-dasharray="3 22" opacity=".55"/><circle r="5" fill="#00CD93"><animateMotion dur="22s" repeatCount="indefinite" begin="-6s"><mpath href="#s01-o2"/></animateMotion></circle><circle r="14" fill="#00CD93" opacity=".18"><animateMotion dur="22s" repeatCount="indefinite" begin="-6s"><mpath href="#s01-o2"/></animateMotion></circle></g>
+    <g class="s01-core"><circle cx="400" cy="400" r="92" fill="#04100C" stroke="#00CD93" stroke-width="3"/><circle cx="400" cy="400" r="108" fill="none" stroke="#00CD93" stroke-width="1.500" stroke-dasharray="2 10"/>
+      <g transform="translate(400 396)" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><path d="M-46 -8L0 -32 46 -8 0 16z"/><path d="M-26 4v22c14 14 38 14 52 0V4"/><path d="M46 -8v30" stroke="#00CD93"/></g></g>
+    <g class="s01-node " transform="translate(140 210)"><circle r="38" fill="#06120E" stroke="#00CD93" stroke-width="2"/><g fill="none" stroke="#fff" stroke-width="2.200" stroke-linecap="round" stroke-linejoin="round"><path d="M-18 -4L0 -13 18 -4 0 5z"/><path d="M-10 0v9c5 5 15 5 20 0V0M18 -4v12"/></g></g><g class="s01-node " transform="translate(668 170)"><circle r="38" fill="#06120E" stroke="#00CD93" stroke-width="2"/><g fill="none" stroke="#fff" stroke-width="2.200" stroke-linecap="round" stroke-linejoin="round"><path d="M0 -10c-5-4-12-4-17-2v20c5-2 12-2 17 2 5-4 12-4 17-2v-20c-5-2-12-2-17 2zM0 -10v20"/></g></g><g class="s01-node " transform="translate(700 610)"><circle r="38" fill="#06120E" stroke="#00CD93" stroke-width="2"/><g fill="none" stroke="#fff" stroke-width="2.200" stroke-linecap="round" stroke-linejoin="round"><circle r="15"/><path d="M-5 -8l12 8-12 8z" fill="#fff"/></g></g><g class="s01-node " transform="translate(118 590)"><circle r="38" fill="#06120E" stroke="#00CD93" stroke-width="2"/><g fill="none" stroke="#fff" stroke-width="2.200" stroke-linecap="round" stroke-linejoin="round"><rect x="-11" y="-11" width="22" height="22" rx="4"/><path d="M-4 -17v6M4 -17v6M-4 11v6M4 11v6M-17 -4h6M-17 4h6M11 -4h6M11 4h6"/></g></g>
+    <g fill="#00CD93"><rect class="s01-bit" x="150" y="520" width="8" height="8" rx="2" style="--t:7s;--dl:-1s"/><rect class="s01-bit" x="240" y="600" width="6" height="6" rx="2" style="--t:9s;--dl:-4s"/><rect class="s01-bit" x="610" y="560" width="8" height="8" rx="2" style="--t:8s;--dl:-2s"/><rect class="s01-bit" x="690" y="480" width="6" height="6" rx="2" style="--t:10s;--dl:-6s"/><rect class="s01-bit" x="330" y="640" width="5" height="5" rx="2" style="--t:6s;--dl:-3s"/><rect class="s01-bit" x="520" y="650" width="7" height="7" rx="2" style="--t:9s;--dl:-5s"/><rect class="s01-bit" x="100" y="380" width="6" height="6" rx="2" style="--t:11s;--dl:-7s"/><rect class="s01-bit" x="720" y="330" width="7" height="7" rx="2" style="--t:8s;--dl:-0s"/></g>
+  </svg>
 </section>
 <section data-page="2" class="slide s02 light">
   <svg class="s02-grid" width="1920" height="1080" aria-hidden="true"><defs><pattern id="s02-dots" width="40" height="40" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1.6" fill="#02BC0C" opacity=".13"/></pattern></defs><rect x="40" y="380" width="1880" height="700" fill="url(#s02-dots)"/></svg>
