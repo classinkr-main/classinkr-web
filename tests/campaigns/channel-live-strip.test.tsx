@@ -91,3 +91,15 @@ describe("ChannelLiveStrip", () => {
     expect(html).toContain("rounded-full")
   })
 })
+
+describe("ChannelLiveStrip — 원화는 정수(2026-11-10)", () => {
+  it("Google KRW 광고비를 소수 없이 그린다 — 예전엔 ₩115,623.55", () => {
+    const html = render([entry({ channel: "google", spend: 115_623.55, currency: "KRW", conversions: null, costPerConversion: null })])
+    expect(html).toContain("₩115,624")
+    expect(html).not.toContain("115,623.55")
+  })
+
+  it("달러는 예전 그대로 소수 두 자리", () => {
+    expect(render([entry()])).toContain("$1,240.50")
+  })
+})
