@@ -186,3 +186,51 @@ describe("runLeadCaptureEffects 토글", () => {
     expect(codeKeys).toEqual(expect.arrayContaining(dbKeys))
   })
 })
+
+describe("runLeadCaptureEffects — source=chatbot", () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] })
+    vi.setSystemTime(new Date(GOLDEN_NOW))
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    vi.spyOn(console, "warn").mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.restoreAllMocks()
+    vi.resetModules()
+  })
+
+  async function runWithSource(source: string) {
+    const base = scenario("contact_page")
+    const goldenScenario: GoldenScenario = {
+      ...base,
+      id: `contact_page_as_${source}`,
+      raw: { ...(base.raw as Record<string, unknown>), source } as GoldenScenario["raw"],
+    }
+    const { leadCapture, log } = await loadRecordedLeadCapture(goldenScenario)
+    const body = leadCapture.buildLeadPayload(goldenScenario.raw)
+    await leadCapture.runLeadCaptureEffects(body, {
+      settings: goldenScenario.settings as EffectsSettings,
+      stored: true,
+      savedLeadId: "lead-effects-chatbot",
+      conversionEventId: "lead:lead-effects-chatbot",
+      toggles: { ...leadCapture.ALL_LEAD_CAPTURE_EFFECTS },
+      context: {},
+    })
+    return { body, log }
+  }
+
+  it("챗봇 리드는 문의폼과 같은 부수효과 순서를 탄다 (전달·구독자·자동화·전환·알림·유입 기록)", async () => {
+    const chatbot = await runWithSource("chatbot")
+    const contact = await runWithSource("contact_page")
+    expect(chatbot.body.source).toBe("chatbot")
+    expect(labelsOf(chatbot.log)).toEqual(labelsOf(contact.log))
+  })
+
+  it("유입 기록(site_inflow)에 챗봇 상담 라벨이 남는다", async () => {
+    const { log } = await runWithSource("chatbot")
+    const inflow = log.find(([label]) => label === "createCrmCustomerEvent")
+    expect(JSON.stringify(inflow?.[1] ?? null)).toContain("챗봇 상담")
+  })
+})
