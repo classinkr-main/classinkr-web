@@ -1,6 +1,12 @@
 import "server-only"
 
 import { stripLeadSubmitTokens } from "@/lib/chatbot/lead-token"
+import {
+  generateChatbotFinalAnswer,
+  streamChatbotFinalAnswer,
+  type ChatbotAnswerUsage,
+} from "@/lib/chatbot/answer-provider"
+import { maybeLabelChatbotExchange } from "@/lib/chatbot/claude/labeling"
 import { unstable_cache, revalidateTag } from "next/cache"
 import { assertJsonSafeInDev } from "@/lib/server/json-safe"
 
@@ -15,8 +21,6 @@ import {
 } from "@/lib/chatbot/classification"
 import { findChatbotSelfKnowledgeEntry } from "@/lib/chatbot/self-knowledge"
 import {
-  generateGeminiFinalAnswer,
-  streamGeminiFinalAnswer,
   clampAnswerToLength,
   embedText,
   sanitizePublicAnswerText,
@@ -3243,6 +3247,13 @@ async function ensureSession(
   return data.id as string
 }
 
+// Claude 로 답한 응답의 모델·토큰 — chatbot_answer_events.model_name·prompt_tokens·completion_tokens 를 채운다.
+// 응답 객체(클라이언트로 나가는 JSON)에 필드를 더하지 않으려고 WeakMap 에 둔다. Gemini 답변은 비워 둔다(기존 그대로).
+const answerUsageByResponse = new WeakMap<object, ChatbotAnswerUsage>()
+function rememberAnswerUsage(response: object, usage: ChatbotAnswerUsage) {
+  answerUsageByResponse.set(response, usage)
+}
+
 async function persistExchange(
   input: ChatbotQueryRequest,
   question: NormalizedQuestion,
@@ -3306,6 +3317,13 @@ async function persistExchange(
     }
 
     if (answerEventId) answerEventInsert.id = answerEventId
+    const answerUsage = answerUsageByResponse.get(response)
+    if (answerUsage) {
+      answerEventInsert.model_name = answerUsage.model
+      answerEventInsert.prompt_tokens =
+        answerUsage.inputTokens + (answerUsage.cacheReadInputTokens ?? 0) + (answerUsage.cacheCreationInputTokens ?? 0)
+      answerEventInsert.completion_tokens = answerUsage.outputTokens
+    }
 
     const { data: answerEvent, error: answerEventError } = await supabase
       .from("chatbot_answer_events")
@@ -3367,6 +3385,16 @@ async function persistExchange(
         detectedIntent: intent,
         handoffIntent,
         sources: response.sources,
+      }),
+      // 대화 라벨(의도·기관·단계·온도) — CHATBOT_LABELING_ENABLED + Anthropic 키일 때만, 테이블이 없으면 조용히 건너뛴다.
+      maybeLabelChatbotExchange(supabase as never, {
+        sessionId: resolvedSessionId,
+        answerEventId: answerEvent.id as string,
+        question: question.redacted,
+        answer: response.answer,
+        category,
+        intent,
+        handoffIntent,
       }),
     ]
 
@@ -4635,7 +4663,7 @@ async function buildChatbotCoreBase(
     const history = await historyPromise
     const finalAnswer = await withTimeoutFallback({
       promise: generateUsableAnswerWithProgressiveModels((tier) =>
-        generateGeminiFinalAnswer({
+        generateChatbotFinalAnswer({
           question: question.redacted,
           category,
           intent,
@@ -4644,6 +4672,9 @@ async function buildChatbotCoreBase(
           sources: response.sources,
           tier,
           history,
+          handoffIntent,
+          sessionId: options.sessionId ?? null,
+          onUsage: (usage) => rememberAnswerUsage(response, usage),
         })
       ),
       timeoutMs: getFinalAnswerTimeoutMs(),
@@ -4771,6 +4802,8 @@ async function streamAndApplyFinalAnswer({
   response,
   historyPromise,
   emit,
+  handoffIntent,
+  sessionId,
 }: {
   question: NormalizedQuestion
   category: string
@@ -4778,6 +4811,8 @@ async function streamAndApplyFinalAnswer({
   response: Omit<ChatbotQueryResponse, "answerEventId" | "sessionId" | "warning" | "handoffIntent">
   historyPromise: Promise<{ role: "user" | "model"; parts: { text: string }[] }[]>
   emit: (event: ChatbotStreamEvent) => void
+  handoffIntent?: HandoffIntent
+  sessionId?: string
 }): Promise<boolean> {
   const history = await historyPromise
   let raw = ""
@@ -4795,7 +4830,7 @@ async function streamAndApplyFinalAnswer({
 
   await withTimeoutFallback({
     promise: (async () => {
-      for await (const chunk of streamGeminiFinalAnswer({
+      for await (const chunk of streamChatbotFinalAnswer({
         question: question.redacted,
         category,
         intent,
@@ -4804,6 +4839,9 @@ async function streamAndApplyFinalAnswer({
         sources: response.sources,
         tier: "basic",
         history,
+        handoffIntent,
+        sessionId: sessionId ?? null,
+        onUsage: (usage) => rememberAnswerUsage(response, usage),
       })) {
         onChunk(chunk)
       }
@@ -4912,7 +4950,16 @@ export async function streamChatbotQuery(
   // 이 경우 AI 재작성을 적용하면 안 된다 — handleChatbotQuery 의 조기 반환 의미와 동일하게 맞춘다.
   const isShortCircuited = isGreetingOnly(question) || Boolean(buildPolicyGuardResponse(question))
   if (!isShortCircuited && shouldUseAiFinalAnswer(response, question, category)) {
-    await streamAndApplyFinalAnswer({ question, category, intent, response, historyPromise, emit })
+    await streamAndApplyFinalAnswer({
+      question,
+      category,
+      intent,
+      response,
+      historyPromise,
+      emit,
+      handoffIntent: core.handoffIntent,
+      sessionId,
+    })
     applyConversationTone(core)
   }
   const handoffIntent = core.handoffIntent
