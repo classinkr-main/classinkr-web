@@ -14,7 +14,7 @@ import Anthropic from "@anthropic-ai/sdk"
 
 import { getClaudeUsageStore } from "@/lib/chatbot/answer-provider"
 import { checkClaudeBudget, recordClaudeUsage } from "./budget"
-import { readChatbotClaudeConfig, thinkingOffParam, type ChatbotClaudeConfig } from "./config"
+import { readChatbotClaudeConfig, lowLatencyParams, type ChatbotClaudeConfig } from "./config"
 import { LABELER_SYSTEM_PROMPT, maxTemperature, parseChatbotSessionLabel, type ChatbotSessionLabel, type LabelTemperature } from "./labels"
 import { isMissingTableError } from "./table-missing"
 
@@ -71,8 +71,7 @@ export async function requestClaudeLabel(
         model: config.labelModel,
         max_tokens: 300,
         // 확장 사고를 끈다 — 켜 두면 사고 토큰이 max_tokens 를 먹어 JSON 이 잘린다(실측).
-        ...(thinkingOffParam(config.labelModel) ? { thinking: thinkingOffParam(config.labelModel) } : {}),
-        output_config: { effort: "low" },
+        ...lowLatencyParams(config.labelModel),
         system: LABELER_SYSTEM_PROMPT,
         messages: [{ role: "user", content: buildLabelerUserText(input) }],
       })

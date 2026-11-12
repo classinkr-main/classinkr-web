@@ -102,6 +102,37 @@ describe("Claude 제공자", () => {
     expect(request.thinking).toEqual({ type: "between_tools" })
   })
 
+  it("거절(stop_reason refusal)이면 끊긴 조각을 답으로 내지 않고 null — 사용량은 남긴다", async () => {
+    const { generateClaudeFinalAnswer } = await import("@/lib/chatbot/claude/provider")
+    const { readChatbotClaudeConfig } = await import("@/lib/chatbot/claude/config")
+    create.mockResolvedValueOnce({
+      content: [{ type: "text", text: "ClassIn 은 수업 전·중·후를 한곳에서" }],
+      stop_reason: "refusal",
+      usage: { input_tokens: 100, output_tokens: 12 },
+    })
+    const onUsage = vi.fn()
+    const config = readChatbotClaudeConfig({ CHATBOT_PROVIDER: "claude", ANTHROPIC_API_KEY: "k1" })
+    expect(await generateClaudeFinalAnswer({ ...baseArgs, onUsage }, config)).toBeNull()
+    expect(onUsage).toHaveBeenCalledWith(expect.objectContaining({ outputTokens: 12 }))
+  })
+
+  it("다른 세대 모델(env)로 바꿔도 그 모델이 받는 사고·effort 값만 보낸다", async () => {
+    const { generateClaudeFinalAnswer } = await import("@/lib/chatbot/claude/provider")
+    const { readChatbotClaudeConfig } = await import("@/lib/chatbot/claude/config")
+    create.mockResolvedValue({ content: [{ type: "text", text: "ClassIn 은 수업 전·중·후를 한곳에서 운영합니다." }], usage: { input_tokens: 1, output_tokens: 1 } })
+    const send = async (model: string) => {
+      create.mockClear()
+      await generateClaudeFinalAnswer(baseArgs, readChatbotClaudeConfig({ CHATBOT_PROVIDER: "claude", ANTHROPIC_API_KEY: "k1", CHATBOT_CLAUDE_MODEL: model }))
+      return create.mock.calls[0][0]
+    }
+    // between_tools 는 Sonnet 5.5 만 받는다 — 예전에는 "sonnet" 글자만 보고 Sonnet 4.6 에도 보내 매번 400 이었다.
+    expect((await send("claude-sonnet-4-6")).thinking).toEqual({ type: "disabled" })
+    expect((await send("claude-opus-5-5")).thinking).toBeUndefined()
+    const haiku45 = await send("claude-haiku-4-5")
+    expect(haiku45.thinking).toEqual({ type: "disabled" })
+    expect(haiku45.output_config).toBeUndefined()
+  })
+
   it("500 이면 다음 키로 가지 않고 null", async () => {
     const { generateClaudeFinalAnswer } = await import("@/lib/chatbot/claude/provider")
     const { readChatbotClaudeConfig } = await import("@/lib/chatbot/claude/config")

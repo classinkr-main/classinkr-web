@@ -81,13 +81,36 @@ export function shouldUseClaudeForAnswer(config: ChatbotClaudeConfig, random: ()
 }
 
 /**
- * 모델별 "확장 사고 끄기" 파라미터(2026-11-12 실측). 기본 adaptive 사고는 출력 토큰·지연을 먹는다.
- *  - Haiku 5.5: { type: "disabled" }
- *  - Sonnet 5.5: { type: "between_tools" } (disabled 는 400 — API 가 이 값을 안내한다)
- *  - Opus 5.5·알 수 없는 모델: 끌 수 없음 → 보내지 않는다(effort low 만)
+ * 모델별 "확장 사고 끄기" 파라미터(2026-11-12 실측 + Claude API 문서). 기본 adaptive 사고는 출력 토큰·지연을 먹는다.
+ *  - Sonnet 5.5: { type: "between_tools" } — disabled 는 400. between_tools 는 Sonnet 5.5 만 받는다.
+ *  - Haiku 5.5·Sonnet 5·Sonnet 4.6·Opus 5·Haiku 4.5: { type: "disabled" } (effort low 와 함께 받는다)
+ *  - Opus 5.5·Fable·Mythos: 끌 수 없음(disabled 도 400) → 보내지 않는다(effort low 만)
+ *  - Opus 4.8·4.7·4.6: 보내지 않으면 사고 없이 돈다
+ *  - 모르는 모델: 보내지 않는다 — 잘못된 값 하나로 모든 답변이 400 이 되는 것보다 낫다
+ * CHATBOT_CLAUDE_MODEL 로 다른 세대를 고르면 "sonnet" 글자만 보고 between_tools 를 보내 매 요청이 400 → Gemini 로
+ * 떨어졌다(2026-11-12 점검). 그래서 글자 포함이 아니라 버전까지 맞춰 고른다.
  */
+const THINKING_DISABLED_MODELS = /^claude-(?:haiku-5-5|sonnet-5|sonnet-4-6|opus-5|haiku-4-5)$/
+
 export function thinkingOffParam(model: string): { type: "disabled" } | { type: "between_tools" } | undefined {
-  if (model.includes("haiku")) return { type: "disabled" }
-  if (model.includes("sonnet")) return { type: "between_tools" }
+  const id = model.trim()
+  if (id === "claude-sonnet-5-5") return { type: "between_tools" }
+  if (THINKING_DISABLED_MODELS.test(id)) return { type: "disabled" }
   return undefined
+}
+
+/**
+ * 챗봇 요청의 지연 줄이기 파라미터 — 사고 끄기(위) + effort low. Haiku 4.5 는 effort 를 받지 않아(400) 뺀다.
+ * 답변(provider.ts)과 라벨링(labeling.ts)이 같이 쓴다.
+ */
+export function lowLatencyParams(model: string): {
+  thinking?: { type: "disabled" } | { type: "between_tools" }
+  output_config?: { effort: "low" }
+} {
+  const thinking = thinkingOffParam(model)
+  const effortSupported = model.trim() !== "claude-haiku-4-5"
+  return {
+    ...(thinking ? { thinking } : {}),
+    ...(effortSupported ? { output_config: { effort: "low" as const } } : {}),
+  }
 }

@@ -101,3 +101,16 @@ describe("maybeLabelChatbotExchange", () => {
     expect(inserts).toEqual([])
   })
 })
+
+describe("라벨링은 응답 뒤에 돈다(2026-11-12)", () => {
+  it("service.ts 는 라벨링을 next/server after 로 넘긴다 — void 부수효과로 두면 Vercel 함수가 응답 직후 멈춰 라벨이 빠진다", async () => {
+    const { readFileSync } = await import("node:fs")
+    const { join } = await import("node:path")
+    const service = readFileSync(join(process.cwd(), "lib/chatbot/service.ts"), "utf8")
+    expect(service).toContain('import { after } from "next/server"')
+    expect(service).toMatch(/runAfterResponse\(\(\) =>\s*maybeLabelChatbotExchange\(/)
+    // 부수효과 배열(Promise.allSettled)에는 넣지 않는다.
+    const sideEffects = service.slice(service.indexOf("const sideEffects"), service.indexOf("runAfterResponse(() =>"))
+    expect(sideEffects).not.toContain("maybeLabelChatbotExchange(")
+  })
+})

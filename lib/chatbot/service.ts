@@ -8,6 +8,7 @@ import {
 } from "@/lib/chatbot/answer-provider"
 import { maybeLabelChatbotExchange } from "@/lib/chatbot/claude/labeling"
 import { unstable_cache, revalidateTag } from "next/cache"
+import { after } from "next/server"
 import { assertJsonSafeInDev } from "@/lib/server/json-safe"
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
@@ -393,6 +394,18 @@ function getFinalAnswerTimeoutMs() {
 
 function getFinalAnswerStreamTimeoutMs() {
   return getPositiveIntegerEnv("CHATBOT_FINAL_ANSWER_STREAM_TIMEOUT_MS", DEFAULT_FINAL_ANSWER_STREAM_TIMEOUT_MS)
+}
+
+/**
+ * 응답을 보낸 뒤에도 끝까지 돌아야 하는 작업 — next/server after 로 넘긴다(라우트 핸들러 요청 안에서만 쓸 수 있다).
+ * 요청 밖(테스트·스크립트)에서는 after 가 바로 throw 하므로 그냥 돌린다. task 는 스스로 오류를 삼켜야 한다.
+ */
+function runAfterResponse(task: () => Promise<void>) {
+  try {
+    after(task)
+  } catch {
+    void task()
+  }
 }
 
 async function withTimeoutFallback<T>({
@@ -3386,7 +3399,11 @@ async function persistExchange(
         handoffIntent,
         sources: response.sources,
       }),
-      // 대화 라벨(의도·기관·단계·온도) — CHATBOT_LABELING_ENABLED + Anthropic 키일 때만, 테이블이 없으면 조용히 건너뛴다.
+    ]
+
+    // 대화 라벨(의도·기관·단계·온도) — CHATBOT_LABELING_ENABLED + Anthropic 키일 때만, 테이블이 없으면 조용히 건너뛴다.
+    // Claude 호출(최대 수 초)이라 응답 뒤에 돈다 — 위 부수효과처럼 void 로 두면 Vercel 함수가 응답 직후 멈춰 라벨이 빠진다.
+    runAfterResponse(() =>
       maybeLabelChatbotExchange(supabase as never, {
         sessionId: resolvedSessionId,
         answerEventId: answerEvent.id as string,
@@ -3395,8 +3412,8 @@ async function persistExchange(
         category,
         intent,
         handoffIntent,
-      }),
-    ]
+      })
+    )
 
     void Promise.allSettled(sideEffects).then((sideEffectResults) => {
       for (const result of sideEffectResults) {

@@ -17,7 +17,7 @@ import {
   sanitizePublicAnswerText,
   type FinalGenerateArgs,
 } from "@/lib/chatbot/llm"
-import { thinkingOffParam, type ChatbotClaudeConfig } from "./config"
+import { lowLatencyParams, type ChatbotClaudeConfig } from "./config"
 import type { ClaudeUsage } from "./pricing"
 import { buildSalesSteeringHint, getClaudeChatbotSystemPrompt } from "./prompt"
 
@@ -95,9 +95,8 @@ function buildRequest(args: FinalGenerateArgs & ClaudeAnswerExtras, config: Chat
       { type: "text" as const, text: getClaudeChatbotSystemPrompt(), cache_control: { type: "ephemeral" as const } },
     ],
     messages: toClaudeMessages(args.history, buildClaudeUserText(args)),
-    // 챗봇은 지연이 중요하다 — 끌 수 있는 모델은 확장 사고를 끄고 effort low.
-    ...(thinkingOffParam(config.answerModel) ? { thinking: thinkingOffParam(config.answerModel) } : {}),
-    output_config: { effort: "low" as const },
+    // 챗봇은 지연이 중요하다 — 끌 수 있는 모델은 확장 사고를 끄고 effort low(config.ts lowLatencyParams).
+    ...lowLatencyParams(config.answerModel),
   }
 }
 
@@ -116,6 +115,12 @@ export async function generateClaudeFinalAnswer(
     try {
       const message = await makeClient(apiKey).messages.create(request)
       args.onUsage?.(usageFrom(config.answerModel, message.usage))
+      // 안전 분류기가 거절하면(HTTP 200, stop_reason "refusal") 본문이 비었거나 중간에 끊긴 문장이다 —
+      // 그 조각을 완성된 답처럼 내지 않고 Gemini(→ 결정형 초안)로 넘긴다.
+      if (message.stop_reason === "refusal") {
+        warn("refusal")
+        return null
+      }
       const text = message.content
         .map((block) => (block.type === "text" ? block.text : ""))
         .join("")

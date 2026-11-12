@@ -48,8 +48,14 @@ describe("estimateClaudeCostUsd", () => {
   it("Sonnet 5.5 정가: 입력 $2 · 출력 $10 / MTok", () => {
     expect(estimateClaudeCostUsd({ model: "claude-sonnet-5-5", inputTokens: 1_000_000, outputTokens: 100_000 })).toBeCloseTo(3)
   })
-  it("모르는 모델은 Opus 단가(보수적)", () => {
-    expect(estimateClaudeCostUsd({ model: "claude-new", inputTokens: 1_000_000, outputTokens: 0 })).toBeCloseTo(4)
+  it("모르는 모델은 표에서 가장 비싼 단가(보수적)", () => {
+    expect(estimateClaudeCostUsd({ model: "claude-new", inputTokens: 1_000_000, outputTokens: 0 })).toBeCloseTo(10)
+  })
+
+  it("세대가 다른 모델은 그 모델 단가 — 이름 글자만 보고 5.5 단가로 싸게 세지 않는다", () => {
+    expect(estimateClaudeCostUsd({ model: "claude-sonnet-4-6", inputTokens: 1_000_000, outputTokens: 100_000 })).toBeCloseTo(4.5)
+    expect(estimateClaudeCostUsd({ model: "claude-haiku-4-5", inputTokens: 1_000_000, outputTokens: 0 })).toBeCloseTo(1)
+    expect(estimateClaudeCostUsd({ model: "claude-opus-5-5", inputTokens: 0, outputTokens: 0, cacheReadInputTokens: 1_000_000 })).toBeCloseTo(0.2)
   })
 })
 
@@ -124,5 +130,11 @@ describe("thinkingOffParam — 모델별 사고 끄기(실측)", () => {
     expect(thinkingOffParam("claude-haiku-5-5")).toEqual({ type: "disabled" })
     expect(thinkingOffParam("claude-sonnet-5-5")).toEqual({ type: "between_tools" })
     expect(thinkingOffParam("claude-opus-5-5")).toBeUndefined()
+    // between_tools 는 Sonnet 5.5 전용 — 다른 Sonnet 은 disabled, 끌 수 없는 모델·모르는 모델은 보내지 않는다.
+    expect(thinkingOffParam("claude-sonnet-5")).toEqual({ type: "disabled" })
+    expect(thinkingOffParam("claude-sonnet-4-6")).toEqual({ type: "disabled" })
+    expect(thinkingOffParam("claude-opus-5")).toEqual({ type: "disabled" })
+    expect(thinkingOffParam("claude-fable-5-2")).toBeUndefined()
+    expect(thinkingOffParam("claude-sonnet-9")).toBeUndefined()
   })
 })
