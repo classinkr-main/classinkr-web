@@ -285,6 +285,19 @@ describe("summarizeVideo — Google 유형 · 조회수 · 조회당 비용(2026
     expect(summarizeVideo([g({ channelType: "SEARCH", videoViews: 0 })]).costPerView).toBeNull()
   })
 
+  it("검색처럼 조회수를 성과로 재지 않는 유형의 0회는 「재지 않음」(null) — 동영상 유형의 0회는 0 이다", () => {
+    // API 는 동영상이 아닌 캠페인도 조회수 칸을 0 으로 채운다(20261106 마이그레이션). 그 0 을 잰 값으로 받으면
+    // 표 합계의 조회당 비용 분자에 검색 광고비가 섞인다.
+    const search = summarizeVideo([g({ channelType: "SEARCH", videoViews: 0, spend: 7000 }), g({ date: "2026-11-06", channelType: "SEARCH", videoViews: 0 })])
+    expect(search).toEqual({ channelType: "SEARCH", videoViews: null, viewsPartial: false, costPerView: null })
+    const searchWithOldDay = summarizeVideo([g({ date: "2026-11-03", channelType: null, videoViews: null }), g({ channelType: "SEARCH", videoViews: 0 })])
+    expect(searchWithOldDay).toMatchObject({ videoViews: null, viewsPartial: false })
+    expect(summarizeVideo([g({ videoViews: 0 })])).toEqual({ channelType: "VIDEO", videoViews: 0, viewsPartial: false, costPerView: null })
+    expect(summarizeVideo([g({ channelType: "DEMAND_GEN", videoViews: 0 })]).videoViews).toBe(0)
+    // 유형을 모르는 줄이라도 조회가 실제로 있었으면 잰 값이다.
+    expect(summarizeVideo([g({ channelType: "PERFORMANCE_MAX", videoViews: 40, spend: 400 })])).toMatchObject({ videoViews: 40, costPerView: 10 })
+  })
+
   it("통화가 섞이면 조회당 비용을 지어내지 않는다", () => {
     expect(summarizeVideo([g({ currency: "KRW" }), g({ date: "2026-11-06", currency: "USD" })]).costPerView).toBeNull()
   })

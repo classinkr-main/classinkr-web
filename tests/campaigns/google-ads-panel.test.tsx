@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server"
 import { describe, expect, it } from "vitest"
 
 import GoogleAdsPanel from "@/components/admin/campaigns/google/GoogleAdsPanel"
+import { fromGoogle, summarizeVideo } from "@/lib/marketing/ad-insights"
 import { GOOGLE_ADS_CAMPAIGN_PLAN, GOOGLE_ADS_COUPON, planDays, planTotal } from "@/lib/marketing/google-ads-setup"
 import type { MarketingPerfResponse, PerfChannelLive, PerfGoogleCampaign } from "@/lib/marketing/perf"
 
@@ -121,6 +122,17 @@ describe("GoogleAdsPanel — 캠페인 실적 표의 유형 · 조회수 · 조�
   it("합계 줄 — 조회수는 잰 캠페인만 더하고, 조회당 비용은 그 캠페인들의 광고비로 나눈다", () => {
     // (85,985.71 + 29,637.84) ÷ (3,763 + 2,613) = ₩18.1 — 검색처럼 조회수가 없는 캠페인 광고비는 섞지 않는다.
     const search = campaign({ campaignId: "g4", campaignName: "검색", channelType: "SEARCH", spend: 7_000, videoViews: null, costPerView: null })
+    const html = render({ perf: perf(live, [dg, campaign({}), search]) })
+    expect(html).toContain("6,376")
+    expect(html).toContain("₩18.1")
+  })
+
+  it("실제 검색 캠페인 행(API 조회수 0)도 합계 조회당 비용에 광고비를 섞지 않는다 — summarizeVideo 를 거친 모양", () => {
+    // 위 테스트는 검색 줄을 videoViews: null 로 손으로 만든다. 운영 행은 0 이라 summarizeVideo 가 null 로 바꿔야 한다.
+    const searchRows = fromGoogle([
+      { date: "2026-11-09", campaignId: "g4", campaignName: "C4 검색", spend: 7_000, impressions: 900, clicks: 40, conversions: 0, currency: "KRW", channelType: "SEARCH", videoViews: 0 },
+    ])
+    const search = campaign({ campaignId: "g4", campaignName: "C4 검색", spend: 7_000, ...summarizeVideo(searchRows) })
     const html = render({ perf: perf(live, [dg, campaign({}), search]) })
     expect(html).toContain("6,376")
     expect(html).toContain("₩18.1")

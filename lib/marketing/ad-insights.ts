@@ -164,13 +164,6 @@ export interface ChannelSpendSummary {
 
 const round2 = (n: number) => Math.round(n * 100) / 100
 
-/**
- * 한 채널의 기간 합계. rows 가 null 이면 **소스 실패**로 보고 전 필드를 미측정(null)으로 둔다 —
- * 빈 배열(조회는 됐는데 집행이 없음)과 구분하는 것이 이 함수의 핵심이다.
- *
- * 통화가 행마다 섞여 있으면(계정 통화가 기간 중 바뀐 극단) currency 를 null 로 두고 합계도
- * 내지 않는다 — 어떤 통화인지 말할 수 없는 숫자를 내놓지 않는다.
- */
 /** Google 캠페인 유형 → 화면 말. 모르는 유형은 원문 그대로, 없으면 null. */
 export const GOOGLE_CHANNEL_TYPE_LABEL: Readonly<Record<string, string>> = {
   VIDEO: "유튜브(동영상)",
@@ -182,10 +175,19 @@ export const GOOGLE_CHANNEL_TYPE_LABEL: Readonly<Record<string, string>> = {
 export const googleChannelTypeLabel = (type: string | null | undefined): string | null =>
   type ? (GOOGLE_CHANNEL_TYPE_LABEL[type] ?? type) : null
 
+/**
+ * 조회수가 성과 지표인 유형. 이 밖의 유형(검색 등)도 API 는 조회수 칸을 0 으로 채운다
+ * (20261106 마이그레이션 주석) — 그 0 을 "잰 조회수"로 받으면 검색 광고비가 합계 조회당 비용에 섞인다.
+ */
+const VIEW_CHANNEL_TYPES: ReadonlySet<string> = new Set(["VIDEO", "DEMAND_GEN"])
+
 export interface VideoSummary {
   /** 가장 최근 줄의 유형(캠페인 유형은 바뀌지 않는다 — 칸 생기기 전 줄의 null 은 건너뛴다). */
   channelType: string | null
-  /** 조회수 합. 한 줄도 재지 않았으면 null. */
+  /**
+   * 조회수 합. 한 줄도 재지 않았거나, 조회수를 성과로 재지 않는 유형(검색 등 — API 가 0 을 준다)이
+   * 조회 0회면 null. 동영상 유형의 0회는 0 이다.
+   */
   videoViews: number | null
   /** 조회수 칸이 빈 날이 섞였다 — 합은 하한이고 조회당 비용은 내지 않는다. */
   viewsPartial: boolean
@@ -201,8 +203,11 @@ export function summarizeVideo(rows: readonly AdInsightRow[]): VideoSummary {
   const sorted = [...rows].sort((a, b) => a.date.localeCompare(b.date))
   const channelType = sorted.reduce<string | null>((latest, r) => r.channelType ?? latest, null)
   const measured = sorted.filter((r) => r.videoViews != null)
-  const viewsPartial = measured.length > 0 && measured.length < sorted.length
-  const videoViews = measured.length > 0 ? measured.reduce((total, r) => total + (r.videoViews ?? 0), 0) : null
+  const viewSum = measured.reduce((total, r) => total + (r.videoViews ?? 0), 0)
+  // 조회가 한 번이라도 있었거나 동영상 유형이어야 "잰 조회수"다 — 검색 캠페인의 0 은 재지 않음으로 둔다.
+  const countsViews = measured.length > 0 && (viewSum > 0 || (channelType != null && VIEW_CHANNEL_TYPES.has(channelType)))
+  const videoViews = countsViews ? viewSum : null
+  const viewsPartial = countsViews && measured.length < sorted.length
   const currencies = new Set(sorted.map((r) => r.currency).filter(Boolean))
   const spend = sorted.reduce((total, r) => total + r.spend, 0)
   const costPerView =
@@ -210,6 +215,13 @@ export function summarizeVideo(rows: readonly AdInsightRow[]): VideoSummary {
   return { channelType, videoViews, viewsPartial, costPerView }
 }
 
+/**
+ * 한 채널의 기간 합계. rows 가 null 이면 **소스 실패**로 보고 전 필드를 미측정(null)으로 둔다 —
+ * 빈 배열(조회는 됐는데 집행이 없음)과 구분하는 것이 이 함수의 핵심이다.
+ *
+ * 통화가 행마다 섞여 있으면(계정 통화가 기간 중 바뀐 극단) currency 를 null 로 두고 합계도
+ * 내지 않는다 — 어떤 통화인지 말할 수 없는 숫자를 내놓지 않는다.
+ */
 export function summarizeChannel(
   channel: LiveAdChannel,
   rows: readonly AdInsightRow[] | null

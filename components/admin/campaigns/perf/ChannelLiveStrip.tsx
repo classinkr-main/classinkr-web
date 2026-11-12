@@ -1,12 +1,12 @@
 "use client"
 
 import { money, won, COUNT } from "@/components/admin/campaigns/event-format"
-
-/** 원화는 정수로 — money() 는 통화와 무관하게 소수 두 자리까지 찍어 ₩115,623.55 가 됐다. */
-const spendText = (value: number | null | undefined, currency: string) => (currency === "KRW" ? won(value) : money(value, currency))
 import { mergeSameCurrency } from "@/lib/marketing/ad-insights"
 import type { PerfChannelLive } from "@/lib/marketing/perf"
 import { AD_CHANNEL_COLOR, AD_CHANNEL_LABEL, type AdChannel } from "@/lib/types/event-metrics"
+
+/** 원화는 정수로 — money() 는 통화와 무관하게 소수 두 자리까지 찍어 ₩115,623.55 가 됐다. */
+const spendText = (value: number | null | undefined, currency: string) => (currency === "KRW" ? won(value) : money(value, currency))
 
 /**
  * 채널 스트립 — 라이브 연동 채널(Meta·Google·네이버)의 기간 집행을 나란히 놓는다.
