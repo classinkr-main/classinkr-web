@@ -25,7 +25,10 @@ import type {
   CrmMatchingSourceSystem,
   CrmMatchingStatusFilter,
 } from "@/lib/admin-crm-matching"
+import { SourceLinkUndoNotice } from "@/components/admin/crm/matching/SourceLinkUndoNotice"
+import { useSourceLinkActions } from "@/components/admin/crm/matching/useSourceLinkActions"
 import type { CrmSourceLinkStatus } from "@/lib/admin-crm-revenue-types"
+import type { SourceLinkAction } from "@/lib/crm/source-link-actions"
 
 type SourceFilter = CrmMatchingSourceFilter
 type StatusFilter = CrmMatchingStatusFilter
@@ -246,10 +249,6 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("review")
   const [pageOffset, setPageOffset] = useState(0)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
-  // 행별 잠금 — 스칼라 하나로 잡으면 B행을 누르는 순간 A행 버튼이 요청 중인데도 다시 활성화돼
-  // 같은 링크에 PATCH가 두 번 나갈 수 있다.
-  const [pendingLinkIds, setPendingLinkIds] = useState<Set<string>>(() => new Set())
-  const [bulkPending, setBulkPending] = useState(false)
   const [manualQueries, setManualQueries] = useState<Record<string, string>>({})
   const [manualTargets, setManualTargets] = useState<Record<string, ManualLinkTargetOption[]>>({})
   const [searchingSourceKey, setSearchingSourceKey] = useState<string | null>(null)
@@ -296,67 +295,6 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
     void load()
   }, [load])
 
-  // Single-row actions patch local state instead of refetching the whole inbox.
-  const applyRowStatus = useCallback((linkId: string, status: CrmSourceLinkStatus) => {
-    setData((current) => {
-      if (!current) return current
-      return {
-        ...current,
-        rows: current.rows.map((row) =>
-          row.linkId === linkId
-            ? {
-                ...row,
-                linkStatus: status,
-                autoConfirmed: status === "confirmed" ? row.autoConfirmed : false,
-                confirmedAt: status === "confirmed" ? new Date().toISOString() : null,
-              }
-            : row
-        ),
-      }
-    })
-    setSelectedIds((current) => {
-      if (!current.has(linkId)) return current
-      const next = new Set(current)
-      next.delete(linkId)
-      return next
-    })
-  }, [])
-
-  const updateSourceLink = useCallback(
-    async (linkId: string, action: "confirm" | "reject" | "stale") => {
-      let alreadyPending = false
-      setPendingLinkIds((prev) => {
-        if (prev.has(linkId)) {
-          alreadyPending = true
-          return prev
-        }
-        const next = new Set(prev)
-        next.add(linkId)
-        return next
-      })
-      if (alreadyPending) return
-
-      setError(null)
-      try {
-        await adminFetchJson(`/api/admin/crm/source-links/${linkId}`, {
-          method: "PATCH",
-          body: JSON.stringify({ action }),
-        })
-        applyRowStatus(linkId, action === "confirm" ? "confirmed" : action === "reject" ? "rejected" : "stale")
-        await load({ force: true })
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "매칭 상태 변경에 실패했습니다.")
-      } finally {
-        setPendingLinkIds((prev) => {
-          const next = new Set(prev)
-          next.delete(linkId)
-          return next
-        })
-      }
-    },
-    [applyRowStatus, load]
-  )
-
   // 실패 알림에 쓸 링크 id → 표시 이름. id 앞 8자만 보여주면 어느 행인지 알 수 없다.
   const rowLabelByLinkId = useMemo(() => {
     const map = new Map<string, string>()
@@ -366,48 +304,61 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
     return map
   }, [data])
 
+  // 확정·제외·되돌리기 — 매출시트와 공용 훅(useSourceLinkActions). 행별 Set 잠금(pendingLinkIds,
+  // 감사 2B.4)·낙관적 반영·실패분 복원·되돌리기 창을 훅이 맡고, 여기서는 행 모양과 문구만 정한다.
+  // 행 상태는 전체 인박스 재조회 전에 로컬로 먼저 바뀐다(낙관적).
+  const sourceLinkActions = useSourceLinkActions<CrmMatchingRow>({
+    updateRows: (updater) =>
+      setData((current) => (current ? { ...current, rows: updater(current.rows) } : current)),
+    patchRow: (row, status: CrmSourceLinkStatus) => ({
+      ...row,
+      linkStatus: status,
+      autoConfirmed: status === "confirmed" ? row.autoConfirmed : false,
+      confirmedAt: status === "confirmed" ? new Date().toISOString() : null,
+    }),
+    refresh: () => load({ force: true }),
+    onApplied: (ids) =>
+      setSelectedIds((current) => {
+        if (!ids.some((id) => current.has(id))) return current
+        const next = new Set(current)
+        for (const id of ids) next.delete(id)
+        return next
+      }),
+    labelOf: (linkId) => rowLabelByLinkId.get(linkId),
+  })
+  const { pendingLinkIds, bulkPending, undo, undoLast, dismissUndo } = sourceLinkActions
+  const runSourceLinkAction = sourceLinkActions.updateSourceLink
+  const runBulkSourceLinkAction = sourceLinkActions.bulkUpdate
+
+  const updateSourceLink = useCallback(
+    async (linkId: string, action: SourceLinkAction) => {
+      setError(null)
+      const run = await runSourceLinkAction(linkId, action)
+      if (run && !run.ok) setError(run.error)
+    },
+    [runSourceLinkAction]
+  )
+
   const bulkUpdate = useCallback(
     async (ids: string[], action: "confirm" | "reject") => {
       if (ids.length === 0) return
-      setBulkPending(true)
       setError(null)
       setNotice(null)
-      try {
-        const result = await adminFetchJson<{
-          updated: number
-          failed: Array<{ id: string; error: string }>
-          skipped?: number
-        }>(`/api/admin/crm/source-links/bulk`, {
-          method: "PATCH",
-          body: JSON.stringify({ ids, action }),
-        })
-
-        // 처리·실패·미처리(요청 상한 초과)를 모두 밝힌다. 합이 선택 건수와 맞아야
-        // 운영자가 "왜 몇 건이 그대로지"를 표에서 되짚지 않는다.
-        const actionLabel = action === "confirm" ? "확정" : "제외"
-        const parts = [`${actionLabel} ${formatNumber(result.updated)}건 처리`]
-        if (result.failed.length > 0) {
-          // 실패 건은 개수만이 아니라 어느 행인지 알아야 다시 손댈 수 있다.
-          const names = result.failed
-            .slice(0, 3)
-            .map(({ id }) => rowLabelByLinkId.get(id) ?? id.slice(0, 8))
-            .join(", ")
-          const more = result.failed.length > 3 ? ` 외 ${formatNumber(result.failed.length - 3)}건` : ""
-          parts.push(`실패 ${formatNumber(result.failed.length)}건 (${names}${more})`)
-        }
-        if (result.skipped && result.skipped > 0) {
-          parts.push(`미처리 ${formatNumber(result.skipped)}건 · 한 번에 처리할 수 있는 한도를 넘어 남겨 두었습니다`)
-        }
-        setNotice(parts.join(" · "))
-        await load({ force: true })
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "일괄 처리에 실패했습니다.")
-      } finally {
-        setBulkPending(false)
-      }
+      // 처리·실패·미처리(요청 상한 초과)를 모두 밝힌다. 합이 선택 건수와 맞아야
+      // 운영자가 "왜 몇 건이 그대로지"를 표에서 되짚지 않는다(문구는 lib/crm/source-link-actions).
+      const run = await runBulkSourceLinkAction(ids, action)
+      if (!run) return
+      if (!run.ok) setError(run.error)
+      else setNotice(run.message ?? null)
     },
-    [load, rowLabelByLinkId]
+    [runBulkSourceLinkAction]
   )
+
+  const undoSourceLink = useCallback(async () => {
+    setError(null)
+    const run = await undoLast()
+    if (run && !run.ok) setError(run.error)
+  }, [undoLast])
 
   const generateCandidates = useCallback(async () => {
     setGenerating(true)
@@ -734,6 +685,13 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
       {notice ? (
         <div className="mb-6 border-l-2 border-[#D7EBDD] pl-3 text-[13px] text-[#084734]">{notice}</div>
       ) : null}
+      <SourceLinkUndoNotice
+        undo={undo}
+        busy={undo ? undo.ids.some((id) => pendingLinkIds.has(id)) : false}
+        onUndo={() => void undoSourceLink()}
+        onDismiss={dismissUndo}
+        className="mb-6"
+      />
       {(data?.warnings ?? []).map((warning) => (
         <div key={warning} className="mb-6 border-l-2 border-[#ECD29C] pl-3 text-[13px] text-[#7A520F]">
           {warning}
