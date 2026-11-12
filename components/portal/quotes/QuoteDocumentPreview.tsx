@@ -1,7 +1,12 @@
 import type { ReactNode } from "react"
 import Image from "next/image"
 import type { PartnerQuoteDetailsInput, PartnerQuoteLineItemInput } from "@/lib/partners-types"
-import { formatStandardQuoteCurrency } from "@/lib/standard-quote-template"
+import {
+  formatQuoteDiscountLabel,
+  formatStandardQuoteCurrency,
+  getQuoteInstallmentNote,
+  isQuoteNoteLine,
+} from "@/lib/standard-quote-template"
 import styles from "./quote-paper.module.css"
 
 /** The approved ClassIn quote paper is shared by editing, viewing and browser PDF output. */
@@ -15,6 +20,7 @@ type QuoteDocumentPreviewProps = {
 
 const money = (value?: number | null) => value == null ? "–" : formatStandardQuoteCurrency(value)
 function lineAmount(line: PartnerQuoteLineItemInput) {
+  if (isQuoteNoteLine(line)) return "–"
   if (line.lineStatus === "separate_billing" || line.billingMode === "separate_invoice") return "별도"
   if (line.lineStatus === "pending_price" || line.billingMode === "tbd") return "협의"
   return money(line.lineSupplyAmount)
@@ -24,6 +30,8 @@ function Field({ label, value }: { label: string; value?: string | null }) {
 }
 
 export default function QuoteDocumentPreview({ quote, documentNumber, title, editing, slots = {} }: QuoteDocumentPreviewProps) {
+  const discountAmount = quote.discountAmount ?? 0
+  const installmentNote = getQuoteInstallmentNote(quote)
   const category = quote.templateId === "online_suite" ? "AI Suite · 하드웨어 및 소프트웨어 공급"
     : quote.lineItems?.some((line) => line.itemType === "hardware") ? "하드웨어 공급" : "소프트웨어 공급"
   return (
@@ -78,15 +86,19 @@ export default function QuoteDocumentPreview({ quote, documentNumber, title, edi
             {line.originalUnitPrice != null && line.unitPrice != null && line.originalUnitPrice > line.unitPrice &&
               <p>정가 {money(line.originalUnitPrice)}원 · 할인 −{money(line.originalUnitPrice - line.unitPrice)}원 / {line.quantityUnit || "개"}</p>}
           </td>
-          <td>{line.quantity ?? "–"}{line.quantityUnit}</td>
-          <td>{money(line.unitPrice)}</td><td>{lineAmount(line)}</td>
+          <td>{isQuoteNoteLine(line) ? "–" : <>{line.quantity ?? "–"}{line.quantityUnit}</>}</td>
+          <td>{isQuoteNoteLine(line) ? "–" : money(line.unitPrice)}</td><td>{lineAmount(line)}</td>
         </tr>)}</tbody>
       </table>}
       <div className={styles.totals} aria-label="견적 합계">
-        <div><span>공급가액</span><span>{money(quote.subtotalAmount)} 원</span></div>
+        {discountAmount > 0 ? <>
+          <div><span>소계</span><span>{money(quote.subtotalAmount)} 원</span></div>
+          <div><span>{formatQuoteDiscountLabel(quote.quoteDiscount)}</span><span>−{money(discountAmount)} 원</span></div>
+          <div><span>공급가액</span><span>{money((quote.subtotalAmount ?? 0) - discountAmount)} 원</span></div>
+        </> : <div><span>공급가액</span><span>{money(quote.subtotalAmount)} 원</span></div>}
         <div><span>부가세{quote.vatIncluded ? "" : " (10%)"}</span><span>{quote.vatIncluded ? "포함" : `${money(quote.vatAmount)} 원`}</span></div>
-        {Boolean(quote.discountAmount) && <div><span>할인</span><span>{money(quote.discountAmount)} 원</span></div>}
         <div className={styles.grandTotal}><strong>총 견적금액 (VAT 포함)</strong><strong>{money(quote.grandTotalAmount)} 원</strong></div>
+        {installmentNote && <p className={styles.installment}>{installmentNote}</p>}
         {quote.pendingAmountNote && <p className={styles.pending}>{quote.pendingAmountNote}</p>}
         {slots.addenda}
       </div>

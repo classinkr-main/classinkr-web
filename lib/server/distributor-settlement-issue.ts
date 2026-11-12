@@ -105,7 +105,7 @@ function notifyReviewRequired(settlement: DistributorSettlementRecord, context: 
     message: [
       `${context.customerName?.trim() || "고객"}님이 견적에 동의했지만 총판 견적서를 자동 발행하지 못했습니다.`,
       `사유: ${reason}`,
-      "견적 화면에서 원가을 확인하고 발행해 주세요.",
+      "견적 화면에서 원가를 확인하고 발행해 주세요.",
     ].join("\n"),
     routeUrl: `/admin/quotes?tab=hardware&quote=${context.document.id}`,
     source: "distributor_settlement",
@@ -234,7 +234,7 @@ export async function issueDistributorSettlement(params: {
 
   if (settlement.sourceVersionId && settlement.sourceVersionId !== context.version.id) {
     return block(
-      `고객 견적이 v${context.version.version_number}로 바뀌었습니다. 원가을 다시 확인하고 저장한 뒤 발행해 주세요.`
+      `고객 견적이 v${context.version.version_number}로 바뀌었습니다. 원가를 다시 확인하고 저장한 뒤 발행해 주세요.`
     )
   }
   const blocker = getDistributorIssueBlocker(settlement)

@@ -19,8 +19,19 @@ export function resolveQuoteVatIncluded(flag: unknown, taxAmount?: number | null
   return !(typeof taxAmount === "number" && taxAmount > 0)
 }
 
-/** 최종 금액 아래에 붙는 한 줄. VAT 별도 견적은 최종 금액이 공급가 + VAT 임을 풀어 보여 준다. */
-export function describeQuoteVat(quote: { vatIncluded: boolean; subtotalAmount: number; taxAmount: number }) {
-  if (quote.vatIncluded) return "VAT 포함"
-  return `공급가 ${formatKRW(Math.round(quote.subtotalAmount))} + VAT ${formatKRW(Math.round(quote.taxAmount))}`
+/**
+ * 최종 금액 아래에 붙는 한 줄. VAT 별도 견적은 최종 금액이 공급가 + VAT 임을 풀어 보여 준다.
+ * 견적 할인이 있으면 공급가는 할인 뒤 금액이고, 할인액을 함께 적는다.
+ */
+export function describeQuoteVat(quote: {
+  vatIncluded: boolean
+  subtotalAmount: number
+  taxAmount: number
+  discountAmount?: number
+}) {
+  const discount = Math.max(0, Math.round(quote.discountAmount ?? 0))
+  const discountText = discount > 0 ? ` · 할인 −${formatKRW(discount)}` : ""
+  if (quote.vatIncluded) return `VAT 포함${discountText}`
+  const supply = Math.round(quote.subtotalAmount) - discount
+  return `공급가 ${formatKRW(supply)} + VAT ${formatKRW(Math.round(quote.taxAmount))}${discountText}`
 }

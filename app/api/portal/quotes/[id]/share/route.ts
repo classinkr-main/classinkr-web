@@ -52,10 +52,16 @@ export async function POST(
       created_by: ctx.userId ?? null,
     });
 
-    const nextDocument =
-      ensured.document.status === "shared"
-        ? ensured.document
-        : await updateQuoteDocument(id, { status: "shared" });
+    // 동의(accepted)·닫힌 견적(계약 전환 archived·만료 expired)은 링크만 돌려주고 상태를 되돌리지 않는다 —
+    // "shared" 로 되돌리면 동의 기록 때문에 '계약 전환' 묶음에 다시 떠 계약서가 중복 생성된다.
+    const keepStatus =
+      ensured.document.status === "shared" ||
+      ensured.document.status === "accepted" ||
+      ensured.document.status === "archived" ||
+      ensured.document.status === "expired";
+    const nextDocument = keepStatus
+      ? ensured.document
+      : await updateQuoteDocument(id, { status: "shared" });
 
     const origin = req.nextUrl.origin;
     const shareUrl = `${origin}/share/quote/${ensured.share.token}`;

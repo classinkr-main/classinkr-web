@@ -1,6 +1,7 @@
 import type { Metadata } from "next"
 
 import { ShareUnavailable } from "@/app/share/_components/ShareUnavailable"
+import { resolveAdminShellSession } from "@/lib/admin-auth"
 import QuoteDocumentPreview from "@/components/portal/quotes/QuoteDocumentPreview"
 import QuoteViewerActions from "@/components/portal/quotes/QuoteViewerActions"
 import { getQuoteDetailsFromStructuredJson } from "@/lib/portal/quote-details"
@@ -57,7 +58,11 @@ export default async function SharedQuotePage({ params }: PageProps) {
   })
 
   const deal = await getDeal(document.deal_id).catch(() => null)
-  if (deal) {
+  // 어드민에 로그인한 직원이 연 것은 고객 열람이 아니다. 작성기 '미리보기'·상세의 '고객 화면' 버튼이
+  // 열람 1회로 잡혀 견적이 '조건 확인' 단계로 넘어가던 문제. 고객 브라우저에는 어드민 쿠키가 없어
+  // 추가 왕복이 없다(resolveAdminShellSession 은 sb-* 쿠키가 없으면 즉시 null).
+  const internalViewer = Boolean(await resolveAdminShellSession())
+  if (deal && !internalViewer) {
     await ensureQuoteInteractionLog({
       partner_account_id: deal.partner_account_id,
       customer_id: deal.customer_id,
@@ -93,6 +98,11 @@ export default async function SharedQuotePage({ params }: PageProps) {
 
   return (
     <div data-quote-viewer="true" className="min-h-screen bg-[#F6F5F4] px-4 py-10 print:bg-white print:px-0 print:py-0 sm:px-6 sm:py-16">
+      {internalViewer && (
+        <p role="note" className="mx-auto mb-3 max-w-[210mm] rounded-lg border border-line-hair bg-surface-sheet px-4 py-2.5 text-caption text-fg-muted print:hidden">
+          내부 미리보기 — 어드민에 로그인한 상태라 고객 열람으로 기록되지 않습니다. 아래 검토 확인·동의 버튼은 고객 응답으로 기록되니 누르지 마세요.
+        </p>
+      )}
       <article className="mx-auto max-w-[210mm] overflow-hidden rounded-2xl border border-black/8 bg-white shadow-sm print:max-w-none print:rounded-none print:border-0 print:shadow-none">
         <header className="border-b border-black/8 px-6 py-6 sm:px-10 sm:py-8">
           <div className="flex items-center justify-between gap-4">

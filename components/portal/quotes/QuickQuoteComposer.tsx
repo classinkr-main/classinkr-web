@@ -41,6 +41,7 @@ import type {
 import type {
   PartnerQuoteDetailsInput,
   PartnerQuoteLineItemInput,
+  QuoteDiscountInput,
 } from "@/lib/partners-types"
 import {
   STANDARD_QUOTE_TEMPLATES,
@@ -48,6 +49,7 @@ import {
   buildConfigurableStandardQuoteDetails,
   buildStandardQuoteTitle,
   calculateStandardQuoteTotals,
+  DEFAULT_QUOTE_DISCOUNT_LABEL,
   createInformationalQuoteLine,
   finalizeStandardQuoteDetails,
   formatStandardQuoteCurrency,
@@ -197,6 +199,7 @@ type QuoteFetchPayload = {
     structured_json: Record<string, unknown> | null
     valid_until: string | null
     subtotal: number
+    discount_amount?: number
     tax_amount: number
     total_amount: number
   } | null
@@ -293,7 +296,7 @@ const QUICK_ADD_RAIL_ITEMS: QuickAddRailItem[] = [
   {
     id: "bundle_86_t1_wall",
     label: '86" 번들',
-    description: '86" + T1 + 벽걸이',
+    description: '86" + T1 + 벽걸이 · 녹화 제외',
     price: getProductBySku("bundle-86-t1-wall")?.unit_price ?? 8_000_000,
     group: "package",
     sku: "bundle-86-t1-wall",
@@ -473,6 +476,11 @@ function isBoardTemplate(templateId: StandardQuoteTemplateId) {
   return templateId === "board_86" || templateId === "board_75"
 }
 
+/** 녹화 세트·86" 번들처럼 칠판을 이미 품은 장. 여기에 다른 패키지를 누르면 행으로 덧붙인다. */
+function isPackageSheet(sheet: ComposerSheet) {
+  return isRecordingStudioTemplate(sheet.templateId) || isBundleSheet(sheet)
+}
+
 function isBundleSheet(sheet: ComposerSheet) {
   return (
     sheet.templateId === "board_86" &&
@@ -556,6 +564,22 @@ function formatQuickAddPrice(value: number, unit?: string) {
 
 function renumberLineItems(items: PartnerQuoteLineItemInput[]) {
   return items.map((item, index) => ({ ...item, sortOrder: index + 1, lineNumber: index + 1 }))
+}
+
+type SavedQuoteDoc = {
+  dealId: string
+  document: { id: string; quote_number: string; status: string; updated_at: string }
+  versionNumber: number
+}
+
+type DiscountDraft = { mode: QuoteDiscountInput["mode"]; value: string; label: string }
+
+function discountDraftOf(discount?: QuoteDiscountInput): DiscountDraft {
+  return {
+    mode: discount?.mode ?? "amount",
+    value: discount ? String(discount.value) : "",
+    label: discount?.label ?? "",
+  }
 }
 
 function parseNumericInput(value: string) {
@@ -885,6 +909,8 @@ export default function QuickQuoteComposer({
   })
   // 정보 라인(금액 없는 note_only) 인라인 추가 폼 — 어느 장에 붙일지
   const [noteLineOpenFor, setNoteLineOpenFor] = useState<QuoteProductLine | null>(null)
+  // 견적 할인 입력 중인 값(빈 칸·0 도 그대로 둔다). 실제 할인은 sheet.quote.quoteDiscount 에 정리돼 들어간다.
+  const [discountDrafts, setDiscountDrafts] = useState<Partial<Record<QuoteProductLine, DiscountDraft>>>({})
   const [noteLineTitle, setNoteLineTitle] = useState("")
   const [noteLineText, setNoteLineText] = useState("")
   // ClassIn Business 충전형: 200만원 미만 예외 발행 확인 모달 상태
@@ -893,6 +919,9 @@ export default function QuickQuoteComposer({
   const [underMinConfirmed, setUnderMinConfirmed] = useState(false)
   const [pendingSubmitAction, setPendingSubmitAction] = useState<CreateAction | null>(null)
   const errorToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // '저장'은 작성 창을 닫지 않는다. 같은 장을 다시 저장·보내면 새 견적이 아니라 그 견적의 다음 버전으로 올린다
+  // (예전에는 저장 후 보내기를 누르면 같은 내용의 견적이 2건 생겼다). 창을 새로 열면 비운다.
+  const savedDocsRef = useRef<Partial<Record<QuoteProductLine, SavedQuoteDoc>>>({})
   // 프리필은 이번 open 세션에서 한 번만 적용한다(사용자가 이후 수동 변경하면 덮어쓰지 않음).
   const prefillAppliedRef = useRef(false)
   const hasPrefillTarget = Boolean(prefill?.dealId || prefill?.customerId)
@@ -1011,6 +1040,9 @@ export default function QuickQuoteComposer({
         validUntil: shared.validUntil,
         vatIncluded: shared.vatIncluded,
         vatPolicyLabel: undefined,
+        // 장을 짤 때 표준 공급자(퀴드러닝) 기준으로 채워진 값이라, 실제 공급자·담당자로 다시 만들게 비운다
+        // (SW 견적·담당자를 바꾼 HW 견적에 '배철웅/010-…'이 남던 문제).
+        footerContactText: undefined,
         generalNotes: shared.generalNotes,
         specialTerms: shared.specialTerms,
       },
@@ -1020,7 +1052,7 @@ export default function QuickQuoteComposer({
 
   const composedSheets = sheets.map((sheet) => {
     const quote = composeSheetQuote(sheet)
-    return { sheet, quote, totals: calculateStandardQuoteTotals(quote.lineItems, quote.vatIncluded ?? true) }
+    return { sheet, quote, totals: calculateStandardQuoteTotals(quote.lineItems, quote.vatIncluded ?? true, quote.quoteDiscount) }
   })
   const isSplit = sheets.length > 1
   const composerMode = quoteComposerMode(sheets[0]?.templateId ?? initialTemplateId)
@@ -1148,6 +1180,7 @@ export default function QuickQuoteComposer({
   useEffect(() => {
     if (!open) return
     prefillAppliedRef.current = false
+    savedDocsRef.current = {}
     setCustomerMode(hasPrefillTarget ? "existing" : "new")
     setSelectedCustomerId(prefill?.customerId ?? "")
     // 신규 고객 모드(딜/고객 타깃 없음)로 진입하면 customerName 프리필을 수신 칸에 1회 채운다.
@@ -1155,6 +1188,7 @@ export default function QuickQuoteComposer({
     setSelectedDealId(prefill?.dealId ?? "")
     setNewDealTitle("")
     const initialSheet = buildSheet(initialTemplateId)
+    setDiscountDrafts({})
     setSheets([initialSheet])
     setShared(buildSharedFields(today, initialSheet.quote.generalNotes ?? ""))
     setActivePick(null)
@@ -1282,6 +1316,25 @@ export default function QuickQuoteComposer({
     }
   }
 
+  /** 견적 할인 — 입력 칸 값은 draft 로 두고, 정리된 할인만 견적에 넣어 합계를 다시 계산한다. */
+  function updateSheetDiscount(line: QuoteProductLine, draft: DiscountDraft | null) {
+    setDiscountDrafts((current) => {
+      const next = { ...current }
+      if (draft) next[line] = draft
+      else delete next[line]
+      return next
+    })
+    const value = draft ? parseNumericInput(draft.value) : undefined
+    const discount: QuoteDiscountInput | undefined =
+      draft && value != null && value > 0
+        ? { mode: draft.mode, value, label: draft.label.trim() || undefined }
+        : undefined
+    updateSheet(line, (sheet) => ({
+      ...sheet,
+      quote: finalizeStandardQuoteDetails({ ...sheet.quote, quoteDiscount: discount }, sheet.templateId),
+    }))
+  }
+
   function setSheetOption(line: QuoteProductLine, groupId: string, value: string | boolean) {
     setActivePick(null)
     updateSheet(line, (sheet) =>
@@ -1370,6 +1423,23 @@ export default function QuickQuoteComposer({
       return
     }
 
+    // 패키지(녹화 세트·번들)를 단품 장(칠판·카메라)에 누르면 행을 덧붙이지 않고 장을 패키지로 바꾼다.
+    // 덧붙이면 시작 장의 칠판과 세트의 칠판이 겹쳐 두 대짜리 견적(630만 + 830만)이 된다.
+    // 작성자가 직접 넣은 행이 있거나 이미 패키지 장이면 행으로 덧붙여 세트를 섞을 수 있게 둔다.
+    const hasUserRows = (sheet.quote.lineItems ?? []).some((entry) => entry.isUserAdded === true)
+    if (item.group === "package" && item.presetId && !isPackageSheet(sheet) && !hasUserRows) {
+      const quantity = getMainQuantity(sheet)
+      const discount = sheet.quote.quoteDiscount
+      const replaced = rebuildSheet(buildSheet(item.templateId, item.presetId), { baseQuantity: quantity })
+      setSheets((current) =>
+        withSheet(current, {
+          ...replaced,
+          quote: finalizeStandardQuoteDetails({ ...replaced.quote, quoteDiscount: discount }, replaced.templateId),
+        })
+      )
+      return
+    }
+
     if ((item.id === "stand" || item.id === "wall_mount") && isBoardTemplate(sheet.templateId)) {
       setSheetOption(line, "mounting_option", item.id)
       return
@@ -1421,6 +1491,7 @@ export default function QuickQuoteComposer({
   }
 
   function applyCombo(combo: (typeof QUICK_COMBOS)[number]) {
+    setDiscountDrafts({})
     setSheets(combo.parts.reduce<ComposerSheet[]>(
       (list, part) => withSheet(list, buildSheet(part.templateId, part.presetId)),
       []
@@ -1431,6 +1502,7 @@ export default function QuickQuoteComposer({
   }
 
   function applyTemplate(templateId: StandardQuoteTemplateId) {
+    setDiscountDrafts({})
     setSheets([buildSheet(templateId)])
     setActivePick(`template:${templateId}`)
     setCloneSource(null)
@@ -1455,6 +1527,7 @@ export default function QuickQuoteComposer({
       },
       templateId
     )
+    setDiscountDrafts({})
     setSheets([{ line: sheetLineOf(templateId), templateId, optionSelections, quote }])
     const validityDays = daysBetween(details.issuedAt, details.validUntil)
     setShared((current) => ({
@@ -1490,6 +1563,10 @@ export default function QuickQuoteComposer({
         customerName: payload.deal?.customer_name ?? item.customerName,
         validUntil: payload.version?.valid_until,
       })
+      // 판매 중단 상품(구독형 AI Suite)은 복제로도 새 견적을 만들지 않는다.
+      if (isRetiredQuoteTemplate(inferStandardQuoteTemplateId(normalized))) {
+        throw new Error("판매가 중단된 상품(구독형 AI Suite) 견적은 복제할 수 없습니다.")
+      }
       loadQuoteDetails({ ...normalized, generatedFromVersionId: payload.version?.id })
       // 품목·단가·조건·메모는 그대로, 고객(수신·참조·거래)만 비운다.
       setCustomerMode("new")
@@ -1812,37 +1889,56 @@ export default function QuickQuoteComposer({
           sheet.templateId
         )
 
-        const response = await portalFetch(`${apiBase}/quotes`, {
-          method: "POST",
-          body: JSON.stringify({
-            deal_id: deal.id,
-            title: buildStandardQuoteTitle(preparedQuote),
-            subtotal: preparedQuote.subtotalAmount ?? 0,
-            discount_amount: preparedQuote.discountAmount ?? 0,
-            tax_amount: preparedQuote.vatAmount ?? 0,
-            total_amount: preparedQuote.grandTotalAmount ?? 0,
-            structured_json: {
-              quoteDetails: preparedQuote,
-            },
-            valid_until: preparedQuote.validUntil ?? null,
-          }),
-        })
+        const versionBody = {
+          title: buildStandardQuoteTitle(preparedQuote),
+          subtotal: preparedQuote.subtotalAmount ?? 0,
+          discount_amount: preparedQuote.discountAmount ?? 0,
+          tax_amount: preparedQuote.vatAmount ?? 0,
+          total_amount: preparedQuote.grandTotalAmount ?? 0,
+          structured_json: {
+            quoteDetails: preparedQuote,
+          },
+          valid_until: preparedQuote.validUntil ?? null,
+        }
+        const saved = savedDocsRef.current[sheet.line]
+        let payload: { document: SavedQuoteDoc["document"]; version: QuoteDocumentVersion }
 
-        const payload = (await response.json().catch(() => null)) as
-          | {
-              error?: string
-              document?: {
-                id: string
-                quote_number: string
-                status: string
-                updated_at: string
+        if (saved && saved.dealId === deal.id) {
+          // 이 창에서 이미 저장한 장 — 같은 견적의 다음 버전으로 올린다.
+          const response = await portalFetch(`${apiBase}/quotes/${saved.document.id}/versions`, {
+            method: "POST",
+            body: JSON.stringify({ ...versionBody, version_number: saved.versionNumber + 1 }),
+          })
+          const versionPayload = (await response.json().catch(() => null)) as
+            | { error?: string; version?: QuoteDocumentVersion }
+            | null
+          if (!response.ok || !versionPayload?.version) {
+            throw new Error(versionPayload?.error ?? "견적서 저장에 실패했습니다.")
+          }
+          payload = { document: saved.document, version: versionPayload.version }
+        } else {
+          const response = await portalFetch(`${apiBase}/quotes`, {
+            method: "POST",
+            body: JSON.stringify({ deal_id: deal.id, ...versionBody }),
+          })
+
+          const created = (await response.json().catch(() => null)) as
+            | {
+                error?: string
+                document?: SavedQuoteDoc["document"]
+                version?: QuoteDocumentVersion
               }
-              version?: QuoteDocumentVersion
-            }
-          | null
+            | null
 
-        if (!response.ok || !payload?.document || !payload?.version) {
-          throw new Error(payload?.error ?? "견적서 생성에 실패했습니다.")
+          if (!response.ok || !created?.document || !created?.version) {
+            throw new Error(created?.error ?? "견적서 생성에 실패했습니다.")
+          }
+          payload = { document: created.document, version: created.version }
+        }
+        savedDocsRef.current[sheet.line] = {
+          dealId: deal.id,
+          document: payload.document,
+          versionNumber: payload.version.version_number,
         }
 
         // 견적 문서가 하나라도 생겼으면 이후 실패에서는 딜/고객을 롤백하지 않는다.
@@ -2117,6 +2213,78 @@ export default function QuickQuoteComposer({
     )
   }
 
+  function renderDiscountEditor(sheet: ComposerSheet, totals: (typeof composedSheets)[number]["totals"]) {
+    const stored = sheet.quote.quoteDiscount
+    const typed = discountDrafts[sheet.line]
+    // 입력값이 있는데 견적에 할인이 없으면(장이 새로 짜인 경우) 남은 입력이다 — 버린다.
+    const typedIsStale = typed != null && !stored && (parseNumericInput(typed.value) ?? 0) > 0
+    const draft = (typedIsStale ? null : typed) ?? (stored ? discountDraftOf(stored) : null)
+    if (!draft) {
+      return (
+        <div className="px-1">
+          <button
+            type="button"
+            onClick={() => updateSheetDiscount(sheet.line, discountDraftOf())}
+            className="text-[12px] text-[#78736D] hover:text-[#084734]"
+          >
+            + 견적 할인 <span className="text-[#A39E98]">(금액 또는 % · 합계에서 차감)</span>
+          </button>
+        </div>
+      )
+    }
+    const update = (patch: Partial<DiscountDraft>) => updateSheetDiscount(sheet.line, { ...draft, ...patch })
+    return (
+      <div role="group" aria-label="견적 할인" className="flex flex-wrap items-center gap-x-2 gap-y-1.5 rounded-[8px] border border-[#E3E0DB] bg-white px-3 py-2 text-[12px]">
+        <span className="font-semibold text-[#111110]">견적 할인</span>
+        <input
+          aria-label="할인 이름"
+          value={draft.label}
+          maxLength={40}
+          placeholder={DEFAULT_QUOTE_DISCOUNT_LABEL}
+          onChange={(event) => update({ label: event.target.value })}
+          className="h-7 w-[120px] rounded-[6px] border border-[#E3E0DB] px-2 text-[12px] outline-none focus:border-[#084734]"
+        />
+        <input
+          aria-label={draft.mode === "rate" ? "할인율(%)" : "할인 금액(원)"}
+          inputMode="decimal"
+          value={draft.mode === "amount" && draft.value ? formatStandardQuoteCurrency(parseNumericInput(draft.value) ?? 0) : draft.value}
+          placeholder={draft.mode === "rate" ? "10" : "300,000"}
+          onChange={(event) => update({ value: event.target.value.replace(/[^\d.]/g, "") })}
+          className="h-7 w-[96px] rounded-[6px] border border-[#E3E0DB] px-2 text-right text-[12px] tabular-nums outline-none focus:border-[#084734]"
+        />
+        <div role="group" aria-label="할인 단위" className="flex">
+          {(["amount", "rate"] as const).map((mode) => (
+            <button
+              key={mode}
+              type="button"
+              aria-pressed={draft.mode === mode}
+              onClick={() => update({ mode, value: "" })}
+              className={`${OPTION_CHIP_CLASS} ${
+                draft.mode === mode
+                  ? "border-[#084734] font-semibold text-[#084734]"
+                  : "border-[#E3E0DB] text-[#615D59] hover:border-[#CFCBC5] hover:text-[#111110]"
+              }`}
+            >
+              {mode === "amount" ? "원" : "%"}
+            </button>
+          ))}
+        </div>
+        <span className="tabular-nums text-[#615D59]">
+          {totals.discountAmount > 0
+            ? `−${formatStandardQuoteCurrency(totals.discountAmount)}원 · 할인 후 공급가 ${formatStandardQuoteCurrency(totals.discountedSupplyAmount)}원`
+            : "금액을 넣으면 합계에서 뺍니다"}
+        </span>
+        <button
+          type="button"
+          onClick={() => updateSheetDiscount(sheet.line, null)}
+          className="ml-auto h-7 px-1.5 text-[12px] text-[#78736D] hover:text-[#111110]"
+        >
+          할인 삭제
+        </button>
+      </div>
+    )
+  }
+
   function renderSheet(entry: (typeof composedSheets)[number], index: number) {
     const { sheet, quote, totals } = entry
     const supplier = supplierFor(sheet)
@@ -2180,6 +2348,9 @@ export default function QuickQuoteComposer({
             </div>
           ))}
         </div>
+
+        {/* 견적 할인 — 견적서 합계에 소계·할인·공급가액 줄로 찍힌다. */}
+        {renderDiscountEditor(sheet, totals)}
 
         {/* ClassIn Business 충전형 — 충전 금액 직접 수정 & 빠른 금액 */}
         {sheet.templateId === "business_recharge" && (
@@ -2478,15 +2649,7 @@ export default function QuickQuoteComposer({
                 (VAT 별도)
               </p>
             )}
-            {isRecordingStudioTemplate(sheet.templateId) && sheet.optionSelections.payment_plan === "12_month" && (
-              <p className="text-right text-[11.5px] text-[#615D59]">
-                12개월 분할 시 월 약{" "}
-                <b className="tabular-nums text-[#111110]">
-                  {formatStandardQuoteCurrency(Math.round((totals.grandTotalAmount ?? 0) / 12))}원
-                </b>{" "}
-                (VAT 포함)
-              </p>
-            )}</>),
+            {/* 녹화 세트 12개월 할부 월 납입 안내는 견적서 렌더러가 직접 찍는다(고객 문서와 같은 문구). */}</>),
             notes: (<div className="grid gap-4">
             <QuoteNoteField
               id={`quote-general-notes-${sheet.line}`}

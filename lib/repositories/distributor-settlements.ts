@@ -8,6 +8,7 @@ import {
   deriveSettlementStatus,
   normalizeDistributorLines,
   normalizeDistributorPriceRules,
+  reviewReasonAfterSave,
   type DistributorEmailStatus,
   type DistributorIssueReason,
   type DistributorPriceRule,
@@ -271,13 +272,15 @@ export async function saveDistributorSettlementDraft(params: {
     customer_total_amount: params.customerTotalAmount,
     due_date: params.input.dueDate,
     notes: params.input.notes,
-    // 사람이 금액을 다시 저장했으면 자동 발행 보류 사유는 해소된 것으로 본다.
-    review_required_reason: null,
+    // 사람이 금액을 다시 저장했으면 자동 발행 보류 사유는 해소된 것으로 본다(설치 완료 검토 요청은 아래에서 남긴다).
+    review_required_reason: null as string | null,
     updated_by: params.actor,
   }
 
   const existing = await getDistributorSettlementByQuote(params.quoteDocumentId)
   if (!existing.available) throw new DistributorSettlementsNotReadyError()
+  // 설치 완료 검토 요청은 발행할 때까지 남긴다(검토 대기 목록에서 빠지지 않게). 다른 보류 사유는 해소된다.
+  columns.review_required_reason = reviewReasonAfterSave(existing.value?.reviewRequiredReason)
 
   if (!existing.value) {
     const { data, error } = await supabase
@@ -518,6 +521,37 @@ export async function listDistributorReceivables(
       return { available: false, warning: DISTRIBUTOR_SETTLEMENTS_NOT_READY_MESSAGE, value: null }
     }
     throw new Error(error.message ?? "총판 미수금을 불러오지 못했습니다.")
+  }
+  const rows = (data ?? []) as unknown as ReceivableJoinRow[]
+  return {
+    available: true,
+    warning: null,
+    value: rows.map((row) => ({
+      ...toDistributorSettlementRecord(row),
+      quoteNumber: row.quote_documents?.quote_number ?? null,
+      customerName: row.quote_documents?.deals?.customers?.name ?? null,
+      dealTitle: row.quote_documents?.deals?.title ?? null,
+    })),
+  }
+}
+
+/**
+ * 검토 대기 — 발행 전 정산 중 검토 사유가 남은 건(설치 완료 자동 준비·자동 발행 보류).
+ * 총판 미수금 탭 위쪽 목록이다. 발행·매출 잡기·취소하면 사유가 지워져 빠진다.
+ */
+export async function listDistributorSettlementReviews(): Promise<DistributorRead<DistributorReceivableRow[]>> {
+  const { data, error } = await createSupabaseAdminClient()
+    .from(SETTLEMENTS)
+    .select(`${SETTLEMENT_COLUMNS}, quote_documents(quote_number, deals(title, customers(name)))`)
+    .eq("status", "draft")
+    .not("review_required_reason", "is", null)
+    .order("updated_at", { ascending: false })
+    .limit(200)
+  if (error) {
+    if (isDistributorTableMissing(error)) {
+      return { available: false, warning: DISTRIBUTOR_SETTLEMENTS_NOT_READY_MESSAGE, value: null }
+    }
+    throw new Error(error.message ?? "총판 정산 검토 대기를 불러오지 못했습니다.")
   }
   const rows = (data ?? []) as unknown as ReceivableJoinRow[]
   return {

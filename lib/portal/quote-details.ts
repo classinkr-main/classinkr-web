@@ -6,6 +6,7 @@ import type {
 import {
   finalizeStandardQuoteDetails,
   inferStandardQuoteTemplateId,
+  normalizeQuoteDiscount,
 } from "@/lib/standard-quote-template"
 
 type QuoteDetailsFallback = {
@@ -171,6 +172,8 @@ export function normalizeQuoteDetailsFromStructuredJson(
       deliveryLocationNote: pickString(details, "deliveryLocationNote"),
       vatIncluded: pickBoolean(details, "vatIncluded", "vat_included") ?? true,
       vatPolicyLabel: pickString(details, "vatPolicyLabel", "vat_policy_label"),
+      // 견적 할인 입력 — finalize 가 할인 금액·부가세·총액을 다시 계산한다.
+      quoteDiscount: normalizeQuoteDiscount(details.quoteDiscount),
       optionSelections: isRecord(details.optionSelections)
         ? (details.optionSelections as Record<string, QuoteOptionSelectionValue | undefined>)
         : undefined,
