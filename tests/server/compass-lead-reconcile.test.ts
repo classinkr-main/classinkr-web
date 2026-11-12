@@ -84,7 +84,7 @@ describe("reconcileCompassLeadPush", () => {
     expect(query.since).toBe("2026-11-03T09:00:00.000Z")
     expect(query.until).toBe("2026-11-06T08:50:00.000Z")
     expect([...query.sources].sort()).toEqual(
-      ["checkout_request", "contact_page", "demo_modal", "newsletter", "showroom_booking"].sort()
+      ["chatbot", "checkout_request", "contact_page", "demo_modal", "newsletter", "showroom_booking"].sort()
     )
   })
 

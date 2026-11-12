@@ -227,7 +227,7 @@ export function buildLeadPriorityItem(
   // ─ 감도(유입 의도)·규모 — "지금 사줄 것 같은 곳"을 위로 올리는 축.
   if (INTAKE_LEAD_SOURCES.has(lead.source)) score += 14
   else if (lead.source === "demo_modal") score += 12
-  else if (lead.source === "contact_page") score += 6
+  else if (lead.source === "contact_page" || lead.source === "chatbot") score += 6
   if (lead.source === "meta_lead_ads") {
     score += 8
     // Meta 안에서도 광고 문구가 드러내는 의도로 한 번 더 가른다 — 리드 대다수가

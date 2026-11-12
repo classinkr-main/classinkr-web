@@ -28,6 +28,7 @@ export interface SegmentConfig {
     | "newsletter"
     | "manual"
     | "meta_lead_ads"
+    | "chatbot"
   >
   /** 리드 상태 필터 — leads 테이블에만 적용 */
   leadStatuses?: Array<"new" | "contacted" | "converted" | "closed">

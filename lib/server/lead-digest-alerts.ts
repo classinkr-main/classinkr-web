@@ -285,7 +285,8 @@ export async function sendLeadDigestAlert(
   const topSource = getTopSource(periodLeads)
   const title = period === "weekly" ? "주간 리드 리포트" : "월간 리드 리포트"
   const previousLabel = period === "weekly" ? "전주 대비" : "전월 대비"
-  const contactPageLeadCount = periodLeads.filter((lead) => lead.source === "contact_page").length
+  // 챗봇 상담(source=chatbot)도 같은 문의 폼으로 접수되므로 문의 내역에 함께 센다 — 홈페이지 합계와 내역 합이 맞게.
+  const contactPageLeadCount = periodLeads.filter((lead) => lead.source === "contact_page" || lead.source === "chatbot").length
   const demoModalLeadCount = periodLeads.filter((lead) => lead.source === "demo_modal").length
   const intakeLeadCount = periodLeads.filter((lead) =>
     INTAKE_LEAD_SOURCES.has(lead.source)
