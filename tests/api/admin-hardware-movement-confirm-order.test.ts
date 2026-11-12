@@ -64,6 +64,23 @@ describe("PATCH movements/[id] confirm-planned — 오더 딜 설치 단계", ()
     expect(logAdminAudit).toHaveBeenCalledWith(expect.objectContaining({ action: "hardware.movement.finalize" }))
   })
 
+  it.each([
+    [{ status: "review_requested" }, "review_requested"],
+    [{ status: "skipped", reason: "승인된 오더가 아닙니다." }, "skipped: 승인된 오더가 아닙니다."],
+    [null, "failed"],
+  ])("총판 정산 자동 준비 결과를 감사 기록에 남긴다(실패·건너뜀이 응답을 막지 않으므로) — %j", async (outcome, recorded) => {
+    requireVerifiedAdminContext.mockResolvedValue(FINALIZER)
+    confirmPlannedHardwareMovement.mockResolvedValue({ id: "mv_actual", raw: { sales_order_id: "so_1" }, lot_no: "C1" })
+    advanceDealForShippedMovementSafely.mockResolvedValue(true)
+    requestDistributorReviewOnInstallSafely.mockResolvedValue(outcome)
+
+    const response = await PATCH(confirmRequest(), { params: Promise.resolve({ id: "mv_1" }) })
+    expect(response.status).toBe(200)
+    expect(logAdminAudit).toHaveBeenCalledWith(
+      expect.objectContaining({ payload: expect.objectContaining({ distributorReview: recorded }) })
+    )
+  })
+
   it("요청자를 저장소로 넘기고, 저장소가 권한으로 막으면 403 — 딜 전진도 하지 않는다", async () => {
     const { MovementRuleError } = await import("@/lib/hardware/movement-rules")
     requireVerifiedAdminContext.mockResolvedValue({ ...FINALIZER, name: "운영 담당", userId: "admin-9", capabilities: [] })

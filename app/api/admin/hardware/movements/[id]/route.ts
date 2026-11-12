@@ -65,7 +65,7 @@ export async function PATCH(
       await advanceDealForShippedMovementSafely(movement)
       // 설치 완료 → 총판 정산을 자동으로 준비하고 검토를 요청한다(자동 발행·자동 매출 없음, 실패해도 확정은 그대로).
       // 방식(C/H)은 출고 로트 첫 글자로 본다 — 요청의 물류번호 배정을 함께 넘긴다(여러 로트일 수 있다).
-      await requestDistributorReviewOnInstallSafely({
+      const distributorReview = await requestDistributorReviewOnInstallSafely({
         ...movement,
         lotNos: lotAllocations?.map((allocation) => allocation.lotNo) ?? (lotNo ? [lotNo] : null),
       })
@@ -77,6 +77,12 @@ export async function PATCH(
         payload: {
           confirmQty: typeof body.confirmQty === "number" ? body.confirmQty : null,
           lotNo: movement.lot_no ?? null,
+          // 총판 정산 자동 준비 결과 — 실패·건너뜀이 응답을 막지 않으므로 감사 기록에라도 남겨 추적한다.
+          distributorReview: distributorReview
+            ? distributorReview.status === "skipped"
+              ? `skipped: ${distributorReview.reason ?? ""}`.slice(0, 200)
+              : distributorReview.status
+            : "failed",
         },
       })
       return NextResponse.json({ movement })

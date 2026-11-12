@@ -301,6 +301,30 @@ describe("설치 완료 → 총판 정산 자동 준비 · 검토 요청", () =>
     expect(emitNotificationEvent).not.toHaveBeenCalled()
   })
 
+  it("나중 출고의 로트 방식이 정산 방식과 어긋나면 그 로트 기준으로 한 번 더 검토를 요청한다", async () => {
+    // 첫 출고(C1)로 C방식 초안이 생긴 뒤 나머지가 H 로트로 나가면, 검토자가 H 재고분까지 C방식으로 발행하지 않게 알린다.
+    const { service, saveDistributorSettlementDraft, flagDistributorSettlementReview, emitNotificationEvent } = await loadService({
+      settlement: { fulfillmentMode: "C", reviewRequiredReason: `${INSTALL_REVIEW_PREFIX}(2026-11-10 출고 확정, 로트 C1) · …` },
+    })
+    const outcome = await service.requestDistributorReviewOnInstall({ ...MOVEMENT, lot_no: "H8", occurred_at: "2026-11-12T00:00:00.000Z" })
+    expect(outcome).toMatchObject({ status: "review_requested", created: false, mode: "C" })
+    expect(saveDistributorSettlementDraft).not.toHaveBeenCalled()
+    const reason = flagDistributorSettlementReview.mock.calls[0][1]
+    expect(reason).toContain("2026-11-12 출고 확정, 로트 H8")
+    expect(reason).toContain("로트는 H방식인데 정산은 C방식입니다")
+    expect(emitNotificationEvent).toHaveBeenCalledTimes(1)
+  })
+
+  it("어긋난 로트로 이미 다시 알렸으면 같은 로트의 다음 출고 확정은 넘어간다", async () => {
+    const { service, flagDistributorSettlementReview, emitNotificationEvent } = await loadService({
+      settlement: { fulfillmentMode: "C", reviewRequiredReason: `${INSTALL_REVIEW_PREFIX}(2026-11-12 출고 확정, 로트 H8) · 로트는 H방식인데 정산은 C방식입니다 — …` },
+    })
+    const outcome = await service.requestDistributorReviewOnInstall({ ...MOVEMENT, lot_no: "H8" })
+    expect(outcome.status).toBe("already_requested")
+    expect(flagDistributorSettlementReview).not.toHaveBeenCalled()
+    expect(emitNotificationEvent).not.toHaveBeenCalled()
+  })
+
   it.each(["issued", "partial", "paid", "completed", "cancelled"] as const)("이미 %s 인 정산은 건드리지 않는다", async (status) => {
     const { service, saveDistributorSettlementDraft, flagDistributorSettlementReview } = await loadService({ settlement: { status } })
     const outcome = await service.requestDistributorReviewOnInstall(MOVEMENT)

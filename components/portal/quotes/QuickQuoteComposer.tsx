@@ -1963,6 +1963,10 @@ export default function QuickQuoteComposer({
 
             share = sharePayload.share ?? null
             shareUrl = sharePayload.shareUrl
+            // 공유 링크가 나간 장은 잊는다 — '편집 계속' 뒤 저장이 이 견적의 다음 버전이 되면 고객 링크(이 버전)와
+            // 견적의 현재 버전이 갈라진다. 고객이 옛 링크로 동의하면 오더·총판 정산은 현재 버전 금액을 읽는다
+            // (sales-orders getResolvableQuoteVersion). 공유 뒤 고친 내용은 새 견적으로 저장해 다시 보낸다.
+            delete savedDocsRef.current[sheet.line]
             links.push({
               url: shareUrl,
               quoteNumber: payload.document.quote_number,

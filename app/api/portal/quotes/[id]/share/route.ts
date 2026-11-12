@@ -52,13 +52,14 @@ export async function POST(
       created_by: ctx.userId ?? null,
     });
 
-    // 동의(accepted)·닫힌 견적(계약 전환 archived·만료 expired)은 링크만 돌려주고 상태를 되돌리지 않는다 —
+    // 동의(accepted)·계약 전환(archived)된 견적은 링크만 돌려주고 상태를 되돌리지 않는다 —
     // "shared" 로 되돌리면 동의 기록 때문에 '계약 전환' 묶음에 다시 떠 계약서가 중복 생성된다.
+    // 만료(expired)는 되살린다 — 다시 보내는 것이 새 30일 링크로 다시 받겠다는 뜻이고, expired 로 두면
+    // 고객 동의가 막히고(accept 라우트) 목록에서도 '만료 · 보관'에 남는다.
     const keepStatus =
       ensured.document.status === "shared" ||
       ensured.document.status === "accepted" ||
-      ensured.document.status === "archived" ||
-      ensured.document.status === "expired";
+      ensured.document.status === "archived";
     const nextDocument = keepStatus
       ? ensured.document
       : await updateQuoteDocument(id, { status: "shared" });

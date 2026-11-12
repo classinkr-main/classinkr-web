@@ -34,6 +34,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 //    C방식은 사람이 '검토 완료' 버튼으로 총판 견적서를 발행하고, H방식은 같은 버튼으로 매출을 잡는다.
 //  - 이미 발행·완료·취소된 정산, 오더 없는 출고, 승인되지 않은 오더는 건드리지 않는다.
 //  - 같은 오더의 출고 확정이 여러 번(품목별·부분 출고) 와도 검토 요청·알림은 한 번만 한다.
+//    단, 나중 출고의 로트 방식이 정산 방식과 어긋나면 그 로트 기준으로 한 번 더 요청한다.
 
 const SYSTEM_ACTOR = "system:hardware-install"
 
@@ -119,15 +120,20 @@ export async function requestDistributorReviewOnInstall(movement: InstalledMovem
   if (existing && existing.status !== "draft") {
     return { status: "skipped", reason: `정산이 이미 '${existing.status}' 상태입니다.` }
   }
+  const lots = inferFulfillmentModeFromLots(movement.lotNos?.length ? movement.lotNos : [movement.lot_no])
+  const lotMode = lots.mode
   if (existing && isInstallReviewReason(existing.reviewRequiredReason)) {
-    return { status: "already_requested", settlement: existing }
+    // 같은 오더의 다음 출고 확정(품목별·부분 출고)은 다시 알리지 않는다. 단, 이번 로트의 방식이 정산 방식과
+    // 어긋나면(예: 첫 출고 C1 로 C방식 초안 → 나머지가 H 로트) 사유를 이 로트 기준으로 고쳐 한 번 더 알린다 —
+    // 그대로 두면 검토자가 H 재고분까지 C방식 총판 견적서로 발행할 수 있다. 같은 로트로 이미 알렸으면 넘어간다.
+    const lotConflict = lots.mixed || (lotMode != null && lotMode !== existing.fulfillmentMode)
+    const alreadyNoted = Boolean(lots.label) && Boolean(existing.reviewRequiredReason?.includes(`로트 ${lots.label}`))
+    if (!lotConflict || alreadyNoted) return { status: "already_requested", settlement: existing }
   }
 
   const context = await loadQuoteContext(quoteDocumentId)
   if (!context) return { status: "skipped", reason: "고객 견적 버전을 찾지 못했습니다." }
 
-  const lots = inferFulfillmentModeFromLots(movement.lotNos?.length ? movement.lotNos : [movement.lot_no])
-  const lotMode = lots.mode
   let settlement = existing
   let created = false
 
