@@ -35,6 +35,8 @@ order by 1 desc, 3 desc;
 
 -- 3) 같은 연락처로 문의폼/다른 경로에도 들어온 중복 여부 (마스킹)
 --    재분류 시 이중 집계·이중 연락을 피하려는 확인용.
+--    전화 비교는 저장소 공통 규칙 public.norm_phone_key(= TS normalizePhoneKey = Compass normPhone)로 한다 —
+--    숫자만 남기는 비교는 +82·0082 로 적힌 같은 번호를 다른 사람으로 센다.
 with chatbot_rows as (
   select id, phone, created_at
   from public.leads
@@ -51,6 +53,6 @@ select
 from chatbot_rows c
 left join public.leads o
   on o.id <> c.id
- and regexp_replace(o.phone, '\D', '', 'g') = regexp_replace(c.phone, '\D', '', 'g')
+ and public.norm_phone_key(o.phone) = public.norm_phone_key(c.phone)
 group by c.id, c.phone, c.created_at
 order by c.created_at desc;
