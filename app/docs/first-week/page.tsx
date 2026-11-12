@@ -125,7 +125,7 @@ export default async function FirstWeekGuidePage() {
                     {stage.day}
                   </p>
                   <h2 className="mt-3 break-keep text-xl font-bold sm:text-2xl">{stage.title}</h2>
-                  <ul className="mt-3 grid gap-1 text-[14px] leading-6 text-[#615D59]" aria-label={`${stage.day} 할 일`}>
+                  <ul className="mt-3 grid gap-1 text-caption text-fg-muted" aria-label={`${stage.day} 할 일`}>
                     {stage.steps.map((step) => (
                       <li key={step} className="flex gap-2">
                         <span aria-hidden className="text-fg-accent">·</span>
