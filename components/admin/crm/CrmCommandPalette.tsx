@@ -106,7 +106,7 @@ export const NAV_CMDS: Array<{ label: string; sub: string; href: string; icon: R
   { label: "참석자 입력", sub: "Capture", href: "/admin/crm/capture", icon: <ClipboardList className="h-4 w-4" />, keywords: "입력함 capture 참석자 명함 붙여넣기" },
   {
     label: "내 사이드바 편집",
-    sub: "탭 상시·기타·숨김 — 숨겨도 ⌘K로 열림",
+    sub: "탭 상시·접힘·숨김 — 숨겨도 ⌘K로 열림",
     href: "/admin/crm",
     icon: <PanelLeft className="h-4 w-4" />,
     keywords: "사이드바 편집 탭 숨기기 숨김 배치 sidebar nav hide",

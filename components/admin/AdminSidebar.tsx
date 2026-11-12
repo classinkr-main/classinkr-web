@@ -56,6 +56,7 @@ import { ADMIN_OPEN_NAV_EDITOR_EVENT, saveMyNavOverrides } from "./my-nav-prefer
 // active 판정은 nav-active.ts로 추출됨 — CS 콘솔
 // 가로 메뉴(cs/CsConsoleNav)와 같은 판정을 공유한다. 여기서는 클로저 인자만 채워 넘긴다.
 import { isNavActive as matchNavActive } from "./nav-active"
+import { isFoldGroupExpanded, toggleFoldGroup, type ClosedActiveFold } from "./sidebar-fold-state"
 import { formatNavCount, useAdminNavCounts, type AdminNavCount } from "./useAdminNavCounts"
 
 // 본인 사이드바 편집 드로어 — 열 때만 내려받는다(사이드바는 모든 어드민 화면에 실린다).
@@ -459,6 +460,14 @@ function writeOpenFoldCategories(categories: ReadonlySet<AdminNavCategory>) {
   }
 }
 
+function writeSidebarCollapsed(collapsed: boolean) {
+  try {
+    localStorage.setItem("admin_sidebar_collapsed", String(collapsed))
+  } catch {
+    // 저장소가 막혀 있으면 다음 방문에 접힘을 기억하지 못할 뿐이다 — 지금 화면의 펼침·접힘은 그대로 진행한다.
+  }
+}
+
 function readOpenFoldCategories(): Set<AdminNavCategory> {
   try {
     const raw = localStorage.getItem(FOLD_OPEN_STORAGE_KEY)
@@ -527,6 +536,8 @@ function AdminSidebarContent({ role, name, email, navOverrides, onNavOverridesCh
     if (restored.size === 0) return
     queueMicrotask(() => setOpenFoldCategories(restored))
   }, [])
+  // 현재 화면이 든 묶음(강제 열림)을 이 화면에서 접은 기록 — 규칙은 sidebar-fold-state.ts.
+  const [closedActiveFold, setClosedActiveFold] = useState<ClosedActiveFold | null>(null)
   // "숨긴 탭 N · 보기" 묶음 펼침 — 저장하지 않는다(숨긴 탭은 드물게 여는 곳이라 매번 접혀 시작).
   // 현재 경로가 숨긴 항목이면 아래 hiddenHasActiveItem 이 강제로 펼친다.
   const [hiddenOpen, setHiddenOpen] = useState(false)
@@ -568,18 +579,8 @@ function AdminSidebarContent({ role, name, email, navOverrides, onNavOverridesCh
 
   const toggle = () => {
     setCollapsed((prev) => {
-      localStorage.setItem("admin_sidebar_collapsed", String(!prev))
+      writeSidebarCollapsed(!prev)
       return !prev
-    })
-  }
-
-  const toggleFoldCategory = (category: AdminNavCategory) => {
-    setOpenFoldCategories((prev) => {
-      const next = new Set(prev)
-      if (next.has(category)) next.delete(category)
-      else next.add(category)
-      writeOpenFoldCategories(next)
-      return next
     })
   }
 
@@ -587,7 +588,8 @@ function AdminSidebarContent({ role, name, email, navOverrides, onNavOverridesCh
   // 사이드바부터 펼치고 접힘 묶음을 전부 연다(2026-11-09 전 "기타" 버튼과 같은 동작, 닫는 방향은 없다).
   const expandFoldsFromRail = (categories: readonly AdminNavCategory[]) => {
     setCollapsed(false)
-    localStorage.setItem("admin_sidebar_collapsed", "false")
+    writeSidebarCollapsed(false)
+    setClosedActiveFold(null)
     setOpenFoldCategories((prev) => {
       const next = new Set([...prev, ...categories])
       writeOpenFoldCategories(next)
@@ -599,7 +601,7 @@ function AdminSidebarContent({ role, name, email, navOverrides, onNavOverridesCh
     // 접힘 묶음과 같은 규칙 — 접힌 사이드바에서는 먼저 사이드바를 펼치고 묶음도 함께 연다.
     if (effectiveCollapsed) {
       setCollapsed(false)
-      localStorage.setItem("admin_sidebar_collapsed", "false")
+      writeSidebarCollapsed(false)
       setHiddenOpen(true)
       return
     }
@@ -651,8 +653,16 @@ function AdminSidebarContent({ role, name, email, navOverrides, onNavOverridesCh
   // 그렇지 않으면 active 항목이 DOM에 없어 데스크톱 사이드바에서 현재 위치를 알 수 없다.
   const activeFoldedCategory =
     navAccess.folded.find((group) => group.items.some((item) => isNavActive(item.href)))?.category ?? null
+  // 강제 열림 묶음을 접으면 이 화면에서만 접고, 저장 목록은 마지막으로 누른 방향을 따른다(sidebar-fold-state.ts).
+  const foldState = { open: openFoldCategories, closedActive: closedActiveFold }
   const isFoldExpanded = (category: AdminNavCategory) =>
-    openFoldCategories.has(category) || category === activeFoldedCategory
+    isFoldGroupExpanded(foldState, category, activeFoldedCategory, pathname)
+  const toggleFoldCategory = (category: AdminNavCategory) => {
+    const next = toggleFoldGroup(foldState, category, activeFoldedCategory, pathname)
+    setOpenFoldCategories(next.open)
+    setClosedActiveFold(next.closedActive)
+    writeOpenFoldCategories(next.open)
+  }
   // 숨긴 탭도 같은 규칙 — 주소·⌘K 로 숨긴 화면에 들어왔으면 그 묶음을 펼쳐 현재 위치를 보인다.
   const hiddenHasActiveItem = navAccess.hidden.some((item) => isNavActive(item.href))
   const hiddenExpanded = hiddenOpen || hiddenHasActiveItem

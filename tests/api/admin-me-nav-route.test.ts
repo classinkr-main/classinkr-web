@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-// PATCH /api/admin/me/nav — 본인 사이드바 편집(상시·기타·숨김) 저장 계약.
+// PATCH /api/admin/me/nav — 본인 사이드바 편집(상시·접힘·숨김) 저장 계약.
 //
 // 고정하는 것:
 //  1. 가드는 전 관리자 역할을 명시한다(unsafe 기본값 STAFF_ADMIN 이면 EDITOR·VIEWER 가 못 쓴다).

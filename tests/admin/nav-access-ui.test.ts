@@ -26,7 +26,9 @@ describe("AdminSidebar — 상시/접힘 2단 구조", () => {
     expect(sidebar).toContain("const renderFoldedGroups = (")
     expect(sidebar).toContain('renderFoldedGroups("desktop")')
     expect(sidebar).toContain('renderFoldedGroups("mobile")')
-    expect(sidebar).toContain("openFoldCategories.has(category) || category === activeFoldedCategory")
+    // 펼침 규칙(저장 ∪ 강제 열림, 강제 열림을 접으면 이 화면에서만)은 sidebar-fold-state.ts — 동작은 sidebar-fold-state.test.ts.
+    expect(sidebar).toContain("isFoldGroupExpanded(foldState, category, activeFoldedCategory, pathname)")
+    expect(sidebar).toContain("toggleFoldGroup(foldState, category, activeFoldedCategory, pathname)")
   })
 
   it("greys out work-in-progress tabs", () => {
