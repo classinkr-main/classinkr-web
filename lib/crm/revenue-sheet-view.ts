@@ -2,7 +2,12 @@
 // 필터 URL 보존, 장부 입력 딥링크(라운드 4 P2-10), CSV 행 조립, 동기화 기준 시각 판정.
 // 화면(app/admin/crm/deals/rev-sheet/page.tsx)은 이 함수들만 부르고, 테스트는 렌더 없이 이 파일을 검증한다.
 
-import type { AdminCrmRevenueSheetRow, RevenueSheetLinkStatus } from "@/lib/admin-crm-revenue-sheet-types"
+import { isInactiveSheetStatus } from "@/lib/crm-source-linking"
+import type {
+  AdminCrmRevenueSheetRow,
+  AdminCrmRevenueSheetSummary,
+  RevenueSheetLinkStatus,
+} from "@/lib/admin-crm-revenue-sheet-types"
 import type { DelimitedCell } from "@/lib/export/delimited"
 
 export type RevenueSheetStatusFilter = "all" | "review" | "confirmed" | "candidate" | "stale" | "rejected" | "unmatched"
@@ -158,4 +163,57 @@ export function isRevenueSheetSyncStale(latestSyncedAt: string | null | undefine
   const synced = Date.parse(latestSyncedAt)
   if (!Number.isFinite(synced)) return true
   return now - synced > REVENUE_SHEET_STALE_AFTER_MS
+}
+
+// ── P2 행 확정·제외 뒤 요약 다시 세기 ────────────────────────────────────────────
+// 서버 요약(lib/admin-crm-revenue-sheet.ts)은 활성(취소·해지 등 아님)·실명(임시명 아님) 행만
+// 매칭 분모로 센다. 행에서 바로 확정·제외하면 전체를 다시 받지 않고(서버 60초 캐시가 아직 옛 값을
+// 줄 수 있다) 바뀐 행의 차이만 요약에 더한다 — 실패 복원도 같은 함수로 역방향이 된다.
+
+type LinkSummaryFields = Pick<
+  AdminCrmRevenueSheetSummary,
+  "linkedRowCount" | "candidateRowCount" | "unmatchedRowCount" | "linkedAmount" | "unmatchedAmount"
+>
+
+function isMatchableRevenueSheetRow(row: AdminCrmRevenueSheetRow) {
+  return !row.placeholder && !isInactiveSheetStatus(row.status)
+}
+
+function linkContribution(row: AdminCrmRevenueSheetRow): LinkSummaryFields {
+  if (!isMatchableRevenueSheetRow(row)) {
+    return { linkedRowCount: 0, candidateRowCount: 0, unmatchedRowCount: 0, linkedAmount: 0, unmatchedAmount: 0 }
+  }
+  const linked = row.linkStatus === "confirmed"
+  const candidate = row.linkStatus === "candidate" || row.linkStatus === "stale"
+  return {
+    linkedRowCount: linked ? 1 : 0,
+    candidateRowCount: candidate ? 1 : 0,
+    unmatchedRowCount: linked ? 0 : 1,
+    linkedAmount: linked ? row.scheduledAmount : 0,
+    unmatchedAmount: linked ? 0 : row.scheduledAmount,
+  }
+}
+
+/** before→after 행 배열에서 링크 상태가 바뀐 행만 골라 요약 링크 수치를 고친다(id 기준). */
+export function recountRevenueSheetLinkSummary<S extends LinkSummaryFields>(
+  summary: S,
+  before: readonly AdminCrmRevenueSheetRow[],
+  after: readonly AdminCrmRevenueSheetRow[]
+): S {
+  const previousById = new Map(before.map((row) => [row.id, row]))
+  const next = { ...summary }
+  const keys = ["linkedRowCount", "candidateRowCount", "unmatchedRowCount", "linkedAmount", "unmatchedAmount"] as const
+  let changed = false
+  for (const row of after) {
+    const previous = previousById.get(row.id)
+    if (!previous || previous.linkStatus === row.linkStatus) continue
+    const from = linkContribution(previous)
+    const to = linkContribution(row)
+    for (const key of keys) {
+      if (from[key] === to[key]) continue
+      next[key] = next[key] - from[key] + to[key]
+      changed = true
+    }
+  }
+  return changed ? next : summary
 }
