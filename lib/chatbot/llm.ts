@@ -44,7 +44,7 @@ const GEMINI_TIMEOUT_MS = 2500
 const GEMINI_STREAM_TIMEOUT_MS = 8000
 // 임베딩은 보통 150~400ms — 생성용 4.5s를 그대로 쓰면 느린 호출이 요청 예산을 잡아먹는다.
 const EMBED_TIMEOUT_MS = 2000
-const MAX_ANSWER_LENGTH = 520
+export const MAX_ANSWER_LENGTH = 520
 
 // 운영 docs_ai_chunks.embedding 은 현재 vector(1536). 768 전환 migration을 적용한 환경은
 // GEMINI_EMBED_DIM=768로 맞춘다. 코사인 유사도는 스케일 불변이라 정규화는 생략한다.
@@ -81,7 +81,7 @@ function getGeminiApiKey() {
   return process.env.GEMINI_API_KEY?.trim() || null
 }
 
-const BASE_SYSTEM_INSTRUCTION = [
+export const BASE_SYSTEM_INSTRUCTION = [
   "너는 Classin(학원·교육기관용 수업/운영 솔루션)의 친근하고 따뜻한 온라인 상담원이야. 딱딱한 안내봇이 아니라 곁에서 도와주는 사람처럼 말해.",
   `제품 정체성은 '${CLASSIN_POSITIONING.categoryName}'이다.`,
   getClassinPositioningContext(),
@@ -156,7 +156,7 @@ interface InferredGenerateArgs {
   history?: { role: "user" | "model"; parts: { text: string }[] }[]
 }
 
-interface FinalGenerateArgs {
+export interface FinalGenerateArgs {
   /** PII 가 제거된 질문 텍스트 */
   question: string
   category: string
@@ -387,18 +387,18 @@ export async function generateGeminiAnswer({
   })
 }
 
-export async function generateGeminiFinalAnswer({
+/**
+ * 최종 답변 프롬프트(사용자 턴 본문). Gemini·Claude 제공자가 같은 본문을 쓴다 —
+ * 분류·의도별 요구사항과 안전 초안 제약이 제공자마다 갈라지지 않게.
+ */
+export function buildFinalAnswerPrompt({
   question,
   category,
   intent,
   answerMode,
   draftAnswer,
   sources = [],
-  tier = "basic",
-  history,
-}: FinalGenerateArgs): Promise<string | null> {
-  if (!getGeminiApiKey() || !question.trim()) return null
-
+}: Pick<FinalGenerateArgs, "question" | "category" | "intent" | "answerMode" | "draftAnswer" | "sources">): string {
   const context = formatInternalContext(sources)
   const prompt = [
     `분류: ${category}`,
@@ -422,6 +422,22 @@ export async function generateGeminiFinalAnswer({
       ? "요구사항: 온보딩/데모 및 체험 신청(onboarding)에 대해, 사용자가 도입 사례/레퍼런스/후기/사용 학원을 물어보는 경우 국내 구체적인 학원 사례(청주 국어학원, 올***영어학원, 부산 과학학원, 대치 세** 학원 등) 및 글로벌 대학교/학습 사례를 언급하며 수업 OS로서 가져다준 변화를 짚고 상담/쇼룸을 권유해라. 만약 무료 체험이나 데모 신청을 원할 때는 바로 신청폼을 요구하지 말고 '맞춤 혜택 구성을 위한 간단한 규모/과목 상담 선행'을 안내한 뒤 질문하고, 신청 단계에서는 상담·대리 신청이 필요하면 대화에서 이름·연락처를 받지 말고, 답변 아래 [도입 상담 남기기] 버튼(문의 폼)이나 채널톡으로 남겨 달라고 안내해라. 접수 여부를 대신 약속하지 말고, 특수 토큰·태그·JSON을 답변 본문에 쓰지 마라."
       : "최종 고객 답변만 작성해줘. 문서, 출처, URL, 이미지 경로는 쓰지 마. 안전 초안의 확인 필요/미지원/상담 확인 문구를 가능/지원/기본 제공으로 완화하지 마.",
   ].join("\n\n")
+  return prompt
+}
+
+export async function generateGeminiFinalAnswer({
+  question,
+  category,
+  intent,
+  answerMode,
+  draftAnswer,
+  sources = [],
+  tier = "basic",
+  history,
+}: FinalGenerateArgs): Promise<string | null> {
+  if (!getGeminiApiKey() || !question.trim()) return null
+
+  const prompt = buildFinalAnswerPrompt({ question, category, intent, answerMode, draftAnswer, sources })
 
   const userContent = { role: "user" as const, parts: [{ text: prompt }] }
   const contents = history && history.length > 0
@@ -543,29 +559,7 @@ export async function* streamGeminiFinalAnswer({
 }: FinalGenerateArgs): AsyncGenerator<string> {
   if (!getGeminiApiKey() || !question.trim()) return
 
-  const context = formatInternalContext(sources)
-  const prompt = [
-    `분류: ${category}`,
-    `현재 응답 모드: ${answerMode}`,
-    context ? `내부 검증 정보(사용자에게 직접 언급 금지):\n${context}` : "내부 검증 정보: 없음",
-    `안전 초안(제약 조건, 필요하면 표현만 다듬기):\n${sanitizeInternalContextText(draftAnswer)}`,
-    `고객 질문: ${question}`,
-    category === "concern"
-      ? "요구사항: 고객의 막연한 고민(concern)에 대해 E.Q.E(공감 -> 유도 질문 1개 -> 격려와 희망) 프레임워크를 적용하여 따뜻하게 응대해줘. 스펙 위주 설명이나 강요하는 느낌을 주지 마."
-      : category === "event"
-      ? "요구사항: 고객의 세미나/행사(event) 질문에 대해 RAG 정보에서 일정(시작/종료), 대상, 장소(위치)를 명확히 발췌해 안내하고, 홈페이지 /events 경로에서 신청하도록 유도해라. 사용자가 직접 신청하는 데 헤매거나 대리 신청을 요구하면 상담·대리 신청이 필요하면 대화에서 이름·연락처를 받지 말고, 답변 아래 [도입 상담 남기기] 버튼(문의 폼)이나 채널톡으로 남겨 달라고 안내해라. 접수 여부를 대신 약속하지 말고, 특수 토큰·태그·JSON을 답변 본문에 쓰지 마라."
-      : intent === "tutor_pricing_recommend"
-      ? "요구사항: 개인강사/과외 요금제 추천(tutor_pricing_recommend)은 공식 안내 기준으로 1인 강사에게 프로(Pro) 요금제를, 강사가 2명 이상인 학원에 비즈니스 요금제를 추천해라. 실제 금액·할인·결제 방식은 단정하지 말고 2주 무료 체험과 도입 상담으로 안내해라. 질문이 단답형이나 거칠더라도 친절하게 답하고, 학생 수나 수업 방식(대면·온라인)처럼 추천을 좁힐 정보 하나를 마지막에 물어라."
-      : intent === "feature_limit_consulting"
-      ? "요구사항: 클래스인이 제공하지 못하는 기능(학원비 결제·수납·정산 기능, 오프라인 지문인식/출석 카드 장비 등)에 대한 질문이 들어왔을 때, 일체 지원하지 않음을 '~~는 지원하지 않습니다'의 어조로 솔직하고 단호하게 선을 그어 답해라. API 연동으로 가능할 것처럼 우회 설명하지 말고 담백하게 대답해라."
-      : intent === "zoom_vs_classin"
-      ? "요구사항: 줌과의 비교(zoom_vs_classin)에 대해 수업 전(화면공유 준비 및 화면설정 불필요), 수업 중(학생이 판서에 참여하는 적극적 상호작용), 수업 후(수업 즉시 생성되는 플레이백 복습 비디오)의 3대 운영 흐름 메리트를 E.Q.E 프레임워크로 감성적이면서도 논리적으로 설명해라."
-      : intent === "parent_feedback_consulting"
-      ? "요구사항: 학부모 피드백 리소스(parent_feedback_consulting)에 대해 고객이 단답형이나 매우 러프하게 툭 던져도 공감과 대화를 보완해 수렴해라. 강사가 수기로 작성하는 리포트 대신 클래스인이 자동 수집해 제공하는 EDB 참여도, AI 스피킹 점수 등의 정량적 리포트가 학부모 설득 및 원생 유지율(Retention) 제고에 어떻게 기여하며 강사 업무 시간을 극단적으로 아끼는지 E.Q.E 구조로 정중하게 답해라."
-      : category === "onboarding" || intent === "onboarding"
-      ? "요구사항: 온보딩/데모 및 체험 신청(onboarding)에 대해, 사용자가 도입 사례/레퍼런스/후기/사용 학원을 물어보는 경우 국내 구체적인 학원 사례(청주 국어학원, 올***영어학원, 부산 과학학원, 대치 세** 학원 등) 및 글로벌 대학교/학습 사례를 언급하며 수업 OS로서 가져다준 변화를 짚고 상담/쇼룸을 권유해라. 만약 무료 체험이나 데모 신청을 원할 때는 바로 신청폼을 요구하지 말고 '맞춤 혜택 구성을 위한 간단한 규모/과목 상담 선행'을 안내한 뒤 질문하고, 신청 단계에서는 상담·대리 신청이 필요하면 대화에서 이름·연락처를 받지 말고, 답변 아래 [도입 상담 남기기] 버튼(문의 폼)이나 채널톡으로 남겨 달라고 안내해라. 접수 여부를 대신 약속하지 말고, 특수 토큰·태그·JSON을 답변 본문에 쓰지 마라."
-      : "최종 고객 답변만 작성해줘. 문서, 출처, URL, 이미지 경로는 쓰지 마. 안전 초안의 확인 필요/미지원/상담 확인 문구를 가능/지원/기본 제공으로 완화하지 마.",
-  ].join("\n\n")
+  const prompt = buildFinalAnswerPrompt({ question, category, intent, answerMode, draftAnswer, sources })
 
   const userContent = { role: "user" as const, parts: [{ text: prompt }] }
   const contents = history && history.length > 0 ? [...history, userContent] : [userContent]
