@@ -352,22 +352,22 @@ const GUIDE_INTENT_COPY: Array<{
   {
     categoryId: "start",
     title: "도입을 검토하고 있어요",
-    description: "도입 전에 묻는 질문, 설치와 회원 가입",
+    description: "우리 학원에 맞는지, 무엇이 필요한지 먼저 살펴봅니다. 설치와 회원 가입도 여기서 시작해요.",
   },
   {
     categoryId: "admin",
     title: "학원을 운영하고 있어요",
-    description: "기관 설정, 교사·학생 추가, 코스 개설, 통계",
+    description: "기관 설정, 교사·학생 추가, 코스 개설 같은 운영 설정을 차근차근 정리합니다.",
   },
   {
     categoryId: "teacher",
     title: "수업을 맡고 있어요",
-    description: "코스 만들기, 교실 설정, 숙제·시험 내기",
+    description: "수업 전 준비부터 판서, 녹화, 과제까지 이어서 봅니다.",
   },
   {
     categoryId: "student",
     title: "수업을 듣고 있어요",
-    description: "코스 참여, 수업 다시보기, 과제 제출",
+    description: "참여하는 방법과 수업 중 알아둘 점, 다시보기와 과제 제출까지 알려드립니다.",
   },
 ]
 
