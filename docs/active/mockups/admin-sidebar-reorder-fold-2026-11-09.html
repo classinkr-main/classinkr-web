@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>어드민 사이드바 재배치 시안</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&display=swap">
+<style>
+/* 레이아웃: 위 = 지금 사이드바와 진단, 가운데 = 실물 폭(240px) 사이드바 시안 4장을 나란히, 아래 = 비교표·공통 바닥·결정.
+   색은 어드민 토큰(DESIGN.md)만 쓴다. 실제 어드민이 라이트 단일 테마라 목업도 라이트 하나로 고정한다. */
+:root{
+  --bg:#FAFAF8;
+  --surface:#FFFFFF;
+  --ink:#111110;
+  --ink2:#31302E;
+  --sub:#615D59;
+  --line:#E8E8E4;
+  --line2:#F0F0EC;
+  --hover:#F5F5F2;
+  --ok-bg:#ECFDF5;
+  --ok:#084734;
+  --ok-chip:#D1FAE5;
+  --warn-bg:#FBF1E0;
+  --warn-line:#ECD29C;
+  --warn:#7A520F;
+  --danger:#8F2C2C;
+  --muted-60:rgba(26,26,26,.6);
+  --muted-45:rgba(26,26,26,.45);
+  --muted-40:rgba(26,26,26,.4);
+  --muted-35:rgba(26,26,26,.35);
+  --muted-30:rgba(26,26,26,.3);
+  --font:"Pretendard Variable",Pretendard,"Noto Sans KR",-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
+  color-scheme:light;
+}
+body{margin:0;background:var(--bg);color:var(--ink)}
+.cv{font-family:var(--font);font-size:13px;line-height:1.55;-webkit-font-smoothing:antialiased;box-sizing:border-box;max-width:1320px;margin:0 auto;padding-block:28px 72px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:36px}
+.cv *{box-sizing:border-box}
+.cv h1,.cv h2,.cv h3,.cv p,.cv ul,.cv ol{margin:0}
+.cv ul,.cv ol{padding-left:18px}
+.num{font-variant-numeric:tabular-nums}
+.sub{color:var(--sub)}
+
+/* 머리 */
+.head{display:flex;flex-direction:column;gap:10px}
+.eyebrow{font-size:11px;font-weight:600;letter-spacing:.08em;color:var(--sub)}
+.head h1{font-size:26px;font-weight:700;letter-spacing:-.02em;line-height:1.25;text-wrap:balance}
+.lede{max-width:70ch;color:var(--ink2);font-size:14px}
+.rec{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:baseline;max-width:860px;background:var(--ok-bg);border:1px solid var(--ok-chip);border-radius:10px;padding:10px 14px;color:var(--ok);font-size:13px}
+.rec b{font-weight:700}
+.sample{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:var(--warn);border:1px solid var(--warn-line);border-radius:6px;padding:2px 8px;background:var(--surface)}
+
+/* 지금 보고 있는 화면 선택 */
+.ctrl{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;background:var(--bg);padding-block:10px;border-bottom:1px solid var(--line)}
+.ctrl .lbl{font-size:12px;font-weight:600;color:var(--sub)}
+.seg{display:flex;flex-wrap:wrap;gap:4px}
+.seg button{font:inherit;font-size:12px;font-weight:600;color:var(--ink2);background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:4px 11px;cursor:pointer}
+.seg button:hover{border-color:#C8C8C4}
+.seg button[aria-pressed="true"]{background:var(--ok-bg);border-color:var(--ok-chip);color:var(--ok)}
+.reset{font:inherit;font-size:12px;font-weight:600;color:var(--sub);background:none;border:0;padding:4px 6px;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+.ctrl .hint{font-size:12px;color:var(--sub);flex-basis:100%}
+.cv button:focus-visible{outline:2px solid var(--ok);outline-offset:2px}
+
+/* 구역 */
+.sec{display:flex;flex-direction:column;gap:14px}
+.sec > h2{font-size:18px;font-weight:700;letter-spacing:-.01em}
+.sec > .desc{max-width:72ch;color:var(--ink2)}
+
+/* 지금 */
+.now{display:flex;flex-wrap:wrap;gap:20px;align-items:flex-start;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px}
+.now .diag{flex:1 1 360px;min-width:0;display:flex;flex-direction:column;gap:10px}
+.diag ol{display:flex;flex-direction:column;gap:8px;max-width:64ch}
+.diag li::marker{color:var(--sub);font-weight:600}
+.diag b{font-weight:700}
+
+/* 시안 카드 */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(272px,1fr));gap:16px;align-items:start}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:14px;min-width:0}
+.card.pick{border-color:var(--ok)}
+.card-h{display:flex;gap:10px;align-items:flex-start}
+.ltr{flex:0 0 28px;height:28px;border-radius:8px;background:var(--ink);color:var(--surface);display:grid;place-items:center;font-weight:700;font-size:14px}
+.card.pick .ltr{background:var(--ok)}
+.card-h h3{font-size:15px;font-weight:700;line-height:1.35}
+.card-h .chip{display:inline-block;margin-left:6px;vertical-align:2px;font-size:10px;font-weight:700;color:var(--ok);background:var(--ok-bg);border:1px solid var(--ok-chip);border-radius:999px;padding:1px 7px}
+.thesis{color:var(--ink2);font-size:12.5px;margin-top:2px}
+.stage{background:var(--bg);border-radius:10px;padding:12px;display:flex;justify-content:center}
+.met{display:flex;flex-wrap:wrap;gap:4px 6px}
+.met span{font-size:11px;font-weight:600;color:var(--ink2);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:1px 7px}
+.pc{display:flex;flex-direction:column;gap:8px;font-size:12.5px}
+.pc h4{margin:0;font-size:11px;font-weight:700;letter-spacing:.04em;color:var(--sub)}
+.pc ul{display:flex;flex-direction:column;gap:3px;color:var(--ink2)}
+.size{font-size:12px;color:var(--ink2);border-top:1px solid var(--line2);padding-top:10px}
+.size b{display:inline-block;min-width:22px;text-align:center;font-size:11px;font-weight:700;border-radius:6px;padding:1px 6px;margin-right:6px;background:var(--bg);border:1px solid var(--line)}
+.size code{font-size:11.5px}
+
+/* 사이드바 목업 — AdminSidebar.tsx 의 클래스 값을 옮긴 것 */
+.sb{width:240px;max-width:100%;background:var(--surface);border:1px solid var(--line);border-radius:12px;display:flex;flex-direction:column;overflow:hidden;box-shadow:rgba(0,0,0,.04) 0 4px 18px,rgba(0,0,0,.027) 0 2px 7.8px}
+.sb-top{display:flex;flex-direction:column;gap:10px;padding:14px 16px 12px;border-bottom:1px solid var(--line)}
+.sb-brand{display:flex;align-items:center;gap:8px;font-weight:700;font-size:13px}
+.logo{width:22px;height:22px;border-radius:6px;background:var(--ok);color:var(--surface);display:grid;place-items:center;font-size:11px;font-weight:700}
+.sb-search{display:flex;align-items:center;gap:8px;border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:7px 10px;color:var(--muted-45);font-size:12px}
+.sb-search kbd{margin-left:auto;background:var(--surface);border-radius:4px;padding:1px 6px;font-size:10px;font-family:inherit;color:var(--muted-35);box-shadow:0 1px 2px rgba(0,0,0,.06)}
+.sb-nav{padding:14px 12px 10px;display:flex;flex-direction:column}
+.grp{display:flex;flex-direction:column;gap:2px}
+.grp + .grp{margin-top:12px}
+.grp.tight + .grp.tight{margin-top:8px}
+.grp.flat + .grp.flat{margin-top:2px}
+.hd{padding:0 12px 4px;font-size:10px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--muted-35)}
+.it,.tg,.hid{appearance:none;border:0;background:none;font:inherit;text-align:left;width:100%;cursor:pointer}
+.it{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;font-size:13px;font-weight:500;color:var(--muted-60)}
+.it:hover{background:var(--hover);color:var(--ink)}
+.it .ic{display:inline-flex;color:var(--muted-40)}
+.it.infold .ic{color:var(--muted-30)}
+.it.wip{color:var(--muted-35)}
+.it .lb{flex:1;min-width:0}
+.it.on{background:var(--ok-bg);color:var(--ok)}
+.it.on .ic{color:var(--ok)}
+.it svg{width:16px;height:16px}
+.it .chev svg{width:12px;height:12px;opacity:.6}
+.cnt{display:inline-flex;align-items:center;justify-content:center;height:20px;min-width:20px;padding:0 6px;border-radius:999px;border:1px solid var(--warn-line);background:var(--warn-bg);color:var(--warn);font-size:11px;font-weight:700;font-variant-numeric:tabular-nums}
+.bdg{border-radius:4px;padding:2px 6px;font-size:10px;font-weight:400;background:var(--line);color:rgba(26,26,26,.5)}
+.it.on .bdg{background:var(--ok-chip);color:var(--ok)}
+.wipchip{border-radius:4px;padding:2px 6px;font-size:10px;font-weight:400;background:var(--line2);color:var(--muted-40)}
+.fold{margin-top:20px;border-top:1px solid var(--line2);padding-top:16px;display:flex;flex-direction:column;gap:2px}
+.fold.acc{margin-top:10px;border-top:0;padding-top:0}
+.tg{display:flex;align-items:center;gap:6px;padding:8px 12px;border-radius:8px;font-size:12px;font-weight:600;color:var(--muted-45)}
+.tg:hover{background:var(--hover);color:var(--ink)}
+.tg svg{width:14px;height:14px;flex:0 0 auto;transition:transform .15s}
+.tg[aria-expanded="true"] svg{transform:rotate(90deg)}
+.tg .n{margin-left:auto;color:var(--muted-30);font-variant-numeric:tabular-nums}
+.tg .now-tag{font-size:10px;font-weight:600;color:var(--ok);background:var(--ok-bg);border-radius:4px;padding:0 5px}
+.fold-body{display:flex;flex-direction:column;gap:12px;margin:4px 0 2px}
+.cat-body{display:flex;flex-direction:column;gap:2px;margin-bottom:6px}
+.hid{margin-top:10px;padding:6px 12px;border-radius:8px;font-size:11.5px;color:var(--muted-40)}
+.hid:hover{background:var(--hover);color:var(--ink)}
+.hid-body{display:flex;flex-direction:column;gap:2px}
+.hid-body .again{font-size:10.5px;color:var(--muted-40)}
+.sb-foot{border-top:1px solid var(--line);padding:12px 16px;display:flex;gap:10px;align-items:center}
+.ava{width:28px;height:28px;border-radius:999px;background:var(--line2);display:grid;place-items:center;font-size:11px;font-weight:700;color:var(--ink2)}
+.sb-foot b{display:block;font-size:12px}
+.sb-foot span{font-size:11px;color:var(--muted-45)}
+
+/* 비교표 */
+.tbl-wrap{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:14px}
+table{border-collapse:collapse;width:100%;min-width:720px;font-size:12.5px}
+th,td{padding:9px 12px;border-bottom:1px solid var(--line2);text-align:left;vertical-align:top}
+thead th{font-size:11px;font-weight:700;letter-spacing:.04em;color:var(--sub);background:var(--bg)}
+tbody th{font-weight:600;color:var(--ink2);white-space:nowrap}
+td.c{text-align:center;font-variant-numeric:tabular-nums}
+td.pick,th.pick{background:var(--ok-bg)}
+tr:last-child th,tr:last-child td{border-bottom:0}
+.good{color:var(--ok);font-weight:600}
+.bad{color:var(--danger);font-weight:600}
+
+/* 공통 바닥·결정 */
+.list{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px}
+.li{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:4px;min-width:0}
+.li .k{font-size:11px;font-weight:700;color:var(--sub);letter-spacing:.04em}
+.li h3{font-size:13.5px;font-weight:700}
+.li p{color:var(--ink2);font-size:12.5px}
+.li .ans{font-size:12px;color:var(--ok);font-weight:600}
+.foot{color:var(--sub);font-size:12px;max-width:80ch}
+@media (prefers-reduced-motion:reduce){.tg svg{transition:none}}
+</style>
+</head>
+<body>
+<div class="cv" lang="ko">
+
+  <header class="head">
+    <p class="eyebrow">어드민 코어 · 사이드바 시안 · 2026-11-09</p>
+    <h1>사이드바 순서 재배치와 접기, 시안 4개</h1>
+    <p class="lede">지금 사이드바(상시 10 · 기타 5 · 숨김 1)를 하루 동선 순서로 다시 놓고, 접는 방식을 네 가지로 비교합니다. 탭은 하나도 지우지 않습니다. 접거나 숨긴 탭도 ⌘K와 주소로 그대로 열립니다.</p>
+    <p class="rec"><b>D 선택·구현 (2026-11-09)</b><span>자주 쓰는 8개를 소제목 없이 위에 고정하고, 나머지는 범주마다 따로 접습니다. 운영자 요청으로 CS 콘솔은 콘텐츠 바로 밑입니다. 아래 D 사이드바가 구현된 모습입니다.</span></p>
+    <p><span class="sample">CRM 배지 숫자는 예시</span></p>
+  </header>
+
+  <div class="ctrl" role="group" aria-label="지금 보고 있는 화면">
+    <span class="lbl">지금 보고 있는 화면</span>
+    <div class="seg" id="seg"></div>
+    <button type="button" class="reset" id="reset">접힘 상태 처음으로</button>
+    <p class="hint">화면을 고르면 다섯 사이드바가 함께 바뀝니다. 그 탭이 접힌 묶음 안에 있으면 묶음이 열립니다. 사이드바 안의 탭·묶음도 눌러 볼 수 있습니다.</p>
+  </div>
+
+  <section class="sec" aria-labelledby="h-now">
+    <h2 id="h-now">지금</h2>
+    <div class="now">
+      <div id="mock-now"></div>
+      <div class="diag">
+        <ol>
+          <li><b>"고객·매출" 소제목 하나 아래 7개가 있습니다.</b> 일정·매출 성과·영업·재고·고객 지원이 한 덩어리라 소제목이 길잡이 노릇을 못 합니다.</li>
+          <li><b>순서가 하루 동선과 다릅니다.</b> 매일 보는 CRM(문의 배지)과 CS 콘솔이 5·8번째입니다. 그 위의 KR Team·매출 장부는 09-24 실측에서 사람 쓰기 흔적이 거의 없었고, 시트 동기화가 08-18 뒤로 실패하던 화면입니다.</li>
+          <li><b>"마케팅·분석" 소제목이 두 번 나옵니다.</b> 마케팅·콘텐츠는 위에, 캠페인 관리·자료 퍼널·Analytics는 접힌 기타 안에 있습니다. Analytics에는 11-06부터 방문자 탭이 들어왔는데 접혀 있습니다.</li>
+          <li><b>"기타"는 이름이 내용을 말하지 않습니다.</b> 펼치기 전에는 설정이 거기 있는지 알 수 없습니다.</li>
+          <li><b>Overview 한 줄 위에 "홈" 소제목이 붙어 있습니다.</b> 항목보다 소제목이 눈에 먼저 들어옵니다.</li>
+        </ol>
+        <p class="sub">기준 코드: main <span class="num">7e89bab</span>의 <code>ADMIN_NAV</code>·<code>DEFAULT_PRIMARY_HREFS</code>, AI 올인원 시안 스위치 꺼짐(16탭).</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec" aria-labelledby="h-ver">
+    <h2 id="h-ver">시안 4개</h2>
+    <p class="desc">네 시안 모두 같은 새 순서와 범주를 씁니다(아래 공통 바닥 F1·F2). 다른 것은 위에 고정하는 탭 수와 접는 단위입니다. 접는 방식과 상시 목록은 서로 섞을 수 있습니다. 예를 들어 D의 범주별 접기에 C의 상시 6개를 얹을 수 있습니다.</p>
+    <div class="grid" id="cards"></div>
+  </section>
+
+  <section class="sec" aria-labelledby="h-cmp">
+    <h2 id="h-cmp">한눈에 비교</h2>
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr><th scope="col"></th><th scope="col">지금</th><th scope="col">A 순서만</th><th scope="col">B 범주 아코디언</th><th scope="col">C 상시 최소</th><th scope="col" class="pick">D 고정 + 범주별 접기</th></tr>
+        </thead>
+        <tbody>
+          <tr><th scope="row">처음 보이는 탭</th><td class="c">10</td><td class="c">10</td><td class="c">13</td><td class="c">6</td><td class="c pick">8</td></tr>
+          <tr><th scope="row">소제목 줄</th><td class="c">3</td><td class="c">3</td><td class="c">4 (토글 겸)</td><td class="c">0</td><td class="c pick">0 (간격만)</td></tr>
+          <tr><th scope="row">접는 단위</th><td>기타 1</td><td>기타 1</td><td>범주 4</td><td>기타 1</td><td class="pick">범주 3</td></tr>
+          <tr><th scope="row">같은 소제목이 두 번 나옴</th><td class="bad">예</td><td class="bad">예</td><td class="good">아니오</td><td class="good">아니오</td><td class="good pick">아니오</td></tr>
+          <tr><th scope="row">CRM · CS 콘솔 위치</th><td class="c">5 · 8번째</td><td class="c">3 · 4번째</td><td class="c">3 · 4번째</td><td class="c">3 · 4번째</td><td class="c pick">3 · 8번째</td></tr>
+          <tr><th scope="row">하드웨어 재고까지 누름</th><td class="c">1</td><td class="c">1</td><td class="c">1</td><td class="c">2</td><td class="c pick">1</td></tr>
+          <tr><th scope="row">콘텐츠까지 누름</th><td class="c">1</td><td class="c">1</td><td class="c">1</td><td class="c">2</td><td class="c pick">1</td></tr>
+          <tr><th scope="row">매출 장부까지 누름</th><td class="c">1</td><td class="c">1</td><td class="c">1</td><td class="c">2</td><td class="c pick">2</td></tr>
+          <tr><th scope="row">Analytics까지 누름</th><td class="c">2</td><td class="c">2</td><td class="c">1</td><td class="c">2</td><td class="c pick">2</td></tr>
+          <tr><th scope="row">개인 설정(상시·기타·숨김) 의미</th><td>—</td><td>그대로</td><td class="bad">바뀜 (보임·숨김 + 범주 펼침)</td><td>그대로</td><td class="pick">그대로</td></tr>
+          <tr><th scope="row">구현 크기</th><td>—</td><td>S</td><td>L</td><td>S</td><td class="pick">M</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="foot">"누름"은 접힘 상태가 처음일 때 사이드바에서 그 탭을 여는 데 필요한 클릭 수입니다. 열어 둔 묶음은 기억하므로 두 번째부터는 1입니다. ⌘K로는 모든 시안에서 똑같이 열립니다.</p>
+  </section>
+
+  <section class="sec" aria-labelledby="h-f">
+    <h2 id="h-f">공통 바닥 — 어느 시안을 고르든</h2>
+    <div class="list">
+      <div class="li"><span class="k">F1</span><h3>범주를 업무 단위로 나눕니다</h3><p>고객·매출 7개를 영업·고객(캘린더 · CRM · CS 콘솔)과 주문·매출(견적·문서 · 하드웨어 재고 · KR Team · 매출 장부)로 나눕니다. 배열은 범주 연속 블록을 그대로 지킵니다.</p></div>
+      <div class="li"><span class="k">F2</span><h3>순서는 하루 동선대로</h3><p>일정 → 문의·고객 → 지원 → 견적·출고 → 성과 → 마케팅(허브 → 캠페인 → 분석 → 콘텐츠 → 자료) → 시스템.</p></div>
+      <div class="li"><span class="k">F3</span><h3>도달성은 바뀌지 않습니다</h3><p>접거나 숨겨도 ⌘K·주소로 열립니다. 지금 화면이 접힌 묶음 안이면 그 묶음을 펼쳐 위치를 보여 줍니다(지금 기타와 같은 규칙).</p></div>
+      <div class="li"><span class="k">F4</span><h3>"홈" 소제목은 그리지 않습니다</h3><p>Overview 한 줄에 소제목 한 줄은 과합니다. Overview는 계속 맨 위 고정이고 숨길 수 없습니다.</p></div>
+      <div class="li"><span class="k">F5</span><h3>개인 설정은 그대로 읽습니다</h3><p>저장값은 기본값과 다른 것만 남습니다. 기본 자리가 바뀌면 예외를 저장하지 않은 사람은 새 기본값을 따르고, 예외를 저장한 사람은 그 예외를 유지합니다.</p></div>
+      <div class="li"><span class="k">F6</span><h3>접힌 사이드바와 모바일</h3><p>아이콘 레일에는 상시 아이콘과 "더 보기" 하나만 둡니다. 누르면 사이드바를 펼치고 묶음을 엽니다(지금 기타와 같은 동작). 모바일 하단 바로가기(캘린더 · 견적 · CRM)는 그대로입니다.</p></div>
+    </div>
+  </section>
+
+  <section class="sec" aria-labelledby="h-d">
+    <h2 id="h-d">정해 주셔야 할 것</h2>
+    <div class="list">
+      <div class="li"><span class="k">D1</span><h3>시안 선택</h3><p>A · B · C · D 가운데 하나. 접는 방식과 상시 목록을 섞어도 됩니다.</p><span class="ans">권장 D</span></div>
+      <div class="li"><span class="k">D2</span><h3>KR Team · 매출 장부의 기본 자리</h3><p>상시 유지 / 접힘. 09-24 실측과 동기화 중단을 보면 접힘이지만, 07-18 "KR Team·매출 장부를 위로" 요청과 반대 방향입니다. 상시로 두면 D는 상시 10이 됩니다.</p><span class="ans">권장 접힘 (요청자 확인 후)</span></div>
+      <div class="li"><span class="k">D3</span><h3>접힘 상태 저장 위치</h3><p>브라우저(지금 기타와 같음) / 계정(<code>nav_overrides</code>). 계정에 두면 기기를 옮겨도 같지만 저장 경로가 하나 더 생깁니다.</p><span class="ans">권장 브라우저</span></div>
+      <div class="li"><span class="k">D4</span><h3>처음 상태</h3><p>전부 접힘 / 전부 펼침. 어느 쪽이든 열어 둔 묶음은 기억하고, 지금 화면의 묶음은 강제로 엽니다.</p><span class="ans">권장 전부 접힘 (B는 시스템만 접힘)</span></div>
+      <div class="li"><span class="k">D5</span><h3>편집기의 "기타" 이름</h3><p>B·D에서는 "기타" 묶음이 없어집니다. 사이드바 편집의 상시 | 기타 | 숨김을 상시 | 접힘 | 숨김으로 바꿀지.</p><span class="ans">권장 "접힘"</span></div>
+      <div class="li"><span class="k">D6</span><h3>범주 이름</h3><p>영업·고객 / 주문·매출 / 마케팅·분석 / 시스템. 다른 이름이 익숙하면 지금 정합니다.</p><span class="ans">권장 이대로</span></div>
+    </div>
+  </section>
+
+  <p class="foot">문서: <code>docs/active/admin-sidebar-reorder-fold-plan-2026-11-09.md</code>. 배치 정본은 <code>components/admin/admin-nav.ts</code>(순서·범주)와 <code>components/admin/admin-nav-access.ts</code>(상시·숨김)입니다. 이 목업은 구현이 아닙니다.</p>
+</div>
+
+<script>
+(function(){
+  var ICON = {
+    dash:'<rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/>',
+    cal:'<path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="M8 14h.01"/><path d="M12 14h.01"/><path d="M16 14h.01"/><path d="M8 18h.01"/><path d="M12 18h.01"/><path d="M16 18h.01"/>',
+    users:'<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+    bot:'<path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/>',
+    file:'<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/>',
+    pkg:'<path d="m16 16 2 2 4-4"/><path d="M21 10V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l2-1.14"/><path d="m7.5 4.27 9 5.15"/><path d="M3.29 7 12 12l8.71-5"/><path d="M12 22V12"/>',
+    bldg:'<path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/><path d="M10 18h4"/>',
+    receipt:'<path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M14 8H8"/><path d="M16 12H8"/><path d="M13 16H8"/>',
+    mega:'<path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/>',
+    layers:'<path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/>',
+    bar:'<path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/>',
+    magnet:'<path d="m6 15-4-4 6.75-6.77a7.79 7.79 0 0 1 11 11L13 22l-4-4 6.39-6.36a2.14 2.14 0 0 0-3-3L6 15"/><path d="m5 8 4 4"/><path d="m12 15 4 4"/>',
+    gear:'<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>',
+    code:'<path d="m18 16 4-4-4-4"/><path d="m6 8-4 4 4 4"/><path d="m14.5 4-5 16"/>',
+    act:'<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>',
+    chev:'<path d="m9 18 6-6-6-6"/>',
+    search:'<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>'
+  };
+  function svg(k){ return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+ICON[k]+'</svg>'; }
+
+  var ITEM = {
+    overview:{l:'Overview',i:'dash'},
+    calendar:{l:'캘린더',i:'cal'},
+    crm:{l:'CRM',i:'users',count:3},
+    chatbot:{l:'CS 콘솔',i:'bot'},
+    quotes:{l:'견적·문서',i:'file'},
+    hardware:{l:'하드웨어 재고',i:'pkg'},
+    branch:{l:'KR Team',i:'bldg'},
+    ledger:{l:'매출 장부',i:'receipt',badge:'MVP',wip:true},
+    campaigns:{l:'마케팅',i:'mega'},
+    manage:{l:'캠페인 관리',i:'layers'},
+    analytics:{l:'Analytics',i:'bar'},
+    blog:{l:'콘텐츠',i:'file'},
+    magnets:{l:'자료 퍼널',i:'magnet'},
+    settings:{l:'설정',i:'gear'},
+    dev:{l:'개발 도구',i:'code'},
+    ops:{l:'운영 상태',i:'act'}
+  };
+  var HIDDEN = ['ops'];
+  var CAT_NOW = {home:'홈',customer:'고객·매출',growth:'마케팅·분석',system:'시스템'};
+  var CAT_NEW = {home:'홈',sales:'영업·고객',revenue:'주문·매출',growth:'마케팅·분석',support:'고객 지원',system:'시스템'};
+  var ORDER_NOW = [['overview','home'],['calendar','customer'],['branch','customer'],['ledger','customer'],['crm','customer'],['quotes','customer'],['hardware','customer'],['chatbot','customer'],['campaigns','growth'],['manage','growth'],['blog','growth'],['magnets','growth'],['analytics','growth'],['ops','system'],['settings','system'],['dev','system']];
+  var ORDER_NEW = [['overview','home'],['calendar','sales'],['crm','sales'],['chatbot','sales'],['quotes','revenue'],['hardware','revenue'],['branch','revenue'],['ledger','revenue'],['campaigns','growth'],['manage','growth'],['analytics','growth'],['blog','growth'],['magnets','growth'],['settings','system'],['dev','system'],['ops','system']];
+  /* 구현된 D — CS 콘솔을 콘텐츠 밑에 두려고 고객 지원 범주로 마케팅·분석 뒤에 선언한다. */
+  var ORDER_D = [['overview','home'],['calendar','sales'],['crm','sales'],['quotes','revenue'],['hardware','revenue'],['branch','revenue'],['ledger','revenue'],['campaigns','growth'],['manage','growth'],['analytics','growth'],['blog','growth'],['magnets','growth'],['chatbot','support'],['settings','system'],['dev','system'],['ops','system']];
+  var PRIMARY_NOW = ['overview','calendar','branch','ledger','crm','quotes','hardware','chatbot','campaigns','blog'];
+
+  var VERSIONS = [
+    {id:'now', order:ORDER_NOW, cats:CAT_NOW, primary:PRIMARY_NOW, headers:'all', fold:'other'},
+    {id:'A', order:ORDER_NEW, cats:CAT_NEW, primary:PRIMARY_NOW, headers:'nohome', fold:'other',
+      title:'순서만 바꾸기', thesis:'자리(상시 10 · 기타 5)는 그대로 둡니다. 범주를 둘로 나누고 하루 동선 순서로 다시 놓습니다.',
+      pros:['바뀌는 것이 가장 적습니다','익숙한 자리가 대부분 그대로입니다','개인 설정의 의미가 그대로입니다'],
+      cons:['마케팅·분석이 위·아래 두 곳에 남습니다','"기타"가 무엇을 품는지 여전히 안 보입니다','길이는 지금과 거의 같습니다'],
+      size:'S', files:'<code>admin-nav.ts</code> 순서·범주 1개 추가, 배치 테스트 기대값'},
+    {id:'B', order:ORDER_NEW, cats:CAT_NEW, fold:'accordion', defaultOpen:['cat:sales','cat:revenue','cat:growth'],
+      title:'범주 아코디언', thesis:'"기타"를 없애고 모든 범주를 접히는 묶음으로 만듭니다. 탭은 제 범주에 한 번만 나옵니다.',
+      pros:['탭마다 자리가 하나입니다','범주 이름이 곧 접는 단위라 안이 예상됩니다','안 쓰는 범주를 통째로 접습니다'],
+      cons:['처음 보이는 줄이 오히려 늘어납니다(13)','범주를 접으면 그 안의 자주 쓰는 탭도 같이 사라집니다','탭 단위 상시·기타 선택이 없어져 편집기와 저장값 의미가 바뀝니다'],
+      size:'L', files:'렌더 교체(데스크톱·모바일), 편집기를 보임·숨김으로, <code>nav_overrides</code>의 primary·folded 해석 변경, 배치 테스트 다수'},
+    {id:'C', order:ORDER_NEW, cats:CAT_NEW, primary:['overview','calendar','crm','chatbot','quotes','campaigns'], headers:'none', fold:'other',
+      title:'상시 최소', thesis:'매일 여는 6개만 위에 두고 나머지 9개는 기타 하나에 접습니다. 필요한 사람은 사이드바 편집에서 상시로 올립니다.',
+      pros:['가장 짧습니다(6줄)','렌더 코드가 거의 그대로입니다','기본값 한 곳만 바꿉니다'],
+      cons:['10-26에 상시로 올린 콘텐츠와 재고 담당이 매일 쓰는 하드웨어 재고가 다시 접힙니다','기타가 9개라 펼치면 깁니다','개인 편집에 기대는 몫이 큽니다'],
+      size:'S', files:'<code>DEFAULT_PRIMARY_HREFS</code>, 상시 소제목 끄기, 순서, 배치 테스트'},
+    {id:'D', order:ORDER_D, cats:CAT_NEW, primary:['overview','calendar','crm','chatbot','quotes','hardware','campaigns','blog'], headers:'gap', fold:'category', pick:true,
+      title:'상시 고정 + 범주별 접기', thesis:'자주 쓰는 8개를 소제목 없이 위에 고정하고, 나머지는 범주마다 따로 접습니다. "기타"라는 이름이 없어집니다. 구현본은 CS 콘솔이 콘텐츠 바로 밑입니다.',
+      pros:['접힌 묶음 이름이 내용을 말합니다','소제목이 한 번씩만 나옵니다','상시·기타·숨김 저장값, API, DB가 그대로입니다'],
+      cons:['KR Team·매출 장부는 한 번 더 눌러야 열립니다(D2)','접힘 토글이 1개에서 3개로 늡니다','렌더 변경은 A·C보다 큽니다'],
+      size:'M', files:'F1·F2 순서·범주 + 상시 8개 + 기타 패널을 범주별 토글로(데스크톱·모바일), localStorage 키 이전, 편집기 미리보기 문구'}
+  ];
+
+  var SCREENS = [['overview','Overview'],['crm','CRM'],['ledger','매출 장부'],['analytics','Analytics'],['settings','설정'],['ops','운영 상태 (숨김)']];
+  var active = 'overview';
+  var open = {};
+  function resetOpen(){ VERSIONS.forEach(function(v){ open[v.id] = {}; (v.defaultOpen||[]).forEach(function(g){ open[v.id][g] = true; }); }); }
+  resetOpen();
+
+  function groupsOf(list){
+    var out = [];
+    list.forEach(function(pair){
+      var last = out[out.length-1];
+      if (last && last.cat === pair[1]) last.items.push(pair[0]);
+      else out.push({cat:pair[1], items:[pair[0]]});
+    });
+    return out;
+  }
+
+  function itemHtml(h, opts){
+    var it = ITEM[h];
+    var on = h === active;
+    var cls = 'it' + (on ? ' on' : '') + (opts.fold ? ' infold' : '') + (opts.fold && it.wip && !on ? ' wip' : '');
+    var tail = '';
+    if (it.count) tail += '<span class="cnt" aria-label="응대 전 문의 '+it.count+'건">'+it.count+'</span>';
+    if (!opts.fold && it.badge) tail += '<span class="bdg">'+it.badge+'</span>';
+    if (opts.fold && it.wip && !on) tail += '<span class="wipchip">다듬는 중</span>';
+    if (opts.hidden) tail += '<span class="again">다시 표시</span>';
+    if (on) tail += '<span class="chev">'+svg('chev')+'</span>';
+    return '<button type="button" class="'+cls+'" data-h="'+h+'"'+(on?' aria-current="page"':'')+'><span class="ic">'+svg(it.i)+'</span><span class="lb">'+it.l+'</span>'+tail+'</button>';
+  }
+
+  function toggleHtml(vid, gid, label, n, isOpen, forced){
+    return '<button type="button" class="tg" data-v="'+vid+'" data-g="'+gid+'" aria-expanded="'+isOpen+'">'+svg('chev')+'<span>'+label+'</span>'+(forced?'<span class="now-tag">지금 화면</span>':'')+'<span class="n">'+n+'</span></button>';
+  }
+
+  function isOpen(v, gid, members){
+    var forced = members.indexOf(active) >= 0;
+    return {open: !!open[v.id][gid] || forced, forced: forced && !open[v.id][gid]};
+  }
+
+  function nav(v){
+    var vis = v.order.filter(function(p){ return HIDDEN.indexOf(p[0]) < 0; });
+    var hid = v.order.filter(function(p){ return HIDDEN.indexOf(p[0]) >= 0; }).map(function(p){ return p[0]; });
+    var html = '';
+    var shown = 0;
+
+    if (v.fold === 'accordion') {
+      var gs = groupsOf(vis);
+      gs.filter(function(g){ return g.cat === 'home'; }).forEach(function(g){
+        html += '<div class="grp">' + g.items.map(function(h){ shown++; return itemHtml(h,{}); }).join('') + '</div>';
+      });
+      html += '<div class="fold acc">';
+      gs.filter(function(g){ return g.cat !== 'home'; }).forEach(function(g){
+        var gid = 'cat:'+g.cat, st = isOpen(v, gid, g.items);
+        html += toggleHtml(v.id, gid, v.cats[g.cat], g.items.length, st.open, st.forced);
+        if (st.open) html += '<div class="cat-body">' + g.items.map(function(h){ shown++; return itemHtml(h,{}); }).join('') + '</div>';
+      });
+      html += '</div>';
+    } else {
+      var prim = vis.filter(function(p){ return v.primary.indexOf(p[0]) >= 0; });
+      var rest = vis.filter(function(p){ return v.primary.indexOf(p[0]) < 0; });
+      groupsOf(prim).forEach(function(g){
+        var head = (v.headers === 'all') || (v.headers === 'nohome' && g.cat !== 'home');
+        var gcls = v.headers === 'gap' ? 'grp tight' : (v.headers === 'none' ? 'grp flat' : 'grp');
+        html += '<div class="'+gcls+'">' + (head ? '<p class="hd">'+v.cats[g.cat]+'</p>' : '') + g.items.map(function(h){ shown++; return itemHtml(h,{}); }).join('') + '</div>';
+      });
+      if (rest.length) {
+        html += '<div class="fold">';
+        if (v.fold === 'other') {
+          var members = rest.map(function(p){ return p[0]; });
+          var st = isOpen(v, 'other', members);
+          html += toggleHtml(v.id, 'other', '기타', rest.length, st.open, st.forced);
+          if (st.open) {
+            html += '<div class="fold-body">' + groupsOf(rest).map(function(g){
+              return '<div class="grp"><p class="hd">'+v.cats[g.cat]+'</p>' + g.items.map(function(h){ return itemHtml(h,{fold:true}); }).join('') + '</div>';
+            }).join('') + '</div>';
+          }
+        } else {
+          groupsOf(rest).forEach(function(g){
+            var gid = 'cat:'+g.cat, st2 = isOpen(v, gid, g.items);
+            html += toggleHtml(v.id, gid, v.cats[g.cat], g.items.length, st2.open, st2.forced);
+            if (st2.open) html += '<div class="cat-body">' + g.items.map(function(h){ return itemHtml(h,{fold:true}); }).join('') + '</div>';
+          });
+        }
+        html += '</div>';
+      }
+    }
+
+    if (hid.length) {
+      var st3 = isOpen(v, 'hidden', hid);
+      html += '<button type="button" class="hid" data-v="'+v.id+'" data-g="hidden" aria-expanded="'+st3.open+'">숨긴 탭 <span class="num">'+hid.length+'</span> · '+(st3.open?'접기':'보기')+'</button>';
+      if (st3.open) html += '<div class="hid-body">' + hid.map(function(h){ return itemHtml(h,{fold:true,hidden:true}); }).join('') + '</div>';
+    }
+    return html;
+  }
+
+  function sidebar(v){
+    return '<div class="sb" data-v="'+v.id+'">' +
+      '<div class="sb-top"><div class="sb-brand"><span class="logo">C</span><span>Classin Admin</span></div>' +
+      '<div class="sb-search">'+svg('search').replace('<svg','<svg width="14" height="14"')+'<span>빠른 이동·검색</span><kbd>⌘K</kbd></div></div>' +
+      '<nav class="sb-nav" aria-label="'+(v.id==='now'?'지금 사이드바':'시안 '+v.id+' 사이드바')+'">' + nav(v) + '</nav>' +
+      '<div class="sb-foot"><span class="ava">관</span><div><b>관리자</b><span>사이드바 편집</span></div></div>' +
+    '</div>';
+  }
+
+  function counts(v){
+    var vis = v.order.filter(function(p){ return HIDDEN.indexOf(p[0]) < 0; });
+    if (v.fold === 'accordion') {
+      var gs = groupsOf(vis).filter(function(g){ return g.cat !== 'home'; });
+      var first = 1; gs.forEach(function(g){ if ((v.defaultOpen||[]).indexOf('cat:'+g.cat) >= 0) first += g.items.length; });
+      return {first:first, folded:vis.length-first, toggles:gs.length};
+    }
+    var prim = vis.filter(function(p){ return v.primary.indexOf(p[0]) >= 0; }).length;
+    var rest = vis.length - prim;
+    var toggles = v.fold === 'other' ? (rest ? 1 : 0) : groupsOf(vis.filter(function(p){ return v.primary.indexOf(p[0]) < 0; })).length;
+    return {first:prim, folded:rest, toggles:toggles};
+  }
+
+  function card(v){
+    var c = counts(v);
+    return '<article class="card'+(v.pick?' pick':'')+'" aria-labelledby="t-'+v.id+'">' +
+      '<div class="card-h"><span class="ltr">'+v.id+'</span><div><h3 id="t-'+v.id+'">'+v.title+(v.pick?'<span class="chip">선택·구현</span>':'')+'</h3><p class="thesis">'+v.thesis+'</p></div></div>' +
+      '<div class="stage" id="mock-'+v.id+'"></div>' +
+      '<div class="met"><span>처음 보이는 탭 '+c.first+'</span><span>접힌 탭 '+c.folded+'</span><span>접힘 토글 '+c.toggles+'</span><span>숨김 1</span></div>' +
+      '<div class="pc"><div><h4>좋아지는 점</h4><ul>'+v.pros.map(function(t){return '<li>'+t+'</li>';}).join('')+'</ul></div>' +
+      '<div><h4>치르는 값</h4><ul>'+v.cons.map(function(t){return '<li>'+t+'</li>';}).join('')+'</ul></div></div>' +
+      '<p class="size"><b>'+v.size+'</b>'+v.files+'</p>' +
+    '</article>';
+  }
+
+  function renderMocks(){
+    VERSIONS.forEach(function(v){
+      var el = document.getElementById('mock-'+v.id);
+      if (el) el.innerHTML = sidebar(v);
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('#seg button'), function(b){
+      b.setAttribute('aria-pressed', String(b.getAttribute('data-h') === active));
+    });
+  }
+
+  document.getElementById('cards').innerHTML = VERSIONS.filter(function(v){ return v.id !== 'now'; }).map(card).join('');
+  document.getElementById('seg').innerHTML = SCREENS.map(function(s){ return '<button type="button" data-h="'+s[0]+'" aria-pressed="false">'+s[1]+'</button>'; }).join('');
+  renderMocks();
+
+  document.addEventListener('click', function(e){
+    var t = e.target.closest ? e.target.closest('button') : null;
+    if (!t) return;
+    if (t.id === 'reset') { resetOpen(); active = 'overview'; renderMocks(); return; }
+    var h = t.getAttribute('data-h');
+    if (h) { active = h; renderMocks(); return; }
+    var vid = t.getAttribute('data-v'), gid = t.getAttribute('data-g');
+    if (vid && gid) {
+      var expanded = t.getAttribute('aria-expanded') === 'true';
+      /* 지금 화면이 든 묶음은 닫아도 열린 채로 남는다(F3, 실제 사이드바와 같은 규칙) — "지금 화면" 표시가 이유를 말한다. */
+      open[vid][gid] = !(expanded && open[vid][gid]);
+      renderMocks();
+    }
+  });
+})();
+</script>
+</body>
+</html>
