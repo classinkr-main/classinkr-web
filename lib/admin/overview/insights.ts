@@ -56,6 +56,7 @@ function isWithinNextDays(dateStr: string, days: number, now: Date) {
 export const SOURCE_LABEL: Record<string, string> = {
   demo_modal: "데모 신청",
   contact_page: "문의",
+  chatbot: "챗봇 상담",
   newsletter: "뉴스레터",
   meta_lead_ads: "Meta 리드",
 }

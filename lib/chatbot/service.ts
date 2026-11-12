@@ -1,5 +1,6 @@
 import "server-only"
 
+import { stripLeadSubmitTokens } from "@/lib/chatbot/lead-token"
 import { unstable_cache, revalidateTag } from "next/cache"
 import { assertJsonSafeInDev } from "@/lib/server/json-safe"
 
@@ -4245,36 +4246,12 @@ function finalizeAnswer(
 ) {
   response.answer = sanitizePublicAnswerText(response.answer)
 
-  // 대리 신청 토큰 처리 ([LEAD_SUBMIT:name=...,phone=...,org=...,event=...])
-  if (response.answer && response.answer.includes("[LEAD_SUBMIT:")) {
-    const submitRegex = /\[LEAD_SUBMIT:name=([^,\n\]]+),phone=([^,\n\]]+),org=([^,\n\]]+),event=([^,\n\]]+)\]/i
-    const match = response.answer.match(submitRegex)
-    if (match) {
-      const [, name, phone, org, eventName] = match
-      
-      // leads 리포지토리를 불러와 DB에 삽입 (비동기 즉시실행식)
-      import("@/lib/repositories/leads").then(({ saveLead }) => {
-        saveLead({
-          source: "contact_page",
-          name: name.trim(),
-          phone: phone.trim(),
-          org: org.trim(),
-          message: `챗봇 대리 신청: ${eventName.trim()}`,
-          notes: `[event:${eventName.trim()}] 챗봇을 통한 자동 세미나 대리 신청 리드`,
-          source_detail: "chatbot_assist_registration",
-          timestamp: new Date().toISOString(),
-        }).then((lead) => {
-          console.log(`[chatbot-registration] Successfully registered lead ${lead.id}: ${name} (${org}) for ${eventName}`)
-        }).catch((err) => {
-          console.error("[chatbot-registration] Failed to auto register lead:", err)
-        })
-      }).catch((err) => {
-        console.error("[chatbot-registration] Failed to import leads repository:", err)
-      })
-
-      // 사용자 답변 텍스트에서 토큰 삭제
-      response.answer = response.answer.replace(submitRegex, "").trim()
-    }
+  // `[LEAD_SUBMIT:...]` 토큰은 더 이상 리드를 만들지 않는다 — 본문에서 지우고 경고만 남긴다.
+  // 챗봇 리드는 상담 연결 → /contact?source=chatbot → /api/lead(submitLeadCapture)로만 접수된다.
+  const leadToken = stripLeadSubmitTokens(response.answer ?? "")
+  if (leadToken.stripped) {
+    response.answer = leadToken.answer
+    console.warn("[chatbot] LEAD_SUBMIT token stripped from answer; leads go through /contact?source=chatbot only.")
   }
 
   // 콘텐츠 추천 토큰 처리 ([CONTENT_SUGGEST:type=...,slug=...,title=...])

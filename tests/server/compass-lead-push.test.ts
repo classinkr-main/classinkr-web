@@ -51,6 +51,7 @@ describe("isCompassPushSource · 공개 폼 소스만", () => {
     ["contact_page", true],
     ["showroom_booking", true],
     ["checkout_request", true],
+    ["chatbot", true],
     ["newsletter", false],
     ["meta_lead_ads", false],
     ["admin_manual", false],
@@ -195,6 +196,13 @@ describe("runLeadCaptureEffects 안에서", () => {
     expect(postJson).toHaveBeenCalledTimes(1)
     expect(postJson.mock.calls[0][0]).toBe("https://mkt.example.test/api/webhook/home-lead")
     expect(postJson.mock.calls[0][1]).toMatchObject({ event_id: "lead:L1", kind: "created", lead_id: "L1", source: "contact_page" })
+  })
+
+  it("챗봇 상담 연결(source=chatbot)로 들어온 문의도 Compass 로 한 번 — source 는 chatbot 그대로", async () => {
+    const { errors } = await run({ ...BASE, source: "chatbot" })
+    expect(errors).toEqual([])
+    expect(postJson).toHaveBeenCalledTimes(1)
+    expect(postJson.mock.calls[0][1]).toMatchObject({ kind: "created", lead_id: "L1", source: "chatbot" })
   })
 
   it("재문의 병합이면 reinflow · event_id 는 재유입 전환 id 그대로", async () => {

@@ -106,7 +106,7 @@ export const LOG_RESULT_COLOR: Record<ContactLogResult, string> = {
 export function calcScore(lead: LeadRecord): number {
   let s = 0
   if (lead.source === "demo_modal")    s += 40
-  else if (lead.source === "contact_page") s += 25
+  else if (lead.source === "contact_page" || lead.source === "chatbot") s += 25
   else if (lead.source === "meta_lead_ads") s += 25
   else if (lead.source === "newsletter")   s += 10
   if (lead.lead_magnet) s += getLeadMagnetIntentScore(lead.lead_magnet)

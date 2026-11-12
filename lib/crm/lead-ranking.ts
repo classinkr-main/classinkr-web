@@ -87,6 +87,8 @@ const SOURCE_INTENT: Record<string, number> = {
   showroom_booking: 30,
   demo_modal: 30,
   contact_page: 22,
+  // 챗봇 상담 연결 → 문의 폼. 같은 폼을 채운 상담 요청이라 문의와 같은 값.
+  chatbot: 22,
   meta_lead_ads: 14,
   seminar: 14,
   // 리드 source 로 쓰인 적 없는 레거시 키. 외부 CRM 유입 대비로 남긴다.
@@ -95,7 +97,6 @@ const SOURCE_INTENT: Record<string, number> = {
   team_event: 12,
   channel_talk: 11,
   channel_talk_mining: 8,
-  chatbot: 10,
   home_final_cta: 10,
   admin_manual: 10,
   manual: 10,

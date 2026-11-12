@@ -178,7 +178,8 @@ export function matchesSegment(
         | "checkout_request"
         | "newsletter"
         | "manual"
-        | "meta_lead_ads")) {
+        | "meta_lead_ads"
+        | "chatbot")) {
       return false
     }
   }

@@ -765,3 +765,46 @@ describe("submitLeadCapture reinflow merge", () => {
     expect(saveLead).toHaveBeenCalledTimes(1)
   })
 })
+
+describe("source=chatbot (챗봇 상담 연결 → 문의 폼)", () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.resetModules()
+  })
+
+  const chatbotLead = { ...baseLead, source: "chatbot", sourceDetail: "도입 상담" }
+
+  it("정식 LeadSource 로 받는다 — contact_page 로 위장하지 않는다", async () => {
+    const { buildLeadPayload, resolveLeadSource } = await loadLeadCapture()
+    expect(resolveLeadSource("chatbot")).toBe("chatbot")
+    expect(buildLeadPayload(chatbotLead).source).toBe("chatbot")
+  })
+
+  it("문의 폼과 같은 필수값(org·name·phone·message)을 요구한다", async () => {
+    const { buildLeadPayload } = await loadLeadCapture()
+    expect(() => buildLeadPayload({ ...chatbotLead, phone: "" })).toThrow("필수 문의 정보를 모두 입력해 주세요.")
+    expect(() => buildLeadPayload({ ...chatbotLead, message: undefined })).toThrow("필수 문의 정보를 모두 입력해 주세요.")
+  })
+
+  it("submitLeadCapture 를 거쳐 source=chatbot 으로 저장되고, 광고 전환은 adConsent 일 때만 해시를 싣는다", async () => {
+    const { submitLeadCapture, saveLead, sendServerConversion } = await loadLeadCapture()
+    saveLead.mockResolvedValue({ id: "lead-chatbot" })
+
+    const result = await submitLeadCapture({ ...chatbotLead, adConsent: false })
+
+    expect(result.status).toBe(200)
+    expect(saveLead).toHaveBeenCalledWith(expect.objectContaining({ source: "chatbot", source_detail: "도입 상담" }))
+    await vi.waitFor(() => expect(sendServerConversion).toHaveBeenCalled())
+    expect(sendServerConversion.mock.calls[0][0]).toMatchObject({
+      user: expect.objectContaining({ allowHashedUserData: false }),
+      customData: expect.objectContaining({ source: "chatbot" }),
+    })
+  })
+
+  it("공개 사이트 폼·응답 SLA 집합에 들어간다(Compass 전달 대상)", async () => {
+    const { DIRECT_INBOUND_LEAD_SOURCES, WEBSITE_FORM_LEAD_SOURCES, INTAKE_LEAD_SOURCES } = await import("@/lib/lead-types")
+    expect(DIRECT_INBOUND_LEAD_SOURCES.has("chatbot")).toBe(true)
+    expect(WEBSITE_FORM_LEAD_SOURCES.has("chatbot")).toBe(true)
+    expect(INTAKE_LEAD_SOURCES.has("chatbot")).toBe(false)
+  })
+})
