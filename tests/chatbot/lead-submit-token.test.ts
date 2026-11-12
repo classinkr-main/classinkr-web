@@ -39,6 +39,15 @@ describe("챗봇 리드 우회 경로 제거 (소스 계약)", () => {
     expect(read("lib/chatbot/llm.ts")).not.toMatch(/LEAD_SUBMIT/)
   })
 
+  it("프롬프트가 대화 속 신청 접수를 약속하게 하지 않는다 — 접수는 문의 폼에서만 된다", () => {
+    // 2026-11-12 점검: 온보딩 지시에 "무료체험 대리 신청을 완료해 드리겠다"는 언질이 남아, 접수 경로가 없는데
+    // 챗봇이 신청을 대신 끝내 주겠다고 말할 수 있었다.
+    const llm = read("lib/chatbot/llm.ts")
+    expect(llm).not.toMatch(/신청을 완료해 드리겠다'고 자연스러운/)
+    expect(llm).not.toMatch(/대리 신청을 완료해 드리겠다/)
+    expect(llm).toMatch(/\[도입 상담 남기기\] 버튼\(문의 폼\)/)
+  })
+
   it("문의 폼은 source 를 하드코딩하지 않고 ?source=chatbot 을 보존한다", () => {
     const page = read("app/contact/page.tsx")
     expect(page).toMatch(/resolveContactLeadSource\(sourceParam\)/)
