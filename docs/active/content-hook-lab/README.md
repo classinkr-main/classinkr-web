@@ -28,8 +28,9 @@
    - [voice-charter.md](../brand-canon/voice-charter.md) — 표면별 톤 · §4 금지 표현
    - [positioning-guidelines](../classin-korea-positioning-guidelines.md) — §6 한계 · §8 표면별 기준 · §9 CTA · §11 문장 규칙
    - [company-facts.md](../brand-canon/company-facts.md) — 쓸 수 있는 회사 수치와 등급
-4. 중복 판정용 기존 자산: `data/lead-magnets.json`(title · summary · blogTone · salesPlaybook.intentScore), `data/blog-posts.json`(title).
-5. 같은 날 앞 단계 보고서가 있으면(MOFU는 TOFU, BOFU는 MOFU) 그 최종 Top3를 읽고, 그 흐름을 이어받는 후보를 매 루프 2개 이상 만든다.
+4. 실측 고객 발언: [docs/reports/customer-voice/](../../reports/customer-voice/) — 고객이 실제로 쓴 말과 장면을 후킹 소재로 쓴다. 표의 검증 상태(✅·⚠️·❓)를 따르고, 고객 발언 원문을 따옴표로 인용하지 않는다(동의 전).
+5. 중복 판정용 기존 자산: `data/lead-magnets.json`(title · summary · blogTone · salesPlaybook.intentScore), `data/blog-posts.json`(title).
+6. 같은 날 앞 단계 보고서가 있으면(MOFU는 TOFU, BOFU는 MOFU) 그 최종 Top3를 읽고, 그 흐름을 이어받는 후보를 매 루프 2개 이상 만든다.
 
 ## 2. 퍼널 정의
 
