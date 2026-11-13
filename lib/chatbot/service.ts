@@ -4086,7 +4086,8 @@ function buildServiceQuickAnswer(question: NormalizedQuestion): QuickAnswer | nu
       ["영수증은 어디서 받나요?", "환불 규정이 어떻게 되나요?", "담당자 상담으로 이어주세요"]
     )
   }
-  if (VAT_RE.test(text)) {
+  // 이 답은 견적서를 받았다는 전제로 쓴 답이다. "부가세 별도인가요?"처럼 견적을 말하지 않은 질문은 기본 사실 답이 맡는다.
+  if (VAT_RE.test(text) && /견적/.test(text)) {
     return make(
       [
         "견적서에 부가세 포함인지 별도인지 적혀 있지 않았다니 헷갈리셨겠어요. 그 부분은 분명히 적혀 있어야 하는 게 맞습니다.",
@@ -4168,9 +4169,13 @@ function buildServiceQuickAnswer(question: NormalizedQuestion): QuickAnswer | nu
     const [first, second] = basics
     const handoff = first.handoff ?? second?.handoff
     // 두 답을 이을 때 상담 연결 안내 문단이 두 번 나오지 않게, 앞 답의 마지막 안내 문단은 뺀다.
+    // 둘째 답 첫머리의 "네, "·"아니요, "도 뺀다(답 한가운데에 대답 말이 다시 나오지 않게).
     const firstParagraphs =
       second && first.handoff && second.handoff && first.answer.length > 1 ? first.answer.slice(0, -1) : first.answer
-    const paragraphs = second ? [...firstParagraphs, ...second.answer] : first.answer
+    const secondParagraphs = second
+      ? [second.answer[0].replace(/^(?:네|아니요),\s*/, ""), ...second.answer.slice(1)]
+      : []
+    const paragraphs = second ? [...firstParagraphs, ...secondParagraphs] : first.answer
     const suggestedQuestions = Array.from(
       new Set([...first.suggestedQuestions, ...(second?.suggestedQuestions ?? [])])
     ).slice(0, 3)

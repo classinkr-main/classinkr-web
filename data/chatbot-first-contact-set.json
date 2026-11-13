@@ -1,0 +1,1157 @@
+{
+ "_comment": "첫 방문자가 한 줄로 묻는 사실 질문 평가셋. 2026-11-13 Drive에 모인 이상 답변 스크린샷 11건(group=screenshot)과, 같은 유형으로 만든 질문 180개(회사·장비 필요 여부·원가·요금·한도·보관·보안·기기·비교·고객사·적합성·낱말 함정). expectTopic 은 이 질문에 나가야 하는 기본 사실 답(lib/chatbot/quick-answers-basics.ts)의 id 이고, null 은 기존 정해 둔 답이나 문서 경로가 맡는 질문이다. 어느 쪽이든 일반 되묻기·약한 문서 제시로 떨어지면 안 된다(tests/chatbot/basics-quick-answers.test.ts).",
+ "cases": [
+  {
+   "id": "shot-01",
+   "group": "screenshot",
+   "question": "클래스인은 어느나라 제품인가요?",
+   "expectTopic": "basics-company-origin"
+  },
+  {
+   "id": "shot-02",
+   "group": "screenshot",
+   "question": "전자칠판 꼭 사야하나요?",
+   "expectTopic": "basics-board-not-required"
+  },
+  {
+   "id": "shot-03",
+   "group": "screenshot",
+   "question": "클래스인 대표는 누구인가요?",
+   "expectTopic": "basics-company-ceo"
+  },
+  {
+   "id": "shot-04",
+   "group": "screenshot",
+   "question": "OPS 원가와 전자칠판원가는?",
+   "expectTopic": "basics-cost-supply-price"
+  },
+  {
+   "id": "shot-05",
+   "group": "screenshot",
+   "question": "녹화본은 몇 달 저장되나요?",
+   "expectTopic": "basics-recording-retention-period"
+  },
+  {
+   "id": "shot-06",
+   "group": "screenshot",
+   "question": "한 교실에 최대 몇 명까지 접속할 수 있나요?",
+   "expectTopic": "basics-max-participants"
+  },
+  {
+   "id": "shot-07",
+   "group": "screenshot",
+   "question": "줌보다 얼마나 싸요?",
+   "expectTopic": "basics-price-vs-zoom"
+  },
+  {
+   "id": "shot-08",
+   "group": "screenshot",
+   "question": "대치동 세정학원도 클래스인 사용하나요?",
+   "expectTopic": "basics-named-academy"
+  },
+  {
+   "id": "shot-09",
+   "group": "screenshot",
+   "question": "중국회사죠? 학생들 영상은 어느 서버에 저장되나요?",
+   "expectTopic": "basics-china-company-data"
+  },
+  {
+   "id": "shot-10",
+   "group": "screenshot",
+   "question": "맥북에도 깔리나요?",
+   "expectTopic": "basics-mac-support"
+  },
+  {
+   "id": "shot-11",
+   "group": "screenshot",
+   "question": "뭐하는 회사야",
+   "expectTopic": null
+  },
+  {
+   "id": "company-01",
+   "group": "company",
+   "question": "클래스인 만든 나라가 어디야?",
+   "expectTopic": "basics-company-origin"
+  },
+  {
+   "id": "company-02",
+   "group": "company",
+   "question": "클래스인 본사 어디예요?",
+   "expectTopic": "basics-korea-entity-address"
+  },
+  {
+   "id": "company-03",
+   "group": "company",
+   "question": "클래스인 사장님이 누구세요?",
+   "expectTopic": "basics-company-ceo"
+  },
+  {
+   "id": "company-04",
+   "group": "company",
+   "question": "ClassIn 창업자 알려주세요",
+   "expectTopic": "basics-company-ceo"
+  },
+  {
+   "id": "company-05",
+   "group": "company",
+   "question": "클래스인 한국 법인 따로 있나요?",
+   "expectTopic": "basics-korea-entity-address"
+  },
+  {
+   "id": "company-06",
+   "group": "company",
+   "question": "클래스인 이 회사 믿을만해요?",
+   "expectTopic": "basics-company-size-stability"
+  },
+  {
+   "id": "company-07",
+   "group": "company",
+   "question": "클래스인 언제 생겼어요?",
+   "expectTopic": "basics-company-founded"
+  },
+  {
+   "id": "company-08",
+   "group": "company",
+   "question": "ClassIn 직원 몇 명 정도 되는 회사야?",
+   "expectTopic": "basics-company-size-stability"
+  },
+  {
+   "id": "company-09",
+   "group": "company",
+   "question": "클래스인 중국 제품이에요?",
+   "expectTopic": "basics-company-origin"
+  },
+  {
+   "id": "company-10",
+   "group": "company",
+   "question": "클래스인코리아 주소가 어디죠",
+   "expectTopic": "basics-korea-entity-address"
+  },
+  {
+   "id": "company-11",
+   "group": "company",
+   "question": "클래스인 한국에 지사 있음?",
+   "expectTopic": "basics-korea-entity-address"
+  },
+  {
+   "id": "company-12",
+   "group": "company",
+   "question": "어느 회사에서 만든 건가요 클래스인",
+   "expectTopic": "basics-company-origin"
+  },
+  {
+   "id": "company-13",
+   "group": "company",
+   "question": "클래스인 망할 일은 없겠죠? 규모가 어때요",
+   "expectTopic": "basics-company-size-stability"
+  },
+  {
+   "id": "company-14",
+   "group": "company",
+   "question": "클래스인 뭐 하는 곳이에요 여기",
+   "expectTopic": null
+  },
+  {
+   "id": "company-15",
+   "group": "company",
+   "question": "클래스인 한국 대표님 성함이랑 회사 설립연도 알려주세요",
+   "expectTopic": "basics-company-ceo"
+  },
+  {
+   "id": "hardware_need-01",
+   "group": "hardware_need",
+   "question": "전자칠판 안 사도 쓸 수 있나요?",
+   "expectTopic": "basics-board-not-required"
+  },
+  {
+   "id": "hardware_need-02",
+   "group": "hardware_need",
+   "question": "클래스인 칠판 없이 수업 가능?",
+   "expectTopic": "basics-board-not-required"
+  },
+  {
+   "id": "hardware_need-03",
+   "group": "hardware_need",
+   "question": "클래스인 집에 있는 TV로 해도 되나요",
+   "expectTopic": "basics-existing-tv-projector"
+  },
+  {
+   "id": "hardware_need-04",
+   "group": "hardware_need",
+   "question": "전자칠판없이도되나요",
+   "expectTopic": "basics-board-not-required"
+  },
+  {
+   "id": "hardware_need-05",
+   "group": "hardware_need",
+   "question": "클래스인 노트북만 있으면 시작할 수 있어요?",
+   "expectTopic": "basics-start-what-to-buy"
+  },
+  {
+   "id": "hardware_need-06",
+   "group": "hardware_need",
+   "question": "클래스인 시작하려면 뭐 사야 돼요?",
+   "expectTopic": "basics-start-what-to-buy"
+  },
+  {
+   "id": "hardware_need-07",
+   "group": "hardware_need",
+   "question": "전자칠판 필수 아니죠?",
+   "expectTopic": "basics-board-not-required"
+  },
+  {
+   "id": "hardware_need-08",
+   "group": "hardware_need",
+   "question": "태블릿으로만 수업해도 되나요 클래스인",
+   "expectTopic": "basics-teach-tablet-phone-only"
+  },
+  {
+   "id": "hardware_need-09",
+   "group": "hardware_need",
+   "question": "클래스인 소프트웨어만 따로 쓸 수 있어요?",
+   "expectTopic": null
+  },
+  {
+   "id": "hardware_need-10",
+   "group": "hardware_need",
+   "question": "저희 학원에 기존 스마트TV 있는데 연결돼요?",
+   "expectTopic": "basics-existing-tv-projector"
+  },
+  {
+   "id": "hardware_need-11",
+   "group": "hardware_need",
+   "question": "클래스인 칠판 안 사면 기능 제한 있나요?",
+   "expectTopic": "basics-board-not-required"
+  },
+  {
+   "id": "hardware_need-12",
+   "group": "hardware_need",
+   "question": "클래스인 교실마다 칠판 하나씩 꼭 있어야 하나요",
+   "expectTopic": "basics-board-not-required"
+  },
+  {
+   "id": "hardware_need-13",
+   "group": "hardware_need",
+   "question": "클래스인 PC 한 대로도 수업 돼?",
+   "expectTopic": "basics-start-what-to-buy"
+  },
+  {
+   "id": "hardware_need-14",
+   "group": "hardware_need",
+   "question": "클래스인 프로젝터로도 가능한가요?",
+   "expectTopic": "basics-existing-tv-projector"
+  },
+  {
+   "id": "hardware_need-15",
+   "group": "hardware_need",
+   "question": "클래스인 전자칠판 꼭 사야하나요? 그냥 앱만 쓰면 안 되나요",
+   "expectTopic": "basics-board-not-required"
+  },
+  {
+   "id": "cost_internal-01",
+   "group": "cost_internal",
+   "question": "전자칠판 원가가 얼마예요?",
+   "expectTopic": "basics-cost-supply-price"
+  },
+  {
+   "id": "cost_internal-02",
+   "group": "cost_internal",
+   "question": "클래스인 OPS 컴퓨터 원가 알려주세요",
+   "expectTopic": "basics-cost-supply-price"
+  },
+  {
+   "id": "cost_internal-03",
+   "group": "cost_internal",
+   "question": "클래스인 마진 얼마 남기세요?",
+   "expectTopic": "basics-cost-supply-price"
+  },
+  {
+   "id": "cost_internal-04",
+   "group": "cost_internal",
+   "question": "도매가로 줄 수 있나요",
+   "expectTopic": "basics-cost-supply-price"
+  },
+  {
+   "id": "cost_internal-05",
+   "group": "cost_internal",
+   "question": "클래스인 총판 가격 따로 있어요?",
+   "expectTopic": "basics-cost-supply-price"
+  },
+  {
+   "id": "cost_internal-06",
+   "group": "cost_internal",
+   "question": "클래스인 좀 깎아주세요 너무 비싸요",
+   "expectTopic": "basics-discount-haggling"
+  },
+  {
+   "id": "cost_internal-07",
+   "group": "cost_internal",
+   "question": "왜 이렇게 비싸요?",
+   "expectTopic": "basics-why-expensive"
+  },
+  {
+   "id": "cost_internal-08",
+   "group": "cost_internal",
+   "question": "클래스인 납품가랑 소비자가 차이가 얼마예요",
+   "expectTopic": "basics-cost-supply-price"
+  },
+  {
+   "id": "cost_internal-09",
+   "group": "cost_internal",
+   "question": "클래스인 OPS 원가랑 칠판 원가 각각 얼마야?",
+   "expectTopic": "basics-cost-supply-price"
+  },
+  {
+   "id": "cost_internal-10",
+   "group": "cost_internal",
+   "question": "10대 사면 얼마까지 빼줘요?",
+   "expectTopic": "basics-discount-haggling"
+  },
+  {
+   "id": "cost_internal-11",
+   "group": "cost_internal",
+   "question": "클래스인 공급가 공개 가능한가요",
+   "expectTopic": "basics-cost-supply-price"
+  },
+  {
+   "id": "cost_internal-12",
+   "group": "cost_internal",
+   "question": "클래스인 원가 공개해주세요 학원장입니다",
+   "expectTopic": "basics-cost-supply-price"
+  },
+  {
+   "id": "cost_internal-13",
+   "group": "cost_internal",
+   "question": "클래스인 경쟁사보다 비싼 이유가 뭐죠",
+   "expectTopic": "basics-why-expensive"
+  },
+  {
+   "id": "cost_internal-14",
+   "group": "cost_internal",
+   "question": "클래스인 대리점 마진율은요?",
+   "expectTopic": "basics-cost-supply-price"
+  },
+  {
+   "id": "cost_internal-15",
+   "group": "cost_internal",
+   "question": "클래스인 OPS 따로 사면 얼마고 칠판에 포함이면 얼마예요",
+   "expectTopic": "basics-cost-supply-price"
+  },
+  {
+   "id": "pricing-01",
+   "group": "pricing",
+   "question": "요금제 어떻게 돼요?",
+   "expectTopic": null
+  },
+  {
+   "id": "pricing-02",
+   "group": "pricing",
+   "question": "클래스인 무료로 쓸 수 있나요?",
+   "expectTopic": null
+  },
+  {
+   "id": "pricing-03",
+   "group": "pricing",
+   "question": "ClassIn 체험해볼 수 있어요?",
+   "expectTopic": null
+  },
+  {
+   "id": "pricing-04",
+   "group": "pricing",
+   "question": "학생 한 명당 얼마예요",
+   "expectTopic": "basics-billing-unit"
+  },
+  {
+   "id": "pricing-05",
+   "group": "pricing",
+   "question": "클래스인 강사 수만큼 돈 내나요?",
+   "expectTopic": "basics-billing-unit"
+  },
+  {
+   "id": "pricing-06",
+   "group": "pricing",
+   "question": "클래스인 계약 기간 최소 얼마예요",
+   "expectTopic": "basics-billing-period-term"
+  },
+  {
+   "id": "pricing-07",
+   "group": "pricing",
+   "question": "한 달만 써도 되나요",
+   "expectTopic": "basics-billing-period-term"
+  },
+  {
+   "id": "pricing-08",
+   "group": "pricing",
+   "question": "클래스인 가격표 있어요?",
+   "expectTopic": null
+  },
+  {
+   "id": "pricing-09",
+   "group": "pricing",
+   "question": "클래스인 월 구독이에요 연 단위예요?",
+   "expectTopic": "basics-billing-period-term"
+  },
+  {
+   "id": "pricing-10",
+   "group": "pricing",
+   "question": "환불 규정 알려주세요",
+   "expectTopic": null
+  },
+  {
+   "id": "pricing-11",
+   "group": "pricing",
+   "question": "클래스인 줌보다 얼마나 저렴해요?",
+   "expectTopic": "basics-price-vs-zoom"
+  },
+  {
+   "id": "pricing-12",
+   "group": "pricing",
+   "question": "클래스인 공부방 한 곳이면 월 얼마쯤?",
+   "expectTopic": null
+  },
+  {
+   "id": "pricing-13",
+   "group": "pricing",
+   "question": "클래스인 무료 체험 끝나면 자동 결제되나요",
+   "expectTopic": "basics-trial-auto-billing"
+  },
+  {
+   "id": "pricing-14",
+   "group": "pricing",
+   "question": "클래스인 부가세 별도인가요",
+   "expectTopic": "basics-vat"
+  },
+  {
+   "id": "pricing-15",
+   "group": "pricing",
+   "question": "클래스인 기업교육용 단가 궁금합니다",
+   "expectTopic": "basics-corporate-training"
+  },
+  {
+   "id": "limits-01",
+   "group": "limits",
+   "question": "한 교실에 몇 명까지 들어와요?",
+   "expectTopic": "basics-max-participants"
+  },
+  {
+   "id": "limits-02",
+   "group": "limits",
+   "question": "클래스인 수업 한 번에 몇 시간까지 가능?",
+   "expectTopic": "basics-duration-limit"
+  },
+  {
+   "id": "limits-03",
+   "group": "limits",
+   "question": "클래스인 화면에 카메라 몇 개까지 떠요",
+   "expectTopic": "basics-cameras-on-screen"
+  },
+  {
+   "id": "limits-04",
+   "group": "limits",
+   "question": "파일 올릴 때 용량 제한 있어요?",
+   "expectTopic": "basics-file-upload-size"
+  },
+  {
+   "id": "limits-05",
+   "group": "limits",
+   "question": "클래스인 저장 공간 몇 GB예요",
+   "expectTopic": "basics-storage-quota"
+  },
+  {
+   "id": "limits-06",
+   "group": "limits",
+   "question": "클래스인 강사 계정 최대 몇 개까지 만들어요",
+   "expectTopic": "basics-plan-count-limits"
+  },
+  {
+   "id": "limits-07",
+   "group": "limits",
+   "question": "동시에 수업 몇 개 열 수 있나요",
+   "expectTopic": "basics-plan-count-limits"
+  },
+  {
+   "id": "limits-08",
+   "group": "limits",
+   "question": "클래스인 한 반 최대 인원이요",
+   "expectTopic": "basics-max-participants"
+  },
+  {
+   "id": "limits-09",
+   "group": "limits",
+   "question": "클래스인 수업 시간 제한 있나요 줌은 40분이던데",
+   "expectTopic": "basics-duration-limit"
+  },
+  {
+   "id": "limits-10",
+   "group": "limits",
+   "question": "학생 수 제한 없나요?",
+   "expectTopic": "basics-max-participants"
+  },
+  {
+   "id": "limits-11",
+   "group": "limits",
+   "question": "클래스인 코스 몇 개까지 만들 수 있어요?",
+   "expectTopic": "basics-plan-count-limits"
+  },
+  {
+   "id": "limits-12",
+   "group": "limits",
+   "question": "클래스인 PDF 몇 MB까지 올려요",
+   "expectTopic": "basics-file-upload-size"
+  },
+  {
+   "id": "limits-13",
+   "group": "limits",
+   "question": "클래스인 화상으로 최대 몇 명 얼굴 보여요",
+   "expectTopic": "basics-cameras-on-screen"
+  },
+  {
+   "id": "limits-14",
+   "group": "limits",
+   "question": "클래스인 100명 수업도 돼요?",
+   "expectTopic": "basics-max-participants"
+  },
+  {
+   "id": "limits-15",
+   "group": "limits",
+   "question": "클래스인 교실 최대 인원이랑 수업 시간 제한 알려주세요",
+   "expectTopic": "basics-capacity-and-duration"
+  },
+  {
+   "id": "limits-16",
+   "group": "limits",
+   "question": "줌은 40분 제한인데 여기는요?",
+   "expectTopic": "basics-zoom-time-limit"
+  },
+  {
+   "id": "retention-01",
+   "group": "retention",
+   "question": "녹화본 몇 달 보관돼요?",
+   "expectTopic": "basics-recording-retention-period"
+  },
+  {
+   "id": "retention-02",
+   "group": "retention",
+   "question": "클래스인 녹화 영상 언제까지 볼 수 있어요",
+   "expectTopic": "basics-recording-retention-period"
+  },
+  {
+   "id": "retention-03",
+   "group": "retention",
+   "question": "ClassIn 수업 녹화 얼마나 저장돼?",
+   "expectTopic": "basics-recording-retention-period"
+  },
+  {
+   "id": "retention-04",
+   "group": "retention",
+   "question": "녹화 파일 다운받을 수 있나요",
+   "expectTopic": "basics-recording-download"
+  },
+  {
+   "id": "retention-05",
+   "group": "retention",
+   "question": "클래스인 계약 끝나면 녹화본 어떻게 돼요",
+   "expectTopic": "basics-contract-end-data"
+  },
+  {
+   "id": "retention-06",
+   "group": "retention",
+   "question": "클래스인 영상 삭제하면 완전히 지워지나요",
+   "expectTopic": "basics-recording-delete"
+  },
+  {
+   "id": "retention-07",
+   "group": "retention",
+   "question": "채팅 기록도 저장되나요",
+   "expectTopic": null
+  },
+  {
+   "id": "retention-08",
+   "group": "retention",
+   "question": "클래스인 녹화본 1년 뒤에도 볼 수 있어요?",
+   "expectTopic": "basics-recording-retention-period"
+  },
+  {
+   "id": "retention-09",
+   "group": "retention",
+   "question": "클래스인 저장기간 연장 가능한가요",
+   "expectTopic": "basics-recording-auto-delete-extend"
+  },
+  {
+   "id": "retention-10",
+   "group": "retention",
+   "question": "해지하면 데이터 바로 사라져요?",
+   "expectTopic": "basics-contract-end-data"
+  },
+  {
+   "id": "retention-11",
+   "group": "retention",
+   "question": "클래스인 수업 녹화 삭제는 누가 할 수 있죠",
+   "expectTopic": "basics-recording-delete"
+  },
+  {
+   "id": "retention-12",
+   "group": "retention",
+   "question": "클래스인 녹화본 내 컴퓨터에 저장 가능?",
+   "expectTopic": "basics-recording-download"
+  },
+  {
+   "id": "retention-13",
+   "group": "retention",
+   "question": "클래스인 학생 정보 얼마나 보관해요",
+   "expectTopic": "basics-student-data-retention"
+  },
+  {
+   "id": "retention-14",
+   "group": "retention",
+   "question": "클래스인 보관 기간 지나면 자동 삭제인가요",
+   "expectTopic": "basics-recording-auto-delete-extend"
+  },
+  {
+   "id": "retention-15",
+   "group": "retention",
+   "question": "클래스인 녹화는 며칠 뒤에 사라지나요",
+   "expectTopic": "basics-recording-retention-period"
+  },
+  {
+   "id": "data_security-01",
+   "group": "data_security",
+   "question": "수업 영상 어느 나라 서버에 저장돼요?",
+   "expectTopic": "basics-data-server-location"
+  },
+  {
+   "id": "data_security-02",
+   "group": "data_security",
+   "question": "클래스인 중국 서버로 가는 거 아니죠?",
+   "expectTopic": "basics-data-server-location"
+  },
+  {
+   "id": "data_security-03",
+   "group": "data_security",
+   "question": "클래스인 개인정보보호법 지켜요?",
+   "expectTopic": "basics-security-posture"
+  },
+  {
+   "id": "data_security-04",
+   "group": "data_security",
+   "question": "녹화본 누가 볼 수 있어요",
+   "expectTopic": null
+  },
+  {
+   "id": "data_security-05",
+   "group": "data_security",
+   "question": "클래스인 중국회사라던데 학생 정보 안전해요?",
+   "expectTopic": "basics-china-company-data"
+  },
+  {
+   "id": "data_security-06",
+   "group": "data_security",
+   "question": "클래스인 보안 인증 받은 게 있나요 ISMS 같은",
+   "expectTopic": null
+  },
+  {
+   "id": "data_security-07",
+   "group": "data_security",
+   "question": "데이터 한국 서버에 있어요?",
+   "expectTopic": "basics-data-server-location"
+  },
+  {
+   "id": "data_security-08",
+   "group": "data_security",
+   "question": "클래스인 우리 아이 영상 해외로 나가요?",
+   "expectTopic": "basics-data-server-location"
+  },
+  {
+   "id": "data_security-09",
+   "group": "data_security",
+   "question": "클래스인 정보 유출 걱정되는데요",
+   "expectTopic": "basics-security-posture"
+  },
+  {
+   "id": "data_security-10",
+   "group": "data_security",
+   "question": "중국 정부가 데이터 볼 수 있나요",
+   "expectTopic": "basics-data-server-location"
+  },
+  {
+   "id": "data_security-11",
+   "group": "data_security",
+   "question": "클래스인 서버 위치 어디예요",
+   "expectTopic": "basics-data-server-location"
+  },
+  {
+   "id": "data_security-12",
+   "group": "data_security",
+   "question": "클래스인 미성년자 영상 보호는 어떻게 해요",
+   "expectTopic": "basics-security-posture"
+  },
+  {
+   "id": "data_security-13",
+   "group": "data_security",
+   "question": "클래스인 학부모 동의 받아야 하나요 녹화할 때",
+   "expectTopic": "basics-recording-parental-consent"
+  },
+  {
+   "id": "data_security-14",
+   "group": "data_security",
+   "question": "클래스인 암호화는 돼요?",
+   "expectTopic": "basics-encryption"
+  },
+  {
+   "id": "data_security-15",
+   "group": "data_security",
+   "question": "클래스인 중국회사 맞죠? 그럼 학생 영상 어디 저장되는지랑 개인정보 지키는지 알려줘요",
+   "expectTopic": "basics-china-company-data"
+  },
+  {
+   "id": "platform-01",
+   "group": "platform",
+   "question": "맥북에서도 돼요?",
+   "expectTopic": "basics-mac-support"
+  },
+  {
+   "id": "platform-02",
+   "group": "platform",
+   "question": "클래스인 맥 지원?",
+   "expectTopic": "basics-mac-support"
+  },
+  {
+   "id": "platform-03",
+   "group": "platform",
+   "question": "ClassIn 아이패드로 수업 가능?",
+   "expectTopic": "basics-mobile-device-support"
+  },
+  {
+   "id": "platform-04",
+   "group": "platform",
+   "question": "갤럭시탭 되나요",
+   "expectTopic": "basics-mobile-device-support"
+  },
+  {
+   "id": "platform-05",
+   "group": "platform",
+   "question": "클래스인 크롬북도 돼?",
+   "expectTopic": null
+  },
+  {
+   "id": "platform-06",
+   "group": "platform",
+   "question": "클래스인 폰으로 들어갈 수 있어요",
+   "expectTopic": "basics-teach-tablet-phone-only"
+  },
+  {
+   "id": "platform-07",
+   "group": "platform",
+   "question": "설치 없이 웹으로만 되나요",
+   "expectTopic": "basics-web-browser-only"
+  },
+  {
+   "id": "platform-08",
+   "group": "platform",
+   "question": "클래스인 리눅스 지원해요?",
+   "expectTopic": null
+  },
+  {
+   "id": "platform-09",
+   "group": "platform",
+   "question": "클래스인 옛날 컴퓨터도 돼요?",
+   "expectTopic": "basics-windows-old-pc-specs"
+  },
+  {
+   "id": "platform-10",
+   "group": "platform",
+   "question": "인터넷 속도 얼마나 필요해요",
+   "expectTopic": "basics-internet-speed-wifi"
+  },
+  {
+   "id": "platform-11",
+   "group": "platform",
+   "question": "클래스인 윈도우7에서도 되나요",
+   "expectTopic": "basics-windows-old-pc-specs"
+  },
+  {
+   "id": "platform-12",
+   "group": "platform",
+   "question": "클래스인 맥북에도 깔리나요? 학생은 아이패드 쓰는데",
+   "expectTopic": "basics-mac-support"
+  },
+  {
+   "id": "platform-13",
+   "group": "platform",
+   "question": "클래스인 스마트폰으로 수업 열 수 있나요",
+   "expectTopic": "basics-teach-tablet-phone-only"
+  },
+  {
+   "id": "platform-14",
+   "group": "platform",
+   "question": "클래스인 크롬 브라우저만 있으면 돼요?",
+   "expectTopic": "basics-web-browser-only"
+  },
+  {
+   "id": "platform-15",
+   "group": "platform",
+   "question": "클래스인 와이파이 약해도 수업 되나요",
+   "expectTopic": "basics-internet-speed-wifi"
+  },
+  {
+   "id": "compare-01",
+   "group": "compare",
+   "question": "줌이랑 뭐가 달라요?",
+   "expectTopic": null
+  },
+  {
+   "id": "compare-02",
+   "group": "compare",
+   "question": "클래스인 구글 미트 쓰면 안 돼요?",
+   "expectTopic": "basics-vs-other-video-tools"
+  },
+  {
+   "id": "compare-03",
+   "group": "compare",
+   "question": "클래스인 그냥 줌 쓰면 되는 거 아닌가요",
+   "expectTopic": null
+  },
+  {
+   "id": "compare-04",
+   "group": "compare",
+   "question": "팀즈보다 나은 점은?",
+   "expectTopic": "basics-vs-other-video-tools"
+  },
+  {
+   "id": "compare-05",
+   "group": "compare",
+   "question": "클래스인 다른 전자칠판이랑 비교하면요",
+   "expectTopic": null
+  },
+  {
+   "id": "compare-06",
+   "group": "compare",
+   "question": "왜 클래스인이에요? 줌도 있는데",
+   "expectTopic": null
+  },
+  {
+   "id": "compare-07",
+   "group": "compare",
+   "question": "줌보다 싼가요?",
+   "expectTopic": "basics-price-vs-zoom"
+  },
+  {
+   "id": "compare-08",
+   "group": "compare",
+   "question": "클래스인 구글 클래스룸이랑 같이 쓸 수 있어요?",
+   "expectTopic": "basics-google-classroom-coexist"
+  },
+  {
+   "id": "compare-09",
+   "group": "compare",
+   "question": "클래스인 네이버 웨일온 말고 이걸 써야 하나",
+   "expectTopic": "basics-vs-other-video-tools"
+  },
+  {
+   "id": "compare-10",
+   "group": "compare",
+   "question": "LMS랑 뭐가 달라요",
+   "expectTopic": "basics-vs-lms"
+  },
+  {
+   "id": "compare-11",
+   "group": "compare",
+   "question": "클래스인 줌 + 판서앱 조합이랑 비교해주세요",
+   "expectTopic": "basics-vs-zoom-whiteboard-combo"
+  },
+  {
+   "id": "compare-12",
+   "group": "compare",
+   "question": "클래스인 삼성 전자칠판이랑 차이는요",
+   "expectTopic": null
+  },
+  {
+   "id": "compare-13",
+   "group": "compare",
+   "question": "클래스인 온라인 수업 프로그램 중에 뭐가 제일 나아요?",
+   "expectTopic": "basics-vs-other-video-tools"
+  },
+  {
+   "id": "compare-14",
+   "group": "compare",
+   "question": "클래스인 줌 무료버전보다 뭐가 좋아?",
+   "expectTopic": null
+  },
+  {
+   "id": "compare-15",
+   "group": "compare",
+   "question": "클래스인 vs 줌 vs 미트 한 줄 비교",
+   "expectTopic": "basics-vs-other-video-tools"
+  },
+  {
+   "id": "customers-01",
+   "group": "customers",
+   "question": "대치동 세정학원도 쓰나요?",
+   "expectTopic": "basics-named-academy"
+  },
+  {
+   "id": "customers-02",
+   "group": "customers",
+   "question": "클래스인 세정학원에서 쓴다던데 맞아요",
+   "expectTopic": "basics-named-academy"
+  },
+  {
+   "id": "customers-03",
+   "group": "customers",
+   "question": "ClassIn 목동 한빛수학학원 같은 데도 써요?",
+   "expectTopic": "basics-named-academy"
+  },
+  {
+   "id": "customers-04",
+   "group": "customers",
+   "question": "우리 동네 학원 중에 쓰는 데 있나요",
+   "expectTopic": "basics-famous-regional-reference"
+  },
+  {
+   "id": "customers-05",
+   "group": "customers",
+   "question": "클래스인 국어학원 쓰는 사례 있어요?",
+   "expectTopic": null
+  },
+  {
+   "id": "customers-06",
+   "group": "customers",
+   "question": "클래스인 한국에서 몇 곳이나 쓰나요",
+   "expectTopic": "basics-customer-count"
+  },
+  {
+   "id": "customers-07",
+   "group": "customers",
+   "question": "도입 사례 보여주세요",
+   "expectTopic": null
+  },
+  {
+   "id": "customers-08",
+   "group": "customers",
+   "question": "클래스인 영어학원 후기 있나요",
+   "expectTopic": null
+  },
+  {
+   "id": "customers-09",
+   "group": "customers",
+   "question": "클래스인 학교에서도 쓰는 곳 있어요?",
+   "expectTopic": "basics-schools-universities-companies"
+  },
+  {
+   "id": "customers-10",
+   "group": "customers",
+   "question": "분당 이룸코딩학원 쓰고 있나요",
+   "expectTopic": "basics-named-academy"
+  },
+  {
+   "id": "customers-11",
+   "group": "customers",
+   "question": "클래스인 유명 학원 어디가 써요?",
+   "expectTopic": "basics-famous-regional-reference"
+  },
+  {
+   "id": "customers-12",
+   "group": "customers",
+   "question": "클래스인 수원 쪽 레퍼런스 알려주세요",
+   "expectTopic": "basics-famous-regional-reference"
+  },
+  {
+   "id": "customers-13",
+   "group": "customers",
+   "question": "클래스인 세정학원은 어떻게 쓰고 있나요?",
+   "expectTopic": "basics-named-academy"
+  },
+  {
+   "id": "customers-14",
+   "group": "customers",
+   "question": "클래스인 대형 학원 써본 데 있어요?",
+   "expectTopic": "basics-famous-regional-reference"
+  },
+  {
+   "id": "customers-15",
+   "group": "customers",
+   "question": "클래스인 부산 해솔국어교습소도 쓸 수 있나요 비슷한 곳 사례 있나요",
+   "expectTopic": "basics-named-academy"
+  },
+  {
+   "id": "basics-01",
+   "group": "basics",
+   "question": "뭐하는 회사야",
+   "expectTopic": null
+  },
+  {
+   "id": "basics-02",
+   "group": "basics",
+   "question": "클래스인이 뭐예요?",
+   "expectTopic": null
+  },
+  {
+   "id": "basics-03",
+   "group": "basics",
+   "question": "클래스인 누구를 위한 서비스예요",
+   "expectTopic": null
+  },
+  {
+   "id": "basics-04",
+   "group": "basics",
+   "question": "주요 기능이 뭐죠",
+   "expectTopic": "basics-main-features"
+  },
+  {
+   "id": "basics-05",
+   "group": "basics",
+   "question": "클래스인 초등학생도 쓸 수 있어요?",
+   "expectTopic": "basics-fit-elementary"
+  },
+  {
+   "id": "basics-06",
+   "group": "basics",
+   "question": "클래스인 과외 선생님도 쓸 수 있나요",
+   "expectTopic": null
+  },
+  {
+   "id": "basics-07",
+   "group": "basics",
+   "question": "공부방에 맞아요?",
+   "expectTopic": "basics-fit-small-private"
+  },
+  {
+   "id": "basics-08",
+   "group": "basics",
+   "question": "클래스인 대형학원에도 맞나요",
+   "expectTopic": "basics-fit-large-academy"
+  },
+  {
+   "id": "basics-09",
+   "group": "basics",
+   "question": "클래스인 학교 수업에도 쓸 수 있어요?",
+   "expectTopic": "basics-fit-school"
+  },
+  {
+   "id": "basics-10",
+   "group": "basics",
+   "question": "기업 교육용으로도 되나요",
+   "expectTopic": "basics-corporate-training"
+  },
+  {
+   "id": "basics-11",
+   "group": "basics",
+   "question": "클래스인 그냥 화상수업 프로그램이에요?",
+   "expectTopic": "basics-not-just-video"
+  },
+  {
+   "id": "basics-12",
+   "group": "basics",
+   "question": "클래스인 온라인이랑 오프라인 같이 하는 건가요",
+   "expectTopic": "basics-hybrid"
+  },
+  {
+   "id": "basics-13",
+   "group": "basics",
+   "question": "클래스인 성인 대상 강의도 돼요?",
+   "expectTopic": "basics-fit-adult"
+  },
+  {
+   "id": "basics-14",
+   "group": "basics",
+   "question": "클래스인 학부모도 가입해야 해요",
+   "expectTopic": "basics-parent-signup"
+  },
+  {
+   "id": "basics-15",
+   "group": "basics",
+   "question": "클래스인 수업 중에 판서 같이 하는 건가요 뭐하는 건지 궁금해요",
+   "expectTopic": "basics-main-features"
+  },
+  {
+   "id": "how_trap-01",
+   "group": "how_trap",
+   "question": "동시 접속 제한 있나요?",
+   "expectTopic": "basics-max-participants"
+  },
+  {
+   "id": "how_trap-02",
+   "group": "how_trap",
+   "question": "클래스인 접속하려면 비용 드나요",
+   "expectTopic": "basics-access-cost"
+  },
+  {
+   "id": "how_trap-03",
+   "group": "how_trap",
+   "question": "클래스인 설치비는 따로인가요?",
+   "expectTopic": "basics-install-fee"
+  },
+  {
+   "id": "how_trap-04",
+   "group": "how_trap",
+   "question": "결제 없이 써볼 수 있나요?",
+   "expectTopic": null
+  },
+  {
+   "id": "how_trap-05",
+   "group": "how_trap",
+   "question": "클래스인 카메라 없어도 수업 되나요?",
+   "expectTopic": "basics-camera-required"
+  },
+  {
+   "id": "how_trap-06",
+   "group": "how_trap",
+   "question": "클래스인 계정 하나로 여러 명 써도 돼요?",
+   "expectTopic": "basics-account-sharing"
+  },
+  {
+   "id": "how_trap-07",
+   "group": "how_trap",
+   "question": "로그인 방식은 뭐가 있어요 구글도 되나요",
+   "expectTopic": null
+  },
+  {
+   "id": "how_trap-08",
+   "group": "how_trap",
+   "question": "클래스인 오류 나면 환불되나요",
+   "expectTopic": null
+  },
+  {
+   "id": "how_trap-09",
+   "group": "how_trap",
+   "question": "클래스인 녹화하면 요금 더 붙어요?",
+   "expectTopic": "basics-recording-extra-fee"
+  },
+  {
+   "id": "how_trap-10",
+   "group": "how_trap",
+   "question": "칠판 설치 기사님 오시나요 비용은요",
+   "expectTopic": "basics-install-fee"
+  },
+  {
+   "id": "how_trap-11",
+   "group": "how_trap",
+   "question": "클래스인 OPS 없어도 칠판 쓸 수 있죠",
+   "expectTopic": "basics-ops-required"
+  },
+  {
+   "id": "how_trap-12",
+   "group": "how_trap",
+   "question": "클래스인 결제 수단 카드만 되나요",
+   "expectTopic": "basics-payment-methods"
+  },
+  {
+   "id": "how_trap-13",
+   "group": "how_trap",
+   "question": "카메라 몇 대 연결할 수 있어요",
+   "expectTopic": "basics-camera-connect-count"
+  },
+  {
+   "id": "how_trap-14",
+   "group": "how_trap",
+   "question": "클래스인 접속 인원 많으면 느려지나요",
+   "expectTopic": "basics-load-performance"
+  },
+  {
+   "id": "how_trap-15",
+   "group": "how_trap",
+   "question": "클래스인 환불하면 설치한 것도 돌려줘야 하나요",
+   "expectTopic": null
+  }
+ ]
+}
