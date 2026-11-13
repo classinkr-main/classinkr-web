@@ -336,7 +336,7 @@ describe("주간 보고서가 쓰는 '마지막 일일 보고 이후' 구간", (
           name: "<test lead: dummy data>",
         },
         // 보고 대상 소스가 아니다
-        { id: "e", source: "chatbot", timestamp: "2026-09-06T07:00:00.000Z", status: "new" },
+        { id: "e", source: "channel_talk", timestamp: "2026-09-06T07:00:00.000Z", status: "new" },
         // 구간 밖(금요일 카드가 이미 보고함)
         { id: "f", source: "contact_page", timestamp: "2026-09-04T00:00:00.000Z", status: "new" },
       ] as never,
@@ -381,7 +381,7 @@ describe("주간 보고서가 쓰는 '마지막 일일 보고 이후' 구간", (
         // 보고 대상 소스가 아니면 재문의여도 빠진다
         {
           id: "d",
-          source: "chatbot",
+          source: "channel_talk",
           timestamp: "2026-08-20T02:00:00.000Z",
           last_inflow_at: "2026-09-06T03:00:00.000Z",
           status: "new",

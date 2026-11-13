@@ -1,6 +1,7 @@
 import type {
   PartnerQuoteDetailsInput,
   PartnerQuoteLineItemInput,
+  QuoteDiscountInput,
   QuoteOptionSelectionValue,
 } from "@/lib/partners-types"
 import { getProductBySku } from "@/lib/product-templates"
@@ -114,6 +115,24 @@ export const RETIRED_QUOTE_TEMPLATE_IDS: ReadonlySet<StandardQuoteTemplateId> = 
 
 export function isRetiredQuoteTemplate(templateId?: string | null): boolean {
   return RETIRED_QUOTE_TEMPLATE_IDS.has(templateId as StandardQuoteTemplateId)
+}
+
+/** 금액 없는 안내 행(조건·할부 안내 등). 견적서에서 수량·단가·금액을 "–"로 찍는다. */
+export function isQuoteNoteLine(line: Pick<PartnerQuoteLineItemInput, "itemType" | "lineStatus">) {
+  return line.itemType === "note_only" || line.lineStatus === "informational"
+}
+
+/**
+ * 녹화 세트 12개월 할부 안내 — 총액(VAT 포함, 할인 반영) ÷ 12.
+ * 고객 문서(공유 링크·내부 보기·PDF)와 작성기가 같은 문구를 쓰도록 견적서 렌더러가 찍는다.
+ */
+export function getQuoteInstallmentNote(
+  quote: Pick<PartnerQuoteDetailsInput, "templateId" | "optionSelections" | "grandTotalAmount">
+): string | null {
+  if (!isRecordingStudioTemplate(quote.templateId) || quote.optionSelections?.payment_plan !== "12_month") return null
+  const total = quote.grandTotalAmount ?? 0
+  if (!(total > 0)) return null
+  return `12개월 할부 시 월 약 ${formatStandardQuoteCurrency(Math.round(total / 12))}원 (VAT 포함)`
 }
 
 /** 올인원 녹화수업 세트(86"·75"). 같은 옵션·조건 행을 쓴다. */
@@ -515,7 +534,7 @@ export const STANDARD_QUOTE_TEMPLATES: StandardQuoteTemplatePreset[] = [
       },
       {
         id: "board_86_bundle",
-        label: "86 번들",
+        label: '86" 번들',
         description: '전자칠판 86" + T1 + 벽걸이',
         templateId: "board_86",
         optionSelections: {
@@ -886,20 +905,60 @@ export function mergeStandardQuoteLineItems(
   })
 }
 
+export const DEFAULT_QUOTE_DISCOUNT_LABEL = "특별 할인"
+
+/** 저장된 값이나 화면 입력을 할인 입력으로 정리한다. 0 이하·숫자 아님은 할인 없음. */
+export function normalizeQuoteDiscount(value: unknown): QuoteDiscountInput | undefined {
+  if (!value || typeof value !== "object") return undefined
+  const record = value as Record<string, unknown>
+  const mode = record.mode === "rate" ? "rate" : record.mode === "amount" ? "amount" : undefined
+  const raw = typeof record.value === "number" ? record.value : Number(record.value)
+  if (!mode || !Number.isFinite(raw) || raw <= 0) return undefined
+  const label = typeof record.label === "string" ? record.label.trim().slice(0, 40) : ""
+  return {
+    mode,
+    value: mode === "rate" ? Math.min(100, Math.round(raw * 10) / 10) : Math.round(raw),
+    ...(label ? { label } : {}),
+  }
+}
+
+/** 할인 금액(원). 품목 공급가 합계를 넘지 않는다. */
+export function resolveQuoteDiscountAmount(subtotalAmount: number, discount?: QuoteDiscountInput | null) {
+  const normalized = normalizeQuoteDiscount(discount)
+  if (!normalized || !(subtotalAmount > 0)) return 0
+  const raw = normalized.mode === "rate" ? (subtotalAmount * normalized.value) / 100 : normalized.value
+  return Math.min(subtotalAmount, Math.max(0, Math.round(raw)))
+}
+
+/** 견적서·목록에 찍는 할인 이름. % 할인은 비율을 붙인다(예: "교육기관 할인 10%"). */
+export function formatQuoteDiscountLabel(discount?: QuoteDiscountInput | null) {
+  const normalized = normalizeQuoteDiscount(discount)
+  const label = normalized?.label || DEFAULT_QUOTE_DISCOUNT_LABEL
+  return normalized?.mode === "rate" ? `${label} ${normalized.value}%` : label
+}
+
+/**
+ * 합계 계산. subtotalAmount = 품목 공급가 합계(할인 전), discountAmount = 견적 할인,
+ * 부가세(VAT 별도)는 할인 뒤 공급가에 붙고, grandTotalAmount = 할인 뒤 공급가 + 부가세.
+ */
 export function calculateStandardQuoteTotals(
   lineItems: PartnerQuoteDetailsInput["lineItems"],
-  vatIncluded = true
+  vatIncluded = true,
+  discount?: QuoteDiscountInput | null
 ) {
   const items = Array.isArray(lineItems) ? lineItems : []
   const subtotalAmount = items.reduce((sum, item) => sum + Number(item.lineSupplyAmount ?? 0), 0)
-  const vatAmount = vatIncluded ? 0 : Math.round(subtotalAmount * 0.1)
-  const grandTotalAmount = subtotalAmount + vatAmount
+  const discountAmount = resolveQuoteDiscountAmount(subtotalAmount, discount)
+  const discountedSupplyAmount = subtotalAmount - discountAmount
+  const vatAmount = vatIncluded ? 0 : Math.round(discountedSupplyAmount * 0.1)
+  const grandTotalAmount = discountedSupplyAmount + vatAmount
   const hasPendingAmounts = items.some((item) => isPendingQuoteLine(item))
 
   return {
     subtotalAmount,
     vatAmount,
-    discountAmount: 0,
+    discountAmount,
+    discountedSupplyAmount,
     grandTotalAmount,
     hasPendingAmounts,
     pendingAmountNote: hasPendingAmounts ? "별도 청구 예정 항목은 합계에서 제외됩니다." : undefined,
@@ -916,7 +975,8 @@ export function finalizeStandardQuoteDetails(
   const resolvedTemplateId = templateId ?? fallbackTemplateId ?? STANDARD_QUOTE_TEMPLATES[0].id
   const vatIncluded = input?.vatIncluded ?? true
   const lineItems = finalizeLineItems(input?.lineItems)
-  const totals = calculateStandardQuoteTotals(lineItems, vatIncluded)
+  const quoteDiscount = normalizeQuoteDiscount(input?.quoteDiscount)
+  const totals = calculateStandardQuoteTotals(lineItems, vatIncluded, quoteDiscount)
   const deliveryLocationNote = input?.deliveryLocationNote?.trim() || STANDARD_QUOTE_DEFAULT_DELIVERY_NOTE
 
   // 공급자 스냅샷: 커스텀 공급자(상호명)가 지정되면 그 블록을 통째로 사용하고(빈 필드는 빈 채로),
@@ -968,6 +1028,7 @@ export function finalizeStandardQuoteDetails(
     footerContactText: input?.footerContactText?.trim() || `${supplier.contactName}/${supplier.contactPhone}`,
     internalMemo: input?.internalMemo?.trim() || undefined,
     optionSelections: input?.optionSelections,
+    quoteDiscount,
     pricingSource: input?.pricingSource?.trim() || undefined,
     generatedFromVersionId: input?.generatedFromVersionId?.trim() || undefined,
     generatedFromTemplateVersion: input?.generatedFromTemplateVersion?.trim() || undefined,

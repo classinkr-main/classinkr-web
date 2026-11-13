@@ -212,6 +212,9 @@ export const SCHEMA_CONTRACT_MIGRATIONS = [
   // 쇼룸 예약 Compass 확정(2026-11-06) — 확정 칸 4개 + compass_demos_v.at. 미적용이면 확정 크론이 건너뛰고(브리지 down)
   // 어드민 접수 큐는 확정 칸 없이 읽는다(warning). 코드 배포 전에 적용한다.
   "supabase/migrations/20261106_showroom_booking_compass_confirm.sql",
+  // 챗봇 Claude 라벨 · 사용량(2026-11-12) — 없어도 코드는 돈다(라벨 건너뜀, 예산은 인스턴스 메모리 합계만).
+  // CHATBOT_PROVIDER=claude 를 켜기 전에 적용한다(warning).
+  "supabase/migrations/20261112_chatbot_claude_labels.sql",
 ] as const
 
 export const SCHEMA_PROBES: SchemaProbe[] = [
@@ -1094,6 +1097,37 @@ export const SCHEMA_PROBES: SchemaProbe[] = [
     severity: "warning",
     impact:
       "META_CRM_SIGNAL_ENABLED 를 켜도 크론이 원장을 읽지 못해 아무것도 보내지 않는다(cron/meta-crm-signal 500). 꺼져 있으면 영향 없다.",
+  },
+  {
+    kind: "table",
+    table: "chatbot_session_labels",
+    label: "챗봇 대화 라벨(의도·기관·단계·온도 — Claude Haiku)",
+    columns: ["session_id", "answer_event_id", "intent", "segment", "stage", "temperature", "session_temperature", "handoff"],
+    migration: "supabase/migrations/20261112_chatbot_claude_labels.sql",
+    severity: "warning",
+    impact:
+      "CHATBOT_LABELING_ENABLED(또는 CHATBOT_PROVIDER=claude)를 켜도 라벨링이 조용히 건너뛴다 — 대화 라벨이 쌓이지 않는다. 꺼져 있으면 영향 없다.",
+  },
+  {
+    kind: "table",
+    table: "chatbot_llm_usage",
+    label: "챗봇 Claude 호출 사용량·추정 비용(일·월 예산 가드)",
+    columns: ["kind", "model", "input_tokens", "output_tokens", "usd", "session_id", "created_at"],
+    migration: "supabase/migrations/20261112_chatbot_claude_labels.sql",
+    severity: "warning",
+    impact:
+      "CHATBOT_PROVIDER=claude 일 때 일·월 예산을 인스턴스 메모리 합계로만 잰다 — 서버리스 인스턴스가 여럿이면 상한을 넘겨 쓸 수 있다. gemini 면 영향 없다.",
+  },
+  {
+    kind: "rpc",
+    functionName: "chatbot_llm_usage_sum",
+    label: "챗봇 Claude 사용량 합계 RPC(예산 가드)",
+    // 읽기 전용 합계지만 id 인자가 없어 실행 프로브 규약(0-UUID)에 맞지 않는다 — 카탈로그·권한만 본다.
+    catalogIdentityTypes: "timestamp with time zone",
+    serviceRoleOnly: true,
+    migration: "supabase/migrations/20261112_chatbot_claude_labels.sql",
+    severity: "warning",
+    impact: "chatbot_llm_usage 와 같다 — 예산 가드가 인스턴스 메모리 합계로만 돈다.",
   },
 ]
 

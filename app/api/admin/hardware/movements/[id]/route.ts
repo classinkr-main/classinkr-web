@@ -24,6 +24,7 @@ import {
 import { logAdminAudit } from "@/lib/auth/audit"
 import { HARDWARE_OUTBOUND_TYPES } from "@/lib/hardware/inventory-process"
 import { advanceDealForShippedMovementSafely } from "@/lib/orders/deal-stage"
+import { requestDistributorReviewOnInstallSafely } from "@/lib/server/distributor-settlement-install"
 import {
   confirmPlannedHardwareMovement,
   HARDWARE_MOVEMENT_TYPES,
@@ -50,16 +51,24 @@ export async function PATCH(
     const actorContext = toHardwareActor(admin)
 
     if (action === "confirm-planned") {
+      const lotNo = readOptionalString(body, "lotNo", "물류번호")
+      const lotAllocations = readLotAllocations(body)
       const movement = await confirmPlannedHardwareMovement(id, {
         occurredAt: readOptionalDate(body, "occurredAt", "출고일"),
         confirmQty: readOptionalNonNegativeInt(body, "confirmQty", "확정 수량"),
         actor: admin.name ?? admin.userId ?? admin.role,
         actorContext,
-        lotNo: readOptionalString(body, "lotNo", "물류번호"),
-        lotAllocations: readLotAllocations(body),
+        lotNo,
+        lotAllocations,
       })
       // 오더로 만든 배송 예정이면 그 딜을 설치 단계로 올린다(전진만, 실패해도 확정은 그대로).
       await advanceDealForShippedMovementSafely(movement)
+      // 설치 완료 → 총판 정산을 자동으로 준비하고 검토를 요청한다(자동 발행·자동 매출 없음, 실패해도 확정은 그대로).
+      // 방식(C/H)은 출고 로트 첫 글자로 본다 — 요청의 물류번호 배정을 함께 넘긴다(여러 로트일 수 있다).
+      const distributorReview = await requestDistributorReviewOnInstallSafely({
+        ...movement,
+        lotNos: lotAllocations?.map((allocation) => allocation.lotNo) ?? (lotNo ? [lotNo] : null),
+      })
       await logAdminAudit({
         admin,
         action: "hardware.movement.finalize",
@@ -68,6 +77,12 @@ export async function PATCH(
         payload: {
           confirmQty: typeof body.confirmQty === "number" ? body.confirmQty : null,
           lotNo: movement.lot_no ?? null,
+          // 총판 정산 자동 준비 결과 — 실패·건너뜀이 응답을 막지 않으므로 감사 기록에라도 남겨 추적한다.
+          distributorReview: distributorReview
+            ? distributorReview.status === "skipped"
+              ? `skipped: ${distributorReview.reason ?? ""}`.slice(0, 200)
+              : distributorReview.status
+            : "failed",
         },
       })
       return NextResponse.json({ movement })

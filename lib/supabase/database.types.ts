@@ -25,7 +25,8 @@ export type LeadSource =
   | "checkout_request"
   | "newsletter"
   | "manual"
-  | "meta_lead_ads";
+  | "meta_lead_ads"
+  | "chatbot";
 
 /* ─── Table Row Types ─── */
 

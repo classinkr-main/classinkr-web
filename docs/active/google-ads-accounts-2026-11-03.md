@@ -87,8 +87,10 @@
 **캠페인 유형·유튜브 조회수(2026-11-06)**: 크론이 `campaign.advertising_channel_type`(VIDEO·DEMAND_GEN·SEARCH …)과
 `metrics.video_trueview_views`(구글 화면의 'TrueView 조회수')도 받아 `google_ads_daily.channel_type`·`video_views` 에 둔다.
 Compass 광고 탭 「구글」이 같은 DB 에서 이 표를 읽어 유튜브·검색을 가르고 조회당 비용을 낸다. 칸은
-`20261106_google_ads_daily_channel_video.sql` — 서울 프로젝트에 **2026-11-06 적용 완료**([DB 마이그레이션 런북](db-migration-runbook.md)). 남은 것은 코드 운영 배포.
-적용 전에 쌓인 행은 두 칸이 NULL 이고, 크론이 trailing 7일을 다시 받으며 채운다(11/3 행은 11/10 크론까지가 마지막 기회).
+`20261106_google_ads_daily_channel_video.sql` — 서울 프로젝트에 **2026-11-06 적용 완료**([DB 마이그레이션 런북](db-migration-runbook.md)).
+코드도 운영에 나갔다 — 11/9 05:35 KST 크론이 11/3~11/9 열두 줄의 유형·조회수를 모두 채운 것을 확인했다(NULL 0줄).
+어드민도 같은 칸을 쓴다(2026-11-10): 데이터 › Google Ads 「캠페인 실적 — API」 표에 유형 · 조회수 · 조회당 비용(합계는 조회수를 잰
+캠페인 광고비로만 나눈다), 광고 탭 Google 카드 참고 줄에 「조회 · 조회당」. 조회수가 빈 날이 섞이면 「이상」을 붙이고 조회당 비용은 비운다.
 
 어드민 Google Ads 섹션 헤더의 'API …' 표시와 남은 일의 'API 연동' 줄은 실제 설정값을 읽으므로, 켜면 저절로 바뀌고 사라진다.
 API 버전 `v25`는 2027년 8월 지원 종료 예정이다.

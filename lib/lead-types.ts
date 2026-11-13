@@ -9,6 +9,13 @@ export type LeadSource =
   | "checkout_request"
   | "newsletter"
   | "meta_lead_ads"
+  /**
+   * 사이트 챗봇에서 넘어온 상담 — 챗봇 상담 연결(ConsultationBridge)이 `/contact?source=chatbot`
+   * 으로 보내고, 문의 폼이 그 값을 그대로 실어 /api/lead → submitLeadCapture 로 접수한다.
+   * 예전에는 챗봇이 `[LEAD_SUBMIT]` 토큰으로 saveLead 를 직접 불러 Compass·광고 전환·동의
+   * 게이트를 건너뛰고 contact_page 로 위장했다.
+   */
+  | "chatbot"
 
 /**
  * 사람이 공개 화면에서 직접 남긴 리드 — 응답 SLA·다이제스트·아침 공지의 대상.
@@ -27,6 +34,7 @@ export const DIRECT_INBOUND_LEAD_SOURCES: ReadonlySet<string> = new Set<LeadSour
   "showroom_booking",
   "checkout_request",
   "meta_lead_ads",
+  "chatbot",
 ])
 
 /**
@@ -38,6 +46,8 @@ export const WEBSITE_FORM_LEAD_SOURCES: ReadonlySet<string> = new Set<LeadSource
   "contact_page",
   "showroom_booking",
   "checkout_request",
+  // 챗봇 경유도 결국 공개 사이트의 문의 폼으로 접수된다 — contact_page 와 같은 Compass 규칙.
+  "chatbot",
 ])
 
 /**

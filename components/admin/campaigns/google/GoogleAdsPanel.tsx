@@ -1,6 +1,7 @@
 import { AlertTriangle, CalendarRange, CheckCircle2, Circle, ExternalLink, Gauge, Target, Wallet } from "lucide-react"
 import { COUNT, compact, money, won } from "@/components/admin/campaigns/event-format"
 import { KpiCard } from "@/components/admin/campaigns/tabs/KpiCard"
+import { googleChannelTypeLabel } from "@/lib/marketing/ad-insights"
 import { GOOGLE_ADS_CONFIG_HINT, spendCell, type CoverageState } from "@/lib/marketing/channel-coverage"
 import {
   GOOGLE_ADS_ACCOUNTS,
@@ -51,6 +52,12 @@ const shortDate = (iso: string) => `${Number(iso.slice(5, 7))}/${Number(iso.slic
 const amount = (n: number | null, currency: string | null) =>
   n == null || currency == null ? "—" : currency === "KRW" ? won(n) : money(n, currency)
 const count = (n: number | null) => (n == null ? "—" : COUNT.format(n))
+/** 조회수 — 칸이 생기기 전 날이 섞였으면 합이 하한이라 「이상」을 붙인다. 재지 않았으면 —. */
+const views = (n: number | null | undefined, partial: boolean | undefined) =>
+  n == null ? "—" : `${COUNT.format(n)}${partial ? " 이상" : ""}`
+/** 조회당 비용 — 원화도 100원 아래는 소수 한 자리(₩11.3). 목표 CPV(₩40)와 견줄 수 있게. */
+const perView = (n: number | null | undefined, currency: string | null) =>
+  n == null || currency == null ? "—" : currency === "KRW" && n < 100 ? `₩${n.toFixed(1)}` : amount(n, currency)
 
 export default function GoogleAdsPanel({
   perf,
@@ -68,6 +75,18 @@ export default function GoogleAdsPanel({
   const primary = GOOGLE_ADS_ACCOUNTS.find((account) => account.primary)
   const couponPct = Math.round((GOOGLE_ADS_COUPON.reservedSpend / GOOGLE_ADS_COUPON.spendTarget) * 100)
   const dailyAll = GOOGLE_ADS_CAMPAIGN_PLAN.reduce((sum, campaign) => sum + campaign.dailyBudget, 0)
+  // 합계 줄의 조회수 — 조회수를 잰 캠페인만 더하고, 조회당 비용은 그 캠페인들의 광고비로만 나눈다(검색 광고비를 섞지 않는다).
+  // 빈 날이 섞인 캠페인이 있거나 통화가 섞이면 조회당 비용을 비운다.
+  const viewed = campaigns.filter((campaign) => campaign.videoViews != null)
+  const viewSum = viewed.reduce((sum, campaign) => sum + (campaign.videoViews ?? 0), 0)
+  const viewPartial = viewed.some((campaign) => campaign.viewsPartial)
+  const viewSpend = viewed.reduce((sum, campaign) => sum + (campaign.spend ?? 0), 0)
+  const viewCurrencies = new Set(viewed.map((campaign) => campaign.currency))
+  const viewTotals = {
+    views: viewed.length ? viewSum : null,
+    partial: viewPartial,
+    costPerView: viewSum > 0 && !viewPartial && viewCurrencies.size === 1 ? Math.round((viewSpend / viewSum) * 100) / 100 : null,
+  }
 
   return (
     <div className="space-y-5">
@@ -118,9 +137,12 @@ export default function GoogleAdsPanel({
                 <thead className="bg-[#fafaf8] text-[#1a1a1a]/45">
                   <tr>
                     <th className="px-4 py-3 font-semibold">캠페인</th>
+                    <th className="px-4 py-3 font-semibold">유형</th>
                     <th className="px-4 py-3 text-right font-semibold">광고비</th>
                     <th className="px-4 py-3 text-right font-semibold">노출</th>
                     <th className="px-4 py-3 text-right font-semibold">클릭</th>
+                    <th className="px-4 py-3 text-right font-semibold">조회수</th>
+                    <th className="px-4 py-3 text-right font-semibold">조회당 비용</th>
                     <th className="px-4 py-3 text-right font-semibold">전환</th>
                     <th className="px-4 py-3 text-right font-semibold">전환당 비용</th>
                   </tr>
@@ -131,9 +153,12 @@ export default function GoogleAdsPanel({
                       <td className="max-w-[320px] truncate px-4 py-3 font-semibold text-[#111110]">
                         {campaign.campaignName ?? campaign.campaignId}
                       </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-[#615D59]">{googleChannelTypeLabel(campaign.channelType) ?? "—"}</td>
                       <td className="px-4 py-3 text-right tabular-nums text-[#111110]">{amount(campaign.spend, campaign.currency)}</td>
                       <td className="px-4 py-3 text-right tabular-nums text-[#111110]">{count(campaign.impressions)}</td>
                       <td className="px-4 py-3 text-right tabular-nums text-[#111110]">{count(campaign.clicks)}</td>
+                      <td className="px-4 py-3 text-right tabular-nums text-[#111110]">{views(campaign.videoViews, campaign.viewsPartial)}</td>
+                      <td className="px-4 py-3 text-right tabular-nums text-[#111110]">{perView(campaign.costPerView, campaign.currency)}</td>
                       <td className="px-4 py-3 text-right tabular-nums text-[#111110]">{count(campaign.conversions)}</td>
                       <td className="px-4 py-3 text-right tabular-nums text-[#111110]">
                         {amount(campaign.costPerConversion, campaign.currency)}
@@ -145,9 +170,12 @@ export default function GoogleAdsPanel({
                   <tfoot className="border-t border-[#e8e8e4] bg-[#fdfdfc] font-semibold text-[#111110]">
                     <tr>
                       <td className="px-4 py-3">합계 {live.campaignCount}개</td>
+                      <td className="px-4 py-3" />
                       <td className="px-4 py-3 text-right tabular-nums">{amount(live.spend, live.currency)}</td>
                       <td className="px-4 py-3 text-right tabular-nums">{count(live.impressions)}</td>
                       <td className="px-4 py-3 text-right tabular-nums">{count(live.clicks)}</td>
+                      <td className="px-4 py-3 text-right tabular-nums">{views(viewTotals.views, viewTotals.partial)}</td>
+                      <td className="px-4 py-3 text-right tabular-nums">{perView(viewTotals.costPerView, live.currency)}</td>
                       <td className="px-4 py-3 text-right tabular-nums">{count(live.conversions)}</td>
                       <td className="px-4 py-3 text-right tabular-nums">{amount(live.costPerConversion, live.currency)}</td>
                     </tr>

@@ -137,3 +137,30 @@ describe("gadCampaignIdOf", () => {
     expect(gadCampaignIdOf(null)).toBeNull()
   })
 })
+
+describe("buildAdBoard — Google 줄의 유형 · 조회수(2026-11-10)", () => {
+  const board = buildAdBoard({
+    since: "2026-11-03",
+    until: UNTIL,
+    meta: [],
+    google: [
+      google({ date: "2026-11-04", spend: 3000, channelType: "VIDEO", videoViews: 300 }),
+      google({ date: "2026-11-05", spend: 1000, channelType: "VIDEO", videoViews: 100 }),
+      // 기간 앞 줄은 조회수 합에 넣지 않는다
+      google({ date: "2026-10-30", spend: 9000, channelType: "VIDEO", videoViews: 9000 }),
+      google({ campaignId: "g9", campaignName: "계획 밖", date: UNTIL, spend: 500, channelType: "DEMAND_GEN", videoViews: 50 }),
+    ],
+    plan,
+    leads: [],
+  })
+  const byId = (id: string) => board.google.campaigns.find((c) => c.id === id)
+
+  it("계획표 줄(C1)과 계획 밖 줄 모두 기간 안 행으로 유형·조회수·조회당 비용을 든다", () => {
+    expect(byId("g1")?.video).toEqual({ channelType: "VIDEO", videoViews: 400, viewsPartial: false, costPerView: 10 })
+    expect(byId("g9")?.video).toEqual({ channelType: "DEMAND_GEN", videoViews: 50, viewsPartial: false, costPerView: 10 })
+  })
+
+  it("집행이 없는 계획 줄(C2 예정)에는 지어내지 않는다", () => {
+    expect(board.google.campaigns.find((c) => c.key === "C2")?.video).toBeUndefined()
+  })
+})

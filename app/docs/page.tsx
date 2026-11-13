@@ -205,13 +205,13 @@ export default async function DocsHomePage({ searchParams }: DocsHomePageProps) 
           Classin Guide
         </p>
         <h1 className="hero-soft-enter hero-soft-enter-title mt-4 break-keep text-[2.35rem] font-black leading-[1.08] tracking-display sm:text-5xl md:text-6xl">
-          필요한 안내를
+          클래스인 사용법,
           <br className="hidden md:block" />{" "}
-          바로 찾으세요.
+          필요한 곳부터 찾아보세요.
         </h1>
         <p className="hero-soft-enter hero-soft-enter-copy mt-5 max-w-2xl text-lg leading-8 text-[#615D59]">
-          설치부터 코스 개설, 수업 중에 생기는 문제까지 역할별로 나눠 두었습니다. 검색하거나
-          아래에서 지금 상황을 고르세요.
+          수업 준비부터 복습, 관리자 데이터까지 한 흐름으로 안내합니다. 막히는 순간에는 바로 해결
+          방법을 찾을 수 있어요.
         </p>
 
         {/* 검색도 면을 두지 않는다 — 카테고리 페이지와 같은 밑줄 입력으로 두 화면을 맞춘다. */}

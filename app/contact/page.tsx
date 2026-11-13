@@ -21,6 +21,7 @@ import { ContactFastTrack } from "@/components/contact/ContactFastTrack"
 import { AdConsentCheckbox } from "@/components/consent/AdConsentCheckbox"
 import { EMPTY_AD_CONSENT, isAdConsentGiven } from "@/lib/consent/ad-consent"
 import { CONTACT_TOPICS, EVENT_CONTACT_TOPICS, isContactTopic } from "@/lib/contact/topics"
+import { type ContactLeadSource, resolveContactLeadSource } from "@/lib/contact/lead-source"
 import type { PublicEvent } from "@/lib/types/public-events"
 
 const PHONE_ALLOWED_INPUT_PATTERN = /^[\d\s-]*$/
@@ -71,6 +72,8 @@ export default function ContactPage() {
     const [topic, setTopic] = useState("")
     const [eventSlug, setEventSlug] = useState("")
     const [leadMagnet, setLeadMagnet] = useState("")
+    // 챗봇 상담 연결(?source=chatbot)로 들어왔으면 그 경로를 리드 source 로 보존한다.
+    const [leadSource, setLeadSource] = useState<ContactLeadSource>("contact_page")
     const [message, setMessage] = useState("")
     const [privacyConsent, setPrivacyConsent] = useState(false)
     const [privacyConsentError, setPrivacyConsentError] = useState("")
@@ -105,6 +108,8 @@ export default function ContactPage() {
         const topicParam = params.get("topic")?.trim()
         const prefillParam = params.get("prefill")?.trim()
         const leadMagnetParam = params.get("lead_magnet")?.trim()
+
+        setLeadSource(resolveContactLeadSource(sourceParam))
 
         if (eventParam) {
             setTopic(sourceParam === "seminar" ? "세미나 신청" : "행사 신청")
@@ -259,7 +264,7 @@ export default function ContactPage() {
                 .join("\n")
 
             const data = await submitLead({
-                source: "contact_page",
+                source: leadSource,
                 sourceDetail: topicValue,
                 org: formData.get("org-name") as string,
                 name: formData.get("name") as string,
@@ -282,7 +287,7 @@ export default function ContactPage() {
             // (허니팟·60초 중복 → stored:false)은 보내지 않고, 같은 접수는 탭 안에서 1회만 센다.
             trackLeadSubmitted({
                 formType: "contact",
-                source: "contact_page",
+                source: leadSource,
                 stored: data.stored,
                 dedupeKey: data.conversionEventId ?? data.leadId,
                 eventId: data.conversionEventId,

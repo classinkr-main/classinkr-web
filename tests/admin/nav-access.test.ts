@@ -23,22 +23,29 @@ import {
   type NavOverrideValue,
 } from "@/components/admin/admin-nav-access"
 
-// 기타 그룹은 범주(홈 / 고객·매출 / 마케팅·분석 / 시스템)로 묶인다.
-// 범주는 전 항목에 붙는다 — 프리셋에 따라 상시 후보도 기타로 내려가기 때문(Task 2 Step 0).
-describe("admin nav — 기타 범주 메타", () => {
+// 접힘 묶음은 범주(홈 / 영업·고객 / 주문·매출 / 마케팅·분석 / 고객 지원 / 시스템)로 묶인다.
+// 범주는 전 항목에 붙는다 — 개인 설정으로 상시 항목도 접힘으로 내려가기 때문(Task 2 Step 0).
+// (2026-11-09 사이드바 재배치 D안) 고객·매출을 영업·고객 + 주문·매출로 나누고, CS 콘솔을 콘텐츠
+// 밑에 두려고 고객 지원 범주를 세웠다(docs/active/admin-sidebar-reorder-fold-plan-2026-11-09.md).
+describe("admin nav — 범주 메타", () => {
   it("assigns a category to every tab that can be folded", () => {
     const expected: Record<string, string> = {
+      "/admin/calendar": "customer",
       "/admin/crm": "customer",
-      "/admin/branch": "customer",
-      "/admin/branch/ledger": "customer",
+      "/admin/quotes": "revenue",
+      "/admin/hardware": "revenue",
+      "/admin/branch": "revenue",
+      "/admin/branch/ledger": "revenue",
+      "/admin/campaigns": "growth",
+      "/admin/blog": "growth",
       "/admin/lead-magnets": "growth",
       "/admin/analytics": "growth",
       "/admin/campaigns/manage": "growth",
       "/admin/overview": "home",
       // AI 올인원(2026-09-29, home 범주)은 시안 스위치가 켜졌을 때만 ADMIN_NAV 에 있다 — 기본(꺼짐) 기준인
       // 이 표에서는 빼고, 켜짐 쪽 범주·자리는 tests/admin/nav-ai-preview.test.tsx 가 본다(기획 D13).
-      // CS 콘솔은 일상 고객 지원 업무면이라 customer(2026-08-18, 진입점 단일화와 함께 재범주화).
-      "/admin/chatbot": "customer",
+      // CS 콘솔은 일상 고객 지원 업무면 — 2026-08-18 customer, 2026-11-09 콘텐츠 밑 자리를 위해 support.
+      "/admin/chatbot": "support",
       "/admin/ops": "system",
       "/admin/settings": "system",
       "/admin/dev": "system",
@@ -71,26 +78,31 @@ describe("admin nav — 기타 범주 메타", () => {
 
   // resolveNavAccess(Task 2)는 ADMIN_NAV 선언 순서를 그대로 상시 목록 순서로 쓴다.
   // 따라서 사이드바 순서는 이 배열 순서로만 표현된다 — 렌더에서 다시 정렬하지 않는다.
-  it("declares the sidebar order used by DEFAULT_PRIMARY_HREFS", () => {
-    // CS 진입점 단일화(2026-08-18): 가이드 문서·내부 CS 상시 후보가 CS 콘솔 하나로 흡수됐다.
-    // CS 콘솔은 고객·매출 범주라 그 블록 끝(하드웨어 재고 뒤)에 선언된다 — 선언이 범주 연속
-    // 블록이어야 상시 범주 묶음(primaryGroups)이 재정렬 없는 분할로 남는다.
-    const primaryCandidates = [
+  it("declares the whole sidebar in day-flow order (2026-11-09 D안)", () => {
+    // 일정 → 문의·고객 → 견적·출고 → 매출 성과 → 마케팅 → 고객 지원 → 시스템.
+    // CS 콘솔은 운영자 요청으로 콘텐츠 바로 밑 — 자료 퍼널(접힘) 뒤 고객 지원 블록에 선언된다.
+    expect(ADMIN_NAV.map((item) => item.href)).toEqual([
+      "/admin/overview",
       "/admin/calendar",
+      "/admin/crm",
       "/admin/quotes",
       "/admin/hardware",
-      "/admin/chatbot",
+      "/admin/branch",
+      "/admin/branch/ledger",
       "/admin/campaigns",
+      "/admin/campaigns/manage",
+      "/admin/analytics",
       "/admin/blog",
-    ]
-    const declared = ADMIN_NAV.map((item) => item.href).filter((href) =>
-      primaryCandidates.includes(href)
-    )
-    expect(declared).toEqual(primaryCandidates)
+      "/admin/lead-magnets",
+      "/admin/chatbot",
+      "/admin/settings",
+      "/admin/dev",
+      "/admin/ops",
+    ])
   })
 
-  // 상시 범주 소제목(2026-08-18)이 "묶기 = 재정렬"이 되지 않기 위한 전제 —
-  // 선언 순서가 범주(고객·매출 → 마케팅·분석 → 시스템) 연속 블록이어야 한다.
+  // 범주 묶음(상시 간격·접힘 묶음)이 "묶기 = 재정렬"이 되지 않기 위한 전제 —
+  // 선언 순서가 범주 연속 블록이어야 한다.
   it("declares ADMIN_NAV in contiguous category blocks", () => {
     const categories = ADMIN_NAV.map((item) => item.category ?? "system")
     const firstIndex = new Map<string, number>()
@@ -109,7 +121,7 @@ describe("admin nav — 기타 범주 메타", () => {
     for (const category of categories) {
       if (seen[seen.length - 1] !== category) seen.push(category)
     }
-    expect(seen).toEqual(["home", "customer", "growth", "system"])
+    expect(seen).toEqual(["home", "customer", "revenue", "growth", "support", "system"])
   })
 })
 
@@ -124,30 +136,34 @@ const EVERY_ROLE = ["SUPER_ADMIN", "ADMIN", "BRANCH", "EDITOR", "VIEWER", "PARTN
 const EVERY_LEGACY_PRESET = ["staff", "sales", "marketing", "cs", "lead", "branch", "super"] as const
 
 describe("resolveNavPlacement — 전원 공통 배치", () => {
-  // 시안 스위치 꺼짐(기본, 기획 D13) 기준 — 켜면 AI 올인원이 더해져 10(tests/admin/nav-ai-preview.test.tsx).
-  it("상시 10개는 DEFAULT_PRIMARY_HREFS 그대로다", () => {
+  // 시안 스위치 꺼짐(기본, 기획 D13) 기준 — 켜면 AI 올인원이 더해져 9(tests/admin/nav-ai-preview.test.tsx).
+  it("상시 8개는 DEFAULT_PRIMARY_HREFS 그대로다", () => {
     // 2026-11-04 마케팅 허브가 기타에서 상시로 올라왔다(방문·문의 바로 보기 기획 D6) — 9 → 10.
+    // 2026-11-09 D안 — KR Team·매출 장부가 접힘으로 내려갔다 — 10 → 8.
     for (const href of DEFAULT_PRIMARY_HREFS) {
       expect(resolveNavPlacement(href, ctx()), href).toBe("primary")
     }
-    expect(DEFAULT_PRIMARY_HREFS).toHaveLength(10)
+    expect(DEFAULT_PRIMARY_HREFS).toHaveLength(8)
     expect(DEFAULT_PRIMARY_HREFS).toContain("/admin/campaigns")
+    expect(DEFAULT_PRIMARY_HREFS).not.toContain("/admin/branch")
+    expect(DEFAULT_PRIMARY_HREFS).not.toContain("/admin/branch/ledger")
   })
 
-  it("나머지 6개의 자리는 전부 기타다 — 그중 1개는 기본 숨김이라 처음엔 목록에 없다", () => {
+  it("나머지 8개의 자리는 전부 접힘이다 — 그중 1개는 기본 숨김이라 처음엔 목록에 없다", () => {
     // 2026-10 마케팅 프로젝트가 캠페인 관리의 탭이 되며 기본 숨김 2 → 1, 기타 자리 8 → 7.
     // 2026-11-04 마케팅 허브가 상시로 올라가며 기타 자리 7 → 6.
+    // 2026-11-09 D안 — KR Team·매출 장부가 내려오며 접힘 자리 6 → 8.
     const rest = ADMIN_NAV.map((item) => item.href).filter(
       (href) => !DEFAULT_PRIMARY_HREFS.includes(href)
     )
-    expect(rest).toHaveLength(6)
+    expect(rest).toHaveLength(8)
     // resolveNavPlacement 는 "보일 때 앉는 자리"다 — 기본 숨김 항목도 다시 표시하면 기타로 간다.
     for (const href of rest) {
       expect(resolveNavPlacement(href, ctx()), href).toBe("folded")
     }
     const hiddenByDefault = rest.filter((href) => isNavHidden(href, ctx()))
     expect(hiddenByDefault.sort()).toEqual([...DEFAULT_HIDDEN_HREFS].sort())
-    expect(rest.length - hiddenByDefault.length).toBe(5)
+    expect(rest.length - hiddenByDefault.length).toBe(7)
   })
 
   // 이 테스트가 "모든 매니저가 같은 사이드바를 본다"를 고정한다.
@@ -201,18 +217,19 @@ describe("normalizeNavOverrides — 레거시 deny 처리", () => {
 })
 
 describe("resolveNavAccess", () => {
-  it("상시 10 / 기타 5 / 숨김 1(기본 숨김) 로 나눈다", () => {
+  it("상시 8 / 접힘 7 / 숨김 1(기본 숨김) 로 나눈다", () => {
     // 2026-09-25 전까지는 "기타 9"였다 — 마케팅 프로젝트·운영 상태가 기본 숨김으로 빠졌다.
     // 2026-10 마케팅 프로젝트는 캠페인 관리의 "프로젝트" 탭이 되며 항목 자체가 빠졌다(숨김 2 → 1).
     // 2026-09-29 AI 올인원이 상시에 더해졌지만 시안 스위치가 꺼져 있으면(기본, 기획 D13) 빠진다 —
     // 2026-10-26 콘텐츠가 기타에서 상시로 올라왔다 — 상시 9, 세 칸을 합치면 16 전부다.
     // 2026-11-04 마케팅 허브가 기타에서 상시로 올라왔다 — 상시 10 · 기타 5.
-    // 켜짐(상시 11·17)은 tests/admin/nav-ai-preview.test.tsx.
+    // 2026-11-09 D안 — KR Team·매출 장부가 접힘으로 — 상시 8 · 접힘 7.
+    // 켜짐(상시 9·17)은 tests/admin/nav-ai-preview.test.tsx.
     const { primary, folded, hidden } = resolveNavAccess(ctx())
-    expect(primary).toHaveLength(10)
-    expect(folded.flatMap((group) => group.items)).toHaveLength(5)
+    expect(primary).toHaveLength(8)
+    expect(folded.flatMap((group) => group.items)).toHaveLength(7)
     expect(hidden.map((item) => item.href)).toEqual(["/admin/ops"])
-    expect(primary.length + 5 + hidden.length).toBe(ADMIN_NAV.length)
+    expect(primary.length + 7 + hidden.length).toBe(ADMIN_NAV.length)
   })
 
   it("Overview 가 상시 첫 항목이고 home 이 첫 그룹이다", () => {
@@ -221,21 +238,41 @@ describe("resolveNavAccess", () => {
     expect(access.primaryGroups[0]?.category).toBe("home")
   })
 
-  it("상시를 재정렬 없이 범주로 분할한다 — 홈 + 고객·매출 + 마케팅·분석(콘텐츠)", () => {
+  it("상시를 재정렬 없이 범주로 분할한다 — 하루 동선 순서, CS 콘솔은 콘텐츠 바로 밑", () => {
     const access = resolveNavAccess(ctx())
     expect(access.primaryGroups.flatMap((group) => group.items)).toEqual(access.primary)
-    expect(access.primaryGroups.map((group) => group.category)).toEqual(["home", "customer", "growth"])
-    expect(access.primary.at(-1)?.href).toBe("/admin/blog")
+    expect(access.primaryGroups.map((group) => group.category)).toEqual([
+      "home",
+      "customer",
+      "revenue",
+      "growth",
+      "support",
+    ])
+    expect(access.primary.map((item) => item.href)).toEqual([
+      "/admin/overview",
+      "/admin/calendar",
+      "/admin/crm",
+      "/admin/quotes",
+      "/admin/hardware",
+      "/admin/campaigns",
+      "/admin/blog",
+      "/admin/chatbot",
+    ])
   })
 
-  it("기타를 마케팅·분석 → 시스템 순서로 묶는다", () => {
+  it("접힘을 범주별 묶음(주문·매출 → 마케팅·분석 → 시스템)으로 나눈다 — 사이드바가 묶음마다 따로 접는다", () => {
     const { folded } = resolveNavAccess(ctx())
-    expect(folded.map((group) => group.category)).toEqual(["growth", "system"])
-    expect(folded.every((group) => group.items.length > 0)).toBe(true)
+    expect(
+      folded.map((group) => [group.category, group.items.map((item) => item.href)])
+    ).toEqual([
+      ["revenue", ["/admin/branch", "/admin/branch/ledger"]],
+      ["growth", ["/admin/campaigns/manage", "/admin/analytics", "/admin/lead-magnets"]],
+      ["system", ["/admin/settings", "/admin/dev"]],
+    ])
   })
 
-  it("상시 소제목을 켠다 — 9항목 3범주", () => {
-    expect(resolveNavAccess(ctx()).showPrimaryHeaders).toBe(true)
+  it("상시 소제목 판정이 없다 — 상시는 소제목 없이 간격만 둔다(2026-11-09 D안)", () => {
+    expect(resolveNavAccess(ctx())).not.toHaveProperty("showPrimaryHeaders")
   })
 })
 

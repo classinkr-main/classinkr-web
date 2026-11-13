@@ -9,14 +9,17 @@ import { getAllDocsSummaries, getTroubleshootingLinks } from "../_utils"
 
 export const metadata: Metadata = {
   title: "첫 7일 수업 준비 가이드",
-  description: "관리자와 강사가 클래스인을 설치하고 첫 수업과 다시보기까지 확인하는 순서입니다.",
+  description: "관리자와 강사가 클래스인 설치부터 첫 수업의 판서·녹화, 다시보기, 과제와 관리자 데이터까지 7일 동안 수업 한 바퀴를 돌아보는 순서입니다.",
   alternates: { canonical: "/docs/first-week" },
 }
 
+// 수업 한 바퀴(설치 → 준비 → 교실 점검 → 판서·녹화 → 다시보기 → 과제·데이터)를 4단계에 나눠 담는다.
+// 단계마다 steps 는 공개 카피(샘플 B)의 여정 순서이고, 링크는 공개 목록에 있는 문서만 노출된다.
 const stages = [
   {
     day: "DAY 1",
-    title: "설치하고 계정을 확인합니다",
+    title: "설치하고 로그인을 확인합니다",
+    steps: ["설치하고 로그인 확인하기"],
     admin: "기관 설정과 사용할 계정을 확인합니다.",
     teacher: "사용할 기기에 설치하고 로그인합니다.",
     links: [
@@ -27,34 +30,40 @@ const stages = [
   },
   {
     day: "DAY 2–3",
-    title: "사람과 수업을 준비합니다",
+    title: "기관·코스·구성원을 준비합니다",
+    steps: ["기관·코스·구성원 준비하기"],
     admin: "강사와 학생을 추가하고 코스를 준비합니다.",
-    teacher: "수업에 필요한 자료와 교실 설정을 확인합니다.",
+    teacher: "수업에 필요한 자료를 드라이브에 올려 둡니다.",
     links: [
       { href: "/docs/admin/teacher-onboarding", label: "교사 추가하기" },
       { href: "/docs/admin/student-onboarding", label: "학생 추가하기" },
       { href: "/docs/admin/course-creation", label: "코스와 수업 개설하기" },
-      { href: "/docs/teacher/classroom-basic-setup", label: "교실 기본 설정" },
+      { href: "/docs/teacher/drive-materials", label: "수업 자료 올려 두기" },
     ],
   },
   {
     day: "DAY 4–5",
-    title: "첫 수업을 진행합니다",
+    title: "교실을 점검하고 첫 수업을 엽니다",
+    steps: ["수업 전 교실 점검하기", "첫 수업에서 판서하고 녹화하기"],
     admin: "수업을 확인할 담당자와 연락 방법을 정합니다.",
-    teacher: "준비한 교실에서 수업을 시작하고 필요한 도구를 확인합니다.",
+    teacher: "수업 전에 교실 기본 설정을 확인하고, 첫 수업에서 판서와 녹화를 해 봅니다.",
     links: [
-      { href: "/docs/teacher/classroom-basic-setup", label: "교실 기본 설정 확인하기" },
+      { href: "/docs/teacher/classroom-basic-setup", label: "수업 전 교실 기본 설정 확인하기" },
+      { href: "/docs/teacher/lesson-option-concepts", label: "수업 녹화 옵션 이해하기" },
       { href: "/docs/student/course-join", label: "학생 코스 참여 안내" },
     ],
   },
   {
     day: "DAY 6–7",
-    title: "녹화와 다시보기를 확인합니다",
-    admin: "녹화와 다시보기에 접근할 수 있는 계정과 설정을 확인합니다.",
-    teacher: "수업 후 다시보기 안내가 필요한 학생에게 확인 방법을 알려줍니다.",
+    title: "다시보기와 과제, 관리자 데이터를 확인합니다",
+    steps: ["다시보기로 복습 확인하기", "과제·시험을 열고 관리자 데이터 살펴보기"],
+    admin: "다시보기 접근과 통계 데이터를 확인합니다.",
+    teacher: "학생에게 다시보기 방법을 알려 주고, 코스에 과제나 시험 같은 학습 활동을 엽니다.",
     links: [
       { href: "/docs/admin/web-live-playback", label: "관리자의 라이브와 다시보기" },
       { href: "/docs/student/class-join-replay", label: "학생 수업 참여와 다시보기" },
+      { href: "/docs/teacher/course-activities", label: "코스에 학습 활동 추가하기" },
+      { href: "/docs/admin/statistics-data", label: "통계 데이터 살펴보기" },
     ],
   },
 ] as const
@@ -91,11 +100,12 @@ export default async function FirstWeekGuidePage() {
           첫 수업 준비
         </p>
         <h1 className="mt-4 max-w-3xl break-keep text-4xl font-black leading-[1.08] tracking-display md:text-6xl">
-          첫 7일, 수업을 시작하는 순서
+          첫 7일, 설치부터 다시보기까지
         </h1>
         <p className="mt-5 max-w-2xl break-keep text-lg leading-8 text-[#615D59]">
-          관리자와 강사가 필요한 준비를 나누어 확인하고, 첫 수업과 다시보기까지 이어갑니다.
-          일정은 학원의 상황에 맞게 조정하세요. 기능과 접근 권한은 계정과 설정에 따라 다를 수 있습니다.
+          관리자와 강사가 함께 수업 한 바퀴를 돌아보는 여정입니다. 하루에 하나씩, 작게 시작해도
+          괜찮아요. 일정은 학원 상황에 맞게 조정하세요. 기능과 접근 권한은 계정과 설정에 따라 다를 수
+          있습니다.
         </p>
 
         <ol className="mt-12 md:mt-16">
@@ -115,6 +125,14 @@ export default async function FirstWeekGuidePage() {
                     {stage.day}
                   </p>
                   <h2 className="mt-3 break-keep text-xl font-bold sm:text-2xl">{stage.title}</h2>
+                  <ul className="mt-3 grid gap-1 text-caption text-fg-muted" aria-label={`${stage.day} 할 일`}>
+                    {stage.steps.map((step) => (
+                      <li key={step} className="flex gap-2">
+                        <span aria-hidden className="text-fg-accent">·</span>
+                        {step}
+                      </li>
+                    ))}
+                  </ul>
                   <dl className="mt-5 grid gap-4 text-[14px] leading-6 sm:grid-cols-2">
                     <div>
                       <dt className="font-semibold text-[#111110]">관리자</dt>

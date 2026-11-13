@@ -9,6 +9,17 @@ describe("admin quick quote composer shell", () => {
     "utf8"
   )
 
+  it("저장 뒤 보내기는 같은 견적의 다음 버전으로, 공유한 장은 잊어 '편집 계속' 뒤 저장이 고객 링크 견적을 바꾸지 않는다", () => {
+    // 공유 링크는 버전에 묶이고 오더·총판 정산은 견적의 현재 버전을 읽는다 — 공유 뒤 버전을 올리면 둘이 갈라진다.
+    expect(source).toContain("/quotes/${saved.document.id}/versions")
+    const shareBlock = source.slice(source.indexOf("/quotes/${payload.document.id}/share"))
+    const forgetAt = shareBlock.indexOf("delete savedDocsRef.current[sheet.line]")
+    expect(forgetAt).toBeGreaterThan(-1)
+    // 링크를 받은 뒤(성공 경로)에만 잊는다 — 공유 실패면 다음 저장이 같은 견적의 버전으로 이어져야 한다.
+    expect(forgetAt).toBeGreaterThan(shareBlock.indexOf("shareUrl = sharePayload.shareUrl"))
+    expect(forgetAt).toBeLessThan(shareBlock.indexOf("} catch (shareIssue)"))
+  })
+
   it("renders the quick quote overlay through a body portal", () => {
     expect(source).toContain('import { createPortal } from "react-dom"')
     expect(source).toContain("createPortal(")

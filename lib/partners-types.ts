@@ -118,6 +118,17 @@ export interface PartnerQuoteLineItem {
   linkedChecklistTemplateId?: string
 }
 
+/**
+ * 견적 전체 할인. mode=amount 는 원 단위 금액, mode=rate 는 품목 공급가 합계에 대한 %.
+ * 부가세는 할인 뒤 공급가에 붙는다(VAT 별도 견적).
+ */
+export interface QuoteDiscountInput {
+  mode: "amount" | "rate"
+  value: number
+  /** 견적서에 찍히는 할인 이름. 비우면 "특별 할인". */
+  label?: string
+}
+
 export interface PartnerQuoteDetails {
   templateId?: string
   estimateNumber?: string
@@ -415,6 +426,8 @@ export interface PartnerQuoteDetailsInput {
   footerContactText?: string
   internalMemo?: string
   optionSelections?: Record<string, QuoteOptionSelectionValue | undefined>
+  /** 견적 전체 할인(작성자 입력). discountAmount 는 이 값으로 매번 다시 계산되는 결과다. */
+  quoteDiscount?: QuoteDiscountInput
   pricingSource?: string
   generatedFromVersionId?: string
   generatedFromTemplateVersion?: string

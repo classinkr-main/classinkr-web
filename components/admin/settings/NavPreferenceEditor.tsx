@@ -1,6 +1,8 @@
 "use client"
 
-// 사이드바 편집기 공통 본문 — 행마다 상시 | 기타 | 숨김 3단 선택 + 미리보기.
+// 사이드바 편집기 공통 본문 — 행마다 상시 | 접힘 | 숨김 3단 선택 + 미리보기.
+// (2026-11-09 사이드바 재배치 D안) 사이드바의 "기타" 묶음이 범주별 접힘으로 바뀌어 선택지 라벨도
+// "기타" → "접힘"이다. 저장값("folded")은 그대로다.
 //
 // 두 곳이 같은 본문을 쓴다: 본인 편집(MyNavEditorDrawer, /api/admin/me/nav)과 설정 › 회원의
 // SUPER_ADMIN 편집(MemberNavAccessDrawer, /api/admin/users). 행 목록·미리보기를 두 벌로 두면
@@ -35,12 +37,12 @@ import {
 
 export const NAV_PREFERENCE_OPTIONS: Array<{ value: NavPreference; label: string }> = [
   { value: "primary", label: "상시" },
-  { value: "folded", label: "기타" },
+  { value: "folded", label: "접힘" },
   { value: "hidden", label: "숨김" },
 ]
 
 // 선택된 값의 톤 — 명시적 선택 상태라 면을 쓴다(DESIGN.md 어드민 라벨 단순화).
-// 상시만 Success 축, 기타·숨김은 중립이다(숨김은 경고가 아니라 정리다).
+// 상시만 Success 축, 접힘·숨김은 중립이다(숨김은 경고가 아니라 정리다).
 const OPTION_ACTIVE_TONE: Record<NavPreference, string> = {
   primary: "border-[#BDEFD8] bg-[#ECFDF5] text-[#084734]",
   folded: "border-[rgba(0,0,0,0.14)] bg-white text-[#111110]",
@@ -53,7 +55,7 @@ export const CRM_SUBNAV_PREFERENCE_OPTIONS: Array<{ value: CrmSubnavPreference; 
   { value: "hidden", label: "숨김" },
 ]
 
-// 표시는 기존 "기타" 톤(중립 선택), 숨김은 기존 "숨김" 톤을 그대로 쓴다.
+// 표시는 기존 "접힘" 톤(중립 선택), 숨김은 기존 "숨김" 톤을 그대로 쓴다.
 const CRM_OPTION_ACTIVE_TONE: Record<CrmSubnavPreference, string> = {
   shown: OPTION_ACTIVE_TONE.folded,
   hidden: OPTION_ACTIVE_TONE.hidden,
@@ -95,8 +97,9 @@ export default function NavPreferenceEditor({
   const preview = useMemo(() => resolveAdminNavAccess(ctx), [ctx])
 
   const foldedItems = preview.folded.flatMap((group) => group.items)
-  const foldedCategoryLabel = preview.folded
-    .map((group) => ADMIN_NAV_CATEGORY_META[group.category].label)
+  // 사이드바가 범주마다 따로 접으므로 미리보기도 묶음 단위로 보여 준다 — "주문·매출 2 · 시스템 2".
+  const foldedGroupSummary = preview.folded
+    .map((group) => `${ADMIN_NAV_CATEGORY_META[group.category].label} ${group.items.length}`)
     .join(" · ")
   const crmHiddenRows = crmRows.filter((row) => row.preference === "hidden")
   const exceptionCount =
@@ -116,7 +119,7 @@ export default function NavPreferenceEditor({
       {/* 안내 — 이 화면이 접근을 다루지 않는다는 것과 숨김의 범위를 분명히 한다. */}
       <div className="border-b border-[#e8e8e4] px-5 py-3">
         <p className="text-[12px] leading-relaxed text-[#1a1a1a]/55">
-          모든 매니저가 같은 메뉴를 갖습니다. 여기서는 {whose} 사이드바에서 각 탭이 상시(상단)·기타·숨김
+          모든 매니저가 같은 메뉴를 갖습니다. 여기서는 {whose} 사이드바에서 각 탭이 상시(상단)·접힘(범주별 묶음)·숨김
           중 어디에 놓일지만 정합니다. 숨김은 목록에서 치우는 것일 뿐 도달성을 줄이지 않습니다. 실제
           데이터 권한은 각 화면의 서버 검사가 정합니다.
         </p>
@@ -276,7 +279,7 @@ export default function NavPreferenceEditor({
         </p>
         {foldedItems.length > 0 ? (
           <p className="text-[11px] text-[#1a1a1a]/50">
-            ▸ 기타 {foldedItems.length} ({foldedCategoryLabel})
+            ▸ 접힘 {foldedItems.length} — {foldedGroupSummary}
           </p>
         ) : null}
         {preview.hidden.length > 0 ? (

@@ -26,7 +26,7 @@
 | 관심사 | 코드 SSOT |
 | --- | --- |
 | 탭 목록·표시명·기본 역할 | `components/admin/admin-nav.ts` |
-| 상시/기타 배치·사람별 예외 | `components/admin/admin-nav-access.ts` |
+| 상시/접힘 배치·사람별 예외 | `components/admin/admin-nav-access.ts` |
 | active 판정 | `components/admin/nav-active.ts` |
 | 인증 컨텍스트·API 역할 묶음·capability | `lib/admin-auth.ts`, `lib/admin-capabilities.ts` |
 | 클라이언트 요청·캐시 | `lib/admin-client.ts` |
@@ -35,13 +35,15 @@
 
 사이드바는 2026-09-10부터 **전원 동일**하다. 모든 관리자가 같은 탭에 도달하고, 배치만 정해진다 —
 상시 목록은 `components/admin/admin-nav-access.ts`의 `DEFAULT_PRIMARY_HREFS`, 전원 기본 숨김은
-`DEFAULT_HIDDEN_HREFS`, 나머지는 접힌 "기타"다. 개수는 이 문서에 적지 않는다 — 상수 위 주석이 정본이다.
+`DEFAULT_HIDDEN_HREFS`, 나머지는 범주마다 따로 접힌 "접힘" 묶음이다(2026-11-09 D안, 그 전에는 하나로 접힌 "기타").
+상시는 소제목 없이 범주 사이 간격만 둔다. 순서·범주는 `ADMIN_NAV` 선언이 정본이다 —
+[사이드바 재배치 기획](admin-sidebar-reorder-fold-plan-2026-11-09.md). 개수는 이 문서에 적지 않는다 — 상수 위 주석이 정본이다.
 AI 올인원(`/admin/ai`)은 시안 스위치(`NEXT_PUBLIC_ADMIN_AI_PREVIEW=1`, `lib/admin-ai/preview.ts`)를 켰을 때만
 메뉴와 라우트에 생긴다(기본 꺼짐). 역할로 항목을 거르지 않으며 "차단(deny)" 배치는 타입에서 제거됐다.
 마케팅 프로젝트는 2026-10 캠페인 관리(`/admin/campaigns/manage`)의 "프로젝트" 탭으로 합쳐져 사이드바 항목에서
 빠졌다(옛 주소 `/admin/campaigns/projects`는 `?view=projects`로 넘기는 스텁, ⌘K는 마케팅 허브 자식 명령).
 
-**배치는 두 자리(상시·기타) + 개인 숨김이다. 숨김은 도달성을 바꾸지 않는다** — 숨긴 탭도 ⌘K·주소로
+**배치는 두 자리(상시·접힘) + 개인 숨김이다. 숨김은 도달성을 바꾸지 않는다** — 숨긴 탭도 ⌘K·주소로
 열리고, `getAccessibleAdminNavItems`는 항상 전체를 돌려준다(⌘K·active 판정·모바일 헤더가 의존).
 Overview는 로그인·`/admin` 착지 화면이라 숨길 수 없다(`UNHIDEABLE_NAV_HREFS`).
 

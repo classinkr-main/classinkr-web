@@ -5,7 +5,7 @@
 
 import type { AdBoard } from "@/lib/marketing/ad-board"
 import { getLeadSourceGroup, isTestLead, type LeadSourceGroup } from "@/lib/crm/lead-attribution"
-import type { ChannelSpendSummary, LiveAdChannel } from "@/lib/marketing/ad-insights"
+import type { ChannelSpendSummary, LiveAdChannel, VideoSummary } from "@/lib/marketing/ad-insights"
 import type { AttributionFunnel } from "@/lib/marketing/attribution-funnel"
 import type { LeadRecord } from "@/lib/repositories/leads"
 import { AD_CHANNELS, type AdChannel } from "@/lib/types/event-metrics"
@@ -480,8 +480,11 @@ export interface MarketingPerfResponse {
  * spend=null)와 "조회됐고 집행이 없다"(spend=0)를 셋 다 구분한다 — 화면이 0 과 미측정을
  * 같은 칸에 그리지 않게 하는 것이 이 타입의 목적이다.
  */
-/** Google Ads 캠페인 한 줄 — 그 캠페인 행만 접은 채널 요약(campaignCount 는 1). */
-export interface PerfGoogleCampaign extends ChannelSpendSummary {
+/**
+ * Google Ads 캠페인 한 줄 — 그 캠페인 행만 접은 채널 요약(campaignCount 는 1).
+ * 유형·조회수(VideoSummary)는 2026-11-10 추가 — 배포 직후 옛 캐시 항목에는 없어 선택 필드다.
+ */
+export interface PerfGoogleCampaign extends ChannelSpendSummary, Partial<VideoSummary> {
   campaignId: string
   campaignName: string | null
 }

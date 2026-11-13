@@ -923,7 +923,7 @@ export const CURATED_CS_FIGMA_GUIDES: CsFigmaGuide[] = [
 // 충전·결제 금액과 계정 잔액이 찍힌 캡처, 예시 학원명이 제목인 대응 메모, 빈 캡처는 공개 문서와 챗봇 답변 어디에도 내보내지 않는다.
 // (생성 파일은 스크립트가 다시 만들므로 여기서 거른다.) 이 가이드들의 원본 캡처 파일은 URL 로도 열리지 않도록
 // public/docs/files/cs-figma/ 에서 뺐다(2026-10-29). 다시 내보낼 때도 이 화면들은 공개 폴더에 넣지 않는다.
-const INTERNAL_ONLY_CS_FIGMA_DOC_SLUGS = new Set([
+export const INTERNAL_ONLY_CS_FIGMA_DOC_SLUGS: ReadonlySet<string> = new Set([
   "cs-figma-digest-881",
   "cs-figma-digest-1385",
   "cs-figma-digest-1402",
