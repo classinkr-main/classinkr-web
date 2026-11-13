@@ -36,6 +36,19 @@ export function isSubjectlessClassinIdentityQuestion(question: string) {
   return text.replace(/\s+/g, "").length <= 24 && SUBJECTLESS_IDENTITY_RE.test(text)
 }
 
+// 무료 체험·파일럿을 묻는 말.
+const TRIAL_OR_PILOT_RE = /무료\s*체험|체험판|무료\s*사용|trial|파일럿|pilot|데모.{0,12}(무료|체험)|먼저\s*써/i
+// '무료 체험'이라는 낱말 없이 묻는 말("무료로 쓸 수 있나요", "체험해볼 수 있어요?", "결제 없이 써볼 수 있나요").
+// 같은 검수 답(체험·파일럿 확인)으로 잇는다. 다만 "웹 라이브 무료로 쓸 수 있나요"처럼 특정 기능의 요금을 묻는 말은 뺀다.
+const FREE_USE_RE =
+  /(?:무료|공짜)로\s*(?:쓸|써|사용|이용)|결제\s*없이\s*(?:써|사용|체험|이용)|체험\s*해\s*볼|체험해볼|체험\s*(?:할\s*수|가능|되나|돼요)/
+const FREE_USE_FEATURE_RE = /웹\s*라이브|녹화|칠판|보드|\bai\b|기능|드라이브|스토리지|숙제|시험|카메라|학생|학부모|아이|쇼룸|데모/
+
+export function isTrialOrPilotText(text: string) {
+  const lower = text.toLowerCase()
+  return TRIAL_OR_PILOT_RE.test(lower) || (FREE_USE_RE.test(lower) && !FREE_USE_FEATURE_RE.test(lower))
+}
+
 function normalizedText(question: string, sourceCategories: string[] = []) {
   return `${question} ${sourceCategories.join(" ")}`.toLowerCase()
 }
@@ -52,10 +65,10 @@ export function detectChatbotCategory(
   if (/결제|요금|가격|견적|영수증|세금|세금계산서|입금|청구|구독|환불|정산|수납|납부|원비|수강료|수업료|학원비|카드\s*결제|pg/.test(text)) {
     return "billing"
   }
-  if (/소프트웨어만|프로그램만|앱만|하드웨어\s*없이|전자칠판\s*없이|보드\s*없이|계정당|계정\s*당|플랜|구독형|충전형|충전제|subscription|consumption|사용량\s*기준/.test(text)) {
+  if (/소프트웨어만|프로그램만|앱만|하드웨어\s*없이|전자칠판\s*없이|(?<!대시\s?)보드\s*없이|계정당|계정\s*당|플랜|구독형|충전형|충전제|subscription|consumption|사용량\s*기준/.test(text)) {
     return "billing"
   }
-  if (/무료\s*체험|체험판|무료\s*사용|trial|파일럿|pilot|데모.{0,12}(무료|체험)|먼저\s*써/.test(text)) {
+  if (isTrialOrPilotText(text)) {
     return "onboarding"
   }
   if (/관리자|어드민|관리자\s*콘솔|대시보드|학교\s*관리자|네트워크|특이사항|스토리지|저장\s*(공간|용량)|녹화\s*(저장|용량)|기관\s*설정|기관\s*관리|관리자\s*기능|계정\s*정보|결제\s*개요|주문\s*세부정보|영수증\s*관리|api\s*도킹|자체\s*관리\s*시스템|브랜딩|웹\s*라이브|라이브\s*&\s*플레이백|통계\s*다운로드|콘텐츠\s*소유권|저작권|개인정보.*(처리|보관|관리|방침|보호|유출|보안|통제)|데이터\s*(처리|보관|지역|보안|유출)|서버(?:는|가|의)?\s*(위치|지역|어디)|메인\s*서버(?:는|가|의)?\s*(위치|지역|어디)?/.test(text)) {

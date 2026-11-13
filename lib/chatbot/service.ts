@@ -11,6 +11,7 @@ import { CLASSIN_POSITIONING } from "@/lib/classin-positioning"
 import {
   classifyChatbotQuestion,
   isSubjectlessClassinIdentityQuestion,
+  isTrialOrPilotText,
   type ChatbotIntent,
 } from "@/lib/chatbot/classification"
 import { findChatbotSelfKnowledgeEntry } from "@/lib/chatbot/self-knowledge"
@@ -1030,11 +1031,9 @@ const PRICING_EXCLUDE_RE = /환불|취소|세금|계산서|영수증|청구|정�
 // "얼마나 걸려요"(기간)는 가격이 아니다 — 돈 단어가 없으면 가격에서 뺀다.
 const PRICING_DURATION_RE = /얼마나?\s*(걸리|걸려|걸릴|오래|소요|기간|시간|일|주|개월)/i
 const SOFTWARE_ONLY_BUYER_RE =
-  /소프트웨어만|프로그램만|앱만|하드웨어\s*없이|전자칠판\s*없이|보드\s*없이|계정당|계정\s*당|플랜|standard|plus|enterprise/i
+  /소프트웨어만|프로그램만|앱만|하드웨어\s*없이|전자칠판\s*없이|(?<!대시\s?)보드\s*없이|계정당|계정\s*당|플랜|standard|plus|enterprise/i
 const SUBSCRIPTION_OR_CONSUMPTION_RE =
   /구독형|충전형|충전제|subscription|consumption|사용량\s*기준|월\s*구독|월구독/i
-const TRIAL_OR_PILOT_RE =
-  /무료\s*체험|체험판|무료\s*사용|trial|파일럿|pilot|데모.{0,12}(무료|체험)|먼저\s*써/i
 function isPricingInfoQuestion(question: NormalizedQuestion) {
   const text = question.redacted.toLowerCase()
   if (PRICING_EXCLUDE_RE.test(text)) return false
@@ -1056,7 +1055,7 @@ function isSoftwarePricingQuestion(question: NormalizedQuestion) {
 }
 
 function isTrialOrPilotQuestion(question: NormalizedQuestion) {
-  return TRIAL_OR_PILOT_RE.test(question.redacted.toLowerCase())
+  return isTrialOrPilotText(question.redacted)
 }
 
 // 설치 형태(스탠드/벽걸이)와 설치 가능/기간. 하드웨어 장애와는 분리한다.
@@ -4163,7 +4162,8 @@ function buildServiceQuickAnswer(question: NormalizedQuestion): QuickAnswer | nu
 
   // 첫 방문자가 한 줄로 묻는 기본 사실 질문(회사·대표, 전자칠판 필수 여부, 지원 기기, 한도, 원가·고객사 등).
   // 위의 좁은 정해 둔 답이 모두 빗나갔을 때만 본다. 두 가지를 함께 물었으면 두 답을 이어 붙인다.
-  const basics = findBasicQuickAnswers(text)
+  // "본사랑 통화하고 싶어요"처럼 사람 연결을 바라는 말은 기본 사실 답이 아니라 상담 연결이 맡는다.
+  const basics = wantsImmediateHumanHandoff(question) ? [] : findBasicQuickAnswers(text)
   if (basics.length > 0) {
     const [first, second] = basics
     const handoff = first.handoff ?? second?.handoff
@@ -4179,7 +4179,7 @@ function buildServiceQuickAnswer(question: NormalizedQuestion): QuickAnswer | nu
       : direct(paragraphs, first.category, suggestedQuestions)
     // 답이 기대는 공개 문서를 출처로 단다(답 ↔ 문서 데이터셋 연결).
     quick.response.sources = basics.flatMap((entry) => {
-      const source = entry.docPath ? buildBasicsDocSource(entry.docPath) : null
+      const source = entry.docPath ? buildBasicsDocSource(entry.docPath, entry.docHeading) : null
       return source ? [source] : []
     })
     return { ...quick, topicId: first.id, suppressSalesFollowUp: !first.salesFollowUp }
@@ -4188,12 +4188,12 @@ function buildServiceQuickAnswer(question: NormalizedQuestion): QuickAnswer | nu
 }
 
 // 기본 사실 답의 근거 문서(/docs/<category>/<slug>)를 출처로 만든다. 문서가 공개 목록에 없으면 달지 않는다.
-function buildBasicsDocSource(docPath: string): ChatbotSource | null {
+function buildBasicsDocSource(docPath: string, heading = "요약"): ChatbotSource | null {
   const doc = getFallbackDocsFromStatic().find((candidate) => getDocPath(candidate) === docPath)
   if (!doc) return null
   return {
     title: doc.title,
-    heading: "요약",
+    heading,
     urlPath: docPath,
     category: getDocCategory(doc),
     excerpt: compactText(doc.chatbotSummary || doc.description),
