@@ -19,17 +19,27 @@ import type { ChatbotSource } from "./service"
 export type ChatbotModelTier = "basic" | "reasoning" | "advanced"
 
 // 챗봇 모델 티어별 기본 모델 설정.
-// 운영 계정의 모델 목록에서 확인된 안정 기본값을 쓴다. 미지원 모델을 기본 요청에 넣지 않는다.
-const DEFAULT_FAST_MODEL = "gemini-2.5-flash"
-const DEFAULT_REASONING_MODEL = "gemini-2.5-pro"
-const DEFAULT_ADVANCED_MODEL = "gemini-2.5-pro"
-const FAST_FALLBACK_MODEL = "gemini-2.5-flash"
-const DEEP_FALLBACK_MODEL = "gemini-2.5-pro"
+// 2026-11-13 generateContent 실측: gemini-2.5-flash·2.5-pro·2.5-flash-lite 가 404("no longer available")를
+// 반환한다. models.list 에는 여전히 보여서 목록만으로는 알 수 없다. 그 상태에서는 답변 재작성이 통째로 실패해
+// 검색 초안(문서 조각)이 그대로 공개 답변으로 나갔다. 내부 CS 코파일럿(lib/internal-cs-chat/gemini.ts)이
+// 이미 검증해 쓰는 현행 모델 조합으로 맞춘다. 새 모델을 넣을 때는 models.list 가 아니라 실제 호출로 확인한다.
+const DEFAULT_FAST_MODEL = "gemini-3.5-flash"
+const DEFAULT_REASONING_MODEL = "gemini-3.1-pro-preview"
+const DEFAULT_ADVANCED_MODEL = "gemini-3.1-pro-preview"
+const FAST_FALLBACK_MODEL = "gemini-3.1-flash-lite"
+const DEEP_FALLBACK_MODEL = "gemini-3.5-flash"
+// 고정 모델이 또 종료돼도 답변 생성이 조용히 끊기지 않도록, Google 이 현행 모델로 이어 주는 별칭을 체인 끝에 둔다.
+// 앞의 고정 모델이 모두 실패했을 때만 쓰인다.
+const LAST_RESORT_MODEL = "gemini-flash-lite-latest"
 
 // 설정값으로 들어오면 무시하고 위 기본값으로 폴백할 모델(미지원/폐기/상시 503).
+// 운영 env 에 종료된 모델명이 남아 있어도 답변 생성이 죽지 않게 한다.
 const UNSUPPORTED_GEMINI_MODELS = new Set([
   "gemini-3.1-pro",
   "gemini-3-pro-preview",
+  "gemini-2.5-flash",
+  "gemini-2.5-flash-lite",
+  "gemini-2.5-pro",
   "gemini-2.0-flash",
   "gemini-2.0-flash-lite",
   "gemini-2.0-flash-thinking-exp-01-21",
@@ -37,6 +47,10 @@ const UNSUPPORTED_GEMINI_MODELS = new Set([
   "gemini-1.5-flash",
   "gemini-1.5-pro",
 ])
+
+// thinkingLevel "minimal" 을 받는다고 실측으로 확인한 모델(2026-11-13). lite 계열, 3.5/3.6-flash, 3-flash-preview.
+// 3.7·3.8-flash, gemini-flash-latest, gemini-4 계열은 minimal 을 400 으로 거부한다. "low" 는 전 모델이 받는다.
+const MINIMAL_THINKING_MODEL_RE = /^gemini-(?:[\d.]+-flash-lite|flash-lite-latest|3\.[56]-flash|3-flash-preview)/
 // 전체 최종 답변 예산(기본 6s) 안에서 primary 실패 후 fallback까지 시도할 수 있어야 한다.
 const GEMINI_TIMEOUT_MS = 2500
 // 스트리밍은 첫 토큰이 빨리 와 사용자가 빈 화면을 보지 않으므로, 본문을 끝까지 받을 여유를 더 준다.
@@ -69,12 +83,12 @@ function resolveModel(tier: ChatbotModelTier = "basic") {
   return configured
 }
 
-// 티어별 프라이머리 + 에러 폴백 모델 체인. 프라이머리 호출이 실패하면 안정 모델로 자동 폴백한다.
-// 기본값과 fallback이 같으면 한 번만 호출한다.
-function resolveModelChain(tier: ChatbotModelTier): string[] {
+// 티어별 프라이머리 + 에러 폴백 모델 체인. 프라이머리 호출이 실패하면 안정 모델, 그다음 별칭 순으로 자동 폴백한다.
+// 같은 모델이 겹치면 한 번만 호출한다.
+export function resolveModelChain(tier: ChatbotModelTier): string[] {
   const primary = resolveModel(tier)
   const fallback = tier === "reasoning" || tier === "advanced" ? DEEP_FALLBACK_MODEL : FAST_FALLBACK_MODEL
-  return Array.from(new Set([primary, fallback]))
+  return Array.from(new Set([primary, fallback, LAST_RESORT_MODEL]))
 }
 
 function getGeminiApiKey() {
@@ -96,6 +110,8 @@ const BASE_SYSTEM_INSTRUCTION = [
   "질문 주도: 답을 먼저 주고, 필요할 때만 끝에 자연스러운 질문 1개를 붙인다. (1) 답이 기기·녹화 종류·역할 같은 조건에 따라 갈리는데 질문에 그 정보가 없으면 그 조건을 묻는다. (2) 줄임말·모호한 말을 한 가지 뜻으로 읽고 답했다면 '…로 이해하고 답했어요'라고 밝혀 오해를 막는다. (3) 도입·견적·요금 상담에서는 아직 모르는 것(강사·학생 수, 교실 수, 수업 방식, 지금 쓰는 도구, 도입 시기) 가운데 하나를 묻는다. 질문은 한 번에 하나만 하고, 화난·반복 문의에는 묻지 말고 상담 연결을 앞세운다. 아이디·비밀번호·카드·계좌 번호 같은 계정·결제 정보는 묻지 않는다. 정책·미지원 답변은 확인 경로로 끝낸다.",
   "가격·계약·장비 상태·도입 조건처럼 계정마다 달라지는 내용은 단정하지 마.",
   "근거가 없는 기능명, 수치, 가격, 재고, 설치 가능 여부, API 범위, 자동화 범위는 만들지 마.",
+  "사실 질문 원칙: 회사·대표·창업자·본사·설립 연도·직원 수·고객사 이름·도입 기관 수·서버 위치·보안 인증·인원/시간/용량 한도·보관 기간·지원 기기와 OS 버전은 내부 검증 정보나 안전 초안에 적힌 것만 말한다. 거기에 없으면 사람 이름·회사 이름·나라·숫자를 새로 만들어 내지 말고 '공개 안내에 없어요'라고 밝힌 뒤 담당자 확인(상담 연결)으로 안내한다. 영문으로 적힌 이름은 한글로 옮겨 적지 않는다.",
+  "특정 학원·기관 이름을 대며 Classin을 쓰는지 물으면 쓴다고도 안 쓴다고도 확인해 주지 않는다. 그 학원의 정보라 알려 드릴 수 없다고 밝히고, 공개된 고객 사례(학원명 일부 가림)와 도입 상담을 안내한다. 사용자가 말한 실명을 가려진 사례명과 같은 곳이라고 이어 말하지 않는다.",
   "금지 표현: 최적의 솔루션, 완벽하게, 모든 것을 해결, 자동으로 처리, 원스톱, 걱정 없이, 혁신적인, 프리미엄만 강조.",
   "Zoom, 일반 전자칠판, LMS와의 비교 질문은 기능표보다 수업 운영 흐름 차이로 설명해.",
   "결제, 오프라인 출석, 고급 리포트는 기본 제공처럼 말하지 말고 필요 시 API·외부 시스템·커스텀 리포트 범위로 분리해.",
@@ -243,7 +259,7 @@ async function readGeminiErrorSnippet(res: Response) {
   }
 }
 
-function buildGenerationConfig(model: string, temperature: number) {
+export function buildGenerationConfig(model: string, temperature: number) {
   const lowerModel = model.toLowerCase()
   const isFastOutputModel = /flash|lite/.test(lowerModel)
   const generationConfig: {
@@ -257,19 +273,20 @@ function buildGenerationConfig(model: string, temperature: number) {
     maxOutputTokens: isFastOutputModel ? 600 : 2048,
   }
 
-  if (lowerModel.startsWith("gemini-4") || lowerModel.startsWith("gemini-3")) {
-    generationConfig.thinkingConfig = {
-      thinkingLevel: lowerModel.includes("pro") ? "low" : "minimal",
-    }
-  } else if (lowerModel.startsWith("gemini-2.5-flash")) {
+  if (lowerModel.startsWith("gemini-2.5-flash")) {
     generationConfig.thinkingConfig = { thinkingBudget: 0 }
+  } else if (/^gemini-(?:[3-9]|flash|pro)/.test(lowerModel)) {
+    // 확인된 모델만 minimal 로 지연을 줄이고, 나머지(3.7·3.8-flash, 4 계열, pro, -latest 별칭)는 모두가 받는 low 를 쓴다.
+    generationConfig.thinkingConfig = {
+      thinkingLevel: MINIMAL_THINKING_MODEL_RE.test(lowerModel) ? "minimal" : "low",
+    }
   }
 
   return generationConfig
 }
 
-// 모델별 generationConfig. 2.5 Flash 는 thinkingBudget=0 으로 지연을 줄이고,
-// Gemini 3 계열은 thinkingBudget 대신 thinkingLevel 을 사용한다.
+// 모델별 generationConfig. Gemini 3 이상은 thinkingBudget 대신 thinkingLevel 을 쓴다.
+// 지원하지 않는 thinkingLevel 을 보내면 400 으로 즉시 실패하므로 모델별 지원 범위를 위 정규식으로 관리한다.
 function buildGeminiBody(
   model: string,
   systemInstruction: string,

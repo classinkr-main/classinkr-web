@@ -177,7 +177,7 @@ describe("chatbot RAG source relevance", () => {
     expect(result.unresolved).toBe(false)
     expect(result.answer).toContain("플립러닝")
     expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining("/models/gemini-2.5-flash:generateContent?key=test-gemini-key"),
+      expect.stringContaining("/models/gemini-3.5-flash:generateContent?key=test-gemini-key"),
       expect.objectContaining({
         method: "POST",
       })
@@ -186,7 +186,7 @@ describe("chatbot RAG source relevance", () => {
       String(url).includes(":generateContent")
     )
     const body = JSON.parse(String(generationCall?.[1]?.body))
-    expect(body.generationConfig.thinkingConfig).toEqual({ thinkingBudget: 0 })
+    expect(body.generationConfig.thinkingConfig).toEqual({ thinkingLevel: "minimal" })
   })
 
   it("ignores unsupported configured fast Gemini models and uses the stable default", async () => {
@@ -221,7 +221,7 @@ describe("chatbot RAG source relevance", () => {
     expect(result.answerMode).toBe("direct_answer")
     expect(result.answer).toContain("프로젝트형 수업")
     expect(generationCalls).toHaveLength(1)
-    expect(generationCalls[0][0]).toContain("/models/gemini-2.5-flash:generateContent")
+    expect(generationCalls[0][0]).toContain("/models/gemini-3.5-flash:generateContent")
     expect(generationCalls[0][0]).not.toContain("gemini-2.0-flash")
   })
 
@@ -276,7 +276,7 @@ describe("chatbot RAG source relevance", () => {
     expect(result.answer).toContain("세미나형 수업")
     expect(generationCalls).toHaveLength(2)
     expect(generationCalls[0][0]).toContain("/models/gemini-3.5-flash:generateContent")
-    expect(generationCalls[1][0]).toContain("/models/gemini-2.5-flash:generateContent")
+    expect(generationCalls[1][0]).toContain("/models/gemini-3.1-flash-lite:generateContent")
     const primaryBody = JSON.parse(String(generationCalls[0][1]?.body))
     expect(primaryBody.generationConfig.thinkingConfig).toEqual({ thinkingLevel: "minimal" })
   })
@@ -334,7 +334,7 @@ describe("chatbot RAG source relevance", () => {
     expect(result.answer).toContain("논술형 수업")
     expect(generationCalls).toHaveLength(2)
     expect(generationCalls[0][0]).toContain("/models/gemini-3.5-flash:generateContent")
-    expect(generationCalls[1][0]).toContain("/models/gemini-2.5-flash:generateContent")
+    expect(generationCalls[1][0]).toContain("/models/gemini-3.1-flash-lite:generateContent")
   })
 
   it("escalates from fast Gemini to a deeper tier only when the fast answer is unusable", async () => {
@@ -392,7 +392,7 @@ describe("chatbot RAG source relevance", () => {
     expect(result.answerMode).toBe("direct_answer")
     expect(result.answer).toContain("토론식 수업")
     expect(generationCalls).toHaveLength(2)
-    expect(generationCalls[0][0]).toContain("/models/gemini-2.5-flash:generateContent")
+    expect(generationCalls[0][0]).toContain("/models/gemini-3.5-flash:generateContent")
     expect(generationCalls[1][0]).toContain("/models/gemini-test-reasoning:generateContent")
   })
 

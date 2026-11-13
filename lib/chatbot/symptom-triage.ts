@@ -1049,7 +1049,8 @@ const BASE_SYMPTOM_TOPICS: SymptomTopic[] = [
     id: "class-disconnect",
     subject: /튕|끊(?:기|겨|김|어|겼|긴|깁|길)|나가져|나가집|(?:계속|자꾸|혼자|갑자기)\s*나가|나가요|나갑니다|강제\s*(?:로\s*)?(?:퇴장|종료)|연결\s*(?:이|가)?\s*(?:불안|끊|안)|접속\s*(?:이|가)?\s*(?:불안|끊)/,
     requireSymptom: false,
-    exclude: /녹화|미러링|무선\s*키보드|마우스/,
+    // "영상이 해외로 나가요?"는 수업에서 나가지는 증상이 아니라 데이터 이전을 묻는 말이다.
+    exclude: /녹화|미러링|무선\s*키보드|마우스|(?:해외|국외|외부|밖)\s*(?:으)?로\s*나가/,
     category: "troubleshooting",
     doc: { category: "start", slug: "class-connection-troubleshooting" },
     steps: [{ heading: "자꾸 끊기거나 교실에서 튕길 때", pick: [0, 1, 3, 2, 4] }],
@@ -1252,7 +1253,8 @@ const BASE_SYMPTOM_TOPICS: SymptomTopic[] = [
   },
   {
     id: "schedule-missing",
-    subject: /일정|캘린더|할\s*일\s*(?:에|목록|탭)?/,
+    // "망할 일은 없겠죠"의 '할 일'은 할 일 목록이 아니다. 낱말 첫머리의 '할 일'만 본다.
+    subject: /일정|캘린더|(?<![가-힣])할\s*일\s*(?:에|목록|탭)?/,
     symptom: /안\s*(?:보|떠|뜨|나)|안보|안떠|안뜨|없|사라|보이지\s*않|안\s*올라/,
     exclude: /수업\s*일정\s*(?:을|를)?\s*(?:어떻게|정하|바꾸|변경)|도입\s*일정|설치\s*일정/,
     category: "troubleshooting",

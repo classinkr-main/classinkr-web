@@ -42,6 +42,7 @@ import {
 } from "@/lib/cs-figma-guides"
 import { getCsFigmaEnrichment } from "@/lib/cs-figma-enrichments"
 import { appendFollowUp, buildFollowUp } from "@/lib/chatbot/follow-up"
+import { findBasicQuickAnswers } from "@/lib/chatbot/quick-answers-basics"
 import { findFieldQuickAnswer } from "@/lib/chatbot/quick-answers-field"
 import { resolveSymptomTriage, type SymptomTriageResult } from "@/lib/chatbot/symptom-triage"
 import {
@@ -69,7 +70,7 @@ const DEFAULT_FINAL_ANSWER_TIMEOUT_MS = 6_000
 const DEFAULT_FINAL_ANSWER_STREAM_TIMEOUT_MS = 8_000
 const RETRIEVAL_CACHE_TTL_MS = 5 * 60 * 1000
 const RETRIEVAL_CACHE_MAX = 200
-const RETRIEVAL_CACHE_VERSION = "rag-rerank-20261113-v6"
+const RETRIEVAL_CACHE_VERSION = "rag-rerank-20261113-v7"
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const CHAT_SESSION_CHANNELS = new Set(["web", "admin_preview", "partner_portal", "manual_import"])
 const PROGRESSIVE_MODEL_TIERS: ChatbotModelTier[] = ["basic", "reasoning", "advanced"]
@@ -320,7 +321,7 @@ interface CachedAnswerEntry {
   warning?: string
 }
 
-const ANSWER_CACHE_VERSION = "answer-20261113-v7"
+const ANSWER_CACHE_VERSION = "answer-20261113-v8"
 const ANSWER_CACHE_TTL_MS = 5 * 60 * 1000
 const ANSWER_CACHE_MAX = 200
 const answerCache = new Map<string, { expiresAt: number; value: CachedAnswerEntry }>()
@@ -655,6 +656,11 @@ const PRE_ADOPTION_POLICY_CONFIRM_RE =
   /무료\s*관리자|유료\s*관리자|관리자.{0,12}(권한|무료|유료)|유료\s*전환|사용\s*기간|계약\s*기간|언제까지\s*(사용|쓸)|정기\s*결제|결제.{0,10}포함|포함\s*항목|콘텐츠\s*소유권|소유권|개인정보\s*(처리|보관|관리|방침)|서버(?:는|가|의)?\s*(위치|지역|어디)|메인\s*서버(?:는|가|의)?\s*(위치|지역|어디)?|스토리지.{0,12}(용량|단가|추가|가격)|클라우드.{0,12}(용량|저장|단가|추가)|저장\s*(용량|공간)|펜\s*팁|전용\s*펜|소모품.{0,12}(가격|구매|재고)|팁.{0,12}(가격|구매|재고)/i
 const PRE_ADOPTION_HARDWARE_CONDITIONAL_RE =
   /카메라.{0,18}(화각|추적|트래킹|조정|전경|클로즈업)|마이크.{0,18}(성능|외부|세팅|설정|가능)|외부\s*(pc|컴퓨터|노트북)|따로\s*(pc|컴퓨터|노트북)|ops|컴퓨터.{0,12}(연결|따로|없이)/i
+// 보관 기간을 묻는 말: 몇 달·며칠·언제까지·얼마나 저장·사라지나·자동 삭제·연장.
+const RECORDING_RETENTION_PERIOD_RE =
+  /몇\s*(?:달|개월|일|주|년)|며칠|얼마나\s*(?:오래|저장|보관|남)|얼마\s*동안|언제까지|\d+\s*(?:년|개월|달)\s*(?:뒤|후|지나)|보관\s*기간|저장\s*기간|사라지|없어지|자동\s*삭제|연장/
+// 장비의 원가·가격을 묻는 말.
+const HARDWARE_COST_QUESTION_RE = /원가|마진|공급가|도매|납품가|단가|얼마|가격|비용|값/
 const GOOGLE_CLASSROOM_RE =
   /구글\s*클래스룸|google\s*classroom|수업반\s*생성|반\s*(생성|개설).{0,12}(100|백|대형)|100\s*개.{0,8}반|자료\s*업로드|과제\s*점수|과제\s*체크/i
 const SITE_ENTRY_INTEGRATION_RE =
@@ -738,6 +744,15 @@ const HARDWARE_UNCONFIRMED_DETAIL_EXCERPT =
 const LOGIN_TROUBLE_RE =
   /로그인|접속|비밀번호|패스워드|인증\s*코드|인증코드|아이디|계정(?!\s*(?:인증|삭제|탈퇴)).{0,12}(안|오류|에러|문제)|재설정/i
 
+// '접속' 말고 로그인 주제임을 직접 드러내는 낱말.
+const LOGIN_EXPLICIT_TOPIC_RE = /로그인|비밀번호|패스워드|인증\s*코드|인증코드|아이디|계정|재설정/i
+// 문제 신호: 안 됨, 오류, 분실, 재설정·변경 요청. "~하면 안 되나요?"는 허락을 묻는 말이라 문제 신호가 아니다.
+const LOGIN_TROUBLE_SIGNAL_RE =
+  /(?<!면\s?)안\s*(?:돼|되|됨|됐|됩|와|옴|열|들어가)|(?<!면\s?)안돼|(?<!면\s?)안되|안됨|못\s*(?:하|해|들어)|오류|에러|문제|실패|틀렸|틀리|잊|까먹|모르겠|막혔|막혀|잠겼|잠김|차단|재설정|변경|바꾸|바꿔|찾기|찾고|해결|초기화|분실/
+// 접속·로그인이 들어가도 인원·요금·속도·방식을 묻는 사실 질문.
+const LOGIN_FACT_QUESTION_RE =
+  /몇\s*명|최대|인원|정원|동시\s*접속|비용|요금|가격|무료|유료|느려|속도|방식|종류/
+
 const LIVE_CLASS_TROUBLE_RE =
   /수업.*(나가|나감|튕김|튕겨|끊김|끊겨|입장\s*안|접속\s*안)|화면\s*공유.*(끊김|끊겨|오류|에러|안\s*됨|안\s*돼)|소리.*(안\s*들|끊김|끊겨)|마이크.*(안\s*됨|안\s*돼|끊김)/i
 const PARENT_REPORT_OR_NOTIFICATION_RE =
@@ -754,7 +769,10 @@ function isPreAdoptionCheckQuestion(question: NormalizedQuestion) {
 }
 
 function isPreAdoptionRecordingPermissionQuestion(question: NormalizedQuestion) {
-  return PRE_ADOPTION_RECORDING_PERMISSION_RE.test(question.redacted)
+  if (!PRE_ADOPTION_RECORDING_PERMISSION_RE.test(question.redacted)) return false
+  // "녹화본은 몇 달 저장되나요", "언제까지 볼 수 있어요"는 권한이 아니라 보관 기간을 묻는 말이다.
+  // 권한 안내("수업 녹화와 현장 녹화는 목적이 달라서…")로 답하면 기간 질문에 답이 되지 않는다.
+  return !RECORDING_RETENTION_PERIOD_RE.test(question.redacted)
 }
 
 function isPreAdoptionSignupInfoQuestion(question: NormalizedQuestion) {
@@ -774,7 +792,9 @@ function isPreAdoptionPolicyConfirmQuestion(question: NormalizedQuestion) {
 }
 
 function isPreAdoptionHardwareConditionalQuestion(question: NormalizedQuestion) {
-  return PRE_ADOPTION_HARDWARE_CONDITIONAL_RE.test(question.redacted)
+  if (!PRE_ADOPTION_HARDWARE_CONDITIONAL_RE.test(question.redacted)) return false
+  // "OPS 원가는?", "OPS 따로 사면 얼마예요"는 구성 조건이 아니라 가격·원가를 묻는 말이다.
+  return !HARDWARE_COST_QUESTION_RE.test(question.redacted)
 }
 
 function isPreAdoptionSpecificQuestion(question: NormalizedQuestion) {
@@ -979,7 +999,14 @@ function isHardwareUnconfirmedDetailQuestion(question: NormalizedQuestion) {
 
 function isLoginTroubleQuestion(question: NormalizedQuestion) {
   const text = question.redacted.toLowerCase()
-  return LOGIN_TROUBLE_RE.test(text)
+  if (!LOGIN_TROUBLE_RE.test(text)) return false
+  const hasTroubleSignal = LOGIN_TROUBLE_SIGNAL_RE.test(text)
+  // "한 교실에 최대 몇 명까지 접속할 수 있나요", "접속하려면 비용 드나요", "로그인 방식은 뭐가 있어요"처럼
+  // 접속·로그인을 지나가며 말한 사실 질문(인원·요금·속도·방식)은 로그인 문제가 아니다.
+  if (LOGIN_FACT_QUESTION_RE.test(text) && !hasTroubleSignal) return false
+  // '접속'만으로는 로그인 문제로 보지 않는다. 안 됨·오류·분실 같은 문제 신호가 함께 있을 때만 본다.
+  if (!LOGIN_EXPLICIT_TOPIC_RE.test(text)) return hasTroubleSignal
+  return true
 }
 
 function isLiveClassTroubleQuestion(question: NormalizedQuestion) {
@@ -2365,10 +2392,17 @@ function buildImmediateHandoffResponse(
   }
 }
 
+// 첫 방문자가 쓰는 낱말. 제품 용어(수업·녹화·전자칠판)를 모르는 방문자는 "맥북에도 깔리나요?", "본사가 어디예요?",
+// "인터넷 속도 얼마나 필요해요?"처럼 묻는데, 이런 질문이 '클래스인과 무관'으로 분류돼 문서 검색도 모델 답변도
+// 건너뛰고 되묻기만 나갔다. 회사·기기·설치·비용·사례·한도를 묻는 낱말을 클래스인 질문으로 본다.
+const FIRST_CONTACT_VOCAB_RE =
+  /회사|기업|본사|법인|지사|대표|사장|ceo|창업|설립|나라|국적|제품|서비스|서버|저장|보관|영상|맥북|macbook|macos|\bmac\b|맥\s*(?:지원|용|에서|으로|os)|윈도우|windows|아이패드|ipad|아이폰|iphone|갤럭시|안드로이드|android|\bios\b|태블릿|노트북|컴퓨터|\bpc\b|스마트폰|휴대폰|핸드폰|크롬|브라우저|웹으로|설치|다운로드|깔리|깔아|인터넷|와이파이|wi-?fi|무료|유료|원가|마진|할인|도매|공급가|납품|기능|사례|후기|레퍼런스|인원|몇\s*명|최대|제한|용량|zoom|줌|구글\s*미트|google\s*meet|팀즈|teams|웨일|비교|차이|공부방|과외|교습소|학교|대학|초등|중등|고등|성인|암호화|프로젝터|스마트\s*tv|\btv\b|티비|모니터|속도|사양|스펙/
+
 function isDomainRelatedQuestion(question: NormalizedQuestion, category: string) {
   if (category !== "general") return true
 
   const text = question.redacted.toLowerCase()
+  if (FIRST_CONTACT_VOCAB_RE.test(text)) return true
   return /classin|클래스인|학원|수업|교실|학생|교사|강사|원장|전자칠판|칠판|하드웨어|보드|board|모델|사이즈|크기|인치|라인업|ops|카메라|마이크|미러링|edb|이\s*디\s*비|lms|녹화|복습|과제|운영|도입|관리자|온라인|화상|교안|토론|플립러닝|하이브리드|소프트웨어|프로그램|앱|플랜|구독형|충전형|체험|파일럿|학부모|리포트|보고서|문자|알림|개인정보|보안|데이터|계정|로그인|비밀번호/.test(text)
 }
 
@@ -2923,16 +2957,28 @@ export function buildDocSuggestionSummary(
   return `관련 안내를 정리해드리면,\n${body}`
 }
 
+// 약한 근거(검색 점수가 낮은 문서)만 있을 때 공개 챗봇이 내보내는 초안.
+// 예전에는 "관련 안내를 정리해드리면," 뒤에 그 문서 조각을 그대로 붙였는데, 근거가 약하다는 것은 질문과
+// 상관없는 조각일 가능성이 높다는 뜻이다("어느 나라 제품인가요?"에 드라이브 사용법이 나간 원인).
+// 모델이 답을 다시 쓰지 못한 경우에도 엉뚱한 조각이 나가지 않도록, 못 찾았다고 밝히고 다음 행동만 안내한다.
+export const WEAK_SOURCE_DRAFT_ANSWER = [
+  "이 질문에 딱 맞는 안내는 아직 찾지 못했어요. 엉뚱한 내용을 붙여 드리기보다 정확히 확인해 드릴게요.",
+  "궁금한 점을 조금만 더 구체적으로 적어 주시거나, \"상담원 연결\"이라고 남겨 주시면 담당자가 이어서 도와드려요.",
+].join("\n\n")
+
 function formatConsumerAnswer({
   answerMode,
   category,
   question,
   top,
+  internal,
 }: {
   answerMode: AnswerMode
   category: string
   question: NormalizedQuestion
   top: ChatbotSource
+  /** 내부 CS 코파일럿 경로. 초안이 담당자에게 근거로 전달되므로 약한 문서 조각도 그대로 요약해 준다. */
+  internal?: boolean
 }) {
   if (
     isHardwareUnconfirmedDetailQuestion(question) &&
@@ -3043,7 +3089,9 @@ function formatConsumerAnswer({
     headingText.length > 0 && normalizedExcerpt.startsWith(headingText.replace(/\s+/g, " ").toLowerCase())
   // 검색 발췌는 220자에서 잘려 "..."로 끝날 수 있다 — 문장 끝까지만 쓰고, "제목: " 접두어는 붙이지 않는다.
   const sentenceSafeExcerpt = trimExcerptToSentence(top.excerpt)
-  // doc_suggestion(약한 출처) 폴백만 따뜻하게 재구성한다. direct_answer/handoff 는 발췌를 그대로 쓴다.
+  // 약한 출처(doc_suggestion): 공개 경로는 조각을 붙이지 않고 못 찾았다고 밝힌다. 내부 코파일럿만 조각을 요약해 넘긴다.
+  if (answerMode === "doc_suggestion" && !internal) return WEAK_SOURCE_DRAFT_ANSWER
+  // direct_answer/handoff 는 발췌를 그대로 쓴다.
   const summary =
     answerMode === "doc_suggestion"
       ? buildDocSuggestionSummary(sentenceSafeExcerpt, headingText, { isMetaHeading, excerptStartsWithHeading })
@@ -3087,7 +3135,8 @@ function isVagueGeneratedAnswer(answer: string) {
 function composeAnswer(
   question: NormalizedQuestion,
   sources: ChatbotSource[],
-  category: string
+  category: string,
+  options: { internal?: boolean } = {}
 ): Omit<ChatbotQueryResponse, "answerEventId" | "sessionId" | "warning" | "handoffIntent"> {
   if (sources.length === 0) {
     const needsConsultation = wantsHumanConsultation(question)
@@ -3151,7 +3200,7 @@ function composeAnswer(
       ? "direct_answer"
       : "doc_suggestion"
 
-  const answer = formatConsumerAnswer({ answerMode, category, question, top })
+  const answer = formatConsumerAnswer({ answerMode, category, question, top, internal: options.internal })
 
   return {
     answer,
@@ -4111,7 +4160,45 @@ function buildServiceQuickAnswer(question: NormalizedQuestion): QuickAnswer | nu
       ["데모를 한번 보고 싶어요", "전자칠판 스펙 알려줘", "견적 구성이 어떻게 되나요?"]
     )
   }
+
+  // 첫 방문자가 한 줄로 묻는 기본 사실 질문(회사·대표, 전자칠판 필수 여부, 지원 기기, 한도, 원가·고객사 등).
+  // 위의 좁은 정해 둔 답이 모두 빗나갔을 때만 본다. 두 가지를 함께 물었으면 두 답을 이어 붙인다.
+  const basics = findBasicQuickAnswers(text)
+  if (basics.length > 0) {
+    const [first, second] = basics
+    const handoff = first.handoff ?? second?.handoff
+    // 두 답을 이을 때 상담 연결 안내 문단이 두 번 나오지 않게, 앞 답의 마지막 안내 문단은 뺀다.
+    const firstParagraphs =
+      second && first.handoff && second.handoff && first.answer.length > 1 ? first.answer.slice(0, -1) : first.answer
+    const paragraphs = second ? [...firstParagraphs, ...second.answer] : first.answer
+    const suggestedQuestions = Array.from(
+      new Set([...first.suggestedQuestions, ...(second?.suggestedQuestions ?? [])])
+    ).slice(0, 3)
+    const quick = handoff
+      ? make(paragraphs, handoff, first.category, suggestedQuestions)
+      : direct(paragraphs, first.category, suggestedQuestions)
+    // 답이 기대는 공개 문서를 출처로 단다(답 ↔ 문서 데이터셋 연결).
+    quick.response.sources = basics.flatMap((entry) => {
+      const source = entry.docPath ? buildBasicsDocSource(entry.docPath) : null
+      return source ? [source] : []
+    })
+    return { ...quick, topicId: first.id, suppressSalesFollowUp: !first.salesFollowUp }
+  }
   return null
+}
+
+// 기본 사실 답의 근거 문서(/docs/<category>/<slug>)를 출처로 만든다. 문서가 공개 목록에 없으면 달지 않는다.
+function buildBasicsDocSource(docPath: string): ChatbotSource | null {
+  const doc = getFallbackDocsFromStatic().find((candidate) => getDocPath(candidate) === docPath)
+  if (!doc) return null
+  return {
+    title: doc.title,
+    heading: "요약",
+    urlPath: docPath,
+    category: getDocCategory(doc),
+    excerpt: compactText(doc.chatbotSummary || doc.description),
+    score: 300,
+  }
 }
 
 // 증상 트리아지 답변처럼 이미 최종본인 결정형 응답. stream 경로에서도 Gemini 재작성을 건너뛴다.
@@ -4666,7 +4753,7 @@ async function buildChatbotCoreBase(
     question.redacted,
     classificationSources.map((source) => source.category)
   )
-  const response = composeAnswer(question, sources, category)
+  const response = composeAnswer(question, sources, category, { internal: options.includeInternalDocs === true })
 
   if (shouldGenerateAnswer && shouldUseAiFinalAnswer(response, question, category)) {
     const history = await historyPromise
