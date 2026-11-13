@@ -23,7 +23,7 @@ OUTPUT_DIR = PUBLIC_DIR / "materials" / "lead-magnets"
 # 워크북 템플릿(HTML → Chromium, scripts/render-lead-magnet-workbook-pdf.mjs)으로 만드는 자료.
 # 여기서 다시 만들면 새 디자인을 옛 디자인으로 덮어쓰므로 건너뛴다. 정본 lib/lead-magnet-pdf/workbook-slugs.mjs 와 같게 둔다
 # (tests/scripts/lead-magnet-workbook-pdf.test.ts 가 대조).
-WORKBOOK_SLUGS = {"academy-system-checklist", "electronic-whiteboard-classroom-checklist"}
+WORKBOOK_SLUGS = {"academy-system-checklist", "electronic-whiteboard-classroom-checklist", "academy-ai-data-ops-guide"}
 
 SITE_URL = os.environ.get("NEXT_PUBLIC_SITE_URL", "https://classin.ai.kr").rstrip("/")
 # 폰트 탐색 경로 — macOS·Windows·Linux 순으로 폴백한다.

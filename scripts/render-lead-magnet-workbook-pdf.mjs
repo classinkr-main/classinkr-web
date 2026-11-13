@@ -6,7 +6,7 @@
  * 제목·본문 위계가 서지 않고, 줄간격·체크 칸 같은 워크북 요소를 손으로 좌표를 찍어 그려야 한다.
  * 이 스크립트는 공개 사이트 글꼴(IBM Plex Sans KR, @fontsource)로 시안과 같은 HTML/CSS 를 인쇄한다.
  * WORKBOOK_SLUGS 에 있는 자료만 이 템플릿으로 만들고, 파이썬 생성기는 이 슬러그를 건너뛴다.
- * scripts/lead-magnet-ebooks/<slug>.html 이 있으면 data 대신 그 인쇄 원본(디자인 캔버스에서 옮긴 6쪽 e-book)을 찍는다.
+ * scripts/lead-magnet-ebooks/<slug>.html 이 있으면 data 대신 그 인쇄 원본(e-book, 6~12쪽)을 찍는다.
  *
  * 사용:
  *   node scripts/render-lead-magnet-workbook-pdf.mjs                 # WORKBOOK_SLUGS 전부
