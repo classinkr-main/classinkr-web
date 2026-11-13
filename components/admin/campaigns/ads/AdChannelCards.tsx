@@ -107,10 +107,22 @@ function CampaignItem({
         cpl,
       ].filter(Boolean)
     : null
+  // 유튜브(동영상)·디맨드젠은 클릭보다 조회가 성과 지표다 — 조회수가 있으면 앞에 둔다.
+  // 빈 날이 섞인 조회수는 하한(「이상」)이고 조회당 비용은 내지 않는다(summarizeVideo 가 null).
+  const video = row.video?.videoViews != null && row.video.videoViews > 0 ? row.video : null
+  const videoPart = video
+    ? [
+        `조회 ${COUNT.format(video.videoViews ?? 0)}${video.viewsPartial ? " 이상" : ""}`,
+        // 원화 조회당 비용은 100원 아래가 보통이라 소수 한 자리(₩11.3) — amount() 의 원화 정수 규칙(CPL 등)은 그대로 둔다.
+        video.costPerView != null
+          ? `조회당 ${currency === "KRW" && video.costPerView < 100 ? `₩${video.costPerView.toFixed(1)}` : amount(video.costPerView, currency, 1)}`
+          : null,
+      ].filter(Boolean)
+    : []
   const platform =
     row.platformLeads != null
       ? row.clicks != null && currency === "KRW"
-        ? `클릭 ${COUNT.format(row.clicks)} · 전환 ${COUNT.format(row.platformLeads)}`
+        ? [...videoPart, `클릭 ${COUNT.format(row.clicks)}`, `전환 ${COUNT.format(row.platformLeads)}`].join(" · ")
         : `플랫폼 리드 ${COUNT.format(row.platformLeads)}`
       : null
 

@@ -214,6 +214,7 @@ async function listQuoteDocuments(
       version_count: versionsForDocument.length,
       total_amount: currentVersion?.total_amount ?? null,
       subtotal: currentVersion?.subtotal ?? null,
+      discount_amount: currentVersion?.discount_amount ?? null,
       tax_amount: currentVersion?.tax_amount ?? null,
       vat_included: currentVersion
         ? resolveQuoteVatIncluded(currentVersion.vat_included, currentVersion.tax_amount)

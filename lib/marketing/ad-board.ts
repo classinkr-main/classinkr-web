@@ -11,7 +11,7 @@
 // 못 붙인 리드는 버리지 않고 채널 아래 칸(unmatched)으로 센다.
 
 import { isContactedLead } from "@/lib/crm/lead-attribution"
-import type { AdInsightRow } from "@/lib/marketing/ad-insights"
+import { summarizeVideo, type AdInsightRow, type VideoSummary } from "@/lib/marketing/ad-insights"
 import type { AdCampaignRecord, AdPlanStatus } from "@/lib/marketing/google-ads-setup"
 import { shiftDays } from "@/lib/marketing/perf"
 import type { LeadRecord } from "@/lib/repositories/leads"
@@ -44,6 +44,11 @@ export interface AdBoardCampaign {
   /** 우리 DB 리드. null = 짝지을 키가 없다. */
   dbLeads: number | null
   contacted: number
+  /**
+   * Google 만 — 유형·조회수·조회당 비용(lib/marketing/ad-insights.ts summarizeVideo).
+   * 계획만 있고 집행이 없으면 undefined. 배포 직후 옛 캐시 항목에도 없다.
+   */
+  video?: VideoSummary
 }
 
 export interface AdBoardBucket {
@@ -104,6 +109,8 @@ interface CampaignRollup {
   clicks: number
   lastActive: string | null
   inPeriod: boolean
+  /** 기간 안 행 — 유형·조회수 요약(summarizeVideo)이 다시 읽는다. */
+  periodRows: AdInsightRow[]
 }
 
 /** 캠페인별 기간 합계 + 마지막 집행일. 이름은 오래된 것부터(마지막이 최신). */
@@ -113,7 +120,7 @@ function rollupByCampaign(rows: readonly AdInsightRow[], since: string, until: s
     if (row.date > until) continue
     const entry =
       out.get(row.campaignId) ??
-      { id: row.campaignId, names: [], spend: 0, currency: null, platformLeads: 0, clicks: 0, lastActive: null, inPeriod: false }
+      { id: row.campaignId, names: [], spend: 0, currency: null, platformLeads: 0, clicks: 0, lastActive: null, inPeriod: false, periodRows: [] }
     if (row.campaignName && entry.names.at(-1) !== row.campaignName) {
       entry.names = [...entry.names.filter((name) => name !== row.campaignName), row.campaignName]
     }
@@ -124,6 +131,7 @@ function rollupByCampaign(rows: readonly AdInsightRow[], since: string, until: s
       entry.currency ??= row.currency
       entry.platformLeads += row.channel === "google" ? (row.conversions ?? 0) : row.leads
       entry.clicks += row.clicks
+      entry.periodRows.push(row)
     }
     out.set(row.campaignId, entry)
   }
@@ -230,6 +238,7 @@ export function buildAdBoard(input: BuildAdBoardInput): AdBoard {
       clicks: apiAccount && record.campaignId ? (rollup?.clicks ?? 0) : null,
       dbLeads: leadsMeasured ? (leads?.dbLeads ?? (record.campaignId ? 0 : null)) : null,
       contacted: leads?.contacted ?? 0,
+      video: apiAccount && rollup?.periodRows.length ? summarizeVideo(rollup.periodRows) : undefined,
     }
   }
   const plannedIds = new Set(plan.flatMap((record) => (record.campaignId ? [record.campaignId] : [])))
@@ -253,6 +262,7 @@ export function buildAdBoard(input: BuildAdBoardInput): AdBoard {
         clicks: rollup.clicks,
         dbLeads: leadsMeasured ? (leads?.dbLeads ?? 0) : null,
         contacted: leads?.contacted ?? 0,
+        video: rollup.periodRows.length ? summarizeVideo(rollup.periodRows) : undefined,
       }
     })
   const byStatus = (a: AdBoardCampaign, b: AdBoardCampaign) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status]

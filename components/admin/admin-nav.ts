@@ -34,7 +34,13 @@ import { ADMIN_AI_HREF, isAdminAiPreviewEnabled } from "@/lib/admin-ai/preview"
 export type AdminRole = "SUPER_ADMIN" | "ADMIN" | "EDITOR" | "VIEWER" | "BRANCH" | "PARTNER"
 export type AdminNavSection = "home" | "sales" | "marketing" | "cs" | "system"
 
-export type AdminNavCategory = "home" | "customer" | "growth" | "system"
+/**
+ * 사이드바 범주 — 선언 순서 = 렌더 순서(홈 → 영업·고객 → 주문·매출 → 마케팅·분석 → 고객 지원 → 시스템).
+ * (2026-11-09 사이드바 재배치 D안) 7개를 품던 "고객·매출"(customer)을 영업·고객(customer 키 유지)과
+ * 주문·매출(revenue)로 나누고, CS 콘솔을 콘텐츠 밑에 두려고 고객 지원(support)을 따로 세웠다
+ * (docs/active/admin-sidebar-reorder-fold-plan-2026-11-09.md).
+ */
+export type AdminNavCategory = "home" | "customer" | "revenue" | "growth" | "support" | "system"
 
 export interface AdminNavItem {
   href: string
@@ -45,9 +51,9 @@ export interface AdminNavItem {
   /** 커맨드 팔레트 검색어 — 공백 구분, 한/영 병기 */
   keywords?: string
   /**
-   * "기타" 접힘 그룹에 들어갔을 때 묶이는 범주.
-   * 상시 후보 7개도 포함해 전 항목에 지정한다 — 프리셋에 따라 상시 항목도 기타로 내려갈 수
-   * 있고, 그때 범주가 없으면 "system" 폴백에 걸려 엉뚱한 그룹에 박힌다(예: 하드웨어 재고).
+   * 접힘 자리에 들어갔을 때 묶이는 범주 — 사이드바는 접힌 탭을 범주마다 따로 접는다(2026-11-09).
+   * 상시 항목에도 전부 지정한다 — 개인 설정으로 상시 항목도 접힘으로 내려갈 수 있고, 그때 범주가
+   * 없으면 "system" 폴백에 걸려 엉뚱한 묶음에 박힌다(예: 하드웨어 재고).
    */
   category?: AdminNavCategory
   /** 아직 다듬는 중인 화면 — 사이드바에서 회색 톤 + 뱃지로 렌더한다. */
@@ -56,8 +62,10 @@ export interface AdminNavItem {
 
 export const ADMIN_NAV_CATEGORY_META: Record<AdminNavCategory, { label: string }> = {
   home: { label: "홈" },
-  customer: { label: "고객·매출" },
+  customer: { label: "영업·고객" },
+  revenue: { label: "주문·매출" },
   growth: { label: "마케팅·분석" },
+  support: { label: "고객 지원" },
   system: { label: "시스템" },
 }
 
@@ -110,42 +118,37 @@ const ADMIN_AI_NAV_ITEM: AdminNavItem = { href: ADMIN_AI_HREF, label: "AI 올인
 // ADMIN_NAV_CATEGORY_META 맨 앞에 두고 선언도 배열 맨 앞으로 옮겼다. groupNavByCategory가 범주
 // 선언 순서로 그룹을 내보내므로 Overview의 그룹이 항상 첫 그룹으로 렌더된다.
 // (2026-09-10 전면 공개) 항목별 roles 필드를 제거했다 — 모든 매니저가 같은 목록을 본다.
-// 배치만 남는다: 앞의 두 범주(홈 + 고객·매출) 8개 + 콘텐츠(2026-10-26)가 상시, 나머지
-// 7개가 "기타" 후보다 — 그중 운영 상태 1개는 기본 숨김(2026-09-25 숨김 2 → 2026-10 마케팅 프로젝트가
-// 캠페인 관리 탭으로 들어가며 숨김 1, 기타 6 + 숨김 1, 숨겨도 ⌘K·주소로 열림). 경계는 admin-nav-access.ts의
-// DEFAULT_PRIMARY_HREFS·DEFAULT_HIDDEN_HREFS가 정본이며,
-// **이 배열의 선언 순서를 바꾸면 그 경계도 함께 흔들린다** — 범주 연속 블록을 깨지 말 것.
+// (2026-11-09 사이드바 재배치 D안) 순서를 하루 동선(일정 → 문의·고객 → 견적·출고 → 매출 성과 → 마케팅
+// → 고객 지원 → 시스템)으로 다시 놓고 범주를 업무 단위로 나눴다 — 홈 · 영업·고객(캘린더·CRM) ·
+// 주문·매출(견적·문서·하드웨어 재고·KR Team·매출 장부) · 마케팅·분석 · 고객 지원(CS 콘솔) · 시스템.
+// CS 콘솔은 운영자 요청으로 콘텐츠 바로 밑이다 — 그래서 마케팅·분석 블록 뒤의 고객 지원 범주로 선언한다.
+// 상시는 DEFAULT_PRIMARY_HREFS(admin-nav-access.ts, 개수는 그 상수 위 주석이 정본)이고 소제목 없이 범주
+// 사이 간격만 두고 그린다. 나머지는 범주마다 따로 접힌다(주문·매출 · 마케팅·분석 · 시스템).
+// 근거·시안: docs/active/admin-sidebar-reorder-fold-plan-2026-11-09.md.
+// **이 배열의 선언 순서를 바꾸면 상시 목록 순서와 접힘 묶음이 함께 흔들린다** — 범주 연속 블록을 깨지 말 것.
 export const ADMIN_NAV: AdminNavItem[] = [
   { href: "/admin/overview", label: "Overview", icon: LayoutDashboard, section: "home", category: "home", keywords: "홈 대시보드 overview home" },
   // (2026-09-29) AI 올인원 — 갈매봇 대화·오더함·AI 도구 바로가기·오더 카탈로그. 어느 화면에서나 뜨는
   // 갈매봇 위젯(components/admin/ai)의 전체 화면판이다. home 범주 블록 안, Overview 바로 아래.
   // 서버 오더 엔진이 붙기 전이라 시안(샘플 데이터)으로 동작한다 — maturity "wip".
   // (2026-10-19 통합 병합) 기획 D13 — 시안 스위치(NEXT_PUBLIC_ADMIN_AI_PREVIEW=1)가 꺼져 있으면(기본)
-  // 이 항목은 배열에 없다(lib/admin-ai/preview.ts). 그때 상시는 9, 전체는 17이다.
+  // 이 항목은 배열에 없다(lib/admin-ai/preview.ts). 그때 전체는 16이다.
   ...(isAdminAiPreviewEnabled() ? [ADMIN_AI_NAV_ITEM] : []),
 
+  // 영업·고객 — 하루의 첫 동선: 오늘 일정 → 들어온 문의·고객(CRM 배지).
   { href: "/admin/calendar", label: "캘린더", icon: CalendarDays, section: "sales", category: "customer", keywords: "캘린더 일정 calendar schedule 행사 이벤트 event 웨비나 공개 행사" },
-
-  // 영업·매출 — 성과(KR Team)·검수(매출 장부)·파이프라인(CRM)·산출물(견적)·재고(하드웨어)
-  // (2026-07-18 재정렬) KR Team·매출 장부를 섹션 상단으로 — 사이드바 탭 우선순위 요청 반영.
-  { href: "/admin/branch", label: "KR Team", icon: Building2, section: "sales", category: "customer", keywords: "지사 브랜치 branch kr team 매출 성과" },
-  { href: "/admin/branch/ledger", label: "매출 장부", icon: ReceiptText, section: "sales", badge: "MVP", category: "customer", maturity: "wip", keywords: "매출 장부 ledger rev dsh kpi 수치 검수 sales 콕핏" },
   { href: "/admin/crm", label: "CRM", icon: Users, section: "sales", category: "customer", keywords: "crm 한국팀 매출 korea" },
-  { href: "/admin/quotes", label: "견적·문서", icon: FileText, section: "sales", category: "customer", keywords: "견적 계약 영수증 quote contract receipt" },
-  // 하드웨어 재고는 견적서 산출물과 바로 이어지는 재고 검증 표면이라 견적·문서 바로 아래에 둔다(2026-07-18 재배치, 이전엔 system 섹션).
-  { href: "/admin/hardware", label: "하드웨어 재고", icon: PackageCheck, section: "sales", category: "customer", keywords: "하드웨어 재고 입고 출고 hardware inventory stock ops" },
 
-  // CS 콘솔 — 고객 지원 진입점 단일화(2026-08-18). 사이드바의 CS 항목은 이것 하나다.
-  // 가이드 문서(/admin/docs)·내부 CS(/admin/cs-chatbot)는 콘솔 가로 메뉴
-  // (components/admin/cs/CsConsoleNav.tsx)의 하위 메뉴로 이미 들어간 화면이라 최상위 nav에서
-  // 내렸다 — 공개 행사·트래픽과 같은 "다른 화면의 하위 메뉴가 된 표면은 최상위에 중복 노출하지
-  // 않는다" 원칙. 라우트·딥링크는 그대로 살아 있고, ⌘K는 이 항목의 자식 커맨드
-  // (AdminCommandPalette의 PALETTE_CHILD_COMMANDS)로 두 화면을 계속 노출한다.
-  // /admin/chatbot은 외부(고객)·내부(사내) 두 축을 잇는 콘솔의 첫 화면이라 진입점으로 삼는다.
-  // category가 customer인 이유 — CS는 일상 고객 지원 업무면이지 시스템 관리면이 아니다.
-  { href: "/admin/chatbot", label: "CS 콘솔", icon: Bot, section: "cs", category: "customer", keywords: "cs 문의 cs 문의 탭 cs 문의 대시보드 cs 콘솔 고객 지원 챗봇 운영 지표 골든셋 품질 평가 알파 준비도 chatbot ops console 채널톡 상담 문의 채팅 channel talk chat inbox 보강 큐 미해결 gaps 질문 패턴 가이드 문서 docs guide faq 추천질문 카테고리 리디렉트 내부 cs 상담 도우미 대기열 본사 확인 운영 도구 internal support assistant" },
+  // 주문·매출 — 산출물(견적) → 재고 검증(하드웨어) → 성과(KR Team) → 검수(매출 장부).
+  // 하드웨어 재고는 견적서 산출물과 바로 이어지는 재고 검증 표면이라 견적·문서 바로 아래에 둔다(2026-07-18).
+  // KR Team·매출 장부는 2026-07-18 요청으로 섹션 상단에 있었으나, 2026-11-09 D안에서 이 블록 끝으로
+  // 내리고 기본 접힘으로 뒀다(09-24 실측 사람 쓰기 ≈0, 시트 동기화 실패 — admin-usage-triage-2026-09-25.md).
+  { href: "/admin/quotes", label: "견적·문서", icon: FileText, section: "sales", category: "revenue", keywords: "견적 계약 영수증 quote contract receipt" },
+  { href: "/admin/hardware", label: "하드웨어 재고", icon: PackageCheck, section: "sales", category: "revenue", keywords: "하드웨어 재고 입고 출고 hardware inventory stock ops" },
+  { href: "/admin/branch", label: "KR Team", icon: Building2, section: "sales", category: "revenue", keywords: "지사 브랜치 branch kr team 매출 성과" },
+  { href: "/admin/branch/ledger", label: "매출 장부", icon: ReceiptText, section: "sales", badge: "MVP", category: "revenue", maturity: "wip", keywords: "매출 장부 ledger rev dsh kpi 수치 검수 sales 콕핏" },
 
-  // 마케팅·분석 — 캠페인·콘텐츠·리드 + 웹/비즈니스 분석
+  // 마케팅·분석 — 허브 → 캠페인 → 분석 → 콘텐츠 → 자료.
   // 메시지 발송 허브(이메일·문자·카카오, /admin/marketing)는 캠페인의 "메시지" 탭으로 흡수 — 라우트는 redirect 유지.
   // (2026-09-14) 라벨 "캠페인" → "마케팅": 허브가 한눈에·상세·데이터 3층의 마케팅 홈이 됐다. 라우트는 그대로(N3 보류).
   { href: "/admin/campaigns", label: "마케팅", icon: Megaphone, section: "marketing", category: "growth", keywords: "마케팅 marketing 한눈에 대시보드 dashboard 캠페인 이메일 campaign email 메시지 발송 문자 sms 카카오 kakao 알림톡 솔라피 solapi 광고비 리드 cpl 퍼널" },
@@ -153,19 +156,32 @@ export const ADMIN_NAV: AdminNavItem[] = [
   // (2026-10) 마케팅 프로젝트(D3, 캠페인을 묶는 상위 개체)가 이 화면의 "프로젝트" 탭으로 들어왔다 —
   // 예전 /admin/campaigns/projects 항목은 내렸고 그 주소는 ?view=projects 로 넘긴다(⌘K 는 허브 자식 명령).
   { href: "/admin/campaigns/manage", label: "캠페인 관리", icon: Layers, section: "marketing", category: "growth", keywords: "캠페인 관리 크로스채널 통합 롤업 연결 마케팅 프로젝트 묶음 예산 소진 campaign manage cross-channel rollup project budget" },
-  { href: "/admin/blog", label: "콘텐츠", icon: FileText, section: "marketing", category: "growth", keywords: "블로그 콘텐츠 blog content" },
-  { href: "/admin/lead-magnets", label: "자료 퍼널", icon: Magnet, section: "marketing", category: "growth", keywords: "자료 퍼널 리드마그넷 material funnel download lead magnet" },
   // (2026-07-29 탭 재구성) 공개 행사(/admin/events)는 캘린더 항목으로 흡수됐다 —
   // 캘린더는 이미 source: "event"로 공개 행사를 그리고 있어 화면 병합이 아니라 nav 항목만 내린 것이다.
   // 방문자/트래픽은 이 항목의 '방문자' 탭(기본 탭)이다. /admin/traffic 은 리다이렉트만 남았다(2026-11-03).
   { href: "/admin/analytics", label: "Analytics", icon: BarChart2, section: "marketing", category: "growth", keywords: "analytics 분석 통계 방문자 트래픽 traffic 추적 pixel 계측 홈페이지 흐름" },
+  { href: "/admin/blog", label: "콘텐츠", icon: FileText, section: "marketing", category: "growth", keywords: "블로그 콘텐츠 blog content" },
+  { href: "/admin/lead-magnets", label: "자료 퍼널", icon: Magnet, section: "marketing", category: "growth", keywords: "자료 퍼널 리드마그넷 material funnel download lead magnet" },
+
+  // 고객 지원 — CS 콘솔. 고객 지원 진입점 단일화(2026-08-18). 사이드바의 CS 항목은 이것 하나다.
+  // 가이드 문서(/admin/docs)·내부 CS(/admin/cs-chatbot)는 콘솔 가로 메뉴
+  // (components/admin/cs/CsConsoleNav.tsx)의 하위 메뉴로 이미 들어간 화면이라 최상위 nav에서
+  // 내렸다 — 공개 행사·트래픽과 같은 "다른 화면의 하위 메뉴가 된 표면은 최상위에 중복 노출하지
+  // 않는다" 원칙. 라우트·딥링크는 그대로 살아 있고, ⌘K는 이 항목의 자식 커맨드
+  // (AdminCommandPalette의 PALETTE_CHILD_COMMANDS)로 두 화면을 계속 노출한다.
+  // /admin/chatbot은 외부(고객)·내부(사내) 두 축을 잇는 콘솔의 첫 화면이라 진입점으로 삼는다.
+  // (2026-11-09) 운영자 요청으로 상시 목록에서 콘텐츠 바로 밑에 온다 — 그 자리를 범주 연속 블록 안에서
+  // 지키려고 영업·고객(customer)에서 고객 지원(support) 범주로 옮겼다. 시스템 관리면이 아니라
+  // 일상 고객 지원 업무면이라는 판단(2026-08-18)은 그대로다.
+  { href: "/admin/chatbot", label: "CS 콘솔", icon: Bot, section: "cs", category: "support", keywords: "cs 문의 cs 문의 탭 cs 문의 대시보드 cs 콘솔 고객 지원 챗봇 운영 지표 골든셋 품질 평가 알파 준비도 chatbot ops console 채널톡 상담 문의 채팅 channel talk chat inbox 보강 큐 미해결 gaps 질문 패턴 가이드 문서 docs guide faq 추천질문 카테고리 리디렉트 내부 cs 상담 도우미 대기열 본사 확인 운영 도구 internal support assistant" },
 
   // 운영·시스템 — Overview는 맨 위 "home" 범주로 옮겨졌다(2026-09-01, 배열 상단 주석 참조).
-  { href: "/admin/ops", label: "운영 상태", icon: Activity, section: "system", category: "system", keywords: "ops health 상태 통합 크론 cron automation" },
   // 회원 관리는 Settings "회원" 탭(?tab=members)으로 흡수됨 — /admin/users는 그 탭으로 redirect 스텁.
   // ⌘K 검색어(회원·사용자·권한)를 Settings 항목 keywords에 병합해 검색성 보존.
   { href: "/admin/settings", label: "설정", icon: Settings, section: "system", category: "system", keywords: "설정 settings 환경 회원 사용자 users 권한 계정" },
   { href: "/admin/dev", label: "개발 도구", icon: Code2, section: "system", category: "system", keywords: "개발 dev 버그 패치노트" },
+  // 운영 상태는 전원 기본 숨김(DEFAULT_HIDDEN_HREFS)이라 시스템 블록 맨 뒤에 둔다.
+  { href: "/admin/ops", label: "운영 상태", icon: Activity, section: "system", category: "system", keywords: "ops health 상태 통합 크론 cron automation" },
 ]
 
 // 섹션 부제(description)는 사이드바에서 미렌더 — 팔레트 그룹 라벨과 코드 문서용으로만 유지.

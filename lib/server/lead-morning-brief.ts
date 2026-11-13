@@ -249,7 +249,8 @@ function buildMetrics(
       .filter((lead) => lead.source === "meta_lead_ads")
       .map((lead) => getMetaAdInfo(lead)?.campaign)
   )
-  const contactPageLeadCount = current.filter((lead) => lead.source === "contact_page").length
+  // 챗봇 상담(source=chatbot)도 같은 문의 폼으로 접수되므로 문의 내역에 함께 센다 — 홈페이지 합계와 내역 합이 맞게.
+  const contactPageLeadCount = current.filter((lead) => lead.source === "contact_page" || lead.source === "chatbot").length
   const demoModalLeadCount = current.filter((lead) => lead.source === "demo_modal").length
   // 쇼룸 예약·도입 신청. 이 줄이 없으면 홈페이지 합계와 내역의 합이 어긋난다.
   const intakeLeadCount = current.filter((lead) => INTAKE_LEAD_SOURCES.has(lead.source)).length

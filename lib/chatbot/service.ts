@@ -1,6 +1,14 @@
 import "server-only"
 
+import { stripLeadSubmitTokens } from "@/lib/chatbot/lead-token"
+import {
+  generateChatbotFinalAnswer,
+  streamChatbotFinalAnswer,
+  type ChatbotAnswerUsage,
+} from "@/lib/chatbot/answer-provider"
+import { maybeLabelChatbotExchange } from "@/lib/chatbot/claude/labeling"
 import { unstable_cache, revalidateTag } from "next/cache"
+import { after } from "next/server"
 import { assertJsonSafeInDev } from "@/lib/server/json-safe"
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
@@ -14,8 +22,6 @@ import {
 } from "@/lib/chatbot/classification"
 import { findChatbotSelfKnowledgeEntry } from "@/lib/chatbot/self-knowledge"
 import {
-  generateGeminiFinalAnswer,
-  streamGeminiFinalAnswer,
   clampAnswerToLength,
   embedText,
   sanitizePublicAnswerText,
@@ -388,6 +394,18 @@ function getFinalAnswerTimeoutMs() {
 
 function getFinalAnswerStreamTimeoutMs() {
   return getPositiveIntegerEnv("CHATBOT_FINAL_ANSWER_STREAM_TIMEOUT_MS", DEFAULT_FINAL_ANSWER_STREAM_TIMEOUT_MS)
+}
+
+/**
+ * 응답을 보낸 뒤에도 끝까지 돌아야 하는 작업 — next/server after 로 넘긴다(라우트 핸들러 요청 안에서만 쓸 수 있다).
+ * 요청 밖(테스트·스크립트)에서는 after 가 바로 throw 하므로 그냥 돌린다. task 는 스스로 오류를 삼켜야 한다.
+ */
+function runAfterResponse(task: () => Promise<void>) {
+  try {
+    after(task)
+  } catch {
+    void task()
+  }
 }
 
 async function withTimeoutFallback<T>({
@@ -3242,6 +3260,13 @@ async function ensureSession(
   return data.id as string
 }
 
+// Claude 로 답한 응답의 모델·토큰 — chatbot_answer_events.model_name·prompt_tokens·completion_tokens 를 채운다.
+// 응답 객체(클라이언트로 나가는 JSON)에 필드를 더하지 않으려고 WeakMap 에 둔다. Gemini 답변은 비워 둔다(기존 그대로).
+const answerUsageByResponse = new WeakMap<object, ChatbotAnswerUsage>()
+function rememberAnswerUsage(response: object, usage: ChatbotAnswerUsage) {
+  answerUsageByResponse.set(response, usage)
+}
+
 async function persistExchange(
   input: ChatbotQueryRequest,
   question: NormalizedQuestion,
@@ -3305,6 +3330,13 @@ async function persistExchange(
     }
 
     if (answerEventId) answerEventInsert.id = answerEventId
+    const answerUsage = answerUsageByResponse.get(response)
+    if (answerUsage) {
+      answerEventInsert.model_name = answerUsage.model
+      answerEventInsert.prompt_tokens =
+        answerUsage.inputTokens + (answerUsage.cacheReadInputTokens ?? 0) + (answerUsage.cacheCreationInputTokens ?? 0)
+      answerEventInsert.completion_tokens = answerUsage.outputTokens
+    }
 
     const { data: answerEvent, error: answerEventError } = await supabase
       .from("chatbot_answer_events")
@@ -3368,6 +3400,20 @@ async function persistExchange(
         sources: response.sources,
       }),
     ]
+
+    // 대화 라벨(의도·기관·단계·온도) — CHATBOT_LABELING_ENABLED + Anthropic 키일 때만, 테이블이 없으면 조용히 건너뛴다.
+    // Claude 호출(최대 수 초)이라 응답 뒤에 돈다 — 위 부수효과처럼 void 로 두면 Vercel 함수가 응답 직후 멈춰 라벨이 빠진다.
+    runAfterResponse(() =>
+      maybeLabelChatbotExchange(supabase as never, {
+        sessionId: resolvedSessionId,
+        answerEventId: answerEvent.id as string,
+        question: question.redacted,
+        answer: response.answer,
+        category,
+        intent,
+        handoffIntent,
+      })
+    )
 
     void Promise.allSettled(sideEffects).then((sideEffectResults) => {
       for (const result of sideEffectResults) {
@@ -4245,36 +4291,12 @@ function finalizeAnswer(
 ) {
   response.answer = sanitizePublicAnswerText(response.answer)
 
-  // 대리 신청 토큰 처리 ([LEAD_SUBMIT:name=...,phone=...,org=...,event=...])
-  if (response.answer && response.answer.includes("[LEAD_SUBMIT:")) {
-    const submitRegex = /\[LEAD_SUBMIT:name=([^,\n\]]+),phone=([^,\n\]]+),org=([^,\n\]]+),event=([^,\n\]]+)\]/i
-    const match = response.answer.match(submitRegex)
-    if (match) {
-      const [, name, phone, org, eventName] = match
-      
-      // leads 리포지토리를 불러와 DB에 삽입 (비동기 즉시실행식)
-      import("@/lib/repositories/leads").then(({ saveLead }) => {
-        saveLead({
-          source: "contact_page",
-          name: name.trim(),
-          phone: phone.trim(),
-          org: org.trim(),
-          message: `챗봇 대리 신청: ${eventName.trim()}`,
-          notes: `[event:${eventName.trim()}] 챗봇을 통한 자동 세미나 대리 신청 리드`,
-          source_detail: "chatbot_assist_registration",
-          timestamp: new Date().toISOString(),
-        }).then((lead) => {
-          console.log(`[chatbot-registration] Successfully registered lead ${lead.id}: ${name} (${org}) for ${eventName}`)
-        }).catch((err) => {
-          console.error("[chatbot-registration] Failed to auto register lead:", err)
-        })
-      }).catch((err) => {
-        console.error("[chatbot-registration] Failed to import leads repository:", err)
-      })
-
-      // 사용자 답변 텍스트에서 토큰 삭제
-      response.answer = response.answer.replace(submitRegex, "").trim()
-    }
+  // `[LEAD_SUBMIT:...]` 토큰은 더 이상 리드를 만들지 않는다 — 본문에서 지우고 경고만 남긴다.
+  // 챗봇 리드는 상담 연결 → /contact?source=chatbot → /api/lead(submitLeadCapture)로만 접수된다.
+  const leadToken = stripLeadSubmitTokens(response.answer ?? "")
+  if (leadToken.stripped) {
+    response.answer = leadToken.answer
+    console.warn("[chatbot] LEAD_SUBMIT token stripped from answer; leads go through /contact?source=chatbot only.")
   }
 
   // 콘텐츠 추천 토큰 처리 ([CONTENT_SUGGEST:type=...,slug=...,title=...])
@@ -4658,7 +4680,7 @@ async function buildChatbotCoreBase(
     const history = await historyPromise
     const finalAnswer = await withTimeoutFallback({
       promise: generateUsableAnswerWithProgressiveModels((tier) =>
-        generateGeminiFinalAnswer({
+        generateChatbotFinalAnswer({
           question: question.redacted,
           category,
           intent,
@@ -4667,6 +4689,9 @@ async function buildChatbotCoreBase(
           sources: response.sources,
           tier,
           history,
+          handoffIntent,
+          sessionId: options.sessionId ?? null,
+          onUsage: (usage) => rememberAnswerUsage(response, usage),
         })
       ),
       timeoutMs: getFinalAnswerTimeoutMs(),
@@ -4794,6 +4819,8 @@ async function streamAndApplyFinalAnswer({
   response,
   historyPromise,
   emit,
+  handoffIntent,
+  sessionId,
 }: {
   question: NormalizedQuestion
   category: string
@@ -4801,6 +4828,8 @@ async function streamAndApplyFinalAnswer({
   response: Omit<ChatbotQueryResponse, "answerEventId" | "sessionId" | "warning" | "handoffIntent">
   historyPromise: Promise<{ role: "user" | "model"; parts: { text: string }[] }[]>
   emit: (event: ChatbotStreamEvent) => void
+  handoffIntent?: HandoffIntent
+  sessionId?: string
 }): Promise<boolean> {
   const history = await historyPromise
   let raw = ""
@@ -4818,7 +4847,7 @@ async function streamAndApplyFinalAnswer({
 
   await withTimeoutFallback({
     promise: (async () => {
-      for await (const chunk of streamGeminiFinalAnswer({
+      for await (const chunk of streamChatbotFinalAnswer({
         question: question.redacted,
         category,
         intent,
@@ -4827,6 +4856,9 @@ async function streamAndApplyFinalAnswer({
         sources: response.sources,
         tier: "basic",
         history,
+        handoffIntent,
+        sessionId: sessionId ?? null,
+        onUsage: (usage) => rememberAnswerUsage(response, usage),
       })) {
         onChunk(chunk)
       }
@@ -4935,7 +4967,16 @@ export async function streamChatbotQuery(
   // 이 경우 AI 재작성을 적용하면 안 된다 — handleChatbotQuery 의 조기 반환 의미와 동일하게 맞춘다.
   const isShortCircuited = isGreetingOnly(question) || Boolean(buildPolicyGuardResponse(question))
   if (!isShortCircuited && shouldUseAiFinalAnswer(response, question, category)) {
-    await streamAndApplyFinalAnswer({ question, category, intent, response, historyPromise, emit })
+    await streamAndApplyFinalAnswer({
+      question,
+      category,
+      intent,
+      response,
+      historyPromise,
+      emit,
+      handoffIntent: core.handoffIntent,
+      sessionId,
+    })
     applyConversationTone(core)
   }
   const handoffIntent = core.handoffIntent

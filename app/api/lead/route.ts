@@ -33,7 +33,8 @@ const LANDING_SOURCE_DETAILS = new Set([
 function getInvalidContactTopic(body: unknown): string | null {
   if (!body || typeof body !== "object") return null
   const record = body as Record<string, unknown>
-  if (record.source !== "contact_page") return null
+  // 챗봇 경유(source=chatbot)도 같은 문의 폼이 보내므로 같은 문의 유형 목록으로 검사한다.
+  if (record.source !== "contact_page" && record.source !== "chatbot") return null
 
   const raw = record.sourceDetail ?? record.source_detail
   if (typeof raw !== "string") return null

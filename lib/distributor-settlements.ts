@@ -13,12 +13,13 @@ import {
 //    총판이 그중 원가를 회사로 입금한다(예: 고객 630만원 → 총판이 회사로 530~550만원).
 //    총판용 견적서는 고객 견적과 같은 양식이고 금액(원가 = 총판 입금가)만 다르다. 공급자 = 회사, 수신 = 총판.
 //    회사 매출은 총판 입금 확인 시점(lib/admin/handoff/distributor-payment-to-ledger-draft.ts).
-//  - H방식: 총판이 먼저 사 둔(수입한) 물량이다. 총판용 견적서·원가 미수가 없고, 직원이 설치 완료를 누르면
-//    그 시점에 매출을 잡는다.
+//  - H방식: 총판이 먼저 사 둔(수입한) 물량이다. 총판용 견적서·원가 미수가 없고, 설치 완료(출고 확정) 뒤
+//    직원이 검토하고 '매출 잡기'를 누른 시점에 매출을 잡는다.
 //
 //  - 대상 품목 기본값: itemType=hardware + AI Suite(online-suite-monthly). 설치·소프트웨어 등은 기본 제외(직접 포함 가능).
 //  - 원가(코드상 unitPrice): 직접 입력 또는 원가 템플릿(품목 코드 × 최소 수량 구간). 구매 대수·고객마다 달라 견적마다 덮어쓸 수 있다.
-//  - 발행 시점: 고객 동의(on_accept) 또는 설치 완료(on_install, 직원이 직접 누름). manual 은 사람이 직접 발행.
+//  - 발행 시점: 고객 동의(on_accept, 자동 발행) 또는 설치 완료(on_install — 출고 확정 때 초안 자동 준비 ·
+//    검토 요청, 직원이 '검토 완료'로 발행). manual 은 사람이 직접 발행.
 //  - 미수: 발행 금액 − 입금 합계. 입금이 합계 이상이면 paid, 일부면 partial.
 //
 // 서버·클라이언트 공용이다(server-only 금지). DB 접근은 lib/repositories/distributor-settlements.ts.
@@ -35,7 +36,7 @@ export const DISTRIBUTOR_MODE_LABELS: Record<DistributorFulfillmentMode, { title
   },
   H: {
     title: "H방식 · 총판 선매입",
-    summary: "총판이 먼저 사 둔 물량. 총판 견적서·원가 미수 없음 — 직원이 설치 완료를 누르면 매출.",
+    summary: "총판이 먼저 사 둔 물량. 총판 견적서·원가 미수 없음 — 설치 완료(출고 확정) 후 검토하고 매출 잡기.",
   },
 }
 
@@ -336,8 +337,95 @@ export function buildDistributorQuoteDetails(
     vatPolicyLabel: undefined,
     specialTerms: settlement.notes?.trim() || customer.specialTerms,
     internalMemo: undefined,
+    // 고객 견적에만 해당하는 값은 넘기지 않는다 — 총판 문서는 원가 줄만으로 다시 계산한다.
+    //  - 견적 할인: 고객 할인이 원가 합계에서 빠지면 '입금 요청 금액'(정산 합계)과 문서 총액이 어긋난다.
+    //  - 구성 옵션: 녹화 세트 12개월 할부처럼 고객 결제 조건(월 납입 안내)이 총판 문서에 찍히지 않게 한다.
+    quoteDiscount: undefined,
+    optionSelections: undefined,
     lineItems,
   })
+}
+
+/* ─── 설치 완료 → 자동 준비 · 검토 요청 ─────────────────────── */
+//
+// 재고 앱에서 오더의 배송 예정을 출고 확정하면(진행 상태 '설치 완료') 총판 정산을 자동으로 준비하고 검토를 요청한다.
+// 자동으로 발행하지 않는다 — 사람이 원가·수량을 확인하고 '검토 완료 → 발행'(C) 또는 '검토 완료 → 매출 잡기'(H)를
+// 눌러야 총판에게 나가거나 매출이 잡힌다. 서버 처리: lib/server/distributor-settlement-install.ts
+
+/** 검토 요청 사유의 머리말. 같은 오더의 출고 확정이 여러 번(품목별·부분 출고) 와도 알림은 한 번만 보낸다. */
+export const INSTALL_REVIEW_PREFIX = "설치 완료 확인"
+
+export function isInstallReviewReason(reason?: string | null) {
+  return Boolean(reason?.startsWith(INSTALL_REVIEW_PREFIX))
+}
+
+/**
+ * 사람이 정산을 다시 저장했을 때 남길 사유. 설치 완료 검토 요청은 발행(또는 매출 잡기)할 때까지 검토 대기에 남아야
+ * 하므로 머리말(출고일·로트)만 남기고, 저장으로 해소됐을 수 있는 세부(빈 원가 등)는 지운다. 다른 보류 사유는 해소된다.
+ */
+export function reviewReasonAfterSave(previous?: string | null): string | null {
+  if (!isInstallReviewReason(previous)) return null
+  const head = (previous ?? "").split(" · ")[0]
+  return `${head} · 저장됨 — 검토를 마쳤으면 발행(H방식은 매출 잡기)을 눌러 주세요`.slice(0, 300)
+}
+
+/** 로트 이름 첫 글자가 방식이다(C1 로트 = C방식, H1~H8 로트 = H방식). 모르면 null. */
+export function inferFulfillmentModeFromLot(lotNo?: string | null): DistributorFulfillmentMode | null {
+  const value = lotNo?.trim().toUpperCase() ?? ""
+  if (/^C\d/.test(value)) return "C"
+  if (/^H\d/.test(value)) return "H"
+  return null
+}
+
+/**
+ * 출고 확정 한 번에 로트가 여러 개일 수 있다(예: C1 2대 + H8 1대). 방식이 하나로 모이면 그 방식,
+ * 섞였거나 모르면 null(기본 C 로 만들고 검토 사유에 섞였다고 적는다).
+ */
+export function inferFulfillmentModeFromLots(lots: ReadonlyArray<string | null | undefined>) {
+  const names = [...new Set(lots.map((lot) => lot?.trim()).filter((lot): lot is string => Boolean(lot)))]
+  const modes = [...new Set(names.map((lot) => inferFulfillmentModeFromLot(lot)))]
+  const mixed = modes.length > 1
+  return {
+    mode: !mixed && modes[0] ? modes[0] : null,
+    mixed,
+    label: names.join("·"),
+  }
+}
+
+/** 검토 요청 사유(정산 행 review_required_reason, 300자 이내). 견적 상세·검토 대기 목록·알림에 그대로 보인다. */
+export function buildInstallReviewReason(input: {
+  mode: DistributorFulfillmentMode
+  installedOn: string | null
+  created: boolean
+  lotNo?: string | null
+  /** 로트로 본 방식. 저장된 방식과 다르면 함께 알린다. */
+  lotMode?: DistributorFulfillmentMode | null
+  /** 한 번의 출고 확정에 C·H 로트가 섞였는지. */
+  mixedLots?: boolean
+  missingPriceCount: number
+  /** 정산을 저장한 뒤 고객 견적이 이 버전으로 바뀌었으면(다시 저장해야 발행된다). */
+  quoteVersionChangedTo?: number | null
+}): string {
+  const when = input.installedOn ? `${input.installedOn} 출고 확정` : "출고 확정"
+  const lot = input.lotNo?.trim() ? `로트 ${input.lotNo.trim()}` : "로트 미지정"
+  const parts = [`${INSTALL_REVIEW_PREFIX}(${when}, ${lot})`]
+  if (input.mixedLots) {
+    parts.push(`로트 방식이 섞여 있습니다 — ${input.mode}방식으로 두었으니 방식을 확인해 주세요`)
+  } else if (input.lotMode && input.lotMode !== input.mode) {
+    parts.push(`로트는 ${input.lotMode}방식인데 정산은 ${input.mode}방식입니다 — 방식을 확인해 주세요`)
+  }
+  if (input.mode === "H") {
+    parts.push(input.created ? "H방식 정산을 자동으로 만들었습니다" : "H방식 정산입니다")
+    parts.push("확인 후 '검토 완료' 버튼으로 매출을 잡아 주세요")
+  } else {
+    parts.push(input.created ? "총판 견적서 초안을 자동으로 만들었습니다" : "총판 견적서 초안이 준비됐습니다")
+    if (input.quoteVersionChangedTo) {
+      parts.push(`고객 견적이 v${input.quoteVersionChangedTo}로 바뀌어 원가를 다시 저장해야 발행됩니다`)
+    }
+    if (input.missingPriceCount > 0) parts.push(`원가가 빈 품목 ${input.missingPriceCount}개`)
+    parts.push("원가·수량을 확인하고 '검토 완료' 버튼으로 총판 견적서를 발행해 주세요")
+  }
+  return parts.join(" · ").slice(0, 300)
 }
 
 /* ─── 미수 ───────────────────────────────────────────────── */

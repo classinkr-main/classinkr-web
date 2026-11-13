@@ -139,7 +139,7 @@ const PALETTE_ACTION_COMMANDS: Array<Omit<AdminCommand, "group">> = [
     label: "내 사이드바 편집",
     href: "",
     event: ADMIN_OPEN_NAV_EDITOR_EVENT,
-    keywords: "내 사이드바 편집 탭 숨기기 숨김 다시 표시 상시 기타 배치 메뉴 정리 sidebar nav menu edit hide customize",
+    keywords: "내 사이드바 편집 탭 숨기기 숨김 다시 표시 상시 접힘 접기 기타 배치 메뉴 정리 sidebar nav menu edit hide customize",
   },
 ]
 

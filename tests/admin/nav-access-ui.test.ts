@@ -5,18 +5,30 @@ import { describe, expect, it } from "vitest"
 
 const sidebar = readFileSync(join(process.cwd(), "components/admin/AdminSidebar.tsx"), "utf8")
 
-describe("AdminSidebar — 상시/기타 2단 구조", () => {
+describe("AdminSidebar — 상시/접힘 2단 구조", () => {
   it("resolves placement through the shared access module, not a local copy", () => {
     expect(sidebar).toContain('from "./admin-nav-access"')
     expect(sidebar).toContain("resolveAdminNavAccess(")
   })
 
-  it("stops rendering section headers (기타 범주 소제목이 대신한다)", () => {
+  it("stops rendering section headers (접힘 묶음의 범주 이름이 대신한다)", () => {
     expect(sidebar).not.toContain("ADMIN_NAV_SECTION_META[section].label")
   })
 
-  it("remembers the 기타 open state across reloads", () => {
-    expect(sidebar).toContain("admin_sidebar_other_open")
+  it("remembers which fold groups are open across reloads, migrating the old 기타 key once", () => {
+    // 2026-11-09 D안 — "기타" 하나(불리언 키)가 범주별 접힘(범주 목록 키)이 됐다.
+    expect(sidebar).toContain('"admin_sidebar_fold_open"')
+    expect(sidebar).toContain('"admin_sidebar_other_open"')
+    expect(sidebar).toContain("localStorage.removeItem(LEGACY_OTHER_OPEN_STORAGE_KEY)")
+  })
+
+  it("folds each category separately and forces open the one holding the current page", () => {
+    expect(sidebar).toContain("const renderFoldedGroups = (")
+    expect(sidebar).toContain('renderFoldedGroups("desktop")')
+    expect(sidebar).toContain('renderFoldedGroups("mobile")')
+    // 펼침 규칙(저장 ∪ 강제 열림, 강제 열림을 접으면 이 화면에서만)은 sidebar-fold-state.ts — 동작은 sidebar-fold-state.test.ts.
+    expect(sidebar).toContain("isFoldGroupExpanded(foldState, category, activeFoldedCategory, pathname)")
+    expect(sidebar).toContain("toggleFoldGroup(foldState, category, activeFoldedCategory, pathname)")
   })
 
   it("greys out work-in-progress tabs", () => {
@@ -28,15 +40,15 @@ describe("AdminSidebar — 상시/기타 2단 구조", () => {
     expect(sidebar).toContain("ADMIN_NAV_CATEGORY_META")
   })
 
-  it("groups the primary list with the shared category partition (2026-08-18)", () => {
-    // 상시 소제목의 표시 여부·묶음은 사이드바가 자체 계산하지 않고 resolveNavAccess 결과를 쓴다.
+  it("groups the primary list with the shared category partition, without headers (2026-11-09)", () => {
+    // 상시 묶음은 사이드바가 자체 계산하지 않고 resolveNavAccess 결과를 쓴다. 소제목은 그리지 않는다.
     expect(sidebar).toContain("navAccess.primaryGroups")
-    expect(sidebar).toContain("navAccess.showPrimaryHeaders")
+    expect(sidebar).not.toContain("showPrimaryHeaders")
   })
 
   it("keeps hover warm-up wired on folded items too", () => {
-    // 기타 항목도 hover 시 프리페치돼야 한다 — 접혀 있다고 느려도 되는 건 아니다.
-    const foldedBlock = sidebar.slice(sidebar.indexOf("navAccess.folded"))
+    // 접힌 항목도 hover 시 프리페치돼야 한다 — 접혀 있다고 느려도 되는 건 아니다.
+    const foldedBlock = sidebar.slice(sidebar.indexOf("const renderFoldedGroups = ("))
     expect(foldedBlock).toContain("scheduleWarmAdminTab")
   })
 
@@ -55,7 +67,7 @@ describe("AdminSidebar — 개인 숨김(2026-09-25)", () => {
     expect(sidebar).toContain("visibleNav.filter((item) => item.section === currentNavItem.section)")
   })
 
-  it("숨긴 탭 묶음을 기타 아래에 그리고, 현재 경로가 숨긴 항목이면 강제로 펼친다", () => {
+  it("숨긴 탭 묶음을 접힘 묶음 아래에 그리고, 현재 경로가 숨긴 항목이면 강제로 펼친다", () => {
     expect(sidebar).toContain("navAccess.hidden")
     expect(sidebar).toContain("숨긴 탭")
     expect(sidebar).toContain("다시 표시")
@@ -171,9 +183,11 @@ describe("NavPreferenceEditor — 두 드로어 공통 본문", () => {
   // (2026-09-25 재작성) 예전 테스트는 "세 번째 선택지 금지"였다 — 그 세 번째가 차단(deny)이었기
   // 때문이다. 세 번째 값 "숨김"은 목록 정리일 뿐 도달성을 줄이지 않으므로 허용하되, 그 경계를
   // 화면 문구로 고정한다: 차단·권한 제한처럼 읽히는 말은 금지, "⌘K·주소로 그대로 열린다"는 필수.
-  it("상시·기타·숨김 3단을 주되 '차단' 문구는 어디에도 쓰지 않는다", () => {
+  it("상시·접힘·숨김 3단을 주되 '차단' 문구는 어디에도 쓰지 않는다", () => {
+    // 2026-11-09 D안 — 사이드바의 "기타" 묶음이 범주별 접힘이 되어 라벨도 "접힘"이다(저장값 folded 그대로).
     expect(editor).toContain('label: "상시"')
-    expect(editor).toContain('label: "기타"')
+    expect(editor).toContain('label: "접힘"')
+    expect(editor).not.toContain('label: "기타"')
     expect(editor).toContain('label: "숨김"')
     for (const [name, source] of [
       ["editor", editor],

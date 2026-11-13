@@ -15,7 +15,7 @@
 //     없습니다" 차단 화면부터 봤다. 두 SSOT 가 서로를 모른 채 반대로 움직인 것이다.
 //  3. "저 사람 화면엔 왜 그 탭이 있지"를 매번 설명하는 비용이 숨겨서 얻는 이득보다 컸다.
 //
-// 남는 축은 **배치 하나뿐**이다: 자주 쓰는 표면은 상시(상단), 나머지는 범주별로 묶인 "기타".
+// 남는 축은 **배치 하나뿐**이다: 자주 쓰는 표면은 상시(상단), 나머지는 범주별로 따로 접힌 "접힘"(2026-11-09 전까지는 하나로 접힌 "기타").
 // 사람별 예외(nav_overrides)는 그 두 자리를 옮기는 개인 취향 설정으로만 남는다 — 더 이상
 // 누구의 접근도 막지 못한다.
 //
@@ -35,7 +35,7 @@
 // 같은 nav_overrides 에 CRM 본문 탭 줄(CrmSubnav)의 개인 숨김도 담는다. 스키마 변경은 없다
 // (컬럼 CHECK 는 "JSON 객체" 하나뿐 — 20260729_admin_nav_access.sql).
 //  - 키는 `crm:<href>`(예: "crm:/admin/crm/activity"). 최상위 키는 항상 "/" 로 시작하므로
-//    겹치지 않는다. 값은 "hidden" | "shown" 두 가지다 — 하위 탭에는 자리(상시/기타)가 없고,
+//    겹치지 않는다. 값은 "hidden" | "shown" 두 가지다 — 하위 탭에는 자리(상시/접힘)가 없고,
 //    "shown" 은 전원 기본 숨김 탭을 되살릴 때만 저장된다(기본값과 같으면 키를 지운다).
 //  - 숨길 수 없는 탭: CRM 진입 탭 3개(현황·고객DB(통합)·검수). 전원 기본 숨김: 기록·입력함·
 //    고객DB›태그(30일 사람 쓰기 0, 역할 무관).
@@ -119,40 +119,38 @@ const NAV_PRESET_KEYS: readonly NavPresetKey[] = [
 ]
 
 /**
- * 전원 공통 상시 목록 — "자주 쓰는 것만 위로, 나머지는 기타".
+ * 전원 공통 상시 목록 — "자주 쓰는 것만 위로, 나머지는 범주별로 접힘".
  *
- * ADMIN_NAV 선언 순서가 이미 범주 연속 블록(home → customer → growth → system)이라,
- * 이 목록은 앞의 두 범주(홈 + 고객·매출)에 콘텐츠 하나를 더 집어 든 것이다. 필터는 선언 순서를
- * 지키므로 상시 목록도 기타와 똑같이 범주 소제목으로 묶이면서 재정렬이 일어나지 않는다.
+ * (2026-11-09 사이드바 재배치 D안 — docs/active/admin-sidebar-reorder-fold-plan-2026-11-09.md)
+ * 상시는 소제목 없이 범주 사이 간격만 두고 그리고, 접힘 자리는 범주마다 따로 접는다. 상시 목록 순서는
+ * 이 배열이 아니라 ADMIN_NAV 선언 순서다(필터가 선언 순서를 지킨다) — 아래는 읽기 쉽게 같은 순서로 적었다.
  *
- * 상시(10): Overview · 캘린더 · KR Team · 매출 장부 · CRM · 견적·문서 · 하드웨어 재고 · CS 콘솔 · 마케팅 · 콘텐츠.
+ * 상시(8): Overview · 캘린더 · CRM · 견적·문서 · 하드웨어 재고 · 마케팅 · 콘텐츠 · CS 콘솔.
  *   시안 스위치(NEXT_PUBLIC_ADMIN_AI_PREVIEW=1, lib/admin-ai/preview.ts)를 켜면 Overview 바로 아래
- *   AI 올인원이 더해져 11 — 꺼져 있으면(기본, 기획 D13) ADMIN_NAV 에도 이 목록에도 없다.
- * 기타(6 자리): 마케팅·분석 3(캠페인 관리 · 자료 퍼널 · Analytics) + 시스템 3
- *          (운영 상태 · 설정 · 개발 도구). 이 중 운영 상태 1개는 기본 숨김(DEFAULT_HIDDEN_HREFS)이라
- *          처음 보이는 기타는 5개다. (마케팅 프로젝트는 2026-10 캠페인 관리의 탭이 되며 자리에서 빠졌다.)
+ *   AI 올인원이 더해져 9 — 꺼져 있으면(기본, 기획 D13) ADMIN_NAV 에도 이 목록에도 없다.
+ * 접힘(8 자리, 범주별 묶음 3개): 주문·매출 2(KR Team · 매출 장부) · 마케팅·분석 3(캠페인 관리 ·
+ *   Analytics · 자료 퍼널) · 시스템 3(설정 · 개발 도구 · 운영 상태). 운영 상태는 기본 숨김
+ *   (DEFAULT_HIDDEN_HREFS)이라 처음 보이는 접힘 탭은 7개다.
  *
- * 견적·문서와 CS 콘솔을 상시에 남긴 이유 — 견적은 하드웨어 재고와 한 흐름(견적 산출물 →
- * 재고 검증)이라 떼면 둘 다 나빠지고, CS 콘솔은 가이드 문서·내부 CS 를 품은 **유일한 CS
- * 진입점**이라 기타로 접으면 팀원의 CS 표면 전체가 메뉴에서 사라진다.
+ * KR Team·매출 장부를 접힘으로 내린 이유 — 2026-07-18 요청으로 위에 있었지만 09-24 실측에서 사람 쓰기
+ * 흔적이 거의 없었고 시트 동기화가 08-18 뒤로 실패했다(admin-usage-triage-2026-09-25.md). 필요한 사람은
+ * 사이드바 편집에서 상시로 올린다. CS 콘솔은 운영자 요청으로 콘텐츠 바로 밑이다(고객 지원 범주).
+ * 견적·문서와 하드웨어 재고는 한 흐름(견적 산출물 → 재고 검증)이라 같이 상시이고, CS 콘솔은 가이드
+ * 문서·내부 CS 를 품은 **유일한 CS 진입점**이라 접으면 팀원의 CS 표면 전체가 메뉴에서 사라진다.
  */
 export const DEFAULT_PRIMARY_HREFS: readonly string[] = [
   "/admin/overview",
   ...(isAdminAiPreviewEnabled() ? [ADMIN_AI_HREF] : []),
   "/admin/calendar",
-  "/admin/branch",
-  "/admin/branch/ledger",
   "/admin/crm",
   "/admin/quotes",
   "/admin/hardware",
-  "/admin/chatbot",
-  // (2026-11-04) 마케팅 허브를 기타에서 상시로 올렸다 — "오늘 유입"·광고 성과가 있는 화면이 접혀 있어
+  // (2026-11-04) 마케팅 허브를 상시로 올렸다 — "오늘 유입"·광고 성과가 있는 화면이 접혀 있어
   // 방문·문의를 바로 볼 곳이 없었다(docs/active/admin-lead-visitor-glance-plan-2026-11-04.md D6).
-  // 선언 순서(ADMIN_NAV)가 콘텐츠보다 앞이라 "마케팅·분석" 소제목 아래 마케팅 → 콘텐츠 순으로 붙는다.
   "/admin/campaigns",
-  // (2026-10-26) 콘텐츠(블로그)를 기타에서 상시로 올렸다 — 블로그 정리·발행이 상시 업무가 됐다.
-  // 선언 순서상 마케팅·분석 블록에 있어 상시 목록 끝에 "마케팅·분석" 소제목으로 붙는다.
+  // (2026-10-26) 콘텐츠(블로그)를 상시로 올렸다 — 블로그 정리·발행이 상시 업무가 됐다.
   "/admin/blog",
+  "/admin/chatbot",
 ]
 
 export function isNavPresetKey(value: unknown): value is NavPresetKey {
@@ -181,12 +179,12 @@ export function isNavHideable(href: string): boolean {
  * DB의 nav_overrides(JSONB)를 신뢰하지 않고 정규화한다 — 모르는 키·값은 버린다.
  *
  * 레거시 "deny" 는 버리지 않고 "folded" 로 강등한다. 그냥 버리면 그 항목이 상시로 튀어올라
- * "숨겨 뒀던 게 갑자기 맨 위에" 가 되고, 남겨두면 전면 공개 전환이 무의미해진다. 기타로
+ * "숨겨 뒀던 게 갑자기 맨 위에" 가 되고, 남겨두면 전면 공개 전환이 무의미해진다. 접힘으로
  * 내리는 것이 두 의도를 모두 존중하는 유일한 처리다. **"hidden" 으로 옮기지 않는다** —
  * deny 는 관리자가 남에게 건 제한이었고, hidden 은 본인이 고른 정리라 의미가 다르다.
  *
  * 예외 — 기본 숨김 항목(DEFAULT_HIDDEN_HREFS)의 deny 는 키째 버려 기본값(숨김)을 따르게 한다.
- * folded 로 강등하면 deny 가 남아 있던 사람만 그 항목이 기타에 "보이게" 돼, 숨기려던 제한이
+ * folded 로 강등하면 deny 가 남아 있던 사람만 그 항목이 접힘 묶음에 "보이게" 돼, 숨기려던 제한이
  * 오히려 노출로 뒤집힌다. 키를 버려도 hidden 을 저장하는 것이 아니다(본인 선택으로 위장하지 않음).
  *
  * "hidden" 은 보존하되 숨길 수 없는 항목(UNHIDEABLE_NAV_HREFS)의 hidden 은 키째 지운다.
@@ -237,7 +235,7 @@ function resolveDefaultNavPlacement(href: string): NavPlacement {
 }
 
 /**
- * 오버라이드가 없을 때의 전원 공통 기본값 — 기본 숨김 → 상시 → 기타 순으로 판정.
+ * 오버라이드가 없을 때의 전원 공통 기본값 — 기본 숨김 → 상시 → 접힘 순으로 판정.
  * setNavOverride 의 "기본과 같으면 키 삭제" 기준이기도 하다.
  */
 export function resolveDefaultNavPreference(href: string): NavPreference {
@@ -266,7 +264,7 @@ export function isNavHidden(href: string, ctx: NavAccessContext): boolean {
 }
 
 /**
- * 렌더 자리 판정 — 보일 때 앉는 자리(상시/기타)만 돌려준다. 숨김은 무시한다: 숨긴 항목은
+ * 렌더 자리 판정 — 보일 때 앉는 자리(상시/접힘)만 돌려준다. 숨김은 무시한다: 숨긴 항목은
  * 기본 자리를 돌려주므로 "다시 표시"가 그 자리로 되돌아간다. 숨김 여부는 isNavHidden.
  */
 export function resolveNavPlacement(href: string, ctx: NavAccessContext): NavPlacement {
@@ -333,27 +331,27 @@ export interface ResolvedNavAccess {
   /** 상시 항목 — ADMIN_NAV 선언 순서 그대로(렌더에서 재정렬하지 않는다). */
   primary: AdminNavItem[]
   /**
-   * primary를 기타와 같은 범주로 묶은 것 — 상시 범주 소제목 렌더용.
+   * primary를 접힘과 같은 범주로 묶은 것 — 상시 목록의 범주 사이 간격 렌더용.
    * ADMIN_NAV 선언이 범주 연속 블록이라 이 묶음은 재정렬 없는 분할이며,
    * 항목을 이어 붙이면 primary와 순서가 완전히 같다.
+   * (2026-11-09 D안) 상시 목록은 소제목을 그리지 않는다 — 묶음 사이에 간격만 둔다. 2026-08-18부터
+   * 있던 showPrimaryHeaders 판정은 그래서 지웠다.
    */
   primaryGroups: FoldedNavGroup[]
   /**
-   * 상시 목록에 범주 소제목을 렌더할지 — 2범주 이상 + 4항목 이상일 때만.
-   * 항목보다 헤더가 많아지는 꼴을 피한다. 사이드바·권한 미리보기가 각자 판단하면
-   * 어긋나므로 여기서 한 번만 계산한다.
+   * 접힘 자리 — 범주별 묶음. 사이드바는 묶음마다 따로 접는다(범주 이름 = 접힘 토글 라벨).
+   * 빈 범주는 없다(groupNavByCategory 가 버린다).
    */
-  showPrimaryHeaders: boolean
   folded: FoldedNavGroup[]
   /**
    * 내 목록에서 숨긴 항목 — ADMIN_NAV 선언 순서. primary·folded 어디에도 들어가지 않는다.
-   * 사이드바는 기타 아래 "숨긴 탭 N" 묶음으로만 보여준다. 도달성은 그대로다
+   * 사이드바는 접힘 묶음 아래 "숨긴 탭 N" 묶음으로만 보여준다. 도달성은 그대로다
    * (getAccessibleAdminNavItems 가 이 목록까지 포함한다).
    */
   hidden: AdminNavItem[]
 }
 
-/** 항목들을 범주 선언 순서(홈 → 고객·매출 → 마케팅·분석 → 시스템)로 묶는다. 빈 범주는 사라진다. */
+/** 항목들을 범주 선언 순서(ADMIN_NAV_CATEGORY_META)로 묶는다. 빈 범주는 사라진다. */
 function groupNavByCategory(items: readonly AdminNavItem[]): FoldedNavGroup[] {
   const byCategory = new Map<AdminNavCategory, AdminNavItem[]>()
 
@@ -371,9 +369,9 @@ function groupNavByCategory(items: readonly AdminNavItem[]): FoldedNavGroup[] {
 }
 
 /**
- * 항목들을 상시/기타/숨김으로 나눈다.
+ * 항목들을 상시/접힘/숨김으로 나눈다(저장값 "folded" = 접힘 자리 — 편집기 라벨은 2026-11-09 "기타" → "접힘").
  * 상시 순서는 ADMIN_NAV 선언 순서를 그대로 따르고(렌더에서 재정렬하지 않는다),
- * 상시·기타 모두 같은 범주로 묶는다. 숨김은 평면 목록이다.
+ * 상시·접힘 모두 같은 범주로 묶는다. 숨김은 평면 목록이다.
  */
 export function resolveNavAccess(
   ctx: NavAccessContext,
@@ -389,12 +387,9 @@ export function resolveNavAccess(
     else foldedItems.push(item)
   }
 
-  const primaryGroups = groupNavByCategory(primary)
-
   return {
     primary,
-    primaryGroups,
-    showPrimaryHeaders: primary.length >= 4 && primaryGroups.length >= 2,
+    primaryGroups: groupNavByCategory(primary),
     folded: groupNavByCategory(foldedItems),
     hidden,
   }
@@ -404,7 +399,7 @@ export function resolveNavAccess(
  * 실제 사용자 컨텍스트용 단일 진입점.
  *
  * 2026-09-10 이후 여기서 항목을 걸러내지 않는다 — 모든 매니저가 같은 목록을 보고, 개인
- * 예외는 상시/기타 자리를 옮기거나 내 목록에서 숨길(hidden) 뿐이다. 숨긴 항목도 결과의
+ * 예외는 상시/접힘 자리를 옮기거나 내 목록에서 숨길(hidden) 뿐이다. 숨긴 항목도 결과의
  * hidden 에 남는다. role 은 정규화만 해서 넘기며(레거시 소문자·대문자 혼재 대비) 배치 판정에는
  * 쓰이지 않는다.
  */
@@ -438,7 +433,7 @@ export function getAccessibleAdminNavItems(access: ResolvedNavAccess): AdminNavI
 }
 
 /**
- * 사이드바 목록에 실제로 그리는 항목(상시 + 기타) — ADMIN_NAV 선언 순서.
+ * 사이드바 목록에 실제로 그리는 항목(상시 + 접힘) — ADMIN_NAV 선언 순서.
  * 모바일 하단 바로가기·유휴 프리페치 이웃처럼 "목록에 보이는 것"이 기준인 곳이 쓴다.
  */
 export function getVisibleAdminNavItems(access: ResolvedNavAccess): AdminNavItem[] {

@@ -4,13 +4,19 @@
 import { NextRequest } from "next/server"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
-const { requireVerifiedAdminContext, confirmPlannedHardwareMovement, advanceDealForShippedMovementSafely, logAdminAudit } =
-  vi.hoisted(() => ({
-    requireVerifiedAdminContext: vi.fn(),
-    confirmPlannedHardwareMovement: vi.fn(),
-    advanceDealForShippedMovementSafely: vi.fn(),
-    logAdminAudit: vi.fn(),
-  }))
+const {
+  requireVerifiedAdminContext,
+  confirmPlannedHardwareMovement,
+  advanceDealForShippedMovementSafely,
+  logAdminAudit,
+  requestDistributorReviewOnInstallSafely,
+} = vi.hoisted(() => ({
+  requireVerifiedAdminContext: vi.fn(),
+  confirmPlannedHardwareMovement: vi.fn(),
+  advanceDealForShippedMovementSafely: vi.fn(),
+  logAdminAudit: vi.fn(),
+  requestDistributorReviewOnInstallSafely: vi.fn(),
+}))
 
 vi.mock("@/lib/admin-auth", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/admin-auth")>()),
@@ -18,6 +24,7 @@ vi.mock("@/lib/admin-auth", async (importOriginal) => ({
 }))
 vi.mock("@/lib/auth/audit", () => ({ logAdminAudit }))
 vi.mock("@/lib/orders/deal-stage", () => ({ advanceDealForShippedMovementSafely }))
+vi.mock("@/lib/server/distributor-settlement-install", () => ({ requestDistributorReviewOnInstallSafely }))
 vi.mock("@/lib/repositories/hardware-inventory", () => ({
   confirmPlannedHardwareMovement,
   HARDWARE_MOVEMENT_TYPES: ["inbound", "outbound", "return", "transfer", "repair", "adjust"],
@@ -52,7 +59,26 @@ describe("PATCH movements/[id] confirm-planned — 오더 딜 설치 단계", ()
 
     expect(response.status).toBe(200)
     expect(advanceDealForShippedMovementSafely).toHaveBeenCalledWith(movement)
+    // 설치 완료 → 총판 정산 자동 준비 · 검토 요청(자동 발행 없음).
+    expect(requestDistributorReviewOnInstallSafely).toHaveBeenCalledWith({ ...movement, lotNos: null })
     expect(logAdminAudit).toHaveBeenCalledWith(expect.objectContaining({ action: "hardware.movement.finalize" }))
+  })
+
+  it.each([
+    [{ status: "review_requested" }, "review_requested"],
+    [{ status: "skipped", reason: "승인된 오더가 아닙니다." }, "skipped: 승인된 오더가 아닙니다."],
+    [null, "failed"],
+  ])("총판 정산 자동 준비 결과를 감사 기록에 남긴다(실패·건너뜀이 응답을 막지 않으므로) — %j", async (outcome, recorded) => {
+    requireVerifiedAdminContext.mockResolvedValue(FINALIZER)
+    confirmPlannedHardwareMovement.mockResolvedValue({ id: "mv_actual", raw: { sales_order_id: "so_1" }, lot_no: "C1" })
+    advanceDealForShippedMovementSafely.mockResolvedValue(true)
+    requestDistributorReviewOnInstallSafely.mockResolvedValue(outcome)
+
+    const response = await PATCH(confirmRequest(), { params: Promise.resolve({ id: "mv_1" }) })
+    expect(response.status).toBe(200)
+    expect(logAdminAudit).toHaveBeenCalledWith(
+      expect.objectContaining({ payload: expect.objectContaining({ distributorReview: recorded }) })
+    )
   })
 
   it("요청자를 저장소로 넘기고, 저장소가 권한으로 막으면 403 — 딜 전진도 하지 않는다", async () => {
@@ -71,6 +97,7 @@ describe("PATCH movements/[id] confirm-planned — 오더 딜 설치 단계", ()
       expect.objectContaining({ actorContext: { userId: "admin-9", name: "운영 담당", isInventoryManager: false } })
     )
     expect(advanceDealForShippedMovementSafely).not.toHaveBeenCalled()
+    expect(requestDistributorReviewOnInstallSafely).not.toHaveBeenCalled()
     expect(logAdminAudit).not.toHaveBeenCalled()
   })
 
@@ -91,5 +118,9 @@ describe("PATCH movements/[id] confirm-planned — 오더 딜 설치 단계", ()
       lotAllocations: [{ lotNo: "C1", quantity: 2 }, { lotNo: "H8", quantity: 1 }],
       actorContext: expect.objectContaining({ isInventoryManager: true }),
     }))
+    // 총판 정산 방식 판단에 쓰도록 배정된 로트를 모두 넘긴다(C1·H8 이 섞이면 검토 사유에 적힌다).
+    expect(requestDistributorReviewOnInstallSafely).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "mv_actual", lotNos: ["C1", "H8"] })
+    )
   })
 })

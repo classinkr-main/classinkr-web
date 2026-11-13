@@ -10,7 +10,7 @@ import { logAdminAudit } from "@/lib/auth/audit"
 import { ADMIN_USER_DIRECTORY_CACHE_TAG } from "@/lib/repositories/admin-users"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 
-// PATCH /api/admin/me/nav — 본인 사이드바 편집(상시·기타·숨김) 저장.
+// PATCH /api/admin/me/nav — 본인 사이드바 편집(상시·접힘·숨김) 저장.
 //
 // 개인 취향 설정이지 권한이 아니다: nav_overrides 는 사이드바 목록의 자리만 바꾸고, 숨긴 탭도
 // ⌘K·주소로 그대로 열린다(components/admin/admin-nav-access.ts). 그래서 모든 활성 관리자

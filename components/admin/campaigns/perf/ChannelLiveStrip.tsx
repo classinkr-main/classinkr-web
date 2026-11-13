@@ -1,9 +1,12 @@
 "use client"
 
-import { money, COUNT } from "@/components/admin/campaigns/event-format"
+import { money, won, COUNT } from "@/components/admin/campaigns/event-format"
 import { mergeSameCurrency } from "@/lib/marketing/ad-insights"
 import type { PerfChannelLive } from "@/lib/marketing/perf"
 import { AD_CHANNEL_COLOR, AD_CHANNEL_LABEL, type AdChannel } from "@/lib/types/event-metrics"
+
+/** 원화는 정수로 — money() 는 통화와 무관하게 소수 두 자리까지 찍어 ₩115,623.55 가 됐다. */
+const spendText = (value: number | null | undefined, currency: string) => (currency === "KRW" ? won(value) : money(value, currency))
 
 /**
  * 채널 스트립 — 라이브 연동 채널(Meta·Google·네이버)의 기간 집행을 나란히 놓는다.
@@ -85,7 +88,7 @@ export function ChannelLiveStrip({ channels, manualChannelCount }: ChannelLiveSt
               }`}
             >
               {/* 통화를 모르면 금액을 표기하지 않는다 — 어느 통화인지 못 말하는 숫자는 안 낸다. */}
-              {entry.spend != null && entry.currency ? money(entry.spend, entry.currency) : "—"}
+              {entry.spend != null && entry.currency ? spendText(entry.spend, entry.currency) : "—"}
             </p>
             <p className="text-[11.5px] tabular-nums text-[#615D59]">
               {entry.conversions != null
@@ -93,7 +96,7 @@ export function ChannelLiveStrip({ channels, manualChannelCount }: ChannelLiveSt
                 : "전환 —"}
               {" · "}
               {entry.costPerConversion != null && entry.currency
-                ? money(entry.costPerConversion, entry.currency)
+                ? spendText(entry.costPerConversion, entry.currency)
                 : "—"}
             </p>
             <DeltaLine entry={entry} />
@@ -115,7 +118,7 @@ export function ChannelLiveStrip({ channels, manualChannelCount }: ChannelLiveSt
       <footer className="border-t border-[#e8e8e4] bg-[#f0f0ec] px-4 py-2.5 text-[11.5px] text-[#615D59]">
         {merged ? (
           <span className="tabular-nums">
-            합계 {money(merged.spend, merged.currency)} · 전 채널 {merged.currency} 기준
+            합계 {spendText(merged.spend, merged.currency)} · 전 채널 {merged.currency} 기준
           </span>
         ) : (
           // 통화가 섞였거나 아직 잰 채널이 없다 — 합계를 만들지 않는 이유를 말한다.

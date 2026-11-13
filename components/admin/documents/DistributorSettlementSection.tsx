@@ -16,6 +16,7 @@ import {
   computeDistributorTotals,
   getDistributorIssueBlocker,
   getOutstandingAmount,
+  isInstallReviewReason,
   type DistributorFulfillmentMode,
   type DistributorSettlementLine,
   type DistributorSettlementRecord,
@@ -37,9 +38,9 @@ import {
 
 // 견적 상세 · 총판 정산(2026-10-23). 방식은 견적마다 C/H 중 하나다(docs/hardware-ops/distributor-settlement.md).
 //  - C방식: 회사가 하드웨어를 원가로 미리 사 두고, 고객은 총액을 총판에게 내고, 총판이 원가를 회사로 입금한다.
-//    원가(하드웨어 + AI Suite)를 미리 정해 두고, 고객 동의 또는 설치 완료(직원이 누름) 때 총판용 견적서를 발행한 뒤
+//    원가(하드웨어 + AI Suite)를 미리 정해 두고, 고객 동의 또는 설치 완료(출고 확정 → 검토 요청 → 직원이 발행) 때 총판용 견적서를 발행한 뒤
 //    총판 입금을 기록한다. 입금이 확인되면 그 입금분을 매출 원장 입력 큐에 초안으로 올린다.
-//  - H방식: 총판이 먼저 사 둔 물량. 총판 견적서·원가 미수 없이, 직원이 설치 완료를 누르면 매출 초안을 올린다.
+//  - H방식: 총판이 먼저 사 둔 물량. 총판 견적서·원가 미수 없이, 설치 완료(출고 확정) 뒤 직원이 검토하고 누르면 매출 초안을 올린다.
 
 type Draft = {
   fulfillmentMode: DistributorFulfillmentMode
@@ -221,10 +222,11 @@ export default function DistributorSettlementSection({ quoteId }: { quoteId: str
 
   async function handleIssue(reason: "installation_completed" | "manual") {
     const isHMode = settlement?.fulfillmentMode === "H"
+    const reviewing = isInstallReviewReason(settlement?.reviewRequiredReason)
     const confirmText = isHMode
-      ? "설치 완료로 처리할까요? H방식이라 총판 견적서 없이 이 시점으로 매출 원장 초안을 올립니다."
+      ? `${reviewing ? "검토를 마치고 " : ""}설치 완료로 처리할까요? H방식이라 총판 견적서 없이 이 시점으로 매출 원장 초안을 올립니다.`
       : reason === "installation_completed"
-        ? "설치 완료로 처리하고 총판 견적서를 발행할까요? 총판 이메일이 있으면 바로 발송됩니다."
+        ? `${reviewing ? "검토를 마치고 총판 견적서를 발행할까요?" : "설치 완료로 처리하고 총판 견적서를 발행할까요?"} 총판 이메일이 있으면 바로 발송됩니다.`
         : "지금 총판 견적서를 발행할까요? 총판 이메일이 있으면 바로 발송됩니다."
     if (!window.confirm(confirmText)) return
     const result = await run(
@@ -459,8 +461,8 @@ export default function DistributorSettlementSection({ quoteId }: { quoteId: str
 
         {draft.fulfillmentMode === "H" ? (
           <p className="mt-4 rounded-md bg-[#F6F5F4] px-3 py-2.5 text-[12px] leading-relaxed text-[#615D59]">
-            H방식은 총판이 먼저 사 둔 물량이라 총판 견적서와 원가 미수가 없습니다. 저장한 뒤 설치가 끝나면
-            &ldquo;설치 완료&rdquo;를 눌러 주세요 — 그 시점으로 매출 원장 입력 큐에 초안이 올라갑니다.
+            H방식은 총판이 먼저 사 둔 물량이라 총판 견적서와 원가 미수가 없습니다. 재고 앱에서 출고를 확정하면
+            검토 요청이 오고, &ldquo;검토 완료 &middot; 매출 잡기&rdquo;를 누른 시점으로 매출 원장 입력 큐에 초안이 올라갑니다.
           </p>
         ) : (
         <>
@@ -615,6 +617,9 @@ export default function DistributorSettlementSection({ quoteId }: { quoteId: str
     )
   }
 
+  // 재고 앱에서 출고 확정(설치 완료)되면 정산이 자동으로 준비되고 검토를 기다린다 — 사람이 확인하고 진행한다.
+  const installReview = settlement.status === "draft" && isInstallReviewReason(settlement.reviewRequiredReason)
+
   if (settlement.fulfillmentMode === "H") {
     const installed = settlement.status === "completed"
     return (
@@ -628,7 +633,13 @@ export default function DistributorSettlementSection({ quoteId }: { quoteId: str
           <dt className="text-[#78736D]">고객 견적 합계</dt>
           <dd className="tabular-nums text-[#31302E]">{formatWon(settlement.customerTotalAmount || payload.quote.customerTotalAmount)}</dd>
           <dt className="text-[#78736D]">설치 완료</dt>
-          <dd className="text-[#31302E]">{installed ? formatDateLabel(settlement.installedAt) : "아직 — 설치가 끝나면 아래 버튼을 눌러 주세요"}</dd>
+          <dd className="text-[#31302E]">
+            {installed
+              ? formatDateLabel(settlement.installedAt)
+              : installReview
+                ? "출고 확정됨 — 검토 후 아래 버튼으로 매출을 잡아 주세요"
+                : "아직 — 출고 확정(설치 완료)되면 검토 요청이 옵니다"}
+          </dd>
           {installed && (
             <>
               <dt className="text-[#78736D]">매출 원장</dt>
@@ -636,6 +647,7 @@ export default function DistributorSettlementSection({ quoteId }: { quoteId: str
             </>
           )}
         </dl>
+        {installReview && <p className="mt-2 text-[12px] text-[#7A520F]">검토 요청: {settlement.reviewRequiredReason}</p>}
         {notice}
         {!installed && (
           <div className="mt-3 flex flex-wrap gap-2">
@@ -644,7 +656,7 @@ export default function DistributorSettlementSection({ quoteId }: { quoteId: str
             </button>
             <button type="button" onClick={() => void handleIssue("installation_completed")} disabled={busy !== null} className={SOLID_BUTTON}>
               {busy === "issue" && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-              설치 완료 → 매출 잡기
+              {installReview ? "검토 완료 → 매출 잡기" : "설치 완료 → 매출 잡기"}
             </button>
             <button type="button" onClick={() => void handleCancel()} disabled={busy !== null} className={`${GHOST_BUTTON} text-[#B43E3E]`}>
               정산 취소
@@ -703,7 +715,9 @@ export default function DistributorSettlementSection({ quoteId }: { quoteId: str
         </p>
       )}
       {!isIssued && settlement.reviewRequiredReason && (
-        <p className="mt-2 text-[12px] text-[#7A520F]">자동 발행 보류: {settlement.reviewRequiredReason}</p>
+        <p className="mt-2 text-[12px] text-[#7A520F]">
+          {installReview ? "검토 요청" : "자동 발행 보류"}: {settlement.reviewRequiredReason}
+        </p>
       )}
 
       {isIssued && (
@@ -769,10 +783,10 @@ export default function DistributorSettlementSection({ quoteId }: { quoteId: str
               {previewOpen ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
               미리보기
             </button>
-            {settlement.issueTrigger === "on_install" ? (
+            {installReview || settlement.issueTrigger === "on_install" ? (
               <button type="button" onClick={() => void handleIssue("installation_completed")} disabled={busy !== null} className={SOLID_BUTTON}>
                 {busy === "issue" && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                설치 완료 → 총판 견적서 발행
+                {installReview ? "검토 완료 → 총판 견적서 발행" : "설치 완료 → 총판 견적서 발행"}
               </button>
             ) : (
               <button type="button" onClick={() => void handleIssue("manual")} disabled={busy !== null} className={settlement.issueTrigger === "manual" ? SOLID_BUTTON : GHOST_BUTTON}>

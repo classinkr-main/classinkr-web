@@ -42,6 +42,13 @@ export interface AdInsightRow {
   /** 플랫폼이 센 리드/전환 수. 채널마다 정의가 다르다. */
   leads: number
   conversions: number | null
+  /**
+   * Google 만 — campaign.advertising_channel_type 원문(VIDEO · DEMAND_GEN · SEARCH …).
+   * 다른 채널은 undefined(재지 않음). null = 그 칸이 생기기 전 줄(20261106 마이그레이션).
+   */
+  channelType?: string | null
+  /** Google 만 — TrueView 조회수. undefined = 그 채널은 재지 않음, null = 칸 생기기 전 줄(0회 아님). */
+  videoViews?: number | null
 }
 
 /* ─── 채널별 원본 → 중립 행 ──────────────────────────────────── */
@@ -66,6 +73,8 @@ export interface GoogleSnapshotRow {
   clicks: number
   conversions: number
   currency: string | null
+  channelType?: string | null
+  videoViews?: number | null
 }
 
 export interface NaverSnapshotRow {
@@ -92,6 +101,9 @@ export function fromMeta(rows: readonly MetaSnapshotRow[]): AdInsightRow[] {
     leads: r.leads,
     // Meta 의 actions[] 에서 뽑은 값은 leads 축으로 이미 들어왔다 — 전환을 따로 세지 않는다.
     conversions: null,
+    // 유형·조회수는 Google 만 잰다 — 키는 같게, 값은 "재지 않음"(fromNaver 와 같다).
+    channelType: undefined,
+    videoViews: undefined,
   }))
 }
 
@@ -109,6 +121,8 @@ export function fromGoogle(rows: readonly GoogleSnapshotRow[]): AdInsightRow[] {
     // leads 축으로 올리면 Meta 리드와 같은 것처럼 보이므로 conversions 로만 둔다.
     leads: 0,
     conversions: r.conversions,
+    channelType: r.channelType ?? null,
+    videoViews: r.videoViews ?? null,
   }))
 }
 
@@ -126,6 +140,9 @@ export function fromNaver(rows: readonly NaverSnapshotRow[]): AdInsightRow[] {
     // 전환추적 미연동이면 API 가 0 을 준다 — 그건 측정 없음이므로 null 로 올린다.
     // (전 캠페인 합이 0 인지로 판정하는 것은 호출부 몫이라 여기서는 행 단위로만 본다.)
     conversions: r.conversions > 0 ? r.conversions : null,
+    // 유형·조회수는 Google 만 잰다 — 키는 같게 두고(화면이 채널마다 모양을 가르지 않게) 값은 "재지 않음".
+    channelType: undefined,
+    videoViews: undefined,
   }))
 }
 
@@ -146,6 +163,57 @@ export interface ChannelSpendSummary {
 }
 
 const round2 = (n: number) => Math.round(n * 100) / 100
+
+/** Google 캠페인 유형 → 화면 말. 모르는 유형은 원문 그대로, 없으면 null. */
+export const GOOGLE_CHANNEL_TYPE_LABEL: Readonly<Record<string, string>> = {
+  VIDEO: "유튜브(동영상)",
+  DEMAND_GEN: "디맨드젠",
+  SEARCH: "검색",
+  PERFORMANCE_MAX: "실적 최대화",
+  DISPLAY: "디스플레이",
+}
+export const googleChannelTypeLabel = (type: string | null | undefined): string | null =>
+  type ? (GOOGLE_CHANNEL_TYPE_LABEL[type] ?? type) : null
+
+/**
+ * 조회수가 성과 지표인 유형. 이 밖의 유형(검색 등)도 API 는 조회수 칸을 0 으로 채운다
+ * (20261106 마이그레이션 주석) — 그 0 을 "잰 조회수"로 받으면 검색 광고비가 합계 조회당 비용에 섞인다.
+ */
+const VIEW_CHANNEL_TYPES: ReadonlySet<string> = new Set(["VIDEO", "DEMAND_GEN"])
+
+export interface VideoSummary {
+  /** 가장 최근 줄의 유형(캠페인 유형은 바뀌지 않는다 — 칸 생기기 전 줄의 null 은 건너뛴다). */
+  channelType: string | null
+  /**
+   * 조회수 합. 한 줄도 재지 않았거나, 조회수를 성과로 재지 않는 유형(검색 등 — API 가 0 을 준다)이
+   * 조회 0회면 null. 동영상 유형의 0회는 0 이다.
+   */
+  videoViews: number | null
+  /** 조회수 칸이 빈 날이 섞였다 — 합은 하한이고 조회당 비용은 내지 않는다. */
+  viewsPartial: boolean
+  /** 조회당 비용(계정 통화). 조회수 0·빈 날 섞임·통화 혼재면 null. */
+  costPerView: number | null
+}
+
+/**
+ * Google 행 묶음의 유형·조회수·조회당 비용. 정직 규칙은 summarizeChannel 과 같다 —
+ * 빈 날(null)을 0회로 세지 않고, 통화가 섞이면 비용을 지어내지 않는다.
+ */
+export function summarizeVideo(rows: readonly AdInsightRow[]): VideoSummary {
+  const sorted = [...rows].sort((a, b) => a.date.localeCompare(b.date))
+  const channelType = sorted.reduce<string | null>((latest, r) => r.channelType ?? latest, null)
+  const measured = sorted.filter((r) => r.videoViews != null)
+  const viewSum = measured.reduce((total, r) => total + (r.videoViews ?? 0), 0)
+  // 조회가 한 번이라도 있었거나 동영상 유형이어야 "잰 조회수"다 — 검색 캠페인의 0 은 재지 않음으로 둔다.
+  const countsViews = measured.length > 0 && (viewSum > 0 || (channelType != null && VIEW_CHANNEL_TYPES.has(channelType)))
+  const videoViews = countsViews ? viewSum : null
+  const viewsPartial = countsViews && measured.length < sorted.length
+  const currencies = new Set(sorted.map((r) => r.currency).filter(Boolean))
+  const spend = sorted.reduce((total, r) => total + r.spend, 0)
+  const costPerView =
+    videoViews != null && videoViews > 0 && !viewsPartial && currencies.size <= 1 ? round2(spend / videoViews) : null
+  return { channelType, videoViews, viewsPartial, costPerView }
+}
 
 /**
  * 한 채널의 기간 합계. rows 가 null 이면 **소스 실패**로 보고 전 필드를 미측정(null)으로 둔다 —

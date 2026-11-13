@@ -35,6 +35,7 @@ import { describeQuoteVat, resolveQuoteVatIncluded } from "@/lib/portal/quote-va
 import type { PartnerDocumentListItem } from "@/lib/portal/types"
 import {
   DEFAULT_HARDWARE_QUOTE_TEMPLATE_ID,
+  isQuoteNoteLine,
   resolveQuoteProductLine,
   type QuoteProductLine,
   type StandardQuoteTemplateId,
@@ -58,6 +59,8 @@ type HardwareQuoteRow = {
   /** 최종 금액 — VAT 포함/별도 설정과 무관하게 항상 부가세가 들어간 금액이다. */
   totalAmount: number
   subtotalAmount: number
+  /** 견적 전체 할인(원). 품목 합계 − 할인 = 공급가. */
+  discountAmount: number
   taxAmount: number
   /** 견적의 VAT 설정. 금액 라벨을 고정 문구가 아니라 이 값으로 정한다. */
   vatIncluded: boolean
@@ -136,6 +139,14 @@ const TONE_DOT: Record<"go" | "warn" | "neutral" | "muted", string> = {
   warn: "bg-[#A8741A]",
   neutral: "bg-[#31302E]",
   muted: "bg-[#C9C6C0]",
+}
+
+/** 단계 제목 띠 — 단계 성격(tone)별 파스텔 톤. 계약 전환=민트, 리마인드·발송=살구, 진행=하늘, 보관=회색. */
+const TONE_BAND: Record<"go" | "warn" | "neutral" | "muted", string> = {
+  go: "bg-[#E6F6EE] border-[#CFEBDD]",
+  warn: "bg-[#FDF1DC] border-[#F4E0BC]",
+  neutral: "bg-[#EAF1FB] border-[#D6E3F5]",
+  muted: "bg-[#F2F1EE] border-[#E6E4DF]",
 }
 
 const DESKTOP_QUERY = "(min-width: 1024px)"
@@ -222,6 +233,7 @@ function mapDocumentToQuoteRow(document: PartnerDocumentListItem): HardwareQuote
     dealTitle: document.deal_title,
     totalAmount: document.total_amount ?? 0,
     subtotalAmount: document.subtotal ?? document.total_amount ?? 0,
+    discountAmount: document.discount_amount ?? 0,
     taxAmount: document.tax_amount ?? 0,
     vatIncluded: document.vat_included ?? resolveQuoteVatIncluded(null, document.tax_amount),
     status: document.status,
@@ -337,13 +349,15 @@ async function fetchQuoteDetail(quoteId: string): Promise<QuoteDetail> {
     validUntil: payload.version.valid_until,
   })
   const lines = (details?.lineItems ?? []).map((line, index) => {
+    // 조건·할부 안내 같은 금액 없는 행은 고객 문서처럼 수량·금액을 비운다("0원"으로 보이지 않게).
+    const note = isQuoteNoteLine(line)
     const amount = line.lineSupplyAmount ?? (line.unitPrice != null ? line.unitPrice * (line.quantity ?? 1) : null)
     return {
       key: line.id ?? `${index}`,
       name: line.itemName,
       description: line.itemDescription ?? null,
-      quantity: line.quantity != null ? `×${line.quantity}${line.quantityUnit && line.quantityUnit !== "대" ? line.quantityUnit : ""}` : "",
-      amount: amount != null ? formatMoney(amount) : "—",
+      quantity: !note && line.quantity != null ? `×${line.quantity}${line.quantityUnit && line.quantityUnit !== "대" ? line.quantityUnit : ""}` : "",
+      amount: !note && amount != null ? formatMoney(amount) : "—",
     }
   })
 
@@ -444,7 +458,8 @@ export default function HardwareQuotesPanel({
 
     return QUOTE_QUEUE_GROUPS.map((group) => {
       const items = visible.filter((quote) => getQuoteQueueKey(quote) === group.key)
-      return { ...group, items, amount: items.reduce((sum, quote) => sum + quote.totalAmount, 0) }
+      // 단계별 합계 금액은 띠에서 뺐다(아직 쓰지 않고 행 금액과 헷갈린다).
+      return { ...group, items }
     }).filter((group) => group.items.length > 0)
   }, [productLineFilter, quotes, searchTerm])
 
@@ -640,6 +655,7 @@ export default function HardwareQuotesPanel({
       dealTitle: payload.deal.title,
       totalAmount: payload.version.total_amount,
       subtotalAmount: payload.version.subtotal,
+      discountAmount: payload.version.discount_amount ?? 0,
       taxAmount: payload.version.tax_amount,
       vatIncluded: resolveQuoteVatIncluded(
         getQuoteDetailsFromStructuredJson(payload.version.structured_json)?.vatIncluded,
@@ -647,7 +663,8 @@ export default function HardwareQuotesPanel({
       ),
       status: payload.share ? "shared" : payload.document.status,
       shareCount: payload.share ? 1 : 0,
-      versionCount: 1,
+      // 작성 창에서 다시 저장하면 같은 견적의 다음 버전이 온다(v2, v3 …).
+      versionCount: payload.version.version_number,
       latestVersionNumber: payload.version.version_number,
       latestShareCreatedAt: payload.share?.created_at ?? null,
       viewCount: 0,
@@ -664,10 +681,24 @@ export default function HardwareQuotesPanel({
       }),
     }
 
-    setQuotes((current) => [
-      nextQuote,
-      ...current.filter((item) => item.id !== payload.document.id),
-    ])
+    setQuotes((current) => {
+      // 같은 견적의 다음 버전이면 이미 있는 공유·열람 기록은 이어받는다(저장만 한 v2 가 공유 상태를 지우지 않게).
+      const previous = current.find((item) => item.id === payload.document.id)
+      const merged: HardwareQuoteRow = previous
+        ? {
+            ...nextQuote,
+            status: payload.share ? "shared" : previous.status,
+            shareCount: Math.max(previous.shareCount, nextQuote.shareCount),
+            shareUrl: nextQuote.shareUrl ?? previous.shareUrl,
+            latestShareCreatedAt: nextQuote.latestShareCreatedAt ?? previous.latestShareCreatedAt,
+            viewCount: previous.viewCount,
+            lastViewedAt: previous.lastViewedAt,
+            reviewConfirmedAt: previous.reviewConfirmedAt,
+            acceptedAt: previous.acceptedAt,
+          }
+        : nextQuote
+      return [merged, ...current.filter((item) => item.id !== payload.document.id)]
+    })
     setSelectedId(payload.document.id)
   }
 
@@ -826,7 +857,7 @@ export default function HardwareQuotesPanel({
     const sharing = sharingQuoteId === quote.id
 
     return (
-      <section aria-live="polite" aria-label="견적 상세" className="flex min-w-0 flex-col gap-6 px-7 py-6">
+      <section aria-label="견적 상세" className="flex min-w-0 flex-col gap-6 px-7 py-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
@@ -934,6 +965,12 @@ export default function HardwareQuotesPanel({
                       <span className="text-right font-semibold tabular-nums">{line.amount}</span>
                     </div>
                   ))
+                )}
+                {quote.discountAmount > 0 && (
+                  <div className="grid grid-cols-[minmax(0,1fr)_112px] gap-2 py-2 text-[12.5px] text-[#615D59]">
+                    <span>견적 할인</span>
+                    <span className="text-right tabular-nums">−{formatMoney(quote.discountAmount)}</span>
+                  </div>
                 )}
                 {!quote.vatIncluded && (
                   <div className="grid grid-cols-[minmax(0,1fr)_112px] gap-2 py-2 text-[12.5px] text-[#615D59]">
@@ -1100,13 +1137,15 @@ export default function HardwareQuotesPanel({
             ) : (
               groups.map((group) => (
                 <section key={group.key} className="border-b border-[#f0f0ec] pb-1.5 last:border-b-0">
-                  <h2 className="flex items-baseline justify-between px-4 pb-1.5 pt-3.5 text-[11.5px] font-semibold text-[#31302E]">
-                    <span className="flex items-center gap-1.5">
-                      <span className={`h-1.5 w-1.5 rounded-full ${TONE_DOT[group.tone]}`} />
+                  {/* 단계 제목 — 행(13px)보다 크고 아주 굵게, 단계 성격별 파스텔 띠로 묶음을 나눈다. */}
+                  <h2 className={`flex items-center gap-2 border-b px-4 py-2.5 text-[15.5px] font-extrabold tracking-[-0.015em] text-[#111110] ${TONE_BAND[group.tone]}`}>
+                    <span className="flex items-center gap-2">
+                      <span aria-hidden className={`h-2.5 w-2.5 shrink-0 rounded-full ${TONE_DOT[group.tone]}`} />
                       {group.label}
-                      <span className="font-normal tabular-nums text-[#78736D]">{group.items.length}</span>
+                      <span className="rounded-full bg-white/80 px-2 py-px text-[12.5px] font-bold tabular-nums text-[#31302E]">
+                        {group.items.length}
+                      </span>
                     </span>
-                    <span className="font-normal tabular-nums text-[#78736D]">{formatMan(group.amount)}원</span>
                   </h2>
                   {group.items.map((quote) => {
                     const selected = quote.id === selectedQuote?.id

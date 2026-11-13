@@ -47,6 +47,20 @@ function mobileBottomBar(html: string) {
   return html.match(/<nav class="fixed inset-x-0 bottom-0[^"]*">[\s\S]*?<\/nav>/)?.[0] ?? ""
 }
 
+/** 접힘 묶음 토글(범주 이름 + 항목 수)의 수. 그 묶음이 없으면 null. */
+function foldCount(html: string, label: string) {
+  const match = html.match(new RegExp(`>${label}</span><span class="tabular-nums[^"]*">(\\d+)</span>`))
+  return match ? Number(match[1]) : null
+}
+
+/** 접힘 묶음 토글의 펼침 상태. */
+function foldExpanded(html: string, label: string) {
+  const button = [...html.matchAll(/<button\b[^>]*aria-expanded="(true|false)"[^>]*>([\s\S]*?)<\/button>/g)].find(
+    (match) => match[2].includes(`>${label}</span>`)
+  )
+  return button ? button[1] === "true" : null
+}
+
 /** "숨긴 탭 N · 보기" 토글의 N. 묶음이 없으면 null. */
 function hiddenCount(html: string) {
   const match = html.match(/숨긴 탭 <span class="tabular-nums">(\d+)<\/span>/)
@@ -56,8 +70,8 @@ function hiddenCount(html: string) {
 describe("사이드바 CRM 평탄화", () => {
   it("CRM 안에서도 다른 상시 링크가 그대로 보인다", () => {
     // 드릴인은 CRM 진입 시 전체 메뉴를 CRM 패널로 교체해, 마케팅·CS 로 바로 갈 수 없었다.
-    // 2026-09-10 전면 공개 이후 마케팅·시스템 탭은 접힌 "기타"로 내려갔으므로, 여기서는
-    // 상시 목록이 CRM 안에서도 그대로인지만 본다(기타 접근성은 아래 토글 테스트가 맡는다).
+    // 2026-09-10 전면 공개 이후 일부 탭은 접힘 묶음으로 내려갔으므로, 여기서는
+    // 상시 목록이 CRM 안에서도 그대로인지만 본다(접힘 접근성은 아래 토글 테스트가 맡는다).
     const html = render("/admin/crm")
     const hrefs = navHrefs(html)
     expect(hrefs).toContain("/admin/chatbot")
@@ -65,14 +79,55 @@ describe("사이드바 CRM 평탄화", () => {
     expect(hrefs).toContain("/admin/hardware")
   })
 
-  it("접힌 기타에도 항목 수와 함께 토글이 렌더된다", () => {
-    // 기타 자리 6개(마케팅·분석 3 + 시스템 3 — 콘텐츠는 2026-10-26, 마케팅 허브는 2026-11-04 상시로 올라감) 중
-    // 운영 상태 1개는 기본 숨김이라(2026-09-25) 기타 토글에는 5개가 뜨고, 나머지 1개는 그 아래 "숨긴 탭 1"로 묶인다
-    // (2026-10 마케팅 프로젝트는 캠페인 관리 탭이 됐다).
+  it("접힘 묶음이 범주마다 항목 수와 함께 토글로 렌더된다(2026-11-09 D안)", () => {
+    // 접힘 자리 8개 = 주문·매출 2 + 마케팅·분석 3 + 시스템 3. 시스템의 운영 상태는 기본 숨김이라(2026-09-25)
+    // 시스템 묶음에는 2개가 뜨고, 나머지 1개는 그 아래 "숨긴 탭 1"로 묶인다. "기타" 묶음은 더는 없다.
     const html = render("/admin/crm")
-    expect(html).toContain("기타")
-    expect(html).toContain(">5<")
+    expect(foldCount(html, "주문·매출")).toBe(2)
+    expect(foldCount(html, "마케팅·분석")).toBe(3)
+    expect(foldCount(html, "시스템")).toBe(2)
+    expect(html).not.toContain(">기타<")
     expect(hiddenCount(html)).toBe(1)
+    // 처음에는 전부 접혀 있다 — 접힌 탭 링크는 그리지 않는다.
+    expect(foldExpanded(html, "주문·매출")).toBe(false)
+    expect(navHrefs(html)).not.toContain("/admin/branch/ledger")
+  })
+
+  it("지금 화면이 든 접힘 묶음만 열린다", () => {
+    const html = render("/admin/branch/ledger")
+    expect(foldExpanded(html, "주문·매출")).toBe(true)
+    expect(foldExpanded(html, "마케팅·분석")).toBe(false)
+    expect(activeNavHrefs(html)).toEqual(["/admin/branch/ledger"])
+    expect(mobileHeader(html)).toContain("매출 장부")
+  })
+
+  it("상시 목록은 소제목 없이 하루 동선 순서이고, CS 콘솔은 콘텐츠 바로 밑이다", () => {
+    const html = render("/admin/overview")
+    const sidebarHrefs = navHrefs(html.slice(html.indexOf("<aside")))
+    const primaryOrder = sidebarHrefs.filter((href) =>
+      [
+        "/admin/overview",
+        "/admin/calendar",
+        "/admin/crm",
+        "/admin/quotes",
+        "/admin/hardware",
+        "/admin/campaigns",
+        "/admin/blog",
+        "/admin/chatbot",
+      ].includes(href)
+    )
+    expect(primaryOrder).toEqual([
+      "/admin/overview",
+      "/admin/calendar",
+      "/admin/crm",
+      "/admin/quotes",
+      "/admin/hardware",
+      "/admin/campaigns",
+      "/admin/blog",
+      "/admin/chatbot",
+    ])
+    expect(html).not.toContain(">영업·고객<")
+    expect(html).not.toContain(">고객 지원<")
   })
 
   it("'전체 메뉴' 복귀 버튼이 더는 없다", () => {
@@ -125,16 +180,16 @@ describe("사이드바 CRM 평탄화", () => {
   })
 
   it("사람별 오버라이드가 상시 목록에서 항목을 내린다", () => {
-    // 전면 공개 이후 오버라이드는 차단이 아니라 자리 이동이다 — 상시에서 빠지고 기타로 간다.
+    // 전면 공개 이후 오버라이드는 차단이 아니라 자리 이동이다 — 상시에서 빠지고 제 범주 접힘 묶음으로 간다.
     const html = render("/admin/calendar", {
       role: "ADMIN",
       navOverrides: { "/admin/quotes": "folded" },
     })
 
     // 모바일 하단 바로가기(MOBILE_PRIMARY_NAV)는 고정 목록이라 견적이 남는다 —
-    // 여기서 확인하는 것은 사이드바 상시/기타 배치가 오버라이드를 반영하는지다.
-    // 기본 기타 5(기본 숨김 1 제외) + 내려온 견적 1 = 6.
-    expect(html).toContain(">6<")
+    // 여기서 확인하는 것은 사이드바 상시/접힘 배치가 오버라이드를 반영하는지다.
+    // 주문·매출 묶음: 기본 2(KR Team·매출 장부) + 내려온 견적 1 = 3.
+    expect(foldCount(html, "주문·매출")).toBe(3)
   })
 
   describe("개인 숨김", () => {

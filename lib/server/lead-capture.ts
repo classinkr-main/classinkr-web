@@ -35,6 +35,7 @@ const VALID_SOURCES = new Set<LeadSource>([
   "checkout_request",
   "newsletter",
   "meta_lead_ads",
+  "chatbot",
 ])
 // site_inflow 타임라인 이벤트 summary에 쓰는 유입 경로 한글 라벨.
 const SITE_INFLOW_SOURCE_LABELS = {
@@ -43,6 +44,7 @@ const SITE_INFLOW_SOURCE_LABELS = {
   showroom_booking: "쇼룸 예약",
   checkout_request: "도입 신청",
   newsletter: "뉴스레터",
+  chatbot: "챗봇 상담",
 } as Record<string, string>
 
 // TLD 2자 이상 강제 — "a@b.c" 류 가짜 이메일 차단
@@ -282,7 +284,7 @@ export function buildLeadPayload(raw: unknown): LeadPayload {
   }
 
   if (
-    payload.source === "contact_page" &&
+    (payload.source === "contact_page" || payload.source === "chatbot") &&
     !hasRequiredFields(payload, ["org", "name", "phone", "message"])
   ) {
     throw new Error("필수 문의 정보를 모두 입력해 주세요.")
