@@ -50,7 +50,7 @@ export async function GET(req: NextRequest) {
   const daysParam = parseInt(req.nextUrl.searchParams.get("days") ?? "30", 10)
   const days = Number.isFinite(daysParam) && daysParam > 0 && daysParam <= 90 ? daysParam : 30
   const limitParam = parseInt(req.nextUrl.searchParams.get("limit") ?? "10", 10)
-  const limit = Number.isFinite(limitParam) && limitParam > 0 && limitParam <= 50 ? limitParam : 10
+  const limit = Number.isFinite(limitParam) && limitParam > 0 && limitParam <= 200 ? limitParam : 10
 
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString()
   const timeoutController = new AbortController()
