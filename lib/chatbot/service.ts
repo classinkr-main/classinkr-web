@@ -10,6 +10,7 @@ import { getDocsContent } from "@/lib/docs-content"
 import { CLASSIN_POSITIONING } from "@/lib/classin-positioning"
 import {
   classifyChatbotQuestion,
+  isSubjectlessClassinIdentityQuestion,
   type ChatbotIntent,
 } from "@/lib/chatbot/classification"
 import { findChatbotSelfKnowledgeEntry } from "@/lib/chatbot/self-knowledge"
@@ -68,7 +69,7 @@ const DEFAULT_FINAL_ANSWER_TIMEOUT_MS = 6_000
 const DEFAULT_FINAL_ANSWER_STREAM_TIMEOUT_MS = 8_000
 const RETRIEVAL_CACHE_TTL_MS = 5 * 60 * 1000
 const RETRIEVAL_CACHE_MAX = 200
-const RETRIEVAL_CACHE_VERSION = "rag-rerank-20260629-v5"
+const RETRIEVAL_CACHE_VERSION = "rag-rerank-20261113-v6"
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const CHAT_SESSION_CHANNELS = new Set(["web", "admin_preview", "partner_portal", "manual_import"])
 const PROGRESSIVE_MODEL_TIERS: ChatbotModelTier[] = ["basic", "reasoning", "advanced"]
@@ -319,7 +320,7 @@ interface CachedAnswerEntry {
   warning?: string
 }
 
-const ANSWER_CACHE_VERSION = "answer-20260629-v6"
+const ANSWER_CACHE_VERSION = "answer-20261113-v7"
 const ANSWER_CACHE_TTL_MS = 5 * 60 * 1000
 const ANSWER_CACHE_MAX = 200
 const answerCache = new Map<string, { expiresAt: number; value: CachedAnswerEntry }>()
@@ -925,7 +926,14 @@ function isComparisonQuestion(question: NormalizedQuestion) {
 
 function isIdentityQuestion(question: NormalizedQuestion) {
   const text = question.redacted.toLowerCase()
-  return IDENTITY_RE.test(text) && !IDENTITY_EXCLUSION_RE.test(text)
+  if (IDENTITY_EXCLUSION_RE.test(text)) return false
+  if (IDENTITY_RE.test(text)) return true
+  // 주어 없이 묻는 "뭐하는 회사야", "무슨 서비스예요?"도 위젯 안에서는 클래스인을 묻는 말이다.
+  return isSubjectlessClassinIdentityQuestion(text)
+}
+
+function isCompanyIdentityQuestion(question: NormalizedQuestion) {
+  return /회사|기업|업체|만든\s*곳|어디\s*거/.test(question.redacted)
 }
 
 // "칠판 티비 밝기 줄이고 싶어요", "화면에 줄이 생겼어요"처럼 쓰는 법·증상을 묻는 말은 스펙 질문이 아니다.
@@ -2539,12 +2547,18 @@ function getComparisonAnswer(question: NormalizedQuestion, top: ChatbotSource) {
   ].filter(Boolean).join("\n\n")
 }
 
-function getIdentityAnswer() {
+function getIdentityAnswer(question: NormalizedQuestion) {
+  const askedCompany = isCompanyIdentityQuestion(question)
   return [
-    "네, Classin은 학원 수업을 준비·진행·녹화·복습·과제(LMS)·관리자 데이터까지 한 흐름으로 묶는 수업 운영 솔루션이에요.",
+    askedCompany
+      ? "클래스인(ClassIn)은 글로벌 에듀테크 기업 EEO가 만든 교육용 수업 플랫폼이고, 한국에서는 이이오클래스인코리아가 학원·교육기관 도입과 운영을 돕고 있어요."
+      : null,
+    askedCompany
+      ? "Classin은 학원 수업을 준비·진행·녹화·복습·과제(LMS)·관리자 데이터까지 한 흐름으로 묶는 수업 운영 솔루션이에요."
+      : "네, Classin은 학원 수업을 준비·진행·녹화·복습·과제(LMS)·관리자 데이터까지 한 흐름으로 묶는 수업 운영 솔루션이에요.",
     "쉽게 말해 Zoom처럼 수업만 여는 도구가 아니라, 전자칠판·EDB 교안·녹화·관리자 운영까지 연결해 수업 품질을 표준화하는 시스템에 가까워요.",
     "전자칠판, 온라인 수업, LMS/관리자 중 어떤 쪽이 궁금하신지 알려주시면 그 부분만 콕 짚어 정리해드릴게요.",
-  ].join("\n\n")
+  ].filter(Boolean).join("\n\n")
 }
 
 function getEdbAnswer() {
@@ -2952,7 +2966,7 @@ function formatConsumerAnswer({
     return getEdbAnswer()
   }
   if (isIdentityQuestion(question) && top.urlPath.includes("/docs/start/academy-system-os-positioning")) {
-    return getIdentityAnswer()
+    return getIdentityAnswer(question)
   }
   if (isPricingInfoQuestion(question) && top.heading === "요금·견적 구성 안내") {
     return getPricingAnswer()

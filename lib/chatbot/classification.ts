@@ -26,6 +26,16 @@ export type ChatbotIntent =
 
 export type HandoffIntent = "demo" | "support"
 
+// 클래스인 사이트 위젯에서 주어 없이 묻는 회사·서비스 정체 질문("뭐하는 회사야", "무슨 서비스예요?", "여기 뭐하는 곳이야").
+// 위젯 안에서는 클래스인을 묻는 말로 본다. "무슨 회사 전자칠판이 좋아요" 같은 긴 질문은 잡지 않도록 짧은 질문만 본다.
+const SUBJECTLESS_IDENTITY_RE =
+  /(?:뭐|무엇을?|무슨\s*일을?|어떤\s*일을?)\s*하는\s*(?:회사|곳|데|서비스|기업|업체|사이트)|(?:무슨|어떤|뭐\s*파는)\s*(?:회사|기업|업체|서비스|사이트|곳)(?:야|예요|에요|이에요|인가요|인가|인지|임|이야|입니까|이죠|죠|요)?\s*[?？!.~]*\s*$|회사\s*소개|(?:여기|여긴|이\s*곳|이곳|이\s*회사|이\s*사이트|이\s*서비스)\s*(?:는|은)?\s*(?:뭐야|뭐예요|뭐에요|뭔가요|뭔데|뭐임|무엇)/
+
+export function isSubjectlessClassinIdentityQuestion(question: string) {
+  const text = question.toLowerCase().trim()
+  return text.replace(/\s+/g, "").length <= 24 && SUBJECTLESS_IDENTITY_RE.test(text)
+}
+
 function normalizedText(question: string, sourceCategories: string[] = []) {
   return `${question} ${sourceCategories.join(" ")}`.toLowerCase()
 }
@@ -86,7 +96,7 @@ export function detectChatbotCategory(
   if (/api|sdk|연동|데이터\s*구독|가상계정|수업\s*중계|코스\s*정보|수업\s*정보|crm|lms/.test(text)) {
     return "admin"
   }
-  if (/(classin|클래스인).*(뭐야|뭐예요|뭐에요|무엇|뭔가요|뭔데|뭐임|뭐\s*하는|어떤\s*(서비스|제품|솔루션|도구|플랫폼)|소개|설명)|(뭐야|뭐예요|뭐에요|무엇|뭔가요|뭔데|뭐임|뭐\s*하는|어떤\s*(서비스|제품|솔루션|도구|플랫폼)|소개|설명).*(classin|클래스인)/.test(text)) {
+  if (/(classin|클래스인).*(뭐야|뭐예요|뭐에요|무엇|뭔가요|뭔데|뭐임|뭐\s*하는|어떤\s*(서비스|제품|솔루션|도구|플랫폼)|소개|설명)|(뭐야|뭐예요|뭐에요|무엇|뭔가요|뭔데|뭐임|뭐\s*하는|어떤\s*(서비스|제품|솔루션|도구|플랫폼)|소개|설명).*(classin|클래스인)/.test(text) || isSubjectlessClassinIdentityQuestion(question)) {
     return "onboarding"
   }
   if (/데모|시연|쇼룸|컨설팅|연락|미팅|제안|상담사|상담원|담당자|매니저|채널톡|도입\s*(상담|문의|검토)|구매\s*상담|상담\s*신청/.test(text)) {
