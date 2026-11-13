@@ -143,3 +143,57 @@ describe("chatbot Gemini model chain", () => {
     expect(result.answer).toContain("실험 수업")
   })
 })
+
+// 근거가 약할 때(검색 점수가 낮은 문서뿐이거나 문서가 없을 때) 모델이 배경 종류·단축키 같은 세부를
+// 지어내는 것을 실측으로 확인했다. 약한 문서 조각을 '검증 정보'로 넘기지 않고, 지어내지 말라는 요구를 붙인다.
+describe("chatbot final answer prompt with weak grounding", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.unstubAllEnvs()
+  })
+
+  async function capturePrompt(question: string) {
+    disableExternalChatbotServices()
+    vi.stubEnv("GEMINI_API_KEY", "test-gemini-key")
+    clearModelEnv()
+
+    const prompts: string[] = []
+    const fetchMock = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      if (String(url).includes(":generateContent")) {
+        const body = JSON.parse(String(init?.body)) as { contents: { parts: { text: string }[] }[] }
+        prompts.push(body.contents.at(-1)?.parts[0]?.text ?? "")
+        return {
+          ok: true,
+          json: async () => ({
+            candidates: [
+              { content: { parts: [{ text: "이 내용은 공개 안내에서 확인되지 않았어요. Classin 수업 운영과 관련해 어떤 점이 궁금하신지 알려 주세요." }] } },
+            ],
+          }),
+        }
+      }
+      return { ok: true, json: async () => ({}) }
+    })
+    vi.stubGlobal("fetch", fetchMock)
+
+    const result = await evaluateChatbotQuery(question)
+    return { prompt: prompts[0] ?? "", result }
+  }
+
+  it("withholds weak doc chunks and tells the model not to invent details", async () => {
+    const { prompt, result } = await capturePrompt("클래스인 배경화면 뭐 있어요")
+
+    expect(prompt).toContain("현재 응답 모드: doc_suggestion")
+    expect(prompt).toContain("내부 검증 정보: 없음")
+    expect(prompt).toContain("근거 없음 주의")
+    expect(prompt).toContain("새로 지어내지 마")
+    expect(result.answer).toContain("확인되지 않았어요")
+  })
+
+  it("keeps passing sources when the grounding is strong", async () => {
+    const { prompt } = await capturePrompt("EDB 교안은 어떻게 재사용해요?")
+
+    expect(prompt).toContain("현재 응답 모드: direct_answer")
+    expect(prompt).toContain("내부 검증 정보(사용자에게 직접 언급 금지)")
+    expect(prompt).not.toContain("근거 없음 주의")
+  })
+})
