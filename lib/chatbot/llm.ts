@@ -15,6 +15,12 @@ import {
   getClassinPositioningContext,
 } from "@/lib/classin-positioning"
 import type { ChatbotSource } from "./service"
+import {
+  getGroundingText,
+  MAX_GROUNDING_TEXT_LENGTH,
+  trimToCompleteSentences,
+  type EvidenceSentence,
+} from "./source-grounding"
 
 export type ChatbotModelTier = "basic" | "reasoning" | "advanced"
 
@@ -162,6 +168,27 @@ function hasWeakGrounding(answerMode: string) {
   return answerMode === "doc_suggestion" || answerMode === "fallback" || answerMode === "clarifying_question"
 }
 
+// 근거가 있는 응답 모드에서도 모델은 근거 밖 세부를 보탠다. 2026-11-13 실측(모델이 쓴 답 69건을 근거와 대조):
+// 절반에서 근거에 없는 단계·아이콘·기능 뜻풀이·사례 성과나, 근거 없는 "제공하지 않습니다" 단정이 나왔다.
+// 시스템 지시의 일반 원칙만으로는 지켜지지 않아, 요청마다 질문 바로 아래에 범위를 다시 적는다.
+const GROUNDED_ANSWER_REQUIREMENT =
+  "근거 범위: 답에 쓰는 사실은 위 내부 검증 정보, 안전 초안, 시스템 지시의 Classin 기본 지식에 적힌 것만 써. 거기에 없는 단계·버튼·메뉴·아이콘·색·화면 위치, 기능의 뜻풀이, 수치, 원인, 사례의 성과와 효과(만족도·유지율·시간 절감 정도)를 보태지 말고, '크게·대폭·획기적으로·널리·수많은·활발히'처럼 정도를 부풀리는 말도 쓰지 마. 질문이 묻는 기능이나 방법이 근거에 직접 적혀 있지 않으면 '된다'고도 '안 된다·제공하지 않는다'고도 단정하지 말고, 적혀 있는 관련 내용만 답한 뒤 '그 부분은 공개 안내에서 확인되지 않았어요'라고 밝혀. 근거에 있는 내용만으로 답이 짧아져도 괜찮아."
+
+// 특정 학원·지역의 도입 여부나 분위기를 묻는 질문. 느슨하게 잡는다(잘못 잡아도 조건부 주의 문장만 붙는다).
+// 짧은 질문은 정해 둔 답(quick-answers-basics.ts 의 named-academy·famous-regional-reference)이 먼저 받는다.
+const ADOPTION_VERB_RE = /쓰|써|사용|도입|이용|넘어가|갈아타/
+const ADOPTION_SCOPE_RE =
+  /분위기|추세|대세|유행|다들|동네|지역|근처|인근|서울|경기|수원|성남|분당|일산|인천|부산|대구|대전|광주|울산|세종|강남|대치|목동|천안|청주|평택|제주|[가-힣a-z0-9]{2,}(?:학원|어학원|교습소|아카데미|스쿨)\s*(?:도|은|는|이|가|에서|이나|나|랑|같은)/
+
+export function asksAboutThirdPartyAdoption(question: string) {
+  const text = question.toLowerCase()
+  return ADOPTION_VERB_RE.test(text) && ADOPTION_SCOPE_RE.test(text)
+}
+
+// 실측: 시스템 지시에 같은 원칙이 있어도 "목동을 포함한 주요 입시 지역에서 적극 활용"처럼 질문 속 지역을 사례에 이어 붙였다.
+const THIRD_PARTY_ADOPTION_REQUIREMENT =
+  "고객사 언급 주의: 질문이 특정 학원·기관 이름이나 지역을 들어 Classin을 쓰는지, 많이 쓰는 분위기인지 묻는 것이라면, 그 학원이 쓰는지와 그 지역에서 많이 쓰는지·늘고 있는지는 확인도 부정도 하지 말고 '공개 안내로는 확인해 드릴 수 없어요'라고 답해. 그 뒤에 질문에 나온 지역·학원 이름을 다시 꺼내 '그 지역의 많은 학원이 쓴다·검토한다'는 식으로 잇지 마. 공개된 사례는 가려진 이름 그대로 한 문장으로만 소개하고, 만족도나 성과는 말하지 말고, 도입 상담을 안내해."
+
 // 근거가 약할 때 모델이 그럴듯한 세부(배경 종류, 단축키, 지원 형식 등)를 지어내는 것을 실측으로 확인했다.
 // 기본 지식으로 답할 수 있는 범위만 답하고, 나머지는 확인되지 않았다고 밝히게 한다.
 const WEAK_GROUNDING_REQUIREMENT =
@@ -236,12 +263,12 @@ export function clampAnswerToLength(text: string, max = MAX_ANSWER_LENGTH): stri
   return window.trim()
 }
 
-function sanitizeInternalContextText(value: string) {
+function sanitizeInternalContextText(value: string, maxLength = 520) {
   return sanitizePublicAnswerText(value)
     .replace(/^#+\s*/gm, "")
     .replace(/\s+/g, " ")
     .trim()
-    .slice(0, 520)
+    .slice(0, maxLength)
 }
 
 function formatInternalContext(sources: ChatbotSource[] = []) {
@@ -249,7 +276,10 @@ function formatInternalContext(sources: ChatbotSource[] = []) {
     .slice(0, 2)
     .map((source, index) => {
       const heading = source.heading ? ` / ${source.heading}` : ""
-      return `[내부 정보 ${index + 1}] ${sanitizeInternalContextText(`${source.title}${heading}`)}\n${sanitizeInternalContextText(source.excerpt)}`
+      // 문서 본문이 붙어 있으면 본문을, 없으면 요약을 넘긴다. 어느 쪽이든 문장 중간에서 끊긴 꼬리는 뗀다.
+      // 끊긴 조각("…초록색 [제출...")을 주면 모델이 뒷부분을 지어 이어 쓴다.
+      const body = getGroundingText(source) ?? trimToCompleteSentences(source.excerpt)
+      return `[내부 정보 ${index + 1}] ${sanitizeInternalContextText(`${source.title}${heading}`)}\n${sanitizeInternalContextText(body, MAX_GROUNDING_TEXT_LENGTH)}`
     })
     .join("\n\n")
 }
@@ -416,6 +446,192 @@ export async function generateGeminiAnswer({
   })
 }
 
+// ── 근거 선별 ──────────────────────────────────────────────────────────────────────────────────────
+// 모델이 답을 새로 쓰는 대신, 문서 문장 가운데 질문에 직접 답하는 문장의 번호만 고르게 한다.
+// 2026-11-13 실측(모델이 쓴 답 69건): 문서에 답 문장이 없을 때 근거 밖 단정이 56%, 있을 때 16%였다.
+// 답 문장이 있는지부터 가려야 "없는 기능을 없다고 단정"하거나 지역·사례를 지어내는 일을 막을 수 있다.
+const MAX_SELECTED_SENTENCES = 6
+// 한 번 시도의 상한과 선별 전체 예산. 실측 중앙값 1.1초, p90 1.4초.
+const SELECTION_ATTEMPT_TIMEOUT_MS = 2200
+const DEFAULT_SELECTION_TIMEOUT_MS = 3500
+
+const SELECTION_SYSTEM_INSTRUCTION = [
+  "너는 Classin 고객 질문에 답이 되는 문장을 문서에서 골라 주는 선별기다. 문장을 새로 쓰지 않는다.",
+  "아래 번호가 붙은 문장 가운데 고객 질문에 직접 답하는 문장의 번호만 고른다.",
+  "규칙:",
+  "1. 질문이 묻는 것에 직접 답하는 문장만 고른다. 주제만 비슷하고 답이 아닌 문장은 고르지 않는다.",
+  "2. 답이 되는 문장이 하나도 없으면 빈 배열을 낸다. 억지로 고르지 않는다.",
+  "3. 답이 여러 문장에 걸쳐 있으면 빠짐없이 고른다. 순서가 있는 절차는 이어지는 문장을 함께 고르고, 답을 이해하는 데 꼭 필요한 조건·주의 문장도 함께 고른다.",
+  "4. 질문한 사람의 처지(학생·학부모, 강사, 원장·관리자)에 맞지 않는 방법은 고르지 않는다. 학생이 숙제 내는 법을 물었는데 교사가 숙제를 만드는 방법을 고르는 식은 안 된다.",
+  `5. 최대 ${MAX_SELECTED_SENTENCES}개. 번호는 오름차순으로 낸다.`,
+].join("\n")
+
+function buildSelectionPrompt(question: string, sentences: EvidenceSentence[]) {
+  const lines: string[] = []
+  let lastLabel = ""
+  for (const sentence of sentences) {
+    if (sentence.label !== lastLabel) {
+      lines.push(`# ${sanitizeInternalContextText(sentence.label)}`)
+      lastLabel = sentence.label
+    }
+    lines.push(`[${sentence.id}] ${sentence.text}`)
+  }
+  return `고객 질문: ${question}\n\n문장:\n${lines.join("\n")}`
+}
+
+/** 모델 응답(JSON)에서 유효한 문장 번호만 뽑는다. 형식이 깨졌으면 null. */
+export function parseSelectedSentenceIds(text: string | undefined, sentenceCount: number): number[] | null {
+  if (!text) return null
+  try {
+    const parsed = JSON.parse(text) as { ids?: unknown }
+    if (!Array.isArray(parsed.ids)) return null
+    const ids = parsed.ids.filter(
+      (value): value is number => Number.isInteger(value) && (value as number) >= 1 && (value as number) <= sentenceCount
+    )
+    return Array.from(new Set(ids))
+      .sort((left, right) => left - right)
+      .slice(0, MAX_SELECTED_SENTENCES)
+  } catch {
+    return null
+  }
+}
+
+/**
+ * 질문에 직접 답하는 문장의 번호를 고른다.
+ * - 답 문장이 없으면 빈 배열, 호출이 모두 실패하면 null(호출부는 결정형 초안을 그대로 쓴다).
+ * - 프라이머리 모델이 실패하면 남은 예산 안에서 폴백 모델을 시도한다.
+ */
+export async function selectAnsweringSentenceIds({
+  question,
+  sentences,
+  timeoutMs = DEFAULT_SELECTION_TIMEOUT_MS,
+}: {
+  /** PII 가 제거된 질문 텍스트 */
+  question: string
+  sentences: EvidenceSentence[]
+  timeoutMs?: number
+}): Promise<number[] | null> {
+  const apiKey = getGeminiApiKey()
+  if (!apiKey || !question.trim() || sentences.length === 0) return null
+
+  const deadline = Date.now() + timeoutMs
+  const prompt = buildSelectionPrompt(question, sentences)
+
+  for (const model of resolveModelChain("basic")) {
+    const remainingMs = deadline - Date.now()
+    if (remainingMs < 400) break
+
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), Math.min(SELECTION_ATTEMPT_TIMEOUT_MS, remainingMs))
+
+    try {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          signal: controller.signal,
+          body: JSON.stringify({
+            systemInstruction: { parts: [{ text: SELECTION_SYSTEM_INSTRUCTION }] },
+            contents: [{ role: "user", parts: [{ text: prompt }] }],
+            generationConfig: {
+              ...buildGenerationConfig(model, 0),
+              maxOutputTokens: 256,
+              responseMimeType: "application/json",
+              responseSchema: {
+                type: "object",
+                properties: { ids: { type: "array", items: { type: "integer" } } },
+                required: ["ids"],
+              },
+            },
+          }),
+        }
+      )
+
+      if (!res.ok) {
+        warnGeminiCallIssue(model, "selection_http_error", {
+          status: res.status,
+          body: await readGeminiErrorSnippet(res),
+        })
+        continue
+      }
+
+      const data = (await res.json()) as { candidates?: { content?: { parts?: { text?: string }[] } }[] }
+      const text = data.candidates?.[0]?.content?.parts?.map((part) => part.text ?? "").join("")
+      const ids = parseSelectedSentenceIds(text, sentences.length)
+      if (ids === null) {
+        warnGeminiCallIssue(model, "selection_parse_error")
+        continue
+      }
+      return ids
+    } catch (error) {
+      warnGeminiCallIssue(model, "selection_request_error", {
+        error: error instanceof Error ? error.name : "unknown_error",
+      })
+      continue
+    } finally {
+      clearTimeout(timeout)
+    }
+  }
+
+  return null
+}
+
+// 분류·인텐트별 요구사항 문장. 스트리밍과 비스트리밍이 같은 문장을 쓴다.
+function pickFinalAnswerRequirement(category: string, intent?: string) {
+  if (category === "concern") {
+    return "요구사항: 고객의 막연한 고민(concern)에 대해 E.Q.E(공감 -> 유도 질문 1개 -> 격려와 희망) 프레임워크를 적용하여 따뜻하게 응대해줘. 스펙 위주 설명이나 강요하는 느낌을 주지 마."
+  }
+  if (category === "event") {
+    return "요구사항: 고객의 세미나/행사(event) 질문에 대해 RAG 정보에서 일정(시작/종료), 대상, 장소(위치)를 명확히 발췌해 안내하고, 홈페이지 /events 경로에서 신청하도록 유도해라. 만약 사용자가 직접 신청하는 데 헤매거나 대리 신청을 요구하여 이름, 연락처, 소속 학원명, 세미나명이 유저 메시지에 모두 제공되었다면 반드시 답변 맨 마지막에 정확히 `[LEAD_SUBMIT:name=이름,phone=연락처,org=학원명,event=행사명]` 토큰을 생성해라. 정보가 일부 누락되었다면 정중히 보완을 요구해라."
+  }
+  if (intent === "tutor_pricing_recommend") {
+    return "요구사항: 개인강사/과외 요금제 추천(tutor_pricing_recommend)은 공식 안내 기준으로 1인 강사에게 프로(Pro) 요금제를, 강사가 2명 이상인 학원에 비즈니스 요금제를 추천해라. 실제 금액·할인·결제 방식은 단정하지 말고 2주 무료 체험과 도입 상담으로 안내해라. 질문이 단답형이나 거칠더라도 친절하게 답하고, 학생 수나 수업 방식(대면·온라인)처럼 추천을 좁힐 정보 하나를 마지막에 물어라."
+  }
+  if (intent === "feature_limit_consulting") {
+    return "요구사항: 클래스인이 제공하지 못하는 기능(학원비 결제·수납·정산 기능, 오프라인 지문인식/출석 카드 장비 등)에 대한 질문이 들어왔을 때, 일체 지원하지 않음을 '~~는 지원하지 않습니다'의 어조로 솔직하고 단호하게 선을 그어 답해라. API 연동으로 가능할 것처럼 우회 설명하지 말고 담백하게 대답해라."
+  }
+  if (intent === "zoom_vs_classin") {
+    return "요구사항: 줌과의 비교(zoom_vs_classin)에 대해 수업 전(화면공유 준비 및 화면설정 불필요), 수업 중(학생이 판서에 참여하는 적극적 상호작용), 수업 후(수업 즉시 생성되는 플레이백 복습 비디오)의 3대 운영 흐름 메리트를 E.Q.E 프레임워크로 감성적이면서도 논리적으로 설명해라."
+  }
+  if (intent === "parent_feedback_consulting") {
+    return "요구사항: 학부모 피드백 리소스(parent_feedback_consulting)에 대해 고객이 단답형이나 매우 러프하게 툭 던져도 공감과 대화를 보완해 수렴해라. 강사가 수기로 작성하는 리포트 대신 클래스인이 자동 수집해 제공하는 EDB 참여도, AI 스피킹 점수 등의 정량적 리포트가 학부모 설득 및 원생 유지율(Retention) 제고에 어떻게 기여하며 강사 업무 시간을 극단적으로 아끼는지 E.Q.E 구조로 정중하게 답해라."
+  }
+  if (category === "onboarding" || intent === "onboarding") {
+    return "요구사항: 온보딩/데모 및 체험 신청(onboarding)에 대해, 사용자가 도입 사례/레퍼런스/후기/사용 학원을 물어보는 경우 국내 구체적인 학원 사례(청주 국어학원, 올***영어학원, 부산 과학학원, 대치 세** 학원 등) 및 글로벌 대학교/학습 사례를 언급하며 수업 OS로서 가져다준 변화를 짚고 상담/쇼룸을 권유해라. 만약 무료 체험이나 데모 신청을 원할 때는 바로 신청폼을 요구하지 말고 '맞춤 혜택 구성을 위한 간단한 규모/과목 상담 선행'을 안내한 뒤 질문하고, 최종 4대 정보 획득 시 `[LEAD_SUBMIT:name=이름,phone=연락처,org=학원명,event=체험신청_상담완료]` 토큰을 붙여라."
+  }
+  return "최종 고객 답변만 작성해줘. 문서, 출처, URL, 이미지 경로는 쓰지 마. 안전 초안의 확인 필요/미지원/상담 확인 문구를 가능/지원/기본 제공으로 완화하지 마."
+}
+
+/**
+ * 최종 답변 프롬프트(사용자 턴). generateGeminiFinalAnswer 와 streamGeminiFinalAnswer 가 함께 쓴다.
+ * 한쪽만 고쳐 두 경로의 답이 갈리는 일이 없도록 여기 한 곳에서만 조립한다.
+ */
+export function buildFinalAnswerPrompt({
+  question,
+  category,
+  intent,
+  answerMode,
+  draftAnswer,
+  sources = [],
+}: Pick<FinalGenerateArgs, "question" | "category" | "intent" | "answerMode" | "draftAnswer" | "sources">) {
+  // 근거가 약하면 그 문서 조각을 '검증 정보'로 넘기지 않는다(질문과 상관없는 조각일 가능성이 높다).
+  const weakGrounding = hasWeakGrounding(answerMode)
+  const context = weakGrounding ? "" : formatInternalContext(sources)
+  return [
+    `분류: ${category}`,
+    `현재 응답 모드: ${answerMode}`,
+    context ? `내부 검증 정보(사용자에게 직접 언급 금지):\n${context}` : "내부 검증 정보: 없음",
+    `안전 초안(제약 조건, 필요하면 표현만 다듬기):\n${sanitizeInternalContextText(draftAnswer)}`,
+    `고객 질문: ${question}`,
+    pickFinalAnswerRequirement(category, intent),
+    weakGrounding ? WEAK_GROUNDING_REQUIREMENT : GROUNDED_ANSWER_REQUIREMENT,
+    asksAboutThirdPartyAdoption(question) ? THIRD_PARTY_ADOPTION_REQUIREMENT : null,
+  ]
+    .filter(Boolean)
+    .join("\n\n")
+}
+
 export async function generateGeminiFinalAnswer({
   question,
   category,
@@ -428,34 +644,7 @@ export async function generateGeminiFinalAnswer({
 }: FinalGenerateArgs): Promise<string | null> {
   if (!getGeminiApiKey() || !question.trim()) return null
 
-  // 근거가 약하면 그 문서 조각을 '검증 정보'로 넘기지 않는다(질문과 상관없는 조각일 가능성이 높다).
-  const weakGrounding = hasWeakGrounding(answerMode)
-  const context = weakGrounding ? "" : formatInternalContext(sources)
-  const prompt = [
-    `분류: ${category}`,
-    `현재 응답 모드: ${answerMode}`,
-    context ? `내부 검증 정보(사용자에게 직접 언급 금지):\n${context}` : "내부 검증 정보: 없음",
-    `안전 초안(제약 조건, 필요하면 표현만 다듬기):\n${sanitizeInternalContextText(draftAnswer)}`,
-    `고객 질문: ${question}`,
-    category === "concern"
-      ? "요구사항: 고객의 막연한 고민(concern)에 대해 E.Q.E(공감 -> 유도 질문 1개 -> 격려와 희망) 프레임워크를 적용하여 따뜻하게 응대해줘. 스펙 위주 설명이나 강요하는 느낌을 주지 마."
-      : category === "event"
-      ? "요구사항: 고객의 세미나/행사(event) 질문에 대해 RAG 정보에서 일정(시작/종료), 대상, 장소(위치)를 명확히 발췌해 안내하고, 홈페이지 /events 경로에서 신청하도록 유도해라. 만약 사용자가 직접 신청하는 데 헤매거나 대리 신청을 요구하여 이름, 연락처, 소속 학원명, 세미나명이 유저 메시지에 모두 제공되었다면 반드시 답변 맨 마지막에 정확히 `[LEAD_SUBMIT:name=이름,phone=연락처,org=학원명,event=행사명]` 토큰을 생성해라. 정보가 일부 누락되었다면 정중히 보완을 요구해라."
-      : intent === "tutor_pricing_recommend"
-      ? "요구사항: 개인강사/과외 요금제 추천(tutor_pricing_recommend)은 공식 안내 기준으로 1인 강사에게 프로(Pro) 요금제를, 강사가 2명 이상인 학원에 비즈니스 요금제를 추천해라. 실제 금액·할인·결제 방식은 단정하지 말고 2주 무료 체험과 도입 상담으로 안내해라. 질문이 단답형이나 거칠더라도 친절하게 답하고, 학생 수나 수업 방식(대면·온라인)처럼 추천을 좁힐 정보 하나를 마지막에 물어라."
-      : intent === "feature_limit_consulting"
-      ? "요구사항: 클래스인이 제공하지 못하는 기능(학원비 결제·수납·정산 기능, 오프라인 지문인식/출석 카드 장비 등)에 대한 질문이 들어왔을 때, 일체 지원하지 않음을 '~~는 지원하지 않습니다'의 어조로 솔직하고 단호하게 선을 그어 답해라. API 연동으로 가능할 것처럼 우회 설명하지 말고 담백하게 대답해라."
-      : intent === "zoom_vs_classin"
-      ? "요구사항: 줌과의 비교(zoom_vs_classin)에 대해 수업 전(화면공유 준비 및 화면설정 불필요), 수업 중(학생이 판서에 참여하는 적극적 상호작용), 수업 후(수업 즉시 생성되는 플레이백 복습 비디오)의 3대 운영 흐름 메리트를 E.Q.E 프레임워크로 감성적이면서도 논리적으로 설명해라."
-      : intent === "parent_feedback_consulting"
-      ? "요구사항: 학부모 피드백 리소스(parent_feedback_consulting)에 대해 고객이 단답형이나 매우 러프하게 툭 던져도 공감과 대화를 보완해 수렴해라. 강사가 수기로 작성하는 리포트 대신 클래스인이 자동 수집해 제공하는 EDB 참여도, AI 스피킹 점수 등의 정량적 리포트가 학부모 설득 및 원생 유지율(Retention) 제고에 어떻게 기여하며 강사 업무 시간을 극단적으로 아끼는지 E.Q.E 구조로 정중하게 답해라."
-      : category === "onboarding" || intent === "onboarding"
-      ? "요구사항: 온보딩/데모 및 체험 신청(onboarding)에 대해, 사용자가 도입 사례/레퍼런스/후기/사용 학원을 물어보는 경우 국내 구체적인 학원 사례(청주 국어학원, 올***영어학원, 부산 과학학원, 대치 세** 학원 등) 및 글로벌 대학교/학습 사례를 언급하며 수업 OS로서 가져다준 변화를 짚고 상담/쇼룸을 권유해라. 만약 무료 체험이나 데모 신청을 원할 때는 바로 신청폼을 요구하지 말고 '맞춤 혜택 구성을 위한 간단한 규모/과목 상담 선행'을 안내한 뒤 질문하고, 최종 4대 정보 획득 시 `[LEAD_SUBMIT:name=이름,phone=연락처,org=학원명,event=체험신청_상담완료]` 토큰을 붙여라."
-      : "최종 고객 답변만 작성해줘. 문서, 출처, URL, 이미지 경로는 쓰지 마. 안전 초안의 확인 필요/미지원/상담 확인 문구를 가능/지원/기본 제공으로 완화하지 마.",
-    weakGrounding ? WEAK_GROUNDING_REQUIREMENT : null,
-  ]
-    .filter(Boolean)
-    .join("\n\n")
+  const prompt = buildFinalAnswerPrompt({ question, category, intent, answerMode, draftAnswer, sources })
 
   const userContent = { role: "user" as const, parts: [{ text: prompt }] }
   const contents = history && history.length > 0
@@ -577,34 +766,7 @@ export async function* streamGeminiFinalAnswer({
 }: FinalGenerateArgs): AsyncGenerator<string> {
   if (!getGeminiApiKey() || !question.trim()) return
 
-  // 근거가 약하면 그 문서 조각을 '검증 정보'로 넘기지 않는다(질문과 상관없는 조각일 가능성이 높다).
-  const weakGrounding = hasWeakGrounding(answerMode)
-  const context = weakGrounding ? "" : formatInternalContext(sources)
-  const prompt = [
-    `분류: ${category}`,
-    `현재 응답 모드: ${answerMode}`,
-    context ? `내부 검증 정보(사용자에게 직접 언급 금지):\n${context}` : "내부 검증 정보: 없음",
-    `안전 초안(제약 조건, 필요하면 표현만 다듬기):\n${sanitizeInternalContextText(draftAnswer)}`,
-    `고객 질문: ${question}`,
-    category === "concern"
-      ? "요구사항: 고객의 막연한 고민(concern)에 대해 E.Q.E(공감 -> 유도 질문 1개 -> 격려와 희망) 프레임워크를 적용하여 따뜻하게 응대해줘. 스펙 위주 설명이나 강요하는 느낌을 주지 마."
-      : category === "event"
-      ? "요구사항: 고객의 세미나/행사(event) 질문에 대해 RAG 정보에서 일정(시작/종료), 대상, 장소(위치)를 명확히 발췌해 안내하고, 홈페이지 /events 경로에서 신청하도록 유도해라. 만약 사용자가 직접 신청하는 데 헤매거나 대리 신청을 요구하여 이름, 연락처, 소속 학원명, 세미나명이 유저 메시지에 모두 제공되었다면 반드시 답변 맨 마지막에 정확히 `[LEAD_SUBMIT:name=이름,phone=연락처,org=학원명,event=행사명]` 토큰을 생성해라. 정보가 일부 누락되었다면 정중히 보완을 요구해라."
-      : intent === "tutor_pricing_recommend"
-      ? "요구사항: 개인강사/과외 요금제 추천(tutor_pricing_recommend)은 공식 안내 기준으로 1인 강사에게 프로(Pro) 요금제를, 강사가 2명 이상인 학원에 비즈니스 요금제를 추천해라. 실제 금액·할인·결제 방식은 단정하지 말고 2주 무료 체험과 도입 상담으로 안내해라. 질문이 단답형이나 거칠더라도 친절하게 답하고, 학생 수나 수업 방식(대면·온라인)처럼 추천을 좁힐 정보 하나를 마지막에 물어라."
-      : intent === "feature_limit_consulting"
-      ? "요구사항: 클래스인이 제공하지 못하는 기능(학원비 결제·수납·정산 기능, 오프라인 지문인식/출석 카드 장비 등)에 대한 질문이 들어왔을 때, 일체 지원하지 않음을 '~~는 지원하지 않습니다'의 어조로 솔직하고 단호하게 선을 그어 답해라. API 연동으로 가능할 것처럼 우회 설명하지 말고 담백하게 대답해라."
-      : intent === "zoom_vs_classin"
-      ? "요구사항: 줌과의 비교(zoom_vs_classin)에 대해 수업 전(화면공유 준비 및 화면설정 불필요), 수업 중(학생이 판서에 참여하는 적극적 상호작용), 수업 후(수업 즉시 생성되는 플레이백 복습 비디오)의 3대 운영 흐름 메리트를 E.Q.E 프레임워크로 감성적이면서도 논리적으로 설명해라."
-      : intent === "parent_feedback_consulting"
-      ? "요구사항: 학부모 피드백 리소스(parent_feedback_consulting)에 대해 고객이 단답형이나 매우 러프하게 툭 던져도 공감과 대화를 보완해 수렴해라. 강사가 수기로 작성하는 리포트 대신 클래스인이 자동 수집해 제공하는 EDB 참여도, AI 스피킹 점수 등의 정량적 리포트가 학부모 설득 및 원생 유지율(Retention) 제고에 어떻게 기여하며 강사 업무 시간을 극단적으로 아끼는지 E.Q.E 구조로 정중하게 답해라."
-      : category === "onboarding" || intent === "onboarding"
-      ? "요구사항: 온보딩/데모 및 체험 신청(onboarding)에 대해, 사용자가 도입 사례/레퍼런스/후기/사용 학원을 물어보는 경우 국내 구체적인 학원 사례(청주 국어학원, 올***영어학원, 부산 과학학원, 대치 세** 학원 등) 및 글로벌 대학교/학습 사례를 언급하며 수업 OS로서 가져다준 변화를 짚고 상담/쇼룸을 권유해라. 만약 무료 체험이나 데모 신청을 원할 때는 바로 신청폼을 요구하지 말고 '맞춤 혜택 구성을 위한 간단한 규모/과목 상담 선행'을 안내한 뒤 질문하고, 최종 4대 정보 획득 시 `[LEAD_SUBMIT:name=이름,phone=연락처,org=학원명,event=체험신청_상담완료]` 토큰을 붙여라."
-      : "최종 고객 답변만 작성해줘. 문서, 출처, URL, 이미지 경로는 쓰지 마. 안전 초안의 확인 필요/미지원/상담 확인 문구를 가능/지원/기본 제공으로 완화하지 마.",
-    weakGrounding ? WEAK_GROUNDING_REQUIREMENT : null,
-  ]
-    .filter(Boolean)
-    .join("\n\n")
+  const prompt = buildFinalAnswerPrompt({ question, category, intent, answerMode, draftAnswer, sources })
 
   const userContent = { role: "user" as const, parts: [{ text: prompt }] }
   const contents = history && history.length > 0 ? [...history, userContent] : [userContent]

@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { evaluateChatbotQuery } from "@/lib/chatbot/service"
 
+import { enableGenerateMode, stubFetchWithEvidenceSelection } from "./helpers/final-answer-llm"
+
 function disableExternalChatbotServices() {
   vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "")
   vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "")
@@ -146,6 +148,7 @@ describe("chatbot RAG source relevance", () => {
   it("uses Gemini inference for Classin questions without matching docs", async () => {
     disableExternalChatbotServices()
     vi.stubEnv("GEMINI_API_KEY", "test-gemini-key")
+    enableGenerateMode()
     vi.stubEnv("GEMINI_FAST_MODEL", "")
     vi.stubEnv("GEMINI_REASONING_MODEL", "")
     vi.stubEnv("GEMINI_MODEL", "")
@@ -167,7 +170,7 @@ describe("chatbot RAG source relevance", () => {
         ],
       }),
     })
-    vi.stubGlobal("fetch", fetchMock)
+    stubFetchWithEvidenceSelection(fetchMock)
 
     const result = await evaluateChatbotQuery("클래스인으로 플립러닝 설계도 가능해?")
 
@@ -192,6 +195,7 @@ describe("chatbot RAG source relevance", () => {
   it("ignores unsupported configured fast Gemini models and uses the stable default", async () => {
     disableExternalChatbotServices()
     vi.stubEnv("GEMINI_API_KEY", "test-gemini-key")
+    enableGenerateMode()
     vi.stubEnv("GEMINI_FAST_MODEL", "gemini-2.0-flash")
 
     const fetchMock = vi.fn().mockResolvedValue({
@@ -211,7 +215,7 @@ describe("chatbot RAG source relevance", () => {
         ],
       }),
     })
-    vi.stubGlobal("fetch", fetchMock)
+    stubFetchWithEvidenceSelection(fetchMock)
 
     const result = await evaluateChatbotQuery("클래스인으로 프로젝트형 수업도 가능해?")
     const generationCalls = fetchMock.mock.calls.filter(([url]) =>
@@ -228,6 +232,7 @@ describe("chatbot RAG source relevance", () => {
   it("falls back to stable Gemini after a configured primary returns empty output", async () => {
     disableExternalChatbotServices()
     vi.stubEnv("GEMINI_API_KEY", "test-gemini-key")
+    enableGenerateMode()
     vi.stubEnv("GEMINI_FAST_MODEL", "gemini-3.5-flash")
 
     let generationCount = 0
@@ -265,7 +270,7 @@ describe("chatbot RAG source relevance", () => {
         }),
       }
     })
-    vi.stubGlobal("fetch", fetchMock)
+    stubFetchWithEvidenceSelection(fetchMock)
 
     const result = await evaluateChatbotQuery("클래스인으로 세미나형 수업 운영 가능해?")
     const generationCalls = fetchMock.mock.calls.filter(([url]) =>
@@ -284,6 +289,7 @@ describe("chatbot RAG source relevance", () => {
   it("falls back to stable Gemini after a configured primary returns malformed JSON", async () => {
     disableExternalChatbotServices()
     vi.stubEnv("GEMINI_API_KEY", "test-gemini-key")
+    enableGenerateMode()
     vi.stubEnv("GEMINI_FAST_MODEL", "gemini-3.5-flash")
 
     let generationCount = 0
@@ -323,7 +329,7 @@ describe("chatbot RAG source relevance", () => {
         }),
       }
     })
-    vi.stubGlobal("fetch", fetchMock)
+    stubFetchWithEvidenceSelection(fetchMock)
 
     const result = await evaluateChatbotQuery("클래스인으로 논술형 수업 운영 가능해?")
     const generationCalls = fetchMock.mock.calls.filter(([url]) =>
@@ -340,6 +346,7 @@ describe("chatbot RAG source relevance", () => {
   it("escalates from fast Gemini to a deeper tier only when the fast answer is unusable", async () => {
     disableExternalChatbotServices()
     vi.stubEnv("GEMINI_API_KEY", "test-gemini-key")
+    enableGenerateMode()
     vi.stubEnv("GEMINI_FAST_MODEL", "")
     vi.stubEnv("GEMINI_REASONING_MODEL", "gemini-test-reasoning")
     vi.stubEnv("GEMINI_MODEL", "gemini-test-advanced")
@@ -382,7 +389,7 @@ describe("chatbot RAG source relevance", () => {
         }),
       }
     })
-    vi.stubGlobal("fetch", fetchMock)
+    stubFetchWithEvidenceSelection(fetchMock)
 
     const result = await evaluateChatbotQuery("클래스인으로 토론식 수업 설계도 가능해?")
     const generationCalls = fetchMock.mock.calls.filter(([url]) =>

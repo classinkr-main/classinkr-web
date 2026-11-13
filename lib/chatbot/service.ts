@@ -21,6 +21,7 @@ import {
   clampAnswerToLength,
   embedText,
   sanitizePublicAnswerText,
+  selectAnsweringSentenceIds,
   type ChatbotModelTier,
 } from "@/lib/chatbot/llm"
 import {
@@ -44,6 +45,7 @@ import {
 import { getCsFigmaEnrichment } from "@/lib/cs-figma-enrichments"
 import { appendFollowUp, buildFollowUp } from "@/lib/chatbot/follow-up"
 import { findBasicQuickAnswers } from "@/lib/chatbot/quick-answers-basics"
+import { attachGroundingText, buildEvidenceSentences, type EvidenceSentence } from "@/lib/chatbot/source-grounding"
 import { findFieldQuickAnswer } from "@/lib/chatbot/quick-answers-field"
 import { resolveSymptomTriage, type SymptomTriageResult } from "@/lib/chatbot/symptom-triage"
 import {
@@ -71,7 +73,7 @@ const DEFAULT_FINAL_ANSWER_TIMEOUT_MS = 6_000
 const DEFAULT_FINAL_ANSWER_STREAM_TIMEOUT_MS = 8_000
 const RETRIEVAL_CACHE_TTL_MS = 5 * 60 * 1000
 const RETRIEVAL_CACHE_MAX = 200
-const RETRIEVAL_CACHE_VERSION = "rag-rerank-20261113-v7"
+const RETRIEVAL_CACHE_VERSION = "rag-rerank-20261113-v8"
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const CHAT_SESSION_CHANNELS = new Set(["web", "admin_preview", "partner_portal", "manual_import"])
 const PROGRESSIVE_MODEL_TIERS: ChatbotModelTier[] = ["basic", "reasoning", "advanced"]
@@ -149,6 +151,11 @@ interface KnowledgeSearchResult {
   sources: ChatbotSource[]
   warning?: string
   cacheHit?: boolean
+  /**
+   * 근거 선별용 후보. sources 는 답·출처 카드용으로 2개(문서당 1개)만 남기지만,
+   * 답이 같은 문서의 다른 섹션이나 3~5위 문서에 있는 경우가 많아 선별에는 더 넓게 넘긴다.
+   */
+  evidencePool?: ChatbotSource[]
 }
 
 interface SupabaseDocsArticle {
@@ -322,7 +329,7 @@ interface CachedAnswerEntry {
   warning?: string
 }
 
-const ANSWER_CACHE_VERSION = "answer-20261113-v8"
+const ANSWER_CACHE_VERSION = "answer-20261113-v9"
 const ANSWER_CACHE_TTL_MS = 5 * 60 * 1000
 const ANSWER_CACHE_MAX = 200
 const answerCache = new Map<string, { expiresAt: number; value: CachedAnswerEntry }>()
@@ -1900,15 +1907,21 @@ async function getFallbackDocs() {
   }
 }
 
-function buildStaticSources(question: NormalizedQuestion, docs: DocArticle[]): ChatbotSource[] {
+// 정적 문서의 요약·섹션을 점수순으로 늘어놓는다(점수 0 제외). 최종 출처와 근거 선별 후보가 이 목록을 함께 쓴다.
+function scoreStaticSources(question: NormalizedQuestion, docs: DocArticle[]): ChatbotSource[] {
   const sources = docs.flatMap((doc) => {
-    const summarySource = {
-      title: doc.title,
-      heading: "요약",
-      urlPath: getDocPath(doc),
-      category: getDocCategory(doc),
-      excerpt: compactText([doc.description, doc.chatbotSummary].join(" ")),
-    }
+    const summaryText = [doc.description, doc.chatbotSummary].join(" ")
+    // excerpt 는 220자 요약이고, 모델 근거로는 문장이 온전한 본문을 따로 붙인다(source-grounding.ts).
+    const summarySource = attachGroundingText(
+      {
+        title: doc.title,
+        heading: "요약",
+        urlPath: getDocPath(doc),
+        category: getDocCategory(doc),
+        excerpt: compactText(summaryText),
+      },
+      summaryText
+    )
 
     const summaryScore = scoreText(question, summarySource, [
       ...doc.tags,
@@ -1917,15 +1930,17 @@ function buildStaticSources(question: NormalizedQuestion, docs: DocArticle[]): C
     ])
 
     const sectionSources = doc.sections.map((section) => {
-      const source = {
-        title: doc.title,
-        heading: section.heading,
-        urlPath: getDocPath(doc),
-        category: getDocCategory(doc),
-        excerpt: compactText(
-          [section.body, ...(section.steps ?? [])].join(" "),
-        ),
-      }
+      const sectionText = [section.body, ...(section.steps ?? [])].join(" ")
+      const source = attachGroundingText(
+        {
+          title: doc.title,
+          heading: section.heading,
+          urlPath: getDocPath(doc),
+          category: getDocCategory(doc),
+          excerpt: compactText(sectionText),
+        },
+        sectionText
+      )
 
       return {
         ...source,
@@ -1939,11 +1954,17 @@ function buildStaticSources(question: NormalizedQuestion, docs: DocArticle[]): C
     ]
   })
 
-  return selectDiverseSources(
-    sources
-      .filter((source) => source.score > 0)
-      .sort((left, right) => right.score - left.score)
-  )
+  return sources
+    .filter((source) => source.score > 0)
+    .sort((left, right) => right.score - left.score)
+}
+
+const EVIDENCE_POOL_SIZE = 5
+const EVIDENCE_POOL_PER_DOC = 2
+
+// 근거 선별 후보: 점수순 상위 5개, 문서당 2개까지.
+function buildEvidencePool(rankedSources: ChatbotSource[]) {
+  return selectDiverseSources(rankedSources, EVIDENCE_POOL_SIZE, EVIDENCE_POOL_PER_DOC)
 }
 
 async function keywordSearchSupabaseSources(
@@ -1993,15 +2014,18 @@ async function keywordSearchSupabaseSources(
           : row.docs_articles
         if (!article) return null
 
-        const source: Omit<ChatbotSource, "score"> = {
-          articleId: article.id,
-          chunkId: row.id,
-          title: article.title,
-          heading: row.heading ?? undefined,
-          urlPath: article.canonical_path ?? `/docs/${article.category_id}/${article.slug}`,
-          category: getSourceCategoryFromDocCategory(article.category_id),
-          excerpt: compactText(row.content),
-        }
+        const source: Omit<ChatbotSource, "score"> = attachGroundingText(
+          {
+            articleId: article.id,
+            chunkId: row.id,
+            title: article.title,
+            heading: row.heading ?? undefined,
+            urlPath: article.canonical_path ?? `/docs/${article.category_id}/${article.slug}`,
+            category: getSourceCategoryFromDocCategory(article.category_id),
+            excerpt: compactText(row.content),
+          },
+          row.content
+        )
 
         return {
           ...source,
@@ -2086,17 +2110,20 @@ async function vectorSearchSupabaseSources(
       .filter((row) => row.similarity >= VECTOR_SIMILARITY_FLOOR)
       .map((row) => {
         const visibility = resolveMatchChunkVisibility(row)
-        return {
-          articleId: row.article_id,
-          chunkId: row.id,
-          title: row.title,
-          heading: row.heading ?? undefined,
-          urlPath: row.canonical_path ?? `/docs/${row.category_id}/${row.slug}`,
-          category: getSourceCategoryFromDocCategory(row.category_id),
-          excerpt: compactText(row.content),
-          score: Math.max(1, row.similarity * 80),
-          ...(visibility ? { visibility } : {}),
-        }
+        return attachGroundingText(
+          {
+            articleId: row.article_id,
+            chunkId: row.id,
+            title: row.title,
+            heading: row.heading ?? undefined,
+            urlPath: row.canonical_path ?? `/docs/${row.category_id}/${row.slug}`,
+            category: getSourceCategoryFromDocCategory(row.category_id),
+            excerpt: compactText(row.content),
+            score: Math.max(1, row.similarity * 80),
+            ...(visibility ? { visibility } : {}),
+          },
+          row.content
+        )
       })
       .sort((left, right) => right.score - left.score)
 
@@ -2157,24 +2184,22 @@ async function clientVectorSearchSupabaseSources(embedding: number[]): Promise<C
 async function searchSupabaseSources(
   question: NormalizedQuestion,
   options?: RetrievalOptions
-): Promise<ChatbotSource[]> {
+): Promise<{ sources: ChatbotSource[]; evidencePool: ChatbotSource[] }> {
   const keywordPromise = keywordSearchSupabaseSources(question, options)
   const embedding = await embedText(buildRetrievalQueryText(question), "RETRIEVAL_QUERY")
   const vectorSources = embedding
     ? await vectorSearchSupabaseSources(question, embedding, options)
     : []
   const keywordSources = await keywordPromise
-  const combined = selectDiverseSources(
-    rerankSources(question, mergeScoredSources([...vectorSources, ...keywordSources]))
-  )
+  const ranked = rerankSources(question, mergeScoredSources([...vectorSources, ...keywordSources]))
+  const combined = selectDiverseSources(ranked)
 
-  if (combined.length > 0) return combined
+  if (combined.length > 0) return { sources: combined, evidencePool: buildEvidencePool(ranked) }
 
-  if (!embedding) return []
+  if (!embedding) return { sources: [], evidencePool: [] }
 
-  return selectDiverseSources(
-    rerankSources(question, await clientVectorSearchSupabaseSources(embedding))
-  )
+  const clientRanked = rerankSources(question, await clientVectorSearchSupabaseSources(embedding))
+  return { sources: selectDiverseSources(clientRanked), evidencePool: buildEvidencePool(clientRanked) }
 }
 
 async function searchKnowledgeSources(
@@ -2224,18 +2249,24 @@ async function searchKnowledgeSources(
     }
   }
 
-  const supabaseSources = await searchSupabaseSources(question, options)
-  if (supabaseSources.length > 0) {
-    const result = { sources: mergeCuratedSources(question, supabaseSources), warning: undefined }
+  const supabaseResult = await searchSupabaseSources(question, options)
+  if (supabaseResult.sources.length > 0) {
+    const result = {
+      sources: mergeCuratedSources(question, supabaseResult.sources),
+      evidencePool: supabaseResult.evidencePool,
+      warning: undefined,
+    }
     setCachedRetrieval(question, result, options)
     return result
   }
 
   const fallbackDocs = await getFallbackDocs()
-  const staticSources = buildStaticSources(question, fallbackDocs)
+  const scoredStaticSources = scoreStaticSources(question, fallbackDocs)
+  const staticSources = selectDiverseSources(scoredStaticSources)
 
   const result = {
     sources: mergeCuratedSources(question, staticSources),
+    evidencePool: buildEvidencePool(scoredStaticSources),
     warning: hasSupabaseServerEnv()
       ? "Supabase 문서 chunk 검색 결과가 없어 문서 원문 fallback을 사용했습니다."
       : "Supabase 환경변수가 없어 정적 문서 fallback을 사용했습니다.",
@@ -2248,9 +2279,11 @@ function getTimedOutKnowledgeFallback(
   question: NormalizedQuestion,
   options?: RetrievalOptions
 ): KnowledgeSearchResult {
-  const staticSources = buildStaticSources(question, getFallbackDocsFromStatic())
+  const scoredStaticSources = scoreStaticSources(question, getFallbackDocsFromStatic())
+  const staticSources = selectDiverseSources(scoredStaticSources)
   const result = {
     sources: mergeCuratedSources(question, staticSources),
+    evidencePool: buildEvidencePool(scoredStaticSources),
     warning: "문서 검색 응답이 지연되어 정적 문서 fallback을 사용했습니다.",
   }
   setCachedRetrieval(question, result, options)
@@ -2971,6 +3004,7 @@ function formatConsumerAnswer({
   question,
   top,
   internal,
+  meta,
 }: {
   answerMode: AnswerMode
   category: string
@@ -2978,6 +3012,8 @@ function formatConsumerAnswer({
   top: ChatbotSource
   /** 내부 CS 코파일럿 경로. 초안이 담당자에게 근거로 전달되므로 약한 문서 조각도 그대로 요약해 준다. */
   internal?: boolean
+  /** 정해 둔 문장이 아니라 검색 조각(발췌)으로 초안을 만들었으면 fromExcerpt 를 켠다. */
+  meta?: { fromExcerpt: boolean }
 }) {
   if (
     isHardwareUnconfirmedDetailQuestion(question) &&
@@ -3074,10 +3110,7 @@ function formatConsumerAnswer({
     return getCoreFeatureYesNoAnswer(question)
   }
 
-  const caution =
-    answerMode === "handoff"
-      ? "이 내용은 실제 계정, 계약, 장비 상태, 도입 조건에 따라 달라질 수 있어 상담으로 확인하는 편이 안전합니다."
-      : ""
+  const caution = answerMode === "handoff" ? HANDOFF_CAUTION_LINE : ""
   // 문서 섹션의 메타성 제목(예: "이 문서는 지도입니다")이 답변 앞에 새지 않게 거른다.
   const isMetaHeading = /^이\s*문서|지도입니다|^목차|개요만\s*보기/.test(top.heading ?? "")
   const headingText = top.heading?.trim() ?? ""
@@ -3088,6 +3121,8 @@ function formatConsumerAnswer({
     headingText.length > 0 && normalizedExcerpt.startsWith(headingText.replace(/\s+/g, " ").toLowerCase())
   // 검색 발췌는 220자에서 잘려 "..."로 끝날 수 있다 — 문장 끝까지만 쓰고, "제목: " 접두어는 붙이지 않는다.
   const sentenceSafeExcerpt = trimExcerptToSentence(top.excerpt)
+  // 여기부터는 정해 둔 문장이 아니라 검색 조각으로 만드는 초안이다. 근거 선별이 이 초안만 바꿔 쓴다.
+  if (meta) meta.fromExcerpt = true
   // 약한 출처(doc_suggestion): 공개 경로는 조각을 붙이지 않고 못 찾았다고 밝힌다. 내부 코파일럿만 조각을 요약해 넘긴다.
   if (answerMode === "doc_suggestion" && !internal) return WEAK_SOURCE_DRAFT_ANSWER
   // direct_answer/handoff 는 발췌를 그대로 쓴다.
@@ -3130,6 +3165,12 @@ function isVagueGeneratedAnswer(answer: string) {
 
   return vaguePatterns.some((pattern) => pattern.test(normalized))
 }
+
+// 정해 둔 문장이 아니라 검색 조각(발췌)으로 만든 초안. 근거 선별은 이 초안만 바꿔 쓴다.
+const excerptDraftResponses = new WeakSet<object>()
+
+const HANDOFF_CAUTION_LINE =
+  "이 내용은 실제 계정, 계약, 장비 상태, 도입 조건에 따라 달라질 수 있어 상담으로 확인하는 편이 안전합니다."
 
 function composeAnswer(
   question: NormalizedQuestion,
@@ -3199,9 +3240,10 @@ function composeAnswer(
       ? "direct_answer"
       : "doc_suggestion"
 
-  const answer = formatConsumerAnswer({ answerMode, category, question, top, internal: options.internal })
+  const draftMeta = { fromExcerpt: false }
+  const answer = formatConsumerAnswer({ answerMode, category, question, top, internal: options.internal, meta: draftMeta })
 
-  return {
+  const response = {
     answer,
     answerMode,
     confidence,
@@ -3210,6 +3252,8 @@ function composeAnswer(
     suggestedQuestions: buildSuggestedQuestions(category),
     unresolved: answerMode === "handoff" || answerMode === "doc_suggestion",
   }
+  if (draftMeta.fromExcerpt) excerptDraftResponses.add(response)
+  return response
 }
 
 function normalizeOptionalUuid(value: unknown) {
@@ -3632,6 +3676,8 @@ interface ChatbotCore {
   topicId?: string
   /** 정해 둔 답이 이미 필요한 것을 묻거나 안내하면 영업용 되묻기(규모·도입 시기)를 붙이지 않는다. */
   suppressSalesFollowUp?: boolean
+  /** 근거 선별용 후보 출처(스트리밍 경로가 코어 뒤에서 선별할 때 쓴다). 응답에는 싣지 않는다. */
+  evidencePool?: ChatbotSource[]
 }
 
 interface BuildChatbotCoreOptions {
@@ -4305,11 +4351,154 @@ function isCuratedTemplateQuestion(question: NormalizedQuestion) {
   )
 }
 
+// 최종 답변에 모델을 어떻게 쓸지 정하는 운영 스위치(CHATBOT_FINAL_ANSWER_LLM). 검색과 임베딩은 어느 값에서나 그대로 쓴다.
+// - select(기본): 모델은 문서에서 답이 되는 문장만 고르고, 답은 그 문장 그대로 나간다. 답 문장이 없으면 못 찾았다고 답한다.
+// - generate: 고른 문장을 근거로 모델이 답을 다시 쓴다(상담 말투). 근거 밖 내용이 섞일 수 있다.
+// - off: 모델을 쓰지 않는다. 정해 둔 답과 문서 요약 초안만 나간다.
+// 기본값을 select 로 둔 근거는 docs/active/chatbot-first-contact-audit-2026-11-13.md 의 측정 결과다.
+type FinalAnswerLlmMode = "select" | "generate" | "off"
+
+function getFinalAnswerLlmMode(): FinalAnswerLlmMode {
+  const value = process.env.CHATBOT_FINAL_ANSWER_LLM?.trim().toLowerCase()
+  if (value === "off") return "off"
+  if (value === "generate") return "generate"
+  return "select"
+}
+
+type EvidenceSelectionOutcome =
+  // skipped: 선별 대상이 아님(정해 둔 초안·상담 연결·출처 없음) / failed: 모델 호출 실패 / not_found: 답 문장 없음
+  | { status: "skipped" | "failed" | "not_found" }
+  | { status: "selected"; evidenceSources: ChatbotSource[] }
+
+// 고른 문장을 그대로 이어 붙인 답의 길이 상한. 절차가 중간에 잘리지 않게 모델 답(520자)보다 넉넉히 둔다.
+const MAX_SELECTED_ANSWER_LENGTH = 640
+// generate 모드는 선별 뒤에 답 생성이 이어지므로, 라우트 예산(13초) 안에 들도록 선별 예산을 줄인다.
+const GENERATE_MODE_SELECTION_TIMEOUT_MS = 2_000
+
+function getSourceKey(source: ChatbotSource) {
+  return source.chunkId ?? `${source.urlPath}:${source.heading ?? ""}`
+}
+
+// 최종 출처(답·초안의 근거)를 앞에 두고, 검색이 넘긴 후보를 겹치지 않게 뒤에 붙인다.
+function buildEvidenceCandidates(sources: ChatbotSource[], evidencePool: ChatbotSource[] = []) {
+  const seen = new Set<string>()
+  const candidates: ChatbotSource[] = []
+  for (const source of [...sources, ...evidencePool]) {
+    const key = getSourceKey(source)
+    if (seen.has(key)) continue
+    seen.add(key)
+    candidates.push(source)
+    if (candidates.length >= EVIDENCE_POOL_SIZE) break
+  }
+  return candidates
+}
+
+// 고른 문장을 문서에 있던 순서대로 잇는다. 같은 출처에서 바로 이어지는 문장은 한 문단으로 묶는다.
+function formatSelectedEvidenceAnswer(
+  picked: EvidenceSentence[],
+  question: NormalizedQuestion,
+  category: string,
+  answerMode: AnswerMode
+) {
+  const paragraphs: string[] = []
+  let current: EvidenceSentence[] = []
+  for (const sentence of picked) {
+    const previous = current.at(-1)
+    if (previous && (previous.sourceIndex !== sentence.sourceIndex || sentence.id !== previous.id + 1)) {
+      paragraphs.push(current.map((item) => item.text).join(" "))
+      current = []
+    }
+    current.push(sentence)
+  }
+  if (current.length > 0) paragraphs.push(current.map((item) => item.text).join(" "))
+
+  const body = clampAnswerToLength(paragraphs.join("\n\n"), MAX_SELECTED_ANSWER_LENGTH)
+  const nextStep = getContextualNextStep(question, category)
+  return [body, answerMode === "handoff" ? HANDOFF_CAUTION_LINE : null, nextStep ? `다음으로는 ${nextStep}` : null]
+    .filter(Boolean)
+    .join("\n\n")
+}
+
+/**
+ * 근거 선별. 검색 조각으로 만든 초안에만 적용한다.
+ * - 답이 되는 문장이 있으면 그 문장으로 답을 바꾸고(문서 문장 그대로), 답에 쓴 문서만 출처로 남긴다.
+ * - 없으면 엉뚱한 조각을 답으로 내보내지 않고 못 찾았다고 밝힌다(unresolved 로 남아 문서 보강 대상이 된다).
+ * - 모델 호출이 실패하면 초안을 그대로 둔다.
+ */
+async function applyEvidenceSelection(
+  response: Omit<ChatbotQueryResponse, "answerEventId" | "sessionId" | "warning" | "handoffIntent">,
+  question: NormalizedQuestion,
+  category: string,
+  evidencePool: ChatbotSource[] | undefined,
+  timeoutMs?: number
+): Promise<EvidenceSelectionOutcome> {
+  if (!excerptDraftResponses.has(response)) return { status: "skipped" }
+  const isHandoff = response.answerMode === "handoff"
+  if (response.answerMode !== "direct_answer" && response.answerMode !== "doc_suggestion" && !isHandoff) {
+    return { status: "skipped" }
+  }
+
+  const candidates = buildEvidenceCandidates(response.sources, evidencePool)
+  const sentences = buildEvidenceSentences(candidates)
+  if (sentences.length === 0) return { status: "skipped" }
+
+  const ids = await selectAnsweringSentenceIds({ question: question.redacted, sentences, timeoutMs })
+  if (ids === null) return { status: "failed" }
+
+  if (ids.length === 0) {
+    if (isHandoff) {
+      // 상담을 청한 질문인데 붙일 문서 문장이 없으면, 엉뚱한 조각 대신 출처 없는 상담 연결 답으로 바꾼다.
+      const withoutSources = composeAnswer(question, [], category)
+      response.answer = withoutSources.answer
+      response.confidence = withoutSources.confidence
+      response.sources = []
+      return { status: "not_found" }
+    }
+    response.answer = WEAK_SOURCE_DRAFT_ANSWER
+    response.answerMode = "doc_suggestion"
+    response.confidence = Math.min(response.confidence, 0.3)
+    response.needsHandoff = false
+    response.unresolved = true
+    response.sources = []
+    return { status: "not_found" }
+  }
+
+  const picked = sentences.filter((sentence) => ids.includes(sentence.id))
+  const usedIndexes = Array.from(new Set(picked.map((sentence) => sentence.sourceIndex)))
+  // generate 모드에서 모델에게 넘길 근거. 고른 문장만 담아, 고르지 않은 문장을 끌어다 쓰지 않게 한다.
+  const evidenceSources = usedIndexes.map((index) =>
+    attachGroundingText(
+      { ...candidates[index] },
+      picked
+        .filter((sentence) => sentence.sourceIndex === index)
+        .map((sentence) => sentence.text)
+        .join(" ")
+    )
+  )
+
+  response.answer = formatSelectedEvidenceAnswer(picked, question, category, response.answerMode)
+  response.sources = usedIndexes.map((index) => candidates[index]).slice(0, MAX_SOURCES)
+  // 상담 연결 답은 모드와 연결 표시를 그대로 두고 본문만 바꾼다.
+  if (!isHandoff) {
+    response.answerMode = "direct_answer"
+    response.confidence = Math.max(response.confidence, 0.72)
+    response.needsHandoff = false
+    response.unresolved = false
+  }
+  return { status: "selected", evidenceSources }
+}
+
+// generate 모드에서만 모델이 답을 다시 쓴다. 답 문장을 못 찾았거나 선별 호출이 실패했으면 쓰지 않는다.
+function shouldGenerateAfterSelection(mode: FinalAnswerLlmMode, selection: EvidenceSelectionOutcome) {
+  return mode === "generate" && (selection.status === "selected" || selection.status === "skipped")
+}
+
 function shouldUseAiFinalAnswer(
   response: Omit<ChatbotQueryResponse, "answerEventId" | "sessionId" | "warning" | "handoffIntent">,
   question: NormalizedQuestion,
   category: string
 ) {
+  if (getFinalAnswerLlmMode() === "off") return false
   if (deterministicFinalResponses.has(response)) return false
   if (category === "general" && !isDomainRelatedQuestion(question, category)) return false
   if (wantsImmediateHumanHandoff(question)) return false
@@ -4752,7 +4941,7 @@ async function buildChatbotCoreBase(
       ? loadSessionHistory(options.sessionId, options.anonymousId)
       : Promise.resolve([])
 
-  const { sources, warning, cacheHit } = await searchKnowledgeSourcesWithinBudget(question, options)
+  const { sources, warning, cacheHit, evidencePool } = await searchKnowledgeSourcesWithinBudget(question, options)
   const classificationSources = sources.filter((source) => source.score >= MIN_DIRECT_SOURCE_SCORE)
   const { category, intent, handoffIntent } = classifyChatbotQuestion(
     question.redacted,
@@ -4761,28 +4950,40 @@ async function buildChatbotCoreBase(
   const response = composeAnswer(question, sources, category, { internal: options.includeInternalDocs === true })
 
   if (shouldGenerateAnswer && shouldUseAiFinalAnswer(response, question, category)) {
-    const history = await historyPromise
-    const finalAnswer = await withTimeoutFallback({
-      promise: generateUsableAnswerWithProgressiveModels((tier) =>
-        generateGeminiFinalAnswer({
-          question: question.redacted,
-          category,
-          intent,
-          answerMode: response.answerMode,
-          draftAnswer: response.answer,
-          sources: response.sources,
-          tier,
-          history,
-        })
-      ),
-      timeoutMs: getFinalAnswerTimeoutMs(),
-      fallback: () => null,
-      onTimeout: () => {
-        console.warn("[chatbot] final answer generation timed out; using deterministic draft.")
-      },
-    })
-    if (finalAnswer) {
-      applyGeneratedFinalAnswer(response, question, category, finalAnswer)
+    const llmMode = getFinalAnswerLlmMode()
+    const selection = await applyEvidenceSelection(
+      response,
+      question,
+      category,
+      evidencePool,
+      llmMode === "generate" ? GENERATE_MODE_SELECTION_TIMEOUT_MS : undefined
+    )
+
+    if (shouldGenerateAfterSelection(llmMode, selection)) {
+      const history = await historyPromise
+      const generationSources = selection.status === "selected" ? selection.evidenceSources : response.sources
+      const finalAnswer = await withTimeoutFallback({
+        promise: generateUsableAnswerWithProgressiveModels((tier) =>
+          generateGeminiFinalAnswer({
+            question: question.redacted,
+            category,
+            intent,
+            answerMode: response.answerMode,
+            draftAnswer: response.answer,
+            sources: generationSources,
+            tier,
+            history,
+          })
+        ),
+        timeoutMs: getFinalAnswerTimeoutMs(),
+        fallback: () => null,
+        onTimeout: () => {
+          console.warn("[chatbot] final answer generation timed out; using deterministic draft.")
+        },
+      })
+      if (finalAnswer) {
+        applyGeneratedFinalAnswer(response, question, category, finalAnswer)
+      }
     }
   }
 
@@ -4802,6 +5003,7 @@ async function buildChatbotCoreBase(
     warning,
     latencyMs: elapsedSince(startedAt),
     retrievalCacheHit: cacheHit,
+    evidencePool,
   }
 }
 
@@ -4900,6 +5102,7 @@ async function streamAndApplyFinalAnswer({
   response,
   historyPromise,
   emit,
+  sources,
 }: {
   question: NormalizedQuestion
   category: string
@@ -4907,6 +5110,8 @@ async function streamAndApplyFinalAnswer({
   response: Omit<ChatbotQueryResponse, "answerEventId" | "sessionId" | "warning" | "handoffIntent">
   historyPromise: Promise<{ role: "user" | "model"; parts: { text: string }[] }[]>
   emit: (event: ChatbotStreamEvent) => void
+  /** 근거 선별이 고른 문장만 담은 출처. 없으면 응답의 출처를 그대로 쓴다. */
+  sources?: ChatbotSource[]
 }): Promise<boolean> {
   const history = await historyPromise
   let raw = ""
@@ -4930,7 +5135,7 @@ async function streamAndApplyFinalAnswer({
         intent,
         answerMode: response.answerMode,
         draftAnswer: response.answer,
-        sources: response.sources,
+        sources: sources ?? response.sources,
         tier: "basic",
         history,
       })) {
@@ -5041,8 +5246,30 @@ export async function streamChatbotQuery(
   // 이 경우 AI 재작성을 적용하면 안 된다 — handleChatbotQuery 의 조기 반환 의미와 동일하게 맞춘다.
   const isShortCircuited = isGreetingOnly(question) || Boolean(buildPolicyGuardResponse(question))
   if (!isShortCircuited && shouldUseAiFinalAnswer(response, question, category)) {
-    await streamAndApplyFinalAnswer({ question, category, intent, response, historyPromise, emit })
-    applyConversationTone(core)
+    const llmMode = getFinalAnswerLlmMode()
+    const selection = await applyEvidenceSelection(
+      response,
+      question,
+      category,
+      core.evidencePool,
+      llmMode === "generate" ? GENERATE_MODE_SELECTION_TIMEOUT_MS : undefined
+    )
+
+    if (shouldGenerateAfterSelection(llmMode, selection)) {
+      await streamAndApplyFinalAnswer({
+        question,
+        category,
+        intent,
+        response,
+        historyPromise,
+        emit,
+        sources: selection.status === "selected" ? selection.evidenceSources : undefined,
+      })
+      applyConversationTone(core)
+    } else if (selection.status === "selected" || selection.status === "not_found") {
+      // 선별이 답을 바꿨으면 말투·끝 질문 층을 새 답에 다시 입힌다.
+      applyConversationTone(core)
+    }
   }
   const handoffIntent = core.handoffIntent
 

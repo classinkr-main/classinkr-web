@@ -169,6 +169,8 @@ export function buildFollowUp(input: FollowUpInput): string | null {
   const { tone } = input
   if (tone.angry || tone.repeated || tone.english) return null
   if (input.answerMode === "clarifying_question" || input.answerMode === "fallback") return null
+  // 공개 경로의 doc_suggestion 은 "딱 맞는 안내를 찾지 못했다"는 답이다. 못 찾았다고 한 뒤에 규모·도입 시기를 묻지 않는다.
+  if (input.answerMode === "doc_suggestion") return null
   if (input.intent === "self_knowledge") return null
   if (OWN_LINES.some((line) => input.answer.includes(line))) return null
   if (input.topicFollowUp && input.answer.includes(input.topicFollowUp)) return null

@@ -50,6 +50,8 @@ Admin 관련 작업은 [Admin 지침 맵](./active/admin-guidance-map.md)에서 
   - 문서/정보 탭 기반 챗봇 지식베이스와 FAQ 통계 설계
 - [active/chatbot-cs-symptom-triage-2026-11-06.md](./active/chatbot-cs-symptom-triage-2026-11-06.md)
   - **챗봇 증상형 CS 질문 트리아지.** "기관 등록 안됨", "에러나요" 같은 증상 질문을 공개 문제 해결 문서 섹션으로 잇는 규칙, 4회 평가 루프 수치(기준선 32% → 블라인드 43/43), 평가셋·커버리지 검사 재실행 방법
+- [active/chatbot-first-contact-audit-2026-11-13.md](./active/chatbot-first-contact-audit-2026-11-13.md)
+  - **챗봇 첫 방문자 질문 점검.** 이상 답변 화면 11장의 원인(종료된 모델, 낱말 하나로 정한 주제, 잘린 근거), 기본 사실 답 68개와 근거 선별(모델은 문서 문장만 고름) 도입, 방식별 측정 수치(첫 방문자 질문 좋은 답 24% → 95%, 모델이 쓴 답의 근거 밖 단정 51%), `CHATBOT_FINAL_ANSWER_LLM` 스위치, 확인이 필요한 답 기준
 - [active/docs-center-content-guidelines.md](./active/docs-center-content-guidelines.md)
   - 공개 문서 탭의 가이드/매뉴얼/도움말 작성 지침과 미완성 콘텐츠 처리 규칙
 - [active/classin-software-feature-inventory.md](./active/classin-software-feature-inventory.md)
