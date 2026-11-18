@@ -93,11 +93,14 @@ export async function checkPreparedAnswer({
   question,
   answer,
   original,
+  timeoutMs: budgetMs,
 }: {
   /** PII 가 제거된 질문 */
   question: string
   answer: string
   original: string
+  /** 판정 예산(ms). 비우면 CHATBOT_ANSWER_GATE_TIMEOUT_MS(기본 3000)를 쓴다. 남은 요청 시간이 짧은 호출부가 줄여 준다. */
+  timeoutMs?: number
 }): Promise<AnswerGateTrace> {
   const disabled = getAnswerGateDisabledReason()
   if (disabled) return { gate: "skipped", gateOriginal: original, gateMs: 0, skipReason: disabled }
@@ -109,7 +112,7 @@ export async function checkPreparedAnswer({
     return { gate: cached === "off_target" ? "rejected" : "kept", gateOriginal: original, gateMs: Date.now() - startedAt }
   }
 
-  const timeoutMs = getAnswerGateTimeoutMs()
+  const timeoutMs = budgetMs !== undefined ? Math.min(budgetMs, getAnswerGateTimeoutMs()) : getAnswerGateTimeoutMs()
   let result: Awaited<ReturnType<typeof judgePreparedAnswerFit>> = null
   let timedOut = false
   try {

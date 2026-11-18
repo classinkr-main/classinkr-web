@@ -9,7 +9,12 @@ import {
 } from "@/lib/chatbot/service"
 import { attachGroundingText, buildEvidenceSentences, splitIntoSentences } from "@/lib/chatbot/source-grounding"
 
-import { enableGenerateMode, isEvidenceSelectionCall, stubEvidenceSelection } from "./helpers/final-answer-llm"
+import {
+  enableGenerateMode,
+  isEvidenceSelectionCall,
+  isOutlinePickCall,
+  stubEvidenceSelection,
+} from "./helpers/final-answer-llm"
 
 // 2026-11-13: 모델이 쓴 답을 근거와 대조하니, 문서에 답 문장이 없을 때 근거 밖 단정이 56%였다(있을 때 16%).
 // 기본 동작을 "모델은 문서에서 답 문장만 고르고, 답은 그 문장 그대로"로 바꿨다. 답 문장이 없으면 못 찾았다고 답한다.
@@ -274,8 +279,10 @@ describe("chatbot evidence selection (generate mode)", () => {
     const { fetchMock, requests } = stubEvidenceSelection(() => false)
 
     const result = await evaluateChatbotQuery("수업 중에 학생 폰을 잠가 둘 수 있나요?")
+    // 못 찾은 뒤의 두 번째 검색(목차에서 절 번호 고르기)도 글을 쓰지 않는 호출이다.
     const generationCalls = fetchMock.mock.calls.filter(
-      ([url, init]) => String(url).includes(":generateContent") && !isEvidenceSelectionCall(init)
+      ([url, init]) =>
+        String(url).includes(":generateContent") && !isEvidenceSelectionCall(init) && !isOutlinePickCall(init)
     )
 
     expect(requests).toHaveLength(1)

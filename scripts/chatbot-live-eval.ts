@@ -2,7 +2,7 @@
  * 질문 묶음을 공개 챗봇 경로에 실제 모델(Gemini)로 돌려 답을 JSONL 로 남기는 측정 스크립트.
  *
  * 실행:
- *   npx tsx scripts/chatbot-live-eval.ts --in <questions.json> --out <results.jsonl> [--concurrency 4] [--mode select|generate|off] [--gate on|off]
+ *   npx tsx scripts/chatbot-live-eval.ts --in <questions.json> --out <results.jsonl> [--concurrency 4] [--mode select|generate|off] [--gate on|off] [--second-chance on|off]
  *
  * - 입력: [{ id, question, group?, expectTopic? }] 또는 { cases: [...] }(data/chatbot-first-contact-set.json).
  * - 질문마다 세션 없이 evaluateChatbotQuery(공개 경로 코어, 말투·후속 질문 포함)를 독립 실행한다.
@@ -12,6 +12,9 @@
  * - --gate 는 정해 둔 답 확인 관문(CHATBOT_ANSWER_GATE, lib/chatbot/answer-gate.ts)을 켜고 끈다. 기본은 on.
  *   결과 줄의 gate 는 kept(판정 후 유지)·rejected(버리고 문서 경로)·skipped(꺼짐·실패로 판정 없이 유지)·none(대상 아님),
  *   gateOriginal 은 판정 대상이던 정해 둔 답의 출처(버려졌으면 버려진 답), gateMs 는 판정에 쓴 시간이다.
+ * - secondChance 는 못 찾았을 때 목차에서 다시 고르는 두 번째 검색(CHATBOT_SECOND_CHANCE, lib/chatbot/service.ts)의 결과다.
+ *   hit(목차에서 고른 절의 문장으로 답함)·miss(돌렸지만 못 찾음 유지)·none(대상 아님·꺼짐), secondChanceMs 는 그 시간,
+ *   secondChanceReason 은 miss·none 의 이유다. --second-chance on|off 로 켜고 끈다(기본 on).
  */
 
 // Mock server-only for non-Next.js CLI execution (scripts/run-chatbot-golden-eval.ts 와 같은 방식)
@@ -66,7 +69,7 @@ function argValue(name: string): string | undefined {
 function usage(message?: string): never {
   if (message) console.error(`오류: ${message}`)
   console.error(
-    "사용법: npx tsx scripts/chatbot-live-eval.ts --in <questions.json> --out <results.jsonl> [--concurrency 4] [--mode select|generate|off] [--gate on|off]"
+    "사용법: npx tsx scripts/chatbot-live-eval.ts --in <questions.json> --out <results.jsonl> [--concurrency 4] [--mode select|generate|off] [--gate on|off] [--second-chance on|off]"
   )
   process.exit(2)
 }
@@ -111,6 +114,10 @@ async function main() {
   if (mode !== "select" && mode !== "generate" && mode !== "off") usage(`--mode 는 select|generate|off 중 하나여야 합니다: ${mode}`)
   const gateSwitch = (argValue("--gate") ?? "on").toLowerCase()
   if (gateSwitch !== "on" && gateSwitch !== "off") usage(`--gate 는 on|off 중 하나여야 합니다: ${gateSwitch}`)
+  const secondChanceSwitch = (argValue("--second-chance") ?? "on").toLowerCase()
+  if (secondChanceSwitch !== "on" && secondChanceSwitch !== "off") {
+    usage(`--second-chance 는 on|off 중 하나여야 합니다: ${secondChanceSwitch}`)
+  }
 
   const inputs = readInputs(resolve(inPath))
 
@@ -128,6 +135,7 @@ async function main() {
   if (process.env.NODE_ENV === "test") (process.env as Record<string, string>).NODE_ENV = "development"
   process.env.CHATBOT_FINAL_ANSWER_LLM = mode
   process.env.CHATBOT_ANSWER_GATE = gateSwitch
+  process.env.CHATBOT_SECOND_CHANCE = secondChanceSwitch
   if (mode !== "off" && !process.env.GEMINI_API_KEY?.trim()) {
     usage("GEMINI_API_KEY 가 없습니다. 모델 경로가 조용히 꺼지므로 중단합니다(--mode off 는 키 없이 가능).")
   }
@@ -165,9 +173,17 @@ async function main() {
   // (앞선 정책 가드 등이 먼저 답했는데 질문만 우연히 맞는 경우를 걸러 내려는 확인이다.)
   function decideBy(
     question: string,
-    result: { answer: string; sources: unknown[]; answerMode: string; answerGate: { gate: string; gateOriginal?: string } },
+    result: {
+      answer: string
+      sources: unknown[]
+      answerMode: string
+      answerGate: { gate: string; gateOriginal?: string }
+      secondChance: { secondChance: string }
+    },
     trace: GeminiTrace
   ): string {
+    // 못 찾음 뒤 목차에서 다시 골라 답했으면 그 경로다(관문이 버린 뒤의 문서 경로에서도 돌 수 있다).
+    if (result.secondChance.secondChance === "hit") return "second_chance"
     // 관문이 정해 둔 답을 버렸으면 문서 경로(근거 선별) 답이다. 버린 답과 질문이 같은 판별 함수에 다시 걸리지 않게 먼저 본다.
     if (result.answerGate.gate === "rejected") {
       if (isWeakSourceAnswer(result.answer)) return "not_found"
@@ -247,6 +263,9 @@ async function main() {
           gate: result.answerGate.gate,
           gateOriginal: result.answerGate.gateOriginal ?? null,
           gateMs: result.answerGate.gateMs ?? null,
+          secondChance: result.secondChance.secondChance,
+          secondChanceMs: result.secondChance.secondChanceMs ?? null,
+          secondChanceReason: result.secondChance.reason ?? null,
           latencyMs: Date.now() - startedAt,
           geminiCalls: trace.calls,
           geminiStatuses: trace.statuses,
@@ -280,6 +299,9 @@ async function main() {
       gate: null,
       gateOriginal: null,
       gateMs: null,
+      secondChance: null,
+      secondChanceMs: null,
+      secondChanceReason: null,
       latencyMs: 0,
       geminiCalls: lastTrace.calls,
       geminiStatuses: lastTrace.statuses,
@@ -339,6 +361,14 @@ async function main() {
   if (gateTimes.length > 0) {
     console.error(
       `관문 판정 시간: 중앙값 ${median(gateTimes)}ms, 95번째 ${gateTimes[Math.min(gateTimes.length - 1, Math.floor(gateTimes.length * 0.95))]}ms`
+    )
+  }
+  const ran = done.filter((row) => row.secondChance === "hit" || row.secondChance === "miss")
+  console.error(`두 번째 검색 분포: ${JSON.stringify(tally(done.map((row) => row.secondChance ?? "error")))}`)
+  if (ran.length > 0) {
+    const times = ran.map((row) => row.secondChanceMs ?? 0).sort((a, b) => a - b)
+    console.error(
+      `두 번째 검색 시간: 중앙값 ${median(times)}ms, 95번째 ${times[Math.min(times.length - 1, Math.floor(times.length * 0.95))]}ms`
     )
   }
   console.error(`오류: ${errors.length}개`)

@@ -24,12 +24,15 @@ import {
 } from "@/lib/chatbot/classification"
 import { findChatbotSelfKnowledgeEntry } from "@/lib/chatbot/self-knowledge"
 import {
+  asksAboutThirdPartyAdoption,
   clampAnswerToLength,
   embedText,
+  pickOutlineSectionIds,
   sanitizePublicAnswerText,
   selectAnsweringSentenceIds,
   type ChatbotModelTier,
 } from "@/lib/chatbot/llm"
+import { DOC_OUTLINE_SUMMARY_HEADING, getPublicDocOutline, isPublicChatbotDoc } from "@/lib/chatbot/doc-outline"
 import {
   buildClientVectorSources,
   type VectorFallbackChunkRow,
@@ -81,7 +84,7 @@ const DEFAULT_FINAL_ANSWER_TIMEOUT_MS = 6_000
 const DEFAULT_FINAL_ANSWER_STREAM_TIMEOUT_MS = 8_000
 const RETRIEVAL_CACHE_TTL_MS = 5 * 60 * 1000
 const RETRIEVAL_CACHE_MAX = 200
-const RETRIEVAL_CACHE_VERSION = "rag-rerank-20261113-v8"
+const RETRIEVAL_CACHE_VERSION = "rag-rerank-20261118-v9"
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const CHAT_SESSION_CHANNELS = new Set(["web", "admin_preview", "partner_portal", "manual_import"])
 const PROGRESSIVE_MODEL_TIERS: ChatbotModelTier[] = ["basic", "reasoning", "advanced"]
@@ -161,7 +164,7 @@ interface KnowledgeSearchResult {
   cacheHit?: boolean
   /**
    * 근거 선별용 후보. sources 는 답·출처 카드용으로 2개(문서당 1개)만 남기지만,
-   * 답이 같은 문서의 다른 섹션이나 3~5위 문서에 있는 경우가 많아 선별에는 더 넓게 넘긴다.
+   * 답이 같은 문서의 다른 섹션이나 3~8위 문서에 있는 경우가 많아 선별에는 더 넓게 넘긴다.
    */
   evidencePool?: ChatbotSource[]
 }
@@ -1970,36 +1973,43 @@ function getDocCategory(doc: DocArticle) {
   return getSourceCategoryFromDocCategory(doc.category)
 }
 
+// 공개 범위 필터는 목차(두 번째 검색, lib/chatbot/doc-outline.ts)와 같은 함수를 쓴다.
 function getFallbackDocsFromStatic() {
-  return listDocs().filter((doc) => !doc.noindex && (doc.visibility ?? "public") !== "internal")
+  return listDocs().filter(isPublicChatbotDoc)
 }
 
 async function getFallbackDocs() {
   try {
     const content = await getDocsContent()
-    return content.docs.filter(
-      (doc) => !doc.noindex && (doc.visibility ?? "public") !== "internal"
-    )
+    return content.docs.filter(isPublicChatbotDoc)
   } catch {
     return getFallbackDocsFromStatic()
   }
 }
 
+// 정적 문서의 요약(sectionIndex=null) 또는 섹션 하나를 출처로 만든다. 점수는 부르는 쪽이 붙인다.
+// excerpt 는 220자 요약이고, 모델 근거로는 문장이 온전한 본문을 따로 붙인다(source-grounding.ts).
+function buildDocSectionSource(doc: DocArticle, sectionIndex: number | null): Omit<ChatbotSource, "score"> {
+  const section = sectionIndex === null ? null : doc.sections[sectionIndex]
+  const text = section
+    ? [section.body, ...(section.steps ?? [])].join(" ")
+    : [doc.description, doc.chatbotSummary].join(" ")
+  return attachGroundingText(
+    {
+      title: doc.title,
+      heading: section ? section.heading : DOC_OUTLINE_SUMMARY_HEADING,
+      urlPath: getDocPath(doc),
+      category: getDocCategory(doc),
+      excerpt: compactText(text),
+    },
+    text
+  )
+}
+
 // 정적 문서의 요약·섹션을 점수순으로 늘어놓는다(점수 0 제외). 최종 출처와 근거 선별 후보가 이 목록을 함께 쓴다.
 function scoreStaticSources(question: NormalizedQuestion, docs: DocArticle[]): ChatbotSource[] {
   const sources = docs.flatMap((doc) => {
-    const summaryText = [doc.description, doc.chatbotSummary].join(" ")
-    // excerpt 는 220자 요약이고, 모델 근거로는 문장이 온전한 본문을 따로 붙인다(source-grounding.ts).
-    const summarySource = attachGroundingText(
-      {
-        title: doc.title,
-        heading: "요약",
-        urlPath: getDocPath(doc),
-        category: getDocCategory(doc),
-        excerpt: compactText(summaryText),
-      },
-      summaryText
-    )
+    const summarySource = buildDocSectionSource(doc, null)
 
     const summaryScore = scoreText(question, summarySource, [
       ...doc.tags,
@@ -2007,18 +2017,8 @@ function scoreStaticSources(question: NormalizedQuestion, docs: DocArticle[]): C
       doc.audience,
     ])
 
-    const sectionSources = doc.sections.map((section) => {
-      const sectionText = [section.body, ...(section.steps ?? [])].join(" ")
-      const source = attachGroundingText(
-        {
-          title: doc.title,
-          heading: section.heading,
-          urlPath: getDocPath(doc),
-          category: getDocCategory(doc),
-          excerpt: compactText(sectionText),
-        },
-        sectionText
-      )
+    const sectionSources = doc.sections.map((_, sectionIndex) => {
+      const source = buildDocSectionSource(doc, sectionIndex)
 
       return {
         ...source,
@@ -2037,10 +2037,12 @@ function scoreStaticSources(question: NormalizedQuestion, docs: DocArticle[]): C
     .sort((left, right) => right.score - left.score)
 }
 
-const EVIDENCE_POOL_SIZE = 5
-const EVIDENCE_POOL_PER_DOC = 2
+// 근거 선별 후보: 점수순 상위 8개, 문서당 3개까지(최종 출처 2개를 앞에 붙인 뒤 8개로 자른다. 문장은 source-grounding.ts 에서 48개까지).
+// 5개·문서당 2개였을 때는 점수가 같은 섹션이 앞을 채우면 답이 든 섹션이 잘렸다(2026-11-18 holdout: "구글 드라이브 연동되나요"에서
+// '공유 드라이브 관리 / Google Drive 연동' 섹션이 같은 문서 3번째라 빠졌다). 6개로는 최종 출처가 한 칸을 차지해 여전히 빠진다.
+const EVIDENCE_POOL_SIZE = 8
+const EVIDENCE_POOL_PER_DOC = 3
 
-// 근거 선별 후보: 점수순 상위 5개, 문서당 2개까지.
 function buildEvidencePool(rankedSources: ChatbotSource[]) {
   return selectDiverseSources(rankedSources, EVIDENCE_POOL_SIZE, EVIDENCE_POOL_PER_DOC)
 }
@@ -3950,6 +3952,8 @@ interface ChatbotCore {
   gateExempt?: boolean
   /** 정해 둔 답 확인 관문의 결과(측정·로그용). 응답에는 싣지 않는다. */
   answerGate?: AnswerGateTrace
+  /** 못 찾았을 때 목차에서 다시 고르는 두 번째 검색의 결과(측정·로그용). 응답에는 싣지 않는다. */
+  secondChance?: SecondChanceTrace
 }
 
 interface BuildChatbotCoreOptions {
@@ -5076,6 +5080,176 @@ function isWeakHandoffSignal(question: NormalizedQuestion) {
   return true
 }
 
+// ── 못 찾았을 때 목차에서 다시 고르는 두 번째 검색 ──────────────────────────────────────────────────────
+// 낱말 검색은 묻는 낱말과 문서 낱말이 다르면("학생 채팅만 막을 수 있나요" ↔ 문서의 "채팅 금지") 답이 든 절을 후보에 올리지 못한다.
+// 정적 문서 경로에는 벡터 검색이 없다. 첫 검색 + 근거 선별이 못 찾은 사실 질문에서만, 공개 도움말 목차(문서·절 제목,
+// lib/chatbot/doc-outline.ts)를 모델에게 보여 주고 답이 있을 만한 절을 최대 3개 고르게 한 뒤, 그 절의 문장으로 근거 선별을 다시 돌린다.
+// 모델은 번호만 고르고 나가는 글은 문서 문장 그대로다. 목차에서 고른 절이 없거나 선별이 못 고르면 못 찾음 답을 그대로 둔다.
+// 고른 문장으로 만든 답은 정해 둔 답 확인 관문(answer-gate.ts)으로 한 번 더 판정해, 질문과 비슷한 주제일 뿐인 문장이면 버린다.
+// 운영(Supabase 검색)에서도 같은 정적 목차·정적 본문을 쓴다. DB 문서와 정적 문서는 다를 수 있다(DB 를 새로 조회하지 않는다).
+// 스위치: CHATBOT_SECOND_CHANCE=off 로 끈다(기본 on). CHATBOT_FINAL_ANSWER_LLM=off 이거나 GEMINI_API_KEY 가 없어도 돌지 않는다.
+
+export interface SecondChanceTrace {
+  /** hit=목차에서 고른 절의 문장으로 답함, miss=돌렸지만 못 찾음 답 유지, none=대상 아님·꺼짐 */
+  secondChance: "hit" | "miss" | "none"
+  /** 두 번째 검색에 쓴 시간(ms). 돌리지 않았으면 없다. */
+  secondChanceMs?: number
+  /** miss·none 의 이유(no_section·no_sentence·off_target·error·timeout·off·llm_off·no_key·budget·policy_topic). */
+  reason?: string
+}
+
+// 두 번째 검색 전체(목차 고르기 → 근거 선별 → 답 확인) 예산과 단계별 상한.
+// 2026-11-18 실측(정적 문서, lite 우선): 목차 고르기 0.7~1.0초, 선별 약 1초, 확인 약 0.9초.
+const SECOND_CHANCE_TIMEOUT_MS = 6_000
+const SECOND_CHANCE_OUTLINE_TIMEOUT_MS = 2_200
+const SECOND_CHANCE_SELECTION_TIMEOUT_MS = 2_500
+const SECOND_CHANCE_MIN_STEP_MS = 800
+// 라우트 예산(13초) 안에서 끝나도록, 요청 시작부터 이 시간 안에 끝날 만큼만 돌린다.
+const SECOND_CHANCE_ROUTE_BUDGET_MS = 11_000
+
+// 한 응답에 두 번째 검색을 두 번 돌리지 않는다(관문 문서 경로에서 이미 돌린 답을 스트림 경로가 다시 돌리지 않게).
+const secondChanceTriedResponses = new WeakSet<object>()
+
+function getSecondChanceDisabledReason(): string | null {
+  if (process.env.CHATBOT_SECOND_CHANCE?.trim().toLowerCase() === "off") return "off"
+  if (getFinalAnswerLlmMode() === "off") return "llm_off"
+  if (!process.env.GEMINI_API_KEY?.trim()) return "no_key"
+  return null
+}
+
+function firstParagraph(text: string) {
+  return text.split("\n\n")[0]
+}
+
+// 못 찾음 답(출처 없음 사실 질문 답, 근거 선별이 답 문장을 못 찾은 답). 말투 층이 앞뒤에 문장을 붙여도 알아보게 첫 문단으로 본다.
+function isNotFoundResponse(response: CoreResponse) {
+  return (
+    response.answer.includes(firstParagraph(NO_SOURCE_FACT_ANSWER)) ||
+    response.answer.includes(firstParagraph(WEAK_SOURCE_DRAFT_ANSWER))
+  )
+}
+
+// 사람이 공개 범위를 정한 주제(금액·내부 원가·요금제 이름·무료 체험·회사 국적·특정 학원 사용 여부·최대/무대 인원·전자칠판 크기).
+// 문서 문장이 이 기준과 어긋나는 곳이 있어(예: 무료 체험은 유보 답을 유지하는데 일부 문서는 기간을 적는다) 두 번째 검색으로 새 문장을
+// 붙이지 않는다. 기준: docs/active/chatbot-first-contact-audit-2026-11-13.md "정해 둔 답의 기준".
+const CAPACITY_TOPIC_RE =
+  /(?:최대|몇\s*명|인원|정원).{0,12}(?:수업|교실|들어|참여|무대|스테이지|온\s*스테이지|카메라)|(?:수업|교실|무대|스테이지|온\s*스테이지).{0,12}(?:최대|몇\s*명|인원|정원)/
+const INTERNAL_COST_TOPIC_RE = /원가|마진|공급가|납품가|도매가/
+const NATIONALITY_TOPIC_RE = /(?:어느|어디|무슨)\s*나라|국적|중국\s*(?:회사|기업|업체|거|꺼|제품)|본사\s*(?:가|는|위치)?\s*어디/
+
+function isPolicyGovernedTopic(question: NormalizedQuestion) {
+  const text = question.redacted.toLowerCase()
+  return (
+    isPricingInfoQuestion(question) ||
+    isSoftwarePricingQuestion(question) ||
+    isTrialOrPilotQuestion(question) ||
+    isAccountPlanOrTrialLimitQuestion(question) ||
+    isHardwareSpecsQuestion(question) ||
+    isHardwareBoardLineupQuestion(question) ||
+    isHardwareUnconfirmedDetailQuestion(question) ||
+    asksAboutThirdPartyAdoption(question.redacted) ||
+    CAPACITY_TOPIC_RE.test(text) ||
+    INTERNAL_COST_TOPIC_RE.test(text) ||
+    NATIONALITY_TOPIC_RE.test(text)
+  )
+}
+
+// 두 번째 검색 결과 가운데 판정을 못 받은 것(호출 실패·시간 초과). 이 답은 답 캐시에 넣지 않는다.
+function isSecondChanceFailure(trace: SecondChanceTrace | undefined) {
+  return trace?.secondChance === "miss" && (trace.reason === "error" || trace.reason === "timeout")
+}
+
+/**
+ * 못 찾음 답이 나가려는 공개 사실 질문에 두 번째 기회를 준다. 찾으면 response 를 문서 문장 답으로 바꾼다(제자리 수정).
+ * 대상: 못 찾음 답 + 사실 질문(isFactSeekingQuestion: 잡담·주제 밖·증상 신고·한 낱말 입력 제외). 내부 CS 경로는 부르지 않는다.
+ * 사람이 공개 범위를 정한 주제(isPolicyGovernedTopic)는 돌리지 않는다.
+ * 이 함수는 예외를 던지지 않는다. 실패하면 못 찾음 답을 그대로 둔다.
+ */
+async function applySecondChanceRetrieval(
+  response: CoreResponse,
+  question: NormalizedQuestion,
+  category: string,
+  startedAt: number
+): Promise<SecondChanceTrace> {
+  if (secondChanceTriedResponses.has(response)) return { secondChance: "none" }
+  if (!isNotFoundResponse(response) || !isFactSeekingQuestion(question)) return { secondChance: "none" }
+  secondChanceTriedResponses.add(response)
+  if (isPolicyGovernedTopic(question)) return { secondChance: "none", reason: "policy_topic" }
+
+  const disabled = getSecondChanceDisabledReason()
+  if (disabled) return { secondChance: "none", reason: disabled }
+  const budgetMs = Math.min(SECOND_CHANCE_TIMEOUT_MS, SECOND_CHANCE_ROUTE_BUDGET_MS - elapsedSince(startedAt))
+  if (budgetMs < SECOND_CHANCE_MIN_STEP_MS * 3) return { secondChance: "none", reason: "budget" }
+
+  const t0 = Date.now()
+  const miss = (reason: string): SecondChanceTrace => {
+    const secondChanceMs = Date.now() - t0
+    if ((reason === "error" || reason === "timeout") && process.env.NODE_ENV !== "test") {
+      console.warn("[chatbot] second-chance retrieval failed; keeping not-found answer.", { reason, secondChanceMs })
+    }
+    return { secondChance: "miss", secondChanceMs, reason }
+  }
+
+  try {
+    const outline = getPublicDocOutline()
+    const remaining = () => budgetMs - (Date.now() - t0)
+    const outlineBudget = Math.min(SECOND_CHANCE_OUTLINE_TIMEOUT_MS, budgetMs - SECOND_CHANCE_MIN_STEP_MS * 2)
+    const picked = await pickOutlineSectionIds({
+      question: question.redacted,
+      outlineText: outline.text,
+      entryCount: outline.entries.size,
+      timeoutMs: outlineBudget,
+    })
+    if (!picked) return miss(Date.now() - t0 >= outlineBudget ? "timeout" : "error")
+    if (picked.ids.length === 0) return miss("no_section")
+
+    const candidates: ChatbotSource[] = []
+    for (const id of picked.ids) {
+      const entry = outline.entries.get(id)
+      if (!entry) continue
+      candidates.push({ ...buildDocSectionSource(entry.doc, entry.sectionIndex), score: MIN_DIRECT_SOURCE_SCORE })
+    }
+    const sentences = buildEvidenceSentences(candidates)
+    if (sentences.length === 0) return miss("no_sentence")
+
+    const selectionBudget = Math.min(SECOND_CHANCE_SELECTION_TIMEOUT_MS, remaining() - SECOND_CHANCE_MIN_STEP_MS)
+    if (selectionBudget < SECOND_CHANCE_MIN_STEP_MS) return miss("timeout")
+    const ids = await selectAnsweringSentenceIds({ question: question.redacted, sentences, timeoutMs: selectionBudget })
+    if (ids === null) return miss(remaining() <= SECOND_CHANCE_MIN_STEP_MS ? "timeout" : "error")
+    const chosen = sentences.filter((sentence) => ids.includes(sentence.id))
+    if (chosen.length === 0) return miss("no_sentence")
+
+    // 목차가 고른 절은 질문과 낱말이 겹치지 않는 절이라 선별이 비슷한 주제의 문장을 고르기 쉽다. 정해 둔 답과 같은 관문으로
+    // "이 질문에 대한 답인지"를 한 번 더 판정하고, 아니라고 하거나 판정을 못 받으면(호출 실패·시간 초과) 못 찾음 답을 둔다.
+    const answer = formatSelectedEvidenceAnswer(chosen, question, category, "direct_answer")
+    const verifyBudget = remaining()
+    if (verifyBudget < SECOND_CHANCE_MIN_STEP_MS) return miss("timeout")
+    const verdict = await checkPreparedAnswer({
+      question: question.redacted,
+      answer,
+      original: "second-chance",
+      timeoutMs: verifyBudget,
+    })
+    if (verdict.gate === "rejected") return miss("off_target")
+    // 관문을 운영자가 끈 경우(CHATBOT_ANSWER_GATE=off)만 확인 없이 쓴다.
+    if (verdict.gate !== "kept" && verdict.skipReason !== "off") {
+      return miss(verdict.skipReason === "timeout" ? "timeout" : "error")
+    }
+
+    const usedIndexes = Array.from(new Set(chosen.map((sentence) => sentence.sourceIndex)))
+    response.answer = answer
+    response.answerMode = "direct_answer"
+    response.confidence = 0.72
+    response.needsHandoff = false
+    response.unresolved = false
+    response.sources = usedIndexes.map((index) => candidates[index]).slice(0, MAX_SOURCES)
+    response.suggestedQuestions = buildSuggestedQuestions(category)
+    return { secondChance: "hit", secondChanceMs: Date.now() - t0 }
+  } catch {
+    return miss("error")
+  }
+}
+
 /**
  * 관문이 정해 둔 답을 버린 뒤 쓸 문서 근거 후보. 큐레이션 출처(정해 둔 답이 기대는 출처)는 빼고 문서 조각만 남긴다.
  * 이미 검색해 둔 후보가 있으면 다시 검색하지 않는다.
@@ -5109,14 +5283,15 @@ async function findDocumentEvidenceAfterGate(
 
 /**
  * 관문이 off_target 으로 판정한 뒤의 문서 경로: 검색 → 근거 선별.
- * 고른 문장이 있으면 그 문장으로 답하고, 없으면 사실 질문은 못 찾음(NO_SOURCE_FACT_ANSWER), 그 밖에는 되묻는다.
- * 선별 호출이 실패해도 버린 답으로 돌아가지 않는다(못 찾음/되묻기).
+ * 고른 문장이 있으면 그 문장으로 답하고, 없으면 사실 질문은 목차에서 다시 고르는 두 번째 검색을 거쳐 못 찾음(NO_SOURCE_FACT_ANSWER),
+ * 그 밖에는 되묻는다. 선별 호출이 실패해도 버린 답으로 돌아가지 않는다(못 찾음/되묻기).
  */
 async function answerFromDocumentsAfterGate(
   question: NormalizedQuestion,
   options: BuildChatbotCoreOptions,
+  startedAt: number,
   prior?: KnowledgeSearchResult
-): Promise<Pick<ChatbotCore, "response" | "category" | "intent" | "handoffIntent">> {
+): Promise<Pick<ChatbotCore, "response" | "category" | "intent" | "handoffIntent" | "secondChance">> {
   const candidates = await findDocumentEvidenceAfterGate(question, options, prior)
   const { category, intent, handoffIntent } = classifyChatbotQuestion(
     question.redacted,
@@ -5151,9 +5326,11 @@ async function answerFromDocumentsAfterGate(
   } else {
     response = composeAnswer(question, [], category, { suppressConsultation: true })
   }
+  // 못 찾음이면 목차에서 다시 고르는 두 번째 검색을 한 번 돌린다(스트림·일반 경로 모두 이 코어 안에서 끝난다).
+  const secondChance = await applySecondChanceRetrieval(response, question, category, startedAt)
   deterministicFinalResponses.add(response)
   gateDocumentResponses.add(response)
-  return { response, category, intent, handoffIntent }
+  return { response, category, intent, handoffIntent, secondChance }
 }
 
 /**
@@ -5170,7 +5347,7 @@ async function gatePreparedCore(
   if (!original || !shouldRunAnswerGate(options)) return core
   const trace = await checkPreparedAnswer({ question: core.question.redacted, answer: core.response.answer, original })
   if (trace.gate !== "rejected") return { ...core, answerGate: trace }
-  const documentCore = await answerFromDocumentsAfterGate(core.question, options, prior)
+  const documentCore = await answerFromDocumentsAfterGate(core.question, options, startedAt, prior)
   return {
     question: core.question,
     ...documentCore,
@@ -5427,6 +5604,7 @@ async function buildChatbotCoreBase(
 
   // 분류별·제목 틀 답도 정해 둔 답이다. 내보내기 전에 관문이 확인하고, 버리면 이미 검색한 결과로 문서 경로를 탄다.
   let answerGate: AnswerGateTrace | undefined
+  let secondChance: SecondChanceTrace | undefined
   const templateOriginal = shouldRunAnswerGate(options) ? getComposedTemplateOriginal(response) : null
   if (templateOriginal) {
     const gated = await gatePreparedCore(
@@ -5437,6 +5615,7 @@ async function buildChatbotCoreBase(
       searched
     )
     answerGate = gated.answerGate
+    secondChance = gated.secondChance
     if (gated.response !== response) {
       ;({ response, category, intent, handoffIntent } = gated)
     }
@@ -5491,11 +5670,18 @@ async function buildChatbotCoreBase(
     withholdUnselectedOutsideVocabularyDraft(response, question, selectionStatus, options.includeInternalDocs === true)
   }
 
+  // 여기까지 못 찾음이면 목차에서 다시 고르는 두 번째 검색. 스트리밍 경로는 선별 뒤에 같은 함수를 부른다.
+  // 모델 없이 초안만 만드는 평가 호출(generateAnswer=false)과 내부 CS 경로는 돌리지 않는다.
+  if (shouldGenerateAnswer && !options.deferEvidenceSelection && !options.includeInternalDocs) {
+    const trace = await applySecondChanceRetrieval(response, question, category, startedAt)
+    if (!secondChance || trace.secondChance !== "none") secondChance = trace
+  }
+
   finalizeAnswer(response)
 
   // 세션(이력)이 없는 질문만 캐시 — 이력에 의존한 답이 캐시에 섞이지 않게.
-  // 관문 판정이 실패·시간 초과로 빠진 답은 캐시하지 않는다(다음 요청에서 다시 확인한다).
-  if (shouldGenerateAnswer && !options.sessionId && !isAnswerGateFailure(answerGate)) {
+  // 관문 판정·두 번째 검색이 실패·시간 초과로 빠진 답은 캐시하지 않는다(다음 요청에서 다시 확인한다).
+  if (shouldGenerateAnswer && !options.sessionId && !isAnswerGateFailure(answerGate) && !isSecondChanceFailure(secondChance)) {
     setCachedAnswer(question, { response, category, intent, handoffIntent, warning }, options)
   }
 
@@ -5510,6 +5696,7 @@ async function buildChatbotCoreBase(
     retrievalCacheHit: cacheHit,
     evidencePool,
     answerGate,
+    secondChance,
   }
 }
 
@@ -5556,7 +5743,12 @@ export async function evaluateChatbotQuery(
   message: string,
   options: { generateAnswer?: boolean; includeInternalDocs?: boolean } = {}
 ): Promise<
-  ChatbotQueryResponse & { detectedCategory: string; detectedIntent: ChatbotIntent; answerGate: AnswerGateTrace }
+  ChatbotQueryResponse & {
+    detectedCategory: string
+    detectedIntent: ChatbotIntent
+    answerGate: AnswerGateTrace
+    secondChance: SecondChanceTrace
+  }
 > {
   const core = await buildChatbotCore(message, {
     generateAnswer: options.generateAnswer,
@@ -5570,6 +5762,7 @@ export async function evaluateChatbotQuery(
     detectedCategory: core.category,
     detectedIntent: core.intent,
     answerGate: core.answerGate ?? { gate: "none" },
+    secondChance: core.secondChance ?? { secondChance: "none" },
   }
 }
 
@@ -5792,9 +5985,18 @@ export async function streamChatbotQuery(
       applyConversationTone(core)
     }
   }
-  const handoffIntent = core.handoffIntent
 
   if (!isShortCircuited) withholdUnselectedOutsideVocabularyDraft(response, question, selectionStatus, false)
+
+  // 일반 경로와 같은 두 번째 검색(못 찾음 답일 때만). 관문 문서 경로에서 이미 돌린 답은 다시 돌리지 않는다.
+  let secondChance = core.secondChance
+  if (!isShortCircuited) {
+    const trace = await applySecondChanceRetrieval(response, question, category, startedAt)
+    if (trace.secondChance !== "none") secondChance = trace
+    // 답이 바뀌었으면 말투·끝 질문 층을 새 답에 다시 입힌다(일반 경로는 코어 뒤에서 한 번 입힌다).
+    if (trace.secondChance === "hit") applyConversationTone(core)
+  }
+  const handoffIntent = core.handoffIntent
 
   finalizeAnswer(response)
 
@@ -5802,7 +6004,7 @@ export async function streamChatbotQuery(
   emit({ type: "replace", answer: response.answer })
 
   // no-session 질문만 캐시(이력 의존 답이 캐시에 섞이지 않게) — handleChatbotQuery 와 동일 규칙.
-  if (!requestedSessionId && !isAnswerGateFailure(core.answerGate)) {
+  if (!requestedSessionId && !isAnswerGateFailure(core.answerGate) && !isSecondChanceFailure(secondChance)) {
     setCachedAnswer(question, { response, category, intent, handoffIntent, warning })
   }
 

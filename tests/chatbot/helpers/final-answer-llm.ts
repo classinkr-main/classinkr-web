@@ -24,9 +24,26 @@ export function answerGateResponse(verdict: "answers" | "off_target" = "answers"
   }
 }
 
-/** 근거 선별 호출인지 본다. 선별은 JSON 응답을 요청하는 generateContent 호출이다(관문 판정 호출은 뺀다). */
+/** 못 찾았을 때 목차에서 절을 고르는 두 번째 검색 호출인지 본다. */
+export function isOutlinePickCall(init?: RequestInit | null) {
+  return String(init?.body ?? "").includes('"sectionIds"')
+}
+
+/** 목차 고르기 응답. 기본은 "답이 있을 만한 절 없음"(못 찾음 유지). */
+export function outlinePickResponse(sectionIds: number[] = []) {
+  return {
+    ok: true,
+    json: async () => ({ candidates: [{ content: { parts: [{ text: JSON.stringify({ sectionIds }) }] } }] }),
+  }
+}
+
+/** 근거 선별 호출인지 본다. 선별은 JSON 응답을 요청하는 generateContent 호출이다(관문 판정·목차 고르기 호출은 뺀다). */
 export function isEvidenceSelectionCall(init?: RequestInit | null) {
-  return String(init?.body ?? "").includes('"responseMimeType":"application/json"') && !isAnswerGateCall(init)
+  return (
+    String(init?.body ?? "").includes('"responseMimeType":"application/json"') &&
+    !isAnswerGateCall(init) &&
+    !isOutlinePickCall(init)
+  )
 }
 
 /** 근거 선별 호출에 돌려줄 응답. 기본은 "1번 문장이 답". 빈 배열이면 답 문장이 없다는 뜻이다. */
@@ -47,7 +64,9 @@ export function stubFetchWithEvidenceSelection(fetchMock: FetchLike, ids: number
   const wrapped = vi.fn(async (url: string | URL | Request, init?: RequestInit) =>
     isAnswerGateCall(init)
       ? answerGateResponse()
-      : isEvidenceSelectionCall(init)
+      : isOutlinePickCall(init)
+        ? outlinePickResponse()
+        : isEvidenceSelectionCall(init)
         ? evidenceSelectionResponse(ids)
         : fetchMock(url, init)
   )
@@ -81,6 +100,7 @@ export function stubEvidenceSelection(pick: (text: string) => boolean, onOtherCa
   const otherCalls: { url: string; init?: RequestInit }[] = []
   const fetchMock = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
     if (isAnswerGateCall(init)) return answerGateResponse()
+    if (isOutlinePickCall(init)) return outlinePickResponse()
     if (isEvidenceSelectionCall(init)) {
       const request = readEvidenceSelectionRequest(init)
       requests.push(request)
