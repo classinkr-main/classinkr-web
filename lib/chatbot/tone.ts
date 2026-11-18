@@ -155,7 +155,7 @@ export function applyToneToAnswer(
   const opener = toneOpener(
     tone,
     (/\[(?:실시간 상담 연결|도입 상담 남기기)\]/.test(answer) && !/^\d\.\s/m.test(answer)) ||
-      /딱 맞는 안내는 아직 찾지 못했어요/.test(answer)
+      /딱 맞는 안내는 아직 찾지 못했어요|추측해서 (?:답|안내)하지는 않을게요/.test(answer)
   )
   const alreadyToned =
     (tone.angry || tone.repeated ? startsWithApology(next) : startsWithEmpathy(next)) ||

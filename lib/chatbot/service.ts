@@ -4812,10 +4812,45 @@ async function applyEvidenceSelection(
 }
 
 // 낱말 목록 밖 질문(검색 관문을 새로 통과한 질문)은 근거 선별이 답 문장을 골라 준 경우에만 문서 문장을 쓴다.
-// 선별이 실패했거나 꺼져 있으면 검색 조각이 질문과 맞는지 알 수 없으므로 조각 대신 못 찾았다고 답한다.
+// 선별이 꺼져 있으면(모델 끔·키 없음·모델 없는 평가) 검색 조각이 질문과 맞는지 알 수 없으므로 조각 대신 못 찾았다고 답한다.
+// 모델이 켜져 있는데 선별 호출이 실패했으면 낱말 목록 안팎을 가리지 않고 조각을 내보내지 않는다(MODEL_UNAVAILABLE_ANSWER).
 const CURATED_SOURCE_MIN_SCORE = 240
 
-function withholdUnselectedOutsideVocabularyDraft(
+// 모델이 켜져 있는데(CHATBOT_FINAL_ANSWER_LLM 이 off 가 아니고 키가 있음) 근거 선별 호출이 실패했을 때의 답.
+// 2026-11-18 Gemini 결제 크레딧이 떨어져 모든 호출이 402 로 실패하자, 처음 보는 질문 90개 중 46건이 확인되지 않은 검색 조각을
+// 그대로 답으로 냈고 그중 38건이 엉뚱한 답이었다(로그인 번호 형식 안내 ← 'IP 대역 지정'). 모델이 죽은 것이지 문서에 없는 것이
+// 아니므로 '못 찾음'(NO_SOURCE_FACT_ANSWER)과 구별하고, 상담 버튼을 띄운다(answerMode=handoff, needsHandoff).
+export const MODEL_UNAVAILABLE_ANSWER = [
+  "지금은 안내 문서에서 답을 확인하지 못했어요. 추측해서 답하지는 않을게요.",
+  "잠시 뒤 다시 물어봐 주시거나, 아래 상담 버튼으로 남겨 주시면 담당자가 확인해 안내해 드려요.",
+].join("\n\n")
+
+// MODEL_UNAVAILABLE_ANSWER 로 바꾼 답. 두 번째 검색이 '못 찾음'으로 보고 모델을 또 부르지 않게 한다.
+const modelUnavailableResponses = new WeakSet<object>()
+
+/** 공개 경로에서 최종 답 모델(근거 선별)이 켜져 있는지. 꺼져 있으면 선별 결과가 'failed'여도 모델이 죽은 것이 아니다. */
+function isFinalAnswerModelEnabled() {
+  return getFinalAnswerLlmMode() !== "off" && Boolean(process.env.GEMINI_API_KEY?.trim())
+}
+
+/** 답을 확인하지 못해 추측하지 않겠다고 밝힌 고정 답인지. 말투 층이 앞에 첫마디를 붙여도 알아보게 첫 문단으로 본다. */
+function isUnverifiedFixedAnswer(answer: string) {
+  return answer.includes(MODEL_UNAVAILABLE_ANSWER.split("\n\n")[0])
+}
+
+function applyModelUnavailableAnswer(response: CoreResponse) {
+  response.answer = MODEL_UNAVAILABLE_ANSWER
+  response.answerMode = "handoff"
+  response.confidence = Math.min(response.confidence, 0.2)
+  response.needsHandoff = true
+  response.unresolved = true
+  response.sources = []
+  modelUnavailableResponses.add(response)
+  // 모델이 정상이면 다른 답이 나오므로 답 캐시에 넣지 않는다.
+  selectionFailedResponses.add(response)
+}
+
+function withholdUnverifiedDraft(
   response: Omit<ChatbotQueryResponse, "answerEventId" | "sessionId" | "warning" | "handoffIntent">,
   question: NormalizedQuestion,
   selectionStatus: EvidenceSelectionOutcome["status"] | undefined,
@@ -4824,12 +4859,17 @@ function withholdUnselectedOutsideVocabularyDraft(
   if (internal || selectionStatus === "selected" || selectionStatus === "not_found") return false
   // 관문이 정해 둔 답을 버리고 근거 선별까지 마친 답(문서 문장 또는 못 찾음)은 이미 확인된 최종본이다.
   if (gateDocumentResponses.has(response)) return false
-  if (response.answerMode === "handoff") return false
   // 검색 조각 초안뿐 아니라, 점수가 낮은 검색 결과의 섹션 제목에 걸린 정해 둔 문장(예: '가입과 개인정보' → 가입 안내)도
   // 질문과 맞는지 확인되지 않았다. 큐레이션 출처(점수 240 이상)만 그대로 둔다.
   const topScore = response.sources[0]?.score
   const unverified = excerptDraftResponses.has(response) || (topScore !== undefined && topScore < CURATED_SOURCE_MIN_SCORE)
   if (!unverified) return false
+  // 모델이 켜져 있는데 선별 호출이 실패(HTTP 오류·시간 초과·응답 해석 실패)했다: 상담 연결 초안이어도 조각을 내보내지 않는다.
+  if (selectionStatus === "failed" && isFinalAnswerModelEnabled()) {
+    applyModelUnavailableAnswer(response)
+    return true
+  }
+  if (response.answerMode === "handoff") return false
   if (!isOutsideKnownVocabulary(question)) return false
   response.answer = NO_SOURCE_FACT_ANSWER
   response.answerMode = "doc_suggestion"
@@ -5032,6 +5072,8 @@ function applyConversationTone(core: ChatbotCore) {
   }
   // 지난 문의·통화를 이어 가려는 사람에게는 상담 연결 버튼을 띄운다(답에서 그 버튼을 가리킨다).
   if (tone.priorContext === "inquiry") core.response.needsHandoff = true
+  // 답을 확인하지 못했다고 밝힌 고정 답(모델 호출 실패 등)에는 규모·도입 시기 같은 끝 질문을 붙이지 않는다.
+  if (isUnverifiedFixedAnswer(core.response.answer)) return
   // 질문 주도: 정보가 부족하거나 오해 여지가 있거나 영업 상담을 이어 갈 때 끝에 질문 하나를 붙인다.
   core.response.answer = appendFollowUp(
     core.response.answer,
@@ -5203,6 +5245,8 @@ async function applySecondChanceRetrieval(
   startedAt: number
 ): Promise<SecondChanceTrace> {
   if (secondChanceTriedResponses.has(response)) return { secondChance: "none" }
+  // 선별 호출이 실패해 낸 답은 '못 찾음'이 아니다. 모델이 죽은 상태에서 목차 고르기를 또 부르지 않는다.
+  if (modelUnavailableResponses.has(response)) return { secondChance: "none", reason: "model_unavailable" }
   if (!isNotFoundResponse(response) || !isFactSeekingQuestion(question)) return { secondChance: "none" }
   secondChanceTriedResponses.add(response)
   if (isPolicyGovernedTopic(question)) return { secondChance: "none", reason: "policy_topic" }
@@ -5356,7 +5400,19 @@ async function answerFromDocumentsAfterGate(
   const picked = ids && ids.length > 0 ? sentences.filter((sentence) => ids.includes(sentence.id)) : []
 
   let response: CoreResponse
-  if (picked.length > 0) {
+  if (ids === null && isFinalAnswerModelEnabled()) {
+    // 선별 호출이 실패했다(모델이 죽은 것이지 문서에 없는 것이 아니다). 못 찾음을 단정하지 않고 다시 묻거나 상담으로 잇게 한다.
+    response = {
+      answer: MODEL_UNAVAILABLE_ANSWER,
+      answerMode: "handoff",
+      confidence: 0.2,
+      needsHandoff: true,
+      sources: [],
+      suggestedQuestions: buildSuggestedQuestions(category),
+      unresolved: true,
+    }
+    modelUnavailableResponses.add(response)
+  } else if (picked.length > 0) {
     const usedIndexes = Array.from(new Set(picked.map((sentence) => sentence.sourceIndex)))
     response = {
       answer: formatSelectedEvidenceAnswer(picked, question, category, "direct_answer"),
@@ -5743,7 +5799,7 @@ async function buildChatbotCoreBase(
   // 근거 선별을 이 뒤에서 하는 스트리밍 경로만 초안을 그대로 넘긴다. 모델 없이 초안만 만드는 평가 호출도
   // 낱말 목록 밖 질문에 고르지 않은 검색 조각을 답으로 내지 않는다.
   if (!options.deferEvidenceSelection) {
-    withholdUnselectedOutsideVocabularyDraft(response, question, selectionStatus, options.includeInternalDocs === true)
+    withholdUnverifiedDraft(response, question, selectionStatus, options.includeInternalDocs === true)
   }
   if (selectionStatus === "failed") selectionFailedResponses.add(response)
 
@@ -6071,7 +6127,7 @@ export async function streamChatbotQuery(
 
   // 스트림 경로는 말투 층을 코어에서 이미 입혔다. 보류가 답을 못 찾음으로 갈아 끼웠으면 공감 첫마디·상담 연결을 다시 입혀
   // 일반 경로(보류 → 말투 순서)와 같은 답·같은 연결 표시를 낸다.
-  const withheld = !isShortCircuited && withholdUnselectedOutsideVocabularyDraft(response, question, selectionStatus, false)
+  const withheld = !isShortCircuited && withholdUnverifiedDraft(response, question, selectionStatus, false)
   if (selectionStatus === "failed") selectionFailedResponses.add(response)
 
   // 일반 경로와 같은 두 번째 검색(못 찾음 답일 때만). 관문 문서 경로에서 이미 돌린 답은 다시 돌리지 않는다.

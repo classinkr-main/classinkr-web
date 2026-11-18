@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import { parseSelectedSentenceIds } from "@/lib/chatbot/llm"
 import {
   evaluateChatbotQuery,
+  MODEL_UNAVAILABLE_ANSWER,
   streamChatbotQuery,
   WEAK_SOURCE_DRAFT_ANSWER,
   type ChatbotStreamEvent,
@@ -156,7 +157,9 @@ describe("chatbot evidence selection (default select mode)", () => {
     expect(apologetic.answer).not.toContain("순서대로 알려 드릴게요")
   })
 
-  it("keeps the deterministic draft when the selection call fails", async () => {
+  // 예전에는 선별 호출이 실패하면 검색 조각 초안을 그대로 냈다. 2026-11-18 모델 결제 실패(402) 때 이 초안이 엉뚱한 답으로
+  // 대량으로 나가, 모델이 켜져 있는데 선별이 실패하면 조각 대신 고정 문구와 상담 버튼을 낸다(tests/chatbot/model-unavailable.test.ts).
+  it("does not ship the unverified excerpt draft when the selection call fails", async () => {
     useStaticDocsWithGemini()
     const question = "OMR 카드 문제 유형은 뭐가 있어요"
     const draft = await evaluateChatbotQuery(question, { generateAnswer: false })
@@ -168,8 +171,12 @@ describe("chatbot evidence selection (default select mode)", () => {
     )
     const result = await evaluateChatbotQuery(question)
 
-    expect(result.answer).toBe(draft.answer)
-    expect(result.answerMode).toBe(draft.answerMode)
+    expect(draft.sources.length).toBeGreaterThan(0)
+    expect(result.answer).toBe(MODEL_UNAVAILABLE_ANSWER)
+    expect(result.answer).not.toContain(draft.answer.split("\n\n")[0])
+    expect(result.answerMode).toBe("handoff")
+    expect(result.needsHandoff).toBe(true)
+    expect(result.sources).toHaveLength(0)
   })
 
   it("leaves curated answers alone and never calls the model for them", async () => {
