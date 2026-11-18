@@ -206,6 +206,31 @@ describe("관문 뒤 고정 문구 고르기", () => {
     expect(result.answer).toContain("그런 날도 있죠")
   })
 
+  it("'~하기 싫은데 …할 수 있나요?' 꼴의 기능 질문은 잡담 공감 답이라도 관문을 거친다(일반·스트림)", async () => {
+    for (const question of [
+      "앱 설치하기 싫은데 웹으로 들어갈 수 있나요?",
+      "매번 판서 다시 하기 싫은데 저장해서 다음 수업에 쓸 수 있나요?",
+      "녹화하기 싫은데 자동 녹화 끄는 법 있나요",
+    ]) {
+      __clearAnswerCacheForTests()
+      __clearAnswerGateCacheForTests()
+      const stubbed = stubModel("off_target")
+      const stream = await collectStream(question)
+      expect(stubbed.calls, question).toContain("gate")
+      expect(stream.answer, question).not.toContain("그런 날도 있죠")
+
+      __clearAnswerCacheForTests()
+      __clearAnswerGateCacheForTests()
+      const { calls } = stubModel("off_target")
+      const result = await evaluateChatbotQuery(question)
+      expect(calls, question).toContain("gate")
+      expect(result.answerGate.gate, question).toBe("rejected")
+      expect(result.answerGate.gateOriginal, question).toBe("self:small_talk")
+      expect(result.answer, question).not.toContain("그런 날도 있죠")
+      expect(stream.answer, question).toBe(result.answer)
+    }
+  })
+
   it("사실을 전하는 자기소개 답(identity·privacy_boundary)은 계속 관문 대상이다", async () => {
     for (const question of ["너 누구야?", "챗봇 대화 내용 저장돼요?"]) {
       const { calls } = stubModel("answers")

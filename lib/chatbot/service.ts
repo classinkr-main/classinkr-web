@@ -22,7 +22,11 @@ import {
   isTrialOrPilotText,
   type ChatbotIntent,
 } from "@/lib/chatbot/classification"
-import { CONVERSATIONAL_SELF_KNOWLEDGE_KEYS, findChatbotSelfKnowledgeEntry } from "@/lib/chatbot/self-knowledge"
+import {
+  CONVERSATIONAL_SELF_KNOWLEDGE_KEYS,
+  findChatbotSelfKnowledgeEntry,
+  hasQuestionSignal,
+} from "@/lib/chatbot/self-knowledge"
 import {
   asksAboutThirdPartyAdoption,
   clampAnswerToLength,
@@ -662,8 +666,10 @@ function buildPolicyGuardResponse(question: NormalizedQuestion): {
       handoffIntent: "demo",
       // 어떤 모델로 도는지 같은 내부 기술 정보를 묻는 말에 답을 돌리는 안내(model_boundary)는 내부 정보를 막는 거절 답이라 관문 대상이 아니다.
       // 잡담에 공감으로 받아 주는 답(small_talk)도 정보를 전하는 답이 아니라 관문 대상이 아니다(CONVERSATIONAL_SELF_KNOWLEDGE_KEYS).
+      // 다만 '앱 설치하기 싫은데 웹으로 들어갈 수 있나요?'처럼 투정 뒤에 묻는 말이 붙으면 기능 질문일 수 있어 관문을 거친다.
       gateOriginal:
-        selfKnowledgeEntry.key === "model_boundary" || CONVERSATIONAL_SELF_KNOWLEDGE_KEYS.has(selfKnowledgeEntry.key)
+        selfKnowledgeEntry.key === "model_boundary" ||
+        (CONVERSATIONAL_SELF_KNOWLEDGE_KEYS.has(selfKnowledgeEntry.key) && !hasQuestionSignal(question.redacted))
           ? undefined
           : `self:${selfKnowledgeEntry.key}`,
     }
@@ -5251,7 +5257,8 @@ const selectionFailedResponses = new WeakSet<object>()
  * 못 찾음 답이 나가려는 공개 사실 질문에 두 번째 기회를 준다. 찾으면 response 를 문서 문장 답으로 바꾼다(제자리 수정).
  * 대상: 못 찾음 답 + 사실 질문(isFactSeekingQuestion: 잡담·주제 밖·증상 신고·한 낱말 입력 제외). 내부 CS 경로는 부르지 않는다.
  * 사람이 공개 범위를 정한 주제(isPolicyGovernedTopic)는 돌리지 않는다.
- * 이 함수는 예외를 던지지 않는다. 실패하면 못 찾음 답을 그대로 둔다.
+ * 이 함수는 예외를 던지지 않는다. 실패하면 못 찾음 답을 그대로 둔다. 다만 차단기 때문에 못 돌렸으면(model_unavailable)
+ * '못 찾음'을 단정하지 않고 MODEL_UNAVAILABLE_ANSWER(상담 버튼)로 바꾼다.
  */
 async function applySecondChanceRetrieval(
   response: CoreResponse,
@@ -5279,6 +5286,10 @@ async function applySecondChanceRetrieval(
     if ((reason === "error" || reason === "timeout") && process.env.NODE_ENV !== "test") {
       console.warn("[chatbot] second-chance retrieval failed; keeping not-found answer.", { reason, secondChanceMs })
     }
+    // 차단기 때문에 두 번째 검색을 돌리지 못했으면 '문서에 없음'을 단정하지 않는다. 문서에 있지만 낱말이 안 겹치는 질문을
+    // 살리려고 둔 단계라, 모델이 죽은 동안의 '못 찾음'은 근거 선별 실패와 같이 '지금 확인 못 함'(상담 버튼)으로 낸다.
+    // 차단기가 닫힌 상태의 일시 실패(오류·시간 초과)는 첫 검색이 정상으로 끝난 '못 찾음'이라 그대로 둔다.
+    if (reason === "model_unavailable") applyModelUnavailableAnswer(response)
     return { secondChance: "miss", secondChanceMs, reason }
   }
 
@@ -6181,14 +6192,16 @@ export async function streamChatbotQuery(
 
   // 일반 경로와 같은 두 번째 검색(못 찾음 답일 때만). 관문 문서 경로에서 이미 돌린 답은 다시 돌리지 않는다.
   let secondChance = core.secondChance
-  let secondChanceHit = false
+  let secondChanceChangedAnswer = false
   if (!isShortCircuited) {
     const trace = await applySecondChanceRetrieval(response, question, category, startedAt)
     if (trace.secondChance !== "none") secondChance = trace
-    secondChanceHit = trace.secondChance === "hit"
+    // 찾았거나(hit), 차단기 때문에 못 돌려 고정 문구로 바꿨으면(miss·model_unavailable) 답이 바뀌었다.
+    secondChanceChangedAnswer =
+      trace.secondChance === "hit" || (trace.secondChance === "miss" && trace.reason === "model_unavailable")
   }
   // 답이 바뀌었으면 말투·끝 질문 층을 새 답에 다시 입힌다(일반 경로는 코어 뒤에서 한 번 입힌다).
-  if (withheld || secondChanceHit) applyConversationTone(core)
+  if (withheld || secondChanceChangedAnswer) applyConversationTone(core)
   const handoffIntent = core.handoffIntent
 
   finalizeAnswer(response)

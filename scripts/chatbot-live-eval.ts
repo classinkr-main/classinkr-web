@@ -12,11 +12,13 @@
  * - --gate 는 정해 둔 답 확인 관문(CHATBOT_ANSWER_GATE, lib/chatbot/answer-gate.ts)을 켜고 끈다. 기본은 on.
  *   결과 줄의 gate 는 kept(판정 후 유지)·rejected(버리고 문서 경로)·skipped(꺼짐·실패로 판정 없이 유지)·none(대상 아님),
  *   gateOriginal 은 판정 대상이던 정해 둔 답의 출처(버려졌으면 버려진 답), gateMs 는 판정에 쓴 시간이다.
+ *   gateSkipReason 은 skipped 의 이유다(off·no_key·timeout·error·model_unavailable 등).
  * - secondChance 는 못 찾았을 때 목차에서 다시 고르는 두 번째 검색(CHATBOT_SECOND_CHANCE, lib/chatbot/service.ts)의 결과다.
  *   hit(목차에서 고른 절의 문장으로 답함)·miss(돌렸지만 못 찾음 유지)·none(대상 아님·꺼짐), secondChanceMs 는 그 시간,
  *   secondChanceReason 은 miss·none 의 이유다. --second-chance on|off 로 켜고 끈다(기본 on).
  * - 무효 측정 알아채기: 결과 줄의 modelError 는 그 줄에서 Gemini 가 401·402·403(결제 크레딧 소진·키 인증 실패)을 돌려줬거나
- *   그 때문에 열린 차단기(lib/chatbot/llm.ts)가 호출을 막은 경우(geminiBlocked) true 다. 이런 줄이 전체의 5% 를 넘으면
+ *   그 때문에 열린 차단기(lib/chatbot/llm.ts)가 호출을 막은 경우(geminiBlocked: 관문이 차단기를 보고 판정 없이 넘긴 것 포함),
+ *   관문·두 번째 검색이 model_unavailable 로 넘어간 경우 true 다. 이런 줄이 전체의 5% 를 넘으면
  *   "측정 무효"를 찍고 종료 코드 2 로 끝나고, 처음 끝난 20줄에서 모델을 부른 줄이 모두 그렇다면 거기서 멈춘다. 2026-11-18 크레딧 소진 때 모든 호출이
  *   402 였는데도 '오류 0'으로 끝나 무효 측정이 채점까지 갔다. 모델이 죽은 상태의 동작을 일부러 잴 때만 --allow-model-errors 를 준다.
  */
@@ -117,8 +119,14 @@ const MODEL_ERROR_MAX_RATIO = 0.05
 // 처음 이만큼이 모두 모델 호출 실패면 남은 질문을 돌리지 않고 멈춘다.
 const MODEL_ERROR_EARLY_STOP_ROWS = 20
 
-function hasModelError(trace: Pick<GeminiTrace, "statuses" | "blocked">) {
-  return trace.blocked > 0 || trace.statuses.some((status) => MODEL_ACCESS_DENIED_STATUSES.has(status))
+// skipReasons: 관문(answerGate.skipReason)·두 번째 검색(secondChance.reason)이 돌려준 이유. 차단기 때문에 판정·검색 없이
+// 넘어간 줄은 호출 추적(statuses·blocked)에 안 잡힐 수 있어도 모델이 죽은 상태에서 잰 줄이다.
+function hasModelError(trace: Pick<GeminiTrace, "statuses" | "blocked">, skipReasons: Array<string | null | undefined> = []) {
+  return (
+    trace.blocked > 0 ||
+    trace.statuses.some((status) => MODEL_ACCESS_DENIED_STATUSES.has(status)) ||
+    skipReasons.includes("model_unavailable")
+  )
 }
 
 async function main() {
@@ -291,6 +299,7 @@ async function main() {
           gate: result.answerGate.gate,
           gateOriginal: result.answerGate.gateOriginal ?? null,
           gateMs: result.answerGate.gateMs ?? null,
+          gateSkipReason: result.answerGate.skipReason ?? null,
           secondChance: result.secondChance.secondChance,
           secondChanceMs: result.secondChance.secondChanceMs ?? null,
           secondChanceReason: result.secondChance.reason ?? null,
@@ -298,7 +307,7 @@ async function main() {
           geminiCalls: trace.calls,
           geminiStatuses: trace.statuses,
           geminiBlocked: trace.blocked,
-          modelError: hasModelError(trace),
+          modelError: hasModelError(trace, [result.answerGate.skipReason, result.secondChance.reason]),
           geminiKinds: trace.kinds,
           attempts: attempt,
           error: isTransientFailure(trace) ? lastError : null,
@@ -329,6 +338,7 @@ async function main() {
       gate: null,
       gateOriginal: null,
       gateMs: null,
+      gateSkipReason: null,
       secondChance: null,
       secondChanceMs: null,
       secondChanceReason: null,

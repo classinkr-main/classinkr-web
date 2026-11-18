@@ -18,7 +18,7 @@
  *   - 같은 프롬프트를 gemini-3.5-flash 로(CHATBOT_ANSWER_GATE_MODEL): 버림 1.59% / 잡음 83.3%, 중앙값 1.3초·95번째 1.6초
  */
 
-import { isModelCircuitOpen, judgePreparedAnswerFit, type PreparedAnswerVerdict } from "./llm"
+import { isModelCircuitOpen, judgePreparedAnswerFit, notifyModelCircuitBlocked, type PreparedAnswerVerdict } from "./llm"
 
 /** 관문 결과. none=관문 대상이 아님, kept=판정 후 유지, rejected=버리고 문서 경로로, skipped=꺼짐·실패로 판정 없이 유지. */
 export type AnswerGateOutcome = "kept" | "rejected" | "skipped" | "none"
@@ -116,7 +116,11 @@ export async function checkPreparedAnswer({
   }
 
   // 결제·인증 실패로 모델 호출을 멈춘 동안(llm.ts 차단기)은 부르지 않고 기존 답을 유지한다.
-  if (isModelCircuitOpen()) return { gate: "skipped", gateOriginal: original, gateMs: 0, skipReason: "model_unavailable" }
+  // 차단기가 막은 호출과 같게 알려, 측정 스크립트가 판정 없이 나간 이 답을 정상 줄로 세지 않게 한다.
+  if (isModelCircuitOpen()) {
+    notifyModelCircuitBlocked()
+    return { gate: "skipped", gateOriginal: original, gateMs: 0, skipReason: "model_unavailable" }
+  }
 
   const timeoutMs = budgetMs !== undefined ? Math.min(budgetMs, getAnswerGateTimeoutMs()) : getAnswerGateTimeoutMs()
   let result: Awaited<ReturnType<typeof judgePreparedAnswerFit>> = null

@@ -1,7 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
-import { __clearAnswerGateCacheForTests } from "@/lib/chatbot/answer-gate"
-import { embedText, isModelCircuitOpen, MODEL_CIRCUIT_OPEN_MS, selectAnsweringSentenceIds } from "@/lib/chatbot/llm"
+import { __clearAnswerGateCacheForTests, checkPreparedAnswer } from "@/lib/chatbot/answer-gate"
+import {
+  embedText,
+  isModelCircuitOpen,
+  MODEL_CIRCUIT_OPEN_MS,
+  selectAnsweringSentenceIds,
+  setModelCircuitBlockedListener,
+} from "@/lib/chatbot/llm"
 import {
   __clearAnswerCacheForTests,
   evaluateChatbotQuery,
@@ -396,6 +402,86 @@ describe("결제·인증 실패(401·402·403) 차단기", () => {
     expect(calls.filter((call) => call === "gate")).toHaveLength(1)
     expect(result.answerGate).toMatchObject({ gate: "skipped", skipReason: "model_unavailable" })
     expect(result.answer).toBe(baseline.answer)
+  })
+
+  it("차단기 때문에 관문이 판정 없이 건너뛴 것도 차단 알림(측정 스크립트의 geminiBlocked)으로 센다", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    let blocked = 0
+    setModelCircuitBlockedListener(() => {
+      blocked += 1
+    })
+    try {
+      const fetchMock = vi.fn(async () => ({ ok: false, status: 402, json: async () => ({}), text: async () => "" }))
+      vi.stubGlobal("fetch", fetchMock)
+      const first = await checkPreparedAnswer({ question: "녹화 기능 있나요", answer: "녹화 기능이 있어요.", original: "basics:x" })
+      expect(first).toMatchObject({ gate: "skipped", skipReason: "model_unavailable" })
+      expect(isModelCircuitOpen()).toBe(true)
+      const sent = fetchMock.mock.calls.length
+      expect(blocked).toBe(0)
+
+      const second = await checkPreparedAnswer({ question: "숙제 내는 방법", answer: "숙제는 이렇게 내요.", original: "guide:y" })
+      expect(second).toMatchObject({ gate: "skipped", skipReason: "model_unavailable" })
+      expect(fetchMock.mock.calls.length).toBe(sent)
+      expect(blocked).toBe(1)
+    } finally {
+      setModelCircuitBlockedListener(null)
+    }
+  })
+
+  it("차단기 때문에 두 번째 검색을 못 돌렸으면 '못 찾음'을 단정하지 않고 고정 문구와 상담 버튼을 낸다(일반·스트림)", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    const question = "양자암호 지원하나요"
+    // 모델 없이도 '못 찾음'으로 끝나는 질문(두 번째 검색 대상)이다.
+    const baseline = await evaluateChatbotQuery(question, { generateAnswer: false })
+    expect(baseline.answer).toContain(NO_SOURCE_FACT_ANSWER.split("\n\n")[0])
+
+    for (const path of ["normal", "stream"] as const) {
+      __resetCircuit()
+      __clearAnswerCacheForTests()
+      stubModel({ selection: "402" })
+      await selectAnsweringSentenceIds({ question: "질문", sentences: [{ id: 1, text: "문장", sourceIndex: 0, label: "문서 / 절" }] })
+      expect(isModelCircuitOpen()).toBe(true)
+      const { calls } = stubModel({ selection: [1] })
+
+      if (path === "normal") {
+        const result = await evaluateChatbotQuery(question)
+        expect(calls, path).toHaveLength(0)
+        expect(result.secondChance).toMatchObject({ secondChance: "miss", reason: "model_unavailable" })
+        expect(result.answer, path).toContain(MODEL_UNAVAILABLE_HEAD)
+        expect(result.answer, path).not.toContain(NO_SOURCE_FACT_ANSWER.split("\n\n")[0])
+        expect(result.answerMode, path).toBe("handoff")
+        expect(result.needsHandoff, path).toBe(true)
+        expect(result.unresolved, path).toBe(true)
+      } else {
+        const stream = await collectStream(question)
+        __resetCircuit()
+        __clearAnswerCacheForTests()
+        stubModel({ selection: "402" })
+        await selectAnsweringSentenceIds({ question: "질문", sentences: [{ id: 1, text: "문장", sourceIndex: 0, label: "문서 / 절" }] })
+        const normal = await evaluateChatbotQuery(question)
+        expect(stream.answer, path).toBe(normal.answer)
+        expect(stream.meta?.answerMode, path).toBe("handoff")
+        expect(stream.meta?.needsHandoff, path).toBe(true)
+        expect(stream.meta?.handoffIntent, path).toBe(normal.handoffIntent)
+      }
+    }
+
+    // 이 답은 캐시하지 않아, 차단기가 닫히면 다음 요청에서 두 번째 검색을 다시 돌린다.
+    __resetCircuit()
+    const healthy = stubModel({ selection: [1] })
+    const again = await evaluateChatbotQuery(question)
+    expect(healthy.calls).toContain("outline")
+    expect(again.answer).not.toContain(MODEL_UNAVAILABLE_HEAD)
+  })
+
+  it("차단기가 닫힌 상태의 일시 실패(500)로 두 번째 검색이 빠진 경우는 기존대로 '못 찾음'을 둔다", async () => {
+    const question = "양자암호 지원하나요"
+    const fetchMock = vi.fn(async () => ({ ok: false, status: 500, json: async () => ({}), text: async () => "" }))
+    vi.stubGlobal("fetch", fetchMock)
+    const result = await evaluateChatbotQuery(question)
+    expect(isModelCircuitOpen()).toBe(false)
+    expect(result.secondChance).toMatchObject({ secondChance: "miss", reason: "error" })
+    expect(result.answer).toContain(NO_SOURCE_FACT_ANSWER.split("\n\n")[0])
   })
 
   it("임베딩도 차단 중에는 네트워크 없이 null 을 돌려준다(호출부는 낱말 검색으로 이어 간다)", async () => {

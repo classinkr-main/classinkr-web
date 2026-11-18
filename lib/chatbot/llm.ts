@@ -133,6 +133,14 @@ export function setModelCircuitBlockedListener(listener: (() => void) | null) {
   modelCircuitBlockedListener = listener
 }
 
+/**
+ * 차단기가 열려 있어 모델 호출을 보내지 않았음을 알린다. fetchGeminiThroughCircuit 을 거치지 않고 isModelCircuitOpen() 을 먼저 보고
+ * 돌아가는 호출부(answer-gate.ts 관문)도 이것을 불러야 측정 스크립트가 그 줄을 '모델이 죽은 상태에서 잰 줄'로 센다.
+ */
+export function notifyModelCircuitBlocked() {
+  modelCircuitBlockedListener?.()
+}
+
 /** 테스트 전용: 차단기를 닫힌 상태로 되돌린다. */
 export function __resetModelCircuitForTests() {
   modelCircuitOpenUntil = 0
@@ -160,7 +168,7 @@ async function fetchGeminiThroughCircuit(url: string, init: RequestInit): Promis
   let probe = false
   if (modelCircuitOpenUntil !== 0) {
     if (Date.now() < modelCircuitOpenUntil || modelCircuitProbeInFlight) {
-      modelCircuitBlockedListener?.()
+      notifyModelCircuitBlocked()
       return null
     }
     probe = true

@@ -28,6 +28,15 @@ export interface ChatbotSelfKnowledgeEntry {
  */
 export const CONVERSATIONAL_SELF_KNOWLEDGE_KEYS: ReadonlySet<ChatbotSelfKnowledgeEntry["key"]> = new Set(["small_talk"])
 
+// 묻는 말의 표시(물음표, '수 있', '어떻게', '방법', '~나요/까요', '가능', '알려'). small_talk 정규식은 '…하기 싫' 뒤를 보지 않아
+// "앱 설치하기 싫은데 웹으로 들어갈 수 있나요?" 같은 기능 질문에도 걸린다. 이런 표시가 있으면 공감 답을 관문(정보 기준 판정)에 넘긴다.
+const QUESTION_SIGNAL_RE = /[?？]|수\s*(?:있|없)|어떻게|방법|법\s*(?:있|없|좀|알려)|[나까]요|[나까]\s*$|가능|알려|되나|돼요\s*$|뭐|무엇|어디|언제/
+
+/** 말에 묻는 말의 표시가 있는지(잡담 공감 답을 관문에서 뺄지 가를 때 쓴다). */
+export function hasQuestionSignal(text: string) {
+  return QUESTION_SIGNAL_RE.test(text)
+}
+
 export const CHATBOT_SELF_KNOWLEDGE_ENTRIES: ChatbotSelfKnowledgeEntry[] = [
   {
     key: "model_boundary",
