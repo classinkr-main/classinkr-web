@@ -1,0 +1,640 @@
+{
+  "_comment": "처음 보는 기본 질문 180개(2026-11-18 실측, scripts/chatbot-live-eval.ts) 가운데 기본 사실 답(quick-answers-basics.ts)으로 가지 않는 질문. 문서 검색·못 찾음·다른 정해 둔 답·상담 연결이 맡는다. 답 내용은 바뀔 수 있어 묶지 않고, 일반 되묻기(상황을 한 가지 더 알려 달라는 답)로 떨어지지 않는지만 본다(tests/chatbot/fresh-open-questions.test.ts). 기본 사실 답으로 가는 질문은 data/chatbot-first-contact-set.json 에 기대 답 id 와 함께 있다.",
+  "cases": [
+    {
+      "id": "fresh-compare-04",
+      "group": "fresh_compare",
+      "question": "클래스인 줌 녹화 파일 가져올 수 있나요"
+    },
+    {
+      "id": "fresh-compare-06",
+      "group": "fresh_compare",
+      "question": "클래스인 미트 링크로 학생 입장돼요"
+    },
+    {
+      "id": "fresh-compare-09",
+      "group": "fresh_compare",
+      "question": "스마트보드랑 같이 써도 돼요?"
+    },
+    {
+      "id": "fresh-compare-10",
+      "group": "fresh_compare",
+      "question": "클래스인 엘지 전자칠판에도 설치돼요"
+    },
+    {
+      "id": "fresh-compare-12",
+      "group": "fresh_compare",
+      "question": "클래스인 출결 관리 기능도 있나요"
+    },
+    {
+      "id": "fresh-compare-14",
+      "group": "fresh_compare",
+      "question": "줌이랑 화면공유 방식 같아요?"
+    },
+    {
+      "id": "fresh-compare-15",
+      "group": "fresh_compare",
+      "question": "클래스인 줌보다 음질 좋아요?"
+    },
+    {
+      "id": "fresh-compare-16",
+      "group": "fresh_compare",
+      "question": "구루미도 아이패드 되던데 여긴요"
+    },
+    {
+      "id": "fresh-compare-17",
+      "group": "fresh_compare",
+      "question": "클래스인 일반 전자칠판은 학생 화면 공유 안 되죠"
+    },
+    {
+      "id": "fresh-contract-01",
+      "group": "fresh_contract",
+      "question": "세금계산서 발행 되나요"
+    },
+    {
+      "id": "fresh-contract-02",
+      "group": "fresh_contract",
+      "question": "클래스인 현금영수증도 끊어주나요"
+    },
+    {
+      "id": "fresh-contract-04",
+      "group": "fresh_contract",
+      "question": "클래스인 소형학원이랑 대형학원 요금 달라요?"
+    },
+    {
+      "id": "fresh-contract-06",
+      "group": "fresh_contract",
+      "question": "클래스인 중간에 해지하면 위약금 있어요?"
+    },
+    {
+      "id": "fresh-contract-08",
+      "group": "fresh_contract",
+      "question": "클래스인 무료체험 기간 며칠이에요"
+    },
+    {
+      "id": "fresh-contract-09",
+      "group": "fresh_contract",
+      "question": "체험판은 기능 제한 있어요?"
+    },
+    {
+      "id": "fresh-contract-11",
+      "group": "fresh_contract",
+      "question": "학교 단위로 계약하면 요금 어떻게 돼요"
+    },
+    {
+      "id": "fresh-contract-12",
+      "group": "fresh_contract",
+      "question": "할부로 나눠서 결제 가능해요?"
+    },
+    {
+      "id": "fresh-contract-14",
+      "group": "fresh_contract",
+      "question": "클래스인 계약서 전자서명 되나요"
+    },
+    {
+      "id": "fresh-contract-16",
+      "group": "fresh_contract",
+      "question": "클래스인 결제 취소는 며칠 안에 해야 돼요"
+    },
+    {
+      "id": "fresh-contract-17",
+      "group": "fresh_contract",
+      "question": "학생 줄면 요금도 내려가나요"
+    },
+    {
+      "id": "fresh-contract-18",
+      "group": "fresh_contract",
+      "question": "클래스인 계약자 이름 바꿀 수 있어요?"
+    },
+    {
+      "id": "fresh-device-01",
+      "group": "fresh_device",
+      "question": "크롬북에서도 수업 가능한가요"
+    },
+    {
+      "id": "fresh-device-05",
+      "group": "fresh_device",
+      "question": "마이크 따로 사야되나요"
+    },
+    {
+      "id": "fresh-device-06",
+      "group": "fresh_device",
+      "question": "웹캠 해상도 얼마나 돼야 하나요"
+    },
+    {
+      "id": "fresh-device-07",
+      "group": "fresh_device",
+      "question": "클래스인 듀얼모니터로 써도 되나요"
+    },
+    {
+      "id": "fresh-device-08",
+      "group": "fresh_device",
+      "question": "유선랜 꼭 꽂아야 하나요"
+    },
+    {
+      "id": "fresh-device-09",
+      "group": "fresh_device",
+      "question": "클래스인 설치파일 용량 얼마에요"
+    },
+    {
+      "id": "fresh-device-10",
+      "group": "fresh_device",
+      "question": "업데이트 자동으로 되나요"
+    },
+    {
+      "id": "fresh-device-12",
+      "group": "fresh_device",
+      "question": "클래스인 칠판 크기 몇 인치까지 있어요"
+    },
+    {
+      "id": "fresh-device-13",
+      "group": "fresh_device",
+      "question": "전자칠판 터치펜 같이 와요?"
+    },
+    {
+      "id": "fresh-device-16",
+      "group": "fresh_device",
+      "question": "업로드 속도는 얼마나 있어야 해요"
+    },
+    {
+      "id": "fresh-device-17",
+      "group": "fresh_device",
+      "question": "사무실 방화벽 포트 열어야 하나요 클래스인"
+    },
+    {
+      "id": "fresh-device-18",
+      "group": "fresh_device",
+      "question": "클래스인 아이패드 펜슬 필수인가요"
+    },
+    {
+      "id": "fresh-feature-01",
+      "group": "fresh_feature",
+      "question": "수업 출석 체크 기능 있어요?"
+    },
+    {
+      "id": "fresh-feature-02",
+      "group": "fresh_feature",
+      "question": "클래스인에 숙제 제출받는 기능 있나요"
+    },
+    {
+      "id": "fresh-feature-03",
+      "group": "fresh_feature",
+      "question": "클래스인 과제 채점도 되나요?"
+    },
+    {
+      "id": "fresh-feature-04",
+      "group": "fresh_feature",
+      "question": "화면 공유 되나요?"
+    },
+    {
+      "id": "fresh-feature-05",
+      "group": "fresh_feature",
+      "question": "소회의실 나눠서 수업할 수 있어요"
+    },
+    {
+      "id": "fresh-feature-06",
+      "group": "fresh_feature",
+      "question": "클래스인 소그룹 토론방 기능 있어요"
+    },
+    {
+      "id": "fresh-feature-07",
+      "group": "fresh_feature",
+      "question": "시험 문제 내고 객관식 채점 되나요"
+    },
+    {
+      "id": "fresh-feature-08",
+      "group": "fresh_feature",
+      "question": "클래스인 퀴즈 기능도 있나요"
+    },
+    {
+      "id": "fresh-feature-09",
+      "group": "fresh_feature",
+      "question": "클래스인 AI 자동 번역 기능 있나요"
+    },
+    {
+      "id": "fresh-feature-11",
+      "group": "fresh_feature",
+      "question": "학생별 학습 리포트 나와요?"
+    },
+    {
+      "id": "fresh-feature-12",
+      "group": "fresh_feature",
+      "question": "클래스인 학습 보고서 자동으로 만들어줘요"
+    },
+    {
+      "id": "fresh-feature-14",
+      "group": "fresh_feature",
+      "question": "워드 파일도 화면에 띄울 수 있어요?"
+    },
+    {
+      "id": "fresh-feature-15",
+      "group": "fresh_feature",
+      "question": "클래스인 수업 자동녹화 설정돼요"
+    },
+    {
+      "id": "fresh-feature-16",
+      "group": "fresh_feature",
+      "question": "출석부 엑셀로 내려받을 수 있어요?"
+    },
+    {
+      "id": "fresh-feature-17",
+      "group": "fresh_feature",
+      "question": "클래스인 과제 마감일 설정도 되나요"
+    },
+    {
+      "id": "fresh-feature-18",
+      "group": "fresh_feature",
+      "question": "1:1 개인 채팅 기능 있어요"
+    },
+    {
+      "id": "fresh-messy-01",
+      "group": "fresh_messy",
+      "question": "고객센터 몇시까지 해요"
+    },
+    {
+      "id": "fresh-messy-03",
+      "group": "fresh_messy",
+      "question": "클래스인 출석부 엑셀로 뽑아지나요"
+    },
+    {
+      "id": "fresh-messy-04",
+      "group": "fresh_messy",
+      "question": "클래스인 소그룹 토론방 나눠져요"
+    },
+    {
+      "id": "fresh-messy-05",
+      "group": "fresh_messy",
+      "question": "숙제 파일 학생이 내는 기능 있음"
+    },
+    {
+      "id": "fresh-messy-06",
+      "group": "fresh_messy",
+      "question": "퀴즈 기능 있어요 클래스인"
+    },
+    {
+      "id": "fresh-messy-08",
+      "group": "fresh_messy",
+      "question": "세금계산서 끊어주나요"
+    },
+    {
+      "id": "fresh-messy-10",
+      "group": "fresh_messy",
+      "question": "계약서 전자서명 되는지 궁금"
+    },
+    {
+      "id": "fresh-messy-11",
+      "group": "fresh_messy",
+      "question": "클래스인 외국에 있는 학생이랑 수업 가능해요?"
+    },
+    {
+      "id": "fresh-messy-12",
+      "group": "fresh_messy",
+      "question": "강사 교육영상 같은거 있어요"
+    },
+    {
+      "id": "fresh-messy-13",
+      "group": "fresh_messy",
+      "question": "상담 신청 어디서 함?"
+    },
+    {
+      "id": "fresh-messy-14",
+      "group": "fresh_messy",
+      "question": "자막 번역 해줌? 클래스인"
+    },
+    {
+      "id": "fresh-messy-15",
+      "group": "fresh_messy",
+      "question": "클래스인 랜덤으로 발표자 뽑는 기능 있나"
+    },
+    {
+      "id": "fresh-messy-16",
+      "group": "fresh_messy",
+      "question": "시각장애인도 쓸 수 있게 돼있어요?"
+    },
+    {
+      "id": "fresh-messy-17",
+      "group": "fresh_messy",
+      "question": "클래스인 학생 화면 공유도 돼요?"
+    },
+    {
+      "id": "fresh-parent-02",
+      "group": "fresh_parent",
+      "question": "학생 계정은 따로 만들어 줘야 하나요"
+    },
+    {
+      "id": "fresh-parent-05",
+      "group": "fresh_parent",
+      "question": "클래스인 부모도 아이 수업을 실시간으로 볼 수 있나요"
+    },
+    {
+      "id": "fresh-parent-06",
+      "group": "fresh_parent",
+      "question": "아이가 수업 중간에 나가면 알림 오나요"
+    },
+    {
+      "id": "fresh-parent-07",
+      "group": "fresh_parent",
+      "question": "클래스인 지난 수업 다시보기는 어디서 보는 거예요"
+    },
+    {
+      "id": "fresh-parent-11",
+      "group": "fresh_parent",
+      "question": "클래스인 숙제 파일 학생이 여기서 제출할 수 있어요?"
+    },
+    {
+      "id": "fresh-parent-14",
+      "group": "fresh_parent",
+      "question": "클래스인 채팅창에서 낯선 사람이 말 걸 수 있어요?"
+    },
+    {
+      "id": "fresh-parent-15",
+      "group": "fresh_parent",
+      "question": "아이 가입할 때 생년월일 꼭 넣어야 해요"
+    },
+    {
+      "id": "fresh-parent-16",
+      "group": "fresh_parent",
+      "question": "클래스인 학생 비밀번호 잃어버리면 어떡해요"
+    },
+    {
+      "id": "fresh-parent-17",
+      "group": "fresh_parent",
+      "question": "수업 시작 전에 아이가 먼저 들어가 있어야 하나요"
+    },
+    {
+      "id": "fresh-parent-18",
+      "group": "fresh_parent",
+      "question": "초대 링크로 들어가면 가입 절차가 있나요"
+    },
+    {
+      "id": "fresh-start-02",
+      "group": "fresh_start",
+      "question": "클래스인 계정 어떻게 만들어요"
+    },
+    {
+      "id": "fresh-start-03",
+      "group": "fresh_start",
+      "question": "데모 수업 신청 어디서 해요"
+    },
+    {
+      "id": "fresh-start-04",
+      "group": "fresh_start",
+      "question": "클래스인 상담받는 데 돈 드나요"
+    },
+    {
+      "id": "fresh-start-05",
+      "group": "fresh_start",
+      "question": "도입하는데 보통 몇 주 걸려요"
+    },
+    {
+      "id": "fresh-start-06",
+      "group": "fresh_start",
+      "question": "신청하고 첫 수업까지 며칠 걸리나요"
+    },
+    {
+      "id": "fresh-start-07",
+      "group": "fresh_start",
+      "question": "운영자 교육 받을수 있나요"
+    },
+    {
+      "id": "fresh-start-08",
+      "group": "fresh_start",
+      "question": "선생님용 사용법 영상 있어요?"
+    },
+    {
+      "id": "fresh-start-10",
+      "group": "fresh_start",
+      "question": "클래스인 학생 계정은 누가 만들어줘요?"
+    },
+    {
+      "id": "fresh-start-13",
+      "group": "fresh_start",
+      "question": "클래스인 해외에서도 가입할 수 있어요?"
+    },
+    {
+      "id": "fresh-start-14",
+      "group": "fresh_start",
+      "question": "기존 학원 자료 옮겨올 수 있나요"
+    },
+    {
+      "id": "fresh-start-15",
+      "group": "fresh_start",
+      "question": "학원 여러 곳 한번에 등록 가능해요?"
+    },
+    {
+      "id": "fresh-start-16",
+      "group": "fresh_start",
+      "question": "도입 상담 전화로도 받나요"
+    },
+    {
+      "id": "fresh-start-17",
+      "group": "fresh_start",
+      "question": "가입 승인 기다려야 하나요?"
+    },
+    {
+      "id": "fresh-start-18",
+      "group": "fresh_start",
+      "question": "클래스인 처음 시작할 때 담당자 붙어요?"
+    },
+    {
+      "id": "fresh-support-01",
+      "group": "fresh_support",
+      "question": "클래스인 전화 상담 번호가 어떻게 되나요"
+    },
+    {
+      "id": "fresh-support-02",
+      "group": "fresh_support",
+      "question": "상담 전화 몇 시부터 받아요?"
+    },
+    {
+      "id": "fresh-support-03",
+      "group": "fresh_support",
+      "question": "주말에도 상담 전화 받나요"
+    },
+    {
+      "id": "fresh-support-07",
+      "group": "fresh_support",
+      "question": "클래스인 AS는 어디로 접수해요"
+    },
+    {
+      "id": "fresh-support-08",
+      "group": "fresh_support",
+      "question": "수리 맡기면 보통 며칠 걸려요?"
+    },
+    {
+      "id": "fresh-support-09",
+      "group": "fresh_support",
+      "question": "클래스인 쇼룸 어디 있어요"
+    },
+    {
+      "id": "fresh-support-10",
+      "group": "fresh_support",
+      "question": "직접 가서 써볼 수 있는 곳 있나요"
+    },
+    {
+      "id": "fresh-support-11",
+      "group": "fresh_support",
+      "question": "클래스인 체험 방문 신청 받아요?"
+    },
+    {
+      "id": "fresh-support-12",
+      "group": "fresh_support",
+      "question": "지방 학원인데 방문 지원 가능해요?"
+    },
+    {
+      "id": "fresh-support-13",
+      "group": "fresh_support",
+      "question": "클래스인 제주도에도 현장 지원 나와요?"
+    },
+    {
+      "id": "fresh-support-14",
+      "group": "fresh_support",
+      "question": "클래스인 원격으로 설정 도와주나요"
+    },
+    {
+      "id": "fresh-support-15",
+      "group": "fresh_support",
+      "question": "원격 지원은 비용 따로 받나요"
+    },
+    {
+      "id": "fresh-support-16",
+      "group": "fresh_support",
+      "question": "상담 예약은 어떻게 잡아요?"
+    },
+    {
+      "id": "fresh-support-17",
+      "group": "fresh_support",
+      "question": "클래스인 메일로 문의하면 답변 얼마나 걸려요"
+    },
+    {
+      "id": "fresh-support-18",
+      "group": "fresh_support",
+      "question": "클래스인 담당자랑 바로 통화 되나요"
+    },
+    {
+      "id": "fresh-trust-01",
+      "group": "fresh_trust",
+      "question": "클래스인 데이터 백업은 따로 해주나요"
+    },
+    {
+      "id": "fresh-trust-02",
+      "group": "fresh_trust",
+      "question": "개인정보 처리 위탁업체는 어디인가요"
+    },
+    {
+      "id": "fresh-trust-03",
+      "group": "fresh_trust",
+      "question": "클래스인 2단계 인증 지원하나요"
+    },
+    {
+      "id": "fresh-trust-04",
+      "group": "fresh_trust",
+      "question": "특허 받은 기술 있는 회사예요?"
+    },
+    {
+      "id": "fresh-trust-06",
+      "group": "fresh_trust",
+      "question": "ClassIn 전 세계 몇 나라에서 써요"
+    },
+    {
+      "id": "fresh-trust-07",
+      "group": "fresh_trust",
+      "question": "서비스 가동률 보장해주나요"
+    },
+    {
+      "id": "fresh-trust-08",
+      "group": "fresh_trust",
+      "question": "클래스인 고객센터 몇 시까지 해요"
+    },
+    {
+      "id": "fresh-trust-09",
+      "group": "fresh_trust",
+      "question": "점검 공지는 어디서 확인해요"
+    },
+    {
+      "id": "fresh-trust-12",
+      "group": "fresh_trust",
+      "question": "클래스인 상담은 한국어로 받을 수 있나요"
+    },
+    {
+      "id": "fresh-trust-13",
+      "group": "fresh_trust",
+      "question": "클래스인 업데이트 얼마나 자주 나와요"
+    },
+    {
+      "id": "fresh-trust-15",
+      "group": "fresh_trust",
+      "question": "클래스인 투자받은 곳 어디예요"
+    },
+    {
+      "id": "fresh-trust-16",
+      "group": "fresh_trust",
+      "question": "클래스인 클라우드 업체 어디 써요"
+    },
+    {
+      "id": "fresh-trust-17",
+      "group": "fresh_trust",
+      "question": "클래스인 정기점검은 주기가 어떻게 돼요?"
+    },
+    {
+      "id": "fresh-usecase-01",
+      "group": "fresh_usecase",
+      "question": "클래스인 해외 학생이랑도 수업 되나요?"
+    },
+    {
+      "id": "fresh-usecase-02",
+      "group": "fresh_usecase",
+      "question": "피아노 개인 레슨에 써도 되나요"
+    },
+    {
+      "id": "fresh-usecase-03",
+      "group": "fresh_usecase",
+      "question": "미술학원 그림 수업에도 맞아요?"
+    },
+    {
+      "id": "fresh-usecase-04",
+      "group": "fresh_usecase",
+      "question": "코딩 교실인데 쓸 만한가요"
+    },
+    {
+      "id": "fresh-usecase-06",
+      "group": "fresh_usecase",
+      "question": "수학 문제 풀이 수업 용도로 괜찮아요?"
+    },
+    {
+      "id": "fresh-usecase-08",
+      "group": "fresh_usecase",
+      "question": "수능 입시반 수업에도 돼요?"
+    },
+    {
+      "id": "fresh-usecase-11",
+      "group": "fresh_usecase",
+      "question": "외국인 강사가 한국 학생 가르쳐도 돼요?"
+    },
+    {
+      "id": "fresh-usecase-12",
+      "group": "fresh_usecase",
+      "question": "어르신 대상 강좌에도 쓸 수 있을까요"
+    },
+    {
+      "id": "fresh-usecase-13",
+      "group": "fresh_usecase",
+      "question": "클래스인 취업 준비생 강의용으로 괜찮아요?"
+    },
+    {
+      "id": "fresh-usecase-14",
+      "group": "fresh_usecase",
+      "question": "독서 토론 모임 같은 소모임에도 돼요"
+    },
+    {
+      "id": "fresh-usecase-16",
+      "group": "fresh_usecase",
+      "question": "음악 합주 수업도 가능한가요"
+    },
+    {
+      "id": "fresh-usecase-17",
+      "group": "fresh_usecase",
+      "question": "과학 실험 설명 수업에도 맞을까요"
+    }
+  ]
+}

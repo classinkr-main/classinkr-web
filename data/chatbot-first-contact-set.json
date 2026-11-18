@@ -1,5 +1,5 @@
 {
- "_comment": "첫 방문자가 한 줄로 묻는 사실 질문 평가셋. 2026-11-13 Drive에 모인 이상 답변 스크린샷 11건(group=screenshot)과, 같은 유형으로 만든 질문 180개(회사·장비 필요 여부·원가·요금·한도·보관·보안·기기·비교·고객사·적합성·낱말 함정). expectTopic 은 이 질문에 나가야 하는 기본 사실 답(lib/chatbot/quick-answers-basics.ts)의 id 이고, null 은 기존 정해 둔 답이나 문서 경로가 맡는 질문이다. 어느 쪽이든 일반 되묻기·약한 문서 제시로 떨어지면 안 된다(tests/chatbot/basics-quick-answers.test.ts).",
+ "_comment": "첫 방문자가 한 줄로 묻는 사실 질문 평가셋. 2026-11-13 Drive에 모인 이상 답변 스크린샷 11건(group=screenshot)과, 같은 유형으로 만든 질문 180개(회사·장비 필요 여부·원가·요금·한도·보관·보안·기기·비교·고객사·적합성·낱말 함정). expectTopic 은 이 질문에 나가야 하는 기본 사실 답(lib/chatbot/quick-answers-basics.ts)의 id 이고, null 은 기존 정해 둔 답이나 문서 경로가 맡는 질문이다. 어느 쪽이든 일반 되묻기·약한 문서 제시로 떨어지면 안 된다(tests/chatbot/basics-quick-answers.test.ts). 2026-11-18: 처음 보는 기본 질문 180개(group=fresh_*) 가운데 기본 사실 답으로 가는 질문을 기대 답 id 와 함께 더했다(group=verified_draft 는 사실 확인을 거친 답 초안의 예시 질문). 나머지(문서 검색·못 찾음·다른 정해 둔 답으로 가는 질문)는 data/chatbot-fresh-open-set.json 에 두고 일반 되묻기로 떨어지지 않는지만 본다(tests/chatbot/fresh-open-questions.test.ts).",
  "cases": [
   {
    "id": "shot-01",
@@ -809,7 +809,7 @@
    "id": "compare-03",
    "group": "compare",
    "question": "클래스인 그냥 줌 쓰면 되는 거 아닌가요",
-   "expectTopic": null
+   "expectTopic": "basics-zoom-enough-free"
   },
   {
    "id": "compare-04",
@@ -863,7 +863,7 @@
    "id": "compare-12",
    "group": "compare",
    "question": "클래스인 삼성 전자칠판이랑 차이는요",
-   "expectTopic": null
+   "expectTopic": "basics-vs-other-board"
   },
   {
    "id": "compare-13",
@@ -875,7 +875,7 @@
    "id": "compare-14",
    "group": "compare",
    "question": "클래스인 줌 무료버전보다 뭐가 좋아?",
-   "expectTopic": null
+   "expectTopic": "basics-zoom-enough-free"
   },
   {
    "id": "compare-15",
@@ -911,7 +911,7 @@
    "id": "customers-05",
    "group": "customers",
    "question": "클래스인 국어학원 쓰는 사례 있어요?",
-   "expectTopic": null
+   "expectTopic": "basics-subject-case-reference"
   },
   {
    "id": "customers-06",
@@ -923,13 +923,13 @@
    "id": "customers-07",
    "group": "customers",
    "question": "도입 사례 보여주세요",
-   "expectTopic": null
+   "expectTopic": "basics-show-adoption-cases"
   },
   {
    "id": "customers-08",
    "group": "customers",
    "question": "클래스인 영어학원 후기 있나요",
-   "expectTopic": null
+   "expectTopic": "basics-subject-case-reference"
   },
   {
    "id": "customers-09",
@@ -1152,6 +1152,336 @@
    "group": "how_trap",
    "question": "클래스인 환불하면 설치한 것도 돌려줘야 하나요",
    "expectTopic": null
+  },
+  {
+   "id": "fresh-compare-01",
+   "group": "fresh_compare",
+   "question": "구루미랑 뭐가 달라요",
+   "expectTopic": "basics-vs-other-video-tools"
+  },
+  {
+   "id": "fresh-compare-02",
+   "group": "fresh_compare",
+   "question": "클래스인 구루미보다 비싼가요",
+   "expectTopic": "basics-why-expensive"
+  },
+  {
+   "id": "fresh-compare-03",
+   "group": "fresh_compare",
+   "question": "줌쓰던 학원인데 옮기기 어려워요?",
+   "expectTopic": "basics-switch-from-zoom"
+  },
+  {
+   "id": "fresh-compare-05",
+   "group": "fresh_compare",
+   "question": "구글미트 무료인데 왜 돈 내요",
+   "expectTopic": "basics-free-tool-why-pay"
+  },
+  {
+   "id": "fresh-compare-07",
+   "group": "fresh_compare",
+   "question": "웨일온은 무료라던데 차이가 뭐임",
+   "expectTopic": "basics-vs-other-video-tools"
+  },
+  {
+   "id": "fresh-compare-08",
+   "group": "fresh_compare",
+   "question": "팀즈 교육계정이랑 뭐가달라요",
+   "expectTopic": "basics-vs-other-video-tools"
+  },
+  {
+   "id": "fresh-compare-11",
+   "group": "fresh_compare",
+   "question": "학원관리프로그램이랑 중복 아니에요?",
+   "expectTopic": "basics-academy-mgmt-overlap"
+  },
+  {
+   "id": "fresh-compare-13",
+   "group": "fresh_compare",
+   "question": "클래스인도 칠판 하드웨어 만들어요",
+   "expectTopic": "basics-sells-hardware"
+  },
+  {
+   "id": "fresh-compare-18",
+   "group": "fresh_compare",
+   "question": "클래스인 기존 LMS 대체용인가요",
+   "expectTopic": "basics-vs-lms"
+  },
+  {
+   "id": "fresh-contract-03",
+   "group": "fresh_contract",
+   "question": "사업자없는 개인도 결제할 수 있어요?",
+   "expectTopic": "basics-individual-teacher-paid"
+  },
+  {
+   "id": "fresh-contract-05",
+   "group": "fresh_contract",
+   "question": "교실 여러개면 한꺼번에 하면 싸지나요",
+   "expectTopic": "basics-discount-haggling"
+  },
+  {
+   "id": "fresh-contract-07",
+   "group": "fresh_contract",
+   "question": "해지 신청은 어디서 하나요",
+   "expectTopic": "basics-contract-cancel-where"
+  },
+  {
+   "id": "fresh-contract-10",
+   "group": "fresh_contract",
+   "question": "클래스인 1년치 한번에 내면 할인돼요?",
+   "expectTopic": "basics-discount-haggling"
+  },
+  {
+   "id": "fresh-contract-13",
+   "group": "fresh_contract",
+   "question": "입금하고 나면 바로 쓸 수 있나요",
+   "expectTopic": "basics-after-payment-activation"
+  },
+  {
+   "id": "fresh-contract-15",
+   "group": "fresh_contract",
+   "question": "계약 끝나면 자동으로 연장돼요?",
+   "expectTopic": "basics-contract-auto-renewal"
+  },
+  {
+   "id": "fresh-device-02",
+   "group": "fresh_device",
+   "question": "클래스인 윈도우 몇 버전부터 깔려요",
+   "expectTopic": "basics-windows-old-pc-specs"
+  },
+  {
+   "id": "fresh-device-03",
+   "group": "fresh_device",
+   "question": "노트북 램 몇 기가 있어야 해요",
+   "expectTopic": "basics-windows-old-pc-specs"
+  },
+  {
+   "id": "fresh-device-04",
+   "group": "fresh_device",
+   "question": "권장 사양 알려주세요 클래스인",
+   "expectTopic": "basics-windows-old-pc-specs"
+  },
+  {
+   "id": "fresh-device-11",
+   "group": "fresh_device",
+   "question": "설치 직접 해도 되나요",
+   "expectTopic": "basics-install-self"
+  },
+  {
+   "id": "fresh-device-14",
+   "group": "fresh_device",
+   "question": "아이폰 앱 몇 iOS부터 되나요",
+   "expectTopic": "basics-mobile-device-support"
+  },
+  {
+   "id": "fresh-device-15",
+   "group": "fresh_device",
+   "question": "클래스인 맥 OS 버전 몇부터 지원해요",
+   "expectTopic": "basics-mac-support"
+  },
+  {
+   "id": "fresh-feature-10",
+   "group": "fresh_feature",
+   "question": "AI로 수업 내용 요약해주나요",
+   "expectTopic": "basics-ai-lesson-summary"
+  },
+  {
+   "id": "fresh-feature-13",
+   "group": "fresh_feature",
+   "question": "교재 PDF 올려서 수업에 쓸 수 있나요",
+   "expectTopic": "basics-material-upload-pdf"
+  },
+  {
+   "id": "fresh-messy-02",
+   "group": "fresh_messy",
+   "question": "클래스인 한국말 지원됨?",
+   "expectTopic": "basics-korean-language-support"
+  },
+  {
+   "id": "fresh-messy-07",
+   "group": "fresh_messy",
+   "question": "수업 시간표 미리 잡아둘수 있어요?",
+   "expectTopic": "basics-class-schedule-prebuild"
+  },
+  {
+   "id": "fresh-messy-09",
+   "group": "fresh_messy",
+   "question": "클래스인 사업자등록증 있어야 가입 되나요",
+   "expectTopic": "basics-business-registration-signup"
+  },
+  {
+   "id": "fresh-messy-18",
+   "group": "fresh_messy",
+   "question": "앱 이름이 뭐임",
+   "expectTopic": "basics-app-name"
+  },
+  {
+   "id": "fresh-parent-01",
+   "group": "fresh_parent",
+   "question": "클래스인 초등 아이 혼자서도 수업 들어갈 수 있나요",
+   "expectTopic": "basics-fit-elementary"
+  },
+  {
+   "id": "fresh-parent-03",
+   "group": "fresh_parent",
+   "question": "클래스인 학생용 앱 따로 받아야 해요?",
+   "expectTopic": "basics-student-app-install"
+  },
+  {
+   "id": "fresh-parent-04",
+   "group": "fresh_parent",
+   "question": "스마트폰 작은 화면으로 강의 들어도 괜찮아요",
+   "expectTopic": "basics-teach-tablet-phone-only"
+  },
+  {
+   "id": "fresh-parent-08",
+   "group": "fresh_parent",
+   "question": "결석한 날 수업 영상 받을 수 있나요",
+   "expectTopic": "basics-recording-download"
+  },
+  {
+   "id": "fresh-parent-09",
+   "group": "fresh_parent",
+   "question": "다시보기 영상 학생 계정으로도 보여요?",
+   "expectTopic": "basics-student-replay"
+  },
+  {
+   "id": "fresh-parent-10",
+   "group": "fresh_parent",
+   "question": "클래스인 수업 자료 학생이 직접 내려받을 수 있나요",
+   "expectTopic": "basics-student-material-download"
+  },
+  {
+   "id": "fresh-parent-12",
+   "group": "fresh_parent",
+   "question": "강사한테 개인 질문 메시지 보낼 수 있나요",
+   "expectTopic": "basics-student-ask-teacher"
+  },
+  {
+   "id": "fresh-parent-13",
+   "group": "fresh_parent",
+   "question": "클래스인 수업 중 다른 학생 얼굴도 다 보여요?",
+   "expectTopic": "basics-student-faces-visible"
+  },
+  {
+   "id": "fresh-start-01",
+   "group": "fresh_start",
+   "question": "회원가입 꼭 해야 하나요?",
+   "expectTopic": "basics-signup-required"
+  },
+  {
+   "id": "fresh-start-09",
+   "group": "fresh_start",
+   "question": "매뉴얼 문서 홈페이지에 공개돼 있나요",
+   "expectTopic": "basics-manual-public"
+  },
+  {
+   "id": "fresh-start-11",
+   "group": "fresh_start",
+   "question": "초대 링크로 학생 가입시킬 수 있어요?",
+   "expectTopic": "basics-invite-link-signup"
+  },
+  {
+   "id": "fresh-start-12",
+   "group": "fresh_start",
+   "question": "사업자등록 없이도 가입 되나요",
+   "expectTopic": "basics-business-registration-signup"
+  },
+  {
+   "id": "fresh-support-04",
+   "group": "fresh_support",
+   "question": "클래스인 카톡 상담 채널 있어요?",
+   "expectTopic": "basics-contact-channel"
+  },
+  {
+   "id": "fresh-support-05",
+   "group": "fresh_support",
+   "question": "카카오톡으로 문의해도 돼요?",
+   "expectTopic": "basics-contact-channel"
+  },
+  {
+   "id": "fresh-support-06",
+   "group": "fresh_support",
+   "question": "채널톡으로 질문 남기면 되나요",
+   "expectTopic": "basics-contact-channel"
+  },
+  {
+   "id": "fresh-trust-05",
+   "group": "fresh_trust",
+   "question": "클래스인 상장된 회사야?",
+   "expectTopic": "basics-company-investors-listing"
+  },
+  {
+   "id": "fresh-trust-10",
+   "group": "fresh_trust",
+   "question": "한국에 직원 몇 명 있어요?",
+   "expectTopic": "basics-company-size-stability"
+  },
+  {
+   "id": "fresh-trust-11",
+   "group": "fresh_trust",
+   "question": "개인정보 보호책임자 지정돼 있어요?",
+   "expectTopic": "basics-security-posture"
+  },
+  {
+   "id": "fresh-trust-14",
+   "group": "fresh_trust",
+   "question": "예전에 보안 사고 난 적 있어요?",
+   "expectTopic": "basics-security-posture"
+  },
+  {
+   "id": "fresh-trust-18",
+   "group": "fresh_trust",
+   "question": "해외 법인은 어느 나라에 있어요?",
+   "expectTopic": "basics-overseas-entities"
+  },
+  {
+   "id": "fresh-usecase-05",
+   "group": "fresh_usecase",
+   "question": "클래스인 영어회화 수업용으로 괜찮나요?",
+   "expectTopic": "basics-fit-english-speaking"
+  },
+  {
+   "id": "fresh-usecase-07",
+   "group": "fresh_usecase",
+   "question": "대학교 교수님도 강의에 쓰나요",
+   "expectTopic": "basics-schools-universities-companies"
+  },
+  {
+   "id": "fresh-usecase-09",
+   "group": "fresh_usecase",
+   "question": "유치원 아이들 수업에도 쓸 수 있어요?",
+   "expectTopic": "basics-fit-elementary"
+  },
+  {
+   "id": "fresh-usecase-10",
+   "group": "fresh_usecase",
+   "question": "클래스인 중학생 과외 선생님인데 써도 되죠?",
+   "expectTopic": "basics-individual-teacher-paid"
+  },
+  {
+   "id": "fresh-usecase-15",
+   "group": "fresh_usecase",
+   "question": "공공기관 직원 연수에도 쓰나요?",
+   "expectTopic": "basics-corporate-training"
+  },
+  {
+   "id": "fresh-usecase-18",
+   "group": "fresh_usecase",
+   "question": "클래스인 온라인 전용 학원 운영하는데 괜찮나요?",
+   "expectTopic": "basics-fit-online-academy"
+  },
+  {
+   "id": "draft-as-intake-01",
+   "group": "verified_draft",
+   "question": "A/S 접수 어떻게 해요",
+   "expectTopic": "basics-as-intake"
+  },
+  {
+   "id": "draft-exam-prep-01",
+   "group": "verified_draft",
+   "question": "입시 학원에서도 쓰나요",
+   "expectTopic": "basics-fit-exam-prep"
   }
  ]
 }
