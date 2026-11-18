@@ -10,9 +10,23 @@ export function enableGenerateMode() {
   vi.stubEnv("CHATBOT_FINAL_ANSWER_LLM", "generate")
 }
 
-/** 근거 선별 호출인지 본다. 선별은 JSON 응답을 요청하는 generateContent 호출이다. */
+/** 정해 둔 답 확인 관문(판정만 하는 JSON 호출)인지 본다. */
+export function isAnswerGateCall(init?: RequestInit | null) {
+  const body = String(init?.body ?? "")
+  return body.includes('"off_target"') && body.includes('"verdict"')
+}
+
+/** 관문 판정 응답. 기본은 "준비된 답이 질문에 답한다"(기존 답 유지). */
+export function answerGateResponse(verdict: "answers" | "off_target" = "answers") {
+  return {
+    ok: true,
+    json: async () => ({ candidates: [{ content: { parts: [{ text: JSON.stringify({ verdict }) }] } }] }),
+  }
+}
+
+/** 근거 선별 호출인지 본다. 선별은 JSON 응답을 요청하는 generateContent 호출이다(관문 판정 호출은 뺀다). */
 export function isEvidenceSelectionCall(init?: RequestInit | null) {
-  return String(init?.body ?? "").includes('"responseMimeType":"application/json"')
+  return String(init?.body ?? "").includes('"responseMimeType":"application/json"') && !isAnswerGateCall(init)
 }
 
 /** 근거 선별 호출에 돌려줄 응답. 기본은 "1번 문장이 답". 빈 배열이면 답 문장이 없다는 뜻이다. */
@@ -31,7 +45,11 @@ type FetchLike = (url: string | URL | Request, init?: RequestInit) => unknown
  */
 export function stubFetchWithEvidenceSelection(fetchMock: FetchLike, ids: number[] = [1]) {
   const wrapped = vi.fn(async (url: string | URL | Request, init?: RequestInit) =>
-    isEvidenceSelectionCall(init) ? evidenceSelectionResponse(ids) : fetchMock(url, init)
+    isAnswerGateCall(init)
+      ? answerGateResponse()
+      : isEvidenceSelectionCall(init)
+        ? evidenceSelectionResponse(ids)
+        : fetchMock(url, init)
   )
   vi.stubGlobal("fetch", wrapped)
   return wrapped
@@ -62,6 +80,7 @@ export function stubEvidenceSelection(pick: (text: string) => boolean, onOtherCa
   const requests: ReturnType<typeof readEvidenceSelectionRequest>[] = []
   const otherCalls: { url: string; init?: RequestInit }[] = []
   const fetchMock = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+    if (isAnswerGateCall(init)) return answerGateResponse()
     if (isEvidenceSelectionCall(init)) {
       const request = readEvidenceSelectionRequest(init)
       requests.push(request)

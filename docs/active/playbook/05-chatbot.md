@@ -24,6 +24,7 @@
 - `lib/chatbot/symptom-triage.ts`: "녹화 안 돼요", "기관 등록 안됨", "에러나요" 같은 증상형 질문을 공개 문제 해결 문서 섹션으로 잇는 결정형 답변. 답변 단계는 문서 섹션에서 그대로 뽑으며, 평가셋은 `data/chatbot-cs-symptom-set.json`
 - `lib/chatbot/quick-answers-field.ts`: 길고 구체적인 상황 질문(결제·영업·계정·보안)에 바로 답하는 정해 둔 답. 패턴을 좁게 쓴다
 - `lib/chatbot/quick-answers-basics.ts`: 첫 방문자가 한 줄로 묻는 기본 사실 질문(회사·대표, 전자칠판 필수 여부, 지원 기기, 한도, 보관 기간, 원가·고객사 등)의 정해 둔 답. 기존 정해 둔 답이 모두 빗나간 뒤, 45자 이하이고 증상 표현이 없는 질문에만 쓴다. 평가셋은 `data/chatbot-first-contact-set.json`, 경위는 `docs/active/chatbot-first-contact-audit-2026-11-13.md`
+- `lib/chatbot/answer-gate.ts`: 정해 둔 답 확인 관문. 정규식이 고른 정해 둔 답(필드·기본 사실 답, 증상 안내, CS 운영 가이드, 분류별·제목 틀 답, 약한 신호의 상담 연결)을 내보내기 전에 모델이 "이 질문에 대한 답인지"만 판정하고, 아니면 문서 경로(검색 → 근거 선별)로 답한다. 판정 실패·시간 초과면 기존 답을 낸다. `CHATBOT_ANSWER_GATE=off`로 끈다. 대상/비대상 경계와 측정값은 파일 머리말과 `service.ts`의 관문 주석에 있다
 - `lib/chatbot/page-context.ts`, `teaser-policy.ts`, `pricing-policy.ts`: 공개 UX와 민감 정책
 - `lib/chatbot/channel-handoff.ts`, `doc-gaps.ts`, `eval.ts`, `alpha-readiness.ts`, `alpha-db-contract.ts`
 - `components/admin/cs/CsInquiryDashboard.tsx`, `components/admin/cs/CsConsoleNav.tsx`

@@ -54,6 +54,7 @@ import { findBasicQuickAnswers } from "@/lib/chatbot/quick-answers-basics"
 import { SHOWROOM_MIN_LEAD_BUSINESS_DAYS, SHOWROOM_SLOT_DURATION_MINUTES } from "@/lib/showroom/slots"
 import { attachGroundingText, buildEvidenceSentences, type EvidenceSentence } from "@/lib/chatbot/source-grounding"
 import { findFieldQuickAnswer } from "@/lib/chatbot/quick-answers-field"
+import { checkPreparedAnswer, type AnswerGateTrace } from "@/lib/chatbot/answer-gate"
 import { resolveSymptomTriage, type SymptomTriageResult } from "@/lib/chatbot/symptom-triage"
 import {
   ENGLISH_SUPPORT_ANSWER,
@@ -516,6 +517,11 @@ function buildPolicyGuardResponse(question: NormalizedQuestion): {
   category: string
   intent: ChatbotIntent
   handoffIntent: HandoffIntent
+  /**
+   * 정해 둔 답 확인 관문의 대상이면 그 답의 출처 이름. 보안 공격·범죄·토큰 낭비를 막는 거절 답은 대상이 아니다(없음).
+   * 학원 결제 기능 안내와 챗봇 자기소개 답은 거절이 아니라 정규식이 고른 정해 둔 답이라 관문을 거친다.
+   */
+  gateOriginal?: string
 } | null {
   const text = question.redacted.toLowerCase()
 
@@ -541,6 +547,7 @@ function buildPolicyGuardResponse(question: NormalizedQuestion): {
       category: "billing",
       intent: "billing_support",
       handoffIntent: "demo",
+      gateOriginal: "policy:academy-payment",
     }
   }
 
@@ -644,6 +651,8 @@ function buildPolicyGuardResponse(question: NormalizedQuestion): {
         ? "feature_limit_consulting"
         : "self_knowledge",
       handoffIntent: "demo",
+      // 어떤 모델로 도는지 같은 내부 기술 정보를 묻는 말에 답을 돌리는 안내(model_boundary)는 내부 정보를 막는 거절 답이라 관문 대상이 아니다.
+      gateOriginal: selfKnowledgeEntry.key === "model_boundary" ? undefined : `self:${selfKnowledgeEntry.key}`,
     }
   }
 
@@ -3391,10 +3400,11 @@ function composeAnswer(
   question: NormalizedQuestion,
   sources: ChatbotSource[],
   category: string,
-  options: { internal?: boolean } = {}
+  /** suppressConsultation: 관문이 상담 연결 틀 답을 버린 뒤 되묻기를 만들 때, 같은 상담 연결 답으로 되돌아가지 않게 한다. */
+  options: { internal?: boolean; suppressConsultation?: boolean } = {}
 ): Omit<ChatbotQueryResponse, "answerEventId" | "sessionId" | "warning" | "handoffIntent"> {
   if (sources.length === 0) {
-    const needsConsultation = wantsHumanConsultation(question)
+    const needsConsultation = !options.suppressConsultation && wantsHumanConsultation(question)
     const isVague = question.tokens.length < 2 && !needsConsultation
     const needsHandoff = needsConsultation
 
@@ -3934,6 +3944,12 @@ interface ChatbotCore {
   suppressSalesFollowUp?: boolean
   /** 근거 선별용 후보 출처(스트리밍 경로가 코어 뒤에서 선별할 때 쓴다). 응답에는 싣지 않는다. */
   evidencePool?: ChatbotSource[]
+  /** 정해 둔 답 확인 관문의 대상이면 그 답의 출처 이름(예: field:logo-usage). 정해 둔 답을 만드는 쪽이 채운다. */
+  gateOriginal?: string
+  /** 관문 대상이 아닌 정해 둔 답(악용을 막는 거절 답). */
+  gateExempt?: boolean
+  /** 정해 둔 답 확인 관문의 결과(측정·로그용). 응답에는 싣지 않는다. */
+  answerGate?: AnswerGateTrace
 }
 
 interface BuildChatbotCoreOptions {
@@ -3945,6 +3961,9 @@ interface BuildChatbotCoreOptions {
   includeInternalDocs?: boolean
   // 스트리밍 경로처럼 근거 선별을 코어 밖에서 이어서 하는 호출. 코어가 초안을 확정하지 않는다.
   deferEvidenceSelection?: boolean
+  // 정해 둔 답 확인 관문을 돌릴지. 비우면 generateAnswer 를 따른다(모델 없이 초안만 만드는 평가 호출은 돌리지 않는다).
+  // 스트리밍 경로는 generateAnswer=false 로 코어를 부르지만 관문은 일반 경로와 같이 돌려야 하므로 true 를 넘긴다.
+  answerGate?: boolean
 }
 
 function determineModelTier(): ChatbotModelTier {
@@ -4101,11 +4120,12 @@ function buildServiceQuickAnswer(question: NormalizedQuestion): QuickAnswer | nu
     const quick = field.handoff
       ? make(field.answer, field.handoff, field.category, field.suggestedQuestions, field.en)
       : direct(field.answer, field.category, field.suggestedQuestions, field.en)
-    return { ...quick, topicId: field.id, suppressSalesFollowUp: !field.salesFollowUp }
+    return { ...quick, topicId: field.id, suppressSalesFollowUp: !field.salesFollowUp, gateOriginal: `field:${field.id}` }
   }
 
   if (EXAM_ANSWER_RE.test(text)) {
-    return direct(
+    // 시험 정답을 대신 알려 달라는 요청을 막는 거절 답이라 관문 대상이 아니다.
+    const refusal = direct(
       [
         "시험 정답은 알려 드릴 수 없어요. 스스로 풀어 봐야 실력이 되니까요.",
         "대신 시험 화면이 안 열리거나, 제출이 안 되거나, 응시하다 화면이 멈추는 것처럼 막히는 문제는 바로 도와 드릴게요. 어떤 화면에서 막혔는지 짧게 알려 주세요.",
@@ -4113,6 +4133,7 @@ function buildServiceQuickAnswer(question: NormalizedQuestion): QuickAnswer | nu
       "classroom",
       ["숙제 제출이 안 돼요", "앱이 자꾸 멈춰요", "다시보기는 어디서 봐요?"]
     )
+    return { ...refusal, gateExempt: true }
   }
   if (
     ACCOUNT_DELETE_RE.test(text) &&
@@ -4511,7 +4532,7 @@ function buildServiceQuickAnswer(question: NormalizedQuestion): QuickAnswer | nu
       const source = entry.docPath ? buildBasicsDocSource(entry.docPath, entry.docHeading) : null
       return source ? [source] : []
     })
-    return { ...quick, topicId: first.id, suppressSalesFollowUp: !first.salesFollowUp }
+    return { ...quick, topicId: first.id, suppressSalesFollowUp: !first.salesFollowUp, gateOriginal: `basics:${first.id}` }
   }
   return null
 }
@@ -4634,6 +4655,8 @@ function isCuratedTemplateQuestion(question: NormalizedQuestion) {
 // - generate: 고른 문장을 근거로 모델이 답을 다시 쓴다(상담 말투). 근거 밖 내용이 섞일 수 있다.
 // - off: 모델을 쓰지 않는다. 정해 둔 답과 문서 요약 초안만 나간다.
 // 기본값을 select 로 둔 근거는 docs/active/chatbot-first-contact-audit-2026-11-13.md 의 측정 결과다.
+// 정해 둔 답 확인 관문은 CHATBOT_ANSWER_GATE(기본 on, off 로 끔)와 CHATBOT_ANSWER_GATE_TIMEOUT_MS(기본 3000)로 조정한다.
+// off 모드에서는 관문도 모델을 부르지 않는다(lib/chatbot/answer-gate.ts).
 type FinalAnswerLlmMode = "select" | "generate" | "off"
 
 function getFinalAnswerLlmMode(): FinalAnswerLlmMode {
@@ -4777,6 +4800,8 @@ function withholdUnselectedOutsideVocabularyDraft(
   internal: boolean
 ) {
   if (internal || selectionStatus === "selected" || selectionStatus === "not_found") return
+  // 관문이 정해 둔 답을 버리고 근거 선별까지 마친 답(문서 문장 또는 못 찾음)은 이미 확인된 최종본이다.
+  if (gateDocumentResponses.has(response)) return
   if (response.answerMode === "handoff") return
   // 검색 조각 초안뿐 아니라, 점수가 낮은 검색 결과의 섹션 제목에 걸린 정해 둔 문장(예: '가입과 개인정보' → 가입 안내)도
   // 질문과 맞는지 확인되지 않았다. 큐레이션 출처(점수 240 이상)만 그대로 둔다.
@@ -5002,6 +5027,160 @@ function applyConversationTone(core: ChatbotCore) {
   )
 }
 
+// ── 정해 둔 답 확인 관문 ──────────────────────────────────────────────────────────────────────────
+// 정규식이 고른 정해 둔 답은 내보내기 전에 모델이 "이 질문에 대한 답인지"만 판정한다(lib/chatbot/answer-gate.ts).
+// 대상: 필드·기본 사실 답, service.ts 안의 정규식 분기 답, 증상 안내, CS 운영 가이드 답, composeAnswer 의 분류별·제목 틀 답,
+//       학원 결제 기능 안내·챗봇 자기소개 답, 약한 신호로 걸린 상담 연결(쇼룸 안내는 정규식 분기 답에 들어 있다).
+// 대상 아님: 인사, 보안 공격·범죄·토큰 낭비·시험 정답·모델 정보 요청을 막는 거절 답, 화난·반복 문의와 연결을 직접 청한 말의
+//       상담 연결, 이미 해 봤다는 화난 고객의 상담 연결, 지난 대화 되묻기, 영어 안내, 못 찾음·되묻기, 근거 선별이 고른 답,
+//       답 캐시 적중, 내부 CS 경로(includeInternalDocs).
+// off_target 이면 그 답을 버리고 문서 경로(검색 → 근거 선별)로만 답한다. 정해 둔 답·틀 답으로는 되돌아가지 않는다.
+
+type CoreResponse = Omit<ChatbotQueryResponse, "answerEventId" | "sessionId" | "warning" | "handoffIntent">
+
+// 관문이 정해 둔 답을 버린 뒤 문서 경로로 만든 최종 답. 스트림 경로가 선별·재작성·보류를 다시 하지 않게 표시한다.
+const gateDocumentResponses = new WeakSet<object>()
+
+// 관문이 켜져 있었는데 판정을 못 받은 경우(호출 실패·시간 초과). 이 답은 답 캐시에 넣지 않는다.
+function isAnswerGateFailure(trace: AnswerGateTrace | undefined) {
+  return trace?.gate === "skipped" && (trace.skipReason === "error" || trace.skipReason === "timeout")
+}
+
+function shouldRunAnswerGate(options: BuildChatbotCoreOptions) {
+  if (options.includeInternalDocs) return false
+  return options.answerGate ?? options.generateAnswer !== false
+}
+
+// composeAnswer 가 만든 답 가운데 관문 대상(분류별·제목 틀 답, 출처 없이 견적·데모 낱말로 상담 연결한 답)의 이름.
+// 검색 조각 초안(근거 선별이 맡는다), 되묻기, 못 찾음 안내는 대상이 아니다(null).
+function getComposedTemplateOriginal(response: CoreResponse): string | null {
+  if (excerptDraftResponses.has(response)) return null
+  const top = response.sources[0]
+  if (top) return `template:${top.heading ?? top.urlPath}`
+  if (response.answerMode === "handoff") return "template:consultation"
+  return null
+}
+
+// 상담 연결이 약한 신호로 걸렸는지. 화난·반복 문의이거나 연결·요청하는 말("연결해 주세요", "상담받고 싶어요")이 있으면 강한 신호다.
+// "선생님이 아이 마이크를 원격으로 끌 수 있나요"처럼 '원격' 낱말만으로 걸린 질문이 약한 신호다.
+const HANDOFF_STRONG_REQUEST_RE =
+  /연결|이어\s*(?:줘|주)|바꿔|불러|주세요|줘|원해|원합|원함|하고\s*싶|싶어|싶습|싶은|싶네|부탁|할래|급해|급합|연락\s*(?:주|줘|바랍|부탁)|신청|예약|잡아|잡고/
+
+function isWeakHandoffSignal(question: NormalizedQuestion) {
+  const text = question.redacted.toLowerCase()
+  const tone = detectConversationTone(question.redacted)
+  if (tone.angry || tone.repeated) return false
+  if (EXPLICIT_HUMAN_CONNECTION_RE.test(text) || HANDOFF_REQUEST_WORD_RE.test(text) || HANDOFF_STRONG_REQUEST_RE.test(text)) {
+    return false
+  }
+  return true
+}
+
+/**
+ * 관문이 정해 둔 답을 버린 뒤 쓸 문서 근거 후보. 큐레이션 출처(정해 둔 답이 기대는 출처)는 빼고 문서 조각만 남긴다.
+ * 이미 검색해 둔 후보가 있으면 다시 검색하지 않는다.
+ */
+async function findDocumentEvidenceAfterGate(
+  question: NormalizedQuestion,
+  options: BuildChatbotCoreOptions,
+  prior?: KnowledgeSearchResult
+): Promise<ChatbotSource[]> {
+  const curatedKeys = new Set(buildCuratedSources(question).map(getSourceKey))
+  const isDocumentSource = (source: ChatbotSource) => !curatedKeys.has(getSourceKey(source))
+  if (prior?.evidencePool && prior.evidencePool.length > 0) {
+    return buildEvidenceCandidates(prior.sources.filter(isDocumentSource), prior.evidencePool.filter(isDocumentSource))
+  }
+  const retrievalOptions = { includeInternalDocs: options.includeInternalDocs }
+  return withTimeoutFallback({
+    promise: (async () => {
+      if (hasSupabaseServerEnv()) {
+        const searched = await searchSupabaseSources(question, retrievalOptions)
+        if (searched.sources.length > 0) {
+          return buildEvidenceCandidates(searched.sources.filter(isDocumentSource), searched.evidencePool.filter(isDocumentSource))
+        }
+      }
+      return buildEvidencePool(scoreStaticSources(question, await getFallbackDocs()))
+    })(),
+    timeoutMs: getKnowledgeSearchTimeoutMs(),
+    fallback: () => buildEvidencePool(scoreStaticSources(question, getFallbackDocsFromStatic())),
+    onTimeout: () => console.warn("[chatbot] knowledge search after answer gate timed out; using static fallback."),
+  })
+}
+
+/**
+ * 관문이 off_target 으로 판정한 뒤의 문서 경로: 검색 → 근거 선별.
+ * 고른 문장이 있으면 그 문장으로 답하고, 없으면 사실 질문은 못 찾음(NO_SOURCE_FACT_ANSWER), 그 밖에는 되묻는다.
+ * 선별 호출이 실패해도 버린 답으로 돌아가지 않는다(못 찾음/되묻기).
+ */
+async function answerFromDocumentsAfterGate(
+  question: NormalizedQuestion,
+  options: BuildChatbotCoreOptions,
+  prior?: KnowledgeSearchResult
+): Promise<Pick<ChatbotCore, "response" | "category" | "intent" | "handoffIntent">> {
+  const candidates = await findDocumentEvidenceAfterGate(question, options, prior)
+  const { category, intent, handoffIntent } = classifyChatbotQuestion(
+    question.redacted,
+    candidates.filter((source) => source.score >= MIN_DIRECT_SOURCE_SCORE).map((source) => source.category)
+  )
+  const sentences = buildEvidenceSentences(candidates)
+  const ids = sentences.length > 0 ? await selectAnsweringSentenceIds({ question: question.redacted, sentences }) : []
+  const picked = ids && ids.length > 0 ? sentences.filter((sentence) => ids.includes(sentence.id)) : []
+
+  let response: CoreResponse
+  if (picked.length > 0) {
+    const usedIndexes = Array.from(new Set(picked.map((sentence) => sentence.sourceIndex)))
+    response = {
+      answer: formatSelectedEvidenceAnswer(picked, question, category, "direct_answer"),
+      answerMode: "direct_answer",
+      confidence: 0.72,
+      needsHandoff: false,
+      sources: usedIndexes.map((index) => candidates[index]).slice(0, MAX_SOURCES),
+      suggestedQuestions: buildSuggestedQuestions(category),
+      unresolved: false,
+    }
+  } else if (isFactSeekingQuestion(question)) {
+    response = {
+      answer: NO_SOURCE_FACT_ANSWER,
+      answerMode: "fallback",
+      confidence: 0.2,
+      needsHandoff: false,
+      sources: [],
+      suggestedQuestions: buildSuggestedQuestions(category),
+      unresolved: true,
+    }
+  } else {
+    response = composeAnswer(question, [], category, { suppressConsultation: true })
+  }
+  deterministicFinalResponses.add(response)
+  gateDocumentResponses.add(response)
+  return { response, category, intent, handoffIntent }
+}
+
+/**
+ * 정해 둔 답으로 끝나는 코어를 관문에 통과시킨다. 대상이 아니거나 관문이 꺼졌으면 그대로 돌려준다.
+ * off_target 이면 문서 경로로 만든 코어로 바꾼다(정해 둔 답의 주제 확인 질문·영어 요약 등은 버린다).
+ */
+async function gatePreparedCore(
+  core: ChatbotCore,
+  original: string | null | undefined,
+  options: BuildChatbotCoreOptions,
+  startedAt: number,
+  prior?: KnowledgeSearchResult
+): Promise<ChatbotCore> {
+  if (!original || !shouldRunAnswerGate(options)) return core
+  const trace = await checkPreparedAnswer({ question: core.question.redacted, answer: core.response.answer, original })
+  if (trace.gate !== "rejected") return { ...core, answerGate: trace }
+  const documentCore = await answerFromDocumentsAfterGate(core.question, options, prior)
+  return {
+    question: core.question,
+    ...documentCore,
+    warning: core.warning,
+    latencyMs: elapsedSince(startedAt),
+    retrievalCacheHit: core.retrievalCacheHit,
+    answerGate: trace,
+  }
+}
+
 async function buildChatbotCore(
   message: unknown,
   options: BuildChatbotCoreOptions = {}
@@ -5045,7 +5224,7 @@ async function buildChatbotCoreBase(
 
   const policyGuard = buildPolicyGuardResponse(question)
   if (policyGuard) {
-    return {
+    const policyCore: ChatbotCore = {
       question,
       response: policyGuard.response,
       category: policyGuard.category,
@@ -5053,6 +5232,8 @@ async function buildChatbotCoreBase(
       handoffIntent: policyGuard.handoffIntent,
       latencyMs: elapsedSince(startedAt),
     }
+    // 거절 답(보안·범죄·토큰 낭비·모델 정보)은 gateOriginal 이 없어 관문을 거치지 않는다.
+    return gatePreparedCore(policyCore, policyGuard.gateOriginal, options, startedAt)
   }
 
   // 아래 공개 챗봇 전용 지름길(정해 둔 답·영어 안내·증상 트리아지·지난 대화 되묻기)은 검색을 건너뛴다.
@@ -5060,7 +5241,8 @@ async function buildChatbotCoreBase(
   const publicShortcuts = !options.includeInternalDocs
   const quickAnswer = publicShortcuts ? buildServiceQuickAnswer(question) : null
   if (quickAnswer) {
-    return { question, ...quickAnswer, latencyMs: elapsedSince(startedAt) }
+    const quickCore: ChatbotCore = { question, ...quickAnswer, latencyMs: elapsedSince(startedAt) }
+    return gatePreparedCore(quickCore, quickAnswer.gateExempt ? null : quickAnswer.gateOriginal ?? "service", options, startedAt)
   }
 
   if (publicShortcuts && isEnglishSupportRequest(question.redacted)) {
@@ -5092,7 +5274,7 @@ async function buildChatbotCoreBase(
       /연락이\s*없|감감무소식|답이\s*없|회신|오류|에러|안\s*(?:돼|되|됨)|환불|고장|문제|장애|불만|항의|보상|책임자|원격|화면\s*(?:을\s*)?(?:보면서|같이)/.test(text) ||
       (/사람|상담원|직원|챗봇\s*말고|봇\s*말고|번호|연락처|물어볼\s*게/.test(text) && !salesRequest)
     const handoffIntent: HandoffIntent = tone.angry || tone.repeated || supportContext ? "support" : classifiedHandoff
-    return {
+    const handoffCore: ChatbotCore = {
       question,
       response: buildImmediateHandoffResponse(category, handoffIntent, text),
       category,
@@ -5100,6 +5282,13 @@ async function buildChatbotCoreBase(
       handoffIntent,
       latencyMs: elapsedSince(startedAt),
     }
+    // 화난·반복 문의나 연결을 직접 청한 말은 그대로 연결한다. 낱말만 걸린 약한 신호만 관문이 확인한다.
+    return gatePreparedCore(
+      handoffCore,
+      publicShortcuts && isWeakHandoffSignal(question) ? "handoff:weak-signal" : null,
+      options,
+      startedAt
+    )
   }
 
   const routingTone = detectConversationTone(question.redacted)
@@ -5131,7 +5320,7 @@ async function buildChatbotCoreBase(
   const symptomTriage = publicShortcuts ? resolveSymptomTriageForQuestion(routingText, csFigmaGuide) : null
   if (symptomTriage) {
     const response = buildSymptomTriageResponse(symptomTriage)
-    return {
+    const symptomCore: ChatbotCore = {
       question,
       response,
       category: symptomTriage.category,
@@ -5143,6 +5332,7 @@ async function buildChatbotCoreBase(
       topicFollowUp: symptomTriage.followUp,
       topicId: symptomTriage.topicId,
     }
+    return gatePreparedCore(symptomCore, `symptom:${symptomTriage.topicId ?? "triage"}`, options, startedAt)
   }
 
   // "저번에 말한 거 또 그래요"처럼 지난 대화를 전제로 한 짧은 질문: 볼 수 없다고 밝히고 한 줄만 되묻는다.
@@ -5171,7 +5361,7 @@ async function buildChatbotCoreBase(
     const guideAnswer = isSymptom
       ? `${formatCsFigmaGuideAnswer(csFigmaGuide)}\n\n위 순서로도 해결되지 않으면 담당자 상담으로 연결해 드릴 수 있어요.`
       : formatCsFigmaGuideAnswer(csFigmaGuide)
-    return {
+    const guideCore: ChatbotCore = {
       question,
       response: {
         answer: guideAnswer,
@@ -5198,6 +5388,7 @@ async function buildChatbotCoreBase(
       handoffIntent: isSymptom ? "support" : handoffIntent,
       latencyMs: elapsedSince(startedAt),
     }
+    return gatePreparedCore(guideCore, `guide:${csFigmaGuide.slug}`, options, startedAt)
   }
 
   // 세션(대화 이력)이 없는 동일 질문은 캐시된 답변으로 즉시 응답 — 검색·Gemini를 통째로 건너뛴다.
@@ -5223,13 +5414,33 @@ async function buildChatbotCoreBase(
       ? loadSessionHistory(options.sessionId, options.anonymousId)
       : Promise.resolve([])
 
-  const { sources, warning, cacheHit, evidencePool } = await searchKnowledgeSourcesWithinBudget(question, options)
+  const searched = await searchKnowledgeSourcesWithinBudget(question, options)
+  const { sources, warning, cacheHit, evidencePool } = searched
   const classificationSources = sources.filter((source) => source.score >= MIN_DIRECT_SOURCE_SCORE)
-  const { category, intent, handoffIntent } = classifyChatbotQuestion(
+  const classified = classifyChatbotQuestion(
     question.redacted,
     classificationSources.map((source) => source.category)
   )
-  const response = composeAnswer(question, sources, category, { internal: options.includeInternalDocs === true })
+  let category: string = classified.category
+  let { intent, handoffIntent } = classified
+  let response = composeAnswer(question, sources, category, { internal: options.includeInternalDocs === true })
+
+  // 분류별·제목 틀 답도 정해 둔 답이다. 내보내기 전에 관문이 확인하고, 버리면 이미 검색한 결과로 문서 경로를 탄다.
+  let answerGate: AnswerGateTrace | undefined
+  const templateOriginal = shouldRunAnswerGate(options) ? getComposedTemplateOriginal(response) : null
+  if (templateOriginal) {
+    const gated = await gatePreparedCore(
+      { question, response, category, intent, handoffIntent, warning, latencyMs: 0 },
+      templateOriginal,
+      options,
+      startedAt,
+      searched
+    )
+    answerGate = gated.answerGate
+    if (gated.response !== response) {
+      ;({ response, category, intent, handoffIntent } = gated)
+    }
+  }
 
   let selectionStatus: EvidenceSelectionOutcome["status"] | undefined
   if (shouldGenerateAnswer && shouldUseAiFinalAnswer(response, question, category)) {
@@ -5283,7 +5494,8 @@ async function buildChatbotCoreBase(
   finalizeAnswer(response)
 
   // 세션(이력)이 없는 질문만 캐시 — 이력에 의존한 답이 캐시에 섞이지 않게.
-  if (shouldGenerateAnswer && !options.sessionId) {
+  // 관문 판정이 실패·시간 초과로 빠진 답은 캐시하지 않는다(다음 요청에서 다시 확인한다).
+  if (shouldGenerateAnswer && !options.sessionId && !isAnswerGateFailure(answerGate)) {
     setCachedAnswer(question, { response, category, intent, handoffIntent, warning }, options)
   }
 
@@ -5297,6 +5509,7 @@ async function buildChatbotCoreBase(
     latencyMs: elapsedSince(startedAt),
     retrievalCacheHit: cacheHit,
     evidencePool,
+    answerGate,
   }
 }
 
@@ -5342,7 +5555,9 @@ export async function handleChatbotQuery(
 export async function evaluateChatbotQuery(
   message: string,
   options: { generateAnswer?: boolean; includeInternalDocs?: boolean } = {}
-): Promise<ChatbotQueryResponse & { detectedCategory: string; detectedIntent: ChatbotIntent }> {
+): Promise<
+  ChatbotQueryResponse & { detectedCategory: string; detectedIntent: ChatbotIntent; answerGate: AnswerGateTrace }
+> {
   const core = await buildChatbotCore(message, {
     generateAnswer: options.generateAnswer,
     // 내부 CS 코파일럿(context.ts, T2)만 true 를 넘긴다 — 공개 챗봇 경로는 이 옵션을 쓰지 않는다(계약 6).
@@ -5354,6 +5569,7 @@ export async function evaluateChatbotQuery(
     warning: core.warning,
     detectedCategory: core.category,
     detectedIntent: core.intent,
+    answerGate: core.answerGate ?? { gate: "none" },
   }
 }
 
@@ -5539,7 +5755,8 @@ export async function streamChatbotQuery(
     : Promise.resolve([])
 
   // 검색·분류·결정형 초안까지는 기존 코어를 그대로 재사용(중복 방지). Gemini 호출만 스트리밍으로 대체.
-  const core = await buildChatbotCore(input.message, { generateAnswer: false, deferEvidenceSelection: true })
+  // 정해 둔 답 확인 관문은 코어 안에서 일반 경로와 같이 돈다. 판정이 날 때까지 아무것도 내보내지 않으므로 틀린 답이 잠깐 보였다 바뀌지 않는다.
+  const core = await buildChatbotCore(input.message, { generateAnswer: false, deferEvidenceSelection: true, answerGate: true })
   const { question, response, category, intent, warning } = core
 
   // 인사·정책 가드 응답은 buildChatbotCore 가 조기 반환한 '최종 답변'이다(정책 가드는 보안 거절 등).
@@ -5585,7 +5802,7 @@ export async function streamChatbotQuery(
   emit({ type: "replace", answer: response.answer })
 
   // no-session 질문만 캐시(이력 의존 답이 캐시에 섞이지 않게) — handleChatbotQuery 와 동일 규칙.
-  if (!requestedSessionId) {
+  if (!requestedSessionId && !isAnswerGateFailure(core.answerGate)) {
     setCachedAnswer(question, { response, category, intent, handoffIntent, warning })
   }
 

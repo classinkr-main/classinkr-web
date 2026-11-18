@@ -2,13 +2,16 @@
  * 질문 묶음을 공개 챗봇 경로에 실제 모델(Gemini)로 돌려 답을 JSONL 로 남기는 측정 스크립트.
  *
  * 실행:
- *   npx tsx scripts/chatbot-live-eval.ts --in <questions.json> --out <results.jsonl> [--concurrency 4] [--mode select|generate|off]
+ *   npx tsx scripts/chatbot-live-eval.ts --in <questions.json> --out <results.jsonl> [--concurrency 4] [--mode select|generate|off] [--gate on|off]
  *
  * - 입력: [{ id, question, group?, expectTopic? }] 또는 { cases: [...] }(data/chatbot-first-contact-set.json).
  * - 질문마다 세션 없이 evaluateChatbotQuery(공개 경로 코어, 말투·후속 질문 포함)를 독립 실행한다.
  * - 데이터베이스 없이 돈다: Supabase env 를 import 전에 지워 정적 문서 검색으로 고정한다.
  *   evaluateChatbotQuery 는 persistExchange 를 부르지 않는다(lib/chatbot/service.ts 의 handleChatbotQuery 만 부른다).
  * - GEMINI_API_KEY 는 환경(또는 .env.local)의 값을 쓴다. 키가 없으면 모델 경로가 조용히 꺼지므로 시작 전에 중단한다.
+ * - --gate 는 정해 둔 답 확인 관문(CHATBOT_ANSWER_GATE, lib/chatbot/answer-gate.ts)을 켜고 끈다. 기본은 on.
+ *   결과 줄의 gate 는 kept(판정 후 유지)·rejected(버리고 문서 경로)·skipped(꺼짐·실패로 판정 없이 유지)·none(대상 아님),
+ *   gateOriginal 은 판정 대상이던 정해 둔 답의 출처(버려졌으면 버려진 답), gateMs 는 판정에 쓴 시간이다.
  */
 
 // Mock server-only for non-Next.js CLI execution (scripts/run-chatbot-golden-eval.ts 와 같은 방식)
@@ -31,6 +34,8 @@ function loadEnvLocal() {
   for (const line of readFileSync(envPath, "utf8").split(/\r?\n/)) {
     const match = line.match(/^([A-Z_][A-Z0-9_]*)=(.*)$/)
     if (!match) continue
+    // 데이터베이스 설정은 읽지 않는다(정적 문서 경로로만 잰다).
+    if (/SUPABASE/.test(match[1])) continue
     let value = match[2].trim()
     if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
       value = value.slice(1, -1)
@@ -61,7 +66,7 @@ function argValue(name: string): string | undefined {
 function usage(message?: string): never {
   if (message) console.error(`오류: ${message}`)
   console.error(
-    "사용법: npx tsx scripts/chatbot-live-eval.ts --in <questions.json> --out <results.jsonl> [--concurrency 4] [--mode select|generate|off]"
+    "사용법: npx tsx scripts/chatbot-live-eval.ts --in <questions.json> --out <results.jsonl> [--concurrency 4] [--mode select|generate|off] [--gate on|off]"
   )
   process.exit(2)
 }
@@ -104,6 +109,8 @@ async function main() {
   const concurrency = Math.max(1, Math.min(16, Math.trunc(Number(argValue("--concurrency") ?? 4)) || 4))
   const mode = (argValue("--mode") ?? "select").toLowerCase()
   if (mode !== "select" && mode !== "generate" && mode !== "off") usage(`--mode 는 select|generate|off 중 하나여야 합니다: ${mode}`)
+  const gateSwitch = (argValue("--gate") ?? "on").toLowerCase()
+  if (gateSwitch !== "on" && gateSwitch !== "off") usage(`--gate 는 on|off 중 하나여야 합니다: ${gateSwitch}`)
 
   const inputs = readInputs(resolve(inPath))
 
@@ -120,6 +127,7 @@ async function main() {
   // NODE_ENV=test 면 모델 호출 보조 동작(실패 로그 등)이 꺼진다. 측정에서는 test 로 두지 않는다.
   if (process.env.NODE_ENV === "test") (process.env as Record<string, string>).NODE_ENV = "development"
   process.env.CHATBOT_FINAL_ANSWER_LLM = mode
+  process.env.CHATBOT_ANSWER_GATE = gateSwitch
   if (mode !== "off" && !process.env.GEMINI_API_KEY?.trim()) {
     usage("GEMINI_API_KEY 가 없습니다. 모델 경로가 조용히 꺼지므로 중단합니다(--mode off 는 키 없이 가능).")
   }
@@ -151,14 +159,24 @@ async function main() {
   const { glossForRouting } = await import("../lib/chatbot/tone")
 
   const firstLine = (text: string) => text.split("\n").find((line) => line.trim())?.trim() ?? ""
+  const isWeakSourceAnswer = (answer: string) => answer.includes(firstLine(WEAK_SOURCE_DRAFT_ANSWER))
 
   // 이미 export 된 판별 함수를 따로 불러, 최종 답에 그 답의 첫 문장이 들어 있는지로 어느 경로가 답했는지 가린다.
   // (앞선 정책 가드 등이 먼저 답했는데 질문만 우연히 맞는 경우를 걸러 내려는 확인이다.)
   function decideBy(
     question: string,
-    result: { answer: string; sources: unknown[]; answerMode: string },
+    result: { answer: string; sources: unknown[]; answerMode: string; answerGate: { gate: string; gateOriginal?: string } },
     trace: GeminiTrace
   ): string {
+    // 관문이 정해 둔 답을 버렸으면 문서 경로(근거 선별) 답이다. 버린 답과 질문이 같은 판별 함수에 다시 걸리지 않게 먼저 본다.
+    if (result.answerGate.gate === "rejected") {
+      if (isWeakSourceAnswer(result.answer)) return "not_found"
+      return result.sources.length > 0 ? "gate_evidence_select" : "gate_not_found"
+    }
+    // 관문이 유지한 틀 답·정책 답·상담 연결·운영 가이드 답은 관문 호출 때문에 모델 호출이 있어도 그 답의 출처로 적는다.
+    const kept = result.answerGate.gateOriginal
+    if (kept && result.answerGate.gate !== "none" && !/^(?:field|basics|symptom):/.test(kept)) return kept
+
     const text = redactPii(question.replace(/\s+/g, " ").trim()).toLowerCase()
     const answer = result.answer
 
@@ -226,6 +244,9 @@ async function main() {
             score: source.score,
           })),
           decidedBy: decideBy(item.question, result, trace),
+          gate: result.answerGate.gate,
+          gateOriginal: result.answerGate.gateOriginal ?? null,
+          gateMs: result.answerGate.gateMs ?? null,
           latencyMs: Date.now() - startedAt,
           geminiCalls: trace.calls,
           geminiStatuses: trace.statuses,
@@ -256,6 +277,9 @@ async function main() {
       warning: null,
       sources: [],
       decidedBy: "unknown",
+      gate: null,
+      gateOriginal: null,
+      gateMs: null,
       latencyMs: 0,
       geminiCalls: lastTrace.calls,
       geminiStatuses: lastTrace.statuses,
@@ -309,6 +333,14 @@ async function main() {
     `decidedBy 분포: ${JSON.stringify(tally(done.map((row) => (row.decidedBy.includes(":") ? row.decidedBy.split(":")[0] : row.decidedBy))))}`
   )
   console.error(`Gemini 생성(generateContent) 호출이 있었던 질문: ${done.filter((row) => (row.geminiKinds.generateContent ?? 0) > 0).length}개`)
+  const gated = done.filter((row) => row.gate === "kept" || row.gate === "rejected")
+  const gateTimes = gated.map((row) => row.gateMs ?? 0).sort((a, b) => a - b)
+  console.error(`관문 분포: ${JSON.stringify(tally(done.map((row) => row.gate ?? "error")))}`)
+  if (gateTimes.length > 0) {
+    console.error(
+      `관문 판정 시간: 중앙값 ${median(gateTimes)}ms, 95번째 ${gateTimes[Math.min(gateTimes.length - 1, Math.floor(gateTimes.length * 0.95))]}ms`
+    )
+  }
   console.error(`오류: ${errors.length}개`)
   console.error(`지연 중앙값: ${median(done.filter((row) => !row.error).map((row) => row.latencyMs))}ms`)
   console.error(`결과: ${resolve(outPath)}`)

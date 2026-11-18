@@ -29,6 +29,8 @@ describe("chatbot public answer policy", () => {
   })
 
   it("serves curated direct answers from the vetted template without calling Gemini", async () => {
+    // 정해 둔 답 확인 관문(판정 호출)은 tests/chatbot/answer-gate.test.ts 가 따로 본다. 여기서는 재작성·선별 호출이 없는지만 본다.
+    vi.stubEnv("CHATBOT_ANSWER_GATE", "off")
     disableExternalChatbotServices()
     enableMockGemini()
 
@@ -260,6 +262,8 @@ describe("chatbot public answer policy", () => {
   })
 
   it("answers chatbot self-identity and prior-conversation questions without exposing internal instructions", async () => {
+    // 정해 둔 답 확인 관문(판정 호출)은 tests/chatbot/answer-gate.test.ts 가 따로 본다. 여기서는 재작성·선별 호출이 없는지만 본다.
+    vi.stubEnv("CHATBOT_ANSWER_GATE", "off")
     disableExternalChatbotServices()
     enableMockGemini()
 
@@ -302,6 +306,8 @@ describe("chatbot public answer policy", () => {
   })
 
   it("answers human-agent identity questions without pretending to be staff", async () => {
+    // 정해 둔 답 확인 관문(판정 호출)은 tests/chatbot/answer-gate.test.ts 가 따로 본다. 여기서는 재작성·선별 호출이 없는지만 본다.
+    vi.stubEnv("CHATBOT_ANSWER_GATE", "off")
     disableExternalChatbotServices()
     enableMockGemini()
 
@@ -360,6 +366,8 @@ describe("chatbot public answer policy", () => {
   })
 
   it("uses public self-knowledge answers for answer-principle, memory, and source questions", async () => {
+    // 정해 둔 답 확인 관문(판정 호출)은 tests/chatbot/answer-gate.test.ts 가 따로 본다. 여기서는 재작성·선별 호출이 없는지만 본다.
+    vi.stubEnv("CHATBOT_ANSWER_GATE", "off")
     disableExternalChatbotServices()
     enableMockGemini()
 
@@ -580,6 +588,8 @@ describe("chatbot public answer policy", () => {
   })
 
   it("keeps instructions hidden but explains the answer basis when a buyer asks what rules the bot follows", async () => {
+    // 정해 둔 답 확인 관문(판정 호출)은 tests/chatbot/answer-gate.test.ts 가 따로 본다. 여기서는 재작성·선별 호출이 없는지만 본다.
+    vi.stubEnv("CHATBOT_ANSWER_GATE", "off")
     disableExternalChatbotServices()
     enableMockGemini()
 
