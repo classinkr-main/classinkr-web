@@ -2,7 +2,7 @@
  * 질문 묶음을 공개 챗봇 경로에 실제 모델(Gemini)로 돌려 답을 JSONL 로 남기는 측정 스크립트.
  *
  * 실행:
- *   npx tsx scripts/chatbot-live-eval.ts --in <questions.json> --out <results.jsonl> [--concurrency 4] [--mode select|generate|off] [--gate on|off] [--second-chance on|off]
+ *   npx tsx scripts/chatbot-live-eval.ts --in <questions.json> --out <results.jsonl> [--concurrency 4] [--mode select|generate|off] [--gate on|off] [--second-chance on|off] [--allow-model-errors]
  *
  * - 입력: [{ id, question, group?, expectTopic? }] 또는 { cases: [...] }(data/chatbot-first-contact-set.json).
  * - 질문마다 세션 없이 evaluateChatbotQuery(공개 경로 코어, 말투·후속 질문 포함)를 독립 실행한다.
@@ -15,6 +15,10 @@
  * - secondChance 는 못 찾았을 때 목차에서 다시 고르는 두 번째 검색(CHATBOT_SECOND_CHANCE, lib/chatbot/service.ts)의 결과다.
  *   hit(목차에서 고른 절의 문장으로 답함)·miss(돌렸지만 못 찾음 유지)·none(대상 아님·꺼짐), secondChanceMs 는 그 시간,
  *   secondChanceReason 은 miss·none 의 이유다. --second-chance on|off 로 켜고 끈다(기본 on).
+ * - 무효 측정 알아채기: 결과 줄의 modelError 는 그 줄에서 Gemini 가 401·402·403(결제 크레딧 소진·키 인증 실패)을 돌려줬거나
+ *   그 때문에 열린 차단기(lib/chatbot/llm.ts)가 호출을 막은 경우(geminiBlocked) true 다. 이런 줄이 전체의 5% 를 넘으면
+ *   "측정 무효"를 찍고 종료 코드 2 로 끝나고, 처음 끝난 20줄에서 모델을 부른 줄이 모두 그렇다면 거기서 멈춘다. 2026-11-18 크레딧 소진 때 모든 호출이
+ *   402 였는데도 '오류 0'으로 끝나 무효 측정이 채점까지 갔다. 모델이 죽은 상태의 동작을 일부러 잴 때만 --allow-model-errors 를 준다.
  */
 
 // Mock server-only for non-Next.js CLI execution (scripts/run-chatbot-golden-eval.ts 와 같은 방식)
@@ -57,6 +61,8 @@ interface EvalInput {
 interface GeminiTrace {
   calls: number
   statuses: number[]
+  /** 결제·인증 실패 차단기 때문에 보내지 않은 호출 수. */
+  blocked: number
   /** 호출 종류별 횟수(generateContent=답·선별 생성, embedContent=검색 임베딩). */
   kinds: Record<string, number>
 }
@@ -69,7 +75,7 @@ function argValue(name: string): string | undefined {
 function usage(message?: string): never {
   if (message) console.error(`오류: ${message}`)
   console.error(
-    "사용법: npx tsx scripts/chatbot-live-eval.ts --in <questions.json> --out <results.jsonl> [--concurrency 4] [--mode select|generate|off] [--gate on|off] [--second-chance on|off]"
+    "사용법: npx tsx scripts/chatbot-live-eval.ts --in <questions.json> --out <results.jsonl> [--concurrency 4] [--mode select|generate|off] [--gate on|off] [--second-chance on|off] [--allow-model-errors]"
   )
   process.exit(2)
 }
@@ -104,6 +110,17 @@ function tally(values: string[]) {
 
 const sleep = (ms: number) => new Promise((done) => setTimeout(done, ms))
 
+// 결제·인증 실패. 이 상태 코드가 한 번이라도 나온 줄은 모델이 죽은 상태에서 잰 것이다.
+const MODEL_ACCESS_DENIED_STATUSES = new Set([401, 402, 403])
+// 모델 호출 실패 줄이 이 비율을 넘으면 측정 무효로 본다.
+const MODEL_ERROR_MAX_RATIO = 0.05
+// 처음 이만큼이 모두 모델 호출 실패면 남은 질문을 돌리지 않고 멈춘다.
+const MODEL_ERROR_EARLY_STOP_ROWS = 20
+
+function hasModelError(trace: Pick<GeminiTrace, "statuses" | "blocked">) {
+  return trace.blocked > 0 || trace.statuses.some((status) => MODEL_ACCESS_DENIED_STATUSES.has(status))
+}
+
 async function main() {
   const inPath = argValue("--in")
   const outPathArg = argValue("--out")
@@ -119,6 +136,7 @@ async function main() {
     usage(`--second-chance 는 on|off 중 하나여야 합니다: ${secondChanceSwitch}`)
   }
 
+  const allowModelErrors = process.argv.includes("--allow-model-errors")
   const inputs = readInputs(resolve(inPath))
 
   // 1) 환경 정리 — lib/chatbot 을 import 하기 전에 해야 한다.
@@ -160,7 +178,15 @@ async function main() {
     }
   }) as typeof fetch
 
-  const { evaluateChatbotQuery, WEAK_SOURCE_DRAFT_ANSWER, redactPii } = await import("../lib/chatbot/service")
+  const { setModelCircuitBlockedListener } = await import("../lib/chatbot/llm")
+  // 차단기가 막은 호출도 그 질문의 추적에 센다(네트워크로 나가지 않아 fetch 감싸기로는 보이지 않는다).
+  setModelCircuitBlockedListener(() => {
+    const trace = traceStore.getStore()
+    if (trace) trace.blocked += 1
+  })
+  const { evaluateChatbotQuery, WEAK_SOURCE_DRAFT_ANSWER, MODEL_UNAVAILABLE_ANSWER, redactPii } = await import(
+    "../lib/chatbot/service"
+  )
   const { findBasicQuickAnswers } = await import("../lib/chatbot/quick-answers-basics")
   const { findFieldQuickAnswer } = await import("../lib/chatbot/quick-answers-field")
   const { resolveSymptomTriage } = await import("../lib/chatbot/symptom-triage")
@@ -184,6 +210,8 @@ async function main() {
   ): string {
     // 못 찾음 뒤 목차에서 다시 골라 답했으면 그 경로다(관문이 버린 뒤의 문서 경로에서도 돌 수 있다).
     if (result.secondChance.secondChance === "hit") return "second_chance"
+    // 근거 선별 호출이 실패해 확인 안 된 조각 대신 고정 문구를 냈다.
+    if (result.answer.includes(firstLine(MODEL_UNAVAILABLE_ANSWER))) return "model_unavailable"
     // 관문이 정해 둔 답을 버렸으면 문서 경로(근거 선별) 답이다. 버린 답과 질문이 같은 판별 함수에 다시 걸리지 않게 먼저 본다.
     if (result.answerGate.gate === "rejected") {
       if (isWeakSourceAnswer(result.answer)) return "not_found"
@@ -212,11 +240,11 @@ async function main() {
     if (answer.includes(firstLine(WEAK_SOURCE_DRAFT_ANSWER))) return "not_found"
 
     if (result.sources.length > 0) {
-      if (mode === "off" || !trace.kinds.generateContent) return "draft"
+      if (mode === "off" || (!trace.kinds.generateContent && !trace.blocked)) return "draft"
       return mode === "generate" ? "generate" : "evidence_select"
     }
-    // 출처가 없고 모델도 부르지 않았다 → 정책 가드·인사·상담 연결 등 코드에 박힌 지름길.
-    if (!trace.kinds.generateContent) return "policy"
+    // 출처가 없고 모델도 부르지 않았다(차단기가 막은 호출도 없음) → 정책 가드·인사·상담 연결 등 코드에 박힌 지름길.
+    if (!trace.kinds.generateContent && !trace.blocked) return "policy"
     return "unknown"
   }
 
@@ -226,9 +254,9 @@ async function main() {
   async function runOne(item: EvalInput) {
     const maxAttempts = 3
     let lastError = ""
-    let lastTrace: GeminiTrace = { calls: 0, statuses: [], kinds: {} }
+    let lastTrace: GeminiTrace = { calls: 0, statuses: [], blocked: 0, kinds: {} }
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-      const trace: GeminiTrace = { calls: 0, statuses: [], kinds: {} }
+      const trace: GeminiTrace = { calls: 0, statuses: [], blocked: 0, kinds: {} }
       lastTrace = trace
       const startedAt = Date.now()
       try {
@@ -269,6 +297,8 @@ async function main() {
           latencyMs: Date.now() - startedAt,
           geminiCalls: trace.calls,
           geminiStatuses: trace.statuses,
+          geminiBlocked: trace.blocked,
+          modelError: hasModelError(trace),
           geminiKinds: trace.kinds,
           attempts: attempt,
           error: isTransientFailure(trace) ? lastError : null,
@@ -305,6 +335,8 @@ async function main() {
       latencyMs: 0,
       geminiCalls: lastTrace.calls,
       geminiStatuses: lastTrace.statuses,
+      geminiBlocked: lastTrace.blocked,
+      modelError: hasModelError(lastTrace),
       geminiKinds: lastTrace.kinds,
       attempts: maxAttempts,
       error: lastError || "unknown error",
@@ -314,12 +346,16 @@ async function main() {
   mkdirSync(dirname(resolve(outPath)), { recursive: true })
   writeFileSync(resolve(outPath), "")
 
-  console.error(`질문 ${inputs.length}개 / 동시 ${concurrency} / 모드 ${mode} / Gemini 키 ${process.env.GEMINI_API_KEY ? "있음" : "없음"}`)
+  console.error(
+    `질문 ${inputs.length}개 / 동시 ${concurrency} / 모드 ${mode} / Gemini 키 ${process.env.GEMINI_API_KEY ? "있음" : "없음"}` +
+      (allowModelErrors ? " / 모델 호출 실패 허용(--allow-model-errors)" : "")
+  )
 
   type Row = Awaited<ReturnType<typeof runOne>>
   const rows: (Row | undefined)[] = new Array(inputs.length)
   let nextIndex = 0
   let flushed = 0
+  let stoppedEarly = false
   const startedAll = Date.now()
 
   // 동시 실행이어도 줄 순서는 입력 순서다: 앞 순번이 끝난 만큼만 이어서 쓴다.
@@ -330,12 +366,29 @@ async function main() {
     }
   }
 
+  // 처음 끝난 20줄에서 모델을 부른 줄이 모두 모델 호출 실패면 남은 질문을 돌리지 않는다(키·결제 문제를 먼저 고쳐야 한다).
+  // 정해 둔 답·정책 답처럼 모델을 부르지 않는 줄은 실패도 성공도 아니라 뺀다. 첫 질문은 준비 때문에 늦게 끝나므로 끝난 순서로 본다.
+  const completed: Row[] = []
+  function checkEarlyStop(row: Row) {
+    completed.push(row)
+    if (allowModelErrors || stoppedEarly || completed.length !== MODEL_ERROR_EARLY_STOP_ROWS) return
+    const usedModel = completed.filter((item) => item.geminiCalls + item.geminiBlocked > 0)
+    if (usedModel.length > 0 && usedModel.every((item) => item.modelError)) {
+      stoppedEarly = true
+      console.error(
+        `\n처음 끝난 ${MODEL_ERROR_EARLY_STOP_ROWS}줄에서 모델을 부른 ${usedModel.length}줄이 모두 모델 호출 실패(HTTP 401·402·403)라 측정을 멈춥니다.`
+      )
+    }
+  }
+
   async function worker() {
-    while (true) {
+    while (!stoppedEarly) {
       const index = nextIndex
       nextIndex += 1
       if (index >= inputs.length) return
-      rows[index] = await runOne(inputs[index])
+      const row = await runOne(inputs[index])
+      rows[index] = row
+      checkEarlyStop(row)
       flush()
       if ((index + 1) % 10 === 0 || index + 1 === inputs.length) {
         console.error(`  진행 ${flushed}/${inputs.length}`)
@@ -372,8 +425,15 @@ async function main() {
     )
   }
   console.error(`오류: ${errors.length}개`)
+  const modelErrorRows = done.filter((row) => row.modelError)
+  console.error(`모델 호출 실패 줄: ${modelErrorRows.length} / ${done.length}`)
+  console.error(`질문당 Gemini 호출 수 중앙값: ${median(done.map((row) => row.geminiCalls))}`)
   console.error(`지연 중앙값: ${median(done.filter((row) => !row.error).map((row) => row.latencyMs))}ms`)
   console.error(`결과: ${resolve(outPath)}`)
+  if (!allowModelErrors && (stoppedEarly || modelErrorRows.length > done.length * MODEL_ERROR_MAX_RATIO)) {
+    console.error(`\n측정 무효: 모델 호출 실패(HTTP 4xx) 줄이 ${modelErrorRows.length}개`)
+    process.exit(2)
+  }
   process.exit(0)
 }
 
