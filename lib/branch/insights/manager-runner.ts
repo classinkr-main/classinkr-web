@@ -1,4 +1,10 @@
 import "server-only"
+import {
+  DEFAULT_GEMINI_FAST_MODEL,
+  resolveGeminiModel,
+  thinkingConfigFor,
+  withGeminiModelFallback,
+} from "@/lib/marketing/gemini-model"
 import { MANAGER_INSIGHT_SYSTEM_PROMPT, MANAGER_INSIGHT_RESPONSE_SCHEMA } from "./prompt"
 import type { ManagerInsightInput } from "./manager-input-builder"
 
@@ -9,20 +15,20 @@ export interface ManagerInsightResult {
   next_actions: Array<{ title: string; why: string; due?: string }>
 }
 
-const DEFAULT_FAST = "gemini-2.5-flash"
-const UNSUPPORTED = new Set(["gemini-3.1-pro"])
-
-function resolveFastModel(): string {
-  const c = process.env.GEMINI_FAST_MODEL?.trim()
-  if (!c || UNSUPPORTED.has(c)) return DEFAULT_FAST
-  return c
-}
-
 export async function callManagerInsight(input: ManagerInsightInput): Promise<{ result: ManagerInsightResult; raw: unknown; model: string }> {
   const apiKey = process.env.GEMINI_API_KEY
   if (!apiKey) throw new Error("GEMINI_API_KEY not set")
-  const model = resolveFastModel()
+  const primary = resolveGeminiModel("GEMINI_FAST_MODEL", DEFAULT_GEMINI_FAST_MODEL)
+  return withGeminiModelFallback(primary, (model) => callOnce(apiKey, model, input))
+}
+
+async function callOnce(
+  apiKey: string,
+  model: string,
+  input: ManagerInsightInput
+): Promise<{ result: ManagerInsightResult; raw: unknown; model: string }> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`
+  const thinking = thinkingConfigFor(model)
   const body = {
     systemInstruction: { parts: [{ text: MANAGER_INSIGHT_SYSTEM_PROMPT }] },
     contents: [{ role: "user", parts: [{ text: JSON.stringify(input) }] }],
@@ -30,6 +36,7 @@ export async function callManagerInsight(input: ManagerInsightInput): Promise<{ 
       responseMimeType: "application/json",
       responseSchema: MANAGER_INSIGHT_RESPONSE_SCHEMA,
       temperature: 0.4,
+      ...(thinking ? { thinkingConfig: thinking } : {}),
     },
   }
   const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json", "Connection": "close" }, body: JSON.stringify(body) })

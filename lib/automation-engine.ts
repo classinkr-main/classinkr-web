@@ -33,6 +33,7 @@ import {
   createDelayQueueItem,
 } from "@/lib/repositories/automation-delay"
 import { sendBatchEmail, wrapCampaignHtml } from "@/lib/email"
+import { DEFAULT_GEMINI_MODEL, resolveGeminiModel, withGeminiModelFallback } from "@/lib/marketing/gemini-model"
 import { emitNotificationEvent } from "@/lib/notifications/emit-event"
 import { createUnsubscribeUrl } from "@/lib/server/security-tokens"
 import {
@@ -201,7 +202,7 @@ async function callAiBlock(
   try {
     const { GoogleGenerativeAI } = await import("@google/generative-ai")
     const genAI = new GoogleGenerativeAI(apiKey)
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro" })
+    const primary = resolveGeminiModel("GEMINI_MODEL", DEFAULT_GEMINI_MODEL)
 
     const systemPrompt = `
 당신은 학원 관리 소프트웨어 클래스인의 마케팅 담당자입니다.
@@ -222,7 +223,9 @@ async function callAiBlock(
 - HTML 태그 없이 순수 텍스트
 `.trim()
 
-    const result = await model.generateContent(systemPrompt)
+    const result = await withGeminiModelFallback(primary, (name) =>
+      genAI.getGenerativeModel({ model: name }).generateContent(systemPrompt)
+    )
     return result.response.text().trim()
   } catch (err) {
     const msg = err instanceof Error ? err.message : "AI 오류"

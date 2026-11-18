@@ -56,7 +56,7 @@ describe("callGemini", () => {
     await callGemini(stubInput)
 
     expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining("/models/gemini-2.5-pro:generateContent"),
+      expect.stringContaining("/models/gemini-3.1-pro-preview:generateContent"),
       expect.any(Object),
     )
   })

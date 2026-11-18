@@ -4,7 +4,7 @@ import { NextRequest } from "next/server"
 import { verifyAdmin } from "@/lib/admin-auth"
 import { buildBlogAiPrompt, readBlogAiRequest, type BlogAiAction } from "@/lib/blog-ai-prompts"
 import { BLOG_AI_STREAM_ERROR_MARKER } from "@/lib/blog-types"
-import { DEFAULT_GEMINI_MODEL, resolveGeminiModel } from "@/lib/marketing/gemini-model"
+import { DEFAULT_GEMINI_MODEL, resolveGeminiModel, withGeminiModelFallback } from "@/lib/marketing/gemini-model"
 import { checkRateLimitDistributed, getClientIp } from "@/lib/server/rate-limit"
 
 export const runtime = "nodejs"
@@ -82,14 +82,20 @@ export async function POST(req: NextRequest) {
   const { title, content, category, extra } = readBlogAiRequest(body)
   const prompt = buildBlogAiPrompt(action, title, content, category, extra)
   // 다른 어드민 AI 와 같은 GEMINI_MODEL 설정을 따른다(모델이 막히면 env 하나로 바꾼다).
-  const modelName = resolveGeminiModel("GEMINI_MODEL", DEFAULT_GEMINI_MODEL)
+  const primaryModel = resolveGeminiModel("GEMINI_MODEL", DEFAULT_GEMINI_MODEL)
 
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
-  const model = genAI.getGenerativeModel({ model: modelName })
 
-  let streamResult: Awaited<ReturnType<typeof model.generateContentStream>>
+  let streamResult: Awaited<
+    ReturnType<ReturnType<typeof genAI.getGenerativeModel>["generateContentStream"]>
+  >
+  let modelName = primaryModel
   try {
-    streamResult = await model.generateContentStream(prompt)
+    // 모델 없음(404)이면 한 번 폴백 모델로 넘어간다(스트림 시작 전 실패만 해당).
+    streamResult = await withGeminiModelFallback(primaryModel, (name) => {
+      modelName = name
+      return genAI.getGenerativeModel({ model: name }).generateContentStream(prompt)
+    })
   } catch (err) {
     return new Response(JSON.stringify({ error: describeGeminiError(err, modelName) }), {
       status: 500,

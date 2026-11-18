@@ -22,6 +22,7 @@ import {
   resolveGeminiModel,
   rethrowGeminiFetchError,
   thinkingConfigFor,
+  withGeminiModelFallback,
 } from "@/lib/marketing/gemini-model"
 
 export interface CreativeSuggestion {
@@ -105,9 +106,18 @@ export async function callCreativeSuggestGemini(
   const apiKey = process.env.GEMINI_API_KEY
   if (!apiKey) throw new Error("GEMINI_API_KEY not set")
 
-  const model = resolveGeminiModel("GEMINI_MODEL", DEFAULT_GEMINI_MODEL)
+  const primary = resolveGeminiModel("GEMINI_MODEL", DEFAULT_GEMINI_MODEL)
+  // 모델 없음(404)이면 한 번 폴백 모델로 넘어간다.
+  return withGeminiModelFallback(primary, (model) => callOnce(apiKey, model, input))
+}
+
+async function callOnce(
+  apiKey: string,
+  model: string,
+  input: CreativeSuggestInput
+): Promise<{ result: CreativeSuggestResult; model: string }> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`
-  // 기본 모델(2.5-pro)에서는 undefined — env 가 flash·3 계열을 가리킬 때만 붙는다.
+  // 3.x pro 는 low, flash 는 minimal. 모델 계열을 모르면 undefined.
   const thinking = thinkingConfigFor(model)
   const body = {
     systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },

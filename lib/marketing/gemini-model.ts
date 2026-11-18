@@ -8,21 +8,60 @@
 
 import "server-only"
 
-// 2026-10-15 운영 계정 models.list 확인: gemini-4.0-pro/flash는 제공되지 않는다.
-export const DEFAULT_GEMINI_MODEL = "gemini-2.5-pro"
-export const DEFAULT_GEMINI_FAST_MODEL = "gemini-2.5-flash"
+// 2026-11-18 실제 generateContent 호출 확인: gemini-2.x/1.x 는 404("no longer available"),
+// 아래 기본값과 폴백 모델은 200. models.list 에는 종료된 모델이 남아 있으니 목록으로 판단하지 않는다.
+// lib/chatbot/llm.ts 와 같은 선택(챗봇 파일은 import 하지 않고 규칙만 맞춘다).
+export const DEFAULT_GEMINI_MODEL = "gemini-3.1-pro-preview"
+export const DEFAULT_GEMINI_FAST_MODEL = "gemini-3.5-flash"
+/** 모델이 없다는 오류(404)일 때 한 번 넘어가는 폴백 모델. */
+export const GEMINI_FALLBACK_MODEL = "gemini-3.5-flash"
+export const GEMINI_LAST_RESORT_MODEL = "gemini-flash-lite-latest"
 
 /** 존재하지 않거나 이 호출 형태(v1beta generateContent + responseSchema)를 지원하지 않는
  *  모델이 env 에 박혀도 404 로 죽지 않게 방어한다. */
-export const UNSUPPORTED_GEMINI_MODELS = new Set(["gemini-3.1-pro"])
+export const UNSUPPORTED_GEMINI_MODELS = new Set(["gemini-3.1-pro", "gemini-3-pro-preview"])
+
+/** 종료된 세대(gemini-1.x, gemini-2.x) — env 에 남아 있어도 무시하고 기본값을 쓴다. */
+export function isUnsupportedGeminiModel(name: string): boolean {
+  const lower = name.trim().toLowerCase()
+  return UNSUPPORTED_GEMINI_MODELS.has(lower) || /^gemini-[12]\./.test(lower)
+}
 
 export function resolveGeminiModel(
   envName: "GEMINI_MODEL" | "GEMINI_FAST_MODEL",
   fallback: string
 ): string {
   const configured = process.env[envName]?.trim()
-  if (!configured || UNSUPPORTED_GEMINI_MODELS.has(configured)) return fallback
+  if (!configured || isUnsupportedGeminiModel(configured)) return fallback
   return configured
+}
+
+/** 모델 없음(404) 계열 오류인지. "Gemini 404: ..." 와 SDK 오류 메시지 둘 다 본다. */
+export function isGeminiModelNotFoundError(error: unknown): boolean {
+  const msg = error instanceof Error ? error.message : String(error)
+  return /\b404\b|no longer available|is not found for api version/i.test(msg)
+}
+
+/**
+ * 모델 없음(404)이면 gemini-3.5-flash → gemini-flash-lite-latest 순으로 한 번씩만 넘어간다.
+ * 그 외 오류(400·429·타임아웃)는 모델 탓이 아니므로 그대로 던진다.
+ * run 은 호출마다 모델명을 받아 URL·thinkingConfig 를 다시 만들어야 한다.
+ */
+export async function withGeminiModelFallback<T>(
+  primary: string,
+  run: (model: string) => Promise<T>
+): Promise<T> {
+  const chain = Array.from(new Set([primary, GEMINI_FALLBACK_MODEL, GEMINI_LAST_RESORT_MODEL]))
+  let lastError: unknown
+  for (const model of chain) {
+    try {
+      return await run(model)
+    } catch (error) {
+      lastError = error
+      if (!isGeminiModelNotFoundError(error)) throw error
+    }
+  }
+  throw lastError
 }
 
 /**
