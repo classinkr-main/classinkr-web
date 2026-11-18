@@ -1,0 +1,920 @@
+{
+  "note": "측정 전용 시험 질문. 챗봇을 고치는 작업자(사람·에이전트)는 이 파일을 열지 않는다. 답을 고치는 근거로 한 번 쓴 묶음은 status 를 dev 로 내리고, 새 측정에는 새 묶음을 만든다. 테스트에서 불러오지 않는다.",
+  "createdAt": "2026-11-18",
+  "sets": [
+    {
+      "key": "holdout1",
+      "status": "dev",
+      "statusNote": "2026-11-18 3차 수정에서 실패 분석에 사용됨",
+      "cases": [
+        {
+          "id": "hold-institution-01",
+          "group": "hold_institution",
+          "question": "나이스랑 연동되는 기능 있나요?"
+        },
+        {
+          "id": "hold-institution-02",
+          "group": "hold_institution",
+          "question": "클래스인 학생 명단 엑셀로 한 번에 등록돼요?"
+        },
+        {
+          "id": "hold-institution-03",
+          "group": "hold_institution",
+          "question": "사내 SSO로 로그인 연동 가능한가요"
+        },
+        {
+          "id": "hold-institution-04",
+          "group": "hold_institution",
+          "question": "폐쇄망(인트라넷)에서도 설치해서 쓸 수 있나요"
+        },
+        {
+          "id": "hold-institution-05",
+          "group": "hold_institution",
+          "question": "클래스인 교직원마다 관리자 권한 다르게 줄 수 있어요?"
+        },
+        {
+          "id": "hold-institution-06",
+          "group": "hold_institution",
+          "question": "견적서 먼저 받아볼 수 있을까요"
+        },
+        {
+          "id": "hold-institution-07",
+          "group": "hold_institution",
+          "question": "나라장터에 등록된 업체인가요"
+        },
+        {
+          "id": "hold-institution-08",
+          "group": "hold_institution",
+          "question": "교육청 예산으로 결제해도 되나요"
+        },
+        {
+          "id": "hold-institution-09",
+          "group": "hold_institution",
+          "question": "클래스인 기관 로고 넣어서 쓸 수 있어요?"
+        },
+        {
+          "id": "hold-institution-10",
+          "group": "hold_institution",
+          "question": "클래스인 수업 자료 저작권은 누구한테 있나요"
+        },
+        {
+          "id": "hold-institution-11",
+          "group": "hold_institution",
+          "question": "해외 기관이라 달러로 결제 되나요"
+        },
+        {
+          "id": "hold-institution-12",
+          "group": "hold_institution",
+          "question": "클래스인 교사별 사용 현황 볼 수 있나요"
+        },
+        {
+          "id": "hold-institution-13",
+          "group": "hold_institution",
+          "question": "API로 우리 학습관리 시스템이랑 연결할 수 있나요"
+        },
+        {
+          "id": "hold-institution-14",
+          "group": "hold_institution",
+          "question": "클래스인 수료증 자동으로 발급해주나요"
+        },
+        {
+          "id": "hold-institution-15",
+          "group": "hold_institution",
+          "question": "전교생 강연처럼 일방향 방송 모드 있나요"
+        },
+        {
+          "id": "hold-owner-large-01",
+          "group": "hold_owner-large",
+          "question": "본원이랑 분원 강의실 현황을 한 화면에서 볼 수 있나요"
+        },
+        {
+          "id": "hold-owner-large-02",
+          "group": "hold_owner-large",
+          "question": "클래스인 강사마다 권한을 다르게 줄 수 있나요"
+        },
+        {
+          "id": "hold-owner-large-03",
+          "group": "hold_owner-large",
+          "question": "강사가 올린 수업 기록을 원장이 나중에 확인할 수 있나요"
+        },
+        {
+          "id": "hold-owner-large-04",
+          "group": "hold_owner-large",
+          "question": "원생 명단 엑셀로 한꺼번에 등록할 수 있나요"
+        },
+        {
+          "id": "hold-owner-large-05",
+          "group": "hold_owner-large",
+          "question": "클래스인 카카오 알림톡으로 수업 공지 보낼 수 있어요?"
+        },
+        {
+          "id": "hold-owner-large-06",
+          "group": "hold_owner-large",
+          "question": "기존 결제 시스템이랑 API로 연결되나요"
+        },
+        {
+          "id": "hold-owner-large-07",
+          "group": "hold_owner-large",
+          "question": "클래스인 구글 캘린더에 수업 일정 자동으로 넣어주나요"
+        },
+        {
+          "id": "hold-owner-large-08",
+          "group": "hold_owner-large",
+          "question": "관리자가 강사 비밀번호를 대신 재설정해줄 수 있나요"
+        },
+        {
+          "id": "hold-owner-large-09",
+          "group": "hold_owner-large",
+          "question": "계약서에 학원 상호랑 대표자 이름이 들어가나요"
+        },
+        {
+          "id": "hold-owner-large-10",
+          "group": "hold_owner-large",
+          "question": "클래스인 부가세 포함 견적서 미리 받아볼 수 있나요"
+        },
+        {
+          "id": "hold-owner-large-11",
+          "group": "hold_owner-large",
+          "question": "강사 수업료 정산 기능도 들어 있나요"
+        },
+        {
+          "id": "hold-owner-large-12",
+          "group": "hold_owner-large",
+          "question": "클래스인 학부모한테 문자로 출결 알려줄 수 있나요"
+        },
+        {
+          "id": "hold-owner-large-13",
+          "group": "hold_owner-large",
+          "question": "연간 결제 내역을 세무용으로 한 장에 뽑을 수 있나요"
+        },
+        {
+          "id": "hold-owner-large-14",
+          "group": "hold_owner-large",
+          "question": "클래스인 퇴사한 강사 계정은 어떻게 정리해요"
+        },
+        {
+          "id": "hold-owner-large-15",
+          "group": "hold_owner-large",
+          "question": "학원 수강료를 학생한테 여기서 받을 수 있나요"
+        },
+        {
+          "id": "hold-owner-small-01",
+          "group": "hold_owner-small",
+          "question": "광고성 문자나 메일 자주 오나요"
+        },
+        {
+          "id": "hold-owner-small-02",
+          "group": "hold_owner-small",
+          "question": "카카오톡 아이디로도 로그인돼요?"
+        },
+        {
+          "id": "hold-owner-small-03",
+          "group": "hold_owner-small",
+          "question": "클래스인 수업 화면에 우리 학원 로고 넣을 수 있나요"
+        },
+        {
+          "id": "hold-owner-small-04",
+          "group": "hold_owner-small",
+          "question": "말 안 듣는 학생 수업에서 내보낼 수 있어요?"
+        },
+        {
+          "id": "hold-owner-small-05",
+          "group": "hold_owner-small",
+          "question": "클래스인 욕설 채팅 자동으로 가려주나요"
+        },
+        {
+          "id": "hold-owner-small-06",
+          "group": "hold_owner-small",
+          "question": "라이브 방송으로 수업 내보낼 수 있나요"
+        },
+        {
+          "id": "hold-owner-small-07",
+          "group": "hold_owner-small",
+          "question": "클래스인이랑 구글 드라이브 연동되나요"
+        },
+        {
+          "id": "hold-owner-small-08",
+          "group": "hold_owner-small",
+          "question": "클래스인 수강료 결제도 여기서 받을 수 있어요?"
+        },
+        {
+          "id": "hold-owner-small-09",
+          "group": "hold_owner-small",
+          "question": "홈페이지에 수업 예약 받는 페이지 만들어줘요?"
+        },
+        {
+          "id": "hold-owner-small-10",
+          "group": "hold_owner-small",
+          "question": "클래스인 컴퓨터 잘 못하는데 사용법 어려워요?"
+        },
+        {
+          "id": "hold-owner-small-11",
+          "group": "hold_owner-small",
+          "question": "한번 정한 요금 나중에 올라갈 수도 있어요?"
+        },
+        {
+          "id": "hold-owner-small-12",
+          "group": "hold_owner-small",
+          "question": "클래스인 칠판 하자보수 기간은 몇 년이에요"
+        },
+        {
+          "id": "hold-owner-small-13",
+          "group": "hold_owner-small",
+          "question": "방학 동안 안 쓰면 요금 멈출 수 있나요"
+        },
+        {
+          "id": "hold-owner-small-14",
+          "group": "hold_owner-small",
+          "question": "클래스인 전자칠판 자동 전원 끄기 되나요"
+        },
+        {
+          "id": "hold-owner-small-15",
+          "group": "hold_owner-small",
+          "question": "체험 기간에 학생 초대하면 학생도 무료예요?"
+        },
+        {
+          "id": "hold-parent-01",
+          "group": "hold_parent",
+          "question": "초등 1학년이 써도 복잡하지 않아요?"
+        },
+        {
+          "id": "hold-parent-02",
+          "group": "hold_parent",
+          "question": "아이가 수업 화면 몰래 녹화하는 거 막을 수 있어요?"
+        },
+        {
+          "id": "hold-parent-03",
+          "group": "hold_parent",
+          "question": "클래스인 수업 중에 아이가 손들기 할 수 있나요"
+        },
+        {
+          "id": "hold-parent-04",
+          "group": "hold_parent",
+          "question": "선생님이 아이 마이크를 원격으로 끌 수 있나요"
+        },
+        {
+          "id": "hold-parent-05",
+          "group": "hold_parent",
+          "question": "클래스인 가입할 때 별명 써도 되나요"
+        },
+        {
+          "id": "hold-parent-06",
+          "group": "hold_parent",
+          "question": "클래스인 프로필 사진 꼭 등록해야 하나요"
+        },
+        {
+          "id": "hold-parent-07",
+          "group": "hold_parent",
+          "question": "가입하면 영업 전화 자주 오나요"
+        },
+        {
+          "id": "hold-parent-08",
+          "group": "hold_parent",
+          "question": "클래스인 수업 화면에 광고 같은 거 뜨나요"
+        },
+        {
+          "id": "hold-parent-09",
+          "group": "hold_parent",
+          "question": "와이파이 잠깐 끊겨도 다시 들어갈 수 있나요"
+        },
+        {
+          "id": "hold-parent-10",
+          "group": "hold_parent",
+          "question": "학원 옮기면 아이 계정이랑 기록 그대로 가져가나요"
+        },
+        {
+          "id": "hold-parent-11",
+          "group": "hold_parent",
+          "question": "클래스인 계정 탈퇴하면 수업 기록도 다 지워져요?"
+        },
+        {
+          "id": "hold-parent-12",
+          "group": "hold_parent",
+          "question": "개인정보 열람 요청은 어디로 하면 되나요"
+        },
+        {
+          "id": "hold-parent-13",
+          "group": "hold_parent",
+          "question": "클래스인 수업 공지는 홈페이지 어디서 봐요"
+        },
+        {
+          "id": "hold-parent-14",
+          "group": "hold_parent",
+          "question": "수업 소리만 파일로 따로 받을 수 있나요"
+        },
+        {
+          "id": "hold-parent-15",
+          "group": "hold_parent",
+          "question": "클래스인 선생님이랑 상담 예약을 앱에서 잡을 수 있어요"
+        },
+        {
+          "id": "hold-teacher-01",
+          "group": "hold_teacher",
+          "question": "수업 방에 비밀번호 걸어둘 수 있어요?"
+        },
+        {
+          "id": "hold-teacher-02",
+          "group": "hold_teacher",
+          "question": "학생 명단 엑셀로 한꺼번에 올릴 수 있나요"
+        },
+        {
+          "id": "hold-teacher-03",
+          "group": "hold_teacher",
+          "question": "클래스인 원장님이 수업 몰래 참관할 수 있어요?"
+        },
+        {
+          "id": "hold-teacher-04",
+          "group": "hold_teacher",
+          "question": "판서한 내용 PDF로 저장되나요"
+        },
+        {
+          "id": "hold-teacher-05",
+          "group": "hold_teacher",
+          "question": "클래스인 수식이나 그래프 그리는 도구 있나요"
+        },
+        {
+          "id": "hold-teacher-06",
+          "group": "hold_teacher",
+          "question": "수업 중에 학생 채팅만 막을 수 있나요"
+        },
+        {
+          "id": "hold-teacher-07",
+          "group": "hold_teacher",
+          "question": "클래스인 수업 타이머 같은 기능 있어요?"
+        },
+        {
+          "id": "hold-teacher-08",
+          "group": "hold_teacher",
+          "question": "공동 강사 두 명이 한 교실에 같이 들어가나요"
+        },
+        {
+          "id": "hold-teacher-09",
+          "group": "hold_teacher",
+          "question": "클래스인 학생이 손들기 같은 신호 보낼 수 있어요?"
+        },
+        {
+          "id": "hold-teacher-10",
+          "group": "hold_teacher",
+          "question": "학생 화면 한눈에 다 볼 수 있나요"
+        },
+        {
+          "id": "hold-teacher-11",
+          "group": "hold_teacher",
+          "question": "시험 중에 학생 화면 감독 기능 있나요"
+        },
+        {
+          "id": "hold-teacher-12",
+          "group": "hold_teacher",
+          "question": "수업 중에 다시 들어가면 판서 내용 그대로 있나요"
+        },
+        {
+          "id": "hold-teacher-13",
+          "group": "hold_teacher",
+          "question": "클래스인 수업 전에 교실 미리 열어 칠판 세팅할 수 있나요?"
+        },
+        {
+          "id": "hold-teacher-14",
+          "group": "hold_teacher",
+          "question": "클래스인 수업 방 복사해서 다음 반에 그대로 쓸 수 있어요?"
+        },
+        {
+          "id": "hold-teacher-15",
+          "group": "hold_teacher",
+          "question": "문제 되는 학생 강제로 내보낼 수 있나요"
+        },
+        {
+          "id": "hold-terse-01",
+          "group": "hold_terse",
+          "question": "손들기 기능 있어요"
+        },
+        {
+          "id": "hold-terse-02",
+          "group": "hold_terse",
+          "question": "클래스인 방 비밀번호 걸 수 있나요"
+        },
+        {
+          "id": "hold-terse-03",
+          "group": "hold_terse",
+          "question": "가상배경 돼요?"
+        },
+        {
+          "id": "hold-terse-04",
+          "group": "hold_terse",
+          "question": "채팅에 이모티콘 써도 되나요"
+        },
+        {
+          "id": "hold-terse-05",
+          "group": "hold_terse",
+          "question": "클래스인 학생 마이크 강제로 끌 수 있어요"
+        },
+        {
+          "id": "hold-terse-06",
+          "group": "hold_terse",
+          "question": "몇 살부터 가입할 수 있어요"
+        },
+        {
+          "id": "hold-terse-07",
+          "group": "hold_terse",
+          "question": "회원 탈퇴는 어떻게 해요"
+        },
+        {
+          "id": "hold-terse-08",
+          "group": "hold_terse",
+          "question": "클래스인 구글캘린더랑 연동돼요?"
+        },
+        {
+          "id": "hold-terse-09",
+          "group": "hold_terse",
+          "question": "문자 알림 보낼 수 있어요"
+        },
+        {
+          "id": "hold-terse-10",
+          "group": "hold_terse",
+          "question": "수업 영상 편집 되나요"
+        },
+        {
+          "id": "hold-terse-11",
+          "group": "hold_terse",
+          "question": "유튜브 영상 틀어줘도 돼요"
+        },
+        {
+          "id": "hold-terse-12",
+          "group": "hold_terse",
+          "question": "클래스인 전체 공지 띄우는 기능 있나요"
+        },
+        {
+          "id": "hold-terse-13",
+          "group": "hold_terse",
+          "question": "에어팟으로 소리 들려요?"
+        },
+        {
+          "id": "hold-terse-14",
+          "group": "hold_terse",
+          "question": "연결 끊기면 다시 들어갈 수 있나요"
+        },
+        {
+          "id": "hold-terse-15",
+          "group": "hold_terse",
+          "question": "클래스인 필기 페이지 여러장 넘길 수 있나"
+        }
+      ]
+    },
+    {
+      "key": "holdout2",
+      "status": "unseen",
+      "statusNote": "2026-11-18 생성. 모델 호출이 전부 실패한 상태에서만 한 번 돌았고(측정 무효) 수정 근거로 쓰이지 않음",
+      "cases": [
+        {
+          "id": "hold2-it-admin-01",
+          "group": "hold2_it-admin",
+          "question": "학교 PC 여러 대에 한꺼번에 설치할 수 있나요"
+        },
+        {
+          "id": "hold2-it-admin-02",
+          "group": "hold2_it-admin",
+          "question": "태블릿 앱 MDM으로 일괄 배포 되나요"
+        },
+        {
+          "id": "hold2-it-admin-03",
+          "group": "hold2_it-admin",
+          "question": "클래스인 접속 허용 IP 대역 지정할 수 있어요"
+        },
+        {
+          "id": "hold2-it-admin-04",
+          "group": "hold2_it-admin",
+          "question": "관리자 접속 기록은 몇 달 남아요"
+        },
+        {
+          "id": "hold2-it-admin-05",
+          "group": "hold2_it-admin",
+          "question": "학교 이메일 도메인으로만 가입 막을 수 있나요"
+        },
+        {
+          "id": "hold2-it-admin-06",
+          "group": "hold2_it-admin",
+          "question": "브라우저 확장 프로그램 따로 깔아야 하나요"
+        },
+        {
+          "id": "hold2-it-admin-07",
+          "group": "hold2_it-admin",
+          "question": "우분투 리눅스에서도 설치 되나요"
+        },
+        {
+          "id": "hold2-it-admin-08",
+          "group": "hold2_it-admin",
+          "question": "클래스인 프록시 서버 뒤에서도 접속돼요?"
+        },
+        {
+          "id": "hold2-it-admin-09",
+          "group": "hold2_it-admin",
+          "question": "교실 한 곳당 인터넷 얼마나 쓰나요"
+        },
+        {
+          "id": "hold2-it-admin-10",
+          "group": "hold2_it-admin",
+          "question": "설치 프로그램 지우면 남는 파일 있나요"
+        },
+        {
+          "id": "hold2-it-admin-11",
+          "group": "hold2_it-admin",
+          "question": "클래스인 칠판 펌웨어 업데이트는 누가 해요"
+        },
+        {
+          "id": "hold2-it-admin-12",
+          "group": "hold2_it-admin",
+          "question": "클래스인 보안 점검표 같은 자료 있어요?"
+        },
+        {
+          "id": "hold2-it-admin-13",
+          "group": "hold2_it-admin",
+          "question": "개인정보 처리방침 최신본 어디서 봐요"
+        },
+        {
+          "id": "hold2-it-admin-14",
+          "group": "hold2_it-admin",
+          "question": "엣지 브라우저에서도 수업 들어갈 수 있나요"
+        },
+        {
+          "id": "hold2-it-admin-15",
+          "group": "hold2_it-admin",
+          "question": "수업 끝나면 로그아웃 자동으로 되나요"
+        },
+        {
+          "id": "hold2-ops-staff-01",
+          "group": "hold2_ops-staff",
+          "question": "클래스인 학생 이메일 없이도 계정 되나요"
+        },
+        {
+          "id": "hold2-ops-staff-02",
+          "group": "hold2_ops-staff",
+          "question": "학생이 몇 시에 들어왔는지 기록 남아요"
+        },
+        {
+          "id": "hold2-ops-staff-03",
+          "group": "hold2_ops-staff",
+          "question": "클래스인 담당 강사 바꾸면 방도 넘어가나요"
+        },
+        {
+          "id": "hold2-ops-staff-04",
+          "group": "hold2_ops-staff",
+          "question": "휴강 공지 자동으로 나가나요"
+        },
+        {
+          "id": "hold2-ops-staff-05",
+          "group": "hold2_ops-staff",
+          "question": "클래스인 학원 등록번호 적는 칸 있나요"
+        },
+        {
+          "id": "hold2-ops-staff-06",
+          "group": "hold2_ops-staff",
+          "question": "지점이 여러 곳인데 한 번에 계약되나요"
+        },
+        {
+          "id": "hold2-ops-staff-07",
+          "group": "hold2_ops-staff",
+          "question": "클래스인 무통장 입금도 되나요"
+        },
+        {
+          "id": "hold2-ops-staff-08",
+          "group": "hold2_ops-staff",
+          "question": "한 학생이 여러 반 수업 들어갈 수 있나요"
+        },
+        {
+          "id": "hold2-ops-staff-09",
+          "group": "hold2_ops-staff",
+          "question": "수업 시작 전에 학생 대기시킬 수 있나요"
+        },
+        {
+          "id": "hold2-ops-staff-10",
+          "group": "hold2_ops-staff",
+          "question": "클래스인 학부모용 수업 리포트 뽑아주나요"
+        },
+        {
+          "id": "hold2-ops-staff-11",
+          "group": "hold2_ops-staff",
+          "question": "클래스인 앱 용량 얼마나 차지해요"
+        },
+        {
+          "id": "hold2-ops-staff-12",
+          "group": "hold2_ops-staff",
+          "question": "학생 개인정보 동의서 양식 주나요"
+        },
+        {
+          "id": "hold2-ops-staff-13",
+          "group": "hold2_ops-staff",
+          "question": "클래스인 수업 전에 자료 미리 올려둘 수 있나요"
+        },
+        {
+          "id": "hold2-ops-staff-14",
+          "group": "hold2_ops-staff",
+          "question": "수업 시간 지나면 자동으로 끊기나요"
+        },
+        {
+          "id": "hold2-ops-staff-15",
+          "group": "hold2_ops-staff",
+          "question": "학생 수 늘어나면 요금 추가로 내나요"
+        },
+        {
+          "id": "hold2-skeptic-01",
+          "group": "hold2_skeptic",
+          "question": "줌 계정으로도 로그인되나요"
+        },
+        {
+          "id": "hold2-skeptic-02",
+          "group": "hold2_skeptic",
+          "question": "클래스인 화면 공유 화질 얼마나 나와요"
+        },
+        {
+          "id": "hold2-skeptic-03",
+          "group": "hold2_skeptic",
+          "question": "파워포인트 파일 그대로 띄워도 돼요?"
+        },
+        {
+          "id": "hold2-skeptic-04",
+          "group": "hold2_skeptic",
+          "question": "클래스인 수업 중 투표나 설문 되나요"
+        },
+        {
+          "id": "hold2-skeptic-05",
+          "group": "hold2_skeptic",
+          "question": "칠판에 학생 여러 명이 같이 쓸 수 있어요"
+        },
+        {
+          "id": "hold2-skeptic-06",
+          "group": "hold2_skeptic",
+          "question": "클래스인 평생 쓰는 라이선스도 있나요"
+        },
+        {
+          "id": "hold2-skeptic-07",
+          "group": "hold2_skeptic",
+          "question": "나중에 그만두면 수업 자료 다 받을 수 있나요"
+        },
+        {
+          "id": "hold2-skeptic-08",
+          "group": "hold2_skeptic",
+          "question": "클래스인 약관 바뀌면 미리 알려주나요"
+        },
+        {
+          "id": "hold2-skeptic-09",
+          "group": "hold2_skeptic",
+          "question": "배경 소음 잡아주는 기능 있나요"
+        },
+        {
+          "id": "hold2-skeptic-10",
+          "group": "hold2_skeptic",
+          "question": "클래스인 화면 캡처해서 저장할 수 있나요"
+        },
+        {
+          "id": "hold2-skeptic-11",
+          "group": "hold2_skeptic",
+          "question": "줌이랑 동시에 켜도 충돌 안 나나요"
+        },
+        {
+          "id": "hold2-skeptic-12",
+          "group": "hold2_skeptic",
+          "question": "고정 입장 링크 하나로 계속 쓸 수 있어요"
+        },
+        {
+          "id": "hold2-skeptic-13",
+          "group": "hold2_skeptic",
+          "question": "클래스인 채팅으로 파일 보내면 받나요"
+        },
+        {
+          "id": "hold2-skeptic-14",
+          "group": "hold2_skeptic",
+          "question": "클래스인 구글 독스 같은 웹 문서 띄워요"
+        },
+        {
+          "id": "hold2-skeptic-15",
+          "group": "hold2_skeptic",
+          "question": "노트북 배터리 한 시간 수업에 얼마나 드나요"
+        },
+        {
+          "id": "hold2-student-01",
+          "group": "hold2_student",
+          "question": "학원 안 다니는데 개인으로도 가입 되나요"
+        },
+        {
+          "id": "hold2-student-02",
+          "group": "hold2_student",
+          "question": "클래스인 로그인 아이디가 이메일이어야 해요?"
+        },
+        {
+          "id": "hold2-student-03",
+          "group": "hold2_student",
+          "question": "수업 화면 캡처해서 친구한테 보내도 되나요"
+        },
+        {
+          "id": "hold2-student-04",
+          "group": "hold2_student",
+          "question": "클래스인 다크모드 같은 화면 테마 있어요?"
+        },
+        {
+          "id": "hold2-student-05",
+          "group": "hold2_student",
+          "question": "클래스인 화면 언어를 영어로 바꿀 수 있나요"
+        },
+        {
+          "id": "hold2-student-06",
+          "group": "hold2_student",
+          "question": "카메라 끄고 들어가도 출석으로 쳐 주나요"
+        },
+        {
+          "id": "hold2-student-07",
+          "group": "hold2_student",
+          "question": "클래스인 친구도 수업 링크로 같이 들어올 수 있어요?"
+        },
+        {
+          "id": "hold2-student-08",
+          "group": "hold2_student",
+          "question": "클래스인 한 번 수업이 최대 몇 시간이에요"
+        },
+        {
+          "id": "hold2-student-09",
+          "group": "hold2_student",
+          "question": "클래스인 노트북이랑 폰에서 같은 계정 동시에 되나요"
+        },
+        {
+          "id": "hold2-student-10",
+          "group": "hold2_student",
+          "question": "학생인 나도 수업방을 직접 만들 수 있나요"
+        },
+        {
+          "id": "hold2-student-11",
+          "group": "hold2_student",
+          "question": "수업 말고 혼자 볼 인강 영상도 있나요"
+        },
+        {
+          "id": "hold2-student-12",
+          "group": "hold2_student",
+          "question": "클래스인 수업 채팅 기록 나중에 볼 수 있어요?"
+        },
+        {
+          "id": "hold2-student-13",
+          "group": "hold2_student",
+          "question": "노트북 배터리 많이 닳나요"
+        },
+        {
+          "id": "hold2-student-14",
+          "group": "hold2_student",
+          "question": "여러 과목 수업을 앱 하나로 들을 수 있나요"
+        },
+        {
+          "id": "hold2-student-15",
+          "group": "hold2_student",
+          "question": "클래스인 정말 무료로 쓸 수 있는 버전 있나요"
+        },
+        {
+          "id": "hold2-terse2-01",
+          "group": "hold2_terse2",
+          "question": "한글(hwp) 파일도 화면에 띄울 수 있어요?"
+        },
+        {
+          "id": "hold2-terse2-02",
+          "group": "hold2_terse2",
+          "question": "ppt 슬라이드 그대로 띄워서 넘겨요?"
+        },
+        {
+          "id": "hold2-terse2-03",
+          "group": "hold2_terse2",
+          "question": "전화로도 수업 소리 들을 수 있나요"
+        },
+        {
+          "id": "hold2-terse2-04",
+          "group": "hold2_terse2",
+          "question": "클래스인 문서카메라 연결돼요?"
+        },
+        {
+          "id": "hold2-terse2-05",
+          "group": "hold2_terse2",
+          "question": "수업 자료 프린터로 바로 뽑을 수 있어요?"
+        },
+        {
+          "id": "hold2-terse2-06",
+          "group": "hold2_terse2",
+          "question": "클래스인 수업 중 투표 기능 있어요?"
+        },
+        {
+          "id": "hold2-terse2-07",
+          "group": "hold2_terse2",
+          "question": "학부모 설문조사 만들 수 있나요"
+        },
+        {
+          "id": "hold2-terse2-08",
+          "group": "hold2_terse2",
+          "question": "클래스인 칭찬 스티커 같은거 있어요?"
+        },
+        {
+          "id": "hold2-terse2-09",
+          "group": "hold2_terse2",
+          "question": "클래스인 지금 할인행사 하고 있어요?"
+        },
+        {
+          "id": "hold2-terse2-10",
+          "group": "hold2_terse2",
+          "question": "클래스인 채용 공고 올라와 있나요"
+        },
+        {
+          "id": "hold2-terse2-11",
+          "group": "hold2_terse2",
+          "question": "쓰던 칠판 중고로 팔 수 있어요?"
+        },
+        {
+          "id": "hold2-terse2-12",
+          "group": "hold2_terse2",
+          "question": "칠판 이사하면 옮겨서 다시 달아줘요?"
+        },
+        {
+          "id": "hold2-terse2-13",
+          "group": "hold2_terse2",
+          "question": "클래스인 홈페이지 영어 버전 있나요"
+        },
+        {
+          "id": "hold2-terse2-14",
+          "group": "hold2_terse2",
+          "question": "클래스인 유튜브 채널 있어요?"
+        },
+        {
+          "id": "hold2-terse2-15",
+          "group": "hold2_terse2",
+          "question": "칠판 리모컨 따로 있나요"
+        },
+        {
+          "id": "hold2-tutor-solo-01",
+          "group": "hold2_tutor-solo",
+          "question": "개인 강사용 요금제 따로 있어요?"
+        },
+        {
+          "id": "hold2-tutor-solo-02",
+          "group": "hold2_tutor-solo",
+          "question": "요금이 계정 한 개 기준인가요"
+        },
+        {
+          "id": "hold2-tutor-solo-03",
+          "group": "hold2_tutor-solo",
+          "question": "해외 신용카드로도 결제되나요"
+        },
+        {
+          "id": "hold2-tutor-solo-04",
+          "group": "hold2_tutor-solo",
+          "question": "무료로 쓰면 수업 시간 제한 있어요?"
+        },
+        {
+          "id": "hold2-tutor-solo-05",
+          "group": "hold2_tutor-solo",
+          "question": "클래스인 폰 한 대로 강의 진행 가능해요?"
+        },
+        {
+          "id": "hold2-tutor-solo-06",
+          "group": "hold2_tutor-solo",
+          "question": "학생 인터넷 느려도 수업 들어올 수 있나요"
+        },
+        {
+          "id": "hold2-tutor-solo-07",
+          "group": "hold2_tutor-solo",
+          "question": "카메라 끄고 목소리만으로 수업해도 돼요"
+        },
+        {
+          "id": "hold2-tutor-solo-08",
+          "group": "hold2_tutor-solo",
+          "question": "매달 끊어서 쓰는 요금제도 있나요"
+        },
+        {
+          "id": "hold2-tutor-solo-09",
+          "group": "hold2_tutor-solo",
+          "question": "클래스인 학생 이름 화면에서 가릴 수 있어요?"
+        },
+        {
+          "id": "hold2-tutor-solo-10",
+          "group": "hold2_tutor-solo",
+          "question": "수업 전에 학생처럼 먼저 입장해 볼 수 있나요"
+        },
+        {
+          "id": "hold2-tutor-solo-11",
+          "group": "hold2_tutor-solo",
+          "question": "학생은 수업 전에 뭘 준비해야 하나요"
+        },
+        {
+          "id": "hold2-tutor-solo-12",
+          "group": "hold2_tutor-solo",
+          "question": "클래스인 설치 없이 브라우저로 입장되나요"
+        },
+        {
+          "id": "hold2-tutor-solo-13",
+          "group": "hold2_tutor-solo",
+          "question": "말하는 사람 화면이 자동으로 커지나요"
+        },
+        {
+          "id": "hold2-tutor-solo-14",
+          "group": "hold2_tutor-solo",
+          "question": "학생이랑 시차 있으면 시간 자동 변환돼요?"
+        },
+        {
+          "id": "hold2-tutor-solo-15",
+          "group": "hold2_tutor-solo",
+          "question": "클래스인 선생님 한 명만 써도 기능 다 있나요"
+        }
+      ]
+    }
+  ]
+}
