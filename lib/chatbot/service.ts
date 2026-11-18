@@ -678,7 +678,7 @@ function getScoringTokens(question: NormalizedQuestion) {
 
 const EDB_QUERY_RE = /edb|이\s*디\s*비/i
 const POSITIONING_RE =
-  /학원\s*시스템|시스템\s*os|수업\s*os|운영\s*os|zoom|줌|화상회의|뭐가\s*(달라|다른)|무엇이\s*다르|어떻게\s*다른|다른\s*(점|가요|건가요|거|것|부분|서비스)|차이|비교|차별|차별점|장점|왜\s*(써|쓰|필요|도입)|일반\s*전자칠판|기존\s*전자칠판|왜\s*전자칠판|edb|이\s*디\s*비|칠판\s*파일|가격\s*부담|비싸|api|sdk|연동|데이터\s*구독|도구.*흩어|녹화.*관리/
+  /학원\s*시스템|시스템\s*os|수업\s*os|운영\s*os|zoom|(?<![가-힣])줌|화상회의|뭐가\s*(달라|다른)|무엇이\s*다르|어떻게\s*다른|다른\s*(점|가요|건가요|거|것|부분|서비스)|차이|비교|차별|차별점|장점|왜\s*(써|쓰|필요|도입)|일반\s*전자칠판|기존\s*전자칠판|왜\s*전자칠판|edb|이\s*디\s*비|칠판\s*파일|가격\s*부담|비싸|api|sdk|연동|데이터\s*구독|도구.*흩어|녹화.*관리/
 
 const PRE_ADOPTION_CHECK_RE =
   /도입\s*전.*(22|질문|체크리스트|확인)|22\s*가지\s*질문|22.*도입|구매\s*전.*(질문|체크리스트|확인)|상담\s*전.*(질문|체크리스트|확인)/
@@ -708,7 +708,7 @@ const CAMERA_CONFLICT_RE =
   /카메라.{0,18}(안\s*켜|꺼|꺼져|권한|한\s*명|한명|1명|문제|오류)|(한\s*명|한명|1명).{0,18}카메라/i
 
 const COMPARISON_RE =
-  /zoom|줌|화상회의|뭐가\s*(달라|다른)|무엇이\s*다르|어떻게\s*다른|다른\s*(점|가요|건가요|거|것|부분|서비스)|차이|비교|차별점|차별화|장점|왜\s*(써|쓰|필요|도입)|일반\s*전자칠판|기존\s*전자칠판/
+  /zoom|(?<![가-힣])줌|화상회의|뭐가\s*(달라|다른)|무엇이\s*다르|어떻게\s*다른|다른\s*(점|가요|건가요|거|것|부분|서비스)|차이|비교|차별점|차별화|장점|왜\s*(써|쓰|필요|도입)|일반\s*전자칠판|기존\s*전자칠판/
 
 // 시중 경쟁 전자칠판 브랜드를 콕 집어 묻는 비교 질문 인식용.
 // 정책: 트리거로 비교 의도만 인식하고, 답변에서는 브랜드명을 노출하거나 타사 사양·우열을 단정하지 않는다.
@@ -747,7 +747,7 @@ const SOFTWARE_BOARD_FEATURE_RE =
 
 // 상세 사양을 콕 집어 묻는 신호. 모델·라인업·추천 같은 '넓은 라인업' 단어는 여기서 제외한다.
 const HARDWARE_SPECS_RE =
-  /스펙|사양|규격|크기|사이즈|인치|두께|가로|세로|치수|외형|\d\s*mm|해상도|화면|ops|터치|주사율|밝기|시야각|마이크|스피커|무선|nfc|무게|중량|소비\s*전력|전력|유리|인증|부속|비교/i
+  /스펙|사양|규격|크기|사이즈|인치|두께|가로|세로|치수|외형|\d\s*mm|해상도|화면|ops|터치(?!\s*펜)|주사율|밝기|시야각|마이크|스피커|무선|nfc|무게|중량|소비\s*전력|전력|유리|인증|부속|비교/i
 
 // 대형 공간·특정 대형 모델을 명시적으로 물을 때만 98/110을 공개한다.
 const HARDWARE_BIG_MODEL_RE =
@@ -790,12 +790,13 @@ const LOGIN_FACT_QUESTION_RE =
   /몇\s*명|최대|인원|정원|동시\s*접속|비용|요금|가격|무료|유료|느려|속도|방식|종류/
 
 const LIVE_CLASS_TROUBLE_RE =
-  /수업.*(나가|나감|튕김|튕겨|끊김|끊겨|입장\s*안|접속\s*안)|화면\s*공유.*(끊김|끊겨|오류|에러|안\s*됨|안\s*돼)|소리.*(안\s*들|끊김|끊겨)|마이크.*(안\s*됨|안\s*돼|끊김)/i
+  /수업.*(나가(?!면|도\s|기|려|는|서|게|고|야|라)|나감|튕김|튕겨|끊김|끊겨|입장\s*안|접속\s*안)|화면\s*공유.*(끊김|끊겨|오류|에러|안\s*됨|안\s*돼)|소리.*(안\s*들|끊김|끊겨)|마이크.*(안\s*됨|안\s*돼|끊김)/i
 const PARENT_REPORT_OR_NOTIFICATION_RE =
   /학부모.{0,18}(알림|문자|메시지|푸시|리포트|보고서|상담|피드백)|(?:알림|문자|메시지|푸시|리포트|보고서|상담|피드백).{0,18}학부모/i
 
 function isPositioningQuestion(question: NormalizedQuestion) {
   const text = question.redacted.toLowerCase()
+  if (isOtherBoardInstallText(text) && !COMPARISON_RE.test(text)) return false
   return POSITIONING_RE.test(text) || COMPETITOR_BOARD_RE.test(text) || isIdentityQuestion(question)
 }
 
@@ -911,9 +912,15 @@ function isCourseCreationQuestion(question: NormalizedQuestion) {
 const STUDENT_SUBMISSION_RE =
   /늦게|마감|못\s*(?:냈|내)|다시\s*(?:내|제출|해서)|재제출|제출이?\s*안|안\s*(?:올라|내져)|내도\s*(?:돼|되)|받아\s*줌|날아|사라|우리\s*아이|아이가|애가/
 
+// 기능이 있는지를 묻는 말("숙제 제출받는 기능 있나요"). 조작 순서(교사의 숙제 게시, 학생 모바일 제출 가이드)로 답하지 않는다.
+const FEATURE_EXISTENCE_RE = /기능\s*(?:이|은|도|좀)?\s*(?:있|없|되|돼|지원|제공)/
+// 학생이 주어인 제출 질문("숙제 파일 학생이 여기서 제출할 수 있어요?")은 교사의 숙제 게시 안내가 아니다.
+const STUDENT_SUBJECT_SUBMISSION_RE = /학생(?:이|은|도|들이|들은|들도)\s*.{0,16}(?:제출|내|올리|올려)/
+
 function isAssignmentQuestion(question: NormalizedQuestion) {
   const text = question.redacted.toLowerCase()
   if (STUDENT_SUBMISSION_RE.test(text)) return false
+  if (FEATURE_EXISTENCE_RE.test(text) || STUDENT_SUBJECT_SUBMISSION_RE.test(text)) return false
   return /과제|숙제|시험/.test(text) && /내는|내려면|낼\s*수|어떻게\s*내|제출|부여|등록|만들|방법|출제/.test(text)
 }
 
@@ -977,7 +984,19 @@ function isApiIntegrationQuestion(question: NormalizedQuestion) {
 
 function isComparisonQuestion(question: NormalizedQuestion) {
   const text = question.redacted.toLowerCase()
+  // "엘지 전자칠판에도 설치돼요"는 비교가 아니라 다른 회사 칠판에 클래스인을 설치하는지 묻는 말이다.
+  if (isOtherBoardInstallText(text) && !COMPARISON_RE.test(text)) return false
   return COMPARISON_RE.test(text) || COMPETITOR_BOARD_RE.test(text)
+}
+
+// 다른 회사·이미 가진 칠판(TV·모니터)에 클래스인을 설치·실행하는지 묻는 말("엘지 전자칠판에도 설치돼요",
+// "삼성 전자칠판에 클래스인 깔 수 있어요?"). 비교·라인업·설치 형태(스탠드·벽걸이) 답으로 가로채지 않는다.
+const OTHER_BOARD_INSTALL_RE =
+  /(?:전자\s*칠판|칠판|보드|tv|티비|모니터|패널)(?:에|에도|에서)\s*(?:\S+\s*)?(?:설치|깔|까|돌아가|돌려|실행|호환|쓸\s*수|써도)/
+const OTHER_BOARD_OWNER_RE = /기존|원래|이미|쓰던|쓰고\s*있는|갖고\s*있는|가지고\s*있는|우리|저희|다른|타사|일반|삼성|lg|엘지/
+
+function isOtherBoardInstallText(text: string) {
+  return OTHER_BOARD_INSTALL_RE.test(text) && (COMPETITOR_BOARD_RE.test(text) || OTHER_BOARD_OWNER_RE.test(text))
 }
 
 function isIdentityQuestion(question: NormalizedQuestion) {
@@ -996,10 +1015,15 @@ function isCompanyIdentityQuestion(question: NormalizedQuestion) {
 const BOARD_USAGE_OR_SYMPTOM_RE =
   /하고\s*싶|하려면|어떻게\s*(?:해|하|줄|바꾸|끄|켜|나눠)|방법|나눠|보내|공유|저장|생겼|생기|줄이|낮추|켜져\s*있|혼자|녹음|녹화|걸어|세워|이사|벽이|안\s*(?:돼|되|나|먹)|안돼|안되|느려|버벅|늘어|뚱뚱|이상해|이상하|눌러도|반응|낙서|닦|지워|아세톤|기사|접수|수리|고치|소개|혜택|이벤트|프로모션|할부|분할|나눠\s*내|매달|\bmac\b|802|내부망|와이파이|wi-?fi|권한|판서|학생|매직|업데이트|usb|한글|파일|보증|대체\s*기기|몇\s*년\s*쓰/
 
+const BOARD_ACCESSORY_QUESTION_RE =
+  /(?:펜|리모컨|케이블|구성품|부속품).{0,12}(?:같이|함께|포함|딸려|들어\s*있|기본\s*(?:으로|제공)|와요|오나요|오나|주나요|줘요|줘\?|챙겨)/
+
 function isHardwareSpecsQuestion(question: NormalizedQuestion) {
   const text = question.redacted.toLowerCase()
   if (COMPETITOR_BOARD_RE.test(text)) return false
   if (BOARD_USAGE_OR_SYMPTOM_RE.test(text)) return false
+  // "터치펜 같이 와요?"는 사양이 아니라 받는 구성품을 묻는 말이다. 모델 사양표로 답하지 않는다.
+  if (BOARD_ACCESSORY_QUESTION_RE.test(text) || isOtherBoardInstallText(text)) return false
   return (
     isBoardTargeted(text) &&
     HARDWARE_SPECS_RE.test(text) &&
@@ -1012,6 +1036,7 @@ function isHardwareBoardLineupQuestion(question: NormalizedQuestion) {
   const text = question.redacted.toLowerCase()
   if (INSTALL_FORM_RE.test(text)) return false
   if (BOARD_USAGE_OR_SYMPTOM_RE.test(text)) return false
+  if (isOtherBoardInstallText(text)) return false
   return (
     isBoardTargeted(text) &&
     HARDWARE_BOARD_LINEUP_INTENT_RE.test(text) &&
@@ -1065,10 +1090,16 @@ const PRICING_INFO_RE = /요금|가격|비용|금액|가격대|얼마/i
 const PRICING_EXCLUDE_RE = /환불|취소|세금|계산서|영수증|청구|정산|미납|연체/i
 // "얼마나 걸려요"(기간)는 가격이 아니다 — 돈 단어가 없으면 가격에서 뺀다.
 const PRICING_DURATION_RE = /얼마나?\s*(걸리|걸려|걸릴|오래|소요|기간|시간|일|주|개월)/i
+// '얼마'가 돈이 아니라 양·빈도·성능을 묻는 말("용량 얼마에요", "업로드 속도는 얼마나 있어야 해요", "업데이트 얼마나 자주").
+// 돈 단어(요금·가격·비용)가 없고 이런 양을 가리키는 말이 있으면 가격 질문으로 보지 않는다.
+const PRICING_NON_MONEY_AMOUNT_RE =
+  /용량|속도|해상도|화질|대역폭|mbps|기가|\bgb\b|\bmb\b|메가|크기|사이즈|인치|무게|길이|거리|인원|몇\s*명|자주|빈도|주기|간격|횟수|번\s*(?:정도|씩)|오래|기간|시간|걸리|걸려|지연|딜레이|배터리|저장\s*공간|사양|스펙|성능|버전|높아야|낮아야|이상이어야/i
 const SOFTWARE_ONLY_BUYER_RE =
   /소프트웨어만|프로그램만|앱만|하드웨어\s*없이|전자칠판\s*없이|(?<!대시\s?)보드\s*없이|계정당|계정\s*당|플랜|standard|plus|enterprise/i
 const SUBSCRIPTION_OR_CONSUMPTION_RE =
   /구독형|충전형|충전제|subscription|consumption|사용량\s*기준|월\s*구독|월구독/i
+const SUPPORT_SERVICE_FEE_RE = /원격\s*(?:지원|제어|상담)|상담\s*(?:받|비|료|자체|하는\s*데|하는데)|상담료/
+
 function isPricingInfoQuestion(question: NormalizedQuestion) {
   const text = question.redacted.toLowerCase()
   if (PRICING_EXCLUDE_RE.test(text)) return false
@@ -1076,6 +1107,9 @@ function isPricingInfoQuestion(question: NormalizedQuestion) {
   if (ACCOUNT_PLAN_RE.test(text) || TRIAL_LIMIT_RE.test(text)) return false
   if (isWebLiveBillingQuestion(question)) return false
   if (!PRICING_MONEY_RE.test(text) && PRICING_DURATION_RE.test(text)) return false
+  if (!PRICING_MONEY_RE.test(text) && PRICING_NON_MONEY_AMOUNT_RE.test(text)) return false
+  // "원격 지원은 비용 따로 받나요", "상담받는 데 돈 드나요"는 제품 견적 구성이 아니라 지원·상담 서비스의 비용을 묻는 말이다.
+  if (SUPPORT_SERVICE_FEE_RE.test(text)) return false
   return PRICING_INFO_RE.test(text)
 }
 
@@ -1097,9 +1131,15 @@ function isTrialOrPilotQuestion(question: NormalizedQuestion) {
 const INSTALL_FORM_RE = /스탠드|벽걸이|벽\s*부착|벽\s*설치|벽에\s*(?:거는|걸|다는|달)|바퀴\s*(?:달린|있는)|이동형|이동식|거치(대|형)?/i
 const INSTALL_HW_CONTEXT_RE = /전자칠판|클래스인\s*보드|classin\s*board|\bboard\b|(?<!대시\s?)보드|칠판|하드웨어|교실|벽면|s\s*(?:65|75|86|98|110)\b/i
 const INSTALL_INTENT_RE = /가능|돼|되나|될까|할\s*수|하나요|해야|방식|유형|형태|환경|기간|일정|얼마|어떻게|어디/i
+const OTHER_BOARD_TARGET_RE =
+  /(?:기존|원래|이미|쓰던|쓰고\s*있는|갖고\s*있는|가지고\s*있는|우리|저희|다른\s*(?:회사|브랜드|업체)|타사|삼성|lg|엘지)\s*(?:\S+\s*)?(?:전자\s*칠판|칠판|보드|tv|티비|모니터)(?:에|에도|에서)/
+
 function isInstallFormQuestion(question: NormalizedQuestion) {
   const text = question.redacted.toLowerCase()
   if (HARDWARE_TROUBLE_RE.test(text)) return false
+  // "엘지 전자칠판에도 설치돼요", "기존 칠판에 깔 수 있어요"는 클래스인 보드의 설치 형태가 아니라
+  // 다른 회사·이미 가진 칠판에 클래스인을 설치하는지 묻는 말이다.
+  if (!INSTALL_FORM_RE.test(text) && (COMPETITOR_BOARD_RE.test(text) || OTHER_BOARD_TARGET_RE.test(text) || isOtherBoardInstallText(text))) return false
   if (INSTALL_FORM_RE.test(text)) return true
   return /설치/.test(text) && INSTALL_HW_CONTEXT_RE.test(text) && INSTALL_INTENT_RE.test(text)
 }
@@ -2411,6 +2451,25 @@ function buildSuggestedQuestions(category: string) {
   ).slice(0, 3)
 }
 
+// 상담 채널 자체에 대한 사실 질문. "상담받는 데 돈 드나요", "원격 지원은 비용 따로 받나요", "전화 상담 번호가 어떻게 되나요",
+// "도입 상담 전화로도 받나요", "개인정보 보호책임자 지정돼 있어요?"는 사람을 불러 달라는 말이 아니라 비용·연락 수단·운영 시간·
+// 담당 책임자를 묻는 말이다. 즉시 상담 연결로 보내면 묻는 사실에는 답하지 않고 "네, 연결해 드릴게요"만 나간다.
+// 연결해 달라는 말(연결·바꿔·불러·주세요·원해·하고 싶어)이 함께 있으면 지금처럼 상담 연결이 맡는다.
+const CONTACT_CHANNEL_FACT_TOPIC_RE =
+  /돈|비용|무료|유료|요금|공짜|과금|따로\s*(?:받|내|들)|개인정보\s*(?:보호\s*)?책임자|번호(?:가|는)?\s*(?:어떻게|뭐|몇|있)|몇\s*시|운영\s*시간|상담\s*시간|언제까지|주말|평일|(?:전화|카톡|카카오톡?|이메일|메일|채팅)(?:로|으로)?도?\s*(?:받|되|돼|가능|할\s*수|하나|있)/
+const CONTACT_CHANNEL_FACT_ASK_RE =
+  /[?？]|(?:나요|가요|까요|어요|에요|예요|돼요|되요|되나|드나요|드나|있나|인가|는지|궁금|뭐예요|뭐에요|어디)\s*[.!~]*$/
+const HANDOFF_REQUEST_WORD_RE =
+  /연결|이어\s*(?:줘|주|주세요|주시)|바꿔|불러|주세요|해\s*줘|원해|원함|하고\s*싶|받고\s*싶|싶어|부탁|할래|급해|급합|연락\s*(?:주|줘)|화나|짜증|답답|몇\s*번째|계속|또\s/
+
+function isContactChannelFactQuestion(text: string) {
+  return (
+    CONTACT_CHANNEL_FACT_TOPIC_RE.test(text) &&
+    CONTACT_CHANNEL_FACT_ASK_RE.test(text) &&
+    !HANDOFF_REQUEST_WORD_RE.test(text)
+  )
+}
+
 function wantsImmediateHumanHandoff(question: NormalizedQuestion) {
   const text = question.redacted.toLowerCase()
   const explicitHandoff =
@@ -2418,6 +2477,7 @@ function wantsImmediateHumanHandoff(question: NormalizedQuestion) {
   const contextualInquiry =
     /문의/.test(text) && /담당자|매니저|상담원|채널톡|쇼룸|연락|전화|통화|구매|도입|시연|데모/.test(text)
 
+  if ((explicitHandoff || contextualInquiry) && isContactChannelFactQuestion(text)) return false
   if (explicitHandoff || contextualInquiry) return true
 
   if (isHardwareSpecsQuestion(question)) return false
@@ -2435,6 +2495,8 @@ function wantsHumanConsultation(question: NormalizedQuestion) {
   if (isAccountPlanOrTrialLimitQuestion(question)) return true
 
   const text = question.redacted.toLowerCase()
+  // "도입 상담 전화로도 받나요"처럼 상담 채널에 대한 사실 질문은 상담 요청이 아니다.
+  if (isContactChannelFactQuestion(text)) return false
   return /견적|데모|시연|미팅|제안|구매|도입\s*검토|도입\s*상담/.test(text)
 }
 
@@ -2489,7 +2551,7 @@ function buildImmediateHandoffResponse(
 // "인터넷 속도 얼마나 필요해요?"처럼 묻는데, 이런 질문이 '클래스인과 무관'으로 분류돼 문서 검색도 모델 답변도
 // 건너뛰고 되묻기만 나갔다. 회사·기기·설치·비용·사례·한도를 묻는 낱말을 클래스인 질문으로 본다.
 const FIRST_CONTACT_VOCAB_RE =
-  /회사|기업|본사|법인|지사|대표|사장|ceo|창업|설립|나라|국적|제품|서비스|서버|저장|보관|영상|맥북|macbook|macos|\bmac\b|맥\s*(?:지원|용|에서|으로|os)|윈도우|windows|아이패드|ipad|아이폰|iphone|갤럭시|안드로이드|android|\bios\b|태블릿|노트북|컴퓨터|\bpc\b|스마트폰|휴대폰|핸드폰|크롬|브라우저|웹으로|설치|다운로드|깔리|깔아|인터넷|와이파이|wi-?fi|무료|유료|원가|마진|할인|도매|공급가|납품|기능|사례|후기|레퍼런스|인원|몇\s*명|최대|제한|용량|zoom|줌|구글\s*미트|google\s*meet|팀즈|teams|웨일|비교|차이|공부방|과외|교습소|학교|대학|초등|중등|고등|성인|암호화|프로젝터|스마트\s*tv|\btv\b|티비|모니터|속도|사양|스펙/
+  /회사|기업|본사|법인|지사|대표|사장|ceo|창업|설립|나라|국적|제품|서비스|서버|저장|보관|영상|맥북|macbook|macos|\bmac\b|맥\s*(?:지원|용|에서|으로|os)|윈도우|windows|아이패드|ipad|아이폰|iphone|갤럭시|안드로이드|android|\bios\b|태블릿|노트북|컴퓨터|\bpc\b|스마트폰|휴대폰|핸드폰|크롬|브라우저|웹으로|설치|다운로드|깔리|깔아|인터넷|와이파이|wi-?fi|무료|유료|원가|마진|할인|도매|공급가|납품|기능|사례|후기|레퍼런스|인원|몇\s*명|최대|제한|용량|zoom|(?<![가-힣])줌|구글\s*미트|google\s*meet|팀즈|teams|웨일|비교|차이|공부방|과외|교습소|학교|대학|초등|중등|고등|성인|암호화|프로젝터|스마트\s*tv|\btv\b|티비|모니터|속도|사양|스펙/
 
 function isDomainRelatedQuestion(question: NormalizedQuestion, category: string) {
   if (category !== "general") return true
@@ -2643,9 +2705,19 @@ function getContextualNextStep(question: NormalizedQuestion, category: string): 
 const BILLING_NEXT_STEP =
   "결제·증빙은 계정마다 조건이 달라 담당자가 확인해요. 상담 채널(홈페이지 하단 채팅)이나 담당 매니저에게 필요한 증빙 종류를 말씀해 주세요."
 
+// 받침이 있으면 '을', 없으면 '를'.
+function withObjectParticle(word: string) {
+  const last = word.charCodeAt(word.length - 1)
+  const hasFinal = last >= 0xac00 && last <= 0xd7a3 && (last - 0xac00) % 28 !== 0
+  return `${word}${hasFinal ? "을" : "를"}`
+}
+
+const COMPARISON_ATTRIBUTE_RE =
+  /음질|화질|소리|화면\s*공유(?:\s*방식)?|공유\s*방식|속도|지연|딜레이|끊김|안정성|보안|해상도|용량|동시\s*접속/
+
 function getComparisonAnswer(question: NormalizedQuestion, top: ChatbotSource) {
   const text = question.redacted.toLowerCase()
-  const zoomFocused = /zoom|줌|화상회의/.test(text)
+  const zoomFocused = /zoom|(?<![가-힣])줌|화상회의/.test(text)
   // 시중 전자칠판(넥소 등) 또는 전자칠판/보드 비교는 하드웨어 차별점을 더 강하게 짚는다.
   // 정책: 경쟁사 브랜드명은 노출하지 않고 타사 사양·우열은 단정하지 않는다.
   const boardFocused =
@@ -2659,8 +2731,13 @@ function getComparisonAnswer(question: NormalizedQuestion, top: ChatbotSource) {
     ].join("\n\n")
   }
 
+  // "줌보다 음질 좋아요?", "줌이랑 화면공유 방식 같아요?"처럼 특정 속성을 견주는 질문. 타사와의 우열·동일 여부는
+  // 단정하지 않는다는 점을 먼저 밝히고, "네, 좋은 질문이에요"로 시작해 긍정처럼 읽히지 않게 한다.
+  const attribute = zoomFocused ? COMPARISON_ATTRIBUTE_RE.exec(text)?.[0] : undefined
   return [
-    "네, 좋은 질문이에요. Classin은 Zoom이나 일반 전자칠판과 달리 '수업 운영 흐름' 전체에 초점이 있어요.",
+    attribute
+      ? `Zoom과 ${withObjectParticle(attribute.replace(/\s+/g, " "))} 같은 조건에서 견준 공개 자료는 없어서, 어느 쪽이 낫다거나 같다고 말씀드리지 않을게요. 대신 Classin이 Zoom과 다른 점은 '수업 운영 흐름' 전체에 초점이 있다는 거예요.`
+      : "네, 좋은 질문이에요. Classin은 Zoom이나 일반 전자칠판과 달리 '수업 운영 흐름' 전체에 초점이 있어요.",
     "Zoom이 회의 중심이라면 Classin은 판서·녹화·복습·LMS를 하나로 연결하고,\n일반 전자칠판이 화면·판서에 머무는 것과 달리 EDB 교안과 관리자 데이터까지 이어줘요.",
     /할인|깎|네고/.test(text)
       ? "할인은 채팅에서 약속드리지 않고, 교실 수와 구성(전자칠판 대수·설치 형태·소프트웨어)을 보고 견적에서 안내드려요. 문의 페이지(/contact)에서 견적을 요청해 주세요."
@@ -3878,7 +3955,10 @@ const FREE_SCOPE_RE = /무료\s*(?:로)?.{0,20}(?:어디까지|범위|뭐까지|
 const MULTI_SITE_BOARD_RE = /(?:다른\s*지점|지점).{0,30}(?:칠판|티비|tv|보드|전자칠판).{0,60}(?:연결|같은|호환|싸게|할인)/
 const DOCS_FEEDBACK_RE = /(?:매뉴얼|설명서|기능\s*설명\s*자료|설명\s*자료|가이드).{0,20}(?:부족|없|링크|주세요)|기능\s*요청|피드백\s*(?:은|을|는)?\s*어디/
 const IRREVERSIBLE_RE = /(?:되돌릴|복구할|돌이킬)\s*수\s*(?:있는|없는)\s*(?:것|거|작업)|실수로.{0,20}(?:지우거나|바꿔도).{0,20}(?:되돌|복구)/
-const DPA_RE = /\bdpa\b|처리\s*위탁|위탁\s*계약|수탁사|재위탁/
+// DPA(위탁 계약서) 양식·문서를 요청하는 말. "개인정보 처리 위탁업체는 어디인가요"처럼 수탁자가 누구인지만 묻는 말은
+// 개인정보처리방침의 수탁자 표로 답할 일이라 여기서 가로채지 않는다.
+const DPA_RE =
+  /\bdpa\b|위탁\s*계약|(?:처리\s*위탁|수탁사|재위탁).{0,24}(?:계약서|양식|서류|문서|확인서|현황|목록|공개된)/
 const DOUBLE_CHARGE_RE =
   /(?:결제|빠져|빠졌|출금|청구|돈).{0,10}(?:두\s*번|두번|2번|중복|이중)|(?:두\s*번|두번|2번|중복|이중)\s*(?:결제|빠|출금|청구)/
 const EXPORT_MASK_RE =
@@ -5014,7 +5094,8 @@ async function buildChatbotCoreBase(
     }
   }
 
-  if (csFigmaGuide) {
+  // 기능이 있는지를 묻는 공개 질문은 조작 가이드가 아니라 기능 안내·문서 검색으로 답한다.
+  if (csFigmaGuide && !(publicShortcuts && FEATURE_EXISTENCE_RE.test(question.redacted.toLowerCase()))) {
     const { category, intent, handoffIntent } = classifyChatbotQuestion(question.redacted, [
       csFigmaGuide.category,
       csFigmaGuide.docCategory,

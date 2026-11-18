@@ -785,6 +785,8 @@ export const FIELD_QUICK_ANSWERS: FieldQuickAnswer[] = [
     id: "overseas-students",
     match: (text) =>
       /미국|해외|외국|abroad|overseas|\busa\b|america|\bu\.s\./.test(text) &&
+      // "외국인 강사가 한국 학생 가르쳐도 돼요?"는 해외 접속이 아니라 사람의 국적을 묻는 말이다.
+      !/외국인|외국\s*(?:사람|국적|출신)|국적/.test(text) &&
       /student|학생|class|수업|lag|접속|app\s*store|앱스토어/.test(text) &&
       !/number|번호|visa|비자|해지|card|카드|결제|pay/.test(text) &&
       // 회사 국적·계약 상대·데이터 국외 이전을 묻는 말은 company-origin-data-transfer가 맡는다.
@@ -5370,6 +5372,8 @@ export const FIELD_QUICK_ANSWERS: FieldQuickAnswer[] = [
     id: "cancellation-penalty-clause",
     match: (text) =>
       all(/위약금|해지\s*(?:비용|수수료)|중도\s*해지/)(text) &&
+      // 이미 청구된 위약금에 대한 답이다. "중간에 해지하면 위약금 있어요?"처럼 계약 전에 묻는 말은 맡지 않는다.
+      /청구|받았|나왔|냈|부과|물었|물게|떼|빠져나|못\s*들|안\s*들|들은\s*적|근거|조항|약관|억울|이의/.test(text) &&
       // 계약 전에 해지 조건을 계약서에 넣자는 협상은 trial-exit-clause-3year-contract가 맡는다.
       !/90일|석\s*달|계약서에\s*넣/.test(text),
     answer: [

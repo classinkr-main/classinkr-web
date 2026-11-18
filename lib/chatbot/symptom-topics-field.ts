@@ -817,15 +817,23 @@ export const FIELD_SYMPTOM_TOPICS: SymptomTopic[] = [
     category: "classroom",
     doc: { category: "software", slug: "classroom-tools" },
     steps: [{ heading: "학생이 직접 풀고 답하게 하려면", pick: [4, 5] }],
-    intro:
-      "교실 도구에 조별로 나눠 활동하는 [그룹 토론]이 있어요. 두 명씩 나눠 말하게 하는 정확한 순서는 공개 안내에 그림으로 정리돼 있지 않아, 처음 쓰실 때는 수업 전에 교실에서 한 번 열어 보시길 권해요.",
+    intro: "교실 도구에 조별로 나눠 활동하는 [그룹 토론]이 있어요.",
+    // 두 명씩 짝지어 말하게 하는 순서를 물었을 때만 붙인다. 소그룹 일반 질문에는 엉뚱한 단서가 된다.
+    branches: [
+      {
+        text: "두 명씩 나눠 말하게 하는 정확한 순서는 공개 안내에 그림으로 정리돼 있지 않아, 처음 쓰실 때는 수업 전에 교실에서 한 번 열어 보시길 권해요.",
+        when: /2명|두\s*명|짝/,
+      },
+    ],
     en: "Yes—use Group Discussion in the classroom tools for pair or small-group work. Try it once in an empty classroom before class; tap 상담원 연결 if you need step-by-step help.",
     suggestedQuestions: ["학생을 무대에 올리는 방법 알려줘", "개인 칠판은 어떻게 나눠 줘요?", "화면 공유가 안 돼요"],
   },
   {
     id: "share-board-notes",
     subject:
-      /(?:판서|칠판(?:에\s*쓴|\s*내용)?|화면에\s*쓴\s*(?:거|것)).{0,30}(?:나눠\s*주|보내|공유|휴대폰으로\s*보|저장해서\s*주)/,
+      /(?:판서|(?<!전자\s?)칠판(?:에\s*쓴|\s*내용)?|화면에\s*쓴\s*(?:거|것)).{0,30}(?:나눠\s*주|보내|공유|휴대폰으로\s*보|저장해서\s*주)/,
+    // "전자칠판은 학생 화면 공유 안 되죠"는 판서를 나눠 주는 말이 아니라 화면 공유 기능을 묻는 말이다.
+    exclude: /화면\s*공유|미러링/,
     requireSymptom: false,
     howto: true,
     category: "classroom",
