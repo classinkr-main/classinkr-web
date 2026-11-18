@@ -1642,8 +1642,11 @@ export function isVagueErrorQuestion(question: string) {
 
 // "또 날아가면 안 되니까 저장해 두겠다", "보이지 않게 하려면"처럼 금지·목적을 말하는 표현은 증상이 아니다.
 // "일반 전자칠판은 학생 화면 공유 안 되죠"처럼 '안 되죠·안 되잖아요'로 확인을 구하는 말은 기능을 묻는 말이다.
+// 다만 "화면 공유 왜 안 되죠", "갑자기 마이크 안 되잖아요"처럼 고장을 알리는 낱말이 함께 있으면 증상 신고다.
+const CONFIRMING_NEGATION_RE = /안\s*(?:되|돼)(?:죠|지요|잖아요|잖아)(?=\s|$)/g
+const FAULT_REPORT_CUE_RE = /왜|갑자기|자꾸|계속|아까|또\s/
 const NON_SYMPTOM_NEGATION_RE =
-  /(?:면|으면)\s*안\s*(?:돼|되)\S*|안\s*(?:되|돼)(?:죠|지요|잖아요|잖아)(?=\s|$)|안\s*(?:되|돼)\s*(?:게|도록)|(?:지|보이지|들리지)\s*않\s*(?:게|도록)|\S*(?:지|진)\s*않(?:나요|을까요|을까|겠죠|겠지요|나|죠)/g
+  /(?:면|으면)\s*안\s*(?:돼|되)\S*|안\s*(?:되|돼)\s*(?:게|도록)|(?:지|보이지|들리지)\s*않\s*(?:게|도록)|\S*(?:지|진)\s*않(?:나요|을까요|을까|겠죠|겠지요|나|죠)/g
 // 공손한 요청 어미("알 수 있을까요", "여쭤봐도 될까요")는 기능·가능 여부 질문이 아니다.
 const POLITE_REQUEST_RE =
   /(?:여쭤|물어)\s*봐도\s*될까요|알려\s*주실\s*수\s*있(?:나요|을까요|으실까요)|알\s*수\s*있(?:을까요|나요|을지)|확인할\s*수\s*있(?:을까요|나요)|(?:확인|점검|알아\s*볼)할\s*방법(?:이|은)?\s*있(?:을까요|나요|는지)|도와\s*주실\s*수\s*있(?:나요|을까요)/g
@@ -1651,7 +1654,8 @@ const POLITE_REQUEST_RE =
 export function findSymptomTopic(question: string): SymptomTopic | null {
   const text = normalizeTriageText(question)
   if (!text) return null
-  const symptomText = text.replace(NON_SYMPTOM_NEGATION_RE, " ")
+  const withoutNegation = text.replace(NON_SYMPTOM_NEGATION_RE, " ")
+  const symptomText = FAULT_REPORT_CUE_RE.test(text) ? withoutNegation : withoutNegation.replace(CONFIRMING_NEGATION_RE, " ")
   const capabilityForm =
     CAPABILITY_QUESTION_RE.test(text.replace(POLITE_REQUEST_RE, " ").trim()) && !EXPLICIT_SYMPTOM_RE.test(symptomText)
 

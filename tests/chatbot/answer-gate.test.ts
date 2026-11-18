@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { __clearAnswerGateCacheForTests } from "@/lib/chatbot/answer-gate"
 import { parsePreparedAnswerVerdict, resolvePreparedAnswerGateModelChain } from "@/lib/chatbot/llm"
 import {
+  __clearAnswerCacheForTests,
   evaluateChatbotQuery,
   NO_SOURCE_FACT_ANSWER,
   streamChatbotQuery,
@@ -75,6 +76,8 @@ describe("정해 둔 답 확인 관문", () => {
     vi.stubEnv("CHATBOT_ANSWER_GATE", "")
     vi.stubEnv("CHATBOT_FINAL_ANSWER_LLM", "")
     __clearAnswerGateCacheForTests()
+    // 관문이 버린 답의 문서 경로 답은 답 캐시에 남는다. 테스트마다 판정을 새로 받게 비운다.
+    __clearAnswerCacheForTests()
   })
 
   afterEach(() => {
@@ -117,7 +120,8 @@ describe("정해 둔 답 확인 관문", () => {
   })
 
   it("off_target 인데 문서에 답 문장이 없으면 사실 질문은 못 찾았다고 답한다(버린 답으로 돌아가지 않는다)", async () => {
-    const question = "클래스인은 어느나라 제품인가요?"
+    // 회사 국적처럼 공개 범위를 사람이 정한 주제는 관문 뒤에도 담당자 확인으로 잇는다(review-round-regression.test.ts).
+    const question = "클래스인 대표가 누구예요?"
     const baseline = await answerWithoutModel(question)
     const { gateQuestions } = stubModel({ verdict: "off_target" })
 
@@ -175,7 +179,8 @@ describe("정해 둔 답 확인 관문", () => {
   })
 
   it("관문이 시간 안에 판정하지 못하면 정해 둔 답을 그대로 낸다(시간 초과)", async () => {
-    vi.stubEnv("CHATBOT_ANSWER_GATE_TIMEOUT_MS", "300")
+    // 예산이 시도 하한(300ms)과 같으면 1ms만 지나도 시도 없이 끝나 중단 경로를 거치지 않는다. 여유를 둔다.
+    vi.stubEnv("CHATBOT_ANSWER_GATE_TIMEOUT_MS", "600")
     const question = "전자칠판 꼭 사야하나요?"
     const baseline = await answerWithoutModel(question)
     stubModel({
@@ -189,6 +194,19 @@ describe("정해 둔 답 확인 관문", () => {
     const result = await evaluateChatbotQuery(question)
 
     expect(Date.now() - startedAt).toBeLessThan(2_000)
+    expect(result.answer).toBe(baseline.answer)
+    expect(result.answerGate).toMatchObject({ gate: "skipped", skipReason: "timeout" })
+  })
+
+  it("예산이 시도 하한보다 작아 판정을 시작하지 못한 것도 오류가 아니라 시간 초과로 센다", async () => {
+    vi.stubEnv("CHATBOT_ANSWER_GATE_TIMEOUT_MS", "200")
+    const question = "전자칠판 꼭 사야하나요?"
+    const baseline = await answerWithoutModel(question)
+    const { gateQuestions } = stubModel({ verdict: "off_target" })
+
+    const result = await evaluateChatbotQuery(question)
+
+    expect(gateQuestions).toHaveLength(0)
     expect(result.answer).toBe(baseline.answer)
     expect(result.answerGate).toMatchObject({ gate: "skipped", skipReason: "timeout" })
   })
@@ -260,6 +278,7 @@ describe("정해 둔 답 확인 관문", () => {
 
     const nonStream = await evaluateChatbotQuery(question)
     __clearAnswerGateCacheForTests()
+    __clearAnswerCacheForTests()
     const events = await collectStream(question)
 
     expect(nonStream.answerGate.gate).toBe("rejected")
@@ -278,6 +297,7 @@ describe("정해 둔 답 확인 관문", () => {
 
     const nonStream = await evaluateChatbotQuery(question)
     __clearAnswerGateCacheForTests()
+    __clearAnswerCacheForTests()
     const events = await collectStream(question)
 
     const replace = events.find((event) => event.type === "replace")

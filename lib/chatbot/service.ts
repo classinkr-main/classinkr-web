@@ -345,6 +345,11 @@ const ANSWER_CACHE_TTL_MS = 5 * 60 * 1000
 const ANSWER_CACHE_MAX = 200
 const answerCache = new Map<string, { expiresAt: number; value: CachedAnswerEntry }>()
 
+/** 테스트 전용: 앞 테스트가 남긴 답 캐시를 비운다. */
+export function __clearAnswerCacheForTests() {
+  answerCache.clear()
+}
+
 function getAnswerCacheKey(question: NormalizedQuestion, options?: RetrievalOptions) {
   const backend = hasSupabaseServerEnv() ? "supabase" : "static"
   return `${ANSWER_CACHE_VERSION}:${backend}:${retrievalScope(options)}:${buildRetrievalQueryText(question).toLowerCase()}`
@@ -803,7 +808,7 @@ const LOGIN_FACT_QUESTION_RE =
   /몇\s*명|최대|인원|정원|동시\s*접속|비용|요금|가격|무료|유료|느려|속도|방식|종류/
 
 const LIVE_CLASS_TROUBLE_RE =
-  /수업.*(나가(?!면|도\s|기|려|는|서|게|고|야|라)|나감|튕김|튕겨|끊김|끊겨|입장\s*안|접속\s*안)|화면\s*공유.*(끊김|끊겨|오류|에러|안\s*됨|안\s*돼)|소리.*(안\s*들|끊김|끊겨)|마이크.*(안\s*됨|안\s*돼|끊김)/i
+  /수업.*(나가(?!면|도\s|기|려|게|야|라|는\s*(?:법|방법))|나감|튕김|튕겨|끊김|끊겨|입장\s*안|접속\s*안)|화면\s*공유.*(끊김|끊겨|오류|에러|안\s*됨|안\s*돼)|소리.*(안\s*들|끊김|끊겨)|마이크.*(안\s*됨|안\s*돼|끊김)/i
 const PARENT_REPORT_OR_NOTIFICATION_RE =
   /학부모.{0,18}(알림|문자|메시지|푸시|리포트|보고서|상담|피드백)|(?:알림|문자|메시지|푸시|리포트|보고서|상담|피드백).{0,18}학부모/i
 
@@ -912,7 +917,7 @@ function getAccountPlanOrTrialLimitAnswer(question: NormalizedQuestion) {
 }
 
 function isRefundQuestion(question: NormalizedQuestion) {
-  return /환불|해지/.test(question.redacted.toLowerCase())
+  return /환불|해지|위약금/.test(question.redacted.toLowerCase())
 }
 
 function isCourseCreationQuestion(question: NormalizedQuestion) {
@@ -927,13 +932,18 @@ const STUDENT_SUBMISSION_RE =
 
 // 기능이 있는지를 묻는 말("숙제 제출받는 기능 있나요"). 조작 순서(교사의 숙제 게시, 학생 모바일 제출 가이드)로 답하지 않는다.
 const FEATURE_EXISTENCE_RE = /기능\s*(?:이|은|도|좀)?\s*(?:있|없|되|돼|지원|제공)/
+// 기능이 있는지와 함께 하는 방법까지 묻는 말("숙제 기능 있는데 어떻게 내요?")은 조작 순서로 답한다.
+const HOWTO_SIGNAL_RE = /어떻게|방법|순서|하려면/
+function asksOnlyFeatureExistence(text: string) {
+  return FEATURE_EXISTENCE_RE.test(text) && !HOWTO_SIGNAL_RE.test(text)
+}
 // 학생이 주어인 제출 질문("숙제 파일 학생이 여기서 제출할 수 있어요?")은 교사의 숙제 게시 안내가 아니다.
 const STUDENT_SUBJECT_SUBMISSION_RE = /학생(?:이|은|도|들이|들은|들도)\s*.{0,16}(?:제출|내|올리|올려)/
 
 function isAssignmentQuestion(question: NormalizedQuestion) {
   const text = question.redacted.toLowerCase()
   if (STUDENT_SUBMISSION_RE.test(text)) return false
-  if (FEATURE_EXISTENCE_RE.test(text) || STUDENT_SUBJECT_SUBMISSION_RE.test(text)) return false
+  if (asksOnlyFeatureExistence(text) || STUDENT_SUBJECT_SUBMISSION_RE.test(text)) return false
   return /과제|숙제|시험/.test(text) && /내는|내려면|낼\s*수|어떻게\s*내|제출|부여|등록|만들|방법|출제/.test(text)
 }
 
@@ -1100,13 +1110,14 @@ function isWebLiveBillingQuestion(question: NormalizedQuestion) {
 // 가격/요금 정보성 질문. 웹라이브·환불·세금계산서는 각자 핸들러가 있으니 제외한다.
 const PRICING_MONEY_RE = /요금|가격|비용|금액|가격대/i
 const PRICING_INFO_RE = /요금|가격|비용|금액|가격대|얼마/i
-const PRICING_EXCLUDE_RE = /환불|취소|세금|계산서|영수증|청구|정산|미납|연체/i
+const PRICING_EXCLUDE_RE = /환불|취소|위약금|세금|계산서|영수증|청구|정산|미납|연체/i
 // "얼마나 걸려요"(기간)는 가격이 아니다 — 돈 단어가 없으면 가격에서 뺀다.
 const PRICING_DURATION_RE = /얼마나?\s*(걸리|걸려|걸릴|오래|소요|기간|시간|일|주|개월)/i
 // '얼마'가 돈이 아니라 양·빈도·성능을 묻는 말("용량 얼마에요", "업로드 속도는 얼마나 있어야 해요", "업데이트 얼마나 자주").
 // 돈 단어(요금·가격·비용)가 없고 이런 양을 가리키는 말이 있으면 가격 질문으로 보지 않는다.
 const PRICING_NON_MONEY_AMOUNT_RE =
-  /용량|속도|해상도|화질|대역폭|mbps|기가|\bgb\b|\bmb\b|메가|크기|사이즈|인치|무게|길이|거리|인원|몇\s*명|자주|빈도|주기|간격|횟수|번\s*(?:정도|씩)|오래|기간|시간|걸리|걸려|지연|딜레이|배터리|저장\s*공간|사양|스펙|성능|버전|높아야|낮아야|이상이어야/i
+  /용량|속도|해상도|화질|대역폭|mbps|기가|\bgb\b|\bmb\b|메가|크기|사이즈|인치|무게|길이|거리|자주|빈도|주기|간격|횟수|번\s*(?:정도|씩)|오래|기간|시간|걸리|걸려|지연|딜레이|배터리|저장\s*공간|사양|스펙|성능|버전|높아야|낮아야|이상이어야/i
+const PRICING_HEADCOUNT_RE = /인원|몇\s*명|\d+\s*명/
 const SOFTWARE_ONLY_BUYER_RE =
   /소프트웨어만|프로그램만|앱만|하드웨어\s*없이|전자칠판\s*없이|(?<!대시\s?)보드\s*없이|계정당|계정\s*당|플랜|standard|plus|enterprise/i
 const SUBSCRIPTION_OR_CONSUMPTION_RE =
@@ -1121,6 +1132,8 @@ function isPricingInfoQuestion(question: NormalizedQuestion) {
   if (isWebLiveBillingQuestion(question)) return false
   if (!PRICING_MONEY_RE.test(text) && PRICING_DURATION_RE.test(text)) return false
   if (!PRICING_MONEY_RE.test(text) && PRICING_NON_MONEY_AMOUNT_RE.test(text)) return false
+  // 인원은 값을 매기는 기준으로도 쓰인다("30명이면 얼마예요"). '얼마나'(몇 명 들어가나)로만 물을 때만 가격 질문이 아니다.
+  if (!PRICING_MONEY_RE.test(text) && PRICING_HEADCOUNT_RE.test(text) && !/얼마(?!나)/.test(text)) return false
   // "원격 지원은 비용 따로 받나요", "상담받는 데 돈 드나요"는 제품 견적 구성이 아니라 지원·상담 서비스의 비용을 묻는 말이다.
   if (SUPPORT_SERVICE_FEE_RE.test(text)) return false
   return PRICING_INFO_RE.test(text)
@@ -2472,9 +2485,13 @@ const CONTACT_CHANNEL_FACT_TOPIC_RE =
 const CONTACT_CHANNEL_FACT_ASK_RE =
   /[?？]|(?:나요|가요|까요|어요|에요|예요|돼요|되요|되나|드나요|드나|있나|인가|는지|궁금|뭐예요|뭐에요|어디)\s*[.!~]*$/
 const HANDOFF_REQUEST_WORD_RE =
-  /연결|이어\s*(?:줘|주|주세요|주시)|바꿔|불러|주세요|해\s*줘|원해|원함|하고\s*싶|받고\s*싶|싶어|부탁|할래|급해|급합|연락\s*(?:주|줘)|화나|짜증|답답|몇\s*번째|계속|또\s/
+  /연결|이어\s*(?:줘|주|주세요|주시)|바꿔|불러|주세요|해\s*줘|원해|원함|원하|하고\s*싶|받고\s*싶|싶어|부탁|할래|급해|급합|연락\s*(?:주|줘)|화나|짜증|답답|몇\s*번째|계속|또\s/
+
+// 사람(담당자·상담원)과 연락 수단(전화·통화·채팅·연락)을 함께 말하면 그 사람에게 닿고 싶다는 말이다("담당자 전화 가능해요?").
+const CONTACT_PERSON_CHANNEL_RE = /(?:담당자|매니저|상담원|상담사|직원).{0,12}(?:전화|통화|채팅|연락)|(?:전화|통화|채팅|연락).{0,12}(?:담당자|매니저|상담원|상담사|직원)/
 
 function isContactChannelFactQuestion(text: string) {
+  if (CONTACT_PERSON_CHANNEL_RE.test(text)) return false
   return (
     CONTACT_CHANNEL_FACT_TOPIC_RE.test(text) &&
     CONTACT_CHANNEL_FACT_ASK_RE.test(text) &&
@@ -3208,7 +3225,8 @@ function isFactSeekingQuestion(question: NormalizedQuestion) {
   const text = question.redacted.toLowerCase().trim()
   const compact = text.replace(/\s+/g, "")
   if (question.tokens.length < 2 || compact.length < 6) return false
-  if (/그거|그게|그걸|그것|이거|저거|그\s*(?:파일|링크|앱)/.test(text) && compact.length <= 40) return false
+  // 앞 턴을 가리키는 지시어(그거·그건·이건·저건·거기)로 시작하는 짧은 후속 질문은 무엇을 묻는지 이 턴만으로는 모른다.
+  if (/그거|그게|그걸|그것|그건|이거|이건|저거|저건|거기|그\s*(?:파일|링크|앱)/.test(text) && compact.length <= 40) return false
   if (SYMPTOM_REPORT_RE.test(text)) return false
   // 잡담·서비스 밖 질문("오늘 날씨 어때?")은 문서를 못 찾은 게 아니라 다룰 범위가 아니다. 지금처럼 되묻는다.
   if (OFF_TOPIC_RE.test(text)) return false
@@ -4802,23 +4820,24 @@ function withholdUnselectedOutsideVocabularyDraft(
   question: NormalizedQuestion,
   selectionStatus: EvidenceSelectionOutcome["status"] | undefined,
   internal: boolean
-) {
-  if (internal || selectionStatus === "selected" || selectionStatus === "not_found") return
+): boolean {
+  if (internal || selectionStatus === "selected" || selectionStatus === "not_found") return false
   // 관문이 정해 둔 답을 버리고 근거 선별까지 마친 답(문서 문장 또는 못 찾음)은 이미 확인된 최종본이다.
-  if (gateDocumentResponses.has(response)) return
-  if (response.answerMode === "handoff") return
+  if (gateDocumentResponses.has(response)) return false
+  if (response.answerMode === "handoff") return false
   // 검색 조각 초안뿐 아니라, 점수가 낮은 검색 결과의 섹션 제목에 걸린 정해 둔 문장(예: '가입과 개인정보' → 가입 안내)도
   // 질문과 맞는지 확인되지 않았다. 큐레이션 출처(점수 240 이상)만 그대로 둔다.
   const topScore = response.sources[0]?.score
   const unverified = excerptDraftResponses.has(response) || (topScore !== undefined && topScore < CURATED_SOURCE_MIN_SCORE)
-  if (!unverified) return
-  if (!isOutsideKnownVocabulary(question)) return
+  if (!unverified) return false
+  if (!isOutsideKnownVocabulary(question)) return false
   response.answer = NO_SOURCE_FACT_ANSWER
   response.answerMode = "doc_suggestion"
   response.confidence = Math.min(response.confidence, 0.3)
   response.needsHandoff = false
   response.unresolved = true
   response.sources = []
+  return true
 }
 
 // generate 모드에서만 모델이 답을 다시 쓴다. 답 문장을 못 찾았거나 선별 호출이 실패했으면 쓰지 않는다.
@@ -5069,12 +5088,20 @@ function getComposedTemplateOriginal(response: CoreResponse): string | null {
 // "선생님이 아이 마이크를 원격으로 끌 수 있나요"처럼 '원격' 낱말만으로 걸린 질문이 약한 신호다.
 const HANDOFF_STRONG_REQUEST_RE =
   /연결|이어\s*(?:줘|주)|바꿔|불러|주세요|줘|원해|원합|원함|하고\s*싶|싶어|싶습|싶은|싶네|부탁|할래|급해|급합|연락\s*(?:주|줘|바랍|부탁)|신청|예약|잡아|잡고/
+// 사람·통화를 찾는 말("상담원 있나요?", "사람이 답하는 거예요?", "통화 가능해요?")은 묻는 꼴이어도 사람을 찾는 신호다.
+// 관문이 '정보를 묻는데 연결만 약속한 답'으로 버리면 연결 버튼이 사라지므로 강한 신호로 본다.
+const HANDOFF_PERSON_WORD_RE = /상담원|상담사|사람|담당자|직원|매니저|통화|전화/
 
 function isWeakHandoffSignal(question: NormalizedQuestion) {
   const text = question.redacted.toLowerCase()
   const tone = detectConversationTone(question.redacted)
   if (tone.angry || tone.repeated) return false
-  if (EXPLICIT_HUMAN_CONNECTION_RE.test(text) || HANDOFF_REQUEST_WORD_RE.test(text) || HANDOFF_STRONG_REQUEST_RE.test(text)) {
+  if (
+    EXPLICIT_HUMAN_CONNECTION_RE.test(text) ||
+    HANDOFF_REQUEST_WORD_RE.test(text) ||
+    HANDOFF_STRONG_REQUEST_RE.test(text) ||
+    HANDOFF_PERSON_WORD_RE.test(text)
+  ) {
     return false
   }
   return true
@@ -5154,10 +5181,14 @@ function isPolicyGovernedTopic(question: NormalizedQuestion) {
   )
 }
 
-// 두 번째 검색 결과 가운데 판정을 못 받은 것(호출 실패·시간 초과). 이 답은 답 캐시에 넣지 않는다.
+// 두 번째 검색 결과 가운데 판정을 못 받은 것(호출 실패·시간 초과, 앞 단계가 느려 시간이 모자라 건너뛴 것). 이 답은 답 캐시에 넣지 않는다.
 function isSecondChanceFailure(trace: SecondChanceTrace | undefined) {
+  if (trace?.secondChance === "none") return trace.reason === "budget"
   return trace?.secondChance === "miss" && (trace.reason === "error" || trace.reason === "timeout")
 }
+
+// 근거 선별 호출이 실패(오류·시간 초과)한 뒤 만든 답(못 찾음·되묻기·보류). 모델이 정상이면 다른 답이 나올 수 있어 답 캐시에 넣지 않는다.
+const selectionFailedResponses = new WeakSet<object>()
 
 /**
  * 못 찾음 답이 나가려는 공개 사실 질문에 두 번째 기회를 준다. 찾으면 response 를 문서 문장 답으로 바꾼다(제자리 수정).
@@ -5281,6 +5312,12 @@ async function findDocumentEvidenceAfterGate(
   })
 }
 
+// 공개 범위를 사람이 정한 주제에서 관문이 정해 둔 답을 버렸을 때의 답. 문서 문장을 붙이지 않고 담당자 확인으로 잇는다.
+const POLICY_TOPIC_AFTER_GATE_ANSWER = [
+  "이 질문은 채팅에서 확정해 말씀드리기 어려운 내용이라, 추측해 답하지 않을게요.",
+  "아래 상담 버튼으로 남겨 주시면 담당자가 확인해 정확히 안내해 드려요.",
+].join("\n\n")
+
 /**
  * 관문이 off_target 으로 판정한 뒤의 문서 경로: 검색 → 근거 선별.
  * 고른 문장이 있으면 그 문장으로 답하고, 없으면 사실 질문은 목차에서 다시 고르는 두 번째 검색을 거쳐 못 찾음(NO_SOURCE_FACT_ANSWER),
@@ -5292,6 +5329,23 @@ async function answerFromDocumentsAfterGate(
   startedAt: number,
   prior?: KnowledgeSearchResult
 ): Promise<Pick<ChatbotCore, "response" | "category" | "intent" | "handoffIntent" | "secondChance">> {
+  // 사람이 공개 범위를 정한 주제는 관문이 정해 둔 답을 버려도 문서 문장을 붙이지 않는다(두 번째 검색과 같은 기준).
+  // 문서 문장이 정해 둔 기준과 어긋날 수 있어서다. 추측하지 않고 담당자 확인으로 잇는다.
+  if (isPolicyGovernedTopic(question)) {
+    const { category, intent, handoffIntent } = classifyChatbotQuestion(question.redacted)
+    const response: CoreResponse = {
+      answer: POLICY_TOPIC_AFTER_GATE_ANSWER,
+      answerMode: "handoff",
+      confidence: 0.4,
+      needsHandoff: true,
+      sources: [],
+      suggestedQuestions: buildSuggestedQuestions(category),
+      unresolved: true,
+    }
+    deterministicFinalResponses.add(response)
+    gateDocumentResponses.add(response)
+    return { response, category, intent, handoffIntent, secondChance: { secondChance: "none", reason: "policy_topic" } }
+  }
   const candidates = await findDocumentEvidenceAfterGate(question, options, prior)
   const { category, intent, handoffIntent } = classifyChatbotQuestion(
     question.redacted,
@@ -5326,6 +5380,7 @@ async function answerFromDocumentsAfterGate(
   } else {
     response = composeAnswer(question, [], category, { suppressConsultation: true })
   }
+  if (ids === null) selectionFailedResponses.add(response)
   // 못 찾음이면 목차에서 다시 고르는 두 번째 검색을 한 번 돌린다(스트림·일반 경로 모두 이 코어 안에서 끝난다).
   const secondChance = await applySecondChanceRetrieval(response, question, category, startedAt)
   deterministicFinalResponses.add(response)
@@ -5347,7 +5402,28 @@ async function gatePreparedCore(
   if (!original || !shouldRunAnswerGate(options)) return core
   const trace = await checkPreparedAnswer({ question: core.question.redacted, answer: core.response.answer, original })
   if (trace.gate !== "rejected") return { ...core, answerGate: trace }
+  // 검색 전에 끝나는 경로(정해 둔 답·증상·가이드·상담 연결)는 답 캐시 조회보다 앞이라, 버린 뒤의 문서 경로 답을 여기서 캐시한다.
+  // 검색 뒤의 틀 답(prior 있음)은 코어 끝에서 캐시한다. 스트림 경로(generateAnswer=false)는 자기 끝에서 캐시한다.
+  const cacheHere = !prior && options.generateAnswer !== false && !options.sessionId
+  const cached = cacheHere ? getCachedAnswer(core.question, options) : null
+  if (cached) {
+    return {
+      question: core.question,
+      response: cached.response,
+      category: cached.category,
+      intent: cached.intent,
+      handoffIntent: cached.handoffIntent,
+      warning: cached.warning,
+      latencyMs: elapsedSince(startedAt),
+      retrievalCacheHit: true,
+      answerGate: trace,
+    }
+  }
   const documentCore = await answerFromDocumentsAfterGate(core.question, options, startedAt, prior)
+  if (cacheHere && !isSecondChanceFailure(documentCore.secondChance) && !selectionFailedResponses.has(documentCore.response)) {
+    const { response, category, intent, handoffIntent } = documentCore
+    setCachedAnswer(core.question, { response, category, intent, handoffIntent, warning: core.warning }, options)
+  }
   return {
     question: core.question,
     ...documentCore,
@@ -5528,7 +5604,7 @@ async function buildChatbotCoreBase(
   }
 
   // 기능이 있는지를 묻는 공개 질문은 조작 가이드가 아니라 기능 안내·문서 검색으로 답한다.
-  if (csFigmaGuide && !(publicShortcuts && FEATURE_EXISTENCE_RE.test(question.redacted.toLowerCase()))) {
+  if (csFigmaGuide && !(publicShortcuts && asksOnlyFeatureExistence(question.redacted.toLowerCase()))) {
     const { category, intent, handoffIntent } = classifyChatbotQuestion(question.redacted, [
       csFigmaGuide.category,
       csFigmaGuide.docCategory,
@@ -5669,6 +5745,7 @@ async function buildChatbotCoreBase(
   if (!options.deferEvidenceSelection) {
     withholdUnselectedOutsideVocabularyDraft(response, question, selectionStatus, options.includeInternalDocs === true)
   }
+  if (selectionStatus === "failed") selectionFailedResponses.add(response)
 
   // 여기까지 못 찾음이면 목차에서 다시 고르는 두 번째 검색. 스트리밍 경로는 선별 뒤에 같은 함수를 부른다.
   // 모델 없이 초안만 만드는 평가 호출(generateAnswer=false)과 내부 CS 경로는 돌리지 않는다.
@@ -5681,7 +5758,13 @@ async function buildChatbotCoreBase(
 
   // 세션(이력)이 없는 질문만 캐시 — 이력에 의존한 답이 캐시에 섞이지 않게.
   // 관문 판정·두 번째 검색이 실패·시간 초과로 빠진 답은 캐시하지 않는다(다음 요청에서 다시 확인한다).
-  if (shouldGenerateAnswer && !options.sessionId && !isAnswerGateFailure(answerGate) && !isSecondChanceFailure(secondChance)) {
+  if (
+    shouldGenerateAnswer &&
+    !options.sessionId &&
+    !isAnswerGateFailure(answerGate) &&
+    !isSecondChanceFailure(secondChance) &&
+    !selectionFailedResponses.has(response)
+  ) {
     setCachedAnswer(question, { response, category, intent, handoffIntent, warning }, options)
   }
 
@@ -5986,16 +6069,21 @@ export async function streamChatbotQuery(
     }
   }
 
-  if (!isShortCircuited) withholdUnselectedOutsideVocabularyDraft(response, question, selectionStatus, false)
+  // 스트림 경로는 말투 층을 코어에서 이미 입혔다. 보류가 답을 못 찾음으로 갈아 끼웠으면 공감 첫마디·상담 연결을 다시 입혀
+  // 일반 경로(보류 → 말투 순서)와 같은 답·같은 연결 표시를 낸다.
+  const withheld = !isShortCircuited && withholdUnselectedOutsideVocabularyDraft(response, question, selectionStatus, false)
+  if (selectionStatus === "failed") selectionFailedResponses.add(response)
 
   // 일반 경로와 같은 두 번째 검색(못 찾음 답일 때만). 관문 문서 경로에서 이미 돌린 답은 다시 돌리지 않는다.
   let secondChance = core.secondChance
+  let secondChanceHit = false
   if (!isShortCircuited) {
     const trace = await applySecondChanceRetrieval(response, question, category, startedAt)
     if (trace.secondChance !== "none") secondChance = trace
-    // 답이 바뀌었으면 말투·끝 질문 층을 새 답에 다시 입힌다(일반 경로는 코어 뒤에서 한 번 입힌다).
-    if (trace.secondChance === "hit") applyConversationTone(core)
+    secondChanceHit = trace.secondChance === "hit"
   }
+  // 답이 바뀌었으면 말투·끝 질문 층을 새 답에 다시 입힌다(일반 경로는 코어 뒤에서 한 번 입힌다).
+  if (withheld || secondChanceHit) applyConversationTone(core)
   const handoffIntent = core.handoffIntent
 
   finalizeAnswer(response)
@@ -6004,7 +6092,12 @@ export async function streamChatbotQuery(
   emit({ type: "replace", answer: response.answer })
 
   // no-session 질문만 캐시(이력 의존 답이 캐시에 섞이지 않게) — handleChatbotQuery 와 동일 규칙.
-  if (!requestedSessionId && !isAnswerGateFailure(core.answerGate) && !isSecondChanceFailure(secondChance)) {
+  if (
+    !requestedSessionId &&
+    !isAnswerGateFailure(core.answerGate) &&
+    !isSecondChanceFailure(secondChance) &&
+    !selectionFailedResponses.has(response)
+  ) {
     setCachedAnswer(question, { response, category, intent, handoffIntent, warning })
   }
 

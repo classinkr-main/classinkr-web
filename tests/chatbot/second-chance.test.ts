@@ -235,6 +235,9 @@ describe("목차에서 다시 고르는 두 번째 검색", () => {
     ]) {
       const result = await evaluateChatbotQuery(question)
       expect(result.secondChance.secondChance).toBe("none")
+      // 관문 뒤 첫 문서 선별도 이 주제에는 문서 문장을 붙이지 않는다.
+      expect(result.sources, question).toHaveLength(0)
+      expect(result.answer, question).not.toContain("2주")
     }
     expect(outlineRequests).toHaveLength(0)
   })

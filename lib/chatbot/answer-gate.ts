@@ -36,6 +36,9 @@ export interface AnswerGateTrace {
 // 판정 한 번의 예산. 2026-11-18 실측 95번째 값이 lite 1.3초·3.5-flash 1.6초라, 첫 모델이 실패해도 다음 모델을 한 번 시도할 수 있게
 // 3초로 둔다. 시간 안에 판정이 안 나면 기존 답을 유지한다.
 export const ANSWER_GATE_TIMEOUT_MS = 3_000
+// 판정 호출 루프(llm.ts judgePreparedAnswerFit)는 남은 시간이 이보다 적으면 새 시도를 시작하지 않는다.
+// 그렇게 예산이 다해 끝난 것은 오류가 아니라 시간 초과로 센다.
+const GATE_MIN_ATTEMPT_MS = 300
 
 // 프롬프트를 바꾸면 버전을 올려 이전 판정 캐시를 쓰지 않게 한다.
 const ANSWER_GATE_CACHE_VERSION = "gate-20261118-v4"
@@ -135,7 +138,7 @@ export async function checkPreparedAnswer({
     if (process.env.NODE_ENV !== "test") {
       console.warn("[chatbot] answer gate skipped; keeping prepared answer.", { original, gateMs, timedOut })
     }
-    return { gate: "skipped", gateOriginal: original, gateMs, skipReason: timedOut || gateMs >= timeoutMs ? "timeout" : "error" }
+    return { gate: "skipped", gateOriginal: original, gateMs, skipReason: timedOut || gateMs >= timeoutMs - GATE_MIN_ATTEMPT_MS ? "timeout" : "error" }
   }
 
   writeCachedVerdict(key, result.verdict)
