@@ -15,21 +15,37 @@ import {
   getClassinPositioningContext,
 } from "@/lib/classin-positioning"
 import type { ChatbotSource } from "./service"
+import {
+  getGroundingText,
+  MAX_GROUNDING_TEXT_LENGTH,
+  trimToCompleteSentences,
+  type EvidenceSentence,
+} from "./source-grounding"
 
 export type ChatbotModelTier = "basic" | "reasoning" | "advanced"
 
 // 챗봇 모델 티어별 기본 모델 설정.
-// 운영 계정의 모델 목록에서 확인된 안정 기본값을 쓴다. 미지원 모델을 기본 요청에 넣지 않는다.
-const DEFAULT_FAST_MODEL = "gemini-2.5-flash"
-const DEFAULT_REASONING_MODEL = "gemini-2.5-pro"
-const DEFAULT_ADVANCED_MODEL = "gemini-2.5-pro"
-const FAST_FALLBACK_MODEL = "gemini-2.5-flash"
-const DEEP_FALLBACK_MODEL = "gemini-2.5-pro"
+// 2026-11-13 generateContent 실측: gemini-2.5-flash·2.5-pro·2.5-flash-lite 가 404("no longer available")를
+// 반환한다. models.list 에는 여전히 보여서 목록만으로는 알 수 없다. 그 상태에서는 답변 재작성이 통째로 실패해
+// 검색 초안(문서 조각)이 그대로 공개 답변으로 나갔다. 내부 CS 코파일럿(lib/internal-cs-chat/gemini.ts)이
+// 이미 검증해 쓰는 현행 모델 조합으로 맞춘다. 새 모델을 넣을 때는 models.list 가 아니라 실제 호출로 확인한다.
+const DEFAULT_FAST_MODEL = "gemini-3.5-flash"
+const DEFAULT_REASONING_MODEL = "gemini-3.1-pro-preview"
+const DEFAULT_ADVANCED_MODEL = "gemini-3.1-pro-preview"
+const FAST_FALLBACK_MODEL = "gemini-3.1-flash-lite"
+const DEEP_FALLBACK_MODEL = "gemini-3.5-flash"
+// 고정 모델이 또 종료돼도 답변 생성이 조용히 끊기지 않도록, Google 이 현행 모델로 이어 주는 별칭을 체인 끝에 둔다.
+// 앞의 고정 모델이 모두 실패했을 때만 쓰인다.
+const LAST_RESORT_MODEL = "gemini-flash-lite-latest"
 
 // 설정값으로 들어오면 무시하고 위 기본값으로 폴백할 모델(미지원/폐기/상시 503).
+// 운영 env 에 종료된 모델명이 남아 있어도 답변 생성이 죽지 않게 한다.
 const UNSUPPORTED_GEMINI_MODELS = new Set([
   "gemini-3.1-pro",
   "gemini-3-pro-preview",
+  "gemini-2.5-flash",
+  "gemini-2.5-flash-lite",
+  "gemini-2.5-pro",
   "gemini-2.0-flash",
   "gemini-2.0-flash-lite",
   "gemini-2.0-flash-thinking-exp-01-21",
@@ -37,8 +53,14 @@ const UNSUPPORTED_GEMINI_MODELS = new Set([
   "gemini-1.5-flash",
   "gemini-1.5-pro",
 ])
+
+// thinkingLevel "minimal" 을 받는다고 실측으로 확인한 모델(2026-11-13). lite 계열, 3.5/3.6-flash, 3-flash-preview.
+// 3.7·3.8-flash, gemini-flash-latest, gemini-4 계열은 minimal 을 400 으로 거부한다. "low" 는 전 모델이 받는다.
+const MINIMAL_THINKING_MODEL_RE = /^gemini-(?:[\d.]+-flash-lite|flash-lite-latest|3\.[56]-flash|3-flash-preview)/
 // 전체 최종 답변 예산(기본 6s) 안에서 primary 실패 후 fallback까지 시도할 수 있어야 한다.
-const GEMINI_TIMEOUT_MS = 2500
+// 2026-11-13 실측: 3.5-flash 는 실제 프롬프트에서 1.2~2.5s, 3.1-flash-lite 는 0.8~2.0s.
+// 2.5s 에서는 프라이머리가 자주 잘려 폴백으로 넘어가 3.2s 로 늘렸다(3.2s + 폴백 2.8s = 6s).
+const GEMINI_TIMEOUT_MS = 3200
 // 스트리밍은 첫 토큰이 빨리 와 사용자가 빈 화면을 보지 않으므로, 본문을 끝까지 받을 여유를 더 준다.
 // 검색(≤2.8s) + 스트림(≤8s) ≈ 11s 안쪽으로 라우트 예산을 지킨다.
 const GEMINI_STREAM_TIMEOUT_MS = 8000
@@ -69,12 +91,12 @@ function resolveModel(tier: ChatbotModelTier = "basic") {
   return configured
 }
 
-// 티어별 프라이머리 + 에러 폴백 모델 체인. 프라이머리 호출이 실패하면 안정 모델로 자동 폴백한다.
-// 기본값과 fallback이 같으면 한 번만 호출한다.
-function resolveModelChain(tier: ChatbotModelTier): string[] {
+// 티어별 프라이머리 + 에러 폴백 모델 체인. 프라이머리 호출이 실패하면 안정 모델, 그다음 별칭 순으로 자동 폴백한다.
+// 같은 모델이 겹치면 한 번만 호출한다.
+export function resolveModelChain(tier: ChatbotModelTier): string[] {
   const primary = resolveModel(tier)
   const fallback = tier === "reasoning" || tier === "advanced" ? DEEP_FALLBACK_MODEL : FAST_FALLBACK_MODEL
-  return Array.from(new Set([primary, fallback]))
+  return Array.from(new Set([primary, fallback, LAST_RESORT_MODEL]))
 }
 
 function getGeminiApiKey() {
@@ -96,6 +118,8 @@ export const BASE_SYSTEM_INSTRUCTION = [
   "질문 주도: 답을 먼저 주고, 필요할 때만 끝에 자연스러운 질문 1개를 붙인다. (1) 답이 기기·녹화 종류·역할 같은 조건에 따라 갈리는데 질문에 그 정보가 없으면 그 조건을 묻는다. (2) 줄임말·모호한 말을 한 가지 뜻으로 읽고 답했다면 '…로 이해하고 답했어요'라고 밝혀 오해를 막는다. (3) 도입·견적·요금 상담에서는 아직 모르는 것(강사·학생 수, 교실 수, 수업 방식, 지금 쓰는 도구, 도입 시기) 가운데 하나를 묻는다. 질문은 한 번에 하나만 하고, 화난·반복 문의에는 묻지 말고 상담 연결을 앞세운다. 아이디·비밀번호·카드·계좌 번호 같은 계정·결제 정보는 묻지 않는다. 정책·미지원 답변은 확인 경로로 끝낸다.",
   "가격·계약·장비 상태·도입 조건처럼 계정마다 달라지는 내용은 단정하지 마.",
   "근거가 없는 기능명, 수치, 가격, 재고, 설치 가능 여부, API 범위, 자동화 범위는 만들지 마.",
+  "사실 질문 원칙: 회사·대표·창업자·본사·설립 연도·직원 수·고객사 이름·도입 기관 수·서버 위치·보안 인증·인원/시간/용량 한도·보관 기간·지원 기기와 OS 버전은 내부 검증 정보나 안전 초안에 적힌 것만 말한다. 거기에 없으면 사람 이름·회사 이름·나라·숫자를 새로 만들어 내지 말고 '공개 안내에 없어요'라고 밝힌 뒤 담당자 확인(상담 연결)으로 안내한다. 영문으로 적힌 이름은 한글로 옮겨 적지 않는다.",
+  "특정 학원·기관 이름을 대며 Classin을 쓰는지 물으면 쓴다고도 안 쓴다고도 확인해 주지 않는다. 그 학원의 정보라 알려 드릴 수 없다고 밝히고, 공개된 고객 사례(학원명 일부 가림)와 도입 상담을 안내한다. 사용자가 말한 실명을 가려진 사례명과 같은 곳이라고 이어 말하지 않는다. 어느 지역·업종에서 도입이 늘고 있다는 식의 추세도 근거 없이 말하지 않는다.",
   "금지 표현: 최적의 솔루션, 완벽하게, 모든 것을 해결, 자동으로 처리, 원스톱, 걱정 없이, 혁신적인, 프리미엄만 강조.",
   "Zoom, 일반 전자칠판, LMS와의 비교 질문은 기능표보다 수업 운영 흐름 차이로 설명해.",
   "결제, 오프라인 출석, 고급 리포트는 기본 제공처럼 말하지 말고 필요 시 API·외부 시스템·커스텀 리포트 범위로 분리해.",
@@ -138,6 +162,37 @@ const INFERENCE_SYSTEM_INSTRUCTION = [
   "가격, 계약, 환불, 계정, 장애, 장비 상태, 설치 가능 여부, API·자동화 범위, 법적·개인정보 관련 내용은 추론하지 말고 상담 확인이 필요하다고 말해.",
   "모르는 세부 기능을 있는 것처럼 단정하지 말고, 고객이 선택할 수 있는 다음 질문을 하나만 제안해.",
 ].join("\n")
+
+// 근거가 약한 응답 모드: 검색 점수가 낮은 문서만 있거나(doc_suggestion) 문서가 없을 때(fallback·clarifying_question).
+function hasWeakGrounding(answerMode: string) {
+  return answerMode === "doc_suggestion" || answerMode === "fallback" || answerMode === "clarifying_question"
+}
+
+// 근거가 있는 응답 모드에서도 모델은 근거 밖 세부를 보탠다. 2026-11-13 실측(모델이 쓴 답 69건을 근거와 대조):
+// 절반에서 근거에 없는 단계·아이콘·기능 뜻풀이·사례 성과나, 근거 없는 "제공하지 않습니다" 단정이 나왔다.
+// 시스템 지시의 일반 원칙만으로는 지켜지지 않아, 요청마다 질문 바로 아래에 범위를 다시 적는다.
+const GROUNDED_ANSWER_REQUIREMENT =
+  "근거 범위: 답에 쓰는 사실은 위 내부 검증 정보, 안전 초안, 시스템 지시의 Classin 기본 지식에 적힌 것만 써. 거기에 없는 단계·버튼·메뉴·아이콘·색·화면 위치, 기능의 뜻풀이, 수치, 원인, 사례의 성과와 효과(만족도·유지율·시간 절감 정도)를 보태지 말고, '크게·대폭·획기적으로·널리·수많은·활발히'처럼 정도를 부풀리는 말도 쓰지 마. 질문이 묻는 기능이나 방법이 근거에 직접 적혀 있지 않으면 '된다'고도 '안 된다·제공하지 않는다'고도 단정하지 말고, 적혀 있는 관련 내용만 답한 뒤 '그 부분은 공개 안내에서 확인되지 않았어요'라고 밝혀. 근거에 있는 내용만으로 답이 짧아져도 괜찮아."
+
+// 특정 학원·지역의 도입 여부나 분위기를 묻는 질문. 느슨하게 잡는다(잘못 잡아도 조건부 주의 문장만 붙는다).
+// 짧은 질문은 정해 둔 답(quick-answers-basics.ts 의 named-academy·famous-regional-reference)이 먼저 받는다.
+const ADOPTION_VERB_RE = /쓰|써|사용|도입|이용|넘어가|갈아타/
+const ADOPTION_SCOPE_RE =
+  /분위기|추세|대세|유행|다들|동네|지역|근처|인근|서울|경기|수원|성남|분당|일산|인천|부산|대구|대전|광주|울산|세종|강남|대치|목동|천안|청주|평택|제주|[가-힣a-z0-9]{2,}(?:학원|어학원|교습소|아카데미|스쿨)\s*(?:도|은|는|이|가|에서|이나|나|랑|같은)/
+
+export function asksAboutThirdPartyAdoption(question: string) {
+  const text = question.toLowerCase()
+  return ADOPTION_VERB_RE.test(text) && ADOPTION_SCOPE_RE.test(text)
+}
+
+// 실측: 시스템 지시에 같은 원칙이 있어도 "목동을 포함한 주요 입시 지역에서 적극 활용"처럼 질문 속 지역을 사례에 이어 붙였다.
+const THIRD_PARTY_ADOPTION_REQUIREMENT =
+  "고객사 언급 주의: 질문이 특정 학원·기관 이름이나 지역을 들어 Classin을 쓰는지, 많이 쓰는 분위기인지 묻는 것이라면, 그 학원이 쓰는지와 그 지역에서 많이 쓰는지·늘고 있는지는 확인도 부정도 하지 말고 '공개 안내로는 확인해 드릴 수 없어요'라고 답해. 그 뒤에 질문에 나온 지역·학원 이름을 다시 꺼내 '그 지역의 많은 학원이 쓴다·검토한다'는 식으로 잇지 마. 공개된 사례는 가려진 이름 그대로 한 문장으로만 소개하고, 만족도나 성과는 말하지 말고, 도입 상담을 안내해."
+
+// 근거가 약할 때 모델이 그럴듯한 세부(배경 종류, 단축키, 지원 형식 등)를 지어내는 것을 실측으로 확인했다.
+// 기본 지식으로 답할 수 있는 범위만 답하고, 나머지는 확인되지 않았다고 밝히게 한다.
+const WEAK_GROUNDING_REQUIREMENT =
+  "근거 없음 주의: 이 질문에 맞는 내부 검증 정보가 없다. 질문이 묻는 기능·설정·목록이 있는지 확인되지 않았으면 있다고도 없다고도 말하지 말고, 첫 문장에서 '공개 안내에서 확인되지 않았어요'라고 밝혀. 기능 목록·메뉴 이름·옵션·단축키·지원 형식·수치·사례·도입 추세 같은 세부를 새로 지어내지 마. 시스템 지시에 있는 Classin 기본 지식(제품 정체성, 도입 흐름, 수업 운영 흐름)을 묻는 질문일 때만 그 범위에서 한두 문장으로 답해. 끝에는 확인 질문 하나 또는 상담 연결을 안내해."
 
 interface GenerateArgs {
   /** PII 가 제거된 질문 텍스트 */
@@ -208,12 +263,12 @@ export function clampAnswerToLength(text: string, max = MAX_ANSWER_LENGTH): stri
   return window.trim()
 }
 
-function sanitizeInternalContextText(value: string) {
+function sanitizeInternalContextText(value: string, maxLength = 520) {
   return sanitizePublicAnswerText(value)
     .replace(/^#+\s*/gm, "")
     .replace(/\s+/g, " ")
     .trim()
-    .slice(0, 520)
+    .slice(0, maxLength)
 }
 
 function formatInternalContext(sources: ChatbotSource[] = []) {
@@ -221,7 +276,10 @@ function formatInternalContext(sources: ChatbotSource[] = []) {
     .slice(0, 2)
     .map((source, index) => {
       const heading = source.heading ? ` / ${source.heading}` : ""
-      return `[내부 정보 ${index + 1}] ${sanitizeInternalContextText(`${source.title}${heading}`)}\n${sanitizeInternalContextText(source.excerpt)}`
+      // 문서 본문이 붙어 있으면 본문을, 없으면 요약을 넘긴다. 어느 쪽이든 문장 중간에서 끊긴 꼬리는 뗀다.
+      // 끊긴 조각("…초록색 [제출...")을 주면 모델이 뒷부분을 지어 이어 쓴다.
+      const body = getGroundingText(source) ?? trimToCompleteSentences(source.excerpt)
+      return `[내부 정보 ${index + 1}] ${sanitizeInternalContextText(`${source.title}${heading}`)}\n${sanitizeInternalContextText(body, MAX_GROUNDING_TEXT_LENGTH)}`
     })
     .join("\n\n")
 }
@@ -243,7 +301,7 @@ async function readGeminiErrorSnippet(res: Response) {
   }
 }
 
-function buildGenerationConfig(model: string, temperature: number) {
+export function buildGenerationConfig(model: string, temperature: number) {
   const lowerModel = model.toLowerCase()
   const isFastOutputModel = /flash|lite/.test(lowerModel)
   const generationConfig: {
@@ -257,19 +315,20 @@ function buildGenerationConfig(model: string, temperature: number) {
     maxOutputTokens: isFastOutputModel ? 600 : 2048,
   }
 
-  if (lowerModel.startsWith("gemini-4") || lowerModel.startsWith("gemini-3")) {
-    generationConfig.thinkingConfig = {
-      thinkingLevel: lowerModel.includes("pro") ? "low" : "minimal",
-    }
-  } else if (lowerModel.startsWith("gemini-2.5-flash")) {
+  if (lowerModel.startsWith("gemini-2.5-flash")) {
     generationConfig.thinkingConfig = { thinkingBudget: 0 }
+  } else if (/^gemini-(?:[3-9]|flash|pro)/.test(lowerModel)) {
+    // 확인된 모델만 minimal 로 지연을 줄이고, 나머지(3.7·3.8-flash, 4 계열, pro, -latest 별칭)는 모두가 받는 low 를 쓴다.
+    generationConfig.thinkingConfig = {
+      thinkingLevel: MINIMAL_THINKING_MODEL_RE.test(lowerModel) ? "minimal" : "low",
+    }
   }
 
   return generationConfig
 }
 
-// 모델별 generationConfig. 2.5 Flash 는 thinkingBudget=0 으로 지연을 줄이고,
-// Gemini 3 계열은 thinkingBudget 대신 thinkingLevel 을 사용한다.
+// 모델별 generationConfig. Gemini 3 이상은 thinkingBudget 대신 thinkingLevel 을 쓴다.
+// 지원하지 않는 thinkingLevel 을 보내면 400 으로 즉시 실패하므로 모델별 지원 범위를 위 정규식으로 관리한다.
 function buildGeminiBody(
   model: string,
   systemInstruction: string,
@@ -387,9 +446,166 @@ export async function generateGeminiAnswer({
   })
 }
 
+// ── 근거 선별 ──────────────────────────────────────────────────────────────────────────────────────
+// 모델이 답을 새로 쓰는 대신, 문서 문장 가운데 질문에 직접 답하는 문장의 번호만 고르게 한다.
+// 2026-11-13 실측(모델이 쓴 답 69건): 문서에 답 문장이 없을 때 근거 밖 단정이 56%, 있을 때 16%였다.
+// 답 문장이 있는지부터 가려야 "없는 기능을 없다고 단정"하거나 지역·사례를 지어내는 일을 막을 수 있다.
+const MAX_SELECTED_SENTENCES = 6
+// 한 번 시도의 상한과 선별 전체 예산. 실측 중앙값 1.1초, p90 1.4초.
+const SELECTION_ATTEMPT_TIMEOUT_MS = 2200
+const DEFAULT_SELECTION_TIMEOUT_MS = 3500
+
+const SELECTION_SYSTEM_INSTRUCTION = [
+  "너는 Classin 고객 질문에 답이 되는 문장을 문서에서 골라 주는 선별기다. 문장을 새로 쓰지 않는다.",
+  "아래 번호가 붙은 문장 가운데 고객 질문에 직접 답하는 문장의 번호만 고른다.",
+  "규칙:",
+  "1. 질문이 묻는 것에 직접 답하는 문장만 고른다. 주제만 비슷하고 답이 아닌 문장은 고르지 않는다.",
+  "2. 답이 되는 문장이 하나도 없으면 빈 배열을 낸다. 억지로 고르지 않는다.",
+  "3. 답이 여러 문장에 걸쳐 있으면 빠짐없이 고른다. 순서가 있는 절차는 이어지는 문장을 함께 고르고, 답을 이해하는 데 꼭 필요한 조건·주의 문장도 함께 고른다.",
+  "4. 질문한 사람의 처지(학생·학부모, 강사, 원장·관리자)에 맞지 않는 방법은 고르지 않는다. 학생이 숙제 내는 법을 물었는데 교사가 숙제를 만드는 방법을 고르는 식은 안 된다.",
+  `5. 최대 ${MAX_SELECTED_SENTENCES}개. 번호는 오름차순으로 낸다.`,
+].join("\n")
+
+function buildSelectionPrompt(question: string, sentences: EvidenceSentence[]) {
+  const lines: string[] = []
+  let lastLabel = ""
+  for (const sentence of sentences) {
+    if (sentence.label !== lastLabel) {
+      lines.push(`# ${sanitizeInternalContextText(sentence.label)}`)
+      lastLabel = sentence.label
+    }
+    lines.push(`[${sentence.id}] ${sentence.text}`)
+  }
+  return `고객 질문: ${question}\n\n문장:\n${lines.join("\n")}`
+}
+
+/** 모델 응답(JSON)에서 유효한 문장 번호만 뽑는다. 형식이 깨졌으면 null. */
+export function parseSelectedSentenceIds(text: string | undefined, sentenceCount: number): number[] | null {
+  if (!text) return null
+  try {
+    const parsed = JSON.parse(text) as { ids?: unknown }
+    if (!Array.isArray(parsed.ids)) return null
+    const ids = parsed.ids.filter(
+      (value): value is number => Number.isInteger(value) && (value as number) >= 1 && (value as number) <= sentenceCount
+    )
+    return Array.from(new Set(ids))
+      .sort((left, right) => left - right)
+      .slice(0, MAX_SELECTED_SENTENCES)
+  } catch {
+    return null
+  }
+}
+
 /**
- * 최종 답변 프롬프트(사용자 턴 본문). Gemini·Claude 제공자가 같은 본문을 쓴다 —
- * 분류·의도별 요구사항과 안전 초안 제약이 제공자마다 갈라지지 않게.
+ * 질문에 직접 답하는 문장의 번호를 고른다.
+ * - 답 문장이 없으면 빈 배열, 호출이 모두 실패하면 null(호출부는 결정형 초안을 그대로 쓴다).
+ * - 프라이머리 모델이 실패하면 남은 예산 안에서 폴백 모델을 시도한다.
+ */
+export async function selectAnsweringSentenceIds({
+  question,
+  sentences,
+  timeoutMs = DEFAULT_SELECTION_TIMEOUT_MS,
+}: {
+  /** PII 가 제거된 질문 텍스트 */
+  question: string
+  sentences: EvidenceSentence[]
+  timeoutMs?: number
+}): Promise<number[] | null> {
+  const apiKey = getGeminiApiKey()
+  if (!apiKey || !question.trim() || sentences.length === 0) return null
+
+  const deadline = Date.now() + timeoutMs
+  const prompt = buildSelectionPrompt(question, sentences)
+
+  for (const model of resolveModelChain("basic")) {
+    const remainingMs = deadline - Date.now()
+    if (remainingMs < 400) break
+
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), Math.min(SELECTION_ATTEMPT_TIMEOUT_MS, remainingMs))
+
+    try {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          signal: controller.signal,
+          body: JSON.stringify({
+            systemInstruction: { parts: [{ text: SELECTION_SYSTEM_INSTRUCTION }] },
+            contents: [{ role: "user", parts: [{ text: prompt }] }],
+            generationConfig: {
+              ...buildGenerationConfig(model, 0),
+              maxOutputTokens: 256,
+              responseMimeType: "application/json",
+              responseSchema: {
+                type: "object",
+                properties: { ids: { type: "array", items: { type: "integer" } } },
+                required: ["ids"],
+              },
+            },
+          }),
+        }
+      )
+
+      if (!res.ok) {
+        warnGeminiCallIssue(model, "selection_http_error", {
+          status: res.status,
+          body: await readGeminiErrorSnippet(res),
+        })
+        continue
+      }
+
+      const data = (await res.json()) as { candidates?: { content?: { parts?: { text?: string }[] } }[] }
+      const text = data.candidates?.[0]?.content?.parts?.map((part) => part.text ?? "").join("")
+      const ids = parseSelectedSentenceIds(text, sentences.length)
+      if (ids === null) {
+        warnGeminiCallIssue(model, "selection_parse_error")
+        continue
+      }
+      return ids
+    } catch (error) {
+      warnGeminiCallIssue(model, "selection_request_error", {
+        error: error instanceof Error ? error.name : "unknown_error",
+      })
+      continue
+    } finally {
+      clearTimeout(timeout)
+    }
+  }
+
+  return null
+}
+
+// 분류·인텐트별 요구사항 문장. 스트리밍과 비스트리밍이 같은 문장을 쓴다.
+function pickFinalAnswerRequirement(category: string, intent?: string) {
+  if (category === "concern") {
+    return "요구사항: 고객의 막연한 고민(concern)에 대해 E.Q.E(공감 -> 유도 질문 1개 -> 격려와 희망) 프레임워크를 적용하여 따뜻하게 응대해줘. 스펙 위주 설명이나 강요하는 느낌을 주지 마."
+  }
+  if (category === "event") {
+    return "요구사항: 고객의 세미나/행사(event) 질문에 대해 RAG 정보에서 일정(시작/종료), 대상, 장소(위치)를 명확히 발췌해 안내하고, 홈페이지 /events 경로에서 신청하도록 유도해라. 사용자가 직접 신청하는 데 헤매거나 대리 신청을 요구하면 대화에서 이름·연락처를 받지 말고, 답변 아래 [도입 상담 남기기] 버튼(문의 폼)이나 채널톡으로 남겨 달라고 안내해라. 신청을 대신 접수하거나 접수를 약속하지 말고, 신청용 토큰·태그·JSON을 답변 본문에 쓰지 마라."
+  }
+  if (intent === "tutor_pricing_recommend") {
+    return "요구사항: 개인강사/과외 요금제 추천(tutor_pricing_recommend)은 공식 안내 기준으로 1인 강사에게 프로(Pro) 요금제를, 강사가 2명 이상인 학원에 비즈니스 요금제를 추천해라. 실제 금액·할인·결제 방식은 단정하지 말고 2주 무료 체험과 도입 상담으로 안내해라. 질문이 단답형이나 거칠더라도 친절하게 답하고, 학생 수나 수업 방식(대면·온라인)처럼 추천을 좁힐 정보 하나를 마지막에 물어라."
+  }
+  if (intent === "feature_limit_consulting") {
+    return "요구사항: 클래스인이 제공하지 못하는 기능(학원비 결제·수납·정산 기능, 오프라인 지문인식/출석 카드 장비 등)에 대한 질문이 들어왔을 때, 일체 지원하지 않음을 '~~는 지원하지 않습니다'의 어조로 솔직하고 단호하게 선을 그어 답해라. API 연동으로 가능할 것처럼 우회 설명하지 말고 담백하게 대답해라."
+  }
+  if (intent === "zoom_vs_classin") {
+    return "요구사항: 줌과의 비교(zoom_vs_classin)에 대해 수업 전(화면공유 준비 및 화면설정 불필요), 수업 중(학생이 판서에 참여하는 적극적 상호작용), 수업 후(수업 즉시 생성되는 플레이백 복습 비디오)의 3대 운영 흐름 메리트를 E.Q.E 프레임워크로 감성적이면서도 논리적으로 설명해라."
+  }
+  if (intent === "parent_feedback_consulting") {
+    return "요구사항: 학부모 피드백 리소스(parent_feedback_consulting)에 대해 고객이 단답형이나 매우 러프하게 툭 던져도 공감과 대화를 보완해 수렴해라. 강사가 수기로 작성하는 리포트 대신 클래스인이 자동 수집해 제공하는 EDB 참여도, AI 스피킹 점수 등의 정량적 리포트가 학부모 설득 및 원생 유지율(Retention) 제고에 어떻게 기여하며 강사 업무 시간을 극단적으로 아끼는지 E.Q.E 구조로 정중하게 답해라."
+  }
+  if (category === "onboarding" || intent === "onboarding") {
+    return "요구사항: 온보딩/데모 및 체험 신청(onboarding)에 대해, 사용자가 도입 사례/레퍼런스/후기/사용 학원을 물어보는 경우 국내 구체적인 학원 사례(청주 국어학원, 올***영어학원, 부산 과학학원, 대치 세** 학원 등) 및 글로벌 대학교/학습 사례를 언급하며 수업 OS로서 가져다준 변화를 짚고 상담/쇼룸을 권유해라. 만약 무료 체험이나 데모 신청을 원할 때는 바로 신청폼을 요구하지 말고 '맞춤 혜택 구성을 위한 간단한 규모/과목 상담 선행'을 안내한 뒤 질문하고, 신청 단계에서는 대화에서 이름·연락처를 받지 말고 답변 아래 [도입 상담 남기기] 버튼(문의 폼)이나 채널톡으로 남겨 달라고 안내해라. 신청을 대신 접수하거나 접수를 약속하지 말고, 신청용 토큰·태그·JSON을 답변 본문에 쓰지 마라."
+  }
+  return "최종 고객 답변만 작성해줘. 문서, 출처, URL, 이미지 경로는 쓰지 마. 안전 초안의 확인 필요/미지원/상담 확인 문구를 가능/지원/기본 제공으로 완화하지 마."
+}
+
+/**
+ * 최종 답변 프롬프트(사용자 턴). generateGeminiFinalAnswer·streamGeminiFinalAnswer 와 Claude 제공자가 함께 쓴다.
+ * 한쪽만 고쳐 경로·제공자마다 답이 갈리는 일이 없도록 여기 한 곳에서만 조립한다.
  */
 export function buildFinalAnswerPrompt({
   question,
@@ -399,30 +615,21 @@ export function buildFinalAnswerPrompt({
   draftAnswer,
   sources = [],
 }: Pick<FinalGenerateArgs, "question" | "category" | "intent" | "answerMode" | "draftAnswer" | "sources">): string {
-  const context = formatInternalContext(sources)
-  const prompt = [
+  // 근거가 약하면 그 문서 조각을 '검증 정보'로 넘기지 않는다(질문과 상관없는 조각일 가능성이 높다).
+  const weakGrounding = hasWeakGrounding(answerMode)
+  const context = weakGrounding ? "" : formatInternalContext(sources)
+  return [
     `분류: ${category}`,
     `현재 응답 모드: ${answerMode}`,
     context ? `내부 검증 정보(사용자에게 직접 언급 금지):\n${context}` : "내부 검증 정보: 없음",
     `안전 초안(제약 조건, 필요하면 표현만 다듬기):\n${sanitizeInternalContextText(draftAnswer)}`,
     `고객 질문: ${question}`,
-    category === "concern"
-      ? "요구사항: 고객의 막연한 고민(concern)에 대해 E.Q.E(공감 -> 유도 질문 1개 -> 격려와 희망) 프레임워크를 적용하여 따뜻하게 응대해줘. 스펙 위주 설명이나 강요하는 느낌을 주지 마."
-      : category === "event"
-      ? "요구사항: 고객의 세미나/행사(event) 질문에 대해 RAG 정보에서 일정(시작/종료), 대상, 장소(위치)를 명확히 발췌해 안내하고, 홈페이지 /events 경로에서 신청하도록 유도해라. 사용자가 직접 신청하는 데 헤매거나 대리 신청을 요구하면 대화에서 이름·연락처를 받지 말고, 답변 아래 [도입 상담 남기기] 버튼(문의 폼)이나 채널톡으로 남겨 달라고 안내해라. 신청을 대신 접수하거나 접수를 약속하지 말고, 신청용 토큰·태그·JSON을 답변 본문에 쓰지 마라."
-      : intent === "tutor_pricing_recommend"
-      ? "요구사항: 개인강사/과외 요금제 추천(tutor_pricing_recommend)은 공식 안내 기준으로 1인 강사에게 프로(Pro) 요금제를, 강사가 2명 이상인 학원에 비즈니스 요금제를 추천해라. 실제 금액·할인·결제 방식은 단정하지 말고 2주 무료 체험과 도입 상담으로 안내해라. 질문이 단답형이나 거칠더라도 친절하게 답하고, 학생 수나 수업 방식(대면·온라인)처럼 추천을 좁힐 정보 하나를 마지막에 물어라."
-      : intent === "feature_limit_consulting"
-      ? "요구사항: 클래스인이 제공하지 못하는 기능(학원비 결제·수납·정산 기능, 오프라인 지문인식/출석 카드 장비 등)에 대한 질문이 들어왔을 때, 일체 지원하지 않음을 '~~는 지원하지 않습니다'의 어조로 솔직하고 단호하게 선을 그어 답해라. API 연동으로 가능할 것처럼 우회 설명하지 말고 담백하게 대답해라."
-      : intent === "zoom_vs_classin"
-      ? "요구사항: 줌과의 비교(zoom_vs_classin)에 대해 수업 전(화면공유 준비 및 화면설정 불필요), 수업 중(학생이 판서에 참여하는 적극적 상호작용), 수업 후(수업 즉시 생성되는 플레이백 복습 비디오)의 3대 운영 흐름 메리트를 E.Q.E 프레임워크로 감성적이면서도 논리적으로 설명해라."
-      : intent === "parent_feedback_consulting"
-      ? "요구사항: 학부모 피드백 리소스(parent_feedback_consulting)에 대해 고객이 단답형이나 매우 러프하게 툭 던져도 공감과 대화를 보완해 수렴해라. 강사가 수기로 작성하는 리포트 대신 클래스인이 자동 수집해 제공하는 EDB 참여도, AI 스피킹 점수 등의 정량적 리포트가 학부모 설득 및 원생 유지율(Retention) 제고에 어떻게 기여하며 강사 업무 시간을 극단적으로 아끼는지 E.Q.E 구조로 정중하게 답해라."
-      : category === "onboarding" || intent === "onboarding"
-      ? "요구사항: 온보딩/데모 및 체험 신청(onboarding)에 대해, 사용자가 도입 사례/레퍼런스/후기/사용 학원을 물어보는 경우 국내 구체적인 학원 사례(청주 국어학원, 올***영어학원, 부산 과학학원, 대치 세** 학원 등) 및 글로벌 대학교/학습 사례를 언급하며 수업 OS로서 가져다준 변화를 짚고 상담/쇼룸을 권유해라. 만약 무료 체험이나 데모 신청을 원할 때는 바로 신청폼을 요구하지 말고 '맞춤 혜택 구성을 위한 간단한 규모/과목 상담 선행'을 안내한 뒤 질문하고, 신청 단계에서는 대화에서 이름·연락처를 받지 말고 답변 아래 [도입 상담 남기기] 버튼(문의 폼)이나 채널톡으로 남겨 달라고 안내해라. 신청을 대신 접수하거나 접수를 약속하지 말고, 신청용 토큰·태그·JSON을 답변 본문에 쓰지 마라."
-      : "최종 고객 답변만 작성해줘. 문서, 출처, URL, 이미지 경로는 쓰지 마. 안전 초안의 확인 필요/미지원/상담 확인 문구를 가능/지원/기본 제공으로 완화하지 마.",
-  ].join("\n\n")
-  return prompt
+    pickFinalAnswerRequirement(category, intent),
+    weakGrounding ? WEAK_GROUNDING_REQUIREMENT : GROUNDED_ANSWER_REQUIREMENT,
+    asksAboutThirdPartyAdoption(question) ? THIRD_PARTY_ADOPTION_REQUIREMENT : null,
+  ]
+    .filter(Boolean)
+    .join("\n\n")
 }
 
 export async function generateGeminiFinalAnswer({

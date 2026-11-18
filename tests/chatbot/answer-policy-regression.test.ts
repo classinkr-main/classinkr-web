@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { evaluateChatbotQuery, handleChatbotQuery } from "@/lib/chatbot/service"
 
+import { enableGenerateMode, stubFetchWithEvidenceSelection } from "./helpers/final-answer-llm"
+
 function disableExternalChatbotServices() {
   vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "")
   vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "")
@@ -11,6 +13,8 @@ function disableExternalChatbotServices() {
 }
 
 function enableMockGemini() {
+  // 이 파일은 모델이 답을 다시 쓰는 경로의 정책을 본다(기본값 select 는 문서 문장만 고른다).
+  enableGenerateMode()
   vi.stubEnv("GEMINI_API_KEY", "test-gemini-key")
   vi.stubEnv("GEMINI_FAST_MODEL", "")
   vi.stubEnv("GEMINI_REASONING_MODEL", "")
@@ -105,7 +109,8 @@ describe("chatbot public answer policy", () => {
           }, 20)
         })
     )
-    vi.stubGlobal("fetch", fetchMock)
+    // 근거 선별은 바로 답하고, 그 뒤의 답 생성만 느리게 둔다.
+    stubFetchWithEvidenceSelection(fetchMock)
 
     const result = await evaluateChatbotQuery("클래스인으로 플립러닝 수업 설계도 가능해?")
 
@@ -141,7 +146,7 @@ describe("chatbot public answer policy", () => {
         ],
       }),
     })
-    vi.stubGlobal("fetch", fetchMock)
+    stubFetchWithEvidenceSelection(fetchMock)
 
     await evaluateChatbotQuery("클래스인으로 소크라틱 세미나 수업 운영 가능해?")
     const generationCall = fetchMock.mock.calls.find(([url]) =>

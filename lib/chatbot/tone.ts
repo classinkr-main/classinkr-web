@@ -148,8 +148,12 @@ export function applyToneToAnswer(
   options: { englishSummary?: string; offerHandoff: boolean; mentionsRefund?: boolean }
 ) {
   let next = answer
-  // 상담 연결 답에는 "순서대로 알려 드릴게요" 같은 안내형 첫마디가 어울리지 않는다.
-  const opener = toneOpener(tone, /\[(?:실시간 상담 연결|도입 상담 남기기)\]/.test(answer) && !/^\d\.\s/m.test(answer))
+  // 상담 연결 답과 "딱 맞는 안내를 찾지 못했다"는 답에는 "순서대로 알려 드릴게요" 같은 안내형 첫마디가 어울리지 않는다.
+  const opener = toneOpener(
+    tone,
+    (/\[(?:실시간 상담 연결|도입 상담 남기기)\]/.test(answer) && !/^\d\.\s/m.test(answer)) ||
+      /딱 맞는 안내는 아직 찾지 못했어요/.test(answer)
+  )
   const alreadyToned =
     (tone.angry || tone.repeated ? startsWithApology(next) : startsWithEmpathy(next)) ||
     next.startsWith("In short:") ||

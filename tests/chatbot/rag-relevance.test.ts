@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { evaluateChatbotQuery } from "@/lib/chatbot/service"
 
+import { enableGenerateMode, stubFetchWithEvidenceSelection } from "./helpers/final-answer-llm"
+
 function disableExternalChatbotServices() {
   vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "")
   vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "")
@@ -146,6 +148,7 @@ describe("chatbot RAG source relevance", () => {
   it("uses Gemini inference for Classin questions without matching docs", async () => {
     disableExternalChatbotServices()
     vi.stubEnv("GEMINI_API_KEY", "test-gemini-key")
+    enableGenerateMode()
     vi.stubEnv("GEMINI_FAST_MODEL", "")
     vi.stubEnv("GEMINI_REASONING_MODEL", "")
     vi.stubEnv("GEMINI_MODEL", "")
@@ -167,7 +170,7 @@ describe("chatbot RAG source relevance", () => {
         ],
       }),
     })
-    vi.stubGlobal("fetch", fetchMock)
+    stubFetchWithEvidenceSelection(fetchMock)
 
     const result = await evaluateChatbotQuery("클래스인으로 플립러닝 설계도 가능해?")
 
@@ -177,7 +180,7 @@ describe("chatbot RAG source relevance", () => {
     expect(result.unresolved).toBe(false)
     expect(result.answer).toContain("플립러닝")
     expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining("/models/gemini-2.5-flash:generateContent?key=test-gemini-key"),
+      expect.stringContaining("/models/gemini-3.5-flash:generateContent?key=test-gemini-key"),
       expect.objectContaining({
         method: "POST",
       })
@@ -186,12 +189,13 @@ describe("chatbot RAG source relevance", () => {
       String(url).includes(":generateContent")
     )
     const body = JSON.parse(String(generationCall?.[1]?.body))
-    expect(body.generationConfig.thinkingConfig).toEqual({ thinkingBudget: 0 })
+    expect(body.generationConfig.thinkingConfig).toEqual({ thinkingLevel: "minimal" })
   })
 
   it("ignores unsupported configured fast Gemini models and uses the stable default", async () => {
     disableExternalChatbotServices()
     vi.stubEnv("GEMINI_API_KEY", "test-gemini-key")
+    enableGenerateMode()
     vi.stubEnv("GEMINI_FAST_MODEL", "gemini-2.0-flash")
 
     const fetchMock = vi.fn().mockResolvedValue({
@@ -211,7 +215,7 @@ describe("chatbot RAG source relevance", () => {
         ],
       }),
     })
-    vi.stubGlobal("fetch", fetchMock)
+    stubFetchWithEvidenceSelection(fetchMock)
 
     const result = await evaluateChatbotQuery("클래스인으로 프로젝트형 수업도 가능해?")
     const generationCalls = fetchMock.mock.calls.filter(([url]) =>
@@ -221,13 +225,14 @@ describe("chatbot RAG source relevance", () => {
     expect(result.answerMode).toBe("direct_answer")
     expect(result.answer).toContain("프로젝트형 수업")
     expect(generationCalls).toHaveLength(1)
-    expect(generationCalls[0][0]).toContain("/models/gemini-2.5-flash:generateContent")
+    expect(generationCalls[0][0]).toContain("/models/gemini-3.5-flash:generateContent")
     expect(generationCalls[0][0]).not.toContain("gemini-2.0-flash")
   })
 
   it("falls back to stable Gemini after a configured primary returns empty output", async () => {
     disableExternalChatbotServices()
     vi.stubEnv("GEMINI_API_KEY", "test-gemini-key")
+    enableGenerateMode()
     vi.stubEnv("GEMINI_FAST_MODEL", "gemini-3.5-flash")
 
     let generationCount = 0
@@ -265,7 +270,7 @@ describe("chatbot RAG source relevance", () => {
         }),
       }
     })
-    vi.stubGlobal("fetch", fetchMock)
+    stubFetchWithEvidenceSelection(fetchMock)
 
     const result = await evaluateChatbotQuery("클래스인으로 세미나형 수업 운영 가능해?")
     const generationCalls = fetchMock.mock.calls.filter(([url]) =>
@@ -276,7 +281,7 @@ describe("chatbot RAG source relevance", () => {
     expect(result.answer).toContain("세미나형 수업")
     expect(generationCalls).toHaveLength(2)
     expect(generationCalls[0][0]).toContain("/models/gemini-3.5-flash:generateContent")
-    expect(generationCalls[1][0]).toContain("/models/gemini-2.5-flash:generateContent")
+    expect(generationCalls[1][0]).toContain("/models/gemini-3.1-flash-lite:generateContent")
     const primaryBody = JSON.parse(String(generationCalls[0][1]?.body))
     expect(primaryBody.generationConfig.thinkingConfig).toEqual({ thinkingLevel: "minimal" })
   })
@@ -284,6 +289,7 @@ describe("chatbot RAG source relevance", () => {
   it("falls back to stable Gemini after a configured primary returns malformed JSON", async () => {
     disableExternalChatbotServices()
     vi.stubEnv("GEMINI_API_KEY", "test-gemini-key")
+    enableGenerateMode()
     vi.stubEnv("GEMINI_FAST_MODEL", "gemini-3.5-flash")
 
     let generationCount = 0
@@ -323,7 +329,7 @@ describe("chatbot RAG source relevance", () => {
         }),
       }
     })
-    vi.stubGlobal("fetch", fetchMock)
+    stubFetchWithEvidenceSelection(fetchMock)
 
     const result = await evaluateChatbotQuery("클래스인으로 논술형 수업 운영 가능해?")
     const generationCalls = fetchMock.mock.calls.filter(([url]) =>
@@ -334,12 +340,13 @@ describe("chatbot RAG source relevance", () => {
     expect(result.answer).toContain("논술형 수업")
     expect(generationCalls).toHaveLength(2)
     expect(generationCalls[0][0]).toContain("/models/gemini-3.5-flash:generateContent")
-    expect(generationCalls[1][0]).toContain("/models/gemini-2.5-flash:generateContent")
+    expect(generationCalls[1][0]).toContain("/models/gemini-3.1-flash-lite:generateContent")
   })
 
   it("escalates from fast Gemini to a deeper tier only when the fast answer is unusable", async () => {
     disableExternalChatbotServices()
     vi.stubEnv("GEMINI_API_KEY", "test-gemini-key")
+    enableGenerateMode()
     vi.stubEnv("GEMINI_FAST_MODEL", "")
     vi.stubEnv("GEMINI_REASONING_MODEL", "gemini-test-reasoning")
     vi.stubEnv("GEMINI_MODEL", "gemini-test-advanced")
@@ -382,7 +389,7 @@ describe("chatbot RAG source relevance", () => {
         }),
       }
     })
-    vi.stubGlobal("fetch", fetchMock)
+    stubFetchWithEvidenceSelection(fetchMock)
 
     const result = await evaluateChatbotQuery("클래스인으로 토론식 수업 설계도 가능해?")
     const generationCalls = fetchMock.mock.calls.filter(([url]) =>
@@ -392,7 +399,7 @@ describe("chatbot RAG source relevance", () => {
     expect(result.answerMode).toBe("direct_answer")
     expect(result.answer).toContain("토론식 수업")
     expect(generationCalls).toHaveLength(2)
-    expect(generationCalls[0][0]).toContain("/models/gemini-2.5-flash:generateContent")
+    expect(generationCalls[0][0]).toContain("/models/gemini-3.5-flash:generateContent")
     expect(generationCalls[1][0]).toContain("/models/gemini-test-reasoning:generateContent")
   })
 
