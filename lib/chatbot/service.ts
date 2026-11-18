@@ -2230,19 +2230,43 @@ async function searchSupabaseSources(
   return { sources: selectDiverseSources(clientRanked), evidencePool: buildEvidencePool(clientRanked) }
 }
 
+// 공개 위젯 방문자는 이미 클래스인 홈페이지에 있다. 낱말 목록(isDomainRelatedQuestion)에 없는 질문이라도
+// "웹캠 해상도 얼마나 돼야 하나요", "업데이트 자동으로 되나요", "고객센터 몇시까지 해요"처럼 대부분 클래스인에 대한 질문이라,
+// 낱말 목록에 없다는 이유로 검색을 건너뛰면 처음 보는 기본 질문이 모두 되묻기로 나갔다(2026-11 실측 180문항 중 13건).
+// 공개 경로에서는 명백한 잡담·서비스 밖 질문만 검색을 건너뛰고, 나머지는 검색하되 강한 근거(직답 점수 이상)가 있을 때만 쓴다.
+const OFF_TOPIC_RE =
+  /날씨|기온|미세\s*먼지|우산|맛집|메뉴\s*추천|점심|저녁\s*(?:메뉴|뭐)|치킨|피자|떡볶이|배달\s*음식|레시피|요리법|주식|코인|비트코인|환율|로또|운세|사주|별자리|타로|연예인|아이돌|드라마|영화\s*추천|노래\s*추천|게임\s*추천|축구|야구|농구|경기\s*결과|농담|심심|놀아\s*줘|사랑해|애인|연애|여행지|관광지|비행기\s*표|호텔\s*추천/
+
+function isOutsideKnownVocabulary(question: NormalizedQuestion) {
+  return classifyChatbotQuestion(question.redacted).category === "general" && !isDomainRelatedQuestion(question, "general")
+}
+
 async function searchKnowledgeSources(
+  question: NormalizedQuestion,
+  options?: RetrievalOptions
+): Promise<KnowledgeSearchResult> {
+  if (!isOutsideKnownVocabulary(question)) return searchKnowledgeSourcesForDomain(question, options)
+
+  // 내부 CS 코파일럿 경로와 잡담·서비스 밖 질문은 지금처럼 검색하지 않는다.
+  const text = question.redacted.toLowerCase()
+  if (options?.includeInternalDocs || OFF_TOPIC_RE.test(text) || question.tokens.length < 2) {
+    return { sources: [], warning: undefined }
+  }
+  const result = await searchKnowledgeSourcesForDomain(question, options)
+  // 낱말 목록 밖 질문은 약한 문서 조각을 붙이지 않는다. 직답 점수에 못 미치면 출처 없음으로 보고
+  // composeAnswer 가 사실 질문이면 못 찾았다고, 모호한 입력이면 되묻게 한다.
+  if ((result.sources[0]?.score ?? 0) < MIN_DIRECT_SOURCE_SCORE) {
+    return { sources: [], warning: result.warning }
+  }
+  return result
+}
+
+async function searchKnowledgeSourcesForDomain(
   question: NormalizedQuestion,
   options?: RetrievalOptions
 ): Promise<KnowledgeSearchResult> {
   const cached = getCachedRetrieval(question, options)
   if (cached) return cached
-
-  const initialCategory = classifyChatbotQuestion(question.redacted).category
-  if (initialCategory === "general" && !isDomainRelatedQuestion(question, "general")) {
-    const result = { sources: [], warning: undefined }
-    setCachedRetrieval(question, result, options)
-    return result
-  }
 
   if (
     isHardwareSpecsQuestion(question) ||
@@ -2325,7 +2349,16 @@ function searchKnowledgeSourcesWithinBudget(
   return withTimeoutFallback({
     promise: searchKnowledgeSources(question, options),
     timeoutMs: getKnowledgeSearchTimeoutMs(),
-    fallback: () => getTimedOutKnowledgeFallback(question, options),
+    fallback: () => {
+      const fallback = getTimedOutKnowledgeFallback(question, options)
+      // 낱말 목록 밖 질문은 검색 본 경로와 같이 강한 근거만 쓴다(잡담·서비스 밖 질문은 출처 없음).
+      if (!isOutsideKnownVocabulary(question)) return fallback
+      const usable =
+        !options?.includeInternalDocs &&
+        !OFF_TOPIC_RE.test(question.redacted.toLowerCase()) &&
+        (fallback.sources[0]?.score ?? 0) >= MIN_DIRECT_SOURCE_SCORE
+      return usable ? fallback : { sources: [], warning: fallback.warning }
+    },
     onTimeout: () => {
       console.warn("[chatbot] knowledge search timed out; using static fallback.")
     },
@@ -3017,6 +3050,34 @@ export function buildDocSuggestionSummary(
   return `관련 안내를 정리해드리면,\n${body}`
 }
 
+// 사실을 묻는 질문(무엇·어디·언제·얼마나·되나요·있나요)인데 공개 문서에서 근거를 찾지 못했을 때의 답.
+// 예전에는 "지금 바로 확정하기 어려워요. 현재 상황을 한 문장만 더 알려주세요"처럼 되물었는데, 상황을 더 알려 줘도
+// 없는 문서가 생기지는 않는다(2026-11 실측 180문항 중 29건). 못 찾았다고 밝히고 사람에게 잇는 길만 알려 준다.
+// unresolved 로 남겨 문서 공백 집계에 잡히게 한다.
+export const NO_SOURCE_FACT_ANSWER = [
+  "이 질문에 대한 내용은 공개 안내에서 찾지 못했어요. 확인되지 않은 내용을 추측해 말씀드리지 않을게요.",
+  "정확한 답이 필요하시면 \"상담원 연결\"이라고 남겨 주세요. 담당자가 확인해 이어서 도와드려요.",
+].join("\n\n")
+
+// 증상 신고 신호. "~하면 안 되나요?"는 허락을 묻는 말이라 증상이 아니다.
+const SYMPTOM_REPORT_RE =
+  /(?<!면\s?)안\s*(?:돼|되|됨|됐|됩|나와|나옴|나오|들려|들리|보여|보이|켜|떠|열려|열리|먹|와|옴)|(?<!면\s?)안돼|(?<!면\s?)안되|안됨|못\s*(?:하|해|들어|보|봐|열|찾)|오류|에러|끊겨|끊김|끊어져|튕겨|튕김|튕기|멈춰|멈춤|멈췄|먹통|고장|이상해|이상하|실패|막혔|막혀|비활성|회색|눌러도|눌렀더니|뜹니다|떠요|라고\s*(?:떠|뜨|나와|나옵)|지원되지\s*않|했는데도|해\s*봐도|사라졌|없어졌|느려|버벅|깨져|0\s*kb/
+// 묻는 말. 의문사가 있거나, 묻는 어미(되나요·있어요?·인가요·궁금)로 끝난다.
+const FACT_QUESTION_CUE_RE =
+  /[?？]|뭐|무엇|무슨|어디|언제|얼마|몇|어떻게\s*(?:되|돼)|어떤|누가|누구|(?:나요|가요|까요|는지|인지|던가|되나|돼요|되요|됨|돼|드나|드나요|있어요|있음|없어요|없음|해요|하나|예요|에요|이에요|인가|일까|맞나|맞아요|궁금|궁금해요|가능|가능해요|가능한가요)\s*[.!~]*$/
+
+/** 증상 신고가 아니라 사실을 묻는 질문인지 본다. 한두 낱말이나 '그거'처럼 무엇을 묻는지 모르는 입력은 아니다. */
+function isFactSeekingQuestion(question: NormalizedQuestion) {
+  const text = question.redacted.toLowerCase().trim()
+  const compact = text.replace(/\s+/g, "")
+  if (question.tokens.length < 2 || compact.length < 6) return false
+  if (/그거|그게|그걸|그것|이거|저거|그\s*(?:파일|링크|앱)/.test(text) && compact.length <= 40) return false
+  if (SYMPTOM_REPORT_RE.test(text)) return false
+  // 잡담·서비스 밖 질문("오늘 날씨 어때?")은 문서를 못 찾은 게 아니라 다룰 범위가 아니다. 지금처럼 되묻는다.
+  if (OFF_TOPIC_RE.test(text)) return false
+  return FACT_QUESTION_CUE_RE.test(text)
+}
+
 // 약한 근거(검색 점수가 낮은 문서)만 있을 때 공개 챗봇이 내보내는 초안.
 // 예전에는 "관련 안내를 정리해드리면," 뒤에 그 문서 조각을 그대로 붙였는데, 근거가 약하다는 것은 질문과
 // 상관없는 조각일 가능성이 높다는 뜻이다("어느 나라 제품인가요?"에 드라이브 사용법이 나간 원인).
@@ -3224,6 +3285,19 @@ function composeAnswer(
           "수업 운영 문제를 해결하고 싶어요",
           "요금/견적은 어떤 항목으로 구성되나요?",
         ],
+        unresolved: true,
+      }
+    }
+
+    // 사실을 묻는 질문이면 되묻지 않고 못 찾았다고 답한다. 정말 모호한 입력만 아래처럼 되묻는다.
+    if (!needsConsultation && !options.internal && isFactSeekingQuestion(question)) {
+      return {
+        answer: NO_SOURCE_FACT_ANSWER,
+        answerMode: "fallback",
+        confidence: 0.2,
+        needsHandoff: false,
+        sources: [],
+        suggestedQuestions: buildSuggestedQuestions(category),
         unresolved: true,
       }
     }
@@ -3743,6 +3817,8 @@ interface BuildChatbotCoreOptions {
   generateAnswer?: boolean
   // 내부 CS 코파일럿 전용(계약 6). 공개 경로는 절대 true 를 넘기지 않는다 — 검색/답변 캐시가 scope 로 격리된다.
   includeInternalDocs?: boolean
+  // 스트리밍 경로처럼 근거 선별을 코어 밖에서 이어서 하는 호출. 코어가 초안을 확정하지 않는다.
+  deferEvidenceSelection?: boolean
 }
 
 function determineModelTier(): ChatbotModelTier {
@@ -4544,6 +4620,32 @@ async function applyEvidenceSelection(
   return { status: "selected", evidenceSources }
 }
 
+// 낱말 목록 밖 질문(검색 관문을 새로 통과한 질문)은 근거 선별이 답 문장을 골라 준 경우에만 문서 문장을 쓴다.
+// 선별이 실패했거나 꺼져 있으면 검색 조각이 질문과 맞는지 알 수 없으므로 조각 대신 못 찾았다고 답한다.
+const CURATED_SOURCE_MIN_SCORE = 240
+
+function withholdUnselectedOutsideVocabularyDraft(
+  response: Omit<ChatbotQueryResponse, "answerEventId" | "sessionId" | "warning" | "handoffIntent">,
+  question: NormalizedQuestion,
+  selectionStatus: EvidenceSelectionOutcome["status"] | undefined,
+  internal: boolean
+) {
+  if (internal || selectionStatus === "selected" || selectionStatus === "not_found") return
+  if (response.answerMode === "handoff") return
+  // 검색 조각 초안뿐 아니라, 점수가 낮은 검색 결과의 섹션 제목에 걸린 정해 둔 문장(예: '가입과 개인정보' → 가입 안내)도
+  // 질문과 맞는지 확인되지 않았다. 큐레이션 출처(점수 240 이상)만 그대로 둔다.
+  const topScore = response.sources[0]?.score
+  const unverified = excerptDraftResponses.has(response) || (topScore !== undefined && topScore < CURATED_SOURCE_MIN_SCORE)
+  if (!unverified) return
+  if (!isOutsideKnownVocabulary(question)) return
+  response.answer = NO_SOURCE_FACT_ANSWER
+  response.answerMode = "doc_suggestion"
+  response.confidence = Math.min(response.confidence, 0.3)
+  response.needsHandoff = false
+  response.unresolved = true
+  response.sources = []
+}
+
 // generate 모드에서만 모델이 답을 다시 쓴다. 답 문장을 못 찾았거나 선별 호출이 실패했으면 쓰지 않는다.
 function shouldGenerateAfterSelection(mode: FinalAnswerLlmMode, selection: EvidenceSelectionOutcome) {
   return mode === "generate" && (selection.status === "selected" || selection.status === "skipped")
@@ -4556,7 +4658,8 @@ function shouldUseAiFinalAnswer(
 ) {
   if (getFinalAnswerLlmMode() === "off") return false
   if (deterministicFinalResponses.has(response)) return false
-  if (category === "general" && !isDomainRelatedQuestion(question, category)) return false
+  // 낱말 목록 밖 질문도 검색에서 강한 근거를 찾았으면 근거 선별을 거친다. 출처가 없으면 모델을 부르지 않는다.
+  if (category === "general" && !isDomainRelatedQuestion(question, category) && response.sources.length === 0) return false
   if (wantsImmediateHumanHandoff(question)) return false
   if (response.answerMode === "clarifying_question" && question.tokens.length < 2) return false
   if (response.answerMode === "direct_answer" && isCsFigmaGuideResponse(response)) return false
@@ -4981,6 +5084,7 @@ async function buildChatbotCoreBase(
   )
   const response = composeAnswer(question, sources, category, { internal: options.includeInternalDocs === true })
 
+  let selectionStatus: EvidenceSelectionOutcome["status"] | undefined
   if (shouldGenerateAnswer && shouldUseAiFinalAnswer(response, question, category)) {
     const llmMode = getFinalAnswerLlmMode()
     const selection = await applyEvidenceSelection(
@@ -4990,6 +5094,7 @@ async function buildChatbotCoreBase(
       evidencePool,
       llmMode === "generate" ? GENERATE_MODE_SELECTION_TIMEOUT_MS : undefined
     )
+    selectionStatus = selection.status
 
     if (shouldGenerateAfterSelection(llmMode, selection)) {
       const history = await historyPromise
@@ -5020,6 +5125,12 @@ async function buildChatbotCoreBase(
         applyGeneratedFinalAnswer(response, question, category, finalAnswer)
       }
     }
+  }
+
+  // 근거 선별을 이 뒤에서 하는 스트리밍 경로만 초안을 그대로 넘긴다. 모델 없이 초안만 만드는 평가 호출도
+  // 낱말 목록 밖 질문에 고르지 않은 검색 조각을 답으로 내지 않는다.
+  if (!options.deferEvidenceSelection) {
+    withholdUnselectedOutsideVocabularyDraft(response, question, selectionStatus, options.includeInternalDocs === true)
   }
 
   finalizeAnswer(response)
@@ -5281,12 +5392,13 @@ export async function streamChatbotQuery(
     : Promise.resolve([])
 
   // 검색·분류·결정형 초안까지는 기존 코어를 그대로 재사용(중복 방지). Gemini 호출만 스트리밍으로 대체.
-  const core = await buildChatbotCore(input.message, { generateAnswer: false })
+  const core = await buildChatbotCore(input.message, { generateAnswer: false, deferEvidenceSelection: true })
   const { question, response, category, intent, warning } = core
 
   // 인사·정책 가드 응답은 buildChatbotCore 가 조기 반환한 '최종 답변'이다(정책 가드는 보안 거절 등).
   // 이 경우 AI 재작성을 적용하면 안 된다 — handleChatbotQuery 의 조기 반환 의미와 동일하게 맞춘다.
   const isShortCircuited = isGreetingOnly(question) || Boolean(buildPolicyGuardResponse(question))
+  let selectionStatus: EvidenceSelectionOutcome["status"] | undefined
   if (!isShortCircuited && shouldUseAiFinalAnswer(response, question, category)) {
     const llmMode = getFinalAnswerLlmMode()
     const selection = await applyEvidenceSelection(
@@ -5296,6 +5408,7 @@ export async function streamChatbotQuery(
       core.evidencePool,
       llmMode === "generate" ? GENERATE_MODE_SELECTION_TIMEOUT_MS : undefined
     )
+    selectionStatus = selection.status
 
     if (shouldGenerateAfterSelection(llmMode, selection)) {
       await streamAndApplyFinalAnswer({
@@ -5316,6 +5429,8 @@ export async function streamChatbotQuery(
     }
   }
   const handoffIntent = core.handoffIntent
+
+  if (!isShortCircuited) withholdUnselectedOutsideVocabularyDraft(response, question, selectionStatus, false)
 
   finalizeAnswer(response)
 
