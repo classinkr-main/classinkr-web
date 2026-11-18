@@ -20,6 +20,14 @@ export interface ChatbotSelfKnowledgeEntry {
   suggestedQuestions: string[]
 }
 
+/**
+ * 정보를 전하지 않고 말을 받아 주는 답(잡담·투정에 대한 공감 한마디와 '막히면 물어봐 달라'는 말).
+ * 정해 둔 답 확인 관문(lib/chatbot/answer-gate.ts)은 '이 질문에 대한 답인지'를 정보 기준으로 판정해 이런 답을 버리고
+ * 되묻기를 냈다("수업 듣기싫다ㅋㅋ" → 분류별 되묻기). 사실을 전하는 답(identity·privacy_boundary·capabilities 등)과
+ * 주장·안내를 담은 답(emotional_concern 은 도입 효과·API 연동을 말한다)은 관문 대상에 남긴다.
+ */
+export const CONVERSATIONAL_SELF_KNOWLEDGE_KEYS: ReadonlySet<ChatbotSelfKnowledgeEntry["key"]> = new Set(["small_talk"])
+
 export const CHATBOT_SELF_KNOWLEDGE_ENTRIES: ChatbotSelfKnowledgeEntry[] = [
   {
     key: "model_boundary",

@@ -22,7 +22,7 @@ import {
   isTrialOrPilotText,
   type ChatbotIntent,
 } from "@/lib/chatbot/classification"
-import { findChatbotSelfKnowledgeEntry } from "@/lib/chatbot/self-knowledge"
+import { CONVERSATIONAL_SELF_KNOWLEDGE_KEYS, findChatbotSelfKnowledgeEntry } from "@/lib/chatbot/self-knowledge"
 import {
   asksAboutThirdPartyAdoption,
   clampAnswerToLength,
@@ -661,7 +661,11 @@ function buildPolicyGuardResponse(question: NormalizedQuestion): {
         : "self_knowledge",
       handoffIntent: "demo",
       // 어떤 모델로 도는지 같은 내부 기술 정보를 묻는 말에 답을 돌리는 안내(model_boundary)는 내부 정보를 막는 거절 답이라 관문 대상이 아니다.
-      gateOriginal: selfKnowledgeEntry.key === "model_boundary" ? undefined : `self:${selfKnowledgeEntry.key}`,
+      // 잡담에 공감으로 받아 주는 답(small_talk)도 정보를 전하는 답이 아니라 관문 대상이 아니다(CONVERSATIONAL_SELF_KNOWLEDGE_KEYS).
+      gateOriginal:
+        selfKnowledgeEntry.key === "model_boundary" || CONVERSATIONAL_SELF_KNOWLEDGE_KEYS.has(selfKnowledgeEntry.key)
+          ? undefined
+          : `self:${selfKnowledgeEntry.key}`,
     }
   }
 
@@ -2699,14 +2703,18 @@ function trimExcerptToSentence(excerpt: string) {
 // getStepCriteriaByCategory가 범주별 단계를 따로 갖고 있는 범주. 나머지는 일반 되묻기를 쓴다.
 const STEP_CRITERIA_CATEGORIES = new Set(["troubleshooting", "billing", "hardware", "onboarding", "admin", "classroom"])
 
+// 일반 되묻기(buildGeneralClarify)의 첫 문장. 분류와 무관하다.
+export const GENERAL_CLARIFY_LEADS = [
+  "말씀하신 '그거'가 무엇인지 한 가지만 알려 주시면 바로 도와드릴게요.",
+  "어떤 상황인지 한 가지만 더 알려 주시면 바로 도와드릴게요.",
+] as const
+
 // 짧거나 대상이 모호한 질문("그거 받았는데 안 열림")에 되물을 말. 묻는 사람(학생·학부모 / 학원)에 맞는 예를 든다.
 function buildGeneralClarify(question: NormalizedQuestion) {
   const text = question.redacted.toLowerCase()
   // 긴 질문 속 '이거'는 대개 앞에서 이미 말한 것을 가리키므로 '그거가 뭐냐'고 되묻지 않는다.
   const vagueRef = /그거|그게|그걸|그것|이거|저거|그\s*(?:파일|링크|앱)/.test(text) && text.replace(/\s+/g, "").length <= 40
-  const lead = vagueRef
-    ? "말씀하신 '그거'가 무엇인지 한 가지만 알려 주시면 바로 도와드릴게요."
-    : "어떤 상황인지 한 가지만 더 알려 주시면 바로 도와드릴게요."
+  const lead = vagueRef ? GENERAL_CLARIFY_LEADS[0] : GENERAL_CLARIFY_LEADS[1]
   const example = LEARNER_VOICE_RE.test(text) || /학생|애들|친구|수업\s*듣|쌤/.test(text)
     ? "예를 들면 수업 들어가기, 다시보기, 숙제 내기, 앱 설치·로그인, 선생님이 보낸 파일 열기 가운데 어느 쪽인가요?"
     : /샘들|선생님들|강사|원장|학원|관리자|직원|실장|경리|세무|정산|마감/.test(text)
@@ -3421,11 +3429,10 @@ function composeAnswer(
   question: NormalizedQuestion,
   sources: ChatbotSource[],
   category: string,
-  /** suppressConsultation: 관문이 상담 연결 틀 답을 버린 뒤 되묻기를 만들 때, 같은 상담 연결 답으로 되돌아가지 않게 한다. */
-  options: { internal?: boolean; suppressConsultation?: boolean } = {}
+  options: { internal?: boolean } = {}
 ): Omit<ChatbotQueryResponse, "answerEventId" | "sessionId" | "warning" | "handoffIntent"> {
   if (sources.length === 0) {
-    const needsConsultation = !options.suppressConsultation && wantsHumanConsultation(question)
+    const needsConsultation = wantsHumanConsultation(question)
     const isVague = question.tokens.length < 2 && !needsConsultation
     const needsHandoff = needsConsultation
 
@@ -4836,7 +4843,7 @@ function isFinalAnswerModelEnabled() {
 
 /** 답을 확인하지 못해 추측하지 않겠다고 밝힌 고정 답인지. 말투 층이 앞에 첫마디를 붙여도 알아보게 첫 문단으로 본다. */
 function isUnverifiedFixedAnswer(answer: string) {
-  return answer.includes(MODEL_UNAVAILABLE_ANSWER.split("\n\n")[0])
+  return [MODEL_UNAVAILABLE_ANSWER, SYMPTOM_AFTER_GATE_ANSWER].some((fixed) => answer.includes(fixed.split("\n\n")[0]))
 }
 
 function applyModelUnavailableAnswer(response: CoreResponse) {
@@ -5097,10 +5104,11 @@ function applyConversationTone(core: ChatbotCore) {
 // 정규식이 고른 정해 둔 답은 내보내기 전에 모델이 "이 질문에 대한 답인지"만 판정한다(lib/chatbot/answer-gate.ts).
 // 대상: 필드·기본 사실 답, service.ts 안의 정규식 분기 답, 증상 안내, CS 운영 가이드 답, composeAnswer 의 분류별·제목 틀 답,
 //       학원 결제 기능 안내·챗봇 자기소개 답, 약한 신호로 걸린 상담 연결(쇼룸 안내는 정규식 분기 답에 들어 있다).
-// 대상 아님: 인사, 보안 공격·범죄·토큰 낭비·시험 정답·모델 정보 요청을 막는 거절 답, 화난·반복 문의와 연결을 직접 청한 말의
+// 대상 아님: 인사, 잡담에 공감으로 받아 주는 답(small_talk), 보안 공격·범죄·토큰 낭비·시험 정답·모델 정보 요청을 막는 거절 답, 화난·반복 문의와 연결을 직접 청한 말의
 //       상담 연결, 이미 해 봤다는 화난 고객의 상담 연결, 지난 대화 되묻기, 영어 안내, 못 찾음·되묻기, 근거 선별이 고른 답,
 //       답 캐시 적중, 내부 CS 경로(includeInternalDocs).
-// off_target 이면 그 답을 버리고 문서 경로(검색 → 근거 선별)로만 답한다. 정해 둔 답·틀 답으로는 되돌아가지 않는다.
+// off_target 이면 그 답을 버리고 문서 경로(검색 → 근거 선별)로만 답한다. 정해 둔 답·분류별 틀·되묻기 문구로는 되돌아가지 않고,
+// 문서 문장을 못 고르면 고정 문구(못 찾음·증상용·정책 주제·일반 되묻기·모델 실패) 가운데 하나를 낸다(answerFromDocumentsAfterGate).
 
 type CoreResponse = Omit<ChatbotQueryResponse, "answerEventId" | "sessionId" | "warning" | "handoffIntent">
 
@@ -5366,18 +5374,29 @@ async function findDocumentEvidenceAfterGate(
 }
 
 // 공개 범위를 사람이 정한 주제에서 관문이 정해 둔 답을 버렸을 때의 답. 문서 문장을 붙이지 않고 담당자 확인으로 잇는다.
-const POLICY_TOPIC_AFTER_GATE_ANSWER = [
+export const POLICY_TOPIC_AFTER_GATE_ANSWER = [
   "이 질문은 채팅에서 확정해 말씀드리기 어려운 내용이라, 추측해 답하지 않을게요.",
   "아래 상담 버튼으로 남겨 주시면 담당자가 확인해 정확히 안내해 드려요.",
 ].join("\n\n")
 
+// 증상·고장 신고에서 관문이 정해 둔 안내를 버렸고 문서에서도 해결 문장을 못 고른 경우의 답. 상담 버튼(기술지원)으로 잇는다.
+// 예전에는 composeAnswer 의 분류별 되묻기·틀 문구가 나가, 엑셀 '형식 오류'에 "90일 전환 순서…", 칠판 밝기에
+// "설치 장소, 대수…"를 묻는 식이었다(2026-11-18 기준 묶음에서 관문이 버린 15건 중 '둘 다 나쁨' 5건이 모두 이 틀 문구).
+export const SYMPTOM_AFTER_GATE_ANSWER = [
+  "딱 맞는 해결 안내를 아직 찾지 못했어요. 추측해서 안내하지는 않을게요.",
+  "아래 상담 버튼으로 증상을 남겨 주시면 기술지원 담당자가 확인해 드려요.",
+].join("\n\n")
+
 /**
  * 관문이 off_target 으로 판정한 뒤의 문서 경로: 검색 → 근거 선별.
- * 고른 문장이 있으면 그 문장으로 답하고, 없으면 사실 질문은 목차에서 다시 고르는 두 번째 검색을 거쳐 못 찾음(NO_SOURCE_FACT_ANSWER),
- * 그 밖에는 되묻는다. 선별 호출이 실패해도 버린 답으로 돌아가지 않는다(못 찾음/되묻기).
+ * 고른 문장이 있으면 그 문장으로 답한다. 없으면 분류별 틀·되묻기 문구로 돌아가지 않고 고정 문구 가운데 하나를 낸다:
+ * 사실 질문은 목차에서 다시 고르는 두 번째 검색을 거쳐 못 찾음(NO_SOURCE_FACT_ANSWER), 증상·고장 신고(또는 버린 답이 증상·가이드 답)는
+ * SYMPTOM_AFTER_GATE_ANSWER, 그 밖(무엇을 묻는지 불분명)은 분류와 무관한 일반 되묻기(buildGeneralClarify).
+ * 선별 호출이 실패하면 못 찾음을 단정하지 않고 MODEL_UNAVAILABLE_ANSWER 를 낸다. 버린 답으로는 돌아가지 않는다.
  */
 async function answerFromDocumentsAfterGate(
   question: NormalizedQuestion,
+  original: string,
   options: BuildChatbotCoreOptions,
   startedAt: number,
   prior?: KnowledgeSearchResult
@@ -5400,10 +5419,12 @@ async function answerFromDocumentsAfterGate(
     return { response, category, intent, handoffIntent, secondChance: { secondChance: "none", reason: "policy_topic" } }
   }
   const candidates = await findDocumentEvidenceAfterGate(question, options, prior)
-  const { category, intent, handoffIntent } = classifyChatbotQuestion(
+  const classified = classifyChatbotQuestion(
     question.redacted,
     candidates.filter((source) => source.score >= MIN_DIRECT_SOURCE_SCORE).map((source) => source.category)
   )
+  const { category, intent } = classified
+  let { handoffIntent } = classified
   const sentences = buildEvidenceSentences(candidates)
   const ids = sentences.length > 0 ? await selectAnsweringSentenceIds({ question: question.redacted, sentences }) : []
   const picked = ids && ids.length > 0 ? sentences.filter((sentence) => ids.includes(sentence.id)) : []
@@ -5442,8 +5463,27 @@ async function answerFromDocumentsAfterGate(
       suggestedQuestions: buildSuggestedQuestions(category),
       unresolved: true,
     }
+  } else if (SYMPTOM_REPORT_RE.test(question.redacted.toLowerCase()) || /^(?:symptom|guide):/.test(original)) {
+    response = {
+      answer: SYMPTOM_AFTER_GATE_ANSWER,
+      answerMode: "handoff",
+      confidence: 0.3,
+      needsHandoff: true,
+      sources: [],
+      suggestedQuestions: buildSuggestedQuestions(category),
+      unresolved: true,
+    }
+    handoffIntent = "support"
   } else {
-    response = composeAnswer(question, [], category, { suppressConsultation: true })
+    response = {
+      answer: buildGeneralClarify(question).join("\n\n"),
+      answerMode: "clarifying_question",
+      confidence: 0.2,
+      needsHandoff: false,
+      sources: [],
+      suggestedQuestions: buildSuggestedQuestions(category),
+      unresolved: true,
+    }
   }
   if (ids === null) selectionFailedResponses.add(response)
   // 못 찾음이면 목차에서 다시 고르는 두 번째 검색을 한 번 돌린다(스트림·일반 경로 모두 이 코어 안에서 끝난다).
@@ -5484,7 +5524,7 @@ async function gatePreparedCore(
       answerGate: trace,
     }
   }
-  const documentCore = await answerFromDocumentsAfterGate(core.question, options, startedAt, prior)
+  const documentCore = await answerFromDocumentsAfterGate(core.question, original, options, startedAt, prior)
   if (cacheHere && !isSecondChanceFailure(documentCore.secondChance) && !selectionFailedResponses.has(documentCore.response)) {
     const { response, category, intent, handoffIntent } = documentCore
     setCachedAnswer(core.question, { response, category, intent, handoffIntent, warning: core.warning }, options)
