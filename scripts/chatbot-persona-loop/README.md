@@ -36,7 +36,7 @@
    - 같은 심사관에게 상대의 판정을 보여 주고 엇갈린 행만 다시 판정하게 한다(`judge-A-rN-final.json`, `judge-B-rN-final.json`).
    - aggregate를 다시 돌린다. 최종 통과는 두 심사관이 모두 통과로 본 문항만 센다.
 5. **고치기**: 최종 실패 행의 `issue`·`fix_hint`를 모아 고친다. 원칙은 아래와 같다.
-   - 답의 사실은 공개 문서(`lib/docs.ts`, `lib/docs-troubleshooting/*.ts`, `lib/cs-figma-guides.ts`와 그 파일이 내보내는 생성 캡처 가이드(사내 전용 slug 제외), `lib/classin-positioning.ts`)에서만 가져온다. 문서에 없으면 "공개 안내에 없다"고 밝히고 상담으로 넘긴다. 반대로 문서에 있는 것을 없다고 하지 않는다.
+   - 답의 사실은 공개 문서(`lib/docs.ts`, `lib/docs-troubleshooting/*.ts`, `lib/cs-figma-guides.ts`와 그 파일이 내보내는 생성 캡처 가이드(사내 전용 slug 제외), `lib/classin-positioning.ts`)에서만 가져온다. `lib/docs.ts` 안이라도 검토 중(review)·초안(draft) 문서는 공개되지 않으니 쓰지 않는다. 문서에 없으면 "공개 안내에 없다"고 밝히고 상담으로 넘긴다. 반대로 문서에 있는 것을 없다고 하지 않는다.
    - 좁은 증상·사용법 주제는 `lib/chatbot/symptom-topics-field.ts`에 더한다. 단계는 문서 섹션에서 가져온다.
    - 첫 방문자가 한 줄로 묻는 기본 사실 질문(회사·기기·한도·보관·요금 기준 등)의 답은 `lib/chatbot/quick-answers-basics.ts`에 있다. 짧고 증상 표현이 없는 질문에만, 아래 정해 둔 답이 모두 빗나간 뒤에 쓰인다. 고치면 `npx vitest run tests/chatbot/basics-quick-answers.test.ts`를 돌린다.
    - 정해 둔 문장으로 바로 답할 것(결제·영업·계정·보안·개인정보 정책)은 `lib/chatbot/quick-answers-field.ts`에 더한다. 패턴은 좁게 쓰고, 고친 뒤 평가셋 전체 답을 수정 전과 비교해 다른 질문을 가로채지 않는지 본다. 기존 정해 둔 답은 `lib/chatbot/service.ts`의 `buildServiceQuickAnswer`에 있다.
@@ -77,4 +77,5 @@
 
 - 이 순서는 예약 작업으로 2시간마다 같은 세션에서 다시 돈다. 한 회차가 끝나기 전에 다음 예약 시각이 오면, 앞 회차가 끝난 뒤에 이어서 돈다.
 - 멈추려면 그 세션에서 "페르소나 루프 멈춰"라고 하면 예약 작업을 지운다.
+- 2026-11-09 21회차를 끝으로 사용자 요청에 따라 예약 작업을 지웠다. 다시 돌리려면 이 순서를 그대로 쓰는 예약 작업을 새로 만든다.
 - 한 회차에 심사관 둘이 120문항씩 읽어 토큰을 많이 쓴다. 새 질문 실패가 연속으로 줄지 않으면 간격을 늘리거나 멈추는 것을 검토한다.

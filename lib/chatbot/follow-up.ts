@@ -50,9 +50,20 @@ const INTERPRETATIONS: { pattern: RegExp; when?: (input: FollowUpInput) => boole
     asks: true,
   },
   {
-    pattern: /(?:수업|그)\s*프로그램/,
-    when: (input) => /칠판|티비|tv|보드/.test(input.question.toLowerCase()),
+    // "경쟁사 전자칠판이랑 화상수업 프로그램"처럼 다른 회사 제품을 말할 때는 클래스인 X로 읽지 않는다.
+    pattern: /(?<!화상\s*)수업\s*프로그램/,
+    when: (input) =>
+      /칠판|티비|tv|보드/.test(input.question.toLowerCase()) && !/경쟁사|타사|다른\s*회사/.test(input.question),
     line: "'수업 프로그램'은 전자칠판에 깔린 클래스인 X(ClassIn X)로 이해하고 답했어요.",
+  },
+  {
+    // 질문자가 쓴 말 그대로 옮긴다("그 프로그램"을 "수업 프로그램"으로 바꿔 말하지 않는다).
+    pattern: /(?:^|\s)그\s*프로그램/,
+    when: (input) =>
+      /칠판|티비|tv|보드/.test(input.question.toLowerCase()) &&
+      !/경쟁사|타사|다른\s*회사/.test(input.question) &&
+      !/(?<!화상\s*)수업\s*프로그램/.test(input.question),
+    line: "'그 프로그램'은 전자칠판에 깔린 클래스인 X(ClassIn X)로 이해하고 답했어요.",
   },
   {
     pattern: /(?:핸드폰|휴대폰|폰)\s*(?:거|화면)?\s*(?:를|을)?\s*띄우/,
@@ -150,8 +161,13 @@ function pickSalesSlot(input: FollowUpInput) {
 const PURCHASE_SIGNAL_RE =
   /도입|구매|견적|가격|요금|비용|체험|데모|상담|들이|살까|사려|살\s*거|추천|쇼룸|몇\s*대|여러\s*대|싸게|할인|대수/
 
+// 화면 가이드의 사용 순서 답은 기능 사용법이라 영업용 되묻기를 붙이지 않는다
+// ("코스 가입 허용"의 '가입'을 도입 상담으로 읽어 학원 규모를 묻던 것).
+const PROCEDURE_GUIDE_ANSWER_RE = /(?:^|\n)아래 순서대로 따라 하시면 됩니다/
+
 function isSalesConversation(input: FollowUpInput) {
   if (input.handoffIntent !== "demo") return false
+  if (PROCEDURE_GUIDE_ANSWER_RE.test(input.answer)) return false
   const text = input.question.toLowerCase()
   if (SUPPORT_SIGNAL_RE.test(text)) return false
   if (SALES_INTENTS.has(input.intent)) return true

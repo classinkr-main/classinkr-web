@@ -39,4 +39,10 @@ describe("chatbot self knowledge", () => {
     expect(findChatbotSelfKnowledgeEntry(question)?.key).not.toBe("emotional_concern")
     expect(findChatbotSelfKnowledgeEntry("기존 LMS랑 충돌할까 걱정돼요. 도입해도 괜찮을까요?")?.key).toBe("emotional_concern")
   })
+
+  it("does not answer a tutor's trial-student billing question with a plan recommendation", () => {
+    const question =
+      "개인 과외 계정을 제 카드로 매달 결제해 쓰고 있습니다. 외부 학생에게 무료 체험 수업을 해 줄 계획인데, 체험 수업에 들어온 학생도 요금을 계산하는 학생 수에 포함되는지 궁금합니다."
+    expect(findChatbotSelfKnowledgeEntry(question)?.key).not.toBe("tutor_pricing_recommend")
+  })
 })

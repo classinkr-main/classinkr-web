@@ -248,7 +248,21 @@ export function findChatbotSelfKnowledgeEntry(question: string) {
       // "화면 기록 권한", "수업 기록"처럼 제품 이야기에 섞인 단어로 챗봇 자기소개가 나가지 않게 한다.
       if (CHATBOT_CONTEXT_REQUIRED_KEYS.has(entry.key) && (!hasChatbotContext || refersToEarlierBotAdvice)) return false
       // 과외 계정의 결제 수단·증빙 명의를 묻는 말은 요금제 추천이 아니라 결제 안내로 보낸다.
-      if (entry.key === "tutor_pricing_recommend" && /법인\s*카드|결제\s*수단|영수증|세금계산서|명의/.test(normalized)) return false
+      // 체험 수업 학생이 요금 학생 수에 드는지 묻는 말도 요금제 추천이 아니다(trial-students-count-toward-plan-fee).
+      if (
+        entry.key === "tutor_pricing_recommend" &&
+        /법인\s*카드|결제\s*수단|영수증|세금계산서|명의|체험\s*수업|요금\s*구간|학생\s*수에\s*포함/.test(normalized)
+      )
+        return false
+      // 수능 뒤 과외 알바를 할 학생이 개인 요금과 대학생 할인을 묻는 말은 student-tutor-personal-plan-price-discount가 맡는다.
+      if (entry.key === "tutor_pricing_recommend" && /대학생\s*할인|학생\s*할인|수능/.test(normalized)) return false
+      // 다른 원장이 챗봇에 물은 내용과 들은 할인 조건을 알려 달라는 말은 other-academy-chatbot-history-request가 맡는다.
+      if (
+        (entry.key === "privacy_boundary" || entry.key === "memory_boundary") &&
+        /옆\s*건물|다른\s*원장|그\s*원장/.test(normalized) &&
+        /할인|조건/.test(normalized)
+      )
+        return false
       // "여기에 전화번호까지 적었는데 지워 주세요"처럼 이미 적은 개인정보의 삭제·열람을 묻는 말은
       // 일반 원칙 소개가 아니라 삭제 요청 경로를 알려 주는 정해 둔 답(personal-info-typed-in-chat-delete)으로 보낸다.
       if (PRIVACY_KEYS.has(entry.key) && TYPED_PERSONAL_INFO_RE.test(normalized)) return false
