@@ -786,7 +786,8 @@ export const FIELD_QUICK_ANSWERS: FieldQuickAnswer[] = [
     match: (text) =>
       /미국|해외|외국|abroad|overseas|\busa\b|america|\bu\.s\./.test(text) &&
       // "외국인 강사가 한국 학생 가르쳐도 돼요?"는 해외 접속이 아니라 사람의 국적을 묻는 말이다.
-      !/외국인|외국\s*(?:사람|국적|출신)|국적/.test(text) &&
+      // "외국어 수업"은 과목 이름이지 해외 접속이 아니다.
+      !/외국인|외국어|외국\s*(?:사람|국적|출신)|국적/.test(text) &&
       /student|학생|class|수업|lag|접속|app\s*store|앱스토어/.test(text) &&
       !/number|번호|visa|비자|해지|card|카드|결제|pay/.test(text) &&
       // 회사 국적·계약 상대·데이터 국외 이전을 묻는 말은 company-origin-data-transfer가 맡는다.
@@ -5475,6 +5476,19 @@ export const FIELD_QUICK_ANSWERS: FieldQuickAnswer[] = [
     category: "classroom",
     suggestedQuestions: ["AI 기능은 어떻게 켜요?", "수업 중 타이머를 띄우고 싶어요", "How do I invite students?"],
     en: "Yes—turn on [실시간 자막 번역] (live caption translation). Your admin first enables it in [부가가치 서비스] (it's off by default, so ask your account manager), then you turn it on when creating the class. In class, set Source Language to English and Target Language to Korean, or turn on Bilingual. It uses credits, and AI captions are for reference.",
+  },
+  {
+    // 자막이라는 말 없이 '수업 중 자동·실시간 번역'이 되는지 묻는 일반 질문. 판서·자료 번역과 앱 화면 언어는 다른 답이 맡는다.
+    id: "live-caption-translation-general",
+    match: (text) =>
+      all(/번역/, /기능|있나|있어|되나|돼|되요|가능|지원|보여|해\s*주|해줘/, /자동|실시간|ai|수업|말소리|통역|외국어/)(text) &&
+      !/판서|자료|교재|문서|파일|숙제|pdf|앱\s*(?:화면\s*)?언어|화면\s*언어|언어\s*(?:를\s*)?(?:바꾸|바꿔|설정|목록)|녹화|transcript|안\s*(?:돼|되|나와)|비용|얼마/.test(text),
+    answer: [
+      "네, [실시간 자막 번역]이 있어요. 수업 중 말소리를 실시간 자막으로 띄우고 한국어, 영어, 중국어, 일본어, 베트남어 등 20개가 넘는 언어 가운데 고른 언어로 번역해요. 기본으로 꺼져 있어 담당 매니저나 상담 채널에 활성화를 요청해야 하고, 쓴 만큼 크레딧이 차감돼요.",
+      "1. 학원 관리자가 관리자 대시보드 일반 설정의 [부가가치 서비스]에서 실시간 자막 번역을 켜 둬요. 처음에는 꺼져 있어서 담당 매니저에게 활성화를 요청해야 해요.\n2. 수업을 만들 때 [실시간 자막 번역]을 켜요.",
+    ],
+    category: "classroom",
+    suggestedQuestions: ["AI 기능은 어떻게 켜요?", "앱 언어를 바꿀 수 있어요?", "녹화본에 자막 붙어요?"],
   },
   {
     id: "mac-formatted-usb-board",

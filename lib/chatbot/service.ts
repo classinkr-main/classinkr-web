@@ -51,6 +51,7 @@ import {
 import { getCsFigmaEnrichment } from "@/lib/cs-figma-enrichments"
 import { appendFollowUp, buildFollowUp } from "@/lib/chatbot/follow-up"
 import { findBasicQuickAnswers } from "@/lib/chatbot/quick-answers-basics"
+import { SHOWROOM_MIN_LEAD_BUSINESS_DAYS, SHOWROOM_SLOT_DURATION_MINUTES } from "@/lib/showroom/slots"
 import { attachGroundingText, buildEvidenceSentences, type EvidenceSentence } from "@/lib/chatbot/source-grounding"
 import { findFieldQuickAnswer } from "@/lib/chatbot/quick-answers-field"
 import { resolveSymptomTriage, type SymptomTriageResult } from "@/lib/chatbot/symptom-triage"
@@ -2514,9 +2515,13 @@ function buildImmediateHandoffResponse(
       /보상|배상|환불/.test(text)
         ? "보상이나 환불은 제가 채팅에서 약속드릴 수 없어요. 담당자가 이번 상황을 확인한 뒤 직접 안내드립니다."
         : null,
-      /통화\s*(?:할\s*수|할수|가능|하고\s*싶|원해|부탁)|전화\s*(?:로\s*해결|로\s*(?:상담|설명)|상담|해\s*주)|원격|화면\s*(?:을\s*)?(?:보면서|같이)/.test(text)
-        ? `${/죄송|잘\s*못하|서툴|모르겠/.test(text) ? "설명이 서툴러도 괜찮아요. " : ""}전화나 화면을 함께 보는 원격 지원이 되는지는 상담원이 상황을 보고 안내해 드려요.`
-        : null,
+      // 원격으로 도와주는지 묻는 말: 공개 안내(PC 설치 문서)가 말하는 원격 설치 도움까지만 말하고, 그 밖의 범위는 상담원에게 넘긴다.
+      /(?:원격|화면\s*(?:을\s*)?(?:보면서|같이)).{0,16}(?:도와|도움|해\s*주|해\s*줄|해줘|지원|설치|설정|되나|돼)/.test(text) &&
+      !/문자|받았|학생|듣는|수업/.test(text)
+        ? `${/죄송|잘\s*못하|서툴|모르겠/.test(text) ? "설명이 서툴러도 괜찮아요. " : ""}PC에 클래스인 설치가 어려우면 상담 채널에 원격 설치 도움을 요청하실 수 있어요. 설치 외의 설정을 어디까지 원격으로 도와드리는지는 상담원이 상황을 보고 안내해 드려요. 원격 지원 프로그램은 상담 채널이 보낸 링크로만 설치해 주세요.`
+        : /통화\s*(?:할\s*수|할수|가능|하고\s*싶|원해|부탁)|전화\s*(?:로\s*해결|로\s*(?:상담|설명)|상담|해\s*주)|원격|화면\s*(?:을\s*)?(?:보면서|같이)/.test(text)
+          ? `${/죄송|잘\s*못하|서툴|모르겠/.test(text) ? "설명이 서툴러도 괜찮아요. " : ""}전화나 화면을 함께 보는 원격 지원이 되는지는 상담원이 상황을 보고 안내해 드려요.`
+          : null,
       /번호|연락처/.test(text)
         ? "담당자 개인 연락처는 채팅에서 드릴 수 없어요. 대신 아래 버튼으로 연결하시면 상담원이 물어보실 내용을 한 번에 받아 이어서 도와드려요. 물어볼 내용을 목록으로 적어 두시면 더 빨라요."
         : null,
@@ -2857,7 +2862,18 @@ function getWebLiveBillingAnswer() {
   ].join("\n\n")
 }
 
-function getPricingAnswer() {
+// 가격표·요금표·가격 안내 페이지가 어디 있는지 묻는 말. 금액(얼마)을 묻는 말은 아래 구성 기준 답이 맡는다.
+const PRICE_TABLE_RE =
+  /(?:가격|요금)\s*(?:표|안내\s*페이지|페이지|정리)|(?:가격|요금)\s*(?:은|는|을|를)?\s*어디서\s*(?:봐|보|확인)|요금제\s*(?:가\s*)?정리된/
+
+function getPricingAnswer(question?: NormalizedQuestion) {
+  if (question && PRICE_TABLE_RE.test(question.redacted.toLowerCase()) && !/얼마/.test(question.redacted)) {
+    return [
+      "요금은 요금 안내 페이지(/pricing)에서 소프트웨어 플랜을 살펴보고 체크아웃으로 이어서 확인하실 수 있어요. 채팅에서는 금액을 숫자로 말씀드리지 않아요.",
+      "전자칠판·설치까지 포함하면 맞춤 견적으로 안내해요. 견적은 전자칠판(OPS 기본 포함), 카메라·마이크, 스탠드나 벽걸이, 설치, 소프트웨어 라이선스, 온보딩 가운데 필요한 것을 묶어 만들어요.",
+      "견적은 문의 페이지(/contact)에 학원명, 이름, 연락처를 남기고 교실 수는 문의 내용에 적어 주시면 상담에서 안내해 드려요.",
+    ].join("\n\n")
+  }
   return [
     "네, 요금은 고정가표보다 '구성 기준'으로 봐요. 보통 이렇게 묶여요.",
     "- 전자칠판 + OPS(윈도우 컴퓨팅)\n- 카메라·마이크·스탠드/벽걸이 구성\n- 소프트웨어 사용 범위(녹화·LMS 등)\n- 설치·온보딩",
@@ -2906,7 +2922,17 @@ function getPreAdoptionOverviewAnswer() {
   ].join("\n\n")
 }
 
-function getRecordingPermissionAnswer() {
+// 녹화본을 누가 볼 수 있는지(열람 권한) 묻는 말. 저장·관리 권한을 묻는 말은 아래 구분 답이 맡는다.
+const RECORDING_VIEWER_RE = /누가\s*(?:볼|봐|보|접근|열람)|열람\s*권한|(?:볼|보는)\s*수\s*있는\s*사람/
+
+function getRecordingPermissionAnswer(question?: NormalizedQuestion) {
+  if (question && RECORDING_VIEWER_RE.test(question.redacted)) {
+    return [
+      "녹화본은 앱에서 교사와 학생이 보고, 학원 관리자는 관리자 콘솔에서 열람하거나 내려받아요. 녹화는 유료 결제와 계정 인증을 마친 학원에서, 교사로 등록된 계정만 켤 수 있어요.",
+      "누가 다시 볼 수 있는지는 관리자 대시보드 [일반 설정] > [수업 다시보기]에서, 학생이 볼 수 있는 기간은 코스 [설정]의 [다시 보기 유효 기간]에서 학원이 정해요.",
+      "구체적으로 어떤 설정인지는 다니는 학원에 먼저 확인해 주세요.",
+    ].join("\n\n")
+  }
   return [
     "수업 녹화와 현장 녹화는 목적이 달라서 먼저 구분해서 봐야 해요.",
     "수업 녹화는 ClassIn 수업 안의 화면·판서·자료 중심이고, 현장 녹화는 카메라 구성이 설정된 경우 교실 뷰나 트래킹 뷰를 다룹니다.",
@@ -3084,8 +3110,31 @@ function getCameraConflictAnswer() {
   ].join("\n\n")
 }
 
+// 핵심 기능 질문 가운데 세부 사항(숙제 마감·채점, 출결 내려받기, 학생 화면 공유)을 묻는 말은 "네, ~할 수 있어요"
+// 일반 답으로는 물은 것에 답하지 못한다. 공개 문서 문장으로 만든 세부 답을 먼저 본다.
+const HOMEWORK_DEADLINE_ANSWER =
+  "네, 숙제를 만들 때 시작 시간과 마감 시간을 함께 정해요. 시작·마감 시간, 게시 대상, 연결할 단원, 선행 학습 조건은 활동 종류와 관계없이 공통 설정이에요. 숙제는 코스의 [과정] 탭 > [새로 만들기]에서 만들어요."
+const HOMEWORK_GRADING_ANSWER =
+  "네, 숙제 채점도 클래스인에서 해요. AI 채점을 켠 숙제는 채점 화면에 점수와 총평 초안이 먼저 채워지고, 확인한 뒤 [게시 후 다음 학생]으로 공개하거나 [저장 후 다음 학생]으로 초안을 남기며 이어서 채점해요. 시험과 OMR 카드는 객관식처럼 답이 정해진 문항을 자동으로 채점하고, 주관식은 교사가 직접 채점해요."
+const ATTENDANCE_EXPORT_ANSWER =
+  "네, 관리자 대시보드 > [결제] > [통계 다운로드]에서 수업별 출결 내역을 [출결 통계]로 받을 수 있어요. 파일은 Excel로 받고, 기간은 한 번에 최대 6개월치까지 정할 수 있어요. 받은 기록은 [계정 정보] > [통계 이력]에 남아요."
+const STUDENT_SCREEN_SHARE_ANSWER =
+  "학생이 자기 화면을 공유할 수 있는지는 공개 안내에서 확인되지 않아 제가 된다고 말씀드리기 어려워요. 클래스인 수업 도구에는 화면 공유와 미러링이 있고, 교재 뷰어, 외부 프로그램, 실습 화면을 보여 줄 때 써요. 확인이 필요하시면 \"상담원 연결\"이라고 남겨 주세요."
+
+function getCoreFeatureDetailAnswer(text: string): string | null {
+  if (/숙제|과제/.test(text)) {
+    if (/마감|기한|시작\s*시간/.test(text) && !/지난|지나|알림|문자/.test(text)) return HOMEWORK_DEADLINE_ANSWER
+    if (/채점|점수/.test(text) && !/성적표|시험|omr/.test(text)) return HOMEWORK_GRADING_ANSWER
+  }
+  if (/출결|출석/.test(text) && /엑셀|excel|내려\s*받|다운|뽑|추출/.test(text)) return ATTENDANCE_EXPORT_ANSWER
+  if (/화면\s*공유|미러링/.test(text) && /(?<![가-힣])(?:학생|수강생|애들|아이들)/.test(text)) return STUDENT_SCREEN_SHARE_ANSWER
+  return null
+}
+
 function getCoreFeatureYesNoAnswer(question: NormalizedQuestion) {
   const text = question.redacted.toLowerCase()
+  const detail = getCoreFeatureDetailAnswer(text)
+  if (detail) return detail
   const lead = /녹화|다시\s*보기/.test(text)
     ? "네, 수업 녹화는 클래스인 기본 흐름에 있어요. 수업을 녹화해 복습·결석 보강용으로 다시 보여줄 수 있고, 영상은 자동으로 정리돼요."
     : /출결|출석/.test(text)
@@ -3216,7 +3265,7 @@ function formatConsumerAnswer({
     return getIdentityAnswer(question)
   }
   if (isPricingInfoQuestion(question) && top.heading === "요금·견적 구성 안내") {
-    return getPricingAnswer()
+    return getPricingAnswer(question)
   }
   if (top.heading === "소프트웨어 요금과 플랜 안내") {
     return getSoftwarePricingAnswer()
@@ -3237,7 +3286,7 @@ function formatConsumerAnswer({
     return getReceiptAnswer(question)
   }
   if (top.heading === "녹화 저장과 권한 기준") {
-    return getRecordingPermissionAnswer()
+    return getRecordingPermissionAnswer(question)
   }
   if (top.heading === "가입과 개인정보") {
     return getSignupInfoAnswer()
@@ -3928,7 +3977,16 @@ async function generateUsableAnswerWithProgressiveModels(
 // 이미 손으로 다듬은 큐레이션 템플릿 직답은 Gemini 재작성을 건너뛴다(즉시 응답·드리프트 방지).
 const SITE_ISSUE_RE =
   /(?:홈페이지|사이트|웹사이트|문의\s*페이지|예약\s*(?:폼|페이지)|신청\s*(?:폼|양식)|폼|양식).{0,24}(?:영상|동영상|폼|양식|버튼|페이지|신청|제출)?.{0,16}(?:안\s*(?:돼|되|나|열|눌|넘어)|재생\s*(?:이\s*)?안|반응\s*(?:이\s*)?없|아무\s*반응|오류|에러|멈)/
-const SHOWROOM_RE = /쇼룸|실물.{0,10}(?:보|볼|확인)|직접\s*(?:보고|보러|볼|만져|체험)|보러\s*갈|어디\s*가면\s*(?:볼|보)/
+const SHOWROOM_RE =
+  /쇼룸|실물.{0,10}(?:보|볼|확인)|직접\s*(?:보고|보러|볼|만져|체험)|보러\s*갈|어디\s*가면\s*(?:볼|보)|가서\s*(?:직접\s*)?(?:써|체험|보)|체험\s*방문|방문\s*(?:신청|상담|예약)|(?<!도입\s?)상담\s*예약/
+// 쇼룸 질문 가운데 위치를 묻는 말과 방문(상담) 예약을 묻는 말. 주차·운영 시간·가까운 역은 일반 쇼룸 답에 둔다.
+const SHOWROOM_LOCATION_RE = /위치|주소|오시는\s*길|어디\s*(?:있|에\s*있|쯤|예요|에요|야|인가)|어디쯤/
+const SHOWROOM_BOOKING_RE = /예약|신청|방문|가서|체험|잡/
+const SHOWROOM_OTHER_DETAIL_RE = /주차|지하철|역\s|역이|버스|몇\s*시|운영\s*시간|본사/
+// 공개 쇼룸 페이지(/showroom)와 회사 소개가 쓰는 data/offices.json 의 주소·운영 안내 그대로.
+const SHOWROOM_LOCATION_ANSWER = "쇼룸은 서울 양천구 목동동로 233-1, 806호에 있어요. 평일에만 운영하고 주말과 공휴일은 쉬어요. 방문은 쇼룸 예약(/showroom)에서 날짜를 고르시면 되고, 정확한 호수는 확정 문자에도 적어 드려요."
+// 최소 예약 기간과 상담 시간은 쇼룸 페이지가 화면에 그리는 상수를 그대로 쓴다(값이 바뀌면 답도 따라 바뀐다).
+const SHOWROOM_BOOKING_ANSWER = `네, 목동 쇼룸 방문 상담을 예약하실 수 있어요. 쇼룸 예약(/showroom)에서 원하는 날짜와 시간을 고르고 연락처를 남기시면, 담당자가 일정을 확인해 확정되면 문자로 알려 드려요. 쇼룸은 평일만 운영하고, 예약은 최소 ${SHOWROOM_MIN_LEAD_BUSINESS_DAYS}영업일 전에 해 주셔야 하며, 상담은 1회 ${SHOWROOM_SLOT_DURATION_MINUTES}분이에요. 쇼룸에서는 EDB 교안, 판서, 녹화, 복습이 한 흐름으로 이어지는 실제 수업 운영을 확인하실 수 있어요.`
 const QUOTE_FIX_RE = /견적서?.{0,24}(?:잘못|틀려|틀렸|다르게|다르|수정|오류|빠졌|빠져|대로\s*안)/
 const EXAM_ANSWER_RE =
   /(?:시험|퀴즈|문제|숙제)\s*(?:의\s*)?(?:답|정답|답안)\s*(?:좀\s*)?(?:알려|가르쳐|보여|줘|주세요|주셈)|(?:^|\s)(?:정답|답)\s*(?:좀\s*)?(?:알려|가르쳐)\s*(?:줘|주세요|주셈)/
@@ -4405,9 +4463,17 @@ function buildServiceQuickAnswer(question: NormalizedQuestion): QuickAnswer | nu
     )
   }
   if (SHOWROOM_RE.test(text) && !/폼|양식|제출|버튼/.test(text)) {
+    const showroomLead = SHOWROOM_OTHER_DETAIL_RE.test(text)
+      ? null
+      : SHOWROOM_LOCATION_RE.test(text)
+        ? SHOWROOM_LOCATION_ANSWER
+        : SHOWROOM_BOOKING_RE.test(text)
+          ? SHOWROOM_BOOKING_ANSWER
+          : null
     return make(
       [
-        "Classin Board는 목동 쇼룸에서 직접 보고 써 보실 수 있어요. 방문은 홈페이지 쇼룸 예약(/showroom)에서 날짜를 고르시면 됩니다.",
+        showroomLead ??
+          "Classin Board는 목동 쇼룸에서 직접 보고 써 보실 수 있어요. 방문은 홈페이지 쇼룸 예약(/showroom)에서 날짜를 고르시면 됩니다.",
         FAR_REGION_RE.test(text)
           ? "목동까지 오시기 어려우시면 아래 [도입 상담 남기기]로 지역을 남겨 주세요. 담당자가 온라인 데모 등 볼 수 있는 방법을 안내드려요."
           : "여러 분이 함께 보실 예정이면 예약할 때 인원을 적어 주세요.",
