@@ -52,6 +52,8 @@ Admin 관련 작업은 [Admin 지침 맵](./active/admin-guidance-map.md)에서 
   - **챗봇 증상형 CS 질문 트리아지.** "기관 등록 안됨", "에러나요" 같은 증상 질문을 공개 문제 해결 문서 섹션으로 잇는 규칙, 4회 평가 루프 수치(기준선 32% → 블라인드 43/43), 평가셋·커버리지 검사 재실행 방법
 - [active/chatbot-first-contact-audit-2026-11-13.md](./active/chatbot-first-contact-audit-2026-11-13.md)
   - **챗봇 첫 방문자 질문 점검.** 이상 답변 화면 11장의 원인(종료된 모델, 낱말 하나로 정한 주제, 잘린 근거), 기본 사실 답 68개와 근거 선별(모델은 문서 문장만 고름) 도입, 방식별 측정 수치(첫 방문자 질문 좋은 답 24% → 95%, 모델이 쓴 답의 근거 밖 단정 51%), `CHATBOT_FINAL_ANSWER_LLM` 스위치, 확인이 필요한 답 기준
+- [active/chatbot-structure-round-2026-11-18.md](./active/chatbot-structure-round-2026-11-18.md)
+  - **챗봇 구조 변경과 측정 기록(2026-11-18).** 질문마다 정규식·정해 둔 답을 더하는 방식이 처음 보는 질문에 통하지 않은 측정(29% → 30%), 정해 둔 답 확인 관문·두 번째 검색 도입, 크레딧 소진(HTTP 402)으로 무효가 된 측정, 모델이 죽은 상태의 결함과 고정 문구·차단기 수정, 아직 재지 못한 것과 다시 재는 명령, 사람이 정할 일(확인할 사실 17건·문서 공백 50건). 현재 구조의 정본은 [플레이북 05](./active/playbook/05-chatbot.md)
 - [active/docs-center-content-guidelines.md](./active/docs-center-content-guidelines.md)
   - 공개 문서 탭의 가이드/매뉴얼/도움말 작성 지침과 미완성 콘텐츠 처리 규칙
 - [active/classin-software-feature-inventory.md](./active/classin-software-feature-inventory.md)

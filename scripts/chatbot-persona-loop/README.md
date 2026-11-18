@@ -13,6 +13,8 @@
 | `scripts/chatbot-persona-loop/transcribe.mjs` | 질문을 챗봇에 넣어 심사용 대화 기록을 만든다(오프라인 결정 경로). |
 | `scripts/chatbot-persona-loop/aggregate.mjs` | 두 심사관 결과를 합쳐 일치율·카파·이견 목록·최종 통과 수를 낸다. |
 | `tests/chatbot/persona-eval-set.test.ts` | 평가셋 전체의 결정 경로 회귀(일반 폴백 0건, 근거 없는 문장·식별 정보 요구 금지 등). |
+| `scripts/chatbot-live-eval.ts` | 질문 묶음을 실제 모델(Gemini)로 돌려 답을 JSONL로 남긴다. 아래 "실제 모델 측정". |
+| `data/chatbot-holdout-sets.json` | 수정자가 보지 않는 시험 질문 묶음. 아래 "시험 질문 묶음". |
 
 ## 1회 실행 순서
 
@@ -36,6 +38,7 @@
    - 같은 심사관에게 상대의 판정을 보여 주고 엇갈린 행만 다시 판정하게 한다(`judge-A-rN-final.json`, `judge-B-rN-final.json`).
    - aggregate를 다시 돌린다. 최종 통과는 두 심사관이 모두 통과로 본 문항만 센다.
 5. **고치기**: 최종 실패 행의 `issue`·`fix_hint`를 모아 고친다. 원칙은 아래와 같다.
+   - 질문마다 정규식·정해 둔 답을 더하지 않는다. 처음 보는 질문에 통하지 않았다(근거와 예외는 `docs/active/playbook/05-chatbot.md` §8). 아래 파일에 더하는 것은 사람이 공개 범위를 정한 사실과 문서에 없는 확인된 사실에 한한다.
    - 답의 사실은 공개 문서(`lib/docs.ts`, `lib/docs-troubleshooting/*.ts`, `lib/cs-figma-guides.ts`와 그 파일이 내보내는 생성 캡처 가이드(사내 전용 slug 제외), `lib/classin-positioning.ts`)에서만 가져온다. `lib/docs.ts` 안이라도 검토 중(review)·초안(draft) 문서는 공개되지 않으니 쓰지 않는다. 문서에 없으면 "공개 안내에 없다"고 밝히고 상담으로 넘긴다. 반대로 문서에 있는 것을 없다고 하지 않는다.
    - 좁은 증상·사용법 주제는 `lib/chatbot/symptom-topics-field.ts`에 더한다. 단계는 문서 섹션에서 가져온다.
    - 첫 방문자가 한 줄로 묻는 기본 사실 질문(회사·기기·한도·보관·요금 기준 등)의 답은 `lib/chatbot/quick-answers-basics.ts`에 있다. 짧고 증상 표현이 없는 질문에만, 아래 정해 둔 답이 모두 빗나간 뒤에 쓰인다. 고치면 `npx vitest run tests/chatbot/basics-quick-answers.test.ts`를 돌린다.
@@ -66,6 +69,59 @@
    ```
 
 8. **기록**: `data/chatbot-persona-loop-history.json`에 회차를 더하고, 기록 문서의 회차 표에 한 줄을 더한다. 커밋 메시지는 `챗봇: 페르소나 루프 N — …`로 쓰고 작업 브랜치에 푸시한다.
+
+## 실제 모델 측정(`scripts/chatbot-live-eval.ts`)
+
+위 루프의 `transcribe.mjs`는 모델 없는 결정 경로다. 관문·근거 선별·두 번째 검색처럼 모델이 정하는 경로는 이 스크립트로 잰다. 질문마다 세션 없이 공개 경로 코어(`evaluateChatbotQuery`, 말투·끝 질문 포함)를 따로 돌리고, 대화 기록을 저장하지 않는다. 데이터베이스 없이 정적 문서 검색으로만 돈다(Supabase 값은 `.env.local`에서도 읽지 않는다). `GEMINI_API_KEY`는 환경 또는 `.env.local`에서 읽는다.
+
+```bash
+npx tsx scripts/chatbot-live-eval.ts --in <questions.json> --out <results.jsonl> [플래그]
+```
+
+| 플래그 | 기본값 | 뜻 |
+|---|---|---|
+| `--in` | 필수 | 입력. `[{ id, question, group?, expectTopic? }]` 또는 `{ cases: [...] }`(`data/chatbot-first-contact-set.json` 등). id가 없으면 `q001`처럼 붙이고, 중복 id는 오류다. |
+| `--out` | 필수 | 결과 JSONL. 동시에 돌아도 줄 순서는 입력 순서다. |
+| `--concurrency` | `4` | 동시에 돌릴 질문 수(1~16). |
+| `--mode` | `select` | `CHATBOT_FINAL_ANSWER_LLM` 값. `select`·`generate`·`off`. `off`가 아니면 키가 있어야 한다. |
+| `--gate` | `on` | `CHATBOT_ANSWER_GATE`(정해 둔 답 확인 관문). |
+| `--second-chance` | `on` | `CHATBOT_SECOND_CHANCE`(못 찾았을 때 목차에서 다시 고르는 두 번째 검색). |
+| `--allow-model-errors` | 꺼짐 | 무효 측정 종료와 조기 중단을 끈다. 모델이 죽은 상태의 동작을 일부러 잴 때만 쓴다. |
+
+결과 줄 필드:
+
+| 필드 | 뜻 |
+|---|---|
+| `id`, `group`, `question`, `expectTopic` | 입력 그대로 |
+| `answer`, `answerMode`, `confidence`, `unresolved`, `needsHandoff`, `handoffIntent`, `detectedCategory`, `detectedIntent`, `warning` | 공개 답과 판정 값. `needsHandoff`가 true면 위젯에 상담 버튼이 뜬다. |
+| `sources` | `{ title, path, heading, score }` 목록 |
+| `decidedBy` | 어느 경로가 답했는지: `second_chance`, `model_unavailable`(선별 실패 고정 문구), `gate_evidence_select`·`gate_not_found`(관문이 버린 뒤 문서 경로), 관문이 유지한 답의 출처(`template:*`·`guide:*`·`self:*` 등), `field:<id>`, `basics:<id>`, `symptom`, `not_found`, `evidence_select`·`generate`·`draft`, `policy`(모델을 부르지 않은 지름길), `unknown` |
+| `gate`, `gateOriginal`, `gateMs`, `gateSkipReason` | 관문 결과(`kept`·`rejected`·`skipped`·`none`), 판정 대상이던 정해 둔 답의 출처, 판정 시간, `skipped`의 이유(`off`·`no_key`·`llm_off`·`timeout`·`error`·`model_unavailable`) |
+| `secondChance`, `secondChanceMs`, `secondChanceReason` | 두 번째 검색 결과(`hit`·`miss`·`none`), 시간, `miss`·`none`의 이유 |
+| `latencyMs` | 그 질문의 처리 시간 |
+| `geminiCalls`, `geminiStatuses`, `geminiKinds` | 그 질문에서 나간 Gemini 호출 수, HTTP 상태(네트워크 오류는 0), 종류별 수(`generateContent`·`embedContent`) |
+| `geminiBlocked` | 결제·인증 실패 차단기 때문에 보내지 않은 호출 수(관문이 차단기를 보고 넘긴 것 포함) |
+| `modelError` | 아래 무효 측정 기준에 걸린 줄 |
+| `attempts`, `error` | 시도 횟수와 오류. 모든 호출이 429·5xx·네트워크 오류로 끝나면 최대 3번 다시 돈다. |
+
+**무효 측정 감지.** 줄의 `geminiStatuses`에 401·402·403(결제 크레딧 소진·키 인증 실패)이 있거나, `geminiBlocked`가 1 이상이거나, `gateSkipReason`·`secondChanceReason`이 `model_unavailable`이면 `modelError`가 true다. 요약에 `모델 호출 실패 줄: N / 전체`와 질문당 Gemini 호출 수 중앙값이 찍힌다.
+
+- `modelError` 줄이 전체의 5%를 넘으면 `측정 무효: 모델 호출 실패(HTTP 4xx) 줄이 N개`를 찍고 종료 코드 2로 끝난다.
+- 끝난 순서로 처음 20줄을 보고, 그중 모델을 부른 줄(`geminiCalls + geminiBlocked > 0`)이 모두 `modelError`면 남은 질문을 돌리지 않고 멈춘 뒤 같은 메시지로 종료 코드 2.
+- 종료 코드: 0 정상, 2 무효 측정 또는 사용법 오류(필수 인자 없음, 잘못된 값, `--mode`가 `off`가 아닌데 키 없음), 1 그 밖의 실패. 2가 나온 결과는 채점하지 않는다.
+
+모델 없는 답과 비교하려면 같은 입력을 `--mode off`로 한 번 더 돌린다. 측정 순서와 채점 분류는 `docs/active/chatbot-structure-round-2026-11-18.md`의 "다시 재는 방법"에 있다.
+
+## 시험 질문 묶음(`data/chatbot-holdout-sets.json`)
+
+구조 변경이 처음 보는 질문에 통하는지는 수정자가 보지 않은 질문으로만 잴 수 있다. 수정자가 본 질문은 고친 만큼 좋아 보인다.
+
+- `sets[]`마다 `key`, `status`(`unseen`·`dev`), `statusNote`, `cases[{ id, group, question }]`가 있다.
+- 챗봇을 고치는 작업자(사람·에이전트)는 이 파일을 열지 않는다. 측정 담당만 묶음을 꺼내 측정 스크립트 입력으로 만든다. 질문을 문서·커밋 메시지·테스트에 옮기지 않는다.
+- 테스트와 `lib/`에서 불러오지 않는다.
+- 측정 결과(실패 행·답)를 수정 근거로 한 번 쓴 묶음은 `status`를 `dev`로 내리고 `statusNote`에 언제 무엇에 썼는지 적는다. 다음 측정에는 새 `unseen` 묶음을 만들어 더한다. `dev` 묶음은 회귀 확인용으로만 쓴다.
+- 2026-11-18 기준 holdout1은 3차 수정의 실패 분석에 쓰여 `dev`, holdout2는 모델 호출이 전부 실패한 상태(무효 측정)에서만 돌았고 수정 근거로 쓰이지 않아 `unseen`이다.
+- 새 묶음을 더하면 기존 묶음과 공백·문장부호를 뺀 질문이 겹치지 않는지 본다(지금 두 묶음 사이 0건).
 
 ## 심사관에게 주는 지시(복사해 쓴다)
 
