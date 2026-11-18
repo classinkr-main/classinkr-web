@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import { __clearAnswerGateCacheForTests } from "@/lib/chatbot/answer-gate"
+import { embedText, isModelCircuitOpen, MODEL_CIRCUIT_OPEN_MS, selectAnsweringSentenceIds } from "@/lib/chatbot/llm"
 import {
   __clearAnswerCacheForTests,
   evaluateChatbotQuery,
@@ -18,6 +19,7 @@ import {
   isOutlinePickCall,
   outlinePickResponse,
 } from "./helpers/final-answer-llm"
+import { __resetModelCircuitForTests as __resetCircuit } from "@/lib/chatbot/llm"
 
 // 모델(근거 선별) 호출이 실패했을 때 확인되지 않은 검색 조각을 답으로 내지 않는다(lib/chatbot/service.ts withholdUnverifiedDraft).
 // 2026-11-18 Gemini 크레딧 소진(모든 호출 402) 상태에서 처음 보는 질문 90개 중 46건이 검색 조각 초안을 그대로 냈다.
@@ -226,5 +228,185 @@ describe("모델 호출 실패 시 확인 안 된 조각을 내지 않는다", (
     stubModel({ selection: "500" })
     const result = await evaluateChatbotQuery(IN_VOCAB_QUESTION, { includeInternalDocs: true })
     expect(result.answer).not.toContain(MODEL_UNAVAILABLE_HEAD)
+  })
+})
+
+describe("결제·인증 실패(401·402·403) 차단기", () => {
+  beforeEach(() => {
+    disableSupabase()
+    vi.stubEnv("GEMINI_API_KEY", "test-secret-key-value")
+    vi.stubEnv("CHATBOT_ANSWER_GATE", "")
+    vi.stubEnv("CHATBOT_FINAL_ANSWER_LLM", "")
+    vi.stubEnv("CHATBOT_SECOND_CHANCE", "")
+    __clearAnswerGateCacheForTests()
+    __clearAnswerCacheForTests()
+    vi.spyOn(console, "warn").mockImplementation(() => {})
+    vi.spyOn(console, "info").mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllEnvs()
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+  })
+
+  const generateCalls = (fetchMock: ReturnType<typeof vi.fn>) =>
+    fetchMock.mock.calls.filter(([url]) => String(url).includes("generativelanguage.googleapis.com")).length
+
+  it("402 한 번이면 같은 요청에서 체인의 다음 모델로 넘어가지 않고, 다음 요청은 fetch 없이 같은 고정 문구를 낸다", async () => {
+    const errorLog = vi.spyOn(console, "error").mockImplementation(() => {})
+    const { fetchMock, calls } = stubModel({ selection: "402" })
+
+    const first = await evaluateChatbotQuery(IN_VOCAB_QUESTION)
+    expect(first.answer).toBe(MODEL_UNAVAILABLE_ANSWER)
+    // 선별 호출 한 번(첫 모델)만 나가고 폴백 모델로 넘어가지 않는다.
+    expect(calls.filter((call) => call === "selection")).toHaveLength(1)
+    expect(isModelCircuitOpen()).toBe(true)
+
+    const before = generateCalls(fetchMock)
+    __clearAnswerCacheForTests()
+    const second = await evaluateChatbotQuery(IN_VOCAB_QUESTION)
+    expect(generateCalls(fetchMock)).toBe(before)
+    expect(second.answer).toBe(MODEL_UNAVAILABLE_ANSWER)
+    expect(second.needsHandoff).toBe(true)
+
+    // 열릴 때 한 번만 운영자용 문장을 남기고, 키 값은 찍지 않는다.
+    expect(errorLog).toHaveBeenCalledTimes(1)
+    const message = String(errorLog.mock.calls[0][0])
+    expect(message).toContain("402")
+    expect(message).toContain("Gemini 결제 크레딧 소진 또는 키 인증 실패로 보임")
+    expect(message).toContain("60초")
+    expect(message).not.toContain("test-secret-key-value")
+  })
+
+  it("401·403 도 차단기를 연다", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    for (const status of [401, 403]) {
+      __resetCircuit()
+      const fetchMock = vi.fn(async () => ({ ok: false, status, json: async () => ({}), text: async () => "denied" }))
+      vi.stubGlobal("fetch", fetchMock)
+      const ids = await selectAnsweringSentenceIds({ question: "질문", sentences: [{ id: 1, text: "문장", sourceIndex: 0, label: "문서 / 절" }] })
+      expect(ids).toBeNull()
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+      expect(isModelCircuitOpen(), String(status)).toBe(true)
+    }
+  })
+
+  it("60초가 지나면 한 번만 다시 시도하고, 성공하면 닫힌다", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    vi.useFakeTimers({ toFake: ["Date"] })
+    vi.setSystemTime(new Date("2026-11-18T12:00:00Z"))
+    stubModel({ selection: "402" })
+    await evaluateChatbotQuery(IN_VOCAB_QUESTION)
+    expect(isModelCircuitOpen()).toBe(true)
+
+    vi.setSystemTime(new Date(Date.now() + MODEL_CIRCUIT_OPEN_MS - 1_000))
+    expect(isModelCircuitOpen()).toBe(true)
+    vi.setSystemTime(new Date(Date.now() + 1_001))
+    expect(isModelCircuitOpen()).toBe(false)
+
+    const healthy = stubModel({ selection: [1] })
+    __clearAnswerCacheForTests()
+    const result = await evaluateChatbotQuery(IN_VOCAB_QUESTION)
+    expect(healthy.calls.filter((call) => call === "selection")).toHaveLength(1)
+    expect(result.answerMode).toBe("direct_answer")
+    expect(isModelCircuitOpen()).toBe(false)
+  })
+
+  it("60초 뒤 시험 호출이 다시 402 면 60초 더 닫아 두고, 다시 열릴 때 로그를 한 번 더 남긴다", async () => {
+    const errorLog = vi.spyOn(console, "error").mockImplementation(() => {})
+    vi.useFakeTimers({ toFake: ["Date"] })
+    vi.setSystemTime(new Date("2026-11-18T12:00:00Z"))
+    const { calls } = stubModel({ selection: "402" })
+    await evaluateChatbotQuery(IN_VOCAB_QUESTION)
+    vi.setSystemTime(new Date(Date.now() + MODEL_CIRCUIT_OPEN_MS + 1))
+    __clearAnswerCacheForTests()
+    await evaluateChatbotQuery(IN_VOCAB_QUESTION)
+    // 시험 호출 한 번만 더 나갔다.
+    expect(calls.filter((call) => call === "selection")).toHaveLength(2)
+    expect(isModelCircuitOpen()).toBe(true)
+    expect(errorLog).toHaveBeenCalledTimes(2)
+  })
+
+  it("시험 호출이 나가 있는 동안 다른 호출은 보내지 않는다", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    vi.useFakeTimers({ toFake: ["Date"] })
+    vi.setSystemTime(new Date("2026-11-18T12:00:00Z"))
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false, status: 402, json: async () => ({}), text: async () => "" })))
+    const sentences = [{ id: 1, text: "문장", sourceIndex: 0, label: "문서 / 절" }]
+    await selectAnsweringSentenceIds({ question: "질문", sentences })
+    vi.setSystemTime(new Date(Date.now() + MODEL_CIRCUIT_OPEN_MS + 1))
+
+    let release: (value: unknown) => void = () => {}
+    const fetchMock = vi.fn(
+      () => new Promise((resolve) => (release = () => resolve(evidenceSelectionResponse([1]))))
+    )
+    vi.stubGlobal("fetch", fetchMock)
+    const probe = selectAnsweringSentenceIds({ question: "질문", sentences })
+    const other = await selectAnsweringSentenceIds({ question: "다른 질문", sentences })
+    expect(other).toBeNull()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    release(undefined)
+    expect(await probe).toEqual([1])
+    expect(isModelCircuitOpen()).toBe(false)
+  })
+
+  it("429·500·시간 초과·404 는 차단기를 열지 않는다(기존 재시도·폴백 유지)", async () => {
+    const errorLog = vi.spyOn(console, "error").mockImplementation(() => {})
+    const sentences = [{ id: 1, text: "문장", sourceIndex: 0, label: "문서 / 절" }]
+    for (const status of [429, 500, 503, 404]) {
+      const fetchMock = vi.fn(async () => ({ ok: false, status, json: async () => ({}), text: async () => "" }))
+      vi.stubGlobal("fetch", fetchMock)
+      expect(await selectAnsweringSentenceIds({ question: "질문", sentences })).toBeNull()
+      // 체인의 다음 모델까지 시도한다.
+      expect(fetchMock.mock.calls.length, String(status)).toBeGreaterThan(1)
+      expect(isModelCircuitOpen(), String(status)).toBe(false)
+    }
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => Promise.reject(Object.assign(new Error("aborted"), { name: "AbortError" })))
+    )
+    expect(await selectAnsweringSentenceIds({ question: "질문", sentences })).toBeNull()
+    expect(isModelCircuitOpen()).toBe(false)
+    expect(errorLog).not.toHaveBeenCalled()
+  })
+
+  it("차단기가 열린 동안 관문은 부르지 않고 건너뛰어(model_unavailable) 정해 둔 답을 유지한다", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    const question = "전자칠판 꼭 사야하나요?"
+    const baseline = await evaluateChatbotQuery(question, { generateAnswer: false })
+    stubModel({ selection: "402" })
+    await selectAnsweringSentenceIds({ question: "질문", sentences: [{ id: 1, text: "문장", sourceIndex: 0, label: "문서 / 절" }] })
+    expect(isModelCircuitOpen()).toBe(true)
+
+    const { calls } = stubModel({ verdict: "off_target" })
+    const result = await evaluateChatbotQuery(question)
+    expect(calls).toHaveLength(0)
+    expect(result.answerGate).toMatchObject({ gate: "skipped", skipReason: "model_unavailable" })
+    expect(result.answer).toBe(baseline.answer)
+  })
+
+  it("관문 호출이 402 를 받으면 그 판정도 model_unavailable 로 건너뛰고 기존 답을 낸다", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    const question = "전자칠판 꼭 사야하나요?"
+    const baseline = await evaluateChatbotQuery(question, { generateAnswer: false })
+    const { calls } = stubModel({ gate: "402" })
+    const result = await evaluateChatbotQuery(question)
+    expect(calls.filter((call) => call === "gate")).toHaveLength(1)
+    expect(result.answerGate).toMatchObject({ gate: "skipped", skipReason: "model_unavailable" })
+    expect(result.answer).toBe(baseline.answer)
+  })
+
+  it("임베딩도 차단 중에는 네트워크 없이 null 을 돌려준다(호출부는 낱말 검색으로 이어 간다)", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    const denied = vi.fn(async () => ({ ok: false, status: 402, json: async () => ({}), text: async () => "" }))
+    vi.stubGlobal("fetch", denied)
+    expect(await embedText("질문", "RETRIEVAL_QUERY")).toBeNull()
+    expect(isModelCircuitOpen()).toBe(true)
+    const fetchMock = vi.fn()
+    vi.stubGlobal("fetch", fetchMock)
+    expect(await embedText("질문", "RETRIEVAL_QUERY")).toBeNull()
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 })

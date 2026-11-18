@@ -1,9 +1,16 @@
-import { vi } from "vitest"
+import { beforeEach, vi } from "vitest"
+
+import { __resetModelCircuitForTests } from "@/lib/chatbot/llm"
 
 /**
  * 최종 답변에 모델을 쓰는 방식(CHATBOT_FINAL_ANSWER_LLM)을 다루는 테스트 도우미.
  * 기본값 select 는 모델이 문서 문장만 고르고, generate 는 고른 문장을 근거로 모델이 답을 다시 쓴다.
  */
+
+// 결제·인증 실패 차단기(lib/chatbot/llm.ts)는 프로세스 단위 상태다. 이 도우미를 쓰는 테스트 파일은 테스트마다 닫힌 상태에서 시작한다.
+beforeEach(() => {
+  __resetModelCircuitForTests()
+})
 
 /** 모델이 답을 다시 쓰는 generate 모드로 돌린다. */
 export function enableGenerateMode() {

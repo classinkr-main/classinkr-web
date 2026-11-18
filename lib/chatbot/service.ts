@@ -27,6 +27,7 @@ import {
   asksAboutThirdPartyAdoption,
   clampAnswerToLength,
   embedText,
+  isModelCircuitOpen,
   pickOutlineSectionIds,
   sanitizePublicAnswerText,
   selectAnsweringSentenceIds,
@@ -5108,7 +5109,10 @@ const gateDocumentResponses = new WeakSet<object>()
 
 // 관문이 켜져 있었는데 판정을 못 받은 경우(호출 실패·시간 초과). 이 답은 답 캐시에 넣지 않는다.
 function isAnswerGateFailure(trace: AnswerGateTrace | undefined) {
-  return trace?.gate === "skipped" && (trace.skipReason === "error" || trace.skipReason === "timeout")
+  return (
+    trace?.gate === "skipped" &&
+    (trace.skipReason === "error" || trace.skipReason === "timeout" || trace.skipReason === "model_unavailable")
+  )
 }
 
 function shouldRunAnswerGate(options: BuildChatbotCoreOptions) {
@@ -5163,7 +5167,7 @@ export interface SecondChanceTrace {
   secondChance: "hit" | "miss" | "none"
   /** 두 번째 검색에 쓴 시간(ms). 돌리지 않았으면 없다. */
   secondChanceMs?: number
-  /** miss·none 의 이유(no_section·no_sentence·off_target·error·timeout·off·llm_off·no_key·budget·policy_topic). */
+  /** miss·none 의 이유(no_section·no_sentence·off_target·error·timeout·model_unavailable·off·llm_off·no_key·budget·policy_topic). */
   reason?: string
 }
 
@@ -5226,7 +5230,10 @@ function isPolicyGovernedTopic(question: NormalizedQuestion) {
 // 두 번째 검색 결과 가운데 판정을 못 받은 것(호출 실패·시간 초과, 앞 단계가 느려 시간이 모자라 건너뛴 것). 이 답은 답 캐시에 넣지 않는다.
 function isSecondChanceFailure(trace: SecondChanceTrace | undefined) {
   if (trace?.secondChance === "none") return trace.reason === "budget"
-  return trace?.secondChance === "miss" && (trace.reason === "error" || trace.reason === "timeout")
+  return (
+    trace?.secondChance === "miss" &&
+    (trace.reason === "error" || trace.reason === "timeout" || trace.reason === "model_unavailable")
+  )
 }
 
 // 근거 선별 호출이 실패(오류·시간 초과)한 뒤 만든 답(못 찾음·되묻기·보류). 모델이 정상이면 다른 답이 나올 수 있어 답 캐시에 넣지 않는다.
@@ -5257,8 +5264,10 @@ async function applySecondChanceRetrieval(
   if (budgetMs < SECOND_CHANCE_MIN_STEP_MS * 3) return { secondChance: "none", reason: "budget" }
 
   const t0 = Date.now()
-  const miss = (reason: string): SecondChanceTrace => {
+  const miss = (failure: string): SecondChanceTrace => {
     const secondChanceMs = Date.now() - t0
+    // 결제·인증 실패로 모델 호출을 멈춘 상태(llm.ts 차단기)에서 끝난 실패는 따로 센다.
+    const reason = (failure === "error" || failure === "timeout") && isModelCircuitOpen() ? "model_unavailable" : failure
     if ((reason === "error" || reason === "timeout") && process.env.NODE_ENV !== "test") {
       console.warn("[chatbot] second-chance retrieval failed; keeping not-found answer.", { reason, secondChanceMs })
     }

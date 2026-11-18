@@ -31,7 +31,7 @@
 
 모델명, thinking 설정, 유사도 하한, 임베딩 차원과 teaser 대상 페이지는 코드와 테스트를 정본으로 확인한다. 시점별 운영 수치나 활성화 건수는 이 플레이북에 복제하지 않는다.
 
-모델을 바꾸거나 점검할 때는 `models.list`가 아니라 실제 `generateContent` 호출로 확인한다. 종료된 모델도 목록에는 남아 있고(2026-11 gemini-2.5 계열), 모델마다 받는 `thinkingLevel`이 달라 지원하지 않는 값을 보내면 400으로 실패한다. 모델 호출이 전부 실패해도 오류 없이 결정형 초안이 나가므로, 답이 문서 조각처럼 보이면 런타임 로그의 `[chatbot] Gemini call failed`부터 본다.
+모델을 바꾸거나 점검할 때는 `models.list`가 아니라 실제 `generateContent` 호출로 확인한다. 종료된 모델도 목록에는 남아 있고(2026-11 gemini-2.5 계열), 모델마다 받는 `thinkingLevel`이 달라 지원하지 않는 값을 보내면 400으로 실패한다. 모델 호출이 실패해도 요청은 오류 없이 끝난다. 근거 선별이 실패하면 검색 조각 대신 "지금은 안내 문서에서 답을 확인하지 못했어요" 고정 문구와 상담 버튼이 나가고(`MODEL_UNAVAILABLE_ANSWER`), 이 답이 늘면 런타임 로그의 `[chatbot] Gemini call failed`부터 본다. Gemini가 401·402·403(결제 크레딧 소진·키 인증 실패)을 돌려주면 `lib/chatbot/llm.ts`의 차단기가 60초 동안 모델 호출을 보내지 않고 `[chatbot] Gemini HTTP 402: …` 오류 로그를 한 번 남긴다.
 
 최종 답변에 모델을 쓰는 방식은 `CHATBOT_FINAL_ANSWER_LLM`으로 고른다. 기본값 `select`는 모델이 문서에서 답 문장의 번호만 고르고 답은 그 문장 그대로 나간다. `generate`는 고른 문장을 근거로 모델이 답을 다시 쓰고, `off`는 모델을 쓰지 않는다. 기본값의 측정 근거와 방식별 수치는 `docs/active/chatbot-first-contact-audit-2026-11-13.md`에 있다.
 

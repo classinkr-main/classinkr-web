@@ -18,7 +18,7 @@
  *   - 같은 프롬프트를 gemini-3.5-flash 로(CHATBOT_ANSWER_GATE_MODEL): 버림 1.59% / 잡음 83.3%, 중앙값 1.3초·95번째 1.6초
  */
 
-import { judgePreparedAnswerFit, type PreparedAnswerVerdict } from "./llm"
+import { isModelCircuitOpen, judgePreparedAnswerFit, type PreparedAnswerVerdict } from "./llm"
 
 /** 관문 결과. none=관문 대상이 아님, kept=판정 후 유지, rejected=버리고 문서 경로로, skipped=꺼짐·실패로 판정 없이 유지. */
 export type AnswerGateOutcome = "kept" | "rejected" | "skipped" | "none"
@@ -29,7 +29,7 @@ export interface AnswerGateTrace {
   gateOriginal?: string
   /** 관문 판정에 쓴 시간(ms). 캐시 적중이면 0에 가깝다. */
   gateMs?: number
-  /** skipped 의 이유(off·no_key·llm_off·error·timeout). */
+  /** skipped 의 이유(off·no_key·llm_off·error·timeout·model_unavailable). model_unavailable 은 결제·인증 실패(401·402·403) 차단 중. */
   skipReason?: string
 }
 
@@ -115,6 +115,9 @@ export async function checkPreparedAnswer({
     return { gate: cached === "off_target" ? "rejected" : "kept", gateOriginal: original, gateMs: Date.now() - startedAt }
   }
 
+  // 결제·인증 실패로 모델 호출을 멈춘 동안(llm.ts 차단기)은 부르지 않고 기존 답을 유지한다.
+  if (isModelCircuitOpen()) return { gate: "skipped", gateOriginal: original, gateMs: 0, skipReason: "model_unavailable" }
+
   const timeoutMs = budgetMs !== undefined ? Math.min(budgetMs, getAnswerGateTimeoutMs()) : getAnswerGateTimeoutMs()
   let result: Awaited<ReturnType<typeof judgePreparedAnswerFit>> = null
   let timedOut = false
@@ -138,7 +141,12 @@ export async function checkPreparedAnswer({
     if (process.env.NODE_ENV !== "test") {
       console.warn("[chatbot] answer gate skipped; keeping prepared answer.", { original, gateMs, timedOut })
     }
-    return { gate: "skipped", gateOriginal: original, gateMs, skipReason: timedOut || gateMs >= timeoutMs - GATE_MIN_ATTEMPT_MS ? "timeout" : "error" }
+    const skipReason = isModelCircuitOpen()
+      ? "model_unavailable"
+      : timedOut || gateMs >= timeoutMs - GATE_MIN_ATTEMPT_MS
+        ? "timeout"
+        : "error"
+    return { gate: "skipped", gateOriginal: original, gateMs, skipReason }
   }
 
   writeCachedVerdict(key, result.verdict)

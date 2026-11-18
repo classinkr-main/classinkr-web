@@ -103,6 +103,88 @@ function getGeminiApiKey() {
   return process.env.GEMINI_API_KEY?.trim() || null
 }
 
+// ── 결제·인증 실패 차단기 ─────────────────────────────────────────────────────────────────────────────
+// Gemini 가 401·402·403 을 돌려주면(결제 크레딧 소진·키 인증 실패) 그 키로는 어떤 모델을 불러도 실패한다.
+// 2026-11-18 크레딧 소진 때 질문마다 모델 체인을 끝까지 돌며 실패 호출을 3~7번씩 보냈다. 한 번 확인하면 60초 동안
+// 이 파일을 거치는 Gemini 호출(관문 판정·근거 선별·목차 고르기·답 생성·스트림·임베딩)을 네트워크 없이 바로 실패로 돌려준다.
+// 호출부에는 기존 실패(null·빈 스트림)와 똑같이 보인다. 60초가 지나면 다음 호출 하나만 실제로 보내 보고(시험 호출),
+// 다시 401·402·403 이면 60초 더 닫아 두고, 그 밖의 응답이면 차단을 푼다. 429(한도)·5xx·시간 초과·404(모델 없음)는
+// 대상이 아니다(기존 재시도·체인 폴백이 처리한다). 상태는 프로세스(서버 인스턴스) 단위다.
+export const MODEL_CIRCUIT_OPEN_MS = 60_000
+const MODEL_ACCESS_DENIED_STATUSES = new Set([401, 402, 403])
+
+let modelCircuitOpenUntil = 0
+let modelCircuitProbeInFlight = false
+let modelCircuitBlockedListener: (() => void) | null = null
+
+/** 이 상태 코드를 받으면 같은 키로 다른 모델을 불러도 소용없다(체인을 멈춘다). */
+function isModelAccessDeniedStatus(status: number | undefined) {
+  return status !== undefined && MODEL_ACCESS_DENIED_STATUSES.has(status)
+}
+
+/** 차단기가 열려 있어 지금 Gemini 호출을 보내지 않는지. 시험 호출이 나가 있는 동안에도 다른 호출은 막는다. */
+export function isModelCircuitOpen(now = Date.now()) {
+  if (modelCircuitOpenUntil === 0) return false
+  return now < modelCircuitOpenUntil || modelCircuitProbeInFlight
+}
+
+/** 측정 스크립트용: 차단기 때문에 보내지 않은 호출마다 불린다(질문별로 세려고 쓴다). */
+export function setModelCircuitBlockedListener(listener: (() => void) | null) {
+  modelCircuitBlockedListener = listener
+}
+
+/** 테스트 전용: 차단기를 닫힌 상태로 되돌린다. */
+export function __resetModelCircuitForTests() {
+  modelCircuitOpenUntil = 0
+  modelCircuitProbeInFlight = false
+}
+
+function openModelCircuit(status: number) {
+  const now = Date.now()
+  // 이미 열려 있으면(동시에 나간 다른 호출이 같은 실패를 받은 경우) 다시 열거나 로그를 또 남기지 않는다.
+  if (now < modelCircuitOpenUntil && !modelCircuitProbeInFlight) return
+  modelCircuitOpenUntil = now + MODEL_CIRCUIT_OPEN_MS
+  modelCircuitProbeInFlight = false
+  console.error(
+    `[chatbot] Gemini HTTP ${status}: Gemini 결제 크레딧 소진 또는 키 인증 실패로 보임. ` +
+      `챗봇 모델 호출을 ${Math.round(MODEL_CIRCUIT_OPEN_MS / 1000)}초 동안 멈추고(모델 없는 답으로 응답), ` +
+      `${Math.round(MODEL_CIRCUIT_OPEN_MS / 1000)}초 뒤 다음 호출 하나로 다시 시도합니다.`
+  )
+}
+
+/**
+ * 차단기를 거쳐 Gemini 에 요청한다. 차단 중이면 네트워크 없이 null 을 돌려준다(호출부는 실패로 처리하고 체인을 멈춘다).
+ * 예외(시간 초과·네트워크 오류)는 그대로 던진다(호출부의 기존 처리).
+ */
+async function fetchGeminiThroughCircuit(url: string, init: RequestInit): Promise<Response | null> {
+  let probe = false
+  if (modelCircuitOpenUntil !== 0) {
+    if (Date.now() < modelCircuitOpenUntil || modelCircuitProbeInFlight) {
+      modelCircuitBlockedListener?.()
+      return null
+    }
+    probe = true
+    modelCircuitProbeInFlight = true
+  }
+  let status: number | undefined
+  try {
+    const res = await fetch(url, init)
+    status = typeof res.status === "number" ? res.status : res.ok ? 200 : undefined
+    return res
+  } finally {
+    if (isModelAccessDeniedStatus(status)) {
+      openModelCircuit(status as number)
+    } else if (probe) {
+      modelCircuitProbeInFlight = false
+      // 응답을 받았으면(성공이든 다른 오류든) 결제·인증 문제는 풀린 것이다. 예외로 끝난 시험 호출은 다음 호출이 다시 시험한다.
+      if (status !== undefined) {
+        modelCircuitOpenUntil = 0
+        if (process.env.NODE_ENV !== "test") console.info("[chatbot] Gemini 호출이 다시 응답해 차단을 풀었습니다.", { status })
+      }
+    }
+  }
+}
+
 export const BASE_SYSTEM_INSTRUCTION = [
   "너는 Classin(학원·교육기관용 수업/운영 솔루션)의 친근하고 따뜻한 온라인 상담원이야. 딱딱한 안내봇이 아니라 곁에서 도와주는 사람처럼 말해.",
   `제품 정체성은 '${CLASSIN_POSITIONING.categoryName}'이다.`,
@@ -364,7 +446,7 @@ async function requestGeminiContent({
     const timeout = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS)
 
     try {
-      const res = await fetch(
+      const res = await fetchGeminiThroughCircuit(
         `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
         {
           method: "POST",
@@ -373,12 +455,14 @@ async function requestGeminiContent({
           body: buildGeminiBody(model, systemInstruction, contents, temperature),
         }
       )
+      if (!res) break
 
       if (!res.ok) {
         warnGeminiCallIssue(model, "http_error", {
           status: res.status,
           body: await readGeminiErrorSnippet(res),
         })
+        if (isModelAccessDeniedStatus(res.status)) break
         continue
       }
 
@@ -525,7 +609,7 @@ export async function selectAnsweringSentenceIds({
     const timeout = setTimeout(() => controller.abort(), Math.min(SELECTION_ATTEMPT_TIMEOUT_MS, remainingMs))
 
     try {
-      const res = await fetch(
+      const res = await fetchGeminiThroughCircuit(
         `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
         {
           method: "POST",
@@ -548,11 +632,13 @@ export async function selectAnsweringSentenceIds({
         }
       )
 
+      if (!res) break
       if (!res.ok) {
         warnGeminiCallIssue(model, "selection_http_error", {
           status: res.status,
           body: await readGeminiErrorSnippet(res),
         })
+        if (isModelAccessDeniedStatus(res.status)) break
         continue
       }
 
@@ -688,7 +774,7 @@ export async function judgePreparedAnswerFit({
     const timeout = setTimeout(() => controller.abort(), Math.min(GATE_ATTEMPT_TIMEOUT_MS, remainingMs))
 
     try {
-      const res = await fetch(
+      const res = await fetchGeminiThroughCircuit(
         `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
         {
           method: "POST",
@@ -718,8 +804,10 @@ export async function judgePreparedAnswerFit({
         }
       )
 
+      if (!res) break
       if (!res.ok) {
         warnGeminiCallIssue(model, "gate_http_error", { status: res.status, body: await readGeminiErrorSnippet(res) })
+        if (isModelAccessDeniedStatus(res.status)) break
         continue
       }
 
@@ -811,7 +899,7 @@ export async function pickOutlineSectionIds({
     const timeout = setTimeout(() => controller.abort(), Math.min(OUTLINE_PICK_ATTEMPT_TIMEOUT_MS, remainingMs))
 
     try {
-      const res = await fetch(
+      const res = await fetchGeminiThroughCircuit(
         `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
         {
           method: "POST",
@@ -834,8 +922,10 @@ export async function pickOutlineSectionIds({
         }
       )
 
+      if (!res) break
       if (!res.ok) {
         warnGeminiCallIssue(model, "outline_http_error", { status: res.status, body: await readGeminiErrorSnippet(res) })
+        if (isModelAccessDeniedStatus(res.status)) break
         continue
       }
 
@@ -965,7 +1055,7 @@ async function* streamGeminiContent({
     let emittedAny = false
 
     try {
-      const res = await fetch(
+      const res = await fetchGeminiThroughCircuit(
         `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${apiKey}`,
         {
           method: "POST",
@@ -975,12 +1065,14 @@ async function* streamGeminiContent({
         }
       )
 
+      if (!res) return
       if (!res.ok || !res.body) {
         warnGeminiCallIssue(model, "stream_http_error", {
           status: res.status,
           hasBody: Boolean(res.body),
           body: res.ok ? undefined : await readGeminiErrorSnippet(res),
         })
+        if (isModelAccessDeniedStatus(res.status)) return
         continue
       }
 
@@ -1117,7 +1209,7 @@ export async function embedText(
   const timeout = setTimeout(() => controller.abort(), EMBED_TIMEOUT_MS)
 
   try {
-    const res = await fetch(
+    const res = await fetchGeminiThroughCircuit(
       `https://generativelanguage.googleapis.com/v1beta/models/${CHATBOT_EMBED_MODEL}:embedContent?key=${apiKey}`,
       {
         method: "POST",
@@ -1132,7 +1224,8 @@ export async function embedText(
       }
     )
 
-    if (!res.ok) return null
+    // 차단 중이거나 실패하면 null — 호출부(searchSupabaseSources)는 낱말 검색만으로 이어 간다.
+    if (!res || !res.ok) return null
 
     const data = (await res.json()) as { embedding?: { values?: number[] } }
     const values = data.embedding?.values
