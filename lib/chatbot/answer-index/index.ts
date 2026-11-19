@@ -12,15 +12,15 @@ import { ANSWER_INDEX_COMPILER_VERSION, compileAnswerIndex, type CompiledAnswerI
 import { curatedTextHash } from "./curated"
 import { decide, type DecideContext } from "./decide"
 import {
-  ANSWER_INDEX_VERSION,
   answerIndexDataDir,
+  answerIndexVersion,
   loadAnswerIndexData,
   resetAnswerIndexCache,
   type LoadedAnswerIndexData,
 } from "./load"
 import type { AnswerIndexDecision, AnswerIndexRouter, AnswerIndexTrace } from "./types"
 
-export { ANSWER_INDEX_VERSION } from "./load"
+export { ANSWER_INDEX_VERSION, answerIndexDataDir, answerIndexVersion } from "./load"
 
 type Env = Record<string, string | undefined>
 
@@ -88,7 +88,7 @@ export function resetRouterAnswerIndex() {
   resetAnswerIndexCache()
 }
 
-/** 흔적에 적을 색인 판: 그 색인의 자료 판 + 계산 규칙 판. 기본 자료면 ANSWER_INDEX_VERSION 과 같다. */
+/** 흔적에 적을 색인 판: 그 색인의 자료 판 + 계산 규칙 판. 그 자료 폴더의 answerIndexVersion() 과 같다. */
 export function answerIndexVersionOf(index: CompiledAnswerIndex) {
   return `${index.dataVersion}+c${ANSWER_INDEX_COMPILER_VERSION}`
 }
@@ -109,7 +109,7 @@ export function routeAnswerIndex(question: string, ctx: RouteContext = {}): Answ
 /** 색인 앞 단계가 답했거나 범위 밖이라 색인이 정하지 않은 질문의 흔적. */
 export function preIndexTrace(router: AnswerIndexRouter, scope: "in" | "out", pre: AnswerIndexTrace["pre"] = null): AnswerIndexTrace {
   return {
-    version: ANSWER_INDEX_VERSION,
+    version: answerIndexVersion(),
     router,
     scope,
     decision: null,

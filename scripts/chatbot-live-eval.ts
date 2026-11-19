@@ -20,6 +20,7 @@
  *   불러오기 전에 환경변수를 그 값으로 둔다. 결과 줄의 router 는 그 값(안 주면 환경변수, 그것도 없으면 legacy)이다.
  *   코어가 답 색인 흔적(answerIndex)을 내면 결과 줄에 그대로 싣고, 색인이 답을 정한 줄의 decidedBy 는
  *   index:<카드>·index-partial:<카드>·index-gap:<카드>·index-abstain·index-clarify 다(사양 §3.7, scripts/lib/chatbot-live-eval-checks.ts).
+ *   답 색인 자료 폴더는 ANSWER_INDEX_DATA_DIR(작업 폴더 자료를 잴 때, 없으면 data/answer-index)이고, 흔적의 version 이 그 폴더의 판이다.
  * - 무효 측정 알아채기: 결과 줄의 modelError 는 그 줄의 답에 쓰이는 Gemini 호출(관문·근거 선별·목차 고르기·답 생성)이
  *   401·402·403(결제 크레딧 소진·키 인증 실패)을 받았거나, 그 때문에 열린 차단기(lib/chatbot/llm.ts)가 그 호출을 막았거나
  *   (geminiBlocked: 관문이 차단기를 보고 판정 없이 넘긴 것 포함), 관문·두 번째 검색이 model_unavailable 로 넘어간 경우 true 다.
@@ -415,6 +416,7 @@ async function main() {
   console.error(
     `질문 ${inputs.length}개 / 동시 ${concurrency} / 모드 ${mode} / 관문 ${gateSwitch} / 두 번째 검색 ${secondChanceSwitch} / 라우터 ${router}` +
       ` / Gemini 키 ${process.env.GEMINI_API_KEY ? "있음" : "없음"}` +
+      (router !== "legacy" ? ` / 답 색인 자료 ${process.env.ANSWER_INDEX_DATA_DIR?.trim() || "data/answer-index"}` : "") +
       (modelFree ? " / 모델 없는 측정(Gemini 호출 0 이어야 함)" : "") +
       (allowModelErrors ? " / 모델 호출 실패 허용(--allow-model-errors)" : "")
   )

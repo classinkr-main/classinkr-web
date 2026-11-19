@@ -1,14 +1,19 @@
 import { readFileSync, writeFileSync } from "node:fs"
-import { join } from "node:path"
+import { join, relative } from "node:path"
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
 
 import {
   __setRouterAnswerIndexForTests,
+  ANSWER_INDEX_VERSION,
+  answerIndexDataDir,
+  answerIndexVersion,
+  answerIndexVersionOf,
   getAnswerRouter,
   getRouterAnswerIndex,
   resetRouterAnswerIndex,
 } from "@/lib/chatbot/answer-index"
+import { ANSWER_INDEX_COMPILER_VERSION } from "@/lib/chatbot/answer-index/compile"
 import { sentenceHash } from "@/lib/chatbot/answer-index/hash"
 import type { AnswerIndexUnitsFile } from "@/lib/chatbot/answer-index/types"
 import {
@@ -258,6 +263,53 @@ describe("compiled router: public answer clean-up and failure fallback", () => {
       errors.mockRestore()
       resetRouterAnswerIndex()
       cleanup()
+    }
+  })
+})
+
+describe("compiled router: data folder (ANSWER_INDEX_DATA_DIR)", () => {
+  it("switches the index, the version string and the trace version to the folder in the env", async () => {
+    const a = copyFixture()
+    const b = copyFixture()
+    try {
+      const manifestPath = join(b.dir, "manifest.json")
+      writeFileSync(manifestPath, JSON.stringify({ ...JSON.parse(readFileSync(manifestPath, "utf8")), dataVersion: "ai-fixture-b" }))
+      stubCompiledEnv("")
+      resetRouterAnswerIndex()
+
+      vi.stubEnv("ANSWER_INDEX_DATA_DIR", a.dir)
+      expect(answerIndexDataDir()).toBe(a.dir)
+      expect(answerIndexVersion()).toBe(`ai-fixture+c${ANSWER_INDEX_COMPILER_VERSION}`)
+      const indexA = getRouterAnswerIndex()
+      expect(indexA.dataVersion).toBe("ai-fixture")
+      expect(answerIndexVersionOf(indexA)).toBe(answerIndexVersion())
+      const priceA = await evaluateChatbotQuery("요금이 어떻게 돼요?", { generateAnswer: false })
+      expect(priceA.answerIndex).toMatchObject({ router: "compiled", scope: "in", version: `ai-fixture+c${ANSWER_INDEX_COMPILER_VERSION}` })
+
+      vi.stubEnv("ANSWER_INDEX_DATA_DIR", b.dir)
+      const versionB = `ai-fixture-b+c${ANSWER_INDEX_COMPILER_VERSION}`
+      expect(answerIndexVersion()).toBe(versionB)
+      const indexB = getRouterAnswerIndex()
+      expect(indexB).not.toBe(indexA)
+      expect(indexB.dataVersion).toBe("ai-fixture-b")
+      const priceB = await evaluateChatbotQuery("요금이 어떻게 돼요?", { generateAnswer: false })
+      expect(priceB.answerIndex?.version).toBe(versionB)
+      // 색인 앞 단계·범위 밖 흔적도 지금 폴더의 판을 적는다.
+      const greeting = await evaluateChatbotQuery("안녕하세요", { generateAnswer: false })
+      expect(greeting.answerIndex).toMatchObject({ pre: "greeting", version: versionB })
+
+      // 상대 경로도 받는다. 같은 폴더로 돌아오면 그 폴더 자료로 다시 만든다(색인 캐시는 마지막 폴더 하나만 둔다).
+      vi.stubEnv("ANSWER_INDEX_DATA_DIR", relative(process.cwd(), a.dir))
+      expect(answerIndexDataDir()).toBe(a.dir)
+      expect(getRouterAnswerIndex().dataVersion).toBe("ai-fixture")
+
+      vi.stubEnv("ANSWER_INDEX_DATA_DIR", "  ")
+      expect(answerIndexDataDir()).toBe(join(process.cwd(), "data/answer-index"))
+      expect(answerIndexVersion()).toBe(ANSWER_INDEX_VERSION)
+    } finally {
+      resetRouterAnswerIndex()
+      a.cleanup()
+      b.cleanup()
     }
   })
 })

@@ -4,13 +4,17 @@ import {
   buildInventoryIndex,
   buildUnitIndex,
   classifyRow,
+  filterByArea,
   idsFromCard,
   legacyIds,
   normalizeHeading,
+  parseAreaFilter,
   readAnswerKeys,
   readInventory,
   readUnits,
   summarizeProxy,
+  summarizeTop1,
+  traceTop1CardId,
   type AnswerKey,
   type CardRecord,
   type ProxyContext,
@@ -269,5 +273,112 @@ describe("요약", () => {
     const parsed = readAnswerKeys({ set: "dev5", keys: [{ id: "dev5-parent-16", accept: ["basics:basics-contact-channel"], nodoc: true }] })
     expect(parsed.set).toBe("dev5")
     expect(parsed.keys[0]).toEqual({ id: "dev5-parent-16", accept: ["basics:basics-contact-channel"], partialAccept: [], nodoc: true, clarifyOk: false })
+  })
+})
+
+describe("정답 키의 reject·영역·1위 카드", () => {
+  it("reject 의 id 가 답 id 에 있으면 accept 보다 앞서 wrong 이다", () => {
+    const row = legacy({ decidedBy: "basics:basics-max-participants" })
+    const rejected = classifyRow(row, key({ accept: ["basics:basics-max-participants"], reject: ["basics:basics-max-participants"] }), context)
+    expect(rejected).toMatchObject({ verdict: "wrong", rejected: ["basics:basics-max-participants"], matched: ["basics:basics-max-participants"] })
+    expect(rejected.reason).toContain("reject")
+    // partialAccept 보다도 앞선다. reject 에 없는 답은 그대로 accept 로 맞는다.
+    expect(classifyRow(row, key({ partialAccept: ["basics:basics-max-participants"], reject: ["basics:basics-max-participants"] }), context).verdict).toBe("wrong")
+    expect(classifyRow(row, key({ accept: ["basics:basics-max-participants"], reject: ["basics:other"] }), context).verdict).toBe("good")
+    // compiled 카드의 id(legacyIds·curatedRef)로도 본다.
+    const compiledRow = compiled("answer", { cardId: "fixed:basics-billing-unit" })
+    expect(classifyRow(compiledRow, key({ accept: ["basics:basics-billing-unit"], reject: ["basics:basics-billing-unit"] }), context).verdict).toBe("wrong")
+    // 못 찾음·되묻기에는 reject 가 상관없다.
+    const notFound = legacy({ decidedBy: "not_found", answerMode: "doc_suggestion", unresolved: true })
+    expect(classifyRow(notFound, key({ nodoc: true, reject: ["basics:x"] }), context).verdict).toBe("nf_ok")
+  })
+
+  it("선택 칸(reject·siteAccept·area·areaFrom·note·keyGroup·evidenceScope·searched)을 읽는다", () => {
+    const parsed = readAnswerKeys({
+      set: "dev5",
+      keys: [
+        {
+          id: "k1",
+          keyGroup: "k0001",
+          accept: ["unit:doc:/docs/software/software-overview#1"],
+          partialAccept: [],
+          reject: ["basics:basics-max-participants"],
+          siteAccept: ["basics:basics-max-participants"],
+          nodoc: false,
+          clarifyOk: false,
+          area: "pricing",
+          areaFrom: "accept",
+          evidenceScope: "site",
+          note: "근거 메모",
+          searched: ["최대 인원"],
+        },
+        { id: "k2", accept: [], area: "nowhere" },
+      ],
+    })
+    expect(parsed.keys[0]).toEqual({
+      id: "k1",
+      keyGroup: "k0001",
+      accept: ["unit:doc:/docs/software/software-overview#1"],
+      partialAccept: [],
+      reject: ["basics:basics-max-participants"],
+      siteAccept: ["basics:basics-max-participants"],
+      nodoc: false,
+      clarifyOk: false,
+      area: "pricing",
+      areaFrom: "accept",
+      evidenceScope: "site",
+      note: "근거 메모",
+      searched: ["최대 인원"],
+    })
+    // 영역 12개 밖 값은 버린다.
+    expect(parsed.keys[1].area).toBeUndefined()
+  })
+
+  it("--area 는 키의 area 로 줄을 거른다", () => {
+    expect(parseAreaFilter("pricing, company")).toEqual(["pricing", "company"])
+    expect(() => parseAreaFilter("pricing,nowhere")).toThrow(/nowhere/)
+    const keyById = new Map<string, AnswerKey>([
+      ["a", { id: "a", accept: [], area: "pricing" }],
+      ["b", { id: "b", accept: [], area: "company" }],
+      ["c", { id: "c", accept: [] }],
+    ])
+    const rows = ["a", "b", "c", "d"].map((id) => legacy({ id }))
+    expect(filterByArea(rows, keyById, ["pricing"]).map((row) => row.id)).toEqual(["a"])
+    expect(filterByArea(rows, keyById, ["pricing", "company"]).map((row) => row.id)).toEqual(["a", "b"])
+  })
+
+  it("--top1: compiled 줄의 흔적 1위 카드가 accept 에 드는 비율과 nodoc 키에서 답한 비율", () => {
+    const memberCardId = "doc:/docs/teacher/course-members#4/remove-member"
+    const rows: ProxyEvalRow[] = [
+      // 결정은 못 찾음이어도 1위 카드가 accept 면 센다.
+      { ...compiled("abstain", { top: [{ id: "none" }, { id: memberCardId }] }), id: "a" },
+      { ...compiled("answer", { cardId: "fixed:basics-billing-unit", top: [{ id: "fixed:basics-billing-unit" }] }), id: "b" },
+      { ...compiled("answer", { cardId: "fixed:basics-billing-unit", top: [{ id: "fixed:basics-billing-unit" }] }), id: "c" },
+      { ...compiled("answer", { cardId: "howto:recording-missing", top: [{ id: "howto:recording-missing" }] }), id: "d" },
+      { ...compiled("gap", { top: [{ id: "doc:missing" }] }), id: "e" },
+      { ...compiled("answer", { top: [{ id: "doc:missing" }] }), id: "f" },
+      legacy({ id: "g", decidedBy: "basics:basics-billing-unit" }),
+    ]
+    const keyById = new Map<string, AnswerKey>([
+      ["a", key({ id: "a", accept: ["unit:doc:/docs/teacher/course-members#4"] })],
+      ["b", key({ id: "b", accept: ["basics:other"], partialAccept: ["basics:basics-billing-unit"] })],
+      ["c", key({ id: "c", accept: ["basics:basics-billing-unit"], reject: ["basics:basics-billing-unit"] })],
+      ["d", key({ id: "d", nodoc: true })],
+      ["e", key({ id: "e", nodoc: true })],
+      ["f", key({ id: "f", accept: ["basics:x"] })],
+      ["g", key({ id: "g", accept: ["basics:basics-billing-unit"] })],
+    ])
+    const results = rows.map((row) => classifyRow(row, keyById.get(row.id), context))
+    expect(traceTop1CardId(rows[0].answerIndex)).toBe(memberCardId)
+    expect(summarizeTop1(rows, results, keyById, context)).toEqual({
+      compiledRows: 6,
+      acceptRows: 4,
+      top1Accept: 1,
+      top1Partial: 1,
+      top1Rejected: 1,
+      top1Unmapped: 1,
+      nodocRows: 2,
+      nodocAnswered: 1,
+    })
   })
 })

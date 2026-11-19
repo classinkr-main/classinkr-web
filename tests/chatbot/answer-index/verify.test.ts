@@ -337,3 +337,147 @@ describe("그 밖의 규칙", () => {
     expect(stale((await runVerify({ dir: fresh, current: currentSources(units, siteFacts), devSets: [] })).findings)).toBe(false)
   })
 })
+
+describe("V-2 런타임이 부를 수 없는 KEEP 카드", () => {
+  const keepCard = (module: string, id: string, textHash: string, overrides: Record<string, unknown> = {}) => ({
+    id: `fixed:${module}-keep-test`,
+    kind: "fixed",
+    tier: "head",
+    area: "company",
+    topic: "시험용 KEEP",
+    answer: { curatedRef: { module, id, textHash } },
+    status: "active",
+    ...overrides,
+  })
+
+  it("curatedRef.module 이 svc·template 이면 옛 답 글 해시가 같아도 오류로 거부하고 FIX text 카드를 안내한다", async () => {
+    const svcText = "쇼룸 방문은 예약으로 안내해 드려요."
+    const templateText = "체험 범위는 상담에서 확인해 드려요."
+    const basicsText = "요금은 계정 수 기준이에요."
+    const inventory = new Map([
+      ["svc:showroom-confirm", { text: svcText, textHash: answerTextHash(svcText) }],
+      ["template:체험·파일럿 확인", { text: templateText, textHash: answerTextHash(templateText) }],
+      ["basics:basics-billing-unit", { text: basicsText, textHash: answerTextHash(basicsText) }],
+    ])
+    const dir = fixture({
+      ...baseFiles(units, siteFacts),
+      "cards/company.json": [
+        keepCard("svc", "showroom-confirm", answerTextHash(svcText)),
+        keepCard("template", "체험·파일럿 확인", answerTextHash(templateText)),
+        keepCard("basics", "basics-billing-unit", answerTextHash(basicsText)),
+      ],
+    })
+    const result = await runVerify({ dir, current: currentSources(units, siteFacts, { inventory }), devSets: [] })
+    const v2 = errorsOf(result.findings, "V-2")
+    for (const id of ["fixed:svc-keep-test", "fixed:template-keep-test"]) {
+      const hit = v2.filter((finding) => finding.message.startsWith(`${id}:`))
+      expect(hit, id).toHaveLength(1)
+      expect(hit[0].message).toContain("FIX text 카드로 쓴다(같은 글이면 textHash 같음)")
+    }
+    expect(v2.some((finding) => finding.message.startsWith("fixed:basics-keep-test:"))).toBe(false)
+  })
+})
+
+describe("V-3 결정 전 정책 구절(blockPhrases)", () => {
+  const PHRASE = "2주 무료 체험"
+  const fixedText = (id: string, text: string, overrides: Record<string, unknown> = {}) => ({
+    id,
+    kind: "fixed",
+    tier: "head",
+    area: "pricing",
+    topic: "시험용 고친 글",
+    answer: { text, textHash: answerTextHash(text) },
+    status: "active",
+    ...overrides,
+  })
+  const policyCard = (id: string, text: string, policyRef: string) => ({
+    id,
+    kind: "policy",
+    tier: "head",
+    area: "pricing",
+    topic: "시험용 정책 글",
+    answer: { text, textHash: answerTextHash(text), policyRef },
+    status: "active",
+  })
+  const queueItem = (id: string, extra: Record<string, unknown> = {}) => ({
+    id,
+    topic: "무료 체험 표기",
+    currentText: "",
+    conflict: "",
+    proposal: null,
+    affectedCards: [],
+    decision: null,
+    decidedBy: null,
+    decidedAt: null,
+    ...extra,
+  })
+  const phraseErrors = (findings: VerifyFinding[]) => errorsOf(findings, "V-3").filter((finding) => finding.message.includes("정책 대기"))
+
+  it("결정 전 항목의 구절이 active fixed(text)·doc·다른 항목 policy 카드 답 글에 정규화 포함되면 오류", async () => {
+    const unit = units.find((candidate) => candidate.unitId === MEMBER_UNIT)!
+    const docPhrase = unit.sentences[3].text.slice(0, 10)
+    const dir = fixture({
+      ...baseFiles(units, siteFacts),
+      "audit/human-queue.json": {
+        items: [
+          queueItem("HQ-90", { blockPhrases: [PHRASE] }),
+          queueItem("HQ-91", { blockPhrases: [docPhrase] }),
+          queueItem("HQ-92", { blockPhrases: ["결정이 난 구절"], decision: "그대로 쓴다", decidedBy: "사람", decidedAt: "2026-11-19" }),
+          queueItem("HQ-93"),
+        ],
+      },
+      "cards/pricing.json": [
+        // 띄어쓰기·문장부호가 달라도 정규화하면 같다.
+        fixedText("fixed:trial-text", "처음에는 2 주, 무료 체험으로 써 보실 수 있어요."),
+        fixedText("fixed:trial-review", "2주 무료 체험이 있어요.", { status: "review" }),
+        fixedText("fixed:trial-disabled", "2주 무료 체험이 있어요.", { status: "disabled" }),
+        fixedText("fixed:decided", "결정이 난 구절이 들어 있어요."),
+        policyCard("policy:free-trial", "2주 무료 체험은 정책 결정 뒤 안내해요.", "HQ-90"),
+        policyCard("policy:other", "다른 정책 글에 2주 무료 체험이 섞였어요.", "HQ-07"),
+      ],
+      "cards/course.json": [memberCard()],
+      "variants/course.json": memberVariants(),
+    })
+    const result = await runVerify({ dir, current: currentSources(units, siteFacts), devSets: [] })
+    const errors = phraseErrors(result.findings)
+    const flagged = errors.map((finding) => finding.message.split(":")[0] + ":" + finding.message.split(":")[1]).sort()
+    expect(flagged).toEqual(["doc:/docs/teacher/course-members#4/remove-member", "fixed:trial-text", "policy:other"].sort())
+    const trial = errors.find((finding) => finding.message.startsWith("fixed:trial-text:"))!
+    expect(trial.message).toContain("정책 대기 HQ-90 구절: 카드를 review 로 두거나 policy 카드로 보낸다")
+    expect(trial.file).toBe("cards/pricing.json")
+    expect(errors.find((finding) => finding.message.startsWith("doc:"))!.message).toContain("HQ-91")
+  })
+
+  it("blockPhrases 가 없는 항목은 아무것도 막지 않고, 꼴이 틀리면 V-12 오류", async () => {
+    const dir = fixture({
+      ...baseFiles(units, siteFacts),
+      "audit/human-queue.json": { items: [queueItem("HQ-90"), queueItem("HQ-94", { blockPhrases: "2주 무료 체험" })] },
+      "cards/pricing.json": [fixedText("fixed:trial-text", "2주 무료 체험이 있어요.")],
+    })
+    const result = await runVerify({ dir, current: currentSources(units, siteFacts), devSets: [] })
+    expect(phraseErrors(result.findings)).toEqual([])
+    expect(errorsOf(result.findings, "V-12").some((finding) => finding.message.includes("HQ-94: blockPhrases 는 문자열 배열"))).toBe(true)
+  })
+
+  it("howto 카드는 증상 주제·가이드 답 글(지금 코드)로 본다", async () => {
+    const topicText = "녹화가 안 보이면 2주 무료 체험 계정인지 먼저 확인해 주세요."
+    const dir = fixture({
+      ...baseFiles(units, siteFacts),
+      "audit/human-queue.json": { items: [queueItem("HQ-90", { blockPhrases: [PHRASE] })] },
+      "cards/recording.json": [
+        { id: "howto:recording-missing", kind: "howto", tier: "standard", area: "recording", topic: "녹화가 안 보임", answer: { symptomTopic: "recording-missing" }, status: "active" },
+      ],
+    })
+    const result = await runVerify({
+      dir,
+      current: currentSources(units, siteFacts, {
+        symptomTopics: new Set(["recording-missing"]),
+        inventory: new Map([["symptom:recording-missing", { text: topicText, textHash: answerTextHash(topicText) }]]),
+      }),
+      devSets: [],
+    })
+    expect(phraseErrors(result.findings).map((finding) => finding.message)).toEqual([
+      expect.stringContaining("howto:recording-missing: 정책 대기 HQ-90 구절"),
+    ])
+  })
+})

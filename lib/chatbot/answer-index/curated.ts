@@ -5,8 +5,9 @@
  * 해시는 inventory(scripts/answer-index/lib/inventory.ts)가 적는 textHash 와 같은 글로 만든다:
  *   field·basics: answer 문단을 빈 줄로 이음 / self: 같은 key 의 n번째(sourceId key 또는 key-n) / symptom: 질문 없이 만든 주제 답
  *   (vague-error 는 긴 되묻기) / guide: formatCsFigmaGuideAnswer.
- * svc·template 은 service.ts 안의 조건 갈래라 id 로 부를 함수가 없다. 런타임에서는 '없음'(null)이라 그 KEEP 카드는 load 때 빠진다.
- * 그런 답은 D4 가 FIX(text) 카드로 만든다(글이 같으면 textHash 도 같다).
+ * svc·template(types.ts CURATED_MODULES_WITHOUT_RUNTIME)은 service.ts 안의 조건 갈래라 id 로 부를 함수가 없다. 런타임에서는
+ * '없음'(null)이라 그 KEEP 카드는 load 때 빠진다. verify V-2 가 이런 카드를 오류로 거부하고, 그런 답은 D4 가 FIX(text) 카드로
+ * 만든다(글이 같으면 textHash 도 같다).
  *
  * 네트워크·모델 호출 없음. service.ts 를 import 하지 않는다(service 가 이 파일을 쓴다).
  */

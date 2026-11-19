@@ -12,7 +12,7 @@
  * 네트워크·모델 호출 없음. 자료가 0장이어도 색인은 만들어지고 판정은 언제나 abstain 이다.
  */
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs"
-import { join } from "node:path"
+import { join, resolve } from "node:path"
 import { CS_FIGMA_GUIDES, INTERNAL_ONLY_CS_FIGMA_DOC_SLUGS } from "@/lib/cs-figma-guides"
 import { SYMPTOM_TOPICS } from "@/lib/chatbot/symptom-triage"
 import { listDocs } from "@/lib/docs"
@@ -39,9 +39,13 @@ import {
 
 export const ANSWER_INDEX_DATA_DIR_REL = "data/answer-index"
 
-/** 자료 폴더: ANSWER_INDEX_DATA_DIR(측정·시험용) 또는 <cwd>/data/answer-index. */
+/**
+ * 자료 폴더: ANSWER_INDEX_DATA_DIR(측정·시험용, 상대 경로는 작업 폴더 기준 절대 경로로) 또는 <cwd>/data/answer-index.
+ * 판정할 때마다 읽는다: 값을 바꾸면 색인 캐시(폴더가 바뀌면 다시 만듦)와 판(answerIndexVersion)도 그 폴더 것으로 바뀐다.
+ */
 export function answerIndexDataDir(env: Record<string, string | undefined> = process.env) {
-  return env.ANSWER_INDEX_DATA_DIR || join(process.cwd(), ANSWER_INDEX_DATA_DIR_REL)
+  const configured = env.ANSWER_INDEX_DATA_DIR?.trim()
+  return configured ? resolve(process.cwd(), configured) : join(process.cwd(), ANSWER_INDEX_DATA_DIR_REL)
 }
 
 /** 지금 문서 단위(문장 해시만 쓰면 되지만 respond·BM25 가 글도 쓴다). */
@@ -377,11 +381,24 @@ function readManifestVersion(dir: string) {
   }
 }
 
+const versionByDir = new Map<string, string>()
+
 /**
- * 답 색인 판(답 캐시 열쇠용): 자료 판(manifest dataVersion) + 계산 규칙 판(ANSWER_INDEX_COMPILER_VERSION).
- * 자료나 계산 규칙이 바뀌면 바뀐다. 모듈을 처음 읽을 때 manifest 만 읽는다(색인은 첫 질문 때 만든다).
+ * 답 색인 판(답 캐시 열쇠·흔적용): 그 자료 폴더의 자료 판(manifest dataVersion) + 계산 규칙 판(ANSWER_INDEX_COMPILER_VERSION).
+ * 자료 폴더(ANSWER_INDEX_DATA_DIR)·자료·계산 규칙이 바뀌면 바뀐다. 폴더마다 manifest 를 한 번만 읽는다(색인과 같이
+ * resetAnswerIndexCache 로 버린다). 색인 판(answerIndexVersionOf)과 같은 값이다: load 도 manifest 의 dataVersion 을 쓴다.
  */
-export const ANSWER_INDEX_VERSION = `${readManifestVersion(answerIndexDataDir())}+c${ANSWER_INDEX_COMPILER_VERSION}`
+export function answerIndexVersion(dir: string = answerIndexDataDir()) {
+  let version = versionByDir.get(dir)
+  if (version === undefined) {
+    version = `${readManifestVersion(dir)}+c${ANSWER_INDEX_COMPILER_VERSION}`
+    versionByDir.set(dir, version)
+  }
+  return version
+}
+
+/** 모듈을 처음 읽을 때의 자료 폴더 판. 폴더를 바꿔 가며 쓰는 곳(답 캐시 열쇠·흔적)은 answerIndexVersion() 을 부른다. */
+export const ANSWER_INDEX_VERSION = answerIndexVersion()
 
 let cached: { dir: string; index: CompiledAnswerIndex } | null = null
 
@@ -398,7 +415,8 @@ export function getAnswerIndex(options?: AnswerIndexLoadOptions): CompiledAnswer
   return index
 }
 
-/** 시험용: 프로세스 안 색인을 버린다. */
+/** 시험용: 프로세스 안 색인과 폴더별 판을 버린다. */
 export function resetAnswerIndexCache() {
   cached = null
+  versionByDir.clear()
 }

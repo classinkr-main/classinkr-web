@@ -359,6 +359,12 @@ export interface HowtoAnswerCard extends AnswerCardBase {
 
 export type CuratedModule = "field" | "basics" | "svc" | "self" | "template" | "symptom" | "guide"
 
+/**
+ * 런타임에서 id 로 옛 답을 부를 수 없는 모듈(curated.ts). svc·template 은 service.ts 안의 조건 갈래라 부를 함수가 없어
+ * 그 KEEP(curatedRef) 카드는 load 때 '옛 답 없음'으로 꺼진다. V-2 가 이런 카드를 거부하고, 같은 글은 FIX(text) 카드로 쓴다.
+ */
+export const CURATED_MODULES_WITHOUT_RUNTIME: readonly CuratedModule[] = ["svc", "template"]
+
 /** 옛 정해 둔 답을 만드는 함수를 그대로 부르는 카드(KEEP). textHash 가 지금 옛 답 글 해시와 다르면 끈다. */
 export interface CuratedRef {
   module: CuratedModule
@@ -608,6 +614,11 @@ export interface HumanQueueItem {
   decision: string | null
   decidedBy: string | null
   decidedAt: string | null
+  /**
+   * 결정을 기다리는 동안 active 카드 답 글에 나오면 안 되는 구절(V-3). 결정(decision)이 비어 있는 항목만 본다.
+   * 정규화(NFC·소문자·글자와 숫자만)해 포함 여부로 대조한다. 그 항목을 policyRef 로 가리키는 policy 카드와 review 카드는 예외다.
+   */
+  blockPhrases?: string[]
 }
 
 export interface HumanQueueFile {
@@ -664,10 +675,23 @@ export interface AnswerKey {
   /** 옛 답 id(basics:·field:·svc:·symptom:·guide:·self:·template:) 또는 unit:<unitId>. */
   accept: string[]
   partialAccept?: string[]
+  /** 답 id 에 이것이 있으면 accept 와 겹쳐도 엉뚱한 답(wrong)으로 센다(심사 범위 밖 사실을 단정하는 옛 답 등). */
+  reject?: string[]
+  /** 공개 페이지 사실(site-facts)까지 근거로 볼 때만 맞는 답 id(§14 결정 과제 3). 대리 점수 기본 계산에는 쓰지 않는다. */
+  siteAccept?: string[]
   nodoc?: boolean
   clarifyOk?: boolean
   /** nodoc 일 때 찾아본 낱말(3개 이상). */
   searched?: string[]
+  /** 이 질문의 영역(정답 대상의 영역). proxy-eval --area 가 이 값으로 줄을 거른다. */
+  area?: AnswerIndexArea
+  /** area 를 정한 근거(키 작성 도구가 적는 값: accept · accept-multi-question · question 등). */
+  areaFrom?: string
+  /** 정답 근거가 공개 페이지(site-facts)에 기대면 site. */
+  evidenceScope?: "docs" | "site"
+  note?: string
+  /** 같은 정답을 공유하는 키 묶음 이름(묶음 안 키는 함께 고친다). */
+  keyGroup?: string
 }
 
 export interface AnswerKeysFile {

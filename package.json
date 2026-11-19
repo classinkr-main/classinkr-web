@@ -37,6 +37,7 @@
     "answer-index:compile": "npx tsx scripts/answer-index/compile.ts",
     "answer-index:calibrate": "npx tsx scripts/answer-index/calibrate.ts",
     "answer-index:cv": "npx tsx scripts/answer-index/cv.ts",
+    "answer-index:topk": "npx tsx scripts/answer-index/topk.ts",
     "answer-index:score": "npx tsx scripts/answer-index/score.ts",
     "answer-index:proxy": "npx tsx scripts/answer-index/proxy-eval.ts",
     "answer-index:judge": "npx tsx scripts/answer-index/judge/judge.ts"

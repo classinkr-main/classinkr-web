@@ -73,7 +73,8 @@ import {
   isEnglishSupportRequest,
 } from "@/lib/chatbot/tone"
 import {
-  ANSWER_INDEX_VERSION,
+  answerIndexDataDir,
+  answerIndexVersion,
   answerIndexVersionOf,
   getAnswerRouter,
   getRouterAnswerIndex,
@@ -374,12 +375,13 @@ export function __clearAnswerCacheForTests() {
   answerCache.clear()
 }
 
-// 답 라우터(CHATBOT_ANSWER_ROUTER)와 답 색인 판(ANSWER_INDEX_VERSION)도 키에 넣는다. 라우터를 바꾸거나 색인 자료·계산 규칙이 바뀌면
-// 다른 라우터·다른 판에서 만든 답을 꺼내지 않는다(답 색인 사양 §3.2·§3.7). 내부 CS 경로는 라우터를 쓰지 않아 legacy 로 적는다.
+// 답 라우터(CHATBOT_ANSWER_ROUTER), 답 색인 판(answerIndexVersion)과 자료 폴더(ANSWER_INDEX_DATA_DIR)도 키에 넣는다. 라우터·자료 폴더를
+// 바꾸거나 색인 자료·계산 규칙이 바뀌면 다른 라우터·다른 판에서 만든 답을 꺼내지 않는다(답 색인 사양 §3.2·§3.7). 폴더는 manifest 를
+// 다시 쓰지 않은 작업 폴더 사본(같은 판 이름)도 가르려고 넣는다. 내부 CS 경로는 라우터를 쓰지 않아 legacy 로 적는다.
 function getAnswerCacheKey(question: NormalizedQuestion, options?: RetrievalOptions) {
   const backend = hasSupabaseServerEnv() ? "supabase" : "static"
   const router = options?.includeInternalDocs ? "legacy" : getAnswerRouter()
-  return `${ANSWER_CACHE_VERSION}:${backend}:${retrievalScope(options)}:${router}@${ANSWER_INDEX_VERSION}:${buildRetrievalQueryText(question).toLowerCase()}`
+  return `${ANSWER_CACHE_VERSION}:${backend}:${retrievalScope(options)}:${router}@${answerIndexVersion()}@${answerIndexDataDir()}:${buildRetrievalQueryText(question).toLowerCase()}`
 }
 
 function cloneCachedAnswer(value: CachedAnswerEntry): CachedAnswerEntry {

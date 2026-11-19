@@ -4,7 +4,7 @@
  * 실행:
  *   npx tsx scripts/answer-index/proxy-eval.ts --results <측정.jsonl> --keys <answer-keys.json>
  *     [--units data/answer-index/units.json] [--inventory data/answer-index/inventory.json] [--cards data/answer-index/cards]
- *     [--out <줄별 판정.json>] [--json]
+ *     [--area <영역,…>] [--top1] [--out <줄별 판정.json>] [--json]
  *
  * 측정 결과(scripts/chatbot-live-eval.ts 의 JSONL) 한 줄마다 '이 답이 무엇으로 답했는가'를 id 목록으로 바꾸고,
  * 정답 키(accept·partialAccept·nodoc·clarifyOk)와 대조해 §2.1 분류 하나를 결정적으로 붙인다. 점수 식·구간은 score.ts 와 같다.
@@ -22,24 +22,25 @@
  * 판정(키가 있는 줄만):
  * - 못 찾음: nodoc 이면 nf_ok, 아니면 nf_doc_has
  * - 되묻기: clarifyOk 면 good, 아니면 needless_clarify
- * - 답: id 가 accept 에 있으면 good, partialAccept 에 있으면 partial, 아니면 wrong(id 를 하나도 못 만들었으면 unmapped 표시)
+ * - 답: id 가 reject 에 있으면 accept 보다 앞서 wrong, accept 에 있으면 good, partialAccept 에 있으면 partial, 아니면 wrong
+ *   (id 를 하나도 못 만들었으면 unmapped 표시). siteAccept(공개 페이지 근거로만 맞는 답)는 이 계산에 쓰지 않는다.
+ *
+ * --area <영역,…>: 키의 area 가 그 영역인 줄만 센다(키가 없거나 area 가 없는 줄은 뺀다).
+ * --top1: compiled 줄(색인이 정한 줄)에서 결정과 무관하게 흔적 1위 카드(top 의 첫 카드, 'none' 자리는 건너뜀)가 accept 에 드는 비율
+ *   (accept 가 있는 키만, reject 에 걸리면 넣지 않음)과, nodoc 키인데 답해 버린 비율(못 찾음·공백이 아닌 답)을 더 찍는다.
  */
 
 import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs"
 import { join, resolve } from "node:path"
 
+import { ANSWER_INDEX_AREAS, isAnswerIndexArea, type AnswerIndexArea, type AnswerKey as IndexAnswerKey } from "@/lib/chatbot/answer-index/types"
 import { decidedByFromAnswerIndex, segmentCard, segmentDecision } from "../lib/chatbot-live-eval-checks"
 import { round2, summarizeVerdicts, type ScoreSummary, type Verdict } from "./score"
 
 // ── 입력 꼴 ─────────────────────────────────────────────────────────────────────────────────────
 
-export interface AnswerKey {
-  id: string
-  accept?: string[]
-  partialAccept?: string[]
-  nodoc?: boolean
-  clarifyOk?: boolean
-}
+/** 정답 키(lib/chatbot/answer-index/types.ts AnswerKey). 대리 점수는 accept 가 없어도 받는다. */
+export type AnswerKey = Omit<IndexAnswerKey, "accept"> & { accept?: string[] }
 
 export interface EvalRowSource {
   path?: string | null
@@ -278,8 +279,10 @@ export interface ProxyRowResult {
   kind: ProxyAnswerKind
   /** 이 답을 나타내는 id(옛 답 id·unit:). */
   ids: string[]
-  /** 정답 키와 겹친 id. */
+  /** 정답 키와 겹친 id(reject 로 wrong 이면 reject 와 겹친 id). */
   matched: string[]
+  /** reject 와 겹쳐 wrong 으로 센 id(없으면 빈 배열). */
+  rejected?: string[]
   /** id 를 하나도 못 만든 답(대리 점수의 사각지대). */
   unmapped: boolean
   /** 키가 없으면 null(점수에서 뺌). */
@@ -434,9 +437,13 @@ export function classifyRow(row: ProxyEvalRow, key: AnswerKey | undefined, conte
 
   const accept = new Set(key.accept ?? [])
   const partialAccept = new Set(key.partialAccept ?? [])
+  const reject = new Set(key.reject ?? [])
   if (kind === "error") return { ...base, matched: [], verdict: "wrong", reason }
   if (kind === "not_found") return { ...base, matched: [], verdict: key.nodoc ? "nf_ok" : "nf_doc_has", reason }
   if (kind === "clarify") return { ...base, matched: [], verdict: key.clarifyOk ? "good" : "needless_clarify", reason }
+  // reject 는 accept 보다 앞선다: 같은 답이 accept 대상 문장도 쓰지만 심사 범위 밖 사실을 단정하는 경우 등.
+  const rejected = ids.filter((id) => reject.has(id))
+  if (rejected.length > 0) return { ...base, matched: rejected, rejected, verdict: "wrong", reason: `${reason} / reject: ${rejected.join(", ")}` }
   const matched = ids.filter((id) => accept.has(id))
   if (matched.length > 0) return { ...base, matched, verdict: "good", reason }
   const partial = ids.filter((id) => partialAccept.has(id))
@@ -476,18 +483,116 @@ export function readAnswerKeys(raw: unknown): { set: string | null; keys: Answer
   const list = Array.isArray(raw) ? raw : container?.keys
   if (!Array.isArray(list)) throw new Error("정답 키 파일에 keys 배열이 없습니다.")
   const keys = list.map((item, index) => {
-    const key = item as Partial<AnswerKey>
-    if (typeof key?.id !== "string" || !key.id) throw new Error(`정답 키 ${index + 1}번째에 id 가 없습니다.`)
+    const key = (isRecord(item) ? item : {}) as Record<string, unknown>
+    if (typeof key.id !== "string" || !key.id) throw new Error(`정답 키 ${index + 1}번째에 id 가 없습니다.`)
     const strings = (value: unknown) => (Array.isArray(value) ? value.filter((v): v is string => typeof v === "string") : [])
-    return {
+    const out: AnswerKey = {
       id: key.id,
       accept: strings(key.accept),
       partialAccept: strings(key.partialAccept),
       nodoc: key.nodoc === true,
       clarifyOk: key.clarifyOk === true,
     }
+    // 선택 칸은 있을 때만 싣는다.
+    if (Array.isArray(key.reject)) out.reject = strings(key.reject)
+    if (Array.isArray(key.siteAccept)) out.siteAccept = strings(key.siteAccept)
+    if (Array.isArray(key.searched)) out.searched = strings(key.searched)
+    if (isAnswerIndexArea(key.area)) out.area = key.area
+    if (typeof key.areaFrom === "string") out.areaFrom = key.areaFrom
+    if (key.evidenceScope === "docs" || key.evidenceScope === "site") out.evidenceScope = key.evidenceScope
+    if (typeof key.note === "string") out.note = key.note
+    if (typeof key.keyGroup === "string") out.keyGroup = key.keyGroup
+    return out
   })
   return { set: typeof container?.set === "string" ? container.set : null, keys }
+}
+
+// ── 영역 거름(--area) ──────────────────────────────────────────────────────────────────────────
+
+/** "pricing,company" → 영역 목록. 모르는 영역이 있으면 예외. */
+export function parseAreaFilter(value: string): AnswerIndexArea[] {
+  const areas = value
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean)
+  const unknown = areas.filter((area) => !isAnswerIndexArea(area))
+  if (areas.length === 0 || unknown.length > 0) {
+    throw new Error(`--area 는 영역(${ANSWER_INDEX_AREAS.join("·")})을 쉼표로 잇습니다: ${unknown.join(", ") || value}`)
+  }
+  return areas as AnswerIndexArea[]
+}
+
+/** 키의 area 가 그 영역인 줄만 남긴다(키가 없거나 area 가 없는 줄은 뺀다). 키도 같은 기준으로 거른다. */
+export function filterByArea<T extends { id: string }>(items: readonly T[], keyById: ReadonlyMap<string, AnswerKey>, areas: readonly AnswerIndexArea[]) {
+  const wanted = new Set<string>(areas)
+  return items.filter((item) => {
+    const area = keyById.get(item.id)?.area
+    return area !== undefined && wanted.has(area)
+  })
+}
+
+// ── 흔적 1위 카드(--top1) ──────────────────────────────────────────────────────────────────────
+
+export interface Top1Summary {
+  /** 키가 있는 compiled 줄(색인이 정한 줄). */
+  compiledRows: number
+  /** 그 가운데 accept 가 있는 키의 줄(1위 정답률 분모). */
+  acceptRows: number
+  /** 흔적 1위 카드의 id 가 accept 에 드는 줄(reject 에 걸리면 넣지 않음). */
+  top1Accept: number
+  /** accept 는 아니고 partialAccept 에 드는 줄. */
+  top1Partial: number
+  /** 1위 카드가 reject 에 걸린 줄. */
+  top1Rejected: number
+  /** 1위 카드가 없거나 카드 자료에 없어 id 를 못 만든 줄(accept 키 줄 가운데). */
+  top1Unmapped: number
+  /** nodoc 키 compiled 줄. */
+  nodocRows: number
+  /** nodoc 키인데 답한 줄(못 찾음·공백·되묻기가 아님). */
+  nodocAnswered: number
+}
+
+/** 흔적 top 에서 첫 카드 id('none' 자리는 건너뜀). */
+export function traceTop1CardId(answerIndex: unknown): string | null {
+  if (!isRecord(answerIndex) || !Array.isArray(answerIndex.top)) return null
+  for (const candidate of answerIndex.top) {
+    const id = isRecord(candidate) && typeof candidate.id === "string" ? candidate.id : null
+    if (id && id !== "none") return id
+  }
+  return null
+}
+
+export function summarizeTop1(
+  rows: readonly ProxyEvalRow[],
+  results: readonly ProxyRowResult[],
+  keyById: ReadonlyMap<string, AnswerKey>,
+  context: ProxyContext = {}
+): Top1Summary {
+  const summary: Top1Summary = { compiledRows: 0, acceptRows: 0, top1Accept: 0, top1Partial: 0, top1Rejected: 0, top1Unmapped: 0, nodocRows: 0, nodocAnswered: 0 }
+  const rowById = new Map(rows.map((row) => [row.id, row]))
+  for (const result of results) {
+    const key = keyById.get(result.id)
+    if (!key || result.route !== "compiled") continue
+    summary.compiledRows += 1
+    if (key.nodoc) {
+      summary.nodocRows += 1
+      if (result.kind === "answer") summary.nodocAnswered += 1
+    }
+    const accept = new Set(key.accept ?? [])
+    if (accept.size === 0) continue
+    summary.acceptRows += 1
+    const cardId = traceTop1CardId(rowById.get(result.id)?.answerIndex)
+    const card = cardId ? context.cards?.get(cardId) : undefined
+    const ids = card ? idsFromCard(card) : []
+    if (ids.length === 0) {
+      summary.top1Unmapped += 1
+      continue
+    }
+    if (ids.some((id) => (key.reject ?? []).includes(id))) summary.top1Rejected += 1
+    else if (ids.some((id) => accept.has(id))) summary.top1Accept += 1
+    else if (ids.some((id) => (key.partialAccept ?? []).includes(id))) summary.top1Partial += 1
+  }
+  return summary
 }
 
 export function readEvalRows(jsonl: string): ProxyEvalRow[] {
@@ -582,7 +687,8 @@ function main(argv: string[]) {
   if (!resultsPath || !keysPath) {
     console.error(
       "사용법: npx tsx scripts/answer-index/proxy-eval.ts --results <측정.jsonl> --keys <answer-keys.json> " +
-        "[--units data/answer-index/units.json] [--inventory data/answer-index/inventory.json] [--cards data/answer-index/cards] [--out <줄별.json>] [--json]"
+        "[--units data/answer-index/units.json] [--inventory data/answer-index/inventory.json] [--cards data/answer-index/cards] " +
+        "[--area <영역,…>] [--top1] [--out <줄별.json>] [--json]"
     )
     process.exit(2)
   }
@@ -590,9 +696,13 @@ function main(argv: string[]) {
   const inventoryPath = resolve(argValue(argv, "--inventory") ?? "data/answer-index/inventory.json")
   const cardsPath = resolve(argValue(argv, "--cards") ?? "data/answer-index/cards")
 
-  const rows = readEvalRows(readFileSync(resolve(resultsPath), "utf8"))
-  const { set, keys } = readAnswerKeys(JSON.parse(readFileSync(resolve(keysPath), "utf8")))
-  const keyById = new Map(keys.map((key) => [key.id, key]))
+  const allRows = readEvalRows(readFileSync(resolve(resultsPath), "utf8"))
+  const { set, keys: allKeys } = readAnswerKeys(JSON.parse(readFileSync(resolve(keysPath), "utf8")))
+  const keyById = new Map(allKeys.map((key) => [key.id, key]))
+  const areaArg = argValue(argv, "--area")
+  const areas = areaArg === undefined ? null : parseAreaFilter(areaArg)
+  const rows = areas ? filterByArea(allRows, keyById, areas) : allRows
+  const keys = areas ? filterByArea(allKeys, keyById, areas) : allKeys
 
   const context: ProxyContext = {}
   const notes: string[] = []
@@ -605,18 +715,25 @@ function main(argv: string[]) {
   const withoutRouter = rows.filter((row) => row.router === undefined).length
   if (withoutRouter > 0) notes.push(`router 필드가 없는 예전 결과 줄 ${withoutRouter}개는 legacy 로 봅니다.`)
 
+  if (areas) notes.push(`영역 거름 ${areas.join(",")}: 줄 ${rows.length}/${allRows.length}, 키 ${keys.length}/${allKeys.length}(키에 area 가 없는 줄은 뺌)`)
+  const withoutArea = areas ? allKeys.filter((key) => key.area === undefined).length : 0
+  if (withoutArea > 0) notes.push(`area 가 없는 키 ${withoutArea}개는 영역 거름에서 빠집니다.`)
+
   const results = rows.map((row) => classifyRow(row, keyById.get(row.id), context))
   const summary = summarizeProxy(results, keys.length)
+  const showTop1 = argv.includes("--top1")
+  if (showTop1 && !context.cards) notes.push("카드 자료가 없어 --top1 의 1위 카드를 id 로 바꾸지 못합니다.")
+  const top1 = showTop1 ? summarizeTop1(rows, results, keyById, context) : null
 
   if (argValue(argv, "--out")) {
-    writeFileSync(resolve(argValue(argv, "--out") as string), `${JSON.stringify({ set, results: resultsPath, rows: results }, null, 2)}\n`)
+    writeFileSync(resolve(argValue(argv, "--out") as string), `${JSON.stringify({ set, results: resultsPath, areas, rows: results }, null, 2)}\n`)
   }
   if (argv.includes("--json")) {
-    console.log(JSON.stringify({ set, results: resultsPath, keys: keysPath, notes, ...summary }, null, 2))
+    console.log(JSON.stringify({ set, results: resultsPath, keys: keysPath, areas, notes, ...summary, ...(top1 ? { top1 } : {}) }, null, 2))
     return
   }
   for (const note of notes) console.error(`참고: ${note}`)
-  console.log(formatLine(`대리 점수${set ? `(${set})` : ""}`, summary))
+  console.log(formatLine(`대리 점수${set ? `(${set})` : ""}${areas ? ` [${areas.join(",")}]` : ""}`, summary))
   for (const [route, routeSummary] of Object.entries(summary.byRoute)) {
     if (routeSummary) console.log(formatLine(`  ${route}`, routeSummary))
   }
@@ -624,6 +741,14 @@ function main(argv: string[]) {
     `줄 ${summary.rows} · 키 없는 줄 ${summary.missingKey} · 줄 없는 키 ${summary.keysWithoutRow} · id 를 못 만든 답 ${summary.unmapped}` +
       ` (${round2(summary.n > 0 ? (summary.unmapped / summary.n) * 100 : 0)}%)`
   )
+  if (top1) {
+    const pct = (part: number, whole: number) => `${round2(whole > 0 ? (part / whole) * 100 : 0)}%`
+    console.log(
+      `흔적 1위 카드(compiled ${top1.compiledRows}줄): accept 키 ${top1.acceptRows}줄 중 1위가 accept ${top1.top1Accept} (${pct(top1.top1Accept, top1.acceptRows)})` +
+        ` · partial ${top1.top1Partial} · reject ${top1.top1Rejected} · id 못 만듦 ${top1.top1Unmapped}`
+    )
+    console.log(`nodoc 키 ${top1.nodocRows}줄 중 답해 버림 ${top1.nodocAnswered} (${pct(top1.nodocAnswered, top1.nodocRows)})`)
+  }
 }
 
 if (process.argv[1] && resolve(process.argv[1]).replace(/\\/g, "/").endsWith("scripts/answer-index/proxy-eval.ts")) {

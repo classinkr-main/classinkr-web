@@ -14,6 +14,7 @@ import {
   ANSWER_LEADS,
   ASK_TYPES,
   AUDIT_DISPOSITIONS,
+  CURATED_MODULES_WITHOUT_RUNTIME,
   isAnswerIndexArea,
   type AnswerCard,
   type AnswerIndexArea,
@@ -32,8 +33,8 @@ import { findSafetyViolations } from "./text-rules"
 
 export const VERIFY_RULES = [
   { rule: "V-1", title: "doc·howto 카드 문장 참조(단위·번호·해시)가 지금 units.json·지금 문서와 같다. units.json 이 지금 문서와 같다" },
-  { rule: "V-2", title: "FIX·policy 답 글 해시 = 점검 통과본, KEEP 해시 = 지금 옛 답 글, 점검 인용이 문장·페이지 줄에 글자 그대로 있다" },
-  { rule: "V-3", title: "리드 허용 목록·리드 근거, 답 글에 식별 정보 요구·금액·할인/환불 약속 없음, 캡션·메타·nav 문장 안 씀" },
+  { rule: "V-2", title: "FIX·policy 답 글 해시 = 점검 통과본, KEEP 해시 = 지금 옛 답 글(svc·template KEEP 은 거부 → FIX text), 점검 인용이 문장·페이지 줄에 글자 그대로 있다" },
+  { rule: "V-3", title: "리드 허용 목록·리드 근거, 답 글에 식별 정보 요구·금액·할인/환불 약속 없음, 캡션·메타·nav 문장 안 씀, 결정 전 정책 구절(blockPhrases) 없음" },
   { rule: "V-4", title: "변형: 두 카드에 같은 변형 없음, 길이 2~60자, 카드 등급별 최소 개수" },
   { rule: "V-5", title: "공백 카드·없는 개념이 문서와 겹치는지(경고)" },
   { rule: "V-6", title: "사전: 모호 규칙 없는 형태 충돌, 4어절 이상 형태, 짧은 형태 경계 표시" },
@@ -343,8 +344,17 @@ export async function runVerify(options: VerifyOptions = {}): Promise<VerifyResu
   for (const card of cards) {
     const value = card.value
     if (!isObject(value.answer)) continue
-    if (value.kind === "fixed" && "curatedRef" in value.answer && isObject(value.answer.curatedRef)) {
-      const ref = value.answer.curatedRef
+    const curatedRef = "curatedRef" in value.answer && isObject(value.answer.curatedRef) ? value.answer.curatedRef : null
+    if (curatedRef && CURATED_MODULES_WITHOUT_RUNTIME.includes(curatedRef.module)) {
+      // 런타임(curated.ts·load.ts)은 이 모듈의 옛 답을 id 로 부를 수 없어 카드를 '옛 답 없음'으로 끈다. 검사도 통과시키지 않는다.
+      add(
+        "V-2",
+        "error",
+        card.file,
+        `${value.id}: curatedRef.module ${curatedRef.module} 은 런타임이 옛 답을 부를 수 없어 꺼지는 KEEP 카드(${curatedRef.module}:${curatedRef.id}) — FIX text 카드로 쓴다(같은 글이면 textHash 같음)`
+      )
+    } else if (value.kind === "fixed" && curatedRef) {
+      const ref = curatedRef
       const now = current.inventory.get(`${ref.module}:${ref.id}`)
       if (!now) add("V-2", "error", card.file, `${value.id}: curatedRef 옛 답이 지금 코드에 없음(${ref.module}:${ref.id})`)
       else if (now.textHash !== ref.textHash) add("V-2", "error", card.file, `${value.id}: curatedRef.textHash 가 지금 옛 답 글 해시와 다름(${ref.module}:${ref.id}) — 다시 점검`)
@@ -425,6 +435,7 @@ export async function runVerify(options: VerifyOptions = {}): Promise<VerifyResu
           : ""
     if (directText) for (const rule of findSafetyViolations(directText)) add("V-3", "error", card.file, `${value.id}: 답 글에 ${rule.label}`)
   }
+  checkPendingPolicyPhrases(data, cards, fileUnits, current, add)
 
   // ── V-4 ──
   const variantOwner = new Map<string, { cardId: string; file: string }>()
@@ -805,9 +816,99 @@ export async function runVerify(options: VerifyOptions = {}): Promise<VerifyResu
   }
 }
 
-// ─── V-12 스키마 ────────────────────────────────────────────────────────
+// ─── V-3 결정 전 정책 구절 ──────────────────────────────────────────────
 
 type Add = (rule: VerifyRule, level: VerifyLevel, file: string | null, message: string) => void
+
+/** 사람 결정 대기열 항목의 결정이 비어 있는지(null·없음·공백 글). */
+function isUndecided(decision: unknown) {
+  return decision === null || decision === undefined || (typeof decision === "string" && !decision.trim())
+}
+
+export interface PendingPolicyPhrase {
+  /** 대기열 항목 id(HQ-xx). */
+  item: string
+  phrase: string
+  /** normalizeForOverlap(phrase). */
+  key: string
+}
+
+/**
+ * 결정이 비어 있는 대기열 항목의 blockPhrases(정규화한 열쇠가 빈 것은 뺀다). 같은 id 가 조각 여러 곳에 있으면
+ * 한 곳이라도 결정이 있으면 결정된 것으로 본다.
+ */
+export function pendingPolicyPhrases(items: readonly unknown[]): PendingPolicyPhrase[] {
+  const decided = new Set<string>()
+  for (const item of items) if (isObject(item) && typeof item.id === "string" && !isUndecided(item.decision)) decided.add(item.id)
+  const out: PendingPolicyPhrase[] = []
+  const seen = new Set<string>()
+  for (const item of items) {
+    if (!isObject(item) || typeof item.id !== "string" || decided.has(item.id) || !isStringArray(item.blockPhrases)) continue
+    for (const phrase of item.blockPhrases) {
+      const key = normalizeForOverlap(phrase)
+      if (!key || seen.has(`${item.id}\u0000${key}`)) continue
+      seen.add(`${item.id}\u0000${key}`)
+      out.push({ item: item.id, phrase, key })
+    }
+  }
+  return out
+}
+
+/**
+ * V-3 확장: 결정 전 정책 구절. active doc·howto·fixed(text)·policy 카드의 답 글(doc 는 고른 문장 글, howto 는 증상 주제·가이드 답 글)에
+ * 결정이 비어 있는 대기열 항목의 blockPhrases 가 정규화 포함되면 오류. 그 항목을 policyRef 로 가리키는 policy 카드와
+ * active 가 아닌 카드(review·disabled)는 보지 않는다. KEEP(curatedRef) 카드는 옛 답 글 그대로라 보지 않는다.
+ */
+function checkPendingPolicyPhrases(
+  data: AnswerIndexData,
+  cards: Located<AnswerCard>[],
+  fileUnits: ReadonlyMap<string, AnswerIndexUnit>,
+  current: CurrentSources,
+  add: Add
+) {
+  const phrases = pendingPolicyPhrases(data.humanQueue.map((item) => item.value))
+  if (phrases.length === 0) return
+  for (const card of cards) {
+    const value = card.value
+    if (value.status !== "active" || !isObject(value.answer)) continue
+    const answer = value.answer as Record<string, unknown>
+    let text = ""
+    let policyRef: string | null = null
+    if (value.kind === "doc" && Array.isArray(answer.sentences)) {
+      const texts: string[] = []
+      for (const ref of answer.sentences) {
+        if (!isObject(ref) || typeof ref.unit !== "string" || !Array.isArray(ref.ids)) continue
+        const unit = fileUnits.get(ref.unit)
+        for (const i of ref.ids) {
+          const sentence = typeof i === "number" ? unit?.sentences[i] : undefined
+          if (sentence) texts.push(sentence.text)
+        }
+      }
+      text = texts.join("\n")
+    } else if (value.kind === "howto") {
+      const topic = typeof answer.symptomTopic === "string" ? current.inventory.get(`symptom:${answer.symptomTopic}`)?.text : undefined
+      const guide = typeof answer.guide === "string" ? current.inventory.get(`guide:${answer.guide}`)?.text : undefined
+      text = [topic, guide].filter((part): part is string => Boolean(part)).join("\n")
+    } else if (value.kind === "fixed" && typeof answer.text === "string") {
+      text = answer.text
+    } else if (value.kind === "policy" && typeof answer.text === "string") {
+      text = answer.text
+      policyRef = typeof answer.policyRef === "string" ? answer.policyRef : null
+    }
+    if (!text) continue
+    const normalized = normalizeForOverlap(text)
+    const hitsByItem = new Map<string, string[]>()
+    for (const phrase of phrases) {
+      if (phrase.item === policyRef || !normalized.includes(phrase.key)) continue
+      hitsByItem.set(phrase.item, [...(hitsByItem.get(phrase.item) ?? []), phrase.phrase])
+    }
+    for (const [item, hit] of hitsByItem) {
+      add("V-3", "error", card.file, `${value.id}: 정책 대기 ${item} 구절: 카드를 review 로 두거나 policy 카드로 보낸다(${hit.map((phrase) => `"${short(phrase, 30)}"`).join(", ")})`)
+    }
+  }
+}
+
+// ─── V-12 스키마 ────────────────────────────────────────────────────────
 
 function checkSchemas(data: AnswerIndexData, add: Add) {
   const err = (file: string, message: string) => add("V-12", "error", file, message)
@@ -948,6 +1049,15 @@ function checkSchemas(data: AnswerIndexData, add: Add) {
     const value = item.value as unknown
     if (!isObject(value) || typeof value.id !== "string" || !/^HQ-\d+$/.test(value.id) || typeof value.topic !== "string") {
       err(item.file, `대기열 ${item.at}: { id: "HQ-<번호>", topic, … } 가 아님`)
+      continue
+    }
+    if (value.blockPhrases !== undefined) {
+      if (!isStringArray(value.blockPhrases)) err(item.file, `${value.id}: blockPhrases 는 문자열 배열`)
+      else {
+        for (const phrase of value.blockPhrases) {
+          if (normalizeForOverlap(phrase).length < 2) add("V-12", "warning", item.file, `${value.id}: blockPhrases "${phrase}"는 정규화하면 2글자 미만이라 거의 모든 글에 걸리거나 아무것도 막지 못함`)
+        }
+      }
     }
   }
   for (const item of data.answerKeys) {
@@ -957,8 +1067,19 @@ function checkSchemas(data: AnswerIndexData, add: Add) {
       continue
     }
     value.keys.forEach((key, index) => {
-      if (!isObject(key) || typeof key.id !== "string" || !isStringArray(key.accept)) err(item.file, `키 ${index}: { id, accept[] } 가 아님`)
-      else if (["q", "question", "text"].some((field) => field in key)) err(item.file, `키 ${key.id}: 질문 글을 담지 않는다(q·question·text 칸 금지)`)
+      if (!isObject(key) || typeof key.id !== "string" || !isStringArray(key.accept)) {
+        err(item.file, `키 ${index}: { id, accept[] } 가 아님`)
+        return
+      }
+      if (["q", "question", "text"].some((field) => field in key)) err(item.file, `키 ${key.id}: 질문 글을 담지 않는다(q·question·text 칸 금지)`)
+      for (const field of ["partialAccept", "reject", "siteAccept", "searched"] as const) {
+        if (key[field] !== undefined && !isStringArray(key[field])) err(item.file, `키 ${key.id}: ${field} 는 문자열 배열`)
+      }
+      if (key.area !== undefined && !isAnswerIndexArea(key.area)) err(item.file, `키 ${key.id}: area 가 영역 12개 밖(${String(key.area)})`)
+      if (key.evidenceScope !== undefined && key.evidenceScope !== "docs" && key.evidenceScope !== "site") err(item.file, `키 ${key.id}: evidenceScope 는 docs·site`)
+      for (const field of ["areaFrom", "note", "keyGroup"] as const) {
+        if (key[field] !== undefined && typeof key[field] !== "string") err(item.file, `키 ${key.id}: ${field} 는 문자열`)
+      }
     })
   }
   if (data.calibrationSet) {

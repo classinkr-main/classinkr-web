@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import { curatedTextHash } from "@/lib/chatbot/answer-index/curated"
 import { collectLegacyVotes, legacyAnswerIds } from "@/lib/chatbot/answer-index/legacy-votes"
-import type { CuratedModule } from "@/lib/chatbot/answer-index/types"
+import { CURATED_MODULES_WITHOUT_RUNTIME, type CuratedModule } from "@/lib/chatbot/answer-index/types"
 import { findBasicQuickAnswers } from "@/lib/chatbot/quick-answers-basics"
 import { findFieldQuickAnswer } from "@/lib/chatbot/quick-answers-field"
 import { buildInventory } from "@/scripts/answer-index/lib/inventory"
@@ -28,6 +28,15 @@ describe("curatedTextHash", () => {
     expect(curatedTextHash({ module: "template", id: "x", textHash: "" })).toBeNull()
     expect(curatedTextHash({ module: "field", id: "no-such-answer", textHash: "" })).toBeNull()
   })
+
+  it("every inventory answer of the modules verify V-2 rejects (CURATED_MODULES_WITHOUT_RUNTIME) is uncallable by id at runtime", async () => {
+    expect([...CURATED_MODULES_WITHOUT_RUNTIME].sort()).toEqual(["svc", "template"])
+    const inventory = await buildInventory({ computeHits: false })
+    const uncallable = inventory.entries.filter((entry) => CURATED_MODULES_WITHOUT_RUNTIME.includes(entry.module as CuratedModule))
+    expect(uncallable.length).toBeGreaterThan(0)
+    const callable = uncallable.filter((entry) => curatedTextHash({ module: entry.module as CuratedModule, id: entry.sourceId, textHash: "" }) !== null)
+    expect(callable.map((entry) => entry.id)).toEqual([])
+  }, 120_000)
 })
 
 describe("collectLegacyVotes", () => {
