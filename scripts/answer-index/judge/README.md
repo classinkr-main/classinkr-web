@@ -204,7 +204,7 @@ npx tsx scripts/answer-index/proxy-eval.ts --results <측정.jsonl> --keys data/
 ```
 
 - 정답 키(사양 §4.2, 형은 `types.ts` `AnswerKey`): `{ "set", "keys": [{ "id", "accept": [], "partialAccept": [], "nodoc": false, "clarifyOk": false }] }`. `accept`·`partialAccept`는 옛 답 id(`basics:`·`field:`·`svc:`·`symptom:`·`guide:` …, inventory 의 id 그대로)와 문서 단위 id(`unit:<unitId>`, 예: `unit:doc:/docs/teacher/course-members#4`).
-  선택 칸: `reject`(이 id 로 답하면 `accept`와 겹쳐도 `wrong`, 심사 범위 밖 사실을 단정하는 옛 답 등), `siteAccept`(공개 페이지 근거로만 맞는 답 — 대리 점수 계산에는 쓰지 않음), `area`(질문의 영역, `--area`가 거름), `areaFrom`(영역을 정한 근거), `evidenceScope`(`docs`·`site`), `searched`(nodoc 일 때 찾아본 낱말), `note`, `keyGroup`(같은 정답을 공유하는 키 묶음).
+  선택 칸: `reject`(이 id 로 답하면 `accept`와 겹쳐도 `wrong`, 심사 범위 밖 사실을 단정하는 옛 답 등. compiled 줄은 카드가 실제로 내는 글의 id — 문장 단위·`curatedRef`·증상·가이드, 그리고 글이 그 옛 답 글과 같은 text 카드의 `provenance.legacyIds` — 로만 대조한다. 고친 글(FIX)·문서 문장(CONVERT) 카드의 provenance 는 출처일 뿐이라 reject 에 걸지 않는다), `siteAccept`(공개 페이지 근거로만 맞는 답 — 대리 점수 계산에는 쓰지 않음), `area`(질문의 영역, `--area`가 거름), `areaFrom`(영역을 정한 근거), `evidenceScope`(`docs`·`site`), `searched`(nodoc 일 때 찾아본 낱말), `note`, `keyGroup`(같은 정답을 공유하는 키 묶음).
 - `--area pricing,company`: 키의 `area`가 그 영역인 줄만 센다(키가 없거나 `area`가 없는 줄은 뺀다).
 - `--top1`: compiled 줄에서 결정과 무관하게 흔적 1위 카드(`answerIndex.top`의 첫 카드, `none` 자리는 건너뜀)의 id 가 `accept`에 드는 비율(`accept`가 있는 키만, `reject`에 걸리면 넣지 않음)과, `nodoc` 키인데 답해 버린(못 찾음·공백·되묻기가 아닌) 비율을 더 찍는다. 문턱을 고치기 전 순위 자체가 맞는지 보는 숫자다.
 - `--units`·`--inventory`·`--cards`는 기본 경로에 파일이 없으면 그 대조만 건너뛰고 `참고:`로 알린다.
@@ -252,7 +252,7 @@ npx tsx scripts/answer-index/proxy-eval.ts --results <측정.jsonl> --keys data/
 | 못 찾음 | `nodoc: false` | `nf_doc_has` |
 | 되묻기 | `clarifyOk: true` | `good` |
 | 되묻기 | 그 밖 | `needless_clarify` |
-| 답 | id 가 `reject`에 있음(아래 둘보다 먼저) | `wrong` |
+| 답 | id 가 `reject`에 있음(아래 둘보다 먼저, compiled 는 카드가 내는 글의 id 만) | `wrong` |
 | 답 | id 가 `accept`에 있음 | `good` |
 | 답 | id 가 `partialAccept`에 있음 | `partial` |
 | 답 | 그 밖(또는 id 를 못 만듦) | `wrong` |

@@ -3,21 +3,28 @@
  *
  * 질문마다 지금 색인의 상위 k 카드(id·종류·영역·주제·덮는 것·덮지 않는 것·답 글 앞 200자·점수·확신도), 없는 개념 적중으로 생기는
  * 공백 카드 후보, 지금 결정(kind·card·conf)을 낸다. 색인은 런타임(lib/chatbot/answer-index/index.ts getRouterAnswerIndex)과 같은
- * 경로로 만든다: loadAnswerIndexData({ dir, curatedTextHash }) → compileAnswerIndex. 결정은 decide 와 같은 계산
- * (analyzeQuestion → resolveDecision, 문턱 thresholdFor = calibration + CHATBOT_COMPILED_MIN_CONFIDENCE)이다.
+ * 경로로 만든다: loadAnswerIndexData({ dir, curatedTextHash }) → compileAnswerIndex. 결정은 decide 가 쓰는 decideWithAnalysis 그대로
+ * (문턱 thresholdFor = calibration + CHATBOT_COMPILED_MIN_CONFIDENCE, 끈 카드 CHATBOT_COMPILED_DISABLED_CARDS)이고, 상위 k 는 그
+ * 판정이 쓴 질문 전체 분석의 순위다.
  *
- * 런타임과 다른 점(알고 쓴다):
+ * 런타임(service.ts planCompiledRoute)과 다른 점(알고 쓴다):
  * - 질문 글은 공백만 접는다. 서비스의 개인정보 가리기(redactPii)는 service.ts 안에 있어 하지 않는다.
  * - 옛 정규식 표(vote)는 collectLegacyVotes(질문, null, legacy-alias)로 센다. 서비스가 더하는 정해 둔 답 출처 이름
  *   (buildServiceQuickAnswer·정책 가드의 gateOriginal, 약한 상담 신호)은 service.ts 를 불러야 해서 넣지 않는다.
- * - 범위 관문(isCompiledScope)은 판정을 막지 않고 scope 칸으로만 적는다(범위 밖 질문도 상위 카드를 본다).
+ * - 증상 신고 판별은 decide 기본값(normalize.ts INDEX_SYMPTOM_RE)이다. 서비스는 service.ts SYMPTOM_REPORT_RE 를 넘기므로
+ *   못 찾음의 abstainReason(symptom·nodoc)이 드물게 다를 수 있다(kind·card 는 같다).
+ * - 색인 앞 단계(인사·거절 답·관문 밖 정해 둔 답·영어 안내·강한 상담 연결·이미 해 봤다는 화난 문의)를 거치지 않고, 범위 관문
+ *   (isCompiledScope)도 판정을 막지 않고 scope 칸으로만 적는다(범위 밖 질문도 상위 카드를 본다).
+ * - top 은 질문 전체의 순위다. 두 조각으로 나뉘어 정해지면 결정 카드가 조각 순위에서 나올 수 있다(decision.segments 를 본다).
  * 네트워크·모델 호출 없음.
  */
+import { resolve } from "node:path"
+
 import { compileAnswerIndex, type CompiledAnswerIndex } from "@/lib/chatbot/answer-index/compile"
 import { curatedLegacyText, curatedTextHash } from "@/lib/chatbot/answer-index/curated"
-import { analyzeQuestion, resolveDecision, thresholdFor } from "@/lib/chatbot/answer-index/decide"
+import { decideWithAnalysis, disabledCardIds } from "@/lib/chatbot/answer-index/decide"
 import { collectLegacyVotes } from "@/lib/chatbot/answer-index/legacy-votes"
-import { loadAnswerIndexData, type AnswerIndexLoadOptions, type LoadedAnswerIndexData } from "@/lib/chatbot/answer-index/load"
+import { answerIndexDataDir, loadAnswerIndexData, type AnswerIndexLoadOptions, type LoadedAnswerIndexData } from "@/lib/chatbot/answer-index/load"
 import { isCompiledScope } from "@/lib/chatbot/answer-index/scope"
 import type { AnswerCard, AnswerCardKind, AnswerIndexDecisionKind, AnswerIndexUnit } from "@/lib/chatbot/answer-index/types"
 
@@ -53,7 +60,7 @@ export interface TopKAbsent {
   form: string
   label: string | null
   gapCard: string | null
-  /** 그 공백 카드가 지금 색인에 있는지(꺼짐·review·낡음이면 false). */
+  /** 그 공백 카드가 지금 판정에 쓰이는지(status 가 active 가 아니거나 낡아 색인에서 빠졌거나, CHATBOT_COMPILED_DISABLED_CARDS 로 껐으면 false). */
   inIndex: boolean
   topic: string | null
   answerPreview: string | null
@@ -120,6 +127,12 @@ export function cardAnswerPreview(card: AnswerCard, units: ReadonlyMap<string, A
   }
 }
 
+/** 자료 폴더: --data-dir(작업 폴더 기준) 또는 런타임과 같은 answerIndexDataDir()(ANSWER_INDEX_DATA_DIR, 없으면 data/answer-index). */
+export function topKDataDir(dirArg?: string | null, env: Env = process.env) {
+  const given = dirArg?.trim()
+  return given ? resolve(process.cwd(), given) : answerIndexDataDir(env)
+}
+
 export interface TopKIndexOptions {
   /** 자료 폴더. */
   dir: string
@@ -147,9 +160,9 @@ export function topKForQuestion(index: CompiledAnswerIndex, question: TopKQuesti
   const k = options.k ?? TOPK_DEFAULT_K
   const text = question.q.replace(/\s+/g, " ").trim()
   const votes = options.votes === false ? [] : collectLegacyVotes(text, null, index.legacyAlias)
-  const analysis = analyzeQuestion(index, text, { votes, env })
-  const decision = resolveDecision(index, analysis, (kind) => thresholdFor(index, kind, env))
+  const { decision, analysis } = decideWithAnalysis(index, text, { votes, env })
   const { ranked, confs } = analysis.whole
+  const disabled = disabledCardIds(env)
 
   const top: TopKCard[] = []
   for (let at = 0; at < ranked.length && top.length < k; at += 1) {
@@ -185,7 +198,8 @@ export function topKForQuestion(index: CompiledAnswerIndex, question: TopKQuesti
       form: match.form,
       label: concept?.label ?? null,
       gapCard: gapId,
-      inIndex: gapCard !== null,
+      // decide 와 같은 기준: 색인에 있고 환경변수로 끄지 않은 공백 카드만 gap 으로 간다.
+      inIndex: gapCard !== null && !disabled.has(gapCard.id),
       topic: gapCard?.topic ?? null,
       answerPreview: gapCard ? cardAnswerPreview(gapCard, index.currentUnits) : null,
     })

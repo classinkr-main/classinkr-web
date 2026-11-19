@@ -65,9 +65,11 @@ export function readLegacyEquivalence(): LegacyEquivalenceFile {
 
 /**
  * 시험 환경과 같은 조건: 문서 검색 DB·모델 키를 비워 외부 서비스를 부르지 않는다(다른 평가셋 시험과 같은 방식).
- * 답 라우터는 router 로 둔다(null 이면 지움 = 환경변수 없음).
+ * 답 라우터는 router 로 둔다(null 이면 지움 = 환경변수 없음). 답 색인 자료 폴더(ANSWER_INDEX_DATA_DIR)는 dataDir 로 둔다
+ * (null 이면 지움 = 기본 data/answer-index). 셸에 작업 폴더 값이 남아 있어도 '환경변수 없음' 조건이 그대로 재지게 한다.
  */
-export function stubLegacyEquivalenceEnv(router: string | null) {
+export function stubLegacyEquivalenceEnv(router: string | null, dataDir: string | null = null) {
+  vi.stubEnv("ANSWER_INDEX_DATA_DIR", dataDir ?? undefined)
   vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "")
   vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "")
   vi.stubEnv("SUPABASE_SECRET_KEY", "")

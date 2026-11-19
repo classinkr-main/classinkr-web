@@ -14,8 +14,9 @@ export function repoRoot() {
   return resolve(process.env.ANSWER_INDEX_ROOT || process.cwd())
 }
 
+/** 자료 폴더: ANSWER_INDEX_DATA_DIR(앞뒤 공백은 뗀다, 런타임 answerIndexDataDir 와 같이) 또는 <root>/data/answer-index. */
 export function dataDir(root = repoRoot()) {
-  return resolve(root, process.env.ANSWER_INDEX_DATA_DIR || DATA_DIR_REL)
+  return resolve(root, process.env.ANSWER_INDEX_DATA_DIR?.trim() || DATA_DIR_REL)
 }
 
 /** 저장소 기준 상대 경로(구분자는 /). */

@@ -24,10 +24,13 @@
  * - 되묻기: clarifyOk 면 good, 아니면 needless_clarify
  * - 답: id 가 reject 에 있으면 accept 보다 앞서 wrong, accept 에 있으면 good, partialAccept 에 있으면 partial, 아니면 wrong
  *   (id 를 하나도 못 만들었으면 unmapped 표시). siteAccept(공개 페이지 근거로만 맞는 답)는 이 계산에 쓰지 않는다.
+ *   compiled 줄의 reject 대조는 카드가 실제로 내는 글의 id(rejectIdsFromCard)로만 한다: 문장 단위·curatedRef·증상·가이드와,
+ *   글이 그 옛 답 글과 같은 text 카드(fixed text·policy)의 provenance. 고친 글(FIX)·문서 문장(CONVERT) 카드의 provenance 는
+ *   출처일 뿐이라 reject 에 걸지 않는다(accept 대조에는 그대로 쓴다).
  *
  * --area <영역,…>: 키의 area 가 그 영역인 줄만 센다(키가 없거나 area 가 없는 줄은 뺀다).
  * --top1: compiled 줄(색인이 정한 줄)에서 결정과 무관하게 흔적 1위 카드(top 의 첫 카드, 'none' 자리는 건너뜀)가 accept 에 드는 비율
- *   (accept 가 있는 키만, reject 에 걸리면 넣지 않음)과, nodoc 키인데 답해 버린 비율(못 찾음·공백이 아닌 답)을 더 찍는다.
+ *   (accept 가 있는 키만, reject 에 걸리면(rejectIdsFromCard) 넣지 않음)과, nodoc 키인데 답해 버린 비율(못 찾음·공백·되묻기가 아닌 답)을 더 찍는다.
  */
 
 import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs"
@@ -85,6 +88,8 @@ export interface CardRecord {
   answer?: {
     sentences?: Array<{ unit?: string }>
     curatedRef?: { module?: string; id?: string }
+    /** fixed(FIX)·policy 카드의 답 글. */
+    text?: string
     symptomTopic?: string
     guide?: string
   }
@@ -209,6 +214,8 @@ export interface InventoryIndex {
   match(answer: string): string[]
   /** 그 id 가 inventory 에 있는지. */
   has(id: string): boolean
+  /** 그 id 의 옛 답 글(공백 접음)이 이 글과 같은지(질문에 따라 바뀌는 갈래 글 포함). */
+  sameText(id: string, text: string): boolean
   /** 관문 출처 이름이 이것인 inventory id(여럿일 수 있다. service 는 31개가 같은 이름을 쓴다). */
   byGateOriginal(name: string): string[]
   size: number
@@ -240,6 +247,12 @@ export function buildInventoryIndex(records: readonly InventoryRecord[]): Invent
     })
     .filter((entry) => entry.id && entry.literal >= MIN_INVENTORY_HEAD_CHARS)
   const ids = new Set(records.map((record) => record.id))
+  const texts = new Map<string, Set<string>>()
+  for (const record of records) {
+    const set = texts.get(record.id) ?? new Set<string>()
+    for (const text of [record.text, ...(record.alternatives ?? [])]) set.add(collapse(text))
+    texts.set(record.id, set)
+  }
   const byGate = new Map<string, string[]>()
   for (const record of records) {
     if (!record.gateOriginal) continue
@@ -248,6 +261,7 @@ export function buildInventoryIndex(records: readonly InventoryRecord[]): Invent
   return {
     size: ids.size,
     has: (id) => ids.has(id),
+    sameText: (id, text) => texts.get(id)?.has(collapse(text)) ?? false,
     byGateOriginal: (name) => byGate.get(name) ?? [],
     match(answer) {
       const text = collapse(answer)
@@ -323,6 +337,19 @@ export function idsFromCard(card: CardRecord): string[] {
   return Array.from(new Set(ids))
 }
 
+/**
+ * reject 대조용 id: 카드가 실제로 내는 글을 나타내는 id 만. 문장 단위·curatedRef(KEEP, 옛 답 글 그대로)·증상 주제·가이드는 그대로 넣고,
+ * provenance.legacyIds 는 카드가 어디서 왔는지일 뿐이라 text 카드(fixed text·policy)의 글이 그 옛 답 글과 같을 때만 넣는다.
+ * 고친 글(FIX)이나 문서 문장으로 바꾼 카드(CONVERT)가 출처 옛 답의 reject 로 wrong 이 되지 않게 한다. inventory 가 없으면 provenance 는 넣지 않는다.
+ */
+export function rejectIdsFromCard(card: CardRecord, inventory?: InventoryIndex): string[] {
+  const content = idsFromCard({ ...card, provenance: undefined })
+  const text = card.answer?.text
+  const sameText =
+    typeof text === "string" && inventory ? (card.provenance?.legacyIds ?? []).filter((id) => inventory.sameText(id, text)) : []
+  return Array.from(new Set([...content, ...sameText]))
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
 }
@@ -392,6 +419,8 @@ export function classifyRow(row: ProxyEvalRow, key: AnswerKey | undefined, conte
   const route: ProxyRowResult["route"] = decidedBy.startsWith("index") ? "compiled" : "legacy"
   let kind: ProxyAnswerKind
   let ids: string[] = []
+  /** reject 와 대조할 id(legacy 줄은 ids 그대로, compiled 줄은 rejectIdsFromCard). */
+  let rejectIds: string[] | null = null
   let reason: string
 
   if (row.answer === null || row.answer === undefined) {
@@ -410,6 +439,7 @@ export function classifyRow(row: ProxyEvalRow, key: AnswerKey | undefined, conte
       const found = cardIds.map((id) => context.cards?.get(id)).filter((card): card is CardRecord => Boolean(card))
       const missing = cardIds.filter((id) => !context.cards?.has(id))
       ids = Array.from(new Set(found.flatMap(idsFromCard)))
+      rejectIds = Array.from(new Set(found.flatMap((card) => rejectIdsFromCard(card, context.inventory))))
       reason = missing.length > 0 ? `카드 자료에 없는 id: ${missing.join(", ")}` : `카드 ${cardIds.join(", ")}`
     }
   } else if (isLegacyNotFound(row)) {
@@ -442,7 +472,7 @@ export function classifyRow(row: ProxyEvalRow, key: AnswerKey | undefined, conte
   if (kind === "not_found") return { ...base, matched: [], verdict: key.nodoc ? "nf_ok" : "nf_doc_has", reason }
   if (kind === "clarify") return { ...base, matched: [], verdict: key.clarifyOk ? "good" : "needless_clarify", reason }
   // reject 는 accept 보다 앞선다: 같은 답이 accept 대상 문장도 쓰지만 심사 범위 밖 사실을 단정하는 경우 등.
-  const rejected = ids.filter((id) => reject.has(id))
+  const rejected = (rejectIds ?? ids).filter((id) => reject.has(id))
   if (rejected.length > 0) return { ...base, matched: rejected, rejected, verdict: "wrong", reason: `${reason} / reject: ${rejected.join(", ")}` }
   const matched = ids.filter((id) => accept.has(id))
   if (matched.length > 0) return { ...base, matched, verdict: "good", reason }
@@ -584,11 +614,12 @@ export function summarizeTop1(
     const cardId = traceTop1CardId(rowById.get(result.id)?.answerIndex)
     const card = cardId ? context.cards?.get(cardId) : undefined
     const ids = card ? idsFromCard(card) : []
-    if (ids.length === 0) {
+    if (!card || ids.length === 0) {
       summary.top1Unmapped += 1
       continue
     }
-    if (ids.some((id) => (key.reject ?? []).includes(id))) summary.top1Rejected += 1
+    const reject = new Set(key.reject ?? [])
+    if (rejectIdsFromCard(card, context.inventory).some((id) => reject.has(id))) summary.top1Rejected += 1
     else if (ids.some((id) => accept.has(id))) summary.top1Accept += 1
     else if (ids.some((id) => (key.partialAccept ?? []).includes(id))) summary.top1Partial += 1
   }

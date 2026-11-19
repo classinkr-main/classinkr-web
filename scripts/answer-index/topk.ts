@@ -7,7 +7,8 @@
  *   npm run answer-index:topk -- --in <질문.json> --out <결과.jsonl>
  *
  * - 입력: [{ id, q }] 배열, 우주 샤드 꼴([{ id, q, p, m, label, … }]), 측정 입력([{ id, question }]) 또는 { items | questions | cases }.
- * - 자료 폴더: --data-dir > ANSWER_INDEX_DATA_DIR > data/answer-index. 합치지 않은 조각 파일은 런타임처럼 읽지 않는다(merge 뒤 쓴다).
+ * - 자료 폴더: --data-dir > ANSWER_INDEX_DATA_DIR > data/answer-index(뒤 둘은 런타임 answerIndexDataDir() 그대로: 상대 경로는 작업 폴더 기준).
+ *   합치지 않은 조각 파일은 런타임처럼 읽지 않는다(merge 뒤 쓴다).
  * - 한 줄: { id, q, scope, decision: { kind, card, conf, partial, absentHit, absentTail, abstainReason, segments }, votes,
  *   top: [{ rank, id, kind, area, topic, covers, notCovers, answerPreview, s, conf }], absent: [{ id, form, label, gapCard, inIndex, topic, answerPreview }] }
  * - --no-votes: 옛 정규식 표를 넣지 않는다(교차 검증·보정과 같은 조건).
@@ -15,8 +16,8 @@
  */
 import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { dirname, resolve } from "node:path"
-import { argValues, dataDir, hasFlag, repoRoot } from "./lib/common"
-import { buildTopKIndex, readTopKQuestions, topKForQuestion, TOPK_DEFAULT_K, type TopKRow } from "./lib/topk-core"
+import { argValues, hasFlag } from "./lib/common"
+import { buildTopKIndex, readTopKQuestions, topKDataDir, topKForQuestion, TOPK_DEFAULT_K, type TopKRow } from "./lib/topk-core"
 import { answerIndexVersionOf } from "@/lib/chatbot/answer-index"
 
 function usage(message?: string): never {
@@ -27,14 +28,12 @@ function usage(message?: string): never {
 
 function main() {
   const argv = process.argv.slice(2)
-  const root = repoRoot()
   const inPath = argValues(argv, "--in")[0]
   if (!inPath) usage("--in 이 없습니다.")
   const kArg = argValues(argv, "--k")[0]
   const k = kArg === undefined ? TOPK_DEFAULT_K : Number(kArg)
   if (!Number.isInteger(k) || k < 1) usage(`--k 는 1 이상 정수여야 합니다: ${kArg}`)
-  const dirArg = argValues(argv, "--data-dir")[0]
-  const dir = dirArg ? resolve(process.cwd(), dirArg) : dataDir(root)
+  const dir = topKDataDir(argValues(argv, "--data-dir")[0])
   const outArg = argValues(argv, "--out")[0]
   const votes = !hasFlag(argv, "--no-votes")
 

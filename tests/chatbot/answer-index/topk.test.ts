@@ -1,7 +1,10 @@
+import { join, resolve } from "node:path"
+
 import { describe, expect, it } from "vitest"
 
 import { decide } from "@/lib/chatbot/answer-index/decide"
-import { buildTopKIndex, readTopKQuestions, topKForQuestion, TOPK_DEFAULT_K } from "@/scripts/answer-index/lib/topk-core"
+import { answerIndexDataDir } from "@/lib/chatbot/answer-index/load"
+import { buildTopKIndex, readTopKQuestions, topKDataDir, topKForQuestion, TOPK_DEFAULT_K } from "@/scripts/answer-index/lib/topk-core"
 
 import { CARDS, FIXTURE_DIR, fixtureUnits } from "./index-fixture"
 
@@ -27,6 +30,49 @@ describe("상위 카드 덤프", () => {
       const firstReal = decision.top.find((candidate) => candidate.id !== "none")
       if (firstReal) expect(row.top[0].id, q).toBe(firstReal.id)
     }
+  })
+
+  it("두 조각으로 나뉘는 질문·끈 카드·문턱 하한에서도 결정 전체(조각·꼬리 포함)가 decide 와 같다", () => {
+    const split = "수업 중 학생 채팅 막을 수 있나요? 그리고 녹화 영상 다시보기 어디서 봐요"
+    expect(decide(index, split, { env }).segments).not.toBeNull()
+    const envs = [env, { CHATBOT_COMPILED_DISABLED_CARDS: CARDS.chat }, { CHATBOT_COMPILED_MIN_CONFIDENCE: "0.99" }]
+    for (const caseEnv of envs) {
+      for (const q of [split, "수업 중 학생 채팅 막을 수 있나요?", "ISMS 인증 받았나요?"]) {
+        const row = topKForQuestion(index, { id: "x", q }, { votes: false, env: caseEnv })
+        const decision = decide(index, q, { env: caseEnv })
+        const label = `${q} ${JSON.stringify(caseEnv)}`
+        expect(row.decision, label).toMatchObject({
+          kind: decision.kind,
+          card: decision.card,
+          partial: Boolean(decision.partial),
+          absentHit: decision.absentHit,
+          absentTail: decision.absentTail,
+          abstainReason: decision.abstainReason ?? null,
+        })
+        expect(row.decision.segments?.map((segment) => [segment.kind, segment.card]) ?? null, label).toEqual(
+          decision.segments?.map((segment) => [segment.kind, segment.card]) ?? null
+        )
+        // 끈 카드는 상위 카드에도 나오지 않는다.
+        for (const disabled of (caseEnv as Record<string, string>).CHATBOT_COMPILED_DISABLED_CARDS?.split(",") ?? []) {
+          expect(row.top.some((card) => card.id === disabled), label).toBe(false)
+        }
+      }
+    }
+  })
+
+  it("환경변수로 끈 공백 카드는 inIndex=false 이고 decide 처럼 gap 으로 가지 않는다", () => {
+    const off = { CHATBOT_COMPILED_DISABLED_CARDS: CARDS.gapCert }
+    const row = topKForQuestion(index, { id: "q", q: "ISMS 인증 받았나요?" }, { votes: false, env: off })
+    expect(row.absent[0]).toMatchObject({ id: "A_isms", gapCard: CARDS.gapCert, inIndex: false })
+    expect(row.decision.kind).not.toBe("gap")
+    expect(row.decision.kind).toBe(decide(index, "ISMS 인증 받았나요?", { env: off }).kind)
+  })
+
+  it("자료 폴더: --data-dir 가 없으면 런타임 answerIndexDataDir(ANSWER_INDEX_DATA_DIR, 공백 떼고 작업 폴더 기준)와 같다", () => {
+    expect(topKDataDir(undefined, {})).toBe(join(process.cwd(), "data/answer-index"))
+    expect(topKDataDir(undefined, { ANSWER_INDEX_DATA_DIR: " tmp/work " })).toBe(answerIndexDataDir({ ANSWER_INDEX_DATA_DIR: " tmp/work " }))
+    expect(topKDataDir(undefined, { ANSWER_INDEX_DATA_DIR: " tmp/work " })).toBe(resolve(process.cwd(), "tmp/work"))
+    expect(topKDataDir("other/data", { ANSWER_INDEX_DATA_DIR: "tmp/work" })).toBe(resolve(process.cwd(), "other/data"))
   })
 
   it("상위 k 카드에 종류·영역·주제·덮는 것·답 글 앞 200자·점수를 싣는다", () => {

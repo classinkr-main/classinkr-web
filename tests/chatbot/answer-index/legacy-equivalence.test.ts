@@ -1,9 +1,12 @@
 import { writeFileSync } from "node:fs"
+import { join } from "node:path"
 
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest"
 
+import { answerIndexDataDir } from "@/lib/chatbot/answer-index"
 import { evaluateChatbotQuery } from "@/lib/chatbot/service"
 
+import { FIXTURE_DIR } from "./index-fixture"
 import {
   equivalenceHash,
   LEGACY_EQUIVALENCE_FILE,
@@ -77,6 +80,8 @@ describe("legacy equivalence (router off / legacy)", () => {
 
   it.skipIf(WRITE)("matches the snapshot with no router env var", async () => {
     stubLegacyEquivalenceEnv(null)
+    // 자료 폴더 환경변수도 없다(기본 data/answer-index).
+    expect(answerIndexDataDir()).toBe(join(process.cwd(), "data/answer-index"))
     const actual = await hashAll()
     expect(diff(readLegacyEquivalence().hashes, actual)).toEqual([])
     expect(fetchSpy).not.toHaveBeenCalled()
@@ -86,6 +91,17 @@ describe("legacy equivalence (router off / legacy)", () => {
     stubLegacyEquivalenceEnv("legacy")
     const actual = await hashAll()
     expect(diff(readLegacyEquivalence().hashes, actual)).toEqual([])
+    expect(fetchSpy).not.toHaveBeenCalled()
+  }, 600_000)
+
+  it.skipIf(WRITE)("keeps the snapshot when ANSWER_INDEX_DATA_DIR points at another folder (router off and legacy)", async () => {
+    // 자료 폴더 환경변수는 답 색인(shadow·compiled)만 바꾼다. 라우터가 꺼져 있거나 legacy 면 답은 그대로다.
+    for (const router of [null, "legacy"]) {
+      stubLegacyEquivalenceEnv(router, FIXTURE_DIR)
+      expect(answerIndexDataDir()).toBe(FIXTURE_DIR)
+      const actual = await hashAll()
+      expect(diff(readLegacyEquivalence().hashes, actual), String(router)).toEqual([])
+    }
     expect(fetchSpy).not.toHaveBeenCalled()
   }, 600_000)
 

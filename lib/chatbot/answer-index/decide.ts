@@ -345,10 +345,23 @@ export function resolveDecision(index: CompiledAnswerIndex, analysis: QuestionAn
   )
 }
 
+/**
+ * decide 와 같은 판정에 그 분석(원문·조각의 순위·확신도)을 같이 돌려준다. 라벨용 상위 카드 덤프(scripts/answer-index/topk.ts)가
+ * 런타임 판정을 따로 다시 짜지 않고 이 함수로 결정과 순위를 함께 얻는다.
+ */
+export function decideWithAnalysis(
+  index: CompiledAnswerIndex,
+  question: string,
+  context: DecideContext = {}
+): { decision: AnswerIndexDecision; analysis: QuestionAnalysis } {
+  const env = context.env ?? process.env
+  const analysis = analyzeQuestion(index, question, context)
+  return { decision: resolveDecision(index, analysis, (kind) => thresholdFor(index, kind, env)), analysis }
+}
+
 /** 질문 하나의 판정(§3.3 ②~⑦, §3.5). question 은 가린 글(question.redacted)을 받는다. */
 export function decide(index: CompiledAnswerIndex, question: string, context: DecideContext = {}): AnswerIndexDecision {
-  const env = context.env ?? process.env
-  return resolveDecision(index, analyzeQuestion(index, question, context), (kind) => thresholdFor(index, kind, env))
+  return decideWithAnalysis(index, question, context).decision
 }
 
 function combineSegments(whole: SegmentResult, parts: SegmentResult[] | null): AnswerIndexDecision {

@@ -20,6 +20,7 @@ import {
   type AnswerIndexArea,
   type AnswerIndexUnit,
   type AuditEvidence,
+  type CuratedRef,
   type LexiconForm,
   type SentenceRef,
   type SingleSentenceRef,
@@ -33,7 +34,7 @@ import { findSafetyViolations } from "./text-rules"
 
 export const VERIFY_RULES = [
   { rule: "V-1", title: "doc·howto 카드 문장 참조(단위·번호·해시)가 지금 units.json·지금 문서와 같다. units.json 이 지금 문서와 같다" },
-  { rule: "V-2", title: "FIX·policy 답 글 해시 = 점검 통과본, KEEP 해시 = 지금 옛 답 글(svc·template KEEP 은 거부 → FIX text), 점검 인용이 문장·페이지 줄에 글자 그대로 있다" },
+  { rule: "V-2", title: "FIX·policy 답 글 해시 = 점검 통과본, KEEP 해시 = 지금 옛 답 글(런타임 load 와 같은 조건, svc·template KEEP 은 거부 → FIX text), 점검 인용이 문장·페이지 줄에 글자 그대로 있다" },
   { rule: "V-3", title: "리드 허용 목록·리드 근거, 답 글에 식별 정보 요구·금액·할인/환불 약속 없음, 캡션·메타·nav 문장 안 씀, 결정 전 정책 구절(blockPhrases) 없음" },
   { rule: "V-4", title: "변형: 두 카드에 같은 변형 없음, 길이 2~60자, 카드 등급별 최소 개수" },
   { rule: "V-5", title: "공백 카드·없는 개념이 문서와 겹치는지(경고)" },
@@ -201,10 +202,14 @@ export async function runVerify(options: VerifyOptions = {}): Promise<VerifyResu
   if (!data.siteFacts) add("load", "error", "site-facts.json", "site-facts.json 이 없습니다(npm run answer-index:extract)")
   if (!data.inventory) add("load", "warning", "inventory.json", "inventory.json 이 없습니다(npm run answer-index:extract)")
 
+  // 옛 답 글(지금 코드)이 필요한 검사: KEEP 해시(V-2), KEEP·howto 답 글의 결정 전 정책 구절(V-3), 점검 기록.
   const needInventory =
-    data.cards.some((card) => card.value?.kind === "fixed" && isObject(card.value.answer) && "curatedRef" in card.value.answer) ||
+    data.cards.some(
+      (card) => (card.value?.kind === "fixed" || card.value?.kind === "policy") && isObject(card.value.answer) && "curatedRef" in card.value.answer
+    ) ||
     data.audits.length > 0 ||
-    Boolean(data.inventory)
+    Boolean(data.inventory) ||
+    pendingPolicyPhrases(data.humanQueue.map((item) => item.value)).length > 0
   const current = await loadCurrentSources(options.current ?? {}, needInventory)
 
   const fileUnits = new Map((data.units?.units ?? []).map((unit) => [unit.unitId, unit]))
@@ -344,7 +349,11 @@ export async function runVerify(options: VerifyOptions = {}): Promise<VerifyResu
   for (const card of cards) {
     const value = card.value
     if (!isObject(value.answer)) continue
-    const curatedRef = "curatedRef" in value.answer && isObject(value.answer.curatedRef) ? value.answer.curatedRef : null
+    // 런타임(load.ts cardStaleReason)과 같은 조건: fixed·policy 카드에 curatedRef 가 있으면 그것을 지금 옛 답 글 해시와 대조해
+    // 옛 답을 부를 수 없거나(svc·template·없는 id) 해시가 다르면 끈다. 다른 종류 카드의 curatedRef 는 런타임이 보지 않는다.
+    const answerFields = value.answer as Record<string, unknown>
+    const curatedRef =
+      (value.kind === "fixed" || value.kind === "policy") && isObject(answerFields.curatedRef) ? (answerFields.curatedRef as unknown as CuratedRef) : null
     if (curatedRef && CURATED_MODULES_WITHOUT_RUNTIME.includes(curatedRef.module)) {
       // 런타임(curated.ts·load.ts)은 이 모듈의 옛 답을 id 로 부를 수 없어 카드를 '옛 답 없음'으로 끈다. 검사도 통과시키지 않는다.
       add(
@@ -353,7 +362,7 @@ export async function runVerify(options: VerifyOptions = {}): Promise<VerifyResu
         card.file,
         `${value.id}: curatedRef.module ${curatedRef.module} 은 런타임이 옛 답을 부를 수 없어 꺼지는 KEEP 카드(${curatedRef.module}:${curatedRef.id}) — FIX text 카드로 쓴다(같은 글이면 textHash 같음)`
       )
-    } else if (value.kind === "fixed" && curatedRef) {
+    } else if (curatedRef) {
       const ref = curatedRef
       const now = current.inventory.get(`${ref.module}:${ref.id}`)
       if (!now) add("V-2", "error", card.file, `${value.id}: curatedRef 옛 답이 지금 코드에 없음(${ref.module}:${ref.id})`)
@@ -855,9 +864,10 @@ export function pendingPolicyPhrases(items: readonly unknown[]): PendingPolicyPh
 }
 
 /**
- * V-3 확장: 결정 전 정책 구절. active doc·howto·fixed(text)·policy 카드의 답 글(doc 는 고른 문장 글, howto 는 증상 주제·가이드 답 글)에
- * 결정이 비어 있는 대기열 항목의 blockPhrases 가 정규화 포함되면 오류. 그 항목을 policyRef 로 가리키는 policy 카드와
- * active 가 아닌 카드(review·disabled)는 보지 않는다. KEEP(curatedRef) 카드는 옛 답 글 그대로라 보지 않는다.
+ * V-3 확장: 결정 전 정책 구절. active 카드가 손님에게 내는 답 글 — doc(고른 문장 글)·howto(증상 주제·가이드 답 글)·fixed(FIX 는 text,
+ * KEEP 은 지금 옛 답 글)·policy(text)·gap(관련 문장 글) — 에 결정이 비어 있는 대기열 항목의 blockPhrases 가 정규화 포함되면 오류.
+ * 예외는 그 항목을 policyRef 로 가리키는 policy 카드와 active 가 아닌 카드(review·disabled)뿐이다. KEEP 도 본다: 옛 답 글이 결정 전
+ * 구절을 담으면 결정이 나도 그 카드 글은 바뀌지 않으므로 policy 카드로 보내야 한다(svc·template KEEP 은 V-2 가 이미 거부해 뺀다).
  */
 function checkPendingPolicyPhrases(
   data: AnswerIndexData,
@@ -868,6 +878,8 @@ function checkPendingPolicyPhrases(
 ) {
   const phrases = pendingPolicyPhrases(data.humanQueue.map((item) => item.value))
   if (phrases.length === 0) return
+  const sentenceText = (unitId: unknown, i: unknown) =>
+    typeof unitId === "string" && typeof i === "number" ? fileUnits.get(unitId)?.sentences[i]?.text : undefined
   for (const card of cards) {
     const value = card.value
     if (value.status !== "active" || !isObject(value.answer)) continue
@@ -877,20 +889,28 @@ function checkPendingPolicyPhrases(
     if (value.kind === "doc" && Array.isArray(answer.sentences)) {
       const texts: string[] = []
       for (const ref of answer.sentences) {
-        if (!isObject(ref) || typeof ref.unit !== "string" || !Array.isArray(ref.ids)) continue
-        const unit = fileUnits.get(ref.unit)
+        if (!isObject(ref) || !Array.isArray(ref.ids)) continue
         for (const i of ref.ids) {
-          const sentence = typeof i === "number" ? unit?.sentences[i] : undefined
-          if (sentence) texts.push(sentence.text)
+          const sentence = sentenceText(ref.unit, i)
+          if (sentence) texts.push(sentence)
         }
       }
       text = texts.join("\n")
+    } else if (value.kind === "gap" && Array.isArray(answer.related)) {
+      // 공백 카드의 관련 문장도 답에 그대로 나간다("공개 안내에는 이런 내용이 있어요:" 아래).
+      text = answer.related
+        .map((ref) => (isObject(ref) ? sentenceText(ref.unit, ref.i) : undefined))
+        .filter((part): part is string => Boolean(part))
+        .join("\n")
     } else if (value.kind === "howto") {
       const topic = typeof answer.symptomTopic === "string" ? current.inventory.get(`symptom:${answer.symptomTopic}`)?.text : undefined
       const guide = typeof answer.guide === "string" ? current.inventory.get(`guide:${answer.guide}`)?.text : undefined
       text = [topic, guide].filter((part): part is string => Boolean(part)).join("\n")
-    } else if (value.kind === "fixed" && typeof answer.text === "string") {
-      text = answer.text
+    } else if (value.kind === "fixed") {
+      // respond.ts 와 같은 순서: text 가 있으면 그 글, 없으면 KEEP 옛 답 글.
+      const ref = isObject(answer.curatedRef) ? (answer.curatedRef as unknown as CuratedRef) : null
+      if (typeof answer.text === "string") text = answer.text
+      else if (ref && !CURATED_MODULES_WITHOUT_RUNTIME.includes(ref.module)) text = current.inventory.get(`${ref.module}:${ref.id}`)?.text ?? ""
     } else if (value.kind === "policy" && typeof answer.text === "string") {
       text = answer.text
       policyRef = typeof answer.policyRef === "string" ? answer.policyRef : null
@@ -967,6 +987,9 @@ function checkSchemas(data: AnswerIndexData, add: Add) {
         }
         break
       case "policy":
+        if (isObject(answer.curatedRef)) {
+          err(card.file, `${id}: policy 카드 answer 에 curatedRef 를 두지 않는다(load 는 curatedRef 가 있으면 그것만 대조하고 policyRef 를 보지 않는다 — 옛 답 그대로면 fixed KEEP 카드)`)
+        }
         if (typeof answer.text !== "string" || typeof answer.textHash !== "string" || typeof answer.policyRef !== "string") {
           err(card.file, `${id}: policy 카드 answer 는 { text, textHash, policyRef }`)
         }

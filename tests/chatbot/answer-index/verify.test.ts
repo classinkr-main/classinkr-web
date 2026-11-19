@@ -1,7 +1,11 @@
 import { afterEach, beforeAll, describe, expect, it } from "vitest"
 
+import { curatedLegacyText, curatedTextHash } from "@/lib/chatbot/answer-index/curated"
 import { answerTextHash } from "@/lib/chatbot/answer-index/hash"
+import { loadAnswerIndexData as loadRuntimeData } from "@/lib/chatbot/answer-index/load"
 import type { AnswerIndexUnit, DocAnswerCard, SiteFact } from "@/lib/chatbot/answer-index/types"
+import { BASIC_QUICK_ANSWERS } from "@/lib/chatbot/quick-answers-basics"
+import { FIELD_QUICK_ANSWERS } from "@/lib/chatbot/quick-answers-field"
 import type { DocArticle } from "@/lib/docs"
 import { dataDir, loadQuestionSet, loadRepoEvalSets } from "@/scripts/answer-index/lib/common"
 import { buildSiteFacts } from "@/scripts/answer-index/lib/site-facts"
@@ -376,6 +380,68 @@ describe("V-2 런타임이 부를 수 없는 KEEP 카드", () => {
     }
     expect(v2.some((finding) => finding.message.startsWith("fixed:basics-keep-test:"))).toBe(false)
   })
+
+  it("V-2 의 curatedRef 오류는 런타임 load(실제 curatedTextHash)가 '옛 답'으로 끄는 카드와 정확히 같다", async () => {
+    const basicsId = BASIC_QUICK_ANSWERS[0].id
+    const fieldId = FIELD_QUICK_ANSWERS[0].id
+    const basicsText = curatedLegacyText({ module: "basics", id: basicsId })!
+    const fieldText = curatedLegacyText({ module: "field", id: fieldId })!
+    const svcText = "쇼룸 방문은 예약으로 안내해 드려요."
+    const templateText = "체험 범위는 상담에서 확인해 드려요."
+    // verify 는 inventory(지금 코드의 옛 답 글)로, 런타임은 curated.ts 로 본다. 부를 수 있는 모듈은 두 글이 같다(curated-votes 시험).
+    const inventory = new Map([
+      [`basics:${basicsId}`, { text: basicsText, textHash: answerTextHash(basicsText) }],
+      [`field:${fieldId}`, { text: fieldText, textHash: answerTextHash(fieldText) }],
+      ["svc:showroom-confirm", { text: svcText, textHash: answerTextHash(svcText) }],
+      ["template:trial-scope", { text: templateText, textHash: answerTextHash(templateText) }],
+    ])
+    const policyText = "정책 결정 전 글이에요."
+    const policyKeep = (id: string, curatedRef: Record<string, string>) => ({
+      ...keepCard("basics", "x", "x"),
+      id,
+      kind: "policy",
+      answer: { curatedRef, text: policyText, textHash: answerTextHash(policyText), policyRef: "HQ-01" },
+    })
+    const doc = memberCard()
+    const cards = [
+      { ...keepCard("basics", basicsId, answerTextHash(basicsText)), id: "fixed:keep-basics-ok" },
+      { ...keepCard("field", fieldId, answerTextHash(fieldText)), id: "fixed:keep-field-ok" },
+      { ...keepCard("basics", basicsId, answerTextHash("다른 글")), id: "fixed:keep-basics-stale" },
+      { ...keepCard("svc", "showroom-confirm", answerTextHash(svcText)), id: "fixed:keep-svc" },
+      { ...keepCard("template", "trial-scope", answerTextHash(templateText)), id: "fixed:keep-template" },
+      { ...keepCard("field", "no-such-answer", answerTextHash(fieldText)), id: "fixed:keep-missing" },
+      policyKeep("policy:keep-field-stale", { module: "field", id: fieldId, textHash: answerTextHash("다른 글") }),
+      policyKeep("policy:keep-svc", { module: "svc", id: "showroom-confirm", textHash: answerTextHash(svcText) }),
+      policyKeep("policy:keep-field-ok", { module: "field", id: fieldId, textHash: answerTextHash(fieldText) }),
+      // doc 카드에 잘못 들어간 curatedRef 는 런타임이 보지 않는다(문장 해시만 대조).
+      { ...doc, answer: { ...doc.answer, curatedRef: { module: "svc", id: "showroom-confirm", textHash: answerTextHash(svcText) } } },
+    ]
+    const dir = fixture({ ...baseFiles(units, siteFacts), "cards/company.json": cards })
+
+    const runtime = loadRuntimeData({ dir, currentUnits: units, curatedTextHash })
+    const runtimeOff = runtime.excluded.filter((item) => item.reason.startsWith("stale: 옛 답")).map((item) => item.id).sort()
+    expect(runtime.cards.map((card) => card.id).sort()).toEqual(
+      ["fixed:keep-basics-ok", "fixed:keep-field-ok", "policy:keep-field-ok", `${MEMBER_UNIT}/remove-member`].sort()
+    )
+
+    const result = await runVerify({ dir, current: currentSources(units, siteFacts, { inventory }), devSets: [] })
+    const verifyOff = Array.from(
+      new Set(
+        errorsOf(result.findings, "V-2")
+          .filter((finding) => finding.message.includes("curatedRef"))
+          .map((finding) => finding.message.slice(0, finding.message.indexOf(": ")))
+      )
+    ).sort()
+    expect(verifyOff).toEqual(runtimeOff)
+    expect(verifyOff).toEqual(
+      ["fixed:keep-basics-stale", "fixed:keep-svc", "fixed:keep-template", "fixed:keep-missing", "policy:keep-field-stale", "policy:keep-svc"].sort()
+    )
+    // policy 카드에 curatedRef 를 두면 스키마 오류다(load 는 curatedRef 만 보고 policyRef 를 보지 않는다).
+    const v12 = errorsOf(result.findings, "V-12").filter((finding) => finding.message.includes("policy 카드 answer 에 curatedRef"))
+    expect(v12.map((finding) => finding.message.slice(0, finding.message.indexOf(": "))).sort()).toEqual(
+      ["policy:keep-field-ok", "policy:keep-field-stale", "policy:keep-svc"].sort()
+    )
+  })
 })
 
 describe("V-3 결정 전 정책 구절(blockPhrases)", () => {
@@ -457,6 +523,51 @@ describe("V-3 결정 전 정책 구절(blockPhrases)", () => {
     const result = await runVerify({ dir, current: currentSources(units, siteFacts), devSets: [] })
     expect(phraseErrors(result.findings)).toEqual([])
     expect(errorsOf(result.findings, "V-12").some((finding) => finding.message.includes("HQ-94: blockPhrases 는 문자열 배열"))).toBe(true)
+  })
+
+  it("KEEP 카드는 지금 옛 답 글로, 공백 카드는 관련 문장 글로 본다(review·svc KEEP 은 이 규칙에서 빼고)", async () => {
+    const keepText = "체험은 2주 무료 체험으로 시작해요."
+    const unit = units.find((candidate) => candidate.unitId === MEMBER_UNIT)!
+    const related = unit.sentences[3]
+    const relatedPhrase = related.text.slice(0, 12)
+    const keep = (id: string, module: string, extra: Record<string, unknown> = {}) => ({
+      id,
+      kind: "fixed",
+      tier: "head",
+      area: "pricing",
+      topic: "시험용 KEEP",
+      answer: { curatedRef: { module, id: "trial", textHash: answerTextHash(keepText) } },
+      status: "active",
+      ...extra,
+    })
+    const dir = fixture({
+      ...baseFiles(units, siteFacts),
+      "audit/human-queue.json": { items: [queueItem("HQ-90", { blockPhrases: [PHRASE] }), queueItem("HQ-91", { blockPhrases: [relatedPhrase] })] },
+      "cards/pricing.json": [
+        keep("fixed:keep-trial", "basics"),
+        keep("fixed:keep-trial-review", "basics", { status: "review" }),
+        keep("fixed:keep-trial-svc", "svc"),
+        {
+          id: "gap:pricing/trial-other",
+          kind: "gap",
+          tier: "standard",
+          area: "pricing",
+          topic: "시험용 공백",
+          answer: { template: "gap_default", related: [{ unit: MEMBER_UNIT, i: 3, hash: related.hash }], handoff: null },
+          status: "active",
+        },
+      ],
+    })
+    const inventory = new Map([
+      ["basics:trial", { text: keepText, textHash: answerTextHash(keepText) }],
+      ["svc:trial", { text: keepText, textHash: answerTextHash(keepText) }],
+    ])
+    const result = await runVerify({ dir, current: currentSources(units, siteFacts, { inventory }), devSets: [] })
+    const flagged = phraseErrors(result.findings).map((finding) => finding.message.slice(0, finding.message.indexOf(": "))).sort()
+    expect(flagged).toEqual(["fixed:keep-trial", "gap:pricing/trial-other"])
+    expect(phraseErrors(result.findings).find((finding) => finding.message.startsWith("gap:"))!.message).toContain("HQ-91")
+    // svc KEEP 은 V-2 가 거부한다.
+    expect(errorsOf(result.findings, "V-2").some((finding) => finding.message.startsWith("fixed:keep-trial-svc:"))).toBe(true)
   })
 
   it("howto 카드는 증상 주제·가이드 답 글(지금 코드)로 본다", async () => {

@@ -12,6 +12,7 @@ import {
   readAnswerKeys,
   readInventory,
   readUnits,
+  rejectIdsFromCard,
   summarizeProxy,
   summarizeTop1,
   traceTop1CardId,
@@ -291,6 +292,55 @@ describe("정답 키의 reject·영역·1위 카드", () => {
     // 못 찾음·되묻기에는 reject 가 상관없다.
     const notFound = legacy({ decidedBy: "not_found", answerMode: "doc_suggestion", unresolved: true })
     expect(classifyRow(notFound, key({ nodoc: true, reject: ["basics:x"] }), context).verdict).toBe("nf_ok")
+  })
+
+  it("compiled 카드의 reject 는 카드가 실제로 내는 글의 id 로만 본다(FIX·CONVERT 의 provenance 는 출처일 뿐)", () => {
+    const legacyText = "상담은 문의 페이지에서 남기실 수 있어요.\n\n둘째 문단"
+    const extraCards = new Map<string, CardRecord>([
+      ...cards,
+      [
+        // 문서 문장으로 바꾼 카드(CONVERT): provenance 에 옛 답이 있어도 글은 문서 문장이다.
+        "doc:/docs/teacher/course-members#4/converted",
+        {
+          id: "doc:/docs/teacher/course-members#4/converted",
+          kind: "doc",
+          answer: { sentences: [{ unit: "doc:/docs/teacher/course-members#4" }] },
+          provenance: { legacyIds: ["basics:basics-contact-channel"] },
+        },
+      ],
+      // 점검에서 고친 글(FIX): 옛 답 글과 다르다.
+      ["fixed:contact-fixed", { id: "fixed:contact-fixed", kind: "fixed", answer: { text: "상담은 문의 페이지나 대표 전화로 남기실 수 있어요." }, provenance: { legacyIds: ["basics:basics-contact-channel"] } }],
+      // 결정 전 policy 카드: 옛 답 글 그대로(공백만 다름).
+      ["policy:contact", { id: "policy:contact", kind: "policy", answer: { text: legacyText.replace("\n\n", "\n") }, provenance: { legacyIds: ["basics:basics-contact-channel"] } }],
+    ])
+    const ctx: ProxyContext = { ...context, cards: extraCards }
+    const rejectKey = (extra: Partial<AnswerKey> = {}) =>
+      key({ accept: ["unit:doc:/docs/teacher/course-members#4", "basics:basics-contact-channel"], reject: ["basics:basics-contact-channel"], ...extra })
+
+    expect(rejectIdsFromCard(extraCards.get("doc:/docs/teacher/course-members#4/converted")!, ctx.inventory)).toEqual(["unit:doc:/docs/teacher/course-members#4"])
+    expect(rejectIdsFromCard(extraCards.get("fixed:contact-fixed")!, ctx.inventory)).toEqual([])
+    expect(rejectIdsFromCard(extraCards.get("policy:contact")!, ctx.inventory)).toEqual(["basics:basics-contact-channel"])
+    // inventory 가 없으면 글을 확인할 수 없어 provenance 는 넣지 않는다.
+    expect(rejectIdsFromCard(extraCards.get("policy:contact")!)).toEqual([])
+    // KEEP 은 curatedRef 가 곧 옛 답 글이다.
+    expect(rejectIdsFromCard(extraCards.get("fixed:basics-billing-unit")!)).toEqual(["basics:basics-billing-unit"])
+
+    const row = (cardId: string) => compiled("answer", { cardId, top: [{ id: cardId }] })
+    expect(classifyRow(row("doc:/docs/teacher/course-members#4/converted"), rejectKey(), ctx)).toMatchObject({ verdict: "good" })
+    expect(classifyRow(row("fixed:contact-fixed"), rejectKey(), ctx)).toMatchObject({ verdict: "good", matched: ["basics:basics-contact-channel"] })
+    expect(classifyRow(row("policy:contact"), rejectKey(), ctx)).toMatchObject({ verdict: "wrong", rejected: ["basics:basics-contact-channel"] })
+    // legacy 줄은 그 옛 답 자체라 그대로 reject 에 걸린다.
+    expect(classifyRow(legacy({ decidedBy: "basics:basics-contact-channel" }), rejectKey(), ctx).verdict).toBe("wrong")
+
+    // --top1 도 같은 기준이다.
+    const rows: ProxyEvalRow[] = [
+      { ...row("doc:/docs/teacher/course-members#4/converted"), id: "a" },
+      { ...row("fixed:contact-fixed"), id: "b" },
+      { ...row("policy:contact"), id: "c" },
+    ]
+    const keyById = new Map<string, AnswerKey>(rows.map((r) => [r.id, rejectKey({ id: r.id })]))
+    const results = rows.map((r) => classifyRow(r, keyById.get(r.id), ctx))
+    expect(summarizeTop1(rows, results, keyById, ctx)).toMatchObject({ acceptRows: 3, top1Accept: 2, top1Rejected: 1 })
   })
 
   it("선택 칸(reject·siteAccept·area·areaFrom·note·keyGroup·evidenceScope·searched)을 읽는다", () => {
