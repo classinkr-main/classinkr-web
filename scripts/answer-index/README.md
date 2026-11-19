@@ -1,0 +1,97 @@
+# 답 색인 자료 도구(I2 추출·목록, I3 스키마·검사기)
+
+공개 챗봇 '답 색인'(compiled answer index)의 자료를 만들고 지키는 도구다. 자료는 `data/answer-index/`에 두고, 스키마의 정본은 `lib/chatbot/answer-index/types.ts`다(다른 구현 단위·자료 생성 단위의 계약). 심사·점수 도구(I1)는 [judge/README.md](judge/README.md)에 있다.
+
+## 명령
+
+| 명령 | 하는 일 |
+|---|---|
+| `npm run answer-index:extract` | 아래 셋을 한 번에 돌리고 `manifest.json`을 다시 쓴다 |
+| `npx tsx scripts/answer-index/extract-units.ts` | 공개 문서 단위 → `units.json` |
+| `npx tsx scripts/answer-index/extract-site-facts.ts` | 공개 페이지 사실 문장 → `site-facts.json` |
+| `npx tsx scripts/answer-index/inventory.ts [--dev-sets …] [--failure-logs …]` | 기존 정해 둔 답 목록 → `inventory.json` |
+| `npx tsx scripts/answer-index/search.ts "<낱말>" [--in unit,site,inventory] [--area <영역>] [--any] [--limit 20] [--json]` | 에이전트용 전문 검색 |
+| `npx tsx scripts/answer-index/search.ts --unit "<단위 id>"` · `--site "<site id>"` | 단위 하나(번호 붙은 문장·표시·해시), 페이지 문장 하나 |
+| `npx tsx scripts/answer-index/merge.ts [조각 …] [--dry-run] [--replace] [--keep-parts]` | 나눠 쓴 조각을 합친다 |
+| `npm run answer-index:verify` (= `npx tsx scripts/answer-index/verify.ts`) | V-1~V-12 검사. 오류가 있으면 종료 코드 1 |
+
+추출은 같은 입력이면 같은 바이트를 쓴다(시각·난수 없음). 문서(`lib/docs.ts`·`lib/docs-troubleshooting/*`·화면 가이드)를 바꾸면 `answer-index:extract`를 다시 돌리고 `answer-index:verify`로 낡은 카드를 본다. 문서를 바꾸고 다시 만들지 않으면 V-1이 실패한다.
+
+## 자료 파일
+
+| 파일 | 만드는 곳 | 내용(형은 `types.ts`) |
+|---|---|---|
+| `units.json` | extract-units | 공개 문서 단위 741개(요약 77·절 555·공개 가이드 109)와 번호 붙은 문장·해시·표시(`AnswerIndexUnitsFile`) |
+| `site-facts.json` | extract-site-facts | 공개 페이지 문장(회사 소개·서비스 소개서·체크아웃·개인정보처리방침 현재판·약관·데이터 삭제·문의·푸터), `site:<경로>:<줄>`(`SiteFact[]`) |
+| `inventory.json` | inventory | 기존 정해 둔 답 전부(답변 사항 점검 D3 의 입력, 런타임은 읽지 않음)(`AnswerIndexInventoryFile`) |
+| `manifest.json` | extract·merge | 원천 파일 해시, 자료 버전 `dataVersion`(= `ANSWER_INDEX_VERSION`), 자료 파일 해시·개수, 조각별 생성 기록 |
+| `cards/<영역>.json` | D1·D2·D4·D5 | 답 카드와 nav 표시(`CardFileEntry[]`) |
+| `variants/<영역>.json` | D1·D4·D5·D7 | 카드 id → 변형(`VariantsFile`) |
+| `universe/<샤드>.json` | D8·D9 | 질문 우주와 라벨(`UniverseItem[]`) |
+| `lexicon.json`·`generic-words.json` | D6 | 개념 사전, 뜻 없는 낱말 |
+| `absent.json` | D5 | 문서에 없는 방문자 개념(검증 기록 포함) |
+| `legacy-alias.json` | D4 | 옛 답 id(inventory id) → 카드 id 또는 null |
+| `audit/<묶음>.jsonl`·`audit/human-queue.json` | D3 | 답변 사항 점검 기록(줄마다 `AuditRecord`), 사람 결정 대기열 |
+| `calibration.json` | I9 | 점수 가중치·확신도 계수·문턱 |
+| `eval/calibration-set.json`·`eval/answer-keys/<묶음>.json` | D10·D12 | 보정 묶음, 개발용 정답 키(질문 글 없이 id 와 정답만). 런타임 아님 |
+
+`dataVersion`은 런타임 자료의 내용 해시다(`inventory.json`·`audit/`·`eval/`·`manifest.json`은 넣지 않는다).
+
+### 단위·문장
+
+- 단위 id: `doc:<문서 경로>#summary`(문서 설명 + 챗봇 요약), `doc:<문서 경로>#<절 번호>`(`doc.sections` 위치, 0부터), `guide:<가이드 slug>`(공개 가이드 문서 페이지 글).
+- 범위: `listDocs()` 중 공개 챗봇 문서(`isPublicChatbotDoc`)이면서 `status ?? "published"`가 `published`인 것, 그리고 `CS_FIGMA_GUIDES`(내부 전용 slug 제외).
+- 문장 나누기: 본문을 줄 단위로 먼저 나누고(경로 줄·목록 줄·표 줄이 다음 문장과 붙지 않게), 줄마다 `splitIntoSentences`(`lib/chatbot/source-grounding.ts`)를 쓴다. 이미지·링크 주소·굵게·목록·인용 표시를 지운다. 같은 단위 안의 같은 문장은 한 번만 넣는다.
+- 해시: `sentenceHash` = sha256(NFC + 공백 하나로 접은 문장) 앞 16자(`lib/chatbot/answer-index/hash.ts`, 런타임도 같은 함수를 쓴다).
+- 표시(`flags`): `caption` 화면 캡션·빨간 박스, `meta` 문서 자체 안내("아래 순서대로…", "이 문서는…"), `nav` 다른 문서를 보라는 말, `connective` 접속어·지시어로 시작(앞 문장과 함께만), `table` 표의 한 줄. `caption`·`meta`·`nav` 문장은 답으로 쓰지 않는다(V-3).
+
+### 영역
+
+영역 12개(`start`·`account`·`classroom`·`course`·`recording`·`homework`·`admin`·`board`·`pricing`·`company`·`trust`·`support`)는 `scripts/answer-index/lib/areas.ts`의 결정적 표로 정한다. 질문으로 정하지 않는다.
+
+- 문서 단위: 절 지정(`SECTION_AREA`) → 절 제목 규칙(`HEADING_AREA_RULES`) → 문서 지정(`DOC_AREA`) → 문서 분류 기본값(`CATEGORY_AREA`)
+- 공개 가이드: 제목 규칙(`GUIDE_TITLE_RULES`) → 가이드 분류 기본값
+- 정해 둔 답: 근거 문서가 있으면 그 문서 단위의 영역 → 답 id 규칙(`ANSWER_ID_RULES`) → 답 분류 기본값
+
+### inventory
+
+id 접두: `field:`·`basics:`·`symptom:`·`svc:`·`template:`·`self:`·`guide:`. `svc:<이름>`은 `buildServiceQuickAnswer`의 답(이름은 판별 정규식 상수 이름, 예: `SHOWROOM_CONFIRM_RE` → `svc:showroom-confirm`)과 `buildPolicyGuardResponse`의 관문 대상 답(`svc:policy-academy-payment`). `template:<절 제목>`은 `formatConsumerAnswer`가 출처 절 제목으로 고르는 틀 답이다(경로로 고르면 `template:<경로>#<함수>`). 보안·범죄·토큰 낭비 거절, 영어 안내, 즉시 상담 연결처럼 compiled 앞단에 그대로 남는 답은 넣지 않는다.
+
+항목마다: 답 글(`text`, 질문에 따라 바뀌는 갈래는 `textAlternatives`), `textHash`, `gateOriginal`(지금 관문에 넘기는 이름), 분류, 상담 버튼, 근거 문서, 판별식 원문과 정규식(`match`), 걸림 수(`hits`: 판별식에 걸리는 질문 수)·뽑힘 수(`wins`: 모듈 안 순서로 이 답이 뽑히는 수), 자동 표시(`flags`: 낡을 수 있는 사실, 부재 주장, 약속하지 않음 문장, V-3 규칙 위반), 비슷한 답(`nearDuplicates`: 첫 40자 같음 또는 2-gram 자카드 0.8 이상), 화면 이름과 그것을 2개 이상 함께 쓰는 답(`screenNamePeers`), 실패 기록의 가로채기 언급 수(`hijackMentions`), 정의 위치.
+
+- 걸림 수는 질문 글 없이 숫자만 남긴다. 저장소 평가셋(first-contact·fresh-open·golden·cs-symptom·persona-eval)은 늘 세고, 저장소 밖 개발용 묶음은 `--dev-sets name=path,…` 또는 `ANSWER_INDEX_DEV_SETS`로 줄 때만 `dev` 칸에 더한다. 확정용 묶음(holdout2·3·4)은 넣지 않는다.
+- `--failure-logs`·`ANSWER_INDEX_FAILURE_LOGS`: 개발용 실패 기록(JSON 배열)의 `rootCause`·`whereInCode`·`fixHint`만 읽어 가로채기 언급을 센다.
+- 저장소 밖 입력은 `manifest.json`의 `inputs`에 이름과 해시만 남는다. 저장소에 넣은 inventory 는 dev5·holdout1·371 묶음과 개발용 실패 기록을 준 결과다. 같은 입력 없이 다시 만들면 `hits.dev`·`hijackMentions`가 null 이 된다(검사는 답 글 해시만 본다).
+
+## 나눠 쓰기와 합치기(merge.ts)
+
+자료 단위(D1~D13)는 같은 파일을 동시에 쓰지 않게 조각 파일로 쓴다: `<기본 이름>.<조각>.json(l)`.
+
+- `cards/account.D1-07.json` → `cards/account.json`, `variants/account.D1-07.json` → `variants/account.json`, `universe/s003.D9-12.json` → `universe/s003.json`, `audit/C-02.D3-02b.jsonl` → `audit/C-02.jsonl`, `lexicon.D6-03.json` → `lexicon.json`, `absent.D5-01.json`, `legacy-alias.D4-01.json`, `audit/human-queue.D3-01.json`, `eval/answer-keys/dev5.D12-01.json`도 같다.
+- 카드·없는 개념·대기열·옛 id 대응·점검 기록·정답 키는 id(키)로 합친다. 같은 id 가 다르면 충돌로 그 파일을 쓰지 않는다(`--replace`면 나중 조각 것으로 바꾼다).
+- 변형은 카드별로 덧붙이고, 같은 정규화 변형이 이미 있으면(다른 카드 포함) 나중 것을 버리고 알린다.
+- 우주는 id 로 합치고 빈 칸(label·label2·conf·labeler)을 채운다. 사전은 개념 id 로 합치고 형태를 합집합으로 한다.
+- 합친 조각은 지운다(`--keep-parts`면 남긴다). `manifest.json`의 `generation`에 조각별 파일·개수·작성자·검수자·해시가 남는다.
+
+## 검사(verify.ts)
+
+| # | 검사 | 실패 |
+|---|---|---|
+| V-1 | `units.json`이 지금 문서로 다시 만든 단위와 같다. doc 카드의 (단위, 문장 번호, 해시)·리드 근거·공백 카드 관련 문장이 지금 `units.json`·지금 문서에서 같은 해시로 찾아진다. howto 카드의 증상 주제·가이드가 있다 | 오류(꺼진 카드는 경고) |
+| V-2 | FIX·policy 카드 `textHash` = 글 해시 = 점검 통과본(`auditRef`). KEEP(`curatedRef`) 해시 = 지금 옛 답 글 해시. 점검 기록의 모든 인용이 그 단위 문장·페이지 줄에 글자 그대로 있고 지금 문서와 같다. `site-facts.json`·`inventory.json`이 낡았으면 경고 | 오류 |
+| V-3 | 리드가 허용 목록 안, `yes_can`·`not_supported`면 `leadBasis`. 답 글(doc 문장·FIX·policy·KEEP 글)에 식별 정보 요구·금액 숫자·할인/환불 약속 없음(`lib/text-rules.ts`). `caption`·`meta`·`nav` 문장 안 씀, `connective` 문장은 앞 문장과 함께. 50자 이하 단편 하나는 경고 | 오류 |
+| V-4 | 같은 정규화 변형이 두 카드에 없음, 변형 2~60자, 작성 변형(g=A) 최소 head 60·standard 25·gap 15(`--require-blind`면 블라인드 g=B 15·10·5도), 변형의 카드 id 가 있음 | 오류 |
+| V-5 | 없는 개념 형태가 문서·페이지 문장에 나오면(같은 뜻이 아니라는 `verified.sameMeaningNote` 없을 때), 기록한 적중 수가 다시 센 값과 다르면, 공백 카드 변형이 문서 카드 변형과 겹치면 | 경고 |
+| V-6 | 모호 규칙 없이 한 형태가 두 개념에 걸림, 4어절 이상 형태, 3글자 이하 형태를 `{ form, boundary: "both" }`로 적지 않음, 없는 상위 개념·모호 규칙 참조 | 오류 |
+| V-7 | 변형·우주·반례·사전 형태·없는 개념 형태·보정 묶음이 개발용 질문과 정규화 동일·편집거리 2 이하(둘 다 8글자 이상일 때)·2-gram 자카드 0.8 이상, 사전·없는 개념 형태는 8자 이상 연속 일치 | 오류 |
+| V-8 | 보정 묶음 문항이 변형·우주와 겹침(V-7 과 같은 기준) | 오류 |
+| V-9 | 공개 단위가 카드(doc 문장 단위·howto 가이드) 하나 이상에 덮이거나 nav 표시 | 카드가 있는 영역은 오류, 아직 없는 영역은 알림(`--strict`면 모두 오류) |
+| V-10 | inventory 의 옛 답 id 가 모두 `legacy-alias.json`에 있음(카드 또는 null), 키·값이 실제 옛 id·카드 | 대응을 시작한 영역은 오류, 아직 없는 영역은 알림(`--strict`면 모두 오류) |
+| V-11 | active policy 카드의 `policyRef`가 대기열에 있음, `evidenceScope: "site"` 카드는 사람 결정 전 `review`, 우주 라벨이 review·disabled 카드를 가리키면 경고 | 오류 |
+| V-12 | 런타임 자료 합계 25MB 이하, 카드 id 형식과 종류·영역, 카드 id 중복, 파일별 스키마, 우주 라벨·반례 행선 형식, 정답 키에 질문 글 없음, `calibration.json`·`manifest.json` 낡음(경고) | 오류 |
+
+- `--only <파일>`: 그 파일에 묶인 결과만 보인다(검사는 자료 전체로 돈다). 자료 에이전트는 자기 조각 파일로 돌려 오류 0을 확인한다: `npx tsx scripts/answer-index/verify.ts --only cards/account.D1-07.json --only variants/account.D1-07.json`.
+- 개발용 질문(V-7): 저장소 평가셋은 늘 쓴다. 저장소 밖 묶음(dev5·holdout1·371·dev6~dev8)은 `--dev-sets name=path,…` 또는 `ANSWER_INDEX_DEV_SETS`. 겹친 자료 쪽 글과 묶음 이름만 찍고 평가 질문 글은 찍지 않는다.
+- 확정용 묶음(측정 담당만): `--with-holdout <경로[#묶음 key]>,…` 또는 `ANSWER_INDEX_HOLDOUT_SETS`. 문장은 기계적으로만 읽고 파일별 겹친 개수만 찍는다. `data/chatbot-holdout-sets.json`은 `#holdout2`처럼 묶음을 골라 준다. 저장소에는 확정용 묶음 문장을 넣지 않는다.
+- V-5의 '색인 1위 + 확신도 ≥ θ' 판정은 색인(I5·I6)이 생긴 뒤 더한다. 지금은 변형 겹침 기준으로 경고한다.
+- 편집거리 2 기준은 정규화 길이 8글자 이상인 글끼리만 쓴다. 짧은 글은 두 글자만 바꿔도 다른 질문이라(예: '줌 연동 돼요'와 '줌 녹화 돼요') 정규화 동일·자카드로만 본다.

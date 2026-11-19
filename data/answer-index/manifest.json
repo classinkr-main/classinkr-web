@@ -1,0 +1,251 @@
+{
+  "schema": 1,
+  "dataVersion": "ai-aa54137c5a17",
+  "sources": {
+    "app/about/AboutPageClient.tsx": "201307dd2bc22b3b",
+    "app/about/layout.tsx": "cbced2f28647c89c",
+    "app/about/page.tsx": "03e964d4db53a526",
+    "app/checkout/fail/page.tsx": "8c7e1d943e2b82bf",
+    "app/checkout/page.tsx": "d0b7fda4a5810aaa",
+    "app/checkout/success/page.tsx": "c90f298122dcf206",
+    "app/contact/layout.tsx": "c18d5a66e437cb1f",
+    "app/contact/page.tsx": "f84dfe501e365b19",
+    "app/data-deletion/page.tsx": "d427dd4428a91125",
+    "app/introduction/cases/[slug]/page.tsx": "960ac77ff6d58109",
+    "app/introduction/cases/case-page-parts.tsx": "bb2c490b26dc95f7",
+    "app/introduction/cases/page.tsx": "01ce52d70544c90b",
+    "app/introduction/full/page.tsx": "28a9898fc3aa36f3",
+    "app/introduction/layout.tsx": "f4e3504335724fb0",
+    "app/introduction/page.tsx": "0850c4601c3aee69",
+    "app/introduction/proof/page.tsx": "791b65b3f4a5b910",
+    "app/introduction/story/page.tsx": "dc6abcc973469fd6",
+    "app/privacy/page.tsx": "9c08d9eb39d24465",
+    "app/terms/page.tsx": "eb01a4e272949d09",
+    "components/checkout/CheckoutClient.tsx": "fdb381f1aa20cabf",
+    "components/checkout/CheckoutRequestForm.tsx": "3c27e607eafda314",
+    "components/checkout/desired-date-blocks.tsx": "ef74159238fe29a7",
+    "components/checkout/DesiredDateCalendar.tsx": "f6d762b53eedfffe",
+    "components/checkout/HardwareCheckoutPanel.tsx": "0b94b34ecd7c187d",
+    "components/checkout/request-date.ts": "d6f805e9ff29531c",
+    "components/contact/ContactDirectChannels.tsx": "8ff6b1974a2bd278",
+    "components/contact/ContactFastTrack.tsx": "95d60b5e2878ef36",
+    "components/contact/ContactMap.tsx": "6a8591b7d8a7b234",
+    "components/introduction/Emphasis.tsx": "10494c595ac4242c",
+    "components/introduction/IntroBlocks.tsx": "63aab637cc61fe4c",
+    "components/introduction/IntroCaseGrid.tsx": "40d8fa319362e87d",
+    "components/introduction/IntroDownloadLink.tsx": "c152f3260b53cf23",
+    "components/introduction/IntroFigure.tsx": "3cd4a0e0a69f4848",
+    "components/introduction/IntroTable.tsx": "403e26303672a653",
+    "components/introduction/IntroVideoPlayer.tsx": "217fc716e33850bd",
+    "components/introduction/landing/landing-copy.ts": "cfc37cc40690532e",
+    "components/introduction/landing/LandingCases.tsx": "c6e9eb8213441b48",
+    "components/introduction/landing/LandingFinalCta.tsx": "20a51e7fb56ad9e6",
+    "components/introduction/landing/LandingHero.tsx": "c1eb679edd82224e",
+    "components/introduction/landing/LandingPdfLink.tsx": "cf9864c6415aaee5",
+    "components/introduction/landing/LandingSmartClassroom.tsx": "26a00a14351e6805",
+    "components/introduction/landing/LandingSoftware.tsx": "ccb1cc60d01a1520",
+    "components/introduction/landing/primitives.tsx": "c3fc8eb879d8b7dd",
+    "components/introduction/proof/proof-copy.ts": "46279e341cf2e309",
+    "components/introduction/proof/ProofAllCases.tsx": "868cfda1762bd68a",
+    "components/introduction/proof/ProofFinalCta.tsx": "7d894f9e35aab33d",
+    "components/introduction/proof/ProofHero.tsx": "e1a11aec9704672b",
+    "components/introduction/proof/ProofInstitutions.tsx": "b73d8a89912e2c75",
+    "components/introduction/proof/ProofParts.tsx": "69ee7a2ce13e6f98",
+    "components/introduction/proof/ProofPdfLink.tsx": "dfce4e410b9152bb",
+    "components/introduction/proof/ProofProduct.tsx": "e2acf49aa9e4b7b2",
+    "components/introduction/proof/ProofStories.tsx": "86ff91736476cf9d",
+    "components/introduction/proof/ProofVideos.tsx": "0562be5081cfb4c1",
+    "components/introduction/sections/IntroCasesSection.tsx": "fefd91d9f069ebd5",
+    "components/introduction/sections/IntroFinalCta.tsx": "f0565ba4d9aa5340",
+    "components/introduction/sections/IntroHero.tsx": "55f7676774b1ab10",
+    "components/introduction/sections/IntroSmartClassroomSection.tsx": "f9af059c0b567e39",
+    "components/introduction/sections/IntroSoftwareSection.tsx": "32ed0e5ecb5566b8",
+    "components/introduction/sections/primitives.tsx": "c915e2e333ef146d",
+    "components/introduction/story/primitives.tsx": "210ea99772648d36",
+    "components/introduction/story/story-copy.ts": "859adc4daad8880c",
+    "components/introduction/story/StoryCases.tsx": "185dd98d65f33195",
+    "components/introduction/story/StoryClassroom.tsx": "6dc0438f1ce40f5f",
+    "components/introduction/story/StoryCtaBand.tsx": "06421028d21d353e",
+    "components/introduction/story/StoryEvidence.tsx": "abf43434e5f50996",
+    "components/introduction/story/StoryFinalCta.tsx": "1e0687162086781c",
+    "components/introduction/story/StoryHero.tsx": "c711a0f426d557b8",
+    "components/introduction/story/StoryPdfLink.tsx": "2c5b1cf73a3281bd",
+    "components/introduction/story/StoryProblem.tsx": "8722e9506ae41882",
+    "components/introduction/story/StorySolution.tsx": "36cacd0cfbf26864",
+    "components/sections/Footer.tsx": "ec0770ed4771fb73",
+    "data/chatbot-cs-symptom-set.json": "3e048f62443da924",
+    "data/chatbot-first-contact-set.json": "bff827e4c6255a9d",
+    "data/chatbot-fresh-open-set.json": "43b6a81ff871c62a",
+    "data/chatbot-golden-set.json": "e189390b124f5183",
+    "data/chatbot-persona-eval-set.json": "d34d3ee4d751f7ed",
+    "lib/chatbot/doc-outline.ts": "c9c194daba7b15fb",
+    "lib/chatbot/quick-answers-basics.ts": "147f6fd96d96c2ce",
+    "lib/chatbot/quick-answers-field.ts": "683e2a13a83ea93f",
+    "lib/chatbot/self-knowledge.ts": "4f1ee990ebd1c5d2",
+    "lib/chatbot/service.ts": "a16f3065b656a474",
+    "lib/chatbot/source-grounding.ts": "c785c0c515fade9c",
+    "lib/chatbot/symptom-topics-field.ts": "2d9ae8dda5294096",
+    "lib/chatbot/symptom-triage.ts": "2c33c3e918cf5d9f",
+    "lib/cs-figma-enrichments.generated.ts": "34532e43bdaecfee",
+    "lib/cs-figma-enrichments.ts": "1fb474e1287f0a10",
+    "lib/cs-figma-guide-aliases.ts": "9eb80be080b5a7a3",
+    "lib/cs-figma-guides.generated.ts": "4753582a626cab9c",
+    "lib/cs-figma-guides.ts": "a40606c063eaeeb4",
+    "lib/docs-guide-media.ts": "8ba4ef29cee779aa",
+    "lib/docs-guide-media/admin.ts": "70c17499a2f7d9b5",
+    "lib/docs-guide-media/cs-usage-2.ts": "1f9210b4d5315848",
+    "lib/docs-guide-media/cs-usage-3.ts": "f442194959fff313",
+    "lib/docs-guide-media/cs-usage-4.ts": "6e130372c58e7a69",
+    "lib/docs-guide-media/cs-usage-5.ts": "412c226e7f4ce168",
+    "lib/docs-guide-media/cs-usage.ts": "6969f83fb300780b",
+    "lib/docs-guide-media/product.ts": "f7f61bca6e251609",
+    "lib/docs-guide-media/public-extra.ts": "fb6311c67c01f1a2",
+    "lib/docs-guide-media/start.ts": "4b0697953b3e6661",
+    "lib/docs-guide-media/student.ts": "1b0dd6776e8429bf",
+    "lib/docs-guide-media/teacher.ts": "1a32a6c229f3aa72",
+    "lib/docs-guide-media/troubleshooting-recording.ts": "c7c9934a0488e9e0",
+    "lib/docs-guide-media/troubleshooting.ts": "5861426a15dd2da4",
+    "lib/docs-guide-media/types.ts": "299024b4560248f0",
+    "lib/docs-troubleshooting.ts": "56374b5ce9387ffc",
+    "lib/docs-troubleshooting/app-class.ts": "4743fc0461b688ed",
+    "lib/docs-troubleshooting/recording.ts": "79135ebc04d0e3aa",
+    "lib/docs.ts": "e1dad64754f86cd7",
+    "lib/introduction/content.ts": "9df4b51bce23a8f3",
+    "scripts/answer-index/lib/areas.ts": "97f79812d8a2784c",
+    "scripts/answer-index/lib/inventory.ts": "04b50635f9f306b7",
+    "scripts/answer-index/lib/sentences.ts": "d43caabbd0c848cc",
+    "scripts/answer-index/lib/site-facts.ts": "cf6aadc2a64fd5a3",
+    "scripts/answer-index/lib/text-rules.ts": "0a9e5da9e29ddc00",
+    "scripts/answer-index/lib/ts-extract.ts": "9c2be4e06e2b2ccf",
+    "scripts/answer-index/lib/units.ts": "ef9883049e199852"
+  },
+  "outputs": {
+    "inventory.json": {
+      "sha": "566dcdba55c131ab",
+      "count": 1459
+    },
+    "site-facts.json": {
+      "sha": "714fbcf3f542585d",
+      "count": 1641
+    },
+    "units.json": {
+      "sha": "e6753ac43dffcf31",
+      "count": 741
+    }
+  },
+  "inputs": {
+    "devSets": [
+      {
+        "name": "dev5",
+        "sha": "35aee9790d7bdbd4"
+      },
+      {
+        "name": "holdout1",
+        "sha": "8c655dbe30b10fbd"
+      },
+      {
+        "name": "input371",
+        "sha": "10ae0565a06e0c34"
+      }
+    ],
+    "failureLogs": [
+      {
+        "name": "failures-0.json",
+        "sha": "44987a9b2b619da6"
+      },
+      {
+        "name": "failures-1.json",
+        "sha": "bf2bdf64d777d9bb"
+      },
+      {
+        "name": "failures-2.json",
+        "sha": "757afc4d2401fe9c"
+      },
+      {
+        "name": "failures-3.json",
+        "sha": "4166eb8905cb70fe"
+      },
+      {
+        "name": "failures-4.json",
+        "sha": "88504fc42290b8ae"
+      },
+      {
+        "name": "failures-5.json",
+        "sha": "5e7f7d3fcf68909e"
+      },
+      {
+        "name": "failures-6.json",
+        "sha": "56ab2d35a4333172"
+      },
+      {
+        "name": "failures-7.json",
+        "sha": "4aef8d8a75ec61d3"
+      },
+      {
+        "name": "failures-8.json",
+        "sha": "221b8e64756a1d24"
+      },
+      {
+        "name": "failures-9.json",
+        "sha": "5bbd53753b78ef63"
+      },
+      {
+        "name": "failures2-changed-0.json",
+        "sha": "e2d09f76901175fa"
+      },
+      {
+        "name": "failures2-changed-1.json",
+        "sha": "57ac215541f7f20b"
+      },
+      {
+        "name": "failures2-changed-2.json",
+        "sha": "1cd3643f9b1cc1e0"
+      },
+      {
+        "name": "failures2-changed-3.json",
+        "sha": "5726115c6b6eb129"
+      },
+      {
+        "name": "failures2-holdout-0.json",
+        "sha": "780b2dcb6b44883c"
+      },
+      {
+        "name": "failures2-holdout-1.json",
+        "sha": "aeebb7f3d8b99fb5"
+      },
+      {
+        "name": "failures2-holdout-2.json",
+        "sha": "2cb91f065d3de79f"
+      },
+      {
+        "name": "failures3-changed3-0.json",
+        "sha": "c53d6e78e9fd5194"
+      },
+      {
+        "name": "failures3-hold1-0.json",
+        "sha": "b3c002407af8c008"
+      },
+      {
+        "name": "failures3-hold1-1.json",
+        "sha": "428b62d87277a33a"
+      },
+      {
+        "name": "failures3-hold1-2.json",
+        "sha": "19d1c777fe0791a6"
+      },
+      {
+        "name": "failures-holdout1-0.json",
+        "sha": "572bf117226152df"
+      },
+      {
+        "name": "failures-holdout1-1.json",
+        "sha": "c19b0226a97c94da"
+      },
+      {
+        "name": "failures-holdout1-2.json",
+        "sha": "64975e2998bb22c9"
+      }
+    ]
+  },
+  "generation": {}
+}

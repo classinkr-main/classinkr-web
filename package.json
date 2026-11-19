@@ -31,7 +31,9 @@
     "measure:admin": "node scripts/measure-admin-api.mjs",
     "check:team-calendar": "node scripts/check-team-calendar-access.mjs",
     "rev:row-ids": "npx tsx scripts/assign-rev-row-ids.ts",
-    "check:google-ads": "node scripts/check-google-ads-access.mjs"
+    "check:google-ads": "node scripts/check-google-ads-access.mjs",
+    "answer-index:extract": "npx tsx scripts/answer-index/extract.ts",
+    "answer-index:verify": "npx tsx scripts/answer-index/verify.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.8.0",
