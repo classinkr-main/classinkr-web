@@ -24,6 +24,7 @@
  */
 import { prepareQuery, type CompiledAnswerIndex, type IndexQuery } from "./compile"
 import { absentCoveredBy, checkCandidate, coverageWithoutSpan, NEG_ROUTE_BONUS, scoreNegatives, type CandidateCheck } from "./checks"
+import type { AbsentMatch } from "./lexicon"
 import { INDEX_SYMPTOM_RE, segmentQuestion } from "./normalize"
 import { compositeScore, confidenceOf, scoreCandidates, sortCandidates, type ScoreComponents } from "./score"
 import type {
@@ -85,7 +86,7 @@ export function thresholdFor(index: CompiledAnswerIndex, kind: AnswerCardKind, e
 
 // ─── 조각 판정 ───────────────────────────────────────────────────────────
 
-interface RankedCandidate {
+export interface RankedCandidate {
   card: number
   id: string
   kind: AnswerCardKind | "none"
@@ -189,15 +190,37 @@ function fallbackKind(index: CompiledAnswerIndex, query: IndexQuery, text: strin
   return { kind: "abstain" as const, abstainReason: "nodoc" as const }
 }
 
-export function decideSegment(index: CompiledAnswerIndex, text: string, context: DecideContext = {}): SegmentResult {
+/**
+ * 조각 하나의 분석: 점수·검사·확신도까지(문턱과 무관한 부분). resolveSegment 가 문턱으로 결정을 내린다.
+ * 보정(scripts/answer-index/calibrate.ts)은 분석을 한 번 하고 문턱만 바꿔 가며 resolveSegment 를 다시 부른다.
+ */
+export interface SegmentAnalysis {
+  text: string
+  query: IndexQuery
+  ranked: RankedCandidate[]
+  confs: number[]
+  top: AnswerIndexCandidate[]
+  /** 1위 실제 카드(none 자리 제외)의 특징. */
+  features: AnswerIndexFeatures | undefined
+  /** ranked 안 첫 실제 카드 위치(-1 이면 없음). */
+  topReal: number
+  /** 1위 카드가 덮지 않은 없는 개념(첫째). */
+  absentMatch: AbsentMatch | null
+  /** 없는 개념 자리를 뺀 질문을 1위 카드가 덮는 비율(1위가 실제 카드이고 absentMatch 가 있을 때만). */
+  absentCoverage: number | null
+  /** absentMatch 의 공백 카드 번호(색인에 있고 꺼지지 않았을 때). */
+  absentGapCard: number | null
+  /** 못 찾음 갈래(문턱과 무관). */
+  fallback: { kind: "clarify" | "abstain"; abstainReason: AnswerIndexDecision["abstainReason"] }
+}
+
+export function analyzeSegment(index: CompiledAnswerIndex, text: string, context: DecideContext = {}): SegmentAnalysis {
   const env = context.env ?? process.env
   const disabled = disabledCardIds(env)
   const isSymptomReport = context.isSymptomReport ?? ((value: string) => INDEX_SYMPTOM_RE.test(value.toLowerCase()))
   const query = prepareQuery(index, text)
   const { ranked } = rankWithChecks(index, query, context.votes ?? [], disabled)
 
-  const live = (card: number) => card >= 0 && !disabled.has(index.cards[card].id)
-  const top1 = ranked[0]
   const topReal = ranked.findIndex((candidate) => candidate.card >= 0)
   const uncovered = topReal >= 0 ? query.absent.filter((match) => !absentCoveredBy(index, query, match, ranked[topReal].card)) : query.absent
   const absentMatch = uncovered[0] ?? null
@@ -207,21 +230,38 @@ export function decideSegment(index: CompiledAnswerIndex, text: string, context:
   )
   const top: AnswerIndexCandidate[] = ranked.slice(0, TRACE_TOP).map((candidate, at) => ({ id: candidate.id, s: candidate.s, conf: confs[at] }))
   const features = topReal >= 0 ? featuresOf(index, query, ranked, topReal, Boolean(absentMatch)) : undefined
+  let absentCoverage: number | null = null
+  let absentGapCard: number | null = null
+  if (absentMatch) {
+    if (topReal === 0) absentCoverage = coverageWithoutSpan(index, query, absentMatch, ranked[0].card)
+    const absent = index.absent.byId.get(absentMatch.id)
+    const gapCard = absent ? index.cardById.get(absent.gapCard) : undefined
+    if (gapCard !== undefined && !disabled.has(index.cards[gapCard].id)) absentGapCard = gapCard
+  }
+  return { text, query, ranked, confs, top, features, topReal, absentMatch, absentCoverage, absentGapCard, fallback: fallbackKind(index, query, text, isSymptomReport) }
+}
+
+/** 카드 종류별 문턱. */
+export type ThresholdFn = (kind: AnswerCardKind) => number
+
+/** 분석 + 문턱 → 조각 판정(§3.5). */
+export function resolveSegment(index: CompiledAnswerIndex, analysis: SegmentAnalysis, threshold: ThresholdFn): SegmentResult {
+  const { ranked, confs, topReal, absentMatch } = analysis
+  const top1 = ranked[0]
   const realConf = topReal >= 0 ? confs[topReal] : 0
-  const base = { text, query, top, features }
+  const base = { text: analysis.text, query: analysis.query, top: analysis.top, features: analysis.features }
   const unexplainedOf = (at: number) => (at >= 0 ? ranked[at].check?.unexplained ?? [] : [])
 
   const answerable = (at: number) => {
     if (at < 0) return false
     const candidate = ranked[at]
     if (candidate.kind === "none" || candidate.kind === "gap") return false
-    return confs[at] >= thresholdFor(index, candidate.kind, env)
+    return confs[at] >= threshold(candidate.kind)
   }
 
   // 1. 없는 개념
   if (absentMatch) {
-    const absent = index.absent.byId.get(absentMatch.id)
-    if (topReal === 0 && answerable(0) && coverageWithoutSpan(index, query, absentMatch, ranked[0].card) >= ABSENT_TAIL_MIN_COVERAGE) {
+    if (topReal === 0 && answerable(0) && (analysis.absentCoverage ?? 0) >= ABSENT_TAIL_MIN_COVERAGE) {
       return {
         ...base,
         kind: "answer",
@@ -233,17 +273,15 @@ export function decideSegment(index: CompiledAnswerIndex, text: string, context:
         abstainReason: null,
       }
     }
-    const gapCard = absent ? index.cardById.get(absent.gapCard) : undefined
-    if (gapCard !== undefined && live(gapCard)) {
-      return { ...base, kind: "gap", card: index.cards[gapCard].id, conf: ABSENT_GAP_CONF, unexplained: unexplainedOf(topReal), absentHit: absentMatch.id, absentTail: null, abstainReason: null }
+    if (analysis.absentGapCard !== null) {
+      return { ...base, kind: "gap", card: index.cards[analysis.absentGapCard].id, conf: ABSENT_GAP_CONF, unexplained: unexplainedOf(topReal), absentHit: absentMatch.id, absentTail: null, abstainReason: null }
     }
-    const fallback = fallbackKind(index, query, text, isSymptomReport)
-    return { ...base, ...fallback, card: null, conf: realConf, unexplained: unexplainedOf(topReal), absentHit: absentMatch.id, absentTail: null }
+    return { ...base, ...analysis.fallback, card: null, conf: realConf, unexplained: unexplainedOf(topReal), absentHit: absentMatch.id, absentTail: null }
   }
 
   if (top1 && top1.card >= 0) {
     // 3. 공백 카드
-    if (top1.kind === "gap" && confs[0] >= thresholdFor(index, "gap", env)) {
+    if (top1.kind === "gap" && confs[0] >= threshold("gap")) {
       return { ...base, kind: "gap", card: top1.id, conf: confs[0], unexplained: unexplainedOf(0), absentHit: null, absentTail: null, abstainReason: null }
     }
     // 4. 답
@@ -252,8 +290,12 @@ export function decideSegment(index: CompiledAnswerIndex, text: string, context:
     }
   }
   // 2·5·6·7. 못 찾음 갈래
-  const fallback = fallbackKind(index, query, text, isSymptomReport)
-  return { ...base, ...fallback, card: null, conf: realConf, unexplained: unexplainedOf(topReal), absentHit: null, absentTail: null }
+  return { ...base, ...analysis.fallback, card: null, conf: realConf, unexplained: unexplainedOf(topReal), absentHit: null, absentTail: null }
+}
+
+export function decideSegment(index: CompiledAnswerIndex, text: string, context: DecideContext = {}): SegmentResult {
+  const env = context.env ?? process.env
+  return resolveSegment(index, analyzeSegment(index, text, context), (kind) => thresholdFor(index, kind, env))
 }
 
 // ─── 질문 전체 ───────────────────────────────────────────────────────────
@@ -283,13 +325,34 @@ function toDecision(result: SegmentResult, segments: SegmentResult[] | null): An
   }
 }
 
+/** 질문 하나의 분석(원문 + 두 조각이면 조각마다). 문턱을 바꿔 가며 resolveDecision 으로 다시 정할 수 있다. */
+export interface QuestionAnalysis {
+  whole: SegmentAnalysis
+  parts: SegmentAnalysis[] | null
+}
+
+export function analyzeQuestion(index: CompiledAnswerIndex, question: string, context: DecideContext = {}): QuestionAnalysis {
+  const whole = analyzeSegment(index, question, context)
+  const pieces = segmentQuestion(question)
+  return { whole, parts: pieces.length < 2 ? null : pieces.map((piece) => analyzeSegment(index, piece, context)) }
+}
+
+/** 분석 + 문턱 → 질문 판정. */
+export function resolveDecision(index: CompiledAnswerIndex, analysis: QuestionAnalysis, threshold: ThresholdFn): AnswerIndexDecision {
+  return combineSegments(
+    resolveSegment(index, analysis.whole, threshold),
+    analysis.parts ? analysis.parts.map((part) => resolveSegment(index, part, threshold)) : null
+  )
+}
+
 /** 질문 하나의 판정(§3.3 ②~⑦, §3.5). question 은 가린 글(question.redacted)을 받는다. */
 export function decide(index: CompiledAnswerIndex, question: string, context: DecideContext = {}): AnswerIndexDecision {
-  const whole = decideSegment(index, question, context)
-  const pieces = segmentQuestion(question)
-  if (pieces.length < 2) return toDecision(whole, null)
+  const env = context.env ?? process.env
+  return resolveDecision(index, analyzeQuestion(index, question, context), (kind) => thresholdFor(index, kind, env))
+}
 
-  const parts = pieces.map((piece) => decideSegment(index, piece, context))
+function combineSegments(whole: SegmentResult, parts: SegmentResult[] | null): AnswerIndexDecision {
+  if (!parts) return toDecision(whole, null)
   const decided = parts.filter(isDecided)
   if (decided.length === 0) return toDecision(whole, null)
 

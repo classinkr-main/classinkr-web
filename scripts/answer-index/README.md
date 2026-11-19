@@ -1,6 +1,6 @@
-# 답 색인 자료 도구(I2 추출·목록, I3 스키마·검사기)
+# 답 색인 자료 도구(I2 추출·목록, I3 스키마·검사기, I9 컴파일·보정·교차 검증)
 
-공개 챗봇 '답 색인'(compiled answer index)의 자료를 만들고 지키는 도구다. 자료는 `data/answer-index/`에 두고, 스키마의 정본은 `lib/chatbot/answer-index/types.ts`다(다른 구현 단위·자료 생성 단위의 계약). 심사·점수 도구(I1)는 [judge/README.md](judge/README.md)에 있다.
+공개 챗봇 '답 색인'(compiled answer index)의 자료를 만들고 지키는 도구다. 자료는 `data/answer-index/`에 두고, 스키마의 정본은 `lib/chatbot/answer-index/types.ts`다(다른 구현 단위·자료 생성 단위의 계약). 심사·점수 도구(I1: `answer-index:judge`·`answer-index:score`·`answer-index:proxy`)는 [judge/README.md](judge/README.md)에 있다.
 
 ## 명령
 
@@ -14,6 +14,10 @@
 | `npx tsx scripts/answer-index/search.ts --unit "<단위 id>"` · `--site "<site id>"` | 단위 하나(번호 붙은 문장·표시·해시), 페이지 문장 하나 |
 | `npx tsx scripts/answer-index/merge.ts [조각 …] [--dry-run] [--replace] [--keep-parts]` | 나눠 쓴 조각을 합친다 |
 | `npm run answer-index:verify` (= `npx tsx scripts/answer-index/verify.ts`) | V-1~V-12 검사. 오류가 있으면 종료 코드 1 |
+| `npm run answer-index:compile [-- --json]` | 런타임과 같이 자료를 읽고 색인을 만들어 판·색인 해시·개수·크기·걸린 시간·색인에서 뺀 카드(이유별)를 찍는다. 파일은 쓰지 않는다 |
+| `npm run answer-index:calibrate [-- --dry-run] [-- --out <파일>] [-- --no-grid]` | 보정 묶음(`eval/calibration-set.json`)으로 `calibration.json`을 쓰고 `manifest.json`을 다시 쓴다. 묶음이 없으면 기본 문턱·계수로 만든다 |
+| `npm run answer-index:cv [-- --folds 5] [-- --out <파일>]` | 변형 5겹 교차 검증: 1위·결정 정답률, 못 찾음·엉뚱한 카드 비율, 종류·영역별 표, 혼동 표 |
+| `npm run answer-index:judge -- <split·check·select-b·disagreements·merge> …` · `answer-index:score` · `answer-index:proxy` | 심사 절차·점수·대리 점수([judge/README.md](judge/README.md)) |
 
 추출은 같은 입력이면 같은 바이트를 쓴다(시각·난수 없음). 문서(`lib/docs.ts`·`lib/docs-troubleshooting/*`·화면 가이드)를 바꾸면 `answer-index:extract`를 다시 돌리고 `answer-index:verify`로 낡은 카드를 본다. 문서를 바꾸고 다시 만들지 않으면 V-1이 실패한다.
 
@@ -96,3 +100,15 @@ id 접두: `field:`·`basics:`·`symptom:`·`svc:`·`template:`·`self:`·`guide
 - 확정용 묶음(측정 담당만): `--with-holdout <경로[#묶음 key]>,…` 또는 `ANSWER_INDEX_HOLDOUT_SETS`. 문장은 기계적으로만 읽고 파일별 겹친 개수만 찍는다. `data/chatbot-holdout-sets.json`은 `#holdout2`처럼 묶음을 골라 준다. 저장소에는 확정용 묶음 문장을 넣지 않는다.
 - V-5의 '색인 1위 + 확신도 ≥ θ' 판정은 색인(I5·I6)이 생긴 뒤 더한다. 지금은 변형 겹침 기준으로 경고한다.
 - 편집거리 2 기준은 정규화 길이 8글자 이상인 글끼리만 쓴다. 짧은 글은 두 글자만 바꿔도 다른 질문이라(예: '줌 연동 돼요'와 '줌 녹화 돼요') 정규화 동일·자카드로만 본다.
+
+## 런타임 연결(I7·I8)과 컴파일·보정·교차 검증(I9)
+
+- 라우터: `CHATBOT_ANSWER_ROUTER` = `legacy`(기본, 값이 없어도 legacy) · `shadow`(손님에게는 legacy 답, 응답 뒤 `[chatbot] answer-index shadow {…}` 로그에 색인 판정 — 질문 해시 앞 12자·길이·결정·상위 3 id·확신도·legacy 출처만) · `compiled`. 연결은 `lib/chatbot/service.ts` `buildChatbotCoreBase`(사양 §3.2 순서), 묶음은 `lib/chatbot/answer-index/index.ts`.
+- compiled 의 범위 안 짧은 질문은 색인이 정하고 모델·네트워크를 부르지 않는다(관문·근거 선별·보류·두 번째 검색·`MODEL_UNAVAILABLE_ANSWER` 없음). 인사·거절 답(보안·범죄·토큰 낭비·모델 정보·잡담 공감)·관문 밖 정해 둔 답(시험 정답 거절)·영어 안내·강한 상담 연결·이미 해 봤다는 화난 문의는 색인 앞에서 그대로 답한다. 정규식이 고른 정해 둔 답(field·basics·자기소개·학원 결제 안내 등)은 답을 정하지 않고 `legacy-alias.json`을 거쳐 표(vote)로만 쓴다. 범위 밖(공백 뺀 80자 초과·문장 4개 이상·영문만)은 지금 흐름이다.
+- 답 조립(`respond.ts`): doc 카드는 문장을 지금 문서에서 다시 꺼내 해시를 대조하고 근거 선별 답과 같은 문단 규칙(`paragraphs.ts`)으로 묶는다. KEEP(`curatedRef`)는 `curated.ts`가 옛 답을 id 로 찾는다 — field·basics·self·symptom·guide 만 된다. svc·template 은 service.ts 안의 조건 갈래라 id 로 부를 함수가 없어 load 때 빠진다(`stale: 옛 답 없음`). 그런 답은 D4 가 FIX(text) 카드로 만든다(글이 같으면 textHash 도 같다). 리드는 `CHATBOT_COMPILED_FRAMING=full`(기본)일 때 묻는 꼴에 맞으면만 붙인다(yes_can·not_supported 는 yes/no 질문 + 검증된 근거 문장, how_to 는 방법·가능 여부 질문 또는 묻는 꼴 모름).
+- 흔적: `evaluateChatbotQuery`가 compiled 라우터일 때 `answerIndex`를 돌려주고 측정 스크립트가 결과 줄에 싣는다. `card`·`partial`(실제로 꼬리를 붙였는지)·`absentTail`·`pre`(색인 앞 단계)·`unavailable`(카드를 답으로 못 만들어 못 찾음으로 바꾼 이유).
+- 답 캐시 열쇠에 라우터와 `ANSWER_INDEX_VERSION`(manifest dataVersion + 계산 규칙 판)이 들어간다.
+- 컴파일(`compile.ts`): `answerIndexHash`는 같은 자료면 같다. 첫 컴파일 시간·메모리는 사양 §3.10 예산과 비교한다(2안 번들은 아직 없음).
+- 보정(`calibrate.ts`, `lib/calibrate-core.ts`): 사양 §8.2. 보정 묶음 문항을 id sha256 순으로 2/3 맞춤·1/3 확인으로 나누고, 가중치 격자 81점 → 종류별 로지스틱(L2 λ=1, IRLS 25회) → 종류별 문턱(0.30~0.90, 부트스트랩 1,000회 10번째 백분위, '문서에 없음' 20·25·30% 재가중 평균, 세 비율 차 1점 초과 θ 제외). 지금 `calibration.json`은 읽지 않고 기본값에서 시작한다(같은 자료·같은 묶음 → 같은 바이트). `calibration.json`의 `dataVersion`은 calibration.json 을 뺀 런타임 자료 해시(`manifest.ts calibrationBasisVersion`)이고 V-12 가 이 값과 비교한다. 개발용·확정용 묶음은 쓰지 않는다.
+- 교차 검증(`cv.ts`, `lib/cv-core.ts`): sha256(카드 id + 변형) % 겹 수로 나눠 겹마다 그 변형을 뺀 색인을 컴파일하고 뺀 변형으로 판정한다. 옛 정규식 표와 `CHATBOT_COMPILED_*` 환경변수는 쓰지 않는다.
+- 끔 동등성: `tests/chatbot/answer-index/fixtures/legacy-equivalence.json`(평가셋 전 문항의 legacy 답 해시, 글 없음)을 라우터 없음·legacy·shadow 에서 대조한다. 옛 흐름을 일부러 바꾼 커밋에서만 `ANSWER_INDEX_WRITE_LEGACY_EQUIVALENCE=1 npx vitest run tests/chatbot/answer-index/legacy-equivalence.test.ts`로 다시 만든다.

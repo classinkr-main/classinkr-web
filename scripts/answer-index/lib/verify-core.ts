@@ -26,7 +26,7 @@ import {
 } from "@/lib/chatbot/answer-index/types"
 import { dataDir, fileSha16, type QuestionSet } from "./common"
 import { loadAnswerIndexData, type AnswerIndexData, type Located } from "./data"
-import { isNonRuntimeDataPath } from "./manifest"
+import { calibrationBasisVersion, isNonRuntimeDataPath } from "./manifest"
 import { normalizeForOverlap, OverlapIndex, type OverlapReason } from "./similarity"
 import { findSafetyViolations } from "./text-rules"
 
@@ -752,8 +752,12 @@ export async function runVerify(options: VerifyOptions = {}): Promise<VerifyResu
       }
     }
   }
-  if (data.calibration && data.manifest && data.calibration.value?.dataVersion !== data.manifest.dataVersion) {
-    add("V-12", "warning", data.calibration.file, `calibration.json dataVersion(${data.calibration.value?.dataVersion})이 manifest(${data.manifest.dataVersion})와 다름 — 자료가 바뀌었으면 다시 보정한다`)
+  if (data.calibration) {
+    // 보정이 가리키는 자료 판은 calibration.json 을 뺀 런타임 자료 해시다(manifest.ts calibrationBasisVersion).
+    const basis = calibrationBasisVersion(dir)
+    if (data.calibration.value?.dataVersion !== basis) {
+      add("V-12", "warning", data.calibration.file, `calibration.json dataVersion(${data.calibration.value?.dataVersion})이 지금 자료(${basis})와 다름 — 자료가 바뀌었으면 다시 보정한다(npm run answer-index:calibrate)`)
+    }
   }
   if (data.manifest && isObject(data.manifest.outputs)) {
     const stale = data.files.filter((rel) => rel !== "manifest.json" && data.manifest?.outputs[rel]?.sha !== fileSha16(join(dir, rel)))

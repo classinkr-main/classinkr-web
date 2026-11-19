@@ -33,7 +33,13 @@
     "rev:row-ids": "npx tsx scripts/assign-rev-row-ids.ts",
     "check:google-ads": "node scripts/check-google-ads-access.mjs",
     "answer-index:extract": "npx tsx scripts/answer-index/extract.ts",
-    "answer-index:verify": "npx tsx scripts/answer-index/verify.ts"
+    "answer-index:verify": "npx tsx scripts/answer-index/verify.ts",
+    "answer-index:compile": "npx tsx scripts/answer-index/compile.ts",
+    "answer-index:calibrate": "npx tsx scripts/answer-index/calibrate.ts",
+    "answer-index:cv": "npx tsx scripts/answer-index/cv.ts",
+    "answer-index:score": "npx tsx scripts/answer-index/score.ts",
+    "answer-index:proxy": "npx tsx scripts/answer-index/proxy-eval.ts",
+    "answer-index:judge": "npx tsx scripts/answer-index/judge/judge.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.8.0",

@@ -31,11 +31,22 @@ export function listDataFiles(dir = dataDir()) {
   return listFilesRecursive(dir).map((file) => toRepoPath(file, dir))
 }
 
-export function computeDataVersion(dir = dataDir()) {
+export function computeDataVersion(dir = dataDir(), exclude: readonly string[] = []) {
   const parts = listDataFiles(dir)
-    .filter((rel) => !isNonRuntimeDataPath(rel))
+    .filter((rel) => !isNonRuntimeDataPath(rel) && !exclude.includes(rel))
     .map((rel) => `${rel}:${fileSha16(join(dir, rel))}`)
   return `ai-${sha16Bytes(parts.join("\n")).slice(0, 12)}`
+}
+
+export const CALIBRATION_FILE = "calibration.json"
+
+/**
+ * calibration.json 의 dataVersion 이 가리키는 자료 판: 런타임 자료에서 calibration.json 자신을 뺀 내용 해시.
+ * manifest dataVersion 은 calibration.json 을 넣어 계산하므로(답 캐시 열쇠가 보정 변경도 알아채게) 그 값과 비교하면
+ * 보정 파일을 쓸 때마다 어긋난다. 보정 쪽은 이 값으로 적고 verify 도 이 값과 비교한다.
+ */
+export function calibrationBasisVersion(dir = dataDir()) {
+  return computeDataVersion(dir, [CALIBRATION_FILE])
 }
 
 function countOf(rel: string, value: unknown) {

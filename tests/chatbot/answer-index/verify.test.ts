@@ -6,8 +6,10 @@ import type { DocArticle } from "@/lib/docs"
 import { dataDir, loadQuestionSet, loadRepoEvalSets } from "@/scripts/answer-index/lib/common"
 import { buildSiteFacts } from "@/scripts/answer-index/lib/site-facts"
 import { buildUnits, loadUnitSources, type UnitSources } from "@/scripts/answer-index/lib/units"
+import { DEFAULT_ASSIST } from "@/scripts/answer-index/lib/calibrate-core"
+import { calibrationBasisVersion, updateManifest } from "@/scripts/answer-index/lib/manifest"
 import { docCardUnitId, isCardIdShape, runVerify, type VerifyFinding } from "@/scripts/answer-index/lib/verify-core"
-import { baseFiles, currentSources, makeDataDir } from "./helpers"
+import { baseFiles, currentSources, makeDataDir, writeDataFile } from "./helpers"
 
 // 답 색인 사양 §6 V-1~V-12, §12.1 I3 완료 기준: 문서 문장 하나를 바꾸면 V-1 실패, 평가셋 질문을 변형에 넣으면 V-7 실패.
 
@@ -285,5 +287,29 @@ describe("그 밖의 규칙", () => {
     })
     const result = await runVerify({ dir, current: currentSources(units, siteFacts), devSets: [] })
     expect(errorsOf(result.findings, "V-12").some((finding) => finding.message.includes("fixed:wrong-kind"))).toBe(true)
+  })
+
+  it("V-12 calibration.json 은 자기 자신을 뺀 자료 판과 비교한다(보정을 쓴 뒤 manifest 를 다시 써도 낡지 않음)", async () => {
+    const calibration = (dataVersion: string) => ({
+      version: "cal-test",
+      dataVersion,
+      weights: { maxcos: 0.3, centroid: 0.7, knnShare: 0.5, vote: 0.15, bm25f: 0.1, linear: 0 },
+      confidence: {},
+      thresholds: { doc: 0.55, howto: 0.55, fixed: 0.55, policy: 0.6, gap: 0.5, handoff: 0.6 },
+      nodocRatesChecked: [0.2, 0.25, 0.3],
+      fit: { set: "none", n: 0, check: 0, bootstrapP10: 0 },
+      assist: DEFAULT_ASSIST,
+    })
+    const stale = (findings: VerifyFinding[]) =>
+      findings.some((finding) => finding.rule === "V-12" && finding.level === "warning" && finding.file === "calibration.json")
+    const dir = fixture({ ...baseFiles(units, siteFacts), "calibration.json": calibration("ai-old") })
+    expect(stale((await runVerify({ dir, current: currentSources(units, siteFacts), devSets: [] })).findings)).toBe(true)
+
+    const fresh = fixture({ ...baseFiles(units, siteFacts) })
+    const basis = calibrationBasisVersion(fresh)
+    writeDataFile(fresh, "calibration.json", calibration(basis))
+    updateManifest({}, fresh)
+    expect(calibrationBasisVersion(fresh)).toBe(basis)
+    expect(stale((await runVerify({ dir: fresh, current: currentSources(units, siteFacts), devSets: [] })).findings)).toBe(false)
   })
 })
