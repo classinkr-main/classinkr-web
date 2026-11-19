@@ -746,6 +746,13 @@ export interface AnswerIndexDecision {
   /** 조각으로 나눠 정했으면 조각별 판정. */
   segments: AnswerIndexSegmentDecision[] | null
   features?: AnswerIndexFeatures
+  /**
+   * abstain 일 때 낼 못 찾음 글(§3.5): nodoc → NO_SOURCE_FACT_ANSWER, symptom → SYMPTOM_AFTER_GATE_ANSWER(상담 버튼).
+   * answer·gap·clarify 면 null.
+   */
+  abstainReason?: "nodoc" | "symptom" | null
+  /** 답에 꼬리(없는 부분 한 줄·못 찾은 조각 한 줄)가 붙는지. 흔적 AnswerIndexTrace.partial 과 같다. */
+  partial?: boolean
 }
 
 /** ChatbotCore.answerIndex 에 싣는 흔적. 응답에는 싣지 않는다. */

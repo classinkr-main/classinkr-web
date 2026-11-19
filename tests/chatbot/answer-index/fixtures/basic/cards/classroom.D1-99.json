@@ -1,0 +1,23 @@
+[
+  {
+    "id": "doc:/docs/fake/chat#0/unmerged-part",
+    "kind": "doc",
+    "tier": "standard",
+    "area": "classroom",
+    "topic": "합치지 않은 조각",
+    "status": "active",
+    "answer": {
+      "sentences": [
+        {
+          "unit": "doc:/docs/fake/chat#0",
+          "ids": [
+            0
+          ],
+          "hashes": [
+            "c03cce0b691760d4"
+          ]
+        }
+      ]
+    }
+  }
+]

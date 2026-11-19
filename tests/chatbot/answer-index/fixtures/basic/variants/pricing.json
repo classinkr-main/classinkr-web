@@ -1,0 +1,60 @@
+{
+  "doc:/docs/fake/students#0/student-count": [
+    {
+      "q": "한 교실에 학생 몇 명까지 들어와요",
+      "p": "fixture",
+      "g": "A",
+      "m": "fixture"
+    },
+    {
+      "q": "최대 인원 몇 명이에요",
+      "p": "fixture",
+      "g": "A",
+      "m": "fixture"
+    },
+    {
+      "q": "학생 수 제한 있나요",
+      "p": "fixture",
+      "g": "A",
+      "m": "fixture"
+    },
+    {
+      "q": "수업에 몇 명 들어갈 수 있어요",
+      "p": "fixture",
+      "g": "A",
+      "m": "fixture"
+    }
+  ],
+  "fixed:fake-price": [
+    {
+      "q": "요금 어떻게 정해져요",
+      "p": "fixture",
+      "g": "A",
+      "m": "fixture"
+    },
+    {
+      "q": "가격이 얼마예요",
+      "p": "fixture",
+      "g": "A",
+      "m": "fixture"
+    },
+    {
+      "q": "비용은 뭐에 따라 달라요",
+      "p": "fixture",
+      "g": "A",
+      "m": "fixture"
+    },
+    {
+      "q": "요금 계산 기준이 뭐예요",
+      "p": "fixture",
+      "g": "A",
+      "m": "fixture"
+    },
+    {
+      "q": "견적 어떻게 나와요",
+      "p": "fixture",
+      "g": "A",
+      "m": "fixture"
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "gap:trust/security-certification": [
+    {
+      "q": "보안 인증 받았나요",
+      "p": "fixture",
+      "g": "A",
+      "m": "fixture"
+    },
+    {
+      "q": "정보보호 인증 있어요",
+      "p": "fixture",
+      "g": "A",
+      "m": "fixture"
+    },
+    {
+      "q": "보안 인증서 있나요",
+      "p": "fixture",
+      "g": "A",
+      "m": "fixture"
+    }
+  ]
+}

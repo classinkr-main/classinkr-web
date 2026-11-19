@@ -7,9 +7,12 @@
  * - 요약 단위 = 문서 설명 + 챗봇 요약(doc-outline 의 '요약'과 같다).
  * - 절 단위 = 절 본문 + 단계. 절 번호는 doc.sections 의 위치(0부터).
  * - 가이드 단위 = 공개 가이드 문서 페이지에 실리는 글(요약 + 절 본문·단계).
+ *
+ * 나누는 함수는 lib/chatbot/answer-index/doc-units.ts 에 있다(런타임 load·respond 가 지금 문서에서 같은 문장·해시를 만들어야 해서).
+ * 이 파일은 문서 목록 읽기와 영역 표(areas.ts)만 더한다.
  */
-import { isPublicChatbotDoc } from "@/lib/chatbot/doc-outline"
 import { sha16 } from "@/lib/chatbot/answer-index/hash"
+import { buildUnitsFromSources, type UnitAreaContext, type UnitSources } from "@/lib/chatbot/answer-index/doc-units"
 import {
   ANSWER_INDEX_AREAS,
   type AnswerIndexArea,
@@ -17,39 +20,19 @@ import {
   type AnswerIndexUnitsFile,
   type UnitKind,
 } from "@/lib/chatbot/answer-index/types"
-import type { DocArticle } from "@/lib/docs"
-import type { CsFigmaGuide } from "@/lib/cs-figma-guides"
 import { areaForDocSection, areaForGuide } from "./areas"
-import { buildUnitSentences } from "./sentences"
 
-export const SUMMARY_HEADING = "요약"
-export const GUIDE_HEADING = "사용 순서 안내"
-
-export interface UnitSources {
-  docs: DocArticle[]
-  guides: CsFigmaGuide[]
-}
-
-export function docPathOf(doc: Pick<DocArticle, "category" | "slug">) {
-  return `/docs/${doc.category}/${doc.slug}`
-}
-
-export function summaryUnitId(path: string) {
-  return `doc:${path}#summary`
-}
-
-export function sectionUnitId(path: string, sectionIndex: number) {
-  return `doc:${path}#${sectionIndex}`
-}
-
-export function guideUnitId(slug: string) {
-  return `guide:${slug}`
-}
-
-/** 공개 챗봇 범위의 published 문서인지. */
-export function isIndexedDoc(doc: DocArticle) {
-  return isPublicChatbotDoc(doc) && (doc.status ?? "published") === "published"
-}
+// 단위 나누기 정본은 lib/chatbot/answer-index/doc-units.ts(런타임 load·respond 와 같은 함수). 여기서는 영역 표만 더한다.
+export {
+  GUIDE_HEADING,
+  SUMMARY_HEADING,
+  docPathOf,
+  guideUnitId,
+  isIndexedDoc,
+  sectionUnitId,
+  summaryUnitId,
+  type UnitSources,
+} from "@/lib/chatbot/answer-index/doc-units"
 
 export async function loadUnitSources(): Promise<UnitSources> {
   const [{ listDocs }, { CS_FIGMA_GUIDES, INTERNAL_ONLY_CS_FIGMA_DOC_SLUGS }] = await Promise.all([
@@ -62,60 +45,15 @@ export async function loadUnitSources(): Promise<UnitSources> {
   }
 }
 
-export function buildUnits(sources: UnitSources): AnswerIndexUnit[] {
-  const units: AnswerIndexUnit[] = []
-  for (const doc of sources.docs) {
-    if (!isIndexedDoc(doc)) continue
-    const path = docPathOf(doc)
-    units.push({
-      unitId: summaryUnitId(path),
-      kind: "summary",
-      path,
-      docTitle: doc.title,
-      heading: SUMMARY_HEADING,
-      sectionIndex: null,
-      area: areaForDocSection(doc.category, doc.slug, null, null),
-      docCategory: doc.category,
-      docSlug: doc.slug,
-      sentences: buildUnitSentences([doc.description, doc.chatbotSummary]),
-    })
-    doc.sections.forEach((section, sectionIndex) => {
-      units.push({
-        unitId: sectionUnitId(path, sectionIndex),
-        kind: "section",
-        path,
-        docTitle: doc.title,
-        heading: section.heading,
-        sectionIndex,
-        area: areaForDocSection(doc.category, doc.slug, sectionIndex, section.heading),
-        docCategory: doc.category,
-        docSlug: doc.slug,
-        sentences: buildUnitSentences([section.body, ...(section.steps ?? [])]),
-      })
-    })
-  }
+/** 단위의 영역(§4.1): 문서 단위는 절·문서·분류 표, 가이드는 제목·분류 표. */
+export function areaOfUnit(context: UnitAreaContext): AnswerIndexArea {
+  return context.kind === "guide"
+    ? areaForGuide(context.title, context.category)
+    : areaForDocSection(context.category, context.slug, context.sectionIndex, context.heading)
+}
 
-  const docsByKey = new Map(sources.docs.map((doc) => [`${doc.category}/${doc.slug}`, doc]))
-  for (const guide of sources.guides) {
-    const doc = docsByKey.get(`${guide.docCategory}/${guide.docSlug}`)
-    const blocks = doc
-      ? [doc.chatbotSummary || doc.description, ...doc.sections.flatMap((section) => [section.body, ...(section.steps ?? [])])]
-      : [guide.summary, ...guide.steps]
-    units.push({
-      unitId: guideUnitId(guide.slug),
-      kind: "guide",
-      path: `/docs/${guide.docCategory}/${guide.docSlug}`,
-      docTitle: doc?.title ?? guide.title,
-      heading: GUIDE_HEADING,
-      sectionIndex: null,
-      area: areaForGuide(guide.title, guide.category),
-      docCategory: guide.docCategory,
-      docSlug: guide.docSlug,
-      guideSlug: guide.slug,
-      sentences: buildUnitSentences(blocks),
-    })
-  }
-  return units
+export function buildUnits(sources: UnitSources): AnswerIndexUnit[] {
+  return buildUnitsFromSources(sources, areaOfUnit)
 }
 
 export function buildUnitsFile(units: AnswerIndexUnit[]): AnswerIndexUnitsFile {

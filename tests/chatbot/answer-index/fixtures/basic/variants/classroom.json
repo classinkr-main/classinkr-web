@@ -1,0 +1,92 @@
+{
+  "doc:/docs/fake/chat#0/chat-ban": [
+    {
+      "q": "학생들 채팅 못 하게 막을 수 있나요",
+      "p": "fixture",
+      "g": "A",
+      "m": "fixture"
+    },
+    {
+      "q": "수업할 때 애들 채팅 금지 어떻게 해요",
+      "p": "fixture",
+      "g": "A",
+      "m": "fixture"
+    },
+    {
+      "q": "채팅창 막는 법",
+      "p": "fixture",
+      "g": "A",
+      "m": "fixture"
+    },
+    {
+      "q": "학생 채팅 차단 가능해요?",
+      "p": "fixture",
+      "g": "A",
+      "m": "fixture"
+    },
+    {
+      "q": "수업 중에 채팅 끄기",
+      "p": "fixture",
+      "g": "A",
+      "m": "fixture"
+    },
+    {
+      "q": "선생님이 채팅 못치게 할 수 있음?",
+      "p": "fixture",
+      "g": "A",
+      "m": "fixture"
+    }
+  ],
+  "doc:/docs/fake/kick#0/kick": [
+    {
+      "q": "수업 중에 학생 강퇴 어떻게 해요",
+      "p": "fixture",
+      "g": "A",
+      "m": "fixture"
+    },
+    {
+      "q": "교실에서 떠드는 학생 내보내기",
+      "p": "fixture",
+      "g": "A",
+      "m": "fixture"
+    },
+    {
+      "q": "학생 강제 퇴장 시키는 법",
+      "p": "fixture",
+      "g": "A",
+      "m": "fixture"
+    },
+    {
+      "q": "수업방에서 한 명 쫓아내고 싶어요",
+      "p": "fixture",
+      "g": "A",
+      "m": "fixture"
+    },
+    {
+      "q": "교실 밖으로 학생 내보낼 수 있나요",
+      "p": "fixture",
+      "g": "A",
+      "m": "fixture"
+    }
+  ],
+  "doc:/docs/fake/edit#0/board-edit": [
+    {
+      "q": "판서 지우는 법",
+      "p": "fixture",
+      "g": "A",
+      "m": "fixture"
+    },
+    {
+      "q": "칠판에 쓴 거 옮길 수 있나요",
+      "p": "fixture",
+      "g": "A",
+      "m": "fixture"
+    },
+    {
+      "q": "판서 편집 어떻게 해요",
+      "p": "fixture",
+      "g": "A",
+      "m": "fixture"
+    }
+  ]
+}

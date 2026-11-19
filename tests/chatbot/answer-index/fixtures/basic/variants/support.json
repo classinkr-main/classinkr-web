@@ -1,0 +1,42 @@
+{
+  "gap:support/phone-hours": [
+    {
+      "q": "상담 전화 몇 시까지 해요",
+      "p": "fixture",
+      "g": "A",
+      "m": "fixture"
+    },
+    {
+      "q": "고객센터 운영 시간 알려주세요",
+      "p": "fixture",
+      "g": "A",
+      "m": "fixture"
+    },
+    {
+      "q": "상담 시간이 언제예요",
+      "p": "fixture",
+      "g": "A",
+      "m": "fixture"
+    }
+  ],
+  "handoff:support": [
+    {
+      "q": "상담원 연결해 주세요",
+      "p": "fixture",
+      "g": "A",
+      "m": "fixture"
+    },
+    {
+      "q": "사람이랑 얘기하고 싶어요",
+      "p": "fixture",
+      "g": "A",
+      "m": "fixture"
+    },
+    {
+      "q": "담당자랑 통화하고 싶어요",
+      "p": "fixture",
+      "g": "A",
+      "m": "fixture"
+    }
+  ]
+}

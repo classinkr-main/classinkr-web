@@ -1,0 +1,54 @@
+{
+  "doc:/docs/fake/recording#0/replay": [
+    {
+      "q": "수업 녹화 되나요",
+      "p": "fixture",
+      "g": "A",
+      "m": "fixture"
+    },
+    {
+      "q": "지난 수업 다시보기 어디서 봐요",
+      "p": "fixture",
+      "g": "A",
+      "m": "fixture"
+    },
+    {
+      "q": "녹화된 수업 볼 수 있나요",
+      "p": "fixture",
+      "g": "A",
+      "m": "fixture"
+    },
+    {
+      "q": "수업 다시 보는 곳",
+      "p": "fixture",
+      "g": "A",
+      "m": "fixture"
+    },
+    {
+      "q": "녹화 영상 어디 있어요",
+      "p": "fixture",
+      "g": "A",
+      "m": "fixture"
+    }
+  ],
+  "doc:/docs/fake/recording#1/download": [
+    {
+      "q": "다운로드 버튼 어디 있어요",
+      "p": "fixture",
+      "g": "A",
+      "m": "fixture"
+    },
+    {
+      "q": "내 컴퓨터에 저장하는 법",
+      "p": "fixture",
+      "g": "A",
+      "m": "fixture"
+    },
+    {
+      "q": "pc에 받아 두고 싶어요",
+      "p": "fixture",
+      "g": "A",
+      "m": "fixture"
+    }
+  ]
+}

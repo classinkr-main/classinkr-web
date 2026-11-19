@@ -1,0 +1,54 @@
+[
+  {
+    "id": "gap:support/phone-hours",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "support",
+    "topic": "상담 전화 운영 시간",
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "support",
+      "related": []
+    },
+    "concepts": [
+      "C_hours"
+    ],
+    "anchors": [
+      "운영 시간",
+      "상담 시간"
+    ],
+    "searchLog": [
+      {
+        "query": "운영 시간",
+        "units": 0,
+        "site": 0
+      },
+      {
+        "query": "상담 시간",
+        "units": 0,
+        "site": 0
+      },
+      {
+        "query": "몇 시",
+        "units": 0,
+        "site": 0
+      }
+    ]
+  },
+  {
+    "id": "handoff:support",
+    "kind": "handoff",
+    "tier": "standard",
+    "area": "support",
+    "topic": "상담원 연결",
+    "status": "active",
+    "answer": {
+      "handoffKind": "support"
+    },
+    "anchors": [
+      "상담원 연결",
+      "사람이랑 얘기"
+    ]
+  }
+]

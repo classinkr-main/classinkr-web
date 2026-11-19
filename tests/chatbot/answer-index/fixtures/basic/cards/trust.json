@@ -1,0 +1,39 @@
+[
+  {
+    "id": "gap:trust/security-certification",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "trust",
+    "topic": "보안 인증",
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "demo",
+      "related": []
+    },
+    "concepts": [
+      "C_security_cert"
+    ],
+    "anchors": [
+      "보안 인증",
+      "인증 받았나요"
+    ],
+    "searchLog": [
+      {
+        "query": "ISMS",
+        "units": 0,
+        "site": 0
+      },
+      {
+        "query": "보안 인증",
+        "units": 0,
+        "site": 0
+      },
+      {
+        "query": "정보보호",
+        "units": 0,
+        "site": 0
+      }
+    ]
+  }
+]

@@ -1,0 +1,34 @@
+{
+  "doc:/docs/fake/members#0/remove": [
+    {
+      "q": "코스에서 학생 삭제하는 법",
+      "p": "fixture",
+      "g": "A",
+      "m": "fixture"
+    },
+    {
+      "q": "그만둔 학생 명단에서 지우기",
+      "p": "fixture",
+      "g": "A",
+      "m": "fixture"
+    },
+    {
+      "q": "코스 구성원 삭제 어떻게 해요",
+      "p": "fixture",
+      "g": "A",
+      "m": "fixture"
+    },
+    {
+      "q": "반 멤버에서 학생 빼고 싶어요",
+      "p": "fixture",
+      "g": "A",
+      "m": "fixture"
+    },
+    {
+      "q": "구성원 목록에서 학생 지우는 방법",
+      "p": "fixture",
+      "g": "A",
+      "m": "fixture"
+    }
+  ]
+}

@@ -43,6 +43,7 @@
 - 범위: `listDocs()` 중 공개 챗봇 문서(`isPublicChatbotDoc`)이면서 `status ?? "published"`가 `published`인 것, 그리고 `CS_FIGMA_GUIDES`(내부 전용 slug 제외).
 - 문장 나누기: 본문을 줄 단위로 먼저 나누고(경로 줄·목록 줄·표 줄이 다음 문장과 붙지 않게), 줄마다 `splitIntoSentences`(`lib/chatbot/source-grounding.ts`)를 쓴다. 이미지·링크 주소·굵게·목록·인용 표시를 지운다. 같은 단위 안의 같은 문장은 한 번만 넣는다.
 - 해시: `sentenceHash` = sha256(NFC + 공백 하나로 접은 문장) 앞 16자(`lib/chatbot/answer-index/hash.ts`, 런타임도 같은 함수를 쓴다).
+- 단위 나누기·문장 나누기의 정본은 `lib/chatbot/answer-index/doc-units.ts`·`sentences.ts`다. 런타임 `load.ts`가 같은 함수로 '지금 문서'를 다시 나눠 카드 문장 해시를 대조하고, `scripts/answer-index/lib/units.ts`·`sentences.ts`는 영역 표만 더하거나 다시 내보낸다.
 - 표시(`flags`): `caption` 화면 캡션·빨간 박스, `meta` 문서 자체 안내("아래 순서대로…", "이 문서는…"), `nav` 다른 문서를 보라는 말, `connective` 접속어·지시어로 시작(앞 문장과 함께만), `table` 표의 한 줄. `caption`·`meta`·`nav` 문장은 답으로 쓰지 않는다(V-3).
 
 ### 영역

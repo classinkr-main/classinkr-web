@@ -45,6 +45,8 @@ export function unitSourcePaths(root = repoRoot()) {
     "lib/cs-figma-enrichments.generated.ts",
     "lib/chatbot/source-grounding.ts",
     "lib/chatbot/doc-outline.ts",
+    "lib/chatbot/answer-index/doc-units.ts",
+    "lib/chatbot/answer-index/sentences.ts",
     `${SCRIPT_LIB}/units.ts`,
     `${SCRIPT_LIB}/sentences.ts`,
     `${SCRIPT_LIB}/areas.ts`,

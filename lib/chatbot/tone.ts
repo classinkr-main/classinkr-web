@@ -188,7 +188,8 @@ export function applyToneToAnswer(
 }
 
 // 영어·줄임말 질문도 한국어 규칙으로 고를 수 있게, 라우팅용 한국어 단어를 덧붙인다(원문은 그대로 둔다).
-const ROUTING_GLOSSES: [RegExp, string][] = [
+// 답 색인(lib/chatbot/answer-index/normalize.ts glossForIndex)이 변형 10만 줄에 같은 표를 미리 컴파일해 쓰려고 내보낸다.
+export const ROUTING_GLOSSES: [RegExp, string][] = [
   [/\blog\s*-?\s*in\b|\bsign\s*in\b/i, "로그인"],
   [/\bsign\s*-?\s*up\b|\bregister\b/i, "회원가입"],
   [/\bpassword\b/i, "비밀번호"],
@@ -225,7 +226,7 @@ const ROUTING_GLOSSES: [RegExp, string][] = [
   [/\bhow\s*(?:do|can|to)\b/i, "어떻게"],
   [/\blink\b/i, "링크"],
 ]
-const SLANG_GLOSSES: [RegExp, string][] = [
+export const SLANG_GLOSSES: [RegExp, string][] = [
   [/어케|어캐|어떠케/g, "어떻게"],
   [/ㅇㄷ(?:서)?/g, "어디서"],
   [/업뎃|업뎃트|업데트/g, "업데이트"],

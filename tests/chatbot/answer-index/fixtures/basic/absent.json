@@ -1,0 +1,41 @@
+[
+  {
+    "id": "A_isms",
+    "label": "ISMS 같은 보안 인증",
+    "forms": [
+      "ISMS",
+      "ISMS-P",
+      "정보보호 인증"
+    ],
+    "area": "trust",
+    "gapCard": "gap:trust/security-certification",
+    "verified": {
+      "grep": [
+        "ISMS",
+        "인증"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-19",
+      "checker": "fixture"
+    }
+  },
+  {
+    "id": "A_kakaopay",
+    "label": "카카오페이 결제",
+    "forms": [
+      "카카오페이"
+    ],
+    "area": "pricing",
+    "gapCard": "gap:pricing/kakaopay",
+    "verified": {
+      "grep": [
+        "카카오페이"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-19",
+      "checker": "fixture"
+    }
+  }
+]

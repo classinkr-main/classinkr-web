@@ -64,7 +64,8 @@ export function isPlainFactQuestion(text: string) {
 }
 
 // 두 가지를 함께 물은 질문("맥북에도 깔리나요? 학생은 아이패드 쓰는데", "최대 인원이랑 수업 시간 제한").
-const COMPOUND_QUESTION_RE = /[?？]\s*\S|이?랑\s|하고\s|그리고|및\s|,\s*\S/
+// 답 색인의 질문 나누기(lib/chatbot/answer-index/normalize.ts segmentQuestion)도 같은 신호를 쓴다.
+export const COMPOUND_QUESTION_RE = /[?？]\s*\S|이?랑\s|하고\s|그리고|및\s|,\s*\S/
 
 export const BASIC_QUICK_ANSWERS: BasicQuickAnswer[] = [
   {
