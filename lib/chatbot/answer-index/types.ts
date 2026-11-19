@@ -776,4 +776,11 @@ export interface AnswerIndexTrace {
   partial?: boolean
   /** 없는 부분 꼬리를 붙인 absent 개념 id. */
   absentTail?: string | null
+  /**
+   * 색인 앞 단계가 답했을 때 그 단계(compiled 라우터, 사양 §3.2 ①~④와 그 앞): greeting(인사)·policy_guard(거절 답)·
+   * exempt(관문 밖 정해 둔 답)·english(영어 안내)·handoff(즉시 상담 연결)·tried(이미 해 봤다는 화난 문의). decision 은 null 이다.
+   */
+  pre?: "greeting" | "policy_guard" | "exempt" | "english" | "handoff" | "tried" | null
+  /** 고른 카드를 답으로 만들 수 없어 못 찾음으로 바꾼 이유(문장 해시 어긋남·옛 답 없음 등). */
+  unavailable?: string | null
 }
