@@ -86,6 +86,7 @@ npx tsx scripts/chatbot-live-eval.ts --in <questions.json> --out <results.jsonl>
 | `--mode` | `select` | `CHATBOT_FINAL_ANSWER_LLM` 값. `select`·`generate`·`off`. `off`가 아니면 키가 있어야 한다. |
 | `--gate` | `on` | `CHATBOT_ANSWER_GATE`(정해 둔 답 확인 관문). |
 | `--second-chance` | `on` | `CHATBOT_SECOND_CHANCE`(못 찾았을 때 목차에서 다시 고르는 두 번째 검색). |
+| `--router` | 없음 | `CHATBOT_ANSWER_ROUTER`(답 라우터 `legacy`·`shadow`·`compiled`). 주면 서비스 모듈을 불러오기 전에 환경변수를 그 값으로 둔다. 안 주면 환경변수를 그대로 쓴다. |
 | `--allow-model-errors` | 꺼짐 | 무효 측정 종료와 조기 중단을 끈다. 모델이 죽은 상태의 동작을 일부러 잴 때만 쓴다. |
 
 결과 줄 필드:
@@ -93,22 +94,27 @@ npx tsx scripts/chatbot-live-eval.ts --in <questions.json> --out <results.jsonl>
 | 필드 | 뜻 |
 |---|---|
 | `id`, `group`, `question`, `expectTopic` | 입력 그대로 |
+| `router` | 답 라우터: `--router` 값, 없으면 `CHATBOT_ANSWER_ROUTER`, 그것도 없으면 `legacy` |
 | `answer`, `answerMode`, `confidence`, `unresolved`, `needsHandoff`, `handoffIntent`, `detectedCategory`, `detectedIntent`, `warning` | 공개 답과 판정 값. `needsHandoff`가 true면 위젯에 상담 버튼이 뜬다. |
 | `sources` | `{ title, path, heading, score }` 목록 |
-| `decidedBy` | 어느 경로가 답했는지: `second_chance`, `model_unavailable`(선별 실패 고정 문구), `gate_evidence_select`·`gate_not_found`(관문이 버린 뒤 문서 경로), 관문이 유지한 답의 출처(`template:*`·`guide:*`·`self:*` 등), `field:<id>`, `basics:<id>`, `symptom`, `not_found`, `evidence_select`·`generate`·`draft`, `policy`(모델을 부르지 않은 지름길), `unknown` |
+| `decidedBy` | 어느 경로가 답했는지: 답 색인이 정한 답이면 `index:<카드>`·`index-partial:<카드>`(없는 부분 꼬리가 붙음)·`index-gap:<카드>`·`index-abstain`·`index-clarify`. 그 밖은 `second_chance`, `model_unavailable`(선별 실패 고정 문구), `gate_evidence_select`·`gate_not_found`(관문이 버린 뒤 문서 경로), 관문이 유지한 답의 출처(`template:*`·`guide:*`·`self:*` 등), `field:<id>`, `basics:<id>`, `symptom`, `not_found`(못 찾음 고정 문구: 약한 출처·출처 없는 사실 질문), `evidence_select`·`generate`·`draft`, `policy`(답에 쓰이는 모델을 부르지 않은 지름길), `unknown` |
+| `answerIndex` | 코어가 낸 답 색인 흔적(`version`·`router`·`scope`·`decision`·`top`·`conf` …, 답 색인 사양 §3.7). 코어에 없으면 이 필드가 없다 |
 | `gate`, `gateOriginal`, `gateMs`, `gateSkipReason` | 관문 결과(`kept`·`rejected`·`skipped`·`none`), 판정 대상이던 정해 둔 답의 출처, 판정 시간, `skipped`의 이유(`off`·`no_key`·`llm_off`·`timeout`·`error`·`model_unavailable`) |
 | `secondChance`, `secondChanceMs`, `secondChanceReason` | 두 번째 검색 결과(`hit`·`miss`·`none`), 시간, `miss`·`none`의 이유 |
 | `latencyMs` | 그 질문의 처리 시간 |
 | `geminiCalls`, `geminiStatuses`, `geminiKinds` | 그 질문에서 나간 Gemini 호출 수, HTTP 상태(네트워크 오류는 0), 종류별 수(`generateContent`·`embedContent`) |
-| `geminiBlocked` | 결제·인증 실패 차단기 때문에 보내지 않은 호출 수(관문이 차단기를 보고 넘긴 것 포함) |
+| `geminiBlocked`, `geminiBlockedKinds` | 결제·인증 실패 차단기 때문에 보내지 않은 호출 수(관문이 차단기를 보고 넘긴 것 포함)와 종류별 수(`embedContent`·`generateContent`) |
 | `modelError` | 아래 무효 측정 기준에 걸린 줄 |
 | `attempts`, `error` | 시도 횟수와 오류. 모든 호출이 429·5xx·네트워크 오류로 끝나면 최대 3번 다시 돈다. |
 
-**무효 측정 감지.** 줄의 `geminiStatuses`에 401·402·403(결제 크레딧 소진·키 인증 실패)이 있거나, `geminiBlocked`가 1 이상이거나, `gateSkipReason`·`secondChanceReason`이 `model_unavailable`이면 `modelError`가 true다. 요약에 `모델 호출 실패 줄: N / 전체`와 질문당 Gemini 호출 수 중앙값이 찍힌다.
+**무효 측정 감지.** 그 줄의 답에 쓰이는 Gemini 호출(관문·근거 선별·목차 고르기·답 생성)이 401·402·403(결제 크레딧 소진·키 인증 실패)을 받았거나, 차단기가 그런 호출을 막았거나(`geminiBlockedKinds`의 `generateContent`), `gateSkipReason`·`secondChanceReason`이 `model_unavailable`이면 `modelError`가 true다. 요약에 `모델 호출 실패 줄: N / 전체`와 질문당 Gemini 호출 수 중앙값이 찍힌다.
 
+- `modelError`가 아닌 것: 모델 단계(`--mode`·`--gate`·`--second-chance`)를 모두 끈 측정의 줄(모델을 일부러 끔), 임베딩(`embedContent`)만 실패·차단된 줄(이 스크립트는 벡터 검색이 없어 임베딩 결과를 답에 쓰지 않는다), 답 글에 `MODEL_UNAVAILABLE_ANSWER`가 있어도 위 신호가 없는 줄.
 - `modelError` 줄이 전체의 5%를 넘으면 `측정 무효: 모델 호출 실패(HTTP 4xx) 줄이 N개`를 찍고 종료 코드 2로 끝난다.
-- 끝난 순서로 처음 20줄을 보고, 그중 모델을 부른 줄(`geminiCalls + geminiBlocked > 0`)이 모두 `modelError`면 남은 질문을 돌리지 않고 멈춘 뒤 같은 메시지로 종료 코드 2.
-- 종료 코드: 0 정상, 2 무효 측정 또는 사용법 오류(필수 인자 없음, 잘못된 값, `--mode`가 `off`가 아닌데 키 없음), 1 그 밖의 실패. 2가 나온 결과는 채점하지 않는다.
+- 끝난 순서로 처음 20줄을 보고, 그중 답에 쓰이는 모델을 부른 줄(임베딩 빼고 나간 호출 + 막힌 호출 > 0, 또는 `modelError`)이 모두 `modelError`면 남은 질문을 돌리지 않고 멈춘 뒤 같은 메시지로 종료 코드 2.
+- 모델 없는 측정(`--mode off --gate off --second-chance off`)은 질문당 Gemini 호출이 0이어야 한다. 호출이 나갔거나 차단기에 막힌 줄이 있으면 `--router compiled`는 `측정 무효: 모델 없는 compiled 측정인데 …`를 찍고 종료 코드 3, 그 밖은 경고와 줄 수·종류만 찍는다. 지금 legacy 경로는 키가 있으면 질문마다 임베딩을 한 번 부르므로(Supabase 가 없어도) 이 경고가 나온다.
+- 종료 코드: 0 정상, 2 무효 측정 또는 사용법 오류(필수 인자 없음, 잘못된 값, `--mode`가 `off`가 아닌데 키 없음), 3 모델 없는 compiled 측정에서 Gemini 호출이 나감, 1 그 밖의 실패. 2·3이 나온 결과는 채점하지 않는다.
+- 결과를 심사·점수로 잇는 도구(50줄씩 나누기, 심사관 A·B·C, 점수·구간, 정답 키 대리 점수)는 `scripts/answer-index/judge/README.md`에 있다.
 
 모델 없는 답과 비교하려면 같은 입력을 `--mode off`로 한 번 더 돌린다. 측정 순서와 채점 분류는 `docs/active/chatbot-structure-round-2026-11-18.md`의 "다시 재는 방법"에 있다.
 

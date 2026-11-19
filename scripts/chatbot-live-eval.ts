@@ -2,7 +2,7 @@
  * 질문 묶음을 공개 챗봇 경로에 실제 모델(Gemini)로 돌려 답을 JSONL 로 남기는 측정 스크립트.
  *
  * 실행:
- *   npx tsx scripts/chatbot-live-eval.ts --in <questions.json> --out <results.jsonl> [--concurrency 4] [--mode select|generate|off] [--gate on|off] [--second-chance on|off] [--allow-model-errors]
+ *   npx tsx scripts/chatbot-live-eval.ts --in <questions.json> --out <results.jsonl> [--concurrency 4] [--mode select|generate|off] [--gate on|off] [--second-chance on|off] [--router legacy|shadow|compiled] [--allow-model-errors]
  *
  * - 입력: [{ id, question, group?, expectTopic? }] 또는 { cases: [...] }(data/chatbot-first-contact-set.json).
  * - 질문마다 세션 없이 evaluateChatbotQuery(공개 경로 코어, 말투·후속 질문 포함)를 독립 실행한다.
@@ -16,11 +16,22 @@
  * - secondChance 는 못 찾았을 때 목차에서 다시 고르는 두 번째 검색(CHATBOT_SECOND_CHANCE, lib/chatbot/service.ts)의 결과다.
  *   hit(목차에서 고른 절의 문장으로 답함)·miss(돌렸지만 못 찾음 유지)·none(대상 아님·꺼짐), secondChanceMs 는 그 시간,
  *   secondChanceReason 은 miss·none 의 이유다. --second-chance on|off 로 켜고 끈다(기본 on).
- * - 무효 측정 알아채기: 결과 줄의 modelError 는 그 줄에서 Gemini 가 401·402·403(결제 크레딧 소진·키 인증 실패)을 돌려줬거나
- *   그 때문에 열린 차단기(lib/chatbot/llm.ts)가 호출을 막은 경우(geminiBlocked: 관문이 차단기를 보고 판정 없이 넘긴 것 포함),
- *   관문·두 번째 검색이 model_unavailable 로 넘어간 경우 true 다. 이런 줄이 전체의 5% 를 넘으면
- *   "측정 무효"를 찍고 종료 코드 2 로 끝나고, 처음 끝난 20줄에서 모델을 부른 줄이 모두 그렇다면 거기서 멈춘다. 2026-11-18 크레딧 소진 때 모든 호출이
- *   402 였는데도 '오류 0'으로 끝나 무효 측정이 채점까지 갔다. 모델이 죽은 상태의 동작을 일부러 잴 때만 --allow-model-errors 를 준다.
+ * - --router 는 답 라우터(CHATBOT_ANSWER_ROUTER: legacy·shadow·compiled, 답 색인 사양 §3.8)를 정한다. 주면 서비스 모듈을
+ *   불러오기 전에 환경변수를 그 값으로 둔다. 결과 줄의 router 는 그 값(안 주면 환경변수, 그것도 없으면 legacy)이다.
+ *   코어가 답 색인 흔적(answerIndex)을 내면 결과 줄에 그대로 싣고, 색인이 답을 정한 줄의 decidedBy 는
+ *   index:<카드>·index-partial:<카드>·index-gap:<카드>·index-abstain·index-clarify 다(사양 §3.7, scripts/lib/chatbot-live-eval-checks.ts).
+ * - 무효 측정 알아채기: 결과 줄의 modelError 는 그 줄의 답에 쓰이는 Gemini 호출(관문·근거 선별·목차 고르기·답 생성)이
+ *   401·402·403(결제 크레딧 소진·키 인증 실패)을 받았거나, 그 때문에 열린 차단기(lib/chatbot/llm.ts)가 그 호출을 막았거나
+ *   (geminiBlocked: 관문이 차단기를 보고 판정 없이 넘긴 것 포함), 관문·두 번째 검색이 model_unavailable 로 넘어간 경우 true 다.
+ *   모델 단계(--mode·--gate·--second-chance)를 모두 끈 측정은 모델을 일부러 끈 것이라 modelError 가 늘 false 다.
+ *   임베딩(embedContent)은 세지 않는다: 이 스크립트에는 벡터 검색이 없어 임베딩이 실패해도 답이 같다.
+ *   답 글에 고정 문구(MODEL_UNAVAILABLE_ANSWER)가 있다는 것만으로는 modelError 가 아니다.
+ *   modelError 줄이 전체의 5% 를 넘으면 "측정 무효"를 찍고 종료 코드 2 로 끝나고, 처음 끝난 20줄에서 모델을 부른 줄이
+ *   모두 그렇다면 거기서 멈춘다. 2026-11-18 크레딧 소진 때 모든 호출이 402 였는데도 '오류 0'으로 끝나 무효 측정이 채점까지 갔다.
+ *   모델이 죽은 상태의 동작을 일부러 잴 때만 --allow-model-errors 를 준다.
+ * - 모델 없는 측정(--mode off --gate off --second-chance off)은 질문당 Gemini 호출이 0 이어야 한다(사양 §2.2). 호출이 나갔거나
+ *   차단기에 막힌 줄이 있으면 router=compiled 는 "측정 무효"로 종료 코드 3, 그 밖은 경고와 줄 수만 찍는다.
+ * - 종료 코드: 0 정상, 1 그 밖의 실패, 2 무효 측정(모델 호출 실패)·사용법 오류, 3 모델 없는 compiled 측정에서 Gemini 호출이 나감.
  */
 
 // Mock server-only for non-Next.js CLI execution (scripts/run-chatbot-golden-eval.ts 와 같은 방식)
@@ -36,6 +47,18 @@ moduleProto.require = function (this: unknown, id: string) {
 import { AsyncLocalStorage } from "node:async_hooks"
 import { existsSync, mkdirSync, readFileSync, writeFileSync, appendFileSync } from "node:fs"
 import { dirname, join, resolve } from "node:path"
+
+import {
+  checkModelFreeRun,
+  classifyBlockedGeminiCall,
+  countAnswerModelCalls,
+  decidedByFromAnswerIndex,
+  hasModelError,
+  isTransientGeminiFailure,
+  parseAnswerRouter,
+  type AnswerRouter,
+  type GeminiCallRecord,
+} from "./lib/chatbot-live-eval-checks"
 
 function loadEnvLocal() {
   const envPath = join(process.cwd(), ".env.local")
@@ -63,11 +86,17 @@ interface EvalInput {
 interface GeminiTrace {
   calls: number
   statuses: number[]
+  /** 나간 호출마다 종류와 상태(modelError 판정용). */
+  records: GeminiCallRecord[]
   /** 결제·인증 실패 차단기 때문에 보내지 않은 호출 수. */
   blocked: number
+  /** 차단기가 막은 호출의 종류별 수(embedContent·generateContent). */
+  blockedKinds: Record<string, number>
   /** 호출 종류별 횟수(generateContent=답·선별 생성, embedContent=검색 임베딩). */
   kinds: Record<string, number>
 }
+
+const newTrace = (): GeminiTrace => ({ calls: 0, statuses: [], records: [], blocked: 0, blockedKinds: {}, kinds: {} })
 
 function argValue(name: string): string | undefined {
   const index = process.argv.indexOf(name)
@@ -77,7 +106,7 @@ function argValue(name: string): string | undefined {
 function usage(message?: string): never {
   if (message) console.error(`오류: ${message}`)
   console.error(
-    "사용법: npx tsx scripts/chatbot-live-eval.ts --in <questions.json> --out <results.jsonl> [--concurrency 4] [--mode select|generate|off] [--gate on|off] [--second-chance on|off] [--allow-model-errors]"
+    "사용법: npx tsx scripts/chatbot-live-eval.ts --in <questions.json> --out <results.jsonl> [--concurrency 4] [--mode select|generate|off] [--gate on|off] [--second-chance on|off] [--router legacy|shadow|compiled] [--allow-model-errors]"
   )
   process.exit(2)
 }
@@ -112,22 +141,13 @@ function tally(values: string[]) {
 
 const sleep = (ms: number) => new Promise((done) => setTimeout(done, ms))
 
-// 결제·인증 실패. 이 상태 코드가 한 번이라도 나온 줄은 모델이 죽은 상태에서 잰 것이다.
-const MODEL_ACCESS_DENIED_STATUSES = new Set([401, 402, 403])
 // 모델 호출 실패 줄이 이 비율을 넘으면 측정 무효로 본다.
 const MODEL_ERROR_MAX_RATIO = 0.05
 // 처음 이만큼이 모두 모델 호출 실패면 남은 질문을 돌리지 않고 멈춘다.
 const MODEL_ERROR_EARLY_STOP_ROWS = 20
 
-// skipReasons: 관문(answerGate.skipReason)·두 번째 검색(secondChance.reason)이 돌려준 이유. 차단기 때문에 판정·검색 없이
-// 넘어간 줄은 호출 추적(statuses·blocked)에 안 잡힐 수 있어도 모델이 죽은 상태에서 잰 줄이다.
-function hasModelError(trace: Pick<GeminiTrace, "statuses" | "blocked">, skipReasons: Array<string | null | undefined> = []) {
-  return (
-    trace.blocked > 0 ||
-    trace.statuses.some((status) => MODEL_ACCESS_DENIED_STATUSES.has(status)) ||
-    skipReasons.includes("model_unavailable")
-  )
-}
+// 모델 없는 측정에서 Gemini 를 부르려 한 줄이 있으면 compiled 측정은 무효다(종료 코드 3).
+const EXIT_MODEL_FREE_VIOLATION = 3
 
 async function main() {
   const inPath = argValue("--in")
@@ -144,7 +164,14 @@ async function main() {
     usage(`--second-chance 는 on|off 중 하나여야 합니다: ${secondChanceSwitch}`)
   }
 
+  const routerArg = argValue("--router")
+  const routerFlag = routerArg === undefined ? null : parseAnswerRouter(routerArg)
+  if (routerArg !== undefined && !routerFlag) usage(`--router 는 legacy|shadow|compiled 중 하나여야 합니다: ${routerArg}`)
+
   const allowModelErrors = process.argv.includes("--allow-model-errors")
+  // 답에 모델을 쓰는 단계가 하나라도 켜져 있는지. 모두 끈 측정은 모델 없는 측정이다(Gemini 호출 0 이어야 함).
+  const modelStagesEnabled = mode !== "off" || gateSwitch === "on" || secondChanceSwitch === "on"
+  const modelFree = !modelStagesEnabled
   const inputs = readInputs(resolve(inPath))
 
   // 1) 환경 정리 — lib/chatbot 을 import 하기 전에 해야 한다.
@@ -162,6 +189,12 @@ async function main() {
   process.env.CHATBOT_FINAL_ANSWER_LLM = mode
   process.env.CHATBOT_ANSWER_GATE = gateSwitch
   process.env.CHATBOT_SECOND_CHANCE = secondChanceSwitch
+  if (routerFlag) process.env.CHATBOT_ANSWER_ROUTER = routerFlag
+  const envRouter = process.env.CHATBOT_ANSWER_ROUTER
+  if (!routerFlag && envRouter?.trim() && !parseAnswerRouter(envRouter)) {
+    console.error(`경고: CHATBOT_ANSWER_ROUTER 값을 알 수 없습니다(${envRouter}). 결과 줄의 router 는 legacy 로 적습니다.`)
+  }
+  const router: AnswerRouter = routerFlag ?? parseAnswerRouter(envRouter) ?? "legacy"
   if (mode !== "off" && !process.env.GEMINI_API_KEY?.trim()) {
     usage("GEMINI_API_KEY 가 없습니다. 모델 경로가 조용히 꺼지므로 중단합니다(--mode off 는 키 없이 가능).")
   }
@@ -179,22 +212,27 @@ async function main() {
     try {
       const res = await realFetch(input, init)
       trace.statuses.push(res.status)
+      trace.records.push({ kind, status: res.status })
       return res
     } catch (error) {
       trace.statuses.push(0)
+      trace.records.push({ kind, status: 0 })
       throw error
     }
   }) as typeof fetch
 
   const { setModelCircuitBlockedListener } = await import("../lib/chatbot/llm")
   // 차단기가 막은 호출도 그 질문의 추적에 센다(네트워크로 나가지 않아 fetch 감싸기로는 보이지 않는다).
+  // 알림에는 URL 이 없어, 임베딩인지는 호출 스택으로 가린다(임베딩 차단은 modelError 로 세지 않는다).
   setModelCircuitBlockedListener(() => {
     const trace = traceStore.getStore()
-    if (trace) trace.blocked += 1
+    if (!trace) return
+    trace.blocked += 1
+    const kind = classifyBlockedGeminiCall(new Error().stack)
+    trace.blockedKinds[kind] = (trace.blockedKinds[kind] ?? 0) + 1
   })
-  const { evaluateChatbotQuery, WEAK_SOURCE_DRAFT_ANSWER, MODEL_UNAVAILABLE_ANSWER, redactPii } = await import(
-    "../lib/chatbot/service"
-  )
+  const { evaluateChatbotQuery, WEAK_SOURCE_DRAFT_ANSWER, NO_SOURCE_FACT_ANSWER, MODEL_UNAVAILABLE_ANSWER, redactPii } =
+    await import("../lib/chatbot/service")
   const { findBasicQuickAnswers } = await import("../lib/chatbot/quick-answers-basics")
   const { findFieldQuickAnswer } = await import("../lib/chatbot/quick-answers-field")
   const { resolveSymptomTriage } = await import("../lib/chatbot/symptom-triage")
@@ -202,6 +240,8 @@ async function main() {
 
   const firstLine = (text: string) => text.split("\n").find((line) => line.trim())?.trim() ?? ""
   const isWeakSourceAnswer = (answer: string) => answer.includes(firstLine(WEAK_SOURCE_DRAFT_ANSWER))
+  // 출처 없는 사실 질문의 못 찾음 고정 문구. 출처가 없어 예전에는 policy 로 적혔다.
+  const isNoSourceAnswer = (answer: string) => answer.includes(firstLine(NO_SOURCE_FACT_ANSWER))
 
   // 이미 export 된 판별 함수를 따로 불러, 최종 답에 그 답의 첫 문장이 들어 있는지로 어느 경로가 답했는지 가린다.
   // (앞선 정책 가드 등이 먼저 답했는데 질문만 우연히 맞는 경우를 걸러 내려는 확인이다.)
@@ -213,9 +253,16 @@ async function main() {
       answerMode: string
       answerGate: { gate: string; gateOriginal?: string }
       secondChance: { secondChance: string }
+      answerIndex?: unknown
     },
     trace: GeminiTrace
   ): string {
+    // 답 색인(compiled)이 정한 답이면 그 결정이다. 범위 밖(scope=out)·shadow 는 아래 기존 판별을 쓴다.
+    const indexDecision = decidedByFromAnswerIndex(result.answerIndex)
+    if (indexDecision) return indexDecision
+    // 답에 쓰이는 모델 호출(임베딩 제외)이 나갔거나 차단기에 막혔는지.
+    const answerModel = countAnswerModelCalls(trace.kinds, trace.blockedKinds)
+    const usedAnswerModel = answerModel.calls > 0 || answerModel.blocked > 0
     // 못 찾음 뒤 목차에서 다시 골라 답했으면 그 경로다(관문이 버린 뒤의 문서 경로에서도 돌 수 있다).
     if (result.secondChance.secondChance === "hit") return "second_chance"
     // 근거 선별 호출이 실패해 확인 안 된 조각 대신 고정 문구를 냈다.
@@ -245,26 +292,28 @@ async function main() {
       if (head && answer.includes(head)) return "symptom"
     }
 
-    if (answer.includes(firstLine(WEAK_SOURCE_DRAFT_ANSWER))) return "not_found"
+    if (isWeakSourceAnswer(answer) || isNoSourceAnswer(answer)) return "not_found"
 
     if (result.sources.length > 0) {
-      if (mode === "off" || (!trace.kinds.generateContent && !trace.blocked)) return "draft"
+      if (mode === "off" || !usedAnswerModel) return "draft"
       return mode === "generate" ? "generate" : "evidence_select"
     }
-    // 출처가 없고 모델도 부르지 않았다(차단기가 막은 호출도 없음) → 정책 가드·인사·상담 연결 등 코드에 박힌 지름길.
-    if (!trace.kinds.generateContent && !trace.blocked) return "policy"
+    // 출처가 없고 답에 쓰이는 모델도 부르지 않았다(차단기가 막은 호출도 없음) → 정책 가드·인사·상담 연결 등 코드에 박힌 지름길.
+    if (!usedAnswerModel) return "policy"
     return "unknown"
   }
 
-  const isTransientFailure = (trace: GeminiTrace) =>
-    trace.calls > 0 && trace.statuses.length > 0 && trace.statuses.every((status) => status === 0 || status === 429 || status >= 500)
+  const isTransientFailure = (trace: GeminiTrace) => isTransientGeminiFailure(trace.records)
+
+  const modelErrorOf = (trace: GeminiTrace, skipReasons: Array<string | null | undefined> = []) =>
+    hasModelError({ modelStagesEnabled, calls: trace.records, blockedKinds: trace.blockedKinds, skipReasons })
 
   async function runOne(item: EvalInput) {
     const maxAttempts = 3
     let lastError = ""
-    let lastTrace: GeminiTrace = { calls: 0, statuses: [], blocked: 0, kinds: {} }
+    let lastTrace: GeminiTrace = newTrace()
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-      const trace: GeminiTrace = { calls: 0, statuses: [], blocked: 0, kinds: {} }
+      const trace: GeminiTrace = newTrace()
       lastTrace = trace
       const startedAt = Date.now()
       try {
@@ -275,11 +324,14 @@ async function main() {
           await sleep(1500 * attempt)
           continue
         }
+        // 답 색인 흔적은 코어가 낼 때만 싣는다(응답에는 실리지 않는 측정 필드, 사양 §3.7).
+        const answerIndex = (result as { answerIndex?: unknown }).answerIndex
         return {
           id: item.id,
           group: item.group ?? null,
           question: item.question,
           expectTopic: item.expectTopic ?? null,
+          router,
           answer: result.answer,
           answerMode: result.answerMode,
           confidence: result.confidence,
@@ -295,7 +347,8 @@ async function main() {
             heading: source.heading ?? null,
             score: source.score,
           })),
-          decidedBy: decideBy(item.question, result, trace),
+          decidedBy: decideBy(item.question, { ...result, answerIndex }, trace),
+          ...(answerIndex !== undefined ? { answerIndex } : {}),
           gate: result.answerGate.gate,
           gateOriginal: result.answerGate.gateOriginal ?? null,
           gateMs: result.answerGate.gateMs ?? null,
@@ -307,7 +360,8 @@ async function main() {
           geminiCalls: trace.calls,
           geminiStatuses: trace.statuses,
           geminiBlocked: trace.blocked,
-          modelError: hasModelError(trace, [result.answerGate.skipReason, result.secondChance.reason]),
+          geminiBlockedKinds: trace.blockedKinds,
+          modelError: modelErrorOf(trace, [result.answerGate.skipReason, result.secondChance.reason]),
           geminiKinds: trace.kinds,
           attempts: attempt,
           error: isTransientFailure(trace) ? lastError : null,
@@ -324,6 +378,7 @@ async function main() {
       group: item.group ?? null,
       question: item.question,
       expectTopic: item.expectTopic ?? null,
+      router,
       answer: null,
       answerMode: null,
       confidence: null,
@@ -346,7 +401,8 @@ async function main() {
       geminiCalls: lastTrace.calls,
       geminiStatuses: lastTrace.statuses,
       geminiBlocked: lastTrace.blocked,
-      modelError: hasModelError(lastTrace),
+      geminiBlockedKinds: lastTrace.blockedKinds,
+      modelError: modelErrorOf(lastTrace),
       geminiKinds: lastTrace.kinds,
       attempts: maxAttempts,
       error: lastError || "unknown error",
@@ -357,7 +413,9 @@ async function main() {
   writeFileSync(resolve(outPath), "")
 
   console.error(
-    `질문 ${inputs.length}개 / 동시 ${concurrency} / 모드 ${mode} / Gemini 키 ${process.env.GEMINI_API_KEY ? "있음" : "없음"}` +
+    `질문 ${inputs.length}개 / 동시 ${concurrency} / 모드 ${mode} / 관문 ${gateSwitch} / 두 번째 검색 ${secondChanceSwitch} / 라우터 ${router}` +
+      ` / Gemini 키 ${process.env.GEMINI_API_KEY ? "있음" : "없음"}` +
+      (modelFree ? " / 모델 없는 측정(Gemini 호출 0 이어야 함)" : "") +
       (allowModelErrors ? " / 모델 호출 실패 허용(--allow-model-errors)" : "")
   )
 
@@ -377,12 +435,16 @@ async function main() {
   }
 
   // 처음 끝난 20줄에서 모델을 부른 줄이 모두 모델 호출 실패면 남은 질문을 돌리지 않는다(키·결제 문제를 먼저 고쳐야 한다).
-  // 정해 둔 답·정책 답처럼 모델을 부르지 않는 줄은 실패도 성공도 아니라 뺀다. 첫 질문은 준비 때문에 늦게 끝나므로 끝난 순서로 본다.
+  // 정해 둔 답·정책 답처럼 답에 쓰이는 모델을 부르지 않는 줄(임베딩만 부른 줄 포함)은 실패도 성공도 아니라 뺀다.
+  // 첫 질문은 준비 때문에 늦게 끝나므로 끝난 순서로 본다.
   const completed: Row[] = []
   function checkEarlyStop(row: Row) {
     completed.push(row)
     if (allowModelErrors || stoppedEarly || completed.length !== MODEL_ERROR_EARLY_STOP_ROWS) return
-    const usedModel = completed.filter((item) => item.geminiCalls + item.geminiBlocked > 0)
+    const usedModel = completed.filter((item) => {
+      const answerModel = countAnswerModelCalls(item.geminiKinds, item.geminiBlockedKinds)
+      return item.modelError || answerModel.calls + answerModel.blocked > 0
+    })
     if (usedModel.length > 0 && usedModel.every((item) => item.modelError)) {
       stoppedEarly = true
       console.error(
@@ -412,11 +474,20 @@ async function main() {
   const done = rows.filter((row): row is Row => Boolean(row))
   const errors = done.filter((row) => row.error)
   console.error("\n==== 요약 ====")
-  console.error(`전체 ${done.length}개, 소요 ${((Date.now() - startedAll) / 1000).toFixed(1)}초`)
+  console.error(`전체 ${done.length}개, 소요 ${((Date.now() - startedAll) / 1000).toFixed(1)}초, 라우터 ${router}`)
   console.error(`answerMode 분포: ${JSON.stringify(tally(done.map((row) => row.answerMode ?? "error")))}`)
   console.error(
     `decidedBy 분포: ${JSON.stringify(tally(done.map((row) => (row.decidedBy.includes(":") ? row.decidedBy.split(":")[0] : row.decidedBy))))}`
   )
+  const indexed = done.filter((row) => "answerIndex" in row)
+  if (indexed.length > 0) {
+    const decisionOf = (row: Row) => {
+      const trace = "answerIndex" in row ? (row.answerIndex as { scope?: unknown; decision?: unknown } | null) : null
+      if (trace?.scope === "out") return "scope_out"
+      return typeof trace?.decision === "string" ? trace.decision : "unknown"
+    }
+    console.error(`답 색인 흔적이 있는 줄: ${indexed.length}개, 결정 분포: ${JSON.stringify(tally(indexed.map(decisionOf)))}`)
+  }
   console.error(`Gemini 생성(generateContent) 호출이 있었던 질문: ${done.filter((row) => (row.geminiKinds.generateContent ?? 0) > 0).length}개`)
   const gated = done.filter((row) => row.gate === "kept" || row.gate === "rejected")
   const gateTimes = gated.map((row) => row.gateMs ?? 0).sort((a, b) => a - b)
@@ -440,6 +511,15 @@ async function main() {
   console.error(`질문당 Gemini 호출 수 중앙값: ${median(done.map((row) => row.geminiCalls))}`)
   console.error(`지연 중앙값: ${median(done.filter((row) => !row.error).map((row) => row.latencyMs))}ms`)
   console.error(`결과: ${resolve(outPath)}`)
+  const modelFreeCheck = checkModelFreeRun({ modelFree, router, rows: done })
+  if (modelFreeCheck.status !== "ok") {
+    const detail = `Gemini 를 부르거나 부르려 한(차단기에 막힘) 줄 ${modelFreeCheck.rows}개, 종류별 ${JSON.stringify(modelFreeCheck.kinds)}`
+    if (modelFreeCheck.status === "invalid") {
+      console.error(`\n측정 무효: 모델 없는 compiled 측정인데 ${detail}`)
+      process.exit(EXIT_MODEL_FREE_VIOLATION)
+    }
+    console.error(`\n경고: 모델 없는 측정(${router})인데 ${detail}. 답에는 쓰이지 않는 호출인지 확인하세요.`)
+  }
   if (!allowModelErrors && (stoppedEarly || modelErrorRows.length > done.length * MODEL_ERROR_MAX_RATIO)) {
     console.error(`\n측정 무효: 모델 호출 실패(HTTP 4xx) 줄이 ${modelErrorRows.length}개`)
     process.exit(2)
