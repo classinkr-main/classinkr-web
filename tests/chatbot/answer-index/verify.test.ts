@@ -194,6 +194,30 @@ describe("그 밖의 규칙", () => {
     expect(errorsOf(result.findings, "V-3").some((finding) => finding.message.includes("meta"))).toBe(true)
   })
 
+  it("V-3 공백 카드의 관련 문장도 캡션·메타·nav 문장이면 실패한다(답에 그대로 나간다)", async () => {
+    const unit = units.find((candidate) => candidate.kind !== "guide" && candidate.sentences.some((sentence) => sentence.flags.includes("meta")))!
+    const i = unit.sentences.findIndex((sentence) => sentence.flags.includes("meta"))
+    const gap = {
+      id: `gap:${unit.area}/related-meta-test`,
+      kind: "gap",
+      tier: "standard",
+      area: unit.area,
+      topic: "시험용 공백 주제",
+      status: "active",
+      answer: { template: "gap_default", handoff: null, related: [{ unit: unit.unitId, i, hash: unit.sentences[i].hash }] },
+      concepts: [],
+      anchors: ["시험용 공백"],
+      searchLog: [
+        { query: "시험 하나", units: 0, site: 0 },
+        { query: "시험 둘", units: 0, site: 0 },
+        { query: "시험 셋", units: 0, site: 0 },
+      ],
+    }
+    const dir = fixture({ ...baseFiles(units, siteFacts), [`cards/${unit.area}.json`]: [gap] })
+    const result = await runVerify({ dir, current: currentSources(units, siteFacts), devSets: [] })
+    expect(errorsOf(result.findings, "V-3").some((finding) => finding.message.includes("관련 문장으로 쓰지 않는 문장(") && finding.message.includes("meta"))).toBe(true)
+  })
+
   it("V-4 같은 변형이 두 카드에 있거나 변형이 모자라면 실패한다", async () => {
     const other = memberCard({ id: `${MEMBER_UNIT}/remove-member-mobile`, topic: "모바일에서 구성원 내보내기" })
     const variants = memberVariants()

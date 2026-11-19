@@ -1,6 +1,16 @@
+import { readFileSync, writeFileSync } from "node:fs"
+import { join } from "node:path"
+
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
 
-import { __setRouterAnswerIndexForTests, getAnswerRouter, resetRouterAnswerIndex } from "@/lib/chatbot/answer-index"
+import {
+  __setRouterAnswerIndexForTests,
+  getAnswerRouter,
+  getRouterAnswerIndex,
+  resetRouterAnswerIndex,
+} from "@/lib/chatbot/answer-index"
+import { sentenceHash } from "@/lib/chatbot/answer-index/hash"
+import type { AnswerIndexUnitsFile } from "@/lib/chatbot/answer-index/types"
 import {
   __clearAnswerCacheForTests,
   evaluateChatbotQuery,
@@ -11,7 +21,7 @@ import {
 } from "@/lib/chatbot/service"
 import { findSafetyViolations } from "@/scripts/answer-index/lib/text-rules"
 
-import { CARDS, compileFixture } from "./index-fixture"
+import { CARDS, compileFixture, copyFixture, fixtureUnits } from "./index-fixture"
 
 /**
  * compiled 라우터 경로의 성질(답 색인 사양 §11 2 경로 성질, §3.2):
@@ -67,9 +77,9 @@ function stubCompiledEnv(modelKey: string) {
   vi.stubEnv("CHATBOT_ANSWER_ROUTER", "compiled")
 }
 
-async function collectStream(message: string) {
+async function collectStream(message: string, sessionId?: string) {
   const events: ChatbotStreamEvent[] = []
-  await streamChatbotQuery({ message, context: { showSources: true } }, {}, (event) => events.push(event))
+  await streamChatbotQuery({ message, sessionId, context: { showSources: true } }, {}, (event) => events.push(event))
   const replace = [...events].reverse().find((event) => event.type === "replace")
   const meta = events.find((event) => event.type === "meta")
   return {
@@ -172,6 +182,83 @@ describe("compiled router with fixture cards", () => {
     const result = await evaluateChatbotQuery("수업 중 학생 채팅 막을 수 있나요?")
     expect(result.answerIndex?.card).not.toBe(CARDS.chat)
     expect(result.answer).not.toContain("[채팅 금지]")
+  })
+
+  it("streams a compiled answer with a session id without waiting on the history", async () => {
+    stubCompiledEnv("test-model-key")
+    const question = "수업 중 학생 채팅 막을 수 있나요?"
+    const nonStream = await evaluateChatbotQuery(question)
+    const stream = await collectStream(question, "00000000-0000-4000-8000-000000000001")
+    expect(stream.answer).toBe(nonStream.answer)
+    expect(stream.deltas).toBe(0)
+    expect(fetchSpy).not.toHaveBeenCalled()
+  })
+})
+
+describe("compiled router: public answer clean-up and failure fallback", () => {
+  it("removes raw URLs from document sentences on both stream and non-stream", async () => {
+    // 문서 문장에 원본 URL 이 섞여 들어온 경우: 스트림 경로만 finalizeAnswer 로 지우면 두 경로 답이 달라진다.
+    const { dir, cleanup } = copyFixture()
+    try {
+      const unitsPath = join(dir, "units.json")
+      const unitsFile = JSON.parse(readFileSync(unitsPath, "utf8")) as AnswerIndexUnitsFile
+      const unit = unitsFile.units.find((candidate) => candidate.unitId === "doc:/docs/fake/chat#0")!
+      const text = `${unit.sentences[1].text} https://example.com/guide/chat-ban`
+      const oldHash = unit.sentences[1].hash
+      unit.sentences[1] = { ...unit.sentences[1], text, hash: sentenceHash(text) }
+      writeFileSync(unitsPath, JSON.stringify(unitsFile))
+      const cardsPath = join(dir, "cards", "classroom.json")
+      writeFileSync(cardsPath, readFileSync(cardsPath, "utf8").split(oldHash).join(sentenceHash(text)))
+      __setRouterAnswerIndexForTests(compileFixture(dir, { currentUnits: fixtureUnits(dir) }))
+
+      stubCompiledEnv("")
+      const question = "수업 중 학생 채팅 막을 수 있나요?"
+      const nonStream = await evaluateChatbotQuery(question)
+      expect(nonStream.answerIndex).toMatchObject({ decision: "answer", card: CARDS.chat })
+      expect(nonStream.answer).toContain("[채팅 금지]")
+      expect(nonStream.answer).not.toContain("https://")
+      __clearAnswerCacheForTests()
+      const stream = await collectStream(question)
+      expect(stream.answer).toBe(nonStream.answer)
+    } finally {
+      cleanup()
+    }
+  })
+
+  it("falls back to the legacy flow when the index cannot be built, and does not rebuild it on every question", async () => {
+    const { dir, cleanup } = copyFixture()
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {})
+    try {
+      // 사전 꼴이 깨진 자료(V-12 가 막지만 검사를 건너뛰고 배포된 경우): 컴파일이 예외를 낸다.
+      const lexiconPath = join(dir, "lexicon.json")
+      const lexicon = JSON.parse(readFileSync(lexiconPath, "utf8")) as Record<string, unknown>[]
+      lexicon[0] = { ...lexicon[0], ambiguous: { form: "깨진 규칙" } }
+      writeFileSync(lexiconPath, JSON.stringify(lexicon))
+      stubCompiledEnv("")
+      vi.stubEnv("ANSWER_INDEX_DATA_DIR", dir)
+      resetRouterAnswerIndex()
+
+      let first: unknown
+      try {
+        getRouterAnswerIndex()
+      } catch (error) {
+        first = error
+      }
+      expect(first).toBeInstanceOf(Error)
+      expect(() => getRouterAnswerIndex()).toThrow(first as Error)
+
+      for (const question of ["수업 중 학생 채팅 막을 수 있나요?", "녹화 영상 다시보기 어디서 봐요"]) {
+        const result = await evaluateChatbotQuery(question, { generateAnswer: false })
+        expect(result.answer.length, question).toBeGreaterThan(0)
+        expect(result.answerIndex, question).toMatchObject({ router: "compiled", scope: "in", decision: null, unavailable: "index_error" })
+      }
+      expect(errors.mock.calls.filter((call) => String(call[0]).includes("answer-index failed"))).toHaveLength(1)
+      expect(fetchSpy).not.toHaveBeenCalled()
+    } finally {
+      errors.mockRestore()
+      resetRouterAnswerIndex()
+      cleanup()
+    }
   })
 })
 

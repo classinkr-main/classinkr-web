@@ -401,6 +401,22 @@ export async function runVerify(options: VerifyOptions = {}): Promise<VerifyResu
       if (picked === 1 && texts[0] && texts[0].length <= 50) add("V-3", "warning", card.file, `${value.id}: 50자 이하 단편 하나만 고름`)
       for (const rule of findSafetyViolations(texts.join("\n"))) add("V-3", "error", card.file, `${value.id}: 답 문장에 ${rule.label}`)
     }
+    // 공백 카드의 관련 문장도 답에 그대로 나간다("공개 안내에는 이런 내용이 있어요:" 아래). doc 답 문장과 같은 규칙으로 본다.
+    if (value.kind === "gap" && Array.isArray(value.answer.related)) {
+      const related = value.answer.related.filter((ref): ref is SingleSentenceRef => isObject(ref) && typeof ref.unit === "string")
+      const texts: string[] = []
+      for (const ref of related) {
+        const sentence = fileUnits.get(ref.unit)?.sentences[ref.i]
+        if (!sentence) continue
+        texts.push(sentence.text)
+        const banned = sentence.flags.filter((flag) => flag === "caption" || flag === "meta" || flag === "nav")
+        if (banned.length > 0) add("V-3", "error", card.file, `${value.id}: 관련 문장으로 쓰지 않는 문장(${banned.join(",")}) ${ref.unit} #${ref.i}`)
+        if (sentence.flags.includes("connective") && !related.some((other) => other.unit === ref.unit && other.i === ref.i - 1)) {
+          add("V-3", "error", card.file, `${value.id}: 접속어 문장을 앞 문장 없이 관련 문장으로 씀(${ref.unit} #${ref.i})`)
+        }
+      }
+      for (const rule of findSafetyViolations(texts.join("\n"))) add("V-3", "error", card.file, `${value.id}: 관련 문장에 ${rule.label}`)
+    }
     const directText =
       value.kind === "policy" || (value.kind === "fixed" && "text" in value.answer)
         ? String((value.answer as { text?: unknown }).text ?? "")

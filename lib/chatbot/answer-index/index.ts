@@ -8,10 +8,16 @@
  * - logShadowDecision(): shadow 로그. 질문 글은 남기지 않는다(질문 해시 sha256 앞 12자·길이·결정·상위 3 id·확신도·legacy decidedBy).
  */
 import { createHash } from "node:crypto"
-import { ANSWER_INDEX_COMPILER_VERSION, type CompiledAnswerIndex } from "./compile"
+import { ANSWER_INDEX_COMPILER_VERSION, compileAnswerIndex, type CompiledAnswerIndex } from "./compile"
 import { curatedTextHash } from "./curated"
 import { decide, type DecideContext } from "./decide"
-import { ANSWER_INDEX_VERSION, answerIndexDataDir, getAnswerIndex, resetAnswerIndexCache } from "./load"
+import {
+  ANSWER_INDEX_VERSION,
+  answerIndexDataDir,
+  loadAnswerIndexData,
+  resetAnswerIndexCache,
+  type LoadedAnswerIndexData,
+} from "./load"
 import type { AnswerIndexDecision, AnswerIndexRouter, AnswerIndexTrace } from "./types"
 
 export { ANSWER_INDEX_VERSION } from "./load"
@@ -27,16 +33,47 @@ export function getAnswerRouter(env: Env = process.env): AnswerIndexRouter {
 // ─── 프로세스 안 색인 ────────────────────────────────────────────────────
 
 let cached: { dir: string; index: CompiledAnswerIndex } | null = null
+let failed: { dir: string; error: Error } | null = null
 let override: CompiledAnswerIndex | null = null
 
-/** 라우터가 쓰는 색인. 같은 자료 폴더면 다시 만들지 않는다. */
+/**
+ * 읽기에서 빠진 것이 있으면 한 번 경고한다(파일 이름·개수만, 질문 글 없음). 조각을 합치지 않았거나 JSON 이 깨지면
+ * 그 파일의 카드가 조용히 빠져 모든 질문이 못 찾음으로 가므로, 운영 로그에서 바로 보이게 한다.
+ */
+function warnLoadIssues(data: LoadedAnswerIndexData) {
+  const stale = data.excluded.filter((item) => item.reason.startsWith("stale") || item.reason.startsWith("schema")).length
+  if (data.problems.length === 0 && data.skipped.length === 0 && stale === 0) return
+  console.warn(
+    `[chatbot] answer-index loaded with issues ${JSON.stringify({
+      cards: data.cards.length,
+      staleOrBroken: stale,
+      skipped: data.skipped.slice(0, 5),
+      problems: data.problems.slice(0, 5),
+    })}`
+  )
+}
+
+/**
+ * 라우터가 쓰는 색인. 같은 자료 폴더면 다시 만들지 않는다.
+ * 컴파일이 예외를 내면 같은 자료 폴더에서는 다시 컴파일하지 않고 같은 예외를 낸다(요청마다 몇 초씩 다시 만들지 않게).
+ * 자료를 고친 뒤에는 다시 시작하거나 resetRouterAnswerIndex() 를 부른다.
+ */
 export function getRouterAnswerIndex(): CompiledAnswerIndex {
   if (override) return override
   const dir = answerIndexDataDir()
   if (cached && cached.dir === dir) return cached.index
-  const index = getAnswerIndex({ dir, curatedTextHash })
-  cached = { dir, index }
-  return index
+  if (failed && failed.dir === dir) throw failed.error
+  try {
+    const data = loadAnswerIndexData({ dir, curatedTextHash })
+    warnLoadIssues(data)
+    const index = compileAnswerIndex(data)
+    cached = { dir, index }
+    failed = null
+    return index
+  } catch (error) {
+    failed = { dir, error: error instanceof Error ? error : new Error(String(error)) }
+    throw failed.error
+  }
 }
 
 /** 시험용: 라우터가 쓸 색인을 바꿔 끼운다(null 이면 되돌린다). */
@@ -47,6 +84,7 @@ export function __setRouterAnswerIndexForTests(index: CompiledAnswerIndex | null
 /** 프로세스 안 색인을 버린다(다음 질문 때 다시 읽고 컴파일). */
 export function resetRouterAnswerIndex() {
   cached = null
+  failed = null
   resetAnswerIndexCache()
 }
 

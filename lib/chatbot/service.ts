@@ -5606,7 +5606,7 @@ async function buildChatbotCoreBase(
   const startedAt = Date.now()
   const question = normalizeQuestion(message)
   if (!options.includeInternalDocs && getAnswerRouter() === "compiled") {
-    const routed = routeCompiledQuestion(question, startedAt)
+    const routed = routeCompiledQuestionSafely(question, startedAt)
     if (routed.core) return routed.core
     const legacyCore = await buildLegacyChatbotCoreBase(question, options, startedAt)
     return { ...legacyCore, answerIndex: routed.trace }
@@ -5668,6 +5668,8 @@ function routeCompiledQuestion(question: NormalizedQuestion, startedAt: number):
   if (plan.kind === "legacy") return { core: null, trace: plan.trace }
   if (plan.kind === "pre") {
     const core = plan.build()
+    // 스트림 경로는 내보내기 전에 finalizeAnswer 를 부른다. 일반 경로도 같은 정리(원본 URL·문서 경로 지우기)를 해 두 경로 답을 같게 둔다.
+    finalizeAnswer(core.response)
     deterministicFinalResponses.add(core.response)
     return { core: { ...core, answerIndex: plan.trace }, trace: plan.trace }
   }
@@ -5679,7 +5681,29 @@ function routeCompiledQuestion(question: NormalizedQuestion, startedAt: number):
     version: answerIndexVersionOf(index),
   })
   const core: ChatbotCore = { question, ...built, response: built.response as CoreResponse }
+  // 문서 문장을 그대로 내므로 문장에 원본 URL·문서 경로가 있으면 공개 답에서 지운다(스트림 경로와 같은 정리, 제자리 수정).
+  finalizeAnswer(core.response)
   return { core, trace: built.answerIndex }
+}
+
+const reportedAnswerIndexFailures = new Set<string>()
+
+/**
+ * compiled 경로에서 색인 읽기·컴파일·판정·답 조립이 예외를 내면 손님 답을 막지 않고 지금(legacy) 흐름으로 보낸다.
+ * 라우터를 legacy 로 되돌린 것과 같은 상태다(사양 §3.9). 흔적에는 unavailable=index_error 를 남기고, 같은 오류는 한 번만 로그로 남긴다.
+ */
+function routeCompiledQuestionSafely(question: NormalizedQuestion, startedAt: number): { core: ChatbotCore | null; trace: AnswerIndexTrace } {
+  try {
+    return routeCompiledQuestion(question, startedAt)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    if (!reportedAnswerIndexFailures.has(message) && reportedAnswerIndexFailures.size < 20) {
+      reportedAnswerIndexFailures.add(message)
+      console.error("[chatbot] answer-index failed; using the legacy flow:", message)
+    }
+    const scope = isCompiledScope(question.redacted) ? "in" : "out"
+    return { core: null, trace: { ...preIndexTrace("compiled", scope), unavailable: "index_error" } }
+  }
 }
 
 // 답 색인이 기존 답 만드는 함수·고정 문구를 쓰게 넘기는 것(respond.ts 가 service.ts 를 import 하지 않게).
@@ -6337,9 +6361,12 @@ export async function streamChatbotQuery(
   }
 
   // 이력은 검색·분류와 무관하므로 검색과 병렬로 시작해 두고 스트리밍 직전에만 await 한다.
-  const historyPromise = requestedSessionId
-    ? loadSessionHistory(requestedSessionId, normalizeString(input.anonymousId) ?? null)
-    : Promise.resolve([])
+  // compiled 라우터는 범위 안 질문을 이력 없이 정하므로(네트워크 호출 0, 답 색인 사양 §3.10) 이력이 필요해질 때만 읽는다.
+  const loadHistory = () =>
+    requestedSessionId
+      ? loadSessionHistory(requestedSessionId, normalizeString(input.anonymousId) ?? null)
+      : Promise.resolve([])
+  const eagerHistoryPromise = getAnswerRouter() === "compiled" ? null : loadHistory()
 
   // 검색·분류·결정형 초안까지는 기존 코어를 그대로 재사용(중복 방지). Gemini 호출만 스트리밍으로 대체.
   // 정해 둔 답 확인 관문은 코어 안에서 일반 경로와 같이 돈다. 판정이 날 때까지 아무것도 내보내지 않으므로 틀린 답이 잠깐 보였다 바뀌지 않는다.
@@ -6370,7 +6397,7 @@ export async function streamChatbotQuery(
         category,
         intent,
         response,
-        historyPromise,
+        historyPromise: eagerHistoryPromise ?? loadHistory(),
         emit,
         handoffIntent: core.handoffIntent,
         sessionId,
