@@ -7,6 +7,7 @@ import { formatNumber, type HardwareDashboard } from "./shared"
 
 interface SummaryBandProps {
   data: HardwareDashboard | null
+  categoryCards: readonly { key: string; warehouse: number; available: number }[]
   // 부모(HardwareInventoryClient)가 이미 계산해 PlannedOutboundPanel에도 넘기는 파생값을
   // 그대로 재사용한다 — 같은 수치를 이 파일에서 다시 집계하면 두 곳이 갈라질 수 있다.
   plannedMovementQuantity: number
@@ -20,19 +21,22 @@ interface SummaryBandProps {
 // StockLevelsSection·AlertsOutboundSections·ImportFreshnessStrip 참고). 새 필터 상태를
 // 만들지 않고 순수 앵커 링크(<a href="#...">)로 구현해 부모의 기존 상태 계약을 건드리지
 // 않는다 — 스크롤 그 이상(필터 연동)은 보고서에 위임 항목으로 남긴다.
-function SummaryBand({ data, plannedMovementQuantity, plannedStaleGroupCount }: SummaryBandProps) {
+function SummaryBand({ data, categoryCards, plannedMovementQuantity, plannedStaleGroupCount }: SummaryBandProps) {
   const totals = data?.totals ?? null
   const plannedCount = data?.plannedMovements.length ?? 0
   const shortageCount = data?.stock.filter(row => row.low || row.orderRecommended).length ?? 0
+  // 제품군 카드가 집계한 일반 판매분을 그대로 사용한다. 판촉 재고는 각 카드의 별도 수치다.
+  const board86 = categoryCards.find((card) => card.key === "ifp86")
+  const board75 = categoryCards.find((card) => card.key === "ifp75")
 
   return (
     <section aria-label="하드웨어 재고 요약" className="grid grid-cols-2 gap-y-4 bg-[#F6F5F4] py-5 xl:grid-cols-4">
-      <SummaryTile href="#hardware-section-stock" label="창고 재고" title="현재 재고 섹션으로 이동">
-        <Headline value={formatNumber(totals?.warehouseStock ?? 0)} unit="대" negative={(totals?.warehouseStock ?? 0) < 0} />
+      <SummaryTile href="#hardware-section-stock" label="전자칠판 창고 재고" title="제품별 재고로 이동">
+        <BoardStock board86={board86?.warehouse ?? 0} board75={board75?.warehouse ?? 0} />
       </SummaryTile>
 
-      <SummaryTile href="#hardware-section-stock" label="가용 재고" title="현재 재고 섹션으로 이동">
-        <Headline value={formatNumber(totals?.availableStock ?? 0)} unit="대" negative={(totals?.availableStock ?? 0) < 0} />
+      <SummaryTile href="#hardware-section-stock" label="전자칠판 가용 재고" title="제품별 재고로 이동">
+        <BoardStock board86={board86?.available ?? 0} board75={board75?.available ?? 0} />
       </SummaryTile>
 
       <SummaryTile href="#hardware-section-planned" label="배송 예정" title="배송 예정 섹션으로 이동">
@@ -54,6 +58,18 @@ function SummaryBand({ data, plannedMovementQuantity, plannedStaleGroupCount }: 
       </SummaryTile>
 
     </section>
+  )
+}
+
+function BoardStock({ board86, board75 }: { board86: number; board75: number }) {
+  const total = board86 + board75
+  return (
+    <>
+      <Headline value={formatNumber(total)} unit="대" negative={total < 0} />
+      <p className="mt-2 text-[11px] font-semibold tabular-nums text-[#615D59]">
+        86″ {formatNumber(board86)}대 · 75″ {formatNumber(board75)}대
+      </p>
+    </>
   )
 }
 

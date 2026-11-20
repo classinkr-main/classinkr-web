@@ -163,7 +163,12 @@ export default function HomeTabPanel({
       transition={{ duration: 0.18, ease: [0.2, 0, 0, 1] }}
     >
     {/* 숫자 요약과 제품군별 게이지를 먼저 보고, 표·출고 작업으로 이어진다. */}
-    <SummaryBand data={data} plannedMovementQuantity={plannedMovementQuantity} plannedStaleGroupCount={plannedStaleGroupCount} />
+    <SummaryBand
+      data={data}
+      categoryCards={categoryCards.cards}
+      plannedMovementQuantity={plannedMovementQuantity}
+      plannedStaleGroupCount={plannedStaleGroupCount}
+    />
 
     <CategoryCardsSection categoryCards={categoryCards.cards} etcSummary={categoryCards.etcSummary} />
 

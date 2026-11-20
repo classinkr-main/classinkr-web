@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server"
 import { describe, expect, it } from "vitest"
 import { buildHardwareStockCsv, filterHomeStock, previewHomeRecord } from "@/components/admin/hardware/inventory/home-record-model"
 import ImportFreshnessStrip from "@/components/admin/hardware/inventory/ImportFreshnessStrip"
+import SummaryBand from "@/components/admin/hardware/inventory/SummaryBand"
 import type { HardwareStockRow } from "@/components/admin/hardware/inventory/shared"
 
 const row = (patch: Partial<HardwareStockRow> = {}): HardwareStockRow => ({
@@ -38,6 +39,25 @@ describe("전체 재고 검색과 내보내기", () => {
     expect(csv).toContain('"\'=HYPERLINK(""x"")"')
     expect(csv).toContain(",24,4,-2,2")
   })
+})
+
+it("상단 창고·가용 재고는 일반 전자칠판 86·75인치만 합산한다", () => {
+  const categoryCards = [
+    { key: "ifp86", warehouse: 36, available: 25, promoted: 3 },
+    { key: "ifp75", warehouse: 9, available: 7, promoted: 5 },
+    { key: "camera", warehouse: 39, available: 30 },
+    { key: "stand", warehouse: 56, available: 45 },
+  ]
+  const data = {
+    items: [], stock: [], movements: [], recentOutbound: [], plannedMovements: [], alerts: [], importRun: null,
+    totals: { warehouseStock: 129, availableStock: 114, plannedOut: 15, outbound30d: 0, lowItems: 0, orderRecommended: 0 },
+  }
+  const html = renderToStaticMarkup(
+    <SummaryBand data={data} categoryCards={categoryCards} plannedMovementQuantity={0} plannedStaleGroupCount={0} />,
+  )
+  const text = html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ")
+  expect(text).toContain("전자칠판 창고 재고 45 대 86″ 36대 · 75″ 9대")
+  expect(text).toContain("전자칠판 가용 재고 32 대 86″ 25대 · 75″ 7대")
 })
 
 it("경고는 접힌 상세에 보존하고 동기화 성공을 만들어 내지 않는다", () => {
