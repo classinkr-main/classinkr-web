@@ -121,6 +121,11 @@ export async function generateClaudeFinalAnswer(
         warn("refusal")
         return null
       }
+      // 길이 한도로 잘린 답(max_tokens)은 끝까지 쓴 답이 아니다 — 잘린 글을 완성된 답처럼 내지 않는다.
+      if (message.stop_reason === "max_tokens") {
+        warn("incomplete_response")
+        return null
+      }
       const text = message.content
         .map((block) => (block.type === "text" ? block.text : ""))
         .join("")
@@ -143,6 +148,14 @@ export async function generateClaudeFinalAnswer(
   return null
 }
 
+// 끝까지 쓴 스트림의 stop_reason. 그 밖(max_tokens·refusal·끝 신호 없음)은 잘리거나 막힌 글이다.
+const COMPLETE_STOP_REASONS = new Set(["end_turn", "stop_sequence"])
+
+/**
+ * 스트림 답. 글을 낸 뒤 끝난 모양을 args.onCompletion 으로 알린다(Gemini 스트림과 같은 계약): end_turn·stop_sequence 면 끝까지 받은 것,
+ * max_tokens·refusal 이면 finish_reason, 끝 신호 없이 닫혔거나 글을 낸 뒤 오류로 끊겼으면 interrupted. 호출부는 complete 가 false 면
+ * 받은 글을 버리고 결정형 초안을 쓴다. 글을 하나도 내지 못했으면 알리지 않는다(호출부가 Gemini 로 넘어간다).
+ */
 export async function* streamClaudeFinalAnswer(
   args: FinalGenerateArgs & ClaudeAnswerExtras,
   config: ChatbotClaudeConfig
@@ -154,6 +167,7 @@ export async function* streamClaudeFinalAnswer(
     let emittedAny = false
     let inputUsage: Anthropic.Usage | null = null
     let outputTokens = 0
+    let stopReason: string | null = null
     try {
       const stream = await makeClient(apiKey).messages.create({ ...request, stream: true })
       for await (const event of stream) {
@@ -161,18 +175,34 @@ export async function* streamClaudeFinalAnswer(
           inputUsage = event.message.usage
         } else if (event.type === "message_delta") {
           outputTokens = event.usage?.output_tokens ?? outputTokens
+          stopReason = event.delta?.stop_reason ?? stopReason
         } else if (event.type === "content_block_delta" && event.delta.type === "text_delta" && event.delta.text) {
           emittedAny = true
           yield event.delta.text
         }
       }
       args.onUsage?.(usageFrom(config.answerModel, inputUsage ? { ...inputUsage, output_tokens: outputTokens } : null))
+      if (emittedAny) {
+        const complete = stopReason !== null && COMPLETE_STOP_REASONS.has(stopReason)
+        if (!complete) warn(stopReason ? "stream_incomplete_response" : "stream_missing_stop_reason")
+        args.onCompletion?.({
+          complete,
+          reason: complete ? "stop" : stopReason ? "finish_reason" : "interrupted",
+          finishReason: stopReason,
+          model: config.answerModel,
+        })
+      }
       return
     } catch (error) {
       if (inputUsage) {
         args.onUsage?.(usageFrom(config.answerModel, { ...inputUsage, output_tokens: outputTokens }))
       }
-      if (emittedAny) return
+      if (emittedAny) {
+        // 글을 낸 뒤 끊겼다: 받은 글은 완성된 답이 아니다.
+        warn("stream_interrupted", error)
+        args.onCompletion?.({ complete: false, reason: "interrupted", finishReason: stopReason, model: config.answerModel })
+        return
+      }
       if (isKeyFallbackError(error)) {
         warn("stream_key_fallback", error)
         continue

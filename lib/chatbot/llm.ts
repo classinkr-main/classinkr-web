@@ -321,7 +321,8 @@ export interface FinalGenerateArgs {
 
 /**
  * 모델이 끝까지 쓰지 못한 응답으로 보는 finishReason. STOP(정상 끝)이 아니면 잘렸거나(MAX_TOKENS) 막힌 것(SAFETY·RECITATION 등)이다.
- * 값이 없으면(스트림 중간 조각·테스트 목) 끝까지 받은 것으로 본다.
+ * 값이 없으면(일반 호출의 응답 본문을 끝까지 읽은 경우·스트림 중간 조각) 이 함수는 false 다. 스트림이 끝 신호(finishReason) 없이
+ * 끝났으면 streamGeminiContent 가 따로 끊긴 것(interrupted)으로 본다.
  */
 export function isIncompleteFinishReason(reason: string | null | undefined) {
   if (!reason) return false
@@ -1295,6 +1296,11 @@ async function* streamGeminiContent({
       }
 
       if (emittedAny) {
+        // 끝 신호 없이 닫힌 스트림은 끝까지 받은 것이 아니다(연결이 중간에 정상 종료처럼 닫힌 경우). 끊긴 것으로 본다.
+        if (!finishReason) {
+          warnGeminiCallIssue(model, "stream_missing_finish_reason")
+          return { complete: false, reason: "interrupted", finishReason, model }
+        }
         const incomplete = isIncompleteFinishReason(finishReason)
         if (incomplete) warnGeminiCallIssue(model, "stream_incomplete_response", { finishReason })
         return { complete: !incomplete, reason: incomplete ? "finish_reason" : "stop", finishReason, model }

@@ -542,6 +542,18 @@ describe("chatbot final answer completion signal", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
+  it("marks a stream that closes after text without any finish reason as interrupted (2026-11-20 검토)", async () => {
+    setup()
+    const fetchMock = vi.fn(async () => sseResponse([sseLine("녹화본은 코스의 "), sseLine("수업 기록에서 내려받습니다.")]))
+    vi.stubGlobal("fetch", fetchMock)
+
+    const { text, completion } = await readStream(streamGeminiFinalAnswer(args))
+
+    expect(text).toBe("녹화본은 코스의 수업 기록에서 내려받습니다.")
+    expect(completion).toEqual({ complete: false, reason: "interrupted", finishReason: null, model: "gemini-3.5-flash" })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
   it("marks a stream that ends with MAX_TOKENS as incomplete", async () => {
     setup()
     vi.stubGlobal("fetch", vi.fn(async () => sseResponse([sseLine("녹화본은 코스의 "), sseLine("수업 기록에서", "MAX_TOKENS")])))

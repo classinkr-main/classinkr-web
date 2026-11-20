@@ -185,3 +185,99 @@ describe("extractContentSuggest", () => {
     }
   })
 })
+
+// 2026-11-20 검토 결과 고침. 모델 글은 이 시험을 위해 지었다.
+describe("checkGeneratedAnswer: 지어낸 숫자·메뉴를 더 넓게 본다", () => {
+  const SHARING: GeneratedAnswerCheckOptions = {
+    draft: "토론형 수업에서도 자료 공유와 판서를 함께 쓸 수 있어요.",
+    groundingSentences: ["토론형 수업에서도 자료 공유와 판서를 함께 쓸 수 있어요."],
+    question: "토론 수업도 돼요?",
+    allowList: getFinalAnswerAllowList("general", "docs_lookup"),
+  }
+  const GOOD = "토론형 수업에서도 자료 공유와 판서를 함께 쓸 수 있어요."
+
+  it.each([
+    ["한글 수 기간", "무료 체험은 한 달 동안 모든 기능을 쓸 수 있어요.", "unsupported_number"],
+    ["한글 수 인원", "한 수업에 학생을 백 명까지 넣을 수 있어요.", "unsupported_number"],
+    ["따옴표 메뉴", "‘토론 모드’ 메뉴를 켜면 바로 시작돼요.", "unsupported_menu"],
+    ["굵게 쓴 버튼", "**토론 모드** 버튼을 누르면 됩니다.", "unsupported_menu"],
+    ["두 마디 버전", "앱 5.2 버전부터 지원해요.", "unsupported_number"],
+  ])("%s 문장은 버린다", (_label, sentence, issue) => {
+    const result = checkGeneratedAnswer(`${GOOD} ${sentence}`, SHARING)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.answer).toBe(GOOD)
+    expect(result.dropped.map((item) => item.issue)).toEqual([issue])
+  })
+
+  it("시스템 지시에만 있는 숫자는 이웃 명사가 다르면 버린다('2주'는 체험 문장의 숫자다)", () => {
+    const draft = "수업이 끝나면 녹화를 다시 볼 수 있어요."
+    const result = checkGeneratedAnswer("녹화 영상은 2주 동안 보관돼요.", { draft, groundingSentences: [draft], allowList: SHARING.allowList })
+    expect(result).toMatchObject({ ok: false, reason: "no_sentences_left" })
+  })
+
+  it("흔한 한글 수 표현('한 번에', '두 가지')은 숫자로 보지 않는다", () => {
+    const answer = "한 번에 두 가지 자료를 함께 띄워 쓸 수 있어요."
+    expect(checkGeneratedAnswer(answer, RECORDING)).toEqual({ ok: true, answer, dropped: [] })
+  })
+
+  it("근거에 있는 숫자는 한글 수로 써도 통과한다('1개월' = '한 달')", () => {
+    const options = { draft: "체험 계정은 1개월 동안 쓸 수 있어요.", groundingSentences: ["체험 계정은 1개월 동안 쓸 수 있어요."] }
+    const answer = "체험 계정은 한 달 동안 쓸 수 있어요."
+    expect(checkGeneratedAnswer(answer, options)).toEqual({ ok: true, answer, dropped: [] })
+  })
+})
+
+describe("checkGeneratedAnswer: '가능' 뒤집기를 문장 단위·버린 뒤에도 본다", () => {
+  const TABLET: GeneratedAnswerCheckOptions = {
+    draft: "안드로이드 태블릿에서는 화면 공유를 지원하지 않아요.",
+    groundingSentences: ["안드로이드 태블릿에서는 화면 공유를 지원하지 않아요."],
+    question: "안드로이드 태블릿 화면 공유 돼요?",
+  }
+
+  it("'(으)ㄹ 수 없'을 같은 동사·대상의 '수 있'으로 바꾸면 뒤집은 것이다", () => {
+    const options = { draft: "끝난 수업은 구성원 기록과 연결돼 있어 앱에서 지울 수 없습니다.", groundingSentences: [] }
+    expect(checkGeneratedAnswer("끝난 수업도 앱에서 바로 지울 수 있어요. 목록에서 길게 누르면 됩니다.", options)).toMatchObject({
+      ok: false,
+      reason: "constraint_flipped",
+    })
+  })
+
+  it("'-지 않'을 같은 동사·대상의 긍정으로 바꾸면 뒤집은 것이다", () => {
+    const options = { draft: "지운 녹화본은 복구되지 않습니다.", groundingSentences: [] }
+    expect(checkGeneratedAnswer("지운 녹화본도 관리자 화면에서 복구돼요.", options)).toMatchObject({ ok: false, reason: "constraint_flipped" })
+  })
+
+  it("제약은 지키고 다른 일을 '할 수 있다'고 한 답은 통과한다", () => {
+    const options = { draft: "지운 녹화본은 복구되지 않습니다.", groundingSentences: ["녹화본 삭제 기간은 [저장 설정]에서 바꿉니다."] }
+    const answer = "녹화본 삭제 기간은 [저장 설정]에서 바꿀 수 있어요. 지운 녹화본은 복구되지 않아요."
+    expect(checkGeneratedAnswer(answer, options)).toEqual({ ok: true, answer, dropped: [] })
+  })
+
+  it("제약 문장이 근거 대조로 버려져 '가능'만 남으면 답 전체를 버린다", () => {
+    const result = checkGeneratedAnswer(
+      "안드로이드 태블릿은 2025년 기준 화면 공유를 지원하지 않아요. 앱을 새로 받으면 화면 공유도 가능해요.",
+      TABLET
+    )
+    expect(result.ok).toBe(false)
+    if (result.ok) return
+    expect(["constraint_dropped", "constraint_flipped"]).toContain(result.reason)
+    expect(result.dropped.map((item) => item.issue)).toEqual(["unsupported_number"])
+  })
+
+  it("'확인이 필요 없이 … 가능해요'는 제약을 지킨 말이 아니다", () => {
+    expect(checkGeneratedAnswer("확인이 필요 없이 안드로이드 태블릿에서도 화면 공유가 가능해요.", TABLET)).toMatchObject({
+      ok: false,
+      reason: "constraint_flipped",
+    })
+  })
+
+  it("조건('저장되지 않으면')은 제약이 아니다: 그 문장이 버려져도 나머지를 쓴다", () => {
+    const options: GeneratedAnswerCheckOptions = {
+      draft: "바로 저장되지 않으면 [다운로드]를 마우스 오른쪽 버튼으로 누르세요.",
+      groundingSentences: GROUNDING,
+    }
+    const result = checkGeneratedAnswer(`${GOOD_SENTENCE} 바로 저장되지 않으면 [AI 저장] 메뉴를 누르세요.`, options)
+    expect(result).toMatchObject({ ok: true, answer: GOOD_SENTENCE })
+  })
+})
