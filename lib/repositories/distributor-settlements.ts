@@ -13,6 +13,7 @@ import {
   type DistributorIssueReason,
   type DistributorPriceRule,
   type DistributorPriceTemplate,
+  type DistributorReceivablePayment,
   type DistributorSettlementInput,
   type DistributorSettlementPayment,
   type DistributorSettlementRecord,
@@ -505,34 +506,97 @@ interface ReceivableJoinRow extends SettlementRow {
   } | null
 }
 
-/** 발행된 정산(미수·완납). includePaid=false 면 아직 다 받지 못한 건만. */
+/** 미수금 목록 한 조회(미수 / 완납)의 행 수 한도. 닿으면 truncated 로 알린다. */
+export const RECEIVABLES_LIST_LIMIT = 500
+
+/** 합치기·정렬·잘림 판정 — issued_at 내림차순(null 은 뒤). 조회가 한도 행 수를 채웠으면 잘렸을 수 있다고 본다. */
+export function mergeReceivableLists<T extends { issuedAt: string | null }>(
+  lists: readonly (readonly T[])[],
+  limit: number = RECEIVABLES_LIST_LIMIT
+): { rows: T[]; truncated: boolean } {
+  const rows = lists.flat().sort((a, b) => {
+    if (a.issuedAt === b.issuedAt) return 0
+    if (a.issuedAt === null) return 1
+    if (b.issuedAt === null) return -1
+    return a.issuedAt < b.issuedAt ? 1 : -1
+  })
+  return { rows, truncated: lists.some((list) => list.length >= limit) }
+}
+
+/**
+ * 발행된 정산(미수·완납). includePaid=false 면 아직 다 받지 못한 건만.
+ * 미수(issued·partial)와 완납(paid)을 따로 조회한다 — 완납이 한도를 채워 오래된 미수를 밀어내지 않게.
+ * truncated = 어느 한 조회가 한도에 닿았다(그 너머는 읽지 못했다).
+ */
 export async function listDistributorReceivables(
   options: { includePaid?: boolean } = {}
-): Promise<DistributorRead<DistributorReceivableRow[]>> {
-  const statuses = options.includePaid ? ["issued", "partial", "paid"] : ["issued", "partial"]
-  const { data, error } = await createSupabaseAdminClient()
-    .from(SETTLEMENTS)
-    .select(`${SETTLEMENT_COLUMNS}, quote_documents(quote_number, deals(title, customers(name)))`)
-    .in("status", statuses)
-    .order("issued_at", { ascending: false })
-    .limit(500)
-  if (error) {
-    if (isDistributorTableMissing(error)) {
-      return { available: false, warning: DISTRIBUTOR_SETTLEMENTS_NOT_READY_MESSAGE, value: null }
+): Promise<DistributorRead<DistributorReceivableRow[]> & { truncated: boolean }> {
+  const statusGroups = options.includePaid ? [["issued", "partial"], ["paid"]] : [["issued", "partial"]]
+  const results = await Promise.all(
+    statusGroups.map((statuses) =>
+      createSupabaseAdminClient()
+        .from(SETTLEMENTS)
+        .select(`${SETTLEMENT_COLUMNS}, quote_documents(quote_number, deals(title, customers(name)))`)
+        .in("status", statuses)
+        .order("issued_at", { ascending: false })
+        .limit(RECEIVABLES_LIST_LIMIT)
+    )
+  )
+  const lists: DistributorReceivableRow[][] = []
+  for (const { data, error } of results) {
+    if (error) {
+      if (isDistributorTableMissing(error)) {
+        return { available: false, warning: DISTRIBUTOR_SETTLEMENTS_NOT_READY_MESSAGE, value: null, truncated: false }
+      }
+      throw new Error(error.message ?? "총판 미수금을 불러오지 못했습니다.")
     }
-    throw new Error(error.message ?? "총판 미수금을 불러오지 못했습니다.")
+    const rows = (data ?? []) as unknown as ReceivableJoinRow[]
+    lists.push(
+      rows.map((row) => ({
+        ...toDistributorSettlementRecord(row),
+        quoteNumber: row.quote_documents?.quote_number ?? null,
+        customerName: row.quote_documents?.deals?.customers?.name ?? null,
+        dealTitle: row.quote_documents?.deals?.title ?? null,
+      }))
+    )
   }
-  const rows = (data ?? []) as unknown as ReceivableJoinRow[]
-  return {
-    available: true,
-    warning: null,
-    value: rows.map((row) => ({
-      ...toDistributorSettlementRecord(row),
-      quoteNumber: row.quote_documents?.quote_number ?? null,
-      customerName: row.quote_documents?.deals?.customers?.name ?? null,
-      dealTitle: row.quote_documents?.deals?.title ?? null,
-    })),
+  const { rows, truncated } = mergeReceivableLists(lists)
+  return { available: true, warning: null, value: rows, truncated }
+}
+
+const PAYMENT_SUMMARY_ID_CHUNK = 200
+const PAYMENT_SUMMARY_PAGE_SIZE = 1000
+
+/**
+ * 미수금 보드용 입금 요약 — 정산 id 들의 (settlementId, amount, paidOn) 만. 메모·기록자는 싣지 않는다.
+ * id 는 200개씩 끊어 부르고, 청크마다 1000행 상한에 잘리지 않게 range 로 끝까지 읽는다.
+ */
+export async function listDistributorReceivablePayments(
+  settlementIds: readonly string[]
+): Promise<DistributorReceivablePayment[]> {
+  const ids = [...new Set(settlementIds)]
+  if (ids.length === 0) return []
+  const sb = createSupabaseAdminClient()
+  const out: DistributorReceivablePayment[] = []
+  for (let i = 0; i < ids.length; i += PAYMENT_SUMMARY_ID_CHUNK) {
+    const chunk = ids.slice(i, i + PAYMENT_SUMMARY_ID_CHUNK)
+    for (let from = 0; ; from += PAYMENT_SUMMARY_PAGE_SIZE) {
+      const { data, error } = await sb
+        .from(PAYMENTS)
+        .select("settlement_id, amount, paid_on")
+        .in("settlement_id", chunk)
+        .order("paid_on", { ascending: true })
+        .order("id", { ascending: true })
+        .range(from, from + PAYMENT_SUMMARY_PAGE_SIZE - 1)
+      if (error) throwDbError(error, "총판 입금 요약을 불러오지 못했습니다.")
+      const page = (data ?? []) as Pick<PaymentRow, "settlement_id" | "amount" | "paid_on">[]
+      for (const row of page) {
+        out.push({ settlementId: row.settlement_id, amount: toNumber(row.amount), paidOn: row.paid_on })
+      }
+      if (page.length < PAYMENT_SUMMARY_PAGE_SIZE) break
+    }
   }
+  return out
 }
 
 /**
