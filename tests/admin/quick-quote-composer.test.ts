@@ -139,6 +139,10 @@ describe("admin quick quote composer shell", () => {
     expect(source).toContain("function stripRemovedMain(")
     expect(source).toContain("function sheetHasQuotableItems(")
     expect(source).toContain("const targets = quotableSheets")
+    // 총판 견적서 같이 만들기 — 원가·저장은 주입(포털 번들에 어드민 클라이언트 없음), 고객 견적 저장 뒤에만, HW 장만.
+    expect(source).toContain("distributorQuote?: QuickQuoteDistributorQuoteOption")
+    expect(source).toContain('distributorQuote && distributorEnabled && sheet.line === "hardware"')
+    expect(source).toContain("총판 견적서 초안을 만들지 못했습니다")
     // 대표 품목 없이 저장된 견적을 다시 불러와도 대표 행이 되살아나지 않고, 거래명에 지운 품목이 남지 않는다.
     expect(source).toContain("quote, mainRemoved }])")
     expect(source).toContain("if (sheet.mainRemoved) {")

@@ -27,6 +27,12 @@ import QuoteDisplaySettings, { type QuoteDisplaySettingsProps } from "./QuoteDis
 import paperStyles from "./quote-paper.module.css"
 
 import { Button } from "@/components/ui/button"
+import {
+  buildDistributorLinesFromQuote,
+  computeDistributorTotals,
+  type DistributorPriceRule,
+  type DistributorSettlementLine,
+} from "@/lib/distributor-settlements"
 import { normalizeQuoteDetailsFromStructuredJson } from "@/lib/portal/quote-details"
 import { portalFetch } from "@/lib/portal/portal-fetch"
 import { getProductBySku } from "@/lib/product-templates"
@@ -175,6 +181,21 @@ type QuickQuoteComposerProps = {
    * "기존 고객" 모드로 해당 고객·거래를 자동 선택한다. (새 고객 암묵 생성 없음)
    */
   prefill?: QuickQuotePrefill | null
+  /**
+   * 하드웨어 견적을 저장할 때 총판(퀴드러닝)용 견적서 초안도 같이 만든다(어드민 전용, 선택).
+   * 원가와 저장 호출은 주입한다 — 포털 번들에 원가·어드민 클라이언트가 들어가지 않게.
+   * 기획: docs/active/distributor-quote-with-customer-quote-plan-2026-11-20.md
+   */
+  distributorQuote?: QuickQuoteDistributorQuoteOption
+}
+
+export type QuickQuoteDistributorQuoteOption = {
+  /** 품목 코드 × 최소 수량 → 총판 공급가(VAT 포함). */
+  rules: readonly DistributorPriceRule[]
+  /** 화면 표기용 총판 이름(예: "퀴드러닝 · 배철웅"). */
+  distributorLabel: string
+  /** 고객 견적 저장 직후 호출 — 발행 전 총판 정산 초안을 만들거나 갱신한다. 실패하면 throw. */
+  onSave: (input: { quoteDocumentId: string; lines: DistributorSettlementLine[] }) => Promise<void>
 }
 
 export type QuickQuotePrefill = {
@@ -898,6 +919,7 @@ export default function QuickQuoteComposer({
   onDeleteTemplate,
   displaySettings,
   prefill = null,
+  distributorQuote,
 }: QuickQuoteComposerProps) {
   const today = getTodayDateValue()
   const isPortalApi = apiBase === "/api/portal"
@@ -939,6 +961,8 @@ export default function QuickQuoteComposer({
   const [shareSheet, setShareSheet] = useState<ShareSheetState | null>(null)
   const [linkCopied, setLinkCopied] = useState(false)
   const [saveToast, setSaveToast] = useState<string | null>(null)
+  // HW 견적 저장 시 총판 견적서 초안을 같이 만들지(주입됐을 때만 의미가 있다).
+  const [distributorEnabled, setDistributorEnabled] = useState(true)
   const [errorToast, setErrorToast] = useState<ErrorToastState | null>(null)
   // 공급자 담당자 override(제품군별). 비우면 공급자 블록 기본값(SW=클래스인 매니저, HW=퀴드러닝 담당자).
   const [managers, setManagers] = useState<Record<QuoteProductLine, ManagerOverride>>({
@@ -1252,6 +1276,7 @@ export default function QuickQuoteComposer({
     setPendingRechargeAmount(null)
     setUnderMinConfirmed(false)
     setPendingSubmitAction(null)
+    setDistributorEnabled(true)
     setError(null)
   }, [hasPrefillTarget, initialTemplateId, open, prefill?.customerId, prefill?.customerName, prefill?.dealId, today])
 
@@ -1933,6 +1958,7 @@ export default function QuickQuoteComposer({
     const savedLines: QuoteProductLine[] = []
     const links: ShareLink[] = []
     let customerName = ""
+    let distributorNotice: string | null = null
 
     try {
       const { customer, created: customerCreated } = await resolveCustomer()
@@ -2046,6 +2072,27 @@ export default function QuickQuoteComposer({
           }
         }
 
+        // 총판 견적서 초안 — 고객 견적이 저장된 뒤에만, 실패해도 고객 견적은 되돌리지 않는다.
+        if (distributorQuote && distributorEnabled && sheet.line === "hardware") {
+          const distributorLines = buildDistributorLinesFromQuote(preparedQuote.lineItems, { rules: distributorQuote.rules })
+          const { missingPriceCount, includedCount } = computeDistributorTotals(distributorLines, true)
+          if (includedCount > 0) {
+            try {
+              await distributorQuote.onSave({ quoteDocumentId: payload.document.id, lines: distributorLines })
+              distributorNotice =
+                missingPriceCount > 0
+                  ? `총판 견적서 초안 생성 · 원가 빈 품목 ${missingPriceCount}개`
+                  : "총판 견적서 초안 생성"
+            } catch (distributorIssue) {
+              const reason = distributorIssue instanceof Error ? distributorIssue.message : "알 수 없는 오류"
+              showErrorToast(
+                `견적서 ${payload.document.quote_number}는 저장했지만 총판 견적서 초안을 만들지 못했습니다: ${reason} — 견적 상세 › 총판 정산에서 다시 저장하세요.`,
+                "총판 견적서"
+              )
+            }
+          }
+        }
+
         await onCreated({
           action,
           templateId: sheet.templateId,
@@ -2065,7 +2112,8 @@ export default function QuickQuoteComposer({
 
       if (action === "save") {
         // 임시저장 → 토스트 표시, 모달 유지
-        setSaveToast(targets.length > 1 ? `견적서 ${targets.length}장 저장 완료` : "저장 완료")
+        const savedLabel = targets.length > 1 ? `견적서 ${targets.length}장 저장 완료` : "저장 완료"
+        setSaveToast(distributorNotice ? `${savedLabel} · ${distributorNotice}` : savedLabel)
         setTimeout(() => setSaveToast(null), 2000)
         return
       }
@@ -2741,7 +2789,83 @@ export default function QuickQuoteComposer({
           </div>),
           }}
         />
+        {distributorQuote && sheet.line === "hardware" && sheetHasQuotableItems(sheet) && renderDistributorPanel(quote)}
       </section>
+    )
+  }
+
+  /** 총판(퀴드러닝)용 견적서 미리 계산 — 작성자만 보는 편집 도구(종이·공유 링크에는 찍히지 않는다). */
+  function renderDistributorPanel(quote: PartnerQuoteDetailsInput) {
+    if (!distributorQuote) return null
+    const lines = buildDistributorLinesFromQuote(quote.lineItems, { rules: distributorQuote.rules })
+    const included = lines.filter((line) => line.included)
+    const totals = computeDistributorTotals(lines, true)
+    const customerSum = included.reduce(
+      (sum, line) => sum + (line.customerUnitPrice == null ? 0 : line.customerUnitPrice * line.quantity),
+      0
+    )
+    const pricedCustomerSum = included.reduce(
+      (sum, line) =>
+        line.unitPrice == null || line.customerUnitPrice == null ? sum : sum + line.customerUnitPrice * line.quantity,
+      0
+    )
+    return (
+      <div role="region" aria-label="총판 견적서" className="grid gap-2 rounded-[8px] border border-[#E3E0DB] bg-white px-3 py-2.5 text-[12px]">
+        <label className="flex cursor-pointer flex-wrap items-center gap-x-2 gap-y-0.5">
+          <input
+            type="checkbox"
+            checked={distributorEnabled}
+            onChange={(event) => setDistributorEnabled(event.target.checked)}
+            className="h-3.5 w-3.5 accent-[#084734]"
+          />
+          <span className="font-semibold text-[#111110]">총판 견적서 같이 만들기</span>
+          <span className="text-[11px] text-[#78736D]">
+            {distributorQuote.distributorLabel} · FY2026 채널공급가(VAT 포함) · 저장 시 발행 전 초안만 만들고, 발송은 고객 동의 때
+          </span>
+        </label>
+        {distributorEnabled && (
+          included.length === 0 ? (
+            <p className="text-[11.5px] text-[#78736D]">총판에게 청구할 하드웨어 품목이 없습니다.</p>
+          ) : (
+            <>
+              <div role="table" aria-label="총판 공급가" className="grid gap-0.5">
+                <div role="row" className="grid grid-cols-[minmax(0,1fr)_44px_88px_88px_88px] gap-2 border-b border-[#F0F0EC] pb-1 text-[11px] text-[#78736D]">
+                  <span role="columnheader">품목</span>
+                  <span role="columnheader" className="text-right">수량</span>
+                  <span role="columnheader" className="text-right">고객 단가</span>
+                  <span role="columnheader" className="text-right">공급 단가</span>
+                  <span role="columnheader" className="text-right">차액/대</span>
+                </div>
+                {included.map((line) => (
+                  <div key={`${line.sourceLineNumber}-${line.itemCode ?? line.itemName}`} role="row" className="grid grid-cols-[minmax(0,1fr)_44px_88px_88px_88px] gap-2 tabular-nums">
+                    <span role="cell" className="truncate">{line.itemName}</span>
+                    <span role="cell" className="text-right">{line.quantity}{line.quantityUnit ?? ""}</span>
+                    <span role="cell" className="text-right text-[#78736D]">{formatStandardQuoteCurrency(line.customerUnitPrice ?? undefined)}</span>
+                    <span role="cell" className={`text-right ${line.unitPrice == null ? "text-[#B85C33]" : "font-semibold"}`}>
+                      {line.unitPrice == null ? "원가 없음" : formatStandardQuoteCurrency(line.unitPrice)}
+                    </span>
+                    <span role="cell" className="text-right text-[#615D59]">
+                      {line.unitPrice == null || line.customerUnitPrice == null
+                        ? "–"
+                        : formatStandardQuoteCurrency(line.customerUnitPrice - line.unitPrice)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <p className="flex flex-wrap justify-end gap-x-4 text-[12px]">
+                <span className="text-[#78736D]">고객가 합계 {formatStandardQuoteCurrency(customerSum)}원</span>
+                <span className="font-semibold text-[#111110]">총판 공급가 합계 {formatStandardQuoteCurrency(totals.totalAmount)}원</span>
+                <span className="text-[#615D59]">차액 {formatStandardQuoteCurrency(pricedCustomerSum - totals.totalAmount)}원</span>
+              </p>
+              {totals.missingPriceCount > 0 && (
+                <p className="text-[11.5px] text-[#B85C33]">
+                  정책표에 없는 품목 {totals.missingPriceCount}개는 원가가 비어 있습니다 — 저장 후 견적 상세 › 총판 정산에서 채워야 발행됩니다.
+                </p>
+              )}
+            </>
+          )
+        )}
+      </div>
     )
   }
 

@@ -17,11 +17,13 @@ import { useCrmOwners } from "@/components/admin/crm/useCrmOwners"
 import { useQuoteWorkspacePreferences } from "@/components/admin/quote-templates/useQuoteWorkspacePreferences"
 import QuickQuoteComposer, {
   type QuickQuoteCreatedPayload,
+  type QuickQuoteDistributorQuoteOption,
   type QuickQuoteManagerOption,
   type QuickQuotePrefill,
   type QuickQuoteTeamTemplate,
 } from "@/components/portal/quotes/QuickQuoteComposer"
 import { adminFetchJson } from "@/lib/admin-client"
+import { DEFAULT_HARDWARE_DISTRIBUTOR, FY2026_CHANNEL_SUPPLY_PRICE_RULES } from "@/lib/distributor-settlements"
 import type { PartnerQuoteDetailsInput } from "@/lib/partners-types"
 import {
   quoteDetailsToTeamTemplateInput,
@@ -500,6 +502,33 @@ export default function HardwareQuotesPanel({
     })
     await loadTeamTemplates()
   }
+
+  /**
+   * 고객 HW 견적 저장 때 총판(퀴드러닝)용 견적서 초안을 같이 만든다 — 기존 총판 정산 저장 API(C방식, 고객 동의 시 발행).
+   * 발행된 정산은 API 가 409 로 막는다(작성기가 오류 토스트로 알린다).
+   */
+  const distributorQuote = useMemo<QuickQuoteDistributorQuoteOption>(
+    () => ({
+      rules: FY2026_CHANNEL_SUPPLY_PRICE_RULES,
+      distributorLabel: `${DEFAULT_HARDWARE_DISTRIBUTOR.distributorName} · ${DEFAULT_HARDWARE_DISTRIBUTOR.distributorContactName}`,
+      onSave: async ({ quoteDocumentId, lines }) => {
+        await adminFetchJson(`/api/admin/quotes/${quoteDocumentId}/distributor-settlement`, {
+          method: "PUT",
+          body: JSON.stringify({
+            ...DEFAULT_HARDWARE_DISTRIBUTOR,
+            fulfillmentMode: "C",
+            issueTrigger: "on_accept",
+            autoEmail: true,
+            priceTemplateId: null,
+            lines,
+            vatIncluded: true,
+            notes: "고객 견적 작성 시 FY2026 채널공급가로 자동 생성",
+          }),
+        })
+      },
+    }),
+    []
+  )
 
   async function handleDeleteTemplate(id: string) {
     await adminFetchJson(`${QUOTE_TEMPLATES_API}/${id}`, { method: "DELETE" })
@@ -1214,6 +1243,7 @@ export default function HardwareQuotesPanel({
         onDeleteTemplate={handleDeleteTemplate}
         displaySettings={{ preferences, onChange: updatePreferences, storageError }}
         prefill={prefill}
+        distributorQuote={distributorQuote}
         onCreated={handleCreated}
       />
     </div>
