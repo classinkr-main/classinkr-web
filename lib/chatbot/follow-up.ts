@@ -1,3 +1,4 @@
+import { isUnverifiedFixedAnswerText } from "@/lib/chatbot/fixed-answers"
 import type { ConversationTone } from "@/lib/chatbot/tone"
 
 /**
@@ -188,6 +189,8 @@ export function buildFollowUp(input: FollowUpInput): string | null {
   // 공개 경로의 doc_suggestion 은 "딱 맞는 안내를 찾지 못했다"는 답이다. 못 찾았다고 한 뒤에 규모·도입 시기를 묻지 않는다.
   if (input.answerMode === "doc_suggestion") return null
   if (input.intent === "self_knowledge") return null
+  // 못 찾음·확정 못 함 고정 답 뒤에는 규모·기기 같은 되묻기를 붙이지 않는다(확정 못 한다고 해 놓고 좁혀 드린다고 하지 않게).
+  if (isUnverifiedFixedAnswerText(input.answer)) return null
   if (OWN_LINES.some((line) => input.answer.includes(line))) return null
   if (input.topicFollowUp && input.answer.includes(input.topicFollowUp)) return null
   if (ALREADY_ASKS_RE.test(lastParagraphs(input.answer, 2))) return null
@@ -219,4 +222,30 @@ function pickQuestion(input: FollowUpInput): string | null {
 export function appendFollowUp(answer: string, followUp: string | null) {
   if (!followUp || answer.includes(followUp)) return answer
   return `${answer.trimEnd()}\n\n${followUp}`
+}
+
+/** 직전 답이 던진 끝 질문의 종류. 다음 턴의 짧은 대답을 그 질문의 답으로 읽는 데 쓴다. */
+export type AskedSlot = "device" | "size" | "rooms" | "mode" | "timing" | "choice"
+
+const SLOT_ID_TO_ASKED: Record<string, AskedSlot | undefined> = {
+  size: "size",
+  rooms: "rooms",
+  mode: "mode",
+  timing: "timing",
+}
+// "A와 B 중 어느 쪽인가요?"처럼 보기를 주고 고르게 하는 끝 질문.
+const CHOICE_ASK_RE = /(?:중에서?|가운데)\s*(?:어느|어떤|무엇|뭐)[^\n?]{0,30}\?\s*$|어느\s*쪽[^\n?]{0,20}\?\s*$/
+
+/**
+ * 답 끝의 끝 질문 문장(DEVICE_LINE·SALES_SLOTS)으로 어떤 정보를 물었는지 알아본다. 마지막 두 문단만 본다.
+ * 물은 것이 없거나 종류를 모르면 null(지금 쓰는 도구 질문처럼 askedSlot 종류에 없는 것도 null).
+ */
+export function detectAskedSlot(answer: string): AskedSlot | null {
+  const tail = lastParagraphs(answer, 2)
+  if (tail.includes(DEVICE_LINE)) return "device"
+  for (const slot of SALES_SLOTS) {
+    if (tail.includes(slot.line)) return SLOT_ID_TO_ASKED[slot.id] ?? null
+  }
+  if (CHOICE_ASK_RE.test(tail.trim())) return "choice"
+  return null
 }
