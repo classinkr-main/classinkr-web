@@ -139,6 +139,9 @@ describe("admin quick quote composer shell", () => {
     expect(source).toContain("function stripRemovedMain(")
     expect(source).toContain("function sheetHasQuotableItems(")
     expect(source).toContain("const targets = quotableSheets")
+    // 대표 품목 없이 저장된 견적을 다시 불러와도 대표 행이 되살아나지 않고, 거래명에 지운 품목이 남지 않는다.
+    expect(source).toContain("quote, mainRemoved }])")
+    expect(source).toContain("if (sheet.mainRemoved) {")
     expect(source).not.toContain('if (target.optionGroupId === "main_product") return null')
     expect(source).toContain("getQuoteNotePresets")
     expect(source).toContain("appendQuoteNoteLine")

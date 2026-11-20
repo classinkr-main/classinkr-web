@@ -620,6 +620,13 @@ function buildDefaultDealTitle(sheets: ComposerSheet[], customerName?: string | 
   const subject = sheets
     .map((sheet) => {
       const template = getStandardQuoteTemplate(sheet.templateId)
+      // 대표 품목을 지운 장은 템플릿 이름 대신 남은 첫 품목으로 부른다(지운 칠판이 제목에 남지 않게).
+      if (sheet.mainRemoved) {
+        const first = (sheet.quote.lineItems ?? []).find(
+          (item) => item.lineStatus !== "informational" && item.itemType !== "note_only"
+        )
+        return first ? `${first.itemName} ${first.quantity ?? 1}${first.quantityUnit ?? ""}` : template.label
+      }
       return `${template.label} ${getMainQuantity(sheet)}${quantityUnitOf(sheet.templateId)}`
     })
     .join(" + ")
@@ -1579,7 +1586,12 @@ export default function QuickQuoteComposer({
       templateId
     )
     setDiscountDrafts({})
-    setSheets([{ line: sheetLineOf(templateId), templateId, optionSelections, quote }])
+    // 대표 품목을 지운 채 저장된 견적이면 그 상태를 이어받는다 — 옵션을 바꿔도 대표 행이 되살아나지 않게.
+    const mainCode = getStandardQuoteTemplate(templateId).lines[0]?.itemCode ?? templateId
+    const mainRemoved = !(quote.lineItems ?? []).some(
+      (item) => item.optionGroupId === "main_product" || item.itemCode === mainCode
+    )
+    setSheets([{ line: sheetLineOf(templateId), templateId, optionSelections, quote, mainRemoved }])
     const validityDays = daysBetween(details.issuedAt, details.validUntil)
     setShared((current) => ({
       ...current,
@@ -2480,7 +2492,7 @@ export default function QuickQuoteComposer({
                     aria-label="새 거래 제목"
                     value={newDealTitle}
                     onChange={(event) => setNewDealTitle(event.target.value)}
-                    placeholder={`비우면 "${buildDefaultDealTitle(sheets, activeCustomerName || null)}"`}
+                    placeholder={`비우면 "${buildDefaultDealTitle(quotableSheets.map((entry) => entry.sheet), activeCustomerName || null)}"`}
                     className={`${EDITABLE_CLASS} min-w-[180px] flex-1 text-[11.5px] text-[#615D59]`}
                   />
                 )}
@@ -3133,7 +3145,7 @@ export default function QuickQuoteComposer({
                           title={isSplit ? "템플릿은 공급자 1곳 기준입니다 — 견적서가 1장일 때 저장하세요" : undefined}
                           onClick={() => {
                             setTemplateSaveState(null)
-                            setTemplateDraftName(sheets[0] ? buildDefaultDealTitle([sheets[0]]) : "")
+                            setTemplateDraftName(quotableSheets[0] ? buildDefaultDealTitle([quotableSheets[0].sheet]) : "")
                           }}
                           className="w-fit text-left text-[#31302E] underline decoration-[#CFCBC5] underline-offset-[3px] hover:decoration-[#084734] disabled:cursor-not-allowed disabled:text-[#A39E98]"
                         >
