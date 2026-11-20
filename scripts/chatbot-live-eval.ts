@@ -2,9 +2,13 @@
  * 질문 묶음을 공개 챗봇 경로에 실제 모델(Gemini)로 돌려 답을 JSONL 로 남기는 측정 스크립트.
  *
  * 실행:
- *   npx tsx scripts/chatbot-live-eval.ts --in <questions.json> --out <results.jsonl> [--concurrency 4] [--mode select|generate|off] [--gate on|off] [--second-chance on|off] [--router legacy|shadow|compiled] [--allow-model-errors]
+ *   npx tsx scripts/chatbot-live-eval.ts --in <questions.json> --out <results.jsonl> [--concurrency 4] [--mode select|generate|off] [--gate on|off] [--second-chance on|off] [--router legacy|shadow|compiled] [--repeat N] [--simulate-gemini 402|hang|429] [--allow-model-errors]
  *
- * - 입력: [{ id, question, group?, expectTopic? }] 또는 { cases: [...] }(data/chatbot-first-contact-set.json).
+ * - 입력: [{ id, question, group?, expectTopic?, pagePath? }] 또는 { cases: [...] }(data/chatbot-first-contact-set.json).
+ *   대화 형식 { id, turns:[질문 문자열 또는 {question}], pagePath? } 도 받는다. 앞 턴의 질문과 답으로 previousTurn 을 만들어
+ *   다음 턴에 넘기고(DB 없음), 결과 줄은 턴마다 하나(id 는 `<id>#t<순번>`)다. 자세한 형식과 플래그는 scripts/chatbot-persona-loop/README.md.
+ * - 결과 줄의 firstAttempt 는 재시도 전 첫 시도(답·decidedBy·modelState), attemptLog 는 시도마다의 기록이다.
+ *   --repeat N 은 입력마다 N 번 돌려 답이 갈린 비율을, --simulate-gemini 는 Gemini fetch 를 가짜로 바꿔(실제 호출 0) 장애 동작을 잰다.
  * - 질문마다 세션 없이 evaluateChatbotQuery(공개 경로 코어, 말투·후속 질문 포함)를 독립 실행한다.
  * - 데이터베이스 없이 돈다: Supabase env 를 import 전에 지워 정적 문서 검색으로 고정한다.
  *   evaluateChatbotQuery 는 persistExchange 를 부르지 않는다(lib/chatbot/service.ts 의 handleChatbotQuery 만 부른다).
@@ -50,15 +54,26 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync, appendFileSync } fr
 import { dirname, join, resolve } from "node:path"
 
 import {
+  answerDivergence,
   checkModelFreeRun,
   classifyBlockedGeminiCall,
   countAnswerModelCalls,
   decidedByFromAnswerIndex,
+  deriveModelState,
   hasModelError,
   isTransientGeminiFailure,
   parseAnswerRouter,
+  parseEvalCases,
+  parseSimulateMode,
+  runConversationTurns,
+  simulateGeminiFetch,
+  summarizeRows,
+  turnRowId,
   type AnswerRouter,
+  type AttemptRecord,
+  type EvalCase,
   type GeminiCallRecord,
+  type TurnRequest,
 } from "./lib/chatbot-live-eval-checks"
 
 function loadEnvLocal() {
@@ -75,13 +90,6 @@ function loadEnvLocal() {
     }
     if (!process.env[match[1]]) process.env[match[1]] = value
   }
-}
-
-interface EvalInput {
-  id: string
-  question: string
-  group?: string
-  expectTopic?: string | null
 }
 
 interface GeminiTrace {
@@ -107,24 +115,17 @@ function argValue(name: string): string | undefined {
 function usage(message?: string): never {
   if (message) console.error(`오류: ${message}`)
   console.error(
-    "사용법: npx tsx scripts/chatbot-live-eval.ts --in <questions.json> --out <results.jsonl> [--concurrency 4] [--mode select|generate|off] [--gate on|off] [--second-chance on|off] [--router legacy|shadow|compiled] [--allow-model-errors]"
+    "사용법: npx tsx scripts/chatbot-live-eval.ts --in <questions.json> --out <results.jsonl> [--concurrency 4] [--mode select|generate|off] [--gate on|off] [--second-chance on|off] [--router legacy|shadow|compiled] [--repeat N] [--simulate-gemini 402|hang|429] [--allow-model-errors]"
   )
   process.exit(2)
 }
 
-function readInputs(path: string): EvalInput[] {
-  const raw = JSON.parse(readFileSync(path, "utf8")) as unknown
-  const list = Array.isArray(raw) ? raw : (raw as { cases?: unknown })?.cases
-  if (!Array.isArray(list)) usage("입력은 배열 또는 {cases:[...]} 형태여야 합니다.")
-  const seen = new Set<string>()
-  return list.map((item, index) => {
-    const row = item as Partial<EvalInput>
-    if (typeof row?.question !== "string" || !row.question.trim()) usage(`${index + 1}번째 항목에 question 이 없습니다.`)
-    const id = typeof row.id === "string" && row.id ? row.id : `q${String(index + 1).padStart(3, "0")}`
-    if (seen.has(id)) usage(`id 가 중복됩니다: ${id}`)
-    seen.add(id)
-    return { id, question: row.question, group: row.group, expectTopic: row.expectTopic ?? null }
-  })
+function readInputs(path: string): EvalCase[] {
+  try {
+    return parseEvalCases(JSON.parse(readFileSync(path, "utf8")) as unknown)
+  } catch (error) {
+    return usage(error instanceof Error ? error.message : String(error))
+  }
 }
 
 function median(values: number[]) {
@@ -170,6 +171,12 @@ async function main() {
   if (routerArg !== undefined && !routerFlag) usage(`--router 는 legacy|shadow|compiled 중 하나여야 합니다: ${routerArg}`)
 
   const allowModelErrors = process.argv.includes("--allow-model-errors")
+  const repeatArg = argValue("--repeat")
+  const repeat = repeatArg === undefined ? 1 : Math.trunc(Number(repeatArg))
+  if (!Number.isFinite(repeat) || repeat < 1 || repeat > 50) usage(`--repeat 는 1~50 의 정수여야 합니다: ${repeatArg}`)
+  const simulateArg = argValue("--simulate-gemini")
+  const simulateMode = simulateArg === undefined ? null : parseSimulateMode(simulateArg)
+  if (simulateArg !== undefined && !simulateMode) usage(`--simulate-gemini 는 402|hang|429 중 하나여야 합니다: ${simulateArg}`)
   // 답에 모델을 쓰는 단계가 하나라도 켜져 있는지. 모두 끈 측정은 모델 없는 측정이다(Gemini 호출 0 이어야 함).
   const modelStagesEnabled = mode !== "off" || gateSwitch === "on" || secondChanceSwitch === "on"
   const modelFree = !modelStagesEnabled
@@ -196,6 +203,8 @@ async function main() {
     console.error(`경고: CHATBOT_ANSWER_ROUTER 값을 알 수 없습니다(${envRouter}). 결과 줄의 router 는 legacy 로 적습니다.`)
   }
   const router: AnswerRouter = routerFlag ?? parseAnswerRouter(envRouter) ?? "legacy"
+  // 가짜 Gemini 측정은 네트워크로 나가지 않으므로 키가 없어도 돈다. 모델 단계가 가짜 응답을 받도록 자리표시 키를 둔다.
+  if (simulateMode && !process.env.GEMINI_API_KEY?.trim()) process.env.GEMINI_API_KEY = "simulated-no-network"
   if (mode !== "off" && !process.env.GEMINI_API_KEY?.trim()) {
     usage("GEMINI_API_KEY 가 없습니다. 모델 경로가 조용히 꺼지므로 중단합니다(--mode off 는 키 없이 가능).")
   }
@@ -203,6 +212,8 @@ async function main() {
   // 2) 질문별 Gemini 호출 추적 — lib 를 고치지 않고 fetch 를 감싸 질문 단위(AsyncLocalStorage)로 센다.
   const traceStore = new AsyncLocalStorage<GeminiTrace>()
   const realFetch = globalThis.fetch.bind(globalThis)
+  // --simulate-gemini: Gemini 호출만 가짜 응답으로 바꾼다(실제 호출 0, 비용 0). 추적·차단기는 그대로 거친다.
+  const geminiFetch: typeof fetch = simulateMode ? simulateGeminiFetch(simulateMode) : realFetch
   globalThis.fetch = (async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
     const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url
     const trace = url.includes("generativelanguage.googleapis.com") ? traceStore.getStore() : undefined
@@ -211,7 +222,7 @@ async function main() {
     const kind = url.match(/:(\w+)(?:\?|$)/)?.[1] ?? "other"
     trace.kinds[kind] = (trace.kinds[kind] ?? 0) + 1
     try {
-      const res = await realFetch(input, init)
+      const res = await geminiFetch(input, init)
       trace.statuses.push(res.status)
       trace.records.push({ kind, status: res.status })
       return res
@@ -234,6 +245,7 @@ async function main() {
   })
   const { evaluateChatbotQuery, WEAK_SOURCE_DRAFT_ANSWER, NO_SOURCE_FACT_ANSWER, MODEL_UNAVAILABLE_ANSWER, redactPii } =
     await import("../lib/chatbot/service")
+  const { detectAskedSlot } = await import("../lib/chatbot/follow-up")
   const { findBasicQuickAnswers } = await import("../lib/chatbot/quick-answers-basics")
   const { findFieldQuickAnswer } = await import("../lib/chatbot/quick-answers-field")
   const { resolveSymptomTriage } = await import("../lib/chatbot/symptom-triage")
@@ -309,8 +321,20 @@ async function main() {
   const modelErrorOf = (trace: GeminiTrace, skipReasons: Array<string | null | undefined> = []) =>
     hasModelError({ modelStagesEnabled, calls: trace.records, blockedKinds: trace.blockedKinds, skipReasons })
 
-  async function runOne(item: EvalInput) {
+  // 서버의 대화 입력 계약: evaluateChatbotQuery(message, { previousTurn?, pagePath? }). 옵션이 아직 없는 서비스 판이면 무시되므로
+  // 좁은 어댑터로 넘기기만 한다(타입이 어긋나도 측정 도구가 막히지 않게).
+  type EvaluateWithContext = (
+    message: string,
+    options?: { previousTurn?: TurnRequest["previousTurn"]; pagePath?: string }
+  ) => ReturnType<typeof evaluateChatbotQuery>
+  const evaluateWithContext = evaluateChatbotQuery as unknown as EvaluateWithContext
+  const asEvalSlot = (answer: string) => detectAskedSlot(answer)
+
+  /** 한 턴(= 한 질문)을 돌린다. 모델이 전부 일시 오류면 최대 3번까지 다시 돌리되, 시도마다 attemptLog 에 남기고 firstAttempt 는 첫 시도다. */
+  async function runTurn(item: EvalCase, request: TurnRequest, turnIndex: number, repeatIndex: number) {
     const maxAttempts = 3
+    const rowId = turnRowId(item, turnIndex)
+    const attemptLog: AttemptRecord[] = []
     let lastError = ""
     let lastTrace: GeminiTrace = newTrace()
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
@@ -318,19 +342,40 @@ async function main() {
       lastTrace = trace
       const startedAt = Date.now()
       try {
-        const result = await traceStore.run(trace, () => evaluateChatbotQuery(item.question))
+        const result = await traceStore.run(trace, () => evaluateWithContext(request.question, {
+            ...(request.previousTurn ? { previousTurn: request.previousTurn } : {}),
+            ...(request.pagePath ? { pagePath: request.pagePath } : {}),
+          }))
+        // 답 색인 흔적·서비스 측정 흔적은 코어가 낼 때만 싣는다(응답에는 실리지 않는 측정 필드, 사양 §3.7).
+        const answerIndex = (result as { answerIndex?: unknown }).answerIndex
+        const reportedModelState = (result as { modelState?: unknown }).modelState
+        const contextExpandedTrace = (result as { contextExpanded?: unknown }).contextExpanded
+        const decidedBy = decideBy(request.question, { ...result, answerIndex }, trace)
+        const modelState = deriveModelState({ reported: reportedModelState, calls: trace.records, blockedKinds: trace.blockedKinds })
+        attemptLog.push({
+          attempt,
+          answer: result.answer,
+          decidedBy,
+          modelState,
+          geminiStatuses: [...trace.statuses],
+          error: null,
+        })
         // 모델 호출이 전부 429/5xx 로 끝나 초안으로 떨어진 경우는 일시 오류로 보고 다시 시도한다.
         if (isTransientFailure(trace) && attempt < maxAttempts) {
           lastError = `gemini transient status ${trace.statuses.join(",")}`
+          attemptLog[attemptLog.length - 1].error = lastError
           await sleep(1500 * attempt)
           continue
         }
-        // 답 색인 흔적은 코어가 낼 때만 싣는다(응답에는 실리지 않는 측정 필드, 사양 §3.7).
-        const answerIndex = (result as { answerIndex?: unknown }).answerIndex
         return {
-          id: item.id,
+          id: rowId,
+          conversationId: item.conversation ? item.id : null,
+          turn: turnIndex + 1,
+          repeatIndex,
+          pagePath: request.pagePath ?? null,
+          previousTurn: request.previousTurn ?? null,
           group: item.group ?? null,
-          question: item.question,
+          question: request.question,
           expectTopic: item.expectTopic ?? null,
           router,
           answer: result.answer,
@@ -348,7 +393,16 @@ async function main() {
             heading: source.heading ?? null,
             score: source.score,
           })),
-          decidedBy: decideBy(item.question, { ...result, answerIndex }, trace),
+          decidedBy,
+          modelState,
+          contextExpanded: typeof contextExpandedTrace === "boolean" ? contextExpandedTrace : null,
+          ...(contextExpandedTrace !== undefined && typeof contextExpandedTrace !== "boolean" ? { contextTrace: contextExpandedTrace } : {}),
+          firstAttempt: {
+            answer: attemptLog[0].answer,
+            decidedBy: attemptLog[0].decidedBy,
+            modelState: attemptLog[0].modelState,
+          },
+          attemptLog,
           ...(answerIndex !== undefined ? { answerIndex } : {}),
           gate: result.answerGate.gate,
           gateOriginal: result.answerGate.gateOriginal ?? null,
@@ -369,15 +423,28 @@ async function main() {
         }
       } catch (error) {
         lastError = error instanceof Error ? error.message : String(error)
+        attemptLog.push({
+          attempt,
+          answer: null,
+          decidedBy: "unknown",
+          modelState: deriveModelState({ calls: lastTrace.records, blockedKinds: lastTrace.blockedKinds }),
+          geminiStatuses: [...lastTrace.statuses],
+          error: lastError,
+        })
         const retryable = /429|rate|quota|timeout|timed out|ECONNRESET|ETIMEDOUT|fetch failed|50\d/i.test(lastError)
         if (!retryable || attempt === maxAttempts) break
         await sleep(1500 * attempt)
       }
     }
     return {
-      id: item.id,
+      id: rowId,
+      conversationId: item.conversation ? item.id : null,
+      turn: turnIndex + 1,
+      repeatIndex,
+      pagePath: request.pagePath ?? null,
+      previousTurn: request.previousTurn ?? null,
       group: item.group ?? null,
-      question: item.question,
+      question: request.question,
       expectTopic: item.expectTopic ?? null,
       router,
       answer: null,
@@ -391,6 +458,12 @@ async function main() {
       warning: null,
       sources: [],
       decidedBy: "unknown",
+      modelState: deriveModelState({ calls: lastTrace.records, blockedKinds: lastTrace.blockedKinds }),
+      contextExpanded: null as boolean | null,
+      firstAttempt: attemptLog[0]
+        ? { answer: attemptLog[0].answer, decidedBy: attemptLog[0].decidedBy, modelState: attemptLog[0].modelState }
+        : null,
+      attemptLog,
       gate: null,
       gateOriginal: null,
       gateMs: null,
@@ -414,15 +487,24 @@ async function main() {
   writeFileSync(resolve(outPath), "")
 
   console.error(
-    `질문 ${inputs.length}개 / 동시 ${concurrency} / 모드 ${mode} / 관문 ${gateSwitch} / 두 번째 검색 ${secondChanceSwitch} / 라우터 ${router}` +
+    `질문 ${inputs.length}개(턴 ${inputs.reduce((sum, item) => sum + item.turns.length, 0)}개)${repeat > 1 ? ` x 반복 ${repeat}` : ""} / 동시 ${concurrency} / 모드 ${mode} / 관문 ${gateSwitch} / 두 번째 검색 ${secondChanceSwitch} / 라우터 ${router}` +
       ` / Gemini 키 ${process.env.GEMINI_API_KEY ? "있음" : "없음"}` +
       (router !== "legacy" ? ` / 답 색인 자료 ${process.env.ANSWER_INDEX_DATA_DIR?.trim() || "data/answer-index"}` : "") +
       (modelFree ? " / 모델 없는 측정(Gemini 호출 0 이어야 함)" : "") +
+      (simulateMode ? ` / 가짜 Gemini ${simulateMode}(실제 호출 0)` : "") +
       (allowModelErrors ? " / 모델 호출 실패 허용(--allow-model-errors)" : "")
   )
 
-  type Row = Awaited<ReturnType<typeof runOne>>
-  const rows: (Row | undefined)[] = new Array(inputs.length)
+  // 측정 작업 하나 = 입력 하나의 한 번 실행(대화면 턴 전체). --repeat N 이면 입력마다 N 개이며 입력 순서대로 묶어 쓴다.
+  const jobs = inputs.flatMap((item) => Array.from({ length: repeat }, (_, repeatIndex) => ({ item, repeatIndex })))
+  const runJob = ({ item, repeatIndex }: (typeof jobs)[number]) =>
+    runConversationTurns({
+      item,
+      runTurn: (request, turnIndex) => runTurn(item, request, turnIndex, repeatIndex),
+      askedSlotOf: asEvalSlot,
+    })
+  type Row = Awaited<ReturnType<typeof runTurn>>
+  const rows: (Row[] | undefined)[] = new Array(jobs.length)
   let nextIndex = 0
   let flushed = 0
   let stoppedEarly = false
@@ -431,7 +513,7 @@ async function main() {
   // 동시 실행이어도 줄 순서는 입력 순서다: 앞 순번이 끝난 만큼만 이어서 쓴다.
   function flush() {
     while (flushed < rows.length && rows[flushed]) {
-      appendFileSync(resolve(outPath), `${JSON.stringify(rows[flushed])}\n`)
+      for (const row of rows[flushed] ?? []) appendFileSync(resolve(outPath), `${JSON.stringify(row)}\n`)
       flushed += 1
     }
   }
@@ -459,21 +541,21 @@ async function main() {
     while (!stoppedEarly) {
       const index = nextIndex
       nextIndex += 1
-      if (index >= inputs.length) return
-      const row = await runOne(inputs[index])
-      rows[index] = row
-      checkEarlyStop(row)
+      if (index >= jobs.length) return
+      const jobRows = await runJob(jobs[index])
+      rows[index] = jobRows
+      for (const row of jobRows) checkEarlyStop(row)
       flush()
-      if ((index + 1) % 10 === 0 || index + 1 === inputs.length) {
-        console.error(`  진행 ${flushed}/${inputs.length}`)
+      if ((index + 1) % 10 === 0 || index + 1 === jobs.length) {
+        console.error(`  진행 ${flushed}/${jobs.length}`)
       }
     }
   }
 
-  await Promise.all(Array.from({ length: Math.min(concurrency, inputs.length) }, worker))
+  await Promise.all(Array.from({ length: Math.min(concurrency, jobs.length) }, worker))
   flush()
 
-  const done = rows.filter((row): row is Row => Boolean(row))
+  const done = rows.flatMap((jobRows) => jobRows ?? [])
   const errors = done.filter((row) => row.error)
   console.error("\n==== 요약 ====")
   console.error(`전체 ${done.length}개, 소요 ${((Date.now() - startedAll) / 1000).toFixed(1)}초, 라우터 ${router}`)
@@ -506,6 +588,21 @@ async function main() {
     console.error(
       `두 번째 검색 시간: 중앙값 ${median(times)}ms, 95번째 ${times[Math.min(times.length - 1, Math.floor(times.length * 0.95))]}ms`
     )
+  }
+  const ratios = summarizeRows(done)
+  console.error(
+    `첫 시도 기준: decidedBy ${JSON.stringify(ratios.firstAttempt.decidedBy)}, 첫 시도가 모델 장애였던 줄 ${ratios.firstAttempt.modelNotOk.count}/${ratios.total} (${ratios.firstAttempt.modelNotOk.ratio})`
+  )
+  console.error(`재시도가 있었던 줄: ${done.filter((row) => row.attemptLog.length > 1).length}개(결과 줄의 답·decidedBy 는 마지막 시도, firstAttempt 는 첫 시도)`)
+  console.error(`gate skipped: ${ratios.gateSkipped.count}/${ratios.total} (${ratios.gateSkipped.ratio})`)
+  console.error(`modelState 분포: ${JSON.stringify(ratios.modelState)}`)
+  console.error(
+    `contextExpanded: ${ratios.contextExpanded.count}/${ratios.contextExpanded.of} (${ratios.contextExpanded.ratio})` +
+      (ratios.contextExpanded.of === 0 ? " — 서비스가 흔적을 내지 않음" : "")
+  )
+  if (repeat > 1) {
+    const divergence = answerDivergence(done.map((row) => ({ key: row.id, answer: row.answer })))
+    console.error(`--repeat ${repeat}: 답이 갈린 질문 ${divergence.diverged}/${divergence.groups} (${divergence.ratio})`)
   }
   console.error(`오류: ${errors.length}개`)
   const modelErrorRows = done.filter((row) => row.modelError)
