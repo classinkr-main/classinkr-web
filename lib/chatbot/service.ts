@@ -83,7 +83,11 @@ import {
   routeAnswerIndex,
 } from "@/lib/chatbot/answer-index"
 import { collectLegacyVotes } from "@/lib/chatbot/answer-index/legacy-votes"
+import { disabledCardIds } from "@/lib/chatbot/answer-index/decide"
 import { detectAskType, segmentQuestion } from "@/lib/chatbot/answer-index/normalize"
+import { MODEL_UNAVAILABLE_CIRCUIT_OPEN_ANSWER } from "@/lib/chatbot/fixed-answers"
+
+export { MODEL_UNAVAILABLE_CIRCUIT_OPEN_ANSWER }
 import { groupSentenceParagraphs } from "@/lib/chatbot/answer-index/paragraphs"
 import {
   buildAnswerIndexCore,
@@ -4886,6 +4890,8 @@ type EvidenceSelectionOutcome =
 const MAX_SELECTED_ANSWER_LENGTH = 640
 // generate 모드는 선별 뒤에 답 생성이 이어지므로, 라우트 예산(13초) 안에 들도록 선별 예산을 줄인다.
 const GENERATE_MODE_SELECTION_TIMEOUT_MS = 2_000
+// 근거 선별 호출의 기본 예산(lib/chatbot/llm.ts selectAnsweringSentenceIds 기본값과 같다). 실패를 시간 초과로 셀지 가르는 데만 쓴다.
+const SELECTION_DEFAULT_TIMEOUT_MS = 3_500
 
 function getSourceKey(source: ChatbotSource) {
   return source.chunkId ?? `${source.urlPath}:${source.heading ?? ""}`
@@ -4947,8 +4953,12 @@ async function applyEvidenceSelection(
   const sentences = buildEvidenceSentences(candidates)
   if (sentences.length === 0) return { status: "skipped" }
 
+  const selectionStartedAt = Date.now()
   const ids = await selectAnsweringSentenceIds({ question: question.redacted, sentences, timeoutMs })
-  if (ids === null) return { status: "failed" }
+  if (ids === null) {
+    if (isFinalAnswerModelEnabled()) noteModelState(response, failedCallState(selectionStartedAt, timeoutMs ?? SELECTION_DEFAULT_TIMEOUT_MS))
+    return { status: "failed" }
+  }
 
   if (ids.length === 0) {
     if (isHandoff) {
@@ -5010,6 +5020,50 @@ export const MODEL_UNAVAILABLE_ANSWER = [
 // MODEL_UNAVAILABLE_ANSWER 로 바꾼 답. 두 번째 검색이 '못 찾음'으로 보고 모델을 또 부르지 않게 한다.
 const modelUnavailableResponses = new WeakSet<object>()
 
+/**
+ * 답에 쓰이는 모델 호출(관문·근거 선별·두 번째 검색·답 다시 쓰기)의 상태. 측정 흔적(evaluateChatbotQuery 의 modelState)으로만 낸다
+ * (2026-11-20 조사 G4: 차단기·시간 초과가 운영에서 보이지 않았다). 임베딩은 답에 쓰이지 않아 세지 않는다.
+ * circuit_open: 결제·인증 실패 차단기 때문에 부르지 못함 / timeout: 시간 초과·끊김 / error: 그 밖의 실패 / ok: 실패 없음(부르지 않았어도 ok).
+ */
+export type ChatbotModelState = "ok" | "circuit_open" | "timeout" | "error"
+const MODEL_STATE_RANK: Record<ChatbotModelState, number> = { ok: 0, error: 1, timeout: 2, circuit_open: 3 }
+const modelStateByResponse = new WeakMap<object, ChatbotModelState>()
+
+function worseModelState(left: ChatbotModelState, right: ChatbotModelState): ChatbotModelState {
+  return MODEL_STATE_RANK[right] > MODEL_STATE_RANK[left] ? right : left
+}
+
+/** 이 답을 만들면서 겪은 모델 실패를 적는다(가장 나쁜 것만 남는다). */
+function noteModelState(response: object, state: ChatbotModelState) {
+  modelStateByResponse.set(response, worseModelState(modelStateByResponse.get(response) ?? "ok", state))
+}
+
+/** 실패한 모델 호출의 상태. 차단기가 열려 있으면 circuit_open, 예산을 거의 다 썼으면 timeout, 아니면 error. */
+function failedCallState(startedAt: number, budgetMs: number): ChatbotModelState {
+  if (isModelCircuitOpen()) return "circuit_open"
+  return Date.now() - startedAt >= budgetMs - 450 ? "timeout" : "error"
+}
+
+/** 관문·두 번째 검색 흔적의 실패 이유를 모델 상태로 옮긴다. */
+function modelStateFromReason(reason: string | undefined): ChatbotModelState {
+  if (reason === "model_unavailable") return "circuit_open"
+  if (reason === "timeout") return "timeout"
+  if (reason === "error") return "error"
+  return "ok"
+}
+
+function modelStateOfCore(core: ChatbotCore): ChatbotModelState {
+  let state = modelStateByResponse.get(core.response) ?? "ok"
+  if (core.answerGate?.gate === "skipped") state = worseModelState(state, modelStateFromReason(core.answerGate.skipReason))
+  if (core.secondChance?.secondChance === "miss") state = worseModelState(state, modelStateFromReason(core.secondChance.reason))
+  return state
+}
+
+/** '지금 확인하지 못함' 답. 차단기가 열려 있으면 곧바로 다시 물어도 같으므로 '잠시 뒤 다시'를 뺀 변형을 쓴다. */
+function modelUnavailableAnswerText(state: ChatbotModelState) {
+  return state === "circuit_open" || isModelCircuitOpen() ? MODEL_UNAVAILABLE_CIRCUIT_OPEN_ANSWER : MODEL_UNAVAILABLE_ANSWER
+}
+
 /** 공개 경로에서 최종 답 모델(근거 선별)이 켜져 있는지. 꺼져 있으면 선별 결과가 'failed'여도 모델이 죽은 것이 아니다. */
 function isFinalAnswerModelEnabled() {
   return getFinalAnswerLlmMode() !== "off" && Boolean(process.env.GEMINI_API_KEY?.trim())
@@ -5020,8 +5074,9 @@ function isUnverifiedFixedAnswer(answer: string) {
   return [MODEL_UNAVAILABLE_ANSWER, SYMPTOM_AFTER_GATE_ANSWER].some((fixed) => answer.includes(fixed.split("\n\n")[0]))
 }
 
-function applyModelUnavailableAnswer(response: CoreResponse) {
-  response.answer = MODEL_UNAVAILABLE_ANSWER
+function applyModelUnavailableAnswer(response: CoreResponse, state: ChatbotModelState = isModelCircuitOpen() ? "circuit_open" : "error") {
+  noteModelState(response, state)
+  response.answer = modelUnavailableAnswerText(state)
   response.answerMode = "handoff"
   response.confidence = Math.min(response.confidence, 0.2)
   response.needsHandoff = true
@@ -5464,10 +5519,12 @@ async function applySecondChanceRetrieval(
     if ((reason === "error" || reason === "timeout") && process.env.NODE_ENV !== "test") {
       console.warn("[chatbot] second-chance retrieval failed; keeping not-found answer.", { reason, secondChanceMs })
     }
-    // 차단기 때문에 두 번째 검색을 돌리지 못했으면 '문서에 없음'을 단정하지 않는다. 문서에 있지만 낱말이 안 겹치는 질문을
-    // 살리려고 둔 단계라, 모델이 죽은 동안의 '못 찾음'은 근거 선별 실패와 같이 '지금 확인 못 함'(상담 버튼)으로 낸다.
-    // 차단기가 닫힌 상태의 일시 실패(오류·시간 초과)는 첫 검색이 정상으로 끝난 '못 찾음'이라 그대로 둔다.
-    if (reason === "model_unavailable") applyModelUnavailableAnswer(response)
+    // 두 번째 검색을 끝내지 못했으면(차단기·오류·시간 초과) '문서에 없음'을 단정하지 않는다. 문서에 있지만 낱말이 안 겹치는
+    // 질문을 살리려고 둔 단계라, 확인을 마치지 못한 '못 찾음'은 근거 선별 실패와 같이 '지금 확인하지 못함'(상담 버튼)으로 낸다
+    // (2026-11-20 조사 G4: 시간 초과 뒤의 '찾지 못했어요'가 진짜 못 찾음과 구별되지 않았다). 차단기가 열려 있으면 '잠시 뒤 다시'를 뺀다.
+    if (reason === "model_unavailable" || reason === "error" || reason === "timeout") {
+      applyModelUnavailableAnswer(response, modelStateFromReason(reason))
+    }
     return { secondChance: "miss", secondChanceMs, reason }
   }
 
@@ -5615,14 +5672,16 @@ async function answerFromDocumentsAfterGate(
   const { category, intent } = classified
   let { handoffIntent } = classified
   const sentences = buildEvidenceSentences(candidates)
+  const selectionStartedAt = Date.now()
   const ids = sentences.length > 0 ? await selectAnsweringSentenceIds({ question: question.redacted, sentences }) : []
   const picked = ids && ids.length > 0 ? sentences.filter((sentence) => ids.includes(sentence.id)) : []
 
   let response: CoreResponse
   if (ids === null && isFinalAnswerModelEnabled()) {
     // 선별 호출이 실패했다(모델이 죽은 것이지 문서에 없는 것이 아니다). 못 찾음을 단정하지 않고 다시 묻거나 상담으로 잇게 한다.
+    const state = failedCallState(selectionStartedAt, SELECTION_DEFAULT_TIMEOUT_MS)
     response = {
-      answer: MODEL_UNAVAILABLE_ANSWER,
+      answer: modelUnavailableAnswerText(state),
       answerMode: "handoff",
       confidence: 0.2,
       needsHandoff: true,
@@ -5630,6 +5689,7 @@ async function answerFromDocumentsAfterGate(
       suggestedQuestions: buildSuggestedQuestions(category),
       unresolved: true,
     }
+    noteModelState(response, state)
     modelUnavailableResponses.add(response)
   } else if (picked.length > 0) {
     const usedIndexes = Array.from(new Set(picked.map((sentence) => sentence.sourceIndex)))
@@ -5980,6 +6040,14 @@ type CompiledRoutePlan =
   /** 색인이 정한다. */
   | { kind: "index"; decision: AnswerIndexDecision; votes: string[] }
 
+// compiled 라우터가 색인으로 정하려면 켜 둔 카드(CHATBOT_COMPILED_DISABLED_CARDS 로 끄지 않은 카드)가 이만큼은 있어야 한다.
+const MIN_ACTIVE_ANSWER_INDEX_CARDS = 1
+
+function countActiveAnswerIndexCards(index: ReturnType<typeof getRouterAnswerIndex>) {
+  const disabled = disabledCardIds()
+  return index.cards.filter((card) => !disabled.has(card.id)).length
+}
+
 function planCompiledRoute(question: NormalizedQuestion, router: AnswerIndexRouter, startedAt: number): CompiledRoutePlan {
   const pre = (name: NonNullable<AnswerIndexTrace["pre"]>) => preIndexTrace(router, "in", name)
   if (isGreetingOnly(question)) return { kind: "legacy", trace: pre("greeting") }
@@ -6004,6 +6072,11 @@ function planCompiledRoute(question: NormalizedQuestion, router: AnswerIndexRout
   }
   if (!inScope) return { kind: "legacy", trace: preIndexTrace(router, "out") }
   const index = getRouterAnswerIndex()
+  // 켜 둘 카드가 없는 색인(자료 반영 전·경로나 컴파일이 잘못됨)은 무엇을 묻든 못 찾음만 낸다(decide.ts: 카드 0장이면 언제나 abstain).
+  // compiled 라우터는 그런 색인으로 정하지 않고 지금(legacy) 흐름으로 보낸다. 흔적에 unavailable=empty_index 를 남긴다(2026-11-20 조사 G11).
+  if (router === "compiled" && countActiveAnswerIndexCards(index) < MIN_ACTIVE_ANSWER_INDEX_CARDS) {
+    return { kind: "legacy", trace: { ...preIndexTrace(router, "in"), unavailable: "empty_index" } }
+  }
   const legacySignals = [quick, policyGuard].filter((signal) => signal !== null).map((signal) => ({ gateOriginal: signal.gateOriginal }))
   if (wantsImmediateHumanHandoff(question)) legacySignals.push({ gateOriginal: "handoff:weak-signal" })
   const votes = collectLegacyVotes(question.redacted, legacySignals, index.legacyAlias)
@@ -6432,6 +6505,7 @@ async function buildLegacyChatbotCoreBase(
         timeoutMs: getFinalAnswerTimeoutMs(),
         fallback: () => null,
         onTimeout: () => {
+          noteModelState(response, "timeout")
           console.warn("[chatbot] final answer generation timed out; using deterministic draft.")
         },
       })
@@ -6545,6 +6619,8 @@ export async function evaluateChatbotQuery(
     contextExpanded: boolean
     /** 대화 맥락 판단(none·short_reply·slot_answer·choice·follow_up·page_context·target_unknown). */
     conversationReason: ConversationTurnReason
+    /** 답에 쓰인 모델 호출의 상태(측정용, 2026-11-20 조사 G4). 사용자 응답에는 싣지 않는다. */
+    modelState: ChatbotModelState
   }
 > {
   const conversation = options.includeInternalDocs
@@ -6567,6 +6643,7 @@ export async function evaluateChatbotQuery(
     ...(core.answerIndex ? { answerIndex: core.answerIndex } : {}),
     contextExpanded: core.conversation?.expanded ?? false,
     conversationReason: core.conversation?.reason ?? "none",
+    modelState: modelStateOfCore(core),
   }
 }
 
@@ -6829,7 +6906,9 @@ export async function streamChatbotQuery(
     if (trace.secondChance !== "none") secondChance = trace
     // 찾았거나(hit), 차단기 때문에 못 돌려 고정 문구로 바꿨으면(miss·model_unavailable) 답이 바뀌었다.
     secondChanceChangedAnswer =
-      trace.secondChance === "hit" || (trace.secondChance === "miss" && trace.reason === "model_unavailable")
+      trace.secondChance === "hit" ||
+      (trace.secondChance === "miss" &&
+        (trace.reason === "model_unavailable" || trace.reason === "error" || trace.reason === "timeout"))
   }
   // 답이 바뀌었으면 말투·끝 질문 층을 새 답에 다시 입힌다(일반 경로는 코어 뒤에서 한 번 입힌다).
   if (withheld || secondChanceChangedAnswer) applyConversationTone(core)

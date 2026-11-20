@@ -12,6 +12,7 @@ import {
   __clearAnswerCacheForTests,
   evaluateChatbotQuery,
   MODEL_UNAVAILABLE_ANSWER,
+  MODEL_UNAVAILABLE_CIRCUIT_OPEN_ANSWER,
   NO_SOURCE_FACT_ANSWER,
   streamChatbotQuery,
   type ChatbotStreamEvent,
@@ -129,7 +130,10 @@ describe("모델 호출 실패 시 확인 안 된 조각을 내지 않는다", (
       const result = await evaluateChatbotQuery(IN_VOCAB_QUESTION)
 
       expect(calls).toContain("selection")
-      expect(result.answer).toBe(MODEL_UNAVAILABLE_ANSWER)
+      // 402 는 차단기를 연다: 곧바로 다시 물어도 같으므로 '잠시 뒤 다시'를 뺀 변형을 낸다(첫 문단은 같다).
+      expect(result.answer).toBe(failure === "402" ? MODEL_UNAVAILABLE_CIRCUIT_OPEN_ANSWER : MODEL_UNAVAILABLE_ANSWER)
+      // 측정 흔적: 차단기는 circuit_open. 시간 초과는 예산을 다 쓴 경우만 timeout 으로 세므로, 곧바로 끊긴 흉내(AbortError)는 error 다.
+      expect(result.modelState).toBe(failure === "402" ? "circuit_open" : "error")
       expect(result.answer).not.toContain(draft.answer.split("\n\n")[0])
       expect(result.answerMode).toBe("handoff")
       expect(result.needsHandoff).toBe(true)
@@ -265,7 +269,9 @@ describe("결제·인증 실패(401·402·403) 차단기", () => {
     const { fetchMock, calls } = stubModel({ selection: "402" })
 
     const first = await evaluateChatbotQuery(IN_VOCAB_QUESTION)
-    expect(first.answer).toBe(MODEL_UNAVAILABLE_ANSWER)
+    expect(first.answer).toBe(MODEL_UNAVAILABLE_CIRCUIT_OPEN_ANSWER)
+    expect(first.answer).not.toContain("잠시 뒤 다시")
+    expect(first.modelState).toBe("circuit_open")
     // 선별 호출 한 번(첫 모델)만 나가고 폴백 모델로 넘어가지 않는다.
     expect(calls.filter((call) => call === "selection")).toHaveLength(1)
     expect(isModelCircuitOpen()).toBe(true)
@@ -274,7 +280,7 @@ describe("결제·인증 실패(401·402·403) 차단기", () => {
     __clearAnswerCacheForTests()
     const second = await evaluateChatbotQuery(IN_VOCAB_QUESTION)
     expect(generateCalls(fetchMock)).toBe(before)
-    expect(second.answer).toBe(MODEL_UNAVAILABLE_ANSWER)
+    expect(second.answer).toBe(MODEL_UNAVAILABLE_CIRCUIT_OPEN_ANSWER)
     expect(second.needsHandoff).toBe(true)
 
     // 열릴 때 한 번만 운영자용 문장을 남기고, 키 값은 찍지 않는다.
@@ -474,14 +480,18 @@ describe("결제·인증 실패(401·402·403) 차단기", () => {
     expect(again.answer).not.toContain(MODEL_UNAVAILABLE_HEAD)
   })
 
-  it("차단기가 닫힌 상태의 일시 실패(500)로 두 번째 검색이 빠진 경우는 기존대로 '못 찾음'을 둔다", async () => {
+  it("차단기가 닫힌 상태의 일시 실패(500)로 두 번째 검색을 끝내지 못하면 '못 찾음' 대신 '지금 확인하지 못함'(잠시 뒤 다시)을 낸다", async () => {
+    // 2026-11-20 조사 G4: 시간 초과·오류 뒤의 '찾지 못했어요'가 진짜 못 찾음과 구별되지 않았다.
     const question = "양자암호 지원하나요"
     const fetchMock = vi.fn(async () => ({ ok: false, status: 500, json: async () => ({}), text: async () => "" }))
     vi.stubGlobal("fetch", fetchMock)
     const result = await evaluateChatbotQuery(question)
     expect(isModelCircuitOpen()).toBe(false)
     expect(result.secondChance).toMatchObject({ secondChance: "miss", reason: "error" })
-    expect(result.answer).toContain(NO_SOURCE_FACT_ANSWER.split("\n\n")[0])
+    expect(result.answer).toBe(MODEL_UNAVAILABLE_ANSWER)
+    expect(result.answer).not.toContain(NO_SOURCE_FACT_ANSWER.split("\n\n")[0])
+    expect(result.needsHandoff).toBe(true)
+    expect(result.modelState).toBe("error")
   })
 
   it("임베딩도 차단 중에는 네트워크 없이 null 을 돌려준다(호출부는 낱말 검색으로 이어 간다)", async () => {

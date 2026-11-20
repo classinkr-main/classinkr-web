@@ -6,6 +6,7 @@ import { parseOutlineSectionIds } from "@/lib/chatbot/llm"
 import {
   __clearAnswerCacheForTests,
   evaluateChatbotQuery,
+  MODEL_UNAVAILABLE_ANSWER,
   NO_SOURCE_FACT_ANSWER,
   streamChatbotQuery,
   WEAK_SOURCE_DRAFT_ANSWER,
@@ -170,14 +171,18 @@ describe("목차에서 다시 고르는 두 번째 검색", () => {
     expect(result.secondChance).toMatchObject({ secondChance: "miss", reason: "off_target" })
   })
 
-  it("목차 고르기 호출이 실패하면 못 찾음 답을 그대로 두고 그 답은 캐시하지 않는다", async () => {
+  it("목차 고르기 호출이 실패하면 '못 찾음'을 단정하지 않고 '지금 확인하지 못함'을 내며, 그 답은 캐시하지 않는다", async () => {
+    // 2026-11-20 조사 G4: 두 번째 검색의 오류·시간 초과는 진짜 못 찾음과 구별한다(차단기가 닫혀 있으면 '잠시 뒤 다시'가 붙은 문구).
     const question = "수업 화면에 학생 생일 축하 폭죽을 터뜨릴 수 있나요?"
     const { outlineRequests } = stubModel({ outline: async () => ({ ok: false, status: 500, text: async () => "" }) })
 
     const first = await evaluateChatbotQuery(question)
     const second = await evaluateChatbotQuery(question)
 
-    expect(isNotFound(first.answer)).toBe(true)
+    expect(isNotFound(first.answer)).toBe(false)
+    expect(first.answer).toBe(MODEL_UNAVAILABLE_ANSWER)
+    expect(first.needsHandoff).toBe(true)
+    expect(first.modelState).toBe("error")
     expect(first.secondChance).toMatchObject({ secondChance: "miss", reason: "error" })
     // 실패한 답은 캐시에 남지 않아 다음 요청에서 다시 시도한다.
     expect(second.secondChance.secondChance).toBe("miss")
