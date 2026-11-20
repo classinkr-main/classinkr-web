@@ -182,7 +182,7 @@ describe("chatbot RAG source relevance", () => {
     expect(generationCalls).toHaveLength(0)
   })
 
-  it("ignores unsupported configured fast Gemini models and uses the stable default", async () => {
+  it("ignores unsupported configured fast Gemini models and uses the default first model (gemini-4-hydrogen)", async () => {
     disableExternalChatbotServices()
     vi.stubEnv("GEMINI_API_KEY", "test-gemini-key")
     enableGenerateMode()
@@ -216,10 +216,11 @@ describe("chatbot RAG source relevance", () => {
     expect(result.answerMode).toBe("direct_answer")
     expect(result.answer).toContain("토론형 수업")
     expect(generationCalls).toHaveLength(1)
-    expect(generationCalls[0][0]).toContain("/models/gemini-3.5-flash:generateContent")
+    expect(generationCalls[0][0]).toContain("/models/gemini-4-hydrogen:generateContent")
     expect(generationCalls[0][0]).not.toContain("gemini-2.0-flash")
     const body = JSON.parse(String(generationCalls[0][1]?.body))
-    expect(body.generationConfig.thinkingConfig).toEqual({ thinkingLevel: "minimal" })
+    // gemini-4 계열은 minimal 을 400 으로 거부해 모두가 받는 low 를 보낸다.
+    expect(body.generationConfig.thinkingConfig).toEqual({ thinkingLevel: "low" })
   })
 
   it("falls back to stable Gemini after a configured primary returns empty output", async () => {
@@ -392,7 +393,7 @@ describe("chatbot RAG source relevance", () => {
     expect(result.answerMode).toBe("direct_answer")
     expect(result.answer).toContain("토론식 수업")
     expect(generationCalls).toHaveLength(2)
-    expect(generationCalls[0][0]).toContain("/models/gemini-3.5-flash:generateContent")
+    expect(generationCalls[0][0]).toContain("/models/gemini-4-hydrogen:generateContent")
     expect(generationCalls[1][0]).toContain("/models/gemini-test-reasoning:generateContent")
   })
 

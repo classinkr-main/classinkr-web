@@ -100,20 +100,23 @@ Vertex 예측 권한(`aiplatform.endpoints.predict`)을 가진 서비스 계정 
 | `CHATBOT_SECOND_CHANCE` | on | `off`: 못 찾음 답을 그대로 낸다. |
 | `CHATBOT_PROVIDER` | `gemini` | 다른 값은 최종 답 생성 제공자를 바꾼다(`lib/chatbot/answer-provider.ts`). 관문·선별·두 번째 검색은 Gemini 그대로다. |
 | `CHATBOT_ENABLE_DEEP_FALLBACK` | 없음 | `1`이면 답 생성이 basic 티어 뒤 reasoning·advanced 티어까지 시도한다. |
-| `GEMINI_FAST_MODEL`·`GEMINI_REASONING_MODEL`·`GEMINI_MODEL` | 아래 §6 | 티어별 맨 앞 모델을 바꾼다. 종료된 모델명이면 무시하고 기본값을 쓴다. |
+| `GEMINI_FAST_MODEL`·`GEMINI_REASONING_MODEL`·`GEMINI_MODEL` | 없음(아래 §6) | 티어별 맨 앞 모델을 바꾼다(그러면 `gemini-4-hydrogen`은 사슬에 들지 않는다). 종료된 모델명이면 무시하고 기본값을 쓴다. 어드민 AI(블로그·마케팅·인사이트)도 같은 이름을 읽는다. |
 | `CHATBOT_LOG_GEMINI_FAILURES` | 켜짐 | `0`이면 Gemini 실패 로그를 끈다. |
 | `CHATBOT_ANSWER_CACHE` | 켜짐 | `off`: 답 캐시와 관문 판정 캐시를 쓰지 않는다. 측정용(`scripts/chatbot-live-eval.ts --repeat`가 2 이상이면 스스로 끈다). 운영에서는 끄지 않는다. |
 | `CHATBOT_KNOWLEDGE_SEARCH_TIMEOUT_MS`·`CHATBOT_FINAL_ANSWER_TIMEOUT_MS`·`CHATBOT_FINAL_ANSWER_STREAM_TIMEOUT_MS`·`CHATBOT_ROUTE_TIMEOUT_MS` | 2800·6000·8000·13000 | 단계별 시간 예산. 바꾸면 §7의 시간 예산 규칙을 따른다. |
 
 ## 6. 모델 체인
 
-`lib/chatbot/llm.ts`가 정본이다. 2026-11 기준 기본값은 아래와 같다. 같은 모델이 겹치면 한 번만 부른다.
+`lib/chatbot/llm.ts`가 정본이다. 2026-11-20 기준 기본값은 아래와 같다(티어별 env가 없을 때). 1순위가 실패(404·5xx·시간 초과·빈 응답)하면 다음 모델로 넘어가고, 같은 모델이 겹치면 한 번만 부른다. 1순위 `gemini-4-hydrogen`은 AI Studio `models.get`으로만 확인했고(입력 1,048,576·출력 65,536 토큰, thinking 지원) 실제 `generateContent` 실측과 Vertex 제공 여부 확인은 아직 없다. thinking은 gemini-4 계열 규칙(`low`)을 따른다.
 
-- basic 티어(근거 선별·답 생성): `gemini-3.5-flash` → `gemini-3.1-flash-lite` → `gemini-flash-lite-latest`
-- reasoning·advanced 티어: `gemini-3.1-pro-preview` → `gemini-3.5-flash` → `gemini-flash-lite-latest`
-- 관문 판정·목차 고르기(lite 우선): `gemini-3.1-flash-lite` → `gemini-3.5-flash` → `gemini-flash-lite-latest`
+- basic 티어(근거 선별·답 생성): `gemini-4-hydrogen` → `gemini-3.5-flash` → `gemini-3.1-flash-lite` → `gemini-flash-lite-latest`
+- reasoning·advanced 티어: `gemini-4-hydrogen` → `gemini-3.1-pro-preview` → `gemini-3.5-flash` → `gemini-flash-lite-latest`
+- 관문 판정·목차 고르기(basic 사슬을 lite 우선으로 다시 세움): `gemini-3.1-flash-lite` → `gemini-4-hydrogen` → `gemini-3.5-flash` → `gemini-flash-lite-latest`
 - 임베딩: `gemini-embedding-001`(`GEMINI_EMBED_MODEL`, 차원은 `GEMINI_EMBED_DIM`)
-- Vertex(`CHATBOT_GEMINI_PROVIDER=vertex`): basic 티어 `gemini-3.5-flash-lite` → `gemini-3.5-flash`, reasoning·advanced 티어 `gemini-3.5-flash` → `gemini-3.5-flash-lite`. env의 `gemini-2.5*`·종료 모델명은 무시한다. `-latest` 별칭은 두지 않는다. 관문·목차 고르기는 같은 lite 우선 규칙을 따른다.
+- Vertex(`CHATBOT_GEMINI_PROVIDER=vertex`): 모든 티어 `gemini-4-hydrogen` → `gemini-3.5-flash` → `gemini-3.5-flash-lite`, 관문·목차 고르기 `gemini-3.5-flash-lite` → `gemini-4-hydrogen` → `gemini-3.5-flash`. env의 `gemini-2.5*`·종료 모델명은 무시한다. `-latest` 별칭은 두지 않는다.
+- 티어 env가 있으면 그 값이 1순위이고 뒤는 티어 현행 기본 → 대체 → 별칭이다(developer). `.env` 예시의 옛 값(`gemini-3.5-flash`·`gemini-3.1-pro-preview`)을 넣어 두면 사슬은 hydrogen 이전과 같다.
+
+1순위가 큰 모델로 바뀌어 근거 선별(시도 2.2초, 전체 3.5초·`generate` 모드 2초)이 시간 초과로 끝나면 `MODEL_UNAVAILABLE_ANSWER`가 늘 수 있다. 선별 시간 예산은 코드 상수라 env로 늘릴 수 없고, 운영에서 늘면 `GEMINI_FAST_MODEL=gemini-3.5-flash`로 basic 티어를 이전 사슬로 되돌린다.
 
 모델을 바꾸거나 점검할 때는 `models.list`가 아니라 실제 `generateContent` 호출로 확인한다. 종료된 모델도 목록에는 남아 있고(2026-11 gemini-2.5 계열), 모델마다 받는 `thinkingLevel`이 달라 지원하지 않는 값을 보내면 400으로 실패한다.
 

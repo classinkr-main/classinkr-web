@@ -61,6 +61,7 @@ describe("public chatbot with Vertex Gemini", () => {
     __resetModelCircuitForTests()
   })
 
+  // 2026-11-20: 1순위가 gemini-4-hydrogen 으로 바뀌어(사용자 지시) 첫 호출 모델이 3.5-flash-lite 에서 hydrogen 으로, 다음이 3.5-flash 다.
   it("uses project-scoped Vertex with the supported fallback models", async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(Response.json({ error: { status: "UNAVAILABLE" } }, { status: 503 }))
@@ -69,7 +70,7 @@ describe("public chatbot with Vertex Gemini", () => {
 
     expect(await generateGeminiFinalAnswer(args)).toBe(parts[1].text)
     expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
-      `${vertexModels}/gemini-3.5-flash-lite:generateContent`,
+      `${vertexModels}/gemini-4-hydrogen:generateContent`,
       `${vertexModels}/gemini-3.5-flash:generateContent`,
     ])
     expect(fetchMock.mock.calls[0][1]).toMatchObject({
@@ -85,7 +86,7 @@ describe("public chatbot with Vertex Gemini", () => {
     for await (const chunk of streamGeminiFinalAnswer(args)) chunks.push(chunk)
 
     expect(chunks).toEqual([parts[1].text])
-    expect(fetchMock.mock.calls[0][0]).toBe(`${vertexModels}/gemini-3.5-flash-lite:streamGenerateContent?alt=sse`)
+    expect(fetchMock.mock.calls[0][0]).toBe(`${vertexModels}/gemini-4-hydrogen:streamGenerateContent?alt=sse`)
   })
 
   it("requests the existing retrieval dimension and rejects an incompatible Vertex vector", async () => {

@@ -9,7 +9,9 @@ import {
   generateGeminiFinalAnswer,
   getFinalAnswerAllowList,
   isIncompleteFinishReason,
+  resolveLiteFirstModelChain,
   resolveModelChain,
+  resolvePreparedAnswerGateModelChain,
   streamGeminiFinalAnswer,
   type GeminiAnswerCompletion,
 } from "@/lib/chatbot/llm"
@@ -39,24 +41,76 @@ describe("chatbot Gemini model chain", () => {
     vi.unstubAllEnvs()
   })
 
-  it("uses current models by default and ends with the rolling alias", () => {
+  // 2026-11-20 사용자 지시: 모든 티어의 1순위 기본을 gemini-4-hydrogen 으로 하고, 실패하면 그 전까지 쓰던 모델로 넘어간다.
+  it("puts gemini-4-hydrogen first on every tier, then the previous models, and ends with the rolling alias", () => {
     clearModelEnv()
 
     expect(resolveModelChain("basic")).toEqual([
+      "gemini-4-hydrogen",
       "gemini-3.5-flash",
       "gemini-3.1-flash-lite",
       "gemini-flash-lite-latest",
     ])
     expect(resolveModelChain("reasoning")).toEqual([
+      "gemini-4-hydrogen",
       "gemini-3.1-pro-preview",
       "gemini-3.5-flash",
       "gemini-flash-lite-latest",
     ])
     expect(resolveModelChain("advanced")).toEqual([
+      "gemini-4-hydrogen",
       "gemini-3.1-pro-preview",
       "gemini-3.5-flash",
       "gemini-flash-lite-latest",
     ])
+  })
+
+  it("uses gemini-4-hydrogen, then 3.5-flash and 3.5-flash-lite on Vertex", () => {
+    clearModelEnv()
+
+    for (const tier of ["basic", "reasoning", "advanced"] as const) {
+      expect(resolveModelChain(tier, "vertex"), tier).toEqual(["gemini-4-hydrogen", "gemini-3.5-flash", "gemini-3.5-flash-lite"])
+    }
+  })
+
+  it("keeps a configured model first and does not add gemini-4-hydrogen to its chain", () => {
+    clearModelEnv()
+    vi.stubEnv("GEMINI_FAST_MODEL", "gemini-3.5-flash")
+    vi.stubEnv("GEMINI_REASONING_MODEL", "gemini-3.1-pro-preview")
+    vi.stubEnv("GEMINI_MODEL", "gemini-3.7-flash")
+
+    // 운영 env 에 지금 값(.env 예시의 값)이 있으면 사슬은 이 변경 전과 같다.
+    expect(resolveModelChain("basic")).toEqual(["gemini-3.5-flash", "gemini-3.1-flash-lite", "gemini-flash-lite-latest"])
+    expect(resolveModelChain("reasoning")).toEqual(["gemini-3.1-pro-preview", "gemini-3.5-flash", "gemini-flash-lite-latest"])
+    expect(resolveModelChain("advanced")).toEqual([
+      "gemini-3.7-flash",
+      "gemini-3.1-pro-preview",
+      "gemini-3.5-flash",
+      "gemini-flash-lite-latest",
+    ])
+    expect(resolveModelChain("basic", "vertex")).toEqual(["gemini-3.5-flash", "gemini-3.5-flash-lite"])
+    expect(resolveModelChain("advanced", "vertex")).toEqual(["gemini-3.7-flash", "gemini-3.5-flash", "gemini-3.5-flash-lite"])
+  })
+
+  it("keeps the gate and outline chain lite-first, with gemini-4-hydrogen right after the lite model", () => {
+    clearModelEnv()
+    vi.stubEnv("CHATBOT_ANSWER_GATE_MODEL", "")
+
+    const developer = ["gemini-3.1-flash-lite", "gemini-4-hydrogen", "gemini-3.5-flash", "gemini-flash-lite-latest"]
+    expect(resolveLiteFirstModelChain()).toEqual(developer)
+    expect(resolvePreparedAnswerGateModelChain()).toEqual(developer)
+    expect(resolveLiteFirstModelChain(undefined, "vertex")).toEqual(["gemini-3.5-flash-lite", "gemini-4-hydrogen", "gemini-3.5-flash"])
+  })
+
+  it("sends thinking level low (the gemini-4 rule) to the first model of every tier", () => {
+    clearModelEnv()
+
+    for (const provider of ["developer", "vertex"] as const) {
+      for (const tier of ["basic", "reasoning", "advanced"] as const) {
+        const [first] = resolveModelChain(tier, provider)
+        expect(buildGenerationConfig(first, 0.2).thinkingConfig, `${provider} ${tier}`).toEqual({ thinkingLevel: "low" })
+      }
+    }
   })
 
   it("never puts a retired model in the default chain", () => {
@@ -69,17 +123,18 @@ describe("chatbot Gemini model chain", () => {
     }
   })
 
-  it("ignores retired models left in env and falls back to the current default", () => {
+  it("ignores retired models left in env and falls back to the default chain", () => {
     vi.stubEnv("GEMINI_FAST_MODEL", "gemini-2.5-flash")
     vi.stubEnv("GEMINI_REASONING_MODEL", "gemini-2.5-pro")
     vi.stubEnv("GEMINI_MODEL", "gemini-2.5-pro")
 
-    expect(resolveModelChain("basic")[0]).toBe("gemini-3.5-flash")
-    expect(resolveModelChain("reasoning")[0]).toBe("gemini-3.1-pro-preview")
-    expect(resolveModelChain("advanced")[0]).toBe("gemini-3.1-pro-preview")
+    expect(resolveModelChain("basic").slice(0, 2)).toEqual(["gemini-4-hydrogen", "gemini-3.5-flash"])
+    expect(resolveModelChain("reasoning").slice(0, 2)).toEqual(["gemini-4-hydrogen", "gemini-3.1-pro-preview"])
+    expect(resolveModelChain("advanced").slice(0, 2)).toEqual(["gemini-4-hydrogen", "gemini-3.1-pro-preview"])
+    expect(resolveModelChain("basic", "vertex")[0]).toBe("gemini-4-hydrogen")
 
     vi.stubEnv("GEMINI_FAST_MODEL", "gemini-2.5-flash-lite")
-    expect(resolveModelChain("basic")[0]).toBe("gemini-3.5-flash")
+    expect(resolveModelChain("basic")[0]).toBe("gemini-4-hydrogen")
   })
 
   it("sends only a thinking level each model accepts", () => {
@@ -150,10 +205,11 @@ describe("chatbot Gemini model chain", () => {
       .map(([url]) => String(url))
       .filter((url) => url.includes(":generateContent"))
 
-    expect(generationCalls).toHaveLength(3)
-    expect(generationCalls[0]).toContain("/models/gemini-3.5-flash:generateContent")
-    expect(generationCalls[1]).toContain("/models/gemini-3.1-flash-lite:generateContent")
-    expect(generationCalls[2]).toContain("/models/gemini-flash-lite-latest:generateContent")
+    expect(generationCalls).toHaveLength(4)
+    expect(generationCalls[0]).toContain("/models/gemini-4-hydrogen:generateContent")
+    expect(generationCalls[1]).toContain("/models/gemini-3.5-flash:generateContent")
+    expect(generationCalls[2]).toContain("/models/gemini-3.1-flash-lite:generateContent")
+    expect(generationCalls[3]).toContain("/models/gemini-flash-lite-latest:generateContent")
     expect(result.answerMode).toBe("direct_answer")
     expect(result.answer).toContain("실험 수업")
   })
@@ -181,9 +237,10 @@ describe("chatbot Gemini model chain", () => {
     const result = await evaluateChatbotQuery("OMR 카드는 어떤 문제 유형을 추가할 수 있나요?")
     const calls = fetchMock.mock.calls.map(([url]) => String(url)).filter((url) => url.includes(":generateContent"))
 
-    expect(calls).toHaveLength(2)
-    expect(calls[0]).toContain("/models/gemini-3.5-flash:generateContent")
-    expect(calls[1]).toContain("/models/gemini-3.1-flash-lite:generateContent")
+    expect(calls).toHaveLength(3)
+    expect(calls[0]).toContain("/models/gemini-4-hydrogen:generateContent")
+    expect(calls[1]).toContain("/models/gemini-3.5-flash:generateContent")
+    expect(calls[2]).toContain("/models/gemini-3.1-flash-lite:generateContent")
     expect(result.answerMode).toBe("direct_answer")
     expect(result.unresolved).toBe(false)
   })
@@ -497,7 +554,7 @@ describe("chatbot final answer completion signal", () => {
 
     expect(answer).toBeNull()
     expect(fetchMock).toHaveBeenCalledTimes(1)
-    expect(completions).toEqual([{ complete: false, reason: "finish_reason", finishReason: "MAX_TOKENS", model: "gemini-3.5-flash" }])
+    expect(completions).toEqual([{ complete: false, reason: "finish_reason", finishReason: "MAX_TOKENS", model: "gemini-4-hydrogen" }])
   })
 
   it("drops SAFETY and RECITATION answers too", async () => {
@@ -514,7 +571,7 @@ describe("chatbot final answer completion signal", () => {
       vi.stubGlobal("fetch", vi.fn(async () => plainResponse(reason)))
       const completions: GeminiAnswerCompletion[] = []
       expect(await generateGeminiFinalAnswer({ ...args, onCompletion: (completion) => completions.push(completion) })).toBe(ANSWER)
-      expect(completions).toEqual([{ complete: true, reason: "stop", finishReason: reason ?? null, model: "gemini-3.5-flash" }])
+      expect(completions).toEqual([{ complete: true, reason: "stop", finishReason: reason ?? null, model: "gemini-4-hydrogen" }])
     }
   })
 
@@ -537,7 +594,7 @@ describe("chatbot final answer completion signal", () => {
     )
 
     expect(text).toBe("녹화본은 코스의 ")
-    expect(completion).toEqual({ complete: false, reason: "interrupted", finishReason: null, model: "gemini-3.5-flash" })
+    expect(completion).toEqual({ complete: false, reason: "interrupted", finishReason: null, model: "gemini-4-hydrogen" })
     expect(completions).toEqual([completion])
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
@@ -550,7 +607,7 @@ describe("chatbot final answer completion signal", () => {
     const { text, completion } = await readStream(streamGeminiFinalAnswer(args))
 
     expect(text).toBe("녹화본은 코스의 수업 기록에서 내려받습니다.")
-    expect(completion).toEqual({ complete: false, reason: "interrupted", finishReason: null, model: "gemini-3.5-flash" })
+    expect(completion).toEqual({ complete: false, reason: "interrupted", finishReason: null, model: "gemini-4-hydrogen" })
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
@@ -561,7 +618,7 @@ describe("chatbot final answer completion signal", () => {
     const { text, completion } = await readStream(streamGeminiFinalAnswer(args))
 
     expect(text).toBe("녹화본은 코스의 수업 기록에서")
-    expect(completion).toEqual({ complete: false, reason: "finish_reason", finishReason: "MAX_TOKENS", model: "gemini-3.5-flash" })
+    expect(completion).toEqual({ complete: false, reason: "finish_reason", finishReason: "MAX_TOKENS", model: "gemini-4-hydrogen" })
   })
 
   it("completes a STOP stream and reads a last line that has no trailing newline", async () => {
@@ -574,13 +631,13 @@ describe("chatbot final answer completion signal", () => {
     const { text, completion } = await readStream(streamGeminiFinalAnswer(args))
 
     expect(text).toBe("녹화본은 코스의 수업 기록에서 내려받습니다.")
-    expect(completion).toEqual({ complete: true, reason: "stop", finishReason: "STOP", model: "gemini-3.5-flash" })
+    expect(completion).toEqual({ complete: true, reason: "stop", finishReason: "STOP", model: "gemini-4-hydrogen" })
   })
 
   it("still moves to the next model when the first one fails before any text", async () => {
     setup()
     const fetchMock = vi.fn(async (url: string | URL | Request) =>
-      String(url).includes("/models/gemini-3.5-flash:")
+      String(url).includes("/models/gemini-4-hydrogen:")
         ? { ok: false, status: 503, body: null, text: async () => "" }
         : sseResponse([sseLine(ANSWER, "STOP")])
     )
@@ -589,7 +646,7 @@ describe("chatbot final answer completion signal", () => {
     const { text, completion } = await readStream(streamGeminiFinalAnswer(args))
 
     expect(text).toBe(ANSWER)
-    expect(completion).toEqual({ complete: true, reason: "stop", finishReason: "STOP", model: "gemini-3.1-flash-lite" })
+    expect(completion).toEqual({ complete: true, reason: "stop", finishReason: "STOP", model: "gemini-3.5-flash" })
     expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 })

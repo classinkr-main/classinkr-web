@@ -36,6 +36,14 @@ export type ChatbotModelTier = "basic" | "reasoning" | "advanced"
 // 반환한다. models.list 에는 여전히 보여서 목록만으로는 알 수 없다. 그 상태에서는 답변 재작성이 통째로 실패해
 // 검색 초안(문서 조각)이 그대로 공개 답변으로 나갔다. 내부 CS 코파일럿(lib/internal-cs-chat/gemini.ts)이
 // 이미 검증해 쓰는 현행 모델 조합으로 맞춘다. 새 모델을 넣을 때는 models.list 가 아니라 실제 호출로 확인한다.
+//
+// 2026-11-20 모든 티어(basic·reasoning·advanced)의 1순위 기본 모델을 gemini-4-hydrogen 으로 올렸다(사용자 지시).
+// AI Studio models.get 확인: 입력 1,048,576·출력 65,536 토큰, thinking 지원, generateContent 지원. 실제 generateContent
+// 호출 실측은 아직 없고, Vertex(CHATBOT_GEMINI_PROVIDER=vertex)에서 제공되는지는 확인하지 못했다. 실패(404·5xx·시간 초과)하면
+// 사슬의 다음 모델(아래 티어별 현행 기본 → 대체 → 별칭)로 넘어간다. thinking 은 gemini-4 계열 규칙(low)을 따른다.
+// GEMINI_FAST_MODEL·GEMINI_REASONING_MODEL·GEMINI_MODEL 이 있으면 그 값이 1순위다(이 모델은 사슬에 들지 않는다).
+const PRIMARY_MODEL = "gemini-4-hydrogen"
+// 아래 셋은 PRIMARY_MODEL 다음에 쓰는 티어별 현행 기본(2026-11-13~11-20 의 1순위).
 const DEFAULT_FAST_MODEL = "gemini-3.5-flash"
 const DEFAULT_REASONING_MODEL = "gemini-3.1-pro-preview"
 const DEFAULT_ADVANCED_MODEL = "gemini-3.1-pro-preview"
@@ -89,26 +97,25 @@ const MODEL_ENV_BY_TIER = {
   advanced: "GEMINI_MODEL",
 } as const
 
-function resolveModel(tier: ChatbotModelTier = "basic") {
-  if (tier === "advanced") {
-    const configured = process.env.GEMINI_MODEL?.trim()
-    if (!configured || UNSUPPORTED_GEMINI_MODELS.has(configured)) return DEFAULT_ADVANCED_MODEL
-    return configured
-  }
-  if (tier === "reasoning") {
-    const configured = process.env.GEMINI_REASONING_MODEL?.trim()
-    if (!configured || UNSUPPORTED_GEMINI_MODELS.has(configured)) return DEFAULT_REASONING_MODEL
-    return configured
-  }
-  // basic
-  const configured = process.env.GEMINI_FAST_MODEL?.trim()
-  if (!configured || UNSUPPORTED_GEMINI_MODELS.has(configured)) return DEFAULT_FAST_MODEL
+/** env 로 정한 티어 1순위 모델. 없거나 종료된 모델명이면 null. */
+function configuredModel(tier: ChatbotModelTier, provider: ChatbotGeminiProvider): string | null {
+  const configured = process.env[MODEL_ENV_BY_TIER[tier]]?.trim()
+  if (!configured || UNSUPPORTED_GEMINI_MODELS.has(configured)) return null
+  // Vertex 는 2.5 계열 이름을 모두 무시한다(main 4533634e 의 규칙).
+  if (provider === "vertex" && configured.startsWith("gemini-2.5-")) return null
   return configured
+}
+
+/** PRIMARY_MODEL 다음에 쓰는 티어별 현행 기본. */
+function tierCurrentDefaultModel(tier: ChatbotModelTier) {
+  if (tier === "advanced") return DEFAULT_ADVANCED_MODEL
+  if (tier === "reasoning") return DEFAULT_REASONING_MODEL
+  return DEFAULT_FAST_MODEL
 }
 
 export type ChatbotGeminiProvider = "developer" | "vertex"
 
-// Vertex(CHATBOT_GEMINI_PROVIDER=vertex) 기본 모델. 2.5 계열은 Vertex 에서도 쓰지 않는다.
+// Vertex(CHATBOT_GEMINI_PROVIDER=vertex)의 PRIMARY_MODEL 다음 모델. 2.5 계열은 Vertex 에서도 쓰지 않는다.
 // -latest 별칭은 Vertex 에 없을 수 있어 Vertex 체인에는 두지 않는다.
 const VERTEX_FLASH_MODEL = "gemini-3.5-flash"
 const VERTEX_LITE_MODEL = "gemini-3.5-flash-lite"
@@ -118,22 +125,18 @@ function configuredGeminiProvider(): ChatbotGeminiProvider {
   return process.env.CHATBOT_GEMINI_PROVIDER?.trim() === "vertex" ? "vertex" : "developer"
 }
 
-// 티어별 프라이머리 + 에러 폴백 모델 체인. 프라이머리 호출이 실패하면 안정 모델, 그다음 별칭 순으로 자동 폴백한다.
-// 같은 모델이 겹치면 한 번만 호출한다.
-// - developer: 티어 기본(또는 env) → 티어 폴백 → gemini-flash-lite-latest
-// - vertex: env(2.5·종료 모델이 아니면) 또는 basic=3.5-flash-lite·그 밖=3.5-flash → 나머지 하나
+// 티어별 모델 체인. 1순위가 실패(404·5xx·시간 초과·빈 응답)하면 다음 모델로 차례로 넘어간다. 같은 모델은 한 번만 부른다.
+// 1순위는 env(티어별 GEMINI_* 이름, 종료 모델이면 무시)가 있으면 그 값, 없으면 PRIMARY_MODEL(gemini-4-hydrogen)이다.
+// - developer: 1순위 → 티어 현행 기본(basic 3.5-flash, reasoning·advanced 3.1-pro-preview) → 티어 대체(3.1-flash-lite·3.5-flash)
+//   → gemini-flash-lite-latest
+// - vertex: 1순위 → gemini-3.5-flash → gemini-3.5-flash-lite (모든 티어)
 export function resolveModelChain(tier: ChatbotModelTier, provider: ChatbotGeminiProvider = configuredGeminiProvider()): string[] {
+  const primary = configuredModel(tier, provider) ?? PRIMARY_MODEL
   if (provider === "vertex") {
-    const configured = process.env[MODEL_ENV_BY_TIER[tier]]?.trim()
-    const supported = configured && !UNSUPPORTED_GEMINI_MODELS.has(configured) && !configured.startsWith("gemini-2.5-")
-    const basic = tier === "basic"
-    const primary = basic ? VERTEX_LITE_MODEL : VERTEX_FLASH_MODEL
-    const fallback = basic ? VERTEX_FLASH_MODEL : VERTEX_LITE_MODEL
-    return Array.from(new Set([supported ? configured : primary, fallback]))
+    return Array.from(new Set([primary, VERTEX_FLASH_MODEL, VERTEX_LITE_MODEL]))
   }
-  const primary = resolveModel(tier)
   const fallback = tier === "reasoning" || tier === "advanced" ? DEEP_FALLBACK_MODEL : FAST_FALLBACK_MODEL
-  return Array.from(new Set([primary, fallback, LAST_RESORT_MODEL]))
+  return Array.from(new Set([primary, tierCurrentDefaultModel(tier), fallback, LAST_RESORT_MODEL]))
 }
 
 /**
