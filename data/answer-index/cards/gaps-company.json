@@ -1,0 +1,2069 @@
+[
+  {
+    "id": "gap:company/patent",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "company",
+    "topic": "특허 보유",
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_recruiting"
+    ],
+    "anchors": [
+      "특허",
+      "특허권",
+      "특허 출원",
+      "기술 특허",
+      "특허 있는 기술"
+    ],
+    "covers": "클래스인(EEO)이 특허를 갖고 있는지는 공개 문서에 없다는 것",
+    "notCovers": [
+      "녹화 영상 워터마크 저작권 보호 → recording-watermark",
+      "회사가 어떤 곳인지 → eeo-company"
+    ],
+    "negatives": [
+      {
+        "q": "클래스인 로고를 우리 학원 홍보물에 써도 되나요",
+        "route": "fixed:logo-usage"
+      },
+      {
+        "q": "EEO가 어떤 회사인지 알려 주세요",
+        "route": "doc:/docs/start/company-overview#1/eeo-company"
+      },
+      {
+        "q": "수업 녹화 영상에 워터마크가 들어가나요",
+        "route": "doc:/docs/start/company-overview#3/recording-watermark"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "특허",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "특허권",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "특허 출원",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "기술 특허",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-company",
+      "writer": "claude-sonnet-5.5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:company/headcount-revenue",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "company",
+    "topic": "직원 수와 매출 규모",
+    "asks": [
+      "yesno",
+      "quantity"
+    ],
+    "concepts": [
+      "C_company_size"
+    ],
+    "anchors": [
+      "직원 수",
+      "직원수",
+      "매출",
+      "연매출",
+      "회사 규모",
+      "종업원"
+    ],
+    "covers": "한국 법인·EEO의 직원 수나 매출 규모는 공개 문서에 없다는 것",
+    "notCovers": [
+      "전 세계 사용 규모와 투자 규모 → global-scale",
+      "회사가 오래 갈지 안정성 → basics-company-size-stability"
+    ],
+    "negatives": [
+      {
+        "q": "전 세계에서 얼마나 쓰는 서비스인가요",
+        "route": "doc:/docs/start/company-overview#2/global-scale"
+      },
+      {
+        "q": "회사가 오래 갈지 걱정돼요",
+        "route": "fixed:basics-company-size-stability"
+      },
+      {
+        "q": "한국에서 쓰는 기관이 몇 곳이에요",
+        "route": "doc:/docs/start/company-overview#2/korea-adoption-count"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "직원 수",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "연매출",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "종업원 수",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "한국 법인 인원",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-company",
+      "writer": "claude-sonnet-5.5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:company/reseller",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "company",
+    "topic": "총판·대리점·리셀러 모집",
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_partnership"
+    ],
+    "anchors": [
+      "총판",
+      "대리점",
+      "리셀러",
+      "유통 파트너",
+      "영업 파트너"
+    ],
+    "covers": "클래스인의 총판·대리점·리셀러로 참여하는 방법은 공개 문서에 없다는 것",
+    "notCovers": [
+      "도입 상담을 신청하는 방법 → adoption-inquiry",
+      "회사·제품 소개 → eeo-company"
+    ],
+    "negatives": [
+      {
+        "q": "도입 상담은 어디로 신청하나요",
+        "route": "doc:/docs/start/company-overview#9/adoption-inquiry"
+      },
+      {
+        "q": "한국 법인이 어떤 곳인지 알려 주세요",
+        "route": "doc:/docs/start/company-overview#1/korea-entity"
+      },
+      {
+        "q": "도입 절차가 어떻게 되나요",
+        "route": "doc:/docs/start/company-overview#6/four-steps"
+      }
+    ],
+    "handoff": "demo",
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "demo",
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "총판",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "대리점",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "리셀러",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "영업 파트너",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-company",
+      "writer": "claude-sonnet-5.5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:company/recruiting",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "company",
+    "topic": "채용과 입사 지원",
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_recruiting"
+    ],
+    "anchors": [
+      "채용",
+      "채용 공고",
+      "입사 지원",
+      "인턴",
+      "구인",
+      "입사 지원서"
+    ],
+    "covers": "클래스인(한국 법인)의 채용 공고나 입사 지원 방법은 공개 문서에 없다는 것",
+    "notCovers": [
+      "한국 법인 소개 → korea-entity",
+      "공식 문의 창구 → formal-complaint-channel"
+    ],
+    "negatives": [
+      {
+        "q": "한국 법인이 어디에 있고 언제 생겼나요",
+        "route": "doc:/docs/start/company-overview#1/korea-entity"
+      },
+      {
+        "q": "공식 문의는 어디로 하나요",
+        "route": "fixed:formal-complaint-channel"
+      },
+      {
+        "q": "EEO 창업자가 누구예요",
+        "route": "fixed:basics-company-ceo"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "채용",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "채용 공고",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "입사 지원",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "인턴십",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-company",
+      "writer": "claude-sonnet-5.5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:company/partnership-proposal",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "company",
+    "topic": "제휴·협업 제안",
+    "asks": [
+      "howto",
+      "yesno"
+    ],
+    "concepts": [
+      "C_partnership"
+    ],
+    "anchors": [
+      "제휴 제안",
+      "협업 제안",
+      "제휴 문의",
+      "공동 마케팅",
+      "업무 협약",
+      "협업"
+    ],
+    "covers": "다른 회사나 기관이 제휴·협업을 제안하는 방법과 담당 창구는 공개 문서에 없다는 것",
+    "notCovers": [
+      "도입 상담 신청 → adoption-inquiry",
+      "공식 문의 창구 → formal-complaint-channel"
+    ],
+    "negatives": [
+      {
+        "q": "도입 상담을 신청하려면 어디로 가야 하나요",
+        "route": "doc:/docs/start/company-overview#9/adoption-inquiry"
+      },
+      {
+        "q": "공식 문의 채널은 어디예요",
+        "route": "fixed:formal-complaint-channel"
+      },
+      {
+        "q": "EEO 제품 라인에는 뭐가 있어요",
+        "route": "doc:/docs/start/company-overview#1/product-lineup"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "제휴 제안",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "협업 제안",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "제휴 문의",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "공동 마케팅",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-company",
+      "writer": "claude-sonnet-5.5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:company/press-awards",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "company",
+    "topic": "언론 보도와 수상 이력",
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_recruiting"
+    ],
+    "anchors": [
+      "언론 보도",
+      "보도자료",
+      "수상",
+      "어워드",
+      "기사",
+      "뉴스"
+    ],
+    "covers": "클래스인의 언론 보도·수상·인증 이력은 공개 문서에 없다는 것",
+    "notCovers": [
+      "회사 소개 → eeo-company",
+      "실제 원장·강사 후기 → owner-teacher-reviews"
+    ],
+    "negatives": [
+      {
+        "q": "실제로 써 본 원장님 후기가 있어요",
+        "route": "doc:/docs/start/customer-stories#8/owner-teacher-reviews"
+      },
+      {
+        "q": "EEO는 어떤 회사예요",
+        "route": "doc:/docs/start/company-overview#1/eeo-company"
+      },
+      {
+        "q": "클래스인을 쓰는 곳이 어디예요",
+        "route": "doc:/docs/start/company-overview#7/where-used"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "언론 보도",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "보도자료",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "수상",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "어워드",
+        "units": 1,
+        "site": 0,
+        "checked": "걸린 문장이 다른 뜻임을 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-company",
+      "writer": "claude-sonnet-5.5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:company/product-roadmap",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "company",
+    "topic": "신규 기능 출시 일정과 로드맵",
+    "asks": [
+      "yesno",
+      "when"
+    ],
+    "concepts": [
+      "C_sns_channel"
+    ],
+    "anchors": [
+      "로드맵",
+      "출시 예정",
+      "신기능",
+      "업데이트 예정",
+      "개발 예정",
+      "나올 기능"
+    ],
+    "covers": "앞으로 나올 기능이나 출시 예정 일정은 공개 문서에 없다는 것",
+    "notCovers": [
+      "이미 나온 업데이트 내용 → 업데이트 안내 문서"
+    ],
+    "negatives": [
+      {
+        "q": "클래스인이 지금 할 수 있는 일이 뭐예요",
+        "route": "fixed:basics-main-features"
+      },
+      {
+        "q": "AI 기능이 어떤 게 있나요",
+        "route": "doc:/docs/software/classin-ai-feature-guide#summary/ai-features-overview"
+      },
+      {
+        "q": "앱으로 할 수 있는 일 전체를 알려 주세요",
+        "route": "doc:/docs/software/app-capabilities-map#summary/what-app-can-do"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "로드맵",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "출시 예정",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "신기능 예정",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "업데이트 예정",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-company",
+      "writer": "claude-sonnet-5.5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:company/seminar-schedule",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "company",
+    "topic": "설명회·세미나·웨비나 일정",
+    "asks": [
+      "when",
+      "howto"
+    ],
+    "concepts": [
+      "C_sns_channel"
+    ],
+    "anchors": [
+      "세미나 일정",
+      "웨비나",
+      "설명회 일정",
+      "행사 일정",
+      "온라인 설명회",
+      "도입 설명회"
+    ],
+    "covers": "도입 설명회·세미나·웨비나의 일정과 신청 가능 여부는 공개 문서에 없다는 것",
+    "notCovers": [
+      "목동 쇼룸 방문 → showroom-visit",
+      "도입 상담 신청 → adoption-inquiry"
+    ],
+    "negatives": [
+      {
+        "q": "쇼룸을 직접 가서 보고 싶어요",
+        "route": "doc:/docs/start/customer-stories#9/showroom-visit"
+      },
+      {
+        "q": "도입 상담은 어떻게 신청해요",
+        "route": "doc:/docs/start/company-overview#9/adoption-inquiry"
+      },
+      {
+        "q": "상담에서 정하는 일정이 뭔가요",
+        "route": "doc:/docs/start/customer-stories#9/consult-scope-schedule"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "세미나 일정",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "웨비나 일정",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "설명회 일정",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "행사 일정",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-company",
+      "writer": "claude-sonnet-5.5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:company/satisfaction-renewal",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "company",
+    "topic": "고객 만족도와 재계약률",
+    "asks": [
+      "yesno",
+      "quantity"
+    ],
+    "concepts": [
+      "C_satisfaction"
+    ],
+    "anchors": [
+      "고객 만족도",
+      "재계약",
+      "재계약률",
+      "이탈률",
+      "해지율",
+      "유지율"
+    ],
+    "covers": "고객 만족도·재계약률·이탈률 같은 수치는 공개 문서에 없다는 것",
+    "notCovers": [
+      "실제 후기와 사례 → owner-teacher-reviews",
+      "도입 뒤 공통 변화 → change-three-steps"
+    ],
+    "negatives": [
+      {
+        "q": "써 본 원장님들 후기가 있나요",
+        "route": "doc:/docs/start/customer-stories#8/owner-teacher-reviews"
+      },
+      {
+        "q": "도입하고 나면 학원에 어떤 변화가 생겨요",
+        "route": "doc:/docs/start/customer-stories#7/change-three-steps"
+      },
+      {
+        "q": "한국에서 쓰는 기관 수가 얼마나 돼요",
+        "route": "doc:/docs/start/company-overview#2/korea-adoption-count"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "고객 만족도",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "재계약",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "재계약률",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "이탈률",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-company",
+      "writer": "claude-sonnet-5.5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:company/data-migration",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "company",
+    "topic": "타사 서비스 데이터 이관",
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_data_migration"
+    ],
+    "anchors": [
+      "데이터 이관",
+      "마이그레이션",
+      "기존 데이터 이전",
+      "타사 이관",
+      "자료 옮기기",
+      "데이터 가져오기"
+    ],
+    "covers": "다른 수업 도구·관리 프로그램에 있던 학생·수업 데이터를 클래스인으로 옮겨 주는 서비스 여부는 공개 문서에 없다는 것",
+    "notCovers": [
+      "줌에서 옮겨 오는 순서(파일럿·강사 온보딩) → basics-switch-from-zoom",
+      "학원 관리 프로그램과 역할 나누기 → basics-academy-mgmt-overlap"
+    ],
+    "negatives": [
+      {
+        "q": "줌에서 클래스인으로 옮기기 쉬워요",
+        "route": "fixed:basics-switch-from-zoom"
+      },
+      {
+        "q": "학원 관리 프로그램을 대체할 수 있나요",
+        "route": "fixed:basics-academy-mgmt-overlap"
+      },
+      {
+        "q": "구글 클래스룸과 병행해서 쓰는 방식이 있나요",
+        "route": "fixed:basics-google-classroom-coexist"
+      }
+    ],
+    "handoff": "demo",
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "demo",
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "데이터 이관",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "마이그레이션",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "기존 데이터 이전",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "타사 이관",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-company",
+      "writer": "claude-sonnet-5.5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:company/sns-channel",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "company",
+    "topic": "공식 SNS·유튜브 채널",
+    "asks": [
+      "howto",
+      "yesno"
+    ],
+    "concepts": [
+      "C_sns_channel"
+    ],
+    "anchors": [
+      "공식 SNS",
+      "공식 유튜브",
+      "인스타그램 계정",
+      "페이스북",
+      "공식 채널",
+      "블로그 주소"
+    ],
+    "covers": "클래스인 공식 SNS·유튜브 계정 주소는 공개 문서에 없다는 것",
+    "notCovers": [
+      "공식 문의 창구 → formal-complaint-channel",
+      "회사 소개 → eeo-company"
+    ],
+    "negatives": [
+      {
+        "q": "공식 문의는 어디로 하나요",
+        "route": "fixed:formal-complaint-channel"
+      },
+      {
+        "q": "클래스인이 어떤 회사예요",
+        "route": "doc:/docs/start/company-overview#1/eeo-company"
+      },
+      {
+        "q": "도입 사례를 볼 수 있는 곳이 어디예요",
+        "route": "fixed:basics-show-adoption-cases"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "공식 SNS",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "공식 유튜브",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "공식 인스타",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "페이스북",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-company",
+      "writer": "claude-sonnet-5.5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:company/fax-post",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "company",
+    "topic": "팩스·우편 연락처",
+    "asks": [
+      "howto"
+    ],
+    "concepts": [
+      "C_korea_entity"
+    ],
+    "anchors": [
+      "팩스",
+      "팩스 번호",
+      "우편",
+      "등기",
+      "서류 발송",
+      "우편 주소"
+    ],
+    "covers": "클래스인 한국 법인의 팩스 번호와 서류 우편 발송처는 공개 문서에 없다는 것",
+    "notCovers": [
+      "한국 법인 주소와 쇼룸 위치 → korea-entity-address",
+      "공식 문의 창구 → formal-complaint-channel"
+    ],
+    "negatives": [
+      {
+        "q": "한국 법인 주소가 어디예요",
+        "route": "policy:korea-entity-address"
+      },
+      {
+        "q": "공식 문의는 어디로 하나요",
+        "route": "fixed:formal-complaint-channel"
+      },
+      {
+        "q": "한국 법인은 언제 생겼어요",
+        "route": "doc:/docs/start/company-overview#1/korea-entity"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "팩스",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "팩스 번호",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "우편",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "서류 발송",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-company",
+      "writer": "claude-sonnet-5.5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:company/field-visit",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "company",
+    "topic": "원장 방문·출장 상담",
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_showroom"
+    ],
+    "anchors": [
+      "방문 상담",
+      "출장 상담",
+      "찾아와서",
+      "영업 사원 방문",
+      "현장 방문",
+      "학원으로 방문"
+    ],
+    "covers": "담당자가 학원으로 찾아와 상담하는 출장 상담 여부는 공개 문서에 없다는 것",
+    "notCovers": [
+      "목동 쇼룸 방문 → showroom-visit",
+      "도입 상담 신청 → adoption-inquiry"
+    ],
+    "negatives": [
+      {
+        "q": "목동 쇼룸에 가면 뭘 볼 수 있어요",
+        "route": "doc:/docs/start/customer-stories#9/showroom-visit"
+      },
+      {
+        "q": "상담 준비물이 뭐예요",
+        "route": "doc:/docs/start/pre-adoption-faq-22-questions#7/prepare-before-consult"
+      },
+      {
+        "q": "도입 상담은 어디로 신청해요",
+        "route": "doc:/docs/start/company-overview#9/adoption-inquiry"
+      }
+    ],
+    "handoff": "demo",
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "demo",
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "방문 상담",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "출장 상담",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "학원으로 방문",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "찾아와서",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-company",
+      "writer": "claude-sonnet-5.5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:company/custom-dev",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "company",
+    "topic": "학원 맞춤 기능 개발",
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_custom_dev"
+    ],
+    "anchors": [
+      "맞춤 개발",
+      "커스터마이징",
+      "기능 개발 요청",
+      "기능 추가 요청",
+      "맞춤 제작",
+      "우리 학원 전용 기능"
+    ],
+    "covers": "특정 학원이 원하는 기능을 따로 개발해 주는 맞춤 개발 여부는 공개 문서에 없다는 것",
+    "notCovers": [
+      "API로 자체 시스템과 연결 → api-what-for",
+      "클래스인이 맡지 않는 일 → weak-areas-crm-erp"
+    ],
+    "negatives": [
+      {
+        "q": "API로 우리 시스템이랑 연결할 수 있어요",
+        "route": "doc:/docs/software/app-capabilities-map#6/api-what-for"
+      },
+      {
+        "q": "클래스인이 못 하는 일이 뭐예요",
+        "route": "doc:/docs/start/company-overview#8/weak-areas-crm-erp"
+      },
+      {
+        "q": "도입 상담은 어디서 해요",
+        "route": "doc:/docs/start/company-overview#9/adoption-inquiry"
+      }
+    ],
+    "handoff": "demo",
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "demo",
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "맞춤 개발",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "커스터마이징",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "기능 개발 요청",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "기능 추가 요청",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-company",
+      "writer": "claude-sonnet-5.5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:company/branding",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "company",
+    "topic": "학원 이름·로고 적용 브랜딩",
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_custom_dev"
+    ],
+    "anchors": [
+      "화이트라벨",
+      "학원 브랜딩",
+      "우리 학원 앱",
+      "학원 로고 앱",
+      "앱에 학원 이름",
+      "학원 이름으로 앱"
+    ],
+    "covers": "앱·교실 화면에 학원 이름이나 로고를 넣어 학원 브랜드로 쓰는 방법은 공개 문서에 없다는 것",
+    "notCovers": [
+      "ClassIn 로고·상표를 홍보물에 쓰는 것 → logo-usage",
+      "회사·제품 소개 → eeo-company"
+    ],
+    "negatives": [
+      {
+        "q": "클래스인 로고를 홍보물에 써도 돼요",
+        "route": "fixed:logo-usage"
+      },
+      {
+        "q": "제품 라인에 뭐가 있어요",
+        "route": "doc:/docs/start/company-overview#1/product-lineup"
+      },
+      {
+        "q": "도입 상담은 어디에 신청해요",
+        "route": "doc:/docs/start/company-overview#9/adoption-inquiry"
+      }
+    ],
+    "handoff": "demo",
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "demo",
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "화이트라벨",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "학원 브랜딩",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "우리 학원 앱",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "학원 로고 앱",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-company",
+      "writer": "claude-sonnet-5.5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:company/certification-program",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "company",
+    "topic": "공인 강사 자격·인증 과정",
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_certification"
+    ],
+    "anchors": [
+      "공인 자격",
+      "강사 자격증",
+      "인증 과정",
+      "자격증",
+      "교육 수료증",
+      "공인 강사"
+    ],
+    "covers": "클래스인 사용 능력을 인증하는 공인 자격·수료증 과정은 공개 문서에 없다는 것",
+    "notCovers": [
+      "계약 뒤 관리자·강사 교육 → manager-training",
+      "강사 온보딩 순서 → 강사 온보딩 안내"
+    ],
+    "negatives": [
+      {
+        "q": "계약하면 교육도 해 주나요",
+        "route": "doc:/docs/start/company-overview#6/manager-training"
+      },
+      {
+        "q": "강사들이 처음 뭘 익혀야 해요",
+        "route": "doc:/docs/start/academy-system-os-positioning#2/teacher-onboarding-order"
+      },
+      {
+        "q": "도입 절차가 어떻게 돼요",
+        "route": "doc:/docs/start/company-overview#6/four-steps"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "공인 자격",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "강사 자격증",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "인증 과정",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "수료증",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-company",
+      "writer": "claude-sonnet-5.5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:company/user-community",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "company",
+    "topic": "사용자 커뮤니티·원장 모임",
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_sns_channel"
+    ],
+    "anchors": [
+      "사용자 모임",
+      "원장 모임",
+      "사용자 커뮤니티",
+      "오픈 채팅방",
+      "사용자 카페",
+      "이용자 모임"
+    ],
+    "covers": "클래스인을 쓰는 원장·강사끼리 정보를 나누는 커뮤니티나 모임은 공개 문서에 없다는 것",
+    "notCovers": [
+      "원장·강사 후기 → owner-teacher-reviews",
+      "도입 사례 더 찾기 → more-similar-cases"
+    ],
+    "negatives": [
+      {
+        "q": "다른 원장님들 후기를 볼 수 있나요",
+        "route": "doc:/docs/start/customer-stories#8/owner-teacher-reviews"
+      },
+      {
+        "q": "우리 학원이랑 비슷한 사례를 더 찾고 싶어요",
+        "route": "doc:/docs/start/customer-stories#9/more-similar-cases"
+      },
+      {
+        "q": "공식 문의는 어디로 하나요",
+        "route": "fixed:formal-complaint-channel"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "사용자 모임",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "원장 모임",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "사용자 커뮤니티",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "오픈 채팅방",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-company",
+      "writer": "claude-sonnet-5.5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:company/korean-school-overseas",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "company",
+    "topic": "해외 한인학교 도입",
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_target_age"
+    ],
+    "anchors": [
+      "한인학교",
+      "해외 한인",
+      "재외국민",
+      "해외 지점",
+      "해외 분원",
+      "현지 한국학교"
+    ],
+    "covers": "해외 한인학교·해외 분원에서 도입해 쓰는 방법과 지원 범위는 공개 문서에 없다는 것",
+    "notCovers": [
+      "해외 학생이 로그인·수업 입장 → overseas-students",
+      "해외 법인·본사 위치 → overseas-entities"
+    ],
+    "negatives": [
+      {
+        "q": "해외에 있는 학생도 수업에 들어올 수 있나요",
+        "route": "fixed:overseas-students"
+      },
+      {
+        "q": "해외에서 VPN 없이 수업돼요",
+        "route": "doc:/docs/student/class-join-replay#9/overseas"
+      },
+      {
+        "q": "해외 법인이 어디에 있어요",
+        "route": "policy:overseas-entities"
+      }
+    ],
+    "handoff": "demo",
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "demo",
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "한인학교",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "해외 한인",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "재외국민",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "해외 분원",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-company",
+      "writer": "claude-sonnet-5.5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:company/kindergarten-afterschool",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "company",
+    "topic": "유치원·어린이집·방과후 도입",
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_target_age"
+    ],
+    "anchors": [
+      "유치원",
+      "어린이집",
+      "방과후",
+      "돌봄교실",
+      "영유아",
+      "보육"
+    ],
+    "covers": "유치원·어린이집·방과후 교실에서 쓸 수 있는지는 공개 문서에 없다는 것",
+    "notCovers": [
+      "초등학생 사용과 연령 제한 → basics-fit-elementary",
+      "학교 도입 조건 → basics-fit-school"
+    ],
+    "negatives": [
+      {
+        "q": "초등학생도 쓸 수 있어요",
+        "route": "fixed:basics-fit-elementary"
+      },
+      {
+        "q": "학교에서도 도입할 수 있나요",
+        "route": "fixed:basics-fit-school"
+      },
+      {
+        "q": "어디에서 쓰고 있어요",
+        "route": "doc:/docs/start/company-overview#7/where-used"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "유치원",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "어린이집",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "방과후",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "돌봄교실",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-company",
+      "writer": "claude-sonnet-5.5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:company/homeschool-alt",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "company",
+    "topic": "홈스쿨링·대안학교 도입",
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_target_age"
+    ],
+    "anchors": [
+      "홈스쿨링",
+      "대안학교",
+      "홈스쿨",
+      "대안교육",
+      "학습 공동체"
+    ],
+    "covers": "홈스쿨링 가정이나 대안학교에서 쓸 수 있는지는 공개 문서에 없다는 것",
+    "notCovers": [
+      "1:1 튜터링·학원·학교에서 쓰는 곳 → where-used",
+      "학교 도입 조건 → basics-fit-school"
+    ],
+    "negatives": [
+      {
+        "q": "어디에서 쓰고 있어요",
+        "route": "doc:/docs/start/company-overview#7/where-used"
+      },
+      {
+        "q": "학교에서도 도입 가능한가요",
+        "route": "fixed:basics-fit-school"
+      },
+      {
+        "q": "대학이나 1:1 튜터링에서도 쓰나요",
+        "route": "doc:/docs/start/company-overview#7/where-used"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "홈스쿨링",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "대안학교",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "홈스쿨",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "대안교육",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-company",
+      "writer": "claude-sonnet-5.5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:company/culture-center-library",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "company",
+    "topic": "문화센터·독서실·도서관 도입",
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_target_age"
+    ],
+    "anchors": [
+      "문화센터",
+      "독서실",
+      "스터디카페",
+      "도서관",
+      "평생교육원",
+      "복지관"
+    ],
+    "covers": "문화센터·독서실·도서관·평생교육원 같은 학원 밖 시설에서 쓸 수 있는지는 공개 문서에 없다는 것",
+    "notCovers": [
+      "성인·기업 교육에 쓸 수 있는지 → basics-corporate-training",
+      "어디에서 쓰고 있는지 → where-used"
+    ],
+    "negatives": [
+      {
+        "q": "직원 연수에도 쓸 수 있어요",
+        "route": "policy:basics-corporate-training"
+      },
+      {
+        "q": "어떤 곳에서 쓰고 있어요",
+        "route": "doc:/docs/start/company-overview#7/where-used"
+      },
+      {
+        "q": "학교는 도입할 수 있나요",
+        "route": "fixed:basics-fit-school"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "문화센터",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "독서실",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "스터디카페",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "평생교육원",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-company",
+      "writer": "claude-sonnet-5.5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:company/education-office",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "company",
+    "topic": "교육청·지자체 협약 사업",
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_education_office"
+    ],
+    "anchors": [
+      "교육청",
+      "교육지원청",
+      "협약",
+      "지자체",
+      "MOU 체결",
+      "시범 사업"
+    ],
+    "covers": "교육청·지자체와의 협약이나 시범 사업 참여 방법은 공개 문서에 없다는 것",
+    "notCovers": [
+      "조달·나라장터 등록과 서류 → school-procurement",
+      "학교 도입 조건 → basics-fit-school"
+    ],
+    "negatives": [
+      {
+        "q": "나라장터에 등록돼 있어요",
+        "route": "policy:school-procurement"
+      },
+      {
+        "q": "학교에서 도입하려면 조건이 뭐예요",
+        "route": "fixed:basics-fit-school"
+      },
+      {
+        "q": "도입 상담은 어디로 신청하나요",
+        "route": "doc:/docs/start/company-overview#9/adoption-inquiry"
+      }
+    ],
+    "handoff": "demo",
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "demo",
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "교육청",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "교육지원청",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "협약",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "MOU 체결",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-company",
+      "writer": "claude-sonnet-5.5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:company/rfp-proposal",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "company",
+    "topic": "입찰·RFP 제안서 제출",
+    "asks": [
+      "howto",
+      "yesno"
+    ],
+    "concepts": [
+      "C_rfp"
+    ],
+    "anchors": [
+      "RFP",
+      "입찰",
+      "입찰 제안",
+      "제안요청서",
+      "공공 입찰",
+      "입찰 참여"
+    ],
+    "covers": "입찰이나 제안요청서(RFP)에 클래스인이 응찰·제안서를 내는 방법은 공개 문서에 없다는 것",
+    "notCovers": [
+      "조달 등록과 일반 계약 서류 → school-procurement",
+      "도입 견적에서 보는 구성 → quote-components"
+    ],
+    "negatives": [
+      {
+        "q": "나라장터 등록은 돼 있나요",
+        "route": "policy:school-procurement"
+      },
+      {
+        "q": "견적에 어떤 구성이 들어가요",
+        "route": "doc:/docs/start/adoption-journey-90days#7/quote-components"
+      },
+      {
+        "q": "도입 상담은 어디로 해요",
+        "route": "doc:/docs/start/company-overview#9/adoption-inquiry"
+      }
+    ],
+    "handoff": "demo",
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "demo",
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "RFP",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "입찰",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "제안요청서",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "공공 입찰",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-company",
+      "writer": "claude-sonnet-5.5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:company/reference-visit",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "company",
+    "topic": "도입 학원 견학·현장 방문",
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_showroom"
+    ],
+    "anchors": [
+      "견학",
+      "학원 견학",
+      "도입 학원 방문",
+      "레퍼런스 방문",
+      "운영 중인 학원",
+      "현장 견학"
+    ],
+    "covers": "이미 도입한 학원을 직접 찾아가 보는 견학이나 레퍼런스 방문 주선은 공개 문서에 없다는 것",
+    "notCovers": [
+      "목동 쇼룸 방문 → showroom-visit",
+      "도입 학원 사례 보기 → show-adoption-cases"
+    ],
+    "negatives": [
+      {
+        "q": "목동 쇼룸에서 뭘 볼 수 있어요",
+        "route": "doc:/docs/start/customer-stories#9/showroom-visit"
+      },
+      {
+        "q": "도입한 학원 사례는 어디서 봐요",
+        "route": "fixed:basics-show-adoption-cases"
+      },
+      {
+        "q": "우리 학원과 비슷한 사례를 더 찾고 싶어요",
+        "route": "doc:/docs/start/customer-stories#9/more-similar-cases"
+      }
+    ],
+    "handoff": "demo",
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "demo",
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "견학",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "학원 견학",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "도입 학원 방문",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "레퍼런스 방문",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-company",
+      "writer": "claude-sonnet-5.5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:company/research-collab",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "company",
+    "topic": "학술 연구·논문 협력",
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_research_collab"
+    ],
+    "anchors": [
+      "학술 연구",
+      "논문",
+      "연구 협력",
+      "교육 연구",
+      "연구 데이터",
+      "연구용"
+    ],
+    "covers": "대학·연구자의 학술 연구나 논문 작성을 위한 협력·자료 제공은 공개 문서에 없다는 것",
+    "notCovers": [
+      "수업·학생 데이터 보관과 삭제 → basics-student-data-retention",
+      "회사 소개 → eeo-company"
+    ],
+    "negatives": [
+      {
+        "q": "학생 정보를 몇 년 보관해요",
+        "route": "fixed:basics-student-data-retention"
+      },
+      {
+        "q": "수업 데이터 어떤 것을 볼 수 있어요",
+        "route": "doc:/docs/start/company-overview#3/lms-admin-dashboard"
+      },
+      {
+        "q": "EEO는 어떤 회사예요",
+        "route": "doc:/docs/start/company-overview#1/eeo-company"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "학술 연구",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "논문",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "연구 협력",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "교육 연구",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-company",
+      "writer": "claude-sonnet-5.5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:company/business-registration",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "company",
+    "topic": "통신판매업 신고와 회사 사업자 정보",
+    "asks": [
+      "howto",
+      "yesno"
+    ],
+    "concepts": [
+      "C_business_registration"
+    ],
+    "anchors": [
+      "통신판매업",
+      "통신판매업 신고",
+      "회사 사업자 정보",
+      "사업자 정보",
+      "법인 등록",
+      "법인 등기"
+    ],
+    "covers": "클래스인 한국 법인의 통신판매업 신고번호·법인 등기 같은 사업자 정보는 공개 문서에 없다는 것",
+    "notCovers": [
+      "한국 법인 소개 → korea-entity",
+      "한국 법인 주소 → korea-entity-address"
+    ],
+    "negatives": [
+      {
+        "q": "한국 법인이 언제 만들어졌어요",
+        "route": "doc:/docs/start/company-overview#1/korea-entity"
+      },
+      {
+        "q": "한국 법인 주소가 어디예요",
+        "route": "policy:korea-entity-address"
+      },
+      {
+        "q": "공식 문의는 어디로 해요",
+        "route": "fixed:formal-complaint-channel"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "통신판매업",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "통신판매업 신고",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "사업자 정보",
+        "units": 0,
+        "site": 1,
+        "checked": "걸린 문장이 다른 뜻임을 확인"
+      },
+      {
+        "query": "법인 등기",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-company",
+      "writer": "claude-sonnet-5.5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  }
+]
