@@ -6919,6 +6919,8 @@ export async function streamChatbotQuery(
         warning: cached.warning,
         latencyMs: 0,
       }
+      // 일반 경로가 넣은 캐시는 조각 알림·말투 층을 입히기 전 사본이다 — 일반 경로와 같은 최종본이 되게 여기서도 입힌다(둘 다 여러 번 입혀도 같다).
+      appendUnansweredSegmentNotice(cachedCore)
       applyConversationTone(cachedCore)
       cached.handoffIntent = cachedCore.handoffIntent
       emit({ type: "replace", answer: cached.response.answer })

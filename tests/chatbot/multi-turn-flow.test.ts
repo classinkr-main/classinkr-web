@@ -334,3 +334,13 @@ describe("처음 온 고객(2026-11-20 조사 G8)", () => {
     expect(stream.answer).toBe(nonStream.answer)
   })
 })
+
+describe("캐시를 거쳐도 조각 알림이 같다", () => {
+  it("일반 경로가 캐시한 답을 스트림이 꺼내도 같은 알림 줄을 낸다", async () => {
+    const question = "무료 체험 있나요? 그리고 앱 설치는 어떻게 해요?"
+    const nonStream = await evaluateChatbotQuery(question)
+    expect(nonStream.answer).toContain("함께 물어보신")
+    const fromCache = await collectStream(question, {})
+    expect(fromCache.answer).toBe(nonStream.answer)
+  })
+})
