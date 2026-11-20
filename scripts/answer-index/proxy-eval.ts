@@ -4,7 +4,7 @@
  * 실행:
  *   npx tsx scripts/answer-index/proxy-eval.ts --results <측정.jsonl> --keys <answer-keys.json>
  *     [--units data/answer-index/units.json] [--inventory data/answer-index/inventory.json] [--cards data/answer-index/cards]
- *     [--area <영역,…>] [--top1] [--out <줄별 판정.json>] [--json]
+ *     [--alias data/answer-index/legacy-alias.json] [--area <영역,…>] [--top1] [--out <줄별 판정.json>] [--json]
  *
  * 측정 결과(scripts/chatbot-live-eval.ts 의 JSONL) 한 줄마다 '이 답이 무엇으로 답했는가'를 id 목록으로 바꾸고,
  * 정답 키(accept·partialAccept·nodoc·clarifyOk)와 대조해 §2.1 분류 하나를 결정적으로 붙인다. 점수 식·구간은 score.ts 와 같다.
@@ -15,9 +15,9 @@
  *   출처(경로·절 제목)는 units.json 으로 unit:<unitId> 로 바꾼다: 근거 선별 답(evidence_select·generate·gate_evidence_select·
  *   second_chance)은 출처 전부, 첫 출처로 만든 답(draft·template:*)은 첫 출처만. 정해 둔 답에 붙은 출처는 쓰지 않는다.
  * - compiled 줄(decidedBy index:*): 고른 카드(answerIndex.cardId 또는 top[0].id, 일부만 답한 조각의 카드 포함)의
- *   provenance.legacyIds, answer.sentences[].unit(→ unit:<unit>), 그리고 보조로 answer.curatedRef(module:id),
- *   answer.symptomTopic(symptom:<id>), answer.guide(guide:<slug>·unit:guide:<slug>)를 쓴다. index-gap·index-abstain 은 못 찾음,
- *   index-clarify 는 되묻기다.
+ *   provenance.legacyIds, legacy-alias.json 에서 그 카드를 대상으로 하는 옛 id, answer.sentences[].unit(→ unit:<unit>), 그리고 보조로
+ *   answer.curatedRef(module:id), answer.symptomTopic(symptom:<id>), answer.guide(guide:<slug>·unit:guide:<slug>)를 쓴다.
+ *   index-gap·index-abstain 은 못 찾음, index-clarify 는 되묻기다.
  *
  * 판정(키가 있는 줄만):
  * - 못 찾음: nodoc 이면 nf_ok, 아니면 nf_doc_has
@@ -25,12 +25,20 @@
  * - 답: id 가 reject 에 있으면 accept 보다 앞서 wrong, accept 에 있으면 good, partialAccept 에 있으면 partial, 아니면 wrong
  *   (id 를 하나도 못 만들었으면 unmapped 표시). siteAccept(공개 페이지 근거로만 맞는 답)는 이 계산에 쓰지 않는다.
  *   compiled 줄의 reject 대조는 카드가 실제로 내는 글의 id(rejectIdsFromCard)로만 한다: 문장 단위·curatedRef·증상·가이드와,
- *   글이 그 옛 답 글과 같은 text 카드(fixed text·policy)의 provenance. 고친 글(FIX)·문서 문장(CONVERT) 카드의 provenance 는
- *   출처일 뿐이라 reject 에 걸지 않는다(accept 대조에는 그대로 쓴다).
+ *   글이 그 옛 답 글과 같은 text 카드(fixed text·policy)의 provenance·alias 옛 id. 고친 글(FIX)·문서 문장(CONVERT) 카드의
+ *   provenance·alias 는 출처일 뿐이라 reject 에 걸지 않는다(accept 대조에는 그대로 쓴다).
+ * - 문장 범위(키의 unitSentences): 키가 unit:<unitId> 에 문장 번호 범위를 적어 두었으면, compiled 카드의 그 unit id 는 카드
+ *   answer.sentences 가 그 범위와 겹칠 때만 맞은 것으로 센다(같은 단위를 쓰는 형제 카드가 모두 정답이 되지 않게). 범위가 없거나
+ *   답이 문장 번호를 모르면(legacy 출처·가이드 단위) 단위 전체로 본다.
+ * - 못 찾음 상당 카드(isNotFoundEquivalentCard: gap 카드, covers 첫 마디가 '공개 안내에 없음'을 말하는 policy 카드)로만 답한 줄은
+ *   accept 에 들면 good, 아니면 nodoc 키에서 nf_ok, 그 밖에는 partialAccept 면 partial, 아니면 nf_doc_has 다.
+ *
+ * NODOC 지표(늘 찍는다): '진짜 NODOC 답함'(nodoc 이고 accept 가 없는 키에서 못 찾음·되묻기·못 찾음 상당 카드가 아닌 답, 사양 §9.3
+ * 파일럿 관문의 'NODOC 질문 답해 버림')과 'nodoc+accept 오답'(nodoc 이면서 accept 도 있는 키에서 wrong)을 나눠 센다.
  *
  * --area <영역,…>: 키의 area 가 그 영역인 줄만 센다(키가 없거나 area 가 없는 줄은 뺀다).
  * --top1: compiled 줄(색인이 정한 줄)에서 결정과 무관하게 흔적 1위 카드(top 의 첫 카드, 'none' 자리는 건너뜀)가 accept 에 드는 비율
- *   (accept 가 있는 키만, reject 에 걸리면(rejectIdsFromCard) 넣지 않음)과, nodoc 키인데 답해 버린 비율(못 찾음·공백·되묻기가 아닌 답)을 더 찍는다.
+ *   (accept 가 있는 키만, reject 에 걸리면(rejectIdsFromCard) 넣지 않음, alias·문장 범위 규칙은 판정과 같다)을 더 찍는다.
  */
 
 import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs"
@@ -42,8 +50,12 @@ import { round2, summarizeVerdicts, type ScoreSummary, type Verdict } from "./sc
 
 // ── 입력 꼴 ─────────────────────────────────────────────────────────────────────────────────────
 
-/** 정답 키(lib/chatbot/answer-index/types.ts AnswerKey). 대리 점수는 accept 가 없어도 받는다. */
-export type AnswerKey = Omit<IndexAnswerKey, "accept"> & { accept?: string[] }
+/**
+ * 정답 키(lib/chatbot/answer-index/types.ts AnswerKey). 대리 점수는 accept 가 없어도 받는다.
+ * unitSentences(대리 점수 전용 선택 칸): accept·partialAccept·reject 의 unit:<unitId> 가운데 질문에 답하는 문장 범위를 아는 것.
+ * unit id → 그 단위의 문장 번호(units.json sentences[].i). 없으면 단위 전체다.
+ */
+export type AnswerKey = Omit<IndexAnswerKey, "accept"> & { accept?: string[]; unitSentences?: Record<string, number[]> }
 
 export interface EvalRowSource {
   path?: string | null
@@ -85,8 +97,11 @@ export interface InventoryRecord {
 export interface CardRecord {
   id: string
   kind?: string
+  /** 카드가 다루는 것(자료 에이전트가 쓴 글, 항목을 ', ' 로 잇는다). 못 찾음 상당 판정에 첫 항목을 쓴다. */
+  covers?: string
   answer?: {
-    sentences?: Array<{ unit?: string }>
+    /** ids 는 그 단위의 문장 번호(units.json sentences[].i). */
+    sentences?: Array<{ unit?: string; ids?: number[] }>
     curatedRef?: { module?: string; id?: string }
     /** fixed(FIX)·policy 카드의 답 글. */
     text?: string
@@ -95,6 +110,9 @@ export interface CardRecord {
   }
   provenance?: { legacyIds?: string[] }
 }
+
+/** legacy-alias.json(옛 id → 카드 id 또는 null)을 뒤집은 것: 카드 id → 그 카드를 대상으로 하는 옛 id. */
+export type AliasIndex = ReadonlyMap<string, readonly string[]>
 
 // ── legacy decidedBy → inventory id 규칙(README 에 같은 표가 있다) ──────────────────────────────────
 
@@ -299,6 +317,10 @@ export interface ProxyRowResult {
   rejected?: string[]
   /** id 를 하나도 못 만든 답(대리 점수의 사각지대). */
   unmapped: boolean
+  /** compiled 답이 못 찾음 상당 카드(isNotFoundEquivalentCard)로만 이뤄졌는지. NODOC 답함에 넣지 않는다. */
+  nfEquivalent?: boolean
+  /** 키가 nodoc 이면 accept 가 없는지(true_nodoc, 관문 지표) 있는지(nodoc_accept). nodoc 이 아니거나 키가 없으면 없음. */
+  nodocKey?: "true_nodoc" | "nodoc_accept"
   /** 키가 없으면 null(점수에서 뺌). */
   verdict: Verdict | null
   reason: string
@@ -308,6 +330,8 @@ export interface ProxyContext {
   units?: UnitIndex
   inventory?: InventoryIndex
   cards?: ReadonlyMap<string, CardRecord>
+  /** legacy-alias.json 을 뒤집은 것(buildAliasIndex). 없으면 provenance 만 쓴다. */
+  alias?: AliasIndex
 }
 
 const MODULE_PREFIX: Readonly<Record<string, string>> = {
@@ -321,9 +345,25 @@ const MODULE_PREFIX: Readonly<Record<string, string>> = {
   template: "template",
 }
 
-/** compiled 카드 하나 → id 목록. */
-export function idsFromCard(card: CardRecord): string[] {
-  const ids: string[] = [...(card.provenance?.legacyIds ?? [])]
+/** legacy-alias.json → 카드 id 별 옛 id(파일 순서). 값이 null(DROP·LEGACY_ONLY)이거나 문자열이 아닌 항목은 뺀다. */
+export function buildAliasIndex(raw: unknown): Map<string, string[]> {
+  if (!isRecord(raw)) throw new Error("legacy-alias 파일은 { 옛 id: 카드 id | null } 객체여야 합니다.")
+  const byCard = new Map<string, string[]>()
+  for (const [oldId, cardId] of Object.entries(raw)) {
+    if (typeof cardId !== "string" || !cardId) continue
+    const list = byCard.get(cardId) ?? []
+    if (!list.includes(oldId)) list.push(oldId)
+    byCard.set(cardId, list)
+  }
+  return byCard
+}
+
+/**
+ * compiled 카드 하나 → id 목록. provenance.legacyIds 와, alias 를 주면 그 카드를 대상으로 하는 옛 id(legacy-alias.json)를 함께 넣는다.
+ * alias 는 '이 옛 답을 이 카드가 대신한다'는 대응이라 provenance 에 빠진 옛 id 도 accept 대조에 쓴다.
+ */
+export function idsFromCard(card: CardRecord, alias?: AliasIndex): string[] {
+  const ids: string[] = [...(card.provenance?.legacyIds ?? []), ...(alias?.get(card.id) ?? [])]
   for (const sentence of card.answer?.sentences ?? []) {
     if (sentence.unit) ids.push(`unit:${sentence.unit}`)
   }
@@ -339,15 +379,60 @@ export function idsFromCard(card: CardRecord): string[] {
 
 /**
  * reject 대조용 id: 카드가 실제로 내는 글을 나타내는 id 만. 문장 단위·curatedRef(KEEP, 옛 답 글 그대로)·증상 주제·가이드는 그대로 넣고,
- * provenance.legacyIds 는 카드가 어디서 왔는지일 뿐이라 text 카드(fixed text·policy)의 글이 그 옛 답 글과 같을 때만 넣는다.
- * 고친 글(FIX)이나 문서 문장으로 바꾼 카드(CONVERT)가 출처 옛 답의 reject 로 wrong 이 되지 않게 한다. inventory 가 없으면 provenance 는 넣지 않는다.
+ * provenance.legacyIds 와 alias 옛 id 는 카드가 어디서 왔는지(무엇을 대신하는지)일 뿐이라 text 카드(fixed text·policy)의 글이 그 옛 답 글과
+ * 같을 때만 넣는다. 고친 글(FIX)이나 문서 문장으로 바꾼 카드(CONVERT)가 출처 옛 답의 reject 로 wrong 이 되지 않게 한다.
+ * inventory 가 없으면 provenance·alias 는 넣지 않는다.
  */
-export function rejectIdsFromCard(card: CardRecord, inventory?: InventoryIndex): string[] {
+export function rejectIdsFromCard(card: CardRecord, inventory?: InventoryIndex, alias?: AliasIndex): string[] {
   const content = idsFromCard({ ...card, provenance: undefined })
   const text = card.answer?.text
-  const sameText =
-    typeof text === "string" && inventory ? (card.provenance?.legacyIds ?? []).filter((id) => inventory.sameText(id, text)) : []
+  const origins = [...(card.provenance?.legacyIds ?? []), ...(alias?.get(card.id) ?? [])]
+  const sameText = typeof text === "string" && inventory ? origins.filter((id) => inventory.sameText(id, text)) : []
   return Array.from(new Set([...content, ...sameText]))
+}
+
+/** 카드들이 쓰는 단위 문장: unit:<unitId> → 문장 번호. 문장 번호가 없는 단위는 넣지 않는다. */
+export function cardUnitSentences(cards: readonly CardRecord[]): Map<string, Set<number>> {
+  const used = new Map<string, Set<number>>()
+  for (const card of cards) {
+    for (const sentence of card.answer?.sentences ?? []) {
+      if (!sentence.unit || !Array.isArray(sentence.ids) || sentence.ids.length === 0) continue
+      const key = `unit:${sentence.unit}`
+      const set = used.get(key) ?? new Set<number>()
+      for (const i of sentence.ids) if (Number.isInteger(i)) set.add(i)
+      used.set(key, set)
+    }
+  }
+  return used
+}
+
+/**
+ * 키의 문장 범위 규칙: 키가 이 unit id 에 문장 범위(unitSentences)를 적어 두었고 답이 그 단위의 문장 번호를 알면, 겹칠 때만 맞은 id 로 센다.
+ * 범위가 없거나(단위 전체) 답이 문장 번호를 모르면(legacy 출처·가이드 단위) 그대로 맞은 id 다. unit 이 아닌 id 는 상관없다.
+ */
+export function withinKeyRange(id: string, key: Pick<AnswerKey, "unitSentences">, used?: ReadonlyMap<string, ReadonlySet<number>>): boolean {
+  const range = key.unitSentences?.[id]
+  if (!range || range.length === 0) return true
+  const sentences = used?.get(id)
+  if (!sentences || sentences.size === 0) return true
+  return range.some((i) => sentences.has(i))
+}
+
+/** policy 카드 covers 첫 항목이 '공개 안내에 없음(정리돼 있지 않음·나와 있지 않음·단정할 수 없음)'을 말하는지. */
+export const NOT_IN_PUBLIC_GUIDE_RE = /공개\s*안내[^,]{0,26}?(?:없|않)/
+
+/**
+ * 못 찾음 상당 카드: 이 카드로 답하면 '공개 안내에 없다'를 알리고 상담으로 넘기는 답이라 심사의 nf_ok 와 같은 몫으로 셀 수 있는 카드.
+ * - gap 카드(공백 답 틀 gap_default 는 그 자체가 '공개 안내에 없음' 답이다).
+ * - policy 카드 가운데 covers 의 첫 항목(', ' 앞)이 NOT_IN_PUBLIC_GUIDE_RE 에 맞는 것. covers 는 카드가 다루는 것을 중요한 것부터 적으므로
+ *   첫 항목이 '공개 안내에 없음'이면 그 답의 주된 말이 그것이다. 사실을 먼저 답하고 덧붙여 '…은 공개 안내에 없다'고 하는 카드는 들지 않는다.
+ * 카드 자료의 기존 칸(kind·covers)만 본다.
+ */
+export function isNotFoundEquivalentCard(card: CardRecord): boolean {
+  if (card.kind === "gap") return true
+  if (card.kind !== "policy") return false
+  const first = (card.covers ?? "").split(/,\s/)[0] ?? ""
+  return NOT_IN_PUBLIC_GUIDE_RE.test(first)
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -421,6 +506,9 @@ export function classifyRow(row: ProxyEvalRow, key: AnswerKey | undefined, conte
   let ids: string[] = []
   /** reject 와 대조할 id(legacy 줄은 ids 그대로, compiled 줄은 rejectIdsFromCard). */
   let rejectIds: string[] | null = null
+  /** compiled 답 카드가 쓰는 단위 문장(키 문장 범위 규칙용). legacy 줄은 모른다. */
+  let used: Map<string, Set<number>> | undefined
+  let nfEquivalent = false
   let reason: string
 
   if (row.answer === null || row.answer === undefined) {
@@ -438,8 +526,10 @@ export function classifyRow(row: ProxyEvalRow, key: AnswerKey | undefined, conte
       const cardIds = answeredCardIds(row, decidedBy)
       const found = cardIds.map((id) => context.cards?.get(id)).filter((card): card is CardRecord => Boolean(card))
       const missing = cardIds.filter((id) => !context.cards?.has(id))
-      ids = Array.from(new Set(found.flatMap(idsFromCard)))
-      rejectIds = Array.from(new Set(found.flatMap((card) => rejectIdsFromCard(card, context.inventory))))
+      ids = Array.from(new Set(found.flatMap((card) => idsFromCard(card, context.alias))))
+      rejectIds = Array.from(new Set(found.flatMap((card) => rejectIdsFromCard(card, context.inventory, context.alias))))
+      used = cardUnitSentences(found)
+      nfEquivalent = found.length > 0 && missing.length === 0 && found.every(isNotFoundEquivalentCard)
       reason = missing.length > 0 ? `카드 자료에 없는 id: ${missing.join(", ")}` : `카드 ${cardIds.join(", ")}`
     }
   } else if (isLegacyNotFound(row)) {
@@ -462,23 +552,64 @@ export function classifyRow(row: ProxyEvalRow, key: AnswerKey | undefined, conte
     kind,
     ids,
     unmapped: kind === "answer" && ids.length === 0,
+    ...(nfEquivalent ? { nfEquivalent: true } : {}),
   }
   if (!key) return { ...base, matched: [], verdict: null, reason: `${reason} / 정답 키 없음` }
 
+  const keyed = { ...base, ...(key.nodoc ? { nodocKey: (key.accept ?? []).length > 0 ? "nodoc_accept" : "true_nodoc" } as const : {}) }
   const accept = new Set(key.accept ?? [])
   const partialAccept = new Set(key.partialAccept ?? [])
   const reject = new Set(key.reject ?? [])
-  if (kind === "error") return { ...base, matched: [], verdict: "wrong", reason }
-  if (kind === "not_found") return { ...base, matched: [], verdict: key.nodoc ? "nf_ok" : "nf_doc_has", reason }
-  if (kind === "clarify") return { ...base, matched: [], verdict: key.clarifyOk ? "good" : "needless_clarify", reason }
+  const inRange = (id: string) => withinKeyRange(id, key, used)
+  if (kind === "error") return { ...keyed, matched: [], verdict: "wrong", reason }
+  if (kind === "not_found") return { ...keyed, matched: [], verdict: key.nodoc ? "nf_ok" : "nf_doc_has", reason }
+  if (kind === "clarify") return { ...keyed, matched: [], verdict: key.clarifyOk ? "good" : "needless_clarify", reason }
   // reject 는 accept 보다 앞선다: 같은 답이 accept 대상 문장도 쓰지만 심사 범위 밖 사실을 단정하는 경우 등.
-  const rejected = (rejectIds ?? ids).filter((id) => reject.has(id))
-  if (rejected.length > 0) return { ...base, matched: rejected, rejected, verdict: "wrong", reason: `${reason} / reject: ${rejected.join(", ")}` }
-  const matched = ids.filter((id) => accept.has(id))
-  if (matched.length > 0) return { ...base, matched, verdict: "good", reason }
-  const partial = ids.filter((id) => partialAccept.has(id))
-  if (partial.length > 0) return { ...base, matched: partial, verdict: "partial", reason }
-  return { ...base, matched: [], verdict: "wrong", reason: base.unmapped ? `${reason} / id 를 못 만듦` : reason }
+  const rejected = (rejectIds ?? ids).filter((id) => reject.has(id) && inRange(id))
+  if (rejected.length > 0) return { ...keyed, matched: rejected, rejected, verdict: "wrong", reason: `${reason} / reject: ${rejected.join(", ")}` }
+  const matched = ids.filter((id) => accept.has(id) && inRange(id))
+  if (matched.length > 0) return { ...keyed, matched, verdict: "good", reason }
+  // '공개 안내에 없음' 카드로만 답했으면 못 찾음 답과 같게 센다(accept 에 들면 위에서 good).
+  if (nfEquivalent && key.nodoc) return { ...keyed, matched: [], verdict: "nf_ok", reason: `${reason} / 못 찾음 상당 카드` }
+  const partial = ids.filter((id) => partialAccept.has(id) && inRange(id))
+  if (partial.length > 0) return { ...keyed, matched: partial, verdict: "partial", reason }
+  if (nfEquivalent) return { ...keyed, matched: [], verdict: "nf_doc_has", reason: `${reason} / 못 찾음 상당 카드` }
+  return { ...keyed, matched: [], verdict: "wrong", reason: base.unmapped ? `${reason} / id 를 못 만듦` : reason }
+}
+
+/**
+ * NODOC 지표. 사양 §9.3 파일럿 관문 'NODOC 질문 답해 버림 8% 이하'는 trueAnswered/trueRows 다.
+ * nodoc 이면서 accept 도 있는 키(문서에는 답이 없지만 상담 경로 답 등도 받아들이는 질문)는 답해도 accept 면 맞으므로 따로 센다.
+ */
+export interface NodocSummary {
+  /** 진짜 NODOC: nodoc 이고 accept 가 없는 키의 줄. */
+  trueRows: number
+  /** 그 가운데 답한 줄(못 찾음·되묻기·측정 오류·못 찾음 상당 카드 답이 아닌 줄). */
+  trueAnswered: number
+  /** nodoc 이면서 accept 도 있는 키의 줄. */
+  acceptRows: number
+  /** 그 가운데 wrong 인 줄. */
+  acceptWrong: number
+}
+
+/** 답해 버림: 답 종류이고 못 찾음 상당 카드 답이 아닌 줄. */
+export function answeredForNodoc(result: Pick<ProxyRowResult, "kind" | "nfEquivalent">): boolean {
+  return result.kind === "answer" && !result.nfEquivalent
+}
+
+export function summarizeNodoc(results: readonly ProxyRowResult[]): NodocSummary {
+  const summary: NodocSummary = { trueRows: 0, trueAnswered: 0, acceptRows: 0, acceptWrong: 0 }
+  for (const result of results) {
+    if (result.verdict === null) continue
+    if (result.nodocKey === "true_nodoc") {
+      summary.trueRows += 1
+      if (answeredForNodoc(result)) summary.trueAnswered += 1
+    } else if (result.nodocKey === "nodoc_accept") {
+      summary.acceptRows += 1
+      if (result.verdict === "wrong") summary.acceptWrong += 1
+    }
+  }
+  return summary
 }
 
 export interface ProxySummary extends ScoreSummary {
@@ -486,15 +617,23 @@ export interface ProxySummary extends ScoreSummary {
   missingKey: number
   keysWithoutRow: number
   unmapped: number
+  /** 못 찾음 상당 카드로만 답한 줄(키가 있는 줄). */
+  nfEquivalent: number
   byRoute: Partial<Record<ProxyRowResult["route"], ScoreSummary>>
+  nodoc: NodocSummary
+  nodocByRoute: Partial<Record<ProxyRowResult["route"], NodocSummary>>
 }
 
 export function summarizeProxy(results: readonly ProxyRowResult[], keyCount: number): ProxySummary {
   const keyed = results.filter((result): result is ProxyRowResult & { verdict: Verdict } => result.verdict !== null)
   const byRoute: ProxySummary["byRoute"] = {}
+  const nodocByRoute: ProxySummary["nodocByRoute"] = {}
   for (const route of ["legacy", "compiled"] as const) {
-    const verdicts = keyed.filter((result) => result.route === route).map((result) => result.verdict)
-    if (verdicts.length > 0) byRoute[route] = summarizeVerdicts(verdicts)
+    const routeRows = keyed.filter((result) => result.route === route)
+    if (routeRows.length > 0) {
+      byRoute[route] = summarizeVerdicts(routeRows.map((result) => result.verdict))
+      nodocByRoute[route] = summarizeNodoc(routeRows)
+    }
   }
   return {
     ...summarizeVerdicts(keyed.map((result) => result.verdict)),
@@ -502,11 +641,29 @@ export function summarizeProxy(results: readonly ProxyRowResult[], keyCount: num
     missingKey: results.length - keyed.length,
     keysWithoutRow: Math.max(0, keyCount - keyed.length),
     unmapped: keyed.filter((result) => result.unmapped).length,
+    nfEquivalent: keyed.filter((result) => result.nfEquivalent).length,
     byRoute,
+    nodoc: summarizeNodoc(keyed),
+    nodocByRoute,
   }
 }
 
 // ── 파일 읽기 ─────────────────────────────────────────────────────────────────────────────────
+
+/** 키의 unitSentences: { "unit:<unitId>": [문장 번호, …] }. unit: 이 아닌 키나 0 이상 정수가 아닌 값은 오류. 비었으면 undefined. */
+function readUnitSentences(value: unknown, keyId: string): Record<string, number[]> | undefined {
+  if (value === undefined) return undefined
+  if (!isRecord(value)) throw new Error(`정답 키 ${keyId}: unitSentences 는 { "unit:<unitId>": [문장 번호] } 객체여야 합니다.`)
+  const out: Record<string, number[]> = {}
+  for (const [id, list] of Object.entries(value)) {
+    if (!id.startsWith("unit:")) throw new Error(`정답 키 ${keyId}: unitSentences 의 ${id} 는 unit: 으로 시작해야 합니다.`)
+    if (!Array.isArray(list) || !list.every((i) => Number.isInteger(i) && (i as number) >= 0)) {
+      throw new Error(`정답 키 ${keyId}: unitSentences[${id}] 는 0 이상 정수 배열이어야 합니다.`)
+    }
+    if (list.length > 0) out[id] = Array.from(new Set(list as number[])).sort((a, b) => a - b)
+  }
+  return Object.keys(out).length > 0 ? out : undefined
+}
 
 export function readAnswerKeys(raw: unknown): { set: string | null; keys: AnswerKey[] } {
   const container = raw as { set?: unknown; keys?: unknown } | null
@@ -532,6 +689,8 @@ export function readAnswerKeys(raw: unknown): { set: string | null; keys: Answer
     if (key.evidenceScope === "docs" || key.evidenceScope === "site") out.evidenceScope = key.evidenceScope
     if (typeof key.note === "string") out.note = key.note
     if (typeof key.keyGroup === "string") out.keyGroup = key.keyGroup
+    const ranges = readUnitSentences(key.unitSentences, key.id)
+    if (ranges) out.unitSentences = ranges
     return out
   })
   return { set: typeof container?.set === "string" ? container.set : null, keys }
@@ -576,10 +735,6 @@ export interface Top1Summary {
   top1Rejected: number
   /** 1위 카드가 없거나 카드 자료에 없어 id 를 못 만든 줄(accept 키 줄 가운데). */
   top1Unmapped: number
-  /** nodoc 키 compiled 줄. */
-  nodocRows: number
-  /** nodoc 키인데 답한 줄(못 찾음·공백·되묻기가 아님). */
-  nodocAnswered: number
 }
 
 /** 흔적 top 에서 첫 카드 id('none' 자리는 건너뜀). */
@@ -598,30 +753,29 @@ export function summarizeTop1(
   keyById: ReadonlyMap<string, AnswerKey>,
   context: ProxyContext = {}
 ): Top1Summary {
-  const summary: Top1Summary = { compiledRows: 0, acceptRows: 0, top1Accept: 0, top1Partial: 0, top1Rejected: 0, top1Unmapped: 0, nodocRows: 0, nodocAnswered: 0 }
+  const summary: Top1Summary = { compiledRows: 0, acceptRows: 0, top1Accept: 0, top1Partial: 0, top1Rejected: 0, top1Unmapped: 0 }
   const rowById = new Map(rows.map((row) => [row.id, row]))
   for (const result of results) {
     const key = keyById.get(result.id)
     if (!key || result.route !== "compiled") continue
     summary.compiledRows += 1
-    if (key.nodoc) {
-      summary.nodocRows += 1
-      if (result.kind === "answer") summary.nodocAnswered += 1
-    }
     const accept = new Set(key.accept ?? [])
     if (accept.size === 0) continue
     summary.acceptRows += 1
     const cardId = traceTop1CardId(rowById.get(result.id)?.answerIndex)
     const card = cardId ? context.cards?.get(cardId) : undefined
-    const ids = card ? idsFromCard(card) : []
+    const ids = card ? idsFromCard(card, context.alias) : []
     if (!card || ids.length === 0) {
       summary.top1Unmapped += 1
       continue
     }
+    const used = cardUnitSentences([card])
+    const inRange = (id: string) => withinKeyRange(id, key, used)
     const reject = new Set(key.reject ?? [])
-    if (rejectIdsFromCard(card, context.inventory).some((id) => reject.has(id))) summary.top1Rejected += 1
-    else if (ids.some((id) => accept.has(id))) summary.top1Accept += 1
-    else if (ids.some((id) => (key.partialAccept ?? []).includes(id))) summary.top1Partial += 1
+    const partialAccept = new Set(key.partialAccept ?? [])
+    if (rejectIdsFromCard(card, context.inventory, context.alias).some((id) => reject.has(id) && inRange(id))) summary.top1Rejected += 1
+    else if (ids.some((id) => accept.has(id) && inRange(id))) summary.top1Accept += 1
+    else if (ids.some((id) => partialAccept.has(id) && inRange(id))) summary.top1Partial += 1
   }
   return summary
 }
@@ -719,13 +873,14 @@ function main(argv: string[]) {
     console.error(
       "사용법: npx tsx scripts/answer-index/proxy-eval.ts --results <측정.jsonl> --keys <answer-keys.json> " +
         "[--units data/answer-index/units.json] [--inventory data/answer-index/inventory.json] [--cards data/answer-index/cards] " +
-        "[--area <영역,…>] [--top1] [--out <줄별.json>] [--json]"
+        "[--alias data/answer-index/legacy-alias.json] [--area <영역,…>] [--top1] [--out <줄별.json>] [--json]"
     )
     process.exit(2)
   }
   const unitsPath = resolve(argValue(argv, "--units") ?? "data/answer-index/units.json")
   const inventoryPath = resolve(argValue(argv, "--inventory") ?? "data/answer-index/inventory.json")
   const cardsPath = resolve(argValue(argv, "--cards") ?? "data/answer-index/cards")
+  const aliasPath = resolve(argValue(argv, "--alias") ?? "data/answer-index/legacy-alias.json")
 
   const allRows = readEvalRows(readFileSync(resolve(resultsPath), "utf8"))
   const { set, keys: allKeys } = readAnswerKeys(JSON.parse(readFileSync(resolve(keysPath), "utf8")))
@@ -743,6 +898,8 @@ function main(argv: string[]) {
   else notes.push(`inventory 없음(${inventoryPath}): id 없는 정해 둔 답(svc:* 등)을 찾지 못합니다.`)
   if (existsSync(cardsPath)) context.cards = readCards(cardsPath)
   else if (rows.some((row) => (row.decidedBy ?? "").startsWith("index"))) notes.push(`카드 자료 없음(${cardsPath}): compiled 줄을 대조하지 못합니다.`)
+  if (existsSync(aliasPath)) context.alias = buildAliasIndex(JSON.parse(readFileSync(aliasPath, "utf8")))
+  else notes.push(`legacy-alias 없음(${aliasPath}): 카드 provenance 에 없는 옛 id 대응을 쓰지 못합니다.`)
   const withoutRouter = rows.filter((row) => row.router === undefined).length
   if (withoutRouter > 0) notes.push(`router 필드가 없는 예전 결과 줄 ${withoutRouter}개는 legacy 로 봅니다.`)
 
@@ -770,15 +927,21 @@ function main(argv: string[]) {
   }
   console.log(
     `줄 ${summary.rows} · 키 없는 줄 ${summary.missingKey} · 줄 없는 키 ${summary.keysWithoutRow} · id 를 못 만든 답 ${summary.unmapped}` +
-      ` (${round2(summary.n > 0 ? (summary.unmapped / summary.n) * 100 : 0)}%)`
+      ` (${round2(summary.n > 0 ? (summary.unmapped / summary.n) * 100 : 0)}%) · 못 찾음 상당 카드 답 ${summary.nfEquivalent}`
   )
+  const pct = (part: number, whole: number) => `${round2(whole > 0 ? (part / whole) * 100 : 0)}%`
+  const nodocLine = (title: string, nodoc: NodocSummary) =>
+    `${title}진짜 NODOC(nodoc·accept 없음) ${nodoc.trueRows}줄 중 답함 ${nodoc.trueAnswered} (${pct(nodoc.trueAnswered, nodoc.trueRows)})` +
+    ` · nodoc+accept ${nodoc.acceptRows}줄 중 오답 ${nodoc.acceptWrong} (${pct(nodoc.acceptWrong, nodoc.acceptRows)})`
+  console.log(nodocLine("", summary.nodoc))
+  for (const [route, routeNodoc] of Object.entries(summary.nodocByRoute)) {
+    if (routeNodoc) console.log(nodocLine(`  ${route}: `, routeNodoc))
+  }
   if (top1) {
-    const pct = (part: number, whole: number) => `${round2(whole > 0 ? (part / whole) * 100 : 0)}%`
     console.log(
       `흔적 1위 카드(compiled ${top1.compiledRows}줄): accept 키 ${top1.acceptRows}줄 중 1위가 accept ${top1.top1Accept} (${pct(top1.top1Accept, top1.acceptRows)})` +
         ` · partial ${top1.top1Partial} · reject ${top1.top1Rejected} · id 못 만듦 ${top1.top1Unmapped}`
     )
-    console.log(`nodoc 키 ${top1.nodocRows}줄 중 답해 버림 ${top1.nodocAnswered} (${pct(top1.nodocAnswered, top1.nodocRows)})`)
   }
 }
 

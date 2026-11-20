@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest"
 
 import {
+  buildAliasIndex,
   buildInventoryIndex,
   buildUnitIndex,
+  cardUnitSentences,
   classifyRow,
   filterByArea,
   idsFromCard,
+  isNotFoundEquivalentCard,
   legacyIds,
   normalizeHeading,
   parseAreaFilter,
@@ -13,9 +16,11 @@ import {
   readInventory,
   readUnits,
   rejectIdsFromCard,
+  summarizeNodoc,
   summarizeProxy,
   summarizeTop1,
   traceTop1CardId,
+  withinKeyRange,
   type AnswerKey,
   type CardRecord,
   type ProxyContext,
@@ -397,7 +402,7 @@ describe("정답 키의 reject·영역·1위 카드", () => {
     expect(filterByArea(rows, keyById, ["pricing", "company"]).map((row) => row.id)).toEqual(["a", "b"])
   })
 
-  it("--top1: compiled 줄의 흔적 1위 카드가 accept 에 드는 비율과 nodoc 키에서 답한 비율", () => {
+  it("--top1: compiled 줄의 흔적 1위 카드가 accept 에 드는 비율(NODOC 답함은 요약의 nodoc 지표로 센다)", () => {
     const memberCardId = "doc:/docs/teacher/course-members#4/remove-member"
     const rows: ProxyEvalRow[] = [
       // 결정은 못 찾음이어도 1위 카드가 accept 면 센다.
@@ -427,8 +432,177 @@ describe("정답 키의 reject·영역·1위 카드", () => {
       top1Partial: 1,
       top1Rejected: 1,
       top1Unmapped: 1,
-      nodocRows: 2,
-      nodocAnswered: 1,
     })
+    // d(howto 카드로 답함)·e(공백) 는 accept 없는 nodoc 키: 진짜 NODOC 2줄 중 답함 1.
+    expect(summarizeProxy(results, results.length).nodocByRoute.compiled).toEqual({ trueRows: 2, trueAnswered: 1, acceptRows: 0, acceptWrong: 0 })
+  })
+})
+
+describe("legacy-alias(옛 id → 카드)", () => {
+  const aliasCards = new Map<string, CardRecord>([
+    ...cards,
+    // provenance 에 옛 id 가 빠진 FIX 카드: alias 로만 옛 답과 이어진다.
+    ["fixed:contact-channel", { id: "fixed:contact-channel", kind: "fixed", answer: { text: "상담은 문의 페이지나 대표 전화로 남기실 수 있어요." }, provenance: { legacyIds: [] } }],
+    // 옛 답 글 그대로인 policy 카드(공백만 다름), provenance 없음.
+    ["policy:contact-same", { id: "policy:contact-same", kind: "policy", answer: { text: "상담은 문의 페이지에서 남기실 수 있어요.\n둘째 문단" } }],
+  ])
+  const alias = buildAliasIndex({
+    "basics:basics-contact-channel": "fixed:contact-channel",
+    "basics:basics-contact-old": "policy:contact-same",
+    "basics:basics-dropped": null,
+  })
+  const ctx: ProxyContext = { ...context, cards: aliasCards, alias }
+  const answer = (cardId: string, id = "q1") => ({ ...compiled("answer", { cardId, top: [{ id: cardId }] }), id })
+
+  it("alias 를 뒤집어 카드 id → 옛 id 로 읽고 null 은 뺀다", () => {
+    expect(alias.get("fixed:contact-channel")).toEqual(["basics:basics-contact-channel"])
+    expect([...alias.keys()]).toEqual(["fixed:contact-channel", "policy:contact-same"])
+    expect(() => buildAliasIndex(["x"])).toThrow(/legacy-alias/)
+  })
+
+  it("accept 옛 id 의 alias 대상 카드로 답하면 good 이고 1위 정답에도 센다", () => {
+    const card = aliasCards.get("fixed:contact-channel") as CardRecord
+    expect(idsFromCard(card)).toEqual([])
+    expect(idsFromCard(card, alias)).toEqual(["basics:basics-contact-channel"])
+    const contactKey = key({ accept: ["basics:basics-contact-channel"] })
+    expect(classifyRow(answer("fixed:contact-channel"), contactKey, context).verdict).toBe("wrong")
+    expect(classifyRow(answer("fixed:contact-channel"), contactKey, ctx)).toMatchObject({ verdict: "good", matched: ["basics:basics-contact-channel"] })
+    const rows = [answer("fixed:contact-channel")]
+    const keyById = new Map<string, AnswerKey>([["q1", contactKey]])
+    const results = rows.map((row) => classifyRow(row, contactKey, ctx))
+    expect(summarizeTop1(rows, results, keyById, ctx)).toMatchObject({ acceptRows: 1, top1Accept: 1 })
+    expect(summarizeTop1(rows, results, keyById, context)).toMatchObject({ acceptRows: 1, top1Accept: 0, top1Unmapped: 1 })
+  })
+
+  it("alias 옛 id 는 글이 그 옛 답 글과 같은 text 카드일 때만 reject 에 건다", () => {
+    const inventoryWithOld = buildInventoryIndex(
+      readInventory({ answers: [{ answerId: "basics:basics-contact-old", text: ["상담은 문의 페이지에서 남기실 수 있어요.", "둘째 문단"] }] })
+    )
+    expect(rejectIdsFromCard(aliasCards.get("fixed:contact-channel") as CardRecord, ctx.inventory, alias)).toEqual([])
+    expect(rejectIdsFromCard(aliasCards.get("policy:contact-same") as CardRecord, inventoryWithOld, alias)).toEqual(["basics:basics-contact-old"])
+    const rejectCtx: ProxyContext = { ...ctx, inventory: inventoryWithOld }
+    const oldKey = key({ accept: ["basics:basics-contact-old"], reject: ["basics:basics-contact-old"] })
+    expect(classifyRow(answer("policy:contact-same"), oldKey, rejectCtx).verdict).toBe("wrong")
+    const fixKey = key({ accept: ["basics:basics-contact-channel"], reject: ["basics:basics-contact-channel"] })
+    expect(classifyRow(answer("fixed:contact-channel"), fixKey, rejectCtx).verdict).toBe("good")
+  })
+})
+
+describe("NODOC 지표: 진짜 NODOC 답함 · nodoc+accept 오답", () => {
+  it("accept 없는 nodoc 키는 답하면 답함, accept 있는 nodoc 키는 wrong 만 센다(경로별로도)", () => {
+    const rows: Array<[ProxyEvalRow, AnswerKey]> = [
+      [legacy({ id: "a", decidedBy: "basics:x" }), { id: "a", nodoc: true }],
+      [legacy({ id: "b", decidedBy: "not_found", answerMode: "doc_suggestion", unresolved: true }), { id: "b", nodoc: true }],
+      [legacy({ id: "c", decidedBy: "policy", answerMode: "clarifying_question" }), { id: "c", nodoc: true }],
+      [legacy({ id: "d", decidedBy: "basics:ok" }), { id: "d", nodoc: true, accept: ["basics:ok"] }],
+      [legacy({ id: "e", decidedBy: "basics:other" }), { id: "e", nodoc: true, accept: ["basics:ok"] }],
+      [{ ...compiled("answer", { cardId: "fixed:basics-billing-unit" }), id: "f" }, { id: "f", nodoc: true }],
+      [legacy({ id: "g", decidedBy: "basics:x" }), { id: "g", accept: ["basics:x"] }],
+    ]
+    const results = rows.map(([row, k]) => classifyRow(row, k, context))
+    expect(results.map((r) => r.nodocKey)).toEqual(["true_nodoc", "true_nodoc", "true_nodoc", "nodoc_accept", "nodoc_accept", "true_nodoc", undefined])
+    const summary = summarizeProxy(results, rows.length)
+    expect(summary.nodoc).toEqual({ trueRows: 4, trueAnswered: 2, acceptRows: 2, acceptWrong: 1 })
+    expect(summary.nodocByRoute.legacy).toEqual({ trueRows: 3, trueAnswered: 1, acceptRows: 2, acceptWrong: 1 })
+    expect(summary.nodocByRoute.compiled).toEqual({ trueRows: 1, trueAnswered: 1, acceptRows: 0, acceptWrong: 0 })
+    expect(summarizeNodoc([])).toEqual({ trueRows: 0, trueAnswered: 0, acceptRows: 0, acceptWrong: 0 })
+  })
+})
+
+describe("못 찾음 상당 카드(policy·gap 이 '공개 안내에 없음'을 말함)", () => {
+  const nfCards = new Map<string, CardRecord>([
+    ...cards,
+    ["policy:overseas-card", { id: "policy:overseas-card", kind: "policy", covers: "해외 카드 결제 여부는 공개 안내에 없고 결제 담당자가 확인한다는 것, 상담 채널 안내", answer: { text: "…" }, provenance: { legacyIds: ["basics:overseas"] } }],
+    ["policy:plan-upgrade", { id: "policy:plan-upgrade", kind: "policy", covers: "Pro 에서 비즈니스로 바꿀 수 있다는 것, 차액 처리는 공개 안내에 없다는 것", answer: { text: "…" } }],
+    ["fixed:not-public", { id: "fixed:not-public", kind: "fixed", covers: "숫자는 공개 안내에 없다는 것", answer: { text: "…" } }],
+    ["gap:pricing/refund", { id: "gap:pricing/refund", kind: "gap" }],
+  ])
+  const ctx: ProxyContext = { ...context, cards: nfCards }
+  const answer = (cardId: string, extra: Record<string, unknown> = {}) => compiled("answer", { cardId, top: [{ id: cardId }], ...extra })
+
+  it("gap 카드와, covers 첫 항목이 '공개 안내에 없음'인 policy 카드만 표지가 붙는다", () => {
+    expect(isNotFoundEquivalentCard(nfCards.get("gap:pricing/refund") as CardRecord)).toBe(true)
+    expect(isNotFoundEquivalentCard(nfCards.get("policy:overseas-card") as CardRecord)).toBe(true)
+    // 사실을 먼저 답하고 덧붙여 '공개 안내에 없다'고 하는 카드, fixed 카드, covers 가 없는 카드는 아니다.
+    expect(isNotFoundEquivalentCard(nfCards.get("policy:plan-upgrade") as CardRecord)).toBe(false)
+    expect(isNotFoundEquivalentCard(nfCards.get("fixed:not-public") as CardRecord)).toBe(false)
+    expect(isNotFoundEquivalentCard({ id: "policy:x", kind: "policy" })).toBe(false)
+    expect(isNotFoundEquivalentCard({ id: "policy:y", kind: "policy", covers: "공개 안내에 정리돼 있지 않아 단정하지 않는다는 것" })).toBe(true)
+  })
+
+  it("nodoc 키면 nf_ok, accept 에 들면 good, 그 밖에는 partial 또는 nf_doc_has 이고 NODOC 답함에 넣지 않는다", () => {
+    const nodoc = classifyRow(answer("policy:overseas-card"), key({ nodoc: true }), ctx)
+    expect(nodoc).toMatchObject({ kind: "answer", nfEquivalent: true, verdict: "nf_ok" })
+    expect(nodoc.reason).toContain("못 찾음 상당")
+    expect(classifyRow(answer("policy:overseas-card"), key({ accept: ["basics:overseas"] }), ctx).verdict).toBe("good")
+    expect(classifyRow(answer("policy:overseas-card"), key({ partialAccept: ["basics:overseas"] }), ctx).verdict).toBe("partial")
+    expect(classifyRow(answer("policy:overseas-card"), key({ accept: ["basics:x"] }), ctx).verdict).toBe("nf_doc_has")
+    // reject 는 그대로 앞선다(text 가 옛 답 글과 다르므로 여기서는 reject id 가 없다).
+    expect(classifyRow(answer("policy:plan-upgrade"), key({ nodoc: true }), ctx)).toMatchObject({ verdict: "wrong" })
+    expect(classifyRow(answer("policy:plan-upgrade"), key({ nodoc: true }), ctx).nfEquivalent).toBeUndefined()
+    // 다른 카드 조각과 같이 답하면 못 찾음 상당이 아니다.
+    const mixed = answer("policy:overseas-card", { segments: [{ kind: "answer", card: "policy:overseas-card" }, { kind: "answer", card: "fixed:basics-billing-unit" }] })
+    expect(classifyRow(mixed, key({ nodoc: true }), ctx)).toMatchObject({ verdict: "wrong" })
+
+    const results = [
+      classifyRow({ ...answer("policy:overseas-card"), id: "a" }, { id: "a", nodoc: true }, ctx),
+      classifyRow({ ...answer("policy:plan-upgrade"), id: "b" }, { id: "b", nodoc: true }, ctx),
+    ]
+    const summary = summarizeProxy(results, 2)
+    expect(summary.nodoc).toEqual({ trueRows: 2, trueAnswered: 1, acceptRows: 0, acceptWrong: 0 })
+    expect(summary.nfEquivalent).toBe(1)
+  })
+})
+
+describe("키 문장 범위(unitSentences): 같은 단위를 쓰는 형제 카드", () => {
+  const unit = "doc:/docs/teacher/course-members#4"
+  const rangeCards = new Map<string, CardRecord>([
+    ["doc:a", { id: "doc:a", kind: "doc", answer: { sentences: [{ unit, ids: [0, 1] }] } }],
+    ["doc:b", { id: "doc:b", kind: "doc", answer: { sentences: [{ unit, ids: [4] }] } }],
+    ["howto:guide", { id: "howto:guide", kind: "howto", answer: { guide: "course-member-management" } }],
+  ])
+  const ctx: ProxyContext = { ...context, cards: rangeCards }
+  const answer = (cardId: string, id = "q1") => ({ ...compiled("answer", { cardId, top: [{ id: cardId }] }), id })
+
+  it("범위가 있으면 겹치는 문장을 쓰는 카드만 맞고, 없으면 단위 전체다", () => {
+    const ranged = key({ accept: [`unit:${unit}`], unitSentences: { [`unit:${unit}`]: [4, 5] } })
+    expect(classifyRow(answer("doc:b"), ranged, ctx).verdict).toBe("good")
+    expect(classifyRow(answer("doc:a"), ranged, ctx).verdict).toBe("wrong")
+    const whole = key({ accept: [`unit:${unit}`] })
+    expect(classifyRow(answer("doc:a"), whole, ctx).verdict).toBe("good")
+    // partialAccept·reject 도 같은 규칙이다.
+    const partial = key({ partialAccept: [`unit:${unit}`], unitSentences: { [`unit:${unit}`]: [1] } })
+    expect(classifyRow(answer("doc:a"), partial, ctx).verdict).toBe("partial")
+    expect(classifyRow(answer("doc:b"), partial, ctx).verdict).toBe("wrong")
+    const rejectKey = key({ accept: ["basics:x"], reject: [`unit:${unit}`], unitSentences: { [`unit:${unit}`]: [4] } })
+    expect(classifyRow(answer("doc:a"), rejectKey, ctx).rejected).toBeUndefined()
+    expect(classifyRow(answer("doc:b"), rejectKey, ctx).rejected).toEqual([`unit:${unit}`])
+  })
+
+  it("legacy 출처처럼 문장 번호를 모르는 답은 단위 전체로 본다", () => {
+    const ranged = key({ accept: [`unit:${unit}`], unitSentences: { [`unit:${unit}`]: [4] } })
+    const row = legacy({ decidedBy: "evidence_select", sources: [{ path: "/docs/teacher/course-members", heading: "4. 구성원 삭제" }] })
+    expect(classifyRow(row, ranged, ctx).verdict).toBe("good")
+    expect(withinKeyRange(`unit:${unit}`, ranged)).toBe(true)
+    expect(withinKeyRange("basics:x", ranged, new Map())).toBe(true)
+    expect(cardUnitSentences([rangeCards.get("doc:a")!, rangeCards.get("doc:b")!, rangeCards.get("howto:guide")!])).toEqual(
+      new Map([[`unit:${unit}`, new Set([0, 1, 4])]])
+    )
+  })
+
+  it("--top1 도 같은 범위 규칙을 쓴다", () => {
+    const ranged = (id: string) => key({ id, accept: [`unit:${unit}`], unitSentences: { [`unit:${unit}`]: [4] } })
+    const rows = [answer("doc:a", "a"), answer("doc:b", "b")]
+    const keyById = new Map<string, AnswerKey>(rows.map((row) => [row.id, ranged(row.id)]))
+    const results = rows.map((row) => classifyRow(row, keyById.get(row.id), ctx))
+    expect(summarizeTop1(rows, results, keyById, ctx)).toMatchObject({ acceptRows: 2, top1Accept: 1 })
+  })
+
+  it("정답 키 파일의 unitSentences 를 읽고 잘못된 꼴은 오류로 알린다", () => {
+    const parsed = readAnswerKeys({ set: "dev5", keys: [{ id: "k1", accept: [`unit:${unit}`], unitSentences: { [`unit:${unit}`]: [5, 4, 4] } }, { id: "k2", unitSentences: {} }] })
+    expect(parsed.keys[0].unitSentences).toEqual({ [`unit:${unit}`]: [4, 5] })
+    expect(parsed.keys[1].unitSentences).toBeUndefined()
+    expect(() => readAnswerKeys({ keys: [{ id: "k3", unitSentences: { "basics:x": [1] } }] })).toThrow(/unit:/)
+    expect(() => readAnswerKeys({ keys: [{ id: "k4", unitSentences: { [`unit:${unit}`]: [-1] } }] })).toThrow(/정수/)
   })
 })

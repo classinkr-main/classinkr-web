@@ -200,15 +200,16 @@ npx tsx scripts/answer-index/score.ts <judged.json> [더 많은 judged.json …]
 ```bash
 npx tsx scripts/answer-index/proxy-eval.ts --results <측정.jsonl> --keys data/answer-index/eval/answer-keys/<set>.json \
   [--units data/answer-index/units.json] [--inventory data/answer-index/inventory.json] [--cards data/answer-index/cards] \
-  [--area <영역,…>] [--top1] [--out <줄별 판정.json>] [--json]
+  [--alias data/answer-index/legacy-alias.json] [--area <영역,…>] [--top1] [--out <줄별 판정.json>] [--json]
 ```
 
 - 정답 키(사양 §4.2, 형은 `types.ts` `AnswerKey`): `{ "set", "keys": [{ "id", "accept": [], "partialAccept": [], "nodoc": false, "clarifyOk": false }] }`. `accept`·`partialAccept`는 옛 답 id(`basics:`·`field:`·`svc:`·`symptom:`·`guide:` …, inventory 의 id 그대로)와 문서 단위 id(`unit:<unitId>`, 예: `unit:doc:/docs/teacher/course-members#4`).
-  선택 칸: `reject`(이 id 로 답하면 `accept`와 겹쳐도 `wrong`, 심사 범위 밖 사실을 단정하는 옛 답 등. compiled 줄은 카드가 실제로 내는 글의 id — 문장 단위·`curatedRef`·증상·가이드, 그리고 글이 그 옛 답 글과 같은 text 카드의 `provenance.legacyIds` — 로만 대조한다. 고친 글(FIX)·문서 문장(CONVERT) 카드의 provenance 는 출처일 뿐이라 reject 에 걸지 않는다), `siteAccept`(공개 페이지 근거로만 맞는 답 — 대리 점수 계산에는 쓰지 않음), `area`(질문의 영역, `--area`가 거름), `areaFrom`(영역을 정한 근거), `evidenceScope`(`docs`·`site`), `searched`(nodoc 일 때 찾아본 낱말), `note`, `keyGroup`(같은 정답을 공유하는 키 묶음).
+  선택 칸: `reject`(이 id 로 답하면 `accept`와 겹쳐도 `wrong`, 심사 범위 밖 사실을 단정하는 옛 답 등. compiled 줄은 카드가 실제로 내는 글의 id — 문장 단위·`curatedRef`·증상·가이드, 그리고 글이 그 옛 답 글과 같은 text 카드의 `provenance.legacyIds`·alias 옛 id — 로만 대조한다. 고친 글(FIX)·문서 문장(CONVERT) 카드의 provenance·alias 는 출처일 뿐이라 reject 에 걸지 않는다), `siteAccept`(공개 페이지 근거로만 맞는 답 — 대리 점수 계산에는 쓰지 않음), `area`(질문의 영역, `--area`가 거름), `areaFrom`(영역을 정한 근거), `evidenceScope`(`docs`·`site`), `searched`(nodoc 일 때 찾아본 낱말), `note`, `keyGroup`(같은 정답을 공유하는 키 묶음), `unitSentences`(대리 점수 전용: `{ "unit:<unitId>": [문장 번호] }`, 아래 문장 범위 규칙).
 - `--area pricing,company`: 키의 `area`가 그 영역인 줄만 센다(키가 없거나 `area`가 없는 줄은 뺀다).
-- `--top1`: compiled 줄에서 결정과 무관하게 흔적 1위 카드(`answerIndex.top`의 첫 카드, `none` 자리는 건너뜀)의 id 가 `accept`에 드는 비율(`accept`가 있는 키만, `reject`에 걸리면 넣지 않음)과, `nodoc` 키인데 답해 버린(못 찾음·공백·되묻기가 아닌) 비율을 더 찍는다. 문턱을 고치기 전 순위 자체가 맞는지 보는 숫자다.
-- `--units`·`--inventory`·`--cards`는 기본 경로에 파일이 없으면 그 대조만 건너뛰고 `참고:`로 알린다.
-- 출력: 대리 점수·구간·분류별 수, legacy·compiled 줄 따로, 키 없는 줄·줄 없는 키·id 를 못 만든 답의 수. `--out`이면 줄마다 `{ id, router, route, decidedBy, kind, ids, matched, unmapped, verdict, reason }`.
+- `--top1`: compiled 줄에서 결정과 무관하게 흔적 1위 카드(`answerIndex.top`의 첫 카드, `none` 자리는 건너뜀)의 id 가 `accept`에 드는 비율(`accept`가 있는 키만, `reject`에 걸리면 넣지 않음, alias·문장 범위 규칙은 판정과 같음)을 더 찍는다. 문턱을 고치기 전 순위 자체가 맞는지 보는 숫자다.
+- NODOC 지표(늘 찍음, 경로별로도): **진짜 NODOC 답함**(= `nodoc: true`이고 `accept`가 빈 키의 줄 가운데 답한 줄 — 못 찾음·되묻기·측정 오류·못 찾음 상당 카드 답은 답함이 아니다. 사양 §9.3 파일럿 관문 'NODOC 질문 답해 버림'은 이 숫자다)과 **nodoc+accept 오답**(= `nodoc: true`이면서 `accept`도 있는 키의 줄 가운데 `wrong`). 앞의 것이 관문 지표다.
+- `--units`·`--inventory`·`--cards`·`--alias`는 기본 경로에 파일이 없으면 그 대조만 건너뛰고 `참고:`로 알린다.
+- 출력: 대리 점수·구간·분류별 수, legacy·compiled 줄 따로, 키 없는 줄·줄 없는 키·id 를 못 만든 답·못 찾음 상당 카드 답의 수, NODOC 지표. `--out`이면 줄마다 `{ id, router, route, decidedBy, kind, ids, matched, unmapped, nfEquivalent?, nodocKey?, verdict, reason }`.
 
 ### 줄 → id 바꾸기
 
@@ -216,7 +217,7 @@ npx tsx scripts/answer-index/proxy-eval.ts --results <측정.jsonl> --keys data/
 
 | decidedBy | 종류 | id |
 |---|---|---|
-| `index:<카드>`·`index-partial:<카드>` | 답 | 그 카드(와 `answerIndex.segments[]`가 배열이면 답한 조각의 카드)의 `provenance.legacyIds` + `answer.sentences[].unit`마다 `unit:<unit>` + 보조로 `answer.curatedRef`(`<module>:<id>`, `service`는 `svc:`), `answer.symptomTopic`(`symptom:<id>`), `answer.guide`(`guide:<slug>`·`unit:guide:<slug>`) |
+| `index:<카드>`·`index-partial:<카드>` | 답 | 그 카드(와 `answerIndex.segments[]`가 배열이면 답한 조각의 카드)의 `provenance.legacyIds` + `legacy-alias.json`에서 그 카드를 대상으로 하는 옛 id + `answer.sentences[].unit`마다 `unit:<unit>` + 보조로 `answer.curatedRef`(`<module>:<id>`, `service`는 `svc:`), `answer.symptomTopic`(`symptom:<id>`), `answer.guide`(`guide:<slug>`·`unit:guide:<slug>`) |
 | `index-gap:<카드>`·`index-abstain` | 못 찾음 | — |
 | `index-clarify` | 되묻기 | — |
 
@@ -252,10 +253,15 @@ npx tsx scripts/answer-index/proxy-eval.ts --results <측정.jsonl> --keys data/
 | 못 찾음 | `nodoc: false` | `nf_doc_has` |
 | 되묻기 | `clarifyOk: true` | `good` |
 | 되묻기 | 그 밖 | `needless_clarify` |
-| 답 | id 가 `reject`에 있음(아래 둘보다 먼저, compiled 는 카드가 내는 글의 id 만) | `wrong` |
+| 답 | id 가 `reject`에 있음(아래보다 먼저, compiled 는 카드가 내는 글의 id 만) | `wrong` |
 | 답 | id 가 `accept`에 있음 | `good` |
+| 답(못 찾음 상당 카드만) | `nodoc: true` | `nf_ok` |
 | 답 | id 가 `partialAccept`에 있음 | `partial` |
+| 답(못 찾음 상당 카드만) | 그 밖 | `nf_doc_has` |
 | 답 | 그 밖(또는 id 를 못 만듦) | `wrong` |
 | 측정 오류(답 없음) | — | `wrong` |
 
-`nodoc: true`이면서 `accept`가 있는 키(예: 문서에 없는 것을 묻지만 상담 경로 답도 받아들임)는 못 찾음도 `nf_ok`, `accept`의 답도 `good`이다. 정답 키가 없는 줄은 점수에서 뺀다. 반복마다 대리 점수와 심사 점수의 차이를 적어 대리 점수를 믿을 만한지 본다(사양 §2.4).
+- **문장 범위 규칙:** 키의 `unitSentences`가 `unit:<unitId>`에 문장 번호(units.json `sentences[].i`)를 적어 두었으면, compiled 카드의 그 unit id 는 카드 `answer.sentences`가 그 범위와 한 문장이라도 겹칠 때만 `accept`·`partialAccept`·`reject`에 든 것으로 센다. 같은 단위를 쓰는 형제 카드(질문과 다른 문장을 쓰는 카드)가 모두 정답이 되지 않게 하는 규칙이다. 범위가 없으면 단위 전체이고, 문장 번호를 모르는 답(legacy 출처, 가이드 단위)은 범위와 상관없이 단위 전체로 본다.
+- **못 찾음 상당 카드(`isNotFoundEquivalentCard`):** gap 카드, 그리고 `covers`의 첫 항목(`, ` 앞)이 '공개 안내에 없음'(`공개 안내` 뒤 26자 안에 `없`·`않`)을 말하는 policy 카드. 답한 카드(조각 포함)가 모두 이런 카드면 위 표처럼 못 찾음 답과 같게 센다. 사실을 먼저 답하고 덧붙여 '…은 공개 안내에 없다'고 하는 카드(첫 항목이 사실)는 들지 않는다. 카드 자료의 기존 칸(`kind`·`covers`)만 본다.
+
+`nodoc: true`이면서 `accept`가 있는 키(예: 문서에 없는 것을 묻지만 상담 경로 답도 받아들임)는 못 찾음도 `nf_ok`, `accept`의 답도 `good`이다. 그래서 NODOC 관문 지표는 이런 키를 빼고 센다(위 '진짜 NODOC 답함'). 정답 키가 없는 줄은 점수에서 뺀다. 반복마다 대리 점수와 심사 점수의 차이를 적어 대리 점수를 믿을 만한지 본다(사양 §2.4).
