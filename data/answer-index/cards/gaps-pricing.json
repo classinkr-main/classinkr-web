@@ -1,0 +1,1988 @@
+[
+  {
+    "id": "gap:pricing/contract-holder-change",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "pricing",
+    "topic": "계약자 명의 변경",
+    "textHash": "",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "demo",
+      "related": []
+    },
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_contract_holder"
+    ],
+    "anchors": [
+      "명의 변경",
+      "계약자 변경",
+      "계약자 이름 바꾸기",
+      "명의 이전",
+      "양수도",
+      "대표자 바뀜",
+      "학원 인수"
+    ],
+    "covers": "계약 뒤에 계약자(명의)를 다른 사람이나 다른 사업자로 바꿀 수 있는지",
+    "notCovers": [],
+    "negatives": [
+      {
+        "q": "메인 관리자 계정은 누구 명의로 정하는 게 좋아요",
+        "route": "doc:/docs/software/software-pricing-quote-bundle-faq#4/main-admin-account"
+      },
+      {
+        "q": "강사 개인 아이디로 결제했는데 그만두면 어떻게 돼요",
+        "route": "doc:/docs/admin/billing-upgrade#5/personal-id-leaves"
+      },
+      {
+        "q": "결제할 때 로그인한 아이디가 무슨 역할을 하나요",
+        "route": "doc:/docs/admin/billing-upgrade#1/main-admin-id"
+      }
+    ],
+    "handoff": "demo",
+    "status": "active",
+    "provenance": {
+      "unit": "D5-pricing",
+      "writer": "agent:sonnet#D5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    },
+    "searchLog": [
+      {
+        "query": "명의 변경",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "계약자 변경",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "명의 이전",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "양수도",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ]
+  },
+  {
+    "id": "gap:pricing/change-academy-name",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "pricing",
+    "topic": "결제 뒤 학원명·소재지 정보 수정",
+    "textHash": "",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "support",
+      "related": []
+    },
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_academy_info_edit"
+    ],
+    "anchors": [
+      "학원명 수정",
+      "학원 정보 수정",
+      "소재지 변경",
+      "학원 이전",
+      "상호 변경",
+      "학원 이름 바꿈",
+      "주소 변경"
+    ],
+    "covers": "결제와 인증을 마친 뒤 학원명이나 소재지 같은 등록 정보를 고칠 수 있는지",
+    "notCovers": [],
+    "negatives": [
+      {
+        "q": "전환 팝업에 적는 학원 정보는 뭘 넣어요",
+        "route": "doc:/docs/admin/billing-upgrade#1/popup-info"
+      },
+      {
+        "q": "학원명을 대충 적었더니 인증이 반려됐어요",
+        "route": "doc:/docs/admin/billing-upgrade#5/verify-name-mismatch"
+      },
+      {
+        "q": "결제하고 나서 계정 인증은 어떻게 신청해요",
+        "route": "doc:/docs/admin/billing-upgrade#4/verification-apply"
+      }
+    ],
+    "handoff": "support",
+    "status": "active",
+    "provenance": {
+      "unit": "D5-pricing",
+      "writer": "agent:sonnet#D5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    },
+    "searchLog": [
+      {
+        "query": "학원명 수정",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "학원 정보 수정",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "소재지 변경",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "상호 변경",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ]
+  },
+  {
+    "id": "gap:pricing/change-main-admin",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "pricing",
+    "topic": "메인 관리자 계정 교체",
+    "textHash": "",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "support",
+      "related": []
+    },
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_main_admin_change"
+    ],
+    "anchors": [
+      "메인 관리자 변경",
+      "관리자 계정 교체",
+      "관리자 바꾸기",
+      "관리자 이전",
+      "원장 계정 바꾸기",
+      "관리자 계정 양도",
+      "관리자 인수인계"
+    ],
+    "covers": "결제로 정해진 메인 관리자 계정을 다른 계정으로 바꾸거나 넘길 수 있는지",
+    "notCovers": [],
+    "negatives": [
+      {
+        "q": "결제할 때 로그인한 아이디가 학원 메인 관리자가 되나요",
+        "route": "doc:/docs/admin/billing-upgrade#1/main-admin-id"
+      },
+      {
+        "q": "결제한 계정은 개인 계정보다 공용 계정이 좋나요",
+        "route": "doc:/docs/software/software-pricing-quote-bundle-faq#4/main-admin-account"
+      },
+      {
+        "q": "강사가 그만두면 메인 관리자 계정은 어떻게 하나요",
+        "route": "doc:/docs/admin/billing-upgrade#5/personal-id-leaves"
+      }
+    ],
+    "handoff": "support",
+    "status": "active",
+    "provenance": {
+      "unit": "D5-pricing",
+      "writer": "agent:sonnet#D5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    },
+    "searchLog": [
+      {
+        "query": "메인 관리자 변경",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "메인 관리자 바꾸",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "관리자 계정 이전",
+        "units": 5,
+        "site": 0,
+        "checked": "걸린 문장은 다른 뜻(낱말만 겹침)이라 관련 문장 없음 확인"
+      },
+      {
+        "query": "관리자 교체",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ]
+  },
+  {
+    "id": "gap:pricing/recover-main-admin",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "pricing",
+    "topic": "결제한 아이디 분실 복구",
+    "textHash": "",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "support",
+      "related": []
+    },
+    "asks": [
+      "howto",
+      "yesno"
+    ],
+    "concepts": [
+      "C_payment_account"
+    ],
+    "anchors": [
+      "결제한 아이디 모름",
+      "관리자 계정 분실",
+      "결제 아이디 찾기",
+      "결제 계정 복구",
+      "메인 관리자 계정 못 찾음",
+      "아이디 복구",
+      "퇴사자 계정으로 결제"
+    ],
+    "covers": "결제할 때 쓴 아이디를 잊었거나 그 사람이 그만둬서 쓸 수 없을 때 되찾는 방법",
+    "notCovers": [],
+    "negatives": [
+      {
+        "q": "결제했는데 무료 계정으로 보여요 뭘 확인해야 하나요",
+        "route": "fixed:paid-not-reflected-check"
+      },
+      {
+        "q": "강사 개인 아이디로 결제했는데 그만두면 어떻게 되나요",
+        "route": "doc:/docs/admin/billing-upgrade#5/personal-id-leaves"
+      },
+      {
+        "q": "결제한 아이디가 학원 메인 관리자인가요",
+        "route": "doc:/docs/admin/billing-upgrade#1/main-admin-id"
+      }
+    ],
+    "handoff": "support",
+    "status": "active",
+    "provenance": {
+      "unit": "D5-pricing",
+      "writer": "agent:sonnet#D5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    },
+    "searchLog": [
+      {
+        "query": "결제한 아이디",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "관리자 계정 분실",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "결제 아이디 찾",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "아이디 복구",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ]
+  },
+  {
+    "id": "gap:pricing/cancel-deadline",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "pricing",
+    "topic": "결제 취소 가능 기한",
+    "textHash": "",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "demo",
+      "related": []
+    },
+    "asks": [
+      "yesno",
+      "quantity"
+    ],
+    "concepts": [
+      "C_cancel_window"
+    ],
+    "anchors": [
+      "결제 취소",
+      "취소 기한",
+      "취소 가능 기간",
+      "결제하고 취소",
+      "계약 취소",
+      "결제 철회",
+      "언제까지 취소"
+    ],
+    "covers": "결제나 계약을 마친 뒤 언제까지 취소할 수 있는지 기한",
+    "notCovers": [],
+    "negatives": [
+      {
+        "q": "소프트웨어 플랜은 어디서 결제하나요",
+        "route": "doc:/docs/software/software-pricing-quote-bundle-faq#5/checkout-plan"
+      },
+      {
+        "q": "세금계산서나 환불 얘기는 결제 전에 물어야 하나요",
+        "route": "doc:/docs/admin/billing-upgrade#1/invoice-before-pay"
+      },
+      {
+        "q": "Pro로 시작했다가 비즈니스로 바꿀 수 있나요",
+        "route": "doc:/docs/software/software-pricing-quote-bundle-faq#0/pro-to-business"
+      }
+    ],
+    "handoff": "demo",
+    "status": "active",
+    "provenance": {
+      "unit": "D5-pricing",
+      "writer": "agent:sonnet#D5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    },
+    "searchLog": [
+      {
+        "query": "결제 취소",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "취소 기한",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "취소 가능",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "계약 취소",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ]
+  },
+  {
+    "id": "gap:pricing/contract-esign",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "pricing",
+    "topic": "전자 계약·전자서명",
+    "textHash": "",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "demo",
+      "related": []
+    },
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_e_contract"
+    ],
+    "anchors": [
+      "전자서명",
+      "전자 계약",
+      "계약서 서명",
+      "전자 계약서",
+      "서명 방식",
+      "계약서 도장",
+      "온라인 계약"
+    ],
+    "covers": "계약서를 전자서명이나 온라인으로 체결할 수 있는지",
+    "notCovers": [],
+    "negatives": [
+      {
+        "q": "Enterprise 맞춤 계약에는 무엇이 들어가나요",
+        "route": "doc:/docs/software/software-pricing-quote-bundle-faq#0/enterprise-contract"
+      },
+      {
+        "q": "견적서는 어떻게 받나요",
+        "route": "doc:/docs/software/software-pricing-quote-bundle-faq#2/trial-quote-request-how"
+      },
+      {
+        "q": "전자칠판과 소프트웨어를 한 견적으로 받을 수 있나요",
+        "route": "doc:/docs/software/software-pricing-quote-bundle-faq#1/board-bundle-quote"
+      }
+    ],
+    "handoff": "demo",
+    "status": "active",
+    "provenance": {
+      "unit": "D5-pricing",
+      "writer": "agent:sonnet#D5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    },
+    "searchLog": [
+      {
+        "query": "전자서명",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "전자 서명",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "계약서 서명",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "전자계약",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ]
+  },
+  {
+    "id": "gap:pricing/public-procurement",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "pricing",
+    "topic": "학교·공공기관 조달 등록",
+    "textHash": "",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "demo",
+      "related": []
+    },
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_public_procurement"
+    ],
+    "anchors": [
+      "나라장터",
+      "조달 등록",
+      "조달청",
+      "공공기관 입찰",
+      "학교 구매",
+      "교육청 구매",
+      "공공 조달"
+    ],
+    "covers": "공공기관이나 학교가 나라장터 같은 조달 절차로 구매할 수 있는지",
+    "notCovers": [],
+    "negatives": [
+      {
+        "q": "대형 기관은 어떤 계약으로 도입하나요",
+        "route": "doc:/docs/software/software-pricing-quote-bundle-faq#0/enterprise-contract"
+      },
+      {
+        "q": "전자칠판과 소프트웨어를 함께 견적받고 싶어요",
+        "route": "doc:/docs/software/software-pricing-quote-bundle-faq#1/board-bundle-quote"
+      },
+      {
+        "q": "플랜은 어디에서 결제하나요",
+        "route": "doc:/docs/software/software-pricing-quote-bundle-faq#5/checkout-plan"
+      }
+    ],
+    "handoff": "demo",
+    "status": "disabled",
+    "provenance": {
+      "unit": "D5-pricing",
+      "writer": "agent:sonnet#D5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    },
+    "searchLog": [
+      {
+        "query": "나라장터",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "조달",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "입찰",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "조달청",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ]
+  },
+  {
+    "id": "gap:pricing/quote-validity",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "pricing",
+    "topic": "견적서 유효 기간",
+    "textHash": "",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "demo",
+      "related": []
+    },
+    "asks": [
+      "quantity",
+      "yesno"
+    ],
+    "concepts": [
+      "C_quote_validity"
+    ],
+    "anchors": [
+      "견적 유효기간",
+      "견적서 유효",
+      "견적 만료",
+      "견적 언제까지 유효",
+      "견적 기한",
+      "견적가 유지",
+      "견적 효력"
+    ],
+    "covers": "받은 견적서가 언제까지 유효한지 기간",
+    "notCovers": [],
+    "negatives": [
+      {
+        "q": "화면에 보이는 금액은 확정된 건가요",
+        "route": "doc:/docs/software/software-pricing-quote-bundle-faq#4/screen-price-not-final"
+      },
+      {
+        "q": "견적서는 어떻게 받아요",
+        "route": "doc:/docs/software/software-pricing-quote-bundle-faq#2/trial-quote-request-how"
+      },
+      {
+        "q": "견적 상담 전에 뭘 준비해야 하나요",
+        "route": "doc:/docs/software/software-pricing-quote-bundle-faq#4/prep-before-consult"
+      }
+    ],
+    "handoff": "demo",
+    "status": "active",
+    "provenance": {
+      "unit": "D5-pricing",
+      "writer": "agent:sonnet#D5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    },
+    "searchLog": [
+      {
+        "query": "견적 유효",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "견적서 유효",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "견적 만료",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "견적 유효기간",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ]
+  },
+  {
+    "id": "gap:pricing/purchase-order",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "pricing",
+    "topic": "품의서·구매 요청 서류",
+    "textHash": "",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "demo",
+      "related": []
+    },
+    "asks": [
+      "howto",
+      "yesno"
+    ],
+    "concepts": [
+      "C_purchase_docs"
+    ],
+    "anchors": [
+      "품의서",
+      "구매요청서",
+      "발주서",
+      "내부 결재",
+      "구매 서류",
+      "결재용 자료",
+      "구매 품의"
+    ],
+    "covers": "내부 결재나 구매 요청에 쓸 서류(품의서·발주서 양식)를 받을 수 있는지",
+    "notCovers": [],
+    "negatives": [
+      {
+        "q": "견적 상담 전에 준비할 게 뭐예요",
+        "route": "doc:/docs/software/software-pricing-quote-bundle-faq#4/prep-before-consult"
+      },
+      {
+        "q": "견적서는 어떻게 받나요",
+        "route": "doc:/docs/software/software-pricing-quote-bundle-faq#2/trial-quote-request-how"
+      },
+      {
+        "q": "세금계산서나 영수증은 결제 전에 물어야 하나요",
+        "route": "doc:/docs/admin/billing-upgrade#1/invoice-before-pay"
+      }
+    ],
+    "handoff": "demo",
+    "status": "active",
+    "provenance": {
+      "unit": "D5-pricing",
+      "writer": "agent:sonnet#D5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    },
+    "searchLog": [
+      {
+        "query": "품의서",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "구매요청서",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "발주서",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "내부 결재",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ]
+  },
+  {
+    "id": "gap:pricing/pause-subscription",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "pricing",
+    "topic": "방학·휴원 일시 정지",
+    "textHash": "",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "demo",
+      "related": []
+    },
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_service_pause"
+    ],
+    "anchors": [
+      "일시정지",
+      "휴원",
+      "방학 중지",
+      "이용 중지",
+      "서비스 정지",
+      "잠깐 멈춤",
+      "쉬는 달"
+    ],
+    "covers": "방학이나 휴원 기간에 이용을 잠시 멈추거나 쉬는 동안 요금을 조정할 수 있는지",
+    "notCovers": [],
+    "negatives": [
+      {
+        "q": "언제까지 쓸 수 있고 계약 기간은 어떻게 되나요",
+        "route": "doc:/docs/start/pre-adoption-faq-22-questions#2/usage-period"
+      },
+      {
+        "q": "정기 결제에는 뭐가 들어가나요",
+        "route": "doc:/docs/start/pre-adoption-faq-22-questions#2/subscription-includes"
+      },
+      {
+        "q": "구독형과 충전형 결제는 어떻게 다른가요",
+        "route": "doc:/docs/software/software-pricing-quote-bundle-faq#0/payment-types"
+      }
+    ],
+    "handoff": "demo",
+    "status": "active",
+    "provenance": {
+      "unit": "D5-pricing",
+      "writer": "agent:sonnet#D5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    },
+    "searchLog": [
+      {
+        "query": "일시정지",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "휴원",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "이용 중지",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "서비스 정지",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ]
+  },
+  {
+    "id": "gap:pricing/delivery-lead",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "pricing",
+    "topic": "주문 뒤 납기·배송 기간",
+    "textHash": "",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "demo",
+      "related": []
+    },
+    "asks": [
+      "quantity",
+      "yesno"
+    ],
+    "concepts": [
+      "C_delivery_lead_time"
+    ],
+    "anchors": [
+      "납기",
+      "출고",
+      "배송 기간",
+      "주문하면 언제 도착",
+      "설치 소요",
+      "도입 일정",
+      "도착까지"
+    ],
+    "covers": "하드웨어를 주문하고 계약한 뒤 출고·배송·설치까지 걸리는 기간",
+    "notCovers": [
+      "설치·온보딩에 들어가는 것과 첫 주부터 수업 목표 → doc:/docs/start/value-and-cost-framing#0/install-onboarding-scope"
+    ],
+    "negatives": [
+      {
+        "q": "설치와 온보딩에는 뭐가 들어가나요",
+        "route": "doc:/docs/start/value-and-cost-framing#0/install-onboarding-scope"
+      },
+      {
+        "q": "쇼룸에서 보고 견적과 일정을 잡을 수 있나요",
+        "route": "doc:/docs/start/value-and-cost-framing#5/showroom-quote-schedule"
+      },
+      {
+        "q": "칠판 모델별 사양과 재고는 어디서 확인해요",
+        "route": "doc:/docs/start/value-and-cost-framing#3/board-model-spec-stock"
+      },
+      {
+        "q": "설치하러 와서 강사 교육도 해 주나요",
+        "route": "doc:/docs/start/value-and-cost-framing#0/install-onboarding-scope"
+      }
+    ],
+    "handoff": "demo",
+    "status": "active",
+    "provenance": {
+      "unit": "D5-pricing",
+      "writer": "agent:sonnet#D5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    },
+    "searchLog": [
+      {
+        "query": "납기",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "출고",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "배송 기간",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "주문 후",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ]
+  },
+  {
+    "id": "gap:pricing/payment-failure",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "pricing",
+    "topic": "결제 실패·카드 승인 오류",
+    "textHash": "",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "support",
+      "related": []
+    },
+    "asks": [
+      "howto",
+      "yesno"
+    ],
+    "concepts": [
+      "C_payment_error"
+    ],
+    "anchors": [
+      "결제 실패",
+      "결제 오류",
+      "카드 승인 거절",
+      "결제가 안 돼요",
+      "카드 승인",
+      "결제 거절",
+      "결제 에러"
+    ],
+    "covers": "결제 화면에서 결제가 실패하거나 카드 승인이 거절될 때 원인과 해결 방법",
+    "notCovers": [],
+    "negatives": [
+      {
+        "q": "결제했는데 계정이 무료로 보여요",
+        "route": "fixed:paid-not-reflected-check"
+      },
+      {
+        "q": "결제하고 나서 해야 할 일 순서가 뭐예요",
+        "route": "doc:/docs/software/software-pricing-quote-bundle-faq#5/after-payment-steps"
+      },
+      {
+        "q": "소프트웨어 플랜은 어디서 결제해요",
+        "route": "doc:/docs/software/software-pricing-quote-bundle-faq#5/checkout-plan"
+      }
+    ],
+    "handoff": "support",
+    "status": "active",
+    "provenance": {
+      "unit": "D5-pricing",
+      "writer": "agent:sonnet#D5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    },
+    "searchLog": [
+      {
+        "query": "결제 실패",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "결제 오류",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "카드 승인",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "결제 거절",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ]
+  },
+  {
+    "id": "gap:pricing/card-change",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "pricing",
+    "topic": "결제 카드·수단 변경",
+    "textHash": "",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "support",
+      "related": []
+    },
+    "asks": [
+      "howto",
+      "yesno"
+    ],
+    "concepts": [
+      "C_payment_method_change"
+    ],
+    "anchors": [
+      "결제 카드 변경",
+      "결제 수단 변경",
+      "카드 교체",
+      "등록 카드 바꾸기",
+      "카드 바꾸기",
+      "결제 카드 교체",
+      "다른 카드로"
+    ],
+    "covers": "이미 결제하고 이용 중인 상태에서 결제에 쓴 카드나 결제 수단을 바꿀 수 있는지",
+    "notCovers": [],
+    "negatives": [
+      {
+        "q": "결제 수단은 뭐가 가능한가요",
+        "route": "policy:payment-methods"
+      },
+      {
+        "q": "결제 방식이 구독형이랑 충전형이 있다던데요",
+        "route": "doc:/docs/software/software-pricing-quote-bundle-faq#0/payment-types"
+      },
+      {
+        "q": "결제한 뒤에 할 일이 뭐예요",
+        "route": "doc:/docs/software/software-pricing-quote-bundle-faq#5/after-payment-steps"
+      }
+    ],
+    "handoff": "support",
+    "status": "active",
+    "provenance": {
+      "unit": "D5-pricing",
+      "writer": "agent:sonnet#D5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    },
+    "searchLog": [
+      {
+        "query": "결제 카드 변경",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "결제 수단 변경",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "카드 교체",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "결제 카드",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ]
+  },
+  {
+    "id": "gap:pricing/billing-day",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "pricing",
+    "topic": "결제일·청구일 변경",
+    "textHash": "",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "support",
+      "related": []
+    },
+    "asks": [
+      "howto",
+      "yesno"
+    ],
+    "concepts": [
+      "C_billing_day"
+    ],
+    "anchors": [
+      "결제일 변경",
+      "청구일",
+      "결제일 조정",
+      "결제 날짜 바꾸기",
+      "납부일",
+      "결제일 옮기기",
+      "월 결제일"
+    ],
+    "covers": "정해진 결제일이나 청구일을 다른 날로 바꾸거나 맞출 수 있는지",
+    "notCovers": [],
+    "negatives": [
+      {
+        "q": "결제 방식이 구독형이랑 충전형이 어떻게 달라요",
+        "route": "doc:/docs/software/software-pricing-quote-bundle-faq#0/payment-types"
+      },
+      {
+        "q": "전환한 뒤 잔여 금액은 어디서 봐요",
+        "route": "doc:/docs/admin/billing-upgrade#3/balance-check"
+      },
+      {
+        "q": "결제하고 나서 해야 할 순서가 뭐예요",
+        "route": "doc:/docs/software/software-pricing-quote-bundle-faq#5/after-payment-steps"
+      }
+    ],
+    "handoff": "support",
+    "status": "active",
+    "provenance": {
+      "unit": "D5-pricing",
+      "writer": "agent:sonnet#D5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    },
+    "searchLog": [
+      {
+        "query": "결제일 변경",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "청구일",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "결제일 조정",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "결제 시점",
+        "units": 2,
+        "site": 0,
+        "checked": "걸린 문장은 다른 뜻(낱말만 겹침)이라 관련 문장 없음 확인"
+      }
+    ]
+  },
+  {
+    "id": "gap:pricing/charge-expiry",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "pricing",
+    "topic": "충전 포인트 유효 기간·소멸",
+    "textHash": "",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "demo",
+      "related": []
+    },
+    "asks": [
+      "yesno",
+      "quantity"
+    ],
+    "concepts": [
+      "C_charge_expiry"
+    ],
+    "anchors": [
+      "포인트 유효기간",
+      "충전금 소멸",
+      "포인트 소멸",
+      "충전 유효기간",
+      "충전한 금액 만료",
+      "남은 포인트",
+      "충전 기한"
+    ],
+    "covers": "충전형으로 미리 충전한 포인트가 언제 사라지거나 만료되는지",
+    "notCovers": [],
+    "negatives": [
+      {
+        "q": "구독형과 충전형은 어떻게 다른가요",
+        "route": "doc:/docs/software/software-pricing-quote-bundle-faq#0/payment-types"
+      },
+      {
+        "q": "전환한 뒤 잔여 금액은 어디서 보나요",
+        "route": "doc:/docs/admin/billing-upgrade#3/balance-check"
+      },
+      {
+        "q": "충전 방식 말고 정기 결제에는 뭐가 포함되나요",
+        "route": "doc:/docs/start/pre-adoption-faq-22-questions#2/subscription-includes"
+      }
+    ],
+    "handoff": "demo",
+    "status": "active",
+    "provenance": {
+      "unit": "D5-pricing",
+      "writer": "agent:sonnet#D5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    },
+    "searchLog": [
+      {
+        "query": "포인트 유효",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "충전 유효",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "포인트 소멸",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "충전금 소멸",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ]
+  },
+  {
+    "id": "gap:pricing/price-change",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "pricing",
+    "topic": "요금 인상·가격 변경",
+    "textHash": "",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "demo",
+      "related": []
+    },
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_price_change"
+    ],
+    "anchors": [
+      "요금 인상",
+      "가격 인상",
+      "가격 변경",
+      "요금 오른다",
+      "가격 동결",
+      "요금 개편",
+      "가격 정책 변경"
+    ],
+    "covers": "이용 중이거나 계약한 뒤에 요금이 오르거나 가격이 바뀌는지, 가격이 유지되는지",
+    "notCovers": [],
+    "negatives": [
+      {
+        "q": "화면에 보이는 금액이 확정이 아니라고요",
+        "route": "doc:/docs/software/software-pricing-quote-bundle-faq#4/screen-price-not-final"
+      },
+      {
+        "q": "도입 비용은 한 가지 가격이 아니라던데요",
+        "route": "doc:/docs/start/value-and-cost-framing#summary/cost-overview"
+      },
+      {
+        "q": "요금제 금액이나 할인은 어디서 문의해요",
+        "route": "doc:/docs/software/software-pricing-quote-bundle-faq#summary/price-trial-quote"
+      }
+    ],
+    "handoff": "demo",
+    "status": "active",
+    "provenance": {
+      "unit": "D5-pricing",
+      "writer": "agent:sonnet#D5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    },
+    "searchLog": [
+      {
+        "query": "요금 인상",
+        "units": 2,
+        "site": 0,
+        "checked": "걸린 문장은 다른 뜻(낱말만 겹침)이라 관련 문장 없음 확인"
+      },
+      {
+        "query": "가격 인상",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "요금 변경",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "가격 동결",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ]
+  },
+  {
+    "id": "gap:pricing/overseas-payment",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "pricing",
+    "topic": "해외 카드·해외 결제",
+    "textHash": "",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "demo",
+      "related": []
+    },
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_overseas_payment"
+    ],
+    "anchors": [
+      "해외 카드",
+      "해외 결제",
+      "해외 학원 결제",
+      "외화 결제",
+      "해외에서 결제",
+      "해외 송금",
+      "국제 카드"
+    ],
+    "covers": "해외에서 발급된 카드나 해외 송금·외화로 결제할 수 있는지",
+    "notCovers": [
+      "해외에서 발급한 카드로 결제되는지 → policy:overseas-card"
+    ],
+    "negatives": [
+      {
+        "q": "해외에서도 VPN 없이 접속되나요",
+        "route": "doc:/docs/student/class-join-replay#9/overseas"
+      },
+      {
+        "q": "결제 방식이 어떻게 있어요",
+        "route": "doc:/docs/software/software-pricing-quote-bundle-faq#0/payment-types"
+      },
+      {
+        "q": "소프트웨어 플랜은 어디서 결제해요",
+        "route": "doc:/docs/software/software-pricing-quote-bundle-faq#5/checkout-plan"
+      },
+      {
+        "q": "외국에서 만든 신용카드로 개인 요금제 결제돼요",
+        "route": "policy:overseas-card"
+      }
+    ],
+    "handoff": "demo",
+    "status": "active",
+    "provenance": {
+      "unit": "D5-pricing",
+      "writer": "agent:sonnet#D5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    },
+    "searchLog": [
+      {
+        "query": "해외 카드",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "해외 결제",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "외화 결제",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "해외 학원 결제",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ]
+  },
+  {
+    "id": "gap:pricing/education-subsidy",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "pricing",
+    "topic": "정부 지원금·바우처 활용",
+    "textHash": "",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "demo",
+      "related": []
+    },
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_subsidy_voucher"
+    ],
+    "anchors": [
+      "바우처",
+      "지원금",
+      "보조금",
+      "지원 사업",
+      "정부 지원",
+      "예산 지원",
+      "지자체 지원"
+    ],
+    "covers": "정부·지자체 지원금이나 바우처, 지원 사업으로 구매할 수 있는지",
+    "notCovers": [],
+    "negatives": [
+      {
+        "q": "대형 기관 맞춤 계약에는 뭐가 들어가나요",
+        "route": "doc:/docs/software/software-pricing-quote-bundle-faq#0/enterprise-contract"
+      },
+      {
+        "q": "도입 비용은 어떻게 구성되나요",
+        "route": "doc:/docs/start/value-and-cost-framing#summary/cost-overview"
+      },
+      {
+        "q": "견적은 어디서 받아요",
+        "route": "doc:/docs/software/software-pricing-quote-bundle-faq#2/trial-quote-request-how"
+      }
+    ],
+    "handoff": "demo",
+    "status": "active",
+    "provenance": {
+      "unit": "D5-pricing",
+      "writer": "agent:sonnet#D5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    },
+    "searchLog": [
+      {
+        "query": "바우처",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "지원금",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "보조금",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "지원 사업",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ]
+  },
+  {
+    "id": "gap:pricing/deferred-payment",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "pricing",
+    "topic": "후불·결제 기한",
+    "textHash": "",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "demo",
+      "related": []
+    },
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_deferred_payment"
+    ],
+    "anchors": [
+      "후불",
+      "외상",
+      "결제 기한",
+      "대금 지급 시기",
+      "납품 후 결제",
+      "대금 지급",
+      "결제 유예"
+    ],
+    "covers": "설치나 사용 뒤에 대금을 내는 후불이나 대금 지급 기한 조건이 가능한지",
+    "notCovers": [],
+    "negatives": [
+      {
+        "q": "결제 방식이 구독형과 충전형이 있다던데요",
+        "route": "doc:/docs/software/software-pricing-quote-bundle-faq#0/payment-types"
+      },
+      {
+        "q": "결제하고 나서 할 일 순서가 뭐예요",
+        "route": "doc:/docs/software/software-pricing-quote-bundle-faq#5/after-payment-steps"
+      },
+      {
+        "q": "결제 전에 상담에서 확인해야 할 게 있나요",
+        "route": "doc:/docs/admin/billing-upgrade#1/invoice-before-pay"
+      }
+    ],
+    "handoff": "demo",
+    "status": "active",
+    "provenance": {
+      "unit": "D5-pricing",
+      "writer": "agent:sonnet#D5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    },
+    "searchLog": [
+      {
+        "query": "후불",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "외상",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "결제 기한",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "대금 지급",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ]
+  },
+  {
+    "id": "gap:pricing/duplicate-charge",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "pricing",
+    "topic": "중복 결제·이중 청구",
+    "textHash": "",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "support",
+      "related": []
+    },
+    "asks": [
+      "howto",
+      "yesno"
+    ],
+    "concepts": [
+      "C_double_payment"
+    ],
+    "anchors": [
+      "중복 결제",
+      "이중 결제",
+      "이중 청구",
+      "두 번 결제",
+      "결제 두 번 됨",
+      "두 번 빠져나감",
+      "중복 청구"
+    ],
+    "covers": "같은 결제가 두 번 이루어졌거나 두 번 청구됐을 때 확인하고 처리하는 방법",
+    "notCovers": [],
+    "negatives": [
+      {
+        "q": "결제했는데 무료 계정으로 보여요",
+        "route": "fixed:paid-not-reflected-check"
+      },
+      {
+        "q": "결제 뒤에 할 일 순서가 어떻게 돼요",
+        "route": "doc:/docs/software/software-pricing-quote-bundle-faq#5/after-payment-steps"
+      },
+      {
+        "q": "세금계산서나 영수증은 결제 전에 확인해야 하나요",
+        "route": "doc:/docs/admin/billing-upgrade#1/invoice-before-pay"
+      }
+    ],
+    "handoff": "support",
+    "status": "active",
+    "provenance": {
+      "unit": "D5-pricing",
+      "writer": "agent:sonnet#D5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    },
+    "searchLog": [
+      {
+        "query": "중복결제",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "이중 결제",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "이중 청구",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "두 번 결제",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ]
+  },
+  {
+    "id": "gap:pricing/payment-notice",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "pricing",
+    "topic": "결제 완료 메일·결제 알림",
+    "textHash": "",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "support",
+      "related": []
+    },
+    "asks": [
+      "yesno",
+      "where"
+    ],
+    "concepts": [
+      "C_payment_notice"
+    ],
+    "anchors": [
+      "결제 완료 메일",
+      "결제 알림",
+      "결제 문자",
+      "결제 확인 메일",
+      "결제 내역 메일",
+      "결제 안내 메일",
+      "결제 알림 설정"
+    ],
+    "covers": "결제를 마치면 결제 완료 메일이나 문자 같은 알림이 오는지와 확인 방법",
+    "notCovers": [],
+    "negatives": [
+      {
+        "q": "결제하고 나서 해야 할 일이 뭐예요",
+        "route": "doc:/docs/software/software-pricing-quote-bundle-faq#5/after-payment-steps"
+      },
+      {
+        "q": "결제했는데 무료 계정으로 보여요",
+        "route": "fixed:paid-not-reflected-check"
+      },
+      {
+        "q": "전환한 뒤 잔여 금액은 어디서 보죠",
+        "route": "doc:/docs/admin/billing-upgrade#3/balance-check"
+      }
+    ],
+    "handoff": "support",
+    "status": "active",
+    "provenance": {
+      "unit": "D5-pricing",
+      "writer": "agent:sonnet#D5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    },
+    "searchLog": [
+      {
+        "query": "결제 완료 메일",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "결제 알림",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "결제 문자",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "결제 확인 메일",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ]
+  },
+  {
+    "id": "gap:pricing/english-invoice",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "pricing",
+    "topic": "영문 견적서·인보이스",
+    "textHash": "",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "demo",
+      "related": []
+    },
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_english_invoice"
+    ],
+    "anchors": [
+      "영문 견적서",
+      "영문 세금계산서",
+      "인보이스",
+      "영어 견적서",
+      "영문 계약서",
+      "해외 제출용 서류",
+      "영문 청구서"
+    ],
+    "covers": "견적서·청구서·계약서를 영어(영문) 또는 인보이스 형식으로 받을 수 있는지",
+    "notCovers": [],
+    "negatives": [
+      {
+        "q": "영어로 데모나 상담이 되나요",
+        "route": "policy:trial-demo-english-support"
+      },
+      {
+        "q": "견적서는 어떻게 받나요",
+        "route": "doc:/docs/software/software-pricing-quote-bundle-faq#2/trial-quote-request-how"
+      },
+      {
+        "q": "세금계산서와 영수증은 결제 전에 물어야 하나요",
+        "route": "doc:/docs/admin/billing-upgrade#1/invoice-before-pay"
+      }
+    ],
+    "handoff": "demo",
+    "status": "active",
+    "provenance": {
+      "unit": "D5-pricing",
+      "writer": "agent:sonnet#D5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    },
+    "searchLog": [
+      {
+        "query": "영문 견적",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "영문 세금계산서",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "인보이스",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "영어 견적서",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ]
+  },
+  {
+    "id": "gap:pricing/down-payment",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "pricing",
+    "topic": "계약금·잔금 납부 일정",
+    "textHash": "",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "demo",
+      "related": []
+    },
+    "asks": [
+      "howto",
+      "yesno"
+    ],
+    "concepts": [
+      "C_down_payment"
+    ],
+    "anchors": [
+      "계약금",
+      "잔금",
+      "선금",
+      "중도금",
+      "분납 일정",
+      "대금 나눠 내기",
+      "납부 일정"
+    ],
+    "covers": "하드웨어 계약 때 계약금과 잔금을 나눠 내는지, 납부 일정이 어떻게 되는지",
+    "notCovers": [],
+    "negatives": [
+      {
+        "q": "전자칠판과 소프트웨어를 한 견적으로 받나요",
+        "route": "doc:/docs/software/software-pricing-quote-bundle-faq#1/board-bundle-quote"
+      },
+      {
+        "q": "결제하고 나서 할 일 순서가 어떻게 돼요",
+        "route": "doc:/docs/software/software-pricing-quote-bundle-faq#5/after-payment-steps"
+      },
+      {
+        "q": "결제 방식이 구독형과 충전형이 있나요",
+        "route": "doc:/docs/software/software-pricing-quote-bundle-faq#0/payment-types"
+      }
+    ],
+    "handoff": "demo",
+    "status": "active",
+    "provenance": {
+      "unit": "D5-pricing",
+      "writer": "agent:sonnet#D5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    },
+    "searchLog": [
+      {
+        "query": "계약금",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "잔금",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "선금",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "중도금",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ]
+  },
+  {
+    "id": "gap:pricing/multi-year-contract",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "pricing",
+    "topic": "다년 계약·장기 계약",
+    "textHash": "",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "demo",
+      "related": []
+    },
+    "asks": [
+      "yesno",
+      "quantity"
+    ],
+    "concepts": [
+      "C_multi_year"
+    ],
+    "anchors": [
+      "다년 계약",
+      "장기 계약",
+      "3년 계약",
+      "장기 약정",
+      "오래 쓰는 계약",
+      "여러 해 계약",
+      "장기 이용"
+    ],
+    "covers": "1년을 넘는 다년·장기 계약이 가능한지와 그 조건",
+    "notCovers": [],
+    "negatives": [
+      {
+        "q": "Enterprise 맞춤 계약에는 뭐가 들어가나요",
+        "route": "doc:/docs/software/software-pricing-quote-bundle-faq#0/enterprise-contract"
+      },
+      {
+        "q": "언제까지 쓸 수 있는지 계약 기간은 어떻게 돼요",
+        "route": "doc:/docs/start/pre-adoption-faq-22-questions#2/usage-period"
+      },
+      {
+        "q": "정기 결제에 포함되는 항목이 뭐예요",
+        "route": "doc:/docs/start/pre-adoption-faq-22-questions#2/subscription-includes"
+      }
+    ],
+    "handoff": "demo",
+    "status": "active",
+    "provenance": {
+      "unit": "D5-pricing",
+      "writer": "agent:sonnet#D5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    },
+    "searchLog": [
+      {
+        "query": "다년 계약",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "장기 계약",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "3년 계약",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "장기 약정",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ]
+  },
+  {
+    "id": "gap:pricing/quote-revision",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "pricing",
+    "topic": "견적서 수정·재발급",
+    "textHash": "",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "demo",
+      "related": []
+    },
+    "asks": [
+      "howto",
+      "yesno"
+    ],
+    "concepts": [
+      "C_quote_revision"
+    ],
+    "anchors": [
+      "재견적",
+      "견적 수정",
+      "견적서 재발급",
+      "견적 변경",
+      "견적서 다시 받기",
+      "구성 바꿔서 견적",
+      "견적 업데이트"
+    ],
+    "covers": "이미 받은 견적서를 구성이나 수량을 바꿔 다시 받거나 수정·재발급할 수 있는지",
+    "notCovers": [],
+    "negatives": [
+      {
+        "q": "견적 상담 전에 준비할 정보가 뭐예요",
+        "route": "doc:/docs/software/software-pricing-quote-bundle-faq#4/prep-before-consult"
+      },
+      {
+        "q": "견적서는 어떻게 받나요",
+        "route": "doc:/docs/software/software-pricing-quote-bundle-faq#2/trial-quote-request-how"
+      },
+      {
+        "q": "화면에 보이는 금액이 확정이 아니에요",
+        "route": "doc:/docs/software/software-pricing-quote-bundle-faq#4/screen-price-not-final"
+      }
+    ],
+    "handoff": "demo",
+    "status": "active",
+    "provenance": {
+      "unit": "D5-pricing",
+      "writer": "agent:sonnet#D5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    },
+    "searchLog": [
+      {
+        "query": "재견적",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "견적 수정",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "견적서 재발급",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "견적 변경",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ]
+  }
+]

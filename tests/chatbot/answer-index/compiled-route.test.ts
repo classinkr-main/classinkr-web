@@ -1,4 +1,5 @@
-import { readdirSync, readFileSync, writeFileSync } from "node:fs"
+import { cpSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
 import { join, relative } from "node:path"
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
@@ -33,7 +34,7 @@ import { CARDS, compileFixture, copyFixture, fixtureUnits } from "./index-fixtur
  * - 범위 안 질문은 네트워크·모델 호출 0(모델 키가 있어도) — fetch 를 감시한다.
  * - stream 과 non-stream 의 답·답 모드·상담 버튼·출처가 같다.
  * - 같은 입력이면 같은 답.
- * - 자료가 0장이면(지금 저장소) 색인이 정하는 질문은 언제나 못 찾음 고정 문구다.
+ * - 켜 둔 카드가 0장인 색인이면 색인이 정하지 않고 legacy 흐름으로 보낸다(unavailable=empty_index).
  * - 안전: 금액 숫자·식별 정보 요구·할인/환불 약속이 compiled 답에 없다.
  */
 
@@ -163,6 +164,28 @@ describe("compiled router with an index that has no active cards (2026-11-20 조
     }
     expect(answered).toBeGreaterThan(0)
     expect(fetchSpy).not.toHaveBeenCalled()
+  })
+
+  it("does the same for the repository units without cards (ANSWER_INDEX_DATA_DIR)", async () => {
+    // 저장소 자료에 카드가 생겼으므로, 카드 0장 상태는 단위 파일만 복사한 임시 폴더로 만든다.
+    const dir = mkdtempSync(join(tmpdir(), "answer-index-empty-"))
+    try {
+      for (const name of ["units.json", "site-facts.json", "inventory.json", "manifest.json"]) {
+        cpSync(join(answerIndexDataDir(), name), join(dir, name))
+      }
+      stubCompiledEnv("test-model-key")
+      vi.stubEnv("ANSWER_INDEX_DATA_DIR", dir)
+      resetRouterAnswerIndex()
+      for (const question of INDEX_QUESTIONS) {
+        const result = await evaluateChatbotQuery(question, { generateAnswer: false })
+        expect(result.answerIndex, question).toMatchObject({ router: "compiled", scope: "in", decision: null, unavailable: "empty_index" })
+        expect(result.answerIndex?.card ?? null, question).toBeNull()
+      }
+      expect(fetchSpy).not.toHaveBeenCalled()
+    } finally {
+      resetRouterAnswerIndex()
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 
   it("does the same when every card is switched off (CHATBOT_COMPILED_DISABLED_CARDS)", async () => {
@@ -374,7 +397,7 @@ describe("compiled router: data folder (ANSWER_INDEX_DATA_DIR)", () => {
   })
 })
 
-// 저장소 자료(카드 0장)는 compiled 가 legacy 로 보내므로(empty_index) 경로 성질은 카드가 있는 가짜 자료로 본다.
+// 경로 성질은 내용이 고정된 가짜 자료로 본다(저장소 자료는 판마다 카드가 바뀐다).
 // 안전 성질은 두 경우 모두 본다.
 describe("compiled router path properties (fixture cards)", () => {
   beforeEach(() => {

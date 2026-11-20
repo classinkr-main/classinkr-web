@@ -1,0 +1,2858 @@
+[
+  {
+    "id": "absent:account/two-factor-auth",
+    "label": "2단계 인증",
+    "forms": [
+      "2단계 인증",
+      "이중 인증",
+      "OTP 인증",
+      "2차 인증",
+      "인증 앱 로그인"
+    ],
+    "area": "account",
+    "gapCard": "gap:account/two-factor-auth",
+    "verified": {
+      "grep": [
+        "2단계 인증",
+        "OTP",
+        "인증 앱",
+        "이중 인증"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:sonnet#D5-account"
+    }
+  },
+  {
+    "id": "absent:account/apple-microsoft-login",
+    "label": "애플·마이크로소프트 계정 로그인",
+    "forms": [
+      "애플 로그인",
+      "애플 계정으로 로그인",
+      "마이크로소프트 로그인",
+      "MS 계정 로그인",
+      "페이스북 로그인"
+    ],
+    "area": "account",
+    "gapCard": "gap:account/apple-microsoft-login",
+    "verified": {
+      "grep": [
+        "애플 로그인",
+        "마이크로소프트",
+        "Apple",
+        "페이스북"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:sonnet#D5-account"
+    }
+  },
+  {
+    "id": "absent:account/password-expiry",
+    "label": "비밀번호 변경 주기",
+    "forms": [
+      "비밀번호 만료",
+      "비밀번호 변경 주기",
+      "비밀번호 유효기간",
+      "정기적으로 비밀번호"
+    ],
+    "area": "account",
+    "gapCard": "gap:account/password-expiry",
+    "verified": {
+      "grep": [
+        "비밀번호 만료",
+        "변경 주기",
+        "유효기간",
+        "정기적으로"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:sonnet#D5-account"
+    }
+  },
+  {
+    "id": "absent:account/concurrent-login",
+    "label": "동시 로그인 기기 수",
+    "forms": [
+      "동시 로그인",
+      "동시에 로그인",
+      "로그인 기기 수",
+      "기기 수 제한",
+      "두 기기 로그인"
+    ],
+    "area": "account",
+    "gapCard": "gap:account/concurrent-login",
+    "verified": {
+      "grep": [
+        "동시에 로그인",
+        "기기 수",
+        "여러 기기",
+        "로그인 제한"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:sonnet#D5-account"
+    }
+  },
+  {
+    "id": "absent:account/login-history",
+    "label": "로그인 내역 확인",
+    "forms": [
+      "로그인 내역",
+      "로그인 이력",
+      "원격 로그아웃",
+      "다른 기기 로그아웃",
+      "접속 기기 목록"
+    ],
+    "area": "account",
+    "gapCard": "gap:account/login-history",
+    "verified": {
+      "grep": [
+        "로그인 내역",
+        "로그인 이력",
+        "원격 로그아웃",
+        "다른 기기 로그아웃"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:sonnet#D5-account"
+    }
+  },
+  {
+    "id": "absent:account/account-hijack",
+    "label": "계정 도용 대처",
+    "forms": [
+      "계정 도용",
+      "계정 해킹",
+      "남이 내 계정",
+      "계정이 털렸",
+      "비밀번호 유출"
+    ],
+    "area": "account",
+    "gapCard": "gap:account/account-hijack",
+    "verified": {
+      "grep": [
+        "계정 도용",
+        "해킹",
+        "비밀번호 유출",
+        "타인 로그인"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:sonnet#D5-account"
+    }
+  },
+  {
+    "id": "absent:account/login-lockout",
+    "label": "비밀번호 오류 횟수 제한",
+    "forms": [
+      "계정 잠금",
+      "계정이 잠겼",
+      "비밀번호 틀린 횟수",
+      "로그인 횟수 제한",
+      "비밀번호 5회"
+    ],
+    "area": "account",
+    "gapCard": "gap:account/login-lockout",
+    "verified": {
+      "grep": [
+        "계정 잠금",
+        "잠김",
+        "틀린 횟수",
+        "로그인 횟수"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:sonnet#D5-account"
+    }
+  },
+  {
+    "id": "absent:account/deleted-account-restore",
+    "label": "삭제한 계정 복구",
+    "forms": [
+      "계정 복구",
+      "탈퇴 취소",
+      "탈퇴 철회",
+      "탈퇴 후 재가입",
+      "삭제한 계정 복구"
+    ],
+    "area": "account",
+    "gapCard": "gap:account/deleted-account-restore",
+    "verified": {
+      "grep": [
+        "계정 복구",
+        "탈퇴 후 재가입",
+        "탈퇴 취소",
+        "삭제 유예"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:sonnet#D5-account"
+    }
+  },
+  {
+    "id": "absent:account/account-merge",
+    "label": "계정 합치기",
+    "forms": [
+      "계정 합치기",
+      "계정 병합",
+      "계정 통합",
+      "중복 계정",
+      "계정 하나로 합"
+    ],
+    "area": "account",
+    "gapCard": "gap:account/account-merge",
+    "verified": {
+      "grep": [
+        "계정 합치기",
+        "병합",
+        "통합",
+        "중복 계정"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:sonnet#D5-account"
+    }
+  },
+  {
+    "id": "absent:account/legal-name-change",
+    "label": "실명 변경",
+    "forms": [
+      "이름 개명",
+      "실명 변경",
+      "본명 수정",
+      "개명 신청",
+      "이름 정정"
+    ],
+    "area": "account",
+    "gapCard": "gap:account/legal-name-change",
+    "verified": {
+      "grep": [
+        "개명",
+        "실명 변경",
+        "본명 수정",
+        "이름 정정"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:sonnet#D5-account"
+    }
+  },
+  {
+    "id": "absent:account/signup-birthdate",
+    "label": "가입 때 생년월일 입력",
+    "forms": [
+      "생년월일 입력",
+      "성별 입력",
+      "가입 입력 항목",
+      "생일 입력",
+      "나이 입력"
+    ],
+    "area": "account",
+    "gapCard": "gap:account/signup-birthdate",
+    "verified": {
+      "grep": [
+        "생년월일",
+        "성별",
+        "생일",
+        "가입 정보"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:sonnet#D5-account"
+    }
+  },
+  {
+    "id": "absent:account/dormant-account",
+    "label": "휴면 계정 정책",
+    "forms": [
+      "휴면 계정",
+      "휴면 전환",
+      "장기 미접속",
+      "오래 안 쓴 계정",
+      "계정 휴면"
+    ],
+    "area": "account",
+    "gapCard": "gap:account/dormant-account",
+    "verified": {
+      "grep": [
+        "휴면",
+        "장기 미접속",
+        "오래 안 쓴",
+        "계정 만료"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:sonnet#D5-account"
+    }
+  },
+  {
+    "id": "absent:account/app-push-settings",
+    "label": "앱 푸시 알림 설정",
+    "forms": [
+      "푸시 알림 설정",
+      "푸시 알림 끄기",
+      "푸시가 안 와요",
+      "알림이 안 와요"
+    ],
+    "area": "account",
+    "gapCard": "gap:account/app-push-settings",
+    "verified": {
+      "grep": [
+        "푸시 알림",
+        "알림 설정",
+        "알림 소리",
+        "알림이 안"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:sonnet#D5-account"
+    }
+  },
+  {
+    "id": "absent:account/app-language",
+    "label": "앱 화면 언어 변경",
+    "forms": [
+      "앱 언어 변경",
+      "화면 언어 설정",
+      "영어 화면",
+      "언어 바꾸기",
+      "영어로 보기"
+    ],
+    "area": "account",
+    "gapCard": "gap:account/app-language",
+    "verified": {
+      "grep": [
+        "앱 언어",
+        "언어 변경",
+        "영어 화면",
+        "화면 언어"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:sonnet#D5-account"
+    }
+  },
+  {
+    "id": "absent:account/biometric-login",
+    "label": "지문·얼굴 인식 로그인",
+    "forms": [
+      "지문 로그인",
+      "생체 인증",
+      "얼굴 인식 로그인",
+      "페이스 아이디",
+      "지문으로 로그인"
+    ],
+    "area": "account",
+    "gapCard": "gap:account/biometric-login",
+    "verified": {
+      "grep": [
+        "지문 로그인",
+        "생체 인증",
+        "얼굴 인식",
+        "페이스 아이디"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:sonnet#D5-account"
+    }
+  },
+  {
+    "id": "absent:account/account-sharing",
+    "label": "계정 공유",
+    "forms": [
+      "계정 공유",
+      "아이디 공유",
+      "계정 같이 쓰기",
+      "한 계정으로 여러 명",
+      "형제 계정"
+    ],
+    "area": "account",
+    "gapCard": "gap:account/account-sharing",
+    "verified": {
+      "grep": [
+        "계정 공유",
+        "아이디 공유",
+        "같이 쓰",
+        "한 계정"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:sonnet#D5-account"
+    }
+  },
+  {
+    "id": "absent:account/school-sso",
+    "label": "기관 계정 SSO 연동",
+    "forms": [
+      "SSO 로그인",
+      "싱글 사인온",
+      "학교 계정으로 로그인",
+      "교육청 계정",
+      "구글 워크스페이스"
+    ],
+    "area": "account",
+    "gapCard": "gap:account/school-sso",
+    "verified": {
+      "grep": [
+        "SSO 로그인",
+        "학교 계정",
+        "교육청 계정",
+        "워크스페이스"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:sonnet#D5-account"
+    }
+  },
+  {
+    "id": "absent:account/login-session-duration",
+    "label": "자동 로그인 유지 기간",
+    "forms": [
+      "로그인 유지 기간",
+      "자동 로그인 기간",
+      "로그인이 풀리는",
+      "로그인 유지 시간",
+      "자동 로그인 만료"
+    ],
+    "area": "account",
+    "gapCard": "gap:account/login-session-duration",
+    "verified": {
+      "grep": [
+        "로그인 유지",
+        "유지 기간",
+        "로그인이 풀",
+        "자동 로그인 기간"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:sonnet#D5-account"
+    }
+  },
+  {
+    "id": "absent:account/code-validity-limit",
+    "label": "인증코드 유효 시간",
+    "forms": [
+      "인증코드 유효 시간",
+      "인증코드 몇 분",
+      "인증번호 유효 시간",
+      "인증 요청 횟수",
+      "인증코드 하루 횟수"
+    ],
+    "area": "account",
+    "gapCard": "gap:account/code-validity-limit",
+    "verified": {
+      "grep": [
+        "유효 시간",
+        "몇 분",
+        "요청 횟수",
+        "인증코드 횟수"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:sonnet#D5-account"
+    }
+  },
+  {
+    "id": "absent:account/nickname-limits",
+    "label": "닉네임 글자 수 제한",
+    "forms": [
+      "닉네임 글자 수",
+      "닉네임 이모지",
+      "닉네임 특수문자",
+      "닉네임 길이 제한",
+      "닉네임 최대 글자"
+    ],
+    "area": "account",
+    "gapCard": "gap:account/nickname-limits",
+    "verified": {
+      "grep": [
+        "닉네임 글자",
+        "이모지",
+        "닉네임 길이",
+        "닉네임 특수문자"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:sonnet#D5-account"
+    }
+  },
+  {
+    "id": "absent:account/profile-photo-spec",
+    "label": "프로필 사진 용량·형식",
+    "forms": [
+      "프로필 사진 용량",
+      "사진 파일 형식",
+      "프로필 사진 크기",
+      "사진 해상도 제한",
+      "프로필 사진 png"
+    ],
+    "area": "account",
+    "gapCard": "gap:account/profile-photo-spec",
+    "verified": {
+      "grep": [
+        "사진 용량",
+        "파일 형식",
+        "프로필 사진 크기",
+        "해상도"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:sonnet#D5-account"
+    }
+  },
+  {
+    "id": "absent:account/add-email-to-account",
+    "label": "이메일 추가 연결",
+    "forms": [
+      "계정에 이메일 추가",
+      "이메일도 등록",
+      "보조 이메일",
+      "이메일 따로 등록"
+    ],
+    "area": "account",
+    "gapCard": "gap:account/add-email-to-account",
+    "verified": {
+      "grep": [
+        "이메일 연결",
+        "추가 등록",
+        "이메일 추가",
+        "번호 추가"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:sonnet#D5-account"
+    }
+  },
+  {
+    "id": "absent:account/parent-child-link",
+    "label": "학부모-자녀 계정 연결",
+    "forms": [
+      "자녀 계정 연결",
+      "학부모 연동",
+      "부모 계정 연결",
+      "자녀 수업 보기",
+      "학부모 앱 연동"
+    ],
+    "area": "account",
+    "gapCard": "gap:account/parent-child-link",
+    "verified": {
+      "grep": [
+        "자녀 연결",
+        "학부모 연동",
+        "부모 계정",
+        "자녀 계정"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:sonnet#D5-account"
+    }
+  },
+  {
+    "id": "absent:classroom/stranger-access",
+    "label": "낯선 사람 접근 차단",
+    "forms": [
+      "낯선사람",
+      "외부인입장",
+      "모르는사람입장",
+      "수업난입",
+      "외부인차단"
+    ],
+    "area": "classroom",
+    "gapCard": "gap:classroom/stranger-access",
+    "verified": {
+      "grep": [
+        "낯선사람",
+        "외부인입장",
+        "모르는사람입장",
+        "수업난입",
+        "외부인차단"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "script:search+manual"
+    }
+  },
+  {
+    "id": "absent:classroom/stylus-required",
+    "label": "태블릿 펜 필수 여부",
+    "forms": [
+      "펜필수",
+      "태블릿펜",
+      "스타일러스",
+      "터치펜",
+      "애플펜슬"
+    ],
+    "area": "classroom",
+    "gapCard": "gap:classroom/stylus-required",
+    "verified": {
+      "grep": [
+        "펜필수",
+        "태블릿펜",
+        "스타일러스",
+        "터치펜",
+        "애플펜슬"
+      ],
+      "unitHits": 2,
+      "siteHits": 4,
+      "checkedAt": "2026-11-20",
+      "checker": "script:search+manual",
+      "sameMeaningNote": "전자칠판 터치 점검·소개서의 스타일러스 문장은 장비 외관·설치 설명이며 태블릿 수업에 펜이 필수인지에 답하지 않는다"
+    }
+  },
+  {
+    "id": "absent:classroom/chromebook",
+    "label": "크롬북 지원",
+    "forms": [
+      "크롬북",
+      "학교크롬북",
+      "구글노트북",
+      "크롬북지원",
+      "크롬북수업"
+    ],
+    "area": "classroom",
+    "gapCard": "gap:classroom/chromebook",
+    "verified": {
+      "grep": [
+        "크롬북",
+        "학교크롬북",
+        "구글노트북",
+        "크롬북지원",
+        "크롬북수업"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "script:search+manual"
+    }
+  },
+  {
+    "id": "absent:classroom/live-poll",
+    "label": "실시간 투표·설문",
+    "forms": [
+      "수업중투표",
+      "실시간투표",
+      "설문조사",
+      "실시간설문",
+      "의견조사"
+    ],
+    "area": "classroom",
+    "gapCard": "gap:classroom/live-poll",
+    "verified": {
+      "grep": [
+        "수업중투표",
+        "실시간투표",
+        "설문조사",
+        "실시간설문",
+        "의견조사"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "script:search+manual"
+    }
+  },
+  {
+    "id": "absent:classroom/anti-capture",
+    "label": "수업 몰래 녹화·캡처 방지",
+    "forms": [
+      "몰래녹화",
+      "캡처방지",
+      "녹화방지",
+      "무단녹화",
+      "수업유출"
+    ],
+    "area": "classroom",
+    "gapCard": "gap:classroom/anti-capture",
+    "verified": {
+      "grep": [
+        "몰래녹화",
+        "캡처방지",
+        "녹화방지",
+        "무단녹화",
+        "수업유출"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "script:search+manual"
+    }
+  },
+  {
+    "id": "absent:classroom/waiting-room",
+    "label": "대기실·입장 승인",
+    "forms": [
+      "대기실",
+      "입장승인",
+      "입장허락",
+      "입장대기",
+      "한명씩입장"
+    ],
+    "area": "classroom",
+    "gapCard": "gap:classroom/waiting-room",
+    "verified": {
+      "grep": [
+        "대기실",
+        "입장승인",
+        "입장허락",
+        "입장대기",
+        "한명씩입장"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "script:search+manual"
+    }
+  },
+  {
+    "id": "absent:classroom/attention-detect",
+    "label": "학생 집중도·딴짓 감지",
+    "forms": [
+      "집중도감지",
+      "딴짓확인",
+      "학생집중도",
+      "졸음감지",
+      "집중도분석"
+    ],
+    "area": "classroom",
+    "gapCard": "gap:classroom/attention-detect",
+    "verified": {
+      "grep": [
+        "집중도감지",
+        "딴짓확인",
+        "학생집중도",
+        "졸음감지",
+        "집중도분석"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "script:search+manual"
+    }
+  },
+  {
+    "id": "absent:classroom/data-usage",
+    "label": "수업 데이터 사용량",
+    "forms": [
+      "데이터사용량",
+      "모바일데이터소모",
+      "통신량",
+      "데이터얼마나",
+      "수업데이터"
+    ],
+    "area": "classroom",
+    "gapCard": "gap:classroom/data-usage",
+    "verified": {
+      "grep": [
+        "데이터사용량",
+        "모바일데이터소모",
+        "통신량",
+        "데이터얼마나",
+        "수업데이터"
+      ],
+      "unitHits": 20,
+      "siteHits": 1,
+      "checkedAt": "2026-11-20",
+      "checker": "script:search+manual",
+      "sameMeaningNote": "'데이터 사용량'은 스토리지·통계 사용량 문서라서 수업 통신량(모바일 데이터 소모)과 뜻이 다르다"
+    }
+  },
+  {
+    "id": "absent:classroom/chat-export",
+    "label": "수업 채팅 저장",
+    "forms": [
+      "채팅저장",
+      "채팅내보내기",
+      "채팅기록다운로드",
+      "수업채팅로그",
+      "대화내용저장"
+    ],
+    "area": "classroom",
+    "gapCard": "gap:classroom/chat-export",
+    "verified": {
+      "grep": [
+        "채팅저장",
+        "채팅내보내기",
+        "채팅기록다운로드",
+        "수업채팅로그",
+        "대화내용저장"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "script:search+manual"
+    }
+  },
+  {
+    "id": "absent:classroom/ppt-animation",
+    "label": "PPT 애니메이션 재생",
+    "forms": [
+      "ppt애니메이션",
+      "파워포인트효과",
+      "슬라이드전환",
+      "ppt동영상",
+      "발표자료효과"
+    ],
+    "area": "classroom",
+    "gapCard": "gap:classroom/ppt-animation",
+    "verified": {
+      "grep": [
+        "ppt애니메이션",
+        "파워포인트효과",
+        "슬라이드전환",
+        "ppt동영상",
+        "발표자료효과"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "script:search+manual"
+    }
+  },
+  {
+    "id": "absent:classroom/student-screen-view",
+    "label": "학생 PC 화면 보기",
+    "forms": [
+      "학생화면보기",
+      "학생pc화면",
+      "원격화면확인",
+      "학생컴퓨터화면",
+      "화면감시"
+    ],
+    "area": "classroom",
+    "gapCard": "gap:classroom/student-screen-view",
+    "verified": {
+      "grep": [
+        "학생화면보기",
+        "학생pc화면",
+        "원격화면확인",
+        "학생컴퓨터화면",
+        "화면감시"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "script:search+manual"
+    }
+  },
+  {
+    "id": "absent:classroom/guest-join",
+    "label": "계정 없이 게스트 입장",
+    "forms": [
+      "게스트입장",
+      "계정없이",
+      "가입없이수업",
+      "링크로바로입장",
+      "비회원수업"
+    ],
+    "area": "classroom",
+    "gapCard": "gap:classroom/guest-join",
+    "verified": {
+      "grep": [
+        "게스트입장",
+        "계정없이",
+        "가입없이수업",
+        "링크로바로입장",
+        "비회원수업"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "script:search+manual"
+    }
+  },
+  {
+    "id": "absent:classroom/virtual-camera",
+    "label": "OBS·가상 카메라 연결",
+    "forms": [
+      "obs",
+      "가상카메라",
+      "외부영상프로그램",
+      "캠프로그램",
+      "방송프로그램연결"
+    ],
+    "area": "classroom",
+    "gapCard": "gap:classroom/virtual-camera",
+    "verified": {
+      "grep": [
+        "obs",
+        "가상카메라",
+        "외부영상프로그램",
+        "캠프로그램",
+        "방송프로그램연결"
+      ],
+      "unitHits": 3,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "script:search+manual",
+      "sameMeaningNote": "웹캠·외장 카메라 문장은 현장 녹화 설명이고 OBS 같은 가상 카메라를 고를 수 있는지에는 답하지 않는다"
+    }
+  },
+  {
+    "id": "absent:classroom/face-attendance",
+    "label": "얼굴 인식 자동 출석",
+    "forms": [
+      "얼굴인식출석",
+      "자동출석",
+      "안면인식",
+      "ai출석",
+      "카메라로출석"
+    ],
+    "area": "classroom",
+    "gapCard": "gap:classroom/face-attendance",
+    "verified": {
+      "grep": [
+        "얼굴인식출석",
+        "자동출석",
+        "안면인식",
+        "ai출석",
+        "카메라로출석"
+      ],
+      "unitHits": 0,
+      "siteHits": 1,
+      "checkedAt": "2026-11-20",
+      "checker": "script:search+manual",
+      "sameMeaningNote": "한 줄은 소개서의 '실시간 출석' 표 항목이라 얼굴 인식 자동 출석과 뜻이 다르다"
+    }
+  },
+  {
+    "id": "absent:classroom/exam-proctor",
+    "label": "시험 부정행위 감시",
+    "forms": [
+      "시험감독",
+      "부정행위",
+      "커닝방지",
+      "온라인시험감독",
+      "컨닝"
+    ],
+    "area": "classroom",
+    "gapCard": "gap:classroom/exam-proctor",
+    "verified": {
+      "grep": [
+        "시험감독",
+        "부정행위",
+        "커닝방지",
+        "온라인시험감독",
+        "컨닝"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "script:search+manual"
+    }
+  },
+  {
+    "id": "absent:classroom/board-undo",
+    "label": "판서 되돌리기",
+    "forms": [
+      "판서되돌리기",
+      "실행취소",
+      "한단계뒤로",
+      "지운판서복구",
+      "잘못쓴것취소"
+    ],
+    "area": "classroom",
+    "gapCard": "gap:classroom/board-undo",
+    "verified": {
+      "grep": [
+        "판서되돌리기",
+        "실행취소",
+        "한단계뒤로",
+        "지운판서복구",
+        "잘못쓴것취소"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "script:search+manual"
+    }
+  },
+  {
+    "id": "absent:classroom/class-reaction",
+    "label": "수업 중 리액션",
+    "forms": [
+      "리액션",
+      "박수버튼",
+      "이모지반응",
+      "스티커보내기",
+      "반응버튼"
+    ],
+    "area": "classroom",
+    "gapCard": "gap:classroom/class-reaction",
+    "verified": {
+      "grep": [
+        "리액션",
+        "박수버튼",
+        "이모지반응",
+        "스티커보내기",
+        "반응버튼"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "script:search+manual"
+    }
+  },
+  {
+    "id": "absent:classroom/call-interrupt",
+    "label": "수업 중 전화 수신",
+    "forms": [
+      "수업중전화",
+      "전화수신",
+      "통화중수업",
+      "앱백그라운드",
+      "수업중다른앱"
+    ],
+    "area": "classroom",
+    "gapCard": "gap:classroom/call-interrupt",
+    "verified": {
+      "grep": [
+        "수업중전화",
+        "전화수신",
+        "통화중수업",
+        "앱백그라운드",
+        "수업중다른앱"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "script:search+manual"
+    }
+  },
+  {
+    "id": "absent:classroom/tv-cast",
+    "label": "TV·빔프로젝터 연결",
+    "forms": [
+      "tv연결",
+      "빔프로젝터",
+      "크롬캐스트",
+      "에어플레이",
+      "tv로수업"
+    ],
+    "area": "classroom",
+    "gapCard": "gap:classroom/tv-cast",
+    "verified": {
+      "grep": [
+        "tv연결",
+        "빔프로젝터",
+        "크롬캐스트",
+        "에어플레이",
+        "tv로수업"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "script:search+manual"
+    }
+  },
+  {
+    "id": "absent:classroom/board-zoom",
+    "label": "칠판 확대·축소",
+    "forms": [
+      "칠판확대",
+      "칠판축소",
+      "핀치확대",
+      "글씨크게보기",
+      "확대축소"
+    ],
+    "area": "classroom",
+    "gapCard": "gap:classroom/board-zoom",
+    "verified": {
+      "grep": [
+        "칠판확대",
+        "칠판축소",
+        "핀치확대",
+        "글씨크게보기",
+        "확대축소"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "script:search+manual"
+    }
+  },
+  {
+    "id": "absent:company/patent",
+    "label": "특허 보유",
+    "forms": [
+      "특허",
+      "특허권",
+      "특허출원",
+      "기술특허"
+    ],
+    "area": "company",
+    "gapCard": "gap:company/patent",
+    "verified": {
+      "grep": [
+        "특허",
+        "특허권",
+        "특허출원",
+        "기술특허"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "script:search+manual"
+    }
+  },
+  {
+    "id": "absent:company/headcount-revenue",
+    "label": "직원 수·매출",
+    "forms": [
+      "직원수",
+      "연매출",
+      "종업원수",
+      "법인인원"
+    ],
+    "area": "company",
+    "gapCard": "gap:company/headcount-revenue",
+    "verified": {
+      "grep": [
+        "직원수",
+        "연매출",
+        "종업원수",
+        "법인인원"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "script:search+manual"
+    }
+  },
+  {
+    "id": "absent:company/reseller",
+    "label": "총판·대리점",
+    "forms": [
+      "총판",
+      "대리점",
+      "리셀러",
+      "영업파트너"
+    ],
+    "area": "company",
+    "gapCard": "gap:company/reseller",
+    "verified": {
+      "grep": [
+        "총판",
+        "대리점",
+        "리셀러",
+        "영업파트너"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "script:search+manual"
+    }
+  },
+  {
+    "id": "absent:company/recruiting",
+    "label": "채용·입사 지원",
+    "forms": [
+      "채용공고",
+      "채용",
+      "입사지원",
+      "인턴십"
+    ],
+    "area": "company",
+    "gapCard": "gap:company/recruiting",
+    "verified": {
+      "grep": [
+        "채용공고",
+        "채용",
+        "입사지원",
+        "인턴십"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "script:search+manual"
+    }
+  },
+  {
+    "id": "absent:company/partnership-proposal",
+    "label": "제휴·협업 제안",
+    "forms": [
+      "제휴제안",
+      "협업제안",
+      "제휴문의",
+      "공동마케팅"
+    ],
+    "area": "company",
+    "gapCard": "gap:company/partnership-proposal",
+    "verified": {
+      "grep": [
+        "제휴제안",
+        "협업제안",
+        "제휴문의",
+        "공동마케팅"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "script:search+manual"
+    }
+  },
+  {
+    "id": "absent:company/press-awards",
+    "label": "언론 보도·수상",
+    "forms": [
+      "언론보도",
+      "보도자료",
+      "수상",
+      "어워드"
+    ],
+    "area": "company",
+    "gapCard": "gap:company/press-awards",
+    "verified": {
+      "grep": [
+        "언론보도",
+        "보도자료",
+        "수상",
+        "어워드"
+      ],
+      "unitHits": 1,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "script:search+manual",
+      "sameMeaningNote": "걸린 문장은 이 개념과 다른 뜻(낱말 일부가 다른 말에 들어간 경우)"
+    }
+  },
+  {
+    "id": "absent:company/product-roadmap",
+    "label": "출시 일정·로드맵",
+    "forms": [
+      "로드맵",
+      "출시예정",
+      "신기능예정",
+      "업데이트예정"
+    ],
+    "area": "company",
+    "gapCard": "gap:company/product-roadmap",
+    "verified": {
+      "grep": [
+        "로드맵",
+        "출시예정",
+        "신기능예정",
+        "업데이트예정"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "script:search+manual"
+    }
+  },
+  {
+    "id": "absent:company/seminar-schedule",
+    "label": "설명회·세미나 일정",
+    "forms": [
+      "세미나일정",
+      "웨비나일정",
+      "설명회일정",
+      "행사일정"
+    ],
+    "area": "company",
+    "gapCard": "gap:company/seminar-schedule",
+    "verified": {
+      "grep": [
+        "세미나일정",
+        "웨비나일정",
+        "설명회일정",
+        "행사일정"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "script:search+manual"
+    }
+  },
+  {
+    "id": "absent:company/satisfaction-renewal",
+    "label": "만족도·재계약률",
+    "forms": [
+      "고객만족도",
+      "재계약",
+      "재계약률",
+      "이탈률"
+    ],
+    "area": "company",
+    "gapCard": "gap:company/satisfaction-renewal",
+    "verified": {
+      "grep": [
+        "고객만족도",
+        "재계약",
+        "재계약률",
+        "이탈률"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "script:search+manual"
+    }
+  },
+  {
+    "id": "absent:company/data-migration",
+    "label": "데이터 이관",
+    "forms": [
+      "데이터이관",
+      "마이그레이션",
+      "기존데이터이전",
+      "타사이관"
+    ],
+    "area": "company",
+    "gapCard": "gap:company/data-migration",
+    "verified": {
+      "grep": [
+        "데이터이관",
+        "마이그레이션",
+        "기존데이터이전",
+        "타사이관"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "script:search+manual"
+    }
+  },
+  {
+    "id": "absent:company/sns-channel",
+    "label": "공식 SNS·유튜브",
+    "forms": [
+      "공식sns",
+      "공식유튜브",
+      "공식인스타",
+      "페이스북"
+    ],
+    "area": "company",
+    "gapCard": "gap:company/sns-channel",
+    "verified": {
+      "grep": [
+        "공식sns",
+        "공식유튜브",
+        "공식인스타",
+        "페이스북"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "script:search+manual"
+    }
+  },
+  {
+    "id": "absent:company/fax-post",
+    "label": "팩스·우편",
+    "forms": [
+      "팩스",
+      "팩스번호",
+      "우편",
+      "서류발송"
+    ],
+    "area": "company",
+    "gapCard": "gap:company/fax-post",
+    "verified": {
+      "grep": [
+        "팩스",
+        "팩스번호",
+        "우편",
+        "서류발송"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "script:search+manual"
+    }
+  },
+  {
+    "id": "absent:company/field-visit",
+    "label": "출장 상담",
+    "forms": [
+      "방문상담",
+      "출장상담",
+      "학원으로방문",
+      "찾아와서"
+    ],
+    "area": "company",
+    "gapCard": "gap:company/field-visit",
+    "verified": {
+      "grep": [
+        "방문상담",
+        "출장상담",
+        "학원으로방문",
+        "찾아와서"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "script:search+manual"
+    }
+  },
+  {
+    "id": "absent:company/custom-dev",
+    "label": "맞춤 개발",
+    "forms": [
+      "맞춤개발",
+      "커스터마이징",
+      "기능개발요청",
+      "기능추가요청"
+    ],
+    "area": "company",
+    "gapCard": "gap:company/custom-dev",
+    "verified": {
+      "grep": [
+        "맞춤개발",
+        "커스터마이징",
+        "기능개발요청",
+        "기능추가요청"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "script:search+manual"
+    }
+  },
+  {
+    "id": "absent:company/branding",
+    "label": "학원 브랜딩",
+    "forms": [
+      "화이트라벨",
+      "학원브랜딩",
+      "우리학원앱",
+      "학원로고앱"
+    ],
+    "area": "company",
+    "gapCard": "gap:company/branding",
+    "verified": {
+      "grep": [
+        "화이트라벨",
+        "학원브랜딩",
+        "우리학원앱",
+        "학원로고앱"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "script:search+manual"
+    }
+  },
+  {
+    "id": "absent:company/certification-program",
+    "label": "자격·인증 과정",
+    "forms": [
+      "공인자격",
+      "강사자격증",
+      "인증과정",
+      "수료증"
+    ],
+    "area": "company",
+    "gapCard": "gap:company/certification-program",
+    "verified": {
+      "grep": [
+        "공인자격",
+        "강사자격증",
+        "인증과정",
+        "수료증"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "script:search+manual"
+    }
+  },
+  {
+    "id": "absent:company/user-community",
+    "label": "사용자 커뮤니티",
+    "forms": [
+      "사용자모임",
+      "원장모임",
+      "사용자커뮤니티",
+      "오픈채팅방"
+    ],
+    "area": "company",
+    "gapCard": "gap:company/user-community",
+    "verified": {
+      "grep": [
+        "사용자모임",
+        "원장모임",
+        "사용자커뮤니티",
+        "오픈채팅방"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "script:search+manual"
+    }
+  },
+  {
+    "id": "absent:company/korean-school-overseas",
+    "label": "해외 한인학교",
+    "forms": [
+      "한인학교",
+      "해외한인",
+      "재외국민",
+      "해외분원"
+    ],
+    "area": "company",
+    "gapCard": "gap:company/korean-school-overseas",
+    "verified": {
+      "grep": [
+        "한인학교",
+        "해외한인",
+        "재외국민",
+        "해외분원"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "script:search+manual"
+    }
+  },
+  {
+    "id": "absent:company/kindergarten-afterschool",
+    "label": "유치원·방과후",
+    "forms": [
+      "유치원",
+      "어린이집",
+      "방과후",
+      "돌봄교실"
+    ],
+    "area": "company",
+    "gapCard": "gap:company/kindergarten-afterschool",
+    "verified": {
+      "grep": [
+        "유치원",
+        "어린이집",
+        "방과후",
+        "돌봄교실"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "script:search+manual"
+    }
+  },
+  {
+    "id": "absent:company/homeschool-alt",
+    "label": "홈스쿨링·대안학교",
+    "forms": [
+      "홈스쿨링",
+      "대안학교",
+      "홈스쿨",
+      "대안교육"
+    ],
+    "area": "company",
+    "gapCard": "gap:company/homeschool-alt",
+    "verified": {
+      "grep": [
+        "홈스쿨링",
+        "대안학교",
+        "홈스쿨",
+        "대안교육"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "script:search+manual"
+    }
+  },
+  {
+    "id": "absent:company/culture-center-library",
+    "label": "문화센터·독서실",
+    "forms": [
+      "문화센터",
+      "독서실",
+      "스터디카페",
+      "평생교육원"
+    ],
+    "area": "company",
+    "gapCard": "gap:company/culture-center-library",
+    "verified": {
+      "grep": [
+        "문화센터",
+        "독서실",
+        "스터디카페",
+        "평생교육원"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "script:search+manual"
+    }
+  },
+  {
+    "id": "absent:company/education-office",
+    "label": "교육청 협약",
+    "forms": [
+      "교육청",
+      "교육지원청",
+      "협약",
+      "mou체결"
+    ],
+    "area": "company",
+    "gapCard": "gap:company/education-office",
+    "verified": {
+      "grep": [
+        "교육청",
+        "교육지원청",
+        "협약",
+        "mou체결"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "script:search+manual"
+    }
+  },
+  {
+    "id": "absent:company/rfp-proposal",
+    "label": "입찰·RFP 제안",
+    "forms": [
+      "rfp",
+      "입찰",
+      "제안요청서",
+      "공공입찰"
+    ],
+    "area": "company",
+    "gapCard": "gap:company/rfp-proposal",
+    "verified": {
+      "grep": [
+        "rfp",
+        "입찰",
+        "제안요청서",
+        "공공입찰"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "script:search+manual"
+    }
+  },
+  {
+    "id": "absent:company/reference-visit",
+    "label": "도입 학원 견학",
+    "forms": [
+      "견학",
+      "학원견학",
+      "도입학원방문",
+      "레퍼런스방문"
+    ],
+    "area": "company",
+    "gapCard": "gap:company/reference-visit",
+    "verified": {
+      "grep": [
+        "견학",
+        "학원견학",
+        "도입학원방문",
+        "레퍼런스방문"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "script:search+manual"
+    }
+  },
+  {
+    "id": "absent:company/research-collab",
+    "label": "학술 연구 협력",
+    "forms": [
+      "학술연구",
+      "논문",
+      "연구협력",
+      "교육연구"
+    ],
+    "area": "company",
+    "gapCard": "gap:company/research-collab",
+    "verified": {
+      "grep": [
+        "학술연구",
+        "논문",
+        "연구협력",
+        "교육연구"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "script:search+manual"
+    }
+  },
+  {
+    "id": "absent:company/business-registration",
+    "label": "사업자 정보",
+    "forms": [
+      "통신판매업",
+      "통신판매업신고",
+      "사업자정보",
+      "법인등기"
+    ],
+    "area": "company",
+    "gapCard": "gap:company/business-registration",
+    "verified": {
+      "grep": [
+        "통신판매업",
+        "통신판매업신고",
+        "사업자정보",
+        "법인등기"
+      ],
+      "unitHits": 0,
+      "siteHits": 1,
+      "checkedAt": "2026-11-20",
+      "checker": "script:search+manual",
+      "sameMeaningNote": "걸린 문장은 이 개념과 다른 뜻(낱말 일부가 다른 말에 들어간 경우)"
+    }
+  },
+  {
+    "id": "absent:course/course-copy",
+    "label": "코스 복제",
+    "forms": [
+      "코스복제",
+      "코스복사",
+      "반복사",
+      "새학기코스",
+      "지난학기코스"
+    ],
+    "area": "course",
+    "gapCard": "gap:course/course-copy",
+    "verified": {
+      "grep": [
+        "코스복제",
+        "코스복사",
+        "반복사",
+        "새학기코스",
+        "지난학기코스"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "script:search+manual"
+    }
+  },
+  {
+    "id": "absent:course/course-merge",
+    "label": "코스 합반",
+    "forms": [
+      "합반",
+      "코스합치기",
+      "코스병합",
+      "반합치기"
+    ],
+    "area": "course",
+    "gapCard": "gap:course/course-merge",
+    "verified": {
+      "grep": [
+        "합반",
+        "코스합치기",
+        "코스병합",
+        "반합치기"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "script:search+manual"
+    }
+  },
+  {
+    "id": "absent:course/course-archive",
+    "label": "코스 보관·숨김",
+    "forms": [
+      "아카이브",
+      "코스숨김",
+      "비활성화코스"
+    ],
+    "area": "course",
+    "gapCard": "gap:course/course-archive",
+    "verified": {
+      "grep": [
+        "아카이브",
+        "코스숨김",
+        "비활성화코스"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "script:search+manual"
+    }
+  },
+  {
+    "id": "absent:course/calendar-sync",
+    "label": "외부 캘린더 연동",
+    "forms": [
+      "구글캘린더",
+      "캘린더연동",
+      "외부캘린더",
+      "일정내보내기"
+    ],
+    "area": "course",
+    "gapCard": "gap:course/calendar-sync",
+    "verified": {
+      "grep": [
+        "구글캘린더",
+        "캘린더연동",
+        "외부캘린더",
+        "일정내보내기"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "script:search+manual"
+    }
+  },
+  {
+    "id": "absent:course/self-enroll",
+    "label": "수강 신청 페이지",
+    "forms": [
+      "수강신청",
+      "수강생모집",
+      "직접신청"
+    ],
+    "area": "course",
+    "gapCard": "gap:course/self-enroll",
+    "verified": {
+      "grep": [
+        "수강신청",
+        "수강생모집",
+        "직접신청"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "script:search+manual"
+    }
+  },
+  {
+    "id": "absent:course/waitlist",
+    "label": "수강 대기 명단",
+    "forms": [
+      "수강대기",
+      "대기자",
+      "대기명단"
+    ],
+    "area": "course",
+    "gapCard": "gap:course/waitlist",
+    "verified": {
+      "grep": [
+        "수강대기",
+        "대기자",
+        "대기명단"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "script:search+manual"
+    }
+  },
+  {
+    "id": "absent:course/course-password",
+    "label": "코스 입장 비밀번호",
+    "forms": [
+      "코스비밀번호",
+      "입장암호",
+      "코스암호"
+    ],
+    "area": "course",
+    "gapCard": "gap:course/course-password",
+    "verified": {
+      "grep": [
+        "코스비밀번호",
+        "입장암호",
+        "코스암호"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "script:search+manual"
+    }
+  },
+  {
+    "id": "absent:course/co-head-teacher",
+    "label": "공동 담임",
+    "forms": [
+      "공동담임",
+      "복수담임",
+      "담임두명"
+    ],
+    "area": "course",
+    "gapCard": "gap:course/co-head-teacher",
+    "verified": {
+      "grep": [
+        "공동담임",
+        "복수담임",
+        "담임두명"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "script:search+manual"
+    }
+  },
+  {
+    "id": "absent:course/lesson-postpone",
+    "label": "수업 연기·휴강 처리",
+    "forms": [
+      "수업연기",
+      "휴강처리",
+      "휴강표시"
+    ],
+    "area": "course",
+    "gapCard": "gap:course/lesson-postpone",
+    "verified": {
+      "grep": [
+        "수업연기",
+        "휴강처리",
+        "휴강표시"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "script:search+manual"
+    }
+  },
+  {
+    "id": "absent:course/completion-certificate",
+    "label": "수료증 발급",
+    "forms": [
+      "수료증",
+      "이수증"
+    ],
+    "area": "course",
+    "gapCard": "gap:course/completion-certificate",
+    "verified": {
+      "grep": [
+        "수료증",
+        "이수증"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "script:search+manual"
+    }
+  },
+  {
+    "id": "absent:course/substitute-teacher",
+    "label": "대체 강사 임시 지정",
+    "forms": [
+      "임시강사",
+      "대타강사",
+      "대강선생"
+    ],
+    "area": "course",
+    "gapCard": "gap:course/substitute-teacher",
+    "verified": {
+      "grep": [
+        "임시강사",
+        "대타강사",
+        "대강선생"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "script:search+manual"
+    }
+  },
+  {
+    "id": "absent:course/roster-export",
+    "label": "구성원 명단 내려받기",
+    "forms": [
+      "명단내려받기",
+      "명단내보내기",
+      "구성원명단"
+    ],
+    "area": "course",
+    "gapCard": "gap:course/roster-export",
+    "verified": {
+      "grep": [
+        "명단내려받기",
+        "명단내보내기",
+        "구성원명단"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "script:search+manual"
+    }
+  },
+  {
+    "id": "absent:course/timetable-export",
+    "label": "시간표 내려받기·인쇄",
+    "forms": [
+      "시간표내보내기",
+      "시간표인쇄",
+      "시간표pdf"
+    ],
+    "area": "course",
+    "gapCard": "gap:course/timetable-export",
+    "verified": {
+      "grep": [
+        "시간표내보내기",
+        "시간표인쇄",
+        "시간표pdf"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "script:search+manual"
+    }
+  },
+  {
+    "id": "absent:course/invite-link-expiry",
+    "label": "초대 링크 유효 기간",
+    "forms": [
+      "링크만료",
+      "링크유효",
+      "초대링크유효"
+    ],
+    "area": "course",
+    "gapCard": "gap:course/invite-link-expiry",
+    "verified": {
+      "grep": [
+        "링크만료",
+        "링크유효",
+        "초대링크유효"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "script:search+manual"
+    }
+  },
+  {
+    "id": "absent:course/parent-invite",
+    "label": "학부모 코스 참여",
+    "forms": [
+      "학부모초대",
+      "보호자초대",
+      "학부모참관"
+    ],
+    "area": "course",
+    "gapCard": "gap:course/parent-invite",
+    "verified": {
+      "grep": [
+        "학부모초대",
+        "보호자초대",
+        "학부모참관"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "script:search+manual"
+    }
+  },
+  {
+    "id": "absent:course/schedule-conflict",
+    "label": "수업 시간 겹침 경고",
+    "forms": [
+      "시간표겹침",
+      "시간겹침",
+      "수업중복"
+    ],
+    "area": "course",
+    "gapCard": "gap:course/schedule-conflict",
+    "verified": {
+      "grep": [
+        "시간표겹침",
+        "시간겹침",
+        "수업중복"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "script:search+manual"
+    }
+  },
+  {
+    "id": "absent:course/cross-institution",
+    "label": "다른 학원과 공동 수업",
+    "forms": [
+      "기관간",
+      "연합수업",
+      "공동수업"
+    ],
+    "area": "course",
+    "gapCard": "gap:course/cross-institution",
+    "verified": {
+      "grep": [
+        "기관간",
+        "연합수업",
+        "공동수업"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "script:search+manual"
+    }
+  },
+  {
+    "id": "absent:course/course-order",
+    "label": "코스 목록 순서 정렬",
+    "forms": [
+      "코스순서",
+      "코스정렬",
+      "코스폴더"
+    ],
+    "area": "course",
+    "gapCard": "gap:course/course-order",
+    "verified": {
+      "grep": [
+        "코스순서",
+        "코스정렬",
+        "코스폴더"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "script:search+manual"
+    }
+  },
+  {
+    "id": "absent:course/course-hidden",
+    "label": "코스 비공개 설정",
+    "forms": [
+      "코스비공개",
+      "비공개코스",
+      "검색노출"
+    ],
+    "area": "course",
+    "gapCard": "gap:course/course-hidden",
+    "verified": {
+      "grep": [
+        "코스비공개",
+        "비공개코스",
+        "검색노출"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "script:search+manual"
+    }
+  },
+  {
+    "id": "absent:course/grade-promotion",
+    "label": "학년 진급 일괄 이동",
+    "forms": [
+      "진급",
+      "학년올리",
+      "학년이동"
+    ],
+    "area": "course",
+    "gapCard": "gap:course/grade-promotion",
+    "verified": {
+      "grep": [
+        "진급",
+        "학년올리",
+        "학년이동"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "script:search+manual"
+    }
+  },
+  {
+    "id": "absent:course/course-compare",
+    "label": "코스 간 통계 비교",
+    "forms": [
+      "코스비교",
+      "통계비교",
+      "반별비교"
+    ],
+    "area": "course",
+    "gapCard": "gap:course/course-compare",
+    "verified": {
+      "grep": [
+        "코스비교",
+        "통계비교",
+        "반별비교"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "script:search+manual"
+    }
+  },
+  {
+    "id": "absent:course/scheduled-publish",
+    "label": "수업 예약 게시",
+    "forms": [
+      "예약게시",
+      "게시예약",
+      "예약공개"
+    ],
+    "area": "course",
+    "gapCard": "gap:course/scheduled-publish",
+    "verified": {
+      "grep": [
+        "예약게시",
+        "게시예약",
+        "예약공개"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "script:search+manual"
+    }
+  },
+  {
+    "id": "absent:course/join-approval",
+    "label": "코스 가입 승인제",
+    "forms": [
+      "가입승인",
+      "승인제",
+      "승인대기"
+    ],
+    "area": "course",
+    "gapCard": "gap:course/join-approval",
+    "verified": {
+      "grep": [
+        "가입승인",
+        "승인제",
+        "승인대기"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "script:search+manual"
+    }
+  },
+  {
+    "id": "absent:course/member-block",
+    "label": "구성원 재입장 차단",
+    "forms": [
+      "재입장차단",
+      "입장금지",
+      "재가입방지"
+    ],
+    "area": "course",
+    "gapCard": "gap:course/member-block",
+    "verified": {
+      "grep": [
+        "재입장차단",
+        "입장금지",
+        "재가입방지"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "script:search+manual"
+    }
+  },
+  {
+    "id": "absent:pricing/contract-holder-change",
+    "label": "계약자 명의 변경",
+    "forms": [
+      "명의 변경",
+      "계약자 변경",
+      "명의 이전",
+      "양수도"
+    ],
+    "area": "pricing",
+    "gapCard": "gap:pricing/contract-holder-change",
+    "verified": {
+      "grep": [
+        "명의 변경",
+        "계약자 변경",
+        "명의 이전",
+        "양수도"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:sonnet#D5-pricing"
+    }
+  },
+  {
+    "id": "absent:pricing/change-academy-name",
+    "label": "학원명·소재지 정보 수정",
+    "forms": [
+      "학원명 수정",
+      "학원 정보 수정",
+      "소재지 변경",
+      "상호 변경"
+    ],
+    "area": "pricing",
+    "gapCard": "gap:pricing/change-academy-name",
+    "verified": {
+      "grep": [
+        "학원명 수정",
+        "학원 정보 수정",
+        "소재지 변경",
+        "상호 변경"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:sonnet#D5-pricing"
+    }
+  },
+  {
+    "id": "absent:pricing/change-main-admin",
+    "label": "메인 관리자 계정 교체",
+    "forms": [
+      "메인 관리자 변경",
+      "관리자 계정 교체",
+      "관리자 계정 양도",
+      "메인 관리자 교체"
+    ],
+    "area": "pricing",
+    "gapCard": "gap:pricing/change-main-admin",
+    "verified": {
+      "grep": [
+        "메인 관리자 변경",
+        "메인 관리자 바꾸",
+        "관리자 계정 이전",
+        "관리자 교체"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:sonnet#D5-pricing"
+    }
+  },
+  {
+    "id": "absent:pricing/recover-main-admin",
+    "label": "결제한 아이디 복구",
+    "forms": [
+      "결제한 아이디 분실",
+      "결제 아이디 찾기",
+      "결제 계정 복구",
+      "관리자 계정 복구"
+    ],
+    "area": "pricing",
+    "gapCard": "gap:pricing/recover-main-admin",
+    "verified": {
+      "grep": [
+        "결제한 아이디",
+        "관리자 계정 분실",
+        "결제 아이디 찾",
+        "아이디 복구"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:sonnet#D5-pricing"
+    }
+  },
+  {
+    "id": "absent:pricing/cancel-deadline",
+    "label": "결제 취소 가능 기한",
+    "forms": [
+      "결제 취소 기한",
+      "취소 가능 기간",
+      "계약 취소 기한",
+      "결제 후 취소"
+    ],
+    "area": "pricing",
+    "gapCard": "gap:pricing/cancel-deadline",
+    "verified": {
+      "grep": [
+        "결제 취소",
+        "취소 기한",
+        "취소 가능",
+        "계약 취소"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:sonnet#D5-pricing"
+    }
+  },
+  {
+    "id": "absent:pricing/contract-esign",
+    "label": "전자 계약·전자서명",
+    "forms": [
+      "전자서명",
+      "전자 서명",
+      "계약서 서명",
+      "전자계약서"
+    ],
+    "area": "pricing",
+    "gapCard": "gap:pricing/contract-esign",
+    "verified": {
+      "grep": [
+        "전자서명",
+        "전자 서명",
+        "계약서 서명",
+        "전자계약"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:sonnet#D5-pricing"
+    }
+  },
+  {
+    "id": "absent:pricing/public-procurement",
+    "label": "공공 조달 구매",
+    "forms": [
+      "나라장터",
+      "조달청",
+      "조달 등록",
+      "공공 입찰"
+    ],
+    "area": "pricing",
+    "gapCard": "gap:pricing/public-procurement",
+    "verified": {
+      "grep": [
+        "나라장터",
+        "조달",
+        "입찰",
+        "조달청"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:sonnet#D5-pricing"
+    }
+  },
+  {
+    "id": "absent:pricing/quote-validity",
+    "label": "견적서 유효 기간",
+    "forms": [
+      "견적 유효기간",
+      "견적서 유효기간",
+      "견적 만료",
+      "견적 효력"
+    ],
+    "area": "pricing",
+    "gapCard": "gap:pricing/quote-validity",
+    "verified": {
+      "grep": [
+        "견적 유효",
+        "견적서 유효",
+        "견적 만료",
+        "견적 유효기간"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:sonnet#D5-pricing"
+    }
+  },
+  {
+    "id": "absent:pricing/purchase-order",
+    "label": "품의서·구매 요청 서류",
+    "forms": [
+      "품의서",
+      "구매요청서",
+      "발주서",
+      "내부 결재 서류"
+    ],
+    "area": "pricing",
+    "gapCard": "gap:pricing/purchase-order",
+    "verified": {
+      "grep": [
+        "품의서",
+        "구매요청서",
+        "발주서",
+        "내부 결재"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:sonnet#D5-pricing"
+    }
+  },
+  {
+    "id": "absent:pricing/pause-subscription",
+    "label": "방학·휴원 일시 정지",
+    "forms": [
+      "일시정지",
+      "휴원",
+      "이용 중지",
+      "서비스 정지"
+    ],
+    "area": "pricing",
+    "gapCard": "gap:pricing/pause-subscription",
+    "verified": {
+      "grep": [
+        "일시정지",
+        "휴원",
+        "이용 중지",
+        "서비스 정지"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:sonnet#D5-pricing"
+    }
+  },
+  {
+    "id": "absent:pricing/delivery-lead",
+    "label": "주문 뒤 납기·배송 기간",
+    "forms": [
+      "납기",
+      "출고",
+      "배송 기간",
+      "주문 후 도착"
+    ],
+    "area": "pricing",
+    "gapCard": "gap:pricing/delivery-lead",
+    "verified": {
+      "grep": [
+        "납기",
+        "출고",
+        "배송 기간",
+        "주문 후"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:sonnet#D5-pricing"
+    }
+  },
+  {
+    "id": "absent:pricing/payment-failure",
+    "label": "결제 실패·카드 승인 오류",
+    "forms": [
+      "결제 실패",
+      "결제 오류",
+      "카드 승인",
+      "결제 거절"
+    ],
+    "area": "pricing",
+    "gapCard": "gap:pricing/payment-failure",
+    "verified": {
+      "grep": [
+        "결제 실패",
+        "결제 오류",
+        "카드 승인",
+        "결제 거절"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:sonnet#D5-pricing"
+    }
+  },
+  {
+    "id": "absent:pricing/card-change",
+    "label": "결제 카드·수단 변경",
+    "forms": [
+      "결제 카드 변경",
+      "결제 수단 변경",
+      "카드 교체",
+      "결제 카드 교체"
+    ],
+    "area": "pricing",
+    "gapCard": "gap:pricing/card-change",
+    "verified": {
+      "grep": [
+        "결제 카드 변경",
+        "결제 수단 변경",
+        "카드 교체",
+        "결제 카드"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:sonnet#D5-pricing"
+    }
+  },
+  {
+    "id": "absent:pricing/billing-day",
+    "label": "결제일·청구일 변경",
+    "forms": [
+      "결제일 변경",
+      "청구일",
+      "결제일 조정",
+      "납부일"
+    ],
+    "area": "pricing",
+    "gapCard": "gap:pricing/billing-day",
+    "verified": {
+      "grep": [
+        "결제일 변경",
+        "청구일",
+        "결제일 조정",
+        "결제 시점"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:sonnet#D5-pricing"
+    }
+  },
+  {
+    "id": "absent:pricing/charge-expiry",
+    "label": "충전 포인트 유효 기간",
+    "forms": [
+      "포인트 유효기간",
+      "충전금 소멸",
+      "포인트 소멸",
+      "충전 유효기간"
+    ],
+    "area": "pricing",
+    "gapCard": "gap:pricing/charge-expiry",
+    "verified": {
+      "grep": [
+        "포인트 유효",
+        "충전 유효",
+        "포인트 소멸",
+        "충전금 소멸"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:sonnet#D5-pricing"
+    }
+  },
+  {
+    "id": "absent:pricing/price-change",
+    "label": "요금 인상·가격 변경",
+    "forms": [
+      "요금 인상",
+      "가격 인상",
+      "가격 동결",
+      "요금 개편"
+    ],
+    "area": "pricing",
+    "gapCard": "gap:pricing/price-change",
+    "verified": {
+      "grep": [
+        "요금 인상",
+        "가격 인상",
+        "요금 변경",
+        "가격 동결"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:sonnet#D5-pricing"
+    }
+  },
+  {
+    "id": "absent:pricing/overseas-payment",
+    "label": "해외 카드·해외 결제",
+    "forms": [
+      "해외 카드",
+      "해외 결제",
+      "외화 결제",
+      "해외 송금"
+    ],
+    "area": "pricing",
+    "gapCard": "gap:pricing/overseas-payment",
+    "verified": {
+      "grep": [
+        "해외 카드",
+        "해외 결제",
+        "외화 결제",
+        "해외 학원 결제"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:sonnet#D5-pricing"
+    }
+  },
+  {
+    "id": "absent:pricing/education-subsidy",
+    "label": "지원금·바우처 활용",
+    "forms": [
+      "바우처",
+      "지원금",
+      "보조금",
+      "지원 사업"
+    ],
+    "area": "pricing",
+    "gapCard": "gap:pricing/education-subsidy",
+    "verified": {
+      "grep": [
+        "바우처",
+        "지원금",
+        "보조금",
+        "지원 사업"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:sonnet#D5-pricing"
+    }
+  },
+  {
+    "id": "absent:pricing/deferred-payment",
+    "label": "후불·대금 지급 기한",
+    "forms": [
+      "후불",
+      "외상",
+      "대금 지급",
+      "결제 유예"
+    ],
+    "area": "pricing",
+    "gapCard": "gap:pricing/deferred-payment",
+    "verified": {
+      "grep": [
+        "후불",
+        "외상",
+        "결제 기한",
+        "대금 지급"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:sonnet#D5-pricing"
+    }
+  },
+  {
+    "id": "absent:pricing/duplicate-charge",
+    "label": "중복 결제·이중 청구",
+    "forms": [
+      "중복 결제",
+      "이중 결제",
+      "이중 청구",
+      "두 번 결제"
+    ],
+    "area": "pricing",
+    "gapCard": "gap:pricing/duplicate-charge",
+    "verified": {
+      "grep": [
+        "중복결제",
+        "이중 결제",
+        "이중 청구",
+        "두 번 결제"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:sonnet#D5-pricing"
+    }
+  },
+  {
+    "id": "absent:pricing/payment-notice",
+    "label": "결제 완료 메일·알림",
+    "forms": [
+      "결제 완료 메일",
+      "결제 알림",
+      "결제 문자",
+      "결제 확인 메일"
+    ],
+    "area": "pricing",
+    "gapCard": "gap:pricing/payment-notice",
+    "verified": {
+      "grep": [
+        "결제 완료 메일",
+        "결제 알림",
+        "결제 문자",
+        "결제 확인 메일"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:sonnet#D5-pricing"
+    }
+  },
+  {
+    "id": "absent:pricing/english-invoice",
+    "label": "영문 견적서·인보이스",
+    "forms": [
+      "영문 견적서",
+      "영문 세금계산서",
+      "인보이스",
+      "영문 청구서"
+    ],
+    "area": "pricing",
+    "gapCard": "gap:pricing/english-invoice",
+    "verified": {
+      "grep": [
+        "영문 견적",
+        "영문 세금계산서",
+        "인보이스",
+        "영어 견적서"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:sonnet#D5-pricing"
+    }
+  },
+  {
+    "id": "absent:pricing/down-payment",
+    "label": "계약금·잔금 납부 일정",
+    "forms": [
+      "계약금",
+      "잔금",
+      "선금",
+      "중도금"
+    ],
+    "area": "pricing",
+    "gapCard": "gap:pricing/down-payment",
+    "verified": {
+      "grep": [
+        "계약금",
+        "잔금",
+        "선금",
+        "중도금"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:sonnet#D5-pricing"
+    }
+  },
+  {
+    "id": "absent:pricing/multi-year-contract",
+    "label": "다년·장기 계약",
+    "forms": [
+      "다년 계약",
+      "장기 계약",
+      "3년 계약",
+      "장기 약정"
+    ],
+    "area": "pricing",
+    "gapCard": "gap:pricing/multi-year-contract",
+    "verified": {
+      "grep": [
+        "다년 계약",
+        "장기 계약",
+        "3년 계약",
+        "장기 약정"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:sonnet#D5-pricing"
+    }
+  },
+  {
+    "id": "absent:pricing/quote-revision",
+    "label": "견적서 수정·재발급",
+    "forms": [
+      "재견적",
+      "견적 수정",
+      "견적서 재발급",
+      "견적 변경"
+    ],
+    "area": "pricing",
+    "gapCard": "gap:pricing/quote-revision",
+    "verified": {
+      "grep": [
+        "재견적",
+        "견적 수정",
+        "견적서 재발급",
+        "견적 변경"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:sonnet#D5-pricing"
+    }
+  }
+]

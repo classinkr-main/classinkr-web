@@ -88,7 +88,11 @@ describe("빈 자료", () => {
 
   it("저장소에 넣은 자료(data/answer-index)가 지금 문서·코드와 맞는다", async () => {
     const result = await runVerify({ dir: dataDir(), devSets: loadRepoEvalSets().map((entry) => entry.set) })
-    expect(errorsOf(result.findings)).toEqual([])
+    // 파일럿 5영역만 카드가 있다. 파일럿 밖 영역의 V-9(덮이지 않은 단위)는 아직 예상된 오류다.
+    const errors = errorsOf(result.findings)
+    expect(errors.filter((finding) => finding.rule !== "V-9")).toEqual([])
+    const pilotAreas = ["account", "classroom", "course", "pricing", "company"]
+    expect(errors.filter((finding) => pilotAreas.some((area) => finding.message.includes(`(${area})`)))).toEqual([])
   }, 120_000)
 })
 

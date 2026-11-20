@@ -1,0 +1,1156 @@
+{
+  "items": [
+    {
+      "id": "HQ-01",
+      "topic": "DPA 답과 개인정보처리방침 8절 수탁사 표 충돌(absence_claim_wrong)",
+      "currentText": "svc:dpa 답: '개인 정보 처리 위탁 계약서(DPA) 양식이나 수탁사·재위탁 현황은 공개 문서에 따로 올라와 있지 않아서 내용을 제가 지어 말씀드리지 않을게요.' 처리 기준은 공식 개인정보처리방침에서 확인하라고 안내. field:academy-privacy-policy-classin-outsourcing 도 수탁자 자료는 공개 안내에 없다고 말함.",
+      "conflict": "공개 페이지 개인정보처리방침에는 처리위탁 받는 곳이 표로 공개돼 있음: site:app/privacy/page.tsx:27(销售易 운영사), :77(주식회사 채널코퍼레이션 채널톡), :81(토스페이먼츠), :478(Vercel·Supabase·Resend·销售易·Google Workspace), :479(챗봇 대화 Gemini 전송), :30·:133(처리위탁, 이 방침에 공개). 따라서 '수탁사 현황이 공개 문서에 없다'는 부재 주장은 틀림. DPA 양식 자체가 공개돼 있는지는 근거 없음. 결정: 부재 주장을 '방침 8절 표 참고'로 바꿀지, 표 인용 범위, DPA 양식 제공 가능 여부.",
+      "proposal": null,
+      "affectedCards": [
+        "svc:dpa",
+        "field:academy-privacy-policy-classin-outsourcing"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": [
+        "수탁사·재위탁 현황은 공개 문서에"
+      ],
+      "note": "svc:dpa 의 틀린 부재 주장('수탁사·재위탁 현황은 공개 문서에 따로 올라와 있지 않아서') 형태. 개인정보처리방침 8절에 수탁사 표가 있어 결정 전 다른 카드로 나가면 안 됨. 지금 active 카드에는 없음. 지금 걸리는 active 카드는 없거나 이 항목 policy 카드뿐(예외)."
+    },
+    {
+      "id": "HQ-02",
+      "topic": "쇼룸 주소 두 표기('806호' / '8층 806호(드림타워)')",
+      "currentText": "svc:showroom 답: '서울 양천구 목동동로 233-1, 806호에 있어요 ... 정확한 호수는 확정 문자에도 적어 드려요.' basics:basics-korea-entity-address 답: '서울특별시 양천구 목동동로 233-1, 8층 806호(목동, 드림타워)'.",
+      "conflict": "공개 페이지도 두 갈래: site:app/privacy/page.tsx:317, site:components/sections/Footer.tsx:87 '8층 806호 (목동, 드림타워)', site:components/contact/ContactDirectChannels.tsx:65 '806호', site:components/contact/ContactMap.tsx:194 '현대드림타워 806호', ContactMap.tsx:112#2 '현대드림타워(목동동로 233-1)'. 층·건물명 포함 여부와 표준 표기 결정 필요.",
+      "proposal": null,
+      "affectedCards": [
+        "svc:showroom",
+        "basics:basics-korea-entity-address"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": [
+        "806호",
+        "목동동로 233-1"
+      ],
+      "note": "주소 두 표기(site:components/contact/ContactDirectChannels.tsx:64·65 '목동동로 233-1'·'806호' / site:components/sections/Footer.tsx:87 '8층 806호 (목동, 드림타워)')에 공통으로 걸리는 조각. 표준 표기가 정해질 때까지 주소는 이 항목 policy 카드로만 나간다. 지금 걸리는 active 카드는 없거나 이 항목 policy 카드뿐(예외). 규칙 변경(policy 카드는 지금 운영 글이라 막지 않음)으로 active 유지: policy:korea-entity-address."
+    },
+    {
+      "id": "HQ-03",
+      "topic": "무료 체험 '2주' 표기 단정 여부 (문서 간 불일치)",
+      "currentText": "답 다수가 '공식 무료 체험은 2주'로 단정: field:trial-card-autobill, field:zoom-remaining-discount, field:friend-trial-english-demo, template:요금제 한도·체험 범위 확인, svc:free-scope 등. 반면 template:체험·파일럿 확인은 '무료 체험 가능 여부를 여기서 단정하기보다는 데모와 파일럿 범위로 확인'이라 함.",
+      "conflict": "doc:/docs/software/software-pricing-quote-bundle-faq#2 문장 0 '도입 전에 2주 무료 체험으로 먼저 써 보고 결정합니다'(단정), doc:/docs/start/pre-adoption-faq-22-questions#1 문장 11, doc:/docs/start/value-and-cost-framing#1 문장 6, software-pricing-quote-bundle-faq#summary 문장 5 는 2주 무료 체험을 신청하라고 함. doc:/docs/admin/billing-upgrade 는 가입 후 무료 버전으로 시작하고 [무료 체험판 시작] 버튼으로 이어짐(billing-upgrade#summary 문장 3). 학생 로그인 화면에 무료 체험판·비즈니스 체험판 선택(doc:/docs/admin/student-onboarding#6 문장 4). '2주'가 현재도 유효한지, 챗봇이 기간을 단정해도 되는지 결정.",
+      "proposal": null,
+      "affectedCards": [
+        "svc:free-scope",
+        "field:trial-card-autobill",
+        "field:zoom-remaining-discount",
+        "field:friend-trial-english-demo",
+        "template:요금제 한도·체험 범위 확인",
+        "template:체험·파일럿 확인",
+        "basics:basics-zoom-time-limit"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": [
+        "2주 무료",
+        "무료 체험은 2주",
+        "체험 기간은 2주"
+      ],
+      "note": "'2주 무료'(software-pricing-quote-bundle-faq#2 i0·#summary i5, pre-adoption-faq-22-questions#1 i11, value-and-cost-framing#1 i6)와 policy 글의 '무료 체험은 2주'·'체험 기간은 2주' 형태. billing-upgrade#2 i8 은 '체험 기간과 혜택은 시기에 따라 달라질 수 있어'라 기간 단정과 충돌. '첫 2주'(software-overview#4)에는 걸리지 않음. 이 구절로 review 한 카드: doc:/docs/software/software-pricing-quote-bundle-faq#summary/price-trial-quote. 이 구절이 든 문장을 뺀 doc 카드: doc:/docs/software/software-pricing-quote-bundle-faq#2/free-trial. 규칙 변경(policy 카드는 지금 운영 글이라 막지 않음)으로 active 유지: policy:basics-price-vs-zoom, policy:basics-zoom-time-limit, policy:billing-period-term, policy:class-duration-limit, policy:demo-lesson-interview-free-account, policy:fit-small-private, policy:free-version-scope, policy:software-plan-overview, policy:teacher-ambassador-referral-discount, policy:trial-auto-billing, policy:trial-card-register-autobill, policy:tutor-plan-recommend, policy:zoom-switch-remaining-discount."
+    },
+    {
+      "id": "HQ-04",
+      "topic": "요금제 이름 세 계열(Pro·비즈니스 / Standard·Plus / Learning Space·Business)",
+      "currentText": "답마다 다른 계열을 씀: field:english-pricing·svc:personal-use·self:tutor_pricing_recommend 는 프로(Pro)·비즈니스, field:public-plans-minimum-term·field:billing-basis-accounts-midterm 은 Standard·Plus·Enterprise, field:short-term-seasonal-student-increase-plan 은 구독형(Learning Space)·충전형(Business). field:quote-license-basic-extended 는 '공식 도움말에는 Pro·비즈니스라는 이름으로 나올 수 있어요'라고 연결.",
+      "conflict": "doc:/docs/software/software-pricing-quote-bundle-faq#summary 문장 0·3, #0 문장 2·3, doc:/docs/admin/billing-upgrade#2 문장 1·4·6 은 Pro·비즈니스·Enterprise. doc:/docs/start/value-and-cost-framing#summary 문장 4, #1 문장 0·2·4 는 Standard·Plus·Enterprise. software-pricing-quote-bundle-faq#0 문장 1 은 구독형(Learning Space)·충전형(Business) 결제 방식, doc:/docs/teacher/lesson-web-live#6 문장 1 은 구독형 Learning Space는 Enterprise, 충전형은 Business, site:components/checkout/CheckoutClient.tsx:24 도 같은 결제 방식 표기. 같은 요금제인지, 결제 방식 이름인지, 챗봇이 쓸 대표 이름이 무엇인지 결정.",
+      "proposal": null,
+      "affectedCards": [
+        "field:english-pricing",
+        "svc:personal-use",
+        "self:tutor_pricing_recommend",
+        "field:public-plans-minimum-term",
+        "field:billing-basis-accounts-midterm",
+        "field:short-term-seasonal-student-increase-plan",
+        "field:quote-license-basic-extended",
+        "template:소프트웨어 요금과 플랜 안내"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": [
+        "Standard, Plus",
+        "Standard와 Plus",
+        "Standard는",
+        "Plus는 강사가",
+        "Pro 요금제",
+        "프로 요금제",
+        "비즈니스 요금제",
+        "Pro·비즈니스",
+        "1인 강사는 프로",
+        "1인 강사는 Pro",
+        "Pro는 1인",
+        "Pro로 시작",
+        "프로로 시작",
+        "비즈니스로 바꿀",
+        "비즈니스는 체험판",
+        "프로는 결제하면",
+        "프로는 바로",
+        "프로는 클래스인",
+        "Learning Space"
+      ],
+      "note": "세 계열 이름 조각 전부: Standard·Plus(value-and-cost-framing#summary i4, #1 i0·i2·i4·i5), Pro·프로/비즈니스(software-pricing-quote-bundle-faq#summary i0·i3, #0 i2·i3, billing-upgrade#summary i3, #2 i1·i2·i4~i7, #3 i6·i8), Learning Space(software-pricing-quote-bundle-faq#0 i1, lesson-web-live#6 i1, site:components/checkout/CheckoutClient.tsx:24). 대표 이름이 정해질 때까지 요금제 이름은 이 항목 policy 카드로만 나간다. 'Enterprise' 단독과 화면 이름 '비즈니스 범위'·'비즈니스 체험판'은 계열 충돌이 아니라 막지 않음. 웹 라이브 요금제 표기(충전형 Business 등)는 HQ-0401 구절. 이 구절로 review 한 카드: doc:/docs/admin/billing-upgrade#2/plan-choice, doc:/docs/admin/billing-upgrade#2/upgrade-later, doc:/docs/admin/billing-upgrade#summary/paid-switch-flow, doc:/docs/software/software-pricing-quote-bundle-faq#0/payment-types, doc:/docs/software/software-pricing-quote-bundle-faq#0/pro-to-business, doc:/docs/software/software-pricing-quote-bundle-faq#summary/plan-recommend, doc:/docs/start/value-and-cost-framing#1/plan-name-pro-business, doc:/docs/start/value-and-cost-framing#1/plan-tiers, doc:/docs/start/value-and-cost-framing#1/standard-vs-plus. 이 구절이 든 문장을 뺀 doc 카드: doc:/docs/admin/billing-upgrade#2/business-trial, doc:/docs/admin/billing-upgrade#3/balance-check, doc:/docs/teacher/lesson-web-live#6/plan-for-web-live. 규칙 변경(policy 카드는 지금 운영 글이라 막지 않음)으로 active 유지: policy:billing-unit, policy:fit-small-private, policy:paid-twice-iphone-app-and-website, policy:parents-watch-only, policy:peer-average-price, policy:plan-upgrade-proration-terms, policy:software-plan-overview, policy:student-account-tutor-friends-free, policy:tutor-plan-recommend, policy:web-live-capacity, policy:winter-camp-three-teachers-account-structure."
+    },
+    {
+      "id": "HQ-05",
+      "topic": "최대 인원·무대(온스테이지) 인원 숫자 불일치",
+      "currentText": "basics:basics-max-participants·basics:basics-capacity-and-duration: 소개 자료에 한 수업 최대 2,000명, 실제 한도는 요금제마다 다름, 온스테이지는 1v0~1v12. field:video-resolution-fps-tiles-zoom 도 최대 12명.",
+      "conflict": "공개 페이지는 학생 카메라 49개 동시 송출·최대 2,000명(site:components/introduction/proof/proof-copy.ts:325, story-copy.ts:301, lib/introduction/content.ts:439·507, landing-copy.ts:137). 문서는 온스테이지 1v0~1v12(doc:/docs/software/classroom-tools#5 문장 4, doc:/docs/teacher/lesson-option-concepts#2), 요금제마다 한도가 다름(doc:/docs/software/software-overview#1 문장 4, software-pricing-quote-bundle-faq#3 문장 3). 개인 칠판은 75명 제한 해제(doc:/docs/teacher/classin-607-update#4 문장 0). 49 대 12, 2,000명 대 요금제별 한도를 챗봇이 어떻게 말할지 결정.",
+      "proposal": null,
+      "affectedCards": [
+        "basics:basics-max-participants",
+        "basics:basics-capacity-and-duration",
+        "field:video-resolution-fps-tiles-zoom",
+        "field:class-40-students-recording-scope"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": [
+        "최대 2,000명",
+        "2,000명까지",
+        "49개 학생 카메라",
+        "학생 카메라 49개"
+      ],
+      "note": "공개 페이지 숫자 '최대 2,000명'·'49개 학생 카메라' 형태(site:components/introduction/proof/proof-copy.ts:325, story-copy.ts:301, lib/introduction/content.ts:439·507). 문서는 요금제마다 다르다(software-overview#1 i4)고 해 충돌. 문서끼리 같은 온스테이지 '1v0~1v12'는 막지 않음. 지금 걸리는 active 카드는 없거나 이 항목 policy 카드뿐(예외)."
+    },
+    {
+      "id": "HQ-06",
+      "topic": "대형 전자칠판(S110·S98 Pro) 크기·무게 공개 범위",
+      "currentText": "field:wall-board-move-warranty: 순중량 S75 54kg, S86 69.5kg, S110 137kg. field:showroom-model-quote: 가장 큰 모델 110인치(S110), 98인치(S98 Pro) 안내. field:board-power-ops 도 소비전력 숫자 안내.",
+      "conflict": "doc:/docs/hardware/board-lineup-specs#2 문장 8 에 S110 본체 2,520.55 × 1,457.20 × 110.00mm, 137kg 공개. 규격서 기준 S75·S86·S98 Pro·S110(board-lineup-specs#summary 문장 2)과 제품 페이지 기준 S65·S75·S86·S110(hardware-spec-installation-faq#summary 문장 2)이 모델 구성이 다름(S98 Pro 포함 여부, S65 포함 여부). 대형 모델 치수·무게·소비전력을 챗봇이 숫자로 답해도 되는지, 모델 목록 정본 결정.",
+      "proposal": null,
+      "affectedCards": [
+        "field:wall-board-move-warranty",
+        "field:showroom-model-quote",
+        "field:board-power-ops",
+        "field:buy-new-board-old-board-compat",
+        "field:two-boards-side-by-side"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": [
+        "137kg",
+        "2,520.55",
+        "89kg",
+        "2,227.92",
+        "740W",
+        "850W"
+      ],
+      "note": "대형 모델 치수·무게·소비전력 숫자(board-lineup-specs#2 i6·i8, #4 i10, board-install-readiness#summary i5·#6 i5, hardware-spec-installation-faq#1 i9). 지금 파일럿 active 카드에는 없음(board 영역 카드가 생길 때 걸림). 지금 걸리는 active 카드는 없거나 이 항목 policy 카드뿐(예외)."
+    },
+    {
+      "id": "HQ-07",
+      "topic": "회사 국적 문구(중국 베이징 본사 vs 글로벌·한국 법인)",
+      "currentText": "basics:basics-company-origin: '글로벌 에듀테크 기업 EEO ... 글로벌 HQ는 싱가포르에, EEO 본사와 R&D 센터는 중국 베이징에 있어요. 한국에서는 ... 한국 법인 이이오클래스인코리아가 도입과 운영을 맡고 있어요.' basics:basics-china-company-data 는 같은 내용에 데이터 저장 위치는 공개 안내에 없다고 함. basics:basics-korea-entity-address 는 '중국'을 빼고 '베이징'만 씀.",
+      "conflict": "근거는 회사 소개 페이지(site:app/about/AboutPageClient.tsx 줄 99 등)와 doc:/docs/start/company-overview#1 문장 3. 개인정보처리방침은 처리위탁에 北京仁科互动网络技术有限公司(销售易)를 공개(site:app/privacy/page.tsx:27), 약관은 싱가포르 법 준거·SIAC 중재(site:app/terms/page.tsx:172). 국적·본사 소재지를 '중국'으로 명시해도 되는지, 질문이 '중국 회사냐'일 때 어디까지 답할지, 데이터 위치 답과의 연결 결정.",
+      "proposal": null,
+      "affectedCards": [
+        "basics:basics-company-origin",
+        "basics:basics-china-company-data",
+        "basics:basics-overseas-entities",
+        "basics:basics-korea-entity-address"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": [
+        "중국 베이징",
+        "베이징에 있",
+        "베이징에 두고"
+      ],
+      "note": "policy 글의 '중국 베이징'·'베이징에 있'·'베이징에 두고' 형태. 문서·공개 페이지 문장(site-facts)에는 베이징 본사 문장이 없음. 이 구절로 review 한 policy 카드 없음. 규칙 변경(policy 카드는 지금 운영 글이라 막지 않음)으로 active 유지: policy:korea-entity-address."
+    },
+    {
+      "id": "HQ-08",
+      "topic": "금액 숫자 비공개 원칙(요금·할인·환불 약속 금지)",
+      "currentText": "다수 답이 '금액은 공개 안내에 숫자가 없어 말씀드리지 않을게요', '견적으로 안내'라고 답함: field:public-plans-minimum-term, basics:basics-price-vs-zoom, template:소프트웨어 요금과 플랜 안내, field:chatbot-discount-claim, field:peer-average-price.",
+      "conflict": "lib/chatbot/pricing-policy.ts 는 '최종 견적과 구체 금액은 단정하지 않고 상담 연결로 맞춤 안내합니다'(PRICE_FINAL_QUOTE_GUIDANCE). 공개 문서의 소프트웨어 안내도 할인·금액은 견적으로 안내(software-pricing-quote-bundle-faq#summary 문장 5). 금액 숫자·할인율·환불 조건을 어떤 경우에도 숫자로 말하지 않는다는 원칙을 정책으로 확정할지, 예외(공개 제품 페이지의 숫자 등) 허용 여부 결정.",
+      "proposal": null,
+      "affectedCards": [
+        "field:public-plans-minimum-term",
+        "basics:basics-price-vs-zoom",
+        "template:소프트웨어 요금과 플랜 안내",
+        "field:chatbot-discount-claim",
+        "field:peer-average-price",
+        "field:sales-promo-deadline-legit"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": [
+        "5억 달러"
+      ],
+      "note": "V-3 금액 규칙(lib text-rules)이 '5억 달러'(숫자+억+달러)를 놓쳐 따로 단 조각(company-overview#2 i5, site:app/about/AboutPageClient.tsx:94). 요금 숫자·할인·환불 약속은 V-3 기본 규칙이 막는다. 지금 걸리는 active 카드는 없거나 이 항목 policy 카드뿐(예외). 규칙 변경(policy 카드는 지금 운영 글이라 막지 않음)으로 active 유지: policy:basics-price-vs-zoom, policy:zoom-switch-remaining-discount."
+    },
+    {
+      "id": "HQ-09",
+      "topic": "특정 학원의 도입·사용 여부 확인 안 함",
+      "currentText": "field:customer-names: '다른 학원이 클래스인을 쓰는지, 학원 이름이 무엇인지는 그 학원의 정보라 제가 임의로 알려 드릴 수 없어요 ... 공개된 도입 사례는 문서센터의 고객 사례(학원명은 일부 가려져 있어요).' field:peer-average-price 도 다른 고객 계약 조건은 알려 주지 않음.",
+      "conflict": "공개 근거는 doc:/docs/start/customer-stories#summary 문장 4, #9 문장 2·4 (사례 안내, 목동 쇼룸). 특정 학원 이름을 대며 쓰는지 묻는 질문에 확인·부인 모두 하지 않는다는 원칙과, 공개 사례에 이름이 나온 학원은 확인해도 되는지 범위 결정.",
+      "proposal": null,
+      "affectedCards": [
+        "field:customer-names",
+        "field:peer-average-price"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": [],
+      "note": "막을 구절 없음: 지금 글은 특정 학원 확인을 거절하는 문장뿐이고, 공개 사례(customer-stories)의 학원명은 가려져 있다. 확인·부인 범위는 응대 원칙 결정."
+    },
+    {
+      "id": "HQ-10",
+      "topic": "basics-contact-channel 에서 대표 전화 누락",
+      "currentText": "basics:basics-contact-channel: '카카오톡 채널은 문의 페이지(/contact)에서 바로 연결돼요. 급한 CS나 도입 상담은 문의 페이지의 QR코드로 열 수 있어요. 전자칠판 고장 같은 장비 증상은 고객센터나 채널톡으로 접수하시면 돼요.' 전화번호 없음. field:support-queue-waiting-long 은 '상담 전화번호는 공개 안내에 나와 있지 않아요'라고 말함.",
+      "conflict": "공개 페이지에는 대표 전화가 있음: site:app/privacy/page.tsx:318·575 '02-6958-8566', site:components/sections/Footer.tsx:91 '전화번호: 02-6958-8566'. 이메일은 classinkr@classin.com(privacy:318). 답에 전화를 넣을지(번호 노출은 공개 페이지 근거만), '상담 전화번호는 공개 안내에 없다'는 부재 주장 정정 여부 결정.",
+      "proposal": null,
+      "affectedCards": [
+        "basics:basics-contact-channel",
+        "field:support-queue-waiting-long"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": [
+        "6958-8566",
+        "상담 전화번호는 공개 안내에"
+      ],
+      "note": "대표 전화 '6958-8566'(site:app/privacy/page.tsx:318·575, site:components/sections/Footer.tsx:91)과 틀린 부재 주장 '상담 전화번호는 공개 안내에'(field:support-queue-waiting-long). 번호를 답에 넣을지 결정 전. 지금 걸리는 active 카드는 없거나 이 항목 policy 카드뿐(예외). review 카드 점검(2026-11-20): fixed:formal-complaint-channel 은 전화 문장을 지운 글로 active, fixed:contact-channel 은 '6958-8566'·HQ-27 구절이 든 채 review 유지."
+    },
+    {
+      "id": "HQ-11",
+      "topic": "전자칠판 직접 제조 여부와 제조국",
+      "currentText": "basics:basics-sells-hardware: '누가 제조하는지는 제가 단정해서 말씀드리지 않을게요.' field:board-kc-certification-emc-report: '모델별 제조국도 공개 안내에 없어요.' basics:basics-company-origin: '전자칠판 모델별 제조국은 공개 안내에 없어요.'",
+      "conflict": "공개 근거는 site:lib/introduction/content.ts:477 '스마트보드(65~110\"), AI 카메라, 빔포밍 마이크까지 자체 개발'(서비스 소개서 'ClassIn X 자체 개발')뿐이고 제조 주체·제조국 문구는 없음. 공개 가능한 제조 주체·제조국 문구 결정 필요.",
+      "proposal": null,
+      "affectedCards": [
+        "basics:basics-sells-hardware",
+        "field:board-kc-certification-emc-report",
+        "basics:basics-company-origin"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": [
+        "마이크까지 자체 개발"
+      ],
+      "note": "공개 페이지의 '마이크까지 자체 개발'(site:lib/introduction/content.ts:477) 형태. 제조 주체 문구 결정 전. 지금 걸리는 active 카드는 없거나 이 항목 policy 카드뿐(예외)."
+    },
+    {
+      "id": "HQ-12",
+      "topic": "줌 무료 버전·구글 미트 등 타사 서비스의 제한·요금과 클래스인 비교 우위",
+      "currentText": "basics:basics-zoom-time-limit·basics:basics-zoom-enough-free·basics:basics-duration-limit: '줌의 시간 제한이나 요금제는 제가 확인해 드릴 수 없어서 비교해서 말씀드리지 않을게요.'",
+      "conflict": "공개 문서에는 타사 서비스의 제한·요금 근거가 없음. 서비스 소개서 비교표(site:lib/introduction/content.ts:436, 477 등)는 구조 비교만 있음. 공개 가능한 비교 자료가 있는지 결정(없으면 계속 비교하지 않음).",
+      "proposal": null,
+      "affectedCards": [
+        "basics:basics-zoom-time-limit",
+        "basics:basics-zoom-enough-free",
+        "basics:basics-duration-limit",
+        "basics:basics-price-vs-zoom"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": [],
+      "note": "막을 구절 없음: 타사 제한·요금을 말하는 문장이 카드·문서에 없고 지금 글은 비교하지 않는다는 문장이다. 규칙 변경(policy 카드는 지금 운영 글이라 막지 않음)으로 active 유지: policy:basics-zoom-time-limit, policy:class-duration-limit."
+    },
+    {
+      "id": "HQ-13",
+      "topic": "줌에서 클래스인으로 옮길 때 데이터 이전 범위·소요 기간",
+      "currentText": "field:zoom-remaining-discount 는 전환 프로모션이 안내에 없다고 답하고 영업 협의를 안내. 이전 범위·기간을 답하는 카드는 없음.",
+      "conflict": "doc:/docs/start/adoption-journey-90days#summary 문장 2, #2 문장 6 에 파일럿 순서(진단, 파일럿, 온보딩, 정착, 확장)와 doc:/docs/start/academy-system-os-positioning#2 문장 0 '3개월 안팎의 파일럿과 온보딩'만 있음. 데이터 이전 범위·소요 기간은 문서에 없음. 공개 가능한 전환 절차·기간 결정.",
+      "proposal": null,
+      "affectedCards": [
+        "field:zoom-remaining-discount"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": [],
+      "note": "막을 구절 없음: 이전 범위·기간을 말하는 글이 없다. 공개할 전환 절차를 정하는 내부 결정."
+    },
+    {
+      "id": "HQ-14",
+      "topic": "무료로 쓸 수 있나요 / 체험해볼 수 있어요 — 무료 체험 가능 여부·기간을 챗봇이 단정해도 되는지",
+      "currentText": "svc:free-scope: '클래스인은 회원 가입을 마치면 무료 버전으로 시작하고, 2주 무료 체험도 신청할 수 있어요(/contact). 학원(기관)에서 쓰려면 유료 계정으로 전환해야 합니다.' template:체험·파일럿 확인(getTrialOrPilotAnswer 계열)은 '무료 체험 가능 여부를 여기서 단정하기보다는 데모와 파일럿 범위로 확인'이라 함.",
+      "conflict": "doc:/docs/software/software-pricing-quote-bundle-faq#2 문장 0 은 '도입 전에 2주 무료 체험'을 단정. doc:/docs/admin/billing-upgrade 는 가입 후 무료 버전 시작, 학원은 유료 계정 전환. 허용되면 getTrialOrPilotAnswer 첫 문장을 그 문서 문장 기준으로 바꿀 수 있음. 정책 결정 필요(HQ-03 과 함께 결정).",
+      "proposal": null,
+      "affectedCards": [
+        "svc:free-scope",
+        "template:체험·파일럿 확인",
+        "basics:basics-zoom-time-limit",
+        "field:free-for-school"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": [],
+      "note": "기간 '2주' 구절은 같이 결정할 HQ-03 에 달았다. 체험 가능 여부 자체는 billing-upgrade([무료 체험판 시작])와 견적 문서([무료 체험 시작])가 같은 방향이라 막지 않는다. 규칙 변경(policy 카드는 지금 운영 글이라 막지 않음)으로 active 유지: policy:free-version-scope, policy:student-account-tutor-friends-free."
+    },
+    {
+      "id": "HQ-15",
+      "topic": "해지 신청은 어디서 하나요 — 계약(서비스) 해지 접수 창구와 절차",
+      "currentText": "field:payment-cycle-termination: 중도 해지와 위약금은 계약서 조건이라 서명 전에 확인하라고 답함. field:autopay-cancel-where: 자동 결제 끄는 위치는 공개 안내에 없다고 답함.",
+      "conflict": "공개 문서에 계약 해지 접수 창구(전화·메일·담당 매니저)와 절차 없음(검색 '해지' 결과는 모두 기존 답 글). 접수 창구·절차 결정 필요.",
+      "proposal": null,
+      "affectedCards": [
+        "field:payment-cycle-termination",
+        "field:autopay-cancel-where",
+        "field:cancelled-but-charged"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": [],
+      "note": "막을 구절 없음: 지금 글은 해지 창구가 공개 안내에 없다는 문장이고 창구를 단정하는 글이 없다."
+    },
+    {
+      "id": "HQ-16",
+      "topic": "계약 끝나면 자동으로 연장돼요 — 자동 연장 여부",
+      "currentText": "basics:basics-contract-auto-renewal·field:service-expiry-auto-renewal: '자동 연장 여부는 공개 안내에 나와 있지 않고 계약마다 다를 수 있어요 ... 상담 채널로 물어보시고 서면으로 받아 두세요.'",
+      "conflict": "공개 문서·페이지에 자동 연장 문구 없음(검색 '자동 갱신' 결과 없음). 문서는 갱신 시점을 학원이 직접 챙기라고 함(근거 문장은 basics-contract-auto-renewal 의 공개 안내 요약). 실제 계약·약관의 자동 연장 여부는 영업·법무 확인 필요.",
+      "proposal": null,
+      "affectedCards": [
+        "basics:basics-contract-auto-renewal",
+        "field:service-expiry-auto-renewal",
+        "field:contract-auto-renewal-clause"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": [],
+      "note": "막을 구절 없음: 자동 연장을 단정하는 글이 없다(지금 글은 공개 안내에 없다·서면 확인)."
+    },
+    {
+      "id": "HQ-17",
+      "topic": "사업자 없는 개인도 결제할 수 있어요 — 개인 결제 수단·증빙",
+      "currentText": "basics:basics-individual-teacher-paid: '결제 단계에서 사업자등록이 필요한지와 개인 결제 수단·증빙 세부는 공개 안내에 정리돼 있지 않아서 상담에서 확인해 주세요.'",
+      "conflict": "공개 문서는 개인 교사 계정 인증(여권·주민등록증·운전면허증 이미지 가능, doc:/docs/admin/account-verification 계열)까지만 말함. 사업자등록이 없는 개인의 결제 수락, 결제 수단, 증빙 방식은 영업 확인 필요.",
+      "proposal": null,
+      "affectedCards": [
+        "basics:basics-individual-teacher-paid",
+        "field:foreigner-academy-before-business-registration",
+        "svc:personal-use"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": [],
+      "note": "막을 구절 없음: 개인 결제 수단·증빙을 단정하는 글이 없다."
+    },
+    {
+      "id": "HQ-18",
+      "topic": "클래스인 칠판 안 사면 기능 제한 있나요 — 소프트웨어만 쓸 때 기능 차이",
+      "currentText": "basics:basics-board-not-required: '칠판 없이 ... 기능 차이는 공개 안내에 정리돼 있지 않아서 제가 단정하지 않을게요. 전자칠판을 함께 쓰면 보드 안의 OPS 컴퓨터로 외장 PC 없이 ...'",
+      "conflict": "doc:/docs/start/value-and-cost-framing#5 '전자칠판만 따로 사도 되나요' 절과 소프트웨어 플랜 설명은 있으나 전자칠판 없이 쓸 때의 기능 차이 문장 없음. 공개해도 되는 기능 차이 결정.",
+      "proposal": null,
+      "affectedCards": [
+        "basics:basics-board-not-required",
+        "field:other-brand-board-software-only"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": [],
+      "note": "막을 구절 없음: 칠판 없이 쓸 때 기능 차이를 단정하는 글이 없다."
+    },
+    {
+      "id": "HQ-19",
+      "topic": "설치 직접 해도 되나요 — 고객이 전자칠판을 직접 설치해도 되는지",
+      "currentText": "basics:basics-install-self: '소프트웨어는 직접 설치하실 수 있어요 ... 고객이 전자칠판을 직접 설치해도 되는지는 공개 안내에 정리돼 있지 않아요.' field:wall-board-move-warranty 는 두 사람이 직접 떼서 옮기는 것은 권하지 않는다고 답함.",
+      "conflict": "공개 문서에는 설치 당일 설치 기사와 짧은 수업(basics-install-self 근거 문서)과 이동형 스탠드·벽걸이·벽 매립 방식별 설치만 있고 직접 설치 허용·불가·보증 영향 문장 없음. 직접 설치 허용 여부 결정.",
+      "proposal": null,
+      "affectedCards": [
+        "basics:basics-install-self",
+        "basics:basics-install-fee",
+        "field:wall-board-move-warranty"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": [],
+      "note": "막을 구절 없음: 직접 설치 허용·불가를 단정하는 글이 없다."
+    },
+    {
+      "id": "HQ-20",
+      "topic": "학생이 수업 중 자기 화면을 공유할 수 있는지(권한 부여 방식 포함)",
+      "currentText": "field:student-wants-to-show-screen: '무대에 올린 학생에게 권한을 주면 카메라 ...' 로 일부만 안내. 학생 화면 공유 가능 여부 문장이 확정 문장으로 없음.",
+      "conflict": "doc:/docs/software/classroom-tools#5 문장 0·1 은 학생을 무대에 올리고 권한을 주는 방법까지만 말함. 공개 안내에 학생 화면 공유 가능 여부 문장 추가 필요(화면 공유 자체는 field:screen-share-annotate 에서 교사 기준 안내).",
+      "proposal": null,
+      "affectedCards": [
+        "field:student-wants-to-show-screen",
+        "field:chromebook-support"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": [],
+      "note": "막을 구절 없음: 학생 화면 공유 가능을 단정하는 글이 없다. 문서 문장을 더하는 내부 문서 정리."
+    },
+    {
+      "id": "HQ-21",
+      "topic": "휴대폰 앱 안에서 표시 언어를 바꾸는 위치",
+      "currentText": "field:app-language-switch-translation: '휴대폰 앱 안에서 언어를 바꾸는 위치는 공개 안내에 나와 있지 않아요.' field:app-language-english 도 위치 모름.",
+      "conflict": "공개 문서에 확인되는 언어 설정은 PC 설치 때 [언어 선택] 창(doc:/docs/start/app-update-cache-reinstall#6 문장 9)과 학습 보고서 오른쪽 위 언어 선택 메뉴뿐. 앱 언어 설정 경로 문장 추가 필요.",
+      "proposal": null,
+      "affectedCards": [
+        "field:app-language-switch-translation",
+        "field:app-language-english",
+        "field:shared-board-language-english"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": [],
+      "note": "막을 구절 없음: 부재 주장이 문서와 맞다(PC 설치 [언어 선택]·학습 보고서 언어 메뉴만 있음). 앱 언어 경로 문장을 더하는 내부 문서 정리."
+    },
+    {
+      "id": "HQ-22",
+      "topic": "AI 요약이 기본으로 꺼져 있어 활성화 요청이 필요한지",
+      "currentText": "field:ai-summary-language-review·field:student-ai-summary-where: 수업을 만들 때 [AI 요약]을 켜면 수업 뒤 요약이 만들어진다고 답함(활성화 요청 언급 없음). field:live-caption-translation-general 은 실시간 자막 번역이 기본 꺼짐이라 활성화 요청이 필요하다고 답함.",
+      "conflict": "doc:/docs/updates/classin-609-update#summary 문장 5: '기본으로 꺼져 있어 담당 매니저에게 활성화를 요청'하는 목록은 AgentIn, AI 칠판, 실시간 자막 번역, AI 강의 분석이고 AI 요약은 목록에 없음. doc:/docs/admin/institution-settings#5 문장 4 는 [기본 에이전트]에 수업 요약이 묶여 있다고만 함. 6.0.9 안내의 기본 꺼짐 목록에 AI 요약 포함 여부 확인 필요.",
+      "proposal": null,
+      "affectedCards": [
+        "field:ai-summary-language-review",
+        "field:student-ai-summary-where",
+        "field:live-caption-translation-general"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": [],
+      "note": "막을 구절 없음: 문서 안에서 AI 요약은 수업 만들 때 켜는 것으로 일관(classin-609-update#3, #0 기본 꺼짐 목록에 없음). 6.0.9 안내를 확인하는 내부 문서 정리."
+    },
+    {
+      "id": "HQ-23",
+      "topic": "신청하고 첫 수업까지 며칠 걸려요 / 결제하고 바로 수업할 수 있어요 / 도입 후 언제부터 쓸 수 있어요 — 표준 기간",
+      "currentText": "field:yesterday-application-status: 담당자가 이어서 연락한다고만 답함. field:install-day-training-not-given 은 설치와 온보딩에 현장 설치와 강사 교육이 들어간다고 답함.",
+      "conflict": "공개 문서에 상담 신청·견적·결제 각 시점부터 첫 수업까지의 표준 기간 없음. doc:/docs/start/adoption-journey-90days 는 3개월 안팎의 파일럿·온보딩 순서만 있음(academy-system-os-positioning#2 문장 0). '신청'을 상담 신청·견적·결제 중 무엇으로 볼지, 소프트웨어만 쓰는 경우와 전자칠판 납품·설치가 끼는 경우의 표준 기간을 공개해도 되는지 결정.",
+      "proposal": null,
+      "affectedCards": [
+        "field:yesterday-application-status",
+        "field:install-day-training-not-given"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": [],
+      "note": "막을 구절 없음: 첫 수업까지 표준 기간을 단정하는 글이 없다."
+    },
+    {
+      "id": "HQ-24",
+      "topic": "독서 토론 모임 같은 소모임에도 돼요 — 학원·기관 아닌 소모임의 사용 대상",
+      "currentText": "관련 답 없음. 가까운 답: svc:personal-use(개인 과외 강사 가능, 1인 강사는 프로 요금제 추천), field:free-for-school.",
+      "conflict": "공개 문서에 소모임(독서 토론·스터디·동호회)이 계정 인증·요금제상 사용 대상인지 문장 없음(검색 '소모임' 결과 없음). 계정 인증 대상은 학원·공공 기관·학교·개인 교사(doc:/docs/admin/account-verification#3 문장 3 등). 사용 대상 결정 필요.",
+      "proposal": null,
+      "affectedCards": [
+        "svc:personal-use",
+        "field:free-for-school"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": [],
+      "note": "막을 구절 없음: 관련 답이 없다. 사용 대상을 정하는 결정."
+    },
+    {
+      "id": "HQ-25",
+      "topic": "어르신 대상 강좌 / 취업 준비생 강의용 — 성인 일반 대상 강좌의 사용 가능 여부와 대상 제한",
+      "currentText": "관련 답 없음. 가까운 답: basics:basics-corporate-training(공개 안내에 대학 간 글로벌 공개 강의, 글로벌 1:1 튜터링, K-12 학교, 국내 학원에서 쓰인다고 나옴).",
+      "conflict": "공개 문서에 어르신·취업 준비생·구직자 등 성인 일반 대상 강좌 문장 없음(검색 '어르신'·'취업' 결과 없음). 대상 제한이 있는지 결정 필요.",
+      "proposal": null,
+      "affectedCards": [
+        "basics:basics-corporate-training",
+        "svc:personal-use"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": [],
+      "note": "막을 구절 없음: 대상 제한을 말하는 글은 이 항목 policy 카드(basics-fit-adult)뿐이다."
+    },
+    {
+      "id": "HQ-26",
+      "topic": "공공기관 직원 연수에도 쓰나요 — 기업·공공기관 직원 연수 사용 가능 여부와 실제 사례",
+      "currentText": "basics:basics-corporate-training: '기업이나 공공기관 직원 연수에 쓸 수 있는지는 공개 안내에 정리돼 있지 않아서 단정하지 않을게요. 기업 교육용 단가나 별도 요금제도 공개 안내에 없어요.'",
+      "conflict": "공개 문서에는 doc:/docs/admin/account-verification#3 문장 3 '공공 기관이나 학교는 [공립 기관의 법인의 증명서]를 누릅니다'(계정 인증 문구)만 있음. 연수 사용 가능 여부와 실제 사례 유무 결정 필요. 공개 페이지에는 site:app/about/AboutPageClient.tsx:756 '전 세계 유수의 대학교·출판사·교육기업이 클래스인으로 수업합니다.'가 있고, basics:basics-schools-universities-companies 고침안(FIX)이 이 줄에 기대 누가 쓰는지를 답한다(site-only라 카드 fixed:basics-schools-universities-companies 는 결정 전까지 review).",
+      "proposal": null,
+      "affectedCards": [
+        "basics:basics-corporate-training",
+        "basics:basics-schools-universities-companies"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": [],
+      "note": "막을 구절 없음: 연수 사용 가능을 단정하는 글이 없다. site:app/about/AboutPageClient.tsx:756 에 기댄 basics-schools-universities-companies 고침안은 이미 review(site 근거)."
+    },
+    {
+      "id": "HQ-27",
+      "topic": "카카오톡 채널 노출 — 운영 환경에서 채널 URL 환경변수가 설정돼 문의 페이지에 채널이 실제로 보이는지",
+      "currentText": "basics:basics-contact-channel: '카카오톡 채널은 문의 페이지(/contact)에서 바로 연결돼요 ... QR코드로 열 수 있어요.' field:support-queue-waiting-long·field:chatbot-send-quote-pdf-email 도 문의 페이지의 카카오톡 채널로 바로 연결된다고 답함.",
+      "conflict": "공개 코드 근거는 site:components/contact/ContactFastTrack.tsx:42 '복잡한 양식 없이 클래스인 카카오톡 채널로 바로 연결됩니다'. 채널 URL 은 운영 환경변수라 코드·문서만으로는 노출 여부를 확인할 수 없음(운영 설정 확인은 사람이 해야 함). 확인 결과에 따라 답에서 채널·QR 언급 유지 여부 결정.",
+      "proposal": null,
+      "affectedCards": [
+        "basics:basics-contact-channel",
+        "field:support-queue-waiting-long",
+        "field:chatbot-send-quote-pdf-email"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": [
+        "카카오톡 채널로 바로 연결",
+        "카카오톡 채널은 문의 페이지"
+      ],
+      "note": "'카카오톡 채널로 바로 연결'(software-pricing-quote-bundle-faq#5 i8, site:components/contact/ContactFastTrack.tsx:42)과 '카카오톡 채널은 문의 페이지'(basics:basics-contact-channel). 운영에서 채널이 실제로 보이는지 확인 전. 이 구절로 review 한 카드: doc:/docs/software/software-pricing-quote-bundle-faq#5/urgent-consult-kakao."
+    },
+    {
+      "id": "HQ-0101",
+      "topic": "개인 계정으로 결제한 뒤 학원 법인카드·학원 명의 증빙·메인 관리자 계정 정리 안내 범위",
+      "currentText": "field:personal-account-paid-by-academy: 개인 계정 결제 카드를 바꾸는 방법, 영수증·세금계산서 명의, 녹화본·자료 소유권을 모두 '공개 안내에 없다/약관과 계약 기준으로 확인'으로 안내하고, 결제할 때 로그인한 아이디가 메인 관리자 계정이 된다고 설명함.",
+      "conflict": "결제 수단 변경·증빙 명의·소유권은 계약·정책 영역이라 챗봇이 단정하지 않는 범위를 사람이 정해야 함. 문서 근거는 doc:/docs/software/software-pricing-quote-bundle-faq#4 문장 4·5(메인 관리자 계정 명의, 결제할 때 로그인한 계정이 메인 관리자가 됨)까지이며 카드 변경·증빙 명의 문장은 문서·페이지에 없음. 소유권은 doc:/docs/start/pre-adoption-faq-22-questions#3 i21·i22('올린 콘텐츠의 소유권은 누구에게 있나요?' → '약관과 계약에 정해진 기준을 확인해 답을 드립니다.')와 site:app/terms/page.tsx:77('ClassIn 계정의 소유권은 EEO에 있으며, 이용자는 약관에 따른 이용 권한을 가집니다.')에 있음.",
+      "proposal": null,
+      "affectedCards": [
+        "field:personal-account-paid-by-academy"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": [],
+      "note": "막을 구절 없음: 지금 글은 '공개 안내에 없다·약관과 계약 기준으로 확인' 문장이다."
+    },
+    {
+      "id": "HQ-0102",
+      "topic": "위탁받은 학교(방과후) 수업을 학원 기관 계정으로 운영해도 되는지와 학교 요구 개인정보 서류",
+      "currentText": "field:school-after-school-on-academy-account: 학교 학생을 학원 기관 계정에 등록해도 되는지, 보안 서약서·처리 위탁 확인서를 받을 수 있는지는 공개 안내에 없다고 안내하고 개인정보처리방침과 도입 상담을 권함.",
+      "conflict": "학교 위탁 운영 가부는 계약 조건 영역이라 사람이 정할 일. 처리 위탁 서류는 HQ-01(DPA·수탁사 표)과 같은 주제로, 개인정보처리방침에 수탁사 표가 공개돼 있어 '공개 안내에 없다'는 부재 주장 범위를 함께 결정해야 함. 계정 인증의 학교용 서류 유형은 doc:/docs/admin/account-verification#3 i3('공공 기관이나 학교는 [공립 기관의 법인의 증명서]를 누릅니다.')·i4('사립 학교는 [학교 허가증]을 누릅니다.')에 있음.",
+      "proposal": null,
+      "affectedCards": [
+        "field:school-after-school-on-academy-account"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": [],
+      "note": "막을 구절 없음: 지금 글은 '공개 안내에 없다·방침과 상담 확인' 문장이다. 수탁사 부재 주장 형태는 HQ-01 구절."
+    },
+    {
+      "id": "HQ-0201",
+      "topic": "iPhone 앱(앱스토어) 결제 구독과 웹 결제가 겹친 경우의 해지·환불 창구 안내",
+      "currentText": "field:paid-twice-iphone-app-and-website 답: '일반적으로 iPhone 앱에서 결제한 구독은 Apple(App Store) 쪽에서 해지와 환불을 신청해야 할 수 있어요. ClassIn 웹에서 결제한 건의 환불은 결제 담당 확인이 필요해서 제가 약속드릴 수 없어요.'",
+      "conflict": "공개 문서·공개 페이지 어디에도 앱스토어(iPhone 앱) 결제·구독·해지 안내가 없다(검색 0건). 문서에 있는 것은 잔여 금액·서비스 기간을 관리자 대시보드 첫 페이지에서 본다는 문장(billing-upgrade#3 #7), 개인 강사용 프로는 앱에서도 잔여 금액이 보인다는 문장(#3 #8), 환불·세금계산서는 상담 채널에서 방법을 묻는다는 문장(billing-upgrade#1 #10)뿐. 앱스토어 결제가 실제로 있는지, 있다면 어느 쪽에서 해지·환불하는지는 사람 확인이 필요.",
+      "proposal": null,
+      "affectedCards": [
+        "field:paid-twice-iphone-app-and-website"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": [
+        "Apple(App Store) 쪽에서",
+        "앱에서 결제한 구독은"
+      ],
+      "note": "근거 0건인 App Store 해지·환불 안내 형태('Apple(App Store) 쪽에서', '앱에서 결제한 구독은'). 지금은 이 항목 policy 카드에만 있음. 지금 걸리는 active 카드는 없거나 이 항목 policy 카드뿐(예외). 규칙 변경(policy 카드는 지금 운영 글이라 막지 않음)으로 active 유지: policy:paid-twice-iphone-app-and-website."
+    },
+    {
+      "id": "HQ-0202",
+      "topic": "단기(예: 3주) 이용 상품·월 단위 결제, 계약 종료 후 명단·녹화본 보관과 콘텐츠 귀속",
+      "currentText": "field:winter-camp-three-teachers-account-structure 답: '3주 같은 단기 상품이나 월 단위 결제: 공개 안내에 없어요 ... 올린 콘텐츠가 누구 것인지와 계약이 끝난 뒤 자료가 언제까지 남는지는 약관과 계약 기준이라 공개 안내에 정해져 있지 않아요 ... 금액은 제가 먼저 말씀드릴 수 없어요.'",
+      "conflict": "문서는 결제 방식이 구독형·충전형 두 가지이고 조건은 상담에서 안내한다는 것(software-pricing-quote-bundle-faq#0 #1), 계약 기간·계정 상태·스토리지 보관 정책을 나눠 확인한다는 것(pre-adoption-faq-22-questions#2 #5), 콘텐츠 소유권은 최신 계약·정책을 확인한 뒤 답한다는 것(같은 문서 summary #4)만 말한다. 단기 상품 가능 여부와 계약 종료 후 보관 기간, 콘텐츠 귀속을 챗봇이 어디까지 말해도 되는지는 사람이 정할 일. 같은 답에 요금제 이름(HQ-04), 인원 한도(HQ-05), 금액 비공개(HQ-08)도 걸려 있음.",
+      "proposal": null,
+      "affectedCards": [
+        "field:winter-camp-three-teachers-account-structure"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": [],
+      "note": "막을 구절 없음: 단기 상품·보관 기간·콘텐츠 귀속을 단정하는 글이 없다. 같은 답의 요금제 이름은 HQ-04 구절로 막는다. 규칙 변경(policy 카드는 지금 운영 글이라 막지 않음)으로 active 유지: policy:winter-camp-three-teachers-account-structure."
+    },
+    {
+      "id": "HQ-0203",
+      "topic": "6.0.7 신규 사용자 체험 교실·스타터 가이드 완료 시 개인 Plus 1개월 혜택 문구의 현재 유효성",
+      "currentText": "field:demo-lesson-interview-free-account 답: '공개 업데이트 안내(6.0.7)에는 처음 클래스인을 쓰는 교사가 데모 학생 3명이 들어와 있는 체험 교실에서 ... 스타터 가이드를 마치면 개인 Plus 요금제 1개월 혜택을 준다고 나와 있어요. ... 혜택이 지금도 같은지는 상담에서 확인하세요.'",
+      "conflict": "문서(teacher/classin-607-update#6 #1, #8 #1)에는 있는 문장이지만 '개인 Plus 요금제'는 요금제 이름 세 계열(HQ-04)과 맞지 않는 이름이고, 한국 고객사에 지금도 적용되는지는 문서 날짜 이상의 확인이 없다. 무료 체험 '2주' 표기(HQ-03)와도 한 답에서 함께 나간다. 이 혜택·요금제 이름을 챗봇 답에 그대로 쓸지는 사람 결정 필요.",
+      "proposal": null,
+      "affectedCards": [
+        "field:demo-lesson-interview-free-account"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": [
+        "개인 Plus 요금제 1개월",
+        "1개월 혜택"
+      ],
+      "note": "'개인 Plus 요금제 1개월'·'1개월 혜택'(classin-607-update#summary i4, #6 i1·i6, #8 i4). 혜택 유효성과 요금제 이름(HQ-04) 결정 전. 이 구절로 review 한 카드: doc:/docs/teacher/classin-607-update#6/starter-guide-reward. 규칙 변경(policy 카드는 지금 운영 글이라 막지 않음)으로 active 유지: policy:demo-lesson-interview-free-account."
+    },
+    {
+      "id": "HQ-0301",
+      "topic": "웹 라이브를 유튜브 등 외부로 동시 송출(RTMP)하거나 OBS로 캡처해 내보내는 것의 이용약관상 허용 범위",
+      "currentText": "웹 라이브에 RTMP 주소나 스트림 키를 넣어 유튜브로 동시에 내보내는 기능은 공개 안내에 없어요. 있다고 말씀드리지 않을게요. / OBS로 화면을 캡처해 내보내는 방식: 이용약관상 허용되는지는 제가 판단할 수 없어요. 약관을 확인하시고 아래 [실시간 상담 연결]로 공식 답변을 받아 주세요.",
+      "conflict": "기능 부재는 공개 문서·페이지 검색 0건으로 확인했으나, OBS 캡처 송출의 약관상 허용 여부는 공개 문서·페이지에 근거가 없다. 약관 해석은 사람이 정할 일이라 현재 문구('판단할 수 없다·상담으로 확인')를 유지할지 결정이 필요하다.",
+      "proposal": null,
+      "affectedCards": [
+        "field:rtmp-simulcast"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": [],
+      "note": "막을 구절 없음: 지금 글은 기능 부재(검색 0건)와 약관 판단 보류 문장이다."
+    },
+    {
+      "id": "HQ-0401",
+      "topic": "웹 라이브·플레이백 사용 가능 요금제(구독형 Enterprise·충전형 Business)와 동시 시청자 한도·계약 설명 확인 범위",
+      "currentText": "field:web-live-viewers-blocked-sales-promise 답: '공개 안내에는 웹 라이브를 쓸 수 있는지가 요금제에 따라 다르고(구독형은 Enterprise, 충전형은 Business)… 동시 시청자 한도는 공개 안내에 숫자로 나와 있지 않아요. 영업 담당자가 계약 때 어떻게 설명했는지는 제가 확인할 수 없어요.'",
+      "conflict": "문서(teacher/lesson-web-live#6)는 구독형=Enterprise·충전형=Business Consumption 이라 하고, start/value-and-cost-framing 은 Standard·Plus·Enterprise, software-pricing-quote-bundle-faq 는 Learning Space·Business 로 적어 요금제 이름 세 계열이 다름(HQ-04). 동시 시청 한도 숫자는 공개 문서에 없고, 계약·영업 약속 확인 범위는 정책 결정 필요.",
+      "proposal": null,
+      "affectedCards": [
+        "field:web-live-viewers-blocked-sales-promise",
+        "doc:/docs/teacher/lesson-web-live#summary/web-live-plan",
+        "doc:/docs/admin/web-live-playback#0/conditions-cost"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": [
+        "구독형은 Enterprise",
+        "충전형은 Business",
+        "구독형 Enterprise",
+        "충전형 Business",
+        "(Consumption)은 Business"
+      ],
+      "note": "웹 라이브 요금제 표기 '구독형은 Enterprise'·'충전형은 Business'·'(Consumption)은 Business'(lesson-web-live#summary i4, #6 i1)와 policy 글 '구독형 Enterprise'·'충전형 Business'. 요금제 이름 계열(HQ-04)이 얽혀 결정 전에는 이 항목 policy 카드로만 나간다. 이 구절로 review 한 카드: doc:/docs/software/software-pricing-quote-bundle-faq#0/payment-types, doc:/docs/teacher/lesson-web-live#summary/web-live-plan. 이 구절이 든 문장을 뺀 doc 카드: doc:/docs/teacher/lesson-web-live#6/plan-for-web-live. 규칙 변경(policy 카드는 지금 운영 글이라 막지 않음)으로 active 유지: policy:parents-watch-only, policy:web-live-capacity."
+    },
+    {
+      "id": "HQ-0402",
+      "topic": "학교폭력 신고·상담 번호(117) 등 외부 기관 안내를 챗봇이 해도 되는지",
+      "currentText": "field:child-bullied-in-class-chat 답: '괴롭힘이 계속되면 117(학교폭력 신고·상담)에도 상담하실 수 있어요.'",
+      "conflict": "공개 문서·공개 페이지 어디에도 외부 신고·상담 기관 번호 안내가 없다(검색 0건). 안전 관련 안내라 틀리면 위험하므로 사람이 포함 여부와 문구를 정해야 함. 결정 전에는 legacy 경로의 옛 글을 그대로 둠.",
+      "proposal": null,
+      "affectedCards": [
+        "field:child-bullied-in-class-chat"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": [
+        "117(학교폭력"
+      ],
+      "note": "외부 신고 번호 '117(학교폭력' 형태(field:child-bullied-in-class-chat). 공개 문서·페이지 근거 0건, 안전 안내. 지금 걸리는 active 카드는 없거나 이 항목 policy 카드뿐(예외)."
+    },
+    {
+      "id": "HQ-0501",
+      "topic": "접속 서버(리전)를 사용자가 고를 수 있는지와 지연이 튈 때의 기술지원 안내 범위",
+      "currentText": "접속 서버(리전)를 사용자가 직접 고르는 옵션은 공개 안내에 없어서, 있다고 말씀드리지 않을게요. 회선과 장비가 좋은데도 지연이 튀는 구간이 반복되면 기술지원이 수업 시간대와 접속 경로를 보고 확인해야 합니다. 그 전에 나눠 볼 수 있는 건 이렇습니다.\n\n1. 다른 인터넷, 4G 이상 모바일 데이터, 휴대폰 핫스팟 중 하나로 바꿔 다시 들어갑니다. 바꾼 뒤 괜찮다면 원래 쓰던 네트워크가 원인입니다.\n2. 구버전이면 최신 버전으로 업데이트합니다.\n3. 먼저 클래스인 말고 켜 둔 프로그램과 인터넷 창을 닫습니다.\n\n기술지원에 넘길 때는 지연이 튄 날짜와 시각, 그때 들어간 수업 이름, 유선·무선 여부를 함께 알려 주세요. 아래 [실시간 상담 연결]로 바로 이어 드릴게요.",
+      "conflict": "'접속 서버(리전)를 사용자가 직접 고르는 옵션은 공개 안내에 없다'는 부재 주장은 공개 문서·페이지 검색 0건으로 확인했다(리전 단어는 개인정보 저장 위치 안내에만 나옴). 그러나 서버·리전은 정책 주제(서버 위치와 데이터 처리 지역은 공식 정책과 계약 확인)라 챗봇이 옵션 부재와 '기술지원이 접속 경로를 보고 확인'이라는 문구를 단정해도 되는지 사람 결정이 필요하다. 점검에서 근거 없는 문장(지연 구간 반복 시 기술지원이 접속 경로 확인, 유선·무선 여부 요청)은 뺄 것을 제안한다.",
+      "proposal": null,
+      "affectedCards": [
+        "symptom:network-latency-region"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": [
+        "수업 시간대와 접속 경로를 보고"
+      ],
+      "note": "근거 없는 기술지원 절차 문장 '수업 시간대와 접속 경로를 보고'(점검이 빼자고 제안). 지금은 이 항목 policy 카드에만 있음. 지금 걸리는 active 카드는 없거나 이 항목 policy 카드뿐(예외)."
+    },
+    {
+      "id": "HQ-0701",
+      "topic": "결제 방식·조건 안내 범위(분할 납부·렌탈, 결제 주기, 중도 해지·위약금, 지점별 세금계산서·계정 구성, 요금제 변경 시 차액 정산)",
+      "currentText": "[board-installment] 한꺼번에 내시기 부담스러우실 수 있죠. 분할 납부나 렌탈이 되는지, 조건은 어떤지는 공개 안내에 없어서 영업 상담에서 확인해 드려요.\n\n아래 [도입 상담 남기기]로 문의하실 때 추가할 대수, 원하는 모델(예: 75인치·86인치), 설치할 교실을 함께 남겨 주시면 그 구성으로 납부 방법을 안내받으실 수 있어요.\n\n[payment-cycle-termination] 계약 전에 꼭 확인하셔야 할 부분이 맞아요. 두 가지 모두 공개 안내에 정해진 기준이 없어 여기서 단정하지 않을게요.\n\n- 결제 주기(연 단위·분기·월): 계약 조건마다 달라서 견적 단계에서 정해요.\n- 중도 해지와 위약금: 계약서에 들어가는 조건이라 서명 전에 확인해야 해요.\n\n아래 [도입 상담 남기기]로 원하시는 결제 주기와 해지 조건 질문을 남겨 주시고, 받은 답은 견적서나 계약서에 서면으로 넣어 달라고 요청하세요.",
+      "conflict": "분할 납부·렌탈, 결제 주기, 위약금, 지점별 계산서, 요금제 변경 차액은 공개 문서·공개 페이지 검색에서 근거 0건이다(문서는 계약 기간과 결제 범위를 견적과 계약서에서 확정한다고만 함). 부재 주장 자체는 맞지만 계약·결제 조건 정책 주제라 챗봇이 '공개 안내에 없다'고 말해도 되는지, 담당자 확인으로 넘기는 문구 범위를 사람이 정해야 한다.",
+      "proposal": null,
+      "affectedCards": [
+        "field:board-installment",
+        "field:payment-cycle-termination",
+        "field:branch-account-invoice",
+        "field:plan-upgrade-proration"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": [],
+      "note": "막을 구절 없음: 부재 주장은 맞고 분할·렌탈·위약금·차액을 단정하는 글이 없다. 규칙 변경(policy 카드는 지금 운영 글이라 막지 않음)으로 active 유지: policy:billing-period-term, policy:plan-upgrade-proration-terms."
+    },
+    {
+      "id": "HQ-0702",
+      "topic": "무료 체험 종료 후 자동 결제 여부와 체험을 그만두는 방법 안내 범위",
+      "currentText": "미리 확인하시는 게 맞아요. 체험이 끝난 뒤 자동으로 결제되는지는 공개 안내에 정리돼 있지 않아서 제가 단정하지 않을게요.\n\n1. 카드를 등록하는 화면에 적힌 결제 조건(체험 종료 뒤 결제 여부, 날짜)을 먼저 확인하세요.\n2. 자동 결제를 끄는 위치나 체험을 그만두는 방법은 아래 [실시간 상담 연결]로 결제 담당에게 확인해 주세요. 공개 안내에도 체험을 그만두는 방법은 상담 채널로 물어보라고 돼 있어요.\n\n공식 무료 체험 기간은 2주예요. 카드 번호는 채팅창에 적지 않으셔도 돼요.",
+      "conflict": "체험 종료 뒤 자동 결제·자동 갱신은 공개 문서·페이지에서 검색 0건이라 '공개 안내에 정리돼 있지 않다'는 부재 주장은 맞다. '체험을 그만두는 방법은 상담 채널로 물어보라고 돼 있다'는 문장은 doc:/docs/admin/billing-upgrade#2 i9('체험이 끝난 뒤 어떻게 되는지, 체험을 그만두려면 어떻게 하는지도 같은 채널로 물어보세요.')가 근거다. 근거가 없는 것은 '자동 결제를 끄는 위치나 … 결제 담당에게 확인' 부분이다. 무료 체험 2주 표기(HQ-03)와 계약·해지 주제(HQ-15)에 걸려 사람이 안내 범위를 정해야 한다.",
+      "proposal": null,
+      "affectedCards": [
+        "field:trial-card-autobill"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": [],
+      "note": "이 항목 자체 구절 없음: 체험 기간 '2주'는 HQ-03 구절로 막는다. 자동 결제 부재 주장은 맞다. 규칙 변경(policy 카드는 지금 운영 글이라 막지 않음)으로 active 유지: policy:trial-auto-billing, policy:trial-card-register-autobill."
+    },
+    {
+      "id": "HQ-0801",
+      "topic": "금액·할인·가격 비교·타사 평균 단가·내부 공급가·보상 판매·가격 조정 요청에 대한 응대 범위",
+      "currentText": "[internal-price-list-request] 신분과 관계없이 대리점 공급 단가나 할인율 같은 내부 기준은 이 채팅에서 드리지 않아요. 저는 공개 안내를 바탕으로 답하는 상담 가이드라 내부 자료를 볼 수도 없어요.\n\n실제 견적이 필요하시면 아래 [도입 상담 남기기]로 학원 규모와 필요한 구성을 남겨 주세요. 영업 담당이 공식 견적으로 안내해 드려요. 챗봇 응답 점검이라면 사내 채널로 진행해 주세요.\n\n[board-price-comparison-discount] 가격 차이가 궁금하실 만해요. 같은 75인치라도 구성에 들어가는 게 달라서, 비교할 때는 항목을 맞춰 보셔야 해요.\n\n공개 안내 기준으로 ClassIn Board에는 이런 것이 함께 들어가요.\n- 윈도우 OPS(탈착식 Intel Core 컴퓨터) 내장: 외부 PC 없이 보드만으로 수업을 돌려요.\n- 4K 화면, 50점 적외선 터치, AG 방현·AF 지문방지 강화유리\n- EDB 칠판 파일과 녹화·복습·LMS·관리자 데이터로 이어지는 클래스인 수업 시스템\n- 무상 A/S 기본 1년(프로모션 적용 시 최대 2년)과 출장 점검\n견적서는 보통 전자칠판, OPS, 카메라·마이크, 스탠드·벽걸이, 소프트웨어, 설치·온보딩 항목으로 나뉘니, 다른 회사 견적과 같은 항목끼리 비교해 보세요.\n\n깎아 드릴 수 있는지는 제가 채팅에서 약속드릴 수 없어요. 가격은 학원 규모와 구성에 따라 상담에서 정해요. 아래 [도입 상담 남기기]로 비교하신 견적 조건(인치·구성)을 남겨 주시면 영업 담당이 같은 기준으로 견적을 드려요.",
+      "conflict": "가격·할인은 공개 문서에 숫자·기준이 없고 견적 상담으로 넘긴다(근거: 견적 문서 '할인이나 금액은 교실 수와 인원을 알려 주시면 견적으로 알려 드리고…'). 부재 주장은 맞지만 '공개 안내에 없다'고 말해도 되는 범위와 크기 목록(S65~S110) 공개 여부를 사람이 정해야 한다. 'Pro·비즈니스' 이름은 문서의 Standard·Plus·Enterprise와 불일치.",
+      "proposal": null,
+      "affectedCards": [
+        "field:internal-price-list-request",
+        "field:board-price-comparison-discount",
+        "field:peer-average-price",
+        "field:cheaper-online-listing-genuine",
+        "field:board-trade-in-discount"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": [],
+      "note": "막을 구절 없음: 금액·할인율 숫자와 할인 약속은 V-3 기본 규칙이 막고, 요금제 이름은 HQ-04 구절로 막는다. 규칙 변경(policy 카드는 지금 운영 글이라 막지 않음)으로 active 유지: policy:peer-average-price, policy:teacher-ambassador-referral-discount."
+    },
+    {
+      "id": "HQ-0802",
+      "topic": "환불·해지·위약금·자동 결제 해지 창구·카드사 이의·요금제 변경 취소·자동 연장 안내 범위",
+      "currentText": "[refund-as-credit-want-card] 그만 쓰시겠다는데 크레딧으로 넣어 드렸다니 답답하셨겠어요.\n\n환불을 크레딧으로 할지 카드 취소로 할지는 결제 방식과 약관에 따라 정해지는 부분이라, 제가 채팅에서 결정하거나 약속드릴 수 없어요.\n\n아래 [실시간 상담 연결]로 '크레딧 대신 카드 취소로 바꿔 달라'고 요청해 주세요. 결제한 날짜와 금액, 크레딧이 들어간 날짜, 앞서 문의한 날짜를 함께 알려 주시면 이전 문의와 이어서 확인해요. 카드 번호는 채팅창에 적지 않으셔도 돼요.\n\n[monthly-to-yearly-switch] 두 가지 답드릴게요.\n\n1) Yearly(연 결제) 할인: 결제 주기별 금액이나 할인은 요금제와 시기에 따라 달라서 공개 안내에 정해져 있지 않아요. 할인이 있다고 말씀드릴 수 없어요.\n2) 이번 달 남은 days: 바꿀 때 남은 기간이 이어지는지, 없어지는지도 공개 안내에 없어요. 바꾸기 전에 확인하시는 게 안전해요.\n\n아래 [실시간 상담 연결]로 'monthly에서 yearly로 바꾸면 할인과 남은 기간이 어떻게 되는지' 물어보세요. 결제한 날짜와 지금 요금제를 알려 주시면 결제 담당이 확인해 드려요. 남은 금액과 서비스 기간은 관리자 대시보드 첫 페이지에서 볼 수 있어요.",
+      "conflict": "해지·환불·위약금·자동 연장·요금제 변경 취소는 공개 문서·공개 페이지 검색에서 근거 0건이다. 답은 '공개 안내에 없다·약속할 수 없다'로 상담 연결하는 구조라 부재 주장 자체는 맞지만 환불·해지 정책 주제여서 문구 범위를 사람이 정해야 한다. 앱스토어 구독 안내(HQ-0201 계열)와도 겹친다.",
+      "proposal": null,
+      "affectedCards": [
+        "field:refund-as-credit-want-card",
+        "field:monthly-to-yearly-switch",
+        "field:autopay-cancel-where",
+        "field:unknown-classin-card-charge",
+        "field:cancellation-penalty-clause",
+        "field:service-expiry-auto-renewal",
+        "field:repair-downtime-fee-credit",
+        "field:chargeback-account-recordings",
+        "field:accidental-plan-change-click"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": [],
+      "note": "막을 구절 없음: 환불 약속은 V-3 기본 규칙이 막고, 그 밖은 '공개 안내에 없다·약속 못 함' 구조다."
+    },
+    {
+      "id": "HQ-0803",
+      "topic": "세금계산서·영수증 명의·분할 결제·결제 수단 변경·리스 등 증빙·결제 방식 안내 범위",
+      "currentText": "[downgrade-refund-tax-invoice] 결론부터 말씀드리면, 요금제를 낮춰 차액을 돌려받은 뒤 처음 받은 계산서를 수정해 다시 발행하는지, 언제 하는지는 공개 안내에 없어서 제가 단정할 수 없어요. 결제 담당이 결제 기록을 보고 처리해요.\n\n아래 [실시간 상담 연결]로 '요금제를 낮춰 차액을 환불받았는데 처음 받은 계산서는 어떻게 처리되는지' 물어보세요. 이렇게 준비하면 빨라요.\n- 처음 결제한 날짜와 금액, 처음 받은 계산서의 발행일\n- 환불받은 날짜와 금액\n사업자 정보는 채팅창에 적지 않으셔도 돼요.\n\n회계 처리는 경리 담당이 세무 담당과 최종 확인하시면 돼요.\n\n[annual-payment-invoice-count] 결론부터 말씀드리면, 1년치를 한 번에 결제할 때 계산서가 한 장으로 나오는지 매달 나눠 나오는지는 공개 안내에 없어서 제가 단정할 수 없어요. 결제 담당이 계약과 결제 방식을 보고 정해요.\n\n아래 [실시간 상담 연결]로 '연간 일시 결제로 바꾸면 계산서가 어떻게 발행되는지' 물어보세요. 경리 담당께서 원하는 방식(한 장 또는 매달)을 함께 말씀하시면 그 기준으로 확인해 드려요. 사업자 정보는 채팅창에 적지 않으셔도 돼요.",
+      "conflict": "문서는 '세금계산서, 영수증, 환불처럼 결제 뒤에 처리할 일은 결제 전에 상담 채널에서 방법을 묻고, 학원 회계 담당과 처리 방식을 맞춥니다'까지만 말한다. 재발행·분할 증빙·명의·법인 카드 재결제·리스 발행 주체는 근거 0건(HQ-0701과 일부 겹침). 부재 주장 범위와 [결제]>[영수증 관리] 같은 메뉴 안내를 함께 쓸 수 있는지 결정이 필요하다.",
+      "proposal": null,
+      "affectedCards": [
+        "field:downgrade-refund-tax-invoice",
+        "field:annual-payment-invoice-count",
+        "field:payment-failed-personal-card",
+        "field:paper-receipt-by-mail",
+        "field:receipt-name-academy-not-mine",
+        "field:last-month-documents-reprint",
+        "field:new-business-registration-tax-invoice",
+        "field:earlier-number-check-payment",
+        "field:board-lease-tax-invoice-subscription",
+        "field:personal-card-repay-corporate-card",
+        "field:split-payment-two-cards-invoice",
+        "field:early-renewal-tax-invoice-date",
+        "field:hometax-invoices-missing"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": [],
+      "note": "막을 구절 없음: 증빙 발행 방식을 단정하는 글이 없다."
+    },
+    {
+      "id": "HQ-0804",
+      "topic": "계약 조건·담당자 변경·가격 인상 적용·인원 한도·기관 통합·명의 변경·라이선스 구분 안내 범위",
+      "currentText": "[teacher-limit-exceeded-contract] 계약 때 들으신 말과 다르니 당황스러우셨겠어요. 다만 계약 당시 어떤 조건으로 하셨는지는 제가 이 채팅에서 확인할 수 없어요.\n\n강사를 몇 명까지 넣을 수 있는지는 요금제·계약마다 달라요. 지금 등록된 교사 수는 관리자 대시보드 첫 페이지([홈])에서 볼 수 있어요.\n\n아래 [실시간 상담 연결]로 이렇게 알려 주시면 계약 조건과 맞춰 확인해 드려요.\n- '인원 초과'가 뜬 화면 캡처\n- 계약서나 견적서에 적힌 강사 수 조건\n- 추가하려던 선생님이 몇 번째인지(7번째)\n\n확인되기 전까지 다른 선생님 계정을 빼거나 바꾸지 않으셔도 돼요.\n\n[academy-transfer-to-family] 학원을 넘겨주시려면 미리 챙기실 게 있죠. 두 가지 나눠 말씀드릴게요.\n\n1) 명의 바꾸기: 칠판과 매달 나가는 프로그램 계약·결제를 따님 이름으로 바꾸는 절차와 필요한 서류는 공개 안내에 나와 있지 않아요. 아래 [실시간 상담 연결]로 '학원을 딸에게 넘기려고 한다'고 말씀하시면 결제·계약 담당이 필요한 서류를 알려 드려요. 사업자등록증이 바뀌면 기관 인증을 새로 해야 하는지도 함께 물어보세요.\n2) 녹화와 아이들 명단: 지금 학원 계정과 데이터를 따님이 그대로 이어 쓸 수 있는지는 제가 단정할 수 없어요. 상담할 때 함께 물어보시고, 넘기기 전에 남길 녹화는 관리자 대시보드 [수업 녹화 데이터]에서 내려받아 두시면 안전해요.",
+      "conflict": "문서는 '계약 기간과 결제 범위는 견적과 계약서에서 확정합니다'까지만 말한다. 인원 한도·승계·명의 변경·인상 적용 시점·기본/확장 라이선스 구분은 근거 0건이고 계약 정책 주제다. 요금제 이름 세 계열 불일치와 최대 인원 숫자 불일치도 얽힌다.",
+      "proposal": null,
+      "affectedCards": [
+        "field:teacher-limit-exceeded-contract",
+        "field:academy-transfer-to-family",
+        "field:student-two-courses-billing",
+        "field:contract-payment-terms-split",
+        "field:quote-license-basic-extended",
+        "field:price-increase-existing-contract",
+        "field:sales-manager-left-contract-terms",
+        "field:acquired-academy-merge-contract"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": [],
+      "note": "이 항목 자체 구절 없음: 교사 수 표시 위치 오류는 HQ-1102 구절, 요금제 이름은 HQ-04 구절로 막는다. 계약 조건을 단정하는 글은 없다."
+    },
+    {
+      "id": "HQ-0805",
+      "topic": "무료 체험·사기 전 체험·반품 안내 범위",
+      "currentText": "[trial-public-class-limits] 학부모님 30명 앞에서 멈추면 안 되니 미리 확인하시는 게 맞아요.\n\n1. 체험판의 이용 범위(인원·기능·상업적 이용)는 공개 안내에 정리돼 있지 않아요. 체험 기간과 혜택도 시기에 따라 달라요. 이번처럼 학원 홍보용으로 써도 되는지는 행사 전에 아래 [도입 상담 남기기]로 확인하세요.\n2. 외부 학부모님이 앱 없이 링크로 보는 공개 수업은 보통 웹 라이브로 해요. 공개 안내 기준으로 웹 라이브는 요금제에 따라 쓸 수 있는지가 달라요(구독형은 Enterprise, 충전형은 Business). 유료로 전환했어도 학원 계정 인증을 마치지 않았으면 웹 라이브가 제한돼서, 체험 계정으로는 웹 라이브를 열지 못할 수 있어요.\n3. 행사와 똑같은 조건(같은 계정, 같은 기기, 비슷한 인원)으로 미리 리허설해 보세요.\n\n[board-return-trial-before-buy] 돌려 말하지 않을게요.\n\n1) 반품: 설치한 뒤 반품이 되는지는 구매 경로(본사·대리점)와 계약 조건에 따라 달라서, 공개 안내에 정해진 기준이 없어요. 제가 된다, 안 된다를 말씀드릴 수 없고, 계약서의 반품·청약철회 조항을 확인하셔야 해요.\n2) 사기 전에 써 보는 방법: 공개 안내 기준으로 목동 쇼룸이나 온라인 데모에서 자료 열기, 판서, 녹화, 저장까지 직접 해 볼 수 있어요. 대표 교실 한 곳, 대표 수업 하나로 먼저 써 보는 파일럿도 안내돼 있어요. 몇 주 빌려 쓰는 대여가 되는지는 공개 안내에 없어요.\n\n아래 [도입 상담 남기기]로 '강사들이 먼저 써 보고 결정하고 싶다'고 남겨 주시면, 쇼룸 예약이나 파일럿 방법을 영업 담당이 안내해 드려요.",
+      "conflict": "문서는 '2주 무료 체험'과 쇼룸·온라인 데모·파일럿만 말하고 체험판 이용 범위(인원·기능·상업적 이용)와 설치 후 반품·대여는 근거 0건이다. 웹 라이브 사용 요금제는 doc:/docs/teacher/lesson-web-live#6 i1('구독형(Classin Learning Space)은 Enterprise에서, 충전형(Consumption)은 Business에서 씁니다.')에 근거가 있으나 요금제 이름 계열(HQ-04)과 얽힌다. 무료 체험 '2주' 표기 문제와 겹친다.",
+      "proposal": null,
+      "affectedCards": [
+        "field:trial-public-class-limits",
+        "field:board-return-trial-before-buy"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": [],
+      "note": "이 항목 자체 구절 없음: '2주'는 HQ-03, 웹 라이브 요금제 표기는 HQ-0401 구절로 막는다. 반품·대여를 단정하는 글은 없다."
+    },
+    {
+      "id": "HQ-0901",
+      "topic": "전자칠판 무상 A/S 기간·유지보수 계약·출장비 안내 범위",
+      "currentText": "[maintenance-fee-vs-free-years] 지난주 대화는 제가 볼 수 없어서, 그때 '3년 무상'이라는 답이 나갔는지 확인해 드릴 수 없어요.\n\n공개 안내 기준으로 전자칠판 무상 A/S는 구입일 기준 기본 1년(프로모션 적용 시 최대 2년)이고, 이 기간에 출장 점검을 받아요. 그래서 '3년 무상'은 공개 안내와 맞지 않아요. 유지보수 계약이 필수인지 선택인지, 가입하지 않으면 고장 때 수리를 어떻게 받는지는 공개 안내에 없어요.\n\n받으신 견적서를 기준으로 영업 담당에게 서면으로 확인하세요.\n1. 유지보수비가 필수인지 선택인지\n2. 가입하지 않으면 무상 A/S 기간이 끝난 뒤 수리를 어떤 조건으로 받는지(출장비·부품비)\n3. 유지보수비에 무엇이 들어 있는지(정기 점검, 출장, 부품)\n아래 [도입 상담 남기기]로 견적서 번호와 함께 물어보세요.\n\n[warranty-visit-fee-receipt] 들여놓은 지 일 년도 안 됐는데 출장비를 내셔서 헷갈리셨겠어요. 확인된 것부터 말씀드릴게요.\n\n1. 공개 안내 기준: 칠판의 무상 보증 기간은 구입일 기준 기본 1년(프로모션 적용 시 최대 2년)이고, 이 기간에는 무상 출장 점검을 받는다고 나와 있어요. 다만 고장 원인이나 산 곳의 보증 조건에 따라 달라질 수 있어서, 이번 출장비가 맞는지는 제가 단정할 수 없어요.\n2. 확인과 영수증 요청: 아래 [실시간 상담 연결]로 '보증 기간 안 수리에 출장비 3만 원을 냈다, 기준 확인과 영수증을 받고 싶다'고 요청하세요. 칠판을 대리점에서 사셨다면 그 대리점에도 같이 물어보세요.\n3. 준비할 것: 칠판을 들여놓은 날(구입일), 수리한 날, 낸 금액과 낸 방법(현금·계좌이체), 오신 기사님 소속이나 명함. A/S 접수 때는 칠판 시리얼 번호도 필요해요. 칠판 오른쪽 전원 버튼을 누른 뒤 [Setting] > [about]에서 보여요.\n\n출장비를 돌려받을 수 있는지는 확인한 뒤 정해져서 제가 약속드릴 수 없어요. 학원 장부에는 영수증을 받기 전까지 '칠판 수리 출장비, 날짜, 금액, 영수증 요청 중'으로 적어 두세요. 시리얼 번호는 이 채팅창에 적지 않으셔도 돼요.",
+      "conflict": "무상 A/S는 구입일 기준 기본 1년(프로모션 시 최대 2년)이라는 문서 문장(hardware-spec-installation-faq#3)은 있으나, 유지보수 계약 필수 여부·가입하지 않을 때 수리 조건·보증 기간 안 출장비 청구 기준은 공개 문서·공개 페이지에 근거 0건이다. 답은 '공개 안내에 없다·약속 못 한다'로 상담 연결하는 구조라 부재 주장은 맞지만 보증·출장비·환불 정책 주제라 문구 범위를 사람이 정해야 한다.",
+      "proposal": null,
+      "affectedCards": [
+        "field:maintenance-fee-vs-free-years",
+        "field:warranty-visit-fee-receipt"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": [],
+      "note": "막을 구절 없음: 무상 A/S 기간 문장은 문서 근거(hardware-spec-installation-faq#3)가 있고 출장비 금액은 V-3 금액 규칙이 막는다."
+    },
+    {
+      "id": "HQ-0902",
+      "topic": "학원이 아닌 구매자(교회·회사 직접 계약)와 영문 계약서·청구서 안내 범위",
+      "currentText": "[church-board-purchase-subscription] 교회에서도 상담받으실 수 있는지, 칠판만 쓸 때 어디까지 되는지 쉽게 정리할게요.\n\n1. 학원이 아닌 곳도 살 수 있는지: 공개 안내에 구매 대상을 학원으로만 정해 둔 내용은 없어요. 교회처럼 학원이 아닌 곳도 도입 상담에서 확인받으시면 돼요.\n2. 매달 프로그램 비용이 꼭 드는지: 칠판 안에는 윈도우 컴퓨터(OPS)가 들어 있어서 따로 컴퓨터 없이 윈도우 환경을 쓰고, 기본 칠판 필기도 돼요. 다만 클래스인 소프트웨어 구독 없이 어떤 기능까지 쓸 수 있는지는 구성과 계약에 따라 달라서 견적 때 확인하셔야 해요. 수업을 녹화해 다시보기로 보내는 기능은 클래스인 프로그램 기능이에요. 칠판 도구의 로컬 녹화로 영상 파일(mp4)을 칠판에 저장하는 방법도 있는데, 구독 없이도 되는지는 상담 때 함께 확인하세요.\n3. 비용: 칠판과 프로그램 비용은 공개 안내에 정해진 금액이 없어서 상담에서 견적을 받으셔야 해요.\n\n교회 담당자분이 아래 [도입 상담 남기기]로 '교회 주일학교용, 칠판 1대, 수업을 녹화해 못 온 아이들에게 보내고 싶음'이라고 남기시면 돼요.\n\n[corporate-direct-contract-english-docs] 두 가지 따로 답드릴게요.\n\n1) 회사용 plan: '회사용'이라는 이름의 요금제는 공개 안내에 따로 없어요. 공개 안내 기준으로 소프트웨어는 Standard, Plus, Enterprise로 나뉘고, Enterprise는 대형 기관을 위한 맞춤 계약이라 가격도 맞춤 견적으로 정해요. 회사가 직접 계약할 때 어느 플랜이 맞는지는 영업 상담에서 정해요.\n2) contract와 invoice를 English로: 영어 계약서나 영어 청구서를 받을 수 있는지는 공개 안내에 없어요. 상담 때 꼭 확인할 항목으로 적어 두세요.\n\n회사 HR manager가 아래 [도입 상담 남기기]로 직접 문의하시면 돼요. 직원 수, 수업 횟수, 원하는 서류(영문 계약서, 영문 invoice)를 함께 적어 주세요. 학원을 통해 수업할지 회사가 직접 계약할지는 그 상담에서 정하시면 돼요.",
+      "conflict": "구매 대상을 학원으로만 정한 공개 문장은 없고, 회사 직접 계약·영문 계약서/청구서·구독 없이 칠판만 쓸 때 기능 범위는 근거 0건이다(HQ-18, HQ-0804 계열과 겹침). 구매 대상 범위와 영문 서류 가능 여부를 사람이 정해야 한다. 학교 조달(나라장터) 서류를 묻는 field:school-procurement-narajangteo-gs 도 점검에서 POLICY 로 바뀌어 이 항목으로 왔다(카드 policy:school-procurement).",
+      "proposal": null,
+      "affectedCards": [
+        "field:church-board-purchase-subscription",
+        "field:corporate-direct-contract-english-docs",
+        "field:school-procurement-narajangteo-gs"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": [],
+      "note": "이 항목 자체 구절 없음: 요금제 이름은 HQ-04 구절로 막는다. 구매 대상·영문 서류를 단정하는 글은 없다."
+    },
+    {
+      "id": "HQ-0903",
+      "topic": "체험 계정 부하 검증·테스트 기기/자동화 접속의 이용약관상 허용 범위",
+      "currentText": "[trial-load-test-automation-tos] 도입 전에 회선을 검증하시는 건 좋은 순서예요. 세 가지 나눠 답드릴게요.\n\n1) 체험 계정으로 원하는 규모를 테스트하거나 인원을 임시로 늘리는 것: 체험 계정의 동시 접속 인원 제한과 임시 확장은 공개 안내에 나와 있지 않아요. 공개 안내에는 결제 전에 써 보고 싶으면 문의 페이지에서 2주 무료 체험을 신청한다고 나와 있고, 요금제마다 한 수업 인원 같은 한도가 다르다고 돼 있어요.\n2) 테스트 기기나 자동화 스크립트로 접속시키는 것: 이용약관상 허용되는지는 공개 안내로 확인할 수 없어요. 허용된다고 단정하지 않을게요. 진행하기 전에 서면으로 사전 승인을 받으세요.\n3) 기술 담당과 함께하는 사전 검증 절차: 공식 절차가 따로 있는지는 공개 안내에 없어요. 공개 안내에는 도입 전에 목동 쇼룸 방문이나 데모로 대표 수업 한 편을 실제로 돌려 보는 파일럿 단계가 나와 있어요.\n\n아래 [도입 상담 남기기]에 '교실 수, 예상 동시 접속 인원, 체험 계정으로 부하 검증 희망, 테스트 기기·자동화 접속 허용 여부 확인 요청'이라고 남기시면 영업·기술 담당이 함께 확인해요.",
+      "conflict": "체험 계정의 동시 접속 제한·임시 확장, 자동화 스크립트 접속 허용 여부는 공개 문서·페이지에 근거 0건이다. 이용약관 해석과 무료 체험(HQ-03) 범위가 얽혀 있어 사람이 응대 범위를 정해야 한다.",
+      "proposal": null,
+      "affectedCards": [
+        "field:trial-load-test-automation-tos"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": [],
+      "note": "이 항목 자체 구절 없음: 체험 '2주'는 HQ-03 구절로 막는다. 자동화 접속 허용을 단정하는 글은 없다."
+    },
+    {
+      "id": "HQ-0904",
+      "topic": "결제 통화·결제 주체 공개 범위(구독형 USD / 충전형 원화 선충전)",
+      "currentText": "[contract-currency-exchange-rate] 단정할 수 없는 부분과 확인된 부분을 나눠 말씀드릴게요.\n\n1) 환율에 따라 갱신 단가가 바뀌는지, 3년 원화 고정가로 묶을 수 있는지: 공개 안내에 없어요. 계약 조건이라 제가 된다, 안 된다를 말씀드릴 수 없어요. 영업·계약 담당에게 '3년 원화 고정가 가능 여부'와 '환율이 바뀔 때 갱신 단가 조정 조항'을 서면으로 받아 계약서에 넣으세요.\n2) 결제 통화와 결제 주체: 원화로 국내 법인에 내는지, 달러로 해외에 내는지는 공개 안내에 없어요. 공개 안내로 확인되는 건 한국 법인 이이오클래스인코리아가 2022년 10월 서울 목동에 설립됐다는 것까지예요. 해외결제 수수료가 생기는지도 계약 담당에게 같이 확인하세요.\n\n아래 [도입 상담 남기기]로 이렇게 요청하시면 빨라요: 받은 견적서 날짜, 계약 기간(3년), 원하는 조건(원화 고정가, 국내 법인 결제, 세금계산서 발급).",
+      "conflict": "현재 글은 '결제 통화와 결제 주체는 공개 안내에 없다'고 하지만 체크아웃 페이지 site:components/checkout/CheckoutClient.tsx:24 는 '구독형 Learning Space는 USD 월/연 단위로, 충전형 Business는 원화 선충전 방식으로 결제합니다.'라고 한다(absence_claim_wrong, 공개 페이지에만 근거). 요금제 이름 세 계열(HQ-04)과 금액 비공개 원칙(HQ-08)이 얽혀 있어 이 문장을 답에 쓸지 사람이 정해야 한다.",
+      "proposal": null,
+      "affectedCards": [
+        "field:contract-currency-exchange-rate"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": [
+        "원화 선충전",
+        "원화를 미리 충전",
+        "USD 월/연",
+        "달러로 해외에 내는지는"
+      ],
+      "note": "공개 페이지에만 있는 결제 통화 문장 'USD 월/연'·'원화 선충전'(site:components/checkout/CheckoutClient.tsx:24)과 policy 글 '원화를 미리 충전', 틀린 부재 주장 '달러로 해외에 내는지는'(field:contract-currency-exchange-rate). 이 구절로 review 한 policy 카드 없음. 규칙 변경(policy 카드는 지금 운영 글이라 막지 않음)으로 active 유지: policy:billing-period-term."
+    },
+    {
+      "id": "HQ-1001",
+      "topic": "무상 보증 뒤 보증 연장 상품·유상 유지보수·출장비·수리 기간 대체 기기 안내 범위",
+      "currentText": "옛 답(field:board-warranty-extension-cost 외)은 '보증 연장 상품이나 유상 유지보수, 그 비용은 공개 안내에 나와 있지 않다'고만 말하고 상담 연결로 넘긴다.",
+      "conflict": "공개 문서는 무상 보증 기간(구입일 기준 기본 1년, 프로모션 시 최대 2년)과 그 기간의 무상 출장 점검만 말한다. 보증 연장·유상 유지보수·출장비·대체 기기는 검색 0건이라 부재 주장을 챗봇이 해도 되는지, 비용 질문을 어디까지 넘겨도 되는지 사람이 정해야 한다.",
+      "proposal": "부재 주장을 그대로 두고 상담 채널로 연결하거나, 공개 범위만 말하고 '확인되지 않음'으로 줄인다. 금액·약속 문구는 쓰지 않는다.",
+      "affectedCards": [
+        "field:board-warranty-extension-cost",
+        "field:jeju-board-as-onsite-fee-loaner",
+        "field:board-wall-mount-tilted-revisit-fee"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": [],
+      "note": "막을 구절 없음: 보증 연장·유상 유지보수를 단정하는 글이 없다."
+    },
+    {
+      "id": "HQ-1002",
+      "topic": "체크아웃 화면 '표기 금액은 부가세 별도 기준' 안내를 챗봇 답에 쓸 수 있는지(부가세·VAT 질문)",
+      "currentText": "옛 답(field:foreign-freelancer-vat-refund)은 '부가세를 빼고 결제하는 방법은 공개 안내에 없어요'라고 말한다.",
+      "conflict": "공개 문서에는 부가세 안내가 없고, 공개 페이지(components/checkout/HardwareCheckoutPanel.tsx:251)에만 '표기 금액은 부가세 별도 기준이며, 교실 수·설치 환경에 따라 최종 견적이 달라질 수 있습니다.'가 있다. 공개 페이지에만 기대는 사실이라 사람이 공개 범위를 정해야 한다.",
+      "proposal": "부가세 질문에는 위 공개 페이지 문장을 그대로 옮기고 세금 처리는 세무 담당 확인으로 넘긴다. 금액 숫자는 쓰지 않는다.",
+      "affectedCards": [
+        "field:foreign-freelancer-vat-refund"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": [
+        "부가세 별도"
+      ],
+      "note": "공개 페이지에만 있는 '부가세 별도'(site:components/checkout/HardwareCheckoutPanel.tsx:251·306, CheckoutRequestForm.tsx:465·523). 챗봇 답에 쓸지 결정 전. 이 구절로 review 한 카드: fixed:billing-vat."
+    },
+    {
+      "id": "HQ-1101",
+      "topic": "학생 수가 요금(과금) 기준에 들어가는지 — \"요금제와 계약마다 달라서 단정하지 않는다\" 문구",
+      "currentText": "basics:basics-billing-unit: '학생 수가 금액에 들어가는지는 요금제와 계약마다 달라서 단정하지 않을게요.' basics:basics-access-cost 와 svc:student-count-billing 도 같은 취지 문장을 씀.",
+      "conflict": "공개 문서는 '요금은 계정 수를 기준으로 하니 강사·운영 계정이 몇 개 필요한지 먼저 세어 보면 플랜이 좁혀집니다'(doc:/docs/start/value-and-cost-framing#1 i3)까지만 말하고, 학생 수 과금 여부나 요금제·계약별 차이는 어디에도 없다. 이 문장을 정책 문구로 유지할지, '공개 안내에 없다'로만 말할지 결정 필요.",
+      "proposal": null,
+      "affectedCards": [
+        "basics:basics-billing-unit",
+        "basics:basics-access-cost",
+        "svc:student-count-billing"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": [],
+      "note": "막을 구절 없음: '요금제와 계약마다 달라 단정하지 않는다'는 단정하지 않는 문장이라 방문자 위험이 낮다. 문구를 유지할지는 내부 결정."
+    },
+    {
+      "id": "HQ-1102",
+      "topic": "동시에 열 수 있는 수업 수·코스 수·강사 계정 수 한도가 요금제·계약마다 다르다는 문구",
+      "currentText": "basics:basics-plan-count-limits: '동시에 열 수 있는 수업 수, 만들 수 있는 코스 수, 강사 계정 수의 한도는 요금제·계약마다 달라서 공개 안내에 숫자가 없어요.' '지금 등록된 교사 수는 관리자 대시보드 첫 페이지에서 볼 수 있어요.' template:요금제 한도·체험 범위 확인 도 학생·강사 한도가 계정과 계약마다 다르다고 말함.",
+      "conflict": "공개 문서는 '요금제마다 한 수업 인원, 온스테이지 인원 같은 한도가 다릅니다'(doc:/docs/software/software-pricing-quote-bundle-faq#0 i6)까지만 말한다. 수업 수·코스 수·강사 수 한도의 요금제별 차이와 대시보드 첫 페이지의 교사 수 표시는 근거가 없다(첫 페이지에는 잔여 금액과 서비스 기간만 나온다: doc:/docs/admin/billing-upgrade#3 i7). 어디까지 말할지 결정 필요.",
+      "proposal": null,
+      "affectedCards": [
+        "basics:basics-plan-count-limits",
+        "template:요금제 한도·체험 범위 확인",
+        "basics:basics-fit-large-academy"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": [
+        "등록된 교사 수는 관리자 대시보드"
+      ],
+      "note": "근거 없는 위치 안내 '등록된 교사 수는 관리자 대시보드'(첫 페이지에는 잔여 금액과 서비스 기간만: billing-upgrade#3 i7). 지금 걸리는 active 카드는 없거나 이 항목 policy 카드뿐(예외)."
+    },
+    {
+      "id": "HQ-1103",
+      "topic": "충전형 포인트가 무엇에 차감되는지(수업·수업 녹화 사용 내역) 안내 범위",
+      "currentText": "basics:basics-billing-unit: '충전형은 수업과 수업 녹화 사용 내역만큼 포인트가 차감돼요.'",
+      "conflict": "공개 문서는 충전제 기관이 [결제] > [주문 세부정보]에서 포인트 차감 내역을 보고 '어떤 항목에서 빠졌는지' 좁혀 본다고만 한다(doc:/docs/admin/statistics-data#1 i1~i3). 차감 대상이 수업·녹화라는 명시는 없다. 차감 기준을 챗봇이 말해도 되는지, 말한다면 어느 문장을 쓸지 결정 필요.",
+      "proposal": null,
+      "affectedCards": [
+        "basics:basics-billing-unit"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": [
+        "수업 녹화 사용 내역만큼"
+      ],
+      "note": "근거 없는 차감 대상 '수업 녹화 사용 내역만큼'(statistics-data#1 i1~i3 는 차감 내역을 본다고만 함). 이 구절로 review 한 policy 카드 없음. 규칙 변경(policy 카드는 지금 운영 글이라 막지 않음)으로 active 유지: policy:billing-unit."
+    },
+    {
+      "id": "HQ-1201",
+      "topic": "온프레미스·전용 구축·미디어 전송 프로토콜(WebRTC)·자체 TURN, 서버 위치·데이터 처리 지역, 보안 아키텍처 문서·NDA 제공 범위 안내",
+      "currentText": "옛 답(field:architecture-onprem 외)은 '미디어 전송 프로토콜과 온프레미스·전용 구축, 자체 TURN·미디어 서버 옵션은 공개 안내에 나와 있지 않아요'라고 부재를 말하고 상담으로 넘긴다.",
+      "conflict": "공개 문서·페이지에서 WebRTC·온프레미스·TURN·NDA 문서는 검색 0건이다. 서버 위치와 데이터 처리 지역은 '공식 정책과 계약을 확인해 답한다'는 문장만 있다(pre-adoption-faq#4). 부재 주장과 보안 문서 안내를 챗봇이 어디까지 해도 되는지 사람이 정해야 한다.",
+      "proposal": "부재 주장은 그대로 두고 상담으로 연결하거나, '공식 정책과 계약으로 확인한다'는 공개 문장만 쓴다. 단정하거나 약속하는 문구는 쓰지 않는다.",
+      "affectedCards": [
+        "field:architecture-onprem",
+        "field:technical-review-meeting-nda",
+        "basics:basics-china-company-data"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": [],
+      "note": "막을 구절 없음: 지금 글은 부재·상담 연결 문장이다."
+    },
+    {
+      "id": "HQ-1202",
+      "topic": "SLA(가용성 목표·장애 공지 채널·대응 시간·장애 보상)와 이용약관 책임의 제한 조항 사용 범위",
+      "currentText": "옛 답(field:sla-availability)은 '가용성 목표(월 99.9% 등), status page, 대응 시간 기준, 장애 시 크레딧·보상 규정이 공개 안내에 나와 있지 않다'고 말한다.",
+      "conflict": "공개 문서에는 SLA 관련 문장이 없지만 이용약관 11조(책임의 제한)에 '천재지변, 외부 플랫폼 장애, 통신망 장애 등 합리적 통제를 벗어난 사유로 인한 손해에 대해 책임을 지지 않습니다'가 있다(site:app/terms/page.tsx:152). '보상 규정이 없다'는 말과 약관 조항을 함께 쓸지 사람이 정해야 한다.",
+      "proposal": "부재 주장 대신 '공개 안내에는 SLA 항목이 따로 없고 책임 범위는 이용약관과 계약을 따른다'로 줄이는 안, 또는 지금 글 유지 후 상담 연결.",
+      "affectedCards": [
+        "field:sla-availability",
+        "field:breach-liability"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": [
+        "월 99.9%"
+      ],
+      "note": "SLA 예시 숫자 '월 99.9%'(field:sla-availability). 약속처럼 읽힐 수 있어 다른 카드로 나가지 않게 함. 지금 걸리는 active 카드는 없거나 이 항목 policy 카드뿐(예외)."
+    },
+    {
+      "id": "HQ-1203",
+      "topic": "개인정보 유출 사고 책임·배상 범위와 개인정보 처리 위탁 계약 안내, 개인정보처리방침 8절 위탁 업체 표 인용 범위",
+      "currentText": "옛 답(field:breach-liability)은 책임·배상 범위를 채팅에서 단정할 수 없고 계약서와 개인정보 처리 위탁 조항으로 정해진다고 말한 뒤 상담으로 넘기고 '학원 측 법률 검토를 받으시는 게 안전해요'로 끝낸다.",
+      "conflict": "개인정보처리방침 8절에 처리 위탁 업체 표가 공개돼 있고 15절에 개인정보 보호책임자가 있으며 이용약관 11조에 책임 제한이 있다(site:app/privacy/page.tsx:443, :564, site:app/terms/page.tsx:150). 답이 이 공개 사실을 빠뜨린다. 법률 검토 권유 문장은 문서 근거가 없다.",
+      "proposal": "공개 페이지 사실(위탁 업체 표·보호책임자·책임 제한)을 근거 인용 그대로 더할지, 현재 글을 두고 법률 검토 권유 문장만 지울지 정한다.",
+      "affectedCards": [
+        "field:breach-liability"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": [],
+      "note": "막을 구절 없음: 관련 글은 이 항목 policy 카드(breach-liability)뿐이다."
+    },
+    {
+      "id": "HQ-1204",
+      "topic": "LTI 지원 여부 안내 — 회사 소개 페이지 '통합 파트너: LTI·SDK·API 연동' 문구를 챗봇 답에 쓸 수 있는지",
+      "currentText": "옛 답(field:lti-moodle-integration)은 'ClassIn이 LTI를 지원하는지는 공개 안내에 나와 있지 않아요'라고 말한다.",
+      "conflict": "회사 소개 페이지에 'LTI·SDK·API 연동으로 클래스인을 기존 에듀테크 환경에 자연스럽게 통합합니다'(site:app/about/AboutPageClient.tsx:797)와 서비스 소개서에 'LTI/CED API'(site:lib/introduction/content.ts:464) 문구가 있어 부재 주장이 틀리다. 다만 LTI 1.3·Deep Linking·NRPS·AGS 지원 여부는 공개 문장에 없다.",
+      "proposal": "고침안(FIX): 공개 문구를 그대로 인용하고 'LTI 1.3 External tool·Deep Linking 지원 여부는 공개 안내에 없다'로 좁힌다. 지원한다고 단정하지 않는다.",
+      "affectedCards": [
+        "field:lti-moodle-integration"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": [
+        "LTI를 지원하는지는",
+        "LTI·SDK·API",
+        "LTI/CED"
+      ],
+      "note": "틀린 부재 주장 'LTI를 지원하는지는'(field:lti-moodle-integration)과 공개 페이지 'LTI·SDK·API'(site:app/about/AboutPageClient.tsx:797)·'LTI/CED'(site:lib/introduction/content.ts:464). 지금 걸리는 active 카드는 없거나 이 항목 policy 카드뿐(예외)."
+    },
+    {
+      "id": "HQ-1205",
+      "topic": "정식 항의·문의 접수에 한국 법인 이메일·대표 전화·주소를 안내해도 되는지",
+      "currentText": "옛 답(field:formal-complaint-channel)은 '항의 접수용 이메일 주소와 회사 주소는 공개 안내에 따로 나와 있지 않아서 제가 지어 드리지 않을게요'라고 말한다.",
+      "conflict": "푸터와 개인정보처리방침에 한국 법인 이메일 classinkr@classin.com, 전화 02-6958-8566, 주소(8층 806호 드림타워)가 공개돼 있다(site:components/sections/Footer.tsx:87,90,91, site:app/privacy/page.tsx:317,318). 부재 주장이 틀리다. 이 연락처가 '항의 접수용'이라는 표시는 없다. HQ-02(주소 표기)·HQ-10(대표 전화 누락)과 같은 공개 페이지 사실이다.",
+      "proposal": "고침안(FIX): '한국 법인의 연락처는 이메일 …, 전화 …이고, 주소는 …'로 공개 페이지 문장을 그대로 옮긴다. 항의 전용 창구라고 말하지 않는다.",
+      "affectedCards": [
+        "field:formal-complaint-channel",
+        "basics:basics-contact-channel"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": [
+        "항의 접수용 이메일 주소와 회사 주소는"
+      ],
+      "note": "틀린 부재 주장 '항의 접수용 이메일 주소와 회사 주소는'(field:formal-complaint-channel). 연락처는 푸터·방침에 공개. 지금 걸리는 active 카드는 없거나 이 항목 policy 카드뿐(예외). review 카드 점검(2026-11-20): fixed:formal-complaint-channel 은 연락처 문장을 지운 글(문서 근거만)로 active. 결정이 나면 D4 가 연락처 문장을 다시 더한다."
+    },
+    {
+      "id": "HQ-1206",
+      "topic": "해외에서 발급한 카드·해외 결제 수단으로 결제할 수 있는지 안내 범위",
+      "currentText": "옛 답(field:overseas-card)은 '해외에서 발급한 카드로 결제되는지는 공개 안내에 없어요. 결제 담당자가 확인해 드려야 해요'라고 말하고 카드 번호를 채팅에 적지 않도록 한다.",
+      "conflict": "공개 문서·페이지에는 해외 발급 카드 결제 가능 여부 문장이 없다(검색 0건). 결제 수단 안내는 정책 주제라 부재 주장과 상담 연결 문구를 사람이 정해야 한다.",
+      "proposal": "부재 주장은 두고 결제 담당 확인으로 연결하는 현재 글 유지. 가능·불가능을 단정하지 않는다.",
+      "affectedCards": [
+        "field:overseas-card"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": [],
+      "note": "막을 구절 없음: 지금 글은 가능·불가를 단정하지 않는다."
+    },
+    {
+      "id": "HQ-1301",
+      "topic": "수업 녹화 영상·학생 정보의 서버 위치·데이터 처리 지역·국외 이전을 챗봇이 어디까지 말할지",
+      "currentText": "basics:basics-data-server-location: '수업 녹화 영상이 어느 나라 서버에 있는지, 해외로 이전되는지, 외국 기관이 볼 수 있는지는 공개 안내에 정리돼 있지 않아요. 그래서 한국이라고도 해외라고도 추측으로 말씀드리지 않을게요.' 이어서 학원 스토리지 저장·보관 기간 관리 안내와 상담 채널로의 문서 요청 안내.",
+      "conflict": "공개 문서는 '서버 위치와 데이터 처리 지역은 공식 정책과 계약을 확인해 답을 드립니다'(doc:/docs/start/pre-adoption-faq-22-questions#4 i14)이고 '추정으로 답하지 않는 항목입니다'(i15)라고 한다. 반면 개인정보처리방침 8·9절에는 회사 웹사이트가 처리하는 정보의 수탁사별 국가·서버 실행 위치 표(site:app/privacy/page.tsx:155 '미국 (서버 실행 위치: 서울)', :164 '싱가포르 (저장 위치: 서울 리전…)')가 있다. 이는 수업 녹화 서버가 아니라 홈페이지 처리 정보라 범위가 다르다. 두 범위를 구분해 말할지, 수업 서버 위치는 계속 '공개 안내에 없다'로만 둘지 결정이 필요하다.",
+      "proposal": null,
+      "affectedCards": [
+        "basics:basics-data-server-location"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": [
+        "서버 실행 위치",
+        "서울 리전"
+      ],
+      "note": "홈페이지 처리 정보의 위치 표기 '서버 실행 위치'·'서울 리전'(site:app/privacy/page.tsx:155·164). 수업 녹화 서버 위치로 오해될 수 있어 범위 결정 전. 지금 걸리는 active 카드는 없거나 이 항목 policy 카드뿐(예외)."
+    },
+    {
+      "id": "HQ-1302",
+      "topic": "회사 소개 페이지의 투자자 이름·인력 규모 수치를 챗봇 답에 쓸지, '직원 수는 공개 안내에 없다' 문구의 처리",
+      "currentText": "basics:basics-company-investors-listing: 'EEO 공식 기준으로 Tencent·Hillhouse·SIG 등의 투자를 받은 시리즈 D 에듀테크 유니콘이에요. … 직원 수와 재무제표 같은 세부 수치는 공개 안내에 없어요.' / basics:basics-company-size-stability: '직원 수와 재무제표 같은 세부 수치는 공개 안내에 없어서, 앞으로의 안정성을 제가 보장하거나 단정할 수는 없어요.'",
+      "conflict": "회사 소개 페이지에 '500+ 교육 전문 인력'(site:app/about/AboutPageClient.tsx:814), '600명 이상의 개발자·엔지니어'(:89)가 공개돼 있어 '직원 수는 공개 안내에 없다'는 문구가 틀리다(absence_claim_wrong, 공개 페이지 근거). 투자자 이름(Tencent·Hillhouse·SIG)도 공개 페이지(:94)에만 있고 문서는 시리즈 D·유니콘까지다. 같은 문장의 '누적 5억 달러 이상'은 금액 숫자 비공개 원칙(HQ-08)에 닿아 쓰지 않았다.",
+      "proposal": "점검 안(FIX)은 '직원 수와' 만 지우고 '재무제표 같은 세부 수치는 공개 안내에 없어요'로 남겼다. 인력 수치(500+, 600명 이상)를 답에 더할지, 투자자 이름을 챗봇이 말해도 되는지 결정해 주세요.",
+      "affectedCards": [
+        "basics:basics-company-investors-listing",
+        "basics:basics-company-size-stability"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": [
+        "Hillhouse",
+        "직원 수와 재무제표",
+        "교육 전문 인력",
+        "600명 이상의 개발자"
+      ],
+      "note": "공개 페이지에만 있는 투자자 이름 'Hillhouse'(site:app/about/AboutPageClient.tsx:94·244)와 인력 수치 '교육 전문 인력'(:814)·'600명 이상의 개발자'(:89), 틀린 부재 주장 '직원 수와 재무제표'(basics:basics-company-size-stability). 지금 걸리는 active 카드는 없거나 이 항목 policy 카드뿐(예외). review 카드 점검(2026-11-20): fixed:basics-company-investors-listing 은 투자사 이름을 지운 글로, fixed:basics-company-size-stability 는 고침 글 그대로(공개 페이지 사실 없음) active. 결정이 나면 D4 가 투자사 이름·인력 수치를 더한다."
+    },
+    {
+      "id": "HQ-1303",
+      "topic": "보안 문의에서 개인정보처리방침 14절의 '전송 구간 암호화' 등 안전성 확보 조치 문구를 쓸지",
+      "currentText": "basics:basics-security-posture / basics:basics-encryption: '암호화 방식, 보안 인증, 보안 사고 이력 같은 세부 항목은 공개 안내에 정리돼 있지 않아서, 제가 있다거나 없다고 단정하지 않을게요.'",
+      "conflict": "공개 문서에는 암호화·보안 인증·보안 사고 문장이 없다. 그러나 개인정보처리방침 14절에는 '개인정보 접근 권한 관리, 전송 구간 암호화, 관리자 접근 제한, 로그 점검, 불필요한 정보의 삭제 또는 익명화 등 … 조치를 적용합니다'(site:app/privacy/page.tsx:559)와 9절 '모든 전송은 암호화 통신을 씁니다'(:457#2)가 있다. 이 문구는 회사 웹사이트의 개인정보 처리 범위이고 클래스인 수업·녹화 데이터에 대한 말인지 불분명하다. '암호화 방식은 공개 안내에 없다'를 유지할지, 위 문구를 그대로 더할지 결정이 필요하다.",
+      "proposal": "점검 안(FIX, security-posture)은 '암호화 방식'을 없다 목록에서 빼고 14절 문장을 그대로 더했다. basics-encryption 은 security-posture 로 흡수(MERGE).",
+      "affectedCards": [
+        "basics:basics-security-posture",
+        "basics:basics-encryption"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": [
+        "전송 구간 암호화",
+        "암호화 통신",
+        "암호화 방식은 공개 안내에",
+        "암호화 방식, 보안 인증"
+      ],
+      "note": "개인정보처리방침의 '전송 구간 암호화'(site:app/privacy/page.tsx:559)·'암호화 통신'(:457#2)과 부재 주장 '암호화 방식은 공개 안내에'(basics:basics-encryption)·'암호화 방식, 보안 인증'(basics:basics-security-posture). 지금 걸리는 active 카드는 없거나 이 항목 policy 카드뿐(예외). review 카드 점검(2026-11-20): fixed:basics-security-posture 는 14절 문장을 지운 글(문서 근거만)로 active. 결정이 나면 D4 가 그 문장을 다시 더한다."
+    },
+    {
+      "id": "HQ-1304",
+      "topic": "세미나·설명회 안내 — 정기 개최·월 웨비나·전국 도시 설명회·무료·'/events' 메뉴 문구와 챗봇 대리 신청 안내의 공개 근거",
+      "currentText": "self:event_inquiry: '다양한 온·오프라인 설명회와 세미나를 정기적으로 개최… 매달 정기적으로 진행되는 온라인 웨비나… 전국 주요 도시에서 열리는 오프라인 설명회… 공식 홈페이지의 /events 메뉴를 통해 무료로 간단히 접수' / self:event_apply_assist: '제가 대신 접수를 도와드릴 수 있습니다' 하며 성함·휴대폰 번호·소속·세미나명을 이 채팅창에 적어 달라는 안내.",
+      "conflict": "공개 문서에는 설명회·세미나 문장이 없고, 공개 페이지에는 문의 페이지의 '세미나 신청 | 웨비나'(site:app/contact/page.tsx:102)·'신청하실 행사를 선택해주세요'(:236)·푸터 '행사·세미나'(site:components/sections/Footer.tsx:67)와 개인정보처리방침의 행사·설명회 신청 접수 항목(:331)만 있다. 정기·매달·전국 주요 도시·무료·/events 는 근거가 없다. 대리 접수 안내는 채팅에 이름·휴대폰 번호를 적게 하는 식별 정보 요구라 공통 규칙과 충돌한다. 두 답을 DROP 했고 legacy 경로에서만 남는다.",
+      "proposal": "행사·세미나 신청은 문의 페이지(/contact)에서 신청하실 행사를 선택해 접수하고, 신청 가능한 행사가 없으면 아래 문의 내용에 원하시는 일정이나 주제를 적어 달라는 안내(근거 site:app/contact/page.tsx:236, :498)로 새 카드를 만들지 결정해 주세요.",
+      "affectedCards": [
+        "self:event_inquiry",
+        "self:event_apply_assist"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": [
+        "설명회와 세미나를 정기적으로",
+        "매달 정기적으로 진행되는 온라인 웨비나",
+        "전국 주요 도시에서 열리는",
+        "'/events' 메뉴",
+        "제가 대신 접수를 도와드릴"
+      ],
+      "note": "self:event_inquiry 의 근거 없는 문장(정기 개최·매달 웨비나·전국 주요 도시·'/events' 메뉴)과 self:event_apply_assist 의 대리 접수(채팅에 이름·휴대폰 번호 요구) 형태. 지금 걸리는 active 카드는 없거나 이 항목 policy 카드뿐(예외)."
+    }
+  ]
+}
