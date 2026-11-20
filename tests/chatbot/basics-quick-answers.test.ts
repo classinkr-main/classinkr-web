@@ -343,3 +343,41 @@ describe("weak sources and word hijacks", () => {
     expect(transfer.answer).not.toContain("수업이 끊기거나 튕기면")
   })
 })
+
+describe("소개 답(2026-11-20 조사 G9): '무엇 → 누가 쓰나 → 다음 할 일', '네,'는 예/아니오 질문에만", () => {
+  it("'클래스인이 뭐예요'는 '네,'로 시작하지 않고 누가 쓰는지를 담는다", async () => {
+    disableExternalChatbotServices()
+    for (const question of ["클래스인이 뭐예요?", "무슨 서비스예요?", "클래스인 소개해 주세요"]) {
+      const result = await evaluateChatbotQuery(question, { generateAnswer: false })
+      expect(result.answer, question).toMatch(/^Classin은 학원 수업을/)
+      const paragraphs = result.answer.split("\n\n")
+      const what = paragraphs.findIndex((paragraph) => paragraph.includes("수업 운영 솔루션"))
+      const who = paragraphs.findIndex((paragraph) => paragraph.includes("학생은 앱을 설치해 가입한 뒤"))
+      const next = paragraphs.findIndex((paragraph) => paragraph.includes("어떤 쪽이 궁금하신지"))
+      expect(what, question).toBeGreaterThanOrEqual(0)
+      expect(who, question).toBeGreaterThan(what)
+      expect(next, question).toBeGreaterThan(who)
+      // 용어는 괄호로 한 번 풀어 쓴다.
+      expect(result.answer).toContain("EDB 교안(판서·이미지를 저장해 다시 불러오는 칠판 파일)")
+    }
+  })
+
+  it("예/아니오로 묻는 소개 질문은 '네,'를 그대로 둔다", async () => {
+    disableExternalChatbotServices()
+    const result = await evaluateChatbotQuery("클래스인 설명 가능해요?", { generateAnswer: false })
+    expect(result.answer).toMatch(/^네, Classin은 학원 수업을/)
+  })
+
+  it("'클래스인 좋아요?'는 소개 답으로 바뀌지 않는다(그대로)", async () => {
+    disableExternalChatbotServices()
+    const result = await evaluateChatbotQuery("클래스인 좋아요?", { generateAnswer: false })
+    expect(result.answer).not.toContain("학생은 앱을 설치해 가입한 뒤")
+  })
+
+  it("회사를 물으면 회사 문장이 먼저다", async () => {
+    disableExternalChatbotServices()
+    const result = await evaluateChatbotQuery("뭐하는 회사야", { generateAnswer: false })
+    expect(result.answer).toMatch(/^클래스인\(ClassIn\)은 글로벌 에듀테크 기업 EEO/)
+    expect(result.answer).not.toContain("네, Classin")
+  })
+})

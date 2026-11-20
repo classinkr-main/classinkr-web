@@ -282,3 +282,55 @@ describe("요청 계약", () => {
     expect(fetchMock.mock.calls.length).toBe(callsAfterFirst)
   })
 })
+
+describe("처음 온 고객(2026-11-20 조사 G8)", () => {
+  it("직전 턴 없는 '이거 뭐예요'는 못 찾음이 아니라 되묻기와 처음 온 사람용 칩이다", async () => {
+    for (const question of ["이거 뭐예요", "그거 어떻게 해요?"]) {
+      const result = await evaluateChatbotQuery(question, { generateAnswer: false })
+      expect(result.conversationReason, question).toBe("target_unknown")
+      expect(result.answerMode, question).toBe("clarifying_question")
+      expect(result.sources, question).toEqual([])
+      expect(result.answer, question).not.toContain("찾지 못했어요")
+      expect(result.answer, question).toContain("클래스인이 어떤 서비스인지")
+      expect(result.suggestedQuestions, question).toContain("클래스인이 뭐예요?")
+    }
+  })
+
+  it("모델이 켜져 있어도 대상 불명 질문은 근거 선별을 부르지 않는다", async () => {
+    vi.stubEnv("GEMINI_API_KEY", "test-key")
+    const { requests } = stubEvidenceSelection(() => true)
+    const result = await evaluateChatbotQuery("이거 뭐예요")
+    expect(result.answerMode).toBe("clarifying_question")
+    expect(requests).toHaveLength(0)
+  })
+
+  it("처음 온 사람용 칩은 각각 소개·수업 입장·요금 답으로 간다", async () => {
+    const intro = await evaluateChatbotQuery("클래스인이 뭐예요?", { generateAnswer: false })
+    expect(intro.answer).toContain("수업 운영 솔루션")
+    const join = await evaluateChatbotQuery("수업에 들어가는 방법이 궁금해요", { generateAnswer: false })
+    expect(join.answerMode).toBe("direct_answer")
+    expect(join.sources[0]?.urlPath).toBe("/docs/student/class-join-replay")
+    const pricing = await evaluateChatbotQuery("요금은 어떻게 되나요?", { generateAnswer: false })
+    expect(pricing.detectedCategory).toBe("billing")
+  })
+
+  it("두 조각 질문에서 한 조각만 답했으면 답하지 못한 조각을 한 줄로 알리고 첫 추천 질문으로 둔다", async () => {
+    const result = await evaluateChatbotQuery("맥북에도 깔리나요? 그리고 카메라가 안 켜져요", { generateAnswer: false })
+    expect(result.answer).toContain("함께 물어보신 '맥북에도 깔리나요'는 이 답에 담지 못했어요.")
+    expect(result.suggestedQuestions[0]).toBe("맥북에도 깔리나요?")
+  })
+
+  it("두 조각을 함께 답한 답에는 알리지 않는다", async () => {
+    const result = await evaluateChatbotQuery("맥북에도 깔리나요? 그리고 녹화 파일 다운로드 돼요?", { generateAnswer: false })
+    expect(result.answer).not.toContain("함께 물어보신")
+  })
+
+  it("stream 과 non-stream 이 같은 알림 줄을 낸다", async () => {
+    const question = "무료 체험 있나요? 그리고 앱 설치는 어떻게 해요?"
+    const nonStream = await evaluateChatbotQuery(question)
+    __clearAnswerCacheForTests()
+    const stream = await collectStream(question, {})
+    expect(nonStream.answer).toContain("함께 물어보신")
+    expect(stream.answer).toBe(nonStream.answer)
+  })
+})

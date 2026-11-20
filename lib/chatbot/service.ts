@@ -83,6 +83,7 @@ import {
   routeAnswerIndex,
 } from "@/lib/chatbot/answer-index"
 import { collectLegacyVotes } from "@/lib/chatbot/answer-index/legacy-votes"
+import { detectAskType, segmentQuestion } from "@/lib/chatbot/answer-index/normalize"
 import { groupSentenceParagraphs } from "@/lib/chatbot/answer-index/paragraphs"
 import {
   buildAnswerIndexCore,
@@ -2849,8 +2850,32 @@ function buildGeneralClarify(question: NormalizedQuestion) {
     ? "예를 들면 수업 들어가기, 다시보기, 숙제 내기, 앱 설치·로그인, 선생님이 보낸 파일 열기 가운데 어느 쪽인가요?"
     : /샘들|선생님들|강사|원장|학원|관리자|직원|실장|경리|세무|정산|마감/.test(text)
       ? "예를 들면 강사·학생 등록, 수업·녹화 설정, 저장 공간, 결제·요금, 전자칠판 가운데 어느 쪽인가요?"
-      : "예를 들면 수업 입장·소리·화면 같은 사용 문제, 녹화·숙제 같은 기능, 결제·요금, 도입 상담 가운데 어느 쪽인가요?"
+      : FIRST_VISIT_CLARIFY_EXAMPLE
   return [lead, example]
+}
+
+// 분류가 안 된 짧은 질문의 되묻기 예시. 무엇을 묻는지 모르는 질문은 처음 온 사람의 질문이 많아(2026-11-20 조사 G8),
+// 사용 문제 대신 처음 온 사람이 가장 많이 묻는 것(클래스인이 무엇인지·수업에 들어가는 법·요금)을 든다. 새 사실은 넣지 않는다.
+const FIRST_VISIT_CLARIFY_EXAMPLE = "예를 들면 클래스인이 어떤 서비스인지, 수업에 들어가는 방법, 요금 가운데 어느 쪽이 궁금하신가요?"
+// 처음 온 사람용 보기 칩(대상 불명 되묻기). 누르면 소개·수업 입장·요금 답으로 간다.
+const FIRST_VISIT_SUGGESTIONS = ["클래스인이 뭐예요?", "수업에 들어가는 방법이 궁금해요", "요금은 어떻게 되나요?"]
+
+/**
+ * 직전 턴 없이 지시어만 있는 질문("이거 뭐예요")의 답. 못 찾음(NO_SOURCE) 대신 무엇을 말씀하시는지 되묻고 처음 온 사람용 보기 칩을 준다.
+ * 모델을 부르지 않는 결정형 답이다(근거 선별·답 다시 쓰기를 건너뛴다).
+ */
+function buildTargetClarifyResponse(question: NormalizedQuestion): CoreResponse {
+  const response: CoreResponse = {
+    answer: buildGeneralClarify(question).join("\n\n"),
+    answerMode: "clarifying_question",
+    confidence: 0.25,
+    needsHandoff: false,
+    sources: [],
+    suggestedQuestions: [...FIRST_VISIT_SUGGESTIONS],
+    unresolved: true,
+  }
+  deterministicFinalResponses.add(response)
+  return response
 }
 
 // 학생·학부모 목소리의 질문. 이런 질문에는 영업형 되묻기("설치 장소, 희망 대수", "수업 전·중·후")를 붙이지 않는다.
@@ -2923,16 +2948,24 @@ function getComparisonAnswer(question: NormalizedQuestion, top: ChatbotSource) {
   ].filter(Boolean).join("\n\n")
 }
 
+// 소개 답은 '무엇인지 → 누가 쓰는지 → 다음 할 일' 순서로 놓는다(2026-11-20 조사 G9). '네,'는 예/아니오로 묻는 말에만 붙인다
+// ("클래스인이 뭐예요?"에 "네,"로 답하지 않는다). 사실은 포지셔닝 정본(lib/classin-positioning.ts: 대상·EDB 풀이)과
+// 검수한 기본 사실 답(학생은 앱을 설치해 가입한 뒤 초대받은 코스로 들어간다)에 있는 것만 쓴다. 용어(EDB)는 괄호로 한 번 풀어 쓴다.
+const IDENTITY_WHAT_LINE =
+  "Classin은 학원 수업을 준비·진행·녹화·복습·과제(LMS)·관리자 데이터까지 한 흐름으로 묶는 수업 운영 솔루션이에요."
+const IDENTITY_WHO_LINE =
+  "학원·교육기관에서는 원장님과 관리자가 수업 운영과 데이터를 관리하는 데 쓰고, 학생은 앱을 설치해 가입한 뒤 학원이 초대한 코스에 들어가 수업을 들어요."
+
 function getIdentityAnswer(question: NormalizedQuestion) {
   const askedCompany = isCompanyIdentityQuestion(question)
+  const askedYesNo = detectAskType(question.redacted) === "yesno"
   return [
     askedCompany
       ? "클래스인(ClassIn)은 글로벌 에듀테크 기업 EEO가 만든 교육용 수업 플랫폼이고, 한국에서는 이이오클래스인코리아가 학원·교육기관 도입과 운영을 돕고 있어요."
       : null,
-    askedCompany
-      ? "Classin은 학원 수업을 준비·진행·녹화·복습·과제(LMS)·관리자 데이터까지 한 흐름으로 묶는 수업 운영 솔루션이에요."
-      : "네, Classin은 학원 수업을 준비·진행·녹화·복습·과제(LMS)·관리자 데이터까지 한 흐름으로 묶는 수업 운영 솔루션이에요.",
-    "쉽게 말해 Zoom처럼 수업만 여는 도구가 아니라, 전자칠판·EDB 교안·녹화·관리자 운영까지 연결해 수업 품질을 표준화하는 시스템에 가까워요.",
+    askedYesNo && !askedCompany ? `네, ${IDENTITY_WHAT_LINE}` : IDENTITY_WHAT_LINE,
+    "쉽게 말해 Zoom처럼 수업만 여는 도구가 아니라, 전자칠판·EDB 교안(판서·이미지를 저장해 다시 불러오는 칠판 파일)·녹화·관리자 운영까지 연결해 수업 품질을 표준화하는 시스템에 가까워요.",
+    IDENTITY_WHO_LINE,
     "전자칠판, 온라인 수업, LMS/관리자 중 어떤 쪽이 궁금하신지 알려주시면 그 부분만 콕 짚어 정리해드릴게요.",
   ].filter(Boolean).join("\n\n")
 }
@@ -5695,11 +5728,104 @@ async function gatePreparedCore(
   }
 }
 
+// ── 두 조각 질문에서 답하지 못한 조각 ─────────────────────────────────────────────────────────────
+
+interface SegmentAnswer {
+  /** 정해 둔 답의 출처 이름(관문 대상 이름과 같은 꼴). */
+  original: string
+  /** 그 답의 첫 문단(앞의 '네, '·'아니요, '를 뗀 것). 두 답을 이어 붙인 답에 들었는지 보는 데 쓴다. */
+  head: string
+}
+
+function answerHead(answer: string) {
+  return answer.split("\n\n")[0].replace(/^(?:네|아니요),\s*/, "").trim()
+}
+
+/**
+ * 조각 하나가 혼자 물렸을 때 고를 정해 둔 답. 정규식 판정만 쓴다(모델·네트워크 없음).
+ * 정해 둔 답·증상 안내·화면 가이드·검수 틀 답이 아니면 null.
+ */
+function segmentAnswerOf(text: string): SegmentAnswer | null {
+  let segment: NormalizedQuestion
+  try {
+    segment = normalizeQuestion(text)
+  } catch {
+    return null
+  }
+  const quick = buildServiceQuickAnswer(segment)
+  if (quick) return { original: quick.gateOriginal ?? "service", head: answerHead(quick.response.answer) }
+  const routing = glossForRouting(segment.redacted)
+  const guide = findCsFigmaGuideForQuestion(routing)
+  const triage = resolveSymptomTriageForQuestion(routing, guide)
+  if (triage) return { original: `symptom:${triage.topicId ?? "triage"}`, head: answerHead(sanitizePublicAnswerText(triage.answer)) }
+  if (guide) return { original: `guide:${guide.slug}`, head: answerHead(csFigmaGuideCoreParts(guide, segment.redacted).response.answer) }
+  if (!isCuratedTemplateQuestion(segment)) return null
+  const curated = buildCuratedSources(segment)
+  if (curated.length === 0) return null
+  const { category } = classifyChatbotQuestion(segment.redacted, curated.map((source) => source.category))
+  const response = composeAnswer(segment, selectDiverseSources(rerankSources(segment, curated), 1), category)
+  const original = getComposedTemplateOriginal(response)
+  return original ? { original, head: answerHead(response.answer) } : null
+}
+
+/** 이 답을 고른 정해 둔 답의 출처 이름. 관문이 버렸거나(문서 경로 답) 정해 둔 답이 아니면 null. */
+function answeredOriginalOf(core: ChatbotCore): string | null {
+  if (core.answerGate?.gate === "rejected" || gateDocumentResponses.has(core.response)) return null
+  return (
+    core.answerGate?.gateOriginal ??
+    core.gateOriginal ??
+    getComposedTemplateOriginal(core.response) ??
+    (core.topicId ? `symptom:${core.topicId}` : null)
+  )
+}
+
+// 받침이 있으면 '은', 없으면 '는'. 따옴표로 묶은 말 뒤에 붙인다.
+function withTopicParticle(word: string) {
+  const last = word.charCodeAt(word.length - 1)
+  const hasFinal = last >= 0xac00 && last <= 0xd7a3 && (last - 0xac00) % 28 !== 0
+  return `'${word}'${hasFinal ? "은" : "는"}`
+}
+
+/**
+ * 잇는 말로 나뉜 두 조각(답 색인과 같은 segmentQuestion, 읽기만)이 서로 다른 정해 둔 답을 고르는데 이 답이 한 조각만 답했으면,
+ * 답하지 못한 조각을 끝에 한 줄로 알리고 그 조각을 첫 추천 질문으로 둔다(2026-11-20 조사 G8: 요금만 답하고 다른 질문은 말없이 버림).
+ * 조각이 답에 들었는지는 그 조각이 혼자 고를 정해 둔 답의 출처 이름이 같거나, 그 답의 첫 문단이 이 답에 있는지로 본다
+ * (두 기본 사실 답을 이어 붙인 답은 둘 다 답한 것이다). 새 사실은 넣지 않는다. 여러 번 불러도 결과가 같다.
+ */
+function appendUnansweredSegmentNotice(core: ChatbotCore) {
+  const answered = answeredOriginalOf(core)
+  if (!answered || isNotFoundResponse(core.response)) return
+  const segments = segmentQuestion((core.utterance ?? core.question).redacted)
+  if (segments.length !== 2) return
+  const candidates = segments.map(segmentAnswerOf)
+  // 두 조각이 저마다 정해 둔 답을 고르고(서로 다른 후보), 이 답은 그 가운데 한 조각 것만 담았을 때만 알린다.
+  // 혼자서 정해 둔 답이 서지 않는 조각("벌써 세 번째예요", 상황 설명)은 묻는 말이 아닐 수 있어 알리지 않는다.
+  if (candidates.some((candidate) => candidate === null)) return
+  if (candidates[0]!.original === candidates[1]!.original) return
+  const covered = candidates.map(
+    (candidate) =>
+      candidate!.original === answered || (candidate!.head.length >= 12 && core.response.answer.includes(candidate!.head))
+  )
+  if (covered[0] === covered[1]) return
+  const missingSegment = segments[covered[0] ? 1 : 0].replace(/^(?:그리고|또|및|근데|그런데)\s+/, "").trim()
+  const missing = missingSegment.replace(/[\s?？!.~]+$/u, "").trim()
+  if (!missing) return
+  const notice = `함께 물어보신 ${withTopicParticle(missing)} 이 답에 담지 못했어요. 따로 한 번 더 물어봐 주시면 이어서 안내해 드릴게요.`
+  if (core.response.answer.includes(notice)) return
+  core.response.answer = `${core.response.answer.trimEnd()}\n\n${notice}`
+  core.response.suggestedQuestions = [
+    missingSegment,
+    ...core.response.suggestedQuestions.filter((item) => item !== missingSegment),
+  ].slice(0, Math.max(3, core.response.suggestedQuestions.length))
+}
+
 async function buildChatbotCore(
   message: unknown,
   options: BuildChatbotCoreOptions = {}
 ): Promise<ChatbotCore> {
   const core = await buildChatbotCoreBase(message, options)
+  // 두 조각 질문에서 한 조각만 답했으면 답하지 못한 조각을 한 줄로 알린다(공개 경로의 정해 둔 답만).
+  if (!options.includeInternalDocs && !isCompiledFinalCore(core)) appendUnansweredSegmentNotice(core)
   // 말투 처리(공감 첫마디·상담 연결 앞세우기)는 공개 챗봇 답에만 붙인다. 내부 CS 코파일럿 근거에는 넣지 않는다.
   if (!options.includeInternalDocs) applyConversationTone(core)
   // shadow 라우터: 손님에게는 legacy 답을 내고, 답 색인 판정은 응답 뒤 로그에만 남긴다(답을 바꾸지 않는다).
@@ -5728,7 +5854,13 @@ async function buildChatbotCoreBase(
   if (prepared.triedAgain) return withTurn(buildTriedAlreadyCore(question, startedAt))
   if (!options.includeInternalDocs && getAnswerRouter() === "compiled") {
     const routed = routeCompiledQuestionSafely(question, startedAt)
-    if (routed.core) return withTurn(routed.core)
+    if (routed.core) {
+      // 대상 불명 질문에 색인이 정하지 못했으면(못 찾음) legacy 와 같은 되묻기를 낸다(두 라우터 같은 처리).
+      if (prepared.turn.reason === "target_unknown" && isNotFoundResponse(routed.core.response)) {
+        return withTurn({ ...routed.core, response: buildTargetClarifyResponse(question) })
+      }
+      return withTurn(routed.core)
+    }
     const legacyCore = await buildLegacyChatbotCoreBase(question, options, startedAt, prepared)
     return withTurn({ ...legacyCore, answerIndex: routed.trace })
   }
@@ -6254,6 +6386,16 @@ async function buildLegacyChatbotCoreBase(
     if (gated.response !== response) {
       ;({ response, category, intent, handoffIntent } = gated)
     }
+  }
+
+  // 직전 턴 없이 지시어만 있는 질문("이거 뭐예요"): 무엇을 묻는지 모르므로 검색 조각을 선별하거나 못 찾음으로 끝내지 않고
+  // 무엇을 말씀하시는지 되묻고 처음 온 사람용 칩을 준다(2026-11-20 조사 G8). 검수한 틀 답(출처가 있는 정해 둔 답)은 그대로 둔다.
+  if (
+    prepared.turn.reason === "target_unknown" &&
+    !gateDocumentResponses.has(response) &&
+    (excerptDraftResponses.has(response) || response.sources.length === 0)
+  ) {
+    response = buildTargetClarifyResponse(question)
   }
 
   let selectionStatus: EvidenceSelectionOutcome["status"] | undefined

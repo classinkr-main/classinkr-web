@@ -8,14 +8,17 @@ export interface PageContext {
   teaserEligible: boolean
 }
 
+// 홈은 처음 온 사람이 가장 많이 본다. 위젯은 앞의 4개만 보여 주므로, 용어(EDB·LMS) 없이 묻는 쉬운 말 칩을 맨 앞에 둔다
+// (2026-11-20 조사 G9). 소개 답은 '무엇인지 → 누가 쓰는지 → 다음 할 일' 순서다(lib/chatbot/service.ts getIdentityAnswer).
 const HOME: PageContext = {
   key: "home",
   teaser: "도입부터 운영까지, 막히는 지점 편하게 물어보세요.",
   starters: [
+    "클래스인이 뭐예요? 쉽게 알려 주세요",
     "Classin이 Zoom이나 일반 전자칠판과 뭐가 다른가요?",
+    "요금/견적은 어떤 항목으로 구성되나요?",
     "우리 학원 90일 도입 순서를 어떻게 잡으면 좋을까요?",
     "전자칠판·녹화·EDB·LMS를 수업 흐름으로 쓰는 방법이 궁금해요",
-    "요금/견적은 어떤 항목으로 구성되나요?",
   ],
   intent: "demo",
   teaserEligible: true,
@@ -47,6 +50,8 @@ const CONTACT: PageContext = {
   teaserEligible: true,
 }
 
+// 문서 페이지의 "방금 본 내용…" 칩은 위젯이 보내는 문서 경로(context.path)로 그 문서 절을 먼저 찾는다
+// (lib/chatbot/conversation-context.ts page_context, 2026-11-20 조사 G10).
 const DOCS: PageContext = {
   key: "docs",
   teaser: "이 문서 관련해서 더 궁금한 점, 바로 물어보세요.",
