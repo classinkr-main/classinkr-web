@@ -368,6 +368,7 @@ export default function AdminShell({
       session
         ? {
             role: session.role,
+            navPreset: session.navPreset,
             navOverrides: session.navOverrides,
             onNavOverridesChange: handleNavOverridesChange,
           }

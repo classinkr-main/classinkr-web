@@ -155,6 +155,22 @@ export const DEFAULT_PRIMARY_HREFS: readonly string[] = [
   "/admin/blog",
 ]
 
+/**
+ * 전체 사이드바를 보는 계정인지 — 2026-11-20 결정(docs/active/sales-workspace-simplification-plan-2026-11-20.md D1).
+ *
+ * 전체: SUPER_ADMIN 역할, 또는 nav_preset 이 "super" 인 지정 계정. 그 밖은 "간소"(매출 장부 + 견적·문서).
+ * 지정 계정은 **역할을 올리지 않는다** — 역할은 API 권한이고, 이것은 메뉴 표시일 뿐이다. 그래서
+ * 레거시였던 nav_preset 컬럼의 "super" 값 하나만 이 용도로 다시 쓴다(다른 프리셋 값은 여전히
+ * 화면을 가르지 않는다).
+ *
+ * 보안 경계가 아니다. 간소 계정도 주소로는 모든 화면에 들어가고, 데이터는 각 API 가 막는다(D2).
+ * 사이드바·⌘K·화면 안 탭(견적·문서, 매출 장부 렌즈)이 같은 기준을 쓰도록 판정을 여기 한 곳에 둔다.
+ */
+export function hasFullAdminNav(ctx: { role: string; preset?: string | null }): boolean {
+  if (normalizeAdminRole(ctx.role) === "SUPER_ADMIN") return true
+  return ctx.preset === "super"
+}
+
 export function isNavPresetKey(value: unknown): value is NavPresetKey {
   return typeof value === "string" && (NAV_PRESET_KEYS as readonly string[]).includes(value)
 }

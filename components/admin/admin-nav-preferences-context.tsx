@@ -14,6 +14,11 @@ import type { NavOverrides } from "./admin-nav-access"
 
 export interface AdminNavPreferencesValue {
   role: string
+  /**
+   * 셸 세션의 nav_preset(없으면 null). 본문 컴포넌트가 hasFullAdminNav({ role, preset: navPreset })로
+   * "전체 / 간소" 계정을 가르는 데만 쓴다 — 화면 안 탭 노출이 사이드바와 같은 기준을 따르게 한다.
+   */
+  navPreset?: string | null
   /** 셸 세션의 원본 값(정규화 전) — 소비자가 normalizeNavOverrides 로 읽는다. */
   navOverrides: Readonly<Record<string, string>>
   /**
