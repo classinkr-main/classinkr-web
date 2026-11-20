@@ -1,4 +1,4 @@
-import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { cpSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join, relative } from "node:path"
 
@@ -34,7 +34,7 @@ import { CARDS, compileFixture, copyFixture, fixtureUnits } from "./index-fixtur
  * - 범위 안 질문은 네트워크·모델 호출 0(모델 키가 있어도) — fetch 를 감시한다.
  * - stream 과 non-stream 의 답·답 모드·상담 버튼·출처가 같다.
  * - 같은 입력이면 같은 답.
- * - 자료가 0장이면(지금 저장소) 색인이 정하는 질문은 언제나 못 찾음 고정 문구다.
+ * - 켜 둔 카드가 0장인 색인이면 색인이 정하지 않고 legacy 흐름으로 보낸다(unavailable=empty_index).
  * - 안전: 금액 숫자·식별 정보 요구·할인/환불 약속이 compiled 답에 없다.
  */
 
@@ -126,34 +126,100 @@ describe("compiled router: switch", () => {
   })
 })
 
-describe("compiled router with an empty index (units only, no cards)", () => {
-  it("answers every index-decided question with a fixed not-found text and no network call, even with a model key", async () => {
+/** 카드를 모두 비운 가짜 자료 색인(자료 반영 전·경로나 컴파일이 잘못된 상태). */
+function compileEmptyFixture() {
+  const { dir, cleanup } = copyFixture()
+  try {
+    for (const file of readdirSync(join(dir, "cards"))) writeFileSync(join(dir, "cards", file), "[]")
+    return compileFixture(dir)
+  } finally {
+    cleanup()
+  }
+}
+
+/** 같은 질문을 legacy 라우터로 물은 답(비교 기준). */
+async function legacyAnswer(question: string) {
+  vi.stubEnv("CHATBOT_ANSWER_ROUTER", "legacy")
+  try {
+    return await evaluateChatbotQuery(question, { generateAnswer: false })
+  } finally {
+    vi.stubEnv("CHATBOT_ANSWER_ROUTER", "compiled")
+  }
+}
+
+describe("compiled router with an index that has no active cards (2026-11-20 조사 G11)", () => {
+  it("sends every in-scope question to the legacy flow with unavailable=empty_index (0 cards)", async () => {
+    stubCompiledEnv("")
+    __setRouterAnswerIndexForTests(compileEmptyFixture())
+    let answered = 0
+    for (const question of INDEX_QUESTIONS) {
+      const result = await evaluateChatbotQuery(question, { generateAnswer: false })
+      // 예전에는 카드 0장 색인이 모든 질문을 못 찾음 고정 문구로 끝냈다.
+      if (!NOT_FOUND_HEADS.some((head) => result.answer.includes(head))) answered += 1
+      expect(result.answerIndex, question).toMatchObject({ router: "compiled", scope: "in", decision: null, unavailable: "empty_index" })
+      const legacy = await legacyAnswer(question)
+      expect(result.answer, question).toBe(legacy.answer)
+      expect(result.answerMode, question).toBe(legacy.answerMode)
+      expect(result.sources.map((source) => source.urlPath), question).toEqual(legacy.sources.map((source) => source.urlPath))
+    }
+    expect(answered).toBeGreaterThan(0)
+    expect(fetchSpy).not.toHaveBeenCalled()
+  })
+
+  it("does the same for the repository units without cards (ANSWER_INDEX_DATA_DIR)", async () => {
     // 저장소 자료에 카드가 생겼으므로, 카드 0장 상태는 단위 파일만 복사한 임시 폴더로 만든다.
     const dir = mkdtempSync(join(tmpdir(), "answer-index-empty-"))
     try {
       for (const name of ["units.json", "site-facts.json", "inventory.json", "manifest.json"]) {
         cpSync(join(answerIndexDataDir(), name), join(dir, name))
       }
+      stubCompiledEnv("test-model-key")
       vi.stubEnv("ANSWER_INDEX_DATA_DIR", dir)
       resetRouterAnswerIndex()
-      await runEmptyIndexCheck()
+      for (const question of INDEX_QUESTIONS) {
+        const result = await evaluateChatbotQuery(question, { generateAnswer: false })
+        expect(result.answerIndex, question).toMatchObject({ router: "compiled", scope: "in", decision: null, unavailable: "empty_index" })
+        expect(result.answerIndex?.card ?? null, question).toBeNull()
+      }
+      expect(fetchSpy).not.toHaveBeenCalled()
     } finally {
       resetRouterAnswerIndex()
       rmSync(dir, { recursive: true, force: true })
     }
   })
 
-  async function runEmptyIndexCheck() {
-    stubCompiledEnv("test-model-key")
-    for (const question of INDEX_QUESTIONS) {
-      const result = await evaluateChatbotQuery(question)
-      expect(result.answerIndex, question).toMatchObject({ router: "compiled", scope: "in", decision: "abstain", card: null })
-      expect(NOT_FOUND_HEADS.some((head) => result.answer.includes(head)), question).toBe(true)
-      expect(result.answerGate.gate).toBe("none")
-      expect(result.secondChance.secondChance).toBe("none")
+  it("does the same when every card is switched off (CHATBOT_COMPILED_DISABLED_CARDS)", async () => {
+    stubCompiledEnv("")
+    const index = compileFixture()
+    __setRouterAnswerIndexForTests(index)
+    vi.stubEnv("CHATBOT_COMPILED_DISABLED_CARDS", index.cards.map((card) => card.id).join(","))
+    const result = await evaluateChatbotQuery("수업 중 학생 채팅 막을 수 있나요?", { generateAnswer: false })
+    expect(result.answerIndex).toMatchObject({ decision: null, unavailable: "empty_index" })
+    expect(result.answer).not.toContain("[채팅 금지]")
+  })
+
+  it("keeps the pre-index steps (greeting, refusal, handoff…) on an empty index", async () => {
+    stubCompiledEnv("")
+    __setRouterAnswerIndexForTests(compileEmptyFixture())
+    const result = await evaluateChatbotQuery("상담원 연결해 주세요", { generateAnswer: false })
+    expect(result.answerIndex?.pre).toBe("handoff")
+  })
+
+  it("streams the same legacy answer as non-stream", async () => {
+    stubCompiledEnv("")
+    __setRouterAnswerIndexForTests(compileEmptyFixture())
+    for (const question of ["녹화 영상 다시보기 어디서 봐요", "요금이 어떻게 돼요?"]) {
+      __clearAnswerCacheForTests()
+      const nonStream = await evaluateChatbotQuery(question)
+      __clearAnswerCacheForTests()
+      const stream = await collectStream(question)
+      expect(stream.answer, question).toBe(nonStream.answer)
+      expect(stream.meta?.needsHandoff, question).toBe(nonStream.needsHandoff)
     }
-    expect(fetchSpy).not.toHaveBeenCalled()
-  }
+  })
+})
+
+describe("compiled router with the repository data", () => {
 
   it("keeps the safety pre-steps and records them in the trace", async () => {
     stubCompiledEnv("test-model-key")
@@ -331,12 +397,11 @@ describe("compiled router: data folder (ANSWER_INDEX_DATA_DIR)", () => {
   })
 })
 
-describe.each([
-  ["repository data", false],
-  ["fixture cards", true],
-])("compiled router path properties (%s)", (_label, useFixture) => {
+// 경로 성질은 내용이 고정된 가짜 자료로 본다(저장소 자료는 판마다 카드가 바뀐다).
+// 안전 성질은 두 경우 모두 본다.
+describe("compiled router path properties (fixture cards)", () => {
   beforeEach(() => {
-    if (useFixture) __setRouterAnswerIndexForTests(compileFixture())
+    __setRouterAnswerIndexForTests(compileFixture())
   })
 
   it("gives the same answer, mode, handoff button and sources on stream and non-stream", async () => {
@@ -371,6 +436,15 @@ describe.each([
       const second = await evaluateChatbotQuery(question)
       expect(second, question).toEqual(first)
     }
+  })
+})
+
+describe.each([
+  ["repository data", false],
+  ["fixture cards", true],
+])("compiled router safety (%s)", (_label, useFixture) => {
+  beforeEach(() => {
+    if (useFixture) __setRouterAnswerIndexForTests(compileFixture())
   })
 
   it("never puts price amounts, identifier requests or discount/refund promises in the answer", async () => {

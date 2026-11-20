@@ -14,6 +14,8 @@ import {
   evidenceSelectionResponse,
   isAnswerGateCall,
   isEvidenceSelectionCall,
+  isOutlinePickCall,
+  outlinePickResponse,
   readEvidenceSelectionRequest,
 } from "./helpers/final-answer-llm"
 
@@ -45,6 +47,8 @@ function stubModel({ verdict = "answers", pick, onGate }: GateMockOptions = {}) 
       gateQuestions.push(body.contents[0].parts[0].text)
       return onGate ? onGate(init) : answerGateResponse(verdict)
     }
+    // 두 번째 검색의 목차 고르기는 '고를 절 없음'으로 답한다(모르는 응답은 실패로 세어 '지금 확인하지 못함'이 된다).
+    if (isOutlinePickCall(init)) return outlinePickResponse([])
     if (isEvidenceSelectionCall(init)) {
       const request = readEvidenceSelectionRequest(init)
       selectionCalls.push(request.sentences.map((sentence) => sentence.text))

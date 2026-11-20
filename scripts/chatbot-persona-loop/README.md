@@ -72,7 +72,7 @@
 
 ## 실제 모델 측정(`scripts/chatbot-live-eval.ts`)
 
-위 루프의 `transcribe.mjs`는 모델 없는 결정 경로다. 관문·근거 선별·두 번째 검색처럼 모델이 정하는 경로는 이 스크립트로 잰다. 질문마다 세션 없이 공개 경로 코어(`evaluateChatbotQuery`, 말투·끝 질문 포함)를 따로 돌리고, 대화 기록을 저장하지 않는다. 데이터베이스 없이 정적 문서 검색으로만 돈다(Supabase 값은 `.env.local`에서도 읽지 않는다). `GEMINI_API_KEY`는 환경 또는 `.env.local`에서 읽는다.
+위 루프의 `transcribe.mjs`는 모델 없는 결정 경로다. 관문·근거 선별·두 번째 검색처럼 모델이 정하는 경로는 이 스크립트로 잰다. 질문마다 세션 없이 공개 경로 코어(`evaluateChatbotQuery`, 말투·끝 질문 포함)를 따로 돌리고, 대화 기록을 저장하지 않는다. 데이터베이스 없이 정적 문서 검색으로만 돈다(Supabase 값은 `.env.local`에서도 읽지 않는다). Gemini 연결(`GEMINI_API_KEY`, `CHATBOT_GEMINI_PROVIDER=vertex`면 `CHATBOT_VERTEX_*`)은 환경 또는 `.env.local`에서 읽고, 서비스와 같은 기준(`hasChatbotGeminiConnection`)으로 연결이 없으면 시작 전에 멈춘다. 호출 추적은 developer(`generativelanguage`)·Vertex(`aiplatform`·`<지역>-aiplatform`) 주소 모두에 걸린다. 1순위 `gemini-4-hydrogen`처럼 실호출로 확인하지 않은 모델 하나의 403은 차단기와 같은 기준으로 `modelError`로 세지 않는다.
 
 ```bash
 npx tsx scripts/chatbot-live-eval.ts --in <questions.json> --out <results.jsonl> [플래그]
@@ -80,14 +80,31 @@ npx tsx scripts/chatbot-live-eval.ts --in <questions.json> --out <results.jsonl>
 
 | 플래그 | 기본값 | 뜻 |
 |---|---|---|
-| `--in` | 필수 | 입력. `[{ id, question, group?, expectTopic? }]` 또는 `{ cases: [...] }`(`data/chatbot-first-contact-set.json` 등). id가 없으면 `q001`처럼 붙이고, 중복 id는 오류다. |
+| `--in` | 필수 | 입력. `[{ id, question, group?, expectTopic?, pagePath? }]` 또는 `{ cases: [...] }`(`data/chatbot-first-contact-set.json` 등). 대화 형식은 아래 "대화 입력". id가 없으면 `q001`처럼 붙이고, 중복 id는 오류다. |
 | `--out` | 필수 | 결과 JSONL. 동시에 돌아도 줄 순서는 입력 순서다. |
 | `--concurrency` | `4` | 동시에 돌릴 질문 수(1~16). |
 | `--mode` | `select` | `CHATBOT_FINAL_ANSWER_LLM` 값. `select`·`generate`·`off`. `off`가 아니면 키가 있어야 한다. |
 | `--gate` | `on` | `CHATBOT_ANSWER_GATE`(정해 둔 답 확인 관문). |
 | `--second-chance` | `on` | `CHATBOT_SECOND_CHANCE`(못 찾았을 때 목차에서 다시 고르는 두 번째 검색). |
 | `--router` | 없음 | `CHATBOT_ANSWER_ROUTER`(답 라우터 `legacy`·`shadow`·`compiled`). 주면 서비스 모듈을 불러오기 전에 환경변수를 그 값으로 둔다. 안 주면 환경변수를 그대로 쓴다. |
+| `--repeat` | `1` | 입력마다 N번(1~50) 되풀이해 돌린다(대화면 대화 전체). 요약에 같은 질문의 답이 갈린 비율(`--repeat N: 답이 갈린 질문 a/b`)이 찍힌다. 결과 줄은 `repeatIndex`로 구별한다. 2 이상이면 답 캐시·관문 판정 캐시를 끈다(`CHATBOT_ANSWER_CACHE=off`). 켜 두면 앞 실행의 답이 캐시에서 나와 갈림이 0으로 찍힌다. |
+| `--simulate-gemini` | 없음 | `402`·`429`·`hang`. Gemini 호출만 가짜 응답으로 바꾼다(실제 호출 0, 비용 0). `402`·`429`는 그 상태 코드, `hang`은 응답 없이 호출 쪽 시간 초과를 기다린다. 키가 없어도 돈다. Vertex 토큰 발급도 내보내지 않도록 연결을 developer(자리표시 키)로 고정하고 Google 인증 주소 요청은 거절한다. 장애 때의 동작을 잴 때 `--allow-model-errors`와 함께 쓴다. |
 | `--allow-model-errors` | 꺼짐 | 무효 측정 종료와 조기 중단을 끈다. 모델이 죽은 상태의 동작을 일부러 잴 때만 쓴다. |
+
+### 대화 입력
+
+한 줄 질문 대신 `{ id, turns, pagePath? }`를 줄 수 있다. `turns`는 질문 문자열(또는 `{ question }`) 배열이다. 한 파일에 두 형식을 섞어도 된다.
+
+```json
+[
+  { "id": "c1", "turns": ["프린터가 안 돼요", "휴대폰이요"] },
+  { "id": "c2", "pagePath": "/docs/guide/example", "turns": ["방금 본 거 다시 알려줘"] }
+]
+```
+
+- 턴을 순서대로 돌리고, 앞 턴의 질문(200자까지)·`askedSlot`(앞 턴 답 끝 질문의 종류, `detectAskedSlot`)·`answerMode`로 `previousTurn`을 만들어 다음 턴의 `evaluateChatbotQuery(message, { previousTurn, pagePath })`에 넘긴다. DB 이력은 쓰지 않는다. 앞 턴이 답을 못 냈으면 다음 턴에 `previousTurn`을 넘기지 않는다.
+- 서비스가 아직 그 옵션을 받지 않는 판이면 옵션은 무시되고 한 줄 질문처럼 돈다.
+- 결과 줄은 턴마다 하나이고 `id`는 `<id>#t<순번>`이다. `conversationId`·`turn`·`previousTurn`·`pagePath`가 함께 실린다. 한 줄 질문의 `id`는 그대로다.
 
 결과 줄 필드:
 
@@ -105,10 +122,16 @@ npx tsx scripts/chatbot-live-eval.ts --in <questions.json> --out <results.jsonl>
 | `geminiCalls`, `geminiStatuses`, `geminiKinds` | 그 질문에서 나간 Gemini 호출 수, HTTP 상태(네트워크 오류는 0), 종류별 수(`generateContent`·`embedContent`) |
 | `geminiBlocked`, `geminiBlockedKinds` | 결제·인증 실패 차단기 때문에 보내지 않은 호출 수(관문이 차단기를 보고 넘긴 것 포함)와 종류별 수(`embedContent`·`generateContent`) |
 | `modelError` | 아래 무효 측정 기준에 걸린 줄 |
-| `attempts`, `error` | 시도 횟수와 오류. 모든 호출이 429·5xx·네트워크 오류로 끝나면 최대 3번 다시 돈다. |
+| `attempts`, `error` | 시도 횟수와 오류. 모든 호출이 429·5xx·네트워크 오류로 끝나면 최대 3번 다시 돈다. 이때 `answer`·`decidedBy`는 마지막 시도다. |
+| `firstAttempt` | 재시도 전 첫 시도의 `{ answer, decidedBy, modelState }`. 운영은 첫 시도가 곧 답이므로 장애 영향은 이 값으로 본다. |
+| `attemptLog` | 시도마다 `{ attempt, answer, decidedBy, modelState, geminiStatuses, error }`. |
+| `modelState` | `ok`·`circuit_open`(차단기가 막음)·`timeout`(상태 0)·`error`(4xx·5xx). 서비스가 `modelState` 흔적을 내면 그 값, 아니면 호출 기록에서 가린다. |
+| `contextExpanded` | 서비스의 대화 맥락 확장 흔적(참·거짓). 서비스가 내지 않으면 `null`. |
 
 **무효 측정 감지.** 그 줄의 답에 쓰이는 Gemini 호출(관문·근거 선별·목차 고르기·답 생성)이 401·402·403(결제 크레딧 소진·키 인증 실패)을 받았거나, 차단기가 그런 호출을 막았거나(`geminiBlockedKinds`의 `generateContent`), `gateSkipReason`·`secondChanceReason`이 `model_unavailable`이면 `modelError`가 true다. 요약에 `모델 호출 실패 줄: N / 전체`와 질문당 Gemini 호출 수 중앙값이 찍힌다.
 
+- 요약에는 `첫 시도 기준`(decidedBy 분포, 첫 시도가 모델 장애였던 비율), `gate skipped` 비율, `modelState` 분포, `contextExpanded` 비율(흔적이 있는 줄 기준), `--repeat` 답 갈림 비율이 찍힌다.
+- 키 없이 장애 동작 보기: `npx tsx scripts/chatbot-live-eval.ts --in <in.json> --out <out.jsonl> --mode off --simulate-gemini 402 --allow-model-errors`
 - `modelError`가 아닌 것: 모델 단계(`--mode`·`--gate`·`--second-chance`)를 모두 끈 측정의 줄(모델을 일부러 끔), 임베딩(`embedContent`)만 실패·차단된 줄(이 스크립트는 벡터 검색이 없어 임베딩 결과를 답에 쓰지 않는다), 답 글에 `MODEL_UNAVAILABLE_ANSWER`가 있어도 위 신호가 없는 줄.
 - `modelError` 줄이 전체의 5%를 넘으면 `측정 무효: 모델 호출 실패(HTTP 4xx) 줄이 N개`를 찍고 종료 코드 2로 끝난다.
 - 끝난 순서로 처음 20줄을 보고, 그중 답에 쓰이는 모델을 부른 줄(임베딩 빼고 나간 호출 + 막힌 호출 > 0, 또는 `modelError`)이 모두 `modelError`면 남은 질문을 돌리지 않고 멈춘 뒤 같은 메시지로 종료 코드 2.

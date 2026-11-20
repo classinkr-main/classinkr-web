@@ -76,13 +76,16 @@ describe("chatbot public answer policy", () => {
         }),
       }
     })
-    vi.stubGlobal("fetch", fetchMock)
+    // 근거 선별·관문·목차 호출은 도우미가 따로 답하고, 답 생성 호출만 fetchMock 이 받는다.
+    // generate 모드는 근거 선별이 문서 문장을 고른 답만 다시 쓰므로(2026-11-20 조사 G13) 문서 문장이 있는 질문으로 본다.
+    stubFetchWithEvidenceSelection(fetchMock)
 
-    const question = "클래스인으로 플립러닝 수업도 잘 되나 궁금해요"
+    const question = "클래스인으로 세미나형 수업 운영 가능해?"
     const first = await evaluateChatbotQuery(question)
     const second = await evaluateChatbotQuery(question)
 
     expect(first.answer).toBe(second.answer)
+    expect(first.answer).toContain("수업 운영 솔루션이에요")
     expect(generationCount).toBe(1) // 두 번째는 답변 캐시 적중 → Gemini 재호출 없음
   })
 

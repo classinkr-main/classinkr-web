@@ -36,6 +36,8 @@ export interface ChannelTalkHandoffCandidate {
   pageUrl?: string | null
   path?: string | null
   question: string
+  /** 대화 맥락(직전 한 턴)으로 넓힌 검색용 질문. 넓혔을 때만 있다("휴대폰이요" → "카메라가 안 켜져요 휴대폰이요"). */
+  routingQuestion?: string | null
   answer: string
   answerMode: AnswerMode
   confidence: number
@@ -241,7 +243,7 @@ function sourceLines(sources: HandoffSource[]) {
   return lines.length > 0 ? lines.join("\n") : "없음"
 }
 
-function formatHandoffMessage(
+export function formatHandoffMessage(
   candidate: ChannelTalkHandoffCandidate,
   reasons: string[],
   feedback?: FeedbackHandoffOptions
@@ -270,6 +272,9 @@ function formatHandoffMessage(
     "",
     "[고객 질문]",
     compactMultiline(candidate.question),
+    ...(candidate.routingQuestion && candidate.routingQuestion !== candidate.question
+      ? [`검색용 질문(직전 대화로 넓힘): ${compactMultiline(candidate.routingQuestion)}`]
+      : []),
     "",
     "[AI 답변]",
     compactMultiline(candidate.answer),

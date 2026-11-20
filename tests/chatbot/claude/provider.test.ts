@@ -38,10 +38,11 @@ function apiError(status: number) {
   return Object.assign(new Error(`status ${status}`), { status })
 }
 
-async function* sseEvents(texts: string[]) {
+async function* sseEvents(texts: string[], stopReason?: string, failAfterText = false) {
   yield { type: "message_start", message: { usage: { input_tokens: 1200, output_tokens: 1, cache_read_input_tokens: 800 } } }
   for (const text of texts) yield { type: "content_block_delta", delta: { type: "text_delta", text } }
-  yield { type: "message_delta", usage: { output_tokens: 42 } }
+  if (failAfterText) throw Object.assign(new Error("socket closed"), { name: "APIConnectionError" })
+  yield { type: "message_delta", usage: { output_tokens: 42 }, ...(stopReason ? { delta: { stop_reason: stopReason } } : {}) }
 }
 
 describe("Claude 제공자", () => {
@@ -153,6 +154,49 @@ describe("Claude 제공자", () => {
     expect(chunks).toEqual(["수업 ", "운영"])
     expect(create.mock.calls[0][0].stream).toBe(true)
     expect(onUsage).toHaveBeenCalledWith(expect.objectContaining({ inputTokens: 1200, outputTokens: 42, cacheReadInputTokens: 800 }))
+  })
+
+  // 2026-11-20 검토: 끊기거나 잘린 스트림을 완성된 답으로 넘기지 않는다(Gemini 스트림과 같은 완료 신호 계약).
+  describe("스트림 완료 신호", () => {
+    async function run(events: AsyncGenerator<unknown>) {
+      const { streamClaudeFinalAnswer } = await import("@/lib/chatbot/claude/provider")
+      const { readChatbotClaudeConfig } = await import("@/lib/chatbot/claude/config")
+      create.mockResolvedValue(events)
+      const config = readChatbotClaudeConfig({ CHATBOT_PROVIDER: "claude", ANTHROPIC_API_KEY: "k" })
+      const completions: unknown[] = []
+      const chunks: string[] = []
+      for await (const c of streamClaudeFinalAnswer({ ...baseArgs, onCompletion: (value) => completions.push(value) }, config)) chunks.push(c)
+      return { chunks, completions, model: config.answerModel }
+    }
+
+    it("end_turn 으로 끝나면 끝까지 받은 것이다", async () => {
+      const { completions, model } = await run(sseEvents(["수업 ", "운영"], "end_turn"))
+      expect(completions).toEqual([{ complete: true, reason: "stop", finishReason: "end_turn", model }])
+    })
+
+    it("max_tokens 로 끝나면 잘린 것이다", async () => {
+      const { completions, model } = await run(sseEvents(["수업 ", "운영"], "max_tokens"))
+      expect(completions).toEqual([{ complete: false, reason: "finish_reason", finishReason: "max_tokens", model }])
+    })
+
+    it("끝 신호 없이 닫히면 끊긴 것이다", async () => {
+      const { completions, model } = await run(sseEvents(["수업 ", "운영"]))
+      expect(completions).toEqual([{ complete: false, reason: "interrupted", finishReason: null, model }])
+    })
+
+    it("글을 낸 뒤 오류로 끊기면 끊긴 것이다(조용히 정상 종료하지 않는다)", async () => {
+      const { chunks, completions, model } = await run(sseEvents(["수업 "], undefined, true))
+      expect(chunks).toEqual(["수업 "])
+      expect(completions).toEqual([{ complete: false, reason: "interrupted", finishReason: null, model }])
+    })
+  })
+
+  it("일반 호출이 max_tokens 로 잘렸으면 답을 내지 않는다(Gemini 로 넘긴다)", async () => {
+    const { generateClaudeFinalAnswer } = await import("@/lib/chatbot/claude/provider")
+    const { readChatbotClaudeConfig } = await import("@/lib/chatbot/claude/config")
+    create.mockResolvedValue({ content: [{ type: "text", text: "Claude 답변이 중간에서" }], stop_reason: "max_tokens", usage: { input_tokens: 10, output_tokens: 5 } })
+    const config = readChatbotClaudeConfig({ CHATBOT_PROVIDER: "claude", ANTHROPIC_API_KEY: "k" })
+    expect(await generateClaudeFinalAnswer(baseArgs, config)).toBeNull()
   })
 
   describe("answer-provider 선택", () => {

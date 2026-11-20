@@ -31,11 +31,14 @@ import {
   asksAboutThirdPartyAdoption,
   clampAnswerToLength,
   embedText,
+  getFinalAnswerAllowList,
+  hasChatbotGeminiConnection,
   isModelCircuitOpen,
   pickOutlineSectionIds,
   sanitizePublicAnswerText,
   selectAnsweringSentenceIds,
   type ChatbotModelTier,
+  type GeminiAnswerCompletion,
 } from "@/lib/chatbot/llm"
 import { DOC_OUTLINE_SUMMARY_HEADING, getPublicDocOutline, isPublicChatbotDoc } from "@/lib/chatbot/doc-outline"
 import {
@@ -60,7 +63,13 @@ import { getCsFigmaEnrichment } from "@/lib/cs-figma-enrichments"
 import { appendFollowUp, buildFollowUp } from "@/lib/chatbot/follow-up"
 import { findBasicQuickAnswers } from "@/lib/chatbot/quick-answers-basics"
 import { SHOWROOM_MIN_LEAD_BUSINESS_DAYS, SHOWROOM_SLOT_DURATION_MINUTES } from "@/lib/showroom/slots"
-import { attachGroundingText, buildEvidenceSentences, type EvidenceSentence } from "@/lib/chatbot/source-grounding"
+import {
+  attachGroundingText,
+  buildEvidenceSentences,
+  getGroundingText,
+  keepAnchoredConnectives,
+  type EvidenceSentence,
+} from "@/lib/chatbot/source-grounding"
 import { findFieldQuickAnswer } from "@/lib/chatbot/quick-answers-field"
 import { checkPreparedAnswer, type AnswerGateTrace } from "@/lib/chatbot/answer-gate"
 import { resolveSymptomTriage, type SymptomTriageResult } from "@/lib/chatbot/symptom-triage"
@@ -83,6 +92,32 @@ import {
   routeAnswerIndex,
 } from "@/lib/chatbot/answer-index"
 import { collectLegacyVotes } from "@/lib/chatbot/answer-index/legacy-votes"
+import { disabledCardIds } from "@/lib/chatbot/answer-index/decide"
+import { detectAskType, segmentQuestion } from "@/lib/chatbot/answer-index/normalize"
+import {
+  isUnverifiedFixedAnswerText,
+  MODEL_UNAVAILABLE_ANSWER,
+  MODEL_UNAVAILABLE_CIRCUIT_OPEN_ANSWER,
+  NO_SOURCE_FACT_ANSWER,
+  POLICY_TOPIC_AFTER_GATE_ANSWER,
+  SYMPTOM_AFTER_GATE_ANSWER,
+  WEAK_SOURCE_DRAFT_ANSWER,
+} from "@/lib/chatbot/fixed-answers"
+import {
+  checkGeneratedAnswer,
+  extractContentSuggest,
+  type ContentSuggestItem,
+} from "@/lib/chatbot/generated-answer"
+
+// 못 찾음·확정 못 함 고정 답은 한 곳(fixed-answers.ts)에서 정하고, 시험·측정 스크립트가 쓰던 이름 그대로 여기서도 내보낸다.
+export {
+  MODEL_UNAVAILABLE_ANSWER,
+  MODEL_UNAVAILABLE_CIRCUIT_OPEN_ANSWER,
+  NO_SOURCE_FACT_ANSWER,
+  POLICY_TOPIC_AFTER_GATE_ANSWER,
+  SYMPTOM_AFTER_GATE_ANSWER,
+  WEAK_SOURCE_DRAFT_ANSWER,
+}
 import { groupSentenceParagraphs } from "@/lib/chatbot/answer-index/paragraphs"
 import {
   buildAnswerIndexCore,
@@ -92,6 +127,16 @@ import {
 import { isCompiledScope } from "@/lib/chatbot/answer-index/scope"
 import type { AnswerIndexDecision, AnswerIndexRouter, AnswerIndexTrace } from "@/lib/chatbot/answer-index/types"
 import type { ChatbotSelfKnowledgeEntry } from "@/lib/chatbot/self-knowledge"
+import {
+  contentWordsOf,
+  parseDocPagePath,
+  parsePreviousTurnInput,
+  resolveConversationTurn,
+  type ConversationTurn,
+  type ConversationTurnReason,
+  type DocPageRef,
+  type PreviousTurn,
+} from "@/lib/chatbot/conversation-context"
 
 // CS 사용 가이드 직답의 출처 식별용 내부 헤딩(피그마/CS 표현 미노출)
 const CS_FIGMA_GUIDE_SOURCE_HEADING = "사용 순서 안내"
@@ -120,6 +165,8 @@ type AnswerMode =
   | "clarifying_question"
   | "handoff"
   | "fallback"
+
+const ANSWER_MODES: readonly AnswerMode[] = ["direct_answer", "doc_suggestion", "clarifying_question", "handoff", "fallback"]
 
 export interface ChatbotQueryRequest {
   message?: unknown
@@ -312,16 +359,38 @@ function retrievalScope(options: RetrievalOptions | undefined) {
   return options?.includeInternalDocs ? "internal" : "public"
 }
 
-function getRetrievalCacheKey(question: NormalizedQuestion, options?: RetrievalOptions) {
-  const backend = hasSupabaseServerEnv() ? "supabase" : "static"
+/**
+ * 질문 임베딩(벡터 검색)을 쓴 결과인지. 정적 문서 검색은 임베딩을 만들지 않아 언제나 off 다.
+ * Supabase 검색에서 임베딩이 막혀(키 없음·차단기·호출 실패) 키워드만으로 만든 결과는 off 로 따로 둔다. 장애가 지난 뒤에도
+ * 벡터 없는 약한 결과를 5분 동안 꺼내지 않게 한다(2026-11-20 조사 G16).
+ */
+type RetrievalVectorState = "on" | "off"
+
+/** 이번 요청에서 질문 임베딩을 만들 수 있을 것으로 보이는지(캐시 조회용). 실제 결과는 검색 뒤 searchSupabaseSources 가 알린다. */
+function expectedRetrievalVectorState(): RetrievalVectorState {
+  return hasSupabaseServerEnv() && hasChatbotGeminiConnection() && !isModelCircuitOpen() ? "on" : "off"
+}
+
+function retrievalCacheKeyOf(question: NormalizedQuestion, options: RetrievalOptions | undefined, supabase: boolean, vector: RetrievalVectorState) {
+  const backend = supabase ? `supabase:vector-${vector}` : "static"
   return `${RETRIEVAL_CACHE_VERSION}:${backend}:${retrievalScope(options)}:${buildRetrievalQueryText(question).toLowerCase()}`
+}
+
+function getRetrievalCacheKey(question: NormalizedQuestion, options?: RetrievalOptions, vector: RetrievalVectorState = "off") {
+  return retrievalCacheKeyOf(question, options, hasSupabaseServerEnv(), vector)
+}
+
+/** 시험 전용: 검색 캐시 열쇠. Supabase 검색이면 질문 임베딩을 썼는지(vector)가 열쇠에 들어간다. */
+export function __retrievalCacheKeyForTests(text: string, backend: { supabase: boolean; vector: RetrievalVectorState }) {
+  return retrievalCacheKeyOf(normalizeQuestion(text), undefined, backend.supabase, backend.vector)
 }
 
 function getCachedRetrieval(
   question: NormalizedQuestion,
-  options?: RetrievalOptions
+  options?: RetrievalOptions,
+  vector: RetrievalVectorState = expectedRetrievalVectorState()
 ): KnowledgeSearchResult | null {
-  const key = getRetrievalCacheKey(question, options)
+  const key = getRetrievalCacheKey(question, options, vector)
   const cached = retrievalCache.get(key)
   if (!cached) return null
   if (cached.expiresAt <= Date.now()) {
@@ -339,9 +408,10 @@ function getCachedRetrieval(
 function setCachedRetrieval(
   question: NormalizedQuestion,
   value: KnowledgeSearchResult,
-  options?: RetrievalOptions
+  options: RetrievalOptions | undefined,
+  vector: RetrievalVectorState
 ) {
-  const key = getRetrievalCacheKey(question, options)
+  const key = getRetrievalCacheKey(question, options, vector)
   if (retrievalCache.size >= RETRIEVAL_CACHE_MAX) {
     const firstKey = retrievalCache.keys().next().value
     if (firstKey) retrievalCache.delete(firstKey)
@@ -365,7 +435,8 @@ interface CachedAnswerEntry {
   warning?: string
 }
 
-const ANSWER_CACHE_VERSION = "answer-20261113-v9"
+// 2026-11-20: 열쇠를 대화 맥락으로 넓힌 검색용 질문으로 바꾸고(페이지 맥락은 경로 포함), 소개 답·되묻기·모델 글 검사가 바뀌어 판을 올렸다.
+const ANSWER_CACHE_VERSION = "answer-20261120-v10"
 const ANSWER_CACHE_TTL_MS = 5 * 60 * 1000
 const ANSWER_CACHE_MAX = 200
 const answerCache = new Map<string, { expiresAt: number; value: CachedAnswerEntry }>()
@@ -378,10 +449,35 @@ export function __clearAnswerCacheForTests() {
 // 답 라우터(CHATBOT_ANSWER_ROUTER), 답 색인 판(answerIndexVersion)과 자료 폴더(ANSWER_INDEX_DATA_DIR)도 키에 넣는다. 라우터·자료 폴더를
 // 바꾸거나 색인 자료·계산 규칙이 바뀌면 다른 라우터·다른 판에서 만든 답을 꺼내지 않는다(답 색인 사양 §3.2·§3.7). 폴더는 manifest 를
 // 다시 쓰지 않은 작업 폴더 사본(같은 판 이름)도 가르려고 넣는다. 내부 CS 경로는 라우터를 쓰지 않아 legacy 로 적는다.
-function getAnswerCacheKey(question: NormalizedQuestion, options?: RetrievalOptions) {
+//
+// 열쇠의 질문은 대화 맥락으로 넓힌 검색용 질문(routingText)이다. 같은 검색용 질문이면 같은 답이 나오고, 말투 층·조각 알림은 캐시 뒤에 입힌다
+// (일반·스트림 경로 모두 말투 층을 입히기 전 사본을 넣는다).
+// 같은 글이라도 대화 맥락 판단이 답을 바꾸는 경우는 열쇠에 그 판단을 넣는다(answerCacheContextKey): 문서 페이지 맥락을 쓴 답(그 문서 절을
+// 후보 맨 앞에 둔 답)은 경로를, 대상 불명 되묻기(target_unknown)는 그 이유를 넣는다.
+function getAnswerCacheKey(question: NormalizedQuestion, options?: RetrievalOptions, contextKey?: string | null) {
   const backend = hasSupabaseServerEnv() ? "supabase" : "static"
   const router = options?.includeInternalDocs ? "legacy" : getAnswerRouter()
-  return `${ANSWER_CACHE_VERSION}:${backend}:${retrievalScope(options)}:${router}@${answerIndexVersion()}@${answerIndexDataDir()}:${buildRetrievalQueryText(question).toLowerCase()}`
+  const context = contextKey ? `:${contextKey}` : ""
+  return `${ANSWER_CACHE_VERSION}:${backend}:${retrievalScope(options)}:${router}@${answerIndexVersion()}@${answerIndexDataDir()}${context}:${buildRetrievalQueryText(question).toLowerCase()}`
+}
+
+/** 답 캐시 열쇠에 넣을 대화 맥락 판단. 지금 말 그대로 검색해도 판단에 따라 답이 다른 경우만 값이 있다. */
+function answerCacheContextKey(trace: ConversationTrace | undefined): string | null {
+  if (!trace) return null
+  if (trace.pagePath) return `page=${trace.pagePath}`
+  if (trace.reason === "target_unknown") return "turn=target_unknown"
+  return null
+}
+
+/**
+ * 답 캐시를 쓸 수 있는지. 세션 이력은 generate 모드의 답 다시 쓰기에만 들어가므로, select·off 모드는 세션이 있어도 캐시를 쓴다
+ * (2026-11-20 조사 G1·novice-11). 모델 없이 초안만 만드는 평가 호출(generateAnswer=false)은 쓰지 않는다.
+ * 측정용 스위치 CHATBOT_ANSWER_CACHE=off 면 쓰지 않는다(관문 판정 캐시도 함께 꺼진다, answer-gate.ts). 같은 질문을 되풀이해
+ * 답이 갈리는지 잴 때(scripts/chatbot-live-eval.ts --repeat) 캐시 적중이 갈림을 가리지 않게 한다.
+ */
+function isAnswerCacheAllowed(options: Pick<BuildChatbotCoreOptions, "generateAnswer" | "sessionId">) {
+  if (process.env.CHATBOT_ANSWER_CACHE?.trim().toLowerCase() === "off") return false
+  return options.generateAnswer !== false && (!options.sessionId || getFinalAnswerLlmMode() !== "generate")
 }
 
 function cloneCachedAnswer(value: CachedAnswerEntry): CachedAnswerEntry {
@@ -397,9 +493,10 @@ function cloneCachedAnswer(value: CachedAnswerEntry): CachedAnswerEntry {
 
 function getCachedAnswer(
   question: NormalizedQuestion,
-  options?: RetrievalOptions
+  options?: RetrievalOptions,
+  contextKey?: string | null
 ): CachedAnswerEntry | null {
-  const key = getAnswerCacheKey(question, options)
+  const key = getAnswerCacheKey(question, options, contextKey)
   const cached = answerCache.get(key)
   if (!cached) return null
   if (cached.expiresAt <= Date.now()) {
@@ -412,13 +509,14 @@ function getCachedAnswer(
 function setCachedAnswer(
   question: NormalizedQuestion,
   value: CachedAnswerEntry,
-  options?: RetrievalOptions
+  options?: RetrievalOptions,
+  contextKey?: string | null
 ) {
   if (answerCache.size >= ANSWER_CACHE_MAX) {
     const firstKey = answerCache.keys().next().value
     if (firstKey) answerCache.delete(firstKey)
   }
-  answerCache.set(getAnswerCacheKey(question, options), {
+  answerCache.set(getAnswerCacheKey(question, options, contextKey), {
     expiresAt: Date.now() + ANSWER_CACHE_TTL_MS,
     value: cloneCachedAnswer(value),
   })
@@ -506,8 +604,45 @@ function normalizeQuestion(raw: unknown): NormalizedQuestion {
   }
 }
 
+/** 대화 맥락으로 넓힌 검색용 질문. 직전 질문은 받을 때 가렸고, 합친 글도 한 번 더 가린다. */
+function buildRoutingQuestion(routingText: string, utterance: NormalizedQuestion): NormalizedQuestion {
+  const normalized = routingText.replace(/\s+/g, " ").trim().slice(0, MAX_MESSAGE_LENGTH)
+  const redacted = redactPii(normalized)
+  return {
+    original: normalized,
+    normalized,
+    redacted,
+    piiRedacted: utterance.piiRedacted || redacted !== normalized,
+    tokens: tokenize(redacted),
+  }
+}
+
+/** 요청이 함께 보낸 대화 맥락(직전 한 턴·문서 페이지). 꼴이 틀린 직전 턴은 400(ChatbotInputError)이다. */
+export interface ChatbotConversationInput {
+  previousTurn: PreviousTurn | null
+  pagePath: DocPageRef | null
+}
+
+/**
+ * 직전 턴(context.previousTurn: question 200자 이하·askedSlot·answerMode)과 문서 페이지 경로(context.pagePath, 없으면 context.path)를
+ * 검사한다. 직전 질문은 이번 질문과 같은 정규화·개인정보 가리기를 한다. 경로는 공개 문서 /docs/<분류>/<slug> 일 때만 쓴다.
+ */
+function parseConversationInput(previousTurnRaw: unknown, pagePathRaw: unknown): ChatbotConversationInput {
+  const parsed = parsePreviousTurnInput(previousTurnRaw, ANSWER_MODES)
+  if (!parsed.ok) throw new ChatbotInputError(parsed.error)
+  const previousTurn = parsed.value ? { ...parsed.value, question: redactPii(parsed.value.question) } : null
+  const doc = parseDocPagePath(pagePathRaw)
+  return { previousTurn, pagePath: doc && findPublicDocForPage(doc) ? doc : null }
+}
+
+function conversationInputFromRequest(input: ChatbotQueryRequest): ChatbotConversationInput {
+  const context = getContextObject(input.context)
+  return parseConversationInput(context.previousTurn, typeof context.pagePath === "string" ? context.pagePath : context.path)
+}
+
 export function validateChatbotQueryInput(input: ChatbotQueryRequest): void {
   normalizeQuestion(input.message)
+  conversationInputFromRequest(input)
 }
 
 function isGreetingOnly(question: NormalizedQuestion) {
@@ -2324,12 +2459,13 @@ async function clientVectorSearchSupabaseSources(embedding: number[]): Promise<C
 async function searchSupabaseSources(
   question: NormalizedQuestion,
   options?: RetrievalOptions
-): Promise<{ sources: ChatbotSource[]; evidencePool: ChatbotSource[] }> {
+): Promise<{ sources: ChatbotSource[]; evidencePool: ChatbotSource[]; vector: RetrievalVectorState }> {
   // 문서 DB 가 설정되지 않았으면 키워드·벡터 검색이 모두 빈 결과라, 질문 임베딩(embedText, 모델 API 호출)을 만들지 않는다.
   // 답은 같다(정적 문서 검색으로 넘어간다). 모델 없는 측정에서 임베딩 호출이 남아 측정이 무효가 되던 것을 없앤다.
-  if (!hasSupabaseServerEnv()) return { sources: [], evidencePool: [] }
+  if (!hasSupabaseServerEnv()) return { sources: [], evidencePool: [], vector: "off" }
   const keywordPromise = keywordSearchSupabaseSources(question, options)
   const embedding = await embedText(buildRetrievalQueryText(question), "RETRIEVAL_QUERY")
+  const vector: RetrievalVectorState = embedding ? "on" : "off"
   const vectorSources = embedding
     ? await vectorSearchSupabaseSources(question, embedding, options)
     : []
@@ -2337,12 +2473,12 @@ async function searchSupabaseSources(
   const ranked = rerankSources(question, mergeScoredSources([...vectorSources, ...keywordSources]))
   const combined = selectDiverseSources(ranked)
 
-  if (combined.length > 0) return { sources: combined, evidencePool: buildEvidencePool(ranked) }
+  if (combined.length > 0) return { sources: combined, evidencePool: buildEvidencePool(ranked), vector }
 
-  if (!embedding) return { sources: [], evidencePool: [] }
+  if (!embedding) return { sources: [], evidencePool: [], vector }
 
   const clientRanked = rerankSources(question, await clientVectorSearchSupabaseSources(embedding))
-  return { sources: selectDiverseSources(clientRanked), evidencePool: buildEvidencePool(clientRanked) }
+  return { sources: selectDiverseSources(clientRanked), evidencePool: buildEvidencePool(clientRanked), vector }
 }
 
 // 공개 위젯 방문자는 이미 클래스인 홈페이지에 있다. 낱말 목록(isDomainRelatedQuestion)에 없는 질문이라도
@@ -2380,7 +2516,8 @@ async function searchKnowledgeSourcesForDomain(
   question: NormalizedQuestion,
   options?: RetrievalOptions
 ): Promise<KnowledgeSearchResult> {
-  const cached = getCachedRetrieval(question, options)
+  const expectedVector = expectedRetrievalVectorState()
+  const cached = getCachedRetrieval(question, options, expectedVector)
   if (cached) return cached
 
   if (
@@ -2411,7 +2548,8 @@ async function searchKnowledgeSourcesForDomain(
         sources: selectDiverseSources(rerankSources(question, curatedSources), 1),
         warning: undefined,
       }
-      setCachedRetrieval(question, result, options)
+      // 큐레이션 출처는 임베딩을 쓰지 않아, 조회한 키 그대로 둔다.
+      setCachedRetrieval(question, result, options, expectedVector)
       return result
     }
   }
@@ -2423,7 +2561,7 @@ async function searchKnowledgeSourcesForDomain(
       evidencePool: supabaseResult.evidencePool,
       warning: undefined,
     }
-    setCachedRetrieval(question, result, options)
+    setCachedRetrieval(question, result, options, supabaseResult.vector)
     return result
   }
 
@@ -2438,23 +2576,20 @@ async function searchKnowledgeSourcesForDomain(
       ? "Supabase 문서 chunk 검색 결과가 없어 문서 원문 fallback을 사용했습니다."
       : "Supabase 환경변수가 없어 정적 문서 fallback을 사용했습니다.",
   }
-  setCachedRetrieval(question, result, options)
+  setCachedRetrieval(question, result, options, supabaseResult.vector)
   return result
 }
 
-function getTimedOutKnowledgeFallback(
-  question: NormalizedQuestion,
-  options?: RetrievalOptions
-): KnowledgeSearchResult {
+// 검색이 시간 안에 끝나지 않았을 때의 정적 문서 대체 결과. 캐시하지 않는다(지연이 지나간 뒤에도 같은 첫 질문에 약한 근거가
+// 5분 동안 나가지 않게, 2026-11-20 조사 G16). 늦게 끝난 본 검색은 자기 결과를 캐시한다.
+function getTimedOutKnowledgeFallback(question: NormalizedQuestion): KnowledgeSearchResult {
   const scoredStaticSources = scoreStaticSources(question, getFallbackDocsFromStatic())
   const staticSources = selectDiverseSources(scoredStaticSources)
-  const result = {
+  return {
     sources: mergeCuratedSources(question, staticSources),
     evidencePool: buildEvidencePool(scoredStaticSources),
     warning: "문서 검색 응답이 지연되어 정적 문서 fallback을 사용했습니다.",
   }
-  setCachedRetrieval(question, result, options)
-  return result
 }
 
 function searchKnowledgeSourcesWithinBudget(
@@ -2465,7 +2600,7 @@ function searchKnowledgeSourcesWithinBudget(
     promise: searchKnowledgeSources(question, options),
     timeoutMs: getKnowledgeSearchTimeoutMs(),
     fallback: () => {
-      const fallback = getTimedOutKnowledgeFallback(question, options)
+      const fallback = getTimedOutKnowledgeFallback(question)
       // 낱말 목록 밖 질문은 검색 본 경로와 같이 강한 근거만 쓴다(잡담·서비스 밖 질문은 출처 없음).
       if (!isOutsideKnownVocabulary(question)) return fallback
       const usable =
@@ -2764,8 +2899,37 @@ function buildGeneralClarify(question: NormalizedQuestion) {
     ? "예를 들면 수업 들어가기, 다시보기, 숙제 내기, 앱 설치·로그인, 선생님이 보낸 파일 열기 가운데 어느 쪽인가요?"
     : /샘들|선생님들|강사|원장|학원|관리자|직원|실장|경리|세무|정산|마감/.test(text)
       ? "예를 들면 강사·학생 등록, 수업·녹화 설정, 저장 공간, 결제·요금, 전자칠판 가운데 어느 쪽인가요?"
-      : "예를 들면 수업 입장·소리·화면 같은 사용 문제, 녹화·숙제 같은 기능, 결제·요금, 도입 상담 가운데 어느 쪽인가요?"
+      : SYMPTOM_REPORT_RE.test(text)
+        ? USAGE_PROBLEM_CLARIFY_EXAMPLE
+        : FIRST_VISIT_CLARIFY_EXAMPLE
   return [lead, example]
+}
+
+// 증상을 말한 질문("판서가 안 보여요")의 되묻기 예시. 사용 문제를 먼저 든다(2026-11-20 조사 이전 문구 그대로).
+const USAGE_PROBLEM_CLARIFY_EXAMPLE =
+  "예를 들면 수업 입장·소리·화면 같은 사용 문제, 녹화·숙제 같은 기능, 결제·요금, 도입 상담 가운데 어느 쪽인가요?"
+// 분류가 안 된 짧은 질문(증상 신고가 아닌 말)의 되묻기 예시. 무엇을 묻는지 모르는 질문은 처음 온 사람의 질문이 많아(2026-11-20 조사 G8),
+// 사용 문제 대신 처음 온 사람이 가장 많이 묻는 것(클래스인이 무엇인지·수업에 들어가는 법·요금)을 든다. 새 사실은 넣지 않는다.
+const FIRST_VISIT_CLARIFY_EXAMPLE = "예를 들면 클래스인이 어떤 서비스인지, 수업에 들어가는 방법, 요금 가운데 어느 쪽이 궁금하신가요?"
+// 처음 온 사람용 보기 칩(대상 불명 되묻기). 누르면 소개·수업 입장·요금 답으로 간다.
+const FIRST_VISIT_SUGGESTIONS = ["클래스인이 뭐예요?", "수업에 들어가는 방법이 궁금해요", "요금은 어떻게 되나요?"]
+
+/**
+ * 직전 턴 없이 지시어만 있는 질문("이거 뭐예요")의 답. 못 찾음(NO_SOURCE) 대신 무엇을 말씀하시는지 되묻고 처음 온 사람용 보기 칩을 준다.
+ * 모델을 부르지 않는 결정형 답이다(근거 선별·답 다시 쓰기를 건너뛴다).
+ */
+function buildTargetClarifyResponse(question: NormalizedQuestion): CoreResponse {
+  const response: CoreResponse = {
+    answer: buildGeneralClarify(question).join("\n\n"),
+    answerMode: "clarifying_question",
+    confidence: 0.25,
+    needsHandoff: false,
+    sources: [],
+    suggestedQuestions: [...FIRST_VISIT_SUGGESTIONS],
+    unresolved: true,
+  }
+  deterministicFinalResponses.add(response)
+  return response
 }
 
 // 학생·학부모 목소리의 질문. 이런 질문에는 영업형 되묻기("설치 장소, 희망 대수", "수업 전·중·후")를 붙이지 않는다.
@@ -2838,16 +3002,24 @@ function getComparisonAnswer(question: NormalizedQuestion, top: ChatbotSource) {
   ].filter(Boolean).join("\n\n")
 }
 
+// 소개 답은 '무엇인지 → 누가 쓰는지 → 다음 할 일' 순서로 놓는다(2026-11-20 조사 G9). '네,'는 예/아니오로 묻는 말에만 붙인다
+// ("클래스인이 뭐예요?"에 "네,"로 답하지 않는다). 사실은 포지셔닝 정본(lib/classin-positioning.ts: 대상·EDB 풀이)과
+// 검수한 기본 사실 답(학생은 앱을 설치해 가입한 뒤 초대받은 코스로 들어간다)에 있는 것만 쓴다. 용어(EDB)는 괄호로 한 번 풀어 쓴다.
+const IDENTITY_WHAT_LINE =
+  "Classin은 학원 수업을 준비·진행·녹화·복습·과제(LMS)·관리자 데이터까지 한 흐름으로 묶는 수업 운영 솔루션이에요."
+const IDENTITY_WHO_LINE =
+  "학원·교육기관에서는 원장님과 관리자가 수업 운영과 데이터를 관리하는 데 쓰고, 학생은 앱을 설치해 가입한 뒤 학원이 초대한 코스에 들어가 수업을 들어요."
+
 function getIdentityAnswer(question: NormalizedQuestion) {
   const askedCompany = isCompanyIdentityQuestion(question)
+  const askedYesNo = detectAskType(question.redacted) === "yesno"
   return [
     askedCompany
       ? "클래스인(ClassIn)은 글로벌 에듀테크 기업 EEO가 만든 교육용 수업 플랫폼이고, 한국에서는 이이오클래스인코리아가 학원·교육기관 도입과 운영을 돕고 있어요."
       : null,
-    askedCompany
-      ? "Classin은 학원 수업을 준비·진행·녹화·복습·과제(LMS)·관리자 데이터까지 한 흐름으로 묶는 수업 운영 솔루션이에요."
-      : "네, Classin은 학원 수업을 준비·진행·녹화·복습·과제(LMS)·관리자 데이터까지 한 흐름으로 묶는 수업 운영 솔루션이에요.",
-    "쉽게 말해 Zoom처럼 수업만 여는 도구가 아니라, 전자칠판·EDB 교안·녹화·관리자 운영까지 연결해 수업 품질을 표준화하는 시스템에 가까워요.",
+    askedYesNo && !askedCompany ? `네, ${IDENTITY_WHAT_LINE}` : IDENTITY_WHAT_LINE,
+    "쉽게 말해 Zoom처럼 수업만 여는 도구가 아니라, 전자칠판·EDB 교안(판서·이미지를 저장해 다시 불러오는 칠판 파일)·녹화·관리자 운영까지 연결해 수업 품질을 표준화하는 시스템에 가까워요.",
+    IDENTITY_WHO_LINE,
     "전자칠판, 온라인 수업, LMS/관리자 중 어떤 쪽이 궁금하신지 알려주시면 그 부분만 콕 짚어 정리해드릴게요.",
   ].filter(Boolean).join("\n\n")
 }
@@ -3262,10 +3434,7 @@ export function buildDocSuggestionSummary(
 // 예전에는 "지금 바로 확정하기 어려워요. 현재 상황을 한 문장만 더 알려주세요"처럼 되물었는데, 상황을 더 알려 줘도
 // 없는 문서가 생기지는 않는다(2026-11 실측 180문항 중 29건). 못 찾았다고 밝히고 사람에게 잇는 길만 알려 준다.
 // unresolved 로 남겨 문서 공백 집계에 잡히게 한다.
-export const NO_SOURCE_FACT_ANSWER = [
-  "이 질문에 대한 내용은 공개 안내에서 찾지 못했어요. 확인되지 않은 내용을 추측해 말씀드리지 않을게요.",
-  "정확한 답이 필요하시면 \"상담원 연결\"이라고 남겨 주세요. 담당자가 확인해 이어서 도와드려요.",
-].join("\n\n")
+// NO_SOURCE_FACT_ANSWER 문구는 lib/chatbot/fixed-answers.ts 에 있다(말투·끝 질문 층과 같은 목록을 본다).
 
 // 증상 신고 신호. "~하면 안 되나요?"는 허락을 묻는 말이라 증상이 아니다.
 const SYMPTOM_REPORT_RE =
@@ -3291,10 +3460,7 @@ function isFactSeekingQuestion(question: NormalizedQuestion) {
 // 예전에는 "관련 안내를 정리해드리면," 뒤에 그 문서 조각을 그대로 붙였는데, 근거가 약하다는 것은 질문과
 // 상관없는 조각일 가능성이 높다는 뜻이다("어느 나라 제품인가요?"에 드라이브 사용법이 나간 원인).
 // 모델이 답을 다시 쓰지 못한 경우에도 엉뚱한 조각이 나가지 않도록, 못 찾았다고 밝히고 다음 행동만 안내한다.
-export const WEAK_SOURCE_DRAFT_ANSWER = [
-  "이 질문에 딱 맞는 안내는 아직 찾지 못했어요. 엉뚱한 내용을 붙여 드리기보다 정확히 확인해 드릴게요.",
-  "궁금한 점을 조금만 더 구체적으로 적어 주시거나, \"상담원 연결\"이라고 남겨 주시면 담당자가 이어서 도와드려요.",
-].join("\n\n")
+// WEAK_SOURCE_DRAFT_ANSWER 문구는 lib/chatbot/fixed-answers.ts 에 있다.
 
 function formatConsumerAnswer({
   answerMode,
@@ -3676,9 +3842,13 @@ async function persistExchange(
   handoffIntent: HandoffIntent,
   latencyMs?: number,
   sessionId?: string,
-  answerEventId?: string
+  answerEventId?: string,
+  // 대화 맥락으로 넓힌 검색용 질문(넓혔을 때만). 질문 묶음·문서 검색 기록은 이 글로 쌓고, 상담 전환 본문에 한 줄로 싣는다
+  // (답은 이 글로 만들었는데 "휴대폰이요"만 남으면 상담원과 문서 공백 집계가 맥락을 볼 수 없다).
+  routingQuestion?: NormalizedQuestion | null
 ) {
   if (!hasSupabaseServerEnv()) return {}
+  const searchedQuestion = routingQuestion ?? question
 
   try {
     const supabase = createSupabaseAdminClient()
@@ -3766,13 +3936,13 @@ async function persistExchange(
       upsertQuestionCluster(
         supabase,
         answerEvent.id as string,
-        question,
+        searchedQuestion,
         response,
         category
       ),
       supabase.from("docs_search_events").insert({
         query: question.redacted,
-        normalized_query: buildRetrievalQueryText(question),
+        normalized_query: buildRetrievalQueryText(searchedQuestion),
         result_count: response.sources.length,
         visitor_id: normalizeString(input.anonymousId) ?? null,
         session_id: resolvedSessionId,
@@ -3788,6 +3958,7 @@ async function persistExchange(
         pageUrl: normalizeString(context.pageUrl) ?? null,
         path: normalizeString(context.path) ?? null,
         question: question.redacted,
+        routingQuestion: routingQuestion ? routingQuestion.redacted : null,
         answer: response.answer,
         answerMode: response.answerMode,
         confidence: response.confidence,
@@ -4027,6 +4198,18 @@ interface ChatbotCore {
   secondChance?: SecondChanceTrace
   /** 답 색인 흔적(compiled 라우터, 측정·로그용, 답 색인 사양 §3.7). 응답에는 싣지 않는다. */
   answerIndex?: AnswerIndexTrace
+  /** 대화 맥락으로 넓히기 전의 이번 말(넓혔을 때만). 말투·대화 저장은 이 말로 한다. question 은 넓힌 검색용 질문이다. */
+  utterance?: NormalizedQuestion
+  /** 대화 맥락 흔적(측정·로그용, 2026-11-20 조사 G1). 응답에는 싣지 않는다. */
+  conversation?: ConversationTrace
+}
+
+interface ConversationTrace {
+  reason: ConversationTurnReason
+  /** 검색용 질문을 직전 질문으로 넓혔는지. */
+  expanded: boolean
+  /** 문서 페이지 맥락을 쓴 답이면 그 경로(답 캐시 열쇠에 넣는다). */
+  pagePath?: string
 }
 
 interface BuildChatbotCoreOptions {
@@ -4041,6 +4224,13 @@ interface BuildChatbotCoreOptions {
   // 정해 둔 답 확인 관문을 돌릴지. 비우면 generateAnswer 를 따른다(모델 없이 초안만 만드는 평가 호출은 돌리지 않는다).
   // 스트리밍 경로는 generateAnswer=false 로 코어를 부르지만 관문은 일반 경로와 같이 돌려야 하므로 true 를 넘긴다.
   answerGate?: boolean
+  // 위젯이 보낸 직전 한 턴(검사·가리기를 마친 값). 짧은 대답·지시어 후속 질문을 직전 질문으로 넓힌다(conversation-context.ts).
+  previousTurn?: PreviousTurn | null
+  // 문서 페이지 경로(공개 문서만). "방금 본 내용" 같은 질문이면 그 문서 절을 검색 후보 맨 앞에 둔다.
+  pagePath?: DocPageRef | null
+  // 스트림 경로: 조각 알림·말투 층을 코어에서 입히지 않는다. 선별·보류·두 번째 검색과 답 캐시 저장을 마친 뒤 한 번 입힌다
+  // (일반 경로와 같은 순서, 캐시에는 말투 층 전 사본이 들어간다).
+  deferAnswerLayers?: boolean
 }
 
 function determineModelTier(): ChatbotModelTier {
@@ -4056,18 +4246,80 @@ function getEnabledModelTiers() {
   return process.env.CHATBOT_ENABLE_DEEP_FALLBACK === "1" ? tiers : tiers.slice(0, 1)
 }
 
-async function generateUsableAnswerWithProgressiveModels(
-  generate: (tier: ChatbotModelTier) => Promise<string | null>
-) {
+async function generateUsableAnswerWithProgressiveModels<T>(
+  generate: (tier: ChatbotModelTier) => Promise<string | null>,
+  accept: (raw: string) => T | null
+): Promise<T | null> {
   const tiers = getEnabledModelTiers()
 
   for (const tier of tiers) {
     const answer = await generate(tier)
-    const sanitized = answer ? sanitizePublicAnswerText(answer) : null
-    if (sanitized && isUsableGeneratedAnswer(sanitized)) return sanitized
+    const accepted = answer ? accept(answer) : null
+    if (accepted) return accepted
   }
 
   return null
+}
+
+/** 모델이 다시 쓴 답을 내보내기 전에 대조할 재료. */
+interface GeneratedAnswerContext {
+  /** 모델에게 준 안전 초안(근거 선별이 고른 문장으로 만든 답). */
+  draft: string
+  /** 모델에게 준 근거 문장(근거 선별이 고른 문장). */
+  groundingSentences: string[]
+  question: NormalizedQuestion
+  category: string
+  intent: string
+}
+
+interface AcceptedGeneratedAnswer {
+  answer: string
+  suggestedContent: ContentSuggestItem[]
+}
+
+/**
+ * 모델 글(generate 모드)을 내보내기 전 검사(2026-11-20 조사 G13·G14). 일반·스트림 경로가 같은 함수를 쓴다.
+ * 1) 추천 자료 토큰을 다른 처리보다 먼저 떼고 허용 목록에 있는 자료만 받는다(토큰으로 끝난 답이 끝 글자 검사에 걸려 버려지던 것).
+ * 2) 정리·길이 자르기·사용성 검사. 3) 문장 단위 근거 대조(근거 밖 숫자·메뉴·영문 이름·연락처·외국어·내부 표현, 초안의 제약 뒤집기).
+ * 못 쓰면 null 이고 호출부는 결정형 답(고른 문장)을 낸다.
+ */
+function acceptGeneratedAnswer(raw: string, context: GeneratedAnswerContext): AcceptedGeneratedAnswer | null {
+  const extracted = extractContentSuggest(raw)
+  const sanitized = clampAnswerToLength(sanitizePublicAnswerText(extracted.text))
+  if (!sanitized || !isUsableGeneratedAnswer(sanitized)) return null
+  const checked = checkGeneratedAnswer(sanitized, {
+    draft: context.draft,
+    groundingSentences: context.groundingSentences,
+    question: context.question.redacted,
+    allowList: getFinalAnswerAllowList(context.category, context.intent),
+  })
+  if (!checked.ok || !isUsableGeneratedAnswer(checked.answer)) return null
+  return { answer: checked.answer, suggestedContent: extracted.items }
+}
+
+/** generate 모드 대조 재료: 고른 문장(근거 출처에 붙은 근거 본문)과 지금 초안. */
+function generatedAnswerContextOf(
+  response: CoreResponse,
+  evidenceSources: ChatbotSource[],
+  question: NormalizedQuestion,
+  category: string,
+  intent: string
+): GeneratedAnswerContext {
+  return {
+    draft: response.answer,
+    groundingSentences: evidenceSources.map((source) => getGroundingText(source) ?? source.excerpt),
+    question,
+    category,
+    intent,
+  }
+}
+
+/** 답 생성 호출이 끝까지 못 간 까닭을 모델 상태로 적는다(측정 흔적). */
+function noteGenerationCompletion(response: object, completion: GeminiAnswerCompletion) {
+  if (completion.complete) return
+  if (completion.reason === "interrupted") noteModelState(response, "timeout")
+  else if (completion.reason === "unavailable") noteModelState(response, isModelCircuitOpen() ? "circuit_open" : "error")
+  else noteModelState(response, "error")
 }
 
 // 이미 손으로 다듬은 큐레이션 템플릿 직답은 Gemini 재작성을 건너뛴다(즉시 응답·드리프트 방지).
@@ -4752,6 +5004,8 @@ type EvidenceSelectionOutcome =
 const MAX_SELECTED_ANSWER_LENGTH = 640
 // generate 모드는 선별 뒤에 답 생성이 이어지므로, 라우트 예산(13초) 안에 들도록 선별 예산을 줄인다.
 const GENERATE_MODE_SELECTION_TIMEOUT_MS = 2_000
+// 근거 선별 호출의 기본 예산(lib/chatbot/llm.ts selectAnsweringSentenceIds 기본값과 같다). 실패를 시간 초과로 셀지 가르는 데만 쓴다.
+const SELECTION_DEFAULT_TIMEOUT_MS = 3_500
 
 function getSourceKey(source: ChatbotSource) {
   return source.chunkId ?? `${source.urlPath}:${source.heading ?? ""}`
@@ -4791,6 +5045,38 @@ function formatSelectedEvidenceAnswer(
 }
 
 /**
+ * 모델이 고른 번호의 문장. 앞 문장에 기대는 문장(connective, source-grounding.ts)은 같은 출처의 바로 앞 문장이 함께 골렸을 때만
+ * 남긴다(2026-11-20 조사 G15: '그래도 안 되면…'·'이때…'가 혼자 답으로 나가던 것). 일반 선별·관문 뒤 문서 경로·두 번째 검색이 같이 쓴다.
+ */
+function pickEvidenceSentences(sentences: EvidenceSentence[], ids: readonly number[]) {
+  return keepAnchoredConnectives(sentences.filter((sentence) => ids.includes(sentence.id)))
+}
+
+/** 근거 선별이 답 문장을 못 찾았을 때의 초안 바꾸기. */
+function markSelectionNotFound(
+  response: Omit<ChatbotQueryResponse, "answerEventId" | "sessionId" | "warning" | "handoffIntent">,
+  question: NormalizedQuestion,
+  category: string,
+  isHandoff: boolean
+): EvidenceSelectionOutcome {
+  if (isHandoff) {
+    // 상담을 청한 질문인데 붙일 문서 문장이 없으면, 엉뚱한 조각 대신 출처 없는 상담 연결 답으로 바꾼다.
+    const withoutSources = composeAnswer(question, [], category)
+    response.answer = withoutSources.answer
+    response.confidence = withoutSources.confidence
+    response.sources = []
+    return { status: "not_found" }
+  }
+  response.answer = WEAK_SOURCE_DRAFT_ANSWER
+  response.answerMode = "doc_suggestion"
+  response.confidence = Math.min(response.confidence, 0.3)
+  response.needsHandoff = false
+  response.unresolved = true
+  response.sources = []
+  return { status: "not_found" }
+}
+
+/**
  * 근거 선별. 검색 조각으로 만든 초안에만 적용한다.
  * - 답이 되는 문장이 있으면 그 문장으로 답을 바꾸고(문서 문장 그대로), 답에 쓴 문서만 출처로 남긴다.
  * - 없으면 엉뚱한 조각을 답으로 내보내지 않고 못 찾았다고 밝힌다(unresolved 로 남아 문서 보강 대상이 된다).
@@ -4813,28 +5099,20 @@ async function applyEvidenceSelection(
   const sentences = buildEvidenceSentences(candidates)
   if (sentences.length === 0) return { status: "skipped" }
 
+  const selectionStartedAt = Date.now()
   const ids = await selectAnsweringSentenceIds({ question: question.redacted, sentences, timeoutMs })
-  if (ids === null) return { status: "failed" }
-
-  if (ids.length === 0) {
-    if (isHandoff) {
-      // 상담을 청한 질문인데 붙일 문서 문장이 없으면, 엉뚱한 조각 대신 출처 없는 상담 연결 답으로 바꾼다.
-      const withoutSources = composeAnswer(question, [], category)
-      response.answer = withoutSources.answer
-      response.confidence = withoutSources.confidence
-      response.sources = []
-      return { status: "not_found" }
-    }
-    response.answer = WEAK_SOURCE_DRAFT_ANSWER
-    response.answerMode = "doc_suggestion"
-    response.confidence = Math.min(response.confidence, 0.3)
-    response.needsHandoff = false
-    response.unresolved = true
-    response.sources = []
-    return { status: "not_found" }
+  if (ids === null) {
+    if (isFinalAnswerModelEnabled()) noteModelState(response, failedCallState(selectionStartedAt, timeoutMs ?? SELECTION_DEFAULT_TIMEOUT_MS))
+    return { status: "failed" }
   }
 
-  const picked = sentences.filter((sentence) => ids.includes(sentence.id))
+  if (ids.length === 0) return markSelectionNotFound(response, question, category, isHandoff)
+
+  const picked = pickEvidenceSentences(sentences, ids)
+  if (picked.length === 0) {
+    // 앞 문장에 기대는 문장("그래도 안 되면…")만 골랐다: 혼자서는 뜻이 통하지 않아 답 문장을 못 찾은 것으로 다룬다.
+    return markSelectionNotFound(response, question, category, isHandoff)
+  }
   const usedIndexes = Array.from(new Set(picked.map((sentence) => sentence.sourceIndex)))
   // generate 모드에서 모델에게 넘길 근거. 고른 문장만 담아, 고르지 않은 문장을 끌어다 쓰지 않게 한다.
   const evidenceSources = usedIndexes.map((index) =>
@@ -4868,26 +5146,71 @@ const CURATED_SOURCE_MIN_SCORE = 240
 // 2026-11-18 Gemini 결제 크레딧이 떨어져 모든 호출이 402 로 실패하자, 처음 보는 질문 90개 중 46건이 확인되지 않은 검색 조각을
 // 그대로 답으로 냈고 그중 38건이 엉뚱한 답이었다(로그인 번호 형식 안내 ← 'IP 대역 지정'). 모델이 죽은 것이지 문서에 없는 것이
 // 아니므로 '못 찾음'(NO_SOURCE_FACT_ANSWER)과 구별하고, 상담 버튼을 띄운다(answerMode=handoff, needsHandoff).
-export const MODEL_UNAVAILABLE_ANSWER = [
-  "지금은 안내 문서에서 답을 확인하지 못했어요. 추측해서 답하지는 않을게요.",
-  "잠시 뒤 다시 물어봐 주시거나, 아래 상담 버튼으로 남겨 주시면 담당자가 확인해 안내해 드려요.",
-].join("\n\n")
+// MODEL_UNAVAILABLE_ANSWER(와 차단기용 변형) 문구는 lib/chatbot/fixed-answers.ts 에 있다.
 
 // MODEL_UNAVAILABLE_ANSWER 로 바꾼 답. 두 번째 검색이 '못 찾음'으로 보고 모델을 또 부르지 않게 한다.
 const modelUnavailableResponses = new WeakSet<object>()
 
+/**
+ * 답에 쓰이는 모델 호출(관문·근거 선별·두 번째 검색·답 다시 쓰기)의 상태. 측정 흔적(evaluateChatbotQuery 의 modelState)으로만 낸다
+ * (2026-11-20 조사 G4: 차단기·시간 초과가 운영에서 보이지 않았다). 임베딩은 답에 쓰이지 않아 세지 않는다.
+ * circuit_open: 결제·인증 실패 차단기 때문에 부르지 못함 / timeout: 시간 초과·끊김 / error: 그 밖의 실패 / ok: 실패 없음(부르지 않았어도 ok).
+ */
+export type ChatbotModelState = "ok" | "circuit_open" | "timeout" | "error"
+const MODEL_STATE_RANK: Record<ChatbotModelState, number> = { ok: 0, error: 1, timeout: 2, circuit_open: 3 }
+const modelStateByResponse = new WeakMap<object, ChatbotModelState>()
+
+function worseModelState(left: ChatbotModelState, right: ChatbotModelState): ChatbotModelState {
+  return MODEL_STATE_RANK[right] > MODEL_STATE_RANK[left] ? right : left
+}
+
+/** 이 답을 만들면서 겪은 모델 실패를 적는다(가장 나쁜 것만 남는다). */
+function noteModelState(response: object, state: ChatbotModelState) {
+  modelStateByResponse.set(response, worseModelState(modelStateByResponse.get(response) ?? "ok", state))
+}
+
+/** 실패한 모델 호출의 상태. 차단기가 열려 있으면 circuit_open, 예산을 거의 다 썼으면 timeout, 아니면 error. */
+function failedCallState(startedAt: number, budgetMs: number): ChatbotModelState {
+  if (isModelCircuitOpen()) return "circuit_open"
+  return Date.now() - startedAt >= budgetMs - 450 ? "timeout" : "error"
+}
+
+/** 관문·두 번째 검색 흔적의 실패 이유를 모델 상태로 옮긴다. */
+function modelStateFromReason(reason: string | undefined): ChatbotModelState {
+  if (reason === "model_unavailable") return "circuit_open"
+  if (reason === "timeout") return "timeout"
+  if (reason === "error") return "error"
+  return "ok"
+}
+
+function modelStateOfCore(core: ChatbotCore): ChatbotModelState {
+  let state = modelStateByResponse.get(core.response) ?? "ok"
+  if (core.answerGate?.gate === "skipped") state = worseModelState(state, modelStateFromReason(core.answerGate.skipReason))
+  if (core.secondChance?.secondChance === "miss") state = worseModelState(state, modelStateFromReason(core.secondChance.reason))
+  return state
+}
+
+/** '지금 확인하지 못함' 답. 차단기가 열려 있으면 곧바로 다시 물어도 같으므로 '잠시 뒤 다시'를 뺀 변형을 쓴다. */
+function modelUnavailableAnswerText(state: ChatbotModelState) {
+  return state === "circuit_open" || isModelCircuitOpen() ? MODEL_UNAVAILABLE_CIRCUIT_OPEN_ANSWER : MODEL_UNAVAILABLE_ANSWER
+}
+
 /** 공개 경로에서 최종 답 모델(근거 선별)이 켜져 있는지. 꺼져 있으면 선별 결과가 'failed'여도 모델이 죽은 것이 아니다. */
 function isFinalAnswerModelEnabled() {
-  return getFinalAnswerLlmMode() !== "off" && Boolean(process.env.GEMINI_API_KEY?.trim())
+  return getFinalAnswerLlmMode() !== "off" && hasChatbotGeminiConnection()
 }
 
-/** 답을 확인하지 못해 추측하지 않겠다고 밝힌 고정 답인지. 말투 층이 앞에 첫마디를 붙여도 알아보게 첫 문단으로 본다. */
+/**
+ * 답을 확인하지 못해 추측하지 않겠다고 밝힌 고정 답(못 찾음·확정 못 함 다섯 개와 차단기용 변형)인지. 말투 층이 앞에 첫마디를 붙여도
+ * 알아보게 첫 문단으로 본다. 말투 층(tone.ts)·끝 질문(follow-up.ts)과 같은 목록(fixed-answers.ts)을 쓴다(2026-11-20 조사 G6).
+ */
 function isUnverifiedFixedAnswer(answer: string) {
-  return [MODEL_UNAVAILABLE_ANSWER, SYMPTOM_AFTER_GATE_ANSWER].some((fixed) => answer.includes(fixed.split("\n\n")[0]))
+  return isUnverifiedFixedAnswerText(answer)
 }
 
-function applyModelUnavailableAnswer(response: CoreResponse) {
-  response.answer = MODEL_UNAVAILABLE_ANSWER
+function applyModelUnavailableAnswer(response: CoreResponse, state: ChatbotModelState = isModelCircuitOpen() ? "circuit_open" : "error") {
+  noteModelState(response, state)
+  response.answer = modelUnavailableAnswerText(state)
   response.answerMode = "handoff"
   response.confidence = Math.min(response.confidence, 0.2)
   response.needsHandoff = true
@@ -4902,7 +5225,8 @@ function withholdUnverifiedDraft(
   response: Omit<ChatbotQueryResponse, "answerEventId" | "sessionId" | "warning" | "handoffIntent">,
   question: NormalizedQuestion,
   selectionStatus: EvidenceSelectionOutcome["status"] | undefined,
-  internal: boolean
+  internal: boolean,
+  conversation?: ConversationTrace
 ): boolean {
   if (internal || selectionStatus === "selected" || selectionStatus === "not_found") return false
   // 관문이 정해 둔 답을 버리고 근거 선별까지 마친 답(문서 문장 또는 못 찾음)은 이미 확인된 최종본이다.
@@ -4918,6 +5242,11 @@ function withholdUnverifiedDraft(
     return true
   }
   if (response.answerMode === "handoff") return false
+  // 문서 페이지에서 그 문서를 가리킨 질문("방금 본 내용 정리해 줘")은 첫 출처가 고객이 가리킨 문서라 질문과 맞는지 알 수 있다.
+  // 단 모델이 꺼져(키 없음·off) 근거 선별을 할 수 없을 때만이다. 모델이 켜져 있는데 선별을 건너뛴 답(정책 주제 등)은 다른 초안과 같이 보류한다.
+  if (conversation?.pagePath && response.sources[0]?.urlPath === conversation.pagePath && !isFinalAnswerModelEnabled()) {
+    return false
+  }
   if (!isOutsideKnownVocabulary(question)) return false
   response.answer = NO_SOURCE_FACT_ANSWER
   response.answerMode = "doc_suggestion"
@@ -4928,9 +5257,11 @@ function withholdUnverifiedDraft(
   return true
 }
 
-// generate 모드에서만 모델이 답을 다시 쓴다. 답 문장을 못 찾았거나 선별 호출이 실패했으면 쓰지 않는다.
+// generate 모드에서만, 근거 선별이 문서 문장을 고른 답(selected)만 모델이 다시 쓴다. 정해 둔 초안·관문을 거친 답·틀 답·
+// fallback 초안(skipped)은 검증된 결정형 답이라 다시 쓰지 않는다(플레이북 §8 '검증된 직답은 재작성하지 않는다', 2026-11-20 조사 G13).
+// 답 문장을 못 찾았거나 선별 호출이 실패했어도 쓰지 않는다.
 function shouldGenerateAfterSelection(mode: FinalAnswerLlmMode, selection: EvidenceSelectionOutcome) {
-  return mode === "generate" && (selection.status === "selected" || selection.status === "skipped")
+  return mode === "generate" && selection.status === "selected"
 }
 
 function shouldUseAiFinalAnswer(
@@ -4955,10 +5286,11 @@ function applyGeneratedFinalAnswer(
   response: Omit<ChatbotQueryResponse, "answerEventId" | "sessionId" | "warning" | "handoffIntent">,
   question: NormalizedQuestion,
   category: string,
-  answer: string
+  accepted: AcceptedGeneratedAnswer
 ) {
   const wasRecoverableFallback = shouldUseInferredAnswerFallback(response, question, category)
-  response.answer = sanitizePublicAnswerText(answer)
+  response.answer = sanitizePublicAnswerText(accepted.answer)
+  if (accepted.suggestedContent.length > 0) response.suggestedContent = accepted.suggestedContent
 
   if (response.answerMode === "handoff") {
     response.unresolved = true
@@ -4989,32 +5321,12 @@ function finalizeAnswer(
     console.warn("[chatbot] LEAD_SUBMIT token stripped from answer; leads go through /contact?source=chatbot only.")
   }
 
-  // 콘텐츠 추천 토큰 처리 ([CONTENT_SUGGEST:type=...,slug=...,title=...])
-  if (response.answer && response.answer.includes("[CONTENT_SUGGEST:")) {
-    const suggestRegex = /\[CONTENT_SUGGEST:type=(blog|resource|case),slug=([^,\n\]]+),title=([^,\n\]]+)\]/gi
-    let match;
-    const suggested: SuggestedContent[] = []
-    
-    while ((match = suggestRegex.exec(response.answer)) !== null) {
-      const [, type, slug, title] = match
-      const cleanType = type.trim() as "blog" | "resource" | "case"
-      const cleanSlug = slug.trim()
-      const cleanTitle = title.trim()
-      const url = cleanType === "blog" ? `/blog/${cleanSlug}` : cleanType === "resource" ? `/resources/${cleanSlug}` : `/events/${cleanSlug}`
-      suggested.push({
-        type: cleanType,
-        slug: cleanSlug,
-        title: cleanTitle,
-        url,
-      })
-    }
-    
-    if (suggested.length > 0) {
-      response.suggestedContent = suggested
-    }
-    
-    // 사용자 답변 텍스트에서 토큰 삭제
-    response.answer = response.answer.replace(suggestRegex, "").trim()
+  // 콘텐츠 추천 토큰([CONTENT_SUGGEST:type=…,slug=…,title=…])이 남아 있으면 떼고, 허용 목록에 있는 자료만 받는다
+  // (모델이 지은 slug·제목은 버린다, generated-answer.ts extractContentSuggest). 모델 답은 내보내기 전 검사에서 이미 뗐다.
+  if (response.answer && /\[\s*CONTENT_SUGGEST/i.test(response.answer)) {
+    const extracted = extractContentSuggest(response.answer)
+    response.answer = extracted.text
+    if (extracted.items.length > 0) response.suggestedContent = extracted.items
   }
 }
 
@@ -5037,14 +5349,21 @@ export function normalizeSessionHistoryForGemini(
     parts: [{ text: msg.content }],
   }))
 
-  // 교차 대화 필터링 (user, model, user, model 순서 유지)
+  // 교차 대화로 맞춘다(user, model, user, model …, model 로 시작하면 버린다). user 가 연이으면(답을 못 받은 질문 뒤에 다시 물음)
+  // 마지막 user 를 남겨, 뒤의 답이 그 답을 받은 질문과 짝이 되게 한다. 예전에는 앞 user 를 남겨 엉뚱한 질문과 답이 짝지어졌다
+  // (2026-11-20 조사 G13). model 이 연이으면 질문 바로 뒤의 첫 답을 남긴다.
   const cleanHistory: { role: "user" | "model"; parts: { text: string }[] }[] = []
-  let expectedRole: "user" | "model" = "user"
   for (const msg of mapped) {
-    if (msg.role === expectedRole) {
-      cleanHistory.push(msg)
-      expectedRole = expectedRole === "user" ? "model" : "user"
+    const last = cleanHistory[cleanHistory.length - 1]
+    if (!last) {
+      if (msg.role === "user") cleanHistory.push(msg)
+      continue
     }
+    if (msg.role === last.role) {
+      if (msg.role === "user") cleanHistory[cleanHistory.length - 1] = msg
+      continue
+    }
+    cleanHistory.push(msg)
   }
   if (cleanHistory.length > 0 && cleanHistory[cleanHistory.length - 1].role === "user") {
     cleanHistory.pop()
@@ -5101,10 +5420,17 @@ async function loadSessionHistory(
 // 질문의 감정·형식 신호에 맞춰 공감 한마디·영어 요약·상담 연결을 붙인다. 여러 번 불러도 결과가 같다.
 // 보안·남용 거절 답변에는 붙이지 않는다.
 function applyConversationTone(core: ChatbotCore) {
-  const text = core.question.redacted.toLowerCase()
+  // 말투(감정·형식 신호)는 이번 말로 본다. 대화 맥락으로 넓힌 검색용 질문(core.question)에는 직전 질문의 신호가 섞여 있다.
+  const said = core.utterance ?? core.question
+  const text = said.redacted.toLowerCase()
   if (isPromptOrSecurityAbuse(text) || CRIMINAL_ABUSE_RE.test(text) || TOKEN_WASTE_RE.test(text)) return
-  if (isGreetingOnly(core.question)) return
-  const tone = detectConversationTone(core.question.redacted)
+  if (isGreetingOnly(said)) return
+  const tone = detectConversationTone(said.redacted)
+  // 같은 대화의 앞 턴을 가리킨 말("아까 그거", "또 안 돼요")이고 직전 턴으로 답했으면 "지난 대화는 볼 수 없어요"를 붙이지 않는다.
+  if (core.conversation?.expanded && tone.priorKind === "same_chat") {
+    tone.priorContext = null
+    tone.priorKind = null
+  }
   // 지난 문의를 전제로 한 질문은 "볼 수 없다"는 줄만 붙이고, 상담 연결은 화난·반복 문의일 때만 앞세운다.
   // 이미 상담원 대기 중이라고 항의하는 사람에게 "지금 바로 연결해 드릴게요"를 또 약속하지 않는다.
   const waitingForAgent = /대기\s*(?:순번|번호|중)|순번|상담원\s*연결을?\s*(?:눌렀|했는데|했더니)/.test(text)
@@ -5208,7 +5534,7 @@ function isWeakHandoffSignal(question: NormalizedQuestion) {
 // 모델은 번호만 고르고 나가는 글은 문서 문장 그대로다. 목차에서 고른 절이 없거나 선별이 못 고르면 못 찾음 답을 그대로 둔다.
 // 고른 문장으로 만든 답은 정해 둔 답 확인 관문(answer-gate.ts)으로 한 번 더 판정해, 질문과 비슷한 주제일 뿐인 문장이면 버린다.
 // 운영(Supabase 검색)에서도 같은 정적 목차·정적 본문을 쓴다. DB 문서와 정적 문서는 다를 수 있다(DB 를 새로 조회하지 않는다).
-// 스위치: CHATBOT_SECOND_CHANCE=off 로 끈다(기본 on). CHATBOT_FINAL_ANSWER_LLM=off 이거나 GEMINI_API_KEY 가 없어도 돌지 않는다.
+// 스위치: CHATBOT_SECOND_CHANCE=off 로 끈다(기본 on). CHATBOT_FINAL_ANSWER_LLM=off 이거나 Gemini 연결(GEMINI_API_KEY 또는 Vertex 설정)이 없어도 돌지 않는다.
 
 export interface SecondChanceTrace {
   /** hit=목차에서 고른 절의 문장으로 답함, miss=돌렸지만 못 찾음 답 유지, none=대상 아님·꺼짐 */
@@ -5234,7 +5560,7 @@ const secondChanceTriedResponses = new WeakSet<object>()
 function getSecondChanceDisabledReason(): string | null {
   if (process.env.CHATBOT_SECOND_CHANCE?.trim().toLowerCase() === "off") return "off"
   if (getFinalAnswerLlmMode() === "off") return "llm_off"
-  if (!process.env.GEMINI_API_KEY?.trim()) return "no_key"
+  if (!hasChatbotGeminiConnection()) return "no_key"
   return null
 }
 
@@ -5320,10 +5646,12 @@ async function applySecondChanceRetrieval(
     if ((reason === "error" || reason === "timeout") && process.env.NODE_ENV !== "test") {
       console.warn("[chatbot] second-chance retrieval failed; keeping not-found answer.", { reason, secondChanceMs })
     }
-    // 차단기 때문에 두 번째 검색을 돌리지 못했으면 '문서에 없음'을 단정하지 않는다. 문서에 있지만 낱말이 안 겹치는 질문을
-    // 살리려고 둔 단계라, 모델이 죽은 동안의 '못 찾음'은 근거 선별 실패와 같이 '지금 확인 못 함'(상담 버튼)으로 낸다.
-    // 차단기가 닫힌 상태의 일시 실패(오류·시간 초과)는 첫 검색이 정상으로 끝난 '못 찾음'이라 그대로 둔다.
-    if (reason === "model_unavailable") applyModelUnavailableAnswer(response)
+    // 두 번째 검색을 끝내지 못했으면(차단기·오류·시간 초과) '문서에 없음'을 단정하지 않는다. 문서에 있지만 낱말이 안 겹치는
+    // 질문을 살리려고 둔 단계라, 확인을 마치지 못한 '못 찾음'은 근거 선별 실패와 같이 '지금 확인하지 못함'(상담 버튼)으로 낸다
+    // (2026-11-20 조사 G4: 시간 초과 뒤의 '찾지 못했어요'가 진짜 못 찾음과 구별되지 않았다). 차단기가 열려 있으면 '잠시 뒤 다시'를 뺀다.
+    if (reason === "model_unavailable" || reason === "error" || reason === "timeout") {
+      applyModelUnavailableAnswer(response, modelStateFromReason(reason))
+    }
     return { secondChance: "miss", secondChanceMs, reason }
   }
 
@@ -5353,7 +5681,7 @@ async function applySecondChanceRetrieval(
     if (selectionBudget < SECOND_CHANCE_MIN_STEP_MS) return miss("timeout")
     const ids = await selectAnsweringSentenceIds({ question: question.redacted, sentences, timeoutMs: selectionBudget })
     if (ids === null) return miss(remaining() <= SECOND_CHANCE_MIN_STEP_MS ? "timeout" : "error")
-    const chosen = sentences.filter((sentence) => ids.includes(sentence.id))
+    const chosen = pickEvidenceSentences(sentences, ids)
     if (chosen.length === 0) return miss("no_sentence")
 
     // 목차가 고른 절은 질문과 낱말이 겹치지 않는 절이라 선별이 비슷한 주제의 문장을 고르기 쉽다. 정해 둔 답과 같은 관문으로
@@ -5419,18 +5747,12 @@ async function findDocumentEvidenceAfterGate(
 }
 
 // 공개 범위를 사람이 정한 주제에서 관문이 정해 둔 답을 버렸을 때의 답. 문서 문장을 붙이지 않고 담당자 확인으로 잇는다.
-export const POLICY_TOPIC_AFTER_GATE_ANSWER = [
-  "이 질문은 채팅에서 확정해 말씀드리기 어려운 내용이라, 추측해 답하지 않을게요.",
-  "아래 상담 버튼으로 남겨 주시면 담당자가 확인해 정확히 안내해 드려요.",
-].join("\n\n")
+// POLICY_TOPIC_AFTER_GATE_ANSWER 문구는 lib/chatbot/fixed-answers.ts 에 있다.
 
 // 증상·고장 신고에서 관문이 정해 둔 안내를 버렸고 문서에서도 해결 문장을 못 고른 경우의 답. 상담 버튼(기술지원)으로 잇는다.
 // 예전에는 composeAnswer 의 분류별 되묻기·틀 문구가 나가, 엑셀 '형식 오류'에 "90일 전환 순서…", 칠판 밝기에
 // "설치 장소, 대수…"를 묻는 식이었다(2026-11-18 기준 묶음에서 관문이 버린 15건 중 '둘 다 나쁨' 5건이 모두 이 틀 문구).
-export const SYMPTOM_AFTER_GATE_ANSWER = [
-  "딱 맞는 해결 안내를 아직 찾지 못했어요. 추측해서 안내하지는 않을게요.",
-  "아래 상담 버튼으로 증상을 남겨 주시면 기술지원 담당자가 확인해 드려요.",
-].join("\n\n")
+// SYMPTOM_AFTER_GATE_ANSWER 문구는 lib/chatbot/fixed-answers.ts 에 있다.
 
 /**
  * 관문이 off_target 으로 판정한 뒤의 문서 경로: 검색 → 근거 선별.
@@ -5471,14 +5793,16 @@ async function answerFromDocumentsAfterGate(
   const { category, intent } = classified
   let { handoffIntent } = classified
   const sentences = buildEvidenceSentences(candidates)
+  const selectionStartedAt = Date.now()
   const ids = sentences.length > 0 ? await selectAnsweringSentenceIds({ question: question.redacted, sentences }) : []
-  const picked = ids && ids.length > 0 ? sentences.filter((sentence) => ids.includes(sentence.id)) : []
+  const picked = ids && ids.length > 0 ? pickEvidenceSentences(sentences, ids) : []
 
   let response: CoreResponse
   if (ids === null && isFinalAnswerModelEnabled()) {
     // 선별 호출이 실패했다(모델이 죽은 것이지 문서에 없는 것이 아니다). 못 찾음을 단정하지 않고 다시 묻거나 상담으로 잇게 한다.
+    const state = failedCallState(selectionStartedAt, SELECTION_DEFAULT_TIMEOUT_MS)
     response = {
-      answer: MODEL_UNAVAILABLE_ANSWER,
+      answer: modelUnavailableAnswerText(state),
       answerMode: "handoff",
       confidence: 0.2,
       needsHandoff: true,
@@ -5486,6 +5810,7 @@ async function answerFromDocumentsAfterGate(
       suggestedQuestions: buildSuggestedQuestions(category),
       unresolved: true,
     }
+    noteModelState(response, state)
     modelUnavailableResponses.add(response)
   } else if (picked.length > 0) {
     const usedIndexes = Array.from(new Set(picked.map((sentence) => sentence.sourceIndex)))
@@ -5549,12 +5874,14 @@ async function gatePreparedCore(
   startedAt: number,
   prior?: KnowledgeSearchResult
 ): Promise<ChatbotCore> {
+  // 정해 둔 답(관문 대상)은 검증된 결정형 답이라 generate 모드에서도 모델이 다시 쓰지 않는다(2026-11-20 조사 G13).
+  if (original) deterministicFinalResponses.add(core.response)
   if (!original || !shouldRunAnswerGate(options)) return core
   const trace = await checkPreparedAnswer({ question: core.question.redacted, answer: core.response.answer, original })
   if (trace.gate !== "rejected") return { ...core, answerGate: trace }
   // 검색 전에 끝나는 경로(정해 둔 답·증상·가이드·상담 연결)는 답 캐시 조회보다 앞이라, 버린 뒤의 문서 경로 답을 여기서 캐시한다.
   // 검색 뒤의 틀 답(prior 있음)은 코어 끝에서 캐시한다. 스트림 경로(generateAnswer=false)는 자기 끝에서 캐시한다.
-  const cacheHere = !prior && options.generateAnswer !== false && !options.sessionId
+  const cacheHere = !prior && isAnswerCacheAllowed(options)
   const cached = cacheHere ? getCachedAnswer(core.question, options) : null
   if (cached) {
     return {
@@ -5584,13 +5911,142 @@ async function gatePreparedCore(
   }
 }
 
+// ── 두 조각 질문에서 답하지 못한 조각 ─────────────────────────────────────────────────────────────
+
+interface SegmentAnswer {
+  /** 정해 둔 답의 출처 이름(관문 대상 이름과 같은 꼴). */
+  original: string
+  /** 그 답의 첫 문단(앞의 '네, '·'아니요, '를 뗀 것). 두 답을 이어 붙인 답에 들었는지 보는 데 쓴다. */
+  head: string
+}
+
+function answerHead(answer: string) {
+  return answer.split("\n\n")[0].replace(/^(?:네|아니요),\s*/, "").trim()
+}
+
+/**
+ * 글 하나가 혼자 물렸을 때 고를 정해 둔 답(출처 이름과 답 글). 정규식 판정만 쓴다(모델·네트워크 없음).
+ * 정해 둔 답·증상 안내·화면 가이드·검수 틀 답이 아니면 null.
+ */
+function deterministicAnswerOf(text: string): { original: string; answer: string } | null {
+  let segment: NormalizedQuestion
+  try {
+    segment = normalizeQuestion(text)
+  } catch {
+    return null
+  }
+  const quick = buildServiceQuickAnswer(segment)
+  if (quick) return { original: quick.gateOriginal ?? "service", answer: quick.response.answer }
+  const routing = glossForRouting(segment.redacted)
+  const guide = findCsFigmaGuideForQuestion(routing)
+  const triage = resolveSymptomTriageForQuestion(routing, guide)
+  if (triage) return { original: `symptom:${triage.topicId ?? "triage"}`, answer: sanitizePublicAnswerText(triage.answer) }
+  if (guide) return { original: `guide:${guide.slug}`, answer: csFigmaGuideCoreParts(guide, segment.redacted).response.answer }
+  if (!isCuratedTemplateQuestion(segment)) return null
+  const curated = buildCuratedSources(segment)
+  if (curated.length === 0) return null
+  const { category } = classifyChatbotQuestion(segment.redacted, curated.map((source) => source.category))
+  const response = composeAnswer(segment, selectDiverseSources(rerankSources(segment, curated), 1), category)
+  const original = getComposedTemplateOriginal(response)
+  return original ? { original, answer: response.answer } : null
+}
+
+/** 조각 하나가 혼자 물렸을 때 고를 정해 둔 답(출처 이름과 첫 문단). */
+function segmentAnswerOf(text: string): SegmentAnswer | null {
+  const found = deterministicAnswerOf(text)
+  return found ? { original: found.original, head: answerHead(found.answer) } : null
+}
+
+// 조각이 무엇을 묻는 꼴인지(물음표·의문사·묻는 어미). "벌써 세 번째예요" 같은 상황 설명은 아니다.
+const ASKING_SEGMENT_RE =
+  /[?？]|(?:^|\s)(?:뭐|무엇|무슨|어디|어디서|언제|얼마|몇|어떻게|어떤|누가|누구|왜)|(?:나요|까요|는지|인지|던가|되나|드나|인가|일까|맞나|궁금|가능한가요)\s*[.!~]*$/
+
+/** 답 글이 조각의 내용 낱말을 하나라도 말하는지(두 글자 낱말은 붙은 조사 한 글자를 떼고도 본다: "앱도" → "앱"). */
+function answerMentionsSegment(answer: string, segment: string) {
+  const text = answer.toLowerCase()
+  return contentWordsOf(segment).some(
+    (word) => text.includes(word) || (word.length === 2 && /[은는이가을를도만에와과랑]$/.test(word) && text.includes(word[0]))
+  )
+}
+
+/** 이 답을 고른 정해 둔 답의 출처 이름. 관문이 버렸거나(문서 경로 답) 정해 둔 답이 아니면 null. */
+function answeredOriginalOf(core: ChatbotCore): string | null {
+  if (core.answerGate?.gate === "rejected" || gateDocumentResponses.has(core.response)) return null
+  return (
+    core.answerGate?.gateOriginal ??
+    core.gateOriginal ??
+    getComposedTemplateOriginal(core.response) ??
+    (core.topicId ? `symptom:${core.topicId}` : null)
+  )
+}
+
+// 받침이 있으면 '은', 없으면 '는'. 따옴표로 묶은 말 뒤에 붙인다.
+function withTopicParticle(word: string) {
+  const last = word.charCodeAt(word.length - 1)
+  const hasFinal = last >= 0xac00 && last <= 0xd7a3 && (last - 0xac00) % 28 !== 0
+  return `'${word}'${hasFinal ? "은" : "는"}`
+}
+
+/**
+ * 잇는 말로 나뉜 두 조각(답 색인과 같은 segmentQuestion, 읽기만)이 서로 다른 정해 둔 답을 고르는데 이 답이 한 조각만 답했으면,
+ * 답하지 못한 조각을 끝에 한 줄로 알리고 그 조각을 첫 추천 질문으로 둔다(2026-11-20 조사 G8: 요금만 답하고 다른 질문은 말없이 버림).
+ * 조각이 답에 들었는지는 그 조각이 혼자 고를 정해 둔 답의 출처 이름이 같거나, 그 답의 첫 문단이 이 답에 있는지로 본다
+ * (두 기본 사실 답을 이어 붙인 답은 둘 다 답한 것이다). 새 사실은 넣지 않는다. 여러 번 불러도 결과가 같다.
+ */
+function appendUnansweredSegmentNotice(core: ChatbotCore) {
+  const answered = answeredOriginalOf(core)
+  if (!answered || isNotFoundResponse(core.response)) return
+  const segments = segmentQuestion((core.utterance ?? core.question).redacted)
+  if (segments.length !== 2) return
+  const candidates = segments.map(segmentAnswerOf)
+  const answers = (candidate: SegmentAnswer) =>
+    candidate.original === answered || (candidate.head.length >= 12 && core.response.answer.includes(candidate.head))
+  let missingIndex: number
+  const knownCount = candidates.filter((candidate) => candidate !== null).length
+  if (knownCount === 2) {
+    // 두 조각이 저마다 정해 둔 답을 고르고(서로 다른 후보), 이 답은 그 가운데 한 조각 것만 담았을 때 알린다.
+    if (candidates[0]!.original === candidates[1]!.original) return
+    const covered = candidates.map((candidate) => answers(candidate!))
+    if (covered[0] === covered[1]) return
+    missingIndex = covered[0] ? 1 : 0
+  } else if (knownCount === 1) {
+    // 한 조각만 정해 둔 답이 서고(이 답은 정해 둔 답이다), 다른 조각이 무엇을 묻는 꼴인데("앱도 있어요?") 답이 그 조각을 말하지 않으면 알린다.
+    // 묻는 꼴이 아닌 조각("벌써 세 번째예요", 상황 설명)은 알리지 않는다.
+    missingIndex = candidates[0] ? 1 : 0
+    const other = segments[missingIndex]
+    if (!ASKING_SEGMENT_RE.test(other.trim()) || answerMentionsSegment(core.response.answer, other)) return
+  } else {
+    return
+  }
+  const missingSegment = segments[missingIndex].replace(/^(?:그리고|또|및|근데|그런데)\s+/, "").trim()
+  const missing = missingSegment.replace(/[\s?？!.~]+$/u, "").trim()
+  if (!missing) return
+  const notice = `함께 물어보신 ${withTopicParticle(missing)} 이 답에 담지 못했어요. 따로 한 번 더 물어봐 주시면 이어서 안내해 드릴게요.`
+  if (core.response.answer.includes(notice)) return
+  core.response.answer = `${core.response.answer.trimEnd()}\n\n${notice}`
+  core.response.suggestedQuestions = [
+    missingSegment,
+    ...core.response.suggestedQuestions.filter((item) => item !== missingSegment),
+  ].slice(0, Math.max(3, core.response.suggestedQuestions.length))
+}
+
+/**
+ * 공개 답의 마지막 층: 두 조각 질문에서 한 조각만 답했으면 답하지 못한 조각을 한 줄로 알리고(공개 경로의 정해 둔 답만),
+ * 말투(공감 첫마디·상담 연결 앞세우기·끝 질문)를 입힌다. 답 캐시에는 이 층을 입히기 전 사본을 넣는다(말투는 이번 말로 판단한다).
+ * 여러 번 입혀도 결과가 같다.
+ */
+function applyPublicAnswerLayers(core: ChatbotCore) {
+  if (!isCompiledFinalCore(core)) appendUnansweredSegmentNotice(core)
+  applyConversationTone(core)
+}
+
 async function buildChatbotCore(
   message: unknown,
   options: BuildChatbotCoreOptions = {}
 ): Promise<ChatbotCore> {
   const core = await buildChatbotCoreBase(message, options)
-  // 말투 처리(공감 첫마디·상담 연결 앞세우기)는 공개 챗봇 답에만 붙인다. 내부 CS 코파일럿 근거에는 넣지 않는다.
-  if (!options.includeInternalDocs) applyConversationTone(core)
+  // 조각 알림·말투 처리는 공개 챗봇 답에만 붙인다. 내부 CS 코파일럿 근거에는 넣지 않는다. 스트림 경로는 끝에서 입힌다.
+  if (!options.includeInternalDocs && !options.deferAnswerLayers) applyPublicAnswerLayers(core)
   // shadow 라우터: 손님에게는 legacy 답을 내고, 답 색인 판정은 응답 뒤 로그에만 남긴다(답을 바꾸지 않는다).
   if (!options.includeInternalDocs && getAnswerRouter() === "shadow") scheduleShadowLog(core)
   return core
@@ -5606,14 +6062,152 @@ async function buildChatbotCoreBase(
   options: BuildChatbotCoreOptions = {}
 ): Promise<ChatbotCore> {
   const startedAt = Date.now()
-  const question = normalizeQuestion(message)
+  const prepared = prepareConversationTurn(message, options)
+  const { question } = prepared
+  const withTurn = (core: ChatbotCore): ChatbotCore => ({
+    ...core,
+    ...(prepared.turn.expanded ? { utterance: prepared.utterance } : {}),
+    conversation: prepared.trace,
+  })
+  // 같은 대화에서 증상 안내를 받은 뒤 "해 봤는데 또 안 돼요": 같은 안내를 또 내지 않고 상담 연결로 잇는다(두 라우터 공통).
+  if (prepared.triedAgain) return withTurn(buildTriedAlreadyCore(question, startedAt))
   if (!options.includeInternalDocs && getAnswerRouter() === "compiled") {
     const routed = routeCompiledQuestionSafely(question, startedAt)
-    if (routed.core) return routed.core
-    const legacyCore = await buildLegacyChatbotCoreBase(question, options, startedAt)
-    return { ...legacyCore, answerIndex: routed.trace }
+    if (routed.core) {
+      // 대상 불명 질문에 색인이 정하지 못했으면(못 찾음) legacy 와 같은 되묻기를 낸다(두 라우터 같은 처리).
+      if (prepared.turn.reason === "target_unknown" && isNotFoundResponse(routed.core.response)) {
+        return withTurn({ ...routed.core, response: buildTargetClarifyResponse(question) })
+      }
+      return withTurn(routed.core)
+    }
+    const legacyCore = await buildLegacyChatbotCoreBase(question, options, startedAt, prepared)
+    return withTurn({ ...legacyCore, answerIndex: routed.trace })
   }
-  return buildLegacyChatbotCoreBase(question, options, startedAt)
+  return withTurn(await buildLegacyChatbotCoreBase(question, options, startedAt, prepared))
+}
+
+// ── 대화 맥락(직전 한 턴·문서 페이지) ──────────────────────────────────────────────────────────────
+
+interface PreparedConversationTurn {
+  /** 이번 말 그대로(정규화·가리기). */
+  utterance: NormalizedQuestion
+  /** 검색·분류·관문·답 색인에 넘기는 질문. 넓히지 않았으면 utterance 와 같은 객체다. */
+  question: NormalizedQuestion
+  turn: ConversationTurn
+  /** 페이지 맥락을 쓰면 그 공개 문서. */
+  pageDoc: DocArticle | null
+  /** 증상 안내 뒤 "해 봤는데 또 안 돼요"(이미 해 본 조치 → 상담 연결). */
+  triedAgain: boolean
+  trace: ConversationTrace
+}
+
+function findPublicDocForPage(ref: Pick<DocPageRef, "category" | "slug">): DocArticle | null {
+  return getFallbackDocsFromStatic().find((doc) => doc.category === ref.category && doc.slug === ref.slug) ?? null
+}
+
+/**
+ * 짧은 말이 혼자서도 답이 서는지(대화 맥락으로 넓히지 않는다). 정해 둔 답·검수 틀 답·증상 안내·화면 가이드·상담 연결·인사·거절 답이
+ * 바로 잡히는 말이다("요금은요?"). 모두 정규식 판정이라 모델·네트워크를 부르지 않는다.
+ */
+function standsAloneForTurn(text: string) {
+  let candidate: NormalizedQuestion
+  try {
+    candidate = normalizeQuestion(text)
+  } catch {
+    return false
+  }
+  if (isGreetingOnly(candidate) || buildPolicyGuardResponse(candidate) || wantsImmediateHumanHandoff(candidate)) return true
+  if (buildServiceQuickAnswer(candidate) || isCuratedTemplateQuestion(candidate)) return true
+  const routing = glossForRouting(candidate.redacted)
+  const guide = findCsFigmaGuideForQuestion(routing)
+  return Boolean(guide || resolveSymptomTriageForQuestion(routing, guide))
+}
+
+/**
+ * 넓힌 글이 지금 말의 새 낱말을 답하는지(대화 맥락 넓히기 판단, 정규식 판정만 쓴다). 넓혀도 직전 질문 혼자와 같은 정해 둔 답(같은 출처)이
+ * 나오고 그 답에 새 낱말이 하나도 없으면 앞 답을 그대로 다시 내게 되므로 false다("카메라가 안 켜져요" 뒤 "그러면 출결은요?").
+ * 정해 둔 답이 서지 않으면(검색 경로) 넓힌 글로 검색하는 편이 낫다고 보고 true.
+ */
+function expansionAnswersNewWords(routingText: string, previousQuestion: string, newWords: string[]) {
+  const expanded = deterministicAnswerOf(routingText)
+  if (!expanded) return true
+  const before = deterministicAnswerOf(previousQuestion)
+  if (!before || before.original !== expanded.original) return true
+  const answer = expanded.answer.toLowerCase()
+  return newWords.some((word) => answer.includes(word.toLowerCase()))
+}
+
+/** 직전 질문이 증상 신고였는지(그 답이 증상 안내였는지). */
+function isSymptomTurn(text: string) {
+  const routing = glossForRouting(text)
+  return SYMPTOM_REPORT_RE.test(text.toLowerCase()) || resolveSymptomTriageForQuestion(routing, findCsFigmaGuideForQuestion(routing)) !== null
+}
+
+/**
+ * 이번 말을 직전 턴·문서 페이지에 비춰 검색용 질문으로 정한다(conversation-context.ts). 직전 턴·페이지가 없으면 질문은 그대로이고
+ * (한 줄 질문의 답은 바뀌지 않는다) '대상 불명'만 표시될 수 있다. 내부 CS 코파일럿 경로는 맥락을 쓰지 않는다.
+ */
+function prepareConversationTurn(message: unknown, options: BuildChatbotCoreOptions): PreparedConversationTurn {
+  const utterance = normalizeQuestion(message)
+  const plain = (turn: ConversationTurn): PreparedConversationTurn => ({
+    utterance,
+    question: utterance,
+    turn,
+    pageDoc: null,
+    triedAgain: false,
+    trace: { reason: turn.reason, expanded: false },
+  })
+  if (options.includeInternalDocs) {
+    return plain({ routingText: utterance.redacted, reason: "none", expanded: false, retryReport: false })
+  }
+  const turn = resolveConversationTurn(utterance.redacted, options.previousTurn ?? null, options.pagePath ?? null, {
+    standsAlone: standsAloneForTurn,
+    answersNewWords: expansionAnswersNewWords,
+  })
+  if (!turn.expanded) {
+    const pageDoc = turn.reason === "page_context" && turn.pageDoc ? findPublicDocForPage(turn.pageDoc) : null
+    const prepared = plain(turn)
+    if (!pageDoc) return prepared
+    return { ...prepared, pageDoc, trace: { ...prepared.trace, pagePath: getDocPath(pageDoc) } }
+  }
+  const triedAgain = turn.retryReport && Boolean(options.previousTurn && isSymptomTurn(options.previousTurn.question))
+  return {
+    utterance,
+    question: buildRoutingQuestion(turn.routingText, utterance),
+    turn,
+    pageDoc: null,
+    triedAgain,
+    trace: { reason: turn.reason, expanded: true },
+  }
+}
+
+/** 페이지 맥락을 쓰지 않는 질문: 사람이 공개 범위를 정한 주제와 근거 선별을 건너뛰는 정책 질문(환불·영수증·체험 한도). */
+function isPageContextExcludedQuestion(question: NormalizedQuestion) {
+  return (
+    isRefundQuestion(question) ||
+    isReceiptQuestion(question) ||
+    isAccountPlanOrTrialLimitQuestion(question) ||
+    isPolicyGovernedTopic(question)
+  )
+}
+
+/**
+ * 페이지 맥락: 그 문서의 정적 절(요약 + 절)을 검색 후보 맨 앞에 둔다. 답·출처 카드의 첫 출처도 그 문서다.
+ * 근거 선별·보류·두 번째 검색은 그대로 거친다(문서 문장을 고른 경우에만 문서 문장이 답이 된다).
+ */
+function withPageDocFirst(searched: KnowledgeSearchResult, doc: DocArticle, question: NormalizedQuestion): KnowledgeSearchResult {
+  const docPath = getDocPath(doc)
+  const extras = [...doc.tags, ...doc.keywords]
+  const docSources: ChatbotSource[] = [null, ...doc.sections.map((_, index) => index)].map((sectionIndex) => {
+    const source = buildDocSectionSource(doc, sectionIndex)
+    return { ...source, score: Math.max(MIN_DIRECT_SOURCE_SCORE, scoreText(question, source, extras)) }
+  })
+  const others = (list: ChatbotSource[] | undefined) => (list ?? []).filter((source) => source.urlPath !== docPath)
+  return {
+    ...searched,
+    sources: [docSources[0], ...others(searched.sources)].slice(0, MAX_SOURCES),
+    evidencePool: [...docSources, ...others(searched.evidencePool)].slice(0, EVIDENCE_POOL_SIZE),
+  }
 }
 
 // ── 답 색인(compiled) 경로 ─────────────────────────────────────────────────────────────────────────
@@ -5629,6 +6223,14 @@ type CompiledRoutePlan =
   | { kind: "pre"; trace: AnswerIndexTrace; build: () => ChatbotCore }
   /** 색인이 정한다. */
   | { kind: "index"; decision: AnswerIndexDecision; votes: string[] }
+
+// compiled 라우터가 색인으로 정하려면 켜 둔 카드(CHATBOT_COMPILED_DISABLED_CARDS 로 끄지 않은 카드)가 이만큼은 있어야 한다.
+const MIN_ACTIVE_ANSWER_INDEX_CARDS = 1
+
+function countActiveAnswerIndexCards(index: ReturnType<typeof getRouterAnswerIndex>) {
+  const disabled = disabledCardIds()
+  return index.cards.filter((card) => !disabled.has(card.id)).length
+}
 
 function planCompiledRoute(question: NormalizedQuestion, router: AnswerIndexRouter, startedAt: number): CompiledRoutePlan {
   const pre = (name: NonNullable<AnswerIndexTrace["pre"]>) => preIndexTrace(router, "in", name)
@@ -5654,6 +6256,11 @@ function planCompiledRoute(question: NormalizedQuestion, router: AnswerIndexRout
   }
   if (!inScope) return { kind: "legacy", trace: preIndexTrace(router, "out") }
   const index = getRouterAnswerIndex()
+  // 켜 둘 카드가 없는 색인(자료 반영 전·경로나 컴파일이 잘못됨)은 무엇을 묻든 못 찾음만 낸다(decide.ts: 카드 0장이면 언제나 abstain).
+  // compiled 라우터는 그런 색인으로 정하지 않고 지금(legacy) 흐름으로 보낸다. 흔적에 unavailable=empty_index 를 남긴다(2026-11-20 조사 G11).
+  if (router === "compiled" && countActiveAnswerIndexCards(index) < MIN_ACTIVE_ANSWER_INDEX_CARDS) {
+    return { kind: "legacy", trace: { ...preIndexTrace(router, "in"), unavailable: "empty_index" } }
+  }
   const legacySignals = [quick, policyGuard].filter((signal) => signal !== null).map((signal) => ({ gateOriginal: signal.gateOriginal }))
   if (wantsImmediateHumanHandoff(question)) legacySignals.push({ gateOriginal: "handoff:weak-signal" })
   const votes = collectLegacyVotes(question.redacted, legacySignals, index.legacyAlias)
@@ -5867,9 +6474,11 @@ function csFigmaGuideCoreParts(csFigmaGuide: CsFigmaGuide, questionText: string)
 async function buildLegacyChatbotCoreBase(
   question: NormalizedQuestion,
   options: BuildChatbotCoreOptions,
-  startedAt: number
+  startedAt: number,
+  prepared: PreparedConversationTurn
 ): Promise<ChatbotCore> {
   const shouldGenerateAnswer = options.generateAnswer !== false
+  const cacheContextKey = answerCacheContextKey(prepared.trace)
   if (isGreetingOnly(question)) {
     return {
       question,
@@ -5947,7 +6556,16 @@ async function buildLegacyChatbotCoreBase(
   }
 
   // "저번에 말한 거 또 그래요"처럼 지난 대화를 전제로 한 짧은 질문: 볼 수 없다고 밝히고 한 줄만 되묻는다.
-  if (publicShortcuts && routingTone.priorContext && question.redacted.replace(/\s+/g, "").length <= 60) {
+  // 같은 대화의 앞 턴을 가리키는 말("아까 그거", "또 안 돼요")이고 직전 턴을 받았으면 볼 수 있으므로 이 지름길을 타지 않는다
+  // (검색용 질문을 직전 질문으로 넓혀 앞 턴 주제로 답한다, 2026-11-20 조사 G2). 다른 창·지난 문의는 지금처럼 답한다.
+  const sameChatWithTurn =
+    prepared.turn.expanded && detectConversationTone(prepared.utterance.redacted).priorKind === "same_chat"
+  if (
+    publicShortcuts &&
+    routingTone.priorContext &&
+    !sameChatWithTurn &&
+    question.redacted.replace(/\s+/g, "").length <= 60
+  ) {
     const response = buildPriorContextClarifyResponse(routingText)
     return {
       question,
@@ -5971,9 +6589,9 @@ async function buildLegacyChatbotCoreBase(
     return gatePreparedCore(guideCore, `guide:${csFigmaGuide.slug}`, options, startedAt)
   }
 
-  // 세션(대화 이력)이 없는 동일 질문은 캐시된 답변으로 즉시 응답 — 검색·Gemini를 통째로 건너뛴다.
-  if (shouldGenerateAnswer && !options.sessionId) {
-    const cached = getCachedAnswer(question, options)
+  // 같은 검색용 질문은 캐시된 답변으로 즉시 응답 — 검색·Gemini를 통째로 건너뛴다. 세션 이력은 generate 모드에서만 답에 들어간다.
+  if (isAnswerCacheAllowed(options)) {
+    const cached = getCachedAnswer(question, options, cacheContextKey)
     if (cached) {
       return {
         question,
@@ -5989,12 +6607,19 @@ async function buildLegacyChatbotCoreBase(
   }
 
   // history는 검색·분류와 무관하므로 검색과 병렬로 시작해 두고 Gemini 직전에만 await한다.
+  // 이력은 generate 모드의 답 다시 쓰기에만 쓴다(select·off 모드는 읽지 않는다).
   const historyPromise: Promise<{ role: "user" | "model"; parts: { text: string }[] }[]> =
-    shouldGenerateAnswer && options.sessionId
+    shouldGenerateAnswer && options.sessionId && getFinalAnswerLlmMode() === "generate"
       ? loadSessionHistory(options.sessionId, options.anonymousId)
       : Promise.resolve([])
 
-  const searched = await searchKnowledgeSourcesWithinBudget(question, options)
+  const searchedRaw = await searchKnowledgeSourcesWithinBudget(question, options)
+  // 문서 페이지에서 그 문서를 가리키는 질문이면 그 문서 절을 후보 맨 앞에 둔다(2026-11-20 조사 G10).
+  // 사람이 공개 범위를 정한 주제(환불·영수증·체험 한도·요금 등)는 근거 선별을 건너뛰는 답이라 페이지 절을 앞세우지 않는다.
+  const searched =
+    prepared.pageDoc && !isPageContextExcludedQuestion(question)
+      ? withPageDocFirst(searchedRaw, prepared.pageDoc, question)
+      : searchedRaw
   const { sources, warning, cacheHit, evidencePool } = searched
   const classificationSources = sources.filter((source) => source.score >= MIN_DIRECT_SOURCE_SCORE)
   const classified = classifyChatbotQuestion(
@@ -6004,6 +6629,8 @@ async function buildLegacyChatbotCoreBase(
   let category: string = classified.category
   let { intent, handoffIntent } = classified
   let response = composeAnswer(question, sources, category, { internal: options.includeInternalDocs === true })
+  // 검색 조각 초안이 아닌 답(분류별·제목 틀 답, 출처 없는 fallback·되묻기)은 결정형 답이다. 모델이 다시 쓰지 않는다.
+  if (!excerptDraftResponses.has(response) && !options.includeInternalDocs) deterministicFinalResponses.add(response)
 
   // 분류별·제목 틀 답도 정해 둔 답이다. 내보내기 전에 관문이 확인하고, 버리면 이미 검색한 결과로 문서 경로를 탄다.
   let answerGate: AnswerGateTrace | undefined
@@ -6024,6 +6651,16 @@ async function buildLegacyChatbotCoreBase(
     }
   }
 
+  // 직전 턴 없이 지시어만 있는 질문("이거 뭐예요"): 무엇을 묻는지 모르므로 검색 조각을 선별하거나 못 찾음으로 끝내지 않고
+  // 무엇을 말씀하시는지 되묻고 처음 온 사람용 칩을 준다(2026-11-20 조사 G8). 검수한 틀 답(출처가 있는 정해 둔 답)은 그대로 둔다.
+  if (
+    prepared.turn.reason === "target_unknown" &&
+    !gateDocumentResponses.has(response) &&
+    (excerptDraftResponses.has(response) || response.sources.length === 0)
+  ) {
+    response = buildTargetClarifyResponse(question)
+  }
+
   let selectionStatus: EvidenceSelectionOutcome["status"] | undefined
   if (shouldGenerateAnswer && shouldUseAiFinalAnswer(response, question, category)) {
     const llmMode = getFinalAnswerLlmMode()
@@ -6036,28 +6673,33 @@ async function buildLegacyChatbotCoreBase(
     )
     selectionStatus = selection.status
 
-    if (shouldGenerateAfterSelection(llmMode, selection)) {
+    if (shouldGenerateAfterSelection(llmMode, selection) && selection.status === "selected") {
       const history = await historyPromise
-      const generationSources = selection.status === "selected" ? selection.evidenceSources : response.sources
+      const generationSources = selection.evidenceSources
+      const generatedContext = generatedAnswerContextOf(response, generationSources, question, category, intent)
       const finalAnswer = await withTimeoutFallback({
-        promise: generateUsableAnswerWithProgressiveModels((tier) =>
-          generateChatbotFinalAnswer({
-            question: question.redacted,
-            category,
-            intent,
-            answerMode: response.answerMode,
-            draftAnswer: response.answer,
-            sources: generationSources,
-            tier,
-            history,
-            handoffIntent,
-            sessionId: options.sessionId ?? null,
-            onUsage: (usage) => rememberAnswerUsage(response, usage),
-          })
+        promise: generateUsableAnswerWithProgressiveModels(
+          (tier) =>
+            generateChatbotFinalAnswer({
+              question: question.redacted,
+              category,
+              intent,
+              answerMode: response.answerMode,
+              draftAnswer: response.answer,
+              sources: generationSources,
+              tier,
+              history,
+              handoffIntent,
+              sessionId: options.sessionId ?? null,
+              onUsage: (usage) => rememberAnswerUsage(response, usage),
+              onCompletion: (completion) => noteGenerationCompletion(response, completion),
+            }),
+          (raw) => acceptGeneratedAnswer(raw, generatedContext)
         ),
         timeoutMs: getFinalAnswerTimeoutMs(),
         fallback: () => null,
         onTimeout: () => {
+          noteModelState(response, "timeout")
           console.warn("[chatbot] final answer generation timed out; using deterministic draft.")
         },
       })
@@ -6070,7 +6712,7 @@ async function buildLegacyChatbotCoreBase(
   // 근거 선별을 이 뒤에서 하는 스트리밍 경로만 초안을 그대로 넘긴다. 모델 없이 초안만 만드는 평가 호출도
   // 낱말 목록 밖 질문에 고르지 않은 검색 조각을 답으로 내지 않는다.
   if (!options.deferEvidenceSelection) {
-    withholdUnverifiedDraft(response, question, selectionStatus, options.includeInternalDocs === true)
+    withholdUnverifiedDraft(response, question, selectionStatus, options.includeInternalDocs === true, prepared.trace)
   }
   if (selectionStatus === "failed") selectionFailedResponses.add(response)
 
@@ -6083,16 +6725,15 @@ async function buildLegacyChatbotCoreBase(
 
   finalizeAnswer(response)
 
-  // 세션(이력)이 없는 질문만 캐시 — 이력에 의존한 답이 캐시에 섞이지 않게.
+  // 이력이 답에 들어가는 generate 모드의 세션 질문은 캐시하지 않는다(isAnswerCacheAllowed).
   // 관문 판정·두 번째 검색이 실패·시간 초과로 빠진 답은 캐시하지 않는다(다음 요청에서 다시 확인한다).
   if (
-    shouldGenerateAnswer &&
-    !options.sessionId &&
+    isAnswerCacheAllowed(options) &&
     !isAnswerGateFailure(answerGate) &&
     !isSecondChanceFailure(secondChance) &&
     !selectionFailedResponses.has(response)
   ) {
-    setCachedAnswer(question, { response, category, intent, handoffIntent, warning }, options)
+    setCachedAnswer(question, { response, category, intent, handoffIntent, warning }, options, cacheContextKey)
   }
 
   return {
@@ -6120,11 +6761,12 @@ export async function handleChatbotQuery(
   const core = await buildChatbotCore(input.message, {
     sessionId: requestedSessionId,
     anonymousId: normalizeString(input.anonymousId) ?? null,
+    ...conversationInputFromRequest(input),
   })
 
   void persistExchange(
     input,
-    core.question,
+    core.utterance ?? core.question,
     core.response,
     meta,
     core.category,
@@ -6132,7 +6774,8 @@ export async function handleChatbotQuery(
     core.handoffIntent,
     core.latencyMs,
     sessionId,
-    answerEventId
+    answerEventId,
+    core.utterance ? core.question : null
   )
 
   return {
@@ -6151,7 +6794,14 @@ export async function handleChatbotQuery(
  */
 export async function evaluateChatbotQuery(
   message: string,
-  options: { generateAnswer?: boolean; includeInternalDocs?: boolean } = {}
+  options: {
+    generateAnswer?: boolean
+    includeInternalDocs?: boolean
+    /** 직전 한 턴(위젯이 보내는 context.previousTurn 과 같은 꼴). 측정 스크립트가 대화 입력을 돌릴 때 넘긴다. */
+    previousTurn?: unknown
+    /** 문서 페이지 경로(위젯의 context.pagePath 와 같다). */
+    pagePath?: string
+  } = {}
 ): Promise<
   ChatbotQueryResponse & {
     detectedCategory: string
@@ -6160,12 +6810,22 @@ export async function evaluateChatbotQuery(
     secondChance: SecondChanceTrace
     /** 답 색인 흔적(compiled 라우터일 때만, 답 색인 사양 §3.7). 측정 스크립트가 결과 줄에 싣는다. */
     answerIndex?: AnswerIndexTrace
+    /** 검색용 질문을 직전 질문으로 넓혔는지(대화 맥락, 측정용). */
+    contextExpanded: boolean
+    /** 대화 맥락 판단(none·short_reply·slot_answer·choice·follow_up·page_context·target_unknown). */
+    conversationReason: ConversationTurnReason
+    /** 답에 쓰인 모델 호출의 상태(측정용, 2026-11-20 조사 G4). 사용자 응답에는 싣지 않는다. */
+    modelState: ChatbotModelState
   }
 > {
+  const conversation = options.includeInternalDocs
+    ? { previousTurn: null, pagePath: null }
+    : parseConversationInput(options.previousTurn, options.pagePath)
   const core = await buildChatbotCore(message, {
     generateAnswer: options.generateAnswer,
     // 내부 CS 코파일럿(context.ts, T2)만 true 를 넘긴다 — 공개 챗봇 경로는 이 옵션을 쓰지 않는다(계약 6).
     includeInternalDocs: options.includeInternalDocs,
+    ...conversation,
   })
   return {
     ...core.response,
@@ -6176,6 +6836,9 @@ export async function evaluateChatbotQuery(
     answerGate: core.answerGate ?? { gate: "none" },
     secondChance: core.secondChance ?? { secondChance: "none" },
     ...(core.answerIndex ? { answerIndex: core.answerIndex } : {}),
+    contextExpanded: core.conversation?.expanded ?? false,
+    conversationReason: core.conversation?.reason ?? "none",
+    modelState: modelStateOfCore(core),
   }
 }
 
@@ -6207,16 +6870,16 @@ export function lastSafeBoundary(text: string): number {
   return match ? match[0].length : 0
 }
 
-// Gemini 답변을 토큰 단위로 스트리밍하면서 정제된 델타를 emit 하고, 완성된 답변에 길이클램프+사용성
-// 게이트를 적용해 response 에 반영한다. 사용 가능한 AI 답변을 만들었으면 true, 아니면 false(=결정형 초안 유지).
-// tier 는 basic 고정(딥 폴백은 비스트리밍 기본과 동일하게 opt-in 유지).
+// generate 모드의 스트림 답: 모델 글을 끝까지 모은 뒤, 끝까지 받았고(완료 신호) 일반 경로와 같은 검사(acceptGeneratedAnswer)를
+// 통과하면 response 에 반영한다. 검사 전에는 글자를 하나도 내보내지 않는다(delta 없음). 바깥이 replace 를 한 번 보낸다.
+// 사용 가능한 AI 답변을 만들었으면 true, 아니면 false(=결정형 답 유지). tier 는 basic 고정.
+// 예전에는 사용성 검사 전에 delta 를 흘리고 시간 초과·끊긴 스트림도 모은 글을 그대로 썼다(2026-11-20 조사 G13).
 async function streamAndApplyFinalAnswer({
   question,
   category,
   intent,
   response,
   historyPromise,
-  emit,
   handoffIntent,
   sessionId,
   sources,
@@ -6226,27 +6889,18 @@ async function streamAndApplyFinalAnswer({
   intent: string
   response: Omit<ChatbotQueryResponse, "answerEventId" | "sessionId" | "warning" | "handoffIntent">
   historyPromise: Promise<{ role: "user" | "model"; parts: { text: string }[] }[]>
-  emit: (event: ChatbotStreamEvent) => void
   handoffIntent?: HandoffIntent
   sessionId?: string
-  /** 근거 선별이 고른 문장만 담은 출처. 없으면 응답의 출처를 그대로 쓴다. */
-  sources?: ChatbotSource[]
+  /** 근거 선별이 고른 문장만 담은 출처. */
+  sources: ChatbotSource[]
 }): Promise<boolean> {
   const history = await historyPromise
+  const generatedContext = generatedAnswerContextOf(response, sources, question, category, intent)
   let raw = ""
-  let emittedLen = 0
+  // 스트림이 끝난 모양을 알린다(Gemini·Claude 같은 계약). 끝 신호 없이 닫혔거나 잘렸으면 complete=false 라 초안을 쓴다.
+  let completion: GeminiAnswerCompletion | null = null
 
-  const onChunk = (chunk: string) => {
-    raw += chunk
-    const sanitized = sanitizePublicAnswerText(raw)
-    const safeEnd = lastSafeBoundary(sanitized)
-    if (safeEnd > emittedLen) {
-      emit({ type: "delta", text: sanitized.slice(emittedLen, safeEnd) })
-      emittedLen = safeEnd
-    }
-  }
-
-  await withTimeoutFallback({
+  const finished = await withTimeoutFallback({
     promise: (async () => {
       for await (const chunk of streamChatbotFinalAnswer({
         question: question.redacted,
@@ -6254,14 +6908,17 @@ async function streamAndApplyFinalAnswer({
         intent,
         answerMode: response.answerMode,
         draftAnswer: response.answer,
-        sources: sources ?? response.sources,
+        sources,
         tier: "basic",
         history,
         handoffIntent,
         sessionId: sessionId ?? null,
         onUsage: (usage) => rememberAnswerUsage(response, usage),
+        onCompletion: (value) => {
+          completion = value
+        },
       })) {
-        onChunk(chunk)
+        raw += chunk
       }
       return true
     })(),
@@ -6270,11 +6927,16 @@ async function streamAndApplyFinalAnswer({
     onTimeout: () => console.warn("[chatbot] streaming final answer timed out; using deterministic draft."),
   })
 
-  const finalAnswer = clampAnswerToLength(sanitizePublicAnswerText(raw))
-  if (!finalAnswer || !isUsableGeneratedAnswer(finalAnswer)) {
+  if (!finished) {
+    noteModelState(response, "timeout")
     return false
   }
-  applyGeneratedFinalAnswer(response, question, category, finalAnswer)
+  const reported = completion as GeminiAnswerCompletion | null
+  if (reported) noteGenerationCompletion(response, reported)
+  if (reported && !reported.complete) return false
+  const accepted = raw ? acceptGeneratedAnswer(raw, generatedContext) : null
+  if (!accepted) return false
+  applyGeneratedFinalAnswer(response, question, category, accepted)
   return true
 }
 
@@ -6327,14 +6989,26 @@ export async function streamChatbotQuery(
     })
   }
 
-  // 세션이 없는(보통 첫 턴) 동일 질문은 캐시된 답변을 즉시 확정해 검색·생성을 통째로 건너뛴다.
-  if (!requestedSessionId) {
-    const cachedQuestion = normalizeQuestion(input.message)
-    const cached = getCachedAnswer(cachedQuestion)
+  // 대화 맥락(직전 한 턴·문서 페이지). 일반 경로와 같은 검사·같은 넓히기를 한다.
+  const coreOptions: BuildChatbotCoreOptions = {
+    generateAnswer: false,
+    deferEvidenceSelection: true,
+    answerGate: true,
+    ...conversationInputFromRequest(input),
+  }
+
+  // 같은 검색용 질문은 캐시된 답변을 즉시 확정해 검색·생성을 통째로 건너뛴다(generate 모드의 세션 질문만 빼고, 일반 경로와 같은 규칙).
+  // 증상 안내 뒤 "또 안 돼요"(상담 연결로 잇는 답)는 캐시를 보지 않는다.
+  const prepared = prepareConversationTurn(input.message, coreOptions)
+  if (isAnswerCacheAllowed({ sessionId: requestedSessionId }) && !prepared.triedAgain) {
+    const cachedQuestion = prepared.question
+    const cached = getCachedAnswer(cachedQuestion, undefined, answerCacheContextKey(prepared.trace))
     if (cached) {
-      // 캐시는 말투 계층 적용 전 사본일 수 있다 — 비스트림과 같은 최종본이 되게 여기서도 적용한다.
+      // 캐시는 말투 층을 입히기 전 사본이다(두 경로 모두) — 비스트림과 같은 최종본이 되게 이번 말로 입힌다.
       const cachedCore: ChatbotCore = {
         question: cachedQuestion,
+        ...(prepared.turn.expanded ? { utterance: prepared.utterance } : {}),
+        conversation: prepared.trace,
         response: cached.response,
         category: cached.category,
         intent: cached.intent,
@@ -6342,13 +7016,13 @@ export async function streamChatbotQuery(
         warning: cached.warning,
         latencyMs: 0,
       }
-      applyConversationTone(cachedCore)
+      applyPublicAnswerLayers(cachedCore)
       cached.handoffIntent = cachedCore.handoffIntent
       emit({ type: "replace", answer: cached.response.answer })
       emitMeta(cached.response, cached.category, cached.intent, cached.handoffIntent, cached.warning)
       void persistExchange(
         input,
-        cachedQuestion,
+        prepared.utterance,
         cached.response,
         meta,
         cached.category,
@@ -6356,7 +7030,8 @@ export async function streamChatbotQuery(
         cached.handoffIntent,
         elapsedSince(startedAt),
         sessionId,
-        answerEventId
+        answerEventId,
+        prepared.turn.expanded ? prepared.question : null
       )
       return
     }
@@ -6368,11 +7043,12 @@ export async function streamChatbotQuery(
     requestedSessionId
       ? loadSessionHistory(requestedSessionId, normalizeString(input.anonymousId) ?? null)
       : Promise.resolve([])
-  const eagerHistoryPromise = getAnswerRouter() === "compiled" ? null : loadHistory()
+  // 이력은 generate 모드의 답 다시 쓰기에만 쓴다.
+  const eagerHistoryPromise = getAnswerRouter() === "compiled" || getFinalAnswerLlmMode() !== "generate" ? null : loadHistory()
 
   // 검색·분류·결정형 초안까지는 기존 코어를 그대로 재사용(중복 방지). Gemini 호출만 스트리밍으로 대체.
   // 정해 둔 답 확인 관문은 코어 안에서 일반 경로와 같이 돈다. 판정이 날 때까지 아무것도 내보내지 않으므로 틀린 답이 잠깐 보였다 바뀌지 않는다.
-  const core = await buildChatbotCore(input.message, { generateAnswer: false, deferEvidenceSelection: true, answerGate: true })
+  const core = await buildChatbotCore(input.message, { ...coreOptions, deferAnswerLayers: true })
   const { question, response, category, intent, warning } = core
 
   // 인사·정책 가드 응답은 buildChatbotCore 가 조기 반환한 '최종 답변'이다(정책 가드는 보안 거절 등).
@@ -6393,64 +7069,61 @@ export async function streamChatbotQuery(
     )
     selectionStatus = selection.status
 
-    if (shouldGenerateAfterSelection(llmMode, selection)) {
+    if (shouldGenerateAfterSelection(llmMode, selection) && selection.status === "selected") {
       await streamAndApplyFinalAnswer({
         question,
         category,
         intent,
         response,
         historyPromise: eagerHistoryPromise ?? loadHistory(),
-        emit,
         handoffIntent: core.handoffIntent,
         sessionId,
-        sources: selection.status === "selected" ? selection.evidenceSources : undefined,
+        sources: selection.evidenceSources,
       })
-      applyConversationTone(core)
-    } else if (selection.status === "selected" || selection.status === "not_found") {
-      // 선별이 답을 바꿨으면 말투·끝 질문 층을 새 답에 다시 입힌다.
-      applyConversationTone(core)
     }
   }
 
-  // 스트림 경로는 말투 층을 코어에서 이미 입혔다. 보류가 답을 못 찾음으로 갈아 끼웠으면 공감 첫마디·상담 연결을 다시 입혀
-  // 일반 경로(보류 → 말투 순서)와 같은 답·같은 연결 표시를 낸다.
-  const withheld = !isShortCircuited && withholdUnverifiedDraft(response, question, selectionStatus, false)
+  // 일반 경로와 같은 순서: 선별 → 보류 → 두 번째 검색 → 정리 → 캐시 → 조각 알림·말투 층.
+  if (!isShortCircuited) withholdUnverifiedDraft(response, question, selectionStatus, false, core.conversation)
   if (selectionStatus === "failed") selectionFailedResponses.add(response)
 
   // 일반 경로와 같은 두 번째 검색(못 찾음 답일 때만). 관문 문서 경로에서 이미 돌린 답은 다시 돌리지 않는다.
   let secondChance = core.secondChance
-  let secondChanceChangedAnswer = false
   if (!isShortCircuited) {
     const trace = await applySecondChanceRetrieval(response, question, category, startedAt)
     if (trace.secondChance !== "none") secondChance = trace
-    // 찾았거나(hit), 차단기 때문에 못 돌려 고정 문구로 바꿨으면(miss·model_unavailable) 답이 바뀌었다.
-    secondChanceChangedAnswer =
-      trace.secondChance === "hit" || (trace.secondChance === "miss" && trace.reason === "model_unavailable")
   }
-  // 답이 바뀌었으면 말투·끝 질문 층을 새 답에 다시 입힌다(일반 경로는 코어 뒤에서 한 번 입힌다).
-  if (withheld || secondChanceChangedAnswer) applyConversationTone(core)
-  const handoffIntent = core.handoffIntent
 
   finalizeAnswer(response)
 
-  // 스트림 델타가 끝난 뒤(또는 AI 미사용 시) 정제된 최종본을 권위 있는 replace 로 확정한다.
-  emit({ type: "replace", answer: response.answer })
-
-  // no-session 질문만 캐시(이력 의존 답이 캐시에 섞이지 않게) — handleChatbotQuery 와 동일 규칙.
+  // 이력 의존 답(generate 모드의 세션 질문)은 캐시하지 않는다 — handleChatbotQuery 와 동일 규칙.
+  // 일반 경로와 같이 조각 알림·말투 층을 입히기 전 사본을 넣는다(넓힌 후속 질문이 앞 턴 말투를 꺼내지 않게, 말투는 이번 말로 판단한다).
   if (
-    !requestedSessionId &&
+    isAnswerCacheAllowed({ sessionId: requestedSessionId }) &&
+    !prepared.triedAgain &&
     !isAnswerGateFailure(core.answerGate) &&
     !isSecondChanceFailure(secondChance) &&
     !selectionFailedResponses.has(response)
   ) {
-    setCachedAnswer(question, { response, category, intent, handoffIntent, warning })
+    setCachedAnswer(
+      question,
+      { response, category, intent, handoffIntent: core.handoffIntent, warning },
+      undefined,
+      answerCacheContextKey(core.conversation)
+    )
   }
+
+  applyPublicAnswerLayers(core)
+  const handoffIntent = core.handoffIntent
+
+  // 스트림 델타가 끝난 뒤(또는 AI 미사용 시) 정제된 최종본을 권위 있는 replace 로 확정한다.
+  emit({ type: "replace", answer: response.answer })
 
   emitMeta(response, category, intent, handoffIntent, warning)
 
   void persistExchange(
     input,
-    question,
+    core.utterance ?? question,
     response,
     meta,
     category,
@@ -6458,7 +7131,8 @@ export async function streamChatbotQuery(
     handoffIntent,
     elapsedSince(startedAt),
     sessionId,
-    answerEventId
+    answerEventId,
+    core.utterance ? question : null
   )
 }
 

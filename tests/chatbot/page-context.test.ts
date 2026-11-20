@@ -43,3 +43,11 @@ describe("mergeStarters", () => {
     expect(mergeStarters([" A ", ""], ["A", "  "], 4)).toEqual(["A"])
   })
 })
+
+describe("home starters", () => {
+  it("shows a plain-language intro chip first (the widget shows the first four)", () => {
+    const starters = resolvePageContext("/").starters
+    expect(starters[0]).toBe("클래스인이 뭐예요? 쉽게 알려 주세요")
+    expect(starters.slice(0, 4).some((starter) => /EDB|LMS/.test(starter))).toBe(false)
+  })
+})

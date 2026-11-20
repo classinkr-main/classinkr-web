@@ -1,13 +1,27 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 
 import {
+  answerDivergence,
+  buildPreviousTurn,
   checkModelFreeRun,
   classifyBlockedGeminiCall,
   countAnswerModelCalls,
   decidedByFromAnswerIndex,
+  deriveModelState,
+  geminiCallKind,
+  geminiCallModel,
   hasModelError,
+  isGeminiEndpointUrl,
+  isGoogleAuthUrl,
   isTransientGeminiFailure,
   parseAnswerRouter,
+  parseEvalCases,
+  parseSimulateMode,
+  repeatRunEnv,
+  runConversationTurns,
+  simulateGeminiFetch,
+  summarizeRows,
+  turnRowId,
 } from "@/scripts/lib/chatbot-live-eval-checks"
 
 // 측정 스크립트(scripts/chatbot-live-eval.ts)의 판정 함수. 2026-11-19: --mode off 측정에서 임베딩 402·차단만 있던 줄을
@@ -82,6 +96,60 @@ describe("호출 종류", () => {
   })
 })
 
+// 검토 고침: 측정 도구가 Vertex 연결을 몰라 aiplatform 호출을 세지도, --simulate-gemini 로 가짜로 받지도 못했다(실제로 나갔다).
+describe("Gemini 호출 주소(developer·Vertex)", () => {
+  const vertexGlobal = "https://aiplatform.googleapis.com/v1/projects/p-1/locations/global/publishers/google/models"
+  const vertexRegional = "https://us-central1-aiplatform.googleapis.com/v1/projects/p-1/locations/us-central1/publishers/google/models"
+  const developer = "https://generativelanguage.googleapis.com/v1beta/models"
+
+  it("developer·Vertex(global·지역) 주소를 모두 Gemini 호출로 본다", () => {
+    expect(isGeminiEndpointUrl(`${developer}/gemini-3.5-flash:generateContent?key=k`)).toBe(true)
+    expect(isGeminiEndpointUrl(`${vertexGlobal}/gemini-4-hydrogen:generateContent`)).toBe(true)
+    expect(isGeminiEndpointUrl(`${vertexRegional}/gemini-3.5-flash-lite:streamGenerateContent?alt=sse`)).toBe(true)
+    expect(isGeminiEndpointUrl(`${vertexRegional}/gemini-embedding-001:predict`)).toBe(true)
+    expect(isGeminiEndpointUrl("https://oauth2.googleapis.com/token")).toBe(false)
+    expect(isGeminiEndpointUrl("https://example.com/?u=generativelanguage.googleapis.com")).toBe(false)
+    expect(isGeminiEndpointUrl("https://aiplatform.googleapis.com.evil.example/x")).toBe(false)
+    expect(isGeminiEndpointUrl("not a url")).toBe(false)
+  })
+
+  it("Vertex 토큰 발급 주소를 가린다(--simulate-gemini 는 이 요청을 내보내지 않는다)", () => {
+    expect(isGoogleAuthUrl("https://oauth2.googleapis.com/token")).toBe(true)
+    expect(isGoogleAuthUrl("https://sts.googleapis.com/v1/token")).toBe(true)
+    expect(
+      isGoogleAuthUrl("https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/a@b.iam.gserviceaccount.com:generateAccessToken")
+    ).toBe(true)
+    expect(isGoogleAuthUrl(`${vertexGlobal}/gemini-3.5-flash:generateContent`)).toBe(false)
+  })
+
+  it("호출 종류와 모델: Vertex 임베딩(predict)은 embedContent 로 센다", () => {
+    expect(geminiCallKind(`${developer}/gemini-3.5-flash:generateContent?key=k`)).toBe("generateContent")
+    expect(geminiCallKind(`${vertexGlobal}/gemini-4-hydrogen:streamGenerateContent?alt=sse`)).toBe("streamGenerateContent")
+    expect(geminiCallKind(`${vertexRegional}/gemini-embedding-001:predict`)).toBe("embedContent")
+    expect(geminiCallKind(`${developer}/gemini-embedding-001:embedContent?key=k`)).toBe("embedContent")
+    expect(geminiCallModel(`${vertexGlobal}/gemini-4-hydrogen:generateContent`)).toBe("gemini-4-hydrogen")
+    expect(geminiCallModel(`${developer}/gemini-3.5-flash:generateContent?key=k`)).toBe("gemini-3.5-flash")
+    expect(geminiCallModel("https://generativelanguage.googleapis.com/v1beta/files")).toBeNull()
+  })
+
+  it("Vertex 토큰 발급이 실패해 답에 쓰이는 호출을 못 보냈으면 modelError(임베딩만이면 아님)", () => {
+    const enabled = { modelStagesEnabled: true, calls: [], blockedKinds: {} }
+    expect(hasModelError({ ...enabled, authFailedKinds: { generateContent: 1 } })).toBe(true)
+    expect(hasModelError({ ...enabled, authFailedKinds: { streamGenerateContent: 1 } })).toBe(true)
+    expect(hasModelError({ ...enabled, authFailedKinds: { embedContent: 3 } })).toBe(false)
+    expect(hasModelError({ ...enabled, modelStagesEnabled: false, authFailedKinds: { generateContent: 1 } })).toBe(false)
+  })
+
+  it("확인 안 된 모델 하나의 403(차단기가 다음 모델로 넘긴 호출)은 modelError·재시도 대상이 아니다", () => {
+    const enabled = { modelStagesEnabled: true, blockedKinds: {} }
+    const scoped = { kind: "generateContent", status: 403, modelScopedDenial: true }
+    expect(hasModelError({ ...enabled, calls: [scoped, { kind: "generateContent", status: 200 }] })).toBe(false)
+    expect(hasModelError({ ...enabled, calls: [scoped, { kind: "generateContent", status: 403 }] })).toBe(true)
+    expect(isTransientGeminiFailure([scoped, { kind: "generateContent", status: 503 }])).toBe(true)
+    expect(isTransientGeminiFailure([scoped])).toBe(false)
+  })
+})
+
 describe("라우터", () => {
   it("legacy·shadow·compiled 만 받는다", () => {
     expect(parseAnswerRouter("compiled")).toBe("compiled")
@@ -112,6 +180,15 @@ describe("모델 없는 측정의 Gemini 호출 확인", () => {
 
   it("모델을 켠 측정은 확인하지 않는다", () => {
     expect(checkModelFreeRun({ modelFree: false, router: "compiled", rows: [embedded] }).status).toBe("ok")
+  })
+
+  it("Vertex 토큰 발급이 실패해 못 보낸 호출도 부르려 한 것으로 센다", () => {
+    const authFailed = { geminiCalls: 0, geminiBlocked: 0, geminiKinds: {}, geminiAuthFailedKinds: { generateContent: 2 } }
+    expect(checkModelFreeRun({ modelFree: true, router: "compiled", rows: [clean, authFailed] })).toEqual({
+      status: "invalid",
+      rows: 1,
+      kinds: { generateContent: 2 },
+    })
   })
 })
 
@@ -166,5 +243,137 @@ describe("답 색인 흔적 → decidedBy", () => {
     expect(decidedByFromAnswerIndex({ ...base, decision: "answer", scope: "out" })).toBeNull()
     expect(decidedByFromAnswerIndex({ ...base, decision: "answer", router: "shadow" })).toBeNull()
     expect(decidedByFromAnswerIndex({ ...base, decision: "unknown" })).toBeNull()
+  })
+})
+
+describe("대화 입력·첫 시도·반복·가짜 Gemini(U4)", () => {
+  it("한 줄 질문과 대화 형식을 함께 읽고 잘못된 입력은 오류", () => {
+    const cases = parseEvalCases({
+      cases: [
+        { id: "a", question: "질문 하나", group: "g" },
+        { id: "b", turns: ["첫 턴", { question: "둘째 턴" }], pagePath: "/docs/x/y" },
+        { question: "id 없음" },
+      ],
+    })
+    expect(cases.map((item) => [item.id, item.conversation, item.turns.length])).toEqual([
+      ["a", false, 1],
+      ["b", true, 2],
+      ["q003", false, 1],
+    ])
+    expect(cases[1].pagePath).toBe("/docs/x/y")
+    expect(turnRowId(cases[0], 0)).toBe("a")
+    expect(turnRowId(cases[1], 1)).toBe("b#t2")
+    expect(() => parseEvalCases([{ id: "a", question: "x" }, { id: "a", question: "y" }])).toThrow(/중복/)
+    expect(() => parseEvalCases([{ id: "a", turns: [] }])).toThrow(/turns/)
+    expect(() => parseEvalCases([{ id: "a", turns: [""] }])).toThrow(/question/)
+    expect(() => parseEvalCases("x")).toThrow()
+  })
+
+  it("previousTurn 은 질문을 200자로 자르고 askedSlot·answerMode 를 싣는다", () => {
+    const turn = buildPreviousTurn("가".repeat(300), "답입니다", "draft", () => "device")
+    expect(turn.question).toHaveLength(200)
+    expect(turn).toMatchObject({ askedSlot: "device", answerMode: "draft" })
+    expect(buildPreviousTurn("q", "답", null, () => null)).toEqual({ question: "q" })
+  })
+
+  it("가짜 evaluate 로 턴 순서와 previousTurn 전달을 본다", async () => {
+    const seen: Array<{ question: string; previousTurn?: unknown; pagePath?: string }> = []
+    const rows = await runConversationTurns({
+      item: { turns: [{ question: "하나" }, { question: "둘" }, { question: "셋" }], pagePath: "/docs/a/b" },
+      askedSlotOf: (answer) => (answer.includes("기기") ? "device" : null),
+      runTurn: async (request, index) => {
+        seen.push(request)
+        return { answer: index === 1 ? null : `답${index} 기기`, answerMode: "draft", index }
+      },
+    })
+    expect(rows.map((row) => row.index)).toEqual([0, 1, 2])
+    expect(seen[0]).toEqual({ question: "하나", pagePath: "/docs/a/b" })
+    expect(seen[1]).toEqual({
+      question: "둘",
+      previousTurn: { question: "하나", askedSlot: "device", answerMode: "draft" },
+      pagePath: "/docs/a/b",
+    })
+    // 앞 턴이 답을 못 냈으면 previousTurn 을 넘기지 않는다.
+    expect(seen[2].previousTurn).toBeUndefined()
+  })
+
+  it("한 줄 질문에는 previousTurn·pagePath 가 없다", async () => {
+    const seen: unknown[] = []
+    await runConversationTurns({
+      item: { turns: [{ question: "q" }] },
+      runTurn: async (request) => {
+        seen.push(request)
+        return { answer: "a", answerMode: null }
+      },
+    })
+    expect(seen).toEqual([{ question: "q" }])
+  })
+
+  it("모델 상태: 보고값 우선, 없으면 호출 기록에서 가린다(임베딩 제외)", () => {
+    expect(deriveModelState({ reported: "timeout", calls: [], blockedKinds: {} })).toBe("timeout")
+    expect(deriveModelState({ reported: "weird", calls: [], blockedKinds: {} })).toBe("ok")
+    expect(deriveModelState({ calls: [], blockedKinds: { generateContent: 1 } })).toBe("circuit_open")
+    expect(deriveModelState({ calls: [{ kind: "generateContent", status: 0 }], blockedKinds: {} })).toBe("timeout")
+    expect(deriveModelState({ calls: [{ kind: "generateContent", status: 429 }], blockedKinds: {} })).toBe("error")
+    expect(deriveModelState({ calls: [{ kind: "embedContent", status: 402 }], blockedKinds: { embedContent: 2 } })).toBe("ok")
+  })
+
+  it("가짜 Gemini 는 실제 fetch 를 부르지 않고 402·429 응답, hang 은 중단 신호로 끝난다", async () => {
+    const real = vi.fn()
+    const original = globalThis.fetch
+    globalThis.fetch = real as unknown as typeof fetch
+    try {
+      const url = "https://generativelanguage.googleapis.com/v1beta/models/x:generateContent"
+      expect((await simulateGeminiFetch("402")(url)).status).toBe(402)
+      expect((await simulateGeminiFetch("429")(url)).status).toBe(429)
+      const controller = new AbortController()
+      const pending = simulateGeminiFetch("hang")(url, { signal: controller.signal })
+      controller.abort()
+      await expect(pending).rejects.toMatchObject({ name: "AbortError" })
+      await expect(simulateGeminiFetch("hang", { hangMs: 5 })(url)).rejects.toThrow()
+      expect(real).not.toHaveBeenCalled()
+    } finally {
+      globalThis.fetch = original
+    }
+    expect(parseSimulateMode(" 402 ")).toBe("402")
+    expect(parseSimulateMode("500")).toBeNull()
+  })
+
+  it("--repeat 답 갈림 비율은 반복이 둘 이상인 질문만 센다", () => {
+    expect(
+      answerDivergence([
+        { key: "a", answer: "x" },
+        { key: "a", answer: "x" },
+        { key: "b", answer: "x" },
+        { key: "b", answer: "y" },
+        { key: "c", answer: "x" },
+        { key: "d", answer: null },
+        { key: "d", answer: "x" },
+      ])
+    ).toEqual({ groups: 3, diverged: 2, ratio: 0.667 })
+    expect(answerDivergence([])).toEqual({ groups: 0, diverged: 0, ratio: 0 })
+  })
+
+  it("요약 비율: gate skipped·modelState·contextExpanded·첫 시도 기준", () => {
+    const ratios = summarizeRows([
+      { gate: "skipped", modelState: "ok", contextExpanded: true, firstAttempt: { decidedBy: "index:a", modelState: "ok" } },
+      { gate: "kept", modelState: "ok", contextExpanded: false, firstAttempt: { decidedBy: "model_unavailable", modelState: "error" } },
+      { gate: "none", modelState: "error", contextExpanded: null, firstAttempt: { decidedBy: "not_found", modelState: "timeout" } },
+      { gate: null, modelState: "ok", contextExpanded: null, firstAttempt: null },
+    ])
+    expect(ratios.gateSkipped).toEqual({ count: 1, ratio: 0.25 })
+    expect(ratios.modelState).toEqual({ ok: 3, error: 1 })
+    expect(ratios.contextExpanded).toEqual({ count: 1, of: 2, ratio: 0.5 })
+    expect(ratios.firstAttempt.decidedBy).toEqual({ "index": 1, model_unavailable: 1, not_found: 1 })
+    expect(ratios.firstAttempt.modelNotOk).toEqual({ count: 2, ratio: 0.667 })
+  })
+})
+
+// 2026-11-20 검토: --repeat 가 같은 프로세스에서 같은 질문을 되풀이하면 답 캐시·관문 캐시가 적중해 갈림이 0 으로 찍혔다.
+describe("--repeat 측정의 캐시", () => {
+  it("반복이 2 이상이면 답 캐시·관문 판정 캐시를 끄는 환경변수를 둔다", () => {
+    expect(repeatRunEnv(1)).toEqual({})
+    expect(repeatRunEnv(2)).toEqual({ CHATBOT_ANSWER_CACHE: "off" })
+    expect(repeatRunEnv(5)).toEqual({ CHATBOT_ANSWER_CACHE: "off" })
   })
 })

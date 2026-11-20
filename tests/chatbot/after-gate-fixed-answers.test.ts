@@ -240,3 +240,15 @@ describe("관문 뒤 고정 문구 고르기", () => {
     }
   })
 })
+
+describe("fixed-answers.ts 상수는 service.ts 상수와 같다", () => {
+  it("다섯 개 문구가 글자 그대로 같다", async () => {
+    const fixed = await import("@/lib/chatbot/fixed-answers")
+    const service = await import("@/lib/chatbot/service")
+    expect(fixed.NO_SOURCE_FACT_ANSWER).toBe(service.NO_SOURCE_FACT_ANSWER)
+    expect(fixed.WEAK_SOURCE_DRAFT_ANSWER).toBe(service.WEAK_SOURCE_DRAFT_ANSWER)
+    expect(fixed.POLICY_TOPIC_AFTER_GATE_ANSWER).toBe(service.POLICY_TOPIC_AFTER_GATE_ANSWER)
+    expect(fixed.MODEL_UNAVAILABLE_ANSWER).toBe(service.MODEL_UNAVAILABLE_ANSWER)
+    expect(fixed.SYMPTOM_AFTER_GATE_ANSWER).toBe(service.SYMPTOM_AFTER_GATE_ANSWER)
+  })
+})

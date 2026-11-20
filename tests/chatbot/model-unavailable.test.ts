@@ -12,6 +12,7 @@ import {
   __clearAnswerCacheForTests,
   evaluateChatbotQuery,
   MODEL_UNAVAILABLE_ANSWER,
+  MODEL_UNAVAILABLE_CIRCUIT_OPEN_ANSWER,
   NO_SOURCE_FACT_ANSWER,
   streamChatbotQuery,
   type ChatbotStreamEvent,
@@ -129,7 +130,10 @@ describe("모델 호출 실패 시 확인 안 된 조각을 내지 않는다", (
       const result = await evaluateChatbotQuery(IN_VOCAB_QUESTION)
 
       expect(calls).toContain("selection")
-      expect(result.answer).toBe(MODEL_UNAVAILABLE_ANSWER)
+      // 402 는 차단기를 연다: 곧바로 다시 물어도 같으므로 '잠시 뒤 다시'를 뺀 변형을 낸다(첫 문단은 같다).
+      expect(result.answer).toBe(failure === "402" ? MODEL_UNAVAILABLE_CIRCUIT_OPEN_ANSWER : MODEL_UNAVAILABLE_ANSWER)
+      // 측정 흔적: 차단기는 circuit_open. 시간 초과는 예산을 다 쓴 경우만 timeout 으로 세므로, 곧바로 끊긴 흉내(AbortError)는 error 다.
+      expect(result.modelState).toBe(failure === "402" ? "circuit_open" : "error")
       expect(result.answer).not.toContain(draft.answer.split("\n\n")[0])
       expect(result.answerMode).toBe("handoff")
       expect(result.needsHandoff).toBe(true)
@@ -265,7 +269,9 @@ describe("결제·인증 실패(401·402·403) 차단기", () => {
     const { fetchMock, calls } = stubModel({ selection: "402" })
 
     const first = await evaluateChatbotQuery(IN_VOCAB_QUESTION)
-    expect(first.answer).toBe(MODEL_UNAVAILABLE_ANSWER)
+    expect(first.answer).toBe(MODEL_UNAVAILABLE_CIRCUIT_OPEN_ANSWER)
+    expect(first.answer).not.toContain("잠시 뒤 다시")
+    expect(first.modelState).toBe("circuit_open")
     // 선별 호출 한 번(첫 모델)만 나가고 폴백 모델로 넘어가지 않는다.
     expect(calls.filter((call) => call === "selection")).toHaveLength(1)
     expect(isModelCircuitOpen()).toBe(true)
@@ -274,7 +280,7 @@ describe("결제·인증 실패(401·402·403) 차단기", () => {
     __clearAnswerCacheForTests()
     const second = await evaluateChatbotQuery(IN_VOCAB_QUESTION)
     expect(generateCalls(fetchMock)).toBe(before)
-    expect(second.answer).toBe(MODEL_UNAVAILABLE_ANSWER)
+    expect(second.answer).toBe(MODEL_UNAVAILABLE_CIRCUIT_OPEN_ANSWER)
     expect(second.needsHandoff).toBe(true)
 
     // 열릴 때 한 번만 운영자용 문장을 남기고, 키 값은 찍지 않는다.
@@ -286,16 +292,114 @@ describe("결제·인증 실패(401·402·403) 차단기", () => {
     expect(message).not.toContain("test-secret-key-value")
   })
 
+  // 403 은 1순위 gemini-4-hydrogen(실호출로 확인하지 않은 모델)이면 그 모델만의 권한 문제일 수 있어 다음(확인된) 모델까지 보고,
+  // 그 모델도 403 이면 연다. env 로 확인된 모델을 1순위에 두면 예전처럼 첫 403 에 연다.
   it("401·403 도 차단기를 연다", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
-    for (const status of [401, 403]) {
+    const sentences = [{ id: 1, text: "문장", sourceIndex: 0, label: "문서 / 절" }]
+    for (const [status, sent] of [[401, 1], [403, 2]] as const) {
       __resetCircuit()
       const fetchMock = vi.fn(async () => ({ ok: false, status, json: async () => ({}), text: async () => "denied" }))
       vi.stubGlobal("fetch", fetchMock)
-      const ids = await selectAnsweringSentenceIds({ question: "질문", sentences: [{ id: 1, text: "문장", sourceIndex: 0, label: "문서 / 절" }] })
+      const ids = await selectAnsweringSentenceIds({ question: "질문", sentences })
       expect(ids).toBeNull()
-      expect(fetchMock).toHaveBeenCalledTimes(1)
+      expect(fetchMock, String(status)).toHaveBeenCalledTimes(sent)
       expect(isModelCircuitOpen(), String(status)).toBe(true)
+    }
+
+    __resetCircuit()
+    vi.stubEnv("GEMINI_FAST_MODEL", "gemini-3.5-flash")
+    const verifiedFirst = vi.fn<(url: string) => Promise<unknown>>(async () => ({
+      ok: false,
+      status: 403,
+      json: async () => ({}),
+      text: async () => "denied",
+    }))
+    vi.stubGlobal("fetch", verifiedFirst)
+    expect(await selectAnsweringSentenceIds({ question: "질문", sentences })).toBeNull()
+    expect(verifiedFirst).toHaveBeenCalledTimes(1)
+    expect(String(verifiedFirst.mock.calls[0][0])).toContain("/models/gemini-3.5-flash:")
+    expect(isModelCircuitOpen()).toBe(true)
+  })
+
+  // 검토 고침: gemini-4-hydrogen 만 403 이면 차단기를 열지 않고 3.5-flash 로 답한다. 예전에는 hydrogen 의 403 한 번에 체인을 멈추고
+  // 고정 문구(MODEL_UNAVAILABLE_CIRCUIT_OPEN_ANSWER)를 낸 뒤 60초 동안 관문·임베딩·목차까지 막았다.
+  it("gemini-4-hydrogen 만 403 이면 차단기를 열지 않고 다음 모델(3.5-flash)로 답한다", async () => {
+    const errorLog = vi.spyOn(console, "error").mockImplementation(() => {})
+    vi.stubEnv("GEMINI_FAST_MODEL", "")
+    const question = "OMR 카드는 어떤 문제 유형을 추가할 수 있나요?"
+    const selectionModels: string[] = []
+    const fetchMock = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      const target = String(url)
+      if (target.includes("/models/gemini-4-hydrogen:")) {
+        if (isEvidenceSelectionCall(init)) selectionModels.push("gemini-4-hydrogen")
+        return { ok: false, status: 403, json: async () => ({ error: { status: "PERMISSION_DENIED" } }), text: async () => "denied" }
+      }
+      if (isAnswerGateCall(init)) return answerGateResponse("answers")
+      if (isOutlinePickCall(init)) return outlinePickResponse([])
+      if (isEvidenceSelectionCall(init)) {
+        selectionModels.push(target.match(/\/models\/([^:]+):/)?.[1] ?? "")
+        return evidenceSelectionResponse([1])
+      }
+      return { ok: true, status: 200, json: async () => ({}) }
+    })
+    vi.stubGlobal("fetch", fetchMock)
+
+    const result = await evaluateChatbotQuery(question)
+    expect(selectionModels).toEqual(["gemini-4-hydrogen", "gemini-3.5-flash"])
+    expect(isModelCircuitOpen()).toBe(false)
+    expect(result.answer).not.toBe(MODEL_UNAVAILABLE_CIRCUIT_OPEN_ANSWER)
+    expect(result.answer).not.toContain(MODEL_UNAVAILABLE_HEAD)
+    expect(result.answerMode).toBe("direct_answer")
+    expect(result.modelState).toBe("ok")
+    expect(errorLog).not.toHaveBeenCalled()
+
+    // 임베딩도 막히지 않고 실제로 나간다(차단 중이면 네트워크 없이 null).
+    const sent = fetchMock.mock.calls.length
+    await embedText("질문", "RETRIEVAL_QUERY")
+    expect(fetchMock.mock.calls.length).toBe(sent + 1)
+    expect(String(fetchMock.mock.calls.at(-1)?.[0])).toContain(":embedContent")
+    expect(isModelCircuitOpen()).toBe(false)
+  })
+
+  // 차단기가 열린 뒤 60초가 지나 체인 첫 모델(hydrogen)이 시험 호출이 되었을 때, 그 모델의 403 은 시험 결과로 치지 않고
+  // 다음(확인된) 모델의 응답으로 풀지 다시 닫을지 정한다.
+  it("60초 뒤 시험 호출에서 hydrogen 의 403 은 시험 결과로 치지 않고 다음 모델이 정한다", async () => {
+    const errorLog = vi.spyOn(console, "error").mockImplementation(() => {})
+    vi.stubEnv("GEMINI_FAST_MODEL", "")
+    vi.useFakeTimers({ toFake: ["Date"] })
+    vi.setSystemTime(new Date("2026-11-18T12:00:00Z"))
+    const sentences = [{ id: 1, text: "문장", sourceIndex: 0, label: "문서 / 절" }]
+
+    for (const nextStatus of [200, 403] as const) {
+      __resetCircuit()
+      vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false, status: 402, json: async () => ({}), text: async () => "" })))
+      await selectAnsweringSentenceIds({ question: "질문", sentences })
+      expect(isModelCircuitOpen()).toBe(true)
+      vi.setSystemTime(new Date(Date.now() + MODEL_CIRCUIT_OPEN_MS + 1))
+
+      const fetchMock = vi.fn(async (url: string) => {
+        if (String(url).includes("/models/gemini-4-hydrogen:")) {
+          return { ok: false, status: 403, json: async () => ({}), text: async () => "denied" }
+        }
+        return nextStatus === 200
+          ? evidenceSelectionResponse([1])
+          : { ok: false, status: 403, json: async () => ({}), text: async () => "denied" }
+      })
+      vi.stubGlobal("fetch", fetchMock)
+      const ids = await selectAnsweringSentenceIds({ question: "질문", sentences })
+      expect(fetchMock.mock.calls.map(([url]) => String(url).match(/\/models\/([^:]+):/)?.[1])).toEqual([
+        "gemini-4-hydrogen",
+        "gemini-3.5-flash",
+      ])
+      if (nextStatus === 200) {
+        expect(ids).toEqual([1])
+        expect(isModelCircuitOpen()).toBe(false)
+      } else {
+        expect(ids).toBeNull()
+        expect(isModelCircuitOpen()).toBe(true)
+        expect(String(errorLog.mock.calls.at(-1)?.[0])).toContain("Gemini HTTP 403")
+      }
     }
   })
 
@@ -474,14 +578,18 @@ describe("결제·인증 실패(401·402·403) 차단기", () => {
     expect(again.answer).not.toContain(MODEL_UNAVAILABLE_HEAD)
   })
 
-  it("차단기가 닫힌 상태의 일시 실패(500)로 두 번째 검색이 빠진 경우는 기존대로 '못 찾음'을 둔다", async () => {
+  it("차단기가 닫힌 상태의 일시 실패(500)로 두 번째 검색을 끝내지 못하면 '못 찾음' 대신 '지금 확인하지 못함'(잠시 뒤 다시)을 낸다", async () => {
+    // 2026-11-20 조사 G4: 시간 초과·오류 뒤의 '찾지 못했어요'가 진짜 못 찾음과 구별되지 않았다.
     const question = "양자암호 지원하나요"
     const fetchMock = vi.fn(async () => ({ ok: false, status: 500, json: async () => ({}), text: async () => "" }))
     vi.stubGlobal("fetch", fetchMock)
     const result = await evaluateChatbotQuery(question)
     expect(isModelCircuitOpen()).toBe(false)
     expect(result.secondChance).toMatchObject({ secondChance: "miss", reason: "error" })
-    expect(result.answer).toContain(NO_SOURCE_FACT_ANSWER.split("\n\n")[0])
+    expect(result.answer).toBe(MODEL_UNAVAILABLE_ANSWER)
+    expect(result.answer).not.toContain(NO_SOURCE_FACT_ANSWER.split("\n\n")[0])
+    expect(result.needsHandoff).toBe(true)
+    expect(result.modelState).toBe("error")
   })
 
   it("임베딩도 차단 중에는 네트워크 없이 null 을 돌려준다(호출부는 낱말 검색으로 이어 간다)", async () => {

@@ -1,12 +1,19 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 import {
+  __resetModelCircuitForTests,
   asksAboutThirdPartyAdoption,
   buildFinalAnswerPrompt,
   buildGenerationConfig,
+  formatDraftForPrompt,
   generateGeminiFinalAnswer,
+  getFinalAnswerAllowList,
+  isIncompleteFinishReason,
+  resolveLiteFirstModelChain,
   resolveModelChain,
+  resolvePreparedAnswerGateModelChain,
   streamGeminiFinalAnswer,
+  type GeminiAnswerCompletion,
 } from "@/lib/chatbot/llm"
 import { evaluateChatbotQuery } from "@/lib/chatbot/service"
 
@@ -34,24 +41,82 @@ describe("chatbot Gemini model chain", () => {
     vi.unstubAllEnvs()
   })
 
-  it("uses current models by default and ends with the rolling alias", () => {
+  // 2026-11-20 사용자 지시: 모든 티어의 1순위 기본을 gemini-4-hydrogen 으로 하고, 실패하면 그 전까지 쓰던 모델로 넘어간다.
+  it("puts gemini-4-hydrogen first on every tier, then the previous models, and ends with the rolling alias", () => {
     clearModelEnv()
 
     expect(resolveModelChain("basic")).toEqual([
+      "gemini-4-hydrogen",
       "gemini-3.5-flash",
       "gemini-3.1-flash-lite",
       "gemini-flash-lite-latest",
     ])
     expect(resolveModelChain("reasoning")).toEqual([
+      "gemini-4-hydrogen",
       "gemini-3.1-pro-preview",
       "gemini-3.5-flash",
       "gemini-flash-lite-latest",
     ])
     expect(resolveModelChain("advanced")).toEqual([
+      "gemini-4-hydrogen",
       "gemini-3.1-pro-preview",
       "gemini-3.5-flash",
       "gemini-flash-lite-latest",
     ])
+  })
+
+  // hydrogen 이 실패하면 hydrogen 이전 Vertex 사슬(main 4533634e: basic 3.5-flash-lite → 3.5-flash, 그 밖 3.5-flash → 3.5-flash-lite)로 넘어간다.
+  // basic 은 근거 선별(3.5초 예산)이 쓰므로 hydrogen 다음이 더 느린 3.5-flash 가 되면 안 된다.
+  it("uses gemini-4-hydrogen on Vertex, then the previous Vertex chain of that tier", () => {
+    clearModelEnv()
+
+    expect(resolveModelChain("basic", "vertex")).toEqual(["gemini-4-hydrogen", "gemini-3.5-flash-lite", "gemini-3.5-flash"])
+    for (const tier of ["reasoning", "advanced"] as const) {
+      expect(resolveModelChain(tier, "vertex"), tier).toEqual(["gemini-4-hydrogen", "gemini-3.5-flash", "gemini-3.5-flash-lite"])
+    }
+  })
+
+  it("keeps a configured model first and does not add gemini-4-hydrogen to its chain", () => {
+    clearModelEnv()
+    vi.stubEnv("GEMINI_FAST_MODEL", "gemini-3.5-flash")
+    vi.stubEnv("GEMINI_REASONING_MODEL", "gemini-3.1-pro-preview")
+    vi.stubEnv("GEMINI_MODEL", "gemini-3.7-flash")
+
+    // 운영 env 에 지금 값(.env 예시의 값)이 있으면 사슬은 이 변경 전과 같다.
+    expect(resolveModelChain("basic")).toEqual(["gemini-3.5-flash", "gemini-3.1-flash-lite", "gemini-flash-lite-latest"])
+    expect(resolveModelChain("reasoning")).toEqual(["gemini-3.1-pro-preview", "gemini-3.5-flash", "gemini-flash-lite-latest"])
+    expect(resolveModelChain("advanced")).toEqual([
+      "gemini-3.7-flash",
+      "gemini-3.1-pro-preview",
+      "gemini-3.5-flash",
+      "gemini-flash-lite-latest",
+    ])
+    expect(resolveModelChain("basic", "vertex")).toEqual(["gemini-3.5-flash", "gemini-3.5-flash-lite"])
+    expect(resolveModelChain("advanced", "vertex")).toEqual(["gemini-3.7-flash", "gemini-3.5-flash", "gemini-3.5-flash-lite"])
+    // env 모델 뒤도 그 연결·티어의 이전 사슬이다(Vertex basic 은 lite 먼저).
+    vi.stubEnv("GEMINI_FAST_MODEL", "gemini-3.7-flash")
+    expect(resolveModelChain("basic", "vertex")).toEqual(["gemini-3.7-flash", "gemini-3.5-flash-lite", "gemini-3.5-flash"])
+  })
+
+  it("keeps the gate and outline chain lite-first, with gemini-4-hydrogen right after the lite model", () => {
+    clearModelEnv()
+    vi.stubEnv("CHATBOT_ANSWER_GATE_MODEL", "")
+
+    const developer = ["gemini-3.1-flash-lite", "gemini-4-hydrogen", "gemini-3.5-flash", "gemini-flash-lite-latest"]
+    expect(resolveLiteFirstModelChain()).toEqual(developer)
+    expect(resolvePreparedAnswerGateModelChain()).toEqual(developer)
+    expect(resolveLiteFirstModelChain(undefined, "vertex")).toEqual(["gemini-3.5-flash-lite", "gemini-4-hydrogen", "gemini-3.5-flash"])
+  })
+
+  it("sends thinking level low (the gemini-4 rule) to the first model of every tier", () => {
+    clearModelEnv()
+
+    for (const provider of ["developer", "vertex"] as const) {
+      for (const tier of ["basic", "reasoning", "advanced"] as const) {
+        const [first] = resolveModelChain(tier, provider)
+        expect(buildGenerationConfig(first, 0.2).thinkingConfig, `${provider} ${tier}`).toEqual({ thinkingLevel: "low" })
+      }
+    }
   })
 
   it("never puts a retired model in the default chain", () => {
@@ -64,17 +129,18 @@ describe("chatbot Gemini model chain", () => {
     }
   })
 
-  it("ignores retired models left in env and falls back to the current default", () => {
+  it("ignores retired models left in env and falls back to the default chain", () => {
     vi.stubEnv("GEMINI_FAST_MODEL", "gemini-2.5-flash")
     vi.stubEnv("GEMINI_REASONING_MODEL", "gemini-2.5-pro")
     vi.stubEnv("GEMINI_MODEL", "gemini-2.5-pro")
 
-    expect(resolveModelChain("basic")[0]).toBe("gemini-3.5-flash")
-    expect(resolveModelChain("reasoning")[0]).toBe("gemini-3.1-pro-preview")
-    expect(resolveModelChain("advanced")[0]).toBe("gemini-3.1-pro-preview")
+    expect(resolveModelChain("basic").slice(0, 2)).toEqual(["gemini-4-hydrogen", "gemini-3.5-flash"])
+    expect(resolveModelChain("reasoning").slice(0, 2)).toEqual(["gemini-4-hydrogen", "gemini-3.1-pro-preview"])
+    expect(resolveModelChain("advanced").slice(0, 2)).toEqual(["gemini-4-hydrogen", "gemini-3.1-pro-preview"])
+    expect(resolveModelChain("basic", "vertex")[0]).toBe("gemini-4-hydrogen")
 
     vi.stubEnv("GEMINI_FAST_MODEL", "gemini-2.5-flash-lite")
-    expect(resolveModelChain("basic")[0]).toBe("gemini-3.5-flash")
+    expect(resolveModelChain("basic")[0]).toBe("gemini-4-hydrogen")
   })
 
   it("sends only a thinking level each model accepts", () => {
@@ -145,10 +211,11 @@ describe("chatbot Gemini model chain", () => {
       .map(([url]) => String(url))
       .filter((url) => url.includes(":generateContent"))
 
-    expect(generationCalls).toHaveLength(3)
-    expect(generationCalls[0]).toContain("/models/gemini-3.5-flash:generateContent")
-    expect(generationCalls[1]).toContain("/models/gemini-3.1-flash-lite:generateContent")
-    expect(generationCalls[2]).toContain("/models/gemini-flash-lite-latest:generateContent")
+    expect(generationCalls).toHaveLength(4)
+    expect(generationCalls[0]).toContain("/models/gemini-4-hydrogen:generateContent")
+    expect(generationCalls[1]).toContain("/models/gemini-3.5-flash:generateContent")
+    expect(generationCalls[2]).toContain("/models/gemini-3.1-flash-lite:generateContent")
+    expect(generationCalls[3]).toContain("/models/gemini-flash-lite-latest:generateContent")
     expect(result.answerMode).toBe("direct_answer")
     expect(result.answer).toContain("실험 수업")
   })
@@ -176,9 +243,10 @@ describe("chatbot Gemini model chain", () => {
     const result = await evaluateChatbotQuery("OMR 카드는 어떤 문제 유형을 추가할 수 있나요?")
     const calls = fetchMock.mock.calls.map(([url]) => String(url)).filter((url) => url.includes(":generateContent"))
 
-    expect(calls).toHaveLength(2)
-    expect(calls[0]).toContain("/models/gemini-3.5-flash:generateContent")
-    expect(calls[1]).toContain("/models/gemini-3.1-flash-lite:generateContent")
+    expect(calls).toHaveLength(3)
+    expect(calls[0]).toContain("/models/gemini-4-hydrogen:generateContent")
+    expect(calls[1]).toContain("/models/gemini-3.5-flash:generateContent")
+    expect(calls[2]).toContain("/models/gemini-3.1-flash-lite:generateContent")
     expect(result.answerMode).toBe("direct_answer")
     expect(result.unresolved).toBe(false)
   })
@@ -221,15 +289,28 @@ describe("chatbot final answer prompt with weak grounding", () => {
     return { prompt: prompts[0] ?? "", result }
   }
 
-  it("tells the model not to invent details when no document matches", async () => {
-    // 문서가 하나도 안 걸리는 질문은 선별할 문장이 없어 바로 생성으로 간다(fallback).
+  it("does not send a fallback draft to the model when no document matches (generate mode)", async () => {
+    // 2026-11-20 조사 G13: 근거 선별이 문서 문장을 고른 답만 다시 쓴다. 문서가 하나도 안 걸리는 질문(fallback 초안)은
+    // 모델에게 넘기지 않고 결정형 답을 낸다.
     const { prompt, result } = await capturePrompt("클래스인 투자자가 누구예요?")
 
+    expect(prompt).toBe("")
+    expect(result.answer).not.toContain("이 내용은 공개 안내에서 확인되지 않았어요. Classin 수업 운영과 관련해")
+  })
+
+  it("tells the model not to invent details when the grounding is weak (prompt builder)", () => {
+    // 프롬프트 조립(llm.ts)은 약한 근거일 때 지어내지 말라는 요구를 그대로 붙인다(다른 제공자도 같은 프롬프트를 쓴다).
+    const prompt = buildFinalAnswerPrompt({
+      question: "클래스인 투자자가 누구예요?",
+      category: "general",
+      answerMode: "fallback",
+      draftAnswer: "이 질문에 대한 내용은 공개 안내에서 찾지 못했어요.",
+      sources: [],
+    })
     expect(prompt).toContain("현재 응답 모드: fallback")
     expect(prompt).toContain("내부 검증 정보: 없음")
     expect(prompt).toContain("근거 없음 주의")
     expect(prompt).toContain("새로 지어내지 마")
-    expect(result.answer).toContain("확인되지 않았어요")
   })
 
   it("uses the model by mode: off never, select only to pick sentences, generate to rewrite as well", async () => {
@@ -276,7 +357,8 @@ describe("chatbot final answer prompt with weak grounding", () => {
   })
 
   it("keeps passing sources when the grounding is strong", async () => {
-    const { prompt } = await capturePrompt("EDB 교안은 어떻게 재사용해요?")
+    // 근거 선별이 문서 문장을 고른 질문(검색 조각 초안). 검수 틀 답("EDB 교안은 어떻게 재사용해요?")은 이제 다시 쓰지 않는다.
+    const { prompt } = await capturePrompt("퀴즈 결과는 어디서 확인하나요?")
 
     expect(prompt).toContain("현재 응답 모드: direct_answer")
     expect(prompt).toContain("내부 검증 정보(사용자에게 직접 언급 금지)")
@@ -393,5 +475,220 @@ describe("chatbot final answer prompt requirements", () => {
     expect(prompts.stream.length).toBeGreaterThan(0)
     expect(new Set([...prompts.plain, ...prompts.stream]).size).toBe(1)
     expect(prompts.plain[0]).toBe(buildFinalAnswerPrompt(args))
+  })
+})
+
+// 2026-11-20 조사 G13: finishReason 을 로그에만 써서 MAX_TOKENS 로 잘린 글이 길이 자르기를 거쳐 완성된 답처럼 나갔고,
+// 스트림은 글을 낸 뒤 끊기면(시간 초과·중단) 조용히 정상 종료로 처리했다. 끝난 모양(complete·finishReason)을 알리고,
+// 일반 호출은 끝까지 받은 답만 돌려준다. 다음 모델로 넘기지 않아 질문당 호출 수는 늘지 않는다.
+describe("chatbot final answer completion signal", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.unstubAllEnvs()
+    __resetModelCircuitForTests()
+  })
+
+  const args = {
+    question: "녹화본은 어디서 내려받아요?",
+    category: "classroom",
+    intent: "classroom_consulting",
+    answerMode: "direct_answer",
+    draftAnswer: "녹화본은 코스의 수업 기록에서 내려받을 수 있습니다.",
+  }
+
+  const ANSWER = "녹화본은 코스의 수업 기록에서 다운로드를 누르면 PC에 저장됩니다."
+
+  function plainResponse(finishReason?: string) {
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({ candidates: [{ content: { parts: [{ text: ANSWER }] }, ...(finishReason ? { finishReason } : {}) }] }),
+    }
+  }
+
+  function sseLine(text: string, finishReason?: string) {
+    return `data: ${JSON.stringify({ candidates: [{ content: { parts: [{ text }] }, ...(finishReason ? { finishReason } : {}) }] })}`
+  }
+
+  /** SSE 응답. fail 이 true 면 마지막 조각 뒤 읽기에서 오류를 낸다(연결 끊김·시간 초과). */
+  function sseResponse(lines: string[], { fail = false, trailingNewline = true } = {}) {
+    const encoder = new TextEncoder()
+    const chunks = lines.map((line, index) => (index < lines.length - 1 || trailingNewline ? `${line}\n\n` : line))
+    let index = 0
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (index < chunks.length) {
+          controller.enqueue(encoder.encode(chunks[index++]))
+          return
+        }
+        if (fail) controller.error(Object.assign(new Error("aborted"), { name: "AbortError" }))
+        else controller.close()
+      },
+    })
+    return { ok: true, status: 200, body }
+  }
+
+  async function readStream(generator: AsyncGenerator<string, GeminiAnswerCompletion>) {
+    let text = ""
+    for (;;) {
+      const next = await generator.next()
+      if (next.done) return { text, completion: next.value }
+      text += next.value
+    }
+  }
+
+  function setup() {
+    vi.stubEnv("GEMINI_API_KEY", "test-gemini-key")
+    clearModelEnv()
+  }
+
+  it("treats only explicit non-STOP finish reasons as incomplete", () => {
+    expect(isIncompleteFinishReason("STOP")).toBe(false)
+    expect(isIncompleteFinishReason(undefined)).toBe(false)
+    expect(isIncompleteFinishReason(null)).toBe(false)
+    expect(isIncompleteFinishReason("FINISH_REASON_UNSPECIFIED")).toBe(false)
+    for (const reason of ["MAX_TOKENS", "SAFETY", "RECITATION", "OTHER"]) expect(isIncompleteFinishReason(reason), reason).toBe(true)
+  })
+
+  it("drops a MAX_TOKENS answer without trying the next model and reports why", async () => {
+    setup()
+    const fetchMock = vi.fn(async () => plainResponse("MAX_TOKENS"))
+    vi.stubGlobal("fetch", fetchMock)
+    const completions: GeminiAnswerCompletion[] = []
+
+    const answer = await generateGeminiFinalAnswer({ ...args, onCompletion: (completion) => completions.push(completion) })
+
+    expect(answer).toBeNull()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(completions).toEqual([{ complete: false, reason: "finish_reason", finishReason: "MAX_TOKENS", model: "gemini-4-hydrogen" }])
+  })
+
+  it("drops SAFETY and RECITATION answers too", async () => {
+    setup()
+    for (const reason of ["SAFETY", "RECITATION"]) {
+      vi.stubGlobal("fetch", vi.fn(async () => plainResponse(reason)))
+      expect(await generateGeminiFinalAnswer(args), reason).toBeNull()
+    }
+  })
+
+  it("returns a STOP answer (or one without a finish reason) as complete", async () => {
+    setup()
+    for (const reason of ["STOP", undefined]) {
+      vi.stubGlobal("fetch", vi.fn(async () => plainResponse(reason)))
+      const completions: GeminiAnswerCompletion[] = []
+      expect(await generateGeminiFinalAnswer({ ...args, onCompletion: (completion) => completions.push(completion) })).toBe(ANSWER)
+      expect(completions).toEqual([{ complete: true, reason: "stop", finishReason: reason ?? null, model: "gemini-4-hydrogen" }])
+    }
+  })
+
+  it("reports an unavailable completion when every model fails", async () => {
+    setup()
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false, status: 500, text: async () => "", json: async () => ({}) })))
+    const completions: GeminiAnswerCompletion[] = []
+    expect(await generateGeminiFinalAnswer({ ...args, onCompletion: (completion) => completions.push(completion) })).toBeNull()
+    expect(completions).toEqual([{ complete: false, reason: "unavailable", finishReason: null, model: null }])
+  })
+
+  it("marks a stream that breaks after the first chunk as interrupted and does not move to the next model", async () => {
+    setup()
+    const fetchMock = vi.fn(async () => sseResponse([sseLine("녹화본은 코스의 ")], { fail: true }))
+    vi.stubGlobal("fetch", fetchMock)
+    const completions: GeminiAnswerCompletion[] = []
+
+    const { text, completion } = await readStream(
+      streamGeminiFinalAnswer({ ...args, onCompletion: (value) => completions.push(value) })
+    )
+
+    expect(text).toBe("녹화본은 코스의 ")
+    expect(completion).toEqual({ complete: false, reason: "interrupted", finishReason: null, model: "gemini-4-hydrogen" })
+    expect(completions).toEqual([completion])
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it("marks a stream that closes after text without any finish reason as interrupted (2026-11-20 검토)", async () => {
+    setup()
+    const fetchMock = vi.fn(async () => sseResponse([sseLine("녹화본은 코스의 "), sseLine("수업 기록에서 내려받습니다.")]))
+    vi.stubGlobal("fetch", fetchMock)
+
+    const { text, completion } = await readStream(streamGeminiFinalAnswer(args))
+
+    expect(text).toBe("녹화본은 코스의 수업 기록에서 내려받습니다.")
+    expect(completion).toEqual({ complete: false, reason: "interrupted", finishReason: null, model: "gemini-4-hydrogen" })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it("marks a stream that ends with MAX_TOKENS as incomplete", async () => {
+    setup()
+    vi.stubGlobal("fetch", vi.fn(async () => sseResponse([sseLine("녹화본은 코스의 "), sseLine("수업 기록에서", "MAX_TOKENS")])))
+
+    const { text, completion } = await readStream(streamGeminiFinalAnswer(args))
+
+    expect(text).toBe("녹화본은 코스의 수업 기록에서")
+    expect(completion).toEqual({ complete: false, reason: "finish_reason", finishReason: "MAX_TOKENS", model: "gemini-4-hydrogen" })
+  })
+
+  it("completes a STOP stream and reads a last line that has no trailing newline", async () => {
+    setup()
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => sseResponse([sseLine("녹화본은 코스의 "), sseLine("수업 기록에서 내려받습니다.", "STOP")], { trailingNewline: false }))
+    )
+
+    const { text, completion } = await readStream(streamGeminiFinalAnswer(args))
+
+    expect(text).toBe("녹화본은 코스의 수업 기록에서 내려받습니다.")
+    expect(completion).toEqual({ complete: true, reason: "stop", finishReason: "STOP", model: "gemini-4-hydrogen" })
+  })
+
+  it("still moves to the next model when the first one fails before any text", async () => {
+    setup()
+    const fetchMock = vi.fn(async (url: string | URL | Request) =>
+      String(url).includes("/models/gemini-4-hydrogen:")
+        ? { ok: false, status: 503, body: null, text: async () => "" }
+        : sseResponse([sseLine(ANSWER, "STOP")])
+    )
+    vi.stubGlobal("fetch", fetchMock)
+
+    const { text, completion } = await readStream(streamGeminiFinalAnswer(args))
+
+    expect(text).toBe(ANSWER)
+    expect(completion).toEqual({ complete: true, reason: "stop", finishReason: "STOP", model: "gemini-3.5-flash" })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+})
+
+// 2026-11-20 조사 G13: 안전 초안을 520자에서 그냥 잘라 끝의 제약 문장("…는 확인이 필요해요")이 빠지거나 문장 중간에서 끊겼다.
+describe("safety draft in the final answer prompt", () => {
+  it("leaves a short draft without constraint sentences as it was", () => {
+    const draft = "숙제는 제출 화면 아래 [숙제 제출]까지 눌러야 제출됩니다.\n\n[초안 저장]은 저장만 됩니다."
+    expect(formatDraftForPrompt(draft)).toBe("숙제는 제출 화면 아래 [숙제 제출]까지 눌러야 제출됩니다. [초안 저장]은 저장만 됩니다.")
+  })
+
+  it("moves constraint sentences to one leading line and cuts the rest at a sentence end", () => {
+    const filler = "수업 전에는 코스와 자료를 미리 올려 두고, 수업 중에는 판서와 녹화를 함께 씁니다."
+    const draft = `${Array.from({ length: 12 }, () => filler).join(" ")} 학원비 결제·수납 기능은 제공하지 않습니다. 계약 조건은 상담에서 확인이 필요해요.`
+    const formatted = formatDraftForPrompt(draft)
+    const [first, ...rest] = formatted.split("\n")
+
+    expect(first).toBe("제약: 학원비 결제·수납 기능은 제공하지 않습니다. 계약 조건은 상담에서 확인이 필요해요.")
+    const body = rest.join("\n")
+    expect(body.length).toBeLessThanOrEqual(520)
+    expect(body.endsWith("씁니다.")).toBe(true)
+    expect(body).not.toContain("제공하지 않습니다")
+
+    const prompt = buildFinalAnswerPrompt({
+      question: "학원비도 클래스인으로 받을 수 있나요?",
+      category: "pricing",
+      answerMode: "direct_answer",
+      draftAnswer: draft,
+    })
+    expect(prompt).toContain(`안전 초안(제약 조건, 필요하면 표현만 다듬기):\n${formatted}`)
+  })
+
+  it("gives the system instruction and the requirement as the allow list for checking the model text", () => {
+    const allowList = getFinalAnswerAllowList("onboarding", "onboarding")
+    expect(allowList).toHaveLength(2)
+    expect(allowList[0]).toContain("[도입 상담 남기기]")
+    expect(allowList[1]).toContain("요구사항: 온보딩/데모")
   })
 })

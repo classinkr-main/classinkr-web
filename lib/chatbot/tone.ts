@@ -6,6 +6,16 @@
  * 성별·나이 같은 속성은 추정하지 않는다. 질문 문장에 드러난 신호만 쓴다.
  */
 
+import { isUnverifiedFixedAnswerText } from "@/lib/chatbot/fixed-answers"
+
+/**
+ * 앞서 한 말을 가리키는 질문의 종류.
+ * same_chat: 이 대화 안의 앞 턴("아까 그거", "또 안 돼요", "아까 챗봇이 알려준").
+ * other_window: 다른 창·이전 채팅·지난 대화("다른 창에서 챗봇이 알려준 거").
+ * past_inquiry: 지난 문의·통화("지난주에 문의했는데").
+ */
+export type PriorContextKind = "same_chat" | "other_window" | "past_inquiry"
+
 export interface ConversationTone {
   angry: boolean
   repeated: boolean
@@ -17,10 +27,14 @@ export interface ConversationTone {
   english: boolean
   /** 다른 창·지난 문의를 전제로 묻는다("다른 창에서 챗봇이…", "지난주에 문의했잖아요"). */
   priorContext: "bot" | "inquiry" | null
+  /** priorContext 를 세 종류로 나눈 값. priorContext 가 null 이면 null. */
+  priorKind: PriorContextKind | null
 }
 
 const ANGRY_RE =
-  /도대체|말이\s*(?:됩니까|돼요|되나요|됩니다|돼)|짜증|화가\s*(?:나|납)|(?<!대)화나(?:요|네|서|고|는|죠)|화났|어이(?:가)?\s*없|황당|(?:돈|시간|비용|요금|수업료)\S{0,4}\s*아깝|아깝습니다!|최악|엉망|책임\s*(?:지|져)|언제\s*(?:고쳐|해결)|장난\s*(?:해|합)|돈\s*(?:낸|내고|냈)|환불해\s*(?:주|줘)|이게\s*뭐(?:예요|에요|야|냐|입니까)/
+  /도대체|말이\s*(?:됩니까|돼요|되나요|됩니다|돼)|짜증|화가\s*(?:나|납)|(?<!대)화나(?:요|네|서|고|는|죠)|화났|어이(?:가)?\s*없|황당|(?:돈|시간|비용|요금|수업료)\S{0,4}\s*아깝|아깝습니다!|최악|엉망|책임\s*(?:지|져)|언제\s*(?:고쳐|해결)|장난\s*(?:해|합)|돈\s*(?:낸|내고|냈)|환불해\s*(?:주|줘)/
+// "이게 뭐예요?"는 처음 온 사람이 화면이나 서비스를 가리키며 묻는 말이다. 다른 화남 신호(반복·느낌표 등)와 함께일 때만 화남으로 본다.
+const THIS_WHAT_RE = /이게\s*뭐(?:예요|에요|야|냐|입니까)/
 const REPEATED_RE =
   /몇\s*번째|(?:두|세|네|다섯)\s*번째\s*(?:문의|연락|전화|말씀|요청|끊|튕|같은|똑같|이에요|예요|입니다)|(?:벌써|이번이|오늘만|이번\s*주만|이번\s*주에만)[^.!?]{0,8}(?:두|세|네|다섯)\s*번째|또\s*(?:문의|연락|물어|말씀)|계속\s*(?:문의|물어|말|연락)|여러\s*번\s*(?:문의|말|연락)|매번\s*(?:문의|물어|말|연락|똑같|같은|재부팅|인터넷)|번번이|몇\s*번을/
 // "오늘만 네 번째"처럼 횟수만 세는 말은 같은 일이 반복된다는 뜻이지, 여러 번 문의했다는 뜻이 아니다.
@@ -41,6 +55,11 @@ const PRIOR_BOT_RE =
   /\byou\s+(?:told|said|mentioned)\b|\b(?:yesterday|last\s*time|earlier|before),?\s+you\b|(?:다른|이전|지난)\s*(?:창|채팅|대화|세션)|(?:아까|전에|지난번|저번).{0,12}(?:챗봇|봇|답변)|챗봇이\s*(?:알려|말해|답|안내)|(?:지난번|저번|어제|아까|지난주|며칠\s*전)(?:에)?\s*(?:이\s*)?(?:여기서|여기에서|채팅에서|챗봇이|챗봇한테|챗봇에서|봇이)/
 const PRIOR_INQUIRY_RE =
   /(?:지난주|지난번|저번|전에|예전에|어제|며칠\s*전|지난달|아까|\d+\s*(?:주|일|달|개월)\s*전)[^.!?]{0,20}(?:문의|물어|물었|여쭤|말씀|연락(?:했|드렸|을\s*드|드린|이\s*왔|받)|접수|얘기|말했|말한|통화|안내받|알려\s*주신|알려준|알려\s*준|전화\s*(?:드렸|했|드린)|상담\s*(?:때|에서|받|했)|받은\s*(?:답변|안내|메일)|메일로\s*받)|(?:지난번|저번|어제|아까)\s*(?:에\s*)?(?:그거|그\s*거)|(?:지난번|저번|어제|아까)(?:이랑|하고|과|처럼)\s*(?:또|(?:똑같은|같은)\s*(?:문제|증상|오류|현상)|same)|(?:문의|접수)\s*했(?:잖아|는데|었는데|었잖아)|happened\s*again|same\s*problem|(?:^|\s)또\s*(?:그래요|그럽니다|그러네|됨|돼요|됐어요|안\s*(?:돼|되)(?!\S*면))|아직도\s*안\s*고쳐/
+// 이 대화 안의 앞 턴을 가리키는 말. 지난 문의·통화를 가리키는 말이 함께 있으면 쓰지 않는다.
+const SAME_CHAT_RE = /아까|(?:^|\s)또\s*(?:그래|됨|돼|안\s*(?:돼|되))/
+const PAST_MARKER_RE =
+  /지난주|지난번|저번|어제|며칠\s*전|지난달|\d+\s*(?:주|일|달|개월)\s*전|예전|전에|통화|문의\s*했(?:잖아|는데|었)|접수|메일|아직도\s*안\s*고쳐/
+const OTHER_WINDOW_RE = /(?:다른|이전|지난)\s*(?:창|채팅|대화|세션)|\byou\s+(?:told|said|mentioned)\b|\b(?:yesterday|last\s*time|earlier|before),?\s+you\b/i
 const QUOTED_SPEECH_RE = /['"‘’“”][^'"‘’“”]{1,60}['"‘’“”]/g
 const THIRD_PARTY_PRIOR_RE =
   /(?:원장|선생님|강사|실장|엄마|아빠|부모님|친구|담임|팀장)(?:님)?\s*(?:이|가|께서|한테서|이\s*저한테)\s*['"‘“]?\s*(?:저번|지난번|아까|어제|전에)/
@@ -58,10 +77,20 @@ export function detectConversationTone(question: string): ConversationTone {
   const repeatText = text.replace(ASK_AGAIN_HESITATION_RE, " ")
   const repeated = REPEATED_RE.test(repeatText) && (INQUIRY_WORD_RE.test(repeatText) || !REPEAT_COUNT_RE.test(repeatText))
   const excitedNotAngry = POSITIVE_RE.test(text)
+  // "원장님께서 '저번에 말한 그 설정'"처럼 다른 사람과의 지난 대화를 옮긴 말은 우리와의 지난 문의가 아니다.
+  // 따옴표로 옮긴 남의 말("선생님, 그거 또 안 돼요")도 빼고 본다.
+  const priorContext: ConversationTone["priorContext"] = THIRD_PARTY_PRIOR_RE.test(text)
+    ? null
+    : PRIOR_BOT_RE.test(text)
+      ? "bot"
+      : PRIOR_INQUIRY_RE.test(text.replace(QUOTED_SPEECH_RE, " "))
+        ? "inquiry"
+        : null
   return {
     // 느낌표 두 개 이상, 또는 "~입니까!" 같은 따지는 어미는 화가 난 신호로 본다(들뜬 느낌표는 뺀다).
     angry:
       ANGRY_RE.test(text) ||
+      (THIS_WHAT_RE.test(text) && repeated) ||
       (!excitedNotAngry &&
         (exclamations >= 2 || (exclamations >= 1 && /(?:니까|겁니까|입니까|습니까)\s*[!?！]|저만\s*이런/.test(text)))),
     repeated,
@@ -72,14 +101,19 @@ export function detectConversationTone(question: string): ConversationTone {
     english: ENGLISH_LEAD_RE.test(text) || (latinWords >= 3 && latinWords / Math.max(1, words.length) >= 0.34),
     // "원장님께서 '저번에 말한 그 설정'"처럼 다른 사람과의 지난 대화를 옮긴 말은 우리와의 지난 문의가 아니다.
     // 따옴표로 옮긴 남의 말("선생님, 그거 또 안 돼요")도 빼고 본다.
-    priorContext: THIRD_PARTY_PRIOR_RE.test(text)
-      ? null
-      : PRIOR_BOT_RE.test(text)
-        ? "bot"
-        : PRIOR_INQUIRY_RE.test(text.replace(QUOTED_SPEECH_RE, " "))
-          ? "inquiry"
-          : null,
+    priorContext,
+    priorKind: priorContext ? priorKindOf(text, priorContext) : null,
   }
+}
+
+function priorKindOf(text: string, priorContext: "bot" | "inquiry"): PriorContextKind {
+  const plain = text.replace(QUOTED_SPEECH_RE, " ")
+  if (priorContext === "bot") {
+    if (OTHER_WINDOW_RE.test(plain)) return "other_window"
+    // "아까 챗봇이 알려준"은 같은 대화, "지난번·저번에 챗봇이"는 이 대화에서 확인할 수 없는 지난 대화다.
+    return /아까/.test(plain) && !PAST_MARKER_RE.test(plain) ? "same_chat" : "other_window"
+  }
+  return SAME_CHAT_RE.test(plain) && !PAST_MARKER_RE.test(plain) ? "same_chat" : "past_inquiry"
 }
 
 export const PRIOR_BOT_LINE =
@@ -95,12 +129,14 @@ function priorContextLine(tone: ConversationTone) {
   return null
 }
 
-export function toneOpener(tone: ConversationTone, forHandoff = false): string | null {
+export function toneOpener(tone: ConversationTone, forHandoff = false, unverifiedFixed = false): string | null {
   if (tone.angry || tone.repeated) {
     return tone.repeated
       ? "같은 문제로 여러 번 문의하시게 해 드려 정말 죄송합니다."
       : "불편을 드려 정말 죄송합니다."
   }
+  // 못 찾음·확정 못 함 고정 답 앞에는 "순서대로 알려 드릴게요"·"같이 확인해 볼게요" 같은 안내형 첫마디를 붙이지 않는다.
+  if (unverifiedFixed) return null
   // "죄송한데요… 걱정입니다"처럼 미안해하며 걱정하는 말에는 사과를 덜어 주는 첫마디가 더 맞다.
   if (tone.anxious && !(tone.apologetic && !tone.panicked)) {
     return tone.panicked ? "많이 당황하셨죠. 같이 차근차근 확인해 볼게요." : "걱정되셨겠어요. 같이 차근차근 확인해 볼게요."
@@ -152,10 +188,11 @@ export function applyToneToAnswer(
 ) {
   let next = answer
   // 상담 연결 답과 "딱 맞는 안내를 찾지 못했다"는 답에는 "순서대로 알려 드릴게요" 같은 안내형 첫마디가 어울리지 않는다.
+  const unverifiedFixed = isUnverifiedFixedAnswerText(answer)
   const opener = toneOpener(
     tone,
-    (/\[(?:실시간 상담 연결|도입 상담 남기기)\]/.test(answer) && !/^\d\.\s/m.test(answer)) ||
-      /딱 맞는 안내는 아직 찾지 못했어요|추측해서 (?:답|안내)하지는 않을게요/.test(answer)
+    (/\[(?:실시간 상담 연결|도입 상담 남기기)\]/.test(answer) && !/^\d\.\s/m.test(answer)) || unverifiedFixed,
+    unverifiedFixed
   )
   const alreadyToned =
     (tone.angry || tone.repeated ? startsWithApology(next) : startsWithEmpathy(next)) ||
