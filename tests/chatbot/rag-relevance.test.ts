@@ -145,7 +145,8 @@ describe("chatbot RAG source relevance", () => {
     }
   })
 
-  it("uses Gemini inference for Classin questions without matching docs", async () => {
+  it("does not let the model write an answer for Classin questions without matching docs (generate mode)", async () => {
+    // 2026-11-20 조사 G13: 근거 선별이 문서 문장을 고른 답만 모델이 다시 쓴다. 문서가 없는 질문에 모델이 "가능합니다"를 지어 쓰던 길을 막았다.
     disableExternalChatbotServices()
     vi.stubEnv("GEMINI_API_KEY", "test-gemini-key")
     enableGenerateMode()
@@ -176,20 +177,9 @@ describe("chatbot RAG source relevance", () => {
 
     expect(result.detectedCategory).toBe("general")
     expect(result.sources).toHaveLength(0)
-    expect(result.answerMode).toBe("direct_answer")
-    expect(result.unresolved).toBe(false)
-    expect(result.answer).toContain("플립러닝")
-    expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining("/models/gemini-3.5-flash:generateContent?key=test-gemini-key"),
-      expect.objectContaining({
-        method: "POST",
-      })
-    )
-    const generationCall = fetchMock.mock.calls.find(([url]) =>
-      String(url).includes(":generateContent")
-    )
-    const body = JSON.parse(String(generationCall?.[1]?.body))
-    expect(body.generationConfig.thinkingConfig).toEqual({ thinkingLevel: "minimal" })
+    expect(result.answer).not.toContain("가능합니다. Classin은 플립러닝처럼")
+    const generationCalls = fetchMock.mock.calls.filter(([url]) => String(url).includes(":generateContent"))
+    expect(generationCalls).toHaveLength(0)
   })
 
   it("ignores unsupported configured fast Gemini models and uses the stable default", async () => {
@@ -207,7 +197,7 @@ describe("chatbot RAG source relevance", () => {
               parts: [
                 {
                   text:
-                    "가능합니다. Classin은 프로젝트형 수업에서도 자료 공유, 수업 진행, 녹화 복습 흐름을 함께 운영할 수 있습니다.",
+                    "가능합니다. Classin은 토론형 수업에서도 자료 공유, 판서, 녹화 복습 흐름을 묶어 운영할 수 있습니다.",
                 },
               ],
             },
@@ -217,16 +207,19 @@ describe("chatbot RAG source relevance", () => {
     })
     stubFetchWithEvidenceSelection(fetchMock)
 
-    const result = await evaluateChatbotQuery("클래스인으로 프로젝트형 수업도 가능해?")
+    // 근거 선별이 문서 문장을 고른 질문이라 모델이 답을 다시 쓴다(문서가 없는 질문은 다시 쓰지 않는다).
+    const result = await evaluateChatbotQuery("클래스인으로 토론형 수업 운영 가능해?")
     const generationCalls = fetchMock.mock.calls.filter(([url]) =>
       String(url).includes(":generateContent")
     )
 
     expect(result.answerMode).toBe("direct_answer")
-    expect(result.answer).toContain("프로젝트형 수업")
+    expect(result.answer).toContain("토론형 수업")
     expect(generationCalls).toHaveLength(1)
     expect(generationCalls[0][0]).toContain("/models/gemini-3.5-flash:generateContent")
     expect(generationCalls[0][0]).not.toContain("gemini-2.0-flash")
+    const body = JSON.parse(String(generationCalls[0][1]?.body))
+    expect(body.generationConfig.thinkingConfig).toEqual({ thinkingLevel: "minimal" })
   })
 
   it("falls back to stable Gemini after a configured primary returns empty output", async () => {

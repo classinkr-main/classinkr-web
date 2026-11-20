@@ -226,15 +226,28 @@ describe("chatbot final answer prompt with weak grounding", () => {
     return { prompt: prompts[0] ?? "", result }
   }
 
-  it("tells the model not to invent details when no document matches", async () => {
-    // 문서가 하나도 안 걸리는 질문은 선별할 문장이 없어 바로 생성으로 간다(fallback).
+  it("does not send a fallback draft to the model when no document matches (generate mode)", async () => {
+    // 2026-11-20 조사 G13: 근거 선별이 문서 문장을 고른 답만 다시 쓴다. 문서가 하나도 안 걸리는 질문(fallback 초안)은
+    // 모델에게 넘기지 않고 결정형 답을 낸다.
     const { prompt, result } = await capturePrompt("클래스인 투자자가 누구예요?")
 
+    expect(prompt).toBe("")
+    expect(result.answer).not.toContain("이 내용은 공개 안내에서 확인되지 않았어요. Classin 수업 운영과 관련해")
+  })
+
+  it("tells the model not to invent details when the grounding is weak (prompt builder)", () => {
+    // 프롬프트 조립(llm.ts)은 약한 근거일 때 지어내지 말라는 요구를 그대로 붙인다(다른 제공자도 같은 프롬프트를 쓴다).
+    const prompt = buildFinalAnswerPrompt({
+      question: "클래스인 투자자가 누구예요?",
+      category: "general",
+      answerMode: "fallback",
+      draftAnswer: "이 질문에 대한 내용은 공개 안내에서 찾지 못했어요.",
+      sources: [],
+    })
     expect(prompt).toContain("현재 응답 모드: fallback")
     expect(prompt).toContain("내부 검증 정보: 없음")
     expect(prompt).toContain("근거 없음 주의")
     expect(prompt).toContain("새로 지어내지 마")
-    expect(result.answer).toContain("확인되지 않았어요")
   })
 
   it("uses the model by mode: off never, select only to pick sentences, generate to rewrite as well", async () => {
@@ -281,7 +294,8 @@ describe("chatbot final answer prompt with weak grounding", () => {
   })
 
   it("keeps passing sources when the grounding is strong", async () => {
-    const { prompt } = await capturePrompt("EDB 교안은 어떻게 재사용해요?")
+    // 근거 선별이 문서 문장을 고른 질문(검색 조각 초안). 검수 틀 답("EDB 교안은 어떻게 재사용해요?")은 이제 다시 쓰지 않는다.
+    const { prompt } = await capturePrompt("퀴즈 결과는 어디서 확인하나요?")
 
     expect(prompt).toContain("현재 응답 모드: direct_answer")
     expect(prompt).toContain("내부 검증 정보(사용자에게 직접 언급 금지)")
