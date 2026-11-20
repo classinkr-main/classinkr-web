@@ -479,7 +479,7 @@ describe("V-3 결정 전 정책 구절(blockPhrases)", () => {
   })
   const phraseErrors = (findings: VerifyFinding[]) => errorsOf(findings, "V-3").filter((finding) => finding.message.includes("정책 대기"))
 
-  it("결정 전 항목의 구절이 active fixed(text)·doc·다른 항목 policy 카드 답 글에 정규화 포함되면 오류", async () => {
+  it("결정 전 항목의 구절이 active fixed(text)·doc 답 글에 정규화 포함되면 오류, active policy 카드는 어느 항목을 가리키든 통과", async () => {
     const unit = units.find((candidate) => candidate.unitId === MEMBER_UNIT)!
     const docPhrase = unit.sentences[3].text.slice(0, 10)
     const dir = fixture({
@@ -499,7 +499,8 @@ describe("V-3 결정 전 정책 구절(blockPhrases)", () => {
         fixedText("fixed:trial-disabled", "2주 무료 체험이 있어요.", { status: "disabled" }),
         fixedText("fixed:decided", "결정이 난 구절이 들어 있어요."),
         policyCard("policy:free-trial", "2주 무료 체험은 정책 결정 뒤 안내해요.", "HQ-90"),
-        policyCard("policy:other", "다른 정책 글에 2주 무료 체험이 섞였어요.", "HQ-07"),
+        // 정책 주제는 사람이 쓴 지금 운영 글로만 답한다: 다른 대기 항목(HQ-90) 구절이 든 policy 카드도 막지 않는다.
+        policyCard("policy:other", "다른 정책 글에 2주 무료 체험이 섞였어요.", "HQ-93"),
       ],
       "cards/course.json": [memberCard()],
       "variants/course.json": memberVariants(),
@@ -507,7 +508,7 @@ describe("V-3 결정 전 정책 구절(blockPhrases)", () => {
     const result = await runVerify({ dir, current: currentSources(units, siteFacts), devSets: [] })
     const errors = phraseErrors(result.findings)
     const flagged = errors.map((finding) => finding.message.split(":")[0] + ":" + finding.message.split(":")[1]).sort()
-    expect(flagged).toEqual(["doc:/docs/teacher/course-members#4/remove-member", "fixed:trial-text", "policy:other"].sort())
+    expect(flagged).toEqual(["doc:/docs/teacher/course-members#4/remove-member", "fixed:trial-text"].sort())
     const trial = errors.find((finding) => finding.message.startsWith("fixed:trial-text:"))!
     expect(trial.message).toContain("정책 대기 HQ-90 구절: 카드를 review 로 두거나 policy 카드로 보낸다")
     expect(trial.file).toBe("cards/pricing.json")
@@ -590,5 +591,85 @@ describe("V-3 결정 전 정책 구절(blockPhrases)", () => {
     expect(phraseErrors(result.findings).map((finding) => finding.message)).toEqual([
       expect.stringContaining("howto:recording-missing: 정책 대기 HQ-90 구절"),
     ])
+  })
+
+  it("다른 항목 구절이 든 active policy 카드는 통과하고, 같은 구절이 든 doc·fixed(FIX·KEEP)·howto·gap 은 여전히 오류", async () => {
+    const unit = units.find((candidate) => candidate.unitId === MEMBER_UNIT)!
+    const related = unit.sentences[3]
+    const docPhrase = related.text.slice(0, 10)
+    const keepText = "체험은 2주 무료 체험으로 시작해요."
+    const topicText = "녹화가 안 보이면 2주 무료 체험 계정인지 먼저 확인해 주세요."
+    // 요금 질문의 지금 운영 글: 무료 체험(HQ-90)·문서 구절(HQ-91)이 함께 들어도 policyRef(HQ-95)와 상관없이 그대로 쓴다.
+    const policyText = `요금제는 상담으로 안내해요. ${PHRASE}도 있어요. ${related.text}`
+    const dir = fixture({
+      ...baseFiles(units, siteFacts),
+      "audit/human-queue.json": {
+        items: [
+          queueItem("HQ-90", { blockPhrases: [PHRASE] }),
+          queueItem("HQ-91", { blockPhrases: [docPhrase] }),
+          queueItem("HQ-95", { topic: "요금제 이름", blockPhrases: ["시험용 요금제 이름"] }),
+        ],
+      },
+      "cards/pricing.json": [
+        policyCard("policy:plan-overview", policyText, "HQ-95"),
+        policyCard("policy:outside-queue", policyText, "HQ-07"),
+        fixedText("fixed:trial-text", `처음에는 ${PHRASE}으로 써 보실 수 있어요.`),
+        {
+          id: "fixed:keep-trial",
+          kind: "fixed",
+          tier: "head",
+          area: "pricing",
+          topic: "시험용 KEEP",
+          answer: { curatedRef: { module: "basics", id: "trial", textHash: answerTextHash(keepText) } },
+          status: "active",
+        },
+        {
+          id: "gap:pricing/trial-other",
+          kind: "gap",
+          tier: "standard",
+          area: "pricing",
+          topic: "시험용 공백",
+          answer: { template: "gap_default", related: [{ unit: MEMBER_UNIT, i: 3, hash: related.hash }], handoff: null },
+          status: "active",
+        },
+      ],
+      "cards/recording.json": [
+        { id: "howto:recording-missing", kind: "howto", tier: "standard", area: "recording", topic: "녹화가 안 보임", answer: { symptomTopic: "recording-missing" }, status: "active" },
+      ],
+      "cards/course.json": [memberCard()],
+      "variants/course.json": memberVariants(),
+    })
+    const result = await runVerify({
+      dir,
+      current: currentSources(units, siteFacts, {
+        symptomTopics: new Set(["recording-missing"]),
+        inventory: new Map([
+          ["basics:trial", { text: keepText, textHash: answerTextHash(keepText) }],
+          ["symptom:recording-missing", { text: topicText, textHash: answerTextHash(topicText) }],
+        ]),
+      }),
+      devSets: [],
+    })
+    const errors = phraseErrors(result.findings)
+    const flagged = errors.map((finding) => finding.message.slice(0, finding.message.indexOf(": "))).sort()
+    expect(flagged).toEqual(
+      [
+        "doc:/docs/teacher/course-members#4/remove-member",
+        "fixed:keep-trial",
+        "fixed:trial-text",
+        "gap:pricing/trial-other",
+        "howto:recording-missing",
+      ].sort()
+    )
+    expect(errors.some((finding) => finding.message.startsWith("policy:"))).toBe(false)
+    const itemsOf = (id: string) => errors.find((finding) => finding.message.startsWith(`${id}: `))!.message
+    expect(itemsOf("fixed:trial-text")).toContain("HQ-90")
+    expect(itemsOf("fixed:keep-trial")).toContain("HQ-90")
+    expect(itemsOf("howto:recording-missing")).toContain("HQ-90")
+    expect(itemsOf("doc:/docs/teacher/course-members#4/remove-member")).toContain("HQ-91")
+    expect(itemsOf("gap:pricing/trial-other")).toContain("HQ-91")
+    // 대기열 항목은 사람 결정을 기다리는 그대로다: policyRef 가 대기열 밖이면 V-11 은 여전히 오류.
+    expect(errorsOf(result.findings, "V-11").some((finding) => finding.message.startsWith("policy:outside-queue:"))).toBe(true)
+    expect(errorsOf(result.findings, "V-11").some((finding) => finding.message.startsWith("policy:plan-overview:"))).toBe(false)
   })
 })

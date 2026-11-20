@@ -616,8 +616,9 @@ export interface HumanQueueItem {
   decidedAt: string | null
   /**
    * 결정을 기다리는 동안 active 카드 답 글에 나오면 안 되는 구절(V-3). 결정(decision)이 비어 있는 항목만 본다.
-   * 정규화(NFC·소문자·글자와 숫자만)해 포함 여부로 대조한다. 보는 글은 doc 문장·howto·FIX text·KEEP 옛 답·policy text·gap 관련 문장.
-   * 그 항목을 policyRef 로 가리키는 policy 카드와 active 가 아닌 카드(review·disabled)만 예외다.
+   * 정규화(NFC·소문자·글자와 숫자만)해 포함 여부로 대조한다. 보는 글은 doc 문장·howto·FIX text·KEEP 옛 답·gap 관련 문장.
+   * active policy 카드 전부(사람이 쓴 지금 운영 정책 글 그대로)와 active 가 아닌 카드(review·disabled)는 예외다.
+   * 빌드 검사(scripts/answer-index V-3)만 쓰고 런타임은 이 칸을 읽지 않는다.
    */
   blockPhrases?: string[]
 }

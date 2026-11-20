@@ -865,9 +865,13 @@ export function pendingPolicyPhrases(items: readonly unknown[]): PendingPolicyPh
 
 /**
  * V-3 확장: 결정 전 정책 구절. active 카드가 손님에게 내는 답 글 — doc(고른 문장 글)·howto(증상 주제·가이드 답 글)·fixed(FIX 는 text,
- * KEEP 은 지금 옛 답 글)·policy(text)·gap(관련 문장 글) — 에 결정이 비어 있는 대기열 항목의 blockPhrases 가 정규화 포함되면 오류.
- * 예외는 그 항목을 policyRef 로 가리키는 policy 카드와 active 가 아닌 카드(review·disabled)뿐이다. KEEP 도 본다: 옛 답 글이 결정 전
- * 구절을 담으면 결정이 나도 그 카드 글은 바뀌지 않으므로 policy 카드로 보내야 한다(svc·template KEEP 은 V-2 가 이미 거부해 뺀다).
+ * KEEP 은 지금 옛 답 글)·gap(관련 문장 글) — 에 결정이 비어 있는 대기열 항목의 blockPhrases 가 정규화 포함되면 오류.
+ * 예외는 active policy 카드 전부와 active 가 아닌 카드(review·disabled)다. 정책 주제(금액·요금제 이름·무료 체험·국적·특정 학원·
+ * 최대/무대 인원·전자칠판 크기)는 지금 운영에서도 사람이 쓴 정해 둔 답 글로만 답하고, policy 카드 text 는 그 지금 운영 글 그대로다.
+ * 그 글을 다른 대기 항목 구절(예: 한 항목의 '2주 무료', 다른 항목의 요금제 이름)로 막으면 지금 운영보다 더 막혀 요금 질문이 답을
+ * 잃는다. 문서에서 고른 글(doc·howto·gap)과 FIX·KEEP 글은 지금처럼 막는다(문서에서 정책 주제를 꺼내 말하지 않는다는 지금 규칙과
+ * 같다). KEEP 도 본다: 옛 답 글이 결정 전 구절을 담으면 결정이 나도 그 카드 글은 바뀌지 않으므로 policy 카드로 보내야 한다
+ * (svc·template KEEP 은 V-2 가 이미 거부해 뺀다). 대기열 항목 자체는 사람 결정을 기다리는 그대로 둔다.
  */
 function checkPendingPolicyPhrases(
   data: AnswerIndexData,
@@ -882,10 +886,10 @@ function checkPendingPolicyPhrases(
     typeof unitId === "string" && typeof i === "number" ? fileUnits.get(unitId)?.sentences[i]?.text : undefined
   for (const card of cards) {
     const value = card.value
-    if (value.status !== "active" || !isObject(value.answer)) continue
+    // policy 카드는 사람이 쓴 지금 운영 정책 글 그대로라 어떤 대기 항목 구절로도 막지 않는다(머리말).
+    if (value.status !== "active" || value.kind === "policy" || !isObject(value.answer)) continue
     const answer = value.answer as Record<string, unknown>
     let text = ""
-    let policyRef: string | null = null
     if (value.kind === "doc" && Array.isArray(answer.sentences)) {
       const texts: string[] = []
       for (const ref of answer.sentences) {
@@ -911,15 +915,12 @@ function checkPendingPolicyPhrases(
       const ref = isObject(answer.curatedRef) ? (answer.curatedRef as unknown as CuratedRef) : null
       if (typeof answer.text === "string") text = answer.text
       else if (ref && !CURATED_MODULES_WITHOUT_RUNTIME.includes(ref.module)) text = current.inventory.get(`${ref.module}:${ref.id}`)?.text ?? ""
-    } else if (value.kind === "policy" && typeof answer.text === "string") {
-      text = answer.text
-      policyRef = typeof answer.policyRef === "string" ? answer.policyRef : null
     }
     if (!text) continue
     const normalized = normalizeForOverlap(text)
     const hitsByItem = new Map<string, string[]>()
     for (const phrase of phrases) {
-      if (phrase.item === policyRef || !normalized.includes(phrase.key)) continue
+      if (!normalized.includes(phrase.key)) continue
       hitsByItem.set(phrase.item, [...(hitsByItem.get(phrase.item) ?? []), phrase.phrase])
     }
     for (const [item, hit] of hitsByItem) {
