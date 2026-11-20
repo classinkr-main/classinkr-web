@@ -172,6 +172,17 @@ export interface DistributorSettlementPayment {
   createdAt: string
 }
 
+/**
+ * 총판 미수금 목록에 함께 싣는 입금 요약(금액·입금일만). 메모·기록자는 견적 상세에서만 본다.
+ * 최근 입금일·월별 입금 흐름 계산에 쓴다(lib/distributor-receivables-view.ts).
+ */
+export interface DistributorReceivablePayment {
+  settlementId: string
+  amount: number
+  /** 입금일 YYYY-MM-DD. */
+  paidOn: string
+}
+
 /* ─── 대상 품목 · 단가 ───────────────────────────────────── */
 
 /** 총판에게 청구하는 기본 대상: 하드웨어 + AI Suite. */
