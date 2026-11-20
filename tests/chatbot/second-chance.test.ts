@@ -4,6 +4,7 @@ import { __clearAnswerGateCacheForTests } from "@/lib/chatbot/answer-gate"
 import { buildDocOutline, getPublicDocOutline, isPublicChatbotDoc } from "@/lib/chatbot/doc-outline"
 import { parseOutlineSectionIds } from "@/lib/chatbot/llm"
 import {
+  __clearAnswerCacheForTests,
   evaluateChatbotQuery,
   NO_SOURCE_FACT_ANSWER,
   streamChatbotQuery,
@@ -268,8 +269,10 @@ describe("목차에서 다시 고르는 두 번째 검색", () => {
     const id = outlineIdOf(KICK_OUT.title, KICK_OUT.heading)
     const { outlineRequests } = stubModel({ outline: [id], pick: (text) => /멤버 삭제/.test(text) })
 
-    // 세션을 붙여 답 캐시를 거치지 않게 한다(정적 문서 경로라 이력은 비어 있다).
+    // select 모드는 세션이 있어도 답 캐시를 쓰므로(이력은 generate 모드에서만 답에 들어간다) 두 호출 사이에 캐시를 비워
+    // 일반 경로도 두 번째 검색을 직접 거치게 한다.
     const events = await collectStream(question, "00000000-0000-4000-8000-000000000001")
+    __clearAnswerCacheForTests()
     const nonStream = await evaluateChatbotQuery(question)
 
     const replaces = events.filter((event) => event.type === "replace")
