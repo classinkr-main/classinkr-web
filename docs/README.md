@@ -74,6 +74,8 @@ Admin 관련 작업은 [Admin 지침 맵](./active/admin-guidance-map.md)에서 
   - **어드민 첫 화면 방문·문의 바로 보기 기획(결정 대기).** Overview 리드 숫자가 "내 담당·확인됨"만 세어 새 문의가 0으로 보이는 원인, 최상단 "지금" 띠·전사 범위·사이드바 문의 배지(P0), 방문·문의 추이·화면 안 알림(P1), 담당 원천(P2), 결정 D1~D8
 - [active/admin-sidebar-reorder-fold-plan-2026-11-09.md](./active/admin-sidebar-reorder-fold-plan-2026-11-09.md)
   - **어드민 사이드바 순서 재배치·접기 — D안(상시 고정 + 범주별 접기) 구현, CS 콘솔은 콘텐츠 밑.** 지금 배열의 문제(한 소제목 아래 7개, CRM·CS 콘솔 5·8번째, 마케팅·분석 소제목 중복, 이름 없는 "기타"), 공통 바닥 F1~F6(업무 단위 범주·하루 동선 순서·도달성 불변), 시안 A 순서만 · B 범주 아코디언 · C 상시 최소 · D 상시 고정 + 범주별 접기(권장), 결정 D1~D6. 목업 [mockups/admin-sidebar-reorder-fold-2026-11-09.html](./active/mockups/admin-sidebar-reorder-fold-2026-11-09.html)
+- [active/sales-ledger-compact-matrix-2026-11-20.md](./active/sales-ledger-compact-matrix-2026-11-20.md)
+  - **매출 장부 컴팩트 매트릭스 — 시안 A-2 구현.** 기본 「장부」 표를 12개월 + 주차 펼침 매트릭스로 교체: 고객·제품 좌우 고정, 지역·계약·경로 별도 열, 열 머리 깔때기(그 달·주에 숫자 있는 행만)·정렬, 지난달 회색 면 + 최근 4개 고정, 이번 달부터 확도 틴트, 머리·요약 한 줄화. 남은 결정 D1~D5
 - [active/admin-usage-triage-2026-09-25.md](./active/admin-usage-triage-2026-09-25.md)
   - **어드민 사용 실측·탭 정리.** 운영 DB 읽기 전용 집계로 본 화면별 사람 사용 흔적(Home 어드민 쓰기 ≈0, 매니저 업무는 Compass), 멈춘 원천(NEO env 누락·시트 권한), 기본 숨김·매니저별 숨기기, 심폐소생 Top 5, 결정 대기 D1~D8
 - [active/crm-tab-develop-plan-2026-09-12.md](./active/crm-tab-develop-plan-2026-09-12.md)

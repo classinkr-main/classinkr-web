@@ -106,7 +106,7 @@ export function rowMatchesChips(row: LedgerRevenueRow, chips: Set<string>) {
   })
 }
 
-function groupLabel(row: LedgerRevenueRow, groupBy: SimpleGroupBy) {
+export function groupLabel(row: LedgerRevenueRow, groupBy: SimpleGroupBy) {
   if (groupBy === "product") return productLabel(row)
   if (groupBy === "contract") return contractLabel(row)
   if (groupBy === "channel") return channelLabel(row)
