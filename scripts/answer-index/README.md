@@ -15,8 +15,8 @@
 | `npx tsx scripts/answer-index/merge.ts [조각 …] [--dry-run] [--replace] [--keep-parts]` | 나눠 쓴 조각을 합친다 |
 | `npm run answer-index:verify` (= `npx tsx scripts/answer-index/verify.ts`) | V-1~V-12 검사. 오류가 있으면 종료 코드 1 |
 | `npm run answer-index:compile [-- --json]` | 런타임과 같이 자료를 읽고 색인을 만들어 판·색인 해시·개수·크기·걸린 시간·색인에서 뺀 카드(이유별)를 찍는다. 파일은 쓰지 않는다 |
-| `npm run answer-index:calibrate [-- --dry-run] [-- --out <파일>] [-- --no-grid]` | 보정 묶음(`eval/calibration-set.json`)으로 `calibration.json`을 쓰고 `manifest.json`을 다시 쓴다. 묶음이 없으면 기본 문턱·계수로 만든다 |
-| `npm run answer-index:cv [-- --folds 5] [-- --out <파일>]` | 변형 5겹 교차 검증: 1위·결정 정답률, 못 찾음·엉뚱한 카드 비율, 종류·영역별 표, 혼동 표 |
+| `npm run answer-index:calibrate [-- --dry-run] [-- --out <파일>] [-- --no-grid] [-- --report <보고.md>] [-- --no-cache]` | 질문 우주(`universe/`)를 관점 5겹으로 나눈 교차 맞춤으로 `calibration.json`을 쓰고 `manifest.json`을 다시 쓴다. 보정 묶음(`eval/calibration-set.json`)은 외부 확인 수치만 낸다. 쓸 우주 문항이 없으면 기본 문턱·계수로 만든다. 격자 108점을 다 훑으면 수십 분 걸려 진행을 찍고 격자 점 결과를 `node_modules/.cache/answer-index-calibrate/`에 둔다(`--report`: 점수 대 NODOC 곡선 등 질문 글 없는 보고) |
+| `npm run answer-index:cv [-- --folds 5] [-- --out <파일>] [-- --no-votes]` | 변형 5겹 교차 검증: 1위·결정 정답률, 못 찾음·엉뚱한 카드 비율, 종류·영역별 표, 혼동 표 |
 | `npm run answer-index:topk -- --in <질문.json> [--out <결과.jsonl>] [--k 20] [--data-dir <폴더>] [--no-votes]` | 라벨용 상위 카드 덤프: 질문마다 지금 색인(런타임과 같은 load·compile)의 상위 k 카드(id·종류·영역·주제·covers·notCovers·답 글 앞 200자·점수·확신도), 공백 카드 후보(없는 개념 적중), 지금 결정(kind·card·conf, `decide`와 같은 `decideWithAnalysis`)을 JSON Lines 로. 입력은 `[{ id, q }]`·우주 샤드·측정 입력·`{ items }`. 자료 폴더는 `--data-dir` 또는 런타임과 같은 `ANSWER_INDEX_DATA_DIR`. 런타임과 다른 점(개인정보 가리기·서비스 출처 표·색인 앞 단계 없음, 증상 판별 정규식)은 `lib/topk-core.ts` 머리말 |
 | `npm run answer-index:judge -- <split·check·select-b·disagreements·merge> …` · `answer-index:score` · `answer-index:proxy` | 심사 절차·점수·대리 점수([judge/README.md](judge/README.md)) |
 
@@ -37,8 +37,8 @@
 | `absent.json` | D5 | 문서에 없는 방문자 개념(검증 기록 포함) |
 | `legacy-alias.json` | D4 | 옛 답 id(inventory id) → 카드 id 또는 null |
 | `audit/<묶음>.jsonl`·`audit/human-queue.json` | D3 | 답변 사항 점검 기록(줄마다 `AuditRecord`), 사람 결정 대기열 |
-| `calibration.json` | I9 | 점수 가중치·확신도 계수·문턱 |
-| `eval/calibration-set.json`·`eval/answer-keys/<묶음>.json` | D10·D12 | 보정 묶음, 개발용 정답 키(질문 글 없이 id 와 정답만, 선택 칸 `reject`·`siteAccept`·`area`·`areaFrom`·`evidenceScope`·`searched`·`note`·`keyGroup` — [judge/README.md](judge/README.md)). 런타임 아님 |
+| `calibration.json` | I9 | 점수 가중치·확신도 계수·문턱. `fit`은 맞춤 자료(`universe-oof@<해시>`)·쓴 우주 문항 수(`n`)·외부 확인 문항 수(`check`)·우주 중첩 교차 검증 관점 군집 부트스트랩 10번째 백분위(`bootstrapP10`) |
+| `eval/calibration-set.json`·`eval/answer-keys/<묶음>.json` | D10·D12 | 보정 묶음(보정 외부 확인 전용), 개발용 정답 키(질문 글 없이 id 와 정답만, 선택 칸 `reject`·`siteAccept`·`area`·`areaFrom`·`evidenceScope`·`searched`·`note`·`keyGroup` — [judge/README.md](judge/README.md)). 런타임 아님 |
 
 `dataVersion`은 런타임 자료의 내용 해시다(`inventory.json`·`audit/`·`eval/`·`manifest.json`은 넣지 않는다).
 
@@ -112,6 +112,23 @@ id 접두: `field:`·`basics:`·`symptom:`·`svc:`·`template:`·`self:`·`guide
 - 자료 폴더: `ANSWER_INDEX_DATA_DIR`(상대 경로는 작업 폴더 기준, 없으면 `data/answer-index`). 작업 폴더 자료를 `scripts/chatbot-live-eval.ts --router compiled`로 잴 때 쓴다. 판정할 때마다 읽어, 색인 캐시(마지막 폴더 하나)·판(`answerIndexVersion()`: 그 폴더 manifest dataVersion + 계산 규칙 판)·흔적의 `version`이 그 폴더를 따른다. 런타임은 합치지 않은 조각을 읽지 않으므로 작업 폴더도 `merge.ts`로 합친 뒤 잰다.
 - 답 캐시 열쇠에 라우터, 판(`answerIndexVersion()`), 자료 폴더가 들어간다(`ANSWER_INDEX_VERSION`은 모듈을 처음 읽을 때 폴더의 판).
 - 컴파일(`compile.ts`): `answerIndexHash`는 같은 자료면 같다. 첫 컴파일 시간·메모리는 사양 §3.10 예산과 비교한다(2안 번들은 아직 없음).
-- 보정(`calibrate.ts`, `lib/calibrate-core.ts`): 사양 §8.2. 보정 묶음 문항을 id sha256 순으로 2/3 맞춤·1/3 확인으로 나누고, 가중치 격자 81점 → 종류별 로지스틱(L2 λ=1, IRLS 25회) → 종류별 문턱(0.30~0.90, 부트스트랩 1,000회 10번째 백분위, '문서에 없음' 20·25·30% 재가중 평균, 세 비율 차 1점 초과 θ 제외). 지금 `calibration.json`은 읽지 않고 기본값에서 시작한다(같은 자료·같은 묶음 → 같은 바이트). `calibration.json`의 `dataVersion`은 calibration.json 을 뺀 런타임 자료 해시(`manifest.ts calibrationBasisVersion`)이고 V-12 가 이 값과 비교한다. 개발용·확정용 묶음은 쓰지 않는다.
-- 교차 검증(`cv.ts`, `lib/cv-core.ts`): sha256(카드 id + 변형) % 겹 수로 나눠 겹마다 그 변형을 뺀 색인을 컴파일하고 뺀 변형으로 판정한다. 옛 정규식 표와 `CHATBOT_COMPILED_*` 환경변수는 쓰지 않는다.
+- 보정(`calibrate.ts`, `lib/calibrate-core.ts` 머리말): 사양 §8.2 를 진단 R1(R02·R05·R06·R12·R13)대로 바꾼 방법이다(아래 '보정이 사양 §8.2 와 다른 점'). 우주 쓸 문항(라벨이 색인 카드·none·gap:*·clarify, 범위 안)을 관점 단위 5겹으로 나눠 겹마다 그 겹 우주를 뺀 색인을 다시 컴파일해 분석하고(OOF), 옛 정규식 표를 런타임처럼 넘긴다. 확신도는 표준화 특징 + L2 로지스틱(종류별, 맞춤 행 20개 미만·한쪽 답뿐인 종류는 종류 one-hot 공용 모델)이고, θ 는 교차 맞춤 확신도에서 '세 비율 재가중 대리 최대, 단 진짜 NODOC 답함 ≤ 8%'로 고른다. 가중치 격자 108점(knn 0 포함)은 같은 θ 절차로 중첩 교차 검증해 고른다. 지금 `calibration.json`은 읽지 않고 기본값에서 시작한다(같은 자료·같은 우주 → 같은 바이트, 캐시와 무관). `calibration.json`의 `dataVersion`은 calibration.json 을 뺀 런타임 자료 해시(`manifest.ts calibrationBasisVersion`)이고 V-12 가 이 값과 비교한다. 개발용·확정용 묶음은 쓰지 않는다.
+- 교차 검증(`cv.ts`, `lib/cv-core.ts`): sha256(질문 쪽 정규화 글 `prepareText(변형).compact`) % 겹 수로 나눠(정규화가 같은 변형은 카드가 달라도 같은 겹, 진단 R19) 겹마다 그 변형을 뺀 색인을 컴파일하고 뺀 변형으로 판정한다. 옛 정규식 표는 런타임처럼 `collectLegacyVotes(변형, null, legacy-alias)`로 넘긴다(진단 R13, `--no-votes`로 끔). `CHATBOT_COMPILED_*` 환경변수는 쓰지 않는다.
 - 끔 동등성: `tests/chatbot/answer-index/fixtures/legacy-equivalence.json`(평가셋 전 문항의 legacy 답 해시, 글 없음)을 라우터 없음·legacy·shadow 에서 대조한다. 옛 흐름을 일부러 바꾼 커밋에서만 `ANSWER_INDEX_WRITE_LEGACY_EQUIVALENCE=1 npx vitest run tests/chatbot/answer-index/legacy-equivalence.test.ts`로 다시 만든다.
+
+## 보정이 사양 §8.2 와 다른 점(진단 R1 단계 1·3)
+
+사양 §8.2 대로 보정 묶음(D10)만으로 맞추면 묶음이 작아(쓸 문항 271, 확인용 90) θ 선택 폭이 크고(부트스트랩 폭 약 15점), 코드에 확정 결함이 있었다(진단 R06·R13). 그래서 아래처럼 바꿨다. 사양 문구는 고치지 않았고, 이 절이 지금 동작의 정본이다.
+
+| 사양 §8.2 | 지금(`lib/calibrate-core.ts`) | 까닭 |
+|---|---|---|
+| 1 맞춤 자료: 보정 묶음 2/3 맞춤·1/3 확인 | 질문 우주(D8·D9 라벨)를 관점(p) 단위 5겹으로 나눈 교차 맞춤. 겹마다 그 겹 우주를 뺀 색인을 다시 컴파일해 분석한다(자기 자신·같은 관점 문항이 kNN 이웃·IDF 에 남는 누설 차단). 보정 묶음은 외부 확인 수치만 낸다(`fit.check`는 그 문항 수) | R02: 묶음 확인용 90문항은 폭이 너무 크고, 우주를 그대로 쓰면 자기 자신이 이웃이라 누설된다 |
+| 2 확신도: 종류별 로지스틱(원 특징), 20개 미만 종류는 기본 계수 | 맞춤 행으로 표준화한 특징 + L2 λ=1, 원 척도 계수로 되돌려 쓴다(런타임 형식 그대로). 20개 미만·한쪽 답뿐인 종류는 종류 one-hot 공용 모델 | R12: howto·gap 이 기본 계수로 남아 거의 답하지 않았다 |
+| 3 가중치: 확인용에서 격자를 기본 문턱으로 채점, knn {0.3,0.5,0.7} | 격자 108점(knn {0,0.3,0.5,0.7}). 점마다 θ 고르기와 같은 절차를 중첩 교차 검증으로 돌린다: 바깥 겹마다 나머지 겹에서 θ 를 고르고 그 겹을 채점(θ 를 고른 자료로 채점하지 않음). vote 0.5점 규칙은 그대로 | R06: 기본 문턱(0.55/0.6)으로 고른 가중치가 실제 θ 와 맞지 않았고 같은 자료를 두 번 썼다. R18: knn 0 은 보정이 거르게 넣는다 |
+| 3·런타임 후보 풀: (명시 없음) | 옛 정규식 표(`collectLegacyVotes(질문, null, alias)`)를 보정·교차 검증에도 넘긴다. 서비스가 더하는 정해 둔 답 출처 이름(`gateOriginal`)은 없다 | R13: 표 없이 맞추면 vote 가중을 잴 수 없고 후보 풀이 런타임과 달랐다 |
+| 4 θ ∈ {0.30,…,0.90}, 부트스트랩 10번째 백분위 최대, 세 비율 차 1점 초과 θ 버림(모두 넘으면 차가 가장 작은 θ) | θ ∈ {0.10,…,0.95}. 세 비율 재가중 대리 평균 최대, 단 우주 OOF 진짜 NODOC(라벨 none·gap:* 이고 label2 도 카드가 아님) 답함 ≤ 8%. 벌점 λ 이분 탐색 + 종류별 좌표 탐색, 제약 안에서 다듬기. 퍼짐은 같은 점수일 때만 본다 | R06: 퍼짐 최소가 5~8점이라 1점 규칙은 만족될 수 없었고, 대체 규칙(퍼짐 최소)이 θ 를 하한 0.30 쪽으로 끌어내렸다. R05: 파일럿 관문(NODOC 답함 8%)을 θ 선택의 제약으로 넣는다 |
+| 7 `fit.bootstrapP10`: 확인용 문항 부트스트랩 | 우주 중첩 교차 검증 점수의 관점 군집 부트스트랩(1,000회, 고정 시드) 10번째 백분위 | 같은 관점 문항끼리 닮아 문항 단위 부트스트랩은 폭을 과소평가한다 |
+
+- 범위 관문(`isCompiledScope`) 밖 우주 문항은 런타임에서 색인이 정하지 않으므로 뺀다.
+- 우주 OOF 는 우주의 80%만 이웃으로 써서 런타임보다 knnShare·knnCount1 이 조금 낮다(진단 R02 위험). 우주 문항 가운데 변형과 글이 같은 것(수십 개)은 그 변형이 색인에 남는다.
+- 보고(`--report`)에는 고른 값, 우주 중첩 점수와 관점 부트스트랩, 우주 OOF, 보정 묶음 외부 확인(1위 정답·결정 정답·진짜 NODOC 답함·세 비율 대리), 점수 대 NODOC 곡선(λ 경로·네 답 종류 공통 θ), 격자 상위가 들어간다. 질문 글은 넣지 않는다.

@@ -4,7 +4,9 @@
 import { createHash } from "node:crypto"
 import { compileAnswerIndex } from "@/lib/chatbot/answer-index/compile"
 import { decide } from "@/lib/chatbot/answer-index/decide"
+import { collectLegacyVotes } from "@/lib/chatbot/answer-index/legacy-votes"
 import type { LoadedAnswerIndexData } from "@/lib/chatbot/answer-index/load"
+import { prepareText } from "@/lib/chatbot/answer-index/normalize"
 import type { AnswerVariant } from "@/lib/chatbot/answer-index/types"
 
 export interface CvRow {
@@ -20,8 +22,17 @@ export interface CvRow {
   conf: number
 }
 
-function foldOf(cardId: string, q: string, folds: number) {
-  return parseInt(createHash("sha256").update(`${cardId}\n${q}`, "utf8").digest("hex").slice(0, 8), 16) % folds
+/**
+ * 겹 열쇠: 질문 쪽 정규화 글(prepareText(q).compact — 브랜드 지우기·라우팅 풀이·정규화·꼬리 떼기·공백 지우기).
+ * 정규화가 같은 변형(같은 카드 안이든 다른 카드든)은 같은 겹에 들어가 서로의 정답을 새지 않는다(진단 R19).
+ * 정규화 글이 비면 원문을 쓴다.
+ */
+export function cvFoldKey(q: string) {
+  return prepareText(q).compact || q
+}
+
+export function cvFoldOf(q: string, folds: number) {
+  return parseInt(createHash("sha256").update(cvFoldKey(q), "utf8").digest("hex").slice(0, 8), 16) % folds
 }
 
 const pct = (part: number, whole: number) => (whole === 0 ? 0 : Math.round((part / whole) * 1000) / 10)
@@ -32,6 +43,8 @@ export interface CvOptions {
   limit?: number | null
   /** 혼동 표 줄 수. */
   top?: number
+  /** false 면 옛 정규식 표를 넘기지 않는다(기본: 런타임처럼 collectLegacyVotes(변형, null, legacy-alias)). */
+  votes?: boolean
   log?: (line: string) => void
 }
 
@@ -59,6 +72,7 @@ export function runVariantCv(data: LoadedAnswerIndexData, options: CvOptions = {
   const folds = options.folds ?? 5
   const limit = options.limit ?? null
   const topN = options.top ?? 30
+  const useVotes = options.votes !== false
   const cardInfo = new Map(data.cards.map((card) => [card.id, { kind: card.kind, area: card.area }]))
   const rows: CvRow[] = []
   for (let fold = 0; fold < folds; fold += 1) {
@@ -69,7 +83,7 @@ export function runVariantCv(data: LoadedAnswerIndexData, options: CvOptions = {
       const keep: AnswerVariant[] = []
       let taken = 0
       for (const variant of list) {
-        if (foldOf(cardId, variant.q, folds) === fold && (limit === null || taken < limit)) {
+        if (cvFoldOf(variant.q, folds) === fold && (limit === null || taken < limit)) {
           held.push({ card: cardId, q: variant.q })
           taken += 1
         } else {
@@ -80,7 +94,8 @@ export function runVariantCv(data: LoadedAnswerIndexData, options: CvOptions = {
     }
     const index = compileAnswerIndex({ ...data, variants: kept })
     for (const item of held) {
-      const decision = decide(index, item.q, { env: {} })
+      const votes = useVotes ? collectLegacyVotes(item.q, null, index.legacyAlias) : []
+      const decision = decide(index, item.q, { env: {}, votes })
       const info = cardInfo.get(item.card)
       rows.push({
         fold,

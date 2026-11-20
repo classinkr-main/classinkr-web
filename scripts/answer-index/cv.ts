@@ -3,11 +3,13 @@
  * 결과는 1위 정답률·결정 정답률·못 찾음 비율·엉뚱한 카드 비율과 혼동 표(정답 카드 → 고른 카드)다. 파일은 쓰지 않는다(--out 제외).
  *
  * 실행:
- *   npx tsx scripts/answer-index/cv.ts [--folds 5] [--limit <카드당 변형 수>] [--top 30] [--out <줄별 결과.json>] [--json]
+ *   npx tsx scripts/answer-index/cv.ts [--folds 5] [--limit <카드당 변형 수>] [--top 30] [--out <줄별 결과.json>] [--no-votes] [--json]
  *   (자료 폴더는 ANSWER_INDEX_DATA_DIR 또는 data/answer-index)
  *
- * - 겹 나누기: sha256(카드 id + 줄바꿈 + 변형 글) 앞 8자리 % 겹 수. 같은 자료면 같은 나눔·같은 결과다.
- * - 판정은 런타임 decide 그대로다(보정 파일·기본 문턱). 옛 정규식 표(vote)와 CHATBOT_COMPILED_* 환경변수는 쓰지 않는다.
+ * - 겹 나누기: sha256(질문 쪽 정규화 글 prepareText(변형).compact) 앞 8자리 % 겹 수. 정규화가 같은 변형은 카드가 달라도 같은 겹이다
+ *   (진단 R19: 남은 쌍둥이 변형이 뺀 변형의 답을 새던 누설). 같은 자료면 같은 나눔·같은 결과다.
+ * - 판정은 런타임 decide 그대로다(보정 파일). 옛 정규식 표(vote)는 런타임처럼 collectLegacyVotes(변형, null, legacy-alias)로 넘긴다
+ *   (진단 R13, 서비스가 더하는 정해 둔 답 출처 이름은 없음). --no-votes 면 넘기지 않는다. CHATBOT_COMPILED_* 환경변수는 쓰지 않는다.
  * - 변형만 본다(우주 라벨·보정 묶음은 calibrate.ts). 개발용·확정용 묶음 문장은 읽지 않는다.
  * 네트워크·모델 호출 없음.
  */
@@ -42,10 +44,11 @@ function main() {
   const top = positiveInt(argValues(argv, "--top")[0], 30, "--top")
   const outArg = argValues(argv, "--out")[0]
   const json = hasFlag(argv, "--json")
+  const votes = !hasFlag(argv, "--no-votes")
 
   const started = performance.now()
   const data = loadAnswerIndexData({ dir, curatedTextHash })
-  const { summary, rows } = runVariantCv(data, { folds, limit, top, log: json ? undefined : (line) => console.error(line) })
+  const { summary, rows } = runVariantCv(data, { folds, limit, top, votes, log: json ? undefined : (line) => console.error(line) })
   const seconds = Math.round((performance.now() - started) / 100) / 10
 
   if (outArg) writeFileSync(resolve(root, outArg), `${JSON.stringify({ dir, summary, rows }, null, 2)}\n`)
@@ -53,7 +56,7 @@ function main() {
     console.log(JSON.stringify({ dir, seconds, ...summary }, null, 2))
     return
   }
-  console.log(`답 색인 변형 교차 검증(${folds}겹)`)
+  console.log(`답 색인 변형 교차 검증(${folds}겹${votes ? "" : " · 옛 정규식 표 없음"})`)
   if (summary.heldOut === 0) {
     console.log("  변형이 없어 잴 것이 없습니다.")
     return
