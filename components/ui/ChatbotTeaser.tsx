@@ -2,7 +2,9 @@
 
 import { motion, useReducedMotion } from "framer-motion"
 import { X } from "lucide-react"
+import { CHATBOT_HIT_AREA_32_CLASS } from "@/components/ui/chatbot-hit-area"
 import { CHATBOT_MOTION, m } from "@/lib/chatbot/motion"
+import { cn } from "@/lib/utils"
 
 export function ChatbotTeaser({
     text,
@@ -36,9 +38,12 @@ export function ChatbotTeaser({
                 type="button"
                 onClick={onDismiss}
                 aria-label="알림 닫기"
-                className="shrink-0 text-[#A39E98] transition-colors hover:text-[#615D59] focus-visible:outline-none"
+                className={cn(
+                    "inline-flex h-8 w-8 shrink-0 items-center justify-center text-fg-muted transition-colors hover:text-fg-ink focus-visible:outline-none",
+                    CHATBOT_HIT_AREA_32_CLASS
+                )}
             >
-                <X className="h-3.5 w-3.5" />
+                <X className="h-4 w-4" />
             </button>
         </motion.div>
     )

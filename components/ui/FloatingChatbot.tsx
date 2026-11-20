@@ -23,6 +23,7 @@ import {
 } from "lucide-react"
 
 import { ClassInAIIcon } from "@/components/ui/ClassInAIIcon"
+import { CHATBOT_HIT_AREA_CLASS } from "@/components/ui/chatbot-hit-area"
 import { cn } from "@/lib/utils"
 import {
     buildChannelTalkMemberId,
@@ -464,12 +465,13 @@ function FeedbackButtons({
     }
 
     return (
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-2">
             <button
                 type="button"
                 onClick={() => sendFeedback("helpful")}
                 className={cn(
-                    "inline-flex h-8 w-8 items-center justify-center rounded-[8px] border border-white/70 bg-white/70 text-[#615D59] transition-colors hover:bg-fg-accent/8 hover:text-fg-accent",
+                    "inline-flex h-9 w-9 items-center justify-center rounded-[8px] border border-white/70 bg-white/70 text-[#615D59] transition-colors hover:bg-fg-accent/8 hover:text-fg-accent",
+                    CHATBOT_HIT_AREA_CLASS,
                     state === "helpful" && "border-fg-accent/25 bg-fg-accent/8 text-fg-accent"
                 )}
                 aria-label="도움됨"
@@ -481,7 +483,8 @@ function FeedbackButtons({
                 type="button"
                 onClick={() => sendFeedback("not_helpful")}
                 className={cn(
-                    "inline-flex h-8 w-8 items-center justify-center rounded-[8px] border border-white/70 bg-white/70 text-[#615D59] transition-colors hover:bg-fg-accent/8 hover:text-fg-accent",
+                    "inline-flex h-9 w-9 items-center justify-center rounded-[8px] border border-white/70 bg-white/70 text-[#615D59] transition-colors hover:bg-fg-accent/8 hover:text-fg-accent",
+                    CHATBOT_HIT_AREA_CLASS,
                     state === "not_helpful" && "border-fg-accent/25 bg-fg-accent/8 text-fg-accent"
                 )}
                 aria-label="도움 안 됨"
@@ -698,7 +701,8 @@ function AnswerCopyButton({ message }: { message: ChatMessage }) {
             whileTap={shouldReduceMotion ? undefined : { scale: 0.96 }}
             onClick={() => void copyAnswer()}
             className={cn(
-                "inline-flex h-8 items-center justify-center gap-1.5 rounded-[8px] border px-2.5 text-[11px] font-bold transition-all shadow-[0_1px_2px_rgba(0,0,0,0.03)]",
+                "inline-flex h-9 items-center justify-center gap-1.5 rounded-[8px] border px-2.5 text-[11px] font-bold transition-all shadow-[0_1px_2px_rgba(0,0,0,0.03)]",
+                CHATBOT_HIT_AREA_CLASS,
                 state === "copied"
                     ? "border-fg-accent/30 bg-fg-accent/8 text-fg-accent"
                     : state === "failed"
@@ -1456,11 +1460,14 @@ export function FloatingChatbot() {
                                         <p className="mt-0.5 truncate text-xs font-medium text-[#615D59]">운영·도입·CS 상담</p>
                                     </div>
                                 </div>
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-3">
                                     <button
                                         type="button"
                                         onClick={toggleMute}
-                                        className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/60 bg-white/35 text-[#615D59] shadow-[inset_0_1px_0_rgba(255,255,255,0.60)] transition-colors hover:bg-white/70 hover:text-fg-accent focus-visible:outline-none"
+                                        className={cn(
+                                            "inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/60 bg-white/35 text-[#615D59] shadow-[inset_0_1px_0_rgba(255,255,255,0.60)] transition-colors hover:bg-white/70 hover:text-fg-accent focus-visible:outline-none",
+                                            CHATBOT_HIT_AREA_CLASS
+                                        )}
                                         aria-label={muted ? "소리 켜기" : "음소거"}
                                     >
                                         {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
@@ -1468,7 +1475,10 @@ export function FloatingChatbot() {
                                     <button
                                         type="button"
                                         onClick={closeChatbot}
-                                        className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/60 bg-white/35 text-[#615D59] shadow-[inset_0_1px_0_rgba(255,255,255,0.60)] transition-colors hover:bg-white/70 hover:text-fg-accent focus-visible:outline-none"
+                                        className={cn(
+                                            "inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/60 bg-white/35 text-[#615D59] shadow-[inset_0_1px_0_rgba(255,255,255,0.60)] transition-colors hover:bg-white/70 hover:text-fg-accent focus-visible:outline-none",
+                                            CHATBOT_HIT_AREA_CLASS
+                                        )}
                                         aria-label="챗봇 닫기"
                                     >
                                         <X className="h-5 w-5" />
