@@ -8,7 +8,8 @@ import { updateSupabaseSession, type VerifiedSupabaseUser } from "@/lib/supabase
 import { getSupabaseBrowserEnv, hasSupabaseBrowserEnv } from "@/lib/supabase/public-env"
 
 const ADMIN_LOGIN_PATH = "/admin/login"
-const PROXY_BYPASS_PATHS = new Set(["/api/meta/webhook"])
+// /api/mcp 는 Bearer 토큰만 본다(app/api/mcp/route.ts) — 세션 갱신 왕복이 필요 없다.
+const PROXY_BYPASS_PATHS = new Set(["/api/meta/webhook", "/api/mcp"])
 const ADMIN_PAGE_ROLES = new Set(["ADMIN", "SUPER_ADMIN"])
 const BRANCH_PAGE_ROLES = new Set(["ADMIN", "SUPER_ADMIN", "BRANCH"])
 
