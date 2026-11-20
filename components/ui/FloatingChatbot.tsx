@@ -1,6 +1,6 @@
 "use client"
 
-import { FormEvent, memo, useEffect, useMemo, useRef, useState } from "react"
+import { FormEvent, memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
@@ -42,6 +42,7 @@ import {
 } from "@/lib/chatbot/open-chatbot"
 import { ChatbotTeaser } from "@/components/ui/ChatbotTeaser"
 import { useChatbotTeaser } from "@/components/ui/useChatbotTeaser"
+import { isNearBottom, resolveChatInputHeight } from "@/components/ui/chatbot-input-autosize"
 import { CHATBOT_MOTION, m } from "@/lib/chatbot/motion"
 import {
     isMuted,
@@ -992,6 +993,40 @@ export function FloatingChatbot() {
         return () => window.cancelAnimationFrame(frame)
     }, [isOpen])
 
+    // 입력창이 내용에 맞춰 44px → 112px 까지 늘고, 넘치면 안쪽 스크롤로 바뀐다.
+    // 한계는 computed min/max-height 를 읽어 글꼴 확대 상태에서도 CSS(min-h-11·max-h-28)와 같게 둔다.
+    // 그리기 전에 맞춰야 한 줄 높이로 깜빡이지 않으므로 layout effect 로 둔다.
+    useLayoutEffect(() => {
+        if (!isOpen) return
+        const el = inputRef.current
+        if (!el) return
+
+        const resize = () => {
+            const container = messagesContainerRef.current
+            const wasNearBottom = container ? isNearBottom(container) : false
+            const prev = el.offsetHeight
+
+            el.style.height = "auto"
+            const cs = window.getComputedStyle(el)
+            const { height, overflowY } = resolveChatInputHeight(
+                el.scrollHeight,
+                parseFloat(cs.minHeight),
+                parseFloat(cs.maxHeight),
+            )
+            el.style.height = `${height}px`
+            el.style.overflowY = overflowY
+
+            // 입력창이 커지면 대화 목록이 줄어든다. 맨 아래를 보고 있었다면 계속 맨 아래에 둔다.
+            if (height !== prev && wasNearBottom && container) {
+                container.scrollTop = container.scrollHeight
+            }
+        }
+
+        resize()
+        window.addEventListener("resize", resize)
+        return () => window.removeEventListener("resize", resize)
+    }, [input, isOpen])
+
     useEffect(() => {
         if (!isOpen) return
         const frame = window.requestAnimationFrame(() => {
@@ -1006,9 +1041,7 @@ export function FloatingChatbot() {
         const container = messagesContainerRef.current
         if (!container) return
 
-        const threshold = 45
-        const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight <= threshold
-        setIsAtBottom(isNearBottom)
+        setIsAtBottom(isNearBottom(container))
     }
 
     useEffect(() => {
@@ -1425,6 +1458,9 @@ export function FloatingChatbot() {
                             {/* 대화 내용 목록 (Staggered Item 2) */}
                             <motion.div
                                 ref={messagesContainerRef}
+                                // 목록 스크롤을 framer 레이아웃 측정에 넣는다. 없으면 입력창이 커질 때 맞춘 맨 아래 위치를
+                                // 메시지 layout 애니메이션이 스크롤 이동으로 오해해 되돌린다.
+                                layoutScroll
                                 onScroll={handleScroll}
                                 variants={itemVariants}
                                 custom={shouldReduceMotion}
@@ -1575,7 +1611,7 @@ export function FloatingChatbot() {
                                             placeholder="질문을 짧게 입력해 주세요"
                                             aria-label="챗봇 질문 입력"
                                             data-focus-ring="parent"
-                                            className="min-h-11 max-h-28 flex-1 resize-none rounded-[12px] border-0 bg-transparent px-3 py-2.5 text-[15px] leading-6 text-[#111110] placeholder:text-[#A39E98] focus-visible:outline-none transition-[height] duration-150 ease-out"
+                                            className="min-h-11 max-h-28 flex-1 resize-none rounded-[12px] border-0 bg-transparent px-3 py-2.5 text-[15px] leading-6 text-[#111110] placeholder:text-fg-placeholder focus-visible:outline-none transition-[height] duration-150 ease-out"
                                         />
                                         <motion.button
                                             type="submit"
