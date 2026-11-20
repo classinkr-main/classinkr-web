@@ -13,6 +13,7 @@ import {
   parseAnswerRouter,
   parseEvalCases,
   parseSimulateMode,
+  repeatRunEnv,
   runConversationTurns,
   simulateGeminiFetch,
   summarizeRows,
@@ -298,5 +299,14 @@ describe("대화 입력·첫 시도·반복·가짜 Gemini(U4)", () => {
     expect(ratios.contextExpanded).toEqual({ count: 1, of: 2, ratio: 0.5 })
     expect(ratios.firstAttempt.decidedBy).toEqual({ "index": 1, model_unavailable: 1, not_found: 1 })
     expect(ratios.firstAttempt.modelNotOk).toEqual({ count: 2, ratio: 0.667 })
+  })
+})
+
+// 2026-11-20 검토: --repeat 가 같은 프로세스에서 같은 질문을 되풀이하면 답 캐시·관문 캐시가 적중해 갈림이 0 으로 찍혔다.
+describe("--repeat 측정의 캐시", () => {
+  it("반복이 2 이상이면 답 캐시·관문 판정 캐시를 끄는 환경변수를 둔다", () => {
+    expect(repeatRunEnv(1)).toEqual({})
+    expect(repeatRunEnv(2)).toEqual({ CHATBOT_ANSWER_CACHE: "off" })
+    expect(repeatRunEnv(5)).toEqual({ CHATBOT_ANSWER_CACHE: "off" })
   })
 })

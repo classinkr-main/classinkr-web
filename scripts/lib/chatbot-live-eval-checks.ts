@@ -399,6 +399,15 @@ export interface RepeatDivergence {
   ratio: number
 }
 
+/**
+ * --repeat N 측정에서 서비스 모듈을 불러오기 전에 둘 환경변수. 같은 프로세스에서 같은 질문을 되풀이하면 답 캐시(5분)·관문 판정 캐시가
+ * 적중해 모델을 다시 부르지 않고 같은 답을 받아 '답이 갈린 비율'이 0 으로 찍힌다. 반복이 2 이상이면 두 캐시를 끈다
+ * (CHATBOT_ANSWER_CACHE=off, 동시 실행 중에 캐시를 비우는 것으로는 다른 반복이 넣은 값을 막지 못한다).
+ */
+export function repeatRunEnv(repeat: number): Record<string, string> {
+  return repeat > 1 ? { CHATBOT_ANSWER_CACHE: "off" } : {}
+}
+
 /** --repeat N 결과에서 같은 질문(키)을 여러 번 돌린 답이 갈린 비율. 답이 null(오류)인 실행은 '오류'라는 하나의 값으로 본다. */
 export function answerDivergence(rows: Array<{ key: string; answer: string | null }>): RepeatDivergence {
   const byKey = new Map<string, Set<string>>()

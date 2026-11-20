@@ -344,3 +344,139 @@ describe("캐시를 거쳐도 조각 알림이 같다", () => {
     expect(fromCache.answer).toBe(nonStream.answer)
   })
 })
+
+// 2026-11-20 검토 결과 고침. 예시 질문은 이 시험을 위해 지었다.
+describe("검토 고침: 대상 불명 답은 다른 대화에 따라 갈리지 않는다", () => {
+  it.each(["안녕하세요", "이거 뭐예요"])("직전 질문이 '%s'여도 대상 불명 되묻기이고, 뒤에 온 새 방문자도 되묻기를 받는다(select, 가짜 Gemini)", async (previous) => {
+    vi.stubEnv("GEMINI_API_KEY", "test-key")
+    const { requests } = stubEvidenceSelection(() => false)
+    const other = await evaluateChatbotQuery("이거 뭐예요", { previousTurn: { question: previous } })
+    expect(other.conversationReason).toBe("target_unknown")
+    expect(other.answerMode).toBe("clarifying_question")
+    const fresh = await evaluateChatbotQuery("이거 뭐예요")
+    expect(fresh.answerMode).toBe("clarifying_question")
+    expect(fresh.answer).toBe(other.answer)
+    const stream = await collectStream("이거 뭐예요", {})
+    expect(stream.answer).toBe(fresh.answer)
+    expect(requests).toHaveLength(0)
+  })
+})
+
+describe("검토 고침: 같은 대화의 '아까 챗봇이 알려준'(G2)", () => {
+  it.each(["아까 챗봇이 알려준 대로 했는데 안 돼요", "아까 알려준 거 해봤는데 안 돼요", "아까 그거 해봤는데도 똑같아요"])(
+    "증상 안내 뒤 '%s'는 같은 안내를 또 주지 않고 상담으로 잇는다",
+    async (second) => {
+      const { secondAnswer } = await twoTurns("카메라가 안 켜져요", second)
+      expect(secondAnswer.contextExpanded).toBe(true)
+      expect(secondAnswer.answerMode).toBe("handoff")
+      expect(secondAnswer.answer).toContain("같은 안내를 또 드리지 않을게요")
+      expect(secondAnswer.answer).not.toContain(PRIOR_INQUIRY_LINE)
+      expect(secondAnswer.answer).not.toMatch(/볼\s*수\s*없/)
+    }
+  )
+})
+
+describe("검토 고침: 넓히면 안 되는 말은 혼자 물었을 때와 같은 답", () => {
+  it.each([
+    ["견적 받고 싶어요", "학생 30명인데 녹화 파일은 어디서 받아요?"],
+    ["데모 신청하고 싶어요", "강사 3명인데 학생 초대는 어떻게 하나요?"],
+    ["학원에 도입하려면 어떻게 해야 하나요?", "아직 모르겠는데 학생은 수업에 어떻게 들어가요?"],
+    ["학원에 도입하려면 어떻게 해야 하나요?", "바로 쓰고 싶은데 앱 설치는 어떻게 해요?"],
+    ["카메라가 안 켜져요", "출결은요?"],
+    ["카메라가 안 켜져요", "숙제는요?"],
+  ])("%s → %s", async (first, second) => {
+    const alone = await evaluateChatbotQuery(second, { generateAnswer: false })
+    const { secondAnswer } = await twoTurns(first, second)
+    expect(secondAnswer.contextExpanded).toBe(false)
+    expect(secondAnswer.answer).toBe(alone.answer)
+  })
+
+  it("'그러면 출결은요?'는 앞 턴 카메라 안내를 다시 내지 않는다", async () => {
+    const { firstAnswer, secondAnswer } = await twoTurns("카메라가 안 켜져요", "그러면 출결은요?")
+    expect(secondAnswer.contextExpanded).toBe(false)
+    expect(secondAnswer.answer).not.toBe(firstAnswer.answer)
+    expect(secondAnswer.answer).not.toContain("카메라")
+  })
+})
+
+describe("검토 고침: 문서 페이지에서 조사 '이'·'말고'는 페이지 맥락이 아니다", () => {
+  const pagePath = "/docs/start/camera-mic-troubleshooting"
+
+  it.each(["학생이 글씨를 못 써요", "선생님이 페이지를 넘기면 학생 화면도 넘어가나요?", "학생이 안내 문자를 못 받아요"])(
+    "%s: 경로와 상관없이 같은 답",
+    async (question) => {
+      const plain = await evaluateChatbotQuery(question, { generateAnswer: false })
+      const onPage = await evaluateChatbotQuery(question, { generateAnswer: false, pagePath })
+      expect(onPage.conversationReason).toBe("none")
+      expect(onPage.answer).toBe(plain.answer)
+      expect(onPage.sources).toEqual(plain.sources)
+    }
+  )
+
+  it("select 모드에서 '이 안내 말고 영수증은 어디서 받아요?'는 페이지 요약이 아니라 영수증 안내다", async () => {
+    vi.stubEnv("GEMINI_API_KEY", "test-key")
+    stubEvidenceSelection(() => false)
+    const question = "이 안내 말고 영수증은 어디서 받아요?"
+    const plain = await evaluateChatbotQuery(question)
+    __clearAnswerCacheForTests()
+    const onPage = await evaluateChatbotQuery(question, { pagePath: "/docs/start/password-change-pc" })
+    expect(onPage.conversationReason).toBe("none")
+    expect(onPage.answer).toBe(plain.answer)
+    expect(onPage.sources.map((source) => source.urlPath)).not.toContain("/docs/start/password-change-pc")
+  })
+})
+
+describe("검토 고침: 스트림 캐시에 앞 턴 말투가 남지 않는다", () => {
+  it("화난 1턴 뒤 '아까 그거요'는 stream 과 non-stream 이 같고 사과·연결을 다시 붙이지 않는다", async () => {
+    const first = "PC에서 수업 녹화 파일은 어디서 다시 보나요 진짜 화나네요"
+    const firstStream = await collectStream(first, {})
+    const streamSecond = await collectStream("아까 그거요", { previousTurn: { question: first, answerMode: firstStream.meta?.answerMode } })
+    __clearAnswerCacheForTests()
+    const firstPlain = await evaluateChatbotQuery(first)
+    const plainSecond = await evaluateChatbotQuery("아까 그거요", { previousTurn: { question: first, answerMode: firstPlain.answerMode } })
+    expect(streamSecond.answer).toBe(plainSecond.answer)
+    expect(streamSecond.meta?.needsHandoff).toBe(plainSecond.needsHandoff)
+    expect(streamSecond.answer).not.toContain("죄송")
+    expect(plainSecond.needsHandoff).toBe(false)
+  })
+})
+
+describe("검토 고침: 한 조각만 정해 둔 답이 서는 두 조각 질문", () => {
+  it("'가격이 얼마예요? 앱도 있어요?'는 답하지 못한 '앱도 있어요'를 알린다", async () => {
+    const result = await evaluateChatbotQuery("가격이 얼마예요? 앱도 있어요?", { generateAnswer: false })
+    expect(result.answer).toContain("함께 물어보신 '앱도 있어요'는 이 답에 담지 못했어요.")
+    expect(result.suggestedQuestions[0]).toBe("앱도 있어요?")
+  })
+
+  it("묻는 꼴이 아닌 조각(상황 설명)은 알리지 않는다", async () => {
+    const result = await evaluateChatbotQuery("가격이 얼마예요? 벌써 세 번째 물어봐요", { generateAnswer: false })
+    expect(result.answer).not.toContain("함께 물어보신")
+  })
+})
+
+describe("검토 고침: 증상을 말한 짧은 질문의 되묻기 예시", () => {
+  it("'판서가 안 보여요'에는 사용 문제 예시를 든다(처음 온 사람용 예시가 아니다)", async () => {
+    for (const question of ["판서가 안 보여요", "그거 안 열려요"]) {
+      const result = await evaluateChatbotQuery(question, { generateAnswer: false })
+      expect(result.answer, question).toContain("수업 입장·소리·화면 같은 사용 문제")
+      expect(result.answer, question).not.toContain("클래스인이 어떤 서비스인지")
+    }
+  })
+})
+
+describe("검토 고침: 반복 측정 스위치(CHATBOT_ANSWER_CACHE=off)", () => {
+  it("캐시를 끄면 같은 질문을 되풀이할 때마다 근거 선별을 다시 부른다", async () => {
+    vi.stubEnv("GEMINI_API_KEY", "test-key")
+    let call = 0
+    const { requests } = stubEvidenceSelection(() => call++ % 2 === 0)
+    await evaluateChatbotQuery("녹화 파일은 어디서 받아요?")
+    const afterFirst = requests.length
+    expect(afterFirst).toBeGreaterThan(0)
+    await evaluateChatbotQuery("녹화 파일은 어디서 받아요?")
+    expect(requests.length).toBe(afterFirst)
+    vi.stubEnv("CHATBOT_ANSWER_CACHE", "off")
+    await evaluateChatbotQuery("녹화 파일은 어디서 받아요?")
+    await evaluateChatbotQuery("녹화 파일은 어디서 받아요?")
+    expect(requests.length).toBe(afterFirst * 3)
+  })
+})

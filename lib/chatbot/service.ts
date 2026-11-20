@@ -127,6 +127,7 @@ import { isCompiledScope } from "@/lib/chatbot/answer-index/scope"
 import type { AnswerIndexDecision, AnswerIndexRouter, AnswerIndexTrace } from "@/lib/chatbot/answer-index/types"
 import type { ChatbotSelfKnowledgeEntry } from "@/lib/chatbot/self-knowledge"
 import {
+  contentWordsOf,
   parseDocPagePath,
   parsePreviousTurnInput,
   resolveConversationTurn,
@@ -448,20 +449,33 @@ export function __clearAnswerCacheForTests() {
 // 바꾸거나 색인 자료·계산 규칙이 바뀌면 다른 라우터·다른 판에서 만든 답을 꺼내지 않는다(답 색인 사양 §3.2·§3.7). 폴더는 manifest 를
 // 다시 쓰지 않은 작업 폴더 사본(같은 판 이름)도 가르려고 넣는다. 내부 CS 경로는 라우터를 쓰지 않아 legacy 로 적는다.
 //
-// 열쇠의 질문은 대화 맥락으로 넓힌 검색용 질문(routingText)이다. 같은 검색용 질문이면 같은 답이 나오고, 말투 층은 캐시 뒤에 입힌다.
-// 문서 페이지 맥락을 쓴 답(그 문서 절을 후보 맨 앞에 둔 답)만 열쇠에 경로를 넣는다(pageKey).
-function getAnswerCacheKey(question: NormalizedQuestion, options?: RetrievalOptions, pageKey?: string | null) {
+// 열쇠의 질문은 대화 맥락으로 넓힌 검색용 질문(routingText)이다. 같은 검색용 질문이면 같은 답이 나오고, 말투 층·조각 알림은 캐시 뒤에 입힌다
+// (일반·스트림 경로 모두 말투 층을 입히기 전 사본을 넣는다).
+// 같은 글이라도 대화 맥락 판단이 답을 바꾸는 경우는 열쇠에 그 판단을 넣는다(answerCacheContextKey): 문서 페이지 맥락을 쓴 답(그 문서 절을
+// 후보 맨 앞에 둔 답)은 경로를, 대상 불명 되묻기(target_unknown)는 그 이유를 넣는다.
+function getAnswerCacheKey(question: NormalizedQuestion, options?: RetrievalOptions, contextKey?: string | null) {
   const backend = hasSupabaseServerEnv() ? "supabase" : "static"
   const router = options?.includeInternalDocs ? "legacy" : getAnswerRouter()
-  const page = pageKey ? `:page=${pageKey}` : ""
-  return `${ANSWER_CACHE_VERSION}:${backend}:${retrievalScope(options)}:${router}@${answerIndexVersion()}@${answerIndexDataDir()}${page}:${buildRetrievalQueryText(question).toLowerCase()}`
+  const context = contextKey ? `:${contextKey}` : ""
+  return `${ANSWER_CACHE_VERSION}:${backend}:${retrievalScope(options)}:${router}@${answerIndexVersion()}@${answerIndexDataDir()}${context}:${buildRetrievalQueryText(question).toLowerCase()}`
+}
+
+/** 답 캐시 열쇠에 넣을 대화 맥락 판단. 지금 말 그대로 검색해도 판단에 따라 답이 다른 경우만 값이 있다. */
+function answerCacheContextKey(trace: ConversationTrace | undefined): string | null {
+  if (!trace) return null
+  if (trace.pagePath) return `page=${trace.pagePath}`
+  if (trace.reason === "target_unknown") return "turn=target_unknown"
+  return null
 }
 
 /**
  * 답 캐시를 쓸 수 있는지. 세션 이력은 generate 모드의 답 다시 쓰기에만 들어가므로, select·off 모드는 세션이 있어도 캐시를 쓴다
  * (2026-11-20 조사 G1·novice-11). 모델 없이 초안만 만드는 평가 호출(generateAnswer=false)은 쓰지 않는다.
+ * 측정용 스위치 CHATBOT_ANSWER_CACHE=off 면 쓰지 않는다(관문 판정 캐시도 함께 꺼진다, answer-gate.ts). 같은 질문을 되풀이해
+ * 답이 갈리는지 잴 때(scripts/chatbot-live-eval.ts --repeat) 캐시 적중이 갈림을 가리지 않게 한다.
  */
 function isAnswerCacheAllowed(options: Pick<BuildChatbotCoreOptions, "generateAnswer" | "sessionId">) {
+  if (process.env.CHATBOT_ANSWER_CACHE?.trim().toLowerCase() === "off") return false
   return options.generateAnswer !== false && (!options.sessionId || getFinalAnswerLlmMode() !== "generate")
 }
 
@@ -479,9 +493,9 @@ function cloneCachedAnswer(value: CachedAnswerEntry): CachedAnswerEntry {
 function getCachedAnswer(
   question: NormalizedQuestion,
   options?: RetrievalOptions,
-  pageKey?: string | null
+  contextKey?: string | null
 ): CachedAnswerEntry | null {
-  const key = getAnswerCacheKey(question, options, pageKey)
+  const key = getAnswerCacheKey(question, options, contextKey)
   const cached = answerCache.get(key)
   if (!cached) return null
   if (cached.expiresAt <= Date.now()) {
@@ -495,13 +509,13 @@ function setCachedAnswer(
   question: NormalizedQuestion,
   value: CachedAnswerEntry,
   options?: RetrievalOptions,
-  pageKey?: string | null
+  contextKey?: string | null
 ) {
   if (answerCache.size >= ANSWER_CACHE_MAX) {
     const firstKey = answerCache.keys().next().value
     if (firstKey) answerCache.delete(firstKey)
   }
-  answerCache.set(getAnswerCacheKey(question, options, pageKey), {
+  answerCache.set(getAnswerCacheKey(question, options, contextKey), {
     expiresAt: Date.now() + ANSWER_CACHE_TTL_MS,
     value: cloneCachedAnswer(value),
   })
@@ -2884,11 +2898,16 @@ function buildGeneralClarify(question: NormalizedQuestion) {
     ? "예를 들면 수업 들어가기, 다시보기, 숙제 내기, 앱 설치·로그인, 선생님이 보낸 파일 열기 가운데 어느 쪽인가요?"
     : /샘들|선생님들|강사|원장|학원|관리자|직원|실장|경리|세무|정산|마감/.test(text)
       ? "예를 들면 강사·학생 등록, 수업·녹화 설정, 저장 공간, 결제·요금, 전자칠판 가운데 어느 쪽인가요?"
-      : FIRST_VISIT_CLARIFY_EXAMPLE
+      : SYMPTOM_REPORT_RE.test(text)
+        ? USAGE_PROBLEM_CLARIFY_EXAMPLE
+        : FIRST_VISIT_CLARIFY_EXAMPLE
   return [lead, example]
 }
 
-// 분류가 안 된 짧은 질문의 되묻기 예시. 무엇을 묻는지 모르는 질문은 처음 온 사람의 질문이 많아(2026-11-20 조사 G8),
+// 증상을 말한 질문("판서가 안 보여요")의 되묻기 예시. 사용 문제를 먼저 든다(2026-11-20 조사 이전 문구 그대로).
+const USAGE_PROBLEM_CLARIFY_EXAMPLE =
+  "예를 들면 수업 입장·소리·화면 같은 사용 문제, 녹화·숙제 같은 기능, 결제·요금, 도입 상담 가운데 어느 쪽인가요?"
+// 분류가 안 된 짧은 질문(증상 신고가 아닌 말)의 되묻기 예시. 무엇을 묻는지 모르는 질문은 처음 온 사람의 질문이 많아(2026-11-20 조사 G8),
 // 사용 문제 대신 처음 온 사람이 가장 많이 묻는 것(클래스인이 무엇인지·수업에 들어가는 법·요금)을 든다. 새 사실은 넣지 않는다.
 const FIRST_VISIT_CLARIFY_EXAMPLE = "예를 들면 클래스인이 어떤 서비스인지, 수업에 들어가는 방법, 요금 가운데 어느 쪽이 궁금하신가요?"
 // 처음 온 사람용 보기 칩(대상 불명 되묻기). 누르면 소개·수업 입장·요금 답으로 간다.
@@ -3822,9 +3841,13 @@ async function persistExchange(
   handoffIntent: HandoffIntent,
   latencyMs?: number,
   sessionId?: string,
-  answerEventId?: string
+  answerEventId?: string,
+  // 대화 맥락으로 넓힌 검색용 질문(넓혔을 때만). 질문 묶음·문서 검색 기록은 이 글로 쌓고, 상담 전환 본문에 한 줄로 싣는다
+  // (답은 이 글로 만들었는데 "휴대폰이요"만 남으면 상담원과 문서 공백 집계가 맥락을 볼 수 없다).
+  routingQuestion?: NormalizedQuestion | null
 ) {
   if (!hasSupabaseServerEnv()) return {}
+  const searchedQuestion = routingQuestion ?? question
 
   try {
     const supabase = createSupabaseAdminClient()
@@ -3912,13 +3935,13 @@ async function persistExchange(
       upsertQuestionCluster(
         supabase,
         answerEvent.id as string,
-        question,
+        searchedQuestion,
         response,
         category
       ),
       supabase.from("docs_search_events").insert({
         query: question.redacted,
-        normalized_query: buildRetrievalQueryText(question),
+        normalized_query: buildRetrievalQueryText(searchedQuestion),
         result_count: response.sources.length,
         visitor_id: normalizeString(input.anonymousId) ?? null,
         session_id: resolvedSessionId,
@@ -3934,6 +3957,7 @@ async function persistExchange(
         pageUrl: normalizeString(context.pageUrl) ?? null,
         path: normalizeString(context.path) ?? null,
         question: question.redacted,
+        routingQuestion: routingQuestion ? routingQuestion.redacted : null,
         answer: response.answer,
         answerMode: response.answerMode,
         confidence: response.confidence,
@@ -4203,6 +4227,9 @@ interface BuildChatbotCoreOptions {
   previousTurn?: PreviousTurn | null
   // 문서 페이지 경로(공개 문서만). "방금 본 내용" 같은 질문이면 그 문서 절을 검색 후보 맨 앞에 둔다.
   pagePath?: DocPageRef | null
+  // 스트림 경로: 조각 알림·말투 층을 코어에서 입히지 않는다. 선별·보류·두 번째 검색과 답 캐시 저장을 마친 뒤 한 번 입힌다
+  // (일반 경로와 같은 순서, 캐시에는 말투 층 전 사본이 들어간다).
+  deferAnswerLayers?: boolean
 }
 
 function determineModelTier(): ChatbotModelTier {
@@ -5215,7 +5242,10 @@ function withholdUnverifiedDraft(
   }
   if (response.answerMode === "handoff") return false
   // 문서 페이지에서 그 문서를 가리킨 질문("방금 본 내용 정리해 줘")은 첫 출처가 고객이 가리킨 문서라 질문과 맞는지 알 수 있다.
-  if (conversation?.pagePath && response.sources[0]?.urlPath === conversation.pagePath) return false
+  // 단 모델이 꺼져(키 없음·off) 근거 선별을 할 수 없을 때만이다. 모델이 켜져 있는데 선별을 건너뛴 답(정책 주제 등)은 다른 초안과 같이 보류한다.
+  if (conversation?.pagePath && response.sources[0]?.urlPath === conversation.pagePath && !isFinalAnswerModelEnabled()) {
+    return false
+  }
   if (!isOutsideKnownVocabulary(question)) return false
   response.answer = NO_SOURCE_FACT_ANSWER
   response.answerMode = "doc_suggestion"
@@ -5894,10 +5924,10 @@ function answerHead(answer: string) {
 }
 
 /**
- * 조각 하나가 혼자 물렸을 때 고를 정해 둔 답. 정규식 판정만 쓴다(모델·네트워크 없음).
+ * 글 하나가 혼자 물렸을 때 고를 정해 둔 답(출처 이름과 답 글). 정규식 판정만 쓴다(모델·네트워크 없음).
  * 정해 둔 답·증상 안내·화면 가이드·검수 틀 답이 아니면 null.
  */
-function segmentAnswerOf(text: string): SegmentAnswer | null {
+function deterministicAnswerOf(text: string): { original: string; answer: string } | null {
   let segment: NormalizedQuestion
   try {
     segment = normalizeQuestion(text)
@@ -5905,19 +5935,37 @@ function segmentAnswerOf(text: string): SegmentAnswer | null {
     return null
   }
   const quick = buildServiceQuickAnswer(segment)
-  if (quick) return { original: quick.gateOriginal ?? "service", head: answerHead(quick.response.answer) }
+  if (quick) return { original: quick.gateOriginal ?? "service", answer: quick.response.answer }
   const routing = glossForRouting(segment.redacted)
   const guide = findCsFigmaGuideForQuestion(routing)
   const triage = resolveSymptomTriageForQuestion(routing, guide)
-  if (triage) return { original: `symptom:${triage.topicId ?? "triage"}`, head: answerHead(sanitizePublicAnswerText(triage.answer)) }
-  if (guide) return { original: `guide:${guide.slug}`, head: answerHead(csFigmaGuideCoreParts(guide, segment.redacted).response.answer) }
+  if (triage) return { original: `symptom:${triage.topicId ?? "triage"}`, answer: sanitizePublicAnswerText(triage.answer) }
+  if (guide) return { original: `guide:${guide.slug}`, answer: csFigmaGuideCoreParts(guide, segment.redacted).response.answer }
   if (!isCuratedTemplateQuestion(segment)) return null
   const curated = buildCuratedSources(segment)
   if (curated.length === 0) return null
   const { category } = classifyChatbotQuestion(segment.redacted, curated.map((source) => source.category))
   const response = composeAnswer(segment, selectDiverseSources(rerankSources(segment, curated), 1), category)
   const original = getComposedTemplateOriginal(response)
-  return original ? { original, head: answerHead(response.answer) } : null
+  return original ? { original, answer: response.answer } : null
+}
+
+/** 조각 하나가 혼자 물렸을 때 고를 정해 둔 답(출처 이름과 첫 문단). */
+function segmentAnswerOf(text: string): SegmentAnswer | null {
+  const found = deterministicAnswerOf(text)
+  return found ? { original: found.original, head: answerHead(found.answer) } : null
+}
+
+// 조각이 무엇을 묻는 꼴인지(물음표·의문사·묻는 어미). "벌써 세 번째예요" 같은 상황 설명은 아니다.
+const ASKING_SEGMENT_RE =
+  /[?？]|(?:^|\s)(?:뭐|무엇|무슨|어디|어디서|언제|얼마|몇|어떻게|어떤|누가|누구|왜)|(?:나요|까요|는지|인지|던가|되나|드나|인가|일까|맞나|궁금|가능한가요)\s*[.!~]*$/
+
+/** 답 글이 조각의 내용 낱말을 하나라도 말하는지(두 글자 낱말은 붙은 조사 한 글자를 떼고도 본다: "앱도" → "앱"). */
+function answerMentionsSegment(answer: string, segment: string) {
+  const text = answer.toLowerCase()
+  return contentWordsOf(segment).some(
+    (word) => text.includes(word) || (word.length === 2 && /[은는이가을를도만에와과랑]$/.test(word) && text.includes(word[0]))
+  )
 }
 
 /** 이 답을 고른 정해 둔 답의 출처 이름. 관문이 버렸거나(문서 경로 답) 정해 둔 답이 아니면 null. */
@@ -5950,16 +5998,26 @@ function appendUnansweredSegmentNotice(core: ChatbotCore) {
   const segments = segmentQuestion((core.utterance ?? core.question).redacted)
   if (segments.length !== 2) return
   const candidates = segments.map(segmentAnswerOf)
-  // 두 조각이 저마다 정해 둔 답을 고르고(서로 다른 후보), 이 답은 그 가운데 한 조각 것만 담았을 때만 알린다.
-  // 혼자서 정해 둔 답이 서지 않는 조각("벌써 세 번째예요", 상황 설명)은 묻는 말이 아닐 수 있어 알리지 않는다.
-  if (candidates.some((candidate) => candidate === null)) return
-  if (candidates[0]!.original === candidates[1]!.original) return
-  const covered = candidates.map(
-    (candidate) =>
-      candidate!.original === answered || (candidate!.head.length >= 12 && core.response.answer.includes(candidate!.head))
-  )
-  if (covered[0] === covered[1]) return
-  const missingSegment = segments[covered[0] ? 1 : 0].replace(/^(?:그리고|또|및|근데|그런데)\s+/, "").trim()
+  const answers = (candidate: SegmentAnswer) =>
+    candidate.original === answered || (candidate.head.length >= 12 && core.response.answer.includes(candidate.head))
+  let missingIndex: number
+  const knownCount = candidates.filter((candidate) => candidate !== null).length
+  if (knownCount === 2) {
+    // 두 조각이 저마다 정해 둔 답을 고르고(서로 다른 후보), 이 답은 그 가운데 한 조각 것만 담았을 때 알린다.
+    if (candidates[0]!.original === candidates[1]!.original) return
+    const covered = candidates.map((candidate) => answers(candidate!))
+    if (covered[0] === covered[1]) return
+    missingIndex = covered[0] ? 1 : 0
+  } else if (knownCount === 1) {
+    // 한 조각만 정해 둔 답이 서고(이 답은 정해 둔 답이다), 다른 조각이 무엇을 묻는 꼴인데("앱도 있어요?") 답이 그 조각을 말하지 않으면 알린다.
+    // 묻는 꼴이 아닌 조각("벌써 세 번째예요", 상황 설명)은 알리지 않는다.
+    missingIndex = candidates[0] ? 1 : 0
+    const other = segments[missingIndex]
+    if (!ASKING_SEGMENT_RE.test(other.trim()) || answerMentionsSegment(core.response.answer, other)) return
+  } else {
+    return
+  }
+  const missingSegment = segments[missingIndex].replace(/^(?:그리고|또|및|근데|그런데)\s+/, "").trim()
   const missing = missingSegment.replace(/[\s?？!.~]+$/u, "").trim()
   if (!missing) return
   const notice = `함께 물어보신 ${withTopicParticle(missing)} 이 답에 담지 못했어요. 따로 한 번 더 물어봐 주시면 이어서 안내해 드릴게요.`
@@ -5971,15 +6029,23 @@ function appendUnansweredSegmentNotice(core: ChatbotCore) {
   ].slice(0, Math.max(3, core.response.suggestedQuestions.length))
 }
 
+/**
+ * 공개 답의 마지막 층: 두 조각 질문에서 한 조각만 답했으면 답하지 못한 조각을 한 줄로 알리고(공개 경로의 정해 둔 답만),
+ * 말투(공감 첫마디·상담 연결 앞세우기·끝 질문)를 입힌다. 답 캐시에는 이 층을 입히기 전 사본을 넣는다(말투는 이번 말로 판단한다).
+ * 여러 번 입혀도 결과가 같다.
+ */
+function applyPublicAnswerLayers(core: ChatbotCore) {
+  if (!isCompiledFinalCore(core)) appendUnansweredSegmentNotice(core)
+  applyConversationTone(core)
+}
+
 async function buildChatbotCore(
   message: unknown,
   options: BuildChatbotCoreOptions = {}
 ): Promise<ChatbotCore> {
   const core = await buildChatbotCoreBase(message, options)
-  // 두 조각 질문에서 한 조각만 답했으면 답하지 못한 조각을 한 줄로 알린다(공개 경로의 정해 둔 답만).
-  if (!options.includeInternalDocs && !isCompiledFinalCore(core)) appendUnansweredSegmentNotice(core)
-  // 말투 처리(공감 첫마디·상담 연결 앞세우기)는 공개 챗봇 답에만 붙인다. 내부 CS 코파일럿 근거에는 넣지 않는다.
-  if (!options.includeInternalDocs) applyConversationTone(core)
+  // 조각 알림·말투 처리는 공개 챗봇 답에만 붙인다. 내부 CS 코파일럿 근거에는 넣지 않는다. 스트림 경로는 끝에서 입힌다.
+  if (!options.includeInternalDocs && !options.deferAnswerLayers) applyPublicAnswerLayers(core)
   // shadow 라우터: 손님에게는 legacy 답을 내고, 답 색인 판정은 응답 뒤 로그에만 남긴다(답을 바꾸지 않는다).
   if (!options.includeInternalDocs && getAnswerRouter() === "shadow") scheduleShadowLog(core)
   return core
@@ -6056,6 +6122,20 @@ function standsAloneForTurn(text: string) {
   return Boolean(guide || resolveSymptomTriageForQuestion(routing, guide))
 }
 
+/**
+ * 넓힌 글이 지금 말의 새 낱말을 답하는지(대화 맥락 넓히기 판단, 정규식 판정만 쓴다). 넓혀도 직전 질문 혼자와 같은 정해 둔 답(같은 출처)이
+ * 나오고 그 답에 새 낱말이 하나도 없으면 앞 답을 그대로 다시 내게 되므로 false다("카메라가 안 켜져요" 뒤 "그러면 출결은요?").
+ * 정해 둔 답이 서지 않으면(검색 경로) 넓힌 글로 검색하는 편이 낫다고 보고 true.
+ */
+function expansionAnswersNewWords(routingText: string, previousQuestion: string, newWords: string[]) {
+  const expanded = deterministicAnswerOf(routingText)
+  if (!expanded) return true
+  const before = deterministicAnswerOf(previousQuestion)
+  if (!before || before.original !== expanded.original) return true
+  const answer = expanded.answer.toLowerCase()
+  return newWords.some((word) => answer.includes(word.toLowerCase()))
+}
+
 /** 직전 질문이 증상 신고였는지(그 답이 증상 안내였는지). */
 function isSymptomTurn(text: string) {
   const routing = glossForRouting(text)
@@ -6081,6 +6161,7 @@ function prepareConversationTurn(message: unknown, options: BuildChatbotCoreOpti
   }
   const turn = resolveConversationTurn(utterance.redacted, options.previousTurn ?? null, options.pagePath ?? null, {
     standsAlone: standsAloneForTurn,
+    answersNewWords: expansionAnswersNewWords,
   })
   if (!turn.expanded) {
     const pageDoc = turn.reason === "page_context" && turn.pageDoc ? findPublicDocForPage(turn.pageDoc) : null
@@ -6097,6 +6178,16 @@ function prepareConversationTurn(message: unknown, options: BuildChatbotCoreOpti
     triedAgain,
     trace: { reason: turn.reason, expanded: true },
   }
+}
+
+/** 페이지 맥락을 쓰지 않는 질문: 사람이 공개 범위를 정한 주제와 근거 선별을 건너뛰는 정책 질문(환불·영수증·체험 한도). */
+function isPageContextExcludedQuestion(question: NormalizedQuestion) {
+  return (
+    isRefundQuestion(question) ||
+    isReceiptQuestion(question) ||
+    isAccountPlanOrTrialLimitQuestion(question) ||
+    isPolicyGovernedTopic(question)
+  )
 }
 
 /**
@@ -6386,7 +6477,7 @@ async function buildLegacyChatbotCoreBase(
   prepared: PreparedConversationTurn
 ): Promise<ChatbotCore> {
   const shouldGenerateAnswer = options.generateAnswer !== false
-  const pageKey = prepared.trace.pagePath ?? null
+  const cacheContextKey = answerCacheContextKey(prepared.trace)
   if (isGreetingOnly(question)) {
     return {
       question,
@@ -6499,7 +6590,7 @@ async function buildLegacyChatbotCoreBase(
 
   // 같은 검색용 질문은 캐시된 답변으로 즉시 응답 — 검색·Gemini를 통째로 건너뛴다. 세션 이력은 generate 모드에서만 답에 들어간다.
   if (isAnswerCacheAllowed(options)) {
-    const cached = getCachedAnswer(question, options, pageKey)
+    const cached = getCachedAnswer(question, options, cacheContextKey)
     if (cached) {
       return {
         question,
@@ -6523,7 +6614,11 @@ async function buildLegacyChatbotCoreBase(
 
   const searchedRaw = await searchKnowledgeSourcesWithinBudget(question, options)
   // 문서 페이지에서 그 문서를 가리키는 질문이면 그 문서 절을 후보 맨 앞에 둔다(2026-11-20 조사 G10).
-  const searched = prepared.pageDoc ? withPageDocFirst(searchedRaw, prepared.pageDoc, question) : searchedRaw
+  // 사람이 공개 범위를 정한 주제(환불·영수증·체험 한도·요금 등)는 근거 선별을 건너뛰는 답이라 페이지 절을 앞세우지 않는다.
+  const searched =
+    prepared.pageDoc && !isPageContextExcludedQuestion(question)
+      ? withPageDocFirst(searchedRaw, prepared.pageDoc, question)
+      : searchedRaw
   const { sources, warning, cacheHit, evidencePool } = searched
   const classificationSources = sources.filter((source) => source.score >= MIN_DIRECT_SOURCE_SCORE)
   const classified = classifyChatbotQuestion(
@@ -6637,7 +6732,7 @@ async function buildLegacyChatbotCoreBase(
     !isSecondChanceFailure(secondChance) &&
     !selectionFailedResponses.has(response)
   ) {
-    setCachedAnswer(question, { response, category, intent, handoffIntent, warning }, options, pageKey)
+    setCachedAnswer(question, { response, category, intent, handoffIntent, warning }, options, cacheContextKey)
   }
 
   return {
@@ -6678,7 +6773,8 @@ export async function handleChatbotQuery(
     core.handoffIntent,
     core.latencyMs,
     sessionId,
-    answerEventId
+    answerEventId,
+    core.utterance ? core.question : null
   )
 
   return {
@@ -6800,7 +6896,7 @@ async function streamAndApplyFinalAnswer({
   const history = await historyPromise
   const generatedContext = generatedAnswerContextOf(response, sources, question, category, intent)
   let raw = ""
-  // Gemini 가 끝난 모양을 알린다. 다른 제공자(Claude)가 답했으면 알리지 않는다(그 제공자는 끝까지 낸 글만 준다).
+  // 스트림이 끝난 모양을 알린다(Gemini·Claude 같은 계약). 끝 신호 없이 닫혔거나 잘렸으면 complete=false 라 초안을 쓴다.
   let completion: GeminiAnswerCompletion | null = null
 
   const finished = await withTimeoutFallback({
@@ -6905,9 +7001,9 @@ export async function streamChatbotQuery(
   const prepared = prepareConversationTurn(input.message, coreOptions)
   if (isAnswerCacheAllowed({ sessionId: requestedSessionId }) && !prepared.triedAgain) {
     const cachedQuestion = prepared.question
-    const cached = getCachedAnswer(cachedQuestion, undefined, prepared.trace.pagePath ?? null)
+    const cached = getCachedAnswer(cachedQuestion, undefined, answerCacheContextKey(prepared.trace))
     if (cached) {
-      // 캐시는 말투 계층 적용 전 사본일 수 있다 — 비스트림과 같은 최종본이 되게 여기서도 적용한다.
+      // 캐시는 말투 층을 입히기 전 사본이다(두 경로 모두) — 비스트림과 같은 최종본이 되게 이번 말로 입힌다.
       const cachedCore: ChatbotCore = {
         question: cachedQuestion,
         ...(prepared.turn.expanded ? { utterance: prepared.utterance } : {}),
@@ -6919,9 +7015,7 @@ export async function streamChatbotQuery(
         warning: cached.warning,
         latencyMs: 0,
       }
-      // 일반 경로가 넣은 캐시는 조각 알림·말투 층을 입히기 전 사본이다 — 일반 경로와 같은 최종본이 되게 여기서도 입힌다(둘 다 여러 번 입혀도 같다).
-      appendUnansweredSegmentNotice(cachedCore)
-      applyConversationTone(cachedCore)
+      applyPublicAnswerLayers(cachedCore)
       cached.handoffIntent = cachedCore.handoffIntent
       emit({ type: "replace", answer: cached.response.answer })
       emitMeta(cached.response, cached.category, cached.intent, cached.handoffIntent, cached.warning)
@@ -6935,7 +7029,8 @@ export async function streamChatbotQuery(
         cached.handoffIntent,
         elapsedSince(startedAt),
         sessionId,
-        answerEventId
+        answerEventId,
+        prepared.turn.expanded ? prepared.question : null
       )
       return
     }
@@ -6952,7 +7047,7 @@ export async function streamChatbotQuery(
 
   // 검색·분류·결정형 초안까지는 기존 코어를 그대로 재사용(중복 방지). Gemini 호출만 스트리밍으로 대체.
   // 정해 둔 답 확인 관문은 코어 안에서 일반 경로와 같이 돈다. 판정이 날 때까지 아무것도 내보내지 않으므로 틀린 답이 잠깐 보였다 바뀌지 않는다.
-  const core = await buildChatbotCore(input.message, coreOptions)
+  const core = await buildChatbotCore(input.message, { ...coreOptions, deferAnswerLayers: true })
   const { question, response, category, intent, warning } = core
 
   // 인사·정책 가드 응답은 buildChatbotCore 가 조기 반환한 '최종 답변'이다(정책 가드는 보안 거절 등).
@@ -6984,40 +7079,24 @@ export async function streamChatbotQuery(
         sessionId,
         sources: selection.evidenceSources,
       })
-      applyConversationTone(core)
-    } else if (selection.status === "selected" || selection.status === "not_found") {
-      // 선별이 답을 바꿨으면 말투·끝 질문 층을 새 답에 다시 입힌다.
-      applyConversationTone(core)
     }
   }
 
-  // 스트림 경로는 말투 층을 코어에서 이미 입혔다. 보류가 답을 못 찾음으로 갈아 끼웠으면 공감 첫마디·상담 연결을 다시 입혀
-  // 일반 경로(보류 → 말투 순서)와 같은 답·같은 연결 표시를 낸다.
-  const withheld = !isShortCircuited && withholdUnverifiedDraft(response, question, selectionStatus, false, core.conversation)
+  // 일반 경로와 같은 순서: 선별 → 보류 → 두 번째 검색 → 정리 → 캐시 → 조각 알림·말투 층.
+  if (!isShortCircuited) withholdUnverifiedDraft(response, question, selectionStatus, false, core.conversation)
   if (selectionStatus === "failed") selectionFailedResponses.add(response)
 
   // 일반 경로와 같은 두 번째 검색(못 찾음 답일 때만). 관문 문서 경로에서 이미 돌린 답은 다시 돌리지 않는다.
   let secondChance = core.secondChance
-  let secondChanceChangedAnswer = false
   if (!isShortCircuited) {
     const trace = await applySecondChanceRetrieval(response, question, category, startedAt)
     if (trace.secondChance !== "none") secondChance = trace
-    // 찾았거나(hit), 차단기 때문에 못 돌려 고정 문구로 바꿨으면(miss·model_unavailable) 답이 바뀌었다.
-    secondChanceChangedAnswer =
-      trace.secondChance === "hit" ||
-      (trace.secondChance === "miss" &&
-        (trace.reason === "model_unavailable" || trace.reason === "error" || trace.reason === "timeout"))
   }
-  // 답이 바뀌었으면 말투·끝 질문 층을 새 답에 다시 입힌다(일반 경로는 코어 뒤에서 한 번 입힌다).
-  if (withheld || secondChanceChangedAnswer) applyConversationTone(core)
-  const handoffIntent = core.handoffIntent
 
   finalizeAnswer(response)
 
-  // 스트림 델타가 끝난 뒤(또는 AI 미사용 시) 정제된 최종본을 권위 있는 replace 로 확정한다.
-  emit({ type: "replace", answer: response.answer })
-
   // 이력 의존 답(generate 모드의 세션 질문)은 캐시하지 않는다 — handleChatbotQuery 와 동일 규칙.
+  // 일반 경로와 같이 조각 알림·말투 층을 입히기 전 사본을 넣는다(넓힌 후속 질문이 앞 턴 말투를 꺼내지 않게, 말투는 이번 말로 판단한다).
   if (
     isAnswerCacheAllowed({ sessionId: requestedSessionId }) &&
     !prepared.triedAgain &&
@@ -7025,8 +7104,19 @@ export async function streamChatbotQuery(
     !isSecondChanceFailure(secondChance) &&
     !selectionFailedResponses.has(response)
   ) {
-    setCachedAnswer(question, { response, category, intent, handoffIntent, warning }, undefined, core.conversation?.pagePath ?? null)
+    setCachedAnswer(
+      question,
+      { response, category, intent, handoffIntent: core.handoffIntent, warning },
+      undefined,
+      answerCacheContextKey(core.conversation)
+    )
   }
+
+  applyPublicAnswerLayers(core)
+  const handoffIntent = core.handoffIntent
+
+  // 스트림 델타가 끝난 뒤(또는 AI 미사용 시) 정제된 최종본을 권위 있는 replace 로 확정한다.
+  emit({ type: "replace", answer: response.answer })
 
   emitMeta(response, category, intent, handoffIntent, warning)
 
@@ -7040,7 +7130,8 @@ export async function streamChatbotQuery(
     handoffIntent,
     elapsedSince(startedAt),
     sessionId,
-    answerEventId
+    answerEventId,
+    core.utterance ? question : null
   )
 }
 

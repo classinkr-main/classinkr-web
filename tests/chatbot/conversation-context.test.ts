@@ -170,3 +170,113 @@ describe("resolveConversationTurn: 의문사", () => {
     expect(turn).toMatchObject({ reason: "follow_up", expanded: true })
   })
 })
+
+// 2026-11-20 검토 결과 고침. 예시 질문은 이 시험을 위해 지었다.
+describe("resolveConversationTurn: 내용 없는 직전 턴은 직전 턴이 없는 것과 같다", () => {
+  it.each(["안녕하세요", "이거 뭐예요"])("직전 질문 '%s' 뒤 '이거 뭐예요'는 대상 불명이다", (previous) => {
+    const turn = resolveConversationTurn("이거 뭐예요", { question: previous }, null)
+    expect(turn).toMatchObject({ reason: "target_unknown", expanded: false, routingText: "이거 뭐예요" })
+  })
+})
+
+describe("resolveConversationTurn: 문서 페이지를 가리키는 말만 page_context 다", () => {
+  const page = parseDocPagePath("/docs/start/camera-mic-troubleshooting")!
+
+  it.each([
+    "학생이 글씨를 못 써요",
+    "선생님이 페이지를 넘기면 학생 화면도 넘어가나요?",
+    "학생이 안내 문자를 못 받아요",
+    "이 글씨가 너무 작아요",
+  ])("조사 '이'·다른 낱말은 문서를 가리키지 않는다: %s", (message) => {
+    const turn = resolveConversationTurn(message, null, page)
+    expect(turn.reason).toBe("none")
+    expect(turn.pageDoc).toBeUndefined()
+  })
+
+  it.each([
+    "이 안내 말고 영수증은 어디서 받아요?",
+    "이 내용이랑 상관없는데 직원 채용 공고는 어디서 봐요?",
+    "여기 나온 거 말고 다른 회사 제품이랑 연동돼요?",
+  ])("'말고·상관없는데'가 붙으면 다른 것을 묻는다: %s", (message) => {
+    expect(resolveConversationTurn(message, null, page).reason).toBe("none")
+  })
+
+  it("문서를 가리키는 말 밖에 내용 낱말이 많으면 새 질문이다", () => {
+    expect(resolveConversationTurn("이 페이지 보다가 궁금한데 무료 체험 인원 제한 있어요?", null, page).reason).toBe("none")
+  })
+
+  it.each(["이 문서 쉽게 설명해 주세요", "방금 본 내용 정리해 줘", "이 내용 학원에도 적용돼요?"])("그 문서에 대한 말은 page_context: %s", (message) => {
+    expect(resolveConversationTurn(message, null, page)).toMatchObject({ reason: "page_context", pageDoc: page })
+  })
+})
+
+describe("resolveConversationTurn: 슬롯 낱말이 든 새 질문은 넓히지 않는다", () => {
+  it.each([
+    ["학생 30명인데 녹화 파일은 어디서 받아요?", { question: "견적 받고 싶어요", askedSlot: "size" as const }],
+    ["강사 3명인데 학생 초대는 어떻게 하나요?", { question: "데모 신청하고 싶어요", askedSlot: "size" as const }],
+    ["아직 모르겠는데 학생은 수업에 어떻게 들어가요?", { question: "학원에 도입하려면 어떻게 해야 하나요?", askedSlot: "timing" as const }],
+    ["바로 쓰고 싶은데 앱 설치는 어떻게 해요?", { question: "학원에 도입하려면 어떻게 해야 하나요?", askedSlot: "timing" as const }],
+  ])("%s", (message, previousTurn) => {
+    expect(resolveConversationTurn(message, previousTurn, null)).toMatchObject({ reason: "none", expanded: false, routingText: message })
+  })
+
+  it("슬롯 대답에 묻는 말만 붙으면 넓힌다('아이폰인데 어떻게 해요?')", () => {
+    const turn = resolveConversationTurn("아이폰인데 어떻게 해요?", { question: "다시보기 영상이 안 나와요", askedSlot: "device" }, null)
+    expect(turn).toMatchObject({ reason: "slot_answer", expanded: true })
+  })
+
+  it("보기를 물은 뒤 묻는 말('요금은 어떻게 돼요?')은 보기 고르기가 아니다", () => {
+    const turn = resolveConversationTurn("요금은 어떻게 돼요?", { question: "클래스인이 뭐예요?", askedSlot: "choice" }, null)
+    expect(turn.expanded).toBe(false)
+  })
+})
+
+describe("resolveConversationTurn: 명사 하나로 화제를 바꾸는 짧은 말", () => {
+  it.each(["출결은요?", "숙제는요?", "녹화는요?"])("잇는 말·기기 이름 없이는 넓히지 않는다: %s", (message) => {
+    expect(resolveConversationTurn(message, camera, null)).toMatchObject({ reason: "none", expanded: false })
+  })
+
+  it("기기 이름은 앞 턴 문제가 나는 곳이라 넓힌다", () => {
+    expect(resolveConversationTurn("전자칠판은요?", camera, null)).toMatchObject({ reason: "short_reply", expanded: true })
+  })
+
+  it("봇이 되물은 뒤의 명사 대답은 넓힌다", () => {
+    const turn = resolveConversationTurn("숙제 파일이요", { question: "파일이 안 열려요", answerMode: "clarifying_question" }, null)
+    expect(turn).toMatchObject({ reason: "short_reply", expanded: true, routingText: "파일이 안 열려요 숙제 파일이요" })
+    // 같은 말이라도 직전 답이 되묻기가 아니면 화제를 바꾸는 말일 수 있어 넓히지 않는다.
+    expect(resolveConversationTurn("숙제 파일이요", { question: "파일이 안 열려요", answerMode: "direct_answer" }, null).expanded).toBe(false)
+  })
+
+  it("넓혀도 앞 답과 같은 답이 나오고 새 낱말이 없으면(answersNewWords=false) 넓히지 않는다", () => {
+    const answersNewWords = (routingText: string, previous: string, words: string[]) => {
+      expect(routingText).toBe("카메라가 안 켜져요 출결은요?")
+      expect(previous).toBe("카메라가 안 켜져요")
+      expect(words).toEqual(["출결"])
+      return false
+    }
+    expect(resolveConversationTurn("그러면 출결은요?", camera, null, { answersNewWords })).toMatchObject({ reason: "none", expanded: false })
+    expect(resolveConversationTurn("그러면 출결은요?", camera, null, { answersNewWords: () => true })).toMatchObject({ reason: "follow_up" })
+  })
+
+  it("기기 이름은 answersNewWords 를 묻지 않는다", () => {
+    const turn = resolveConversationTurn("그러면 아이패드는요", camera, null, { answersNewWords: () => false })
+    expect(turn).toMatchObject({ reason: "follow_up", expanded: true })
+  })
+})
+
+describe("resolveConversationTurn: 같은 대화의 앞 턴을 가리키는 말(G2)", () => {
+  it.each(["아까 챗봇이 알려준 대로 했는데 안 돼요", "아까 알려준 거 해봤는데 안 돼요", "아까 그거 해봤는데도 똑같아요"])(
+    "내용 낱말 수와 상관없이 잇고 다시 생긴 문제로 표시한다: %s",
+    (message) => {
+      expect(resolveConversationTurn(message, camera, null)).toMatchObject({ reason: "follow_up", expanded: true, retryReport: true })
+    }
+  )
+
+  it("'아까 그거 말고 …'는 앞 턴 말고 다른 것을 묻는다", () => {
+    expect(resolveConversationTurn("아까 그거 말고 요금은요?", camera, null).expanded).toBe(false)
+  })
+
+  it("직전 턴이 없으면 글을 바꾸지 않고 대상 불명으로도 보지 않는다", () => {
+    expect(resolveConversationTurn("아까 챗봇이 알려준 대로 했는데 안 돼요", null, null)).toMatchObject({ reason: "none", expanded: false })
+  })
+})

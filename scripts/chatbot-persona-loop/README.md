@@ -87,7 +87,7 @@ npx tsx scripts/chatbot-live-eval.ts --in <questions.json> --out <results.jsonl>
 | `--gate` | `on` | `CHATBOT_ANSWER_GATE`(정해 둔 답 확인 관문). |
 | `--second-chance` | `on` | `CHATBOT_SECOND_CHANCE`(못 찾았을 때 목차에서 다시 고르는 두 번째 검색). |
 | `--router` | 없음 | `CHATBOT_ANSWER_ROUTER`(답 라우터 `legacy`·`shadow`·`compiled`). 주면 서비스 모듈을 불러오기 전에 환경변수를 그 값으로 둔다. 안 주면 환경변수를 그대로 쓴다. |
-| `--repeat` | `1` | 입력마다 N번(1~50) 되풀이해 돌린다(대화면 대화 전체). 요약에 같은 질문의 답이 갈린 비율(`--repeat N: 답이 갈린 질문 a/b`)이 찍힌다. 결과 줄은 `repeatIndex`로 구별한다. |
+| `--repeat` | `1` | 입력마다 N번(1~50) 되풀이해 돌린다(대화면 대화 전체). 요약에 같은 질문의 답이 갈린 비율(`--repeat N: 답이 갈린 질문 a/b`)이 찍힌다. 결과 줄은 `repeatIndex`로 구별한다. 2 이상이면 답 캐시·관문 판정 캐시를 끈다(`CHATBOT_ANSWER_CACHE=off`). 켜 두면 앞 실행의 답이 캐시에서 나와 갈림이 0으로 찍힌다. |
 | `--simulate-gemini` | 없음 | `402`·`429`·`hang`. Gemini 호출만 가짜 응답으로 바꾼다(실제 호출 0, 비용 0). `402`·`429`는 그 상태 코드, `hang`은 응답 없이 호출 쪽 시간 초과를 기다린다. 키가 없어도 돈다. 장애 때의 동작을 잴 때 `--allow-model-errors`와 함께 쓴다. |
 | `--allow-model-errors` | 꺼짐 | 무효 측정 종료와 조기 중단을 끈다. 모델이 죽은 상태의 동작을 일부러 잴 때만 쓴다. |
 

@@ -9,6 +9,7 @@
  *   다음 턴에 넘기고(DB 없음), 결과 줄은 턴마다 하나(id 는 `<id>#t<순번>`)다. 자세한 형식과 플래그는 scripts/chatbot-persona-loop/README.md.
  * - 결과 줄의 firstAttempt 는 재시도 전 첫 시도(답·decidedBy·modelState), attemptLog 는 시도마다의 기록이다.
  *   --repeat N 은 입력마다 N 번 돌려 답이 갈린 비율을, --simulate-gemini 는 Gemini fetch 를 가짜로 바꿔(실제 호출 0) 장애 동작을 잰다.
+ *   --repeat 가 2 이상이면 답 캐시·관문 판정 캐시를 끈다(CHATBOT_ANSWER_CACHE=off): 켜 두면 앞 실행의 답이 캐시에서 나와 갈림이 0 으로 찍힌다.
  * - 질문마다 세션 없이 evaluateChatbotQuery(공개 경로 코어, 말투·후속 질문 포함)를 독립 실행한다.
  * - 데이터베이스 없이 돈다: Supabase env 를 import 전에 지워 정적 문서 검색으로 고정한다.
  *   evaluateChatbotQuery 는 persistExchange 를 부르지 않는다(lib/chatbot/service.ts 의 handleChatbotQuery 만 부른다).
@@ -65,6 +66,7 @@ import {
   parseAnswerRouter,
   parseEvalCases,
   parseSimulateMode,
+  repeatRunEnv,
   runConversationTurns,
   simulateGeminiFetch,
   summarizeRows,
@@ -198,6 +200,8 @@ async function main() {
   process.env.CHATBOT_ANSWER_GATE = gateSwitch
   process.env.CHATBOT_SECOND_CHANCE = secondChanceSwitch
   if (routerFlag) process.env.CHATBOT_ANSWER_ROUTER = routerFlag
+  // --repeat N(2 이상): 답 캐시·관문 판정 캐시를 끈다. 켜 두면 앞 실행의 답이 캐시에서 나와 갈림이 0 으로 찍힌다.
+  Object.assign(process.env, repeatRunEnv(repeat))
   const envRouter = process.env.CHATBOT_ANSWER_ROUTER
   if (!routerFlag && envRouter?.trim() && !parseAnswerRouter(envRouter)) {
     console.error(`경고: CHATBOT_ANSWER_ROUTER 값을 알 수 없습니다(${envRouter}). 결과 줄의 router 는 legacy 로 적습니다.`)
@@ -492,6 +496,7 @@ async function main() {
       (router !== "legacy" ? ` / 답 색인 자료 ${process.env.ANSWER_INDEX_DATA_DIR?.trim() || "data/answer-index"}` : "") +
       (modelFree ? " / 모델 없는 측정(Gemini 호출 0 이어야 함)" : "") +
       (simulateMode ? ` / 가짜 Gemini ${simulateMode}(실제 호출 0)` : "") +
+      (repeat > 1 ? " / 답·관문 캐시 끔(반복 측정)" : "") +
       (allowModelErrors ? " / 모델 호출 실패 허용(--allow-model-errors)" : "")
   )
 

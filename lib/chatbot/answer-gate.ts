@@ -51,7 +51,13 @@ function getCacheKey(question: string, answer: string) {
   return `${ANSWER_GATE_CACHE_VERSION}\u0000${question}\u0000${answer}`
 }
 
+/** 측정용 스위치(CHATBOT_ANSWER_CACHE=off): 답 캐시와 함께 판정 캐시도 쓰지 않는다(같은 질문을 되풀이해 답 갈림을 잴 때). */
+function isVerdictCacheOff() {
+  return process.env.CHATBOT_ANSWER_CACHE?.trim().toLowerCase() === "off"
+}
+
 function readCachedVerdict(key: string): PreparedAnswerVerdict | null {
+  if (isVerdictCacheOff()) return null
   const entry = verdictCache.get(key)
   if (!entry) return null
   if (entry.expiresAt <= Date.now()) {
@@ -62,6 +68,7 @@ function readCachedVerdict(key: string): PreparedAnswerVerdict | null {
 }
 
 function writeCachedVerdict(key: string, verdict: PreparedAnswerVerdict) {
+  if (isVerdictCacheOff()) return
   verdictCache.set(key, { verdict, expiresAt: Date.now() + ANSWER_GATE_CACHE_TTL_MS })
   while (verdictCache.size > ANSWER_GATE_CACHE_MAX) {
     const oldest = verdictCache.keys().next().value

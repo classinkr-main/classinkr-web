@@ -8,14 +8,22 @@
  *
  * 규칙(결정형, 모델·네트워크 호출 없음)
  * - 넓히는 말: 짧은 대답(내용 낱말 2개 이하이고 자기 서술어가 없는 말), 직전 답이 물은 정보의 답 모양(askedSlot),
- *   지시어 후속 질문(그거·이거, 그럼·그러면 …은요, 아까 그거 다시요, 해 봤는데 또 안 돼요).
+ *   지시어 후속 질문(그거·이거, 그럼·그러면 …은요, 아까 그거 다시요, 해 봤는데 또 안 돼요), 같은 대화의 앞 턴을 가리키는 말
+ *   ("아까 챗봇이 알려준 대로 했는데 안 돼요": 말투 층의 same_chat, 내용 낱말 수와 상관없이).
  * - 그대로 두는 말: 내용 낱말이 있는 긴 질문, 자기 서술어가 있는 새 질문("그럼 녹화는 어디서 봐요?"), 혼자서도 답이 서는 짧은 말
- *   (standsAlone: "요금은요?"처럼 정해 둔 답이 바로 잡히는 말. 판단은 부르는 쪽이 준다).
- * - 직전 턴 없이 지시어만 있는 말("이거 뭐예요")은 target_unknown(대상 불명)이다. 문서 페이지에서는 그 문서를 가리키는 말로 본다(page_context).
+ *   (standsAlone: "요금은요?"처럼 정해 둔 답이 바로 잡히는 말. 판단은 부르는 쪽이 준다), 슬롯 낱말이 든 완전한 새 질문
+ *   ("학생 30명인데 녹화 파일은 어디서 받아요?"), 잇는 말 없이 명사 하나로 화제를 바꾸는 말("출결은요?", 기기 이름과 봇이 되물은 뒤는 뺀다),
+ *   넓혀도 앞 턴과 같은 정해 둔 답이 나오고 새 낱말이 답에 없는 말(answersNewWords, 판단은 부르는 쪽이 준다),
+ *   다른 창·지난 문의를 가리키는 말.
+ * - 직전 턴이 없거나 직전 질문에 내용 낱말이 없는데(인사·"이거 뭐예요") 지시어만 있는 말("이거 뭐예요")은 target_unknown(대상 불명)이다.
+ *   문서 페이지에서는 그 문서를 가리키는 말로 본다(page_context).
+ * - page_context 는 그 문서를 가리키는 말("이 문서", "방금 본 내용") 밖의 내용 낱말이 적을 때만이다. 조사 '이'("학생이 글씨…"),
+ *   '말고·상관없는데'가 붙은 말, 다른 내용 낱말이 많은 말은 경로와 상관없이 지금 흐름이다.
  * - 넓힌 글은 "직전 질문 + 지금 말(지시어·잇는 말을 뺀 것)"이다. 직전 질문이 없으면 지금 말 그대로다(한 줄 질문의 답은 바뀌지 않는다).
  */
 import type { AskedSlot } from "@/lib/chatbot/follow-up"
 import { isTailOnly, stripParticle } from "@/lib/chatbot/answer-index/normalize"
+import { detectConversationTone } from "@/lib/chatbot/tone"
 
 export const ASKED_SLOTS: readonly AskedSlot[] = ["device", "size", "rooms", "mode", "timing", "choice"]
 export const PREVIOUS_TURN_QUESTION_MAX = 200
@@ -65,6 +73,11 @@ export interface ConversationTurn {
 export interface ResolveConversationTurnOptions {
   /** 지금 말만으로 답이 서는지(정해 둔 답·증상 안내·즉시 상담 연결 등). 짧은 대답·잇는 말 후속 질문을 넓히기 전에 묻는다. */
   standsAlone?: (text: string) => boolean
+  /**
+   * 넓힌 글(routingText)이 새 낱말(지금 말의 내용 낱말, 기기 이름 뺌)을 답하는지. 넓혀도 직전 질문 혼자와 같은 정해 둔 답이 나오고
+   * 그 답에 새 낱말이 하나도 없으면 false("카메라가 안 켜져요" 뒤 "그러면 출결은요?"). 판단은 부르는 쪽이 결정형으로 한다(모델 호출 없음).
+   */
+  answersNewWords?: (routingText: string, previousQuestion: string, newWords: string[]) => boolean
 }
 
 // ─── 입력 검사 ────────────────────────────────────────────────────────────
@@ -147,11 +160,22 @@ const PREDICATE_WORD_RE =
 // 명사 뒤 꼬리(이요·은요·예요·이에요…)를 뗀다.
 const NOUN_TAIL_RE = /(?:이에요|이예요|예요|에요|이요|이고요|이고|인데요|입니다|이죠|은요|는요|도요|이랑요|랑요|으로요|로요|에서요|요)$/
 
-// 같은 문제가 다시 생겼다는 신고.
+// 같은 문제가 다시 생겼다는 신고("해 봤는데 또 안 돼요", "알려준 대로 했는데 안 돼요", "해봤는데도 똑같아요").
 const RETRY_REPORT_RE =
-  /해\s*봤|했는데도|그래도\s*(?:안|똑같)|(?:^|\s)또\s*(?:안\s*(?:돼|되|나|켜|떠|들|보)|그래|그러|똑같|같은)|여전히\s*안|아직도\s*안|똑같(?:아요|이|은\s*(?:문제|증상))/
-// 문서 페이지를 가리키는 말.
-const PAGE_REFERENCE_RE = /방금\s*(?:본|읽은|보던|봤던)|이\s*(?:문서|페이지|글|안내|내용)|지금\s*(?:보는|본|읽는)|여기\s*(?:나온|있는|적힌|쓰인)/
+  /해\s*봤|했는데도|했(?:는데|지만|어도)\s*(?:안\s*(?:돼|되|나|켜|떠|들|보|열)|똑같|그대로|여전)|그래도\s*(?:안|똑같)|(?:^|\s)또\s*(?:안\s*(?:돼|되|나|켜|떠|들|보)|그래|그러|똑같|같은)|여전히\s*안|아직도\s*안|똑같(?:아요|이|은\s*(?:문제|증상))/
+// 문서 페이지를 가리키는 말. 지시어 '이'는 문장 처음이나 띄어 쓴 뒤에만 본다(조사 '이': "학생이 글씨를…", "선생님이 페이지를…").
+// 가리키는 낱말 뒤에는 조사·끝만 온다("이 글씨"는 아니다). 동사 꼴 뒤에도 띄어쓰기·끝만 온다("방금 본사에…"는 아니다).
+const PAGE_NOUN_END = String.raw`(?=$|[\s.,?!~]|은|는|이|가|을|를|에|의|도|만|로|으로|과|와|랑|이랑|대로|처럼|요)`
+const PAGE_REFERENCE_RE = new RegExp(
+  String.raw`방금\s*(?:본|읽은|보던|봤던)(?=\s|$)|(?:^|\s)이\s*(?:문서|페이지|글|안내|내용)${PAGE_NOUN_END}|지금\s*(?:보는|본|읽는)(?=\s|$)|여기\s*(?:나온|있는|적힌|쓰인)(?=\s|$)`
+)
+// 가리킨 것을 빼고 다른 것을 묻는 말("이 안내 말고 영수증은…", "이 내용이랑 상관없는데…", "아까 그거 말고…").
+const EXCLUSION_RE = /말고|상관\s*(?:없|업)|관계\s*없|관련\s*없|별개/
+// 문서를 가리키는 말 밖에서 그 문서에 대해 할 일(정리·요약·설명)이나 문서 자체를 말하는 낱말. page_context 의 '다른 내용 낱말'로 세지 않는다.
+const PAGE_TALK_RE =
+  /^(?:정리|요약|설명|해석|이해|자세|간단)|^(?:쉽게|짧게|맞게|다시|무슨|말|얘기|이야기|뜻|내용|문서|페이지|글|안내|부분|수|줘|해줘|해줄래|줄래)$/
+// 문서를 가리키는 말 밖에 이만큼까지의 내용 낱말은 그 문서에 대한 말로 본다("방금 본 내용을 우리 학원 상황에 맞게 정리해 주세요").
+const PAGE_OTHER_CONTENT_MAX = 2
 
 // 직전 답이 물은 정보의 답 모양(askedSlot 별).
 const DEVICE_ANSWER_RE =
@@ -231,6 +255,11 @@ function analyzeMessage(text: string): MessageShape {
   return shape
 }
 
+/** 글의 내용 낱말(조사·꼬리를 뗀 꼴, 지시어·잇는 말·의문사·내용 없는 서술어 뺌). 서비스가 답이 그 낱말을 말하는지 볼 때 쓴다. */
+export function contentWordsOf(text: string): string[] {
+  return analyzeMessage(text.replace(/\s+/g, " ").trim()).content
+}
+
 /** 넓힌 글에 붙일 지금 말: 지시어·잇는 말("아까 그거", "그러면")을 뺀다. 남는 것이 없으면 빈 글. */
 function stripReferenceWords(text: string) {
   return text
@@ -244,12 +273,37 @@ function stripReferenceWords(text: string) {
     .trim()
 }
 
+function globalOf(pattern: RegExp) {
+  return new RegExp(pattern.source, pattern.flags.includes("g") ? pattern.flags : `${pattern.flags}g`)
+}
+
+/**
+ * 지금 말이 직전 답이 물은 정보(askedSlot)의 대답인지. 슬롯 낱말이 들어 있어도, 슬롯 낱말을 뺀 나머지가 묻는 말·자기 서술어를 가진
+ * 새 질문이면("학생 30명인데 녹화 파일은 어디서 받아요?", "아직 모르겠는데 학생은 수업에 어떻게 들어가요?") 대답이 아니다.
+ * 나머지의 내용 낱말이 하나 이하면("아이폰 써요", "아이폰인데 어떻게 해요?") 대답이다.
+ */
 function matchesSlotAnswer(slot: AskedSlot | undefined, text: string, shape: MessageShape) {
   if (!slot) return false
   if (slot === "choice") {
-    return CHOICE_ANSWER_RE.test(text) || (shape.content.length >= 1 && shape.content.length <= 2 && !shape.specificPredicate)
+    if (CHOICE_ANSWER_RE.test(text)) return true
+    // 보기 고르기는 명사 꼴이다("전자칠판이요"). 묻는 말("요금은 어떻게 돼요?")은 새 질문이다.
+    return !shape.interrogative && shape.content.length >= 1 && shape.content.length <= 2 && !shape.specificPredicate
   }
-  return SLOT_ANSWER_RE[slot].test(text.toLowerCase())
+  const lower = text.toLowerCase()
+  const pattern = SLOT_ANSWER_RE[slot]
+  if (!pattern.test(lower)) return false
+  const rest = analyzeMessage(lower.replace(globalOf(pattern), " "))
+  if (!rest.interrogative && !rest.specificPredicate) return true
+  return rest.content.length <= 1
+}
+
+/** 문서를 가리키는 말이 있고, 그 말 밖의 내용 낱말이 적어 그 문서에 대한 말인지("방금 본 내용 정리해 줘"). */
+function refersToPage(text: string) {
+  const match = PAGE_REFERENCE_RE.exec(text)
+  if (!match) return false
+  const rest = `${text.slice(0, match.index)} ${text.slice(match.index + match[0].length)}`
+  const other = analyzeMessage(rest).content.filter((word) => !PAGE_TALK_RE.test(word))
+  return other.length <= PAGE_OTHER_CONTENT_MAX
 }
 
 // 넓힐 만큼 짧은 말(공백 뺀 길이). 슬롯 답은 조금 더 길어도 된다("강사 3명에 학생 40명 정도예요").
@@ -271,34 +325,48 @@ export function resolveConversationTurn(
   const shape = analyzeMessage(text)
   const none: ConversationTurn = { routingText: text, reason: "none", expanded: false, retryReport: false }
 
-  if (pagePath && (PAGE_REFERENCE_RE.test(text) || (!previousTurn && shape.objectDeictic && shape.content.length === 0))) {
+  const previous = previousTurn?.question.replace(/\s+/g, " ").trim() ?? ""
+  // 직전 질문에도 내용이 없으면(인사·"이거 뭐예요") 붙일 것이 없다. 이때는 직전 턴이 없는 것과 같이 본다.
+  const usablePrevious = previous && analyzeMessage(previous).content.length > 0 ? previous : ""
+  const deicticOnly = shape.objectDeictic && shape.content.length === 0
+  const excluded = EXCLUSION_RE.test(text)
+
+  if (pagePath && !excluded && (refersToPage(text) || (!usablePrevious && deicticOnly))) {
     return { ...none, reason: "page_context", pageDoc: pagePath }
   }
 
-  const previous = previousTurn?.question.replace(/\s+/g, " ").trim() ?? ""
-  // 직전 질문에도 내용이 없으면(인사·"이거 뭐예요") 붙일 것이 없다.
-  const usablePrevious = previous && analyzeMessage(previous).content.length > 0 ? previous : ""
-
   if (!usablePrevious) {
-    if (!previousTurn && shape.objectDeictic && shape.content.length === 0 && compactLength <= SHORT_MESSAGE_MAX) {
-      return { ...none, reason: "target_unknown" }
-    }
+    if (deicticOnly && compactLength <= SHORT_MESSAGE_MAX) return { ...none, reason: "target_unknown" }
     return none
   }
 
-  const expand = (reason: ConversationTurnReason, retryReport = false): ConversationTurn => {
-    const rest = stripReferenceWords(text)
-    return { routingText: rest ? `${usablePrevious} ${rest}` : usablePrevious, reason, expanded: true, retryReport }
-  }
+  const rest = stripReferenceWords(text)
+  const routingText = rest ? `${usablePrevious} ${rest}` : usablePrevious
+  const expand = (reason: ConversationTurnReason, retryReport = false): ConversationTurn => ({
+    routingText,
+    reason,
+    expanded: true,
+    retryReport,
+  })
   const standsAlone = (candidate: string) => Boolean(options.standsAlone?.(candidate))
   const short = compactLength <= SHORT_MESSAGE_MAX
+  const retry = RETRY_REPORT_RE.test(text)
+  const priorKind = detectConversationTone(text).priorKind
 
-  if (short && RETRY_REPORT_RE.test(text) && shape.content.length === 0 && !shape.specificPredicate) {
+  // 다른 창·이전 채팅·지난 문의를 가리키는 말은 이 대화의 앞 턴이 아니다(말투 층이 '볼 수 없어요'로 답한다).
+  if (priorKind === "other_window" || priorKind === "past_inquiry") return none
+  // 같은 대화의 앞 턴을 가리키는 말("아까 챗봇이 알려준 대로 했는데 안 돼요", "아까 그거 해봤는데도 똑같아요")은
+  // 내용 낱말 수와 상관없이 잇는다. '말고'가 붙으면 앞 턴 말고 다른 것을 묻는 말이다.
+  if (priorKind === "same_chat" && !excluded) return expand("follow_up", retry)
+  // "해 봤는데 또 안 돼요", "그거 해봤는데 안 돼요": 다시 생긴 문제 신고.
+  if (short && retry && (shape.objectDeictic || (shape.content.length === 0 && !shape.specificPredicate))) {
     return expand("follow_up", true)
   }
   if (compactLength <= SLOT_MESSAGE_MAX && matchesSlotAnswer(previousTurn?.askedSlot, text, shape)) {
     return expand(previousTurn?.askedSlot === "choice" ? "choice" : "slot_answer")
   }
+  // "그거 말고 요금은요?": 앞 턴의 것 말고 다른 것을 묻는다.
+  if (excluded) return none
   if (!short || shape.content.length > 2) return none
   // "그거 받았는데 안 열려요", "아까 그거 다시요": 앞 턴의 무엇을 가리킨다.
   if (shape.objectDeictic) return expand("follow_up")
@@ -310,6 +378,12 @@ export function resolveConversationTurn(
   // 잇는 말 없이 의문사로 묻는 말("학생 초대는 어떻게 하나요?")도 새 질문이다. "그러면 아이패드는 어떻게 해요?"는 잇는다.
   if (shape.interrogative && !linked) return none
   // "그러면 아이패드는요", "휴대폰이요": 혼자서도 답이 서면("요금은요?") 넓히지 않는다.
-  if (standsAlone(stripReferenceWords(text) || text)) return none
+  if (standsAlone(rest || text)) return none
+  // 기기 이름("휴대폰이요", "그러면 아이패드는요")은 앞 턴 문제가 나는 곳이라 그대로 잇는다.
+  const device = DEVICE_ANSWER_RE.test(text.toLowerCase())
+  // 잇는 말 없는 명사 하나("출결은요?", "숙제는요?")는 화제를 바꾸는 말일 수 있다. 봇이 되물은 뒤(직전 답이 되묻기)가 아니면 넓히지 않는다.
+  if (!linked && !device && previousTurn?.answerMode !== "clarifying_question") return none
+  // 넓혀도 앞 턴과 같은 정해 둔 답이 나오고 새 낱말이 그 답에 없으면 넓히지 않는다(앞 답을 그대로 다시 내게 된다).
+  if (!device && options.answersNewWords && !options.answersNewWords(routingText, usablePrevious, shape.content)) return none
   return expand(linked ? "follow_up" : "short_reply")
 }
