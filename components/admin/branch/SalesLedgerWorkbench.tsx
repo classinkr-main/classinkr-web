@@ -3018,29 +3018,33 @@ export default function SalesLedgerWorkbench({
 
   return (
     <div className="min-h-screen bg-[#FAFAF8] pb-24 text-[#111110]">
-      <header className="border-b border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-4 py-5 sm:px-6 lg:px-9">
-        <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+      {/* 머리 압축(2026-11-20, 시안 A-2) — 제목·경로·통화 안내를 한 줄로 줄여 표가 첫 화면에 들어오게 한다.
+          예전엔 경로 → 28px 제목 → 설명문이 세 줄로 쌓여 표가 화면 아래로 밀렸다. */}
+      <header className="border-b border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-4 py-2.5 sm:px-6 lg:px-9">
+        <div className="flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
           <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2 text-[11px] font-bold uppercase tracking-[0.08em] text-[#615D59]">
-              <Link
-                href="/admin/branch"
-                className="underline-offset-2 transition hover:text-[#084734] hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734]"
-              >
-                KR Team
-              </Link>
-              <ChevronRight className="h-3.5 w-3.5" />
-              <span>{fyLabel}</span>
-              <ChevronRight className="h-3.5 w-3.5" />
-              {/* 구 IA 시절 영문 라벨("Sales Ledger") 잔재 — 현재 admin-nav 섹션 라벨(sales="영업·매출")로 정정. */}
-              <span>영업·매출</span>
+            <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
+              <h1 className="text-[20px] font-bold leading-tight tracking-[-0.01em] text-[#111110]">
+                매출시트
+              </h1>
+              <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.08em] text-[#615D59]">
+                <Link
+                  href="/admin/branch"
+                  className="underline-offset-2 transition hover:text-[#084734] hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734]"
+                >
+                  KR Team
+                </Link>
+                <ChevronRight className="h-3 w-3" />
+                <span>{fyLabel}</span>
+                <ChevronRight className="h-3 w-3" />
+                {/* 구 IA 시절 영문 라벨("Sales Ledger") 잔재 — 현재 admin-nav 섹션 라벨(sales="영업·매출")로 정정. */}
+                <span>영업·매출</span>
+              </div>
+              <p className="text-[12px] text-[#615D59]" title="월별 금액을 비교하고, 선택한 매출을 확인·입력합니다.">
+                통화 ¥ · 본사 보고 기준
+              </p>
             </div>
-            <h1 className="mt-2 text-[28px] font-bold leading-tight tracking-[-0.02em] text-[#111110] sm:text-[30px]">
-              매출시트
-            </h1>
-            <p className="mt-2 max-w-3xl text-[13px] leading-relaxed text-[#615D59]">
-              월별 금액을 비교하고, 선택한 매출을 확인·입력합니다. 통화 ¥ · 본사 보고 기준.
-            </p>
-            {isLegacyBranchTeam(team) ? <p role="status" className="mt-2 text-[12px] text-[#A8741A]">이전 조직 CSM의 장부 이력입니다. 현재 조직은 BD · MKT이며 기존 팀 귀속은 보존됩니다.</p> : null}
+            {isLegacyBranchTeam(team) ? <p role="status" className="mt-1 text-[12px] text-[#A8741A]">이전 조직 CSM의 장부 이력입니다. 현재 조직은 BD · MKT이며 기존 팀 귀속은 보존됩니다.</p> : null}
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -3133,9 +3137,11 @@ export default function SalesLedgerWorkbench({
           </div>
         )}
       </header>
-      <div className="flex flex-wrap items-center gap-2 border-b border-black/[0.08] bg-white px-4 py-3 sm:px-6 lg:px-9" role="group" aria-label="장부 데이터 범위">
-        <button type="button" aria-pressed={scopedManager === defaultManager} onClick={() => { setTeam("ALL"); setManagerFilter(new Set([defaultManager])) }} className="min-h-11 rounded-lg border border-black/[0.08] px-3 text-xs font-semibold text-[#084734]">내 담당</button>
-        <button type="button" aria-pressed={managerFilter.size === 0} onClick={() => setManagerFilter(new Set())} className="min-h-11 rounded-lg border border-black/[0.08] px-3 text-xs font-semibold text-[#615D59]">전체 담당자</button>
+      {/* 범위 줄 압축(2026-11-20, 시안 A-2) — 데스크톱 높이 32px(터치 폭은 44px 유지), 눌린 쪽을 그린 선·글자로 표시한다.
+          예전엔 두 버튼 색이 고정이라 지금 어느 범위인지 옆 문구를 읽어야 알 수 있었다. */}
+      <div className="flex flex-wrap items-center gap-2 border-b border-black/[0.08] bg-white px-4 py-1.5 sm:px-6 lg:px-9" role="group" aria-label="장부 데이터 범위">
+        <button type="button" aria-pressed={scopedManager === defaultManager} onClick={() => { setTeam("ALL"); setManagerFilter(new Set([defaultManager])) }} className={`min-h-11 rounded-lg border px-3 text-xs font-semibold md:min-h-8 ${scopedManager === defaultManager ? "border-[#084734] text-[#084734]" : "border-black/[0.08] text-[#615D59] hover:text-[#111110]"}`}>내 담당</button>
+        <button type="button" aria-pressed={managerFilter.size === 0} onClick={() => setManagerFilter(new Set())} className={`min-h-11 rounded-lg border px-3 text-xs font-semibold md:min-h-8 ${managerFilter.size === 0 ? "border-[#084734] text-[#084734]" : "border-black/[0.08] text-[#615D59] hover:text-[#111110]"}`}>전체 담당자</button>
         <span className="text-xs text-[#615D59]">{scopedManager === UNMAPPED_BRANCH_MEMBER ? "로그인 계정의 담당자 연결이 필요합니다." : managerFilter.size ? `${Array.from(managerFilter).map(branchManagerLabel).join(", ")} · 개인 목표와 데이터` : "선택한 팀·전체 데이터"}</span>
       </div>
 
