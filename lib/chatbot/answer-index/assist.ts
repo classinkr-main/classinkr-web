@@ -10,7 +10,8 @@
  *
  * 모델에 주는 것: 아래 ANSWER_CARD_PICK_INSTRUCTION(지시문, 대역 추정과 같은 글 그대로)과, 가린 질문 + 질문 전체 순위 상위 10 카드
  * (review·disabled·nav 는 색인에 없고, 끈 카드·상담 연결 카드·none 자리는 뺀다)를 번호와 함께 적은 입력(buildAnswerCardPickInput).
- * 후보 줄: "[번호] (종류) 주제 | 다루는 것: … | 다루지 않음: …(최대 3개) | 답 앞부분: …(200자)".
+ * 후보 줄: "[번호] (종류) 주제 | 다루는 것: … | 다루지 않음: …(앞 3개, '→ 행선' 그대로) | 답 앞부분: …(200자)".
+ * 후보 줄은 대역 추정 묶음(topk 덤프의 칸을 그대로 이은 줄)과 글자까지 같다(시험 assist.test.ts 가 추정 묶음 줄과 맞댄다).
  * 모델은 {"pick": n} 만 낸다: 1..후보 수 카드 번호, 0 못 찾음, -1 되묻기.
  *
  * 받아들이는 조건(resolveAssistPick, 사양 §3.5·§10):
@@ -19,6 +20,9 @@
  * - 결정형이 정책 카드 답이면 바꾸지 않는다(policy_card). 범위 관문 밖이면 바꾸지 않는다(scope).
  * - 카드: 사람이 공개 범위를 정한 주제(service.ts isPolicyGovernedTopic)면 정책 카드·공백 카드만(policy_topic), 반례(negMargin > 0)에
  *   걸리면 거절(negative), 질문의 없는 개념을 덮지 않으면 거절(absent, 그 개념의 공백 카드는 받아들인다).
+ * - NODOC(정해 둔 답 승격과 같은 신호, decide.ts hasNoDocSignal): 반례 'none' 자리가 1위이거나 우주 이웃의 'none' 몫이
+ *   VOTE_RESCUE_MAX_KNN_NONE(0.5) 이상이면, 결정형이 답하지 않은 판정(못 찾음·되묻기·공백)을 다른 카드(공백 카드 포함)로 바꾸지 않는다
+ *   (nodoc). 정해 둔 답 승격처럼 문턱 밖에서 답을 만드는 장치는 이 신호를 넘지 않는다. 0·-1 은 그대로 받는다.
  * - 0: 결정형이 이미 못 찾음·되묻기·공백이면 그대로, 질문에 없는 개념이 있고 그 공백 카드가 색인에 있으면 그 공백 카드,
  *   아니면 결정형 못 찾음 갈래(analysis.fallback: 증상 신고·문서에 없음·내용 없는 말 되묻기).
  * - -1: 결정형 되묻기 문구(clarify). 질문에 없는 개념이 있으면 받아들이지 않는다(absent).
@@ -26,12 +30,13 @@
  * compiled 경로는 MODEL_UNAVAILABLE_ANSWER 를 쓰지 않는다.
  *
  * 이 파일은 모델을 직접 부르지 않는다: 호출 함수(AnswerCardPickRequest, lib/chatbot/llm.ts requestAnswerCardPick)를 받는다.
- * 질문당 호출 함수는 한 번만 부른다. 시간 예산은 CHATBOT_ASSIST_TIMEOUT_MS(기본 2,500ms)이고, 호출 함수가 예산을 넘겨도 여기서 끊는다.
+ * 질문당 호출 함수는 한 번만 부르고, 호출 함수는 basic 1순위 모델 하나에 HTTP 요청을 한 번 보낸다(실패해도 다음 모델로 넘어가지 않는다).
+ * 시간 예산은 CHATBOT_ASSIST_TIMEOUT_MS(기본 2,500ms)이고, 호출 함수가 예산을 넘겨도 여기서 끊는다.
  */
 import { absentCoveredBy, checkCandidate, scoreNegatives, type CandidateCheck } from "./checks"
 import type { CompiledAnswerIndex } from "./compile"
 import { curatedLegacyText } from "./curated"
-import { disabledCardIds, type QuestionAnalysis } from "./decide"
+import { disabledCardIds, hasNoDocSignal, type QuestionAnalysis } from "./decide"
 import { scoreCandidates } from "./score"
 import type {
   AnswerAssistMode,
@@ -57,7 +62,7 @@ export const ANSWER_CARD_PICK_INSTRUCTION = `너는 ClassIn 한국 홈페이지 
 
 /** 후보 수(질문 전체 순위 상위). */
 export const ASSIST_CANDIDATES = 10
-/** 후보 줄의 '다루지 않음' 최대 개수. */
+/** 후보 줄의 '다루지 않음' 최대 개수(카드에 적힌 순서로 앞에서부터). */
 export const ASSIST_NOT_COVERS_MAX = 3
 /** 후보 줄의 '답 앞부분' 글자 수(scripts/answer-index topk 덤프의 answerPreview 와 같다). */
 export const ANSWER_PREVIEW_CHARS = 200
@@ -150,30 +155,49 @@ export function cardAnswerPreview(card: AnswerCard, units: ReadonlyMap<string, A
   }
 }
 
-/** 후보 줄 칸 글: 공백을 접고, 칸 구분자(|)는 '/'로 바꾼다(표 문장 등). 비면 "-". */
+/**
+ * 후보 줄 칸 글. 대역 추정 묶음은 topk 덤프의 칸(주제·다루는 것·다루지 않음·답 앞부분)을 손대지 않고 이었으므로 여기서도 공백을
+ * 접거나 다듬지 않는다(답 앞부분은 200자에서 잘려 끝에 공백이 남을 수 있다). 줄을 깨는 줄바꿈만 띄어쓰기로, 칸 구분자(|)는 '/'로
+ * 바꾼다(지금 자료에는 둘 다 없어 추정 묶음과 같은 글이 된다). 비면 "-".
+ */
 function field(text: string | null | undefined) {
-  const value = collapse(String(text ?? "")).replace(/\s*\|\s*/g, " / ")
-  return value || "-"
+  const value = String(text ?? "").replace(/[\r\n]+/g, " ").replace(/\|/g, "/")
+  return value.trim() ? value : "-"
 }
 
-/** notCovers 한 줄("… → 행선")에서 행선(카드 id 등 내부 이름)을 뗀다. */
-function notCoveredItem(text: string) {
-  return collapse(String(text).split("→")[0] ?? "")
+/** 후보 줄 본문을 만드는 카드 칸(topk 덤프의 TopKCard 칸과 같은 뜻). */
+export interface AssistCandidateFields {
+  kind: string
+  topic: string | null | undefined
+  covers: string | null | undefined
+  /** 카드의 notCovers 그대로("… → 행선"). 앞 ASSIST_NOT_COVERS_MAX 개를 행선까지 그대로 싣는다. */
+  notCovers: readonly unknown[] | null | undefined
+  /** cardAnswerPreview 글. */
+  answerPreview: string
 }
 
 /** 번호를 뺀 후보 줄 본문: "(종류) 주제 | 다루는 것: … | 다루지 않음: … | 답 앞부분: …". */
-export function assistCandidateBody(card: AnswerCard, units: ReadonlyMap<string, AnswerIndexUnit>) {
-  const notCovers = (Array.isArray(card.notCovers) ? card.notCovers : [])
-    .map(notCoveredItem)
-    .filter(Boolean)
+export function formatAssistCandidateBody(fields: AssistCandidateFields) {
+  const notCovers = (Array.isArray(fields.notCovers) ? fields.notCovers : [])
     .slice(0, ASSIST_NOT_COVERS_MAX)
-    .map((item) => field(item))
+    .map((item) => field(String(item ?? "")))
   return [
-    `(${card.kind}) ${field(card.topic)}`,
-    `다루는 것: ${field(card.covers)}`,
+    `(${fields.kind}) ${field(fields.topic)}`,
+    `다루는 것: ${field(fields.covers)}`,
     `다루지 않음: ${notCovers.length > 0 ? notCovers.join(" / ") : "-"}`,
-    `답 앞부분: ${field(cardAnswerPreview(card, units))}`,
+    `답 앞부분: ${field(fields.answerPreview)}`,
   ].join(" | ")
+}
+
+/** 카드 하나의 후보 줄 본문(번호 뺌). */
+export function assistCandidateBody(card: AnswerCard, units: ReadonlyMap<string, AnswerIndexUnit>) {
+  return formatAssistCandidateBody({
+    kind: card.kind,
+    topic: card.topic,
+    covers: card.covers,
+    notCovers: card.notCovers,
+    answerPreview: cardAnswerPreview(card, units),
+  })
 }
 
 const bodyCache = new WeakMap<CompiledAnswerIndex, Map<number, string>>()
@@ -370,6 +394,10 @@ export function resolveAssistPick(
   ) {
     return keep("card_unavailable", pickCard)
   }
+  // NODOC: 결정형이 '문서에 없음' 신호로 답하지 않은 질문을 그 아래 카드로 바꾸지 않는다(정해 둔 답 승격과 같은 신호). 공백 카드도
+  // 막는다: 이 신호가 있을 때 1번 공백 카드는 질문과 다른 주제일 수 있고(예: '클래스인 무료로 써도 돼?'의 1번이 스타일러스 공백 카드),
+  // 이 경우의 고름은 잰 적이 없다.
+  if (decision.kind !== "answer" && hasNoDocSignal(whole)) return keep("nodoc", pickCard)
   if (!isPolicyGovernedCard(compiled.card) && compiled.kind !== "gap" && options.isPolicyTopic?.()) return keep("policy_topic", pickCard)
   const check = checkPicked(index, analysis, at, env)
   if (check.rejected) return keep("negative", pickCard)

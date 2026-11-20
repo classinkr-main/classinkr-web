@@ -425,6 +425,14 @@ export function resolveDecision(index: CompiledAnswerIndex, analysis: QuestionAn
 }
 
 /**
+ * NODOC 신호: 반례 'none' 행선 자리가 1위이거나(순위가 비었거나) 우주 이웃의 'none'(문서에 없음) 몫이 VOTE_RESCUE_MAX_KNN_NONE 이상.
+ * 결정형이 답하지 않은 판정을 문턱 밖에서 카드 답으로 바꾸는 장치(정해 둔 답 승격, 모델 선택 층 assist.ts)는 이 신호가 있으면 바꾸지 않는다.
+ */
+export function hasNoDocSignal(analysis: Pick<SegmentAnalysis, "ranked" | "knn">) {
+  return analysis.ranked.length === 0 || analysis.ranked[0].card < 0 || analysis.knn.none >= VOTE_RESCUE_MAX_KNN_NONE
+}
+
+/**
  * 정해 둔 답 승격(진단 R07, 혼합 P3 꼴). 머리말의 검사를 모두 통과한 옛 정규식 표 카드가 원문 상위 VOTE_RESCUE_TOP 안에 있으면
  * 그 카드로 답한다(표 카드가 여럿이면 순위가 높은 쪽). 기본(below)은 답하지 않던(abstain) 판정만 바꾸고, override 는 다른 카드로
  * 답한 판정도 바꾼다. 이미 그 카드로 답했거나 검사에 걸리면 원래 판정을 그대로 돌려준다.
@@ -437,7 +445,7 @@ export function applyVoteRescue(index: CompiledAnswerIndex, analysis: QuestionAn
   const whole = analysis.whole
   const { ranked } = whole
   // NODOC: 반례 none 자리가 1위이거나 우주 이웃 대부분이 '문서에 없음'이면 승격하지 않는다.
-  if (ranked.length === 0 || ranked[0].card < 0 || whole.knn.none >= VOTE_RESCUE_MAX_KNN_NONE) return base
+  if (hasNoDocSignal(whole)) return base
   const votes = new Set(analysis.votes)
   for (let at = 0; at < Math.min(VOTE_RESCUE_TOP, ranked.length); at += 1) {
     const candidate = ranked[at]

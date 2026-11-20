@@ -843,7 +843,7 @@ export interface AnswerIndexAssistTrace {
   pick: number | null
   /** pick 이 가리킨 후보 카드 id(번호가 후보 안일 때만). */
   pickCard: string | null
-  /** 답한 모델(호출 실패면 마지막으로 시도한 모델, 묻지 않았으면 null). */
+  /** 물은 모델(basic 1순위 하나, 호출이 실패해도 그 모델). 묻지 않았거나 연결이 없으면 null. */
   model: string | null
   /** 모델 호출에 쓴 시간(ms). 묻지 않았으면 null. */
   ms: number | null
@@ -852,7 +852,8 @@ export interface AnswerIndexAssistTrace {
   /**
    * 따르지 않은 이유. 묻지 않음: calibration_disabled·out_of_band·gap·absent·segments·policy_card·no_candidates.
    * 호출 실패: no_connection·circuit_open·access_denied·auth_error·timeout·http_error·parse_error·error.
-   * 받아들이지 않음: out_of_range·negative·absent·policy_card·policy_topic·scope·card_unavailable. 따랐으면 null.
+   * 받아들이지 않음: out_of_range·negative·absent·policy_card·policy_topic·scope·card_unavailable·nodoc(결정형이 NODOC 신호로 답하지 않은
+   * 질문을 카드 답으로 바꾸려 함). 따랐으면 null.
    */
   rejectReason: string | null
   /** 결정형 판정(모델 전). */

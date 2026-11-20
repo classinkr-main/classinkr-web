@@ -1,6 +1,9 @@
+import { readFileSync } from "node:fs"
+import { join } from "node:path"
+
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
 
-import { __setRouterAnswerIndexForTests, answerIndexDataDir, resetRouterAnswerIndex } from "@/lib/chatbot/answer-index"
+import { __setRouterAnswerIndexForTests, answerIndexDataDir, getRouterAnswerIndex, resetRouterAnswerIndex } from "@/lib/chatbot/answer-index"
 import {
   ANSWER_CARD_PICK_INSTRUCTION,
   answerAssistMode,
@@ -8,15 +11,18 @@ import {
   assistCandidates,
   assistTimeoutMs,
   buildAnswerCardPickInput,
+  cardAnswerPreview,
+  formatAssistCandidateBody,
   maybeAssistWithModel,
   resolveAssistPick,
   type AnswerCardPickRequest,
 } from "@/lib/chatbot/answer-index/assist"
 import { resolveAssistCalibration, type CompiledAnswerIndex } from "@/lib/chatbot/answer-index/compile"
-import { decideWithAnalysis, type QuestionAnalysis } from "@/lib/chatbot/answer-index/decide"
+import { decideWithAnalysis, hasNoDocSignal, VOTE_RESCUE_MAX_KNN_NONE, type QuestionAnalysis } from "@/lib/chatbot/answer-index/decide"
 import type { AnswerCard, AnswerIndexAssistTrace } from "@/lib/chatbot/answer-index/types"
 import {
   __resetModelCircuitForTests,
+  answerCardPickModel,
   buildAnswerCardPickGenerationConfig,
   isAnswerCardPickRequestBody,
   parseAnswerCardPick,
@@ -41,7 +47,10 @@ import { equivalenceHash, legacyEquivalenceCases, readLegacyEquivalence } from "
  * 답 색인 모델 선택 층(사양 §10, I11). 모델은 가짜 fetch 다(실제 Gemini·Vertex 호출 없음).
  * - 지시문은 글자 그대로, 후보 줄 꼴, 켜는 범위(off·band·always)와 calibration assist.
  * - 가짜 모델: pick 정상(다른 카드)·같은 카드·0·-1·범위 밖 번호·파싱 실패·시간 초과·402(차단기)·정책 주제·반례·없는 개념.
- * - off 면 흔적·호출·답이 그대로이고 legacy 동등성이 그대로다. stream 과 일반 경로 답이 같다. 질문당 모델 호출 1회.
+ * - off 면 흔적·호출·답이 그대로이고 legacy 동등성이 그대로다. stream 과 일반 경로 답이 같다. 질문당 HTTP 요청 1회(basic 1순위 모델 하나,
+ *   실패해도 다음 모델을 부르지 않는다).
+ * - NODOC 신호(반례 none 자리 1위·우주 이웃 none 몫 ≥ 0.5)로 결정형이 답하지 않은 질문은 카드 답으로 바꾸지 않는다.
+ * - 후보 줄은 대역 추정 묶음(fixtures/assist-band-estimate-lines.json)과 글자까지 같다.
  */
 
 const firstParagraph = (text: string) => text.split("\n\n")[0]
@@ -175,7 +184,7 @@ describe("assist settings and prompt", () => {
     )
   })
 
-  it("writes candidate lines as [n] (kind) topic | covers | not covered (max 3, no route) | answer head (200 chars)", () => {
+  it("writes candidate lines as [n] (kind) topic | covers | not covered (first 3, routes kept) | answer head (200 chars)", () => {
     const index = compileFixture()
     const { analysis } = decideWithAnalysis(index, "수업 중 학생 채팅 막을 수 있나요?", { env: {} })
     const candidates = assistCandidates(index, analysis, {})
@@ -191,9 +200,19 @@ describe("assist settings and prompt", () => {
       ...index.cards[index.cardById.get(CARDS.replay)!].card,
       notCovers: ["녹화 파일 내려받기 → doc:/docs/fake/recording#1/download", "녹화 | 편집 → gap:x/y", "자막", "넷째"],
     } as AnswerCard
-    expect(assistCandidateBody(card, index.currentUnits)).toContain("| 다루지 않음: 녹화 파일 내려받기 / 녹화 / 편집 / 자막 | 답 앞부분: ")
+    // '→ 행선'은 그대로 싣고(대역 추정 묶음과 같은 꼴), 칸 구분자(|)만 '/'로 바꾼다. 넷째부터는 싣지 않는다.
+    expect(assistCandidateBody(card, index.currentUnits)).toContain(
+      "| 다루지 않음: 녹화 파일 내려받기 → doc:/docs/fake/recording#1/download / 녹화 / 편집 → gap:x/y / 자막 | 답 앞부분: "
+    )
     const long = { ...card, kind: "policy", answer: { text: "가".repeat(300), textHash: "x", policyRef: "HQ-1" } } as AnswerCard
     expect(assistCandidateBody(long, index.currentUnits).endsWith(`답 앞부분: ${"가".repeat(200)}`)).toBe(true)
+    // 200자에서 잘려 끝에 남은 공백은 다듬지 않는다(대역 추정 묶음의 topk answerPreview 그대로).
+    const cut = { ...long, answer: { text: `${"가".repeat(199)} 나다`, textHash: "x", policyRef: "HQ-1" } } as AnswerCard
+    expect(assistCandidateBody(cut, index.currentUnits).endsWith(`답 앞부분: ${"가".repeat(199)} `)).toBe(true)
+    // 줄바꿈은 줄을 깨지 않게 띄어쓰기로, 빈 칸은 "-".
+    expect(formatAssistCandidateBody({ kind: "doc", topic: "첫 줄\n둘째 줄", covers: "", notCovers: null, answerPreview: "" })).toBe(
+      "(doc) 첫 줄 둘째 줄 | 다루는 것: - | 다루지 않음: - | 답 앞부분: -"
+    )
   })
 
   it("leaves out none slots, handoff cards and switched-off cards from the candidates", () => {
@@ -240,13 +259,62 @@ describe("requestAnswerCardPick (llm.ts)", () => {
     }
   })
 
-  it("uses the basic chain (gemini-4-hydrogen first) and moves on when that model alone fails", async () => {
+  const modelOf = (call: RecordedCall) => call.url.match(/models\/([^:]+):/)?.[1]
+  const pickInput = "방문자 질문: x\n\n답 카드 후보:\n[1] …"
+
+  it("asks the first basic model (gemini-4-hydrogen) with one request", async () => {
     stubModelEnv("always")
-    behavior = (call) => (call.url.includes("gemini-4-hydrogen") ? geminiError(404) : geminiText('{"pick": 2}'))
-    const outcome = await requestAnswerCardPick({ instruction: ANSWER_CARD_PICK_INSTRUCTION, input: "방문자 질문: x\n\n답 카드 후보:\n[1] …", timeoutMs: 2000 })
-    expect(outcome).toEqual({ ok: true, pick: 2, model: "gemini-3.5-flash" })
-    expect(calls.map((call) => call.url.match(/models\/([^:]+):/)?.[1])).toEqual(["gemini-4-hydrogen", "gemini-3.5-flash"])
+    behavior = () => geminiText('{"pick": 2}')
+    const outcome = await requestAnswerCardPick({ instruction: ANSWER_CARD_PICK_INSTRUCTION, input: pickInput, timeoutMs: 2000 })
+    expect(outcome).toEqual({ ok: true, pick: 2, model: "gemini-4-hydrogen" })
+    expect(calls.map(modelOf)).toEqual(["gemini-4-hydrogen"])
     expect(isAnswerCardPickRequestBody(JSON.stringify(calls[0].body))).toBe(true)
+    expect(answerCardPickModel("developer")).toBe("gemini-4-hydrogen")
+    expect(answerCardPickModel("vertex")).toBe("gemini-4-hydrogen")
+    vi.stubEnv("GEMINI_FAST_MODEL", "gemini-3.5-flash")
+    expect(answerCardPickModel("developer")).toBe("gemini-3.5-flash")
+  })
+
+  it("does not call the next model when the first fails (404·429·5xx·unverified 403·network error)", async () => {
+    stubModelEnv("always")
+    const failures: [string, () => Response, string][] = [
+      ["404", () => geminiError(404), "http_error"],
+      ["429", () => geminiError(429), "http_error"],
+      ["500", () => geminiError(500), "http_error"],
+      ["503", () => geminiError(503), "http_error"],
+      // 확인 안 된 모델(gemini-4-hydrogen)의 403 은 그 모델만의 권한 문제일 수 있어 차단기를 열지 않는다. 그래도 다음 모델은 부르지 않는다.
+      ["403 hydrogen", () => geminiError(403), "http_error"],
+      [
+        "network",
+        () => {
+          throw new TypeError("fetch failed")
+        },
+        "error",
+      ],
+    ]
+    for (const [name, fail, reason] of failures) {
+      calls.length = 0
+      __resetModelCircuitForTests()
+      behavior = (call) => (call.url.includes("gemini-4-hydrogen") ? fail() : geminiText('{"pick": 2}'))
+      const outcome = await requestAnswerCardPick({ instruction: ANSWER_CARD_PICK_INSTRUCTION, input: pickInput, timeoutMs: 2000 })
+      expect(outcome, name).toEqual({ ok: false, reason, model: "gemini-4-hydrogen" })
+      expect(calls.map(modelOf), name).toEqual(["gemini-4-hydrogen"])
+    }
+    // 키·결제 거절(402)은 차단기를 열고 다음 질문은 네트워크로 보내지 않는다.
+    calls.length = 0
+    __resetModelCircuitForTests()
+    behavior = () => geminiError(402)
+    expect(await requestAnswerCardPick({ instruction: ANSWER_CARD_PICK_INSTRUCTION, input: pickInput, timeoutMs: 2000 })).toEqual({
+      ok: false,
+      reason: "access_denied",
+      model: "gemini-4-hydrogen",
+    })
+    expect(await requestAnswerCardPick({ instruction: ANSWER_CARD_PICK_INSTRUCTION, input: pickInput, timeoutMs: 2000 })).toEqual({
+      ok: false,
+      reason: "circuit_open",
+      model: "gemini-4-hydrogen",
+    })
+    expect(calls).toHaveLength(1)
   })
 
   it("returns no_connection without a model key and never calls the network", async () => {
@@ -292,6 +360,78 @@ describe("resolveAssistPick (acceptance rules)", () => {
     expect(resolveAssistPick(index, patched.analysis, decision, [candidate], 1, { env: {} })).toMatchObject({ accepted: false, rejectReason: "absent" })
     expect(resolveAssistPick(index, analysis, decision, [], 0, { env: {} })).toMatchObject({ accepted: true, decision })
     expect(resolveAssistPick(index, analysis, decision, [], -1, { env: {} })).toMatchObject({ accepted: false, rejectReason: "absent" })
+  })
+
+  it("keeps a NODOC abstain (none slot first) on any card pick (gap cards too), but follows 0 and -1", () => {
+    const index = compileFixture()
+    const question = "채팅 기록은 나중에 볼 수 있나요"
+    const { decision, analysis } = decideWithAnalysis(index, question, { env: {} })
+    // 반례 행선이 none 이라 none 자리가 1위이고 결정형은 못 찾음이다. 후보에서는 none 자리가 빠져 그 아래 카드가 1번이 된다.
+    expect(decision).toMatchObject({ kind: "abstain", abstainReason: "nodoc" })
+    expect(analysis.whole.ranked[0].card).toBeLessThan(0)
+    expect(hasNoDocSignal(analysis.whole)).toBe(true)
+    const candidates = assistCandidates(index, analysis, {})
+    expect(candidates[0].id).toBe(CARDS.replay)
+    for (const candidate of candidates) {
+      expect(resolveAssistPick(index, analysis, decision, candidates, candidate.n, { env: {} }), candidate.id).toMatchObject({
+        accepted: false,
+        rejectReason: "nodoc",
+        pickCard: candidate.id,
+        decision,
+      })
+    }
+    expect(resolveAssistPick(index, analysis, decision, candidates, 0, { env: {} })).toMatchObject({ accepted: true, decision })
+    expect(resolveAssistPick(index, analysis, decision, candidates, -1, { env: {} })).toMatchObject({ accepted: true, decision: { kind: "clarify", card: null } })
+    // 공백 카드도 바꾸지 않는다(none 자리 아래 공백 카드는 질문과 다른 주제일 수 있다).
+    const withGap = withUncheckedRank(index, analysis, CARDS.gapHours)
+    const gap = { card: index.cardById.get(CARDS.gapHours)!, id: CARDS.gapHours, at: withGap.at }
+    expect(resolveAssistPick(index, withGap.analysis, decision, [gap], 1, { env: {} })).toMatchObject({
+      accepted: false,
+      rejectReason: "nodoc",
+      pickCard: CARDS.gapHours,
+      decision,
+    })
+    // 대조: none 자리가 없고 우주 이웃도 '문서에 없음'이 아니면 같은 카드를 받아들인다(막는 것은 NODOC 신호뿐이다).
+    const ranked = analysis.whole.ranked.filter((candidate) => candidate.card >= 0)
+    const confs = analysis.whole.confs.filter((_, at) => analysis.whole.ranked[at].card >= 0)
+    const clean: QuestionAnalysis = { ...analysis, whole: { ...analysis.whole, ranked, confs, knn: { ...analysis.whole.knn, none: 0 } } }
+    expect(hasNoDocSignal(clean.whole)).toBe(false)
+    const cleanCandidates = assistCandidates(index, clean, {})
+    expect(resolveAssistPick(index, clean, decision, cleanCandidates, 1, { env: {} })).toMatchObject({
+      accepted: true,
+      decision: { kind: "answer", card: CARDS.replay },
+    })
+  })
+
+  it("keeps a NODOC abstain when most universe neighbours are 'none' (share ≥ VOTE_RESCUE_MAX_KNN_NONE)", () => {
+    const index = compileFixture()
+    const { decision, analysis } = decideWithAnalysis(index, "회사 주식 상장했나요", { votes: [CARDS.price], env: {} })
+    expect(decision.kind).toBe("abstain")
+    expect(analysis.whole.ranked[0].id).toBe(CARDS.price)
+    expect(analysis.whole.knn.none).toBeGreaterThanOrEqual(VOTE_RESCUE_MAX_KNN_NONE)
+    const candidates = assistCandidates(index, analysis, {})
+    expect(candidates.map((candidate) => candidate.id)).toEqual([CARDS.price])
+    expect(resolveAssistPick(index, analysis, decision, candidates, 1, { env: {} })).toMatchObject({ accepted: false, rejectReason: "nodoc", decision })
+    const share = (none: number): QuestionAnalysis => ({ ...analysis, whole: { ...analysis.whole, knn: { ...analysis.whole.knn, none } } })
+    expect(resolveAssistPick(index, share(VOTE_RESCUE_MAX_KNN_NONE), decision, candidates, 1, { env: {} })).toMatchObject({ rejectReason: "nodoc" })
+    expect(resolveAssistPick(index, share(VOTE_RESCUE_MAX_KNN_NONE - 0.01), decision, candidates, 1, { env: {} })).toMatchObject({
+      accepted: true,
+      decision: { kind: "answer", card: CARDS.price },
+    })
+  })
+
+  it("does not apply the NODOC guard when the deterministic decision already answers", () => {
+    const index = compileFixture()
+    const { decision, analysis } = decideWithAnalysis(index, "녹화 영상 다시보기 어디서 봐요", { env: {} })
+    expect(decision).toMatchObject({ kind: "answer", card: CARDS.replay })
+    const noisy: QuestionAnalysis = { ...analysis, whole: { ...analysis.whole, knn: { ...analysis.whole.knn, none: 0.9 } } }
+    expect(hasNoDocSignal(noisy.whole)).toBe(true)
+    const candidates = assistCandidates(index, noisy, {})
+    const download = candidates.find((candidate) => candidate.id === CARDS.download)!
+    expect(resolveAssistPick(index, noisy, decision, candidates, download.n, { env: {} })).toMatchObject({
+      accepted: true,
+      decision: { kind: "answer", card: CARDS.download },
+    })
   })
 
   it("rejects numbers outside -1..candidates", () => {
@@ -400,6 +540,48 @@ describe("compiled route with the assist layer (fake model)", () => {
     expect(result.answerIndex).toMatchObject({ decision: "clarify", card: null })
     expect(decidedByFromAnswerIndex(result.answerIndex)).toBe("index-clarify")
     expect(assistOf(result)).toMatchObject({ pick: -1, accepted: true })
+  })
+
+  it("keeps the NODOC not-found answer when the model picks a card below the none slot", async () => {
+    stubModelEnv("always")
+    behavior = pickNumber(1)
+    const result = await evaluateChatbotQuery("채팅 기록은 나중에 볼 수 있나요")
+    expect(result.answerIndex).toMatchObject({ decision: "abstain", card: null })
+    expect(assistOf(result)).toMatchObject({
+      used: true,
+      pick: 1,
+      pickCard: CARDS.replay,
+      model: "gemini-4-hydrogen",
+      accepted: false,
+      rejectReason: "nodoc",
+      original: { kind: "abstain", card: null },
+    })
+    expect(result.answer).toContain(firstParagraph(NO_SOURCE_FACT_ANSWER))
+    expect(result.answer).not.toContain("[다시보기]")
+    expect(calls).toHaveLength(1)
+  })
+
+  it("keeps the deterministic answer with one request when the first model fails (no next model)", async () => {
+    for (const status of [404, 429, 500, 403]) {
+      stubModelEnv("always")
+      __clearAnswerCacheForTests()
+      __resetModelCircuitForTests()
+      calls.length = 0
+      behavior = (call) => (call.url.includes("gemini-4-hydrogen") ? geminiError(status) : pickTopic("녹화 파일 내려받기")(call, undefined))
+      const result = await evaluateChatbotQuery("녹화 영상 다시보기 어디서 봐요")
+      expect(result.answerIndex, String(status)).toMatchObject({ decision: "answer", card: CARDS.replay })
+      expect(assistOf(result), String(status)).toMatchObject({
+        used: true,
+        pick: null,
+        model: "gemini-4-hydrogen",
+        accepted: false,
+        rejectReason: "http_error",
+      })
+      expect(result.answer, String(status)).toContain("[다시보기]")
+      expect(result.answer, String(status)).not.toContain(firstParagraph(MODEL_UNAVAILABLE_ANSWER))
+      expect(result.modelState, String(status)).toBe("error")
+      expect(calls.map((call) => call.url.match(/models\/([^:]+):/)?.[1]), String(status)).toEqual(["gemini-4-hydrogen"])
+    }
   })
 
   it("keeps the deterministic answer for an out-of-range number", async () => {
@@ -604,6 +786,78 @@ describe("legacy equivalence with the assist switch set", () => {
     }
     expect(calls).toHaveLength(0)
   }, 600_000)
+})
+
+// ─── 대역 추정 묶음과 맞대기 ──────────────────────────────────────────────
+
+interface EstimateCandidate {
+  n: number
+  id: string
+  kind: string
+  topic: string
+  covers: string
+  notCovers: string[]
+  answerPreview: string
+  line: string
+}
+
+interface EstimateRow {
+  id: string
+  q: string
+  votes: string[]
+  cands: EstimateCandidate[]
+}
+
+const estimateRows = (
+  JSON.parse(readFileSync(join(__dirname, "fixtures", "assist-band-estimate-lines.json"), "utf8")) as { rows: EstimateRow[] }
+).rows
+
+describe("candidate lines match the band estimate batches", () => {
+  it("formats the estimate's topk fields into exactly the estimate's lines (routes, trailing spaces, inner arrows)", () => {
+    const all = estimateRows.flatMap((row) => row.cands)
+    expect(all.length).toBe(30)
+    // 이 묶음이 덮는 꼴: '→ 행선'이 붙은 다루지 않음, 넷 이상인 다루지 않음, 끝 공백이 남은 답 앞부분, 행선 앞 글에 화살표가 또 있는 칸, 빈 다루지 않음.
+    expect(all.some((cand) => cand.notCovers.length > 3)).toBe(true)
+    expect(all.some((cand) => cand.answerPreview.endsWith(" "))).toBe(true)
+    expect(all.some((cand) => cand.notCovers.slice(0, 3).some((item) => item.split("→").length > 2))).toBe(true)
+    expect(all.some((cand) => cand.notCovers.length === 0)).toBe(true)
+    expect(new Set(all.map((cand) => cand.kind))).toEqual(new Set(["doc", "fixed", "gap", "howto", "policy"]))
+    for (const cand of all) expect(`[${cand.n}] ${formatAssistCandidateBody(cand)}`, cand.id).toBe(cand.line)
+  })
+
+  it("gives the estimate's lines from the runtime index for cards unchanged since the estimate", () => {
+    vi.stubEnv("ANSWER_INDEX_DATA_DIR", undefined)
+    __setRouterAnswerIndexForTests(null)
+    const index = getRouterAnswerIndex()
+    let compared = 0
+    let shownCompared = 0
+    for (const row of estimateRows) {
+      const { analysis } = decideWithAnalysis(index, row.q, { votes: row.votes, env: {} })
+      const shown = new Map(assistCandidates(index, analysis, {}).map((candidate) => [candidate.id, candidate]))
+      for (const cand of row.cands) {
+        const at = index.cardById.get(cand.id)
+        if (at === undefined) continue
+        const card = index.cards[at].card
+        const unchanged =
+          card.kind === cand.kind &&
+          card.topic === cand.topic &&
+          card.covers === cand.covers &&
+          JSON.stringify(card.notCovers ?? []) === JSON.stringify(cand.notCovers) &&
+          cardAnswerPreview(card, index.currentUnits) === cand.answerPreview
+        if (!unchanged) continue
+        compared += 1
+        expect(`[${cand.n}] ${assistCandidateBody(card, index.currentUnits)}`, cand.id).toBe(cand.line)
+        const runtime = shown.get(cand.id)
+        if (runtime && runtime.n === cand.n) {
+          shownCompared += 1
+          expect(runtime.line, cand.id).toBe(cand.line)
+        }
+      }
+    }
+    // 자료가 바뀌어 맞댈 카드가 하나도 남지 않으면 묶음을 다시 뽑는다(빈 시험으로 통과시키지 않는다).
+    expect(compared).toBeGreaterThan(0)
+    expect(shownCompared).toBeGreaterThan(0)
+  }, 60_000)
 })
 
 // ─── 측정 도구 ───────────────────────────────────────────────────────────
