@@ -38,6 +38,8 @@ const PUBLIC = {
     "lib/server/", "lib/repositories/", "lib/portal/repositories/", "lib/db/", "lib/meta/",
     "lib/internal-cs-chat/", "lib/cs/", "lib/marketing/", "lib/notifications/",
     "lib/email.ts", "lib/team-member-colors.ts", "lib/chatbot/service.ts",
+    // 모델 지시문·라우터 모드 이름("shadow")만 담는 서버 전용 — 화면 클래스·UI 글자를 내지 않는다
+    "lib/chatbot/llm.ts", "lib/chatbot/answer-index/",
     "components/notifications/", "components/ui/badge.tsx", "components/ui/ClassInInternalAIIcon.tsx",
     "components/portal/quotes/QuickQuoteComposer.tsx", "components/portal/quotes/QuoteDisplaySettings.tsx",
   ],
