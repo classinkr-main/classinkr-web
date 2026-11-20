@@ -33,6 +33,7 @@ import {
 import { CLASSIN_POSITIONING } from "@/lib/classin-positioning"
 import { trackEvent } from "@/lib/analytics"
 import { stashContactPrefill } from "@/lib/tracking-paths"
+import { CHATBOT_DESKTOP_MEDIA_QUERY, shouldCloseChatbotAfterLinkClick, type ChatLinkClick } from "@/components/ui/chatbot-link-navigation"
 import { resolvePageContext, mergeStarters } from "@/lib/chatbot/page-context"
 import {
     CHATBOT_OPEN_EVENT,
@@ -285,10 +286,12 @@ function ConsultationBridge({
     messages,
     message,
     sessionId,
+    onNavigate,
 }: {
     messages: ChatMessage[]
     message: ChatMessage
     sessionId?: string
+    onNavigate?: (click: ChatLinkClick) => void
 }) {
     const shouldReduceMotion = useReducedMotion()
     const [state, setState] = useState<"idle" | "opened" | "copied" | "failed">("idle")
@@ -396,7 +399,10 @@ function ConsultationBridge({
                     onClick={(event) => {
                         // 요약은 주소가 아니라 sessionStorage 로 넘긴다. 저장이 막히면 조용히 빈 폼으로
                         // 보내지 않고 복사해서 붙여 넣도록 안내한다.
-                        if (stashContactPrefill(draft)) return
+                        if (stashContactPrefill(draft)) {
+                            onNavigate?.(event)
+                            return
+                        }
                         event.preventDefault()
                         setToast({ type: "error", text: "요약을 보관하지 못했어요. 요약을 복사한 뒤 문의폼에 붙여 넣어 주세요." })
                     }}
@@ -733,7 +739,13 @@ function AnswerCopyButton({ message }: { message: ChatMessage }) {
     )
 }
 
-function SourceLinks({ sources }: { sources?: ChatbotSource[] }) {
+function SourceLinks({
+    sources,
+    onNavigate,
+}: {
+    sources?: ChatbotSource[]
+    onNavigate?: (click: ChatLinkClick) => void
+}) {
     const shouldReduceMotion = useReducedMotion()
     const visibleSources = sources?.slice(0, 2) ?? []
     if (visibleSources.length === 0) return null
@@ -760,6 +772,7 @@ function SourceLinks({ sources }: { sources?: ChatbotSource[] }) {
                     >
                         <Link
                             href={source.urlPath}
+                            onClick={(event) => onNavigate?.(event)}
                             className={cn(
                                 "group block rounded-[12px] border px-3 py-2 text-left transition-all focus-visible:outline-none",
                                 isTopMatch
@@ -1339,6 +1352,14 @@ export function FloatingChatbot() {
         })
     }
 
+    // 휴대폰에서 답 안 링크로 다른 페이지(또는 같은 페이지 #앵커)로 가면 대화창과 딤이 목적지를 덮지 않게 닫는다.
+    // 다음 페이지로 가는 중이라 런처로 포커스를 옮기지 않는다. 대화 상태(messages·sessionId)는 두므로 다시 열면 이어진다.
+    function closeAfterInChatNavigation(click: ChatLinkClick) {
+        const isDesktop = window.matchMedia(CHATBOT_DESKTOP_MEDIA_QUERY).matches
+        if (!shouldCloseChatbotAfterLinkClick(click, isDesktop)) return
+        setIsOpen(false)
+    }
+
     return (
         <div className="pointer-events-none fixed inset-x-0 bottom-0 z-(--z-chatbot) flex flex-col items-end px-3 pb-[calc(1rem+env(safe-area-inset-bottom))] md:inset-x-auto md:bottom-6 md:right-6 md:px-0 md:pb-0">
             {/* 모바일 화면 백드롭 딤/블러 오버레이 */}
@@ -1501,7 +1522,7 @@ export function FloatingChatbot() {
                                                         />
                                                         {message.role === "assistant" ? (
                                                             <>
-                                                                <SourceLinks sources={message.sources} />
+                                                                <SourceLinks sources={message.sources} onNavigate={closeAfterInChatNavigation} />
                                                                 {message.retryQuestion ? (
                                                                     <div className="mt-3">
                                                                         <button
@@ -1556,7 +1577,12 @@ export function FloatingChatbot() {
                                                                     </div>
                                                                 ) : null}
                                                                 {message.showHandoffCTA ? (
-                                                                    <ConsultationBridge messages={messages} message={message} sessionId={sessionId} />
+                                                                    <ConsultationBridge
+                                                                        messages={messages}
+                                                                        message={message}
+                                                                        sessionId={sessionId}
+                                                                        onNavigate={closeAfterInChatNavigation}
+                                                                    />
                                                                 ) : null}
                                                             </>
                                                         ) : null}
