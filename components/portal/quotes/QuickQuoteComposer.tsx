@@ -407,8 +407,9 @@ const EDITABLE_CLASS =
   "min-w-0 rounded-none border-0 border-b border-dashed border-transparent bg-transparent px-0.5 py-px outline-none transition-colors placeholder:text-[#A39E98] hover:border-[#CFCBC5] hover:bg-[#FCFCFA] focus:border-solid focus:border-[#084734] focus:bg-white"
 const PAPER_SELECT_CLASS =
   "h-7 rounded-[4px] border border-transparent bg-transparent px-1 text-[12px] text-[#31302E] outline-none transition-colors hover:border-[#E3E0DB] focus-visible:border-[#084734]"
+// 누르는 순간 살짝 눌려 들어가고(scale·inset 그림자) 놓으면 튀어 오르는 손맛. 모션 최소화 설정은 존중한다.
 const RAIL_BUTTON_CLASS =
-  "flex w-full items-baseline gap-2 rounded-[6px] px-2 py-[7px] text-left text-[#111110] transition-colors hover:bg-white disabled:opacity-60"
+  "flex w-full items-baseline gap-2 rounded-[6px] px-2 py-[7px] text-left text-[#111110] transition-[background-color,box-shadow,transform] duration-150 ease-out hover:bg-white hover:shadow-[0_1px_2px_rgba(17,17,16,0.06)] active:scale-[0.97] active:bg-[#EFEDE8] active:shadow-[inset_0_1px_2px_rgba(17,17,16,0.12)] active:duration-75 disabled:opacity-60 disabled:active:scale-100 motion-reduce:transition-none motion-reduce:active:scale-100"
 const RAIL_ACTIVE_CLASS = "bg-white font-semibold shadow-[inset_2px_0_0_#084734]"
 const RAIL_HEADING_CLASS = "mx-2 mb-1.5 text-[11.5px] font-semibold text-[#78736D]"
 const OPTION_CHIP_CLASS =
@@ -913,6 +914,9 @@ export default function QuickQuoteComposer({
   const [showAllRecent, setShowAllRecent] = useState(false)
   const [showAllTemplates, setShowAllTemplates] = useState(false)
   const [toolsExpanded, setToolsExpanded] = useState(false)
+  // 품목 카탈로그에서 방금 넣은 항목 — 잠깐 초록 체크로 바뀌어 "들어갔다"를 알려준다.
+  const [justAddedId, setJustAddedId] = useState<string | null>(null)
+  const justAddedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [deletingTemplateId, setDeletingTemplateId] = useState<string | null>(null)
   const [templateDeleteError, setTemplateDeleteError] = useState<string | null>(null)
   // 최근 견적 복제 직후 안내(고객만 비웠음 + 옛 단가 되돌리기)
@@ -1249,8 +1253,17 @@ export default function QuickQuoteComposer({
       if (errorToastTimerRef.current) {
         clearTimeout(errorToastTimerRef.current)
       }
+      if (justAddedTimerRef.current) {
+        clearTimeout(justAddedTimerRef.current)
+      }
     }
   }, [])
+
+  function flashCatalogAdded(id: string) {
+    if (justAddedTimerRef.current) clearTimeout(justAddedTimerRef.current)
+    setJustAddedId(id)
+    justAddedTimerRef.current = setTimeout(() => setJustAddedId(null), 900)
+  }
 
   // 딜/고객 프리필 — 목록 로드가 끝난 뒤 한 번만 고객·거래를 선택한다.
   // 자동은 '선택 제안'까지이며, 새 고객을 암묵 생성하지 않는다.
@@ -2720,6 +2733,47 @@ export default function QuickQuoteComposer({
     )
   }
 
+  // HW·HW+SW 믹스 견적은 품목을 골라 담는 일이 주 작업이라 카탈로그를 레일 맨 위로 올린다.
+  const catalogFirst = composerMode === "hardware" || isSplit
+  const catalogSection = (
+                <section aria-label="품목 카탈로그" className={catalogFirst ? "" : "border-t border-[#E3E0DB] pt-3.5"}>
+                  <p className={RAIL_HEADING_CLASS}>품목 · 눌러서 추가</p>
+                  {visibleCatalogItems.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      title={`${item.label} · ${item.description}`}
+                      onClick={() => {
+                        handleCatalogAdd(item)
+                        flashCatalogAdded(item.id)
+                      }}
+                      className={`group ${RAIL_BUTTON_CLASS} items-center py-1.5 ${justAddedId === item.id ? "bg-[#ECFDF5] hover:bg-[#ECFDF5] shadow-[inset_2px_0_0_#084734]" : ""}`}
+                    >
+                      <span className="min-w-0 flex-1">
+                        <span className="text-[12.5px] font-semibold">{item.label}</span>{" "}
+                        <span className="text-[10.5px] text-[#78736D]">
+                          {item.templateId === "online_suite" ? "HW+SW" : isSoftwareQuoteTemplate(item.templateId) ? "SW" : "HW"}
+                          {item.badge ? ` · ${item.badge}` : ""}
+                        </span>
+                        <span className="block text-[11.5px] tabular-nums text-[#78736D]">
+                          {formatQuickAddPrice(item.price, item.priceUnit)}
+                        </span>
+                      </span>
+                      <span
+                        aria-hidden="true"
+                        className={`flex h-6 w-6 items-center justify-center rounded-[6px] border transition-[background-color,border-color,color,transform] duration-150 ease-out group-hover:scale-110 group-active:scale-90 motion-reduce:transform-none ${
+                          justAddedId === item.id
+                            ? "border-[#084734] bg-[#084734] text-white"
+                            : "border-[#D6D3CE] text-[#615D59] group-hover:border-[#084734] group-hover:text-[#084734] group-active:bg-[#084734] group-active:text-white"
+                        }`}
+                      >
+                        {justAddedId === item.id ? <Check className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
+                      </span>
+                    </button>
+                  ))}
+                </section>
+  )
+
   const submitDisabled = Boolean(submittingAction) || loadingOptions || !canCreateQuote
 
   return createPortal(
@@ -2967,9 +3021,10 @@ export default function QuickQuoteComposer({
                 <span>최근 견적·템플릿·품목</span><span>{toolsExpanded ? "접기" : "펼치기"}</span>
               </button>
               <div id="quote-composer-tools" className={toolsExpanded ? "contents" : "hidden lg:contents"}>
+                {catalogFirst && catalogSection}
                 {displaySettings && <QuoteDisplaySettings {...displaySettings} />}
                 {showRecentQuotes && recentQuotes.length > 0 && (
-                  <section aria-label="최근 견적서">
+                  <section aria-label="최근 견적서" className={catalogFirst ? "border-t border-[#E3E0DB] pt-3.5" : undefined}>
                     <p className={RAIL_HEADING_CLASS}>
                       최근 견적서 <span className="font-normal">· 고객만 바꿔 재사용</span>
                     </p>
@@ -3135,35 +3190,7 @@ export default function QuickQuoteComposer({
                   )}
                 </div>
 
-                <div className="border-t border-[#E3E0DB] pt-3.5">
-                  <p className={RAIL_HEADING_CLASS}>품목 · 눌러서 추가</p>
-                  {visibleCatalogItems.map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      title={`${item.label} · ${item.description}`}
-                      onClick={() => handleCatalogAdd(item)}
-                      className={`group ${RAIL_BUTTON_CLASS} items-center py-1.5`}
-                    >
-                      <span className="min-w-0 flex-1">
-                        <span className="text-[12.5px] font-semibold">{item.label}</span>{" "}
-                        <span className="text-[10.5px] text-[#78736D]">
-                          {item.templateId === "online_suite" ? "HW+SW" : isSoftwareQuoteTemplate(item.templateId) ? "SW" : "HW"}
-                          {item.badge ? ` · ${item.badge}` : ""}
-                        </span>
-                        <span className="block text-[11.5px] tabular-nums text-[#78736D]">
-                          {formatQuickAddPrice(item.price, item.priceUnit)}
-                        </span>
-                      </span>
-                      <span
-                        aria-hidden="true"
-                        className="flex h-6 w-6 items-center justify-center rounded-[6px] border border-[#D6D3CE] text-[#615D59] transition-colors group-hover:border-[#084734] group-hover:text-[#084734]"
-                      >
-                        <Plus className="h-3.5 w-3.5" />
-                      </span>
-                    </button>
-                  ))}
-                </div>
+                {!catalogFirst && catalogSection}
               </div>
             </nav>
 

@@ -61,7 +61,7 @@ describe("admin quick quote composer shell", () => {
   })
 
   it("keeps recent quotes and templates compact, with optional combinations below templates", () => {
-    const sections = ['aria-label="최근 견적서"', 'aria-label="견적 템플릿"', "빠른 조합 · HW + SW 별도 구매", "품목 · 눌러서 추가"].map((marker) =>
+    const sections = ['aria-label="최근 견적서"', 'aria-label="견적 템플릿"', "빠른 조합 · HW + SW 별도 구매", "{!catalogFirst && catalogSection}"].map((marker) =>
       source.indexOf(marker)
     )
     expect(sections.every((index) => index > 0)).toBe(true)
@@ -71,6 +71,12 @@ describe("admin quick quote composer shell", () => {
     // 팀 템플릿(DB)은 목록만 꽂을 자리
     expect(source).toContain("teamTemplates?: QuickQuoteTeamTemplate[]")
     expect(source).toContain("function handleCatalogAdd(")
+    // HW·믹스 견적은 품목 카탈로그를 레일 맨 위(최근 견적서보다 앞)에 둔다.
+    expect(source).toContain('const catalogFirst = composerMode === "hardware" || isSplit')
+    expect(source.indexOf("{catalogFirst && catalogSection}")).toBeLessThan(source.indexOf('aria-label="최근 견적서"'))
+    // 눌림 피드백: 버튼 active 상태 + 방금 담은 품목 체크 표시
+    expect(source).toContain("active:scale-[0.97]")
+    expect(source).toContain("flashCatalogAdded(item.id)")
   })
 
   it("clones a recent quote but clears only the customer, with stale-price reset", () => {
