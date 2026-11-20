@@ -2,7 +2,7 @@
  * 질문 묶음을 공개 챗봇 경로에 실제 모델(Gemini)로 돌려 답을 JSONL 로 남기는 측정 스크립트.
  *
  * 실행:
- *   npx tsx scripts/chatbot-live-eval.ts --in <questions.json> --out <results.jsonl> [--concurrency 4] [--mode select|generate|off] [--gate on|off] [--second-chance on|off] [--router legacy|shadow|compiled] [--repeat N] [--simulate-gemini 402|hang|429] [--allow-model-errors]
+ *   npx tsx scripts/chatbot-live-eval.ts --in <questions.json> --out <results.jsonl> [--concurrency 4] [--mode select|generate|off] [--gate on|off] [--second-chance on|off] [--router legacy|shadow|compiled] [--assist off|band|always] [--repeat N] [--simulate-gemini 402|hang|429] [--allow-model-errors]
  *
  * - 입력: [{ id, question, group?, expectTopic?, pagePath? }] 또는 { cases: [...] }(data/chatbot-first-contact-set.json).
  *   대화 형식 { id, turns:[질문 문자열 또는 {question}], pagePath? } 도 받는다. 앞 턴의 질문과 답으로 previousTurn 을 만들어
@@ -29,6 +29,11 @@
  *   코어가 답 색인 흔적(answerIndex)을 내면 결과 줄에 그대로 싣고, 색인이 답을 정한 줄의 decidedBy 는
  *   index:<카드>·index-partial:<카드>·index-gap:<카드>·index-abstain·index-clarify 다(사양 §3.7, scripts/lib/chatbot-live-eval-checks.ts).
  *   답 색인 자료 폴더는 ANSWER_INDEX_DATA_DIR(작업 폴더 자료를 잴 때, 없으면 data/answer-index)이고, 흔적의 version 이 그 폴더의 판이다.
+ * - --assist 는 답 색인 모델 선택 층(CHATBOT_ANSWER_ASSIST: off·band·always, lib/chatbot/answer-index/assist.ts, 사양 §10)을 정한다.
+ *   안 주면 환경변수, 그것도 없으면 off. compiled 라우터에서만 일한다. off 가 아니면 모델 단계가 켜진 측정이라(모델 없는 측정 확인을
+ *   하지 않는다) Gemini 연결이 있어야 하고, --simulate-gemini 와 함께 쓰면 가짜 응답으로 돈다(실제 호출 0). 호출은 다른 단계와 같이
+ *   질문별로 세고(geminiCalls·geminiKinds), 결과 줄의 assist 는 answerIndex.assist(mode·used·pick·pickCard·model·ms·accepted·
+ *   rejectReason·original)다. decidedBy 는 최종 카드 기준이다.
  * - 무효 측정 알아채기: 결과 줄의 modelError 는 그 줄의 답에 쓰이는 Gemini 호출(관문·근거 선별·목차 고르기·답 생성)이
  *   401·402·403(결제 크레딧 소진·키 인증 실패)을 받았거나, 그 때문에 열린 차단기(lib/chatbot/llm.ts)가 그 호출을 막았거나
  *   (geminiBlocked: 관문이 차단기를 보고 판정 없이 넘긴 것 포함), Vertex 토큰 발급이 실패해 그 호출을 못 보냈거나
@@ -73,14 +78,17 @@ import {
   isGoogleAuthUrl,
   isTransientGeminiFailure,
   parseAnswerRouter,
+  parseAssistMode,
   parseEvalCases,
   parseSimulateMode,
   repeatRunEnv,
   runConversationTurns,
   simulateGeminiFetch,
+  summarizeAssistRows,
   summarizeRows,
   turnRowId,
   type AnswerRouter,
+  type AssistMode,
   type AttemptRecord,
   type EvalCase,
   type GeminiCallRecord,
@@ -136,7 +144,7 @@ function argValue(name: string): string | undefined {
 function usage(message?: string): never {
   if (message) console.error(`오류: ${message}`)
   console.error(
-    "사용법: npx tsx scripts/chatbot-live-eval.ts --in <questions.json> --out <results.jsonl> [--concurrency 4] [--mode select|generate|off] [--gate on|off] [--second-chance on|off] [--router legacy|shadow|compiled] [--repeat N] [--simulate-gemini 402|hang|429] [--allow-model-errors]"
+    "사용법: npx tsx scripts/chatbot-live-eval.ts --in <questions.json> --out <results.jsonl> [--concurrency 4] [--mode select|generate|off] [--gate on|off] [--second-chance on|off] [--router legacy|shadow|compiled] [--assist off|band|always] [--repeat N] [--simulate-gemini 402|hang|429] [--allow-model-errors]"
   )
   process.exit(2)
 }
@@ -187,6 +195,10 @@ async function main() {
     usage(`--second-chance 는 on|off 중 하나여야 합니다: ${secondChanceSwitch}`)
   }
 
+  const assistArg = argValue("--assist")
+  const assistFlag = assistArg === undefined ? null : parseAssistMode(assistArg)
+  if (assistArg !== undefined && !assistFlag) usage(`--assist 는 off|band|always 중 하나여야 합니다: ${assistArg}`)
+
   const routerArg = argValue("--router")
   const routerFlag = routerArg === undefined ? null : parseAnswerRouter(routerArg)
   if (routerArg !== undefined && !routerFlag) usage(`--router 는 legacy|shadow|compiled 중 하나여야 합니다: ${routerArg}`)
@@ -198,9 +210,6 @@ async function main() {
   const simulateArg = argValue("--simulate-gemini")
   const simulateMode = simulateArg === undefined ? null : parseSimulateMode(simulateArg)
   if (simulateArg !== undefined && !simulateMode) usage(`--simulate-gemini 는 402|hang|429 중 하나여야 합니다: ${simulateArg}`)
-  // 답에 모델을 쓰는 단계가 하나라도 켜져 있는지. 모두 끈 측정은 모델 없는 측정이다(Gemini 호출 0 이어야 함).
-  const modelStagesEnabled = mode !== "off" || gateSwitch === "on" || secondChanceSwitch === "on"
-  const modelFree = !modelStagesEnabled
   const inputs = readInputs(resolve(inPath))
 
   // 1) 환경 정리 — lib/chatbot 을 import 하기 전에 해야 한다.
@@ -219,6 +228,7 @@ async function main() {
   process.env.CHATBOT_ANSWER_GATE = gateSwitch
   process.env.CHATBOT_SECOND_CHANCE = secondChanceSwitch
   if (routerFlag) process.env.CHATBOT_ANSWER_ROUTER = routerFlag
+  if (assistFlag) process.env.CHATBOT_ANSWER_ASSIST = assistFlag
   // --repeat N(2 이상): 답 캐시·관문 판정 캐시를 끈다. 켜 두면 앞 실행의 답이 캐시에서 나와 갈림이 0 으로 찍힌다.
   Object.assign(process.env, repeatRunEnv(repeat))
   const envRouter = process.env.CHATBOT_ANSWER_ROUTER
@@ -226,6 +236,18 @@ async function main() {
     console.error(`경고: CHATBOT_ANSWER_ROUTER 값을 알 수 없습니다(${envRouter}). 결과 줄의 router 는 legacy 로 적습니다.`)
   }
   const router: AnswerRouter = routerFlag ?? parseAnswerRouter(envRouter) ?? "legacy"
+  const envAssist = process.env.CHATBOT_ANSWER_ASSIST
+  if (!assistFlag && envAssist?.trim() && !parseAssistMode(envAssist)) {
+    console.error(`경고: CHATBOT_ANSWER_ASSIST 값을 알 수 없습니다(${envAssist}). 모델 선택 층은 off 로 봅니다.`)
+  }
+  // 모델 선택 층은 compiled 라우터에서만 일한다.
+  const assist: AssistMode = router === "compiled" ? (assistFlag ?? parseAssistMode(envAssist) ?? "off") : "off"
+  if (router !== "compiled" && (assistFlag ?? parseAssistMode(envAssist) ?? "off") !== "off") {
+    console.error("알림: 모델 선택 층(--assist)은 compiled 라우터에서만 일합니다. 이 측정에서는 off 로 봅니다.")
+  }
+  // 답에 모델을 쓰는 단계가 하나라도 켜져 있는지. 모두 끈 측정은 모델 없는 측정이다(Gemini 호출 0 이어야 함).
+  const modelStagesEnabled = mode !== "off" || gateSwitch === "on" || secondChanceSwitch === "on" || assist !== "off"
+  const modelFree = !modelStagesEnabled
   // 가짜 Gemini 측정은 네트워크로 나가지 않으므로 키가 없어도 돈다. Vertex 연결은 가짜 fetch 앞에서 토큰 발급(google-auth-library)이
   // 실제로 나가므로 쓰지 않는다: 연결을 developer 로 고정하고, 모델 단계가 가짜 응답을 받도록 자리표시 키를 둔다.
   if (simulateMode) {
@@ -240,11 +262,11 @@ async function main() {
     await import("../lib/chatbot/llm")
   // 서비스와 같은 기준(developer 키 또는 올바른 Vertex 설정)으로 본다. 연결이 없으면 모델 단계가 조용히 꺼진다.
   const geminiProvider = process.env.CHATBOT_GEMINI_PROVIDER?.trim() === "vertex" ? "vertex" : "developer"
-  if (mode !== "off" && !hasChatbotGeminiConnection()) {
+  if ((mode !== "off" || assist !== "off") && !hasChatbotGeminiConnection()) {
     usage(
       geminiProvider === "vertex"
         ? "CHATBOT_GEMINI_PROVIDER=vertex 인데 Vertex 설정(CHATBOT_VERTEX_PROJECT_ID 등)이 틀렸거나 없습니다. 모델 경로가 조용히 꺼지므로 중단합니다(--mode off 는 연결 없이 가능)."
-        : "GEMINI_API_KEY 가 없습니다. 모델 경로가 조용히 꺼지므로 중단합니다(--mode off 는 키 없이 가능)."
+        : "GEMINI_API_KEY 가 없습니다. 모델 경로가 조용히 꺼지므로 중단합니다(--mode off·--assist off 는 키 없이 가능)."
     )
   }
 
@@ -553,6 +575,7 @@ async function main() {
     `질문 ${inputs.length}개(턴 ${inputs.reduce((sum, item) => sum + item.turns.length, 0)}개)${repeat > 1 ? ` x 반복 ${repeat}` : ""} / 동시 ${concurrency} / 모드 ${mode} / 관문 ${gateSwitch} / 두 번째 검색 ${secondChanceSwitch} / 라우터 ${router}` +
       ` / Gemini 연결 ${hasChatbotGeminiConnection() ? geminiProvider : "없음"}` +
       (router !== "legacy" ? ` / 답 색인 자료 ${process.env.ANSWER_INDEX_DATA_DIR?.trim() || "data/answer-index"}` : "") +
+      (router === "compiled" ? ` / 모델 선택 층 ${assist}` : "") +
       (modelFree ? " / 모델 없는 측정(Gemini 호출 0 이어야 함)" : "") +
       (simulateMode ? ` / 가짜 Gemini ${simulateMode}(실제 호출 0)` : "") +
       (repeat > 1 ? " / 답·관문 캐시 끔(반복 측정)" : "") +
@@ -635,6 +658,14 @@ async function main() {
       return typeof trace?.decision === "string" ? trace.decision : "unknown"
     }
     console.error(`답 색인 흔적이 있는 줄: ${indexed.length}개, 결정 분포: ${JSON.stringify(tally(indexed.map(decisionOf)))}`)
+  }
+  if (assist !== "off") {
+    const summary = summarizeAssistRows(done.map((row) => ("answerIndex" in row ? row.answerIndex : undefined)))
+    console.error(
+      `모델 선택 층(${assist}): 흔적 ${summary.traced}줄, 모델에 물은 줄 ${summary.used}, 따른 줄 ${summary.accepted}, 결정형과 달라진 줄 ${summary.changed}` +
+        `, 이유 ${JSON.stringify(summary.rejectReasons)}, 고른 번호 ${JSON.stringify(summary.picks)}` +
+        (summary.ms.length > 0 ? `, 호출 시간 중앙값 ${median(summary.ms)}ms` : "")
+    )
   }
   console.error(`Gemini 생성(generateContent) 호출이 있었던 질문: ${done.filter((row) => (row.geminiKinds.generateContent ?? 0) > 0).length}개`)
   const gated = done.filter((row) => row.gate === "kept" || row.gate === "rejected")

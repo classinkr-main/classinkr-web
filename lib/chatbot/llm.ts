@@ -21,6 +21,7 @@ import {
   type GeminiConnection,
   type GeminiOperation,
 } from "./gemini-transport"
+import type { AnswerCardPickFailure, AnswerCardPickOutcome } from "./answer-index/assist"
 import type { ChatbotSource } from "./service"
 import {
   getGroundingText,
@@ -1212,6 +1213,127 @@ export async function pickOutlineSectionIds({
   }
 
   return null
+}
+
+// ── 답 카드 고르기(답 색인 모델 선택 층, lib/chatbot/answer-index/assist.ts) ─────────────────────────────────
+// compiled 라우터가 결정형으로 정한 판정을 모델이 다시 고르게 할 때 부른다(CHATBOT_ANSWER_ASSIST, 기본 꺼짐). 모델은 글을 쓰지 않고
+// 후보 카드 번호 하나({"pick": n}: 카드 번호 · 0 못 찾음 · -1 되묻기)만 낸다. 지시문과 후보 글은 assist.ts 가 만든다.
+// 모델 사슬은 basic(1순위 gemini-4-hydrogen)이고, 차단기·연결(developer·Vertex)은 다른 호출과 같다. 질문당 이 함수는 한 번 불린다.
+// 1순위가 모델 하나의 실패(404·5xx·429·확인 안 된 모델의 403·네트워크 오류)로 끝나면 남은 예산 안에서 사슬의 다음 모델로 넘어간다.
+// 시간 초과(예산을 다 씀)·파싱 실패·키/결제 거절(401·402·확인된 모델의 403)·Vertex 토큰 실패·차단기는 그 자리에서 멈춘다.
+// thinking 은 low 로 둔다. thinking 토큰이 출력 상한을 먹어 JSON 이 잘리지 않게 출력 상한을 넉넉히 준다.
+const ANSWER_CARD_PICK_MAX_OUTPUT_TOKENS = 2048
+/** 남은 예산이 이보다 적으면 다음 모델을 부르지 않는다. */
+const ANSWER_CARD_PICK_MIN_ATTEMPT_MS = 200
+
+/** 답 카드 고르기 요청인지 본다(시험·측정의 가짜 응답이 다른 호출과 구별할 때 쓴다). */
+export function isAnswerCardPickRequestBody(body: string) {
+  return body.includes("답 카드 고르기") && body.includes('"pick"')
+}
+
+/** 모델 응답(JSON)에서 고른 번호(정수)를 읽는다. 형식이 깨졌거나 정수가 아니면 null. 범위 확인은 assist.ts 가 한다. */
+export function parseAnswerCardPick(text: string | undefined): number | null {
+  if (!text) return null
+  const trimmed = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "")
+  try {
+    const parsed = JSON.parse(trimmed) as { pick?: unknown }
+    return typeof parsed.pick === "number" && Number.isInteger(parsed.pick) ? parsed.pick : null
+  } catch {
+    return null
+  }
+}
+
+/** 답 카드 고르기 generationConfig: 온도 0, thinking low(3 이상 계열), 넉넉한 출력 상한, {pick: 정수} JSON. */
+export function buildAnswerCardPickGenerationConfig(model: string) {
+  const base = buildGenerationConfig(model, 0)
+  return {
+    ...base,
+    ...(base.thinkingConfig?.thinkingLevel ? { thinkingConfig: { thinkingLevel: "low" as const } } : {}),
+    maxOutputTokens: ANSWER_CARD_PICK_MAX_OUTPUT_TOKENS,
+    responseMimeType: "application/json",
+    responseSchema: {
+      type: "object",
+      properties: { pick: { type: "integer" } },
+      required: ["pick"],
+    },
+  }
+}
+
+/**
+ * 답 카드 번호 하나를 고르게 한다. 실패는 이유와 함께 돌려준다(던지지 않는다): no_connection(연결 없음)·circuit_open(차단기)·
+ * access_denied(401·402·확인된 모델의 403)·auth_error(Vertex 토큰 실패)·timeout(예산 소진)·http_error·parse_error·error.
+ */
+export async function requestAnswerCardPick({
+  instruction,
+  input,
+  timeoutMs,
+}: {
+  instruction: string
+  /** 가린 질문과 후보 줄(assist.ts buildAnswerCardPickInput). */
+  input: string
+  timeoutMs: number
+}): Promise<AnswerCardPickOutcome> {
+  const connection = getChatbotGeminiConnection()
+  if (!connection) return { ok: false, reason: "no_connection", model: null }
+  if (!instruction.trim() || !input.trim()) return { ok: false, reason: "error", model: null }
+
+  const deadline = Date.now() + timeoutMs
+  let lastModel: string | null = null
+  let lastReason: AnswerCardPickFailure = "error"
+
+  for (const model of resolveModelChain("basic", connection.provider)) {
+    const remainingMs = deadline - Date.now()
+    if (remainingMs < ANSWER_CARD_PICK_MIN_ATTEMPT_MS) break
+    lastModel = model
+
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), remainingMs)
+
+    try {
+      const res = await fetchGeminiThroughCircuit(
+        connection, model, "generateContent",
+        JSON.stringify({
+          systemInstruction: { parts: [{ text: instruction }] },
+          contents: [{ role: "user", parts: [{ text: input }] }],
+          generationConfig: buildAnswerCardPickGenerationConfig(model),
+        }),
+        controller.signal
+      )
+
+      if (!res) return { ok: false, reason: "circuit_open", model }
+      if (!res.ok) {
+        warnGeminiCallIssue(model, "card_pick_http_error", {
+          status: res.status,
+          provider: connection.provider,
+          apiStatus: await readGeminiErrorStatus(res),
+        })
+        if (isConnectionAccessDenied(model, res.status)) return { ok: false, reason: "access_denied", model }
+        lastReason = "http_error"
+        continue
+      }
+
+      const data = (await res.json()) as {
+        candidates?: { content?: { parts?: GeminiPart[] }; finishReason?: string }[]
+      }
+      const text = joinAnswerParts(data.candidates?.[0]?.content?.parts)
+      const pick = parseAnswerCardPick(text)
+      if (pick === null) {
+        warnGeminiCallIssue(model, "card_pick_parse_error", { finishReason: data.candidates?.[0]?.finishReason ?? null })
+        return { ok: false, reason: "parse_error", model }
+      }
+      return { ok: true, pick, model }
+    } catch (error) {
+      warnGeminiCallIssue(model, "card_pick_request_error", { provider: connection.provider, ...geminiErrorDetails(error) })
+      if (isVertexAuthError(error)) return { ok: false, reason: "auth_error", model }
+      if (controller.signal.aborted) return { ok: false, reason: "timeout", model }
+      lastReason = "error"
+      continue
+    } finally {
+      clearTimeout(timeout)
+    }
+  }
+
+  return { ok: false, reason: lastModel === null ? "timeout" : lastReason, model: lastModel }
 }
 
 // 분류·인텐트별 요구사항 문장. 스트리밍과 비스트리밍이 같은 문장을 쓴다.

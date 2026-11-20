@@ -21,15 +21,18 @@
 import { resolve } from "node:path"
 
 import { compileAnswerIndex, type CompiledAnswerIndex } from "@/lib/chatbot/answer-index/compile"
-import { curatedLegacyText, curatedTextHash } from "@/lib/chatbot/answer-index/curated"
+// 답 글 앞 200자는 모델 선택 층(assist.ts)의 후보 줄과 같은 함수로 만든다(대역 추정·라벨 덤프·런타임이 같은 글을 본다).
+import { ANSWER_PREVIEW_CHARS, cardAnswerPreview } from "@/lib/chatbot/answer-index/assist"
+import { curatedTextHash } from "@/lib/chatbot/answer-index/curated"
 import { decideWithAnalysis, disabledCardIds } from "@/lib/chatbot/answer-index/decide"
 import { collectLegacyVotes } from "@/lib/chatbot/answer-index/legacy-votes"
 import { answerIndexDataDir, loadAnswerIndexData, type AnswerIndexLoadOptions, type LoadedAnswerIndexData } from "@/lib/chatbot/answer-index/load"
 import { isCompiledScope } from "@/lib/chatbot/answer-index/scope"
-import type { AnswerCard, AnswerCardKind, AnswerIndexDecisionKind, AnswerIndexUnit } from "@/lib/chatbot/answer-index/types"
+import type { AnswerCardKind, AnswerIndexDecisionKind } from "@/lib/chatbot/answer-index/types"
+
+export { ANSWER_PREVIEW_CHARS, cardAnswerPreview }
 
 export const TOPK_DEFAULT_K = 20
-export const ANSWER_PREVIEW_CHARS = 200
 
 type Env = Record<string, string | undefined>
 
@@ -89,43 +92,6 @@ export interface TopKRow {
 }
 
 const round3 = (value: number) => Math.round(value * 1000) / 1000
-
-function preview(text: string) {
-  const collapsed = text.replace(/\s+/g, " ").trim()
-  return collapsed.length > ANSWER_PREVIEW_CHARS ? collapsed.slice(0, ANSWER_PREVIEW_CHARS) : collapsed
-}
-
-/** 카드 답 글 미리보기(앞 200자). 글을 만들 수 없으면(옛 답·주제 없음) 빈 글. */
-export function cardAnswerPreview(card: AnswerCard, units: ReadonlyMap<string, AnswerIndexUnit>): string {
-  switch (card.kind) {
-    case "doc": {
-      const texts: string[] = []
-      for (const ref of card.answer.sentences ?? []) {
-        const unit = units.get(ref.unit)
-        for (const i of ref.ids ?? []) {
-          const text = unit?.sentences[i]?.text
-          if (text) texts.push(text)
-        }
-      }
-      return preview(texts.join(" "))
-    }
-    case "fixed":
-      return preview("curatedRef" in card.answer ? (curatedLegacyText(card.answer.curatedRef) ?? "") : card.answer.text)
-    case "policy":
-      return preview(card.answer.text)
-    case "howto": {
-      const topic = card.answer.symptomTopic ? curatedLegacyText({ module: "symptom", id: card.answer.symptomTopic }) : null
-      const guide = card.answer.guide ? curatedLegacyText({ module: "guide", id: card.answer.guide }) : null
-      return preview([topic, guide].filter((part): part is string => Boolean(part)).join(" "))
-    }
-    case "gap":
-      return `공개 안내에 없는 주제: ${card.topic}`
-    case "handoff":
-      return `상담 연결(${card.answer.handoffKind})`
-    default:
-      return ""
-  }
-}
 
 /** 자료 폴더: --data-dir(작업 폴더 기준) 또는 런타임과 같은 answerIndexDataDir()(ANSWER_INDEX_DATA_DIR, 없으면 data/answer-index). */
 export function topKDataDir(dirArg?: string | null, env: Env = process.env) {

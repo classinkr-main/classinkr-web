@@ -127,6 +127,32 @@ export function resolveCalibration(file: CalibrationFile | null, warn: (message:
   return { version: file?.version ?? "default", dataVersion: file?.dataVersion ?? null, weights, confidence, thresholds, fitted: Boolean(file) }
 }
 
+// ─── 모델 선택 층 설정(calibration.json assist, 사양 §10) ─────────────────
+
+/** calibration.json assist 의 기본 대역(scripts/answer-index/lib/calibrate-core.ts DEFAULT_ASSIST 와 같다). */
+export const DEFAULT_ASSIST_BAND: readonly [number, number] = [0.45, 0.62]
+
+export interface ResolvedAssistCalibration {
+  /** 대역(band) 모드를 켜도 되는지. assist-check 로 순이득을 확인한 뒤에만 true 로 둔다(§10). */
+  enabled: boolean
+  /** [θ_lo, θ_hi]: 결정형 확신도가 θ_lo 이상 θ_hi 미만이면 band 모드가 모델에 묻는다. */
+  band: [number, number]
+}
+
+/**
+ * calibration.json assist → 쓸 값. 파일·칸이 없으면 꺼짐. 대역이 0 ≤ θ_lo ≤ θ_hi ≤ 1 이 아니면 꺼짐으로 본다(잘못된 대역으로 모델을
+ * 부르지 않는다). 확신도 계산과 무관해 색인 해시(answerIndexHash)에는 넣지 않는다(판은 calibration.json 내용이 든 dataVersion 이 가른다).
+ */
+export function resolveAssistCalibration(file: CalibrationFile | null): ResolvedAssistCalibration {
+  const raw = file?.assist
+  const band = Array.isArray(raw?.band) && raw.band.length === 2 ? [Number(raw.band[0]), Number(raw.band[1])] : null
+  const validBand = band !== null && band.every(Number.isFinite) && 0 <= band[0] && band[0] <= band[1] && band[1] <= 1
+  return {
+    enabled: raw?.enabled === true && validBand,
+    band: validBand ? [band[0], band[1]] : [DEFAULT_ASSIST_BAND[0], DEFAULT_ASSIST_BAND[1]],
+  }
+}
+
 // ─── 뜻 없는 낱말 ────────────────────────────────────────────────────────
 
 /** generic-words.json 이 없어도 쓰는 기본 낱말(지시어·묻는 말·증상 일반어·부사). */
@@ -497,6 +523,8 @@ export interface CompiledCard {
 export interface CompiledAnswerIndex {
   dataVersion: string
   calibration: ResolvedCalibration
+  /** 모델 선택 층 설정(calibration.json assist). 색인 해시에 넣지 않는다. 없으면(옛 색인 객체) 꺼짐. */
+  assist?: ResolvedAssistCalibration
   cards: CompiledCard[]
   cardById: Map<string, number>
   lexicon: CompiledLexicon
@@ -822,6 +850,7 @@ export function compileAnswerIndex(data: LoadedAnswerIndexData): CompiledAnswerI
   return {
     dataVersion: data.dataVersion,
     calibration,
+    assist: resolveAssistCalibration(data.calibration),
     cards,
     cardById,
     lexicon,

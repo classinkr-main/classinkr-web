@@ -19,6 +19,7 @@
 | `npm run answer-index:cv [-- --folds 5] [-- --out <파일>] [-- --no-votes]` | 변형 5겹 교차 검증: 1위·결정 정답률, 못 찾음·엉뚱한 카드 비율, 종류·영역별 표, 혼동 표 |
 | `npm run answer-index:topk -- --in <질문.json> [--out <결과.jsonl>] [--k 20] [--data-dir <폴더>] [--no-votes]` | 라벨용 상위 카드 덤프: 질문마다 지금 색인(런타임과 같은 load·compile)의 상위 k 카드(id·종류·영역·주제·covers·notCovers·답 글 앞 200자·점수·확신도), 공백 카드 후보(없는 개념 적중), 지금 결정(kind·card·conf, `decide`와 같은 `decideWithAnalysis`)을 JSON Lines 로. 입력은 `[{ id, q }]`·우주 샤드·측정 입력·`{ items }`. 자료 폴더는 `--data-dir` 또는 런타임과 같은 `ANSWER_INDEX_DATA_DIR`. 런타임과 다른 점(개인정보 가리기·서비스 출처 표·색인 앞 단계 없음, 증상 판별 정규식)은 `lib/topk-core.ts` 머리말 |
 | `npm run answer-index:judge -- <split·check·select-b·disagreements·merge> …` · `answer-index:score` · `answer-index:proxy` | 심사 절차·점수·대리 점수([judge/README.md](judge/README.md)) |
+| `npx tsx scripts/answer-index/assist-check.ts run --set <이름>=<입력.json> --set … --out-dir <폴더> [--assist band\|always]` · `diff` · `compare` | 모델 선택 층(사양 §10, `lib/chatbot/answer-index/assist.ts`) 켜기 전 확인: 묶음마다 compiled 모델 없는 측정을 선택 층 끔·켬으로 돌려 답이 바뀐 줄만 심사 입력(`judge/<묶음>-assist-off-bNN.json`·`-assist-<범위>-bNN.json`)과 바뀐 꼴 표로 낸다. `compare --off <judged> --on <judged> --total N`이 순이득·좋음→나쁨·나쁨→좋음과 켜기 조건(순이득 > 0, 좋음→나쁨 < 나쁨→좋음, 좋음→나쁨 ≤ 1%)을 본다. 통과해야 `calibration.json` `assist.enabled=true`로 둔다 |
 
 추출은 같은 입력이면 같은 바이트를 쓴다(시각·난수 없음). 문서(`lib/docs.ts`·`lib/docs-troubleshooting/*`·화면 가이드)를 바꾸면 `answer-index:extract`를 다시 돌리고 `answer-index:verify`로 낡은 카드를 본다. 문서를 바꾸고 다시 만들지 않으면 V-1이 실패한다.
 

@@ -35,6 +35,7 @@ import {
   hasChatbotGeminiConnection,
   isModelCircuitOpen,
   pickOutlineSectionIds,
+  requestAnswerCardPick,
   sanitizePublicAnswerText,
   selectAnsweringSentenceIds,
   type ChatbotModelTier,
@@ -89,10 +90,16 @@ import {
   getRouterAnswerIndex,
   logShadowDecision,
   preIndexTrace,
-  routeAnswerIndex,
+  routeAnswerIndexWithAnalysis,
 } from "@/lib/chatbot/answer-index"
+import {
+  answerAssistMode,
+  assistTimeoutMs,
+  maybeAssistWithModel,
+  type AnswerCardPickFailure,
+} from "@/lib/chatbot/answer-index/assist"
 import { collectLegacyVotes } from "@/lib/chatbot/answer-index/legacy-votes"
-import { disabledCardIds } from "@/lib/chatbot/answer-index/decide"
+import { disabledCardIds, type QuestionAnalysis } from "@/lib/chatbot/answer-index/decide"
 import { detectAskType, segmentQuestion } from "@/lib/chatbot/answer-index/normalize"
 import {
   isUnverifiedFixedAnswerText,
@@ -456,9 +463,19 @@ export function __clearAnswerCacheForTests() {
 // 후보 맨 앞에 둔 답)은 경로를, 대상 불명 되묻기(target_unknown)는 그 이유를 넣는다.
 function getAnswerCacheKey(question: NormalizedQuestion, options?: RetrievalOptions, contextKey?: string | null) {
   const backend = hasSupabaseServerEnv() ? "supabase" : "static"
-  const router = options?.includeInternalDocs ? "legacy" : getAnswerRouter()
+  const router = options?.includeInternalDocs ? "legacy" : answerCacheRouterKey()
   const context = contextKey ? `:${contextKey}` : ""
   return `${ANSWER_CACHE_VERSION}:${backend}:${retrievalScope(options)}:${router}@${answerIndexVersion()}@${answerIndexDataDir()}${context}:${buildRetrievalQueryText(question).toLowerCase()}`
+}
+
+/**
+ * 열쇠의 라우터 칸. compiled 에서 모델 선택 층(CHATBOT_ANSWER_ASSIST)을 켰으면 그 범위를 붙인다(끔·켬·범위를 바꾸면 다른 답).
+ * 끔(기본)이면 라우터 이름 그대로다.
+ */
+function answerCacheRouterKey() {
+  const router = getAnswerRouter()
+  const assist = router === "compiled" ? answerAssistMode() : "off"
+  return assist === "off" ? router : `${router}+assist-${assist}`
 }
 
 /** 답 캐시 열쇠에 넣을 대화 맥락 판단. 지금 말 그대로 검색해도 판단에 따라 답이 다른 경우만 값이 있다. */
@@ -5611,6 +5628,7 @@ function isSecondChanceFailure(trace: SecondChanceTrace | undefined) {
 }
 
 // 근거 선별 호출이 실패(오류·시간 초과)한 뒤 만든 답(못 찾음·되묻기·보류). 모델이 정상이면 다른 답이 나올 수 있어 답 캐시에 넣지 않는다.
+// 답 색인 모델 선택 층 호출이 실패해 결정형 판정으로 낸 답(noteAssistModelFailure)도 같은 이유로 여기에 넣는다.
 const selectionFailedResponses = new WeakSet<object>()
 
 /**
@@ -6072,7 +6090,7 @@ async function buildChatbotCoreBase(
   // 같은 대화에서 증상 안내를 받은 뒤 "해 봤는데 또 안 돼요": 같은 안내를 또 내지 않고 상담 연결로 잇는다(두 라우터 공통).
   if (prepared.triedAgain) return withTurn(buildTriedAlreadyCore(question, startedAt))
   if (!options.includeInternalDocs && getAnswerRouter() === "compiled") {
-    const routed = routeCompiledQuestionSafely(question, startedAt)
+    const routed = await routeCompiledQuestionSafely(question, startedAt)
     if (routed.core) {
       // 대상 불명 질문에 색인이 정하지 못했으면(못 찾음) legacy 와 같은 되묻기를 낸다(두 라우터 같은 처리).
       if (prepared.turn.reason === "target_unknown" && isNotFoundResponse(routed.core.response)) {
@@ -6221,8 +6239,8 @@ type CompiledRoutePlan =
   | { kind: "legacy"; trace: AnswerIndexTrace }
   /** 색인 앞 단계가 답한다(①~④). */
   | { kind: "pre"; trace: AnswerIndexTrace; build: () => ChatbotCore }
-  /** 색인이 정한다. */
-  | { kind: "index"; decision: AnswerIndexDecision; votes: string[] }
+  /** 색인이 정한다(analysis 는 판정에 쓴 순위·확신도, 모델 선택 층이 후보로 쓴다). */
+  | { kind: "index"; decision: AnswerIndexDecision; analysis: QuestionAnalysis; votes: string[] }
 
 // compiled 라우터가 색인으로 정하려면 켜 둔 카드(CHATBOT_COMPILED_DISABLED_CARDS 로 끄지 않은 카드)가 이만큼은 있어야 한다.
 const MIN_ACTIVE_ANSWER_INDEX_CARDS = 1
@@ -6264,15 +6282,15 @@ function planCompiledRoute(question: NormalizedQuestion, router: AnswerIndexRout
   const legacySignals = [quick, policyGuard].filter((signal) => signal !== null).map((signal) => ({ gateOriginal: signal.gateOriginal }))
   if (wantsImmediateHumanHandoff(question)) legacySignals.push({ gateOriginal: "handoff:weak-signal" })
   const votes = collectLegacyVotes(question.redacted, legacySignals, index.legacyAlias)
-  const decision = routeAnswerIndex(question.redacted, {
+  const { decision, analysis } = routeAnswerIndexWithAnalysis(question.redacted, {
     index,
     votes,
     isSymptomReport: (text) => SYMPTOM_REPORT_RE.test(text.toLowerCase()),
   })
-  return { kind: "index", decision, votes }
+  return { kind: "index", decision, analysis, votes }
 }
 
-function routeCompiledQuestion(question: NormalizedQuestion, startedAt: number): { core: ChatbotCore | null; trace: AnswerIndexTrace } {
+async function routeCompiledQuestion(question: NormalizedQuestion, startedAt: number): Promise<{ core: ChatbotCore | null; trace: AnswerIndexTrace }> {
   const plan = planCompiledRoute(question, "compiled", startedAt)
   if (plan.kind === "legacy") return { core: null, trace: plan.trace }
   if (plan.kind === "pre") {
@@ -6283,16 +6301,47 @@ function routeCompiledQuestion(question: NormalizedQuestion, startedAt: number):
     return { core: { ...core, answerIndex: plan.trace }, trace: plan.trace }
   }
   const index = getRouterAnswerIndex()
-  const built = buildAnswerIndexCore(plan.decision, question, startedAt, {
+  // 모델 선택 층(CHATBOT_ANSWER_ASSIST, 기본 off). off 면 결정형 판정 그대로이고 모델을 부르지 않는다.
+  const assisted = await maybeAssistWithModel({
     index,
-    host: answerIndexHost,
-    router: "compiled",
-    version: answerIndexVersionOf(index),
+    analysis: plan.analysis,
+    decision: plan.decision,
+    question: question.redacted,
+    mode: answerAssistMode(),
+    request: requestAnswerCardPick,
+    isPolicyTopic: () => isPolicyGovernedTopic(question),
+    timeoutMs: assistTimeoutMs(),
   })
-  const core: ChatbotCore = { question, ...built, response: built.response as CoreResponse }
+  const respondContext = { index, host: answerIndexHost, router: "compiled" as const, version: answerIndexVersionOf(index) }
+  let built = buildAnswerIndexCore(assisted.decision, question, startedAt, respondContext)
+  let assistTrace = assisted.trace
+  // 모델이 바꾼 카드를 답으로 만들 수 없으면(문장 해시 어긋남·옛 답 없음) 못 찾음 대신 결정형 판정으로 낸다.
+  if (assisted.decision !== plan.decision && built.answerIndex.unavailable) {
+    built = buildAnswerIndexCore(plan.decision, question, startedAt, respondContext)
+    if (assistTrace) assistTrace = { ...assistTrace, accepted: false, rejectReason: "card_unavailable" }
+  }
+  const answerIndex: AnswerIndexTrace = assistTrace ? { ...built.answerIndex, assist: assistTrace } : built.answerIndex
+  const core: ChatbotCore = { question, ...built, answerIndex, response: built.response as CoreResponse }
   // 문서 문장을 그대로 내므로 문장에 원본 URL·문서 경로가 있으면 공개 답에서 지운다(스트림 경로와 같은 정리, 제자리 수정).
   finalizeAnswer(core.response)
-  return { core, trace: built.answerIndex }
+  noteAssistModelFailure(core.response, assisted.modelFailure)
+  return { core, trace: answerIndex }
+}
+
+/**
+ * 모델 선택 층 호출이 실패해 결정형 판정으로 낸 답: 측정 흔적의 모델 상태(modelState)에 적고, 답 캐시에 넣지 않는다(모델이 정상이면
+ * 다른 답이 나올 수 있다). 연결이 없는 것(no_connection)은 설정이라 실패로 보지 않는다.
+ */
+function noteAssistModelFailure(response: CoreResponse, failure: AnswerCardPickFailure | null) {
+  if (!failure || failure === "no_connection") return
+  const state: ChatbotModelState =
+    failure === "circuit_open" || failure === "access_denied" || failure === "auth_error"
+      ? "circuit_open"
+      : failure === "timeout"
+        ? "timeout"
+        : "error"
+  noteModelState(response, state)
+  selectionFailedResponses.add(response)
 }
 
 const reportedAnswerIndexFailures = new Set<string>()
@@ -6301,9 +6350,9 @@ const reportedAnswerIndexFailures = new Set<string>()
  * compiled 경로에서 색인 읽기·컴파일·판정·답 조립이 예외를 내면 손님 답을 막지 않고 지금(legacy) 흐름으로 보낸다.
  * 라우터를 legacy 로 되돌린 것과 같은 상태다(사양 §3.9). 흔적에는 unavailable=index_error 를 남기고, 같은 오류는 한 번만 로그로 남긴다.
  */
-function routeCompiledQuestionSafely(question: NormalizedQuestion, startedAt: number): { core: ChatbotCore | null; trace: AnswerIndexTrace } {
+async function routeCompiledQuestionSafely(question: NormalizedQuestion, startedAt: number): Promise<{ core: ChatbotCore | null; trace: AnswerIndexTrace }> {
   try {
-    return routeCompiledQuestion(question, startedAt)
+    return await routeCompiledQuestion(question, startedAt)
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     if (!reportedAnswerIndexFailures.has(message) && reportedAnswerIndexFailures.size < 20) {

@@ -87,6 +87,7 @@ npx tsx scripts/chatbot-live-eval.ts --in <questions.json> --out <results.jsonl>
 | `--gate` | `on` | `CHATBOT_ANSWER_GATE`(정해 둔 답 확인 관문). |
 | `--second-chance` | `on` | `CHATBOT_SECOND_CHANCE`(못 찾았을 때 목차에서 다시 고르는 두 번째 검색). |
 | `--router` | 없음 | `CHATBOT_ANSWER_ROUTER`(답 라우터 `legacy`·`shadow`·`compiled`). 주면 서비스 모듈을 불러오기 전에 환경변수를 그 값으로 둔다. 안 주면 환경변수를 그대로 쓴다. |
+| `--assist` | 없음 | `CHATBOT_ANSWER_ASSIST`(답 색인 모델 선택 층 `off`·`band`·`always`, `lib/chatbot/answer-index/assist.ts`). compiled 라우터에서만 일한다. 안 주면 환경변수, 그것도 없으면 `off`. `off`가 아니면 모델 단계가 켜진 측정이라 키가 있어야 하고(`--simulate-gemini`면 자리표시 키), 모델 없는 측정 확인(종료 코드 3)을 하지 않는다. `band`는 `calibration.json` `assist.enabled`가 false면 아무것도 하지 않는다. 결과 줄의 `answerIndex.assist`에 흔적이 실리고, 요약에 물은 줄·따른 줄·결정형과 달라진 줄·이유·고른 번호·호출 시간이 찍힌다. 끔·켬 비교와 심사 입력은 `scripts/answer-index/assist-check.ts`. |
 | `--repeat` | `1` | 입력마다 N번(1~50) 되풀이해 돌린다(대화면 대화 전체). 요약에 같은 질문의 답이 갈린 비율(`--repeat N: 답이 갈린 질문 a/b`)이 찍힌다. 결과 줄은 `repeatIndex`로 구별한다. 2 이상이면 답 캐시·관문 판정 캐시를 끈다(`CHATBOT_ANSWER_CACHE=off`). 켜 두면 앞 실행의 답이 캐시에서 나와 갈림이 0으로 찍힌다. |
 | `--simulate-gemini` | 없음 | `402`·`429`·`hang`. Gemini 호출만 가짜 응답으로 바꾼다(실제 호출 0, 비용 0). `402`·`429`는 그 상태 코드, `hang`은 응답 없이 호출 쪽 시간 초과를 기다린다. 키가 없어도 돈다. Vertex 토큰 발급도 내보내지 않도록 연결을 developer(자리표시 키)로 고정하고 Google 인증 주소 요청은 거절한다. 장애 때의 동작을 잴 때 `--allow-model-errors`와 함께 쓴다. |
 | `--allow-model-errors` | 꺼짐 | 무효 측정 종료와 조기 중단을 끈다. 모델이 죽은 상태의 동작을 일부러 잴 때만 쓴다. |
@@ -115,7 +116,7 @@ npx tsx scripts/chatbot-live-eval.ts --in <questions.json> --out <results.jsonl>
 | `answer`, `answerMode`, `confidence`, `unresolved`, `needsHandoff`, `handoffIntent`, `detectedCategory`, `detectedIntent`, `warning` | 공개 답과 판정 값. `needsHandoff`가 true면 위젯에 상담 버튼이 뜬다. |
 | `sources` | `{ title, path, heading, score }` 목록 |
 | `decidedBy` | 어느 경로가 답했는지: 답 색인이 정한 답이면 `index:<카드>`·`index-partial:<카드>`(없는 부분 꼬리가 붙음)·`index-gap:<카드>`·`index-abstain`·`index-clarify`. 그 밖은 `second_chance`, `model_unavailable`(선별 실패 고정 문구), `gate_evidence_select`·`gate_not_found`(관문이 버린 뒤 문서 경로), 관문이 유지한 답의 출처(`template:*`·`guide:*`·`self:*` 등), `field:<id>`, `basics:<id>`, `symptom`, `not_found`(못 찾음 고정 문구: 약한 출처·출처 없는 사실 질문), `evidence_select`·`generate`·`draft`, `policy`(답에 쓰이는 모델을 부르지 않은 지름길), `unknown` |
-| `answerIndex` | 코어가 낸 답 색인 흔적(`version`·`router`·`scope`·`decision`·`top`·`conf` …, 답 색인 사양 §3.7). 코어에 없으면 이 필드가 없다 |
+| `answerIndex` | 코어가 낸 답 색인 흔적(`version`·`router`·`scope`·`decision`·`top`·`conf` …, 답 색인 사양 §3.7). 코어에 없으면 이 필드가 없다. 모델 선택 층을 켰으면 `assist`(`mode`·`used`·`pick`·`pickCard`·`model`·`ms`·`accepted`·`rejectReason`·`original{kind,card,conf}`)가 붙는다. `decision`·`card`·`decidedBy`는 최종 판정 기준이다 |
 | `gate`, `gateOriginal`, `gateMs`, `gateSkipReason` | 관문 결과(`kept`·`rejected`·`skipped`·`none`), 판정 대상이던 정해 둔 답의 출처, 판정 시간, `skipped`의 이유(`off`·`no_key`·`llm_off`·`timeout`·`error`·`model_unavailable`) |
 | `secondChance`, `secondChanceMs`, `secondChanceReason` | 두 번째 검색 결과(`hit`·`miss`·`none`), 시간, `miss`·`none`의 이유 |
 | `latencyMs` | 그 질문의 처리 시간 |

@@ -101,6 +101,8 @@ Vertex 예측 권한(`aiplatform.endpoints.predict`)을 가진 서비스 계정 
 | `CHATBOT_PROVIDER` | `gemini` | 다른 값은 최종 답 생성 제공자를 바꾼다(`lib/chatbot/answer-provider.ts`). 관문·선별·두 번째 검색은 Gemini 그대로다. |
 | `CHATBOT_ENABLE_DEEP_FALLBACK` | 없음 | `1`이면 답 생성이 basic 티어 뒤 reasoning·advanced 티어까지 시도한다. |
 | `GEMINI_FAST_MODEL`·`GEMINI_REASONING_MODEL`·`GEMINI_MODEL` | 없음(아래 §6) | 티어별 맨 앞 모델을 바꾼다(그러면 `gemini-4-hydrogen`은 사슬에 들지 않는다). 종료된 모델명이면 무시하고 기본값을 쓴다. 어드민 AI(블로그·마케팅·인사이트)도 같은 이름을 읽는다. |
+| `CHATBOT_ANSWER_ASSIST` | `off` | 답 색인(compiled 라우터)의 모델 선택 층(`lib/chatbot/answer-index/assist.ts`, 답 색인 사양 §10). `band`: `data/answer-index/calibration.json` `assist.enabled`가 true이고 결정형 확신도가 `assist.band` [θ_lo, θ_hi) 안일 때만 상위 10 카드 중 하나를 모델에 고르게 한다(공백·없는 개념·정책 카드 답·두 조각 답·θ_hi 이상은 그대로). `always`: 범위 안 판정마다 묻는다(측정용). 고른 카드도 반례·없는 개념·정책 주제·범위 관문을 통과해야 하고, 모델이 실패(시간 초과·402·차단기·파싱 실패)하면 결정형 답 그대로다(`MODEL_UNAVAILABLE_ANSWER`를 쓰지 않음, 캐시하지 않음). 흔적은 `answerIndex.assist`. |
+| `CHATBOT_ASSIST_TIMEOUT_MS` | `2500` | 모델 선택 층 호출 한 번의 예산(basic 사슬, 질문당 1회). |
 | `CHATBOT_LOG_GEMINI_FAILURES` | 켜짐 | `0`이면 Gemini 실패 로그를 끈다. |
 | `CHATBOT_ANSWER_CACHE` | 켜짐 | `off`: 답 캐시와 관문 판정 캐시를 쓰지 않는다. 측정용(`scripts/chatbot-live-eval.ts --repeat`가 2 이상이면 스스로 끈다). 운영에서는 끄지 않는다. |
 | `CHATBOT_KNOWLEDGE_SEARCH_TIMEOUT_MS`·`CHATBOT_FINAL_ANSWER_TIMEOUT_MS`·`CHATBOT_FINAL_ANSWER_STREAM_TIMEOUT_MS`·`CHATBOT_ROUTE_TIMEOUT_MS` | 2800·6000·8000·13000 | 단계별 시간 예산. 바꾸면 §7의 시간 예산 규칙을 따른다. |
@@ -112,6 +114,7 @@ Vertex 예측 권한(`aiplatform.endpoints.predict`)을 가진 서비스 계정 
 - basic 티어(근거 선별·답 생성): `gemini-4-hydrogen` → `gemini-3.5-flash` → `gemini-3.1-flash-lite` → `gemini-flash-lite-latest`
 - reasoning·advanced 티어: `gemini-4-hydrogen` → `gemini-3.1-pro-preview` → `gemini-3.5-flash` → `gemini-flash-lite-latest`
 - 관문 판정·목차 고르기(basic 사슬을 lite 우선으로 다시 세움): `gemini-3.1-flash-lite` → `gemini-4-hydrogen` → `gemini-3.5-flash` → `gemini-flash-lite-latest`
+- 답 색인 모델 선택 층(`CHATBOT_ANSWER_ASSIST`, 기본 꺼짐): basic 티어 사슬 그대로, thinking `low`, 출력 상한 2048(thinking 이 상한을 먹지 않게), `{"pick": n}` JSON
 - 임베딩: `gemini-embedding-001`(`GEMINI_EMBED_MODEL`, 차원은 `GEMINI_EMBED_DIM`)
 - Vertex(`CHATBOT_GEMINI_PROVIDER=vertex`): `gemini-4-hydrogen` 뒤는 hydrogen 이전 Vertex 사슬 그대로다. basic 티어 `gemini-4-hydrogen` → `gemini-3.5-flash-lite` → `gemini-3.5-flash`, reasoning·advanced 티어 `gemini-4-hydrogen` → `gemini-3.5-flash` → `gemini-3.5-flash-lite`, 관문·목차 고르기 `gemini-3.5-flash-lite` → `gemini-4-hydrogen` → `gemini-3.5-flash`. env의 `gemini-2.5*`·종료 모델명은 무시한다. `-latest` 별칭은 두지 않는다.
 - 티어 env가 있으면 그 값이 1순위이고 뒤는 그 연결의 티어 사슬이다(developer 티어 현행 기본 → 대체 → 별칭, Vertex 위 순서). `.env` 예시의 옛 값(`gemini-3.5-flash`·`gemini-3.1-pro-preview`)을 넣어 두면 사슬은 hydrogen 이전과 같다.

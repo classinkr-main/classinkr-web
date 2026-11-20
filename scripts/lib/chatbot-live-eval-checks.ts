@@ -18,6 +18,54 @@ export function parseAnswerRouter(value: string | null | undefined): AnswerRoute
   return (ANSWER_ROUTERS as readonly string[]).includes(normalized ?? "") ? (normalized as AnswerRouter) : null
 }
 
+/** 답 색인 모델 선택 층 범위(--assist, CHATBOT_ANSWER_ASSIST: lib/chatbot/answer-index/assist.ts). */
+export const ASSIST_MODES = ["off", "band", "always"] as const
+export type AssistMode = (typeof ASSIST_MODES)[number]
+
+/** 알 수 없는 값이면 null. 대소문자·앞뒤 공백은 무시한다. */
+export function parseAssistMode(value: string | null | undefined): AssistMode | null {
+  const normalized = value?.trim().toLowerCase()
+  return (ASSIST_MODES as readonly string[]).includes(normalized ?? "") ? (normalized as AssistMode) : null
+}
+
+export interface AssistRowsSummary {
+  /** answerIndex.assist 흔적이 있는 줄. */
+  traced: number
+  /** 모델에 물은 줄(used). */
+  used: number
+  /** 최종 판정이 모델의 고름을 따른 줄(accepted). */
+  accepted: number
+  /** 최종 판정(decision·card)이 결정형(original)과 달라진 줄. */
+  changed: number
+  /** 따르지 않은 이유별 줄 수(묻지 않음·호출 실패·받아들이지 않음). */
+  rejectReasons: Record<string, number>
+  /** 모델이 고른 번호별 줄 수(카드 번호는 "card", 0·-1 은 그대로). */
+  picks: Record<string, number>
+  /** 모델 호출 시간(ms). */
+  ms: number[]
+}
+
+/** 결과 줄의 answerIndex 흔적들 → 모델 선택 층 요약(측정 스크립트 요약 줄·assist-check 표). */
+export function summarizeAssistRows(traces: readonly unknown[]): AssistRowsSummary {
+  const summary: AssistRowsSummary = { traced: 0, used: 0, accepted: 0, changed: 0, rejectReasons: {}, picks: {}, ms: [] }
+  for (const trace of traces) {
+    if (!isRecord(trace) || !isRecord(trace.assist)) continue
+    const assist = trace.assist
+    summary.traced += 1
+    if (assist.used === true) summary.used += 1
+    if (assist.accepted === true) summary.accepted += 1
+    if (typeof assist.rejectReason === "string") summary.rejectReasons[assist.rejectReason] = (summary.rejectReasons[assist.rejectReason] ?? 0) + 1
+    if (typeof assist.pick === "number") {
+      const key = assist.pick > 0 ? "card" : String(assist.pick)
+      summary.picks[key] = (summary.picks[key] ?? 0) + 1
+    }
+    if (typeof assist.ms === "number" && assist.used === true) summary.ms.push(assist.ms)
+    const original = isRecord(assist.original) ? assist.original : null
+    if (original && (original.kind !== trace.decision || (original.card ?? null) !== (trace.card ?? null))) summary.changed += 1
+  }
+  return summary
+}
+
 // 결제·인증 실패. 이 상태를 받은 호출은 모델이 죽은 상태에서 나간 것이다(lib/chatbot/llm.ts 차단기와 같은 집합).
 export const MODEL_ACCESS_DENIED_STATUSES: ReadonlySet<number> = new Set([401, 402, 403])
 

@@ -10,7 +10,7 @@
 import { createHash } from "node:crypto"
 import { ANSWER_INDEX_COMPILER_VERSION, compileAnswerIndex, type CompiledAnswerIndex } from "./compile"
 import { curatedTextHash } from "./curated"
-import { decide, type DecideContext } from "./decide"
+import { decide, decideWithAnalysis, type DecideContext, type QuestionAnalysis } from "./decide"
 import {
   answerIndexDataDir,
   answerIndexVersion,
@@ -104,6 +104,15 @@ export interface RouteContext extends DecideContext {
 export function routeAnswerIndex(question: string, ctx: RouteContext = {}): AnswerIndexDecision {
   const index = ctx.index ?? getRouterAnswerIndex()
   return decide(index, question, { votes: ctx.votes, isSymptomReport: ctx.isSymptomReport, env: ctx.env })
+}
+
+/**
+ * routeAnswerIndex 와 같은 판정에 그 분석(질문 전체·조각의 순위·확신도)을 같이 돌려준다. 모델 선택 층(assist.ts)이 판정을 다시
+ * 계산하지 않고 같은 순위에서 후보를 고른다. 판정은 routeAnswerIndex 와 같다(decide = decideWithAnalysis(...).decision).
+ */
+export function routeAnswerIndexWithAnalysis(question: string, ctx: RouteContext = {}): { decision: AnswerIndexDecision; analysis: QuestionAnalysis } {
+  const index = ctx.index ?? getRouterAnswerIndex()
+  return decideWithAnalysis(index, question, { votes: ctx.votes, isSymptomReport: ctx.isSymptomReport, env: ctx.env })
 }
 
 /** 색인 앞 단계가 답했거나 범위 밖이라 색인이 정하지 않은 질문의 흔적. */

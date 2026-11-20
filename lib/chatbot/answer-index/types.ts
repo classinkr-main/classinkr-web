@@ -824,4 +824,37 @@ export interface AnswerIndexTrace {
    * 측정 줄의 decidedBy(index:<card>, 카드 대조용)는 그대로이고 이 칸이 승격 여부를 알려 준다.
    */
   decidedBy?: "index:vote-rescue" | null
+  /**
+   * 모델 선택 층(사양 §10, assist.ts) 흔적. CHATBOT_ANSWER_ASSIST 가 off(기본)면 없다. 위 decision·card·conf 는 최종 판정이고
+   * 결정형 판정은 assist.original 에 남는다(운영 shadow 비교용).
+   */
+  assist?: AnswerIndexAssistTrace
+}
+
+/** 모델 선택 층 켜는 범위(CHATBOT_ANSWER_ASSIST). */
+export type AnswerAssistMode = "off" | "band" | "always"
+
+/** 모델 선택 층 흔적(AnswerIndexTrace.assist). */
+export interface AnswerIndexAssistTrace {
+  mode: Exclude<AnswerAssistMode, "off">
+  /** 모델에 물었는지(대상이고 후보가 있어 호출 함수를 불렀는지). 연결이 없거나 차단기에 막혀도 물었으면 true, 실패 이유는 rejectReason. */
+  used: boolean
+  /** 모델이 고른 번호(후보 번호 1부터 · 0 못 찾음 · -1 되묻기). 묻지 않았거나 호출·파싱이 실패하면 null. */
+  pick: number | null
+  /** pick 이 가리킨 후보 카드 id(번호가 후보 안일 때만). */
+  pickCard: string | null
+  /** 답한 모델(호출 실패면 마지막으로 시도한 모델, 묻지 않았으면 null). */
+  model: string | null
+  /** 모델 호출에 쓴 시간(ms). 묻지 않았으면 null. */
+  ms: number | null
+  /** 최종 판정이 모델의 고름을 따랐는지(같은 카드를 골라 결정형 그대로인 경우 포함). */
+  accepted: boolean
+  /**
+   * 따르지 않은 이유. 묻지 않음: calibration_disabled·out_of_band·gap·absent·segments·policy_card·no_candidates.
+   * 호출 실패: no_connection·circuit_open·access_denied·auth_error·timeout·http_error·parse_error·error.
+   * 받아들이지 않음: out_of_range·negative·absent·policy_card·policy_topic·scope·card_unavailable. 따랐으면 null.
+   */
+  rejectReason: string | null
+  /** 결정형 판정(모델 전). */
+  original: { kind: AnswerIndexDecisionKind; card: string | null; conf: number }
 }
