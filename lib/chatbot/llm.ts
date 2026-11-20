@@ -18,6 +18,7 @@ import type { ChatbotSource } from "./service"
 import {
   getGroundingText,
   MAX_GROUNDING_TEXT_LENGTH,
+  splitIntoSentences,
   trimToCompleteSentences,
   type EvidenceSentence,
 } from "./source-grounding"
@@ -311,6 +312,62 @@ export interface FinalGenerateArgs {
   sources?: ChatbotSource[]
   tier?: ChatbotModelTier
   history?: { role: "user" | "model"; parts: { text: string }[] }[]
+  /**
+   * Gemini 답 생성(일반·스트림)이 끝나면 한 번 불린다. 끝까지 받았는지(complete)와 finishReason 을 알린다.
+   * 스트림은 소비자가 끝까지 읽었을 때만 불린다(중간에 멈추면 불리지 않는다). 다른 제공자(Claude)가 답했으면 불리지 않는다.
+   */
+  onCompletion?: (completion: GeminiAnswerCompletion) => void
+}
+
+/**
+ * 모델이 끝까지 쓰지 못한 응답으로 보는 finishReason. STOP(정상 끝)이 아니면 잘렸거나(MAX_TOKENS) 막힌 것(SAFETY·RECITATION 등)이다.
+ * 값이 없으면(스트림 중간 조각·테스트 목) 끝까지 받은 것으로 본다.
+ */
+export function isIncompleteFinishReason(reason: string | null | undefined) {
+  if (!reason) return false
+  const normalized = reason.trim().toUpperCase()
+  return normalized !== "" && normalized !== "STOP" && normalized !== "FINISH_REASON_UNSPECIFIED"
+}
+
+/**
+ * 답 생성 호출이 어떻게 끝났는지.
+ * - stop: 끝까지 받았다.
+ * - finish_reason: 글은 받았지만 finishReason 이 STOP 이 아니다(MAX_TOKENS·SAFETY·RECITATION 등). 다음 모델로 넘기지 않는다.
+ * - interrupted: 스트림이 글을 낸 뒤 시간 초과·중단·네트워크 오류로 끊겼다.
+ * - unavailable: 글을 하나도 받지 못했다(키 없음·차단기·모든 모델 실패).
+ */
+export type GeminiCompletionReason = "stop" | "finish_reason" | "interrupted" | "unavailable"
+
+export interface GeminiAnswerCompletion {
+  /** 끝까지 받은 답인지. false 면 호출부는 결정형 초안을 쓴다. */
+  complete: boolean
+  reason: GeminiCompletionReason
+  /** 마지막으로 받은 finishReason. 받지 못했으면 null. */
+  finishReason: string | null
+  /** 글을 낸 모델. 아무 글도 받지 못했으면 null. */
+  model: string | null
+}
+
+/** 일반(비스트림) 호출 결과. text 는 정제·길이 자르기를 마친 글이다(불완전이어도 담아 둔다). */
+interface GeminiContentResult extends GeminiAnswerCompletion {
+  text: string
+}
+
+const UNAVAILABLE_COMPLETION: GeminiAnswerCompletion = Object.freeze({
+  complete: false,
+  reason: "unavailable",
+  finishReason: null,
+  model: null,
+})
+
+function toCompletion(result: GeminiAnswerCompletion): GeminiAnswerCompletion {
+  return { complete: result.complete, reason: result.reason, finishReason: result.finishReason, model: result.model }
+}
+
+/** 끝까지 받은 글만 돌려준다. 잘린 글(MAX_TOKENS 등)은 null 이라 호출부가 결정형 초안을 쓴다. */
+function completedTextOrNull(result: GeminiContentResult, onCompletion?: (completion: GeminiAnswerCompletion) => void) {
+  onCompletion?.(toCompletion(result))
+  return result.complete && result.text ? result.text : null
 }
 
 export function sanitizePublicAnswerText(value: string) {
@@ -327,28 +384,60 @@ export function sanitizePublicAnswerText(value: string) {
     .trim()
 }
 
+// 문장 끝: 마침표·물음표·느낌표(뒤에 닫는 따옴표·괄호가 붙어도 됨) 또는 한국어 종결('니다'·'세요'·'요.'·'다.')이고,
+// 그 뒤가 공백이거나 글의 끝인 자리. 숫자 뒤 마침표("1.5배"의 "1.", "6.0.7", 목록 번호 "8.")는 문장 끝이 아니다.
+// 뒤 글자는 자르기 전 전체 글에서 본다. 자른 창의 끝만 보면 "6.0.7" 이 "6." 에서 끝난 것처럼 보인다.
+const ANSWER_SENTENCE_END_RE = /(?:(?<!\d)[.!?。]|니다|습니다|합니다|세요|요\.|다\.)["'”’)\]]*(?=\s|$)/g
+// 번호나 목록 표시만 남은 꼬리 줄("8.", "3)", "-").
+const DANGLING_LIST_MARKER_LINE_RE = /\n[^\S\n]*(?:\d+[.)]|[-*•])?[^\S\n]*$/
+
+/** 자른 뒤 꼬리에 남은 번호만 있는 줄·숫자로 끝난 줄을 떼어 낸다. 한 줄뿐이면 그대로 둔다. */
+function dropDanglingTail(value: string) {
+  let result = value.trim()
+  for (;;) {
+    if (DANGLING_LIST_MARKER_LINE_RE.test(result)) {
+      result = result.replace(DANGLING_LIST_MARKER_LINE_RE, "").trim()
+      continue
+    }
+    const lastBreak = result.lastIndexOf("\n")
+    if (lastBreak > 0 && /\d$/.test(result)) {
+      result = result.slice(0, lastBreak).trim()
+      continue
+    }
+    return result
+  }
+}
+
 /**
  * 답변 길이 상한(MAX_ANSWER_LENGTH)을 지키되 단어·문장 중간에서 끊지 않는다.
  * - 상한 이하면 그대로 반환한다.
- * - 넘으면 상한 안쪽 마지막 문장 끝(.!? 。 또는 한국어 종결 '다.'/'요.'/'니다'/'습니다'/'세요')에서 자른다.
+ * - 넘으면 상한 안쪽 마지막 문장 끝(ANSWER_SENTENCE_END_RE)에서 자른다.
  * - 종결 경계가 상한의 60% 미만으로 너무 앞이면 마지막 공백에서, 그것도 없으면 상한에서 자른다.
+ * - 자른 뒤 번호만 남은 꼬리 줄("\n8.")이나 숫자로 끝난 마지막 줄은 지운다.
  *
  * 이전에는 `slice(0, MAX_ANSWER_LENGTH)` 로 코드포인트를 그대로 잘라 문장 중간에서 끊겼고,
  * 그 결과 호출부(service.ts isUsableGeneratedAnswer)의 종결 검사에 걸려 멀쩡한 긴 답변이
  * 통째로 버려지고 결정형 초안으로 폴백되는 품질 저하가 있었다. 이를 막는다.
+ * 숫자 뒤 마침표를 문장 끝으로 보면 "…보다 1.", "6.0.", "\n8." 로 끝나는 답이 나와(2026-11-20 조사 G12) 그 자리는 뺀다.
  */
 export function clampAnswerToLength(text: string, max = MAX_ANSWER_LENGTH): string {
   const trimmed = text.trim()
   if (trimmed.length <= max) return trimmed
 
-  const window = trimmed.slice(0, max)
-  const sentenceMatch = window.match(/^[\s\S]*(?:[.!?。]|니다\.?|습니다\.?|합니다\.?|세요\.?|요\.|다\.)/)
-  if (sentenceMatch && sentenceMatch[0].trim().length >= max * 0.6) {
-    return sentenceMatch[0].trim()
+  let end = -1
+  for (const match of trimmed.matchAll(ANSWER_SENTENCE_END_RE)) {
+    const matchEnd = match.index + match[0].length
+    if (matchEnd > max) break
+    end = matchEnd
+  }
+  if (end >= max * 0.6) {
+    const sentenceCut = dropDanglingTail(trimmed.slice(0, end))
+    if (sentenceCut.length >= max * 0.6) return sentenceCut
   }
 
+  const window = trimmed.slice(0, max)
   const lastSpace = window.lastIndexOf(" ")
-  if (lastSpace >= max * 0.6) return window.slice(0, lastSpace).trim()
+  if (lastSpace >= max * 0.6) return dropDanglingTail(window.slice(0, lastSpace))
 
   return window.trim()
 }
@@ -359,6 +448,40 @@ function sanitizeInternalContextText(value: string, maxLength = 520) {
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, maxLength)
+}
+
+// 안전 초안 가운데 제약 문장: 미지원(지원·제공하지 않음), 확인 필요, 단정·추측 금지.
+// 시스템 지시(FINAL_SYSTEM_INSTRUCTION)가 "안전 초안의 미지원, 확인 필요, 단정 금지, 상담 확인 문구는 제약 조건"이라고 부르는 문장이다.
+const DRAFT_CONSTRAINT_RE =
+  /(?:지원|제공)(?:하지|되지)\s*않|확인이\s*필요|확인해야|단정(?:하지|할\s*수|하기)|(?:확정|말씀)(?:해|드리기|하기|해\s*드리기|해\s*말씀드리기)\s*어렵|추측해/
+const MAX_DRAFT_LENGTH = 520
+const MAX_DRAFT_CONSTRAINT_LENGTH = 360
+
+/**
+ * 최종 답 프롬프트에 싣는 안전 초안. 제약 문장은 '제약:' 한 줄로 앞에 모으고, 나머지는 온전한 문장까지만 남긴다.
+ * 예전에는 520자에서 그냥 잘라 초안 끝의 제약 문장("…는 확인이 필요해요")이 빠지거나 문장 중간에서 끊겼다(2026-11-20 조사 G13).
+ */
+export function formatDraftForPrompt(draftAnswer: string) {
+  const flattened = sanitizePublicAnswerText(draftAnswer)
+    .replace(/^#+\s*/gm, "")
+    .replace(/\s+/g, " ")
+    .trim()
+  if (!flattened) return ""
+
+  const constraints: string[] = []
+  const rest: string[] = []
+  for (const sentence of splitIntoSentences(flattened)) {
+    if (DRAFT_CONSTRAINT_RE.test(sentence)) {
+      if (!constraints.includes(sentence)) constraints.push(sentence)
+    } else {
+      rest.push(sentence)
+    }
+  }
+
+  const body = trimToCompleteSentences(rest.join(" "), MAX_DRAFT_LENGTH)
+  if (constraints.length === 0) return body
+  const constraintLine = `제약: ${trimToCompleteSentences(constraints.join(" "), MAX_DRAFT_CONSTRAINT_LENGTH)}`
+  return body ? `${constraintLine}\n${body}` : constraintLine
 }
 
 function formatInternalContext(sources: ChatbotSource[] = []) {
@@ -432,6 +555,12 @@ function buildGeminiBody(
   })
 }
 
+/**
+ * 일반 답 생성 호출. 모델 체인을 차례로 시도해 결과와 끝난 모양(complete·finishReason)을 돌려준다.
+ * finishReason 이 STOP 이 아니면(MAX_TOKENS·SAFETY·RECITATION 등) 받은 글을 불완전으로 표시하고 다음 모델로 넘기지 않는다
+ * (잘린 답은 다른 모델로도 비슷하게 잘리고, 질문당 호출 수를 늘리지 않는다). 예전에는 finishReason 을 로그에만 써서
+ * MAX_TOKENS 로 잘린 글이 길이 자르기를 거쳐 완성된 답처럼 나갔다(2026-11-20 조사 G13).
+ */
 async function requestGeminiContent({
   systemInstruction,
   contents,
@@ -442,9 +571,9 @@ async function requestGeminiContent({
   contents: { role: "user" | "model"; parts: { text: string }[] }[]
   tier: ChatbotModelTier
   temperature: number
-}) {
+}): Promise<GeminiContentResult> {
   const apiKey = getGeminiApiKey()
-  if (!apiKey) return null
+  if (!apiKey) return { ...UNAVAILABLE_COMPLETION, text: "" }
 
   const models = resolveModelChain(tier)
 
@@ -483,10 +612,11 @@ async function requestGeminiContent({
         ?.map((part) => part.text ?? "")
         .join("")
         .trim()
+      const finishReason = data.candidates?.[0]?.finishReason ?? null
 
       if (!text) {
         warnGeminiCallIssue(model, "empty_response", {
-          finishReason: data.candidates?.[0]?.finishReason,
+          finishReason,
           blockReason: data.promptFeedback?.blockReason,
         })
         continue
@@ -496,7 +626,15 @@ async function requestGeminiContent({
         warnGeminiCallIssue(model, "sanitized_empty_response")
         continue
       }
-      return clampAnswerToLength(sanitized)
+      const incomplete = isIncompleteFinishReason(finishReason)
+      if (incomplete) warnGeminiCallIssue(model, "incomplete_response", { finishReason })
+      return {
+        text: clampAnswerToLength(sanitized),
+        complete: !incomplete,
+        reason: incomplete ? "finish_reason" : "stop",
+        finishReason,
+        model,
+      }
     } catch (error) {
       // 타임아웃·네트워크·파싱 오류 → 다음 폴백 모델 시도
       warnGeminiCallIssue(model, "request_error", {
@@ -508,7 +646,7 @@ async function requestGeminiContent({
     }
   }
 
-  return null
+  return { ...UNAVAILABLE_COMPLETION, text: "" }
 }
 
 export async function generateGeminiAnswer({
@@ -530,12 +668,14 @@ export async function generateGeminiAnswer({
     ? [...history, userContent]
     : [userContent]
 
-  return requestGeminiContent({
-    systemInstruction: RAG_SYSTEM_INSTRUCTION,
-    contents,
-    tier,
-    temperature: 0.2,
-  })
+  return completedTextOrNull(
+    await requestGeminiContent({
+      systemInstruction: RAG_SYSTEM_INSTRUCTION,
+      contents,
+      tier,
+      temperature: 0.2,
+    })
+  )
 }
 
 // ── 근거 선별 ──────────────────────────────────────────────────────────────────────────────────────
@@ -983,6 +1123,14 @@ function pickFinalAnswerRequirement(category: string, intent?: string) {
 }
 
 /**
+ * 모델 글 대조(generated-answer.ts checkGeneratedAnswer 의 allowList)에 넘기는 허용 글: 이 요청에서 모델에게 사실로 준 시스템 지시와
+ * 분류·인텐트별 요구사항. 모델이 여기 적힌 사실(Classin 기본 지식, [도입 상담 남기기] 버튼 이름 등)을 쓴 문장은 근거 밖으로 보지 않는다.
+ */
+export function getFinalAnswerAllowList(category: string, intent?: string): string[] {
+  return [FINAL_SYSTEM_INSTRUCTION, pickFinalAnswerRequirement(category, intent)]
+}
+
+/**
  * 최종 답변 프롬프트(사용자 턴). generateGeminiFinalAnswer·streamGeminiFinalAnswer 와 Claude 제공자가 함께 쓴다.
  * 한쪽만 고쳐 경로·제공자마다 답이 갈리는 일이 없도록 여기 한 곳에서만 조립한다.
  */
@@ -1001,7 +1149,7 @@ export function buildFinalAnswerPrompt({
     `분류: ${category}`,
     `현재 응답 모드: ${answerMode}`,
     context ? `내부 검증 정보(사용자에게 직접 언급 금지):\n${context}` : "내부 검증 정보: 없음",
-    `안전 초안(제약 조건, 필요하면 표현만 다듬기):\n${sanitizeInternalContextText(draftAnswer)}`,
+    `안전 초안(제약 조건, 필요하면 표현만 다듬기):\n${formatDraftForPrompt(draftAnswer)}`,
     `고객 질문: ${question}`,
     pickFinalAnswerRequirement(category, intent),
     weakGrounding ? WEAK_GROUNDING_REQUIREMENT : GROUNDED_ANSWER_REQUIREMENT,
@@ -1011,6 +1159,10 @@ export function buildFinalAnswerPrompt({
     .join("\n\n")
 }
 
+/**
+ * 최종 답을 한 번에 받는다. 끝까지 받은 답만 돌려주고, 잘렸거나(finishReason≠STOP) 못 받았으면 null 이다
+ * (호출부는 결정형 초안을 쓴다). 끝난 모양은 onCompletion 으로 알린다.
+ */
 export async function generateGeminiFinalAnswer({
   question,
   category,
@@ -1020,8 +1172,12 @@ export async function generateGeminiFinalAnswer({
   sources = [],
   tier = "basic",
   history,
+  onCompletion,
 }: FinalGenerateArgs): Promise<string | null> {
-  if (!getGeminiApiKey() || !question.trim()) return null
+  if (!getGeminiApiKey() || !question.trim()) {
+    onCompletion?.(toCompletion(UNAVAILABLE_COMPLETION))
+    return null
+  }
 
   const prompt = buildFinalAnswerPrompt({ question, category, intent, answerMode, draftAnswer, sources })
 
@@ -1030,18 +1186,48 @@ export async function generateGeminiFinalAnswer({
     ? [...history, userContent]
     : [userContent]
 
-  return requestGeminiContent({
-    systemInstruction: FINAL_SYSTEM_INSTRUCTION,
-    contents,
-    tier,
-    temperature: 0.25,
-  })
+  return completedTextOrNull(
+    await requestGeminiContent({
+      systemInstruction: FINAL_SYSTEM_INSTRUCTION,
+      contents,
+      tier,
+      temperature: 0.25,
+    }),
+    onCompletion
+  )
+}
+
+type GeminiStreamChunk = {
+  candidates?: { content?: { parts?: { text?: string }[] }; finishReason?: string }[]
+}
+
+/** SSE 한 줄(`data: {...}`)에서 글 조각과 finishReason 을 읽는다. data 줄이 아니거나 JSON 이 깨졌으면 null. */
+function parseGeminiStreamLine(line: string): { text: string; finishReason: string | null } | null {
+  const trimmed = line.trim()
+  if (!trimmed.startsWith("data:")) return null
+  const payload = trimmed.slice(5).trim()
+  if (!payload || payload === "[DONE]") return null
+  try {
+    const data = JSON.parse(payload) as GeminiStreamChunk
+    const candidate = data.candidates?.[0]
+    return {
+      text: candidate?.content?.parts?.map((part) => part.text ?? "").join("") ?? "",
+      finishReason: candidate?.finishReason ?? null,
+    }
+  } catch {
+    // 부분 JSON 라인 — 무시한다.
+    return null
+  }
 }
 
 /**
  * Gemini 스트리밍 생성기. `:streamGenerateContent?alt=sse` 의 SSE(`data: {...}`) 청크를 파싱해
- * 텍스트 델타를 순서대로 yield 한다. 키가 없거나 모델 호출이 실패하면 아무것도 내보내지 않는다.
- * 한 모델이 토큰을 하나도 못 내면 다음 폴백 모델을 시도한다(이미 토큰을 냈으면 그대로 종료).
+ * 텍스트 델타를 순서대로 yield 하고, 끝에 끝난 모양(GeminiAnswerCompletion)을 돌려준다(제너레이터 반환값).
+ * - 한 모델이 토큰을 하나도 못 내면 다음 폴백 모델을 시도한다.
+ * - 토큰을 낸 뒤 시간 초과·중단·네트워크 오류로 끊기면 complete=false, reason='interrupted' 로 끝낸다.
+ *   예전에는 이 경우를 조용히 정상 종료로 처리해 끊긴 답이 완성된 답처럼 쓰였다(2026-11-20 조사 G13).
+ * - 끝까지 받았어도 마지막 finishReason 이 STOP 이 아니면(MAX_TOKENS 등) complete=false, reason='finish_reason'.
+ * - 키가 없거나 차단기가 열렸거나 모든 모델이 실패하면 아무것도 내지 않고 reason='unavailable'.
  */
 async function* streamGeminiContent({
   systemInstruction,
@@ -1053,14 +1239,15 @@ async function* streamGeminiContent({
   contents: { role: "user" | "model"; parts: { text: string }[] }[]
   tier: ChatbotModelTier
   temperature: number
-}): AsyncGenerator<string> {
+}): AsyncGenerator<string, GeminiAnswerCompletion> {
   const apiKey = getGeminiApiKey()
-  if (!apiKey) return
+  if (!apiKey) return toCompletion(UNAVAILABLE_COMPLETION)
 
   for (const model of resolveModelChain(tier)) {
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), GEMINI_STREAM_TIMEOUT_MS)
     let emittedAny = false
+    let finishReason: string | null = null
 
     try {
       const res = await fetchGeminiThroughCircuit(
@@ -1073,14 +1260,14 @@ async function* streamGeminiContent({
         }
       )
 
-      if (!res) return
+      if (!res) return toCompletion(UNAVAILABLE_COMPLETION)
       if (!res.ok || !res.body) {
         warnGeminiCallIssue(model, "stream_http_error", {
           status: res.status,
           hasBody: Boolean(res.body),
           body: res.ok ? undefined : await readGeminiErrorSnippet(res),
         })
-        if (isModelAccessDeniedStatus(res.status)) return
+        if (isModelAccessDeniedStatus(res.status)) return toCompletion(UNAVAILABLE_COMPLETION)
         continue
       }
 
@@ -1088,52 +1275,54 @@ async function* streamGeminiContent({
       const decoder = new TextDecoder()
       let buffer = ""
 
-      while (true) {
+      for (let streamDone = false; !streamDone; ) {
         const { value, done } = await reader.read()
-        if (done) break
-        buffer += decoder.decode(value, { stream: true })
+        streamDone = done
+        buffer += done ? decoder.decode() : decoder.decode(value, { stream: true })
 
-        let newlineIndex: number
-        while ((newlineIndex = buffer.indexOf("\n")) >= 0) {
-          const line = buffer.slice(0, newlineIndex).trim()
-          buffer = buffer.slice(newlineIndex + 1)
-          if (!line.startsWith("data:")) continue
-          const payload = line.slice(5).trim()
-          if (!payload || payload === "[DONE]") continue
-          try {
-            const data = JSON.parse(payload) as {
-              candidates?: { content?: { parts?: { text?: string }[] } }[]
-            }
-            const text = data.candidates?.[0]?.content?.parts
-              ?.map((part) => part.text ?? "")
-              .join("")
-            if (text) {
-              emittedAny = true
-              yield text
-            }
-          } catch {
-            // 부분 JSON 라인 — 무시하고 다음 청크에서 재시도된다.
+        // 끝났으면 줄바꿈 없이 남은 마지막 줄도 읽는다.
+        const lines = buffer.split("\n")
+        buffer = done ? "" : (lines.pop() ?? "")
+        for (const line of lines) {
+          const parsed = parseGeminiStreamLine(line)
+          if (!parsed) continue
+          if (parsed.finishReason) finishReason = parsed.finishReason
+          if (parsed.text) {
+            emittedAny = true
+            yield parsed.text
           }
         }
       }
 
-      if (emittedAny) return
+      if (emittedAny) {
+        const incomplete = isIncompleteFinishReason(finishReason)
+        if (incomplete) warnGeminiCallIssue(model, "stream_incomplete_response", { finishReason })
+        return { complete: !incomplete, reason: incomplete ? "finish_reason" : "stop", finishReason, model }
+      }
+      warnGeminiCallIssue(model, "stream_empty_response", { finishReason })
     } catch (error) {
-      // 타임아웃·네트워크·파싱 오류 → 토큰을 냈으면 종료, 아니면 다음 폴백 모델 시도
-      if (emittedAny) return
-      warnGeminiCallIssue(model, "stream_request_error", {
-        error: error instanceof Error ? error.name : "unknown_error",
-      })
+      const errorName = error instanceof Error ? error.name : "unknown_error"
+      if (emittedAny) {
+        // 토큰을 낸 뒤 끊겼다. 다음 모델로 넘기지 않고(이미 낸 글과 섞인다) 불완전으로 끝낸다.
+        warnGeminiCallIssue(model, "stream_interrupted", { error: errorName, finishReason })
+        return { complete: false, reason: "interrupted", finishReason, model }
+      }
+      // 타임아웃·네트워크·파싱 오류 → 다음 폴백 모델 시도
+      warnGeminiCallIssue(model, "stream_request_error", { error: errorName })
       continue
     } finally {
       clearTimeout(timeout)
     }
   }
+
+  return toCompletion(UNAVAILABLE_COMPLETION)
 }
 
 /**
  * generateGeminiFinalAnswer 의 스트리밍 버전. 동일한 프롬프트·시스템 지시·내부 컨텍스트를 쓰되
  * 답변 텍스트를 델타로 yield 한다. 호출부(service.ts)가 누적·정제·길이클램프·사용성 게이트를 적용한다.
+ * 끝난 모양(complete·finishReason)은 제너레이터 반환값과 onCompletion 으로 알린다. 호출부는 complete 가 false 면
+ * 받은 글을 버리고 결정형 초안을 써야 한다.
  */
 export async function* streamGeminiFinalAnswer({
   question,
@@ -1144,20 +1333,27 @@ export async function* streamGeminiFinalAnswer({
   sources = [],
   tier = "basic",
   history,
-}: FinalGenerateArgs): AsyncGenerator<string> {
-  if (!getGeminiApiKey() || !question.trim()) return
+  onCompletion,
+}: FinalGenerateArgs): AsyncGenerator<string, GeminiAnswerCompletion> {
+  if (!getGeminiApiKey() || !question.trim()) {
+    const completion = toCompletion(UNAVAILABLE_COMPLETION)
+    onCompletion?.(completion)
+    return completion
+  }
 
   const prompt = buildFinalAnswerPrompt({ question, category, intent, answerMode, draftAnswer, sources })
 
   const userContent = { role: "user" as const, parts: [{ text: prompt }] }
   const contents = history && history.length > 0 ? [...history, userContent] : [userContent]
 
-  yield* streamGeminiContent({
+  const completion = yield* streamGeminiContent({
     systemInstruction: FINAL_SYSTEM_INSTRUCTION,
     contents,
     tier,
     temperature: 0.25,
   })
+  onCompletion?.(completion)
+  return completion
 }
 
 export async function generateGeminiInferredAnswer({
@@ -1194,12 +1390,14 @@ export async function generateGeminiInferredAnswer({
     ? [...history, userContent]
     : [userContent]
 
-  return requestGeminiContent({
-    systemInstruction: INFERENCE_SYSTEM_INSTRUCTION,
-    contents,
-    tier,
-    temperature: 0.25,
-  })
+  return completedTextOrNull(
+    await requestGeminiContent({
+      systemInstruction: INFERENCE_SYSTEM_INSTRUCTION,
+      contents,
+      tier,
+      temperature: 0.25,
+    })
+  )
 }
 
 /**

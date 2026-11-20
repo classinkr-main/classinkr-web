@@ -42,6 +42,54 @@ describe("clampAnswerToLength", () => {
   })
 })
 
+// 2026-11-20 조사 G12: 숫자 뒤 마침표("1.5배"의 "1.", "6.0.7", 목록 번호 "8.")를 문장 끝으로 보고 잘라
+// "…보다 1.", "6.0.", "\n8." 로 끝나는 답이 나왔다. 문장 끝은 숫자 뒤가 아니고, 뒤가 공백이거나 글의 끝인 자리다.
+describe("clampAnswerToLength around numbers, versions, lists and URLs", () => {
+  const filler = "클래스인은 수업 전후 흐름을 한곳에서 관리하도록 돕습니다. "
+
+  it("does not cut inside a decimal such as 1.5배", () => {
+    const text = `${filler.repeat(9)}녹화 화질을 올리면 저장 용량이 기본 설정보다 1.5배 정도 늘어납니다. ${filler.repeat(3)}`
+    const cut = text.indexOf("1.5배") + 2 // "…보다 1." 바로 뒤
+    const result = clampAnswerToLength(text, cut)
+    expect(result.endsWith("1.")).toBe(false)
+    expect(result.endsWith("돕습니다.")).toBe(true)
+    expect(USABLE_ENDING.test(result)).toBe(true)
+  })
+
+  it("does not cut inside a version number", () => {
+    const text = `${filler.repeat(9)}앱 버전 6.0.7 이상에서는 판서 저장이 자동으로 켜집니다. ${filler.repeat(3)}`
+    for (const cutAfter of ["버전 6.", "버전 6.0."]) {
+      const result = clampAnswerToLength(text, text.indexOf(cutAfter) + cutAfter.length)
+      expect(result, cutAfter).not.toMatch(/\d\.$/)
+      expect(result.endsWith("돕습니다.")).toBe(true)
+    }
+  })
+
+  it("does not end on a bare list number line", () => {
+    const steps = Array.from({ length: 9 }, (_, index) => `${index + 1}. 설정 화면에서 ${index + 1}번째 항목을 확인하고 저장합니다.`)
+    const text = `순서는 이렇습니다.\n${steps.join("\n")}`
+    const cut = text.indexOf("\n8.") + 3 // "\n8." 까지만 창에 들어온다
+    const result = clampAnswerToLength(text, cut)
+    expect(result).not.toMatch(/\n\s*\d+\.\s*$/)
+    expect(result.endsWith("7번째 항목을 확인하고 저장합니다.")).toBe(true)
+  })
+
+  it("keeps a URL whole instead of cutting at its dots", () => {
+    const text = `${filler.repeat(9)}설치 파일은 www.classin.com/download 에서 받을 수 있습니다. ${filler.repeat(3)}`
+    const result = clampAnswerToLength(text, text.indexOf("classin.com") + "classin.".length)
+    expect(result).not.toContain("www.classin.")
+    expect(result.endsWith("돕습니다.")).toBe(true)
+  })
+
+  it("drops a dangling numbered line left by the whitespace fallback", () => {
+    // 문장 끝이 없어 마지막 공백에서 자르면 "…\n8." 이 남는 글.
+    const text = `${"가나다 ".repeat(127)}\n8. ${"라마바".repeat(40)}`
+    const result = clampAnswerToLength(text, 520)
+    expect(result).not.toMatch(/\d\.?$/)
+    expect(result.endsWith("가나다")).toBe(true)
+  })
+})
+
 describe("buildDocSuggestionSummary", () => {
   it("adds a warm lead and keeps the heading when it is meaningful", () => {
     const result = buildDocSuggestionSummary(

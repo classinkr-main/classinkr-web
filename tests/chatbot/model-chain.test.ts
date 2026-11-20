@@ -1,12 +1,17 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 import {
+  __resetModelCircuitForTests,
   asksAboutThirdPartyAdoption,
   buildFinalAnswerPrompt,
   buildGenerationConfig,
+  formatDraftForPrompt,
   generateGeminiFinalAnswer,
+  getFinalAnswerAllowList,
+  isIncompleteFinishReason,
   resolveModelChain,
   streamGeminiFinalAnswer,
+  type GeminiAnswerCompletion,
 } from "@/lib/chatbot/llm"
 import { evaluateChatbotQuery } from "@/lib/chatbot/service"
 
@@ -393,5 +398,208 @@ describe("chatbot final answer prompt requirements", () => {
     expect(prompts.stream.length).toBeGreaterThan(0)
     expect(new Set([...prompts.plain, ...prompts.stream]).size).toBe(1)
     expect(prompts.plain[0]).toBe(buildFinalAnswerPrompt(args))
+  })
+})
+
+// 2026-11-20 조사 G13: finishReason 을 로그에만 써서 MAX_TOKENS 로 잘린 글이 길이 자르기를 거쳐 완성된 답처럼 나갔고,
+// 스트림은 글을 낸 뒤 끊기면(시간 초과·중단) 조용히 정상 종료로 처리했다. 끝난 모양(complete·finishReason)을 알리고,
+// 일반 호출은 끝까지 받은 답만 돌려준다. 다음 모델로 넘기지 않아 질문당 호출 수는 늘지 않는다.
+describe("chatbot final answer completion signal", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.unstubAllEnvs()
+    __resetModelCircuitForTests()
+  })
+
+  const args = {
+    question: "녹화본은 어디서 내려받아요?",
+    category: "classroom",
+    intent: "classroom_consulting",
+    answerMode: "direct_answer",
+    draftAnswer: "녹화본은 코스의 수업 기록에서 내려받을 수 있습니다.",
+  }
+
+  const ANSWER = "녹화본은 코스의 수업 기록에서 다운로드를 누르면 PC에 저장됩니다."
+
+  function plainResponse(finishReason?: string) {
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({ candidates: [{ content: { parts: [{ text: ANSWER }] }, ...(finishReason ? { finishReason } : {}) }] }),
+    }
+  }
+
+  function sseLine(text: string, finishReason?: string) {
+    return `data: ${JSON.stringify({ candidates: [{ content: { parts: [{ text }] }, ...(finishReason ? { finishReason } : {}) }] })}`
+  }
+
+  /** SSE 응답. fail 이 true 면 마지막 조각 뒤 읽기에서 오류를 낸다(연결 끊김·시간 초과). */
+  function sseResponse(lines: string[], { fail = false, trailingNewline = true } = {}) {
+    const encoder = new TextEncoder()
+    const chunks = lines.map((line, index) => (index < lines.length - 1 || trailingNewline ? `${line}\n\n` : line))
+    let index = 0
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (index < chunks.length) {
+          controller.enqueue(encoder.encode(chunks[index++]))
+          return
+        }
+        if (fail) controller.error(Object.assign(new Error("aborted"), { name: "AbortError" }))
+        else controller.close()
+      },
+    })
+    return { ok: true, status: 200, body }
+  }
+
+  async function readStream(generator: AsyncGenerator<string, GeminiAnswerCompletion>) {
+    let text = ""
+    for (;;) {
+      const next = await generator.next()
+      if (next.done) return { text, completion: next.value }
+      text += next.value
+    }
+  }
+
+  function setup() {
+    vi.stubEnv("GEMINI_API_KEY", "test-gemini-key")
+    clearModelEnv()
+  }
+
+  it("treats only explicit non-STOP finish reasons as incomplete", () => {
+    expect(isIncompleteFinishReason("STOP")).toBe(false)
+    expect(isIncompleteFinishReason(undefined)).toBe(false)
+    expect(isIncompleteFinishReason(null)).toBe(false)
+    expect(isIncompleteFinishReason("FINISH_REASON_UNSPECIFIED")).toBe(false)
+    for (const reason of ["MAX_TOKENS", "SAFETY", "RECITATION", "OTHER"]) expect(isIncompleteFinishReason(reason), reason).toBe(true)
+  })
+
+  it("drops a MAX_TOKENS answer without trying the next model and reports why", async () => {
+    setup()
+    const fetchMock = vi.fn(async () => plainResponse("MAX_TOKENS"))
+    vi.stubGlobal("fetch", fetchMock)
+    const completions: GeminiAnswerCompletion[] = []
+
+    const answer = await generateGeminiFinalAnswer({ ...args, onCompletion: (completion) => completions.push(completion) })
+
+    expect(answer).toBeNull()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(completions).toEqual([{ complete: false, reason: "finish_reason", finishReason: "MAX_TOKENS", model: "gemini-3.5-flash" }])
+  })
+
+  it("drops SAFETY and RECITATION answers too", async () => {
+    setup()
+    for (const reason of ["SAFETY", "RECITATION"]) {
+      vi.stubGlobal("fetch", vi.fn(async () => plainResponse(reason)))
+      expect(await generateGeminiFinalAnswer(args), reason).toBeNull()
+    }
+  })
+
+  it("returns a STOP answer (or one without a finish reason) as complete", async () => {
+    setup()
+    for (const reason of ["STOP", undefined]) {
+      vi.stubGlobal("fetch", vi.fn(async () => plainResponse(reason)))
+      const completions: GeminiAnswerCompletion[] = []
+      expect(await generateGeminiFinalAnswer({ ...args, onCompletion: (completion) => completions.push(completion) })).toBe(ANSWER)
+      expect(completions).toEqual([{ complete: true, reason: "stop", finishReason: reason ?? null, model: "gemini-3.5-flash" }])
+    }
+  })
+
+  it("reports an unavailable completion when every model fails", async () => {
+    setup()
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false, status: 500, text: async () => "", json: async () => ({}) })))
+    const completions: GeminiAnswerCompletion[] = []
+    expect(await generateGeminiFinalAnswer({ ...args, onCompletion: (completion) => completions.push(completion) })).toBeNull()
+    expect(completions).toEqual([{ complete: false, reason: "unavailable", finishReason: null, model: null }])
+  })
+
+  it("marks a stream that breaks after the first chunk as interrupted and does not move to the next model", async () => {
+    setup()
+    const fetchMock = vi.fn(async () => sseResponse([sseLine("녹화본은 코스의 ")], { fail: true }))
+    vi.stubGlobal("fetch", fetchMock)
+    const completions: GeminiAnswerCompletion[] = []
+
+    const { text, completion } = await readStream(
+      streamGeminiFinalAnswer({ ...args, onCompletion: (value) => completions.push(value) })
+    )
+
+    expect(text).toBe("녹화본은 코스의 ")
+    expect(completion).toEqual({ complete: false, reason: "interrupted", finishReason: null, model: "gemini-3.5-flash" })
+    expect(completions).toEqual([completion])
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it("marks a stream that ends with MAX_TOKENS as incomplete", async () => {
+    setup()
+    vi.stubGlobal("fetch", vi.fn(async () => sseResponse([sseLine("녹화본은 코스의 "), sseLine("수업 기록에서", "MAX_TOKENS")])))
+
+    const { text, completion } = await readStream(streamGeminiFinalAnswer(args))
+
+    expect(text).toBe("녹화본은 코스의 수업 기록에서")
+    expect(completion).toEqual({ complete: false, reason: "finish_reason", finishReason: "MAX_TOKENS", model: "gemini-3.5-flash" })
+  })
+
+  it("completes a STOP stream and reads a last line that has no trailing newline", async () => {
+    setup()
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => sseResponse([sseLine("녹화본은 코스의 "), sseLine("수업 기록에서 내려받습니다.", "STOP")], { trailingNewline: false }))
+    )
+
+    const { text, completion } = await readStream(streamGeminiFinalAnswer(args))
+
+    expect(text).toBe("녹화본은 코스의 수업 기록에서 내려받습니다.")
+    expect(completion).toEqual({ complete: true, reason: "stop", finishReason: "STOP", model: "gemini-3.5-flash" })
+  })
+
+  it("still moves to the next model when the first one fails before any text", async () => {
+    setup()
+    const fetchMock = vi.fn(async (url: string | URL | Request) =>
+      String(url).includes("/models/gemini-3.5-flash:")
+        ? { ok: false, status: 503, body: null, text: async () => "" }
+        : sseResponse([sseLine(ANSWER, "STOP")])
+    )
+    vi.stubGlobal("fetch", fetchMock)
+
+    const { text, completion } = await readStream(streamGeminiFinalAnswer(args))
+
+    expect(text).toBe(ANSWER)
+    expect(completion).toEqual({ complete: true, reason: "stop", finishReason: "STOP", model: "gemini-3.1-flash-lite" })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+})
+
+// 2026-11-20 조사 G13: 안전 초안을 520자에서 그냥 잘라 끝의 제약 문장("…는 확인이 필요해요")이 빠지거나 문장 중간에서 끊겼다.
+describe("safety draft in the final answer prompt", () => {
+  it("leaves a short draft without constraint sentences as it was", () => {
+    const draft = "숙제는 제출 화면 아래 [숙제 제출]까지 눌러야 제출됩니다.\n\n[초안 저장]은 저장만 됩니다."
+    expect(formatDraftForPrompt(draft)).toBe("숙제는 제출 화면 아래 [숙제 제출]까지 눌러야 제출됩니다. [초안 저장]은 저장만 됩니다.")
+  })
+
+  it("moves constraint sentences to one leading line and cuts the rest at a sentence end", () => {
+    const filler = "수업 전에는 코스와 자료를 미리 올려 두고, 수업 중에는 판서와 녹화를 함께 씁니다."
+    const draft = `${Array.from({ length: 12 }, () => filler).join(" ")} 학원비 결제·수납 기능은 제공하지 않습니다. 계약 조건은 상담에서 확인이 필요해요.`
+    const formatted = formatDraftForPrompt(draft)
+    const [first, ...rest] = formatted.split("\n")
+
+    expect(first).toBe("제약: 학원비 결제·수납 기능은 제공하지 않습니다. 계약 조건은 상담에서 확인이 필요해요.")
+    const body = rest.join("\n")
+    expect(body.length).toBeLessThanOrEqual(520)
+    expect(body.endsWith("씁니다.")).toBe(true)
+    expect(body).not.toContain("제공하지 않습니다")
+
+    const prompt = buildFinalAnswerPrompt({
+      question: "학원비도 클래스인으로 받을 수 있나요?",
+      category: "pricing",
+      answerMode: "direct_answer",
+      draftAnswer: draft,
+    })
+    expect(prompt).toContain(`안전 초안(제약 조건, 필요하면 표현만 다듬기):\n${formatted}`)
+  })
+
+  it("gives the system instruction and the requirement as the allow list for checking the model text", () => {
+    const allowList = getFinalAnswerAllowList("onboarding", "onboarding")
+    expect(allowList).toHaveLength(2)
+    expect(allowList[0]).toContain("[도입 상담 남기기]")
+    expect(allowList[1]).toContain("요구사항: 온보딩/데모")
   })
 })

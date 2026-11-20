@@ -8,7 +8,16 @@ import {
   WEAK_SOURCE_DRAFT_ANSWER,
   type ChatbotStreamEvent,
 } from "@/lib/chatbot/service"
-import { attachGroundingText, buildEvidenceSentences, splitIntoSentences } from "@/lib/chatbot/source-grounding"
+import { flagSentence } from "@/lib/chatbot/answer-index/sentences"
+import { isPublicChatbotDoc } from "@/lib/chatbot/doc-outline"
+import {
+  attachGroundingText,
+  buildEvidenceSentences,
+  getGroundingText,
+  keepAnchoredConnectives,
+  splitIntoSentences,
+} from "@/lib/chatbot/source-grounding"
+import { listDocs } from "@/lib/docs"
 
 import {
   enableGenerateMode,
@@ -85,6 +94,82 @@ describe("evidence sentence helpers", () => {
     expect(
       buildEvidenceSentences([{ title: "문서", excerpt: "첫 문장은 온전합니다. 둘째 문장은 중간에서 끊겨..." }]).map((sentence) => sentence.text)
     ).toEqual(["첫 문장은 온전합니다."])
+  })
+})
+
+// 2026-11-20 조사 G15: legacy 근거 문장 거르기가 답 색인보다 약해, 앞 문장 없이는 뜻이 통하지 않는 문장
+// ('그래도 안 되면…')과 뒤 내용 소개('아래를 차례로 봅니다'), 그림 설명·다른 문서로 보내는 말이 혼자 답으로 나갈 수 있었다.
+// 답 색인 문장 표시(flagSentence)를 그대로 읽어 caption·meta·nav 는 빼고, connective 는 표시해 앞 문장과 함께일 때만 남긴다.
+describe("evidence sentence filtering with the answer-index sentence flags", () => {
+  const source = (text: string) => attachGroundingText({ title: "녹화가 안 될 때", heading: "먼저 확인할 것", excerpt: "" }, text)
+
+  it("drops caption, meta, nav and section-guide sentences and marks connectives", () => {
+    const sentences = buildEvidenceSentences([
+      source(
+        [
+          "녹화가 시작되지 않으면 수업 설정에서 [수업 녹화]가 켜져 있는지 봅니다.",
+          "빨간 박스로 표시한 곳이 녹화 버튼입니다.",
+          "이 가이드는 녹화 문제를 정리한 지도입니다.",
+          "자세한 방법은 녹화 설정 문서를 참고하세요.",
+          "문의를 받은 관리자는 아래를 차례로 봅니다.",
+          "그래도 안 되면 앱을 다시 설치합니다.",
+        ].join(" ")
+      ),
+    ])
+
+    expect(sentences.map((sentence) => [sentence.text, sentence.connective ?? false])).toEqual([
+      ["녹화가 시작되지 않으면 수업 설정에서 [수업 녹화]가 켜져 있는지 봅니다.", false],
+      ["그래도 안 되면 앱을 다시 설치합니다.", true],
+    ])
+  })
+
+  it("keeps a connective sentence only when the sentence right before it in the same source is picked too", () => {
+    const sentences = buildEvidenceSentences([
+      source("녹화 버튼이 회색이면 관리자에게 녹화 권한을 요청합니다. 그래도 안 되면 앱을 다시 설치합니다. 이때 녹화본은 지워지지 않습니다."),
+      attachGroundingText({ title: "앱 재설치", excerpt: "" }, "재설치 전에 앱을 완전히 종료합니다. 그다음 스토어에서 새로 받습니다."),
+    ])
+    const byText = (prefix: string) => sentences.find((sentence) => sentence.text.startsWith(prefix))!
+    const [permission, retry, meanwhile, quit, store] = ["녹화 버튼", "그래도", "이때", "재설치 전에", "그다음"].map(byText)
+
+    expect([retry.connective, meanwhile.connective, store.connective]).toEqual([true, true, true])
+    // 앞 문장 없이 connective 만 골렸다: 뺀다(남는 문장이 없을 수 있다).
+    expect(keepAnchoredConnectives([retry])).toEqual([])
+    expect(keepAnchoredConnectives([retry, meanwhile])).toEqual([])
+    // 앞 문장과 함께 골렸다: 남긴다(연달아 이어지는 connective 도).
+    expect(keepAnchoredConnectives([permission, retry, meanwhile])).toEqual([permission, retry, meanwhile])
+    // 다른 출처의 앞 번호 문장은 앞 문장이 아니다.
+    expect(keepAnchoredConnectives([meanwhile, quit, store])).toEqual([quit, store])
+    expect(keepAnchoredConnectives([quit, store])).toEqual([quit, store])
+  })
+
+  it("filters the flagged sentences of the public static docs (counts recorded)", () => {
+    let candidates = 0
+    let filtered = 0
+    let connective = 0
+    for (const doc of listDocs().filter(isPublicChatbotDoc)) {
+      const texts = [[doc.description, doc.chatbotSummary].join(" "), ...doc.sections.map((section) => [section.body, ...(section.steps ?? [])].join(" "))]
+      for (const text of texts) {
+        const grounded = attachGroundingText({ title: doc.title, excerpt: "" }, text)
+        const kept = buildEvidenceSentences([grounded])
+        const keptTexts = new Set(kept.map((sentence) => sentence.text))
+        connective += kept.filter((sentence) => sentence.connective).length
+        for (const sentence of splitIntoSentences(getGroundingText(grounded) ?? "")) {
+          if (sentence.length < 6 || sentence.length > 360) continue
+          candidates += 1
+          const flags = flagSentence(sentence, { docLink: /\[[^\]]+]\(\/docs\//.test(sentence), table: false })
+          const dropped = flags.includes("caption") || flags.includes("meta") || flags.includes("nav")
+          if (dropped) {
+            filtered += 1
+            expect(keptTexts.has(sentence), `${doc.slug}: ${sentence}`).toBe(false)
+          }
+        }
+      }
+    }
+    // 2026-11-20 공개 문서(77개): 후보 약 4,100문장 가운데 caption·meta·nav 로 빠지는 문장 수십 개, connective 표시 수십 개.
+    expect(candidates).toBeGreaterThan(3000)
+    expect(filtered).toBeGreaterThan(20)
+    expect(filtered).toBeLessThan(candidates * 0.05)
+    expect(connective).toBeGreaterThan(20)
   })
 })
 
