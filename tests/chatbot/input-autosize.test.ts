@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs"
+import { join } from "node:path"
+
 import { describe, expect, it } from "vitest"
 
 import {
@@ -6,6 +9,7 @@ import {
   CHAT_NEAR_BOTTOM_THRESHOLD_PX,
   isNearBottom,
   resolveChatInputHeight,
+  resolveListScrollTopAfterInputResize,
 } from "@/components/ui/chatbot-input-autosize"
 
 describe("chatbot input autosize constants", () => {
@@ -79,5 +83,51 @@ describe("isNearBottom", () => {
   it("accepts a custom threshold", () => {
     expect(isNearBottom({ scrollHeight: 1000, scrollTop: 590, clientHeight: 400 }, 10)).toBe(true)
     expect(isNearBottom({ scrollHeight: 1000, scrollTop: 589, clientHeight: 400 }, 10)).toBe(false)
+  })
+})
+
+describe("resolveListScrollTopAfterInputResize", () => {
+  // 목록 scrollHeight 461, 입력창 92px 일 때 clientHeight 366(맨 아래 scrollTop 95), auto(44px)로 줄이면 414(최대 47).
+  it("높이가 바뀌었고 맨 아래를 보고 있었으면 맨 아래로 둔다", () => {
+    expect(
+      resolveListScrollTopAfterInputResize({ heightChanged: true, wasNearBottom: true, prevScrollTop: 71, scrollTop: 47, scrollHeight: 461 })
+    ).toBe(461)
+  })
+
+  it("Safari: 여러 줄에서 글자만 쳐 높이가 그대로여도, 재는 동안 깎인 scrollTop 을 되돌린다", () => {
+    expect(
+      resolveListScrollTopAfterInputResize({ heightChanged: false, wasNearBottom: true, prevScrollTop: 95, scrollTop: 47, scrollHeight: 461 })
+    ).toBe(95)
+  })
+
+  it("위로 올려 읽는 중이면 높이가 바뀌어도 원래 위치로 되돌리고 맨 아래로 끌어내리지 않는다", () => {
+    expect(
+      resolveListScrollTopAfterInputResize({ heightChanged: true, wasNearBottom: false, prevScrollTop: 30, scrollTop: 10, scrollHeight: 461 })
+    ).toBe(30)
+  })
+
+  it("Chromium·Firefox 처럼 스크롤 앵커링이 이미 되돌렸으면 건드리지 않는다", () => {
+    expect(
+      resolveListScrollTopAfterInputResize({ heightChanged: false, wasNearBottom: true, prevScrollTop: 95, scrollTop: 95, scrollHeight: 461 })
+    ).toBeNull()
+    expect(
+      resolveListScrollTopAfterInputResize({ heightChanged: true, wasNearBottom: false, prevScrollTop: 0, scrollTop: 0, scrollHeight: 461 })
+    ).toBeNull()
+  })
+})
+
+describe("FloatingChatbot 입력창 높이 맞춤 연결", () => {
+  const source = readFileSync(join(process.cwd(), "components/ui/FloatingChatbot.tsx"), "utf8")
+
+  it("재기 전 목록 scrollTop 을 잡아 두고, 높이를 정한 뒤 resolveListScrollTopAfterInputResize 로 되돌린다", () => {
+    const body = source.match(/const resize = \(\) => \{([\s\S]*?)\n {8}\}/)?.[1] ?? ""
+    expect(body).not.toBe("")
+    const capture = body.indexOf("const prevScrollTop = container ? container.scrollTop : 0")
+    const collapse = body.indexOf('el.style.height = "auto"')
+    const restore = body.indexOf("resolveListScrollTopAfterInputResize({")
+    expect(capture).toBeGreaterThan(-1)
+    expect(collapse).toBeGreaterThan(capture)
+    expect(restore).toBeGreaterThan(collapse)
+    expect(body).toContain("heightChanged: height !== prev")
   })
 })

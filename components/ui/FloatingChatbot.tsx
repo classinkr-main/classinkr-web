@@ -44,7 +44,7 @@ import {
 } from "@/lib/chatbot/open-chatbot"
 import { ChatbotTeaser } from "@/components/ui/ChatbotTeaser"
 import { useChatbotTeaser } from "@/components/ui/useChatbotTeaser"
-import { isNearBottom, resolveChatInputHeight } from "@/components/ui/chatbot-input-autosize"
+import { isNearBottom, resolveChatInputHeight, resolveListScrollTopAfterInputResize } from "@/components/ui/chatbot-input-autosize"
 import { CHATBOT_MOTION, m } from "@/lib/chatbot/motion"
 import {
     isMuted,
@@ -1021,6 +1021,7 @@ export function FloatingChatbot() {
         const resize = () => {
             const container = messagesContainerRef.current
             const wasNearBottom = container ? isNearBottom(container) : false
+            const prevScrollTop = container ? container.scrollTop : 0
             const prev = el.offsetHeight
 
             el.style.height = "auto"
@@ -1034,8 +1035,16 @@ export function FloatingChatbot() {
             el.style.overflowY = overflowY
 
             // 입력창이 커지면 대화 목록이 줄어든다. 맨 아래를 보고 있었다면 계속 맨 아래에 둔다.
-            if (height !== prev && wasNearBottom && container) {
-                container.scrollTop = container.scrollHeight
+            // 재려고 auto 로 줄인 사이 깎인 scrollTop 은 되돌린다(스크롤 앵커링이 없는 Safari 에서 남는다).
+            if (container) {
+                const nextScrollTop = resolveListScrollTopAfterInputResize({
+                    heightChanged: height !== prev,
+                    wasNearBottom,
+                    prevScrollTop,
+                    scrollTop: container.scrollTop,
+                    scrollHeight: container.scrollHeight,
+                })
+                if (nextScrollTop !== null) container.scrollTop = nextScrollTop
             }
         }
 
