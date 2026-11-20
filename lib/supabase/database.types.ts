@@ -44,9 +44,13 @@ export interface AdminProfile {
   neo_owner_id: string | null;
   crm_sort_order: number;
   capabilities: string[];
-  /** 사이드바 프리셋 키. NULL이면 기존 role 기반 동작(무변화) — 20260729_admin_nav_access.sql */
+  /**
+   * 사이드바 프리셋 키(20260729_admin_nav_access.sql). 2026-11-20 부터 "super" 한 값만 뜻이 있다 —
+   * 역할을 올리지 않고 전체 사이드바를 보는 지정 계정(components/admin/admin-nav-access.ts hasFullAdminNav).
+   * NULL·그 밖의 레거시 값은 역할만으로 판정한다. 메뉴 표시일 뿐 접근 권한이 아니다.
+   */
   nav_preset: string | null;
-  /** 프리셋 대비 사람별 예외. {"/admin/crm":"primary"} — 값 검증은 normalizeNavOverrides가 한다. */
+  /** 그 계정 기본값(전체/간소) 대비 사람별 예외. {"/admin/crm":"primary"} — 값 검증은 normalizeNavOverrides가 한다. */
   nav_overrides: Record<string, string>;
   created_at: string;
   updated_at: string;

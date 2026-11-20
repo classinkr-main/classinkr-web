@@ -2,9 +2,51 @@
 // 사이드바·모바일·커맨드 팔레트·권한 미리보기는 전부 이 모듈의 resolveAdminNavAccess를 거쳐야
 // 서로 어긋나지 않는다.
 //
-// ── 2026-09-10 전면 공개 전환 ────────────────────────────────────────────────
+// ── 2026-11-20 전체 / 간소 사이드바 (지금 규칙) ────────────────────────────────
+// 정본: docs/active/sales-workspace-simplification-plan-2026-11-20.md W1 · D1 · D2.
+// 2026-09-10 의 "모든 매니저가 같은 사이드바를 본다"를 **기본값만** 둘로 갈랐다.
+//
+//  - 전체 사이드바: SUPER_ADMIN 역할, 또는 admin_profiles.nav_preset 이 "super" 인 지정 계정
+//    (hasFullAdminNav). 2026-09-10 ~ 11-19 의 사이드바와 완전히 같다(아래 단락들이 그 규칙이다).
+//  - 간소 사이드바: 그 밖의 모든 계정. 기본값이 매출 장부 + 견적·문서 둘만 상시이고
+//    (SIMPLE_NAV_PRIMARY_HREFS) 나머지는 전부 기본 숨김이다.
+//
+// 왜 바꿨나 — 팀원이 계속 가입하는데 처음 보는 화면이 관리자용 Overview 와 16개 탭이었다.
+// 지금 팀이 실제로 쓰는 표면은 장부와 견적 둘이라, 나머지는 화면을 고도화하면서 하나씩 다시 꺼낸다.
+//
+// 무엇을 **되살리지 않았나** — 차단(deny)이다. 2026-09-10 의 근거 1(nav 는 보안 경계가 아니다)은
+// 그대로다. 숨김은 메뉴와 눈에 보이는 목록(사이드바 · 모바일 메뉴/하단 바로가기 · "기타" ·
+// "숨긴 탭 N" · ⌘K 명령 목록)에서만 적용되고, 주소로 들어가면 모든 화면이 지금처럼 열린다.
+// 데이터 접근은 예나 지금이나 각 API 의 역할 검사가 막는다. NavPlacement 에 "deny" 를 다시
+// 넣지 말 것.
+//
+// 그때의 사고를 이번엔 어떻게 막나 — 2026-09-10 전환의 직접 원인은 "로그인은 전원을 Overview 로
+// 보내는데 Overview 가 일부 역할에게 막혀 있던" 것, 곧 착지 경로와 숨김/차단 목록이 서로 다른
+// 파일에서 따로 움직인 것이었다(아래 근거 2). 그래서 이번에는
+//  1. 착지 경로를 이 파일의 resolveAdminLandingHref 하나로 정하고, 로그인
+//     (app/admin/login/page.tsx)과 /admin(app/admin/page.tsx)은 이 함수만 부른다.
+//  2. "숨길 수 없는 항목"을 고정 목록이 아니라 **그 계정의 착지 화면**으로 정의했다
+//     (isNavHideable(href, ctx)). 착지를 바꾸면 숨김 불가도 같이 따라온다.
+//  3. tests/admin/nav-access.test.ts 가 "착지 경로는 그 계정에게 숨김이 아니다"를 역할 ·
+//     프리셋 · 오버라이드 조합 전체에서 고정한다.
+//
+// 간소 계정에게 남는 것 / 사라지는 것:
+//  - getAccessibleAdminNavItems 는 간소 계정에서도 항상 ADMIN_NAV 전체다(아래 불변식 그대로).
+//    주소로 들어간 화면의 모바일 헤더 라벨 · active 판정이 여기에 기댄다.
+//  - ⌘K 는 팔레트 쪽에서만 거른다 — 간소 계정의 명령 목록은 보이는 탭과 그 자식뿐이다
+//    (AdminCommandPalette.resolveAdminCommands, crm/CrmCommandPalette).
+//  - 사이드바의 범주 소제목 · "숨긴 탭 N" 묶음 · "사이드바 편집" 진입점은 간소 계정에게 그리지
+//    않는다(ResolvedNavAccess.fullNav). 거의 전부가 숨김이라 그 묶음이 곧 전체 메뉴가 되기 때문이다.
+//  - 개인 오버라이드는 여전히 기본값을 이긴다. 간소 계정의 탭을 되살리는 길은 설정 › 회원에서
+//    최고 관리자가 그 사람 배치를 고치거나 "전체 사이드바"를 켜는 것이다.
+//
+// nav_preset 컬럼은 2026-09-10 이후 "레거시, 화면을 가르지 말 것"이었다. 값 "super" 하나만
+// 위 용도로 다시 쓴다 — 지정 계정의 역할을 SUPER_ADMIN 으로 올리면 API 권한까지 열리기 때문이다.
+// 다른 값(staff · sales · marketing · cs · lead · branch)은 여전히 아무것도 가르지 않는다.
+//
+// ── 2026-09-10 전면 공개 전환 (전체 사이드바의 규칙 · 차단을 걷어낸 근거) ────────────
 // 프리셋별 차등 노출(NAV_PRESETS·MOON_ONLY_HREFS·RESTRICTED_HREFS)과 "차단(deny)" 배치를
-// 걷어냈다. 이제 **모든 매니저가 같은 사이드바를 본다**. 근거:
+// 걷어냈다. 그때는 **모든 매니저가 같은 사이드바를 봤다**(2026-11-20 부터는 위 단락). 근거:
 //
 //  1. nav 는 보안 경계가 아니다. 이 파일 위쪽에 있던 경고문 그대로 — 실제 데이터 접근은 각
 //     API 의 verifyAdmin()/requireVerifiedAdminContext() 역할 검사와 capability 가 강제한다
@@ -26,8 +68,9 @@
 //    ⌘K 명령 목록·active 판정의 형제 목록·모바일 헤더 라벨이 이 집합에 기대고 있다.
 //  - 숨긴 탭도 주소와 ⌘K 로 그대로 열리고, 그 화면에 있으면 사이드바가 "숨긴 탭" 묶음을
 //    펼쳐 현재 위치를 보여준다.
-//  - Overview 는 숨길 수 없다(UNHIDEABLE_NAV_HREFS) — 로그인·/admin 이 전원을 그리로 보낸다.
-//  - 거의 안 쓰는 탭 몇 개는 전원 기본값이 숨김이다(DEFAULT_HIDDEN_HREFS). 사람이 "다시
+//  - 그 계정의 착지 화면은 숨길 수 없다(isNavHideable) — 전체 계정은 Overview, 간소 계정은
+//    매출 장부다. 로그인·/admin 이 그 계정을 그리로 보낸다(resolveAdminLandingHref).
+//  - 거의 안 쓰는 탭 몇 개는 전체 계정의 기본값이 숨김이다(DEFAULT_HIDDEN_HREFS). 사람이 "다시
 //    표시"하면 그 사람 nav_overrides 에 자리(folded/primary)가 저장된다.
 // 사이드바는 렌더 자리(NavPlacement)만 알고, 숨김 여부는 ResolvedNavAccess.hidden 으로 받는다.
 //
@@ -39,8 +82,10 @@
 //    "shown" 은 전원 기본 숨김 탭을 되살릴 때만 저장된다(기본값과 같으면 키를 지운다).
 //  - 숨길 수 없는 탭: CRM 진입 탭 3개(현황·고객DB(통합)·검수). 전원 기본 숨김: 기록·입력함·
 //    고객DB›태그(30일 사람 쓰기 0, 역할 무관).
-//  - 도달성은 그대로다: 숨긴 하위 탭도 ⌘K(두 팔레트 모두 정적 목록)·주소·맥락 딥링크로 열리고,
-//    그 화면에 있으면 탭 줄이 그 탭을 강제로 보인다.
+//  - 도달성은 그대로다: 숨긴 하위 탭도 ⌘K(두 팔레트 모두 CRM 하위 명령은 정적 목록 — crm: 키로
+//    거르지 않는다)·주소·맥락 딥링크로 열리고, 그 화면에 있으면 탭 줄이 그 탭을 강제로 보인다.
+//    (2026-11-20 간소 계정은 CRM 최상위 탭이 숨김이면 그 자식 명령이 통째로 빠진다 — crm: 키와는
+//    다른 축이다.)
 //  - 최상위 판정 함수는 ADMIN_NAV href 키만 읽으므로 crm: 키는 사이드바 배치에 영향을 주지 않는다
 //    (accessible 17 불변식 그대로 — tests/admin/nav-crm-subnav.test.ts).
 //  - 모르는 네임스페이스 키는 정규화가 버린다 — 저장 키 수가 레지스트리 크기로 상한된다.
@@ -83,14 +128,29 @@ export type NavOverrideValue = NavPreference | CrmSubnavPreference
 export type NavOverrides = Record<string, NavOverrideValue>
 
 /**
- * 숨길 수 없는 항목. 로그인(app/admin/login/page.tsx)과 /admin(app/admin/page.tsx)이 전원을
- * 이 경로로 보낸다 — 숨길 수 있으면 "로그인하자마자 사이드바에 없는 화면"이 된다.
- * 정규화가 이 항목의 "hidden" 을 지우고, 편집기는 숨김 선택지를 비활성화한다.
+ * 착지 화면 — 로그인(app/admin/login/page.tsx)과 /admin(app/admin/page.tsx)이 계정을 보내는 곳.
+ * 두 진입점은 이 상수를 직접 읽지 않고 resolveAdminLandingHref 만 부른다.
+ *
+ * 착지 화면은 그 계정에게 숨길 수 없다(isNavHideable) — 숨길 수 있으면 "로그인하자마자
+ * 사이드바에 없는 화면"이 된다. 2026-11-19 까지는 고정 목록 UNHIDEABLE_NAV_HREFS(["/admin/overview"])
+ * 였다. 상수를 지운 것은 의도다 — "Overview 는 누구에게나 숨김 불가"를 전제한 코드가 컴파일
+ * 단계에서 드러나야 한다.
  */
-export const UNHIDEABLE_NAV_HREFS: readonly string[] = ["/admin/overview"]
+export const FULL_NAV_LANDING_HREF = "/admin/overview"
+export const SIMPLE_NAV_LANDING_HREF = "/admin/branch/ledger"
 
 /**
- * 전원 기본값이 숨김인 항목 — 거의 안 쓰는 탭(2026-09-24 운영 조사).
+ * 간소 사이드바의 상시 항목 — 매출 장부 · 견적·문서(2026-11-20 S1). 그 밖은 전부 기본 숨김이다.
+ * 탭을 다시 꺼낼 때(S2) 여기에 href 를 더한다. 두 가지를 지킬 것(테스트가 고정한다):
+ *  - SIMPLE_NAV_LANDING_HREF 가 이 목록에 있어야 한다.
+ *  - 전부 DEFAULT_PRIMARY_HREFS 안에 있어야 한다 — "보일 때 앉는 자리"를 전체/간소가 같은 표로
+ *    읽으므로(resolveDefaultNavPlacement), 기타 자리의 항목을 넣으면 간소 사이드바에 "기타"
+ *    묶음이 생긴다.
+ */
+export const SIMPLE_NAV_PRIMARY_HREFS: readonly string[] = [SIMPLE_NAV_LANDING_HREF, "/admin/quotes"]
+
+/**
+ * 전체 계정의 기본값이 숨김인 항목 — 거의 안 쓰는 탭(2026-09-24 운영 조사).
  *  - 운영 상태: 설정 › 외부 연동과 같은 API(/api/admin/settings/integrations/status)를 읽는다.
  *    60일 커밋 0·인바운드 0.
  * (마케팅 프로젝트도 2026-09-25 부터 여기 있었으나, 2026-10 캠페인 관리의 "프로젝트" 탭으로 합쳐지며
@@ -100,11 +160,12 @@ export const UNHIDEABLE_NAV_HREFS: readonly string[] = ["/admin/overview"]
 export const DEFAULT_HIDDEN_HREFS: readonly string[] = ["/admin/ops"]
 
 /**
- * 레거시 프리셋 키. 배치에는 더 이상 영향을 주지 않지만 두 가지 이유로 타입을 남긴다.
+ * nav_preset 컬럼의 키. **"super" 하나만 뜻이 있다** — 전체 사이드바 지정(hasFullAdminNav,
+ * 2026-11-20). 나머지 여섯은 레거시이고 아무것도 가르지 않지만 두 가지 이유로 타입을 남긴다.
  *  - admin_profiles.nav_preset 컬럼과 20260729 마이그레이션의 CHECK 제약이 이 값들을 그대로
  *    허용한다. 타입을 지우면 기존 행(sales·branch 등)을 읽는 API 가 400 을 내기 시작한다.
  *  - 컬럼 자체를 드롭하는 마이그레이션은 되돌리기 어려워 별도 결정으로 미룬다.
- * 새 코드에서 이 키로 화면을 갈라서는 안 된다.
+ * 새 코드에서 이 키를 직접 비교해 화면을 갈라서는 안 된다 — 판정은 hasFullAdminNav 하나다.
  */
 export type NavPresetKey = "staff" | "sales" | "marketing" | "cs" | "lead" | "branch" | "super"
 
@@ -119,7 +180,8 @@ const NAV_PRESET_KEYS: readonly NavPresetKey[] = [
 ]
 
 /**
- * 전원 공통 상시 목록 — "자주 쓰는 것만 위로, 나머지는 기타".
+ * 전체 계정의 상시 목록 — "자주 쓰는 것만 위로, 나머지는 기타". 간소 계정에게는 "다시 표시한
+ * 탭이 앉는 자리" 표로만 쓰인다(resolveDefaultNavPlacement).
  *
  * ADMIN_NAV 선언 순서가 이미 범주 연속 블록(home → customer → growth → system)이라,
  * 이 목록은 앞의 두 범주(홈 + 고객·매출)에 콘텐츠 하나를 더 집어 든 것이다. 필터는 선언 순서를
@@ -155,6 +217,18 @@ export const DEFAULT_PRIMARY_HREFS: readonly string[] = [
   "/admin/blog",
 ]
 
+/** 전체 사이드바 지정에 쓰는 nav_preset 값. 설정 › 회원의 "전체 사이드바" 토글이 이 값을 쓴다. */
+export const FULL_NAV_PRESET: NavPresetKey = "super"
+
+/**
+ * 전체/간소 판정에 필요한 최소 컨텍스트. preset 은 DB·세션의 원본 문자열을 그대로 받는다 —
+ * "super" 가 아닌 값(레거시 sales·branch, 빈 문자열, 모르는 값)은 전부 간소다.
+ */
+export interface NavAudienceContext {
+  role: string
+  preset?: string | null
+}
+
 /**
  * 전체 사이드바를 보는 계정인지 — 2026-11-20 결정(docs/active/sales-workspace-simplification-plan-2026-11-20.md D1).
  *
@@ -166,9 +240,21 @@ export const DEFAULT_PRIMARY_HREFS: readonly string[] = [
  * 보안 경계가 아니다. 간소 계정도 주소로는 모든 화면에 들어가고, 데이터는 각 API 가 막는다(D2).
  * 사이드바·⌘K·화면 안 탭(견적·문서, 매출 장부 렌즈)이 같은 기준을 쓰도록 판정을 여기 한 곳에 둔다.
  */
-export function hasFullAdminNav(ctx: { role: string; preset?: string | null }): boolean {
+export function hasFullAdminNav(ctx: NavAudienceContext): boolean {
   if (normalizeAdminRole(ctx.role) === "SUPER_ADMIN") return true
-  return ctx.preset === "super"
+  return ctx.preset === FULL_NAV_PRESET
+}
+
+/**
+ * 로그인 · /admin 이 그 계정을 보내는 화면. 전체 → Overview, 간소 → 매출 장부(2026-11-20 S3).
+ *
+ * 착지를 정하는 곳은 여기 하나다. 이 함수가 돌려준 경로는 그 계정에게 숨길 수 없으므로
+ * (isNavHideable) 개인 오버라이드가 무엇이든 착지 화면은 사이드바에 있다 — 오버라이드를 인자로
+ * 받지 않는 이유다. 세션을 모르는 호출부는 FULL_NAV_LANDING_HREF 로 떨어지면 된다(주소 진입은
+ * 막히지 않고, 미인증이면 proxy 가 로그인으로 돌린다).
+ */
+export function resolveAdminLandingHref(ctx: NavAudienceContext): string {
+  return hasFullAdminNav(ctx) ? FULL_NAV_LANDING_HREF : SIMPLE_NAV_LANDING_HREF
 }
 
 export function isNavPresetKey(value: unknown): value is NavPresetKey {
@@ -188,9 +274,9 @@ export function isCrmSubnavPreference(value: unknown): value is CrmSubnavPrefere
   return value === "hidden" || value === "shown"
 }
 
-/** 이 항목을 숨길 수 있는지 — Overview(로그인 착지)만 불가. */
-export function isNavHideable(href: string): boolean {
-  return !UNHIDEABLE_NAV_HREFS.includes(href)
+/** 이 계정이 이 항목을 숨길 수 있는지 — 그 계정의 착지 화면만 불가(전체: Overview, 간소: 매출 장부). */
+export function isNavHideable(href: string, ctx: NavAudienceContext): boolean {
+  return href !== resolveAdminLandingHref(ctx)
 }
 
 /**
@@ -205,7 +291,11 @@ export function isNavHideable(href: string): boolean {
  * folded 로 강등하면 deny 가 남아 있던 사람만 그 항목이 기타에 "보이게" 돼, 숨기려던 제한이
  * 오히려 노출로 뒤집힌다. 키를 버려도 hidden 을 저장하는 것이 아니다(본인 선택으로 위장하지 않음).
  *
- * "hidden" 은 보존하되 숨길 수 없는 항목(UNHIDEABLE_NAV_HREFS)의 hidden 은 키째 지운다.
+ * "hidden" 은 보존하되 Overview 의 hidden 은 키째 지운다. 정규화는 계정을 모르므로(저장 라우트
+ * 세 곳이 계정 없이 부른다) 누구에게도 뜻이 없는 값만 지운다 — 전체 계정에게 Overview 는 숨길 수
+ * 없고, 간소 계정에게는 기본값이 이미 숨김이라 키가 없어도 같은 결과다. 간소 계정의 착지(매출
+ * 장부) hidden 은 전체 계정에게는 정당한 선택이라 여기서 지우지 않고, resolveNavPreference 가
+ * 계정을 보고 무시한다(역할·지정이 나중에 바뀌어도 저장값을 고칠 필요가 없다).
  *
  * 네임스페이스 키("/" 로 시작하지 않는 키)는 먼저 갈라 처리한다. `crm:<href>` 는 레지스트리
  * (CRM_SUBNAV_PREFERENCE_ITEMS)에 있는 숨길 수 있는 탭이고 값이 hidden|shown 일 때만 보존하고,
@@ -229,7 +319,7 @@ export function normalizeNavOverrides(value: unknown): NavOverrides {
     if (!known.has(href)) continue
     if (isNavPlacement(placement)) result[href] = placement
     else if (placement === "hidden") {
-      if (isNavHideable(href)) result[href] = "hidden"
+      if (href !== FULL_NAV_LANDING_HREF) result[href] = "hidden"
     } else if (placement === "deny") {
       if (!DEFAULT_HIDDEN_HREFS.includes(href)) result[href] = "folded"
     }
@@ -238,42 +328,58 @@ export function normalizeNavOverrides(value: unknown): NavOverrides {
   return result
 }
 
-export interface NavAccessContext {
-  /** resolveAdminNavAccess가 normalizeAdminRole을 적용한다. 배치에는 영향을 주지 않는다. */
+export interface NavAccessContext extends NavAudienceContext {
+  /**
+   * 역할. SUPER_ADMIN 이면 전체 사이드바다(hasFullAdminNav). 그 밖의 역할끼리는 배치가 갈리지
+   * 않는다 — 레거시 소문자 값은 hasFullAdminNav 가 normalizeAdminRole 로 읽는다.
+   */
   role: string
-  /** 레거시 컬럼값. 배치에 더 이상 영향을 주지 않는다 — 호출부 시그니처 호환용으로만 받는다. */
-  preset?: NavPresetKey | null
+  /**
+   * admin_profiles.nav_preset 원본값. **"super" 면 전체 사이드바**(지정 계정, 2026-11-20)이고
+   * 그 밖의 값·null·생략은 역할만으로 판정한다. 호출부가 이 값을 빠뜨리면 지정 계정이 간소로
+   * 떨어진다 — 세션의 navPreset 을 그대로 넘길 것.
+   */
+  preset?: string | null
   /** crm: 키가 섞여 있어도 된다 — 최상위 판정은 ADMIN_NAV href 키만 읽는다. */
   overrides: Readonly<NavOverrides>
 }
 
-/** 오버라이드가 없을 때 보이면 앉는 전원 공통 기본 자리(숨김과 무관). */
+/**
+ * 보이면 앉는 기본 자리(숨김과 무관). 전체/간소가 같은 표를 읽는다 — 간소 계정이 탭을 되살리면
+ * 전체 계정에서 그 탭이 앉는 자리로 간다. 그래서 저장된 자리(primary/folded)의 뜻이 계정의
+ * 전체/간소가 바뀌어도 달라지지 않는다.
+ */
 function resolveDefaultNavPlacement(href: string): NavPlacement {
   return DEFAULT_PRIMARY_HREFS.includes(href) ? "primary" : "folded"
 }
 
 /**
- * 오버라이드가 없을 때의 전원 공통 기본값 — 기본 숨김 → 상시 → 기타 순으로 판정.
- * setNavOverride 의 "기본과 같으면 키 삭제" 기준이기도 하다.
+ * 오버라이드가 없을 때 그 계정의 기본값. setNavOverride 의 "기본과 같으면 키 삭제" 기준이기도 하다.
+ *  - 착지 화면은 항상 보인다(숨김 불가).
+ *  - 전체 계정: 기본 숨김(DEFAULT_HIDDEN_HREFS) → 상시 → 기타.
+ *  - 간소 계정: SIMPLE_NAV_PRIMARY_HREFS 만 보이고 나머지는 전부 숨김.
  */
-export function resolveDefaultNavPreference(href: string): NavPreference {
-  if (DEFAULT_HIDDEN_HREFS.includes(href) && isNavHideable(href)) return "hidden"
-  return resolveDefaultNavPlacement(href)
+export function resolveDefaultNavPreference(href: string, ctx: NavAudienceContext): NavPreference {
+  if (!isNavHideable(href, ctx)) return resolveDefaultNavPlacement(href)
+  const hiddenByDefault = hasFullAdminNav(ctx)
+    ? DEFAULT_HIDDEN_HREFS.includes(href)
+    : !SIMPLE_NAV_PRIMARY_HREFS.includes(href)
+  return hiddenByDefault ? "hidden" : resolveDefaultNavPlacement(href)
 }
 
 /**
- * 한 항목의 최종 선호 — 사람별 예외가 있으면 그것, 없으면 전원 공통 기본값.
- * 역할·프리셋은 판정에 쓰이지 않는다(전면 공개). 숨길 수 없는 항목의 hidden 은 무시한다
- * (정규화를 거치지 않은 컨텍스트가 들어와도 Overview 가 사라지지 않게).
+ * 한 항목의 최종 선호 — 사람별 예외가 있으면 그것, 없으면 그 계정의 기본값(전체/간소).
+ * 숨길 수 없는 항목(그 계정의 착지)의 hidden 은 무시한다 — 정규화를 거치지 않은 컨텍스트가
+ * 들어오거나, 전체 계정일 때 매출 장부를 숨겼던 사람이 간소 계정이 돼도 착지가 사라지지 않게.
  */
 export function resolveNavPreference(href: string, ctx: NavAccessContext): NavPreference {
   const override = ctx.overrides[href]
   if (isNavPreference(override)) {
-    if (override === "hidden" && !isNavHideable(href)) return resolveDefaultNavPlacement(href)
+    if (override === "hidden" && !isNavHideable(href, ctx)) return resolveDefaultNavPlacement(href)
     return override
   }
 
-  return resolveDefaultNavPreference(href)
+  return resolveDefaultNavPreference(href, ctx)
 }
 
 /** 내 사이드바 목록에서 치워졌는지. 도달성과는 무관하다. */
@@ -294,20 +400,24 @@ export function resolveNavPlacement(href: string, ctx: NavAccessContext): NavPla
 
 /**
  * 한 항목의 선호를 바꾼 새 오버라이드를 돌려준다(원본은 건드리지 않는다).
- * 결과가 전원 공통 기본값과 같으면 키를 지운다 — 불필요한 예외가 쌓이면 읽기 어렵고, 기본값이
+ * 결과가 **그 계정의** 기본값과 같으면 키를 지운다 — 불필요한 예외가 쌓이면 읽기 어렵고, 기본값이
  * 나중에 바뀌어도 그 사람에게 전달되지 않는다. 모르는 href·숨길 수 없는 항목의 hidden 은 무시한다.
  * 다른 키(crm: 하위 탭 포함)는 그대로 복사된다 — 사이드바 "다시 표시"가 CRM 선택을 지우지 않는다.
+ *
+ * audience 는 오버라이드의 주인이다(편집하는 사람이 아니다) — 설정 › 회원에서 최고 관리자가 간소
+ * 계정을 고칠 때는 그 회원의 역할·지정을 넘긴다.
  */
 export function setNavOverride(
   overrides: Readonly<NavOverrides>,
   href: string,
-  next: NavPreference
+  next: NavPreference,
+  audience: NavAudienceContext
 ): NavOverrides {
   const draft: NavOverrides = { ...overrides }
   if (!ADMIN_NAV.some((item) => item.href === href)) return draft
-  if (next === "hidden" && !isNavHideable(href)) return draft
+  if (next === "hidden" && !isNavHideable(href, audience)) return draft
 
-  if (next === resolveDefaultNavPreference(href)) delete draft[href]
+  if (next === resolveDefaultNavPreference(href, audience)) delete draft[href]
   else draft[href] = next
 
   return draft
@@ -317,11 +427,11 @@ export interface NavPreferenceRow {
   item: AdminNavItem
   /** 지금 선택된 값(숨김 포함). */
   preference: NavPreference
-  /** 전원 공통 기본값. */
+  /** 그 계정의 기본값(전체/간소). */
   base: NavPreference
   /** 기본과 다른지 — 편집기의 "예외" 표시. */
   isException: boolean
-  /** 숨김 선택지를 열어도 되는지(Overview 는 false). */
+  /** 숨김 선택지를 열어도 되는지(그 계정의 착지 화면은 false). */
   hideable: boolean
 }
 
@@ -329,13 +439,13 @@ export interface NavPreferenceRow {
 export function buildNavPreferenceRows(ctx: NavAccessContext): NavPreferenceRow[] {
   return ADMIN_NAV.map((item) => {
     const preference = resolveNavPreference(item.href, ctx)
-    const base = resolveDefaultNavPreference(item.href)
+    const base = resolveDefaultNavPreference(item.href, ctx)
     return {
       item,
       preference,
       base,
       isException: preference !== base,
-      hideable: isNavHideable(item.href),
+      hideable: isNavHideable(item.href, ctx),
     }
   })
 }
@@ -346,6 +456,12 @@ export interface FoldedNavGroup {
 }
 
 export interface ResolvedNavAccess {
+  /**
+   * 전체 사이드바 계정인지(hasFullAdminNav). false(간소)면 사이드바는 "숨긴 탭 N" 묶음과
+   * "사이드바 편집" 진입점을 그리지 않고, ⌘K 는 hidden 의 탭과 그 자식 명령을 뺀다. 사이드바 ·
+   * 팔레트 · 미리보기가 각자 판정하면 어긋나므로 여기서 한 번만 계산한다.
+   */
+  fullNav: boolean
   /** 상시 항목 — ADMIN_NAV 선언 순서 그대로(렌더에서 재정렬하지 않는다). */
   primary: AdminNavItem[]
   /**
@@ -355,16 +471,16 @@ export interface ResolvedNavAccess {
    */
   primaryGroups: FoldedNavGroup[]
   /**
-   * 상시 목록에 범주 소제목을 렌더할지 — 2범주 이상 + 4항목 이상일 때만.
-   * 항목보다 헤더가 많아지는 꼴을 피한다. 사이드바·권한 미리보기가 각자 판단하면
-   * 어긋나므로 여기서 한 번만 계산한다.
+   * 상시 목록에 범주 소제목을 렌더할지 — 전체 계정이고 2범주 이상 + 4항목 이상일 때만.
+   * 항목보다 헤더가 많아지는 꼴을 피한다. 간소 계정은 항상 false 다(2026-11-20 — 되살린 탭이
+   * 늘어도 평평한 목록이다). 사이드바·권한 미리보기가 각자 판단하면 어긋나므로 여기서 한 번만 계산한다.
    */
   showPrimaryHeaders: boolean
   folded: FoldedNavGroup[]
   /**
    * 내 목록에서 숨긴 항목 — ADMIN_NAV 선언 순서. primary·folded 어디에도 들어가지 않는다.
-   * 사이드바는 기타 아래 "숨긴 탭 N" 묶음으로만 보여준다. 도달성은 그대로다
-   * (getAccessibleAdminNavItems 가 이 목록까지 포함한다).
+   * 전체 계정의 사이드바는 기타 아래 "숨긴 탭 N" 묶음으로 보여주고, 간소 계정에게는 그리지
+   * 않는다(fullNav). 도달성은 어느 쪽이든 그대로다(getAccessibleAdminNavItems 가 이 목록까지 포함한다).
    */
   hidden: AdminNavItem[]
 }
@@ -406,11 +522,13 @@ export function resolveNavAccess(
   }
 
   const primaryGroups = groupNavByCategory(primary)
+  const fullNav = hasFullAdminNav(ctx)
 
   return {
+    fullNav,
     primary,
     primaryGroups,
-    showPrimaryHeaders: primary.length >= 4 && primaryGroups.length >= 2,
+    showPrimaryHeaders: fullNav && primary.length >= 4 && primaryGroups.length >= 2,
     folded: groupNavByCategory(foldedItems),
     hidden,
   }
@@ -419,10 +537,10 @@ export function resolveNavAccess(
 /**
  * 실제 사용자 컨텍스트용 단일 진입점.
  *
- * 2026-09-10 이후 여기서 항목을 걸러내지 않는다 — 모든 매니저가 같은 목록을 보고, 개인
- * 예외는 상시/기타 자리를 옮기거나 내 목록에서 숨길(hidden) 뿐이다. 숨긴 항목도 결과의
- * hidden 에 남는다. role 은 정규화만 해서 넘기며(레거시 소문자·대문자 혼재 대비) 배치 판정에는
- * 쓰이지 않는다.
+ * 여기서 항목을 걸러내지 않는다 — 결과의 primary · folded · hidden 을 합치면 항상 ADMIN_NAV
+ * 전체다. role · preset 은 기본값(전체/간소, 2026-11-20)만 가르고, 개인 예외는 그 위에서 상시/기타
+ * 자리를 옮기거나 내 목록에서 숨길(hidden) 뿐이다. role 은 정규화해서 넘긴다(레거시 소문자·대문자
+ * 혼재 대비).
  */
 export function resolveAdminNavAccess(ctx: NavAccessContext): ResolvedNavAccess {
   return resolveNavAccess(
@@ -438,9 +556,11 @@ export function resolveAdminNavAccess(ctx: NavAccessContext): ResolvedNavAccess 
 /**
  * 도달 가능한 항목을 ADMIN_NAV 선언 순서로 되돌린다.
  *
- * **불변식: 숨긴 항목까지 포함해 항상 ADMIN_NAV 전체와 같은 집합이다.** 커맨드 팔레트 명령
- * 목록, active 판정의 형제 목록(nav-active.ts), 모바일 헤더 라벨이 이 집합에 기댄다 — 여기서
- * 숨긴 항목을 빼면 숨긴 탭이 ⌘K 에서 사라지고, 그 화면에 있을 때 헤더가 엉뚱한 이름을 낸다.
+ * **불변식: 숨긴 항목까지 포함해 항상 ADMIN_NAV 전체와 같은 집합이다 — 간소 계정에서도.**
+ * 전체 계정의 커맨드 팔레트 명령 목록, active 판정의 형제 목록(nav-active.ts), 모바일 헤더
+ * 라벨이 이 집합에 기댄다 — 여기서 숨긴 항목을 빼면 주소로 들어간 화면의 헤더가 엉뚱한 이름을
+ * 낸다. 간소 계정의 ⌘K 가 숨긴 탭을 빼는 것은 팔레트가 이 함수 **밖에서** 거른다
+ * (getPaletteAdminNavItems) — 이 함수의 반환을 좁혀서 해결하지 말 것.
  * 사이드바 목록에 그릴 항목이 필요하면 getVisibleAdminNavItems 를 쓴다.
  */
 export function getAccessibleAdminNavItems(access: ResolvedNavAccess): AdminNavItem[] {
@@ -464,6 +584,17 @@ export function getVisibleAdminNavItems(access: ResolvedNavAccess): AdminNavItem
   ])
 
   return ADMIN_NAV.filter((item) => visibleHrefs.has(item.href))
+}
+
+/**
+ * ⌘K 명령 목록의 숙주가 되는 최상위 항목 — ADMIN_NAV 선언 순서.
+ *  - 전체 계정: 숨긴 항목까지 전부(2026-09-25 규칙 그대로 — 숨긴 탭도 ⌘K 로 찾는다).
+ *  - 간소 계정: 목록에 보이는 항목만(2026-11-20 D2 — ⌘K 명령 목록은 "눈에 보이는 목록"이다).
+ *    본인 예외로 되살린 탭은 보이는 항목이므로 함께 나온다.
+ * 두 팔레트(AdminCommandPalette · crm/CrmCommandPalette)가 이 함수 하나로 거른다.
+ */
+export function getPaletteAdminNavItems(access: ResolvedNavAccess): AdminNavItem[] {
+  return access.fullNav ? getAccessibleAdminNavItems(access) : getVisibleAdminNavItems(access)
 }
 
 // ── CRM 하위 탭 개인 숨김(2026-09-25) ───────────────────────────────────────────

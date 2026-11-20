@@ -11,7 +11,7 @@ import {
   type AdminNavItem,
 } from "./admin-nav"
 import {
-  getAccessibleAdminNavItems,
+  getPaletteAdminNavItems,
   normalizeNavOverrides,
   resolveAdminNavAccess,
   type NavAccessContext,
@@ -41,6 +41,8 @@ export { ADMIN_OPEN_NAV_EDITOR_EVENT }
 
 export interface AdminCommandPaletteAccessProps {
   role: string
+  /** 셸 세션의 nav_preset — "super" 면 전체 사이드바 지정 계정이다(admin-nav-access hasFullAdminNav). */
+  navPreset?: string | null
   navOverrides: Record<string, string>
 }
 
@@ -133,7 +135,9 @@ const PALETTE_CHILD_COMMANDS: Record<string, Array<Omit<AdminCommand, "group">>>
   ],
 }
 
-// 이동이 아닌 셸 동작 — nav 항목과 무관하게 항상 목록 끝(운영·시스템 그룹)에 붙는다.
+// 이동이 아닌 셸 동작 — nav 항목과 무관하게 목록 끝(운영·시스템 그룹)에 붙는다.
+// 전체 사이드바 계정에게만 방출한다(2026-11-20) — 간소 계정에게는 "사이드바 편집" 진입점을 눈에
+// 보이는 목록 어디에도 두지 않는다(사이드바 버튼과 같은 기준, resolveAdminCommands).
 const PALETTE_ACTION_COMMANDS: Array<Omit<AdminCommand, "group">> = [
   {
     label: "내 사이드바 편집",
@@ -148,7 +152,10 @@ const TOP_LEVEL_NAV_HREFS = new Set(ADMIN_NAV.map((item) => item.href))
 
 // 어드민 전역 이동·검색 대상 — 사이드바 nav(admin-nav SSOT)에서 파생.
 // 그룹은 사이드바 섹션 라벨과 동일해 사이드바와 팔레트의 IA가 항상 일치한다.
-function buildAdminCommands(items: readonly AdminNavItem[]): AdminCommand[] {
+function buildAdminCommands(
+  items: readonly AdminNavItem[],
+  options: { includeActions: boolean } = { includeActions: true }
+): AdminCommand[] {
   const accessibleHrefs = new Set(items.map((item) => item.href))
 
   const navCommands = ADMIN_NAV_SECTIONS.flatMap((section) => {
@@ -163,6 +170,8 @@ function buildAdminCommands(items: readonly AdminNavItem[]): AdminCommand[] {
     ])
   })
 
+  if (!options.includeActions) return navCommands
+
   const actionGroup = ADMIN_NAV_SECTION_META.system.label
   return [...navCommands, ...PALETTE_ACTION_COMMANDS.map((command) => ({ group: actionGroup, ...command }))]
 }
@@ -171,20 +180,29 @@ function buildAdminCommands(items: readonly AdminNavItem[]): AdminCommand[] {
 export const ADMIN_COMMANDS: AdminCommand[] = buildAdminCommands(ADMIN_NAV)
 
 /**
- * 사이드바와 같은 배치 해석(전원 공통 기본 + 사람별 오버라이드)을 거친 명령 목록.
- * getAccessibleAdminNavItems 는 배치·숨김과 무관하게 ADMIN_NAV 전체를 돌려준다 — 그래서
- * 사이드바에서 숨긴 탭(기본 숨김 포함)도 ⌘K 에서는 계속 검색된다(command-palette.test.ts 고정).
- * CRM 하위 탭(crm: 키) 숨김도 마찬가지다 — 자식 명령(PALETTE_CHILD_COMMANDS)은 정적이라
- * 숨김으로 걸러지지 않는다(nav-crm-subnav.test.ts 고정).
+ * 사이드바와 같은 배치 해석(그 계정의 기본 + 사람별 오버라이드)을 거친 명령 목록.
+ *
+ * 전체 사이드바 계정: 배치·숨김과 무관하게 ADMIN_NAV 전체가 숙주다 — 사이드바에서 숨긴 탭(기본
+ * 숨김 포함)도 ⌘K 에서는 계속 검색된다(command-palette.test.ts 고정).
+ *
+ * 간소 사이드바 계정(2026-11-20 D2): ⌘K 명령 목록도 "눈에 보이는 목록"이라 숨긴 최상위 탭과 그
+ * 자식 명령(PALETTE_CHILD_COMMANDS)을 뺀다. 본인 예외로 되살린 탭은 다시 나온다. 주소 진입은
+ * 그대로다 — 거르는 곳은 여기(getPaletteAdminNavItems)이고, getAccessibleAdminNavItems 의
+ * "항상 ADMIN_NAV 전체" 불변식은 건드리지 않는다.
+ *
+ * CRM 하위 탭(crm: 키) 숨김은 어느 계정에서도 자식 명령을 거르지 않는다 — 그 목록은 정적이다
+ * (nav-crm-subnav.test.ts 고정).
  */
 export function resolveAdminCommands(ctx: NavAccessContext): AdminCommand[] {
-  return buildAdminCommands(getAccessibleAdminNavItems(resolveAdminNavAccess(ctx)))
+  const access = resolveAdminNavAccess(ctx)
+  return buildAdminCommands(getPaletteAdminNavItems(access), { includeActions: access.fullNav })
 }
 
 export default function AdminCommandPalette({
   open,
   onClose,
   role,
+  navPreset,
   navOverrides,
 }: AdminCommandPaletteProps) {
   const router = useRouter()
@@ -195,9 +213,10 @@ export default function AdminCommandPalette({
     () =>
       resolveAdminCommands({
         role,
+        preset: navPreset,
         overrides: normalizeNavOverrides(navOverrides),
       }),
-    [role, navOverrides]
+    [role, navPreset, navOverrides]
   )
 
   const filtered = useMemo(() => {

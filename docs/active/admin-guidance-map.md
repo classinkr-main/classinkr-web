@@ -10,7 +10,7 @@
 
 1. 저장소 공통 규칙: [AGENTS.md](../../AGENTS.md)
 2. Admin 역할·권한·데이터·상태 정책: [Admin OS 운영 결정](admin-os-operating-decisions-2026-07-11.md)
-3. 현재 탭 배치: [어드민 탭 재구성 스펙](admin-tab-restructure-2026-07-29.md) — 단 §5 권한 모델(프리셋별 차등 노출)은 2026-09-10 전면 공개 전환으로 폐기됐다. 배치 정본은 `components/admin/admin-nav-access.ts`의 `DEFAULT_PRIMARY_HREFS`다.
+3. 현재 탭 배치: [어드민 탭 재구성 스펙](admin-tab-restructure-2026-07-29.md) — 단 §5 권한 모델(프리셋별 차등 노출)은 2026-09-10 전면 공개 전환으로 폐기됐고, 2026-11-20부터 기본값이 전체/간소 둘로 갈린다(그 문서 §18). 배치 정본은 `components/admin/admin-nav-access.ts`다.
 4. 홈페이지·Admin 실행/배포 경계 변경: [홈페이지·Admin 실행 경계 분리 계획](site-admin-separation-plan-2026-08-28.md)
 5. 도메인 세부 기준: 아래 [작업 라우팅](#4-작업-라우팅)의 해당 문서와 스킬
 6. 현재 동작 확인: 실제 코드와 검증 결과
@@ -26,35 +26,53 @@
 | 관심사 | 코드 SSOT |
 | --- | --- |
 | 탭 목록·표시명·기본 역할 | `components/admin/admin-nav.ts` |
-| 상시/기타 배치·사람별 예외 | `components/admin/admin-nav-access.ts` |
+| 전체/간소 판정·상시/기타 배치·사람별 예외·로그인 착지 경로 | `components/admin/admin-nav-access.ts` |
 | active 판정 | `components/admin/nav-active.ts` |
 | 인증 컨텍스트·API 역할 묶음·capability | `lib/admin-auth.ts`, `lib/admin-capabilities.ts` |
 | 클라이언트 요청·캐시 | `lib/admin-client.ts` |
 | 관리자 API 응답 | `lib/admin-api-response.ts` |
 | 관리자 계정 조회 | `lib/repositories/admin-users.ts` |
 
-사이드바는 2026-09-10부터 **전원 동일**하다. 모든 관리자가 같은 탭에 도달하고, 배치만 정해진다 —
-상시 목록은 `components/admin/admin-nav-access.ts`의 `DEFAULT_PRIMARY_HREFS`, 전원 기본 숨김은
-`DEFAULT_HIDDEN_HREFS`, 나머지는 접힌 "기타"다. 개수는 이 문서에 적지 않는다 — 상수 위 주석이 정본이다.
+사이드바의 기본값은 2026-11-20부터 **전체 / 간소 둘**이다([매출 장부·견적·사이드바 간소화 기획](sales-workspace-simplification-plan-2026-11-20.md) W1).
+판정은 `admin-nav-access.ts`의 `hasFullAdminNav` 하나다 — 사이드바·⌘K·화면 안 탭이 이 함수만 쓴다.
+
+- **전체 사이드바**: `SUPER_ADMIN` 역할, 또는 `admin_profiles.nav_preset`이 `super`인 지정 계정. 상시 목록은
+  `DEFAULT_PRIMARY_HREFS`, 기본 숨김은 `DEFAULT_HIDDEN_HREFS`, 나머지는 접힌 "기타"다(2026-09-10 ~ 11-19의 전원 공통 사이드바 그대로).
+- **간소 사이드바**: 그 밖의 모든 계정. 상시는 `SIMPLE_NAV_PRIMARY_HREFS`(매출 장부 · 견적·문서)뿐이고 나머지는 전부 기본 숨김이다.
+  범주 소제목·"숨긴 탭 N" 묶음·"사이드바 편집" 진입점을 그리지 않는다.
+
+지정 계정은 역할을 올리지 않는다 — 역할은 API 권한이고 지정은 메뉴 표시다. 설정 › 회원의 사이드바 배치에서
+`SUPER_ADMIN`이 "전체 사이드바"를 켜고 끈다(`PATCH /api/admin/users`, 저장값 `nav_preset = "super"` 또는 `null`).
+`nav_preset`의 다른 값(`staff`·`sales`·`marketing`·`cs`·`lead`·`branch`)은 레거시이고 아무것도 가르지 않는다.
+
+개수는 이 문서에 적지 않는다 — 상수 위 주석이 정본이다.
 AI 올인원(`/admin/ai`)은 시안 스위치(`NEXT_PUBLIC_ADMIN_AI_PREVIEW=1`, `lib/admin-ai/preview.ts`)를 켰을 때만
-메뉴와 라우트에 생긴다(기본 꺼짐). 역할로 항목을 거르지 않으며 "차단(deny)" 배치는 타입에서 제거됐다.
+메뉴와 라우트에 생긴다(기본 꺼짐). 어느 계정에서도 항목을 걸러 막지 않으며 "차단(deny)" 배치는 타입에서 제거됐다 —
+간소 사이드바도 차단이 아니라 기본 숨김이다.
 마케팅 프로젝트는 2026-10 캠페인 관리(`/admin/campaigns/manage`)의 "프로젝트" 탭으로 합쳐져 사이드바 항목에서
 빠졌다(옛 주소 `/admin/campaigns/projects`는 `?view=projects`로 넘기는 스텁, ⌘K는 마케팅 허브 자식 명령).
 
-**배치는 두 자리(상시·기타) + 개인 숨김이다. 숨김은 도달성을 바꾸지 않는다** — 숨긴 탭도 ⌘K·주소로
-열리고, `getAccessibleAdminNavItems`는 항상 전체를 돌려준다(⌘K·active 판정·모바일 헤더가 의존).
-Overview는 로그인·`/admin` 착지 화면이라 숨길 수 없다(`UNHIDEABLE_NAV_HREFS`).
+**배치는 두 자리(상시·기타) + 숨김이다. 숨김은 메뉴와 눈에 보이는 목록에서만 적용되고 주소 진입을 막지 않는다** —
+`getAccessibleAdminNavItems`는 어느 계정에서든 항상 전체를 돌려준다(active 판정·모바일 헤더 라벨이 의존).
+⌘K 명령 목록은 계정에 따라 다르다: 전체 계정은 숨긴 탭도 ⌘K로 찾고, 간소 계정은 숨긴 최상위 탭과 그 자식 명령이
+빠진다(`getPaletteAdminNavItems` — 전역 팔레트와 CRM 팔레트가 함께 쓴다).
+
+**착지 화면과 숨김 판정은 같은 파일에 둔다.** 로그인(`app/admin/login/page.tsx`)과 `/admin`(`app/admin/page.tsx`)은
+`resolveAdminLandingHref`만 부른다 — 전체 계정은 Overview, 간소 계정은 매출 장부다. 그 계정의 착지 화면은 숨길 수
+없다(`isNavHideable`). 2026-09-10 전환의 직접 원인이 "로그인은 전원을 Overview로 보내는데 그 화면이 일부 역할에게
+막혀 있던" 것이었다 — 착지 경로를 다른 파일에 글자로 박지 않는다.
 
 `admin_profiles.nav_overrides`(`primary`·`folded`·`hidden`)는 그 자리를 사람별로 바꾸는 취향 설정이다.
 CRM 하위 탭은 같은 컬럼에 `crm:<href>` 키(`hidden`·`shown`)로 저장한다 — 기록·입력함·태그가 전원 기본 숨김이고,
 현황·고객DB(통합)·검수는 숨길 수 없다([탭 재구성 §16](admin-tab-restructure-2026-07-29.md)).
-본인은 사이드바의 "사이드바 편집"(또는 ⌘K "내 사이드바 편집", `PATCH /api/admin/me/nav`)으로,
-SUPER_ADMIN은 설정 › 회원으로 편집한다. 레거시 `deny` 값은 `folded`로 읽는다(숨김으로 옮기지 않는다).
-`nav_preset` 컬럼은 레거시다 — 값은 검증만 하고 화면을 가르지 않는다.
+전체 사이드바 계정은 사이드바의 "사이드바 편집"(또는 ⌘K "내 사이드바 편집", `PATCH /api/admin/me/nav`)으로 본인이 편집하고,
+간소 사이드바 계정의 배치는 `SUPER_ADMIN`이 설정 › 회원에서 편집한다(개인 예외는 간소 기본값을 이긴다).
+레거시 `deny` 값은 `folded`로 읽는다(숨김으로 옮기지 않는다).
 
 실제 보안 경계는 각 API의 `verifyAdmin()` 또는 `requireVerifiedAdminContext()` 역할 검사와
 필요한 capability 검사다. 탭이 보인다고 데이터가 열리는 것이 아니며, 권한이 없는 역할은
-화면에 들어가도 API가 403으로 막는다.
+화면에 들어가도 API가 403으로 막는다. 반대로 탭을 숨겼다고 데이터가 닫히는 것도 아니다 —
+전체/간소 구분과 `nav_preset`·`nav_overrides`를 접근 통제로 쓰지 않는다.
 
 ## 3. 계정과 권한
 

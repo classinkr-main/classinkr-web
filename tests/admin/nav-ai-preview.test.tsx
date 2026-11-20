@@ -49,8 +49,10 @@ vi.mock("@/components/admin/ai/AdminAiWorkspace", () => ({
   },
 }))
 
+// 전체 사이드바 계정 기준 — 간소 계정(2026-11-20)에게는 Overview 도 AI 올인원도 기본 숨김이다
+// (그쪽은 아래 "간소 사이드바 계정" 테스트가 본다).
 const SESSION: AdminShellSession = {
-  role: "ADMIN",
+  role: "SUPER_ADMIN",
   name: "테스터",
   email: "t@classin.com",
   navPreset: null,
@@ -74,7 +76,7 @@ type Loaded = Awaited<ReturnType<typeof loadWithFlag>>
 
 function renderSidebar({ AdminSidebar }: Loaded) {
   return renderToStaticMarkup(
-    <AdminSidebar role="ADMIN" name="테스터" email="t@classin.com" navOverrides={{}} />
+    <AdminSidebar role="SUPER_ADMIN" name="테스터" email="t@classin.com" navOverrides={{}} />
   )
 }
 
@@ -194,7 +196,7 @@ describe("켜짐(NEXT_PUBLIC_ADMIN_AI_PREVIEW=1) — 시안 미리보기", () =>
     const { access } = await loadWithFlag("1")
     expect(access.DEFAULT_PRIMARY_HREFS).toHaveLength(11)
     expect(access.DEFAULT_PRIMARY_HREFS[1]).toBe("/admin/ai")
-    const resolved = access.resolveAdminNavAccess({ role: "ADMIN", overrides: {} })
+    const resolved = access.resolveAdminNavAccess({ role: "SUPER_ADMIN", overrides: {} })
     expect(resolved.primary).toHaveLength(11)
     expect(resolved.primaryGroups[0]?.items.map((item) => item.href)).toEqual([
       "/admin/overview",
@@ -202,6 +204,15 @@ describe("켜짐(NEXT_PUBLIC_ADMIN_AI_PREVIEW=1) — 시안 미리보기", () =>
     ])
     expect(resolved.folded.flatMap((group) => group.items)).toHaveLength(5)
     expect(resolved.hidden).toHaveLength(1)
+    expect(access.getAccessibleAdminNavItems(resolved).map((item) => item.href)).toContain("/admin/ai")
+  })
+
+  it("간소 사이드바 계정에게는 켜져 있어도 기본 숨김이다 — 상시는 장부·견적 둘", async () => {
+    const { access } = await loadWithFlag("1")
+    const resolved = access.resolveAdminNavAccess({ role: "ADMIN", overrides: {} })
+    expect(resolved.primary.map((item) => item.href)).toEqual(["/admin/branch/ledger", "/admin/quotes"])
+    expect(resolved.hidden.map((item) => item.href)).toContain("/admin/ai")
+    // 숨김은 목록 정리일 뿐이다 — 도달 가능한 집합에는 그대로 있다.
     expect(access.getAccessibleAdminNavItems(resolved).map((item) => item.href)).toContain("/admin/ai")
   })
 

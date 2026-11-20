@@ -25,7 +25,8 @@ describe("⌘K child fallback when a surface leaves the sidebar SSOT", () => {
     ["/admin/campaigns/manage", "캠페인 관리"],
     ["/admin/campaigns/manage?view=projects", "마케팅 프로젝트"],
   ])("%s stays reachable as a 마케팅 hub child command", (href, label) => {
-    for (const commands of [ADMIN_COMMANDS, resolveAdminCommands({ role: "ADMIN", overrides: {} })]) {
+    // 전체 사이드바 계정 기준 — 간소 계정(2026-11-20)은 마케팅 허브가 숨김이라 이 자식도 함께 빠진다.
+    for (const commands of [ADMIN_COMMANDS, resolveAdminCommands({ role: "SUPER_ADMIN", overrides: {} })]) {
       const matches = commands.filter((cmd) => cmd.href === href)
       expect(matches).toHaveLength(1)
       expect(matches[0]?.label).toBe(label)

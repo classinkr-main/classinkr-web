@@ -2,6 +2,7 @@
 
 // 본인 사이드바 편집 — 사이드바 사용자 블록의 "사이드바 편집" 버튼, 모바일 메뉴, ⌘K 명령
 // (window 이벤트 admin:open-nav-editor)이 연다. 저장은 PATCH /api/admin/me/nav(본인 행만).
+// 그 버튼·명령은 전체 사이드바 계정에게만 보인다(2026-11-20, admin-nav-access.ts 머리 주석).
 //
 // 설정 탭에 두지 않는 이유: 설정 API 는 STAFF_ADMIN 전용이라 EDITOR·VIEWER·BRANCH 가 자기
 // 사이드바를 고칠 길이 없어진다(app/api/admin/settings/route.ts). 이 편집은 권한이 아니라 취향이다.
@@ -19,6 +20,8 @@ import { useDialogFocus } from "@/components/admin/use-dialog-focus"
 
 interface MyNavEditorDrawerProps {
   role: string
+  /** 셸 세션의 nav_preset — 기본값(전체/간소)을 실제 사이드바와 같은 기준으로 읽는다. */
+  navPreset?: string | null
   name: string
   initialOverrides: Record<string, string>
   onClose: () => void
@@ -28,6 +31,7 @@ interface MyNavEditorDrawerProps {
 
 export default function MyNavEditorDrawer({
   role,
+  navPreset,
   name,
   initialOverrides,
   onClose,
@@ -42,8 +46,8 @@ export default function MyNavEditorDrawer({
   useDialogFocus(true, onClose, closeButtonRef)
 
   const exceptionCount = useMemo(
-    () => countNavPreferenceExceptions({ role, overrides }),
-    [role, overrides]
+    () => countNavPreferenceExceptions({ role, preset: navPreset, overrides }),
+    [role, navPreset, overrides]
   )
 
   const handleSave = async () => {
@@ -71,6 +75,7 @@ export default function MyNavEditorDrawer({
     >
       <NavPreferenceEditor
         role={role}
+        preset={navPreset}
         overrides={overrides}
         onChange={(next) => {
           setOverrides(next)

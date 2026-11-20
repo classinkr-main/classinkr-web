@@ -3,7 +3,7 @@
 import { useEffect, useState, type ReactNode } from "react"
 import { Building2, Check, CircleAlert, Info, Loader2, PanelsTopLeft, ShieldCheck, UserRound } from "lucide-react"
 
-import { type NavOverrideValue } from "@/components/admin/admin-nav-access"
+import { hasFullAdminNav, type NavOverrideValue } from "@/components/admin/admin-nav-access"
 import MemberNavAccessDrawer from "@/components/admin/settings/MemberNavAccessDrawer"
 import { adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
 
@@ -146,6 +146,8 @@ function UserSection({
                         <PanelsTopLeft className="h-3.5 w-3.5 text-[#1a1a1a]/45" />
                         사이드바 배치
                         <span className="text-[#1a1a1a]/40">
+                          {hasFullAdminNav({ role: String(user.role), preset: user.navPreset }) ? "전체" : "간소"}
+                          {" · "}
                           {Object.keys(user.navOverrides ?? {}).length > 0
                             ? `개인 ${Object.keys(user.navOverrides ?? {}).length}`
                             : "기본"}
@@ -298,14 +300,15 @@ export function MembersPanel() {
 
   // 드로어가 성공 응답으로 직접 반환한 overrides로 로컬 목록을 갱신한다 — 재조회 없이
   // "사이드바 배치" 버튼의 예외 개수가 바로 최신화된다(handleCapabilityToggle과 동일한 패턴).
-  // 프리셋은 드로어가 항상 null로 밀므로 여기서도 함께 비운다(레거시 값 정리).
+  // 프리셋은 드로어가 저장한 값 그대로 담는다 — "super"(전체 사이드바 지정) 또는 null.
   const handleNavAccessSaved = (
     targetUserId: string,
-    navOverrides: Record<string, NavOverrideValue>
+    navOverrides: Record<string, NavOverrideValue>,
+    navPreset: string | null
   ) => {
     const updateUsers = (users: AdminUser[]) =>
       users.map((item) =>
-        item.userId === targetUserId ? { ...item, navPreset: null, navOverrides } : item
+        item.userId === targetUserId ? { ...item, navPreset, navOverrides } : item
       )
 
     setDirectory((previous) =>
@@ -404,13 +407,14 @@ export function MembersPanel() {
           userId={navTarget.userId}
           displayName={navTarget.displayName}
           targetRole={String(navTarget.role)}
+          initialPreset={navTarget.navPreset ?? null}
           initialOverrides={navTarget.navOverrides ?? {}}
           onClose={() => setNavTarget(null)}
-          onSaved={(navOverrides) => {
+          onSaved={(navOverrides, navPreset) => {
             // navTarget.userId는 위 조건에서 이미 string으로 좁혀졌지만, 클로저 안에서
             // TS가 그 좁힘을 유지하지 못해 로컬 상수로 다시 고정한다.
             const targetUserId = navTarget.userId as string
-            handleNavAccessSaved(targetUserId, navOverrides)
+            handleNavAccessSaved(targetUserId, navOverrides, navPreset)
           }}
         />
       ) : null}
