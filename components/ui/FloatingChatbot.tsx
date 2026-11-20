@@ -36,6 +36,7 @@ import { trackEvent } from "@/lib/analytics"
 import { stashContactPrefill } from "@/lib/tracking-paths"
 import { CHATBOT_DESKTOP_MEDIA_QUERY, shouldCloseChatbotAfterLinkClick, type ChatLinkClick } from "@/components/ui/chatbot-link-navigation"
 import { resolvePageContext, mergeStarters } from "@/lib/chatbot/page-context"
+import { buildPreviousTurnPayload, shouldShowUnresolvedNudge } from "@/lib/chatbot/widget-turn"
 import {
     CHATBOT_OPEN_EVENT,
     openChatbot,
@@ -133,6 +134,8 @@ interface ChatMessage {
     handoffIntent?: HandoffIntent
     showHandoffCTA?: boolean
     retryQuestion?: string
+    // 서버 답(meta)의 답 모드. 다음 질문에 직전 턴(context.previousTurn)으로 함께 보낸다. 위젯이 붙인 말풍선에는 없다.
+    answerMode?: string
 }
 
 // /api/chatbot/query/stream 의 NDJSON 이벤트(서버 ChatbotStreamEvent 와 구조 일치).
@@ -1172,6 +1175,10 @@ export function FloatingChatbot() {
             content: trimmed,
         }
 
+        // 직전 한 턴(직전 질문·직전 답이 물은 정보의 종류·답 모드)을 함께 보내 짧은 대답("휴대폰이요")·이어 묻기("그러면 아이패드는요")를
+        // 앞 턴 주제로 답하게 한다. 서버는 DB 이력이 아니라 이 값만 쓴다(lib/chatbot/conversation-context.ts).
+        const previousTurn = buildPreviousTurnPayload(messages)
+
         setMessages((current) => [...current, userMessage])
 
         // 첫 토큰이 오면 그때 어시스턴트 말풍선을 만든다(그 전까지는 ThinkingIndicator 가 보인다).
@@ -1202,7 +1209,8 @@ export function FloatingChatbot() {
                     message: trimmed,
                     sessionId,
                     anonymousId,
-                    context,
+                    // context.path 는 문서 페이지 맥락("방금 본 내용…")에도 쓰인다.
+                    context: previousTurn ? { ...context, previousTurn } : context,
                 }),
             })
 
@@ -1244,9 +1252,18 @@ export function FloatingChatbot() {
                     needsHandoff: meta.needsHandoff,
                     handoffIntent: meta.handoffIntent,
                     showHandoffCTA: Boolean(meta.needsHandoff),
+                    answerMode: meta.answerMode,
                 }))
 
-                if (nextStreak >= UNRESOLVED_STREAK_THRESHOLD && !meta.needsHandoff) {
+                // 서버가 이미 되묻거나 안내한 답(clarifying_question·fallback) 뒤에는 거의 같은 재촉 말풍선을 또 붙이지 않는다.
+                if (
+                    shouldShowUnresolvedNudge({
+                        streak: nextStreak,
+                        threshold: UNRESOLVED_STREAK_THRESHOLD,
+                        needsHandoff: meta.needsHandoff,
+                        answerMode: meta.answerMode,
+                    })
+                ) {
                     const intent = meta.handoffIntent ?? "demo"
                     const nudge =
                         intent === "support"
