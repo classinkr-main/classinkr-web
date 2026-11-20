@@ -1,0 +1,2438 @@
+{
+  "version": "calib-pilot-1",
+  "items": [
+    {
+      "id": "c-0001",
+      "q": "방학 특강 온라인이랑 병행하고 싶은디 되는 거여?",
+      "p": "Q-01",
+      "m": "haiku",
+      "label": "fixed:basics-hybrid",
+      "label2": "fixed:basics-hybrid"
+    },
+    {
+      "id": "c-0002",
+      "q": "화상 수업이 자꾸 끊기는디 왜 그런 거여요",
+      "p": "Q-01",
+      "m": "haiku",
+      "label": "fixed:class-disconnect",
+      "label2": "fixed:class-disconnect"
+    },
+    {
+      "id": "c-0003",
+      "q": "원래 쓰던 무료 프로그램 말고 다른 거 있는감?",
+      "p": "Q-01",
+      "m": "haiku",
+      "label": "fixed:basics-free-tool-why-pay",
+      "label2": "fixed:basics-free-tool-why-pay"
+    },
+    {
+      "id": "c-0004",
+      "q": "클래스인이 뭐하는 거여? 학원용인 거여?",
+      "p": "Q-01",
+      "m": "haiku",
+      "label": "doc:/docs/start/company-overview#summary/what-is-classin",
+      "label2": "fixed:basics-main-features",
+      "final": "fixed:basics-main-features"
+    },
+    {
+      "id": "c-0005",
+      "q": "그 하이브리드가 뭔 말이여? 설명 좀 해줘",
+      "p": "Q-01",
+      "m": "haiku",
+      "label": "doc:/docs/teacher/lesson-option-concepts#3/hybrid-meaning",
+      "label2": "doc:/docs/teacher/lesson-option-concepts#3/hybrid-meaning"
+    },
+    {
+      "id": "c-0006",
+      "q": "LMS가 뭐여? 그것도 들어가 있는 거여?",
+      "p": "Q-01",
+      "m": "haiku",
+      "label": "doc:/docs/start/company-overview#3/lms-admin-dashboard",
+      "label2": "doc:/docs/start/company-overview#3/lms-admin-dashboard"
+    },
+    {
+      "id": "c-0007",
+      "q": "학생 몇 명까지 한 방에 들어올 수 있는 거여?",
+      "p": "Q-01",
+      "m": "haiku",
+      "label": "policy:max-participants",
+      "label2": "policy:max-participants"
+    },
+    {
+      "id": "c-0008",
+      "q": "수업 녹화도 되는 거여? 복습용으로 쓰려고",
+      "p": "Q-01",
+      "m": "haiku",
+      "label": "doc:/docs/admin/course-creation#4/class-recording-what",
+      "label2": "doc:/docs/start/company-overview#3/recording-watermark",
+      "final": "doc:/docs/admin/course-creation#4/class-recording-what"
+    },
+    {
+      "id": "c-0009",
+      "q": "가격은 대략 얼마쯤 하는 거여요",
+      "p": "Q-01",
+      "m": "haiku",
+      "label": "doc:/docs/start/value-and-cost-framing#summary/cost-overview",
+      "label2": "doc:/docs/start/value-and-cost-framing#summary/cost-overview"
+    },
+    {
+      "id": "c-0010",
+      "q": "학생이 혼자 들어와서 들어도 되는 거지?",
+      "p": "Q-01",
+      "m": "haiku",
+      "label": "clarify",
+      "label2": "clarify"
+    },
+    {
+      "id": "c-0011",
+      "q": "설치 어렵지 않은감? 나 컴맹인디",
+      "p": "Q-01",
+      "m": "haiku",
+      "label": "missing:guide:classin-app-download",
+      "label2": "doc:/docs/start/value-and-cost-framing#0/install-onboarding-scope",
+      "final": "missing:doc:/docs/start/pc-install#summary"
+    },
+    {
+      "id": "c-0012",
+      "q": "모바일로도 들어가져요? 학부모님도 보게",
+      "p": "Q-01",
+      "m": "haiku",
+      "label": "doc:/docs/software/software-overview#0/app-and-dashboard",
+      "label2": "policy:parents-watch-only",
+      "final": "policy:parents-watch-only"
+    },
+    {
+      "id": "c-0013",
+      "q": "과제 내고 채점도 여기서 되는 거여?",
+      "p": "Q-01",
+      "m": "haiku",
+      "label": "doc:/docs/start/company-overview#3/lms-admin-dashboard",
+      "label2": "doc:/docs/start/company-overview#3/lms-admin-dashboard"
+    },
+    {
+      "id": "c-0014",
+      "q": "환불은 어떻게 하는 거여요",
+      "p": "Q-01",
+      "m": "haiku",
+      "label": "doc:/docs/admin/billing-upgrade#1/invoice-before-pay",
+      "label2": "doc:/docs/admin/billing-upgrade#1/invoice-before-pay"
+    },
+    {
+      "id": "c-0015",
+      "q": "원래 쓰던 프로그램 데이터 옮길 수 있는감?",
+      "p": "Q-01",
+      "m": "haiku",
+      "label": "gap:company/data-migration",
+      "label2": "gap:company/data-migration"
+    },
+    {
+      "id": "c-0016",
+      "q": "학원 두 군데 쓰는디 따로 관리되는 거여?",
+      "p": "Q-01",
+      "m": "haiku",
+      "label": "fixed:student-two-academies-class-list",
+      "label2": "fixed:student-two-academies-class-list"
+    },
+    {
+      "id": "c-0017",
+      "q": "무료 체험 기간 있는 거여?",
+      "p": "Q-01",
+      "m": "haiku",
+      "label": "doc:/docs/software/software-pricing-quote-bundle-faq#2/free-trial",
+      "label2": "doc:/docs/software/software-pricing-quote-bundle-faq#2/free-trial"
+    },
+    {
+      "id": "c-0018",
+      "q": "전자칠판 같은 장비도 팔아요? 있는감",
+      "p": "Q-01",
+      "m": "haiku",
+      "label": "doc:/docs/software/software-pricing-quote-bundle-faq#1/board-bundle-quote",
+      "label2": "doc:/docs/software/software-pricing-quote-bundle-faq#1/board-bundle-quote"
+    },
+    {
+      "id": "c-0019",
+      "q": "서버 나가면 어떡하는 거여 ㅠ 불안하구만",
+      "p": "Q-01",
+      "m": "haiku",
+      "label": "policy:sla-availability",
+      "label2": "policy:sla-availability"
+    },
+    {
+      "id": "c-0020",
+      "q": "그래서 우리 학원한테 맞는 거여 아닌 거여?",
+      "p": "Q-01",
+      "m": "haiku",
+      "label": "clarify",
+      "label2": "doc:/docs/start/value-and-cost-framing#5/showroom-quote-schedule",
+      "final": "doc:/docs/start/value-and-cost-framing#5/showroom-quote-schedule"
+    },
+    {
+      "id": "c-0021",
+      "q": "지점 3곳 수업 도구 하나로 통합 되나요?",
+      "p": "Q-02",
+      "m": "haiku",
+      "label": "policy:branch-account-invoice-split",
+      "label2": "policy:branch-account-invoice-split"
+    },
+    {
+      "id": "c-0022",
+      "q": "지점 3곳 기준 단가 얼마예요?",
+      "p": "Q-02",
+      "m": "haiku",
+      "label": "policy:group-purchase-bulk-price",
+      "label2": "doc:/docs/start/value-and-cost-framing#summary/cost-overview",
+      "final": "doc:/docs/start/value-and-cost-framing#summary/cost-overview"
+    },
+    {
+      "id": "c-0023",
+      "q": "레퍼런스 있는 학원 몇 곳이에요?",
+      "p": "Q-02",
+      "m": "haiku",
+      "label": "policy:customer-names",
+      "label2": "fixed:basics-customer-count",
+      "final": "policy:customer-names"
+    },
+    {
+      "id": "c-0024",
+      "q": "출결이랑 수업 기록 한 화면에 나오나요?",
+      "p": "Q-02",
+      "m": "haiku",
+      "label": "doc:/docs/admin/course-management#3/attendance-monitoring",
+      "label2": "doc:/docs/start/academy-system-os-positioning#4/admin-data-overview",
+      "final": "doc:/docs/admin/course-management#3/attendance-monitoring"
+    },
+    {
+      "id": "c-0025",
+      "q": "기존에 쓰던 도구랑 호환돼요?",
+      "p": "Q-02",
+      "m": "haiku",
+      "label": "clarify",
+      "label2": "clarify"
+    },
+    {
+      "id": "c-0027",
+      "q": "최소 계약 기간 얼마예요?",
+      "p": "Q-02",
+      "m": "haiku",
+      "label": "policy:billing-period-term",
+      "label2": "policy:billing-period-term"
+    },
+    {
+      "id": "c-0028",
+      "q": "관리자용 데이터 대시보드 제공하나요?",
+      "p": "Q-02",
+      "m": "haiku",
+      "label": "doc:/docs/start/academy-system-os-positioning#4/admin-data-overview",
+      "label2": "doc:/docs/software/software-overview#0/app-and-dashboard",
+      "final": "doc:/docs/software/software-overview#0/app-and-dashboard"
+    },
+    {
+      "id": "c-0029",
+      "q": "지점별로 권한 나눠줄 수 있어요?",
+      "p": "Q-02",
+      "m": "haiku",
+      "label": "policy:branch-account-invoice-split",
+      "label2": "policy:branch-account-invoice-split"
+    },
+    {
+      "id": "c-0030",
+      "q": "견적 받으려면 뭘 제출해야 해요?",
+      "p": "Q-02",
+      "m": "haiku",
+      "label": "doc:/docs/software/software-pricing-quote-bundle-faq#4/prep-before-consult",
+      "label2": "doc:/docs/software/software-pricing-quote-bundle-faq#2/trial-quote-request-how",
+      "final": "doc:/docs/software/software-pricing-quote-bundle-faq#2/trial-quote-request-how"
+    },
+    {
+      "id": "c-0033",
+      "q": "장비 없이 소프트웨어만 쓸 수 있어요?",
+      "p": "Q-02",
+      "m": "haiku",
+      "label": "policy:software-plan-overview",
+      "label2": "policy:fit-small-private",
+      "final": "policy:fit-small-private"
+    },
+    {
+      "id": "c-0034",
+      "q": "수업 데이터 엑셀로 뽑을 수 있어요?",
+      "p": "Q-02",
+      "m": "haiku",
+      "label": "doc:/docs/admin/course-management#2/find-lesson",
+      "label2": "doc:/docs/admin/course-management#2/find-lesson"
+    },
+    {
+      "id": "c-0035",
+      "q": "사용자 몇 명부터 추가 과금돼요?",
+      "p": "Q-02",
+      "m": "haiku",
+      "label": "policy:billing-unit",
+      "label2": "policy:billing-unit"
+    },
+    {
+      "id": "c-0036",
+      "q": "기존 데이터 이전은 따로 비용 받나요?",
+      "p": "Q-02",
+      "m": "haiku",
+      "label": "gap:company/data-migration",
+      "label2": "gap:company/data-migration"
+    },
+    {
+      "id": "c-0037",
+      "q": "기술 지원은 몇 시까지 되나요?",
+      "p": "Q-02",
+      "m": "haiku",
+      "label": "none",
+      "label2": "none"
+    },
+    {
+      "id": "c-0038",
+      "q": "장애 나면 보상 조건 있어요?",
+      "p": "Q-02",
+      "m": "haiku",
+      "label": "policy:sla-availability",
+      "label2": "policy:sla-availability"
+    },
+    {
+      "id": "c-0039",
+      "q": "다른 솔루션 대비 장점 한 줄로요?",
+      "p": "Q-02",
+      "m": "haiku",
+      "label": "fixed:basics-vs-other-video-tools",
+      "label2": "fixed:basics-vs-other-video-tools"
+    },
+    {
+      "id": "c-0040",
+      "q": "데모 바로 예약 가능해요?",
+      "p": "Q-02",
+      "m": "haiku",
+      "label": "policy:trial-demo-english-support",
+      "label2": "policy:trial-demo-english-support"
+    },
+    {
+      "id": "c-0041",
+      "q": "지방에서 수험생 첨삭 가능한가요?! 궁금해요ㅠㅠ",
+      "p": "Q-03",
+      "m": "haiku",
+      "label": "none",
+      "label2": "doc:/docs/software/classroom-tools#4/personal-board",
+      "final": "doc:/docs/software/classroom-tools#4/personal-board"
+    },
+    {
+      "id": "c-0042",
+      "q": "화면 위에 직접 그려가면서 고쳐줄 수 있어요?",
+      "p": "Q-03",
+      "m": "haiku",
+      "label": "doc:/docs/software/classroom-tools#2/screen-share-memo",
+      "label2": "doc:/docs/software/classroom-tools#4/personal-board",
+      "final": "doc:/docs/software/classroom-tools#2/screen-share-memo"
+    },
+    {
+      "id": "c-0043",
+      "q": "제가 그린 그림이 학생 화면에도 보여요?",
+      "p": "Q-03",
+      "m": "haiku",
+      "label": "clarify",
+      "label2": "fixed:board-writing-only-me",
+      "final": "fixed:board-writing-only-me"
+    },
+    {
+      "id": "c-0044",
+      "q": "칠판에 쓰듯이 되는 거예요? 신기해요!",
+      "p": "Q-03",
+      "m": "haiku",
+      "label": "doc:/docs/software/app-capabilities-map#2/board-tools",
+      "label2": "doc:/docs/software/app-capabilities-map#2/board-tools"
+    },
+    {
+      "id": "c-0045",
+      "q": "손글씨 첨삭이 실시간으로 된다니 진짜예요?",
+      "p": "Q-03",
+      "m": "haiku",
+      "label": "doc:/docs/updates/classin-ai-blackboard-609#3/answer-detail-live",
+      "label2": "doc:/docs/software/classroom-tools#4/personal-board",
+      "final": "doc:/docs/software/classroom-tools#4/personal-board"
+    },
+    {
+      "id": "c-0046",
+      "q": "태블릿 없으면 마우스로도 그릴 수 있어요?",
+      "p": "Q-03",
+      "m": "haiku",
+      "label": "none",
+      "label2": "gap:classroom/stylus-required",
+      "final": "none"
+    },
+    {
+      "id": "c-0047",
+      "q": "학생이 답안 사진 올리면 바로 그릴 수 있나요?",
+      "p": "Q-03",
+      "m": "haiku",
+      "label": "doc:/docs/updates/classin-ai-blackboard-609#2/student-answer-methods",
+      "label2": "missing:doc:/docs/teacher/course-activities#4",
+      "final": "missing:doc:/docs/teacher/course-activities#4"
+    },
+    {
+      "id": "c-0048",
+      "q": "지방이라 인터넷 느린데 괜찮을까요ㅠㅠ",
+      "p": "Q-03",
+      "m": "haiku",
+      "label": "doc:/docs/start/pc-install#summary/internet-speed-guide",
+      "label2": "doc:/docs/start/pc-install#summary/internet-speed-guide"
+    },
+    {
+      "id": "c-0049",
+      "q": "그림 저장해서 나중에 다시 볼 수 있어요?",
+      "p": "Q-03",
+      "m": "haiku",
+      "label": "doc:/docs/teacher/drive-materials#2/save-board",
+      "label2": "doc:/docs/teacher/drive-materials#2/save-board"
+    },
+    {
+      "id": "c-0050",
+      "q": "첨삭 내용을 학생한테 파일로 보내줄 수 있나요?",
+      "p": "Q-03",
+      "m": "haiku",
+      "label": "none",
+      "label2": "doc:guide:cs-figma-digest-120/board-save-share",
+      "final": "doc:guide:cs-figma-digest-120/board-save-share"
+    },
+    {
+      "id": "c-0051",
+      "q": "화면 공유랑 그리기 동시에 되나요?",
+      "p": "Q-03",
+      "m": "haiku",
+      "label": "doc:/docs/software/classroom-tools#2/screen-share-memo",
+      "label2": "doc:/docs/software/classroom-tools#2/screen-share-memo"
+    },
+    {
+      "id": "c-0052",
+      "q": "여러 명이 같이 보면서 첨삭해도 돼요?",
+      "p": "Q-03",
+      "m": "haiku",
+      "label": "clarify",
+      "label2": "doc:/docs/software/classroom-tools#4/personal-board",
+      "final": "doc:/docs/software/classroom-tools#4/personal-board"
+    },
+    {
+      "id": "c-0053",
+      "q": "그림 지우개 기능도 있어요?",
+      "p": "Q-03",
+      "m": "haiku",
+      "label": "doc:/docs/software/app-capabilities-map#2/board-tools",
+      "label2": "missing:doc:/docs/hardware/board-writing-touch#2",
+      "final": "missing:doc:/docs/hardware/board-writing-touch#2"
+    },
+    {
+      "id": "c-0054",
+      "q": "아이패드로도 쓸 수 있는 거죠?!",
+      "p": "Q-03",
+      "m": "haiku",
+      "label": "doc:/docs/software/software-overview#0/app-and-dashboard",
+      "label2": "missing:doc:/docs/start/mobile-install#summary",
+      "final": "missing:doc:/docs/start/mobile-install#summary"
+    },
+    {
+      "id": "c-0055",
+      "q": "색깔 여러 개 쓸 수 있어요? 빨간펜 느낌으로!",
+      "p": "Q-03",
+      "m": "haiku",
+      "label": "doc:/docs/software/app-capabilities-map#2/board-tools",
+      "label2": "none",
+      "final": "none"
+    },
+    {
+      "id": "c-0056",
+      "q": "다른 프로그램 따로 깔아야 하나요? 귀찮은 건 싫어요",
+      "p": "Q-03",
+      "m": "haiku",
+      "label": "missing:guide:classin-app-download",
+      "label2": "doc:/docs/software/software-overview#summary/what-software-does",
+      "final": "doc:/docs/software/software-overview#summary/what-software-does"
+    },
+    {
+      "id": "c-0057",
+      "q": "무료로 한번 써볼 수 있을까요ㅠㅠ",
+      "p": "Q-03",
+      "m": "haiku",
+      "label": "doc:/docs/software/software-pricing-quote-bundle-faq#2/free-trial",
+      "label2": "doc:/docs/software/software-pricing-quote-bundle-faq#2/free-trial"
+    },
+    {
+      "id": "c-0058",
+      "q": "그림 말고 채점은 어떻게 해요?",
+      "p": "Q-03",
+      "m": "haiku",
+      "label": "doc:/docs/software/app-capabilities-map#3/ai-grading-drafting",
+      "label2": "missing:doc:/docs/teacher/course-activities#4",
+      "final": "missing:doc:/docs/teacher/course-activities#4"
+    },
+    {
+      "id": "c-0059",
+      "q": "학생 수 많으면 화면이 버벅거리나요?",
+      "p": "Q-03",
+      "m": "haiku",
+      "label": "fixed:basics-load-performance",
+      "label2": "fixed:basics-load-performance"
+    },
+    {
+      "id": "c-0060",
+      "q": "아... 그냥 됐어요 ㅠㅠ 이만 볼게요",
+      "p": "Q-03",
+      "m": "haiku",
+      "label": "none",
+      "label2": "none"
+    },
+    {
+      "id": "c-0061",
+      "q": "혹시 무료 화상 수업 시간 제한 없는 방법 있을까요?",
+      "p": "Q-04",
+      "m": "haiku",
+      "label": "policy:class-duration-limit",
+      "label2": "policy:free-version-scope",
+      "final": "policy:free-version-scope"
+    },
+    {
+      "id": "c-0062",
+      "q": "죄송한데 유료로 바꾸면 시간 제한이 없어지나요?",
+      "p": "Q-04",
+      "m": "haiku",
+      "label": "policy:class-duration-limit",
+      "label2": "policy:class-duration-limit"
+    },
+    {
+      "id": "c-0063",
+      "q": "1인 과외도 가입할 수 있는 거죠?",
+      "p": "Q-04",
+      "m": "haiku",
+      "label": "policy:fit-small-private",
+      "label2": "policy:fit-small-private"
+    },
+    {
+      "id": "c-0064",
+      "q": "혹시 요금은 월 기준인가요, 학생 수 기준인가요?",
+      "p": "Q-04",
+      "m": "haiku",
+      "label": "policy:billing-unit",
+      "label2": "policy:billing-unit"
+    },
+    {
+      "id": "c-0065",
+      "q": "죄송한데 수업 중에 끊기면 자동으로 재접속 되나요?",
+      "p": "Q-04",
+      "m": "haiku",
+      "label": "fixed:class-disconnect",
+      "label2": "none",
+      "final": "none"
+    },
+    {
+      "id": "c-0066",
+      "q": "학생 한 명만 들어와도 요금이 나가나요?",
+      "p": "Q-04",
+      "m": "haiku",
+      "label": "policy:billing-unit",
+      "label2": "policy:billing-unit"
+    },
+    {
+      "id": "c-0067",
+      "q": "혹시 임용 준비하는 사람도 할인 되나요?",
+      "p": "Q-04",
+      "m": "haiku",
+      "label": "policy:discount-by-quantity-quote",
+      "label2": "policy:discount-negotiation",
+      "final": "policy:discount-negotiation"
+    },
+    {
+      "id": "c-0068",
+      "q": "수업 녹화본을 학생이 다시 볼 수 있게 되나요?",
+      "p": "Q-04",
+      "m": "haiku",
+      "label": "howto:replay-howto",
+      "label2": "howto:replay-howto"
+    },
+    {
+      "id": "c-0069",
+      "q": "과외 숙제 파일도 올려줄 수 있어요?",
+      "p": "Q-04",
+      "m": "haiku",
+      "label": "doc:/docs/teacher/drive-materials#1/reuse-attach",
+      "label2": "missing:doc:/docs/teacher/course-activities#4",
+      "final": "missing:doc:/docs/teacher/course-activities#4"
+    },
+    {
+      "id": "c-0070",
+      "q": "혹시 학생이 모바일로 들어와도 괜찮을까요?",
+      "p": "Q-04",
+      "m": "haiku",
+      "label": "doc:/docs/software/software-overview#0/app-and-dashboard",
+      "label2": "doc:/docs/software/software-overview#0/app-and-dashboard"
+    },
+    {
+      "id": "c-0071",
+      "q": "죄송한데 무료 체험은 며칠인가요?",
+      "p": "Q-04",
+      "m": "haiku",
+      "label": "doc:/docs/software/software-pricing-quote-bundle-faq#2/free-trial",
+      "label2": "doc:/docs/software/software-pricing-quote-bundle-faq#2/free-trial"
+    },
+    {
+      "id": "c-0074",
+      "q": "화이트보드 기능은 기본으로 들어있어요?",
+      "p": "Q-04",
+      "m": "haiku",
+      "label": "doc:/docs/software/app-capabilities-map#2/default-features",
+      "label2": "doc:/docs/software/software-overview#2/live-and-tools",
+      "final": "doc:/docs/software/software-overview#2/live-and-tools"
+    },
+    {
+      "id": "c-0076",
+      "q": "혹시 수학 기호 입력도 되나요?",
+      "p": "Q-04",
+      "m": "haiku",
+      "label": "none",
+      "label2": "doc:/docs/updates/classin-609-update#2/ai-board-609-improve",
+      "final": "doc:/docs/updates/classin-609-update#2/ai-board-609-improve"
+    },
+    {
+      "id": "c-0077",
+      "q": "죄송한데 한 시간 넘게 수업하면 끊기나요?",
+      "p": "Q-04",
+      "m": "haiku",
+      "label": "policy:class-duration-limit",
+      "label2": "policy:class-duration-limit"
+    },
+    {
+      "id": "c-0078",
+      "q": "학부모님께 수업 기록 보내는 기능 있어요?",
+      "p": "Q-04",
+      "m": "haiku",
+      "label": "doc:/docs/admin/course-management#3/report-link-parent-message",
+      "label2": "doc:/docs/admin/course-management#3/report-link-parent-message"
+    },
+    {
+      "id": "c-0079",
+      "q": "혹시 설치 안 하고 웹에서 바로 들어갈 수 있나요?",
+      "p": "Q-04",
+      "m": "haiku",
+      "label": "doc:/docs/teacher/lesson-web-live#summary/web-live-what",
+      "label2": "doc:/docs/teacher/lesson-web-live#summary/web-live-what"
+    },
+    {
+      "id": "c-0080",
+      "q": "그럼 제가 유료 전환하는 게 나을까요?",
+      "p": "Q-04",
+      "m": "haiku",
+      "label": "doc:/docs/admin/billing-upgrade#0/paid-needed-and-verify",
+      "label2": "doc:/docs/admin/billing-upgrade#0/paid-needed-and-verify"
+    },
+    {
+      "id": "c-0081",
+      "q": "결제랑 수업 링크 관리 한 번에 되는 거예요? 😅",
+      "p": "Q-05",
+      "m": "haiku",
+      "label": "clarify",
+      "label2": "doc:/docs/start/value-and-cost-framing#4/tuition-payment",
+      "final": "doc:/docs/start/value-and-cost-framing#4/tuition-payment"
+    },
+    {
+      "id": "c-0082",
+      "q": "일단 해보죠 뭐~ 무료로 되는 거 있어요?",
+      "p": "Q-05",
+      "m": "haiku",
+      "label": "policy:free-version-scope",
+      "label2": "policy:free-version-scope"
+    },
+    {
+      "id": "c-0083",
+      "q": "제주에서 온라인 영어 수업해도 괜찮아요? ㅎㅎ",
+      "p": "Q-05",
+      "m": "haiku",
+      "label": "doc:/docs/start/company-overview#0/one-line-intro",
+      "label2": "fixed:basics-fit-online-academy",
+      "final": "fixed:basics-fit-online-academy"
+    },
+    {
+      "id": "c-0084",
+      "q": "수업 링크 매번 새로 만들어야 해요? 귀찮아요😭",
+      "p": "Q-05",
+      "m": "haiku",
+      "label": "clarify",
+      "label2": "fixed:basics-class-schedule-prebuild",
+      "final": "fixed:basics-class-schedule-prebuild"
+    },
+    {
+      "id": "c-0085",
+      "q": "수강료 자동 결제 설정할 수 있어요?",
+      "p": "Q-05",
+      "m": "haiku",
+      "label": "doc:/docs/start/value-and-cost-framing#4/tuition-payment",
+      "label2": "doc:/docs/start/value-and-cost-framing#4/tuition-payment"
+    },
+    {
+      "id": "c-0086",
+      "q": "학생이 결제 안 하면 수업 입장을 막을 수 있어요?",
+      "p": "Q-05",
+      "m": "haiku",
+      "label": "doc:/docs/start/value-and-cost-framing#4/tuition-payment",
+      "label2": "doc:/docs/start/value-and-cost-framing#4/tuition-payment"
+    },
+    {
+      "id": "c-0087",
+      "q": "영어 말하기 수업 녹음도 되나요? 🎧",
+      "p": "Q-05",
+      "m": "haiku",
+      "label": "doc:/docs/admin/course-creation#4/class-recording-what",
+      "label2": "doc:/docs/software/app-capabilities-map#3/ai-language-activity",
+      "final": "doc:/docs/admin/course-creation#4/class-recording-what"
+    },
+    {
+      "id": "c-0088",
+      "q": "학생마다 시간표 따로 관리돼요?",
+      "p": "Q-05",
+      "m": "haiku",
+      "label": "none",
+      "label2": "missing:doc:/docs/student/todo-calendar#1",
+      "final": "missing:doc:/docs/student/todo-calendar#1"
+    },
+    {
+      "id": "c-0089",
+      "q": "제주는 와이파이 가끔 끊기는데 괜찮을까요~",
+      "p": "Q-05",
+      "m": "haiku",
+      "label": "doc:/docs/start/pc-install#summary/internet-speed-guide",
+      "label2": "fixed:class-disconnect",
+      "final": "fixed:class-disconnect"
+    },
+    {
+      "id": "c-0090",
+      "q": "단체 수업이랑 1:1 둘 다 되나요?",
+      "p": "Q-05",
+      "m": "haiku",
+      "label": "doc:/docs/start/company-overview#7/where-used",
+      "label2": "doc:/docs/start/company-overview#7/where-used"
+    },
+    {
+      "id": "c-0091",
+      "q": "링크 하나로 여러 반 들어가게 할 수 있어요?",
+      "p": "Q-05",
+      "m": "haiku",
+      "label": "clarify",
+      "label2": "none",
+      "final": "none"
+    },
+    {
+      "id": "c-0092",
+      "q": "수업 자료 미리 올려놓을 수 있어요?",
+      "p": "Q-05",
+      "m": "haiku",
+      "label": "doc:/docs/teacher/drive-materials#1/upload",
+      "label2": "doc:/docs/teacher/drive-materials#1/upload"
+    },
+    {
+      "id": "c-0093",
+      "q": "처음 쓰는 사람도 금방 배울 수 있나요? 😊",
+      "p": "Q-05",
+      "m": "haiku",
+      "label": "doc:/docs/software/software-overview#summary/learning-order",
+      "label2": "doc:/docs/teacher/classin-607-update#6/onboarding-what",
+      "final": "doc:/docs/teacher/classin-607-update#6/onboarding-what"
+    },
+    {
+      "id": "c-0094",
+      "q": "발음 교정할 때 화면 확대 되나요?",
+      "p": "Q-05",
+      "m": "haiku",
+      "label": "gap:classroom/board-zoom",
+      "label2": "gap:classroom/board-zoom"
+    },
+    {
+      "id": "c-0095",
+      "q": "학생 질문을 채팅으로 받을 수 있어요?",
+      "p": "Q-05",
+      "m": "haiku",
+      "label": "doc:/docs/student/chat#summary/chat-overview",
+      "label2": "fixed:basics-student-ask-teacher",
+      "final": "fixed:basics-student-ask-teacher"
+    },
+    {
+      "id": "c-0096",
+      "q": "카톡으로 링크 보내는 거랑 뭐가 달라요?",
+      "p": "Q-05",
+      "m": "haiku",
+      "label": "clarify",
+      "label2": "doc:/docs/start/why-classin-needs#0/scattered-tools-cost",
+      "final": "fixed:basics-vs-other-video-tools"
+    },
+    {
+      "id": "c-0097",
+      "q": "월 구독이랑 건당 결제 중에 뭐가 나아요?",
+      "p": "Q-05",
+      "m": "haiku",
+      "label": "none",
+      "label2": "none"
+    },
+    {
+      "id": "c-0098",
+      "q": "수업 끝나면 숙제가 학생한테 자동으로 가나요?",
+      "p": "Q-05",
+      "m": "haiku",
+      "label": "none",
+      "label2": "missing:doc:/docs/teacher/course-activities#4",
+      "final": "missing:doc:/docs/teacher/course-activities#4"
+    },
+    {
+      "id": "c-0099",
+      "q": "대치동 학원들도 같이 쓰는 곳 많아요? ㅋㅋ",
+      "p": "Q-05",
+      "m": "haiku",
+      "label": "policy:basics-famous-regional-reference",
+      "label2": "policy:basics-famous-regional-reference"
+    },
+    {
+      "id": "c-0100",
+      "q": "흠 일단 한번 써보고 결정해도 되죠? 😅",
+      "p": "Q-05",
+      "m": "haiku",
+      "label": "doc:/docs/software/software-pricing-quote-bundle-faq#2/free-trial",
+      "label2": "doc:/docs/software/software-pricing-quote-bundle-faq#2/free-trial"
+    },
+    {
+      "id": "c-0101",
+      "q": "혹시 피아노 소리도 원격 수업에서 깨지지 않고 전달되는지요?",
+      "p": "Q-06",
+      "m": "sonnet",
+      "label": "fixed:audio-quality",
+      "label2": "doc:/docs/start/camera-mic-troubleshooting#6/cam-noise-reduction",
+      "final": "fixed:audio-quality"
+    },
+    {
+      "id": "c-0102",
+      "q": "처음 들어와 보았는데 이곳은 어떤 곳인지 여쭤도 될는지요?",
+      "p": "Q-06",
+      "m": "sonnet",
+      "label": "doc:/docs/start/company-overview#summary/what-is-classin",
+      "label2": "doc:/docs/start/company-overview#summary/what-is-classin"
+    },
+    {
+      "id": "c-0103",
+      "q": "개인 교습을 하는 사람도 이용할 수 있는 것인지 궁금합니다.",
+      "p": "Q-06",
+      "m": "sonnet",
+      "label": "policy:fit-small-private",
+      "label2": "policy:personal-tutor-use",
+      "final": "policy:fit-small-private"
+    },
+    {
+      "id": "c-0104",
+      "q": "비용은 대략 어느 정도 생각하면 되는지 알려주시면 감사하겠습니다.",
+      "p": "Q-06",
+      "m": "sonnet",
+      "label": "doc:/docs/start/value-and-cost-framing#summary/cost-overview",
+      "label2": "doc:/docs/start/value-and-cost-framing#summary/cost-overview"
+    },
+    {
+      "id": "c-0105",
+      "q": "학생이 멀리 이사를 가는데 수업을 이어 가는 데 도움이 될는지요?",
+      "p": "Q-06",
+      "m": "sonnet",
+      "label": "doc:/docs/start/company-overview#summary/what-is-classin",
+      "label2": "fixed:basics-hybrid",
+      "final": "doc:/docs/start/company-overview#summary/what-is-classin"
+    },
+    {
+      "id": "c-0106",
+      "q": "컴퓨터를 잘 다루지 못하는데 설치가 어렵지는 않은지요?",
+      "p": "Q-06",
+      "m": "sonnet",
+      "label": "doc:/docs/start/value-and-cost-framing#0/install-onboarding-scope",
+      "label2": "missing:doc:/docs/start/pc-install#summary",
+      "final": "missing:doc:/docs/start/pc-install#summary"
+    },
+    {
+      "id": "c-0107",
+      "q": "수업 중 소리가 끊기거나 울리면 어찌하면 좋을는지요?",
+      "p": "Q-06",
+      "m": "sonnet",
+      "label": "howto:audio-echo",
+      "label2": "howto:audio-echo"
+    },
+    {
+      "id": "c-0108",
+      "q": "수업 장면을 녹화해 학생이 다시 볼 수 있게 하는 것도 가능한지요?",
+      "p": "Q-06",
+      "m": "sonnet",
+      "label": "howto:replay-howto",
+      "label2": "doc:/docs/admin/course-creation#4/class-recording-what",
+      "final": "doc:/docs/admin/course-creation#4/class-recording-what"
+    },
+    {
+      "id": "c-0109",
+      "q": "마이크는 어떤 것을 쓰는 편이 좋은지 조언을 구해도 되겠는지요?",
+      "p": "Q-06",
+      "m": "sonnet",
+      "label": "fixed:audio-quality",
+      "label2": "fixed:audio-quality"
+    },
+    {
+      "id": "c-0110",
+      "q": "다른 화상 수업 프로그램과는 어떤 점이 다른지 말씀해 주실는지요?",
+      "p": "Q-06",
+      "m": "sonnet",
+      "label": "fixed:basics-vs-other-video-tools",
+      "label2": "fixed:basics-vs-other-video-tools"
+    },
+    {
+      "id": "c-0111",
+      "q": "악보를 화면에 띄워 함께 보며 표시도 할 수 있는지요?",
+      "p": "Q-06",
+      "m": "sonnet",
+      "label": "fixed:basics-material-upload-pdf",
+      "label2": "doc:/docs/software/classroom-tools#2/screen-share-memo",
+      "final": "doc:/docs/software/classroom-tools#2/screen-share-memo"
+    },
+    {
+      "id": "c-0112",
+      "q": "학생 쪽 인터넷이 느리면 수업이 어려워지는 것은 아닌지 걱정됩니다.",
+      "p": "Q-06",
+      "m": "sonnet",
+      "label": "doc:/docs/student/class-join-replay#6/drop-fix",
+      "label2": "doc:/docs/start/pc-install#summary/internet-speed-guide",
+      "final": "doc:/docs/student/class-join-replay#6/drop-fix"
+    },
+    {
+      "id": "c-0113",
+      "q": "먼저 써 볼 수 있는 무료 기간이 있는지 조심스레 여쭙습니다.",
+      "p": "Q-06",
+      "m": "sonnet",
+      "label": "doc:/docs/software/software-pricing-quote-bundle-faq#2/free-trial",
+      "label2": "doc:/docs/software/software-pricing-quote-bundle-faq#2/free-trial"
+    },
+    {
+      "id": "c-0114",
+      "q": "학생이 어린데 부모님이 옆에서 지켜봐도 괜찮은 구조인지요?",
+      "p": "Q-06",
+      "m": "sonnet",
+      "label": "policy:parents-watch-only",
+      "label2": "policy:parents-watch-only"
+    },
+    {
+      "id": "c-0115",
+      "q": "수업료를 학생에게 받는 일까지 이곳에서 도와주는지 궁금합니다.",
+      "p": "Q-06",
+      "m": "sonnet",
+      "label": "doc:/docs/start/value-and-cost-framing#4/tuition-payment",
+      "label2": "fixed:replace-academy-management-program-features",
+      "final": "doc:/docs/start/value-and-cost-framing#4/tuition-payment"
+    },
+    {
+      "id": "c-0116",
+      "q": "휴대전화나 태블릿으로도 수업을 할 수 있는지 알고 싶습니다.",
+      "p": "Q-06",
+      "m": "sonnet",
+      "label": "doc:/docs/teacher/course-units#3/any-device",
+      "label2": "doc:/docs/teacher/course-units#3/any-device"
+    },
+    {
+      "id": "c-0117",
+      "q": "전자칠판도 판다고 들었는데 저 같은 사람에게도 필요한지요?",
+      "p": "Q-06",
+      "m": "sonnet",
+      "label": "doc:/docs/start/value-and-cost-framing#5/board-only-purchase",
+      "label2": "policy:fit-small-private",
+      "final": "policy:fit-small-private"
+    },
+    {
+      "id": "c-0118",
+      "q": "수업 도중 화면이 멈추면 어디로 연락드려야 하는지요?",
+      "p": "Q-06",
+      "m": "sonnet",
+      "label": "doc:/docs/start/class-connection-troubleshooting#summary/conn-contact-info",
+      "label2": "doc:/docs/start/class-connection-troubleshooting#summary/conn-contact-info"
+    },
+    {
+      "id": "c-0119",
+      "q": "제가 나이가 있어서 그런데 처음 쓰는 법을 안내하는 자료가 있는지요?",
+      "p": "Q-06",
+      "m": "sonnet",
+      "label": "doc:/docs/software/software-overview#summary/learning-order",
+      "label2": "doc:/docs/teacher/classin-607-update#6/onboarding-what",
+      "final": "doc:/docs/teacher/classin-607-update#6/onboarding-what"
+    },
+    {
+      "id": "c-0120",
+      "q": "늦은 나이에 새로 배워 쓰기에 너무 번거롭지는 않겠는지요?",
+      "p": "Q-06",
+      "m": "sonnet",
+      "label": "doc:/docs/software/software-overview#summary/learning-order",
+      "label2": "doc:/docs/software/software-overview#summary/learning-order"
+    },
+    {
+      "id": "c-0121",
+      "q": "우리 애 무슨 수업 듣는지 어디서 봐요",
+      "p": "Q-07",
+      "m": "sonnet",
+      "label": "fixed:basics-parent-signup",
+      "label2": "fixed:basics-parent-signup"
+    },
+    {
+      "id": "c-0122",
+      "q": "부모도 로그인 되나요",
+      "p": "Q-07",
+      "m": "sonnet",
+      "label": "fixed:basics-parent-signup",
+      "label2": "fixed:basics-parent-signup"
+    },
+    {
+      "id": "c-0123",
+      "q": "그럼 얼마예요",
+      "p": "Q-07",
+      "m": "sonnet",
+      "label": "doc:/docs/start/value-and-cost-framing#summary/cost-overview",
+      "label2": "doc:/docs/start/value-and-cost-framing#summary/cost-overview"
+    },
+    {
+      "id": "c-0124",
+      "q": "상담 못 가는데 대신 확인할 방법 있어요",
+      "p": "Q-07",
+      "m": "sonnet",
+      "label": "doc:/docs/start/company-overview#9/adoption-inquiry",
+      "label2": "policy:trial-pilot-check",
+      "final": "policy:trial-pilot-check"
+    },
+    {
+      "id": "c-0126",
+      "q": "숙제 했는지도 나와요",
+      "p": "Q-07",
+      "m": "sonnet",
+      "label": "missing:doc:/docs/teacher/course-activities#4",
+      "label2": "fixed:notify-non-submitters-parents",
+      "final": "fixed:notify-non-submitters-parents"
+    },
+    {
+      "id": "c-0127",
+      "q": "출석하면 알림 와요",
+      "p": "Q-07",
+      "m": "sonnet",
+      "label": "none",
+      "label2": "fixed:replace-academy-management-program-features",
+      "final": "fixed:replace-academy-management-program-features"
+    },
+    {
+      "id": "c-0128",
+      "q": "저 밤에만 확인 가능한데 상관없죠",
+      "p": "Q-07",
+      "m": "sonnet",
+      "label": "doc:/docs/start/company-overview#9/adoption-inquiry",
+      "label2": "clarify",
+      "final": "clarify"
+    },
+    {
+      "id": "c-0129",
+      "q": "앱 있어요",
+      "p": "Q-07",
+      "m": "sonnet",
+      "label": "doc:/docs/software/app-capabilities-map#8/teacher-student-app",
+      "label2": "doc:/docs/software/software-overview#0/app-and-dashboard",
+      "final": "doc:/docs/software/software-overview#0/app-and-dashboard"
+    },
+    {
+      "id": "c-0130",
+      "q": "결제는 누가 해요",
+      "p": "Q-07",
+      "m": "sonnet",
+      "label": "doc:/docs/software/software-pricing-quote-bundle-faq#4/main-admin-account",
+      "label2": "fixed:student-access-cost",
+      "final": "fixed:student-access-cost"
+    },
+    {
+      "id": "c-0131",
+      "q": "학원에서 신청해야 돼요",
+      "p": "Q-07",
+      "m": "sonnet",
+      "label": "doc:/docs/student/course-join#1/only-academy-registers",
+      "label2": "doc:/docs/student/course-join#1/only-academy-registers"
+    },
+    {
+      "id": "c-0133",
+      "q": "성적도 보여요",
+      "p": "Q-07",
+      "m": "sonnet",
+      "label": "missing:doc:/docs/student/course-grades#summary",
+      "label2": "missing:doc:/docs/student/course-grades#summary"
+    },
+    {
+      "id": "c-0134",
+      "q": "애가 수업 안 들어가면 알려줘요",
+      "p": "Q-07",
+      "m": "sonnet",
+      "label": "none",
+      "label2": "fixed:replace-academy-management-program-features",
+      "final": "fixed:replace-academy-management-program-features"
+    },
+    {
+      "id": "c-0135",
+      "q": "여기 뭐하는 곳이에요",
+      "p": "Q-07",
+      "m": "sonnet",
+      "label": "doc:/docs/start/company-overview#summary/what-is-classin",
+      "label2": "doc:/docs/start/company-overview#summary/what-is-classin"
+    },
+    {
+      "id": "c-0137",
+      "q": "고장나면 어디다 말해요",
+      "p": "Q-07",
+      "m": "sonnet",
+      "label": "doc:/docs/start/class-connection-troubleshooting#summary/conn-contact-info",
+      "label2": "missing:doc:/docs/hardware/hardware-spec-installation-faq#3",
+      "final": "doc:/docs/start/class-connection-troubleshooting#summary/conn-contact-info"
+    },
+    {
+      "id": "c-0138",
+      "q": "휴대폰으로도 돼요",
+      "p": "Q-07",
+      "m": "sonnet",
+      "label": "doc:/docs/teacher/course-units#3/any-device",
+      "label2": "doc:/docs/teacher/course-units#3/any-device"
+    },
+    {
+      "id": "c-0139",
+      "q": "다른 애 정보도 보이는 건 아니죠",
+      "p": "Q-07",
+      "m": "sonnet",
+      "label": "none",
+      "label2": "none"
+    },
+    {
+      "id": "c-0140",
+      "q": "네 그럼 어떻게 시작해요",
+      "p": "Q-07",
+      "m": "sonnet",
+      "label": "doc:/docs/start/academy-system-os-positioning#summary/where-to-start",
+      "label2": "doc:/docs/software/software-overview#summary/learning-order",
+      "final": "doc:/docs/software/software-overview#summary/learning-order"
+    },
+    {
+      "id": "c-0141",
+      "q": "카페에서 온라인 관리가 기숙형보다 낫다던데 근데 그게 맞나요?",
+      "p": "Q-08",
+      "m": "sonnet",
+      "label": "none",
+      "label2": "none"
+    },
+    {
+      "id": "c-0142",
+      "q": "어떤 엄마가 여기 쓰면 공부시간 다 기록된다던데 근데 그게 맞나요?",
+      "p": "Q-08",
+      "m": "sonnet",
+      "label": "none",
+      "label2": "doc:/docs/start/why-classin-needs#3/student-records",
+      "final": "doc:/docs/start/why-classin-needs#3/student-records"
+    },
+    {
+      "id": "c-0143",
+      "q": "수능 100일 전인데 온라인 수업만으로 진짜 관리가 되긴 하나요 근데 그게 맞나요?",
+      "p": "Q-08",
+      "m": "sonnet",
+      "label": "fixed:basics-fit-online-academy",
+      "label2": "fixed:basics-fit-online-academy"
+    },
+    {
+      "id": "c-0144",
+      "q": "학원 원장이 이건 학원만 쓸 수 있다던데 부모가 직접 가입은 안 되는 거 맞나요?",
+      "p": "Q-08",
+      "m": "sonnet",
+      "label": "fixed:basics-parent-signup",
+      "label2": "fixed:basics-parent-signup"
+    },
+    {
+      "id": "c-0145",
+      "q": "후기에 보니 녹화 다시보기로 틀린 부분 복습한다는데 사실인가요?",
+      "p": "Q-08",
+      "m": "sonnet",
+      "label": "howto:replay-howto",
+      "label2": "doc:/docs/admin/course-creation#4/class-recording-what",
+      "final": "doc:/docs/admin/course-creation#4/class-recording-what"
+    },
+    {
+      "id": "c-0146",
+      "q": "누가 그러는데 가격이 학원마다 다 다르다던데 근데 그게 맞나요?",
+      "p": "Q-08",
+      "m": "sonnet",
+      "label": "doc:/docs/start/value-and-cost-framing#summary/cost-overview",
+      "label2": "doc:/docs/start/value-and-cost-framing#summary/cost-overview"
+    },
+    {
+      "id": "c-0147",
+      "q": "기숙학원 한 달 비용이랑 비교하면 여기가 훨씬 싸다는 말이 맞나요?",
+      "p": "Q-08",
+      "m": "sonnet",
+      "label": "policy:why-expensive-compare",
+      "label2": "policy:why-expensive-compare"
+    },
+    {
+      "id": "c-0148",
+      "q": "아이 폰 사용 시간까지 관리해준다고 들었는데 근데 그게 맞나요?",
+      "p": "Q-08",
+      "m": "sonnet",
+      "label": "none",
+      "label2": "none"
+    },
+    {
+      "id": "c-0149",
+      "q": "수업 중에 딴짓하면 선생님한테 바로 뜬다던데 그게 맞나요?",
+      "p": "Q-08",
+      "m": "sonnet",
+      "label": "none",
+      "label2": "gap:classroom/attention-detect",
+      "final": "gap:classroom/attention-detect"
+    },
+    {
+      "id": "c-0150",
+      "q": "인강이랑 뭐가 다른 건지 엄마들 사이에서 말이 갈리는데 어떻게 다른가요?",
+      "p": "Q-08",
+      "m": "sonnet",
+      "label": "none",
+      "label2": "doc:/docs/start/company-overview#summary/what-is-classin",
+      "final": "none"
+    },
+    {
+      "id": "c-0151",
+      "q": "무료로 먼저 해볼 수 있다던데 그 말 믿어도 되나요 근데 그게 맞나요?",
+      "p": "Q-08",
+      "m": "sonnet",
+      "label": "doc:/docs/software/software-pricing-quote-bundle-faq#2/free-trial",
+      "label2": "doc:/docs/software/software-pricing-quote-bundle-faq#2/free-trial"
+    },
+    {
+      "id": "c-0152",
+      "q": "중간에 그만두면 환불이 안 된다는 글을 봤는데 근데 그게 맞나요?",
+      "p": "Q-08",
+      "m": "sonnet",
+      "label": "policy:payment-cycle-termination-terms",
+      "label2": "policy:payment-cycle-termination-terms"
+    },
+    {
+      "id": "c-0153",
+      "q": "밤 늦게까지 자습실처럼 화상으로 같이 공부하는 게 가능하다던데 맞나요?",
+      "p": "Q-08",
+      "m": "sonnet",
+      "label": "none",
+      "label2": "none"
+    },
+    {
+      "id": "c-0154",
+      "q": "성적 데이터를 그래프로 보여준다는데 부모도 볼 수 있다는 게 맞나요?",
+      "p": "Q-08",
+      "m": "sonnet",
+      "label": "doc:/docs/admin/course-management#3/report-link-parent-message",
+      "label2": "doc:/docs/admin/course-management#3/report-link-parent-message"
+    },
+    {
+      "id": "c-0155",
+      "q": "접속이 자주 끊긴다는 후기가 있던데 요즘도 그런가요 근데 그게 맞나요?",
+      "p": "Q-08",
+      "m": "sonnet",
+      "label": "fixed:class-disconnect",
+      "label2": "fixed:class-disconnect"
+    },
+    {
+      "id": "c-0156",
+      "q": "전자칠판이 있어야만 수업이 된다던데 집에서는 안 써도 되는 거 맞죠?",
+      "p": "Q-08",
+      "m": "sonnet",
+      "label": "doc:/docs/teacher/course-units#3/any-device",
+      "label2": "doc:/docs/teacher/course-units#3/any-device"
+    },
+    {
+      "id": "c-0157",
+      "q": "옆집 애는 이걸로 내신 올렸다던데 효과가 정말 있긴 한가요?",
+      "p": "Q-08",
+      "m": "sonnet",
+      "label": "doc:/docs/start/customer-stories#summary/adoption-effects",
+      "label2": "none",
+      "final": "none"
+    },
+    {
+      "id": "c-0158",
+      "q": "아이가 집에서 졸면 모른 척 넘어가지 않나 걱정인데 그것도 확인되나요?",
+      "p": "Q-08",
+      "m": "sonnet",
+      "label": "none",
+      "label2": "gap:classroom/attention-detect",
+      "final": "gap:classroom/attention-detect"
+    },
+    {
+      "id": "c-0159",
+      "q": "고3은 따로 반이 있다던데 그건 어디서 신청하는 게 맞나요?",
+      "p": "Q-08",
+      "m": "sonnet",
+      "label": "doc:/docs/student/course-join#1/only-academy-registers",
+      "label2": "doc:/docs/student/course-join#1/only-academy-registers"
+    },
+    {
+      "id": "c-0160",
+      "q": "제가 뭘 잘못 알고 있는 건 아닌지 이 서비스 정확히 누구를 위한 건가요?",
+      "p": "Q-08",
+      "m": "sonnet",
+      "label": "doc:/docs/start/company-overview#4/who-for",
+      "label2": "doc:/docs/start/company-overview#4/who-for"
+    },
+    {
+      "id": "c-0161",
+      "q": "제가 이미 알아봤는데요 자막 기능은 있는 건가요?",
+      "p": "Q-09",
+      "m": "sonnet",
+      "label": "doc:/docs/updates/classin-609-update#5/live-caption-what",
+      "label2": "doc:/docs/updates/classin-609-update#5/live-caption-what"
+    },
+    {
+      "id": "c-0162",
+      "q": "그건 해당이 안 되죠 집에서 혼자 듣는 수업도 지원하나요?",
+      "p": "Q-09",
+      "m": "sonnet",
+      "label": "none",
+      "label2": "doc:/docs/start/company-overview#0/one-line-intro",
+      "final": "doc:/docs/start/company-overview#0/one-line-intro"
+    },
+    {
+      "id": "c-0163",
+      "q": "제가 이미 알아봤는데요 수업 배속이나 느리게 재생 되나요?",
+      "p": "Q-09",
+      "m": "sonnet",
+      "label": "missing:doc:/docs/student/course-submit-activity#1",
+      "label2": "missing:doc:/docs/software/lesson-activities#1",
+      "final": "missing:doc:/docs/student/course-submit-activity#1"
+    },
+    {
+      "id": "c-0164",
+      "q": "교실 소음이 문제라서 그러는데 소리 잡음 줄이는 기능이 있나요?",
+      "p": "Q-09",
+      "m": "sonnet",
+      "label": "doc:/docs/start/camera-mic-troubleshooting#6/cam-noise-reduction",
+      "label2": "doc:/docs/start/camera-mic-troubleshooting#6/cam-noise-reduction"
+    },
+    {
+      "id": "c-0165",
+      "q": "접근성 기능이라고 하면 구체적으로 무엇이 있는지 말씀해 주세요",
+      "p": "Q-09",
+      "m": "sonnet",
+      "label": "fixed:web-accessibility-screen-reader",
+      "label2": "fixed:web-accessibility-screen-reader"
+    },
+    {
+      "id": "c-0166",
+      "q": "실시간 수업 말고 녹화본으로 혼자 보는 건 가능한 건가요?",
+      "p": "Q-09",
+      "m": "sonnet",
+      "label": "howto:replay-howto",
+      "label2": "howto:replay-howto",
+      "final": "howto:replay-howto"
+    },
+    {
+      "id": "c-0167",
+      "q": "그건 학원에서 정하는 거 아닌가요 개인이 선택할 수 있나요?",
+      "p": "Q-09",
+      "m": "sonnet",
+      "label": "clarify",
+      "label2": "clarify"
+    },
+    {
+      "id": "c-0168",
+      "q": "글자 크기나 화면 대비 조절 같은 건 되는지 확인하고 싶은데요",
+      "p": "Q-09",
+      "m": "sonnet",
+      "label": "none",
+      "label2": "none"
+    },
+    {
+      "id": "c-0169",
+      "q": "아이가 다른 아이들 앞에서 질문하는 걸 힘들어해요 채팅으로 되나요",
+      "p": "Q-09",
+      "m": "sonnet",
+      "label": "fixed:basics-student-ask-teacher",
+      "label2": "fixed:basics-student-ask-teacher"
+    },
+    {
+      "id": "c-0170",
+      "q": "제가 이미 다른 곳도 봤는데 여기만의 장점이 뭐죠",
+      "p": "Q-09",
+      "m": "sonnet",
+      "label": "fixed:basics-main-features",
+      "label2": "fixed:basics-vs-other-video-tools",
+      "final": "fixed:basics-vs-other-video-tools"
+    },
+    {
+      "id": "c-0171",
+      "q": "가격은 어떻게 되는지 정확히 알려주세요 대충 말고요",
+      "p": "Q-09",
+      "m": "sonnet",
+      "label": "doc:/docs/software/software-pricing-quote-bundle-faq#2/trial-quote-request-how",
+      "label2": "doc:/docs/start/value-and-cost-framing#summary/cost-overview",
+      "final": "doc:/docs/start/value-and-cost-framing#summary/cost-overview"
+    },
+    {
+      "id": "c-0172",
+      "q": "학교 수업을 집에서 듣게 해주는 건 해당이 안 되는 건가요",
+      "p": "Q-09",
+      "m": "sonnet",
+      "label": "fixed:basics-fit-school",
+      "label2": "fixed:basics-fit-school"
+    },
+    {
+      "id": "c-0173",
+      "q": "자막이 자동으로 나오는 건지 선생님이 따로 넣어야 하는 건지요",
+      "p": "Q-09",
+      "m": "sonnet",
+      "label": "doc:/docs/updates/classin-609-update#5/live-caption-what",
+      "label2": "doc:/docs/updates/classin-609-update#5/live-caption-what"
+    },
+    {
+      "id": "c-0174",
+      "q": "소리가 작거나 웅얼거리면 아이가 못 알아듣는데 어떻게 하죠",
+      "p": "Q-09",
+      "m": "sonnet",
+      "label": "howto:audio-echo",
+      "label2": "doc:/docs/teacher/classroom-basic-setup#3/mic-quiet",
+      "final": "doc:/docs/teacher/classroom-basic-setup#3/mic-quiet"
+    },
+    {
+      "id": "c-0175",
+      "q": "그럼 집에서 혼자 들어도 수업 참여로 인정되나요",
+      "p": "Q-09",
+      "m": "sonnet",
+      "label": "doc:/docs/admin/course-management#3/lesson-data-report",
+      "label2": "doc:/docs/admin/course-management#3/attendance-monitoring",
+      "final": "doc:/docs/admin/course-management#3/attendance-monitoring"
+    },
+    {
+      "id": "c-0176",
+      "q": "제가 읽어본 안내에는 없던 내용인데 정말 가능한 건가요",
+      "p": "Q-09",
+      "m": "sonnet",
+      "label": "clarify",
+      "label2": "clarify"
+    },
+    {
+      "id": "c-0177",
+      "q": "아이 혼자 접속할 때 설치는 어렵지 않은지 확인하고 싶습니다",
+      "p": "Q-09",
+      "m": "sonnet",
+      "label": "doc:/docs/start/signup#5/parent-message-template",
+      "label2": "missing:guide:classin-app-download",
+      "final": "missing:guide:classin-app-download"
+    },
+    {
+      "id": "c-0178",
+      "q": "담당자와 직접 통화할 수 있는 번호나 방법이 있나요",
+      "p": "Q-09",
+      "m": "sonnet",
+      "label": "doc:/docs/start/company-overview#9/adoption-inquiry",
+      "label2": "doc:/docs/start/company-overview#9/adoption-inquiry"
+    },
+    {
+      "id": "c-0179",
+      "q": "화면 공유하는 속도를 늦춰서 볼 수 있다던데 사실입니까",
+      "p": "Q-09",
+      "m": "sonnet",
+      "label": "none",
+      "label2": "none"
+    },
+    {
+      "id": "c-0180",
+      "q": "이런 기능이 안 되면 다른 곳으로 가겠습니다 결론만 알려주세요",
+      "p": "Q-09",
+      "m": "sonnet",
+      "label": "clarify",
+      "label2": "clarify"
+    },
+    {
+      "id": "c-0181",
+      "q": "이거 ㄹㅇ 뭐하는 거임",
+      "p": "Q-10",
+      "m": "sonnet",
+      "label": "doc:/docs/start/company-overview#summary/what-is-classin",
+      "label2": "doc:/docs/start/company-overview#summary/what-is-classin"
+    },
+    {
+      "id": "c-0182",
+      "q": "수업 중에 필기 공유 되냐ㅋㅋ",
+      "p": "Q-10",
+      "m": "sonnet",
+      "label": "doc:/docs/software/classroom-tools#2/board-to-report",
+      "label2": "doc:guide:cs-figma-digest-120/board-save-share",
+      "final": "doc:/docs/software/classroom-tools#2/board-to-report"
+    },
+    {
+      "id": "c-0184",
+      "q": "내가 딴짓하면 쌤이 앎?",
+      "p": "Q-10",
+      "m": "sonnet",
+      "label": "gap:classroom/attention-detect",
+      "label2": "gap:classroom/attention-detect"
+    },
+    {
+      "id": "c-0185",
+      "q": "ㅇㅇ 그럼 다른 창 켜놔도 모름?",
+      "p": "Q-10",
+      "m": "sonnet",
+      "label": "gap:classroom/attention-detect",
+      "label2": "gap:classroom/student-screen-view",
+      "final": "gap:classroom/attention-detect"
+    },
+    {
+      "id": "c-0186",
+      "q": "녹화한거 나도 볼 수 있음?",
+      "p": "Q-10",
+      "m": "sonnet",
+      "label": "howto:replay-howto",
+      "label2": "howto:replay-howto"
+    },
+    {
+      "id": "c-0187",
+      "q": "쌤이 내 화면 볼 수 있는거임ㅋㅋ",
+      "p": "Q-10",
+      "m": "sonnet",
+      "label": "gap:classroom/student-screen-view",
+      "label2": "gap:classroom/student-screen-view"
+    },
+    {
+      "id": "c-0188",
+      "q": "카메라 꺼도 되냐",
+      "p": "Q-10",
+      "m": "sonnet",
+      "label": "fixed:basics-camera-required",
+      "label2": "fixed:basics-camera-required"
+    },
+    {
+      "id": "c-0189",
+      "q": "채팅은 쌤만 보임?",
+      "p": "Q-10",
+      "m": "sonnet",
+      "label": "doc:/docs/student/chat#summary/chat-overview",
+      "label2": "fixed:basics-student-ask-teacher",
+      "final": "fixed:basics-student-ask-teacher"
+    },
+    {
+      "id": "c-0190",
+      "q": "출석 체크 어케 함",
+      "p": "Q-10",
+      "m": "sonnet",
+      "label": "doc:/docs/admin/course-management#3/attendance-monitoring",
+      "label2": "doc:/docs/admin/course-management#3/attendance-monitoring"
+    },
+    {
+      "id": "c-0191",
+      "q": "폰으로도 되냐 ㄹㅇ",
+      "p": "Q-10",
+      "m": "sonnet",
+      "label": "doc:/docs/software/software-overview#0/app-and-dashboard",
+      "label2": "doc:/docs/teacher/course-units#3/any-device",
+      "final": "doc:/docs/software/software-overview#0/app-and-dashboard"
+    },
+    {
+      "id": "c-0192",
+      "q": "숙제 안 내면 걸림?",
+      "p": "Q-10",
+      "m": "sonnet",
+      "label": "fixed:notify-non-submitters-parents",
+      "label2": "fixed:notify-non-submitters-parents"
+    },
+    {
+      "id": "c-0193",
+      "q": "소리 안나는데 이거 뭐임",
+      "p": "Q-10",
+      "m": "sonnet",
+      "label": "howto:audio-cant-hear",
+      "label2": "howto:audio-cant-hear"
+    },
+    {
+      "id": "c-0194",
+      "q": "엄마가 내 수업 기록 다 볼 수 있음?",
+      "p": "Q-10",
+      "m": "sonnet",
+      "label": "doc:/docs/admin/course-management#3/report-link-parent-message",
+      "label2": "fixed:basics-parent-signup",
+      "final": "fixed:basics-parent-signup"
+    },
+    {
+      "id": "c-0195",
+      "q": "이거 쓰면 렉 심함?ㅋㅋ",
+      "p": "Q-10",
+      "m": "sonnet",
+      "label": "howto:class-slow",
+      "label2": "fixed:basics-load-performance",
+      "final": "fixed:basics-load-performance"
+    },
+    {
+      "id": "c-0196",
+      "q": "필기한거 친구한테 보내도 됨",
+      "p": "Q-10",
+      "m": "sonnet",
+      "label": "doc:guide:cs-figma-digest-120/board-save-share",
+      "label2": "doc:guide:cs-figma-digest-120/board-save-share"
+    },
+    {
+      "id": "c-0197",
+      "q": "수업 중에 졸면 쌤한테 뜨냐",
+      "p": "Q-10",
+      "m": "sonnet",
+      "label": "gap:classroom/attention-detect",
+      "label2": "gap:classroom/attention-detect"
+    },
+    {
+      "id": "c-0198",
+      "q": "ㅇㅇ 근데 이거 가격 얼마임",
+      "p": "Q-10",
+      "m": "sonnet",
+      "label": "doc:/docs/start/value-and-cost-framing#summary/cost-overview",
+      "label2": "doc:/docs/start/value-and-cost-framing#summary/cost-overview"
+    },
+    {
+      "id": "c-0199",
+      "q": "그냥 줌이랑 뭐가 다름",
+      "p": "Q-10",
+      "m": "sonnet",
+      "label": "doc:/docs/start/academy-system-os-positioning#1/vs-zoom",
+      "label2": "doc:/docs/start/academy-system-os-positioning#1/vs-zoom"
+    },
+    {
+      "id": "c-0200",
+      "q": "수업 지루한데 배속 가능함?ㅋㅋ",
+      "p": "Q-10",
+      "m": "sonnet",
+      "label": "missing:doc:/docs/student/course-submit-activity#1",
+      "label2": "missing:doc:/docs/student/course-submit-activity#1"
+    },
+    {
+      "id": "c-0201",
+      "q": "학생끼리 온라인 스터디룸 용도로도 쓸 수 있나요?",
+      "p": "Q-11",
+      "m": "opus",
+      "label": "none",
+      "label2": "doc:/docs/student/chat#2/temp-class-what",
+      "final": "doc:/docs/student/chat#2/temp-class-what"
+    },
+    {
+      "id": "c-0202",
+      "q": "1) 8명 동시 접속 가능 여부 2) 무료 여부 알려주세요.",
+      "p": "Q-11",
+      "m": "opus",
+      "label": "policy:max-participants",
+      "label2": "policy:max-participants"
+    },
+    {
+      "id": "c-0203",
+      "q": "화면 공유할 때 지연 시간이 어느 정도인지 궁금합니다.",
+      "p": "Q-11",
+      "m": "opus",
+      "label": "policy:network-latency-region",
+      "label2": "none",
+      "final": "none"
+    },
+    {
+      "id": "c-0204",
+      "q": "줌과 비교해서 장단점 정리해 주세요.",
+      "p": "Q-11",
+      "m": "opus",
+      "label": "doc:/docs/start/academy-system-os-positioning#1/vs-zoom",
+      "label2": "doc:/docs/start/academy-system-os-positioning#1/vs-zoom"
+    },
+    {
+      "id": "c-0205",
+      "q": "스터디 카페 월 이용료와 비교하면 어느 쪽이 저렴한가요?",
+      "p": "Q-11",
+      "m": "opus",
+      "label": "none",
+      "label2": "policy:why-expensive-compare",
+      "final": "policy:why-expensive-compare"
+    },
+    {
+      "id": "c-0206",
+      "q": "개인 학생도 가입할 수 있나요, 아니면 학원만 되나요?",
+      "p": "Q-11",
+      "m": "opus",
+      "label": "doc:/docs/student/course-join#1/only-academy-registers",
+      "label2": "doc:/docs/start/signup#summary/signup-overview",
+      "final": "doc:/docs/start/signup#summary/signup-overview"
+    },
+    {
+      "id": "c-0207",
+      "q": "캠만 켜두고 각자 공부하는 캠스터디 방식도 가능한가요?",
+      "p": "Q-11",
+      "m": "opus",
+      "label": "none",
+      "label2": "none"
+    },
+    {
+      "id": "c-0208",
+      "q": "1. 방 만드는 법 2. 친구 초대하는 법 순서대로 알려주세요.",
+      "p": "Q-11",
+      "m": "opus",
+      "label": "doc:/docs/student/chat#2/temp-class-how",
+      "label2": "doc:/docs/student/chat#2/temp-class-how"
+    },
+    {
+      "id": "c-0209",
+      "q": "노트북 사양이 낮은데 8명 영상이 버벅이지 않을까요?",
+      "p": "Q-11",
+      "m": "opus",
+      "label": "howto:class-slow",
+      "label2": "fixed:basics-load-performance",
+      "final": "fixed:basics-load-performance"
+    },
+    {
+      "id": "c-0210",
+      "q": "PC·모바일·태블릿 중 어디서 접속되는지 기기별로 정리해 주세요.",
+      "p": "Q-11",
+      "m": "opus",
+      "label": "doc:/docs/software/software-overview#0/app-and-dashboard",
+      "label2": "doc:/docs/software/software-overview#0/app-and-dashboard"
+    },
+    {
+      "id": "c-0211",
+      "q": "녹화 기능을 스터디 기록용으로 써도 되나요?",
+      "p": "Q-11",
+      "m": "opus",
+      "label": "doc:/docs/teacher/lesson-option-concepts#summary/rec-sum",
+      "label2": "doc:/docs/admin/billing-upgrade#4/recording-conditions",
+      "final": "doc:/docs/admin/billing-upgrade#4/recording-conditions"
+    },
+    {
+      "id": "c-0212",
+      "q": "방을 하루 몇 시간까지 연속으로 열어둘 수 있나요?",
+      "p": "Q-11",
+      "m": "opus",
+      "label": "policy:class-duration-limit",
+      "label2": "policy:class-duration-limit"
+    },
+    {
+      "id": "c-0213",
+      "q": "화이트보드에 여러 명이 동시에 필기할 수 있나요?",
+      "p": "Q-11",
+      "m": "opus",
+      "label": "doc:/docs/student/class-join-replay#2/crown-permission",
+      "label2": "doc:/docs/software/classroom-tools#4/student-quizzes",
+      "final": "doc:/docs/software/classroom-tools#4/student-quizzes"
+    },
+    {
+      "id": "c-0214",
+      "q": "와이파이가 끊겼다가 다시 들어오면 방이 그대로 유지되나요?",
+      "p": "Q-11",
+      "m": "opus",
+      "label": "fixed:class-disconnect",
+      "label2": "doc:/docs/start/class-connection-troubleshooting#0/conn-urgent-first",
+      "final": "fixed:class-disconnect"
+    },
+    {
+      "id": "c-0215",
+      "q": "학생 할인이나 무료 체험 기간이 있는지 알려주세요.",
+      "p": "Q-11",
+      "m": "opus",
+      "label": "doc:/docs/software/software-pricing-quote-bundle-faq#2/free-trial",
+      "label2": "doc:/docs/software/software-pricing-quote-bundle-faq#2/trial-quote-request-how",
+      "final": "doc:/docs/software/software-pricing-quote-bundle-faq#2/trial-quote-request-how"
+    },
+    {
+      "id": "c-0216",
+      "q": "타이머나 뽀모도로 같은 집중 기능이 있나요?",
+      "p": "Q-11",
+      "m": "opus",
+      "label": "doc:/docs/software/classroom-tools#1/timer-dice",
+      "label2": "doc:/docs/software/classroom-tools#1/timer-dice"
+    },
+    {
+      "id": "c-0217",
+      "q": "1) 소리 울림 2) 마이크 잡음, 각각 해결 방법이 있을까요?",
+      "p": "Q-11",
+      "m": "opus",
+      "label": "howto:audio-echo",
+      "label2": "howto:audio-echo"
+    },
+    {
+      "id": "c-0218",
+      "q": "카톡 그룹통화보다 나은 점 세 가지만 정리해 주세요.",
+      "p": "Q-11",
+      "m": "opus",
+      "label": "doc:/docs/start/why-classin-needs#7/just-zoom",
+      "label2": "fixed:basics-vs-other-video-tools",
+      "final": "fixed:basics-vs-other-video-tools"
+    },
+    {
+      "id": "c-0219",
+      "q": "스터디원 출석 기록을 자동으로 남길 수 있나요?",
+      "p": "Q-11",
+      "m": "opus",
+      "label": "doc:/docs/admin/course-management#3/attendance-monitoring",
+      "label2": "doc:/docs/admin/course-management#3/attendance-monitoring"
+    },
+    {
+      "id": "c-0221",
+      "q": "SSO 지원돼요? SAML이랑 OIDC 둘 다요?",
+      "p": "Q-12",
+      "m": "opus",
+      "label": "gap:account/school-sso",
+      "label2": "gap:account/school-sso"
+    },
+    {
+      "id": "c-0222",
+      "q": "로그 보존 기간은요?",
+      "p": "Q-12",
+      "m": "opus",
+      "label": "none",
+      "label2": "none"
+    },
+    {
+      "id": "c-0223",
+      "q": "방화벽에서 열어야 할 포트·도메인 목록 있어요?",
+      "p": "Q-12",
+      "m": "opus",
+      "label": "fixed:network-environment",
+      "label2": "fixed:network-environment"
+    },
+    {
+      "id": "c-0224",
+      "q": "장애 대응 SLA 문서로 받을 수 있나요?",
+      "p": "Q-12",
+      "m": "opus",
+      "label": "policy:sla-availability",
+      "label2": "policy:sla-availability"
+    },
+    {
+      "id": "c-0225",
+      "q": "학원별로 관리자 테넌트 분리 가능해요?",
+      "p": "Q-12",
+      "m": "opus",
+      "label": "none",
+      "label2": "policy:branch-account-invoice-split",
+      "final": "policy:branch-account-invoice-split"
+    },
+    {
+      "id": "c-0226",
+      "q": "계정 일괄 생성은 CSV 업로드예요, API예요?",
+      "p": "Q-12",
+      "m": "opus",
+      "label": "none",
+      "label2": "howto:cs-figma-digest-1327-proxy-register-student",
+      "final": "howto:cs-figma-digest-1327-proxy-register-student"
+    },
+    {
+      "id": "c-0227",
+      "q": "데이터센터 리전 어디예요? 국내 있어요?",
+      "p": "Q-12",
+      "m": "opus",
+      "label": "policy:basics-data-server-location",
+      "label2": "policy:basics-data-server-location"
+    },
+    {
+      "id": "c-0228",
+      "q": "UDP 막힌 망에서 TCP 443 폴백 되나요?",
+      "p": "Q-12",
+      "m": "opus",
+      "label": "none",
+      "label2": "none"
+    },
+    {
+      "id": "c-0229",
+      "q": "트래픽 경로에 해외 서버 경유 구간 있어요?",
+      "p": "Q-12",
+      "m": "opus",
+      "label": "policy:basics-data-server-location",
+      "label2": "policy:basics-data-server-location"
+    },
+    {
+      "id": "c-0230",
+      "q": "개인정보 처리 위탁 계약서 샘플 받을 수 있어요?",
+      "p": "Q-12",
+      "m": "opus",
+      "label": "none",
+      "label2": "policy:breach-liability",
+      "final": "policy:breach-liability"
+    },
+    {
+      "id": "c-0231",
+      "q": "ISMS나 ISO 27001 인증 보유하고 있어요?",
+      "p": "Q-12",
+      "m": "opus",
+      "label": "none",
+      "label2": "gap:company/press-awards",
+      "final": "none"
+    },
+    {
+      "id": "c-0232",
+      "q": "클라이언트 MSI 배포랑 무인 설치 옵션 지원해요?",
+      "p": "Q-12",
+      "m": "opus",
+      "label": "none",
+      "label2": "none"
+    },
+    {
+      "id": "c-0233",
+      "q": "학원 20곳 묶으면 볼륨 라이선스 단가 어떻게 돼요?",
+      "p": "Q-12",
+      "m": "opus",
+      "label": "policy:group-purchase-bulk-price",
+      "label2": "policy:group-purchase-bulk-price"
+    },
+    {
+      "id": "c-0234",
+      "q": "어제 저녁 접속 장애 있었나요? 상태 페이지 있어요?",
+      "p": "Q-12",
+      "m": "opus",
+      "label": "policy:sla-availability",
+      "label2": "policy:sla-availability"
+    },
+    {
+      "id": "c-0235",
+      "q": "녹화 파일 외부 스토리지로 자동 내보내기 되나요?",
+      "p": "Q-12",
+      "m": "opus",
+      "label": "none",
+      "label2": "doc:/docs/admin/course-management#3/recording-data-admin",
+      "final": "none"
+    },
+    {
+      "id": "c-0236",
+      "q": "프록시 서버 경유 환경에서도 접속돼요?",
+      "p": "Q-12",
+      "m": "opus",
+      "label": "none",
+      "label2": "none"
+    },
+    {
+      "id": "c-0237",
+      "q": "권장 대역폭 사용자당 업·다운 몇 Mbps예요?",
+      "p": "Q-12",
+      "m": "opus",
+      "label": "doc:/docs/start/pc-install#summary/internet-speed-guide",
+      "label2": "doc:/docs/start/pc-install#summary/internet-speed-guide"
+    },
+    {
+      "id": "c-0238",
+      "q": "출결 이벤트 웹훅으로 받을 수 있나요?",
+      "p": "Q-12",
+      "m": "opus",
+      "label": "none",
+      "label2": "none"
+    },
+    {
+      "id": "c-0239",
+      "q": "장애 시 1차 접수 채널이 티켓이에요, 전화예요?",
+      "p": "Q-12",
+      "m": "opus",
+      "label": "policy:sla-availability",
+      "label2": "policy:sla-availability"
+    },
+    {
+      "id": "c-0240",
+      "q": "SCIM 프로비저닝 지원 여부 확인 부탁해요.",
+      "p": "Q-12",
+      "m": "opus",
+      "label": "none",
+      "label2": "none"
+    },
+    {
+      "id": "c-0241",
+      "q": "조달청 나라장터에 등록된 제품인지 확인 부탁드립니다.",
+      "p": "Q-13",
+      "m": "opus",
+      "label": "policy:school-procurement",
+      "label2": "policy:school-procurement"
+    },
+    {
+      "id": "c-0242",
+      "q": "수의계약 가능 여부와 관련 근거가 있을까요?",
+      "p": "Q-13",
+      "m": "opus",
+      "label": "policy:school-procurement",
+      "label2": "policy:school-procurement",
+      "final": "policy:school-procurement"
+    },
+    {
+      "id": "c-0243",
+      "q": "디지털서비스 이용지원시스템 등록 여부도 궁금합니다.",
+      "p": "Q-13",
+      "m": "opus",
+      "label": "none",
+      "label2": "policy:school-procurement",
+      "final": "policy:school-procurement"
+    },
+    {
+      "id": "c-0244",
+      "q": "고령 주민도 쉽게 쓸 수 있는 화면인지 검토가 필요합니다.",
+      "p": "Q-13",
+      "m": "opus",
+      "label": "none",
+      "label2": "none"
+    },
+    {
+      "id": "c-0245",
+      "q": "견적서와 사업자등록증 사본 송부가 가능할까요?",
+      "p": "Q-13",
+      "m": "opus",
+      "label": "doc:/docs/software/software-pricing-quote-bundle-faq#2/trial-quote-request-how",
+      "label2": "policy:school-procurement",
+      "final": "doc:/docs/software/software-pricing-quote-bundle-faq#2/trial-quote-request-how"
+    },
+    {
+      "id": "c-0246",
+      "q": "공공기관 도입 사례가 있으시면 공유 부탁드립니다.",
+      "p": "Q-13",
+      "m": "opus",
+      "label": "fixed:basics-show-adoption-cases",
+      "label2": "doc:/docs/start/company-overview#7/where-used",
+      "final": "policy:basics-corporate-training"
+    },
+    {
+      "id": "c-0247",
+      "q": "읍면 마을회관 인터넷 환경에서도 원활히 운영되는지요?",
+      "p": "Q-13",
+      "m": "opus",
+      "label": "doc:/docs/start/pc-install#summary/internet-speed-guide",
+      "label2": "doc:/docs/start/pc-install#summary/internet-speed-guide"
+    },
+    {
+      "id": "c-0248",
+      "q": "참여자 출석 및 이수 현황을 증빙 자료로 출력 가능한지요?",
+      "p": "Q-13",
+      "m": "opus",
+      "label": "doc:/docs/admin/course-management#3/attendance-monitoring",
+      "label2": "doc:/docs/start/academy-system-os-positioning#4/admin-data-overview",
+      "final": "doc:/docs/start/academy-system-os-positioning#4/admin-data-overview"
+    },
+    {
+      "id": "c-0249",
+      "q": "연간 계약과 월 단위 계약 중 어느 방식이 가능한지 여쭙습니다.",
+      "p": "Q-13",
+      "m": "opus",
+      "label": "policy:billing-period-term",
+      "label2": "policy:billing-period-term"
+    },
+    {
+      "id": "c-0250",
+      "q": "클라우드 보안인증(CSAP) 취득 여부 확인 부탁드립니다.",
+      "p": "Q-13",
+      "m": "opus",
+      "label": "none",
+      "label2": "policy:school-procurement",
+      "final": "none"
+    },
+    {
+      "id": "c-0251",
+      "q": "강사 대상 사전 교육을 별도로 지원해 주시는지요?",
+      "p": "Q-13",
+      "m": "opus",
+      "label": "doc:/docs/start/company-overview#6/manager-training",
+      "label2": "doc:/docs/start/company-overview#6/manager-training"
+    },
+    {
+      "id": "c-0252",
+      "q": "주민 개인정보 수집 범위가 어떻게 되는지 문의드립니다.",
+      "p": "Q-13",
+      "m": "opus",
+      "label": "none",
+      "label2": "missing:doc:/docs/start/pre-adoption-faq-22-questions#4",
+      "final": "missing:doc:/docs/start/pre-adoption-faq-22-questions#4"
+    },
+    {
+      "id": "c-0253",
+      "q": "스마트폰만 있는 주민도 참여 가능한지 확인 부탁드립니다.",
+      "p": "Q-13",
+      "m": "opus",
+      "label": "none",
+      "label2": "doc:/docs/software/software-overview#0/app-and-dashboard",
+      "final": "doc:/docs/software/software-overview#0/app-and-dashboard"
+    },
+    {
+      "id": "c-0254",
+      "q": "전자칠판 장비도 함께 조달 구매가 가능할까요?",
+      "p": "Q-13",
+      "m": "opus",
+      "label": "policy:school-procurement",
+      "label2": "policy:school-procurement"
+    },
+    {
+      "id": "c-0255",
+      "q": "중소기업 제품 우선구매 대상에 해당하는지 궁금합니다.",
+      "p": "Q-13",
+      "m": "opus",
+      "label": "none",
+      "label2": "policy:school-procurement",
+      "final": "none"
+    },
+    {
+      "id": "c-0256",
+      "q": "수업 중 접속 장애 발생 시 현장 대응도 가능한지요?",
+      "p": "Q-13",
+      "m": "opus",
+      "label": "none",
+      "label2": "policy:sla-availability",
+      "final": "policy:sla-availability"
+    },
+    {
+      "id": "c-0257",
+      "q": "내부 검토용 제안서 자료가 있으시면 회신 부탁드립니다.",
+      "p": "Q-13",
+      "m": "opus",
+      "label": "gap:company/rfp-proposal",
+      "label2": "doc:/docs/start/pre-adoption-faq-22-questions#7/consult-goal-one",
+      "final": "doc:/docs/start/pre-adoption-faq-22-questions#7/consult-goal-one"
+    },
+    {
+      "id": "c-0258",
+      "q": "사업 종료 후 데이터 파기 확인서 발급이 되는지요?",
+      "p": "Q-13",
+      "m": "opus",
+      "label": "policy:basics-contract-end-data",
+      "label2": "policy:basics-contract-end-data"
+    },
+    {
+      "id": "c-0259",
+      "q": "검토 후 회신드리겠습니다. 담당 부서를 안내받을 수 있을까요?",
+      "p": "Q-13",
+      "m": "opus",
+      "label": "doc:/docs/start/company-overview#9/adoption-inquiry",
+      "label2": "doc:/docs/start/company-overview#9/adoption-inquiry"
+    },
+    {
+      "id": "c-0260",
+      "q": "주말에도 상담 응대가 되는지 여쭙습니다.",
+      "p": "Q-13",
+      "m": "opus",
+      "label": "none",
+      "label2": "none"
+    },
+    {
+      "id": "c-0261",
+      "q": "교대 근무자 안전교육, 녹화로 돌리면 되는 거죠?",
+      "p": "Q-14",
+      "m": "opus",
+      "label": "none",
+      "label2": "doc:/docs/teacher/course-units#0/vod-course",
+      "final": "doc:/docs/teacher/course-units#0/vod-course"
+    },
+    {
+      "id": "c-0262",
+      "q": "녹화 보고 이수 처리까지 한 번에 돼요?",
+      "p": "Q-14",
+      "m": "opus",
+      "label": "none",
+      "label2": "doc:/docs/teacher/course-units#0/vod-course",
+      "final": "doc:/docs/teacher/course-units#0/vod-course"
+    },
+    {
+      "id": "c-0263",
+      "q": "그래서 유튜브 일부공개랑 뭐가 달라지는데요",
+      "p": "Q-14",
+      "m": "opus",
+      "label": "none",
+      "label2": "doc:/docs/teacher/course-units#0/vod-course",
+      "final": "none"
+    },
+    {
+      "id": "c-0264",
+      "q": "영상 틀어놓고 딴짓하면 그건 어떻게 잡아요?",
+      "p": "Q-14",
+      "m": "opus",
+      "label": "none",
+      "label2": "gap:classroom/attention-detect",
+      "final": "gap:classroom/attention-detect"
+    },
+    {
+      "id": "c-0265",
+      "q": "300명 기준 얼마예요, 대충이라도.",
+      "p": "Q-14",
+      "m": "opus",
+      "label": "doc:/docs/start/value-and-cost-framing#summary/cost-overview",
+      "label2": "policy:billing-unit",
+      "final": "policy:billing-unit"
+    },
+    {
+      "id": "c-0266",
+      "q": "이수 명단 엑셀로 뽑혀요?",
+      "p": "Q-14",
+      "m": "opus",
+      "label": "gap:course/roster-export",
+      "label2": "gap:course/roster-export"
+    },
+    {
+      "id": "c-0267",
+      "q": "야간조는 새벽 3시에 보는데 그때도 접속 돼요?",
+      "p": "Q-14",
+      "m": "opus",
+      "label": "none",
+      "label2": "none"
+    },
+    {
+      "id": "c-0268",
+      "q": "현장에서 폰으로 보다 끊기면 이어보기 돼요?",
+      "p": "Q-14",
+      "m": "opus",
+      "label": "fixed:class-disconnect",
+      "label2": "none",
+      "final": "none"
+    },
+    {
+      "id": "c-0269",
+      "q": "끝에 시험 붙여서 통과해야 이수되게 할 수 있어요?",
+      "p": "Q-14",
+      "m": "opus",
+      "label": "none",
+      "label2": "missing:doc:/docs/teacher/course-activities#1",
+      "final": "missing:doc:/docs/teacher/course-activities#1"
+    },
+    {
+      "id": "c-0270",
+      "q": "노동부 점검 나오면 이 기록 인정돼요?",
+      "p": "Q-14",
+      "m": "opus",
+      "label": "none",
+      "label2": "none"
+    },
+    {
+      "id": "c-0271",
+      "q": "프로그램 깔아야 돼요? 직원들 그런 거 못 해요.",
+      "p": "Q-14",
+      "m": "opus",
+      "label": "missing:guide:classin-app-download",
+      "label2": "doc:/docs/admin/web-live-playback#0/what-it-does",
+      "final": "doc:/docs/admin/web-live-playback#0/what-it-does"
+    },
+    {
+      "id": "c-0272",
+      "q": "미이수자한테 알림 자동으로 가는 거 있어요?",
+      "p": "Q-14",
+      "m": "opus",
+      "label": "none",
+      "label2": "fixed:notify-non-submitters-parents",
+      "final": "fixed:notify-non-submitters-parents"
+    },
+    {
+      "id": "c-0273",
+      "q": "전자칠판은 됐고, 소프트웨어만 따로 사요?",
+      "p": "Q-14",
+      "m": "opus",
+      "label": "doc:/docs/software/software-pricing-quote-bundle-faq#1/board-bundle-quote",
+      "label2": "policy:software-plan-overview",
+      "final": "policy:software-plan-overview"
+    },
+    {
+      "id": "c-0274",
+      "q": "도입하는 데 며칠 걸려요?",
+      "p": "Q-14",
+      "m": "opus",
+      "label": "doc:/docs/start/customer-stories#7/settle-period",
+      "label2": "doc:/docs/start/value-and-cost-framing#0/install-onboarding-scope",
+      "final": "doc:/docs/start/value-and-cost-framing#0/install-onboarding-scope"
+    },
+    {
+      "id": "c-0275",
+      "q": "외국인 근로자도 있는데 자막 돼요?",
+      "p": "Q-14",
+      "m": "opus",
+      "label": "doc:/docs/updates/classin-609-update#5/live-caption-what",
+      "label2": "doc:/docs/updates/classin-609-update#5/live-caption-what"
+    },
+    {
+      "id": "c-0276",
+      "q": "로그인 안 된다는 직원 쏟아지면 누가 처리해요?",
+      "p": "Q-14",
+      "m": "opus",
+      "label": "none",
+      "label2": "none"
+    },
+    {
+      "id": "c-0277",
+      "q": "실시간 교육이랑 녹화 교육 섞어서 돌려도 돼요?",
+      "p": "Q-14",
+      "m": "opus",
+      "label": "none",
+      "label2": "doc:/docs/software/software-overview#2/learning-activities",
+      "final": "doc:/docs/software/software-overview#2/learning-activities"
+    },
+    {
+      "id": "c-0278",
+      "q": "이거 학원용 아니에요? 회사에서 써도 돼요?",
+      "p": "Q-14",
+      "m": "opus",
+      "label": "policy:basics-corporate-training",
+      "label2": "policy:basics-corporate-training"
+    },
+    {
+      "id": "c-0280",
+      "q": "챗봇 말고 사람 연결해 줘요.",
+      "p": "Q-14",
+      "m": "opus",
+      "label": "doc:/docs/software/software-pricing-quote-bundle-faq#2/trial-quote-request-how",
+      "label2": "doc:/docs/software/software-pricing-quote-bundle-faq#2/trial-quote-request-how"
+    },
+    {
+      "id": "c-0281",
+      "q": "새벽에 죄송해요, 우리 애들이 한국어를 배울 수 있을까요?",
+      "p": "Q-15",
+      "m": "opus",
+      "label": "none",
+      "label2": "fixed:find-tutor-marketplace",
+      "final": "fixed:find-tutor-marketplace"
+    },
+    {
+      "id": "c-0282",
+      "q": "내가 잘 몰라서요, 여기서 선생님을 구할 수 있나요?",
+      "p": "Q-15",
+      "m": "opus",
+      "label": "fixed:find-tutor-marketplace",
+      "label2": "fixed:find-tutor-marketplace"
+    },
+    {
+      "id": "c-0283",
+      "q": "미국에 사는데요, 시차가 있어도 수업 예약이 되나요?",
+      "p": "Q-15",
+      "m": "opus",
+      "label": "none",
+      "label2": "fixed:overseas-students",
+      "final": "none"
+    },
+    {
+      "id": "c-0284",
+      "q": "손주 둘이 한 수업을 같이 들어도 되는지요?",
+      "p": "Q-15",
+      "m": "opus",
+      "label": "none",
+      "label2": "gap:account/account-sharing",
+      "final": "gap:account/account-sharing"
+    },
+    {
+      "id": "c-0285",
+      "q": "한국어를 거의 못 하는 아이들도 가르쳐 주시나요?",
+      "p": "Q-15",
+      "m": "opus",
+      "label": "none",
+      "label2": "fixed:find-tutor-marketplace",
+      "final": "fixed:find-tutor-marketplace"
+    },
+    {
+      "id": "c-0286",
+      "q": "결제는 외국 카드로도 되는지 여쭤봐요.",
+      "p": "Q-15",
+      "m": "opus",
+      "label": "policy:overseas-card",
+      "label2": "policy:overseas-card"
+    },
+    {
+      "id": "c-0287",
+      "q": "한 달에 얼마쯤 드는지 대충이라도 알 수 있을까요?",
+      "p": "Q-15",
+      "m": "opus",
+      "label": "doc:/docs/start/value-and-cost-framing#summary/cost-overview",
+      "label2": "doc:/docs/start/value-and-cost-framing#summary/cost-overview"
+    },
+    {
+      "id": "c-0288",
+      "q": "내가 잘 몰라서 그러는데 컴퓨터에 뭘 깔아야 하나요?",
+      "p": "Q-15",
+      "m": "opus",
+      "label": "missing:guide:classin-app-download",
+      "label2": "missing:doc:/docs/start/pc-install#summary",
+      "final": "missing:doc:/docs/start/pc-install#summary"
+    },
+    {
+      "id": "c-0289",
+      "q": "우리 애들이 아이패드밖에 없는데 그걸로 되나요?",
+      "p": "Q-15",
+      "m": "opus",
+      "label": "missing:guide:classin-app-download",
+      "label2": "missing:doc:/docs/start/mobile-install#summary",
+      "final": "missing:doc:/docs/start/mobile-install#summary"
+    },
+    {
+      "id": "c-0290",
+      "q": "수업 시간은 한국 시간으로 잡나요, 여기 시간으로 잡나요?",
+      "p": "Q-15",
+      "m": "opus",
+      "label": "none",
+      "label2": "none"
+    },
+    {
+      "id": "c-0291",
+      "q": "늦은 밤에 미안해요, 수업 끝나고 다시 볼 수 있나요?",
+      "p": "Q-15",
+      "m": "opus",
+      "label": "howto:replay-howto",
+      "label2": "howto:replay-howto"
+    },
+    {
+      "id": "c-0292",
+      "q": "선생님이 영어도 조금 하시면 좋겠는데 가능할까요?",
+      "p": "Q-15",
+      "m": "opus",
+      "label": "none",
+      "label2": "fixed:find-tutor-marketplace",
+      "final": "fixed:find-tutor-marketplace"
+    },
+    {
+      "id": "c-0293",
+      "q": "수업 중에 소리가 안 들리면 내가 어떻게 해야 하나요?",
+      "p": "Q-15",
+      "m": "opus",
+      "label": "howto:audio-cant-hear",
+      "label2": "howto:audio-cant-hear"
+    },
+    {
+      "id": "c-0294",
+      "q": "우리 애들이 6살, 9살인데 같은 반이 될까요?",
+      "p": "Q-15",
+      "m": "opus",
+      "label": "none",
+      "label2": "doc:/docs/student/course-join#1/only-academy-registers",
+      "final": "doc:/docs/student/course-join#1/only-academy-registers"
+    },
+    {
+      "id": "c-0295",
+      "q": "할머니가 옆에서 같이 봐도 괜찮은가요?",
+      "p": "Q-15",
+      "m": "opus",
+      "label": "none",
+      "label2": "none"
+    },
+    {
+      "id": "c-0296",
+      "q": "환불은 어떻게 되는지, 내가 잘 몰라서 여쭤요.",
+      "p": "Q-15",
+      "m": "opus",
+      "label": "doc:/docs/admin/billing-upgrade#1/invoice-before-pay",
+      "label2": "doc:/docs/admin/billing-upgrade#1/invoice-before-pay"
+    },
+    {
+      "id": "c-0297",
+      "q": "선생님이 어떤 분인지 미리 알 수 있을까요?",
+      "p": "Q-15",
+      "m": "opus",
+      "label": "none",
+      "label2": "fixed:find-tutor-marketplace",
+      "final": "fixed:find-tutor-marketplace"
+    },
+    {
+      "id": "c-0298",
+      "q": "아이들 숙제도 거기서 내주고 봐주시나요?",
+      "p": "Q-15",
+      "m": "opus",
+      "label": "none",
+      "label2": "doc:/docs/student/course-grades#4/homework-feedback-where",
+      "final": "doc:/docs/student/course-grades#4/homework-feedback-where"
+    },
+    {
+      "id": "c-0299",
+      "q": "새벽이라 실례가 많아요, 답은 언제쯤 받을 수 있을까요?",
+      "p": "Q-15",
+      "m": "opus",
+      "label": "none",
+      "label2": "none"
+    },
+    {
+      "id": "c-0300",
+      "q": "자식들이 바빠서 혼자 해보려니 참 어렵네요.",
+      "p": "Q-15",
+      "m": "opus",
+      "label": "none",
+      "label2": "clarify",
+      "final": "clarify"
+    }
+  ]
+}

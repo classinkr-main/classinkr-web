@@ -1,4 +1,5 @@
-import { readFileSync, writeFileSync } from "node:fs"
+import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
 import { join, relative } from "node:path"
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
@@ -125,8 +126,24 @@ describe("compiled router: switch", () => {
   })
 })
 
-describe("compiled router with the repository data (no cards yet)", () => {
+describe("compiled router with an empty index (units only, no cards)", () => {
   it("answers every index-decided question with a fixed not-found text and no network call, even with a model key", async () => {
+    // 저장소 자료에 카드가 생겼으므로, 카드 0장 상태는 단위 파일만 복사한 임시 폴더로 만든다.
+    const dir = mkdtempSync(join(tmpdir(), "answer-index-empty-"))
+    try {
+      for (const name of ["units.json", "site-facts.json", "inventory.json", "manifest.json"]) {
+        cpSync(join(answerIndexDataDir(), name), join(dir, name))
+      }
+      vi.stubEnv("ANSWER_INDEX_DATA_DIR", dir)
+      resetRouterAnswerIndex()
+      await runEmptyIndexCheck()
+    } finally {
+      resetRouterAnswerIndex()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  async function runEmptyIndexCheck() {
     stubCompiledEnv("test-model-key")
     for (const question of INDEX_QUESTIONS) {
       const result = await evaluateChatbotQuery(question)
@@ -136,7 +153,7 @@ describe("compiled router with the repository data (no cards yet)", () => {
       expect(result.secondChance.secondChance).toBe("none")
     }
     expect(fetchSpy).not.toHaveBeenCalled()
-  })
+  }
 
   it("keeps the safety pre-steps and records them in the trace", async () => {
     stubCompiledEnv("test-model-key")
