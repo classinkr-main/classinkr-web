@@ -635,7 +635,7 @@ export interface CalibrationFile {
   version: string
   dataVersion: string
   weights: Record<ScoreComponent, number>
-  /** 카드 종류별 로지스틱 계수. w 는 §3.3 ⑥ 특징 13개 순서. */
+  /** 카드 종류별 로지스틱 계수. w 는 ANSWER_INDEX_FEATURES 순서(§3.3 ⑥ 13개 + knnCount1). 길이가 다르면 그 종류는 기본 계수. */
   confidence: Partial<Record<AnswerCardKind, { w: number[]; b: number }>>
   thresholds: Record<AnswerCardKind, number>
   nodocRatesChecked: number[]
@@ -722,7 +722,11 @@ export interface CalibrationSetFile {
 export type AnswerIndexRouter = "legacy" | "shadow" | "compiled"
 export type AnswerIndexDecisionKind = "answer" | "gap" | "abstain" | "clarify"
 
-/** 확신도 특징(§3.3 ⑥) 순서. calibration.confidence[kind].w 가 이 순서를 따른다. */
+/**
+ * 확신도 특징(§3.3 ⑥) 순서. calibration.confidence[kind].w 가 이 순서를 따른다(길이가 다르면 그 종류는 기본 계수, compile.ts).
+ * knnCount1(진단 R02): 우주 이웃(상위 10, 코사인 0.35 이상) 가운데 그 카드 라벨인 이웃 수를 log1p 로 눌러 0~1 로 맞춘 값
+ * (log1p(수) / log1p(10)). 라벨이 둘로 갈린 이웃은 반으로 센다. 이웃 몫(knnShare1)과 달리 이웃이 하나뿐인 소음과 촘촘한 근거를 가른다.
+ */
 export const ANSWER_INDEX_FEATURES = [
   "s1",
   "s1MinusS2",
@@ -737,6 +741,7 @@ export const ANSWER_INDEX_FEATURES = [
   "absentHit",
   "questionLength",
   "askTypeMatch",
+  "knnCount1",
 ] as const
 
 export type AnswerIndexFeatureName = (typeof ANSWER_INDEX_FEATURES)[number]
@@ -779,6 +784,11 @@ export interface AnswerIndexDecision {
   abstainReason?: "nodoc" | "symptom" | null
   /** 답에 꼬리(없는 부분 한 줄·못 찾은 조각 한 줄)가 붙는지. 흔적 AnswerIndexTrace.partial 과 같다. */
   partial?: boolean
+  /**
+   * 정해 둔 답 승격(진단 R07, decide.ts applyVoteRescue): 옛 정규식 표의 카드가 상위 3 안이고 검사를 통과해 문턱 아래에서도
+   * 그 카드로 답했으면 "vote". 흔적에는 decidedBy "index:vote-rescue" 로 남는다.
+   */
+  rescue?: "vote" | null
 }
 
 /** ChatbotCore.answerIndex 에 싣는 흔적. 응답에는 싣지 않는다. */
@@ -809,4 +819,9 @@ export interface AnswerIndexTrace {
   pre?: "greeting" | "policy_guard" | "exempt" | "english" | "handoff" | "tried" | null
   /** 고른 카드를 답으로 만들 수 없어 못 찾음으로 바꾼 이유(문장 해시 어긋남·옛 답 없음 등). */
   unavailable?: string | null
+  /**
+   * 결정 경로 표지. 정해 둔 답 승격(AnswerIndexDecision.rescue = vote)으로 답했으면 "index:vote-rescue", 아니면 null.
+   * 측정 줄의 decidedBy(index:<card>, 카드 대조용)는 그대로이고 이 칸이 승격 여부를 알려 준다.
+   */
+  decidedBy?: "index:vote-rescue" | null
 }

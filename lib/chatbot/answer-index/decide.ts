@@ -15,9 +15,21 @@
  *
  * 질문 전체(decide)
  *   짧은 질문은 최대 두 조각으로 나눠(segmentQuestion) 조각마다 정하고, 원문 전체로도 정한다.
+ *   - 조각의 답·공백은 그 종류 θ + SEGMENT_CONF_MARGIN(0.1) 이상일 때만 낸다(진단 R15: 확신도 모델은 원문 특징으로 맞췄다).
  *   - 두 조각이 서로 다른 카드로 답(또는 공백)하면 두 조각 판정을 잇는다(각 조각이 제 문턱을 넘었다).
  *   - 한 조각만 답하면, 원문 판정의 확신도가 그 조각보다 높을 때 원문을 쓰고 아니면 '그 답 + 나머지 조각 못 찾음 한 줄'.
  *   - 두 조각이 같은 카드면 하나로 본다.
+ *
+ * 정해 둔 답 승격(진단 R07, applyVoteRescue, CHATBOT_COMPILED_VOTE_RESCUE: 기본 켬 · off · override)
+ *   옛 정규식 표(votes) 카드가 원문 순위 상위 VOTE_RESCUE_TOP(3) 안에 있고 아래 검사를 모두 통과하면, 문턱에 못 미쳐 답하지 않던
+ *   질문을 그 카드로 답한다. override 면 1위가 다른 카드로 답했어도 표 카드로 바꾼다(혼합 P3 그대로). 기본이 override 가 아닌 까닭:
+ *   보정 묶음에서 '답을 바꾼' 줄은 손해, '못 찾음을 살린' 줄은 이득이었다. 흔적 decidedBy 는 index:vote-rescue.
+ *   legacy 문서 초안 경로는 쓰지 않는다.
+ *   - 카드: active 이고 끄지 않았고(순위에 있음) 종류가 doc·howto·fixed·policy(공백·상담 연결 카드는 승격하지 않는다).
+ *   - 범위: isCompiledScope.
+ *   - 없는 개념: 질문의 없는 개념을 그 카드가 모두 덮는다.
+ *   - 공백: 결정이 gap 이 아니다(없는 개념·공백 카드 판정은 그대로 둔다). 되묻기·두 조각을 이은 답도 그대로 둔다.
+ *   - NODOC: 반례 'none' 자리가 1위가 아니고, 우주 이웃의 'none' 몫이 VOTE_RESCUE_MAX_KNN_NONE(0.5) 미만이다.
  * 반례: 상위 5 후보마다 negMargin > 0 이면 탈락, 반례 행선 카드에 NEG_ROUTE_BONUS × 반례 코사인 가산, 행선이 none 이면
  * 탈락한 카드 점수로 'none' 자리를 만든다(1위가 되면 못 찾음).
  * 끈 카드(CHATBOT_COMPILED_DISABLED_CARDS)는 후보·이웃 라벨·표·반례 행선·없는 개념 공백 카드에서 빠지고 다음 순위가 경쟁한다.
@@ -26,7 +38,8 @@ import { prepareQuery, type CompiledAnswerIndex, type IndexQuery } from "./compi
 import { absentCoveredBy, checkCandidate, coverageWithoutSpan, NEG_ROUTE_BONUS, scoreNegatives, type CandidateCheck } from "./checks"
 import type { AbsentMatch } from "./lexicon"
 import { INDEX_SYMPTOM_RE, segmentQuestion } from "./normalize"
-import { compositeScore, confidenceOf, scoreCandidates, sortCandidates, type ScoreComponents } from "./score"
+import { isCompiledScope } from "./scope"
+import { compositeScore, confidenceOf, knnCountFeature, scoreCandidates, sortCandidates, type KnnSummary, type ScoreComponents } from "./score"
 import type {
   AnswerCardKind,
   AnswerIndexCandidate,
@@ -43,6 +56,13 @@ export const TRACE_TOP = 5
 export const ABSENT_TAIL_MIN_COVERAGE = 0.6
 /** 규칙으로 정한 공백(없는 개념)의 확신도. */
 export const ABSENT_GAP_CONF = 1
+/** 조각 판정의 문턱 여유(진단 R15): 조각 답·공백은 θ + 이 값 이상이어야 한다. */
+export const SEGMENT_CONF_MARGIN = 0.1
+/** 정해 둔 답 승격(진단 R07): 옛 정규식 표 카드가 원문 순위 이 안에 있어야 한다. */
+export const VOTE_RESCUE_TOP = 3
+/** 정해 둔 답 승격의 NODOC 검사: 우주 이웃 가운데 'none'(문서에 없음) 몫이 이 값 이상이면 승격하지 않는다. */
+export const VOTE_RESCUE_MAX_KNN_NONE = 0.5
+const VOTE_RESCUE_KINDS: ReadonlySet<AnswerCardKind> = new Set(["doc", "howto", "fixed", "policy"])
 const NONE_ID = "none"
 
 type Env = Record<string, string | undefined>
@@ -68,6 +88,16 @@ export function disabledCardIds(env: Env = process.env): ReadonlySet<string> {
     disabledCache.set = new Set(raw.split(",").map((id) => id.trim()).filter(Boolean))
   }
   return disabledCache.set
+}
+
+/** 정해 둔 답 승격 방식: off(끔) · below(기본: 답하지 않던 질문만) · override(다른 카드로 답한 질문도 표 카드로). */
+export type VoteRescueMode = "off" | "below" | "override"
+
+/** CHATBOT_COMPILED_VOTE_RESCUE: off·0·false 면 끔, override 면 덮어쓰기까지, 그 밖(없음·on)은 below. */
+export function voteRescueMode(env: Env = process.env): VoteRescueMode {
+  const raw = env.CHATBOT_COMPILED_VOTE_RESCUE?.trim().toLowerCase()
+  if (raw === "off" || raw === "0" || raw === "false") return "off"
+  return raw === "override" ? "override" : "below"
 }
 
 /** CHATBOT_COMPILED_MIN_CONFIDENCE: 모든 문턱의 하한(0~1). 없거나 잘못되면 null. */
@@ -115,7 +145,14 @@ function askTypeMatch(index: CompiledAnswerIndex, query: IndexQuery, card: numbe
   return asks.includes(query.askType) ? 1 : 0
 }
 
-function featuresOf(index: CompiledAnswerIndex, query: IndexQuery, ranked: RankedCandidate[], at: number, absentHit: boolean): AnswerIndexFeatures {
+function featuresOf(
+  index: CompiledAnswerIndex,
+  query: IndexQuery,
+  ranked: RankedCandidate[],
+  at: number,
+  absentHit: boolean,
+  knnCountOf: (card: number) => number
+): AnswerIndexFeatures {
   const candidate = ranked[at]
   const others = ranked.filter((_, position) => position !== at)
   const s2 = others.length > 0 ? others[0].s : 0
@@ -135,6 +172,7 @@ function featuresOf(index: CompiledAnswerIndex, query: IndexQuery, ranked: Ranke
     absentHit: absentHit ? 1 : 0,
     questionLength: Math.min(query.compact.length, 80) / 80,
     askTypeMatch: candidate.card >= 0 ? askTypeMatch(index, query, candidate.card) : 0.5,
+    knnCount1: candidate.card >= 0 ? knnCountFeature(knnCountOf(candidate.card)) : 0,
   }
 }
 
@@ -180,7 +218,7 @@ function rankWithChecks(index: CompiledAnswerIndex, query: IndexQuery, votes: re
   }
   // 아직 검사하지 않은 상위 후보(마지막 라운드에 올라온 것)도 특징용으로 검사한다.
   for (const candidate of ranked.slice(0, CHECK_TOP)) if (candidate.card >= 0 && !candidate.check) candidate.check = checkCandidate(index, query, candidate.card, inputs)
-  return { ranked, knn: scored.knn }
+  return { ranked, knn: scored.knn, knnCountOf: scored.knnCountOf }
 }
 
 function fallbackKind(index: CompiledAnswerIndex, query: IndexQuery, text: string, isSymptomReport: (text: string) => boolean) {
@@ -202,6 +240,10 @@ export interface SegmentAnalysis {
   top: AnswerIndexCandidate[]
   /** 1위 실제 카드(none 자리 제외)의 특징. */
   features: AnswerIndexFeatures | undefined
+  /** ranked 앞 VOTE_RESCUE_TOP 자리의 특징(none 자리는 undefined). 정해 둔 답 승격이 고른 카드의 특징으로 쓴다. */
+  topFeatures: (AnswerIndexFeatures | undefined)[]
+  /** 우주 이웃 요약(이웃 수·none·clarify·쓸 수 없음 몫). */
+  knn: KnnSummary
   /** ranked 안 첫 실제 카드 위치(-1 이면 없음). */
   topReal: number
   /** 1위 카드가 덮지 않은 없는 개념(첫째). */
@@ -219,17 +261,19 @@ export function analyzeSegment(index: CompiledAnswerIndex, text: string, context
   const disabled = disabledCardIds(env)
   const isSymptomReport = context.isSymptomReport ?? ((value: string) => INDEX_SYMPTOM_RE.test(value.toLowerCase()))
   const query = prepareQuery(index, text)
-  const { ranked } = rankWithChecks(index, query, context.votes ?? [], disabled)
+  const { ranked, knn, knnCountOf } = rankWithChecks(index, query, context.votes ?? [], disabled)
 
   const topReal = ranked.findIndex((candidate) => candidate.card >= 0)
   const uncovered = topReal >= 0 ? query.absent.filter((match) => !absentCoveredBy(index, query, match, ranked[topReal].card)) : query.absent
   const absentMatch = uncovered[0] ?? null
 
+  const featureAt = (at: number) => featuresOf(index, query, ranked, at, Boolean(absentMatch), knnCountOf)
   const confs = ranked.map((candidate, at) =>
-    candidate.card >= 0 ? confidenceOf(featuresOf(index, query, ranked, at, Boolean(absentMatch)), candidate.kind as AnswerCardKind, index.calibration) : 0
+    candidate.card >= 0 ? confidenceOf(featureAt(at), candidate.kind as AnswerCardKind, index.calibration) : 0
   )
   const top: AnswerIndexCandidate[] = ranked.slice(0, TRACE_TOP).map((candidate, at) => ({ id: candidate.id, s: candidate.s, conf: confs[at] }))
-  const features = topReal >= 0 ? featuresOf(index, query, ranked, topReal, Boolean(absentMatch)) : undefined
+  const features = topReal >= 0 ? featureAt(topReal) : undefined
+  const topFeatures = ranked.slice(0, VOTE_RESCUE_TOP).map((candidate, at) => (candidate.card >= 0 ? featureAt(at) : undefined))
   let absentCoverage: number | null = null
   let absentGapCard: number | null = null
   if (absentMatch) {
@@ -238,7 +282,21 @@ export function analyzeSegment(index: CompiledAnswerIndex, text: string, context
     const gapCard = absent ? index.cardById.get(absent.gapCard) : undefined
     if (gapCard !== undefined && !disabled.has(index.cards[gapCard].id)) absentGapCard = gapCard
   }
-  return { text, query, ranked, confs, top, features, topReal, absentMatch, absentCoverage, absentGapCard, fallback: fallbackKind(index, query, text, isSymptomReport) }
+  return {
+    text,
+    query,
+    ranked,
+    confs,
+    top,
+    features,
+    topFeatures,
+    knn,
+    topReal,
+    absentMatch,
+    absentCoverage,
+    absentGapCard,
+    fallback: fallbackKind(index, query, text, isSymptomReport),
+  }
 }
 
 /** 카드 종류별 문턱. */
@@ -322,6 +380,7 @@ function toDecision(result: SegmentResult, segments: SegmentResult[] | null): An
     features: result.features,
     abstainReason: result.abstainReason ?? null,
     partial: result.kind === "answer" ? partial : false,
+    rescue: null,
   }
 }
 
@@ -329,20 +388,81 @@ function toDecision(result: SegmentResult, segments: SegmentResult[] | null): An
 export interface QuestionAnalysis {
   whole: SegmentAnalysis
   parts: SegmentAnalysis[] | null
+  /** 넘겨받은 옛 정규식 표(카드 id). 정해 둔 답 승격이 쓴다. */
+  votes: readonly string[]
+  /** 정해 둔 답 승격 방식(CHATBOT_COMPILED_VOTE_RESCUE, 분석할 때의 환경변수). */
+  voteRescue: VoteRescueMode
+  /** 범위 관문(isCompiledScope, 분석할 때의 환경변수). */
+  inScope: boolean
 }
 
 export function analyzeQuestion(index: CompiledAnswerIndex, question: string, context: DecideContext = {}): QuestionAnalysis {
+  const env = context.env ?? process.env
   const whole = analyzeSegment(index, question, context)
   const pieces = segmentQuestion(question)
-  return { whole, parts: pieces.length < 2 ? null : pieces.map((piece) => analyzeSegment(index, piece, context)) }
+  return {
+    whole,
+    parts: pieces.length < 2 ? null : pieces.map((piece) => analyzeSegment(index, piece, context)),
+    votes: [...(context.votes ?? [])],
+    voteRescue: voteRescueMode(env),
+    inScope: isCompiledScope(question, env),
+  }
 }
 
-/** 분석 + 문턱 → 질문 판정. */
+/** 조각 판정용 문턱: 그 종류 θ + SEGMENT_CONF_MARGIN. */
+export function segmentThreshold(threshold: ThresholdFn): ThresholdFn {
+  return (kind) => threshold(kind) + SEGMENT_CONF_MARGIN
+}
+
+/** 분석 + 문턱 → 질문 판정(조각은 θ + SEGMENT_CONF_MARGIN, 그다음 정해 둔 답 승격). */
 export function resolveDecision(index: CompiledAnswerIndex, analysis: QuestionAnalysis, threshold: ThresholdFn): AnswerIndexDecision {
-  return combineSegments(
+  const partThreshold = segmentThreshold(threshold)
+  const base = combineSegments(
     resolveSegment(index, analysis.whole, threshold),
-    analysis.parts ? analysis.parts.map((part) => resolveSegment(index, part, threshold)) : null
+    analysis.parts ? analysis.parts.map((part) => resolveSegment(index, part, partThreshold)) : null
   )
+  return applyVoteRescue(index, analysis, base)
+}
+
+/**
+ * 정해 둔 답 승격(진단 R07, 혼합 P3 꼴). 머리말의 검사를 모두 통과한 옛 정규식 표 카드가 원문 상위 VOTE_RESCUE_TOP 안에 있으면
+ * 그 카드로 답한다(표 카드가 여럿이면 순위가 높은 쪽). 기본(below)은 답하지 않던(abstain) 판정만 바꾸고, override 는 다른 카드로
+ * 답한 판정도 바꾼다. 이미 그 카드로 답했거나 검사에 걸리면 원래 판정을 그대로 돌려준다.
+ */
+export function applyVoteRescue(index: CompiledAnswerIndex, analysis: QuestionAnalysis, base: AnswerIndexDecision): AnswerIndexDecision {
+  if (analysis.voteRescue === "off" || analysis.votes.length === 0 || !analysis.inScope) return base
+  // 공백(없는 개념·공백 카드)·되묻기는 그대로 둔다. 답은 override 일 때만, 두 조각을 이은 답은 언제나 그대로 둔다.
+  if (base.kind === "gap" || base.kind === "clarify") return base
+  if (base.kind === "answer" && (analysis.voteRescue !== "override" || base.segments)) return base
+  const whole = analysis.whole
+  const { ranked } = whole
+  // NODOC: 반례 none 자리가 1위이거나 우주 이웃 대부분이 '문서에 없음'이면 승격하지 않는다.
+  if (ranked.length === 0 || ranked[0].card < 0 || whole.knn.none >= VOTE_RESCUE_MAX_KNN_NONE) return base
+  const votes = new Set(analysis.votes)
+  for (let at = 0; at < Math.min(VOTE_RESCUE_TOP, ranked.length); at += 1) {
+    const candidate = ranked[at]
+    if (candidate.card < 0 || !votes.has(candidate.id)) continue
+    if (!VOTE_RESCUE_KINDS.has(candidate.kind as AnswerCardKind)) continue
+    if (index.cards[candidate.card].card.status !== "active") continue
+    if (whole.query.absent.some((match) => !absentCoveredBy(index, whole.query, match, candidate.card))) continue
+    if (base.kind === "answer" && base.card === candidate.id) return base
+    return {
+      kind: "answer",
+      card: candidate.id,
+      conf: whole.confs[at],
+      askType: whole.query.askType,
+      top: whole.top,
+      unexplained: candidate.check?.unexplained ?? [],
+      absentHit: null,
+      absentTail: null,
+      segments: null,
+      features: whole.topFeatures[at],
+      abstainReason: null,
+      partial: false,
+      rescue: "vote",
+    }
+  }
+  return base
 }
 
 /**
@@ -398,6 +518,7 @@ export interface TraceMeta {
 /**
  * ChatbotCore.answerIndex 흔적. card 는 고른 카드(answer 의 답 카드, gap 의 공백 카드 — 없는 개념으로 간 gap 이면 absent.gapCard),
  * absentHit 은 없는 개념 id, partial 은 꼬리(없는 부분 한 줄·못 찾은 조각 한 줄)를 붙였는지다.
+ * decidedBy 는 정해 둔 답 승격으로 답했으면 index:vote-rescue(아니면 null)다.
  * 측정 스크립트(scripts/lib/chatbot-live-eval-checks.ts decidedByFromAnswerIndex)가 이 칸으로 decidedBy 를 만든다.
  */
 export function toAnswerIndexTrace(decision: AnswerIndexDecision, meta: TraceMeta): AnswerIndexTrace {
@@ -414,6 +535,7 @@ export function toAnswerIndexTrace(decision: AnswerIndexDecision, meta: TraceMet
     card: decision.kind === "answer" || decision.kind === "gap" ? decision.card : null,
     partial: Boolean(decision.partial),
     absentTail: decision.absentTail,
+    decidedBy: decision.rescue === "vote" ? "index:vote-rescue" : null,
   }
 }
 

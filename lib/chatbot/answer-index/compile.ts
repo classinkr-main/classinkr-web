@@ -53,8 +53,11 @@ import {
   type ScoreComponent,
 } from "./types"
 
-/** 계산 규칙을 바꾸면 올린다(답 캐시 열쇠 ANSWER_INDEX_VERSION 에 들어간다). */
-export const ANSWER_INDEX_COMPILER_VERSION = 1
+/**
+ * 계산 규칙을 바꾸면 올린다(답 캐시 열쇠 ANSWER_INDEX_VERSION 에 들어간다).
+ * 2: 확신도 특징 knnCount1, 조각 답 문턱 여유(SEGMENT_CONF_MARGIN), 정해 둔 답 승격(진단 R02·R15·R07).
+ */
+export const ANSWER_INDEX_COMPILER_VERSION = 2
 
 /** 카드 중심 벡터는 가중치가 큰 특징만 남기고 다시 정규화한다(메모리 §3.10). */
 export const CENTROID_MAX_FEATURES = 256
@@ -70,7 +73,8 @@ export const DEFAULT_THRESHOLDS: Record<AnswerCardKind, number> = { doc: 0.55, h
  * 1위 합성 점수·1위와 2위 차이·최고 변형 코사인·덮임이 높을수록, 설명 안 된 개념·말뭉치 밖 낱말·반례 근접·없는 개념이 있을수록 낮다.
  */
 export const DEFAULT_CONFIDENCE = {
-  w: [4, 3, 2, 0, 0, 0, 1.5, -0.6, -0.5, -2, -1.5, 0, 0.5],
+  // 마지막 knnCount1 은 0: 보정 전 기본값의 판정을 바꾸지 않는다(보정이 맞춘다).
+  w: [4, 3, 2, 0, 0, 0, 1.5, -0.6, -0.5, -2, -1.5, 0, 0.5, 0],
   b: -6.5,
 }
 
@@ -86,7 +90,12 @@ export interface ResolvedCalibration {
 
 const KINDS: AnswerCardKind[] = ["doc", "howto", "fixed", "policy", "gap", "handoff"]
 
-export function resolveCalibration(file: CalibrationFile | null): ResolvedCalibration {
+/**
+ * calibration.json → 쓸 보정 값. 빠지거나 잘못된 칸은 기본값이다.
+ * 확신도 계수 w 의 길이가 특징 수(ANSWER_INDEX_FEATURES)와 다르면(특징을 더하기 전 파일 등) 그 종류는 기본 계수로 돌아가고
+ * 한 번 경고한다(warn, 기본 console.warn). 계수를 자리만 맞춰 옮기지 않는다: 특징 뜻이 바뀌었을 수 있다. calibrate.ts 로 다시 맞춘다.
+ */
+export function resolveCalibration(file: CalibrationFile | null, warn: (message: string) => void = console.warn): ResolvedCalibration {
   const weights = { ...DEFAULT_WEIGHTS }
   for (const key of Object.keys(weights) as ScoreComponent[]) {
     const value = file?.weights?.[key]
@@ -94,14 +103,26 @@ export function resolveCalibration(file: CalibrationFile | null): ResolvedCalibr
   }
   const confidence = {} as ResolvedCalibration["confidence"]
   const thresholds = { ...DEFAULT_THRESHOLDS }
+  const lengthMismatch: string[] = []
   for (const kind of KINDS) {
     const fitted = file?.confidence?.[kind]
+    if (fitted && Array.isArray(fitted.w) && fitted.w.length !== ANSWER_INDEX_FEATURES.length) lengthMismatch.push(`${kind}:${fitted.w.length}`)
     confidence[kind] =
       fitted && Array.isArray(fitted.w) && fitted.w.length === ANSWER_INDEX_FEATURES.length && fitted.w.every(Number.isFinite) && Number.isFinite(fitted.b)
         ? { w: [...fitted.w], b: fitted.b }
         : { w: [...DEFAULT_CONFIDENCE.w], b: DEFAULT_CONFIDENCE.b }
     const threshold = file?.thresholds?.[kind]
     if (typeof threshold === "number" && Number.isFinite(threshold)) thresholds[kind] = threshold
+  }
+  if (lengthMismatch.length > 0) {
+    warn(
+      `[chatbot] answer-index calibration feature count mismatch ${JSON.stringify({
+        version: file?.version ?? null,
+        expected: ANSWER_INDEX_FEATURES.length,
+        kinds: lengthMismatch,
+        fallback: "DEFAULT_CONFIDENCE",
+      })}`
+    )
   }
   return { version: file?.version ?? "default", dataVersion: file?.dataVersion ?? null, weights, confidence, thresholds, fitted: Boolean(file) }
 }

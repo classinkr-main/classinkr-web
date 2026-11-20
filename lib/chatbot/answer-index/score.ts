@@ -5,6 +5,7 @@
  * - maxcos: 변형 역색인으로 코사인 상위 200 변형을 뽑아 후보 카드를 정하고, 후보마다 그 카드 변형 가운데 가장 높은 코사인.
  * - centroid: 카드 중심 벡터 코사인. 중심 벡터 상위 50 카드도 후보에 넣는다.
  * - knnShare: 우주 상위 10 이웃(코사인 0.35 이상)의 라벨을 코사인 가중으로 나눈 몫. label2 가 다르면 반씩.
+ *   같은 이웃에서 카드별 이웃 수(라벨이 갈리면 반씩)도 센다(knnCountOf, 확신도 특징 knnCount1 — 점수 성분은 아니다).
  * - vote: 옛 정규식 표(collectLegacyVotes 가 카드 id 로 바꾼 것)에 있으면 1.
  * - bm25f: 지금 문서 단위 BM25F 점수를 질의 최고점으로 나눈 값 가운데 카드 근거 단위의 최댓값.
  * - linear: 0(선택 특징, I9 ablation 전까지 쓰지 않음).
@@ -63,6 +64,8 @@ export interface ScoreResult {
   centroidCos: (card: number) => number
   /** 카드 번호 → 성분(후보 밖 카드를 뒤늦게 더할 때). */
   componentsOf: (card: number) => ScoreComponents
+  /** 카드 번호 → 그 카드 라벨인 우주 이웃 수(라벨이 둘로 갈린 이웃은 0.5). 확신도 특징 knnCount1 의 원값. */
+  knnCountOf: (card: number) => number
 }
 
 export interface ScoreOptions {
@@ -195,22 +198,26 @@ export function scoreCandidates(index: CompiledAnswerIndex, query: IndexQuery, v
   const universe = accumulate(index.universe, query, index.featureWeight)
   const neighbors = topK(universe.touched, (d) => universe.acc[d], KNN_K).filter(([, cos]) => cos >= KNN_MIN_COS)
   const knnShare = new Map<number, number>()
+  const knnCount = new Map<number, number>()
   const knn: KnnSummary = { neighbors: neighbors.length, none: 0, clarify: 0, unavailable: 0 }
   let knnTotal = 0
-  const addLabel = (label: number, weight: number) => {
+  const addLabel = (label: number, weight: number, count: number) => {
     knnTotal += weight
     if (label === LABEL_NONE) knn.none += weight
     else if (label === LABEL_CLARIFY) knn.clarify += weight
     else if (label === LABEL_UNAVAILABLE || (label >= 0 && !isLive(label))) knn.unavailable += weight
-    else if (label >= 0) knnShare.set(label, (knnShare.get(label) ?? 0) + weight)
+    else if (label >= 0) {
+      knnShare.set(label, (knnShare.get(label) ?? 0) + weight)
+      knnCount.set(label, (knnCount.get(label) ?? 0) + count)
+    }
   }
   for (const [item, cos] of neighbors) {
     const label = index.universe.label[item]
     const label2 = index.universe.label2[item]
     if (label2 !== LABEL_ABSENT) {
-      addLabel(label, cos / 2)
-      addLabel(label2, cos / 2)
-    } else addLabel(label, cos)
+      addLabel(label, cos / 2, 0.5)
+      addLabel(label2, cos / 2, 0.5)
+    } else addLabel(label, cos, 1)
   }
   if (knnTotal > 0) {
     for (const [card, weight] of knnShare) knnShare.set(card, weight / knnTotal)
@@ -259,7 +266,7 @@ export function scoreCandidates(index: CompiledAnswerIndex, query: IndexQuery, v
     candidates.push({ card, id: index.cards[card].id, kind: index.cards[card].kind, s: compositeScore(components, weights), components })
   }
   sortCandidates(candidates)
-  return { candidates, knn, maxVariantCos, centroidCos, componentsOf }
+  return { candidates, knn, maxVariantCos, centroidCos, componentsOf, knnCountOf: (card: number) => knnCount.get(card) ?? 0 }
 }
 
 export function sortCandidates<T extends { s: number; id: string }>(list: T[]) {
@@ -267,6 +274,11 @@ export function sortCandidates<T extends { s: number; id: string }>(list: T[]) {
 }
 
 // ─── 확신도 ──────────────────────────────────────────────────────────────
+
+/** 우주 이웃 수 → 특징 knnCount1(log1p 로 눌러 이웃 KNN_K 개일 때 1). */
+export function knnCountFeature(count: number) {
+  return count > 0 ? Math.log1p(count) / Math.log1p(KNN_K) : 0
+}
 
 /** 특징 벡터(ANSWER_INDEX_FEATURES 순서). */
 export function featureVector(features: AnswerIndexFeatures) {

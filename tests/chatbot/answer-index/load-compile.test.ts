@@ -3,11 +3,11 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, beforeAll, describe, expect, it } from "vitest"
 
-import { answerIndexHash, compileAnswerIndex, resolveCalibration, DEFAULT_THRESHOLDS } from "@/lib/chatbot/answer-index/compile"
+import { answerIndexHash, compileAnswerIndex, resolveCalibration, DEFAULT_CONFIDENCE, DEFAULT_THRESHOLDS } from "@/lib/chatbot/answer-index/compile"
 import { decide } from "@/lib/chatbot/answer-index/decide"
 import { answerTextHash } from "@/lib/chatbot/answer-index/hash"
 import { ANSWER_INDEX_VERSION, buildCurrentUnits, getAnswerIndex, isPartFileName, loadAnswerIndexData } from "@/lib/chatbot/answer-index/load"
-import type { AnswerCard, AnswerIndexUnit } from "@/lib/chatbot/answer-index/types"
+import { ANSWER_INDEX_FEATURES, type AnswerCard, type AnswerIndexUnit } from "@/lib/chatbot/answer-index/types"
 import { SYMPTOM_TOPICS } from "@/lib/chatbot/symptom-triage"
 import { stableJson } from "@/scripts/answer-index/lib/common"
 import { mergeParts } from "@/scripts/answer-index/lib/merge-core"
@@ -196,9 +196,29 @@ describe("compile: 결정적 색인", () => {
     expect(calibration.fitted).toBe(false)
     expect(calibration.weights).toEqual({ maxcos: 0.3, centroid: 0.7, knnShare: 0.5, vote: 0.15, bm25f: 0.1, linear: 0 })
     expect(calibration.thresholds).toEqual(DEFAULT_THRESHOLDS)
-    // 계수 길이가 특징 수와 다르면 기본 계수로 둔다.
-    const broken = resolveCalibration({ ...readJson(join(FIXTURE_DIR, "calibration.json")), confidence: { doc: { w: [1, 2], b: 0 } } })
-    expect(broken.confidence.doc.w).toHaveLength(13)
+    // 계수 길이가 특징 수와 다르면 기본 계수로 둔다(경고 한 줄).
+    const warnings: string[] = []
+    const broken = resolveCalibration({ ...readJson(join(FIXTURE_DIR, "calibration.json")), confidence: { doc: { w: [1, 2], b: 0 } } }, (line) => warnings.push(line))
+    expect(DEFAULT_CONFIDENCE.w).toHaveLength(ANSWER_INDEX_FEATURES.length)
+    expect(broken.confidence.doc).toEqual({ w: DEFAULT_CONFIDENCE.w, b: DEFAULT_CONFIDENCE.b })
+    expect(warnings).toHaveLength(1)
+    expect(warnings[0]).toContain("feature count mismatch")
+    expect(warnings[0]).toContain('"doc:2"')
+  })
+
+  it("특징을 더하기 전 calibration.json(계수 13개)은 종류마다 기본 계수로 돌아가며 경고하고, 가중치·문턱은 그대로 읽는다", () => {
+    const old = readJson(join(FIXTURE_DIR, "calibration.json")) as { confidence: Record<string, { w: number[]; b: number }>; thresholds: Record<string, number> }
+    for (const entry of Object.values(old.confidence)) entry.w = entry.w.slice(0, 13)
+    const warnings: string[] = []
+    const resolved = resolveCalibration(old as never, (line) => warnings.push(line))
+    expect(warnings).toHaveLength(1)
+    expect(warnings[0]).toContain(`"expected":${ANSWER_INDEX_FEATURES.length}`)
+    for (const kind of Object.keys(old.confidence)) expect(resolved.confidence[kind as keyof typeof resolved.confidence].w).toEqual(DEFAULT_CONFIDENCE.w)
+    expect(resolved.thresholds).toEqual(old.thresholds)
+    // 길이가 맞으면 경고하지 않는다.
+    const current = resolveCalibration(readJson(join(FIXTURE_DIR, "calibration.json")) as never, (line) => warnings.push(line))
+    expect(warnings).toHaveLength(1)
+    expect(current.confidence.doc.w).toHaveLength(ANSWER_INDEX_FEATURES.length)
   })
 
   it("카드가 0장이면 색인은 만들어지고 판정은 언제나 abstain 이다", () => {

@@ -515,7 +515,7 @@ export function buildAnswerIndexCore(
     return { ...parts, latencyMs: Math.max(0, Date.now() - startedAt), answerIndex: { ...trace, ...overrides } }
   }
   const unavailable = (reason: string) =>
-    finish(abstainParts("nodoc", question, ctx.host, conf), { decision: "abstain", card: null, partial: false, absentTail: null, unavailable: reason })
+    finish(abstainParts("nodoc", question, ctx.host, conf), { decision: "abstain", card: null, partial: false, absentTail: null, decidedBy: null, unavailable: reason })
 
   if (decision.kind === "clarify") return finish(clarifyParts(question, ctx.host), { partial: false })
   if (decision.kind === "abstain") return finish(abstainParts(decision.abstainReason === "symptom" ? "symptom" : "nodoc", question, ctx.host, conf), { partial: false })

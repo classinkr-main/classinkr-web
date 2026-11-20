@@ -196,6 +196,15 @@ describe("respond: doc cards", () => {
     expect(core.response.answer).toBe(NO_SOURCE)
     expect(core.answerIndex.unavailable).toBe("missing_card:doc:/docs/none#0/missing")
   })
+
+  it("keeps the vote-rescue mark in the trace for a rendered answer and clears it when the card cannot be rendered", () => {
+    const rescued = respond(decision("answer", CARDS.remove, { rescue: "vote", conf: 0.2 })).core
+    expect(rescued.answerIndex).toMatchObject({ decision: "answer", card: CARDS.remove, decidedBy: "index:vote-rescue" })
+    expect(rescued.response.answerMode).toBe("direct_answer")
+    const missing = respond(decision("answer", "doc:/docs/none#0/missing", { rescue: "vote" })).core
+    expect(missing.answerIndex).toMatchObject({ decision: "abstain", card: null, decidedBy: null })
+    expect(respond(decision("answer", CARDS.remove)).core.answerIndex.decidedBy).toBeNull()
+  })
 })
 
 describe("respond: fixed and policy cards", () => {
