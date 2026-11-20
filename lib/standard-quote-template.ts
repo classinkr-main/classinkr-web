@@ -191,6 +191,9 @@ const STANDARD_PRICE_BOARD_86 = getProductBySku("board-86")?.unit_price ?? 6_300
 const STANDARD_PRICE_BOARD_75 = getProductBySku("board-75")?.unit_price ?? 5_400_000
 const STANDARD_PRICE_CAMERA_T1 = getProductBySku("camera-t1")?.unit_price ?? 1_200_000
 const STANDARD_PRICE_STAND = getProductBySku("stand")?.unit_price ?? 500_000
+/** 프로모션 증정품 품목 코드(0원). */
+export const GIFT_CAMERA_T1_ITEM_CODE = "camera-t1-gift"
+export const GIFT_STAND_ITEM_CODE = "stand-gift"
 const STANDARD_PRICE_WALL_MOUNT = getProductBySku("wall-mount")?.unit_price ?? 500_000
 const STANDARD_PRICE_RECORDING_STUDIO =
   getProductBySku("ai-studio-recording-set")?.unit_price ?? 8_300_000
@@ -410,6 +413,25 @@ export const STANDARD_QUOTE_TEMPLATES: StandardQuoteTemplatePreset[] = [
         enabledLabel: "추가",
         disabledLabel: "제외",
       },
+      // 단품 프로모션(FY2026 채널 정책표) — 작성자가 고객별로 직접 켠다. 자동 적용하지 않는다.
+      {
+        id: "gift_t1",
+        label: "T1 증정",
+        description: "프로모션 — 전자칠판 2대 구매 시 T1 카메라 1대 증정(0원 행).",
+        control: "toggle",
+        defaultValue: false,
+        enabledLabel: "증정",
+        disabledLabel: "없음",
+      },
+      {
+        id: "gift_stand",
+        label: "스탠드 증정",
+        description: "프로모션 — 전자칠판 1대 구매 시 이동형 스탠드 1대 증정(0원 행).",
+        control: "toggle",
+        defaultValue: false,
+        enabledLabel: "증정",
+        disabledLabel: "없음",
+      },
       {
         id: "support_package",
         label: "유지보수 안내",
@@ -508,6 +530,25 @@ export const STANDARD_QUOTE_TEMPLATES: StandardQuoteTemplatePreset[] = [
         defaultValue: false,
         enabledLabel: "추가",
         disabledLabel: "제외",
+      },
+      // 단품 프로모션(FY2026 채널 정책표) — 작성자가 고객별로 직접 켠다. 자동 적용하지 않는다.
+      {
+        id: "gift_t1",
+        label: "T1 증정",
+        description: "프로모션 — 전자칠판 2대 구매 시 T1 카메라 1대 증정(0원 행).",
+        control: "toggle",
+        defaultValue: false,
+        enabledLabel: "증정",
+        disabledLabel: "없음",
+      },
+      {
+        id: "gift_stand",
+        label: "스탠드 증정",
+        description: "프로모션 — 전자칠판 1대 구매 시 이동형 스탠드 1대 증정(0원 행).",
+        control: "toggle",
+        defaultValue: false,
+        enabledLabel: "증정",
+        disabledLabel: "없음",
       },
       {
         id: "support_package",
@@ -1372,6 +1413,36 @@ export function buildConfigurableStandardQuoteDetails({
         unitPrice: STANDARD_PRICE_CAMERA_T1,
         optionGroupId: "camera_bundle",
         optionId: "enabled",
+      })
+    }
+
+    // 증정품: 0원 하드웨어 행. 품목 코드를 따로 두어 총판 원가·고객 누적 대수 구간 계산에 섞이지 않게 하고,
+    // 출고(오더 줄)에서는 같은 재고 품목으로 센다(lib/orders/order-lines.ts).
+    if (readSelectionBoolean(selections, "gift_t1", false)) {
+      addOptionalLine(GIFT_CAMERA_T1_ITEM_CODE, {
+        itemType: "hardware",
+        itemName: "T1 카메라 (증정)",
+        itemDescription: "프로모션 증정 · 전자칠판 2대당 1대",
+        quantity: Math.max(1, Math.floor(quantity / 2)),
+        quantityUnit: "대",
+        unitPrice: 0,
+        optionGroupId: "gift_t1",
+        optionId: "enabled",
+        priceLocked: true,
+      })
+    }
+
+    if (readSelectionBoolean(selections, "gift_stand", false)) {
+      addOptionalLine(GIFT_STAND_ITEM_CODE, {
+        itemType: "hardware",
+        itemName: "이동형 스탠드 (증정)",
+        itemDescription: "프로모션 증정 · 전자칠판 1대당 1대",
+        quantity,
+        quantityUnit: "대",
+        unitPrice: 0,
+        optionGroupId: "gift_stand",
+        optionId: "enabled",
+        priceLocked: true,
       })
     }
 

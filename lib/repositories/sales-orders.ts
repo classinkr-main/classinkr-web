@@ -351,6 +351,32 @@ async function attachSuccessors(orders: SalesOrderWithFulfillment[]): Promise<Sa
   )
 }
 
+/**
+ * 고객의 승인된 오더 품목 코드별 누적 수량 — 작성기의 "누적 대수 구간가" 추천(넛지)용.
+ * 승인(approved) 오더만 센다(대기·반려·취소 제외). 고객 id 로만 묶는다(이름 매칭 없음 — 명확히 매칭될 때만).
+ */
+export async function sumApprovedOrderUnitsByCustomer(customerId: string): Promise<Record<string, number>> {
+  const sb = createSupabaseAdminClient()
+  const { data, error } = await sb
+    .from("sales_orders")
+    .select("lines")
+    .eq("customer_id", customerId)
+    .eq("status", "approved")
+    .limit(500)
+  if (error) rethrow(error)
+  const units: Record<string, number> = {}
+  for (const row of (data ?? []) as Array<{ lines: unknown }>) {
+    if (!Array.isArray(row.lines)) continue
+    for (const line of row.lines as Array<Partial<SalesOrderLine>>) {
+      const code = typeof line.itemCode === "string" ? line.itemCode.trim() : ""
+      const quantity = Number(line.quantity)
+      if (!code || !Number.isFinite(quantity) || quantity <= 0) continue
+      units[code] = (units[code] ?? 0) + quantity
+    }
+  }
+  return units
+}
+
 export async function listSalesOrders(
   options: { statuses?: SalesOrderStatus[]; limit?: number; withFulfillment?: boolean; withSuccessor?: boolean } = {}
 ): Promise<SalesOrderWithFulfillment[]> {

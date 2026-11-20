@@ -63,6 +63,9 @@ const SKU_TO_PRODUCTS: Record<string, SalesOrderHardwareProduct[]> = {
   "camera-t1": [{ product: "T1", quantity: 1 }],
   camera_t1: [{ product: "T1", quantity: 1 }],
   stand: [{ product: "STD1", quantity: 1 }],
+  // 프로모션 증정품(0원 행)도 출고는 같은 재고 품목으로 센다.
+  "camera-t1-gift": [{ product: "T1", quantity: 1 }],
+  "stand-gift": [{ product: "STD1", quantity: 1 }],
   // 86" 패키지 = 보드 + T1 + 벽걸이 설치(설치는 재고가 아니다).
   "bundle-86-t1-wall": [
     { product: '86" IFP', quantity: 1 },

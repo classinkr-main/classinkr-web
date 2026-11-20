@@ -33,6 +33,7 @@ import {
   type DistributorPriceRule,
   type DistributorSettlementLine,
 } from "@/lib/distributor-settlements"
+import { buildCumulativeTierNudge, type CumulativeTierNudge } from "@/lib/hardware-market-price-tiers"
 import { normalizeQuoteDetailsFromStructuredJson } from "@/lib/portal/quote-details"
 import { portalFetch } from "@/lib/portal/portal-fetch"
 import { getProductBySku } from "@/lib/product-templates"
@@ -187,6 +188,11 @@ type QuickQuoteComposerProps = {
    * 기획: docs/active/distributor-quote-with-customer-quote-plan-2026-11-20.md
    */
   distributorQuote?: QuickQuoteDistributorQuoteOption
+  /**
+   * 기존 고객이 명확히 매칭됐을 때(수신 칸 = 등록 고객) 그 고객의 승인된 오더 품목별 누적 수량을 읽는다(어드민 전용, 선택).
+   * 있으면 누적 대수 기준 시장 구간가를 추천만 한다 — 단가는 작성자가 '적용'을 눌러야 바뀐다.
+   */
+  loadCustomerUnits?: (customerId: string) => Promise<Record<string, number>>
 }
 
 export type QuickQuoteDistributorQuoteOption = {
@@ -194,6 +200,14 @@ export type QuickQuoteDistributorQuoteOption = {
   rules: readonly DistributorPriceRule[]
   /** 화면 표기용 총판 이름(예: "퀴드러닝 · 배철웅"). */
   distributorLabel: string
+  /** 공급가 원천(원가 템플릿) 표기·선택. 템플릿이 없으면 seedAction 으로 정책표를 템플릿으로 저장하게 한다. */
+  priceSource?: {
+    label: string
+    options?: { id: string; label: string }[]
+    selectedId?: string | null
+    onSelect?: (id: string) => void
+    seedAction?: { label: string; busy?: boolean; onClick: () => void }
+  }
   /** 고객 견적 저장 직후 호출 — 발행 전 총판 정산 초안을 만들거나 갱신한다. 실패하면 throw. */
   onSave: (input: { quoteDocumentId: string; lines: DistributorSettlementLine[] }) => Promise<void>
 }
@@ -920,6 +934,7 @@ export default function QuickQuoteComposer({
   displaySettings,
   prefill = null,
   distributorQuote,
+  loadCustomerUnits,
 }: QuickQuoteComposerProps) {
   const today = getTodayDateValue()
   const isPortalApi = apiBase === "/api/portal"
@@ -963,6 +978,8 @@ export default function QuickQuoteComposer({
   const [saveToast, setSaveToast] = useState<string | null>(null)
   // HW 견적 저장 시 총판 견적서 초안을 같이 만들지(주입됐을 때만 의미가 있다).
   const [distributorEnabled, setDistributorEnabled] = useState(true)
+  // 매칭된 고객의 승인 오더 누적 수량(품목 코드별) — 구간가 추천용.
+  const [customerUnits, setCustomerUnits] = useState<{ customerId: string; units: Record<string, number> } | null>(null)
   const [errorToast, setErrorToast] = useState<ErrorToastState | null>(null)
   // 공급자 담당자 override(제품군별). 비우면 공급자 블록 기본값(SW=클래스인 매니저, HW=퀴드러닝 담당자).
   const [managers, setManagers] = useState<Record<QuoteProductLine, ManagerOverride>>({
@@ -1087,6 +1104,25 @@ export default function QuickQuoteComposer({
     customerMode === "existing" ? selectedCustomer?.name ?? "" : recipientInput.trim()
   const customerReady =
     customerMode === "existing" ? Boolean(selectedCustomer) : recipientInput.trim().length > 0
+  // 누적 대수 넛지는 등록 고객과 정확히 매칭됐을 때만(새 고객·부분 일치에는 보이지 않는다).
+  const matchedCustomerId = customerMode === "existing" && selectedCustomer ? selectedCustomerId : ""
+
+  useEffect(() => {
+    if (!open || !loadCustomerUnits || !matchedCustomerId) return
+    if (customerUnits?.customerId === matchedCustomerId) return
+    let cancelled = false
+    loadCustomerUnits(matchedCustomerId)
+      .then((units) => {
+        if (!cancelled) setCustomerUnits({ customerId: matchedCustomerId, units })
+      })
+      .catch(() => {
+        // 추천은 보조 기능 — 실패하면 조용히 넘어간다(견적 작성은 그대로).
+        if (!cancelled) setCustomerUnits({ customerId: matchedCustomerId, units: {} })
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [customerUnits?.customerId, loadCustomerUnits, matchedCustomerId, open])
 
   /** 저장·화면에 쓰는 한 장의 최종 견적(수신·조건·메모·공급자를 합쳐 finalize). */
   function composeSheetQuote(sheet: ComposerSheet) {
@@ -1277,6 +1313,7 @@ export default function QuickQuoteComposer({
     setUnderMinConfirmed(false)
     setPendingSubmitAction(null)
     setDistributorEnabled(true)
+    setCustomerUnits(null)
     setError(null)
   }, [hasPrefillTarget, initialTemplateId, open, prefill?.customerId, prefill?.customerName, prefill?.dealId, today])
 
@@ -2464,6 +2501,8 @@ export default function QuickQuoteComposer({
           ))}
         </div>
 
+        {sheet.line === "hardware" && renderTierNudges(sheet, quote)}
+
         {/* 견적 할인 — 견적서 합계에 소계·할인·공급가액 줄로 찍힌다. */}
         {renderDiscountEditor(sheet, totals)}
 
@@ -2794,9 +2833,43 @@ export default function QuickQuoteComposer({
     )
   }
 
+  /** 이미 산 적 있는 고객 — 누적 대수 구간가 추천. 적용은 작성자가 누른다(자동 변경 없음). */
+  function renderTierNudges(sheet: ComposerSheet, quote: PartnerQuoteDetailsInput) {
+    if (!matchedCustomerId || customerUnits?.customerId !== matchedCustomerId) return null
+    const nudges = (quote.lineItems ?? [])
+      .map((line, lineIndex) => ({ lineIndex, nudge: buildCumulativeTierNudge(line, customerUnits.units) }))
+      .filter((entry): entry is { lineIndex: number; nudge: CumulativeTierNudge } => entry.nudge != null)
+    if (nudges.length === 0) return null
+    return (
+      <div role="note" aria-label="누적 구매 구간가 추천" className="grid gap-1 rounded-[8px] border border-[#D9E7DF] bg-[#F3F9F5] px-3 py-2 text-[12px]">
+        {nudges.map(({ lineIndex, nudge }) => (
+          <div key={`${nudge.itemCode}-${lineIndex}`} className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span className="text-[#31302E]">
+              <b>{activeCustomerName}</b> 누적 {nudge.itemName} {nudge.priorQuantity}대 + 이번 {nudge.currentQuantity}대 ={" "}
+              <b>{nudge.cumulativeQuantity}대</b> · {nudge.tierLabel} 시장가{" "}
+              <b className="tabular-nums">{formatStandardQuoteCurrency(nudge.recommendedUnitPrice)}원</b>
+              <span className="text-[#78736D]"> (지금 {formatStandardQuoteCurrency(nudge.currentUnitPrice)}원)</span>
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                setActivePick(null)
+                updateLine(sheet.line, lineIndex, { unitPrice: nudge.recommendedUnitPrice })
+              }}
+              className="h-6 rounded-full border border-[#084734] px-2.5 text-[11.5px] font-semibold text-[#084734] transition-[background-color,transform] hover:bg-[#ECFDF5] active:scale-95 motion-reduce:transform-none"
+            >
+              추천가 적용
+            </button>
+          </div>
+        ))}
+      </div>
+    )
+  }
+
   /** 총판(퀴드러닝)용 견적서 미리 계산 — 작성자만 보는 편집 도구(종이·공유 링크에는 찍히지 않는다). */
   function renderDistributorPanel(quote: PartnerQuoteDetailsInput) {
     if (!distributorQuote) return null
+    const priceSource = distributorQuote.priceSource
     const lines = buildDistributorLinesFromQuote(quote.lineItems, { rules: distributorQuote.rules })
     const included = lines.filter((line) => line.included)
     const totals = computeDistributorTotals(lines, true)
@@ -2820,9 +2893,38 @@ export default function QuickQuoteComposer({
           />
           <span className="font-semibold text-[#111110]">총판 견적서 같이 만들기</span>
           <span className="text-[11px] text-[#78736D]">
-            {distributorQuote.distributorLabel} · FY2026 채널공급가(VAT 포함) · 저장 시 발행 전 초안만 만들고, 발송은 고객 동의 때
+            {distributorQuote.distributorLabel} · 공급가 VAT 포함 · 저장 시 발행 전 초안만 만들고, 발송은 고객 동의 때
           </span>
         </label>
+        {distributorEnabled && priceSource && (
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11.5px] text-[#615D59]">
+            <span>공급가 기준</span>
+            {priceSource.options && priceSource.options.length > 1 && priceSource.onSelect ? (
+              <select
+                aria-label="공급가 원가 템플릿"
+                value={priceSource.selectedId ?? ""}
+                onChange={(event) => priceSource.onSelect?.(event.target.value)}
+                className={`${PAPER_SELECT_CLASS} border-[#E3E0DB]`}
+              >
+                {priceSource.options.map((option) => (
+                  <option key={option.id} value={option.id}>{option.label}</option>
+                ))}
+              </select>
+            ) : (
+              <b className="font-semibold text-[#31302E]">{priceSource.label}</b>
+            )}
+            {priceSource.seedAction && (
+              <button
+                type="button"
+                disabled={priceSource.seedAction.busy}
+                onClick={priceSource.seedAction.onClick}
+                className="text-[#084734] underline underline-offset-[3px] disabled:opacity-50"
+              >
+                {priceSource.seedAction.busy ? "저장 중…" : priceSource.seedAction.label}
+              </button>
+            )}
+          </div>
+        )}
         {distributorEnabled && (
           included.length === 0 ? (
             <p className="text-[11.5px] text-[#78736D]">총판에게 청구할 하드웨어 품목이 없습니다.</p>

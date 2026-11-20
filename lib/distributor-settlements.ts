@@ -338,15 +338,24 @@ export function buildDistributorQuoteDetails(
       vatIncluded: settlement.vatIncluded,
     }))
   const customerName = options.customerName?.trim() || customer.recipientCompanyName?.trim()
+  // 수신 = 총판 대표(담당자 칸), 참조 = 총판 실무 담당자(2026-11-20 결정: 퀴드러닝 대표 조혜리 · 참조 배철웅).
+  // 대표 이름은 정산 표에 칸이 없어 등록된 총판(퀴드러닝)일 때만 표준 공급자 정보에서 가져온다.
+  const representativeName =
+    settlement.distributorName.trim() === STANDARD_QUOTE_SUPPLIER.businessName
+      ? STANDARD_QUOTE_SUPPLIER.representativeName
+      : undefined
+  const contactName = settlement.distributorContactName?.trim() || undefined
 
   return finalizeStandardQuoteDetails({
     ...customer,
     issuedAt: options.issuedAt?.slice(0, 10) || customer.issuedAt,
     recipientCompanyName: settlement.distributorName,
-    recipientContactName: settlement.distributorContactName ?? undefined,
+    recipientContactName: representativeName ?? contactName,
     recipientPhone: settlement.distributorPhone ?? undefined,
     recipientEmail: settlement.distributorEmail ?? undefined,
-    referenceName: customerName ? `고객사 ${customerName}` : customer.referenceName,
+    referenceName: representativeName ? contactName : undefined,
+    // 어느 고객 건인지는 본문 첫 문장에 적는다(참조 칸은 총판 담당자 몫).
+    subjectText: customerName ? `고객사 ${customerName} 건으로 아래와 같이 견적서를 제출합니다.` : undefined,
     // 공급자 블록은 통째로 회사(클래스인)로 바꾼다 — 담당자·연락처는 회사 표준 정보가 없어 비워 둔다.
     supplierBusinessName: CLASSIN_QUOTE_SUPPLIER.businessName,
     supplierBusinessRegistrationNumber: CLASSIN_QUOTE_SUPPLIER.businessRegistrationNumber,

@@ -143,6 +143,9 @@ describe("admin quick quote composer shell", () => {
     expect(source).toContain("distributorQuote?: QuickQuoteDistributorQuoteOption")
     expect(source).toContain('distributorQuote && distributorEnabled && sheet.line === "hardware"')
     expect(source).toContain("총판 견적서 초안을 만들지 못했습니다")
+    // 누적 대수 구간가 — 등록 고객과 매칭됐을 때만, 적용은 작성자가 누른다.
+    expect(source).toContain('const matchedCustomerId = customerMode === "existing" && selectedCustomer ? selectedCustomerId : ""')
+    expect(source).toContain("추천가 적용")
     // 대표 품목 없이 저장된 견적을 다시 불러와도 대표 행이 되살아나지 않고, 거래명에 지운 품목이 남지 않는다.
     expect(source).toContain("quote, mainRemoved }])")
     expect(source).toContain("if (sheet.mainRemoved) {")
