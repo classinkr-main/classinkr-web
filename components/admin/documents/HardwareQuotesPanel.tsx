@@ -49,6 +49,7 @@ import {
   type QuoteQueueKey,
 } from "./quote-queue"
 import DistributorSettlementSection from "./DistributorSettlementSection"
+import QuoteTemplatePicker, { QuoteTemplatePickerReturn } from "./QuoteTemplatePicker"
 
 type HardwareQuoteRow = {
   id: string
@@ -406,6 +407,7 @@ export default function HardwareQuotesPanel({
   const [searchTerm, setSearchTerm] = useState("")
   const [productLineFilter, setProductLineFilter] = useState<QuoteProductLine | "all">("all")
   // ?quote=<id> 딥링크(총판 미수금 탭·알림)로 들어오면 그 견적을 먼저 연다. 목록이 비동기로 오므로 첫 렌더 마크업은 같다.
+  // 고른 견적이 없으면(null) 오른쪽은 견적 상세가 아니라 템플릿 고르기다 — 첫 행을 대신 고르지 않는다.
   const [selectedId, setSelectedId] = useState<string | null>(() =>
     typeof window === "undefined" ? null : new URLSearchParams(window.location.search).get("quote")
   )
@@ -464,8 +466,7 @@ export default function HardwareQuotesPanel({
   }, [productLineFilter, quotes, searchTerm])
 
   const visibleCount = groups.reduce((sum, group) => sum + group.items.length, 0)
-  const selectedQuote =
-    groups.flatMap((group) => group.items).find((quote) => quote.id === selectedId) ?? groups[0]?.items[0] ?? null
+  const selectedQuote = groups.flatMap((group) => group.items).find((quote) => quote.id === selectedId) ?? null
   const selectedDetail = selectedQuote ? details[selectedQuote.id] : undefined
 
   // 작성기 '템플릿' 칸의 팀 템플릿. 표가 없거나 API 가 실패하면 빈 목록 — 기본 템플릿(코드 상수)만으로 동작한다.
@@ -645,6 +646,22 @@ export default function HardwareQuotesPanel({
     setComposerOpen(true)
     onQuickActionConsumed?.()
   }, [onQuickActionConsumed, quickAction])
+
+  // 템플릿 카드 → 작성기. 헤더 작성 버튼(quickAction)과 같이 템플릿 id 를 정하고 작성기를 연다.
+  function openComposerWithTemplate(templateId: StandardQuoteTemplateId) {
+    setComposerTemplateId(templateId)
+    setComposerOpen(true)
+  }
+
+  // 견적 선택을 풀어 오른쪽을 템플릿 고르기로 되돌린다. ?quote= 로 들어왔다면 주소에서도 빼
+  // 새로고침했을 때 그 견적이 다시 열리지 않게 한다.
+  function showTemplatePicker() {
+    setSelectedId(null)
+    const url = new URL(window.location.href)
+    if (!url.searchParams.has("quote")) return
+    url.searchParams.delete("quote")
+    window.history.replaceState(window.history.state, "", url)
+  }
 
   async function handleCreated(payload: QuickQuoteCreatedPayload) {
     const nextQuote: HardwareQuoteRow = {
@@ -1194,9 +1211,14 @@ export default function HardwareQuotesPanel({
 
           <div className="hidden min-w-0 flex-1 lg:block">
             {selectedQuote ? (
-              renderDetail(selectedQuote)
-            ) : (
+              <>
+                {!showDeleted && <QuoteTemplatePickerReturn onClick={showTemplatePicker} />}
+                {renderDetail(selectedQuote)}
+              </>
+            ) : showDeleted ? (
               <p className="px-7 py-16 text-center text-sm text-[#78736D]">왼쪽에서 견적을 고르세요.</p>
+            ) : (
+              <QuoteTemplatePicker hiddenTemplateIds={preferences.hiddenTemplateIds} onSelect={openComposerWithTemplate} />
             )}
           </div>
         </div>
