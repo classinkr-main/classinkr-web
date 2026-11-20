@@ -2,7 +2,7 @@
  * Chatbot LLM 답변 생성 — Google Gemini (RAG)
  *
  * 검색으로 찾은 내부 정보(sources)를 참고해 한국어 답변을 생성한다.
- * - GEMINI_API_KEY 가 없으면 null → 호출부가 기존 템플릿 답변으로 폴백한다.
+ * - Gemini 연결(developer 키 또는 Vertex, lib/chatbot/gemini-transport.ts)을 쓸 수 없으면 null → 호출부가 기존 템플릿 답변으로 폴백한다.
  * - 네트워크 오류·타임아웃·빈 응답도 모두 null 로 처리해 챗봇이 절대 끊기지 않게 한다.
  * - 공개 답변에는 문서, 출처, URL, 이미지 경로를 드러내지 않는다.
  */
@@ -14,6 +14,12 @@ import {
   getClassinChatbotReferenceContext,
   getClassinPositioningContext,
 } from "@/lib/classin-positioning"
+import {
+  getChatbotGeminiConnection,
+  postChatbotGemini,
+  type GeminiConnection,
+  type GeminiOperation,
+} from "./gemini-transport"
 import type { ChatbotSource } from "./service"
 import {
   getGroundingText,
@@ -67,6 +73,8 @@ const GEMINI_TIMEOUT_MS = 3200
 const GEMINI_STREAM_TIMEOUT_MS = 8000
 // 임베딩은 보통 150~400ms — 생성용 4.5s를 그대로 쓰면 느린 호출이 요청 예산을 잡아먹는다.
 const EMBED_TIMEOUT_MS = 2000
+// Vertex의 첫 OAuth 요청까지 포함하되 2.8초 검색 예산 안에 벡터 RPC 시간을 남긴다.
+const VERTEX_EMBED_TIMEOUT_MS = 2500
 export const MAX_ANSWER_LENGTH = 520
 
 // 운영 docs_ai_chunks.embedding 은 현재 vector(1536). 768 전환 migration을 적용한 환경은
@@ -74,6 +82,12 @@ export const MAX_ANSWER_LENGTH = 520
 export const CHATBOT_EMBED_MODEL = process.env.GEMINI_EMBED_MODEL || "gemini-embedding-001"
 export const CHATBOT_EMBED_DIM = Number(process.env.GEMINI_EMBED_DIM ?? "1536")
 export type EmbedTaskType = "RETRIEVAL_QUERY" | "RETRIEVAL_DOCUMENT"
+
+const MODEL_ENV_BY_TIER = {
+  basic: "GEMINI_FAST_MODEL",
+  reasoning: "GEMINI_REASONING_MODEL",
+  advanced: "GEMINI_MODEL",
+} as const
 
 function resolveModel(tier: ChatbotModelTier = "basic") {
   if (tier === "advanced") {
@@ -92,20 +106,48 @@ function resolveModel(tier: ChatbotModelTier = "basic") {
   return configured
 }
 
+export type ChatbotGeminiProvider = "developer" | "vertex"
+
+// Vertex(CHATBOT_GEMINI_PROVIDER=vertex) 기본 모델. 2.5 계열은 Vertex 에서도 쓰지 않는다.
+// -latest 별칭은 Vertex 에 없을 수 있어 Vertex 체인에는 두지 않는다.
+const VERTEX_FLASH_MODEL = "gemini-3.5-flash"
+const VERTEX_LITE_MODEL = "gemini-3.5-flash-lite"
+
+/** 지금 설정된 Gemini 연결 방식. 연결이 없거나 설정이 틀려도 이름만 본다(체인 계산용). */
+function configuredGeminiProvider(): ChatbotGeminiProvider {
+  return process.env.CHATBOT_GEMINI_PROVIDER?.trim() === "vertex" ? "vertex" : "developer"
+}
+
 // 티어별 프라이머리 + 에러 폴백 모델 체인. 프라이머리 호출이 실패하면 안정 모델, 그다음 별칭 순으로 자동 폴백한다.
 // 같은 모델이 겹치면 한 번만 호출한다.
-export function resolveModelChain(tier: ChatbotModelTier): string[] {
+// - developer: 티어 기본(또는 env) → 티어 폴백 → gemini-flash-lite-latest
+// - vertex: env(2.5·종료 모델이 아니면) 또는 basic=3.5-flash-lite·그 밖=3.5-flash → 나머지 하나
+export function resolveModelChain(tier: ChatbotModelTier, provider: ChatbotGeminiProvider = configuredGeminiProvider()): string[] {
+  if (provider === "vertex") {
+    const configured = process.env[MODEL_ENV_BY_TIER[tier]]?.trim()
+    const supported = configured && !UNSUPPORTED_GEMINI_MODELS.has(configured) && !configured.startsWith("gemini-2.5-")
+    const basic = tier === "basic"
+    const primary = basic ? VERTEX_LITE_MODEL : VERTEX_FLASH_MODEL
+    const fallback = basic ? VERTEX_FLASH_MODEL : VERTEX_LITE_MODEL
+    return Array.from(new Set([supported ? configured : primary, fallback]))
+  }
   const primary = resolveModel(tier)
   const fallback = tier === "reasoning" || tier === "advanced" ? DEEP_FALLBACK_MODEL : FAST_FALLBACK_MODEL
   return Array.from(new Set([primary, fallback, LAST_RESORT_MODEL]))
 }
 
-function getGeminiApiKey() {
-  return process.env.GEMINI_API_KEY?.trim() || null
+/**
+ * 공개 챗봇이 Gemini 를 부를 수 있는지(developer 키 또는 올바른 Vertex 설정). 관문·근거 선별·두 번째 검색·임베딩이
+ * 켜지는 조건이다. GEMINI_API_KEY 만 보면 Vertex 만 설정한 환경에서 이 단계들이 꺼진다.
+ */
+export function hasChatbotGeminiConnection() {
+  return getChatbotGeminiConnection() !== null
 }
 
 // ── 결제·인증 실패 차단기 ─────────────────────────────────────────────────────────────────────────────
 // Gemini 가 401·402·403 을 돌려주면(결제 크레딧 소진·키 인증 실패) 그 키로는 어떤 모델을 불러도 실패한다.
+// developer(키)·vertex(OAuth) 두 연결 모두 같은 차단기를 거친다. Vertex 는 엔드포인트의 401·403 과, 토큰 발급(WIF·서비스 계정 키)이
+// 401·403 으로 거절된 경우도 같은 대상이다.
 // 2026-11-18 크레딧 소진 때 질문마다 모델 체인을 끝까지 돌며 실패 호출을 3~7번씩 보냈다. 한 번 확인하면 60초 동안
 // 이 파일을 거치는 Gemini 호출(관문 판정·근거 선별·목차 고르기·답 생성·스트림·임베딩)을 네트워크 없이 바로 실패로 돌려준다.
 // 호출부에는 기존 실패(null·빈 스트림)와 똑같이 보인다. 60초가 지나면 다음 호출 하나만 실제로 보내 보고(시험 호출),
@@ -161,11 +203,29 @@ function openModelCircuit(status: number) {
   )
 }
 
+/** Vertex 토큰 발급(google-auth-library) 오류에 실린 HTTP 상태. 없으면 undefined. */
+function accessDeniedStatusOfError(error: unknown): number | undefined {
+  if (!error || typeof error !== "object") return undefined
+  const candidate = error as { status?: unknown; code?: unknown; response?: { status?: unknown } }
+  for (const value of [candidate.response?.status, candidate.status, candidate.code]) {
+    const status = typeof value === "number" ? value : typeof value === "string" && /^\d{3}$/.test(value) ? Number(value) : undefined
+    if (isModelAccessDeniedStatus(status)) return status
+  }
+  return undefined
+}
+
 /**
- * 차단기를 거쳐 Gemini 에 요청한다. 차단 중이면 네트워크 없이 null 을 돌려준다(호출부는 실패로 처리하고 체인을 멈춘다).
- * 예외(시간 초과·네트워크 오류)는 그대로 던진다(호출부의 기존 처리).
+ * 차단기를 거쳐 Gemini 에 요청한다(연결 방식은 lib/chatbot/gemini-transport.ts). 차단 중이면 네트워크 없이 null 을 돌려준다
+ * (호출부는 실패로 처리하고 체인을 멈춘다). 예외(시간 초과·네트워크 오류·Vertex 토큰 발급 실패)는 그대로 던진다(호출부의 기존 처리).
+ * Vertex 토큰 발급이 401·403 으로 거절되면 차단기도 연다.
  */
-async function fetchGeminiThroughCircuit(url: string, init: RequestInit): Promise<Response | null> {
+async function fetchGeminiThroughCircuit(
+  connection: GeminiConnection,
+  model: string,
+  operation: GeminiOperation,
+  body: string,
+  signal: AbortSignal
+): Promise<Response | null> {
   let probe = false
   if (modelCircuitOpenUntil !== 0) {
     if (Date.now() < modelCircuitOpenUntil || modelCircuitProbeInFlight) {
@@ -177,9 +237,12 @@ async function fetchGeminiThroughCircuit(url: string, init: RequestInit): Promis
   }
   let status: number | undefined
   try {
-    const res = await fetch(url, init)
+    const res = await postChatbotGemini(connection, model, operation, body, signal)
     status = typeof res.status === "number" ? res.status : res.ok ? 200 : undefined
     return res
+  } catch (error) {
+    status = accessDeniedStatusOfError(error)
+    throw error
   } finally {
     if (isModelAccessDeniedStatus(status)) {
       openModelCircuit(status as number)
@@ -507,12 +570,21 @@ function warnGeminiCallIssue(model: string, reason: string, details: Record<stri
   console.warn("[chatbot] Gemini call failed; trying fallback.", { model, reason, ...details })
 }
 
-async function readGeminiErrorSnippet(res: Response) {
+// 오류 본문은 남기지 않고 Google 오류 상태 이름(UNAVAILABLE·PERMISSION_DENIED 등)만 남긴다(본문에 프로젝트·키 정보가 섞일 수 있다).
+async function readGeminiErrorStatus(res: Response) {
   try {
-    return (await res.text()).replace(/\s+/g, " ").slice(0, 240)
+    const { error } = (await res.json()) as { error?: { status?: string } }
+    return typeof error?.status === "string" && /^[A-Z_]{1,48}$/.test(error.status) ? error.status : undefined
   } catch {
     return undefined
   }
+}
+
+type GeminiPart = { text?: string; thought?: boolean }
+
+/** 답 글 조각만 잇는다. thinking 요약(thought) 조각은 공개 답·판정·번호 고르기에 쓰지 않는다. */
+function joinAnswerParts(parts: GeminiPart[] | undefined) {
+  return parts?.filter((part) => !part.thought).map((part) => part.text ?? "").join("")
 }
 
 export function buildGenerationConfig(model: string, temperature: number) {
@@ -573,10 +645,10 @@ async function requestGeminiContent({
   tier: ChatbotModelTier
   temperature: number
 }): Promise<GeminiContentResult> {
-  const apiKey = getGeminiApiKey()
-  if (!apiKey) return { ...UNAVAILABLE_COMPLETION, text: "" }
+  const connection = getChatbotGeminiConnection()
+  if (!connection) return { ...UNAVAILABLE_COMPLETION, text: "" }
 
-  const models = resolveModelChain(tier)
+  const models = resolveModelChain(tier, connection.provider)
 
   // 프라이머리 모델이 실패(non-ok/타임아웃/네트워크/빈 응답)하면 다음 폴백 모델로 순차 시도한다.
   for (const model of models) {
@@ -585,34 +657,27 @@ async function requestGeminiContent({
 
     try {
       const res = await fetchGeminiThroughCircuit(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          signal: controller.signal,
-          body: buildGeminiBody(model, systemInstruction, contents, temperature),
-        }
+        connection, model, "generateContent",
+        buildGeminiBody(model, systemInstruction, contents, temperature), controller.signal
       )
       if (!res) break
 
       if (!res.ok) {
         warnGeminiCallIssue(model, "http_error", {
           status: res.status,
-          body: await readGeminiErrorSnippet(res),
+          provider: connection.provider,
+          apiStatus: await readGeminiErrorStatus(res),
         })
         if (isModelAccessDeniedStatus(res.status)) break
         continue
       }
 
       const data = (await res.json()) as {
-        candidates?: { content?: { parts?: { text?: string }[] }; finishReason?: string }[]
+        candidates?: { content?: { parts?: GeminiPart[] }; finishReason?: string }[]
         promptFeedback?: { blockReason?: string }
       }
 
-      const text = data.candidates?.[0]?.content?.parts
-        ?.map((part) => part.text ?? "")
-        .join("")
-        .trim()
+      const text = joinAnswerParts(data.candidates?.[0]?.content?.parts)?.trim()
       const finishReason = data.candidates?.[0]?.finishReason ?? null
 
       if (!text) {
@@ -639,6 +704,7 @@ async function requestGeminiContent({
     } catch (error) {
       // 타임아웃·네트워크·파싱 오류 → 다음 폴백 모델 시도
       warnGeminiCallIssue(model, "request_error", {
+        provider: connection.provider,
         error: error instanceof Error ? error.name : "unknown_error",
       })
       continue
@@ -656,7 +722,7 @@ export async function generateGeminiAnswer({
   tier = "basic",
   history,
 }: GenerateArgs): Promise<string | null> {
-  if (!getGeminiApiKey() || sources.length === 0 || !question.trim()) {
+  if (!hasChatbotGeminiConnection() || sources.length === 0 || !question.trim()) {
     return null
   }
 
@@ -744,13 +810,13 @@ export async function selectAnsweringSentenceIds({
   sentences: EvidenceSentence[]
   timeoutMs?: number
 }): Promise<number[] | null> {
-  const apiKey = getGeminiApiKey()
-  if (!apiKey || !question.trim() || sentences.length === 0) return null
+  const connection = getChatbotGeminiConnection()
+  if (!connection || !question.trim() || sentences.length === 0) return null
 
   const deadline = Date.now() + timeoutMs
   const prompt = buildSelectionPrompt(question, sentences)
 
-  for (const model of resolveModelChain("basic")) {
+  for (const model of resolveModelChain("basic", connection.provider)) {
     const remainingMs = deadline - Date.now()
     if (remainingMs < 400) break
 
@@ -759,40 +825,37 @@ export async function selectAnsweringSentenceIds({
 
     try {
       const res = await fetchGeminiThroughCircuit(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          signal: controller.signal,
-          body: JSON.stringify({
-            systemInstruction: { parts: [{ text: SELECTION_SYSTEM_INSTRUCTION }] },
-            contents: [{ role: "user", parts: [{ text: prompt }] }],
-            generationConfig: {
-              ...buildGenerationConfig(model, 0),
-              maxOutputTokens: 256,
-              responseMimeType: "application/json",
-              responseSchema: {
-                type: "object",
-                properties: { ids: { type: "array", items: { type: "integer" } } },
-                required: ["ids"],
-              },
+        connection, model, "generateContent",
+        JSON.stringify({
+          systemInstruction: { parts: [{ text: SELECTION_SYSTEM_INSTRUCTION }] },
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+          generationConfig: {
+            ...buildGenerationConfig(model, 0),
+            maxOutputTokens: 256,
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: "object",
+              properties: { ids: { type: "array", items: { type: "integer" } } },
+              required: ["ids"],
             },
-          }),
-        }
+          },
+        }),
+        controller.signal
       )
 
       if (!res) break
       if (!res.ok) {
         warnGeminiCallIssue(model, "selection_http_error", {
           status: res.status,
-          body: await readGeminiErrorSnippet(res),
+          provider: connection.provider,
+          apiStatus: await readGeminiErrorStatus(res),
         })
         if (isModelAccessDeniedStatus(res.status)) break
         continue
       }
 
-      const data = (await res.json()) as { candidates?: { content?: { parts?: { text?: string }[] } }[] }
-      const text = data.candidates?.[0]?.content?.parts?.map((part) => part.text ?? "").join("")
+      const data = (await res.json()) as { candidates?: { content?: { parts?: GeminiPart[] } }[] }
+      const text = joinAnswerParts(data.candidates?.[0]?.content?.parts)
       const ids = parseSelectedSentenceIds(text, sentences.length)
       if (ids === null) {
         warnGeminiCallIssue(model, "selection_parse_error")
@@ -878,14 +941,17 @@ export function isPreparedAnswerGateRequestBody(body: string) {
 
 // 관문은 판정 한 낱말만 받으면 되므로 체인에서 가장 빠르고 싼 lite 모델을 먼저 쓴다. 별칭(-latest)은 계속 맨 끝이다.
 // CHATBOT_ANSWER_GATE_MODEL 로 맨 앞 모델을 바꿀 수 있다(종료된 모델명이면 무시한다).
-export function resolvePreparedAnswerGateModelChain(): string[] {
-  return resolveLiteFirstModelChain(process.env.CHATBOT_ANSWER_GATE_MODEL)
+export function resolvePreparedAnswerGateModelChain(provider: ChatbotGeminiProvider = configuredGeminiProvider()): string[] {
+  return resolveLiteFirstModelChain(process.env.CHATBOT_ANSWER_GATE_MODEL, provider)
 }
 
 // 번호·판정만 받는 짧은 호출(관문 판정, 목차 고르기)에 쓰는 체인. basic 체인을 lite 우선으로 다시 줄 세운다.
 // override 가 살아 있는 모델명이면 맨 앞에 둔다(종료된 모델·2.5 계열은 무시).
-export function resolveLiteFirstModelChain(override?: string): string[] {
-  const chain = resolveModelChain("basic")
+export function resolveLiteFirstModelChain(
+  override?: string,
+  provider: ChatbotGeminiProvider = configuredGeminiProvider()
+): string[] {
+  const chain = resolveModelChain("basic", provider)
   const first = override?.trim()
   if (first && !UNSUPPORTED_GEMINI_MODELS.has(first) && !first.startsWith("gemini-2.5")) {
     return Array.from(new Set([first, ...chain]))
@@ -909,13 +975,13 @@ export async function judgePreparedAnswerFit({
   answer: string
   timeoutMs: number
 }): Promise<{ verdict: PreparedAnswerVerdict; model: string } | null> {
-  const apiKey = getGeminiApiKey()
-  if (!apiKey || !question.trim() || !answer.trim()) return null
+  const connection = getChatbotGeminiConnection()
+  if (!connection || !question.trim() || !answer.trim()) return null
 
   const deadline = Date.now() + timeoutMs
   const prompt = buildPreparedAnswerGatePrompt(question, answer)
 
-  for (const model of resolvePreparedAnswerGateModelChain()) {
+  for (const model of resolvePreparedAnswerGateModelChain(connection.provider)) {
     const remainingMs = deadline - Date.now()
     if (remainingMs < 300) break
 
@@ -924,44 +990,44 @@ export async function judgePreparedAnswerFit({
 
     try {
       const res = await fetchGeminiThroughCircuit(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          signal: controller.signal,
-          body: JSON.stringify({
-            systemInstruction: { parts: [{ text: PREPARED_ANSWER_GATE_INSTRUCTION }] },
-            contents: [{ role: "user", parts: [{ text: prompt }] }],
-            generationConfig: {
-              ...buildGenerationConfig(model, 0),
-              // asked·quote 를 먼저 쓰게 해 "응답하는 문장이 실제로 있는지"를 근거로 판정하게 한다(판정만 쓰게 했을 때보다
-              // 가로채기를 더 잡았다. 측정은 lib/chatbot/answer-gate.ts 머리말). 출력은 판정 근거용이고 어디에도 내보내지 않는다.
-              maxOutputTokens: 320,
-              responseMimeType: "application/json",
-              responseSchema: {
-                type: "object",
-                properties: {
-                  asked: { type: "string" },
-                  quote: { type: "string" },
-                  verdict: { type: "string", enum: ["answers", "off_target"] },
-                },
-                required: ["asked", "quote", "verdict"],
-                propertyOrdering: ["asked", "quote", "verdict"],
+        connection, model, "generateContent",
+        JSON.stringify({
+          systemInstruction: { parts: [{ text: PREPARED_ANSWER_GATE_INSTRUCTION }] },
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+          generationConfig: {
+            ...buildGenerationConfig(model, 0),
+            // asked·quote 를 먼저 쓰게 해 "응답하는 문장이 실제로 있는지"를 근거로 판정하게 한다(판정만 쓰게 했을 때보다
+            // 가로채기를 더 잡았다. 측정은 lib/chatbot/answer-gate.ts 머리말). 출력은 판정 근거용이고 어디에도 내보내지 않는다.
+            maxOutputTokens: 320,
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: "object",
+              properties: {
+                asked: { type: "string" },
+                quote: { type: "string" },
+                verdict: { type: "string", enum: ["answers", "off_target"] },
               },
+              required: ["asked", "quote", "verdict"],
+              propertyOrdering: ["asked", "quote", "verdict"],
             },
-          }),
-        }
+          },
+        }),
+        controller.signal
       )
 
       if (!res) break
       if (!res.ok) {
-        warnGeminiCallIssue(model, "gate_http_error", { status: res.status, body: await readGeminiErrorSnippet(res) })
+        warnGeminiCallIssue(model, "gate_http_error", {
+          status: res.status,
+          provider: connection.provider,
+          apiStatus: await readGeminiErrorStatus(res),
+        })
         if (isModelAccessDeniedStatus(res.status)) break
         continue
       }
 
-      const data = (await res.json()) as { candidates?: { content?: { parts?: { text?: string }[] } }[] }
-      const text = data.candidates?.[0]?.content?.parts?.map((part) => part.text ?? "").join("")
+      const data = (await res.json()) as { candidates?: { content?: { parts?: GeminiPart[] } }[] }
+      const text = joinAnswerParts(data.candidates?.[0]?.content?.parts)
       const verdict = parsePreparedAnswerVerdict(text)
       if (verdict === null) {
         warnGeminiCallIssue(model, "gate_parse_error")
@@ -1033,14 +1099,14 @@ export async function pickOutlineSectionIds({
   entryCount: number
   timeoutMs: number
 }): Promise<{ ids: number[]; model: string } | null> {
-  const apiKey = getGeminiApiKey()
-  if (!apiKey || !question.trim() || !outlineText.trim() || entryCount === 0) return null
+  const connection = getChatbotGeminiConnection()
+  if (!connection || !question.trim() || !outlineText.trim() || entryCount === 0) return null
 
   const deadline = Date.now() + timeoutMs
   const systemInstruction = `${OUTLINE_PICK_INSTRUCTION}\n\n<목차>\n${outlineText}\n</목차>`
   const safeQuestion = question.replace(/<\/?(?:질문|목차)>/g, " ").trim().slice(0, OUTLINE_MAX_QUESTION_LENGTH)
 
-  for (const model of resolveLiteFirstModelChain()) {
+  for (const model of resolveLiteFirstModelChain(undefined, connection.provider)) {
     const remainingMs = deadline - Date.now()
     if (remainingMs < 300) break
 
@@ -1049,37 +1115,37 @@ export async function pickOutlineSectionIds({
 
     try {
       const res = await fetchGeminiThroughCircuit(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          signal: controller.signal,
-          body: JSON.stringify({
-            systemInstruction: { parts: [{ text: systemInstruction }] },
-            contents: [{ role: "user", parts: [{ text: `<질문>${safeQuestion}</질문>` }] }],
-            generationConfig: {
-              ...buildGenerationConfig(model, 0),
-              maxOutputTokens: 64,
-              responseMimeType: "application/json",
-              responseSchema: {
-                type: "object",
-                properties: { sectionIds: { type: "array", items: { type: "integer" } } },
-                required: ["sectionIds"],
-              },
+        connection, model, "generateContent",
+        JSON.stringify({
+          systemInstruction: { parts: [{ text: systemInstruction }] },
+          contents: [{ role: "user", parts: [{ text: `<질문>${safeQuestion}</질문>` }] }],
+          generationConfig: {
+            ...buildGenerationConfig(model, 0),
+            maxOutputTokens: 64,
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: "object",
+              properties: { sectionIds: { type: "array", items: { type: "integer" } } },
+              required: ["sectionIds"],
             },
-          }),
-        }
+          },
+        }),
+        controller.signal
       )
 
       if (!res) break
       if (!res.ok) {
-        warnGeminiCallIssue(model, "outline_http_error", { status: res.status, body: await readGeminiErrorSnippet(res) })
+        warnGeminiCallIssue(model, "outline_http_error", {
+          status: res.status,
+          provider: connection.provider,
+          apiStatus: await readGeminiErrorStatus(res),
+        })
         if (isModelAccessDeniedStatus(res.status)) break
         continue
       }
 
-      const data = (await res.json()) as { candidates?: { content?: { parts?: { text?: string }[] } }[] }
-      const text = data.candidates?.[0]?.content?.parts?.map((part) => part.text ?? "").join("")
+      const data = (await res.json()) as { candidates?: { content?: { parts?: GeminiPart[] } }[] }
+      const text = joinAnswerParts(data.candidates?.[0]?.content?.parts)
       const ids = parseOutlineSectionIds(text, entryCount)
       if (ids === null) {
         warnGeminiCallIssue(model, "outline_parse_error")
@@ -1175,7 +1241,7 @@ export async function generateGeminiFinalAnswer({
   history,
   onCompletion,
 }: FinalGenerateArgs): Promise<string | null> {
-  if (!getGeminiApiKey() || !question.trim()) {
+  if (!hasChatbotGeminiConnection() || !question.trim()) {
     onCompletion?.(toCompletion(UNAVAILABLE_COMPLETION))
     return null
   }
@@ -1199,7 +1265,7 @@ export async function generateGeminiFinalAnswer({
 }
 
 type GeminiStreamChunk = {
-  candidates?: { content?: { parts?: { text?: string }[] }; finishReason?: string }[]
+  candidates?: { content?: { parts?: GeminiPart[] }; finishReason?: string }[]
 }
 
 /** SSE 한 줄(`data: {...}`)에서 글 조각과 finishReason 을 읽는다. data 줄이 아니거나 JSON 이 깨졌으면 null. */
@@ -1212,7 +1278,7 @@ function parseGeminiStreamLine(line: string): { text: string; finishReason: stri
     const data = JSON.parse(payload) as GeminiStreamChunk
     const candidate = data.candidates?.[0]
     return {
-      text: candidate?.content?.parts?.map((part) => part.text ?? "").join("") ?? "",
+      text: joinAnswerParts(candidate?.content?.parts) ?? "",
       finishReason: candidate?.finishReason ?? null,
     }
   } catch {
@@ -1241,10 +1307,10 @@ async function* streamGeminiContent({
   tier: ChatbotModelTier
   temperature: number
 }): AsyncGenerator<string, GeminiAnswerCompletion> {
-  const apiKey = getGeminiApiKey()
-  if (!apiKey) return toCompletion(UNAVAILABLE_COMPLETION)
+  const connection = getChatbotGeminiConnection()
+  if (!connection) return toCompletion(UNAVAILABLE_COMPLETION)
 
-  for (const model of resolveModelChain(tier)) {
+  for (const model of resolveModelChain(tier, connection.provider)) {
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), GEMINI_STREAM_TIMEOUT_MS)
     let emittedAny = false
@@ -1252,13 +1318,8 @@ async function* streamGeminiContent({
 
     try {
       const res = await fetchGeminiThroughCircuit(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${apiKey}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          signal: controller.signal,
-          body: buildGeminiBody(model, systemInstruction, contents, temperature),
-        }
+        connection, model, "streamGenerateContent",
+        buildGeminiBody(model, systemInstruction, contents, temperature), controller.signal
       )
 
       if (!res) return toCompletion(UNAVAILABLE_COMPLETION)
@@ -1266,7 +1327,8 @@ async function* streamGeminiContent({
         warnGeminiCallIssue(model, "stream_http_error", {
           status: res.status,
           hasBody: Boolean(res.body),
-          body: res.ok ? undefined : await readGeminiErrorSnippet(res),
+          provider: connection.provider,
+          apiStatus: res.ok ? undefined : await readGeminiErrorStatus(res),
         })
         if (isModelAccessDeniedStatus(res.status)) return toCompletion(UNAVAILABLE_COMPLETION)
         continue
@@ -1341,7 +1403,7 @@ export async function* streamGeminiFinalAnswer({
   history,
   onCompletion,
 }: FinalGenerateArgs): AsyncGenerator<string, GeminiAnswerCompletion> {
-  if (!getGeminiApiKey() || !question.trim()) {
+  if (!hasChatbotGeminiConnection() || !question.trim()) {
     const completion = toCompletion(UNAVAILABLE_COMPLETION)
     onCompletion?.(completion)
     return completion
@@ -1369,7 +1431,7 @@ export async function generateGeminiInferredAnswer({
   tier = "basic",
   history,
 }: InferredGenerateArgs): Promise<string | null> {
-  if (!getGeminiApiKey() || !question.trim()) return null
+  if (!hasChatbotGeminiConnection() || !question.trim()) return null
 
   const prompt = [
     `분류: ${category}`,
@@ -1407,43 +1469,73 @@ export async function generateGeminiInferredAnswer({
 }
 
 /**
- * Gemini 임베딩 생성. 키가 없거나 오류면 null → 호출부가 키워드 검색으로 폴백.
+ * Gemini 임베딩 생성. 연결을 사용할 수 없거나 오류면 null → 호출부가 키워드 검색으로 폴백.
  * - 검색 질문: RETRIEVAL_QUERY, 문서 청크: RETRIEVAL_DOCUMENT (비대칭 검색 품질↑)
+ * - Vertex 는 predict 형식(instances·predictions)으로 같은 모델·같은 차원을 요청하고, 차원이 다른 벡터는 버린다.
  */
 export async function embedText(
   text: string,
   taskType: EmbedTaskType
 ): Promise<number[] | null> {
-  const apiKey = getGeminiApiKey()
-  if (!apiKey || !text.trim()) return null
+  const connection = getChatbotGeminiConnection()
+  if (!connection || !text.trim()) return null
 
   const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), EMBED_TIMEOUT_MS)
+  const timeoutMs = connection.provider === "vertex" ? VERTEX_EMBED_TIMEOUT_MS : EMBED_TIMEOUT_MS
+  const timeout = setTimeout(() => controller.abort(), timeoutMs)
 
   try {
-    const res = await fetchGeminiThroughCircuit(
-      `https://generativelanguage.googleapis.com/v1beta/models/${CHATBOT_EMBED_MODEL}:embedContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        signal: controller.signal,
-        body: JSON.stringify({
-          model: `models/${CHATBOT_EMBED_MODEL}`,
-          content: { parts: [{ text }] },
-          taskType,
-          outputDimensionality: CHATBOT_EMBED_DIM,
-        }),
+    const body = connection.provider === "vertex"
+      ? {
+        instances: [{ content: text, task_type: taskType }],
+        parameters: { outputDimensionality: CHATBOT_EMBED_DIM },
       }
+      : {
+        model: `models/${CHATBOT_EMBED_MODEL}`,
+        content: { parts: [{ text }] },
+        taskType,
+        outputDimensionality: CHATBOT_EMBED_DIM,
+      }
+    const res = await fetchGeminiThroughCircuit(
+      connection, CHATBOT_EMBED_MODEL, "embedContent", JSON.stringify(body), controller.signal
     )
 
     // 차단 중이거나 실패하면 null — 호출부(searchSupabaseSources)는 낱말 검색만으로 이어 간다.
-    if (!res || !res.ok) return null
+    if (!res) return null
+    if (!res.ok) {
+      if (connection.provider === "vertex") {
+        warnGeminiCallIssue(CHATBOT_EMBED_MODEL, "embedding_http_error", {
+          provider: connection.provider,
+          status: res.status,
+          apiStatus: await readGeminiErrorStatus(res),
+        })
+      }
+      return null
+    }
 
-    const data = (await res.json()) as { embedding?: { values?: number[] } }
-    const values = data.embedding?.values
+    const data = (await res.json()) as {
+      embedding?: { values?: number[] }
+      predictions?: { embeddings?: { values?: number[] } }[]
+    }
+    const values = connection.provider === "vertex"
+      ? data.predictions?.[0]?.embeddings?.values
+      : data.embedding?.values
     if (!Array.isArray(values) || values.length === 0) return null
+    if (connection.provider === "vertex" && (values.length !== CHATBOT_EMBED_DIM || !values.every(Number.isFinite))) {
+      warnGeminiCallIssue(CHATBOT_EMBED_MODEL, "invalid_embedding", {
+        provider: connection.provider,
+        dimensions: values.length,
+      })
+      return null
+    }
     return values
-  } catch {
+  } catch (error) {
+    if (connection.provider === "vertex") {
+      warnGeminiCallIssue(CHATBOT_EMBED_MODEL, "embedding_request_error", {
+        provider: connection.provider,
+        error: error instanceof Error ? error.name : "unknown_error",
+      })
+    }
     return null
   } finally {
     clearTimeout(timeout)

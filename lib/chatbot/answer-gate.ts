@@ -7,7 +7,7 @@
  * 이 관문은 정규식을 후보 고르기에만 쓰고, 그 답이 정말 이 질문에 대한 답인지 모델이 한 번 판정한 뒤 내보낸다.
  * 모델은 판정만 하고 글을 쓰지 않는다(나가는 글은 사람이 쓴 답이나 문서 문장 그대로).
  *
- * - 스위치: CHATBOT_ANSWER_GATE=off 로 끈다(기본 on). CHATBOT_FINAL_ANSWER_LLM=off 이거나 GEMINI_API_KEY 가 없어도 건너뛴다.
+ * - 스위치: CHATBOT_ANSWER_GATE=off 로 끈다(기본 on). CHATBOT_FINAL_ANSWER_LLM=off 이거나 Gemini 연결(GEMINI_API_KEY 또는 Vertex 설정)이 없어도 건너뛴다.
  * - 실패에 안전: 호출 실패·시간 초과·형식 오류면 기존 답을 그대로 둔다(skipped).
  * - 같은 (질문, 답) 판정은 프로세스 메모리에 잠깐 둔다. 답 캐시(service.ts 의 answer cache)와는 키 공간이 따로다.
  *
@@ -18,7 +18,13 @@
  *   - 같은 프롬프트를 gemini-3.5-flash 로(CHATBOT_ANSWER_GATE_MODEL): 버림 1.59% / 잡음 83.3%, 중앙값 1.3초·95번째 1.6초
  */
 
-import { isModelCircuitOpen, judgePreparedAnswerFit, notifyModelCircuitBlocked, type PreparedAnswerVerdict } from "./llm"
+import {
+  hasChatbotGeminiConnection,
+  isModelCircuitOpen,
+  judgePreparedAnswerFit,
+  notifyModelCircuitBlocked,
+  type PreparedAnswerVerdict,
+} from "./llm"
 
 /** 관문 결과. none=관문 대상이 아님, kept=판정 후 유지, rejected=버리고 문서 경로로, skipped=꺼짐·실패로 판정 없이 유지. */
 export type AnswerGateOutcome = "kept" | "rejected" | "skipped" | "none"
@@ -86,7 +92,7 @@ export function __clearAnswerGateCacheForTests() {
 export function getAnswerGateDisabledReason(): string | null {
   if (process.env.CHATBOT_ANSWER_GATE?.trim().toLowerCase() === "off") return "off"
   if (process.env.CHATBOT_FINAL_ANSWER_LLM?.trim().toLowerCase() === "off") return "llm_off"
-  if (!process.env.GEMINI_API_KEY?.trim()) return "no_key"
+  if (!hasChatbotGeminiConnection()) return "no_key"
   return null
 }
 

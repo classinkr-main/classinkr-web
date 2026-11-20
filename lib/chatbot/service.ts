@@ -32,6 +32,7 @@ import {
   clampAnswerToLength,
   embedText,
   getFinalAnswerAllowList,
+  hasChatbotGeminiConnection,
   isModelCircuitOpen,
   pickOutlineSectionIds,
   sanitizePublicAnswerText,
@@ -367,7 +368,7 @@ type RetrievalVectorState = "on" | "off"
 
 /** 이번 요청에서 질문 임베딩을 만들 수 있을 것으로 보이는지(캐시 조회용). 실제 결과는 검색 뒤 searchSupabaseSources 가 알린다. */
 function expectedRetrievalVectorState(): RetrievalVectorState {
-  return hasSupabaseServerEnv() && Boolean(process.env.GEMINI_API_KEY?.trim()) && !isModelCircuitOpen() ? "on" : "off"
+  return hasSupabaseServerEnv() && hasChatbotGeminiConnection() && !isModelCircuitOpen() ? "on" : "off"
 }
 
 function retrievalCacheKeyOf(question: NormalizedQuestion, options: RetrievalOptions | undefined, supabase: boolean, vector: RetrievalVectorState) {
@@ -5196,7 +5197,7 @@ function modelUnavailableAnswerText(state: ChatbotModelState) {
 
 /** 공개 경로에서 최종 답 모델(근거 선별)이 켜져 있는지. 꺼져 있으면 선별 결과가 'failed'여도 모델이 죽은 것이 아니다. */
 function isFinalAnswerModelEnabled() {
-  return getFinalAnswerLlmMode() !== "off" && Boolean(process.env.GEMINI_API_KEY?.trim())
+  return getFinalAnswerLlmMode() !== "off" && hasChatbotGeminiConnection()
 }
 
 /**
@@ -5533,7 +5534,7 @@ function isWeakHandoffSignal(question: NormalizedQuestion) {
 // 모델은 번호만 고르고 나가는 글은 문서 문장 그대로다. 목차에서 고른 절이 없거나 선별이 못 고르면 못 찾음 답을 그대로 둔다.
 // 고른 문장으로 만든 답은 정해 둔 답 확인 관문(answer-gate.ts)으로 한 번 더 판정해, 질문과 비슷한 주제일 뿐인 문장이면 버린다.
 // 운영(Supabase 검색)에서도 같은 정적 목차·정적 본문을 쓴다. DB 문서와 정적 문서는 다를 수 있다(DB 를 새로 조회하지 않는다).
-// 스위치: CHATBOT_SECOND_CHANCE=off 로 끈다(기본 on). CHATBOT_FINAL_ANSWER_LLM=off 이거나 GEMINI_API_KEY 가 없어도 돌지 않는다.
+// 스위치: CHATBOT_SECOND_CHANCE=off 로 끈다(기본 on). CHATBOT_FINAL_ANSWER_LLM=off 이거나 Gemini 연결(GEMINI_API_KEY 또는 Vertex 설정)이 없어도 돌지 않는다.
 
 export interface SecondChanceTrace {
   /** hit=목차에서 고른 절의 문장으로 답함, miss=돌렸지만 못 찾음 답 유지, none=대상 아님·꺼짐 */
@@ -5559,7 +5560,7 @@ const secondChanceTriedResponses = new WeakSet<object>()
 function getSecondChanceDisabledReason(): string | null {
   if (process.env.CHATBOT_SECOND_CHANCE?.trim().toLowerCase() === "off") return "off"
   if (getFinalAnswerLlmMode() === "off") return "llm_off"
-  if (!process.env.GEMINI_API_KEY?.trim()) return "no_key"
+  if (!hasChatbotGeminiConnection()) return "no_key"
   return null
 }
 

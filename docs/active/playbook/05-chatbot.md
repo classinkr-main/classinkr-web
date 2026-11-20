@@ -19,6 +19,7 @@
 
 - `lib/chatbot/service.ts`: 분류, 정해 둔 답 후보, 검색, 답변 조립, 근거 선별, 두 번째 검색, 고정 문구, 캐시, streaming
 - `lib/chatbot/llm.ts`: 모델 체인, 생성 설정, 근거 선별·관문 판정·목차 고르기 호출, 결제·인증 실패 차단기, 공개 답변 sanitize와 길이 제어
+- `lib/chatbot/gemini-transport.ts`: Gemini 연결 방식(`CHATBOT_GEMINI_PROVIDER=developer|vertex`)과 요청 주소·인증(`getChatbotGeminiConnection`, `postChatbotGemini`). 모든 챗봇 Gemini 호출이 `llm.ts`의 차단기를 거쳐 이것으로 나간다
 - `lib/chatbot/answer-gate.ts`: 정해 둔 답 확인 관문(아래 §3)
 - `lib/chatbot/doc-outline.ts`: 두 번째 검색이 쓰는 공개 정적 문서 목차(문서 제목 + 절 제목)
 - `lib/chatbot/source-grounding.ts`: 출처에 문서 본문을 실어 모델에게 넘기고(응답·저장에는 실리지 않음), 본문을 번호 붙은 문장으로 나눈다
@@ -37,6 +38,15 @@
 - `components/admin/cs/CsInquiryDashboard.tsx`, `components/admin/cs/CsConsoleNav.tsx`
 
 임베딩 차원, 유사도 하한과 teaser 대상 페이지는 코드와 테스트를 정본으로 확인한다. 시점별 운영 수치나 활성화 건수는 이 플레이북에 복제하지 않는다. 구조를 바꾼 경위와 측정값은 기록 문서에 있다: [첫 방문자 질문 점검(2026-11-13)](../chatbot-first-contact-audit-2026-11-13.md), [구조 변경과 측정(2026-11-18)](../chatbot-structure-round-2026-11-18.md).
+
+공개 챗봇을 Vertex AI에 연결할 때는 `CHATBOT_GEMINI_PROVIDER=vertex`, 대상 Google Cloud 프로젝트 ID인
+`CHATBOT_VERTEX_PROJECT_ID`, 모델을 제공하는 위치인 `CHATBOT_VERTEX_LOCATION`(기본 `global`)을 설정한다.
+로컬은 해당 프로젝트 권한이 있는 Application Default Credentials를 사용한다. Vercel 운영 배포는 해당 팀·프로젝트·
+`production` 환경의 OIDC 토큰만 허용하는 Google Cloud Workload Identity Provider를 사용한다.
+`CHATBOT_VERTEX_WIF_PROVIDER`에는 제공자의 전체 리소스 이름을, `CHATBOT_VERTEX_SERVICE_ACCOUNT_EMAIL`에는
+Vertex 예측 권한(`aiplatform.endpoints.predict`)을 가진 서비스 계정 이메일을 설정한다. 키를 사용하는 환경에는 제공자 대신
+`CHATBOT_VERTEX_PRIVATE_KEY`를 설정할 수 있다.
+검색 임베딩은 기존 문서 벡터와 동일한 모델과 차원으로 요청한다.
 
 ## 3. 공개 답 결정 흐름
 
@@ -71,7 +81,7 @@
 | 답 다시 쓰기(`generate`) | 선별이 문장을 고른 답만 다시 쓴다. 다시 쓰기가 실패·시간 초과·끊김(`MAX_TOKENS` 등 STOP 이 아닌 끝, 끊긴 스트림)이거나 검사에 걸리면 선별한 문장 답을 낸다. |
 | 질문 임베딩 | 키워드 검색만으로 찾는다(Supabase 경로). |
 
-**차단기**(`lib/chatbot/llm.ts`). Gemini가 401·402·403(결제 크레딧 소진·키 인증 실패)을 돌려주면 그 프로세스에서 60초(`MODEL_CIRCUIT_OPEN_MS`) 동안 챗봇의 Gemini 호출(관문·선별·목차 고르기·답 생성·스트림·임베딩)을 네트워크로 보내지 않고, 한 호출 안의 모델 체인도 다음 모델로 넘어가지 않는다. 열릴 때마다 `[chatbot] Gemini HTTP 402: Gemini 결제 크레딧 소진 또는 키 인증 실패로 보임 …` 오류 로그를 한 번 남긴다(키는 남기지 않는다). 60초 뒤 호출 하나만 시험으로 보내, 401·402·403이 아니면 풀고(`[chatbot] Gemini 호출이 다시 응답해 차단을 풀었습니다.`) 같으면 60초 더 닫는다. 429·5xx·시간 초과·404는 세지 않는다(기존 재시도·체인 폴백이 맡는다). `CHATBOT_PROVIDER`로 고르는 다른 답 생성 제공자 경로(`lib/chatbot/answer-provider.ts`)는 차단기를 거치지 않는다.
+**차단기**(`lib/chatbot/llm.ts`). Gemini가 401·402·403(결제 크레딧 소진·키 인증 실패)을 돌려주면(developer·vertex 두 연결 모두. Vertex는 엔드포인트 응답과 토큰 발급이 401·403으로 거절된 경우도 센다) 그 프로세스에서 60초(`MODEL_CIRCUIT_OPEN_MS`) 동안 챗봇의 Gemini 호출(관문·선별·목차 고르기·답 생성·스트림·임베딩)을 네트워크로 보내지 않고, 한 호출 안의 모델 체인도 다음 모델로 넘어가지 않는다. 열릴 때마다 `[chatbot] Gemini HTTP 402: Gemini 결제 크레딧 소진 또는 키 인증 실패로 보임 …` 오류 로그를 한 번 남긴다(키는 남기지 않는다). 60초 뒤 호출 하나만 시험으로 보내, 401·402·403이 아니면 풀고(`[chatbot] Gemini 호출이 다시 응답해 차단을 풀었습니다.`) 같으면 60초 더 닫는다. 429·5xx·시간 초과·404는 세지 않는다(기존 재시도·체인 폴백이 맡는다). `CHATBOT_PROVIDER`로 고르는 다른 답 생성 제공자 경로(`lib/chatbot/answer-provider.ts`)는 차단기를 거치지 않는다.
 
 차단기가 열린 동안의 `MODEL_UNAVAILABLE_ANSWER`는 '잠시 뒤 다시'를 뺀 변형(`MODEL_UNAVAILABLE_CIRCUIT_OPEN_ANSWER`)을 쓴다. 측정 호출(`evaluateChatbotQuery`) 결과에는 답에 쓰인 모델 호출 상태 `modelState`(ok·circuit_open·timeout·error)와 대화 맥락 흔적(`contextExpanded`·`conversationReason`)이 실린다. compiled 라우터는 켜 둔 카드가 없는 색인이면 색인으로 정하지 않고 legacy 흐름으로 보낸다(흔적 `unavailable=empty_index`).
 
@@ -81,7 +91,8 @@
 
 | 이름 | 기본값 | 끄거나 바꾸면 |
 |---|---|---|
-| `GEMINI_API_KEY` | 없음 | 없으면 관문·근거 선별·두 번째 검색·답 생성이 모두 꺼진다. 선별 실패를 모델 장애로 보지 않으므로 `MODEL_UNAVAILABLE_ANSWER`도 나가지 않는다. |
+| `GEMINI_API_KEY` | 없음 | developer 연결의 키. 쓸 수 있는 Gemini 연결(developer 키 또는 아래 Vertex 설정)이 없으면 관문·근거 선별·두 번째 검색·답 생성·임베딩이 모두 꺼진다. 선별 실패를 모델 장애로 보지 않으므로 `MODEL_UNAVAILABLE_ANSWER`도 나가지 않는다. |
+| `CHATBOT_GEMINI_PROVIDER` | `developer` | `vertex`: 공개 챗봇의 Gemini 호출(관문·선별·목차 고르기·답 생성·스트림·임베딩)을 `CHATBOT_VERTEX_PROJECT_ID` 프로젝트의 Vertex AI로 보낸다(인증은 §2 끝 문단). Vertex 설정이 틀리면 연결이 없는 것으로 본다. |
 | `CHATBOT_FINAL_ANSWER_LLM` | `select` | `generate`: 고른 문장을 근거로 모델이 답을 다시 쓴다. `off`: 모델을 쓰지 않는다(관문·선별·두 번째 검색도 꺼짐). 정해 둔 답과 결정형 초안만 나가고, 확인되지 않은 낱말 목록 밖 초안은 `NO_SOURCE_FACT_ANSWER`로 보류한다. |
 | `CHATBOT_ANSWER_GATE` | on | `off`: 정해 둔 답을 판정 없이 낸다(두 번째 검색의 확인 단계도 건너뛰고 고른 문장을 쓴다). |
 | `CHATBOT_ANSWER_GATE_MODEL` | 없음(lite 우선 체인) | 살아 있는 모델명을 주면 관문 체인 맨 앞에 둔다. 종료된 모델·`gemini-2.5*`는 무시한다. |
@@ -102,6 +113,7 @@
 - reasoning·advanced 티어: `gemini-3.1-pro-preview` → `gemini-3.5-flash` → `gemini-flash-lite-latest`
 - 관문 판정·목차 고르기(lite 우선): `gemini-3.1-flash-lite` → `gemini-3.5-flash` → `gemini-flash-lite-latest`
 - 임베딩: `gemini-embedding-001`(`GEMINI_EMBED_MODEL`, 차원은 `GEMINI_EMBED_DIM`)
+- Vertex(`CHATBOT_GEMINI_PROVIDER=vertex`): basic 티어 `gemini-3.5-flash-lite` → `gemini-3.5-flash`, reasoning·advanced 티어 `gemini-3.5-flash` → `gemini-3.5-flash-lite`. env의 `gemini-2.5*`·종료 모델명은 무시한다. `-latest` 별칭은 두지 않는다. 관문·목차 고르기는 같은 lite 우선 규칙을 따른다.
 
 모델을 바꾸거나 점검할 때는 `models.list`가 아니라 실제 `generateContent` 호출로 확인한다. 종료된 모델도 목록에는 남아 있고(2026-11 gemini-2.5 계열), 모델마다 받는 `thinkingLevel`이 달라 지원하지 않는 값을 보내면 400으로 실패한다.
 
