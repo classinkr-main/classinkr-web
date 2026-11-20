@@ -81,7 +81,7 @@ Vertex 예측 권한(`aiplatform.endpoints.predict`)을 가진 서비스 계정 
 | 답 다시 쓰기(`generate`) | 선별이 문장을 고른 답만 다시 쓴다. 다시 쓰기가 실패·시간 초과·끊김(`MAX_TOKENS` 등 STOP 이 아닌 끝, 끊긴 스트림)이거나 검사에 걸리면 선별한 문장 답을 낸다. |
 | 질문 임베딩 | 키워드 검색만으로 찾는다(Supabase 경로). |
 
-**차단기**(`lib/chatbot/llm.ts`). Gemini가 401·402·403(결제 크레딧 소진·키 인증 실패)을 돌려주면(developer·vertex 두 연결 모두. Vertex는 엔드포인트 응답과 토큰 발급이 401·403으로 거절된 경우도 센다) 그 프로세스에서 60초(`MODEL_CIRCUIT_OPEN_MS`) 동안 챗봇의 Gemini 호출(관문·선별·목차 고르기·답 생성·스트림·임베딩)을 네트워크로 보내지 않고, 한 호출 안의 모델 체인도 다음 모델로 넘어가지 않는다. 열릴 때마다 `[chatbot] Gemini HTTP 402: Gemini 결제 크레딧 소진 또는 키 인증 실패로 보임 …` 오류 로그를 한 번 남긴다(키는 남기지 않는다). 60초 뒤 호출 하나만 시험으로 보내, 401·402·403이 아니면 풀고(`[chatbot] Gemini 호출이 다시 응답해 차단을 풀었습니다.`) 같으면 60초 더 닫는다. 429·5xx·시간 초과·404는 세지 않는다(기존 재시도·체인 폴백이 맡는다). `CHATBOT_PROVIDER`로 고르는 다른 답 생성 제공자 경로(`lib/chatbot/answer-provider.ts`)는 차단기를 거치지 않는다.
+**차단기**(`lib/chatbot/llm.ts`). Gemini가 401·402·403(결제 크레딧 소진·키 인증 실패)을 돌려주면(developer·vertex 두 연결 모두. Vertex는 엔드포인트 응답과 토큰 발급이 401·403으로 거절된 경우도 센다) 그 프로세스에서 60초(`MODEL_CIRCUIT_OPEN_MS`) 동안 챗봇의 Gemini 호출(관문·선별·목차 고르기·답 생성·스트림·임베딩)을 네트워크로 보내지 않고, 한 호출 안의 모델 체인도 다음 모델로 넘어가지 않는다. 열릴 때마다 `[chatbot] Gemini HTTP 402: Gemini 결제 크레딧 소진 또는 키 인증 실패로 보임 …` 오류 로그를 한 번 남긴다(키는 남기지 않는다). 60초 뒤 호출 하나만 시험으로 보내, 401·402·403이 아니면 풀고(`[chatbot] Gemini 호출이 다시 응답해 차단을 풀었습니다.`) 같으면 60초 더 닫는다. 429·5xx·시간 초과·404는 세지 않는다(기존 재시도·체인 폴백이 맡는다). 실제 호출로 확인하지 않은 모델(`ACCESS_VERIFIED_MODELS` 밖: 1순위 `gemini-4-hydrogen`, env로 넣은 새 모델)의 403은 그 모델만의 권한 문제일 수 있어 차단기를 열지 않고 체인의 다음 모델로 넘긴다. 다음(확인된) 모델도 401·402·403이면 그때 연다. 시험 호출도 같아서 그런 403은 시험 결과로 치지 않는다. Vertex 토큰 발급이 401·403이 아닌 이유로 실패하면(키 삭제·서명 오류의 400, 네트워크 오류) 차단기는 열지 않지만 모델과 상관없으므로 그 호출의 체인을 멈춘다(`VertexAuthError`, 로그 `authStatus`). `CHATBOT_PROVIDER`로 고르는 다른 답 생성 제공자 경로(`lib/chatbot/answer-provider.ts`)는 차단기를 거치지 않는다.
 
 차단기가 열린 동안의 `MODEL_UNAVAILABLE_ANSWER`는 '잠시 뒤 다시'를 뺀 변형(`MODEL_UNAVAILABLE_CIRCUIT_OPEN_ANSWER`)을 쓴다. 측정 호출(`evaluateChatbotQuery`) 결과에는 답에 쓰인 모델 호출 상태 `modelState`(ok·circuit_open·timeout·error)와 대화 맥락 흔적(`contextExpanded`·`conversationReason`)이 실린다. compiled 라우터는 켜 둔 카드가 없는 색인이면 색인으로 정하지 않고 legacy 흐름으로 보낸다(흔적 `unavailable=empty_index`).
 
@@ -113,8 +113,9 @@ Vertex 예측 권한(`aiplatform.endpoints.predict`)을 가진 서비스 계정 
 - reasoning·advanced 티어: `gemini-4-hydrogen` → `gemini-3.1-pro-preview` → `gemini-3.5-flash` → `gemini-flash-lite-latest`
 - 관문 판정·목차 고르기(basic 사슬을 lite 우선으로 다시 세움): `gemini-3.1-flash-lite` → `gemini-4-hydrogen` → `gemini-3.5-flash` → `gemini-flash-lite-latest`
 - 임베딩: `gemini-embedding-001`(`GEMINI_EMBED_MODEL`, 차원은 `GEMINI_EMBED_DIM`)
-- Vertex(`CHATBOT_GEMINI_PROVIDER=vertex`): 모든 티어 `gemini-4-hydrogen` → `gemini-3.5-flash` → `gemini-3.5-flash-lite`, 관문·목차 고르기 `gemini-3.5-flash-lite` → `gemini-4-hydrogen` → `gemini-3.5-flash`. env의 `gemini-2.5*`·종료 모델명은 무시한다. `-latest` 별칭은 두지 않는다.
-- 티어 env가 있으면 그 값이 1순위이고 뒤는 티어 현행 기본 → 대체 → 별칭이다(developer). `.env` 예시의 옛 값(`gemini-3.5-flash`·`gemini-3.1-pro-preview`)을 넣어 두면 사슬은 hydrogen 이전과 같다.
+- Vertex(`CHATBOT_GEMINI_PROVIDER=vertex`): `gemini-4-hydrogen` 뒤는 hydrogen 이전 Vertex 사슬 그대로다. basic 티어 `gemini-4-hydrogen` → `gemini-3.5-flash-lite` → `gemini-3.5-flash`, reasoning·advanced 티어 `gemini-4-hydrogen` → `gemini-3.5-flash` → `gemini-3.5-flash-lite`, 관문·목차 고르기 `gemini-3.5-flash-lite` → `gemini-4-hydrogen` → `gemini-3.5-flash`. env의 `gemini-2.5*`·종료 모델명은 무시한다. `-latest` 별칭은 두지 않는다.
+- 티어 env가 있으면 그 값이 1순위이고 뒤는 그 연결의 티어 사슬이다(developer 티어 현행 기본 → 대체 → 별칭, Vertex 위 순서). `.env` 예시의 옛 값(`gemini-3.5-flash`·`gemini-3.1-pro-preview`)을 넣어 두면 사슬은 hydrogen 이전과 같다.
+- `gemini-4-hydrogen`이 403(그 모델 권한 없음)을 돌려주면 차단기를 열지 않고 다음 모델로 넘어간다(§4 차단기).
 
 1순위가 큰 모델로 바뀌어 근거 선별(시도 2.2초, 전체 3.5초·`generate` 모드 2초)이 시간 초과로 끝나면 `MODEL_UNAVAILABLE_ANSWER`가 늘 수 있다. 선별 시간 예산은 코드 상수라 env로 늘릴 수 없고, 운영에서 늘면 `GEMINI_FAST_MODEL=gemini-3.5-flash`로 basic 티어를 이전 사슬로 되돌린다.
 

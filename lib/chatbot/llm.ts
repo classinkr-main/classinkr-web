@@ -16,6 +16,7 @@ import {
 } from "@/lib/classin-positioning"
 import {
   getChatbotGeminiConnection,
+  isVertexAuthError,
   postChatbotGemini,
   type GeminiConnection,
   type GeminiOperation,
@@ -120,20 +121,37 @@ export type ChatbotGeminiProvider = "developer" | "vertex"
 const VERTEX_FLASH_MODEL = "gemini-3.5-flash"
 const VERTEX_LITE_MODEL = "gemini-3.5-flash-lite"
 
+// 실제 호출로 쓰고 있음을 확인한 모델(developer 2026-11-13 generateContent 실측, Vertex main 4533634e 의 기본 사슬)과 임베딩 기본 모델.
+// 이 모델이 403 을 받으면 키·프로젝트 전체의 거절로 보고 차단기를 연다(아래 isConnectionAccessDenied). PRIMARY_MODEL·env 로 넣은
+// 새 모델처럼 여기 없는 모델의 403 은 그 모델만의 권한 문제(PERMISSION_DENIED)일 수 있어, 차단기를 열지 않고 체인의 다음 모델에 맡긴다.
+const ACCESS_VERIFIED_MODELS: ReadonlySet<string> = new Set([
+  DEFAULT_FAST_MODEL,
+  DEFAULT_REASONING_MODEL,
+  DEFAULT_ADVANCED_MODEL,
+  FAST_FALLBACK_MODEL,
+  DEEP_FALLBACK_MODEL,
+  LAST_RESORT_MODEL,
+  VERTEX_FLASH_MODEL,
+  VERTEX_LITE_MODEL,
+  "gemini-embedding-001",
+])
+
 /** 지금 설정된 Gemini 연결 방식. 연결이 없거나 설정이 틀려도 이름만 본다(체인 계산용). */
 function configuredGeminiProvider(): ChatbotGeminiProvider {
   return process.env.CHATBOT_GEMINI_PROVIDER?.trim() === "vertex" ? "vertex" : "developer"
 }
 
-// 티어별 모델 체인. 1순위가 실패(404·5xx·시간 초과·빈 응답)하면 다음 모델로 차례로 넘어간다. 같은 모델은 한 번만 부른다.
+// 티어별 모델 체인. 1순위가 실패(404·5xx·시간 초과·빈 응답, 검증 안 된 모델의 403)하면 다음 모델로 차례로 넘어간다. 같은 모델은 한 번만 부른다.
 // 1순위는 env(티어별 GEMINI_* 이름, 종료 모델이면 무시)가 있으면 그 값, 없으면 PRIMARY_MODEL(gemini-4-hydrogen)이다.
+// 1순위 뒤는 hydrogen 이전에 쓰던 그 연결·티어의 사슬 그대로다.
 // - developer: 1순위 → 티어 현행 기본(basic 3.5-flash, reasoning·advanced 3.1-pro-preview) → 티어 대체(3.1-flash-lite·3.5-flash)
 //   → gemini-flash-lite-latest
-// - vertex: 1순위 → gemini-3.5-flash → gemini-3.5-flash-lite (모든 티어)
+// - vertex: 1순위 → basic 3.5-flash-lite → 3.5-flash, reasoning·advanced 3.5-flash → 3.5-flash-lite (main 4533634e 의 순서)
 export function resolveModelChain(tier: ChatbotModelTier, provider: ChatbotGeminiProvider = configuredGeminiProvider()): string[] {
   const primary = configuredModel(tier, provider) ?? PRIMARY_MODEL
   if (provider === "vertex") {
-    return Array.from(new Set([primary, VERTEX_FLASH_MODEL, VERTEX_LITE_MODEL]))
+    const previous = tier === "basic" ? [VERTEX_LITE_MODEL, VERTEX_FLASH_MODEL] : [VERTEX_FLASH_MODEL, VERTEX_LITE_MODEL]
+    return Array.from(new Set([primary, ...previous]))
   }
   const fallback = tier === "reasoning" || tier === "advanced" ? DEEP_FALLBACK_MODEL : FAST_FALLBACK_MODEL
   return Array.from(new Set([primary, tierCurrentDefaultModel(tier), fallback, LAST_RESORT_MODEL]))
@@ -156,16 +174,32 @@ export function hasChatbotGeminiConnection() {
 // 호출부에는 기존 실패(null·빈 스트림)와 똑같이 보인다. 60초가 지나면 다음 호출 하나만 실제로 보내 보고(시험 호출),
 // 다시 401·402·403 이면 60초 더 닫아 두고, 그 밖의 응답이면 차단을 푼다. 429(한도)·5xx·시간 초과·404(모델 없음)는
 // 대상이 아니다(기존 재시도·체인 폴백이 처리한다). 상태는 프로세스(서버 인스턴스) 단위다.
+// 예외: 실제 호출로 확인하지 않은 모델(ACCESS_VERIFIED_MODELS 밖: 1순위 gemini-4-hydrogen, env 로 넣은 새 모델)의 403 은
+// 그 모델만의 권한 문제(Vertex 프로젝트에 그 모델 권한이 없음 등)일 수 있다. 차단기를 열지 않고 체인의 다음 모델로 넘겨,
+// 다음(확인된) 모델도 401·402·403 이면 그때 연다. 시험 호출도 같아서, 확인 안 된 모델의 403 은 시험 결과로 치지 않고 다음 모델이 정한다.
 export const MODEL_CIRCUIT_OPEN_MS = 60_000
 const MODEL_ACCESS_DENIED_STATUSES = new Set([401, 402, 403])
 
 let modelCircuitOpenUntil = 0
 let modelCircuitProbeInFlight = false
 let modelCircuitBlockedListener: (() => void) | null = null
+let vertexAuthFailureListener: ((operation: GeminiOperation) => void) | null = null
 
-/** 이 상태 코드를 받으면 같은 키로 다른 모델을 불러도 소용없다(체인을 멈춘다). */
 function isModelAccessDeniedStatus(status: number | undefined) {
   return status !== undefined && MODEL_ACCESS_DENIED_STATUSES.has(status)
+}
+
+/**
+ * 이 응답이 확인 안 된 모델 하나의 권한 거절(403)인지. 그렇다면 키·프로젝트 전체 문제로 보지 않는다(차단기를 열지 않고 다음 모델로).
+ * 측정 스크립트(scripts/chatbot-live-eval.ts)도 같은 판단으로 이 403 을 모델 장애로 세지 않는다.
+ */
+export function isModelScopedAccessDenial(model: string, status: number | undefined) {
+  return status === 403 && !ACCESS_VERIFIED_MODELS.has(model)
+}
+
+/** 이 응답을 받으면 같은 연결로 다른 모델을 불러도 소용없다(체인을 멈추고 차단기를 연다). */
+function isConnectionAccessDenied(model: string, status: number | undefined) {
+  return isModelAccessDeniedStatus(status) && !isModelScopedAccessDenial(model, status)
 }
 
 /** 차단기가 열려 있어 지금 Gemini 호출을 보내지 않는지. 시험 호출이 나가 있는 동안에도 다른 호출은 막는다. */
@@ -177,6 +211,14 @@ export function isModelCircuitOpen(now = Date.now()) {
 /** 측정 스크립트용: 차단기 때문에 보내지 않은 호출마다 불린다(질문별로 세려고 쓴다). */
 export function setModelCircuitBlockedListener(listener: (() => void) | null) {
   modelCircuitBlockedListener = listener
+}
+
+/**
+ * 측정 스크립트용: Vertex 토큰 발급이 실패해(VertexAuthError) 모델 호출을 보내지 못할 때마다 호출 종류와 함께 불린다.
+ * 그 호출은 네트워크로 나가지 않아 fetch 감싸기로는 보이지 않는다(측정 무효·모델 없는 측정 확인에 센다).
+ */
+export function setVertexAuthFailureListener(listener: ((operation: GeminiOperation) => void) | null) {
+  vertexAuthFailureListener = listener
 }
 
 /**
@@ -206,21 +248,10 @@ function openModelCircuit(status: number) {
   )
 }
 
-/** Vertex 토큰 발급(google-auth-library) 오류에 실린 HTTP 상태. 없으면 undefined. */
-function accessDeniedStatusOfError(error: unknown): number | undefined {
-  if (!error || typeof error !== "object") return undefined
-  const candidate = error as { status?: unknown; code?: unknown; response?: { status?: unknown } }
-  for (const value of [candidate.response?.status, candidate.status, candidate.code]) {
-    const status = typeof value === "number" ? value : typeof value === "string" && /^\d{3}$/.test(value) ? Number(value) : undefined
-    if (isModelAccessDeniedStatus(status)) return status
-  }
-  return undefined
-}
-
 /**
  * 차단기를 거쳐 Gemini 에 요청한다(연결 방식은 lib/chatbot/gemini-transport.ts). 차단 중이면 네트워크 없이 null 을 돌려준다
- * (호출부는 실패로 처리하고 체인을 멈춘다). 예외(시간 초과·네트워크 오류·Vertex 토큰 발급 실패)는 그대로 던진다(호출부의 기존 처리).
- * Vertex 토큰 발급이 401·403 으로 거절되면 차단기도 연다.
+ * (호출부는 실패로 처리하고 체인을 멈춘다). 예외(시간 초과·네트워크 오류·Vertex 토큰 발급 실패)는 그대로 던진다.
+ * Vertex 토큰 발급 실패(VertexAuthError)는 모델과 상관없으므로 호출부가 체인을 멈추고, 401·403 거절이면 차단기도 연다.
  */
 async function fetchGeminiThroughCircuit(
   connection: GeminiConnection,
@@ -238,23 +269,33 @@ async function fetchGeminiThroughCircuit(
     probe = true
     modelCircuitProbeInFlight = true
   }
-  let status: number | undefined
+  // 엔드포인트가 응답한 상태(없으면 예외로 끝남)와, 키·프로젝트 전체의 거절로 볼 상태.
+  let responseStatus: number | undefined
+  let deniedStatus: number | undefined
   try {
     const res = await postChatbotGemini(connection, model, operation, body, signal)
-    status = typeof res.status === "number" ? res.status : res.ok ? 200 : undefined
+    responseStatus = typeof res.status === "number" ? res.status : res.ok ? 200 : undefined
+    if (isConnectionAccessDenied(model, responseStatus)) deniedStatus = responseStatus
     return res
   } catch (error) {
-    status = accessDeniedStatusOfError(error)
+    if (isVertexAuthError(error)) {
+      vertexAuthFailureListener?.(operation)
+      // 토큰 발급 거절(401·403)은 모델과 상관없이 연결 전체의 문제다.
+      if (isModelAccessDeniedStatus(error.status)) deniedStatus = error.status
+    }
     throw error
   } finally {
-    if (isModelAccessDeniedStatus(status)) {
-      openModelCircuit(status as number)
+    if (deniedStatus !== undefined) {
+      openModelCircuit(deniedStatus)
     } else if (probe) {
       modelCircuitProbeInFlight = false
-      // 응답을 받았으면(성공이든 다른 오류든) 결제·인증 문제는 풀린 것이다. 예외로 끝난 시험 호출은 다음 호출이 다시 시험한다.
-      if (status !== undefined) {
+      // 응답을 받았으면(성공이든 다른 오류든) 결제·인증 문제는 풀린 것이다. 예외로 끝난 시험 호출과, 확인 안 된 모델의 403 은
+      // 판단하지 않는다(다음 호출, 같은 체인이면 다음 모델이 다시 시험한다).
+      if (responseStatus !== undefined && !isModelAccessDeniedStatus(responseStatus)) {
         modelCircuitOpenUntil = 0
-        if (process.env.NODE_ENV !== "test") console.info("[chatbot] Gemini 호출이 다시 응답해 차단을 풀었습니다.", { status })
+        if (process.env.NODE_ENV !== "test") {
+          console.info("[chatbot] Gemini 호출이 다시 응답해 차단을 풀었습니다.", { status: responseStatus })
+        }
       }
     }
   }
@@ -573,6 +614,14 @@ function warnGeminiCallIssue(model: string, reason: string, details: Record<stri
   console.warn("[chatbot] Gemini call failed; trying fallback.", { model, reason, ...details })
 }
 
+/** 호출 예외의 로그용 세부: 오류 이름과, Vertex 토큰 발급 실패면 토큰 서버의 HTTP 상태. 오류 글은 남기지 않는다. */
+function geminiErrorDetails(error: unknown): Record<string, unknown> {
+  return {
+    error: error instanceof Error ? error.name : "unknown_error",
+    ...(isVertexAuthError(error) && error.status !== undefined ? { authStatus: error.status } : {}),
+  }
+}
+
 // 오류 본문은 남기지 않고 Google 오류 상태 이름(UNAVAILABLE·PERMISSION_DENIED 등)만 남긴다(본문에 프로젝트·키 정보가 섞일 수 있다).
 async function readGeminiErrorStatus(res: Response) {
   try {
@@ -671,7 +720,7 @@ async function requestGeminiContent({
           provider: connection.provider,
           apiStatus: await readGeminiErrorStatus(res),
         })
-        if (isModelAccessDeniedStatus(res.status)) break
+        if (isConnectionAccessDenied(model, res.status)) break
         continue
       }
 
@@ -705,11 +754,9 @@ async function requestGeminiContent({
         model,
       }
     } catch (error) {
-      // 타임아웃·네트워크·파싱 오류 → 다음 폴백 모델 시도
-      warnGeminiCallIssue(model, "request_error", {
-        provider: connection.provider,
-        error: error instanceof Error ? error.name : "unknown_error",
-      })
+      // 타임아웃·네트워크·파싱 오류 → 다음 폴백 모델 시도. Vertex 토큰을 못 받았으면 다른 모델도 같은 토큰이 필요하다 → 멈춘다.
+      warnGeminiCallIssue(model, "request_error", { provider: connection.provider, ...geminiErrorDetails(error) })
+      if (isVertexAuthError(error)) break
       continue
     } finally {
       clearTimeout(timeout)
@@ -853,7 +900,7 @@ export async function selectAnsweringSentenceIds({
           provider: connection.provider,
           apiStatus: await readGeminiErrorStatus(res),
         })
-        if (isModelAccessDeniedStatus(res.status)) break
+        if (isConnectionAccessDenied(model, res.status)) break
         continue
       }
 
@@ -866,9 +913,8 @@ export async function selectAnsweringSentenceIds({
       }
       return ids
     } catch (error) {
-      warnGeminiCallIssue(model, "selection_request_error", {
-        error: error instanceof Error ? error.name : "unknown_error",
-      })
+      warnGeminiCallIssue(model, "selection_request_error", { provider: connection.provider, ...geminiErrorDetails(error) })
+      if (isVertexAuthError(error)) break
       continue
     } finally {
       clearTimeout(timeout)
@@ -1025,7 +1071,7 @@ export async function judgePreparedAnswerFit({
           provider: connection.provider,
           apiStatus: await readGeminiErrorStatus(res),
         })
-        if (isModelAccessDeniedStatus(res.status)) break
+        if (isConnectionAccessDenied(model, res.status)) break
         continue
       }
 
@@ -1038,7 +1084,8 @@ export async function judgePreparedAnswerFit({
       }
       return { verdict, model }
     } catch (error) {
-      warnGeminiCallIssue(model, "gate_request_error", { error: error instanceof Error ? error.name : "unknown_error" })
+      warnGeminiCallIssue(model, "gate_request_error", { provider: connection.provider, ...geminiErrorDetails(error) })
+      if (isVertexAuthError(error)) break
       continue
     } finally {
       clearTimeout(timeout)
@@ -1143,7 +1190,7 @@ export async function pickOutlineSectionIds({
           provider: connection.provider,
           apiStatus: await readGeminiErrorStatus(res),
         })
-        if (isModelAccessDeniedStatus(res.status)) break
+        if (isConnectionAccessDenied(model, res.status)) break
         continue
       }
 
@@ -1156,7 +1203,8 @@ export async function pickOutlineSectionIds({
       }
       return { ids, model }
     } catch (error) {
-      warnGeminiCallIssue(model, "outline_request_error", { error: error instanceof Error ? error.name : "unknown_error" })
+      warnGeminiCallIssue(model, "outline_request_error", { provider: connection.provider, ...geminiErrorDetails(error) })
+      if (isVertexAuthError(error)) break
       continue
     } finally {
       clearTimeout(timeout)
@@ -1333,7 +1381,7 @@ async function* streamGeminiContent({
           provider: connection.provider,
           apiStatus: res.ok ? undefined : await readGeminiErrorStatus(res),
         })
-        if (isModelAccessDeniedStatus(res.status)) return toCompletion(UNAVAILABLE_COMPLETION)
+        if (isConnectionAccessDenied(model, res.status)) return toCompletion(UNAVAILABLE_COMPLETION)
         continue
       }
 
@@ -1378,8 +1426,9 @@ async function* streamGeminiContent({
         warnGeminiCallIssue(model, "stream_interrupted", { error: errorName, finishReason })
         return { complete: false, reason: "interrupted", finishReason, model }
       }
-      // 타임아웃·네트워크·파싱 오류 → 다음 폴백 모델 시도
-      warnGeminiCallIssue(model, "stream_request_error", { error: errorName })
+      // 타임아웃·네트워크·파싱 오류 → 다음 폴백 모델 시도. Vertex 토큰을 못 받았으면 다른 모델도 같다 → 멈춘다.
+      warnGeminiCallIssue(model, "stream_request_error", { provider: connection.provider, ...geminiErrorDetails(error) })
+      if (isVertexAuthError(error)) return toCompletion(UNAVAILABLE_COMPLETION)
       continue
     } finally {
       clearTimeout(timeout)
@@ -1536,7 +1585,7 @@ export async function embedText(
     if (connection.provider === "vertex") {
       warnGeminiCallIssue(CHATBOT_EMBED_MODEL, "embedding_request_error", {
         provider: connection.provider,
-        error: error instanceof Error ? error.name : "unknown_error",
+        ...geminiErrorDetails(error),
       })
     }
     return null

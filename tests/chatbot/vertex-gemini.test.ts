@@ -9,6 +9,7 @@ import {
   isModelCircuitOpen,
   judgePreparedAnswerFit,
   selectAnsweringSentenceIds,
+  setVertexAuthFailureListener,
   streamGeminiFinalAnswer,
   type GeminiAnswerCompletion,
 } from "@/lib/chatbot/llm"
@@ -61,7 +62,8 @@ describe("public chatbot with Vertex Gemini", () => {
     __resetModelCircuitForTests()
   })
 
-  // 2026-11-20: 1순위가 gemini-4-hydrogen 으로 바뀌어(사용자 지시) 첫 호출 모델이 3.5-flash-lite 에서 hydrogen 으로, 다음이 3.5-flash 다.
+  // 2026-11-20: 1순위가 gemini-4-hydrogen 으로 바뀌어(사용자 지시) 첫 호출 모델이 hydrogen 이다. 실패하면 main 이 basic 에
+  // 쓰던 1순위 3.5-flash-lite 로 넘어간다(그다음 3.5-flash).
   it("uses project-scoped Vertex with the supported fallback models", async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(Response.json({ error: { status: "UNAVAILABLE" } }, { status: 503 }))
@@ -71,7 +73,7 @@ describe("public chatbot with Vertex Gemini", () => {
     expect(await generateGeminiFinalAnswer(args)).toBe(parts[1].text)
     expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
       `${vertexModels}/gemini-4-hydrogen:generateContent`,
-      `${vertexModels}/gemini-3.5-flash:generateContent`,
+      `${vertexModels}/gemini-3.5-flash-lite:generateContent`,
     ])
     expect(fetchMock.mock.calls[0][1]).toMatchObject({
       headers: { Authorization: "Bearer test-access-token", "x-goog-user-project": "test-classin-ai2" },
@@ -147,21 +149,62 @@ describe("public chatbot with Vertex Gemini", () => {
   })
 
   // 2026-11-20 합치기: 차단기·완료 신호·체인 넘김은 developer·vertex 두 연결에 같이 걸린다.
+  // 401 은 첫 모델에서 바로 연다. 403 은 1순위 gemini-4-hydrogen(실호출로 확인하지 않은 모델)이면 그 모델만의 권한 문제일 수 있어
+  // 다음(확인된) 모델까지 보고, 그 모델도 403 이면 연다.
   it("opens the same circuit on a Vertex 401/403 and stops the chain and later calls", async () => {
-    for (const status of [401, 403]) {
+    for (const [status, sent] of [[401, 1], [403, 2]] as const) {
       __resetModelCircuitForTests()
       const fetchMock = vi.fn().mockResolvedValue(Response.json({ error: { status: "PERMISSION_DENIED" } }, { status }))
       vi.stubGlobal("fetch", fetchMock)
       const errors = vi.spyOn(console, "error").mockImplementation(() => {})
 
       expect(await generateGeminiFinalAnswer(args), String(status)).toBeNull()
-      expect(fetchMock, String(status)).toHaveBeenCalledTimes(1)
+      expect(fetchMock, String(status)).toHaveBeenCalledTimes(sent)
+      expect(fetchMock.mock.calls.at(-1)?.[0], String(status)).toBe(
+        `${vertexModels}/${sent === 1 ? "gemini-4-hydrogen" : "gemini-3.5-flash-lite"}:generateContent`
+      )
       expect(isModelCircuitOpen(), String(status)).toBe(true)
       expect(await embedText(args.question, "RETRIEVAL_QUERY")).toBeNull()
-      expect(fetchMock, String(status)).toHaveBeenCalledTimes(1)
+      expect(fetchMock, String(status)).toHaveBeenCalledTimes(sent)
       expect(errors.mock.calls.some((call) => String(call[0]).includes(`Gemini HTTP ${status}`))).toBe(true)
       errors.mockRestore()
     }
+  })
+
+  // 검토 고침: Vertex 프로젝트에 gemini-4-hydrogen 권한이 없어 그 모델만 PERMISSION_DENIED 403 을 주면, 차단기를 열지 않고
+  // 지금 쓰던 모델로 답한다(관문·임베딩도 막지 않는다). 예전에는 403 한 번에 체인을 멈추고 60초 동안 모든 호출을 막았다.
+  it("moves on when only gemini-4-hydrogen is denied (403) and keeps the circuit closed", async () => {
+    const fetchMock = vi.fn(async (url: string, init: RequestInit) => {
+      if (url.includes("/gemini-4-hydrogen:")) return Response.json({ error: { status: "PERMISSION_DENIED" } }, { status: 403 })
+      if (url.endsWith(":predict")) return Response.json({ predictions: [{ embeddings: { values: Array.from({ length: 1536 }, () => 0.01) } }] })
+      const body = String(init.body)
+      const text = body.includes('"ids"') ? '{"ids":[1]}' : parts[1].text
+      const payload = { candidates: [{ content: { parts: [{ text }] }, finishReason: "STOP" }] }
+      if (url.includes(":streamGenerateContent")) return new Response(`data: ${JSON.stringify(payload)}\n\n`)
+      return Response.json(payload)
+    })
+    vi.stubGlobal("fetch", fetchMock)
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {})
+
+    expect(await generateGeminiFinalAnswer(args)).toBe(parts[1].text)
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+      `${vertexModels}/gemini-4-hydrogen:generateContent`,
+      `${vertexModels}/gemini-3.5-flash-lite:generateContent`,
+    ])
+    expect(isModelCircuitOpen()).toBe(false)
+
+    const ids = await selectAnsweringSentenceIds({
+      question: "녹화 다시보기 어디서 봐요?",
+      sentences: [{ id: 1, sourceIndex: 0, label: "녹화 / 다시보기", text: "녹화본은 수업 기록에서 봅니다." }],
+    })
+    expect(ids).toEqual([1])
+    expect(await embedText(args.question, "RETRIEVAL_QUERY")).toHaveLength(1536)
+    const chunks: string[] = []
+    for await (const chunk of streamGeminiFinalAnswer(args)) chunks.push(chunk)
+    expect(chunks.join("")).toBe(parts[1].text)
+    expect(isModelCircuitOpen()).toBe(false)
+    expect(errors).not.toHaveBeenCalled()
+    errors.mockRestore()
   })
 
   it("opens the circuit when the Vertex token request is refused with 401/403, without sending the model request", async () => {
@@ -175,6 +218,53 @@ describe("public chatbot with Vertex Gemini", () => {
     expect(fetchMock).not.toHaveBeenCalled()
     expect(getAccessToken).toHaveBeenCalledTimes(1)
     errors.mockRestore()
+  })
+
+  // 검토 고침: 토큰 발급 실패는 모델과 상관없다. 401·403 이 아닌 실패(키 삭제·서명 오류의 400 invalid_grant, 네트워크 오류)도
+  // 체인의 다음 모델마다 토큰을 다시 받으려 하지 않고 그 호출에서 멈춘다(차단기는 열지 않는다).
+  it("stops the chain after one Vertex token failure that is not 401/403, without opening the circuit", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    // 측정 스크립트는 토큰 실패로 못 보낸 호출을 이 알림으로 센다(네트워크로 나가지 않아 fetch 로는 보이지 않는다).
+    const authFailures: string[] = []
+    setVertexAuthFailureListener((operation) => authFailures.push(operation))
+    try {
+      for (const failure of [
+        Object.assign(new Error("invalid_grant"), { response: { status: 400 } }),
+        Object.assign(new Error("socket hang up"), { code: "ECONNRESET" }),
+      ]) {
+        getAccessToken.mockClear()
+        getAccessToken.mockRejectedValue(failure)
+        const fetchMock = vi.fn()
+        vi.stubGlobal("fetch", fetchMock)
+
+        expect(await generateGeminiFinalAnswer(args), failure.message).toBeNull()
+        expect(getAccessToken, failure.message).toHaveBeenCalledTimes(1)
+
+        const chunks: string[] = []
+        for await (const chunk of streamGeminiFinalAnswer(args)) chunks.push(chunk)
+        expect(chunks, failure.message).toEqual([])
+        expect(getAccessToken, failure.message).toHaveBeenCalledTimes(2)
+
+        const sentences = [{ id: 1, sourceIndex: 0, label: "녹화 / 다시보기", text: "녹화본은 수업 기록에서 봅니다." }]
+        expect(await selectAnsweringSentenceIds({ question: "녹화 다시보기 어디서 봐요?", sentences }), failure.message).toBeNull()
+        expect(await judgePreparedAnswerFit({ question: "녹화 어디서 봐요?", answer: "녹화본은 수업 기록에서 봅니다.", timeoutMs: 3000 })).toBeNull()
+        expect(getAccessToken, failure.message).toHaveBeenCalledTimes(4)
+
+        expect(fetchMock, failure.message).not.toHaveBeenCalled()
+        expect(isModelCircuitOpen(), failure.message).toBe(false)
+        expect(authFailures.splice(0), failure.message).toEqual([
+          "generateContent",
+          "streamGenerateContent",
+          "generateContent",
+          "generateContent",
+        ])
+      }
+    } finally {
+      setVertexAuthFailureListener(null)
+      getAccessToken.mockReset()
+      getAccessToken.mockResolvedValue("test-access-token")
+      warn.mockRestore()
+    }
   })
 
   it("moves to the next Vertex model on 404 and 5xx", async () => {

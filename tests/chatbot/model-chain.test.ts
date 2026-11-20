@@ -65,10 +65,13 @@ describe("chatbot Gemini model chain", () => {
     ])
   })
 
-  it("uses gemini-4-hydrogen, then 3.5-flash and 3.5-flash-lite on Vertex", () => {
+  // hydrogen 이 실패하면 hydrogen 이전 Vertex 사슬(main 4533634e: basic 3.5-flash-lite → 3.5-flash, 그 밖 3.5-flash → 3.5-flash-lite)로 넘어간다.
+  // basic 은 근거 선별(3.5초 예산)이 쓰므로 hydrogen 다음이 더 느린 3.5-flash 가 되면 안 된다.
+  it("uses gemini-4-hydrogen on Vertex, then the previous Vertex chain of that tier", () => {
     clearModelEnv()
 
-    for (const tier of ["basic", "reasoning", "advanced"] as const) {
+    expect(resolveModelChain("basic", "vertex")).toEqual(["gemini-4-hydrogen", "gemini-3.5-flash-lite", "gemini-3.5-flash"])
+    for (const tier of ["reasoning", "advanced"] as const) {
       expect(resolveModelChain(tier, "vertex"), tier).toEqual(["gemini-4-hydrogen", "gemini-3.5-flash", "gemini-3.5-flash-lite"])
     }
   })
@@ -90,6 +93,9 @@ describe("chatbot Gemini model chain", () => {
     ])
     expect(resolveModelChain("basic", "vertex")).toEqual(["gemini-3.5-flash", "gemini-3.5-flash-lite"])
     expect(resolveModelChain("advanced", "vertex")).toEqual(["gemini-3.7-flash", "gemini-3.5-flash", "gemini-3.5-flash-lite"])
+    // env 모델 뒤도 그 연결·티어의 이전 사슬이다(Vertex basic 은 lite 먼저).
+    vi.stubEnv("GEMINI_FAST_MODEL", "gemini-3.7-flash")
+    expect(resolveModelChain("basic", "vertex")).toEqual(["gemini-3.7-flash", "gemini-3.5-flash-lite", "gemini-3.5-flash"])
   })
 
   it("keeps the gate and outline chain lite-first, with gemini-4-hydrogen right after the lite model", () => {

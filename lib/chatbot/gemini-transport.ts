@@ -33,6 +33,38 @@ export function getChatbotGeminiConnection(): GeminiConnection | null {
   return { provider, project, location, email, privateKey, wifProvider }
 }
 
+/**
+ * Vertex 액세스 토큰을 받지 못했다(서비스 계정 키 삭제·서명 오류의 400 invalid_grant, WIF 거절, 토큰 서버 네트워크 오류 등).
+ * 모델과 상관없으므로 호출부(lib/chatbot/llm.ts)는 체인의 다음 모델로 넘기지 않고 멈춘다. 401·403 이면 차단기도 연다.
+ * 예산(AbortSignal) 안에 토큰이 오지 않은 경우는 이 오류가 아니라 중단 오류다(시간 초과와 같게 다룬다).
+ * 오류 글에는 토큰 서버 응답을 싣지 않는다(원래 오류는 cause 에만 둔다).
+ */
+export class VertexAuthError extends Error {
+  /** 토큰 서버가 돌려준 HTTP 상태. 응답 없이 실패했으면 undefined. */
+  readonly status: number | undefined
+
+  constructor(cause: unknown) {
+    super("Vertex access token request failed", { cause })
+    this.name = "VertexAuthError"
+    this.status = httpStatusOfError(cause)
+  }
+}
+
+export function isVertexAuthError(error: unknown): error is VertexAuthError {
+  return error instanceof VertexAuthError
+}
+
+/** google-auth-library(gaxios) 오류에 실린 HTTP 상태. 없으면 undefined. */
+function httpStatusOfError(error: unknown): number | undefined {
+  if (!error || typeof error !== "object") return undefined
+  const candidate = error as { status?: unknown; code?: unknown; response?: { status?: unknown } }
+  for (const value of [candidate.response?.status, candidate.status, candidate.code]) {
+    const status = typeof value === "number" ? value : typeof value === "string" && /^\d{3}$/.test(value) ? Number(value) : undefined
+    if (status !== undefined && Number.isInteger(status) && status >= 100 && status <= 599) return status
+  }
+  return undefined
+}
+
 let vertexAuth: { connection: VertexConnection; client: Promise<GoogleAuth> } | undefined
 
 async function createVertexAuth({ project, email, privateKey, wifProvider }: VertexConnection) {
@@ -85,7 +117,12 @@ async function getVertexAccessTokenWithinBudget(connection: VertexConnection, si
     signal.addEventListener("abort", abort, { once: true })
   })
   try {
-    return await Promise.race([getVertexAccessToken(connection), cancelled])
+    return await Promise.race([
+      getVertexAccessToken(connection).catch((error: unknown) => {
+        throw new VertexAuthError(error)
+      }),
+      cancelled,
+    ])
   } finally {
     signal.removeEventListener("abort", abort)
   }
