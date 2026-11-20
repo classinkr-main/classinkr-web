@@ -9,11 +9,14 @@
  *   다음 턴에 넘기고(DB 없음), 결과 줄은 턴마다 하나(id 는 `<id>#t<순번>`)다. 자세한 형식과 플래그는 scripts/chatbot-persona-loop/README.md.
  * - 결과 줄의 firstAttempt 는 재시도 전 첫 시도(답·decidedBy·modelState), attemptLog 는 시도마다의 기록이다.
  *   --repeat N 은 입력마다 N 번 돌려 답이 갈린 비율을, --simulate-gemini 는 Gemini fetch 를 가짜로 바꿔(실제 호출 0) 장애 동작을 잰다.
+ *   --simulate-gemini 는 Vertex 토큰 발급도 내보내지 않도록 연결을 developer(자리표시 키)로 고정하고, Google 인증 주소 요청은 거절한다.
  *   --repeat 가 2 이상이면 답 캐시·관문 판정 캐시를 끈다(CHATBOT_ANSWER_CACHE=off): 켜 두면 앞 실행의 답이 캐시에서 나와 갈림이 0 으로 찍힌다.
  * - 질문마다 세션 없이 evaluateChatbotQuery(공개 경로 코어, 말투·후속 질문 포함)를 독립 실행한다.
  * - 데이터베이스 없이 돈다: Supabase env 를 import 전에 지워 정적 문서 검색으로 고정한다.
  *   evaluateChatbotQuery 는 persistExchange 를 부르지 않는다(lib/chatbot/service.ts 의 handleChatbotQuery 만 부른다).
- * - GEMINI_API_KEY 는 환경(또는 .env.local)의 값을 쓴다. 키가 없으면 모델 경로가 조용히 꺼지므로 시작 전에 중단한다.
+ * - Gemini 연결은 환경(또는 .env.local)의 값을 쓴다: developer 는 GEMINI_API_KEY, CHATBOT_GEMINI_PROVIDER=vertex 면 CHATBOT_VERTEX_* 설정
+ *   (lib/chatbot/gemini-transport.ts). 쓸 수 있는 연결이 없으면(hasChatbotGeminiConnection) 모델 경로가 조용히 꺼지므로 시작 전에 중단한다.
+ *   추적·가짜 응답은 두 연결의 Gemini 주소(generativelanguage·aiplatform·<지역>-aiplatform) 모두에 걸린다.
  * - --gate 는 정해 둔 답 확인 관문(CHATBOT_ANSWER_GATE, lib/chatbot/answer-gate.ts)을 켜고 끈다. 기본은 on.
  *   결과 줄의 gate 는 kept(판정 후 유지)·rejected(버리고 문서 경로)·skipped(꺼짐·실패로 판정 없이 유지)·none(대상 아님),
  *   gateOriginal 은 판정 대상이던 정해 둔 답의 출처(버려졌으면 버려진 답), gateMs 는 판정에 쓴 시간이다.
@@ -28,7 +31,9 @@
  *   답 색인 자료 폴더는 ANSWER_INDEX_DATA_DIR(작업 폴더 자료를 잴 때, 없으면 data/answer-index)이고, 흔적의 version 이 그 폴더의 판이다.
  * - 무효 측정 알아채기: 결과 줄의 modelError 는 그 줄의 답에 쓰이는 Gemini 호출(관문·근거 선별·목차 고르기·답 생성)이
  *   401·402·403(결제 크레딧 소진·키 인증 실패)을 받았거나, 그 때문에 열린 차단기(lib/chatbot/llm.ts)가 그 호출을 막았거나
- *   (geminiBlocked: 관문이 차단기를 보고 판정 없이 넘긴 것 포함), 관문·두 번째 검색이 model_unavailable 로 넘어간 경우 true 다.
+ *   (geminiBlocked: 관문이 차단기를 보고 판정 없이 넘긴 것 포함), Vertex 토큰 발급이 실패해 그 호출을 못 보냈거나
+ *   (geminiAuthFailedKinds), 관문·두 번째 검색이 model_unavailable 로 넘어간 경우 true 다. 1순위 gemini-4-hydrogen 처럼
+ *   실호출로 확인하지 않은 모델 하나의 403 은 차단기와 같이 다음 모델로 넘어가므로 세지 않는다.
  *   모델 단계(--mode·--gate·--second-chance)를 모두 끈 측정은 모델을 일부러 끈 것이라 modelError 가 늘 false 다.
  *   임베딩(embedContent)은 세지 않는다: 이 스크립트에는 벡터 검색이 없어 임베딩이 실패해도 답이 같다.
  *   답 글에 고정 문구(MODEL_UNAVAILABLE_ANSWER)가 있다는 것만으로는 modelError 가 아니다.
@@ -61,7 +66,11 @@ import {
   countAnswerModelCalls,
   decidedByFromAnswerIndex,
   deriveModelState,
+  geminiCallKind,
+  geminiCallModel,
   hasModelError,
+  isGeminiEndpointUrl,
+  isGoogleAuthUrl,
   isTransientGeminiFailure,
   parseAnswerRouter,
   parseEvalCases,
@@ -103,11 +112,21 @@ interface GeminiTrace {
   blocked: number
   /** 차단기가 막은 호출의 종류별 수(embedContent·generateContent). */
   blockedKinds: Record<string, number>
+  /** Vertex 토큰 발급이 실패해 보내지 못한 호출의 종류별 수(네트워크로 나가지 않아 fetch 감싸기로는 보이지 않는다). */
+  authFailedKinds: Record<string, number>
   /** 호출 종류별 횟수(generateContent=답·선별 생성, embedContent=검색 임베딩). */
   kinds: Record<string, number>
 }
 
-const newTrace = (): GeminiTrace => ({ calls: 0, statuses: [], records: [], blocked: 0, blockedKinds: {}, kinds: {} })
+const newTrace = (): GeminiTrace => ({
+  calls: 0,
+  statuses: [],
+  records: [],
+  blocked: 0,
+  blockedKinds: {},
+  authFailedKinds: {},
+  kinds: {},
+})
 
 function argValue(name: string): string | undefined {
   const index = process.argv.indexOf(name)
@@ -207,28 +226,55 @@ async function main() {
     console.error(`경고: CHATBOT_ANSWER_ROUTER 값을 알 수 없습니다(${envRouter}). 결과 줄의 router 는 legacy 로 적습니다.`)
   }
   const router: AnswerRouter = routerFlag ?? parseAnswerRouter(envRouter) ?? "legacy"
-  // 가짜 Gemini 측정은 네트워크로 나가지 않으므로 키가 없어도 돈다. 모델 단계가 가짜 응답을 받도록 자리표시 키를 둔다.
-  if (simulateMode && !process.env.GEMINI_API_KEY?.trim()) process.env.GEMINI_API_KEY = "simulated-no-network"
-  if (mode !== "off" && !process.env.GEMINI_API_KEY?.trim()) {
-    usage("GEMINI_API_KEY 가 없습니다. 모델 경로가 조용히 꺼지므로 중단합니다(--mode off 는 키 없이 가능).")
+  // 가짜 Gemini 측정은 네트워크로 나가지 않으므로 키가 없어도 돈다. Vertex 연결은 가짜 fetch 앞에서 토큰 발급(google-auth-library)이
+  // 실제로 나가므로 쓰지 않는다: 연결을 developer 로 고정하고, 모델 단계가 가짜 응답을 받도록 자리표시 키를 둔다.
+  if (simulateMode) {
+    if (process.env.CHATBOT_GEMINI_PROVIDER?.trim() === "vertex") {
+      console.error("알림: --simulate-gemini 는 Vertex 토큰 발급을 막으려고 developer 연결(자리표시 키)로 돕니다(차단기·체인 동작은 같다).")
+    }
+    process.env.CHATBOT_GEMINI_PROVIDER = "developer"
+    if (!process.env.GEMINI_API_KEY?.trim()) process.env.GEMINI_API_KEY = "simulated-no-network"
+  }
+
+  const { hasChatbotGeminiConnection, isModelScopedAccessDenial, setModelCircuitBlockedListener, setVertexAuthFailureListener } =
+    await import("../lib/chatbot/llm")
+  // 서비스와 같은 기준(developer 키 또는 올바른 Vertex 설정)으로 본다. 연결이 없으면 모델 단계가 조용히 꺼진다.
+  const geminiProvider = process.env.CHATBOT_GEMINI_PROVIDER?.trim() === "vertex" ? "vertex" : "developer"
+  if (mode !== "off" && !hasChatbotGeminiConnection()) {
+    usage(
+      geminiProvider === "vertex"
+        ? "CHATBOT_GEMINI_PROVIDER=vertex 인데 Vertex 설정(CHATBOT_VERTEX_PROJECT_ID 등)이 틀렸거나 없습니다. 모델 경로가 조용히 꺼지므로 중단합니다(--mode off 는 연결 없이 가능)."
+        : "GEMINI_API_KEY 가 없습니다. 모델 경로가 조용히 꺼지므로 중단합니다(--mode off 는 키 없이 가능)."
+    )
   }
 
   // 2) 질문별 Gemini 호출 추적 — lib 를 고치지 않고 fetch 를 감싸 질문 단위(AsyncLocalStorage)로 센다.
+  //    developer(generativelanguage)·Vertex(aiplatform·<지역>-aiplatform) 호출 모두 센다.
   const traceStore = new AsyncLocalStorage<GeminiTrace>()
   const realFetch = globalThis.fetch.bind(globalThis)
   // --simulate-gemini: Gemini 호출만 가짜 응답으로 바꾼다(실제 호출 0, 비용 0). 추적·차단기는 그대로 거친다.
   const geminiFetch: typeof fetch = simulateMode ? simulateGeminiFetch(simulateMode) : realFetch
   globalThis.fetch = (async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
     const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url
-    const trace = url.includes("generativelanguage.googleapis.com") ? traceStore.getStore() : undefined
-    if (!trace) return realFetch(input, init)
+    if (simulateMode && isGoogleAuthUrl(url)) {
+      throw new Error("--simulate-gemini: Google 인증(토큰 발급) 요청은 보내지 않습니다")
+    }
+    if (!isGeminiEndpointUrl(url)) return realFetch(input, init)
+    const trace = traceStore.getStore()
+    // 질문 밖의 Gemini 호출은 세지 않지만, 가짜 측정이면 그것도 가짜 응답으로 받는다(실제 호출 0).
+    if (!trace) return geminiFetch(input, init)
     trace.calls += 1
-    const kind = url.match(/:(\w+)(?:\?|$)/)?.[1] ?? "other"
+    const kind = geminiCallKind(url)
+    const model = geminiCallModel(url)
     trace.kinds[kind] = (trace.kinds[kind] ?? 0) + 1
     try {
       const res = await geminiFetch(input, init)
       trace.statuses.push(res.status)
-      trace.records.push({ kind, status: res.status })
+      trace.records.push({
+        kind,
+        status: res.status,
+        ...(model && isModelScopedAccessDenial(model, res.status) ? { modelScopedDenial: true } : {}),
+      })
       return res
     } catch (error) {
       trace.statuses.push(0)
@@ -237,7 +283,6 @@ async function main() {
     }
   }) as typeof fetch
 
-  const { setModelCircuitBlockedListener } = await import("../lib/chatbot/llm")
   // 차단기가 막은 호출도 그 질문의 추적에 센다(네트워크로 나가지 않아 fetch 감싸기로는 보이지 않는다).
   // 알림에는 URL 이 없어, 임베딩인지는 호출 스택으로 가린다(임베딩 차단은 modelError 로 세지 않는다).
   setModelCircuitBlockedListener(() => {
@@ -246,6 +291,12 @@ async function main() {
     trace.blocked += 1
     const kind = classifyBlockedGeminiCall(new Error().stack)
     trace.blockedKinds[kind] = (trace.blockedKinds[kind] ?? 0) + 1
+  })
+  // Vertex 토큰 발급 실패로 보내지 못한 호출도 그 질문의 추적에 센다(modelError·모델 없는 측정 확인).
+  setVertexAuthFailureListener((operation) => {
+    const trace = traceStore.getStore()
+    if (!trace) return
+    trace.authFailedKinds[operation] = (trace.authFailedKinds[operation] ?? 0) + 1
   })
   const { evaluateChatbotQuery, WEAK_SOURCE_DRAFT_ANSWER, NO_SOURCE_FACT_ANSWER, MODEL_UNAVAILABLE_ANSWER, redactPii } =
     await import("../lib/chatbot/service")
@@ -323,7 +374,13 @@ async function main() {
   const isTransientFailure = (trace: GeminiTrace) => isTransientGeminiFailure(trace.records)
 
   const modelErrorOf = (trace: GeminiTrace, skipReasons: Array<string | null | undefined> = []) =>
-    hasModelError({ modelStagesEnabled, calls: trace.records, blockedKinds: trace.blockedKinds, skipReasons })
+    hasModelError({
+      modelStagesEnabled,
+      calls: trace.records,
+      blockedKinds: trace.blockedKinds,
+      authFailedKinds: trace.authFailedKinds,
+      skipReasons,
+    })
 
   // 서버의 대화 입력 계약: evaluateChatbotQuery(message, { previousTurn?, pagePath? }). 옵션이 아직 없는 서비스 판이면 무시되므로
   // 좁은 어댑터로 넘기기만 한다(타입이 어긋나도 측정 도구가 막히지 않게).
@@ -420,6 +477,7 @@ async function main() {
           geminiStatuses: trace.statuses,
           geminiBlocked: trace.blocked,
           geminiBlockedKinds: trace.blockedKinds,
+          geminiAuthFailedKinds: trace.authFailedKinds,
           modelError: modelErrorOf(trace, [result.answerGate.skipReason, result.secondChance.reason]),
           geminiKinds: trace.kinds,
           attempts: attempt,
@@ -480,6 +538,7 @@ async function main() {
       geminiStatuses: lastTrace.statuses,
       geminiBlocked: lastTrace.blocked,
       geminiBlockedKinds: lastTrace.blockedKinds,
+      geminiAuthFailedKinds: lastTrace.authFailedKinds,
       modelError: modelErrorOf(lastTrace),
       geminiKinds: lastTrace.kinds,
       attempts: maxAttempts,
@@ -492,7 +551,7 @@ async function main() {
 
   console.error(
     `질문 ${inputs.length}개(턴 ${inputs.reduce((sum, item) => sum + item.turns.length, 0)}개)${repeat > 1 ? ` x 반복 ${repeat}` : ""} / 동시 ${concurrency} / 모드 ${mode} / 관문 ${gateSwitch} / 두 번째 검색 ${secondChanceSwitch} / 라우터 ${router}` +
-      ` / Gemini 키 ${process.env.GEMINI_API_KEY ? "있음" : "없음"}` +
+      ` / Gemini 연결 ${hasChatbotGeminiConnection() ? geminiProvider : "없음"}` +
       (router !== "legacy" ? ` / 답 색인 자료 ${process.env.ANSWER_INDEX_DATA_DIR?.trim() || "data/answer-index"}` : "") +
       (modelFree ? " / 모델 없는 측정(Gemini 호출 0 이어야 함)" : "") +
       (simulateMode ? ` / 가짜 Gemini ${simulateMode}(실제 호출 0)` : "") +
@@ -537,7 +596,7 @@ async function main() {
     if (usedModel.length > 0 && usedModel.every((item) => item.modelError)) {
       stoppedEarly = true
       console.error(
-        `\n처음 끝난 ${MODEL_ERROR_EARLY_STOP_ROWS}줄에서 모델을 부른 ${usedModel.length}줄이 모두 모델 호출 실패(HTTP 401·402·403)라 측정을 멈춥니다.`
+        `\n처음 끝난 ${MODEL_ERROR_EARLY_STOP_ROWS}줄에서 모델을 부른 ${usedModel.length}줄이 모두 모델 호출 실패(HTTP 401·402·403·Vertex 토큰 발급 실패)라 측정을 멈춥니다.`
       )
     }
   }
@@ -625,7 +684,7 @@ async function main() {
     console.error(`\n경고: 모델 없는 측정(${router})인데 ${detail}. 답에는 쓰이지 않는 호출인지 확인하세요.`)
   }
   if (!allowModelErrors && (stoppedEarly || modelErrorRows.length > done.length * MODEL_ERROR_MAX_RATIO)) {
-    console.error(`\n측정 무효: 모델 호출 실패(HTTP 4xx) 줄이 ${modelErrorRows.length}개`)
+    console.error(`\n측정 무효: 모델 호출 실패(HTTP 401·402·403·Vertex 토큰 발급 실패) 줄이 ${modelErrorRows.length}개`)
     process.exit(2)
   }
   process.exit(0)

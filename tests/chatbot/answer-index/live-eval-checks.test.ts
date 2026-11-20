@@ -8,7 +8,11 @@ import {
   countAnswerModelCalls,
   decidedByFromAnswerIndex,
   deriveModelState,
+  geminiCallKind,
+  geminiCallModel,
   hasModelError,
+  isGeminiEndpointUrl,
+  isGoogleAuthUrl,
   isTransientGeminiFailure,
   parseAnswerRouter,
   parseEvalCases,
@@ -92,6 +96,60 @@ describe("호출 종류", () => {
   })
 })
 
+// 검토 고침: 측정 도구가 Vertex 연결을 몰라 aiplatform 호출을 세지도, --simulate-gemini 로 가짜로 받지도 못했다(실제로 나갔다).
+describe("Gemini 호출 주소(developer·Vertex)", () => {
+  const vertexGlobal = "https://aiplatform.googleapis.com/v1/projects/p-1/locations/global/publishers/google/models"
+  const vertexRegional = "https://us-central1-aiplatform.googleapis.com/v1/projects/p-1/locations/us-central1/publishers/google/models"
+  const developer = "https://generativelanguage.googleapis.com/v1beta/models"
+
+  it("developer·Vertex(global·지역) 주소를 모두 Gemini 호출로 본다", () => {
+    expect(isGeminiEndpointUrl(`${developer}/gemini-3.5-flash:generateContent?key=k`)).toBe(true)
+    expect(isGeminiEndpointUrl(`${vertexGlobal}/gemini-4-hydrogen:generateContent`)).toBe(true)
+    expect(isGeminiEndpointUrl(`${vertexRegional}/gemini-3.5-flash-lite:streamGenerateContent?alt=sse`)).toBe(true)
+    expect(isGeminiEndpointUrl(`${vertexRegional}/gemini-embedding-001:predict`)).toBe(true)
+    expect(isGeminiEndpointUrl("https://oauth2.googleapis.com/token")).toBe(false)
+    expect(isGeminiEndpointUrl("https://example.com/?u=generativelanguage.googleapis.com")).toBe(false)
+    expect(isGeminiEndpointUrl("https://aiplatform.googleapis.com.evil.example/x")).toBe(false)
+    expect(isGeminiEndpointUrl("not a url")).toBe(false)
+  })
+
+  it("Vertex 토큰 발급 주소를 가린다(--simulate-gemini 는 이 요청을 내보내지 않는다)", () => {
+    expect(isGoogleAuthUrl("https://oauth2.googleapis.com/token")).toBe(true)
+    expect(isGoogleAuthUrl("https://sts.googleapis.com/v1/token")).toBe(true)
+    expect(
+      isGoogleAuthUrl("https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/a@b.iam.gserviceaccount.com:generateAccessToken")
+    ).toBe(true)
+    expect(isGoogleAuthUrl(`${vertexGlobal}/gemini-3.5-flash:generateContent`)).toBe(false)
+  })
+
+  it("호출 종류와 모델: Vertex 임베딩(predict)은 embedContent 로 센다", () => {
+    expect(geminiCallKind(`${developer}/gemini-3.5-flash:generateContent?key=k`)).toBe("generateContent")
+    expect(geminiCallKind(`${vertexGlobal}/gemini-4-hydrogen:streamGenerateContent?alt=sse`)).toBe("streamGenerateContent")
+    expect(geminiCallKind(`${vertexRegional}/gemini-embedding-001:predict`)).toBe("embedContent")
+    expect(geminiCallKind(`${developer}/gemini-embedding-001:embedContent?key=k`)).toBe("embedContent")
+    expect(geminiCallModel(`${vertexGlobal}/gemini-4-hydrogen:generateContent`)).toBe("gemini-4-hydrogen")
+    expect(geminiCallModel(`${developer}/gemini-3.5-flash:generateContent?key=k`)).toBe("gemini-3.5-flash")
+    expect(geminiCallModel("https://generativelanguage.googleapis.com/v1beta/files")).toBeNull()
+  })
+
+  it("Vertex 토큰 발급이 실패해 답에 쓰이는 호출을 못 보냈으면 modelError(임베딩만이면 아님)", () => {
+    const enabled = { modelStagesEnabled: true, calls: [], blockedKinds: {} }
+    expect(hasModelError({ ...enabled, authFailedKinds: { generateContent: 1 } })).toBe(true)
+    expect(hasModelError({ ...enabled, authFailedKinds: { streamGenerateContent: 1 } })).toBe(true)
+    expect(hasModelError({ ...enabled, authFailedKinds: { embedContent: 3 } })).toBe(false)
+    expect(hasModelError({ ...enabled, modelStagesEnabled: false, authFailedKinds: { generateContent: 1 } })).toBe(false)
+  })
+
+  it("확인 안 된 모델 하나의 403(차단기가 다음 모델로 넘긴 호출)은 modelError·재시도 대상이 아니다", () => {
+    const enabled = { modelStagesEnabled: true, blockedKinds: {} }
+    const scoped = { kind: "generateContent", status: 403, modelScopedDenial: true }
+    expect(hasModelError({ ...enabled, calls: [scoped, { kind: "generateContent", status: 200 }] })).toBe(false)
+    expect(hasModelError({ ...enabled, calls: [scoped, { kind: "generateContent", status: 403 }] })).toBe(true)
+    expect(isTransientGeminiFailure([scoped, { kind: "generateContent", status: 503 }])).toBe(true)
+    expect(isTransientGeminiFailure([scoped])).toBe(false)
+  })
+})
+
 describe("라우터", () => {
   it("legacy·shadow·compiled 만 받는다", () => {
     expect(parseAnswerRouter("compiled")).toBe("compiled")
@@ -122,6 +180,15 @@ describe("모델 없는 측정의 Gemini 호출 확인", () => {
 
   it("모델을 켠 측정은 확인하지 않는다", () => {
     expect(checkModelFreeRun({ modelFree: false, router: "compiled", rows: [embedded] }).status).toBe("ok")
+  })
+
+  it("Vertex 토큰 발급이 실패해 못 보낸 호출도 부르려 한 것으로 센다", () => {
+    const authFailed = { geminiCalls: 0, geminiBlocked: 0, geminiKinds: {}, geminiAuthFailedKinds: { generateContent: 2 } }
+    expect(checkModelFreeRun({ modelFree: true, router: "compiled", rows: [clean, authFailed] })).toEqual({
+      status: "invalid",
+      rows: 1,
+      kinds: { generateContent: 2 },
+    })
   })
 })
 

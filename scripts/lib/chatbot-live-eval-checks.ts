@@ -25,10 +25,66 @@ export const MODEL_ACCESS_DENIED_STATUSES: ReadonlySet<number> = new Set([401, 4
 export const ANSWER_UNUSED_GEMINI_KINDS: ReadonlySet<string> = new Set(["embedContent", "batchEmbedContents"])
 
 export interface GeminiCallRecord {
-  /** URL 의 메서드 이름(generateContent·streamGenerateContent·embedContent). */
+  /** URL 의 메서드 이름(generateContent·streamGenerateContent·embedContent). Vertex 임베딩(predict)도 embedContent 다. */
   kind: string
   /** HTTP 상태. 네트워크 오류·시간 초과는 0. */
   status: number
+  /**
+   * 실호출로 확인하지 않은 모델(1순위 gemini-4-hydrogen 등) 하나의 403 이라 차단기가 연결 장애로 보지 않고 다음 모델로 넘긴 호출
+   * (lib/chatbot/llm.ts isModelScopedAccessDenial). 모델 장애(modelError)로도, 재시도할 일시 오류로도 세지 않는다.
+   */
+  modelScopedDenial?: boolean
+}
+
+// 공개 챗봇 Gemini 호출이 나가는 호스트(lib/chatbot/gemini-transport.ts): developer 는 generativelanguage,
+// Vertex 는 aiplatform(global) 또는 <지역>-aiplatform.
+const GEMINI_DEVELOPER_HOST = "generativelanguage.googleapis.com"
+const VERTEX_HOST_RE = /^(?:[a-z0-9-]+-)?aiplatform\.googleapis\.com$/
+// Vertex 토큰 발급(google-auth-library: 서비스 계정 키 oauth2, WIF sts·iamcredentials)이 나가는 호스트.
+const GOOGLE_AUTH_HOSTS: ReadonlySet<string> = new Set([
+  "oauth2.googleapis.com",
+  "www.googleapis.com",
+  "sts.googleapis.com",
+  "iamcredentials.googleapis.com",
+  "metadata.google.internal",
+  "169.254.169.254",
+])
+
+function hostOf(url: string): string | null {
+  try {
+    return new URL(url).hostname.toLowerCase()
+  } catch {
+    return null
+  }
+}
+
+/** 공개 챗봇의 Gemini 호출 주소인지(developer·Vertex 모두). 측정 스크립트가 이 호출만 추적하고, --simulate-gemini 면 가짜로 답한다. */
+export function isGeminiEndpointUrl(url: string): boolean {
+  const host = hostOf(url)
+  return host !== null && (host === GEMINI_DEVELOPER_HOST || VERTEX_HOST_RE.test(host))
+}
+
+/** Vertex 토큰 발급 요청 주소인지. --simulate-gemini 는 이 요청도 내보내지 않는다. */
+export function isGoogleAuthUrl(url: string): boolean {
+  const host = hostOf(url)
+  return host !== null && GOOGLE_AUTH_HOSTS.has(host)
+}
+
+/** 호출 종류(URL 의 메서드 이름). Vertex 임베딩(:predict)은 developer 와 같은 embedContent 로 센다. */
+export function geminiCallKind(url: string): string {
+  const method = url.match(/:(\w+)(?:\?|$)/)?.[1] ?? "other"
+  return method === "predict" ? "embedContent" : method
+}
+
+/** 호출 주소의 모델 이름(.../models/<모델>:<메서드>). 없으면 null. */
+export function geminiCallModel(url: string): string | null {
+  const encoded = url.match(/\/models\/([^/:?]+):/)?.[1]
+  if (!encoded) return null
+  try {
+    return decodeURIComponent(encoded)
+  } catch {
+    return encoded
+  }
 }
 
 export interface ModelErrorInput {
@@ -38,32 +94,40 @@ export interface ModelErrorInput {
   calls: GeminiCallRecord[]
   /** 차단기 때문에 보내지 않은 호출 수(종류별). */
   blockedKinds: Record<string, number>
+  /** Vertex 토큰 발급이 실패해 보내지 못한 호출 수(종류별, lib/chatbot/llm.ts setVertexAuthFailureListener). */
+  authFailedKinds?: Record<string, number>
   /** 관문(answerGate.skipReason)·두 번째 검색(secondChance.reason)의 이유. */
   skipReasons?: Array<string | null | undefined>
 }
 
 /**
  * 그 줄이 모델이 죽은 상태에서 잰 줄인지.
- * 참: 답에 쓰이는 호출이 401·402·403 을 받음 / 차단기가 답에 쓰이는 호출을 막음 / 관문·두 번째 검색이 차단기 때문에 넘어감(model_unavailable).
+ * 참: 답에 쓰이는 호출이 401·402·403 을 받음(확인 안 된 모델 하나의 403 은 빼고) / 차단기가 답에 쓰이는 호출을 막음 /
+ * Vertex 토큰 발급이 실패해 답에 쓰이는 호출을 못 보냄 / 관문·두 번째 검색이 차단기 때문에 넘어감(model_unavailable).
  * 거짓: 모델 단계를 모두 끈 측정, 임베딩만 실패·차단된 줄, 답 글에 고정 문구(MODEL_UNAVAILABLE_ANSWER)가 있어도 위 신호가 없는 줄.
  */
 export function hasModelError(input: ModelErrorInput): boolean {
   if (!input.modelStagesEnabled) return false
   const deniedCall = input.calls.some(
-    (call) => !ANSWER_UNUSED_GEMINI_KINDS.has(call.kind) && MODEL_ACCESS_DENIED_STATUSES.has(call.status)
+    (call) =>
+      !ANSWER_UNUSED_GEMINI_KINDS.has(call.kind) && MODEL_ACCESS_DENIED_STATUSES.has(call.status) && !call.modelScopedDenial
   )
-  const blockedCall = Object.entries(input.blockedKinds).some(
-    ([kind, count]) => !ANSWER_UNUSED_GEMINI_KINDS.has(kind) && count > 0
+  const notSent = (record: Record<string, number> | undefined) =>
+    Object.entries(record ?? {}).some(([kind, count]) => !ANSWER_UNUSED_GEMINI_KINDS.has(kind) && count > 0)
+  return (
+    deniedCall ||
+    notSent(input.blockedKinds) ||
+    notSent(input.authFailedKinds) ||
+    (input.skipReasons ?? []).includes("model_unavailable")
   )
-  return deniedCall || blockedCall || (input.skipReasons ?? []).includes("model_unavailable")
 }
 
 /**
  * 답에 쓰이는 호출(임베딩 제외)이 있었고 모두 일시 오류(429·5xx·네트워크 0)로 끝났는지. 측정 스크립트는 이런 줄을 다시 돌린다.
- * 임베딩만 실패한 줄은 답이 같으므로 다시 돌리지 않는다.
+ * 임베딩만 실패한 줄은 답이 같으므로 다시 돌리지 않는다. 확인 안 된 모델 하나의 403(modelScopedDenial)은 체인이 지나간 호출이라 보지 않는다.
  */
 export function isTransientGeminiFailure(calls: GeminiCallRecord[]) {
-  const answerCalls = calls.filter((call) => !ANSWER_UNUSED_GEMINI_KINDS.has(call.kind))
+  const answerCalls = calls.filter((call) => !ANSWER_UNUSED_GEMINI_KINDS.has(call.kind) && !call.modelScopedDenial)
   return answerCalls.length > 0 && answerCalls.every((call) => call.status === 0 || call.status === 429 || call.status >= 500)
 }
 
@@ -88,6 +152,8 @@ export interface ModelFreeRow {
   geminiBlocked: number
   geminiKinds: Record<string, number>
   geminiBlockedKinds?: Record<string, number>
+  /** Vertex 토큰 발급이 실패해 보내지 못한 호출(부르려 한 것이므로 함께 센다). */
+  geminiAuthFailedKinds?: Record<string, number>
 }
 
 export interface ModelFreeCheck {
@@ -100,14 +166,16 @@ export interface ModelFreeCheck {
 
 /**
  * 모델 단계를 모두 끈 측정(--mode off --gate off --second-chance off)은 질문당 Gemini 호출이 0 이어야 한다(사양 §2.2).
- * 차단기에 막힌 호출도 부르려 한 것이라 함께 센다. compiled 측정이면 invalid(종료 코드 3), 그 밖은 warn(줄 수만 알림).
+ * 차단기에 막힌 호출과 Vertex 토큰 발급이 실패해 못 보낸 호출도 부르려 한 것이라 함께 센다. compiled 측정이면 invalid(종료 코드 3),
+ * 그 밖은 warn(줄 수만 알림).
  */
 export function checkModelFreeRun(options: { modelFree: boolean; router: AnswerRouter; rows: ModelFreeRow[] }): ModelFreeCheck {
   if (!options.modelFree) return { status: "ok", rows: 0, kinds: {} }
-  const offending = options.rows.filter((row) => row.geminiCalls + row.geminiBlocked > 0)
+  const authFailed = (row: ModelFreeRow) => Object.values(row.geminiAuthFailedKinds ?? {}).reduce((sum, count) => sum + count, 0)
+  const offending = options.rows.filter((row) => row.geminiCalls + row.geminiBlocked + authFailed(row) > 0)
   const kinds: Record<string, number> = {}
   for (const row of offending) {
-    for (const record of [row.geminiKinds, row.geminiBlockedKinds ?? {}]) {
+    for (const record of [row.geminiKinds, row.geminiBlockedKinds ?? {}, row.geminiAuthFailedKinds ?? {}]) {
       for (const [kind, count] of Object.entries(record)) kinds[kind] = (kinds[kind] ?? 0) + count
     }
   }
