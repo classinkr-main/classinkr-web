@@ -70,16 +70,45 @@ export function buildChannelTalkMemberId(anonymousId: string) {
   return `classin:web:${anonymousId}`.replace(/[^\w:.-]/g, "_").slice(0, 160)
 }
 
+// localStorage 가 막힌 브라우저(사이트 데이터 차단·용량 초과·구형 Safari 프라이빗 모드)에서
+// 같은 페이지뷰 안의 호출이 같은 id 를 쓰도록 메모리에 둔다.
+let pageViewAnonymousId: string | undefined
+
+function readStoredAnonymousId() {
+  try {
+    return window.localStorage.getItem(CHANNEL_TALK_ANONYMOUS_ID_KEY) || undefined
+  } catch {
+    return undefined
+  }
+}
+
+function storeAnonymousId(id: string) {
+  try {
+    window.localStorage.setItem(CHANNEL_TALK_ANONYMOUS_ID_KEY, id)
+  } catch {
+    // 저장 불가 — 이번 페이지뷰에서만 메모리 id 로 이어간다.
+  }
+}
+
+/**
+ * 챗봇·채널톡이 같은 방문자로 묶을 익명 id. 저장소 접근이 막혀도 throw 하지 않고
+ * 이번 페이지뷰 동안 유지되는 id 를 돌려준다(서버 렌더에서는 undefined).
+ */
 export function getChannelTalkAnonymousId() {
   if (typeof window === "undefined") return undefined
 
-  const existing = window.localStorage.getItem(CHANNEL_TALK_ANONYMOUS_ID_KEY)
-  if (existing) return existing
+  const existing = readStoredAnonymousId()
+  if (existing) {
+    pageViewAnonymousId = existing
+    return existing
+  }
 
   const next =
+    pageViewAnonymousId ??
     globalThis.crypto?.randomUUID?.() ??
     `anon_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`
-  window.localStorage.setItem(CHANNEL_TALK_ANONYMOUS_ID_KEY, next)
+  pageViewAnonymousId = next
+  storeAnonymousId(next)
   return next
 }
 

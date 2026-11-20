@@ -8,9 +8,16 @@ let audioCtx: AudioContext | null = null
 const isBrowser = typeof window !== "undefined"
 let isMutedState = false
 
-// Restore settings from localStorage on client side
+const MUTED_STORAGE_KEY = "classin_chatbot_muted"
+
+// Restore settings from localStorage on client side.
+// 저장소 접근이 막힌 브라우저에서는 모듈 로드 자체가 깨지지 않도록 기본값(소리 켬)으로 둔다.
 if (isBrowser) {
-    isMutedState = localStorage.getItem("classin_chatbot_muted") === "true"
+    try {
+        isMutedState = window.localStorage.getItem(MUTED_STORAGE_KEY) === "true"
+    } catch {
+        isMutedState = false
+    }
 }
 
 function getAudioContext(): AudioContext | null {
@@ -31,7 +38,11 @@ export function isMuted(): boolean {
 export function setMuted(muted: boolean): void {
     isMutedState = muted
     if (isBrowser) {
-        localStorage.setItem("classin_chatbot_muted", muted ? "true" : "false")
+        try {
+            window.localStorage.setItem(MUTED_STORAGE_KEY, muted ? "true" : "false")
+        } catch {
+            // 저장 불가 — 이번 페이지뷰 동안만 음소거 상태를 유지한다.
+        }
     }
 }
 
