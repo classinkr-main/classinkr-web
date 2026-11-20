@@ -27,6 +27,15 @@
 
 모델명, thinking 설정, 유사도 하한, 임베딩 차원과 teaser 대상 페이지는 코드와 테스트를 정본으로 확인한다. 시점별 운영 수치나 활성화 건수는 이 플레이북에 복제하지 않는다.
 
+공개 챗봇을 Vertex AI에 연결할 때는 `CHATBOT_GEMINI_PROVIDER=vertex`, 대상 Google Cloud 프로젝트 ID인
+`CHATBOT_VERTEX_PROJECT_ID`, 모델을 제공하는 위치인 `CHATBOT_VERTEX_LOCATION`(기본 `global`)을 설정한다.
+로컬은 해당 프로젝트 권한이 있는 Application Default Credentials를 사용한다. Vercel 운영 배포는 해당 팀·프로젝트·
+`production` 환경의 OIDC 토큰만 허용하는 Google Cloud Workload Identity Provider를 사용한다.
+`CHATBOT_VERTEX_WIF_PROVIDER`에는 제공자의 전체 리소스 이름을, `CHATBOT_VERTEX_SERVICE_ACCOUNT_EMAIL`에는
+Vertex 예측 권한(`aiplatform.endpoints.predict`)을 가진 서비스 계정 이메일을 설정한다. 키를 사용하는 환경에는 제공자 대신
+`CHATBOT_VERTEX_PRIVATE_KEY`를 설정할 수 있다.
+검색 임베딩은 기존 문서 벡터와 동일한 모델과 차원으로 요청한다.
+
 ## 3. 강제 규칙
 
 ### 공개 답변 안전성

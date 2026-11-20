@@ -2,7 +2,7 @@
  * Chatbot LLM 답변 생성 — Google Gemini (RAG)
  *
  * 검색으로 찾은 내부 정보(sources)를 참고해 한국어 답변을 생성한다.
- * - GEMINI_API_KEY 가 없으면 null → 호출부가 기존 템플릿 답변으로 폴백한다.
+ * - Gemini 연결을 사용할 수 없으면 호출부가 기존 템플릿 답변으로 폴백한다.
  * - 네트워크 오류·타임아웃·빈 응답도 모두 null 로 처리해 챗봇이 절대 끊기지 않게 한다.
  * - 공개 답변에는 문서, 출처, URL, 이미지 경로를 드러내지 않는다.
  */
@@ -14,17 +14,16 @@ import {
   getClassinChatbotReferenceContext,
   getClassinPositioningContext,
 } from "@/lib/classin-positioning"
+import { getChatbotGeminiConnection, postChatbotGemini } from "./gemini-transport"
 import type { ChatbotSource } from "./service"
 
 export type ChatbotModelTier = "basic" | "reasoning" | "advanced"
 
-// 챗봇 모델 티어별 기본 모델 설정.
-// 운영 계정의 모델 목록에서 확인된 안정 기본값을 쓴다. 미지원 모델을 기본 요청에 넣지 않는다.
-const DEFAULT_FAST_MODEL = "gemini-2.5-flash"
-const DEFAULT_REASONING_MODEL = "gemini-2.5-pro"
-const DEFAULT_ADVANCED_MODEL = "gemini-2.5-pro"
-const FAST_FALLBACK_MODEL = "gemini-2.5-flash"
-const DEEP_FALLBACK_MODEL = "gemini-2.5-pro"
+const MODEL_ENV_BY_TIER = {
+  basic: "GEMINI_FAST_MODEL",
+  reasoning: "GEMINI_REASONING_MODEL",
+  advanced: "GEMINI_MODEL",
+} as const
 
 // 설정값으로 들어오면 무시하고 위 기본값으로 폴백할 모델(미지원/폐기/상시 503).
 const UNSUPPORTED_GEMINI_MODELS = new Set([
@@ -42,8 +41,9 @@ const GEMINI_TIMEOUT_MS = 2500
 // 스트리밍은 첫 토큰이 빨리 와 사용자가 빈 화면을 보지 않으므로, 본문을 끝까지 받을 여유를 더 준다.
 // 검색(≤2.8s) + 스트림(≤8s) ≈ 11s 안쪽으로 라우트 예산을 지킨다.
 const GEMINI_STREAM_TIMEOUT_MS = 8000
-// 임베딩은 보통 150~400ms — 생성용 4.5s를 그대로 쓰면 느린 호출이 요청 예산을 잡아먹는다.
 const EMBED_TIMEOUT_MS = 2000
+// Vertex의 첫 OAuth 요청까지 포함하되 2.8초 검색 예산 안에 벡터 RPC 시간을 남긴다.
+const VERTEX_EMBED_TIMEOUT_MS = 2500
 export const MAX_ANSWER_LENGTH = 520
 
 // 운영 docs_ai_chunks.embedding 은 현재 vector(1536). 768 전환 migration을 적용한 환경은
@@ -52,33 +52,20 @@ export const CHATBOT_EMBED_MODEL = process.env.GEMINI_EMBED_MODEL || "gemini-emb
 export const CHATBOT_EMBED_DIM = Number(process.env.GEMINI_EMBED_DIM ?? "1536")
 export type EmbedTaskType = "RETRIEVAL_QUERY" | "RETRIEVAL_DOCUMENT"
 
-function resolveModel(tier: ChatbotModelTier = "basic") {
-  if (tier === "advanced") {
-    const configured = process.env.GEMINI_MODEL?.trim()
-    if (!configured || UNSUPPORTED_GEMINI_MODELS.has(configured)) return DEFAULT_ADVANCED_MODEL
-    return configured
+function resolveModelChain(tier: ChatbotModelTier, provider: "developer" | "vertex"): string[] {
+  const configured = process.env[MODEL_ENV_BY_TIER[tier]]?.trim()
+  const basic = tier === "basic"
+  const supported = configured && !UNSUPPORTED_GEMINI_MODELS.has(configured) &&
+    !(provider === "vertex" && configured.startsWith("gemini-2.5-"))
+  if (provider === "vertex") {
+    const flash = "gemini-3.5-flash"
+    const lite = "gemini-3.5-flash-lite"
+    const primary = basic ? lite : flash
+    const fallback = basic ? flash : lite
+    return [...new Set([supported ? configured : primary, fallback])]
   }
-  if (tier === "reasoning") {
-    const configured = process.env.GEMINI_REASONING_MODEL?.trim()
-    if (!configured || UNSUPPORTED_GEMINI_MODELS.has(configured)) return DEFAULT_REASONING_MODEL
-    return configured
-  }
-  // basic
-  const configured = process.env.GEMINI_FAST_MODEL?.trim()
-  if (!configured || UNSUPPORTED_GEMINI_MODELS.has(configured)) return DEFAULT_FAST_MODEL
-  return configured
-}
-
-// 티어별 프라이머리 + 에러 폴백 모델 체인. 프라이머리 호출이 실패하면 안정 모델로 자동 폴백한다.
-// 기본값과 fallback이 같으면 한 번만 호출한다.
-function resolveModelChain(tier: ChatbotModelTier): string[] {
-  const primary = resolveModel(tier)
-  const fallback = tier === "reasoning" || tier === "advanced" ? DEEP_FALLBACK_MODEL : FAST_FALLBACK_MODEL
-  return Array.from(new Set([primary, fallback]))
-}
-
-function getGeminiApiKey() {
-  return process.env.GEMINI_API_KEY?.trim() || null
+  const fallback = basic ? "gemini-2.5-flash" : "gemini-2.5-pro"
+  return [...new Set([supported ? configured : fallback, fallback])]
 }
 
 export const BASE_SYSTEM_INSTRUCTION = [
@@ -235,9 +222,10 @@ function warnGeminiCallIssue(model: string, reason: string, details: Record<stri
   console.warn("[chatbot] Gemini call failed; trying fallback.", { model, reason, ...details })
 }
 
-async function readGeminiErrorSnippet(res: Response) {
+async function readGeminiErrorStatus(res: Response) {
   try {
-    return (await res.text()).replace(/\s+/g, " ").slice(0, 240)
+    const { error } = (await res.json()) as { error?: { status?: string } }
+    return typeof error?.status === "string" && /^[A-Z_]{1,48}$/.test(error.status) ? error.status : undefined
   } catch {
     return undefined
   }
@@ -294,10 +282,10 @@ async function requestGeminiContent({
   tier: ChatbotModelTier
   temperature: number
 }) {
-  const apiKey = getGeminiApiKey()
-  if (!apiKey) return null
+  const connection = getChatbotGeminiConnection()
+  if (!connection) return null
 
-  const models = resolveModelChain(tier)
+  const models = resolveModelChain(tier, connection.provider)
 
   // 프라이머리 모델이 실패(non-ok/타임아웃/네트워크/빈 응답)하면 다음 폴백 모델로 순차 시도한다.
   for (const model of models) {
@@ -305,30 +293,27 @@ async function requestGeminiContent({
     const timeout = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS)
 
     try {
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          signal: controller.signal,
-          body: buildGeminiBody(model, systemInstruction, contents, temperature),
-        }
+      const res = await postChatbotGemini(
+        connection, model, "generateContent",
+        buildGeminiBody(model, systemInstruction, contents, temperature), controller.signal
       )
 
       if (!res.ok) {
         warnGeminiCallIssue(model, "http_error", {
           status: res.status,
-          body: await readGeminiErrorSnippet(res),
+          provider: connection.provider,
+          apiStatus: await readGeminiErrorStatus(res),
         })
         continue
       }
 
       const data = (await res.json()) as {
-        candidates?: { content?: { parts?: { text?: string }[] }; finishReason?: string }[]
+        candidates?: { content?: { parts?: { text?: string; thought?: boolean }[] }; finishReason?: string }[]
         promptFeedback?: { blockReason?: string }
       }
 
       const text = data.candidates?.[0]?.content?.parts
+        ?.filter((part) => !part.thought)
         ?.map((part) => part.text ?? "")
         .join("")
         .trim()
@@ -366,7 +351,7 @@ export async function generateGeminiAnswer({
   tier = "basic",
   history,
 }: GenerateArgs): Promise<string | null> {
-  if (!getGeminiApiKey() || sources.length === 0 || !question.trim()) {
+  if (sources.length === 0 || !question.trim()) {
     return null
   }
 
@@ -435,7 +420,7 @@ export async function generateGeminiFinalAnswer({
   tier = "basic",
   history,
 }: FinalGenerateArgs): Promise<string | null> {
-  if (!getGeminiApiKey() || !question.trim()) return null
+  if (!question.trim()) return null
 
   const prompt = buildFinalAnswerPrompt({ question, category, intent, answerMode, draftAnswer, sources })
 
@@ -468,30 +453,26 @@ async function* streamGeminiContent({
   tier: ChatbotModelTier
   temperature: number
 }): AsyncGenerator<string> {
-  const apiKey = getGeminiApiKey()
-  if (!apiKey) return
+  const connection = getChatbotGeminiConnection()
+  if (!connection) return
 
-  for (const model of resolveModelChain(tier)) {
+  for (const model of resolveModelChain(tier, connection.provider)) {
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), GEMINI_STREAM_TIMEOUT_MS)
     let emittedAny = false
 
     try {
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${apiKey}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          signal: controller.signal,
-          body: buildGeminiBody(model, systemInstruction, contents, temperature),
-        }
+      const res = await postChatbotGemini(
+        connection, model, "streamGenerateContent",
+        buildGeminiBody(model, systemInstruction, contents, temperature), controller.signal
       )
 
       if (!res.ok || !res.body) {
         warnGeminiCallIssue(model, "stream_http_error", {
           status: res.status,
           hasBody: Boolean(res.body),
-          body: res.ok ? undefined : await readGeminiErrorSnippet(res),
+          provider: connection.provider,
+          apiStatus: res.ok ? undefined : await readGeminiErrorStatus(res),
         })
         continue
       }
@@ -514,9 +495,10 @@ async function* streamGeminiContent({
           if (!payload || payload === "[DONE]") continue
           try {
             const data = JSON.parse(payload) as {
-              candidates?: { content?: { parts?: { text?: string }[] } }[]
+              candidates?: { content?: { parts?: { text?: string; thought?: boolean }[] } }[]
             }
             const text = data.candidates?.[0]?.content?.parts
+              ?.filter((part) => !part.thought)
               ?.map((part) => part.text ?? "")
               .join("")
             if (text) {
@@ -557,7 +539,7 @@ export async function* streamGeminiFinalAnswer({
   tier = "basic",
   history,
 }: FinalGenerateArgs): AsyncGenerator<string> {
-  if (!getGeminiApiKey() || !question.trim()) return
+  if (!question.trim()) return
 
   const prompt = buildFinalAnswerPrompt({ question, category, intent, answerMode, draftAnswer, sources })
 
@@ -579,7 +561,7 @@ export async function generateGeminiInferredAnswer({
   tier = "basic",
   history,
 }: InferredGenerateArgs): Promise<string | null> {
-  if (!getGeminiApiKey() || !question.trim()) return null
+  if (!question.trim()) return null
 
   const prompt = [
     `분류: ${category}`,
@@ -615,42 +597,70 @@ export async function generateGeminiInferredAnswer({
 }
 
 /**
- * Gemini 임베딩 생성. 키가 없거나 오류면 null → 호출부가 키워드 검색으로 폴백.
+ * Gemini 임베딩 생성. 연결을 사용할 수 없거나 오류면 키워드 검색으로 폴백.
  * - 검색 질문: RETRIEVAL_QUERY, 문서 청크: RETRIEVAL_DOCUMENT (비대칭 검색 품질↑)
  */
 export async function embedText(
   text: string,
   taskType: EmbedTaskType
 ): Promise<number[] | null> {
-  const apiKey = getGeminiApiKey()
-  if (!apiKey || !text.trim()) return null
+  const connection = getChatbotGeminiConnection()
+  if (!connection || !text.trim()) return null
 
   const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), EMBED_TIMEOUT_MS)
+  const timeoutMs = connection.provider === "vertex" ? VERTEX_EMBED_TIMEOUT_MS : EMBED_TIMEOUT_MS
+  const timeout = setTimeout(() => controller.abort(), timeoutMs)
 
   try {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${CHATBOT_EMBED_MODEL}:embedContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        signal: controller.signal,
-        body: JSON.stringify({
-          model: `models/${CHATBOT_EMBED_MODEL}`,
-          content: { parts: [{ text }] },
-          taskType,
-          outputDimensionality: CHATBOT_EMBED_DIM,
-        }),
+    const body = connection.provider === "vertex"
+      ? {
+        instances: [{ content: text, task_type: taskType }],
+        parameters: { outputDimensionality: CHATBOT_EMBED_DIM },
       }
+      : {
+        model: `models/${CHATBOT_EMBED_MODEL}`,
+        content: { parts: [{ text }] },
+        taskType,
+        outputDimensionality: CHATBOT_EMBED_DIM,
+      }
+    const res = await postChatbotGemini(
+      connection, CHATBOT_EMBED_MODEL, "embedContent", JSON.stringify(body), controller.signal
     )
 
-    if (!res.ok) return null
+    if (!res.ok) {
+      if (connection.provider === "vertex") {
+        warnGeminiCallIssue(CHATBOT_EMBED_MODEL, "embedding_http_error", {
+          provider: connection.provider,
+          status: res.status,
+          apiStatus: await readGeminiErrorStatus(res),
+        })
+      }
+      return null
+    }
 
-    const data = (await res.json()) as { embedding?: { values?: number[] } }
-    const values = data.embedding?.values
+    const data = (await res.json()) as {
+      embedding?: { values?: number[] }
+      predictions?: { embeddings?: { values?: number[] } }[]
+    }
+    const values = connection.provider === "vertex"
+      ? data.predictions?.[0]?.embeddings?.values
+      : data.embedding?.values
     if (!Array.isArray(values) || values.length === 0) return null
+    if (connection.provider === "vertex" && (values.length !== CHATBOT_EMBED_DIM || !values.every(Number.isFinite))) {
+      warnGeminiCallIssue(CHATBOT_EMBED_MODEL, "invalid_embedding", {
+        provider: connection.provider,
+        dimensions: values.length,
+      })
+      return null
+    }
     return values
-  } catch {
+  } catch (error) {
+    if (connection.provider === "vertex") {
+      warnGeminiCallIssue(CHATBOT_EMBED_MODEL, "embedding_request_error", {
+        provider: connection.provider,
+        error: error instanceof Error ? error.name : "unknown_error",
+      })
+    }
     return null
   } finally {
     clearTimeout(timeout)
