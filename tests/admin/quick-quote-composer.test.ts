@@ -128,6 +128,12 @@ describe("admin quick quote composer shell", () => {
     expect(source).toContain("createInformationalQuoteLine")
     expect(source).toContain("정보 라인 추가")
     expect(source).toContain("function removeLine(")
+    // 대표 품목을 지워도 장(틀)은 남고, 품목이 없는 장은 생성 대상에서 빠진다.
+    expect(source).toContain("mainRemoved: true")
+    expect(source).toContain("function stripRemovedMain(")
+    expect(source).toContain("function sheetHasQuotableItems(")
+    expect(source).toContain("const targets = quotableSheets")
+    expect(source).not.toContain('if (target.optionGroupId === "main_product") return null')
     expect(source).toContain("getQuoteNotePresets")
     expect(source).toContain("appendQuoteNoteLine")
     expect(source).toContain("function QuoteNoteField(")
@@ -218,7 +224,7 @@ describe("admin quotes shell — 팀 템플릿 연결", () => {
     expect(composerSource).toContain("onSaveTemplate?: (draft: { name: string; details: PartnerQuoteDetailsInput }) => Promise<void>")
     expect(composerSource).toContain("이 구성을 템플릿으로 저장")
     // 템플릿은 공급자 1곳 기준 — 2장으로 나뉘면 저장을 막는다.
-    expect(composerSource).toContain("disabled={isSplit || sheets.length === 0}")
+    expect(composerSource).toContain("disabled={isSplit || quotableSheets.length === 0}")
     expect(composerSource).not.toContain("@/lib/admin-client")
   })
 

@@ -225,6 +225,8 @@ type ComposerSheet = {
   templateId: StandardQuoteTemplateId
   optionSelections: StandardQuoteOptionSelections
   quote: PartnerQuoteDetailsInput
+  /** 대표 품목 행을 지운 장. 템플릿이 다시 짜여도 대표 행을 되살리지 않는다(장의 틀은 유지). */
+  mainRemoved?: boolean
 }
 
 type SharedQuoteFields = {
@@ -493,6 +495,31 @@ function isBundleSheet(sheet: ComposerSheet) {
 function getListPrice(line: PartnerQuoteLineItemInput) {
   if (!line.itemCode || line.itemCode === RECHARGE_ITEM_CODE) return undefined
   return getProductBySku(line.itemCode)?.unit_price
+}
+
+/** 대표 품목을 지운 장에서 템플릿이 되살린 대표 행을 걷어낸다. */
+function stripRemovedMain(sheet: ComposerSheet): ComposerSheet {
+  if (!sheet.mainRemoved) return sheet
+  const items = sheet.quote.lineItems ?? []
+  if (!items.some((item) => item.optionGroupId === "main_product")) return sheet
+  return {
+    ...sheet,
+    quote: finalizeStandardQuoteDetails(
+      { ...sheet.quote, lineItems: renumberLineItems(items.filter((item) => item.optionGroupId !== "main_product")) },
+      sheet.templateId
+    ),
+  }
+}
+
+/**
+ * 견적서로 만들 품목이 있는 장인지. 대표 품목·직접 추가한 품목·금액이 있는 옵션 품목이 하나도 없으면
+ * (0원 부속 행·안내 문구만 남은 장) 틀은 화면에 두되 견적서는 생성하지 않는다.
+ */
+function sheetHasQuotableItems(sheet: ComposerSheet) {
+  return (sheet.quote.lineItems ?? []).some((item) => {
+    if (item.lineStatus === "informational" || item.itemType === "note_only") return false
+    return item.optionGroupId === "main_product" || item.isUserAdded === true || Number(item.unitPrice ?? 0) > 0
+  })
 }
 
 function sheetSubtotal(sheet: ComposerSheet) {
@@ -1054,7 +1081,9 @@ export default function QuickQuoteComposer({
     const quote = composeSheetQuote(sheet)
     return { sheet, quote, totals: calculateStandardQuoteTotals(quote.lineItems, quote.vatIncluded ?? true, quote.quoteDiscount) }
   })
-  const isSplit = sheets.length > 1
+  // 품목이 없는 장은 틀만 화면에 남고 생성·저장·장 수 계산에서 빠진다.
+  const quotableSheets = composedSheets.filter((entry) => sheetHasQuotableItems(entry.sheet))
+  const isSplit = quotableSheets.length > 1
   const composerMode = quoteComposerMode(sheets[0]?.templateId ?? initialTemplateId)
   const hiddenTemplateIds = displaySettings?.preferences.hiddenTemplateIds ?? []
   const showRecentQuotes = displaySettings?.preferences.showRecentQuotes ?? true
@@ -1065,8 +1094,8 @@ export default function QuickQuoteComposer({
   const templateCount = visibleTeamTemplates.length + visibleTemplates.length
   const displayedTeamTemplates = showAllTemplates ? visibleTeamTemplates : visibleTeamTemplates.slice(0, QUOTE_WORKSPACE_PREVIEW_LIMIT)
   const displayedBaseTemplates = showAllTemplates ? visibleTemplates : visibleTemplates.slice(0, Math.max(0, QUOTE_WORKSPACE_PREVIEW_LIMIT - displayedTeamTemplates.length))
-  const grandTotalAll = composedSheets.reduce((sum, entry) => sum + entry.totals.grandTotalAmount, 0)
-  const lineItemCount = sheets.reduce((sum, sheet) => sum + (sheet.quote.lineItems?.length ?? 0), 0)
+  const grandTotalAll = quotableSheets.reduce((sum, entry) => sum + entry.totals.grandTotalAmount, 0)
+  const lineItemCount = quotableSheets.reduce((sum, entry) => sum + (entry.sheet.quote.lineItems?.length ?? 0), 0)
   const canCreateQuote = customerReady && lineItemCount > 0
   const hasNoExpiration = !shared.validUntil
   const validityPresetValue = hasNoExpiration
@@ -1076,7 +1105,7 @@ export default function QuickQuoteComposer({
   const preflightChecks = [
     { label: customerReady ? "수신" : "수신 비어 있음", ok: customerReady },
     { label: `품목 ${lineItemCount}개`, ok: lineItemCount > 0 },
-    { label: isSplit ? "견적서 2장" : "견적서 1장", ok: true },
+    { label: isSplit ? "견적서 2장" : quotableSheets.length === 0 ? "견적서 0장" : "견적서 1장", ok: quotableSheets.length > 0 },
     { label: hasNoExpiration ? "유효기한 없음" : "유효기한", ok: true },
   ]
   // 복제해 온 단가 중 지금 정가와 다른 행(옛 단가)
@@ -1292,7 +1321,7 @@ export default function QuickQuoteComposer({
     } = {}
   ): ComposerSheet {
     const optionSelections = next.optionSelections ?? sheet.optionSelections
-    return {
+    return stripRemovedMain({
       ...sheet,
       optionSelections,
       quote: buildConfigurableStandardQuoteDetails({
@@ -1306,7 +1335,7 @@ export default function QuickQuoteComposer({
         optionSelections,
         baseQuantity: next.baseQuantity ?? getMainQuantity(sheet),
       }),
-    }
+    })
   }
 
   function withLineItems(sheet: ComposerSheet, lineItems: PartnerQuoteLineItemInput[]): ComposerSheet {
@@ -1387,8 +1416,13 @@ export default function QuickQuoteComposer({
       const items = sheet.quote.lineItems ?? []
       const target = items[lineIndex]
       if (!target) return sheet
-      // 대표 품목을 지우면 그 공급자 견적서 한 장이 통째로 빠진다.
-      if (target.optionGroupId === "main_product") return null
+      // 대표 품목을 지워도 장(틀)은 남기고 그 행만 뺀다. 품목이 하나도 안 남으면 생성 단계에서 건너뛴다.
+      if (target.optionGroupId === "main_product") {
+        return withLineItems(
+          { ...sheet, mainRemoved: true },
+          renumberLineItems(items.filter((_, index) => index !== lineIndex))
+        )
+      }
       if (target.isUserAdded === true) {
         // finalize 는 기존 lineNumber 를 존중하므로 삭제 후 번호를 다시 매긴다(번호 구멍 방지).
         return withLineItems(sheet, renumberLineItems(items.filter((_, index) => index !== lineIndex)))
@@ -1419,7 +1453,11 @@ export default function QuickQuoteComposer({
       item.id !== "wall_mount" &&
       (item.id === "bundle_86_t1_wall" ? isBundleSheet(sheet) : !(item.id === "board_86" && isBundleSheet(sheet)))
     if (isMainOfSheet) {
-      updateSheet(line, (current) => rebuildSheet(current, { baseQuantity: getMainQuantity(current) + 1 }))
+      updateSheet(line, (current) =>
+        current.mainRemoved
+          ? rebuildSheet({ ...current, mainRemoved: false }, { baseQuantity: 1 })
+          : rebuildSheet(current, { baseQuantity: getMainQuantity(current) + 1 })
+      )
       return
     }
 
@@ -1857,7 +1895,7 @@ export default function QuickQuoteComposer({
   async function executeSubmit(action: CreateAction) {
     if (submittingAction) return
 
-    const targets = composedSheets.filter((entry) => (entry.sheet.quote.lineItems?.length ?? 0) > 0)
+    const targets = quotableSheets
     if (targets.length === 0) return
 
     const previewWindow = action === "save_and_preview" ? prepareQuotePreviewWindow() : null
@@ -2050,7 +2088,7 @@ export default function QuickQuoteComposer({
 
   async function handleSaveTemplate() {
     const name = templateDraftName?.trim()
-    const entry = composedSheets[0]
+    const entry = quotableSheets[0]
     if (!onSaveTemplate || !name || !entry || isSplit) return
     setTemplateSaveState({ status: "saving" })
     try {
@@ -2203,8 +2241,8 @@ export default function QuickQuoteComposer({
         {canRemoveLine(sheet, line) ? (
           <button
             type="button"
-            aria-label={isMain ? "이 견적서 장 삭제" : `${line.itemName} 행 삭제`}
-            title={isMain ? "대표 품목을 지우면 이 견적서 한 장이 빠집니다" : "행 삭제"}
+            aria-label={`${line.itemName} 행 삭제`}
+            title={isMain ? "대표 품목 행만 지웁니다 — 견적서 틀은 남고, 품목이 없으면 생성되지 않습니다" : "행 삭제"}
             onClick={() => removeLine(sheet.line, lineIndex)}
             className="flex h-6 w-6 items-center justify-center rounded-[4px] text-[#78736D] opacity-0 transition-opacity hover:bg-[#F0F0EC] hover:text-[#111110] focus-visible:opacity-100 group-hover:opacity-100"
           >
@@ -2591,6 +2629,11 @@ export default function QuickQuoteComposer({
                 <span />
               </div>
               {(quote.lineItems ?? []).map((line, lineIndex) => renderLineRow(sheet, line, lineIndex))}
+              {!sheetHasQuotableItems(sheet) && (
+                <p className="border-b border-[#F0F0EC] py-3 text-center text-[12px] text-[#78736D]">
+                  품목이 없어 이 견적서는 생성되지 않습니다. 왼쪽 품목을 눌러 다시 추가하세요.
+                </p>
+              )}
 
               {noteLineOpen ? (
                 <div className="flex flex-wrap items-center gap-1.5 border-b border-[#F0F0EC] py-2">
@@ -3031,7 +3074,7 @@ export default function QuickQuoteComposer({
                       {templateDraftName === null ? (
                         <button
                           type="button"
-                          disabled={isSplit || sheets.length === 0}
+                          disabled={isSplit || quotableSheets.length === 0}
                           title={isSplit ? "템플릿은 공급자 1곳 기준입니다 — 견적서가 1장일 때 저장하세요" : undefined}
                           onClick={() => {
                             setTemplateSaveState(null)
