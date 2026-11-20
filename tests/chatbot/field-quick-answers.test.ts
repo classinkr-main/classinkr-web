@@ -22,6 +22,16 @@ describe("field quick answers", () => {
     )
   })
 
+  it("uses the pre-class viewing answer only for questions about tracking who viewed materials", () => {
+    expect(find("예습 자료를 올리고 학생별로 열어 봤는지 확인할 수 있나요?")).toBe(
+      "pre-class-materials-viewed"
+    )
+    expect(find("학생마다 예습 자료 열람 기록을 볼 수 있어요?")).toBe("pre-class-materials-viewed")
+    expect(
+      find("플립러닝 수업에서 EDB 교안을 예습 자료로 배포하고, 본 수업에서는 토론한 뒤 복습 자료를 제공하려면 어떻게 구성하면 좋나요?")
+    ).not.toBe("pre-class-materials-viewed")
+  })
+
   it("keeps a teacher's two-academy account question apart from a parent's", () => {
     expect(find("아이가 수학 학원이랑 영어 학원을 다니는데 아이 계정 하나로 두 학원 수업이 다 보이는 건지, 학원마다 계정을 따로 만들어야 하는지요")).toBe(
       "one-child-account-two-academies"

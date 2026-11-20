@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 
-import { evaluateChatbotQuery } from "@/lib/chatbot/service"
+import { evaluateChatbotQuery, streamChatbotQuery, type ChatbotStreamEvent } from "@/lib/chatbot/service"
 
 function disableExternalChatbotServices() {
   vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "")
@@ -81,8 +81,72 @@ describe("chatbot RAG source relevance", () => {
       })
       expect(result.sources).toHaveLength(1)
       expect(result.answer).toContain("수업 운영 솔루션")
+      expect(result.answer).toContain("복습 자료")
+      expect(result.answer).not.toMatch(/\b(?:EDB|LMS)\b/)
+      expect(result.answer).not.toContain("요금제")
       expect(result.answer).not.toContain("문서에서 바로 맞는 답을 찾지 못했습니다")
     }
+  })
+
+  it("gives a beginner a first-lesson example and an actionable source", async () => {
+    disableExternalChatbotServices()
+    const result = await evaluateChatbotQuery("우리 학원에서는 어떻게 써요?", { generateAnswer: false })
+
+    expect(result.answerMode).toBe("direct_answer")
+    expect(result.answer).toMatch(/한 반.*PDF 교안[\s\S]*수업 시간[\s\S]*복습 자료/)
+    expect(result.sources.map(({ urlPath }) => urlPath)).toContain("/docs/teacher/course-activities")
+    expect(result.needsHandoff).toBe(false)
+  })
+
+  it("addresses the equipment constraint and English class example before any pricing", async () => {
+    disableExternalChatbotServices()
+    const result = await evaluateChatbotQuery(
+      "학생 25명인 영어학원인데 전자칠판 없이도 시작할 수 있어요? 첫 수업에서 어떻게 쓰는지 예를 들어주세요.",
+      { generateAnswer: false }
+    )
+
+    expect(result.answer.split("\n")[0]).toMatch(/전자칠판 없이도.*컴퓨터/)
+    expect(result.answer).toContain("영어 지문 PDF")
+    expect(result.answer).not.toMatch(/요금제|견적/)
+    expect(result.sources.map(({ urlPath }) => urlPath)).toEqual([
+      "/docs/start/pc-install",
+      "/docs/teacher/course-activities",
+    ])
+  })
+
+  it("covers all flipped lesson phases in both public response paths", async () => {
+    disableExternalChatbotServices()
+    const message = "플립러닝 수업에서 EDB 교안을 예습 자료로 배포하고, 본 수업에서는 토론한 뒤 복습 자료를 제공하려면 어떻게 구성하면 좋나요?"
+    const result = await evaluateChatbotQuery(message, { generateAnswer: false })
+    const events: ChatbotStreamEvent[] = []
+    await streamChatbotQuery({ message, context: { showSources: true } }, {}, (event) => events.push(event))
+
+    expect(result.answer).toMatch(/예습[\s\S]*EDB 교안[\s\S]*그룹 토론[\s\S]*복습 자료/)
+    expect(result.answer).not.toContain("열람 기록")
+    expect(result.sources.map(({ urlPath }) => urlPath)).toEqual([
+      "/docs/software/classroom-tools",
+      "/docs/teacher/course-activities",
+    ])
+    expect(events).toContainEqual({ type: "replace", answer: result.answer })
+  })
+
+  it.each([
+    ["EDB로 플립러닝을 할 때 예습 자료, 토론, 복습을 어떻게 구성해요?", "학습 자료로 EDB 교안을 예습용으로 배포하고 학생의 열람 여부를 확인할 수 있어요."],
+    ["EDB 교안으로 플립러닝 예습, 그룹 토론, 복습을 한 코스에 구성하려면요?", "예습에는 EDB 교안이나 관련 PDF를 학습 자료에 올려요.\n본 수업에서는 그룹 토론을 해요.\n마지막으로 복습 자료를 공유해요."],
+  ])("keeps a grounded lesson draft when generated text misanswers %s", async (message, text) => {
+    disableExternalChatbotServices()
+    vi.stubEnv("GEMINI_API_KEY", "test-gemini-key")
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        candidates: [{ content: { parts: [{ text }] } }],
+      }),
+    })
+    vi.stubGlobal("fetch", fetchMock)
+
+    const result = await evaluateChatbotQuery(message)
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining(":generateContent"), expect.anything())
+    expect(result.answer).toMatch(/미리 볼 부분을 PDF나 이미지[\s\S]*그룹 토론[\s\S]*복습 자료/)
   })
 
   it("answers hardware spec questions from the board lineup specs", async () => {

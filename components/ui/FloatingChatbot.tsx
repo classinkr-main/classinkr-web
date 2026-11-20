@@ -882,18 +882,22 @@ export function FloatingChatbot() {
     const pendingAssistantScrollIdRef = useRef<string | null>(null)
     const inputRef = useRef<HTMLTextAreaElement | null>(null)
     const triggerRef = useRef<HTMLButtonElement | null>(null)
-    const [messages, setMessages] = useState<ChatMessage[]>(() => [
-        {
-            id: "welcome",
-            role: "assistant",
-            content: CLASSIN_POSITIONING.chatbot.welcome,
-            suggestedQuestions: resolvePageContext(pathname).starters.slice(0, STARTER_SUGGESTION_LIMIT),
-        },
-    ])
+    const [conversation, setConversation] = useState<ChatMessage[]>([])
+    const [publishedStarters, setPublishedStarters] = useState<string[]>([])
 
     const hidden = shouldHideChatbot(pathname)
 
-    const pageContext = useMemo(() => resolvePageContext(pathname), [pathname])
+    const pageContext = resolvePageContext(pathname)
+    const needsPublishedStarters = pageContext.starters.length < STARTER_SUGGESTION_LIMIT
+    const messages = useMemo<ChatMessage[]>(() => [
+        {
+            id: "welcome",
+            role: "assistant",
+            content: pageContext.welcome ?? CLASSIN_POSITIONING.chatbot.welcome,
+            suggestedQuestions: mergeStarters(pageContext.starters, publishedStarters, STARTER_SUGGESTION_LIMIT),
+        },
+        ...conversation,
+    ], [conversation, pageContext, publishedStarters])
     const chatbotTeaser = useChatbotTeaser({ pathname, isOpen })
     const openSourceRef = useRef<ChatbotOpenSource>("button")
     const wasOpenRef = useRef(false)
@@ -941,7 +945,7 @@ export function FloatingChatbot() {
     // 거쳐도 창이 영구히 닫히지 않고, 다시 보이는 페이지로 오면 이전 열림 상태로
     // 복귀한다. 시각적 숨김은 아래 `if (hidden) return null`이 담당한다.
     useEffect(() => {
-        if (hidden) return
+        if (hidden || !needsPublishedStarters) return
 
         const controller = new AbortController()
 
@@ -951,6 +955,7 @@ export function FloatingChatbot() {
                     cache: "no-store",
                     signal: controller.signal,
                 })
+                if (!response.ok) return
                 const data = (await response.json()) as ChatbotStarterQuestionsResponse
                 const questions = Array.isArray(data.questions)
                     ? data.questions
@@ -960,16 +965,7 @@ export function FloatingChatbot() {
                         .slice(0, STARTER_SUGGESTION_LIMIT)
                     : []
 
-                const merged = mergeStarters(pageContext.starters, questions, STARTER_SUGGESTION_LIMIT)
-                if (merged.length === 0) return
-
-                setMessages((current) =>
-                    current.map((message) =>
-                        message.id === "welcome"
-                            ? { ...message, suggestedQuestions: merged }
-                            : message
-                    )
-                )
+                setPublishedStarters(questions)
             } catch (err) {
                 if (err instanceof DOMException && err.name === "AbortError") return
             }
@@ -978,7 +974,7 @@ export function FloatingChatbot() {
         void loadStarterQuestions()
 
         return () => controller.abort()
-    }, [hidden, pageContext])
+    }, [hidden, needsPublishedStarters])
 
     useEffect(() => {
         if (!isOpen) return
@@ -1113,7 +1109,7 @@ export function FloatingChatbot() {
             content: trimmed,
         }
 
-        setMessages((current) => [...current, userMessage])
+        setConversation((current) => [...current, userMessage])
 
         // 첫 토큰이 오면 그때 어시스턴트 말풍선을 만든다(그 전까지는 ThinkingIndicator 가 보인다).
         let assistantId: string | null = null
@@ -1123,12 +1119,12 @@ export function FloatingChatbot() {
             assistantId = id
             pendingAssistantScrollIdRef.current = id
             setIsStreaming(true)
-            setMessages((current) => [...current, { id, role: "assistant", content: "" }])
+            setConversation((current) => [...current, { id, role: "assistant", content: "" }])
             return id
         }
         const updateAssistant = (updater: (message: ChatMessage) => ChatMessage) => {
             const id = ensureAssistant()
-            setMessages((current) => current.map((message) => (message.id === id ? updater(message) : message)))
+            setConversation((current) => current.map((message) => (message.id === id ? updater(message) : message)))
         }
 
         let timeoutId: number | undefined
@@ -1193,7 +1189,7 @@ export function FloatingChatbot() {
                         intent === "support"
                             ? "정확한 확인을 위해 오류 화면, 사용 기기, 발생 시점을 한 문장으로 알려주세요."
                             : "도입, 수업 운영, 계정/오류, 결제 중 어느 쪽인지 알려주시면 더 짧게 좁혀드릴게요."
-                    setMessages((current) => [
+                    setConversation((current) => [
                         ...current,
                         {
                             id: makeId(),
@@ -1238,7 +1234,7 @@ export function FloatingChatbot() {
             if (!assistantId) {
                 const fallbackId = makeId()
                 pendingAssistantScrollIdRef.current = fallbackId
-                setMessages((current) => [
+                setConversation((current) => [
                     ...current,
                     {
                         id: fallbackId,
@@ -1249,7 +1245,7 @@ export function FloatingChatbot() {
                 ])
                 setSrAnnouncement("답변 완료: 확인 가능한 답변을 찾지 못했습니다.")
             } else {
-                setMessages((current) => {
+                setConversation((current) => {
                     const latestAssistant = current.find((m) => m.id === assistantId)
                     if (latestAssistant) {
                         const cleanText = sanitizeVisibleAssistantText(latestAssistant.content)
@@ -1282,7 +1278,7 @@ export function FloatingChatbot() {
                 showHandoffCTA: false,
                 retryQuestion: trimmed,
             }
-            setMessages((current) =>
+            setConversation((current) =>
                 assistantId
                     ? current.map((message) => (message.id === assistantId ? errorMessage : message))
                     : [...current, errorMessage]

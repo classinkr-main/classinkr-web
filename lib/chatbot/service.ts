@@ -48,6 +48,7 @@ import {
 import { getCsFigmaEnrichment } from "@/lib/cs-figma-enrichments"
 import { appendFollowUp, buildFollowUp } from "@/lib/chatbot/follow-up"
 import { findFieldQuickAnswer } from "@/lib/chatbot/quick-answers-field"
+import { resolveShowroomAnswer } from "@/lib/chatbot/showroom-answer"
 import { resolveSymptomTriage, type SymptomTriageResult } from "@/lib/chatbot/symptom-triage"
 import {
   ENGLISH_SUPPORT_ANSWER,
@@ -74,7 +75,7 @@ const DEFAULT_FINAL_ANSWER_TIMEOUT_MS = 6_000
 const DEFAULT_FINAL_ANSWER_STREAM_TIMEOUT_MS = 8_000
 const RETRIEVAL_CACHE_TTL_MS = 5 * 60 * 1000
 const RETRIEVAL_CACHE_MAX = 200
-const RETRIEVAL_CACHE_VERSION = "rag-rerank-20260629-v5"
+const RETRIEVAL_CACHE_VERSION = "rag-rerank-20261120-v6"
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const CHAT_SESSION_CHANNELS = new Set(["web", "admin_preview", "partner_portal", "manual_import"])
 const PROGRESSIVE_MODEL_TIERS: ChatbotModelTier[] = ["basic", "reasoning", "advanced"]
@@ -325,7 +326,7 @@ interface CachedAnswerEntry {
   warning?: string
 }
 
-const ANSWER_CACHE_VERSION = "answer-20260629-v6"
+const ANSWER_CACHE_VERSION = "answer-20261120-v7"
 const ANSWER_CACHE_TTL_MS = 5 * 60 * 1000
 const ANSWER_CACHE_MAX = 200
 const answerCache = new Map<string, { expiresAt: number; value: CachedAnswerEntry }>()
@@ -946,6 +947,10 @@ function isIdentityQuestion(question: NormalizedQuestion) {
   return IDENTITY_RE.test(text) && !IDENTITY_EXCLUSION_RE.test(text)
 }
 
+function isBasicProductIntroQuestion(question: NormalizedQuestion) {
+  return isIdentityQuestion(question) && !isComparisonQuestion(question)
+}
+
 // "칠판 티비 밝기 줄이고 싶어요", "화면에 줄이 생겼어요"처럼 쓰는 법·증상을 묻는 말은 스펙 질문이 아니다.
 const BOARD_USAGE_OR_SYMPTOM_RE =
   /하고\s*싶|하려면|어떻게\s*(?:해|하|줄|바꾸|끄|켜|나눠)|방법|나눠|보내|공유|저장|생겼|생기|줄이|낮추|켜져\s*있|혼자|녹음|녹화|걸어|세워|이사|벽이|안\s*(?:돼|되|나|먹)|안돼|안되|느려|버벅|늘어|뚱뚱|이상해|이상하|눌러도|반응|낙서|닦|지워|아세톤|기사|접수|수리|고치|소개|혜택|이벤트|프로모션|할부|분할|나눠\s*내|매달|\bmac\b|802|내부망|와이파이|wi-?fi|권한|판서|학생|매직|업데이트|usb|한글|파일|보증|대체\s*기기|몇\s*년\s*쓰/
@@ -1013,7 +1018,8 @@ const PRICING_EXCLUDE_RE = /환불|취소|세금|계산서|영수증|청구|정�
 // "얼마나 걸려요"(기간)는 가격이 아니다 — 돈 단어가 없으면 가격에서 뺀다.
 const PRICING_DURATION_RE = /얼마나?\s*(걸리|걸려|걸릴|오래|소요|기간|시간|일|주|개월)/i
 const SOFTWARE_ONLY_BUYER_RE =
-  /소프트웨어만|프로그램만|앱만|하드웨어\s*없이|전자칠판\s*없이|보드\s*없이|계정당|계정\s*당|플랜|standard|plus|enterprise/i
+  /소프트웨어만|프로그램만|앱만|계정\s*당|플랜|standard|plus|enterprise/i
+const WITHOUT_BOARD_RE = /(?:하드웨어|전자\s*칠판|보드)(?:\s*[이가을를])?\s*(?:없이|없어도|없는)/i
 const SUBSCRIPTION_OR_CONSUMPTION_RE =
   /구독형|충전형|충전제|subscription|consumption|사용량\s*기준|월\s*구독|월구독/i
 const TRIAL_OR_PILOT_RE =
@@ -1033,9 +1039,24 @@ function isSoftwarePricingQuestion(question: NormalizedQuestion) {
   return (
     SOFTWARE_ONLY_BUYER_RE.test(text) ||
     SUBSCRIPTION_OR_CONSUMPTION_RE.test(text) ||
+    (WITHOUT_BOARD_RE.test(text) && /구매|구입|견적|결제|요금|가격|비용|구독|얼마/.test(text)) ||
     (isPricingInfoQuestion(question) &&
       /소프트웨어|앱|계정|플랜|구독|충전|standard|plus|enterprise/.test(text))
   )
+}
+
+type LessonWorkflow = "academy-intro" | "without-board" | "flipped"
+
+function getLessonWorkflow(question: NormalizedQuestion): LessonWorkflow | null {
+  const text = question.redacted
+  if (/^(?:(?:classin|클래스인)(?:을|를)?\s*)?우리\s*학원에서(?:는)?\s*어떻게\s*(?:써요|쓰나요|쓸\s*수\s*있나요|쓰면\s*되나요|사용하나요)[?.!]*$/i.test(text)) {
+    return "academy-intro"
+  }
+  if (/요금|비용|가격|견적|결제|환불|구매|구입|계약|설치\s*오류|안\s*(?:돼|되|보여)|안\s*열려|접속\s*문제|쇼룸/.test(text)) return null
+  if (WITHOUT_BOARD_RE.test(text) && /수업|온라인|시작|사용|쓸\s*수|써도/.test(text)) return "without-board"
+  if (/플립\s*러닝|거꾸로\s*수업|flipped/i.test(text) && /예습|수업\s*전/.test(text) &&
+    /토론|본\s*수업/.test(text) && /복습|수업\s*후/.test(text)) return "flipped"
+  return null
 }
 
 function isTrialOrPilotQuestion(question: NormalizedQuestion) {
@@ -1119,6 +1140,53 @@ function buildStaticDocSource(
     category: sourceCategory ?? getSourceCategoryFromDocCategory(doc.category),
     excerpt: compactText(excerpt || doc.chatbotSummary || doc.description),
     score,
+  }
+}
+
+function getLessonWorkflowSources(workflow: LessonWorkflow, retrieved: ChatbotSource[] = []) {
+  const activities = buildStaticDocSource("teacher", "course-activities", "어떤 활동을 올릴지 고르기",
+    "코스의 학습 자료 활동으로 PDF, 이미지, 수업 판서를 배포합니다. 실시간 수업, 토론, 복습용 녹화 수업과 숙제를 한 코스에 추가할 수 있습니다.", 320)
+  const teaching = workflow === "without-board"
+    ? buildStaticDocSource("start", "pc-install", "설치는 세 단계입니다",
+      "컴퓨터로 수업을 가르치려면 운영체제에 맞는 클래스인 앱을 설치한 뒤 계정으로 로그인합니다.", 320)
+    : buildStaticDocSource("software", "classroom-tools", "학생이 직접 풀고 답하게 하려면",
+      "실시간 교실의 그룹 토론 도구는 조별 풀이와 토의에 쓰고, 객관식 퀴즈로 이해도를 확인합니다.", 320)
+
+  return [teaching, activities].flatMap((source) => {
+    if (!source) return []
+    const match = retrieved.find((candidate) =>
+      candidate.urlPath === source.urlPath && candidate.heading === source.heading && candidate.excerpt
+    )
+    return [match ? { ...source, articleId: match.articleId, chunkId: match.chunkId, excerpt: match.excerpt } : source]
+  })
+}
+
+function buildLessonWorkflowAnswer(workflow: LessonWorkflow, question: NormalizedQuestion, sources: ChatbotSource[]) {
+  const example = /영어/.test(question.redacted) ? "영어 지문 PDF" : "평소에 쓰는 PDF 교안"
+  const edb = /edb|이\s*디\s*비/i.test(question.redacted)
+  const plan = workflow === "flipped"
+    ? [
+      "예습 → 실시간 토론 → 복습을 한 코스에서 이어가면 돼요.",
+      edb
+        ? "1. 예습 때는 EDB 교안에서 미리 볼 부분을 PDF나 이미지로 준비해 [학습 자료]로 올려요."
+        : "1. 예습 때는 미리 볼 자료를 PDF나 이미지로 준비해 코스의 [학습 자료]로 올려요.",
+      `2. 본 수업에서는 ${edb ? "EDB 교안을 칠판에 열고" : "교안을 열어 설명하고"}, 같은 주제로 그룹 토론을 진행해요.`,
+      "3. 수업 후에는 핵심 판서나 복습 자료를 같은 코스에 올려 학생이 다시 확인하게 해요.",
+    ].join("\n")
+    : [
+      workflow === "without-board"
+        ? "네. 전자칠판 없이도 선생님 컴퓨터에 클래스인 앱을 설치해 온라인 수업부터 시작할 수 있어요."
+        : "한 반, 한 수업부터 시작해 보세요. 클래스인에서 자료를 보여주고, 수업 뒤에 복습 자료까지 한곳에 올릴 수 있어요.",
+      `1. 먼저 한 반을 만들고 ${example}을 준비해요.\n2. 수업 시간에 교안을 띄워 설명하고 학생에게 질문을 받아요.\n3. 수업 뒤에는 같은 반에 복습 자료를 올려 학생이 다시 볼 수 있게 해요.`,
+    ].join("\n\n")
+  return {
+    answer: plan,
+    answerMode: "direct_answer" as const,
+    confidence: 0.88,
+    needsHandoff: false,
+    sources,
+    suggestedQuestions: ["첫 수업은 어떻게 만들어요?", "학습 자료는 어떻게 올려요?"],
+    unresolved: false,
   }
 }
 
@@ -2168,6 +2236,14 @@ async function searchKnowledgeSources(
   const cached = getCachedRetrieval(question, options)
   if (cached) return cached
 
+  const workflow = options?.includeInternalDocs ? null : getLessonWorkflow(question)
+  if (workflow) {
+    const retrieved = workflow === "academy-intro" ? [] : await searchSupabaseSources(question, options)
+    const result = { sources: getLessonWorkflowSources(workflow, retrieved), warning: undefined }
+    setCachedRetrieval(question, result, options)
+    return result
+  }
+
   const initialCategory = classifyChatbotQuestion(question.redacted).category
   if (initialCategory === "general" && !isDomainRelatedQuestion(question, "general")) {
     const result = { sources: [], warning: undefined }
@@ -2232,9 +2308,11 @@ function getTimedOutKnowledgeFallback(
   question: NormalizedQuestion,
   options?: RetrievalOptions
 ): KnowledgeSearchResult {
-  const staticSources = buildStaticSources(question, getFallbackDocsFromStatic())
+  const workflow = options?.includeInternalDocs ? null : getLessonWorkflow(question)
   const result = {
-    sources: mergeCuratedSources(question, staticSources),
+    sources: workflow
+      ? getLessonWorkflowSources(workflow)
+      : mergeCuratedSources(question, buildStaticSources(question, getFallbackDocsFromStatic())),
     warning: "문서 검색 응답이 지연되어 정적 문서 fallback을 사용했습니다.",
   }
   setCachedRetrieval(question, result, options)
@@ -2559,9 +2637,8 @@ function getComparisonAnswer(question: NormalizedQuestion, top: ChatbotSource) {
 
 function getIdentityAnswer() {
   return [
-    "네, Classin은 학원 수업을 준비·진행·녹화·복습·과제(LMS)·관리자 데이터까지 한 흐름으로 묶는 수업 운영 솔루션이에요.",
-    "쉽게 말해 Zoom처럼 수업만 여는 도구가 아니라, 전자칠판·EDB 교안·녹화·관리자 운영까지 연결해 수업 품질을 표준화하는 시스템에 가까워요.",
-    "전자칠판, 온라인 수업, LMS/관리자 중 어떤 쪽이 궁금하신지 알려주시면 그 부분만 콕 짚어 정리해드릴게요.",
+    "클래스인은 학원에서 수업을 열고, 수업 자료와 복습을 한곳에서 관리하는 수업 운영 솔루션이에요.",
+    "예를 들어 영어 학원 선생님이 수업 중에 지문을 띄워 설명하고, 끝나면 같은 반에 복습 자료나 숙제를 올릴 수 있어요.",
   ].join("\n\n")
 }
 
@@ -3163,7 +3240,9 @@ function composeAnswer(
     confidence,
     needsHandoff: answerMode === "handoff",
     sources,
-    suggestedQuestions: buildSuggestedQuestions(category),
+    suggestedQuestions: isBasicProductIntroQuestion(question)
+      ? CLASSIN_POSITIONING.chatbot.starterQuestions.slice(1)
+      : buildSuggestedQuestions(category),
     unresolved: answerMode === "handoff" || answerMode === "doc_suggestion",
   }
 }
@@ -4265,8 +4344,23 @@ function applyGeneratedFinalAnswer(
   response: Omit<ChatbotQueryResponse, "answerEventId" | "sessionId" | "warning" | "handoffIntent">,
   question: NormalizedQuestion,
   category: string,
-  answer: string
+  answer: string,
+  workflow: LessonWorkflow | null = null
 ) {
+  if (workflow === "flipped" && (
+    !/예습|수업\s*전/.test(answer) || !/토론|의견을?\s*나누/.test(answer) ||
+    !/복습|수업\s*후/.test(answer)
+  )) return
+  if (workflow === "flipped" && /edb|이\s*디\s*비/i.test(question.redacted)) {
+    if (!/edb|이\s*디\s*비/i.test(answer)) return
+    const preview = answer.split("\n").find((line) => /예습|미리|수업\s*전/.test(line) && /pdf|이미지/i.test(line))
+    // 예습용 PDF·이미지 안내는 확인됐지만 학습 자료에서 EDB 원본을 열 수 있다는 근거는 없다.
+    if (!preview || /(?:edb|이\s*디\s*비)(?:\s*(?:교안|파일))?\s*(?:이나|나|또는|및|와|과|,|를?\s*그대로)\s*(?:관련\s*)?(?:pdf|이미지|업로드|올려|배포)/i.test(preview)) return
+  }
+  if (workflow === "without-board" && (
+    !/(?:전자\s*칠판|보드).{0,12}(?:없이|없어도|필요\s*없|필수.{0,4}아니)|(?:컴퓨터|노트북|pc)만으로/i.test(answer) ||
+    !/수업/.test(answer) || (/영어/.test(question.redacted) && !/영어|지문|단어/.test(answer))
+  )) return
   const wasRecoverableFallback = shouldUseInferredAnswerFallback(response, question, category)
   response.answer = sanitizePublicAnswerText(answer)
 
@@ -4443,7 +4537,8 @@ function applyConversationTone(core: ChatbotCore) {
       tone,
       topicFollowUp: core.topicFollowUp,
       topicId: core.topicId,
-      allowSalesFollowUp: !core.suppressSalesFollowUp,
+      allowSalesFollowUp: !core.suppressSalesFollowUp &&
+        !isBasicProductIntroQuestion(core.question) && !getLessonWorkflow(core.question),
     })
   )
 }
@@ -4470,16 +4565,12 @@ async function buildChatbotCoreBase(
       question,
       response: {
         answer:
-          "안녕하세요. 도입 상담, 수업 운영, 계정/오류, 결제/영수증 중 어떤 내용이 필요한지 알려주시면 바로 이어서 안내드릴게요.",
+          "안녕하세요. 클래스인이 어떤 서비스인지, 학원 수업에서 어떻게 쓰는지 알려드릴게요. 이미 사용 중이거나 쇼룸 방문이 궁금하시면 편하게 물어보세요.",
         answerMode: "clarifying_question",
         confidence: 0.3,
         needsHandoff: false,
         sources: [],
-        suggestedQuestions: [
-          "도입 전 확인 질문을 알려주세요",
-          "수업 운영 문제를 해결하고 싶어요",
-          "요금/견적은 어떤 항목으로 구성되나요?",
-        ],
+        suggestedQuestions: [...CLASSIN_POSITIONING.chatbot.starterQuestions],
         unresolved: true,
       },
       category: "general",
@@ -4504,7 +4595,13 @@ async function buildChatbotCoreBase(
   // 아래 공개 챗봇 전용 지름길(정해 둔 답·영어 안내·증상 트리아지·지난 대화 되묻기)은 검색을 건너뛴다.
   // 내부 CS 코파일럿(includeInternalDocs, 계약 6)은 내부 문서까지 검색해야 하므로 이 지름길을 쓰지 않는다.
   const publicShortcuts = !options.includeInternalDocs
-  const quickAnswer = publicShortcuts ? buildServiceQuickAnswer(question) : null
+  const workflow = publicShortcuts ? getLessonWorkflow(question) : null
+  const showroom = publicShortcuts ? await resolveShowroomAnswer(question.redacted) : null
+  if (showroom) {
+    deterministicFinalResponses.add(showroom.response)
+    return { question, ...showroom, latencyMs: elapsedSince(startedAt) }
+  }
+  const quickAnswer = publicShortcuts && !workflow ? buildServiceQuickAnswer(question) : null
   if (quickAnswer) {
     return { question, ...quickAnswer, latencyMs: elapsedSince(startedAt) }
   }
@@ -4571,10 +4668,12 @@ async function buildChatbotCoreBase(
   }
 
   const routingText = glossForRouting(question.redacted)
-  const csFigmaGuide = findCsFigmaGuideForQuestion(routingText)
+  const csFigmaGuide = workflow ? null : findCsFigmaGuideForQuestion(routingText)
   // 증상형 질문("녹화 안 돼요", "기관 등록 안됨", "에러나요")은 공개 문제 해결 문서 섹션으로 바로 답한다.
   // Figma 가이드의 알려진 의도(예: 늦게 가입한 학생 다시보기)가 맞으면 그 가이드를 먼저 쓴다.
-  const symptomTriage = publicShortcuts ? resolveSymptomTriageForQuestion(routingText, csFigmaGuide) : null
+  const symptomTriage = publicShortcuts && !workflow
+    ? resolveSymptomTriageForQuestion(routingText, csFigmaGuide)
+    : null
   if (symptomTriage) {
     const response = buildSymptomTriageResponse(symptomTriage)
     return {
@@ -4670,11 +4769,17 @@ async function buildChatbotCoreBase(
 
   const { sources, warning, cacheHit } = await searchKnowledgeSourcesWithinBudget(question, options)
   const classificationSources = sources.filter((source) => source.score >= MIN_DIRECT_SOURCE_SCORE)
-  const { category, intent, handoffIntent } = classifyChatbotQuestion(
-    question.redacted,
-    classificationSources.map((source) => source.category)
-  )
-  const response = composeAnswer(question, sources, category)
+  const { category, intent, handoffIntent } = workflow
+    ? {
+      category: workflow === "academy-intro" ? "onboarding" : "classroom",
+      intent: "docs_lookup" as const,
+      handoffIntent: "support" as const,
+    }
+    : classifyChatbotQuestion(question.redacted, classificationSources.map((source) => source.category))
+  const response = workflow
+    ? buildLessonWorkflowAnswer(workflow, question, sources)
+    : composeAnswer(question, sources, category)
+  if (workflow === "academy-intro") deterministicFinalResponses.add(response)
 
   if (shouldGenerateAnswer && shouldUseAiFinalAnswer(response, question, category)) {
     const history = await historyPromise
@@ -4701,7 +4806,7 @@ async function buildChatbotCoreBase(
       },
     })
     if (finalAnswer) {
-      applyGeneratedFinalAnswer(response, question, category, finalAnswer)
+      applyGeneratedFinalAnswer(response, question, category, finalAnswer, workflow)
     }
   }
 
@@ -4832,11 +4937,14 @@ async function streamAndApplyFinalAnswer({
   sessionId?: string
 }): Promise<boolean> {
   const history = await historyPromise
+  const workflow = getLessonWorkflow(question)
   let raw = ""
   let emittedLen = 0
 
   const onChunk = (chunk: string) => {
     raw += chunk
+    // 각 요청 단계가 들어갔는지 확인한 뒤에 여러 단계의 수업 답변을 공개한다.
+    if (workflow) return
     const sanitized = sanitizePublicAnswerText(raw)
     const safeEnd = lastSafeBoundary(sanitized)
     if (safeEnd > emittedLen) {
@@ -4873,7 +4981,7 @@ async function streamAndApplyFinalAnswer({
   if (!finalAnswer || !isUsableGeneratedAnswer(finalAnswer)) {
     return false
   }
-  applyGeneratedFinalAnswer(response, question, category, finalAnswer)
+  applyGeneratedFinalAnswer(response, question, category, finalAnswer, workflow)
   return true
 }
 
@@ -4987,7 +5095,7 @@ export async function streamChatbotQuery(
   emit({ type: "replace", answer: response.answer })
 
   // no-session 질문만 캐시(이력 의존 답이 캐시에 섞이지 않게) — handleChatbotQuery 와 동일 규칙.
-  if (!requestedSessionId) {
+  if (!requestedSessionId && !core.topicId?.startsWith("showroom-")) {
     setCachedAnswer(question, { response, category, intent, handoffIntent, warning })
   }
 

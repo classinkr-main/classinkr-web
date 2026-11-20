@@ -424,6 +424,26 @@ const BASE_SYMPTOM_TOPICS: SymptomTopic[] = [
     suggestedQuestions: ["녹화본이 안 보여요", "예전 녹화본이 사라졌어요", "녹화가 안 돼요"],
   },
   {
+    id: "replay-student-video",
+    subject:
+      /(?:학생|아이|수강생).{0,12}(?:녹화|영상|동영상).{0,12}(?:못\s*(?:보|봐|본)|안\s*(?:보|떠|뜨|나))|(?:녹화(?:본|\s*영상)?|다시\s*보기|복습\s*영상).{0,28}(?:학생|아이|수강생)(?:들)?\s*(?:한테|에게|쪽|화면).{0,12}(?:못\s*(?:보|봐|본)|안\s*(?:보|떠|뜨|나)|보이지\s*않)/,
+    exclude: /다운|내려받|로컬\s*녹화/,
+    requireSymptom: false,
+    category: "troubleshooting",
+    doc: { category: "admin", slug: "replay-troubleshooting" },
+    steps: [
+      { heading: "먼저 확인할 것", pick: [0, 1] },
+      { heading: "코스 설정에서 기간이나 횟수가 막혀 있을 때", pick: [1, 2] },
+    ],
+    intro: "방금 끝난 수업은 녹화본을 처리하는 데 시간이 걸릴 수 있어요. 잠시 뒤 학생 앱에서 다시 열어 보고, 계속 안 보이면 아래 순서로 확인해 주세요.",
+    branches: [
+      "녹화는 됐는데 코스에 등록된 학생에게도 안 보이면, 학원 관리자에게 [일반 설정] > [수업 다시보기]에서 정규 학생의 시청이 허용됐는지 확인해 달라고 하세요.",
+      "그래도 안 보이면 [실시간 상담 연결]을 눌러 수업 날짜와 학생 화면에 나온 문구를 알려 주세요.",
+    ],
+    handoff: true,
+    suggestedQuestions: ["다시보기 기간이 지났대요", "녹화본이 안 보여요", "수업 끝나고 코스에 가입한 학생이 이전 강의를 못 봐요"],
+  },
+  {
     id: "recording-file-missing",
     subject: /녹화본|녹화\s*(?:파일|영상|데이터|본)|녹화된\s*(?:영상|수업)|녹화\s*(?:가|이)?.{0,10}(?:사라|없어|안\s*보|못\s*찾)/,
     symptom: /안\s*(?:보|떠|뜨|나)|안보|안떠|안뜨|없|못\s*찾|사라|안\s*올라|안\s*생/,
@@ -438,17 +458,6 @@ const BASE_SYMPTOM_TOPICS: SymptomTopic[] = [
       },
     ],
     suggestedQuestions: ["녹화 다운로드가 안 돼요", "예전 녹화본이 사라졌어요", "학생이 다시보기를 못 봐요"],
-  },
-  {
-    id: "replay-student-video",
-    subject: /(?:학생|아이|수강생).{0,12}(?:녹화|영상|동영상).{0,12}(?:못\s*(?:보|봐|본)|안\s*(?:보|떠|뜨|나)|안보|안떠|안뜨)/,
-    requireSymptom: false,
-    exclude: /다운|내려받/,
-    category: "troubleshooting",
-    doc: { category: "admin", slug: "replay-troubleshooting" },
-    steps: [{ heading: "먼저 확인할 것", take: 4 }],
-    intro: "학생이 녹화 영상(다시보기)을 못 보면 녹화 여부, 학생이 코스에 들어온 시점, 로그인한 아이디를 차례로 확인해 주세요.",
-    suggestedQuestions: ["다시보기 기간이 지났대요", "녹화본이 안 보여요", "수업 끝나고 코스에 가입한 학생이 이전 강의를 못 봐요"],
   },
   {
     id: "replay-speed",
@@ -1628,9 +1637,12 @@ function isGenericToken(token: string) {
   return GENERIC_TOKEN_PREFIX_RE.test(token)
 }
 
+const GENERAL_USE_PROBLEM_RE = /^(?:사용|이용)\s*중(?:에)?\s*(?:문제|오류)(?:가)?\s*(?:생겼|발생했|있)(?:어요|습니다)$/
+
 export function isVagueErrorQuestion(question: string) {
   const text = normalizeTriageText(question)
   if (!text) return false
+  if (GENERAL_USE_PROBLEM_RE.test(text)) return true
   if (!GENERIC_ERROR_RE.test(text) && !SYMPTOM_RE.test(text)) return false
   const tokens = text.split(" ").filter(Boolean)
   if (tokens.length > 8) return false
@@ -1948,6 +1960,8 @@ export function resolveSymptomTriage(
       suggestedQuestions: [...new Set([secondaryFollowUp, ...result.suggestedQuestions].filter(Boolean))].slice(0, 3),
     }
   }
-  if (isVagueErrorQuestion(question)) return buildVagueErrorAnswer({ compact: options.upset })
+  if (isVagueErrorQuestion(question)) {
+    return buildVagueErrorAnswer({ compact: options.upset || GENERAL_USE_PROBLEM_RE.test(normalizeTriageText(question)) })
+  }
   return null
 }

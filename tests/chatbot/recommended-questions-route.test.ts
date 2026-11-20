@@ -8,6 +8,23 @@ describe("GET /api/chatbot/recommended-questions", () => {
     vi.doUnmock("@/lib/supabase/admin")
   })
 
+  it("uses the beginner-first question order when published starters are unavailable", async () => {
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "")
+
+    const { GET } = await import("@/app/api/chatbot/recommended-questions/route")
+    const response = await GET()
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({
+      questions: [
+        "클래스인이 뭐예요?",
+        "우리 학원에서는 어떻게 써요?",
+        "사용 중 문제가 생겼어요",
+        "쇼룸 방문이 가능한가요?",
+      ],
+    })
+  })
+
   it("ignores malformed DB prompt rows while keeping valid starter questions", async () => {
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://classin.example.supabase.co")
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "test-publishable-key")
