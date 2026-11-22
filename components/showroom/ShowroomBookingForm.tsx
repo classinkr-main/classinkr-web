@@ -983,7 +983,7 @@ export function ShowroomBookingForm({ interests }: Props) {
               className="mt-0.5 h-4 w-4 shrink-0 accent-fg-accent"
             />
             <span className="text-[12px] leading-relaxed text-[#44514A]">
-              방문 일정 확인 연락을 위한 개인정보(기관명 · 성함 · 연락처 · 이메일)
+              [필수] 방문 일정 확인 연락을 위한 개인정보(기관명 · 성함 · 연락처 · 이메일)
               수집·이용에 동의합니다.{" "}
               <Link
                 href="/privacy"
