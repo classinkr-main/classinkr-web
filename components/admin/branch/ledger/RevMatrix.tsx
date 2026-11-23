@@ -669,7 +669,7 @@ const RevMatrixWeekCell = memo(function RevMatrixWeekCell({
                 : "font-medium text-[#31302E]"
           }`}
         >
-          {locked && <Lock className="h-2.5 w-2.5 shrink-0 text-[#A39E98]" aria-label={lockLabel} />}
+          {/* 시트 칸에는 칸마다 자물쇠를 찍지 않는다(확정 칸 대부분이 잠겨 있어 소음) — 잠금 사유는 툴팁에, 행 전체 잠금은 고객명 옆 자물쇠에 있다. */}
           {formatWeekAmount(display)}
         </span>
       ) : display > 0 ? (

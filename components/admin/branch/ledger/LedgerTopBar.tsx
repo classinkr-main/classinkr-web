@@ -2,8 +2,9 @@
 
 // 장부 머리 두 줄(2026-11-23, 기획 L2·L5·L8) — 표 위에 놓이는 것은 이 두 줄이 전부다.
 //
-//  1줄: 제목 · 렌즈 탭(DSH | 장부 …) · 월 이동 · [필터 전부 풀기 N] · [지난달 고정] · 동기화 · 매출 입력
-//  2줄: [내 담당 | 전체] · 열 필터 칩 · 보기(건별 | 기관별 | 매니저별) · 고객 검색 · 걸린 필터 · [요약·필터 펼치기]
+//  1줄: 제목 · 렌즈 탭(DSH | 장부 …) · [내 담당 | 전체 담당자] · 월 이동 · [필터 전부 풀기 N] · [지난달 고정] · 동기화 · 매출 입력
+//  2줄: 열 필터 칩 · 보기(건별 | 기관별 | 매니저별) · 고객 검색 · 걸린 필터 · 범례 · [요약·필터 펼치기]
+// (시안은 범위 전환을 2줄에 뒀지만, 1440px 에서 걸린 필터 목록이 잘리지 않게 1줄로 올렸다.)
 //
 // 상태 줄·요약 띠·묶기·칩·범례·설명·브레드크럼은 지우지 않고 "요약·필터 펼치기" 뒤로 접는다(부모가 그 패널을 그린다).
 // 이 파일은 표시와 클릭 전달만 한다 — 필터·렌즈 판정은 ledger-sheet-logic.ts · ledger-lens-tabs.ts 의 순수 함수다.
@@ -85,16 +86,15 @@ export interface LedgerTopBarProps {
     onPickFilterMode: (mode: SheetFilterMode | null) => void
     activeFilters: Array<{ key: string; label: string }>
     onRemoveFilter: (key: string) => void
-    rowCount: number
   } | null
   refreshing: boolean
   onRefresh: () => void
   /** 매출 입력 버튼 — 콕핏에서는 화면 안에 입력기가 있어 숨긴다. */
   onNewEntry: (() => void) | null
-  // ── 2줄
   scope: { mine: boolean; all: boolean; hint: string | null }
   onScopeMine: () => void
   onScopeAll: () => void
+  // ── 2줄
   /** 장부 탭일 때만 — 건별 | 기관별 | 매니저별(주차 검수 보기 중이면 그 칸이 하나 더 붙는다). */
   tableViews: Array<{ id: string; label: string; title?: string }> | null
   tableView: string | null
@@ -149,7 +149,7 @@ export default function LedgerTopBar({
 
   return (
     <div className="flex shrink-0 flex-col gap-1.5 bg-[#FAFAF8] pb-1.5 pt-2 text-[13px] text-[#111110]">
-      <div className="flex min-h-10 flex-wrap items-center gap-x-3 gap-y-1.5 px-4">
+      <div className="flex min-h-10 flex-wrap items-center gap-x-2.5 gap-y-1.5 px-4">
         <h1 className="shrink-0 text-[18px] font-bold leading-none">매출 장부</h1>
         <div role="tablist" aria-label="장부 렌즈 전환" className={SEG_GROUP}>
           {tabs.map((tab, index) => {
@@ -173,6 +173,10 @@ export default function LedgerTopBar({
               </button>
             )
           })}
+        </div>
+        <div role="group" aria-label="장부 데이터 범위" className={SEG_GROUP}>
+          <button type="button" aria-pressed={scope.mine} onClick={onScopeMine} className={`${SEG_BUTTON} ${scope.mine ? "bg-[#F6F5F4] font-semibold text-[#111110]" : "text-[#615D59] hover:text-[#111110]"}`}>내 담당</button>
+          <button type="button" aria-pressed={scope.all} onClick={onScopeAll} className={`${SEG_BUTTON} ${scope.all ? "bg-[#F6F5F4] font-semibold text-[#111110]" : "text-[#615D59] hover:text-[#111110]"}`}>전체 담당자</button>
         </div>
         <div className="flex shrink-0 items-center gap-0.5" role="group" aria-label="월 이동">
           <button type="button" aria-label="이전 달" title="이전 달 (회계연도 안에서만)" disabled={!month.canPrev} onClick={() => onMonthStep(-1)} className={iconButton}>
@@ -220,7 +224,6 @@ export default function LedgerTopBar({
           </>
         ) : null}
         <span className="flex-1" />
-        <span className="hidden shrink-0 text-[12px] text-[#615D59] xl:inline">단위 ¥</span>
         <button
           type="button"
           onClick={onRefresh}
@@ -243,10 +246,6 @@ export default function LedgerTopBar({
       </div>
 
       <div className="flex min-h-[34px] flex-wrap items-center gap-x-2.5 gap-y-1.5 px-4">
-        <div role="group" aria-label="장부 데이터 범위" className={SEG_GROUP}>
-          <button type="button" aria-pressed={scope.mine} onClick={onScopeMine} className={`${SEG_BUTTON} ${scope.mine ? "bg-[#F6F5F4] font-semibold text-[#111110]" : "text-[#615D59] hover:text-[#111110]"}`}>내 담당</button>
-          <button type="button" aria-pressed={scope.all} onClick={onScopeAll} className={`${SEG_BUTTON} ${scope.all ? "bg-[#F6F5F4] font-semibold text-[#111110]" : "text-[#615D59] hover:text-[#111110]"}`}>전체 담당자</button>
-        </div>
         {scope.hint ? <span className="max-w-[240px] truncate text-[12px] text-[#615D59]" title={scope.hint}>{scope.hint}</span> : null}
         {sheet ? (
           <div role="group" aria-label={`${sheet.filterColumnLabel} 열 필터`} className="flex h-8 shrink-0 items-center gap-1 rounded-lg border border-[#BDEFD8] bg-[#ECFDF5] pl-2.5 pr-1">
@@ -289,7 +288,6 @@ export default function LedgerTopBar({
         />
         {sheet ? (
           <div className="no-scrollbar flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto text-[12px]" role="group" aria-label="걸린 필터">
-            <span className="shrink-0 tabular-nums text-[#615D59]">{sheet.rowCount.toLocaleString("ko-KR")}행</span>
             {sheet.activeFilters.length === 0 ? (
               <span className="shrink-0 text-[#615D59]">걸린 필터 없음</span>
             ) : (

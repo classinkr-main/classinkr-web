@@ -29,7 +29,8 @@ const W = { num: 30, customer: 172, manager: 50, product: 34, region: 42, contra
 // 선 — 칸 사이는 옅게(#F0F0EC), 묶음 경계는 한 단계 진하게(#E8E8E4), 월 묶음이 끊기는 "계" 왼쪽은 진한 선(#A39E98).
 const CELL = "box-border h-7 overflow-hidden text-ellipsis whitespace-nowrap border-b border-b-[#F0F0EC] px-1.5 py-0 align-middle"
 const HEAD = "box-border h-[26px] overflow-hidden whitespace-nowrap border-b border-b-[#E8E8E4] px-1.5 py-0 align-middle text-[11.5px]"
-const SUM_BASE = "box-border h-7 overflow-hidden whitespace-nowrap border-b border-b-[#E8E8E4] px-1.5 py-0 align-middle text-[11.5px] font-bold text-[#111110]"
+// 합계 행은 자릿수가 하나 더 길다 — 주차 칸(60px)에 7자리 합계가 들어가게 글자·여백을 한 단계 줄인다(잘리면 title 로 전체).
+const SUM_BASE = "box-border h-7 overflow-hidden whitespace-nowrap border-b border-b-[#E8E8E4] px-1 py-0 align-middle text-[11px] font-bold tracking-[-0.01em] text-[#111110]"
 const SUM = `${SUM_BASE} bg-[#FAFAF8]`
 const SUM_TOTAL = `${SUM_BASE} bg-[#E8E8E4]`
 
@@ -129,7 +130,7 @@ const SheetRow = memo(function SheetRow({
       <td className={`${CELL} border-l border-l-[#F0F0EC] ${view.channel === "채널" ? "font-bold text-[#111110]" : ""}`}>{view.channel}</td>
       <td className={`${CELL} border-l border-l-[#F0F0EC]`} title={row.productVersion ?? undefined}>{row.productVersion ?? ""}</td>
       {columns.pastMonths.length === 0 ? null : columns.pastPinned ? (
-        <td className={`${CELL} border-l border-l-[#F0F0EC] bg-[#F6F5F4] text-right tabular-nums text-[#31302E]`} title={bucketTitle(columns.pastLabel ?? "", view.past)}>
+        <td className={`${CELL} border-l border-l-[#E8E8E4] bg-[#F0F0EC] text-right tabular-nums text-[#31302E]`} title={bucketTitle(columns.pastLabel ?? "", view.past)}>
           {amount(view.past.total)}
         </td>
       ) : (

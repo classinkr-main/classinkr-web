@@ -51,7 +51,7 @@ import { revLinkedTargetHref } from "@/lib/crm/rev-sync-health"
 import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
 import LedgerSimpleView from "./ledger/LedgerSimpleView"
 import { ApprovalBar, type LedgerCellEditApi } from "./ledger/LedgerSimpleEdit"
-import LedgerTopBar, { SegmentedButtons, SheetConfidenceLegend } from "./ledger/LedgerTopBar"
+import LedgerTopBar, { SegmentedButtons } from "./ledger/LedgerTopBar"
 import { LEDGER_TABLE_VIEWS, ledgerTableViewFromParam, lensTabOf, visibleLensTabIds, type LedgerTableView, type LensTabId } from "./ledger/ledger-lens-tabs"
 import {
   buildSheetColumns,
@@ -3157,7 +3157,7 @@ export default function SalesLedgerWorkbench({
     months: matrixMonths,
     currentMonth: defaultMonthRef.current,
     monthlyGoals: revGoalComparable ? new Map(monthlySeriesRows.map((row) => [row.month, row.goal])) : null,
-    loading: sheetActive ? pipeline.loading && rows.length === 0 : (pipeline.loading && rows.length === 0) || (summary.loading && !summary.data),
+    loading: (pipeline.loading && rows.length === 0) || (summary.loading && !summary.data),
     edit: ledgerCellEdit,
     pendingDrafts: openDrafts.filter((draft) =>
       scopedManager ? branchManagerMatches(draft.manager, scopedManager) : team === "ALL" || draft.team === team,
@@ -3208,7 +3208,6 @@ export default function SalesLedgerWorkbench({
           onPickFilterMode: pickSheetFilterMode,
           activeFilters: sheetActiveFilters,
           onRemoveFilter: removeSheetFilter,
-          rowCount: sheetViews.length,
         } : null}
         refreshing={refreshing}
         onRefresh={() => void onRefresh()}
@@ -3313,8 +3312,7 @@ export default function SalesLedgerWorkbench({
           {sheetActive ? (
             <>
               <LedgerSimpleView {...ledgerSimpleProps} view="none" />
-              <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-[#615D59]">
-                <SheetConfidenceLegend className="inline-flex" />
+              <p className="text-[12px] text-[#615D59]">
                 <span>
                   주차 칸을 누르고 숫자를 친 뒤 Enter 로 저장합니다(E·H·C 확도, Tab·방향키 이동, Esc 취소). 자물쇠 칸은 확정이라 잠겼고, 밑줄 친 칸은 아직 반영 전입니다.
                   열 머리의 필터 아이콘을 누르면 그 열에 값이 있는 행만 남습니다 — 여러 열에 겹쳐 걸 수 있습니다. 고객 이름은 상세를 엽니다.
@@ -3602,7 +3600,8 @@ export default function SalesLedgerWorkbench({
                   selectedFilterKey={sheetFilterKey}
                   onPickFilterColumn={pickSheetFilterColumn}
                   currentMonth={defaultMonthRef.current}
-                  loading={ledgerSimpleProps.loading}
+                  // 표는 장부 행만 있으면 그린다 — 목표(요약 띠)를 기다리지 않는다.
+                  loading={pipeline.loading && rows.length === 0}
                   emptyText={
                     scopedManager === UNMAPPED_BRANCH_MEMBER
                       ? "로그인 계정에 담당자가 연결돼 있지 않아 내 담당 행이 없습니다 — [전체 담당자]로 바꿔 보세요."
@@ -3616,8 +3615,8 @@ export default function SalesLedgerWorkbench({
                   editor={matrixEditor}
                   pendingByCell={pendingByCell}
                 />
-                {/* 변경 대기 줄 — 표 아래쪽에 띄운다. 오른쪽은 빠른 작업 버튼 자리라 비운다. */}
-                <div className="pointer-events-none absolute bottom-4 left-4 right-4 z-30 sm:right-52 [&>*]:pointer-events-auto">
+                {/* 변경 대기 줄 — 대기 중인 변경이 있을 때만 표 아래에 한 줄(표를 가리지 않는다). 오른쪽은 빠른 작업 버튼 자리라 비운다. */}
+                <div className={`shrink-0 px-4 empty:hidden [&>*]:my-1.5${sidePanelCollapsed ? " sm:pr-52" : ""}`}>
                   <ApprovalBar
                     drafts={ledgerSimpleProps.pendingDrafts}
                     serverQueue={ledgerSimpleProps.serverQueue}
