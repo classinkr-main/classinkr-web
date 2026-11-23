@@ -394,7 +394,7 @@ function QuoteTemplatePreviewPane({
           )}
         </dl>
         <p className="mt-4 text-xs leading-relaxed text-[#615D59]">
-          고객·수량·할인·유효기한은 작성 창에서 정합니다. 저장한 견적서는 히스토리 탭에 나타납니다.
+          고객·수량·금액·할인·유효기한은 작성 창에서 정합니다. 저장한 견적서는 히스토리 탭에 나타납니다.
         </p>
       </div>
     </section>
