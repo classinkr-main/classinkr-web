@@ -70,15 +70,19 @@ async function PersonalSalesLedger() {
   // 한 줄로 드러낸다. 별도 Suspense(fallback 없음)라 첫 바이트·워크벤치 스트리밍을 기다리게 하지 않는다.
   // 바깥 Suspense(기본 export)는 기본 담당자(로그인 사용자) 해석을 기다리는 경계, 안쪽 Suspense는
   // 프리페치 promise 를 푸는 use() 가 띠까지 붙잡지 않게 나눈 경계다(10월 줄기 + 09-25 띠 병합).
+  //
+  // 건별 시트(2026-11-23) — 워크벤치가 data-ledger-sheet 를 내면 이 래퍼가 화면 높이를 잡고(데스크톱), 띠가 있으면
+  // 띠만큼 줄어든 나머지를 표가 채운다. 표는 그 안에서 스크롤하므로 머리·합계 행이 늘 보인다. 시트가 아닌
+  // 렌즈·보기에서는 표식이 없어 지금처럼 본문이 길어지고 셸이 스크롤한다.
   return (
-    <>
+    <div className="flex flex-col lg:has-[[data-ledger-sheet]]:h-dvh">
       <Suspense fallback={null}>
-        <SyncHealthBannerServer sources={["sheets"]} className="bg-[#FAFAF8] px-4 pt-4 sm:px-6 lg:px-9" />
+        <SyncHealthBannerServer sources={["sheets"]} className="shrink-0 bg-[#FAFAF8] px-4 pt-3" />
       </Suspense>
       <Suspense fallback={<AdminRouteLoading />}>
         <SalesLedgerWorkbench initialPipeline={initialPipeline} defaultManager={defaultManager} />
       </Suspense>
-    </>
+    </div>
   )
 }
 

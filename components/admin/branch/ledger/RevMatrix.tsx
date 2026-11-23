@@ -68,6 +68,8 @@ const MATRIX_DEAL_ROW_HEIGHT: Record<MatrixDensity, string> = {
   regular: "h-[33px]", // 기존 h-7(28px) 대비 약 18% 증가 (33px)
   relaxed: "h-10",
 }
+// 장부 건별 시트의 주차 칸 폭(px) — ledger/LedgerSheet.tsx 의 열 폭과 같은 값이어야 한다.
+export const SHEET_WEEK_W = 60
 // isMatrixDensity는 ledger/rev-matrix-logic.ts로 이동(위 export * 재수출로 이 파일에서도 계속 사용 가능).
 
 // 확도 = 숫자 글자색(셀 안 아이콘 없음). 장부 렌즈(LedgerSimpleView)와 같은 표시이고,
@@ -522,12 +524,19 @@ const RevMatrixWeekCell = memo(function RevMatrixWeekCell({
   editConfidence = "expected",
   // 웨이브 5 — 항목 1(b): 이 칸이 속한 달이 현재 M/Q 선택 기간이면 월 셀과 동일한 좌측 accent.
   periodHighlighted = false,
+  // 장부 건별 시트(ledger/LedgerSheet.tsx, 2026-11-23): 28px 행에 맞춘 좁은 칸. 값 있는 칸은 그 칸의 확도
+  // (sheetConfidence)로 글자색 + 옅은 바탕(CONFIDENCE_TOKENS 틴트)을 칠하고, 빈 칸은 점 없이 비운다.
+  // 선택·편집·잠금·대기 표시와 키보드 조작은 매트릭스 칸 그대로다. 기본값이면 기존 매트릭스 렌더와 같다.
+  compact = false,
+  sheetConfidence = null,
 }: {
   display: number
   isMonthOnly: boolean
   inferred: boolean
   weekIndex: number
   bgClass: string
+  compact?: boolean
+  sheetConfidence?: DraftConfidence | null
   month?: string
   rowId?: string
   editable?: boolean
@@ -548,8 +557,11 @@ const RevMatrixWeekCell = memo(function RevMatrixWeekCell({
     if (interactive && editable && selected && !isEditingCell) cellRef.current?.focus()
   }, [interactive, editable, selected, isEditingCell])
 
+  const cellWidth = compact ? SHEET_WEEK_W : MATRIX_WEEK_W
   const confidenceLabel = (v: DraftConfidence) => DRAFT_CONFIDENCE_OPTIONS.find((option) => option.id === v)?.label ?? v
-  const baseTitle = display > 0 ? `W${weekIndex + 1} ${formatMoney(display)}${isMonthOnly ? " · 월합계만" : ""}` : `W${weekIndex + 1} 미입력`
+  const baseTitle = display > 0
+    ? `W${weekIndex + 1} ${formatMoney(display)}${compact && sheetConfidence ? ` · ${confidenceLabel(sheetConfidence)}` : ""}${isMonthOnly ? " · 월합계만" : ""}`
+    : `W${weekIndex + 1} 미입력`
   const title = locked
     ? `${baseTitle} · 🔒 ${lockLabel} 값이라 잠금(실수 방지) — 수정은 우측 패널에서 정정 초안으로`
     : pending
@@ -563,7 +575,7 @@ const RevMatrixWeekCell = memo(function RevMatrixWeekCell({
     return (
       <td
         className={`relative px-0 text-right align-middle ${bgClass} ring-2 ring-inset ring-[#084734]/40`}
-        style={{ width: MATRIX_WEEK_W, minWidth: MATRIX_WEEK_W, maxWidth: MATRIX_WEEK_W }}
+        style={{ width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}
       >
         <input
           autoFocus
@@ -593,7 +605,7 @@ const RevMatrixWeekCell = memo(function RevMatrixWeekCell({
   // 우선한다(월 우세 확도로 뭉개면 같은 달 안 다른 주차의 확도가 묻힌다 — UX 감사 2026-09-20).
   const pendingConfidence = pending ? pending.weeklyConfidence?.[weekIndex] ?? pending.confidence : null
 
-  const cellClassName = `relative px-1 py-1.5 text-right align-middle tabular-nums border-l border-[#EDECE8] ${
+  const cellClassName = `relative ${compact ? "h-7 overflow-hidden border-b border-b-[#F0F0EC] px-1.5 py-0" : "px-1 py-1.5"} text-right align-middle tabular-nums border-l border-[#EDECE8] ${
     periodHighlighted ? "border-l-2 border-l-[#084734]/30" : ""
   } ${bgClass} ${
     interactive && editable ? "cursor-cell" : ""
@@ -631,9 +643,11 @@ const RevMatrixWeekCell = memo(function RevMatrixWeekCell({
       aria-label={interactive ? title : undefined}
       className={cellClassName}
       style={{
-        width: MATRIX_WEEK_W,
-        minWidth: MATRIX_WEEK_W,
-        maxWidth: MATRIX_WEEK_W,
+        width: cellWidth,
+        minWidth: cellWidth,
+        maxWidth: cellWidth,
+        // 시트 칸: 값 있는 칸의 옅은 바탕 = 그 칸 확도의 틴트(토큰 값 그대로). 대기 중인 칸은 밑줄·점이 우선이라 칠하지 않는다.
+        ...(compact && sheetConfidence && display > 0 && !pendingConfidence ? { backgroundColor: CONFIDENCE_TOKENS[sheetConfidence].tintBg } : {}),
         ...(pendingConfidence ? { boxShadow: `inset 0 -2px 0 0 ${CONFIDENCE_TOKENS[pendingConfidence].color}` } : {}),
       }}
       {...interactiveHandlers}
@@ -645,7 +659,20 @@ const RevMatrixWeekCell = memo(function RevMatrixWeekCell({
           style={{ backgroundColor: CONFIDENCE_TOKENS[pendingConfidence].color }}
         />
       )}
-      {display > 0 ? (
+      {display > 0 && compact ? (
+        <span
+          className={`inline-flex max-w-full items-center justify-end gap-0.5 whitespace-nowrap text-[12px] leading-none ${
+            pendingConfidence
+              ? `font-bold ${CONFIDENCE_TOKENS[pendingConfidence].textStrongClass}`
+              : sheetConfidence
+                ? `${sheetConfidence === "expected" ? "font-medium" : sheetConfidence === "confirmed" ? "font-bold" : "font-semibold"} ${CONFIDENCE_TOKENS[sheetConfidence].textStrongClass}`
+                : "font-medium text-[#31302E]"
+          }`}
+        >
+          {locked && <Lock className="h-2.5 w-2.5 shrink-0 text-[#A39E98]" aria-label={lockLabel} />}
+          {formatWeekAmount(display)}
+        </span>
+      ) : display > 0 ? (
         <div className="flex items-center justify-between w-full leading-none">
           <span className="text-[9.5px] font-medium text-[#A39E98] select-none pl-0.5">¥</span>
           <span
@@ -663,7 +690,7 @@ const RevMatrixWeekCell = memo(function RevMatrixWeekCell({
             {formatWeekAmount(display)}
           </span>
         </div>
-      ) : (
+      ) : compact ? null : (
         <span className="select-none text-[#D1D5DB]">·</span>
       )}
     </td>
@@ -675,7 +702,7 @@ const RevMatrixWeekCell = memo(function RevMatrixWeekCell({
 
 // 확장된 월의 w1~w5 5칸. editContext가 오면(딜행·비잠금월) 각 칸이 편집 셀이 된다.
 // month-only 행은 W5에 월합계를 얹어 시트 검수 감각을 유지(기존 읽기전용 규약 계승).
-function RevMatrixWeekCells({
+export function RevMatrixWeekCells({
   weeks,
   inferred,
   monthOnlyAmount,
@@ -683,6 +710,8 @@ function RevMatrixWeekCells({
   month,
   editContext = null,
   periodHighlighted = false,
+  compact = false,
+  sheetConfidences = null,
 }: {
   weeks: number[]
   inferred: boolean
@@ -691,6 +720,9 @@ function RevMatrixWeekCells({
   month?: string
   editContext?: RevMatrixEditContext | null
   periodHighlighted?: boolean
+  /** 장부 건별 시트 전용(RevMatrixWeekCell 주석 참조). */
+  compact?: boolean
+  sheetConfidences?: Array<DraftConfidence | null> | null
 }) {
   // 월 단위 잠금은 주차 인덱스와 무관(monthLockedOf) — 한 번만 조회해 순수 함수에 넘긴다.
   // 칸별 잠금(빈 칸은 열림)·표시 금액은 computeWeekCellStates가 결정한다(회귀 테스트가 검증하는 그 함수).
@@ -729,6 +761,8 @@ function RevMatrixWeekCells({
         editBuffer={weekEditing ? editContext!.editBuffer : ""}
         editConfidence={weekEditing ? editContext!.editConfidence : "expected"}
         periodHighlighted={periodHighlighted}
+        compact={compact}
+        sheetConfidence={sheetConfidences?.[index] ?? null}
       />,
     )
   }
@@ -738,7 +772,7 @@ function RevMatrixWeekCells({
 // 딜행 스트립에만 주입되는 편집 컨텍스트. 그룹 소계행은 이 값을 넘기지 않아 읽기전용 유지.
 // 선택/편집 상태는 이 행 스코프로 좁혀(selected/editing 좌표가 이 행일 때만 non-null) 내려온다 —
 // 각 셀의 선택·편집 여부는 스트립이 여기서 계산해 memo 셀에 원시 boolean으로 전달한다.
-interface RevMatrixEditContext {
+export interface RevMatrixEditContext {
   rowId: string
   actions: MatrixEditorActions // identity 안정 — 셀 핸들러(선택/편집 시작/커밋/버퍼)용
   isSelectedCell: (month: string, week?: number) => boolean // 이 행 기준 셀 선택 판정
@@ -759,6 +793,55 @@ interface RevMatrixEditContext {
   weekPendingOf: (month: string, week: number) => MatrixPendingDraft | null
   // 주차 셀 편집 팝오버 고지문 — explicit 행(주차 병합 보존) vs 그 외(월 전체 대체) 구분.
   weekEditNotice: (month: string) => string
+}
+
+// 딜행의 편집 컨텍스트 조립 — 매트릭스 딜행(RevMatrixDealRow)과 장부 건별 시트 행(ledger/LedgerSheet.tsx)이
+// 같은 잠금·대기·고지 규약을 쓰도록 한 곳에 둔다(로직은 RevMatrixDealRow 에 있던 그대로다).
+// isSelectedCell/isEditingCell는 행 스코프 좌표(selectedCoord/editingCoord)와 month·week를 비교한다 —
+// 원 isSelected/isEditing 규약과 동일(행 rowId 일치는 좌표가 이미 이 행일 때만 non-null이라 내포).
+export function buildRevMatrixEditContext({
+  row,
+  correctedMonths,
+  actions,
+  selectedCoord,
+  editingCoord,
+  editBuffer,
+  editConfidence,
+  pendingByCell,
+}: {
+  row: LedgerRevenueRow
+  correctedMonths?: Set<string> | null
+  actions: MatrixEditorActions
+  selectedCoord: MatrixCellCoord | null
+  editingCoord: MatrixCellCoord | null
+  editBuffer: string
+  editConfidence: DraftConfidence
+  pendingByCell: Map<string, MatrixPendingDraft> | null
+}): RevMatrixEditContext {
+  return {
+    rowId: row.id,
+    actions,
+    isSelectedCell: (month, week) =>
+      selectedCoord != null && selectedCoord.month === month && (selectedCoord.week ?? -1) === (week ?? -1),
+    isEditingCell: (month, week) =>
+      editingCoord != null && editingCoord.month === month && (editingCoord.week ?? -1) === (week ?? -1),
+    editBuffer,
+    editConfidence,
+    // 품질 웨이브 4 — 항목 1: 정정으로 재잠긴 달만 "장부 반영(정정)"으로 구분 — 나머지는 기존 규약.
+    lockLabelOf: (month) =>
+      correctedMonths?.has(month) ? "장부 반영(정정)" : row.ledgerOrigin === "draft" ? "장부 반영" : "시트 확정",
+    editableOf: (month) => isMatrixCellEditable(row, month, correctedMonths),
+    lockedOf: (month) => isMatrixCellLocked(row, month, correctedMonths),
+    pendingOf: (month) => pendingByCell?.get(`${row.id}::${month}`) ?? null,
+    // 월 단위 잠금 = 그 달 시트 확정 여부. 칸별 잠금은 computeWeekCellStates가 display>0로 좁힌다.
+    // 주차 pending = `rowId::month::wN` 키.
+    monthLockedOf: (month) => isMatrixCellLocked(row, month, correctedMonths),
+    weekPendingOf: (month, week) => pendingByCell?.get(`${row.id}::${month}::w${week + 1}`) ?? null,
+    weekEditNotice: (month) =>
+      rowWeeklySplit(row, month).source === "explicit"
+        ? "커밋 시 이 달 금액이 주차 합계로 재기재됩니다 (기존 주차 병합 보존)"
+        : "적용 시 이 달 전체가 이 값으로 대체됩니다 (주차 분해 없음)",
+  }
 }
 
 // 12개월(요약/확장 혼재)에 걸친 월 셀 스트립 — 그룹행·딜행이 공유한다.
@@ -1466,30 +1549,7 @@ export const RevMatrixDealRow = memo(function RevMatrixDealRow({
   // isSelectedCell/isEditingCell는 행 스코프 좌표(selectedCoord/editingCoord)와 month·week를 비교한다 —
   // 원 isSelected/isEditing 규약과 동일(행 rowId 일치는 좌표가 이미 이 행일 때만 non-null이라 내포).
   const editContext: RevMatrixEditContext | null = actions
-    ? {
-        rowId: row.id,
-        actions,
-        isSelectedCell: (month, week) =>
-          selectedCoord != null && selectedCoord.month === month && (selectedCoord.week ?? -1) === (week ?? -1),
-        isEditingCell: (month, week) =>
-          editingCoord != null && editingCoord.month === month && (editingCoord.week ?? -1) === (week ?? -1),
-        editBuffer,
-        editConfidence,
-        // 품질 웨이브 4 — 항목 1: 정정으로 재잠긴 달만 "장부 반영(정정)"으로 구분 — 나머지는 기존 규약.
-        lockLabelOf: (month) =>
-          view.correctedMonths?.has(month) ? "장부 반영(정정)" : row.ledgerOrigin === "draft" ? "장부 반영" : "시트 확정",
-        editableOf: (month) => isMatrixCellEditable(row, month, view.correctedMonths),
-        lockedOf: (month) => isMatrixCellLocked(row, month, view.correctedMonths),
-        pendingOf: (month) => pendingByCell?.get(`${row.id}::${month}`) ?? null,
-        // 월 단위 잠금 = 그 달 시트 확정 여부. 칸별 잠금은 computeWeekCellStates가 display>0로 좁힌다.
-        // 주차 pending = `rowId::month::wN` 키.
-        monthLockedOf: (month) => isMatrixCellLocked(row, month, view.correctedMonths),
-        weekPendingOf: (month, week) => pendingByCell?.get(`${row.id}::${month}::w${week + 1}`) ?? null,
-        weekEditNotice: (month) =>
-          rowWeeklySplit(row, month).source === "explicit"
-            ? "커밋 시 이 달 금액이 주차 합계로 재기재됩니다 (기존 주차 병합 보존)"
-            : "적용 시 이 달 전체가 이 값으로 대체됩니다 (주차 분해 없음)",
-      }
+    ? buildRevMatrixEditContext({ row, correctedMonths: view.correctedMonths, actions, selectedCoord, editingCoord, editBuffer, editConfidence, pendingByCell })
     : null
   return (
     <tr role="row" className={`group ${MATRIX_DEAL_ROW_HEIGHT[density]} border-t border-[#EDECE8] transition-colors ${active ? "bg-[#EAF6F0]" : draftRow ? "bg-[#FFFCF5] hover:bg-[#FBF1E0]" : grouped ? "bg-[#FAFAF8] hover:bg-[#F4F4F2]" : "hover:bg-[#F9F9F8]"}`}>
