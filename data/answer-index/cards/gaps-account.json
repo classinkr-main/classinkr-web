@@ -1,0 +1,1725 @@
+[
+  {
+    "id": "gap:account/two-factor-auth",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "account",
+    "topic": "2단계 인증(OTP)",
+    "textHash": "",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "support",
+      "related": []
+    },
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_two_factor"
+    ],
+    "anchors": [
+      "2단계 인증",
+      "이중 인증",
+      "OTP",
+      "인증 앱"
+    ],
+    "covers": "로그인할 때 2단계 인증·OTP 같은 추가 보안 인증을 켤 수 있는지",
+    "notCovers": [],
+    "negatives": [
+      {
+        "q": "가입할 때 인증코드는 어디로 오나요",
+        "route": "doc:/docs/start/login-troubleshooting#4/code-delivery-resend"
+      },
+      {
+        "q": "비밀번호 조건이 뭐예요",
+        "route": "doc:/docs/start/login-troubleshooting#5/password-rules"
+      },
+      {
+        "q": "로그인이 안 돼요 뭐부터 확인하나요",
+        "route": "doc:/docs/start/login-troubleshooting#summary/login-causes-overview"
+      }
+    ],
+    "handoff": "support",
+    "status": "active",
+    "provenance": {
+      "unit": "D5-account",
+      "writer": "agent:sonnet#D5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    },
+    "searchLog": [
+      {
+        "query": "2단계 인증",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "OTP",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "인증 앱",
+        "units": 6,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "이중 인증",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ]
+  },
+  {
+    "id": "gap:account/apple-microsoft-login",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "account",
+    "topic": "애플·마이크로소프트 계정 로그인",
+    "textHash": "",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_social_login"
+    ],
+    "anchors": [
+      "애플 로그인",
+      "마이크로소프트 로그인",
+      "MS 계정",
+      "페이스북 로그인"
+    ],
+    "covers": "애플·마이크로소프트·페이스북 같은 외부 계정으로 클래스인에 로그인할 수 있는지",
+    "notCovers": [],
+    "negatives": [
+      {
+        "q": "구글 계정으로 로그인 되나요",
+        "route": "fixed:google-account-login"
+      },
+      {
+        "q": "QR 스캔으로 로그인하는 방법",
+        "route": "doc:guide:cs-figma-digest-2140/other-login-methods"
+      },
+      {
+        "q": "로그인 아이디로 뭘 넣어야 해요",
+        "route": "doc:/docs/start/login-troubleshooting#0/wrong-credentials"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "provenance": {
+      "unit": "D5-account",
+      "writer": "agent:sonnet#D5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    },
+    "searchLog": [
+      {
+        "query": "애플 로그인",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "마이크로소프트",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "Apple",
+        "units": 11,
+        "site": 1,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "페이스북",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ]
+  },
+  {
+    "id": "gap:account/password-expiry",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "account",
+    "topic": "비밀번호 변경 주기·만료",
+    "textHash": "",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "asks": [
+      "when"
+    ],
+    "concepts": [
+      "C_password"
+    ],
+    "anchors": [
+      "비밀번호 만료",
+      "비밀번호 변경 주기",
+      "유효기간"
+    ],
+    "covers": "비밀번호를 정기적으로 바꿔야 하는지, 일정 기간이 지나면 만료되는지",
+    "notCovers": [],
+    "negatives": [
+      {
+        "q": "비밀번호 바꾸는 곳이 어디예요",
+        "route": "doc:/docs/start/password-change-pc#0/pc-change-path"
+      },
+      {
+        "q": "새 비밀번호 조건이 뭔가요",
+        "route": "doc:/docs/start/password-change-pc#1/new-password-rules"
+      },
+      {
+        "q": "비밀번호를 잊었는데 어떻게 해요",
+        "route": "howto:login-forgot-password"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "provenance": {
+      "unit": "D5-account",
+      "writer": "agent:sonnet#D5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    },
+    "searchLog": [
+      {
+        "query": "비밀번호 만료",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "변경 주기",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "유효기간",
+        "units": 23,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "정기적으로",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ]
+  },
+  {
+    "id": "gap:account/concurrent-login",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "account",
+    "topic": "동시 로그인·로그인 기기 수 제한",
+    "textHash": "",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "asks": [
+      "yesno",
+      "quantity"
+    ],
+    "concepts": [
+      "C_concurrent_login"
+    ],
+    "anchors": [
+      "동시 로그인",
+      "기기 수 제한",
+      "여러 기기 로그인"
+    ],
+    "covers": "한 계정을 여러 기기에서 동시에 로그인할 수 있는지, 로그인 가능한 기기 수 제한",
+    "notCovers": [],
+    "negatives": [
+      {
+        "q": "부모님 폰에서 아이 계정 써도 되나요",
+        "route": "fixed:shared-device"
+      },
+      {
+        "q": "자동 로그인 때문에 다른 계정으로 들어가 있어요",
+        "route": "doc:/docs/start/login-troubleshooting#6/class-not-visible"
+      },
+      {
+        "q": "PC랑 폰에 같은 닉네임 반영되나요",
+        "route": "doc:/docs/student/student-profile#2/pc-mobile-sync"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "provenance": {
+      "unit": "D5-account",
+      "writer": "agent:sonnet#D5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    },
+    "searchLog": [
+      {
+        "query": "동시에 로그인",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "기기 수",
+        "units": 147,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "여러 기기",
+        "units": 5,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "로그인 제한",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ]
+  },
+  {
+    "id": "gap:account/login-history",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "account",
+    "topic": "로그인 기록 확인·다른 기기 로그아웃",
+    "textHash": "",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "support",
+      "related": []
+    },
+    "asks": [
+      "howto",
+      "yesno"
+    ],
+    "concepts": [
+      "C_login"
+    ],
+    "anchors": [
+      "로그인 내역",
+      "로그인 이력",
+      "원격 로그아웃"
+    ],
+    "covers": "내 계정의 로그인 내역을 보거나 다른 기기의 로그인을 원격으로 끊는 기능이 있는지",
+    "notCovers": [],
+    "negatives": [
+      {
+        "q": "로그아웃은 어디서 하나요",
+        "route": "doc:/docs/start/login-troubleshooting#6/class-not-visible"
+      },
+      {
+        "q": "학생이 다른 계정으로 로그인해 있어요",
+        "route": "doc:/docs/start/login-troubleshooting#6/class-not-visible"
+      },
+      {
+        "q": "자동 로그인 해제하고 싶어요",
+        "route": "doc:/docs/start/password-change-pc#2/auto-login"
+      }
+    ],
+    "handoff": "support",
+    "status": "active",
+    "provenance": {
+      "unit": "D5-account",
+      "writer": "agent:sonnet#D5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    },
+    "searchLog": [
+      {
+        "query": "로그인 내역",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "로그인 이력",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "원격 로그아웃",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "다른 기기 로그아웃",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ]
+  },
+  {
+    "id": "gap:account/account-hijack",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "account",
+    "topic": "계정 도용·해킹 의심 대처",
+    "textHash": "",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "support",
+      "related": []
+    },
+    "asks": [
+      "howto"
+    ],
+    "concepts": [
+      "C_account"
+    ],
+    "anchors": [
+      "계정 도용",
+      "계정 해킹",
+      "비밀번호 유출"
+    ],
+    "covers": "누가 내 계정에 들어간 것 같을 때 공개 안내에 적힌 확인·조치 방법",
+    "notCovers": [],
+    "negatives": [
+      {
+        "q": "비밀번호를 새로 정하고 싶어요",
+        "route": "howto:login-forgot-password"
+      },
+      {
+        "q": "내 아이디가 이메일인지 번호인지 헷갈려요",
+        "route": "doc:/docs/start/password-change-pc#3/which-id-is-mine"
+      },
+      {
+        "q": "계정 삭제하고 싶어요",
+        "route": "fixed:account-delete"
+      }
+    ],
+    "handoff": "support",
+    "status": "active",
+    "provenance": {
+      "unit": "D5-account",
+      "writer": "agent:sonnet#D5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    },
+    "searchLog": [
+      {
+        "query": "계정 도용",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "해킹",
+        "units": 0,
+        "site": 1,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "비밀번호 유출",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "타인 로그인",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ]
+  },
+  {
+    "id": "gap:account/login-lockout",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "account",
+    "topic": "비밀번호 오류 횟수·계정 잠금",
+    "textHash": "",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "support",
+      "related": []
+    },
+    "asks": [
+      "quantity",
+      "when"
+    ],
+    "concepts": [
+      "C_login"
+    ],
+    "anchors": [
+      "계정 잠금",
+      "비밀번호 틀린 횟수",
+      "로그인 횟수 제한"
+    ],
+    "covers": "비밀번호를 여러 번 틀리면 계정이 잠기는지, 몇 번까지 틀릴 수 있는지",
+    "notCovers": [],
+    "negatives": [
+      {
+        "q": "맞게 넣었는데 잘못된 계정 또는 비밀번호라고 나와요",
+        "route": "doc:/docs/start/login-troubleshooting#0/wrong-credentials"
+      },
+      {
+        "q": "로그인 버튼이 안 눌려요",
+        "route": "doc:/docs/start/login-troubleshooting#2/login-button-disabled"
+      },
+      {
+        "q": "비밀번호 잊었을 때 새로 정하기",
+        "route": "howto:login-forgot-password"
+      }
+    ],
+    "handoff": "support",
+    "status": "active",
+    "provenance": {
+      "unit": "D5-account",
+      "writer": "agent:sonnet#D5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    },
+    "searchLog": [
+      {
+        "query": "계정 잠금",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "잠김",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "틀린 횟수",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "로그인 횟수",
+        "units": 1,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ]
+  },
+  {
+    "id": "gap:account/deleted-account-restore",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "account",
+    "topic": "삭제한 계정 복구·탈퇴 후 재가입",
+    "textHash": "",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "support",
+      "related": []
+    },
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_account_delete"
+    ],
+    "anchors": [
+      "계정 복구",
+      "탈퇴 취소",
+      "탈퇴 후 재가입"
+    ],
+    "covers": "탈퇴·삭제한 계정을 되살릴 수 있는지, 같은 번호로 다시 가입할 수 있는지, 삭제 유예 기간",
+    "notCovers": [],
+    "negatives": [
+      {
+        "q": "계정 삭제는 어떻게 해요",
+        "route": "fixed:account-delete"
+      },
+      {
+        "q": "계정 지우기 전에 챙길 게 있나요",
+        "route": "doc:guide:classin-account-delete/before-delete-backup"
+      },
+      {
+        "q": "PC에서 탈퇴 메뉴가 안 보여요",
+        "route": "doc:guide:classin-account-delete/pc-no-delete-menu"
+      }
+    ],
+    "handoff": "support",
+    "status": "active",
+    "provenance": {
+      "unit": "D5-account",
+      "writer": "agent:sonnet#D5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    },
+    "searchLog": [
+      {
+        "query": "계정 복구",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "탈퇴 후 재가입",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "탈퇴 취소",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "삭제 유예",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ]
+  },
+  {
+    "id": "gap:account/account-merge",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "account",
+    "topic": "계정 두 개 합치기",
+    "textHash": "",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "support",
+      "related": []
+    },
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_account"
+    ],
+    "anchors": [
+      "계정 합치기",
+      "계정 병합",
+      "중복 계정"
+    ],
+    "covers": "이메일 계정과 휴대폰 번호 계정처럼 따로 만든 두 계정을 하나로 합치는 기능",
+    "notCovers": [],
+    "negatives": [
+      {
+        "q": "로그인 아이디를 이메일에서 번호로 바꿀 수 있나요",
+        "route": "doc:guide:classin-account-signup/login-id-type-change"
+      },
+      {
+        "q": "가입한 이메일이 뭔지 모르겠어요",
+        "route": "doc:/docs/start/login-troubleshooting#3/find-signup-email"
+      },
+      {
+        "q": "자동 로그인 때문에 예전 계정으로 들어가 있어요",
+        "route": "doc:/docs/start/login-troubleshooting#6/class-not-visible"
+      }
+    ],
+    "handoff": "support",
+    "status": "active",
+    "provenance": {
+      "unit": "D5-account",
+      "writer": "agent:sonnet#D5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    },
+    "searchLog": [
+      {
+        "query": "계정 합치기",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "병합",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "통합",
+        "units": 4,
+        "site": 20,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "중복 계정",
+        "units": 1,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ]
+  },
+  {
+    "id": "gap:account/legal-name-change",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "account",
+    "topic": "개명 등 이름 정보 변경",
+    "textHash": "",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "support",
+      "related": []
+    },
+    "asks": [
+      "howto"
+    ],
+    "concepts": [
+      "C_real_name"
+    ],
+    "anchors": [
+      "개명",
+      "실명 변경",
+      "본명 수정"
+    ],
+    "covers": "개명이나 오타로 계정에 등록된 본명(실명)을 고치는 방법",
+    "notCovers": [],
+    "negatives": [
+      {
+        "q": "닉네임은 어디서 바꿔요",
+        "route": "doc:/docs/teacher/teacher-profile#summary/profile-change-where"
+      },
+      {
+        "q": "코스 안에서 보이는 이름 바꾸기",
+        "route": "doc:/docs/student/student-profile#3/course-nickname-change"
+      },
+      {
+        "q": "학원에 이름이 틀리게 나온다고 알려야 하나요",
+        "route": "doc:/docs/student/student-profile#4/tell-academy-name"
+      }
+    ],
+    "handoff": "support",
+    "status": "active",
+    "provenance": {
+      "unit": "D5-account",
+      "writer": "agent:sonnet#D5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    },
+    "searchLog": [
+      {
+        "query": "개명",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "실명 변경",
+        "units": 1,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "본명 수정",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "이름 정정",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ]
+  },
+  {
+    "id": "gap:account/signup-birthdate",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "account",
+    "topic": "가입할 때 생년월일·성별 입력",
+    "textHash": "",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_signup"
+    ],
+    "anchors": [
+      "생년월일 입력",
+      "성별 입력",
+      "가입 입력 항목"
+    ],
+    "covers": "회원 가입 때 생년월일·성별 같은 개인 정보를 입력해야 하는지",
+    "notCovers": [],
+    "negatives": [
+      {
+        "q": "가입할 때 필요한 게 뭐예요",
+        "route": "doc:/docs/start/signup#summary/signup-overview"
+      },
+      {
+        "q": "아이디는 뭘로 만들어요",
+        "route": "doc:/docs/start/signup#2/id-type"
+      },
+      {
+        "q": "처음 로그인하면 역할 고르라고 해요",
+        "route": "doc:/docs/start/signup#3/role-select-starter"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "provenance": {
+      "unit": "D5-account",
+      "writer": "agent:sonnet#D5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    },
+    "searchLog": [
+      {
+        "query": "생년월일",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "성별",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "생일",
+        "units": 12,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "가입 정보",
+        "units": 20,
+        "site": 1,
+        "checked": "관련 문장 없음 확인"
+      }
+    ]
+  },
+  {
+    "id": "gap:account/dormant-account",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "account",
+    "topic": "휴면 계정·장기 미접속",
+    "textHash": "",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "support",
+      "related": []
+    },
+    "asks": [
+      "when",
+      "yesno"
+    ],
+    "concepts": [
+      "C_dormant_account"
+    ],
+    "anchors": [
+      "휴면 계정",
+      "장기 미접속",
+      "오래 안 쓴 계정"
+    ],
+    "covers": "오래 로그인하지 않은 계정이 휴면 처리되거나 삭제되는지",
+    "notCovers": [],
+    "negatives": [
+      {
+        "q": "계정 삭제는 어떻게 하나요",
+        "route": "fixed:account-delete"
+      },
+      {
+        "q": "자동 삭제 설정은 어디서 해요",
+        "route": "doc:guide:classin-account-delete/before-delete-backup"
+      },
+      {
+        "q": "로그인했더니 계정이 없다고 나와요",
+        "route": "doc:/docs/start/signup#4/no-account-after-signup"
+      }
+    ],
+    "handoff": "support",
+    "status": "active",
+    "provenance": {
+      "unit": "D5-account",
+      "writer": "agent:sonnet#D5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    },
+    "searchLog": [
+      {
+        "query": "휴면",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "장기 미접속",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "오래 안 쓴",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "계정 만료",
+        "units": 3,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ]
+  },
+  {
+    "id": "gap:account/app-push-settings",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "account",
+    "topic": "앱 푸시 알림 설정",
+    "textHash": "",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "asks": [
+      "howto"
+    ],
+    "concepts": [
+      "C_mobile"
+    ],
+    "anchors": [
+      "푸시 알림 설정",
+      "앱 알림 설정",
+      "알림 소리"
+    ],
+    "covers": "클래스인 앱에서 받는 푸시 알림을 켜고 끄거나 알림 소리·종류를 정하는 방법",
+    "notCovers": [
+      "코스별 알림 끄기·휴대폰 설정에서 앱 알림 전체 끄기 → howto:chat-notification-off"
+    ],
+    "negatives": [
+      {
+        "q": "코스 알림 끄는 설정이 어디예요",
+        "route": "none"
+      },
+      {
+        "q": "수업 시작 알림 문자 받을 수 있어요",
+        "route": "none"
+      },
+      {
+        "q": "앱 업데이트하고 캐시 지우는 법",
+        "route": "none"
+      },
+      {
+        "q": "반 알림만 끄고 싶어요",
+        "route": "howto:chat-notification-off"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "provenance": {
+      "unit": "D5-account",
+      "writer": "agent:sonnet#D5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    },
+    "searchLog": [
+      {
+        "query": "푸시 알림",
+        "units": 2,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "알림 설정",
+        "units": 55,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "알림 소리",
+        "units": 15,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "알림이 안",
+        "units": 39,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ]
+  },
+  {
+    "id": "gap:account/app-language",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "account",
+    "topic": "앱 화면 언어 바꾸기",
+    "textHash": "",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "asks": [
+      "howto",
+      "yesno"
+    ],
+    "concepts": [
+      "C_mobile"
+    ],
+    "anchors": [
+      "앱 언어 변경",
+      "화면 언어 설정",
+      "영어 화면"
+    ],
+    "covers": "클래스인 앱이나 PC 프로그램의 화면 표시 언어(한국어·영어 등)를 바꾸는 방법",
+    "notCovers": [],
+    "negatives": [
+      {
+        "q": "설치할 때 언어는 한국어로 고르나요",
+        "route": "none"
+      },
+      {
+        "q": "수업 자막 번역 설정",
+        "route": "none"
+      },
+      {
+        "q": "비밀번호 조건 알려주세요",
+        "route": "doc:/docs/start/login-troubleshooting#5/password-rules"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "provenance": {
+      "unit": "D5-account",
+      "writer": "agent:sonnet#D5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    },
+    "searchLog": [
+      {
+        "query": "앱 언어",
+        "units": 8,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "언어 변경",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "영어 화면",
+        "units": 2,
+        "site": 1,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "화면 언어",
+        "units": 3,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ]
+  },
+  {
+    "id": "gap:account/biometric-login",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "account",
+    "topic": "지문·얼굴 인식 로그인",
+    "textHash": "",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_biometric_login"
+    ],
+    "anchors": [
+      "지문 로그인",
+      "생체 인증",
+      "얼굴 인식 로그인"
+    ],
+    "covers": "비밀번호 대신 지문·얼굴 인식으로 앱에 로그인하는 기능",
+    "notCovers": [],
+    "negatives": [
+      {
+        "q": "자동 로그인 설정하고 싶어요",
+        "route": "doc:/docs/start/password-change-pc#2/auto-login"
+      },
+      {
+        "q": "비밀번호 없이 인증코드로 로그인",
+        "route": "doc:/docs/start/password-change-mobile#0/login-with-code"
+      },
+      {
+        "q": "QR로 로그인",
+        "route": "doc:guide:cs-figma-digest-2140/other-login-methods"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "provenance": {
+      "unit": "D5-account",
+      "writer": "agent:sonnet#D5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    },
+    "searchLog": [
+      {
+        "query": "지문 로그인",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "생체 인증",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "얼굴 인식",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "페이스 아이디",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ]
+  },
+  {
+    "id": "gap:account/account-sharing",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "account",
+    "topic": "한 계정을 여럿이 함께 쓰기",
+    "textHash": "",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_account"
+    ],
+    "anchors": [
+      "계정 공유",
+      "아이디 공유",
+      "한 계정으로 여러 명"
+    ],
+    "covers": "한 계정을 형제·동료 등 여러 사람이 같이 써도 되는지",
+    "notCovers": [],
+    "negatives": [
+      {
+        "q": "부모님 폰에서 아이 계정 로그인해도 되나요",
+        "route": "fixed:shared-device"
+      },
+      {
+        "q": "학원이 만들어 준 계정으로 들어가야 하나요",
+        "route": "doc:/docs/start/signup#0/temp-password-account"
+      },
+      {
+        "q": "학부모도 따로 가입해야 하나요",
+        "route": "fixed:basics-parent-signup"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "provenance": {
+      "unit": "D5-account",
+      "writer": "agent:sonnet#D5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    },
+    "searchLog": [
+      {
+        "query": "계정 공유",
+        "units": 12,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "아이디 공유",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "같이 쓰",
+        "units": 8,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "한 계정",
+        "units": 175,
+        "site": 7,
+        "checked": "관련 문장 없음 확인"
+      }
+    ]
+  },
+  {
+    "id": "gap:account/school-sso",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "account",
+    "topic": "학교·기관 계정(SSO) 연동 로그인",
+    "textHash": "",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "demo",
+      "related": []
+    },
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_sso_login"
+    ],
+    "anchors": [
+      "SSO 로그인",
+      "학교 계정으로 로그인",
+      "구글 워크스페이스"
+    ],
+    "covers": "학교·기업이 쓰는 기관 계정(SSO, 구글 워크스페이스, 교육청 계정)으로 클래스인에 로그인하는 연동",
+    "notCovers": [],
+    "negatives": [
+      {
+        "q": "구글 계정으로 로그인 되나요",
+        "route": "fixed:google-account-login"
+      },
+      {
+        "q": "학원 계정 API 연동은 어떻게 해요",
+        "route": "none"
+      },
+      {
+        "q": "학원에서 준 임시 비밀번호로 로그인",
+        "route": "doc:/docs/start/signup#0/temp-password-account"
+      }
+    ],
+    "handoff": "demo",
+    "status": "active",
+    "provenance": {
+      "unit": "D5-account",
+      "writer": "agent:sonnet#D5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    },
+    "searchLog": [
+      {
+        "query": "SSO 로그인",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "학교 계정",
+        "units": 7,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "교육청 계정",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "워크스페이스",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ]
+  },
+  {
+    "id": "gap:account/login-session-duration",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "account",
+    "topic": "자동 로그인 유지 기간",
+    "textHash": "",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "asks": [
+      "when",
+      "quantity"
+    ],
+    "concepts": [
+      "C_login"
+    ],
+    "anchors": [
+      "로그인 유지 기간",
+      "자동 로그인 기간",
+      "로그인이 풀리는"
+    ],
+    "covers": "자동 로그인을 켜면 로그인이 며칠·몇 달 유지되는지, 언제 풀리는지",
+    "notCovers": [],
+    "negatives": [
+      {
+        "q": "자동 로그인 어떻게 켜요",
+        "route": "doc:/docs/start/password-change-pc#2/auto-login"
+      },
+      {
+        "q": "자동 로그인 때문에 다른 계정으로 들어가요",
+        "route": "doc:/docs/start/login-troubleshooting#6/class-not-visible"
+      },
+      {
+        "q": "비밀번호 기억 체크는 뭐예요",
+        "route": "doc:/docs/start/password-change-pc#2/auto-login"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "provenance": {
+      "unit": "D5-account",
+      "writer": "agent:sonnet#D5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    },
+    "searchLog": [
+      {
+        "query": "로그인 유지",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "유지 기간",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "로그인이 풀",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "자동 로그인 기간",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ]
+  },
+  {
+    "id": "gap:account/code-validity-limit",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "account",
+    "topic": "인증코드 유효 시간·요청 횟수 한도",
+    "textHash": "",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "asks": [
+      "quantity",
+      "when"
+    ],
+    "concepts": [
+      "C_verification_code"
+    ],
+    "anchors": [
+      "인증코드 유효 시간",
+      "인증번호 몇 분",
+      "인증 요청 횟수"
+    ],
+    "covers": "인증코드가 몇 분 동안 유효한지, 하루에 몇 번까지 받을 수 있는지",
+    "notCovers": [],
+    "negatives": [
+      {
+        "q": "[인증코드 받기]가 안 눌려요",
+        "route": "doc:/docs/start/login-troubleshooting#4/code-delivery-resend"
+      },
+      {
+        "q": "코드는 받았는데 입력하면 오류가 나요",
+        "route": "fixed:login-code-wrong"
+      },
+      {
+        "q": "인증코드 입력했는데 틀렸대요",
+        "route": "fixed:login-code-wrong"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "provenance": {
+      "unit": "D5-account",
+      "writer": "agent:sonnet#D5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    },
+    "searchLog": [
+      {
+        "query": "유효 시간",
+        "units": 5,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "몇 분",
+        "units": 2,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "요청 횟수",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "인증코드 횟수",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ]
+  },
+  {
+    "id": "gap:account/nickname-limits",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "account",
+    "topic": "닉네임 글자 수·이모지 제한",
+    "textHash": "",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "asks": [
+      "quantity",
+      "yesno"
+    ],
+    "concepts": [
+      "C_nickname"
+    ],
+    "anchors": [
+      "닉네임 글자 수",
+      "닉네임 이모지",
+      "닉네임 특수문자"
+    ],
+    "covers": "닉네임의 최대 글자 수와 이모지·특수문자를 쓸 수 있는지",
+    "notCovers": [],
+    "negatives": [
+      {
+        "q": "학생 닉네임 어떤 형식으로 적어요",
+        "route": "doc:/docs/student/student-profile#0/nickname-format"
+      },
+      {
+        "q": "닉네임 바꾸는 순서",
+        "route": "doc:/docs/teacher/teacher-profile#1/pc-profile-edit"
+      },
+      {
+        "q": "코스마다 이름이 다르게 보여요",
+        "route": "doc:/docs/teacher/teacher-profile#3/course-nickname"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "provenance": {
+      "unit": "D5-account",
+      "writer": "agent:sonnet#D5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    },
+    "searchLog": [
+      {
+        "query": "닉네임 글자",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "이모지",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "닉네임 길이",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "닉네임 특수문자",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ]
+  },
+  {
+    "id": "gap:account/profile-photo-spec",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "account",
+    "topic": "프로필 사진 파일 크기·형식",
+    "textHash": "",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "asks": [
+      "quantity",
+      "yesno"
+    ],
+    "concepts": [
+      "C_profile"
+    ],
+    "anchors": [
+      "프로필 사진 용량",
+      "사진 파일 형식",
+      "프로필 사진 크기"
+    ],
+    "covers": "프로필 사진으로 올릴 수 있는 파일 크기·형식·해상도 제한",
+    "notCovers": [],
+    "negatives": [
+      {
+        "q": "프로필 사진 어떤 걸로 고르면 좋아요",
+        "route": "doc:/docs/student/student-profile#0/profile-photo-guide"
+      },
+      {
+        "q": "모바일에서 사진 바꾸는 순서",
+        "route": "doc:/docs/student/student-profile#2/mobile-photo"
+      },
+      {
+        "q": "PC에서 프로필 사진 바꾸기",
+        "route": "doc:/docs/teacher/teacher-profile#1/pc-profile-edit"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "provenance": {
+      "unit": "D5-account",
+      "writer": "agent:sonnet#D5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    },
+    "searchLog": [
+      {
+        "query": "사진 용량",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "파일 형식",
+        "units": 11,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "프로필 사진 크기",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "해상도",
+        "units": 8,
+        "site": 2,
+        "checked": "관련 문장 없음 확인"
+      }
+    ]
+  },
+  {
+    "id": "gap:account/add-email-to-account",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "account",
+    "topic": "휴대폰 계정에 이메일 추가 연결",
+    "textHash": "",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_add_email"
+    ],
+    "anchors": [
+      "이메일 추가 등록",
+      "계정에 이메일 연결",
+      "번호 추가 등록"
+    ],
+    "covers": "휴대폰 번호로 가입한 계정에 이메일을 추가로 연결하거나, 반대로 번호를 더 등록하는 것",
+    "notCovers": [],
+    "negatives": [
+      {
+        "q": "로그인 아이디를 이메일에서 번호로 바꿀 수 있나요",
+        "route": "doc:guide:classin-account-signup/login-id-type-change"
+      },
+      {
+        "q": "로그인 아이디로 쓰는 번호 바꾸기",
+        "route": "fixed:account-phone-change"
+      },
+      {
+        "q": "제 아이디가 이메일인지 번호인지 모르겠어요",
+        "route": "doc:/docs/start/password-change-pc#3/which-id-is-mine"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "provenance": {
+      "unit": "D5-account",
+      "writer": "agent:sonnet#D5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    },
+    "searchLog": [
+      {
+        "query": "이메일 연결",
+        "units": 0,
+        "site": 2,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "추가 등록",
+        "units": 119,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "이메일 추가",
+        "units": 22,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "번호 추가",
+        "units": 41,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ]
+  },
+  {
+    "id": "gap:account/parent-child-link",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "account",
+    "topic": "학부모 계정과 자녀 계정 연결",
+    "textHash": "",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_parent_account"
+    ],
+    "anchors": [
+      "자녀 계정 연결",
+      "학부모 연동",
+      "부모 계정 연결"
+    ],
+    "covers": "학부모가 자기 계정에 자녀 계정을 연결해 자녀의 수업·학습을 보는 기능",
+    "notCovers": [],
+    "negatives": [
+      {
+        "q": "학부모도 따로 가입해야 하나요",
+        "route": "fixed:basics-parent-signup"
+      },
+      {
+        "q": "자녀가 쓰는 앱 기능 제한하고 싶어요",
+        "route": "doc:/docs/student/student-profile#5/teen-mode"
+      },
+      {
+        "q": "부모님 폰으로 아이 계정 로그인해도 되나요",
+        "route": "fixed:shared-device"
+      }
+    ],
+    "handoff": null,
+    "status": "disabled",
+    "provenance": {
+      "unit": "D5-account",
+      "writer": "agent:sonnet#D5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    },
+    "searchLog": [
+      {
+        "query": "자녀 연결",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "학부모 연동",
+        "units": 1,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "부모 계정",
+        "units": 2,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "자녀 계정",
+        "units": 1,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ]
+  }
+]

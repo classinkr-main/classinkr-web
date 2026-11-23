@@ -1,4 +1,11 @@
 import "server-only"
+import {
+  DEFAULT_GEMINI_FAST_MODEL,
+  DEFAULT_GEMINI_MODEL,
+  resolveGeminiModel,
+  thinkingConfigFor,
+  withGeminiModelFallback,
+} from "@/lib/marketing/gemini-model"
 import { INSIGHT_SYSTEM_PROMPT, INSIGHT_RESPONSE_SCHEMA } from "./prompt"
 import type { InsightInput } from "./input-builder"
 
@@ -9,23 +16,22 @@ export interface InsightResult {
 
 export type GeminiMode = "quality" | "fast"
 
-const DEFAULT_GEMINI_MODEL = "gemini-2.5-pro"
-const DEFAULT_GEMINI_FAST_MODEL = "gemini-2.5-flash"
-const UNSUPPORTED_GEMINI_MODELS = new Set(["gemini-3.1-pro"])
-
-function resolveModel(envName: "GEMINI_MODEL" | "GEMINI_FAST_MODEL", fallback: string): string {
-  const configured = process.env[envName]?.trim()
-  if (!configured || UNSUPPORTED_GEMINI_MODELS.has(configured)) return fallback
-  return configured
-}
-
 export async function callGemini(input: InsightInput, mode: GeminiMode = "quality"): Promise<{ result: InsightResult; raw: unknown; model: string }> {
   const apiKey = process.env.GEMINI_API_KEY
   if (!apiKey) throw new Error("GEMINI_API_KEY not set")
-  const model = mode === "fast"
-    ? resolveModel("GEMINI_FAST_MODEL", DEFAULT_GEMINI_FAST_MODEL)
-    : resolveModel("GEMINI_MODEL", DEFAULT_GEMINI_MODEL)
+  const primary = mode === "fast"
+    ? resolveGeminiModel("GEMINI_FAST_MODEL", DEFAULT_GEMINI_FAST_MODEL)
+    : resolveGeminiModel("GEMINI_MODEL", DEFAULT_GEMINI_MODEL)
+  return withGeminiModelFallback(primary, (model) => callOnce(apiKey, model, input))
+}
+
+async function callOnce(
+  apiKey: string,
+  model: string,
+  input: InsightInput
+): Promise<{ result: InsightResult; raw: unknown; model: string }> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`
+  const thinking = thinkingConfigFor(model)
   const body = {
     systemInstruction: { parts: [{ text: INSIGHT_SYSTEM_PROMPT }] },
     contents: [{ role: "user", parts: [{ text: JSON.stringify(input) }] }],
@@ -33,6 +39,7 @@ export async function callGemini(input: InsightInput, mode: GeminiMode = "qualit
       responseMimeType: "application/json",
       responseSchema: INSIGHT_RESPONSE_SCHEMA,
       temperature: 0.4,
+      ...(thinking ? { thinkingConfig: thinking } : {}),
     },
   }
   const res = await fetch(url, {

@@ -1,0 +1,1551 @@
+{
+  "schema": 1,
+  "dataVersion": "ai-d7b742926456",
+  "sources": {
+    "app/about/AboutPageClient.tsx": "201307dd2bc22b3b",
+    "app/about/layout.tsx": "cbced2f28647c89c",
+    "app/about/page.tsx": "03e964d4db53a526",
+    "app/checkout/fail/page.tsx": "8c7e1d943e2b82bf",
+    "app/checkout/page.tsx": "d0b7fda4a5810aaa",
+    "app/checkout/success/page.tsx": "c90f298122dcf206",
+    "app/contact/layout.tsx": "c18d5a66e437cb1f",
+    "app/contact/page.tsx": "f84dfe501e365b19",
+    "app/data-deletion/page.tsx": "d427dd4428a91125",
+    "app/introduction/cases/[slug]/page.tsx": "960ac77ff6d58109",
+    "app/introduction/cases/case-page-parts.tsx": "bb2c490b26dc95f7",
+    "app/introduction/cases/page.tsx": "01ce52d70544c90b",
+    "app/introduction/full/page.tsx": "28a9898fc3aa36f3",
+    "app/introduction/layout.tsx": "f4e3504335724fb0",
+    "app/introduction/page.tsx": "0850c4601c3aee69",
+    "app/introduction/proof/page.tsx": "791b65b3f4a5b910",
+    "app/introduction/story/page.tsx": "dc6abcc973469fd6",
+    "app/privacy/page.tsx": "9c08d9eb39d24465",
+    "app/terms/page.tsx": "eb01a4e272949d09",
+    "components/checkout/CheckoutClient.tsx": "fdb381f1aa20cabf",
+    "components/checkout/CheckoutRequestForm.tsx": "3c27e607eafda314",
+    "components/checkout/desired-date-blocks.tsx": "ef74159238fe29a7",
+    "components/checkout/DesiredDateCalendar.tsx": "f6d762b53eedfffe",
+    "components/checkout/HardwareCheckoutPanel.tsx": "0b94b34ecd7c187d",
+    "components/checkout/request-date.ts": "d6f805e9ff29531c",
+    "components/contact/ContactDirectChannels.tsx": "8ff6b1974a2bd278",
+    "components/contact/ContactFastTrack.tsx": "95d60b5e2878ef36",
+    "components/contact/ContactMap.tsx": "6a8591b7d8a7b234",
+    "components/introduction/Emphasis.tsx": "10494c595ac4242c",
+    "components/introduction/IntroBlocks.tsx": "63aab637cc61fe4c",
+    "components/introduction/IntroCaseGrid.tsx": "40d8fa319362e87d",
+    "components/introduction/IntroDownloadLink.tsx": "c152f3260b53cf23",
+    "components/introduction/IntroFigure.tsx": "3cd4a0e0a69f4848",
+    "components/introduction/IntroTable.tsx": "403e26303672a653",
+    "components/introduction/IntroVideoPlayer.tsx": "217fc716e33850bd",
+    "components/introduction/landing/landing-copy.ts": "cfc37cc40690532e",
+    "components/introduction/landing/LandingCases.tsx": "c6e9eb8213441b48",
+    "components/introduction/landing/LandingFinalCta.tsx": "20a51e7fb56ad9e6",
+    "components/introduction/landing/LandingHero.tsx": "c1eb679edd82224e",
+    "components/introduction/landing/LandingPdfLink.tsx": "cf9864c6415aaee5",
+    "components/introduction/landing/LandingSmartClassroom.tsx": "26a00a14351e6805",
+    "components/introduction/landing/LandingSoftware.tsx": "ccb1cc60d01a1520",
+    "components/introduction/landing/primitives.tsx": "c3fc8eb879d8b7dd",
+    "components/introduction/proof/proof-copy.ts": "46279e341cf2e309",
+    "components/introduction/proof/ProofAllCases.tsx": "868cfda1762bd68a",
+    "components/introduction/proof/ProofFinalCta.tsx": "7d894f9e35aab33d",
+    "components/introduction/proof/ProofHero.tsx": "e1a11aec9704672b",
+    "components/introduction/proof/ProofInstitutions.tsx": "b73d8a89912e2c75",
+    "components/introduction/proof/ProofParts.tsx": "69ee7a2ce13e6f98",
+    "components/introduction/proof/ProofPdfLink.tsx": "dfce4e410b9152bb",
+    "components/introduction/proof/ProofProduct.tsx": "e2acf49aa9e4b7b2",
+    "components/introduction/proof/ProofStories.tsx": "86ff91736476cf9d",
+    "components/introduction/proof/ProofVideos.tsx": "0562be5081cfb4c1",
+    "components/introduction/sections/IntroCasesSection.tsx": "fefd91d9f069ebd5",
+    "components/introduction/sections/IntroFinalCta.tsx": "f0565ba4d9aa5340",
+    "components/introduction/sections/IntroHero.tsx": "55f7676774b1ab10",
+    "components/introduction/sections/IntroSmartClassroomSection.tsx": "f9af059c0b567e39",
+    "components/introduction/sections/IntroSoftwareSection.tsx": "32ed0e5ecb5566b8",
+    "components/introduction/sections/primitives.tsx": "c915e2e333ef146d",
+    "components/introduction/story/primitives.tsx": "210ea99772648d36",
+    "components/introduction/story/story-copy.ts": "859adc4daad8880c",
+    "components/introduction/story/StoryCases.tsx": "185dd98d65f33195",
+    "components/introduction/story/StoryClassroom.tsx": "6dc0438f1ce40f5f",
+    "components/introduction/story/StoryCtaBand.tsx": "06421028d21d353e",
+    "components/introduction/story/StoryEvidence.tsx": "abf43434e5f50996",
+    "components/introduction/story/StoryFinalCta.tsx": "1e0687162086781c",
+    "components/introduction/story/StoryHero.tsx": "c711a0f426d557b8",
+    "components/introduction/story/StoryPdfLink.tsx": "2c5b1cf73a3281bd",
+    "components/introduction/story/StoryProblem.tsx": "8722e9506ae41882",
+    "components/introduction/story/StorySolution.tsx": "36cacd0cfbf26864",
+    "components/sections/Footer.tsx": "ec0770ed4771fb73",
+    "data/chatbot-cs-symptom-set.json": "3e048f62443da924",
+    "data/chatbot-first-contact-set.json": "bff827e4c6255a9d",
+    "data/chatbot-fresh-open-set.json": "43b6a81ff871c62a",
+    "data/chatbot-golden-set.json": "e189390b124f5183",
+    "data/chatbot-persona-eval-set.json": "d34d3ee4d751f7ed",
+    "lib/chatbot/doc-outline.ts": "c9c194daba7b15fb",
+    "lib/chatbot/quick-answers-basics.ts": "147f6fd96d96c2ce",
+    "lib/chatbot/quick-answers-field.ts": "683e2a13a83ea93f",
+    "lib/chatbot/self-knowledge.ts": "4f1ee990ebd1c5d2",
+    "lib/chatbot/service.ts": "a16f3065b656a474",
+    "lib/chatbot/source-grounding.ts": "c785c0c515fade9c",
+    "lib/chatbot/symptom-topics-field.ts": "2d9ae8dda5294096",
+    "lib/chatbot/symptom-triage.ts": "2c33c3e918cf5d9f",
+    "lib/cs-figma-enrichments.generated.ts": "34532e43bdaecfee",
+    "lib/cs-figma-enrichments.ts": "1fb474e1287f0a10",
+    "lib/cs-figma-guide-aliases.ts": "9eb80be080b5a7a3",
+    "lib/cs-figma-guides.generated.ts": "4753582a626cab9c",
+    "lib/cs-figma-guides.ts": "a40606c063eaeeb4",
+    "lib/docs-guide-media.ts": "8ba4ef29cee779aa",
+    "lib/docs-guide-media/admin.ts": "70c17499a2f7d9b5",
+    "lib/docs-guide-media/cs-usage-2.ts": "1f9210b4d5315848",
+    "lib/docs-guide-media/cs-usage-3.ts": "f442194959fff313",
+    "lib/docs-guide-media/cs-usage-4.ts": "6e130372c58e7a69",
+    "lib/docs-guide-media/cs-usage-5.ts": "412c226e7f4ce168",
+    "lib/docs-guide-media/cs-usage.ts": "6969f83fb300780b",
+    "lib/docs-guide-media/product.ts": "f7f61bca6e251609",
+    "lib/docs-guide-media/public-extra.ts": "fb6311c67c01f1a2",
+    "lib/docs-guide-media/start.ts": "4b0697953b3e6661",
+    "lib/docs-guide-media/student.ts": "1b0dd6776e8429bf",
+    "lib/docs-guide-media/teacher.ts": "1a32a6c229f3aa72",
+    "lib/docs-guide-media/troubleshooting-recording.ts": "c7c9934a0488e9e0",
+    "lib/docs-guide-media/troubleshooting.ts": "5861426a15dd2da4",
+    "lib/docs-guide-media/types.ts": "299024b4560248f0",
+    "lib/docs-troubleshooting.ts": "56374b5ce9387ffc",
+    "lib/docs-troubleshooting/app-class.ts": "4743fc0461b688ed",
+    "lib/docs-troubleshooting/recording.ts": "79135ebc04d0e3aa",
+    "lib/docs.ts": "e1dad64754f86cd7",
+    "lib/introduction/content.ts": "9df4b51bce23a8f3",
+    "scripts/answer-index/lib/areas.ts": "97f79812d8a2784c",
+    "scripts/answer-index/lib/inventory.ts": "04b50635f9f306b7",
+    "scripts/answer-index/lib/sentences.ts": "d43caabbd0c848cc",
+    "scripts/answer-index/lib/site-facts.ts": "cf6aadc2a64fd5a3",
+    "scripts/answer-index/lib/text-rules.ts": "0a9e5da9e29ddc00",
+    "scripts/answer-index/lib/ts-extract.ts": "9c2be4e06e2b2ccf",
+    "scripts/answer-index/lib/units.ts": "ef9883049e199852"
+  },
+  "outputs": {
+    "absent.json": {
+      "sha": "585211a363c5930e",
+      "count": 118
+    },
+    "audit/C-01.jsonl": {
+      "sha": "d9db556cf3c253b6",
+      "count": 44
+    },
+    "audit/C-02.jsonl": {
+      "sha": "c5255298ca201eb5",
+      "count": 44
+    },
+    "audit/C-03.jsonl": {
+      "sha": "bab3cbe7d6a88c88",
+      "count": 47
+    },
+    "audit/C-04.jsonl": {
+      "sha": "7e232768f16f14de",
+      "count": 47
+    },
+    "audit/C-05.jsonl": {
+      "sha": "85bffdefee0bc6b8",
+      "count": 47
+    },
+    "audit/C-06.jsonl": {
+      "sha": "3d4d3616ab22d7d4",
+      "count": 40
+    },
+    "audit/C-07.jsonl": {
+      "sha": "5986d4cc76e47be2",
+      "count": 44
+    },
+    "audit/C-08.jsonl": {
+      "sha": "8799fa8ff9953fa7",
+      "count": 44
+    },
+    "audit/C-09.jsonl": {
+      "sha": "fe024d3157c6de43",
+      "count": 44
+    },
+    "audit/C-10.jsonl": {
+      "sha": "95e1894c2d9c4c64",
+      "count": 44
+    },
+    "audit/C-11.jsonl": {
+      "sha": "485d0f2e17982826",
+      "count": 41
+    },
+    "audit/C-12.jsonl": {
+      "sha": "254474fa11f18dd2",
+      "count": 46
+    },
+    "audit/C-13.jsonl": {
+      "sha": "ebe45529cda768f6",
+      "count": 45
+    },
+    "audit/human-queue.json": {
+      "sha": "07775d7e2bba9737",
+      "count": 62
+    },
+    "calibration.json": {
+      "sha": "d67829ebae4048cc",
+      "count": 8
+    },
+    "cards/account.json": {
+      "sha": "df624f31a783b4b4",
+      "count": 112
+    },
+    "cards/classroom.json": {
+      "sha": "a9ded8dfd75b35f4",
+      "count": 357
+    },
+    "cards/company.json": {
+      "sha": "eb3b504cd4e2b1a4",
+      "count": 194
+    },
+    "cards/course.json": {
+      "sha": "7b934bf4fcdd3c94",
+      "count": 200
+    },
+    "cards/gaps-account.json": {
+      "sha": "7c9443f0708c07c0",
+      "count": 23
+    },
+    "cards/gaps-classroom.json": {
+      "sha": "46b6702cf5476f31",
+      "count": 20
+    },
+    "cards/gaps-company.json": {
+      "sha": "6f6f9d6291d79dd7",
+      "count": 26
+    },
+    "cards/gaps-course.json": {
+      "sha": "8faeeebdd5e6b597",
+      "count": 24
+    },
+    "cards/gaps-pricing.json": {
+      "sha": "1b0dfd3e170f9052",
+      "count": 25
+    },
+    "cards/pricing.json": {
+      "sha": "4cb1e183345ea3e3",
+      "count": 127
+    },
+    "eval/calibration-set.json": {
+      "sha": "e19b3abca1e0950e",
+      "count": 288
+    },
+    "generic-words.json": {
+      "sha": "44a051c05d6aa169",
+      "count": 4
+    },
+    "inventory.json": {
+      "sha": "566dcdba55c131ab",
+      "count": 1459
+    },
+    "legacy-alias.json": {
+      "sha": "3e6294e4da45f158",
+      "count": 620
+    },
+    "lexicon.json": {
+      "sha": "c37489095e4a7097",
+      "count": 601
+    },
+    "site-facts.json": {
+      "sha": "714fbcf3f542585d",
+      "count": 1641
+    },
+    "units.json": {
+      "sha": "e6753ac43dffcf31",
+      "count": 741
+    },
+    "universe/s001.json": {
+      "sha": "8ad5d1be692c950f",
+      "count": 1997
+    },
+    "universe/s002.json": {
+      "sha": "0133c3a437b8fda7",
+      "count": 1995
+    },
+    "universe/s003.json": {
+      "sha": "c777145eb7c708e6",
+      "count": 869
+    },
+    "variants/account.json": {
+      "sha": "24023e4faeb38ef7",
+      "count": 120
+    },
+    "variants/classroom.json": {
+      "sha": "108e88ae33c0343b",
+      "count": 360
+    },
+    "variants/company.json": {
+      "sha": "411771db7c980f4d",
+      "count": 214
+    },
+    "variants/course.json": {
+      "sha": "a38e408d90344617",
+      "count": 218
+    },
+    "variants/gaps-account.json": {
+      "sha": "ad2e30671e81d809",
+      "count": 22
+    },
+    "variants/gaps-classroom.json": {
+      "sha": "8b5c1e8732821c04",
+      "count": 20
+    },
+    "variants/gaps-company.json": {
+      "sha": "9ab44ef44fcd3cde",
+      "count": 26
+    },
+    "variants/gaps-course.json": {
+      "sha": "c1e5f20c4a3e6e05",
+      "count": 24
+    },
+    "variants/gaps-pricing.json": {
+      "sha": "abb313320606c1e3",
+      "count": 24
+    },
+    "variants/pricing.json": {
+      "sha": "7c9873230e52980b",
+      "count": 150
+    }
+  },
+  "inputs": {
+    "devSets": [
+      {
+        "name": "dev5",
+        "sha": "35aee9790d7bdbd4"
+      },
+      {
+        "name": "holdout1",
+        "sha": "8c655dbe30b10fbd"
+      },
+      {
+        "name": "input371",
+        "sha": "10ae0565a06e0c34"
+      }
+    ],
+    "failureLogs": [
+      {
+        "name": "failures-0.json",
+        "sha": "44987a9b2b619da6"
+      },
+      {
+        "name": "failures-1.json",
+        "sha": "bf2bdf64d777d9bb"
+      },
+      {
+        "name": "failures-2.json",
+        "sha": "757afc4d2401fe9c"
+      },
+      {
+        "name": "failures-3.json",
+        "sha": "4166eb8905cb70fe"
+      },
+      {
+        "name": "failures-4.json",
+        "sha": "88504fc42290b8ae"
+      },
+      {
+        "name": "failures-5.json",
+        "sha": "5e7f7d3fcf68909e"
+      },
+      {
+        "name": "failures-6.json",
+        "sha": "56ab2d35a4333172"
+      },
+      {
+        "name": "failures-7.json",
+        "sha": "4aef8d8a75ec61d3"
+      },
+      {
+        "name": "failures-8.json",
+        "sha": "221b8e64756a1d24"
+      },
+      {
+        "name": "failures-9.json",
+        "sha": "5bbd53753b78ef63"
+      },
+      {
+        "name": "failures2-changed-0.json",
+        "sha": "e2d09f76901175fa"
+      },
+      {
+        "name": "failures2-changed-1.json",
+        "sha": "57ac215541f7f20b"
+      },
+      {
+        "name": "failures2-changed-2.json",
+        "sha": "1cd3643f9b1cc1e0"
+      },
+      {
+        "name": "failures2-changed-3.json",
+        "sha": "5726115c6b6eb129"
+      },
+      {
+        "name": "failures2-holdout-0.json",
+        "sha": "780b2dcb6b44883c"
+      },
+      {
+        "name": "failures2-holdout-1.json",
+        "sha": "aeebb7f3d8b99fb5"
+      },
+      {
+        "name": "failures2-holdout-2.json",
+        "sha": "2cb91f065d3de79f"
+      },
+      {
+        "name": "failures3-changed3-0.json",
+        "sha": "c53d6e78e9fd5194"
+      },
+      {
+        "name": "failures3-hold1-0.json",
+        "sha": "b3c002407af8c008"
+      },
+      {
+        "name": "failures3-hold1-1.json",
+        "sha": "428b62d87277a33a"
+      },
+      {
+        "name": "failures3-hold1-2.json",
+        "sha": "19d1c777fe0791a6"
+      },
+      {
+        "name": "failures-holdout1-0.json",
+        "sha": "572bf117226152df"
+      },
+      {
+        "name": "failures-holdout1-1.json",
+        "sha": "c19b0226a97c94da"
+      },
+      {
+        "name": "failures-holdout1-2.json",
+        "sha": "64975e2998bb22c9"
+      }
+    ]
+  },
+  "generation": {
+    "D1-01": {
+      "part": "D1-01",
+      "files": [
+        "cards/account.D1-01.json",
+        "variants/account.D1-01.json"
+      ],
+      "counts": {
+        "cards": 32,
+        "variants": 800
+      },
+      "writers": [
+        "agent:opus#D1"
+      ],
+      "reviewers": [
+        "agent:opus#D2"
+      ],
+      "sha": "978d7ae70eb78ae0"
+    },
+    "D1-02": {
+      "part": "D1-02",
+      "files": [
+        "cards/account.D1-02.json",
+        "variants/account.D1-02.json"
+      ],
+      "counts": {
+        "cards": 23,
+        "variants": 577
+      },
+      "writers": [
+        "D1"
+      ],
+      "reviewers": [
+        "agent:opus#D2-02"
+      ],
+      "sha": "e77464d30a4ccc1b"
+    },
+    "D1-03": {
+      "part": "D1-03",
+      "files": [
+        "cards/account.D1-03.json",
+        "variants/account.D1-03.json"
+      ],
+      "counts": {
+        "cards": 29,
+        "variants": 727
+      },
+      "writers": [
+        "D1"
+      ],
+      "reviewers": [
+        "D2"
+      ],
+      "sha": "9754b5ec20ad6639"
+    },
+    "D1-04": {
+      "part": "D1-04",
+      "files": [
+        "cards/classroom.D1-04.json",
+        "variants/classroom.D1-04.json"
+      ],
+      "counts": {
+        "cards": 57,
+        "variants": 1433
+      },
+      "writers": [
+        "agent:opus#D1",
+        "agent:opus#D2"
+      ],
+      "reviewers": [
+        "agent:opus#D2-04"
+      ],
+      "sha": "94b8ceb436ad180e"
+    },
+    "D1-05": {
+      "part": "D1-05",
+      "files": [
+        "cards/classroom.D1-05.json",
+        "variants/classroom.D1-05.json"
+      ],
+      "counts": {
+        "cards": 53,
+        "variants": 1328
+      },
+      "writers": [
+        "agent:opus#D1",
+        "agent:opus#D2"
+      ],
+      "reviewers": [
+        "agent:opus#D2"
+      ],
+      "sha": "37406fe311b2e48c"
+    },
+    "D1-06": {
+      "part": "D1-06",
+      "files": [
+        "cards/classroom.D1-06.json",
+        "variants/classroom.D1-06.json"
+      ],
+      "counts": {
+        "cards": 35,
+        "variants": 877
+      },
+      "writers": [
+        "agent:opus#D2-06",
+        "agent:sonnet#D1"
+      ],
+      "reviewers": [
+        "agent:opus#D2-06"
+      ],
+      "sha": "9d55f4cf6a908d7c"
+    },
+    "D1-07": {
+      "part": "D1-07",
+      "files": [
+        "cards/classroom.D1-07.json",
+        "variants/classroom.D1-07.json"
+      ],
+      "counts": {
+        "cards": 41,
+        "variants": 1025
+      },
+      "writers": [
+        "agent:opus#D1"
+      ],
+      "reviewers": [
+        "agent:opus#D2"
+      ],
+      "sha": "6bed26908e1bd004"
+    },
+    "D1-08": {
+      "part": "D1-08",
+      "files": [
+        "cards/classroom.D1-08.json",
+        "variants/classroom.D1-08.json"
+      ],
+      "counts": {
+        "cards": 31,
+        "variants": 804
+      },
+      "writers": [
+        "D1"
+      ],
+      "reviewers": [
+        "agent:opus#D2-08"
+      ],
+      "sha": "9c495ef517a341ca"
+    },
+    "D1-09": {
+      "part": "D1-09",
+      "files": [
+        "cards/classroom.D1-09.json",
+        "variants/classroom.D1-09.json"
+      ],
+      "counts": {
+        "cards": 48,
+        "variants": 1200
+      },
+      "writers": [
+        "agent:opus#D1"
+      ],
+      "reviewers": [
+        "agent:opus#D2"
+      ],
+      "sha": "b9b6f1aa9ecfc3ac"
+    },
+    "D1-10": {
+      "part": "D1-10",
+      "files": [
+        "cards/classroom.D1-10.json",
+        "variants/classroom.D1-10.json"
+      ],
+      "counts": {
+        "cards": 19,
+        "variants": 452
+      },
+      "writers": [
+        "agent:opus#D1"
+      ],
+      "reviewers": [
+        "agent:opus#D2"
+      ],
+      "sha": "4250e9e6b0dbb7ac"
+    },
+    "D1-11": {
+      "part": "D1-11",
+      "files": [
+        "cards/course.D1-11.json",
+        "variants/course.D1-11.json"
+      ],
+      "counts": {
+        "cards": 53,
+        "variants": 1328
+      },
+      "writers": [
+        "agent:opus#D1"
+      ],
+      "reviewers": [
+        "agent:sonnet#D2"
+      ],
+      "sha": "ff449d5eac4d9aea"
+    },
+    "D1-12": {
+      "part": "D1-12",
+      "files": [
+        "cards/course.D1-12.json",
+        "variants/course.D1-12.json"
+      ],
+      "counts": {
+        "cards": 76,
+        "variants": 1935
+      },
+      "writers": [
+        "D1",
+        "agent:opus#D2-12"
+      ],
+      "reviewers": [
+        "agent:opus#D2-12"
+      ],
+      "sha": "c72c88f8ddfdc2d7"
+    },
+    "D1-13": {
+      "part": "D1-13",
+      "files": [
+        "cards/course.D1-13.json",
+        "variants/course.D1-13.json"
+      ],
+      "counts": {
+        "cards": 27,
+        "variants": 675
+      },
+      "writers": [
+        "D1"
+      ],
+      "reviewers": [
+        "D2"
+      ],
+      "sha": "9169db61ff6e2263"
+    },
+    "D1-14": {
+      "part": "D1-14",
+      "files": [
+        "cards/course.D1-14.json",
+        "variants/course.D1-14.json"
+      ],
+      "counts": {
+        "cards": 13,
+        "variants": 291
+      },
+      "writers": [
+        "D1",
+        "agent:opus#D2-14"
+      ],
+      "reviewers": [
+        "agent:opus#D2-14"
+      ],
+      "sha": "02810c61ef15c5c3"
+    },
+    "D1-15": {
+      "part": "D1-15",
+      "files": [
+        "cards/pricing.D1-15.json",
+        "variants/pricing.D1-15.json"
+      ],
+      "counts": {
+        "cards": 41,
+        "variants": 1131
+      },
+      "writers": [
+        "D1",
+        "D2"
+      ],
+      "reviewers": [
+        "D2"
+      ],
+      "sha": "763e9c95e9974b6d"
+    },
+    "D1-16": {
+      "part": "D1-16",
+      "files": [
+        "cards/pricing.D1-16.json",
+        "variants/pricing.D1-16.json"
+      ],
+      "counts": {
+        "cards": 24,
+        "variants": 677
+      },
+      "writers": [
+        "agent:opus#D1",
+        "agent:opus#D2-16"
+      ],
+      "reviewers": [
+        "agent:opus#D2-16"
+      ],
+      "sha": "c5555cf3aae9314e"
+    },
+    "D1-17": {
+      "part": "D1-17",
+      "files": [
+        "cards/company.D1-17.json",
+        "variants/company.D1-17.json"
+      ],
+      "counts": {
+        "cards": 46,
+        "variants": 1360
+      },
+      "writers": [
+        "agent:opus#D1",
+        "agent:sonnet#D2"
+      ],
+      "reviewers": [
+        "agent:sonnet#D2"
+      ],
+      "sha": "76f912f9023d7737"
+    },
+    "D1-18": {
+      "part": "D1-18",
+      "files": [
+        "cards/company.D1-18.json",
+        "variants/company.D1-18.json"
+      ],
+      "counts": {
+        "cards": 26,
+        "variants": 763
+      },
+      "writers": [
+        "D1",
+        "agent:opus#D2-18"
+      ],
+      "reviewers": [
+        "agent:opus#D2-18"
+      ],
+      "sha": "f0036b687f06cffe"
+    },
+    "D1-19": {
+      "part": "D1-19",
+      "files": [
+        "cards/company.D1-19.json",
+        "variants/company.D1-19.json"
+      ],
+      "counts": {
+        "cards": 41,
+        "variants": 1215
+      },
+      "writers": [
+        "agent:opus#D1"
+      ],
+      "reviewers": [
+        "agent:sonnet#D2-19"
+      ],
+      "sha": "901db8d234c19b16"
+    },
+    "D1-20": {
+      "part": "D1-20",
+      "files": [
+        "cards/company.D1-20.json",
+        "variants/company.D1-20.json"
+      ],
+      "counts": {
+        "cards": 21,
+        "variants": 633
+      },
+      "writers": [
+        "D1",
+        "agent:opus#D2-20"
+      ],
+      "reviewers": [
+        "agent:opus#D2-20"
+      ],
+      "sha": "43159b195782bb4f"
+    },
+    "D1-sup": {
+      "part": "D1-sup",
+      "files": [
+        "cards/classroom.D1-sup.json",
+        "cards/pricing.D1-sup.json",
+        "variants/classroom.D1-sup.json",
+        "variants/pricing.D1-sup.json"
+      ],
+      "counts": {
+        "cards": 3,
+        "variants": 75
+      },
+      "writers": [
+        "agent:sonnet#D1-sup"
+      ],
+      "reviewers": [],
+      "sha": "2f2abc351acefd48"
+    },
+    "D3-00": {
+      "part": "D3-00",
+      "files": [
+        "audit/human-queue.D3-00.json"
+      ],
+      "counts": {
+        "human-queue": 27
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "f2c5e8bc36310de8"
+    },
+    "D3-01": {
+      "part": "D3-01",
+      "files": [
+        "audit/C-01.D3-01.jsonl",
+        "audit/human-queue.D3-01.json"
+      ],
+      "counts": {
+        "audit": 44,
+        "human-queue": 2
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "ff78fc9cedce3740"
+    },
+    "D3-02": {
+      "part": "D3-02",
+      "files": [
+        "audit/C-02.D3-02.jsonl",
+        "audit/human-queue.D3-02.json"
+      ],
+      "counts": {
+        "audit": 44,
+        "human-queue": 3
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "02c59d7f70a510f8"
+    },
+    "D3-03": {
+      "part": "D3-03",
+      "files": [
+        "audit/C-03.D3-03.jsonl",
+        "audit/human-queue.D3-03.json"
+      ],
+      "counts": {
+        "audit": 47,
+        "human-queue": 1
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "07f74ca1b4e81827"
+    },
+    "D3-04": {
+      "part": "D3-04",
+      "files": [
+        "audit/C-04.D3-04.jsonl",
+        "audit/human-queue.D3-04.json"
+      ],
+      "counts": {
+        "audit": 47,
+        "human-queue": 2
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "7bae54709dfb22b6"
+    },
+    "D3-05": {
+      "part": "D3-05",
+      "files": [
+        "audit/C-05.D3-05.jsonl",
+        "audit/human-queue.D3-05.json"
+      ],
+      "counts": {
+        "audit": 47,
+        "human-queue": 1
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "2dfbee1f3a6382fa"
+    },
+    "D3-06": {
+      "part": "D3-06",
+      "files": [
+        "audit/C-06.D3-06.jsonl",
+        "audit/human-queue.D3-06.json"
+      ],
+      "counts": {
+        "audit": 40,
+        "human-queue": 0
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "9544d869bc978e05"
+    },
+    "D3-07": {
+      "part": "D3-07",
+      "files": [
+        "audit/C-07.D3-07.jsonl",
+        "audit/human-queue.D3-07.json"
+      ],
+      "counts": {
+        "audit": 44,
+        "human-queue": 2
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "a8134dbf378c4f73"
+    },
+    "D3-08": {
+      "part": "D3-08",
+      "files": [
+        "audit/C-08.D3-08.jsonl",
+        "audit/human-queue.D3-08.json"
+      ],
+      "counts": {
+        "audit": 44,
+        "human-queue": 5
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "bd1d89c1a70de709"
+    },
+    "D3-09": {
+      "part": "D3-09",
+      "files": [
+        "audit/C-09.D3-09.jsonl",
+        "audit/human-queue.D3-09.json"
+      ],
+      "counts": {
+        "audit": 44,
+        "human-queue": 4
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "f5f10d88b06aaef1"
+    },
+    "D3-10": {
+      "part": "D3-10",
+      "files": [
+        "audit/C-10.D3-10.jsonl",
+        "audit/human-queue.D3-10.json"
+      ],
+      "counts": {
+        "audit": 44,
+        "human-queue": 2
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "08ca799b761a0fc4"
+    },
+    "D3-11": {
+      "part": "D3-11",
+      "files": [
+        "audit/C-11.D3-11.jsonl",
+        "audit/human-queue.D3-11.json"
+      ],
+      "counts": {
+        "audit": 41,
+        "human-queue": 3
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "f802508a4ba02d23"
+    },
+    "D3-12": {
+      "part": "D3-12",
+      "files": [
+        "audit/C-12.D3-12.jsonl",
+        "audit/human-queue.D3-12.json"
+      ],
+      "counts": {
+        "audit": 46,
+        "human-queue": 6
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "0629bd17a77dcd7f"
+    },
+    "D3-13": {
+      "part": "D3-13",
+      "files": [
+        "audit/C-13.D3-13.jsonl",
+        "audit/human-queue.D3-13.json"
+      ],
+      "counts": {
+        "audit": 45,
+        "human-queue": 4
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "84b7175de902d884"
+    },
+    "D4-01": {
+      "part": "D4-01",
+      "files": [
+        "cards/account.D4-01.json",
+        "legacy-alias.D4-01.json",
+        "variants/account.D4-01.json"
+      ],
+      "counts": {
+        "cards": 7,
+        "legacy-alias": 44,
+        "variants": 182
+      },
+      "writers": [
+        "agent:sonnet#D4-01"
+      ],
+      "reviewers": [],
+      "sha": "9354f1ce395664e2"
+    },
+    "D4-02": {
+      "part": "D4-02",
+      "files": [
+        "cards/account.D4-02.json",
+        "legacy-alias.D4-02.json",
+        "variants/account.D4-02.json"
+      ],
+      "counts": {
+        "cards": 21,
+        "legacy-alias": 44,
+        "variants": 656
+      },
+      "writers": [
+        "agent:sonnet#D4-02"
+      ],
+      "reviewers": [],
+      "sha": "46102fe6539f2c96"
+    },
+    "D4-03": {
+      "part": "D4-03",
+      "files": [
+        "cards/classroom.D4-03.json",
+        "legacy-alias.D4-03.json",
+        "variants/classroom.D4-03.json"
+      ],
+      "counts": {
+        "cards": 10,
+        "legacy-alias": 47,
+        "variants": 280
+      },
+      "writers": [
+        "agent:sonnet#D4-03"
+      ],
+      "reviewers": [],
+      "sha": "00b685e6416b240f"
+    },
+    "D4-04": {
+      "part": "D4-04",
+      "files": [
+        "cards/classroom.D4-04.json",
+        "legacy-alias.D4-04.json",
+        "variants/classroom.D4-04.json"
+      ],
+      "counts": {
+        "cards": 16,
+        "legacy-alias": 47,
+        "variants": 577
+      },
+      "writers": [
+        "agent:sonnet#D4-04"
+      ],
+      "reviewers": [],
+      "sha": "0c2d2b707a89bb40"
+    },
+    "D4-05": {
+      "part": "D4-05",
+      "files": [
+        "cards/classroom.D4-05.json",
+        "legacy-alias.D4-05.json",
+        "variants/classroom.D4-05.json"
+      ],
+      "counts": {
+        "cards": 45,
+        "legacy-alias": 47,
+        "variants": 1126
+      },
+      "writers": [
+        "agent:sonnet#D4-05"
+      ],
+      "reviewers": [],
+      "sha": "1c960c0d82b2bd4a"
+    },
+    "D4-06": {
+      "part": "D4-06",
+      "files": [
+        "cards/course.D4-06.json",
+        "legacy-alias.D4-06.json",
+        "variants/course.D4-06.json"
+      ],
+      "counts": {
+        "cards": 31,
+        "legacy-alias": 40,
+        "variants": 1057
+      },
+      "writers": [
+        "agent:sonnet#D4-06"
+      ],
+      "reviewers": [],
+      "sha": "5a022419d066cb87"
+    },
+    "D4-07": {
+      "part": "D4-07",
+      "files": [
+        "cards/pricing.D4-07.json",
+        "legacy-alias.D4-07.json",
+        "variants/pricing.D4-07.json"
+      ],
+      "counts": {
+        "cards": 17,
+        "legacy-alias": 44,
+        "variants": 443
+      },
+      "writers": [
+        "agent:sonnet"
+      ],
+      "reviewers": [],
+      "sha": "69f514b28696cefa"
+    },
+    "D4-08": {
+      "part": "D4-08",
+      "files": [
+        "cards/pricing.D4-08.json",
+        "legacy-alias.D4-08.json",
+        "variants/pricing.D4-08.json"
+      ],
+      "counts": {
+        "cards": 10,
+        "legacy-alias": 44,
+        "variants": 250
+      },
+      "writers": [
+        "D4"
+      ],
+      "reviewers": [],
+      "sha": "1ebf4ac9602ad319"
+    },
+    "D4-09": {
+      "part": "D4-09",
+      "files": [
+        "cards/pricing.D4-09.json",
+        "legacy-alias.D4-09.json",
+        "variants/pricing.D4-09.json"
+      ],
+      "counts": {
+        "cards": 3,
+        "legacy-alias": 44,
+        "variants": 83
+      },
+      "writers": [
+        "D4"
+      ],
+      "reviewers": [],
+      "sha": "882c0c5e375c8c9a"
+    },
+    "D4-10": {
+      "part": "D4-10",
+      "files": [
+        "cards/pricing.D4-10.json",
+        "legacy-alias.D4-10.json",
+        "variants/pricing.D4-10.json"
+      ],
+      "counts": {
+        "cards": 5,
+        "legacy-alias": 44,
+        "variants": 228
+      },
+      "writers": [
+        "agent:sonnet"
+      ],
+      "reviewers": [],
+      "sha": "7823df98aec88e7f"
+    },
+    "D4-11": {
+      "part": "D4-11",
+      "files": [
+        "cards/pricing.D4-11.json",
+        "legacy-alias.D4-11.json",
+        "variants/pricing.D4-11.json"
+      ],
+      "counts": {
+        "cards": 26,
+        "legacy-alias": 41,
+        "variants": 1622
+      },
+      "writers": [
+        "agent:sonnet"
+      ],
+      "reviewers": [],
+      "sha": "540c42356db57f0b"
+    },
+    "D4-12": {
+      "part": "D4-12",
+      "files": [
+        "cards/company.D4-12.json",
+        "legacy-alias.D4-12.json",
+        "variants/company.D4-12.json"
+      ],
+      "counts": {
+        "cards": 24,
+        "legacy-alias": 46,
+        "variants": 779
+      },
+      "writers": [
+        "agent:sonnet#D4-12"
+      ],
+      "reviewers": [],
+      "sha": "1584ed588e21b16b"
+    },
+    "D4-13": {
+      "part": "D4-13",
+      "files": [
+        "cards/company.D4-13.json",
+        "legacy-alias.D4-13.json",
+        "variants/company.D4-13.json"
+      ],
+      "counts": {
+        "cards": 36,
+        "legacy-alias": 45,
+        "variants": 2256
+      },
+      "writers": [
+        "agent:sonnet"
+      ],
+      "reviewers": [],
+      "sha": "1ee306433850bae7"
+    },
+    "D4-guide": {
+      "part": "D4-guide",
+      "files": [
+        "legacy-alias.D4-guide.json"
+      ],
+      "counts": {
+        "legacy-alias": 43
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "7c284f574c12da8c"
+    },
+    "D5-account": {
+      "part": "D5-account",
+      "files": [
+        "absent.D5-account.json",
+        "cards/gaps-account.D5-account.json",
+        "variants/gaps-account.D5-account.json"
+      ],
+      "counts": {
+        "absent": 23,
+        "cards": 23,
+        "variants": 345
+      },
+      "writers": [
+        "agent:sonnet#D5"
+      ],
+      "reviewers": [],
+      "sha": "b16d5255ea06277a"
+    },
+    "D5-classroom": {
+      "part": "D5-classroom",
+      "files": [
+        "absent.D5-classroom.json",
+        "cards/gaps-classroom.D5-classroom.json",
+        "variants/gaps-classroom.D5-classroom.json"
+      ],
+      "counts": {
+        "absent": 20,
+        "cards": 20,
+        "variants": 300
+      },
+      "writers": [
+        "claude-sonnet-5.5"
+      ],
+      "reviewers": [],
+      "sha": "4a32aa65dc189fe6"
+    },
+    "D5-company": {
+      "part": "D5-company",
+      "files": [
+        "absent.D5-company.json",
+        "cards/gaps-company.D5-company.json",
+        "variants/gaps-company.D5-company.json"
+      ],
+      "counts": {
+        "absent": 26,
+        "cards": 26,
+        "variants": 390
+      },
+      "writers": [
+        "claude-sonnet-5.5"
+      ],
+      "reviewers": [],
+      "sha": "c04111917f551078"
+    },
+    "D5-course": {
+      "part": "D5-course",
+      "files": [
+        "absent.D5-course.json",
+        "cards/gaps-course.D5-course.json",
+        "variants/gaps-course.D5-course.json"
+      ],
+      "counts": {
+        "absent": 24,
+        "cards": 24,
+        "variants": 360
+      },
+      "writers": [
+        "claude-sonnet-5.5"
+      ],
+      "reviewers": [],
+      "sha": "7357540b2b27e479"
+    },
+    "D5-pricing": {
+      "part": "D5-pricing",
+      "files": [
+        "absent.D5-pricing.json",
+        "cards/gaps-pricing.D5-pricing.json",
+        "variants/gaps-pricing.D5-pricing.json"
+      ],
+      "counts": {
+        "absent": 25,
+        "cards": 25,
+        "variants": 375
+      },
+      "writers": [
+        "agent:sonnet#D5"
+      ],
+      "reviewers": [],
+      "sha": "8a706b0a1359ec9c"
+    },
+    "D6-01": {
+      "part": "D6-01",
+      "files": [
+        "generic-words.D6-01.json",
+        "lexicon.D6-01.json"
+      ],
+      "counts": {
+        "generic-words": 303,
+        "lexicon": 547
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "7e8470dc198d968c"
+    },
+    "D6-c1": {
+      "part": "D6-c1",
+      "files": [
+        "lexicon.D6-c1.json"
+      ],
+      "counts": {
+        "lexicon": 100
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "999982f7a89298ba"
+    },
+    "D7-account-1": {
+      "part": "D7-account-1",
+      "files": [
+        "variants/account.D7-account-1.json"
+      ],
+      "counts": {
+        "variants": 3000
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "c040b511888a7eb7"
+    },
+    "D7-account-2": {
+      "part": "D7-account-2",
+      "files": [
+        "variants/account.D7-account-2.json"
+      ],
+      "counts": {
+        "variants": 240
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "8ae51f7690debf39"
+    },
+    "D7-classroom-1": {
+      "part": "D7-classroom-1",
+      "files": [
+        "variants/classroom.D7-classroom-1.json"
+      ],
+      "counts": {
+        "variants": 3000
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "ecc485337e78f976"
+    },
+    "D7-classroom-2": {
+      "part": "D7-classroom-2",
+      "files": [
+        "variants/classroom.D7-classroom-2.json"
+      ],
+      "counts": {
+        "variants": 1000
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "372564a36f29cb42"
+    },
+    "D7-classroom-3": {
+      "part": "D7-classroom-3",
+      "files": [
+        "variants/classroom.D7-classroom-3.json"
+      ],
+      "counts": {
+        "variants": 1010
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "ee758e6280f0ef9a"
+    },
+    "D7-classroom-4": {
+      "part": "D7-classroom-4",
+      "files": [
+        "variants/classroom.D7-classroom-4.json"
+      ],
+      "counts": {
+        "variants": 670
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "32c6ef4d9f9f7e22"
+    },
+    "D7-company-1": {
+      "part": "D7-company-1",
+      "files": [
+        "variants/company.D7-company-1.json"
+      ],
+      "counts": {
+        "variants": 1060
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "b67180855650a8d2"
+    },
+    "D7-company-2": {
+      "part": "D7-company-2",
+      "files": [
+        "variants/company.D7-company-2.json"
+      ],
+      "counts": {
+        "variants": 1195
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "aa21dafbe7b8b77d"
+    },
+    "D7-company-3": {
+      "part": "D7-company-3",
+      "files": [
+        "variants/company.D7-company-3.json"
+      ],
+      "counts": {
+        "variants": 100
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "f1ce1a5bc6dbf036"
+    },
+    "D7-course-1": {
+      "part": "D7-course-1",
+      "files": [
+        "variants/course.D7-course-1.json"
+      ],
+      "counts": {
+        "variants": 3000
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "7988e3a1fdd5d0e3"
+    },
+    "D7-course-2": {
+      "part": "D7-course-2",
+      "files": [
+        "variants/course.D7-course-2.json"
+      ],
+      "counts": {
+        "variants": 1020
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "ae80aeae525d4b25"
+    },
+    "D7-course-3": {
+      "part": "D7-course-3",
+      "files": [
+        "variants/course.D7-course-3.json"
+      ],
+      "counts": {
+        "variants": 660
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "fb428a13b8e6061f"
+    },
+    "D7-pricing-1": {
+      "part": "D7-pricing-1",
+      "files": [
+        "variants/pricing.D7-pricing-1.json"
+      ],
+      "counts": {
+        "variants": 900
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "e0dcba28cde4b590"
+    },
+    "D7-pricing-2": {
+      "part": "D7-pricing-2",
+      "files": [
+        "variants/pricing.D7-pricing-2.json"
+      ],
+      "counts": {
+        "variants": 645
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "8163f91880148d6f"
+    },
+    "M-01": {
+      "part": "M-01",
+      "files": [
+        "variants/course.M-01.json",
+        "variants/gaps-account.M-01.json",
+        "variants/gaps-company.M-01.json",
+        "variants/pricing.M-01.json"
+      ],
+      "counts": {
+        "variants": 18
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "cfb033af571d1bf4"
+    }
+  }
+}

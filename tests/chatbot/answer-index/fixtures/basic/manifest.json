@@ -1,0 +1,11 @@
+{
+  "schema": 1,
+  "dataVersion": "ai-fixture",
+  "sources": {},
+  "outputs": {},
+  "inputs": {
+    "devSets": [],
+    "failureLogs": []
+  },
+  "generation": {}
+}

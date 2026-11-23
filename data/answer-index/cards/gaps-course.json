@@ -1,0 +1,1848 @@
+[
+  {
+    "id": "gap:course/course-copy",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "course",
+    "topic": "코스 복제",
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_course_copy"
+    ],
+    "anchors": [
+      "코스 복제",
+      "코스 복사",
+      "새 학기 코스",
+      "반 복사",
+      "지난 학기 코스",
+      "이월"
+    ],
+    "covers": "기존 코스를 통째로 복제해 새 학기 반으로 쓰는 기능 여부는 공개 문서에 없다는 것",
+    "notCovers": [
+      "코스를 새로 만드는 순서 → course-create",
+      "여러 수업을 한 번에 만들기 → bulk-create-lessons"
+    ],
+    "negatives": [
+      {
+        "q": "같은 요일 수업을 한 번에 여러 개 만들 수 있나요",
+        "route": "doc:/docs/admin/course-creation#5/bulk-create-lessons"
+      },
+      {
+        "q": "새 코스를 처음 만드는 순서를 알려 주세요",
+        "route": "doc:/docs/admin/course-creation#1/create-course-dashboard"
+      },
+      {
+        "q": "학기가 끝난 코스는 어떻게 닫나요",
+        "route": "doc:/docs/admin/course-management#4/close-course-admin"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "코스 복제",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "코스 복사",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "새 학기 코스 가져오기",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "지난 학기 코스 이월",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-course",
+      "writer": "claude-sonnet-5.5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:course/course-merge",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "course",
+    "topic": "코스 합반",
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_course_merge"
+    ],
+    "anchors": [
+      "합반",
+      "코스 합치기",
+      "코스 병합",
+      "반 합치기"
+    ],
+    "covers": "두 코스를 하나로 합치는 기능 여부는 공개 문서에 없다는 것",
+    "notCovers": [
+      "다른 반 학생을 편입생으로 넣기 → transfer-student-registration"
+    ],
+    "negatives": [
+      {
+        "q": "다른 반에서 옮겨 온 학생을 코스에 넣으려면요",
+        "route": "howto:guide:transfer-student-registration"
+      },
+      {
+        "q": "대시보드에서 코스에 학생을 넣는 순서",
+        "route": "doc:/docs/admin/course-creation#2/add-members-dashboard"
+      },
+      {
+        "q": "코스를 종료하면 기록이 어떻게 되나요",
+        "route": "doc:/docs/teacher/course-create#4/close-what-remains"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "합반",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "코스 합치기",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "코스 병합",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "반 합치기",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-course",
+      "writer": "claude-sonnet-5.5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:course/course-archive",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "course",
+    "topic": "코스 보관함",
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_course_archive"
+    ],
+    "anchors": [
+      "아카이브",
+      "코스 보관",
+      "코스 숨김",
+      "지난 코스 정리"
+    ],
+    "covers": "코스를 종료하지 않고 보관·숨김 처리하는 기능은 공개 문서에 없다는 것",
+    "notCovers": [
+      "종료한 코스 복구 불가 → no-restore-lock",
+      "종료 뒤 녹화본 → replay-after-close"
+    ],
+    "negatives": [
+      {
+        "q": "종료한 코스를 다시 살릴 수 있나요",
+        "route": "doc:guide:cs-figma-digest-655/no-restore-lock"
+      },
+      {
+        "q": "코스를 종료한 뒤에도 녹화본을 볼 수 있나요",
+        "route": "doc:/docs/admin/course-management#4/replay-after-close"
+      },
+      {
+        "q": "코스 종료 전에 미리 챙겨 둘 것",
+        "route": "doc:/docs/admin/course-management#4/before-close-backup"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "아카이브",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "코스 보관",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "코스 숨김",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "보관함",
+        "units": 1,
+        "site": 0,
+        "checked": "낱말만 겹치고 이 주제 답 아님"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-course",
+      "writer": "claude-sonnet-5.5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:course/calendar-sync",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "course",
+    "topic": "외부 캘린더 연동",
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_calendar_sync"
+    ],
+    "anchors": [
+      "구글 캘린더",
+      "캘린더 연동",
+      "일정 내보내기",
+      "아이폰 캘린더"
+    ],
+    "covers": "구글·애플 등 외부 캘린더에 수업 일정을 연동하는 기능은 공개 문서에 없다는 것",
+    "notCovers": [
+      "학생 앱의 캘린더 보기",
+      "수업 입장 알림 → room-entry-time"
+    ],
+    "negatives": [
+      {
+        "q": "수업은 언제부터 입장할 수 있나요",
+        "route": "doc:/docs/teacher/course-units#summary/room-entry-time"
+      },
+      {
+        "q": "대시보드에서 수업 회차 찾는 법",
+        "route": "doc:/docs/admin/course-management#2/find-lesson"
+      },
+      {
+        "q": "수업 시작 시간을 한꺼번에 바꾸려면",
+        "route": "doc:/docs/admin/course-management#1/bulk-edit-lessons"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "구글 캘린더",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "캘린더 연동",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "일정 내보내기",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "외부 캘린더",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-course",
+      "writer": "claude-sonnet-5.5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:course/self-enroll",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "course",
+    "topic": "학생 직접 수강 신청",
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_self_enroll"
+    ],
+    "anchors": [
+      "수강 신청",
+      "수강생 모집",
+      "신청 페이지",
+      "직접 신청"
+    ],
+    "covers": "학생이 신청 페이지에서 스스로 수강 신청하는 기능은 공개 문서에 없다는 것(코스 가입은 초대·QR·코스 ID)",
+    "notCovers": [
+      "코스 가입 방법 → join-methods",
+      "코스 ID 검색 → course-id-search"
+    ],
+    "negatives": [
+      {
+        "q": "학생이 코스에 들어오는 방법을 알려 주세요",
+        "route": "doc:/docs/student/course-join#summary/join-methods"
+      },
+      {
+        "q": "코스 ID로 검색해서 들어가려면요",
+        "route": "doc:/docs/student/course-join#4/course-id-search"
+      },
+      {
+        "q": "QR 코드로 코스에 가입하려면요",
+        "route": "doc:/docs/student/course-join#3/qr-join"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "수강 신청",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "수강생 모집",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "신청 페이지",
+        "units": 0,
+        "site": 1,
+        "checked": "낱말만 겹치고 이 주제 답 아님"
+      },
+      {
+        "query": "직접 신청",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-course",
+      "writer": "claude-sonnet-5.5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:course/waitlist",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "course",
+    "topic": "수강 대기 명단",
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_waitlist"
+    ],
+    "anchors": [
+      "수강 대기",
+      "대기자",
+      "대기 명단",
+      "정원 초과"
+    ],
+    "covers": "정원이 찼을 때 대기자를 받는 기능은 공개 문서에 없다는 것",
+    "notCovers": [
+      "코스 가입 허용 → join-allow"
+    ],
+    "negatives": [
+      {
+        "q": "코스 가입 허용을 켜면 어떻게 되나요",
+        "route": "doc:/docs/teacher/course-create#2/allow-course-join"
+      },
+      {
+        "q": "초대했는데 학생이 코스에 못 들어와요",
+        "route": "howto:invite-not-joining"
+      },
+      {
+        "q": "대시보드에서 학생을 코스에 넣는 순서",
+        "route": "doc:/docs/admin/course-creation#2/add-members-dashboard"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "수강 대기",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "대기자",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "대기 명단",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "웨이팅",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-course",
+      "writer": "claude-sonnet-5.5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:course/course-password",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "course",
+    "topic": "코스 입장 비밀번호",
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_course_password"
+    ],
+    "anchors": [
+      "코스 비밀번호",
+      "입장 암호",
+      "코스 암호",
+      "입장 코드"
+    ],
+    "covers": "코스 입장 때 별도 비밀번호를 거는 기능은 공개 문서에 없다는 것",
+    "notCovers": [
+      "코스 가입 허용 → join-allow",
+      "초대 링크·QR·ID → join-methods"
+    ],
+    "negatives": [
+      {
+        "q": "코스 가입 허용 설정이 뭔가요",
+        "route": "doc:/docs/teacher/course-create#2/allow-course-join"
+      },
+      {
+        "q": "초대 링크로 코스에 들어가려면요",
+        "route": "doc:/docs/teacher/course-members#0/invite-how"
+      },
+      {
+        "q": "코스 ID로 검색해서 들어가려면요",
+        "route": "doc:/docs/teacher/course-members#0/link-id-search"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "코스 비밀번호",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "입장 암호",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "코스 암호",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "입장 코드",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-course",
+      "writer": "claude-sonnet-5.5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:course/co-head-teacher",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "course",
+    "topic": "공동 담임 지정",
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_head_teacher"
+    ],
+    "anchors": [
+      "공동 담임",
+      "복수 담임",
+      "담임 두 명",
+      "담임 여러 명"
+    ],
+    "covers": "코스에 담임 교사를 여럿 두는 공동 담임 방식은 공개 문서에 없다는 것(담임 1명과 함께 맡는 교사 구조만 안내)",
+    "notCovers": [
+      "담임과 함께 맡는 교사 차이 → head-teacher-role"
+    ],
+    "negatives": [
+      {
+        "q": "담임 교사와 함께 맡는 교사는 뭐가 다른가요",
+        "route": "doc:/docs/admin/course-creation#1/head-teacher-role"
+      },
+      {
+        "q": "강사가 바뀔 때 새 담임으로 바꾸려면요",
+        "route": "doc:/docs/admin/course-management#1/change-head-teacher"
+      },
+      {
+        "q": "학생을 교사로 올리려면요",
+        "route": "doc:/docs/teacher/course-members#3/promote-teacher"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "공동 담임",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "복수 담임",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "담임 두 명",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "담임 여러",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-course",
+      "writer": "claude-sonnet-5.5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:course/lesson-postpone",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "course",
+    "topic": "수업 연기·휴강 처리",
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_lesson_postpone"
+    ],
+    "anchors": [
+      "수업 연기",
+      "휴강",
+      "보강 수업",
+      "수업 취소"
+    ],
+    "covers": "수업을 휴강·연기로 표시하고 학생에게 자동 안내하는 기능은 공개 문서에 없다는 것",
+    "notCovers": [
+      "수업 시간 일괄 변경 → bulk-edit-lessons",
+      "결석 보강용 녹화 수업과 수업 만들기 → fixed:makeup-class-meaning-create"
+    ],
+    "negatives": [
+      {
+        "q": "이미 만든 여러 수업의 시작 시간을 바꾸려면요",
+        "route": "doc:/docs/admin/course-management#1/bulk-edit-lessons"
+      },
+      {
+        "q": "수업을 초안으로 저장하려면요",
+        "route": "doc:/docs/admin/course-creation#3/publish-or-draft"
+      },
+      {
+        "q": "끝난 수업 데이터를 정리하려면요",
+        "route": "doc:/docs/admin/course-management#5/delete-lesson-data"
+      },
+      {
+        "q": "결석한 학생 보강 영상 올리는 법",
+        "route": "fixed:makeup-class-meaning-create"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "수업 연기",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "휴강",
+        "units": 4,
+        "site": 0,
+        "checked": "낱말만 겹치고 이 주제 답 아님"
+      },
+      {
+        "query": "보강 수업",
+        "units": 1,
+        "site": 0,
+        "checked": "낱말만 겹치고 이 주제 답 아님"
+      },
+      {
+        "query": "수업 취소",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-course",
+      "writer": "claude-sonnet-5.5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:course/completion-certificate",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "course",
+    "topic": "수료증 발급",
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_completion_certificate"
+    ],
+    "anchors": [
+      "수료증",
+      "이수증",
+      "수료",
+      "수료 처리"
+    ],
+    "covers": "코스 수료증·이수증을 발급하는 기능은 공개 문서에 없다는 것",
+    "notCovers": [
+      "성적·학습 보고서 → report-link-parent-message"
+    ],
+    "negatives": [
+      {
+        "q": "학부모에게 학습 보고서 링크를 보내려면요",
+        "route": "doc:/docs/admin/course-management#3/report-link-parent-message"
+      },
+      {
+        "q": "수업 출석을 확인하려면요",
+        "route": "doc:/docs/admin/course-management#3/attendance-monitoring"
+      },
+      {
+        "q": "수업 기록은 어디서 보나요",
+        "route": "doc:/docs/admin/course-management#3/lesson-records-menu"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "수료증",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "이수증",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "수료 처리",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "인증서 발급",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-course",
+      "writer": "claude-sonnet-5.5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:course/substitute-teacher",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "course",
+    "topic": "대체 강사 임시 지정",
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_lesson_teacher"
+    ],
+    "anchors": [
+      "대체 강사",
+      "임시 강사",
+      "대강",
+      "하루만 강사"
+    ],
+    "covers": "하루만 대신 들어가는 대체 강사를 임시로 지정하는 방법은 공개 문서에 없다는 것",
+    "notCovers": [
+      "수업 교사·조교 지정 → lesson-teacher-assistant",
+      "담임 교체 → change-head-teacher"
+    ],
+    "negatives": [
+      {
+        "q": "수업마다 수업 교사와 조교를 정하려면요",
+        "route": "doc:/docs/admin/course-creation#3/lesson-teacher-assistant"
+      },
+      {
+        "q": "담임을 바꾼 뒤 이미 만든 수업의 교사도 바꾸려면요",
+        "route": "doc:/docs/admin/course-management#1/change-lesson-teacher"
+      },
+      {
+        "q": "그만둔 강사를 코스에서 삭제하려면요",
+        "route": "doc:/docs/admin/course-management#1/remove-old-teacher"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "대체 강사",
+        "units": 3,
+        "site": 0,
+        "checked": "낱말만 겹치고 이 주제 답 아님"
+      },
+      {
+        "query": "임시 강사",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "대강",
+        "units": 0,
+        "site": 4,
+        "checked": "낱말만 겹치고 이 주제 답 아님"
+      },
+      {
+        "query": "대타 강사",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-course",
+      "writer": "claude-sonnet-5.5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:course/roster-export",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "course",
+    "topic": "구성원 명단 내려받기",
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_roster_export"
+    ],
+    "anchors": [
+      "명단 내려받기",
+      "명단 내보내기",
+      "구성원 명단",
+      "엑셀 다운로드"
+    ],
+    "covers": "코스 구성원 명단을 엑셀 등으로 내려받는 기능은 공개 문서에 없다는 것",
+    "notCovers": [
+      "수업 회차 엑셀 내보내기 → find-lesson",
+      "수업 기록 엑셀 → settlement-excel"
+    ],
+    "negatives": [
+      {
+        "q": "대시보드에서 수업 회차를 찾고 엑셀로 내보내려면요",
+        "route": "doc:/docs/admin/course-management#2/find-lesson"
+      },
+      {
+        "q": "코스 구성원을 한눈에 보려면요",
+        "route": "doc:/docs/teacher/course-members#summary/members-overview"
+      },
+      {
+        "q": "정산용 엑셀은 어디서 받나요",
+        "route": "doc:/docs/admin/course-management#6/settlement-excel"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "명단 내려받기",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "명단 내보내기",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "구성원 명단",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "학생 명단 다운로드",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-course",
+      "writer": "claude-sonnet-5.5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:course/timetable-export",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "course",
+    "topic": "시간표 내려받기·인쇄",
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_timetable_export"
+    ],
+    "anchors": [
+      "시간표 내보내기",
+      "시간표 인쇄",
+      "시간표 PDF",
+      "주간 시간표"
+    ],
+    "covers": "코스 시간표를 PDF나 인쇄용으로 내보내는 기능은 공개 문서에 없다는 것",
+    "notCovers": [
+      "수업 회차 찾기·엑셀 → find-lesson"
+    ],
+    "negatives": [
+      {
+        "q": "대시보드에서 특정 수업을 찾고 엑셀로 내보내려면요",
+        "route": "doc:/docs/admin/course-management#2/find-lesson"
+      },
+      {
+        "q": "매주 반복되는 수업을 한 번에 만들려면요",
+        "route": "doc:/docs/admin/course-creation#5/bulk-create-lessons"
+      },
+      {
+        "q": "코스의 수업 횟수와 학생 수는 어디서 보나요",
+        "route": "doc:/docs/admin/course-management#0/find-course"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "시간표 내보내기",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "시간표 인쇄",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "시간표 PDF",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "일정표 출력",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-course",
+      "writer": "claude-sonnet-5.5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:course/invite-link-expiry",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "course",
+    "topic": "초대 링크 유효 기간",
+    "asks": [
+      "when"
+    ],
+    "concepts": [
+      "C_invite_link_expiry"
+    ],
+    "anchors": [
+      "링크 만료",
+      "링크 유효",
+      "초대 링크 기간",
+      "링크 재발급"
+    ],
+    "covers": "코스 초대 링크가 언제까지 유효한지·만료 기간을 정할 수 있는지는 공개 문서에 없다는 것",
+    "notCovers": [
+      "초대 링크 만들기 → invite-how",
+      "링크가 안 열릴 때 → link-id-search"
+    ],
+    "negatives": [
+      {
+        "q": "코스 초대 링크는 어떻게 만드나요",
+        "route": "doc:/docs/teacher/course-members#0/invite-how"
+      },
+      {
+        "q": "초대 메시지는 어떻게 보내면 좋나요",
+        "route": "doc:/docs/teacher/course-members#1/invite-message"
+      },
+      {
+        "q": "링크가 안 열릴 때 코스 ID로 들어가려면요",
+        "route": "doc:/docs/teacher/course-members#0/link-id-search"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "링크 만료",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "링크 유효",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "초대 링크 기간",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "링크 재발급",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-course",
+      "writer": "claude-sonnet-5.5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:course/parent-invite",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "course",
+    "topic": "학부모 코스 참여",
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_parent_in_course"
+    ],
+    "anchors": [
+      "학부모 초대",
+      "보호자 초대",
+      "학부모 참관",
+      "학부모 계정"
+    ],
+    "covers": "학부모를 코스 구성원으로 초대하거나 수업을 참관시키는 방법은 공개 문서에 없다는 것",
+    "notCovers": [
+      "학부모에게 보고서 링크 보내기 → report-link-parent-message"
+    ],
+    "negatives": [
+      {
+        "q": "학생을 코스에 초대하는 방법",
+        "route": "doc:/docs/teacher/course-members#0/invite-how"
+      },
+      {
+        "q": "학부모에게 학습 보고서 링크를 보내려면요",
+        "route": "doc:/docs/admin/course-management#3/report-link-parent-message"
+      },
+      {
+        "q": "학생 계정에 이름과 전화번호를 어떻게 쓰나요",
+        "route": "doc:/docs/teacher/course-members#5/name-phone"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "학부모 초대",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "보호자 초대",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "학부모 참관",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "학부모 계정",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-course",
+      "writer": "claude-sonnet-5.5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:course/schedule-conflict",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "course",
+    "topic": "수업 시간 겹침 경고",
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_schedule_conflict"
+    ],
+    "anchors": [
+      "시간표 겹침",
+      "시간 중복",
+      "수업 충돌",
+      "일정 충돌"
+    ],
+    "covers": "같은 강사·학생의 수업 시간이 겹치면 경고하는 기능은 공개 문서에 없다는 것",
+    "notCovers": [
+      "수업 만들기 → create-one-lesson",
+      "수업 시간 일괄 변경 → bulk-edit-lessons"
+    ],
+    "negatives": [
+      {
+        "q": "대시보드 코스에서 수업 하나를 만드는 순서",
+        "route": "doc:/docs/admin/course-creation#3/create-one-lesson"
+      },
+      {
+        "q": "매주 반복되는 수업을 한 번에 만들려면요",
+        "route": "doc:/docs/admin/course-creation#5/bulk-create-lessons"
+      },
+      {
+        "q": "이미 만든 수업 시간을 한꺼번에 바꾸려면요",
+        "route": "doc:/docs/admin/course-management#1/bulk-edit-lessons"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "시간표 겹침",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "시간 중복",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "수업 충돌",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "일정 충돌",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-course",
+      "writer": "claude-sonnet-5.5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:course/cross-institution",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "course",
+    "topic": "다른 학원과 공동 수업",
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_cross_institution"
+    ],
+    "anchors": [
+      "기관 간 수업",
+      "연합 수업",
+      "공동 수업",
+      "다른 학원 강사"
+    ],
+    "covers": "서로 다른 학원 계정이 한 코스에서 함께 수업하는 방식은 공개 문서에 없다는 것",
+    "notCovers": [
+      "다른 아이디로 로그인한 학생 → wrong-account",
+      "강사가 목록에 없을 때 → member-not-listed"
+    ],
+    "negatives": [
+      {
+        "q": "학원에 등록한 아이디가 아닌 계정으로 로그인했을 때는요",
+        "route": "doc:/docs/student/course-join#5/wrong-account"
+      },
+      {
+        "q": "코스에 넣을 강사가 목록에 없을 때는요",
+        "route": "doc:/docs/admin/course-creation#2/member-not-listed"
+      },
+      {
+        "q": "대시보드에서 교사와 학생을 코스에 넣으려면요",
+        "route": "doc:/docs/admin/course-creation#2/add-members-dashboard"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "기관 간 수업",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "연합 수업",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "공동 수업",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "타 기관 강사",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-course",
+      "writer": "claude-sonnet-5.5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:course/course-order",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "course",
+    "topic": "코스 목록 순서 정렬",
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_course_order"
+    ],
+    "anchors": [
+      "코스 순서",
+      "코스 정렬",
+      "코스 상단",
+      "코스 폴더"
+    ],
+    "covers": "앱의 코스 목록 순서를 직접 바꾸거나 폴더로 묶는 기능은 공개 문서에 없다는 것",
+    "notCovers": [
+      "대시보드에서 코스 찾기 → find-course",
+      "코스 이름 짓는 기준 → course-naming"
+    ],
+    "negatives": [
+      {
+        "q": "대시보드에서 코스를 찾으려면요",
+        "route": "doc:/docs/admin/course-management#0/find-course"
+      },
+      {
+        "q": "코스 이름은 어떻게 짓는 게 좋나요",
+        "route": "doc:/docs/teacher/course-create#1/course-naming"
+      },
+      {
+        "q": "코스 안의 과정·단원 구조는요",
+        "route": "doc:/docs/teacher/course-units#0/hierarchy"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "코스 순서",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "코스 정렬",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "코스 상단 고정",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "코스 폴더",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-course",
+      "writer": "claude-sonnet-5.5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:course/course-hidden",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "course",
+    "topic": "코스 비공개 설정",
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_course_hidden"
+    ],
+    "anchors": [
+      "비공개 코스",
+      "코스 공개",
+      "검색 노출",
+      "코스 숨김 설정"
+    ],
+    "covers": "코스를 검색에서 숨기거나 공개 범위를 정하는 설정은 공개 문서에 없다는 것",
+    "notCovers": [
+      "코스 가입 허용 → join-allow",
+      "코스 ID 검색 → course-id-search"
+    ],
+    "negatives": [
+      {
+        "q": "코스 가입 허용을 켜고 끄는 설정은요",
+        "route": "doc:/docs/teacher/course-create#2/allow-course-join"
+      },
+      {
+        "q": "코스 ID로 검색해서 들어가려면요",
+        "route": "doc:/docs/student/course-join#4/course-id-search"
+      },
+      {
+        "q": "코스 구성원을 한눈에 보려면요",
+        "route": "doc:/docs/teacher/course-members#summary/members-overview"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "비공개 코스",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "코스 공개",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "검색 노출",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "코스 숨김",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-course",
+      "writer": "claude-sonnet-5.5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:course/grade-promotion",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "course",
+    "topic": "학년 진급 일괄 이동",
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_grade_promotion"
+    ],
+    "anchors": [
+      "진급",
+      "학년 올리기",
+      "학년 이동",
+      "학생 일괄 이동"
+    ],
+    "covers": "새 학년이 되면 학생을 다음 학년 코스로 일괄 이동·진급시키는 기능은 공개 문서에 없다는 것",
+    "notCovers": [
+      "편입생 넣기 → transfer-student-registration",
+      "코스 종료 → close-course-admin"
+    ],
+    "negatives": [
+      {
+        "q": "다른 반에서 온 학생을 편입생으로 넣으려면요",
+        "route": "howto:guide:transfer-student-registration"
+      },
+      {
+        "q": "코스에서 학생을 삭제하려면요",
+        "route": "doc:/docs/teacher/course-members#4/remove-member"
+      },
+      {
+        "q": "학기가 끝난 코스를 종료하려면요",
+        "route": "doc:/docs/admin/course-management#4/close-course-admin"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "진급",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "학년 올리기",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "학년 이동",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "학생 일괄 이동",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-course",
+      "writer": "claude-sonnet-5.5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:course/course-compare",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "course",
+    "topic": "코스 간 통계 비교",
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_course_compare"
+    ],
+    "anchors": [
+      "코스 비교",
+      "통계 비교",
+      "반별 비교",
+      "코스별 순위"
+    ],
+    "covers": "여러 코스의 출석·성적을 한 화면에서 비교하는 기능은 공개 문서에 없다는 것",
+    "notCovers": [
+      "수업 데이터 리포트 → lesson-data-report",
+      "출석 모니터링 → attendance-monitoring"
+    ],
+    "negatives": [
+      {
+        "q": "수업 데이터 리포트는 어디서 보나요",
+        "route": "doc:/docs/admin/course-management#3/lesson-data-report"
+      },
+      {
+        "q": "수업 출석과 접속을 확인하려면요",
+        "route": "doc:/docs/admin/course-management#3/attendance-monitoring"
+      },
+      {
+        "q": "대시보드에서 코스별 수업 횟수와 학생 수를 보려면요",
+        "route": "doc:/docs/admin/course-management#0/find-course"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "코스 비교",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "통계 비교",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "반별 비교",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "코스별 순위",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-course",
+      "writer": "claude-sonnet-5.5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:course/scheduled-publish",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "course",
+    "topic": "수업 예약 게시",
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_scheduled_publish"
+    ],
+    "anchors": [
+      "예약 게시",
+      "게시 예약",
+      "예약 공개",
+      "자동 공개"
+    ],
+    "covers": "수업을 정해 둔 시각에 자동으로 게시·공개되게 예약하는 기능은 공개 문서에 없다는 것(게시·초안 저장만 안내)",
+    "notCovers": [
+      "게시와 초안 → publish-or-draft"
+    ],
+    "negatives": [
+      {
+        "q": "수업 게시와 초안 저장은 어떻게 다른가요",
+        "route": "doc:/docs/admin/course-creation#3/publish-or-draft"
+      },
+      {
+        "q": "대시보드에서 수업 하나를 만드는 순서",
+        "route": "doc:/docs/admin/course-creation#3/create-one-lesson"
+      },
+      {
+        "q": "이미 만든 수업의 시작 시간을 한꺼번에 바꾸려면요",
+        "route": "doc:/docs/admin/course-management#1/bulk-edit-lessons"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "예약 게시",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "게시 예약",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "예약 공개",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "자동 공개",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-course",
+      "writer": "claude-sonnet-5.5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:course/join-approval",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "course",
+    "topic": "코스 가입 승인제",
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_join_approval"
+    ],
+    "anchors": [
+      "가입 승인",
+      "승인제",
+      "가입 신청 승인",
+      "승인 후 입장"
+    ],
+    "covers": "학생이 가입을 신청하면 교사가 건별로 승인하는 방식은 공개 문서에 없다는 것(가입 허용 켜기·끄기만 안내)",
+    "notCovers": [
+      "코스 가입 허용 → join-allow"
+    ],
+    "negatives": [
+      {
+        "q": "코스 가입 허용을 켜면 어떻게 되나요",
+        "route": "doc:/docs/teacher/course-create#2/allow-course-join"
+      },
+      {
+        "q": "선생님이 초대한 학생이 반에 입장하지 못해요",
+        "route": "howto:invite-not-joining"
+      },
+      {
+        "q": "학생이 코스에 가입이 안 될 때는요",
+        "route": "howto:course-join-fail"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "가입 승인",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "승인제",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "가입 신청 승인",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "승인 대기",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-course",
+      "writer": "claude-sonnet-5.5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:course/member-block",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "course",
+    "topic": "구성원 재입장 차단",
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_member_block"
+    ],
+    "anchors": [
+      "재입장 차단",
+      "입장 금지",
+      "차단 해제",
+      "블랙리스트"
+    ],
+    "covers": "퇴장시킨 구성원이 다시 들어오지 못하게 막는 설정은 공개 문서에 없다는 것(구성원 삭제만 안내)",
+    "notCovers": [
+      "구성원 삭제 → remove-member",
+      "학생 퇴장 제한 → student-cant-leave"
+    ],
+    "negatives": [
+      {
+        "q": "코스 구성원을 삭제하려면요",
+        "route": "doc:/docs/teacher/course-members#4/remove-member"
+      },
+      {
+        "q": "학생이 코스에서 스스로 나갈 수 없다는데 왜 그런가요",
+        "route": "doc:/docs/teacher/course-members#4/student-cant-leave"
+      },
+      {
+        "q": "모바일에서 구성원을 삭제하려면요",
+        "route": "howto:cs-figma-digest-859-mobile-remove-member"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "재입장 차단",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "입장 금지",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "차단 해제",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "재가입 방지",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-course",
+      "writer": "claude-sonnet-5.5",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  }
+]

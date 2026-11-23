@@ -1049,7 +1049,9 @@ const BASE_SYMPTOM_TOPICS: SymptomTopic[] = [
     id: "class-disconnect",
     subject: /튕|끊(?:기|겨|김|어|겼|긴|깁|길)|나가져|나가집|(?:계속|자꾸|혼자|갑자기)\s*나가|나가요|나갑니다|강제\s*(?:로\s*)?(?:퇴장|종료)|연결\s*(?:이|가)?\s*(?:불안|끊|안)|접속\s*(?:이|가)?\s*(?:불안|끊)/,
     requireSymptom: false,
-    exclude: /녹화|미러링|무선\s*키보드|마우스/,
+    // "영상이 해외로 나가요?"는 수업에서 나가지는 증상이 아니라 데이터 이전을 묻는 말이다.
+    // "현금영수증 끊어주나요", "세금계산서 끊어 줘요"의 '끊다'는 증빙을 발행한다는 말이다.
+    exclude: /녹화|미러링|무선\s*키보드|마우스|(?:해외|국외|외부|밖)\s*(?:으)?로\s*나가|끊어\s*(?:주|줘|줄|드|달)|(?:영수증|계산서|증빙|전표)\S{0,3}\s*(?:도\s*)?끊/,
     category: "troubleshooting",
     doc: { category: "start", slug: "class-connection-troubleshooting" },
     steps: [{ heading: "자꾸 끊기거나 교실에서 튕길 때", pick: [0, 1, 3, 2, 4] }],
@@ -1252,7 +1254,8 @@ const BASE_SYMPTOM_TOPICS: SymptomTopic[] = [
   },
   {
     id: "schedule-missing",
-    subject: /일정|캘린더|할\s*일\s*(?:에|목록|탭)?/,
+    // "망할 일은 없겠죠"의 '할 일'은 할 일 목록이 아니다. 낱말 첫머리의 '할 일'만 본다.
+    subject: /일정|캘린더|(?<![가-힣])할\s*일\s*(?:에|목록|탭)?/,
     symptom: /안\s*(?:보|떠|뜨|나)|안보|안떠|안뜨|없|사라|보이지\s*않|안\s*올라/,
     exclude: /수업\s*일정\s*(?:을|를)?\s*(?:어떻게|정하|바꾸|변경)|도입\s*일정|설치\s*일정/,
     category: "troubleshooting",
@@ -1638,6 +1641,10 @@ export function isVagueErrorQuestion(question: string) {
 }
 
 // "또 날아가면 안 되니까 저장해 두겠다", "보이지 않게 하려면"처럼 금지·목적을 말하는 표현은 증상이 아니다.
+// "일반 전자칠판은 학생 화면 공유 안 되죠"처럼 '안 되죠·안 되잖아요'로 확인을 구하는 말은 기능을 묻는 말이다.
+// 다만 "화면 공유 왜 안 되죠", "갑자기 마이크 안 되잖아요"처럼 고장을 알리는 낱말이 함께 있으면 증상 신고다.
+const CONFIRMING_NEGATION_RE = /안\s*(?:되|돼)(?:죠|지요|잖아요|잖아)(?=\s|$)/g
+const FAULT_REPORT_CUE_RE = /왜|갑자기|자꾸|계속|아까|또\s/
 const NON_SYMPTOM_NEGATION_RE =
   /(?:면|으면)\s*안\s*(?:돼|되)\S*|안\s*(?:되|돼)\s*(?:게|도록)|(?:지|보이지|들리지)\s*않\s*(?:게|도록)|\S*(?:지|진)\s*않(?:나요|을까요|을까|겠죠|겠지요|나|죠)/g
 // 공손한 요청 어미("알 수 있을까요", "여쭤봐도 될까요")는 기능·가능 여부 질문이 아니다.
@@ -1647,7 +1654,8 @@ const POLITE_REQUEST_RE =
 export function findSymptomTopic(question: string): SymptomTopic | null {
   const text = normalizeTriageText(question)
   if (!text) return null
-  const symptomText = text.replace(NON_SYMPTOM_NEGATION_RE, " ")
+  const withoutNegation = text.replace(NON_SYMPTOM_NEGATION_RE, " ")
+  const symptomText = FAULT_REPORT_CUE_RE.test(text) ? withoutNegation : withoutNegation.replace(CONFIRMING_NEGATION_RE, " ")
   const capabilityForm =
     CAPABILITY_QUESTION_RE.test(text.replace(POLITE_REQUEST_RE, " ").trim()) && !EXPLICIT_SYMPTOM_RE.test(symptomText)
 

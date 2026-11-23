@@ -1,0 +1,66 @@
+[
+  {
+    "id": "doc:/docs/fake/students#0/student-count",
+    "kind": "doc",
+    "tier": "standard",
+    "area": "pricing",
+    "topic": "한 교실 학생 수",
+    "status": "active",
+    "answer": {
+      "sentences": [
+        {
+          "unit": "doc:/docs/fake/students#0",
+          "ids": [
+            0
+          ],
+          "hashes": [
+            "d1d2846296f1e5c2"
+          ]
+        }
+      ]
+    },
+    "asks": [
+      "quantity"
+    ],
+    "concepts": [
+      "C_student_count"
+    ],
+    "anchors": [
+      "학생 수",
+      "최대 인원"
+    ],
+    "covers": "한 교실에 들어올 수 있는 학생 수"
+  },
+  {
+    "id": "fixed:fake-price",
+    "kind": "fixed",
+    "tier": "head",
+    "area": "pricing",
+    "topic": "요금 계산 기준",
+    "status": "active",
+    "answer": {
+      "text": "요금은 학생 수와 사용 기간에 따라 달라요. 정확한 견적은 상담으로 안내해 드려요.",
+      "textHash": "77fae2f492e2b58c"
+    },
+    "asks": [
+      "cost"
+    ],
+    "concepts": [
+      "C_price"
+    ],
+    "anchors": [
+      "요금",
+      "가격",
+      "견적"
+    ],
+    "covers": "요금이 무엇에 따라 정해지는지",
+    "provenance": {
+      "unit": "D4-fixture",
+      "writer": "fixture",
+      "at": "2026-11-19",
+      "legacyIds": [
+        "basics:fake-price"
+      ]
+    }
+  }
+]

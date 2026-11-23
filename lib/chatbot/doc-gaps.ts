@@ -16,9 +16,9 @@ import { assertJsonSafeInDev } from "@/lib/server/json-safe"
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import { DOC_GAP_BACKLOG_CACHE_TAG } from "@/lib/chatbot/cache-tags"
+import { resolveModelChain } from "./llm"
 import { evaluateChatbotQuery } from "./service"
 
-const DRAFT_MODEL = process.env.GEMINI_MODEL?.trim() || "gemini-2.5-pro"
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY
 const DOC_CATEGORIES = ["start", "software", "admin", "teacher", "student", "hardware", "board"]
 
@@ -283,39 +283,43 @@ export async function generateDocDraft(question: string): Promise<DocDraft | nul
     },
   }
 
-  try {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${DRAFT_MODEL}:generateContent?key=${GEMINI_API_KEY}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+  // 초안 모델도 챗봇과 같은 체인을 쓴다. 종료된 모델이 env 에 남아 있거나 한 모델이 실패해도 다음 모델로 이어 간다.
+  for (const model of resolveModelChain("advanced")) {
+    try {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        }
+      )
+      if (!res.ok) continue
+      const data = (await res.json()) as {
+        candidates?: { content?: { parts?: { text?: string }[] } }[]
       }
-    )
-    if (!res.ok) return null
-    const data = (await res.json()) as {
-      candidates?: { content?: { parts?: { text?: string }[] } }[]
-    }
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text
-    if (!text) return null
-    const parsed = JSON.parse(text) as {
-      title?: string
-      contentMarkdown?: string
-      suggestedCategory?: string
-    }
-    if (!parsed.title || !parsed.contentMarkdown) return null
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text
+      if (!text) continue
+      const parsed = JSON.parse(text) as {
+        title?: string
+        contentMarkdown?: string
+        suggestedCategory?: string
+      }
+      if (!parsed.title || !parsed.contentMarkdown) continue
 
-    const suggestedCategory = DOC_CATEGORIES.includes(parsed.suggestedCategory ?? "")
-      ? (parsed.suggestedCategory as string)
-      : "start"
+      const suggestedCategory = DOC_CATEGORIES.includes(parsed.suggestedCategory ?? "")
+        ? (parsed.suggestedCategory as string)
+        : "start"
 
-    return {
-      title: parsed.title,
-      contentMarkdown: parsed.contentMarkdown,
-      suggestedCategory,
-      grounding,
+      return {
+        title: parsed.title,
+        contentMarkdown: parsed.contentMarkdown,
+        suggestedCategory,
+        grounding,
+      }
+    } catch {
+      continue
     }
-  } catch {
-    return null
   }
+  return null
 }

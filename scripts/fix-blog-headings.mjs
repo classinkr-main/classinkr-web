@@ -89,7 +89,8 @@ function deterministicFix(markdown) {
 /* ─── Gemini 로 H2 헤딩 추가 ─── */
 async function addHeadingsViaAi(title, markdown) {
   const model = gemini.getGenerativeModel({
-    model: "gemini-2.5-pro",
+    // 2026-11 기준 gemini-2.x 는 404 — 일회성 스크립트라 앱 코드(server-only)를 import 하지 않고 기본값만 맞춘다.
+    model: "gemini-3.1-pro-preview",
     generationConfig: { temperature: 0.2 },
   });
 

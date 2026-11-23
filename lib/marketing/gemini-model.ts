@@ -8,21 +8,65 @@
 
 import "server-only"
 
-// 2026-10-15 운영 계정 models.list 확인: gemini-4.0-pro/flash는 제공되지 않는다.
-export const DEFAULT_GEMINI_MODEL = "gemini-2.5-pro"
-export const DEFAULT_GEMINI_FAST_MODEL = "gemini-2.5-flash"
+// 2026-11-18 실제 generateContent 호출 확인: gemini-2.x/1.x 는 404("no longer available"),
+// 아래 기본값과 폴백 모델은 200. models.list 에는 종료된 모델이 남아 있으니 목록으로 판단하지 않는다.
+// lib/chatbot/llm.ts 와 같은 선택(챗봇 파일은 import 하지 않고 규칙만 맞춘다).
+export const DEFAULT_GEMINI_MODEL = "gemini-3.1-pro-preview"
+export const DEFAULT_GEMINI_FAST_MODEL = "gemini-3.5-flash"
+/** 모델이 없다는 오류(404)일 때 한 번 넘어가는 폴백 모델. */
+export const GEMINI_FALLBACK_MODEL = "gemini-3.5-flash"
+export const GEMINI_LAST_RESORT_MODEL = "gemini-flash-lite-latest"
 
 /** 존재하지 않거나 이 호출 형태(v1beta generateContent + responseSchema)를 지원하지 않는
  *  모델이 env 에 박혀도 404 로 죽지 않게 방어한다. */
-export const UNSUPPORTED_GEMINI_MODELS = new Set(["gemini-3.1-pro"])
+export const UNSUPPORTED_GEMINI_MODELS = new Set(["gemini-3.1-pro", "gemini-3-pro-preview"])
+
+/** 종료된 세대(gemini-1.x, gemini-2.x) — env 에 남아 있어도 무시하고 기본값을 쓴다. */
+export function isUnsupportedGeminiModel(name: string): boolean {
+  const lower = name.trim().toLowerCase()
+  return UNSUPPORTED_GEMINI_MODELS.has(lower) || /^gemini-[12]\./.test(lower)
+}
 
 export function resolveGeminiModel(
   envName: "GEMINI_MODEL" | "GEMINI_FAST_MODEL",
   fallback: string
 ): string {
   const configured = process.env[envName]?.trim()
-  if (!configured || UNSUPPORTED_GEMINI_MODELS.has(configured)) return fallback
+  if (!configured || isUnsupportedGeminiModel(configured)) return fallback
   return configured
+}
+
+/**
+ * 모델 없음(404) 계열 오류인지. "Gemini 404: ..." 와 SDK 오류 메시지("[404 Not Found]") 둘 다 본다.
+ * 메시지 아무 곳의 404 는 보지 않는다 — 응답 JSON 파싱 오류("column 404", "신규 리드 404건")가 모델 없음으로 읽혀
+ * 품질 모드가 조용히 flash 로 내려가지 않게 한다. JSON.parse 의 SyntaxError 는 응답 내용 탓이라 폴백 대상이 아니다.
+ */
+export function isGeminiModelNotFoundError(error: unknown): boolean {
+  if (error instanceof SyntaxError) return false
+  const msg = error instanceof Error ? error.message : String(error)
+  return /^Gemini 404\b|\[404 [^\]]*\]|no longer available|is not found for api version/i.test(msg)
+}
+
+/**
+ * 모델 없음(404)이면 gemini-3.5-flash → gemini-flash-lite-latest 순으로 한 번씩만 넘어간다.
+ * 그 외 오류(400·429·타임아웃)는 모델 탓이 아니므로 그대로 던진다.
+ * run 은 호출마다 모델명을 받아 URL·thinkingConfig 를 다시 만들어야 한다.
+ */
+export async function withGeminiModelFallback<T>(
+  primary: string,
+  run: (model: string) => Promise<T>
+): Promise<T> {
+  const chain = Array.from(new Set([primary, GEMINI_FALLBACK_MODEL, GEMINI_LAST_RESORT_MODEL]))
+  let lastError: unknown
+  for (const model of chain) {
+    try {
+      return await run(model)
+    } catch (error) {
+      lastError = error
+      if (!isGeminiModelNotFoundError(error)) throw error
+    }
+  }
+  throw lastError
 }
 
 /**
@@ -54,10 +98,15 @@ export interface GeminiThinkingConfig {
  * 응답 본문이 빈 채로 오는 무음 실패를 겪었다(챗봇이 답변 대신 raw 청크를 노출).
  * pro 계열은 선례와 동일하게 건드리지 않는다 — 사고 예산이 품질 모드의 본체다.
  */
+// thinkingLevel "minimal" 을 받는다고 실측으로 확인한 모델(lib/chatbot/llm.ts MINIMAL_THINKING_MODEL_RE 와 같은 목록, 2026-11-13).
+// 3.7·3.8-flash, gemini-4 계열은 minimal 을 400 으로 거부하고, 400 은 모델 폴백 대상이 아니라 호출이 그대로 실패한다.
+// 그 밖의 3.x·4.x 는 전 모델이 받는 "low" 를 쓴다.
+const MINIMAL_THINKING_MODEL_RE = /^gemini-(?:[\d.]+-flash-lite|flash-lite-latest|3\.[56]-flash|3-flash-preview)/
+
 export function thinkingConfigFor(model: string): GeminiThinkingConfig | undefined {
   const lower = model.toLowerCase()
   if (lower.startsWith("gemini-4") || lower.startsWith("gemini-3")) {
-    return { thinkingLevel: lower.includes("pro") ? "low" : "minimal" }
+    return { thinkingLevel: MINIMAL_THINKING_MODEL_RE.test(lower) ? "minimal" : "low" }
   }
   if (lower.startsWith("gemini-2.5-flash")) return { thinkingBudget: 0 }
   return undefined

@@ -1,3 +1,4 @@
+import { isUnverifiedFixedAnswerText } from "@/lib/chatbot/fixed-answers"
 import type { ConversationTone } from "@/lib/chatbot/tone"
 
 /**
@@ -50,9 +51,20 @@ const INTERPRETATIONS: { pattern: RegExp; when?: (input: FollowUpInput) => boole
     asks: true,
   },
   {
-    pattern: /(?:수업|그)\s*프로그램/,
-    when: (input) => /칠판|티비|tv|보드/.test(input.question.toLowerCase()),
+    // "경쟁사 전자칠판이랑 화상수업 프로그램"처럼 다른 회사 제품을 말할 때는 클래스인 X로 읽지 않는다.
+    pattern: /(?<!화상\s*)수업\s*프로그램/,
+    when: (input) =>
+      /칠판|티비|tv|보드/.test(input.question.toLowerCase()) && !/경쟁사|타사|다른\s*회사/.test(input.question),
     line: "'수업 프로그램'은 전자칠판에 깔린 클래스인 X(ClassIn X)로 이해하고 답했어요.",
+  },
+  {
+    // 질문자가 쓴 말 그대로 옮긴다("그 프로그램"을 "수업 프로그램"으로 바꿔 말하지 않는다).
+    pattern: /(?:^|\s)그\s*프로그램/,
+    when: (input) =>
+      /칠판|티비|tv|보드/.test(input.question.toLowerCase()) &&
+      !/경쟁사|타사|다른\s*회사/.test(input.question) &&
+      !/(?<!화상\s*)수업\s*프로그램/.test(input.question),
+    line: "'그 프로그램'은 전자칠판에 깔린 클래스인 X(ClassIn X)로 이해하고 답했어요.",
   },
   {
     pattern: /(?:핸드폰|휴대폰|폰)\s*(?:거|화면)?\s*(?:를|을)?\s*띄우/,
@@ -150,8 +162,13 @@ function pickSalesSlot(input: FollowUpInput) {
 const PURCHASE_SIGNAL_RE =
   /도입|구매|견적|가격|요금|비용|체험|데모|상담|들이|살까|사려|살\s*거|추천|쇼룸|몇\s*대|여러\s*대|싸게|할인|대수/
 
+// 화면 가이드의 사용 순서 답은 기능 사용법이라 영업용 되묻기를 붙이지 않는다
+// ("코스 가입 허용"의 '가입'을 도입 상담으로 읽어 학원 규모를 묻던 것).
+const PROCEDURE_GUIDE_ANSWER_RE = /(?:^|\n)아래 순서대로 따라 하시면 됩니다/
+
 function isSalesConversation(input: FollowUpInput) {
   if (input.handoffIntent !== "demo") return false
+  if (PROCEDURE_GUIDE_ANSWER_RE.test(input.answer)) return false
   const text = input.question.toLowerCase()
   if (SUPPORT_SIGNAL_RE.test(text)) return false
   if (SALES_INTENTS.has(input.intent)) return true
@@ -169,7 +186,11 @@ export function buildFollowUp(input: FollowUpInput): string | null {
   const { tone } = input
   if (tone.angry || tone.repeated || tone.english) return null
   if (input.answerMode === "clarifying_question" || input.answerMode === "fallback") return null
+  // 공개 경로의 doc_suggestion 은 "딱 맞는 안내를 찾지 못했다"는 답이다. 못 찾았다고 한 뒤에 규모·도입 시기를 묻지 않는다.
+  if (input.answerMode === "doc_suggestion") return null
   if (input.intent === "self_knowledge") return null
+  // 못 찾음·확정 못 함 고정 답 뒤에는 규모·기기 같은 되묻기를 붙이지 않는다(확정 못 한다고 해 놓고 좁혀 드린다고 하지 않게).
+  if (isUnverifiedFixedAnswerText(input.answer)) return null
   if (OWN_LINES.some((line) => input.answer.includes(line))) return null
   if (input.topicFollowUp && input.answer.includes(input.topicFollowUp)) return null
   if (ALREADY_ASKS_RE.test(lastParagraphs(input.answer, 2))) return null
@@ -201,4 +222,30 @@ function pickQuestion(input: FollowUpInput): string | null {
 export function appendFollowUp(answer: string, followUp: string | null) {
   if (!followUp || answer.includes(followUp)) return answer
   return `${answer.trimEnd()}\n\n${followUp}`
+}
+
+/** 직전 답이 던진 끝 질문의 종류. 다음 턴의 짧은 대답을 그 질문의 답으로 읽는 데 쓴다. */
+export type AskedSlot = "device" | "size" | "rooms" | "mode" | "timing" | "choice"
+
+const SLOT_ID_TO_ASKED: Record<string, AskedSlot | undefined> = {
+  size: "size",
+  rooms: "rooms",
+  mode: "mode",
+  timing: "timing",
+}
+// "A와 B 중 어느 쪽인가요?"처럼 보기를 주고 고르게 하는 끝 질문.
+const CHOICE_ASK_RE = /(?:중에서?|가운데)\s*(?:어느|어떤|무엇|뭐)[^\n?]{0,30}\?\s*$|어느\s*쪽[^\n?]{0,20}\?\s*$/
+
+/**
+ * 답 끝의 끝 질문 문장(DEVICE_LINE·SALES_SLOTS)으로 어떤 정보를 물었는지 알아본다. 마지막 두 문단만 본다.
+ * 물은 것이 없거나 종류를 모르면 null(지금 쓰는 도구 질문처럼 askedSlot 종류에 없는 것도 null).
+ */
+export function detectAskedSlot(answer: string): AskedSlot | null {
+  const tail = lastParagraphs(answer, 2)
+  if (tail.includes(DEVICE_LINE)) return "device"
+  for (const slot of SALES_SLOTS) {
+    if (tail.includes(slot.line)) return SLOT_ID_TO_ASKED[slot.id] ?? null
+  }
+  if (CHOICE_ASK_RE.test(tail.trim())) return "choice"
+  return null
 }

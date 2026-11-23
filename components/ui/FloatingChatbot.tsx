@@ -1,6 +1,6 @@
 "use client"
 
-import { FormEvent, memo, useEffect, useMemo, useRef, useState } from "react"
+import { FormEvent, memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
@@ -23,6 +23,7 @@ import {
 } from "lucide-react"
 
 import { ClassInAIIcon } from "@/components/ui/ClassInAIIcon"
+import { CHATBOT_HIT_AREA_CLASS } from "@/components/ui/chatbot-hit-area"
 import { cn } from "@/lib/utils"
 import {
     buildChannelTalkMemberId,
@@ -33,7 +34,9 @@ import {
 import { CLASSIN_POSITIONING } from "@/lib/classin-positioning"
 import { trackEvent } from "@/lib/analytics"
 import { stashContactPrefill } from "@/lib/tracking-paths"
+import { CHATBOT_DESKTOP_MEDIA_QUERY, shouldCloseChatbotAfterLinkClick, type ChatLinkClick } from "@/components/ui/chatbot-link-navigation"
 import { resolvePageContext, mergeStarters } from "@/lib/chatbot/page-context"
+import { buildPreviousTurnPayload, shouldShowUnresolvedNudge } from "@/lib/chatbot/widget-turn"
 import {
     CHATBOT_OPEN_EVENT,
     openChatbot,
@@ -42,6 +45,7 @@ import {
 } from "@/lib/chatbot/open-chatbot"
 import { ChatbotTeaser } from "@/components/ui/ChatbotTeaser"
 import { useChatbotTeaser } from "@/components/ui/useChatbotTeaser"
+import { isNearBottom, resolveChatInputHeight, resolveListScrollTopAfterInputResize } from "@/components/ui/chatbot-input-autosize"
 import { CHATBOT_MOTION, m } from "@/lib/chatbot/motion"
 import {
     isMuted,
@@ -130,6 +134,8 @@ interface ChatMessage {
     handoffIntent?: HandoffIntent
     showHandoffCTA?: boolean
     retryQuestion?: string
+    // 서버 답(meta)의 답 모드. 다음 질문에 직전 턴(context.previousTurn)으로 함께 보낸다. 위젯이 붙인 말풍선에는 없다.
+    answerMode?: string
 }
 
 // /api/chatbot/query/stream 의 NDJSON 이벤트(서버 ChatbotStreamEvent 와 구조 일치).
@@ -284,10 +290,12 @@ function ConsultationBridge({
     messages,
     message,
     sessionId,
+    onNavigate,
 }: {
     messages: ChatMessage[]
     message: ChatMessage
     sessionId?: string
+    onNavigate?: (click: ChatLinkClick) => void
 }) {
     const shouldReduceMotion = useReducedMotion()
     const [state, setState] = useState<"idle" | "opened" | "copied" | "failed">("idle")
@@ -395,7 +403,10 @@ function ConsultationBridge({
                     onClick={(event) => {
                         // 요약은 주소가 아니라 sessionStorage 로 넘긴다. 저장이 막히면 조용히 빈 폼으로
                         // 보내지 않고 복사해서 붙여 넣도록 안내한다.
-                        if (stashContactPrefill(draft)) return
+                        if (stashContactPrefill(draft)) {
+                            onNavigate?.(event)
+                            return
+                        }
                         event.preventDefault()
                         setToast({ type: "error", text: "요약을 보관하지 못했어요. 요약을 복사한 뒤 문의폼에 붙여 넣어 주세요." })
                     }}
@@ -457,12 +468,13 @@ function FeedbackButtons({
     }
 
     return (
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-2">
             <button
                 type="button"
                 onClick={() => sendFeedback("helpful")}
                 className={cn(
-                    "inline-flex h-8 w-8 items-center justify-center rounded-[8px] border border-white/70 bg-white/70 text-[#615D59] transition-colors hover:bg-fg-accent/8 hover:text-fg-accent",
+                    "inline-flex h-9 w-9 items-center justify-center rounded-[8px] border border-white/70 bg-white/70 text-[#615D59] transition-colors hover:bg-fg-accent/8 hover:text-fg-accent",
+                    CHATBOT_HIT_AREA_CLASS,
                     state === "helpful" && "border-fg-accent/25 bg-fg-accent/8 text-fg-accent"
                 )}
                 aria-label="도움됨"
@@ -474,7 +486,8 @@ function FeedbackButtons({
                 type="button"
                 onClick={() => sendFeedback("not_helpful")}
                 className={cn(
-                    "inline-flex h-8 w-8 items-center justify-center rounded-[8px] border border-white/70 bg-white/70 text-[#615D59] transition-colors hover:bg-fg-accent/8 hover:text-fg-accent",
+                    "inline-flex h-9 w-9 items-center justify-center rounded-[8px] border border-white/70 bg-white/70 text-[#615D59] transition-colors hover:bg-fg-accent/8 hover:text-fg-accent",
+                    CHATBOT_HIT_AREA_CLASS,
                     state === "not_helpful" && "border-fg-accent/25 bg-fg-accent/8 text-fg-accent"
                 )}
                 aria-label="도움 안 됨"
@@ -691,7 +704,8 @@ function AnswerCopyButton({ message }: { message: ChatMessage }) {
             whileTap={shouldReduceMotion ? undefined : { scale: 0.96 }}
             onClick={() => void copyAnswer()}
             className={cn(
-                "inline-flex h-8 items-center justify-center gap-1.5 rounded-[8px] border px-2.5 text-[11px] font-bold transition-all shadow-[0_1px_2px_rgba(0,0,0,0.03)]",
+                "inline-flex h-9 items-center justify-center gap-1.5 rounded-[8px] border px-2.5 text-[11px] font-bold transition-all shadow-[0_1px_2px_rgba(0,0,0,0.03)]",
+                CHATBOT_HIT_AREA_CLASS,
                 state === "copied"
                     ? "border-fg-accent/30 bg-fg-accent/8 text-fg-accent"
                     : state === "failed"
@@ -732,7 +746,13 @@ function AnswerCopyButton({ message }: { message: ChatMessage }) {
     )
 }
 
-function SourceLinks({ sources }: { sources?: ChatbotSource[] }) {
+function SourceLinks({
+    sources,
+    onNavigate,
+}: {
+    sources?: ChatbotSource[]
+    onNavigate?: (click: ChatLinkClick) => void
+}) {
     const shouldReduceMotion = useReducedMotion()
     const visibleSources = sources?.slice(0, 2) ?? []
     if (visibleSources.length === 0) return null
@@ -759,6 +779,7 @@ function SourceLinks({ sources }: { sources?: ChatbotSource[] }) {
                     >
                         <Link
                             href={source.urlPath}
+                            onClick={(event) => onNavigate?.(event)}
                             className={cn(
                                 "group block rounded-[12px] border px-3 py-2 text-left transition-all focus-visible:outline-none",
                                 isTopMatch
@@ -992,6 +1013,49 @@ export function FloatingChatbot() {
         return () => window.cancelAnimationFrame(frame)
     }, [isOpen])
 
+    // 입력창이 내용에 맞춰 44px → 112px 까지 늘고, 넘치면 안쪽 스크롤로 바뀐다.
+    // 한계는 computed min/max-height 를 읽어 글꼴 확대 상태에서도 CSS(min-h-11·max-h-28)와 같게 둔다.
+    // 그리기 전에 맞춰야 한 줄 높이로 깜빡이지 않으므로 layout effect 로 둔다.
+    useLayoutEffect(() => {
+        if (!isOpen) return
+        const el = inputRef.current
+        if (!el) return
+
+        const resize = () => {
+            const container = messagesContainerRef.current
+            const wasNearBottom = container ? isNearBottom(container) : false
+            const prevScrollTop = container ? container.scrollTop : 0
+            const prev = el.offsetHeight
+
+            el.style.height = "auto"
+            const cs = window.getComputedStyle(el)
+            const { height, overflowY } = resolveChatInputHeight(
+                el.scrollHeight,
+                parseFloat(cs.minHeight),
+                parseFloat(cs.maxHeight),
+            )
+            el.style.height = `${height}px`
+            el.style.overflowY = overflowY
+
+            // 입력창이 커지면 대화 목록이 줄어든다. 맨 아래를 보고 있었다면 계속 맨 아래에 둔다.
+            // 재려고 auto 로 줄인 사이 깎인 scrollTop 은 되돌린다(스크롤 앵커링이 없는 Safari 에서 남는다).
+            if (container) {
+                const nextScrollTop = resolveListScrollTopAfterInputResize({
+                    heightChanged: height !== prev,
+                    wasNearBottom,
+                    prevScrollTop,
+                    scrollTop: container.scrollTop,
+                    scrollHeight: container.scrollHeight,
+                })
+                if (nextScrollTop !== null) container.scrollTop = nextScrollTop
+            }
+        }
+
+        resize()
+        window.addEventListener("resize", resize)
+        return () => window.removeEventListener("resize", resize)
+    }, [input, isOpen])
+
     useEffect(() => {
         if (!isOpen) return
         const frame = window.requestAnimationFrame(() => {
@@ -1006,9 +1070,7 @@ export function FloatingChatbot() {
         const container = messagesContainerRef.current
         if (!container) return
 
-        const threshold = 45
-        const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight <= threshold
-        setIsAtBottom(isNearBottom)
+        setIsAtBottom(isNearBottom(container))
     }
 
     useEffect(() => {
@@ -1113,6 +1175,10 @@ export function FloatingChatbot() {
             content: trimmed,
         }
 
+        // 직전 한 턴(직전 질문·직전 답이 물은 정보의 종류·답 모드)을 함께 보내 짧은 대답("휴대폰이요")·이어 묻기("그러면 아이패드는요")를
+        // 앞 턴 주제로 답하게 한다. 서버는 DB 이력이 아니라 이 값만 쓴다(lib/chatbot/conversation-context.ts).
+        const previousTurn = buildPreviousTurnPayload(messages)
+
         setMessages((current) => [...current, userMessage])
 
         // 첫 토큰이 오면 그때 어시스턴트 말풍선을 만든다(그 전까지는 ThinkingIndicator 가 보인다).
@@ -1143,7 +1209,8 @@ export function FloatingChatbot() {
                     message: trimmed,
                     sessionId,
                     anonymousId,
-                    context,
+                    // context.path 는 문서 페이지 맥락("방금 본 내용…")에도 쓰인다.
+                    context: previousTurn ? { ...context, previousTurn } : context,
                 }),
             })
 
@@ -1185,9 +1252,18 @@ export function FloatingChatbot() {
                     needsHandoff: meta.needsHandoff,
                     handoffIntent: meta.handoffIntent,
                     showHandoffCTA: Boolean(meta.needsHandoff),
+                    answerMode: meta.answerMode,
                 }))
 
-                if (nextStreak >= UNRESOLVED_STREAK_THRESHOLD && !meta.needsHandoff) {
+                // 서버가 이미 되묻거나 안내한 답(clarifying_question·fallback) 뒤에는 거의 같은 재촉 말풍선을 또 붙이지 않는다.
+                if (
+                    shouldShowUnresolvedNudge({
+                        streak: nextStreak,
+                        threshold: UNRESOLVED_STREAK_THRESHOLD,
+                        needsHandoff: meta.needsHandoff,
+                        answerMode: meta.answerMode,
+                    })
+                ) {
                     const intent = meta.handoffIntent ?? "demo"
                     const nudge =
                         intent === "support"
@@ -1306,6 +1382,14 @@ export function FloatingChatbot() {
         })
     }
 
+    // 휴대폰에서 답 안 링크로 다른 페이지(또는 같은 페이지 #앵커)로 가면 대화창과 딤이 목적지를 덮지 않게 닫는다.
+    // 다음 페이지로 가는 중이라 런처로 포커스를 옮기지 않는다. 대화 상태(messages·sessionId)는 두므로 다시 열면 이어진다.
+    function closeAfterInChatNavigation(click: ChatLinkClick) {
+        const isDesktop = window.matchMedia(CHATBOT_DESKTOP_MEDIA_QUERY).matches
+        if (!shouldCloseChatbotAfterLinkClick(click, isDesktop)) return
+        setIsOpen(false)
+    }
+
     return (
         <div className="pointer-events-none fixed inset-x-0 bottom-0 z-(--z-chatbot) flex flex-col items-end px-3 pb-[calc(1rem+env(safe-area-inset-bottom))] md:inset-x-auto md:bottom-6 md:right-6 md:px-0 md:pb-0">
             {/* 모바일 화면 백드롭 딤/블러 오버레이 */}
@@ -1402,11 +1486,14 @@ export function FloatingChatbot() {
                                         <p className="mt-0.5 truncate text-xs font-medium text-[#615D59]">운영·도입·CS 상담</p>
                                     </div>
                                 </div>
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-3">
                                     <button
                                         type="button"
                                         onClick={toggleMute}
-                                        className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/60 bg-white/35 text-[#615D59] shadow-[inset_0_1px_0_rgba(255,255,255,0.60)] transition-colors hover:bg-white/70 hover:text-fg-accent focus-visible:outline-none"
+                                        className={cn(
+                                            "inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/60 bg-white/35 text-[#615D59] shadow-[inset_0_1px_0_rgba(255,255,255,0.60)] transition-colors hover:bg-white/70 hover:text-fg-accent focus-visible:outline-none",
+                                            CHATBOT_HIT_AREA_CLASS
+                                        )}
                                         aria-label={muted ? "소리 켜기" : "음소거"}
                                     >
                                         {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
@@ -1414,7 +1501,10 @@ export function FloatingChatbot() {
                                     <button
                                         type="button"
                                         onClick={closeChatbot}
-                                        className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/60 bg-white/35 text-[#615D59] shadow-[inset_0_1px_0_rgba(255,255,255,0.60)] transition-colors hover:bg-white/70 hover:text-fg-accent focus-visible:outline-none"
+                                        className={cn(
+                                            "inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/60 bg-white/35 text-[#615D59] shadow-[inset_0_1px_0_rgba(255,255,255,0.60)] transition-colors hover:bg-white/70 hover:text-fg-accent focus-visible:outline-none",
+                                            CHATBOT_HIT_AREA_CLASS
+                                        )}
                                         aria-label="챗봇 닫기"
                                     >
                                         <X className="h-5 w-5" />
@@ -1425,6 +1515,9 @@ export function FloatingChatbot() {
                             {/* 대화 내용 목록 (Staggered Item 2) */}
                             <motion.div
                                 ref={messagesContainerRef}
+                                // 목록 스크롤을 framer 레이아웃 측정에 넣는다. 없으면 입력창이 커질 때 맞춘 맨 아래 위치를
+                                // 메시지 layout 애니메이션이 스크롤 이동으로 오해해 되돌린다.
+                                layoutScroll
                                 onScroll={handleScroll}
                                 variants={itemVariants}
                                 custom={shouldReduceMotion}
@@ -1465,7 +1558,7 @@ export function FloatingChatbot() {
                                                         />
                                                         {message.role === "assistant" ? (
                                                             <>
-                                                                <SourceLinks sources={message.sources} />
+                                                                <SourceLinks sources={message.sources} onNavigate={closeAfterInChatNavigation} />
                                                                 {message.retryQuestion ? (
                                                                     <div className="mt-3">
                                                                         <button
@@ -1520,7 +1613,12 @@ export function FloatingChatbot() {
                                                                     </div>
                                                                 ) : null}
                                                                 {message.showHandoffCTA ? (
-                                                                    <ConsultationBridge messages={messages} message={message} sessionId={sessionId} />
+                                                                    <ConsultationBridge
+                                                                        messages={messages}
+                                                                        message={message}
+                                                                        sessionId={sessionId}
+                                                                        onNavigate={closeAfterInChatNavigation}
+                                                                    />
                                                                 ) : null}
                                                             </>
                                                         ) : null}
@@ -1575,7 +1673,7 @@ export function FloatingChatbot() {
                                             placeholder="질문을 짧게 입력해 주세요"
                                             aria-label="챗봇 질문 입력"
                                             data-focus-ring="parent"
-                                            className="min-h-11 max-h-28 flex-1 resize-none rounded-[12px] border-0 bg-transparent px-3 py-2.5 text-[15px] leading-6 text-[#111110] placeholder:text-[#A39E98] focus-visible:outline-none transition-[height] duration-150 ease-out"
+                                            className="min-h-11 max-h-28 flex-1 resize-none rounded-[12px] border-0 bg-transparent px-3 py-2.5 text-[15px] leading-6 text-[#111110] placeholder:text-fg-placeholder focus-visible:outline-none transition-[height] duration-150 ease-out"
                                         />
                                         <motion.button
                                             type="submit"

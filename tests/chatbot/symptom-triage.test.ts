@@ -195,6 +195,8 @@ describe("symptom triage stream parity", () => {
   })
 
   it("streams the same deterministic answer without calling Supabase or Gemini", async () => {
+    // 정해 둔 답 확인 관문(판정 호출)은 tests/chatbot/answer-gate.test.ts 가 따로 본다. 여기서는 재작성·선별 호출이 없는지만 본다.
+    vi.stubEnv("CHATBOT_ANSWER_GATE", "off")
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://example.supabase.co")
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "anon-key")
     vi.stubEnv("SUPABASE_SECRET_KEY", "service-key")

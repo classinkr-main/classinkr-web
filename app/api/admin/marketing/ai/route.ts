@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { GoogleGenerativeAI } from "@google/generative-ai"
 import { verifyAdmin } from "@/lib/admin-auth"
+import { DEFAULT_GEMINI_MODEL, resolveGeminiModel, withGeminiModelFallback } from "@/lib/marketing/gemini-model"
 
 export const runtime = "nodejs"
 export const maxDuration = 60 // 1분으로 타임아웃 연장
@@ -103,10 +104,13 @@ export async function POST(req: NextRequest) {
     : buildEmailPrompt(body.brief!, body.recipient)
 
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
-  const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro" })
+  const primary = resolveGeminiModel("GEMINI_MODEL", DEFAULT_GEMINI_MODEL)
 
   try {
-    const result = await model.generateContent(prompt)
+    // 모델 없음(404)이면 한 번 폴백 모델로 넘어간다.
+    const result = await withGeminiModelFallback(primary, (name) =>
+      genAI.getGenerativeModel({ model: name }).generateContent(prompt)
+    )
     const text   = result.response.text()
 
     // AI 블록 모드: 텍스트 그대로 반환

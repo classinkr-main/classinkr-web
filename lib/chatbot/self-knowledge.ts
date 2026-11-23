@@ -20,6 +20,23 @@ export interface ChatbotSelfKnowledgeEntry {
   suggestedQuestions: string[]
 }
 
+/**
+ * 정보를 전하지 않고 말을 받아 주는 답(잡담·투정에 대한 공감 한마디와 '막히면 물어봐 달라'는 말).
+ * 정해 둔 답 확인 관문(lib/chatbot/answer-gate.ts)은 '이 질문에 대한 답인지'를 정보 기준으로 판정해 이런 답을 버리고
+ * 되묻기를 냈다("수업 듣기싫다ㅋㅋ" → 분류별 되묻기). 사실을 전하는 답(identity·privacy_boundary·capabilities 등)과
+ * 주장·안내를 담은 답(emotional_concern 은 도입 효과·API 연동을 말한다)은 관문 대상에 남긴다.
+ */
+export const CONVERSATIONAL_SELF_KNOWLEDGE_KEYS: ReadonlySet<ChatbotSelfKnowledgeEntry["key"]> = new Set(["small_talk"])
+
+// 묻는 말의 표시(물음표, '수 있', '어떻게', '방법', '~나요/까요', '가능', '알려'). small_talk 정규식은 '…하기 싫' 뒤를 보지 않아
+// "앱 설치하기 싫은데 웹으로 들어갈 수 있나요?" 같은 기능 질문에도 걸린다. 이런 표시가 있으면 공감 답을 관문(정보 기준 판정)에 넘긴다.
+const QUESTION_SIGNAL_RE = /[?？]|수\s*(?:있|없)|어떻게|방법|법\s*(?:있|없|좀|알려)|[나까]요|[나까]\s*$|가능|알려|되나|돼요\s*$|뭐|무엇|어디|언제/
+
+/** 말에 묻는 말의 표시가 있는지(잡담 공감 답을 관문에서 뺄지 가를 때 쓴다). */
+export function hasQuestionSignal(text: string) {
+  return QUESTION_SIGNAL_RE.test(text)
+}
+
 export const CHATBOT_SELF_KNOWLEDGE_ENTRIES: ChatbotSelfKnowledgeEntry[] = [
   {
     key: "model_boundary",
@@ -114,9 +131,10 @@ export const CHATBOT_SELF_KNOWLEDGE_ENTRIES: ChatbotSelfKnowledgeEntry[] = [
     match:
       /(?:대화|상담\s*내용|상담|질문|답변|로그|기록).{0,18}(?:저장|보관|남아|삭제|지워|제거|개인\s*정보|개인정보|프라이버시|열람|접근|조회|볼\s*수|볼수|확인)|(?:누가|권한|열람|접근|조회|볼\s*수|볼수).{0,18}(?:대화|상담\s*내용|상담|질문|답변|로그|기록)|(?:저장|보관|삭제|지워|제거|개인\s*정보|개인정보|프라이버시).{0,18}(?:대화|상담\s*내용|상담|질문|답변|로그|기록)|(?:너|넌|챗봇|봇|상담\s*가이드|ai|인공지능).{0,18}(?:내\s*)?(?:개인\s*정보|개인정보).{0,18}(?:알|가지|보관|저장|처리)|(?:내\s*)?(?:개인\s*정보|개인정보).{0,18}(?:알|가지|보관|저장|처리).{0,18}(?:너|넌|챗봇|봇|상담\s*가이드|ai|인공지능)/i,
     answer: [
-      "저는 AI로 답하는 Classin 상담 가이드예요. 대화나 상담 내용은 현재 질문을 이해하고 반복 질문을 파악하는 범위에서만 안내합니다.",
-      "개인정보 보관 기간이나 삭제 요청처럼 실제 처리 상태를 봐야 하는 내용은 채팅에서 단정하지 않고, 공식 개인정보처리방침과 담당자 확인으로 안내합니다.",
-      "삭제나 정정이 필요한 내용이 있다면 어떤 정보에 대한 요청인지 알려주시면 담당자 상담으로 이어질 수 있게 정리해드릴게요.",
+      // 보관 기준은 공개 개인정보처리방침(/privacy)의 보유 기간 표 그대로다. 특정 요청의 처리 상태는 단정하지 않는다.
+      "네, 챗봇 대화와 상담 채팅 기록은 저장되고, 마지막 대화일로부터 최대 3년 보관해요. 개인정보처리방침에 적힌 기준이에요.",
+      "챗봇 대화는 챗봇을 쓸 때만 Gemini로 보내져요.",
+      "삭제 요청의 처리 상태처럼 실제로 봐야 하는 내용은 채팅에서 단정하지 않고 담당자 확인으로 안내해요. 삭제나 정정이 필요한 내용이 있으면 어떤 정보에 대한 요청인지 알려 주세요. 담당자 상담으로 이어질 수 있게 정리해 드릴게요.",
     ],
     suggestedQuestions: [
       "개인정보 처리 기준이 궁금해요",
@@ -248,7 +266,21 @@ export function findChatbotSelfKnowledgeEntry(question: string) {
       // "화면 기록 권한", "수업 기록"처럼 제품 이야기에 섞인 단어로 챗봇 자기소개가 나가지 않게 한다.
       if (CHATBOT_CONTEXT_REQUIRED_KEYS.has(entry.key) && (!hasChatbotContext || refersToEarlierBotAdvice)) return false
       // 과외 계정의 결제 수단·증빙 명의를 묻는 말은 요금제 추천이 아니라 결제 안내로 보낸다.
-      if (entry.key === "tutor_pricing_recommend" && /법인\s*카드|결제\s*수단|영수증|세금계산서|명의/.test(normalized)) return false
+      // 체험 수업 학생이 요금 학생 수에 드는지 묻는 말도 요금제 추천이 아니다(trial-students-count-toward-plan-fee).
+      if (
+        entry.key === "tutor_pricing_recommend" &&
+        /법인\s*카드|결제\s*수단|영수증|세금계산서|명의|체험\s*수업|요금\s*구간|학생\s*수에\s*포함/.test(normalized)
+      )
+        return false
+      // 수능 뒤 과외 알바를 할 학생이 개인 요금과 대학생 할인을 묻는 말은 student-tutor-personal-plan-price-discount가 맡는다.
+      if (entry.key === "tutor_pricing_recommend" && /대학생\s*할인|학생\s*할인|수능/.test(normalized)) return false
+      // 다른 원장이 챗봇에 물은 내용과 들은 할인 조건을 알려 달라는 말은 other-academy-chatbot-history-request가 맡는다.
+      if (
+        (entry.key === "privacy_boundary" || entry.key === "memory_boundary") &&
+        /옆\s*건물|다른\s*원장|그\s*원장/.test(normalized) &&
+        /할인|조건/.test(normalized)
+      )
+        return false
       // "여기에 전화번호까지 적었는데 지워 주세요"처럼 이미 적은 개인정보의 삭제·열람을 묻는 말은
       // 일반 원칙 소개가 아니라 삭제 요청 경로를 알려 주는 정해 둔 답(personal-info-typed-in-chat-delete)으로 보낸다.
       if (PRIVACY_KEYS.has(entry.key) && TYPED_PERSONAL_INFO_RE.test(normalized)) return false

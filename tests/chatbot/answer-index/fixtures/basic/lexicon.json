@@ -1,0 +1,327 @@
+[
+  {
+    "id": "C_chat",
+    "kind": "object",
+    "generic": false,
+    "parents": [],
+    "doc": [
+      "채팅"
+    ],
+    "visitor": [
+      {
+        "form": "챗",
+        "boundary": "both"
+      }
+    ],
+    "ambiguous": []
+  },
+  {
+    "id": "C_chat_ban",
+    "kind": "action",
+    "generic": false,
+    "parents": [
+      "C_chat"
+    ],
+    "doc": [
+      "채팅 금지"
+    ],
+    "visitor": [
+      "채팅 막기",
+      "채팅 못 하게",
+      "채팅 차단",
+      "채팅 끄기"
+    ],
+    "ambiguous": []
+  },
+  {
+    "id": "C_kick",
+    "kind": "action",
+    "generic": false,
+    "parents": [],
+    "doc": [
+      "강제 퇴장"
+    ],
+    "visitor": [
+      {
+        "form": "강퇴",
+        "boundary": "both"
+      },
+      "쫓아내"
+    ],
+    "ambiguous": [
+      {
+        "form": "내보내",
+        "requiresAny": [
+          "C_student",
+          "C_classroom",
+          "C_class"
+        ],
+        "notWith": [
+          "C_file"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "C_file",
+    "kind": "object",
+    "generic": false,
+    "parents": [],
+    "doc": [
+      {
+        "form": "파일",
+        "boundary": "both"
+      },
+      {
+        "form": "엑셀",
+        "boundary": "both"
+      }
+    ],
+    "visitor": [],
+    "ambiguous": []
+  },
+  {
+    "id": "C_student",
+    "kind": "object",
+    "generic": false,
+    "parents": [],
+    "doc": [
+      {
+        "form": "학생",
+        "boundary": "both"
+      }
+    ],
+    "visitor": [
+      {
+        "form": "애들",
+        "boundary": "both"
+      }
+    ],
+    "ambiguous": []
+  },
+  {
+    "id": "C_student_count",
+    "kind": "attribute",
+    "generic": false,
+    "parents": [
+      "C_student"
+    ],
+    "doc": [
+      {
+        "form": "학생 수",
+        "boundary": "both"
+      }
+    ],
+    "visitor": [
+      "학생 인원",
+      {
+        "form": "인원수",
+        "boundary": "both"
+      }
+    ],
+    "ambiguous": []
+  },
+  {
+    "id": "C_class",
+    "kind": "object",
+    "generic": true,
+    "parents": [],
+    "doc": [
+      {
+        "form": "수업",
+        "boundary": "both"
+      }
+    ],
+    "visitor": [],
+    "ambiguous": []
+  },
+  {
+    "id": "C_classroom",
+    "kind": "object",
+    "generic": false,
+    "parents": [],
+    "doc": [
+      {
+        "form": "교실",
+        "boundary": "both"
+      }
+    ],
+    "visitor": [
+      {
+        "form": "수업방",
+        "boundary": "both"
+      }
+    ],
+    "ambiguous": []
+  },
+  {
+    "id": "C_edit",
+    "kind": "action",
+    "generic": false,
+    "parents": [],
+    "doc": [
+      {
+        "form": "편집",
+        "boundary": "both"
+      }
+    ],
+    "visitor": [],
+    "ambiguous": []
+  },
+  {
+    "id": "C_home",
+    "kind": "object",
+    "generic": false,
+    "parents": [],
+    "doc": [
+      {
+        "form": "집에서",
+        "boundary": "both"
+      }
+    ],
+    "visitor": [],
+    "ambiguous": []
+  },
+  {
+    "id": "C_recording",
+    "kind": "object",
+    "generic": false,
+    "parents": [],
+    "doc": [
+      {
+        "form": "녹화",
+        "boundary": "both"
+      },
+      "다시보기"
+    ],
+    "visitor": [],
+    "ambiguous": []
+  },
+  {
+    "id": "C_download",
+    "kind": "action",
+    "generic": false,
+    "parents": [],
+    "doc": [
+      "다운로드"
+    ],
+    "visitor": [
+      "내려받",
+      {
+        "form": "저장",
+        "boundary": "both"
+      }
+    ],
+    "ambiguous": []
+  },
+  {
+    "id": "C_remove",
+    "kind": "action",
+    "generic": false,
+    "parents": [],
+    "doc": [
+      {
+        "form": "삭제",
+        "boundary": "both"
+      }
+    ],
+    "visitor": [
+      {
+        "form": "빼기",
+        "boundary": "both"
+      },
+      {
+        "form": "지우기",
+        "boundary": "both"
+      }
+    ],
+    "ambiguous": []
+  },
+  {
+    "id": "C_course_member",
+    "kind": "object",
+    "generic": false,
+    "parents": [],
+    "doc": [
+      "코스 구성원",
+      {
+        "form": "구성원",
+        "boundary": "both"
+      }
+    ],
+    "visitor": [
+      {
+        "form": "멤버",
+        "boundary": "both"
+      },
+      {
+        "form": "명단",
+        "boundary": "both"
+      }
+    ],
+    "ambiguous": []
+  },
+  {
+    "id": "C_price",
+    "kind": "attribute",
+    "generic": false,
+    "parents": [],
+    "doc": [
+      {
+        "form": "요금",
+        "boundary": "both"
+      },
+      {
+        "form": "가격",
+        "boundary": "both"
+      }
+    ],
+    "visitor": [
+      {
+        "form": "비용",
+        "boundary": "both"
+      },
+      {
+        "form": "견적",
+        "boundary": "both"
+      }
+    ],
+    "ambiguous": []
+  },
+  {
+    "id": "C_security_cert",
+    "kind": "object",
+    "generic": false,
+    "parents": [],
+    "doc": [],
+    "visitor": [
+      "보안 인증",
+      "정보보호 인증"
+    ],
+    "ambiguous": []
+  },
+  {
+    "id": "C_hours",
+    "kind": "attribute",
+    "generic": false,
+    "parents": [],
+    "doc": [
+      "운영 시간",
+      "상담 시간"
+    ],
+    "visitor": [],
+    "ambiguous": []
+  },
+  {
+    "id": "C_payment_app",
+    "kind": "object",
+    "generic": false,
+    "parents": [],
+    "doc": [],
+    "visitor": [
+      "카카오페이",
+      "네이버페이"
+    ],
+    "ambiguous": []
+  }
+]

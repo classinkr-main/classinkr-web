@@ -1,0 +1,45 @@
+[
+  {
+    "id": "doc:/docs/fake/members#0/remove",
+    "kind": "doc",
+    "tier": "standard",
+    "area": "course",
+    "topic": "코스 구성원에서 학생 삭제",
+    "status": "active",
+    "answer": {
+      "lead": "how_to",
+      "sentences": [
+        {
+          "unit": "doc:/docs/fake/members#0",
+          "ids": [
+            0,
+            1
+          ],
+          "hashes": [
+            "4a1ed9c6b1cb54f0",
+            "09f182bba9276931"
+          ]
+        }
+      ]
+    },
+    "asks": [
+      "howto"
+    ],
+    "concepts": [
+      "C_course_member",
+      "C_remove"
+    ],
+    "anchors": [
+      "구성원 삭제",
+      "명단에서 빼기",
+      "멤버 삭제"
+    ],
+    "covers": "코스 구성원 목록에서 학생을 삭제하는 방법",
+    "negatives": [
+      {
+        "q": "수업 도중에 떠드는 애 교실 밖으로 쫓아낼 수 있어요",
+        "route": "doc:/docs/fake/kick#0/kick"
+      }
+    ]
+  }
+]

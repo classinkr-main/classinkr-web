@@ -15,7 +15,9 @@ import "server-only"
 import fs from "node:fs"
 import path from "node:path"
 
+import { resolveModelChain } from "./llm"
 import { evaluateChatbotQuery, listChatbotRegressionEvalCases } from "./service"
+import { getGroundingText } from "./source-grounding"
 
 const ANSWER_MODES = new Set(["direct_answer", "doc_suggestion"])
 const DEFAULT_JUDGE_MODEL = "gemini-3.5-flash"
@@ -128,7 +130,8 @@ function getGeminiApiKey() {
 }
 
 function getJudgeModel() {
-  return process.env.GEMINI_FAST_MODEL?.trim() || DEFAULT_JUDGE_MODEL
+  // 답변 생성과 같은 해석을 쓴다. env 에 종료된 모델명이 남아 있어도 심판 호출이 404 로 통째로 빠지지 않는다.
+  return resolveModelChain("basic")[0] ?? DEFAULT_JUDGE_MODEL
 }
 
 function boundedIntegerEnv(name: string, fallback: number, min: number, max: number) {
@@ -352,7 +355,8 @@ async function evaluateGoldenCase(
     judgement = await judge(
       testCase.question,
       result.answer,
-      result.sources.map((source) => ({ title: source.title, excerpt: source.excerpt })),
+      // 모델이 실제로 받은 근거(문서 본문)로 채점한다. 220자 요약만 보여 주면 본문에 있는 내용까지 환각으로 센다.
+      result.sources.map((source) => ({ title: source.title, excerpt: getGroundingText(source) ?? source.excerpt })),
       deadline
     )
     if (judgement) {

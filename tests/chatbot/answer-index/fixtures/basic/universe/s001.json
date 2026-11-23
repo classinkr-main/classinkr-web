@@ -1,0 +1,92 @@
+[
+  {
+    "id": "u-0001",
+    "q": "애들끼리 채팅 못 하게 하는 기능 있어요",
+    "p": "P-1",
+    "m": "fixture",
+    "label": "doc:/docs/fake/chat#0/chat-ban",
+    "conf": 0.9,
+    "labeler": "fixture",
+    "label2": null
+  },
+  {
+    "id": "u-0002",
+    "q": "학생 한 명 수업에서 내보내는 법",
+    "p": "P-1",
+    "m": "fixture",
+    "label": "doc:/docs/fake/kick#0/kick",
+    "conf": 0.9,
+    "labeler": "fixture",
+    "label2": null
+  },
+  {
+    "id": "u-0003",
+    "q": "지난 수업 영상 다시 보려면",
+    "p": "P-2",
+    "m": "fixture",
+    "label": "doc:/docs/fake/recording#0/replay",
+    "conf": 0.9,
+    "labeler": "fixture",
+    "label2": null
+  },
+  {
+    "id": "u-0004",
+    "q": "회사 주식 상장했나요",
+    "p": "P-3",
+    "m": "fixture",
+    "label": "none",
+    "conf": 0.8,
+    "labeler": "fixture",
+    "label2": null
+  },
+  {
+    "id": "u-0005",
+    "q": "이거 뭐예요",
+    "p": "P-3",
+    "m": "fixture",
+    "label": "clarify",
+    "conf": 0.7,
+    "labeler": "fixture",
+    "label2": null
+  },
+  {
+    "id": "u-0006",
+    "q": "코스 멤버 정리하고 싶어요",
+    "p": "P-2",
+    "m": "fixture",
+    "label": "doc:/docs/fake/members#0/remove",
+    "conf": 0.8,
+    "labeler": "fixture",
+    "label2": "doc:/docs/fake/kick#0/kick"
+  },
+  {
+    "id": "u-0007",
+    "q": "검토 중인 카드 라벨",
+    "p": "P-4",
+    "m": "fixture",
+    "label": "doc:/docs/fake/chat#0/review-only",
+    "conf": 0.5,
+    "labeler": "fixture",
+    "label2": null
+  },
+  {
+    "id": "u-0008",
+    "q": "라벨이 아직 없는 질문",
+    "p": "P-4",
+    "m": "fixture",
+    "label": null,
+    "conf": null,
+    "labeler": null,
+    "label2": null
+  },
+  {
+    "id": "u-0009",
+    "q": "문서에는 있는데 카드가 없는 질문",
+    "p": "P-4",
+    "m": "fixture",
+    "label": "missing:doc:/docs/fake/edit#0",
+    "conf": 0.6,
+    "labeler": "fixture",
+    "label2": null
+  }
+]

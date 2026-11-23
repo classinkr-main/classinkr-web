@@ -1,0 +1,154 @@
+{
+  "version": "units-fixture",
+  "counts": {
+    "units": 7,
+    "sentences": 9
+  },
+  "units": [
+    {
+      "unitId": "doc:/docs/fake/chat#0",
+      "kind": "section",
+      "path": "/docs/fake/chat",
+      "docTitle": "가짜 문서 chat",
+      "heading": "채팅 금지",
+      "sectionIndex": 0,
+      "area": "classroom",
+      "docCategory": "fake",
+      "docSlug": "chat",
+      "sentences": [
+        {
+          "i": 0,
+          "text": "수업 중에 [채팅 금지] 버튼을 누르면 학생 채팅을 막을 수 있습니다.",
+          "hash": "c03cce0b691760d4",
+          "flags": []
+        },
+        {
+          "i": 1,
+          "text": "경로: 교실 > [도구] > [채팅 금지]",
+          "hash": "ea239bc25b34b6fa",
+          "flags": []
+        }
+      ]
+    },
+    {
+      "unitId": "doc:/docs/fake/kick#0",
+      "kind": "section",
+      "path": "/docs/fake/kick",
+      "docTitle": "가짜 문서 kick",
+      "heading": "학생 내보내기",
+      "sectionIndex": 0,
+      "area": "classroom",
+      "docCategory": "fake",
+      "docSlug": "kick",
+      "sentences": [
+        {
+          "i": 0,
+          "text": "교실에서 학생 이름을 눌러 [내보내기]를 고르면 그 학생을 교실 밖으로 내보낼 수 있습니다.",
+          "hash": "3d77a21e4f495efd",
+          "flags": []
+        }
+      ]
+    },
+    {
+      "unitId": "doc:/docs/fake/members#0",
+      "kind": "section",
+      "path": "/docs/fake/members",
+      "docTitle": "가짜 문서 members",
+      "heading": "코스 구성원 삭제",
+      "sectionIndex": 0,
+      "area": "course",
+      "docCategory": "fake",
+      "docSlug": "members",
+      "sentences": [
+        {
+          "i": 0,
+          "text": "코스 구성원 목록에서 학생을 선택한 뒤 [삭제]를 누릅니다.",
+          "hash": "4a1ed9c6b1cb54f0",
+          "flags": []
+        },
+        {
+          "i": 1,
+          "text": "삭제한 학생은 다시 초대할 수 있습니다.",
+          "hash": "09f182bba9276931",
+          "flags": []
+        }
+      ]
+    },
+    {
+      "unitId": "doc:/docs/fake/recording#0",
+      "kind": "section",
+      "path": "/docs/fake/recording",
+      "docTitle": "가짜 문서 recording",
+      "heading": "녹화와 다시보기",
+      "sectionIndex": 0,
+      "area": "recording",
+      "docCategory": "fake",
+      "docSlug": "recording",
+      "sentences": [
+        {
+          "i": 0,
+          "text": "수업은 자동으로 녹화되며 [다시보기]에서 볼 수 있습니다.",
+          "hash": "c97576e371e3a558",
+          "flags": []
+        }
+      ]
+    },
+    {
+      "unitId": "doc:/docs/fake/recording#1",
+      "kind": "section",
+      "path": "/docs/fake/recording",
+      "docTitle": "가짜 문서 recording",
+      "heading": "녹화 파일 내려받기",
+      "sectionIndex": 1,
+      "area": "recording",
+      "docCategory": "fake",
+      "docSlug": "recording",
+      "sentences": [
+        {
+          "i": 0,
+          "text": "녹화 파일은 [다운로드] 버튼으로 내 컴퓨터에 저장할 수 있습니다.",
+          "hash": "d1d17cb3222c7dba",
+          "flags": []
+        }
+      ]
+    },
+    {
+      "unitId": "doc:/docs/fake/students#0",
+      "kind": "section",
+      "path": "/docs/fake/students",
+      "docTitle": "가짜 문서 students",
+      "heading": "학생 수",
+      "sectionIndex": 0,
+      "area": "pricing",
+      "docCategory": "fake",
+      "docSlug": "students",
+      "sentences": [
+        {
+          "i": 0,
+          "text": "한 교실에 들어올 수 있는 학생 수는 요금제에 따라 다릅니다.",
+          "hash": "d1d2846296f1e5c2",
+          "flags": []
+        }
+      ]
+    },
+    {
+      "unitId": "doc:/docs/fake/edit#0",
+      "kind": "section",
+      "path": "/docs/fake/edit",
+      "docTitle": "가짜 문서 edit",
+      "heading": "판서 편집",
+      "sectionIndex": 0,
+      "area": "classroom",
+      "docCategory": "fake",
+      "docSlug": "edit",
+      "sentences": [
+        {
+          "i": 0,
+          "text": "판서는 편집에서 지우거나 옮길 수 있습니다.",
+          "hash": "30fe550febb6ce6a",
+          "flags": []
+        }
+      ]
+    }
+  ]
+}

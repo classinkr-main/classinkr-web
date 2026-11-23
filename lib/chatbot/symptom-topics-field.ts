@@ -811,21 +811,35 @@ export const FIELD_SYMPTOM_TOPICS: SymptomTopic[] = [
   },
   {
     id: "breakout-groups",
-    subject: /breakout|소그룹|분조|조별|그룹\s*(?:토론|나누|방)|(?:2명|두\s*명|짝)\s*(?:씩|끼리).{0,10}(?:대화|말|talk|토론)/,
+    subject:
+      /breakout|브레이크\s*아웃|소회의실|소그룹|분조|조별|모둠\s*(?:별|으로|끼리)?.{0,6}(?:나눠|나누|활동|수업|토의|토론)|팀\s*별\s*(?:토의|토론|활동|수업)|조\s*(?:를|로|별로)?\s*나눠|그룹\s*(?:토론|나누|방)|(?:2명|두\s*명|짝)\s*(?:씩|끼리).{0,10}(?:대화|말|talk|토론)/,
+    // 공개 안내에 없는 이름(소회의실·브레이크아웃)으로 증상을 말하면 그룹 토론 사용법이 답이 아니다.
+    exclude: /(?:소회의실|브레이크\s*아웃|breakout).{0,20}(?:입장|안\s*(?:돼|되|들어|보여)|오류)/,
     requireSymptom: false,
     howto: true,
     category: "classroom",
     doc: { category: "software", slug: "classroom-tools" },
     steps: [{ heading: "학생이 직접 풀고 답하게 하려면", pick: [4, 5] }],
-    intro:
-      "교실 도구에 조별로 나눠 활동하는 [그룹 토론]이 있어요. 두 명씩 나눠 말하게 하는 정확한 순서는 공개 안내에 그림으로 정리돼 있지 않아, 처음 쓰실 때는 수업 전에 교실에서 한 번 열어 보시길 권해요.",
+    intro: "교실 도구에 조별로 나눠 활동하는 [그룹 토론]이 있어요.",
+    // 두 명씩 짝지어 말하게 하는 순서를 물었을 때만 붙인다. 소그룹 일반 질문에는 엉뚱한 단서가 된다.
+    branches: [
+      {
+        text: "두 명씩 나눠 말하게 하는 정확한 순서는 공개 안내에 그림으로 정리돼 있지 않아, 처음 쓰실 때는 수업 전에 교실에서 한 번 열어 보시길 권해요.",
+        when: /2명|두\s*명|짝/,
+      },
+      // '소회의실'·'브레이크아웃 룸'은 공개 안내에 없는 이름이라, 같은 기능이라고 말하지 않는다.
+      { text: "'소회의실'이라는 이름의 기능은 공개 안내에 따로 정리돼 있지 않아요.", when: /소회의실/ },
+      { text: "'브레이크아웃 룸'이라는 이름의 기능은 공개 안내에 따로 정리돼 있지 않아요.", when: /브레이크\s*아웃|breakout/ },
+    ],
     en: "Yes—use Group Discussion in the classroom tools for pair or small-group work. Try it once in an empty classroom before class; tap 상담원 연결 if you need step-by-step help.",
     suggestedQuestions: ["학생을 무대에 올리는 방법 알려줘", "개인 칠판은 어떻게 나눠 줘요?", "화면 공유가 안 돼요"],
   },
   {
     id: "share-board-notes",
     subject:
-      /(?:판서|칠판(?:에\s*쓴|\s*내용)?|화면에\s*쓴\s*(?:거|것)).{0,30}(?:나눠\s*주|보내|공유|휴대폰으로\s*보|저장해서\s*주)/,
+      /(?:판서|(?<!전자\s?)칠판(?:에\s*쓴|\s*내용)?|화면에\s*쓴\s*(?:거|것)).{0,30}(?:나눠\s*주|보내|공유|휴대폰으로\s*보|저장해서\s*주)/,
+    // "전자칠판은 학생 화면 공유 안 되죠"는 판서를 나눠 주는 말이 아니라 화면 공유 기능을 묻는 말이다.
+    exclude: /화면\s*공유|미러링/,
     requireSymptom: false,
     howto: true,
     category: "classroom",
@@ -1216,6 +1230,15 @@ export const FIELD_SYMPTOM_TOPICS: SymptomTopic[] = [
     doc: { category: "admin", slug: "statistics-data" },
     steps: [{ heading: "통계 파일 내려받기", take: 5 }],
     intro: "교사별 수업 시간은 관리자 대시보드에서 바로 내려받을 수 있어요. 공개 안내 기준으로 파일은 Excel로 받습니다.",
+    // 출결·출석부를 내려받는 질문에는 교사별 수업 시간 대신 [출결 통계]로 첫 문단을 연다.
+    variants: [
+      {
+        // 출석부 '양식' 파일은 공개 안내에 없다. 그 질문은 기본 답(교사별 수업 시간)으로 둔다.
+        when: /^(?!.*양식).*(?:출결|출석)/,
+        steps: [{ heading: "통계 파일 내려받기", take: 5 }],
+        intro: "네, 관리자 대시보드 > [결제] > [통계 다운로드]에서 수업별 출결 내역을 [출결 통계]로 받을 수 있어요. 파일은 Excel로 받고, 기간은 한 번에 최대 6개월치까지 정할 수 있어요. 받은 기록은 [계정 정보] > [통계 이력]에 남아요.",
+      },
+    ],
     branches: [
       {
         text: "API로 자체 시스템에 가져오는 방식은 [계정 정보]의 API 도킹 메뉴에서 다루는데, 쓸 수 있는 범위와 조건은 담당자와 먼저 확인해 주세요.",

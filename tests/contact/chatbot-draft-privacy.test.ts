@@ -35,7 +35,7 @@ describe("chatbot contact draft", () => {
 
   it("keeps the chatbot on the page with a notice when the draft cannot be stored", () => {
     const source = readFileSync(path.join(process.cwd(), "components/ui/FloatingChatbot.tsx"), "utf8")
-    expect(source).toContain("if (stashContactPrefill(draft)) return")
+    expect(source).toMatch(/if \(stashContactPrefill\(draft\)\) \{\s*onNavigate\?\.\(event\)\s*return\s*\}/)
     expect(source).toContain("event.preventDefault()")
     expect(source).not.toMatch(/prefill:\s*draft/)
   })

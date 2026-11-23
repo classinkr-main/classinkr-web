@@ -14,6 +14,7 @@ import {
   resolveGeminiModel,
   rethrowGeminiFetchError,
   thinkingConfigFor,
+  withGeminiModelFallback,
 } from "@/lib/marketing/gemini-model"
 import { MARKETING_INSIGHT_SYSTEM_PROMPT, MARKETING_INSIGHT_RESPONSE_SCHEMA } from "./prompt"
 import type { MarketingInsightInput } from "./input-builder"
@@ -32,10 +33,19 @@ export async function callMarketingGemini(
 ): Promise<{ result: MarketingInsightResult; raw: unknown; model: string }> {
   const apiKey = process.env.GEMINI_API_KEY
   if (!apiKey) throw new Error("GEMINI_API_KEY not set")
-  const model =
+  const primary =
     mode === "fast"
       ? resolveGeminiModel("GEMINI_FAST_MODEL", DEFAULT_GEMINI_FAST_MODEL)
       : resolveGeminiModel("GEMINI_MODEL", DEFAULT_GEMINI_MODEL)
+  // 모델 없음(404)이면 한 번 폴백 모델로 넘어간다 — 반환하는 model 은 실제 응답한 모델이다.
+  return withGeminiModelFallback(primary, (model) => callOnce(apiKey, model, input))
+}
+
+async function callOnce(
+  apiKey: string,
+  model: string,
+  input: MarketingInsightInput
+): Promise<{ result: MarketingInsightResult; raw: unknown; model: string }> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`
   const thinking = thinkingConfigFor(model)
   const body = {
