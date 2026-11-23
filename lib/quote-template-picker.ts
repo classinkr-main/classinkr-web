@@ -184,7 +184,7 @@ export function buildQuoteTemplatePreview(
 
   return {
     templateId: template.id,
-    presetId: quote.presetId ?? null,
+    presetId: template.quickPresets?.find((preset) => preset.id === presetId)?.id ?? null,
     label: template.label,
     description: template.description,
     productLineLabel: getQuoteProductLineLabel(productLine),
