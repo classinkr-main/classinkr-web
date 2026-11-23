@@ -11,7 +11,7 @@
 // (admin-nav-access.ts 상단 주석 — 도달성 불변식).
 //
 // (2026-11-20) 기본값은 계정에 따라 둘이다 — 전체 사이드바(SUPER_ADMIN · nav_preset "super" 지정
-// 계정)와 간소 사이드바(매출 장부 + 견적·문서, 나머지 기본 숨김). 그래서 role 과 preset 을 함께
+// 계정)와 간소 사이드바(매출 장부 + 견적·문서 + 하드웨어 재고, 나머지 기본 숨김). 그래서 role 과 preset 을 함께
 // 받아야 "기본 숨김"·"예외" 표시와 미리보기가 그 사람의 실제 사이드바와 맞는다. 안내 문구도 갈린다:
 // 전체 계정의 숨긴 탭은 ⌘K 로도 열리지만 간소 계정의 숨긴 탭은 ⌘K 목록에서도 빠진다.
 //
@@ -29,6 +29,7 @@ import { ADMIN_NAV_CATEGORY_META } from "@/components/admin/admin-nav"
 import {
   buildCrmSubnavPreferenceRows,
   buildNavPreferenceRows,
+  getSimpleNavPrimaryLabels,
   resolveAdminNavAccess,
   setCrmSubnavOverride,
   setNavOverride,
@@ -135,7 +136,7 @@ export default function NavPreferenceEditor({
         </p>
         {preview.fullNav ? null : (
           <p className="mt-1.5 text-[12px] leading-relaxed text-[#1a1a1a]/55">
-            간소 사이드바 계정입니다. 기본으로 매출 장부와 견적·문서만 보이고 나머지는 숨김입니다.
+            {`간소 사이드바 계정입니다. 기본으로 ${getSimpleNavPrimaryLabels().join(" · ")}만 보이고 나머지는 숨김입니다.`}
           </p>
         )}
       </div>

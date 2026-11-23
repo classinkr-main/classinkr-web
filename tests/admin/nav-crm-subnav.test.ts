@@ -289,9 +289,11 @@ describe("CRM 팔레트 — 간소 사이드바 계정", () => {
     expect(resolveCrmPaletteNavCommands({ role: "ADMIN", preset: "super", overrides: {} })).toBe(NAV_CMDS)
   })
 
-  it("간소 계정은 보이는 최상위 탭의 명령만 받는다 — 기본은 매출 장부 하나", () => {
-    expect(hrefsFor()).toEqual(["/admin/branch/ledger"])
-    expect(hrefsFor({ preset: "sales" })).toEqual(["/admin/branch/ledger"])
+  it("간소 계정은 보이는 최상위 탭의 명령만 받는다 — 기본은 매출 장부 · 하드웨어 재고 둘", () => {
+    // CRM 팔레트에는 견적·문서 명령이 없다 — 간소 상시 셋 중 NAV_CMDS 에 있는 것은 이 둘이다.
+    expect(hrefsFor()).toEqual(["/admin/branch/ledger", "/admin/hardware"])
+    expect(hrefsFor({ preset: "sales" })).toEqual(["/admin/branch/ledger", "/admin/hardware"])
+    expect(hrefsFor({ overrides: { "/admin/hardware": "hidden" } })).toEqual(["/admin/branch/ledger"])
   })
 
   it("'내 사이드바 편집' 이벤트 명령이 없다", () => {
@@ -301,13 +303,17 @@ describe("CRM 팔레트 — 간소 사이드바 계정", () => {
     ).toBe(false)
   })
 
-  it("CRM 탭을 되살린 간소 계정은 CRM 명령을 전부 돌려받는다(쿼리 딥링크 포함) — 하드웨어는 여전히 없다", () => {
+  it("CRM 탭을 되살린 간소 계정은 CRM 명령을 전부 돌려받는다(쿼리 딥링크 포함) — 숨긴 탭의 명령은 여전히 없다", () => {
     const hrefs = hrefsFor({ overrides: { "/admin/crm": "primary" } })
     const crmHrefs = NAV_CMDS.filter((nav) => !nav.event && nav.href.startsWith("/admin/crm")).map((nav) => nav.href)
     expect(crmHrefs.some((href) => href.includes("?"))).toBe(true)
     expect(hrefs).toEqual(expect.arrayContaining(crmHrefs))
     expect(hrefs).toContain("/admin/branch/ledger")
-    expect(hrefs).not.toContain("/admin/hardware")
+    // 하드웨어 재고는 2026-11-23 부터 간소 상시라 남는다. 숨기면 CRM 을 되살렸어도 빠진다.
+    expect(hrefs).toContain("/admin/hardware")
+    expect(hrefsFor({ overrides: { "/admin/crm": "primary", "/admin/hardware": "hidden" } })).not.toContain(
+      "/admin/hardware"
+    )
   })
 
   it("crm: 키는 간소 계정에서도 CRM 팔레트 목록을 바꾸지 않는다", () => {

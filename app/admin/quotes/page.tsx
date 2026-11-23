@@ -6,6 +6,7 @@ import {
   ClipboardList,
   FileSignature,
   FileText,
+  History,
   Plus,
   Ticket,
   Users,
@@ -24,7 +25,9 @@ import AdminTabs, { type AdminTabItem } from "@/components/admin/AdminTabs"
 import { hasFullAdminNav } from "@/components/admin/admin-nav-access"
 import { useAdminNavPreferences } from "@/components/admin/admin-nav-preferences-context"
 
-type DocumentTab = "hardware" | "software" | "contracts" | "receipts" | "receivables"
+// "hardware" = 견적서 탭(템플릿 화면), "history" = 저장한 견적 목록·상세. 둘 다 HardwareQuotesPanel 이 그린다.
+// 키 "hardware" 는 옛 주소(?tab=hardware…) 호환 때문에 그대로 둔다.
+type DocumentTab = "hardware" | "software" | "contracts" | "receipts" | "receivables" | "history"
 type HardwareQuoteQuickAction = "new" | StandardQuoteTemplateId
 type HardwareQuoteQuickActionRequest = {
   key: string
@@ -42,7 +45,7 @@ const DOCUMENT_TABS: DocumentTabItem[] = [
   {
     key: "hardware",
     label: "견적서",
-    description: "SW·HW 견적을 한 목록에서 — 품목, 수량, 계약 전환까지",
+    description: "템플릿을 골라 SW·HW 견적서 작성",
     icon: <FileText className="h-4 w-4" />,
   },
   {
@@ -68,6 +71,12 @@ const DOCUMENT_TABS: DocumentTabItem[] = [
     label: "총판 미수금",
     description: "총판용 견적서 발행분의 입금 현황과 원가 템플릿",
     icon: <Wallet className="h-4 w-4" />,
+  },
+  {
+    key: "history",
+    label: "히스토리",
+    description: "저장한 견적 — 다음 할 일별 목록, 고객 반응, 계약 전환까지",
+    icon: <History className="h-4 w-4" />,
   },
   // "공유 링크"(links) coming-soon 탭은 제거 — 열람수·발송 상태는 하드웨어 견적 행 단위로 이미 제공된다.
   // 구 딥링크(tab=links|shares)는 normalizeDocumentTab의 hardware 폴백이 흡수한다.
@@ -120,13 +129,16 @@ const HARDWARE_QUOTE_PRESETS: Array<{
   },
 ]
 
-function normalizeDocumentTab(raw: string | null): DocumentTab {
+function normalizeDocumentTab(raw: string | null, hasQuote = false): DocumentTab {
   if (raw === "software" || raw === "software-code" || raw === "sw") return "software"
   if (raw === "contract" || raw === "contracts") return "contracts"
   if (raw === "receipt" || raw === "receipts") return "receipts"
   if (raw === "receivables" || raw === "distributor") return "receivables"
+  if (raw === "history") return "history"
 
-  return "hardware"
+  // ?tab=hardware&quote=<id>(총판 미수금 탭·알림·공유에서 들어오는 딥링크)는 그 견적 상세를 열어야 한다 —
+  // 견적 상세는 히스토리 화면에 있다. quote 가 없으면 견적서 탭(템플릿 화면).
+  return hasQuote ? "history" : "hardware"
 }
 
 function normalizeHardwareQuoteAction(raw: string | null): HardwareQuoteQuickAction | null {
@@ -134,7 +146,7 @@ function normalizeHardwareQuoteAction(raw: string | null): HardwareQuoteQuickAct
 }
 
 function tabFromParams(params: Pick<URLSearchParams, "get">) {
-  return normalizeDocumentTab(params.get("tab") ?? params.get("type"))
+  return normalizeDocumentTab(params.get("tab") ?? params.get("type"), Boolean(params.get("quote")))
 }
 
 function tabFromSearch() {
@@ -305,8 +317,20 @@ export default function QuotesPage() {
       url.searchParams.delete("type")
       url.searchParams.delete("action")
       url.searchParams.delete("quick")
+      // quote 가 남으면 새로고침 때 견적서 탭이 히스토리로 읽힌다(위 normalizeDocumentTab).
+      url.searchParams.delete("quote")
       window.history.replaceState(null, "", url.toString())
     }
+  }
+
+  // 작성기가 견적을 저장하면 히스토리 탭으로 넘어간다 — 패널이 그 견적을 이미 선택해 뒀다.
+  const handleQuoteCreated = (quoteId: string) => {
+    setActiveTab("history")
+    const url = new URL(window.location.href)
+    url.searchParams.set("tab", "history")
+    url.searchParams.set("quote", quoteId)
+    url.searchParams.delete("type")
+    window.history.replaceState(window.history.state, "", url.toString())
   }
 
   // 브라우저 뒤로가기/앞으로가기 시 URL의 탭 상태와 동기화
@@ -322,7 +346,9 @@ export default function QuotesPage() {
 
   const openHardwareQuickAction = (action: HardwareQuoteQuickAction) => {
     quickActionSequenceRef.current += 1
-    setActiveTab("hardware")
+    // 작성기는 견적서·히스토리 탭의 패널 안에 있다. 히스토리에서 누르면 그 자리에서 열고, 다른 탭이면 견적서 탭으로 간다.
+    const panelTab: DocumentTab = activeTab === "history" ? "history" : "hardware"
+    setActiveTab(panelTab)
     setHardwareQuickAction({
       action,
       key: `manual-${action}-${quickActionSequenceRef.current}`,
@@ -330,7 +356,7 @@ export default function QuotesPage() {
 
     if (typeof window !== "undefined") {
       const url = new URL(window.location.href)
-      url.searchParams.set("tab", "hardware")
+      url.searchParams.set("tab", panelTab)
       url.searchParams.set("action", action)
       window.history.replaceState(null, "", url.toString())
     }
@@ -374,8 +400,10 @@ export default function QuotesPage() {
       </div>
 
       <div className="px-0 py-0">
-        {activeTab === "hardware" && (
+        {(activeTab === "hardware" || activeTab === "history") && (
           <HardwareQuotesPanel
+            view={activeTab === "history" ? "history" : "templates"}
+            onQuoteCreated={handleQuoteCreated}
             quickAction={hardwareQuickAction}
             onQuickActionConsumed={() => {
               setHardwareQuickAction(null)

@@ -6,7 +6,7 @@
 // 사이드바에서 항목이 상시·기타·숨김 중 어디에 놓이는지뿐이다. 숨김(2026-09-25)도 목록 정리일 뿐
 // 숨긴 탭은 주소로 그대로 열린다. 프리셋 선택(7종)은 제거됐다(admin-nav-access.ts 상단 주석 참조).
 //
-// (2026-11-20) "전체 사이드바" 지정 하나가 돌아왔다. 기본은 간소 사이드바(매출 장부 + 견적·문서)
+// (2026-11-20) "전체 사이드바" 지정 하나가 돌아왔다. 기본은 간소 사이드바(매출 장부 + 견적·문서 + 하드웨어 재고)
 // 이고, 이 토글을 켜면 그 사람은 역할을 올리지 않고도 전체 사이드바를 본다 — 저장값은
 // nav_preset = "super"(FULL_NAV_PRESET), 끄면 null 이다. 이것도 메뉴 표시일 뿐 접근 권한이
 // 아니다(데이터는 각 API 의 역할 검사가 막는다). SUPER_ADMIN 은 역할만으로 항상 전체라 토글이 잠긴다.
@@ -20,6 +20,7 @@ import { Check } from "lucide-react"
 
 import {
   FULL_NAV_PRESET,
+  getSimpleNavPrimaryLabels,
   hasFullAdminNav,
   normalizeNavOverrides,
   type NavOverrides,
@@ -138,7 +139,7 @@ export default function MemberNavAccessDrawer({
             <span className="mt-0.5 block text-[11px] leading-relaxed text-[#1a1a1a]/45">
               {fullByRole
                 ? "최고 관리자는 항상 전체 사이드바를 봅니다."
-                : "끄면 매출 장부와 견적·문서만 보입니다. 켜도 역할과 데이터 권한은 그대로입니다."}
+                : `끄면 ${getSimpleNavPrimaryLabels().join(" · ")}만 보입니다. 켜도 역할과 데이터 권한은 그대로입니다.`}
             </span>
           </span>
         </button>

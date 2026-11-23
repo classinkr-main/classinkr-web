@@ -12,7 +12,8 @@
 //    (SIMPLE_NAV_PRIMARY_HREFS) 나머지는 전부 기본 숨김이다.
 //
 // 왜 바꿨나 — 팀원이 계속 가입하는데 처음 보는 화면이 관리자용 Overview 와 16개 탭이었다.
-// 지금 팀이 실제로 쓰는 표면은 장부와 견적 둘이라, 나머지는 화면을 고도화하면서 하나씩 다시 꺼낸다.
+// 지금 팀이 실제로 쓰는 표면은 장부와 견적이고(2026-11-23 부터 견적 산출물을 검증하는 하드웨어 재고까지
+// 셋), 나머지는 화면을 고도화하면서 하나씩 다시 꺼낸다.
 //
 // 무엇을 **되살리지 않았나** — 차단(deny)이다. 2026-09-10 의 근거 1(nav 는 보안 경계가 아니다)은
 // 그대로다. 숨김은 메뉴와 눈에 보이는 목록(사이드바 · 모바일 메뉴/하단 바로가기 · "기타" ·
@@ -140,7 +141,8 @@ export const FULL_NAV_LANDING_HREF = "/admin/overview"
 export const SIMPLE_NAV_LANDING_HREF = "/admin/branch/ledger"
 
 /**
- * 간소 사이드바의 상시 항목 — 매출 장부 · 견적·문서(2026-11-20 S1). 그 밖은 전부 기본 숨김이다.
+ * 간소 사이드바의 상시 항목 — 매출 장부 · 견적·문서(2026-11-20 S1) · 하드웨어 재고(2026-11-23).
+ * 그 밖은 전부 기본 숨김이다.
  * 탭을 다시 꺼낼 때(S2) 여기에 href 를 더한다. 두 가지를 지킬 것(테스트가 고정한다):
  *  - SIMPLE_NAV_LANDING_HREF 가 이 목록에 있어야 한다.
  *  - 전부 DEFAULT_PRIMARY_HREFS 안에 있어야 한다 — "보일 때 앉는 자리"를 전체/간소가 같은 표로
@@ -154,6 +156,14 @@ export const SIMPLE_NAV_PRIMARY_HREFS: readonly string[] = [
   "/admin/quotes",
   "/admin/hardware",
 ]
+
+/**
+ * 간소 사이드바 상시 항목의 탭 이름(선언 순서). 안내 문구가 목록을 글자로 박아 두면 상수가 바뀔 때
+ * 문구만 낡는다 — 편집기·회원 서랍은 이 함수로 읽는다.
+ */
+export function getSimpleNavPrimaryLabels(): string[] {
+  return ADMIN_NAV.filter((item) => SIMPLE_NAV_PRIMARY_HREFS.includes(item.href)).map((item) => item.label)
+}
 
 /**
  * 전체 계정의 기본값이 숨김인 항목 — 거의 안 쓰는 탭(2026-09-24 운영 조사).
@@ -238,7 +248,7 @@ export interface NavAudienceContext {
 /**
  * 전체 사이드바를 보는 계정인지 — 2026-11-20 결정(docs/active/sales-workspace-simplification-plan-2026-11-20.md D1).
  *
- * 전체: SUPER_ADMIN 역할, 또는 nav_preset 이 "super" 인 지정 계정. 그 밖은 "간소"(매출 장부 + 견적·문서).
+ * 전체: SUPER_ADMIN 역할, 또는 nav_preset 이 "super" 인 지정 계정. 그 밖은 "간소"(매출 장부 + 견적·문서 + 하드웨어 재고).
  * 지정 계정은 **역할을 올리지 않는다** — 역할은 API 권한이고, 이것은 메뉴 표시일 뿐이다. 그래서
  * 레거시였던 nav_preset 컬럼의 "super" 값 하나만 이 용도로 다시 쓴다(다른 프리셋 값은 여전히
  * 화면을 가르지 않는다).

@@ -293,12 +293,14 @@ describe("admin command palette — 간소 사이드바 계정", () => {
   const simpleCommands = (over: Partial<NavAccessContext> = {}) =>
     resolveAdminCommands({ role: "ADMIN", overrides: {}, ...over })
 
-  it("기본 목록은 매출 장부·견적·문서와 견적의 자식 명령뿐이다", () => {
+  it("기본 목록은 매출 장부·견적·문서·하드웨어 재고와 견적의 자식 명령뿐이다", () => {
     expect(simpleCommands().map((cmd) => cmd.href)).toEqual([
       "/admin/branch/ledger",
       "/admin/quotes",
       "/admin/quotes?tab=hardware&action=new",
       "/admin/quotes?tab=hardware&action=recording_studio",
+      // 하드웨어 재고(2026-11-23 간소 상시) — 자기 자식 명령은 없다. 위 둘은 견적·문서의 자식이다.
+      "/admin/hardware",
     ])
     expect(new Set(simpleCommands().map((cmd) => cmd.group))).toEqual(new Set(["영업·매출"]))
   })
@@ -348,7 +350,10 @@ describe("admin command palette — 간소 사이드바 계정", () => {
 
   it("보이는 탭을 숨기면 그 자식 명령도 함께 빠진다", () => {
     const hrefs = simpleCommands({ overrides: { "/admin/quotes": "hidden" } }).map((cmd) => cmd.href)
-    expect(hrefs).toEqual(["/admin/branch/ledger"])
+    expect(hrefs).toEqual(["/admin/branch/ledger", "/admin/hardware"])
+    expect(
+      simpleCommands({ overrides: { "/admin/quotes": "hidden", "/admin/hardware": "hidden" } }).map((cmd) => cmd.href)
+    ).toEqual(["/admin/branch/ledger"])
   })
 
   it("getAccessibleAdminNavItems 는 간소 계정에서도 ADMIN_NAV 전체다 — 팔레트 쪽에서만 거른다", () => {

@@ -207,10 +207,14 @@ describe("켜짐(NEXT_PUBLIC_ADMIN_AI_PREVIEW=1) — 시안 미리보기", () =>
     expect(access.getAccessibleAdminNavItems(resolved).map((item) => item.href)).toContain("/admin/ai")
   })
 
-  it("간소 사이드바 계정에게는 켜져 있어도 기본 숨김이다 — 상시는 장부·견적 둘", async () => {
+  it("간소 사이드바 계정에게는 켜져 있어도 기본 숨김이다 — 상시는 장부·견적·하드웨어 셋", async () => {
     const { access } = await loadWithFlag("1")
     const resolved = access.resolveAdminNavAccess({ role: "ADMIN", overrides: {} })
-    expect(resolved.primary.map((item) => item.href)).toEqual(["/admin/branch/ledger", "/admin/quotes"])
+    expect(resolved.primary.map((item) => item.href)).toEqual([
+      "/admin/branch/ledger",
+      "/admin/quotes",
+      "/admin/hardware",
+    ])
     expect(resolved.hidden.map((item) => item.href)).toContain("/admin/ai")
     // 숨김은 목록 정리일 뿐이다 — 도달 가능한 집합에는 그대로 있다.
     expect(access.getAccessibleAdminNavItems(resolved).map((item) => item.href)).toContain("/admin/ai")

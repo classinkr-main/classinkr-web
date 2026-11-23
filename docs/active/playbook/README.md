@@ -37,7 +37,7 @@
 
 - 운영 계정과 프로필의 정본은 Supabase `admin_profiles`다. `ADMIN_USERS`와 `ADMIN_PASSWORD`는 로컬 개발 또는 전환기 레거시 인증 폴백이며 운영 권한 원장으로 사용하지 않는다.
 - 정규 역할은 `SUPER_ADMIN`, `ADMIN`, `BRANCH`다. `EDITOR`, `VIEWER`, `PARTNER`는 기존 데이터와 세션을 위한 레거시 호환 값이며 새 권한 모델의 기준으로 확장하지 않는다.
-- 사이드바의 기본값은 전체 / 간소 둘이다(2026-11-20). `SUPER_ADMIN`과 `nav_preset`이 `super`인 지정 계정은 전체 사이드바를, 그 밖의 계정은 간소 사이드바(매출 장부 + 견적·문서)를 본다. 판정(`hasFullAdminNav`)·배치·로그인 착지 경로(`resolveAdminLandingHref`)의 정본은 모두 `admin-nav-access.ts`이고, `nav_overrides`는 그 위에서 자리와 숨김을 사람별로 바꾸는 설정이다. 숨김은 메뉴와 ⌘K 목록에서만 적용되고 주소 진입을 막지 않는다. 어느 것도 보안 경계가 아니다 — 실제 접근은 각 `app/api/admin/*` 라우트의 role/capability 검사로 강제한다.
+- 사이드바의 기본값은 전체 / 간소 둘이다(2026-11-20). `SUPER_ADMIN`과 `nav_preset`이 `super`인 지정 계정은 전체 사이드바를, 그 밖의 계정은 간소 사이드바(매출 장부 + 견적·문서 + 하드웨어 재고, 하드웨어는 2026-11-23 추가)를 본다. 판정(`hasFullAdminNav`)·배치·로그인 착지 경로(`resolveAdminLandingHref`)의 정본은 모두 `admin-nav-access.ts`이고, `nav_overrides`는 그 위에서 자리와 숨김을 사람별로 바꾸는 설정이다. 숨김은 메뉴와 ⌘K 목록에서만 적용되고 주소 진입을 막지 않는다. 어느 것도 보안 경계가 아니다 — 실제 접근은 각 `app/api/admin/*` 라우트의 role/capability 검사로 강제한다.
 - 어드민 API는 `verifyAdmin()` 또는 `requireVerifiedAdminContext()`로 인증·역할을 확인하고, 필요한 동작은 capability까지 검사한다. 데이터 접근은 `createSupabaseAdminClient()`를 사용한다.
 
 ### 데이터·마이그레이션

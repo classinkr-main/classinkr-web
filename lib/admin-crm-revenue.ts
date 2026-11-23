@@ -1384,7 +1384,7 @@ async function assembleAdminCrmRevenueDashboard(): Promise<CrmRevenueDashboard> 
       status: quote.status,
       amount: quote.total_amount,
       occurredAt: quote.accepted_at ?? quote.sent_at ?? quote.created_at,
-      href: "/admin/quotes?tab=hardware",
+      href: "/admin/quotes?tab=history",
     })),
     ...contracts.map((contract) => ({
       id: contract.id,

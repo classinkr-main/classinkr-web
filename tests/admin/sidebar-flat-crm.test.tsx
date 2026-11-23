@@ -15,7 +15,7 @@ vi.mock("next/navigation", () => ({
 import AdminSidebar from "@/components/admin/AdminSidebar"
 
 // 기본 역할은 SUPER_ADMIN = 전체 사이드바 계정이다. 2026-11-20 부터 그 밖의 계정은 간소 사이드바
-// (매출 장부 + 견적·문서)라, 이 파일의 2026-11-19 이전 기대값은 전부 전체 계정의 것이다.
+// (매출 장부 + 견적·문서 + 하드웨어 재고)라, 이 파일의 2026-11-19 이전 기대값은 전부 전체 계정의 것이다.
 // 간소 계정은 맨 아래 "간소 사이드바" describe 가 렌더로 본다.
 function render(
   pathname: string,
@@ -213,24 +213,26 @@ describe("사이드바 CRM 평탄화", () => {
 
 // ── 간소 사이드바(2026-11-20) ─────────────────────────────────────────────────
 // docs/active/sales-workspace-simplification-plan-2026-11-20.md W1. SUPER_ADMIN 과 지정 계정
-// (nav_preset "super")을 뺀 모든 계정은 매출 장부 · 견적·문서 둘만 본다. 숨김은 목록에서만이다 —
+// (nav_preset "super")을 뺀 모든 계정은 매출 장부 · 견적·문서 · 하드웨어 재고 셋만 본다(2026-11-23 하드웨어 추가). 숨김은 목록에서만이다 —
 // 주소로 들어간 화면은 그대로 열리고 헤더 라벨도 맞아야 한다.
 describe("간소 사이드바", () => {
   const SIMPLE = { role: "ADMIN" } as const
   const LEDGER = "/admin/branch/ledger"
   const QUOTES = "/admin/quotes"
+  const HARDWARE = "/admin/hardware"
+  const SIMPLE_HREFS = [LEDGER, QUOTES, HARDWARE]
 
   function desktopAside(html: string) {
     return html.match(/<aside\b[\s\S]*<\/aside>/)?.[0] ?? ""
   }
 
   it.each(["ADMIN", "BRANCH", "EDITOR", "VIEWER", "PARTNER", "admin"])(
-    "%s — 메뉴 링크는 매출 장부·견적·문서 둘뿐이다(데스크톱·모바일 하단 모두)",
+    "%s — 메뉴 링크는 매출 장부·견적·문서·하드웨어 재고 셋뿐이다(데스크톱·모바일 하단 모두)",
     (role) => {
       const html = render(LEDGER, { role })
-      expect([...new Set(navHrefs(html))].sort()).toEqual([LEDGER, QUOTES].sort())
-      expect(navHrefs(desktopAside(html))).toEqual([LEDGER, QUOTES])
-      expect(navHrefs(mobileBottomBar(html))).toEqual([LEDGER, QUOTES])
+      expect([...new Set(navHrefs(html))].sort()).toEqual([...SIMPLE_HREFS].sort())
+      expect(navHrefs(desktopAside(html))).toEqual(SIMPLE_HREFS)
+      expect(navHrefs(mobileBottomBar(html))).toEqual(SIMPLE_HREFS)
     }
   )
 
@@ -238,7 +240,7 @@ describe("간소 사이드바", () => {
     'nav_preset "%s" 는 전체 사이드바를 주지 않는다',
     (navPreset) => {
       const html = render(LEDGER, { role: "ADMIN", navPreset })
-      expect([...new Set(navHrefs(html))].sort()).toEqual([LEDGER, QUOTES].sort())
+      expect([...new Set(navHrefs(html))].sort()).toEqual([...SIMPLE_HREFS].sort())
     }
   )
 
@@ -274,11 +276,12 @@ describe("간소 사이드바", () => {
     const bar = mobileBottomBar(render(QUOTES, SIMPLE))
     expect(bar).toContain(">장부<")
     expect(bar).toContain(">견적<")
+    expect(bar).toContain(">재고<")
     expect(bar).toContain("More")
     expect(bar).not.toContain('href="/admin/calendar"')
     expect(bar).not.toContain('href="/admin/crm"')
-    // 장부 · 견적 · More = 3칸.
-    expect(bar).toContain("repeat(3, minmax(0, 1fr))")
+    // 장부 · 견적 · 재고 · More = 4칸.
+    expect(bar).toContain("repeat(4, minmax(0, 1fr))")
   })
 
   // 숨김은 메뉴에서만이다(D2) — 주소로 들어가면 열리고, 그 화면의 이름도 맞아야 한다.
@@ -287,15 +290,25 @@ describe("간소 사이드바", () => {
     ["/admin/crm", "CRM"],
     ["/admin/crm/deals/rev-sheet", "매출시트"],
     ["/admin/settings", "설정"],
-    ["/admin/hardware/items", "하드웨어 재고"],
+    ["/admin/calendar", "캘린더"],
     ["/admin/docs", "CS 콘솔"],
-  ])("주소로 들어간 숨긴 화면 %s — 헤더는 %s, 메뉴는 여전히 둘, 숨긴 탭 묶음은 펼쳐지지 않는다", (pathname, label) => {
+  ])("주소로 들어간 숨긴 화면 %s — 헤더는 %s, 메뉴는 여전히 셋, 숨긴 탭 묶음은 펼쳐지지 않는다", (pathname, label) => {
     const html = render(pathname, SIMPLE)
     expect(mobileHeader(html)).toContain(label)
-    expect([...new Set(navHrefs(html))].sort()).toEqual([LEDGER, QUOTES].sort())
+    expect([...new Set(navHrefs(html))].sort()).toEqual([...SIMPLE_HREFS].sort())
     expect(activeNavHrefs(html)).toEqual([])
     expect(html).not.toContain("숨긴 탭")
     expect(html).not.toContain("접근 권한이 없습니다")
+  })
+
+  // 2026-11-23 — 하드웨어 재고는 이제 숨긴 화면이 아니다(위 표에서 여기로 옮겼다). 하위 화면에서도
+  // 그 탭이 active 다.
+  it("하드웨어 재고 하위 화면 — 헤더는 하드웨어 재고, 메뉴의 그 탭이 active 다", () => {
+    const html = render("/admin/hardware/items", SIMPLE)
+    expect(mobileHeader(html)).toContain("하드웨어 재고")
+    expect([...new Set(navHrefs(html))].sort()).toEqual([...SIMPLE_HREFS].sort())
+    expect([...new Set(activeNavHrefs(html))]).toEqual([HARDWARE])
+    expect(html).not.toContain("숨긴 탭")
   })
 
   it("최고 관리자가 되살려 준 탭은 보인다 — 자리는 전체 계정과 같고 소제목은 여전히 없다", () => {
@@ -303,17 +316,21 @@ describe("간소 사이드바", () => {
       role: "ADMIN",
       navOverrides: { "/admin/crm": "primary", "/admin/analytics": "folded" },
     })
-    expect(navHrefs(desktopAside(html))).toEqual([LEDGER, "/admin/crm", QUOTES])
+    expect(navHrefs(desktopAside(html))).toEqual([LEDGER, "/admin/crm", QUOTES, HARDWARE])
     // 기타로 되살린 Analytics 는 접힌 "기타 1" 뒤에 있다(빈 묶음이 아니라서 그린다).
     expect(html).toContain("기타")
     expect(html).toContain(">1<")
     expect(html).not.toContain("숨긴 탭")
     expect(html).not.toContain("사이드바 편집")
-    expect(navHrefs(mobileBottomBar(html))).toEqual([LEDGER, "/admin/crm", QUOTES])
+    // 장부 · CRM · 견적 · 재고 = 4칸(MOBILE_SIMPLE_NAV_MAX) + More.
+    expect(navHrefs(mobileBottomBar(html))).toEqual([LEDGER, "/admin/crm", QUOTES, HARDWARE])
   })
 
   it("착지(매출 장부)를 숨긴 값이 들어와도 목록에 남는다", () => {
-    const html = render(QUOTES, { role: "ADMIN", navOverrides: { [LEDGER]: "hidden", [QUOTES]: "hidden" } })
+    const html = render(QUOTES, {
+      role: "ADMIN",
+      navOverrides: { [LEDGER]: "hidden", [QUOTES]: "hidden", [HARDWARE]: "hidden" },
+    })
     expect([...new Set(navHrefs(html))]).toEqual([LEDGER])
   })
 })

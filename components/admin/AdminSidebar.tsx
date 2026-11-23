@@ -405,11 +405,14 @@ const MOBILE_PRIMARY_NAV = [
 
 // 간소 사이드바 계정(2026-11-20)의 하단 바로가기 — 위 고정 목록의 캘린더·CRM 은 그 계정에게 숨김이라
 // 견적 하나만 남고 착지 화면(매출 장부)이 빠진다. 그래서 그 계정의 상시 목록을 선언 순서대로 올린다
-// (기본은 매출 장부 · 견적 둘, 최고 관리자가 되살려 준 탭이 있으면 4칸까지). 좁은 칸에 맞춘 짧은 라벨.
+// (기본은 매출 장부 · 견적 · 하드웨어 재고 셋, 최고 관리자가 되살려 준 탭이 있으면 4칸까지). 좁은 칸에
+// 맞춘 짧은 라벨. 칸 수는 바로가기 + More 이고 5칸이 상한이라(mobileBottomColumns) 기본 셋 + More =
+// 4칸이 한 줄에 들어간다.
 const MOBILE_SIMPLE_NAV_MAX = 4
 const MOBILE_SHORT_LABELS: Record<string, string> = {
   "/admin/branch/ledger": "장부",
   "/admin/quotes": "견적",
+  "/admin/hardware": "재고",
   "/admin/calendar": "캘린더",
   "/admin/crm": "CRM",
 }
@@ -604,7 +607,7 @@ function AdminSidebarContent({ role, name, email, navPreset, navOverrides, onNav
   const normalizedOverrides = useMemo(() => normalizeNavOverrides(navOverrides), [navOverrides])
   // 상시/기타/숨김 배치는 반드시 resolveAdminNavAccess를 통해서만 계산한다 — 사이드바가 자체
   // 계산을 하면 편집기 미리보기와 어긋난다. 기본값은 계정에 따라 둘이다(2026-11-20): 전체 사이드바
-  // (SUPER_ADMIN · nav_preset "super" 지정 계정)는 예전 그대로, 그 밖은 간소(매출 장부 + 견적·문서).
+  // (SUPER_ADMIN · nav_preset "super" 지정 계정)는 예전 그대로, 그 밖은 간소(매출 장부 + 견적·문서 + 하드웨어 재고).
   // 사람별 오버라이드는 그 위에서 항목의 상시/기타 자리를 옮기거나 내 목록에서 숨길 뿐이다.
   // 어느 쪽이든 목록 정리일 뿐 접근을 막지 않는다 — 주소로는 모든 화면이 열린다.
   const navAccess = useMemo(

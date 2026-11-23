@@ -41,7 +41,7 @@ Admin Core는 `/admin`의 셸·로그인·공통 내비와 관리자 인증/권�
 사이드바의 기본값은 2026-11-20부터 전체 / 간소 둘이다. 판정은 `admin-nav-access.ts`의 `hasFullAdminNav` 하나다 — `SUPER_ADMIN` 역할이거나 `nav_preset`이 `super`인 지정 계정이면 전체, 그 밖은 간소다. 사이드바·모바일 메뉴·⌘K(전역·CRM 팔레트)·화면 안 탭이 이 함수만 쓰고, 역할이나 프리셋을 직접 비교하지 않는다.
 
 - 전체 사이드바: `DEFAULT_PRIMARY_HREFS`가 상시 탭을 정하고 `DEFAULT_HIDDEN_HREFS`가 기본 숨김, 나머지는 접힌 기타다(개수는 상수 위 주석이 정본).
-- 간소 사이드바: `SIMPLE_NAV_PRIMARY_HREFS`(매출 장부 · 견적·문서)만 상시이고 나머지는 전부 기본 숨김이다. 탭을 다시 꺼낼 때 이 상수에 더한다.
+- 간소 사이드바: `SIMPLE_NAV_PRIMARY_HREFS`(매출 장부 · 견적·문서 · 하드웨어 재고 — 하드웨어는 2026-11-23 추가)만 상시이고 나머지는 전부 기본 숨김이다. 탭을 다시 꺼낼 때 이 상수에 더한다.
 - `nav_overrides`는 그 위에서 사람별로 자리와 숨김을 바꾼다(CRM 하위 탭은 `crm:<href>` 키). 개인 예외는 간소 기본값도 이긴다.
 - `nav_preset`은 `super` 한 값만 뜻이 있다(전체 사이드바 지정). 지정 계정의 역할을 `SUPER_ADMIN`으로 올리지 않는다 — 역할은 API 권한이다. 설정 › 회원의 사이드바 배치에서 `SUPER_ADMIN`이 켜고 끈다.
 

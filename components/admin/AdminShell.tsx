@@ -36,7 +36,7 @@ type SessionInfo = Pick<
 //
 // 바이패스는 어떤 계정으로 들어오든 세션을 Dev/dev@local로 덮어쓴다. 사이드바는 역할과 nav_preset
 // 으로 갈린다(admin-nav-access.ts hasFullAdminNav, 2026-11-20): SUPER_ADMIN 이거나 프리셋이
-// "super" 면 전체, 그 밖은 간소(매출 장부 + 견적·문서).
+// "super" 면 전체, 그 밖은 간소(매출 장부 + 견적·문서 + 하드웨어 재고).
 //
 //   NEXT_PUBLIC_DEV_NAV_PRESET=super       # 역할은 그대로 두고 전체 사이드바(지정 계정 흉내)
 //   NEXT_PUBLIC_DEV_ROLE=SUPER_ADMIN       # 생략 시 admin

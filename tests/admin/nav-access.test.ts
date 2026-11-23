@@ -410,12 +410,15 @@ describe("개인 숨김 — 목록과 도달성", () => {
     }
 
     const simpleExpected = hrefsOf(resolveAdminNavAccess(simple({ overrides })).hidden)
-    // 간소: 매출 장부·견적(기본 상시)과 되살린 운영 상태를 뺀 전부가 숨김이다.
+    // 간소: 매출 장부·견적(기본 상시)과 되살린 운영 상태를 뺀 전부가 숨김이다. 하드웨어 재고는 간소
+    // 계정에게도 기본 상시(2026-11-23)지만 여기서는 오버라이드로 숨겼으므로 숨김 쪽에 남는다.
     expect(simpleExpected).toEqual(
       ADMIN_NAV.map((item) => item.href).filter(
-        (href) => ![...SIMPLE_NAV_PRIMARY_HREFS, "/admin/ops"].includes(href)
+        (href) =>
+          ![...SIMPLE_NAV_PRIMARY_HREFS.filter((primary) => primary !== "/admin/hardware"), "/admin/ops"].includes(href)
       )
     )
+    expect(simpleExpected).toContain("/admin/hardware")
     for (const audience of SIMPLE_AUDIENCES) {
       expect(
         hrefsOf(resolveAdminNavAccess({ ...audience, overrides }).hidden),
@@ -607,26 +610,30 @@ describe("(a) 전체 사이드바 계정의 결과는 2026-11-20 이전과 같�
   })
 })
 
-describe("(b) 간소 사이드바 계정 — 상시는 매출 장부·견적·문서 둘뿐이다", () => {
-  it("상시 목록 상수는 장부·견적이고, 착지가 그 안에 있으며, 전부 전체 계정의 상시 자리다", () => {
-    expect([...SIMPLE_NAV_PRIMARY_HREFS]).toEqual(["/admin/branch/ledger", "/admin/quotes"])
+describe("(b) 간소 사이드바 계정 — 상시는 매출 장부·견적·문서·하드웨어 재고 셋뿐이다", () => {
+  it("상시 목록 상수는 장부·견적·하드웨어이고, 착지가 그 안에 있으며, 전부 전체 계정의 상시 자리다", () => {
+    expect([...SIMPLE_NAV_PRIMARY_HREFS]).toEqual(["/admin/branch/ledger", "/admin/quotes", "/admin/hardware"])
     expect(SIMPLE_NAV_PRIMARY_HREFS).toContain(SIMPLE_NAV_LANDING_HREF)
     // 기타 자리의 항목을 넣으면 간소 사이드바에 "기타" 묶음이 생긴다 — 자리 표를 전체와 같이 쓰기 때문.
     for (const href of SIMPLE_NAV_PRIMARY_HREFS) expect(DEFAULT_PRIMARY_HREFS, href).toContain(href)
   })
 
   it.each(SIMPLE_AUDIENCES.map((audience) => [audienceLabel(audience), audience] as const))(
-    "%s — 상시 2 · 기타 0 · 나머지 전부 숨김, 소제목 없음",
+    "%s — 상시 3 · 기타 0 · 나머지 전부 숨김, 소제목 없음",
     (_label, audience) => {
       const access = resolveAdminNavAccess({ ...audience, overrides: {} })
       expect(access.fullNav).toBe(false)
-      expect(hrefsOf(access.primary)).toEqual(["/admin/branch/ledger", "/admin/quotes"])
+      expect(hrefsOf(access.primary)).toEqual(["/admin/branch/ledger", "/admin/quotes", "/admin/hardware"])
       expect(access.folded).toEqual([])
       expect(hrefsOf(access.hidden)).toEqual(
         ADMIN_NAV.map((item) => item.href).filter((href) => !SIMPLE_NAV_PRIMARY_HREFS.includes(href))
       )
       expect(access.showPrimaryHeaders).toBe(false)
-      expect(hrefsOf(getVisibleAdminNavItems(access))).toEqual(["/admin/branch/ledger", "/admin/quotes"])
+      expect(hrefsOf(getVisibleAdminNavItems(access))).toEqual([
+        "/admin/branch/ledger",
+        "/admin/quotes",
+        "/admin/hardware",
+      ])
       // Overview 는 간소 계정에게 기본 숨김이다 — 관리자 화면에 떨어지지 않는다(S3).
       expect(isNavHidden("/admin/overview", { ...audience, overrides: {} })).toBe(true)
     }
@@ -653,7 +660,12 @@ describe("(b) 간소 사이드바 계정 — 상시는 매출 장부·견적·�
     expect(setNavOverride({}, "/admin/crm", "primary", FULL)).toEqual({})
 
     const access = resolveAdminNavAccess(simple({ overrides }))
-    expect(hrefsOf(access.primary)).toEqual(["/admin/branch/ledger", "/admin/crm", "/admin/quotes"])
+    expect(hrefsOf(access.primary)).toEqual([
+      "/admin/branch/ledger",
+      "/admin/crm",
+      "/admin/quotes",
+      "/admin/hardware",
+    ])
     expect(foldedHrefsOf(access)).toEqual(["/admin/analytics"])
     expect(hrefsOf(access.hidden)).not.toContain("/admin/crm")
   })
@@ -663,7 +675,7 @@ describe("(b) 간소 사이드바 계정 — 상시는 매출 장부·견적·�
     expect(setNavOverride({ "/admin/overview": "primary" }, "/admin/overview", "hidden", SIMPLE)).toEqual({})
     // 견적은 간소 계정에게도 숨길 수 있다(착지가 아니다) — 숨기면 예외로 남는다.
     expect(setNavOverride({}, "/admin/quotes", "hidden", SIMPLE)).toEqual({ "/admin/quotes": "hidden" })
-    // 장부·견적을 상시로 두는 것은 기본값이라 키가 남지 않는다.
+    // 장부·견적·하드웨어를 상시로 두는 것은 기본값이라 키가 남지 않는다.
     expect(setNavOverride({ "/admin/quotes": "folded" }, "/admin/quotes", "primary", SIMPLE)).toEqual({})
   })
 
@@ -675,6 +687,7 @@ describe("(b) 간소 사이드바 계정 — 상시는 매출 장부·견적·�
     expect(hrefsOf(rows.filter((row) => row.base !== "hidden").map((row) => row.item))).toEqual([
       "/admin/branch/ledger",
       "/admin/quotes",
+      "/admin/hardware",
     ])
     const overview = rows.find((row) => row.item.href === "/admin/overview")
     expect(overview).toMatchObject({ preference: "hidden", base: "hidden", hideable: true })
@@ -684,10 +697,11 @@ describe("(b) 간소 사이드바 계정 — 상시는 매출 장부·견적·�
     expect(hrefsOf(getPaletteAdminNavItems(resolveAdminNavAccess(simple())))).toEqual([
       "/admin/branch/ledger",
       "/admin/quotes",
+      "/admin/hardware",
     ])
     expect(
       hrefsOf(getPaletteAdminNavItems(resolveAdminNavAccess(simple({ overrides: { "/admin/analytics": "folded" } }))))
-    ).toEqual(["/admin/branch/ledger", "/admin/quotes", "/admin/analytics"])
+    ).toEqual(["/admin/branch/ledger", "/admin/quotes", "/admin/hardware", "/admin/analytics"])
   })
 })
 
@@ -745,7 +759,7 @@ describe("(c) 착지 경로는 그 계정에게 숨김이 아니다", () => {
     expect(saved).toEqual({ "/admin/branch/ledger": "hidden" })
     expect(hrefsOf(resolveAdminNavAccess(ctx({ overrides: saved })).hidden)).toContain("/admin/branch/ledger")
     const demoted = resolveAdminNavAccess(simple({ overrides: saved }))
-    expect(hrefsOf(demoted.primary)).toEqual(["/admin/branch/ledger", "/admin/quotes"])
+    expect(hrefsOf(demoted.primary)).toEqual(["/admin/branch/ledger", "/admin/quotes", "/admin/hardware"])
   })
 
   // 착지를 정하는 곳은 admin-nav-access.ts 하나다 — 두 진입점이 경로를 글자로 박으면 다시 따로 논다.

@@ -66,12 +66,12 @@ describe("NavPreferenceEditor — 전체 / 간소 사이드바(2026-11-20)", () 
     return button ? { pressed: button.includes('aria-pressed="true"'), disabled: /\sdisabled=""/.test(button) } : null
   }
 
-  it("간소 계정 — 장부·견적만 상시이고 나머지는 기본 숨김, 미리보기가 실제 사이드바와 같다", () => {
+  it("간소 계정 — 장부·견적·하드웨어만 상시이고 나머지는 기본 숨김, 미리보기가 실제 사이드바와 같다", () => {
     const html = render({}, { role: "ADMIN" })
-    expect(html).toContain("간소 사이드바 계정입니다")
-    expect(html).toContain(">상시 2</span>")
-    expect(html).toContain("매출 장부 · 견적·문서</span>")
-    expect(html).toContain("숨김 14 — Overview")
+    expect(html).toContain("간소 사이드바 계정입니다. 기본으로 매출 장부 · 견적·문서 · 하드웨어 재고만 보이고")
+    expect(html).toContain(">상시 3</span>")
+    expect(html).toContain("매출 장부 · 견적·문서 · 하드웨어 재고</span>")
+    expect(html).toContain("숨김 13 — Overview")
     expect(html).not.toContain("▸ 기타")
     expect(optionPressed(html, "매출 장부", "상시")).toEqual({ pressed: true, disabled: false })
     expect(optionPressed(html, "Overview", "숨김")).toEqual({ pressed: true, disabled: false })
