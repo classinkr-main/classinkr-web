@@ -6,6 +6,7 @@ vi.mock("@/components/ui/toast", () => ({
   useToast: () => ({ toast: () => {} }),
 }))
 
+import { metadata } from "@/app/contact/layout"
 import ContactPage from "@/app/contact/page"
 
 /**
@@ -44,6 +45,13 @@ function expectAutoComplete(chunk: string | undefined, token: string) {
 
 describe("문의 폼 필드 계약", () => {
   const html = renderContact()
+
+  it("제목과 H1에 도입 상담·기술 지원을 표시하고 결제 증빙도 안내한다", () => {
+    expect(metadata.title).toBe("클래스인 도입 상담·기술 지원")
+    expect(html).toMatch(/<h1[^>]*>클래스인 도입 상담·기술 지원<\/h1>/)
+    expect(html).toContain("결제 증빙")
+    expect(metadata.alternates?.canonical).toMatch(/\/contact$/)
+  })
 
   it("서버가 요구하는 필드가 전부 폼에 있다", () => {
     // org 는 화면에서 org-name 이라는 다른 이름을 쓴다 — 제출 핸들러의 매핑이 유일한 다리다.

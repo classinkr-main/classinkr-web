@@ -111,7 +111,7 @@ describe("홈", () => {
     ])
     for (const t of tags) expect(attr(t, "alt")?.trim(), t).toBeTruthy()
     hrefs(h, ["/product/recording", "/product/ai-report", "/product/sw"])
-    expect([...h.matchAll(/<span[^>]*class="underline[^"]*">([^<]*)<\/span>/g)].map((m) => m[1])).toEqual(["저절로"])
+    expect([...h.matchAll(/<span[^>]*class="underline[^"]*">([^<]*)<\/span>/g)].map((m) => m[1])).toEqual(["다시보기"])
     expect(count(h, /plate-window/g)).toBe(2)
     for (const m of ["ink-word", "window-in", "window-up"]) expect(count(h, new RegExp(`data-moment="${m}"`, "g")), m).toBe(1)
   })
