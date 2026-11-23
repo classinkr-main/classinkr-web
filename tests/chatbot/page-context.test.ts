@@ -3,11 +3,17 @@ import { describe, expect, it } from "vitest"
 import { resolvePageContext, mergeStarters } from "@/lib/chatbot/page-context"
 
 describe("resolvePageContext", () => {
-  it("returns the home context for '/'", () => {
+  it("prioritizes beginner, support and showroom questions on the home page", () => {
     const ctx = resolvePageContext("/")
     expect(ctx.key).toBe("home")
     expect(ctx.teaserEligible).toBe(true)
-    expect(ctx.starters.length).toBeGreaterThan(0)
+    expect(ctx.welcome).toContain("클래스인이 어떤 서비스인지")
+    expect(mergeStarters(ctx.starters, ["다른 추천 질문"], 4)).toEqual([
+      "클래스인이 뭐예요?",
+      "우리 학원에서는 어떻게 써요?",
+      "사용 중 문제가 생겼어요",
+      "쇼룸 방문이 가능한가요?",
+    ])
   })
 
   it("matches product and docs by prefix", () => {
@@ -47,7 +53,7 @@ describe("mergeStarters", () => {
 describe("home starters", () => {
   it("shows a plain-language intro chip first (the widget shows the first four)", () => {
     const starters = resolvePageContext("/").starters
-    expect(starters[0]).toBe("클래스인이 뭐예요? 쉽게 알려 주세요")
+    expect(starters[0]).toBe("클래스인이 뭐예요?")
     expect(starters.slice(0, 4).some((starter) => /EDB|LMS/.test(starter))).toBe(false)
   })
 })

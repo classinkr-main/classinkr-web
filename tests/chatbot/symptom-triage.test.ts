@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 
 import {
   evaluateChatbotQuery,
+  handleChatbotQuery,
   streamChatbotQuery,
   type ChatbotStreamEvent,
 } from "@/lib/chatbot/service"
@@ -129,6 +130,8 @@ describe("symptom topics stay wired to the public guides", () => {
 })
 
 describe("symptom triage boundaries", () => {
+  afterEach(() => vi.unstubAllEnvs())
+
   it("does not treat how-to, capability, or pricing questions as symptoms", () => {
     const questions = [
       "현장 녹화 카메라 설정 어떻게 해요?",
@@ -160,6 +163,32 @@ describe("symptom triage boundaries", () => {
     for (const question of ["에러 없이 잘 되나요?", "문제 은행 쓰는 법 알려줘", "전자칠판 화면이 안 켜져요"]) {
       expect(isVagueErrorQuestion(question), question).toBe(false)
     }
+  })
+
+  it("starts from the reported symptom after a visitor picks the generic support starter", async () => {
+    disableExternalChatbotServices()
+    const result = await handleChatbotQuery({ message: "사용 중 문제가 생겼어요" })
+
+    expect(result.answerMode).toBe("clarifying_question")
+    expect(result.handoffIntent).toBe("support")
+    expect(result.answer).toContain("어디가 막혔나요")
+    expect(result.answer).not.toContain("요금")
+  })
+
+  it("diagnoses student access when a teacher reports an invisible recording", async () => {
+    disableExternalChatbotServices()
+    const result = await handleChatbotQuery({
+      message: "선생님인데 방금 끝난 수업 녹화가 학생한테 안 보여요. 뭘 먼저 확인해야 해요?",
+      context: { showSources: true },
+    })
+
+    expect(result.sources[0]?.urlPath).toBe("/docs/admin/replay-troubleshooting")
+    expect(result.answer).toContain("처리하는 데 시간이")
+    expect(result.answer).toContain("코스에 있었는지")
+    expect(result.answer).toContain("정규 학생의 시청이 허용")
+    expect(result.answer).not.toContain("로컬")
+    expect(result.handoffIntent).toBe("support")
+    expect(result.needsHandoff).toBe(true)
   })
 
   it("does not read the 보드 in 대시보드 as an electronic board", async () => {
@@ -204,7 +233,7 @@ describe("symptom triage stream parity", () => {
     vi.stubEnv("GEMINI_API_KEY", "gemini-key")
     const fetchMock = vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("external fetch should not run"))
 
-    for (const question of ["기관 등록 안됨", "에러나요", "녹화가 안 돼요"]) {
+    for (const question of ["기관 등록 안됨", "에러나요", "녹화가 안 돼요", "녹화본이 학생한테 안 보여요"]) {
       const events: ChatbotStreamEvent[] = []
       await streamChatbotQuery({ message: question }, {}, (event) => events.push(event))
       const replace = [...events].reverse().find((event) => event.type === "replace")
