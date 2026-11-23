@@ -202,4 +202,67 @@ describe("hw parsers", () => {
     expect(out[0]).toMatchObject({ fiscal_year: 2026, fiscal_month: 4, product: '86" IFP', quantity: 1 })
     expect(out[11]).toMatchObject({ fiscal_year: 2026, fiscal_month: 3 })
   })
+
+  it("outbound resolves shifted KRW / S/N / 결제 여부 columns by header name", () => {
+    const grid: FormattedCell[][] = [
+      [
+        c("물류No."), c("출고일"), c("담당자"), c("제품명"), c("수량"),
+        c("단가(USD)"), c("매출(USD)"), c("매출(CNY)"),
+        c("단가(KRW)"), c("매출(KRW)"), c("배송/설치 장소"),
+        c("시리얼 번호"), c("S/N"), c("진행 상태"), c("유형"), c("결제 여부"), c("Remarks"),
+      ],
+      [
+        c("C1"), c("2026.11.23"), c("Somang"), c('86" IFP'), c(1),
+        c(""), c(""), c(""),
+        c("4,870,000.00"), c("4,870,000.00"), c("메테오에듀"),
+        c(""), c("BS86A260318015"), c("배송 예정"), c("Sales"), c("완료"), c("비고 메모"),
+      ],
+      [
+        c("C3"), c("2026.11.23"), c("Somang"), c("STD1"), c(1),
+        c(""), c(""), c(""),
+        c("270,000.00"), c("270,000.00"), c(""),
+        c(""), c(""), c("배송 예정"), c("Sales"), c("완료"), c(""),
+      ],
+    ]
+    const out = parseOutbound(grid)
+    expect(out[0]).toMatchObject({
+      logistics_no: "C1",
+      outbound_date: "2026-11-23",
+      owner: "Somang",
+      product: '86" IFP',
+      quantity: 1,
+      destination: "메테오에듀",
+      serials: ["BS86A260318015"],
+      progress: "배송 예정",
+      type: "Sales",
+      remarks: "비고 메모",
+    })
+    expect(out[0].raw).toMatchObject({
+      unit_price_krw: 4870000,
+      amount_krw: 4870000,
+      payment_status: "완료",
+    })
+    // 병합된 배송/설치 장소는 아래 품목 행에도 이어진다.
+    expect(out[1]).toMatchObject({
+      product: "STD1",
+      destination: "메테오에듀",
+      progress: "배송 예정",
+      type: "Sales",
+    })
+  })
+
+  it("salesMonthly parses live FY-grouped layout with product in col B and months starting at col D", () => {
+    const grid: FormattedCell[][] = [
+      [c(""), c(""), c("연간 합계"), c("4월"), c("5월"), c("6월"), c("7월"), c("8월"), c("9월"), c("10월"), c("11월"), c("12월"), c("1월"), c("2월"), c("3월")],
+      [c("FY25-26"), c('86" IFP'), c(222), c(50), c(1), c(18), c(18), c(31), c(9), c(7), c(41), c(24), c(4), c(9), c(10)],
+      [c(""), c("T1"), c(59), c(0), c(1), c(17), c(10), c(9), c(2), c(4), c(6), c(3), c(2), c(2), c(3)],
+      [c("FY26-27"), c('86" IFP'), c(57), c(9), c(0), c(14), c(8), c(13), c(9), c(2), c(2), c(0), c(0), c(0), c(0)],
+    ]
+    const out = parseSalesMonthly(grid, 2026)
+    expect(out).toHaveLength(36)
+    expect(out.find((r) => r.fiscal_year === 2025 && r.fiscal_month === 4 && r.product === '86" IFP')?.quantity).toBe(50)
+    expect(out.find((r) => r.fiscal_year === 2025 && r.fiscal_month === 6 && r.product === "T1")?.quantity).toBe(17)
+    expect(out.find((r) => r.fiscal_year === 2026 && r.fiscal_month === 4 && r.product === '86" IFP')?.quantity).toBe(9)
+    expect(out.some((r) => r.product.startsWith("FY"))).toBe(false)
+  })
 })

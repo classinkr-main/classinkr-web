@@ -26,4 +26,19 @@ describe('채널 정산 서버 읽기', () => {
     vi.stubEnv('GOOGLE_PRIVATE_KEY', '')
     await expect(readChannelSettlement()).rejects.toThrow(/인증/)
   })
+
+  it("'3. 채널 정산' 탭이 없으면 '3. 채널 정산(구)' 폴백 탭을 읽는다", async () => {
+    const fallbackSheet = () => ({
+      properties: { title: '3. 채널 정산(구)', gridProperties: { rowCount: 1120, columnCount: 25 } },
+      data: [{ rowData: [{ values: [] }, { values: headers.map(stringValue => ({ effectiveValue: { stringValue } })) }] }],
+    })
+    mocks.get
+      .mockRejectedValueOnce(Object.assign(new Error("Unable to parse range: '3. 채널 정산'!A:L"), { code: 400 }))
+      .mockResolvedValueOnce({ data: { sheets: [fallbackSheet()] } })
+
+    const res = await readChannelSettlement()
+    expect(res.sheetTitle).toBe('3. 채널 정산(구)')
+    expect(mocks.get).toHaveBeenNthCalledWith(1, expect.objectContaining({ ranges: ["'3. 채널 정산'!A:L"] }), { timeout: 15000, retry: false })
+    expect(mocks.get).toHaveBeenNthCalledWith(2, expect.objectContaining({ ranges: ["'3. 채널 정산(구)'!A:L"] }), { timeout: 15000, retry: false })
+  })
 })

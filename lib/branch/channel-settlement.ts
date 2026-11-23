@@ -33,7 +33,13 @@ function totals(rows: ChannelSettlementRecord[]): ChannelSettlementTotals {
   const rmb = sum('contractAmountRmb'), krw = sum('contractAmountKrw'), fee = sum('feeAmountRmb')
   return { contracts: rows.length, contractAmountRmb: rmb.amount, contractAmountRmbCount: rmb.count, contractAmountKrw: krw.amount, contractAmountKrwCount: krw.count, feeAmountRmb: fee.amount, feeAmountRmbCount: fee.count, settlementDateEntered: rows.filter(row => row.settlementDate !== null).length, settlementDateMissing: rows.filter(row => row.settlementDate === null).length }
 }
-export function buildChannelSettlementOverview(records: ChannelSettlementRecord[], period: 'M' | 'Q' | 'Y', periodDate: Date, readAt: string): ChannelSettlementOverview {
+export function buildChannelSettlementOverview(
+  records: ChannelSettlementRecord[],
+  period: 'M' | 'Q' | 'Y',
+  periodDate: Date,
+  readAt: string,
+  sheetTitle: string = CHANNEL_SETTLEMENT_SHEET
+): ChannelSettlementOverview {
   const fy = fyOf(periodDate)
   const start = period === 'Y' ? new Date(Date.UTC(fy, 3, 1)) : period === 'Q' ? new Date(Date.UTC(fy, 3 + (fiscalQuarter(periodDate.getUTCMonth() + 1) - 1) * 3, 1)) : new Date(Date.UTC(periodDate.getUTCFullYear(), periodDate.getUTCMonth(), 1))
   const end = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + (period === 'Y' ? 12 : period === 'Q' ? 3 : 1), 1))
@@ -46,7 +52,7 @@ export function buildChannelSettlementOverview(records: ChannelSettlementRecord[
   }
   return {
     scope: 'company-wide', currency: 'CNY', dateBasis: 'payment-date', period, periodStart, periodEnd,
-    source: { kind: 'live-sheet', sheetTitle: CHANNEL_SETTLEMENT_SHEET, readAt }, totals: totals(selected),
+    source: { kind: 'live-sheet', sheetTitle, readAt }, totals: totals(selected),
     partners: group(row => row.partner).map(({ label, ...value }) => ({ partner: label, ...value })),
     months: group(row => row.paymentDate!.slice(0, 7)).map(({ label, ...value }) => ({ month: label, ...value })),
     quality: { totalSourceContracts: records.length, missingPaymentDate: records.filter(row => row.paymentDate === null).length, excludedOutsidePeriod: records.filter(row => row.paymentDate !== null).length - selected.length },
