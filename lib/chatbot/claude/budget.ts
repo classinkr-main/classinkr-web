@@ -27,7 +27,8 @@ export interface ClaudeUsageStore {
 }
 
 export interface ClaudeUsageRow {
-  kind: "answer" | "label" | "eval"
+  /** assist: 답 색인 모델 선택 층(고르기·올림·업체 간 대체, lib/chatbot/claude/card-pick.ts). */
+  kind: "answer" | "label" | "eval" | "assist"
   model: string
   input_tokens: number
   output_tokens: number
@@ -60,6 +61,9 @@ export function kstWindowStarts(now: Date): { dayStartIso: string; monthStartIso
 }
 
 const memory = { dayKey: "", dayUsd: 0, monthKey: "", monthUsd: 0 }
+// 종류별 KST 오늘 합계(인스턴스 메모리). 모델 선택 층의 하루 상한(checkClaudeAssistBudget)이 assist 몫만 본다.
+const dayByKind = { dayKey: "", usd: {} as Partial<Record<ClaudeUsageRow["kind"], number>> }
+let lastAssistWarnKey = ""
 const dbCache = { at: 0, dayKey: "", dayUsd: 0, monthUsd: 0 }
 let dbDisabledUntil = 0
 let lastWarnKey = ""
@@ -80,11 +84,17 @@ function rollMemory(now: Date) {
     memory.monthKey = monthKey
     memory.monthUsd = 0
   }
+  if (dayByKind.dayKey !== dayKey) {
+    dayByKind.dayKey = dayKey
+    dayByKind.usd = {}
+  }
 }
 
 export function resetClaudeBudgetStateForTests() {
   Object.assign(memory, { dayKey: "", dayUsd: 0, monthKey: "", monthUsd: 0 })
   Object.assign(dbCache, { at: 0, dayKey: "", dayUsd: 0, monthUsd: 0 })
+  Object.assign(dayByKind, { dayKey: "", usd: {} })
+  lastAssistWarnKey = ""
   dbDisabledUntil = 0
   lastWarnKey = ""
   recentUsage.length = 0
@@ -139,6 +149,33 @@ export async function checkClaudeBudget(
   return { allowed: true, dayUsd, monthUsd }
 }
 
+/** KST 오늘 그 종류의 Claude 추정 비용(인스턴스 메모리). */
+export function claudeDayUsdByKind(kind: ClaudeUsageRow["kind"], now: Date = new Date()): number {
+  rollMemory(now)
+  return dayByKind.usd[kind] ?? 0
+}
+
+/**
+ * 모델 선택 층(답 색인 §10)의 Claude 하루 상한(CHATBOT_CLAUDE_DAILY_BUDGET_USD). assist 종류의 KST 오늘 추정 비용(토큰 × pricing.ts 단가)이
+ * 상한 이상이면 막는다. 막히면 올림(Sonnet)·업체 간 대체(Haiku)를 끄고 Gemini 고르기만 돈다.
+ *
+ * 프로세스(인스턴스) 메모리만 센다: 서버리스에서는 인스턴스마다 따로 세고 콜드 스타트마다 0 부터 다시 세므로, 동시에 뜬 인스턴스 수만큼
+ * 실제 하루 지출이 상한을 넘을 수 있다. 그 배수를 감안해 상한을 보수적으로 둔다(기본 1 USD). 전역 합계가 필요하면 답변 예산과 같은
+ * chatbot_llm_usage 표를 붙인다. 답변·라벨링 예산(checkClaudeBudget)의 메모리 합계에도 assist 몫이 더해진다(보수적으로).
+ */
+export function checkClaudeAssistBudget(limitUsd: number, now: Date = new Date()): { allowed: boolean; dayUsd: number } {
+  const dayUsd = claudeDayUsdByKind("assist", now)
+  if (dayUsd < limitUsd) return { allowed: true, dayUsd }
+  const warnKey = `assist:${dayByKind.dayKey}`
+  if (warnKey !== lastAssistWarnKey) {
+    lastAssistWarnKey = warnKey
+    console.warn(
+      `[chatbot-claude] assist daily budget reached (day $${dayUsd.toFixed(4)}); escalation and cross-provider fallback are off until tomorrow (KST).`
+    )
+  }
+  return { allowed: false, dayUsd }
+}
+
 export function recordClaudeUsage(
   usage: ClaudeUsage,
   meta: { kind: ClaudeUsageRow["kind"]; sessionId?: string | null; now?: Date; store?: ClaudeUsageStore | null }
@@ -148,6 +185,7 @@ export function recordClaudeUsage(
   const usd = estimateClaudeCostUsd(usage)
   memory.dayUsd += usd
   memory.monthUsd += usd
+  dayByKind.usd[meta.kind] = (dayByKind.usd[meta.kind] ?? 0) + usd
   recentUsage.push({ ...usage, kind: meta.kind, usd })
   if (recentUsage.length > 50) recentUsage.shift()
   if (dbCache.at) {
