@@ -8,7 +8,7 @@
 //
 //  - 전체 사이드바: SUPER_ADMIN 역할, 또는 admin_profiles.nav_preset 이 "super" 인 지정 계정
 //    (hasFullAdminNav). 2026-09-10 ~ 11-19 의 사이드바와 완전히 같다(아래 단락들이 그 규칙이다).
-//  - 간소 사이드바: 그 밖의 모든 계정. 기본값이 매출 장부 + 견적·문서 둘만 상시이고
+//  - 간소 사이드바: 그 밖의 모든 계정. 기본값이 매출 장부 + 견적·문서 + 하드웨어 재고 셋만 상시이고
 //    (SIMPLE_NAV_PRIMARY_HREFS) 나머지는 전부 기본 숨김이다.
 //
 // 왜 바꿨나 — 팀원이 계속 가입하는데 처음 보는 화면이 관리자용 Overview 와 16개 탭이었다.
@@ -147,7 +147,13 @@ export const SIMPLE_NAV_LANDING_HREF = "/admin/branch/ledger"
  *    읽으므로(resolveDefaultNavPlacement), 기타 자리의 항목을 넣으면 간소 사이드바에 "기타"
  *    묶음이 생긴다.
  */
-export const SIMPLE_NAV_PRIMARY_HREFS: readonly string[] = [SIMPLE_NAV_LANDING_HREF, "/admin/quotes"]
+// (2026-11-23) 하드웨어 재고를 더했다 — 시안 확인 때 "하단에 하드웨어 탭까지" 로 정해졌다. 견적 산출물을
+// 재고에서 검증하는 한 흐름이라 견적과 같이 꺼낸다.
+export const SIMPLE_NAV_PRIMARY_HREFS: readonly string[] = [
+  SIMPLE_NAV_LANDING_HREF,
+  "/admin/quotes",
+  "/admin/hardware",
+]
 
 /**
  * 전체 계정의 기본값이 숨김인 항목 — 거의 안 쓰는 탭(2026-09-24 운영 조사).
