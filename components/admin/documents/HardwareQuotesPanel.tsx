@@ -49,6 +49,7 @@ import {
   type QuoteQueueKey,
 } from "./quote-queue"
 import DistributorSettlementSection from "./DistributorSettlementSection"
+import QuoteTemplatePicker from "./QuoteTemplatePicker"
 
 type HardwareQuoteRow = {
   id: string
@@ -115,6 +116,10 @@ type HardwareQuotesPanelProps = {
   onQuickActionConsumed?: () => void
   /** 딜/고객 컨텍스트에서 진입한 프리필 대상(있으면 작성기가 기존 고객·거래를 자동 선택). */
   prefill?: QuickQuotePrefill | null
+  /** "templates" = 견적서 탭(템플릿 목록·미리보기), "history" = 히스토리 탭(저장한 견적 목록·상세). 작성기는 둘 다에 있다. */
+  view?: "templates" | "history"
+  /** 작성기가 견적을 저장했다 — 그 견적은 이미 선택돼 있고, 페이지가 히스토리 탭으로 넘긴다. */
+  onQuoteCreated?: (quoteId: string) => void
 }
 
 const PRODUCT_LINE_OPTIONS: Array<{ key: QuoteProductLine | "all"; label: string }> = [
@@ -391,6 +396,8 @@ export default function HardwareQuotesPanel({
   quickAction = null,
   onQuickActionConsumed,
   prefill = null,
+  view = "history",
+  onQuoteCreated,
 }: HardwareQuotesPanelProps) {
   const { preferences, updatePreferences, storageError } = useQuoteWorkspacePreferences()
   const [composerOpen, setComposerOpen] = useState(false)
@@ -624,7 +631,7 @@ export default function HardwareQuotesPanel({
   // id 별 캐시라 응답이 늦게 와도 다른 견적에 섞이지 않는다 — 취소 없이 한 번만 받는다.
   const selectedQuoteId = selectedQuote?.id ?? null
   useEffect(() => {
-    if (showDeleted || !selectedQuoteId || details[selectedQuoteId]) return
+    if (view === "templates" || showDeleted || !selectedQuoteId || details[selectedQuoteId]) return
     setDetails((current) => ({ ...current, [selectedQuoteId]: { status: "loading" } }))
     fetchQuoteDetail(selectedQuoteId)
       .then((detail) => {
@@ -634,7 +641,7 @@ export default function HardwareQuotesPanel({
         const message = error instanceof Error ? error.message : "견적 상세를 불러오지 못했습니다."
         setDetails((current) => ({ ...current, [selectedQuoteId]: { status: "error", message } }))
       })
-  }, [selectedQuoteId, details, showDeleted])
+  }, [selectedQuoteId, details, showDeleted, view])
 
   useEffect(() => {
     if (!quickAction) return
@@ -645,6 +652,12 @@ export default function HardwareQuotesPanel({
     setComposerOpen(true)
     onQuickActionConsumed?.()
   }, [onQuickActionConsumed, quickAction])
+
+  // 템플릿 화면의 "이 템플릿으로 작성" → 작성기. 헤더 작성 버튼(quickAction)과 같이 템플릿 id 를 정하고 연다.
+  function openComposerWithTemplate(templateId: StandardQuoteTemplateId) {
+    setComposerTemplateId(templateId)
+    setComposerOpen(true)
+  }
 
   async function handleCreated(payload: QuickQuoteCreatedPayload) {
     const nextQuote: HardwareQuoteRow = {
@@ -700,6 +713,7 @@ export default function HardwareQuotesPanel({
       return [merged, ...current.filter((item) => item.id !== payload.document.id)]
     })
     setSelectedId(payload.document.id)
+    onQuoteCreated?.(payload.document.id)
   }
 
   async function ensureShareUrl(quote: HardwareQuoteRow) {
@@ -1022,6 +1036,10 @@ export default function HardwareQuotesPanel({
 
   return (
     <div className="mx-auto max-w-7xl space-y-4 p-4 sm:px-6 sm:py-5">
+      {view === "templates" ? (
+        <QuoteTemplatePicker hiddenTemplateIds={preferences.hiddenTemplateIds} onCompose={openComposerWithTemplate} />
+      ) : (
+      <div className="space-y-4">
       <button type="button" className={GHOST_BUTTON} aria-pressed={showDeleted} onClick={() => {
         const next = !showDeleted
         setShowDeleted(next)
@@ -1200,6 +1218,8 @@ export default function HardwareQuotesPanel({
             )}
           </div>
         </div>
+      )}
+      </div>
       )}
 
       <QuickQuoteComposer

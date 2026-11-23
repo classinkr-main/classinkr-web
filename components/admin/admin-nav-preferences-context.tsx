@@ -14,6 +14,11 @@ import type { NavOverrides } from "./admin-nav-access"
 
 export interface AdminNavPreferencesValue {
   role: string
+  /**
+   * 셸 세션의 nav_preset(없으면 null). 본문 컴포넌트가 hasFullAdminNav({ role, preset: navPreset })로
+   * "전체 / 간소" 계정을 가르는 데만 쓴다 — 화면 안 탭 노출이 사이드바와 같은 기준을 따르게 한다.
+   */
+  navPreset?: string | null
   /** 셸 세션의 원본 값(정규화 전) — 소비자가 normalizeNavOverrides 로 읽는다. */
   navOverrides: Readonly<Record<string, string>>
   /**
@@ -32,14 +37,17 @@ export function AdminNavPreferencesProvider({
   value,
   children,
 }: {
-  /** null 이면 기본값 판정(전원 공통 기본 숨김)으로 읽고 저장은 막힌다. */
+  /** null 이면 기본값 판정(오버라이드 없음 · 간소 사이드바 계정)으로 읽고 저장은 막힌다. */
   value: AdminNavPreferencesValue | null
   children: ReactNode
 }) {
   return <AdminNavPreferencesContext.Provider value={value}>{children}</AdminNavPreferencesContext.Provider>
 }
 
-/** provider 가 없거나 값이 null 이면 빈 오버라이드(= 전원 공통 기본값)를 돌려준다. */
+/**
+ * provider 가 없거나 값이 null 이면 빈 오버라이드와 역할 "ADMIN"(지정 없음)을 돌려준다 — 세션을 확인하기
+ * 전에는 간소 사이드바 기준으로 읽는다(덜 보이는 쪽이 안전한 기본값이다).
+ */
 export function useAdminNavPreferences(): AdminNavPreferencesValue {
   return useContext(AdminNavPreferencesContext) ?? EMPTY_NAV_PREFERENCES
 }

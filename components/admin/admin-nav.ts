@@ -28,8 +28,9 @@ import { ADMIN_AI_HREF, isAdminAiPreviewEnabled } from "@/lib/admin-ai/preview"
  * 신규 권한 모델의 역할 단계로 취급하지 않는다.
  *
  * 이 타입은 이제 CS 콘솔 가로 메뉴(cs/CsConsoleNav)와 세션 role 정규화에만 쓰인다.
- * 사이드바 항목별 roles 필드는 2026-09-10 전면 공개 전환으로 제거됐다 — 모든 매니저가 같은
- * 목록을 본다. 실제 데이터·동작 권한은 각 API의 관리자 가드와 capability 검사가 강제한다.
+ * 사이드바 항목별 roles 필드는 2026-09-10 전면 공개 전환으로 제거됐다 — 항목을 역할로 거르지
+ * 않는다(2026-11-20 전체/간소 사이드바도 기본 숨김일 뿐 거르지 않는다, admin-nav-access.ts).
+ * 실제 데이터·동작 권한은 각 API의 관리자 가드와 capability 검사가 강제한다.
  */
 export type AdminRole = "SUPER_ADMIN" | "ADMIN" | "EDITOR" | "VIEWER" | "BRANCH" | "PARTNER"
 export type AdminNavSection = "home" | "sales" | "marketing" | "cs" | "system"
@@ -117,7 +118,9 @@ const ADMIN_AI_NAV_ITEM: AdminNavItem = { href: ADMIN_AI_HREF, label: "AI 올인
 // (2026-09-01 Overview 최상단 고정 — 사이드바 정렬 요청) Overview 전용 "home" 범주를 신설해
 // ADMIN_NAV_CATEGORY_META 맨 앞에 두고 선언도 배열 맨 앞으로 옮겼다. groupNavByCategory가 범주
 // 선언 순서로 그룹을 내보내므로 Overview의 그룹이 항상 첫 그룹으로 렌더된다.
-// (2026-09-10 전면 공개) 항목별 roles 필드를 제거했다 — 모든 매니저가 같은 목록을 본다.
+// (2026-09-10 전면 공개) 항목별 roles 필드를 제거했다 — 이 배열은 누구에게도 걸러지지 않는다.
+// (2026-11-20) 기본 배치는 계정에 따라 둘이다: 아래 설명은 전체 사이드바 계정의 것이고, 간소 계정은
+// 매출 장부·견적·문서·하드웨어 재고만 상시다(admin-nav-access.ts SIMPLE_NAV_PRIMARY_HREFS).
 // (2026-11-09 사이드바 재배치 D안) 순서를 하루 동선(일정 → 문의·고객 → 견적·출고 → 매출 성과 → 마케팅
 // → 고객 지원 → 시스템)으로 다시 놓고 범주를 업무 단위로 나눴다 — 홈 · 영업·고객(캘린더·CRM) ·
 // 주문·매출(견적·문서·하드웨어 재고·KR Team·매출 장부) · 마케팅·분석 · 고객 지원(CS 콘솔) · 시스템.

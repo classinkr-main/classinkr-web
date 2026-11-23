@@ -22,7 +22,7 @@ import {
   type NavAccessContext,
   type NavOverrides,
 } from "@/components/admin/admin-nav-access"
-import { NAV_CMDS, matchesNavCommand } from "@/components/admin/crm/CrmCommandPalette"
+import { NAV_CMDS, matchesNavCommand, resolveCrmPaletteNavCommands } from "@/components/admin/crm/CrmCommandPalette"
 
 // CRM 하위 탭 개인 숨김(2026-09-25, 2단계) — nav_overrides 의 `crm:<href>` 키.
 // 규칙 정본: components/admin/admin-nav-access.ts 상단 주석. 이 파일이 고정하는 것:
@@ -32,8 +32,13 @@ import { NAV_CMDS, matchesNavCommand } from "@/components/admin/crm/CrmCommandPa
 //  4. setCrmSubnavOverride(기본과 같으면 키 삭제·숨김 불가 no-op·입력 불변)
 //  5. ⌘K 도달성 — 숨겨도 두 팔레트(전역·CRM)에서 라벨로 찾힌다
 
+// CRM 하위 탭(crm: 키) 숨김은 계정의 전체/간소(2026-11-20)와 다른 축이다. 최상위 격리·⌘K 도달성
+// 기대값은 전체 사이드바 계정 기준으로 본다 — 간소 계정은 CRM 최상위 탭 자체가 기본 숨김이라 CRM
+// 명령이 통째로 빠진다(아래 "간소 사이드바 계정" describe).
+const FULL_ROLE = "SUPER_ADMIN"
+
 const ctx = (over: Partial<NavAccessContext> = {}): NavAccessContext => ({
-  role: "ADMIN",
+  role: FULL_ROLE,
   overrides: {},
   ...over,
 })
@@ -165,7 +170,7 @@ describe("최상위 격리 — crm: 키는 사이드바 배치에 영향이 없�
   })
 
   it("사이드바 '다시 표시'(setNavOverride)는 crm: 키를 지우지 않는다", () => {
-    const next = setNavOverride({ "crm:/admin/crm/activity": "shown" }, "/admin/ops", "folded")
+    const next = setNavOverride({ "crm:/admin/crm/activity": "shown" }, "/admin/ops", "folded", { role: FULL_ROLE })
     expect(next).toEqual({ "crm:/admin/crm/activity": "shown", "/admin/ops": "folded" })
   })
 })
@@ -245,7 +250,7 @@ describe("⌘K 도달성 — 숨긴 CRM 하위 탭도 두 팔레트에서 찾힌
   it.each(CRM_SUBNAV_PREFERENCE_ITEMS.map((item) => [item.displayLabel, item] as const))(
     "전역 팔레트: CRM 전부 숨김에서도 %s 가 탭 라벨로 찾힌다",
     (_name, item) => {
-      const commands = resolveAdminCommands({ role: "ADMIN", overrides: HIDE_ALL_CRM })
+      const commands = resolveAdminCommands({ role: FULL_ROLE, overrides: HIDE_ALL_CRM })
       const q = item.label.toLowerCase()
       const matches = commands.filter(
         (cmd) => cmd.label.toLowerCase().includes(q) || (cmd.keywords ?? "").toLowerCase().includes(q)
@@ -255,6 +260,10 @@ describe("⌘K 도달성 — 숨긴 CRM 하위 탭도 두 팔레트에서 찾힌
   )
 
   it("전역 팔레트 명령 목록은 CRM 숨김과 무관하게 설정 없음과 같다", () => {
+    expect(resolveAdminCommands({ role: FULL_ROLE, overrides: HIDE_ALL_CRM })).toEqual(
+      resolveAdminCommands({ role: FULL_ROLE, overrides: {} })
+    )
+    // 간소 계정에서도 crm: 키는 명령 목록을 바꾸지 않는다(목록을 가르는 것은 최상위 탭의 숨김뿐).
     expect(resolveAdminCommands({ role: "ADMIN", overrides: HIDE_ALL_CRM })).toEqual(
       resolveAdminCommands({ role: "ADMIN", overrides: {} })
     )
@@ -265,5 +274,51 @@ describe("⌘K 도달성 — 숨긴 CRM 하위 탭도 두 팔레트에서 찾힌
     expect(hrefsFor("입력함")).toContain("/admin/crm/capture")
     expect(hrefsFor("세그먼트")).toContain("/admin/crm/customers/segments")
     expect(hrefsFor("segment")).toContain("/admin/crm/customers/segments")
+  })
+})
+
+// 2026-11-20 D2 — CRM 라우트에서는 CRM 팔레트가 전역 ⌘K 를 대신하므로 같은 기준으로 걸러야 한다.
+// 주소로 CRM 에 들어온 간소 계정에게 숨긴 탭의 명령 목록이 통째로 뜨면 "목록에서만 숨김"이 깨진다.
+describe("CRM 팔레트 — 간소 사이드바 계정", () => {
+  const hrefsFor = (over: Partial<NavAccessContext> = {}) =>
+    resolveCrmPaletteNavCommands({ role: "ADMIN", overrides: {}, ...over }).map((nav) => nav.href)
+
+  it("전체 사이드바 계정은 NAV_CMDS 를 같은 참조로 받는다 — 숨김으로 거르지 않는다", () => {
+    expect(resolveCrmPaletteNavCommands(ctx())).toBe(NAV_CMDS)
+    expect(resolveCrmPaletteNavCommands(ctx({ overrides: { ...HIDE_EVERYTHING_TOP, ...HIDE_ALL_CRM } }))).toBe(NAV_CMDS)
+    expect(resolveCrmPaletteNavCommands({ role: "ADMIN", preset: "super", overrides: {} })).toBe(NAV_CMDS)
+  })
+
+  it("간소 계정은 보이는 최상위 탭의 명령만 받는다 — 기본은 매출 장부 · 하드웨어 재고 둘", () => {
+    // CRM 팔레트에는 견적·문서 명령이 없다 — 간소 상시 셋 중 NAV_CMDS 에 있는 것은 이 둘이다.
+    expect(hrefsFor()).toEqual(["/admin/branch/ledger", "/admin/hardware"])
+    expect(hrefsFor({ preset: "sales" })).toEqual(["/admin/branch/ledger", "/admin/hardware"])
+    expect(hrefsFor({ overrides: { "/admin/hardware": "hidden" } })).toEqual(["/admin/branch/ledger"])
+  })
+
+  it("'내 사이드바 편집' 이벤트 명령이 없다", () => {
+    expect(resolveCrmPaletteNavCommands({ role: "ADMIN", overrides: {} }).some((nav) => nav.event)).toBe(false)
+    expect(
+      resolveCrmPaletteNavCommands({ role: "ADMIN", overrides: { "/admin/crm": "primary" } }).some((nav) => nav.event)
+    ).toBe(false)
+  })
+
+  it("CRM 탭을 되살린 간소 계정은 CRM 명령을 전부 돌려받는다(쿼리 딥링크 포함) — 숨긴 탭의 명령은 여전히 없다", () => {
+    const hrefs = hrefsFor({ overrides: { "/admin/crm": "primary" } })
+    const crmHrefs = NAV_CMDS.filter((nav) => !nav.event && nav.href.startsWith("/admin/crm")).map((nav) => nav.href)
+    expect(crmHrefs.some((href) => href.includes("?"))).toBe(true)
+    expect(hrefs).toEqual(expect.arrayContaining(crmHrefs))
+    expect(hrefs).toContain("/admin/branch/ledger")
+    // 하드웨어 재고는 2026-11-23 부터 간소 상시라 남는다. 숨기면 CRM 을 되살렸어도 빠진다.
+    expect(hrefs).toContain("/admin/hardware")
+    expect(hrefsFor({ overrides: { "/admin/crm": "primary", "/admin/hardware": "hidden" } })).not.toContain(
+      "/admin/hardware"
+    )
+  })
+
+  it("crm: 키는 간소 계정에서도 CRM 팔레트 목록을 바꾸지 않는다", () => {
+    expect(hrefsFor({ overrides: { "/admin/crm": "primary", ...HIDE_ALL_CRM } })).toEqual(
+      hrefsFor({ overrides: { "/admin/crm": "primary" } })
+    )
   })
 })

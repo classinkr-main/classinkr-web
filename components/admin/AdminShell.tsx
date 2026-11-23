@@ -32,17 +32,17 @@ type SessionInfo = Pick<
   "role" | "name" | "email" | "navPreset" | "navOverrides"
 >
 
-// dev 바이패스가 흉내 낼 페르소나 — 사이드바 프리셋을 로컬에서 검증하기 위한 손잡이.
+// dev 바이패스가 흉내 낼 페르소나 — 전체 / 간소 사이드바를 로컬에서 검증하기 위한 손잡이.
 //
-// 바이패스는 어떤 계정으로 들어오든 세션을 Dev/dev@local로 덮어쓰고 nav_preset을 비운다.
-// nav_preset이 비면 설계상 "기존 동작 = 전 탭 상시"라(admin-nav-access.ts resolveNavPlacement
-// 첫 분기) 로컬에서는 프리셋이 적용된 화면을 아예 볼 수 없었다 — 확인하려면 매번 이 파일을
-// 손으로 고쳤다 되돌려야 했다. 그래서 env로 뺀다.
+// 바이패스는 어떤 계정으로 들어오든 세션을 Dev/dev@local로 덮어쓴다. 사이드바는 역할과 nav_preset
+// 으로 갈린다(admin-nav-access.ts hasFullAdminNav, 2026-11-20): SUPER_ADMIN 이거나 프리셋이
+// "super" 면 전체, 그 밖은 간소(매출 장부 + 견적·문서 + 하드웨어 재고).
 //
-//   NEXT_PUBLIC_DEV_NAV_PRESET=sales   # staff|sales|marketing|cs|lead|branch|super
-//   NEXT_PUBLIC_DEV_ROLE=ADMIN         # 생략 시 admin
+//   NEXT_PUBLIC_DEV_NAV_PRESET=super       # 역할은 그대로 두고 전체 사이드바(지정 계정 흉내)
+//   NEXT_PUBLIC_DEV_ROLE=SUPER_ADMIN       # 생략 시 admin
 //
-// 둘 다 미설정이면 기존 동작 그대로다. 프로덕션에는 영향이 없다 —
+// **둘 다 미설정이면 간소 사이드바다** — 팀원 대부분이 보는 화면이 로컬 기본값이다. "super" 가 아닌
+// 프리셋 값(sales·branch 등 레거시)은 아무것도 바꾸지 않는다. 프로덕션에는 영향이 없다 —
 // isAdminAuthBypassEnabled()가 NODE_ENV=development + !VERCEL을 요구한다.
 const DEV_ROLE = process.env.NEXT_PUBLIC_DEV_ROLE?.trim() || "admin"
 const DEV_NAV_PRESET = process.env.NEXT_PUBLIC_DEV_NAV_PRESET?.trim() || ""
@@ -362,12 +362,13 @@ export default function AdminShell({
 
   // 본문(CRM 탭 줄 CrmSubnav 등)이 같은 세션 오버라이드와 저장 콜백을 읽는 컨텍스트 값.
   // 첫 렌더는 서버 세션(initialSession) 그대로라 SSR 마크업과 같다 — 핀 값은 위 이펙트가 곧 반영한다.
-  // 세션 확인 전(null)이면 소비자는 전원 공통 기본값으로 읽고 저장 UI 를 막는다.
+  // 세션 확인 전(null)이면 소비자는 기본값(오버라이드 없음 · 간소 사이드바)으로 읽고 저장 UI 를 막는다.
   const navPreferences = useMemo<AdminNavPreferencesValue | null>(
     () =>
       session
         ? {
             role: session.role,
+            navPreset: session.navPreset,
             navOverrides: session.navOverrides,
             onNavOverridesChange: handleNavOverridesChange,
           }
@@ -391,6 +392,7 @@ export default function AdminShell({
             role={session.role}
             name={session.name}
             email={session.email}
+            navPreset={session.navPreset}
             navOverrides={session.navOverrides}
             onNavOverridesChange={handleNavOverridesChange}
           />
@@ -426,6 +428,7 @@ export default function AdminShell({
         {session ? (
           <AdminCommandPaletteLauncher
             role={session.role}
+            navPreset={session.navPreset}
             navOverrides={session.navOverrides}
           />
         ) : null}

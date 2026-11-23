@@ -86,6 +86,48 @@ describe("AdminSidebar — 개인 숨김(2026-09-25)", () => {
   })
 })
 
+// 2026-11-20 — 기본값이 계정에 따라 둘이다. 사이드바는 판정을 스스로 하지 않고(역할·프리셋 비교 금지)
+// resolveAdminNavAccess 에 프리셋을 넘긴 뒤 결과의 fullNav 만 읽는다. 렌더 결과는
+// tests/admin/sidebar-flat-crm.test.tsx 의 "간소 사이드바" describe 가 본다.
+describe("AdminSidebar — 전체 / 간소 사이드바(2026-11-20)", () => {
+  it("세션의 nav_preset 을 공유 판정에 넘긴다 — 빠뜨리면 지정 계정이 간소로 떨어진다", () => {
+    expect(sidebar).toContain("navPreset?: string | null")
+    expect(sidebar).toMatch(/resolveAdminNavAccess\(\{\s*role: normalizedRole,\s*preset: navPreset,\s*overrides: normalizedOverrides,\s*\}\)/)
+    expect(sidebar).toContain("const fullNav = navAccess.fullNav")
+  })
+
+  it("전체/간소를 스스로 판정하지 않는다 — 역할·프리셋 글자 비교가 없다", () => {
+    expect(sidebar).not.toContain('=== "SUPER_ADMIN"')
+    expect(sidebar).not.toContain('=== "super"')
+    expect(sidebar).not.toContain("hasFullAdminNav(")
+  })
+
+  it("숨긴 탭 묶음과 사이드바 편집 진입점 세 곳을 전체 계정에게만 그린다", () => {
+    expect(sidebar).toContain("if (!fullNav || navAccess.hidden.length === 0) return null")
+    // 모바일 드로어 · 데스크톱 사용자 블록 · 접힌 사이드바 아이콘.
+    expect(sidebar.match(/\{fullNav \? \(\s*<button\s+type="button"\s+onClick=\{openNavEditor\}/g)).toHaveLength(2)
+    expect(sidebar).toContain("{effectiveCollapsed && fullNav ? (")
+    expect(sidebar.match(/onClick=\{openNavEditor\}/g)).toHaveLength(3)
+  })
+
+  it("다시 표시·본인 편집기에도 같은 계정 정보를 넘긴다", () => {
+    expect(sidebar).toContain("const audience = { role: normalizedRole, preset: navPreset }")
+    expect(sidebar).toContain("setNavOverride(normalizedOverrides, href, seat, audience)")
+    expect(sidebar).toContain("navPreset={navPreset}")
+  })
+
+  it("간소 계정의 모바일 하단 바는 그 계정의 상시 목록을 쓴다", () => {
+    const bottomBar = sidebar.slice(sidebar.indexOf("const mobilePrimaryNav = useMemo("))
+    expect(bottomBar.slice(0, 600)).toContain("navAccess.primary")
+    expect(bottomBar.slice(0, 600)).toContain("MOBILE_SIMPLE_NAV_MAX")
+  })
+
+  it("차단 화면을 되살리지 않는다 — 숨김은 목록에서만이다", () => {
+    expect(sidebar).not.toContain("접근 권한이 없습니다")
+    expect(sidebar).not.toContain('"deny"')
+  })
+})
+
 const preferences = readFileSync(join(process.cwd(), "components/admin/my-nav-preferences.ts"), "utf8")
 
 describe("my-nav-preferences — 클라이언트 계약", () => {
@@ -116,6 +158,15 @@ describe("AdminShell — 전면 공개 이후", () => {
   it("팔레트에 세션 오버라이드를 그대로 넘긴다", () => {
     expect(shell).toContain("<AdminCommandPaletteLauncher")
     expect(shell).toContain("navOverrides={session.navOverrides}")
+  })
+
+  // 2026-11-20 — 사이드바·⌘K·본문 컨텍스트 세 곳이 같은 nav_preset 을 받아야 전체/간소 판정이 갈리지 않는다.
+  it("세션의 nav_preset 을 사이드바·팔레트·본문 컨텍스트에 모두 넘긴다", () => {
+    expect(shell.match(/navPreset=\{session\.navPreset\}/g)).toHaveLength(2)
+    expect(shell).toContain("navPreset: session.navPreset")
+    // 셸은 판정하지 않는다 — 넘기기만 한다.
+    expect(shell).not.toContain("hasFullAdminNav(")
+    expect(shell).not.toContain("resolveAdminLandingHref(")
   })
 
   it("보안 경계는 여전히 서버 가드라는 것을 주석으로 남긴다", () => {
@@ -216,9 +267,19 @@ describe("NavPreferenceEditor — 두 드로어 공통 본문", () => {
     expect(editor).toContain("도달성을 줄이지 않습니다")
   })
 
-  it("Overview 는 숨김을 비활성화하고 이유를 보여준다", () => {
+  it("그 계정의 착지 화면은 숨김을 비활성화하고 이유를 보여준다", () => {
+    // 전체 계정은 Overview, 간소 계정은 매출 장부 — 어느 행이 잠기는지는 buildNavPreferenceRows 가 정한다.
     expect(editor).toContain("로그인 첫 화면이라 숨길 수 없습니다")
     expect(editor).toContain('option.value === "hidden" && !hideable')
+  })
+
+  it("role 과 preset 을 함께 받아 판정·저장에 쓴다(2026-11-20)", () => {
+    expect(editor).toContain("preset?: string | null")
+    expect(editor).toContain("({ role, preset, overrides })")
+    expect(editor).toContain("setNavOverride(overrides, href, next, { role, preset })")
+    // "모든 매니저가 같은 메뉴"는 더 이상 사실이 아니다 — 화면 문구에 남기지 않는다.
+    expect(editor).not.toContain("모든 매니저가 같은 메뉴를 갖습니다")
+    expect(editor).toContain("preview.fullNav ? NAV_HIDDEN_REACH_NOTE : NAV_HIDDEN_REACH_NOTE_SIMPLE")
   })
 
   it("기본과 다른 행을 예외로 표시하고, 미리보기에 숨김 개수를 싣는다", () => {
@@ -254,6 +315,30 @@ describe("MemberNavAccessDrawer", () => {
     expect(drawer).toContain("navOverrides")
     expect(drawer).toContain('method: "PATCH"')
   })
+
+  // 2026-11-20 — nav_preset "super" 가 전체 사이드바 지정이 됐다. 2026-09-10 ~ 11-19 의 이 드로어는
+  // 저장할 때마다 프리셋을 null 로 밀었다 — 그대로 두면 배치만 고쳐 저장해도 지정이 조용히 꺼진다.
+  it("프리셋을 무조건 null 로 밀지 않고 '전체 사이드바' 토글 값 그대로 보낸다", () => {
+    expect(drawer).not.toContain("navPreset: null")
+    expect(drawer).toContain("JSON.stringify({ userId, navPreset, navOverrides: overrides })")
+    expect(drawer).toContain("const navPreset = fullNavDesignated ? FULL_NAV_PRESET : null")
+    expect(drawer).toContain("useState(initialPreset === FULL_NAV_PRESET)")
+    expect(drawer).toContain("onSaved(overrides, navPreset)")
+  })
+
+  it("토글은 '전체 사이드바'이고, 역할만으로 전체인 사람(SUPER_ADMIN)에게는 잠긴다", () => {
+    expect(drawer).toContain("전체 사이드바")
+    expect(drawer).toContain("const fullByRole = hasFullAdminNav({ role: targetRole })")
+    expect(drawer).toContain("disabled={fullByRole || saving}")
+    expect(drawer).toContain("aria-pressed={fullByRole || fullNavDesignated}")
+    // 권한 화면처럼 읽히면 안 된다 — 메뉴 표시일 뿐이라는 말을 싣는다.
+    expect(drawer).toContain("역할과 데이터 권한은 그대로입니다")
+  })
+
+  it("편집기 미리보기가 토글을 따라간다 — 같은 프리셋 값을 넘긴다", () => {
+    expect(drawer).toContain("preset={navPreset}")
+    expect(drawer).toContain("countNavPreferenceExceptions({ role: targetRole, preset: navPreset, overrides })")
+  })
 })
 
 describe("MyNavEditorDrawer — 본인 편집", () => {
@@ -262,6 +347,11 @@ describe("MyNavEditorDrawer — 본인 편집", () => {
     expect(myDrawer).toContain("<NavPreferenceEditor")
     expect(myDrawer).toContain('subject="self"')
     expect(myDrawer).not.toContain("/api/admin/users")
+  })
+
+  it("세션의 nav_preset 을 편집기에 넘긴다 — 본인은 지정을 바꿀 수 없다(읽기만)", () => {
+    expect(myDrawer).toContain("preset={navPreset}")
+    expect(myDrawer).not.toContain("FULL_NAV_PRESET")
   })
 })
 
@@ -303,5 +393,27 @@ describe("MembersPanel — 탭 권한 진입점", () => {
   it("shows the nav access entry only to a SUPER_ADMIN viewer", () => {
     expect(panel).toContain("canManageCapabilities")
     expect(panel).toContain("MemberNavAccessDrawer")
+  })
+
+  it("회원의 현재 nav_preset 을 드로어에 넘기고, 저장된 값을 목록에 그대로 담는다(2026-11-20)", () => {
+    expect(panel).toContain("initialPreset={navTarget.navPreset ?? null}")
+    expect(panel).toContain("{ ...item, navPreset, navOverrides }")
+    expect(panel).not.toContain("navPreset: null")
+    // 버튼 옆에 전체/간소를 공유 판정으로 표시한다.
+    expect(panel).toContain("hasFullAdminNav({ role: String(user.role), preset: user.navPreset })")
+  })
+})
+
+describe("본문 컨텍스트 — 화면 안 탭이 사이드바와 같은 기준을 쓴다", () => {
+  const context = readFileSync(
+    join(process.cwd(), "components/admin/admin-nav-preferences-context.tsx"),
+    "utf8"
+  )
+
+  it("navPreset 을 싣고, 판정은 소비자가 hasFullAdminNav 로 하게 한다", () => {
+    expect(context).toContain("navPreset?: string | null")
+    expect(context).toContain("hasFullAdminNav({ role, preset: navPreset })")
+    // 컨텍스트 모듈 자신은 판정 함수를 들여오지 않는다(타입만).
+    expect(context).toContain('import type { NavOverrides } from "./admin-nav-access"')
   })
 })

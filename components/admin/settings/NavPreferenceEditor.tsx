@@ -8,9 +8,14 @@
 // SUPER_ADMIN 편집(MemberNavAccessDrawer, /api/admin/users). 행 목록·미리보기를 두 벌로 두면
 // 한쪽만 고쳐지고, 어긋난 미리보기는 이 기능 전체의 신뢰를 깎는다.
 //
-// 이 화면은 권한을 다루지 않는다. 모든 매니저가 같은 메뉴를 갖고, 여기서 고르는 것은 그
-// 사람 사이드바 목록에서 항목이 놓이는 자리뿐이다. "숨김"도 목록에서 치우는 것일 뿐이라 숨긴
-// 탭은 ⌘K와 주소로 그대로 열린다(admin-nav-access.ts 상단 주석 — 도달성 불변식).
+// 이 화면은 권한을 다루지 않는다. 여기서 고르는 것은 그 사람 사이드바 목록에서 항목이 놓이는
+// 자리뿐이다. "숨김"도 목록에서 치우는 것일 뿐이라 숨긴 탭은 주소로 그대로 열린다
+// (admin-nav-access.ts 상단 주석 — 도달성 불변식).
+//
+// (2026-11-20) 기본값은 계정에 따라 둘이다 — 전체 사이드바(SUPER_ADMIN · nav_preset "super" 지정
+// 계정)와 간소 사이드바(매출 장부 + 견적·문서 + 하드웨어 재고, 나머지 기본 숨김). 그래서 role 과 preset 을 함께
+// 받아야 "기본 숨김"·"예외" 표시와 미리보기가 그 사람의 실제 사이드바와 맞는다. 안내 문구도 갈린다:
+// 전체 계정의 숨긴 탭은 ⌘K 로도 열리지만 간소 계정의 숨긴 탭은 ⌘K 목록에서도 빠진다.
 //
 // 판정·미리보기는 반드시 admin-nav-access 의 resolveAdminNavAccess·buildNavPreferenceRows 를
 // 쓴다 — 여기서 다시 계산하면 실제 사이드바와 어긋난다.
@@ -26,6 +31,7 @@ import { ADMIN_NAV_CATEGORY_META } from "@/components/admin/admin-nav"
 import {
   buildCrmSubnavPreferenceRows,
   buildNavPreferenceRows,
+  getSimpleNavPrimaryLabels,
   resolveAdminNavAccess,
   setCrmSubnavOverride,
   setNavOverride,
@@ -63,6 +69,8 @@ const CRM_OPTION_ACTIVE_TONE: Record<CrmSubnavPreference, string> = {
 
 export const NAV_UNHIDEABLE_REASON = "로그인 첫 화면이라 숨길 수 없습니다"
 export const NAV_HIDDEN_REACH_NOTE = "숨긴 탭도 ⌘K와 주소로 그대로 열립니다."
+/** 간소 사이드바 계정용 — 그 계정의 숨긴 탭은 ⌘K 명령 목록에서도 빠진다(주소 진입은 그대로). */
+export const NAV_HIDDEN_REACH_NOTE_SIMPLE = "숨긴 탭은 ⌘K 목록에서도 빠지지만 주소로는 그대로 열립니다."
 export const CRM_SUBNAV_SECTION_NOTE =
   "현황·고객DB(통합)·검수는 CRM 진입 탭이라 숨길 수 없습니다. 숨긴 탭은 CRM 탭 줄의 '숨긴 탭 N · 보기'에 모입니다."
 
@@ -75,6 +83,11 @@ export function countNavPreferenceExceptions(ctx: NavAccessContext): number {
 
 interface NavPreferenceEditorProps {
   role: string
+  /**
+   * 편집 대상의 nav_preset — "super" 면 전체 사이드바 지정 계정이다. 빠뜨리면 지정 계정의
+   * 기본값을 간소로 읽는다(admin-nav-access NavAccessContext.preset).
+   */
+  preset?: string | null
   overrides: NavOverrides
   onChange: (next: NavOverrides) => void
   /** 안내 문구의 주어 — 본인 편집이면 "내", 회원 관리면 "이 사람". */
@@ -84,6 +97,7 @@ interface NavPreferenceEditorProps {
 
 export default function NavPreferenceEditor({
   role,
+  preset,
   overrides,
   onChange,
   subject,
@@ -91,7 +105,7 @@ export default function NavPreferenceEditor({
 }: NavPreferenceEditorProps) {
   const reasonId = useId()
   const crmHeadingId = useId()
-  const ctx = useMemo<NavAccessContext>(() => ({ role, overrides }), [role, overrides])
+  const ctx = useMemo<NavAccessContext>(() => ({ role, preset, overrides }), [role, preset, overrides])
   const rows = useMemo(() => buildNavPreferenceRows(ctx), [ctx])
   const crmRows = useMemo(() => buildCrmSubnavPreferenceRows(overrides), [overrides])
   const preview = useMemo(() => resolveAdminNavAccess(ctx), [ctx])
@@ -107,7 +121,7 @@ export default function NavPreferenceEditor({
   const whose = subject === "self" ? "내" : "이 사람"
 
   const choose = (href: string, next: NavPreference) => {
-    onChange(setNavOverride(overrides, href, next))
+    onChange(setNavOverride(overrides, href, next, { role, preset }))
   }
 
   const chooseCrm = (href: string, next: CrmSubnavPreference) => {
@@ -119,10 +133,15 @@ export default function NavPreferenceEditor({
       {/* 안내 — 이 화면이 접근을 다루지 않는다는 것과 숨김의 범위를 분명히 한다. */}
       <div className="border-b border-[#e8e8e4] px-5 py-3">
         <p className="text-[12px] leading-relaxed text-[#1a1a1a]/55">
-          모든 매니저가 같은 메뉴를 갖습니다. 여기서는 {whose} 사이드바에서 각 탭이 상시(상단)·접힘(범주별 묶음)·숨김
-          중 어디에 놓일지만 정합니다. 숨김은 목록에서 치우는 것일 뿐 도달성을 줄이지 않습니다. 실제
-          데이터 권한은 각 화면의 서버 검사가 정합니다.
+          여기서는 {whose} 사이드바에서 각 탭이 상시(상단)·접힘(범주별 묶음)·숨김 중 어디에 놓일지만 정합니다.
+          숨김은 목록에서 치우는 것일 뿐 도달성을 줄이지 않습니다. 실제 데이터 권한은 각 화면의 서버
+          검사가 정합니다.
         </p>
+        {preview.fullNav ? null : (
+          <p className="mt-1.5 text-[12px] leading-relaxed text-[#1a1a1a]/55">
+            {`간소 사이드바 계정입니다. 기본으로 ${getSimpleNavPrimaryLabels().join(" · ")}만 보이고 나머지는 숨김입니다.`}
+          </p>
+        )}
       </div>
 
       {/* 탭 목록 — 3단 선택 */}
@@ -292,7 +311,9 @@ export default function NavPreferenceEditor({
             CRM 숨긴 탭 {crmHiddenRows.length} — {crmHiddenRows.map((row) => row.item.displayLabel).join(" · ")}
           </p>
         ) : null}
-        <p className="text-[11px] text-[#1a1a1a]/40">{NAV_HIDDEN_REACH_NOTE}</p>
+        <p className="text-[11px] text-[#1a1a1a]/40">
+          {preview.fullNav ? NAV_HIDDEN_REACH_NOTE : NAV_HIDDEN_REACH_NOTE_SIMPLE}
+        </p>
       </div>
     </>
   )
