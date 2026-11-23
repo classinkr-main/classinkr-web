@@ -45,7 +45,9 @@ export const ANSWER_INDEX_DATA_DIR_REL = "data/answer-index"
  */
 export function answerIndexDataDir(env: Record<string, string | undefined> = process.env) {
   const configured = env.ANSWER_INDEX_DATA_DIR?.trim()
-  return configured ? resolve(process.cwd(), configured) : join(process.cwd(), ANSWER_INDEX_DATA_DIR_REL)
+  return configured
+    ? resolve(/* turbopackIgnore: true */ process.cwd(), configured)
+    : join(/* turbopackIgnore: true */ process.cwd(), ANSWER_INDEX_DATA_DIR_REL)
 }
 
 /** 지금 문서 단위(문장 해시만 쓰면 되지만 respond·BM25 가 글도 쓴다). */
