@@ -106,6 +106,19 @@ const leadMagnetPdfFonts = [
   "./node_modules/pretendard/dist/public/static/alternative/Pretendard-SemiBold.ttf",
 ];
 
+// compiled answer-index 런타임 자료(load.ts 는 turbopackIgnore 로cwd 스캔을 건너뛰므로 필수 파일만 명시 포함한다).
+const answerIndexRuntimeData = [
+  "./data/answer-index/cards/*.json",
+  "./data/answer-index/variants/*.json",
+  "./data/answer-index/universe/*.json",
+  "./data/answer-index/lexicon.json",
+  "./data/answer-index/generic-words.json",
+  "./data/answer-index/absent.json",
+  "./data/answer-index/legacy-alias.json",
+  "./data/answer-index/calibration.json",
+  "./data/answer-index/manifest.json",
+];
+
 const publicAssetCacheHeaders = [
   {
     key: "Cache-Control",
@@ -142,6 +155,21 @@ const nextConfig: NextConfig = {
       "./public/materials/lead-magnets/*.pdf",
     ],
     "/api/admin/lead-magnets/pdf-preview": leadMagnetPdfFonts,
+    "/api/chatbot/query": answerIndexRuntimeData,
+    "/api/chatbot/query/stream": answerIndexRuntimeData,
+  },
+  // 공개 챗봇 함수 번들에서 개발/감사/평가용 대용량 데이터와 네이버 크롤링 스냅샷을 제외해 콜드 스타트와 번들 크기를 줄인다.
+  outputFileTracingExcludes: {
+    "/api/chatbot/**": [
+      "./data/_naver-dev/**",
+      "./data/_naver-pull/**",
+      "./data/answer-index/inventory.json",
+      "./data/answer-index/units.json",
+      "./data/answer-index/site-facts.json",
+      "./data/answer-index/audit/**",
+      "./data/answer-index/eval/**",
+      "./data/chatbot-golden-set.json",
+    ],
   },
   images: {
     // 기본값은 webp 단독이다. avif를 앞에 두면 지원 브라우저에서 추가로 ~17% 더 줄어든다.

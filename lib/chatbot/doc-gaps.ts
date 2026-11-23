@@ -37,6 +37,8 @@ export interface DocGapCluster {
   metadata?: {
     source?: string
     internalCs?: Array<{ conversationId: string; messageId: string }>
+    notHelpfulCount?: number
+    occurrenceCount?: number
   }
 }
 
@@ -96,11 +98,32 @@ function normalizeGapClusterMetadata(value: unknown): DocGapCluster["metadata"] 
         }
       )
     : undefined
+  const notHelpfulCount =
+    typeof record.notHelpfulCount === "number" &&
+    Number.isFinite(record.notHelpfulCount) &&
+    record.notHelpfulCount > 0
+      ? Math.floor(record.notHelpfulCount)
+      : undefined
+  const occurrenceCount =
+    typeof record.occurrenceCount === "number" &&
+    Number.isFinite(record.occurrenceCount) &&
+    record.occurrenceCount > 0
+      ? Math.floor(record.occurrenceCount)
+      : undefined
 
-  if (!source && (!internalCs || internalCs.length === 0)) return undefined
+  if (
+    !source &&
+    (!internalCs || internalCs.length === 0) &&
+    notHelpfulCount === undefined &&
+    occurrenceCount === undefined
+  ) {
+    return undefined
+  }
   return {
     ...(source ? { source } : {}),
     ...(internalCs && internalCs.length > 0 ? { internalCs } : {}),
+    ...(notHelpfulCount !== undefined ? { notHelpfulCount } : {}),
+    ...(occurrenceCount !== undefined ? { occurrenceCount } : {}),
   }
 }
 
@@ -143,19 +166,7 @@ async function computeDocGapBacklog(limit: number): Promise<DocGapBacklog> {
 
     if (clusterError) throw new Error(clusterError.message)
 
-    const gapClusters: DocGapCluster[] = ((clusterRows ?? []) as ClusterRow[]).map((row) => {
-      const metadata = normalizeGapClusterMetadata(row.metadata)
-      return {
-        id: row.id,
-        label: row.label,
-        question: row.canonical_question,
-        category: row.category,
-        sampleCount: Array.isArray(row.sample_questions) ? row.sample_questions.length : 0,
-        lastSeenAt: row.last_seen_at,
-        status: row.status,
-        ...(metadata ? { metadata } : {}),
-      }
-    })
+    const rawClusterRows = (clusterRows ?? []) as ClusterRow[]
 
     // zero-result 검색어 — 최근 이벤트를 JS에서 집계
     const { data: eventRows, error: eventError } = await supabase
@@ -174,6 +185,48 @@ async function computeDocGapBacklog(limit: number): Promise<DocGapBacklog> {
       .limit(1000)
 
     if (mappedError) throw new Error(mappedError.message)
+
+    const clusterEventCounts = new Map<string, number>()
+    if (rawClusterRows.length > 0) {
+      // sample_questions 는 5개 상한 + 문자열 중복 제거라 실제 누적 빈도를 반영하지 못한다.
+      // question_cluster_events 건수를 합산해 동일 질문 50회 유입도 정확히 드러낸다.
+      try {
+        const { data: clusterEventRows, error: clusterEventError } = await supabase
+          .from("question_cluster_events")
+          .select("cluster_id")
+          .in(
+            "cluster_id",
+            rawClusterRows.map((row) => row.id)
+          )
+          .limit(5000)
+
+        if (!clusterEventError && Array.isArray(clusterEventRows)) {
+          for (const row of clusterEventRows as Array<{ cluster_id?: unknown }>) {
+            if (typeof row.cluster_id === "string" && row.cluster_id) {
+              clusterEventCounts.set(row.cluster_id, (clusterEventCounts.get(row.cluster_id) ?? 0) + 1)
+            }
+          }
+        }
+      } catch {
+        // 최소 모킹 테스트 환경에서 4번째 테이블 스텁이 없으면 sample_questions 길이로 폴백한다.
+      }
+    }
+
+    const gapClusters: DocGapCluster[] = rawClusterRows.map((row) => {
+      const metadata = normalizeGapClusterMetadata(row.metadata)
+      const sampleQuestionsCount = Array.isArray(row.sample_questions) ? row.sample_questions.length : 0
+      const eventCount = clusterEventCounts.get(row.id) ?? 0
+      return {
+        id: row.id,
+        label: row.label,
+        question: row.canonical_question,
+        category: row.category,
+        sampleCount: Math.max(sampleQuestionsCount, eventCount, metadata?.occurrenceCount ?? 0),
+        lastSeenAt: row.last_seen_at,
+        status: row.status,
+        ...(metadata ? { metadata } : {}),
+      }
+    })
 
     const counts = new Map<string, { count: number; lastSeenAt: string }>()
     for (const event of (eventRows ?? []) as SearchEventRow[]) {

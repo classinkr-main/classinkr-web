@@ -569,7 +569,12 @@ function runAfterResponse(task: () => Promise<void>) {
   try {
     after(task)
   } catch {
-    void task()
+    void task().catch((error) => {
+      console.warn(
+        "[chatbot] after-response task failed:",
+        error instanceof Error ? error.message : error
+      )
+    })
   }
 }
 
@@ -4086,7 +4091,7 @@ async function persistExchange(
     ]
 
     // 대화 라벨(의도·기관·단계·온도) — CHATBOT_LABELING_ENABLED + Anthropic 키일 때만, 테이블이 없으면 조용히 건너뛴다.
-    // Claude 호출(최대 수 초)이라 응답 뒤에 돈다 — 위 부수효과처럼 void 로 두면 Vercel 함수가 응답 직후 멈춰 라벨이 빠진다.
+    // Claude 호출(최대 수 초)이라 응답 뒤에 돈다 — Next.js AfterContext 큐에 한 번 더 넘겨 함수 종료 전에 끝맺는다.
     runAfterResponse(() =>
       maybeLabelChatbotExchange(supabase as never, {
         sessionId: resolvedSessionId,
@@ -4099,16 +4104,15 @@ async function persistExchange(
       })
     )
 
-    void Promise.allSettled(sideEffects).then((sideEffectResults) => {
-      for (const result of sideEffectResults) {
-        if (result.status === "rejected") {
-          console.warn(
-            "[chatbot] failed to persist exchange side effect:",
-            result.reason instanceof Error ? result.reason.message : result.reason
-          )
-        }
+    const sideEffectResults = await Promise.allSettled(sideEffects)
+    for (const result of sideEffectResults) {
+      if (result.status === "rejected") {
+        console.warn(
+          "[chatbot] failed to persist exchange side effect:",
+          result.reason instanceof Error ? result.reason.message : result.reason
+        )
       }
-    })
+    }
 
     return {
       answerEventId: answerEvent.id as string,
@@ -4129,6 +4133,12 @@ const QUESTION_CLUSTER_INTERNAL_CS_REF_CAP = 10
 interface QuestionClusterInternalCsRef {
   conversationId: string
   messageId: string
+}
+
+function canonicalizeClusterQuestion(raw: string) {
+  const collapsed = raw.replace(/\s+/g, " ").trim()
+  const stripped = collapsed.replace(/[?!.~…]+$/u, "").trim()
+  return stripped || collapsed
 }
 
 function mergeInternalCsRefs(existing: unknown, ref: QuestionClusterInternalCsRef) {
@@ -4168,6 +4178,7 @@ export async function upsertQuestionCluster(
   const topSource = response?.sources[0]
   const source = options?.source ?? "chatbot_mvp_exact_match"
   const internalCsRef = options?.internalCsRef
+  const canonicalQuestion = canonicalizeClusterQuestion(question.redacted)
 
   try {
     // 동시성 하드닝: (1) 신규 insert 가 canonical_question unique 경합에서 지면 승자 행에
@@ -4183,7 +4194,7 @@ export async function upsertQuestionCluster(
       const { data: existing, error: existingError } = await supabase
         .from("question_clusters")
         .select("id, sample_questions, metadata")
-        .eq("canonical_question", question.redacted)
+        .eq("canonical_question", canonicalQuestion)
         .maybeSingle()
 
       if (existingError) throw existingError
@@ -4235,8 +4246,8 @@ export async function upsertQuestionCluster(
         const { data: inserted, error } = await supabase
           .from("question_clusters")
           .insert({
-            label: question.redacted.slice(0, 120),
-            canonical_question: question.redacted,
+            label: canonicalQuestion.slice(0, 120),
+            canonical_question: canonicalQuestion,
             category,
             mapped_article_id: topSource?.articleId ?? null,
             mapped_chunk_id: topSource?.chunkId ?? null,
@@ -6954,19 +6965,21 @@ export async function handleChatbotQuery(
     ...conversationInputFromRequest(input),
   })
 
-  void persistExchange(
-    input,
-    core.utterance ?? core.question,
-    core.response,
-    meta,
-    core.category,
-    core.intent,
-    core.handoffIntent,
-    core.latencyMs,
-    sessionId,
-    answerEventId,
-    core.utterance ? core.question : null
-  )
+  runAfterResponse(async () => {
+    await persistExchange(
+      input,
+      core.utterance ?? core.question,
+      core.response,
+      meta,
+      core.category,
+      core.intent,
+      core.handoffIntent,
+      core.latencyMs,
+      sessionId,
+      answerEventId,
+      core.utterance ? core.question : null
+    )
+  })
 
   return {
     ...core.response,
@@ -7211,19 +7224,21 @@ export async function streamChatbotQuery(
       cached.handoffIntent = cachedCore.handoffIntent
       emit({ type: "replace", answer: cached.response.answer })
       emitMeta(cached.response, cached.category, cached.intent, cached.handoffIntent, cached.warning)
-      void persistExchange(
-        input,
-        prepared.utterance,
-        cached.response,
-        meta,
-        cached.category,
-        cached.intent,
-        cached.handoffIntent,
-        elapsedSince(startedAt),
-        sessionId,
-        answerEventId,
-        prepared.turn.expanded ? prepared.question : null
-      )
+      runAfterResponse(async () => {
+        await persistExchange(
+          input,
+          prepared.utterance,
+          cached.response,
+          meta,
+          cached.category,
+          cached.intent,
+          cached.handoffIntent,
+          elapsedSince(startedAt),
+          sessionId,
+          answerEventId,
+          prepared.turn.expanded ? prepared.question : null
+        )
+      })
       return
     }
   }
@@ -7315,19 +7330,118 @@ export async function streamChatbotQuery(
 
   emitMeta(response, category, intent, handoffIntent, warning)
 
-  void persistExchange(
-    input,
-    core.utterance ?? question,
-    response,
-    meta,
-    category,
-    intent,
-    handoffIntent,
-    elapsedSince(startedAt),
-    sessionId,
-    answerEventId,
-    core.utterance ? question : null
-  )
+  runAfterResponse(async () => {
+    await persistExchange(
+      input,
+      core.utterance ?? question,
+      response,
+      meta,
+      category,
+      intent,
+      handoffIntent,
+      elapsedSince(startedAt),
+      sessionId,
+      answerEventId,
+      core.utterance ? question : null
+    )
+  })
+}
+
+const NEGATIVE_FEEDBACK_REGRESSION_THRESHOLD = 2
+
+async function recordNegativeFeedbackOnCluster(
+  supabase: ReturnType<typeof createSupabaseAdminClient>,
+  params: {
+    answerEventId: string
+    question: string | null
+    category: string | null
+  }
+) {
+  try {
+    let clusterId: string | null = null
+
+    const { data: linked } = await supabase
+      .from("question_cluster_events")
+      .select("cluster_id")
+      .eq("answer_event_id", params.answerEventId)
+      .maybeSingle()
+
+    if (linked && typeof (linked as { cluster_id?: unknown }).cluster_id === "string") {
+      clusterId = (linked as { cluster_id: string }).cluster_id
+    } else if (params.question) {
+      const canonical = canonicalizeClusterQuestion(params.question)
+      const { data: byQuestion } = await supabase
+        .from("question_clusters")
+        .select("id")
+        .eq("canonical_question", canonical)
+        .maybeSingle()
+      if (byQuestion && typeof (byQuestion as { id?: unknown }).id === "string") {
+        clusterId = (byQuestion as { id: string }).id
+      }
+    }
+
+    if (!clusterId) return
+
+    const { data: clusterRow, error: clusterError } = await supabase
+      .from("question_clusters")
+      .select("id, category, metadata")
+      .eq("id", clusterId)
+      .maybeSingle()
+
+    if (clusterError || !clusterRow) return
+
+    const row = clusterRow as {
+      id: string
+      category?: string | null
+      metadata?: Record<string, unknown> | null
+    }
+    const existingMetadata = getContextObject(row.metadata)
+    const prevNotHelpfulCount =
+      typeof existingMetadata.notHelpfulCount === "number" &&
+      Number.isFinite(existingMetadata.notHelpfulCount) &&
+      existingMetadata.notHelpfulCount >= 0
+        ? Math.floor(existingMetadata.notHelpfulCount)
+        : 0
+    const nextNotHelpfulCount = prevNotHelpfulCount + 1
+
+    const nextMetadata: Record<string, unknown> = {
+      ...existingMetadata,
+      notHelpfulCount: nextNotHelpfulCount,
+      lastNegativeFeedbackAt: new Date().toISOString(),
+    }
+
+    // 반복적인 부정 피드백(>= 2회)이 쌓인 클러스터는 회귀 후보로 자동 승격한다.
+    // 단, 어드민이 명시적으로 비활성화(enabled === false)한 항목은 덮어쓰지 않는다.
+    const existingCandidate = getContextObject(existingMetadata.regressionCandidate)
+    if (
+      nextNotHelpfulCount >= NEGATIVE_FEEDBACK_REGRESSION_THRESHOLD &&
+      existingCandidate.enabled !== false &&
+      existingCandidate.enabled !== true
+    ) {
+      nextMetadata.regressionCandidate = {
+        enabled: true,
+        expectedCategory: normalizeString(row.category) ?? params.category ?? "general",
+        expectedModes: ["direct_answer", "doc_suggestion", "handoff"],
+        expectedPathIncludes: null,
+        reason: "negative_feedback",
+        addedAt: new Date().toISOString(),
+      }
+    }
+
+    const { error: updateError } = await supabase
+      .from("question_clusters")
+      .update({ metadata: nextMetadata })
+      .eq("id", row.id)
+
+    if (!updateError) {
+      revalidateTag(DOC_GAP_BACKLOG_CACHE_TAG, "max")
+    }
+  } catch (error) {
+    console.warn(
+      "[chatbot] failed to record negative feedback on cluster:",
+      error instanceof Error ? error.message : error
+    )
+  }
 }
 
 export async function saveChatbotFeedback(raw: unknown) {
@@ -7362,7 +7476,7 @@ export async function saveChatbotFeedback(raw: unknown) {
   const supabase = createSupabaseAdminClient()
   const { data: answerEvent, error: answerEventError } = await supabase
     .from("chatbot_answer_events")
-    .select("id")
+    .select("id, normalized_question, detected_category")
     .eq("id", answerEventId)
     .eq("session_id", sessionId)
     .maybeSingle()
@@ -7385,6 +7499,19 @@ export async function saveChatbotFeedback(raw: unknown) {
   // 반면 매 질의마다 쌓이는 answer event 자체는 무효화하지 않고 60초 TTL에만 맡긴다
   // (getChatbotStats 캐시 정의부 주석 참고) — 그렇게 하지 않으면 트래픽마다 캐시가 무의미해진다.
   revalidateTag(CHATBOT_STATS_CACHE_TAG, "max")
+
+  if (rating === "not_helpful") {
+    const answerEventRecord = answerEvent as {
+      id: string
+      normalized_question?: unknown
+      detected_category?: unknown
+    }
+    await recordNegativeFeedbackOnCluster(supabase, {
+      answerEventId,
+      question: normalizeString(answerEventRecord.normalized_question) ?? null,
+      category: normalizeString(answerEventRecord.detected_category) ?? null,
+    })
+  }
 
   try {
     await maybeCreateChannelTalkFeedbackHandoff(answerEventId, {
