@@ -300,6 +300,15 @@ npm run check:db --  --strict
 | --- | --- | --- | --- |
 | `20261112_chatbot_claude_labels.sql` | 답변별 라벨 `chatbot_session_labels`(의도·기관·단계·온도·세션 최고 온도, `chat_sessions` CASCADE)·Claude 호출 사용량 `chatbot_llm_usage`(모델·토큰·추정 USD)·합계 함수 `chatbot_llm_usage_sum(timestamptz)`(service_role 만 실행). RLS on + 활성 관리자 SELECT 정책, anon 권한 회수. 멱등(`IF NOT EXISTS`·`CREATE OR REPLACE`) | 라벨링은 조용히 건너뛰고, 일·월 예산은 인스턴스 메모리 합계로만 잰다(서버리스 인스턴스가 여럿이면 상한을 넘겨 쓸 수 있다). Gemini 기본값이면 영향 없다 | `npm run check:db` 의 `chatbot_session_labels`·`chatbot_llm_usage`·`chatbot_llm_usage_sum` 프로브(warning), 또는 `select to_regclass('public.chatbot_session_labels') is not null and to_regclass('public.chatbot_llm_usage') is not null;` → `true` |
 
+### 2026-11-23 총판 정산 스냅샷 — 서울 프로젝트 미적용
+
+[총판 정산](../hardware-ops/distributor-settlement.md) §7 의 쿼드러닝 계정 보드. 코드보다 먼저든 나중이든 된다(폴백이 있다).
+적용 뒤 스냅샷을 한 번 올린다: `node --env-file=.env.local scripts/upload-partner-settlement-snapshot.mjs <snapshot.json>`(운영 DB에 쓴다).
+
+| 파일 | 하는 일 | 미적용 시 | 확인 |
+| --- | --- | --- | --- |
+| `20261123_partner_settlement_snapshots.sql` | 총판마다 최신 정산 스냅샷 한 행 `partner_settlement_snapshots`(`partner` PK·`snapshot` jsonb·`generated_at`·`updated_by`·`updated_at` 트리거). RLS deny-all(정책 0, service_role 전용), 멱등 | 총판 미수금 탭 위 보드가 "아직 올라오지 않았다" 한 줄로 바뀌고 Overview 정산 잔액 카드가 그려지지 않는다. 견적별 총판 미수금은 그대로다 | `npm run check:db` 의 `partner_settlement_snapshots` 프로브(warning, 행 0이면 업로드 안내), 또는 `select to_regclass('public.partner_settlement_snapshots') is not null;` → `true` |
+
 ## 적용 보류 중인 마이그레이션
 
 `check:db`에 걸리지 않는(프로브가 없는) 파일이라도, 아래 파일은 **파일명 순서대로 일괄 적용하지 않는다.**

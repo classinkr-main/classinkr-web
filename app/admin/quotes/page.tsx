@@ -15,6 +15,7 @@ import {
 
 import DistributorReceivablesPanel from "@/components/admin/documents/DistributorReceivablesPanel"
 import HardwareQuotesPanel from "@/components/admin/documents/HardwareQuotesPanel"
+import PartnerSettlementBoard from "@/components/admin/documents/partner-settlement/board"
 import SoftwareQuoteCodesPanel from "@/components/admin/documents/SoftwareQuoteCodesPanel"
 import { ContractsPanel } from "@/components/admin/documents/ContractsPanel"
 import { ReceiptsPanel } from "@/components/admin/documents/ReceiptsPanel"
@@ -69,7 +70,7 @@ const DOCUMENT_TABS: DocumentTabItem[] = [
   {
     key: "receivables",
     label: "총판 미수금",
-    description: "총판용 견적서 발행분의 입금 현황과 원가 템플릿",
+    description: "쿼드러닝 계정 잔액, 총판용 견적서 발행분의 입금 현황과 원가 템플릿",
     icon: <Wallet className="h-4 w-4" />,
   },
   {
@@ -415,7 +416,13 @@ export default function QuotesPage() {
         {activeTab === "software" && <SoftwareQuoteCodesPanel />}
         {activeTab === "contracts" && <ContractsPanel />}
         {activeTab === "receipts" && <ReceiptsPanel />}
-        {activeTab === "receivables" && <DistributorReceivablesPanel />}
+        {/* 쿼드러닝 계정 잔액 보드(정산 스냅샷)가 위, 견적별 총판 미수금 목록이 아래. */}
+        {activeTab === "receivables" && (
+          <>
+            <PartnerSettlementBoard />
+            <DistributorReceivablesPanel />
+          </>
+        )}
       </div>
     </div>
   )
