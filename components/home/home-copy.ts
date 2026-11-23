@@ -1,10 +1,12 @@
 // components/home/home-copy.ts — 홈 카피 SSOT (스펙 §8, 캔버스 B-T2). H1 은 lib/classin-positioning.ts 의 heroHeadline.
 // 숫자 4개는 docs/active/brand-canon/company-facts.md 의 EEO 공식 수치. 학원 34곳은 옛 LogoBar 목록 그대로.
+import { KOREA_WEBSITE_NAME } from "@/lib/classin-positioning"
+
 export const HOME_COPY = {
   hero: {
     // H1 "칠판은 지워져도, 수업은 남습니다"의 근거 — 무엇이 어떻게 남는지(아래 이득 3행과 같은 순서의 말).
-    // 두 구절 — md 이상에서 "남기고," 뒤에서 줄을 바꾼다(휴대폰은 이어 흐른다)
-    lead: ["Classin 전자칠판은 판서를 교안 파일로, 수업을 녹화로 남기고,", "수업이 끝나면 AI가 강의를 평가합니다."] as const,
+    // 두 문장 — md 이상에서 줄을 바꾼다(휴대폰은 이어 흐른다).
+    lead: [`${KOREA_WEBSITE_NAME}의 전자칠판은 판서를 교안으로 남깁니다.`, "수업 녹화와 AI 강의 평가도 활용할 수 있습니다."] as const,
     primaryCta: "파일럿 상담 신청",
     secondaryCta: "34문항 운영 진단지 받기",
     secondaryHref: "/resources/academy-system-checklist#download",
