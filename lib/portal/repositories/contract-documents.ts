@@ -1,6 +1,7 @@
 "server-only";
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { fetchAllSupabaseRows } from "@/lib/repositories/branch-hw";
 import type {
   InsertContractDocument,
   UpdateContractDocument,
@@ -14,6 +15,11 @@ import type {
   QuoteDocument,
   QuoteDocumentVersion,
 } from "@/lib/portal/types";
+import {
+  CONTRACT_NUMBER_INSERT_ATTEMPTS,
+  generateContractNumber,
+  isUniqueViolation,
+} from "@/lib/contract-number";
 import { getLatestAcceptedQuoteInteraction } from "@/lib/portal/repositories/activity";
 
 function isExpired(expiresAt?: string | null) {
@@ -129,38 +135,28 @@ function resolveQuoteVersionForConversion(input: {
   };
 }
 
-/* ─── Number Generation ─────────────────────────────────── */
-
-async function generateContractNumber(): Promise<string> {
-  const supabase = createSupabaseAdminClient();
-  const year = new Date().getFullYear();
-  const prefix = `C-${year}-`;
-
-  const { count } = await supabase
-    .from("contract_documents")
-    .select("*", { count: "exact", head: true })
-    .like("contract_number", `${prefix}%`);
-
-  const seq = String((count ?? 0) + 1).padStart(3, "0");
-  return `${prefix}${seq}`;
-}
-
 /* ─── Document CRUD ─────────────────────────────────────── */
 
 export async function createContractDocument(
   input: Omit<InsertContractDocument, "contract_number">
 ): Promise<ContractDocument> {
   const supabase = createSupabaseAdminClient();
-  const contractNumber = await generateContractNumber();
 
-  const { data, error } = await supabase
-    .from("contract_documents")
-    .insert({ ...input, contract_number: contractNumber })
-    .select()
-    .single();
+  // 동시 생성으로 번호가 겹치면(유니크 위반) 새 번호로 몇 번 더 시도한다.
+  let lastError: unknown = null;
+  for (let attempt = 0; attempt < CONTRACT_NUMBER_INSERT_ATTEMPTS; attempt++) {
+    const contractNumber = await generateContractNumber();
+    const { data, error } = await supabase
+      .from("contract_documents")
+      .insert({ ...input, contract_number: contractNumber })
+      .select()
+      .single();
 
-  if (error) throw error;
-  return data as ContractDocument;
+    if (!error) return data as ContractDocument;
+    if (!isUniqueViolation(error)) throw error;
+    lastError = error;
+  }
+  throw lastError;
 }
 
 export async function updateContractDocument(
@@ -238,13 +234,18 @@ function readSourceQuote(value: unknown) {
 export async function listContractDocumentsForAdmin(): Promise<ContractDocumentListItem[]> {
   const supabase = createSupabaseAdminClient();
 
-  const { data: documents, error: documentsError } = await supabase
-    .from("contract_documents")
-    .select("*")
-    .order("updated_at", { ascending: false });
-  if (documentsError) throw documentsError;
-
-  const documentRows = (documents ?? []) as ContractDocument[];
+  // PostgREST 기본 행 제한(1,000)에 잘리지 않게 id 키셋으로 끝까지 읽고, 최근 변경순으로 다시 세운다.
+  const documentRows = (
+    await fetchAllSupabaseRows<ContractDocument>((afterId, limit) => {
+      let query = supabase
+        .from("contract_documents")
+        .select("*")
+        .order("id", { ascending: true })
+        .limit(limit);
+      if (afterId) query = query.gt("id", afterId);
+      return query;
+    })
+  ).sort((left, right) => right.updated_at.localeCompare(left.updated_at));
   if (documentRows.length === 0) return [];
 
   const versionRows: ContractListVersionRow[] = [];
@@ -352,10 +353,11 @@ export async function createContractDocumentVersion(
   const version = data as ContractDocumentVersion;
 
   // current_version_id 업데이트
-  await supabase
+  const { error: pointerError } = await supabase
     .from("contract_documents")
     .update({ current_version_id: version.id })
     .eq("id", input.contract_document_id);
+  if (pointerError) throw pointerError;
 
   return version;
 }
@@ -391,7 +393,20 @@ export async function applySignature(
     .single();
 
   if (error) throw error;
-  return data as ContractDocumentVersion;
+  const signed = data as ContractDocumentVersion;
+
+  // 양측 서명이 모두 있으면 서명 순서와 무관하게 completed. 아니면 방금 서명한 쪽 상태.
+  if (signed.partner_signed_at && signed.admin_signed_at) {
+    const { data: completed, error: completeError } = await supabase
+      .from("contract_document_versions")
+      .update({ sign_status: "completed" })
+      .eq("id", versionId)
+      .select()
+      .single();
+    if (completeError) throw completeError;
+    return completed as ContractDocumentVersion;
+  }
+  return signed;
 }
 
 /* ─── Share ─────────────────────────────────────────────── */
@@ -576,28 +591,49 @@ export async function convertQuoteToContract(
   });
 
   // 계약 버전 생성 (견적 내용 복사)
-  const version = await createContractDocumentVersion({
-    contract_document_id: contractDocument.id,
-    version_number: 1,
-    title: resolvedQuote.version.title ?? "계약서",
-    content_html: resolvedQuote.version.content_html ?? null,
-    structured_json: sourceStructuredJson,
-    total_amount: resolvedQuote.version.total_amount ?? 0,
-    valid_from: null,
-    valid_until: resolvedQuote.version.valid_until ?? null,
-    sign_status: "draft",
-    partner_signed_at: null,
-    partner_signature_url: null,
-    admin_signed_at: null,
-    admin_signature_url: null,
-    created_by: createdBy,
-  });
+  // 이후 단계가 실패하면 방금 만든 계약 문서를 지워(버전은 cascade) 반쪽짜리 계약이 남지 않게 한다.
+  const rollbackContract = async () => {
+    const { error: rollbackError } = await supabase
+      .from("contract_documents")
+      .delete()
+      .eq("id", contractDocument.id);
+    if (rollbackError) {
+      console.error("[convertQuoteToContract] rollback failed:", rollbackError);
+    }
+  };
 
-  // 견적 상태 업데이트
-  await supabase
+  let version: ContractDocumentVersion;
+  try {
+    version = await createContractDocumentVersion({
+      contract_document_id: contractDocument.id,
+      version_number: 1,
+      title: resolvedQuote.version.title ?? "계약서",
+      content_html: resolvedQuote.version.content_html ?? null,
+      structured_json: sourceStructuredJson,
+      total_amount: resolvedQuote.version.total_amount ?? 0,
+      valid_from: null,
+      valid_until: resolvedQuote.version.valid_until ?? null,
+      sign_status: "draft",
+      partner_signed_at: null,
+      partner_signature_url: null,
+      admin_signed_at: null,
+      admin_signature_url: null,
+      created_by: createdBy,
+    });
+  } catch (versionError) {
+    await rollbackContract();
+    throw versionError;
+  }
+
+  // 견적 상태 업데이트 — 실패하면 계약을 되돌린다(견적이 그대로면 다시 전환할 수 있어야 한다).
+  const { error: archiveError } = await supabase
     .from("quote_documents")
     .update({ status: "archived" })
     .eq("id", quoteDocId);
+  if (archiveError) {
+    await rollbackContract();
+    throw archiveError;
+  }
 
   return { contractDocument, version };
 }

@@ -11,7 +11,7 @@ import {
   convertQuoteToContract,
   findContractDocumentBySourceQuote,
 } from "@/lib/portal/repositories/contract-documents";
-import { logActivity } from "@/lib/portal/repositories/activity";
+import { getLatestAcceptedQuoteInteraction, logActivity } from "@/lib/portal/repositories/activity";
 import {
   completeCrmTask,
   listActiveTasksForDealByType,
@@ -38,15 +38,15 @@ export async function POST(
       if (f) return f;
     }
 
-    // 계약 전환이 끝난 견적은 archived 가 된다. 다시 전환하면 같은 견적으로 계약서가 두 번 생긴다.
-    // archived 는 전환 없이 보관만 한 견적일 수도 있어, 실제로 만들어진 계약을 찾아 번호로 안내한다.
-    if (doc.status === "archived") {
-      let existingNumber: string | null = null;
-      try {
-        existingNumber = (await findContractDocumentBySourceQuote(id))?.contract_number ?? null;
-      } catch (lookupError) {
-        console.error("[portal/quotes/[id]/convert] existing contract lookup skipped:", lookupError);
-      }
+    // 이미 이 견적에서 만든 계약이 있으면 상태와 무관하게 거절한다(같은 견적으로 계약서가 두 번 생기는 것을 막는다).
+    // 전환이 끝난 견적은 archived 가 되지만, 보관만 한 견적일 수도 있어 실제 계약을 찾아 번호로 안내한다.
+    let existingNumber: string | null = null;
+    try {
+      existingNumber = (await findContractDocumentBySourceQuote(id))?.contract_number ?? null;
+    } catch (lookupError) {
+      console.error("[portal/quotes/[id]/convert] existing contract lookup skipped:", lookupError);
+    }
+    if (existingNumber || doc.status === "archived") {
       return NextResponse.json(
         {
           error: existingNumber
@@ -54,6 +54,25 @@ export async function POST(
             : "보관된 견적은 계약으로 전환할 수 없습니다. 이미 전환했다면 견적·문서의 계약서 탭에서 확인하세요.",
           contract_number: existingNumber,
         },
+        { status: 409 }
+      );
+    }
+
+    // 고객이 동의한(accepted) 견적만 전환한다 — 견적 큐의 "계약 전환" 단계
+    // (components/admin/documents/quote-queue.ts getQuoteQueueKey === "convert")와 같은 조건.
+    // 삭제된 견적은 getQuoteDocument 가 null 을 돌려줘 위에서 404 로 끝난다.
+    // 화면은 상태가 아직 안 따라왔어도 동의 기록(acceptedAt)이 있으면 전환 버튼을 보여 주므로 여기서도 같이 본다.
+    let accepted = doc.status === "accepted";
+    if (!accepted) {
+      try {
+        accepted = Boolean(await getLatestAcceptedQuoteInteraction({ quote_document_id: id }));
+      } catch (acceptLookupError) {
+        console.error("[portal/quotes/[id]/convert] accept lookup failed:", acceptLookupError);
+      }
+    }
+    if (!accepted) {
+      return NextResponse.json(
+        { error: "고객이 동의한 견적만 계약으로 전환할 수 있습니다." },
         { status: 409 }
       );
     }

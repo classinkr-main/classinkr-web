@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 type Row = Record<string, unknown>
 
 const { db, requirePortalContext } = vi.hoisted(() => ({
-  db: { tables: {} as Record<string, Array<Record<string, unknown>>>, seq: 0, failTables: new Set<string>() },
+  db: { tables: {} as Record<string, Array<Record<string, unknown>>>, seq: 0, failTables: new Set<string>(), failUpdateTables: new Set<string>(), uniqueColumns: {} as Record<string, string>, forcedConflicts: {} as Record<string, number> },
   requirePortalContext: vi.fn(),
 }))
 
@@ -33,7 +33,7 @@ function project(row: Row, columns: string | null): Row {
 function createBuilder(table: string) {
   const rows = (db.tables[table] ??= [])
   const state = {
-    op: "select" as "select" | "insert" | "update",
+    op: "select" as "select" | "insert" | "update" | "delete",
     columns: null as string | null,
     payload: null as Row | null,
     filters: [] as Array<(row: Row) => boolean>,
@@ -46,8 +46,32 @@ function createBuilder(table: string) {
   function run() {
     if (db.failTables.has(table)) return { data: null, error: { message: `${table} unavailable` }, count: null }
 
+    if (state.op === "update" && db.failUpdateTables.has(table)) {
+      return { data: null, error: { message: `${table} update failed` }, count: null }
+    }
+
     let result: Row[]
+    if (state.op === "delete") {
+      const doomed = rows.filter((row) => state.filters.every((filter) => filter(row)))
+      for (const row of doomed) rows.splice(rows.indexOf(row), 1)
+      // contract_document_versions 는 계약 문서 삭제 시 cascade.
+      if (table === "contract_documents") {
+        const versions = (db.tables.contract_document_versions ??= [])
+        db.tables.contract_document_versions = versions.filter(
+          (version) => !doomed.some((row) => row.id === version.contract_document_id)
+        )
+      }
+      return { data: null, error: null, count: doomed.length }
+    }
     if (state.op === "insert") {
+      const uniqueColumn = db.uniqueColumns[table]
+      if ((db.forcedConflicts[table] ?? 0) > 0) {
+        db.forcedConflicts[table] -= 1
+        return { data: null, error: { code: "23505", message: "duplicate key value" }, count: null }
+      }
+      if (uniqueColumn && rows.some((row) => row[uniqueColumn] === state.payload?.[uniqueColumn])) {
+        return { data: null, error: { code: "23505", message: "duplicate key value" }, count: null }
+      }
       const now = new Date(Date.UTC(2026, 10, 23, 0, 0, ++db.seq)).toISOString()
       const inserted = { id: `${table}_${db.seq}`, created_at: now, updated_at: now, ...state.payload }
       rows.push(inserted)
@@ -87,6 +111,10 @@ function createBuilder(table: string) {
       state.payload = payload
       return builder
     },
+    delete() {
+      state.op = "delete"
+      return builder
+    },
     update(payload: Row) {
       state.op = "update"
       state.payload = payload
@@ -98,6 +126,10 @@ function createBuilder(table: string) {
     },
     in(column: string, values: unknown[]) {
       state.filters.push((row) => values.includes(row[column]))
+      return builder
+    },
+    gt(column: string, value: unknown) {
+      state.filters.push((row) => String(row[column] ?? "") > String(value))
       return builder
     },
     like(column: string, pattern: string) {
@@ -154,7 +186,9 @@ vi.mock("@/lib/repositories/crm-tasks", () => ({
 }))
 
 import { POST as convert } from "@/app/api/portal/quotes/[id]/convert/route"
-import { GET as listContractsTab } from "@/app/api/admin/contracts/route"
+import { GET as listContractsTab, POST as createContractRoute } from "@/app/api/admin/contracts/route"
+import { applySignature, createContractDocument } from "@/lib/portal/repositories/contract-documents"
+import { generateContractNumber } from "@/lib/contract-number"
 
 const convertQuote = (id: string) =>
   convert(new NextRequest(`https://classin.kr/api/portal/quotes/${id}/convert`, { method: "POST" }), {
@@ -166,6 +200,9 @@ const getContractsTab = (query = "") =>
 beforeEach(() => {
   db.seq = 0
   db.failTables.clear()
+  db.failUpdateTables.clear()
+  db.forcedConflicts = {}
+  db.uniqueColumns = { contracts: "contract_number", contract_documents: "contract_number" }
   db.tables = {
     contracts: [
       {
@@ -278,5 +315,120 @@ describe("견적 계약 전환 → 계약서 탭 목록", () => {
     expect(body.contracts).toHaveLength(1)
     expect(body.convertedContracts).toEqual([])
     expect(body.convertedContractsError).toBeTruthy()
+  })
+})
+
+describe("계약 번호 채번", () => {
+  it("직접 작성·견적 전환 두 표의 최대 순번 + 1 을 쓴다", async () => {
+    const year = new Date().getFullYear()
+    db.tables.contracts = [{ id: "a", contract_number: `C-${year}-004` }]
+    db.tables.contract_documents = [{ id: "b", contract_number: `C-${year}-007` }]
+    expect(await generateContractNumber()).toBe(`C-${year}-008`)
+  })
+
+  it("삭제로 중간 번호가 비어도 번호를 재사용하지 않고, 999 를 넘어도 숫자 최댓값을 쓴다", async () => {
+    const year = new Date().getFullYear()
+    db.tables.contracts = [
+      { id: "a", contract_number: `C-${year}-001` },
+      { id: "b", contract_number: `C-${year}-005` },
+      { id: "c", contract_number: `C-${year}-999` },
+    ]
+    db.tables.contract_documents = [{ id: "d", contract_number: `C-${year}-1000` }]
+    expect(await generateContractNumber()).toBe(`C-${year}-1001`)
+  })
+
+  it("전환 계약과 직접 작성 계약이 같은 번호를 받지 않는다", async () => {
+    const year = new Date().getFullYear()
+    db.tables.contracts = [{ id: "a", contract_number: `C-${year}-001` }]
+    const { contract } = await (await convertQuote("qd_1")).json()
+    expect(contract.contract_number).toBe(`C-${year}-002`)
+  })
+
+  it("V2 생성이 번호 충돌(23505)을 만나면 새 번호로 다시 시도한다", async () => {
+    const year = new Date().getFullYear()
+    db.tables.contracts = []
+    db.forcedConflicts.contract_documents = 1 // 채번 직후 다른 요청이 같은 번호를 먼저 넣은 상황
+
+    const doc = await createContractDocument({ deal_id: "deal_1", status: "draft", current_version_id: null, created_by: null })
+    expect(doc.contract_number).toBe(`C-${year}-001`)
+    expect(db.forcedConflicts.contract_documents).toBe(0)
+  })
+
+  it("계속 충돌하면 3번까지만 시도하고 실패한다", async () => {
+    db.forcedConflicts.contract_documents = 10
+
+    await expect(
+      createContractDocument({ deal_id: "deal_1", status: "draft", current_version_id: null, created_by: null })
+    ).rejects.toMatchObject({ code: "23505" })
+    expect(db.forcedConflicts.contract_documents).toBe(7)
+    expect(db.tables.contract_documents ?? []).toHaveLength(0)
+  })
+
+  it("직접 작성 POST 도 번호 충돌 시 새 번호로 재시도한다", async () => {
+    const year = new Date().getFullYear()
+    db.tables.contracts = []
+    db.forcedConflicts.contracts = 1
+
+    const response = await createContractRoute(
+      new NextRequest("https://classin.kr/api/admin/contracts", {
+        method: "POST",
+        body: JSON.stringify({ title: "직접 작성", partner_id: "partner_1" }),
+      })
+    )
+    expect(response.status).toBe(201)
+    expect((await response.json()).contract.contract_number).toBe(`C-${year}-001`)
+  })
+})
+
+describe("견적 전환 원자성·멱등성·동의 검사", () => {
+  it("견적 보관 업데이트가 실패하면 만든 계약을 되돌리고 500 을 준다", async () => {
+    db.failUpdateTables.add("quote_documents")
+
+    const response = await convertQuote("qd_1")
+    expect(response.status).toBe(500)
+    expect(db.tables.contract_documents ?? []).toHaveLength(0)
+    expect(db.tables.contract_document_versions ?? []).toHaveLength(0)
+    expect(db.tables.quote_documents[0].status).toBe("accepted")
+  })
+
+  it("버전 생성이 실패하면 만든 계약 문서를 지운다", async () => {
+    db.failTables.add("contract_document_versions")
+
+    const response = await convertQuote("qd_1")
+    expect(response.status).toBe(500)
+    expect(db.tables.contract_documents ?? []).toHaveLength(0)
+  })
+
+  it("accepted 상태여도 이미 계약이 있으면 409 로 번호를 안내한다(archived 로 바뀌지 않은 경우)", async () => {
+    const { contract } = await (await convertQuote("qd_1")).json()
+    db.tables.quote_documents[0].status = "accepted"
+
+    const again = await convertQuote("qd_1")
+    expect(again.status).toBe(409)
+    const body = await again.json()
+    expect(body.contract_number).toBe(contract.contract_number)
+    expect(body.error).toContain("계약서 탭")
+    expect(db.tables.contract_documents).toHaveLength(1)
+  })
+
+  it("고객이 동의하지 않은 견적은 409 로 거절하고 계약을 만들지 않는다", async () => {
+    db.tables.quote_documents[0].status = "shared"
+
+    const response = await convertQuote("qd_1")
+    expect(response.status).toBe(409)
+    expect((await response.json()).error).toBe("고객이 동의한 견적만 계약으로 전환할 수 있습니다.")
+    expect(db.tables.contract_documents ?? []).toHaveLength(0)
+  })
+})
+
+describe("applySignature — 버전 sign_status", () => {
+  it("양측 서명이 모두 있으면 서명 순서와 무관하게 completed, 한쪽만이면 서명한 쪽 상태", async () => {
+    db.tables.contract_document_versions = [{ id: "cv_1", partner_signed_at: null, admin_signed_at: null, sign_status: "draft" }]
+
+    const first = await applySignature("cv_1", "a.png", "admin")
+    expect(first.sign_status).toBe("admin_signed")
+    const second = await applySignature("cv_1", "p.png", "partner")
+    expect(second.sign_status).toBe("completed")
+    expect(db.tables.contract_document_versions[0].sign_status).toBe("completed")
   })
 })

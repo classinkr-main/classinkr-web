@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAdmin } from "@/lib/admin-auth";
 import { adminCachedJson } from "@/lib/admin-api-response";
-import { listContracts, createContract, generateContractNumber } from "@/lib/repositories/contracts";
+import { listContracts, createContract } from "@/lib/repositories/contracts";
+import {
+  CONTRACT_NUMBER_INSERT_ATTEMPTS,
+  generateContractNumber,
+  isUniqueViolation,
+} from "@/lib/contract-number";
 import { listContractDocumentsForAdmin } from "@/lib/portal/repositories/contract-documents";
 import type { ContractDocumentListItem } from "@/lib/portal/types";
 
@@ -38,10 +43,24 @@ export async function POST(req: NextRequest) {
   if (err) return err;
   try {
     const body = await req.json();
-    if (!body.contract_number) {
-      body.contract_number = await generateContractNumber();
+    let contract;
+    if (body.contract_number) {
+      contract = await createContract(body);
+    } else {
+      // 자동 채번은 동시 요청과 겹치면 유니크 위반이 날 수 있어, 새 번호로 몇 번 더 시도한다.
+      let lastError: unknown = null;
+      for (let attempt = 0; attempt < CONTRACT_NUMBER_INSERT_ATTEMPTS; attempt++) {
+        body.contract_number = await generateContractNumber();
+        try {
+          contract = await createContract(body);
+          break;
+        } catch (createError) {
+          if (!isUniqueViolation(createError)) throw createError;
+          lastError = createError;
+        }
+      }
+      if (!contract) throw lastError;
     }
-    const contract = await createContract(body);
     return NextResponse.json({ contract }, { status: 201 });
   } catch (e) {
     console.error("[POST /api/admin/contracts]", e);

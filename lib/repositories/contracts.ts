@@ -9,26 +9,21 @@ import type {
 
 /* ─── 채번 ─────────────────────────────────────────────── */
 
-export async function generateContractNumber(): Promise<string> {
-  const supabase = createSupabaseAdminClient();
-  const year = new Date().getFullYear();
-  const { count } = await supabase
-    .from("contracts")
-    .select("*", { count: "exact", head: true })
-    .like("contract_number", `C-${year}-%`);
-  const seq = String((count ?? 0) + 1).padStart(3, "0");
-  return `C-${year}-${seq}`;
-}
+// 직접 작성·견적 전환 계약이 한 번호 체계를 쓰므로 공용 채번을 그대로 노출한다.
+export { generateContractNumber } from "@/lib/contract-number";
 
 /* ─── Contracts CRUD ─────────────────────────────────────── */
 
 export async function listContracts(partnerId?: string): Promise<Contract[]> {
   const supabase = createSupabaseAdminClient();
-  let q = supabase.from("contracts").select("*").order("created_at", { ascending: false });
-  if (partnerId) q = q.eq("partner_id", partnerId);
-  const { data, error } = await q;
-  if (error) throw error;
-  return data ?? [];
+  // PostgREST 기본 행 제한(1,000)에 잘리지 않게 id 키셋으로 끝까지 읽고, 최근 작성순으로 다시 세운다.
+  const rows = await fetchAllSupabaseRows<Contract>((afterId, limit) => {
+    let q = supabase.from("contracts").select("*").order("id", { ascending: true }).limit(limit);
+    if (partnerId) q = q.eq("partner_id", partnerId);
+    if (afterId) q = q.gt("id", afterId);
+    return q;
+  });
+  return rows.sort((left, right) => right.created_at.localeCompare(left.created_at));
 }
 
 export async function getContract(id: string): Promise<Contract | null> {

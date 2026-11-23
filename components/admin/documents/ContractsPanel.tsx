@@ -4,13 +4,17 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { AlertCircle, Check, Copy, FileSignature, PenLine, Plus, Send, Trash2, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { adminFetch, adminFetchJsonCached, clearAdminRequestCache } from "@/lib/admin-client"
+import { portalFetch } from "@/lib/portal/portal-fetch"
+import { canTransitionContractStatus } from "@/lib/portal/contract-status-flow"
 import { useUrlState } from "@/lib/use-url-state"
 import type { Contract, Partner, Receipt } from "@/lib/supabase/database.types"
-import type { ContractDocumentListItem } from "@/lib/portal/types"
+import type { ContractDocumentListItem, ContractDocumentStatus } from "@/lib/portal/types"
+import DistributorSettlementSection from "./DistributorSettlementSection"
 import {
   CONTRACT_QUEUE_GROUPS,
   getContractQueueKey,
   getContractSteps,
+  getConvertedContractSteps,
   groupContracts,
   type ContractQueueKey,
 } from "./document-queues"
@@ -43,8 +47,8 @@ type PartnerOption = Pick<Partner, "id" | "name">
 
 // 계약서 탭은 두 원천을 한 목록에 합쳐 보여 준다.
 //  - direct: 이 화면에서 직접 작성한 V1 계약(contracts, 파트너 기준). 발송·서명 링크·우리 서명·삭제를 여기서 한다.
-//  - converted: 견적 "계약 전환"으로 만든 계약(contract_documents, 딜·고객 기준). 지금은 보기만 한다 —
-//    고객용 공개 서명 페이지(/share/contract/[token])가 V1 토큰만 읽어 서명 링크를 내줄 수 없다.
+//  - converted: 견적 "계약 전환"으로 만든 계약(contract_documents, 딜·고객 기준). 전자서명은 보류라
+//    서명 없이 관리자가 "발송함 → 고객 확인 → 계약 확정"을 확인 후 체크로 진행한다(contract-status-flow).
 type ContractRowBase = {
   id: string
   contract_number: string
@@ -82,8 +86,9 @@ function toConvertedRow(doc: ContractDocumentListItem): ContractRow {
     party: doc.customer_name ?? doc.deal_title ?? "고객 미지정",
     total_amount: doc.total_amount,
     status: toQueueStatus(doc.status),
-    partner_signed_at: doc.partner_signed_at,
-    admin_signed_at: doc.admin_signed_at,
+    // 체크 방식은 서명 시각이 없다 — 큐 판정이 서명 시각이 아닌 상태만 따르도록 비운다.
+    partner_signed_at: null,
+    admin_signed_at: null,
     created_at: doc.created_at,
     updated_at: doc.updated_at,
     valid_from: doc.valid_from,
@@ -198,6 +203,10 @@ export function ContractsPanel() {
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
   const [query, setQuery] = useUrlState("contract_q", "")
+  // 전환 계약 체크: 처리 중인 목표 상태·서버 오류(계약별). 총판 견적서는 펼친 계약 id만 기억해 다른 계약을 고르면 닫힌다.
+  const [checkBusy, setCheckBusy] = useState<{ id: string; to: ContractDocumentStatus } | null>(null)
+  const [checkError, setCheckError] = useState<{ id: string; message: string } | null>(null)
+  const [quoteOpenId, setQuoteOpenId] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -356,6 +365,26 @@ export function ContractsPanel() {
     setSigning(false)
   }
 
+  async function handleCheck(doc: ContractDocumentListItem, to: ContractDocumentStatus) {
+    if (to === "cancelled" && !window.confirm("이 계약을 취소할까요? 취소하면 되돌릴 수 없습니다.")) return
+    setCheckBusy({ id: doc.id, to })
+    setCheckError(null)
+    try {
+      const res = await portalFetch(`/api/portal/contracts/${doc.id}`, {
+        method: "PUT",
+        body: JSON.stringify({ status: to }),
+      })
+      const data = (await res.json().catch(() => null)) as { error?: string } | null
+      if (!res.ok) throw new Error(data?.error ?? "계약 상태를 바꾸지 못했습니다.")
+      clearAdminRequestCache("/api/admin/contracts")
+      await load()
+    } catch (error) {
+      setCheckError({ id: doc.id, message: error instanceof Error ? error.message : "계약 상태를 바꾸지 못했습니다." })
+    } finally {
+      setCheckBusy(null)
+    }
+  }
+
   async function handleDelete(id: string) {
     if (!confirm("이 계약을 삭제할까요?")) return
     await adminFetch(`/api/admin/contracts/${id}`, { method: "DELETE" })
@@ -366,8 +395,10 @@ export function ContractsPanel() {
   function getListStatus(c: ContractRow, key: ContractQueueKey) {
     switch (key) {
       case "sign":
+        if (c.source === "converted") return { text: `확정 체크 필요 · ${formatDay(c.updated_at) ?? ""}`, tone: "go" as const }
         return { text: `고객 서명 ${formatDay(c.partner_signed_at) ?? ""}`, tone: "go" as const }
       case "await":
+        if (c.source === "converted") return { text: `고객 확인 대기 · ${formatDay(c.updated_at) ?? ""}`, tone: "warn" as const }
         return { text: `서명 대기 · ${formatDay(c.updated_at) ?? ""}`, tone: "warn" as const }
       case "draft":
         return { text: `작성 ${formatDay(c.created_at) ?? ""}`, tone: "warn" as const }
@@ -388,29 +419,114 @@ export function ContractsPanel() {
     )
   }
 
-  // 견적 전환 계약은 보기만 한다 — 발송·서명 버튼 없이 지금 단계만 알려 준다.
+  // 견적 전환 계약은 서명 대신 "확인 후 체크"로 진행한다 — 버튼 = 다음 체크, 한 단계 해제, 취소.
   function renderConvertedStatus(row: ContractRow & { source: "converted" }, key: ContractQueueKey) {
+    const doc = row.doc
     const tone = CONTRACT_QUEUE_GROUPS.find((group) => group.key === key)?.tone ?? "neutral"
-    const from = row.doc.source_quote_number ? `견적 ${row.doc.source_quote_number}에서 ` : "견적에서 "
-    const viewOnly = "이 화면에서는 보기만 할 수 있습니다 — 고객 서명 링크 발송은 아직 지원하지 않습니다."
-    switch (key) {
-      case "sign":
-        return (
+    const from = doc.source_quote_number ? `견적 ${doc.source_quote_number}에서 ` : "견적에서 "
+    const busy = checkBusy?.id === doc.id ? checkBusy.to : null
+    const anyBusy = checkBusy !== null
+    const error = checkError?.id === doc.id ? checkError.message : null
+
+    const checkButton = (to: ContractDocumentStatus, label: string, className: string, icon?: React.ReactNode) =>
+      canTransitionContractStatus(doc.status, to) ? (
+        <button
+          key={to}
+          type="button"
+          disabled={anyBusy}
+          aria-busy={busy === to}
+          onClick={() => void handleCheck(doc, to)}
+          className={className}
+        >
+          {busy === to ? "처리 중..." : (
+            <>
+              {icon}
+              {label}
+            </>
+          )}
+        </button>
+      ) : null
+    const cancelButton = checkButton("cancelled", "취소", DANGER_GHOST_BUTTON)
+
+    const steps = [
+      { label: "발송함", done: ["shared", "partner_signed", "admin_signed", "completed"].includes(doc.status) },
+      { label: "고객 확인", done: ["partner_signed", "admin_signed", "completed"].includes(doc.status) },
+      { label: "계약 확정", done: ["admin_signed", "completed"].includes(doc.status) },
+    ]
+    const lastDone = steps.map((step) => step.done).lastIndexOf(true)
+
+    let action: React.ReactNode
+    switch (doc.status) {
+      case "draft":
+        action = (
+          <NextActionBox tone={tone} label="발송 전" description={`${from}전환한 계약입니다 — 고객에게 계약서를 보낸 뒤 「발송함」을 체크하세요.`}>
+            {cancelButton}
+            {checkButton("shared", "발송함 체크", SOLID_BUTTON, <Send className="h-3.5 w-3.5" />)}
+          </NextActionBox>
+        )
+        break
+      case "shared":
+        action = (
+          <NextActionBox tone={tone} label="고객 확인 대기" description="발송했지만 고객 확인 전입니다 — 고객이 계약 내용을 확인했다고 알려오면 체크하세요.">
+            {checkButton("draft", "발송함 체크 해제", GHOST_BUTTON)}
+            {cancelButton}
+            {checkButton("partner_signed", "고객 확인 체크", SOLID_BUTTON, <Check className="h-3.5 w-3.5" />)}
+          </NextActionBox>
+        )
+        break
+      case "partner_signed":
+        action = (
           <NextActionBox
             tone={tone}
-            label="우리 서명 필요"
-            description={`고객이 ${formatDay(row.partner_signed_at) ?? ""} 서명했습니다. ${viewOnly}`}
-          />
+            label="계약 확정 체크 필요"
+            description="고객이 계약을 확인했습니다 — 조건을 최종 확인한 뒤 계약 확정을 체크하면 매출 원장 초안이 제안됩니다."
+          >
+            {checkButton("shared", "고객 확인 체크 해제", GHOST_BUTTON)}
+            {cancelButton}
+            {checkButton("completed", "계약 확정 체크", SOLID_BUTTON, <Check className="h-3.5 w-3.5" />)}
+          </NextActionBox>
         )
-      case "await":
-        return <NextActionBox tone={tone} label="고객 서명 대기" description={`공유했지만 고객 서명 전입니다. ${viewOnly}`} />
-      case "draft":
-        return <NextActionBox tone={tone} label="발송 전" description={`${from}전환한 계약입니다. ${viewOnly}`} />
-      case "done":
-        return <NextActionBox tone={tone} label="완료" description="서명이 끝난 계약입니다." />
+        break
+      case "cancelled":
+        action = <NextActionBox tone={tone} label="취소" description="취소된 계약입니다. 기록용으로 남아 있습니다." />
+        break
       default:
-        return <NextActionBox tone={tone} label="취소" description="취소된 계약입니다. 기록용으로 남아 있습니다." />
+        action = <NextActionBox tone={tone} label="완료" description="계약이 확정되었습니다." />
     }
+
+    return (
+      <div className="flex flex-col gap-3">
+        {action}
+        {error && (
+          <p role="alert" className="rounded-lg border border-[#F6D5C5] bg-[#FEF3EE] px-3 py-2 text-xs text-[#B85C33]">
+            {error}
+          </p>
+        )}
+        {doc.status !== "cancelled" && (
+          <ul aria-label="계약 진행 체크" className="flex flex-wrap gap-x-5 gap-y-1.5 text-xs">
+            {steps.map((step, index) => (
+              <li key={step.label} className="flex items-center gap-1.5">
+                <span
+                  aria-hidden
+                  className={`flex h-4 w-4 items-center justify-center rounded border ${
+                    step.done ? "border-[#084734] bg-[#084734] text-white" : "border-[#CFCBC5] bg-white"
+                  }`}
+                >
+                  {step.done && <Check className="h-3 w-3" />}
+                </span>
+                <span className={step.done ? "font-semibold text-[#111110]" : "text-[#78736D]"}>
+                  {step.label}
+                  <span className="sr-only">{step.done ? " 체크됨" : " 체크 전"}</span>
+                </span>
+                {index === lastDone && (
+                  <span className="text-[11.5px] text-[#78736D]">· {formatDay(doc.updated_at) ?? ""} 변경</span>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    )
   }
 
   function renderNextAction(c: Contract, key: ContractQueueKey, receipt: Receipt | undefined) {
@@ -490,12 +606,25 @@ export function ContractsPanel() {
       formatDay(row.admin_signed_at),
       key === "done" ? "계약 확정" : null,
     ]
-    const steps = getContractSteps(row).map((step, index) => ({
-      label: step.label,
-      done: step.done,
-      detail: stepDetails[index],
-      warn: index === 2 && key === "await" && !step.done,
-    }))
+    const steps =
+      row.source === "converted"
+        ? (() => {
+            // 체크 방식 — 단계별 시각은 없고 마지막 변경일(updated_at)만 가장 최근 완료 단계에 붙인다.
+            const converted = getConvertedContractSteps({ status: row.doc.status })
+            const last = converted.map((step) => step.done).lastIndexOf(true)
+            return converted.map((step, index) => ({
+              label: step.label,
+              done: step.done,
+              detail: index === 0 ? formatDay(row.created_at) : index === last ? `${formatDay(row.updated_at) ?? ""} 변경` : null,
+              warn: false,
+            }))
+          })()
+        : getContractSteps(row).map((step, index) => ({
+            label: step.label,
+            done: step.done,
+            detail: stepDetails[index],
+            warn: index === 2 && key === "await" && !step.done,
+          }))
     const period =
       row.valid_from || row.valid_until
         ? `${formatDay(row.valid_from) ?? "—"} ~ ${formatDay(row.valid_until) ?? "—"}`
@@ -532,7 +661,7 @@ export function ContractsPanel() {
         {row.source === "converted" ? renderConvertedStatus(row, key) : renderNextAction(row.contract, key, receipt)}
 
         <div className="grid gap-7 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
-          <QueueTimeline title="서명" steps={steps} />
+          <QueueTimeline title={row.source === "converted" ? "진행" : "서명"} steps={steps} />
           <div>
             <h3 className="mb-2 text-[11.5px] font-semibold text-[#78736D]">계약 정보</h3>
             <dl className="grid grid-cols-[72px_1fr] gap-x-2.5 gap-y-1.5 text-xs">
@@ -555,6 +684,26 @@ export function ContractsPanel() {
                 </>
               )}
             </dl>
+            {row.source === "converted" && row.doc.source_quote_document_id && (
+              <div className="mt-4">
+                <button
+                  type="button"
+                  aria-expanded={quoteOpenId === row.id}
+                  onClick={() => setQuoteOpenId(quoteOpenId === row.id ? null : row.id)}
+                  className={GHOST_BUTTON}
+                >
+                  {quoteOpenId === row.id ? "총판 견적서 접기" : "총판 견적서 같이 보기"}
+                </button>
+                {quoteOpenId === row.id && (
+                  <div className="mt-3">
+                    <DistributorSettlementSection
+                      key={row.doc.source_quote_document_id}
+                      quoteId={row.doc.source_quote_document_id}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
