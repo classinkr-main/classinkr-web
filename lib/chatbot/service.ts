@@ -93,6 +93,7 @@ import {
   logShadowDecision,
   preIndexTrace,
   routeAnswerIndexWithAnalysis,
+  shadowLogPayload,
 } from "@/lib/chatbot/answer-index"
 import {
   answerAssistMode,
@@ -4115,6 +4116,10 @@ async function persistExchange(
       }
     }
 
+    if (getAnswerRouter() === "shadow") {
+      await recordShadowDecisionOnCluster(supabase, searchedQuestion, response)
+    }
+
     return {
       answerEventId: answerEvent.id as string,
       sessionId: resolvedSessionId,
@@ -7381,12 +7386,83 @@ export async function streamChatbotQuery(
 
 const NEGATIVE_FEEDBACK_REGRESSION_THRESHOLD = 2
 
+function readNonNegativeInt(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? Math.floor(value) : 0
+}
+
+async function recordShadowDecisionOnCluster(
+  supabase: ReturnType<typeof createSupabaseAdminClient>,
+  question: NormalizedQuestion,
+  response: Omit<ChatbotQueryResponse, "answerEventId" | "sessionId" | "handoffIntent">
+) {
+  try {
+    const plan = planCompiledRoute(question, "shadow", Date.now())
+    const payload =
+      plan.kind === "index"
+        ? shadowLogPayload({
+            question: question.redacted,
+            decision: plan.decision,
+            legacyDecidedBy: response.answerMode,
+          })
+        : shadowLogPayload({
+            question: question.redacted,
+            decision: null,
+            skipped: plan.trace.scope === "out" ? "scope_out" : (plan.trace.pre ?? "skipped"),
+            legacyDecidedBy: response.answerMode,
+          })
+
+    const canonical = canonicalizeClusterQuestion(question.redacted)
+    const { data: clusterRow, error: clusterError } = await supabase
+      .from("question_clusters")
+      .select("id, metadata")
+      .eq("canonical_question", canonical)
+      .maybeSingle()
+
+    if (clusterError || !clusterRow) return
+
+    const row = clusterRow as { id: string; metadata?: Record<string, unknown> | null }
+    const existingMetadata = getContextObject(row.metadata)
+    const prevShadow = getContextObject(existingMetadata.answerIndexShadow)
+    const nextTotal = readNonNegativeInt(prevShadow.total) + 1
+    const nextAnswerCount =
+      readNonNegativeInt(prevShadow.answerCount) + (payload.decision === "answer" ? 1 : 0)
+    const nextAbstainCount =
+      readNonNegativeInt(prevShadow.abstainCount) + (payload.decision === "abstain" ? 1 : 0)
+    const nextSkippedCount =
+      readNonNegativeInt(prevShadow.skippedCount) +
+      (payload.decision !== "answer" && payload.decision !== "abstain" ? 1 : 0)
+
+    const nextMetadata: Record<string, unknown> = {
+      ...existingMetadata,
+      answerIndexShadow: {
+        total: nextTotal,
+        answerCount: nextAnswerCount,
+        abstainCount: nextAbstainCount,
+        skippedCount: nextSkippedCount,
+        lastDecision: payload.decision,
+        lastConf: payload.conf,
+        lastTop: payload.top,
+        lastLegacyMode: response.answerMode,
+        lastUpdatedAt: new Date().toISOString(),
+      },
+    }
+
+    await supabase.from("question_clusters").update({ metadata: nextMetadata }).eq("id", row.id)
+  } catch (error) {
+    console.warn(
+      "[chatbot] failed to record shadow comparison:",
+      error instanceof Error ? error.message : error
+    )
+  }
+}
+
 async function recordNegativeFeedbackOnCluster(
   supabase: ReturnType<typeof createSupabaseAdminClient>,
   params: {
     answerEventId: string
     question: string | null
     category: string | null
+    hasComment?: boolean
   }
 ) {
   try {
@@ -7428,13 +7504,7 @@ async function recordNegativeFeedbackOnCluster(
       metadata?: Record<string, unknown> | null
     }
     const existingMetadata = getContextObject(row.metadata)
-    const prevNotHelpfulCount =
-      typeof existingMetadata.notHelpfulCount === "number" &&
-      Number.isFinite(existingMetadata.notHelpfulCount) &&
-      existingMetadata.notHelpfulCount >= 0
-        ? Math.floor(existingMetadata.notHelpfulCount)
-        : 0
-    const nextNotHelpfulCount = prevNotHelpfulCount + 1
+    const nextNotHelpfulCount = readNonNegativeInt(existingMetadata.notHelpfulCount) + 1
 
     const nextMetadata: Record<string, unknown> = {
       ...existingMetadata,
@@ -7442,11 +7512,11 @@ async function recordNegativeFeedbackOnCluster(
       lastNegativeFeedbackAt: new Date().toISOString(),
     }
 
-    // 반복적인 부정 피드백(>= 2회)이 쌓인 클러스터는 회귀 후보로 자동 승격한다.
+    // 코멘트가 포함된 부정 피드백(1회) 또는 2회 이상 누적된 부정 피드백 클러스터는 회귀 후보로 자동 승격한다.
     // 단, 어드민이 명시적으로 비활성화(enabled === false)한 항목은 덮어쓰지 않는다.
     const existingCandidate = getContextObject(existingMetadata.regressionCandidate)
     if (
-      nextNotHelpfulCount >= NEGATIVE_FEEDBACK_REGRESSION_THRESHOLD &&
+      (params.hasComment || nextNotHelpfulCount >= NEGATIVE_FEEDBACK_REGRESSION_THRESHOLD) &&
       existingCandidate.enabled !== false &&
       existingCandidate.enabled !== true
     ) {
@@ -7455,7 +7525,7 @@ async function recordNegativeFeedbackOnCluster(
         expectedCategory: normalizeString(row.category) ?? params.category ?? "general",
         expectedModes: ["direct_answer", "doc_suggestion", "handoff"],
         expectedPathIncludes: null,
-        reason: "negative_feedback",
+        reason: params.hasComment ? "negative_feedback_comment" : "negative_feedback",
         addedAt: new Date().toISOString(),
       }
     }
@@ -7542,6 +7612,7 @@ export async function saveChatbotFeedback(raw: unknown) {
       answerEventId,
       question: normalizeString(answerEventRecord.normalized_question) ?? null,
       category: normalizeString(answerEventRecord.detected_category) ?? null,
+      hasComment: Boolean(comment),
     })
   }
 
@@ -7785,6 +7856,14 @@ async function computeChatbotStats(from: string, to: string | undefined) {
       categories: [],
       channelHandoffs: summarizeChannelHandoffs([]),
       avgConfidence: null,
+      answerIndexShadow: {
+        clusterCount: 0,
+        totalEvaluated: 0,
+        answerCount: 0,
+        abstainCount: 0,
+        skippedCount: 0,
+        hitRate: null as number | null,
+      },
       warning: "Supabase 환경변수가 없어 챗봇 통계를 조회하지 않았습니다.",
     }
   }
@@ -7851,6 +7930,13 @@ async function computeChatbotStats(from: string, to: string | undefined) {
 
   const clusterIds = Array.from(new Set(rows.map((row) => row.cluster_id).filter((id) => UUID_RE.test(id))))
   const regressionCandidateClusterIds = new Set<string>()
+  const shadowStats = {
+    clusterCount: 0,
+    totalEvaluated: 0,
+    answerCount: 0,
+    abstainCount: 0,
+    skippedCount: 0,
+  }
 
   if (clusterIds.length > 0) {
     const { data: clusterRows, error: clusterError } = await supabase
@@ -7863,6 +7949,15 @@ async function computeChatbotStats(from: string, to: string | undefined) {
     for (const row of (clusterRows ?? []) as QuestionClusterMetadataRow[]) {
       if (getRegressionCandidateMetadata(row.metadata)) {
         regressionCandidateClusterIds.add(row.id)
+      }
+      const shadow = getContextObject(row.metadata?.answerIndexShadow)
+      const total = readNonNegativeInt(shadow.total)
+      if (total > 0) {
+        shadowStats.clusterCount += 1
+        shadowStats.totalEvaluated += total
+        shadowStats.answerCount += readNonNegativeInt(shadow.answerCount)
+        shadowStats.abstainCount += readNonNegativeInt(shadow.abstainCount)
+        shadowStats.skippedCount += readNonNegativeInt(shadow.skippedCount)
       }
     }
   }
@@ -7913,6 +8008,13 @@ async function computeChatbotStats(from: string, to: string | undefined) {
     ),
     channelHandoffs: summarizeChannelHandoffs(handoffRows),
     avgConfidence: averageRatio(confidences),
+    answerIndexShadow: {
+      ...shadowStats,
+      hitRate:
+        shadowStats.totalEvaluated === 0
+          ? null
+          : Number((shadowStats.answerCount / shadowStats.totalEvaluated).toFixed(4)),
+    },
   }
 }
 

@@ -286,4 +286,234 @@ describe("chatbot archiving guarantee & negative feedback back-propagation", () 
     expect(currentClusterMetadata.notHelpfulCount).toBe(3)
     expect(currentClusterMetadata.regressionCandidate).toMatchObject({ enabled: false })
   })
+
+  it("promotes immediately to regressionCandidate on the first not_helpful feedback when a comment is provided", async () => {
+    stubSupabaseEnv()
+    mockNextCache()
+
+    let currentClusterMetadata: Record<string, unknown> = {
+      source: "chatbot_mvp_exact_match",
+    }
+
+    const from = vi.fn((table: string) => {
+      if (table === "chatbot_answer_events") {
+        return {
+          select: () => ({
+            eq: () => ({
+              eq: () => ({
+                maybeSingle: async () => ({
+                  data: {
+                    id: answerEventId,
+                    normalized_question: "결제 수단 변경 방법",
+                    detected_category: "pricing",
+                  },
+                  error: null,
+                }),
+              }),
+            }),
+          }),
+        }
+      }
+      if (table === "chatbot_feedback") {
+        return { insert: async () => ({ error: null }) }
+      }
+      if (table === "question_cluster_events") {
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({ data: { cluster_id: clusterId }, error: null }),
+            }),
+          }),
+        }
+      }
+      if (table === "question_clusters") {
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({
+                data: { id: clusterId, category: "pricing", metadata: currentClusterMetadata },
+                error: null,
+              }),
+            }),
+          }),
+          update: (patch: { metadata: Record<string, unknown> }) => ({
+            eq: async () => {
+              currentClusterMetadata = patch.metadata
+              return { error: null }
+            },
+          }),
+        }
+      }
+      throw new Error(`unexpected table: ${table}`)
+    })
+
+    vi.doMock("@/lib/supabase/admin", () => ({
+      createSupabaseAdminClient: vi.fn(() => ({ from })),
+    }))
+    vi.doMock("@/lib/chatbot/channel-handoff", () => ({
+      maybeCreateChannelTalkFeedbackHandoff: vi.fn().mockResolvedValue(undefined),
+      maybeCreateChannelTalkHandoff: vi.fn(),
+    }))
+
+    const { saveChatbotFeedback } = await import("@/lib/chatbot/service")
+    await saveChatbotFeedback({
+      answerEventId,
+      sessionId,
+      rating: "not_helpful",
+      comment: "최신 요금제 안내와 다릅니다.",
+    })
+
+    expect(currentClusterMetadata.notHelpfulCount).toBe(1)
+    expect(currentClusterMetadata.regressionCandidate).toMatchObject({
+      enabled: true,
+      expectedCategory: "pricing",
+      reason: "negative_feedback_comment",
+    })
+  })
+
+  it("persists answerIndexShadow summary during shadow mode and aggregates it in getChatbotStats", async () => {
+    stubSupabaseEnv()
+    vi.stubEnv("CHATBOT_ANSWER_ROUTER", "shadow")
+    mockNextCache()
+
+    let clusterMetadata: Record<string, unknown> = {
+      source: "chatbot_mvp_exact_match",
+    }
+    const infoSpy = vi.spyOn(console, "info").mockImplementation(() => {})
+
+    const from = vi.fn((table: string) => {
+      if (table === "chat_sessions") {
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({ data: { id: sessionId, anonymous_id: "anon-1" }, error: null }),
+            }),
+          }),
+        }
+      }
+      if (table === "chat_messages") {
+        return {
+          insert: () => ({ select: () => ({ single: async () => ({ data: { id: "msg-1" }, error: null }) }) }),
+        }
+      }
+      if (table === "chatbot_answer_events") {
+        return {
+          insert: () => ({ select: () => ({ single: async () => ({ data: { id: answerEventId }, error: null }) }) }),
+          select: () => ({
+            gte: () => ({
+              order: () => ({
+                limit: async () => ({ data: [], error: null }),
+              }),
+            }),
+          }),
+        }
+      }
+      if (table === "question_clusters") {
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({
+                data: { id: clusterId, sample_questions: ["상담원 연결해 주세요"], metadata: clusterMetadata },
+                error: null,
+              }),
+            }),
+            in: async () => ({
+              data: [{ id: clusterId, metadata: clusterMetadata }],
+              error: null,
+            }),
+          }),
+          update: (patch: { metadata?: Record<string, unknown> }) => {
+            const builder = {
+              eq: () => builder,
+              select: async () => ({ data: [{ id: clusterId }], error: null }),
+              then: (resolve: (val: { error: null }) => void) => {
+                if (patch.metadata) clusterMetadata = patch.metadata
+                resolve({ error: null })
+              },
+            }
+            return builder
+          },
+        }
+      }
+      if (table === "v_chatbot_daily_question_stats") {
+        return {
+          select: () => ({
+            gte: () => ({
+              order: async () => ({
+                data: [
+                  {
+                    day: "2026-11-23",
+                    cluster_id: clusterId,
+                    question_label: "상담원 연결해 주세요",
+                    detected_category: "general",
+                    question_count: 1,
+                    unresolved_count: 0,
+                    handoff_count: 1,
+                    direct_answer_count: 0,
+                    avg_confidence: 0.9,
+                  },
+                ],
+                error: null,
+              }),
+            }),
+          }),
+        }
+      }
+      if (table === "v_chatbot_feedback_stats") {
+        return {
+          select: () => ({
+            order: () => ({
+              limit: async () => ({ data: [], error: null }),
+            }),
+          }),
+        }
+      }
+      if (table === "chatbot_channel_handoffs") {
+        return {
+          select: () => ({
+            gte: () => ({
+              order: () => ({
+                limit: async () => ({ data: [], error: null }),
+              }),
+            }),
+          }),
+        }
+      }
+      if (table === "question_cluster_events" || table === "docs_search_events" || table === "chatbot_answer_citations") {
+        return { insert: async () => ({ error: null }) }
+      }
+      throw new Error(`unexpected table: ${table}`)
+    })
+
+    vi.doMock("@/lib/supabase/admin", () => ({
+      createSupabaseAdminClient: vi.fn(() => ({ from })),
+    }))
+    vi.doMock("@/lib/chatbot/channel-handoff", () => ({
+      maybeCreateChannelTalkHandoff: vi.fn().mockResolvedValue(undefined),
+      maybeCreateChannelTalkFeedbackHandoff: vi.fn().mockResolvedValue(undefined),
+    }))
+
+    const { handleChatbotQuery, getChatbotStats } = await import("@/lib/chatbot/service")
+    await handleChatbotQuery({
+      message: "상담원 연결해 주세요",
+      sessionId,
+      anonymousId: "anon-1",
+    })
+
+    // 테스트 환경(after 없음)에서 백그라운드 persistExchange 가 끝날 때까지 잠시 대기
+    await vi.waitFor(() => {
+      expect(clusterMetadata.answerIndexShadow).toBeDefined()
+    })
+    expect(infoSpy).toHaveBeenCalledWith(expect.stringContaining("[chatbot] answer-index shadow"))
+    expect(clusterMetadata.answerIndexShadow).toMatchObject({
+      total: 1,
+      lastLegacyMode: "handoff",
+    })
+
+    const stats = await getChatbotStats(new URLSearchParams({ from: "2026-11-23" }))
+    expect(stats.answerIndexShadow).toMatchObject({
+      clusterCount: 1,
+      totalEvaluated: 1,
+    })
+  })
 })
