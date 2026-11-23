@@ -29,9 +29,15 @@
  * 모델 호출이 실패하면(연결 없음·차단기·402 등 접근 거절·토큰 실패·시간 초과·HTTP 오류·파싱 실패) 결정형 판정 그대로다.
  * compiled 경로는 MODEL_UNAVAILABLE_ANSWER 를 쓰지 않는다.
  *
- * 이 파일은 모델을 직접 부르지 않는다: 호출 함수(AnswerCardPickRequest, lib/chatbot/llm.ts requestAnswerCardPick)를 받는다.
- * 질문당 호출 함수는 한 번만 부르고, 호출 함수는 basic 1순위 모델 하나에 HTTP 요청을 한 번 보낸다(실패해도 다음 모델로 넘어가지 않는다).
- * 시간 예산은 CHATBOT_ASSIST_TIMEOUT_MS(기본 2,500ms)이고, 호출 함수가 예산을 넘겨도 여기서 끊는다.
+ * 이 파일은 모델을 직접 부르지 않는다: 호출 함수(AnswerCardPickRequest)를 받는다. 서비스는 lib/chatbot/claude/card-pick.ts
+ * createAssistPickRequests 로 만든 고르기(②)·올림(③) 함수를 넘긴다. 기본 env 에서 고르기는 llm.ts 와 같은 basic 1순위 Gemini 모델 하나에
+ * HTTP 요청 한 번이다(실패해도 다음 모델로 넘어가지 않는다). 업체(CHATBOT_ASSIST_PICK_PROVIDER)·업체 간 대체(CHATBOT_ASSIST_CROSS_FALLBACK)는
+ * 고르기 함수 안에서 정한다.
+ * 고르기 시간 예산은 CHATBOT_ASSIST_TIMEOUT_MS(기본 2,500ms)이고, 호출 함수가 예산을 넘겨도 여기서 끊는다.
+ *
+ * 올림(③, 기본 꺼짐, escalate 함수를 넘길 때만): 고르기가 성공했고 escalationTrigger((a) 고른 답 카드 ≠ 결정형 답 카드, (b) 0 인데 결정형
+ * 못 찾음이고 NODOC 신호 없음, (c) 넓힌 질문·두 조각·화남/반복)가 걸리면 같은 지시문·입력으로 한 번 더 부른다(질문당 최대 1회). 올림의
+ * 고름이 최종이고 받아들이는 규칙은 같다. 올림 호출이 실패하면 결정형 판정 그대로, 하루 상한·키 없음·마감이면 올리지 않고 고르기 결과 그대로.
  */
 import { absentCoveredBy, checkCandidate, scoreNegatives, type CandidateCheck } from "./checks"
 import type { CompiledAnswerIndex } from "./compile"
@@ -41,7 +47,9 @@ import { scoreCandidates } from "./score"
 import type {
   AnswerAssistMode,
   AnswerCard,
+  AnswerIndexAssistEscalation,
   AnswerIndexAssistTrace,
+  AnswerIndexAssistUsage,
   AnswerIndexDecision,
   AnswerIndexUnit,
 } from "./types"
@@ -87,10 +95,40 @@ export type AnswerCardPickFailure =
   | "http_error"
   | "parse_error"
   | "error"
+  /** Claude 안전 분류기 거절(stop_reason refusal). */
+  | "refusal"
+  /** Claude 하루 상한(CHATBOT_CLAUDE_DAILY_BUDGET_USD)에 걸려 부르지 않음. 실패로 보지 않는다(올림·대체를 끈 것과 같다). */
+  | "budget"
+
+/** 고르기 업체. */
+export type AnswerCardPickProvider = "gemini" | "claude"
+
+/** Claude 호출 한 번의 토큰·추정 비용(lib/chatbot/claude/pricing.ts). Gemini 호출은 남기지 않는다. */
+export interface AnswerCardPickCallUsage {
+  stage: "pick" | "cross" | "escalate"
+  model: string
+  inputTokens: number
+  outputTokens: number
+  cacheReadInputTokens: number
+  cacheCreationInputTokens: number
+  usd: number
+}
+
+/**
+ * 호출 함수가 덧붙일 수 있는 칸(업체 고르기·대체 층, lib/chatbot/claude/card-pick.ts). llm.ts requestAnswerCardPick 은 붙이지 않는다.
+ * crossFallback: 1순위 Gemini 가 실패해 Claude 로 다시 골랐으면 그 실패(from 모델·이유).
+ */
+interface AnswerCardPickOutcomeExtras {
+  provider?: AnswerCardPickProvider
+  usage?: AnswerCardPickCallUsage[]
+  crossFallback?: { from: string | null; reason: AnswerCardPickFailure; status: number | null }
+  /** 하루 상한 때문에 Claude(고르기·대체)를 건너뛰었는지. */
+  budgetBlocked?: boolean
+}
 
 export type AnswerCardPickOutcome =
-  | { ok: true; pick: number; model: string }
-  | { ok: false; reason: AnswerCardPickFailure; model: string | null }
+  | ({ ok: true; pick: number; model: string } & AnswerCardPickOutcomeExtras)
+  | ({ ok: false; reason: AnswerCardPickFailure; model: string | null } & AnswerCardPickOutcomeExtras)
 
 /** 모델 호출 함수(lib/chatbot/llm.ts requestAnswerCardPick). instruction 은 지시문, input 은 질문·후보 글. */
 export type AnswerCardPickRequest = (args: { instruction: string; input: string; timeoutMs: number }) => Promise<AnswerCardPickOutcome>
@@ -433,8 +471,74 @@ export interface AnswerAssistInput {
   isPolicyTopic?: () => boolean
   /** 시간 예산(없으면 CHATBOT_ASSIST_TIMEOUT_MS). */
   timeoutMs?: number
+  /**
+   * 올림(③, CHATBOT_ASSIST_ESCALATE) 호출 함수. 없으면 올리지 않는다(지금 동작). 고르기(②)가 성공했고 escalationTrigger 가 걸리면
+   * 같은 지시문·입력으로 한 번 더 부르고, 그 고름을 최종으로 받아들이는 규칙에 넣는다. 질문당 최대 1회.
+   */
+  escalate?: AnswerCardPickRequest
+  /** 올림 한 번의 시간 상한(기본 ESCALATE_TIMEOUT_DEFAULT_MS). */
+  escalateTimeoutMs?: number
+  /** 라우트 마감 시각(now() 기준 ms). 있으면 올림 예산은 마감까지 남은 시간을 넘지 않는다. */
+  deadlineAt?: number
+  /** 올림 조건 (c)의 신호: 대화 맥락으로 넓힌 질문·화남·반복 말투(두 조각은 analysis.parts 로 본다). */
+  escalateSignals?: AssistEscalationSignals
   env?: Env
   now?: () => number
+}
+
+export interface AssistEscalationSignals {
+  expanded?: boolean
+  angry?: boolean
+  repeated?: boolean
+}
+
+/** 올림 한 번의 시간 상한 기본값(CHATBOT_ASSIST_ESCALATE_TIMEOUT_MS). */
+export const ESCALATE_TIMEOUT_DEFAULT_MS = 3000
+/** 남은 시간이 이보다 짧으면 올리지 않는다. */
+const ESCALATE_MIN_MS = 300
+
+export type AssistEscalationTrigger = "disagree" | "none_vs_abstain" | "context"
+
+/**
+ * 올림 조건(③). 순서대로 본다.
+ * (a) disagree: 고른 번호가 카드이고 결정형 1위(답 판정의 카드)와 다르며 둘 다 답 카드(공백 카드가 아님).
+ * (b) none_vs_abstain: 고름이 0(없음)이고 결정형이 못 찾음(abstain)이며 NODOC 신호(hasNoDocSignal)가 없다.
+ * (c) context: 대화 맥락으로 넓힌 질문·두 조각 질문(analysis.parts)·말투가 화남/반복.
+ * 번호가 범위 밖이면 올리지 않는다(결정형 그대로).
+ */
+export function escalationTrigger(
+  index: CompiledAnswerIndex,
+  analysis: QuestionAnalysis,
+  decision: AnswerIndexDecision,
+  candidates: readonly Pick<AssistCandidate, "card" | "id">[],
+  pick: number,
+  signals: AssistEscalationSignals = {}
+): AssistEscalationTrigger | null {
+  if (!Number.isInteger(pick) || pick < -1 || pick > candidates.length) return null
+  if (pick >= 1 && decision.kind === "answer" && decision.card) {
+    const candidate = candidates[pick - 1]
+    const compiled = index.cards[candidate.card]
+    if (candidate.id !== decision.card && compiled && compiled.kind !== "gap") return "disagree"
+  }
+  if (pick === 0 && decision.kind === "abstain" && !hasNoDocSignal(analysis.whole)) return "none_vs_abstain"
+  if (signals.expanded || analysis.parts !== null || signals.angry || signals.repeated) return "context"
+  return null
+}
+
+/** 질문 하나의 Claude 호출 usage 를 흔적 꼴로 합친다. */
+function sumUsage(entries: readonly AnswerCardPickCallUsage[]): AnswerIndexAssistUsage | undefined {
+  if (entries.length === 0) return undefined
+  const total = entries.reduce(
+    (sum, entry) => ({
+      inputTokens: sum.inputTokens + entry.inputTokens,
+      outputTokens: sum.outputTokens + entry.outputTokens,
+      cacheReadInputTokens: sum.cacheReadInputTokens + entry.cacheReadInputTokens,
+      cacheCreationInputTokens: sum.cacheCreationInputTokens + entry.cacheCreationInputTokens,
+      usd: sum.usd + entry.usd,
+    }),
+    { inputTokens: 0, outputTokens: 0, cacheReadInputTokens: 0, cacheCreationInputTokens: 0, usd: 0 }
+  )
+  return { ...total, usd: Number(total.usd.toFixed(8)), calls: entries.map((entry) => ({ ...entry })) }
 }
 
 export interface AnswerAssistResult {
@@ -470,6 +574,17 @@ async function requestWithDeadline(
   }
 }
 
+/** 업체 고르기·대체 층이 붙인 칸 → 흔적 칸. 붙이지 않은 호출(llm.ts requestAnswerCardPick)이면 빈 객체(지금 흔적과 같다). */
+function providerTraceFields(outcome: AnswerCardPickOutcome, escalateOn: boolean): Partial<AnswerIndexAssistTrace> {
+  if (!outcome.provider) return {}
+  return {
+    provider: outcome.provider,
+    crossFallback: Boolean(outcome.crossFallback),
+    ...(outcome.budgetBlocked ? { budgetBlocked: true } : {}),
+    ...(escalateOn ? { escalated: false } : {}),
+  }
+}
+
 /** 모델 선택 층(§10). off 면 결정형 판정 그대로, 흔적 없음. 예외를 던지지 않는다. */
 export async function maybeAssistWithModel(input: AnswerAssistInput): Promise<AnswerAssistResult> {
   const { decision, mode } = input
@@ -501,32 +616,121 @@ export async function maybeAssistWithModel(input: AnswerAssistInput): Promise<An
   const candidates = assistCandidates(input.index, input.analysis, env)
   if (candidates.length === 0) return { decision, trace: trace({ rejectReason: "no_candidates" }), modelFailure: null }
 
-  const started = now()
-  const outcome = await requestWithDeadline(input.request, {
+  const pickArgs = {
     instruction: ANSWER_CARD_PICK_INSTRUCTION,
     input: buildAnswerCardPickInput(input.question, candidates),
     timeoutMs: input.timeoutMs ?? assistTimeoutMs(env),
-  })
+  }
+  const started = now()
+  const outcome = await requestWithDeadline(input.request, pickArgs)
   const ms = Math.max(0, now() - started)
+  const escalateOn = Boolean(input.escalate)
+  const usageEntries: AnswerCardPickCallUsage[] = [...(outcome.usage ?? [])]
+  const extras = providerTraceFields(outcome, escalateOn)
+  const withUsage = (fields: Partial<AnswerIndexAssistTrace>): Partial<AnswerIndexAssistTrace> => {
+    const usage = sumUsage(usageEntries)
+    return usage ? { ...fields, usage } : fields
+  }
   if (!outcome.ok) {
     return {
       decision,
-      trace: trace({ used: true, model: outcome.model, ms, rejectReason: outcome.reason }),
-      modelFailure: outcome.reason,
+      trace: trace(withUsage({ used: true, model: outcome.model, ms, rejectReason: outcome.reason, ...extras })),
+      // 하루 상한으로 부르지 않은 것은 실패가 아니다(Gemini 고르기가 따로 실패한 경우는 그 이유가 reason 이다).
+      modelFailure: outcome.reason === "budget" ? null : outcome.reason,
     }
   }
-  const resolved = resolveAssistPick(input.index, input.analysis, decision, candidates, outcome.pick, { isPolicyTopic: input.isPolicyTopic, env })
+  const resolveOptions = { isPolicyTopic: input.isPolicyTopic, env }
+  const resolved = resolveAssistPick(input.index, input.analysis, decision, candidates, outcome.pick, resolveOptions)
+  const firstFields: Partial<AnswerIndexAssistTrace> = {
+    used: true,
+    pick: outcome.pick,
+    pickCard: resolved.pickCard,
+    model: outcome.model,
+    ms,
+    accepted: resolved.accepted,
+    rejectReason: resolved.rejectReason,
+    ...extras,
+  }
+
+  const trigger = input.escalate
+    ? escalationTrigger(input.index, input.analysis, decision, candidates, outcome.pick, input.escalateSignals)
+    : null
+  if (!input.escalate || !trigger) {
+    return { decision: resolved.decision, trace: trace(withUsage(firstFields)), modelFailure: null }
+  }
+
+  // ③ 올림: 같은 지시문·입력으로 한 번 더. 결과가 최종(받아들이는 규칙 같음). 실패하면 결정형 판정 그대로.
+  const first = { provider: outcome.provider ?? null, model: outcome.model, pick: outcome.pick, pickCard: resolved.pickCard }
+  const escalation = (fields: Partial<AnswerIndexAssistEscalation>): AnswerIndexAssistEscalation => ({
+    trigger,
+    skipped: null,
+    model: null,
+    pick: null,
+    ms: null,
+    failure: null,
+    first,
+    ...fields,
+  })
+  const remaining = input.deadlineAt !== undefined ? input.deadlineAt - now() : Number.POSITIVE_INFINITY
+  const escalateTimeoutMs = Math.min(input.escalateTimeoutMs ?? ESCALATE_TIMEOUT_DEFAULT_MS, remaining)
+  if (escalateTimeoutMs < ESCALATE_MIN_MS) {
+    return {
+      decision: resolved.decision,
+      trace: trace(withUsage({ ...firstFields, escalation: escalation({ skipped: "deadline" }) })),
+      modelFailure: null,
+    }
+  }
+  const escStarted = now()
+  const esc = await requestWithDeadline(input.escalate, { ...pickArgs, timeoutMs: escalateTimeoutMs })
+  const escMs = Math.max(0, now() - escStarted)
+  usageEntries.push(...(esc.usage ?? []))
+  if (!esc.ok && (esc.reason === "budget" || esc.reason === "no_connection")) {
+    // 하루 상한·키 없음: 올림을 끈 것과 같다(고르기 결과 그대로).
+    return {
+      decision: resolved.decision,
+      trace: trace(
+        withUsage({
+          ...firstFields,
+          ...(esc.budgetBlocked ? { budgetBlocked: true } : {}),
+          escalation: escalation({ skipped: esc.reason, model: esc.model }),
+        })
+      ),
+      modelFailure: null,
+    }
+  }
+  if (!esc.ok) {
+    return {
+      decision,
+      trace: trace(
+        withUsage({
+          ...firstFields,
+          ms: ms + escMs,
+          accepted: false,
+          rejectReason: `escalation_${esc.reason}`,
+          escalated: true,
+          escalation: escalation({ model: esc.model, ms: escMs, failure: esc.reason }),
+        })
+      ),
+      modelFailure: esc.reason,
+    }
+  }
+  const final = resolveAssistPick(input.index, input.analysis, decision, candidates, esc.pick, resolveOptions)
   return {
-    decision: resolved.decision,
-    trace: trace({
-      used: true,
-      pick: outcome.pick,
-      pickCard: resolved.pickCard,
-      model: outcome.model,
-      ms,
-      accepted: resolved.accepted,
-      rejectReason: resolved.rejectReason,
-    }),
+    decision: final.decision,
+    trace: trace(
+      withUsage({
+        ...firstFields,
+        pick: esc.pick,
+        pickCard: final.pickCard,
+        model: esc.model,
+        ...(esc.provider ? { provider: esc.provider } : {}),
+        ms: ms + escMs,
+        accepted: final.accepted,
+        rejectReason: final.rejectReason,
+        escalated: true,
+        escalation: escalation({ model: esc.model, pick: esc.pick, ms: escMs }),
+      })
+    ),
     modelFailure: null,
   }
 }

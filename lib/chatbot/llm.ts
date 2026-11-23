@@ -1263,26 +1263,33 @@ export function answerCardPickModel(provider: ChatbotGeminiProvider = configured
   return resolveModelChain("basic", provider)[0]
 }
 
+/** Gemini 고르기 결과 + HTTP 상태(업체 간 대체 판단용, lib/chatbot/claude/card-pick.ts). */
+export interface GeminiAnswerCardPickResult {
+  outcome: AnswerCardPickOutcome
+  /** HTTP 응답 상태. 응답이 없었으면(차단기·연결 없음·네트워크 오류·시간 초과) null. */
+  status: number | null
+}
+
 /**
- * 답 카드 번호 하나를 고르게 한다(basic 1순위 모델에 HTTP 요청 한 번). 실패는 이유와 함께 돌려준다(던지지 않는다):
- * no_connection(연결 없음)·circuit_open(차단기)·access_denied(401·402·확인된 모델의 403)·auth_error(Vertex 토큰 실패)·
- * timeout(예산 소진)·http_error(404·429·5xx·확인 안 된 모델의 403 등)·parse_error·error(네트워크 오류 등).
+ * requestAnswerCardPick 과 같은 요청에 HTTP 상태를 덧붙여 돌려준다. model 을 주면(CHATBOT_ASSIST_PICK_MODEL) 그 모델 하나에, 없으면
+ * basic 1순위 모델에 보낸다. 요청 본문·실패 처리는 requestAnswerCardPick 과 같다.
  */
-export async function requestAnswerCardPick({
+export async function requestGeminiAnswerCardPick({
   instruction,
   input,
   timeoutMs,
+  model: modelOverride,
 }: {
   instruction: string
-  /** 가린 질문과 후보 줄(assist.ts buildAnswerCardPickInput). */
   input: string
   timeoutMs: number
-}): Promise<AnswerCardPickOutcome> {
+  model?: string | null
+}): Promise<GeminiAnswerCardPickResult> {
   const connection = getChatbotGeminiConnection()
-  if (!connection) return { ok: false, reason: "no_connection", model: null }
-  if (!instruction.trim() || !input.trim()) return { ok: false, reason: "error", model: null }
+  if (!connection) return { outcome: { ok: false, reason: "no_connection", model: null }, status: null }
+  if (!instruction.trim() || !input.trim()) return { outcome: { ok: false, reason: "error", model: null }, status: null }
 
-  const model = answerCardPickModel(connection.provider)
+  const model = modelOverride?.trim() || answerCardPickModel(connection.provider)
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), Math.max(1, timeoutMs))
 
@@ -1297,14 +1304,17 @@ export async function requestAnswerCardPick({
       controller.signal
     )
 
-    if (!res) return { ok: false, reason: "circuit_open", model }
+    if (!res) return { outcome: { ok: false, reason: "circuit_open", model }, status: null }
     if (!res.ok) {
       warnGeminiCallIssue(model, "card_pick_http_error", {
         status: res.status,
         provider: connection.provider,
         apiStatus: await readGeminiErrorStatus(res),
       })
-      return { ok: false, reason: isConnectionAccessDenied(model, res.status) ? "access_denied" : "http_error", model }
+      return {
+        outcome: { ok: false, reason: isConnectionAccessDenied(model, res.status) ? "access_denied" : "http_error", model },
+        status: res.status,
+      }
     }
 
     const data = (await res.json()) as {
@@ -1314,17 +1324,31 @@ export async function requestAnswerCardPick({
     const pick = parseAnswerCardPick(text)
     if (pick === null) {
       warnGeminiCallIssue(model, "card_pick_parse_error", { finishReason: data.candidates?.[0]?.finishReason ?? null })
-      return { ok: false, reason: "parse_error", model }
+      return { outcome: { ok: false, reason: "parse_error", model }, status: res.status }
     }
-    return { ok: true, pick, model }
+    return { outcome: { ok: true, pick, model }, status: res.status }
   } catch (error) {
     warnGeminiCallIssue(model, "card_pick_request_error", { provider: connection.provider, ...geminiErrorDetails(error) })
-    if (isVertexAuthError(error)) return { ok: false, reason: "auth_error", model }
-    if (controller.signal.aborted) return { ok: false, reason: "timeout", model }
-    return { ok: false, reason: "error", model }
+    if (isVertexAuthError(error)) return { outcome: { ok: false, reason: "auth_error", model }, status: null }
+    if (controller.signal.aborted) return { outcome: { ok: false, reason: "timeout", model }, status: null }
+    return { outcome: { ok: false, reason: "error", model }, status: null }
   } finally {
     clearTimeout(timeout)
   }
+}
+
+/**
+ * 답 카드 번호 하나를 고르게 한다(basic 1순위 모델에 HTTP 요청 한 번). 실패는 이유와 함께 돌려준다(던지지 않는다):
+ * no_connection(연결 없음)·circuit_open(차단기)·access_denied(401·402·확인된 모델의 403)·auth_error(Vertex 토큰 실패)·
+ * timeout(예산 소진)·http_error(404·429·5xx·확인 안 된 모델의 403 등)·parse_error·error(네트워크 오류 등).
+ */
+export async function requestAnswerCardPick(args: {
+  instruction: string
+  /** 가린 질문과 후보 줄(assist.ts buildAnswerCardPickInput). */
+  input: string
+  timeoutMs: number
+}): Promise<AnswerCardPickOutcome> {
+  return (await requestGeminiAnswerCardPick(args)).outcome
 }
 
 // 분류·인텐트별 요구사항 문장. 스트리밍과 비스트리밍이 같은 문장을 쓴다.
