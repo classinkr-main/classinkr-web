@@ -72,7 +72,7 @@ export async function POST(req: NextRequest) {
       createdBy: actor,
     })
 
-    revalidateTag(ADMIN_CRM_REVENUE_CACHE_TAG, "max")
+    revalidateTag(ADMIN_CRM_REVENUE_CACHE_TAG, { expire: 0 })
     return NextResponse.json({ deal }, { status: 201 })
   } catch (error) {
     console.error("[POST /api/admin/crm/deals-lite]", error)
