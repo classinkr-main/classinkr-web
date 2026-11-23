@@ -679,30 +679,12 @@ export const STANDARD_QUOTE_TEMPLATES: StandardQuoteTemplatePreset[] = [
       {
         id: "recharge_200",
         label: "200만 기본",
-        description: "최소 기본 충전 금액",
+        // 금액 프리셋은 이것 하나다(2026-11-23). 400만·1,000만 프리셋은 금액을 바꾸지 않아 이름과 합계가
+        // 어긋났다 — 기본 200만으로 고정하고, 금액은 작성 창에서 직접 고친다(위 priceEditable).
+        description: "기본 충전 금액 — 작성 창에서 금액을 직접 수정합니다",
         templateId: "business_recharge",
         optionSelections: {
           credit_validity: "1_year",
-          support_setup: true,
-        },
-      },
-      {
-        id: "recharge_400",
-        label: "400만 패키지",
-        description: "중형 학원 권장 충전",
-        templateId: "business_recharge",
-        optionSelections: {
-          credit_validity: "1_year",
-          support_setup: true,
-        },
-      },
-      {
-        id: "recharge_1000",
-        label: "1,000만 패키지",
-        description: "대형 기관 일괄 충전",
-        templateId: "business_recharge",
-        optionSelections: {
-          credit_validity: "2_year",
           support_setup: true,
         },
       },
