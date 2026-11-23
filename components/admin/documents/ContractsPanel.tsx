@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { adminFetch, adminFetchJsonCached, clearAdminRequestCache } from "@/lib/admin-client"
 import { useUrlState } from "@/lib/use-url-state"
 import type { Contract, Partner, Receipt } from "@/lib/supabase/database.types"
+import type { ContractDocumentListItem } from "@/lib/portal/types"
 import {
   CONTRACT_QUEUE_GROUPS,
   getContractQueueKey,
@@ -39,6 +40,62 @@ type PartnerOption = Pick<Partner, "id" | "name">
 
 // V2 견적 전환은 HardwareQuotesPanel이 /api/portal/quotes/[id]/convert로 직접 처리(딜·고객 FK 연결) —
 // 이 폼은 V1 legacy 계약의 수동 신설 전용이라 외부 프리필 요청 프롭을 받지 않는다.
+
+// 계약서 탭은 두 원천을 한 목록에 합쳐 보여 준다.
+//  - direct: 이 화면에서 직접 작성한 V1 계약(contracts, 파트너 기준). 발송·서명 링크·우리 서명·삭제를 여기서 한다.
+//  - converted: 견적 "계약 전환"으로 만든 계약(contract_documents, 딜·고객 기준). 지금은 보기만 한다 —
+//    고객용 공개 서명 페이지(/share/contract/[token])가 V1 토큰만 읽어 서명 링크를 내줄 수 없다.
+type ContractRowBase = {
+  id: string
+  contract_number: string
+  title: string
+  party: string
+  total_amount: number
+  /** 작업 큐 판정용 상태(V1 어휘). */
+  status: string
+  partner_signed_at: string | null
+  admin_signed_at: string | null
+  created_at: string
+  updated_at: string
+  valid_from: string | null
+  valid_until: string | null
+}
+type ContractRow =
+  | (ContractRowBase & { source: "direct"; contract: Contract })
+  | (ContractRowBase & { source: "converted"; doc: ContractDocumentListItem })
+
+// 전환 계약 상태를 큐 판정 어휘로 옮긴다. shared = 발송됨, admin_signed = 우리 서명까지 끝난 확정
+// (서명 API가 이 시점에 매출 원장 초안을 제안한다).
+function toQueueStatus(status: ContractDocumentListItem["status"]) {
+  if (status === "shared") return "sent"
+  if (status === "admin_signed") return "completed"
+  return status
+}
+
+function toConvertedRow(doc: ContractDocumentListItem): ContractRow {
+  return {
+    source: "converted",
+    doc,
+    id: doc.id,
+    contract_number: doc.contract_number,
+    title: doc.title ?? doc.deal_title ?? "계약서",
+    party: doc.customer_name ?? doc.deal_title ?? "고객 미지정",
+    total_amount: doc.total_amount,
+    status: toQueueStatus(doc.status),
+    partner_signed_at: doc.partner_signed_at,
+    admin_signed_at: doc.admin_signed_at,
+    created_at: doc.created_at,
+    updated_at: doc.updated_at,
+    valid_from: doc.valid_from,
+    valid_until: doc.valid_until,
+  }
+}
+
+const CONVERTED_BADGE = (
+  <span className="rounded border border-[#CFE3DA] bg-[#F1F8F5] px-1.5 py-px text-[11px] font-medium text-[#084734]">
+    견적 전환
+  </span>
+)
 
 const EMPTY_CREATE_FORM = {
   partner_id: "",
@@ -125,6 +182,8 @@ function SignatureCanvas({ onSave }: { onSave: (dataUrl: string) => void }) {
 
 export function ContractsPanel() {
   const [contracts, setContracts] = useState<Contract[]>([])
+  const [converted, setConverted] = useState<ContractDocumentListItem[]>([])
+  const [convertedError, setConvertedError] = useState<string | null>(null)
   const [partners, setPartners] = useState<PartnerOption[]>([])
   const [receipts, setReceipts] = useState<Receipt[]>([])
   const [loading, setLoading] = useState(true)
@@ -145,7 +204,11 @@ export function ContractsPanel() {
     setLoadError(null)
     try {
       const [cData, pData, rData] = await Promise.all([
-        adminFetchJsonCached<{ contracts?: Contract[] }>("/api/admin/contracts"),
+        adminFetchJsonCached<{
+          contracts?: Contract[]
+          convertedContracts?: ContractDocumentListItem[]
+          convertedContractsError?: string | null
+        }>("/api/admin/contracts"),
         adminFetchJsonCached<{ summaries?: Array<{ partnerId: string; partnerName: string }> }>(
           "/api/admin/partners?view=summary"
         ),
@@ -153,6 +216,8 @@ export function ContractsPanel() {
         adminFetchJsonCached<{ receipts?: Receipt[] }>("/api/admin/receipts").catch(() => ({ receipts: [] })),
       ])
       setContracts(cData.contracts ?? [])
+      setConverted(cData.convertedContracts ?? [])
+      setConvertedError(cData.convertedContractsError ?? null)
       setPartners((pData.summaries ?? []).map((s) => ({ id: s.partnerId, name: s.partnerName })))
       setReceipts(rData.receipts ?? [])
     } catch (error) {
@@ -210,19 +275,46 @@ export function ContractsPanel() {
     [partners]
   )
 
+  // 직접 작성 계약과 견적 전환 계약을 한 목록으로 합친다.
+  const rows = useMemo<ContractRow[]>(
+    () => [
+      ...contracts.map(
+        (c): ContractRow => ({
+          source: "direct",
+          contract: c,
+          id: c.id,
+          contract_number: c.contract_number,
+          title: c.title,
+          party: partnerName(c.partner_id),
+          total_amount: c.total_amount,
+          status: c.status,
+          partner_signed_at: c.partner_signed_at,
+          admin_signed_at: c.admin_signed_at,
+          created_at: c.created_at,
+          updated_at: c.updated_at,
+          valid_from: c.valid_from,
+          valid_until: c.valid_until,
+        })
+      ),
+      ...converted.map(toConvertedRow),
+    ],
+    [contracts, converted, partnerName]
+  )
+
   // 다음 할 일 기준 묶음. 그룹 순서 = 처리 우선순위, 그룹 안은 최근 변경순.
   const groups = useMemo(() => {
     const q = query.trim().toLowerCase()
     const visible = q
-      ? contracts.filter(
-          (c) =>
-            c.contract_number.toLowerCase().includes(q) ||
-            c.title.toLowerCase().includes(q) ||
-            partnerName(c.partner_id).toLowerCase().includes(q)
+      ? rows.filter(
+          (row) =>
+            row.contract_number.toLowerCase().includes(q) ||
+            row.title.toLowerCase().includes(q) ||
+            row.party.toLowerCase().includes(q) ||
+            (row.source === "converted" && (row.doc.source_quote_number ?? "").toLowerCase().includes(q))
         )
-      : contracts
+      : rows
     return groupContracts(visible)
-  }, [contracts, query, partnerName])
+  }, [rows, query])
 
   const visibleContracts = groups.flatMap((group) => group.items)
   const current = visibleContracts.find((c) => c.id === selectedId) ?? visibleContracts[0] ?? null
@@ -271,7 +363,7 @@ export function ContractsPanel() {
     load()
   }
 
-  function getListStatus(c: Contract, key: ContractQueueKey) {
+  function getListStatus(c: ContractRow, key: ContractQueueKey) {
     switch (key) {
       case "sign":
         return { text: `고객 서명 ${formatDay(c.partner_signed_at) ?? ""}`, tone: "go" as const }
@@ -294,6 +386,31 @@ export function ContractsPanel() {
         {copied === c.id ? "복사됨" : "서명 링크 복사"}
       </button>
     )
+  }
+
+  // 견적 전환 계약은 보기만 한다 — 발송·서명 버튼 없이 지금 단계만 알려 준다.
+  function renderConvertedStatus(row: ContractRow & { source: "converted" }, key: ContractQueueKey) {
+    const tone = CONTRACT_QUEUE_GROUPS.find((group) => group.key === key)?.tone ?? "neutral"
+    const from = row.doc.source_quote_number ? `견적 ${row.doc.source_quote_number}에서 ` : "견적에서 "
+    const viewOnly = "이 화면에서는 보기만 할 수 있습니다 — 고객 서명 링크 발송은 아직 지원하지 않습니다."
+    switch (key) {
+      case "sign":
+        return (
+          <NextActionBox
+            tone={tone}
+            label="우리 서명 필요"
+            description={`고객이 ${formatDay(row.partner_signed_at) ?? ""} 서명했습니다. ${viewOnly}`}
+          />
+        )
+      case "await":
+        return <NextActionBox tone={tone} label="고객 서명 대기" description={`공유했지만 고객 서명 전입니다. ${viewOnly}`} />
+      case "draft":
+        return <NextActionBox tone={tone} label="발송 전" description={`${from}전환한 계약입니다. ${viewOnly}`} />
+      case "done":
+        return <NextActionBox tone={tone} label="완료" description="서명이 끝난 계약입니다." />
+      default:
+        return <NextActionBox tone={tone} label="취소" description="취소된 계약입니다. 기록용으로 남아 있습니다." />
+    }
   }
 
   function renderNextAction(c: Contract, key: ContractQueueKey, receipt: Receipt | undefined) {
@@ -360,66 +477,95 @@ export function ContractsPanel() {
     }
   }
 
-  function renderDetail(c: Contract) {
-    const key = getContractQueueKey(c)
-    const receipt = receipts.find((r) => r.contract_id === c.id)
+  function renderDetail(row: ContractRow) {
+    const key = getContractQueueKey(row)
+    const direct = row.source === "direct" ? row.contract : null
+    // 영수증의 contract_id 는 V1 계약만 가리킨다 — 전환 계약에는 연결된 영수증이 없다.
+    const receipt = direct ? receipts.find((r) => r.contract_id === direct.id) : undefined
+    const version = direct ? direct.version : row.source === "converted" ? row.doc.version_number ?? 1 : 1
     const stepDetails = [
-      formatDay(c.created_at),
+      formatDay(row.created_at),
       key === "draft" ? "아직 발송 전" : null,
-      formatDay(c.partner_signed_at) ?? (key === "await" ? "서명 대기 중" : null),
-      formatDay(c.admin_signed_at),
+      formatDay(row.partner_signed_at) ?? (key === "await" ? "서명 대기 중" : null),
+      formatDay(row.admin_signed_at),
       key === "done" ? "계약 확정" : null,
     ]
-    const steps = getContractSteps(c).map((step, index) => ({
+    const steps = getContractSteps(row).map((step, index) => ({
       label: step.label,
       done: step.done,
       detail: stepDetails[index],
       warn: index === 2 && key === "await" && !step.done,
     }))
     const period =
-      c.valid_from || c.valid_until ? `${formatDay(c.valid_from) ?? "—"} ~ ${formatDay(c.valid_until) ?? "—"}` : "—"
+      row.valid_from || row.valid_until
+        ? `${formatDay(row.valid_from) ?? "—"} ~ ${formatDay(row.valid_until) ?? "—"}`
+        : "—"
 
     return (
       <section aria-live="polite" aria-label="계약 상세" className="flex min-w-0 flex-col gap-6 px-7 py-6">
         <DetailHeader
-          mono={c.contract_number}
-          title={`${partnerName(c.partner_id)} · ${c.title}`}
-          meta={`${formatDay(c.created_at) ?? ""} 작성${c.version > 1 ? ` · v${c.version}` : ""}`}
-          amount={formatWon(c.total_amount)}
+          mono={row.contract_number}
+          title={`${row.party} · ${row.title}`}
+          meta={`${formatDay(row.created_at) ?? ""} ${direct ? "작성" : "전환"}${version > 1 ? ` · v${version}` : ""}`}
+          amount={formatWon(row.total_amount)}
           amountNote="계약 금액"
+          badge={direct ? undefined : CONVERTED_BADGE}
         />
 
         <DocChain
           links={[
-            { label: "견적", value: c.quote_id ? "연결됨" : null },
-            { label: "계약", value: c.contract_number, current: true },
+            {
+              label: "견적",
+              value: direct
+                ? direct.quote_id
+                  ? "연결됨"
+                  : null
+                : row.source === "converted"
+                  ? row.doc.source_quote_number
+                  : null,
+            },
+            { label: "계약", value: row.contract_number, current: true },
             { label: "영수증", value: receipt?.receipt_number ?? null },
           ]}
         />
 
-        {renderNextAction(c, key, receipt)}
+        {row.source === "converted" ? renderConvertedStatus(row, key) : renderNextAction(row.contract, key, receipt)}
 
         <div className="grid gap-7 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
           <QueueTimeline title="서명" steps={steps} />
           <div>
             <h3 className="mb-2 text-[11.5px] font-semibold text-[#78736D]">계약 정보</h3>
             <dl className="grid grid-cols-[72px_1fr] gap-x-2.5 gap-y-1.5 text-xs">
-              <dt className="text-[#78736D]">파트너</dt>
-              <dd className="text-[#31302E]">{partnerName(c.partner_id)}</dd>
+              <dt className="text-[#78736D]">{direct ? "파트너" : "고객"}</dt>
+              <dd className="text-[#31302E]">{row.party}</dd>
+              {row.source === "converted" && (
+                <>
+                  <dt className="text-[#78736D]">딜</dt>
+                  <dd className="text-[#31302E]">{row.doc.deal_title ?? "—"}</dd>
+                  <dt className="text-[#78736D]">원본 견적</dt>
+                  <dd className="font-mono text-[#31302E]">{row.doc.source_quote_number ?? "—"}</dd>
+                </>
+              )}
               <dt className="text-[#78736D]">계약 기간</dt>
               <dd className="text-[#31302E]">{period}</dd>
-              <dt className="text-[#78736D]">메모</dt>
-              <dd className="whitespace-pre-wrap text-[#31302E]">{c.notes?.trim() || "—"}</dd>
+              {direct && (
+                <>
+                  <dt className="text-[#78736D]">메모</dt>
+                  <dd className="whitespace-pre-wrap text-[#31302E]">{direct.notes?.trim() || "—"}</dd>
+                </>
+              )}
             </dl>
           </div>
         </div>
 
-        <div className="flex justify-end border-t border-[#f0f0ec] pt-4">
-          <button type="button" onClick={() => void handleDelete(c.id)} className={DANGER_GHOST_BUTTON}>
-            <Trash2 className="h-3.5 w-3.5" />
-            삭제
-          </button>
-        </div>
+        {direct && (
+          <div className="flex justify-end border-t border-[#f0f0ec] pt-4">
+            <button type="button" onClick={() => void handleDelete(direct.id)} className={DANGER_GHOST_BUTTON}>
+              <Trash2 className="h-3.5 w-3.5" />
+              삭제
+            </button>
+          </div>
+        )}
       </section>
     )
   }
@@ -433,7 +579,12 @@ export function ContractsPanel() {
 
   return (
     <div className="mx-auto max-w-7xl space-y-4 p-4 sm:px-6 sm:py-5">
-      {loadError && contracts.length === 0 ? (
+      {convertedError && (
+        <p role="status" className="rounded-lg border border-[#F6D5C5] bg-[#FEF3EE] px-3 py-2 text-xs text-[#B85C33]">
+          {convertedError} 직접 작성한 계약만 보이는 상태입니다 — 새로고침으로 다시 시도하세요.
+        </p>
+      )}
+      {loadError && rows.length === 0 ? (
         <QueueEmptyState
           icon={<AlertCircle className="h-5 w-5 text-[#B43E3E]" />}
           title="계약 목록을 불러오지 못했습니다."
@@ -444,13 +595,13 @@ export function ContractsPanel() {
             </button>
           }
         />
-      ) : loading && contracts.length === 0 ? (
+      ) : loading && rows.length === 0 ? (
         <QueueLoading label="계약서를 불러오는 중입니다." />
-      ) : contracts.length === 0 ? (
+      ) : rows.length === 0 ? (
         <QueueEmptyState
           icon={<FileSignature className="h-5 w-5" />}
           title="아직 계약서가 없습니다."
-          description="계약서를 만들면 여기서 서명 단계 순서로 정리되고, 지금 할 일이 맨 위에 옵니다."
+          description="견적을 계약으로 전환하거나 계약서를 직접 만들면 여기서 서명 단계 순서로 정리되고, 지금 할 일이 맨 위에 옵니다."
           action={
             <button type="button" onClick={openCreateForm} className={SOLID_BUTTON}>
               <Plus className="h-3.5 w-3.5" />
@@ -466,7 +617,7 @@ export function ContractsPanel() {
               <QueueToolbar
                 query={query}
                 onQueryChange={setQuery}
-                placeholder="계약번호, 파트너, 제목"
+                placeholder="계약번호, 고객·파트너, 제목"
                 loading={loading}
                 onRefresh={() => void load()}
                 action={createButton}
@@ -489,10 +640,10 @@ export function ContractsPanel() {
                           key={c.id}
                           selected={c.id === current?.id}
                           onSelect={() => setSelectedId(c.id)}
-                          title={partnerName(c.partner_id)}
+                          title={c.party}
                           subtitle={c.title}
                           amount={formatMan(c.total_amount)}
-                          mono={c.contract_number}
+                          mono={c.source === "converted" ? `${c.contract_number} · 견적 전환` : c.contract_number}
                           status={status.text}
                           statusTone={status.tone}
                         />

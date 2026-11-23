@@ -7,7 +7,10 @@ import {
 import { authorizeForAccount, getActorInfo } from "@/lib/portal/portal-authorize";
 import { getDeal, updateDeal } from "@/lib/portal/repositories/deals";
 import { getQuoteDocument } from "@/lib/portal/repositories/quote-documents";
-import { convertQuoteToContract } from "@/lib/portal/repositories/contract-documents";
+import {
+  convertQuoteToContract,
+  findContractDocumentBySourceQuote,
+} from "@/lib/portal/repositories/contract-documents";
 import { logActivity } from "@/lib/portal/repositories/activity";
 import {
   completeCrmTask,
@@ -36,9 +39,21 @@ export async function POST(
     }
 
     // 계약 전환이 끝난 견적은 archived 가 된다. 다시 전환하면 같은 견적으로 계약서가 두 번 생긴다.
+    // archived 는 전환 없이 보관만 한 견적일 수도 있어, 실제로 만들어진 계약을 찾아 번호로 안내한다.
     if (doc.status === "archived") {
+      let existingNumber: string | null = null;
+      try {
+        existingNumber = (await findContractDocumentBySourceQuote(id))?.contract_number ?? null;
+      } catch (lookupError) {
+        console.error("[portal/quotes/[id]/convert] existing contract lookup skipped:", lookupError);
+      }
       return NextResponse.json(
-        { error: "이미 계약으로 전환된 견적입니다. 계약서 탭에서 확인하세요." },
+        {
+          error: existingNumber
+            ? `이미 계약 ${existingNumber}(으)로 전환된 견적입니다. 견적·문서의 계약서 탭에서 '견적 전환' 표시가 붙은 계약을 확인하세요.`
+            : "보관된 견적은 계약으로 전환할 수 없습니다. 이미 전환했다면 견적·문서의 계약서 탭에서 확인하세요.",
+          contract_number: existingNumber,
+        },
         { status: 409 }
       );
     }

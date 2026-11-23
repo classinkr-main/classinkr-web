@@ -8,6 +8,7 @@ import type {
 } from "@/lib/supabase/database.types.v2";
 import type {
   ContractDocument,
+  ContractDocumentListItem,
   ContractDocumentVersion,
   ContractDocumentShare,
   QuoteDocument,
@@ -192,6 +193,146 @@ export async function getContractDocument(
 
   if (error) return null;
   return data as ContractDocument;
+}
+
+/* ─── 목록 (계약서 탭) ───────────────────────────────────── */
+
+const LIST_IN_CHUNK = 100;
+
+function chunk<T>(items: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size));
+  }
+  return chunks;
+}
+
+type ContractListVersionRow = Pick<
+  ContractDocumentVersion,
+  | "id"
+  | "contract_document_id"
+  | "version_number"
+  | "title"
+  | "total_amount"
+  | "valid_from"
+  | "valid_until"
+  | "partner_signed_at"
+  | "admin_signed_at"
+> & { source_quote: unknown };
+
+function readSourceQuote(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return { id: null, number: null };
+  }
+  const source = value as Record<string, unknown>;
+  return {
+    id: typeof source.quote_document_id === "string" ? source.quote_document_id : null,
+    number: typeof source.quote_number === "string" ? source.quote_number : null,
+  };
+}
+
+/**
+ * /admin/quotes 계약서 탭이 읽는 전환 계약 목록. 견적 "계약 전환"이 쓰는 contract_documents 가 원천이다.
+ * 본문(content_html)과 견적 스냅샷 전체는 싣지 않고, 원본 견적 표식(sourceQuote)만 JSON 경로로 꺼낸다.
+ */
+export async function listContractDocumentsForAdmin(): Promise<ContractDocumentListItem[]> {
+  const supabase = createSupabaseAdminClient();
+
+  const { data: documents, error: documentsError } = await supabase
+    .from("contract_documents")
+    .select("*")
+    .order("updated_at", { ascending: false });
+  if (documentsError) throw documentsError;
+
+  const documentRows = (documents ?? []) as ContractDocument[];
+  if (documentRows.length === 0) return [];
+
+  const versionRows: ContractListVersionRow[] = [];
+  for (const ids of chunk(documentRows.map((document) => document.id), LIST_IN_CHUNK)) {
+    const { data, error } = await supabase
+      .from("contract_document_versions")
+      .select(
+        "id, contract_document_id, version_number, title, total_amount, valid_from, valid_until, partner_signed_at, admin_signed_at, source_quote:structured_json->sourceQuote"
+      )
+      .in("contract_document_id", ids)
+      .order("version_number", { ascending: false });
+    if (error) throw error;
+    versionRows.push(...((data ?? []) as unknown as ContractListVersionRow[]));
+  }
+
+  const dealRows: Array<{ id: string; title: string | null; customer_id: string | null }> = [];
+  for (const ids of chunk([...new Set(documentRows.map((document) => document.deal_id))], LIST_IN_CHUNK)) {
+    const { data, error } = await supabase.from("deals").select("id, title, customer_id").in("id", ids);
+    if (error) throw error;
+    dealRows.push(...(data ?? []));
+  }
+
+  const customerRows: Array<{ id: string; name: string | null }> = [];
+  const customerIds = [
+    ...new Set(dealRows.map((deal) => deal.customer_id).filter((id): id is string => Boolean(id))),
+  ];
+  for (const ids of chunk(customerIds, LIST_IN_CHUNK)) {
+    const { data, error } = await supabase.from("customers").select("id, name").in("id", ids);
+    if (error) throw error;
+    customerRows.push(...(data ?? []));
+  }
+
+  const dealById = new Map(dealRows.map((deal) => [deal.id, deal]));
+  const customerNameById = new Map(customerRows.map((customer) => [customer.id, customer.name]));
+  const versionsByDocument = new Map<string, ContractListVersionRow[]>();
+  for (const version of versionRows) {
+    const list = versionsByDocument.get(version.contract_document_id);
+    if (list) list.push(version);
+    else versionsByDocument.set(version.contract_document_id, [version]);
+  }
+
+  return documentRows.map((document) => {
+    const versions = (versionsByDocument.get(document.id) ?? []).sort(
+      (left, right) => right.version_number - left.version_number
+    );
+    const version =
+      versions.find((candidate) => candidate.id === document.current_version_id) ?? versions[0] ?? null;
+    const deal = dealById.get(document.deal_id);
+    const sourceQuote = readSourceQuote(version?.source_quote);
+
+    return {
+      id: document.id,
+      deal_id: document.deal_id,
+      contract_number: document.contract_number,
+      status: document.status,
+      created_at: document.created_at,
+      updated_at: document.updated_at,
+      deal_title: deal?.title ?? null,
+      customer_name: deal?.customer_id ? customerNameById.get(deal.customer_id) ?? null : null,
+      version_number: version?.version_number ?? null,
+      title: version?.title ?? null,
+      total_amount: Number(version?.total_amount ?? 0),
+      valid_from: version?.valid_from ?? null,
+      valid_until: version?.valid_until ?? null,
+      partner_signed_at: version?.partner_signed_at ?? null,
+      admin_signed_at: version?.admin_signed_at ?? null,
+      source_quote_document_id: sourceQuote.id,
+      source_quote_number: sourceQuote.number,
+    };
+  });
+}
+
+/** 이 견적에서 전환된 계약(가장 최근 것). 전환한 적이 없으면 null. */
+export async function findContractDocumentBySourceQuote(
+  quoteDocumentId: string
+): Promise<ContractDocument | null> {
+  const supabase = createSupabaseAdminClient();
+
+  const { data, error } = await supabase
+    .from("contract_document_versions")
+    .select("contract_document_id")
+    .eq("structured_json->sourceQuote->>quote_document_id", quoteDocumentId)
+    .order("created_at", { ascending: false })
+    .limit(1);
+  if (error) throw error;
+
+  const contractDocumentId = (data ?? [])[0]?.contract_document_id;
+  return contractDocumentId ? getContractDocument(contractDocumentId) : null;
 }
 
 /* ─── Version CRUD ──────────────────────────────────────── */

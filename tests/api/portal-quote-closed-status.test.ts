@@ -38,7 +38,10 @@ vi.mock("@/lib/portal/repositories/quote-documents", () => ({
   ensureQuoteDocumentShare,
   createQuoteDocumentVersion,
 }))
-vi.mock("@/lib/portal/repositories/contract-documents", () => ({ convertQuoteToContract }))
+vi.mock("@/lib/portal/repositories/contract-documents", () => ({
+  convertQuoteToContract,
+  findContractDocumentBySourceQuote: vi.fn(async () => ({ id: "cd_1", contract_number: "C-2026-003" })),
+}))
 vi.mock("@/lib/portal/repositories/activity", () => ({ logActivity: vi.fn() }))
 vi.mock("@/lib/repositories/crm-tasks", () => ({
   completeCrmTask: vi.fn(),

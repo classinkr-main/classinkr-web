@@ -21,7 +21,7 @@ import QuickQuoteComposer, {
   type QuickQuotePrefill,
   type QuickQuoteTeamTemplate,
 } from "@/components/portal/quotes/QuickQuoteComposer"
-import { adminFetchJson } from "@/lib/admin-client"
+import { adminFetchJson, clearAdminRequestCache } from "@/lib/admin-client"
 import type { PartnerQuoteDetailsInput } from "@/lib/partners-types"
 import {
   quoteDetailsToTeamTemplateInput,
@@ -605,6 +605,8 @@ export default function HardwareQuotesPanel({
         throw new Error(payload?.error ?? "계약 전환에 실패했습니다.")
       }
 
+      // 계약서 탭 목록(/api/admin/contracts)이 방금 만든 계약을 바로 읽도록 캐시를 비운다.
+      clearAdminRequestCache("/api/admin/contracts")
       const contractNumber = payload?.contract?.contract_number
       setNotice({
         tone: "success",
