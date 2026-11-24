@@ -1,10 +1,11 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { AlertCircle, Eye, EyeOff, ExternalLink, Link2, Loader2, Mail, Plus, Trash2 } from "lucide-react"
+import { AlertCircle, Eye, EyeOff, ExternalLink, Link2, Loader2, Mail, Pencil, Plus, Trash2 } from "lucide-react"
 
 import QuoteDocumentPreview from "@/components/portal/quotes/QuoteDocumentPreview"
 import { adminFetchJson } from "@/lib/admin-client"
+import type { QuoteDiscountInput } from "@/lib/partners-types"
 import {
   DISTRIBUTOR_FULFILLMENT_MODES,
   DISTRIBUTOR_ISSUE_REASON_LABELS,
@@ -16,6 +17,7 @@ import {
   computeDistributorTotals,
   getDistributorIssueBlocker,
   getOutstandingAmount,
+  resolveDistributorDocumentTitle,
   isInstallReviewReason,
   type DistributorFulfillmentMode,
   type DistributorSettlementLine,
@@ -55,6 +57,42 @@ type Draft = {
   dueDate: string
   notes: string
   lines: DistributorSettlementLine[]
+  // 총판 할인(고객 견적 할인과 별개). 값은 입력 중인 문자열로 들고 있다가 계산할 때 숫자로 바꾼다.
+  discountEnabled: boolean
+  discountMode: "amount" | "rate"
+  discountValue: string
+  discountLabel: string
+  // 총판 견적서 제목. 비우면 기본 제목.
+  documentTitle: string
+  // 기타사항 직접 쓰기. 꺼 두면 고객 견적 기타사항을 그대로 쓴다(generalNotes: null).
+  customGeneralNotes: boolean
+  generalNotes: string
+}
+
+type DiscountFields = Pick<Draft, "discountEnabled" | "discountMode" | "discountValue" | "discountLabel">
+
+// 입력 중인 할인 값을 서버 형식으로 바꾼다. 꺼져 있거나 값이 0 이하이면 null.
+function parseDraftDiscount(fields: DiscountFields): QuoteDiscountInput | null {
+  if (!fields.discountEnabled) return null
+  const value = fields.discountMode === "rate" ? Number(fields.discountValue.replace(/[^\d.]/g, "")) : parseWonInput(fields.discountValue)
+  if (!value || !Number.isFinite(value) || value <= 0) return null
+  if (fields.discountMode === "rate" && value > 100) return null
+  const label = fields.discountLabel.trim()
+  return { mode: fields.discountMode, value, ...(label ? { label } : {}) }
+}
+
+function discountFieldsFromRecord(discount: QuoteDiscountInput | null | undefined): DiscountFields {
+  if (!discount) return { discountEnabled: false, discountMode: "amount", discountValue: "", discountLabel: "" }
+  return {
+    discountEnabled: true,
+    discountMode: discount.mode,
+    discountValue: discount.mode === "amount" ? discount.value.toLocaleString("ko-KR") : String(discount.value),
+    discountLabel: discount.label ?? "",
+  }
+}
+
+function hasLineTextOverride(line: DistributorSettlementLine) {
+  return Boolean(line.displayName?.trim() || line.displayDescription?.trim())
 }
 
 type CustomLineType = "hardware" | "installation" | "shipping" | "service"
@@ -118,6 +156,10 @@ function draftFromPayload(payload: DistributorSettlementPayload, revise = false)
       dueDate: settlement.dueDate ?? "",
       notes: settlement.notes ?? "",
       lines: settlement.lines,
+      ...discountFieldsFromRecord(settlement.discount),
+      documentTitle: settlement.documentTitle ?? "",
+      customGeneralNotes: typeof settlement.generalNotes === "string",
+      generalNotes: settlement.generalNotes ?? "",
     }
   }
   return {
@@ -133,6 +175,10 @@ function draftFromPayload(payload: DistributorSettlementPayload, revise = false)
     dueDate: settlement?.dueDate ?? "",
     notes: settlement?.notes ?? "",
     lines: payload.draftLines,
+    ...discountFieldsFromRecord(settlement?.discount),
+    documentTitle: settlement?.documentTitle ?? "",
+    customGeneralNotes: typeof settlement?.generalNotes === "string",
+    generalNotes: settlement?.generalNotes ?? "",
   }
 }
 
@@ -158,6 +204,8 @@ export default function DistributorSettlementSection({ quoteId }: { quoteId: str
   const [paymentDate, setPaymentDate] = useState(todayValue())
   const [paymentMemo, setPaymentMemo] = useState("")
   const [previewOpen, setPreviewOpen] = useState(false)
+  // 문구 수정 입력을 펼친 줄(draft.lines 인덱스).
+  const [textEditOpen, setTextEditOpen] = useState<Set<number>>(() => new Set())
 
   const load = useCallback(async () => {
     try {
@@ -184,9 +232,10 @@ export default function DistributorSettlementSection({ quoteId }: { quoteId: str
 
   const payload = state.status === "ready" ? state.payload : null
   const settlement = payload?.settlement ?? null
+  const draftDiscount = useMemo(() => (draft ? parseDraftDiscount(draft) : null), [draft])
   const draftTotals = useMemo(
-    () => (draft ? computeDistributorTotals(draft.lines, draft.vatIncluded) : null),
-    [draft]
+    () => (draft ? computeDistributorTotals(draft.lines, draft.vatIncluded, draftDiscount) : null),
+    [draft, draftDiscount]
   )
   // 총판 견적서 미리보기 — 고객 견적서와 같은 승인 양식(QuoteDocumentPreview)으로, 편집 중인 원가를 바로 그린다.
   const previewDetails = useMemo(() => {
@@ -198,6 +247,8 @@ export default function DistributorSettlementSection({ quoteId }: { quoteId: str
           distributorPhone: draft.distributorPhone || null,
           distributorEmail: draft.distributorEmail || null,
           notes: draft.notes || null,
+          discount: draftDiscount,
+          generalNotes: draft.customGeneralNotes ? draft.generalNotes : null,
         }
       : settlement
     if (!source) return null
@@ -205,11 +256,12 @@ export default function DistributorSettlementSection({ quoteId }: { quoteId: str
       issuedAt: settlement?.issuedAt ?? todayValue(),
       customerName: payload.quote.customerName,
     })
-  }, [draft, payload, previewOpen, settlement])
+  }, [draft, draftDiscount, payload, previewOpen, settlement])
 
   function startEditing(revise = false) {
     if (!payload) return
     setDraft(draftFromPayload(payload, revise))
+    setTextEditOpen(new Set())
     setRevising(revise)
     setEditing(true)
     setMessage(null)
@@ -229,6 +281,33 @@ export default function DistributorSettlementSection({ quoteId }: { quoteId: str
 
   function removeLine(index: number) {
     setDraft((current) => (current ? { ...current, lines: current.lines.filter((_, i) => i !== index) } : current))
+    // 삭제한 줄 뒤의 인덱스가 한 칸씩 당겨지므로 펼침 상태도 맞춘다.
+    setTextEditOpen((open) => {
+      const next = new Set<number>()
+      open.forEach((i) => {
+        if (i < index) next.add(i)
+        else if (i > index) next.add(i - 1)
+      })
+      return next
+    })
+  }
+
+  function toggleTextEdit(index: number) {
+    setTextEditOpen((open) => {
+      const next = new Set(open)
+      if (next.has(index)) next.delete(index)
+      else next.add(index)
+      return next
+    })
+  }
+
+  function toggleCustomGeneralNotes(checked: boolean) {
+    // 처음 켤 때 고객 견적 기타사항을 채워 두어 고쳐 쓰게 한다.
+    setDraft((current) => {
+      if (!current) return current
+      const prefill = !current.generalNotes && checked ? (payload?.customerQuoteDetails?.generalNotes ?? "") : current.generalNotes
+      return { ...current, customGeneralNotes: checked, generalNotes: prefill }
+    })
   }
 
   // 새로 추가한 줄의 품목명 입력으로 포커스를 옮긴다.
@@ -282,6 +361,10 @@ export default function DistributorSettlementSection({ quoteId }: { quoteId: str
       setMessage({ tone: "error", text: "직접 추가한 줄의 품목명을 입력해 주세요." })
       return
     }
+    if (draft.discountEnabled && !parseDraftDiscount(draft)) {
+      setMessage({ tone: "error", text: "할인 값을 확인해 주세요(금액은 1원 이상, 비율은 0 초과 100 이하)." })
+      return
+    }
     const revise = revising
     const saved = await run(
       "save",
@@ -290,10 +373,31 @@ export default function DistributorSettlementSection({ quoteId }: { quoteId: str
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            ...draft,
-            lines: draft.lines.map((line) => (isCustomLine(line) ? { ...line, itemName: line.itemName.trim() } : line)),
+            fulfillmentMode: draft.fulfillmentMode,
+            distributorName: draft.distributorName,
+            distributorContactName: draft.distributorContactName,
+            distributorEmail: draft.distributorEmail,
+            distributorPhone: draft.distributorPhone,
+            issueTrigger: draft.issueTrigger,
+            autoEmail: draft.autoEmail,
+            vatIncluded: draft.vatIncluded,
+            notes: draft.notes,
+            lines: draft.lines.map((line) => {
+              const { displayName, displayDescription, ...rest } = line
+              const name = displayName?.trim()
+              const description = displayDescription?.trim()
+              return {
+                ...rest,
+                ...(isCustomLine(line) ? { itemName: line.itemName.trim() } : {}),
+                ...(!isCustomLine(line) && name ? { displayName: name } : {}),
+                ...(!isCustomLine(line) && description ? { displayDescription: description } : {}),
+              }
+            }),
             priceTemplateId: draft.priceTemplateId || null,
             dueDate: draft.dueDate || null,
+            discount: parseDraftDiscount(draft),
+            documentTitle: draft.documentTitle.trim(),
+            generalNotes: draft.customGeneralNotes ? draft.generalNotes : null,
           }),
         }),
       revise ? "총판 견적서 금액을 수정했습니다." : "원가를 저장했습니다."
@@ -446,6 +550,13 @@ export default function DistributorSettlementSection({ quoteId }: { quoteId: str
     </p>
   )
 
+  const defaultDocumentTitle = `${payload?.quote.customerName ?? ""} 건 하드웨어 공급`
+  const previewTitle = resolveDistributorDocumentTitle(
+    { documentTitle: (draft ? draft.documentTitle : settlement?.documentTitle) ?? null },
+    payload?.quote.customerName,
+    "총판 견적서"
+  )
+
   // 고객 견적서와 같은 승인 양식(웹·PDF 공용)으로 총판용 견적서를 미리 본다.
   const previewPanel =
     previewOpen &&
@@ -454,7 +565,7 @@ export default function DistributorSettlementSection({ quoteId }: { quoteId: str
         <QuoteDocumentPreview
           quote={previewDetails}
           documentNumber={`${payload?.quote.quoteNumber ?? ""}-D`}
-          title="총판 견적서"
+          title={previewTitle}
         />
       </div>
     ) : (
@@ -686,7 +797,55 @@ export default function DistributorSettlementSection({ quoteId }: { quoteId: str
                         className="accent-[#084734]"
                       />
                     </td>
-                    <td className={`py-1.5 ${line.included ? "text-[#111110]" : "text-[#A39E98]"}`}>{line.itemName}</td>
+                    <td className={`py-1.5 ${line.included ? "text-[#111110]" : "text-[#A39E98]"}`}>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span>{line.itemName}</span>
+                        {hasLineTextOverride(line) && (
+                          <span className="rounded bg-[#FFF8E6] px-1 py-0.5 text-[10px] font-semibold text-[#7A520F]">문구 수정됨</span>
+                        )}
+                        <button
+                          type="button"
+                          aria-label={`${line.itemName} 문구 수정`}
+                          aria-expanded={textEditOpen.has(index)}
+                          onClick={() => toggleTextEdit(index)}
+                          className="text-[#A39E98] hover:text-[#084734]"
+                        >
+                          <Pencil className="h-3 w-3" />
+                        </button>
+                      </div>
+                      {textEditOpen.has(index) && (
+                        <div className="mt-1.5 grid gap-1.5">
+                          <input
+                            aria-label={`${line.itemName} 표시 이름`}
+                            maxLength={200}
+                            value={line.displayName ?? ""}
+                            onChange={(e) => patchLine(index, { displayName: e.target.value })}
+                            placeholder={line.itemName}
+                            className={`${INPUT} h-8`}
+                          />
+                          <input
+                            aria-label={`${line.itemName} 세부내역`}
+                            maxLength={400}
+                            value={line.displayDescription ?? ""}
+                            onChange={(e) => patchLine(index, { displayDescription: e.target.value })}
+                            placeholder={line.itemDescription || "세부내역"}
+                            className={`${INPUT} h-8`}
+                          />
+                          <div className="flex items-center gap-2 text-[11px] text-[#78736D]">
+                            <span>비우면 고객 견적 문구를 그대로 씁니다.</span>
+                            {hasLineTextOverride(line) && (
+                              <button
+                                type="button"
+                                onClick={() => patchLine(index, { displayName: undefined, displayDescription: undefined })}
+                                className="font-semibold text-[#084734] hover:underline"
+                              >
+                                원래대로
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </td>
                     <td className="py-1.5 text-right tabular-nums text-[#78736D]">{line.quantity}</td>
                     <td className="py-1.5 text-right tabular-nums text-[#78736D]">{formatWon(line.customerUnitPrice)}</td>
                     <td className="py-1.5 text-right">
@@ -733,9 +892,110 @@ export default function DistributorSettlementSection({ quoteId }: { quoteId: str
           <dl className="grid grid-cols-[auto_auto] gap-x-4 gap-y-0.5 text-right text-[12.5px]">
             <dt className="text-[#78736D]">고객 견적 합계</dt>
             <dd className="tabular-nums">{formatWon(payload.quote.customerTotalAmount)}</dd>
+            {draftTotals.discountAmount > 0 && (
+              <>
+                <dt className="text-[#78736D]">원가 공급가</dt>
+                <dd className="tabular-nums">{formatWon(draftTotals.subtotalAmount)}</dd>
+                <dt className="text-[#78736D]">{draftDiscount?.label || "특별 할인"}</dt>
+                <dd className="tabular-nums text-[#B43E3E]">−{formatWon(draftTotals.discountAmount)}</dd>
+              </>
+            )}
             <dt className="font-bold text-[#111110]">총판에게 받을 원가</dt>
             <dd className="font-bold tabular-nums text-[#084734]">{formatWon(draftTotals.totalAmount)}</dd>
           </dl>
+        </div>
+
+        <div className="mt-3 rounded-md border border-[#e8e8e4] px-3 py-2.5">
+          <label className="flex items-center gap-1.5 text-[12.5px] text-[#31302E]">
+            <input
+              type="checkbox"
+              checked={draft.discountEnabled}
+              onChange={(e) => patchDraft({ discountEnabled: e.target.checked })}
+              className="accent-[#084734]"
+            />
+            총판 할인 넣기
+          </label>
+          {draft.discountEnabled && (
+            <div className="mt-2 grid gap-2 sm:grid-cols-[120px_140px_1fr]">
+              <label className="block">
+                <span className={LABEL}>방식</span>
+                <select
+                  className={INPUT}
+                  value={draft.discountMode}
+                  onChange={(e) => patchDraft({ discountMode: e.target.value as "amount" | "rate", discountValue: "" })}
+                >
+                  <option value="amount">금액(원)</option>
+                  <option value="rate">비율(%)</option>
+                </select>
+              </label>
+              <label className="block">
+                <span className={LABEL}>{draft.discountMode === "rate" ? "할인율(%)" : "할인 금액"}</span>
+                <input
+                  inputMode={draft.discountMode === "rate" ? "decimal" : "numeric"}
+                  className={`${INPUT} text-right tabular-nums`}
+                  value={draft.discountValue}
+                  onChange={(e) =>
+                    patchDraft({
+                      discountValue:
+                        draft.discountMode === "rate"
+                          ? e.target.value.replace(/[^\d.]/g, "")
+                          : (parseWonInput(e.target.value) ?? "").toLocaleString("ko-KR"),
+                    })
+                  }
+                />
+              </label>
+              <label className="block">
+                <span className={LABEL}>할인 이름</span>
+                <input
+                  className={INPUT}
+                  maxLength={40}
+                  value={draft.discountLabel}
+                  onChange={(e) => patchDraft({ discountLabel: e.target.value })}
+                  placeholder="특별 할인"
+                />
+              </label>
+              <p className="text-[11.5px] text-[#78736D] sm:col-span-3">
+                {draftDiscount
+                  ? `할인 ${formatWon(draftTotals.discountAmount)} 적용 → 총판에게 받을 원가 ${formatWon(draftTotals.totalAmount)}`
+                  : "할인 값을 입력해 주세요(금액은 1원 이상, 비율은 0 초과 100 이하)."}
+              </p>
+            </div>
+          )}
+        </div>
+
+        <label className="mt-3 block">
+          <span className={LABEL}>총판 견적서 제목</span>
+          <input
+            className={INPUT}
+            maxLength={80}
+            value={draft.documentTitle}
+            onChange={(e) => patchDraft({ documentTitle: e.target.value })}
+            placeholder={defaultDocumentTitle}
+          />
+        </label>
+
+        <div className="mt-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className={LABEL}>총판 견적서 기타사항</span>
+            <label className="flex items-center gap-1.5 text-[12px] text-[#31302E]">
+              <input
+                type="checkbox"
+                checked={draft.customGeneralNotes}
+                onChange={(e) => toggleCustomGeneralNotes(e.target.checked)}
+                className="accent-[#084734]"
+              />
+              기타사항 직접 쓰기
+            </label>
+          </div>
+          <textarea
+            rows={4}
+            maxLength={2000}
+            disabled={!draft.customGeneralNotes}
+            className={`${INPUT} h-auto py-2 disabled:bg-[#F6F5F4]`}
+            value={draft.customGeneralNotes ? draft.generalNotes : ""}
+            onChange={(e) => patchDraft({ generalNotes: e.target.value })}
+            placeholder="체크하지 않으면 고객 견적 기타사항을 그대로 씁니다. 체크하고 비우면 기타사항 없이 나갑니다."
+          />
         </div>
 
         <label className="mt-3 block">
@@ -870,6 +1130,21 @@ export default function DistributorSettlementSection({ quoteId }: { quoteId: str
         </dd>
         <dt className="text-[#78736D]">고객 견적 합계</dt>
         <dd className="tabular-nums text-[#31302E]">{formatWon(settlement.customerTotalAmount || payload.quote.customerTotalAmount)}</dd>
+        {settlement.documentTitle && (
+          <>
+            <dt className="text-[#78736D]">문서 제목</dt>
+            <dd className="text-[#31302E]">{settlement.documentTitle}</dd>
+          </>
+        )}
+        {settlement.discount && (
+          <>
+            <dt className="text-[#78736D]">총판 할인</dt>
+            <dd className="tabular-nums text-[#31302E]">
+              {settlement.discount.label || "특별 할인"} −{formatWon(computeDistributorTotals(settlement.lines, settlement.vatIncluded, settlement.discount).discountAmount)}
+              {settlement.discount.mode === "rate" ? ` (${settlement.discount.value}%)` : ""}
+            </dd>
+          </>
+        )}
         <dt className="font-semibold text-[#111110]">받을 원가</dt>
         <dd className="font-semibold tabular-nums text-[#111110]">{formatWon(settlement.totalAmount)}</dd>
         {isIssued && (
