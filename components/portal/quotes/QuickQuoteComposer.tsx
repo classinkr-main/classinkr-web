@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react"
 import { createPortal } from "react-dom"
 import {
   AlertCircle,
@@ -44,9 +44,13 @@ import type {
   QuoteDiscountInput,
 } from "@/lib/partners-types"
 import {
+  INSTALL_FEE_ITEM_CODE,
+  INSTALL_FEE_OPTION_ID,
+  STANDARD_PRICE_INSTALL_FEE,
   STANDARD_QUOTE_TEMPLATES,
   appendQuoteNoteLine,
   buildConfigurableStandardQuoteDetails,
+  buildStandardQuoteFromPreset,
   buildStandardQuoteTitle,
   calculateStandardQuoteTotals,
   DEFAULT_QUOTE_DISCOUNT_LABEL,
@@ -57,7 +61,6 @@ import {
   getQuoteNotePresets,
   getStandardQuoteDefaultSelections,
   getStandardQuoteOptionGroups,
-  getStandardQuoteQuickPresets,
   getStandardQuoteTemplate,
   inferStandardQuoteTemplateId,
   isRecordingStudioTemplate,
@@ -159,6 +162,8 @@ type QuickQuoteComposerProps = {
   apiBase?: QuickQuoteApiBase
   portalPartnerAccountId?: string | null
   initialTemplateId?: StandardQuoteTemplateId
+  initialPresetId?: string | null
+  initialQuantity?: number
   /** 공급자 담당자 드롭다운 후보(비면 기존처럼 자유 텍스트 입력만 노출). */
   supplierManagerOptions?: QuickQuoteManagerOption[]
   /** 팀 템플릿 목록(선택). 비면 코드 상수 템플릿만 보인다. */
@@ -248,6 +253,7 @@ type QuickAddRailItemId =
   | "stand"
   | "wall_mount"
   | "bundle_86_t1_wall"
+  | "install_fee"
 
 type QuickAddRailGroup = "package" | "software" | "panel" | "accessory"
 
@@ -268,6 +274,17 @@ type QuickAddRailItem = {
 }
 
 const QUICK_ADD_RAIL_ITEMS: QuickAddRailItem[] = [
+  {
+    id: "install_fee",
+    label: "배송·설치비",
+    description: "견적 합계에 추가 · 단가 수정 가능",
+    price: STANDARD_PRICE_INSTALL_FEE,
+    group: "accessory",
+    sku: INSTALL_FEE_ITEM_CODE,
+    templateId: "board_86",
+    quantityUnit: "대",
+    priceUnit: "/대",
+  },
   // ── 패키지 상품 (수트 · 번들 · 세트) ─────────────────────────
   {
     id: "recording_studio",
@@ -425,27 +442,16 @@ function withSheet(list: ComposerSheet[], sheet: ComposerSheet) {
 
 function buildSheet(
   templateId: StandardQuoteTemplateId,
-  presetId?: string,
-  patch?: Partial<StandardQuoteOptionSelections>
+  presetId?: string | null,
+  patch?: Partial<StandardQuoteOptionSelections>,
+  baseQuantity = 1,
 ): ComposerSheet {
-  const preset = presetId
-    ? getStandardQuoteQuickPresets(templateId).find((item) => item.id === presetId)
-    : undefined
-  const optionSelections: StandardQuoteOptionSelections = {
-    ...getStandardQuoteDefaultSelections(templateId),
-    ...(preset?.optionSelections ?? {}),
-    ...(patch ?? {}),
-  }
+  const quote = buildStandardQuoteFromPreset(templateId, presetId, baseQuantity, patch)
   return {
     line: sheetLineOf(templateId),
     templateId,
-    optionSelections,
-    quote: buildConfigurableStandardQuoteDetails({
-      templateId,
-      input: { templateId, presetId },
-      optionSelections,
-      baseQuantity: 1,
-    }),
+    optionSelections: quote.optionSelections ?? {},
+    quote,
   }
 }
 
@@ -857,6 +863,8 @@ export default function QuickQuoteComposer({
   apiBase = "/api/portal",
   portalPartnerAccountId = null,
   initialTemplateId = "board_86",
+  initialPresetId = null,
+  initialQuantity = 1,
   supplierManagerOptions,
   teamTemplates,
   onSaveTemplate,
@@ -867,6 +875,7 @@ export default function QuickQuoteComposer({
   const today = getTodayDateValue()
   const isPortalApi = apiBase === "/api/portal"
   const [portalMounted, setPortalMounted] = useState(false)
+  const quotePriceFieldId = useId()
   const closeButtonRef = useRef<HTMLButtonElement>(null)
   const [customers, setCustomers] = useState<CustomerListItem[]>([])
   const [deals, setDeals] = useState<DealListItem[]>([])
@@ -877,9 +886,11 @@ export default function QuickQuoteComposer({
   const [recipientInput, setRecipientInput] = useState("")
   const [selectedDealId, setSelectedDealId] = useState("")
   const [newDealTitle, setNewDealTitle] = useState("")
-  const [sheets, setSheets] = useState<ComposerSheet[]>(() => [buildSheet(initialTemplateId)])
+  const [sheets, setSheets] = useState<ComposerSheet[]>(() => [
+    buildSheet(initialTemplateId, initialPresetId, undefined, initialQuantity),
+  ])
   const [shared, setShared] = useState<SharedQuoteFields>(() =>
-    buildSharedFields(today, buildSheet(initialTemplateId).quote.generalNotes ?? "")
+    buildSharedFields(today, sheets[0]?.quote.generalNotes ?? "")
   )
   // 왼쪽 레일에서 마지막으로 고른 조합/템플릿(강조용). 품목을 손으로 바꾸면 풀린다.
   const [activePick, setActivePick] = useState<string | null>(null)
@@ -1060,7 +1071,12 @@ export default function QuickQuoteComposer({
   const showRecentQuotes = displaySettings?.preferences.showRecentQuotes ?? true
   const showTemplates = displaySettings?.preferences.showTemplates ?? true
   const visibleTemplates = STANDARD_QUOTE_TEMPLATES.filter((template) => !isRetiredQuoteTemplate(template.id) && quoteComposerMode(template.id) === composerMode && !hiddenTemplateIds.includes(`base:${template.id}`))
-  const visibleCatalogItems = QUICK_ADD_RAIL_ITEMS.filter((item) => quoteComposerMode(item.templateId) === composerMode)
+  const hardwareSheet = sheets.find((sheet) => sheet.line === "hardware")
+  const supportsInstallFee = hardwareSheet && getStandardQuoteOptionGroups(hardwareSheet.templateId)
+    .some((group) => group.id === INSTALL_FEE_OPTION_ID)
+  const visibleCatalogItems = QUICK_ADD_RAIL_ITEMS.filter((item) =>
+    quoteComposerMode(item.templateId) === composerMode && (item.id !== "install_fee" || supportsInstallFee)
+  )
   const visibleTeamTemplates = (teamTemplates ?? []).filter((template) => quoteComposerMode(inferStandardQuoteTemplateId(template.details)) === composerMode && !hiddenTemplateIds.includes(template.id))
   const templateCount = visibleTeamTemplates.length + visibleTemplates.length
   const displayedTeamTemplates = showAllTemplates ? visibleTeamTemplates : visibleTeamTemplates.slice(0, QUOTE_WORKSPACE_PREVIEW_LIMIT)
@@ -1187,7 +1203,7 @@ export default function QuickQuoteComposer({
     setRecipientInput(prefill?.customerName?.trim() ?? "")
     setSelectedDealId(prefill?.dealId ?? "")
     setNewDealTitle("")
-    const initialSheet = buildSheet(initialTemplateId)
+    const initialSheet = buildSheet(initialTemplateId, initialPresetId, undefined, initialQuantity)
     setDiscountDrafts({})
     setSheets([initialSheet])
     setShared(buildSharedFields(today, initialSheet.quote.generalNotes ?? ""))
@@ -1213,7 +1229,7 @@ export default function QuickQuoteComposer({
     setUnderMinConfirmed(false)
     setPendingSubmitAction(null)
     setError(null)
-  }, [hasPrefillTarget, initialTemplateId, open, prefill?.customerId, prefill?.customerName, prefill?.dealId, today])
+  }, [hasPrefillTarget, initialPresetId, initialQuantity, initialTemplateId, open, prefill?.customerId, prefill?.customerName, prefill?.dealId, today])
 
   useEffect(() => {
     return () => {
@@ -1342,6 +1358,22 @@ export default function QuickQuoteComposer({
     )
   }
 
+  function focusInstallationPrice(itemCode: string) {
+    window.requestAnimationFrame(() => {
+      const input = document.getElementById(`${quotePriceFieldId}-${itemCode}`)
+      if (!(input instanceof HTMLInputElement)) return
+      input.focus()
+      input.select()
+    })
+  }
+
+  function addOrEditInstallationFee() {
+    if (!hardwareSheet?.quote.lineItems?.some((line) => line.itemCode === INSTALL_FEE_ITEM_CODE)) {
+      setSheetOption("hardware", INSTALL_FEE_OPTION_ID, true)
+    }
+    focusInstallationPrice(INSTALL_FEE_ITEM_CODE)
+  }
+
   function updateLine(line: QuoteProductLine, lineIndex: number, patch: Partial<PartnerQuoteLineItemInput>) {
     updateSheet(line, (sheet) => {
       const items = sheet.quote.lineItems ?? []
@@ -1406,6 +1438,11 @@ export default function QuickQuoteComposer({
     setActivePick(null)
     const line = sheetLineOf(item.templateId)
     const sheet = sheets.find((entry) => entry.line === line)
+
+    if (item.id === "install_fee") {
+      addOrEditInstallationFee()
+      return
+    }
 
     if (!sheet) {
       const mounting = item.id === "stand" || item.id === "wall_mount" ? { mounting_option: item.id } : undefined
@@ -2082,6 +2119,9 @@ export default function QuickQuoteComposer({
     const priceChanged = listPrice != null && line.unitPrice != null && line.unitPrice !== listPrice
     const changePct = priceChanged ? Math.round((1 - (line.unitPrice ?? 0) / (listPrice ?? 1)) * 1000) / 10 : 0
     const isRechargeLine = sheet.templateId === "business_recharge" && line.itemCode === RECHARGE_ITEM_CODE
+    const isInstallation = line.itemType === "installation" || line.optionGroupId === "installation_mode"
+    const installationItemCode = isInstallation ? line.itemCode : undefined
+    const installationPriceId = installationItemCode ? `${quotePriceFieldId}-${installationItemCode}` : undefined
     const quantityEditable =
       line.quantity != null && !(line.quantityLocked === true && line.optionGroupId !== "main_product")
     const isMain = line.optionGroupId === "main_product"
@@ -2115,14 +2155,29 @@ export default function QuickQuoteComposer({
           {informational ? (
             <span className="text-[#A39E98]">–</span>
           ) : pending ? (
-            <span className="text-[11.5px] text-[#78736D]">
-              {line.lineStatus === "separate_billing" ? "별도 청구" : "협의"}
-            </span>
+            <>
+              <span className="text-[11.5px] text-[#78736D]">
+                {line.lineStatus === "separate_billing" ? "별도 청구" : "협의"}
+              </span>
+              {line.optionGroupId === "installation_mode" && installationItemCode && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSheetOption(sheet.line, "installation_mode", "included_quote")
+                    focusInstallationPrice(installationItemCode)
+                  }}
+                  className="text-[11px] font-semibold text-[#084734] underline"
+                >
+                  가격 입력
+                </button>
+              )}
+            </>
           ) : line.priceLocked === true ? (
             <span className="tabular-nums">{formatStandardQuoteCurrency(line.unitPrice)}</span>
           ) : (
             <input
-              aria-label={isRechargeLine ? "충전 금액" : "단가"}
+              id={installationPriceId}
+              aria-label={isRechargeLine ? "충전 금액" : isInstallation ? `${line.itemName} 단가` : "단가"}
               inputMode="numeric"
               value={formatStandardQuoteCurrency(line.unitPrice)}
               onChange={(event) => {
@@ -2134,7 +2189,7 @@ export default function QuickQuoteComposer({
                 updateLine(sheet.line, lineIndex, { unitPrice: parseNumericInput(event.target.value) ?? 0 })
               }}
               onBlur={isRechargeLine ? (event) => handleRechargeInputBlur(event.target.value) : undefined}
-              className={`${EDITABLE_CLASS} w-full text-right tabular-nums ${
+              className={`${EDITABLE_CLASS} w-full text-right tabular-nums ${isInstallation ? "border-[#CFCBC5]" : ""} ${
                 priceChanged ? "font-semibold text-[#7A520F]" : "text-[#31302E]"
               }`}
             />
@@ -2295,7 +2350,9 @@ export default function QuickQuoteComposer({
     const supplierDefaults = resolveQuoteSupplier(sheet.templateId)
     const manager = managers[sheet.line]
     const managerManualMode = !hasManagerOptions || manager.selection === MANAGER_CUSTOM_VALUE
+    const feeLine = quote.lineItems?.find((line) => line.itemCode === INSTALL_FEE_ITEM_CODE)
     const optionGroups = getStandardQuoteOptionGroups(sheet.templateId)
+      .filter((group) => group.id !== INSTALL_FEE_OPTION_ID || !feeLine?.isUserAdded)
     const termMonths =
       sheet.templateId === "online_suite"
         ? getOnlineSuiteTermMonths(sheet.optionSelections.contract_term as string)
@@ -2591,6 +2648,16 @@ export default function QuickQuoteComposer({
                 <span />
               </div>
               {(quote.lineItems ?? []).map((line, lineIndex) => renderLineRow(sheet, line, lineIndex))}
+
+              {sheet.line === "hardware" && supportsInstallFee && (
+                <button
+                  type="button"
+                  onClick={addOrEditInstallationFee}
+                  className="border-b border-[#F0F0EC] py-2 text-left text-[12px] font-semibold text-[#084734] hover:underline"
+                >
+                  {feeLine ? "배송·설치비 단가 수정" : "+ 배송·설치비 추가"}
+                </button>
+              )}
 
               {noteLineOpen ? (
                 <div className="flex flex-wrap items-center gap-1.5 border-b border-[#F0F0EC] py-2">

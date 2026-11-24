@@ -194,10 +194,11 @@ const STANDARD_PRICE_CAMERA_T1 = getProductBySku("camera-t1")?.unit_price ?? 1_2
 const STANDARD_PRICE_STAND = getProductBySku("stand")?.unit_price ?? 500_000
 const STANDARD_PRICE_WALL_MOUNT = getProductBySku("wall-mount")?.unit_price ?? 500_000
 /** "설치비 추가" 옵션의 기본 단가(대당) — 하드웨어 카탈로그의 설치비. 작성 창에서 행 금액을 바로 고친다. */
-const STANDARD_PRICE_INSTALL_FEE = HARDWARE_INSTALL_PRICE_KRW
+export const STANDARD_PRICE_INSTALL_FEE = HARDWARE_INSTALL_PRICE_KRW
 
 /** 설치비를 따로 받는 견적용 행 코드. */
 export const INSTALL_FEE_ITEM_CODE = "install-fee"
+export const INSTALL_FEE_OPTION_ID = "install_fee"
 
 /**
  * "설치비 추가" — 하드웨어 템플릿 공통 토글(2026-11-24). 켜면 대표 품목 수량만큼 "설치비" 행이 붙고,
@@ -206,9 +207,9 @@ export const INSTALL_FEE_ITEM_CODE = "install-fee"
  * 설치 방식은 설치·교육을 어떻게 안내할지, 이 옵션은 설치비를 금액으로 받을지다.
  */
 const INSTALL_FEE_OPTION_GROUP: StandardQuoteOptionGroup = {
-  id: "install_fee",
-  label: "설치비 추가",
-  description: "설치비 행을 추가합니다. 기본 대당 50만원, 작성 창에서 금액을 바로 고칠 수 있습니다.",
+  id: INSTALL_FEE_OPTION_ID,
+  label: "배송·설치비",
+  description: "배송·설치비를 견적 합계에 추가합니다. 단가는 작성 창에서 수정할 수 있습니다.",
   control: "toggle",
   defaultValue: false,
   enabledLabel: "추가",
@@ -1069,6 +1070,26 @@ export function buildStandardQuoteDetails(
   )
 }
 
+/** 미리보기와 작성기가 같은 템플릿·빠른 구성·대표 수량으로 시작한다. */
+export function buildStandardQuoteFromPreset(
+  templateId: StandardQuoteTemplateId,
+  presetId?: string | null,
+  baseQuantity = 1,
+  overrides?: Partial<StandardQuoteOptionSelections>,
+) {
+  const preset = getStandardQuoteQuickPresets(templateId).find((item) => item.id === presetId)
+  return buildConfigurableStandardQuoteDetails({
+    templateId,
+    input: { templateId, presetId: preset?.id },
+    optionSelections: {
+      ...getStandardQuoteDefaultSelections(templateId),
+      ...preset?.optionSelections,
+      ...overrides,
+    },
+    baseQuantity: Number.isSafeInteger(baseQuantity) && !isSoftwareQuoteTemplate(templateId) ? baseQuantity : 1,
+  })
+}
+
 export function buildConfigurableStandardQuoteDetails({
   templateId,
   input,
@@ -1180,15 +1201,17 @@ export function buildConfigurableStandardQuoteDetails({
   // "설치비 추가" 토글 — 하드웨어 템플릿 공통. 대표 품목 수량을 따르고, 작성자가 고친 단가는
   // addOptionalLine 이 기존 행 값으로 살린다.
   const addInstallFeeLine = (quantityUnit: string) => {
-    if (!readSelectionBoolean(selections, "install_fee", false)) return
+    if (!readSelectionBoolean(selections, INSTALL_FEE_OPTION_ID, false)) return
     addOptionalLine(INSTALL_FEE_ITEM_CODE, {
       itemType: "installation",
-      itemName: "설치비",
-      itemDescription: "현장 설치",
+      itemName: "배송·설치비",
+      itemDescription: "납품 및 현장 설치",
       quantity,
       quantityUnit,
       unitPrice: STANDARD_PRICE_INSTALL_FEE,
-      optionGroupId: "install_fee",
+      lineStatus: "priced",
+      billingMode: "included_in_quote",
+      optionGroupId: INSTALL_FEE_OPTION_ID,
       optionId: "enabled",
       priceLocked: false,
     })
@@ -1579,7 +1602,7 @@ export const QUOTE_NOTE_PRESETS: QuoteNotePreset[] = [
   {
     id: "general_delivery_cost",
     group: "general",
-    label: "배송·설치비",
+    label: "배송·설치 안내",
     text: "설치 및 배송비는 견적 금액에 포함되어 있습니다.",
   },
   {

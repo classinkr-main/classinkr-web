@@ -7,6 +7,7 @@ import {
   type StandardQuoteTemplateId,
 } from "@/lib/standard-quote-template"
 import { HARDWARE_INSTALL_PRICE_KRW } from "@/lib/billing/hardware-catalog"
+import { normalizeQuoteDetailsFromStructuredJson } from "@/lib/portal/quote-details"
 
 // "설치비 추가" 옵션(2026-11-24) — 하드웨어 템플릿 공통 토글, 기본 꺼짐, 금액 수정 가능.
 const HARDWARE: StandardQuoteTemplateId[] = ["board_86", "board_75", "camera_t1", "recording_studio", "recording_studio_75"]
@@ -51,8 +52,12 @@ describe("설치비 추가 옵션", () => {
         line.itemCode === INSTALL_FEE_ITEM_CODE ? { ...line, unitPrice: 300_000 } : line
       ),
     }
-    const rebuilt = build("board_86", { install_fee: true, camera_bundle: true }, 2, edited)
-    expect(installLine(rebuilt)?.unitPrice).toBe(300_000)
+    const rebuilt = build("board_86", { install_fee: true, camera_bundle: true }, 3, edited)
+    expect(installLine(rebuilt)).toMatchObject({ unitPrice: 300_000, quantity: 3, lineSupplyAmount: 900_000 })
+    const saved = normalizeQuoteDetailsFromStructuredJson({ quoteDetails: rebuilt })
+    expect(saved?.lineItems?.filter((line) => line.itemCode === INSTALL_FEE_ITEM_CODE)).toMatchObject([
+      { itemName: "배송·설치비", itemType: "installation", quantity: 3, unitPrice: 300_000, billingMode: "included_in_quote" },
+    ])
   })
 
   it("합계에 들어간다", () => {

@@ -49,7 +49,7 @@ import {
   type QuoteQueueKey,
 } from "./quote-queue"
 import DistributorSettlementSection from "./DistributorSettlementSection"
-import QuoteTemplatePicker from "./QuoteTemplatePicker"
+import QuoteTemplatePicker, { type QuoteTemplatePickerSelection } from "./QuoteTemplatePicker"
 
 type HardwareQuoteRow = {
   id: string
@@ -401,9 +401,11 @@ export default function HardwareQuotesPanel({
 }: HardwareQuotesPanelProps) {
   const { preferences, updatePreferences, storageError } = useQuoteWorkspacePreferences()
   const [composerOpen, setComposerOpen] = useState(false)
-  const [composerTemplateId, setComposerTemplateId] = useState<StandardQuoteTemplateId>(
-    DEFAULT_HARDWARE_QUOTE_TEMPLATE_ID
-  )
+  const [composerTemplate, setComposerTemplate] = useState<QuoteTemplatePickerSelection>({
+    templateId: DEFAULT_HARDWARE_QUOTE_TEMPLATE_ID,
+    presetId: null,
+    quantity: 1,
+  })
   const [quotes, setQuotes] = useState<HardwareQuoteRow[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -648,14 +650,13 @@ export default function HardwareQuotesPanel({
     if (handledQuickActionKeyRef.current === quickAction.key) return
 
     handledQuickActionKeyRef.current = quickAction.key
-    setComposerTemplateId(templateIdFromQuickAction(quickAction.action))
+    setComposerTemplate({ templateId: templateIdFromQuickAction(quickAction.action), presetId: null, quantity: 1 })
     setComposerOpen(true)
     onQuickActionConsumed?.()
   }, [onQuickActionConsumed, quickAction])
 
-  // 템플릿 화면의 "이 템플릿으로 작성" → 작성기. 헤더 작성 버튼(quickAction)과 같이 템플릿 id 를 정하고 연다.
-  function openComposerWithTemplate(templateId: StandardQuoteTemplateId) {
-    setComposerTemplateId(templateId)
+  function openComposerWithTemplate(selection: QuoteTemplatePickerSelection) {
+    setComposerTemplate(selection)
     setComposerOpen(true)
   }
 
@@ -1080,10 +1081,7 @@ export default function HardwareQuotesPanel({
           {!showDeleted && <><p className="mt-1 text-xs text-[#78736D]">견적서를 만들면 여기서 다음 할 일 순서로 정리됩니다.</p>
           <button
             type="button"
-            onClick={() => {
-              setComposerTemplateId("board_86")
-              setComposerOpen(true)
-            }}
+            onClick={() => openComposerWithTemplate({ templateId: DEFAULT_HARDWARE_QUOTE_TEMPLATE_ID, presetId: null, quantity: 1 })}
             className={`${SOLID_BUTTON} mt-4`}
           >
             <Plus className="h-3.5 w-3.5" />
@@ -1227,7 +1225,9 @@ export default function HardwareQuotesPanel({
         onOpenChange={setComposerOpen}
         recentQuotes={recentQuotes}
         apiBase="/api/portal"
-        initialTemplateId={composerTemplateId}
+        initialTemplateId={composerTemplate.templateId}
+        initialPresetId={composerTemplate.presetId}
+        initialQuantity={composerTemplate.quantity}
         supplierManagerOptions={supplierManagerOptions}
         teamTemplates={teamTemplates}
         onSaveTemplate={handleSaveTemplate}

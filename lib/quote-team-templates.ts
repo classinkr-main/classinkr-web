@@ -1,6 +1,8 @@
 import { PRODUCT_TEMPLATES } from "@/lib/product-templates"
 import {
+  INSTALL_FEE_ITEM_CODE,
   QUOTE_NOTE_PRESETS,
+  STANDARD_PRICE_INSTALL_FEE,
   STANDARD_QUOTE_TEMPLATES,
   isRetiredQuoteTemplate,
   isSoftwareQuoteTemplate,
@@ -114,6 +116,7 @@ function buildCatalog(): QuoteTemplateCatalogEntry[] {
       if (line.itemCode && typeof line.unitPrice === "number") add(line.itemCode, line.itemName, line.unitPrice)
     }
   }
+  add(INSTALL_FEE_ITEM_CODE, "배송·설치비", STANDARD_PRICE_INSTALL_FEE)
   return [...bySku.values()]
 }
 

@@ -10,7 +10,7 @@ import {
   validateQuoteTemplateInput,
   type QuoteTeamTemplateRecord,
 } from "@/lib/quote-team-templates"
-import { finalizeStandardQuoteDetails } from "@/lib/standard-quote-template"
+import { INSTALL_FEE_ITEM_CODE, finalizeStandardQuoteDetails } from "@/lib/standard-quote-template"
 
 function record(patch: Partial<QuoteTeamTemplateRecord>): QuoteTeamTemplateRecord {
   return {
@@ -35,6 +35,18 @@ const byCode = (details: ReturnType<typeof teamTemplateViewToQuoteDetails>, code
   details?.lineItems?.find((line) => line.itemCode === code)
 
 describe("teamTemplateViewToQuoteDetails", () => {
+  it.each([1, 2])("팀 템플릿의 배송·설치비 %i건과 편집 단가를 유지한다", (quantity) => {
+    const items = [
+      { sku: "board-86", quantity: 2, unitPrice: null },
+      { sku: INSTALL_FEE_ITEM_CODE, quantity, unitPrice: 300_000 },
+    ]
+    const view = teamQuoteTemplateView(record({ items }), true)
+    const details = teamTemplateViewToQuoteDetails(view, "2026-10-21")
+    expect(byCode(details, INSTALL_FEE_ITEM_CODE)).toMatchObject({ itemType: "installation", quantity, unitPrice: 300_000 })
+    const input = quoteDetailsToTeamTemplateInput("재사용", finalizeStandardQuoteDetails(details))
+    expect(input?.items).toContainEqual(items[1])
+  })
+
   it("짠 기본 템플릿 위에 수량·단가 덮어쓰기를 얹는다", () => {
     const view = teamQuoteTemplateView(
       record({

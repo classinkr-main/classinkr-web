@@ -7,6 +7,8 @@ import {
   type QuoteTemplateView,
 } from "@/lib/quote-team-templates"
 import {
+  INSTALL_FEE_ITEM_CODE,
+  INSTALL_FEE_OPTION_ID,
   QUOTE_NOTE_PRESETS,
   STANDARD_QUOTE_TEMPLATES,
   buildConfigurableStandardQuoteDetails,
@@ -61,7 +63,7 @@ function userLine(item: QuoteTemplateView["items"][number], index: number, produ
   return {
     sortOrder: index + 1,
     lineNumber: index + 1,
-    itemType: productLine === "software" ? "service" : "hardware",
+    itemType: item.sku === INSTALL_FEE_ITEM_CODE ? "installation" : productLine === "software" ? "service" : "hardware",
     itemCode: item.sku,
     itemName: item.name,
     quantity: item.quantity,
@@ -106,6 +108,10 @@ export function teamTemplateViewToQuoteDetails(
   if (mainItem && hasOptionGroup(templateId, "camera_bundle")) {
     selections.camera_bundle = followsMain("camera-t1")
     if (selections.camera_bundle) consumed.add("camera-t1")
+  }
+  if (mainItem && hasOptionGroup(templateId, INSTALL_FEE_OPTION_ID) && followsMain(INSTALL_FEE_ITEM_CODE)) {
+    selections[INSTALL_FEE_OPTION_ID] = true
+    consumed.add(INSTALL_FEE_ITEM_CODE)
   }
 
   const built = buildConfigurableStandardQuoteDetails({
