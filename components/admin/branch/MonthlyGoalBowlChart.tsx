@@ -26,10 +26,12 @@ interface Props {
   todayMonth: string
   onSelectMonth?: (month: string) => void
   goalNote?: string
+  /** "compact" — 개요 콕핏처럼 카드 폭이 좁을 때 최소 폭을 낮춰 가로 스크롤 없이 12개월을 다 보인다. */
+  density?: "default" | "compact"
 }
 
 /** 3b: 공통 금액 축의 넓은 목표 그릇 + 좁은 확도 스택. 수치는 캐논에서, 좌표만 SVG에서 계산한다. */
-export function MonthlyGoalBowlChart({ rows, plans, selectedMonth, todayMonth, onSelectMonth, goalNote }: Props) {
+export function MonthlyGoalBowlChart({ rows, plans, selectedMonth, todayMonth, onSelectMonth, goalNote, density = "default" }: Props) {
   const points = useMemo(() => buildMonthlyGoalChart(rows, plans, todayMonth), [rows, plans, todayMonth])
   const [inspectedMonth, setInspectedMonth] = useState<string | null>(null)
   const [detailMonth, setDetailMonth] = useState<string | null>(null)
@@ -70,7 +72,7 @@ export function MonthlyGoalBowlChart({ rows, plans, selectedMonth, todayMonth, o
       </div>
       <p className="mb-2 text-[11px] text-[#615D59] md:hidden">좌우로 넘겨 4월~3월을 확인하고 월을 눌러 수치를 보세요.</p>
       <div ref={scrollRef} className="overflow-x-auto overscroll-x-contain">
-        <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} className="block min-w-[840px] w-full" role="group" aria-label="회계월별 목표와 확도별 매출">
+        <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} className={`block w-full ${density === "compact" ? "min-w-[620px]" : "min-w-[840px]"}`} role="group" aria-label="회계월별 목표와 확도별 매출">
           <defs>
             <linearGradient id={`${hatchId}-active`} x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="#EBF6F1" />

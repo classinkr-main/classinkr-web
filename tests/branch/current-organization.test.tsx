@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import { branchDraftTeamOptions, branchTeamLabel, CURRENT_BRANCH_TEAMS, defaultBranchDraftTeam, isCurrentBranchTeam, isLegacyBranchTeam } from "@/lib/branch/current-organization";
 import { CURRENT_TEAM_FILTERS, TEAMS, type BranchKpiResponse, type BranchSummaryResponse, type Team } from "@/components/admin/branch/types";
 import BranchHeroGauges from "@/components/admin/branch/sections/BranchHeroGauges";
-import BranchKpiAccordion from "@/components/admin/branch/sections/BranchKpiAccordion";
 
 const kpi: BranchKpiResponse = {
   teams: ["BD", "MKT", "CSM"].map((team) => ({ team, goal: 100, status: team === "CSM" ? -20 : 50, pacing_pct: 50 })), members: [],
@@ -36,12 +35,5 @@ describe("현재 조직과 장부 이력은 구분한다", () => {
     const html = renderToStaticMarkup(<BranchHeroGauges summary={summary("CSM")} kpi={kpi} loading={false} periodLabel="10월" />);
     expect(html).toContain("CSM · 이전 조직 이력"); expect(html).toContain("이전 조직 매출 이력");
     expect(html).toContain("CSM DSH 실적 -20 CNY");
-  });
-  it("시트 KPI의 전체 비교와 CSM 이력은 같은 기준으로 구분한다", () => {
-    const props = { data: kpi, loading: false, error: null, period: "M" as const, selectedMonth: "2026-10" };
-    const current = renderToStaticMarkup(<BranchKpiAccordion {...props} team="ALL" />);
-    expect(current).not.toContain("CSM");
-    const legacy = renderToStaticMarkup(<BranchKpiAccordion {...props} team="CSM" />);
-    expect(legacy).toContain("CSM · 이전 조직 이력"); expect(legacy).toContain("이전 조직 매출 이력");
   });
 });

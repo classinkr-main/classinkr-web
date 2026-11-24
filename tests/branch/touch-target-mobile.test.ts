@@ -13,8 +13,7 @@ const pipelineTablePath = join(process.cwd(), "components/admin/branch/sections/
 const multiSelectPath = join(process.cwd(), "components/admin/branch/MultiSelect.tsx")
 const syncStatusBarPath = join(process.cwd(), "components/admin/branch/SyncStatusBar.tsx")
 const integrityStripPath = join(process.cwd(), "components/admin/branch/IntegrityStrip.tsx")
-const branchKpiPath = join(process.cwd(), "components/admin/branch/sections/BranchKpiAccordion.tsx")
-const bottleneckPath = join(process.cwd(), "components/admin/branch/sections/ActivityBottleneckSection.tsx")
+const branchKpiPath = join(process.cwd(), "components/admin/branch/sections/BranchKpiTable.tsx")
 
 function dashboardClientSource() {
   return readFileSync(dashboardClientPath, "utf8")
@@ -33,9 +32,6 @@ function integrityStripSource() {
 }
 function branchKpiSource() {
   return readFileSync(branchKpiPath, "utf8")
-}
-function bottleneckSource() {
-  return readFileSync(bottleneckPath, "utf8")
 }
 
 describe("웨이브 7 — U5. BranchDashboardClient 팀/기간 필터 칩 모바일 터치 타깃", () => {
@@ -108,16 +104,16 @@ describe("웨이브 7 — U5. PipelineTable 페이지네이션 버튼 모바일 
   })
 })
 
-describe("파이프라인 KPI·병목 컨트롤 모바일 터치 타깃", () => {
+describe("파이프라인 KPI 표 컨트롤 모바일 터치 타깃", () => {
   it("담당자 검색·정렬·보기 전환이 모바일 44px다", () => {
     const source = branchKpiSource()
     expect(source).toContain("h-11 min-h-11 w-36")
     expect(source.match(/min-h-11 min-w-11/g)?.length).toBeGreaterThanOrEqual(2)
   })
 
-  it("병목 장부 링크와 담당자 링크가 모바일 44px다", () => {
-    const source = bottleneckSource()
-    expect(source.match(/min-h-11 min-w-11/g)?.length).toBe(2)
+  it("장부 링크와 담당자 링크가 모바일 44px다", () => {
+    const source = branchKpiSource()
+    expect(source).toContain('className="inline-flex min-h-11 min-w-11 items-center hover:underline md:min-h-0 md:min-w-0"')
   })
 })
 

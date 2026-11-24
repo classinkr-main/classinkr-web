@@ -10,6 +10,7 @@ import type { DealModalDeal } from "./sections/DealModal"
 import { adminFetchJson, clearBranchRequestCache, postBranchSync, useBranchJson, type BranchJsonState } from "./client-api"
 import { describeSyncOutcome, resolveSyncOutcome } from "@/lib/admin/sync-outcome"
 import CompassTeamSection from "./sections/CompassTeamSection"
+import { PIPELINE_ACTION_LIST_SIZE } from "./sections/pipeline-action-constants"
 import type { CompassKrTeamResult } from "@/lib/compass/kr-team-contract"
 import { adminFetchJsonCached } from "@/lib/admin-client"
 import { isPrefetchFresh } from "@/lib/admin/prefetch-freshness"
@@ -132,11 +133,11 @@ const DealModal = dynamic(() => import("./sections/DealModal"))
 // 탭 전용 컴포넌트 코드 스플리팅(품질 웨이브 2 — 항목 6) — 개요를 포함한 각 탭의
 // 컴포넌트는 그 탭을 열 때만 청크를 내려받는다.
 // 로딩 스켈레톤은 각 컴포넌트 내부의 자체 로딩 상태(데이터 미도착 시)와 동일 톤으로 맞춘다.
-const BranchKpiAccordion = dynamic(() => import("./sections/BranchKpiAccordion"), {
+const BranchKpiTable = dynamic(() => import("./sections/BranchKpiTable"), {
   loading: () => <div className="h-64 animate-pulse rounded-xl bg-[#f0f0ec]" />,
 })
-const ActivityBottleneckSection = dynamic(() => import("./sections/ActivityBottleneckSection"), {
-  loading: () => <div className="h-64 animate-pulse rounded-xl bg-[#f0f0ec]" />,
+const PipelineActionBoard = dynamic(() => import("./sections/PipelineActionBoard"), {
+  loading: () => <div className="h-48 animate-pulse rounded-xl bg-[#f0f0ec]" />,
 })
 const BranchPipelineKanban = dynamic(() => import("./sections/BranchPipelineKanban"), {
   loading: () => <div className="h-72 animate-pulse rounded-xl bg-[#f0f0ec]" />,
@@ -668,13 +669,25 @@ export default function BranchDashboardClient({
 
           {activeTab === "pipeline" && (
             <div id={activePanelId} role="tabpanel" aria-labelledby={activeTabId} className="space-y-4">
-              {/* 팀 KPI 아코디언 → 활동 병목·담당자 순으로 단일 열 세로 배치(2열 그리드 해제).
-                  부모 space-y-4가 아래 파이프라인 카드와 동일한 세로 리듬을 준다. */}
-              <BranchKpiAccordion data={kpi.data} loading={kpi.loading} error={kpi.error} team={team} period={period} selectedMonth={selectedMonth} />
-              <ActivityBottleneckSection kpi={kpi.data} loading={kpi.loading} error={kpi.error} team={team} />
+              {/* 2026-11-24 시안 '파이프라인 A+B ③'(할 일 먼저) — 결론·확도 막대·세 목록 → 담당자 KPI 표(병목 열 포함)
+                  → 전체 딜(칸반/테이블). 칸반은 위 목록이 보여 준 상위 딜을 건너뛰어 같은 딜을 두 번 싣지 않는다. */}
+              {pipelineFiltersReady ? (
+                <PipelineActionBoard
+                  key={`action-${team}-${pipelineManager}`}
+                  scopeManager={pipelineManager}
+                  team={team}
+                  period={period}
+                  selectedMonth={selectedMonth}
+                  refreshKey={refreshKey}
+                  kpi={kpi.data}
+                  summary={summary.data}
+                  onDealClick={(d) => { void openDealLog(d) }}
+                />
+              ) : null}
+              <BranchKpiTable data={kpi.data} loading={kpi.loading} error={kpi.error} team={team} period={period} selectedMonth={selectedMonth} />
               <section className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
                 <div className="flex items-center justify-between gap-3 border-b border-[rgba(0,0,0,0.08)] px-5 py-3.5">
-                  <h2 className="text-[14px] font-bold tracking-[-0.01em] text-[#111110]">파이프라인</h2>
+                  <h2 className="text-[14px] font-bold tracking-[-0.01em] text-[#111110]">전체 딜</h2>
                   <div className="inline-flex rounded-md border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] p-[3px]">
                     {(["table", "kanban"] as const).map((v) => (
                       <button key={v} type="button" onClick={() => setPipelineView(v)}
@@ -703,6 +716,7 @@ export default function BranchDashboardClient({
                       initialQuery={pipelineQuery}
                       initialManager={pipelineManager}
                       onFilterChange={onPipelineFilterChange}
+                      coveredLeading={{ "high-confidence": PIPELINE_ACTION_LIST_SIZE, expected: PIPELINE_ACTION_LIST_SIZE }}
                       onDealClick={(d) => {
                         void openDealLog({
                           id: d.id, customer: d.customer, manager: d.manager,
