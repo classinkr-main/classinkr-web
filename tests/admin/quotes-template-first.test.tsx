@@ -13,7 +13,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 // jsdom 이 없고 Node SSR 에는 이펙트가 없다 — 목록을 "불러온 뒤" 상태를 보려면 패널의 useState 를 씨앗으로 채운다
 // (tests/crm/performance-charts-render.test.tsx 와 같은 방식). 번호는 HardwareQuotesPanel 의 useState 선언 순서다:
-//   0 composerOpen · 1 composerTemplateId · 2 quotes · 3 loading
+//   0 composerOpen · 1 composerTemplate · 2 quotes · 3 loading
 // 패널이 부르는 훅·자식은 아래에서 전부 useState 없는 대역으로 바꿔 번호가 밀리지 않는다.
 // 순서가 바뀌면 "씨앗 번호가 패널 상태와 맞는다" 테스트가 먼저 깨진다.
 const state = vi.hoisted(() => ({
@@ -25,11 +25,13 @@ const captured = vi.hoisted(() => ({
   composer: null as null | {
     open: boolean
     initialTemplateId?: string
+    initialPresetId?: string | null
+    initialQuantity?: number
     onCreated?: (payload: unknown) => Promise<void> | void
   },
   picker: null as null | {
     hiddenTemplateIds?: readonly string[]
-    onCompose: (templateId: import("@/lib/standard-quote-template").StandardQuoteTemplateId) => void
+    onCompose: (selection: import("@/components/admin/documents/QuoteTemplatePicker").QuoteTemplatePickerSelection) => void
   },
 }))
 
@@ -260,10 +262,11 @@ describe("견적서 탭 — 템플릿 목록과 첫 템플릿 미리보기", () 
       expect(onSelect).toHaveBeenCalledExactlyOnceWith({
         templateId,
         presetId: getDefaultQuoteTemplatePresetId(templateId),
+        quantity: 1,
       })
     }
 
-    const html = renderView({ selection: { templateId: "recording_studio_75", presetId: null } })
+    const html = renderView({ selection: { templateId: "recording_studio_75", presetId: null, quantity: 1 } })
     expect(html).toMatch(/data-template-id="recording_studio_75"[^>]*aria-pressed="true"/)
     expect(html).toMatch(/data-template-id="board_86"[^>]*aria-pressed="false"/)
     const preview = previewOf(html)
@@ -271,7 +274,7 @@ describe("견적서 탭 — 템플릿 목록과 첫 템플릿 미리보기", () 
     expect(preview).toContain("7,400,000원")
     expect(preview).not.toContain("전자칠판 86&quot; 견적서")
 
-    const software = previewOf(renderView({ selection: { templateId: "business_recharge", presetId: null } }))
+    const software = previewOf(renderView({ selection: { templateId: "business_recharge", presetId: null, quantity: 1 } }))
     expect(software).toContain("SW · 이이오클래스인코리아 유한회사")
     expect(software).toContain("2,000,000원")
   })
@@ -286,21 +289,20 @@ describe("견적서 탭 — 템플릿 목록과 첫 템플릿 미리보기", () 
     // 기본 선택은 작성 창이 처음 여는 구성과 같은 프리셋이다.
     expect(chips.map((chip) => chip.props["aria-pressed"])).toEqual([true, false, false])
     ;(chips[1].props.onClick as () => void)()
-    expect(props.onSelectPreset).toHaveBeenCalledExactlyOnceWith({ templateId: "board_86", presetId: "board_86_bundle" })
+    expect(props.onSelectPreset).toHaveBeenCalledExactlyOnceWith({ templateId: "board_86", presetId: "board_86_bundle", quantity: 1 })
 
     const base = previewOf(renderView())
     expect(base).toContain("6,300,000원")
     expect(base).not.toContain("T1 카메라")
     expect(base).not.toContain("작성 창은 기본 구성으로 열립니다.")
 
-    const bundle = previewOf(renderView({ selection: { templateId: "board_86", presetId: "board_86_bundle" } }))
+    const bundle = previewOf(renderView({ selection: { templateId: "board_86", presetId: "board_86_bundle", quantity: 1 } }))
     expect(bundle).toContain("8,000,000원")
     expect(bundle).toMatch(/data-preset-id="board_86_bundle"[^>]*aria-pressed="true"/)
     expect(bundle).toMatch(/data-preset-id="board_86_classroom"[^>]*aria-pressed="false"/)
     expect(bundle).toContain("T1 카메라")
     expect(bundle).toContain("벽걸이 설치")
-    // 작성기는 프리셋 지정 열기를 받지 않는다 — 그 사실을 화면에 적는다.
-    expect(bundle).toContain("작성 창은 기본 구성으로 열립니다.")
+    expect(bundle).not.toContain("작성 창은 기본 구성으로 열립니다.")
   })
 
   it("미리보기 값은 템플릿 정의에서 계산한다 — 작성기의 첫 시트와 같은 호출", () => {
@@ -319,46 +321,61 @@ describe("견적서 탭 — 템플릿 목록과 첫 템플릿 미리보기", () 
           expected.subtotalAmount
         )
       }
-      // 프리셋 없이 연 구성 = 작성 창이 처음 여는 구성.
-      expect(buildQuoteTemplatePreview(template.id).matchesDefault).toBe(true)
+      expect(buildQuoteTemplatePreview(template.id).quantity).toBe(1)
     }
     // 안내 행은 금액·수량을 찍지 않고, 별도 청구 행은 합계에 넣지 않는다.
     expect(buildQuoteTemplatePreview("recording_studio").lines.at(-1)).toMatchObject({ kind: "note", quantity: null, amount: null })
     const camera = buildQuoteTemplatePreview("camera_t1")
     expect(camera.lines.at(-1)).toMatchObject({ name: "카메라 설치", kind: "pending", amount: null })
     expect(camera.pendingAmountNote).toBe("별도 청구 예정 항목은 합계에서 제외됩니다.")
-    // 작성기(수정 금지 파일)의 첫 시트 계산이 바뀌면 여기도 같이 봐야 한다.
     const composer = readFileSync(join(process.cwd(), "components/portal/quotes/QuickQuoteComposer.tsx"), "utf8")
-    expect(composer).toContain("input: { templateId, presetId },")
-    expect(composer).toContain("baseQuantity: 1,")
+    expect(composer).toContain("buildStandardQuoteFromPreset(templateId, presetId, baseQuantity, patch)")
   })
 })
 
 describe("이 템플릿으로 작성 → 작성기", () => {
-  it("버튼은 지금 고른 템플릿 id 를 넘긴다", () => {
+  it("버튼은 지금 고른 템플릿과 기본 수량을 넘긴다", () => {
     for (const template of pickable) {
-      const props = viewProps({ selection: { templateId: template.id, presetId: null } })
+      const props = viewProps({ selection: { templateId: template.id, presetId: null, quantity: 1 } })
       const buttons = findElements(
         QuoteTemplatePickerView(props),
         (element) => element.type === "button" && textOf(element).includes("이 템플릿으로 작성")
       )
       expect(buttons).toHaveLength(1)
       ;(buttons[0].props.onClick as () => void)()
-      expect(props.onCompose).toHaveBeenCalledExactlyOnceWith(template.id)
+      expect(props.onCompose).toHaveBeenCalledExactlyOnceWith({ templateId: template.id, presetId: null, quantity: 1 })
     }
   })
 
-  it("패널은 넘겨받은 템플릿 id 로 작성기를 연다", () => {
+  it("수량 변경은 선택한 구성을 보존하고 미리보기 합계와 작성기에 전달된다", () => {
+    const selection = { templateId: "board_86", presetId: "board_86_bundle", quantity: 3 } as const
+    const props = viewProps({ selection })
+    const view = QuoteTemplatePickerView(props)
+    const inputs = findElements(view, (element) => element.type === "input" && element.props.type === "number")
+    expect(inputs).toHaveLength(1)
+    ;(inputs[0].props.onChange as (event: unknown) => void)({ target: { value: "4", valueAsNumber: 4 } })
+    expect(props.onSelectPreset).toHaveBeenCalledExactlyOnceWith({ ...selection, quantity: 4 })
+    const buttons = findElements(view, (element) => element.type === "button" && textOf(element).includes("이 템플릿으로 작성"))
+    ;(buttons[0].props.onClick as () => void)()
+    expect(props.onCompose).toHaveBeenCalledExactlyOnceWith(selection)
+    expect(previewOf(renderView({ selection }))).toContain("24,000,000원")
+    const billedLines = buildQuoteTemplatePreview("board_86", "board_86_bundle", 3).lines
+      .filter((line) => (line.amount ?? 0) > 0)
+    expect(billedLines.map((line) => line.quantity)).toEqual([3, 3, 3])
+  })
+
+  it("패널은 넘겨받은 빠른 구성과 수량으로 작성기를 연다", () => {
     renderPanel({ view: "templates" })
-    captured.picker?.onCompose("board_75")
-    // 1 = composerTemplateId, 0 = composerOpen
+    const selection = { templateId: "board_75", presetId: "board_75_t1_addon", quantity: 3 } as const
+    captured.picker?.onCompose(selection)
+    // 1 = composerTemplate, 0 = composerOpen
     expect(state.setCalls).toEqual([
-      [1, "board_75"],
+      [1, selection],
       [0, true],
     ])
 
-    renderPanel({ view: "templates" }, { 0: true, 1: "board_75" })
-    expect(captured.composer).toMatchObject({ open: true, initialTemplateId: "board_75" })
+    renderPanel({ view: "templates" }, { 0: true, 1: selection })
+    expect(captured.composer).toMatchObject({ open: true, initialTemplateId: "board_75", initialPresetId: "board_75_t1_addon", initialQuantity: 3 })
   })
 
   it("작성기가 저장하면 그 견적을 선택하고 페이지에 알린다(페이지가 히스토리 탭으로 넘긴다)", async () => {

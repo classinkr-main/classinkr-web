@@ -71,6 +71,63 @@ export function readChatbotClaudeConfig(env: Env = process.env): ChatbotClaudeCo
   }
 }
 
+// ─── 답 색인 모델 선택 층(lib/chatbot/answer-index/assist.ts)의 고르기·올림·대체 설정 ─────────────────────
+//
+//   CHATBOT_ASSIST_PICK_PROVIDER      gemini(기본) | claude — 고르기(②) 업체
+//   CHATBOT_ASSIST_PICK_MODEL         고르기 모델. gemini 면 비워 두면 basic 티어 1순위(지금 동작, 대역을 잰 모델),
+//                                     claude 면 기본 claude-haiku-5-5
+//   CHATBOT_ASSIST_ESCALATE           off(기본) | on — 애매한 고름을 Claude 로 한 번 더 고르기(③)
+//   CHATBOT_ASSIST_ESCALATE_MODEL     올림 모델(기본 claude-sonnet-5-5)
+//   CHATBOT_ASSIST_ESCALATE_TIMEOUT_MS 올림 한 번의 시간 상한(기본 3,000ms, 남은 라우트 예산 안에서)
+//   CHATBOT_ASSIST_CROSS_FALLBACK     off(기본) | on — Gemini 고르기가 402·429·5xx·차단기면 Claude Haiku 로 한 번(⑤)
+//   CHATBOT_CLAUDE_DAILY_BUDGET_USD   선택 층 Claude 호출의 KST 하루 상한(기본 1). 넘으면 ③⑤를 끄고 Gemini 고르기만 돈다
+
+export type AssistPickProvider = "gemini" | "claude"
+
+export interface AssistPickConfig {
+  pickProvider: AssistPickProvider
+  /** 고르기 모델. gemini 이고 env 가 없으면 null(basic 1순위). */
+  pickModel: string | null
+  escalate: boolean
+  escalateModel: string
+  escalateTimeoutMs: number
+  crossFallback: boolean
+  crossFallbackModel: string
+  dailyBudgetUsd: number
+  apiKeys: string[]
+}
+
+export const DEFAULT_ASSIST_CLAUDE_PICK_MODEL = "claude-haiku-5-5"
+export const DEFAULT_ASSIST_ESCALATE_MODEL = "claude-sonnet-5-5"
+export const DEFAULT_ASSIST_CROSS_FALLBACK_MODEL = "claude-haiku-5-5"
+export const DEFAULT_ASSIST_ESCALATE_TIMEOUT_MS = 3000
+export const DEFAULT_ASSIST_CLAUDE_DAILY_BUDGET_USD = 1
+
+export function readAssistPickConfig(env: Env = process.env): AssistPickConfig {
+  const pickProvider: AssistPickProvider = env.CHATBOT_ASSIST_PICK_PROVIDER?.trim().toLowerCase() === "claude" ? "claude" : "gemini"
+  const pickModelEnv = env.CHATBOT_ASSIST_PICK_MODEL?.trim() || null
+  return {
+    pickProvider,
+    pickModel: pickProvider === "claude" ? (pickModelEnv ?? DEFAULT_ASSIST_CLAUDE_PICK_MODEL) : pickModelEnv,
+    escalate: bool(env.CHATBOT_ASSIST_ESCALATE, false),
+    escalateModel: env.CHATBOT_ASSIST_ESCALATE_MODEL?.trim() || DEFAULT_ASSIST_ESCALATE_MODEL,
+    escalateTimeoutMs: Math.round(num(env.CHATBOT_ASSIST_ESCALATE_TIMEOUT_MS, DEFAULT_ASSIST_ESCALATE_TIMEOUT_MS, { min: 200, max: 20_000 })),
+    crossFallback: bool(env.CHATBOT_ASSIST_CROSS_FALLBACK, false),
+    crossFallbackModel: DEFAULT_ASSIST_CROSS_FALLBACK_MODEL,
+    dailyBudgetUsd: num(env.CHATBOT_CLAUDE_DAILY_BUDGET_USD, DEFAULT_ASSIST_CLAUDE_DAILY_BUDGET_USD),
+    apiKeys: resolveAnthropicKeys(env),
+  }
+}
+
+/** 기본(지금 동작)과 다른 설정이면 답 캐시 열쇠에 붙일 꼬리. 기본이면 빈 글(열쇠가 그대로다). */
+export function assistPickCacheSuffix(config: AssistPickConfig): string {
+  const parts: string[] = []
+  if (config.pickProvider === "claude" || config.pickModel) parts.push(`pick-${config.pickProvider}:${config.pickModel ?? "basic"}`)
+  if (config.escalate) parts.push(`esc-${config.escalateModel}`)
+  if (config.crossFallback) parts.push(`xfb-${config.crossFallbackModel}`)
+  return parts.length > 0 ? `+${parts.join("+")}` : ""
+}
+
 /** 이 요청을 Claude 로 보낼지 — provider·키·카나리 비율. 예산·분당 상한은 budget.ts 가 따로 본다. */
 export function shouldUseClaudeForAnswer(config: ChatbotClaudeConfig, random: () => number = Math.random): boolean {
   if (config.provider !== "claude") return false

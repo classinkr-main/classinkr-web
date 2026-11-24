@@ -16,6 +16,7 @@ import {
   type BranchPipelineResponse,
   type Period,
 } from "../types"
+import { LENS_TAB_ORDER } from "./ledger-lens-tabs"
 import {
   DRAFT_OPERATIONS,
   draftConfidenceFromMetadata,
@@ -266,7 +267,7 @@ const MATRIX_TOAST_MAX = 3
 // 하이라이트를 소비하는 매트릭스 행 메모(RevMatrixGroupRow 등)가 불필요하게 리렌더된다(웨이브 5, 항목 1).
 const EMPTY_MONTH_SET: Set<string> = new Set()
 const LENSES: Array<{ id: LedgerLens; label: string; description: string }> = [
-  { id: "ledger", label: "장부", description: "기본 · 월 요약(내 담당 확정/고확도/예정 한 화면, 팀·전체는 담당자별 합계)과 주차 검수(REV 표)를 한 탭에서" },
+  { id: "ledger", label: "장부", description: "기본 · 건별 시트(주차 칸에 바로 입력) — 기관별·매니저별 보기와 주차 검수(REV 표)도 이 탭에서" },
   { id: "dsh", label: "DSH", description: "수치 상세 · 목표/실적 그리드" },
   { id: "rev", label: "REV", description: "주차·목표 수치 검수와 행 상세" },
   { id: "board", label: "보드", description: "주차 Forecast 칸반 · 확정/고확도/예정 카드 검수" },
@@ -274,8 +275,12 @@ const LENSES: Array<{ id: LedgerLens; label: string; description: string }> = [
 ]
 // 탭 줄에 보이는 렌즈(2026-10-26 장부·REV 통합). REV 는 탭이 아니라 장부 탭 안의 "주차 검수" 보기다 —
 // 렌즈 값(rev)·?lens=rev 딥링크는 그대로 두고, 탭 줄에서만 장부 탭 하나로 보인다.
-const LENS_TABS = LENSES.filter((item) => item.id !== "rev")
-// 장부 탭 안 보기 전환 — 월 요약(ledger 렌즈) ↔ 주차 검수(rev 렌즈).
+// 2026-11-23: 순서는 DSH · 장부 · 보드 · 콕핏(ledger-lens-tabs.ts LENS_TAB_ORDER 가 정본)이고, 보드·콕핏은
+// 전체 사이드바 계정에게만 보인다 — 계정별 판정은 visibleLensTabIds 가 한다. 기본 렌즈는 여전히 장부다.
+const LENS_TABS = LENS_TAB_ORDER.flatMap((id) => LENSES.filter((item) => item.id === id))
+// 장부 탭 안의 옛 두 보기(2026-10-26). 2026-11-23 부터 기본 화면은 건별 시트이고 보기 선택은
+// ledger-lens-tabs.ts LEDGER_TABLE_VIEWS(건별 · 기관별 · 매니저별)다 — 월 요약의 고객 합산 표는 "기관별",
+// 담당자 합계는 "매니저별"이 됐고, 주차 검수(rev 렌즈)는 접힌 패널의 버튼과 ?lens=rev 로 연다. 라벨·설명은 그 버튼이 쓴다.
 const LEDGER_VIEWS: Array<{ id: "ledger" | "rev"; label: string; description: string }> = [
   { id: "ledger", label: "월 요약", description: "고객 한 줄 · 월 칸 — 칸을 눌러 바로 고친다" },
   { id: "rev", label: "주차 검수", description: "딜 행 · 주차 칸 · 잠금·불일치 · 엑셀 붙여넣기(기존 REV 표)" },

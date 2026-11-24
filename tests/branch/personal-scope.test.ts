@@ -1,6 +1,6 @@
 import { matchesDataOwner } from "@/lib/crm/personal-owner"
 import { describe, expect, it } from "vitest"
-import { initialBranchManager, scopeDshToManager, UNMAPPED_BRANCH_MEMBER } from "@/lib/branch/personal-scope"
+import { initialBranchManager, ledgerDefaultManager, scopeDshToManager, UNMAPPED_BRANCH_MEMBER } from "@/lib/branch/personal-scope"
 import { summarizeRevenue } from "@/lib/branch/computations/core-kpi"
 import type { DshOutput } from "@/lib/branch/parsers/dsh"
 import type { BranchRevDeal } from "@/lib/repositories/branch-deals"
@@ -16,6 +16,15 @@ const dsh: DshOutput = {
 }
 
 describe("개인 기본 범위", () => {
+  it("장부의 기본 담당자를 공용 계정과 MOON 계정의 실제 매출 범위에 맞춘다", () => {
+    const shared = ledgerDefaultManager("classin-admin")
+    expect(initialBranchManager(new URLSearchParams(), shared)).toBe("")
+    expect(initialBranchManager(new URLSearchParams("mgr=__me"), shared)).toBe("")
+    expect(initialBranchManager(new URLSearchParams("mgr=문준혁"), shared)).toBe("Junhyuk")
+    expect(ledgerDefaultManager("MOON")).toBe("Junhyuk")
+    expect(ledgerDefaultManager("Somang")).toBe("Somang")
+    expect(ledgerDefaultManager(UNMAPPED_BRANCH_MEMBER)).toBe(UNMAPPED_BRANCH_MEMBER)
+  })
   it("담당자 이름은 한영 별명만 연결하고 비슷한 다른 이름을 포함하지 않는다", () => {
     expect(matchesDataOwner("Junhyuk", ["문준혁"])).toBe(true)
     expect(matchesDataOwner("매니저A2", ["매니저A"])).toBe(false)

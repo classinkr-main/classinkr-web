@@ -398,19 +398,15 @@ const CLICK_SKIP_WARMUP_URLS: Record<string, string[]> = {
 const MINIMAL_SCROLLBAR =
   "[scrollbar-width:thin] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-black/10 hover:[&::-webkit-scrollbar-thumb]:bg-black/20"
 
-// 현장 사용 빈도 기준 — 2026-07-29 탭 재구성으로 첫 화면이 캘린더가 되면서 Overview를 내렸다.
-// 나머지는 More의 전체 메뉴에서 접근한다. 전체 사이드바 계정의 하단 바로가기다.
+// 모바일 하단 바로가기는 사이드바의 첫 네 업무 메뉴를 따른다.
 const MOBILE_PRIMARY_NAV = [
-  { href: "/admin/calendar", label: "캘린더" },
+  { href: "/admin/overview", label: "Overview" },
+  { href: "/admin/branch/ledger", label: "장부" },
   { href: "/admin/quotes", label: "견적" },
-  { href: "/admin/crm", label: "CRM" },
+  { href: "/admin/hardware", label: "재고" },
 ] as const
 
-// 간소 사이드바 계정(2026-11-20)의 하단 바로가기 — 위 고정 목록의 캘린더·CRM 은 그 계정에게 숨김이라
-// 견적 하나만 남고 착지 화면(매출 장부)이 빠진다. 그래서 그 계정의 상시 목록을 선언 순서대로 올린다
-// (기본은 매출 장부 · 견적 · 하드웨어 재고 셋, 최고 관리자가 되살려 준 탭이 있으면 4칸까지). 좁은 칸에
-// 맞춘 짧은 라벨. 칸 수는 바로가기 + More 이고 5칸이 상한이라(mobileBottomColumns) 기본 셋 + More =
-// 4칸이 한 줄에 들어간다.
+// 간소 계정은 상시 목록의 앞 네 항목을 바로가기로 쓴다.
 const MOBILE_SIMPLE_NAV_MAX = 4
 const MOBILE_SHORT_LABELS: Record<string, string> = {
   "/admin/branch/ledger": "장부",
@@ -653,7 +649,7 @@ function AdminSidebarContent({ role, name, email, navPreset, navOverrides, onNav
   const normalizedOverrides = useMemo(() => normalizeNavOverrides(navOverrides), [navOverrides])
   // 상시/접힘/숨김 배치는 반드시 resolveAdminNavAccess를 통해서만 계산한다 — 사이드바가 자체
   // 계산을 하면 편집기 미리보기와 어긋난다. 기본값은 계정에 따라 둘이다(2026-11-20): 전체 사이드바
-  // (SUPER_ADMIN · nav_preset "super" 지정 계정)는 D안 배치, 그 밖은 간소(매출 장부 + 견적·문서 + 하드웨어 재고).
+  // (SUPER_ADMIN · nav_preset "super" 지정 계정)는 전체 배치, 그 밖은 간소(Overview + 매출 장부 + 견적·문서 + 하드웨어 재고).
   // 사람별 오버라이드는 그 위에서 항목의 상시/접힘 자리를 옮기거나 내 목록에서 숨길 뿐이다.
   // 어느 쪽이든 목록 정리일 뿐 접근을 막지 않는다 — 주소로는 모든 화면이 열린다.
   const navAccess = useMemo(
@@ -1116,8 +1112,8 @@ function AdminSidebarContent({ role, name, email, navPreset, navOverrides, onNav
               <>
                 {/* 상시 — 소제목 없이 범주 묶음 사이 간격만(2026-11-09 D안, renderFoldedGroups 위 주석). */}
                 <div className="space-y-2.5">
-                  {navAccess.primaryGroups.map(({ category, items }) => (
-                    <div key={`mobile-primary-${category}`} className="space-y-1">
+                  {navAccess.primaryGroups.map(({ items }) => (
+                    <div key={`mobile-primary-${items[0].href}`} className="space-y-1">
                       {items.map((item) => {
                         const isActive = isNavActive(item.href)
 
@@ -1304,8 +1300,8 @@ function AdminSidebarContent({ role, name, email, navPreset, navOverrides, onNav
             {/* 상시 — 소제목 없이 범주 묶음 사이 간격만(2026-11-09 D안, renderFoldedGroups 위 주석).
                 아이콘 레일에서도 같은 간격이 묶음 경계를 보여 준다. */}
             <div className="space-y-2">
-              {navAccess.primaryGroups.map(({ category, items }) => (
-                <div key={`primary-${category}`} className="space-y-0.5">
+              {navAccess.primaryGroups.map(({ items }) => (
+                <div key={`primary-${items[0].href}`} className="space-y-0.5">
                   {items.map((item) => {
                     const isActive = isNavActive(item.href)
 

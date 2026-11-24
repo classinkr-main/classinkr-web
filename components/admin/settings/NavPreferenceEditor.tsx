@@ -33,6 +33,7 @@ import {
   buildNavPreferenceRows,
   getSimpleNavPrimaryLabels,
   resolveAdminNavAccess,
+  resolveAdminLandingHref,
   setCrmSubnavOverride,
   setNavOverride,
   type CrmSubnavPreference,
@@ -109,6 +110,7 @@ export default function NavPreferenceEditor({
   const rows = useMemo(() => buildNavPreferenceRows(ctx), [ctx])
   const crmRows = useMemo(() => buildCrmSubnavPreferenceRows(overrides), [overrides])
   const preview = useMemo(() => resolveAdminNavAccess(ctx), [ctx])
+  const landingHref = resolveAdminLandingHref(ctx)
 
   const foldedItems = preview.folded.flatMap((group) => group.items)
   // 사이드바가 범주마다 따로 접으므로 미리보기도 묶음 단위로 보여 준다 — "주문·매출 2 · 시스템 2".
@@ -149,6 +151,7 @@ export default function NavPreferenceEditor({
         <ul>
           {rows.map(({ item, preference, base, isException, hideable }, index) => {
             const rowReasonId = `${reasonId}-reason-${index}`
+            const lockedReason = item.href === landingHref ? NAV_UNHIDEABLE_REASON : "공통 메뉴는 숨길 수 없습니다"
             return (
             <li
               key={item.href}
@@ -176,7 +179,7 @@ export default function NavPreferenceEditor({
                 </div>
                 {!hideable ? (
                   <p id={rowReasonId} className="mt-0.5 pl-[22px] text-[10.5px] text-[#1a1a1a]/40">
-                    {NAV_UNHIDEABLE_REASON}
+                    {lockedReason}
                   </p>
                 ) : null}
               </div>
@@ -194,7 +197,7 @@ export default function NavPreferenceEditor({
                       type="button"
                       aria-pressed={active}
                       disabled={disabled || locked}
-                      title={locked ? NAV_UNHIDEABLE_REASON : undefined}
+                      title={locked ? lockedReason : undefined}
                       aria-describedby={locked ? rowReasonId : undefined}
                       onClick={() => choose(item.href, option.value)}
                       className={`rounded-md border px-2.5 py-1 text-[11px] font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#084734] disabled:cursor-not-allowed disabled:opacity-40 ${

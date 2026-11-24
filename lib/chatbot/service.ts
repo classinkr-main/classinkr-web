@@ -6,6 +6,8 @@ import {
   streamChatbotFinalAnswer,
   type ChatbotAnswerUsage,
 } from "@/lib/chatbot/answer-provider"
+import { createAssistPickRequests } from "@/lib/chatbot/claude/card-pick"
+import { assistPickCacheSuffix, readAssistPickConfig } from "@/lib/chatbot/claude/config"
 import { maybeLabelChatbotExchange } from "@/lib/chatbot/claude/labeling"
 import { unstable_cache, revalidateTag } from "next/cache"
 import { after } from "next/server"
@@ -35,7 +37,6 @@ import {
   hasChatbotGeminiConnection,
   isModelCircuitOpen,
   pickOutlineSectionIds,
-  requestAnswerCardPick,
   sanitizePublicAnswerText,
   selectAnsweringSentenceIds,
   type ChatbotModelTier,
@@ -92,6 +93,7 @@ import {
   logShadowDecision,
   preIndexTrace,
   routeAnswerIndexWithAnalysis,
+  shadowLogPayload,
 } from "@/lib/chatbot/answer-index"
 import {
   answerAssistMode,
@@ -471,12 +473,12 @@ function getAnswerCacheKey(question: NormalizedQuestion, options?: RetrievalOpti
 
 /**
  * 열쇠의 라우터 칸. compiled 에서 모델 선택 층(CHATBOT_ANSWER_ASSIST)을 켰으면 그 범위를 붙인다(끔·켬·범위를 바꾸면 다른 답).
- * 끔(기본)이면 라우터 이름 그대로다.
+ * 고르기 업체·모델·올림·업체 간 대체를 기본과 다르게 두었으면 그 꼬리도 붙인다(기본이면 꼬리 없음). 끔(기본)이면 라우터 이름 그대로다.
  */
 function answerCacheRouterKey() {
   const router = getAnswerRouter()
   const assist = router === "compiled" ? answerAssistMode() : "off"
-  return assist === "off" ? router : `${router}+assist-${assist}`
+  return assist === "off" ? router : `${router}+assist-${assist}${assistPickCacheSuffix(readAssistPickConfig())}`
 }
 
 /** 답 캐시 열쇠에 넣을 대화 맥락 판단. 지금 말 그대로 검색해도 판단에 따라 답이 다른 경우만 값이 있다. */
@@ -4114,6 +4116,10 @@ async function persistExchange(
       }
     }
 
+    if (getAnswerRouter() === "shadow") {
+      await recordShadowDecisionOnCluster(supabase, searchedQuestion, response)
+    }
+
     return {
       answerEventId: answerEvent.id as string,
       sessionId: resolvedSessionId,
@@ -6223,7 +6229,7 @@ async function buildChatbotCoreBase(
   // 같은 대화에서 증상 안내를 받은 뒤 "해 봤는데 또 안 돼요": 같은 안내를 또 내지 않고 상담 연결로 잇는다(두 라우터 공통).
   if (prepared.triedAgain) return withTurn(buildTriedAlreadyCore(question, startedAt))
   if (!options.includeInternalDocs && getAnswerRouter() === "compiled") {
-    const routed = await routeCompiledQuestionSafely(question, startedAt)
+    const routed = await routeCompiledQuestionSafely(question, startedAt, { expanded: Boolean(prepared.turn.expanded), utterance: prepared.utterance })
     if (routed.core) {
       // 대상 불명 질문에 색인이 정하지 못했으면(못 찾음) legacy 와 같은 되묻기를 낸다(두 라우터 같은 처리).
       if (prepared.turn.reason === "target_unknown" && isNotFoundResponse(routed.core.response)) {
@@ -6423,7 +6429,19 @@ function planCompiledRoute(question: NormalizedQuestion, router: AnswerIndexRout
   return { kind: "index", decision, analysis, votes }
 }
 
-async function routeCompiledQuestion(question: NormalizedQuestion, startedAt: number): Promise<{ core: ChatbotCore | null; trace: AnswerIndexTrace }> {
+/** 모델 선택 층 올림 조건 (c)의 대화 신호(buildChatbotCoreBase 가 넘긴다). */
+interface CompiledRouteSignals {
+  /** 대화 맥락으로 넓힌 질문인지. */
+  expanded: boolean
+  /** 이번 말 그대로(말투는 넓히기 전 말로 본다). */
+  utterance: NormalizedQuestion
+}
+
+async function routeCompiledQuestion(
+  question: NormalizedQuestion,
+  startedAt: number,
+  signals?: CompiledRouteSignals
+): Promise<{ core: ChatbotCore | null; trace: AnswerIndexTrace }> {
   const plan = planCompiledRoute(question, "compiled", startedAt)
   if (plan.kind === "legacy") return { core: null, trace: plan.trace }
   if (plan.kind === "pre") {
@@ -6435,15 +6453,28 @@ async function routeCompiledQuestion(question: NormalizedQuestion, startedAt: nu
   }
   const index = getRouterAnswerIndex()
   // 모델 선택 층(CHATBOT_ANSWER_ASSIST, 기본 off). off 면 결정형 판정 그대로이고 모델을 부르지 않는다.
+  // 고르기(②)·올림(③)·업체 간 대체(⑤)·하루 상한(⑥)은 lib/chatbot/claude/card-pick.ts. 기본 env 는 basic 1순위 Gemini 한 번(지금 동작).
+  const mode = answerAssistMode()
+  const requests = mode === "off" ? null : createAssistPickRequests(readAssistPickConfig())
+  const tone = requests?.escalate ? detectConversationTone((signals?.utterance ?? question).redacted) : null
   const assisted = await maybeAssistWithModel({
     index,
     analysis: plan.analysis,
     decision: plan.decision,
     question: question.redacted,
-    mode: answerAssistMode(),
-    request: requestAnswerCardPick,
+    mode,
+    request: requests?.pick ?? (async () => ({ ok: false, reason: "error", model: null })),
     isPolicyTopic: () => isPolicyGovernedTopic(question),
     timeoutMs: assistTimeoutMs(),
+    ...(requests?.escalate
+      ? {
+          escalate: requests.escalate,
+          escalateTimeoutMs: requests.config.escalateTimeoutMs,
+          // 올림은 남은 라우트 예산(두 번째 기회와 같은 11초) 안에서만.
+          deadlineAt: startedAt + SECOND_CHANCE_ROUTE_BUDGET_MS,
+          escalateSignals: { expanded: signals?.expanded ?? false, angry: tone?.angry ?? false, repeated: tone?.repeated ?? false },
+        }
+      : {}),
   })
   const respondContext = { index, host: answerIndexHost, router: "compiled" as const, version: answerIndexVersionOf(index) }
   let built = buildAnswerIndexCore(assisted.decision, question, startedAt, respondContext)
@@ -6458,6 +6489,8 @@ async function routeCompiledQuestion(question: NormalizedQuestion, startedAt: nu
   // 문서 문장을 그대로 내므로 문장에 원본 URL·문서 경로가 있으면 공개 답에서 지운다(스트림 경로와 같은 정리, 제자리 수정).
   finalizeAnswer(core.response)
   noteAssistModelFailure(core.response, assisted.modelFailure)
+  // 대화 신호(넓힌 질문·말투)로 올린 답은 같은 검색 글이라도 신호에 따라 달라질 수 있어 답 캐시에 넣지 않는다.
+  if (assistTrace?.escalation?.trigger === "context") selectionFailedResponses.add(core.response)
   return { core, trace: answerIndex }
 }
 
@@ -6466,7 +6499,7 @@ async function routeCompiledQuestion(question: NormalizedQuestion, startedAt: nu
  * 다른 답이 나올 수 있다). 연결이 없는 것(no_connection)은 설정이라 실패로 보지 않는다.
  */
 function noteAssistModelFailure(response: CoreResponse, failure: AnswerCardPickFailure | null) {
-  if (!failure || failure === "no_connection") return
+  if (!failure || failure === "no_connection" || failure === "budget") return
   const state: ChatbotModelState =
     failure === "circuit_open" || failure === "access_denied" || failure === "auth_error"
       ? "circuit_open"
@@ -6483,9 +6516,13 @@ const reportedAnswerIndexFailures = new Set<string>()
  * compiled 경로에서 색인 읽기·컴파일·판정·답 조립이 예외를 내면 손님 답을 막지 않고 지금(legacy) 흐름으로 보낸다.
  * 라우터를 legacy 로 되돌린 것과 같은 상태다(사양 §3.9). 흔적에는 unavailable=index_error 를 남기고, 같은 오류는 한 번만 로그로 남긴다.
  */
-async function routeCompiledQuestionSafely(question: NormalizedQuestion, startedAt: number): Promise<{ core: ChatbotCore | null; trace: AnswerIndexTrace }> {
+async function routeCompiledQuestionSafely(
+  question: NormalizedQuestion,
+  startedAt: number,
+  signals?: CompiledRouteSignals
+): Promise<{ core: ChatbotCore | null; trace: AnswerIndexTrace }> {
   try {
-    return await routeCompiledQuestion(question, startedAt)
+    return await routeCompiledQuestion(question, startedAt, signals)
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     if (!reportedAnswerIndexFailures.has(message) && reportedAnswerIndexFailures.size < 20) {
@@ -7349,12 +7386,83 @@ export async function streamChatbotQuery(
 
 const NEGATIVE_FEEDBACK_REGRESSION_THRESHOLD = 2
 
+function readNonNegativeInt(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? Math.floor(value) : 0
+}
+
+async function recordShadowDecisionOnCluster(
+  supabase: ReturnType<typeof createSupabaseAdminClient>,
+  question: NormalizedQuestion,
+  response: Omit<ChatbotQueryResponse, "answerEventId" | "sessionId" | "handoffIntent">
+) {
+  try {
+    const plan = planCompiledRoute(question, "shadow", Date.now())
+    const payload =
+      plan.kind === "index"
+        ? shadowLogPayload({
+            question: question.redacted,
+            decision: plan.decision,
+            legacyDecidedBy: response.answerMode,
+          })
+        : shadowLogPayload({
+            question: question.redacted,
+            decision: null,
+            skipped: plan.trace.scope === "out" ? "scope_out" : (plan.trace.pre ?? "skipped"),
+            legacyDecidedBy: response.answerMode,
+          })
+
+    const canonical = canonicalizeClusterQuestion(question.redacted)
+    const { data: clusterRow, error: clusterError } = await supabase
+      .from("question_clusters")
+      .select("id, metadata")
+      .eq("canonical_question", canonical)
+      .maybeSingle()
+
+    if (clusterError || !clusterRow) return
+
+    const row = clusterRow as { id: string; metadata?: Record<string, unknown> | null }
+    const existingMetadata = getContextObject(row.metadata)
+    const prevShadow = getContextObject(existingMetadata.answerIndexShadow)
+    const nextTotal = readNonNegativeInt(prevShadow.total) + 1
+    const nextAnswerCount =
+      readNonNegativeInt(prevShadow.answerCount) + (payload.decision === "answer" ? 1 : 0)
+    const nextAbstainCount =
+      readNonNegativeInt(prevShadow.abstainCount) + (payload.decision === "abstain" ? 1 : 0)
+    const nextSkippedCount =
+      readNonNegativeInt(prevShadow.skippedCount) +
+      (payload.decision !== "answer" && payload.decision !== "abstain" ? 1 : 0)
+
+    const nextMetadata: Record<string, unknown> = {
+      ...existingMetadata,
+      answerIndexShadow: {
+        total: nextTotal,
+        answerCount: nextAnswerCount,
+        abstainCount: nextAbstainCount,
+        skippedCount: nextSkippedCount,
+        lastDecision: payload.decision,
+        lastConf: payload.conf,
+        lastTop: payload.top,
+        lastLegacyMode: response.answerMode,
+        lastUpdatedAt: new Date().toISOString(),
+      },
+    }
+
+    await supabase.from("question_clusters").update({ metadata: nextMetadata }).eq("id", row.id)
+  } catch (error) {
+    console.warn(
+      "[chatbot] failed to record shadow comparison:",
+      error instanceof Error ? error.message : error
+    )
+  }
+}
+
 async function recordNegativeFeedbackOnCluster(
   supabase: ReturnType<typeof createSupabaseAdminClient>,
   params: {
     answerEventId: string
     question: string | null
     category: string | null
+    hasComment?: boolean
   }
 ) {
   try {
@@ -7396,13 +7504,7 @@ async function recordNegativeFeedbackOnCluster(
       metadata?: Record<string, unknown> | null
     }
     const existingMetadata = getContextObject(row.metadata)
-    const prevNotHelpfulCount =
-      typeof existingMetadata.notHelpfulCount === "number" &&
-      Number.isFinite(existingMetadata.notHelpfulCount) &&
-      existingMetadata.notHelpfulCount >= 0
-        ? Math.floor(existingMetadata.notHelpfulCount)
-        : 0
-    const nextNotHelpfulCount = prevNotHelpfulCount + 1
+    const nextNotHelpfulCount = readNonNegativeInt(existingMetadata.notHelpfulCount) + 1
 
     const nextMetadata: Record<string, unknown> = {
       ...existingMetadata,
@@ -7410,11 +7512,11 @@ async function recordNegativeFeedbackOnCluster(
       lastNegativeFeedbackAt: new Date().toISOString(),
     }
 
-    // 반복적인 부정 피드백(>= 2회)이 쌓인 클러스터는 회귀 후보로 자동 승격한다.
+    // 코멘트가 포함된 부정 피드백(1회) 또는 2회 이상 누적된 부정 피드백 클러스터는 회귀 후보로 자동 승격한다.
     // 단, 어드민이 명시적으로 비활성화(enabled === false)한 항목은 덮어쓰지 않는다.
     const existingCandidate = getContextObject(existingMetadata.regressionCandidate)
     if (
-      nextNotHelpfulCount >= NEGATIVE_FEEDBACK_REGRESSION_THRESHOLD &&
+      (params.hasComment || nextNotHelpfulCount >= NEGATIVE_FEEDBACK_REGRESSION_THRESHOLD) &&
       existingCandidate.enabled !== false &&
       existingCandidate.enabled !== true
     ) {
@@ -7423,7 +7525,7 @@ async function recordNegativeFeedbackOnCluster(
         expectedCategory: normalizeString(row.category) ?? params.category ?? "general",
         expectedModes: ["direct_answer", "doc_suggestion", "handoff"],
         expectedPathIncludes: null,
-        reason: "negative_feedback",
+        reason: params.hasComment ? "negative_feedback_comment" : "negative_feedback",
         addedAt: new Date().toISOString(),
       }
     }
@@ -7510,6 +7612,7 @@ export async function saveChatbotFeedback(raw: unknown) {
       answerEventId,
       question: normalizeString(answerEventRecord.normalized_question) ?? null,
       category: normalizeString(answerEventRecord.detected_category) ?? null,
+      hasComment: Boolean(comment),
     })
   }
 
@@ -7753,6 +7856,14 @@ async function computeChatbotStats(from: string, to: string | undefined) {
       categories: [],
       channelHandoffs: summarizeChannelHandoffs([]),
       avgConfidence: null,
+      answerIndexShadow: {
+        clusterCount: 0,
+        totalEvaluated: 0,
+        answerCount: 0,
+        abstainCount: 0,
+        skippedCount: 0,
+        hitRate: null as number | null,
+      },
       warning: "Supabase 환경변수가 없어 챗봇 통계를 조회하지 않았습니다.",
     }
   }
@@ -7819,6 +7930,13 @@ async function computeChatbotStats(from: string, to: string | undefined) {
 
   const clusterIds = Array.from(new Set(rows.map((row) => row.cluster_id).filter((id) => UUID_RE.test(id))))
   const regressionCandidateClusterIds = new Set<string>()
+  const shadowStats = {
+    clusterCount: 0,
+    totalEvaluated: 0,
+    answerCount: 0,
+    abstainCount: 0,
+    skippedCount: 0,
+  }
 
   if (clusterIds.length > 0) {
     const { data: clusterRows, error: clusterError } = await supabase
@@ -7831,6 +7949,15 @@ async function computeChatbotStats(from: string, to: string | undefined) {
     for (const row of (clusterRows ?? []) as QuestionClusterMetadataRow[]) {
       if (getRegressionCandidateMetadata(row.metadata)) {
         regressionCandidateClusterIds.add(row.id)
+      }
+      const shadow = getContextObject(row.metadata?.answerIndexShadow)
+      const total = readNonNegativeInt(shadow.total)
+      if (total > 0) {
+        shadowStats.clusterCount += 1
+        shadowStats.totalEvaluated += total
+        shadowStats.answerCount += readNonNegativeInt(shadow.answerCount)
+        shadowStats.abstainCount += readNonNegativeInt(shadow.abstainCount)
+        shadowStats.skippedCount += readNonNegativeInt(shadow.skippedCount)
       }
     }
   }
@@ -7881,6 +8008,13 @@ async function computeChatbotStats(from: string, to: string | undefined) {
     ),
     channelHandoffs: summarizeChannelHandoffs(handoffRows),
     avgConfidence: averageRatio(confidences),
+    answerIndexShadow: {
+      ...shadowStats,
+      hitRate:
+        shadowStats.totalEvaluated === 0
+          ? null
+          : Number((shadowStats.answerCount / shadowStats.totalEvaluated).toFixed(4)),
+    },
   }
 }
 

@@ -47,10 +47,10 @@ describe("admin quick quote composer shell", () => {
     expect(source).toContain('aria-label="발행일"')
     expect(source).toContain('aria-label="유효기한"')
     expect(source).toContain('aria-label="품목명"')
-    expect(source).toContain('aria-label="세부 내역"')
+    expect(source).toContain('aria-label={`${line.itemName} 세부 내역`}')
     expect(source).toContain('label="기타사항"')
     // 수신 칸 하나로 기존 고객(자동완성 일치)과 새 고객을 가른다.
-    expect(source).toContain('list="quick-quote-customer-options"')
+    expect(source).toContain('list={initialDraft ? undefined : "quick-quote-customer-options"}')
     expect(source).toContain("function handleRecipientChange(")
   })
 

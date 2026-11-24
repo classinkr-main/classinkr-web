@@ -858,4 +858,43 @@ export interface AnswerIndexAssistTrace {
   rejectReason: string | null
   /** 결정형 판정(모델 전). */
   original: { kind: AnswerIndexDecisionKind; card: string | null; conf: number }
+  /**
+   * 아래 칸은 업체 고르기·대체 층(lib/chatbot/claude/card-pick.ts)을 거친 호출에만 있다. pick·pickCard·model·provider 는 최종 판정에 쓴
+   * 고름이다(올림이 성공했으면 올림 모델의 고름, 고르기 단계의 고름은 first).
+   */
+  provider?: "gemini" | "claude"
+  /** 이 질문의 Claude 호출 토큰·추정 비용(고르기·대체·올림 합). Claude 를 부르지 않았으면 없다. */
+  usage?: AnswerIndexAssistUsage
+  /** 1순위 Gemini 고르기가 402·429·5xx·차단기로 실패해 Claude Haiku 로 다시 골랐는지. */
+  crossFallback?: boolean
+  /** 하루 상한(CHATBOT_CLAUDE_DAILY_BUDGET_USD) 때문에 Claude 를 건너뛰었는지. */
+  budgetBlocked?: boolean
+  /** 올림(CHATBOT_ASSIST_ESCALATE)을 실제로 불렀는지. 올림이 꺼져 있으면 없다. */
+  escalated?: boolean
+  /** 올림 판단·결과. 올림 조건에 걸렸을 때만 있다. */
+  escalation?: AnswerIndexAssistEscalation
+}
+
+export interface AnswerIndexAssistUsage {
+  inputTokens: number
+  outputTokens: number
+  cacheReadInputTokens: number
+  cacheCreationInputTokens: number
+  usd: number
+  calls: { stage: "pick" | "cross" | "escalate"; model: string; inputTokens: number; outputTokens: number; cacheReadInputTokens: number; cacheCreationInputTokens: number; usd: number }[]
+}
+
+export interface AnswerIndexAssistEscalation {
+  /** disagree: 고른 답 카드가 결정형 답 카드와 다름 · none_vs_abstain: 고르기 0·결정형 못 찾음·NODOC 신호 없음 · context: 넓힌 질문·두 조각·화남/반복. */
+  trigger: "disagree" | "none_vs_abstain" | "context"
+  /** 부르지 않은 이유(budget·no_connection·deadline). 불렀으면 null. */
+  skipped: string | null
+  model: string | null
+  /** 올림 모델의 고름. 부르지 않았거나 실패했으면 null. */
+  pick: number | null
+  ms: number | null
+  /** 올림 호출 실패 이유(실패하면 결정형 판정 그대로). */
+  failure: string | null
+  /** 고르기 단계(②)의 고름. */
+  first: { provider: "gemini" | "claude" | null; model: string | null; pick: number; pickCard: string | null }
 }

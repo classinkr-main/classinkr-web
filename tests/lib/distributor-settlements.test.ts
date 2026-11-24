@@ -17,7 +17,9 @@ import {
   type DistributorPriceRule,
 } from "@/lib/distributor-settlements"
 import type { PartnerQuoteDetailsInput, PartnerQuoteLineItemInput } from "@/lib/partners-types"
-import { CLASSIN_QUOTE_SUPPLIER, STANDARD_QUOTE_SUPPLIER } from "@/lib/standard-quote-template"
+import { CLASSIN_QUOTE_SUPPLIER, STANDARD_QUOTE_SUPPLIER, moveQuoteLine } from "@/lib/standard-quote-template"
+import { createQuoteChargeLine, QUOTE_CHARGE_OPTIONS } from "@/lib/quote-custom-charges"
+import { writeQuoteGeneralNotes } from "@/lib/quote-composer-notes"
 
 const CUSTOMER_LINES: PartnerQuoteLineItemInput[] = [
   { sortOrder: 1, lineNumber: 1, itemType: "hardware", itemCode: "board-86", itemName: '86" 전자칠판', quantity: 2, unitPrice: 6_300_000 },
@@ -80,9 +82,46 @@ describe("distributor settlement lines", () => {
     expect(getDistributorIssueBlocker({ lines, vatIncluded: true, distributorName: " " })).toContain("총판 이름")
     expect(getDistributorIssueBlocker({ lines, vatIncluded: true, distributorName: "총판" })).toBeNull()
   })
+
+  it("배송비가 첫 행으로 이동해도 기존에 설정한 총판 원가와 포함 여부를 유지한다", () => {
+    const shipping = { ...createQuoteChargeLine("shipping", QUOTE_CHARGE_OPTIONS.shipping.itemCode, 5), unitPrice: 80_000 }
+    const original = [...CUSTOMER_LINES, shipping]
+    const previous = buildDistributorLinesFromQuote(original, { rules: RULES }).map((line) =>
+      line.itemType === "shipping" ? { ...line, included: true, unitPrice: 45_000 } : line
+    )
+    const moved = buildDistributorLinesFromQuote(moveQuoteLine(original, 4, 0), { previous })
+    expect(moved[0]).toMatchObject({ itemName: "배송비", sourceLineNumber: 1, included: true, unitPrice: 45_000 })
+    expect(moved[1]).toMatchObject({ itemCode: "board-86", sourceLineNumber: 2, included: true, unitPrice: 5_500_000 })
+  })
 })
 
 describe("distributor quote document", () => {
+  it("자동 안내를 총판 견적의 부가세와 청구 품목으로 다시 계산한다", () => {
+    const lineItems = [
+      CUSTOMER_LINES[0],
+      { ...createQuoteChargeLine("shipping", QUOTE_CHARGE_OPTIONS.shipping.itemCode, 2), unitPrice: 80_000 },
+      { ...createQuoteChargeLine("installation", QUOTE_CHARGE_OPTIONS.installation.itemCode, 3), unitPrice: 300_000 },
+    ]
+    const customer: PartnerQuoteDetailsInput = {
+      templateId: "board_86",
+      vatIncluded: false,
+      lineItems,
+      optionSelections: { general_vat: true, general_delivery_cost: true },
+    }
+    customer.generalNotes = writeQuoteGeneralNotes("납품 일정은 별도 협의", customer, ["general_vat", "general_delivery_cost"])
+    const lines = buildDistributorLinesFromQuote(lineItems, { rules: RULES }).map((line) =>
+      line.itemType === "installation" ? { ...line, included: true, unitPrice: 100_000 } : line
+    )
+    const document = buildDistributorQuoteDetails(customer, {
+      ...DEFAULT_HARDWARE_DISTRIBUTOR,
+      lines,
+      vatIncluded: true,
+      notes: null,
+    })
+    expect(document.lineItems?.map((line) => line.unitPrice)).toEqual([5_500_000, 100_000])
+    expect(document.generalNotes).toBe("납품 일정은 별도 협의\n상기 금액은 부가세 포함 금액입니다.\n설치비: 견적 포함")
+  })
+
   it("keeps the customer quote format but swaps recipient and amounts", () => {
     const customer: PartnerQuoteDetailsInput = {
       templateId: "board_86",

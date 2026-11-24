@@ -10,6 +10,7 @@ const {
   getQuoteDocument,
   updateQuoteDocument,
   ensureQuoteDocumentShare,
+  markQuoteDraftShared,
   getDeal,
   convertQuoteToContract,
   findContractDocumentBySourceQuote,
@@ -19,6 +20,7 @@ const {
   getQuoteDocument: vi.fn(),
   updateQuoteDocument: vi.fn(),
   ensureQuoteDocumentShare: vi.fn(),
+  markQuoteDraftShared: vi.fn(),
   getDeal: vi.fn(),
   convertQuoteToContract: vi.fn(),
   findContractDocumentBySourceQuote: vi.fn(),
@@ -34,10 +36,12 @@ vi.mock("@/lib/portal/portal-authorize", () => ({
   getActorInfo: vi.fn(() => ({ actor_user_id: "admin-1", actor_role: "admin" })),
 }))
 vi.mock("@/lib/portal/repositories/deals", () => ({ getDeal, updateDeal: vi.fn() }))
-vi.mock("@/lib/portal/repositories/quote-documents", () => ({
+vi.mock("@/lib/portal/repositories/quote-documents", async (importOriginal) => ({
+  QuoteDraftVersionConflictError: (await importOriginal<typeof import("@/lib/portal/repositories/quote-documents")>()).QuoteDraftVersionConflictError,
   getQuoteDocument,
   updateQuoteDocument,
   ensureQuoteDocumentShare,
+  markQuoteDraftShared,
   createQuoteDocumentVersion,
 }))
 vi.mock("@/lib/portal/repositories/contract-documents", () => ({
@@ -104,18 +108,30 @@ describe("POST /api/portal/quotes/[id]/share — 닫힌 견적 상태 보존", (
 
   it("작성 중 견적은 공유하면 shared 가 된다", async () => {
     requirePortalContext.mockResolvedValue(ADMIN_CTX)
-    getQuoteDocument.mockResolvedValue({ id: "qd_1", deal_id: "deal_1", status: "draft" })
+    const document = { id: "qd_1", deal_id: "deal_1", status: "draft", current_version_id: "v1" }
+    getQuoteDocument.mockResolvedValue(document)
     getDeal.mockResolvedValue({ id: "deal_1", partner_account_id: null })
     ensureQuoteDocumentShare.mockResolvedValue({
-      document: { id: "qd_1", status: "draft" },
+      document,
       version: { id: "v1" },
       share: { token: "tok" },
     })
-    updateQuoteDocument.mockResolvedValue({ id: "qd_1", status: "shared" })
+    markQuoteDraftShared.mockResolvedValue({ id: "qd_1", status: "shared" })
 
     const response = await share(post("share"), params)
-    expect(updateQuoteDocument).toHaveBeenCalledWith("qd_1", { status: "shared" })
+    expect(markQuoteDraftShared).toHaveBeenCalledWith("qd_1", "v1")
     expect((await response.json()).document.status).toBe("shared")
+  })
+
+  it("편집 중 최신 버전이 바뀌면 고객 링크를 발급하지 않는다", async () => {
+    requirePortalContext.mockResolvedValue(ADMIN_CTX)
+    getQuoteDocument.mockResolvedValue({ id: "qd_1", deal_id: "deal_1", status: "draft", current_version_id: "v2" })
+    getDeal.mockResolvedValue({ id: "deal_1" })
+
+    const request = new NextRequest(post("share"), { headers: { "x-quote-version-id": "v1" } })
+    const response = await share(request, params)
+    expect(response.status).toBe(409)
+    expect(ensureQuoteDocumentShare).not.toHaveBeenCalled()
   })
 })
 
@@ -189,6 +205,25 @@ describe("POST /api/portal/quotes/[id]/versions — 동의·전환된 견적은 
 
     const response = await createVersion(post("versions", { version_number: 2, total_amount: 1 }), params)
     expect(response.status).toBe(201)
-    expect(createQuoteDocumentVersion).toHaveBeenCalledWith(expect.objectContaining({ quote_document_id: "qd_1", version_number: 2 }))
+    expect(createQuoteDocumentVersion).toHaveBeenCalledWith(expect.objectContaining({ quote_document_id: "qd_1", version_number: 2 }), undefined)
+  })
+
+  it.each([["draft", "v2"], ["shared", "v1"]])("편집 시작 이후 견적이 %s / %s 상태가 되면 저장을 거절한다", async (status, current_version_id) => {
+    requirePortalContext.mockResolvedValue(ADMIN_CTX)
+    getQuoteDocument.mockResolvedValue({ id: "qd_1", deal_id: "deal_1", status, current_version_id })
+
+    const response = await createVersion(post("versions", { draft_version_id: "v1", version_number: 2 }), params)
+    expect(response.status).toBe(409)
+    expect(createQuoteDocumentVersion).not.toHaveBeenCalled()
+  })
+
+  it("현재 초안의 같은 견적 번호로 다음 버전을 저장한다", async () => {
+    requirePortalContext.mockResolvedValue(ADMIN_CTX)
+    getQuoteDocument.mockResolvedValue({ id: "qd_1", deal_id: "deal_1", status: "draft", current_version_id: "v1" })
+    createQuoteDocumentVersion.mockResolvedValue({ id: "v2", version_number: 2 })
+
+    const response = await createVersion(post("versions", { draft_version_id: "v1", version_number: 2 }), params)
+    expect(response.status).toBe(201)
+    expect(createQuoteDocumentVersion).toHaveBeenCalledWith(expect.objectContaining({ quote_document_id: "qd_1", version_number: 2 }), "v1")
   })
 })

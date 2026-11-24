@@ -95,7 +95,7 @@ export function normalizeAdminRole(role: string): AdminRole {
   return "ADMIN"
 }
 
-// AI 올인원 항목 — 시안 스위치가 켜졌을 때만 ADMIN_NAV 의 Overview 바로 아래에 들어간다(아래 배열 주석).
+// AI 올인원 항목 — 시안 스위치가 켜졌을 때만 ADMIN_NAV 의 공통 업무 메뉴 뒤에 들어간다(아래 배열 주석).
 const ADMIN_AI_NAV_ITEM: AdminNavItem = { href: ADMIN_AI_HREF, label: "AI 올인원", icon: Sparkles, section: "home", badge: "시안", category: "home", maturity: "wip", keywords: "ai 올인원 갈매봇 챗봇 어시스턴트 오더 원격 오더 오더함 카탈로그 assistant order" }
 
 // IA 재편(2026-07-04): 6섹션 → 4섹션 병합. "너무 세분화" 해소 — 비즈니스 분석(Analytics)은
@@ -120,7 +120,7 @@ const ADMIN_AI_NAV_ITEM: AdminNavItem = { href: ADMIN_AI_HREF, label: "AI 올인
 // 선언 순서로 그룹을 내보내므로 Overview의 그룹이 항상 첫 그룹으로 렌더된다.
 // (2026-09-10 전면 공개) 항목별 roles 필드를 제거했다 — 이 배열은 누구에게도 걸러지지 않는다.
 // (2026-11-20) 기본 배치는 계정에 따라 둘이다: 아래 설명은 전체 사이드바 계정의 것이고, 간소 계정은
-// 매출 장부·견적·문서·하드웨어 재고만 상시다(admin-nav-access.ts SIMPLE_NAV_PRIMARY_HREFS).
+// Overview·매출 장부·견적·문서·하드웨어 재고만 상시다(admin-nav-access.ts SIMPLE_NAV_PRIMARY_HREFS).
 // (2026-11-09 사이드바 재배치 D안) 순서를 하루 동선(일정 → 문의·고객 → 견적·출고 → 매출 성과 → 마케팅
 // → 고객 지원 → 시스템)으로 다시 놓고 범주를 업무 단위로 나눴다 — 홈 · 영업·고객(캘린더·CRM) ·
 // 주문·매출(견적·문서·하드웨어 재고·KR Team·매출 장부) · 마케팅·분석 · 고객 지원(CS 콘솔) · 시스템.
@@ -128,9 +128,13 @@ const ADMIN_AI_NAV_ITEM: AdminNavItem = { href: ADMIN_AI_HREF, label: "AI 올인
 // 상시는 DEFAULT_PRIMARY_HREFS(admin-nav-access.ts, 개수는 그 상수 위 주석이 정본)이고 소제목 없이 범주
 // 사이 간격만 두고 그린다. 나머지는 범주마다 따로 접힌다(주문·매출 · 마케팅·분석 · 시스템).
 // 근거·시안: docs/active/admin-sidebar-reorder-fold-plan-2026-11-09.md.
-// **이 배열의 선언 순서를 바꾸면 상시 목록 순서와 접힘 묶음이 함께 흔들린다** — 범주 연속 블록을 깨지 말 것.
+// **이 배열의 선언 순서를 바꾸면 상시 목록 순서와 접힘 묶음이 함께 흔들린다** — 상시 업무 메뉴 네 개 뒤에 나머지를 배치한다.
 export const ADMIN_NAV: AdminNavItem[] = [
   { href: "/admin/overview", label: "Overview", icon: LayoutDashboard, section: "home", category: "home", keywords: "홈 대시보드 overview home" },
+  { href: "/admin/branch/ledger", label: "매출 장부", icon: ReceiptText, section: "sales", badge: "MVP", category: "revenue", maturity: "wip", keywords: "매출 장부 ledger rev dsh kpi 수치 검수 sales 콕핏" },
+  { href: "/admin/quotes", label: "견적·문서", icon: FileText, section: "sales", category: "revenue", keywords: "견적 계약 영수증 quote contract receipt" },
+  { href: "/admin/hardware", label: "하드웨어 재고", icon: PackageCheck, section: "sales", category: "revenue", keywords: "하드웨어 재고 입고 출고 hardware inventory stock ops" },
+
   // (2026-09-29) AI 올인원 — 갈매봇 대화·오더함·AI 도구 바로가기·오더 카탈로그. 어느 화면에서나 뜨는
   // 갈매봇 위젯(components/admin/ai)의 전체 화면판이다. home 범주 블록 안, Overview 바로 아래.
   // 서버 오더 엔진이 붙기 전이라 시안(샘플 데이터)으로 동작한다 — maturity "wip".
@@ -142,14 +146,8 @@ export const ADMIN_NAV: AdminNavItem[] = [
   { href: "/admin/calendar", label: "캘린더", icon: CalendarDays, section: "sales", category: "customer", keywords: "캘린더 일정 calendar schedule 행사 이벤트 event 웨비나 공개 행사" },
   { href: "/admin/crm", label: "CRM", icon: Users, section: "sales", category: "customer", keywords: "crm 한국팀 매출 korea" },
 
-  // 주문·매출 — 산출물(견적) → 재고 검증(하드웨어) → 성과(KR Team) → 검수(매출 장부).
-  // 하드웨어 재고는 견적서 산출물과 바로 이어지는 재고 검증 표면이라 견적·문서 바로 아래에 둔다(2026-07-18).
-  // KR Team·매출 장부는 2026-07-18 요청으로 섹션 상단에 있었으나, 2026-11-09 D안에서 이 블록 끝으로
-  // 내리고 기본 접힘으로 뒀다(09-24 실측 사람 쓰기 ≈0, 시트 동기화 실패 — admin-usage-triage-2026-09-25.md).
-  { href: "/admin/quotes", label: "견적·문서", icon: FileText, section: "sales", category: "revenue", keywords: "견적 계약 영수증 quote contract receipt" },
-  { href: "/admin/hardware", label: "하드웨어 재고", icon: PackageCheck, section: "sales", category: "revenue", keywords: "하드웨어 재고 입고 출고 hardware inventory stock ops" },
+  // KR Team은 장부와 같은 범주에서 접힘으로 둔다.
   { href: "/admin/branch", label: "KR Team", icon: Building2, section: "sales", category: "revenue", keywords: "지사 브랜치 branch kr team 매출 성과" },
-  { href: "/admin/branch/ledger", label: "매출 장부", icon: ReceiptText, section: "sales", badge: "MVP", category: "revenue", maturity: "wip", keywords: "매출 장부 ledger rev dsh kpi 수치 검수 sales 콕핏" },
 
   // 마케팅·분석 — 허브 → 캠페인 → 분석 → 콘텐츠 → 자료.
   // 메시지 발송 허브(이메일·문자·카카오, /admin/marketing)는 캠페인의 "메시지" 탭으로 흡수 — 라우트는 redirect 유지.

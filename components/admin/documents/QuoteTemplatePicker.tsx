@@ -14,16 +14,17 @@ import {
 } from "@/lib/quote-template-picker"
 import type { QuoteProductLine, StandardQuoteTemplateId } from "@/lib/standard-quote-template"
 
-// 견적서 탭 = 템플릿 화면(2026-11-23 정정). 왼쪽은 템플릿 목록, 오른쪽은 고른 템플릿의 기본 구성 미리보기.
+// 견적서 탭 = 템플릿 화면(2026-11-23 정정). 왼쪽은 템플릿 목록, 오른쪽은 고른 템플릿의 구성·수량 미리보기.
 // 저장한 견적 목록·상세는 히스토리 탭(HardwareQuotesPanel 의 history 화면)이 맡고, 두 화면은 같은 틀을 쓴다.
 //
 // 목록과 미리보기 값은 lib/quote-template-picker.ts 가 템플릿 정의(STANDARD_QUOTE_TEMPLATES)에서 계산한다.
 // 팀 템플릿(quote_team_templates) 줄은 없다 — 작성기가 "팀 템플릿을 지정해 열기"를 받지 않는다
 // (initialTemplateId 는 기본 템플릿 id 만). 팀 템플릿은 작성 창 안의 템플릿 목록에서 고른다.
-// 같은 이유로 작성기는 프리셋 지정도 받지 않아, "이 템플릿으로 작성"은 항상 기본 구성으로 열린다.
+// 미리보기에서 고른 빠른 구성과 수량은 작성기의 첫 견적에 전달한다.
 
 const TEMPLATE_SETTINGS_HREF = "/admin/quotes/templates"
 const DESKTOP_QUERY = "(min-width: 1024px)"
+const PREVIEW_ID = "quote-template-preview"
 
 const TEXT_LINK =
   "font-semibold text-[#084734] underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-1"
@@ -58,13 +59,13 @@ function amountText(line: QuoteTemplatePreviewLine) {
   return line.amount != null ? formatMoney(line.amount) : "—"
 }
 
-export type QuoteTemplatePickerSelection = { templateId: StandardQuoteTemplateId; presetId: string | null }
+export type QuoteTemplatePickerSelection = { templateId: StandardQuoteTemplateId; presetId: string | null; quantity: number }
 
 type QuoteTemplatePickerProps = {
   /** 개인 설정의 숨긴 템플릿 id(useQuoteWorkspacePreferences). */
   hiddenTemplateIds?: readonly string[]
   /** 그 템플릿으로 작성기를 연다. */
-  onCompose: (templateId: StandardQuoteTemplateId) => void
+  onCompose: (selection: QuoteTemplatePickerSelection) => void
 }
 
 export default function QuoteTemplatePicker({ hiddenTemplateIds = [], onCompose }: QuoteTemplatePickerProps) {
@@ -82,12 +83,10 @@ export default function QuoteTemplatePicker({ hiddenTemplateIds = [], onCompose 
       onSearchTermChange={setSearchTerm}
       onProductLineChange={setProductLine}
       onSelect={(next) => {
-        // 좁은 화면에는 미리보기 칸이 없다 — 줄을 누르면 바로 작성 창을 연다.
-        if (typeof window !== "undefined" && !window.matchMedia(DESKTOP_QUERY).matches) {
-          onCompose(next.templateId)
-          return
-        }
         setSelection(next)
+        if (typeof window !== "undefined" && !window.matchMedia(DESKTOP_QUERY).matches) {
+          document.getElementById(PREVIEW_ID)?.scrollIntoView({ block: "start" })
+        }
       }}
       onSelectPreset={setSelection}
       onCompose={onCompose}
@@ -151,10 +150,11 @@ export function QuoteTemplatePickerView({
       ? selection.presetId
       : getDefaultQuoteTemplatePresetId(selected.id)
     : null
-  const preview = selected ? buildQuoteTemplatePreview(selected.id, presetId) : null
+  const quantity = selection && selection.templateId === selected?.id ? selection.quantity : 1
+  const preview = selected ? buildQuoteTemplatePreview(selected.id, presetId, quantity) : null
 
   return (
-    <div className="flex overflow-hidden rounded-[10px] border border-[#e8e8e4] bg-white">
+    <div className="flex flex-col overflow-hidden rounded-[10px] border border-[#e8e8e4] bg-white lg:flex-row">
       <aside aria-label="견적서 템플릿" className="w-full min-w-0 shrink-0 border-[#e8e8e4] lg:w-[400px] lg:border-r">
         <div className="flex flex-col gap-2.5 border-b border-[#e8e8e4] px-3.5 py-3">
           <label className="relative block">
@@ -222,9 +222,9 @@ export function QuoteTemplatePickerView({
                     type="button"
                     data-template-id={template.id}
                     title={template.description}
-                    onClick={() =>
-                      onSelect({ templateId: template.id, presetId: getDefaultQuoteTemplatePresetId(template.id) })
-                    }
+                    onClick={() => onSelect(active && selection?.templateId === template.id
+                      ? selection
+                      : { templateId: template.id, presetId: getDefaultQuoteTemplatePresetId(template.id), quantity: 1 })}
                     aria-pressed={active}
                     className={`block w-full py-2.5 pl-[18px] pr-4 text-left transition-colors ${
                       active ? "bg-[#F6F5F2] shadow-[inset_2px_0_0_#084734]" : "hover:bg-[#FCFCFA]"
@@ -261,13 +261,15 @@ export function QuoteTemplatePickerView({
         </p>
       </aside>
 
-      <div className="hidden min-w-0 flex-1 lg:block">
+      <div id={PREVIEW_ID} className="min-w-0 flex-1 border-t border-[#e8e8e4] lg:border-t-0">
         {preview && selected ? (
           <QuoteTemplatePreviewPane
             preview={preview}
             presets={selected.presets}
-            onSelectPreset={(nextPresetId) => onSelectPreset({ templateId: selected.id, presetId: nextPresetId })}
-            onCompose={() => onCompose(selected.id)}
+            quantity={quantity}
+            onQuantityChange={(nextQuantity) => onSelectPreset({ templateId: selected.id, presetId, quantity: nextQuantity })}
+            onSelectPreset={(nextPresetId) => onSelectPreset({ templateId: selected.id, presetId: nextPresetId, quantity })}
+            onCompose={() => onCompose({ templateId: selected.id, presetId: preview.presetId, quantity: preview.quantity })}
           />
         ) : (
           <p className="px-7 py-16 text-center text-sm text-[#78736D]">왼쪽에서 템플릿을 고르세요.</p>
@@ -280,16 +282,20 @@ export function QuoteTemplatePickerView({
 function QuoteTemplatePreviewPane({
   preview,
   presets,
+  quantity,
+  onQuantityChange,
   onSelectPreset,
   onCompose,
 }: {
   preview: QuoteTemplatePreview
   presets: Array<{ id: string; label: string; description: string }>
+  quantity: number
+  onQuantityChange: (quantity: number) => void
   onSelectPreset: (presetId: string) => void
   onCompose: () => void
 }) {
   return (
-    <section aria-label="템플릿 미리보기" className="flex min-w-0 flex-col gap-6 px-7 py-6">
+    <section aria-label="템플릿 미리보기" className="flex min-w-0 flex-col gap-6 px-4 py-5 sm:px-7 sm:py-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
@@ -307,7 +313,7 @@ function QuoteTemplatePreviewPane({
         </div>
         <div className="text-right">
           <p className="text-2xl font-bold tracking-[-0.02em] tabular-nums text-[#111110]">{formatMoney(preview.totalAmount)}</p>
-          <p className="text-[11.5px] text-[#78736D]">{preview.vatIncluded ? "VAT 포함" : "VAT 별도"} · 수량 1 기준</p>
+          <p className="text-[11.5px] text-[#78736D]">{preview.vatIncluded ? "VAT 포함" : "VAT 별도"}</p>
           <button type="button" onClick={onCompose} className={`${SOLID_BUTTON} mt-2`}>
             <Plus className="h-3.5 w-3.5" />
             이 템플릿으로 작성
@@ -315,35 +321,55 @@ function QuoteTemplatePreviewPane({
         </div>
       </div>
 
-      {presets.length > 0 && (
-        <div className="rounded-lg border border-[#e8e8e4] px-4 py-3.5">
-          <h3 className="text-[11.5px] font-semibold text-[#78736D]">구성</h3>
-          <div role="group" aria-label="구성" className="mt-2 flex flex-wrap gap-2">
-            {presets.map((preset) => {
-              const active = preset.id === preview.presetId
-              return (
-                <button
-                  key={preset.id}
-                  type="button"
-                  data-preset-id={preset.id}
-                  title={preset.description}
-                  onClick={() => onSelectPreset(preset.id)}
-                  aria-pressed={active}
-                  className={`inline-flex h-8 items-center rounded-md border px-3 text-[12.5px] transition-colors ${
-                    active
-                      ? "border-[#31302E] bg-[#F6F5F2] font-semibold text-[#111110]"
-                      : "border-[#e8e8e4] bg-white text-[#615D59] hover:border-[#c8c8c4] hover:text-[#111110]"
-                  }`}
-                >
-                  {preset.label}
-                </button>
-              )
-            })}
-          </div>
-          {!preview.matchesDefault && (
-            <p className="mt-2.5 text-xs text-[#615D59]">
-              작성 창은 기본 구성으로 열립니다. 이 구성의 옵션은 작성 창에서 고릅니다.
-            </p>
+      {(presets.length > 0 || preview.productLine === "hardware") && (
+        <div className="flex flex-wrap items-end gap-x-8 gap-y-4 rounded-lg border border-[#e8e8e4] px-4 py-3.5">
+          {presets.length > 0 && (
+            <div role="group" aria-label="빠른 구성">
+              <h3 className="text-[11.5px] font-semibold text-[#78736D]">빠른 구성</h3>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {presets.map((preset) => {
+                  const active = preset.id === preview.presetId
+                  return (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      data-preset-id={preset.id}
+                      title={preset.description}
+                      onClick={() => onSelectPreset(preset.id)}
+                      aria-pressed={active}
+                      className={`inline-flex h-8 items-center rounded-md border px-3 text-[12.5px] transition-colors ${
+                        active
+                          ? "border-[#31302E] bg-[#F6F5F2] font-semibold text-[#111110]"
+                          : "border-[#e8e8e4] bg-white text-[#615D59] hover:border-[#c8c8c4] hover:text-[#111110]"
+                      }`}
+                    >
+                      {preset.label}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+          {preview.productLine === "hardware" && (
+            <label className="grid gap-2 text-[11.5px] font-semibold text-[#78736D]">
+              수량
+              <input
+                type="number"
+                min={1}
+                step={1}
+                inputMode="numeric"
+                value={quantity || ""}
+                onChange={(event) => {
+                  const next = event.target.valueAsNumber
+                  if (event.target.value === "") onQuantityChange(0)
+                  else if (Number.isSafeInteger(next) && next >= 1) onQuantityChange(next)
+                }}
+                onBlur={() => {
+                  if (quantity !== preview.quantity) onQuantityChange(preview.quantity)
+                }}
+                className="h-8 w-24 rounded-md border border-[#e8e8e4] bg-white px-2.5 text-[13px] tabular-nums text-[#111110] outline-none focus:border-[#084734]"
+              />
+            </label>
           )}
         </div>
       )}
@@ -394,7 +420,7 @@ function QuoteTemplatePreviewPane({
           )}
         </dl>
         <p className="mt-4 text-xs leading-relaxed text-[#615D59]">
-          고객·수량·금액·할인·유효기한은 작성 창에서 정합니다. 저장한 견적서는 히스토리 탭에 나타납니다.
+          저장한 견적서는 히스토리 탭에 나타납니다.
         </p>
       </div>
     </section>

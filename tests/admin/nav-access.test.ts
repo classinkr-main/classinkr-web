@@ -86,17 +86,17 @@ describe("admin nav — 범주 메타", () => {
 
   // resolveNavAccess(Task 2)는 ADMIN_NAV 선언 순서를 그대로 상시 목록 순서로 쓴다.
   // 따라서 사이드바 순서는 이 배열 순서로만 표현된다 — 렌더에서 다시 정렬하지 않는다.
-  it("declares the whole sidebar in day-flow order (2026-11-09 D안)", () => {
+  it("declares the four priority links before the rest", () => {
     // 일정 → 문의·고객 → 견적·출고 → 매출 성과 → 마케팅 → 고객 지원 → 시스템.
     // CS 콘솔은 운영자 요청으로 콘텐츠 바로 밑 — 자료 퍼널(접힘) 뒤 고객 지원 블록에 선언된다.
     expect(ADMIN_NAV.map((item) => item.href)).toEqual([
       "/admin/overview",
-      "/admin/calendar",
-      "/admin/crm",
+      "/admin/branch/ledger",
       "/admin/quotes",
       "/admin/hardware",
+      "/admin/calendar",
+      "/admin/crm",
       "/admin/branch",
-      "/admin/branch/ledger",
       "/admin/campaigns",
       "/admin/campaigns/manage",
       "/admin/analytics",
@@ -109,28 +109,7 @@ describe("admin nav — 범주 메타", () => {
     ])
   })
 
-  // 범주 묶음(상시 간격·접힘 묶음)이 "묶기 = 재정렬"이 되지 않기 위한 전제 —
-  // 선언 순서가 범주 연속 블록이어야 한다.
-  it("declares ADMIN_NAV in contiguous category blocks", () => {
-    const categories = ADMIN_NAV.map((item) => item.category ?? "system")
-    const firstIndex = new Map<string, number>()
-    categories.forEach((category, index) => {
-      if (!firstIndex.has(category)) firstIndex.set(category, index)
-    })
-    // 같은 범주는 반드시 연속 구간이다 — 범주가 한 번 바뀌면 이전 범주로 돌아오지 않는다.
-    let previous = ""
-    for (const category of categories) {
-      if (category !== previous) {
-        expect(firstIndex.get(category), category).toBeDefined()
-        previous = category
-      }
-    }
-    const seen: string[] = []
-    for (const category of categories) {
-      if (seen[seen.length - 1] !== category) seen.push(category)
-    }
-    expect(seen).toEqual(["home", "customer", "revenue", "growth", "support", "system"])
-  })
+
 })
 
 // 2026-11-20 부터 기본값이 계정에 따라 둘이다(admin-nav-access.ts 머리 주석).
@@ -182,33 +161,33 @@ const foldedHrefsOf = (access: { folded: ReadonlyArray<{ items: ReadonlyArray<{ 
 
 describe("resolveNavPlacement — 보일 때 앉는 자리(전체 계정의 배치)", () => {
   // 시안 스위치 꺼짐(기본, 기획 D13) 기준 — 켜면 AI 올인원이 더해져 9(tests/admin/nav-ai-preview.test.tsx).
-  it("상시 8개는 DEFAULT_PRIMARY_HREFS 그대로다", () => {
+  it("상시 9개는 DEFAULT_PRIMARY_HREFS 그대로다", () => {
     // 2026-11-04 마케팅 허브가 기타에서 상시로 올라왔다(방문·문의 바로 보기 기획 D6) — 9 → 10.
     // 2026-11-09 D안 — KR Team·매출 장부가 접힘으로 내려갔다 — 10 → 8.
     for (const href of DEFAULT_PRIMARY_HREFS) {
       expect(resolveNavPlacement(href, ctx()), href).toBe("primary")
     }
-    expect(DEFAULT_PRIMARY_HREFS).toHaveLength(8)
+    expect(DEFAULT_PRIMARY_HREFS).toHaveLength(9)
     expect(DEFAULT_PRIMARY_HREFS).toContain("/admin/campaigns")
     expect(DEFAULT_PRIMARY_HREFS).not.toContain("/admin/branch")
-    expect(DEFAULT_PRIMARY_HREFS).not.toContain("/admin/branch/ledger")
+    expect(DEFAULT_PRIMARY_HREFS).toContain("/admin/branch/ledger")
   })
 
-  it("나머지 8개의 자리는 전부 접힘이다 — 그중 1개는 기본 숨김이라 처음엔 목록에 없다", () => {
+  it("나머지 7개의 자리는 전부 접힘이다 — 그중 1개는 기본 숨김이라 처음엔 목록에 없다", () => {
     // 2026-10 마케팅 프로젝트가 캠페인 관리의 탭이 되며 기본 숨김 2 → 1, 기타 자리 8 → 7.
     // 2026-11-04 마케팅 허브가 상시로 올라가며 기타 자리 7 → 6.
     // 2026-11-09 D안 — KR Team·매출 장부가 내려오며 접힘 자리 6 → 8.
     const rest = ADMIN_NAV.map((item) => item.href).filter(
       (href) => !DEFAULT_PRIMARY_HREFS.includes(href)
     )
-    expect(rest).toHaveLength(8)
+    expect(rest).toHaveLength(7)
     // resolveNavPlacement 는 "보일 때 앉는 자리"다 — 기본 숨김 항목도 다시 표시하면 기타로 간다.
     for (const href of rest) {
       expect(resolveNavPlacement(href, ctx()), href).toBe("folded")
     }
     const hiddenByDefault = rest.filter((href) => isNavHidden(href, ctx()))
     expect(hiddenByDefault.sort()).toEqual([...DEFAULT_HIDDEN_HREFS].sort())
-    expect(rest.length - hiddenByDefault.length).toBe(7)
+    expect(rest.length - hiddenByDefault.length).toBe(6)
   })
 
   // 2026-11-19 까지 이 테스트는 "모든 매니저가 같은 사이드바를 본다"를 고정했다. 지금은 기본
@@ -267,19 +246,19 @@ describe("normalizeNavOverrides — 레거시 deny 처리", () => {
 })
 
 describe("resolveNavAccess", () => {
-  it("상시 8 / 접힘 7 / 숨김 1(기본 숨김) 로 나눈다", () => {
+  it("상시 9 / 접힘 6 / 숨김 1(기본 숨김) 로 나눈다", () => {
     // 2026-09-25 전까지는 "기타 9"였다 — 마케팅 프로젝트·운영 상태가 기본 숨김으로 빠졌다.
     // 2026-10 마케팅 프로젝트는 캠페인 관리의 "프로젝트" 탭이 되며 항목 자체가 빠졌다(숨김 2 → 1).
     // 2026-09-29 AI 올인원이 상시에 더해졌지만 시안 스위치가 꺼져 있으면(기본, 기획 D13) 빠진다 —
     // 2026-10-26 콘텐츠가 기타에서 상시로 올라왔다 — 상시 9, 세 칸을 합치면 16 전부다.
     // 2026-11-04 마케팅 허브가 기타에서 상시로 올라왔다 — 상시 10 · 기타 5.
-    // 2026-11-09 D안 — KR Team·매출 장부가 접힘으로 — 상시 8 · 접힘 7.
+    // 2026-11-09 D안 — KR Team·매출 장부가 접힘으로 — 상시 9 · 접힘 6.
     // 켜짐(상시 9·17)은 tests/admin/nav-ai-preview.test.tsx.
     const { primary, folded, hidden } = resolveNavAccess(ctx())
-    expect(primary).toHaveLength(8)
-    expect(folded.flatMap((group) => group.items)).toHaveLength(7)
+    expect(primary).toHaveLength(9)
+    expect(folded.flatMap((group) => group.items)).toHaveLength(6)
     expect(hidden.map((item) => item.href)).toEqual(["/admin/ops"])
-    expect(primary.length + 7 + hidden.length).toBe(ADMIN_NAV.length)
+    expect(primary.length + 6 + hidden.length).toBe(ADMIN_NAV.length)
   })
 
   it("Overview 가 상시 첫 항목이고 home 이 첫 그룹이다", () => {
@@ -293,17 +272,18 @@ describe("resolveNavAccess", () => {
     expect(access.primaryGroups.flatMap((group) => group.items)).toEqual(access.primary)
     expect(access.primaryGroups.map((group) => group.category)).toEqual([
       "home",
-      "customer",
       "revenue",
+      "customer",
       "growth",
       "support",
     ])
     expect(access.primary.map((item) => item.href)).toEqual([
       "/admin/overview",
-      "/admin/calendar",
-      "/admin/crm",
+      "/admin/branch/ledger",
       "/admin/quotes",
       "/admin/hardware",
+      "/admin/calendar",
+      "/admin/crm",
       "/admin/campaigns",
       "/admin/blog",
       "/admin/chatbot",
@@ -315,7 +295,7 @@ describe("resolveNavAccess", () => {
     expect(
       folded.map((group) => [group.category, group.items.map((item) => item.href)])
     ).toEqual([
-      ["revenue", ["/admin/branch", "/admin/branch/ledger"]],
+      ["revenue", ["/admin/branch"]],
       ["growth", ["/admin/campaigns/manage", "/admin/analytics", "/admin/lead-magnets"]],
       ["system", ["/admin/settings", "/admin/dev"]],
     ])
@@ -351,7 +331,7 @@ describe("resolveAdminNavAccess", () => {
 // hidden 은 "내 목록에서 치움"이지 접근 제한이 아니다. 아래 테스트가 그 경계를 고정한다.
 /** 그 계정이 숨길 수 있는 항목 — 착지 화면 하나만 빠진다. */
 const hideableHrefsFor = (audience: NavAudienceContext) =>
-  ADMIN_NAV.map((item) => item.href).filter((href) => href !== resolveAdminLandingHref(audience))
+  ADMIN_NAV.map((item) => item.href).filter((href) => isNavHideable(href, audience))
 const HIDE_EVERYTHING: Record<string, NavOverrideValue> = Object.fromEntries(
   ADMIN_NAV.map((item) => [item.href, "hidden" as const])
 )
@@ -431,7 +411,7 @@ describe("개인 숨김 — 목록과 도달성", () => {
       )
       // 목록에 남는 것은 숨길 수 없는 그 계정의 착지 화면뿐이다(전체: Overview, 간소: 매출 장부).
       expect(getVisibleAdminNavItems(access).map((item) => item.href), role).toEqual([
-        resolveAdminLandingHref({ role }),
+        ...new Set([FULL_NAV_LANDING_HREF, resolveAdminLandingHref({ role })]),
       ])
       expect(access.hidden.map((item) => item.href), role).toEqual(hideableHrefsFor({ role }))
     }
@@ -583,9 +563,10 @@ describe("hasFullAdminNav — 전체 사이드바 계정", () => {
       const access = resolveAdminNavAccess({ ...audience, overrides: {} })
       expect(access.fullNav, audienceLabel(audience)).toBe(false)
       expect(hrefsOf(access.primary), audienceLabel(audience)).toEqual([
+        "/admin/overview",
+        "/admin/branch/ledger",
         "/admin/quotes",
         "/admin/hardware",
-        "/admin/branch/ledger",
       ])
     }
   })
@@ -603,17 +584,17 @@ describe("(a) 전체 사이드바 계정의 결과는 D안(2026-11-09)과 같다
   const BEFORE = {
     primary: [
       "/admin/overview",
-      "/admin/calendar",
-      "/admin/crm",
+      "/admin/branch/ledger",
       "/admin/quotes",
       "/admin/hardware",
+      "/admin/calendar",
+      "/admin/crm",
       "/admin/campaigns",
       "/admin/blog",
       "/admin/chatbot",
     ],
     folded: [
       "/admin/branch",
-      "/admin/branch/ledger",
       "/admin/campaigns/manage",
       "/admin/analytics",
       "/admin/lead-magnets",
@@ -624,7 +605,7 @@ describe("(a) 전체 사이드바 계정의 결과는 D안(2026-11-09)과 같다
   }
 
   it.each(FULL_AUDIENCES.map((audience) => [audienceLabel(audience), audience] as const))(
-    "%s — 상시 8 · 접힘 7 · 숨김 1, 상시 소제목 없음, Overview 만 숨김 불가",
+    "%s — 상시 9 · 접힘 6 · 숨김 1, 상시 소제목 없음, Overview 만 숨김 불가",
     (_label, audience) => {
       const access = resolveAdminNavAccess({ ...audience, overrides: {} })
       expect(access.fullNav).toBe(true)
@@ -634,8 +615,8 @@ describe("(a) 전체 사이드바 계정의 결과는 D안(2026-11-09)과 같다
       expect(access).not.toHaveProperty("showPrimaryHeaders")
       expect(access.primaryGroups.map((group) => group.category)).toEqual([
         "home",
-        "customer",
         "revenue",
+        "customer",
         "growth",
         "support",
       ])
@@ -667,9 +648,9 @@ describe("(a) 전체 사이드바 계정의 결과는 D안(2026-11-09)과 같다
   })
 })
 
-describe("(b) 간소 사이드바 계정 — 상시는 매출 장부·견적·문서·하드웨어 재고 셋뿐이다", () => {
+describe("(b) 간소 사이드바 계정 — 상시는 Overview·매출 장부·견적·문서·하드웨어 재고가 기본이다", () => {
   it("상시 목록 상수는 장부·견적·하드웨어이고, 착지가 그 안에 있으며, 간소 계정에서 전부 상시 자리다", () => {
-    expect([...SIMPLE_NAV_PRIMARY_HREFS]).toEqual(["/admin/branch/ledger", "/admin/quotes", "/admin/hardware"])
+    expect([...SIMPLE_NAV_PRIMARY_HREFS]).toEqual(["/admin/overview", "/admin/branch/ledger", "/admin/quotes", "/admin/hardware"])
     expect(SIMPLE_NAV_PRIMARY_HREFS).toContain(SIMPLE_NAV_LANDING_HREF)
     for (const href of SIMPLE_NAV_PRIMARY_HREFS) {
       expect(resolveNavPlacement(href, simple()), href).toBe("primary")
@@ -677,23 +658,23 @@ describe("(b) 간소 사이드바 계정 — 상시는 매출 장부·견적·�
   })
 
   it.each(SIMPLE_AUDIENCES.map((audience) => [audienceLabel(audience), audience] as const))(
-    "%s — 상시 3 · 접힘 0 · 나머지 전부 숨김",
+    "%s — 상시 4 · 접힘 0 · 나머지 전부 숨김",
     (_label, audience) => {
       const access = resolveAdminNavAccess({ ...audience, overrides: {} })
       expect(access.fullNav).toBe(false)
-      expect(hrefsOf(access.primary)).toEqual(["/admin/quotes", "/admin/hardware", "/admin/branch/ledger"])
+      expect(hrefsOf(access.primary)).toEqual(["/admin/overview", "/admin/branch/ledger", "/admin/quotes", "/admin/hardware"])
       expect(access.folded).toEqual([])
       expect(hrefsOf(access.hidden)).toEqual(
         ADMIN_NAV.map((item) => item.href).filter((href) => !SIMPLE_NAV_PRIMARY_HREFS.includes(href))
       )
       expect(access).not.toHaveProperty("showPrimaryHeaders")
       expect(hrefsOf(getVisibleAdminNavItems(access))).toEqual([
+        "/admin/overview",
+        "/admin/branch/ledger",
         "/admin/quotes",
         "/admin/hardware",
-        "/admin/branch/ledger",
       ])
-      // Overview 는 간소 계정에게 기본 숨김이다 — 관리자 화면에 떨어지지 않는다(S3).
-      expect(isNavHidden("/admin/overview", { ...audience, overrides: {} })).toBe(true)
+      expect(isNavHidden("/admin/overview", { ...audience, overrides: {} })).toBe(false)
     }
   )
 
@@ -719,10 +700,11 @@ describe("(b) 간소 사이드바 계정 — 상시는 매출 장부·견적·�
 
     const access = resolveAdminNavAccess(simple({ overrides }))
     expect(hrefsOf(access.primary)).toEqual([
-      "/admin/crm",
+      "/admin/overview",
+      "/admin/branch/ledger",
       "/admin/quotes",
       "/admin/hardware",
-      "/admin/branch/ledger",
+      "/admin/crm",
     ])
     expect(foldedHrefsOf(access)).toEqual(["/admin/analytics"])
     expect(hrefsOf(access.hidden)).not.toContain("/admin/crm")
@@ -730,36 +712,38 @@ describe("(b) 간소 사이드바 계정 — 상시는 매출 장부·견적·�
 
   it("다시 숨기면 키가 지워진다 — 간소 계정의 기본값이 숨김이라 예외가 아니다", () => {
     expect(setNavOverride({ "/admin/crm": "primary" }, "/admin/crm", "hidden", SIMPLE)).toEqual({})
-    expect(setNavOverride({ "/admin/overview": "primary" }, "/admin/overview", "hidden", SIMPLE)).toEqual({})
+    expect(setNavOverride({}, "/admin/overview", "hidden", SIMPLE)).toEqual({})
     // 견적은 간소 계정에게도 숨길 수 있다(착지가 아니다) — 숨기면 예외로 남는다.
     expect(setNavOverride({}, "/admin/quotes", "hidden", SIMPLE)).toEqual({ "/admin/quotes": "hidden" })
     // 장부·견적·하드웨어를 상시로 두는 것은 기본값이라 키가 남지 않는다.
     expect(setNavOverride({ "/admin/quotes": "folded" }, "/admin/quotes", "primary", SIMPLE)).toEqual({})
   })
 
-  it("편집기 행 — 매출 장부만 숨김 불가이고, 설정이 없으면 예외가 0이다", () => {
+  it("편집기 행 — Overview와 매출 장부는 숨김 불가이고, 설정이 없으면 예외가 0이다", () => {
     const rows = buildNavPreferenceRows(simple())
     expect(rows).toHaveLength(ADMIN_NAV.length)
-    expect(hrefsOf(rows.filter((row) => !row.hideable).map((row) => row.item))).toEqual(["/admin/branch/ledger"])
+    expect(hrefsOf(rows.filter((row) => !row.hideable).map((row) => row.item))).toEqual(["/admin/overview", "/admin/branch/ledger"])
     expect(rows.filter((row) => row.isException)).toEqual([])
     expect(hrefsOf(rows.filter((row) => row.base !== "hidden").map((row) => row.item))).toEqual([
+      "/admin/overview",
+      "/admin/branch/ledger",
       "/admin/quotes",
       "/admin/hardware",
-      "/admin/branch/ledger",
     ])
     const overview = rows.find((row) => row.item.href === "/admin/overview")
-    expect(overview).toMatchObject({ preference: "hidden", base: "hidden", hideable: true })
+    expect(overview).toMatchObject({ preference: "primary", base: "primary", hideable: false })
   })
 
   it("⌘K 숙주는 보이는 탭뿐이고, 되살린 탭은 다시 숙주가 된다", () => {
     expect(hrefsOf(getPaletteAdminNavItems(resolveAdminNavAccess(simple())))).toEqual([
+      "/admin/overview",
+      "/admin/branch/ledger",
       "/admin/quotes",
       "/admin/hardware",
-      "/admin/branch/ledger",
     ])
     expect(
       hrefsOf(getPaletteAdminNavItems(resolveAdminNavAccess(simple({ overrides: { "/admin/analytics": "folded" } }))))
-    ).toEqual(["/admin/quotes", "/admin/hardware", "/admin/branch/ledger", "/admin/analytics"])
+    ).toEqual(["/admin/overview", "/admin/branch/ledger", "/admin/quotes", "/admin/hardware", "/admin/analytics"])
   })
 })
 
@@ -800,11 +784,11 @@ describe("(c) 착지 경로는 그 계정에게 숨김이 아니다", () => {
     }
   })
 
-  it("착지 화면만 숨김 불가다 — 상대 계정의 착지는 숨길 수 있다", () => {
+  it("Overview는 두 모드에서 숨김 불가이고 매출 장부는 간소 모드에서 숨김 불가다", () => {
     expect(isNavHideable("/admin/overview", FULL)).toBe(false)
     expect(isNavHideable("/admin/branch/ledger", FULL)).toBe(true)
     expect(isNavHideable("/admin/branch/ledger", SIMPLE)).toBe(false)
-    expect(isNavHideable("/admin/overview", SIMPLE)).toBe(true)
+    expect(isNavHideable("/admin/overview", SIMPLE)).toBe(false)
     // 전체 계정은 지금처럼 매출 장부를 숨길 수 있다.
     expect(setNavOverride({}, "/admin/branch/ledger", "hidden", FULL)).toEqual({ "/admin/branch/ledger": "hidden" })
     // 간소 계정의 착지 숨김은 무시된다(입력 그대로).
@@ -817,7 +801,7 @@ describe("(c) 착지 경로는 그 계정에게 숨김이 아니다", () => {
     expect(saved).toEqual({ "/admin/branch/ledger": "hidden" })
     expect(hrefsOf(resolveAdminNavAccess(ctx({ overrides: saved })).hidden)).toContain("/admin/branch/ledger")
     const demoted = resolveAdminNavAccess(simple({ overrides: saved }))
-    expect(hrefsOf(demoted.primary)).toEqual(["/admin/quotes", "/admin/hardware", "/admin/branch/ledger"])
+    expect(hrefsOf(demoted.primary)).toEqual(["/admin/overview", "/admin/branch/ledger", "/admin/quotes", "/admin/hardware"])
   })
 
   // 착지를 정하는 곳은 admin-nav-access.ts 하나다 — 두 진입점이 경로를 글자로 박으면 다시 따로 논다.
@@ -870,7 +854,7 @@ describe("(d) getAccessibleAdminNavItems 는 간소 계정에서도 ADMIN_NAV �
 
   it("간소 계정의 숨긴 탭은 hidden 에 남는다 — 주소로 들어간 화면의 헤더 라벨·active 판정이 여기에 기댄다", () => {
     const access = resolveAdminNavAccess(simple())
-    expect(hrefsOf(access.hidden)).toContain("/admin/overview")
+    expect(hrefsOf(access.hidden)).not.toContain("/admin/overview")
     expect(hrefsOf(access.hidden)).toContain("/admin/crm")
     expect(hrefsOf(getAccessibleAdminNavItems(access))).toContain("/admin/crm")
     expect(hrefsOf(getVisibleAdminNavItems(access))).not.toContain("/admin/crm")

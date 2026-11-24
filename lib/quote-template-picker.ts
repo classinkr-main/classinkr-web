@@ -3,10 +3,9 @@ import {
   getQuoteTemplateSupplierLabel,
 } from "@/lib/quote-team-templates"
 import {
-  buildConfigurableStandardQuoteDetails,
+  buildStandardQuoteFromPreset,
   getQuoteProductLineLabel,
   getQuoteProductLineTemplateId,
-  getStandardQuoteDefaultSelections,
   getStandardQuoteTemplate,
   isPendingQuoteLine,
   isQuoteNoteLine,
@@ -124,6 +123,7 @@ export interface QuoteTemplatePreviewLine {
 export interface QuoteTemplatePreview {
   templateId: StandardQuoteTemplateId
   presetId: string | null
+  quantity: number
   label: string
   description: string
   /** "HW" · "SW" */
@@ -138,25 +138,9 @@ export interface QuoteTemplatePreview {
   vatIncluded: boolean
   pendingAmountNote: string | null
   deliveryLocationNote: string | null
-  /** 작성 창이 처음 여는 구성(프리셋 없음)과 품목·옵션이 같은가. */
-  matchesDefault: boolean
 }
 
-function buildTemplateQuote(templateId: StandardQuoteTemplateId, presetId?: string | null) {
-  const preset = presetId
-    ? getStandardQuoteTemplate(templateId).quickPresets?.find((item) => item.id === presetId)
-    : undefined
-  // 작성기(QuickQuoteComposer 의 buildSheet)가 템플릿·프리셋에서 첫 시트를 만드는 호출과 같다:
-  // 기본 옵션 위에 프리셋 옵션을 덮고, 대표 품목 수량 1 로 품목·합계를 계산한다.
-  return buildConfigurableStandardQuoteDetails({
-    templateId,
-    input: { templateId, presetId: preset?.id },
-    optionSelections: { ...getStandardQuoteDefaultSelections(templateId), ...(preset?.optionSelections ?? {}) },
-    baseQuantity: 1,
-  })
-}
-
-function compositionKey(quote: ReturnType<typeof buildTemplateQuote>) {
+function compositionKey(quote: ReturnType<typeof buildStandardQuoteFromPreset>) {
   return JSON.stringify([
     quote.optionSelections,
     (quote.lineItems ?? []).map((line) => [line.itemCode, line.itemName, line.itemDescription, line.quantity, line.unitPrice]),
@@ -165,9 +149,9 @@ function compositionKey(quote: ReturnType<typeof buildTemplateQuote>) {
 
 /** 작성 창이 처음 여는 구성과 같은 프리셋(보통 첫 프리셋). 미리보기의 기본 선택이다. 없으면 null. */
 export function getDefaultQuoteTemplatePresetId(templateId: StandardQuoteTemplateId): string | null {
-  const base = compositionKey(buildTemplateQuote(templateId))
+  const base = compositionKey(buildStandardQuoteFromPreset(templateId))
   const presets = getStandardQuoteTemplate(templateId).quickPresets ?? []
-  return presets.find((preset) => compositionKey(buildTemplateQuote(templateId, preset.id)) === base)?.id ?? null
+  return presets.find((preset) => compositionKey(buildStandardQuoteFromPreset(templateId, preset.id)) === base)?.id ?? null
 }
 
 /**
@@ -176,15 +160,17 @@ export function getDefaultQuoteTemplatePresetId(templateId: StandardQuoteTemplat
  */
 export function buildQuoteTemplatePreview(
   templateId: StandardQuoteTemplateId,
-  presetId?: string | null
+  presetId?: string | null,
+  quantity = 1,
 ): QuoteTemplatePreview {
   const template = getStandardQuoteTemplate(templateId)
-  const quote = buildTemplateQuote(template.id, presetId)
+  const quote = buildStandardQuoteFromPreset(template.id, presetId, quantity)
   const productLine: QuoteProductLine = isSoftwareQuoteTemplate(template.id) ? "software" : "hardware"
 
   return {
     templateId: template.id,
-    presetId: template.quickPresets?.find((preset) => preset.id === presetId)?.id ?? null,
+    presetId: quote.presetId ?? null,
+    quantity: quote.lineItems?.find((line) => line.optionGroupId === "main_product")?.quantity ?? 1,
     label: template.label,
     description: template.description,
     productLineLabel: getQuoteProductLineLabel(productLine),
@@ -208,6 +194,5 @@ export function buildQuoteTemplatePreview(
     vatIncluded: quote.vatIncluded ?? true,
     pendingAmountNote: quote.pendingAmountNote ?? null,
     deliveryLocationNote: quote.deliveryLocationNote ?? null,
-    matchesDefault: compositionKey(quote) === compositionKey(buildTemplateQuote(template.id)),
   }
 }

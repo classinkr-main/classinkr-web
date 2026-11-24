@@ -39,8 +39,10 @@
 - **전체 사이드바**: `SUPER_ADMIN` 역할, 또는 `admin_profiles.nav_preset`이 `super`인 지정 계정. 상시 목록은
   `DEFAULT_PRIMARY_HREFS`, 기본 숨김은 `DEFAULT_HIDDEN_HREFS`, 나머지는 범주마다 따로 접힌 "접힘" 묶음이다
   (2026-11-09 D안, [사이드바 재배치 기획](admin-sidebar-reorder-fold-plan-2026-11-09.md)). 상시는 소제목 없이 범주 사이 간격만 둔다.
-- **간소 사이드바**: 그 밖의 모든 계정. 상시는 `SIMPLE_NAV_PRIMARY_HREFS`(매출 장부 · 견적·문서 · 하드웨어 재고 — 하드웨어는 2026-11-23 추가)뿐이고 나머지는 전부 기본 숨김이다.
+- **간소 사이드바**: 그 밖의 모든 계정. 상시는 `SIMPLE_NAV_PRIMARY_HREFS`이고 나머지는 전부 기본 숨김이다.
   "숨긴 탭 N" 묶음·"사이드바 편집" 진입점을 그리지 않는다.
+
+두 사이드바는 Overview → 매출 장부 → 견적·문서 → 하드웨어 재고 순서로 시작한다.
 
 지정 계정은 역할을 올리지 않는다 — 역할은 API 권한이고 지정은 메뉴 표시다. 설정 › 회원의 사이드바 배치에서
 `SUPER_ADMIN`이 "전체 사이드바"를 켜고 끈다(`PATCH /api/admin/users`, 저장값 `nav_preset = "super"` 또는 `null`).

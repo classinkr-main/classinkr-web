@@ -21,7 +21,7 @@ import { formatDate, formatTime } from "@/lib/format"
 import { emitNotificationEvent } from "@/lib/notifications/emit-event"
 import { getCustomer } from "@/lib/portal/repositories/customers"
 import { getDeal } from "@/lib/portal/repositories/deals"
-import { getQuoteDocument, getResolvableQuoteVersion } from "@/lib/portal/repositories/quote-documents"
+import { getQuoteDocument, getQuoteDocumentVersion, getResolvableQuoteVersion } from "@/lib/portal/repositories/quote-documents"
 import { getQuoteDetailsFromStructuredJson } from "@/lib/portal/quote-details"
 import type { QuoteDocument, QuoteDocumentVersion } from "@/lib/portal/types"
 import {
@@ -77,10 +77,12 @@ export interface QuoteContext {
   customerName: string | null
 }
 
-export async function loadQuoteContext(quoteDocumentId: string): Promise<QuoteContext | null> {
+export async function loadQuoteContext(quoteDocumentId: string, versionId?: string | null): Promise<QuoteContext | null> {
   const document = await getQuoteDocument(quoteDocumentId)
   if (!document) return null
-  const version = await getResolvableQuoteVersion(document)
+  const version = versionId
+    ? await getQuoteDocumentVersion(document.id, versionId)
+    : await getResolvableQuoteVersion(document)
   if (!version) return null
   const deal = await getDeal(document.deal_id).catch(() => null)
   const customer = deal ? await getCustomer(deal.customer_id).catch(() => null) : null
@@ -89,7 +91,7 @@ export async function loadQuoteContext(quoteDocumentId: string): Promise<QuoteCo
 
 /** 공유 페이지·이메일 공용 — 발행 스냅샷 기준 총판용 견적서 본문. */
 export async function loadDistributorQuoteView(settlement: DistributorSettlementRecord) {
-  const context = await loadQuoteContext(settlement.quoteDocumentId)
+  const context = await loadQuoteContext(settlement.quoteDocumentId, settlement.issuedVersionId ?? settlement.sourceVersionId)
   if (!context) return null
   const customerDetails = getQuoteDetailsFromStructuredJson(context.version.structured_json, {
     customerName: context.customerName,

@@ -406,7 +406,9 @@ describe("워크벤치 배선 — 켜짐일 때만 힌트·화면에 상태 전�
 
   it("장부 화면에 mode, 큐에 sheetWrites 를 넘긴다", () => {
     expect(source).toMatch(/sheetWriteMode=\{sheetWrite\.mode\}/)
-    expect(source).toMatch(/sheetWriteHealthMessage=\{sheetWrite\.healthMessage\}/)
+    // 2026-11-23: 장부 화면(기관별·매니저별 표와 건별 시트의 접힌 요약)이 같은 props 묶음(ledgerSimpleProps)을 쓴다.
+    expect(source).toMatch(/sheetWriteMode: sheetWrite\.mode,/)
+    expect(source).toMatch(/sheetWriteHealthMessage: sheetWrite\.healthMessage,/)
     expect(source).toMatch(/sheetWrites=\{sheetWrites\}/)
   })
 })

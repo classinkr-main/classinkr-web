@@ -53,7 +53,7 @@ describe("AdminSidebar — 상시/접힘 2단 구조", () => {
   })
 
   it("points the mobile bottom bar at the new IA", () => {
-    expect(sidebar).toContain('href: "/admin/calendar"')
+    expect(sidebar).toContain('href: "/admin/branch/ledger"')
     expect(sidebar).toContain('href: "/admin/quotes"')
   })
 })

@@ -9,6 +9,7 @@ import { getDeal } from "@/lib/portal/repositories/deals";
 import {
   getQuoteDocument,
   createQuoteDocumentVersion,
+  QuoteDraftVersionConflictError,
 } from "@/lib/portal/repositories/quote-documents";
 
 export async function POST(
@@ -41,6 +42,10 @@ export async function POST(
     }
 
     const body = await req.json();
+    const expectedDraftVersionId = typeof body.draft_version_id === "string" ? body.draft_version_id : undefined;
+    if (expectedDraftVersionId && (doc.status !== "draft" || doc.current_version_id !== expectedDraftVersionId)) {
+      throw new QuoteDraftVersionConflictError();
+    }
     const version = await createQuoteDocumentVersion({
       quote_document_id: id,
       version_number: body.version_number ?? 1,
@@ -53,10 +58,13 @@ export async function POST(
       total_amount: body.total_amount ?? 0,
       valid_until: body.valid_until ?? null,
       created_by: ctx.userId ?? null,
-    });
+    }, expectedDraftVersionId);
 
     return NextResponse.json({ version }, { status: 201 });
   } catch (err) {
+    if (err instanceof QuoteDraftVersionConflictError) {
+      return NextResponse.json({ error: err.message }, { status: 409 });
+    }
     console.error("[portal/quotes/[id]/versions] POST error:", err);
     return NextResponse.json({ error: "견적 버전 생성 실패" }, { status: 500 });
   }

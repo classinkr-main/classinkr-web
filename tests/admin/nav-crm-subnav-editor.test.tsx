@@ -66,25 +66,26 @@ describe("NavPreferenceEditor — 전체 / 간소 사이드바(2026-11-20)", () 
     return button ? { pressed: button.includes('aria-pressed="true"'), disabled: /\sdisabled=""/.test(button) } : null
   }
 
-  it("간소 계정 — 견적·하드웨어·장부만 상시이고 나머지는 기본 숨김, 미리보기가 실제 사이드바와 같다", () => {
+  it("간소 계정 미리보기는 공통 업무 메뉴 네 개를 실제 사이드바 순서로 보여 준다", () => {
     const html = render({}, { role: "ADMIN" })
-    expect(html).toContain("간소 사이드바 계정입니다. 기본으로 견적·문서 · 하드웨어 재고 · 매출 장부만 보이고")
-    expect(html).toContain(">상시 3</span>")
-    expect(html).toContain("견적·문서 · 하드웨어 재고 · 매출 장부</span>")
-    expect(html).toContain("숨김 13 — Overview")
+    expect(html).toContain("간소 사이드바 계정입니다. 기본으로 Overview · 매출 장부 · 견적·문서 · 하드웨어 재고만 보이고")
+    expect(html).toContain(">상시 4</span>")
+    expect(html).toContain("Overview · 매출 장부 · 견적·문서 · 하드웨어 재고</span>")
+    expect(html).toContain("숨김 12 — 캘린더")
     expect(html).not.toContain("▸ 기타")
     expect(optionPressed(html, "매출 장부", "상시")).toEqual({ pressed: true, disabled: false })
-    expect(optionPressed(html, "Overview", "숨김")).toEqual({ pressed: true, disabled: false })
+    expect(optionPressed(html, "Overview", "숨김")).toEqual({ pressed: false, disabled: true })
     expect(optionPressed(html, "CRM", "숨김")).toEqual({ pressed: true, disabled: false })
     // 기본값 그대로라 예외는 0이다.
     expect(countNavPreferenceExceptions({ role: "ADMIN", overrides: {} })).toBe(0)
     expect(html).not.toContain(">예외<")
   })
 
-  it("간소 계정 — 숨김 불가는 매출 장부(착지)이고 Overview 는 숨길 수 있다", () => {
+  it("간소 계정은 로그인 첫 화면인 장부와 공통 메뉴인 Overview의 숨김을 막는다", () => {
     const html = render({}, { role: "ADMIN" })
     expect(optionPressed(html, "매출 장부", "숨김")).toEqual({ pressed: false, disabled: true })
     expect(html.match(/로그인 첫 화면이라 숨길 수 없습니다/g)?.length).toBeGreaterThan(0)
+    expect(html).toContain("공통 메뉴는 숨길 수 없습니다")
   })
 
   it("간소 계정의 안내는 ⌘K 로 열린다고 말하지 않는다", () => {
