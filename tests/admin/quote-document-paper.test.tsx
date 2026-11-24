@@ -66,14 +66,23 @@ describe("shared quote paper", () => {
     expect(visible).toContain("100,000")
     expect(visible).toContain("2,090,000")
   })
-  it("retains the original price after saving, loading, and changing options", () => {
+  it("retains the original price and custom discount text after saving, loading, and changing options", () => {
     const draft = buildConfigurableStandardQuoteDetails({ templateId: "recording_studio" })
-    draft.lineItems![0] = { ...draft.lineItems![0], originalUnitPrice: 8_300_000, unitPrice: 7_800_000 }
+    const customText = "녹화수업 도입 할인 적용"
+    draft.lineItems![0] = { ...draft.lineItems![0], originalUnitPrice: 8_300_000, unitPrice: 7_800_000, discountDisplayText: customText }
     const loaded = normalizeQuoteDetailsFromStructuredJson({ quoteDetails: draft })
     const rebuilt = buildConfigurableStandardQuoteDetails({ templateId: "recording_studio", input: loaded, optionSelections: { delivery_policy: false } })
     expect(rebuilt.lineItems![0].originalUnitPrice).toBe(8_300_000)
     expect(rebuilt.lineItems![0].unitPrice).toBe(7_800_000)
     expect(rebuilt.grandTotalAmount).toBe(7_800_000)
+    expect(rebuilt.lineItems![0].discountDisplayText).toBe(customText)
+
+    const visible = renderToStaticMarkup(<QuoteDocumentPreview quote={rebuilt} />)
+    expect(visible).toContain(customText)
+    expect(visible).not.toContain("정가 8,300,000원")
+    expect(visible).toContain("7,800,000")
+    const hidden = renderToStaticMarkup(<QuoteDocumentPreview quote={{ ...rebuilt, showDiscountDetails: false }} />)
+    expect(hidden).not.toContain(customText)
   })
   it("escapes arbitrary quote content, retains all rows, and uses edit slots without duplicating contacts", () => {
     const html = renderToStaticMarkup(<QuoteDocumentPreview quote={{ ...quote,

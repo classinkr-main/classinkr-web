@@ -7,6 +7,7 @@ import {
 import { BUSINESS_RECHARGE, validateRechargeAmount } from "@/lib/billing/recharge"
 import { getSoftwarePlan } from "@/lib/billing/plans"
 import { getProductBySku } from "@/lib/product-templates"
+import { normalizeQuoteDetailsFromStructuredJson } from "@/lib/portal/quote-details"
 import {
   buildConfigurableStandardQuoteDetails,
   getOnlineSuiteTermMonths,
@@ -61,6 +62,28 @@ describe("하드웨어·수트형·소프트웨어 가격 정합성 검증", () 
       expect(HARDWARE_INSTALL_PRICE_KRW).toBe(500_000)
       expect(getProductBySku("stand")?.unit_price).toBe(HARDWARE_INSTALL_PRICE_KRW)
       expect(getProductBySku("wall-mount")?.unit_price).toBe(HARDWARE_INSTALL_PRICE_KRW)
+    })
+
+    it.each(["board_75", "board_86"] as const)("%s 견적에서 스탠드 수량과 금액은 저장 및 칠판 수량 변경 후에도 유지된다", (templateId) => {
+      const quote = buildConfigurableStandardQuoteDetails({
+        templateId,
+        baseQuantity: 2,
+        optionSelections: { mounting_option: "stand" },
+      })
+      const stand = quote.lineItems?.find((line) => line.itemCode === "stand")
+      expect(stand).toMatchObject({ quantity: 2, quantityLocked: false })
+      const loaded = normalizeQuoteDetailsFromStructuredJson({
+        quoteDetails: {
+          ...quote,
+          lineItems: quote.lineItems?.map((line) => line.itemCode === "stand" ? { ...line, quantity: 1 } : line),
+        },
+      })
+      const rebuilt = buildConfigurableStandardQuoteDetails({ templateId, input: loaded, baseQuantity: 3 })
+
+      expect(rebuilt.lineItems?.find((line) => line.optionGroupId === "main_product")?.quantity).toBe(3)
+      expect(rebuilt.lineItems?.find((line) => line.itemCode === "stand")).toMatchObject({
+        quantity: 1, lineSupplyAmount: HARDWARE_INSTALL_PRICE_KRW, quantityLocked: false,
+      })
     })
   })
 

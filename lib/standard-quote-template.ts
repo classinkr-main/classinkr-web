@@ -865,6 +865,14 @@ export function formatStandardQuoteCurrency(value?: number | null) {
   return value.toLocaleString("ko-KR")
 }
 
+export function formatDefaultQuoteLineDiscount(line: PartnerQuoteLineItemInput) {
+  const { originalUnitPrice, unitPrice, quantityUnit } = line
+  if (originalUnitPrice == null || unitPrice == null || originalUnitPrice <= unitPrice) return undefined
+  const original = formatStandardQuoteCurrency(originalUnitPrice)
+  const discount = formatStandardQuoteCurrency(originalUnitPrice - unitPrice)
+  return `정가 ${original}원 · 할인 −${discount}원 / ${quantityUnit || "개"}`
+}
+
 export function isPendingQuoteLine(item: Pick<PartnerQuoteLineItemInput, "lineStatus" | "billingMode" | "unitPrice">) {
   // 정보성(무상 포함) 라인은 가격 미정(별도청구/협의)이 아니라 무상 항목이므로 pending에서 제외한다.
   if (item.lineStatus === "informational") return false
@@ -915,6 +923,7 @@ export function mergeStandardQuoteLineItems(
       quantityUnit: current?.quantityUnit ?? line.quantityUnit ?? "대",
       unitPrice,
       originalUnitPrice: current?.originalUnitPrice,
+      discountDisplayText: current?.discountDisplayText,
       vatIncluded: current?.vatIncluded ?? true,
       lineStatus: current?.lineStatus ?? line.lineStatus,
       billingMode: current?.billingMode ?? line.billingMode,
@@ -1154,6 +1163,7 @@ export function buildConfigurableStandardQuoteDetails({
       quantityUnit: mainTemplateLine.quantityUnit ?? "대",
       unitPrice: mainExisting?.unitPrice ?? mainTemplateLine.unitPrice,
       originalUnitPrice: mainExisting?.originalUnitPrice,
+      discountDisplayText: mainExisting?.discountDisplayText,
       vatIncluded: mainExisting?.vatIncluded ?? true,
       lineStatus: "priced",
       billingMode: "included_in_quote",
@@ -1196,13 +1206,16 @@ export function buildConfigurableStandardQuoteDetails({
       itemCode: code,
       itemName: (keepEditedText ? existingLine?.itemName : undefined) ?? config.itemName,
       itemDescription: (keepEditedText ? existingLine?.itemDescription : undefined) ?? config.itemDescription,
-      quantity: config.quantity,
+      quantity: config.quantityLocked === false && existingLine?.optionId === config.optionId && existingLine.quantityLocked === false
+        ? existingLine.quantity ?? config.quantity
+        : config.quantity,
       quantityUnit: config.quantityUnit ?? "식",
       unitPrice:
         config.lineStatus === "pending_price" || config.lineStatus === "separate_billing"
           ? undefined
           : existingLine?.unitPrice ?? config.unitPrice,
       originalUnitPrice: keepEditedText ? existingLine?.originalUnitPrice : undefined,
+      discountDisplayText: keepEditedText ? existingLine?.discountDisplayText : undefined,
       vatIncluded: existingLine?.vatIncluded ?? true,
       lineStatus: config.lineStatus,
       billingMode: config.billingMode,
@@ -1397,6 +1410,7 @@ export function buildConfigurableStandardQuoteDetails({
         unitPrice: STANDARD_PRICE_STAND,
         optionGroupId: "mounting_option",
         optionId: mountingOption,
+        quantityLocked: false,
       })
     }
 

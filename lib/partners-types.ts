@@ -377,6 +377,8 @@ export interface PartnerQuoteLineItemInput {
   unitPrice?: number
   /** 발행 시 명시한 할인 전 단가. 카탈로그 가격과 독립적으로 보관한다. */
   originalUnitPrice?: number
+  /** 품목 세부 내역 아래에 표시하는 할인 안내 문구. */
+  discountDisplayText?: string
   quantity?: number
   quantityUnit?: string
   lineSupplyAmount?: number

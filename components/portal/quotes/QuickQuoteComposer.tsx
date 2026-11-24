@@ -73,6 +73,7 @@ import {
   DEFAULT_QUOTE_DISCOUNT_LABEL,
   createInformationalQuoteLine,
   finalizeStandardQuoteDetails,
+  formatDefaultQuoteLineDiscount,
   formatStandardQuoteCurrency,
   getOnlineSuiteTermMonths,
   getQuoteNotePresets,
@@ -556,6 +557,19 @@ function getMainLine(quote: PartnerQuoteDetailsInput) {
 
 function getMainQuantity(sheet: ComposerSheet) {
   return Math.max(1, Number(getMainLine(sheet.quote)?.quantity ?? 1))
+}
+
+function isStandOptionLine(line: PartnerQuoteLineItemInput) {
+  return line.optionGroupId === "mounting_option" && line.optionId === "stand"
+}
+
+function canEditLineQuantity(line: PartnerQuoteLineItemInput) {
+  return line.quantity != null && (
+    line.quantityLocked !== true ||
+    line.optionGroupId === "main_product" ||
+    line.optionGroupId === "camera_bundle" ||
+    isStandOptionLine(line)
+  )
 }
 
 /** 녹화 세트·86" 번들처럼 칠판을 이미 품은 장. 여기에 다른 패키지를 누르면 행으로 덧붙인다. */
@@ -1519,13 +1533,12 @@ export default function QuickQuoteComposer({
 
   function nudgeLineQuantity(line: QuoteProductLine, lineIndex: number, delta: number) {
     const target = sheets.find((sheet) => sheet.line === line)?.quote.lineItems?.[lineIndex]
-    if (!target) return
-    if (target.quantityLocked === true && target.optionGroupId !== "main_product" && target.optionGroupId !== "camera_bundle") return
+    if (!target || !canEditLineQuantity(target)) return
     const current = Math.round(Number(target.quantity ?? 1))
     const quantity = Math.max(1, current + delta)
     if (quantity === current) return
     setActivePick(null)
-    updateLine(line, lineIndex, { quantity })
+    updateLine(line, lineIndex, { quantity, ...(isStandOptionLine(target) ? { quantityLocked: false } : {}) })
   }
 
   /** 옵션에서 생긴 행은 옵션을 끄는 방식으로만 지운다(지워도 다시 생기지 않게). */
@@ -2292,10 +2305,8 @@ export default function QuickQuoteComposer({
     const isCharge = isCustomQuoteCharge(line)
     const installationItemCode = isInstallation ? line.itemCode : undefined
     const editablePriceCode = isCharge ? line.itemCode : installationItemCode
-    const quantityEditable =
-      line.quantity != null && (
-        line.quantityLocked !== true || line.optionGroupId === "main_product" || line.optionGroupId === "camera_bundle"
-      )
+    const quantityEditable = canEditLineQuantity(line)
+    const defaultDiscountText = formatDefaultQuoteLineDiscount(line)
     const isMain = line.optionGroupId === "main_product"
     const canMove = (sheet.quote.lineItems?.length ?? 0) > 1
 
@@ -2388,8 +2399,30 @@ export default function QuickQuoteComposer({
             onChange={(event) => updateLine(sheet.line, lineIndex, { itemDescription: event.target.value })}
             className={`${EDITABLE_CLASS} field-sizing-content w-full resize-y text-[11.5px] text-[#78736D]`}
           />
-          {line.originalUnitPrice != null && line.unitPrice != null && line.originalUnitPrice > line.unitPrice && (
-            <span className="text-[11px] text-[#78736D]">정가 {formatStandardQuoteCurrency(line.originalUnitPrice)}원 · 할인 −{formatStandardQuoteCurrency(line.originalUnitPrice - line.unitPrice)}원 / {line.quantityUnit || "개"}</span>
+          {defaultDiscountText && (
+            <>
+              <textarea
+                aria-label={`${line.itemName} 할인 표시 문구`}
+                title="할인 표시 문구 편집"
+                rows={1}
+                value={line.discountDisplayText ?? defaultDiscountText}
+                onChange={(event) => updateLine(sheet.line, lineIndex, { discountDisplayText: event.target.value })}
+                onBlur={(event) => {
+                  const text = event.target.value.trim()
+                  updateLine(sheet.line, lineIndex, { discountDisplayText: text && text !== defaultDiscountText ? text : undefined })
+                }}
+                className={`${EDITABLE_CLASS} field-sizing-content w-full resize-y text-[11px] text-[#615D59]`}
+              />
+              {line.discountDisplayText && (
+                <button
+                  type="button"
+                  className="w-fit text-[10.5px] text-[#615D59] underline"
+                  onClick={() => updateLine(sheet.line, lineIndex, { discountDisplayText: undefined })}
+                >
+                  기본 할인 문구로 되돌리기
+                </button>
+              )}
+            </>
           )}
         </span>
         <span role="cell" className="flex flex-col items-end">
@@ -2459,7 +2492,7 @@ export default function QuickQuoteComposer({
                   value={formatStandardQuoteCurrency(line.originalUnitPrice)}
                   onChange={(event) => updateLine(sheet.line, lineIndex, { originalUnitPrice: parseNumericInput(event.target.value) ?? 0 })}
                   className={`${EDITABLE_CLASS} w-full text-right tabular-nums`} />
-                <button type="button" onClick={() => updateLine(sheet.line, lineIndex, { originalUnitPrice: undefined })}>할인 내역 삭제</button>
+                <button type="button" onClick={() => updateLine(sheet.line, lineIndex, { originalUnitPrice: undefined, discountDisplayText: undefined })}>할인 내역 삭제</button>
               </label>
             )
           )}
