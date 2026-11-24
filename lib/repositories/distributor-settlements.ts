@@ -18,6 +18,7 @@ import {
   type DistributorSettlementRecord,
   type DistributorSettlementTotals,
 } from "@/lib/distributor-settlements"
+import { normalizeQuoteDiscount } from "@/lib/standard-quote-template"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 
 // 총판 정산 저장소(2026-10-23) — distributor_settlements · distributor_settlement_payments · distributor_price_templates.
@@ -38,8 +39,14 @@ const BASE_SETTLEMENT_COLUMNS = [
   "email_status", "emailed_at", "email_error", "review_required_reason", "notes", "cancelled_at",
   "installed_at", "created_at", "updated_at",
 ].join(", ")
-// 20261124 마이그레이션 칸(총판 확인·발행 후 수정). 미적용 DB 에서는 이 칸 없이 다시 읽는다(42703 폴백).
-const CONFIRM_REVISE_COLUMNS = ["distributor_confirmed_at", "distributor_confirmed_name", "revised_at"] as const
+// 20261124 마이그레이션 칸(총판 확인·발행 후 수정·할인·문구). 미적용 DB 에서는 이 칸 없이 다시 읽는다(42703 폴백).
+const CONFIRM_REVISE_COLUMNS = [
+  "distributor_confirmed_at",
+  "distributor_confirmed_name",
+  "revised_at",
+  "discount",
+  "document_text",
+] as const
 let confirmReviseColumnsMissing = false
 
 function settlementColumns() {
@@ -89,7 +96,7 @@ export class DistributorSettlementsNotReadyError extends Error {
 }
 
 export const DISTRIBUTOR_CONFIRM_REVISE_NOT_READY_MESSAGE =
-  "총판 확인·발행 후 수정 칸이 아직 적용되지 않았습니다. supabase/migrations/20261124_distributor_settlement_confirm_revise.sql 적용이 필요합니다."
+  "총판 확인·발행 후 수정·할인·문구 칸이 아직 적용되지 않았습니다. supabase/migrations/20261124_distributor_settlement_confirm_revise.sql 적용이 필요합니다."
 
 interface PostgrestErrorLike {
   code?: string | null
@@ -149,8 +156,35 @@ interface SettlementRow {
   distributor_confirmed_at?: string | null
   distributor_confirmed_name?: string | null
   revised_at?: string | null
+  discount?: unknown
+  document_text?: unknown
   created_at: string
   updated_at: string
+}
+
+function readDocumentText(value: unknown): { documentTitle: string | null; generalNotes: string | null } {
+  const record = value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {}
+  return {
+    documentTitle: typeof record.title === "string" && record.title.trim() ? record.title.trim() : null,
+    generalNotes: typeof record.generalNotes === "string" ? record.generalNotes : null,
+  }
+}
+
+/** 할인·문구 칸 쓰기 값. 새 칸이 없는 DB 에서 할인·문구를 저장하려 하면 '적용 필요'로 막는다(조용히 버리지 않는다). */
+function extraWriteColumns(input: Pick<DistributorSettlementInput, "discount" | "documentTitle" | "generalNotes">) {
+  const discount = input.discount ?? null
+  const documentText =
+    input.documentTitle || typeof input.generalNotes === "string"
+      ? {
+          ...(input.documentTitle ? { title: input.documentTitle } : {}),
+          ...(typeof input.generalNotes === "string" ? { generalNotes: input.generalNotes } : {}),
+        }
+      : null
+  if (confirmReviseColumnsMissing) {
+    if (discount || documentText) throw new DistributorSettlementsNotReadyError(DISTRIBUTOR_CONFIRM_REVISE_NOT_READY_MESSAGE)
+    return {}
+  }
+  return { discount, document_text: documentText }
 }
 
 // NUMERIC 은 PostgREST 에서 문자열로 올 수 있다.
@@ -203,6 +237,8 @@ export function toDistributorSettlementRecord(row: SettlementRow): DistributorSe
     confirmedAt: row.distributor_confirmed_at ?? null,
     confirmedByName: row.distributor_confirmed_name ?? null,
     revisedAt: row.revised_at ?? null,
+    discount: normalizeQuoteDiscount(row.discount) ?? null,
+    ...readDocumentText(row.document_text),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
@@ -331,6 +367,8 @@ export async function saveDistributorSettlementDraft(params: {
   if (!existing.available) throw new DistributorSettlementsNotReadyError()
   // 설치 완료 검토 요청은 발행할 때까지 남긴다(검토 대기 목록에서 빠지지 않게). 다른 보류 사유는 해소된다.
   columns.review_required_reason = reviewReasonAfterSave(existing.value?.reviewRequiredReason)
+  // 새 칸 유무는 바로 위 조회에서 알게 된다 — 그 뒤에 할인·문구 칸을 붙인다.
+  Object.assign(columns, extraWriteColumns(params.input))
 
   if (!existing.value) {
     const { data, error } = await withSettlementColumns((selectColumns) =>
@@ -532,6 +570,7 @@ export async function reviseIssuedDistributorSettlement(params: {
         total_amount: totals.totalAmount,
         due_date: input.dueDate,
         notes: input.notes,
+        ...extraWriteColumns(input),
         status,
         revised_at: new Date().toISOString(),
         distributor_confirmed_at: null,

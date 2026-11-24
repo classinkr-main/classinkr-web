@@ -10,10 +10,17 @@ const sql = readFileSync(join(process.cwd(), FILE), "utf8").replace(/--[^\n]*/g,
 
 describe("distributor settlement confirm/revise migration", () => {
   it("adds the partner-confirmation and revision columns idempotently", () => {
-    for (const column of ["distributor_confirmed_at TIMESTAMPTZ", "distributor_confirmed_name TEXT", "revised_at TIMESTAMPTZ"]) {
+    for (const column of [
+      "distributor_confirmed_at TIMESTAMPTZ",
+      "distributor_confirmed_name TEXT",
+      "revised_at TIMESTAMPTZ",
+      "discount JSONB",
+      "document_text JSONB",
+    ]) {
       expect(sql).toContain(`ADD COLUMN IF NOT EXISTS ${column}`)
     }
     expect(sql).toContain("DROP CONSTRAINT IF EXISTS distributor_settlements_confirmed_name_check")
+    expect(sql).toContain("discount->>'mode' IN ('amount', 'rate')")
     expect(sql).not.toMatch(/CREATE POLICY|DISABLE ROW LEVEL SECURITY|DROP TABLE/i)
   })
 
@@ -24,7 +31,7 @@ describe("distributor settlement confirm/revise migration", () => {
     expect(probes[0]).toMatchObject({
       kind: "table",
       table: "distributor_settlements",
-      columns: ["distributor_confirmed_at", "distributor_confirmed_name", "revised_at"],
+      columns: ["distributor_confirmed_at", "distributor_confirmed_name", "revised_at", "discount", "document_text"],
       severity: "warning",
     })
   })

@@ -63,7 +63,11 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
     const context = await loadQuoteContext(id)
     if (!context) return NextResponse.json({ error: "견적서를 찾을 수 없습니다." }, { status: 404 })
 
-    const totals = computeDistributorTotals(validated.value.lines, validated.value.vatIncluded)
+    const totals = computeDistributorTotals(
+      validated.value.lines,
+      validated.value.vatIncluded,
+      validated.value.discount
+    )
     const settlement = await saveDistributorSettlementDraft({
       quoteDocumentId: id,
       dealId: context.document.deal_id,
@@ -117,7 +121,7 @@ async function reviseIssued(
   const revised = await reviseIssuedDistributorSettlement({
     settlement: current,
     input,
-    totals: computeDistributorTotals(input.lines, input.vatIncluded),
+    totals: computeDistributorTotals(input.lines, input.vatIncluded, input.discount),
     actor,
   })
   if (!revised) {

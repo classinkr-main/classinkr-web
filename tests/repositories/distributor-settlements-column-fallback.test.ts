@@ -65,6 +65,36 @@ describe("새 칸 미적용 폴백", () => {
     )
   })
 
+  it("새 칸이 없으면 할인·문구를 넣은 저장은 조용히 버리지 않고 '적용 필요'로 막는다", async () => {
+    const { repo } = await load(true)
+    const input = {
+      fulfillmentMode: "C" as const,
+      distributorName: "퀴드러닝",
+      distributorContactName: null,
+      distributorEmail: null,
+      distributorPhone: null,
+      issueTrigger: "on_accept" as const,
+      autoEmail: true,
+      priceTemplateId: null,
+      lines: [],
+      vatIncluded: true,
+      dueDate: null,
+      notes: null,
+      discount: { mode: "amount" as const, value: 10_000 },
+    }
+    await expect(
+      repo.saveDistributorSettlementDraft({
+        quoteDocumentId: "qd_1",
+        dealId: null,
+        sourceVersionId: null,
+        customerTotalAmount: 0,
+        input,
+        totals: { subtotalAmount: 0, discountAmount: 0, vatAmount: 0, totalAmount: 0, missingPriceCount: 0, includedCount: 0 },
+        actor: "운영자",
+      })
+    ).rejects.toThrow(/20261124_distributor_settlement_confirm_revise/)
+  })
+
   it("새 칸이 있으면 한 번에 읽는다", async () => {
     const { repo, selects } = await load(false)
     await repo.getDistributorSettlementByToken("t")

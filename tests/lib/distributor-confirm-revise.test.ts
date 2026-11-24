@@ -68,6 +68,9 @@ const BASE: DistributorSettlementRecord = {
   confirmedAt: null,
   confirmedByName: null,
   revisedAt: null,
+  discount: null,
+  documentTitle: null,
+  generalNotes: null,
   createdAt: "2026-11-24T00:00:00.000Z",
   updatedAt: "2026-11-24T00:00:00.000Z",
 }
@@ -275,5 +278,87 @@ describe("발행 후 금액 수정 알림", () => {
     })
     expect(ctx.sendEmail).not.toHaveBeenCalled()
     expect(ctx.emitNotificationEvent).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe("총판 견적서 할인 · 문구", () => {
+  it("할인은 공급가에서 빼고, 부가세는 할인 뒤 금액에 붙는다(고객 견적서와 같은 계산)", async () => {
+    const { computeDistributorTotals } = await import("@/lib/distributor-settlements")
+    const amount = computeDistributorTotals([HW_LINE], false, { mode: "amount", value: 300_000, label: "물량 할인" })
+    expect(amount).toMatchObject({ subtotalAmount: 5_300_000, discountAmount: 300_000, vatAmount: 500_000, totalAmount: 5_500_000 })
+    const rate = computeDistributorTotals([HW_LINE], true, { mode: "rate", value: 10 })
+    expect(rate).toMatchObject({ discountAmount: 530_000, totalAmount: 4_770_000 })
+    const none = computeDistributorTotals([HW_LINE], true)
+    expect(none).toMatchObject({ discountAmount: 0, totalAmount: 5_300_000 })
+  })
+
+  it("문서 총액이 입금 요청 금액과 같고, 고쳐 쓴 품목 이름·기타사항·할인이 문서에 찍힌다", async () => {
+    const { buildDistributorQuoteDetails, computeDistributorTotals } = await import("@/lib/distributor-settlements")
+    const discount = { mode: "amount" as const, value: 300_000, label: "물량 할인" }
+    const lines = [{ ...HW_LINE, displayName: "전자칠판 86형(총판 공급가)", displayDescription: "본체만" }, CUSTOM_LINE]
+    const details = buildDistributorQuoteDetails(
+      { lineItems: [], generalNotes: "고객용 안내", quoteDiscount: { mode: "amount", value: 999_999 } },
+      {
+        distributorName: "퀴드러닝",
+        distributorContactName: null,
+        distributorPhone: null,
+        distributorEmail: null,
+        lines,
+        vatIncluded: true,
+        notes: null,
+        discount,
+        generalNotes: "총판 전용 안내",
+      },
+      { customerName: "한빛학원" }
+    )
+    expect(details.lineItems?.[0]).toMatchObject({ itemName: "전자칠판 86형(총판 공급가)", itemDescription: "본체만" })
+    expect(details.lineItems?.[1]).toMatchObject({ itemName: "배송비" })
+    expect(details.quoteDiscount).toMatchObject({ value: 300_000, label: "물량 할인" })
+    expect(details.generalNotes).toBe("총판 전용 안내")
+    expect(details.grandTotalAmount).toBe(computeDistributorTotals(lines, true, discount).totalAmount)
+  })
+
+  it("기타사항을 따로 정하지 않으면 고객 견적 기타사항을, 빈 문자열이면 비운다", async () => {
+    const { buildDistributorQuoteDetails } = await import("@/lib/distributor-settlements")
+    const base = {
+      distributorName: "퀴드러닝",
+      distributorContactName: null,
+      distributorPhone: null,
+      distributorEmail: null,
+      lines: [HW_LINE],
+      vatIncluded: true,
+      notes: null,
+    }
+    expect(buildDistributorQuoteDetails({ lineItems: [], generalNotes: "고객용 안내" }, { ...base, generalNotes: null }).generalNotes).toContain(
+      "고객용 안내"
+    )
+    expect(buildDistributorQuoteDetails({ lineItems: [], generalNotes: "고객용 안내" }, { ...base, generalNotes: "" }).generalNotes).toBeFalsy()
+  })
+
+  it("고객 견적에서 줄을 다시 만들어도 고쳐 쓴 문구는 남는다", () => {
+    const lines = buildDistributorLinesFromQuote(
+      [{ sortOrder: 1, lineNumber: 1, itemType: "hardware", itemCode: "board-86", itemName: '86" 전자칠판(새 이름)', quantity: 2, unitPrice: 3_150_000 }],
+      { previous: [{ ...HW_LINE, displayName: "총판용 이름" }] }
+    )
+    expect(lines[0]).toMatchObject({ itemName: '86" 전자칠판(새 이름)', displayName: "총판용 이름" })
+  })
+
+  it("입력 검증 — 할인·제목·기타사항을 받고, 잘못된 할인은 버린다", async () => {
+    const { validateDistributorSettlementInput } = await import("@/lib/distributor-settlements")
+    const ok = validateDistributorSettlementInput({
+      distributorName: "퀴드러닝",
+      lines: [HW_LINE],
+      discount: { mode: "rate", value: 150, label: "특가" },
+      documentTitle: "  한빛학원 총판 공급  ",
+      generalNotes: "",
+    })
+    expect(ok.ok && ok.value).toMatchObject({
+      discount: { mode: "rate", value: 100, label: "특가" },
+      documentTitle: "한빛학원 총판 공급",
+      generalNotes: "",
+    })
+    const bad = validateDistributorSettlementInput({ distributorName: "퀴드러닝", lines: [HW_LINE], discount: { mode: "x", value: 5 } })
+    expect(bad.ok && bad.value.discount).toBeNull()
+    expect(bad.ok && bad.value.generalNotes).toBeNull()
   })
 })

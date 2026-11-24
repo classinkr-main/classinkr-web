@@ -300,14 +300,14 @@ npm run check:db --  --strict
 | --- | --- | --- | --- |
 | `20261112_chatbot_claude_labels.sql` | 답변별 라벨 `chatbot_session_labels`(의도·기관·단계·온도·세션 최고 온도, `chat_sessions` CASCADE)·Claude 호출 사용량 `chatbot_llm_usage`(모델·토큰·추정 USD)·합계 함수 `chatbot_llm_usage_sum(timestamptz)`(service_role 만 실행). RLS on + 활성 관리자 SELECT 정책, anon 권한 회수. 멱등(`IF NOT EXISTS`·`CREATE OR REPLACE`) | 라벨링은 조용히 건너뛰고, 일·월 예산은 인스턴스 메모리 합계로만 잰다(서버리스 인스턴스가 여럿이면 상한을 넘겨 쓸 수 있다). Gemini 기본값이면 영향 없다 | `npm run check:db` 의 `chatbot_session_labels`·`chatbot_llm_usage`·`chatbot_llm_usage_sum` 프로브(warning), 또는 `select to_regclass('public.chatbot_session_labels') is not null and to_regclass('public.chatbot_llm_usage') is not null;` → `true` |
 
-### 2026-11-24 총판 견적서 확인 · 발행 후 수정 — 서울 프로젝트 미적용
+### 2026-11-24 총판 견적서 확인 · 발행 후 수정 · 할인 · 문구 — 서울 프로젝트 미적용
 
 총판이 공유 링크에서 [견적 확인]을 누른 기록과, 발행 뒤 금액 수정 기록([총판 정산](../hardware-ops/distributor-settlement.md) §4-1·§4-2).
 코드는 미적용 DB 에서도 돈다 — 확인 버튼과 발행 후 수정만 막힌다. **이 기능을 쓰기 전에 적용한다.**
 
 | 파일 | 하는 일 | 미적용 시 | 확인 |
 | --- | --- | --- | --- |
-| `20261124_distributor_settlement_confirm_revise.sql` | `distributor_settlements` 에 `distributor_confirmed_at`·`distributor_confirmed_name`(60자 CHECK)·`revised_at` 추가. 멱등(`ADD COLUMN IF NOT EXISTS`·`DROP CONSTRAINT IF EXISTS`) | 정산 조회는 새 칸 없이 다시 읽는다(42703 폴백). 총판 링크에 확인 버튼이 나오지 않고, 발행 후 금액 수정 저장은 503 "적용 필요". 발행 전 편집·발행·입금·고객 동의 자동 생성은 그대로 된다 | `npm run check:db` 의 `distributor_settlements`(총판 견적서 확인·발행 후 수정) 프로브(warning), 또는 `select count(*) from information_schema.columns where table_name = 'distributor_settlements' and column_name in ('distributor_confirmed_at','distributor_confirmed_name','revised_at');` → `3` |
+| `20261124_distributor_settlement_confirm_revise.sql` | `distributor_settlements` 에 `distributor_confirmed_at`·`distributor_confirmed_name`(60자 CHECK)·`revised_at`·`discount`(JSONB, mode CHECK)·`document_text`(JSONB) 추가. 멱등(`ADD COLUMN IF NOT EXISTS`·`DROP CONSTRAINT IF EXISTS`) | 정산 조회는 새 칸 없이 다시 읽는다(42703 폴백). 총판 링크에 확인 버튼이 나오지 않고, 발행 후 금액 수정과 할인·제목·기타사항을 넣은 저장은 503 "적용 필요". 발행 전 편집·발행·입금·고객 동의 자동 생성은 그대로 된다 | `npm run check:db` 의 `distributor_settlements`(총판 견적서 확인·발행 후 수정) 프로브(warning), 또는 `select count(*) from information_schema.columns where table_name = 'distributor_settlements' and column_name in ('distributor_confirmed_at','distributor_confirmed_name','revised_at','discount','document_text');` → `5` |
 
 ## 적용 보류 중인 마이그레이션
 

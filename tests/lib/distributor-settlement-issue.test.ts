@@ -56,6 +56,9 @@ const SETTLEMENT: DistributorSettlementRecord = {
   confirmedAt: null,
   confirmedByName: null,
   revisedAt: null,
+  discount: null,
+  documentTitle: null,
+  generalNotes: null,
   createdAt: "2026-10-23T00:00:00.000Z",
   updatedAt: "2026-10-23T00:00:00.000Z",
 }

@@ -277,7 +277,7 @@ export async function issueDistributorSettlement(params: {
   const blocker = getDistributorIssueBlocker(settlement)
   if (blocker) return block(blocker)
 
-  const totals = computeDistributorTotals(settlement.lines, settlement.vatIncluded)
+  const totals = computeDistributorTotals(settlement.lines, settlement.vatIncluded, settlement.discount)
   const issued = await markDistributorSettlementIssued({
     id: settlement.id,
     issuedVersionId: context.version.id,
