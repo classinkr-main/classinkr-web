@@ -1,5 +1,16 @@
 import { describe, expect, it } from "vitest"
 
+import { normalizeQuoteDetailsFromStructuredJson } from "@/lib/portal/quote-details"
+import {
+  AUTOMATIC_QUOTE_NOTE_IDS,
+  getAutomaticQuoteNoteLines,
+  readAutomaticQuoteNotes,
+  readQuoteGeneralNotes,
+  readQuotePaymentNote,
+  replaceQuotePaymentNote,
+  writeAutomaticQuoteNotes,
+  writeQuoteGeneralNotes,
+} from "@/lib/quote-composer-notes"
 import {
   DEFAULT_HARDWARE_QUOTE_TEMPLATE_ID,
   DEFAULT_SOFTWARE_QUOTE_TEMPLATE_ID,
@@ -63,6 +74,42 @@ describe("appendQuoteNoteLine", () => {
   it("빈 문구는 원본을 바꾸지 않는다", () => {
     expect(appendQuoteNoteLine("기존 메모", "   ")).toBe("기존 메모")
     expect(quoteNoteHasLine("기존 메모", "  ")).toBe(false)
+  })
+})
+
+describe("견적 설정 기반 문구", () => {
+  it("자동 선택과 문구를 저장하고 기존 견적을 다시 열어도 현재 조건으로 갱신한다", () => {
+    const quote = buildConfigurableStandardQuoteDetails({
+      templateId: "camera_t1",
+      input: { validUntil: "2026-11-30", vatIncluded: true },
+    })
+    const automatic = [...AUTOMATIC_QUOTE_NOTE_IDS]
+    const generalNotes = writeQuoteGeneralNotes("직접 작성한 안내", quote, automatic)
+    expect(generalNotes).toContain("부가세 포함 금액")
+    expect(generalNotes).toContain("2026-11-30까지")
+    expect(generalNotes).toContain("카메라 설치: 별도 청구 예정")
+    expect(generalNotes).not.toContain("배송비")
+
+    const saved = normalizeQuoteDetailsFromStructuredJson({
+      quoteDetails: { ...quote, generalNotes, optionSelections: writeAutomaticQuoteNotes({}, automatic) },
+    })
+    const selected = readAutomaticQuoteNotes(saved.optionSelections)
+    expect(selected).toEqual(automatic)
+    const manualNotes = readQuoteGeneralNotes(saved, selected)
+    expect(manualNotes).toBe("직접 작성한 안내")
+    const updated = { ...saved, validUntil: undefined, vatIncluded: false, lineItems: [] }
+    const updatedNotes = writeQuoteGeneralNotes(manualNotes, updated, selected)
+    expect(updatedNotes).toContain("부가세 별도 금액")
+    expect(updatedNotes).toContain("기한 없음")
+    expect(getAutomaticQuoteNoteLines(updated, "general_delivery_cost")).toEqual([])
+  })
+
+  it("결제 기한을 바꿀 때 이전 문구만 교체하고 직접 작성한 문구는 유지한다", () => {
+    const original = replaceQuotePaymentNote("계약서에 따름", 30)
+    const updated = replaceQuotePaymentNote(original, 7)
+    expect(readQuotePaymentNote(updated)).toBe(7)
+    expect(updated).not.toContain("30일")
+    expect(replaceQuotePaymentNote(updated)).toBe("계약서에 따름")
   })
 })
 

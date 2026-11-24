@@ -1,5 +1,11 @@
 import type { PartnerQuoteDetailsInput, PartnerQuoteLineItemInput } from "@/lib/partners-types"
 import {
+  AUTOMATIC_QUOTE_NOTE_IDS,
+  readAutomaticQuoteNotes,
+  writeAutomaticQuoteNotes,
+  writeQuoteGeneralNotes,
+} from "@/lib/quote-composer-notes"
+import {
   DEFAULT_QUOTE_TEMPLATE_DEFAULTS,
   QUOTE_TEMPLATE_INSTALLATION_OPTIONS,
   QUOTE_TEMPLATE_VALIDITY_DAYS,
@@ -136,21 +142,25 @@ export function teamTemplateViewToQuoteDetails(
     .map((line, index) => ({ ...line, sortOrder: index + 1, lineNumber: index + 1 }))
 
   const presets = QUOTE_NOTE_PRESETS.filter((preset) => view.defaults.notePresetIds.includes(preset.id))
+  const automaticNotes = AUTOMATIC_QUOTE_NOTE_IDS.filter((id) => view.defaults.notePresetIds.includes(id))
   const notesOf = (group: "general" | "special") =>
-    presets.filter((preset) => preset.group === group).map((preset) => preset.text).join("\n") || undefined
+    presets
+      .filter((preset) => preset.group === group && !automaticNotes.some((id) => id === preset.id))
+      .map((preset) => preset.text)
+      .join("\n")
 
-  return {
+  const details: PartnerQuoteDetailsInput = {
     ...built,
     templateId,
-    optionSelections: selections,
+    optionSelections: writeAutomaticQuoteNotes(selections, automaticNotes),
     lineItems,
     issuedAt: today,
     validUntil: addDays(today, view.defaults.validityDays),
     vatIncluded: view.defaults.vat === "included",
     vatPolicyLabel: undefined,
-    generalNotes: notesOf("general"),
-    specialTerms: notesOf("special"),
+    specialTerms: notesOf("special") || undefined,
   }
+  return { ...details, generalNotes: writeQuoteGeneralNotes(notesOf("general"), details, automaticNotes) || undefined }
 }
 
 function nearestValidityDays(issuedAt?: string, validUntil?: string): QuoteTemplateInput["defaults"]["validityDays"] {
@@ -195,6 +205,7 @@ export function quoteDetailsToTeamTemplateInput(
     (option) => option.value === selections.installation_mode
   )
   const notes = [details.generalNotes, details.specialTerms].join("\n")
+  const automaticNotes = readAutomaticQuoteNotes(selections)
 
   return {
     name: name.trim(),
@@ -206,9 +217,9 @@ export function quoteDetailsToTeamTemplateInput(
       vat: details.vatIncluded === false ? "excluded" : "included",
       installation: installation?.value ?? DEFAULT_QUOTE_TEMPLATE_DEFAULTS.installation,
       payment: selections.payment_plan === "12_month" ? "12_month" : "one_time",
-      notePresetIds: QUOTE_NOTE_PRESETS.filter((preset) => quoteNoteHasLine(notes, preset.text)).map(
-        (preset) => preset.id
-      ),
+      notePresetIds: QUOTE_NOTE_PRESETS.filter(
+        (preset) => automaticNotes.some((id) => id === preset.id) || quoteNoteHasLine(notes, preset.text)
+      ).map((preset) => preset.id),
     },
     // 디자인 정본: "이 구성을 팀 템플릿으로 저장". 메뉴 노출은 설정 화면에서 켠다.
     scope: "team",

@@ -25,6 +25,7 @@ import {
 import { buildSalesOrderLines, summarizeSalesOrderProducts } from "@/lib/orders/order-lines"
 import type { PartnerQuoteDetailsInput } from "@/lib/partners-types"
 import { normalizeQuoteDetailsFromStructuredJson } from "@/lib/portal/quote-details"
+import { createQuoteChargeLine, QUOTE_CHARGE_OPTIONS } from "@/lib/quote-custom-charges"
 import {
   STANDARD_QUOTE_SUPPLIER,
   STANDARD_QUOTE_TEMPLATES,
@@ -35,6 +36,7 @@ import {
   getStandardQuoteQuickPresets,
   isRetiredQuoteTemplate,
   isSoftwareQuoteTemplate,
+  moveQuoteLine,
   resolveQuoteProductLine,
   resolveQuoteSupplier,
   type StandardQuoteTemplateId,
@@ -111,6 +113,41 @@ function savePayload(quote: PartnerQuoteDetailsInput) {
 }
 
 describe("1. HW 템플릿·프리셋 → 품목과 금액", () => {
+  it("배송비·설치비·추가 항목 금액과 옮긴 행 순서를 구성 변경 및 고객 문서까지 유지한다", () => {
+    const original = composeHardwareQuote("board_86")
+    const { shipping, installation } = QUOTE_CHARGE_OPTIONS
+    const items = original.lineItems ?? []
+    const additions = [
+      { ...createQuoteChargeLine("shipping", shipping.itemCode, items.length + 1), unitPrice: 80_000 },
+      { ...createQuoteChargeLine("installation", installation.itemCode, items.length + 2), quantity: 2, unitPrice: 200_000 },
+      { ...createQuoteChargeLine("custom", "quote-custom-fee-test", items.length + 3), itemName: "현장 출장비", unitPrice: 20_000 },
+    ]
+    const moved = moveQuoteLine([...items, ...additions], items.length, 0)
+    const rebuilt = buildConfigurableStandardQuoteDetails({
+      templateId: "board_86",
+      input: { ...original, lineItems: moved },
+      optionSelections: { mounting_option: "stand" },
+      baseQuantity: 2,
+    })
+    const saved = normalizeQuoteDetailsFromStructuredJson(savePayload(rebuilt).structured_json)
+    expect(saved.grandTotalAmount).toBe(14_100_000)
+    expect(saved.lineItems?.map((line) => line.itemCode)).toEqual([
+      shipping.itemCode, "board-86", "install-training", "support-1y", installation.itemCode, "quote-custom-fee-test", "stand",
+    ])
+    expect(saved.lineItems?.map((line) => [line.sortOrder, line.lineNumber])).toEqual(
+      [1, 2, 3, 4, 5, 6, 7].map((number) => [number, number])
+    )
+    expect(saved.lineItems?.find((line) => line.itemCode === installation.itemCode)).toMatchObject({
+      itemType: "installation", isUserAdded: true, quantity: 2, unitPrice: 200_000, lineSupplyAmount: 400_000,
+    })
+    const document = renderToStaticMarkup(<QuoteDocumentPreview quote={saved} documentNumber="검증" />)
+    const shippingPosition = document.indexOf("배송비</strong>")
+    expect(shippingPosition).toBeGreaterThan(-1)
+    expect(document.indexOf("전자칠판 86")).toBeGreaterThan(shippingPosition)
+    expect(document).toContain("현장 출장비")
+    expect(document).toContain("14,100,000")
+  })
+
   it.each([
     // [템플릿, 프리셋, 수량, 공급가 합계, 품목 코드(금액 있는 줄)]
     ["board_86", undefined, 1, 6_300_000, ["board-86"]],

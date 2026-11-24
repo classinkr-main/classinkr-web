@@ -6,9 +6,12 @@ import {
   AlertCircle,
   AlertTriangle,
   Check,
+  ChevronDown,
+  ChevronUp,
   Copy,
   Eye,
   EyeOff,
+  GripVertical,
   Loader2,
   Mail,
   MessageCircle,
@@ -31,6 +34,20 @@ import { normalizeQuoteDetailsFromStructuredJson } from "@/lib/portal/quote-deta
 import { portalFetch } from "@/lib/portal/portal-fetch"
 import { getProductBySku } from "@/lib/product-templates"
 import { quoteComposerMode } from "@/lib/quote-composer-navigation"
+import {
+  AUTOMATIC_QUOTE_NOTE_IDS,
+  getAutomaticQuoteNoteLines,
+  QUOTE_PAYMENT_NOTE_DAYS,
+  readAutomaticQuoteNotes,
+  readQuoteGeneralNotes,
+  readQuotePaymentNote,
+  removeQuoteNoteLines,
+  replaceQuotePaymentNote,
+  writeAutomaticQuoteNotes,
+  writeQuoteGeneralNotes,
+  type AutomaticQuoteNoteId,
+} from "@/lib/quote-composer-notes"
+import { createQuoteChargeLine, isCustomQuoteCharge, QUOTE_CHARGE_OPTIONS, type QuoteChargeOption } from "@/lib/quote-custom-charges"
 import { QUOTE_WORKSPACE_PREVIEW_LIMIT } from "@/lib/quote-workspace-preferences"
 import type {
   CustomerListItem,
@@ -46,7 +63,6 @@ import type {
 import {
   INSTALL_FEE_ITEM_CODE,
   INSTALL_FEE_OPTION_ID,
-  STANDARD_PRICE_INSTALL_FEE,
   STANDARD_QUOTE_TEMPLATES,
   appendQuoteNoteLine,
   buildConfigurableStandardQuoteDetails,
@@ -66,7 +82,9 @@ import {
   isRecordingStudioTemplate,
   isRetiredQuoteTemplate,
   isSoftwareQuoteTemplate,
+  moveQuoteLine,
   quoteNoteHasLine,
+  renumberQuoteLines,
   resolveQuoteSupplier,
   type QuoteNotePresetGroup,
   type QuoteProductLine,
@@ -239,6 +257,7 @@ type SharedQuoteFields = {
   vatIncluded: boolean
   generalNotes: string
   specialTerms: string
+  automaticNotes: AutomaticQuoteNoteId[]
 }
 
 type ManagerOverride = { name: string; phone: string; selection: string }
@@ -253,7 +272,6 @@ type QuickAddRailItemId =
   | "stand"
   | "wall_mount"
   | "bundle_86_t1_wall"
-  | "install_fee"
 
 type QuickAddRailGroup = "package" | "software" | "panel" | "accessory"
 
@@ -270,21 +288,9 @@ type QuickAddRailItem = {
   presetId?: string
   quantityUnit: string
   badge?: string
-  priceUnit?: string
 }
 
 const QUICK_ADD_RAIL_ITEMS: QuickAddRailItem[] = [
-  {
-    id: "install_fee",
-    label: "배송·설치비",
-    description: "견적 합계에 추가 · 단가 수정 가능",
-    price: STANDARD_PRICE_INSTALL_FEE,
-    group: "accessory",
-    sku: INSTALL_FEE_ITEM_CODE,
-    templateId: "board_86",
-    quantityUnit: "대",
-    priceUnit: "/대",
-  },
   // ── 패키지 상품 (수트 · 번들 · 세트) ─────────────────────────
   {
     id: "recording_studio",
@@ -428,6 +434,12 @@ const RAIL_ACTIVE_CLASS = "bg-white font-semibold shadow-[inset_2px_0_0_#084734]
 const RAIL_HEADING_CLASS = "mx-2 mb-1.5 text-[11.5px] font-semibold text-[#78736D]"
 const OPTION_CHIP_CLASS =
   "h-7 rounded-full border px-2.5 text-[11.5px] font-medium transition-colors"
+const LINE_MOVE_BUTTON_CLASS =
+  "flex h-5 w-6 items-center justify-center rounded-[4px] text-[#615D59] hover:bg-[#F0F0EC] disabled:invisible"
+const quoteChargeOptions = Object.entries(QUOTE_CHARGE_OPTIONS) as [
+  QuoteChargeOption,
+  (typeof QUOTE_CHARGE_OPTIONS)[QuoteChargeOption],
+][]
 
 function sheetLineOf(templateId: StandardQuoteTemplateId): QuoteProductLine {
   return isSoftwareQuoteTemplate(templateId) ? "software" : "hardware"
@@ -463,6 +475,7 @@ function buildSharedFields(today: string, generalNotes = ""): SharedQuoteFields 
     vatIncluded: true,
     generalNotes,
     specialTerms: "",
+    automaticNotes: [],
   }
 }
 
@@ -563,13 +576,8 @@ function daysBetween(from?: string, to?: string) {
   return Number.isFinite(diff) && diff > 0 ? diff : null
 }
 
-function formatQuickAddPrice(value: number, unit?: string) {
-  const formatted = `${Math.round(value / 10_000).toLocaleString("ko-KR")}만`
-  return unit ? `${formatted}${unit}` : formatted
-}
-
-function renumberLineItems(items: PartnerQuoteLineItemInput[]) {
-  return items.map((item, index) => ({ ...item, sortOrder: index + 1, lineNumber: index + 1 }))
+function formatQuickAddPrice(value: number) {
+  return `${Math.round(value / 10_000).toLocaleString("ko-KR")}만`
 }
 
 type SavedQuoteDoc = {
@@ -754,7 +762,7 @@ function ShareOptionButton({
   )
 }
 
-/** 프리셋 칩 + 직접 추가 + 종이 위 textarea 한 세트(기타사항/특약사항 공용). */
+/** 기타사항·특약사항 문구 선택과 직접 편집. */
 function QuoteNoteField({
   id,
   label,
@@ -762,6 +770,7 @@ function QuoteNoteField({
   value,
   placeholder,
   onChange,
+  automatic,
 }: {
   id: string
   label: string
@@ -769,17 +778,15 @@ function QuoteNoteField({
   value: string
   placeholder?: string
   onChange: (next: string) => void
+  automatic?: {
+    quote: PartnerQuoteDetailsInput
+    selected: AutomaticQuoteNoteId[]
+    onToggle: (id: AutomaticQuoteNoteId, oldText: string) => void
+  }
 }) {
   const presets = getQuoteNotePresets(group)
-  const [customOpen, setCustomOpen] = useState(false)
-  const [customText, setCustomText] = useState("")
-
-  function commitCustomText() {
-    const next = appendQuoteNoteLine(value, customText)
-    if (next !== value) onChange(next)
-    setCustomText("")
-    setCustomOpen(false)
-  }
+  const automaticLines = automatic?.selected.flatMap((id) => getAutomaticQuoteNoteLines(automatic.quote, id))
+  const paymentDays = group === "general" ? readQuotePaymentNote(value) : undefined
 
   return (
     <div className="grid gap-1.5">
@@ -787,66 +794,66 @@ function QuoteNoteField({
         <label htmlFor={id} className="text-[11.5px] font-semibold text-[#78736D]">
           {label}
         </label>
-        <div className="flex flex-wrap items-center gap-1" aria-label={`${label} 문구 추가`}>
+        <div role="group" className="flex flex-wrap items-center gap-1" aria-label={`${label} 문구 선택`}>
           {presets.map((preset) => {
-            const included = quoteNoteHasLine(value, preset.text)
+            if (preset.id === "general_payment_terms") {
+              return (
+                <select
+                  key={preset.id}
+                  aria-label="세금계산서 발행 후 결제 기한"
+                  value={paymentDays ?? ""}
+                  onChange={(event) => onChange(replaceQuotePaymentNote(
+                    value, QUOTE_PAYMENT_NOTE_DAYS.find((days) => String(days) === event.target.value)
+                  ))}
+                  className={`${OPTION_CHIP_CLASS} bg-transparent ${paymentDays ? "border-[#084734] text-[#084734]" : "border-[#E3E0DB] text-[#615D59]"}`}
+                >
+                  <option value="">{paymentDays ? "결제 조건 빼기" : "결제 조건"}</option>
+                  {QUOTE_PAYMENT_NOTE_DAYS.map((days) => <option key={days} value={days}>결제 {days}일 이내</option>)}
+                </select>
+              )
+            }
+
+            const automaticId = AUTOMATIC_QUOTE_NOTE_IDS.find((id) => id === preset.id)
+            const automaticText = automatic && automaticId
+              ? getAutomaticQuoteNoteLines(automatic.quote, automaticId).join("\n")
+              : undefined
+            const included = automatic && automaticId
+              ? automatic.selected.includes(automaticId)
+              : quoteNoteHasLine(value, preset.text)
+            const unavailable = automaticText === "" && !included
 
             return (
               <button
                 key={preset.id}
                 type="button"
-                title={preset.text}
-                disabled={included}
-                onClick={() => onChange(appendQuoteNoteLine(value, preset.text))}
+                title={automaticText === "" ? "이 견적의 배송·설치 항목이 없습니다." : automaticText ?? preset.text}
+                aria-pressed={included}
+                disabled={unavailable}
+                onClick={() => {
+                  if (automatic && automaticId) automatic.onToggle(automaticId, preset.text)
+                  else onChange(included ? removeQuoteNoteLines(value, [preset.text]) : appendQuoteNoteLine(value, preset.text))
+                }}
                 className={`inline-flex h-6 items-center gap-0.5 rounded-full border px-2 text-[11px] transition-colors ${
                   included
-                    ? "cursor-default border-[#084734]/40 text-[#084734]"
+                    ? "border-[#084734]/40 text-[#084734]"
                     : "border-[#E3E0DB] text-[#615D59] hover:border-[#084734] hover:text-[#111110]"
-                }`}
+                } disabled:opacity-50`}
               >
                 {included ? <Check className="h-3 w-3" /> : <Plus className="h-3 w-3" />}
                 {preset.label}
               </button>
             )
           })}
-          <button
-            type="button"
-            onClick={() => setCustomOpen((current) => !current)}
-            className="inline-flex h-6 items-center rounded-full border border-dashed border-[#CFCBC5] px-2 text-[11px] text-[#615D59] transition-colors hover:border-[#084734] hover:text-[#084734]"
-          >
-            직접 추가
-          </button>
         </div>
       </div>
-
-      {customOpen && (
-        <div className="flex items-center gap-1.5">
-          <input
-            value={customText}
-            onChange={(event) => setCustomText(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault()
-                commitCustomText()
-              }
-            }}
-            placeholder="추가할 문구를 입력하고 Enter"
-            className={`${EDITABLE_CLASS} h-7 flex-1 border-[#CFCBC5] text-[12.5px]`}
-          />
-          <button
-            type="button"
-            onClick={commitCustomText}
-            className="inline-flex h-7 shrink-0 items-center rounded-[6px] border border-[#E3E0DB] px-2.5 text-[12px] text-[#111110] transition-colors hover:border-[#084734]"
-          >
-            추가
-          </button>
-        </div>
+      {automaticLines && automaticLines.length > 0 && (
+        <p className="whitespace-pre-line text-[12px] leading-[1.75] text-[#615D59]">{automaticLines.join("\n")}</p>
       )}
 
       <textarea
         id={id}
         value={value}
-        rows={3}
+        rows={2}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
         className={`${EDITABLE_CLASS} w-full resize-y text-[12.5px] leading-[1.75] text-[#31302E]`}
@@ -920,6 +927,8 @@ export default function QuickQuoteComposer({
   })
   // 정보 라인(금액 없는 note_only) 인라인 추가 폼 — 어느 장에 붙일지
   const [noteLineOpenFor, setNoteLineOpenFor] = useState<QuoteProductLine | null>(null)
+  const [chargeMenuFor, setChargeMenuFor] = useState<QuoteProductLine | null>(null)
+  const draggedLineRef = useRef<{ sheet: QuoteProductLine; index: number } | null>(null)
   // 견적 할인 입력 중인 값(빈 칸·0 도 그대로 둔다). 실제 할인은 sheet.quote.quoteDiscount 에 정리돼 들어간다.
   const [discountDrafts, setDiscountDrafts] = useState<Partial<Record<QuoteProductLine, DiscountDraft>>>({})
   const [noteLineTitle, setNoteLineTitle] = useState("")
@@ -1039,23 +1048,25 @@ export default function QuickQuoteComposer({
 
   /** 저장·화면에 쓰는 한 장의 최종 견적(수신·조건·메모·공급자를 합쳐 finalize). */
   function composeSheetQuote(sheet: ComposerSheet) {
+    const quote: PartnerQuoteDetailsInput = {
+      ...sheet.quote,
+      ...supplierFor(sheet),
+      templateId: sheet.templateId,
+      optionSelections: writeAutomaticQuoteNotes(sheet.optionSelections, shared.automaticNotes),
+      recipientCompanyName: activeCustomerName,
+      referenceName: shared.referenceName,
+      issuedAt: shared.issuedAt || today,
+      validUntil: shared.validUntil,
+      vatIncluded: shared.vatIncluded,
+      vatPolicyLabel: undefined,
+      // 공급자·담당자를 변경했으면 이전 담당자 연락처 대신 새 견적 정보로 채운다.
+      footerContactText: undefined,
+      specialTerms: shared.specialTerms,
+    }
     return finalizeStandardQuoteDetails(
       {
-        ...sheet.quote,
-        ...supplierFor(sheet),
-        templateId: sheet.templateId,
-        optionSelections: sheet.optionSelections,
-        recipientCompanyName: activeCustomerName,
-        referenceName: shared.referenceName,
-        issuedAt: shared.issuedAt || today,
-        validUntil: shared.validUntil,
-        vatIncluded: shared.vatIncluded,
-        vatPolicyLabel: undefined,
-        // 장을 짤 때 표준 공급자(퀴드러닝) 기준으로 채워진 값이라, 실제 공급자·담당자로 다시 만들게 비운다
-        // (SW 견적·담당자를 바꾼 HW 견적에 '배철웅/010-…'이 남던 문제).
-        footerContactText: undefined,
-        generalNotes: shared.generalNotes,
-        specialTerms: shared.specialTerms,
+        ...quote,
+        generalNotes: writeQuoteGeneralNotes(shared.generalNotes, quote, shared.automaticNotes),
       },
       sheet.templateId
     )
@@ -1072,10 +1083,9 @@ export default function QuickQuoteComposer({
   const showTemplates = displaySettings?.preferences.showTemplates ?? true
   const visibleTemplates = STANDARD_QUOTE_TEMPLATES.filter((template) => !isRetiredQuoteTemplate(template.id) && quoteComposerMode(template.id) === composerMode && !hiddenTemplateIds.includes(`base:${template.id}`))
   const hardwareSheet = sheets.find((sheet) => sheet.line === "hardware")
-  const supportsInstallFee = hardwareSheet && getStandardQuoteOptionGroups(hardwareSheet.templateId)
-    .some((group) => group.id === INSTALL_FEE_OPTION_ID)
+  const quickChargeSheet = hardwareSheet ?? sheets[0]
   const visibleCatalogItems = QUICK_ADD_RAIL_ITEMS.filter((item) =>
-    quoteComposerMode(item.templateId) === composerMode && (item.id !== "install_fee" || supportsInstallFee)
+    quoteComposerMode(item.templateId) === composerMode
   )
   const visibleTeamTemplates = (teamTemplates ?? []).filter((template) => quoteComposerMode(inferStandardQuoteTemplateId(template.details)) === composerMode && !hiddenTemplateIds.includes(template.id))
   const templateCount = visibleTeamTemplates.length + visibleTemplates.length
@@ -1222,6 +1232,7 @@ export default function QuickQuoteComposer({
     setSaveToast(null)
     setErrorToast(null)
     setNoteLineOpenFor(null)
+    setChargeMenuFor(null)
     setNoteLineTitle("")
     setNoteLineText("")
     setUnderMinModalOpen(false)
@@ -1279,6 +1290,17 @@ export default function QuickQuoteComposer({
 
   function patchShared(patch: Partial<SharedQuoteFields>) {
     setShared((current) => ({ ...current, ...patch }))
+  }
+
+  function toggleAutomaticNote(id: AutomaticQuoteNoteId, oldText: string) {
+    setShared((current) => current.automaticNotes.includes(id) ? {
+      ...current,
+      automaticNotes: current.automaticNotes.filter((selected) => selected !== id),
+    } : {
+      ...current,
+      automaticNotes: [...current.automaticNotes, id],
+      generalNotes: removeQuoteNoteLines(current.generalNotes, [oldText]),
+    })
   }
 
   function setValidityDays(days: number | null) {
@@ -1358,20 +1380,39 @@ export default function QuickQuoteComposer({
     )
   }
 
-  function focusInstallationPrice(itemCode: string) {
+  function quoteLineFieldId(sheet: QuoteProductLine, itemCode: string, field: "price" | "name") {
+    return `${quotePriceFieldId}-${sheet}-${itemCode}-${field}`
+  }
+
+  function focusQuoteLineField(sheet: QuoteProductLine, itemCode: string, field: "price" | "name" = "price") {
     window.requestAnimationFrame(() => {
-      const input = document.getElementById(`${quotePriceFieldId}-${itemCode}`)
+      const input = document.getElementById(quoteLineFieldId(sheet, itemCode, field))
       if (!(input instanceof HTMLInputElement)) return
       input.focus()
       input.select()
     })
   }
 
-  function addOrEditInstallationFee() {
-    if (!hardwareSheet?.quote.lineItems?.some((line) => line.itemCode === INSTALL_FEE_ITEM_CODE)) {
-      setSheetOption("hardware", INSTALL_FEE_OPTION_ID, true)
-    }
-    focusInstallationPrice(INSTALL_FEE_ITEM_CODE)
+  function addQuoteCharge(line: QuoteProductLine, kind: QuoteChargeOption) {
+    const presetCode = QUOTE_CHARGE_OPTIONS[kind].itemCode
+    const itemCode = kind === "custom" ? `${presetCode}-${crypto.randomUUID()}` : presetCode
+    setChargeMenuFor(null)
+    setActivePick(null)
+    updateSheet(line, (sheet) => {
+      const items = sheet.quote.lineItems ?? []
+      if (items.some((item) => item.itemCode === itemCode)) return sheet
+      return withLineItems(sheet, [...items, createQuoteChargeLine(kind, itemCode, items.length + 1)])
+    })
+    focusQuoteLineField(line, itemCode, kind === "custom" ? "name" : "price")
+  }
+
+  function moveLine(line: QuoteProductLine, from: number, to: number) {
+    setActivePick(null)
+    updateSheet(line, (sheet) => {
+      const items = sheet.quote.lineItems ?? []
+      const reordered = moveQuoteLine(items, from, to)
+      return reordered === items ? sheet : withLineItems(sheet, reordered)
+    })
   }
 
   function updateLine(line: QuoteProductLine, lineIndex: number, patch: Partial<PartnerQuoteLineItemInput>) {
@@ -1423,7 +1464,7 @@ export default function QuickQuoteComposer({
       if (target.optionGroupId === "main_product") return null
       if (target.isUserAdded === true) {
         // finalize 는 기존 lineNumber 를 존중하므로 삭제 후 번호를 다시 매긴다(번호 구멍 방지).
-        return withLineItems(sheet, renumberLineItems(items.filter((_, index) => index !== lineIndex)))
+        return withLineItems(sheet, renumberQuoteLines(items.filter((_, index) => index !== lineIndex)))
       }
       const offValue = getOptionOffValue(sheet, target)
       if (offValue === undefined || !target.optionGroupId) return sheet
@@ -1438,11 +1479,6 @@ export default function QuickQuoteComposer({
     setActivePick(null)
     const line = sheetLineOf(item.templateId)
     const sheet = sheets.find((entry) => entry.line === line)
-
-    if (item.id === "install_fee") {
-      addOrEditInstallationFee()
-      return
-    }
 
     if (!sheet) {
       const mounting = item.id === "stand" || item.id === "wall_mount" ? { mounting_option: item.id } : undefined
@@ -1502,7 +1538,7 @@ export default function QuickQuoteComposer({
       }
       return withLineItems(
         current,
-        renumberLineItems([
+        renumberQuoteLines([
           ...items,
           {
             sortOrder: items.length + 1,
@@ -1567,13 +1603,15 @@ export default function QuickQuoteComposer({
     setDiscountDrafts({})
     setSheets([{ line: sheetLineOf(templateId), templateId, optionSelections, quote }])
     const validityDays = daysBetween(details.issuedAt, details.validUntil)
+    const automaticNotes = readAutomaticQuoteNotes(optionSelections)
     setShared((current) => ({
       ...current,
       issuedAt: today,
       validUntil: details.validUntil ? addDays(today, validityDays ?? 7) : undefined,
       vatIncluded: details.vatIncluded ?? true,
-      generalNotes: quote.generalNotes ?? "",
+      generalNotes: readQuoteGeneralNotes(quote, automaticNotes),
       specialTerms: quote.specialTerms ?? "",
+      automaticNotes,
     }))
     setUnderMinConfirmed(false)
   }
@@ -1643,7 +1681,7 @@ export default function QuickQuoteComposer({
       const items = sheet.quote.lineItems ?? []
       return withLineItems(
         sheet,
-        renumberLineItems([
+        renumberQuoteLines([
           ...items,
           createInformationalQuoteLine({ itemName, itemDescription, sortOrder: items.length + 1 }),
         ])
@@ -2120,21 +2158,76 @@ export default function QuickQuoteComposer({
     const changePct = priceChanged ? Math.round((1 - (line.unitPrice ?? 0) / (listPrice ?? 1)) * 1000) / 10 : 0
     const isRechargeLine = sheet.templateId === "business_recharge" && line.itemCode === RECHARGE_ITEM_CODE
     const isInstallation = line.itemType === "installation" || line.optionGroupId === "installation_mode"
+    const isCharge = isCustomQuoteCharge(line)
     const installationItemCode = isInstallation ? line.itemCode : undefined
-    const installationPriceId = installationItemCode ? `${quotePriceFieldId}-${installationItemCode}` : undefined
+    const editablePriceCode = isCharge ? line.itemCode : installationItemCode
     const quantityEditable =
       line.quantity != null && !(line.quantityLocked === true && line.optionGroupId !== "main_product")
     const isMain = line.optionGroupId === "main_product"
+    const canMove = (sheet.quote.lineItems?.length ?? 0) > 1
 
     return (
       <div
-        key={`${line.itemCode ?? line.itemName}-${line.lineNumber}`}
+        key={line.id ?? (line.itemCode ? `${line.itemCode}-${Boolean(line.isUserAdded)}` : `note-${line.lineNumber}`)}
         role="row"
         className={`group ${paperStyles.itemGrid}`}
+        onDragOver={(event) => {
+          if (draggedLineRef.current?.sheet !== sheet.line) return
+          event.preventDefault()
+          event.dataTransfer.dropEffect = "move"
+        }}
+        onDrop={(event) => {
+          const dragged = draggedLineRef.current
+          if (dragged?.sheet !== sheet.line) return
+          event.preventDefault()
+          draggedLineRef.current = null
+          moveLine(sheet.line, dragged.index, lineIndex)
+        }}
       >
-        <span role="cell" className="tabular-nums text-[#78736D]">{line.lineNumber}</span>
+        <span role="cell" className="grid justify-items-center self-start text-[#78736D]">
+          <span className="tabular-nums">{line.lineNumber}</span>
+          {canMove && (
+            <>
+              <span
+                draggable
+                aria-hidden="true"
+                title="드래그하여 순서 변경"
+                className="hidden h-5 w-6 cursor-grab items-center justify-center rounded-[4px] hover:bg-[#F0F0EC] active:cursor-grabbing [@media(hover:hover)]:flex"
+                onDragStart={(event) => {
+                  draggedLineRef.current = { sheet: sheet.line, index: lineIndex }
+                  event.dataTransfer.effectAllowed = "move"
+                  event.dataTransfer.setData("application/x-classin-quote-row", String(lineIndex))
+                }}
+                onDragEnd={() => { draggedLineRef.current = null }}
+              >
+                <GripVertical className="h-3.5 w-3.5" />
+              </span>
+              <button
+                type="button"
+                aria-label={`${line.itemName} 위로 이동`}
+                title="위로 이동"
+                disabled={lineIndex === 0}
+                onClick={() => moveLine(sheet.line, lineIndex, lineIndex - 1)}
+                className={LINE_MOVE_BUTTON_CLASS}
+              >
+                <ChevronUp className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                aria-label={`${line.itemName} 아래로 이동`}
+                title="아래로 이동"
+                disabled={lineIndex === (sheet.quote.lineItems?.length ?? 0) - 1}
+                onClick={() => moveLine(sheet.line, lineIndex, lineIndex + 1)}
+                className={LINE_MOVE_BUTTON_CLASS}
+              >
+                <ChevronDown className="h-3.5 w-3.5" />
+              </button>
+            </>
+          )}
+        </span>
         <span role="cell" className="grid min-w-0">
           <input
+            id={isCharge && line.itemCode ? quoteLineFieldId(sheet.line, line.itemCode, "name") : undefined}
             aria-label="품목명"
             value={line.itemName}
             onChange={(event) => updateLine(sheet.line, lineIndex, { itemName: event.target.value })}
@@ -2164,7 +2257,7 @@ export default function QuickQuoteComposer({
                   type="button"
                   onClick={() => {
                     setSheetOption(sheet.line, "installation_mode", "included_quote")
-                    focusInstallationPrice(installationItemCode)
+                    focusQuoteLineField(sheet.line, installationItemCode)
                   }}
                   className="text-[11px] font-semibold text-[#084734] underline"
                 >
@@ -2176,8 +2269,8 @@ export default function QuickQuoteComposer({
             <span className="tabular-nums">{formatStandardQuoteCurrency(line.unitPrice)}</span>
           ) : (
             <input
-              id={installationPriceId}
-              aria-label={isRechargeLine ? "충전 금액" : isInstallation ? `${line.itemName} 단가` : "단가"}
+              id={editablePriceCode ? quoteLineFieldId(sheet.line, editablePriceCode, "price") : undefined}
+              aria-label={isRechargeLine ? "충전 금액" : editablePriceCode ? `${line.itemName} 단가` : "단가"}
               inputMode="numeric"
               value={formatStandardQuoteCurrency(line.unitPrice)}
               onChange={(event) => {
@@ -2186,10 +2279,11 @@ export default function QuickQuoteComposer({
                   return
                 }
                 setActivePick(null)
-                updateLine(sheet.line, lineIndex, { unitPrice: parseNumericInput(event.target.value) ?? 0 })
+                const value = parseNumericInput(event.target.value) ?? 0
+                updateLine(sheet.line, lineIndex, { unitPrice: isCharge ? Math.max(0, Math.round(value)) : value })
               }}
               onBlur={isRechargeLine ? (event) => handleRechargeInputBlur(event.target.value) : undefined}
-              className={`${EDITABLE_CLASS} w-full text-right tabular-nums ${isInstallation ? "border-[#CFCBC5]" : ""} ${
+              className={`${EDITABLE_CLASS} w-full text-right tabular-nums ${editablePriceCode ? "border-[#CFCBC5]" : ""} ${
                 priceChanged ? "font-semibold text-[#7A520F]" : "text-[#31302E]"
               }`}
             />
@@ -2262,7 +2356,7 @@ export default function QuickQuoteComposer({
             title={isMain ? "대표 품목을 지우면 이 견적서 한 장이 빠집니다" : "행 삭제"}
             onClick={() => removeLine(sheet.line, lineIndex)}
             className={`flex h-6 w-6 items-center justify-center rounded-[4px] text-[#78736D] transition-opacity hover:bg-[#F0F0EC] hover:text-[#111110] ${
-              line.optionGroupId === "installation_mode" ? "" : "opacity-0 focus-visible:opacity-100 group-hover:opacity-100"
+              line.optionGroupId === "installation_mode" || isCharge ? "" : "opacity-0 focus-visible:opacity-100 group-hover:opacity-100"
             }`}
           >
             <X className="h-3.5 w-3.5" />
@@ -2354,7 +2448,7 @@ export default function QuickQuoteComposer({
     const managerManualMode = !hasManagerOptions || manager.selection === MANAGER_CUSTOM_VALUE
     const feeLine = quote.lineItems?.find((line) => line.itemCode === INSTALL_FEE_ITEM_CODE)
     const optionGroups = getStandardQuoteOptionGroups(sheet.templateId)
-      .filter((group) => group.id !== INSTALL_FEE_OPTION_ID || !feeLine?.isUserAdded)
+      .filter((group) => group.id !== INSTALL_FEE_OPTION_ID || (feeLine && !feeLine.isUserAdded))
     const termMonths =
       sheet.templateId === "online_suite"
         ? getOnlineSuiteTermMonths(sheet.optionSelections.contract_term as string)
@@ -2637,7 +2731,7 @@ export default function QuickQuoteComposer({
               <option value="excluded">단위: 원 · VAT 별도</option>
             </select>),
             items: (          <div role="table" aria-label="품목" className="overflow-x-auto">
-            <div className="min-w-[560px]">
+            <div className="sm:min-w-[560px]">
               <div
                 role="row"
                 className={`${paperStyles.itemGrid} ${paperStyles.itemHead}`}
@@ -2651,15 +2745,26 @@ export default function QuickQuoteComposer({
               </div>
               {(quote.lineItems ?? []).map((line, lineIndex) => renderLineRow(sheet, line, lineIndex))}
 
-              {sheet.line === "hardware" && supportsInstallFee && (
+              <div className="flex flex-wrap items-center gap-2 border-b border-[#F0F0EC] py-2">
                 <button
                   type="button"
-                  onClick={addOrEditInstallationFee}
-                  className="border-b border-[#F0F0EC] py-2 text-left text-[12px] font-semibold text-[#084734] hover:underline"
+                  aria-expanded={chargeMenuFor === sheet.line}
+                  onClick={() => setChargeMenuFor((current) => current === sheet.line ? null : sheet.line)}
+                  className="text-left text-[12px] font-semibold text-[#084734] hover:underline"
                 >
-                  {feeLine ? "배송·설치비 단가 수정" : "+ 배송·설치비 추가"}
+                  + 옵션 추가
                 </button>
-              )}
+                {chargeMenuFor === sheet.line && quoteChargeOptions.map(([kind, option]) => (
+                  <button
+                    key={kind}
+                    type="button"
+                    onClick={() => addQuoteCharge(sheet.line, kind)}
+                    className={`${OPTION_CHIP_CLASS} border-[#E3E0DB] text-[#615D59] hover:border-[#084734] hover:text-[#084734]`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
 
               {noteLineOpen ? (
                 <div className="flex flex-wrap items-center gap-1.5 border-b border-[#F0F0EC] py-2">
@@ -2724,12 +2829,17 @@ export default function QuickQuoteComposer({
             )}
             {/* 녹화 세트 12개월 할부 월 납입 안내는 견적서 렌더러가 직접 찍는다(고객 문서와 같은 문구). */}</>),
             notes: (<div className="grid gap-4">
+            <p className="text-[11.5px] text-[#615D59]">
+              고객용 견적 하단 · 공유 링크와 PDF에 표시{isSplit ? " · 직접 입력 문구는 두 견적에 공통" : ""}
+            </p>
             <QuoteNoteField
               id={`quote-general-notes-${sheet.line}`}
               label="기타사항"
               group="general"
               value={shared.generalNotes}
               onChange={(next) => patchShared({ generalNotes: next })}
+              placeholder="고객에게 안내할 내용을 입력하세요."
+              automatic={{ quote, selected: shared.automaticNotes, onToggle: toggleAutomaticNote }}
             />
             <QuoteNoteField
               id={`quote-special-terms-${sheet.line}`}
@@ -3163,6 +3273,18 @@ export default function QuickQuoteComposer({
 
                 <div className="border-t border-[#E3E0DB] pt-3.5">
                   <p className={RAIL_HEADING_CLASS}>품목 · 눌러서 추가</p>
+                  {quickChargeSheet && quoteChargeOptions.map(([kind, option]) => (
+                    <button
+                      key={kind}
+                      type="button"
+                      onClick={() => addQuoteCharge(quickChargeSheet.line, kind)}
+                      aria-label={`${kind === "custom" ? "직접 입력 항목" : option.label} 추가`}
+                      className={`${RAIL_BUTTON_CLASS} items-center text-[12.5px] font-semibold`}
+                    >
+                      <Plus className="h-3.5 w-3.5 text-[#084734]" aria-hidden="true" />
+                      {option.label}
+                    </button>
+                  ))}
                   {visibleCatalogItems.map((item) => (
                     <button
                       key={item.id}
@@ -3178,7 +3300,7 @@ export default function QuickQuoteComposer({
                           {item.badge ? ` · ${item.badge}` : ""}
                         </span>
                         <span className="block text-[11.5px] tabular-nums text-[#78736D]">
-                          {formatQuickAddPrice(item.price, item.priceUnit)}
+                          {formatQuickAddPrice(item.price)}
                         </span>
                       </span>
                       <span

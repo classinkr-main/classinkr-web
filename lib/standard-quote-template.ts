@@ -767,20 +767,38 @@ function lineIdentity(item: Pick<PartnerQuoteLineItemInput, "itemCode" | "itemNa
   return item.itemCode?.trim() || item.itemName.trim()
 }
 
-function createGeneratedLine(
-  line: Omit<PartnerQuoteLineItemInput, "sortOrder" | "lineNumber" | "lineSupplyAmount">,
-  index: number
-) {
-  const nextItem: PartnerQuoteLineItemInput = {
-    ...line,
-    sortOrder: index + 1,
-    lineNumber: index + 1,
-  }
+type RebuiltQuoteLine = Omit<PartnerQuoteLineItemInput, "sortOrder" | "lineNumber" | "lineSupplyAmount">
 
-  return {
-    ...nextItem,
-    lineSupplyAmount: computeLineSupplyAmount(nextItem),
-  }
+export function renumberQuoteLines(lines: RebuiltQuoteLine[]): PartnerQuoteLineItemInput[] {
+  return lines.map((line, index) => ({ ...line, sortOrder: index + 1, lineNumber: index + 1 }))
+}
+
+export function moveQuoteLine(items: PartnerQuoteLineItemInput[], from: number, to: number) {
+  if (from === to || !items[from] || !items[to]) return items
+  const reordered = [...items]
+  const [moved] = reordered.splice(from, 1)
+  reordered.splice(to, 0, moved)
+  return renumberQuoteLines(reordered)
+}
+
+function keepQuoteLineOrder(generated: RebuiltQuoteLine[], previous: PartnerQuoteLineItemInput[]) {
+  const newByCode = new Map(generated.map((line) => [lineIdentity(line), line]))
+  const retained = previous.flatMap<RebuiltQuoteLine>((line) => {
+    if (line.isUserAdded) return [line]
+    const code = lineIdentity(line)
+    const regenerated = newByCode.get(code)
+    if (!regenerated) return []
+    newByCode.delete(code)
+    return [regenerated]
+  })
+
+  const retainedLines = new Set(retained)
+  const standardOrder = [...generated, ...previous.filter((line) => line.isUserAdded)]
+  const standardRetainedOrder = standardOrder.filter((line) => retainedLines.has(line))
+  // 편집자가 순서를 바꾼 견적에는 새로 켠 옵션 행만 맨 뒤에 붙인다.
+  return retained.some((line, index) => line !== standardRetainedOrder[index])
+    ? [...retained, ...newByCode.values()]
+    : standardOrder
 }
 
 function finalizeLineItems(lineItems: PartnerQuoteDetailsInput["lineItems"]) {
@@ -803,6 +821,7 @@ function finalizeLineItems(lineItems: PartnerQuoteDetailsInput["lineItems"]) {
 function getExistingLineMap(existingItems: PartnerQuoteDetailsInput["lineItems"]) {
   const map = new Map<string, PartnerQuoteLineItemInput>()
   for (const item of existingItems ?? []) {
+    if (item.isUserAdded) continue
     const key = lineIdentity(item)
     if (key) map.set(key, item)
   }
@@ -1123,7 +1142,7 @@ export function buildConfigurableStandardQuoteDetails({
     baseQuantity ?? mainExisting?.quantity ?? mainTemplateLine.quantity ?? 1,
     1
   )
-  const generatedItems: Array<Omit<PartnerQuoteLineItemInput, "sortOrder" | "lineNumber" | "lineSupplyAmount">> = [
+  const generatedItems: RebuiltQuoteLine[] = [
     {
       id: mainExisting?.id,
       itemType: mainTemplateLine.itemType,
@@ -1444,19 +1463,13 @@ export function buildConfigurableStandardQuoteDetails({
     }
   }
 
-  // 작성자가 직접 추가한 정보 라인(isUserAdded)은 템플릿 재생성 대상이 아니므로
-  // 옵션/수량을 바꿔도 살아남도록 생성 라인 뒤에 이어 붙인다.
-  const userAddedItems = (existing.lineItems ?? []).filter((item) => item.isUserAdded === true)
-
   return finalizeStandardQuoteDetails(
     {
       ...existing,
       templateId: resolvedTemplateId,
       optionSelections: selections,
       pricingSource: "standard_quote_builder",
-      lineItems: [...generatedItems, ...userAddedItems].map((item, index) =>
-        createGeneratedLine(item, index)
-      ),
+      lineItems: renumberQuoteLines(keepQuoteLineOrder(generatedItems, existing.lineItems ?? [])),
     },
     resolvedTemplateId
   )
@@ -1469,7 +1482,9 @@ export function inferStandardQuoteTemplateId(
     return getStandardQuoteTemplate(quoteDetails.templateId).id as StandardQuoteTemplateId
   }
 
-  const firstItemCode = quoteDetails?.lineItems?.find((item) => item.itemCode)?.itemCode
+  const lines = quoteDetails?.lineItems
+  const firstItemCode = (lines?.find((item) => item.optionGroupId === "main_product" && item.itemCode) ??
+    lines?.find((item) => item.itemCode))?.itemCode
   return inferTemplateIdFromItemCode(firstItemCode)
 }
 
