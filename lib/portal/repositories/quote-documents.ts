@@ -157,6 +157,21 @@ export async function createQuoteDocumentShare(input: {
   return data as QuoteDocumentShare;
 }
 
+export async function getQuoteDocumentVersion(
+  documentId: string,
+  versionId: string
+): Promise<QuoteDocumentVersion | null> {
+  const { data, error } = await createSupabaseAdminClient()
+    .from("quote_document_versions")
+    .select("*")
+    .eq("quote_document_id", documentId)
+    .eq("id", versionId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data as QuoteDocumentVersion | null;
+}
+
 export async function getResolvableQuoteVersion(document: QuoteDocument): Promise<QuoteDocumentVersion | null> {
   const supabase = createSupabaseAdminClient();
 

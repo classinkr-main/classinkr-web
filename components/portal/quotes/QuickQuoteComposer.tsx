@@ -2189,14 +2189,13 @@ export default function QuickQuoteComposer({
           dropLine?.sheet === sheet.line && dropLine.index === lineIndex ? "bg-[#ECFDF5]" : ""
         }`}
       >
-        <span role="cell" className="grid justify-items-center self-start text-[#78736D]">
-          <span className="tabular-nums">{line.lineNumber}</span>
-          {canMove && (
-            <>
+        <span role="cell" className="relative grid justify-items-center text-[#78736D] max-sm:self-start">
+          <span className={paperStyles.lineNumber}>
+            {canMove && (
               <span
                 aria-hidden="true"
                 title="드래그하여 순서 변경"
-                className="hidden h-5 w-6 cursor-grab touch-none select-none items-center justify-center rounded-[4px] hover:bg-[#F0F0EC] active:cursor-grabbing [@media(hover:hover)]:flex"
+                className={`${paperStyles.lineDragHandle} h-5 w-5 shrink-0 cursor-grab touch-none select-none items-center justify-center rounded-[4px] hover:bg-[#F0F0EC] active:cursor-grabbing`}
                 onPointerDown={(event) => {
                   if (!event.isPrimary || event.button !== 0) return
                   event.preventDefault()
@@ -2225,13 +2224,18 @@ export default function QuickQuoteComposer({
               >
                 <GripVertical className="h-3.5 w-3.5" />
               </span>
+            )}
+            <span className="tabular-nums">{line.lineNumber}</span>
+          </span>
+          {canMove && (
+            <>
               <button
                 type="button"
                 aria-label={`${line.itemName} 위로 이동`}
                 title="위로 이동"
                 disabled={lineIndex === 0}
                 onClick={() => moveLine(sheet.line, lineIndex, lineIndex - 1)}
-                className={LINE_MOVE_BUTTON_CLASS}
+                className={`${LINE_MOVE_BUTTON_CLASS} ${paperStyles.lineMoveButton}`}
               >
                 <ChevronUp className="h-3.5 w-3.5" />
               </button>
@@ -2241,7 +2245,7 @@ export default function QuickQuoteComposer({
                 title="아래로 이동"
                 disabled={lineIndex === (sheet.quote.lineItems?.length ?? 0) - 1}
                 onClick={() => moveLine(sheet.line, lineIndex, lineIndex + 1)}
-                className={LINE_MOVE_BUTTON_CLASS}
+                className={`${LINE_MOVE_BUTTON_CLASS} ${paperStyles.lineMoveButton}`}
               >
                 <ChevronDown className="h-3.5 w-3.5" />
               </button>

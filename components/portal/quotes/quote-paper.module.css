@@ -75,6 +75,23 @@
 .itemGrid > :nth-child(5) { grid-column: 5; grid-row: 1; }
 .itemGrid > :nth-child(6) { grid-column: 6; grid-row: 1; }
 .itemHead { background: #F6F5F4; min-height: 29pt; padding: 6pt 0; font-size: 8.5pt; color: #615D59; font-weight: 600; }
+.lineNumber { display: flex; align-items: center; justify-content: center; width: 100%; }
+.lineDragHandle { display: none; }
+@media screen and (min-width: 641px) and (hover: hover) and (pointer: fine) {
+  .itemGrid { grid-template-columns: 44px minmax(0,1fr) 78px 96px 104px 24px; }
+  .itemHead > :first-child { padding-inline-start: 24px; }
+  .lineNumber { justify-content: flex-end; gap: 2px; padding-inline-end: 5px; }
+  .lineDragHandle { display: flex; opacity: 0; pointer-events: none; }
+  .itemGrid:hover .lineDragHandle, .lineDragHandle:active { opacity: 1; pointer-events: auto; }
+  .lineMoveButton:not(:focus-visible) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+}
 @media screen and (max-width: 640px) {
   .paper { padding: 28px 20px; min-height: auto; }
   .parties { grid-template-columns: 1fr; min-height: auto; gap: 24px; }

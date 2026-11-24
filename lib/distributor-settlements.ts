@@ -1,4 +1,5 @@
 import type { PartnerQuoteDetailsInput, PartnerQuoteLineItemInput } from "@/lib/partners-types"
+import { readAutomaticQuoteNotes, readQuoteGeneralNotes, writeQuoteGeneralNotes } from "@/lib/quote-composer-notes"
 import {
   CLASSIN_QUOTE_SUPPLIER,
   STANDARD_QUOTE_SUPPLIER,
@@ -201,20 +202,31 @@ export function pickTemplateUnitPrice(
 }
 
 /**
- * 고객 견적 품목 → 총판 정산 줄 초안. 기존 줄이 있으면(같은 품목 번호·품목 코드) 사람이 정한 포함 여부와
- * 원가를 이어받고, 없으면 템플릿 단가를 채운다.
+ * 고객 견적 품목 → 총판 정산 줄 초안. 기존 번호·코드 또는 순서가 바뀐 고유 코드로 원가와 포함 여부를
+ * 이어받는다. 새 품목은 템플릿 단가를 채운다.
  */
 export function buildDistributorLinesFromQuote(
   customerLines: readonly PartnerQuoteLineItemInput[] | undefined,
   options: { previous?: readonly DistributorSettlementLine[]; rules?: readonly DistributorPriceRule[] } = {}
 ): DistributorSettlementLine[] {
   const previous = new Map<string, DistributorSettlementLine>()
-  for (const line of options.previous ?? []) previous.set(lineKey(line.sourceLineNumber, line.itemCode), line)
+  const previousByCode = new Map<string, DistributorSettlementLine | null>()
+  for (const line of options.previous ?? []) {
+    previous.set(lineKey(line.sourceLineNumber, line.itemCode), line)
+    if (line.itemCode) previousByCode.set(line.itemCode, previousByCode.has(line.itemCode) ? null : line)
+  }
 
-  return (customerLines ?? []).filter(isBillableCustomerLine).map((line, index) => {
+  const billable = (customerLines ?? []).filter(isBillableCustomerLine)
+  const codeCounts = new Map<string, number>()
+  for (const { itemCode } of billable) {
+    if (itemCode) codeCounts.set(itemCode, (codeCounts.get(itemCode) ?? 0) + 1)
+  }
+
+  return billable.map((line, index) => {
     const sourceLineNumber = line.lineNumber ?? index + 1
     const quantity = Math.max(0, Math.round(Number(line.quantity ?? 0)))
-    const prior = previous.get(lineKey(sourceLineNumber, line.itemCode))
+    const prior = previous.get(lineKey(sourceLineNumber, line.itemCode)) ??
+      (line.itemCode && codeCounts.get(line.itemCode) === 1 ? previousByCode.get(line.itemCode) : null)
     const templatePrice = pickTemplateUnitPrice(options.rules ?? [], line.itemCode, quantity)
     return {
       sourceLineNumber,
@@ -315,7 +327,7 @@ export function buildDistributorQuoteDetails(
     }))
   const customerName = options.customerName?.trim() || customer.recipientCompanyName?.trim()
 
-  return finalizeStandardQuoteDetails({
+  const quote: PartnerQuoteDetailsInput = {
     ...customer,
     issuedAt: options.issuedAt?.slice(0, 10) || customer.issuedAt,
     recipientCompanyName: settlement.distributorName,
@@ -343,6 +355,11 @@ export function buildDistributorQuoteDetails(
     quoteDiscount: undefined,
     optionSelections: undefined,
     lineItems,
+  }
+  const automaticNotes = readAutomaticQuoteNotes(customer.optionSelections)
+  return finalizeStandardQuoteDetails({
+    ...quote,
+    generalNotes: writeQuoteGeneralNotes(readQuoteGeneralNotes(customer, automaticNotes), quote, automaticNotes),
   })
 }
 

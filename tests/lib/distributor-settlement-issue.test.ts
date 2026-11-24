@@ -89,6 +89,14 @@ async function loadService(options: {
   const proposeLedgerDraftForInstallation = vi.fn().mockResolvedValue({ status: "created", draftId: "ld_9" })
   const emitNotificationEvent = vi.fn().mockResolvedValue({ id: "evt" })
   const sendEmail = vi.fn().mockResolvedValue(options.emailResult ?? { provider: "resend", sent: 1, failed: 0 })
+  const getQuoteDocumentVersion = vi.fn().mockResolvedValue({
+    id: "qv_issued",
+    quote_document_id: "qd_1",
+    version_number: 1,
+    structured_json: { quoteDetails: { templateId: "board_86", generalNotes: "발행 시 확정한 문구" } },
+    valid_until: "2026-11-30",
+    total_amount: 6_300_000,
+  })
 
   vi.doMock("@/lib/repositories/distributor-settlements", () => ({
     DistributorSettlementsNotReadyError: class extends Error {},
@@ -101,6 +109,7 @@ async function loadService(options: {
   vi.doMock("@/lib/admin/handoff/distributor-payment-to-ledger-draft", () => ({ proposeLedgerDraftForInstallation }))
   vi.doMock("@/lib/portal/repositories/quote-documents", () => ({
     getQuoteDocument: vi.fn().mockResolvedValue({ id: "qd_1", deal_id: "deal_1", quote_number: "Q-2026-001" }),
+    getQuoteDocumentVersion,
     getResolvableQuoteVersion: vi.fn().mockResolvedValue({
       id: options.versionId ?? "qv_1",
       version_number: 2,
@@ -121,6 +130,7 @@ async function loadService(options: {
   const service = await import("@/lib/server/distributor-settlement-issue")
   return {
     service,
+    getQuoteDocumentVersion,
     markDistributorSettlementIssued,
     recordDistributorEmailResult,
     flagDistributorSettlementReview,
@@ -134,6 +144,18 @@ async function loadService(options: {
 afterEach(() => {
   vi.resetModules()
   vi.restoreAllMocks()
+})
+
+it("공유한 총판 견적은 고객 최신 버전이 생겨도 발행 당시의 문구를 읽는다", async () => {
+  const { service, getQuoteDocumentVersion } = await loadService({ versionId: "qv_new" })
+  const view = await service.loadDistributorQuoteView({
+    ...SETTLEMENT,
+    status: "issued",
+    issuedVersionId: "qv_issued",
+  })
+  expect(getQuoteDocumentVersion).toHaveBeenCalledWith(SETTLEMENT.quoteDocumentId, "qv_issued")
+  expect(view?.version.id).toBe("qv_issued")
+  expect(view?.details.generalNotes).toBe("발행 시 확정한 문구")
 })
 
 describe("issueDistributorSettlement", () => {
