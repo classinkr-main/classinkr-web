@@ -53,6 +53,9 @@ const SETTLEMENT: DistributorSettlementRecord = {
   notes: null,
   cancelledAt: null,
   installedAt: null,
+  confirmedAt: null,
+  confirmedByName: null,
+  revisedAt: null,
   createdAt: "2026-10-23T00:00:00.000Z",
   updatedAt: "2026-10-23T00:00:00.000Z",
 }
@@ -97,6 +100,10 @@ async function loadService(options: {
     markDistributorSettlementInstalled,
     recordDistributorEmailResult,
     flagDistributorSettlementReview,
+    // 고객 동의 때 정산이 없으면 기본 정산을 만든다(2026-11-24) — 그 경로의 저장소 함수.
+    listDistributorPriceTemplates: vi.fn().mockResolvedValue({ available: true, warning: null, value: [] }),
+    getLatestDistributorContact: vi.fn().mockResolvedValue(null),
+    saveDistributorSettlementDraft: vi.fn().mockResolvedValue(null),
   }))
   vi.doMock("@/lib/admin/handoff/distributor-payment-to-ledger-draft", () => ({ proposeLedgerDraftForInstallation }))
   vi.doMock("@/lib/portal/repositories/quote-documents", () => ({
@@ -212,6 +219,7 @@ describe("issueDistributorSettlement", () => {
     expect(ctx.flagDistributorSettlementReview).not.toHaveBeenCalled()
   })
 
+  // 정산이 없으면 기본 정산을 만들려 하지만, 이 견적(본문 없음)에는 총판에게 청구할 품목이 없어 만들지 않는다.
   it("is idempotent once issued and silent when no settlement exists", async () => {
     const issued = await loadService({ settlement: { status: "issued", shareToken: "tok", issuedAt: "2026-10-23" } })
     const again = await issued.service.issueDistributorSettlement({

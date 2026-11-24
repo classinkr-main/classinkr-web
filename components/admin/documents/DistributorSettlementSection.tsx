@@ -1,7 +1,7 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
-import { AlertCircle, Eye, EyeOff, ExternalLink, Link2, Loader2, Mail, Trash2 } from "lucide-react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { AlertCircle, Eye, EyeOff, ExternalLink, Link2, Loader2, Mail, Plus, Trash2 } from "lucide-react"
 
 import QuoteDocumentPreview from "@/components/portal/quotes/QuoteDocumentPreview"
 import { adminFetchJson } from "@/lib/admin-client"
@@ -57,6 +57,34 @@ type Draft = {
   lines: DistributorSettlementLine[]
 }
 
+type CustomLineType = "hardware" | "installation" | "shipping" | "service"
+
+const CUSTOM_LINE_TYPE_OPTIONS: { value: CustomLineType; label: string }[] = [
+  { value: "hardware", label: "하드웨어" },
+  { value: "installation", label: "설치" },
+  { value: "shipping", label: "배송" },
+  { value: "service", label: "서비스" },
+]
+
+const MAX_DISTRIBUTOR_LINES = 60
+
+// 고객 견적에 없는 직접 추가 줄은 sourceLineNumber 0 으로 구분한다.
+function isCustomLine(line: DistributorSettlementLine) {
+  return line.sourceLineNumber === 0
+}
+
+function createCustomLine(): DistributorSettlementLine {
+  return {
+    sourceLineNumber: 0,
+    itemName: "",
+    itemType: "service",
+    quantity: 1,
+    customerUnitPrice: null,
+    unitPrice: null,
+    included: true,
+  }
+}
+
 type LoadState =
   | { status: "loading" }
   | { status: "error"; message: string }
@@ -73,8 +101,25 @@ const LEDGER_STATUS_LABELS: Record<string, string> = {
   none: "초안 없음",
 }
 
-function draftFromPayload(payload: DistributorSettlementPayload): Draft {
+function draftFromPayload(payload: DistributorSettlementPayload, revise = false): Draft {
   const settlement = payload.settlement
+  if (revise && settlement) {
+    // 발행 후 금액 수정 — 저장된 정산 값(직접 추가 줄 포함)에서 시작한다.
+    return {
+      fulfillmentMode: settlement.fulfillmentMode,
+      distributorName: settlement.distributorName ?? "",
+      distributorContactName: settlement.distributorContactName ?? "",
+      distributorEmail: settlement.distributorEmail ?? "",
+      distributorPhone: settlement.distributorPhone ?? "",
+      issueTrigger: settlement.issueTrigger,
+      autoEmail: settlement.autoEmail,
+      priceTemplateId: settlement.priceTemplateId ?? "",
+      vatIncluded: settlement.vatIncluded,
+      dueDate: settlement.dueDate ?? "",
+      notes: settlement.notes ?? "",
+      lines: settlement.lines,
+    }
+  }
   return {
     fulfillmentMode: settlement?.fulfillmentMode ?? "C",
     distributorName: payload.defaults.distributorName ?? "",
@@ -102,6 +147,10 @@ function statusTone(settlement: DistributorSettlementRecord) {
 export default function DistributorSettlementSection({ quoteId }: { quoteId: string }) {
   const [state, setState] = useState<LoadState>({ status: "loading" })
   const [editing, setEditing] = useState(false)
+  // 발행 후 금액 수정 모드(방식·발행 시점은 서버가 그대로 둔다).
+  const [revising, setRevising] = useState(false)
+  const lineTableRef = useRef<HTMLDivElement | null>(null)
+  const [focusCustomIndex, setFocusCustomIndex] = useState<number | null>(null)
   const [draft, setDraft] = useState<Draft | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const [message, setMessage] = useState<{ tone: "success" | "error"; text: string } | null>(null)
@@ -126,6 +175,7 @@ export default function DistributorSettlementSection({ quoteId }: { quoteId: str
   useEffect(() => {
     setState({ status: "loading" })
     setEditing(false)
+    setRevising(false)
     setDraft(null)
     setMessage(null)
     setPreviewOpen(false)
@@ -157,12 +207,37 @@ export default function DistributorSettlementSection({ quoteId }: { quoteId: str
     })
   }, [draft, payload, previewOpen, settlement])
 
-  function startEditing() {
+  function startEditing(revise = false) {
     if (!payload) return
-    setDraft(draftFromPayload(payload))
+    setDraft(draftFromPayload(payload, revise))
+    setRevising(revise)
     setEditing(true)
     setMessage(null)
   }
+
+  function closeEditor() {
+    setEditing(false)
+    setRevising(false)
+    setDraft(null)
+  }
+
+  function addCustomLine() {
+    if (!draft || draft.lines.length >= MAX_DISTRIBUTOR_LINES) return
+    setFocusCustomIndex(draft.lines.length)
+    patchDraft({ lines: [...draft.lines, createCustomLine()] })
+  }
+
+  function removeLine(index: number) {
+    setDraft((current) => (current ? { ...current, lines: current.lines.filter((_, i) => i !== index) } : current))
+  }
+
+  // 새로 추가한 줄의 품목명 입력으로 포커스를 옮긴다.
+  useEffect(() => {
+    if (focusCustomIndex == null) return
+    const input = lineTableRef.current?.querySelector<HTMLInputElement>(`[data-custom-name="${focusCustomIndex}"]`)
+    input?.focus()
+    setFocusCustomIndex(null)
+  }, [focusCustomIndex, draft])
 
   function patchDraft(patch: Partial<Draft>) {
     setDraft((current) => (current ? { ...current, ...patch } : current))
@@ -203,19 +278,28 @@ export default function DistributorSettlementSection({ quoteId }: { quoteId: str
 
   async function handleSave() {
     if (!draft) return
+    if (draft.lines.some((line) => isCustomLine(line) && !line.itemName.trim())) {
+      setMessage({ tone: "error", text: "직접 추가한 줄의 품목명을 입력해 주세요." })
+      return
+    }
+    const revise = revising
     const saved = await run(
       "save",
       () =>
-        adminFetchJson<{ settlement: DistributorSettlementRecord }>(DISTRIBUTOR_SETTLEMENT_API(quoteId), {
+        adminFetchJson<{ settlement: DistributorSettlementRecord; revised?: boolean }>(DISTRIBUTOR_SETTLEMENT_API(quoteId), {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...draft, priceTemplateId: draft.priceTemplateId || null, dueDate: draft.dueDate || null }),
+          body: JSON.stringify({
+            ...draft,
+            lines: draft.lines.map((line) => (isCustomLine(line) ? { ...line, itemName: line.itemName.trim() } : line)),
+            priceTemplateId: draft.priceTemplateId || null,
+            dueDate: draft.dueDate || null,
+          }),
         }),
-      "원가를 저장했습니다."
+      revise ? "총판 견적서 금액을 수정했습니다." : "원가를 저장했습니다."
     )
     if (saved) {
-      setEditing(false)
-      setDraft(null)
+      closeEditor()
       await load()
     }
   }
@@ -412,9 +496,16 @@ export default function DistributorSettlementSection({ quoteId }: { quoteId: str
 
   if (editing && draft && draftTotals) {
     const blocker = getDistributorIssueBlocker(draft)
+    const hasEmptyCustomName = draft.lines.some((line) => isCustomLine(line) && !line.itemName.trim())
     return (
       <section className="rounded-lg border border-[#31302E] px-4 py-4">
         {header}
+        {revising && (
+          <p className="mb-4 rounded-md bg-[#FFF8E6] px-3 py-2.5 text-[12px] leading-relaxed text-[#7A520F]">
+            저장하면 총판 견적서 링크의 금액이 바로 바뀌고, 총판 확인이 해제됩니다. 자동 메일이 켜져 있으면 수정 메일이 갑니다.
+          </p>
+        )}
+        {!revising && (
         <fieldset className="mb-4">
           <legend className={LABEL}>방식</legend>
           <div className="grid gap-2 sm:grid-cols-2">
@@ -440,6 +531,7 @@ export default function DistributorSettlementSection({ quoteId }: { quoteId: str
             ))}
           </div>
         </fieldset>
+        )}
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="block">
             <span className={LABEL}>총판 이름 *</span>
@@ -459,7 +551,7 @@ export default function DistributorSettlementSection({ quoteId }: { quoteId: str
           </label>
         </div>
 
-        {draft.fulfillmentMode === "H" ? (
+        {draft.fulfillmentMode === "H" && !revising ? (
           <p className="mt-4 rounded-md bg-[#F6F5F4] px-3 py-2.5 text-[12px] leading-relaxed text-[#615D59]">
             H방식은 총판이 먼저 사 둔 물량이라 총판 견적서와 원가 미수가 없습니다. 재고 앱에서 출고를 확정하면
             검토 요청이 오고, &ldquo;검토 완료 &middot; 매출 잡기&rdquo;를 누른 시점으로 매출 원장 입력 큐에 초안이 올라갑니다.
@@ -467,7 +559,8 @@ export default function DistributorSettlementSection({ quoteId }: { quoteId: str
         ) : (
         <>
         <fieldset className="mt-4">
-          <legend className={LABEL}>발행 시점</legend>
+          <legend className={LABEL}>{revising ? "메일" : "발행 시점"}</legend>
+          {!revising && (
           <div className="flex flex-wrap gap-x-4 gap-y-1.5">
             {TRIGGER_OPTIONS.map((trigger) => (
               <label key={trigger} className="flex items-center gap-1.5 text-[12.5px] text-[#31302E]">
@@ -482,9 +575,10 @@ export default function DistributorSettlementSection({ quoteId }: { quoteId: str
               </label>
             ))}
           </div>
-          <label className="mt-2 flex items-center gap-1.5 text-[12.5px] text-[#31302E]">
+          )}
+          <label className={`${revising ? "" : "mt-2 "}flex items-center gap-1.5 text-[12.5px] text-[#31302E]`}>
             <input type="checkbox" checked={draft.autoEmail} onChange={(e) => patchDraft({ autoEmail: e.target.checked })} className="accent-[#084734]" />
-            발행할 때 총판 이메일로 바로 보내기
+            {revising ? "수정할 때 총판 이메일로 수정 메일 보내기" : "발행할 때 총판 이메일로 바로 보내기"}
           </label>
         </fieldset>
 
@@ -504,8 +598,8 @@ export default function DistributorSettlementSection({ quoteId }: { quoteId: str
           </label>
         </div>
 
-        <div className="mt-4 overflow-x-auto">
-          <table className="w-full min-w-[520px] text-[12.5px]">
+        <div ref={lineTableRef} className="mt-4 overflow-x-auto">
+          <table className="w-full min-w-[620px] text-[12.5px]">
             <thead>
               <tr className="border-b border-[#e8e8e4] text-left text-[11px] text-[#78736D]">
                 <th className="w-8 py-1.5 font-semibold">포함</th>
@@ -514,43 +608,122 @@ export default function DistributorSettlementSection({ quoteId }: { quoteId: str
                 <th className="w-24 py-1.5 text-right font-semibold">고객 단가</th>
                 <th className="w-32 py-1.5 text-right font-semibold">원가(입금가)</th>
                 <th className="w-28 py-1.5 text-right font-semibold">원가 합계</th>
+                <th className="w-12 py-1.5" aria-label="삭제" />
               </tr>
             </thead>
             <tbody>
-              {draft.lines.map((line, index) => (
-                <tr key={`${line.sourceLineNumber}-${line.itemCode ?? index}`} className="border-b border-[#f0f0ec]">
-                  <td className="py-1.5">
-                    <input
-                      type="checkbox"
-                      aria-label={`${line.itemName} 총판 청구에 포함`}
-                      checked={line.included}
-                      onChange={(e) => patchLine(index, { included: e.target.checked })}
-                      className="accent-[#084734]"
-                    />
-                  </td>
-                  <td className={`py-1.5 ${line.included ? "text-[#111110]" : "text-[#A39E98]"}`}>{line.itemName}</td>
-                  <td className="py-1.5 text-right tabular-nums text-[#78736D]">{line.quantity}</td>
-                  <td className="py-1.5 text-right tabular-nums text-[#78736D]">{formatWon(line.customerUnitPrice)}</td>
-                  <td className="py-1.5 text-right">
-                    <input
-                      inputMode="numeric"
-                      aria-label={`${line.itemName} 원가`}
-                      disabled={!line.included}
-                      value={line.unitPrice == null ? "" : line.unitPrice.toLocaleString("ko-KR")}
-                      onChange={(e) => patchLine(index, { unitPrice: parseWonInput(e.target.value) })}
-                      placeholder="금액 입력"
-                      className={`${INPUT} h-8 text-right tabular-nums disabled:bg-[#F6F5F4]`}
-                    />
-                  </td>
-                  <td className="py-1.5 text-right font-semibold tabular-nums">
-                    {line.included && line.unitPrice != null ? formatWon(line.quantity * line.unitPrice) : "—"}
-                  </td>
-                </tr>
-              ))}
+              {draft.lines.map((line, index) =>
+                isCustomLine(line) ? (
+                  <tr key={`custom-${index}`} className="border-b border-[#f0f0ec] bg-[#FBFAF9]">
+                    <td className="py-1.5">
+                      <span className="rounded bg-[#ECFDF5] px-1 py-0.5 text-[10px] font-semibold text-[#084734]">직접 추가</span>
+                    </td>
+                    <td className="py-1.5 pr-2">
+                      <div className="flex gap-1.5">
+                        <input
+                          data-custom-name={index}
+                          aria-label="추가 품목명"
+                          maxLength={200}
+                          value={line.itemName}
+                          onChange={(e) => patchLine(index, { itemName: e.target.value })}
+                          placeholder="품목명(예: 배송비)"
+                          className={`${INPUT} h-8 min-w-0 flex-1`}
+                        />
+                        <select
+                          aria-label="추가 품목 유형"
+                          value={line.itemType}
+                          onChange={(e) => patchLine(index, { itemType: e.target.value as CustomLineType })}
+                          className={`${INPUT} h-8 w-[84px] shrink-0 px-1.5`}
+                        >
+                          {CUSTOM_LINE_TYPE_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>{option.label}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </td>
+                    <td className="py-1.5 pl-1 text-right">
+                      <input
+                        inputMode="numeric"
+                        aria-label="추가 품목 수량"
+                        value={String(line.quantity)}
+                        onChange={(e) => patchLine(index, { quantity: parseWonInput(e.target.value) ?? 0 })}
+                        className={`${INPUT} h-8 text-right tabular-nums`}
+                      />
+                    </td>
+                    <td className="py-1.5 text-right tabular-nums text-[#78736D]">—</td>
+                    <td className="py-1.5 pl-1 text-right">
+                      <input
+                        inputMode="numeric"
+                        aria-label={`${line.itemName || "추가 품목"} 원가`}
+                        value={line.unitPrice == null ? "" : line.unitPrice.toLocaleString("ko-KR")}
+                        onChange={(e) => patchLine(index, { unitPrice: parseWonInput(e.target.value) })}
+                        placeholder="금액 입력"
+                        className={`${INPUT} h-8 text-right tabular-nums`}
+                      />
+                    </td>
+                    <td className="py-1.5 text-right font-semibold tabular-nums">
+                      {line.unitPrice != null ? formatWon(line.quantity * line.unitPrice) : "—"}
+                    </td>
+                    <td className="py-1.5 text-right">
+                      <button
+                        type="button"
+                        aria-label={`${line.itemName || "추가 품목"} 삭제`}
+                        onClick={() => removeLine(index)}
+                        className="text-[#A39E98] hover:text-[#B43E3E]"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </td>
+                  </tr>
+                ) : (
+                  <tr key={`${line.sourceLineNumber}-${line.itemCode ?? index}`} className="border-b border-[#f0f0ec]">
+                    <td className="py-1.5">
+                      <input
+                        type="checkbox"
+                        aria-label={`${line.itemName} 총판 청구에 포함`}
+                        checked={line.included}
+                        onChange={(e) => patchLine(index, { included: e.target.checked })}
+                        className="accent-[#084734]"
+                      />
+                    </td>
+                    <td className={`py-1.5 ${line.included ? "text-[#111110]" : "text-[#A39E98]"}`}>{line.itemName}</td>
+                    <td className="py-1.5 text-right tabular-nums text-[#78736D]">{line.quantity}</td>
+                    <td className="py-1.5 text-right tabular-nums text-[#78736D]">{formatWon(line.customerUnitPrice)}</td>
+                    <td className="py-1.5 text-right">
+                      <input
+                        inputMode="numeric"
+                        aria-label={`${line.itemName} 원가`}
+                        disabled={!line.included}
+                        value={line.unitPrice == null ? "" : line.unitPrice.toLocaleString("ko-KR")}
+                        onChange={(e) => patchLine(index, { unitPrice: parseWonInput(e.target.value) })}
+                        placeholder="금액 입력"
+                        className={`${INPUT} h-8 text-right tabular-nums disabled:bg-[#F6F5F4]`}
+                      />
+                    </td>
+                    <td className="py-1.5 text-right font-semibold tabular-nums">
+                      {line.included && line.unitPrice != null ? formatWon(line.quantity * line.unitPrice) : "—"}
+                    </td>
+                    <td />
+                  </tr>
+                )
+              )}
             </tbody>
           </table>
           {draft.lines.length === 0 && <p className="py-3 text-xs text-[#78736D]">고객 견적에 품목이 없습니다.</p>}
         </div>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={addCustomLine}
+            disabled={busy !== null || draft.lines.length >= MAX_DISTRIBUTOR_LINES}
+            className={GHOST_BUTTON}
+          >
+            <Plus className="h-3.5 w-3.5" />
+            금액 추가
+          </button>
+          <span className="text-[11.5px] text-[#78736D]">배송비·추가 장비·조정 금액처럼 고객 견적에 없는 줄을 직접 넣습니다.</span>
+        </div>
+        {hasEmptyCustomName && <p className="mt-2 text-[12px] text-[#B43E3E]">직접 추가한 줄의 품목명을 입력해 주세요.</p>}
 
         <div className="mt-3 flex flex-wrap items-end justify-between gap-3">
           <label className="flex items-center gap-1.5 text-[12.5px] text-[#31302E]">
@@ -576,7 +749,7 @@ export default function DistributorSettlementSection({ quoteId }: { quoteId: str
           />
         </label>
 
-        {blocker && <p className="mt-2 text-[12px] text-[#7A520F]">발행 전 확인: {blocker}</p>}
+        {blocker && <p className="mt-2 text-[12px] text-[#7A520F]">{revising ? "저장 전 확인" : "발행 전 확인"}: {blocker}</p>}
 
         <button type="button" onClick={() => setPreviewOpen((open) => !open)} className={`${GHOST_BUTTON} mt-3`}>
           {previewOpen ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
@@ -588,12 +761,17 @@ export default function DistributorSettlementSection({ quoteId }: { quoteId: str
         {notice}
 
         <div className="mt-3 flex flex-wrap justify-end gap-2">
-          <button type="button" onClick={() => { setEditing(false); setDraft(null) }} className={GHOST_BUTTON} disabled={busy !== null}>
-            닫기
+          <button type="button" onClick={closeEditor} className={GHOST_BUTTON} disabled={busy !== null}>
+            {revising ? "취소" : "닫기"}
           </button>
-          <button type="button" onClick={() => void handleSave()} className={SOLID_BUTTON} disabled={busy !== null || !draft.distributorName.trim()}>
+          <button
+            type="button"
+            onClick={() => void handleSave()}
+            className={SOLID_BUTTON}
+            disabled={busy !== null || !draft.distributorName.trim() || hasEmptyCustomName}
+          >
             {busy === "save" && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-            저장
+            {revising ? "금액 수정 저장" : "저장"}
           </button>
         </div>
       </section>
@@ -610,7 +788,7 @@ export default function DistributorSettlementSection({ quoteId }: { quoteId: str
             : "하드웨어 물량의 방식을 정합니다. C방식(회사 선매입)은 원가를 정해 두면 고객 동의 또는 설치 완료 때 같은 양식의 총판 견적서를 발행하고 총판 입금 확인 시 매출을 잡습니다. H방식(총판 선매입)은 설치 완료 시 매출을 잡습니다."}
         </p>
         {notice}
-        <button type="button" onClick={startEditing} className={`${GHOST_BUTTON} mt-2.5`}>
+        <button type="button" onClick={() => startEditing()} className={`${GHOST_BUTTON} mt-2.5`}>
           방식·원가 설정
         </button>
       </section>
@@ -651,7 +829,7 @@ export default function DistributorSettlementSection({ quoteId }: { quoteId: str
         {notice}
         {!installed && (
           <div className="mt-3 flex flex-wrap gap-2">
-            <button type="button" onClick={startEditing} disabled={busy !== null} className={GHOST_BUTTON}>
+            <button type="button" onClick={() => startEditing()} disabled={busy !== null} className={GHOST_BUTTON}>
               방식 수정
             </button>
             <button type="button" onClick={() => void handleIssue("installation_completed")} disabled={busy !== null} className={SOLID_BUTTON}>
@@ -669,6 +847,11 @@ export default function DistributorSettlementSection({ quoteId }: { quoteId: str
 
   const outstanding = getOutstandingAmount(settlement)
   const isIssued = settlement.status !== "draft"
+  const confirmation = settlement
+  // 발행 후 금액 수정은 C방식 발행 건(입금 대기·일부 입금·입금 완료)만 — H방식 설치 완료는 서버가 409 로 거절한다.
+  const canRevise =
+    settlement.fulfillmentMode === "C" &&
+    (settlement.status === "issued" || settlement.status === "partial" || settlement.status === "paid")
 
   return (
     <section className="rounded-lg border border-[#e8e8e4] px-4 py-3.5">
@@ -694,6 +877,15 @@ export default function DistributorSettlementSection({ quoteId }: { quoteId: str
             <dt className="text-[#78736D]">입금 / 남은 금액</dt>
             <dd className="tabular-nums text-[#31302E]">
               {formatWon(settlement.paidAmount)} / <span className={outstanding > 0 ? "font-semibold text-[#7A520F]" : ""}>{formatWon(outstanding)}</span>
+            </dd>
+            <dt className="text-[#78736D]">총판 확인</dt>
+            <dd className="text-[#31302E]">
+              {confirmation.confirmedAt
+                ? `${formatDateLabel(confirmation.confirmedAt)}${confirmation.confirmedByName ? ` · ${confirmation.confirmedByName}` : ""}`
+                : "총판 확인 전"}
+              {confirmation.revisedAt ? (
+                <span className="text-[#78736D]"> · 마지막 수정 {formatDateLabel(confirmation.revisedAt)}</span>
+              ) : null}
             </dd>
             <dt className="text-[#78736D]">총판 메일</dt>
             <dd className="text-[#31302E]">
@@ -776,7 +968,7 @@ export default function DistributorSettlementSection({ quoteId }: { quoteId: str
       <div className="mt-3 flex flex-wrap gap-2">
         {!isIssued && (
           <>
-            <button type="button" onClick={startEditing} disabled={busy !== null} className={GHOST_BUTTON}>
+            <button type="button" onClick={() => startEditing()} disabled={busy !== null} className={GHOST_BUTTON}>
               원가 수정
             </button>
             <button type="button" onClick={() => setPreviewOpen((open) => !open)} className={GHOST_BUTTON}>
@@ -795,6 +987,11 @@ export default function DistributorSettlementSection({ quoteId }: { quoteId: str
               </button>
             )}
           </>
+        )}
+        {canRevise && (
+          <button type="button" onClick={() => startEditing(true)} disabled={busy !== null} className={GHOST_BUTTON}>
+            금액 수정
+          </button>
         )}
         {isIssued && payload.shareUrl && (
           <>

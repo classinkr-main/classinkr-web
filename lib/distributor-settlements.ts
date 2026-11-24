@@ -1,3 +1,4 @@
+import { formatKRW } from "@/lib/format"
 import type { PartnerQuoteDetailsInput, PartnerQuoteLineItemInput } from "@/lib/partners-types"
 import {
   CLASSIN_QUOTE_SUPPLIER,
@@ -158,6 +159,12 @@ export interface DistributorSettlementRecord {
   cancelledAt: string | null
   /** H방식 설치 완료 시각(= 매출 인식 시점). */
   installedAt: string | null
+  /** 총판이 공유 링크에서 "확인"을 누른 시각. 발행 후 금액을 고치면 null 로 돌아간다(마이그레이션 미적용이면 늘 null). */
+  confirmedAt: string | null
+  /** 확인을 누른 총판 담당자 이름(선택 입력). */
+  confirmedByName: string | null
+  /** 발행 뒤 금액을 마지막으로 고친 시각. */
+  revisedAt: string | null
   createdAt: string
   updatedAt: string
 }
@@ -211,7 +218,7 @@ export function buildDistributorLinesFromQuote(
   const previous = new Map<string, DistributorSettlementLine>()
   for (const line of options.previous ?? []) previous.set(lineKey(line.sourceLineNumber, line.itemCode), line)
 
-  return (customerLines ?? []).filter(isBillableCustomerLine).map((line, index) => {
+  const fromQuote = (customerLines ?? []).filter(isBillableCustomerLine).map((line, index) => {
     const sourceLineNumber = line.lineNumber ?? index + 1
     const quantity = Math.max(0, Math.round(Number(line.quantity ?? 0)))
     const prior = previous.get(lineKey(sourceLineNumber, line.itemCode))
@@ -229,6 +236,17 @@ export function buildDistributorLinesFromQuote(
       included: prior ? prior.included : isDistributorEligibleLine(line),
     }
   })
+  // 어드민이 직접 추가한 줄(고객 견적에 없는 배송비·추가 장비·조정 금액 등)은 고객 견적이 바뀌어도 그대로 뒤에 붙인다.
+  const custom = (options.previous ?? []).filter(isCustomDistributorLine)
+  return [...fromQuote, ...custom].slice(0, MAX_DISTRIBUTOR_LINES)
+}
+
+/** 고객 견적 품목 번호는 1부터 — 0 은 어드민이 총판 견적서에 직접 추가한 줄이다. */
+export const CUSTOM_LINE_SOURCE_NUMBER = 0
+export const MAX_DISTRIBUTOR_LINES = 60
+
+export function isCustomDistributorLine(line: Pick<DistributorSettlementLine, "sourceLineNumber">) {
+  return line.sourceLineNumber === CUSTOM_LINE_SOURCE_NUMBER
 }
 
 function lineKey(lineNumber: number, itemCode?: string) {
@@ -278,6 +296,25 @@ export function getDistributorIssueBlocker(input: {
   if (totals.includedCount === 0) return "총판에게 청구할 품목을 하나 이상 포함해 주세요."
   if (totals.missingPriceCount > 0) return `원가(총판 입금가)가 비어 있는 품목이 ${totals.missingPriceCount}개 있습니다.`
   if (totals.totalAmount <= 0) return "총판 청구 금액이 0원입니다."
+  return null
+}
+
+/**
+ * 발행 뒤 금액 수정이 안 되는 이유. null 이면 고칠 수 있다.
+ * 발행 조건과 같고, 이미 받은 입금보다 작게 줄이지 못한다(미수가 음수가 된다 — 입금 기록을 먼저 정리한다).
+ */
+export function getDistributorReviseBlocker(input: {
+  lines: readonly DistributorSettlementLine[]
+  vatIncluded: boolean
+  distributorName: string
+  paidAmount: number
+}): string | null {
+  const blocker = getDistributorIssueBlocker(input)
+  if (blocker) return blocker
+  const { totalAmount } = computeDistributorTotals(input.lines, input.vatIncluded)
+  if (totalAmount < input.paidAmount) {
+    return `이미 받은 입금(${formatKRW(input.paidAmount)})보다 작게 줄일 수 없습니다. 입금 기록을 먼저 정리해 주세요.`
+  }
   return null
 }
 

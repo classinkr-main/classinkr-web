@@ -1,6 +1,6 @@
 # 하드웨어 C방식/H방식 — 총판 정산과 매출 순서
 
-기준 시점: 2026-10-23 (설치 완료 자동 준비·검토 요청 2026-11-10)
+기준 시점: 2026-10-23 (설치 완료 자동 준비·검토 요청 2026-11-10, 고객 동의 자동 생성·총판 확인·발행 후 수정 2026-11-24)
 범위: `/admin/quotes` 견적 상세의 총판 정산 영역, `총판 미수금` 탭, `/share/distributor-quote/[token]`,
 하드웨어 매출 원장 초안. 입고·출고 물량에의 적용은 §6(다음 단계).
 
@@ -77,7 +77,30 @@
 - 원가는 구매 대수·고객마다 다르므로 견적마다 직접 입력하거나 원가 템플릿(품목 × 최소 구매 대수)으로 채운 뒤 덮어쓴다.
 - 고객 단가·고객 합계는 싣지 않는다.
 - 자동 발행 보류: 원가 저장 뒤 고객 견적 버전이 바뀌었거나 원가가 비어 있으면 발행하지 않고 재확인 알림을 남긴다.
-- 이메일 실패는 발행을 되돌리지 않는다(링크 복사·메일 재발송). 발행 후 금액 변경은 취소(입금 없을 때) 후 재설정.
+- 이메일 실패는 발행을 되돌리지 않는다(링크 복사·메일 재발송).
+
+### 4-1. 만드는 시점 — 고객 견적과 동시, 또는 고객이 확인할 때 (2026-11-24)
+
+- **동시**: 고객 견적을 만들 때 견적 상세 › 총판 정산에서 방식·원가를 미리 저장해 둔다. 발행 시점이 '고객 동의 시'면
+  고객이 동의하는 순간 발행된다.
+- **고객 먼저**: 미리 만들어 두지 않았어도, 고객이 공유 링크에서 동의하면 기본 정산을 자동으로 만들고 같은 규칙으로 발행한다
+  (`ensureDefaultSettlementOnAccept` — C방식 · 고객 동의 시 발행 · 마지막에 저장한 총판, 없으면 퀴드러닝 · 원가는 원가 템플릿이
+  하나뿐일 때만 채운다). 원가가 비어 있으면 발행하지 않고 검토 요청 알림을 남긴다 — 사람이 원가를 넣고 발행한다.
+- 자동으로 만들지 않는 경우: 총판에게 청구할 품목(하드웨어·AI Suite)이 없는 견적, 사람이 취소한 정산(되살리지 않는다),
+  발행 시점을 '설치 완료 시'·'직접 발행'으로 정해 둔 정산(그 설정을 따른다).
+
+### 4-2. 총판 확인과 발행 후 금액 수정 (2026-11-24)
+
+- **총판 확인**: 총판용 견적서 링크에 [견적 확인] 버튼이 있다(확인자 이름은 선택). 누르면 확인 시각이 남고, 처음 한 번만
+  총판 이메일로 확인 완료 사본, 사내에는 알림(위컴 + 알림 메일 수신 목록)이 간다. 발행 메일은 "링크에서 확인을 눌러 달라"고 안내한다.
+  견적 상세 › 총판 정산에 "총판 확인: 날짜 · 이름" 또는 "총판 확인 전"이 보인다.
+- **금액 추가**: 고객 견적에 없는 줄(배송비·추가 장비·조정 금액 등)을 '금액 추가'로 직접 넣을 수 있다(`sourceLineNumber` 0).
+  고객 견적이 바뀌어 줄을 다시 만들어도 직접 추가한 줄은 남는다.
+- **발행 후 수정**: C방식 발행 건(입금 대기·일부 입금·입금 완료)은 '금액 수정'으로 줄·원가·부가세·입금 기한을 고칠 수 있다.
+  공유 링크는 그대로이고 금액만 바뀐다. 고치면 총판 확인이 해제되고(다시 확인 받는다), 자동 메일이 켜져 있으면 총판에게
+  '[수정]' 메일이 간다. 상태는 새 합계와 받은 입금으로 다시 정한다(입금 완료였는데 금액을 올리면 일부 입금으로 돌아간다).
+  이미 받은 입금보다 작게 줄일 수는 없다 — 입금 기록을 먼저 정리한다. 방식·발행 시점은 바꾸지 않는다.
+- 입금별 매출 원장 초안은 입금 금액 기준이라 금액 수정과 무관하다.
 
 ## 5. 매출 원장 초안 규칙(두 방식 공통)
 
@@ -107,4 +130,6 @@
 - 매출 초안: `lib/admin/handoff/distributor-payment-to-ledger-draft.ts`
 - API: `app/api/admin/quotes/[id]/distributor-settlement/**`, `app/api/admin/distributor-receivables`, `app/api/admin/distributor-price-templates/**`
 - 화면: `components/admin/documents/DistributorSettlementSection.tsx`, `components/admin/documents/DistributorReceivablesPanel.tsx`
-- 마이그레이션: [20261023_distributor_settlements.sql](../../supabase/migrations/20261023_distributor_settlements.sql)
+- 총판 확인: `app/share/distributor-quote/[token]/DistributorConfirmPanel.tsx`, `app/api/share/distributor-quote/[token]/confirm/route.ts`
+- 마이그레이션: [20261023_distributor_settlements.sql](../../supabase/migrations/20261023_distributor_settlements.sql),
+  [20261124_distributor_settlement_confirm_revise.sql](../../supabase/migrations/20261124_distributor_settlement_confirm_revise.sql)

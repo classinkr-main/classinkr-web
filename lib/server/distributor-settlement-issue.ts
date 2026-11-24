@@ -3,7 +3,9 @@ import "server-only"
 import { randomBytes } from "crypto"
 
 import {
+  DEFAULT_HARDWARE_DISTRIBUTOR,
   DISTRIBUTOR_ISSUE_REASON_LABELS,
+  buildDistributorLinesFromQuote,
   buildDistributorQuoteDetails,
   computeDistributorTotals,
   getDistributorIssueBlocker,
@@ -15,6 +17,7 @@ import {
   type DistributorLedgerProposal,
 } from "@/lib/admin/handoff/distributor-payment-to-ledger-draft"
 import { sendEmail, wrapNotificationHtml } from "@/lib/email"
+import { formatDate, formatTime } from "@/lib/format"
 import { emitNotificationEvent } from "@/lib/notifications/emit-event"
 import { getCustomer } from "@/lib/portal/repositories/customers"
 import { getDeal } from "@/lib/portal/repositories/deals"
@@ -24,8 +27,12 @@ import type { QuoteDocument, QuoteDocumentVersion } from "@/lib/portal/types"
 import {
   DistributorSettlementsNotReadyError,
   flagDistributorSettlementReview,
+  confirmDistributorSettlementByToken,
   getDistributorSettlementByQuote,
+  getLatestDistributorContact,
+  listDistributorPriceTemplates,
   markDistributorSettlementInstalled,
+  saveDistributorSettlementDraft,
   markDistributorSettlementIssued,
   recordDistributorEmailResult,
 } from "@/lib/repositories/distributor-settlements"
@@ -54,6 +61,10 @@ export function distributorShareUrl(token: string, origin?: string | null) {
 
 function createShareToken() {
   return randomBytes(24).toString("hex")
+}
+
+function formatKst(value: string) {
+  return `${formatDate(value, "prose")} ${formatTime(value)}`
 }
 
 function won(value: number) {
@@ -149,21 +160,45 @@ function notifyIssued(
 }
 
 /** 총판에게 발행 링크를 메일로 보낸다. 결과는 정산 행에 기록한다. */
+/**
+ * 총판 메일 종류.
+ *  - issued: 발행 — 링크에서 금액을 보고 [확인]을 눌러 달라고 안내한다.
+ *  - revised: 발행 뒤 금액 수정 — 바뀐 금액을 다시 확인해 달라고 안내한다(총판 확인이 해제돼 있다).
+ *  - confirmed: 총판이 링크에서 확인을 누른 뒤 보내는 확인 완료 사본.
+ */
+export type DistributorEmailKind = "issued" | "revised" | "confirmed"
+
 export async function sendDistributorSettlementEmail(
   settlement: DistributorSettlementRecord,
-  input: { quoteNumber: string; customerName: string | null; shareUrl: string }
+  input: { quoteNumber: string; customerName: string | null; shareUrl: string; kind?: DistributorEmailKind }
 ): Promise<DistributorSettlementRecord> {
   if (!settlement.distributorEmail) {
     return (await recordDistributorEmailResult(settlement.id, { status: "skipped", error: "총판 이메일 없음" })) ?? settlement
   }
 
+  const kind = input.kind ?? "issued"
   const customerLabel = input.customerName?.trim() || "고객사"
-  const subject = `[클래스인] ${customerLabel} 하드웨어 총판 견적서 (No. ${input.quoteNumber})`
+  const subjectByKind: Record<DistributorEmailKind, string> = {
+    issued: `[클래스인] ${customerLabel} 하드웨어 총판 견적서 (No. ${input.quoteNumber})`,
+    revised: `[클래스인][수정] ${customerLabel} 하드웨어 총판 견적서 (No. ${input.quoteNumber})`,
+    confirmed: `[클래스인] ${customerLabel} 하드웨어 총판 견적서 확인 완료 (No. ${input.quoteNumber})`,
+  }
+  const leadByKind: Record<DistributorEmailKind, string> = {
+    issued: "아래 고객 건의 총판 견적서를 보내 드립니다. 링크에서 금액을 확인하신 뒤 [견적 확인]을 눌러 주세요.",
+    revised: "아래 고객 건의 총판 견적서 금액이 수정됐습니다. 링크에서 바뀐 금액을 확인하신 뒤 [견적 확인]을 다시 눌러 주세요.",
+    confirmed: "아래 고객 건의 총판 견적서를 확인해 주셔서 감사합니다. 확인하신 내용을 보내 드립니다.",
+  }
+  const subject = subjectByKind[kind]
   const body = [
-    `${escapeHtmlAttribute(settlement.distributorName)} 담당자님, 아래 고객 건의 총판 견적서를 보내 드립니다.`,
+    `${escapeHtmlAttribute(settlement.distributorName)} 담당자님, ${leadByKind[kind]}`,
     `고객사: ${escapeHtmlAttribute(customerLabel)}`,
     `입금 요청 금액: <strong>${won(settlement.totalAmount)}</strong> (VAT 포함)`,
     settlement.dueDate ? `입금 기한: ${escapeHtmlAttribute(settlement.dueDate)}` : null,
+    kind === "confirmed" && settlement.confirmedAt
+      ? `확인 시각: ${escapeHtmlAttribute(formatKst(settlement.confirmedAt))}${
+          settlement.confirmedByName ? ` · ${escapeHtmlAttribute(settlement.confirmedByName)}` : ""
+        }`
+      : null,
   ].filter(Boolean).join("<br />")
 
   try {
@@ -272,18 +307,76 @@ export async function issueDistributorSettlement(params: {
 }
 
 /** 고객 동의 라우트용 — 어떤 실패도 동의 응답을 막지 않는다. */
+const ACCEPT_ACTOR = "system:quote-accept"
+
+/**
+ * 고객 동의 때 정산이 아직 없으면 기본 총판 정산(C방식 · 고객 동의 시 발행)을 만든다 — 고객이 확인하면
+ * 총판 견적서도 함께 나오게 하려는 것이다. 미리 만들어 둔(고객 견적과 동시에 설정한) 정산은 건드리지 않는다.
+ *  - 총판은 마지막에 저장한 총판(없으면 퀴드러닝), 품목은 고객 견적에서, 원가는 원가 템플릿이 하나뿐일 때만 채운다.
+ *  - 총판에게 청구할 품목(하드웨어·AI Suite)이 없는 견적은 만들지 않는다.
+ *  - 취소한 정산은 되살리지 않는다(사람이 일부러 끈 것이다).
+ * 만들었으면 true.
+ */
+export async function ensureDefaultSettlementOnAccept(quoteDocumentId: string): Promise<boolean> {
+  const read = await getDistributorSettlementByQuote(quoteDocumentId)
+  if (!read.available || read.value) return false
+
+  const context = await loadQuoteContext(quoteDocumentId)
+  if (!context) return false
+  const customerDetails = getQuoteDetailsFromStructuredJson(context.version.structured_json, {
+    customerName: context.customerName,
+    validUntil: context.version.valid_until,
+  })
+  const [templates, latestContact] = await Promise.all([listDistributorPriceTemplates(), getLatestDistributorContact()])
+  const template = templates.value?.length === 1 ? templates.value[0] : null
+  const lines = buildDistributorLinesFromQuote(customerDetails?.lineItems, { rules: template?.rules })
+  const totals = computeDistributorTotals(lines, true)
+  if (totals.includedCount === 0) return false
+
+  const contact = latestContact ?? DEFAULT_HARDWARE_DISTRIBUTOR
+  const created = await saveDistributorSettlementDraft({
+    quoteDocumentId,
+    dealId: context.document.deal_id ?? null,
+    sourceVersionId: context.version.id,
+    customerTotalAmount: context.version.total_amount,
+    input: {
+      fulfillmentMode: "C",
+      distributorName: contact.distributorName,
+      distributorContactName: contact.distributorContactName ?? null,
+      distributorEmail: contact.distributorEmail ?? null,
+      distributorPhone: contact.distributorPhone ?? null,
+      issueTrigger: "on_accept",
+      autoEmail: true,
+      priceTemplateId: template?.id ?? null,
+      lines,
+      vatIncluded: true,
+      dueDate: null,
+      notes: null,
+    },
+    totals,
+    actor: ACCEPT_ACTOR,
+  })
+  return Boolean(created)
+}
+
 export async function issueDistributorSettlementOnAcceptSafely(input: {
   quoteDocumentId: string
   origin?: string | null
 }) {
   try {
-    return await issueDistributorSettlement({
-      quoteDocumentId: input.quoteDocumentId,
-      reason: "customer_accepted",
-      mode: "auto",
-      actor: "system:quote-accept",
-      origin: input.origin,
-    })
+    const issue = () =>
+      issueDistributorSettlement({
+        quoteDocumentId: input.quoteDocumentId,
+        reason: "customer_accepted",
+        mode: "auto",
+        actor: ACCEPT_ACTOR,
+        origin: input.origin,
+      })
+    const first = await issue()
+    if (first.status !== "not_configured") return first
+    // 정산이 없던 견적 — 기본 정산을 만들고 같은 규칙으로 발행한다. 원가가 비어 있으면 발행 대신 검토 요청이 남는다.
+    const created = await ensureDefaultSettlementOnAccept(input.quoteDocumentId)
+    return created ? await issue() : first
   } catch (error) {
     console.error(
       "[distributor-settlement] auto issue on accept skipped:",
@@ -334,4 +427,107 @@ export async function completeHModeInstallation(params: {
   })
   if (ledger.status === "error") console.error("[distributor-settlement] H방식 매출 초안 실패:", ledger.error)
   return { status: "completed", settlement: completed, ledger }
+}
+
+/* ─── 총판 확인 · 발행 후 수정 ─────────────────────────────── */
+
+export type DistributorConfirmOutcome =
+  | { status: "confirmed"; settlement: DistributorSettlementRecord }
+  | { status: "already_confirmed"; settlement: DistributorSettlementRecord }
+  | { status: "not_found" }
+
+/**
+ * 총판이 공유 링크에서 [견적 확인]을 누른다. 처음 확인할 때만:
+ *  - 총판 이메일이 있으면 확인 완료 사본을 메일로 보낸다(실패해도 확인은 유지, 결과는 email_status 에).
+ *  - 사내에 알림(위컴 + 알림 메일 수신 목록)을 보낸다.
+ * 다시 눌러도 기록·메일은 한 번뿐이다.
+ */
+export async function confirmDistributorQuote(params: {
+  token: string
+  confirmedByName: string | null
+  origin?: string | null
+}): Promise<DistributorConfirmOutcome> {
+  const result = await confirmDistributorSettlementByToken({
+    token: params.token,
+    confirmedByName: params.confirmedByName,
+  })
+  if (result.status !== "confirmed") return result
+
+  const context = await loadQuoteContext(result.settlement.quoteDocumentId).catch(() => null)
+  const quoteNumber = context?.document.quote_number ?? ""
+  let settlement = result.settlement
+  try {
+    settlement = await sendDistributorSettlementEmail(settlement, {
+      quoteNumber,
+      customerName: context?.customerName ?? null,
+      shareUrl: distributorShareUrl(params.token, params.origin),
+      kind: "confirmed",
+    })
+  } catch (error) {
+    console.error("[distributor-settlement] confirm email failed:", error instanceof Error ? error.message : error)
+  }
+
+  emitNotificationEvent({
+    eventType: "distributor_settlement.confirmed",
+    notificationType: "status_update",
+    categoryTag: "finance",
+    severity: "info",
+    scopeTag: "org_admin",
+    title: `총판 견적서 확인 — 견적 ${quoteNumber}`,
+    message: [
+      `${context?.customerName?.trim() || "고객"} 건 · 총판 ${settlement.distributorName}이(가) 총판 견적서를 확인했습니다.`,
+      settlement.confirmedByName ? `확인자: ${settlement.confirmedByName}` : null,
+      `입금 받을 금액 ${won(settlement.totalAmount)}`,
+    ].filter(Boolean).join("\n"),
+    routeUrl: `/admin/quotes?tab=hardware&quote=${settlement.quoteDocumentId}`,
+    source: "distributor_settlement",
+    sourceId: settlement.id,
+    payload: { quoteNumber, distributorName: settlement.distributorName, totalAmount: settlement.totalAmount },
+    channels: ["wecom_webhook", "email"],
+  }).catch((error) => {
+    console.error("[distributor-settlement] confirmed notification failed:", error)
+  })
+
+  return { status: "confirmed", settlement }
+}
+
+/** 발행 뒤 금액을 고쳤을 때 — 자동 메일이 켜져 있으면 총판에게 수정 메일, 사내에는 알림. */
+export async function notifyDistributorSettlementRevised(params: {
+  settlement: DistributorSettlementRecord
+  previousTotalAmount: number
+  origin?: string | null
+  actor: string
+}): Promise<DistributorSettlementRecord> {
+  const context = await loadQuoteContext(params.settlement.quoteDocumentId).catch(() => null)
+  const quoteNumber = context?.document.quote_number ?? ""
+  let settlement = params.settlement
+  if (settlement.autoEmail && settlement.shareToken) {
+    settlement = await sendDistributorSettlementEmail(settlement, {
+      quoteNumber,
+      customerName: context?.customerName ?? null,
+      shareUrl: distributorShareUrl(settlement.shareToken, params.origin),
+      kind: "revised",
+    })
+  }
+  emitNotificationEvent({
+    eventType: "distributor_settlement.revised",
+    notificationType: "status_update",
+    categoryTag: "finance",
+    severity: "info",
+    scopeTag: "org_admin",
+    title: `총판 견적서 금액 수정 — 견적 ${quoteNumber}`,
+    message: [
+      `${context?.customerName?.trim() || "고객"} 건 · 총판 ${settlement.distributorName}`,
+      `${won(params.previousTotalAmount)} → ${won(settlement.totalAmount)} (수정: ${params.actor})`,
+      "총판 확인이 해제됐습니다. 총판이 링크에서 다시 확인해야 합니다.",
+    ].join("\n"),
+    routeUrl: `/admin/quotes?tab=hardware&quote=${settlement.quoteDocumentId}`,
+    source: "distributor_settlement",
+    sourceId: settlement.id,
+    payload: { quoteNumber, previousTotalAmount: params.previousTotalAmount, totalAmount: settlement.totalAmount },
+    channels: ["wecom_webhook"],
+  }).catch((error) => {
+    console.error("[distributor-settlement] revised notification failed:", error)
+  })
+  return settlement
 }
