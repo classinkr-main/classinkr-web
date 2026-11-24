@@ -466,7 +466,7 @@ export default function SalesLedgerWorkbench({
   const [query, setQuery] = useState("")
   // 품질 웨이브 7 — 항목 3: 단일 select → MultiSelect(Set) 전환. 빈 Set === "전체"(기존 "ALL"과
   // 동일 의미) — 필터 로직·URL 직렬화·크로스링크 모두 Set 기준으로 다시 쓴다.
-  const [managerFilter, setManagerFilter] = useState<Set<string>>(() => new Set([defaultManager]))
+  const [managerFilter, setManagerFilter] = useState<Set<string>>(() => new Set(defaultManager ? [defaultManager] : []))
   const [regionFilter, setRegionFilter] = useState<Set<string>>(() => new Set())
   const [productFilter, setProductFilter] = useState<RevProductCategory>("all")
   const [revStatusFilter, setRevStatusFilter] = useState("ALL")
@@ -936,7 +936,7 @@ export default function SalesLedgerWorkbench({
     setLens(nextLens)
     if (nextLens === "cockpit" && lens !== "cockpit") {
       setTeam("ALL")
-      setManagerFilter(new Set([defaultManager]))
+      setManagerFilter(new Set(defaultManager ? [defaultManager] : []))
     }
 
     if (typeof window === "undefined") return
@@ -960,7 +960,7 @@ export default function SalesLedgerWorkbench({
 
   const resetRevFilters = useCallback(() => {
     setQuery("")
-    setManagerFilter(new Set([defaultManager]))
+    setManagerFilter(new Set(defaultManager ? [defaultManager] : []))
     setRegionFilter(new Set())
     setProductFilter("all")
     setRevStatusFilter("ALL")
@@ -3134,7 +3134,7 @@ export default function SalesLedgerWorkbench({
         )}
       </header>
       <div className="flex flex-wrap items-center gap-2 border-b border-black/[0.08] bg-white px-4 py-3 sm:px-6 lg:px-9" role="group" aria-label="장부 데이터 범위">
-        <button type="button" aria-pressed={scopedManager === defaultManager} onClick={() => { setTeam("ALL"); setManagerFilter(new Set([defaultManager])) }} className="min-h-11 rounded-lg border border-black/[0.08] px-3 text-xs font-semibold text-[#084734]">내 담당</button>
+        {defaultManager && <button type="button" aria-pressed={scopedManager === defaultManager} onClick={() => { setTeam("ALL"); setManagerFilter(new Set([defaultManager])) }} className="min-h-11 rounded-lg border border-black/[0.08] px-3 text-xs font-semibold text-[#084734]">내 담당</button>}
         <button type="button" aria-pressed={managerFilter.size === 0} onClick={() => setManagerFilter(new Set())} className="min-h-11 rounded-lg border border-black/[0.08] px-3 text-xs font-semibold text-[#615D59]">전체 담당자</button>
         <span className="text-xs text-[#615D59]">{scopedManager === UNMAPPED_BRANCH_MEMBER ? "로그인 계정의 담당자 연결이 필요합니다." : managerFilter.size ? `${Array.from(managerFilter).map(branchManagerLabel).join(", ")} · 개인 목표와 데이터` : "선택한 팀·전체 데이터"}</span>
       </div>
