@@ -345,7 +345,7 @@ const QUICK_ADD_RAIL_ITEMS: QuickAddRailItem[] = [
   {
     id: "board_86",
     label: '전자칠판 86"',
-    description: "대형 패널",
+    description: getStandardQuoteTemplate("board_86").lines[0].itemDescription ?? "대형 패널",
     price: getProductBySku("board-86")?.unit_price ?? 6_300_000,
     group: "panel",
     sku: "board-86",
@@ -355,7 +355,7 @@ const QUICK_ADD_RAIL_ITEMS: QuickAddRailItem[] = [
   {
     id: "board_75",
     label: '전자칠판 75"',
-    description: "중형 패널",
+    description: getStandardQuoteTemplate("board_75").lines[0].itemDescription ?? "중형 패널",
     price: getProductBySku("board-75")?.unit_price ?? 5_400_000,
     group: "panel",
     sku: "board-75",
