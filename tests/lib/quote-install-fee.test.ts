@@ -24,6 +24,33 @@ function build(templateId: StandardQuoteTemplateId, selections: Record<string, s
 const installLine = (details: ReturnType<typeof build>) =>
   (details.lineItems ?? []).find((line) => line.itemCode === INSTALL_FEE_ITEM_CODE)
 
+describe("설치 방식 행 삭제", () => {
+  it.each(["board_86", "board_75", "camera_t1"] as const)(
+    "%s에서 삭제 후 수량과 저장 상태가 바뀌어도 설치 방식 행을 다시 생성하지 않는다",
+    (templateId) => {
+      const group = getStandardQuoteOptionGroups(templateId).find((item) => item.id === "installation_mode")
+      expect(group?.control === "radio" && group.options.some((option) => option.value === "none")).toBe(true)
+      const installation = (details: ReturnType<typeof build> | null) =>
+        details?.lineItems?.find((line) => line.optionGroupId === "installation_mode")
+
+      const original = build(templateId, { install_fee: true })
+      expect(installation(original)).toBeDefined()
+
+      const removed = build(templateId, { installation_mode: "none" }, 1, original)
+      expect(installation(removed)).toBeUndefined()
+
+      const saved = normalizeQuoteDetailsFromStructuredJson({ quoteDetails: removed })
+      expect(saved?.optionSelections?.installation_mode).toBe("none")
+      const resized = build(templateId, {}, 3, saved ?? undefined)
+      expect(installation(resized)).toBeUndefined()
+      expect(installLine(resized)).toMatchObject({ quantity: 3, unitPrice: HARDWARE_INSTALL_PRICE_KRW })
+
+      const restored = build(templateId, { installation_mode: "included_quote" }, 3, resized)
+      expect(installation(restored)).toMatchObject({ unitPrice: 0 })
+    }
+  )
+})
+
 describe("설치비 추가 옵션", () => {
   it.each(HARDWARE)("%s 에 토글이 있고 기본은 꺼짐", (templateId) => {
     const group = getStandardQuoteOptionGroups(templateId).find((item) => item.id === "install_fee")

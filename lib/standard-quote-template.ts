@@ -337,6 +337,7 @@ export const STANDARD_QUOTE_TEMPLATES: StandardQuoteTemplatePreset[] = [
           { value: "included_quote", label: "견적 포함", description: "같은 견적서 합계에 포함합니다." },
           { value: "separate_billing", label: "별도 청구", description: "합계에서는 제외하고 안내만 넣습니다." },
           { value: "tbd", label: "추후 협의", description: "설치 정책이 미정일 때 사용합니다." },
+          { value: "none", label: "제외", description: "카메라 설치 행을 뺍니다." },
         ],
       },
       INSTALL_FEE_OPTION_GROUP,
@@ -412,6 +413,7 @@ export const STANDARD_QUOTE_TEMPLATES: StandardQuoteTemplatePreset[] = [
           { value: "included_quote", label: "견적 포함", description: "설치 및 교육을 같은 견적에 포함합니다." },
           { value: "separate_billing", label: "별도 청구", description: "설치비는 추후 별도 청구합니다." },
           { value: "tbd", label: "추후 협의", description: "현장 조건 확인 후 확정합니다." },
+          { value: "none", label: "제외", description: "설치 및 교육 행을 뺍니다." },
         ],
       },
       INSTALL_FEE_OPTION_GROUP,
@@ -512,6 +514,7 @@ export const STANDARD_QUOTE_TEMPLATES: StandardQuoteTemplatePreset[] = [
           { value: "included_quote", label: "견적 포함", description: "설치 및 교육을 같은 견적에 포함합니다." },
           { value: "separate_billing", label: "별도 청구", description: "설치비는 추후 별도 청구합니다." },
           { value: "tbd", label: "추후 협의", description: "현장 조건 확인 후 확정합니다." },
+          { value: "none", label: "제외", description: "설치 및 교육 행을 뺍니다." },
         ],
       },
       INSTALL_FEE_OPTION_GROUP,
@@ -1319,7 +1322,7 @@ export function buildConfigurableStandardQuoteDetails({
         optionId: installationMode,
         priceLocked: true,
       })
-    } else {
+    } else if (installationMode !== "none") {
       addOptionalLine("camera-install", {
         itemType: "installation",
         itemName: "카메라 설치",
@@ -1399,7 +1402,7 @@ export function buildConfigurableStandardQuoteDetails({
         optionId: installationMode,
         priceLocked: true,
       })
-    } else {
+    } else if (installationMode !== "none") {
       addOptionalLine("install-training", {
         itemType: "service",
         itemName: "설치 및 교육",

@@ -122,6 +122,25 @@ describe("teamTemplateViewToQuoteDetails", () => {
 })
 
 describe("quoteDetailsToTeamTemplateInput", () => {
+  it("설치 제외를 팀 템플릿에 저장하고 다시 열어도 유지한다", () => {
+    const input = quoteDetailsToTeamTemplateInput("설치 제외", {
+      templateId: "board_86",
+      optionSelections: { installation_mode: "none" },
+      lineItems: [
+        { sortOrder: 1, lineNumber: 1, itemType: "hardware", itemCode: "board-86", itemName: "전자칠판", quantity: 1, unitPrice: 6_300_000 },
+      ],
+    })
+    const validated = validateQuoteTemplateInput(input as unknown as Record<string, unknown>)
+    expect(validated.ok).toBe(true)
+    if (!validated.ok) return
+    expect(validated.value.defaults.installation).toBe("none")
+
+    const view = teamQuoteTemplateView(record(validated.value), true)
+    const details = teamTemplateViewToQuoteDetails(view, "2026-10-21")
+    expect(details?.optionSelections?.installation_mode).toBe("none")
+    expect(byCode(details, "install-training")).toBeUndefined()
+  })
+
   it("뷰 → 작성기 → 저장 입력이 서버 검증을 통과하고 원래 품목으로 돌아온다", () => {
     const items = [
       { sku: "board-86", quantity: 2, unitPrice: 5_900_000 },

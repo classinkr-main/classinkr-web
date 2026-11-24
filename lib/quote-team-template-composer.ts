@@ -1,5 +1,7 @@
 import type { PartnerQuoteDetailsInput, PartnerQuoteLineItemInput } from "@/lib/partners-types"
 import {
+  DEFAULT_QUOTE_TEMPLATE_DEFAULTS,
+  QUOTE_TEMPLATE_INSTALLATION_OPTIONS,
   QUOTE_TEMPLATE_VALIDITY_DAYS,
   getQuoteTemplateCatalogEntry,
   type QuoteTemplateInput,
@@ -189,7 +191,9 @@ export function quoteDetailsToTeamTemplateInput(
   if (items.length === 0) return null
 
   const selections = details.optionSelections ?? {}
-  const installation = selections.installation_mode
+  const installation = QUOTE_TEMPLATE_INSTALLATION_OPTIONS.find(
+    (option) => option.value === selections.installation_mode
+  )
   const notes = [details.generalNotes, details.specialTerms].join("\n")
 
   return {
@@ -200,8 +204,7 @@ export function quoteDetailsToTeamTemplateInput(
     defaults: {
       validityDays: nearestValidityDays(details.issuedAt, details.validUntil),
       vat: details.vatIncluded === false ? "excluded" : "included",
-      installation:
-        installation === "separate_billing" || installation === "tbd" ? installation : "included_quote",
+      installation: installation?.value ?? DEFAULT_QUOTE_TEMPLATE_DEFAULTS.installation,
       payment: selections.payment_plan === "12_month" ? "12_month" : "one_time",
       notePresetIds: QUOTE_NOTE_PRESETS.filter((preset) => quoteNoteHasLine(notes, preset.text)).map(
         (preset) => preset.id

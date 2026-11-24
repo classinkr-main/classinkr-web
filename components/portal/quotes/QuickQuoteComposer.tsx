@@ -2261,7 +2261,9 @@ export default function QuickQuoteComposer({
             aria-label={isMain ? "이 견적서 장 삭제" : `${line.itemName} 행 삭제`}
             title={isMain ? "대표 품목을 지우면 이 견적서 한 장이 빠집니다" : "행 삭제"}
             onClick={() => removeLine(sheet.line, lineIndex)}
-            className="flex h-6 w-6 items-center justify-center rounded-[4px] text-[#78736D] opacity-0 transition-opacity hover:bg-[#F0F0EC] hover:text-[#111110] focus-visible:opacity-100 group-hover:opacity-100"
+            className={`flex h-6 w-6 items-center justify-center rounded-[4px] text-[#78736D] transition-opacity hover:bg-[#F0F0EC] hover:text-[#111110] ${
+              line.optionGroupId === "installation_mode" ? "" : "opacity-0 focus-visible:opacity-100 group-hover:opacity-100"
+            }`}
           >
             <X className="h-3.5 w-3.5" />
           </button>
