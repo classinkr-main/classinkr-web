@@ -4,6 +4,7 @@ import type {
   QuoteDiscountInput,
   QuoteOptionSelectionValue,
 } from "@/lib/partners-types"
+import { HARDWARE_INSTALL_PRICE_KRW } from "@/lib/billing/hardware-catalog"
 import { getProductBySku } from "@/lib/product-templates"
 
 export type StandardQuoteTemplateId =
@@ -192,6 +193,27 @@ const STANDARD_PRICE_BOARD_75 = getProductBySku("board-75")?.unit_price ?? 5_400
 const STANDARD_PRICE_CAMERA_T1 = getProductBySku("camera-t1")?.unit_price ?? 1_200_000
 const STANDARD_PRICE_STAND = getProductBySku("stand")?.unit_price ?? 500_000
 const STANDARD_PRICE_WALL_MOUNT = getProductBySku("wall-mount")?.unit_price ?? 500_000
+/** "설치비 추가" 옵션의 기본 단가(대당) — 하드웨어 카탈로그의 설치비. 작성 창에서 행 금액을 바로 고친다. */
+const STANDARD_PRICE_INSTALL_FEE = HARDWARE_INSTALL_PRICE_KRW
+
+/** 설치비를 따로 받는 견적용 행 코드. */
+export const INSTALL_FEE_ITEM_CODE = "install-fee"
+
+/**
+ * "설치비 추가" — 하드웨어 템플릿 공통 토글(2026-11-24). 켜면 대표 품목 수량만큼 "설치비" 행이 붙고,
+ * 기본 단가는 카탈로그 설치비, 금액은 작성자가 고칠 수 있다(priceLocked: false — 다시 계산해도 고친 값이 남는다).
+ * 기본은 꺼짐이라 기존 견적·프리셋의 합계는 바뀌지 않는다. "설치 방식"(포함/별도 청구/협의)과는 별개다 —
+ * 설치 방식은 설치·교육을 어떻게 안내할지, 이 옵션은 설치비를 금액으로 받을지다.
+ */
+const INSTALL_FEE_OPTION_GROUP: StandardQuoteOptionGroup = {
+  id: "install_fee",
+  label: "설치비 추가",
+  description: "설치비 행을 추가합니다. 기본 대당 50만원, 작성 창에서 금액을 바로 고칠 수 있습니다.",
+  control: "toggle",
+  defaultValue: false,
+  enabledLabel: "추가",
+  disabledLabel: "없음",
+}
 const STANDARD_PRICE_RECORDING_STUDIO =
   getProductBySku("ai-studio-recording-set")?.unit_price ?? 8_300_000
 const STANDARD_PRICE_RECORDING_STUDIO_75 =
@@ -246,6 +268,7 @@ function recordingStudioTemplate(config: {
         enabledLabel: "포함",
         disabledLabel: "별도",
       },
+      INSTALL_FEE_OPTION_GROUP,
     ],
     quickPresets: [
       {
@@ -315,6 +338,7 @@ export const STANDARD_QUOTE_TEMPLATES: StandardQuoteTemplatePreset[] = [
           { value: "tbd", label: "추후 협의", description: "설치 정책이 미정일 때 사용합니다." },
         ],
       },
+      INSTALL_FEE_OPTION_GROUP,
       {
         id: "support_package",
         label: "초기 세팅 지원",
@@ -389,6 +413,7 @@ export const STANDARD_QUOTE_TEMPLATES: StandardQuoteTemplatePreset[] = [
           { value: "tbd", label: "추후 협의", description: "현장 조건 확인 후 확정합니다." },
         ],
       },
+      INSTALL_FEE_OPTION_GROUP,
       {
         id: "mounting_option",
         label: "거치 방식",
@@ -488,6 +513,7 @@ export const STANDARD_QUOTE_TEMPLATES: StandardQuoteTemplatePreset[] = [
           { value: "tbd", label: "추후 협의", description: "현장 조건 확인 후 확정합니다." },
         ],
       },
+      INSTALL_FEE_OPTION_GROUP,
       {
         id: "mounting_option",
         label: "거치 방식",
@@ -1151,6 +1177,23 @@ export function buildConfigurableStandardQuoteDetails({
     readSelectionString(defaultSelections, "installation_mode", "included_quote")
   )
 
+  // "설치비 추가" 토글 — 하드웨어 템플릿 공통. 대표 품목 수량을 따르고, 작성자가 고친 단가는
+  // addOptionalLine 이 기존 행 값으로 살린다.
+  const addInstallFeeLine = (quantityUnit: string) => {
+    if (!readSelectionBoolean(selections, "install_fee", false)) return
+    addOptionalLine(INSTALL_FEE_ITEM_CODE, {
+      itemType: "installation",
+      itemName: "설치비",
+      itemDescription: "현장 설치",
+      quantity,
+      quantityUnit,
+      unitPrice: STANDARD_PRICE_INSTALL_FEE,
+      optionGroupId: "install_fee",
+      optionId: "enabled",
+      priceLocked: false,
+    })
+  }
+
   if (isRecordingStudioTemplate(resolvedTemplateId)) {
     const paymentPlan = readSelectionString(selections, "payment_plan", "one_time")
     const deliveryIncluded = readSelectionBoolean(selections, "delivery_policy", true)
@@ -1172,6 +1215,7 @@ export function buildConfigurableStandardQuoteDetails({
       priceLocked: true,
       alwaysRegenerateText: true,
     })
+    addInstallFeeLine("세트")
   } else if (resolvedTemplateId === "online_suite") {
     const contractTerm = readSelectionString(selections, "contract_term", "36_month")
     const includeLanding = readSelectionBoolean(selections, "landing_page", true)
@@ -1267,6 +1311,8 @@ export function buildConfigurableStandardQuoteDetails({
       })
     }
 
+    addInstallFeeLine("대")
+
     if (readSelectionBoolean(selections, "support_package", false)) {
       addOptionalLine("camera-support", {
         itemType: "service",
@@ -1343,6 +1389,8 @@ export function buildConfigurableStandardQuoteDetails({
         priceLocked: true,
       })
     }
+
+    addInstallFeeLine("대")
 
     if (readSelectionBoolean(selections, "camera_bundle", false)) {
       addOptionalLine("camera-t1", {
