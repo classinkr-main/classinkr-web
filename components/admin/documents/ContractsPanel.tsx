@@ -684,28 +684,30 @@ export function ContractsPanel() {
                 </>
               )}
             </dl>
-            {row.source === "converted" && row.doc.source_quote_document_id && (
-              <div className="mt-4">
-                <button
-                  type="button"
-                  aria-expanded={quoteOpenId === row.id}
-                  onClick={() => setQuoteOpenId(quoteOpenId === row.id ? null : row.id)}
-                  className={GHOST_BUTTON}
-                >
-                  {quoteOpenId === row.id ? "총판 견적서 접기" : "총판 견적서 같이 보기"}
-                </button>
-                {quoteOpenId === row.id && (
-                  <div className="mt-3">
-                    <DistributorSettlementSection
-                      key={row.doc.source_quote_document_id}
-                      quoteId={row.doc.source_quote_document_id}
-                    />
-                  </div>
-                )}
+          </div>
+        </div>
+
+        {/* 총판 견적서는 상세 아래 전체 폭으로 연다 — 편집 화면이라 반쪽 칸에 넣으면 좁다. */}
+        {row.source === "converted" && row.doc.source_quote_document_id && (
+          <div className="border-t border-[#f0f0ec] pt-4">
+            <button
+              type="button"
+              aria-expanded={quoteOpenId === row.id}
+              onClick={() => setQuoteOpenId(quoteOpenId === row.id ? null : row.id)}
+              className={GHOST_BUTTON}
+            >
+              {quoteOpenId === row.id ? "총판 견적서 접기" : "총판 견적서 같이 보기"}
+            </button>
+            {quoteOpenId === row.id && (
+              <div className="mt-3">
+                <DistributorSettlementSection
+                  key={row.doc.source_quote_document_id}
+                  quoteId={row.doc.source_quote_document_id}
+                />
               </div>
             )}
           </div>
-        </div>
+        )}
 
         {direct && (
           <div className="flex justify-end border-t border-[#f0f0ec] pt-4">
