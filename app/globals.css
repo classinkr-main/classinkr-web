@@ -139,6 +139,14 @@
   }
 }
 
+/* 매출 장부 건별 시트(components/admin/branch/SalesLedgerWorkbench — data-ledger-sheet) — 표가 사이드바 옆부터
+   화면 끝까지 쓴다. 어드민 셸 본문의 최대 폭(max-w-[1680px], 가운데 정렬)을 이 화면에서만 푼다. 셸을 고치지 않고
+   장부가 내는 표식으로 거는 규칙이라, 시트가 아닌 보기(DSH·기관별 등)와 다른 화면은 지금 폭 그대로다.
+   레이어 밖에 두어 유틸리티 레이어의 max-w-* 를 이긴다. */
+main:has([data-ledger-sheet]) > .mx-auto {
+  max-width: none;
+}
+
 .route-transition {
   /* fill-mode 'both'는 종료 후에도 to 키프레임(transform: translate3d(0,0,0))을 영구 유지해
      래퍼가 fixed 자손의 containing block이 된다(⌘K 팔레트·모달이 뷰포트 밖으로 밀림).

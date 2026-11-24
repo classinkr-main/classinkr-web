@@ -8,7 +8,7 @@
 //
 //  - 전체 사이드바: SUPER_ADMIN 역할, 또는 admin_profiles.nav_preset 이 "super" 인 지정 계정
 //    (hasFullAdminNav). 2026-09-10 ~ 11-19 의 사이드바와 완전히 같다(아래 단락들이 그 규칙이다).
-//  - 간소 사이드바: 그 밖의 모든 계정. 기본값이 매출 장부 + 견적·문서 + 하드웨어 재고 셋만 상시이고
+//  - 간소 사이드바: 그 밖의 모든 계정. 기본값이 Overview + 매출 장부 + 견적·문서 + 하드웨어 재고만 상시이고
 //    (SIMPLE_NAV_PRIMARY_HREFS) 나머지는 전부 기본 숨김이다.
 //
 // 왜 바꿨나 — 팀원이 계속 가입하는데 처음 보는 화면이 관리자용 Overview 와 16개 탭이었다.
@@ -141,7 +141,7 @@ export const FULL_NAV_LANDING_HREF = "/admin/overview"
 export const SIMPLE_NAV_LANDING_HREF = "/admin/branch/ledger"
 
 /**
- * 간소 사이드바의 상시 항목 — 매출 장부 · 견적·문서(2026-11-20 S1) · 하드웨어 재고(2026-11-23).
+ * 간소 사이드바의 상시 항목 — Overview · 매출 장부 · 견적·문서 · 하드웨어 재고.
  * 그 밖은 전부 기본 숨김이다.
  * 탭을 다시 꺼낼 때(S2) 여기에 href 를 더한다. 두 가지를 지킬 것(테스트가 고정한다):
  *  - SIMPLE_NAV_LANDING_HREF 가 이 목록에 있어야 한다.
@@ -151,6 +151,7 @@ export const SIMPLE_NAV_LANDING_HREF = "/admin/branch/ledger"
 // (2026-11-23) 하드웨어 재고를 더했다 — 시안 확인 때 "하단에 하드웨어 탭까지" 로 정해졌다. 견적 산출물을
 // 재고에서 검증하는 한 흐름이라 견적과 같이 꺼낸다.
 export const SIMPLE_NAV_PRIMARY_HREFS: readonly string[] = [
+  FULL_NAV_LANDING_HREF,
   SIMPLE_NAV_LANDING_HREF,
   "/admin/quotes",
   "/admin/hardware",
@@ -195,37 +196,15 @@ const NAV_PRESET_KEYS: readonly NavPresetKey[] = [
 ]
 
 /**
- * 전체 계정의 상시 목록 — "자주 쓰는 것만 위로, 나머지는 범주별로 접힘". 간소 계정에게는
- * "다시 표시한 탭이 앉는 자리" 표로만 쓰인다(resolveDefaultNavPlacement).
- *
- * (2026-11-09 사이드바 재배치 D안 — docs/active/admin-sidebar-reorder-fold-plan-2026-11-09.md)
- * 상시는 소제목 없이 범주 사이 간격만 두고 그리고, 접힘 자리는 범주마다 따로 접는다. 상시 목록 순서는
- * 이 배열이 아니라 ADMIN_NAV 선언 순서다(필터가 선언 순서를 지킨다) — 아래는 읽기 쉽게 같은 순서로 적었다.
- *
- * 상시(8): Overview · 캘린더 · CRM · 견적·문서 · 하드웨어 재고 · 마케팅 · 콘텐츠 · CS 콘솔.
- *   시안 스위치(NEXT_PUBLIC_ADMIN_AI_PREVIEW=1, lib/admin-ai/preview.ts)를 켜면 Overview 바로 아래
- *   AI 올인원이 더해져 9 — 꺼져 있으면(기본, 기획 D13) ADMIN_NAV 에도 이 목록에도 없다.
- * 접힘(8 자리, 범주별 묶음 3개): 주문·매출 2(KR Team · 매출 장부) · 마케팅·분석 3(캠페인 관리 ·
- *   Analytics · 자료 퍼널) · 시스템 3(설정 · 개발 도구 · 운영 상태). 운영 상태는 기본 숨김
- *   (DEFAULT_HIDDEN_HREFS)이라 처음 보이는 접힘 탭은 7개다.
- *
- * KR Team·매출 장부를 접힘으로 내린 이유 — 2026-07-18 요청으로 위에 있었지만 09-24 실측에서 사람 쓰기
- * 흔적이 거의 없었고 시트 동기화가 08-18 뒤로 실패했다(admin-usage-triage-2026-09-25.md). 필요한 사람은
- * 사이드바 편집에서 상시로 올린다. CS 콘솔은 운영자 요청으로 콘텐츠 바로 밑이다(고객 지원 범주).
- * 견적·문서와 하드웨어 재고는 한 흐름(견적 산출물 → 재고 검증)이라 같이 상시이고, CS 콘솔은 가이드
- * 문서·내부 CS 를 품은 **유일한 CS 진입점**이라 접으면 팀원의 CS 표면 전체가 메뉴에서 사라진다.
+ * 전체 계정은 공통 상시 업무 메뉴에 일정·CRM·마케팅·콘텐츠·CS를 더한다.
+ * 화면 순서는 ADMIN_NAV를 따른다.
  */
 export const DEFAULT_PRIMARY_HREFS: readonly string[] = [
-  "/admin/overview",
+  ...SIMPLE_NAV_PRIMARY_HREFS,
   ...(isAdminAiPreviewEnabled() ? [ADMIN_AI_HREF] : []),
   "/admin/calendar",
   "/admin/crm",
-  "/admin/quotes",
-  "/admin/hardware",
-  // (2026-11-04) 마케팅 허브를 상시로 올렸다 — "오늘 유입"·광고 성과가 있는 화면이 접혀 있어
-  // 방문·문의를 바로 볼 곳이 없었다(docs/active/admin-lead-visitor-glance-plan-2026-11-04.md D6).
   "/admin/campaigns",
-  // (2026-10-26) 콘텐츠(블로그)를 상시로 올렸다 — 블로그 정리·발행이 상시 업무가 됐다.
   "/admin/blog",
   "/admin/chatbot",
 ]
@@ -289,7 +268,7 @@ export function isCrmSubnavPreference(value: unknown): value is CrmSubnavPrefere
 
 /** 이 계정이 이 항목을 숨길 수 있는지 — 그 계정의 착지 화면만 불가(전체: Overview, 간소: 매출 장부). */
 export function isNavHideable(href: string, ctx: NavAudienceContext): boolean {
-  return href !== resolveAdminLandingHref(ctx)
+  return href !== FULL_NAV_LANDING_HREF && href !== resolveAdminLandingHref(ctx)
 }
 
 /**
@@ -305,8 +284,7 @@ export function isNavHideable(href: string, ctx: NavAudienceContext): boolean {
  * 오히려 노출로 뒤집힌다. 키를 버려도 hidden 을 저장하는 것이 아니다(본인 선택으로 위장하지 않음).
  *
  * "hidden" 은 보존하되 Overview 의 hidden 은 키째 지운다. 정규화는 계정을 모르므로(저장 라우트
- * 세 곳이 계정 없이 부른다) 누구에게도 뜻이 없는 값만 지운다 — 전체 계정에게 Overview 는 숨길 수
- * 없고, 간소 계정에게는 기본값이 이미 숨김이라 키가 없어도 같은 결과다. 간소 계정의 착지(매출
+ * 세 곳이 계정 없이 부른다) 공통 상시 메뉴인 Overview의 숨김만 지운다. 간소 계정의 착지(매출
  * 장부) hidden 은 전체 계정에게는 정당한 선택이라 여기서 지우지 않고, resolveNavPreference 가
  * 계정을 보고 무시한다(역할·지정이 나중에 바뀌어도 저장값을 고칠 필요가 없다).
  *
@@ -357,15 +335,8 @@ export interface NavAccessContext extends NavAudienceContext {
   overrides: Readonly<NavOverrides>
 }
 
-/**
- * 보이면 앉는 기본 자리(숨김과 무관). 전체 계정은 DEFAULT_PRIMARY_HREFS(D안)를 따르고,
- * 간소 계정은 SIMPLE_NAV_PRIMARY_HREFS 도 상시("primary")로 앉는다(매출 장부가 전체 D안에서는
- * 접힘 자리지만 간소 사이드바에서는 접힘 묶음을 만들지 않고 상시 3항목에 함께 둬야 한다).
- */
-function resolveDefaultNavPlacement(href: string, ctx?: NavAudienceContext): NavPlacement {
-  if (ctx && !hasFullAdminNav(ctx) && SIMPLE_NAV_PRIMARY_HREFS.includes(href)) {
-    return "primary"
-  }
+/** 보일 때 앉는 기본 자리. 상시 기본 항목은 두 모드에서 같은 자리를 쓴다. */
+function resolveDefaultNavPlacement(href: string): NavPlacement {
   return DEFAULT_PRIMARY_HREFS.includes(href) ? "primary" : "folded"
 }
 
@@ -376,11 +347,11 @@ function resolveDefaultNavPlacement(href: string, ctx?: NavAudienceContext): Nav
  *  - 간소 계정: SIMPLE_NAV_PRIMARY_HREFS 만 보이고 나머지는 전부 숨김.
  */
 export function resolveDefaultNavPreference(href: string, ctx: NavAudienceContext): NavPreference {
-  if (!isNavHideable(href, ctx)) return resolveDefaultNavPlacement(href, ctx)
+  if (!isNavHideable(href, ctx)) return resolveDefaultNavPlacement(href)
   const hiddenByDefault = hasFullAdminNav(ctx)
     ? DEFAULT_HIDDEN_HREFS.includes(href)
     : !SIMPLE_NAV_PRIMARY_HREFS.includes(href)
-  return hiddenByDefault ? "hidden" : resolveDefaultNavPlacement(href, ctx)
+  return hiddenByDefault ? "hidden" : resolveDefaultNavPlacement(href)
 }
 
 /**
@@ -391,7 +362,7 @@ export function resolveDefaultNavPreference(href: string, ctx: NavAudienceContex
 export function resolveNavPreference(href: string, ctx: NavAccessContext): NavPreference {
   const override = ctx.overrides[href]
   if (isNavPreference(override)) {
-    if (override === "hidden" && !isNavHideable(href, ctx)) return resolveDefaultNavPlacement(href, ctx)
+    if (override === "hidden" && !isNavHideable(href, ctx)) return resolveDefaultNavPlacement(href)
     return override
   }
 
@@ -411,7 +382,7 @@ export function resolveNavPlacement(href: string, ctx: NavAccessContext): NavPla
   const override = ctx.overrides[href]
   if (isNavPlacement(override)) return override
 
-  return resolveDefaultNavPlacement(href, ctx)
+  return resolveDefaultNavPlacement(href)
 }
 
 /**
@@ -518,6 +489,18 @@ function groupNavByCategory(items: readonly AdminNavItem[]): FoldedNavGroup[] {
   })
 }
 
+/** 순서는 유지하고 이웃한 같은 범주 항목에만 간격을 같이 적용한다. */
+function groupPrimaryNav(items: readonly AdminNavItem[]): FoldedNavGroup[] {
+  const groups: FoldedNavGroup[] = []
+  for (const item of items) {
+    const category = item.category ?? "system"
+    const last = groups.at(-1)
+    if (last?.category === category) last.items.push(item)
+    else groups.push({ category, items: [item] })
+  }
+  return groups
+}
+
 /**
  * 항목들을 상시/접힘/숨김으로 나눈다(저장값 "folded" = 접힘 자리 — 편집기 라벨은 2026-11-09 "기타" → "접힘").
  * 상시 순서는 ADMIN_NAV 선언 순서를 그대로 따르고(렌더에서 재정렬하지 않는다),
@@ -540,7 +523,7 @@ export function resolveNavAccess(
   return {
     fullNav: hasFullAdminNav(ctx),
     primary,
-    primaryGroups: groupNavByCategory(primary),
+    primaryGroups: groupPrimaryNav(primary),
     folded: groupNavByCategory(foldedItems),
     hidden,
   }
