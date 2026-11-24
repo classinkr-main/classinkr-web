@@ -31,6 +31,8 @@ function Field({ label, value }: { label: string; value?: string | null }) {
 
 export default function QuoteDocumentPreview({ quote, documentNumber, title, editing, slots = {} }: QuoteDocumentPreviewProps) {
   const discountAmount = quote.discountAmount ?? 0
+  const showDiscountDetails = editing || quote.showDiscountDetails !== false
+  const discountedSupplyAmount = (quote.subtotalAmount ?? 0) - discountAmount
   const installmentNote = getQuoteInstallmentNote(quote)
   const category = quote.templateId === "online_suite" ? "AI Suite · 하드웨어 및 소프트웨어 공급"
     : quote.lineItems?.some((line) => line.itemType === "hardware") ? "하드웨어 공급" : "소프트웨어 공급"
@@ -83,7 +85,7 @@ export default function QuoteDocumentPreview({ quote, documentNumber, title, edi
         <tbody>{(quote.lineItems ?? []).map((line, index) => <tr key={`${index}-${line.itemCode}`}>
           <td>{line.lineNumber ?? index + 1}</td>
           <td><strong>{line.itemName}</strong>{line.itemDescription && <p>{line.itemDescription}</p>}
-            {line.originalUnitPrice != null && line.unitPrice != null && line.originalUnitPrice > line.unitPrice &&
+            {showDiscountDetails && line.originalUnitPrice != null && line.unitPrice != null && line.originalUnitPrice > line.unitPrice &&
               <p>정가 {money(line.originalUnitPrice)}원 · 할인 −{money(line.originalUnitPrice - line.unitPrice)}원 / {line.quantityUnit || "개"}</p>}
           </td>
           <td>{isQuoteNoteLine(line) ? "–" : <>{line.quantity ?? "–"}{line.quantityUnit}</>}</td>
@@ -91,11 +93,11 @@ export default function QuoteDocumentPreview({ quote, documentNumber, title, edi
         </tr>)}</tbody>
       </table>}
       <div className={styles.totals} aria-label="견적 합계">
-        {discountAmount > 0 ? <>
+        {discountAmount > 0 && showDiscountDetails ? <>
           <div><span>소계</span><span>{money(quote.subtotalAmount)} 원</span></div>
           <div><span>{formatQuoteDiscountLabel(quote.quoteDiscount)}</span><span>−{money(discountAmount)} 원</span></div>
-          <div><span>공급가액</span><span>{money((quote.subtotalAmount ?? 0) - discountAmount)} 원</span></div>
-        </> : <div><span>공급가액</span><span>{money(quote.subtotalAmount)} 원</span></div>}
+          <div><span>공급가액</span><span>{money(discountedSupplyAmount)} 원</span></div>
+        </> : <div><span>{discountAmount > 0 ? "최종 공급가액" : "공급가액"}</span><span>{money(discountedSupplyAmount)} 원</span></div>}
         <div><span>부가세{quote.vatIncluded ? "" : " (10%)"}</span><span>{quote.vatIncluded ? "포함" : `${money(quote.vatAmount)} 원`}</span></div>
         <div className={styles.grandTotal}><strong>총 견적금액 (VAT 포함)</strong><strong>{money(quote.grandTotalAmount)} 원</strong></div>
         {installmentNote && <p className={styles.installment}>{installmentNote}</p>}

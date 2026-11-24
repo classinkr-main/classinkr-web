@@ -42,6 +42,30 @@ describe("shared quote paper", () => {
     expect(html).toContain("할인 −500,000원 / 세트")
     expect(html).toContain("7,800,000")
   })
+  it("keeps net totals when saved presentation settings hide both kinds of discount", () => {
+    const pricedQuote: PartnerQuoteDetailsInput = {
+      ...quote,
+      showDiscountDetails: false,
+      quoteDiscount: { mode: "amount", value: 100_000 },
+      discountAmount: 100_000,
+      vatAmount: 190_000,
+      grandTotalAmount: 2_090_000,
+      lineItems: [{ ...quote.lineItems![0], originalUnitPrice: 2_500_000 }],
+    }
+    const loaded = normalizeQuoteDetailsFromStructuredJson({ quoteDetails: pricedQuote })
+    expect(loaded?.showDiscountDetails).toBe(false)
+
+    const hidden = renderToStaticMarkup(<QuoteDocumentPreview quote={loaded!} />)
+    expect(hidden).not.toContain("2,500,000")
+    expect(hidden).not.toContain("100,000")
+    expect(hidden).toContain("1,900,000")
+    expect(hidden).toContain("2,090,000")
+
+    const visible = renderToStaticMarkup(<QuoteDocumentPreview quote={{ ...loaded!, showDiscountDetails: true }} />)
+    expect(visible).toContain("2,500,000")
+    expect(visible).toContain("100,000")
+    expect(visible).toContain("2,090,000")
+  })
   it("retains the original price after saving, loading, and changing options", () => {
     const draft = buildConfigurableStandardQuoteDetails({ templateId: "recording_studio" })
     draft.lineItems![0] = { ...draft.lineItems![0], originalUnitPrice: 8_300_000, unitPrice: 7_800_000 }

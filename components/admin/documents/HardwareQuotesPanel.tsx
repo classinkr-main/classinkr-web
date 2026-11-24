@@ -17,6 +17,7 @@ import { useCrmOwners } from "@/components/admin/crm/useCrmOwners"
 import { useQuoteWorkspacePreferences } from "@/components/admin/quote-templates/useQuoteWorkspacePreferences"
 import QuickQuoteComposer, {
   type QuickQuoteCreatedPayload,
+  type QuickQuoteDraft,
   type QuickQuoteManagerOption,
   type QuickQuotePrefill,
   type QuickQuoteTeamTemplate,
@@ -32,7 +33,7 @@ import type { QuoteTemplateCatalogResponse } from "@/lib/repositories/quote-team
 import { portalFetch } from "@/lib/portal/portal-fetch"
 import { getQuoteDetailsFromStructuredJson } from "@/lib/portal/quote-details"
 import { describeQuoteVat, resolveQuoteVatIncluded } from "@/lib/portal/quote-vat"
-import type { PartnerDocumentListItem } from "@/lib/portal/types"
+import type { Deal, PartnerDocumentListItem, QuoteDocument, QuoteDocumentVersion } from "@/lib/portal/types"
 import {
   DEFAULT_HARDWARE_QUOTE_TEMPLATE_ID,
   isQuoteNoteLine,
@@ -93,10 +94,9 @@ type SharePayload = {
 }
 
 type ViewerPayload = {
-  version?: {
-    structured_json: Record<string, unknown> | null
-    valid_until: string | null
-  }
+  document?: QuoteDocument
+  version?: QuoteDocumentVersion
+  deal?: Deal | null
   error?: string
 }
 
@@ -343,15 +343,19 @@ function getTimeline(quote: HardwareQuoteRow) {
   }))
 }
 
-async function fetchQuoteDetail(quoteId: string): Promise<QuoteDetail> {
+async function fetchQuoteViewer(quoteId: string) {
   const response = await portalFetch(`/api/portal/quotes/${quoteId}?include=viewer`)
   const payload = (await response.json().catch(() => null)) as ViewerPayload | null
   if (!response.ok || !payload?.version) {
     throw new Error(payload?.error ?? "견적 상세를 불러오지 못했습니다.")
   }
+  return { ...payload, version: payload.version }
+}
 
-  const details = getQuoteDetailsFromStructuredJson(payload.version.structured_json, {
-    validUntil: payload.version.valid_until,
+async function fetchQuoteDetail(quoteId: string): Promise<QuoteDetail> {
+  const { version } = await fetchQuoteViewer(quoteId)
+  const details = getQuoteDetailsFromStructuredJson(version.structured_json, {
+    validUntil: version.valid_until,
   })
   const lines = (details?.lineItems ?? []).map((line, index) => {
     // 조건·할부 안내 같은 금액 없는 행은 고객 문서처럼 수량·금액을 비운다("0원"으로 보이지 않게).
@@ -369,7 +373,7 @@ async function fetchQuoteDetail(quoteId: string): Promise<QuoteDetail> {
   return {
     lines,
     supplier: details?.supplierBusinessName ?? null,
-    validUntil: formatDay(payload.version.valid_until),
+    validUntil: formatDay(version.valid_until),
   }
 }
 
@@ -421,6 +425,8 @@ export default function HardwareQuotesPanel({
   const [showDeleted, setShowDeleted] = useState(false)
   const [changingDeletionId, setChangingDeletionId] = useState<string | null>(null)
   const [details, setDetails] = useState<Record<string, DetailState>>({})
+  const [composerDraft, setComposerDraft] = useState<QuickQuoteDraft | null>(null)
+  const [resumeQuoteId, setResumeQuoteId] = useState<string | null>(null)
   const handledQuickActionKeyRef = useRef<string | null>(null)
   const quoteLoadSequenceRef = useRef(0)
 
@@ -650,14 +656,37 @@ export default function HardwareQuotesPanel({
     if (handledQuickActionKeyRef.current === quickAction.key) return
 
     handledQuickActionKeyRef.current = quickAction.key
+    setComposerDraft(null)
     setComposerTemplate({ templateId: templateIdFromQuickAction(quickAction.action), presetId: null, quantity: 1 })
     setComposerOpen(true)
     onQuickActionConsumed?.()
   }, [onQuickActionConsumed, quickAction])
 
   function openComposerWithTemplate(selection: QuoteTemplatePickerSelection) {
+    if (composerDraft) setComposerDraft(null)
     setComposerTemplate(selection)
     setComposerOpen(true)
+  }
+
+  async function handleResumeDraft(quote: HardwareQuoteRow) {
+    if (resumeQuoteId) return
+    setResumeQuoteId(quote.id)
+    setNotice(null)
+    try {
+      const { document, version, deal } = await fetchQuoteViewer(quote.id)
+      if (document?.status !== "draft") throw new Error("견적 상태가 변경됐습니다. 목록을 새로고침해 주세요.")
+      const details = getQuoteDetailsFromStructuredJson(version.structured_json, {
+        validUntil: version.valid_until,
+        customerName: quote.customerName,
+      })
+      if (!deal || !details?.lineItems?.length) throw new Error("편집할 견적 구성을 불러오지 못했습니다.")
+      setComposerDraft({ document, version, deal, details, customerName: quote.customerName })
+      setComposerOpen(true)
+    } catch (error) {
+      setNotice({ tone: "error", message: error instanceof Error ? error.message : "견적 초안을 불러오지 못했습니다." })
+    } finally {
+      setResumeQuoteId(null)
+    }
   }
 
   async function handleCreated(payload: QuickQuoteCreatedPayload) {
@@ -675,7 +704,7 @@ export default function HardwareQuotesPanel({
         getQuoteDetailsFromStructuredJson(payload.version.structured_json)?.vatIncluded,
         payload.version.tax_amount
       ),
-      status: payload.share ? "shared" : payload.document.status,
+      status: payload.document.status,
       shareCount: payload.share ? 1 : 0,
       // 작성 창에서 다시 저장하면 같은 견적의 다음 버전이 온다(v2, v3 …).
       versionCount: payload.version.version_number,
@@ -696,12 +725,11 @@ export default function HardwareQuotesPanel({
     }
 
     setQuotes((current) => {
-      // 같은 견적의 다음 버전이면 이미 있는 공유·열람 기록은 이어받는다(저장만 한 v2 가 공유 상태를 지우지 않게).
+      // 같은 견적의 후속 버전이면 이미 있는 공유·열람 기록은 이어받는다.
       const previous = current.find((item) => item.id === payload.document.id)
       const merged: HardwareQuoteRow = previous
         ? {
             ...nextQuote,
-            status: payload.share ? "shared" : previous.status,
             shareCount: Math.max(previous.shareCount, nextQuote.shareCount),
             shareUrl: nextQuote.shareUrl ?? previous.shareUrl,
             latestShareCreatedAt: nextQuote.latestShareCreatedAt ?? previous.latestShareCreatedAt,
@@ -712,6 +740,11 @@ export default function HardwareQuotesPanel({
           }
         : nextQuote
       return [merged, ...current.filter((item) => item.id !== payload.document.id)]
+    })
+    setDetails((current) => {
+      const next = { ...current }
+      delete next[payload.document.id]
+      return next
     })
     setSelectedId(payload.document.id)
     onQuoteCreated?.(payload.document.id)
@@ -787,7 +820,9 @@ export default function HardwareQuotesPanel({
   function handleSelect(quote: HardwareQuoteRow) {
     // 좁은 화면에는 상세 패널이 없다 — 기존 직접 보기로 연다.
     if (typeof window !== "undefined" && !window.matchMedia(DESKTOP_QUERY).matches) {
-      if (!showDeleted) openAdminQuoteView(quote.id)
+      if (showDeleted) return
+      if (quote.status === "draft") void handleResumeDraft(quote)
+      else openAdminQuoteView(quote.id)
       return
     }
     setSelectedId(quote.id)
@@ -850,6 +885,12 @@ export default function HardwareQuotesPanel({
     return (
       <>
         {viewButton}
+        {quote.status === "draft" && (
+          <button type="button" onClick={() => void handleResumeDraft(quote)} disabled={Boolean(resumeQuoteId)} className={OUTLINE_STRONG_BUTTON}>
+            {resumeQuoteId === quote.id && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            이어서 편집
+          </button>
+        )}
         {copyButton}
       </>
     )
@@ -1222,7 +1263,10 @@ export default function HardwareQuotesPanel({
 
       <QuickQuoteComposer
         open={composerOpen}
-        onOpenChange={setComposerOpen}
+        onOpenChange={(open) => {
+          setComposerOpen(open)
+          if (!open) setComposerDraft(null)
+        }}
         recentQuotes={recentQuotes}
         apiBase="/api/portal"
         initialTemplateId={composerTemplate.templateId}
@@ -1233,7 +1277,8 @@ export default function HardwareQuotesPanel({
         onSaveTemplate={handleSaveTemplate}
         onDeleteTemplate={handleDeleteTemplate}
         displaySettings={{ preferences, onChange: updatePreferences, storageError }}
-        prefill={prefill}
+        prefill={composerDraft ? null : prefill}
+        initialDraft={composerDraft}
         onCreated={handleCreated}
       />
     </div>

@@ -112,8 +112,15 @@ export async function setQuoteDeleted(id: string, deleted: boolean): Promise<Quo
 
 /* ─── Version CRUD ──────────────────────────────────────── */
 
+export class QuoteDraftVersionConflictError extends Error {
+  constructor() {
+    super("견적 상태나 초안 버전이 변경됐습니다. 히스토리에서 최신 견적을 다시 열어 주세요.");
+  }
+}
+
 export async function createQuoteDocumentVersion(
-  input: InsertQuoteDocumentVersion
+  input: InsertQuoteDocumentVersion,
+  expectedDraftVersionId?: string
 ): Promise<QuoteDocumentVersion> {
   const supabase = createSupabaseAdminClient();
 
@@ -123,14 +130,33 @@ export async function createQuoteDocumentVersion(
     .select()
     .single();
 
-  if (error) throw error;
+  if (error) {
+    if (expectedDraftVersionId && error.code === "23505") throw new QuoteDraftVersionConflictError();
+    throw error;
+  }
   const version = data as QuoteDocumentVersion;
 
-  const { error: updateError } = await supabase
+  const update = supabase
     .from("quote_documents")
     .update({ current_version_id: version.id })
     .eq("id", input.quote_document_id);
 
+  if (expectedDraftVersionId) {
+    const { data: updated, error: draftUpdateError } = await update
+      .eq("status", "draft")
+      .eq("current_version_id", expectedDraftVersionId)
+      .is("deleted_at", null)
+      .select("id")
+      .maybeSingle();
+    if (draftUpdateError) throw draftUpdateError;
+    if (!updated) {
+      const { error: cleanupError } = await supabase.from("quote_document_versions").delete().eq("id", version.id);
+      if (cleanupError) console.error("[quote-documents] unused draft version cleanup failed", cleanupError);
+      throw new QuoteDraftVersionConflictError();
+    }
+    return version;
+  }
+  const { error: updateError } = await update;
   if (updateError) throw updateError;
 
   return version;
@@ -219,6 +245,7 @@ export async function ensureQuoteDocumentShare(input: {
   access_mode?: "view" | "sign";
   expires_at?: string | null;
   created_by?: string | null;
+  expectedVersionId?: string;
 }): Promise<{
   document: QuoteDocument;
   version: QuoteDocumentVersion;
@@ -234,6 +261,7 @@ export async function ensureQuoteDocumentShare(input: {
   if (!version) {
     throw new Error("공유할 견적 버전이 없습니다.");
   }
+  if (input.expectedVersionId && version.id !== input.expectedVersionId) throw new QuoteDraftVersionConflictError();
 
   const accessMode = input.access_mode ?? "view";
   const { data: existingShares, error: shareError } = await supabase
@@ -265,6 +293,21 @@ export async function ensureQuoteDocumentShare(input: {
   });
 
   return { document, version, share };
+}
+
+export async function markQuoteDraftShared(id: string, versionId: string): Promise<QuoteDocument> {
+  const { data, error } = await createSupabaseAdminClient()
+    .from("quote_documents")
+    .update({ status: "shared" })
+    .eq("id", id)
+    .eq("current_version_id", versionId)
+    .in("status", ["draft", "shared"])
+    .is("deleted_at", null)
+    .select()
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) throw new QuoteDraftVersionConflictError();
+  return data as QuoteDocument;
 }
 
 export type PublicQuoteLookup =

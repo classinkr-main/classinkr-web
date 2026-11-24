@@ -428,6 +428,8 @@ export interface PartnerQuoteDetailsInput {
   optionSelections?: Record<string, QuoteOptionSelectionValue | undefined>
   /** 견적 전체 할인(작성자 입력). discountAmount 는 이 값으로 매번 다시 계산되는 결과다. */
   quoteDiscount?: QuoteDiscountInput
+  /** 고객용 공유 화면과 PDF에서 정가와 할인 내역을 표시한다. */
+  showDiscountDetails?: boolean
   pricingSource?: string
   generatedFromVersionId?: string
   generatedFromTemplateVersion?: string

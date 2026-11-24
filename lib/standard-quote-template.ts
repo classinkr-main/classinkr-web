@@ -1060,6 +1060,7 @@ export function finalizeStandardQuoteDetails(
     internalMemo: input?.internalMemo?.trim() || undefined,
     optionSelections: input?.optionSelections,
     quoteDiscount,
+    showDiscountDetails: input?.showDiscountDetails,
     pricingSource: input?.pricingSource?.trim() || undefined,
     generatedFromVersionId: input?.generatedFromVersionId?.trim() || undefined,
     generatedFromTemplateVersion: input?.generatedFromTemplateVersion?.trim() || undefined,

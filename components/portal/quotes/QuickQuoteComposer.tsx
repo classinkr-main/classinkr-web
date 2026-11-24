@@ -30,7 +30,7 @@ import QuoteDisplaySettings, { type QuoteDisplaySettingsProps } from "./QuoteDis
 import paperStyles from "./quote-paper.module.css"
 
 import { Button } from "@/components/ui/button"
-import { normalizeQuoteDetailsFromStructuredJson } from "@/lib/portal/quote-details"
+import { getQuoteDetailsFromStructuredJson, normalizeQuoteDetailsFromStructuredJson } from "@/lib/portal/quote-details"
 import { portalFetch } from "@/lib/portal/portal-fetch"
 import { getProductBySku } from "@/lib/product-templates"
 import { quoteComposerMode } from "@/lib/quote-composer-navigation"
@@ -51,6 +51,7 @@ import { createQuoteChargeLine, isCustomQuoteCharge, QUOTE_CHARGE_OPTIONS, type 
 import { QUOTE_WORKSPACE_PREVIEW_LIMIT } from "@/lib/quote-workspace-preferences"
 import type {
   CustomerListItem,
+  Deal,
   DealListItem,
   QuoteDocumentShare,
   QuoteDocumentVersion,
@@ -101,7 +102,7 @@ type RecentQuoteOption = {
   currentVersionLabel: string | null
 }
 
-type CreateAction = "save" | "save_and_preview" | "save_and_send"
+type CreateAction = "save" | "save_and_send"
 type QuickQuoteApiBase = "/api/portal"
 
 type ShareLink = {
@@ -171,6 +172,14 @@ export type QuickQuoteTeamTemplate = {
   canDelete?: boolean
 }
 
+export type QuickQuoteDraft = {
+  document: SavedQuoteDoc["document"]
+  version: Pick<QuoteDocumentVersion, "id" | "version_number">
+  deal: Deal
+  customerName: string
+  details: PartnerQuoteDetailsInput
+}
+
 type QuickQuoteComposerProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -182,6 +191,7 @@ type QuickQuoteComposerProps = {
   initialTemplateId?: StandardQuoteTemplateId
   initialPresetId?: string | null
   initialQuantity?: number
+  initialDraft?: QuickQuoteDraft | null
   /** 공급자 담당자 드롭다운 후보(비면 기존처럼 자유 텍스트 입력만 노출). */
   supplierManagerOptions?: QuickQuoteManagerOption[]
   /** 팀 템플릿 목록(선택). 비면 코드 상수 템플릿만 보인다. */
@@ -366,7 +376,7 @@ const QUICK_ADD_RAIL_ITEMS: QuickAddRailItem[] = [
   {
     id: "camera_t1",
     label: "T1 카메라",
-    description: "모션트래킹",
+    description: getStandardQuoteTemplate("camera_t1").lines[0].itemDescription ?? "모션트래킹",
     price: getProductBySku("camera-t1")?.unit_price ?? 1_200_000,
     group: "accessory",
     sku: "camera-t1",
@@ -458,7 +468,7 @@ function buildSheet(
   patch?: Partial<StandardQuoteOptionSelections>,
   baseQuantity = 1,
 ): ComposerSheet {
-  const quote = buildStandardQuoteFromPreset(templateId, presetId, baseQuantity, patch)
+  const quote = { ...buildStandardQuoteFromPreset(templateId, presetId, baseQuantity, patch), showDiscountDetails: false }
   return {
     line: sheetLineOf(templateId),
     templateId,
@@ -479,6 +489,63 @@ function buildSharedFields(today: string, generalNotes = ""): SharedQuoteFields 
   }
 }
 
+function restoreSheet(quote: PartnerQuoteDetailsInput): ComposerSheet {
+  const templateId = inferStandardQuoteTemplateId(quote)
+  return {
+    line: sheetLineOf(templateId),
+    templateId,
+    optionSelections: quote.optionSelections ?? getStandardQuoteDefaultSelections(templateId),
+    quote,
+  }
+}
+
+function restoreSharedFields(quote: PartnerQuoteDetailsInput, today: string): SharedQuoteFields {
+  const automaticNotes = readAutomaticQuoteNotes(quote.optionSelections)
+  return {
+    issuedAt: quote.issuedAt || today,
+    validUntil: quote.validUntil,
+    referenceName: quote.referenceName ?? "",
+    vatIncluded: quote.vatIncluded ?? true,
+    generalNotes: readQuoteGeneralNotes(quote, automaticNotes),
+    specialTerms: quote.specialTerms ?? "",
+    automaticNotes,
+  }
+}
+
+function restoreManagers(sheets: ComposerSheet[]) {
+  const managers = { hardware: EMPTY_MANAGER, software: EMPTY_MANAGER }
+  for (const { line, quote } of sheets) {
+    managers[line] = {
+      selection: MANAGER_CUSTOM_VALUE,
+      name: quote.supplierContactName ?? "",
+      phone: quote.supplierContactPhone ?? "",
+    }
+  }
+  return managers
+}
+
+type BrowserQuoteDraft = { quotes: PartnerQuoteDetailsInput[]; dealTitle: string }
+const BROWSER_QUOTE_DRAFT_KEY = "classin.quote.unlinked.v1"
+
+function readBrowserQuoteDraft(): BrowserQuoteDraft | null {
+  try {
+    const value = JSON.parse(window.sessionStorage.getItem(BROWSER_QUOTE_DRAFT_KEY) ?? "null") as
+      { quotes?: unknown; dealTitle?: unknown } | null
+    if (!Array.isArray(value?.quotes) || value.quotes.length < 1 || value.quotes.length > 2) return null
+    const quotes = value.quotes.map((item: unknown) => {
+      if (!item || typeof item !== "object" || Array.isArray(item)) return null
+      return getQuoteDetailsFromStructuredJson({ quoteDetails: item })
+    })
+    if (quotes.some((quote) => !quote?.lineItems?.length)) return null
+    return {
+      quotes: quotes.filter((quote): quote is PartnerQuoteDetailsInput => quote !== null),
+      dealTitle: typeof value.dealTitle === "string" ? value.dealTitle : "",
+    }
+  } catch {
+    return null
+  }
+}
+
 function getMainLine(quote: PartnerQuoteDetailsInput) {
   return (
     quote.lineItems?.find((item) => item.optionGroupId === "main_product") ??
@@ -489,10 +556,6 @@ function getMainLine(quote: PartnerQuoteDetailsInput) {
 
 function getMainQuantity(sheet: ComposerSheet) {
   return Math.max(1, Number(getMainLine(sheet.quote)?.quantity ?? 1))
-}
-
-function isBoardTemplate(templateId: StandardQuoteTemplateId) {
-  return templateId === "board_86" || templateId === "board_75"
 }
 
 /** 녹화 세트·86" 번들처럼 칠판을 이미 품은 장. 여기에 다른 패키지를 누르면 행으로 덧붙인다. */
@@ -584,6 +647,7 @@ type SavedQuoteDoc = {
   dealId: string
   document: { id: string; quote_number: string; status: string; updated_at: string }
   versionNumber: number
+  versionId: string
 }
 
 type DiscountDraft = { mode: QuoteDiscountInput["mode"]; value: string; label: string }
@@ -677,30 +741,7 @@ function openMailShare(share: ShareSheetState) {
   window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(buildQuoteShareText(share))}`
 }
 
-function prepareQuotePreviewWindow() {
-  if (typeof window === "undefined") return null
-  const target = window.open("about:blank", "_blank")
-  if (!target) return null
-
-  try {
-    target.document.title = "견적서 준비 중"
-    target.document.body.style.fontFamily = "system-ui, sans-serif"
-    target.document.body.style.padding = "24px"
-    target.document.body.textContent = "견적서를 준비하는 중입니다."
-  } catch {
-    // Some browsers restrict the temporary document; navigation can still work.
-  }
-
-  return target
-}
-
-function openQuotePreviewUrl(url: string, preparedWindow?: Window | null) {
-  if (preparedWindow && !preparedWindow.closed) {
-    preparedWindow.opener = null
-    preparedWindow.location.href = url
-    return true
-  }
-
+function openQuotePreviewUrl(url: string) {
   if (typeof window === "undefined") return false
   const opened = window.open(url, "_blank", "noopener,noreferrer")
   if (opened) return true
@@ -872,6 +913,7 @@ export default function QuickQuoteComposer({
   initialTemplateId = "board_86",
   initialPresetId = null,
   initialQuantity = 1,
+  initialDraft = null,
   supplierManagerOptions,
   teamTemplates,
   onSaveTemplate,
@@ -917,6 +959,9 @@ export default function QuickQuoteComposer({
   const [reuseLoadingId, setReuseLoadingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [shareSheet, setShareSheet] = useState<ShareSheetState | null>(null)
+  const [showPreview, setShowPreview] = useState(false)
+  const [browserDraft, setBrowserDraft] = useState<BrowserQuoteDraft | null>(null)
+  const browserDraftActive = useRef(false)
   const [linkCopied, setLinkCopied] = useState(false)
   const [saveToast, setSaveToast] = useState<string | null>(null)
   const [errorToast, setErrorToast] = useState<ErrorToastState | null>(null)
@@ -1042,10 +1087,10 @@ export default function QuickQuoteComposer({
         : [],
     [customerMode, deals, selectedCustomerId]
   )
-  const activeCustomerName =
-    customerMode === "existing" ? selectedCustomer?.name ?? "" : recipientInput.trim()
-  const customerReady =
-    customerMode === "existing" ? Boolean(selectedCustomer) : recipientInput.trim().length > 0
+  const activeCustomerName = initialDraft?.customerName ??
+    (customerMode === "existing" ? selectedCustomer?.name ?? "" : recipientInput.trim())
+  const customerReady = Boolean(initialDraft ||
+    (customerMode === "existing" ? selectedCustomer : recipientInput.trim()))
 
   /** 저장·화면에 쓰는 한 장의 최종 견적(수신·조건·메모·공급자를 합쳐 finalize). */
   function composeSheetQuote(sheet: ComposerSheet) {
@@ -1168,7 +1213,7 @@ export default function QuickQuoteComposer({
   }
 
   useEffect(() => {
-    if (!open) return
+    if (!open || initialDraft) return
 
     let alive = true
     setLoadingOptions(true)
@@ -1202,22 +1247,34 @@ export default function QuickQuoteComposer({
     return () => {
       alive = false
     }
-  }, [apiBase, open])
+  }, [apiBase, initialDraft, open])
 
   useEffect(() => {
     if (!open) return
     prefillAppliedRef.current = false
     savedDocsRef.current = {}
-    setCustomerMode(hasPrefillTarget ? "existing" : "new")
+    browserDraftActive.current = false
+    setBrowserDraft(initialDraft ? null : readBrowserQuoteDraft())
+    setCustomerMode(initialDraft || hasPrefillTarget ? "existing" : "new")
     setSelectedCustomerId(prefill?.customerId ?? "")
     // 신규 고객 모드(딜/고객 타깃 없음)로 진입하면 customerName 프리필을 수신 칸에 1회 채운다.
-    setRecipientInput(prefill?.customerName?.trim() ?? "")
+    setRecipientInput(initialDraft?.customerName ?? prefill?.customerName?.trim() ?? "")
     setSelectedDealId(prefill?.dealId ?? "")
     setNewDealTitle("")
-    const initialSheet = buildSheet(initialTemplateId, initialPresetId, undefined, initialQuantity)
+    const initialSheet = initialDraft
+      ? restoreSheet(initialDraft.details)
+      : buildSheet(initialTemplateId, initialPresetId, undefined, initialQuantity)
+    if (initialDraft) {
+      savedDocsRef.current[initialSheet.line] = {
+        dealId: initialDraft.deal.id,
+        document: initialDraft.document,
+        versionId: initialDraft.version.id,
+        versionNumber: initialDraft.version.version_number,
+      }
+    }
     setDiscountDrafts({})
     setSheets([initialSheet])
-    setShared(buildSharedFields(today, initialSheet.quote.generalNotes ?? ""))
+    setShared(initialDraft ? restoreSharedFields(initialSheet.quote, today) : buildSharedFields(today, initialSheet.quote.generalNotes ?? ""))
     setActivePick(null)
     setCloneSource(null)
     setTemplateDraftName(null)
@@ -1225,10 +1282,13 @@ export default function QuickQuoteComposer({
     // SW 견적만 클래스인 명의라 로그인 관리자를 자동 채운다.
     // HW는 퀴드러닝 담당자가 기본값이므로 비워둔 채로 시작한다(기존 발행물과 동일).
     const adminName = typeof window === "undefined" ? null : window.sessionStorage.getItem("admin_name")
-    setManagers({ hardware: EMPTY_MANAGER, software: { ...EMPTY_MANAGER, name: adminName ?? "" } })
+    setManagers(initialDraft
+      ? restoreManagers([initialSheet])
+      : { hardware: EMPTY_MANAGER, software: { ...EMPTY_MANAGER, name: adminName ?? "" } })
     setSubmittingAction(null)
     setReuseLoadingId(null)
     setShareSheet(null)
+    setShowPreview(false)
     setLinkCopied(false)
     setSaveToast(null)
     setErrorToast(null)
@@ -1243,7 +1303,7 @@ export default function QuickQuoteComposer({
     setUnderMinConfirmed(false)
     setPendingSubmitAction(null)
     setError(null)
-  }, [hasPrefillTarget, initialPresetId, initialQuantity, initialTemplateId, open, prefill?.customerId, prefill?.customerName, prefill?.dealId, today])
+  }, [hasPrefillTarget, initialDraft, initialPresetId, initialQuantity, initialTemplateId, open, prefill?.customerId, prefill?.customerName, prefill?.dealId, today])
 
   useEffect(() => {
     return () => {
@@ -1433,7 +1493,18 @@ export default function QuickQuoteComposer({
       const items = sheet.quote.lineItems ?? []
       const target = items[lineIndex]
       if (!target) return sheet
-      const nextItems = items.map((item, index) => (index === lineIndex ? { ...item, ...patch } : item))
+      const updated = { ...target, ...patch }
+      const detachCamera = target.optionGroupId === "camera_bundle" && patch.quantity != null
+      const updatedLine = detachCamera
+        ? { ...updated, optionGroupId: undefined, optionId: undefined, isUserAdded: true, quantityLocked: false }
+        : updated
+      const nextItems = items.map((item, index) => index === lineIndex ? updatedLine : item)
+      if (detachCamera) {
+        return rebuildSheet(sheet, {
+          lineItems: nextItems,
+          optionSelections: { ...sheet.optionSelections, camera_bundle: false },
+        })
+      }
       // 대표 품목의 수량·단가는 딸린 행(벽걸이 수량, 구독 약정 총액 문구)에 번지므로 템플릿으로 다시 짠다.
       if (target.optionGroupId === "main_product" && (patch.quantity != null || "unitPrice" in patch)) {
         return rebuildSheet(sheet, {
@@ -1449,9 +1520,12 @@ export default function QuickQuoteComposer({
   function nudgeLineQuantity(line: QuoteProductLine, lineIndex: number, delta: number) {
     const target = sheets.find((sheet) => sheet.line === line)?.quote.lineItems?.[lineIndex]
     if (!target) return
-    if (target.quantityLocked === true && target.optionGroupId !== "main_product") return
+    if (target.quantityLocked === true && target.optionGroupId !== "main_product" && target.optionGroupId !== "camera_bundle") return
+    const current = Math.round(Number(target.quantity ?? 1))
+    const quantity = Math.max(1, current + delta)
+    if (quantity === current) return
     setActivePick(null)
-    updateLine(line, lineIndex, { quantity: Math.max(1, Math.round(Number(target.quantity ?? 1)) + delta) })
+    updateLine(line, lineIndex, { quantity })
   }
 
   /** 옵션에서 생긴 행은 옵션을 끄는 방식으로만 지운다(지워도 다시 생기지 않게). */
@@ -1520,19 +1594,17 @@ export default function QuickQuoteComposer({
       setSheets((current) =>
         withSheet(current, {
           ...replaced,
-          quote: finalizeStandardQuoteDetails({ ...replaced.quote, quoteDiscount: discount }, replaced.templateId),
+          quote: finalizeStandardQuoteDetails(
+            { ...replaced.quote, quoteDiscount: discount, showDiscountDetails: sheet.quote.showDiscountDetails },
+            replaced.templateId
+          ),
         })
       )
       return
     }
 
-    if ((item.id === "stand" || item.id === "wall_mount") && isBoardTemplate(sheet.templateId)) {
+    if ((item.id === "stand" || item.id === "wall_mount") && (sheet.templateId === "board_86" || sheet.templateId === "board_75")) {
       setSheetOption(line, "mounting_option", item.id)
-      return
-    }
-
-    if (item.id === "camera_t1" && isBoardTemplate(sheet.templateId) && sheet.optionSelections.camera_bundle !== true) {
-      setSheetOption(line, "camera_bundle", true)
       return
     }
 
@@ -1633,6 +1705,19 @@ export default function QuickQuoteComposer({
     loadQuoteDetails(template.details)
     setActivePick(`team:${template.id}`)
     setCloneSource(null)
+  }
+
+  function resumeBrowserDraft(draft: BrowserQuoteDraft) {
+    const restored = draft.quotes.map(restoreSheet)
+    setSheets(restored)
+    setShared(restoreSharedFields(restored[0].quote, today))
+    setManagers(restoreManagers(restored))
+    setNewDealTitle(draft.dealTitle)
+    setDiscountDrafts({})
+    setActivePick(null)
+    setCloneSource(null)
+    browserDraftActive.current = true
+    setBrowserDraft(null)
   }
 
   async function handleReuseQuote(item: RecentQuoteOption) {
@@ -1782,6 +1867,16 @@ export default function QuickQuoteComposer({
 
   // created: 이번 호출에서 고객을 새로 만들었는지(부분 실패 시 롤백 대상 판단용).
   async function resolveCustomer(): Promise<{ customer: ResolvedCustomer; created: boolean }> {
+    if (initialDraft) {
+      return {
+        customer: {
+          id: initialDraft.deal.customer_id,
+          name: initialDraft.customerName,
+          partnerAccountId: initialDraft.deal.partner_account_id,
+        },
+        created: false,
+      }
+    }
     if (customerMode === "existing") {
       if (selectedCustomer) {
         return {
@@ -1840,6 +1935,19 @@ export default function QuickQuoteComposer({
 
   // created: 이번 호출에서 딜을 새로 만들었는지(부분 실패 시 롤백 대상 판단용).
   async function resolveDeal(customer: ResolvedCustomer, targets: ComposerSheet[], expectedAmount: number) {
+    if (initialDraft) {
+      return {
+        deal: {
+          ...initialDraft.deal,
+          customer_name: initialDraft.customerName,
+          customer_contact_name: null,
+          customer_region_label: null,
+          customer_campus_name: null,
+          owner_name: null,
+        },
+        created: false,
+      }
+    }
     const existingDeal =
       selectedDealId && deals.find((deal) => deal.id === selectedDealId && deal.customer_id === customer.id)
 
@@ -1931,8 +2039,23 @@ export default function QuickQuoteComposer({
   async function handleSubmit(action: CreateAction) {
     if (submittingAction) return
 
+    if (action === "save" && !customerReady) {
+      const quotes = composedSheets.filter(({ quote }) => quote.lineItems?.length).map(({ quote }) => quote)
+      if (quotes.length === 0) return
+      try {
+        window.sessionStorage.setItem(BROWSER_QUOTE_DRAFT_KEY, JSON.stringify({ quotes, dealTitle: newDealTitle }))
+        browserDraftActive.current = true
+        setBrowserDraft(null)
+        setSaveToast("이 탭에 임시 저장했습니다.")
+        setTimeout(() => setSaveToast(null), 2000)
+      } catch {
+        showErrorToast("이 탭에 임시 저장하지 못했습니다.")
+      }
+      return
+    }
+
     // ClassIn Business 충전형이면서 200만원 미만이고 아직 확인 승인을 받지 않은 경우 확인 창 팝업
-    if (rechargeSheet && currentRechargeAmount < RECHARGE_MIN_AMOUNT && !underMinConfirmed) {
+    if (action === "save_and_send" && rechargeSheet && currentRechargeAmount < RECHARGE_MIN_AMOUNT && !underMinConfirmed) {
       setPendingRechargeAmount(currentRechargeAmount)
       setPendingSubmitAction(action)
       setUnderMinModalOpen(true)
@@ -1948,7 +2071,6 @@ export default function QuickQuoteComposer({
     const targets = composedSheets.filter((entry) => (entry.sheet.quote.lineItems?.length ?? 0) > 0)
     if (targets.length === 0) return
 
-    const previewWindow = action === "save_and_preview" ? prepareQuotePreviewWindow() : null
     setSubmittingAction(action)
     setError(null)
 
@@ -1995,7 +2117,7 @@ export default function QuickQuoteComposer({
           // 이 창에서 이미 저장한 장 — 같은 견적의 다음 버전으로 올린다.
           const response = await portalFetch(`${apiBase}/quotes/${saved.document.id}/versions`, {
             method: "POST",
-            body: JSON.stringify({ ...versionBody, version_number: saved.versionNumber + 1 }),
+            body: JSON.stringify({ ...versionBody, version_number: saved.versionNumber + 1, draft_version_id: saved.versionId }),
           })
           const versionPayload = (await response.json().catch(() => null)) as
             | { error?: string; version?: QuoteDocumentVersion }
@@ -2026,6 +2148,7 @@ export default function QuickQuoteComposer({
         savedDocsRef.current[sheet.line] = {
           dealId: deal.id,
           document: payload.document,
+          versionId: payload.version.id,
           versionNumber: payload.version.version_number,
         }
 
@@ -2037,13 +2160,14 @@ export default function QuickQuoteComposer({
         let shareError: string | null = null
         let share: QuoteDocumentShare | null = null
 
-        if (action === "save_and_preview" || action === "save_and_send") {
+        if (action === "save_and_send") {
           try {
             const shareResponse = await portalFetch(`${apiBase}/quotes/${payload.document.id}/share`, {
               method: "POST",
+              headers: { "x-quote-version-id": payload.version.id },
             })
             const sharePayload = (await shareResponse.json().catch(() => null)) as
-              | { error?: string; shareUrl?: string; share?: QuoteDocumentShare }
+              | { error?: string; shareUrl?: string; share?: QuoteDocumentShare; document?: SavedQuoteDoc["document"] }
               | null
             if (!shareResponse.ok || !sharePayload?.shareUrl) {
               throw new Error(sharePayload?.error ?? "공유 링크 생성에 실패했습니다.")
@@ -2051,6 +2175,7 @@ export default function QuickQuoteComposer({
 
             share = sharePayload.share ?? null
             shareUrl = sharePayload.shareUrl
+            payload.document = sharePayload.document ?? payload.document
             // 공유 링크가 나간 장은 잊는다 — '편집 계속' 뒤 저장이 이 견적의 다음 버전이 되면 고객 링크(이 버전)와
             // 견적의 현재 버전이 갈라진다. 고객이 옛 링크로 동의하면 오더·총판 정산은 현재 버전 금액을 읽는다
             // (sales-orders getResolvableQuoteVersion). 공유 뒤 고친 내용은 새 견적으로 저장해 다시 보낸다.
@@ -2088,35 +2213,28 @@ export default function QuickQuoteComposer({
         })
       }
 
+      if (browserDraftActive.current) {
+        try {
+          window.sessionStorage.removeItem(BROWSER_QUOTE_DRAFT_KEY)
+          setBrowserDraft(null)
+          browserDraftActive.current = false
+        } catch {
+          // 서버 초안은 이미 저장됐다. 브라우저 저장소 오류로 결과를 바꾸지 않는다.
+        }
+      }
+
       if (action === "save") {
         // 임시저장 → 토스트 표시, 모달 유지
-        setSaveToast(targets.length > 1 ? `견적서 ${targets.length}장 저장 완료` : "저장 완료")
+        setSaveToast(targets.length > 1 ? `견적서 ${targets.length}장 임시 저장 완료` : "임시 저장 완료")
         setTimeout(() => setSaveToast(null), 2000)
         return
       }
 
-      if (links.length === 0) {
-        if (previewWindow && !previewWindow.closed) previewWindow.close()
-        return
-      }
-
-      if (action === "save_and_preview") {
-        openQuotePreviewUrl(links[0].url, previewWindow)
-        // 1장이면 미리보기 새 탭만 열고 닫는다. 2장이면 두 번째 링크를 보내기 줄에서 연다.
-        if (links.length === 1) {
-          onOpenChange(false)
-          return
-        }
-      } else if (previewWindow && !previewWindow.closed) {
-        previewWindow.close()
-      }
+      if (links.length === 0) return
 
       setShareSheet({ customerName, links })
       setLinkCopied(false)
     } catch (submitError) {
-      if (previewWindow && !previewWindow.closed) {
-        previewWindow.close()
-      }
       const reason = getQuoteSubmitErrorMessage(submitError)
       if (savedLines.length === 0) {
         // 견적 생성 전 실패라면 이번 시도에서 새로 만든 딜/고객을 정리한다
@@ -2175,7 +2293,9 @@ export default function QuickQuoteComposer({
     const installationItemCode = isInstallation ? line.itemCode : undefined
     const editablePriceCode = isCharge ? line.itemCode : installationItemCode
     const quantityEditable =
-      line.quantity != null && !(line.quantityLocked === true && line.optionGroupId !== "main_product")
+      line.quantity != null && (
+        line.quantityLocked !== true || line.optionGroupId === "main_product" || line.optionGroupId === "camera_bundle"
+      )
     const isMain = line.optionGroupId === "main_product"
     const canMove = (sheet.quote.lineItems?.length ?? 0) > 1
 
@@ -2260,12 +2380,13 @@ export default function QuickQuoteComposer({
             onChange={(event) => updateLine(sheet.line, lineIndex, { itemName: event.target.value })}
             className={`${EDITABLE_CLASS} w-full font-semibold text-[#111110]`}
           />
-          <input
-            aria-label="세부 내역"
+          <textarea
+            aria-label={`${line.itemName} 세부 내역`}
+            rows={1}
             value={line.itemDescription ?? ""}
-            placeholder="세부 내역"
+            placeholder="세부 내역 입력"
             onChange={(event) => updateLine(sheet.line, lineIndex, { itemDescription: event.target.value })}
-            className={`${EDITABLE_CLASS} w-full text-[11.5px] text-[#78736D]`}
+            className={`${EDITABLE_CLASS} field-sizing-content w-full resize-y text-[11.5px] text-[#78736D]`}
           />
           {line.originalUnitPrice != null && line.unitPrice != null && line.originalUnitPrice > line.unitPrice && (
             <span className="text-[11px] text-[#78736D]">정가 {formatStandardQuoteCurrency(line.originalUnitPrice)}원 · 할인 −{formatStandardQuoteCurrency(line.originalUnitPrice - line.unitPrice)}원 / {line.quantityUnit || "개"}</span>
@@ -2535,6 +2656,21 @@ export default function QuickQuoteComposer({
 
         {/* 견적 할인 — 견적서 합계에 소계·할인·공급가액 줄로 찍힌다. */}
         {renderDiscountEditor(sheet, totals)}
+        <label className="flex w-fit items-center gap-1.5 px-1 text-[11.5px] text-[#615D59]">
+          <input
+            type="checkbox"
+            checked={quote.showDiscountDetails !== false}
+            onChange={(event) => {
+              const showDiscountDetails = event.target.checked
+              updateSheet(sheet.line, (current) => ({
+                ...current,
+                quote: { ...current.quote, showDiscountDetails },
+              }))
+            }}
+            className="accent-[#084734]"
+          />
+          고객용 할인 내역 표시
+        </label>
 
         {/* ClassIn Business 충전형 — 충전 금액 직접 수정 & 빠른 금액 */}
         {sheet.templateId === "business_recharge" && (
@@ -2589,7 +2725,8 @@ export default function QuickQuoteComposer({
               {/* 거래 연결 — 견적서에는 찍히지 않는 내부 정보 */}
               <span className="text-[11px] text-[#A39E98]">거래</span>
               <div className="flex min-w-0 flex-wrap items-center gap-1 text-[11.5px]">
-                {availableDeals.length > 0 && (
+                {initialDraft && <span>{initialDraft.deal.title}</span>}
+                {!initialDraft && availableDeals.length > 0 && (
                   <select
                     aria-label="거래 연결"
                     value={selectedDealId}
@@ -2604,7 +2741,7 @@ export default function QuickQuoteComposer({
                     ))}
                   </select>
                 )}
-                {!selectedDealId && (
+                {!initialDraft && !selectedDealId && (
                   <input
                     aria-label="새 거래 제목"
                     value={newDealTitle}
@@ -2632,7 +2769,8 @@ export default function QuickQuoteComposer({
                 <input
                   id={`quote-recipient-${sheet.line}`}
                   aria-label="수신 고객사"
-                  list="quick-quote-customer-options"
+                  list={initialDraft ? undefined : "quick-quote-customer-options"}
+                  readOnly={Boolean(initialDraft)}
                   value={recipientInput}
                   onChange={(event) => handleRecipientChange(event.target.value)}
                   placeholder="고객명 입력"
@@ -2641,7 +2779,7 @@ export default function QuickQuoteComposer({
                   }`}
                 />
                 <span className="mt-0.5 text-[11px] text-[#78736D]">
-                  {loadingOptions
+                  {initialDraft ? "연결된 고객" : loadingOptions
                     ? "고객 목록 불러오는 중…"
                     : customerMode === "existing"
                       ? "기존 고객"
@@ -2883,7 +3021,8 @@ export default function QuickQuoteComposer({
     )
   }
 
-  const submitDisabled = Boolean(submittingAction) || loadingOptions || !canCreateQuote
+  const saveDisabled = Boolean(submittingAction) || lineItemCount === 0 || (loadingOptions && customerReady && !initialDraft)
+  const submitDisabled = Boolean(submittingAction) || (loadingOptions && !initialDraft) || !canCreateQuote
 
   return createPortal(
     <div
@@ -2898,7 +3037,8 @@ export default function QuickQuoteComposer({
           if (event.key === "Escape" && !event.defaultPrevented && !submittingAction && !underMinModalOpen) {
             event.preventDefault()
             event.stopPropagation()
-            onOpenChange(false)
+            if (showPreview) setShowPreview(false)
+            else onOpenChange(false)
           }
           if (event.key === "Tab") {
             const controls = Array.from(event.currentTarget.querySelectorAll<HTMLElement>(
@@ -2919,7 +3059,7 @@ export default function QuickQuoteComposer({
       >
         <header className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 border-b border-[#E8E8E4] bg-white px-4 py-3 sm:px-6">
           <h2 id="quick-quote-composer-title" className="text-[16px] font-bold">
-            새 견적
+            {initialDraft ? "초안 편집" : "새 견적"}
           </h2>
           <ul aria-label="발송 전 확인" className="flex flex-wrap gap-x-3.5 gap-y-1 text-[12px]">
             {preflightChecks.map((check) => (
@@ -2952,31 +3092,26 @@ export default function QuickQuoteComposer({
               variant="outline"
               size="sm"
               className="h-9 text-[13px]"
-              disabled={submitDisabled}
+              disabled={saveDisabled}
               onClick={() => {
                 void handleSubmit("save")
               }}
             >
               {submittingAction === "save" ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}
-              저장
+              임시 저장
             </Button>
             <Button
               type="button"
               variant="outline"
               size="sm"
               className="h-9 text-[13px]"
-              title="저장 후 고객 화면 미리보기"
-              disabled={submitDisabled}
-              onClick={() => {
-                void handleSubmit("save_and_preview")
-              }}
+              aria-pressed={showPreview}
+              title="현재 편집본의 고객용 미리보기"
+              disabled={Boolean(submittingAction) || lineItemCount === 0}
+              onClick={() => setShowPreview((current) => !current)}
             >
-              {submittingAction === "save_and_preview" ? (
-                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Eye className="mr-1.5 h-3.5 w-3.5" />
-              )}
-              미리보기
+              <Eye className="mr-1.5 h-3.5 w-3.5" />
+              {showPreview ? "편집으로 돌아가기" : "미리보기"}
             </Button>
             <Button
               type="button"
@@ -3083,7 +3218,7 @@ export default function QuickQuoteComposer({
                 className="h-9 text-[13px]"
                 onClick={() => setShareSheet(null)}
               >
-                편집 계속
+                수정본 작성
               </Button>
               <Button
                 type="button"
@@ -3100,6 +3235,20 @@ export default function QuickQuoteComposer({
           </div>
         )}
 
+        {showPreview ? (
+          <main aria-label="고객용 견적 미리보기" className="min-h-0 flex-1 space-y-5 overflow-y-auto p-4 sm:p-6">
+            <p className="mx-auto max-w-[210mm] text-[12px] text-[#615D59]">현재 편집본 · 고객용 형식</p>
+            {composedSheets.map(({ sheet, quote }) => (
+              <QuoteDocumentPreview key={sheet.line} quote={quote} />
+            ))}
+          </main>
+        ) : (
+        <>
+        {initialDraft ? (
+          <p className="shrink-0 border-b border-[#E8E8E4] bg-white px-4 py-2 text-[12px] text-[#615D59] sm:px-6">
+            {initialDraft.document.quote_number} · 임시 저장한 견적
+          </p>
+        ) : (
         <div role="group" aria-label="견적 유형" className="flex shrink-0 flex-wrap items-center gap-2 border-b border-[#E8E8E4] bg-white px-4 py-2 sm:px-6">
           {([
             { id: "business_recharge", mode: "software", label: "SW 단독" },
@@ -3120,6 +3269,13 @@ export default function QuickQuoteComposer({
             {composerMode === "suite" ? "전자칠판·카메라·소프트웨어 포함 · 견적서 1장" : "유형 선택 시 품목 구성이 바뀝니다. 수신 정보는 유지됩니다."}
           </span>
         </div>
+        )}
+        {browserDraft && !initialDraft && (
+          <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-[#E8E8E4] bg-white px-4 py-2 text-[12px] sm:px-6">
+            <span className="text-[#615D59]">이 탭에 임시 저장된 견적이 있습니다.</span>
+            <Button type="button" variant="outline" size="sm" onClick={() => resumeBrowserDraft(browserDraft)}>임시 견적 이어쓰기</Button>
+          </div>
+        )}
         <div className="min-h-0 flex-1 overflow-y-auto">
           <main className="flex flex-wrap items-start justify-center gap-7 p-4 sm:p-6">
             <nav
@@ -3131,7 +3287,7 @@ export default function QuickQuoteComposer({
               </button>
               <div id="quote-composer-tools" className={toolsExpanded ? "contents" : "hidden lg:contents"}>
                 {displaySettings && <QuoteDisplaySettings {...displaySettings} />}
-                {showRecentQuotes && recentQuotes.length > 0 && (
+                {!initialDraft && showRecentQuotes && recentQuotes.length > 0 && (
                   <section aria-label="최근 견적서">
                     <p className={RAIL_HEADING_CLASS}>
                       최근 견적서 <span className="font-normal">· 고객만 바꿔 재사용</span>
@@ -3167,7 +3323,7 @@ export default function QuickQuoteComposer({
                 )}
 
                 <div>
-                  {showTemplates && (
+                  {!initialDraft && showTemplates && (
                     <section aria-label="견적 템플릿" className="border-t border-[#E8E8E4] pt-3.5">
                       <p className={RAIL_HEADING_CLASS}>템플릿 <span className="font-normal">{templateCount}</span></p>
                       {displayedTeamTemplates.map((template) => {
@@ -3390,6 +3546,8 @@ export default function QuickQuoteComposer({
             </div>
           </main>
         </div>
+        </>
+        )}
 
         <datalist id="quick-quote-customer-options">
           {sortedCustomers.map((item) => (
