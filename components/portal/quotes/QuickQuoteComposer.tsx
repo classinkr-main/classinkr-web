@@ -928,7 +928,8 @@ export default function QuickQuoteComposer({
   // 정보 라인(금액 없는 note_only) 인라인 추가 폼 — 어느 장에 붙일지
   const [noteLineOpenFor, setNoteLineOpenFor] = useState<QuoteProductLine | null>(null)
   const [chargeMenuFor, setChargeMenuFor] = useState<QuoteProductLine | null>(null)
-  const draggedLineRef = useRef<{ sheet: QuoteProductLine; index: number } | null>(null)
+  const draggedLineRef = useRef<{ sheet: QuoteProductLine; index: number; pointerId: number } | null>(null)
+  const [dropLine, setDropLine] = useState<{ sheet: QuoteProductLine; index: number } | null>(null)
   // 견적 할인 입력 중인 값(빈 칸·0 도 그대로 둔다). 실제 할인은 sheet.quote.quoteDiscount 에 정리돼 들어간다.
   const [discountDrafts, setDiscountDrafts] = useState<Partial<Record<QuoteProductLine, DiscountDraft>>>({})
   const [noteLineTitle, setNoteLineTitle] = useState("")
@@ -1233,6 +1234,8 @@ export default function QuickQuoteComposer({
     setErrorToast(null)
     setNoteLineOpenFor(null)
     setChargeMenuFor(null)
+    draggedLineRef.current = null
+    setDropLine(null)
     setNoteLineTitle("")
     setNoteLineText("")
     setUnderMinModalOpen(false)
@@ -1413,6 +1416,16 @@ export default function QuickQuoteComposer({
       const reordered = moveQuoteLine(items, from, to)
       return reordered === items ? sheet : withLineItems(sheet, reordered)
     })
+  }
+
+  function quoteRowAtPoint(sheet: QuoteProductLine, x: number, y: number) {
+    const row = document.elementFromPoint(x, y)?.closest<HTMLElement>("[data-quote-line-index]")
+    return row?.dataset.quoteSheet === sheet ? Number(row.dataset.quoteLineIndex) : undefined
+  }
+
+  function clearLineDrag() {
+    draggedLineRef.current = null
+    setDropLine(null)
   }
 
   function updateLine(line: QuoteProductLine, lineIndex: number, patch: Partial<PartnerQuoteLineItemInput>) {
@@ -2170,35 +2183,45 @@ export default function QuickQuoteComposer({
       <div
         key={line.id ?? (line.itemCode ? `${line.itemCode}-${Boolean(line.isUserAdded)}` : `note-${line.lineNumber}`)}
         role="row"
-        className={`group ${paperStyles.itemGrid}`}
-        onDragOver={(event) => {
-          if (draggedLineRef.current?.sheet !== sheet.line) return
-          event.preventDefault()
-          event.dataTransfer.dropEffect = "move"
-        }}
-        onDrop={(event) => {
-          const dragged = draggedLineRef.current
-          if (dragged?.sheet !== sheet.line) return
-          event.preventDefault()
-          draggedLineRef.current = null
-          moveLine(sheet.line, dragged.index, lineIndex)
-        }}
+        data-quote-sheet={sheet.line}
+        data-quote-line-index={lineIndex}
+        className={`group ${paperStyles.itemGrid} ${
+          dropLine?.sheet === sheet.line && dropLine.index === lineIndex ? "bg-[#ECFDF5]" : ""
+        }`}
       >
         <span role="cell" className="grid justify-items-center self-start text-[#78736D]">
           <span className="tabular-nums">{line.lineNumber}</span>
           {canMove && (
             <>
               <span
-                draggable
                 aria-hidden="true"
                 title="드래그하여 순서 변경"
-                className="hidden h-5 w-6 cursor-grab items-center justify-center rounded-[4px] hover:bg-[#F0F0EC] active:cursor-grabbing [@media(hover:hover)]:flex"
-                onDragStart={(event) => {
-                  draggedLineRef.current = { sheet: sheet.line, index: lineIndex }
-                  event.dataTransfer.effectAllowed = "move"
-                  event.dataTransfer.setData("application/x-classin-quote-row", String(lineIndex))
+                className="hidden h-5 w-6 cursor-grab touch-none select-none items-center justify-center rounded-[4px] hover:bg-[#F0F0EC] active:cursor-grabbing [@media(hover:hover)]:flex"
+                onPointerDown={(event) => {
+                  if (!event.isPrimary || event.button !== 0) return
+                  event.preventDefault()
+                  event.currentTarget.setPointerCapture(event.pointerId)
+                  draggedLineRef.current = { sheet: sheet.line, index: lineIndex, pointerId: event.pointerId }
                 }}
-                onDragEnd={() => { draggedLineRef.current = null }}
+                onPointerMove={(event) => {
+                  const dragged = draggedLineRef.current
+                  if (dragged?.pointerId !== event.pointerId) return
+                  const index = quoteRowAtPoint(dragged.sheet, event.clientX, event.clientY)
+                  setDropLine((current) => {
+                    if (index === undefined || index === dragged.index) return null
+                    return current?.index === index && current.sheet === dragged.sheet
+                      ? current
+                      : { sheet: dragged.sheet, index }
+                  })
+                }}
+                onPointerUp={(event) => {
+                  const dragged = draggedLineRef.current
+                  if (dragged?.pointerId !== event.pointerId) return
+                  const target = quoteRowAtPoint(dragged.sheet, event.clientX, event.clientY)
+                  clearLineDrag()
+                  if (target !== undefined && target !== dragged.index) moveLine(dragged.sheet, dragged.index, target)
+                }}
+                onLostPointerCapture={clearLineDrag}
               >
                 <GripVertical className="h-3.5 w-3.5" />
               </span>
