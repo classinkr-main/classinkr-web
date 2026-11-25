@@ -9,6 +9,7 @@
  * - 위젯이 그리는 규칙에 맞춘다(components/ui/chatbot/MessageList.tsx): 빈 줄로 덩이를 나누고, 덩이의 줄이 전부 "1." 이거나 전부 "-" 일 때만 목록으로 그린다.
  *   리드 줄 바로 아래 번호 목록이 붙으면 목록이 생글자로 나오므로, 문장 줄과 목록 사이에는 늘 빈 줄을 둔다. 번호 목록은 덩이 안에서 끊기지 않게 한 덩이로 모으고
  *   (빈 줄로 갈라진 "1)" "2)" 는 위젯이 각각 "1." 로 그린다) 번호는 1부터 다시 매긴다. 목록 항목 안에서는 줄을 나누지 않는다(이어지는 줄이 있으면 목록이 깨진다).
+ *   번호 목록과 점 목록이 한 답에 섞이면 점 목록은 표시를 떼어 한 줄씩 둔다(순서 없는 점검 항목에 번호를 붙이면 "1. 1단계 …"처럼 읽힌다). 점 목록만 있으면 "-" 그대로다.
  * - 줄맞춤 뒤에 안전 규칙(safety-rules.ts)을 다시 검사한다. 원문에 없던 위반이 생기면 다듬지 않은 글을 그대로 낸다.
  * - 스위치 CHATBOT_COMPILED_SHAPE(기본 on, off·0·false 로 끈다). compiled 경로(respond.ts)에서만 돈다.
  */
@@ -235,19 +236,32 @@ function layoutBlocks(input: readonly (readonly string[])[]): string[][] {
   return mergeOrderedBlocks(blocks)
 }
 
-/** 같은 답 안에 번호·점 목록이 섞이면 점 목록을 번호 목록으로 맞춘다. 번호는 덩이마다 1부터 다시 매긴다. */
+/** 짧은 소제목 줄(목록 앞에 붙는 "함께 확인할 것" 같은 줄)인지. */
+function isHeadingLine(line: string): boolean {
+  return line.length <= 24 || /[:：]$/.test(line)
+}
+
+/**
+ * 같은 답 안에 번호 목록과 점 목록이 섞이면 목록 표시를 한 가지(번호)로 맞춘다. 번호는 덩이마다 1부터 다시 매긴다.
+ * 점 목록은 순서가 없는 점검 항목이라 번호를 붙이면 "1. 1단계 …"처럼 읽히므로 표시를 떼고 한 줄씩 둔다(앞 소제목 줄과 한 덩이).
+ */
 function unifyListMarks(blocks: string[][]): string[][] {
   const hasOrdered = blocks.some((lines) => blockKind(lines) === "ordered")
-  return blocks.map((lines) => {
+  const out: string[][] = []
+  for (const lines of blocks) {
     const kind = blockKind(lines)
-    if (kind === "ordered" || (kind === "bullet" && hasOrdered)) {
+    if (kind === "ordered") {
       // 항목이 하나뿐인 번호 목록은 번호를 떼어 문장으로 둔다(위젯이 번호를 다시 1로 그리므로 번호가 틀려 보인다).
-      if (lines.length === 1 && kind === "ordered") return [itemText(lines[0])]
-      return lines.map((line, at) => `${at + 1}. ${itemText(line)}`)
-    }
-    if (kind === "bullet") return lines.map((line) => `- ${itemText(line)}`)
-    return lines
-  })
+      out.push(lines.length === 1 ? [itemText(lines[0])] : lines.map((line, at) => `${at + 1}. ${itemText(line)}`))
+    } else if (kind === "bullet" && hasOrdered) {
+      const plain = lines.map(itemText)
+      const previous = out.at(-1)
+      if (previous && blockKind(previous) === "plain" && isHeadingLine(previous[previous.length - 1])) previous.push(...plain)
+      else out.push(plain)
+    } else if (kind === "bullet") out.push(lines.map((line) => `- ${itemText(line)}`))
+    else out.push(lines)
+  }
+  return out
 }
 
 /** 맨 앞 빈 리드·예고 문장을 뺀다(뒤에 다른 내용이 있을 때만). */

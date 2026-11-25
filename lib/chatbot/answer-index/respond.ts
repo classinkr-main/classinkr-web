@@ -13,7 +13,7 @@
  *
  * CHATBOT_COMPILED_FRAMING=full(기본)이면 허용 목록 리드와 꼬리 문장(없는 부분·못 찾은 조각)을 붙이고,
  * verbatim 이면 문서 문장·점검 통과본만 낸다(§3.8, §14 결정 과제 1).
- * 질문이 둘 이상으로 나뉘면(decision.segments) 조각마다 【주제】 머리 줄 + 결론 문단을 질문 순서로 잇고, 답하지 못한 조각은 같은 자리에 사실대로 한 줄
+ * 질문이 둘 이상으로 나뉘면(decision.segments) 조각마다 【주제】 머리 줄 + 카드 본문(길이 상한 안에서)을 질문 순서로 잇고, 답하지 못한 조각은 같은 자리에 사실대로 한 줄
  * (카드가 있을 법한데 못 고름 → "따로 한 번 더 물어봐 주세요", 공개 안내에 없음 → "상담으로 확인해 드릴게요")을 둔다. 끝맺음은 답 끝에 한 줄. 길이 상한은
  * 2조각 700자·3조각 900자(넘으면 조각마다 결론 문단만, 그래도 넘으면 가장 긴 조각을 '따로 물어봐 주세요'로 바꾼다). 소리 없이 조각을 버리지 않는다.
  * compiled 답은 마지막에 shape.ts 로 줄바꿈·목록·표기를 가지런히 한다(CHATBOT_COMPILED_SHAPE, 기본 on).
@@ -604,20 +604,6 @@ function takeClosing(blocks: string[][]) {
   return { blocks: out, closing: taken.length > 0 ? taken[taken.length - 1] : null }
 }
 
-/** 조각 본문: 평문 덩이는 앞에서 둘까지(목록은 그대로). */
-function limitBlocks(blocks: string[][], plainMax = 2) {
-  const out: string[][] = []
-  let plain = 0
-  for (const lines of blocks) {
-    if (blockKind(lines) === "plain") {
-      plain += 1
-      if (plain > plainMax) break
-    }
-    out.push(lines)
-  }
-  return out
-}
-
 /** 조각 본문을 결론만 남긴다: 첫 덩이가 문장이면 그 덩이의 첫 줄들(문장 하나), 목록이면 첫 항목 하나와 이어 묻기 한 줄. */
 function conclusionOnly(blocks: string[][], deeper = false): string[][] {
   const first = blocks[0]
@@ -830,7 +816,7 @@ function buildCompound(decision: AnswerIndexDecision, segments: AnswerIndexSegme
       return
     }
     const closed = takeClosing(shapedBlocks(result.value.parts.response.answer, shape))
-    pieces.push({ kind: "answer", label, blocks: limitBlocks(closed.blocks), closing: closed.closing, card, parts: result.value.parts })
+    pieces.push({ kind: "answer", label, blocks: closed.blocks, closing: closed.closing, card, parts: result.value.parts })
   })
 
   const answered = pieces.filter(isAnswerPiece)

@@ -79,10 +79,10 @@ describe("shape: lines and lists (widget rules)", () => {
     )
   })
 
-  it("uses one marker kind: bullets stay '-' alone, and become '1.' when the answer also has a numbered list", () => {
+  it("uses one marker kind: bullets stay '-' alone, and lose their mark (one line each) when the answer also has a numbered list", () => {
     expect(shapeLayout("확인할 것이에요.\n• 하나입니다.\n• 둘입니다.")).toBe("확인할 것이에요.\n\n- 하나입니다.\n- 둘입니다.")
     expect(shapeLayout("1. 순서 하나입니다.\n2. 순서 둘입니다.\n\n함께 확인할 것\n- 점검 하나입니다.\n- 점검 둘입니다.")).toBe(
-      "1. 순서 하나입니다.\n2. 순서 둘입니다.\n\n함께 확인할 것\n\n1. 점검 하나입니다.\n2. 점검 둘입니다."
+      "1. 순서 하나입니다.\n2. 순서 둘입니다.\n\n함께 확인할 것\n점검 하나입니다.\n점검 둘입니다."
     )
     expect(shapeLayout("①첫째 조건입니다.\n② 둘째 조건입니다.")).toBe("1. 첫째 조건입니다.\n2. 둘째 조건입니다.")
   })
