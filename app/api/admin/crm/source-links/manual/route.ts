@@ -56,18 +56,18 @@ export async function POST(req: NextRequest) {
       sourceObject: typeof body.sourceObject === "string" && body.sourceObject.trim() ? body.sourceObject.trim() : undefined,
     })
 
-    revalidateTag(ADMIN_CRM_REVENUE_CACHE_TAG, "max")
+    revalidateTag(ADMIN_CRM_REVENUE_CACHE_TAG, { expire: 0 })
     // REV 링크(branch_rev_sheet)가 바뀌면 lib/admin-crm-revenue-sheet.ts의 60초 캐시도 낡는다(D1).
     // 리드·Neo 원천 수동 연결은 rev-sheet 입력이 아니지만 원천 판별 전 분기를 늘리지 않고 같이 건다.
-    revalidateTag(ADMIN_CRM_REVENUE_SHEET_CACHE_TAG, "max")
+    revalidateTag(ADMIN_CRM_REVENUE_SHEET_CACHE_TAG, { expire: 0 })
 
-    revalidateTag(ADMIN_CRM_COVERAGE_CACHE_TAG, "max")
+    revalidateTag(ADMIN_CRM_COVERAGE_CACHE_TAG, { expire: 0 })
 
-    revalidateTag(ADMIN_OS_SUMMARY_CACHE_TAG, "max")
+    revalidateTag(ADMIN_OS_SUMMARY_CACHE_TAG, { expire: 0 })
 
     // 새 후보 링크는 crm-unified-customers.ts 소스 스냅샷(listConfirmedLeadCustomerLinks·
     // listConfirmedLeadNeoLinkLeadIds)의 입력이기도 하다.
-    revalidateTag(ADMIN_CRM_UNIFIED_SNAPSHOT_CACHE_TAG, "max")
+    revalidateTag(ADMIN_CRM_UNIFIED_SNAPSHOT_CACHE_TAG, { expire: 0 })
     return NextResponse.json({ ok: true, link })
   } catch (error) {
     console.error("[POST /api/admin/crm/source-links/manual]", error)

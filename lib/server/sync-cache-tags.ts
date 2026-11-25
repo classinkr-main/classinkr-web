@@ -1,5 +1,15 @@
 import "server-only"
 import { revalidateTag } from "next/cache"
+import {
+  ADMIN_CRM_ACCOUNT_MASTER_CACHE_TAG,
+  ADMIN_CRM_COVERAGE_CACHE_TAG,
+  ADMIN_CRM_NEO_CUSTOMERS_CACHE_TAG,
+  ADMIN_CRM_OVERVIEW_CACHE_TAG,
+  ADMIN_CRM_PRIORITY_QUEUE_SNAPSHOT_CACHE_TAG,
+  ADMIN_CRM_REGION_MAP_CACHE_TAG,
+  ADMIN_CRM_UNIFIED_SNAPSHOT_CACHE_TAG,
+  ADMIN_OS_SUMMARY_CACHE_TAG,
+} from "@/lib/admin/crm/cache-tags"
 import { ADMIN_CRM_REVENUE_CACHE_TAG } from "@/lib/admin-crm-revenue"
 import { ADMIN_CRM_REVENUE_SHEET_CACHE_TAG } from "@/lib/admin-crm-revenue-sheet"
 import { BRANCH_REV_DEALS_CACHE_TAG } from "@/lib/repositories/branch-deals"
@@ -17,8 +27,8 @@ import { SALES_LEDGER_IMPORTS_CACHE_TAG } from "@/lib/repositories/sales-ledger-
 // 화면을 다시 불러와도 숫자가 그대로였다("동기화가 안 된다"). 바깥 캐시(지사 KPI 묶음)가 안쪽의
 // 옛 미러 값으로 다시 채워지는 일도 있었다. { expire: 0 }은 다음 조회에서 새로 만들게 한다.
 //
-// 이번 범위는 매출·HW 시트 동기화 묶음뿐이다. 다른 원천(NEO·Meta 등)의 묶음은 설계 문서에 있지만
-// 아직 옮기지 않았다.
+// 2026-09-14 범위는 매출·HW 시트 동기화 묶음뿐이었다. 2026-11-23 NEO(외부 CRM) 동기화와 소스 링크
+// 확정·해제·생성 묶음을 더했다(아래 neoSync·crmSourceLinks). Meta 등 나머지 원천은 아직이다.
 
 /** KR Team 지역(SEG) 탭 캐시 — data-quality 라우트가 문자열 그대로 쓴다. */
 export const BRANCH_SEG_CACHE_TAG = "branch-seg"
@@ -41,6 +51,29 @@ export const SYNC_CACHE_TAG_BUNDLES = {
   branchRevLinks: [ADMIN_CRM_REVENUE_CACHE_TAG, ADMIN_CRM_REVENUE_SHEET_CACHE_TAG],
   /** HW 시트 미러(branch_hw_*)와 그것을 함께 읽는 하드웨어 조립. */
   branchHw: [BRANCH_SEG_CACHE_TAG, BRANCH_HW_CACHE_TAG, HARDWARE_INVENTORY_CACHE_TAG, BRANCH_SYNC_RUNS_CACHE_TAG],
+  /**
+   * NEO(샤오쇼우이) 동기화가 crm_neo_customer_snapshots·external_crm_records 를 다시 쓴 뒤 낡는 것.
+   * NEO 고객 캐시만 만료하면 그 값을 품은 바깥 캐시(통합 고객·우선순위 큐 소스 스냅샷, os-summary 재연락 원천 300초,
+   * CRM 개요)가 옛 NEO 값을 계속 돌려준다(겹친 캐시 — 위 설명과 같은 사고). 그래서 바깥 캐시까지 한 묶음으로 만료한다.
+   */
+  neoSync: [
+    ADMIN_CRM_NEO_CUSTOMERS_CACHE_TAG,
+    ADMIN_CRM_REGION_MAP_CACHE_TAG,
+    ADMIN_CRM_REVENUE_CACHE_TAG,
+    ADMIN_CRM_UNIFIED_SNAPSHOT_CACHE_TAG,
+    ADMIN_CRM_PRIORITY_QUEUE_SNAPSHOT_CACHE_TAG,
+    ADMIN_OS_SUMMARY_CACHE_TAG,
+    ADMIN_CRM_OVERVIEW_CACHE_TAG,
+  ],
+  /** crm_source_links 확정·해제·생성(사람 손 또는 동기화 체인의 후보 생성·자동 확정)이 바꾸는 집계. */
+  crmSourceLinks: [
+    ADMIN_CRM_REVENUE_CACHE_TAG,
+    ADMIN_CRM_REVENUE_SHEET_CACHE_TAG,
+    ADMIN_CRM_COVERAGE_CACHE_TAG,
+    ADMIN_OS_SUMMARY_CACHE_TAG,
+    ADMIN_CRM_UNIFIED_SNAPSHOT_CACHE_TAG,
+    ADMIN_CRM_ACCOUNT_MASTER_CACHE_TAG,
+  ],
 } as const
 
 export type SyncCacheTagBundle = keyof typeof SYNC_CACHE_TAG_BUNDLES

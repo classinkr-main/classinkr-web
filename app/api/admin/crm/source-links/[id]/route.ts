@@ -37,14 +37,14 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
   try {
     const result = await updateCrmSourceLinkStatus(id, body.action, admin.userId)
     // 소스 링크 상태가 바뀌면 coverage·os-summary·매출 집계 캐시가 낡는다 — 즉시 무효화한다.
-    revalidateTag(ADMIN_CRM_COVERAGE_CACHE_TAG, "max")
-    revalidateTag(ADMIN_OS_SUMMARY_CACHE_TAG, "max")
-    revalidateTag(ADMIN_CRM_REVENUE_CACHE_TAG, "max")
+    revalidateTag(ADMIN_CRM_COVERAGE_CACHE_TAG, { expire: 0 })
+    revalidateTag(ADMIN_OS_SUMMARY_CACHE_TAG, { expire: 0 })
+    revalidateTag(ADMIN_CRM_REVENUE_CACHE_TAG, { expire: 0 })
     // REV 링크(branch_rev_sheet)가 바뀌면 lib/admin-crm-revenue-sheet.ts의 60초 캐시도 낡는다(D1).
-    revalidateTag(ADMIN_CRM_REVENUE_SHEET_CACHE_TAG, "max")
+    revalidateTag(ADMIN_CRM_REVENUE_SHEET_CACHE_TAG, { expire: 0 })
     // 확정/해제된 링크는 crm-unified-customers.ts 소스 스냅샷(listConfirmedLeadCustomerLinks·
     // listConfirmedLeadNeoLinkLeadIds)의 입력이기도 하다.
-    revalidateTag(ADMIN_CRM_UNIFIED_SNAPSHOT_CACHE_TAG, "max")
+    revalidateTag(ADMIN_CRM_UNIFIED_SNAPSHOT_CACHE_TAG, { expire: 0 })
     return NextResponse.json({ ok: true, link: result })
   } catch (error) {
     console.error("[PATCH /api/admin/crm/source-links/[id]]", error)

@@ -130,11 +130,11 @@ describe("POST /api/admin/crm/source-links/hw-outbound — 성공·충돌·무�
     expect(response.status).toBe(200)
     expect(body).toEqual({ ok: true, link: { id: "link-1", status: "confirmed" } })
 
-    expect(mocks.revalidateTag).toHaveBeenCalledWith("test-admin-crm-revenue", "max")
-    expect(mocks.revalidateTag).toHaveBeenCalledWith("test-admin-crm-revenue-sheet", "max")
-    expect(mocks.revalidateTag).toHaveBeenCalledWith(ADMIN_CRM_COVERAGE_CACHE_TAG, "max")
-    expect(mocks.revalidateTag).toHaveBeenCalledWith(ADMIN_OS_SUMMARY_CACHE_TAG, "max")
-    expect(mocks.revalidateTag).toHaveBeenCalledWith(ADMIN_CRM_UNIFIED_SNAPSHOT_CACHE_TAG, "max")
+    expect(mocks.revalidateTag).toHaveBeenCalledWith("test-admin-crm-revenue", { expire: 0 })
+    expect(mocks.revalidateTag).toHaveBeenCalledWith("test-admin-crm-revenue-sheet", { expire: 0 })
+    expect(mocks.revalidateTag).toHaveBeenCalledWith(ADMIN_CRM_COVERAGE_CACHE_TAG, { expire: 0 })
+    expect(mocks.revalidateTag).toHaveBeenCalledWith(ADMIN_OS_SUMMARY_CACHE_TAG, { expire: 0 })
+    expect(mocks.revalidateTag).toHaveBeenCalledWith(ADMIN_CRM_UNIFIED_SNAPSHOT_CACHE_TAG, { expire: 0 })
     expect(mocks.revalidateTag).toHaveBeenCalledTimes(5)
   })
 

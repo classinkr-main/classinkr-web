@@ -162,11 +162,8 @@ const getCachedNeoCrmCustomers = unstable_cache(
     return assertJsonSafeInDev("admin-crm-neo-customers", value)
   },
   ["admin-crm-neo-customers-v1"],
-  // TTL은 이전 process-local 캐시와 같은 60초로 유지한다 — 무효화(아래 invalidateNeoCrmCustomersCache)가
-  // 수동 동기화(app/api/admin/crm/external-sync/route.ts) 경로만 덮고 크론 경로
-  // (app/api/cron/sync-external-crm/route.ts → lib/external-crm/sync-chain.ts)는 못 덮는다 —
-  // 그 두 파일은 이 작업의 소유 밖(cron/webhooks는 platform-data 소유)이라 배선하지 못했다.
-  // 완전한 무효화 커버리지가 아니므로 Phase 4 규칙대로 TTL을 5~10분으로 올리지 않는다.
+  // TTL은 이전 process-local 캐시와 같은 60초로 유지한다. 2026-11-23부터 수동·크론 동기화 둘 다
+  // lib/external-crm/sync-cache.ts(neoSync 묶음, { expire: 0 })로 이 태그를 즉시 만료한다.
   { revalidate: 60, tags: [ADMIN_CRM_NEO_CUSTOMERS_CACHE_TAG] }
 )
 
@@ -179,9 +176,8 @@ export async function getNeoCrmCustomers(): Promise<NeoCrmCustomerList> {
   }
 }
 
-// crm_neo_customer_snapshots 재계산 직후 호출한다 — 현재 유일한 호출부는
-// app/api/admin/crm/external-sync/route.ts(수동 동기화). revalidateTag(tag, "max")로 걸어
-// 이번 재계산 결과를 다음 읽기가 즉시 보게 한다("max" = 이미 나간 stale 응답도 더 안 씀).
+// 단건 보조 무효화("max" = 오래됨 표시 — 다음 한 번은 옛 값). 동기화 경로는 이걸 쓰지 않고
+// lib/server/sync-cache-tags.ts neoSync 묶음을 { expire: 0 } 으로 만료한다(2026-11-23).
 export function invalidateNeoCrmCustomersCache() {
   revalidateTag(ADMIN_CRM_NEO_CUSTOMERS_CACHE_TAG, "max")
 }
