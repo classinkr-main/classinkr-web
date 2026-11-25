@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
   if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 })
 
   const actor = staffActor(admin)
-  const deps = buildServerOrchestratorDeps()
+  const deps = buildServerOrchestratorDeps({ sub: staffKey(admin) })
   const encoder = new TextEncoder()
 
   const stream = new ReadableStream<Uint8Array>({

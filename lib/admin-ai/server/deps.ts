@@ -5,6 +5,9 @@ import "server-only"
 //  - 담당자: resolveContact + buildContactDeps(상담 검색은 끈다 — 임베딩 검색이라 비용이 들고 R17 범위 결정 전)
 //  - 도구: lib/ops-tools 레지스트리·실행기
 //  - 모델: 연결 전(null) — 결정형만 돈다
+//  - 쓰기: preview 까지(writes.ts) + 서명 표(ADMIN_AI_TICKET_SECRET 이 있을 때만)
+import { randomUUID } from "crypto"
+
 import { routeAnswerIndex, getRouterAnswerIndex } from "@/lib/chatbot/answer-index"
 import { redactPii } from "@/lib/chatbot/pii"
 import { resolveContact } from "@/lib/internal-cs-chat/contact"
@@ -20,7 +23,9 @@ import { isWriteDef } from "@/lib/ops-tools/types"
 import type { CustomerPhrasing } from "./knowledge"
 import { getAdminAiModelAdapter } from "./llm/adapter"
 import type { OrchestratorDeps } from "./orchestrator"
+import { readTicketSecret } from "./tickets"
 import type { OpsDeps } from "./tools"
+import { previewWriteTurn } from "./writes"
 
 /**
  * 답 색인 상위 카드 — 고객 말투 글이 카드에 그대로 있는 것(fixed 의 text, policy)만. 문서 문장 조립 카드(doc)·증상 안내(howto)는
@@ -55,8 +60,10 @@ export const serverOpsDeps: OpsDeps = {
   },
 }
 
-export function buildServerOrchestratorDeps(): OrchestratorDeps {
+/** sub 는 행위자 키(actor.ts staffKey) — 쓰기 확인 표에 서명해 싣는다. */
+export function buildServerOrchestratorDeps(options: { sub: string }): OrchestratorDeps {
   const contactDeps = buildContactDeps()
+  const ticketSecret = readTicketSecret()
   return {
     knowledge: {
       evidence: (question) => buildInternalEvidence(question, { includeInternalDocs: true }),
@@ -65,5 +72,6 @@ export function buildServerOrchestratorDeps(): OrchestratorDeps {
     resolveContact: (question, openCustomer) => resolveContact(question, contactDeps, { openCustomer }),
     ops: serverOpsDeps,
     model: getAdminAiModelAdapter(),
+    previewWrite: (kind, ctx) => previewWriteTurn(kind, ctx, { ops: serverOpsDeps, ticketSecret, sub: options.sub, newId: randomUUID }),
   }
 }
