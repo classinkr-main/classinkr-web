@@ -116,11 +116,14 @@ export default function SyncStatusBar({ lastSync, lastSyncStartedAt, lastError, 
   const warn = lastError ? "text-[#8F2C2C]" : staleRefresh || importStale || sheetFreshnessError || sheetAhead ? "text-[#7A520F]" : "text-[#31302E]"
 
   // 2층 머리줄 1층의 동기화 칸 — 상태(마지막 동기화·실패 여부)와 장부 링크만 둔다. 동기화 실행은 장부(/admin/branch/ledger)에서 한다.
+  // 1440px에서도 한 줄에 들어가도록 문구를 줄이고, 원천 라벨(REV·DSH)은 아주 넓은 화면에서만 펼친다(그 밖에는 상태 문구의 title).
+  const sourceTitle = dataSources ? `REV ${sourceLabel(dataSources.rev, now)} · DSH ${sourceLabel(dataSources.dsh, now)}` : undefined
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-[12px] lg:justify-end">
       <span className="inline-flex min-w-0 items-center gap-1.5">
         {statusIcon}
-        <span role={lastError ? "alert" : "status"} className={`font-semibold ${warn}`}>
+        <span role={lastError ? "alert" : "status"} className={`font-semibold ${warn}`}
+          title={[importStale && !lastError ? "임포트가 시트 동기화보다 오래됨 — 장부에서 재동기화 필요" : null, sourceTitle].filter(Boolean).join(" · ") || undefined}>
           {lastError
             ? // 원문 오류(예: 시트 API 의 권한 문구)는 키·내부 URL 이 섞일 수 있어 싣지 않고, 동기화 경고 띠와
               // 같은 분류로 말한다(lib/admin/sync-health.ts 정직 규칙). lastError 에는 요약 불러오기 실패·마지막 실행
@@ -131,7 +134,7 @@ export default function SyncStatusBar({ lastSync, lastSyncStartedAt, lastError, 
             : staleRefresh
               ? `갱신 실패 — ${relativeTime(new Date(staleSince as number).toISOString(), now)} 데이터 표시 중`
               : importStale
-                ? "임포트가 시트 동기화보다 오래됨 — 장부에서 재동기화 필요"
+                ? "임포트가 시트보다 오래됨"
                 : sheetFreshnessError
                   ? `동기화 ${lastSync ? relativeTime(lastSync, now) : "없음"} — 시트 신선도 확인 실패`
                   : sheetAhead
@@ -168,10 +171,10 @@ export default function SyncStatusBar({ lastSync, lastSyncStartedAt, lastError, 
       ) : null}
       {dataSources && (
         <>
-          <span className={revImportStale ? "font-semibold text-[#7A520F]" : "text-[#615D59]"}>
+          <span className={`hidden 2xl:inline ${revImportStale ? "font-semibold text-[#7A520F]" : "text-[#615D59]"}`}>
             REV {sourceLabel(dataSources.rev, now)}
           </span>
-          <span className={dshImportStale ? "font-semibold text-[#7A520F]" : "text-[#615D59]"}>
+          <span className={`hidden 2xl:inline ${dshImportStale ? "font-semibold text-[#7A520F]" : "text-[#615D59]"}`}>
             DSH {sourceLabel(dataSources.dsh, now)}
           </span>
         </>
