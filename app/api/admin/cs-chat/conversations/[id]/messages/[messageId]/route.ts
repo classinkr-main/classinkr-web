@@ -1,7 +1,7 @@
 import { revalidateTag } from "next/cache"
 import { NextRequest, NextResponse } from "next/server"
 
-import { CRM_STAFF_ADMIN_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
+import { CS_COPILOT_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
 import { ingestInternalCsGap } from "@/lib/internal-cs-chat/gap-ingest"
 import { INTERNAL_CS_METRICS_CACHE_TAG } from "@/lib/internal-cs-chat/metrics"
 import { checkFinalAnswer, WARNINGS_ACKNOWLEDGED_LABEL } from "@/lib/internal-cs-chat/answer-checks"
@@ -83,7 +83,7 @@ async function queueReviewGap(conversationId: string, message: InternalCsMessage
 }
 
 export async function PATCH(req: NextRequest, context: Context) {
-  const admin = await requireVerifiedAdminContext(req, CRM_STAFF_ADMIN_API_ROLES)
+  const admin = await requireVerifiedAdminContext(req, CS_COPILOT_API_ROLES)
   if (admin instanceof NextResponse) return admin
   const { id, messageId } = await context.params
   const body = await req.json().catch(() => null)

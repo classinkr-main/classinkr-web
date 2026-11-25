@@ -1,7 +1,12 @@
 import { revalidateTag } from "next/cache"
 import { NextRequest, NextResponse } from "next/server"
 
-import { CRM_STAFF_ADMIN_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
+import {
+  CS_COPILOT_API_ROLES,
+  CS_KNOWLEDGE_PROMOTE_CAPABILITY,
+  requireCsCopilotCapability,
+  requireVerifiedAdminContext,
+} from "@/lib/admin-auth"
 import {
   deriveKnowledgeMetaFromMessage,
   embedInternalText,
@@ -42,8 +47,11 @@ async function readOptionalBody(req: NextRequest): Promise<Record<string, unknow
 // 멱등: 같은 메시지 재승격 시 기존 문서 갱신(reused).
 // 문서는 visibility='internal', noindex=true, updated_by='cs-knowledge-promotion', content_json 백링크.
 export async function POST(req: NextRequest, context: Context) {
-  const admin = await requireVerifiedAdminContext(req, CRM_STAFF_ADMIN_API_ROLES)
+  const admin = await requireVerifiedAdminContext(req, CS_COPILOT_API_ROLES)
   if (admin instanceof NextResponse) return admin
+  // 교정본을 공유 지식 문서로 만드는 동작 — capability 가 필요하다(기본 부여 역할은 lib/admin-auth.ts).
+  const capabilityError = requireCsCopilotCapability(admin, CS_KNOWLEDGE_PROMOTE_CAPABILITY)
+  if (capabilityError) return capabilityError
 
   const { messageId } = await context.params
   const body = await readOptionalBody(req)

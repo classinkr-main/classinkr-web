@@ -72,6 +72,12 @@ describe("CS copilot roles and capabilities", () => {
       "app/api/admin/cs-chat/metrics/route.ts",
       "app/api/admin/cs-chat/regression-candidates/route.ts",
       "app/api/admin/cs-chat/integrations/status/route.ts",
+      // cs1(승인·승격·생성·에스컬레이션) 라우트 — 합친 뒤 같은 상수로 옮겼다.
+      "app/api/admin/cs-chat/conversations/[id]/generate/route.ts",
+      "app/api/admin/cs-chat/conversations/[id]/messages/[messageId]/route.ts",
+      "app/api/admin/cs-chat/escalation/route.ts",
+      "app/api/admin/cs-chat/regression-eval/route.ts",
+      "app/api/admin/cs-chat/messages/[messageId]/promote-knowledge/route.ts",
     ]
     for (const route of routes) {
       const source = readFileSync(join(process.cwd(), route), "utf8")
@@ -80,6 +86,17 @@ describe("CS copilot roles and capabilities", () => {
     }
     const dispatch = readFileSync(join(process.cwd(), routes[4]), "utf8")
     expect(dispatch).toContain("requireCsCopilotCapability")
+  })
+
+  it("the capability-gated cs1 routes check their capability right after the role check", () => {
+    const gated: Array<[string, string]> = [
+      ["app/api/admin/cs-chat/regression-eval/route.ts", "CS_REGRESSION_RUN_CAPABILITY"],
+      ["app/api/admin/cs-chat/messages/[messageId]/promote-knowledge/route.ts", "CS_KNOWLEDGE_PROMOTE_CAPABILITY"],
+    ]
+    for (const [route, capability] of gated) {
+      const source = readFileSync(join(process.cwd(), route), "utf8")
+      expect(source, route).toContain(`requireCsCopilotCapability(admin, ${capability})`)
+    }
   })
 })
 

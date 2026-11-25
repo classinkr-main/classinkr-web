@@ -35,7 +35,7 @@ vi.mock("@/lib/chatbot/service", async () => {
 })
 
 vi.mock("@/lib/admin-auth", () => ({
-  CRM_STAFF_ADMIN_API_ROLES: ["SUPER_ADMIN", "ADMIN", "BRANCH"],
+  CS_COPILOT_API_ROLES: ["SUPER_ADMIN", "ADMIN", "BRANCH"],
   requireVerifiedAdminContext: mocks.requireVerifiedAdminContext,
 }))
 

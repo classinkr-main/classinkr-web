@@ -21,10 +21,11 @@ vi.mock("@/lib/supabase/admin", () => ({
   createSupabaseAdminClient: mocks.createSupabaseAdminClient,
 }))
 
-vi.mock("@/lib/admin-auth", () => ({
-  CRM_STAFF_ADMIN_API_ROLES: ["SUPER_ADMIN", "ADMIN", "BRANCH"],
-  requireVerifiedAdminContext: mocks.requireVerifiedAdminContext,
-}))
+// capability 검사(requireCsCopilotCapability)는 실제 구현을 쓴다 — 기본 부여·엄격 스위치 동작을 그대로 확인한다.
+vi.mock("@/lib/admin-auth", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/admin-auth")>("@/lib/admin-auth")
+  return { ...actual, requireVerifiedAdminContext: mocks.requireVerifiedAdminContext }
+})
 
 vi.mock("@/lib/repositories/internal-cs-chat", async () => {
   const actual = await vi.importActual<typeof import("@/lib/repositories/internal-cs-chat")>(
@@ -116,6 +117,19 @@ describe("POST /api/admin/cs-chat/messages/[messageId]/promote-knowledge", () =>
     expect(response.status).toBe(403)
     expect(mocks.getInternalCsMessageById).not.toHaveBeenCalled()
     expect(mocks.promoteMessageToInternalArticle).not.toHaveBeenCalled()
+  })
+
+  it("denies under the strict capability switch without cs.knowledge.promote (default grant otherwise unchanged)", async () => {
+    vi.stubEnv("CS_COPILOT_STRICT_CAPABILITIES", "1")
+    try {
+      mocks.requireVerifiedAdminContext.mockResolvedValue({ role: "ADMIN", name: "CS", userId: "u1", capabilities: [] })
+      const denied = await promotePost(promoteRequest("assistant-1"), routeContext("assistant-1"))
+      expect(denied.status).toBe(403)
+      expect(await denied.json()).toMatchObject({ requiredCapability: "cs.knowledge.promote" })
+      expect(mocks.getInternalCsMessageById).not.toHaveBeenCalled()
+    } finally {
+      vi.unstubAllEnvs()
+    }
   })
 
   it("returns 404 when the message does not exist", async () => {

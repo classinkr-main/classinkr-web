@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 
-import { CRM_STAFF_ADMIN_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
+import { CS_COPILOT_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
 import { normalizeTopicTags } from "@/lib/chatbot/topic-crosswalk"
 import {
   checkInternalCsAnswer,
@@ -78,7 +78,7 @@ function latestHqReply(messages: InternalCsMessageRow[]) {
 }
 
 export async function POST(req: NextRequest, context: Context) {
-  const admin = await requireVerifiedAdminContext(req, CRM_STAFF_ADMIN_API_ROLES)
+  const admin = await requireVerifiedAdminContext(req, CS_COPILOT_API_ROLES)
   if (admin instanceof NextResponse) return admin
 
   // 모델 호출은 비용이 든다 — 사용자별 분당 30회(IC-16). 인스턴스별 메모리 제한이며 Upstash 설정 시 분산 제한이다.

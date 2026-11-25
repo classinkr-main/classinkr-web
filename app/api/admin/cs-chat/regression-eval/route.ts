@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
 
-import { CRM_STAFF_ADMIN_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
+import {
+  CS_COPILOT_API_ROLES,
+  CS_REGRESSION_RUN_CAPABILITY,
+  requireCsCopilotCapability,
+  requireVerifiedAdminContext,
+} from "@/lib/admin-auth"
 import {
   createDefaultRegressionEvalDeps,
   runInternalCsRegressionEval,
@@ -15,8 +20,11 @@ export const maxDuration = 60
 // 응답의 suggestedOutcome 은 제안일 뿐이며 DB 의 regression_outcome 을 변경하지 않는다.
 // 확정은 기존 판정 PATCH(messages/[messageId])의 몫이다.
 export async function POST(req: NextRequest) {
-  const admin = await requireVerifiedAdminContext(req, CRM_STAFF_ADMIN_API_ROLES)
+  const admin = await requireVerifiedAdminContext(req, CS_COPILOT_API_ROLES)
   if (admin instanceof NextResponse) return admin
+  // 재생성·심판 모델을 여러 번 부르는 비싼 실행 — capability 가 필요하다(기본 부여 역할은 lib/admin-auth.ts).
+  const capabilityError = requireCsCopilotCapability(admin, CS_REGRESSION_RUN_CAPABILITY)
+  if (capabilityError) return capabilityError
 
   // 한 번에 최대 10건 × (재생성 + 심판)을 부르는 비싼 요청이라 사용자별 분당 3회로 제한한다(IC-16).
   const { allowed } = await checkRateLimitDistributed(

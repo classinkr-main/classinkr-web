@@ -29,8 +29,6 @@ vi.mock("@/lib/supabase/admin", () => ({
 
 vi.mock("@/lib/admin-auth", () => ({
   CS_COPILOT_API_ROLES: ["SUPER_ADMIN", "ADMIN", "BRANCH"],
-  // messages/[messageId] 는 후속 묶음에서 새 상수로 바꾼다 — 그 전까지 옛 상수도 함께 가짜로 둔다.
-  CRM_STAFF_ADMIN_API_ROLES: ["SUPER_ADMIN", "ADMIN", "BRANCH"],
   requireVerifiedAdminContext: mocks.requireVerifiedAdminContext,
   verifyAdmin: mocks.verifyAdmin,
 }))

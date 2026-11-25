@@ -18,10 +18,11 @@ vi.mock("@/lib/supabase/admin", () => ({
   createSupabaseAdminClient: mocks.createSupabaseAdminClient,
 }))
 
-vi.mock("@/lib/admin-auth", () => ({
-  CRM_STAFF_ADMIN_API_ROLES: ["SUPER_ADMIN", "ADMIN", "BRANCH"],
-  requireVerifiedAdminContext: mocks.requireVerifiedAdminContext,
-}))
+// capability 검사(requireCsCopilotCapability)는 실제 구현을 쓴다 — 기본 부여·엄격 스위치 동작을 그대로 확인한다.
+vi.mock("@/lib/admin-auth", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/admin-auth")>("@/lib/admin-auth")
+  return { ...actual, requireVerifiedAdminContext: mocks.requireVerifiedAdminContext }
+})
 
 vi.mock("@/lib/internal-cs-chat/regression-eval", () => ({
   runInternalCsRegressionEval: mocks.runInternalCsRegressionEval,
@@ -137,6 +138,26 @@ describe("POST /api/admin/cs-chat/regression-eval", () => {
 
     expect(response.status).toBe(403)
     expect(mocks.runInternalCsRegressionEval).not.toHaveBeenCalled()
+  })
+
+  it("keeps the default capability grant for copilot roles and denies under the strict switch without cs.regression.run", async () => {
+    mocks.runInternalCsRegressionEval.mockResolvedValue({ items: [], skipped: [] })
+    mocks.requireVerifiedAdminContext.mockResolvedValue({ role: "BRANCH", name: "CS", userId: "u1", capabilities: [] })
+    expect((await regressionEvalPost(evalRequest({}))).status).toBe(200)
+
+    vi.stubEnv("CS_COPILOT_STRICT_CAPABILITIES", "1")
+    try {
+      mocks.runInternalCsRegressionEval.mockClear()
+      const denied = await regressionEvalPost(evalRequest({}))
+      expect(denied.status).toBe(403)
+      expect(await denied.json()).toMatchObject({ requiredCapability: "cs.regression.run" })
+      expect(mocks.runInternalCsRegressionEval).not.toHaveBeenCalled()
+
+      mocks.requireVerifiedAdminContext.mockResolvedValue({ role: "ADMIN", name: "CS", userId: "u1", capabilities: ["cs.regression.run"] })
+      expect((await regressionEvalPost(evalRequest({}))).status).toBe(200)
+    } finally {
+      vi.unstubAllEnvs()
+    }
   })
 
   it("runs with defaults for an empty body and returns items + skipped", async () => {
