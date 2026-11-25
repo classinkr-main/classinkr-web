@@ -95,7 +95,7 @@ tests/admin-ai/  tests/api/admin-ai-*.test.ts
 | 메타 | `lib/admin-ai/order-catalog.ts` (공용) | id, 도메인, 이름, 등급, 민감 여부, 되돌리기 방식, 역할 묶음 이름 |
 | 핸들러 | `lib/admin-ai/server/orders/*` (서버) | 입력 스키마, preview, execute, undo |
 
-**갱신(2026-11).** 도구 정의의 정본은 `lib/ops-tools/registry.ts`(신설, server-only)다. 이 표의 "핸들러"는 거기로 모이고, MCP(`lib/mcp/tools.ts`)와 갈매봇이 각각 얇은 어댑터가 된다. R0는 `run` 하나, R1 이상은 `resolveTarget`·`preview`·`execute`·`undo`로 나누며 `run`을 두지 않는다. 오더 id 집합 = MCP ∪ 갈매봇 집합이 레지스트리와 같다는 시험을 둔다.
+**갱신(2026-11).** 도구 정의의 정본은 `lib/ops-tools/registry.ts`(신설, server-only)다. 이 표의 "핸들러"는 거기로 모이고, MCP(`lib/mcp/tools.ts`)와 갈매봇이 각각 얇은 어댑터가 된다. R0는 `run` 하나, R1 이상은 `resolveTarget`·`preview`·`execute`·`undo`로 나누며 `run`을 두지 않는다. 오더 id 집합 = MCP ∪ 갈매봇 집합이 레지스트리와 같다는 시험을 둔다. (현재 구현(B3): 레지스트리 등급은 R0 조회 `run`·R1 등록 `preview`/`execute` 둘뿐이고 `resolveTarget`·`undo` 는 아직 없다 — [홈페이지 MCP 운영](home-mcp-operations.md). 카탈로그(`lib/admin-ai/order-catalog.ts`)의 R0~R4 는 확인 단계 척도라 숫자가 다를 수 있다 — 예: `hw_plan_movement` 는 레지스트리 R1, 카탈로그 `hardware.movement.plan` R2. 카탈로그 mcp 칸과 `OPS_TOOLS` 의 이름·조회/쓰기 구분 일치는 `tests/admin-ai/catalog-and-context.test.ts` 가 본다.)
 
 테스트로 고정할 것: 메타에 있는 id 와 핸들러가 등록된 id 가 같은 집합이다. 등급은 메타에만 있고 핸들러는 그것을 읽는다 — 등급이 두 군데에 적히지 않게 한다.
 

@@ -534,7 +534,7 @@ resolveNavPlacement(item.href.split("?")[0], { role, preset, overrides }) !== "d
   `INTERNAL_CS_GEMINI_FAST_MODEL=gemini-3.5-flash`로 되돌린다. 시간 예산: fast 시도 3.5초/전체 8초, deep 시도 18초/전체 30초
   (`INTERNAL_CS_GEMINI_DEEP_ATTEMPT_TIMEOUT_MS`·`INTERNAL_CS_GEMINI_DEEP_TOTAL_TIMEOUT_MS`), 라우트 `maxDuration` 60초.
 
-**답 후검사(IC-04)**: 결과·metadata에 `reviewWarnings`(금액·무료 체험·환불·보상 약속, 원가·공급가, 다른 고객 기관, 케이스 ID, UID·계정)와 `reviewWarningCodes`.
+**답 후검사(IC-04)**: 결과·metadata에 `reviewWarnings`(금액·무료 체험·환불·보상 약속, 원가·공급가, 다른 고객 기관, 케이스 ID, UID·계정)와 `reviewWarningCodes`. 다른 고객 기관 이름은 모델 컨텍스트 글에 싣지 않고(과거 상담 서술에서 `기관 {이름}` 을 뺐다) `buildInternalCsCopilotContext` 의 `otherCustomerNames`(과거 상담 근거의 `matchedOrg`)로 받아 검사한다.
 경고는 차단이 아니라 검토 신호다. 승인 전 '확인했습니다' 체크는 B4 화면이 건다.
 
 **generate 요청 본문**
