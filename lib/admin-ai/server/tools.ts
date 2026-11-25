@@ -73,11 +73,110 @@ export function productQueryOf(text: string): string | undefined {
   return token ? token[0].replace(/\s+/g, "") : undefined
 }
 
+// ── 기간 말(검토 동작-4) ─────────────────────────────────────────────────────────────────
+// 조회 도구는 기간 인자를 받지 않는다(입출고는 최신순, 견적은 갱신순, 방문은 7·14·30·90일). 그래서
+//  - 입출고: 날짜(occurred_at)가 있으니 넉넉히(100건) 받아 기간으로 거른다. 100건이 다 기간 안이면 "최근 100건 안에서"라고 밝힌다.
+//  - 견적: 기간으로 거를 날짜가 갱신일뿐이라 거르지 않는다. 기간을 물었으면 합계 숫자를 결론으로 내지 않고 화면으로 안내한다.
+//  - 방문: 도구 구간과 다르면 실제로 본 구간을 밝힌다. 두 구간 비교는 화면으로 안내한다.
+// 날짜는 KST 달력 기준이다.
+
+export interface Period {
+  label: string
+  /** YYYY-MM-DD(포함). */
+  from: string
+  to: string
+  /** 방문 도구 구간으로 그대로 바꿀 수 있는 최근 N일. */
+  days?: number
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000
+const KST_MS = 9 * 60 * 60 * 1000
+const ymd = (ms: number) => new Date(ms).toISOString().slice(0, 10)
+const md = (date: string) => `${Number(date.slice(5, 7))}월 ${Number(date.slice(8, 10))}일`
+const rangeLabel = (name: string, from: string, to: string) => `${name}(${from === to ? md(from) : `${md(from)}~${md(to)}`})`
+
+/** 기간 말을 KST 날짜 구간으로. 기간 말이 없으면 null, 있는데 해석하지 못하면 "unsupported". */
+export function periodOf(text: string, now: number): Period | "unsupported" | null {
+  const today = Date.parse(`${ymd(now + KST_MS)}T00:00:00Z`)
+  const weekday = (new Date(today).getUTCDay() + 6) % 7 // 월=0
+  const make = (name: string, fromMs: number, toMs: number, days?: number): Period => {
+    const from = ymd(fromMs)
+    const to = ymd(toMs)
+    return { label: rangeLabel(name, from, to), from, to, ...(days ? { days } : {}) }
+  }
+  const recent = text.match(/(?:최근|지난)\s*(\d{1,3})\s*일/)
+  if (recent) {
+    const n = Math.max(1, Number(recent[1]))
+    return make(`최근 ${n}일`, today - (n - 1) * DAY_MS, today, n)
+  }
+  if (/오늘/.test(text)) return make("오늘", today, today)
+  if (/어제/.test(text)) return make("어제", today - DAY_MS, today - DAY_MS)
+  if (/이번\s*주/.test(text)) return make("이번 주", today - weekday * DAY_MS, today)
+  if (/지난\s*주/.test(text)) return make("지난주", today - (weekday + 7) * DAY_MS, today - (weekday + 1) * DAY_MS)
+  const first = new Date(today)
+  first.setUTCDate(1)
+  if (/이번\s*달/.test(text)) return make("이번 달", first.getTime(), today)
+  if (/지난\s*달/.test(text)) {
+    const end = first.getTime() - DAY_MS
+    const start = new Date(end)
+    start.setUTCDate(1)
+    return make("지난달", start.getTime(), end)
+  }
+  if (/올해/.test(text)) {
+    const jan = new Date(today)
+    jan.setUTCMonth(0, 1)
+    return make("올해", jan.getTime(), today)
+  }
+  if (/\d{1,2}\s*월|분기|작년|상반기|하반기|\d{4}\s*년|지난\s*해/.test(text)) return "unsupported"
+  return null
+}
+
+const COMPARE = /비교|대비|차이/
+
+// ── 상태 이름표(검토 동작-8) — 표에 영문 코드가 그대로 나오지 않게. 모르는 값은 그대로 둔다. ──
+const STATUS_LABEL: Readonly<Record<string, string>> = {
+  draft: "초안",
+  pending_approval: "승인 대기",
+  shared: "공유됨",
+  sent: "발송",
+  accepted: "수락",
+  expired: "만료",
+  archived: "보관",
+  consult: "상담",
+  demo: "데모",
+  quote: "견적",
+  proposal: "제안",
+  decision: "의사결정",
+  order: "오더/설치",
+  won: "완료",
+  lost: "실패",
+  open: "진행",
+  planned: "예정",
+  inbound: "입고",
+  outbound: "출고",
+}
+export const statusLabel = (value: unknown) => {
+  const raw = str(value)
+  return STATUS_LABEL[raw] ?? raw
+}
+
 // ── 조회 ────────────────────────────────────────────────────────────────────────────────
 
 type ToolName = Extract<ReadTarget, { kind: "tool" }>["tool"]
 
-function argsForRead(tool: ToolName, ctx: ToolTurnContext): ToolArgs {
+const QUOTE_LIMIT = 10
+const MOVEMENT_LIMIT = 10
+const MOVEMENT_PERIOD_LIMIT = 100
+
+function trafficDays(text: string, period: Period | "unsupported" | null): number {
+  if (period && period !== "unsupported" && period.days && [7, 14, 30, 90].includes(period.days)) return period.days
+  if (/90|분기/.test(text)) return 90
+  if (/14일|2\s*주/.test(text)) return 14
+  if (/7일|일주|이번\s*주|지난\s*주/.test(text)) return 7
+  return 30
+}
+
+function argsForRead(tool: ToolName, ctx: ToolTurnContext, period: Period | "unsupported" | null): ToolArgs {
   const entity = ctx.context?.entity
   switch (tool) {
     case "hw_stock": {
@@ -85,12 +184,13 @@ function argsForRead(tool: ToolName, ctx: ToolTurnContext): ToolArgs {
       return { ...(query ? { query } : {}), ...(/부족|주문\s*권장|모자/.test(ctx.text) ? { attention_only: true } : {}) }
     }
     case "hw_movements":
-      return { limit: 10 }
+      return { limit: period && period !== "unsupported" ? MOVEMENT_PERIOD_LIMIT : MOVEMENT_LIMIT }
     case "deals_list":
-    case "quotes_list":
       return { limit: 10, ...(entity && (entity.type === "customer" || entity.type === "lead") ? { query: entity.label } : {}) }
+    case "quotes_list":
+      return { limit: QUOTE_LIMIT, ...(entity && (entity.type === "customer" || entity.type === "lead") ? { query: entity.label } : {}) }
     case "site_traffic":
-      return { range_days: /90|분기/.test(ctx.text) ? 90 : /7|일주|이번\s*주/.test(ctx.text) ? 7 : 30 }
+      return { range_days: trafficDays(ctx.text, period) }
     default:
       return {}
   }
@@ -135,19 +235,36 @@ function viewHwStock(value: unknown, args: ToolArgs): ReadView {
   }
 }
 
-function viewHwMovements(value: unknown): ReadView {
-  const rows = listOf(value, ["movements", "rows", "items"]).slice(0, 10)
+function viewHwMovements(value: unknown, period: Period | "unsupported" | null): ReadView {
+  const all = listOf(value, ["movements", "rows", "items"])
+  const ranged = period && period !== "unsupported" ? period : null
+  const inRange = ranged ? all.filter((row) => day(row.occurred_at) >= ranged.from && day(row.occurred_at) <= ranged.to) : all
+  const rows = inRange.slice(0, 10)
+  // 받은 기록이 상한까지 꽉 찼고 가장 오래된 날도 기간 안이면 더 오래된 기록이 남았을 수 있다.
+  const oldest = all.length ? day(all[all.length - 1].occurred_at) : ""
+  const truncated = Boolean(ranged && all.length >= MOVEMENT_PERIOD_LIMIT && oldest >= ranged.from)
+  let summary: string
+  if (ranged) {
+    summary = inRange.length
+      ? `${ranged.label} 입출고는 ${truncated ? `최근 ${MOVEMENT_PERIOD_LIMIT}건 안에서 ` : ""}${units(inRange.length, "건")}입니다.`
+      : `${ranged.label} 입출고 기록이 없습니다.`
+  } else if (period === "unsupported") {
+    summary = `요청한 기간은 아직 거르지 못해 최근 기록 ${units(rows.length, "건")}을 보여 드립니다. 기간별로는 HW 화면에서 확인해 주세요.`
+  } else {
+    summary = rows.length ? `최근 입출고 ${rows.length}건입니다.` : "입출고 기록이 없습니다."
+  }
   return {
-    summary: rows.length ? `최근 입출고 ${rows.length}건입니다.` : "입출고 기록이 없습니다.",
+    summary,
     card: {
       icon: "stock",
       title: "HW 입출고",
-      target: { label: "최근 기록", meta: `${rows.length}건` },
+      target: { label: ranged ? ranged.label : "최근 기록", meta: `${inRange.length}건` },
       table: {
         head: ["날짜", "품목", "수량", "상태"],
-        rows: rows.map((row) => [day(row.occurred_at), str(row.product_name), units(num(row.quantity) ?? 0, "대"), str(row.status) || str(row.movement_type)]),
+        rows: rows.map((row) => [day(row.occurred_at), str(row.product_name), units(num(row.quantity) ?? 0, "대"), statusLabel(row.status) || statusLabel(row.movement_type)]),
         textual: true,
       },
+      ...(inRange.length > rows.length ? { note: `상위 ${rows.length}건만 보입니다` } : {}),
     },
   }
 }
@@ -186,19 +303,26 @@ function viewDeals(value: unknown): ReadView {
       target: { label: "최근 갱신순", meta: `${rows.length}건` },
       table: {
         head: ["고객", "딜", "단계", "담당"],
-        rows: rows.slice(0, 10).map((row) => [str(row.customer_name), str(row.title), str(row.stage) || str(row.status), str(row.owner)]),
+        rows: rows.slice(0, 10).map((row) => [str(row.customer_name), str(row.title), statusLabel(row.stage) || statusLabel(row.status), str(row.owner)]),
         textual: true,
       },
     },
   }
 }
 
-function viewQuotes(value: unknown): ReadView {
+function viewQuotes(value: unknown, period: Period | "unsupported" | null): ReadView {
   const rows = listOf(value)
   const amounts = rows.map((row) => firstNum(row, ["total_amount", "total", "grand_total", "amount"]))
   const sum = amounts.reduce<number>((acc, v) => acc + (v ?? 0), 0)
+  const asked = period === "unsupported" ? "요청한 기간" : period ? period.label.replace(/\(.*\)$/, "") : null
+  // 견적 목록은 기간으로 거르지 못한다 — 기간을 물었으면 합계 숫자를 결론으로 내지 않는다.
+  const summary = asked
+    ? `견적 목록은 아직 기간으로 거르지 못합니다. ${asked} 합계는 견적 화면에서 확인해 주세요 — 아래는 최근 갱신 ${units(rows.length, "건")}입니다.`
+    : rows.length
+      ? `견적 ${units(rows.length, "건")}(최근 갱신 ${QUOTE_LIMIT}건까지), 합계 ${krw(sum)}(VAT 포함 금액 기준)입니다.`
+      : "조건에 맞는 견적이 없습니다."
   return {
-    summary: rows.length ? `견적 ${rows.length}건, 합계 ${krw(sum)}(VAT 포함 금액 기준)입니다.` : "조건에 맞는 견적이 없습니다.",
+    summary,
     card: {
       icon: "search",
       title: "견적",
@@ -208,7 +332,7 @@ function viewQuotes(value: unknown): ReadView {
         rows: rows.slice(0, 10).map((row, index) => [
           str(row.document_number) || str(row.quote_number),
           str(row.customer_name),
-          str(row.status),
+          statusLabel(row.status),
           amounts[index] != null ? krw(amounts[index] as number) : "-",
         ]),
       },
@@ -216,14 +340,20 @@ function viewQuotes(value: unknown): ReadView {
   }
 }
 
-function viewTraffic(value: unknown, args: ToolArgs): ReadView {
+function viewTraffic(value: unknown, args: ToolArgs, period: Period | "unsupported" | null, text: string): ReadView {
   const data = isRow(value) ? value : {}
   const totals = isRow(data.totals) ? data.totals : data
   const visitors = firstNum(totals, ["visitors", "uniqueVisitors", "unique_visitors", "sessions"])
   const views = firstNum(totals, ["pageViews", "pageviews", "page_views", "views"])
   const range = num(args.range_days) ?? 30
+  const base = visitors != null ? `최근 ${range}일 방문자는 ${units(visitors, "명")}입니다.` : `최근 ${range}일 방문 요약입니다.`
+  const askedOther =
+    period === "unsupported" ? "요청한 기간" : period && period.days !== range ? period.label.replace(/\(.*\)$/, "") : null
+  const notes: string[] = []
+  if (COMPARE.test(text)) notes.push("두 구간 비교는 아직 한 번에 보지 못합니다 — Analytics 방문자 화면에서 비교해 주세요.")
+  else if (askedOther) notes.push(`${askedOther}이 아니라 최근 ${range}일 기준입니다 — ${askedOther}만 보려면 Analytics 방문자 화면에서 확인해 주세요.`)
   return {
-    summary: visitors != null ? `최근 ${range}일 방문자는 ${units(visitors, "명")}입니다.` : `최근 ${range}일 방문 요약입니다.`,
+    summary: [base, ...notes].join(" "),
     card: {
       icon: "search",
       title: "사이트 방문",
@@ -239,20 +369,20 @@ function viewTraffic(value: unknown, args: ToolArgs): ReadView {
   }
 }
 
-function viewOf(tool: ToolName, value: unknown, args: ToolArgs): ReadView {
+function viewOf(tool: ToolName, value: unknown, args: ToolArgs, period: Period | "unsupported" | null, text: string): ReadView {
   switch (tool) {
     case "hw_stock":
       return viewHwStock(value, args)
     case "hw_movements":
-      return viewHwMovements(value)
+      return viewHwMovements(value, period)
     case "hw_sales":
       return viewHwSales(value)
     case "deals_list":
       return viewDeals(value)
     case "quotes_list":
-      return viewQuotes(value)
+      return viewQuotes(value, period)
     case "site_traffic":
-      return viewTraffic(value, args)
+      return viewTraffic(value, args, period, text)
   }
 }
 
@@ -282,11 +412,12 @@ export async function readBlocks(target: ReadTarget, ctx: ToolTurnContext, deps:
   if (target.kind === "screen") return [screenBlock(target)]
   const def = deps.getTool(target.tool)
   if (!def || def.risk !== "R0") return [{ kind: "text", text: "이 조회 도구를 찾지 못했습니다." }]
-  const args = argsForRead(target.tool, ctx)
+  const period = periodOf(ctx.text, ctx.now)
+  const args = argsForRead(target.tool, ctx, period)
   try {
     const { value } = await deps.run(def, args, ctx.actor)
     const presented = await deps.present(def, args, ctx.actor, value)
-    const view = viewOf(target.tool, presented.value, args)
+    const view = viewOf(target.tool, presented.value, args, period, ctx.text)
     const screen = TOOL_SCREEN[target.tool]
     const openHref = screen ? hrefOf(screen.linkId) : undefined
     return [

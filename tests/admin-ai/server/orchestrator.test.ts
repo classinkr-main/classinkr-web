@@ -162,7 +162,7 @@ describe("조율기 — 조회 도구", () => {
   it("견적 조회는 통화를 붙이고 견적 화면 링크를 단다", async () => {
     const { deps } = fakeDeps()
     const result = await collectTurn(turn("견적 목록 보여 줘"), deps)
-    expect(result.blocks[0]).toEqual({ kind: "text", text: "견적 1건, 합계 ₩1,100,000(VAT 포함 금액 기준)입니다." })
+    expect(result.blocks[0]).toEqual({ kind: "text", text: "견적 1건(최근 갱신 10건까지), 합계 ₩1,100,000(VAT 포함 금액 기준)입니다." })
     const read = result.blocks[1]
     if (read.kind === "read") {
       expect(read.card.table?.rows[0][3]).toBe("₩1,100,000")

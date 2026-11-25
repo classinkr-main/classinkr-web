@@ -10,7 +10,7 @@ import type { OpsToolDef, ReadToolDef, ToolArgs, WriteToolDef } from "@/lib/ops-
 
 const EMPTY: InternalEvidenceParts = { curated: [], incidents: [], publicDocs: [], internalDocs: [], publicAnswer: null, internalDraft: null }
 
-/** 질문 낱말로 근거를 고른다. "근거없는주제" 가 들어 있으면 빈 근거. */
+/** 질문 낱말로 근거를 고른다. "근거없는주제" 가 들어 있으면 빈 근거. 주제별로 다른 문서를 준다(FAKE_DOCS). */
 export function fakeEvidence(question: string): InternalEvidenceParts {
   if (/근거없는주제|우주선/.test(question)) return EMPTY
   if (/환불|할인|정책|규정|승인/.test(question)) {
@@ -34,25 +34,103 @@ export function fakeEvidence(question: string): InternalEvidenceParts {
       ],
     }
   }
+  const doc = FAKE_DOCS.find((entry) => entry.match.test(question)) ?? FAKE_DOCS[FAKE_DOCS.length - 1]
   return {
     ...EMPTY,
     publicDocs: [
       {
         kind: "public_doc",
-        id: "doc-sample",
-        title: "수업 기능 안내(샘플)",
+        id: doc.id,
+        title: doc.title,
         heading: "시작하기",
-        summary: "수업 설정 화면에서 켤 수 있습니다. 교사 계정으로 로그인해야 합니다.",
-        excerpt: "수업 설정 화면에서 켤 수 있습니다. 교사 계정으로 로그인합니다. 수업 설정을 엽니다. 해당 항목을 켭니다.",
+        summary: doc.summary,
+        excerpt: doc.excerpt,
         urlPath: "/support",
         confirmed: true,
         customerUse: "allowed",
         asOf: null,
-        sources: [{ id: "doc-sample", label: "수업 기능 안내(샘플)" }],
+        sources: [{ id: doc.id, label: doc.title }],
       },
     ],
   }
 }
+
+/**
+ * 질문 주제별 공개 문서(샘플). 근거 검색처럼 낱말로 고르되 주제마다 다른 글을 돌려준다 — 질문과 상관없이 늘 같은 문서를 주면
+ * "결론이 질문에 대한 답인가"(검토 동작-1)를 시험이 잡지 못한다. 마지막 줄은 아무 주제에도 안 맞을 때의 일반 문서다.
+ */
+const FAKE_DOCS: ReadonlyArray<{ match: RegExp; id: string; title: string; summary: string; excerpt: string }> = [
+  {
+    match: /녹화/,
+    id: "doc-recording",
+    title: "수업 녹화 안내(샘플)",
+    summary: "수업 녹화는 수업 설정 화면에서 켤 수 있습니다. 교사 계정으로 로그인해야 합니다.",
+    excerpt: "수업 녹화는 수업 설정 화면에서 켤 수 있습니다. 교사 계정으로 로그인합니다. 수업 설정을 엽니다. 녹화 항목을 켭니다. 녹화 영상 삭제는 녹화 목록에서 합니다.",
+  },
+  {
+    match: /화질|카메라/,
+    id: "doc-camera",
+    title: "카메라 화질 안내(샘플)",
+    summary: "카메라 화질이 흐리면 장치 설정의 해상도를 먼저 확인합니다.",
+    excerpt: "카메라 화질이 흐리면 장치 설정의 해상도를 먼저 확인합니다. 렌즈를 닦습니다. 조명을 확인합니다.",
+  },
+  {
+    match: /입장|접속|링크/,
+    id: "doc-join",
+    title: "수업 입장 안내(샘플)",
+    summary: "학생이 수업 링크로 입장이 안 되면 링크 만료와 앱 버전을 확인합니다.",
+    excerpt: "학생이 수업 링크로 입장이 안 되면 링크 만료와 앱 버전을 확인합니다. 새 링크를 보냅니다. 앱을 다시 설치합니다.",
+  },
+  {
+    match: /칠판|PDF|판서/i,
+    id: "doc-board",
+    title: "칠판 안내(샘플)",
+    summary: "칠판에 PDF를 올리려면 칠판 도구의 파일 올리기를 누릅니다.",
+    excerpt: "칠판에 PDF를 올리려면 칠판 도구의 파일 올리기를 누릅니다. 파일을 고릅니다. 올린 PDF는 페이지로 넘깁니다.",
+  },
+  {
+    match: /설치|앱/,
+    id: "doc-install",
+    title: "앱 설치 안내(샘플)",
+    summary: "앱 설치가 안 되면 운영체제 버전과 저장 공간을 먼저 확인합니다.",
+    excerpt: "앱 설치가 안 되면 운영체제 버전과 저장 공간을 먼저 확인합니다. 설치 파일을 다시 받습니다.",
+  },
+  {
+    match: /숙제|출석/,
+    id: "doc-class",
+    title: "숙제·출석 안내(샘플)",
+    summary: "숙제는 수업 화면의 숙제 탭에서 보내고, 출석 체크는 수업 기록에서 봅니다.",
+    excerpt: "숙제는 수업 화면의 숙제 탭에서 보냅니다. 출석 체크는 수업 기록에서 봅니다.",
+  },
+  {
+    match: /계정/,
+    id: "doc-account",
+    title: "계정 안내(샘플)",
+    summary: "교사 계정 추가는 기관 관리자 화면에서 합니다. 학생 계정도 같은 화면에서 만듭니다.",
+    excerpt: "교사 계정 추가는 기관 관리자 화면에서 합니다. 학생 계정도 같은 화면에서 만듭니다.",
+  },
+  {
+    match: /요금제|결제\s*수단|가격/,
+    id: "doc-pricing",
+    title: "요금제 안내(샘플)",
+    summary: "요금제 차이와 결제 수단은 가격표 페이지에 있습니다.",
+    excerpt: "요금제 차이와 결제 수단은 가격표 페이지에 있습니다. 결제 수단은 카드와 계좌 이체입니다.",
+  },
+  {
+    match: /화면\s*공유|끊/,
+    id: "doc-share",
+    title: "화면 공유 안내(샘플)",
+    summary: "화면 공유가 끊기면 네트워크 상태와 공유 권한을 확인합니다.",
+    excerpt: "화면 공유가 끊기면 네트워크 상태와 공유 권한을 확인합니다. 다시 공유를 누릅니다.",
+  },
+  {
+    match: /./,
+    id: "doc-sample",
+    title: "수업 기능 안내(샘플)",
+    summary: "수업 설정 화면에서 켤 수 있습니다. 교사 계정으로 로그인해야 합니다.",
+    excerpt: "수업 설정 화면에서 켤 수 있습니다. 교사 계정으로 로그인합니다. 수업 설정을 엽니다. 해당 항목을 켭니다.",
+  },
+]
 
 export function fakeInternalContact(question: string): InternalContactCard {
   return {
@@ -106,7 +184,10 @@ export function fakeOps() {
       ...SAMPLE_STOCK,
       stock: SAMPLE_STOCK.stock.filter((row) => !args.query || row.product.toLowerCase().includes(String(args.query).toLowerCase())),
     })),
-    readDef("hw_movements", () => [{ occurred_at: "2026-11-20", product_name: "T1 카메라", quantity: 2, status: "planned" }]),
+    readDef("hw_movements", () => [
+      { occurred_at: "2026-11-20", product_name: "T1 카메라", quantity: 2, status: "planned", movement_type: "outbound" },
+      { occurred_at: "2026-10-30", product_name: "86형 보드", quantity: 1, status: "", movement_type: "inbound" },
+    ]),
     readDef("hw_sales", () => ({ fy: 2026, grandTotal: { total: { installed: 40, planned: 3 } }, groups: [] })),
     readDef("deals_list", () => [{ customer_name: "가온학원(샘플)", title: "녹화 세트", stage: "proposal", owner: "담당 A" }]),
     readDef("quotes_list", () => [{ document_number: "Q-1", customer_name: "가온학원(샘플)", status: "draft", total_amount: 1_100_000, contact_phone: "010-1234-5678" }]),

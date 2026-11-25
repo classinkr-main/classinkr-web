@@ -13,8 +13,8 @@ import type { AdminAiPageContext, AiBlock, OrderTicket } from "../types"
 import { contactBlock, linksBlock } from "./contact"
 import { answerKnowledge, type KnowledgeDeps } from "./knowledge"
 import { askModelRoute, type AdminAiModelAdapter } from "./llm/adapter"
-import { BRANCH_LABEL, routeMessage, type AskBranch, type RouteDecision, type WriteKind } from "./router"
-import { notReadyBlock, readBlocks, type OpsDeps, type ToolTurnContext } from "./tools"
+import { BRANCH_LABEL, routeMessageDetailed, type AskBranch, type RouteDecision, type WriteKind } from "./router"
+import { hrefOf, notReadyBlock, readBlocks, TOOL_SCREEN, type OpsDeps, type ToolTurnContext } from "./tools"
 
 export interface WriteTurnResult {
   blocks: AiBlock[]
@@ -28,7 +28,11 @@ export interface OrchestratorDeps {
   model: AdminAiModelAdapter | null
   /** 쓰기(견적 초안·HW 배송 예정) 미리보기 — 없으면 쓰기는 모두 "아직 준비 중" 카드. */
   previewWrite?: (kind: "quote_draft" | "hw_plan", ctx: ToolTurnContext) => Promise<WriteTurnResult>
+  /** 조각 하나(근거 찾기·조회·미리보기)의 시간 상한. 기본 15초 — 넘으면 "시간이 넘었습니다 — 화면에서" 카드. */
+  segmentTimeoutMs?: number
 }
+
+export const SEGMENT_TIMEOUT_MS = 15_000
 
 export interface TurnInput {
   text: string
@@ -114,9 +118,8 @@ async function segmentBlocks(decision: RouteDecision, input: TurnInput, deps: Or
     const kind = decision.write ?? "other"
     if ((kind === "quote_draft" || kind === "hw_plan") && deps.previewWrite) {
       if (state.orderTaken) return { blocks: [{ kind: "text", text: "오더는 한 번에 하나만 만듭니다. 앞 오더를 확인한 뒤 다시 요청해 주세요." }] }
-      const result = await deps.previewWrite(kind, { text: decision.text, actor: input.actor, context: input.context, now: input.now })
-      if (result.order) state.orderTaken = true
-      return result
+      // 오더를 받았다는 표시(state.orderTaken)는 runTurn 이 오더를 실제로 내보낼 때 한다(시간이 넘어 버린 미리보기는 세지 않는다).
+      return deps.previewWrite(kind, { text: decision.text, actor: input.actor, context: input.context, now: input.now })
     }
     return { blocks: [notReadyBlock(kind as Exclude<WriteKind, "quote_draft" | "hw_plan">)] }
   }
@@ -130,22 +133,75 @@ async function segmentBlocks(decision: RouteDecision, input: TurnInput, deps: Or
   return { blocks: await askBranchBlocks(branch, { ...decision, branch }, input, deps) }
 }
 
+class SegmentTimeout extends Error {}
+
+/** 시간 상한을 넘은 조각의 카드 — 조회면 그 화면 링크를 단다. 늦게 끝난 결과(오더 포함)는 버린다. */
+function timeoutBlock(decision: RouteDecision, seconds: number): AiBlock {
+  const screen = decision.branch === "read" && decision.read?.kind === "tool" ? TOOL_SCREEN[decision.read.tool] : undefined
+  const href = screen ? hrefOf(screen.linkId) : undefined
+  return {
+    kind: "deny",
+    card: {
+      title: "시간이 넘었습니다 — 화면에서",
+      target: { label: decision.text.length > 30 ? `${decision.text.slice(0, 29)}…` : decision.text, meta: `${seconds}초 안에 답하지 못함` },
+      text: `${STEP_LABEL[decision.branch]} 시간이 넘었습니다(${seconds}초). 화면에서 확인하거나 잠시 뒤 다시 물어봐 주세요.`,
+      ...(screen && href ? { openLabel: screen.label, openHref: href } : {}),
+    },
+  }
+}
+
+async function withTimeout<T>(task: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([task, new Promise<never>((_, reject) => (timer = setTimeout(() => reject(new SegmentTimeout()), ms)))])
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
+}
+
+/** 한 턴 안에서 같은 담당자·링크 카드는 한 번만 낸다(복합 질문에서 근거 없는 조각마다 같은 카드가 겹치지 않게, 검토 동작-8). */
+const cardKey = (block: AiBlock) => (block.kind === "contact" || block.kind === "links" ? `${block.kind}:${JSON.stringify(block.card)}` : null)
+
 /** 한 턴을 돌린다. 이벤트는 step → block/order … 순서로 emit 하고, 끝은 호출자가 done 으로 닫는다. */
 export async function runTurn(input: TurnInput, deps: OrchestratorDeps, emit: Emit): Promise<void> {
   const text = withFollowUpContext(input.text.trim(), input.history)
   emit({ type: "step", label: "질문 나누기" })
-  const decisions = routeMessage(text)
+  const { decisions, dropped } = routeMessageDetailed(text)
   const state = { orderTaken: false }
-  for (const decision of decisions) {
+  const timeoutMs = deps.segmentTimeoutMs ?? SEGMENT_TIMEOUT_MS
+  const seen = new Set<string>()
+  for (const [index, decision] of decisions.entries()) {
     emit({ type: "step", label: STEP_LABEL[decision.branch] })
     let result: WriteTurnResult
     try {
-      result = await segmentBlocks(decision, input, deps, state)
-    } catch {
-      result = { blocks: [{ kind: "text", text: "이 질문은 처리하지 못했습니다. 잠시 뒤 다시 물어봐 주세요." }] }
+      result = await withTimeout(segmentBlocks(decision, input, deps, state), timeoutMs)
+    } catch (error) {
+      result =
+        error instanceof SegmentTimeout
+          ? { blocks: [timeoutBlock(decision, Math.round(timeoutMs / 1000))] }
+          : { blocks: [{ kind: "text", text: "이 질문은 처리하지 못했습니다. 잠시 뒤 다시 물어봐 주세요." }] }
     }
-    if (result.order) emit({ type: "order", order: result.order })
-    for (const block of result.blocks) emit({ type: "block", block })
+    // 뒤 조각이 담당자를 따로 물으면, 근거 없는 답에 붙는 담당자 카드는 빼고 뒤 조각의 카드만 낸다.
+    const contactLater = decisions.slice(index + 1).some((later) => later.branch === "contact")
+    const blocks = result.blocks.filter((block) => {
+      if (contactLater && decision.branch !== "contact" && block.kind === "contact") return false
+      const key = cardKey(block)
+      if (!key) return true
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+    if (result.order) {
+      state.orderTaken = true
+      emit({ type: "order", order: result.order })
+    }
+    for (const block of blocks) emit({ type: "block", block })
+  }
+  if (dropped.length) {
+    emit({
+      type: "block",
+      block: { kind: "text", text: `질문이 많아 앞의 ${decisions.length}개만 답했습니다. 나머지(${dropped.join(" ")})는 다시 물어봐 주세요.` },
+    })
   }
 }
 
