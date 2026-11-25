@@ -67,7 +67,25 @@ export interface WeeklyCompassEvaluation {
   people: WeeklyEvaluationPerson[]
 }
 
+/** KA 고객에 이름으로 맞춘 Compass 리드와 최근 기록 — 진행 서술(AI 초안)의 근거. 이름 매칭이라 확정 연결이 아니다. */
+export interface WeeklyKaCompass {
+  leadId: number
+  academy: string | null
+  url: string
+  stage: string | null
+  stageLabel: string | null
+  nextAction: string | null
+  nextActionAt: string | null
+  /** 가장 최근 기록 시각 */
+  lastActivityAt: string | null
+  /** 보고 주(월~일) 기록 수 */
+  weekActivityCount: number
+  /** 최근 30일 기록(최신순, 최대 6) — 연락처는 가린 본문 */
+  recent: { at: string; kind: string | null; actor: string | null; text: string }[]
+}
+
 export interface WeeklyKaCustomer {
+  compass?: WeeklyKaCompass | null
   customer: string
   manager: string | null
   team: string | null
@@ -89,6 +107,8 @@ export interface WeeklyKaSection {
   customerCount: number
   /** 분기 합계 큰 순 상위 */
   customers: WeeklyKaCustomer[]
+  /** Compass 기록 조회 상태 — down이면 진행 서술 초안을 만들지 않는다. */
+  compassState?: "ready" | "down"
 }
 
 export interface BranchWeeklyCompassReport {
@@ -108,4 +128,45 @@ export interface BranchWeeklyCompassReport {
 
 export function weeklyDelta(current: number, previous: number): { diff: number; pct: number | null } {
   return { diff: current - previous, pct: previous > 0 ? ((current - previous) / previous) * 100 : null }
+}
+
+/** 본사 주간 보고서 모듈(5.2 对应模块). */
+export type ReportModule = "KA" | "market" | "partner" | "other"
+
+/** AI가 쓴 본사 양식(韩国业务周报) 간이 보고 — 간체 중국어. raw_response._weekly_report로 저장된다. */
+export interface WeeklyReportDraft {
+  /** 一、财年业绩进展表 한 줄 평 */
+  performance: string
+  /** 二、本月收款 한 줄 평 */
+  collections: string
+  /** 三、重点KA客户情况跟进 행 */
+  ka: Array<{ customer: string; stage: string; change: string; issue: string; next_action: string; hq_support: string }>
+  /** 四、市场活动 한 줄 평(Compass 퍼널·행사) */
+  activities: string
+  /** 5.1 本周要点 */
+  key_points: string[]
+  /** 5.2 下周主要计划 */
+  next_week: Array<{ plan: string; module: ReportModule; due: string }>
+}
+
+/** 저장된 raw_response에서 간이 보고를 안전하게 꺼낸다(모양이 다르면 null). */
+export function readWeeklyReportDraft(value: unknown): WeeklyReportDraft | null {
+  if (!value || typeof value !== "object") return null
+  const v = value as Record<string, unknown>
+  const str = (x: unknown) => (typeof x === "string" ? x : "")
+  if (!Array.isArray(v.ka) || !Array.isArray(v.key_points) || !Array.isArray(v.next_week)) return null
+  return {
+    performance: str(v.performance),
+    collections: str(v.collections),
+    activities: str(v.activities),
+    key_points: v.key_points.filter((x): x is string => typeof x === "string"),
+    ka: v.ka.filter((x): x is Record<string, unknown> => !!x && typeof x === "object").map((x) => ({
+      customer: str(x.customer), stage: str(x.stage), change: str(x.change), issue: str(x.issue), next_action: str(x.next_action), hq_support: str(x.hq_support),
+    })),
+    next_week: v.next_week.filter((x): x is Record<string, unknown> => !!x && typeof x === "object").map((x) => ({
+      plan: str(x.plan),
+      module: (["KA", "market", "partner", "other"].includes(str(x.module)) ? str(x.module) : "other") as ReportModule,
+      due: str(x.due),
+    })),
+  }
 }

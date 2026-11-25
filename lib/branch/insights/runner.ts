@@ -75,8 +75,8 @@ export async function runInsights(team: TeamScope, force: boolean): Promise<RunI
     const saved = await insertInsight({
       team, fiscal_period: input.fiscalPeriod,
       one_liner: result.one_liner, next_actions: result.next_actions,
-      // report_notes는 테이블 칼럼이 없어 raw_response._report_notes에 함께 둔다(마이그레이션 없이 화면이 읽는다).
-      raw_response: { ...((raw as object) ?? {}), _model: usedModel, _mode: mode, _retried: retried, _warnings: warnings, _report_notes: result.report_notes ?? [], _compass_week: compassWeekly?.week.label ?? null },
+      // weekly_report(본사 양식 간이 보고)는 테이블 칼럼이 없어 raw_response._weekly_report에 둔다(마이그레이션 없이 화면이 읽는다).
+      raw_response: { ...((raw as object) ?? {}), _model: usedModel, _mode: mode, _retried: retried, _warnings: warnings, _weekly_report: result.weekly_report ?? null, _compass_week: compassWeekly?.week.label ?? null },
       input_digest: digest,
     })
     return { from: "fresh", insight: saved, numerical_warnings: warnings.length > 0 ? warnings : undefined, retried }

@@ -4,7 +4,13 @@ import "server-only"
 import { getBusinessDateParts, toBusinessStorageDateTime } from "@/lib/business-time"
 import { readCompassKrTeam } from "@/lib/compass/kr-team"
 import { buildCompassRangeFunnel, UNASSIGNED_OWNER_LABEL, type CompassRangeFunnel } from "@/lib/compass/summary"
-import type { CompassLeadSliceRow } from "@/lib/compass/bridge"
+import {
+  getCompassActivitiesByLeadIds,
+  getCompassLeadsByAcademyNames,
+  type CompassLeadByAcademyRow,
+  type CompassLeadSliceRow,
+} from "@/lib/compass/bridge"
+import { compassLeadUrl, COMPASS_STAGE_LABEL } from "@/lib/compass/normalize"
 import { deriveMemberTeams } from "@/lib/branch/computations/member-teams"
 import { normalizeBranchMemberName } from "@/lib/branch/member-names"
 import { branchManagerMatches } from "@/lib/branch/personal-scope"
@@ -15,6 +21,7 @@ import type {
   BranchWeeklyCompassReport,
   WeeklyCompassEvaluation,
   WeeklyCompassFunnel,
+  WeeklyKaCompass,
   WeeklyKaSection,
   WeeklyReportWeek,
 } from "./weekly-report-contract"
@@ -129,6 +136,88 @@ export function buildKaSection(deals: readonly BranchRevDeal[], { now, team, man
   }
 }
 
+const KA_RECENT_LIMIT = 6
+const KA_RECENT_DAYS = 30
+// 단계 순위 — 같은 이름 후보가 여럿이면 더 진행된 리드를 고른다(신규 캠퍼스 스텁보다 결제 리드).
+const STAGE_RANK: Record<string, number> = { won: 7, bd: 6, quote: 5, demo: 4, consult: 3, contact: 2, new: 1, lost: 0 }
+
+function normalizeAcademy(value: string | null | undefined) {
+  return (value ?? "").replace(/\s+/g, "").toLowerCase()
+}
+
+/** LLM·화면으로 내보내기 전에 본문 안의 전화·이메일을 가린다. */
+export function maskContact(text: string) {
+  return text
+    .replace(/[\w.+-]+@[\w-]+(\.[\w-]+)+/g, "[이메일]")
+    .replace(/(\+?82[-\s]?)?0?1[016789][-\s.]?\d{3,4}[-\s.]?\d{4}/g, "[전화]")
+    .replace(/0\d{1,2}[-\s.]\d{3,4}[-\s.]\d{4}/g, "[전화]")
+}
+
+/** 후보 중 이름이 공백 무시 정확히 같은 리드 → 고객명을 포함하는 리드 순, 그 안에서는 단계가 앞선 것 → 최근 갱신. */
+export function pickCompassLeadForCustomer(customer: string, candidates: readonly CompassLeadByAcademyRow[]): CompassLeadByAcademyRow | null {
+  const target = normalizeAcademy(customer)
+  if (!target) return null
+  const scored = candidates
+    .map((lead) => {
+      const academy = normalizeAcademy(lead.academy)
+      const match = academy === target ? 2 : academy.includes(target) ? 1 : 0
+      return { lead, match }
+    })
+    .filter((entry) => entry.match > 0)
+  scored.sort((a, b) => b.match - a.match
+    || (STAGE_RANK[b.lead.stage ?? ""] ?? 0) - (STAGE_RANK[a.lead.stage ?? ""] ?? 0)
+    || (b.lead.updated_at ?? "").localeCompare(a.lead.updated_at ?? ""))
+  return scored[0]?.lead ?? null
+}
+
+/** KA 고객에 Compass 리드·최근 기록을 붙인다. 브리지가 죽으면 compassState=down으로 표시하고 기록 없이 돌려준다. */
+export async function attachKaCompass(ka: WeeklyKaSection, week: WeeklyReportWeek, now: Date): Promise<WeeklyKaSection> {
+  if (ka.customers.length === 0) return { ...ka, compassState: "ready" }
+  const leads = await getCompassLeadsByAcademyNames(ka.customers.map((customer) => customer.customer))
+  if (leads.down) return { ...ka, compassState: "down" }
+  const picked = new Map<string, CompassLeadByAcademyRow>()
+  for (const customer of ka.customers) {
+    const lead = pickCompassLeadForCustomer(customer.customer, leads.rows)
+    if (lead) picked.set(customer.customer, lead)
+  }
+  const activities = await getCompassActivitiesByLeadIds([...picked.values()].map((lead) => lead.id), 400)
+  if (activities.down) return { ...ka, compassState: "down" }
+  const recentSince = new Date(now.getTime() - KA_RECENT_DAYS * 86_400_000).toISOString()
+  const weekSince = Date.parse(week.since)
+  const weekUntil = Date.parse(week.until)
+  const byLead = new Map<number, typeof activities.rows>()
+  for (const row of activities.rows) byLead.set(row.lead_id, [...(byLead.get(row.lead_id) ?? []), row])
+  const customers = ka.customers.map((customer) => {
+    const lead = picked.get(customer.customer)
+    if (!lead) return { ...customer, compass: null }
+    const rows = (byLead.get(lead.id) ?? []).slice().sort((a, b) => b.created_at.localeCompare(a.created_at))
+    const compass: WeeklyKaCompass = {
+      leadId: lead.id,
+      academy: lead.academy,
+      url: compassLeadUrl(lead.id),
+      stage: lead.stage,
+      stageLabel: lead.stage ? COMPASS_STAGE_LABEL[lead.stage] ?? lead.stage : null,
+      nextAction: lead.next_action ? maskContact(lead.next_action).slice(0, 160) : null,
+      nextActionAt: lead.next_action_at,
+      lastActivityAt: rows[0]?.created_at ?? null,
+      weekActivityCount: rows.filter((row) => { const at = Date.parse(row.created_at); return at >= weekSince && at < weekUntil }).length,
+      recent: rows
+        .filter((row) => row.created_at >= recentSince && (row.body?.trim() || row.kind === "stage_change"))
+        .slice(0, KA_RECENT_LIMIT)
+        .map((row) => ({
+          at: row.created_at,
+          kind: row.kind,
+          actor: row.actor,
+          text: row.kind === "stage_change"
+            ? `${COMPASS_STAGE_LABEL[row.from_stage ?? ""] ?? row.from_stage ?? "?"} → ${COMPASS_STAGE_LABEL[row.to_stage ?? ""] ?? row.to_stage ?? "?"}`
+            : maskContact(row.body ?? "").replace(/\s+/g, " ").trim().slice(0, 200),
+        })),
+    }
+    return { ...customer, compass }
+  })
+  return { ...ka, customers, compassState: "ready" }
+}
+
 export async function buildBranchWeeklyCompassReport({ now = new Date(), team, manager, deals }: {
   now?: Date
   team: string
@@ -191,6 +280,6 @@ export async function buildBranchWeeklyCompassReport({ now = new Date(), team, m
     scope: { team, manager: manager ?? null, teamSource: scoped ? teamSource : null },
     funnel: foldFunnel(current, previous, !scoped),
     evaluation,
-    ka: buildKaSection(deals, { now, team, manager }),
+    ka: await attachKaCompass(buildKaSection(deals, { now, team, manager }), weeks.week, now),
   }
 }

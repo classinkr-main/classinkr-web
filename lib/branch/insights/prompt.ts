@@ -11,10 +11,15 @@ export const INSIGHT_SYSTEM_PROMPT = `너는 Sales Branding Dashboard 의 시니
 
 ## 출력 규칙
 - 출력은 반드시 다음 JSON 스키마를 따른다:
-  { "one_liner": "한 줄 정의 (50자 이내)", "next_actions": [ { "title": "...", "why": "...", "owner": "매니저명", "due": "YYYY-MM-DD" } ], "report_notes": ["매출 ...", "KA ...", "영업 활동 ...", "KPI ..."] }
-- report_notes 는 본사 주간 보고서에 그대로 싣는 정확히 4줄이며 보고서 순서와 같다: 매출 → KA → 주요 영업 활동 → KPI. 각 100자 이내, 평서문(~입니다/~했습니다).
-  매출과 KA가 보고의 핵심이다 — 1·2줄에 가장 구체적인 수치와 판단을 담는다.
-  1줄 매출: REV 확정·DSH 목표·달성률·남은 목표. 2줄 KA: ka_quarter 확정·미확정과 가장 큰(또는 지연된) KA 고객. 3줄 주요 영업 활동: compass_weekly 지난 주 vs 그 전 주(유입·데모·결제 등 숫자, state 가 ready 가 아니면 "Compass 리드 퍼널을 읽지 못해 활동 비교를 생략합니다."). 4줄 KPI: 시트 KPI 병목(bottleneck_kpi)과 Compass 과정 평가가 있으면 낮은 사람, 그리고 다음 주 대응 1가지.
+  { "one_liner": "한 줄 정의 (50자 이내)", "next_actions": [ { "title": "...", "why": "...", "owner": "매니저명", "due": "YYYY-MM-DD", "module": "KA" } ], "weekly_report": { "performance": "...", "collections": "...", "ka": [ { "customer": "...", "stage": "商机推进", "change": "...", "issue": "...", "next_action": "...", "hq_support": "-" } ], "activities": "...", "key_points": ["..."], "next_week": [ { "plan": "...", "module": "KA", "due": "YYYY-MM-DD" } ] } }
+- next_actions 의 module 은 본사 주간 보고서 모듈 중 하나다: "KA"(핵심 고객) · "market"(설명회·행사·광고 등 마케팅 활동) · "partner"(파트너·공교육) · "other". next_actions 는 다음 주 계획의 근거가 되므로 매출·KA 액션을 먼저 둔다.
+- weekly_report 는 본사에 보내는 주간 보고서(韩国业务周报) 양식의 간이 초안이다. **간체 중국어**로 쓰고, 고객·사람 이름은 입력 그대로(한글·영문) 둔다. 금액은 입력 CNY 를 万 단위 소수 1~2자리로 쓴다(예: 46,250 → 4.6万). 매출과 KA가 보고의 핵심이다.
+  · performance(一): performance.rows 의 월·분기·연 회수 달성률과 HW/SW 중 부진한 쪽을 한 문장(120자 이내)으로.
+  · collections(二): month_collections 의 이번 달 확정·미확정 회수와 금액이 큰 고객(新客/续费, 硬件/软件 구분)을 한두 문장으로.
+  · ka(三): ka_quarter.top_customers 중 최대 8곳, 한 고객 한 행. stage 는 触达·拜访·方案·试用·商机推进·签约 중 하나 — compass.stage 를 따른다(유입·컨택→触达, 상담·미팅→拜访, 데모→方案 또는 试用, BD인계→商机推进, 결제→签约, 확정 금액만 있고 compass 가 없으면 签约). change(本周阶段变化)·issue(现存问题)·next_action(下一步落地动作)은 **compass.recent·compass.next_action 과 금액(confirmed/open)에만 근거**한다. compass 가 null 이거나 recent 가 비면 change 에 "本周无 Compass 记录" 라고 쓰고 사실을 지어내지 않는다. hq_support(总部支持)는 근거가 없으면 "-".
+  · activities(四): compass_weekly 지난 주 vs 그 전 주 리드 퍼널(유입·데모 등)과 events_30d 행사를 한두 문장으로. compass_weekly.state 가 ready 가 아니면 "Compass 线索漏斗暂不可用。".
+  · key_points(5.1): 이번 주 요점 2~4개(각 120자 이내) — 매출 → KA → 활동 → KPI(bottleneck_kpi, Compass 평가) 순.
+  · next_week(5.2): 다음 주 계획 최대 6개 — plan(80자 이내, 담당자 포함), module(위 4개 중 하나), due(YYYY-MM-DD). KA·매출 계획을 먼저.
   매출·KA 숫자와 Compass 숫자를 한 문장 안에서 더하거나 비율로 엮지 않는다.
 - next_actions 는 정확히 5개. 각 title 은 100자 이내, why 는 80자 이내.
 - title 은 동사로 시작 (예: "재정비", "재시도", "추진", "신설").
@@ -50,18 +55,52 @@ export const INSIGHT_RESPONSE_SCHEMA = {
           why: { type: "string", maxLength: 100 },
           owner: { type: "string", maxLength: 30 },
           due: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$" },
+          module: { type: "string", enum: ["KA", "market", "partner", "other"] },
         },
-        required: ["title", "why", "owner"],
+        required: ["title", "why", "owner", "module"],
       },
     },
-    report_notes: {
-      type: "array",
-      minItems: 4,
-      maxItems: 4,
-      items: { type: "string", maxLength: 140 },
+    weekly_report: {
+      type: "object",
+      properties: {
+        performance: { type: "string", maxLength: 200 },
+        collections: { type: "string", maxLength: 260 },
+        ka: {
+          type: "array",
+          maxItems: 8,
+          items: {
+            type: "object",
+            properties: {
+              customer: { type: "string", maxLength: 60 },
+              stage: { type: "string", enum: ["触达", "拜访", "方案", "试用", "商机推进", "签约"] },
+              change: { type: "string", maxLength: 200 },
+              issue: { type: "string", maxLength: 160 },
+              next_action: { type: "string", maxLength: 160 },
+              hq_support: { type: "string", maxLength: 80 },
+            },
+            required: ["customer", "stage", "change", "issue", "next_action", "hq_support"],
+          },
+        },
+        activities: { type: "string", maxLength: 260 },
+        key_points: { type: "array", minItems: 2, maxItems: 4, items: { type: "string", maxLength: 180 } },
+        next_week: {
+          type: "array",
+          maxItems: 6,
+          items: {
+            type: "object",
+            properties: {
+              plan: { type: "string", maxLength: 140 },
+              module: { type: "string", enum: ["KA", "market", "partner", "other"] },
+              due: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$" },
+            },
+            required: ["plan", "module", "due"],
+          },
+        },
+      },
+      required: ["performance", "collections", "ka", "activities", "key_points", "next_week"],
     },
   },
-  required: ["one_liner", "next_actions", "report_notes"],
+  required: ["one_liner", "next_actions", "weekly_report"],
 } as const
 
 export const MANAGER_INSIGHT_SYSTEM_PROMPT = `너는 BD/MKT 운영 컨설턴트로, 한 명의 매니저를 코칭하는 1:1 상황이다.

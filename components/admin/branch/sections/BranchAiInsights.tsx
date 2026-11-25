@@ -3,12 +3,12 @@ import { useEffect, useState } from "react"
 import { Sparkles, RefreshCw, AlertTriangle } from "lucide-react"
 import type { BranchSummaryResponse, Team } from "../types"
 import { adminFetchJson, useBranchJson } from "../client-api"
-import type { BranchWeeklyCompassReport } from "@/lib/branch/weekly-report-contract"
+import { readWeeklyReportDraft, type BranchWeeklyCompassReport, type ReportModule } from "@/lib/branch/weekly-report-contract"
 import HqWeeklyReport, { type ReportLang } from "./HqWeeklyReport"
 import { cny } from "@/lib/branch/money-format"
 import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
 
-interface NextAction { title: string; why: string; owner: string; due?: string }
+interface NextAction { title: string; why: string; owner: string; due?: string; module?: ReportModule }
 
 interface InsightPayload {
   id: string
@@ -16,7 +16,7 @@ interface InsightPayload {
   next_actions: NextAction[]
   generated_at: string
   fiscal_period?: string
-  raw_response?: { _model?: string; _mode?: string; _retried?: boolean; _warnings?: unknown[]; _report_notes?: unknown; _compass_week?: string | null } | null
+  raw_response?: { _model?: string; _mode?: string; _retried?: boolean; _warnings?: unknown[]; _report_notes?: unknown; _weekly_report?: unknown; _compass_week?: string | null } | null
 }
 
 interface InsightResp {
@@ -41,6 +41,9 @@ const TONE = {
 
 type ToneKey = keyof typeof TONE
 
+/** 본사 주간 보고 5.2의 모듈 — AI가 next_actions에 함께 낸다(이전 캐시엔 없음). */
+const MODULE_LABEL: Record<ReportModule, string> = { KA: "KA", market: "마케팅", partner: "파트너", other: "기타" }
+
 function classifyAction(a: NextAction): ToneKey {
   const text = `${a.title} ${a.why}`.toLowerCase()
   if (/risk|위험|이슈|delay|지연|충돌/.test(text)) return "risk"
@@ -62,7 +65,10 @@ function InsightRow({ action, idx, overdue }: { action: NextAction; idx: number;
   return (
     <li className="grid grid-cols-[24px_minmax(0,1fr)] gap-x-3 gap-y-1 border-t border-[#E8E8E4] px-5 py-3.5 sm:grid-cols-[24px_72px_minmax(0,1fr)_minmax(0,120px)_88px]">
       <span className="pt-0.5 text-[11px] tabular-nums text-[#615D59]">{idx + 1}</span>
-      <span className="pt-0.5 text-[12px] font-bold" style={{ color: t.fg }}>{t.label}</span>
+      <span className="pt-0.5 text-[12px] font-bold" style={{ color: t.fg }}>
+        {t.label}
+        {action.module ? <span className="block text-[11px] font-semibold text-[#615D59]">{MODULE_LABEL[action.module] ?? action.module}</span> : null}
+      </span>
       <div className="col-span-2 min-w-0 sm:col-span-1">
         <p className="text-[14px] font-bold leading-snug text-[#111110]">{action.title}</p>
         {action.why ? <p className="mt-1 text-[12.5px] leading-relaxed text-[#615D59]">{action.why}</p> : null}
@@ -161,8 +167,11 @@ export default function BranchAiInsights({ team, refreshKey, summary, canGenerat
   const showLoading = loading || stale
   const generatedAt = formatGeneratedAt(insight?.generated_at)
   const rev = summary?.revenue
+  // 본사 양식 간이 보고(AI 초안). 이전 캐시는 4줄 report_notes만 있어 5.1 초안으로만 쓴다.
+  const reportDraft = readWeeklyReportDraft(insight?.raw_response?._weekly_report)
   const rawNotes = insight?.raw_response?._report_notes
   const reportNotes = Array.isArray(rawNotes) ? rawNotes.filter((note): note is string => typeof note === "string" && note.trim() !== "") : []
+  const draftWeek = insight?.raw_response?._compass_week ?? null
 
   return (
     <section className="space-y-4">
@@ -247,7 +256,7 @@ export default function BranchAiInsights({ team, refreshKey, summary, canGenerat
                 {rows.map((row, position) => <InsightRow key={`${row.action.title}-${row.index}`} action={row.action} idx={position} overdue={row.overdue} />)}
               </ol>
               <p className="border-t border-[#E8E8E4] px-5 py-2.5 text-[11.5px] text-[#615D59]">
-                액션 {rows.length}건{overdueCount ? ` · 기한 경과 ${overdueCount}건(아래로 내림)` : ""} · 유형은 문장에서 자동 분류
+                액션 {rows.length}건{overdueCount ? ` · 기한 경과 ${overdueCount}건(아래로 내림)` : ""} · 유형은 문장에서 자동 분류 · 모듈은 AI가 본사 보고 양식에 맞춰 지정
               </p>
             </>
           )}
@@ -269,7 +278,7 @@ export default function BranchAiInsights({ team, refreshKey, summary, canGenerat
           </div>
         </div>
         <HqWeeklyReport team={team} manager={manager} refreshKey={refreshKey} lang={lang} weekly={weekly}
-          notes={reportNotes} actions={insight?.next_actions ?? []} />
+          draft={reportDraft} draftWeek={draftWeek} notes={reportNotes} actions={insight?.next_actions ?? []} />
       </section>
     </section>
   )

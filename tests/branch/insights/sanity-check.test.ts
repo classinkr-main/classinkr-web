@@ -19,6 +19,8 @@ const mkInput = (over: Partial<InsightInput> = {}): InsightInput => ({
   managers: [], regions: [],
   bottleneck_kpi: { name: "ACC", pct: 2.3, worst_member: "Junhyuk" },
   closing_deals: [], events_30d: [], campaigns_30d: [], hw_alerts: [],
+  performance: { month: "2026-06", quarter: "Q1", rows: [] },
+  month_collections: { month: "2026-06", confirmed: 0, planned_not_confirmed: 0, customers: [] },
   ka_quarter: toInsightKaBlock(null),
   compass_weekly: toInsightCompassBlock(null),
   ...over,
@@ -56,5 +58,29 @@ describe("checkNumericalSanity", () => {
       report_notes: ["매출 달성률 17%입니다.", "KA 확정 ¥42.0만, 미확정 ¥18만입니다.", "유입 34건으로 그 전 주보다 13건 늘었습니다.", "데모가 77건입니다."],
     } as InsightResult)
     expect(w.map((x) => x.field)).toEqual(["report_notes[3]"])
+  })
+})
+
+describe("checkNumericalSanity · 본사 양식 간이 보고", () => {
+  const report = (over: Partial<NonNullable<InsightResult["weekly_report"]>> = {}) => ({
+    performance: "", collections: "", activities: "", key_points: [], ka: [], next_week: [], ...over,
+  })
+  const input = mkInput({
+    performance: { month: "2026-06", quarter: "Q1", rows: [{ product: "TOTAL", month_goal: 800_000, month_actual: 433_600, quarter_goal: 2_400_000, quarter_actual: 1_200_000, year_goal: 9_600_000, year_actual: 3_000_000 }] },
+    month_collections: { month: "2026-06", confirmed: 265_000, planned_not_confirmed: 120_000, customers: [] },
+  })
+  it("업적·회수 수치는 만 단위와 달성률(파생)까지 근거로 인정한다", () => {
+    const w = checkNumericalSanity(input, { one_liner: "", next_actions: [], weekly_report: report({
+      performance: "6月回款 43.4 万，月达成率 54.2%，季度 50.0%。",
+      collections: "本月确认 26.5 万，待回款 12.0 万。",
+    }) } as InsightResult)
+    expect(w).toEqual([])
+  })
+  it("입력에 없는 수치를 KA 진행·요점에 쓰면 잡는다", () => {
+    const w = checkNumericalSanity(input, { one_liner: "", next_actions: [], weekly_report: report({
+      key_points: ["签约 88.8 万"],
+      ka: [{ customer: "A", stage: "", change: "报价 777 万", issue: "", next_action: "", hq_support: "" }],
+    }) } as InsightResult)
+    expect(w.map((x) => x.field)).toEqual(["weekly_report.key_points[0]", "weekly_report.ka[0].change"])
   })
 })

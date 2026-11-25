@@ -54,6 +54,17 @@ function collectInputNumbers(input: InsightInput): number[] {
   for (const slice of [...input.deal_mix.by_category, ...input.deal_mix.by_status_type, ...input.deal_mix.by_channel]) {
     push(slice.goal); push(slice.actual); push(slice.pct)
   }
+  const pct = (part: number, whole: number) => { if (whole > 0) push((part / whole) * 100) }
+  for (const row of input.performance?.rows ?? []) {
+    push(row.month_goal); push(row.month_actual); push(row.quarter_goal); push(row.quarter_actual); push(row.year_goal); push(row.year_actual)
+    pct(row.month_actual, row.month_goal); pct(row.quarter_actual, row.quarter_goal); pct(row.year_actual, row.year_goal)
+    push(row.month_goal - row.month_actual); push(row.quarter_goal - row.quarter_actual); push(row.year_goal - row.year_actual)
+  }
+  const mc = input.month_collections
+  if (mc) {
+    push(mc.confirmed); push(mc.planned_not_confirmed); push(mc.confirmed + mc.planned_not_confirmed)
+    for (const c of mc.customers) { push(c.confirmed); push(c.planned_not_confirmed); push(c.confirmed + c.planned_not_confirmed) }
+  }
   const ka = input.ka_quarter
   if (ka) {
     push(ka.confirmed); push(ka.open); push(ka.confirmed + ka.open); push(ka.customer_count)
@@ -115,5 +126,16 @@ export function checkNumericalSanity(input: InsightInput, output: InsightResult)
     inspect(`next_actions[${i}].why`, a.why)
   })
   ;(output.report_notes ?? []).forEach((note, i) => inspect(`report_notes[${i}]`, note))
+  const report = output.weekly_report
+  if (report) {
+    inspect("weekly_report.performance", report.performance)
+    inspect("weekly_report.collections", report.collections)
+    inspect("weekly_report.activities", report.activities)
+    report.key_points.forEach((point, i) => inspect(`weekly_report.key_points[${i}]`, point))
+    report.ka.forEach((row, i) => {
+      inspect(`weekly_report.ka[${i}].change`, row.change)
+      inspect(`weekly_report.ka[${i}].issue`, row.issue)
+    })
+  }
   return warnings
 }

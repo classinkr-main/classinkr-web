@@ -1,11 +1,16 @@
 import "server-only"
 import { INSIGHT_SYSTEM_PROMPT, INSIGHT_RESPONSE_SCHEMA } from "./prompt"
 import type { InsightInput } from "./input-builder"
+import type { ReportModule, WeeklyReportDraft } from "@/lib/branch/weekly-report-contract"
+
+export type { ReportModule, WeeklyReportDraft }
 
 export interface InsightResult {
   one_liner: string
-  next_actions: Array<{ title: string; why: string; owner: string; due?: string }>
-  /** 본사 주간 보고서 4줄(매출 · KA · 주요 영업 활동 · KPI). 이전 캐시에는 없을 수 있다. */
+  next_actions: Array<{ title: string; why: string; owner: string; due?: string; module?: ReportModule }>
+  /** 본사 양식 간이 보고. 이전 캐시에는 없을 수 있다. */
+  weekly_report?: WeeklyReportDraft
+  /** 이전 형식(4줄) — 오래된 캐시 호환용으로만 읽는다. */
   report_notes?: string[]
 }
 

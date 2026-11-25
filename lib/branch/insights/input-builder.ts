@@ -12,6 +12,8 @@ import { dedupeDshByKind } from "@/lib/branch/dsh-dedupe"
 import { fyOf, fiscalQuarter, ymKey } from "@/lib/branch/fiscal"
 import type { Period } from "@/lib/branch/computations/heatmap"
 import type { BranchWeeklyCompassReport } from "@/lib/branch/weekly-report-contract"
+import { classifySalesLedgerProductCategory } from "@/lib/branch/product-category"
+import { normalizeBranchMemberName } from "@/lib/branch/member-names"
 
 export type TeamScope = "ALL" | "BD" | "MKT" | "CSM"
 
@@ -58,11 +60,30 @@ export interface InsightInput {
   campaigns_30d: Array<{ name: string; sent_at: string; open_pct: number }>
   hw_alerts: Array<{ product: string; current: number; threshold: number }>
 
+  // 본사 양식 一 — 1. DSH 제품별 회수 목표·누계(월·분기·연, CNY). team=ALL 일 때만 제품 분해.
+  performance: InsightPerformanceBlock
+
+  // 본사 양식 二 — 이번 달 REV 회수(고객별 확정·미확정, CNY).
+  month_collections: InsightCollectionsBlock
+
   // KA(REV 딜 importance=KA) 이번 분기 고객 — 매출(REV) 지표. 주간 보고 2순위.
   ka_quarter: InsightKaBlock
 
   // Compass(마케팅·BD CRM) — 끝난 주(월~일 KST) 리드 퍼널과 월간 과정 평가. 매출이 아니다.
   compass_weekly: InsightCompassBlock
+}
+
+export interface InsightPerformanceBlock {
+  month: string
+  quarter: string
+  rows: Array<{ product: "HW" | "SW" | "OTHER" | "TOTAL"; month_goal: number; month_actual: number; quarter_goal: number; quarter_actual: number; year_goal: number; year_actual: number }>
+}
+
+export interface InsightCollectionsBlock {
+  month: string
+  confirmed: number
+  planned_not_confirmed: number
+  customers: Array<{ customer: string; manager: string | null; product: "HW" | "SW"; kind: "new" | "renew" | null; confirmed: number; planned_not_confirmed: number }>
 }
 
 export interface InsightKaBlock {
@@ -71,11 +92,16 @@ export interface InsightKaBlock {
   confirmed: number
   open: number
   customer_count: number
-  top_customers: Array<{ customer: string; manager: string | null; confirmed: number; open: number }>
+  top_customers: Array<{
+    customer: string; manager: string | null; confirmed: number; open: number
+    // Compass 이름 매칭 리드(없으면 null) — 진행 서술의 유일한 근거. 이름 매칭이라 확정 연결이 아니다.
+    compass: { stage: string | null; next_action: string | null; next_action_at: string | null; last_activity: string | null; week_records: number; recent: string[] } | null
+  }>
+  compass_state: "ready" | "down" | "missing"
 }
 
 export function toInsightKaBlock(report: BranchWeeklyCompassReport | null): InsightKaBlock {
-  if (!report) return { state: "missing", quarter: null, confirmed: 0, open: 0, customer_count: 0, top_customers: [] }
+  if (!report) return { state: "missing", quarter: null, confirmed: 0, open: 0, customer_count: 0, top_customers: [], compass_state: "missing" }
   const ka = report.ka
   return {
     state: "ready",
@@ -83,7 +109,18 @@ export function toInsightKaBlock(report: BranchWeeklyCompassReport | null): Insi
     confirmed: Math.round(ka.confirmed),
     open: Math.round(ka.open),
     customer_count: ka.customerCount,
-    top_customers: ka.customers.slice(0, 5).map((c) => ({ customer: c.customer, manager: c.manager, confirmed: Math.round(c.confirmed), open: Math.round(c.open) })),
+    top_customers: ka.customers.slice(0, 8).map((c) => ({
+      customer: c.customer, manager: c.manager, confirmed: Math.round(c.confirmed), open: Math.round(c.open),
+      compass: c.compass ? {
+        stage: c.compass.stageLabel,
+        next_action: c.compass.nextAction,
+        next_action_at: c.compass.nextActionAt?.slice(0, 10) ?? null,
+        last_activity: c.compass.lastActivityAt?.slice(0, 10) ?? null,
+        week_records: c.compass.weekActivityCount,
+        recent: c.compass.recent.map((r) => `${r.at.slice(5, 10)} ${r.actor ?? ""} ${r.text}`.trim()),
+      } : null,
+    })),
+    compass_state: ka.compassState ?? "ready",
   }
 }
 
@@ -180,6 +217,67 @@ function buildMix(
     const ac = actuals.get(k) ?? 0
     return { name: k, goal: g, actual: ac, pct: g > 0 ? (ac / g) * 100 : 0 }
   }).sort((x, y) => y.goal - x.goal)
+}
+
+function buildPerformance(breakdown: DshBreakdownRow[], now: Date): InsightPerformanceBlock {
+  const month = ymKey(now)
+  const qIndex = fiscalQuarter(now.getUTCMonth() + 1) - 1
+  const dedup = dedupeDshByKind(breakdown)
+  const sum = (kind: "goal" | "status", match: (category: string) => boolean) => {
+    const out = { month: 0, quarter: 0, year: 0 }
+    for (const row of dedup[kind].values()) {
+      if (!match(row.category)) continue
+      out.month += row.months[month] ?? 0
+      out.quarter += row.quarters[qIndex] ?? 0
+      out.year += row.annual
+    }
+    return out
+  }
+  const groups = [
+    { product: "HW" as const, match: (c: string) => c === "Hardware" },
+    { product: "SW" as const, match: (c: string) => c === "Software" },
+    { product: "OTHER" as const, match: (c: string) => c !== "Hardware" && c !== "Software" },
+    { product: "TOTAL" as const, match: () => true },
+  ]
+  return {
+    month,
+    quarter: `Q${qIndex + 1}`,
+    rows: groups.map((group) => {
+      const goal = sum("goal", group.match)
+      const status = sum("status", group.match)
+      return { product: group.product, month_goal: Math.round(goal.month), month_actual: Math.round(status.month), quarter_goal: Math.round(goal.quarter), quarter_actual: Math.round(status.quarter), year_goal: Math.round(goal.year), year_actual: Math.round(status.year) }
+    }).filter((row) => row.product === "TOTAL" || row.year_goal !== 0 || row.year_actual !== 0),
+  }
+}
+
+function buildCollections(deals: BranchRevDeal[], now: Date): InsightCollectionsBlock {
+  const month = ymKey(now)
+  const byCustomer = new Map<string, InsightCollectionsBlock["customers"][number]>()
+  for (const deal of deals) {
+    const amount = Number(deal.monthly_payments?.[month] ?? 0)
+    if (!Number.isFinite(amount) || amount === 0) continue
+    const confirmed = confirmedMonthAmount(deal, month, amount)
+    const key = deal.customer_name.trim().toLowerCase()
+    const status = (deal.status ?? "").trim().toLowerCase()
+    const entry = byCustomer.get(key) ?? {
+      customer: deal.customer_name.trim(),
+      manager: normalizeBranchMemberName(deal.manager),
+      product: classifySalesLedgerProductCategory({ product: deal.product_version, account: deal.customer_name }) === "hardware" ? "HW" as const : "SW" as const,
+      kind: status === "new" || status === "신규" ? "new" as const : status === "renew" || status === "갱신" ? "renew" as const : null,
+      confirmed: 0,
+      planned_not_confirmed: 0,
+    }
+    entry.confirmed += confirmed
+    entry.planned_not_confirmed += amount - confirmed
+    byCustomer.set(key, entry)
+  }
+  const rows = [...byCustomer.values()].map((row) => ({ ...row, confirmed: Math.round(row.confirmed), planned_not_confirmed: Math.round(row.planned_not_confirmed) }))
+  return {
+    month,
+    confirmed: rows.reduce((sum, row) => sum + row.confirmed, 0),
+    planned_not_confirmed: rows.reduce((sum, row) => sum + row.planned_not_confirmed, 0),
+    customers: rows.sort((a, b) => (b.confirmed + b.planned_not_confirmed) - (a.confirmed + a.planned_not_confirmed)).slice(0, 10),
+  }
 }
 
 export function buildInsightInput(a: BuildArgs): InsightInput {
@@ -351,6 +449,8 @@ export function buildInsightInput(a: BuildArgs): InsightInput {
       .slice(0, 8)
       .map((c) => ({ name: c.subject, sent_at: c.sentAt!, open_pct: c.openPct })),
     hw_alerts: a.hwAlerts.slice(0, 5),
+    performance: a.team === "ALL" ? buildPerformance(breakdown, a.now) : { month: ymKey(a.now), quarter: `Q${q}`, rows: [] },
+    month_collections: buildCollections(a.deals, a.now),
     ka_quarter,
     compass_weekly,
   }

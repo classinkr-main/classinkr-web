@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import type { CompassRangeFunnel } from "@/lib/compass/summary"
-import type { CompassLeadSliceRow } from "@/lib/compass/bridge"
+import type { CompassActivityRow, CompassLeadByAcademyRow, CompassLeadSliceRow, CompassResult } from "@/lib/compass/bridge"
 import type { CompassKrTeamResult } from "@/lib/compass/kr-team-contract"
 
 // 본사 주간 보고 Compass 구획 — 끝난 주 경계, 팀·개인 범위, 연결 끊김을 0 실적으로 위장하지 않는지 고정한다.
@@ -15,9 +15,15 @@ vi.mock("@/lib/compass/summary", () => ({
     return funnelFor(range.since)
   }),
 }))
+let kaLeads: CompassResult<CompassLeadByAcademyRow> = { rows: [], down: false }
+let kaActivities: CompassResult<CompassActivityRow> = { rows: [], down: false }
+vi.mock("@/lib/compass/bridge", () => ({
+  getCompassLeadsByAcademyNames: vi.fn(async () => kaLeads),
+  getCompassActivitiesByLeadIds: vi.fn(async () => kaActivities),
+}))
 vi.mock("@/lib/compass/kr-team", () => ({ readCompassKrTeam: vi.fn(async () => krTeam) }))
 
-import { buildBranchWeeklyCompassReport, buildKaSection, isoWeekLabel, resolveReportWeeks } from "@/lib/branch/weekly-report"
+import { attachKaCompass, buildBranchWeeklyCompassReport, buildKaSection, isoWeekLabel, maskContact, pickCompassLeadForCustomer, resolveReportWeeks } from "@/lib/branch/weekly-report"
 
 const stages = (counts: number[]) => ["new", "contact", "consult", "demo", "quote", "bd", "won"].map((key, i) => ({ key, label: key, count: counts[i] ?? 0 }))
 const funnel = (over: Partial<CompassRangeFunnel>): CompassRangeFunnel => ({
@@ -30,6 +36,8 @@ const deals = [
 
 beforeEach(() => {
   calls.length = 0
+  kaLeads = { rows: [], down: false }
+  kaActivities = { rows: [], down: false }
   krTeam = { state: "not_configured", snapshot: null }
   funnelFor = (since) => since.startsWith("2026-11-16")
     ? funnel({ inflowTotal: 12, stages: stages([12, 8, 5, 3, 2, 1, 1]), lost: 2, byOwner: [
@@ -146,5 +154,54 @@ describe("KA 분기 고객", () => {
     expect(buildKaSection(deals, { now, team: "MKT" }).customers.map((c) => c.customer)).toEqual(["새솔수학"])
     const personal = buildKaSection(deals, { now, team: "ALL", manager: "Heesung" })
     expect(personal.customers.map((c) => [c.customer, c.manager])).toEqual([["새솔수학", "Heesung"]])
+  })
+})
+
+describe("KA 진행 서술 근거 · Compass 기록", () => {
+  const lead = (id: number, academy: string, stage: string, updated_at = "2026-11-01T00:00:00Z") =>
+    ({ id, academy, stage, care_stage: null, owner: null, caller: null, bd_owner: null, next_action: null, next_action_at: null, updated_at }) as CompassLeadByAcademyRow
+  const activity = (id: number, lead_id: number, created_at: string, body: string | null, kind = "note", extra: Partial<CompassActivityRow> = {}) =>
+    ({ id, lead_id, kind, body, from_stage: null, to_stage: null, actor: "Han", created_at, ...extra }) as CompassActivityRow
+  const { week } = resolveReportWeeks(new Date("2026-11-25T01:00:00Z"))
+  const now = new Date("2026-11-25T01:00:00Z")
+  const ka = { quarter: "FY2026-Q3", months: [], confirmed: 0, open: 0, customerCount: 2, customers: [
+    { customer: "한빛 영어학원", manager: "Han", team: "BD", confirmed: 100, open: 0, total: 100, deals: 1 },
+    { customer: "새솔수학", manager: "Heesung", team: "MKT", confirmed: 0, open: 80, total: 80, deals: 1 },
+  ] }
+
+  it("본문의 전화·이메일을 가린다", () => {
+    expect(maskContact("원장 010-1234-5678 / a.b@c.co.kr 회신")).toBe("원장 [전화] / [이메일] 회신")
+    expect(maskContact("대표번호 02-123-4567")).toBe("대표번호 [전화]")
+  })
+
+  it("같은 이름(공백 무시) 리드를 포함 매칭보다, 그 안에서는 더 진행된 단계를 고른다", () => {
+    const rows = [lead(1, "한빛영어학원 분당캠퍼스", "won"), lead(2, "한빛영어학원", "new"), lead(3, "한빛 영어학원", "demo")]
+    expect(pickCompassLeadForCustomer("한빛영어학원", rows)?.id).toBe(3)
+    expect(pickCompassLeadForCustomer("분당캠퍼스", rows)?.id).toBe(1)
+    expect(pickCompassLeadForCustomer("없는학원", rows)).toBeNull()
+  })
+
+  it("고른 리드의 최근 30일 기록(최신순)과 보고 주 기록 수를 붙인다", async () => {
+    kaLeads = { rows: [lead(7, "한빛영어학원", "quote")], down: false }
+    kaActivities = { rows: [
+      activity(1, 7, "2026-11-18T02:00:00Z", "견적 재송부 010-1111-2222"),
+      activity(2, 7, "2026-11-24T02:00:00Z", null, "stage_change", { from_stage: "demo", to_stage: "quote" }),
+      activity(3, 7, "2026-09-01T02:00:00Z", "오래된 기록"),
+    ], down: false }
+    const out = await attachKaCompass(ka, week, now)
+    expect(out.compassState).toBe("ready")
+    const compass = out.customers[0].compass
+    expect(compass?.leadId).toBe(7)
+    expect(compass?.weekActivityCount).toBe(1)
+    expect(compass?.lastActivityAt).toBe("2026-11-24T02:00:00Z")
+    expect(compass?.recent.map((r) => r.text)).toEqual([expect.stringContaining("→"), "견적 재송부 [전화]"])
+    expect(out.customers[1].compass).toBeNull()
+  })
+
+  it("Compass가 끊기면 기록 없이 down으로 알린다(빈 기록으로 위장하지 않는다)", async () => {
+    kaLeads = { rows: [], down: true, error: "timeout" }
+    const out = await attachKaCompass(ka, week, now)
+    expect(out.compassState).toBe("down")
+    expect(out.customers.every((customer) => customer.compass === undefined)).toBe(true)
   })
 })

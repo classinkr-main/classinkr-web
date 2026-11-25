@@ -4,17 +4,18 @@
 //   二、本月收款计划与实施情况 — REV 장부 이번 달 주차별 계획·실제 회수와 고객 명세
 //   三、重点KA客户情况跟进     — REV importance=KA 고객(이번 분기) + 진행 서술
 //   四、市场活动计划统计表     — 행사 일정 + Compass 리드 퍼널(지난 주 vs 그 전 주)
-//   五、其它情况              — 이번 주 요점(AI) · 다음 주 계획(AI 액션) · 분기 팀/멤버 회수 · Compass 과정 평가
-// 숫자는 전부 코드가 원천에서 계산한다(DSH · REV · Compass를 서로 더하지 않는다). 서술 칸은 AI 초안 또는 직접 입력이며
-// 이 브라우저에만 저장된다(공유·서버 저장 아님). 표 복사로 Flowin에 붙여 넣거나 PDF로 내보낸다.
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+//   五、其它情况              — 이번 주 요점(AI) · 다음 주 계획(AI) · 분기 팀/멤버 회수 · Compass 과정 평가
+// 숫자는 전부 코드가 원천에서 계산한다(DSH · REV · Compass를 서로 더하지 않는다). 서술 칸은 AI 간이 보고(weekly_report —
+// 같은 틀로 쓴 초안, KA 진행은 Compass 기록 근거) 또는 직접 입력이며, 우선순위는 직접 입력 > AI 초안 > 자동 기본값이다.
+// 입력은 이 브라우저에만 저장된다(공유·서버 저장 아님). 표 복사로 Flowin에 붙여 넣거나 PDF로 내보낸다.
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { ClipboardCopy, FileDown } from "lucide-react"
 import { dedupeDshByKind } from "@/lib/branch/dsh-dedupe"
 import { fiscalQuarter } from "@/lib/branch/fiscal"
 import { classifySalesLedgerProductCategory } from "@/lib/branch/product-category"
 import { normalizeBranchMemberName } from "@/lib/branch/member-names"
 import { isCurrentBranchTeam } from "@/lib/branch/current-organization"
-import type { BranchWeeklyCompassReport } from "@/lib/branch/weekly-report-contract"
+import type { BranchWeeklyCompassReport, ReportModule, WeeklyKaCompass, WeeklyReportDraft } from "@/lib/branch/weekly-report-contract"
 import { useBranchJson, type BranchJsonState } from "../client-api"
 import { buildDshTeamGrid, dshTotalsFromRows, type DshNumbers } from "../ledger/dsh-derive"
 import { rowMonthAmount, rowMonthConfirmed, rowWeeklySplit, type LedgerRevenueRow } from "../ledger/shared"
@@ -22,7 +23,7 @@ import type { BranchPipelineResponse, BranchSummaryResponse, Team } from "../typ
 
 export type ReportLang = "zh" | "ko"
 
-export interface ReportAction { title: string; why?: string; owner: string; due?: string }
+export interface ReportAction { title: string; why?: string; owner: string; due?: string; module?: ReportModule }
 
 const T = {
   zh: {
@@ -44,6 +45,9 @@ const T = {
     s53Unit: "单位：CNY · 来源：1. DSH 成员行", monthCol: (m: number) => `${m}月 收款/目标`, monthRateCol: (m: number) => `${m}月达成率`, s54: "5.4 过程评估 · Compass", evalNotConfigured: "Compass 过程评估尚未连接。", evalUnavailable: "无法加载 Compass 过程评估。",
     aiDraft: "AI 草稿", editHint: "灰底单元格可直接编辑，仅保存在本浏览器。", loading: "加载中", copy: "复制表格", copied: "已复制", pdf: "PDF 下载",
     modules: { KA: "KA", market: "市场活动", partner: "合作伙伴·公立教育", other: "其它" },
+    summaryLine: "小结", compassMatch: (stage: string, last: string, week: number) => `Compass ${stage} · 最近记录 ${last} · 本周 ${week} 条`,
+    compassNone: "Compass 未匹配到线索", compassKaDown: "Compass 记录暂不可用，KA 进展无草稿。", nameMatch: "按客户名匹配",
+    draftStale: (w: string) => `AI 草稿基于 ${w}，与本报告周不同，请重新生成洞察。`, draftNone: "暂无 AI 草稿 — 生成洞察后自动填入。",
     stageLabels: { contact: "接触", consult: "咨询", demo: "演示", quote: "面谈", bd: "BD移交", won: "付款" } as Record<string, string>,
   },
   ko: {
@@ -65,6 +69,9 @@ const T = {
     s53Unit: "단위: CNY · 원천: 1. DSH 구성원 행", monthCol: (m: number) => `${m}월 회수/목표`, monthRateCol: (m: number) => `${m}월 달성률`, s54: "5.4 과정 평가 · Compass", evalNotConfigured: "Compass 과정 평가 연결 전입니다.", evalUnavailable: "Compass 과정 평가를 불러오지 못했습니다.",
     aiDraft: "AI 초안", editHint: "회색 칸은 바로 고칠 수 있고 이 브라우저에만 저장됩니다.", loading: "불러오는 중", copy: "표 복사", copied: "복사됨", pdf: "PDF 다운로드",
     modules: { KA: "KA", market: "마케팅 활동", partner: "파트너·공교육", other: "기타" },
+    summaryLine: "요약", compassMatch: (stage: string, last: string, week: number) => `Compass ${stage} · 최근 기록 ${last} · 이번 주 ${week}건`,
+    compassNone: "Compass 리드 매칭 없음", compassKaDown: "Compass 기록을 읽지 못해 KA 진행 초안이 없습니다.", nameMatch: "고객명 매칭",
+    draftStale: (w: string) => `AI 초안은 ${w} 기준이라 보고 주와 다릅니다. 인사이트를 새로 생성하세요.`, draftNone: "AI 초안 없음 — 인사이트를 생성하면 채워집니다.",
     stageLabels: {} as Record<string, string>,
   },
 } as const
@@ -92,6 +99,27 @@ function kstToday() {
 function shortDate(ymd: string) {
   const [, m, d] = ymd.split("-")
   return `${Number(m)}/${Number(d)}`
+}
+
+/** ISO 시각 → KST 날짜(M/D). */
+function kstShort(iso: string | null) {
+  if (!iso) return "-"
+  const ms = Date.parse(iso)
+  return Number.isNaN(ms) ? "-" : shortDate(new Date(ms + 9 * 3600_000).toISOString().slice(0, 10))
+}
+
+/** 고객명 비교 키 — 공백·대소문자 무시. */
+export function customerKey(name: string) {
+  return name.replace(/\s+/g, "").toLowerCase()
+}
+
+/** AI 초안 KA 행을 REV KA 고객에 맞춘다 — 같은 이름 우선, 없으면 한쪽이 다른 쪽을 포함. */
+export function matchDraftKaRow<T extends { customer: string }>(rows: readonly T[], customer: string): T | null {
+  const key = customerKey(customer)
+  if (!key) return null
+  return rows.find((row) => customerKey(row.customer) === key)
+    ?? rows.find((row) => { const other = customerKey(row.customer); return other.length > 1 && (other.includes(key) || key.includes(other)) })
+    ?? null
 }
 
 function classifyModule(text: string): keyof (typeof T)["zh"]["modules"] {
@@ -129,15 +157,19 @@ function EditCell({ id, value, placeholder, onChange, className = "" }: {
 
 interface WeekCustomer { key: string; customer: string; amount: number; pending: number; category: "hw" | "sw"; status: string | null; managers: Set<string> }
 
-export default function HqWeeklyReport({ team, manager, refreshKey, lang, weekly, notes, actions }: {
+export default function HqWeeklyReport({ team, manager, refreshKey, lang, weekly, draft = null, draftWeek = null, notes, actions }: {
   team: Team
   manager?: string
   refreshKey: number
   lang: ReportLang
   weekly: BranchJsonState<BranchWeeklyCompassReport>
-  /** AI 보고서 줄(매출 · KA · 주요 영업 활동 · KPI) — 5.1 초안 */
+  /** AI 간이 보고(본사 양식 틀) — 구획별 요약·KA 진행·5.1·5.2 초안 */
+  draft?: WeeklyReportDraft | null
+  /** AI 초안을 만든 보고 주 라벨 — 지금 보고 주와 다르면 알린다 */
+  draftWeek?: string | null
+  /** 이전 캐시의 AI 보고 줄 — draft가 없을 때 5.1 초안 */
   notes: string[]
-  /** AI 다음 액션 — 5.2 초안 */
+  /** AI 다음 액션 — draft가 없을 때 5.2 초안 */
   actions: ReportAction[]
 }) {
   const t = T[lang]
@@ -314,14 +346,33 @@ export default function HqWeeklyReport({ team, manager, refreshKey, lang, weekly
   const evaluation = report?.evaluation
   const funnel = report?.funnel
   const ka = report?.ka
-  const noteFallback = notes.join("\n")
-  // 5.2 초안은 기한이 지나지 않은 AI 액션만 쓴다(오래된 캐시 액션이 다음 주 계획처럼 보이지 않게).
-  const planDrafts = actions.filter((action) => !action.due || action.due >= today)
+  const draftKa = draft?.ka ?? []
+  const keyPoints = draft?.key_points.filter((point) => point.trim() !== "") ?? []
+  const noteFallback = keyPoints.length ? keyPoints.map((point, index) => `${index + 1}. ${point}`).join("\n") : notes.join("\n")
+  const hasPointsDraft = keyPoints.length > 0 || notes.length > 0
+  // 5.2 초안은 기한이 지나지 않은 계획만 쓴다(오래된 캐시가 다음 주 계획처럼 보이지 않게).
+  // AI 간이 보고의 next_week가 우선이고, 없으면(이전 캐시) AI 액션을 쓴다.
+  const planDrafts: Array<{ plan: string; module: ReportModule; due: string }> = (() => {
+    const fromDraft = (draft?.next_week ?? []).filter((plan) => plan.plan.trim() !== "" && (!plan.due || plan.due >= today))
+    if (fromDraft.length) return fromDraft
+    return actions
+      .filter((action) => !action.due || action.due >= today)
+      .map((action) => ({
+        plan: `${action.title}${action.owner ? ` (${action.owner})` : ""}`,
+        module: action.module ?? classifyModule(`${action.title} ${action.why ?? ""}`),
+        due: action.due ?? "",
+      }))
+  })()
+  const draftStale = Boolean(draft && draftWeek && report && draftWeek !== report.week.label)
 
   return (
     <div className="min-w-0 space-y-2">
       <div className="flex flex-wrap items-center justify-end gap-2 print:hidden">
-        <span className="mr-auto text-[11.5px] text-[#615D59]">{t.editHint}</span>
+        <span className="mr-auto text-[11.5px] text-[#615D59]">
+          {t.editHint}
+          {draftStale && draftWeek ? <b className="ml-1 font-semibold text-[#7A520F]">{t.draftStale(draftWeek)}</b>
+            : !draft && !notes.length ? <span className="ml-1">{t.draftNone}</span> : null}
+        </span>
         <button type="button" onClick={copyReport} className="inline-flex min-h-11 items-center gap-1.5 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[12px] font-bold text-[#111110] md:min-h-8">
           <ClipboardCopy className="h-3.5 w-3.5" aria-hidden="true" />{copied ? t.copied : t.copy}
         </button>
@@ -364,6 +415,7 @@ export default function HqWeeklyReport({ team, manager, refreshKey, lang, weekly
             <p className="mt-1 text-[10.5px] text-[#615D59]">{t.s1Unit}{performance.scoped ? ` · ${t.s1Scoped}` : ""}</p>
           </div>
         )}
+        <SummaryLine label={t.summaryLine} ai={Boolean(draft?.performance)} aiLabel={t.aiDraft}>{cell("s1-summary", draft?.performance ?? "", t.summaryLine)}</SummaryLine>
 
         {/* 二 */}
         <h3 className="mt-6 text-[14px] font-bold">{t.s2}</h3>
@@ -395,10 +447,12 @@ export default function HqWeeklyReport({ team, manager, refreshKey, lang, weekly
             <p className="mt-1 text-[10.5px] text-[#615D59]">{t.s2Unit}</p>
           </div>
         )}
+        <SummaryLine label={t.summaryLine} ai={Boolean(draft?.collections)} aiLabel={t.aiDraft}>{cell("s2-summary", draft?.collections ?? "", t.summaryLine)}</SummaryLine>
 
         {/* 三 */}
         <h3 className="mt-6 text-[14px] font-bold">{t.s3}</h3>
-        <p className="mt-1 text-[11px] text-[#615D59]">{t.s3Stages}</p>
+        <p className="mt-1 text-[11px] text-[#615D59]">{t.s3Stages}{draftKa.length ? ` · ${t.aiDraft}` : ""}</p>
+        {ka?.compassState === "down" ? <p className="mt-1 text-[11px] text-[#8F2C2C]">{t.compassKaDown}</p> : null}
         {!ka ? <p className="mt-2 text-[#615D59]">{weekly.error ?? t.loading}</p> : ka.customerCount === 0 ? <p className="mt-2 text-[#615D59]">{t.kaEmpty}</p> : (
           <div className="mt-2 overflow-x-auto">
             <table className="w-full min-w-[720px] border-collapse text-[11.5px]">
@@ -406,17 +460,19 @@ export default function HqWeeklyReport({ team, manager, refreshKey, lang, weekly
               <tbody>
                 {ka.customers.map((customer) => {
                   const id = `ka-${customer.customer}`
+                  const ai = matchDraftKaRow(draftKa, customer.customer)
                   return (
                     <tr key={customer.customer}>
-                      <td className={`${CELL} min-w-[120px]`}>
+                      <td className={`${CELL} min-w-[140px]`}>
                         <div className="font-semibold">{customer.customer}</div>
                         <div className="text-[10.5px] text-[#615D59]">{customer.manager ?? "-"} · {t.kaAmount(wan(customer.confirmed), wan(customer.open))}</div>
+                        {ka.compassState === "ready" ? <KaCompassLine compass={customer.compass ?? null} t={t} /> : null}
                       </td>
-                      <td className={`${CELL} min-w-[90px]`}>{cell(`${id}-stage`, customer.open > 0 ? t.stagePush : t.stageSigned)}</td>
-                      <td className={`${CELL} min-w-[150px]`}>{cell(`${id}-change`, "", t.change)}</td>
-                      <td className={`${CELL} min-w-[120px]`}>{cell(`${id}-issue`, "", t.issue)}</td>
-                      <td className={`${CELL} min-w-[150px]`}>{cell(`${id}-next`, "", t.next)}</td>
-                      <td className={`${CELL} min-w-[70px]`}>{cell(`${id}-hq`, "", "-")}</td>
+                      <td className={`${CELL} min-w-[90px]`}>{cell(`${id}-stage`, ai?.stage || (customer.open > 0 ? t.stagePush : t.stageSigned))}</td>
+                      <td className={`${CELL} min-w-[150px]`}>{cell(`${id}-change`, ai?.change ?? "", t.change)}</td>
+                      <td className={`${CELL} min-w-[120px]`}>{cell(`${id}-issue`, ai?.issue ?? "", t.issue)}</td>
+                      <td className={`${CELL} min-w-[150px]`}>{cell(`${id}-next`, ai?.next_action ?? "", t.next)}</td>
+                      <td className={`${CELL} min-w-[70px]`}>{cell(`${id}-hq`, ai?.hq_support ?? "", "-")}</td>
                     </tr>
                   )
                 })}
@@ -460,10 +516,11 @@ export default function HqWeeklyReport({ team, manager, refreshKey, lang, weekly
             </table>
           </div>
         )}
+        <SummaryLine label={t.summaryLine} ai={Boolean(draft?.activities)} aiLabel={t.aiDraft}>{cell("s4-summary", draft?.activities ?? "", t.summaryLine)}</SummaryLine>
 
         {/* 五 */}
         <h3 className="mt-6 text-[14px] font-bold">{t.s5}</h3>
-        <h4 className="mt-2 text-[12.5px] font-bold">{t.s51} {notes.length ? <span className="text-[10.5px] font-medium text-[#615D59]">· {t.aiDraft}</span> : null}</h4>
+        <h4 className="mt-2 text-[12.5px] font-bold">{t.s51} {hasPointsDraft ? <span className="text-[10.5px] font-medium text-[#615D59]">· {t.aiDraft}</span> : null}</h4>
         <div className="mt-1 rounded-sm border border-[#E8E8E4] p-2">{cell("s51", noteFallback, t.s51)}</div>
 
         <h4 className="mt-3 text-[12.5px] font-bold">{t.s52} {planDrafts.length ? <span className="text-[10.5px] font-medium text-[#615D59]">· {t.aiDraft}</span> : null}</h4>
@@ -471,12 +528,12 @@ export default function HqWeeklyReport({ team, manager, refreshKey, lang, weekly
           <table className="w-full min-w-[560px] border-collapse text-[11.5px]">
             <thead><tr>{[t.priority, t.plan, t.module, t.deadline].map((label) => <th key={label} className={HEAD}>{label}</th>)}</tr></thead>
             <tbody>
-              {(planDrafts.length ? planDrafts : [{ title: "", owner: "", due: "" }]).map((action, index) => (
+              {(planDrafts.length ? planDrafts : [null]).map((plan, index) => (
                 <tr key={index}>
                   <td className={`${CELL} text-center`}>{index + 1}</td>
-                  <td className={`${CELL} min-w-[260px]`}>{cell(`s52-${index}-plan`, action.title ? `${action.title}${action.owner ? ` (${action.owner})` : ""}` : "", t.plan)}</td>
-                  <td className={CELL}>{cell(`s52-${index}-module`, action.title ? t.modules[classifyModule(`${action.title} ${action.why ?? ""}`)] : "", t.module)}</td>
-                  <td className={CELL}>{cell(`s52-${index}-due`, action.due ?? "", t.deadline)}</td>
+                  <td className={`${CELL} min-w-[260px]`}>{cell(`s52-${index}-plan`, plan?.plan ?? "", t.plan)}</td>
+                  <td className={CELL}>{cell(`s52-${index}-module`, plan ? t.modules[plan.module] : "", t.module)}</td>
+                  <td className={CELL}>{cell(`s52-${index}-due`, plan?.due ?? "", t.deadline)}</td>
                 </tr>
               ))}
             </tbody>
@@ -527,6 +584,28 @@ export default function HqWeeklyReport({ team, manager, refreshKey, lang, weekly
             </ul>
           )}
       </div>
+    </div>
+  )
+}
+
+/** 구획 아래 한 줄 요약 칸(AI 초안 또는 직접 입력). */
+function SummaryLine({ label, ai, aiLabel, children }: { label: string; ai: boolean; aiLabel: string; children: ReactNode }) {
+  return (
+    <div className="mt-1.5 grid grid-cols-[auto_minmax(0,1fr)] items-start gap-2 text-[11.5px]">
+      <span className="pt-0.5 font-semibold text-[#615D59]">{label}{ai ? <span className="ml-1 text-[10.5px] font-medium">· {aiLabel}</span> : null}</span>
+      {children}
+    </div>
+  )
+}
+
+/** KA 고객명으로 맞춘 Compass 리드 — 단계 · 최근 기록 · 이번 주 기록 수. 이름 매칭이라 확정 연결은 아니다. */
+function KaCompassLine({ compass, t }: { compass: WeeklyKaCompass | null; t: (typeof T)[ReportLang] }) {
+  if (!compass) return <div className="mt-0.5 text-[10.5px] text-[#A39E98]">{t.compassNone}</div>
+  const stage = (compass.stage ? t.stageLabels[compass.stage] : undefined) ?? compass.stageLabel ?? "-"
+  return (
+    <div className="mt-0.5 text-[10.5px] text-[#615D59]">
+      <a href={compass.url} target="_blank" rel="noreferrer" title={`${t.nameMatch}: ${compass.academy ?? "-"}`}
+        className="font-semibold text-[#084734] hover:underline">{t.compassMatch(stage, kstShort(compass.lastActivityAt), compass.weekActivityCount)}</a>
     </div>
   )
 }
