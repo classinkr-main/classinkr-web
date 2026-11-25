@@ -321,6 +321,50 @@ describe("그 밖의 규칙", () => {
     expect(errorsOf(result.findings, "V-12").some((finding) => finding.message.includes("fixed:wrong-kind"))).toBe(true)
   })
 
+  it("V-13 first 가 답 문장 밖이면 실패하고, 안이면 통과한다", async () => {
+    const unit = units.find((candidate) => candidate.unitId === MEMBER_UNIT)!
+    const run = async (i: number) => {
+      const card = memberCard({ answer: { ...memberCard().answer, first: { unit: MEMBER_UNIT, i, hash: unit.sentences[i].hash } } })
+      const dir = fixture({ ...baseFiles(units, siteFacts), "cards/course.json": [card], "variants/course.json": memberVariants() })
+      return runVerify({ dir, current: currentSources(units, siteFacts), devSets: [] })
+    }
+    expect(errorsOf((await run(4)).findings, "V-13")).toEqual([])
+    expect(errorsOf((await run(0)).findings, "V-13").some((finding) => finding.message.includes("답 문장에 없음"))).toBe(true)
+  })
+
+  it("V-13 headline 은 요체 마침표·60자 이하·카드 문장의 숫자와 부정 극성을 지켜야 한다", async () => {
+    const unit = units.find((candidate) => candidate.unitId === MEMBER_UNIT)!
+    const basis = [{ unit: MEMBER_UNIT, i: 3, hash: unit.sentences[3].hash }]
+    const run = async (text: string) => {
+      const card = memberCard({ answer: { ...memberCard().answer, headline: { text, basis } } })
+      const dir = fixture({ ...baseFiles(units, siteFacts), "cards/course.json": [card], "variants/course.json": memberVariants() })
+      return errorsOf((await runVerify({ dir, current: currentSources(units, siteFacts), devSets: [] })).findings, "V-13").map((finding) => finding.message)
+    }
+    expect((await run("구성원을 내보내요")).some((message) => message.includes("요체"))).toBe(true)
+    expect((await run(`${"가".repeat(61)}요.`)).some((message) => message.includes("길이"))).toBe(true)
+    expect((await run("코스 구성원은 999명까지 내보낼 수 있어요.")).some((message) => message.includes('"999"'))).toBe(true)
+  })
+
+  it("V-6 명의·독·수상 형태에 모호 규칙이 없으면 실패하고, 있으면 통과한다", async () => {
+    const concept = (ambiguous: unknown[]) => ({ id: "C_x", kind: "attribute", generic: false, parents: [], doc: [], visitor: [{ form: "명의", boundary: "both" }], ambiguous })
+    const run = async (ambiguous: unknown[]) => {
+      const dir = fixture({ ...baseFiles(units, siteFacts), "lexicon.json": [concept(ambiguous), { id: "C_y", kind: "object", generic: false, parents: [], doc: ["계약 조건"], visitor: [], ambiguous: [] }] })
+      return errorsOf((await runVerify({ dir, current: currentSources(units, siteFacts), devSets: [] })).findings, "V-6")
+    }
+    expect((await run([])).some((finding) => finding.message.includes("모호 규칙"))).toBe(true)
+    expect((await run([{ form: "명의", requiresAny: ["C_y"] }])).some((finding) => finding.message.includes("모호 규칙"))).toBe(false)
+  })
+
+  it("V-5 없는 개념 형태가 짧은 낱말 하나(수상)면 실패한다", async () => {
+    const absent = (forms: string[]) => [{ id: "absent:company/x", label: "수상", forms, area: "company", gapCard: "gap:company/x", verified: { grep: forms, unitHits: 0, siteHits: 0, checkedAt: "2026-11-25", checker: "test" } }]
+    const run = async (forms: string[]) => {
+      const dir = fixture({ ...baseFiles(units, siteFacts), "absent.json": absent(forms) })
+      return errorsOf((await runVerify({ dir, current: currentSources(units, siteFacts), devSets: [] })).findings, "V-5")
+    }
+    expect((await run(["수상"])).some((finding) => finding.message.includes("짧은 낱말"))).toBe(true)
+    expect((await run(["수상 이력"])).some((finding) => finding.message.includes("짧은 낱말"))).toBe(false)
+  })
+
   it("V-12 calibration.json 은 자기 자신을 뺀 자료 판과 비교한다(보정을 쓴 뒤 manifest 를 다시 써도 낡지 않음)", async () => {
     const calibration = (dataVersion: string) => ({
       version: "cal-test",
