@@ -11,11 +11,9 @@ import Link from "next/link"
 import { submitLead } from "@/lib/submitLead"
 import { trackFormStart, trackLeadSubmitted } from "@/lib/analytics"
 import { takeContactPrefill } from "@/lib/tracking-paths"
+import { SUPPORT_HOURS_FULL_LABEL, describeSupportHoursWait, getSupportHoursState, type SupportHoursState } from "@/lib/contact/support-hours"
 import { useToast } from "@/components/ui/toast"
-import {
-    ACADEMY_SIZE_OPTIONS,
-    ACADEMY_SIZE_PLACEHOLDER,
-} from "@/lib/contact/academy-size"
+import { ACADEMY_SIZE_OPTIONS, ACADEMY_SIZE_PLACEHOLDER } from "@/lib/contact/academy-size"
 import { ContactDirectChannels } from "@/components/contact/ContactDirectChannels"
 import { ContactFastTrack } from "@/components/contact/ContactFastTrack"
 import { AdConsentCheckbox } from "@/components/consent/AdConsentCheckbox"
@@ -75,6 +73,8 @@ export default function ContactPage() {
     // 챗봇 상담 연결(?source=chatbot)로 들어왔으면 그 경로를 리드 source 로 보존한다.
     const [leadSource, setLeadSource] = useState<ContactLeadSource>("contact_page")
     const [message, setMessage] = useState("")
+    const [chatbotPrefill, setChatbotPrefill] = useState(false) // 챗봇 상담 카드의 요약을 받아 왔는지 — 받았으면 안내와 '문의 내용' 칸을 폼 맨 위에(CX-18)
+    const [submittedHours, setSubmittedHours] = useState<SupportHoursState>("open") // 접수 시각의 운영시간 상태(KST, CX-07)
     const [privacyConsent, setPrivacyConsent] = useState(false)
     const [privacyConsentError, setPrivacyConsentError] = useState("")
     const [adConsent, setAdConsent] = useState(EMPTY_AD_CONSENT)
@@ -122,9 +122,9 @@ export default function ContactPage() {
         // 하위 호환으로만 읽고 곧바로 주소에서 지운다 — 대화 요약이 주소창·리퍼러·분석 URL 로
         // 새지 않게.
         const prefill = takeContactPrefill() ?? prefillParam
-        if (prefill) {
-            setMessage(prefill)
-        }
+        if (prefill) setMessage(prefill)
+        // 챗봇 상담 카드(?source=chatbot)가 넘긴 요약이면 안내와 '문의 내용' 칸을 먼저 보인다. 끄지는 않는다(개발 모드 이중 실행에서 두 번째는 빈 값).
+        if (prefill && sourceParam === "chatbot") setChatbotPrefill(true)
         if (params.has("prefill")) {
             params.delete("prefill")
             const cleanedSearch = params.toString()
@@ -304,6 +304,8 @@ export default function ContactPage() {
                 },
             })
             toast.success("상담 요청이 접수되었어요")
+            setSubmittedHours(getSupportHoursState())
+            setChatbotPrefill(false)
             setSubmitted(true)
         } catch (err) {
             const msg = err instanceof Error ? err.message : "상담 요청을 제출하지 못했습니다. 잠시 후 다시 시도해주세요."
@@ -312,6 +314,22 @@ export default function ContactPage() {
             setLoading(false)
         }
     }
+
+    // 챗봇 요약을 받아 왔으면 폼 맨 위로, 아니면 원래 자리(문의 유형 아래)에 그린다. 같은 칸 하나다.
+    const messageField = (
+        <div className="space-y-3 w-full">
+            <Label htmlFor="message" className="text-[#44514A] font-bold ml-1">문의 내용 <span className="font-medium text-[#A39E98]">(선택)</span></Label>
+            <textarea
+                className={`w-full resize-none rounded-xl border border-[#E5E5E0] bg-white px-4 py-4 text-base transition-all shadow-sm ${chatbotPrefill ? "min-h-[220px]" : "min-h-[110px]"}`}
+                placeholder="비워두셔도 됩니다. 현재 상황이나 급한 일정이 있다면 적어주세요."
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                id="message"
+                name="message"
+                aria-describedby={errorMessageId}
+            />
+        </div>
+    )
     return (
         <div className="min-h-screen bg-[#FAFAF8] pb-24 pt-20 font-sans text-[#111110] selection:bg-fg-accent/8 sm:pb-28 lg:pb-32">
 
@@ -376,6 +394,11 @@ export default function ContactPage() {
                                         <CheckCircle2 className="h-14 w-14 text-fg-accent" />
                                         <h3 className="text-2xl font-bold text-[#111110]">상담 요청이 접수되었습니다</h3>
                                         <p className="text-[#615D59] text-lg">담당 매니저가 내용을 확인한 뒤 이어서 안내드리겠습니다.</p>
+                                        {/* 운영시간은 직접 연락 블록·챗봇 상담 카드와 같은 정본. 응답 목표 시간은 정해진 뒤에 넣는다(CX-07). */}
+                                        <p className="text-caption text-fg-muted">상담 운영시간: {SUPPORT_HOURS_FULL_LABEL}</p>
+                                        {describeSupportHoursWait(submittedHours) ? (
+                                            <p className="text-caption text-fg-muted">{describeSupportHoursWait(submittedHours)}</p>
+                                        ) : null}
                                         {notice && <p className="text-sm text-[#A39E98] max-w-md">{notice}</p>}
                                         <Button onClick={resetForm} variant="outline" className="mt-4">
                                             추가 상담 남기기
@@ -392,6 +415,15 @@ export default function ContactPage() {
                                     }}
                                     className="w-full space-y-6 md:space-y-8"
                                 >
+                                {/* 챗봇 상담 카드에서 넘어온 요약 안내. 상태 영역은 늘 두고 글만 채워 화면 읽기 프로그램이 읽게 한다(CX-18). */}
+                                <div role="status" className={chatbotPrefill ? "w-full" : "sr-only"}>
+                                    {chatbotPrefill ? (
+                                        <p className="rounded-xl border border-line-strong bg-surface-sunken px-4 py-3 text-caption text-fg-body">
+                                            챗봇 대화 요약을 아래 &lsquo;문의 내용&rsquo;에 넣어 두었어요. 기관명·성함·연락처를 채우고 개인정보 동의 뒤 제출하면 접수돼요.
+                                        </p>
+                                    ) : null}
+                                </div>
+                                {chatbotPrefill ? messageField : null}
                                 {/* 스팸 봇 honeypot — 사용자에게 보이지 않으며 값이 채워지면 서버가 무시 */}
                                 <div aria-hidden="true" className="absolute -left-[9999px] top-0 h-px w-px overflow-hidden">
                                     <label htmlFor="contact-website">Website</label>
@@ -518,18 +550,7 @@ export default function ContactPage() {
                                         )}
                                     </div>
                                 )}
-                                <div className="space-y-3 w-full">
-                                    <Label htmlFor="message" className="text-[#44514A] font-bold ml-1">문의 내용 <span className="font-medium text-[#A39E98]">(선택)</span></Label>
-                                    <textarea
-                                        className="w-full resize-none rounded-xl border border-[#E5E5E0] bg-white px-4 py-4 text-base transition-all shadow-sm min-h-[110px]"
-                                        placeholder="비워두셔도 됩니다. 현재 상황이나 급한 일정이 있다면 적어주세요."
-                                        value={message}
-                                        onChange={(e) => setMessage(e.target.value)}
-                                        id="message"
-                                        name="message"
-                                        aria-describedby={errorMessageId}
-                                    />
-                                </div>
+                                {chatbotPrefill ? null : messageField}
                                 {/* 개인정보 수집·이용 동의는 필수다. 문구(항목·목적·보유 기간)는 /privacy 2·4·5절과 같은 값을 쓴다 */}
                                 <label
                                     htmlFor="privacy-consent"
