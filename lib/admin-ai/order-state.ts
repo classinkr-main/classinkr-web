@@ -104,6 +104,8 @@ export function transitionOrder(order: OrderTicket, action: OrderAction, now: nu
 
     case "confirm": {
       if (order.state !== "draft") return order
+      // 서버 오더는 화면 전이로 완료되지 않는다 — 확인 경로의 답(order-server-result)으로만 바뀐다.
+      if (order.server) return order
       // 버튼이 남아 있어도 만료 시각이 지났으면 실행하지 않는다.
       if (now >= order.expiresAt) return { ...order, state: "expired" }
       if (order.risk === "R3") {
@@ -152,6 +154,8 @@ export function transitionOrder(order: OrderTicket, action: OrderAction, now: nu
     }
 
     case "redraft": {
+      // 서버 오더는 확인 표가 일회용이라 다시 작성하지 않는다 — 다시 요청한다.
+      if (order.server) return order
       if (!isClosedOrderState(order.state) && order.state !== "failed") return order
       return {
         ...order,

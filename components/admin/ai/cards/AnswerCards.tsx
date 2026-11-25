@@ -103,7 +103,27 @@ export function AnswerCardView({ card }: { card: AnswerCard }) {
       }
     >
       {preview ? <PreviewBand /> : null}
-      <p className="text-[13px] leading-[1.55] text-[#111110]">{card.answer}</p>
+      <p className="text-[13px] font-semibold leading-[1.55] text-[#111110]">{card.answer}</p>
+      {card.steps && card.steps.length > 0 ? (
+        <section aria-label="방법">
+          <h5 className="mb-1 text-[11px] font-semibold text-[#A39E98]">방법</h5>
+          <ol className="list-decimal space-y-0.5 pl-5 text-[12px] leading-[1.5] text-[#31302E]">
+            {card.steps.map((step) => (
+              <li key={step}>{step}</li>
+            ))}
+          </ol>
+        </section>
+      ) : null}
+      {card.cautions && card.cautions.length > 0 ? (
+        <section aria-label="조건·주의">
+          <h5 className="mb-1 text-[11px] font-semibold text-[#A39E98]">조건·주의</h5>
+          <ul className="list-disc space-y-0.5 pl-5 text-[12px] leading-[1.5] text-[#7A520F]">
+            {card.cautions.map((caution) => (
+              <li key={caution}>{caution}</li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
       <div className="flex flex-wrap gap-1.5">
         <Badge tone={card.confidence === "confirmed" ? "green" : "warn"}>
           {card.confidence === "confirmed" ? (
@@ -116,7 +136,7 @@ export function AnswerCardView({ card }: { card: AnswerCard }) {
           )}
         </Badge>
         <Badge tone={customerSafe ? "green" : "warn"}>
-          {customerSafe ? "고객에게 그대로 말해도 됨" : "고객에게 그대로 말하지 마세요"}
+          {customerSafe ? "고객에게 그대로 말해도 됨" : "내부용 — 그대로 보내지 마세요"}
         </Badge>
       </div>
       <section aria-label="근거">
@@ -131,6 +151,18 @@ export function AnswerCardView({ card }: { card: AnswerCard }) {
           <p className="text-[12px] text-[#7A520F]">확인된 근거가 없습니다. 추측해서 답하지 않았습니다.</p>
         )}
       </section>
+      {card.customerDraft ? (
+        // 고객용 문안 — 공개 챗봇이 고객에게 내는 말투 그대로. 매니저 답과 섞지 않고 접어 둔다(점검 R18).
+        <details className="rounded-lg border border-[#F0F0EC] bg-[#FAFAF8] px-[11px] py-[8px] text-[12px]">
+          <summary className="cursor-pointer text-[11px] font-semibold text-[#615D59]">
+            고객용 문안 · {card.customerDraft.status === "confirmed" ? "공개 답" : "확인 필요"}
+          </summary>
+          <p className="mt-1.5 whitespace-pre-line leading-[1.5] text-[#31302E]">{card.customerDraft.text}</p>
+          {card.customerDraft.note ? (
+            <p className="mt-1 text-[11px] text-[#7A520F]">{card.customerDraft.note}</p>
+          ) : null}
+        </details>
+      ) : null}
       {card.note ? (
         <CardNote icon={<Info className="h-3 w-3" aria-hidden="true" />}>{card.note}</CardNote>
       ) : null}

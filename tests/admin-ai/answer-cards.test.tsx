@@ -50,7 +50,7 @@ describe("답 카드", () => {
     expect(isCustomerSafeAnswer(confirmedAnswer)).toBe(true)
     expect(html).toContain("확정")
     expect(html).toContain("고객에게 그대로 말해도 됨")
-    expect(html).not.toContain("고객에게 그대로 말하지 마세요")
+    expect(html).not.toContain("내부용 — 그대로 보내지 마세요")
     expect(html).toContain("가격표")
     expect(html).toContain("요금제 표")
     expect(html).toContain("공개 문서")
@@ -65,7 +65,7 @@ describe("답 카드", () => {
     ]
     for (const card of variants) {
       expect(isCustomerSafeAnswer(card)).toBe(false)
-      expect(renderToStaticMarkup(<AnswerCardView card={card} />)).toContain("고객에게 그대로 말하지 마세요")
+      expect(renderToStaticMarkup(<AnswerCardView card={card} />)).toContain("내부용 — 그대로 보내지 마세요")
     }
   })
 
@@ -74,7 +74,7 @@ describe("답 카드", () => {
     const html = renderToStaticMarkup(<AnswerCardView card={card} />)
     expect(isCustomerSafeAnswer(card)).toBe(false)
     expect(html).toContain("확인된 근거가 없습니다")
-    expect(html).toContain("고객에게 그대로 말하지 마세요")
+    expect(html).toContain("내부용 — 그대로 보내지 마세요")
   })
 
   it("고객 문안은 CS 코파일럿에서 만든다 — 하단에 코파일럿 열기", () => {
@@ -283,7 +283,7 @@ describe("시안 자료와 시안 시나리오", () => {
     expect(renderToStaticMarkup(<AdminAiConversation state={who} />)).toContain("카메라 담당(본사)")
     expect(buildAdminAiAnnouncement(who)).toContain("카메라 담당(본사)")
     const ask = turn("knowledge", 3)
-    expect(renderToStaticMarkup(<AdminAiConversation state={ask} />)).toContain("고객에게 그대로 말하지 마세요")
+    expect(renderToStaticMarkup(<AdminAiConversation state={ask} />)).toContain("내부용 — 그대로 보내지 마세요")
     expect(buildAdminAiAnnouncement(ask)).toContain("견적 할인 승인 규칙")
   })
 })
