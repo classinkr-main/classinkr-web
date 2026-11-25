@@ -1790,12 +1790,13 @@ export function FloatingChatbot() {
                                             disabled={isSending || !input.trim()}
                                             animate={{
                                                 scale: (isSending || !input.trim()) ? 0.96 : 1,
-                                                opacity: (isSending || !input.trim()) ? 0.45 : 1,
+                                                opacity: (isSending || !input.trim()) ? 0.35 : 1,
                                             }}
-                                            whileHover={(isSending || !input.trim()) ? undefined : { scale: 1.05 }}
-                                            whileTap={(isSending || !input.trim()) ? undefined : { scale: 0.95 }}
+                                            whileHover={(isSending || !input.trim()) ? undefined : { scale: 1.1 }}
+                                            whileTap={(isSending || !input.trim()) ? undefined : { scale: 0.9 }}
                                             transition={m(CHATBOT_MOTION.micro, shouldReduceMotion)}
-                                            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[12px] bg-fg-accent text-fg-on-accent transition-colors hover:bg-fg-accent-hover disabled:cursor-not-allowed disabled:shadow-none focus-visible:outline-none"
+                                            // 상자 없이 아이콘만 — 누르는 영역은 44px 유지. 키보드 포커스는 입력창 테두리(focus-within)와 아이콘 색으로 보인다.
+                                            className="inline-flex h-11 w-11 shrink-0 items-center justify-center bg-transparent text-fg-accent transition-colors hover:text-fg-accent-hover disabled:cursor-not-allowed focus-visible:text-fg-accent-hover focus-visible:outline-none"
                                             aria-label="질문 보내기"
                                         >
                                             <AnimatePresence mode="popLayout" initial={false}>
@@ -1808,7 +1809,7 @@ export function FloatingChatbot() {
                                                         transition={m(CHATBOT_MOTION.micro, shouldReduceMotion)}
                                                         className="flex"
                                                     >
-                                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                                        <Loader2 className="h-5 w-5 animate-spin" />
                                                     </motion.span>
                                                 ) : (
                                                     <motion.span
@@ -1820,7 +1821,7 @@ export function FloatingChatbot() {
                                                         transition={m(CHATBOT_MOTION.enter, shouldReduceMotion)}
                                                         className="flex"
                                                     >
-                                                        <Send className="h-4 w-4" />
+                                                        <Send className="h-5 w-5" />
                                                     </motion.span>
                                                 )}
                                             </AnimatePresence>
