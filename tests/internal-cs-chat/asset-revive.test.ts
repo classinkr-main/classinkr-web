@@ -72,7 +72,7 @@ describe("createInternalCsAsset after the original object was deleted", () => {
     expect(patch.status).toBe("uploaded")
     expect(typeof patch.created_at).toBe("string")
     expect((asset.metadata as Record<string, unknown>).storageDeletedAt).toBeUndefined()
-    expect(asset.signed_url ?? asset.signedUrl).toBeTruthy()
+    expect(asset.signed_url).toBeTruthy()
   })
 
   it("still returns a live duplicate unchanged", async () => {
