@@ -10,7 +10,13 @@
 //  상담 사례: 건수만(기관 이름·원문 없음, R17).
 // 근거가 없으면 지어내지 않는다 — "근거를 찾지 못했습니다" + 담당자 카드 + CS 코파일럿 열기.
 // 자료는 deps 로 받는다(서버 연결은 deps.ts, 시험은 가짜). 이 파일은 I/O 를 하지 않는다.
-import type { InternalEvidenceParts } from "@/lib/internal-cs-chat/context"
+import type {
+  InternalCuratedEvidence,
+  InternalDocEvidence,
+  InternalEvidenceParts,
+  InternalIncidentEvidence,
+  InternalPublicDocEvidence,
+} from "@/lib/internal-cs-chat/context"
 
 import { ADMIN_AI_LINKS, getLinkById } from "../links"
 import type { AiBlock, AnswerCard, AnswerConfidence, AnswerSource, ContactCard } from "../types"
@@ -90,6 +96,8 @@ function publicLinkIdFor(urlPath: string): string | undefined {
   return entry?.id
 }
 
+type AnyEvidence = InternalCuratedEvidence | InternalPublicDocEvidence | InternalIncidentEvidence | InternalDocEvidence
+
 interface Picked {
   conclusion: string
   steps: string[]
@@ -100,26 +108,25 @@ interface Picked {
 
 function assemble(parts: InternalEvidenceParts): Picked | null {
   const curated = [...parts.curated].sort((a, b) => Number(b.confirmed === true) - Number(a.confirmed === true))
-  const primaryCurated = curated[0]
-  const primaryPublic = parts.publicDocs[0]
-  const primaryIncident = parts.incidents[0]
-  const primaryInternal = parts.internalDocs[0]
-  const primary = primaryCurated ?? primaryPublic ?? primaryIncident ?? primaryInternal
+  // .at() 은 없을 때 undefined 를 타입에 남긴다(배열 [0] 은 늘 있는 것처럼 좁혀진다).
+  const primary: AnyEvidence | undefined = curated.at(0) ?? parts.publicDocs.at(0) ?? parts.incidents.at(0) ?? parts.internalDocs.at(0)
   if (!primary) return null
 
   const steps: string[] = []
   const cautions: string[] = []
-  if (primaryCurated) {
-    steps.push(...primaryCurated.handling)
-    const statusCaution = STATUS_CAUTION[primaryCurated.status]
+  if (primary.kind === "curated") {
+    steps.push(...primary.handling)
+    const statusCaution = STATUS_CAUTION[primary.status]
     if (statusCaution) cautions.push(statusCaution)
-    if (primaryCurated.customerUse === "internal_only") cautions.push("사내 판단 근거입니다 — 고객에게 그대로 말하지 마세요.")
+    if (primary.customerUse === "internal_only") cautions.push("사내 판단 근거입니다 — 고객에게 그대로 말하지 마세요.")
+  } else if (primary.kind === "public_doc" || primary.kind === "internal_doc") {
+    steps.push(...restSentences(primary.excerpt || primary.summary))
+  } else {
+    steps.push(...primary.steps)
+    if (primary.confirmed === false) cautions.push("원인이 확정되지 않은 선례입니다.")
   }
-  if (steps.length === 0 && primaryIncident && primary === primaryIncident) steps.push(...primaryIncident.steps)
-  if (steps.length === 0 && primary === primaryPublic) steps.push(...restSentences(primaryPublic.excerpt || primaryPublic.summary))
-  if (steps.length === 0 && primary === primaryInternal) steps.push(...restSentences(primaryInternal.excerpt || primaryInternal.summary))
-  if (primary === primaryIncident && primaryIncident.confirmed === false) cautions.push("원인이 확정되지 않은 선례입니다.")
-  if (primary.customerUse === "confirm_first") cautions.push("계약·본사·현장 확인 전에는 고객에게 단정하지 마세요.")
+  // 상태 주의(본사 확인 필요 등)가 이미 있으면 같은 뜻의 고객 전달 주의를 겹쳐 싣지 않는다.
+  if (primary.customerUse === "confirm_first" && cautions.length === 0) cautions.push("계약·본사·현장 확인 전에는 고객에게 단정하지 마세요.")
 
   const sources: AnswerSource[] = []
   for (const entry of curated.slice(0, 2)) {
@@ -143,7 +150,7 @@ function assemble(parts: InternalEvidenceParts): Picked | null {
   }
 
   const confirmed =
-    primary === primaryPublic ? true : primary.confirmed === true && !cautions.some((c) => c.includes("확인") || c.includes("다릅니다"))
+    primary.kind === "public_doc" ? true : primary.confirmed === true && !cautions.some((c) => c.includes("확인") || c.includes("다릅니다"))
   return {
     conclusion: asConclusion(primary.summary || primary.title),
     steps: Array.from(new Set(steps.map((step) => clip(step.replace(/^[-•*·\d.)\s]+/, ""), STEP_MAX_CHARS)).filter(Boolean))).slice(0, MAX_STEPS),

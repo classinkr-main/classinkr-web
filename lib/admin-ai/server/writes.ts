@@ -26,7 +26,9 @@ export function plannedDateOf(text: string, now: number): string | undefined {
   return undefined
 }
 
-export type WriteArgsResult = { ok: true; tool: "quote_create_draft" | "hw_plan_movement"; args: ToolArgs } | { ok: false; block: AiBlock }
+export type WriteArgsResult =
+  | { ok: true; tool: "quote_create_draft" | "hw_plan_movement"; args: ToolArgs; /** 카드에 보일 이름(요약 칸 키 → 이름) */ labels?: Record<string, string> }
+  | { ok: false; block: AiBlock }
 
 interface TemplateOption {
   id: string
@@ -82,7 +84,7 @@ export async function quoteDraftArgs(ctx: ToolTurnContext, deps: OpsDeps): Promi
     }
     return { ok: false, block: needMore("견적 초안 — 값이 더 필요합니다", missing, "admin:quotes") }
   }
-  return { ok: true, tool: "quote_create_draft", args: { deal_id: dealId, template_id: matched[0].id } }
+  return { ok: true, tool: "quote_create_draft", args: { deal_id: dealId, template_id: matched[0].id }, labels: { template_id: matched[0].label } }
 }
 
 /**
@@ -272,6 +274,10 @@ export async function previewWriteTurn(
     ticket: issued?.ticket,
     title: WRITE_TITLE[picked.tool],
   })
+  if (picked.labels) {
+    const labels = picked.labels
+    order.fields = order.fields.map((field) => (labels[field.key] ? { ...field, value: labels[field.key] } : field))
+  }
   const total = num(preview.summary.total)
   const lead =
     picked.tool === "quote_create_draft"
