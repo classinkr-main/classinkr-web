@@ -45,6 +45,16 @@ export function chatbotRequestReferrer(
 const CHATBOT_UTM_KEYS = ["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term"] as const
 const CHATBOT_UTM_VALUE_MAX_LENGTH = 200
 
+// utm 값에서 개인정보로 보고 버리는 것은 이메일과 휴대전화 꼴뿐이다. redactPii 의 사업자·카드·일반 전화 규칙은 숫자로만 된
+// 광고·캠페인 ID(Meta 18자리, Google Ads 10~11자리 등)를 전화번호로 오인해 귀속을 지웠다. 휴대전화 꼴은 01[016789] 로
+// 시작하는 10~11자리(구분자 -·.·공백 허용, 앞뒤가 숫자가 아닐 때)로 좁힌다. 캠페인 ID 가 우연히 이 꼴이면 버려지는 것은 받아들인다.
+const UTM_EMAIL_RE = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i
+const UTM_MOBILE_RE = /(?<!\d)01[016789][-.\s]?\d{3,4}[-.\s]?\d{4}(?!\d)/
+
+function looksLikeUtmPii(value: string): boolean {
+  return UTM_EMAIL_RE.test(value) || UTM_MOBILE_RE.test(value)
+}
+
 function readParam(source: unknown, key: string): unknown {
   if (source instanceof URLSearchParams) return source.get(key)
   if (source && typeof source === "object" && !Array.isArray(source)) return (source as Record<string, unknown>)[key]
@@ -53,8 +63,7 @@ function readParam(source: unknown, key: string): unknown {
 
 /**
  * 챗봇 요청 context.utm 과 chat_sessions.utm 에 싣는 광고 귀속 값. utm 다섯 키의 문자열만 남긴다.
- * 개인정보처럼 보이는 값(redactPii 가 바꾸는 이메일·전화·사업자·카드 번호 — 메일 캠페인이 utm_term 에 수신자를 박는 사고)은
- * 버리고, 추적 제외 경로(/unsubscribe·/share·/account 등)에서는 아무것도 남기지 않는다(sanitizeChatbotPageUrl 과 같은 경계).
+ * 개인정보처럼 보이는 값(이메일·휴대전화 꼴 — 메일 캠페인이 utm_term 에 수신자를 박는 사고)은 버리고 숫자·문자 ID 는 남기며, 추적 제외 경로(/unsubscribe·/share·/account 등)에서는 아무것도 남기지 않는다(sanitizeChatbotPageUrl 과 같은 경계).
  * source 는 주소 쿼리(URLSearchParams)나 요청 본문의 객체다.
  */
 export function sanitizeChatbotUtm(source: unknown, pathname?: string | null): Record<string, string> {
@@ -64,7 +73,7 @@ export function sanitizeChatbotUtm(source: unknown, pathname?: string | null): R
     const raw = readParam(source, key)
     if (typeof raw !== "string") continue
     const value = raw.trim().slice(0, CHATBOT_UTM_VALUE_MAX_LENGTH)
-    if (!value || redactPii(value) !== value) continue
+    if (!value || looksLikeUtmPii(value)) continue
     utm[key] = value
   }
   return utm

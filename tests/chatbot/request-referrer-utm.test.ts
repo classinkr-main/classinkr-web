@@ -43,6 +43,38 @@ describe("챗봇 요청 Referer (chatbotRequestReferrer)", () => {
 })
 
 describe("챗봇 utm (sanitizeChatbotUtm)", () => {
+  it("숫자·문자로 된 광고·캠페인 ID 는 남긴다", () => {
+    const params = new URLSearchParams({
+      utm_source: "facebook",
+      utm_campaign: "120208765432100123", // Meta {{campaign.id}} 18자리
+      utm_content: "23851234567890123",
+      utm_term: "21234567890", // Google Ads {campaignid} 11자리
+      utm_medium: "1234567890",
+    })
+    expect(sanitizeChatbotUtm(params, "/pricing")).toEqual({
+      utm_source: "facebook",
+      utm_campaign: "120208765432100123",
+      utm_content: "23851234567890123",
+      utm_term: "21234567890",
+      utm_medium: "1234567890",
+    })
+    expect(sanitizeChatbotUtm({ utm_campaign: "spring_2026-a1b2", utm_content: "ad-9876543210" })).toEqual({
+      utm_campaign: "spring_2026-a1b2",
+      utm_content: "ad-9876543210",
+    })
+  })
+
+  it("이메일과 휴대전화 꼴 값은 구분자가 있든 없든 버린다", () => {
+    for (const value of ["01012345678", "010-1234-5678", "010 1234 5678", "010.123.4567", "0111234567", "call_010-1234-5678", "a@b.co"]) {
+      expect(sanitizeChatbotUtm({ utm_term: value }), value).toEqual({})
+    }
+  })
+
+  it("추적 제외 경로에서는 비우고 길이는 200자로 자른다", () => {
+    expect(sanitizeChatbotUtm({ utm_source: "123456789" }, "/unsubscribe")).toEqual({})
+    expect(sanitizeChatbotUtm({ utm_campaign: "1".repeat(500) }).utm_campaign).toHaveLength(200)
+  })
+
   it("utm 다섯 키의 문자열만 남기고, 이메일 같은 개인정보 값은 버린다", () => {
     const params = new URLSearchParams("utm_source=mail&utm_term=victim%40example.com&utm_campaign=spring&token=x&gclid=g1")
     expect(sanitizeChatbotUtm(params, "/pricing")).toEqual({ utm_source: "mail", utm_campaign: "spring" })
