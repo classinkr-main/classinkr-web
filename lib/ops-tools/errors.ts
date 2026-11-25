@@ -3,7 +3,7 @@
  *
  * 판정은 바꾸기 전과 같다: HW 입출고 API 의 toErrorResponse(검증·규칙·중복·재고 부족 → 4xx). 4xx 는 글을 그대로 돌려준다.
  * 이 판정은 Postgres 영문 오류("duplicate key value violates …")도 4xx 로 보아 원문을 돌려준다(점검 R30) — 이를 코드만으로
- * 바꾸는 일은 총괄 결정 밖이라 이번에는 되돌렸다(docs/active/home-mcp-operations.md §7). 돌려주는 글의 연락처는 가린다(run.ts).
+ * 바꾸는 일은 총괄 결정 밖이라 이번에는 되돌렸다(docs/active/home-mcp-operations.md §7). 돌려주는 글의 연락처는 pii 범위가 없을 때 가린다(lib/mcp/tools.ts).
  * 로그에는 글 원문 없이 닫힌 코드만 싣는다.
  */
 import { HardwareApiValidationError, toErrorResponse } from "@/app/api/admin/hardware/_validation"

@@ -14,10 +14,11 @@ export const OPS_SCOPES = ["read", "write:quote", "write:hw", "internal", "pii"]
 export type OpsScope = (typeof OPS_SCOPES)[number]
 
 /**
- * 옛 형식(`이름:토큰`) 토큰이 받는 범위 — 넓힌 형식이 생기기 전과 같은 권한(읽기·쓰기 둘·내부 문서).
- * pii 는 없다: 연락처 가림은 옛 형식에도 기본으로 적용한다(Compass MCP 와 같은 기준).
+ * 옛 형식(`이름:토큰`) 토큰이 받는 범위 — 넓힌 형식이 생기기 전과 같은 권한(읽기·쓰기 둘·내부 문서·연락처 원문).
+ * pii 를 넣어 연락처를 가리지 않는다: 조회한 연락처를 그대로 다음 쓰기 인자로 넘기던 흐름이 전처럼 돈다(호환 조정).
+ * 가림은 넓힌 형식 토큰에 pii 범위가 없을 때만 적용된다.
  */
-export const LEGACY_SCOPES: readonly OpsScope[] = ["read", "write:quote", "write:hw", "internal"]
+export const LEGACY_SCOPES: readonly OpsScope[] = ["read", "write:quote", "write:hw", "internal", "pii"]
 
 export type OpsActor = {
   /** 토큰 줄의 이름 — 감사·로그에 `mcp:<이름>` 으로 남는다 */

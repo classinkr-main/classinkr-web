@@ -23,7 +23,7 @@ const rpcErrorResponse = (status: number, code: number, message: string) =>
 export async function POST(req: NextRequest) {
   const auth = authenticateMcp(req.headers.get("authorization"), process.env.HOME_MCP_TOKENS)
   if (!auth.ok) {
-    // 실패 이유는 닫힌 어휘로 로그에만(missing·unconfigured·invalid·expired·duplicate). 응답은 전과 같은 401 하나
+    // 실패 이유는 닫힌 어휘로 로그에만(missing·unconfigured·invalid·expired). 응답은 전과 같은 401 하나
     console.info(formatMcpAuthDenied(auth.reason))
     return NextResponse.json({ error: "Unauthorized" }, { status: 401, headers: { "WWW-Authenticate": "Bearer" } })
   }
