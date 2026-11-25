@@ -170,3 +170,128 @@ export function readFailureKinds(message: Pick<InternalCsMessage, "metadata"> | 
   const raw = message?.metadata?.failureKinds
   return Array.isArray(raw) ? raw.filter((kind): kind is string => typeof kind === "string") : []
 }
+
+// ── 대화 스레드 표시(IC-10·IC-25) ─────────────────────────────────────────────────
+
+import { extractCustomerContextFields } from "@/lib/internal-cs-chat/customer-context"
+import { redactInternalCsDraft } from "@/lib/internal-cs-chat/redact"
+
+/** generate 라우트가 맥락 비우기 때 저장하는 경계 행의 metadata.kind (lib/internal-cs-chat/history.ts 와 같은 값). */
+export const CONTEXT_RESET_KIND = "copilot_context_reset"
+
+export function isContextResetMessage(message: Pick<InternalCsMessage, "role" | "metadata">) {
+  return message.role === "system" && message.metadata?.kind === CONTEXT_RESET_KIND
+}
+
+/** 마지막 맥락 경계의 위치. 없으면 -1. */
+export function lastContextBoundaryIndex(messages: Array<Pick<InternalCsMessage, "role" | "metadata">>) {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    if (isContextResetMessage(messages[index])) return index
+  }
+  return -1
+}
+
+/** 마지막 경계 뒤의 질문(user) 수. '맥락 비우기' 버튼은 1개 이상일 때만 보인다. */
+export function turnsSinceBoundary(messages: Array<Pick<InternalCsMessage, "role" | "metadata">>) {
+  const start = lastContextBoundaryIndex(messages) + 1
+  return messages.slice(start).filter((message) => message.role === "user").length
+}
+
+export type MessageSpeakerKind = "customer" | "staff" | "ai" | "external_ai" | "external_note" | "note" | "hq_reply" | "system"
+
+const BRIDGE_SYSTEM_LABELS: Record<string, string> = {
+  "channel-talk": "채널톡",
+  channel_talk: "채널톡",
+  channeltalk: "채널톡",
+}
+
+function bridgeLabel(message: Pick<InternalCsMessage, "metadata">) {
+  const raw = message.metadata?.bridgeSourceSystem
+  if (typeof raw !== "string" || !raw.trim()) return null
+  return BRIDGE_SYSTEM_LABELS[raw.trim().toLowerCase()] ?? raw.trim().slice(0, 24)
+}
+
+/**
+ * 메시지 머리에 적을 주인. 브리지가 넣은 글(metadata.bridgeEventId)은 외부에서 온 것이고,
+ * 그 밖의 user 글은 담당자가 코파일럿에 한 질문이다.
+ */
+export function describeMessageSpeaker(
+  message: Pick<InternalCsMessage, "role" | "metadata">
+): { kind: MessageSpeakerKind; label: string } {
+  const bridged = Boolean(message.metadata?.bridgeEventId) || Boolean(message.metadata?.bridgeSourceSystem)
+  const channel = bridgeLabel(message)
+  switch (message.role) {
+    case "user":
+      return bridged
+        ? { kind: "customer", label: channel ? `고객 · ${channel}` : "고객" }
+        : { kind: "staff", label: "담당자 질문" }
+    case "assistant":
+      return bridged
+        ? { kind: "external_ai", label: channel ? `외부 AI 초안 · ${channel}` : "외부 AI 초안" }
+        : { kind: "ai", label: "AI 초안" }
+    case "internal_note":
+      if (message.metadata?.kind === "hq_reply") return { kind: "hq_reply", label: "본사 회신(참고)" }
+      return bridged
+        ? { kind: "external_note", label: "외부 AI 관찰" }
+        : { kind: "note", label: "내부 메모" }
+    default:
+      return { kind: "system", label: "시스템" }
+  }
+}
+
+const CONTEXT_SOURCE_LABELS: Record<string, string> = {
+  public_chatbot: "공개 챗봇",
+  chatbot: "공개 챗봇",
+  channel_talk: "채널톡",
+  "channel-talk": "채널톡",
+  channeltalk: "채널톡",
+}
+
+export interface ContextCardData {
+  source: string | null
+  summary: string | null
+  lastQuestion: string | null
+  institution: string | null
+  /** 사이트 안 문서 경로("/docs/...")만. 바깥 주소·상대 경로는 버린다. */
+  documents: string[]
+}
+
+function readDocumentPaths(context: Record<string, unknown>) {
+  const raw: unknown[] = []
+  for (const key of ["chatbotSources", "sources", "documents"]) {
+    const value = context[key]
+    if (Array.isArray(value)) raw.push(...value)
+  }
+  if (typeof context.page === "string") raw.push(context.page)
+  const seen = new Set<string>()
+  for (const item of raw) {
+    if (typeof item !== "string") continue
+    const path = item.trim().split("#")[0]
+    if (!path.startsWith("/") || path.startsWith("//") || path.length > 200) continue
+    seen.add(path)
+    if (seen.size >= 5) break
+  }
+  return [...seen]
+}
+
+/** customer_context 를 '상담 맥락' 카드에 보일 칸으로 줄인다. 모든 글은 가림을 거치고, 값이 하나도 없으면 null(카드를 숨긴다). */
+export function readContextCard(context: unknown): ContextCardData | null {
+  if (!context || typeof context !== "object" || Array.isArray(context)) return null
+  const record = context as Record<string, unknown>
+  const fields = extractCustomerContextFields(record)
+  const documents = readDocumentPaths(record)
+  const sourceKey = fields.source?.toLowerCase() ?? null
+  // 공개 챗봇 브리지는 요약을 chatbotSummary 로 넘긴다 — 공용 추출기의 이름 목록에 없어 여기서 한 번 더 본다.
+  const botSummary = typeof record.chatbotSummary === "string" && record.chatbotSummary.trim()
+    ? redactInternalCsDraft(record.chatbotSummary.trim().replace(/\s+/g, " ").slice(0, 200)).text
+    : null
+  const card: ContextCardData = {
+    source: fields.source ? CONTEXT_SOURCE_LABELS[sourceKey ?? ""] ?? fields.source : null,
+    summary: fields.summary ?? botSummary,
+    lastQuestion: fields.previousQuestion,
+    institution: fields.institution,
+    documents,
+  }
+  const any = card.source || card.summary || card.lastQuestion || card.institution || card.documents.length > 0
+  return any ? card : null
+}

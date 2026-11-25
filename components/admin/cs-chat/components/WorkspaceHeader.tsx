@@ -10,6 +10,7 @@ import { CONSOLE_CONTENT_CLASS } from "../constants"
 // 워크스페이스 상단 바 + 전역 알림 배너 2종(에러·안내).
 // 콘솔 내비는 이 위(기본 export)에서 이미 그려졌다.
 export default function WorkspaceHeader({
+  compact = false,
   loading,
   isPending,
   regressionPendingCount,
@@ -18,6 +19,8 @@ export default function WorkspaceHeader({
   onRefresh,
   onOpenTools,
 }: {
+  /** 대화 탭에서는 제목 띠를 그리지 않는다 — 새로고침·운영 도구 진입은 대화 툴바로 옮겼다(IC-15). 알림 띠만 남는다. */
+  compact?: boolean
   loading: boolean
   isPending: boolean
   regressionPendingCount: number
@@ -28,6 +31,8 @@ export default function WorkspaceHeader({
 }) {
   return (
     <>
+      {compact ? <h1 className="sr-only">CS 코파일럿</h1> : null}
+      {compact ? null : (
       <header className="shrink-0 border-b border-black/[0.08] bg-white">
         <div className={cn(CONSOLE_CONTENT_CLASS, "flex items-center justify-between gap-3 py-2.5")}>
           <div className="flex min-w-0 items-center gap-2.5">
@@ -69,6 +74,7 @@ export default function WorkspaceHeader({
           </div>
         </div>
       </header>
+      )}
 
       {error ? (
         <div className="shrink-0 border-b border-[#F2B8B8] bg-[#FCE9E9]">

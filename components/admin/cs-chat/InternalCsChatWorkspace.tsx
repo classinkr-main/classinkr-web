@@ -1851,7 +1851,8 @@ function InternalCsChatWorkspaceInner() {
         })
         await loadConversations(detail.conversation.id)
         setActiveTab("chat")
-        setNotice("대화를 다시 대기열로 이동했습니다.")
+        requestComposerFocus()
+        setNotice("대화를 다시 열었습니다. 이어서 질문할 수 있습니다.")
       } catch (reopenError) {
         setError(reopenError instanceof Error ? reopenError.message : "대화를 다시 열지 못했습니다.")
       }
@@ -1861,6 +1862,7 @@ function InternalCsChatWorkspaceInner() {
     // 콘솔 내비는 Suspense 바깥(기본 export)에서 이미 그려졌다 — 여기서는 그 아래 본문만 만든다.
     <>
       <WorkspaceHeader
+        compact={activeTab === "chat"}
         loading={loading}
         isPending={isPending}
         regressionPendingCount={regressionPendingCount}
@@ -1893,6 +1895,11 @@ function InternalCsChatWorkspaceInner() {
           }}
           onRejectPending={() => void rejectAllPendingDrafts()}
           onClearContext={clearCopilotContext}
+          onRefresh={() => void refreshList()}
+          refreshing={loading}
+          regressionPendingCount={regressionPendingCount}
+          onOpenTools={() => setActiveTab("tools")}
+          onReopenConversation={reopenConversation}
           contextResetPending={contextResetPending}
           restoredAttachmentNames={restoredAttachmentNames}
           selectedId={selectedId}
