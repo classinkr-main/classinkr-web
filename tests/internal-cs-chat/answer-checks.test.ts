@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import {
+  checkFinalAnswer,
   checkInternalCsAnswer,
   extractCustomerDraftBlock,
   extractInstitutionNames,
@@ -106,5 +107,47 @@ describe("answer text helpers", () => {
     ].join("\n")
     expect(extractInstitutionNames(context)).toEqual(["테스트기관Z", "테스트기관Y"])
     expect(extractInstitutionNames("")).toEqual([])
+  })
+})
+
+// 검토(안전-4): 흔한 환불·보상·무료·금액 약속 꼴이 그물을 빠져나갔다. 고정 사례로 막는다.
+describe("checkInternalCsAnswer — common promise phrasings", () => {
+  it.each([
+    ["환불을 진행해 드리겠습니다.", "refund_promise"],
+    ["결제하신 금액은 전부 돌려드리겠습니다.", "refund_promise"],
+    ["이번 달 이용료는 청구하지 않겠습니다.", "refund_promise"],
+    ["환 불 해 드 립 니 다", "refund_promise"],
+    ["한 달 더 쓰실 수 있도록 해 드릴게요.", "compensation_promise"],
+    ["보상으로 이용권을 드리겠습니다", "compensation_promise"],
+    ["무료로 체험하실 수 있습니다.", "free_trial"],
+    ["공짜로 설치해 드립니다.", "free_trial"],
+    ["오십만 원으로 맞춰 드릴게요.", "amount"],
+    ["１０％ 할인해 드립니다.", "amount"],
+    ["UID 1234 5678 계정에서", "account_id"],
+    ["계정번호 12345678", "account_id"],
+  ])("flags %j as %s", (text, code) => {
+    expect(warningCodes(checkInternalCsAnswer(text))).toContain(code)
+  })
+
+  it("keeps neutral guidance clean", () => {
+    expect(checkInternalCsAnswer("앱을 다시 설치한 뒤 수업에 입장해 주세요. 확인 후 다시 안내드리겠습니다.")).toEqual([])
+  })
+})
+
+// 검토(안전-3): 승인 직전 최종본 검사. 내부 표시는 확인으로 넘길 수 없고, high 경고는 확인을 받아야 한다.
+describe("checkFinalAnswer", () => {
+  it("finds internal markers left in the final answer", () => {
+    const result = checkFinalAnswer("## 내부 분석\n[선례] 같은 증상\nchannel: 상담")
+    expect(result.internalMarkers.length).toBe(3)
+  })
+
+  it("returns only high-severity warnings", () => {
+    const result = checkFinalAnswer("50만원입니다. 전액 환불해 드리겠습니다.")
+    expect(result.internalMarkers).toEqual([])
+    // 금액(medium)은 빠지고 환불 약속(high)만 남는다.
+    expect(result.warnings.length).toBeGreaterThan(0)
+    expect(new Set(result.warnings.map((warning) => warning.code))).toEqual(new Set(["refund_promise"]))
+    expect(result.warnings.every((warning) => warning.severity === "high")).toBe(true)
+    expect(checkFinalAnswer("확인 후 다시 안내드리겠습니다.")).toEqual({ internalMarkers: [], warnings: [] })
   })
 })

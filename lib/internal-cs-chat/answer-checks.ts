@@ -18,7 +18,7 @@
  * - 순수 함수다. 서버와 브라우저 모두 쓸 수 있다(server-only 아님).
  */
 
-import { redactInternalCsDraft } from "@/lib/internal-cs-chat/redact"
+import { ACCOUNT_ID_LABEL_SOURCE, redactInternalCsDraft } from "@/lib/internal-cs-chat/redact"
 
 export type ReviewWarningCode =
   | "amount"
@@ -69,6 +69,8 @@ const RULES: Rule[] = [
     pattern: new RegExp(
       [
         "\\d[\\d,]*(?:\\.\\d+)?\\s*(?:만\\s*)?(?:원|위안|元|달러)",
+        // 한글 수사 금액: '오십만 원', '삼천원'(공백은 매칭 전에 지운다).
+        "(?:[일이삼사오육칠팔구십백천]+만|[일이삼사오육칠팔구십백]+천)\\s*원",
         "(?:¥|￥|\\$|RMB|CNY|USD)\\s*\\d[\\d,]*(?:\\.\\d+)?",
         `${FINANCE_WORD}.{0,8}\\d+(?:\\.\\d+)?\\s*%`,
         `\\d+(?:\\.\\d+)?\\s*%.{0,8}${FINANCE_WORD}`,
@@ -80,19 +82,21 @@ const RULES: Rule[] = [
     code: "free_trial",
     severity: "high",
     label: "무료 체험·무상 제공을 약속하는 표현이 있습니다. 근거와 권한을 확인하세요.",
-    pattern: /무료\s*체험|체험\s*(?:기간|권|계정|판)?\s*(?:을|를)?\s*(?:제공|드리|연장|가능)|무상\s*(?:체험|제공|지원|교체|설치)|무료\s*(?:제공|지원|설치|교체|사용\s*가능)/g,
+    pattern: /무료\s*체험|체험\s*(?:기간|권|계정|판)?\s*(?:을|를)?\s*(?:제공|드리|연장|가능)|무상\s*(?:체험|제공|지원|교체|설치)|무료\s*(?:제공|지원|설치|교체|사용\s*가능)|(?:무료|무상)으?로|공짜/g,
   },
   {
     code: "refund_promise",
     severity: "high",
     label: "환불을 약속하는 표현이 있습니다. 계약·정책 근거 없이 보내지 마세요.",
-    pattern: /전액\s*환불|환불\s*(?:해\s*드|해드|처리\s*(?:해|됩|하겠)|가능(?!\s*(?:여부|성|한지))|보장|됩니다)|(?:취소|해지)\s*수수료\s*(?:없이|면제|무료)/g,
+    pattern:
+      /전액\s*환불|환불\s*(?:해\s*드|해드|처리\s*(?:해|됩|하겠)|가능(?!\s*(?:여부|성|한지))|보장|됩니다)|(?:취소|해지)\s*수수료\s*(?:없이|면제|무료)|환불(?:을|은|이|금)?(?:진행|처리|해)[가-힣]{0,4}드리|(?:돌려|환급해?)\s*드리|환급(?:을|해|처리)|청구하지\s*않|(?:요금|이용료|비용|금액)(?:을|은|는|도)?(?:받지\s*않|면제)/g,
   },
   {
     code: "compensation_promise",
     severity: "high",
     label: "보상·연장·크레딧을 약속하는 표현이 있습니다. 근거와 권한을 확인하세요.",
-    pattern: /보상\s*(?:해\s*드|해드|가능|지급|드리)|배상\s*(?:해|가능|드리)|위로금|크레딧\s*(?:을\s*)?(?:지급|드리|제공)|(?:이용\s*)?기간\s*(?:을\s*)?(?:연장|추가)\s*(?:해\s*드|해드|제공|가능)|(?:무상|서비스)\s*연장/g,
+    pattern:
+      /보상\s*(?:해\s*드|해드|가능|지급|드리)|보상으로|보상(?:을|금)?[가-힣]{0,6}드리|배상\s*(?:해|가능|드리)|위로금|크레딧\s*(?:을\s*)?(?:지급|드리|제공)|(?:이용\s*)?기간\s*(?:을\s*)?(?:연장|추가)\s*(?:해\s*드|해드|제공|가능)|(?:무상|서비스)\s*연장|(?:이용권|쿠폰|상품권)(?:을|를)?[가-힣]{0,4}(?:드리|드립|제공|지급)|(?:한|두|세|\d+)\s*(?:달|개월|주일?)(?:을|를)?\s*더\s*(?:쓰|사용|이용)/g,
   },
   {
     code: "cost_price",
@@ -111,7 +115,11 @@ const RULES: Rule[] = [
     code: "account_id",
     severity: "high",
     label: "UID·계정 ID 꼴이 있습니다. 고객 식별정보를 답에 복제하지 마세요.",
-    pattern: /(?<![A-Za-z])(?:UID|User\s*ID|Account(?:\s*ID)?|계정\s*ID|회원\s*번호|아이디)\s*[:：#]?\s*[A-Za-z0-9_-]{5,}|계정\s*[:：#]?\s*\d{5,}/gi,
+    // 이름표 목록은 가림(redact.ts)과 같다 — 계정번호·아이디는·ID: 와 값 안 공백('UID 1234 5678')도 잡는다.
+    pattern: new RegExp(
+      `${ACCOUNT_ID_LABEL_SOURCE}\\s*[:：#]?\\s*(?:\\d(?:[ -]?\\d){4,13}|(?=[A-Za-z0-9_-]*\\d)[A-Za-z0-9_-]{5,})`,
+      "gi"
+    ),
     hideExcerpt: true,
   },
 ]
@@ -135,11 +143,22 @@ function isPlaceholderMatch(match: string) {
   return /\[[a-z_]+\]/i.test(match)
 }
 
+/**
+ * 매칭 전 꼴 고르기: NFKC(전각 숫자·％ → 반각), 폭 없는 문자 제거, 한글 음절 사이 공백 제거
+ * ('환 불 해 드 립 니 다', '환불을 진행해 드리겠습니다' 를 붙인 꼴로 본다). 경고 excerpt 도 이 글에서 뽑는다.
+ */
+export function normalizeForAnswerCheck(value: string) {
+  return value
+    .normalize("NFKC")
+    .replace(/[\u200B-\u200D\u2060\uFEFF]/g, "")
+    .replace(/(?<=[가-힣])[ \t]+(?=[가-힣])/g, "")
+}
+
 export function checkInternalCsAnswer(
   answer: string | null | undefined,
   options: AnswerCheckOptions = {}
 ): ReviewWarning[] {
-  const text = answer ?? ""
+  const text = normalizeForAnswerCheck(answer ?? "")
   if (!text.trim()) return []
   const warnings: ReviewWarning[] = []
 
@@ -190,6 +209,38 @@ export function hasBlockingWarning(warnings: readonly ReviewWarning[]) {
 export function warningCodes(warnings: readonly ReviewWarning[]): ReviewWarningCode[] {
   return [...new Set(warnings.map((warning) => warning.code))]
 }
+
+// ── 승인 직전 최종본 검사(검토 안전-3) ──────────────────────────────────────────
+
+/** 고객용 최종본에 남으면 안 되는 내부 표시. 경고와 달리 확인 체크로 넘길 수 없다. */
+const INTERNAL_MARKERS: ReadonlyArray<{ label: string; pattern: RegExp }> = [
+  { label: "'내부' 제목", pattern: /^\s*#{1,6}\s*내부/m },
+  { label: "[선례] 표시", pattern: /\[\s*선례\s*\]/ },
+  { label: "channel: 출처 표시", pattern: /\bchannel\s*:/i },
+  { label: "'검토 전' 제목", pattern: /^\s*#{1,6}.*검토\s*전/m },
+]
+
+export interface FinalAnswerCheck {
+  /** 남아 있는 내부 표시 이름(있으면 승인할 수 없다). */
+  internalMarkers: string[]
+  /** 최종본에서 찾은 high 경고(있으면 경고 확인을 받아야 승인한다). */
+  warnings: ReviewWarning[]
+}
+
+/**
+ * 고객용 최종본(교정본)을 승인 직전에 다시 검사한다. 생성 때 원문에만 돌던 후검사를 사람이 고쳐 쓴 글에도 돌린다.
+ * 검토 화면(ops-desk.reviewApprovalState·ReviewDrawer)과 승인 라우트가 같은 함수를 쓴다.
+ */
+export function checkFinalAnswer(text: string | null | undefined, options: AnswerCheckOptions = {}): FinalAnswerCheck {
+  const normalized = normalizeForAnswerCheck(text ?? "")
+  return {
+    internalMarkers: INTERNAL_MARKERS.filter((marker) => marker.pattern.test(normalized)).map((marker) => marker.label),
+    warnings: checkInternalCsAnswer(text, options).filter((warning) => warning.severity === "high"),
+  }
+}
+
+/** 승인 라우트가 경고 확인을 받았을 때 feedback_labels 에 남기는 값. */
+export const WARNINGS_ACKNOWLEDGED_LABEL = "warnings_acknowledged"
 
 /** 유출 종류(다른 고객·원가·식별자). 회귀 평가가 기준 답에 없던 유출을 잡을 때 쓴다. */
 export const LEAK_WARNING_CODES: readonly ReviewWarningCode[] = [
