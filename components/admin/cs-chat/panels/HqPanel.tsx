@@ -141,7 +141,7 @@ export default function HqPanel({
 
       {conversations.length === 0 ? (
         <div className="flex min-h-[320px] flex-col items-center justify-center border-t border-black/[0.08] px-6 text-center">
-          <Building className="h-8 w-8 text-[#A39E98]" />
+          <Building className="h-8 w-8 text-[#78736D]" />
           <p className="mt-4 text-[14px] font-semibold text-[#31302E]">본사 회신을 기다리는 건이 없습니다.</p>
           <p className="mt-1 max-w-[420px] text-[12px] leading-5 text-[#615D59]">
             대기열이나 내부 상담에서 <span className="font-semibold text-[#31302E]">본사 확인 요청</span>을 누르면 이곳에 쌓입니다.
@@ -166,7 +166,7 @@ export default function HqPanel({
                   <ChevronRight
                     aria-hidden
                     className={cn(
-                      "mt-1 h-4 w-4 shrink-0 text-[#A39E98] transition-transform",
+                      "mt-1 h-4 w-4 shrink-0 text-[#78736D] transition-transform",
                       expanded && "rotate-90"
                     )}
                   />
@@ -180,13 +180,13 @@ export default function HqPanel({
                       <span className="text-[#D8D5D1]" aria-hidden>·</span>
                       <span>등록 {formatDay(conversation.created_at)}</span>
                       <span className="text-[#D8D5D1]" aria-hidden>·</span>
-                      <span className="truncate text-[#A39E98]">
+                      <span className="truncate text-[#78736D]">
                         {conversation.tags.length > 0 ? conversation.tags.join(" · ") : "분류 전"}
                       </span>
                     </span>
                   </span>
                   <span className="shrink-0 text-right">
-                    <span className="block text-[10px] font-bold uppercase tracking-[0.12em] text-[#A39E98]">대기 경과</span>
+                    <span className="block text-[11px] font-bold uppercase tracking-[0.12em] text-[#78736D]">대기 경과</span>
                     <span
                       className={cn(
                         "mt-1 inline-flex items-center gap-1.5 text-[13px] font-semibold tabular-nums",
@@ -304,7 +304,7 @@ function HqRowBody({
             type="button"
             onClick={onComplete}
             disabled={busy}
-            className="inline-flex h-8 items-center gap-1.5 rounded-md bg-[#084734] px-3 text-[11px] font-semibold text-white transition-colors hover:bg-[#065C41] disabled:cursor-not-allowed disabled:bg-[#A39E98]"
+            className="inline-flex h-8 items-center gap-1.5 rounded-md bg-[#084734] px-3 text-[11px] font-semibold text-white transition-colors hover:bg-[#065C41] disabled:cursor-not-allowed disabled:bg-[#78736D]"
           >
             {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3 w-3" />}
             본사 확인 완료
@@ -359,7 +359,7 @@ function HqRowBody({
           />
         </div>
       ) : null}
-      <p className="mt-2 text-[10.5px] leading-4 text-[#615D59]">
+      <p className="mt-2 text-[11px] leading-4 text-[#615D59]">
         회신을 받으면 본사 확인 완료를 눌러 주세요 — 근거 태그가 확정으로 바뀌고 이 목록에서 빠집니다.
       </p>
     </>

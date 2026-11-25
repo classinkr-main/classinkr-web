@@ -316,3 +316,85 @@ export function buildHqTemplate(detail: ConversationDetailResponse | null) {
     "- Please include applicable market/models, generation, effective date, and source document/version.",
   ].join("\n")
 }
+
+// ── 대기열 표시(IC-26) ────────────────────────────────────────────────────────────
+
+const AREA_LABELS: Record<string, string> = {
+  camera: "카메라",
+  board: "전자칠판",
+  hardware: "하드웨어",
+  hardware_as: "하드웨어 AS",
+  hardware_remote: "원격 지원",
+  software: "소프트웨어",
+  software_pen: "소프트웨어·펜",
+  network: "네트워크",
+  recording: "녹화",
+  mirroring: "미러링",
+  ai: "AI",
+  ai_classroom: "AI 수업",
+  ai_risk: "AI 위험",
+  lms: "LMS",
+  lms_agentin: "LMS·에이전틴",
+  homework_tapd: "숙제",
+  api: "API",
+  billing: "결제·정산",
+  sms: "문자",
+  cloud_cdn: "클라우드",
+  infra_data: "인프라·데이터",
+  security_account: "계정·보안",
+  course_data_log: "수업 기록",
+  attendance: "출결",
+  device: "기기",
+  general: "일반",
+}
+
+const FIXED_TAG_LABELS: Record<string, string> = {
+  internal_cs: "내부 CS",
+  "intent:hq_confirmation": "본사 문의",
+  "evidence:hq_pending": "본사 확인 대기",
+  "evidence:confirmed": "본사 회신 확정",
+}
+
+/** 대기열 태그를 한글로. 모르는 값은 접두사를 떼고 그대로 보인다(영문 코드 덩어리를 그대로 노출하지 않는다). */
+export function formatTagLabel(tag: string) {
+  const fixed = FIXED_TAG_LABELS[tag]
+  if (fixed) return fixed
+  if (tag.startsWith("area:")) {
+    const key = tag.slice(5)
+    return AREA_LABELS[key] ?? key.replace(/_/g, " ")
+  }
+  if (tag.startsWith("bridge:")) {
+    const source = tag.slice(7)
+    return source === "channel-talk" || source === "channel_talk" ? "채널톡 연동" : `${source} 연동`
+  }
+  const separator = tag.indexOf(":")
+  return separator >= 0 ? tag.slice(separator + 1).replace(/_/g, " ") : tag
+}
+
+/** "방금 / 12분 전 / 3시간 전 / 4일 전". 한 달이 넘으면 날짜. 해석할 수 없으면 "—". */
+export function formatRelativeTime(value: string | null | undefined, now: number = Date.now()) {
+  if (!value) return "—"
+  const time = Date.parse(value)
+  if (Number.isNaN(time)) return "—"
+  const minutes = Math.floor((now - time) / 60_000)
+  if (minutes < 1) return "방금"
+  if (minutes < 60) return `${minutes}분 전`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}시간 전`
+  const days = Math.floor(hours / 24)
+  if (days < 30) return `${days}일 전`
+  return formatDay(value)
+}
+
+/** 근거 믹스 요약: 합계 대신 비율을 적는다(loop-4). 합이 0이면 undefined. */
+export function formatEvidenceMix(mix: { knowledge: number; docs: number; channel: number; none: number }) {
+  const total = mix.knowledge + mix.docs + mix.channel + mix.none
+  if (total <= 0) return undefined
+  const part = (label: string, count: number) => `${label} ${count} (${Math.round((count / total) * 100)}%)`
+  return [
+    part("정본", mix.knowledge),
+    part("문서", mix.docs),
+    part("상담이관", mix.channel),
+    part("근거없음", mix.none),
+  ].join(" · ")
+}

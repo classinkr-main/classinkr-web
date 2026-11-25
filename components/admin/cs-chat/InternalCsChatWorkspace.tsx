@@ -2,14 +2,12 @@
 
 import { useSearchParams } from "next/navigation"
 import {
-  Archive,
   BookOpen,
   CheckCircle2,
   Clock,
   History,
   Loader2,
   MessageSquare,
-  RotateCcw,
   Search,
 } from "lucide-react"
 import {
@@ -41,6 +39,7 @@ import {
   WORKSPACE_TAB_VALUES,
   type QueueStatusFilter,
 } from "./constants"
+import { isEditableTarget, isNewCaseShortcut } from "./composer-keyboard"
 import { DEMO_CONVERSATION, DEMO_DETAIL, DEMO_MESSAGES } from "./demo-data"
 import {
   createDraftStore,
@@ -53,6 +52,7 @@ import {
   buildHqTemplate,
   buildInternalHandoffTemplate,
   fileKey,
+  formatEvidenceMix,
   formatMetricHours,
   formatMetricRate,
   integrationState,
@@ -253,6 +253,11 @@ function InternalCsChatWorkspaceInner() {
   const [band, setBand] = useState<WorkspaceBand | null>(null)
   const [focusRequest, setFocusRequest] = useState(0)
   const [polishUndo, setPolishUndo] = useState<string | null>(null)
+  // 대화 목록을 불러오지 못한 이유(IC-23) — 대화 화면은 빈 상태 대신 오류 블록과 '다시 시도'를 보이고 입력창을 막는다.
+  const [listError, setListError] = useState<string | null>(null)
+  // 방금 보관한 상담(IC-24) — 대기열 화면의 되돌리기 띠.
+  const [archivedBand, setArchivedBand] = useState<{ id: string; title: string } | null>(null)
+  const [metricsDays, setMetricsDays] = useState<7 | 30>(7)
   const [polishing, setPolishing] = useState(false)
   const [polishNotice, setPolishNotice] = useState<string | null>(null)
   const [scrollToMessage, setScrollToMessage] = useState<{ id: string; nonce: number } | null>(null)
@@ -494,7 +499,7 @@ function InternalCsChatWorkspaceInner() {
     setMetricsLoadState("loading")
     try {
       const response = await adminFetchJsonCached<InternalCsMetricsResponse>(
-        "/api/admin/cs-chat/metrics?days=7",
+        `/api/admin/cs-chat/metrics?days=${metricsDays}`,
         undefined,
         {
           ttlMs: LIST_CACHE_TTL_MS,
@@ -520,7 +525,7 @@ function InternalCsChatWorkspaceInner() {
       setCsMetrics(null)
       setMetricsLoadState("failed")
     }
-  }, [demoMode])
+  }, [demoMode, metricsDays])
 
   const loadConversations = useCallback(async (preferredId?: string | null) => {
     setLoading(true)
@@ -549,6 +554,7 @@ function InternalCsChatWorkspaceInner() {
       const nextId = preferredId ?? selectedIdRef.current ?? response.conversations.find((item) => item.status !== "archived")?.id
       if (nextId) await loadConversation(nextId)
       setError(null)
+      setListError(null)
     } catch (loadError) {
       if (process.env.NODE_ENV === "development") {
         setDemoMode(true)
@@ -562,7 +568,9 @@ function InternalCsChatWorkspaceInner() {
         setError(null)
         setNotice(null)
       } else {
-        setError(loadError instanceof Error ? loadError.message : "내부 CS 대화를 불러오지 못했습니다.")
+        const reason = loadError instanceof Error ? loadError.message : "내부 CS 대화를 불러오지 못했습니다."
+        setListError(reason)
+        setError(reason)
       }
     } finally {
       setLoading(false)
@@ -577,6 +585,7 @@ function InternalCsChatWorkspaceInner() {
       if (!mountedRef.current) return null
       setConversations(response.conversations)
       setError(null)
+      setListError(null)
       return response
     } catch (listError) {
       if (mountedRef.current) {
@@ -784,9 +793,9 @@ function InternalCsChatWorkspaceInner() {
       {
         key: "fallback",
         icon: Search,
-        label: "폴백률",
+        label: "모델 실패율",
         value: formatMetricRate(m?.fallbackRate),
-        sub: "라이브 검색 실패 비율",
+        sub: "모델 호출이 실패해 근거 요약으로 대신한 답의 비율",
       },
       {
         key: "evidence",
@@ -795,9 +804,7 @@ function InternalCsChatWorkspaceInner() {
         value: m
           ? String(m.evidenceMix.knowledge + m.evidenceMix.docs + m.evidenceMix.channel + m.evidenceMix.none)
           : "—",
-        sub: m
-          ? `정본 ${m.evidenceMix.knowledge} · 문서 ${m.evidenceMix.docs} · 상담이관 ${m.evidenceMix.channel} · 근거없음 ${m.evidenceMix.none}`
-          : undefined,
+        sub: m ? formatEvidenceMix(m.evidenceMix) : undefined,
       },
       {
         key: "approval",
@@ -842,6 +849,7 @@ function InternalCsChatWorkspaceInner() {
       setActiveTab("chat")
       return
     }
+    setArchivedBand(null)
     setLoading(true)
     try {
       await loadConversation(conversation.id)
@@ -1784,38 +1792,86 @@ function InternalCsChatWorkspaceInner() {
     }
   }
 
+  // 보관은 확인 창 없이 바로 실행하고 대기열 화면의 되돌리기 띠로 되돌린다(IC-24). 검토 대기 초안이 있으면 막는다.
   function archiveConversation() {
     if (!detail || isPending) return
 
-    // 대화 내 검토 대기(pending) 답변이 남아있는 경우: 승인(허가) 또는 수정 요청 완료 후 아카이브 가능하도록 보호
+    // 대화 내 검토 대기(pending) 답변이 남아있는 경우: 승인·수정 요청·'사용 안 함'으로 정리한 뒤 보관하도록 보호
     if (pendingMessage) {
-      setReviewOpen(true)
-      setError("검토 대기 중인 AI 답변이 있습니다. 승인(허가) 또는 수정 요청을 완료한 후 아카이브할 수 있습니다.")
+      openReviewFor(pendingMessage.id)
+      setError("검토 대기 중인 AI 답변이 있습니다. 승인·수정 요청을 하거나 '사용 안 함'으로 정리한 뒤 보관할 수 있습니다.")
       return
     }
+    const target = { id: detail.conversation.id, title: detail.conversation.title }
     if (demoMode) {
       setDetail((current) => current ? { ...current, conversation: { ...current.conversation, status: "archived" } } : current)
-      setConversations((current) => current.map((item) => item.id === detail.conversation.id ? { ...item, status: "archived" } : item))
+      setConversations((current) => current.map((item) => item.id === target.id ? { ...item, status: "archived" } : item))
       // 흡수 후 착지점 — 대기열 탭 + 종료·보관 칩(옛 아카이브 탭과 같은 행 집합).
       setQueueFilter("closed")
       setActiveTab("queue")
-      setNotice("미리보기 대화를 아카이브했습니다.")
+      setArchivedBand(target)
       return
     }
     startTransition(async () => {
       try {
-        await adminFetchJson(`/api/admin/cs-chat/conversations/${detail.conversation.id}`, {
+        await adminFetchJson(`/api/admin/cs-chat/conversations/${target.id}`, {
           method: "PATCH",
           body: JSON.stringify({ action: "archive", archiveReason: "CS 담당자 수동 아카이브" }),
         })
         await loadConversations(null)
         setQueueFilter("closed")
         setActiveTab("queue")
-        setNotice("대화를 아카이브했습니다.")
+        setArchivedBand(target)
       } catch (archiveError) {
         setError(archiveError instanceof Error ? archiveError.message : "아카이브하지 못했습니다.")
       }
     })
+  }
+
+  // 대기열 행의 보관 버튼. 대화를 열지 않고 보관하므로 검토 대기 초안이 있는 상담(검토 필요)은 막는다.
+  async function archiveFromQueue(conversation: InternalCsConversation) {
+    if (conversation.status === "waiting_review") {
+      setError("검토 대기 초안이 있는 상담입니다. 대화를 열어 승인하거나 '사용 안 함'으로 정리한 뒤 보관해 주세요.")
+      return
+    }
+    const target = { id: conversation.id, title: conversation.title }
+    setError(null)
+    try {
+      if (demoMode) {
+        setConversations((current) => current.map((item) => item.id === target.id ? { ...item, status: "archived" } : item))
+      } else {
+        await adminFetchJson(`/api/admin/cs-chat/conversations/${target.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ action: "archive", archiveReason: "CS 담당자 수동 아카이브" }),
+        })
+        await refreshList()
+        if (selectedIdRef.current === target.id) await loadConversation(target.id)
+      }
+      setArchivedBand(target)
+    } catch (archiveError) {
+      setError(archiveError instanceof Error ? archiveError.message : "아카이브하지 못했습니다.")
+    }
+  }
+
+  async function undoArchive() {
+    const target = archivedBand
+    if (!target) return
+    setArchivedBand(null)
+    try {
+      if (demoMode) {
+        setConversations((current) => current.map((item) => item.id === target.id ? { ...item, status: "queue" } : item))
+      } else {
+        await adminFetchJson(`/api/admin/cs-chat/conversations/${target.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ action: "reopen" }),
+        })
+        await refreshList()
+        if (selectedIdRef.current === target.id) await loadConversation(target.id)
+      }
+      setNotice(`‹${target.title}›을 보관에서 되돌렸습니다.`)
+    } catch (reopenError) {
+      setError(reopenError instanceof Error ? reopenError.message : "보관을 되돌리지 못했습니다.")
+    }
   }
 
   // 입력창 밖에서 Alt+Shift+N — 새 상담(맥락 비우기에는 실수 방지를 위해 단축키를 두지 않는다).
@@ -1823,10 +1879,8 @@ function InternalCsChatWorkspaceInner() {
   startNewRef.current = startNewConversation
   useEffect(() => {
     function handleShortcut(event: KeyboardEvent) {
-      if (!(event.altKey && event.shiftKey && event.code === "KeyN")) return
-      const target = event.target as HTMLElement | null
-      const tag = target?.tagName
-      if (tag === "TEXTAREA" || tag === "INPUT" || tag === "SELECT" || target?.isContentEditable) return
+      if (!isNewCaseShortcut(event)) return
+      if (isEditableTarget(event.target as HTMLElement | null)) return
       event.preventDefault()
       startNewRef.current()
     }
@@ -1870,6 +1924,8 @@ function InternalCsChatWorkspaceInner() {
         notice={notice}
         onRefresh={() => void refreshList()}
         onOpenTools={() => setActiveTab("tools")}
+        onDismissError={() => setError(null)}
+        onDismissNotice={() => setNotice(null)}
       />
 
       {/* 본문 영역 — 검토 드로어의 기준 요소다. 오버레이 시절 드로어는 root(fixed inset-0)에
@@ -1900,6 +1956,9 @@ function InternalCsChatWorkspaceInner() {
           regressionPendingCount={regressionPendingCount}
           onOpenTools={() => setActiveTab("tools")}
           onReopenConversation={reopenConversation}
+          onArchiveConversation={archiveConversation}
+          listError={listError}
+          onRetryLoad={() => void loadConversations()}
           contextResetPending={contextResetPending}
           restoredAttachmentNames={restoredAttachmentNames}
           selectedId={selectedId}
@@ -1950,6 +2009,9 @@ function InternalCsChatWorkspaceInner() {
           onFilterChange={setQueueFilter}
           onSelect={(item) => void handleSelect(item)}
           onRequestHq={(item) => void requestHqConfirmation(item)}
+          onArchive={(item) => void archiveFromQueue(item)}
+          archivedBand={archivedBand}
+          onUndoArchive={() => void undoArchive()}
         />
       ) : null}
 
@@ -1977,6 +2039,11 @@ function InternalCsChatWorkspaceInner() {
           bridgeState={bridgeState}
           integrationLoading={integrationLoading}
           metricsLoadState={metricsLoadState}
+          metricsDays={metricsDays}
+          onMetricsDaysChange={(days) => {
+            setMetricsDays(days)
+            setMetricsLoadState("idle")
+          }}
           metricCards={metricCards}
           regressionEvalRunState={regressionEvalRunState}
           regressionCandidates={regressionCandidates}
@@ -2038,29 +2105,6 @@ function InternalCsChatWorkspaceInner() {
         />
       ) : null}
 
-      {detail ? (
-        <div className="pointer-events-none absolute right-4 bottom-4 z-20 hidden gap-2 sm:flex">
-          {detail.conversation.status === "archived" ? (
-            <button
-              type="button"
-              onClick={reopenConversation}
-              className="pointer-events-auto inline-flex h-9 items-center gap-2 rounded-md border border-black/[0.08] bg-white px-3 text-[11px] font-semibold shadow-sm hover:bg-[#F6F5F4]"
-            >
-              <RotateCcw className="h-3.5 w-3.5" />
-              다시 열기
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={archiveConversation}
-              className="pointer-events-auto inline-flex h-9 items-center gap-2 rounded-md border border-black/[0.08] bg-white px-3 text-[11px] font-semibold text-[#615D59] shadow-sm hover:bg-[#F6F5F4] hover:text-[#31302E]"
-            >
-              <Archive className="h-3.5 w-3.5" />
-              아카이브
-            </button>
-          )}
-        </div>
-      ) : null}
       </div>
     </>
   )

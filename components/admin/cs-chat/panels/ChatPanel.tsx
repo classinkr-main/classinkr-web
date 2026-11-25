@@ -39,6 +39,7 @@ import ConversationContextCard from "../components/ConversationContextCard"
 import ConversationSwitcher from "../components/ConversationSwitcher"
 import PromoteKnowledgeControl from "../components/PromoteKnowledgeControl"
 import QuickPromptChips from "../components/QuickPromptChips"
+import ToolbarMoreMenu from "../components/ToolbarMoreMenu"
 import SmartActionCard from "../components/SmartActionCard"
 import StatusBadge from "../components/StatusBadge"
 import { shouldSubmitComposerOnKeyDown } from "../composer-keyboard"
@@ -53,6 +54,7 @@ import {
   assetAnalysisStatus,
   assetFileName,
   assetNeedsHumanReview,
+  assetSensitiveWarnings,
   assetPreviewUrl,
   fileKey,
   formatTime,
@@ -106,6 +108,9 @@ export default function ChatPanel({
   regressionPendingCount = 0,
   onOpenTools,
   onReopenConversation,
+  onArchiveConversation,
+  listError = null,
+  onRetryLoad,
   selectedId,
   queueConversations,
   handleSelect,
@@ -171,6 +176,11 @@ export default function ChatPanel({
   onOpenTools?: () => void
   /** 보관된 대화를 다시 열고 묻는다(IC-27). */
   onReopenConversation?: () => void
+  /** 지금 보는 상담을 보관한다(툴바 '더보기'). 보관 뒤 되돌리기 띠는 대기열 화면이 그린다(IC-24). */
+  onArchiveConversation?: () => void
+  /** 대화 목록을 불러오지 못한 이유. 있고 열린 대화가 없으면 오류 블록을 보이고 입력창을 막는다(IC-23). */
+  listError?: string | null
+  onRetryLoad?: () => void
   selectedId: string | null
   queueConversations: InternalCsConversation[]
   handleSelect: (conversation: InternalCsConversation) => void
@@ -240,6 +250,7 @@ export default function ChatPanel({
 
   // 스크롤 규칙(IC-15): 대화를 열면 마지막 초안의 머리로, 새 초안이 오면 그 머리로 가되
   // 위로 올려 읽는 중이면 움직이지 않고 '새 초안 ↓' 버튼만 띄운다. 보낸 직후에는 맨 아래로 간다.
+  const [sensitiveAck, setSensitiveAck] = useState<Record<string, boolean>>({})
   const [nearBottom, setNearBottom] = useState(true)
   const seenConversationRef = useRef<string | null>(null)
   const seenAssistantRef = useRef<string | null>(null)
@@ -301,6 +312,7 @@ export default function ChatPanel({
   const turnsAfterBoundary = turnsSinceBoundary(messages)
   const contextCard = readContextCard(detail?.conversation.customer_context)
   const isArchived = detail?.conversation.status === "archived"
+  const loadFailed = Boolean(listError) && !detail
 
   return (
     <div className={cn("flex min-h-0 flex-1 flex-col", reviewOpen && "xl:pr-[438px]")}>
@@ -383,6 +395,13 @@ export default function ChatPanel({
             <PanelRightOpen className="h-4 w-4" aria-hidden="true" />
             검토 열기
           </button>
+          <ToolbarMoreMenu
+            conversationTitle={detail?.conversation.title ?? null}
+            archived={isArchived}
+            onArchive={detail ? onArchiveConversation : undefined}
+            onReopen={detail ? onReopenConversation : undefined}
+            disabled={isPending}
+          />
           {onRefresh ? (
             <button
               type="button"
@@ -430,6 +449,26 @@ export default function ChatPanel({
             <div className="flex min-h-[360px] items-center justify-center text-[#615D59]">
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               내부 CS 대화를 불러오는 중입니다.
+            </div>
+          ) : loadFailed ? (
+            <div
+              role="alert"
+              data-testid="list-error-block"
+              className="flex min-h-[320px] flex-col items-center justify-center text-center"
+            >
+              <AlertTriangle className="h-8 w-8 text-[#8F2C2C]" aria-hidden="true" />
+              <h2 className="mt-4 text-[16px] font-semibold text-[#31302E]">대화를 불러오지 못했습니다</h2>
+              <p className="mt-1.5 max-w-md text-[13px] leading-5 text-[#615D59]">{listError}</p>
+              {onRetryLoad ? (
+                <button
+                  type="button"
+                  onClick={onRetryLoad}
+                  className="mt-4 inline-flex h-9 items-center gap-2 rounded-md bg-[#31302E] px-4 text-[12px] font-semibold text-white hover:bg-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2"
+                >
+                  <RefreshCcw className="h-3.5 w-3.5" aria-hidden="true" />
+                  다시 시도
+                </button>
+              ) : null}
             </div>
           ) : detail?.messages.length || generating ? (
             <>
@@ -601,7 +640,7 @@ export default function ChatPanel({
                               >
                                 <span>소통 초안 3종</span>
                                 {escalationContext ? (
-                                  <span className="ml-1 rounded bg-[#084734]/10 px-1.5 py-0.5 text-[9.5px] font-semibold text-[#084734]">
+                                  <span className="ml-1 rounded bg-[#084734]/10 px-1.5 py-0.5 text-[11px] font-semibold text-[#084734]">
                                     {escalationContext.contact.domainLabel.split("·")[0]}
                                   </span>
                                 ) : null}
@@ -637,7 +676,7 @@ export default function ChatPanel({
                                         {status ? (
                                           <span
                                             className={cn(
-                                              "shrink-0 rounded-full px-2 py-0.5 text-[9px] font-semibold",
+                                              "shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold",
                                               status.tone === "confirmed"
                                                 ? "bg-[#ECFDF5] text-[#084734]"
                                                 : status.tone === "conditional"
@@ -760,7 +799,7 @@ export default function ChatPanel({
                   <h2 className="text-[13px] font-semibold text-[#31302E]">누적 이미지 분석</h2>
                   <p className="mt-1 text-[11px] text-[#615D59]">같은 대화의 사진과 분석 결과를 순서대로 보관합니다.</p>
                 </div>
-                <span className="text-[10px] font-medium text-[#A39E98]">{assets.length}개</span>
+                <span className="text-[11px] font-medium text-[#78736D]">{assets.length}개</span>
               </div>
 
               <div className="mt-3 flex gap-2 overflow-x-auto pb-2">
@@ -777,7 +816,7 @@ export default function ChatPanel({
                         "group relative h-[72px] w-[72px] shrink-0 overflow-hidden rounded-md border bg-[#F6F5F4] text-[#615D59] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]",
                         selectedAsset?.id === asset.id ? "border-[#084734]" : "border-black/[0.08] hover:border-black/20"
                       )}
-                      aria-label={`${assetFileName(asset)} 분석 보기`}
+                      aria-label={`${maskAssetFileName(assetFileName(asset))} 분석 보기`}
                     >
                       {preview ? (
                         <Image
@@ -808,25 +847,25 @@ export default function ChatPanel({
                   <div className="flex flex-wrap items-center gap-2 border-b border-black/[0.08] bg-white px-4 py-3">
                     <ImageIcon className="h-4 w-4 text-[#084734]" />
                     <p className="min-w-0 flex-1 truncate text-[12px] font-semibold text-[#31302E]">
-                      {assetFileName(selectedAsset)}
+                      {maskAssetFileName(assetFileName(selectedAsset))}
                     </p>
                     {["pending", "processing", "analyzing", "queued"].includes(assetAnalysisStatus(selectedAsset).toLowerCase()) ? (
-                      <span className="inline-flex items-center gap-1 rounded-md bg-[#F6F5F4] px-2 py-1 text-[10px] font-semibold text-[#615D59]">
+                      <span className="inline-flex items-center gap-1 rounded-md bg-[#F6F5F4] px-2 py-1 text-[11px] font-semibold text-[#615D59]">
                         <Loader2 className="h-3 w-3 animate-spin" />
                         분석 중
                       </span>
                     ) : ["failed", "error"].includes(assetAnalysisStatus(selectedAsset).toLowerCase()) ? (
-                      <span className="inline-flex items-center gap-1 rounded-md bg-[#FCE9E9] px-2 py-1 text-[10px] font-semibold text-[#8F2C2C]">
+                      <span className="inline-flex items-center gap-1 rounded-md bg-[#FCE9E9] px-2 py-1 text-[11px] font-semibold text-[#8F2C2C]">
                         <AlertTriangle className="h-3 w-3" />
                         분석 실패
                       </span>
                     ) : assetNeedsHumanReview(selectedAsset) ? (
-                      <span className="inline-flex items-center gap-1 rounded-md bg-[#FBF1E0] px-2 py-1 text-[10px] font-semibold text-[#7A520F]">
+                      <span className="inline-flex items-center gap-1 rounded-md bg-[#FBF1E0] px-2 py-1 text-[11px] font-semibold text-[#7A520F]">
                         <ShieldCheck className="h-3 w-3" />
                         담당자 확인 필요
                       </span>
                     ) : (
-                      <span className="inline-flex items-center gap-1 rounded-md bg-[#ECFDF5] px-2 py-1 text-[10px] font-semibold text-[#084734]">
+                      <span className="inline-flex items-center gap-1 rounded-md bg-[#ECFDF5] px-2 py-1 text-[11px] font-semibold text-[#084734]">
                         <CheckCircle2 className="h-3 w-3" />
                         확인 완료
                       </span>
@@ -837,35 +876,60 @@ export default function ChatPanel({
                       {assetPreviewUrl(selectedAsset) ? (
                         <Image
                           src={assetPreviewUrl(selectedAsset) ?? ""}
-                          alt={assetFileName(selectedAsset)}
+                          alt={maskAssetFileName(assetFileName(selectedAsset))}
                           fill
                           unoptimized
                           sizes="120px"
                           className="object-cover"
                         />
                       ) : (
-                        <span className="flex h-full items-center justify-center text-[#A39E98]">
+                        <span className="flex h-full items-center justify-center text-[#78736D]">
                           <ImageIcon className="h-6 w-6" />
                         </span>
                       )}
                     </div>
                     <div className="min-w-0">
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#A39E98]">AI 분석</p>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#78736D]">AI 분석</p>
                       <p className="mt-2 whitespace-pre-wrap text-[12px] leading-5 text-[#31302E]">
                         {assetAnalysis(selectedAsset)}
                       </p>
                       {selectedAsset.instruction ? (
-                        <p className="mt-3 border-t border-black/[0.08] pt-3 text-[10px] leading-4 text-[#615D59]">
+                        <p className="mt-3 border-t border-black/[0.08] pt-3 text-[11px] leading-4 text-[#615D59]">
                           분석 요청 · {selectedAsset.instruction}
                         </p>
+                      ) : null}
+                      {assetSensitiveWarnings(selectedAsset).length > 0 ? (
+                        <div
+                          data-testid="asset-sensitive-warning"
+                          className="mt-3 rounded-md border border-[#EBD9A8] bg-[#FFF7E0] px-3 py-2 text-[12px] leading-5 text-[#6B4E00]"
+                        >
+                          <p className="flex items-center gap-1.5 font-semibold">
+                            <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
+                            민감정보 가능성
+                          </p>
+                          <ul className="mt-1 list-disc pl-5">
+                            {assetSensitiveWarnings(selectedAsset).map((warning) => (
+                              <li key={warning}>{warning}</li>
+                            ))}
+                          </ul>
+                          <label className="mt-2 flex cursor-pointer items-start gap-2 font-semibold">
+                            <input
+                              type="checkbox"
+                              checked={Boolean(sensitiveAck[selectedAsset.id])}
+                              onChange={(event) => setSensitiveAck((current) => ({ ...current, [selectedAsset.id]: event.target.checked }))}
+                              className="mt-0.5 h-4 w-4 shrink-0 accent-[#084734]"
+                            />
+                            <span>민감정보 여부를 확인했습니다</span>
+                          </label>
+                        </div>
                       ) : null}
                       {assetNeedsHumanReview(selectedAsset)
                         && ["ready", "completed"].includes(assetAnalysisStatus(selectedAsset).toLowerCase()) ? (
                         <button
                           type="button"
                           onClick={() => void approveSelectedAsset()}
-                          disabled={assetReviewingId === selectedAsset.id}
-                          className="mt-3 inline-flex h-8 items-center gap-1.5 rounded-md bg-[#084734] px-3 text-[11px] font-semibold text-white hover:bg-[#065C41] disabled:opacity-50"
+                          disabled={assetReviewingId === selectedAsset.id || (assetSensitiveWarnings(selectedAsset).length > 0 && !sensitiveAck[selectedAsset.id])}
+                          className="mt-3 inline-flex h-8 items-center gap-1.5 rounded-md bg-[#084734] px-3 text-[12px] font-semibold text-white hover:bg-[#065C41] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           {assetReviewingId === selectedAsset.id ? (
                             <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -1061,7 +1125,7 @@ export default function ChatPanel({
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            disabled={pendingFiles.length >= MAX_PENDING_ASSETS || uploadingAssets || isPending || Boolean(generating)}
+            disabled={pendingFiles.length >= MAX_PENDING_ASSETS || uploadingAssets || isPending || Boolean(generating) || loadFailed}
             className="mb-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-[#615D59] transition-colors hover:bg-[#F6F5F4] hover:text-[#084734] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] disabled:cursor-not-allowed disabled:opacity-35"
             aria-label="사진 첨부 또는 촬영"
             title={`JPG, PNG, WebP · 최대 ${MAX_PENDING_ASSETS}장`}
@@ -1084,6 +1148,7 @@ export default function ChatPanel({
               }
             }}
             aria-label="내부 CS 질문 입력"
+            disabled={loadFailed}
             rows={2}
             maxLength={1000}
             placeholder="내부 자료와 상담 맥락을 함께 질문하세요"
@@ -1091,16 +1156,15 @@ export default function ChatPanel({
           />
           <button
             type="submit"
-            disabled={(!composer.trim() && pendingFiles.length === 0) || isPending || uploadingAssets || Boolean(generating)}
+            disabled={(!composer.trim() && pendingFiles.length === 0) || isPending || uploadingAssets || Boolean(generating) || loadFailed}
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-[#31302E] text-white transition-colors hover:bg-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:bg-[#D8D5D1]"
             aria-label="질문 보내기"
           >
             {isPending || uploadingAssets || generating ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Send className="h-4 w-4" aria-hidden="true" />}
           </button>
         </div>
-        <p className={cn("mt-1.5 text-[12px] text-[#78736D]", reviewOpen ? "max-w-none" : "mx-auto max-w-[980px]")}>
-          사진은 JPG·PNG·WebP 최대 3장 · AI 답변은 담당자 검토 전에는 고객에게 전달되지 않습니다.
-        </p>
+        {/* 안내 문구는 대화 영역을 넓히려고 화면에서는 숨기고 스크린리더에만 읽힌다(첨부 버튼 title 에도 같은 말이 있다). */}
+        <p className="sr-only">사진은 JPG·PNG·WebP 최대 3장 · AI 답변은 담당자 검토 전에는 고객에게 전달되지 않습니다.</p>
         </>
         )}
       </form>

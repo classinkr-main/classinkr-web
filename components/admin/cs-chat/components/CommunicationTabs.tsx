@@ -285,7 +285,7 @@ export default function CommunicationTabs({
                     : "border-transparent text-[#615D59] hover:text-[#111110] hover:bg-black/[0.02]"
                 )}
               >
-                <Icon className={cn("h-3.5 w-3.5", active ? "text-[#084734]" : "text-[#A39E98]")} />
+                <Icon className={cn("h-3.5 w-3.5", active ? "text-[#084734]" : "text-[#78736D]")} />
                 <span>{tab.shortLabel}</span>
               </button>
             )
@@ -305,7 +305,7 @@ export default function CommunicationTabs({
               <button
                 type="button"
                 onClick={handleReset}
-                className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10.5px] text-[#A62626] hover:bg-[#FCE9E9] transition-colors"
+                className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-[#A62626] hover:bg-[#FCE9E9] transition-colors"
                 title="스마트 자동 주입 초안으로 되돌리기"
               >
                 <RefreshCw className="h-3 w-3" />
@@ -339,7 +339,7 @@ export default function CommunicationTabs({
 
         {/* 하단 액션 바 */}
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-black/[0.06] bg-[#FAFAF8] px-4 py-3">
-          <div className="flex items-center gap-2 text-[11px] text-[#A39E98]">
+          <div className="flex items-center gap-2 text-[11px] text-[#78736D]">
             {isEdited ? (
               <span className="inline-flex items-center gap-1 text-[#7A520F]">
                 * 수정한 내용이 반영되었습니다.
@@ -351,14 +351,14 @@ export default function CommunicationTabs({
 
           <div className="flex flex-wrap items-center gap-2">
             {activeTab === "hq" ? (
-              <span className="hidden sm:inline-flex items-center gap-1 rounded bg-[#EBF3F0] px-2 py-1 text-[10px] font-semibold text-[#084734]">
+              <span className="hidden sm:inline-flex items-center gap-1 rounded bg-[#EBF3F0] px-2 py-1 text-[11px] font-semibold text-[#084734]">
                 <Send className="h-3 w-3" />
                 WeCom 채널 연동 준비됨
               </span>
             ) : null}
 
             {copyBlockedReason ? (
-              <span className="inline-flex items-center gap-1 rounded-sm bg-[#F6F5F4] px-2 py-1 text-[10px] font-medium text-[#615D59]">
+              <span className="inline-flex items-center gap-1 rounded-sm bg-[#F6F5F4] px-2 py-1 text-[11px] font-medium text-[#615D59]">
                 <LockKeyhole className="h-3 w-3" />
                 {isInternalTab ? (escalation.status === "error" ? "불러오기 실패" : "불러오는 중") : !isApproved ? "승인 필요" : "자리 채우기 필요"}
               </span>
@@ -379,7 +379,7 @@ export default function CommunicationTabs({
                 "inline-flex h-8 items-center gap-1.5 rounded-lg border px-3 text-[11px] font-semibold transition-all shadow-xs",
                 canCopy
                   ? "border-[#084734] bg-[#084734] text-white hover:bg-[#065C41] active:scale-[0.98]"
-                  : "cursor-not-allowed border-black/[0.08] bg-[#F6F5F4] text-[#A39E98] opacity-60"
+                  : "cursor-not-allowed border-black/[0.08] bg-[#F6F5F4] text-[#78736D] opacity-60"
               )}
             >
               {copiedId === activeTab ? (

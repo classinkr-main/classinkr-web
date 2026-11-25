@@ -40,7 +40,7 @@ export default function ReviewWarningList({ warnings, className }: ReviewWarning
       <ul className="mt-1.5 space-y-1.5">
         {items.map((warning, index) => (
           <li key={`${warning.code}-${index}`} data-code={warning.code}>
-            <span className="mr-1.5 rounded border border-current px-1 text-[10px] font-semibold">
+            <span className="mr-1.5 rounded border border-current px-1 text-[11px] font-semibold">
               {SEVERITY_LABEL[warning.severity]}
             </span>
             {warning.label}

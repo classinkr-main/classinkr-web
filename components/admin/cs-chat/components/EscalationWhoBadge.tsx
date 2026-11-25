@@ -80,7 +80,7 @@ export default function EscalationWhoBadge({
           onClick={() => setOpen(!open)}
           className={cn(
             "group inline-flex items-center gap-2 rounded-lg border border-black/[0.08] bg-[#F6F5F4] font-medium text-[#31302E] transition-all hover:border-[#084734]/30 hover:bg-white shadow-xs",
-            compact ? "px-2 py-1 text-[10.5px]" : "px-2.5 py-1.5 text-[11px]",
+            compact ? "px-2 py-1 text-[11px]" : "px-2.5 py-1.5 text-[11px]",
             open && "border-[#084734]/40 bg-white ring-2 ring-[#084734]/10"
           )}
         >
@@ -88,19 +88,19 @@ export default function EscalationWhoBadge({
             <Icon className="h-3 w-3" />
           </span>
           <span className="font-semibold text-[#111110]">{contact.domainLabel}</span>
-          <span className="text-[#A39E98]" aria-hidden>·</span>
+          <span className="text-[#78736D]" aria-hidden>·</span>
           <span className="inline-flex items-center gap-1 text-[#615D59]">
             <UserCheck className="h-3 w-3 text-[#084734]" />
             <strong className="font-semibold text-[#084734]">{contact.primaryContact}</strong>
           </span>
           {contact.remoteTool ? (
-            <span className="hidden sm:inline-block rounded bg-white px-1.5 py-0.5 text-[10px] text-[#615D59] border border-black/[0.06]">
+            <span className="hidden sm:inline-block rounded bg-white px-1.5 py-0.5 text-[11px] text-[#615D59] border border-black/[0.06]">
               {contact.remoteTool.split("/")[0]?.trim()}
             </span>
           ) : null}
           <ChevronDown
             className={cn(
-              "h-3 w-3 text-[#A39E98] transition-transform duration-150",
+              "h-3 w-3 text-[#78736D] transition-transform duration-150",
               open && "rotate-180 text-[#084734]"
             )}
           />
@@ -109,7 +109,7 @@ export default function EscalationWhoBadge({
         {issueTypeTag ? (
           <span
             className={cn(
-              "rounded px-1.5 py-0.5 text-[10.5px] font-bold tabular-nums",
+              "rounded px-1.5 py-0.5 text-[11px] font-bold tabular-nums",
               isBug && "bg-[#FCE9E9] text-[#A62626] border border-[#F2B8B8]",
               isReq && "bg-[#ECFDF5] text-[#084734] border border-[#BDEFD8]",
               !isBug && !isReq && "bg-[#FBF1E0] text-[#7A520F] border border-[#ECD29C]"
@@ -119,7 +119,7 @@ export default function EscalationWhoBadge({
           </span>
         ) : null}
         {candidates.length > 0 ? (
-          <span className="rounded border border-[#ECD29C] bg-[#FBF1E0] px-1.5 py-0.5 text-[10.5px] font-semibold text-[#7A520F]">
+          <span className="rounded border border-[#ECD29C] bg-[#FBF1E0] px-1.5 py-0.5 text-[11px] font-semibold text-[#7A520F]">
             분류 확인 필요
           </span>
         ) : null}
@@ -135,7 +135,7 @@ export default function EscalationWhoBadge({
           <div className="absolute left-0 top-full z-50 mt-1.5 w-80 rounded-xl border border-black/[0.12] bg-white p-4 shadow-xl text-[12px] leading-5 text-[#31302E]">
             <div className="flex items-start justify-between border-b border-black/[0.06] pb-2.5">
               <div>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-[#A39E98]">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-[#78736D]">
                   HQ 소통 라우팅 가이드
                 </span>
                 <h4 className="font-bold text-[13px] text-[#111110] flex items-center gap-1.5 mt-0.5">
@@ -143,7 +143,7 @@ export default function EscalationWhoBadge({
                   {contact.domainLabel}
                 </h4>
               </div>
-              <span className="rounded bg-[#F6F5F4] px-1.5 py-0.5 text-[10px] font-mono text-[#615D59]">
+              <span className="rounded bg-[#F6F5F4] px-1.5 py-0.5 text-[11px] font-mono text-[#615D59]">
                 {contact.recommendedTag}
               </span>
             </div>
@@ -157,7 +157,7 @@ export default function EscalationWhoBadge({
                 {contact.secondaryContact ? (
                   <p className="text-[#615D59]">• <strong>2차/협력:</strong> {contact.secondaryContact}</p>
                 ) : null}
-                <p className="text-[#A39E98]">• <strong>1차 접점:</strong> {contact.firstLineContact}</p>
+                <p className="text-[#78736D]">• <strong>1차 접점:</strong> {contact.firstLineContact}</p>
               </div>
 
               {candidates.length > 0 ? (
@@ -193,7 +193,7 @@ export default function EscalationWhoBadge({
                 {contact.guidanceTip}
               </div>
 
-              <p className="text-[10.5px] leading-4 text-[#A39E98]">
+              <p className="text-[11px] leading-4 text-[#78736D]">
                 근거 {contact.source} · 문서 기준일 {contact.verifiedAt}
               </p>
             </div>

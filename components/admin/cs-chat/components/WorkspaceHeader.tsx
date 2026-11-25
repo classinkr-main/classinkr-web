@@ -1,6 +1,6 @@
 "use client"
 
-import { HelpCircle, RefreshCcw } from "lucide-react"
+import { HelpCircle, RefreshCcw, X } from "lucide-react"
 
 import { ClassInInternalAIIcon } from "@/components/ui/ClassInInternalAIIcon"
 import { cn } from "@/lib/utils"
@@ -18,6 +18,8 @@ export default function WorkspaceHeader({
   notice,
   onRefresh,
   onOpenTools,
+  onDismissError,
+  onDismissNotice,
 }: {
   /** 대화 탭에서는 제목 띠를 그리지 않는다 — 새로고침·운영 도구 진입은 대화 툴바로 옮겼다(IC-15). 알림 띠만 남는다. */
   compact?: boolean
@@ -28,6 +30,9 @@ export default function WorkspaceHeader({
   notice: string | null
   onRefresh: () => void
   onOpenTools: () => void
+  /** 알림 띠 닫기(IC-23). 없으면 닫기 버튼을 그리지 않는다. */
+  onDismissError?: () => void
+  onDismissNotice?: () => void
 }) {
   return (
     <>
@@ -76,16 +81,45 @@ export default function WorkspaceHeader({
       </header>
       )}
 
-      {error ? (
-        <div className="shrink-0 border-b border-[#F2B8B8] bg-[#FCE9E9]">
-          <p className={cn(CONSOLE_CONTENT_CLASS, "py-2.5 text-[12px] text-[#8F2C2C]")}>{error}</p>
-        </div>
-      ) : null}
-      {notice ? (
-        <div className="shrink-0 border-b border-[#BDEFD8] bg-[#ECFDF5]">
-          <p className={cn(CONSOLE_CONTENT_CLASS, "py-2.5 text-[12px] text-[#084734]")}>{notice}</p>
-        </div>
-      ) : null}
+      {/* 알림 띠 — 오류는 role=alert, 안내는 role=status 로 읽히고 닫을 수 있다(IC-23). 영역 자체는 늘 떠 있어야 변화를 읽는다. */}
+      <div role="alert">
+        {error ? (
+          <div className="shrink-0 border-b border-[#F2B8B8] bg-[#FCE9E9]">
+            <div className={cn(CONSOLE_CONTENT_CLASS, "flex items-start justify-between gap-3 py-2")}>
+              <p className="py-0.5 text-[12px] text-[#8F2C2C]">{error}</p>
+              {onDismissError ? (
+                <button
+                  type="button"
+                  onClick={onDismissError}
+                  aria-label="오류 알림 닫기"
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-[#8F2C2C] hover:bg-[#F7D4D4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8F2C2C]"
+                >
+                  <X className="h-4 w-4" aria-hidden="true" />
+                </button>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+      </div>
+      <div role="status" aria-live="polite">
+        {notice ? (
+          <div className="shrink-0 border-b border-[#BDEFD8] bg-[#ECFDF5]">
+            <div className={cn(CONSOLE_CONTENT_CLASS, "flex items-start justify-between gap-3 py-2")}>
+              <p className="py-0.5 text-[12px] text-[#084734]">{notice}</p>
+              {onDismissNotice ? (
+                <button
+                  type="button"
+                  onClick={onDismissNotice}
+                  aria-label="안내 알림 닫기"
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-[#084734] hover:bg-[#D3F5E5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]"
+                >
+                  <X className="h-4 w-4" aria-hidden="true" />
+                </button>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+      </div>
     </>
   )
 }
