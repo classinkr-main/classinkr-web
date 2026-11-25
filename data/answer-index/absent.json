@@ -6888,53 +6888,5 @@
       "checkedAt": "2026-11-20",
       "checker": "agent:opus#D5-trust"
     }
-  },
-  {
-    "id": "absent:start/tablet-landscape-cutoff",
-    "label": "태블릿 가로 화면 잘림",
-    "forms": [
-      "태블릿 가로 화면 잘림",
-      "가로 화면에서 잘려",
-      "화면 오른쪽이 잘려",
-      "화면 우측이 잘려"
-    ],
-    "area": "start",
-    "gapCard": "gap:start/tablet-landscape-cutoff",
-    "verified": {
-      "grep": [
-        "태블릿 가로 화면 잘림",
-        "가로 화면에서 잘려",
-        "화면 오른쪽이 잘려",
-        "화면 우측이 잘려"
-      ],
-      "unitHits": 0,
-      "siteHits": 0,
-      "checkedAt": "2026-11-25",
-      "checker": "agent:fable#B6"
-    }
-  },
-  {
-    "id": "absent:classroom/onstage-one-to-one-camera",
-    "label": "온스테이지 1:1 수업 카메라",
-    "forms": [
-      "1대1 수업 카메라",
-      "일대일 수업 카메라",
-      "1대1 카메라",
-      "일대일 카메라"
-    ],
-    "area": "classroom",
-    "gapCard": "gap:classroom/onstage-one-to-one-camera",
-    "verified": {
-      "grep": [
-        "1대1 수업 카메라",
-        "일대일 수업 카메라",
-        "1대1 카메라",
-        "일대일 카메라"
-      ],
-      "unitHits": 0,
-      "siteHits": 0,
-      "checkedAt": "2026-11-25",
-      "checker": "agent:fable#B6"
-    }
   }
 ]

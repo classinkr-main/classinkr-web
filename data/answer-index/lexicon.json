@@ -37471,28 +37471,6 @@
     "ambiguous": []
   },
   {
-    "id": "C_mirror_app",
-    "kind": "object",
-    "generic": false,
-    "parents": [
-      "C_mobile"
-    ],
-    "doc": [
-      "Mirror 앱"
-    ],
-    "visitor": [
-      "클래스인 미러",
-      {
-        "form": "미러 앱",
-        "boundary": "both"
-      },
-      "mirror로 검색",
-      "Mirror 설치",
-      "클래스 미러"
-    ],
-    "ambiguous": []
-  },
-  {
     "id": "C_sgf_file",
     "kind": "object",
     "generic": false,
