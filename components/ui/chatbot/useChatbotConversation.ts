@@ -6,7 +6,7 @@ import { getChannelTalkAnonymousId } from "@/lib/channel-talk"
 import { CLASSIN_POSITIONING } from "@/lib/classin-positioning"
 import { trackEvent } from "@/lib/analytics"
 import { resolvePageContext, mergeStarters } from "@/lib/chatbot/page-context"
-import { sanitizeChatbotPageUrl } from "@/lib/chatbot/pii"
+import { chatbotRequestReferrer, sanitizeChatbotPageUrl, sanitizeChatbotUtm } from "@/lib/chatbot/pii"
 import {
     buildPreviousTurnPayload,
     classifyWidgetTurnError,
@@ -72,7 +72,8 @@ let starterQuestionsCache: string[] | null = null
 
 function loadStarterQuestionsOnce(): Promise<string[]> {
     if (starterQuestionsCache) return Promise.resolve(starterQuestionsCache)
-    starterQuestionsRequest ??= fetch("/api/chatbot/recommended-questions", { cache: "no-store" })
+    // Referer 에 주소 전체(쿼리 포함)가 실리지 않게 정화한 주소를 준다(CX-04·C4).
+    starterQuestionsRequest ??= fetch("/api/chatbot/recommended-questions", { cache: "no-store", referrer: chatbotRequestReferrer() })
         .then((response) => response.json() as Promise<ChatbotStarterQuestionsResponse>)
         .then((data) => {
             const questions = Array.isArray(data.questions)
@@ -232,14 +233,13 @@ export function useChatbotConversation({
     const context = useMemo(
         () => {
             // 쿼리의 토큰·이메일이 챗봇 서버와 상담 수신함으로 가지 않게 정화한다(CX-04·C4). 추적 제외 경로는 경로만 보낸다.
+            // utm 도 같은 경계다: 이메일 같은 개인정보 값은 버리고 추적 제외 경로에서는 보내지 않는다. Referer 헤더는 fetch 의
+            // referrer(chatbotRequestReferrer)로 같은 정화 주소만 싣는다.
             const pageUrl = typeof window === "undefined" ? undefined : sanitizeChatbotPageUrl(window.location.href)
-            const searchParams =
-                typeof window === "undefined" ? new URLSearchParams() : new URLSearchParams(window.location.search)
-            const utm = Object.fromEntries(
-                ["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term"]
-                    .map((key) => [key, searchParams.get(key)] as const)
-                    .filter(([, value]) => Boolean(value))
-            )
+            const utm =
+                typeof window === "undefined"
+                    ? {}
+                    : sanitizeChatbotUtm(new URLSearchParams(window.location.search), window.location.pathname)
 
             return {
                 channel: "web",
@@ -388,6 +388,8 @@ export function useChatbotConversation({
             const response = await fetch("/api/chatbot/query/stream", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
+                // 서버는 Referer 를 chat_sessions.referrer 로 저장한다 — 기본 정책이면 같은 출처라 쿼리째 실린다(CX-04·C4).
+                referrer: chatbotRequestReferrer(),
                 signal: controller.signal,
                 body: JSON.stringify({
                     message: question,

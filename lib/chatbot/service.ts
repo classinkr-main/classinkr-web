@@ -1,7 +1,7 @@
 import "server-only"
 
 import { stripLeadSubmitTokens } from "@/lib/chatbot/lead-token"
-import { redactPii } from "@/lib/chatbot/pii"
+import { redactPii, sanitizeChatSessionAttribution } from "@/lib/chatbot/pii"
 import {
   generateChatbotFinalAnswer,
   streamChatbotFinalAnswer,
@@ -3808,12 +3808,19 @@ async function ensureSession(
   }
 
   const context = getContextObject(input.context)
-  const utm = getContextObject(context.utm)
+  // Referer 헤더·context.utm 은 받은 그대로 저장하지 않는다 — 수신거부 메일 링크의 token·email 이나 utm_term 에 박힌
+  // 수신자 이메일이 chat_sessions 에 평문으로 남는다(CX-04·C4). 위젯도 정화해 보내지만 옛 위젯·직접 호출 대비로 한 번 더.
+  const { referrer, utm } = sanitizeChatSessionAttribution({
+    referrer: meta.referrer,
+    utm: context.utm,
+    path: context.path,
+    pageUrl: context.pageUrl,
+  })
   const sessionInsert: Record<string, unknown> = {
     channel: normalizeChatSessionChannel(context.channel),
     anonymous_id: callerAnonymousId,
     user_agent: meta.userAgent ?? null,
-    referrer: meta.referrer ?? null,
+    referrer,
     utm,
   }
 

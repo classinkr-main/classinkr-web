@@ -196,7 +196,7 @@ describe("챗봇 요청 주소 정화 (CX-04·C4)", () => {
 
   it("redactPii 정본은 pii.ts 이고 서버(service.ts)는 다시 내보내기만 한다", () => {
     const service = readFileSync(join(process.cwd(), "lib/chatbot/service.ts"), "utf8")
-    expect(service).toContain('import { redactPii } from "@/lib/chatbot/pii"')
+    expect(service).toMatch(/import \{[^}]*\bredactPii\b[^}]*\} from "@\/lib\/chatbot\/pii"/)
     expect(service).toContain("export { redactPii }")
     expect(service).not.toMatch(/export function redactPii/)
   })

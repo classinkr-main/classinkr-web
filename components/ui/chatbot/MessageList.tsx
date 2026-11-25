@@ -33,6 +33,7 @@ import {
 import type { ChatbotSource, ChatMessage } from "@/components/ui/chatbot/types"
 import { cn } from "@/lib/utils"
 import { CHATBOT_MOTION, m } from "@/lib/chatbot/motion"
+import { chatbotRequestReferrer } from "@/lib/chatbot/pii"
 import { buildRetryLabel, WIDGET_INTERRUPTED_NOTICE } from "@/lib/chatbot/widget-turn"
 
 // 답 머리: 화자(Classin AI)와 상태. 상태는 알약 배지 대신 점 + 13px 글자다(DESIGN.md §4 Pill Badge retired, CX-16).
@@ -91,6 +92,8 @@ function FeedbackButtons({
             const response = await fetch("/api/chatbot/feedback", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
+                // Referer 에 주소 전체(쿼리 포함)가 실리지 않게 정화한 주소를 준다(CX-04·C4).
+                referrer: chatbotRequestReferrer(),
                 body: JSON.stringify({ answerEventId, sessionId, rating }),
             })
             if (response.ok) setStatus("saved")
