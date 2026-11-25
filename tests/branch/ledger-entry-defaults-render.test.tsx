@@ -29,9 +29,12 @@ describe("매출장부 첫 화면", () => {
     expect(html).toMatch(/aria-expanded="false"[^>]*>요약·필터 펼치기/)
     expect(html).not.toContain('aria-label="장부 요약"')
     expect(html).not.toContain("KR Team")
-    // 들어오면 "이번 달 계 · 공백 제외"가 걸려 있고, 첫 줄의 전부 풀기에 걸린 수가 보인다.
-    expect(html).toContain("10월 계 공백 제외")
-    expect(html).toMatch(/필터 전부 풀기<span[^>]*>1<\/span>/)
+    // 들어오면 "이번 달 계 · 값 있음"이 걸려 있고, 2줄(결과 줄)에 칩 · 모두 풀기 · "내 화면에만"이 보인다(필터 기획 F-2).
+    // 1줄의 "필터 전부 풀기 N"은 결과 줄의 모두 풀기로 옮겼다.
+    expect(html).toContain('aria-label="10월 계 값 있음 필터 풀기"')
+    expect(html).toMatch(/>모두 풀기<\/button>/)
+    expect(html).toContain("내 화면에만 걸립니다")
+    expect(html).not.toContain("필터 전부 풀기")
   })
 
   it("탭 줄은 DSH · 장부 순서이고, 간소 계정에게 보드·콕핏은 보이지 않는다", () => {

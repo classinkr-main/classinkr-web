@@ -12,8 +12,10 @@ import { ProgressRoadmap } from "../../viz/ProgressRoadmap"
 import MoneyValue from "../MoneyValue"
 import ComparisonBar from "./ComparisonBar"
 
-export default function BranchHeroGauges({ summary, kpi, loading, periodLabel, error }: {
+export default function BranchHeroGauges({ summary, kpi, loading, periodLabel, error, layout = "wide" }: {
   summary: BranchSummaryResponse | null; kpi: BranchKpiResponse | null; loading: boolean; periodLabel: string; error?: string | null
+  /** "cockpit" — 개요 콕핏 판의 왼쪽 칸(2026-11-24 시안 '개요 B'). 같은 수치·게이지·로드맵을 좁은 세로 판에 쌓는다. */
+  layout?: "wide" | "cockpit"
 }) {
   const teams = useMemo(() => {
     if (summary?.scope?.manager) return (kpi?.members ?? []).map((member) => ({ team: member.team ?? "ALL", label: member.member, goal: member.goal, status: member.status }))
@@ -34,6 +36,53 @@ export default function BranchHeroGauges({ summary, kpi, loading, periodLabel, e
   const teamDomain = comparisonDomain(teams.flatMap((item) => [item.status, item.goal]))
   const scope = summary.scope?.manager ? branchManagerLabel(summary.scope.manager) : branchTeamLabel(summary.team)
   const legacy = isLegacyBranchTeam(summary.team)
+
+  const teamTitle = summary.scope?.manager ? "개인 목표와 DSH 실적" : legacy ? "이전 조직 매출 이력" : "현재 팀별 매출"
+  const teamBody = loading && !kpi ? <p role="status" className="mt-3 text-[13px] text-[#615D59]">팀 KPI를 불러오는 중입니다.</p>
+    : error && !kpi ? <p role="alert" className="mt-3 text-[13px] text-[#8F2C2C]">팀 KPI를 불러오지 못했습니다 · {error}</p>
+    : !kpi || teams.length === 0 ? <p role="status" className="mt-3 text-[13px] text-[#615D59]">표시할 팀 KPI 데이터가 없습니다.</p>
+    : null
+
+  if (layout === "cockpit") return <section aria-label="매출 현황 요약" className="flex min-w-0 flex-col gap-4 rounded-xl border border-[rgba(0,0,0,0.08)] bg-white p-5">
+    <div className="flex flex-wrap items-baseline justify-between gap-2">
+      <h2 className="text-[14px] font-bold text-[#111110]">목표 달성</h2>
+      <span className="text-[12px] text-[#615D59]">{scope} · {periodLabel} · CNY</span>
+    </div>
+    <div className="flex flex-wrap items-center gap-5">
+      {goal > 0 ? <div role="img" aria-label={`확정 매출 ${cnyExact(actual)} CNY, 목표 ${cnyExact(goal)} CNY, 달성률 ${pacing.toFixed(1)}%`}>
+        <GaugeRing value={actual} goal={goal} size={128} stroke={11} />
+      </div> : null}
+      <dl className="grid min-w-0 gap-1.5 text-[12px]">
+        <div><dt className="text-[#615D59]">확정 매출</dt><dd className="text-[22px] font-bold leading-tight tracking-[-0.02em] text-[#111110]"><MoneyValue value={actual} /></dd></div>
+        <div><dt className="sr-only">달성률</dt><dd className="text-[16px] font-semibold tabular-nums text-[#084734]">{goal > 0 ? pacing.toFixed(1) + "%" : "목표 기준 없음"}</dd></div>
+        <div><dt className="text-[#615D59]">목표</dt><dd className="font-semibold text-[#111110]"><MoneyValue value={goal} />{goal > 0 ? <span className="font-normal text-[#615D59]"> · {actual >= goal ? "초과 " : "남은 "}<MoneyValue value={Math.abs(goal - actual)} /></span> : null}</dd></div>
+      </dl>
+    </div>
+    <div className="border-t border-[rgba(0,0,0,0.08)] pt-3">
+      <h3 className="text-[12.5px] font-semibold text-[#111110]">{teamTitle} <span className="font-normal text-[#615D59]">· DSH 실적 / 목표</span></h3>
+      {teamBody ?? <div className="mt-2 grid grid-cols-2 gap-3">
+        {teams.map((item) => <div key={item.team} className="flex min-w-0 items-center gap-2.5">
+          {item.goal > 0 ? <div role="img" aria-label={`${item.label} 매출 달성률 ${((item.status / item.goal) * 100).toFixed(1)}%`} className="shrink-0">
+            <GaugeRing value={item.status} goal={item.goal} size={60} stroke={6} />
+          </div> : <span className="text-[11px] text-[#615D59]">목표 미설정</span>}
+          <div className="min-w-0 text-[12px]">
+            <strong style={{ color: TEAM_COLORS[item.team as TeamKey]?.color ?? "#615D59" }}>{item.label}</strong>
+            <p className="tabular-nums text-[#31302E]"><MoneyValue value={item.status} /></p>
+            <p className="text-[11px] tabular-nums text-[#615D59]">/ <MoneyValue value={item.goal} /></p>
+          </div>
+        </div>)}
+      </div>}
+    </div>
+    {goal > 0 ? <div className="border-t border-[rgba(0,0,0,0.08)] pt-3">
+      <ProgressRoadmap actual={actual} goal={goal} label="매출 로드맵" formatValue={cny} milestones={[
+        { pct: 25, label: "25%" }, { pct: 50, label: "50%" }, { pct: 75, label: "75%" }, { pct: 100, label: "목표 100%" },
+      ]} />
+    </div> : null}
+    <div className="mt-auto flex flex-wrap items-center justify-between gap-2 text-[11.5px] text-[#615D59]">
+      <p>확정액: REV 장부 · 목표: 1. DSH · 미승인 조정안 제외</p>
+      <Link href="/admin/branch/ledger?lens=rev" className="inline-flex min-h-11 items-center text-[#084734] underline underline-offset-2 md:min-h-0">장부에서 열기 ↗</Link>
+    </div>
+  </section>
 
   return <section aria-label="매출 현황 요약" className="grid gap-6 rounded-xl border border-[rgba(0,0,0,0.08)] bg-white p-5 md:p-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
     <div className="min-w-0">

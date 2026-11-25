@@ -1,7 +1,6 @@
 "use client"
-import { useSearchParams } from "next/navigation"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { AlertTriangle, ArrowUpRight, Link2, MapPin, MapPinned, Minus, Plus, RotateCcw } from "lucide-react"
+import { AlertTriangle, ArrowUpRight, MapPin, MapPinned, Minus, Plus, RotateCcw } from "lucide-react"
 import {
   KOREA_PROVINCE_BY_LABEL,
   KOREA_PROVINCE_HEIGHT,
@@ -17,6 +16,13 @@ import type {
   NaverMapCountSummary,
   NaverMapRegionSummaryRow,
 } from "@/lib/crm/naver-map-region-summary"
+import {
+  isOffMapRegion,
+  rankRegions,
+  regionGoalCoverage,
+  regionSelectionKey,
+  type RegionMetric,
+} from "@/lib/branch/region-heatmap"
 import type { Period, Team } from "../types"
 
 interface TopCustomer {
@@ -171,14 +177,15 @@ const ZOOM_MIN = 1
 const ZOOM_MAX = 4
 const ZOOM_STEP = 1.4
 
-type Metric = "revenue" | "progress"
+type Metric = RegionMetric
 
 const EMPTY_ROWS: Row[] = []
 
 function HeatMap({ rows, selectedLabel, onSelect, metric }: {
   rows: MapRow[]
   selectedLabel: string | null
-  onSelect: (row: MapRow) => void
+  /** null = 선택 해제(지도 빈 곳 클릭). */
+  onSelect: (row: MapRow | null) => void
   metric: Metric
 }) {
   const [hovered, setHovered] = useState<string | null>(null)
@@ -240,6 +247,8 @@ function HeatMap({ rows, selectedLabel, onSelect, metric }: {
 
   const dragRef = useRef<{ startX: number; startY: number; panX: number; panY: number } | null>(null)
   const svgRef = useRef<SVGSVGElement | null>(null)
+  // 드래그(팬) 끝의 click이 선택 해제로 번지지 않게 이동 여부를 기억한다.
+  const dragMovedRef = useRef(false)
   // Pixels-to-SVG-units conversion uses the rendered svg width vs the viewBox
   // width — independent of zoom, since viewBox adjusts with zoom.
   function pxToSvg(dx: number, dy: number) {
@@ -268,11 +277,17 @@ function HeatMap({ rows, selectedLabel, onSelect, metric }: {
         role="group" aria-label="대한민국 지역별 매출 달성률 히트맵"
         onMouseDown={(e) => {
           if (zoom <= 1) return
+          dragMovedRef.current = false
           dragRef.current = { startX: e.clientX, startY: e.clientY, panX: clampedPan.x, panY: clampedPan.y }
+        }}
+        onClick={() => {
+          if (dragMovedRef.current) { dragMovedRef.current = false; return }
+          onSelect(null)
         }}
         onMouseMoveCapture={(e) => {
           const drag = dragRef.current
           if (!drag) return
+          if (Math.abs(e.clientX - drag.startX) + Math.abs(e.clientY - drag.startY) > 4) dragMovedRef.current = true
           const { x: dx, y: dy } = pxToSvg(e.clientX - drag.startX, e.clientY - drag.startY)
           setPan({ x: drag.panX - dx, y: drag.panY - dy })
         }}
@@ -325,11 +340,11 @@ function HeatMap({ rows, selectedLabel, onSelect, metric }: {
                 }}
                 role="button" tabIndex={0}
                 aria-label={aria}
-                onClick={() => onSelect(row)}
+                onClick={(e) => { e.stopPropagation(); onSelect(row) }}
                 onMouseEnter={() => setHovered(row.label)}
                 onFocus={() => setHovered(row.label)}
                 onBlur={() => setHovered(null)}
-                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(row) } }}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); onSelect(row) } }}
               >
                 <title>{aria}</title>
               </path>
@@ -403,39 +418,45 @@ function HeatMap({ rows, selectedLabel, onSelect, metric }: {
       )}
 
       {/* Zoom controls — top-right floating cluster */}
-      <div className="absolute right-2 top-2 z-20 flex flex-col gap-1 rounded-md border border-[rgba(0,0,0,0.08)] bg-white/90 p-0.5 shadow-[0_2px_6px_rgba(0,0,0,0.06)] backdrop-blur">
+      <div onClick={(e) => e.stopPropagation()} className="absolute right-2 top-2 z-20 flex flex-col gap-1 rounded-md border border-[rgba(0,0,0,0.08)] bg-white/90 p-0.5 shadow-[0_2px_6px_rgba(0,0,0,0.06)] backdrop-blur">
         <button type="button" aria-label="확대"
           disabled={zoom >= ZOOM_MAX}
           onClick={() => applyZoom(zoom * ZOOM_STEP)}
-          className="flex h-6 w-6 items-center justify-center rounded text-[#111110] transition hover:bg-[#F0EFEC] disabled:opacity-30">
+          className="flex h-11 w-11 items-center justify-center rounded text-[#111110] md:h-7 md:w-7 transition hover:bg-[#F0EFEC] disabled:opacity-30">
           <Plus className="h-3.5 w-3.5" />
         </button>
         <button type="button" aria-label="축소"
           disabled={zoom <= ZOOM_MIN}
           onClick={() => applyZoom(zoom / ZOOM_STEP)}
-          className="flex h-6 w-6 items-center justify-center rounded text-[#111110] transition hover:bg-[#F0EFEC] disabled:opacity-30">
+          className="flex h-11 w-11 items-center justify-center rounded text-[#111110] md:h-7 md:w-7 transition hover:bg-[#F0EFEC] disabled:opacity-30">
           <Minus className="h-3.5 w-3.5" />
         </button>
         <button type="button" aria-label="원래 크기"
           disabled={zoom === 1 && pan.x === 0 && pan.y === 0}
           onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }) }}
-          className="flex h-6 w-6 items-center justify-center rounded text-[#615D59] transition hover:bg-[#F0EFEC] disabled:opacity-30">
+          className="flex h-11 w-11 items-center justify-center rounded text-[#615D59] md:h-7 md:w-7 transition hover:bg-[#F0EFEC] disabled:opacity-30">
           <RotateCcw className="h-3 w-3" />
         </button>
       </div>
 
-      {/* Tiny legend — mirrors the active ramp so the user reads the map and
-          legend with the same visual vocabulary. */}
-      <div className="mt-2 flex items-center gap-2 px-1 text-[10px] text-[#615D59]">
-        <span>{metric === "revenue" ? "매출" : "달성률"}</span>
-        <div className="h-[3px] w-28 rounded-full"
-          style={{ background: `linear-gradient(90deg, ${HEAT_STOPS.map((s) => `rgb(${s.rgb.join(",")}) ${(s.t * 100).toFixed(0)}%`).join(", ")})` }} />
-        <span className="text-[#A39E98]">낮음</span>
-        <span className="ml-auto text-[#A39E98]">높음</span>
+      {/* 범례 — 램프의 4단계 색을 그대로 구획으로 보여준다(연속 그라디언트 아님). */}
+      <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 px-1 text-[11px] text-[#615D59]">
+        <span>{metric === "revenue" ? "매출" : "달성률"} 낮음</span>
+        <span className="flex h-2 w-40 overflow-hidden rounded-full" aria-hidden="true">
+          {HEAT_STOPS.map((stop) => (
+            <i key={stop.t} className="flex-1" style={{ background: `rgb(${stop.rgb.join(",")})` }} />
+          ))}
+        </span>
+        <span>높음</span>
+        <span className="ml-3 inline-block h-2.5 w-2.5 rounded-sm" style={{ background: DIMMED_FILL }} aria-hidden="true" />
+        <span>데이터 없음</span>
+        <span className="ml-auto text-[#A39E98]">빈 곳 클릭 = 선택 해제</span>
       </div>
     </div>
   )
 }
+
+type DetailRow = Row & { label: string; regions: string[] }
 
 function CompactRow({ row, rank, selected, onSelect, metric, maxExpected }: {
   row: Row; rank: number; selected: boolean; onSelect: () => void
@@ -446,134 +467,110 @@ function CompactRow({ row, rank, selected, onSelect, metric, maxExpected }: {
   const barPct = metric === "revenue"
     ? (maxExpected > 0 ? Math.min(100, (row.expected / maxExpected) * 100) : 0)
     : Math.min(100, row.progress)
-  const barColor = heatColorRamp(metricValue, metricMax)
+  const empty = metricValue <= 0
+  const barColor = empty ? DIMMED_FILL : heatColorRamp(metricValue, metricMax)
   const barOpacity = rampOpacity(metricValue, metricMax)
-  // 저대비 수정 — 이전에는 이 값 텍스트 색을 heatColorRamp 보간값으로 직접 칠해
-  // 중간 구간(예: 태닝 톤 #C09460)에서 흰 배경 대비 ~2.75:1까지 떨어졌다. 이제
-  // 텍스트는 항상 캐논 잉크(#111110)로 고정하고, 색 신호는 옆의 진행 바 + 작은
-  // 도트(칩)로만 전달한다.
+  const offMap = isOffMapRegion(row.region)
+  const selectable = regionSelectionKey(row.region) !== null
+  // 값 텍스트는 항상 캐논 잉크(#111110) — 색 신호는 진행 바와 도트로만 전달한다(저대비 방지).
   return (
-    <button type="button" onClick={onSelect}
-      className={`grid w-full grid-cols-[18px_56px_minmax(0,1fr)_56px] items-center gap-2 rounded px-1.5 py-1.5 text-left transition ${
+    <button type="button" onClick={onSelect} disabled={!selectable}
+      aria-pressed={selected}
+      className={`grid min-h-11 w-full grid-cols-[22px_minmax(0,auto)_minmax(0,1fr)_72px] items-center gap-2 rounded px-2 text-left text-[12.5px] tabular-nums transition md:min-h-7 ${
         selected ? "bg-[#F0EFEC]" : "hover:bg-[#F6F5F4]"
       }`}>
-      <span className="text-[10px] tabular-nums text-[#A39E98]">{String(rank).padStart(2, "0")}</span>
-      <span className="truncate text-[11.5px] font-semibold text-[#111110]">{row.region}</span>
-      <div className="h-1 overflow-hidden rounded-full bg-[#EFEDE7]">
-        <div className="h-full rounded-full transition-[width]" style={{ width: `${barPct}%`, background: barColor, opacity: barOpacity }} />
+      <span className="text-[11px] text-[#A39E98]">{String(rank).padStart(2, "0")}</span>
+      <span className={`flex min-w-[52px] items-baseline gap-1.5 truncate text-[#111110] ${selected ? "font-bold" : ""}`}>
+        {row.region}
+        {offMap && <span className="shrink-0 text-[10.5px] font-medium text-[#615D59]">지도 밖</span>}
+      </span>
+      <div className="h-1.5 overflow-hidden rounded-full bg-[#F0F0EC]">
+        <div className="h-full rounded-full transition-[width]" style={{ width: `${barPct}%`, background: barColor, opacity: empty ? 1 : barOpacity }} />
       </div>
-      <span className="flex items-center justify-end gap-1.5 text-right text-[11px] font-bold tabular-nums text-[#111110]">
-        <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: barColor }} aria-hidden="true" />
+      <span className={`text-right font-semibold ${empty ? "text-[#615D59]" : "text-[#111110]"}`}>
         {metric === "revenue" ? `¥${cny(row.expected)}` : `${row.progress.toFixed(0)}%`}
       </span>
     </button>
   )
 }
 
-function DetailPanel({ row, metric }: { row: MapRow | null; metric: Metric }) {
+function DetailPanel({ row, metric, selected, onClear }: {
+  row: DetailRow | null; metric: Metric; selected: boolean; onClear: () => void
+}) {
   if (!row) {
     return (
-      <div className="px-1 py-2 text-[12px] text-[#A39E98]">
-        지역을 선택하거나 호버하면 상세가 표시됩니다.
+      <div className="px-1 py-2 text-[12px] text-[#615D59]">
+        지도나 순위에서 지역을 고르면 상세가 표시됩니다.
       </div>
     )
   }
+  const hasGoal = row.target > 0
   return (
     <div>
-      <div className="flex items-baseline justify-between gap-3 border-b border-[rgba(0,0,0,0.06)] pb-3">
-        <div>
-          <p className="text-[16px] font-bold tracking-[-0.01em] text-[#111110]">{row.label}</p>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[11.5px] font-medium text-[#615D59]">{selected ? "선택 지역" : "상위 지역(선택 전)"}</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-[20px] font-bold tracking-[-0.01em] text-[#111110]">{row.label}</p>
+            {isOffMapRegion(row.label) && (
+              <span className="rounded-full bg-[#F6F5F4] px-2 py-0.5 text-[10.5px] font-medium text-[#615D59]">지도 밖</span>
+            )}
+            {selected && (
+              <button type="button" onClick={onClear}
+                className="inline-flex min-h-11 items-center rounded-md px-2 text-[11.5px] font-semibold text-[#084734] hover:underline md:min-h-7">
+                선택 해제
+              </button>
+            )}
+          </div>
           {row.regions.length > 1 && (
-            <p className="mt-0.5 text-[10px] text-[#A39E98]">{row.regions.join(", ")}</p>
+            <p className="mt-0.5 text-[11px] text-[#615D59]">{row.regions.join(", ")}</p>
           )}
         </div>
-        {(() => {
-          // DetailPanel doesn't know maxExpected, but it can derive a sane
-          // ramp by using the region's progress for the progress mode and the
-          // ratio of expected to its own target for the revenue mode (since
-          // we want "this region is X% of max" coloring; without maxExpected
-          // here we fall back to progress as the secondary indicator).
-          const progressColor = heatColorRamp(row.progress, 100)
-          return metric === "revenue" ? (
-            <div className="text-right">
-              <span className="text-[18px] font-bold tabular-nums" style={{ color: progressColor }}>
-                ¥{cny(row.expected)}
-              </span>
-              {/* 저대비 수정(품질 웨이브 5 — 항목 3) — 이 보조 숫자는 순수 장식이 아니라
-                  실데이터(달성률)라 :444-447과 동일 처방으로 #615D59 승격. */}
-              <p className="mt-0.5 text-[10px] tabular-nums text-[#615D59]">{row.progress.toFixed(0)}%</p>
-            </div>
-          ) : (
-            <div className="text-right">
-              <span className="text-[18px] font-bold tabular-nums" style={{ color: progressColor }}>
-                {row.progress.toFixed(0)}%
-              </span>
-              <p className="mt-0.5 text-[10px] tabular-nums text-[#615D59]">¥{cny(row.expected)}</p>
-            </div>
-          )
-        })()}
+        <div className="shrink-0 text-right">
+          <p className="text-[11.5px] font-medium text-[#615D59]">{metric === "revenue" ? "합계(확정+추정)" : "달성률"}</p>
+          <p className="text-[20px] font-bold tabular-nums text-[#111110]">
+            {metric === "revenue" ? `¥${cny(row.expected)}` : `${row.progress.toFixed(0)}%`}
+          </p>
+          {metric === "progress" && <p className="text-[11px] tabular-nums text-[#615D59]">¥{cny(row.expected)}</p>}
+          {metric === "revenue" && hasGoal && <p className="text-[11px] tabular-nums text-[#615D59]">달성률 {row.progress.toFixed(0)}%</p>}
+        </div>
       </div>
-      <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-[11.5px]">
+      <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3 xl:grid-cols-5">
         <div>
-          <p className="text-[10px] text-[#A39E98]">확정 (당월·이전)</p>
+          <p className="text-[11.5px] font-medium text-[#615D59]">확정(당월·이전)</p>
           {/* 확정 매출 = 캐논 그린 — 빨강 아님(시트 "빨간 글자=확정"은 입력 관례일 뿐). */}
-          <p className="mt-0.5 text-[13px] font-bold tracking-[-0.01em]" style={{ color: CONFIDENCE_TOKENS.confirmed.color }}>
-            ¥{cny(row.revenue)}
-          </p>
+          <p className="mt-0.5 text-[14px] font-bold tabular-nums" style={{ color: CONFIDENCE_TOKENS.confirmed.color }}>¥{cny(row.revenue)}</p>
         </div>
         <div>
-          <p className="text-[10px] text-[#A39E98]">추정 (미래)</p>
-          <p className="mt-0.5 text-[13px] font-semibold text-[#615D59]">¥{cny(row.projected)}</p>
+          <p className="text-[11.5px] font-medium text-[#615D59]">추정(미래)</p>
+          <p className="mt-0.5 text-[14px] font-bold tabular-nums text-[#111110]">¥{cny(row.projected)}</p>
         </div>
         <div>
-          <p className="text-[10px] text-[#A39E98]">합계 (확정+추정)</p>
-          <p className="mt-0.5 text-[13px] font-bold tracking-[-0.01em]" style={{ color: heatColorRamp(row.progress, 100) }}>
-            ¥{cny(row.expected)}
-          </p>
+          <p className="text-[11.5px] font-medium text-[#615D59]">딜</p>
+          <p className="mt-0.5 text-[14px] font-bold tabular-nums text-[#111110]">{row.confirmed_count} / {row.deals_count}건</p>
         </div>
         <div>
-          <p className="text-[10px] text-[#A39E98]">목표 (계약가 합)</p>
-          <p className="mt-0.5 text-[13px] font-semibold text-[#111110]">¥{cny(row.target)}</p>
+          <p className="text-[11.5px] font-medium text-[#615D59]">목표(계약가 합)</p>
+          {hasGoal
+            ? <p className="mt-0.5 text-[14px] font-bold tabular-nums text-[#111110]">¥{cny(row.target)}</p>
+            : <p className="mt-0.5 text-[12px] text-[#615D59]">없음</p>}
         </div>
         <div>
-          <p className="text-[10px] text-[#A39E98]">딜</p>
-          <p className="mt-0.5 text-[13px] font-semibold text-[#111110]">
-            {row.confirmed_count} / {row.deals_count}건
-          </p>
-        </div>
-        <div>
-          <p className="text-[10px] text-[#A39E98]">미시작 잔량</p>
-          {/* 확도 예외 파랑(#1E5DA8)은 REV 3단 확도 맥락 전용 — 여기 open_target은
-              "첫 납부가 아직 없는 딜의 목표 합"이라 확도 신호가 아니다. 아직 손도
-              안 댄 목표라는 뜻이라 Warning 축(캐논 #A8741A)으로 표시한다. */}
-          <p className="mt-0.5 text-[13px] font-bold" style={{ color: "#A8741A" }}>
-            ¥{cny(row.open_target)}
-          </p>
+          <p className="text-[11.5px] font-medium text-[#615D59]">미시작 잔량</p>
+          {/* open_target은 확도 신호가 아니라 "첫 납부가 아직 없는 딜의 목표 합" — Warning 축(#A8741A). */}
+          <p className="mt-0.5 text-[14px] font-bold tabular-nums" style={{ color: "#A8741A" }}>¥{cny(row.open_target)}</p>
         </div>
       </div>
-      {row.top_customers.length > 0 && (
-        <div className="mt-3 border-t border-[rgba(0,0,0,0.06)] pt-3">
-          <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.04em] text-[#A39E98]">주요 고객</p>
-          <ul className="flex flex-col gap-1">
-            {row.top_customers.slice(0, 3).map((c) => (
-              <li key={`${c.customer}-${c.manager ?? ""}`}
-                className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-3 py-0.5">
-                <span className="truncate text-[11.5px] text-[#111110]">{c.customer}</span>
-                <span className="whitespace-nowrap text-[11px] font-semibold tabular-nums" style={{ color: CONFIDENCE_TOKENS.confirmed.color }}>¥{cny(c.revenue)}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
     </div>
   )
 }
 
+// 원천 전체 상태는 카드 맨 아래 한 줄로 내렸다(지도·순위보다 먼저 눈에 띄지 않게).
 function MapSourceStrip({ source, href, loading }: { source: HeatmapMapSource | null; href: string; loading: boolean }) {
   if (loading && !source) {
     return (
-      <div className="flex min-h-[61px] items-center gap-2.5 border-b border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] px-5 py-3 text-[11px] font-semibold text-[#615D59]">
-        <MapPinned className="h-4 w-4 text-[#084734]" aria-hidden="true" />
+      <div className="flex min-h-11 items-center gap-2 border-t border-[#E8E8E4] px-5 py-2.5 text-[11.5px] font-medium text-[#615D59]">
+        <MapPinned className="h-4 w-4 shrink-0 text-[#084734]" aria-hidden="true" />
         CRM 지도 기회를 병렬로 불러오는 중입니다.
       </div>
     )
@@ -581,37 +578,22 @@ function MapSourceStrip({ source, href, loading }: { source: HeatmapMapSource | 
   if (!source) return null
   const summary = source.summary
   const unavailable = source.status === "unavailable" || !summary
+  const warn = unavailable || source.isStale
 
   return (
-    <div
-      className={`flex flex-col gap-3 border-b border-[rgba(0,0,0,0.08)] px-5 py-3 sm:flex-row sm:items-center sm:justify-between ${
-        unavailable || source.isStale
-          ? "bg-[#FFF9ED]"
-          : "bg-gradient-to-r from-[#F2FAF6] via-[#EBF7F1] to-[#F2FAF6]"
-      }`}
-    >
-      <div className="flex min-w-0 items-start gap-2.5">
-        {unavailable ? (
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[#A8741A]" aria-hidden="true" />
-        ) : (
-          <MapPinned className="mt-0.5 h-4 w-4 shrink-0 text-[#084734]" aria-hidden="true" />
-        )}
-        <div className="min-w-0">
-          <p className="text-[11px] font-bold text-[#111110]">
-            {unavailable ? "CRM 지도 원천 연결 확인 필요" : `전사 공용 CRM 지도 기회 ${fmt(summary.active)}곳 · ${summary.regions.length}개 지역`}
-          </p>
-          <p className="mt-0.5 text-[10.5px] leading-4 text-[#615D59]">
-            {unavailable
-              ? source.warnings[0]
-              : `연결 ${fmt(summary.linked)} · 유력 ${fmt(summary.prelinked)} · 검토 ${fmt(summary.review)} · 미매칭 ${fmt(summary.unmatched)} · ${formatMapSourceDate(source.latestSyncedAt)}`}
-            {!unavailable && source.isStale ? " · 7일 이상 갱신되지 않음" : ""}
-          </p>
-        </div>
-      </div>
-      <a
-        href={href}
-        className="inline-flex min-h-9 shrink-0 items-center justify-center gap-1.5 rounded-md border border-[#084734]/20 bg-white/95 px-3 text-[11px] font-bold text-[#084734] shadow-xs transition hover:bg-[#F2FAF6]"
-      >
+    <div className="flex flex-col gap-1 border-t border-[#E8E8E4] px-5 py-2.5 text-[11.5px] text-[#615D59] sm:flex-row sm:items-center sm:gap-3">
+      <span className="flex min-w-0 items-start gap-2">
+        {warn
+          ? <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#A8741A]" aria-hidden="true" />
+          : <MapPinned className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#084734]" aria-hidden="true" />}
+        <span className="min-w-0">
+          {unavailable
+            ? `CRM 지도 원천 연결 확인 필요${source.warnings[0] ? ` · ${source.warnings[0]}` : ""}`
+            : `CRM 지도 원천 · 전사 공용 기회 ${fmt(summary.active)}곳 · ${summary.regions.length}개 지역 · ${formatMapSourceDate(source.latestSyncedAt)} 갱신${source.isStale ? " · 7일 이상 갱신되지 않음" : ""}`}
+        </span>
+      </span>
+      <a href={href}
+        className="inline-flex min-h-11 shrink-0 items-center gap-1 font-semibold text-[#084734] hover:underline sm:ml-auto md:min-h-7">
         지도 원천 검수
         <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
       </a>
@@ -619,6 +601,7 @@ function MapSourceStrip({ source, href, loading }: { source: HeatmapMapSource | 
   )
 }
 
+// 선택 지역의 CRM 지도 기회 — 상세 아래 한 줄.
 function RegionMapSourcePanel({
   region,
   source,
@@ -633,34 +616,30 @@ function RegionMapSourcePanel({
     source.summary.regions.find((candidate) => candidate.label === region) ?? null
 
   return (
-    <div className="rounded-xl border border-[#084734]/15 bg-gradient-to-b from-[#F2FAF6] to-[#E8F6EF] p-3.5 shadow-[0_1px_3px_rgba(8,71,52,0.04),inset_0_1px_0_rgba(255,255,255,0.8)]">
-      <div className="flex items-center justify-between gap-3">
-        <p className="flex items-center gap-1.5 text-[11px] font-bold text-[#084734]">
-          <Link2 className="h-3.5 w-3.5" aria-hidden="true" />
-          CRM 지도 기회
-        </p>
-        <span className="text-[10px] font-semibold text-[#084734]/55">팀 필터와 무관</span>
-      </div>
-      <div className="mt-2 flex items-end justify-between gap-3">
-        <div>
-          <p className="text-[22px] font-bold tracking-[-0.04em] text-[#111110]">
-            {fmt(row?.count ?? 0)}<span className="ml-1 text-[11px] font-semibold text-[#615D59]">곳</span>
-          </p>
-          <p className="mt-0.5 text-[10.5px] text-[#615D59]">
-            연결 {fmt(row?.linked ?? 0)} · 유력 {fmt(row?.prelinked ?? 0)} · 검토 {fmt(row?.review ?? 0)} · 미매칭 {fmt(row?.unmatched ?? 0)}
-          </p>
-        </div>
-        <a href={href} className="inline-flex shrink-0 items-center gap-1 text-[11px] font-bold text-[#084734] hover:underline">
-          {region} 검수
-          <ArrowUpRight className="h-3 w-3" aria-hidden="true" />
-        </a>
-      </div>
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-[#E8E8E4] pt-3 text-[12px]">
+      <span className="text-[11.5px] font-medium text-[#615D59]">CRM 지도 기회</span>
+      <span className="tabular-nums text-[#111110]">
+        <b>{fmt(row?.count ?? 0)}곳</b> · 연결 {fmt(row?.linked ?? 0)} · 유력 {fmt(row?.prelinked ?? 0)} · 검토 {fmt(row?.review ?? 0)} · 미매칭 {fmt(row?.unmatched ?? 0)}
+      </span>
+      <span className="text-[11px] text-[#A39E98]">팀 필터와 무관</span>
+      <a href={href} className="inline-flex min-h-11 items-center gap-1 font-semibold text-[#084734] hover:underline sm:ml-auto md:min-h-7">
+        {region} 검수
+        <ArrowUpRight className="h-3 w-3" aria-hidden="true" />
+      </a>
     </div>
   )
 }
 
-export default function BranchRegionHeatmap({ team, period, selectedMonth, refreshKey, manager }: { manager?: string; team: Team; period: Period; selectedMonth: string; refreshKey: number }) {
-  const searchParams = useSearchParams()
+export default function BranchRegionHeatmap({ team, period, selectedMonth, refreshKey, manager, selectedKey, onSelectedKeyChange }: {
+  manager?: string
+  team: Team
+  period: Period
+  selectedMonth: string
+  refreshKey: number
+  /** 선택 지역 키(표준 라벨, 지도 밖은 원문). 상위 표 거르기와 공유하려고 부모가 소유한다. */
+  selectedKey: string | null
+  onSelectedKeyChange: (key: string | null) => void
+}) {
   const monthQuery = period === "M" ? `&month=${encodeURIComponent(selectedMonth)}` : ""
   // 로컬 재시도 넛지 — 상위 refreshKey(전역 새로고침, 강제 스크롤 동반)에 기대지 않고
   // 이 섹션만 useBranchJson의 기존 캐시키 재계산 경로(refreshKey:url)를 재사용해 다시 요청한다.
@@ -681,35 +660,41 @@ export default function BranchRegionHeatmap({ team, period, selectedMonth, refre
     warnings: [mapSourceRequest.error],
   } : null)
   const error = heatmap.error
-  const [selectedLabel, setSelectedLabel] = useState<string | null>(() =>
-    canonicalRegion(searchParams.get("region") ?? "")
-  )
   // Default to revenue — magnitude tells the operator where the money is,
   // which is more actionable than achievement %.
   const [metric, setMetric] = useState<Metric>("revenue")
 
-  // Ranking sort follows the active metric so the list and the map agree.
-  const sortedRanking = useMemo(() => {
-    const list = [...(rows ?? [])]
-    if (metric === "revenue") {
-      return list.sort((a, b) => b.expected - a.expected || b.progress - a.progress)
-    }
-    return list.sort((a, b) => b.progress - a.progress || b.expected - a.expected)
-  }, [rows, metric])
   const { mappedRows, otherRows } = useMemo(() => mergeForMap(rows ?? []), [rows])
+  // 지역 목표가 거의 없으면 달성률 보기는 전부 0%만 그린다 — 끄고 이유를 보여준다.
+  const coverage = useMemo(() => regionGoalCoverage(mappedRows), [mappedRows])
+  const effectiveMetric: Metric = coverage.progressViewUsable ? metric : "revenue"
+  const sortedRanking = useMemo(() => rankRegions(rows ?? [], effectiveMetric), [rows, effectiveMetric])
   const maxExpected = useMemo(
     () => Math.max(1, ...(rows ?? []).map((r) => r.expected || 0)),
     [rows],
   )
-  const selected = mappedRows.find((r) => r.label === selectedLabel) ?? mappedRows[0] ?? null
-  const selectRegion = useCallback((label: string) => {
-    setSelectedLabel(label)
+  const selectedMap = selectedKey ? mappedRows.find((r) => r.label === selectedKey) ?? null : null
+  const selectedOther = selectedKey && !selectedMap
+    ? otherRows.find((r) => regionSelectionKey(r.region) === selectedKey) ?? null
+    : null
+  const selectedDetail: DetailRow | null = selectedMap
+    ?? (selectedOther ? { ...selectedOther, label: selectedOther.region, regions: [selectedOther.region] } : null)
+  const detailRow: DetailRow | null = selectedDetail ?? mappedRows[0] ?? null
+  const crmRegion = detailRow && !isOffMapRegion(detailRow.label) ? detailRow.label : null
+
+  const selectKey = useCallback((key: string | null) => {
+    onSelectedKeyChange(key)
     const url = new URL(window.location.href)
-    url.searchParams.set("region", label)
+    if (key) {
+      const label = key
+      url.searchParams.set("region", label)
+    } else {
+      url.searchParams.delete("region")
+    }
     window.history.replaceState(null, "", url.toString())
-  }, [])
-  const mapSourceHref = selected
-    ? `/admin/crm/customers/map?region=${encodeURIComponent(selected.label)}`
+  }, [onSelectedKeyChange])
+  const mapSourceHref = crmRegion
+    ? `/admin/crm/customers/map?region=${encodeURIComponent(crmRegion)}`
     : "/admin/crm/customers/map"
 
   // 품질 웨이브 4 — 항목 7. Tailwind 기본 rose-* 팔레트 유출을 캐논 Danger(#B43E3E 계열)로
@@ -723,7 +708,7 @@ export default function BranchRegionHeatmap({ team, period, selectedMonth, refre
       <button
         type="button"
         onClick={() => setLocalRetry((v) => v + 1)}
-        className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md border border-[#B43E3E] bg-white px-2.5 text-[11px] font-bold text-[#B43E3E] transition hover:bg-[#FCE9E9]"
+        className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-md border border-[#B43E3E] bg-white px-2.5 text-[11px] font-bold text-[#B43E3E] transition hover:bg-[#FCE9E9] md:h-8 md:min-h-0"
       >
         <RotateCcw className="h-3 w-3" aria-hidden="true" />
         다시 시도
@@ -740,66 +725,68 @@ export default function BranchRegionHeatmap({ team, period, selectedMonth, refre
   }
 
   return (
-    <section className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[rgba(0,0,0,0.08)] px-5 py-3">
+    <section className="overflow-hidden rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-[#E8E8E4] px-5 py-3">
         <div className="flex items-center gap-2">
-          <MapPin className="h-4 w-4 text-[#084734]" />
+          <MapPin className="h-4 w-4 text-[#084734]" aria-hidden="true" />
           <h2 className="text-[14px] font-bold tracking-[-0.01em] text-[#111110]">KR 지역 히트맵</h2>
         </div>
-        <div className="inline-flex rounded-md border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] p-[2px]" role="group" aria-label="히트맵 지표 선택">
-          {(["revenue", "progress"] as const).map((m) => (
-            <button key={m} type="button" onClick={() => setMetric(m)}
-              aria-pressed={metric === m}
-              className={`rounded px-2.5 py-1 text-[11px] font-semibold transition ${
-                metric === m ? "bg-white text-[#111110] shadow-[0_1px_2px_rgba(0,0,0,0.06)]" : "text-[#615D59]"
-              }`}>
-              {m === "revenue" ? "매출" : "달성률"}
-            </button>
-          ))}
+        <span className="text-[11.5px] text-[#615D59]">
+          합계 = 확정 + 추정 · 지역 {sortedRanking.length}개(지도 {mappedRows.length} + 지도 밖 {otherRows.length})
+        </span>
+        <div className="flex flex-wrap items-center gap-2.5 sm:ml-auto">
+          {!coverage.progressViewUsable && (
+            <span className="text-[11.5px] text-[#615D59]">
+              달성률 보기는 지역 목표가 있는 곳이 {coverage.withGoal}/{coverage.total}이라 꺼 둠
+            </span>
+          )}
+          <div className="inline-flex rounded-md border border-[rgba(0,0,0,0.08)] p-[2px]" role="group" aria-label="히트맵 지표 선택">
+            {(["revenue", "progress"] as const).map((m) => {
+              const disabled = m === "progress" && !coverage.progressViewUsable
+              return (
+                <button key={m} type="button" onClick={() => setMetric(m)}
+                  aria-pressed={effectiveMetric === m}
+                  disabled={disabled}
+                  className={`min-h-11 rounded px-3 text-[12px] font-semibold transition md:min-h-7 ${
+                    effectiveMetric === m ? "bg-[#F6F5F4] font-bold text-[#111110]" : "text-[#615D59]"
+                  } ${disabled ? "cursor-not-allowed text-[#A39E98]" : ""}`}>
+                  {m === "revenue" ? "매출" : "달성률"}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid w-full lg:grid-cols-[minmax(0,11fr)_minmax(0,9fr)]">
+        <div className="min-w-0 p-5 lg:border-r lg:border-[#E8E8E4]">
+          <HeatMap rows={mappedRows} selectedLabel={selectedMap?.label ?? null}
+            onSelect={(r) => selectKey(r ? r.label : null)} metric={effectiveMetric} />
+        </div>
+
+        <div className="flex min-w-0 flex-col gap-4 border-t border-[#E8E8E4] p-5 lg:border-t-0">
+          <DetailPanel row={detailRow} metric={effectiveMetric} selected={selectedDetail !== null}
+            onClear={() => selectKey(null)} />
+          <RegionMapSourcePanel region={crmRegion} source={mapSource} href={mapSourceHref} />
+
+          <div className="border-t border-[#E8E8E4] pt-3">
+            <div className="mb-1 flex items-baseline justify-between px-2">
+              <p className="text-[11.5px] font-semibold text-[#615D59]">지역 순위 · {sortedRanking.length}개</p>
+              <p className="text-[11.5px] text-[#615D59]">{effectiveMetric === "revenue" ? "합계 순" : "달성률 순"}</p>
+            </div>
+            <div>
+              {sortedRanking.map((r, i) => (
+                <CompactRow key={r.region} row={r} rank={i + 1}
+                  selected={selectedKey !== null && regionSelectionKey(r.region) === selectedKey}
+                  metric={effectiveMetric} maxExpected={maxExpected}
+                  onSelect={() => selectKey(regionSelectionKey(r.region))} />
+              ))}
+            </div>
+          </div>
         </div>
       </div>
 
       <MapSourceStrip source={mapSource} href={mapSourceHref} loading={mapSourceRequest.loading} />
-
-      <div className="grid w-full gap-6 p-5 lg:grid-cols-[minmax(520px,1fr)_minmax(280px,360px)]">
-        <HeatMap rows={mappedRows} selectedLabel={selected?.label ?? null}
-          onSelect={(r) => selectRegion(r.label)} metric={metric} />
-
-        <div className="flex w-full max-w-[360px] flex-col gap-4 lg:ml-auto">
-          <DetailPanel row={selected} metric={metric} />
-          <RegionMapSourcePanel region={selected?.label ?? null} source={mapSource} href={mapSourceHref} />
-
-          <div>
-            <p className="mb-2 px-1 text-[10.5px] font-semibold uppercase tracking-[0.04em] text-[#615D59]">
-              지역 순위 · {sortedRanking.length}개 ({metric === "revenue" ? "매출 순" : "달성률 순"})
-            </p>
-            <div className="max-h-[280px] overflow-y-auto">
-              {sortedRanking.map((r, i) => {
-                const canon = canonicalRegion(r.region)
-                const sel = canon ? selected?.label === canon : false
-                return (
-                  <CompactRow key={r.region} row={r} rank={i + 1} selected={sel}
-                    metric={metric} maxExpected={maxExpected}
-                    onSelect={() => { if (canon) selectRegion(canon) }} />
-                )
-              })}
-            </div>
-          </div>
-
-          {otherRows.length > 0 && (
-            <div className="px-1">
-              <p className="mb-1.5 text-[10px] font-semibold text-[#A39E98]">지도 외</p>
-              <div className="flex flex-wrap gap-1">
-                {otherRows.map((r) => (
-                  <span key={r.region} className="rounded-full bg-[#F6F5F4] px-2 py-0.5 text-[10px] text-[#615D59]">
-                    {r.region} {metric === "revenue" ? `¥${cny(r.expected)}` : `${r.progress.toFixed(0)}%`}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
     </section>
   )
 }

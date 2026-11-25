@@ -675,6 +675,64 @@ export async function getCompassActivitiesByLeadIds(
   }
 }
 
+/** 학원명 후보 조회 행 — KA 진행 서술 초안용(연락처 칼럼은 읽지 않는다). */
+export interface CompassLeadByAcademyRow {
+  id: number
+  academy: string | null
+  stage: string | null
+  care_stage: string | null
+  owner: string | null
+  caller: string | null
+  bd_owner: string | null
+  next_action: string | null
+  next_action_at: string | null
+  updated_at: string | null
+}
+
+const ACADEMY_NAME_CHUNK = 12
+
+/** PostgREST or() 안의 ilike 값 — 공백은 와일드카드로, 따옴표·역슬래시는 이스케이프해 값 전체를 인용한다. */
+function academyIlikeClause(name: string): string | null {
+  const core = name.trim().replace(/[*%_]/g, "").replace(/\s+/g, "*")
+  if (!core) return null
+  const quoted = `*${core}*`.replace(/\\/g, "\\\\").replace(/"/g, '\\"')
+  return `academy.ilike."${quoted}"`
+}
+
+/**
+ * 학원명(REV 장부 고객명)으로 Compass 리드 후보를 찾는다 — 부분 일치라 후보가 여럿 나올 수 있고,
+ * 어느 리드를 쓸지는 호출부가 정규화 이름 비교로 고른다. 이름 매칭은 확정 연결이 아니라 서술 초안용 참고다.
+ */
+export async function getCompassLeadsByAcademyNames(names: string[]): Promise<CompassResult<CompassLeadByAcademyRow>> {
+  const unique = [...new Set(names.map((name) => name.trim()).filter(Boolean))].sort()
+  if (unique.length === 0) return ok([])
+  const cacheKey = `leads:byAcademy:${foldLongKey(unique.join("|"))}`
+  try {
+    return await memoize(
+      cacheKey,
+      async () => {
+        const sb = createSupabaseAdminClient()
+        const rows: CompassLeadByAcademyRow[] = []
+        for (let index = 0; index < unique.length; index += ACADEMY_NAME_CHUNK) {
+          const clauses = unique.slice(index, index + ACADEMY_NAME_CHUNK).map(academyIlikeClause).filter((clause): clause is string => clause != null)
+          if (clauses.length === 0) continue
+          const { data, error } = await sb
+            .from("compass_leads_v")
+            .select("id,academy,stage,care_stage,owner,caller,bd_owner,next_action,next_action_at,updated_at")
+            .or(clauses.join(","))
+            .limit(500)
+          if (error) return downResult(error)
+          rows.push(...((data ?? []) as CompassLeadByAcademyRow[]))
+        }
+        return ok(rows)
+      },
+      { ttlMs: TTL_MS, downTtlMs: TTL_DOWN_MS, isDown: isCompassResultDown, copy: copyCompassResult },
+    )
+  } catch (error) {
+    return downResult(error)
+  }
+}
+
 /** 고객 전체 로그의 다음 페이지. 단건 고객의 전화로 확인한 리드 id만 전달한다. */
 export async function getCompassActivityPage(
   leadIds: number[],

@@ -8,25 +8,26 @@ import { matchesTokens, tokenize } from "../search-tokens"
 import MultiSelect from "../MultiSelect"
 import { type BranchPipelineResponse, type BranchPipelineRow, type Period, type Team } from "../types"
 import { cny, cnyExact } from "@/lib/branch/money-format"
-import { CONFIDENCE_TOKENS, type ConfidenceKey } from "@/lib/branch/confidence-tokens"
-import { ledgerMonthSplit } from "@/lib/branch/computations/revenue-core"
+import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
+import {
+  groupPipelineByConfidence,
+  type MergedPipelineRow,
+  type PipelineConfidenceGroupKey,
+  type PipelineSortValue,
+} from "@/lib/branch/pipeline-confidence-groups"
 import { teamColorOf } from "@/lib/branch/team-colors"
 import MoneyValue from "../MoneyValue"
 
 type Row = BranchPipelineRow
+type MergedRow = MergedPipelineRow<Row>
 
-interface MergedRow extends Row {
-  count: number  // number of deals merged under this customer
-}
-
-// 확도 기반 칸반 컬럼 — 이전에는 딜 id 해시로 발견/적격/제안/협의 4단계를 무작위
-// 배정했다(실데이터와 무관한 가짜 단계). 파이프라인 행이 실제로 갖고 있는 필드는
-// 월별 확도 3분해(monthlyPayments/monthlyConfirmed/monthlyHighConfidence/monthlyRed —
-// DealModal의 월별 매출 로그가 쓰는 그 필드들)뿐이라, 그걸 rev-confirmed 캐논
-// (revenue-core.ledgerMonthSplit)에 그대로 넣어 딜 전체를 확정/고확도/예정 중 하나로
-// 분류한다. 색 데이터가 전혀 없는 딜(월별 데이터 자체가 없거나 3분해가 모두 0)은
+// 확도 기반 칸반 컬럼 — 분류·고객 합치기·정렬은 lib/branch/pipeline-confidence-groups.ts가 정본이다
+// (파이프라인 탭 위쪽 '이번에 닫을 것 / 확도를 올릴 것' 목록과 같은 함수). 색 데이터가 없는 딜은
 // "미분류"로 정직하게 남긴다 — 존재하지 않는 확률·단계를 발명하지 않는다.
-type ConfidenceColumnKey = ConfidenceKey | "unclassified"
+type ConfidenceColumnKey = PipelineConfidenceGroupKey
+
+/** 열마다 처음에 보여 줄 카드 수. 나머지는 '더 보기'로 펼친다(열 안 스크롤 없음). */
+const COLUMN_PAGE_SIZE = 6
 
 const CONFIDENCE_COLUMNS: ReadonlyArray<{
   key: ConfidenceColumnKey
@@ -65,31 +66,11 @@ const CONFIDENCE_COLUMNS: ReadonlyArray<{
   },
 ]
 
-/** 딜 하나의 월별 납부액을 rev-confirmed 캐논으로 확정/고확도/예정 3분해한 뒤,
- *  가장 큰 값의 버킷으로 분류한다. 계산 로직(캐논)은 건드리지 않고 소비만 한다. */
-function rowConfidenceBucket(row: Row): ConfidenceColumnKey {
-  const entries = Object.entries(row.monthlyPayments ?? {})
-  if (entries.length === 0) return "unclassified"
-  let confirmed = 0
-  let highConfidence = 0
-  let expected = 0
-  for (const [ym, raw] of entries) {
-    const total = Number(raw)
-    if (total === 0) continue
-    const split = ledgerMonthSplit(row, ym, total)
-    confirmed += split.confirmed
-    highConfidence += split.highConfidence
-    expected += split.expected
-  }
-  if (confirmed === 0 && highConfidence === 0 && expected === 0) return "unclassified"
-  if (confirmed >= highConfidence && confirmed >= expected) return "confirmed"
-  if (highConfidence >= expected) return "high-confidence"
-  return "expected"
-}
-
-function PipelineCard({ deal, onClick, ledgerHref }: {
+function PipelineCard({ deal, onClick, ledgerHref, amountColor }: {
   deal: MergedRow
   onClick?: () => void
+  /** 금액 글자색 — 그 카드가 놓인 확도 열의 색(확도 토큰). 미분류는 웜 그레이. */
+  amountColor: string
   /** 품질 웨이브 4 — 항목 2. PipelineTable 행의 "장부에서 열기" 딥링크와 동일 컨텍스트
    *  보존 규약(lens=rev&team=&period=&month=&mgr=)으로 이 카드의 고객만 필터해 연다. */
   ledgerHref?: (extra?: Record<string, string>) => string
@@ -143,25 +124,31 @@ function PipelineCard({ deal, onClick, ledgerHref }: {
         </p>
       )}
       <div className="mt-2.5 flex items-center justify-between border-t border-[rgba(0,0,0,0.05)] pt-2">
-        <span className="cursor-help text-[13px] font-bold tracking-[-0.01em] text-[#B43E3E]"
+        {/* 원천 행 id(UUID)는 사람이 읽는 값이 아니라 카드에 싣지 않는다 — 상세는 카드를 눌러 연다. */}
+        <span className="cursor-help text-[13px] font-bold tracking-[-0.01em]" style={{ color: amountColor }}
           title={`¥${cnyExact(deal.revenue)} · 시트 원값 · 반올림 없음`}>
           ¥{cny(deal.revenue)}
         </span>
-        {deal.count === 1 && (
-          <span className="text-[9.5px] font-medium text-[#9B9690]">{deal.id}</span>
-        )}
       </div>
     </div>
   )
 }
 
-function PipelineColumn({ column, deals, onCardClick, ledgerHref }: {
+function PipelineColumn({ column, deals, onCardClick, ledgerHref, skipLeading = 0 }: {
   column: typeof CONFIDENCE_COLUMNS[number]
   deals: MergedRow[]
   onCardClick?: (d: MergedRow) => void
   ledgerHref?: (extra?: Record<string, string>) => string
+  /** 위쪽 할 일 목록이 이미 보여 준 상위 카드 수 — 같은 딜을 두 번 싣지 않으려고 건너뛴다.
+   *  열 합계·건수는 건너뛴 카드까지 포함한 전체 값이다. */
+  skipLeading?: number
 }) {
+  const [expanded, setExpanded] = useState(false)
   const total = deals.reduce((s, d) => s + d.revenue, 0)
+  const rest = deals.slice(skipLeading)
+  const visible = expanded ? rest : rest.slice(0, COLUMN_PAGE_SIZE)
+  const hidden = rest.length - visible.length
+  const amountColor = column.key === "unclassified" ? "#615D59" : CONFIDENCE_TOKENS[column.key].strongColor
 
   return (
     <div className="flex min-w-0 flex-col rounded-xl border border-[rgba(0,0,0,0.08)]"
@@ -180,16 +167,30 @@ function PipelineColumn({ column, deals, onCardClick, ledgerHref }: {
           <MoneyValue value={total} />
         </p>
         <p className="mt-1 text-[10.5px] leading-relaxed text-[#615D59]">{column.description}</p>
+        {skipLeading > 0 && deals.length > 0 ? (
+          <p className="mt-1 text-[10.5px] font-semibold text-[#615D59]">상위 {Math.min(skipLeading, deals.length)}곳은 위 목록에 있음</p>
+        ) : null}
       </div>
-      {/* Card list — 정렬은 사용자가 고른 sortValue 기준(grouped 단계에서 정렬 완료, 기본 매출 desc) */}
-      <div className="flex flex-col gap-2 overflow-y-auto px-3 pb-4" style={{ maxHeight: 520 }}>
+      {/* Card list — 정렬은 사용자가 고른 sortValue 기준(grouped 단계에서 정렬 완료, 기본 매출 desc).
+          열 안 스크롤 대신 처음 COLUMN_PAGE_SIZE장만 보이고 '더 보기'로 펼친다. */}
+      <div className="flex flex-col gap-2 px-3 pb-4">
         {deals.length === 0 ? (
           <div className="flex items-center justify-center py-8">
-            <p className="text-[11px] text-[#9B9690]">딜 없음</p>
+            <p className="text-[11px] text-[#615D59]">딜 없음</p>
           </div>
-        ) : deals.map((d) => (
-          <PipelineCard key={d.id} deal={d} onClick={() => onCardClick?.(d)} ledgerHref={ledgerHref} />
+        ) : visible.map((d) => (
+          <PipelineCard key={d.id} deal={d} amountColor={amountColor} onClick={() => onCardClick?.(d)} ledgerHref={ledgerHref} />
         ))}
+        {hidden > 0 || expanded ? (
+          <button
+            type="button"
+            onClick={() => setExpanded((open) => !open)}
+            aria-expanded={expanded}
+            className="inline-flex min-h-11 items-center justify-center rounded-md px-2 text-[11.5px] font-semibold text-[#084734] hover:underline md:min-h-8"
+          >
+            {expanded ? "접기" : `${hidden}곳 더 보기`}
+          </button>
+        ) : null}
       </div>
     </div>
   )
@@ -198,7 +199,7 @@ function PipelineColumn({ column, deals, onCardClick, ledgerHref }: {
 // 매출/고객명 정렬 옵션 — PipelineTable의 컬럼 헤더 클릭 정렬(항목 SortableTh)과
 // 동등한 두 축(revenue/customer)을 칸반 컬럼 내 카드 순서에도 제공한다(품질 웨이브
 // 4 — 항목 2). 컬럼이 카드 목록이라 헤더 클릭 대신 단일 셀렉트로 축약.
-const SORT_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
+const SORT_OPTIONS: ReadonlyArray<{ value: PipelineSortValue; label: string }> = [
   { value: "revenue-desc", label: "매출 높은순" },
   { value: "revenue-asc", label: "매출 낮은순" },
   { value: "customer-asc", label: "고객명 가나다순" },
@@ -206,7 +207,7 @@ const SORT_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
 ]
 
 export default function BranchPipelineKanban({
-  scopeManager, team, period, selectedMonth, refreshKey, onDealClick, initialQuery, initialManager, onFilterChange,
+  scopeManager, team, period, selectedMonth, refreshKey, onDealClick, initialQuery, initialManager, onFilterChange, coveredLeading,
 }: {
   scopeManager?: string
   team: Team
@@ -219,11 +220,14 @@ export default function BranchPipelineKanban({
   initialQuery?: string
   initialManager?: string
   onFilterChange?: (next: { query: string; manager: string }) => void
+  /** 위쪽 할 일 목록(PipelineActionBoard)이 열마다 이미 보여 준 상위 카드 수. 기본 정렬(매출 높은순)·
+   *  검색어 없음·담당 1명 이하일 때만 건너뛴다 — 그 밖에는 목록과 순서가 달라 건너뛰면 빠지는 딜이 생긴다. */
+  coveredLeading?: Partial<Record<ConfidenceColumnKey, number>>
 }) {
   // 담당 필터 — PipelineTable과 동일 멀티선택(품질 웨이브 4 — 항목 2, 이전엔 단일 select).
   const [selectedManagers, setSelectedManagers] = useState<Set<string>>(() => initialManager ? new Set([initialManager]) : new Set())
   const [query, setQuery] = useState(initialQuery ?? "")
-  const [sortValue, setSortValue] = useState<string>("revenue-desc")
+  const [sortValue, setSortValue] = useState<PipelineSortValue>("revenue-desc")
 
   // PipelineTable.tsx와 동일 패턴 — 검색어/담당 변경을 부모에 통지해 URL(q/mgr) 동기화.
   useEffect(() => {
@@ -280,38 +284,11 @@ export default function BranchPipelineKanban({
       .filter((r) => matchesTokens(tokens, [r.customer, r.manager, r.team, r.region]))
   }, [rows, selectedManagers, query])
 
-  const grouped = useMemo(() => {
-    const byColumn: Record<ConfidenceColumnKey, Row[]> = {
-      confirmed: [], "high-confidence": [], expected: [], unclassified: [],
-    }
-    if (filteredRows) for (const r of filteredRows) {
-      byColumn[rowConfidenceBucket(r)].push(r)
-    }
-    const [sortField, sortDir] = sortValue.split("-") as ["revenue" | "customer", "asc" | "desc"]
-    const out = {} as Record<ConfidenceColumnKey, MergedRow[]>
-    for (const [columnKey, columnRows] of Object.entries(byColumn) as [ConfidenceColumnKey, Row[]][]) {
-      const mergeMap = new Map<string, MergedRow>()
-      for (const r of columnRows) {
-        const key = r.customer.trim().toLowerCase()
-        const existing = mergeMap.get(key)
-        if (existing) {
-          existing.revenue += r.revenue
-          existing.count += 1
-        } else {
-          mergeMap.set(key, { ...r, count: 1 })
-        }
-      }
-      // 정렬 셀렉트(sortValue) 기준 — 기본값(매출 높은순)은 이전 하드코딩 동작과 동일,
-      // 사용자가 고객명 asc/desc로 바꾸면 그 축으로 정렬한다. 동률은 항상 고객명으로 타이브레이크.
-      out[columnKey] = Array.from(mergeMap.values()).sort((a, b) => {
-        const primary = sortField === "revenue"
-          ? (sortDir === "desc" ? b.revenue - a.revenue : a.revenue - b.revenue)
-          : (sortDir === "desc" ? b.customer.localeCompare(a.customer, "ko") : a.customer.localeCompare(b.customer, "ko"))
-        return primary !== 0 ? primary : a.customer.localeCompare(b.customer, "ko")
-      })
-    }
-    return out
-  }, [filteredRows, sortValue])
+  const grouped = useMemo(
+    () => groupPipelineByConfidence(filteredRows ?? [], sortValue),
+    [filteredRows, sortValue],
+  )
+  const skipCovered = sortValue === "revenue-desc" && query.trim() === "" && selectedManagers.size <= 1
 
   if (!rows) return <div className="h-72 animate-pulse rounded-xl bg-[#f0f0ec]" />
   // 에러를 빈 상태("딜 없음" 4컬럼)로 위장하지 않는다 — pipeline.error가 있으면
@@ -386,7 +363,7 @@ export default function BranchPipelineKanban({
           <select
             id="kanban-sort"
             value={sortValue}
-            onChange={(e) => setSortValue(e.target.value)}
+            onChange={(e) => setSortValue(e.target.value as PipelineSortValue)}
             className="h-7 rounded-full border border-[rgba(0,0,0,0.08)] bg-white px-2.5 text-[11px] font-medium text-[#111110] outline-none transition hover:border-[#111110]/25 focus:border-[#111110]/30"
           >
             {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
@@ -402,10 +379,11 @@ export default function BranchPipelineKanban({
           />
         </div>
       </div>
-      {/* Kanban grid — 1-col on mobile, 2-col on md, 4-col on xl */}
-      <div className="grid grid-cols-1 gap-4 p-5 md:grid-cols-2 xl:grid-cols-4">
+      {/* Kanban grid — 1-col on mobile, 2-col on md, xl는 확정·고확도·예정 3열 + 좁은 미분류 열 */}
+      <div className="grid grid-cols-1 items-start gap-4 p-5 md:grid-cols-2 xl:grid-cols-[repeat(3,minmax(0,1fr))_minmax(200px,0.6fr)]">
         {CONFIDENCE_COLUMNS.map((c) => (
           <PipelineColumn key={c.key} column={c} deals={grouped[c.key]} ledgerHref={ledgerHref}
+            skipLeading={skipCovered ? coveredLeading?.[c.key] ?? 0 : 0}
             onCardClick={(d) => onDealClick?.({ ...d, stageLabel: c.label, stageColor: c.color })} />
         ))}
       </div>

@@ -5,9 +5,14 @@
 // 상태 배지 SSOT 소비 헬퍼(draftStatusMeta·draftMatchesFilter/Query·DRAFT_STATUS_FILTERS).
 // 회귀 테스트(tests/branch/draft-status-labels-ssot·ledger-record-error-isolation·
 // ledger-entry-reverse-action)가 이 파일을 소스 스캔한다.
+//
+// 체크 큐 컴팩트(P0-5 · C-4, docs/active/ledger-filter-plan-2026-11-24.md): 초안 한 건이 카드 한 장(약 140px)에
+// 배지 4~5개 · 버튼 6개라 900px 패널에 3건 남짓만 보였다. 표시만 바꿨다 — 한 건 = 한 줄(약 40px, 카드 상자
+// 없음), 금액 밑에 다음 단계 버튼 하나(체크 또는 적용), 나머지 동작은 줄을 펼치면 나오는 글자 링크로 옮겼다.
+// 동작 · 활성 조건 · 확인 다이얼로그 · 상태 계산은 그대로다.
 
-import { useMemo, useRef, useState } from "react"
-import { CheckCircle2, Loader2, Pencil, RefreshCw, RotateCcw, Search, Send, Trash2, XCircle } from "lucide-react"
+import { useEffect, useId, useMemo, useRef, useState } from "react"
+import { AlertTriangle, Loader2, RefreshCw, RotateCcw, Search, Send, Trash2, XCircle } from "lucide-react"
 
 import { matchesTokens, tokenize } from "../search-tokens"
 import { useDialogFocus } from "../../use-dialog-focus"
@@ -22,36 +27,35 @@ import {
   summarizeApplyOutcomes,
   type ApplySheetOutcome,
   type SheetWriteBadgeTone,
+  type SheetWriteMode,
   type SheetWriteView,
 } from "./sheet-write-view"
 import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
 import {
   DRAFT_STATUS_LABELS,
+  draftConfidenceFromMetadata,
   draftStatusLabel,
+  dominantWeeklyConfidence,
   formatMoney,
   formatMonthLabel,
   mergedWeeklyFromMetadata,
   metadataString,
   weeklyConfidenceFromMetadata,
+  type DraftConfidence,
   type DraftQueueMode,
   type DraftStatus,
   type LedgerDraft,
 } from "./shared"
 
-type DraftStatusFilter = DraftStatus | "open" | "all"
+// 결정 D5(2026-11-24, P0-5): 상태 탭 6개 → 3개. 검토중 · 체크완료는 "대기" 안에서 줄 왼쪽 점 색으로 가르고,
+// 취소된 초안은 "전체" 안에서만 보인다(전용 탭 없음). 기한 지남 탭은 C-10이 들어올 때 붙인다.
+// 라벨은 품질 웨이브 7 — 항목 4 그대로 DRAFT_STATUS_LABELS(ledger/shared.tsx) SSOT를 쓴다. "대기"(open — draft+checked
+// 묶음 필터)와 "전체"(all)는 단일 상태가 아니라 SSOT 밖에 둔다.
+type DraftStatusFilter = "open" | "applied" | "all"
 
-// 품질 웨이브 7 — 항목 4: draft/checked/applied 라벨은 DRAFT_STATUS_LABELS(ledger/shared.tsx)
-// SSOT를 그대로 쓴다 — 예전엔 이 탭이 "검토"/"체크"/"적용"으로, 배지(draftStatusMeta)는
-// "검토 필요"/"체크 완료"/"적용됨"으로 서로 다르게 불렀다. "대기"(open — draft+checked 묶음
-// 필터)와 "전체"(all)는 단일 상태가 아니라 그대로 유지.
 export const DRAFT_STATUS_FILTERS: Array<{ id: DraftStatusFilter; label: string }> = [
   { id: "open", label: "대기" },
-  { id: "draft", label: DRAFT_STATUS_LABELS.draft },
-  { id: "checked", label: DRAFT_STATUS_LABELS.checked },
   { id: "applied", label: DRAFT_STATUS_LABELS.applied },
-  // 품질 감사 2026-09-10 — #8: 취소 액션(아래 onCancel)이 새로 생기면서 cancelled 상태에
-  // 실제로 도달하는 초안이 생긴다 — "전체" 필터에만 숨어 있지 않게 전용 칩을 둔다.
-  { id: "cancelled", label: DRAFT_STATUS_LABELS.cancelled },
   { id: "all", label: "전체" },
 ]
 
@@ -79,12 +83,14 @@ export function draftStatusMeta(status: DraftStatus, reversed = false) {
   return { label: draftStatusLabel(status), className: "border-[#ECD29C] bg-[#FBF1E0] text-[#7A520F]" }
 }
 
-// REV 시트 쓰기(ADR-011) 배지 톤 — DESIGN.md 운영 상태 스케일(Success·Warning·Danger)과 중립.
+// REV 시트 쓰기(ADR-011) 상태 글자 — DESIGN.md 운영 상태 스케일(Success·Warning·Danger)과 중립.
+// 컴팩트 줄(P0-5)에서는 정상(시트 반영 · 장부에만)은 둘째 줄 글자로만 두고, 막힘 · 확인 중만 테두리 없는
+// 작은 틴트 배지로 띄운다 — 무엇이 문제인지가 한눈에 보이게.
 const SHEET_WRITE_BADGE_CLASS: Record<SheetWriteBadgeTone, string> = {
-  success: "border-[#BDEFD8] bg-[#ECFDF5] text-[#084734]",
-  warning: "border-[#ECD29C] bg-[#FBF1E0] text-[#7A520F]",
-  danger: "border-[#F2B8B8] bg-[#FCE9E9] text-[#8F2C2C]",
-  neutral: "border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] text-[#615D59]",
+  success: "text-[#084734]",
+  warning: "rounded-sm bg-[#FBF1E0] px-1 font-semibold text-[#7A520F]",
+  danger: "rounded-sm bg-[#FCE9E9] px-1 font-semibold text-[#8F2C2C]",
+  neutral: "text-[#615D59]",
 }
 
 function draftMatchesFilter(draft: LedgerDraft, filter: DraftStatusFilter) {
@@ -92,6 +98,63 @@ function draftMatchesFilter(draft: LedgerDraft, filter: DraftStatusFilter) {
   if (filter === "open") return draft.status === "draft" || draft.status === "checked"
   return draft.status === filter
 }
+
+// 펼친 줄의 시트 쓰기 사유 — 막힘(danger) · 확인 중(warning)만 그린다. 글자색 · 아이콘색만 톤을 따른다(상자 없음).
+type SheetAlertTone = Extract<SheetWriteBadgeTone, "warning" | "danger">
+const SHEET_WRITE_REASON_CLASS: Record<SheetAlertTone, string> = {
+  warning: "text-[#7A520F]",
+  danger: "text-[#8F2C2C]",
+}
+const SHEET_WRITE_ICON_CLASS: Record<SheetAlertTone, string> = {
+  warning: "text-[#A8741A]",
+  danger: "text-[#B43E3E]",
+}
+
+// 상태 점(P0-5) — 상태 배지 대신 줄 왼쪽 점 하나로 가른다(D5). 검토중은 Warning 앰버, 체크완료는 Classin Green,
+// 적용 · 취소는 흐린 장식색. 로컬 임시(local-*) 초안은 아직 서버 큐에 오르지 않은 초안이라 속 빈 회색 고리로 둔다.
+// 점은 장식이다 — 상태 글자는 줄 버튼의 sr-only 문구 · 금액 밑 상태 글자 · 펼친 줄 상세가 전한다.
+function draftStatusDotClass(draft: LedgerDraft, reversed: boolean): string {
+  if (draft.status === "checked") return "bg-[#084734]"
+  if (draft.status === "applied") return reversed ? "border-[1.5px] border-[#A39E98] bg-white" : "bg-[#A39E98]"
+  if (draft.status === "cancelled") return "border-[1.5px] border-[#A39E98] bg-white"
+  if (draft.id.startsWith("local-")) return "border-[1.5px] border-[#8A857F] bg-white"
+  return "bg-[#A8741A]"
+}
+
+// 금액 글자색 = 초안 확도(CONFIDENCE_TOKENS). 주차별 확도가 있으면 금액이 가장 큰 확도(dominantWeeklyConfidence —
+// 동률은 낮은 확도), 없으면 초안 단위 확도(metadata.confidence, 없으면 예정) — 매트릭스 pending과 같은 판독이다.
+function draftAmountConfidence(metadata: Record<string, unknown> | null | undefined): DraftConfidence {
+  const weekly = mergedWeeklyFromMetadata(metadata)
+  const states = weekly ? weeklyConfidenceFromMetadata(metadata) : null
+  return weekly && states ? dominantWeeklyConfidence(weekly, states) : draftConfidenceFromMetadata(metadata)
+}
+
+// 금액 밑 다음 단계 버튼 하나(P0-5) — 검토중이면 체크, 체크완료면 적용, 그 밖(적용 · 취소)은 버튼 없음.
+// 어느 버튼을 그릴지만 정한다 — 활성 조건(disabled)은 각 버튼에 예전 체크/적용 버튼 식 그대로 둔다.
+function nextStepForStatus(status: DraftStatus): "check" | "apply" | null {
+  if (status === "draft") return "check"
+  if (status === "checked") return "apply"
+  return null
+}
+
+// 펼친 줄에 보일 글자 링크(P0-5) — 상태상 애초에 못 쓰는 동작은 숨긴다. 활성 조건(disabled)은 링크마다 예전
+// 네모 버튼 식 그대로라, 시트 쓰기 가드 · 서버 큐 아님 · 진행 중처럼 그때그때 막히는 경우는 흐린 링크 + title로 보인다.
+function rowLinksForStatus(status: DraftStatus) {
+  return {
+    edit: status === "draft",
+    uncheck: status === "checked",
+    reverse: status === "applied",
+    cancel: status === "draft" || status === "checked",
+    remove: status === "draft",
+  }
+}
+
+// 키보드 포커스 링 — 어드민 공통(#084734 · 2px · offset 2px). 줄 버튼 · 알약 · 글자 링크가 같은 링을 쓴다.
+const FOCUS_RING = "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734]"
+// 펼친 줄의 글자 링크(P0-5) — 네모 아이콘 버튼 대신 상자 없는 밑줄 글자. 꺼진 링크는 밑줄을 빼고 흐리게 두되
+// title로 이유를 보인다(시트 쓰기 가드 · 서버 큐 아님 등).
+const ROW_LINK_CLASS = `inline-flex items-center gap-1 rounded-sm text-[11.5px] font-semibold text-[#31302E] underline decoration-[rgba(0,0,0,0.28)] underline-offset-2 transition hover:text-[#111110] hover:decoration-current disabled:cursor-not-allowed disabled:no-underline disabled:opacity-45 ${FOCUS_RING}`
+const ROW_LINK_DANGER_CLASS = `inline-flex items-center gap-1 rounded-sm text-[11.5px] font-semibold text-[#B43E3E] underline decoration-[#B43E3E]/40 underline-offset-2 transition hover:text-[#8F2C2C] hover:decoration-current disabled:cursor-not-allowed disabled:no-underline disabled:opacity-45 ${FOCUS_RING}`
 
 // 라운드 3(P1) — 주차 병합 초안의 주차별 확도 도트: metadata.weekly + weeklyConfidence가 둘 다
 // 유효할 때만 금액>0 주차를 W라벨+3px 원(CONFIDENCE_TOKENS color)으로 한 줄 표기한다.
@@ -142,6 +205,7 @@ export function DraftQueue({
   reversedDraftIds,
   recordErrors,
   sheetWrites,
+  sheetWriteMode = "off",
   onReload,
   onEdit,
   onToggle,
@@ -165,6 +229,12 @@ export function DraftQueue({
   // REV 시트 쓰기(ADR-011) — draft id → 가장 최근 시트 쓰기 시도(GET sheetWrites). 행 배지(시트 반영됨·충돌·
   // 확인 중·실패·장부에만)와 실패 사유 한 줄(messages.ts 문구)에 쓴다. 없으면 배지 없음.
   sheetWrites?: Record<string, SheetWriteView>
+  // REV 시트 쓰기 스위치(ADR-011) — 켜짐이면 일괄 적용이 시트(2. REV)에도 쓴다. 일괄 띠 버튼 · 확인 문구는 표 아래
+  // 변경 대기 줄(ApprovalBar)과 같은 말("N건 시트·장부에 반영")을 쓴다 — 둘은 같은 일괄 함수(applyDrafts)이고 큐를 열면
+  // 함께 보인다. 곳("장부에" · "시트·장부에")이든 동사("적용" · "반영")든 한쪽만 다르면 다른 동작으로 읽힌다(최종 검증
+  // 라운드 2: "4건 시트·장부에 적용" 바로 아래 "4건 시트·장부에 반영"). 줄 알약 "적용" · 상태 "적용완료"는 초안 한 건의
+  // 단계 이름(SSOT)이라 그대로 둔다 — "적용하면 장부에 반영된다"(자가 체크 저장 안내)와 같은 짝이다. 없으면 꺼짐(장부에만).
+  sheetWriteMode?: SheetWriteMode
   onReload: () => void
   onEdit: (draft: LedgerDraft) => void
   onToggle: (id: string) => void | Promise<void>
@@ -183,11 +253,51 @@ export function DraftQueue({
   onBulkApply?: (ids: string[]) => Promise<{ done: number; failed: number; sheetResults?: ApplySheetOutcome[] }>
 }) {
   const modeLabel = mode === "server" ? "서버 큐" : "로컬 fallback"
+  const baseId = useId()
+  const searchInputId = `${baseId}-search`
   const [query, setQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState<DraftStatusFilter>("open")
+  // 검색칸은 머리 줄 아이콘을 눌러야 펼친다(P0-5). 닫으면 검색어도 지운다 — 걸린 조건이 안 보이는 채로 남지 않게.
+  const [searchOpen, setSearchOpen] = useState(false)
+  const searchInputRef = useRef<HTMLInputElement | null>(null)
+  const searchButtonRef = useRef<HTMLButtonElement | null>(null)
+  useEffect(() => {
+    if (searchOpen) searchInputRef.current?.focus()
+  }, [searchOpen])
+  const toggleSearch = () => {
+    if (searchOpen) {
+      setQuery("")
+      setSearchOpen(false)
+      return
+    }
+    setSearchOpen(true)
+  }
+  // 빈 큐(불러오는 중 포함)에는 검색칸이 없다 — 머리 줄의 검색 아이콘도 숨긴다(누르면 아무것도 안 열리고 aria-controls 가
+  // 없는 칸을 가리킨다). 열어 둔 채 목록이 비면 접고 검색어도 지운다 — 초안이 다시 들어올 때 포커스 없이 펼쳐진 칸과
+  // 안 보이던 검색어가 목록을 거르지 않게. effect 가 아니라 렌더 중에 맞춘다(set-state-in-effect 회피 — 조건이 풀리면 멈춘다).
+  const searchable = drafts.length > 0
+  if (!searchable && (searchOpen || query)) {
+    setSearchOpen(false)
+    setQuery("")
+  }
+  // 줄 펼침(P0-5) — 한 번에 한 줄만 펼친다(경고 전문 · 메모 · 주차 확도 · 글자 링크).
+  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const queryMatchedDrafts = useMemo(() => drafts.filter((draft) => draftMatchesQuery(draft, query)), [drafts, query])
   const visibleDrafts = useMemo(() => {
-    return drafts.filter((draft) => draftMatchesFilter(draft, statusFilter)).filter((draft) => draftMatchesQuery(draft, query))
-  }, [drafts, query, statusFilter])
+    return queryMatchedDrafts.filter((draft) => draftMatchesFilter(draft, statusFilter))
+  }, [queryMatchedDrafts, statusFilter])
+  // 탭 알약의 건수 — 검색어가 걸려 있으면 검색 결과 안에서 센다(누르면 보일 건수와 같게).
+  const filterCounts = useMemo(() => {
+    const counts: Record<DraftStatusFilter, number> = { open: 0, applied: 0, all: 0 }
+    for (const draft of queryMatchedDrafts) {
+      for (const item of DRAFT_STATUS_FILTERS) {
+        if (draftMatchesFilter(draft, item.id)) counts[item.id] += 1
+      }
+    }
+    return counts
+  }, [queryMatchedDrafts])
+  // 머리 줄 "체크 큐 N"은 검색과 무관한 대기(draft+checked) 건수 — 빠른 작업 탭 배지와 같은 값.
+  const openCount = useMemo(() => drafts.filter((draft) => draftMatchesFilter(draft, "open")).length, [drafts])
   const bulkCheckPlan = useMemo(() => planBulkCheck(visibleDrafts), [visibleDrafts])
   const bulkApplyPlan = useMemo(() => planBulkApply(visibleDrafts), [visibleDrafts])
   // 일괄 적용은 DB 장부에 기록하는 동작이라 한 번 더 확인한다(단건 적용 다이얼로그와 같은 원칙, 인라인).
@@ -211,7 +321,7 @@ export function DraftQueue({
       const result = await onBulkApply(bulkApplyPlan.ids)
       // 시트 쓰기 결과가 있으면 코드별 건수로(ApprovalBar 결과 줄과 같은 문구), 꺼짐이면 지금 문구.
       const sheet = summarizeApplyOutcomes(result.sheetResults ?? [])
-      setBulkResult(sheet ? sheet.text : `적용 ${result.done}건${result.failed ? ` · 실패 ${result.failed}건` : ""}`)
+      setBulkResult(sheet ? sheet.text : `반영 ${result.done}건${result.failed ? ` · 실패 ${result.failed}건` : ""}`)
     } finally {
       setBulkBusy(null)
       setBulkApplyConfirm(false)
@@ -349,365 +459,496 @@ export function DraftQueue({
     confirmCancelCancelRef
   )
 
+  // 머리 한 줄(P0-5): "체크 큐 N" · 검색 아이콘(누르면 검색칸 펼침) · 새로고침 아이콘. 서버 큐가 정상일 때는
+  // 모드 배지를 숨기고, 로컬 fallback일 때만 아래 경고 띠로 알린다.
+  const header = (
+    <div className="flex items-center gap-0.5 px-3 pb-1 pt-2">
+      <p className="text-[12.5px] font-bold text-[#111110]">
+        체크 큐{" "}
+        <span className="tabular-nums text-[#084734]">
+          <span className="sr-only">대기 </span>
+          {openCount}
+          <span className="sr-only">건</span>
+        </span>
+      </p>
+      <span className="flex-1" />
+      {searchable ? (
+        <button
+          ref={searchButtonRef}
+          type="button"
+          onClick={toggleSearch}
+          aria-expanded={searchOpen}
+          aria-controls={searchInputId}
+          aria-label={searchOpen ? "체크 큐 검색 닫기" : "체크 큐 검색"}
+          title={searchOpen ? "검색 닫기" : "검색"}
+          className={`flex h-7 w-7 items-center justify-center rounded-md transition hover:bg-[#F6F5F4] hover:text-[#111110] ${
+            searchOpen ? "bg-[#F6F5F4] text-[#111110]" : "text-[#615D59]"
+          } ${FOCUS_RING}`}
+        >
+          <Search aria-hidden className="h-3.5 w-3.5" />
+        </button>
+      ) : null}
+      <button
+        type="button"
+        onClick={onReload}
+        aria-label="체크 큐 새로고침"
+        title="새로고침"
+        className={`flex h-7 w-7 items-center justify-center rounded-md text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110] ${FOCUS_RING}`}
+      >
+        <RefreshCw aria-hidden className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+      </button>
+    </div>
+  )
+
+  // 경고 띠 — 로컬 fallback 안내(지금 문구 그대로: 로컬 임시 초안은 장부에 적용할 수 없다)와 큐 오류 문구를 한 띠에 모은다.
+  const notice =
+    mode !== "server" || error ? (
+      <div className="mx-3 mb-1.5 flex items-start gap-1.5 rounded-md bg-[#FBF1E0] px-2 py-1.5 text-[11px] leading-relaxed text-[#7A520F]">
+        <AlertTriangle aria-hidden className="mt-[3px] h-3 w-3 shrink-0 text-[#A8741A]" />
+        <div className="min-w-0 space-y-0.5">
+          {mode !== "server" && (
+            <p className="font-bold">
+              {modeLabel} — 로컬 임시 초안은 DB 장부에 적용할 수 없습니다. 서버 큐가 복구된 뒤 적용하세요.
+            </p>
+          )}
+          {error && <p className="font-semibold">{error}</p>}
+        </div>
+      </div>
+    ) : null
+
   if (loading && drafts.length === 0) {
     return (
-      <div className="flex min-h-[120px] items-center justify-center rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] text-[12px] font-semibold text-[#615D59]">
-        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-        입력 큐를 불러오는 중
+      <div>
+        {header}
+        <div className="flex min-h-[96px] items-center justify-center text-[12px] font-semibold text-[#615D59]">
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          입력 큐를 불러오는 중
+        </div>
       </div>
     )
   }
 
   if (drafts.length === 0) {
     return (
-      <div className="space-y-2">
-        <div className="flex items-center justify-between gap-2">
-          <span className="rounded-full border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-2 py-0.5 text-[10px] font-bold text-[#615D59]">
-            {modeLabel}
-          </span>
-          <button
-            type="button"
-            onClick={onReload}
-            className="inline-flex h-7 items-center gap-1 rounded-md border border-[rgba(0,0,0,0.08)] px-2 text-[10px] font-bold text-[#615D59] transition hover:bg-[#F6F5F4]"
-          >
-            <RefreshCw className="h-3 w-3" />
-            새로고침
-          </button>
-        </div>
-        {error && (
-          <div className="rounded-lg border border-[#ECD29C] bg-[#FBF1E0] p-3 text-[11px] leading-relaxed text-[#7A520F]">
-            {error}
-          </div>
-        )}
-        <div className="rounded-lg border border-dashed border-[rgba(0,0,0,0.12)] bg-[#FAFAF8] p-4 text-[12px] leading-relaxed text-[#615D59]">
-          아직 저장된 입력/수정 초안이 없습니다. REV 행을 선택하거나 아래 입력 폼으로 새 장부 초안을 만들 수 있습니다.
-        </div>
+      <div>
+        {header}
+        {notice}
+        <p className="px-3 pb-4 pt-1 text-[12px] leading-relaxed text-[#615D59]">
+          아직 초안이 없습니다. 장부에서 칸을 고치거나 입력 탭에서 새 초안을 만들면 여기에 쌓입니다.
+        </p>
       </div>
     )
   }
 
+  // 스크롤은 목록(ul) 혼자 한다 — 머리 줄 · 경고 띠 · 검색칸 · 상태 탭은 위에, 일괄 띠는 아래에 늘 보인다.
+  // 예전에는 레일(aside) 전체가 스크롤해 긴 목록에서 머리 · 탭이 위로 사라지고, sticky 일괄 띠는 레일 안쪽 여백만큼
+  // 떠서 그 틈으로 지나가는 줄이 비쳤다. 부모(빠른 작업 레일의 큐 패널)가 높이를 주는 flex 열이라 min-h-0 으로 줄어든다.
   return (
     <>
-    <div className="space-y-2">
-      <div className="flex items-center justify-between gap-2">
-        <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold ${
-          mode === "server" ? "border-[#084734]/15 bg-gradient-to-b from-[#F2FAF6] to-[#E6F5ED] text-[#084734] shadow-xs" : "border-[#ECD29C] bg-[#FBF1E0] text-[#7A520F]"
-        }`}>
-          <span className={`mr-1.5 h-1.5 w-1.5 rounded-full ${mode === "server" ? "bg-[#084734]" : "bg-[#D97706]"}`} />
-          {modeLabel}
-        </span>
-        <button
-          type="button"
-          onClick={onReload}
-          className="inline-flex h-6.5 items-center gap-1 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 text-[10px] font-bold text-[#615D59] shadow-2xs transition hover:bg-[#F6F5F4] hover:text-[#111110]"
-        >
-          <RefreshCw className={`h-3 w-3 ${loading ? "animate-spin" : ""}`} />
-          새로고침
-        </button>
+    <div className="flex min-h-0 flex-col">
+      <div className="shrink-0">
+        {header}
+        {notice}
       </div>
-      {error && (
-        <div className="rounded-lg border border-[#ECD29C] bg-[#FBF1E0] p-2.5 text-[11px] leading-relaxed text-[#7A520F]">
-          {error}
-        </div>
-      )}
-      <div className="space-y-1.5 rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-2">
+      <div hidden={!searchOpen} className="shrink-0 px-3 pb-1.5">
         <label className="relative block">
           <span className="sr-only">체크 큐 검색</span>
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#A39E98]" />
+          <Search aria-hidden className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#A39E98]" />
           <input
+            ref={searchInputRef}
+            id={searchInputId}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="고객, 담당자, 메모 검색"
-            className="h-7.5 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white pl-8 pr-2 text-[11px] font-semibold text-[#111110] outline-none placeholder:text-[#A39E98] focus:border-[#084734]"
+            onKeyDown={(event) => {
+              // Esc — 검색어를 지우고 칸을 접은 뒤 검색 아이콘으로 포커스를 돌린다.
+              if (event.key !== "Escape") return
+              event.preventDefault()
+              event.stopPropagation()
+              setQuery("")
+              setSearchOpen(false)
+              searchButtonRef.current?.focus()
+            }}
+            placeholder="고객, 담당자, 메모, 시트 행 검색"
+            className="h-7 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white pl-7 pr-2 text-[11.5px] font-semibold text-[#111110] outline-none placeholder:font-normal placeholder:text-[#78736D] focus:border-[#084734]"
           />
         </label>
-        <div className="flex flex-wrap items-center gap-1">
-          {DRAFT_STATUS_FILTERS.map((item) => (
+      </div>
+      {/* 상태 탭(D5) — 테두리 없는 알약 3개. 건수는 검색 결과 기준. */}
+      <div role="group" aria-label="상태로 거르기" className="flex shrink-0 items-center gap-0.5 px-3 pb-1.5">
+        {DRAFT_STATUS_FILTERS.map((item) => {
+          const active = statusFilter === item.id
+          return (
             <button
               key={item.id}
               type="button"
+              aria-pressed={active}
               onClick={() => setStatusFilter(item.id)}
-              className={`rounded-md px-2 py-0.5 text-[10px] font-bold transition ${
-                statusFilter === item.id
-                  ? "bg-[#111110] text-white shadow-2xs"
-                  : "border border-[rgba(0,0,0,0.08)] bg-white text-[#615D59] hover:bg-[#F6F5F4] hover:text-[#111110]"
+              className={`inline-flex h-6 items-center gap-1 rounded-full px-2.5 text-[11.5px] transition ${FOCUS_RING} ${
+                active ? "bg-[#111110] font-bold text-white" : "font-semibold text-[#615D59] hover:bg-[#F6F5F4] hover:text-[#111110]"
               }`}
             >
               {item.label}
+              <span className="tabular-nums">{filterCounts[item.id]}</span>
             </button>
-          ))}
-          <span className="ml-auto text-[10px] font-semibold text-[#8C8782]">
-            {visibleDrafts.length}/{drafts.length}건
-          </span>
-        </div>
-        {(onBulkCheck || onBulkApply) && (bulkCheckPlan.count > 0 || bulkApplyPlan.count > 0 || bulkResult) && (
-          <div className="flex flex-wrap items-center gap-1.5 border-t border-[rgba(0,0,0,0.08)] pt-1.5">
-            {onBulkCheck && bulkCheckPlan.count > 0 && (
-              <button
-                type="button"
-                onClick={() => void runBulkCheck()}
-                disabled={bulkBusy !== null}
-                className="inline-flex h-7 items-center gap-1 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 text-[10.5px] font-bold text-[#111110] shadow-2xs transition hover:bg-[#F6F5F4] disabled:cursor-not-allowed disabled:opacity-50"
+          )
+        })}
+      </div>
+      {visibleDrafts.length === 0 ? (
+        <p className="shrink-0 border-t border-[#F0F0EC] px-3 py-6 text-center text-[12px] text-[#615D59]">
+          {statusFilter === "open" && !query ? "대기 중인 초안이 없습니다." : "조건에 맞는 초안이 없습니다."}
+        </p>
+      ) : (
+        // relative — 줄 안의 sr-only(절대 위치) 글자가 목록을 기준으로 놓이게 한다. 아니면 가장 가까운 위치 지정 조상인
+        // 레일(sticky)에 붙어, 목록 밖으로 내려간 줄의 sr-only 가 레일을 다시 스크롤 가능하게 만든다(머리 · 탭이 밀려 올라간다).
+        <ul aria-label="체크 큐 초안" className="relative min-h-0 overflow-y-auto overscroll-contain border-t border-[#F0F0EC]">
+          {visibleDrafts.map((draft) => {
+            const reversed = reversedDraftIds.has(draft.id)
+            const statusLabel = draftStatusMeta(draft.status, reversed).label
+            const localOnly = draft.id.startsWith("local-")
+            const customerName = draft.customer || "초안"
+            const expanded = expandedId === draft.id
+            const panelId = `${baseId}-row-${draft.id}`
+            const weekMatch = /^w([1-5])$/.exec(metadataString(draft.metadata, "week") ?? "")
+            const mergedWeekly = mergedWeeklyFromMetadata(draft.metadata)
+            // 주차 셀 초안 고지: 병합(metadata.weekly 보존) vs 레거시 단일값(월 전체 대체) 구분 — 판정은 예전 카드와 같다.
+            // 레거시(월 전체 대체)는 "다른 주차 값 소멸"을 놓치면 안 되는 경고라 줄 배경을 Warning 틴트로 칠한다.
+            const weekCellNotice = draft.kind === "edit-row" && weekMatch !== null && draft.status !== "applied" && draft.status !== "cancelled"
+            const legacyWeekReplace = weekCellNotice && !mergedWeekly
+            const sheetWrite = sheetWrites?.[draft.id]
+            const sheetBadge = sheetWrite ? sheetWriteBadge(sheetWrite) : null
+            const sheetAlertTone: SheetAlertTone | null =
+              sheetBadge && (sheetBadge.tone === "danger" || sheetBadge.tone === "warning") ? sheetBadge.tone : null
+            const confidence = CONFIDENCE_TOKENS[draftAmountConfidence(draft.metadata)]
+            const nextStep = nextStepForStatus(draft.status)
+            const rowLinks = rowLinksForStatus(draft.status)
+            // 둘째 줄 — "11월 W2 · 담당자 · 시트 342행 · 수정". 시트 행 번호는 장부 `#` 열과 같은 번호(sourceSheetRow).
+            const metaText = [
+              // 장부 월 머리("11월")와 같은 꼴. 연도까지 필요한 곳(펼침 경고·확인 창)은 formatMonthLabel 그대로.
+              `${Number(draft.month.split("-")[1]) ? `${Number(draft.month.split("-")[1])}월` : formatMonthLabel(draft.month)}${weekMatch ? ` W${weekMatch[1]}` : ""}`,
+              draft.manager || "-",
+              draft.sourceSheetRow ? `시트 ${draft.sourceSheetRow}행` : "새 행",
+              draft.kind === "edit-row" ? "수정" : "신규",
+            ].join(" · ")
+            const detailText = [
+              localOnly ? `${statusLabel}(로컬 임시)` : statusLabel,
+              `확도 ${confidence.label}`,
+              draft.team,
+            ]
+              .filter(Boolean)
+              .join(" · ")
+            return (
+              <li
+                key={draft.id}
+                className={`border-b border-[#F0F0EC] last:border-b-0 ${
+                  legacyWeekReplace ? "bg-[#FBF1E0]" : expanded ? "bg-[#FAFAF8]" : ""
+                }`}
               >
-                {bulkBusy === "check" ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3 w-3 text-[#084734]" />}
-                보이는 초안 {bulkCheckPlan.count}건 체크
-              </button>
-            )}
-            {onBulkApply && bulkApplyPlan.count > 0 && !bulkApplyConfirm && (
+                <div className="flex items-start gap-2 px-3 py-[3px]">
+                  <span
+                    aria-hidden
+                    title={statusLabel}
+                    className={`mt-[4.5px] h-2 w-2 shrink-0 rounded-full ${draftStatusDotClass(draft, reversed)}`}
+                  />
+                  {/* 줄 본문 = 펼침 버튼. 고객명(굵게) + 둘째 줄 글자(배지 대신 — 수정 · 신규 · 자가 체크 · 시트 쓰기). */}
+                  <button
+                    type="button"
+                    onClick={() => setExpandedId(expanded ? null : draft.id)}
+                    aria-expanded={expanded}
+                    aria-controls={panelId}
+                    className={`min-w-0 flex-1 rounded-sm text-left ${FOCUS_RING}`}
+                  >
+                    <span className="flex min-w-0 items-center gap-1">
+                      {legacyWeekReplace && <AlertTriangle aria-hidden className="h-3 w-3 shrink-0 text-[#A8741A]" />}
+                      <span className="truncate text-[12.5px] font-bold leading-[17px] text-[#111110]">
+                        {draft.customer || "고객명 미입력"}
+                      </span>
+                      {/* 시트 쓰기가 막혔거나(실패 · 충돌) 결과를 모르면(확인 중) 고객명 바로 옆 작은 틴트 배지 — 둘째 줄 끝에
+                          두면 긴 줄에서 잘려 안 보인다. 고객명이 대신 줄어든다. 사유 전문은 펼친 줄에. */}
+                      {sheetBadge && sheetAlertTone && (
+                        <span
+                          data-sheet-write-badge={sheetBadge.tone}
+                          title={sheetBadge.message}
+                          aria-label={`시트 쓰기 ${sheetBadge.label} — ${sheetBadge.message}`}
+                          className={`shrink-0 text-[10.5px] leading-4 ${SHEET_WRITE_BADGE_CLASS[sheetBadge.tone]}`}
+                        >
+                          {sheetBadge.label}
+                        </span>
+                      )}
+                    </span>
+                    <span className="block truncate text-[11px] leading-4 text-[#615D59]">
+                      {metaText}
+                      {/* 자가 체크(입력 속도 라운드 4 P0-2): 매트릭스 셀 커밋은 저장 시점에 체크까지 끝난다 —
+                          남(검수자)의 체크와 구분되게 created_by===checked_by 파생 표시를 둘째 줄 글자로 단다. */}
+                      {isSelfCheckedDraft(draft) && <span title={SELF_CHECK_BADGE_TITLE}> · {SELF_CHECK_BADGE_LABEL}</span>}
+                      {sheetBadge && !sheetAlertTone && (
+                        <>
+                          {" · "}
+                          <span
+                            data-sheet-write-badge={sheetBadge.tone}
+                            title={sheetBadge.message}
+                            aria-label={`시트 쓰기 ${sheetBadge.label} — ${sheetBadge.message}`}
+                            className={SHEET_WRITE_BADGE_CLASS[sheetBadge.tone]}
+                          >
+                            {sheetBadge.label}
+                          </span>
+                        </>
+                      )}
+                    </span>
+                    <span className="sr-only">
+                      {` · ${statusLabel}`}
+                      {legacyWeekReplace ? " · 주의: 적용하면 월 금액 전체가 바뀝니다" : ""}
+                    </span>
+                  </button>
+                  {/* 오른쪽: 금액(확도 색) 밑에 다음 단계 버튼 하나만 — 검토중이면 체크, 체크완료면 적용. 적용 · 취소된
+                      초안은 버튼 없이 상태 글자만. 활성 조건 · 확인 다이얼로그는 예전 체크/적용 버튼과 같다. */}
+                  <div className="flex shrink-0 flex-col items-end">
+                    <span
+                      title={`확도 ${confidence.label}`}
+                      className={`text-[12.5px] font-bold leading-4 tabular-nums ${
+                        draft.status === "cancelled" || reversed ? "text-[#615D59]" : confidence.textStrongClass
+                      }`}
+                    >
+                      {formatMoney(draft.amount)}
+                    </span>
+                    {nextStep === "check" ? (
+                      <button
+                        type="button"
+                        onClick={() => void runToggle(draft.id)}
+                        disabled={draft.status === "applied" || draft.status === "cancelled" || isRowBusy(draft.id)}
+                        className={`inline-flex h-[18px] min-w-[40px] items-center justify-center gap-1 rounded-full bg-[#ECFDF5] px-2 text-[11px] font-bold text-[#084734] transition hover:bg-[#BDEFD8] disabled:cursor-not-allowed disabled:opacity-50 ${FOCUS_RING}`}
+                        aria-label={`${customerName} 체크`}
+                        title="초안 체크"
+                      >
+                        {rowActionBusy?.id === draft.id && rowActionBusy.action === "toggle" ? (
+                          <Loader2 aria-hidden className="h-3 w-3 animate-spin" />
+                        ) : null}
+                        체크
+                      </button>
+                    ) : nextStep === "apply" ? (
+                      <button
+                        type="button"
+                        onClick={() => setConfirmApplyDraft(draft)}
+                        disabled={draft.status !== "checked" || mode !== "server" || draft.id.startsWith("local-") || isRowBusy(draft.id)}
+                        className={`inline-flex h-[18px] min-w-[40px] items-center justify-center gap-1 rounded-full bg-[#084734] px-2 text-[11px] font-bold text-white transition hover:bg-[#065c41] disabled:cursor-not-allowed disabled:opacity-40 ${FOCUS_RING}`}
+                        aria-label={`${customerName} 적용`}
+                        title={mode !== "server" || localOnly ? "로컬 임시 초안은 DB 장부에 적용할 수 없습니다" : "체크 완료 초안 적용"}
+                      >
+                        {applyingId === draft.id ? <Loader2 aria-hidden className="h-3 w-3 animate-spin" /> : null}
+                        적용
+                      </button>
+                    ) : (
+                      <span className="text-[11px] font-semibold leading-[18px] text-[#615D59]">{statusLabel}</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* 품질 웨이브 7 — 항목 2: 레코드별 에러(404 등) — 큐 전체를 로컬로 강등하지 않고 이
+                    행에만 문구+새로고침 유도를 낸다. 접어 두지 않는다(바로 보여야 하는 오류). */}
+                {recordErrors.get(draft.id) && (
+                  <div
+                    role="alert"
+                    className="flex items-start gap-2 pb-1.5 pl-7 pr-3 text-[11px] font-semibold leading-snug text-[#8F2C2C]"
+                  >
+                    <span className="min-w-0 flex-1">{recordErrors.get(draft.id)}</span>
+                    <button
+                      type="button"
+                      onClick={onReload}
+                      className={`shrink-0 rounded-sm text-[11px] font-bold text-[#B43E3E] underline underline-offset-2 transition hover:text-[#8F2C2C] ${FOCUS_RING}`}
+                    >
+                      새로고침
+                    </button>
+                  </div>
+                )}
+
+                {/* 펼친 줄 — 경고 전문 · 메모 · 주차 확도 · 상세 한 줄 · 글자 링크. 접힌 동안에도 DOM에 두고 hidden으로만
+                    가린다(aria-controls 대상 유지). */}
+                <div id={panelId} hidden={!expanded} className="space-y-1 pb-2 pl-7 pr-3 text-[11.5px] leading-relaxed text-[#31302E]">
+                  {legacyWeekReplace && (
+                    <p className="flex items-start gap-1 font-semibold text-[#7A520F]">
+                      <AlertTriangle aria-hidden className="mt-[3px] h-3 w-3 shrink-0 text-[#A8741A]" />
+                      <span>
+                        주차 셀 초안 — 적용 시 {formatMonthLabel(draft.month)} 금액 전체가 이 값으로 대체됩니다 (다른 주차 값 소멸)
+                      </span>
+                    </p>
+                  )}
+                  {weekCellNotice && mergedWeekly && (
+                    <p className="text-[#615D59]">
+                      주차 병합 초안 — 적용 시 {formatMonthLabel(draft.month)} 금액이 주차 합계 {formatMoney(draft.amount)}로 재기재됩니다 (기존 주차 보존)
+                    </p>
+                  )}
+                  {/* 시트 쓰기가 막혔거나 결과를 모를 때는 무엇을 하면 되는지(messages.ts 문구)를 한 줄로 보인다.
+                      목록 전체에 남는 기록이라 alert 로 읽히게 하지 않는다(방금 누른 반영의 결과는 결과 줄·배너가 알린다). */}
+                  {sheetBadge && sheetAlertTone && (
+                    <div className="flex items-start gap-1">
+                      <AlertTriangle aria-hidden className={`mt-[3px] h-3 w-3 shrink-0 ${SHEET_WRITE_ICON_CLASS[sheetAlertTone]}`} />
+                      <p data-sheet-write-reason className={`font-semibold ${SHEET_WRITE_REASON_CLASS[sheetAlertTone]}`}>
+                        {sheetBadge.message}
+                      </p>
+                    </div>
+                  )}
+                  {draft.note && <p className="whitespace-pre-wrap break-words">{draft.note}</p>}
+                  <WeeklyConfidenceDots metadata={draft.metadata} />
+                  <p className="text-[11px] text-[#615D59]">{detailText}</p>
+                  {/* 글자 링크 — 예전 네모 아이콘 버튼 4개 + 체크 해제. 활성 조건 · 확인 다이얼로그는 그대로이고, 상태상
+                      애초에 못 쓰는 링크는 숨긴다(검토중: 편집 · 초안 취소 · 삭제, 체크완료: 체크 해제 · 초안 취소, 적용: 되돌리기). */}
+                  {Object.values(rowLinks).some(Boolean) && (
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pt-0.5">
+                      {rowLinks.edit && (
+                        <button
+                          type="button"
+                          onClick={() => onEdit(draft)}
+                          disabled={draft.status === "checked" || draft.status === "applied" || draft.status === "cancelled"}
+                          className={ROW_LINK_CLASS}
+                          aria-label={`${customerName} 편집`}
+                          title="초안 편집"
+                        >
+                          편집
+                        </button>
+                      )}
+                      {rowLinks.uncheck && (
+                        <button
+                          type="button"
+                          onClick={() => void runToggle(draft.id)}
+                          disabled={draft.status === "applied" || draft.status === "cancelled" || isRowBusy(draft.id)}
+                          className={ROW_LINK_CLASS}
+                          aria-label={`${customerName} 체크 해제`}
+                          title="체크를 풀면 다시 편집할 수 있습니다"
+                        >
+                          {rowActionBusy?.id === draft.id && rowActionBusy.action === "toggle" ? (
+                            <Loader2 aria-hidden className="h-3 w-3 animate-spin" />
+                          ) : null}
+                          체크 해제
+                        </button>
+                      )}
+                      {rowLinks.reverse && (
+                        <button
+                          type="button"
+                          onClick={() => setConfirmReverseDraft(draft)}
+                          disabled={
+                            draft.status !== "applied" ||
+                            mode !== "server" ||
+                            draft.id.startsWith("local-") ||
+                            reversedDraftIds.has(draft.id) ||
+                            isRowBusy(draft.id) ||
+                            sheetBlocksReverse(draft.id)
+                          }
+                          className={ROW_LINK_CLASS}
+                          aria-label={`${customerName} 적용 되돌리기`}
+                          title={reversedDraftIds.has(draft.id) ? "이미 상쇄된 적용입니다" : sheetBlocksReverse(draft.id) ? SHEET_WRITTEN_REVERSE_MESSAGE : "적용 되돌리기"}
+                        >
+                          {reversingId === draft.id ? <Loader2 aria-hidden className="h-3 w-3 animate-spin" /> : null}
+                          적용 되돌리기
+                        </button>
+                      )}
+                      {rowLinks.cancel && (
+                        <button
+                          type="button"
+                          onClick={() => setConfirmCancelDraft(draft)}
+                          disabled={draft.status === "applied" || draft.status === "cancelled" || isRowBusy(draft.id)}
+                          className={ROW_LINK_CLASS}
+                          aria-label={`${customerName} 초안 취소`}
+                          title="초안 취소(감사 기록 보존)"
+                        >
+                          {rowActionBusy?.id === draft.id && rowActionBusy.action === "cancel" ? (
+                            <Loader2 aria-hidden className="h-3 w-3 animate-spin" />
+                          ) : null}
+                          초안 취소
+                        </button>
+                      )}
+                      {rowLinks.remove && (
+                        <button
+                          type="button"
+                          onClick={() => setConfirmDeleteDraft(draft)}
+                          disabled={
+                            draft.status === "checked" ||
+                            draft.status === "applied" ||
+                            draft.status === "cancelled" ||
+                            isRowBusy(draft.id) ||
+                            sheetBlocksDelete(draft.id)
+                          }
+                          className={ROW_LINK_DANGER_CLASS}
+                          aria-label={`${customerName} 삭제`}
+                          title={sheetBlocksDelete(draft.id) ? SHEET_WRITE_HISTORY_DELETE_MESSAGE : "초안 삭제"}
+                        >
+                          {rowActionBusy?.id === draft.id && rowActionBusy.action === "delete" ? (
+                            <Loader2 aria-hidden className="h-3 w-3 animate-spin" />
+                          ) : null}
+                          삭제
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+      {/* 일괄 동작(2026-09-14) — 목록 아래 고정 띠(P0-5). 왼쪽 "보이는 초안 N건 체크", 오른쪽 "체크완료 N건 · ¥합계
+          [N건 (시트·)장부에 반영]"(인라인 확인을 한 번 더 거친다 — 표 아래 변경 대기 줄과 같은 말). 할 일이 없으면 띠 자체를 숨긴다. 목록만 스크롤하므로
+          sticky 가 아니라 흐름 안의 마지막 줄이다(줄어들지 않는다). */}
+      {(onBulkCheck || onBulkApply) && (bulkCheckPlan.count > 0 || bulkApplyPlan.count > 0 || bulkResult) && (
+        <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1.5 rounded-b-lg border-t border-[#F0F0EC] bg-white px-3 py-2">
+          {onBulkCheck && bulkCheckPlan.count > 0 && (
+            <button
+              type="button"
+              onClick={() => void runBulkCheck()}
+              disabled={bulkBusy !== null}
+              className={ROW_LINK_CLASS}
+            >
+              {bulkBusy === "check" ? <Loader2 aria-hidden className="h-3 w-3 animate-spin" /> : null}
+              보이는 초안 {bulkCheckPlan.count}건 체크
+            </button>
+          )}
+          {bulkResult && !bulkApplyConfirm && (
+            <span role="status" className="text-[11px] font-semibold text-[#615D59]">{bulkResult}</span>
+          )}
+          <span className="flex-1" />
+          {onBulkApply && bulkApplyPlan.count > 0 && !bulkApplyConfirm && (
+            // 누르기 전에 장부에 쓰일 건수 · 합계를 보인다(C-4 "체크된 2건 · ¥합계 [적용]"). 요약과 버튼은 한 묶음 —
+            // 좁으면 함께 다음 줄 오른쪽으로 내려간다. 건수 · 합계는 확인 문구와 같은 값(로컬 임시 초안 제외).
+            <span className="ml-auto inline-flex shrink-0 items-center gap-2">
+              <span className="text-[11.5px] text-[#31302E]">
+                {DRAFT_STATUS_LABELS.checked} <b className="tabular-nums">{bulkApplyPlan.count}</b>건 ·{" "}
+                <b className="tabular-nums">{formatMoney(bulkApplyPlan.total)}</b>
+              </span>
               <button
                 type="button"
                 onClick={() => setBulkApplyConfirm(true)}
                 disabled={bulkBusy !== null}
-                className="inline-flex h-7 items-center gap-1 rounded-md border border-[#084734] bg-white px-2 text-[10.5px] font-bold text-[#084734] shadow-2xs transition hover:bg-[#F2FAF6] disabled:cursor-not-allowed disabled:opacity-50"
+                className={`inline-flex h-7 items-center gap-1 rounded-md bg-[#084734] px-3 text-[11.5px] font-bold text-white transition hover:bg-[#065c41] disabled:cursor-not-allowed disabled:opacity-50 ${FOCUS_RING}`}
               >
-                <Send className="h-3 w-3 text-[#084734]" />
-                체크된 {bulkApplyPlan.count}건 적용
+                {bulkApplyPlan.count}건 {sheetWriteMode === "on" ? "시트·장부에" : "장부에"} 반영
               </button>
-            )}
-            {bulkApplyConfirm && (
-              <span role="alert" className="flex flex-wrap items-center gap-1.5 text-[10.5px] font-bold text-[#111110]">
-                {bulkApplyPlan.count}건 · {formatMoney(bulkApplyPlan.total)}을 DB 장부에 적용합니다
-                {bulkApplyPlan.skippedLocal > 0 ? ` (로컬 임시 ${bulkApplyPlan.skippedLocal}건 제외)` : ""}
-                <button
-                  type="button"
-                  onClick={() => void runBulkApply()}
-                  disabled={bulkBusy !== null}
-                  className="inline-flex h-7 items-center gap-1 rounded-md bg-[#084734] px-2 text-white shadow-2xs transition hover:bg-[#065c41] disabled:opacity-50"
-                >
-                  {bulkBusy === "apply" ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
-                  적용
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setBulkApplyConfirm(false)}
-                  disabled={bulkBusy === "apply"}
-                  className="inline-flex h-7 items-center rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 text-[#615D59]"
-                >
-                  취소
-                </button>
-              </span>
-            )}
-            {bulkResult && !bulkApplyConfirm && (
-              <span className="text-[10.5px] font-semibold text-[#615D59]">{bulkResult}</span>
-            )}
-          </div>
-        )}
-      </div>
-      {visibleDrafts.length === 0 && (
-        <div className="rounded-lg border border-dashed border-[rgba(0,0,0,0.12)] bg-[#FAFAF8] p-4 text-[12px] leading-relaxed text-[#615D59]">
-          현재 검색/상태 조건에 맞는 초안이 없습니다.
-        </div>
-      )}
-      {visibleDrafts.map((draft) => (
-        <div key={draft.id} className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-white p-2.5 transition-shadow hover:shadow-xs">
-          {/* 상단: 상태 배지 + 자가체크 + 수정/신규 + REV행 + 우측 정렬된 금액 */}
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex flex-wrap items-center gap-1">
-              <span className={`rounded-md border px-1.5 py-0.5 text-[10px] font-bold ${draftStatusMeta(draft.status, reversedDraftIds.has(draft.id)).className}`}>
-                {draftStatusMeta(draft.status, reversedDraftIds.has(draft.id)).label}
-              </span>
-              {/* 자가 체크(입력 속도 라운드 4 P0-2): 매트릭스 셀 커밋은 저장 시점에 체크까지 끝난다 —
-                  남(검수자)의 체크와 구분되게 created_by===checked_by 파생 배지를 상태 배지 옆에 단다. */}
-              {isSelfCheckedDraft(draft) && (
-                <span
-                  title={SELF_CHECK_BADGE_TITLE}
-                  className="rounded-md border border-[#084734]/15 bg-white px-1.5 py-0.5 text-[10px] font-bold text-[#084734] shadow-2xs"
-                >
-                  {SELF_CHECK_BADGE_LABEL}
-                </span>
-              )}
-              <span className="rounded-md border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-1.5 py-0.5 text-[10px] font-bold text-[#615D59]">
-                {draft.kind === "edit-row" ? "수정" : "신규"}
-              </span>
-              {draft.sourceSheetRow ? (
-                <span className="rounded-md border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-1.5 py-0.5 text-[10px] font-bold text-[#8C8782]">
-                  REV row {draft.sourceSheetRow}
-                </span>
-              ) : null}
-              {(() => {
-                const sheetWrite = sheetWrites?.[draft.id]
-                if (!sheetWrite) return null
-                const badge = sheetWriteBadge(sheetWrite)
-                return (
-                  <span
-                    data-sheet-write-badge={badge.tone}
-                    title={badge.message}
-                    aria-label={`시트 쓰기 ${badge.label} — ${badge.message}`}
-                    className={`rounded-md border px-1.5 py-0.5 text-[10px] font-bold ${SHEET_WRITE_BADGE_CLASS[badge.tone]}`}
-                  >
-                    {badge.label}
-                  </span>
-                )
-              })()}
-            </div>
-            <span className="shrink-0 text-[13px] font-bold tabular-nums text-[#111110]">
-              {formatMoney(draft.amount)}
             </span>
-          </div>
-
-          {/* 본문: 고객명 + 메타데이터 */}
-          <div className="mt-1.5 min-w-0">
-            <p className="truncate text-[12.5px] font-bold text-[#111110]">{draft.customer || "고객명 미입력"}</p>
-            <p className="mt-0.5 flex flex-wrap items-center gap-1 text-[11px] text-[#615D59]">
-              <span className="font-semibold text-[#111110]">{formatMonthLabel(draft.month)}</span>
-              <span className="text-[#DDD9D3]">·</span>
-              <span>{draft.manager || "-"}</span>
-              {draft.team && (
-                <>
-                  <span className="text-[#DDD9D3]">·</span>
-                  <span className="text-[#8C8782]">{draft.team}</span>
-                </>
-              )}
-            </p>
-            <WeeklyConfidenceDots metadata={draft.metadata} />
-            {/* 주차 셀 초안 고지: 병합(metadata.weekly 보존) vs 레거시 단일값(월 전체 대체) 구분 */}
-            {draft.kind === "edit-row" &&
-              /^w[1-5]$/.test(metadataString(draft.metadata, "week") ?? "") &&
-              draft.status !== "applied" &&
-              draft.status !== "cancelled" &&
-              (mergedWeeklyFromMetadata(draft.metadata) ? (
-                <p className="mt-1.5 rounded border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-2 py-0.5 text-[10px] font-semibold leading-relaxed text-[#615D59]">
-                  주차 병합 초안 — 적용 시 {formatMonthLabel(draft.month)} 금액이 주차 합계 {formatMoney(draft.amount)}로 재기재됩니다 (기존 주차 보존)
-                </p>
-              ) : (
-                <p className="mt-1.5 rounded border border-[#ECD29C] bg-[#FBF1E0] px-2 py-0.5 text-[10px] font-bold leading-relaxed text-[#7A520F]">
-                  주차 셀 초안 — 적용 시 {formatMonthLabel(draft.month)} 금액 전체가 이 값으로 대체됩니다 (다른 주차 값 소멸)
-                </p>
-              ))}
-            {draft.note && <p className="mt-1.5 line-clamp-2 text-[11px] leading-relaxed text-[#615D59]">{draft.note}</p>}
-            {/* 시트 쓰기가 막혔거나 결과를 모를 때는 무엇을 하면 되는지(messages.ts 문구)를 한 줄로 보인다.
-                목록 전체에 남는 기록이라 alert 로 읽히게 하지 않는다(방금 누른 반영의 결과는 결과 줄·배너가 알린다). */}
-            {(() => {
-              const sheetWrite = sheetWrites?.[draft.id]
-              if (!sheetWrite) return null
-              const badge = sheetWriteBadge(sheetWrite)
-              if (badge.tone !== "danger" && badge.tone !== "warning") return null
-              return (
-                <p
-                  data-sheet-write-reason
-                  className={`mt-1.5 rounded border px-2 py-0.5 text-[10.5px] font-semibold leading-relaxed ${SHEET_WRITE_BADGE_CLASS[badge.tone]}`}
-                >
-                  {badge.message}
-                </p>
-              )
-            })()}
-          </div>
-
-          {/* 하단: 액션 버튼 바 (좌측 보조 4개 / 우측 주요 2개) */}
-          <div className="mt-2.5 flex items-center justify-between gap-1 border-t border-[rgba(0,0,0,0.06)] pt-2">
-            <div className="flex items-center gap-1">
+          )}
+          {bulkApplyConfirm && (
+            <span role="alert" className="flex basis-full flex-wrap items-center gap-1.5 text-[11px] font-bold text-[#111110]">
+              <span className="min-w-0 flex-1">
+                {bulkApplyPlan.count}건 · {formatMoney(bulkApplyPlan.total)}을 {sheetWriteMode === "on" ? "시트(2. REV)와 DB 장부에" : "DB 장부에"} 반영합니다
+                {bulkApplyPlan.skippedLocal > 0 ? ` (로컬 임시 ${bulkApplyPlan.skippedLocal}건 제외)` : ""}
+              </span>
               <button
                 type="button"
-                onClick={() => onEdit(draft)}
-                disabled={draft.status === "checked" || draft.status === "applied" || draft.status === "cancelled"}
-                className="flex h-8 w-8 items-center justify-center rounded-md border border-[rgba(0,0,0,0.08)] text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110] disabled:cursor-not-allowed disabled:opacity-35"
-                aria-label={`${draft.customer || "초안"} 편집`}
-                title="초안 편집"
+                onClick={() => void runBulkApply()}
+                disabled={bulkBusy !== null}
+                className={`inline-flex h-7 items-center gap-1 rounded-md bg-[#084734] px-3 text-white transition hover:bg-[#065c41] disabled:opacity-50 ${FOCUS_RING}`}
               >
-                <Pencil className="h-3.5 w-3.5" />
+                {bulkBusy === "apply" ? <Loader2 aria-hidden className="h-3 w-3 animate-spin" /> : null}
+                반영
               </button>
               <button
                 type="button"
-                onClick={() => setConfirmReverseDraft(draft)}
-                disabled={
-                  draft.status !== "applied" ||
-                  mode !== "server" ||
-                  draft.id.startsWith("local-") ||
-                  reversedDraftIds.has(draft.id) ||
-                  isRowBusy(draft.id) ||
-                  sheetBlocksReverse(draft.id)
-                }
-                className="flex h-8 w-8 items-center justify-center rounded-md border border-[#ECD29C] text-[#7A520F] transition hover:bg-[#FBF1E0] disabled:cursor-not-allowed disabled:opacity-35"
-                aria-label={`${draft.customer || "초안"} 적용 되돌리기`}
-                title={reversedDraftIds.has(draft.id) ? "이미 상쇄된 적용입니다" : sheetBlocksReverse(draft.id) ? SHEET_WRITTEN_REVERSE_MESSAGE : "적용 되돌리기"}
+                onClick={() => setBulkApplyConfirm(false)}
+                disabled={bulkBusy === "apply"}
+                className={`inline-flex h-7 items-center rounded-md px-2 text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110] ${FOCUS_RING}`}
               >
-                {reversingId === draft.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
+                취소
               </button>
-              <button
-                type="button"
-                onClick={() => setConfirmCancelDraft(draft)}
-                disabled={draft.status === "applied" || draft.status === "cancelled" || isRowBusy(draft.id)}
-                className="flex h-8 w-8 items-center justify-center rounded-md border border-[rgba(0,0,0,0.08)] text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#B43E3E] disabled:cursor-not-allowed disabled:opacity-35"
-                aria-label={`${draft.customer || "초안"} 취소`}
-                title="초안 취소(감사 기록 보존)"
-              >
-                {rowActionBusy?.id === draft.id && rowActionBusy.action === "cancel" ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <XCircle className="h-3.5 w-3.5" />
-                )}
-              </button>
-              <button
-                type="button"
-                onClick={() => setConfirmDeleteDraft(draft)}
-                disabled={
-                  draft.status === "checked" ||
-                  draft.status === "applied" ||
-                  draft.status === "cancelled" ||
-                  isRowBusy(draft.id) ||
-                  sheetBlocksDelete(draft.id)
-                }
-                className="flex h-8 w-8 items-center justify-center rounded-md border border-[rgba(0,0,0,0.08)] text-[#B43E3E] transition hover:bg-[#FCE9E9] disabled:cursor-not-allowed disabled:opacity-35"
-                aria-label="초안 삭제"
-                title={sheetBlocksDelete(draft.id) ? SHEET_WRITE_HISTORY_DELETE_MESSAGE : "초안 삭제"}
-              >
-                {rowActionBusy?.id === draft.id && rowActionBusy.action === "delete" ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <Trash2 className="h-3.5 w-3.5" />
-                )}
-              </button>
-            </div>
-
-            <div className="flex shrink-0 flex-wrap items-center gap-1">
-              <button
-                type="button"
-                onClick={() => void runToggle(draft.id)}
-                disabled={draft.status === "applied" || draft.status === "cancelled" || isRowBusy(draft.id)}
-                className="flex h-9 min-w-[72px] items-center justify-center gap-1 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2.5 text-[11px] font-bold text-[#084734] transition hover:bg-[#F2FAF6] disabled:cursor-not-allowed disabled:opacity-35"
-                aria-label="초안 체크 상태 변경"
-                title="초안 체크 상태 변경"
-              >
-                {rowActionBusy?.id === draft.id && rowActionBusy.action === "toggle" ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <CheckCircle2 className="h-4 w-4" />
-                )}
-                {draft.status === "checked" ? "체크 해제" : "체크"}
-              </button>
-              <button
-                type="button"
-                onClick={() => setConfirmApplyDraft(draft)}
-                disabled={draft.status !== "checked" || mode !== "server" || draft.id.startsWith("local-") || isRowBusy(draft.id)}
-                className="flex h-9 min-w-[72px] items-center justify-center gap-1 rounded-md border border-[#084734]/20 bg-gradient-to-b from-[#F2FAF6] to-[#E6F5ED] px-2.5 text-[11px] font-bold text-[#084734] shadow-xs transition hover:bg-[#084734] hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
-                aria-label={`${draft.customer || "초안"} 적용`}
-                title="체크 완료 초안 적용"
-              >
-                {applyingId === draft.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
-                적용
-              </button>
-            </div>
-          </div>
-
-          {/* 품질 웨이브 7 — 항목 2: 레코드별 에러(404 등) — 큐 전체를 로컬로 강등하지 않고 이
-              행에만 배지+새로고침 유도를 낸다. */}
-          {recordErrors.get(draft.id) && (
-            <div
-              role="alert"
-              className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-md border border-[#F2B8B8] bg-[#FCE9E9] px-2.5 py-1.5 text-[10.5px] font-semibold leading-relaxed text-[#8F2C2C]"
-            >
-              <span className="min-w-0">{recordErrors.get(draft.id)}</span>
-              <button
-                type="button"
-                onClick={onReload}
-                className="shrink-0 rounded border border-[#B43E3E]/40 bg-white px-2 py-0.5 text-[10px] font-bold text-[#B43E3E] transition hover:bg-[#FCE9E9]"
-              >
-                새로고침
-              </button>
-            </div>
+            </span>
           )}
         </div>
-      ))}
+      )}
     </div>
     {/* 적용 확인 다이얼로그 — TSV 붙여넣기 미리보기(RevMatrixPasteDialog)와 동일 셸 스타일 재사용. */}
     {confirmApplyDraft && (

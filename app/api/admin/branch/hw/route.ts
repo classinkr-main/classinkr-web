@@ -40,6 +40,8 @@ async function assembleBranchHwPayload() {
   // 출고 시트의 "예정" 행(배송 예정 등)은 아직 창고에 있는 물량이다.
   // 실재고 = 입고 − 완료된 출고, 가용 재고 = 실재고 − 출고 예정. (원장·스테이징 공통 정의)
   const isPlannedOutbound = (progress: string | null) => (progress ?? "").includes("예정")
+  // 최근 30일 출고(실제 출고만, 예정 제외) — 원장은 품목별 outbound30d(하드웨어 콘솔과 같은 산식), 스테이징은 출고일 기준.
+  const cutoff30d = new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10)
   const stockByPattern = HW_PATTERNS.map((p) => {
     const fromSheet = stock.filter((r) => p.match.test(r.product)).reduce((s, r) => s + r.quantity, 0)
 
@@ -52,6 +54,7 @@ async function assembleBranchHwPayload() {
       return {
         product: p.key,
         io_stock: io,
+        outbound_30d: rows.reduce((s, r) => s + r.outbound30d, 0),
         planned_out: plannedOut,
         available_stock: available,
         sheet_stock: fromSheet,
@@ -71,6 +74,9 @@ async function assembleBranchHwPayload() {
     return {
       product: p.key,
       io_stock: fromIO,
+      outbound_30d: outboundRows
+        .filter((r) => !isPlannedOutbound(r.progress) && (r.outbound_date ?? "").slice(0, 10) >= cutoff30d)
+        .reduce((s, r) => s + r.quantity, 0),
       planned_out: plannedOut,
       available_stock: available,
       sheet_stock: fromSheet,
@@ -96,8 +102,20 @@ async function assembleBranchHwPayload() {
       return b.quantity - a.quantity
     })
     .slice(0, 8)
+  // 주요 7품목 합계 — 장부 머리 "HW 출고 · 재고 · 예정" 한 줄과 개요 표 합계 행이 같은 값을 쓴다.
+  const totals = stockByPattern.reduce(
+    (acc, row) => ({
+      outbound_30d: acc.outbound_30d + row.outbound_30d,
+      io_stock: acc.io_stock + row.io_stock,
+      planned_out: acc.planned_out + row.planned_out,
+      available_stock: acc.available_stock + row.available_stock,
+      low_items: acc.low_items + (row.low ? 1 : 0),
+    }),
+    { outbound_30d: 0, io_stock: 0, planned_out: 0, available_stock: 0, low_items: 0 },
+  )
   return {
     stock: stockByPattern,
+    totals,
     recent_installs,
     // 위젯·감사용: 이 응답의 재고가 어느 원천에서 나왔는지 명시.
     source: ledgerReady ? "ledger" : "sheet_staging",

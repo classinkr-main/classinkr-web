@@ -4,10 +4,13 @@ import { listBranchRevDeals } from "@/lib/repositories/branch-deals"
 import { listPublicEvents } from "@/lib/repositories/public-events"
 import { summarizeCampaigns } from "@/lib/branch/computations/campaigns"
 import { buildInsightInput, digestInput, type TeamScope } from "./input-builder"
-import { callGemini, type GeminiMode } from "./gemini-runner"
+import { callInsightModel } from "./gemini-runner"
+import type { InsightMode } from "./llm"
 import { checkNumericalSanity, type NumericalWarning } from "./sanity-check"
 import { findInsightByDigest, getLatestInsight, insertInsight, type BranchInsight } from "@/lib/repositories/branch-insights"
 import { fyOf } from "@/lib/branch/fiscal"
+import { buildBranchWeeklyCompassReport } from "@/lib/branch/weekly-report"
+import type { BranchWeeklyCompassReport } from "@/lib/branch/weekly-report-contract"
 
 // DB-우선 사다리(액티브 임포트 → 시트 미러 → 라이브 시트 초기 폴백) — summary/kpi와 동일 규약.
 // 시트 장애 시에도 마지막 스냅샷으로 인사이트 입력을 만들 수 있다(기존엔 stale 인사이트로만 강등).
@@ -37,34 +40,46 @@ export async function runInsights(team: TeamScope, force: boolean): Promise<RunI
     const [dsh, kpi, deals, events, campaigns] = await Promise.all([
       readDsh(), readKpi(), listBranchRevDeals(), listPublicEvents(), summarizeCampaigns(now),
     ])
+    // Compass 주간 구획 — 끝난 주 기준이라 한 주 동안 입력이 크게 흔들리지 않는다(다이제스트 캐시 유지).
+    // 읽기 실패는 인사이트 전체를 막지 않고 state=missing으로 넘겨 AI가 한계를 말하게 한다.
+    let compassWeekly: BranchWeeklyCompassReport | null = null
+    try {
+      compassWeekly = await buildBranchWeeklyCompassReport({ now, team, deals })
+    } catch (error) {
+      console.error("[branch insights] Compass weekly report failed:", error instanceof Error ? error.message : error)
+    }
     const input = buildInsightInput({
       team, scope: "Q", now, dsh, kpi,
       deals: team === "ALL" ? deals : deals.filter((d) => d.team === team),
       events: events.map((e) => ({ title: e.title, startsAt: e.startsAt, location: e.location })),
       campaigns: campaigns.recent.map((c) => ({ subject: c.subject, sentAt: c.sentAt, openPct: c.openPct })),
       hwAlerts: [],
+      compassWeekly,
     })
     const digest = digestInput(input)
     if (!force) {
       const cached = await findInsightByDigest(team, digest)
       if (cached) return { from: "cache", insight: cached }
     }
-    const mode: GeminiMode = force ? "fast" : "quality"
-    let { result, raw, model: usedModel } = await callGemini(input, mode)
+    const mode: InsightMode = force ? "fast" : "quality"
+    const first = await callInsightModel(input, mode)
+    let { result, raw, model: usedModel, provider } = first
+    let fallbackReason = first.fallbackReason
     let warnings = checkNumericalSanity(input, result)
     let retried = false
     if (warnings.length >= 3) {
       retried = true
-      const retry = await callGemini(input, mode)
+      const retry = await callInsightModel(input, mode)
       const retryWarnings = checkNumericalSanity(input, retry.result)
       if (retryWarnings.length < warnings.length) {
-        result = retry.result; raw = retry.raw; usedModel = retry.model; warnings = retryWarnings
+        result = retry.result; raw = retry.raw; usedModel = retry.model; provider = retry.provider; fallbackReason = retry.fallbackReason; warnings = retryWarnings
       }
     }
     const saved = await insertInsight({
       team, fiscal_period: input.fiscalPeriod,
       one_liner: result.one_liner, next_actions: result.next_actions,
-      raw_response: { ...((raw as object) ?? {}), _model: usedModel, _mode: mode, _retried: retried, _warnings: warnings },
+      // weekly_report(본사 양식 간이 보고)는 테이블 칼럼이 없어 raw_response._weekly_report에 둔다(마이그레이션 없이 화면이 읽는다).
+      raw_response: { ...((raw as object) ?? {}), _model: usedModel, _provider: provider, _fallback_reason: fallbackReason ?? null, _mode: mode, _retried: retried, _warnings: warnings, _weekly_report: result.weekly_report ?? null, _compass_week: compassWeekly?.week.label ?? null },
       input_digest: digest,
     })
     return { from: "fresh", insight: saved, numerical_warnings: warnings.length > 0 ? warnings : undefined, retried }

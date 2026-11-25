@@ -69,3 +69,32 @@ describe("buildInsightInput", () => {
     expect(digestInput(a)).toBe(digestInput(b))
   })
 })
+
+describe("buildInsightInput · 본사 양식 근거 블록", () => {
+  const mk = (kind: "goal" | "status", category: string, annual: number, month: number) => ({
+    kind, category, status_type: "New", channel: "Direct", annual,
+    quarters: [annual / 4, annual / 4, annual / 4, annual / 4] as [number, number, number, number],
+    months: { "2026-05": month },
+  })
+  it("performance는 HW·SW·기타·합계 행을 같은 DSH 중복 제거 규칙으로 만든다(팀 전체만)", () => {
+    const dsh: DshOutput = { rows: [], members: {}, breakdown: [
+      mk("goal", "Hardware", 400, 40), mk("goal", "Software", 800, 60), mk("status", "Software", 300, 30),
+    ] }
+    const out = buildInsightInput({ ...baseArgs, dsh })
+    expect(out.performance.month).toBe("2026-05")
+    expect(out.performance.rows.map((r) => [r.product, r.month_goal, r.month_actual, r.year_goal, r.year_actual])).toEqual([
+      ["HW", 40, 0, 400, 0], ["SW", 60, 30, 800, 300], ["TOTAL", 100, 30, 1200, 300],
+    ])
+    expect(buildInsightInput({ ...baseArgs, dsh, team: "BD" }).performance.rows).toEqual([])
+  })
+  it("month_collections는 이번 달 고객별 확정·미확정을 나눈다", () => {
+    const deal = (customer_name: string, pay: number, confirmed: number) => ({
+      customer_name, manager: "Han", team: "BD", status: "new", product_version: null,
+      monthly_payments: { "2026-05": pay }, monthly_confirmed: { "2026-05": confirmed }, monthly_high_conf: {}, monthly_red: {},
+    }) as unknown as BranchRevDeal
+    const out = buildInsightInput({ ...baseArgs, deals: [deal("A학원", 100, 100), deal("B학원", 50, 0), deal(" A학원 ", 20, 0)] })
+    expect(out.month_collections.confirmed).toBe(100)
+    expect(out.month_collections.planned_not_confirmed).toBe(70)
+    expect(out.month_collections.customers.map((c) => [c.customer, c.confirmed, c.planned_not_confirmed, c.kind])).toEqual([["A학원", 100, 20, "new"], ["B학원", 0, 50, "new"]])
+  })
+})
