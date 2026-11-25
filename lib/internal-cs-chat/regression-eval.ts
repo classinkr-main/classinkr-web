@@ -479,7 +479,8 @@ export async function judgeRegression(input: {
     return { outcome, rationale, model: judgeModel }
   } catch (error) {
     console.warn(
-      `[regression-judge] 심판 응답 해석 실패: ${error instanceof Error ? error.message : String(error)}`
+      // 오류 글(JSON.parse 는 모델 응답 앞부분을 싣는다)은 질문·고객 정보를 담을 수 있어 이름만 남긴다(검토 안전-5).
+      `[regression-judge] 심판 응답 해석 실패: ${error instanceof Error ? error.name : "unknown"}`
     )
     return null
   }
