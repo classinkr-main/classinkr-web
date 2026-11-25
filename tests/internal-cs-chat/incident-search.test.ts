@@ -18,8 +18,6 @@ import {
   formatIncidentEvidence,
   incidentSourceRefs,
   searchIncidentEvidence,
-  INCIDENT_CASES,
-  WORKFLOW_FLOWS,
 } from "@/lib/internal-cs-chat/incident-search"
 
 beforeEach(() => {
@@ -40,7 +38,10 @@ describe("searchIncidentEvidence", () => {
     expect(results.length).toBeGreaterThan(0)
     const d02a = results.find((r) => r.caseId === "D-02a")
     expect(d02a).toBeDefined()
-    expect(d02a?.org).toBe("정율사관 B3")
+    // 고객사 이름은 제목·본문에 싣지 않는다(IC-07). 제목은 "케이스 ID · 증상"이다.
+    expect(d02a).not.toHaveProperty("org")
+    expect(d02a?.title).toMatch(/^D-02a · /)
+    expect(d02a?.title).not.toContain("정율사관")
     expect(d02a?.summary).toContain("172.17.0.52")
     expect(d02a?.resolution).toContain("DHCP")
   })
@@ -117,7 +118,7 @@ describe("formatIncidentEvidence and incidentSourceRefs", () => {
   })
 
   it("converts evidence entries to InternalCsSourceRef with kind internal_guide", () => {
-    const sample = searchIncidentEvidence("정율사관 B3")
+    const sample = searchIncidentEvidence("정율사관 B3 네트워크 끊김")
     const refs = incidentSourceRefs(sample)
     expect(refs.length).toBeGreaterThan(0)
     expect(refs[0].kind).toBe("internal_guide")
