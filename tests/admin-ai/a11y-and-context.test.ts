@@ -104,14 +104,34 @@ describe("화면이 알리는 '지금 열린 대상'", () => {
 })
 
 describe("직전 대화 — 제목·시각만", () => {
-  it("제목은 첫 질문의 앞 24자다", () => {
+  it("제목은 대화 종류 이름이고 사용자가 친 글(전화번호·이름)을 담지 않는다(F2)", () => {
+    const typed = "010-1234-5678 도담영어 원장 김철수님께 문자 보내 줘"
     const messages = [
-      { id: "u", role: "user" as const, text: "한빛수학학원 내일 오후 3시에 데모 후속 전화 할 일 잡아 줘. 담당은 나.", blocks: [] },
+      { id: "u", role: "user" as const, text: typed, blocks: [] },
+      { id: "a", role: "assistant" as const, blocks: [{ kind: "order" as const, orderId: "o1" }] },
     ]
-    const title = recentThreadTitle(messages)
-    expect(Array.from(title ?? "")).toHaveLength(24)
-    expect(title).toBe("한빛수학학원 내일 오후 3시에 데모 후속 전")
+    const title = recentThreadTitle(messages, { o1: { type: "message.sms.send" } })
+    expect(title).not.toBeNull()
+    for (const piece of ["010", "1234", "도담", "김철수", typed.slice(0, 6)]) {
+      expect(title, piece).not.toContain(piece)
+    }
+    expect(Array.from(title ?? "").length).toBeLessThanOrEqual(24)
     expect(recentThreadTitle([])).toBeNull()
+  })
+
+  it("오더가 여러 건이면 '외 N건', 묻기 답이면 카드 종류, 답이 없으면 질문 건수다", () => {
+    const user = { id: "u", role: "user" as const, text: "아무 말 010-9999-0000", blocks: [] }
+    const orderBlocks = [
+      { kind: "order" as const, orderId: "o1" },
+      { kind: "order" as const, orderId: "o2" },
+    ]
+    const two = [user, { id: "a", role: "assistant" as const, blocks: orderBlocks }]
+    expect(recentThreadTitle(two, { o1: { type: "crm.task.create" }, o2: { type: "crm.task.create" } })).toBe(
+      "할 일 생성 외 1건"
+    )
+    const ask = [user, { id: "a", role: "assistant" as const, blocks: [{ kind: "contact" as const, card: {} as never }] }]
+    expect(recentThreadTitle(ask)).toBe("담당자 질문")
+    expect(recentThreadTitle([user])).toBe("질문 1건")
   })
 
   it("최대 5개, 최근 것이 앞이고 같은 id 는 하나만 남는다", () => {

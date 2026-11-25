@@ -151,7 +151,7 @@ export function reduceAdminAi(state: AdminAiState, event: AdminAiEvent): AdminAi
       )
       const reverted = revertAllEditing(state, event.now)
 
-      const title = recentThreadTitle(state.messages)
+      const title = recentThreadTitle(state.messages, state.orders)
       return {
         ...state,
         messages: [],

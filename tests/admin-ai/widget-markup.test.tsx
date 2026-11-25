@@ -207,7 +207,7 @@ describe("첫 화면 — 공통 추천 칩(N8)", () => {
     const labels = buttonLabels(markup)
     for (const label of ["담당자 찾기", "링크 찾기", "정책 묻기"]) expect(labels).toContain(label)
     expect(markup).toContain("직전 대화")
-    expect(markup).toContain("질문 1")
+    expect(markup).toContain("할 일 생성")
     expect(markup).toContain("대화 내용은 저장하지 않습니다")
   })
 })

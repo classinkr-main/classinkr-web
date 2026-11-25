@@ -325,7 +325,7 @@ describe("admin ai store — 새 대화 N1~N4·N7", () => {
 })
 
 describe("admin ai store — 직전 대화 목록(N5 1단계)", () => {
-  it("제목(첫 질문 24자)·시각만 남기고 대화 원문은 담지 않는다", () => {
+  it("제목(대화 종류 이름)·시각만 남기고 대화 원문은 담지 않는다", () => {
     const store = createAdminAiStore(instantClient())
     store.ask({ text: "한빛수학학원 내일 오후 3시에 데모 후속 전화 할 일 잡아 줘", scenario: "task", context: CONTEXT })
     vi.advanceTimersByTime(100)
@@ -333,7 +333,8 @@ describe("admin ai store — 직전 대화 목록(N5 1단계)", () => {
 
     const [thread] = store.getState().recentThreads
     expect(Object.keys(thread).sort()).toEqual(["at", "id", "title"])
-    expect(Array.from(thread.title)).toHaveLength(24)
+    expect(thread.title).toBe("할 일 생성")
+    expect(thread.title).not.toContain("한빛")
     expect(thread.at).toBe(Date.now())
 
     // 되돌리면 목록에서 빠진다 — 같은 대화가 두 번 보이지 않는다.
@@ -341,7 +342,7 @@ describe("admin ai store — 직전 대화 목록(N5 1단계)", () => {
     expect(store.getState().recentThreads).toEqual([])
   })
 
-  it("sessionStorage 에 제목·시각만 쓴다", () => {
+  it("sessionStorage 에 제목·시각만 쓰고, 전화번호·이름을 친 질문도 저장값에 남지 않는다(F2)", () => {
     const written: Record<string, string> = {}
     const storage = {
       getItem: (key: string) => written[key] ?? null,
@@ -353,14 +354,16 @@ describe("admin ai store — 직전 대화 목록(N5 1단계)", () => {
     try {
       const store = createAdminAiStore(instantClient())
       store.subscribe(() => undefined)
-      store.ask({ text: "도담영어 쇼룸 안내 문자", scenario: "sms", context: CONTEXT })
+      store.ask({ text: "010-1234-5678 도담영어 원장 김철수님께 문자 보내 줘", scenario: "sms", context: CONTEXT })
       vi.advanceTimersByTime(100)
       store.newConversation()
 
-      const saved = JSON.parse(written["admin-ai:recent-threads:v1"])
+      const raw = written["admin-ai:recent-threads:v1"]
+      const saved = JSON.parse(raw)
       expect(saved).toHaveLength(1)
       expect(Object.keys(saved[0]).sort()).toEqual(["at", "id", "title"])
-      expect(JSON.stringify(saved)).not.toContain("발송")
+      expect(saved[0].title).toBe("문자·알림톡 1건 발송")
+      for (const piece of ["010-1234", "5678", "김철수", "도담영어"]) expect(raw, piece).not.toContain(piece)
     } finally {
       vi.unstubAllGlobals()
     }
