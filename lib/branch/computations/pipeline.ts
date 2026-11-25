@@ -1,6 +1,13 @@
 import type { BranchRevDeal } from "@/lib/repositories/branch-deals"
 import { normalizeBranchMemberName } from "@/lib/branch/member-names"
-import { confirmedMonthAmountWithColor, dealHasColorData } from "@/lib/branch/computations/rev-confirmed"
+import { branchManagerMatches } from "@/lib/branch/personal-scope"
+import {
+  confirmedMonthAmountWithColor,
+  dealHasColorData,
+  revReadTimeFields,
+  type RevMonthWeekMismatch,
+  type RevPendingCells,
+} from "@/lib/branch/computations/rev-confirmed"
 import { fiscalQuarter, fyOf, ymKey } from "@/lib/branch/fiscal"
 import { isValidRowId } from "@/lib/branch/sheet-writeback/row-id"
 
@@ -62,6 +69,10 @@ export interface RevRevenueRow {
    * 장부 화면이 "시트에 쓴 정정을 이 행이 이미 담았는가"를 동기화 기록이 아니라 실제로 가진 행으로 판정한다(ADR-011).
    */
   syncedAt?: string
+  /** 빨간 예정 칸(raw.pendingCells) — 캐논이 그 주 시작일(KST)부터 확정으로 읽는다(F-08). 없으면 키가 없다. */
+  pendingCells?: RevPendingCells
+  /** 월 칸 ≠ 주차 합 표시(raw.monthWeekMismatch) — 캐논이 확정·고확도를 월 합계 안으로 자른다(F-15). 없으면 키가 없다. */
+  monthWeekMismatch?: Record<string, RevMonthWeekMismatch>
 }
 
 const REV_MONTH_ORDER = [4, 5, 6, 7, 8, 9, 10, 11, 12, 1, 2, 3]
@@ -166,7 +177,8 @@ function inScope(ym: string, scope: RevenuePeriod, now: Date): boolean {
   if (fyOfYm !== fy) return false
   if (scope === "Y") return true
   if (scope === "M") return ym === ymKey(now)
-  return fiscalQuarter(m) === fiscalQuarter(now.getUTCMonth() + 1)
+  // fyOf·ymKey 는 KST 영업일이다 — 분기도 같은 달에서 구한다(UTC 달과 섞으면 분기 첫날 0~9시 KST 에 어긋난다).
+  return fiscalQuarter(m) === fiscalQuarter(Number(ymKey(now).slice(5, 7)))
 }
 
 export function revenueFromRev(d: BranchRevDeal, period?: RevenuePeriod, now = new Date()): number {
@@ -177,11 +189,18 @@ export function revenueFromRev(d: BranchRevDeal, period?: RevenuePeriod, now = n
   }, 0)
 }
 
+// 담당 일치는 branchManagerMatches(별칭·대소문자 무시) — summary·매니저별과 같은 규칙(F-42). 정확 일치로 거르면
+// '예시a'로 적힌 행이 타일·매니저별에는 들어가고 그 사람의 장부(내 담당)에서는 빠졌다.
+function managerFilterOf(manager: string | null | undefined): ((value: string | null | undefined) => boolean) | null {
+  const wanted = normalizeBranchMemberName(manager)
+  return wanted ? (value) => branchManagerMatches(value, wanted) : null
+}
+
 export function listPipeline(deals: BranchRevDeal[], filter?: { team?: string; manager?: string; region?: string; importance?: string; stage?: PipelineStage }): PipelineRow[] {
-  const managerFilter = normalizeBranchMemberName(filter?.manager)
+  const managerMatches = managerFilterOf(filter?.manager)
   return deals.filter((d) => {
     if (filter?.team && filter.team !== "ALL" && d.team !== filter.team) return false
-    if (managerFilter && normalizeBranchMemberName(d.manager) !== managerFilter) return false
+    if (managerMatches && !managerMatches(d.manager)) return false
     if (filter?.region && d.region !== filter.region) return false
     if (filter?.importance && d.importance !== filter.importance) return false
     if (filter?.stage && stageOf(d) !== filter.stage) return false
@@ -208,11 +227,11 @@ export function listRevRevenue(
   filter?: { team?: string; manager?: string; region?: string },
   scope?: { period: RevenuePeriod; now: Date },
 ): RevRevenueRow[] {
-  const managerFilter = normalizeBranchMemberName(filter?.manager)
+  const managerMatches = managerFilterOf(filter?.manager)
   return deals
     .filter((d) => {
       if (filter?.team && filter.team !== "ALL" && d.team !== filter.team) return false
-      if (managerFilter && normalizeBranchMemberName(d.manager) !== managerFilter) return false
+      if (managerMatches && !managerMatches(d.manager)) return false
       if (filter?.region && d.region !== filter.region) return false
       return true
     })
@@ -236,6 +255,8 @@ export function listRevRevenue(
       monthlyRed: sparseBooleanMap(d.monthly_red, true),
       weeklyPayments: weeklyPaymentsFromRaw(d),
       ...revRowIdentityFields(d.raw),
+      // 읽는 시점 확도 재료(F-08·F-15) — 오버레이·서버 합치기·화면이 캐논에 같은 재료를 넘긴다.
+      ...revReadTimeFields(d.raw),
       ...(typeof d.synced_at === "string" && d.synced_at ? { syncedAt: d.synced_at } : {}),
     }))
     .sort((a, b) => b.revenue - a.revenue || a.customer.localeCompare(b.customer))

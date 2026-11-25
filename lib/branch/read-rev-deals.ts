@@ -30,9 +30,13 @@ export interface RevDealsSource {
 // 없었음) 이후 KR Team 등 서빙 화면이 소스 신선도를 스스로 판단할 수 있게 하려는 용도.
 // 기존 readRevDealsPreferActive는 시그니처를 유지한다(heatmap/kpi/data-quality/insights 등
 // 소스 메타가 필요 없는 다수 소비처가 이미 그 시그니처에 맞춰져 있다).
+// withRaw: 미러 폴백에서 raw(주차·Row ID·빨간 예정 칸 pendingCells·월≠주 표시)를 함께 읽는다 — 장부 매출 집계
+// (lib/branch/ledger-revenue.ts)가 정정의 원본 행을 Row ID 로 찾고, 확도를 읽는 시점(F-08·F-09)으로 판정하는 데 쓴다.
+// 액티브 임포트 경로는 늘 raw 를 싣는다. 파이프라인 행(pipeline-rows)이 같은 withRaw 미러 캐시를 이미 쓴다.
 export async function readRevDealsPreferActiveWithSource(
   fiscalYear: number,
   filter?: { team?: string },
+  opts?: { withRaw?: boolean },
 ): Promise<{ deals: BranchRevDeal[]; source: RevDealsSource }> {
   const runInfo = await getActiveImportRunInfo("rev", fiscalYear)
   if (runInfo) {
@@ -45,7 +49,7 @@ export async function readRevDealsPreferActiveWithSource(
   }
   // 미러 폴백 — 동기화 완료 시각은 summary 라우트가 이미 lastSync로 계산해 두므로 여기서는
   // null로 남기고 라우트가 그 값을 대입한다(같은 값을 다시 조회하는 왕복을 만들지 않는다).
-  const mirrorDeals = await listBranchRevDeals(filter)
+  const mirrorDeals = opts?.withRaw ? await listBranchRevDeals(filter, { withRaw: true }) : await listBranchRevDeals(filter)
   return { deals: mirrorDeals, source: { kind: "mirror", asOf: null } }
 }
 

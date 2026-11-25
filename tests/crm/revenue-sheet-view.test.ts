@@ -1,6 +1,7 @@
 // 라운드 5 B3·S-6·S-9 — 매출시트 화면 순수 헬퍼(lib/crm/revenue-sheet-view.ts).
 import { describe, expect, it } from "vitest"
 
+import { parseSheetFilters } from "@/components/admin/branch/ledger/ledger-sheet-logic"
 import type { AdminCrmRevenueSheetRow } from "@/lib/admin-crm-revenue-sheet-types"
 import {
   DEFAULT_REVENUE_SHEET_URL_STATE,
@@ -78,6 +79,12 @@ describe("buildLedgerEntryHref — 매출시트 행 → 장부의 그 행(라운
     const url = new URL(LEDGER_MANUAL_ENTRIES_HREF, "https://x")
     expect(url.searchParams.get("origin")).toBe("draft")
     expect(url.searchParams.get("period")).toBe("Y")
+  })
+
+  it("F-25: 수기 입력 확인 링크는 장부 기본 열 필터('이번 달 계 값 있음')를 끈다 — 회계연도 전체 N건이 다 보인다", () => {
+    const url = new URL(LEDGER_MANUAL_ENTRIES_HREF, "https://x")
+    expect(url.searchParams.get("cf")).toBe("none")
+    expect(parseSheetFilters(url.searchParams.get("cf"))).toEqual({})
   })
 })
 

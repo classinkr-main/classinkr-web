@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
 import { BRANCH_READ_ADMIN_API_ROLES, verifyAdmin } from "@/lib/admin-auth"
 import { branchManagerFromRequest } from "@/lib/admin/personal-branch"
+import { businessFy } from "@/lib/branch/fiscal"
+import { readLedgerRevenueDeals } from "@/lib/branch/ledger-revenue"
 import { buildBranchWeeklyCompassReport } from "@/lib/branch/weekly-report"
-import { listBranchRevDeals } from "@/lib/repositories/branch-deals"
 
 const TEAMS = new Set(["ALL", "BD", "MKT", "CSM"])
 
@@ -16,7 +17,8 @@ export async function GET(req: NextRequest) {
   if (!TEAMS.has(team)) return NextResponse.json({ error: "Invalid team query" }, { status: 400 })
   const manager = await branchManagerFromRequest(url, req)
   try {
-    const deals = await listBranchRevDeals()
+    // 매출 딜 = 시트 행(액티브 임포트 우선) + 장부 항목(D1) — KA 확정·미확정이 장부 화면과 같다.
+    const { deals } = await readLedgerRevenueDeals({ fiscalYear: businessFy() })
     const report = await buildBranchWeeklyCompassReport({ team, manager: manager ?? null, deals })
     return NextResponse.json(report, { headers: { "Cache-Control": "private, no-store" } })
   } catch (error) {

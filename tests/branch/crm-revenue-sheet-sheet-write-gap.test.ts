@@ -58,6 +58,15 @@ vi.mock("next/cache", () => ({
 }))
 vi.mock("@/lib/supabase/admin", () => ({ createSupabaseAdminClient: () => recording.client }))
 vi.mock("@/lib/compass/bridge", () => ({ getCompassRevenue: vi.fn(async () => ({ down: false, rows: [] })) }))
+// D1: 이 화면 매출은 미러 행 + 장부 항목(장부 오버레이). 이 파일은 "장부 입력 N건" 배지의 세는 규칙만 본다 — 오버레이
+// 입력은 빈 장부로 둔다(합치기는 tests/branch/crm-revenue-sheet-ledger-overlay.test.ts).
+vi.mock("@/lib/branch/ledger-revenue", async () => ({
+  ...(await vi.importActual<typeof import("@/lib/branch/ledger-revenue")>("@/lib/branch/ledger-revenue")),
+  readLedgerOverlaySources: vi.fn(async () => ({
+    fiscalYear: 2026, months: [], entries: [], drafts: [], reversedDraftIds: [], sheetWrites: {},
+    lastRevSyncStartedAt: null, ledgerReadable: true, sheetWritesReadable: true, truncated: false,
+  })),
+}))
 vi.mock("@/lib/repositories/branch-sales-ledger-sheet-writes", () => ({
   latestSheetWritesByDraftIds,
   lastSuccessfulRevSyncStartedAt,

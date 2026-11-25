@@ -7,7 +7,7 @@ import {
   railDedupTarget,
   rowCommitKind,
 } from "@/components/admin/branch/ledger/rev-matrix-logic"
-import { capLedgerDrafts, ledgerTruncationNotice } from "@/components/admin/branch/ledger/useLedgerDraftQueue"
+import { capLedgerDrafts, joinQueueNotices, ledgerTruncationNotice } from "@/components/admin/branch/ledger/useLedgerDraftQueue"
 import { alignOpenDraftsToSheetRows, resolveCorrectionTargets, snapshotSheetRowId } from "@/components/admin/branch/ledger/workbench-shared"
 import type { LedgerDraft, LedgerRevenueRow } from "@/components/admin/branch/ledger/shared"
 
@@ -167,6 +167,15 @@ describe("2) 열린 초안은 목록에서 잘리지 않는다(capLedgerDrafts)"
     expect(ledgerTruncationNotice({ openDrafts: false, entries: false })).toBeNull()
     expect(ledgerTruncationNotice({ openDrafts: true })).toContain("열린 초안")
     expect(ledgerTruncationNotice({ entries: true })).toContain("반영값")
+    // 장부 항목은 회계연도 범위를 끝까지 읽어(F-29) 서버 상한 20,000건에서만 경고한다.
+    expect(ledgerTruncationNotice({ entries: true })).toContain("20,000건")
+  })
+
+  it("상한 경고는 큐 알림과 따로 들고 한 줄로 합친다 — 큐 알림이 비어도 남는다(F-29)", () => {
+    expect(joinQueueNotices(null, null)).toBeNull()
+    expect(joinQueueNotices("큐 알림", null)).toBe("큐 알림")
+    expect(joinQueueNotices(null, "상한 경고")).toBe("상한 경고")
+    expect(joinQueueNotices("큐 알림", "상한 경고")).toBe("큐 알림 · 상한 경고")
   })
 })
 

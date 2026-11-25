@@ -21,9 +21,13 @@ describe("branch ledger DB-first route wiring", () => {
     expect(payload).toContain("readDshPreferDb")
     expect(payload).toContain("readKpiBlocksPreferDb")
     expect(payload).toContain('from "@/lib/branch/read-dsh-kpi"')
-    // REV 읽기도 같은 방식으로 lib/branch/read-rev-deals 헬퍼를 경유한다.
-    expect(payload).toContain("readRevDealsPreferActive")
-    expect(payload).toContain('from "@/lib/branch/read-rev-deals"')
+    // REV 읽기는 시트 행 + 장부 항목(D1) 헬퍼(lib/branch/ledger-revenue)를 경유하고, 그 헬퍼가 같은 REV 사다리
+    // (lib/branch/read-rev-deals — 액티브 임포트 우선, 미러 폴백)를 탄다.
+    expect(payload).toContain("readLedgerRevenueDeals")
+    expect(payload).toContain('from "@/lib/branch/ledger-revenue"')
+    const ledgerRevenue = source("lib/branch/ledger-revenue.ts")
+    expect(ledgerRevenue).toContain("readRevDealsPreferActiveWithSource")
+    expect(ledgerRevenue).toContain('from "@/lib/branch/read-rev-deals"')
 
     const revHelper = source("lib/branch/read-rev-deals.ts")
     expect(revHelper).toContain("readRevDealsFromActiveImport")
@@ -46,8 +50,9 @@ describe("branch ledger DB-first route wiring", () => {
     expect(route).toContain("readDshPreferDb")
     expect(route).toContain("readKpiBlocksPreferDb")
     expect(route).toContain('from "@/lib/branch/read-dsh-kpi"')
-    expect(route).toContain("readRevDealsPreferActive")
-    expect(route).toContain('from "@/lib/branch/read-rev-deals"')
+    // REV 는 시트 행 + 장부 항목(D1) — 같은 REV 사다리 위에 장부 항목을 얹는 헬퍼.
+    expect(route).toContain("readLedgerRevenueDeals")
+    expect(route).toContain('from "@/lib/branch/ledger-revenue"')
   })
 
   it("loads REV from active imports before using branch_rev_deals fallback in pipeline route", () => {

@@ -26,12 +26,16 @@ import type { LedgerDraftInput } from "./useLedgerDraftQueue"
 
 import {
   draftConfidenceFromMetadata,
+  foldWeeksIntoMonth,
   isDraftConfidence,
+  ledgerMonthWeekCount,
   mapNumberValue,
   mergedWeeklyFromMetadata,
   metadataString,
   rowMonthAmount,
+  rowMonthHasRefund,
   rowProductCategory,
+  rowWeeklySplit,
   weeklyConfidenceFromMetadata,
   type DraftConfidence,
   type DraftKind,
@@ -138,6 +142,9 @@ export interface MatrixPendingDraft {
   confidenceTouched?: boolean
   /** 주차별 확도 직접 선택 표시(metadata.weeklyConfidenceTouched, 5칸). 없으면 null. */
   weeklyConfidenceTouched?: boolean[] | null
+  /** 초안이 가리킨 주차(metadata.week "w1".."w5" → 0~4). 월 칸 초안·주차 병합 초안("month")이면 null. 주차 병합이 없는
+      한 주차 초안의 금액이 어느 칸 것인지 — 같은 달 다른 주차를 이어 고칠 때 그 칸 값을 지키는 데 쓴다(mergeWeekCellCommit). */
+  week?: number | null
 }
 
 /** metadata.weeklyConfidenceTouched(5칸 불리언) — 모양이 틀리면 null. */
@@ -258,6 +265,7 @@ export function buildMatrixPendingByCell(
         weeklyConfidence: weeklyConfidenceFromMetadata(draft.metadata),
         confidenceTouched: draft.metadata?.confidenceTouched === true,
         weeklyConfidenceTouched: weeklyConfidenceTouchedFromMetadata(draft.metadata),
+        week: weekIndexFromToken(metadataString(draft.metadata, "week")),
       }
       // 비어 있거나, 먼저 들어온 것이 신규 초안인데 이번 것이 수정 초안이면 이번 것으로(수정 우선).
       const claim = (key: string) => {
@@ -297,14 +305,37 @@ function parseMatrixAmount(value: string): number {
 // 그 달의 원본 금액을 지워 amount<=0으로 만들기 때문에, 이 체크가 없으면 아래 "미입력=편집 가능" 분기로
 // 새어 정정 적용 직후 원본 셀이 재편집 가능해진다 — 새 셀 입력이 쌓이면 적용된 정정 + 신규 초안이 같은
 // (딜, 월)에 겹쳐 이중계상된다. 그래서 금액 판정보다 먼저, 금액과 무관하게 잠근다.
+//
+// 환불 달(D2): 그 달에 시트 환불(순액 < 0 이거나 음수 주차)이 있으면 금액과 무관하게 잠근다('환불 — 시트 값'). 주차 병합
+// 저장은 음수 주차를 0 으로 읽고(mergedWeeklyFromMetadata), 월 대체는 그 달을 통째로 바꿔 환불이 소리 없이 사라진다 —
+// 환불 초안 종류가 생기기 전까지 장부에서 고치지 않는다.
 export function isMatrixCellLocked(row: LedgerRevenueRow, month: string, correctedMonths?: Set<string> | null): boolean {
-  if (correctedMonths?.has(month)) return true
+  return matrixCellLockKind(row, month, correctedMonths) != null
+}
+
+/**
+ * 잠긴 까닭(툴팁·칸 모양이 이것으로 갈린다). 잠기지 않았으면 null.
+ *  - "corrected": 장부 정정이 그 달을 대체했다 — 원래 행의 그 달은 전부 잠근다(F-04).
+ *  - "refund":    그 달에 시트 환불이 있다 — 전부 잠근다(D2 '환불 — 시트 값').
+ *  - "ledger":    적용된 장부 입력 행의 자기 달.
+ *  - "confirmed": 시트 확정(빨강 · 확정액이 그 달 금액을 덮는다) — 주차 칸은 값 있는 칸만 잠근다(computeWeekCellStates).
+ */
+export type MatrixCellLockKind = "corrected" | "refund" | "ledger" | "confirmed"
+
+export function matrixCellLockKind(row: LedgerRevenueRow, month: string, correctedMonths?: Set<string> | null): MatrixCellLockKind | null {
+  if (correctedMonths?.has(month)) return "corrected"
+  if (rowMonthHasRefund(row, month)) return "refund"
   const amount = rowMonthAmount(row, month)
-  if (amount <= 0) return false // 미입력 = 편집 가능(예정 추가)
-  if (row.ledgerOrigin === "draft" && row.draftMonth === month) return true
-  if (row.monthlyRed?.[month]) return true
+  if (amount <= 0) return null // 미입력 = 편집 가능(예정 추가)
+  if (row.ledgerOrigin === "draft" && row.draftMonth === month) return "ledger"
+  if (row.monthlyRed?.[month]) return "confirmed"
   const confirmed = mapNumberValue(row.monthlyConfirmed, month)
-  return confirmed > 0 && confirmed >= amount
+  return confirmed > 0 && confirmed >= amount ? "confirmed" : null
+}
+
+/** 그 달 주차 칸을 전부 잠그는 까닭인가(정정 대체 · 환불) — 확정 잠금은 값 있는 칸만 잠근다(빈 칸은 열린다, 2026-07-20). */
+export function isWholeMonthLock(kind: MatrixCellLockKind | null | undefined): boolean {
+  return kind === "corrected" || kind === "refund"
 }
 
 // 딜행 셀이 편집 가능한지 — 딜행(그룹 소계 제외)이면서 잠금 아님. 미래월 제한은 두지 않는다.
@@ -971,20 +1002,212 @@ export type MatrixEditorActions = MatrixEditor["actions"]
 // (display>0)만 잠그고, 빈 칸은 같은 달이어도 편집 가능하게 둔다 — 아직 안 지난 주차(예: 당월 W5)
 // 입력을 월 단위 잠금이 통째로 막던 문제를 잡는다. 이전 구현은 월 단위 잠금(monthLockedOf)과
 // isMatrixCellEditable(=!monthLocked)을 AND로 겹쳐 5칸을 통째로 잠갔다. display 산식은 월합계만 행
-// (W5에 monthOnlyAmount 얹기)까지 포함해 실제 렌더와 1:1로 맞춘다.
+// (마지막 주차에 monthOnlyAmount 얹기)까지 포함해 실제 렌더와 1:1로 맞춘다.
+//
+// 2026-11-25(시트 고정 전):
+//  - display 는 그대로 양수만이다. 시트 음수(환불) 주차는 refund(≤ 0)로 따로 싣고 잠근다(D2 '환불 — 시트 값'). 주차 값이
+//    하나도 없는 환불 달은 monthOnlyAmount 에 순액(음수)을 넘기면 마지막 주차의 refund 로 둔다(월합계만과 같은 자리).
+//  - weekCount(F-31): 그 달의 시트 주차 칸 수(ledgerMonthWeekCount — 2월 4). 5칸은 늘 돌려주되(표 정렬) 없는 주차는
+//    absent(표시 0 · 잠금)이고, 거기 놓일 값(월합계만·W5 값)은 마지막 주차로 합친다(시트 쓰기도 2월 W5 를 W4 에 쓴다).
+//    생략하면 5 — 예전과 같은 결과다.
 export function computeWeekCellStates(
   weeks: number[],
   monthOnlyAmount: number,
   monthLocked: boolean,
-): Array<{ display: number; isMonthOnly: boolean; locked: boolean }> {
+  weekCount = 5,
+): Array<{ display: number; isMonthOnly: boolean; locked: boolean; refund?: number; absent?: boolean }> {
+  const count = Math.min(Math.max(Math.floor(weekCount), 1), 5)
+  const last = count - 1
   const anyExplicit = weeks.some((w) => w > 0)
-  return Array.from({ length: 5 }, (_unused, index) => {
+  const anyValue = weeks.some((w) => Number(w) !== 0)
+  const displays = Array.from({ length: 5 }, (_unused, index) => {
     const value = weeks[index] ?? 0
-    // 월합계만 있는 행은 마지막(W5) 칸에 금액을 얹어 시트 검수 감각을 유지한다.
-    const display = value > 0 ? value : index === 4 && monthOnlyAmount > 0 && !anyExplicit ? monthOnlyAmount : 0
-    const isMonthOnly = display > 0 && value === 0
-    return { display, isMonthOnly, locked: monthLocked && display > 0 }
+    // 월합계만 있는 행은 마지막 칸에 금액을 얹어 시트 검수 감각을 유지한다.
+    return value > 0 ? value : index === last && monthOnlyAmount > 0 && !anyExplicit ? monthOnlyAmount : 0
   })
+  const monthOnly = displays.map((display, index) => display > 0 && !((weeks[index] ?? 0) > 0))
+  const refunds = Array.from({ length: 5 }, (_unused, index) => Math.min(Number(weeks[index] ?? 0) || 0, 0))
+  if (!anyValue && monthOnlyAmount < 0) {
+    refunds[last] = monthOnlyAmount
+    monthOnly[last] = true
+  }
+  // 그 달에 없는 주차의 값은 마지막 주차로 합친다.
+  for (let index = count; index < 5; index += 1) {
+    displays[last] += displays[index]
+    refunds[last] += refunds[index]
+    monthOnly[last] = monthOnly[last] || monthOnly[index]
+    displays[index] = 0
+    refunds[index] = 0
+    monthOnly[index] = false
+  }
+  // refund · absent 는 해당할 때만 싣는다(없으면 생략 — 예전 모양 { display, isMonthOnly, locked } 그대로).
+  return displays.map((display, index) => {
+    const absent = index >= count
+    const refund = refunds[index]
+    return {
+      display,
+      isMonthOnly: monthOnly[index] && (display > 0 || refund < 0),
+      locked: absent || refund < 0 || (monthLocked && display > 0),
+      ...(refund < 0 ? { refund } : {}),
+      ...(absent ? { absent } : {}),
+    }
+  })
+}
+
+// ── 주차 칸 커밋 병합(F-02 · F-05) ─────────────────────────────────────────────────────────────
+
+/** 대기 초안(서버 목록) 또는 응답 전 저장(pendingFromDraftInput)의 요약 — 병합 기준. */
+export type WeekCommitPending = Pick<MatrixPendingDraft, "amount" | "weekly" | "weeklyConfidence"> &
+  Partial<Pick<MatrixPendingDraft, "confidence" | "week">>
+
+export interface WeekCellCommitInput {
+  /** 같은 (행, 달)·같은 종류(pendingMatchesKind)의 대기 초안 — 서버 목록의 것이든, 아직 응답이 오지 않은 저장이든. 없으면 null. */
+  pendingDraft: WeekCommitPending | null | undefined
+  /** 칸이 있는 행 — 대기 초안이 싣지 않은 주차는 이 행의 시트 주차(rowWeeklySplit 의 explicit)로 채운다. */
+  sheetRow: LedgerRevenueRow
+  month: string
+  /** 고친 주차(0~4). 그 달에 없는 주차(2월 W5)는 마지막 주차로 놓는다. */
+  week: number
+  /** 그 주차의 새 금액(원). 음수는 0. */
+  amount: number
+  /** 고친 주차의 확도. 생략하면 예정. */
+  confidence?: DraftConfidence
+}
+
+export interface WeekCellCommitResult {
+  /** 그 달 금액 = 주차 합. */
+  amount: number
+  /** metadata.weekly — 늘 5칸(그 달에 없는 주차는 0). */
+  weekly: number[]
+  /** metadata.weeklyConfidence — 금액 > 0 주차만 확도, 나머지 null. */
+  weeklyConfidence: Array<DraftConfidence | null>
+  /** 금액이 실제로 놓인 주차(2월 W5 → W4). */
+  week: number
+  /** 무엇 위에 얹었나 — pending: 대기 초안의 주차 · sheet: 행의 시트 주차 · empty: 빈 달(놓을 주차 없음). */
+  base: "pending" | "sheet" | "empty"
+  /**
+   * 대기 초안이 주차 없는 월 금액 초안이었다 — 그 월 금액은 주차로 나눌 수 없어 이번 저장이 그 달을 주차 합으로 대체한다
+   * (호출부가 "이 달 전체가 주차 합으로 바뀝니다"라고 알린다).
+   */
+  replacedMonthDraft: boolean
+}
+
+function clampWeeks(weeks: readonly number[]): number[] {
+  return Array.from({ length: 5 }, (_unused, index) => Math.max(Number(weeks[index] ?? 0) || 0, 0))
+}
+
+function foldStates(states: ReadonlyArray<DraftConfidence | null> | null | undefined, weekCount: number): Array<DraftConfidence | null> | null {
+  if (!states) return null
+  const out = Array.from({ length: 5 }, (_unused, index) => states[index] ?? null)
+  for (let index = weekCount; index < 5; index += 1) {
+    out[weekCount - 1] = out[weekCount - 1] ?? out[index]
+    out[index] = null
+  }
+  return out
+}
+
+/**
+ * 주차 칸 커밋의 그 달 주차 5칸(F-02). 같은 (행, 달)에 대기 초안이 있으면 그 초안의 주차(metadata.weekly, 없으면 그 초안의 한
+ * 주차 금액)에서 시작하고, 초안이 싣지 않은 주차만 행의 시트 주차(explicit)로 채운 뒤 이번 주차를 얹는다 — 같은 달 두 번째 주차
+ * 입력이 첫 주차를 지우지 않는다. 응답이 오기 전에 다시 고친 경우(F-05)는 호출부가 그 저장의 입력을 pendingFromDraftInput 으로
+ * 바꿔 pendingDraft 로 넘긴다. 결과는 늘 metadata.weekly(5칸)다 — 큐는 주차 병합 초안으로 보이고 '월 전체 대체' 경고가 없다.
+ * 시트 주차가 일자 추정(inferred)·월합계만이면 지킬 실주차가 없어(지금과 같은 단일 주차 대체 규약) 그 달은 주차 합으로 바뀐다.
+ */
+export function mergeWeekCellCommit(input: WeekCellCommitInput): WeekCellCommitResult {
+  const { pendingDraft: pending, sheetRow, month } = input
+  const weekCount = ledgerMonthWeekCount(month)
+  const target = Math.min(Math.max(Math.floor(input.week), 0), weekCount - 1)
+  const split = rowWeeklySplit(sheetRow, month)
+  const explicit = split.source === "explicit"
+  const rowWeeks = explicit ? foldWeeksIntoMonth(clampWeeks(split.weeks), month) : [0, 0, 0, 0, 0]
+  // 행 쪽 주차 확도 — 적용 초안 행(장부 입력)의 자기 달만 저장된 주차별 확도가 있다.
+  const rowStates = sheetRow.draftMonth === month ? foldStates(weeklyConfidenceFromMetadata(sheetRow.draftMetadata), weekCount) : null
+  let weeks: number[]
+  let states: Array<DraftConfidence | null>
+  let base: WeekCellCommitResult["base"] = explicit ? "sheet" : "empty"
+  let replacedMonthDraft = false
+  if (pending?.weekly) {
+    weeks = foldWeeksIntoMonth(clampWeeks(pending.weekly), month)
+    const pendingStates = foldStates(pending.weeklyConfidence, weekCount)
+    states = weeks.map((_value, index) => pendingStates?.[index] ?? rowStates?.[index] ?? null)
+    base = "pending"
+  } else if (pending && pending.week != null) {
+    weeks = rowWeeks.slice()
+    const at = Math.min(Math.max(pending.week, 0), weekCount - 1)
+    weeks[at] = Math.max(Number(pending.amount) || 0, 0)
+    states = weeks.map((_value, index) =>
+      index === at ? pending.weeklyConfidence?.[index] ?? pending.confidence ?? null : rowStates?.[index] ?? null,
+    )
+    base = "pending"
+  } else {
+    weeks = rowWeeks.slice()
+    states = weeks.map((_value, index) => rowStates?.[index] ?? null)
+    replacedMonthDraft = Boolean(pending)
+  }
+  weeks[target] = Math.max(Math.round(Number(input.amount) || 0), 0)
+  const weeklyConfidence = weeks.map((value, index) => {
+    if (!(value > 0)) return null
+    return index === target ? input.confidence ?? "expected" : states[index] ?? null
+  })
+  return {
+    amount: weeks.reduce((sum, value) => sum + value, 0),
+    weekly: weeks,
+    weeklyConfidence,
+    week: target,
+    base,
+    replacedMonthDraft,
+  }
+}
+
+/**
+ * 아직 응답이 오지 않은(또는 방금 보낸) 칸 저장의 입력 → 병합 기준 요약(F-05). 호출부는 (행, 달)마다 마지막으로 보낸 입력을
+ * 들고 있다가, 그 응답이 목록(drafts)에 들어오기 전에 같은 달을 다시 고치면 이것을 mergeWeekCellCommit 의 pendingDraft 로 넘긴다.
+ */
+export function pendingFromDraftInput(
+  input: Pick<LedgerDraftInput, "kind" | "amount" | "metadata">,
+  id = "in-flight",
+): MatrixPendingDraft {
+  return {
+    id,
+    kind: input.kind,
+    amount: input.amount,
+    confidence: draftConfidenceFromMetadata(input.metadata),
+    weekly: mergedWeeklyFromMetadata(input.metadata),
+    weeklyConfidence: weeklyConfidenceFromMetadata(input.metadata),
+    confidenceTouched: input.metadata?.confidenceTouched === true,
+    weeklyConfidenceTouched: weeklyConfidenceTouchedFromMetadata(input.metadata),
+    week: weekIndexFromToken(metadataString(input.metadata, "week")),
+  }
+}
+
+/** 칸 저장의 (행, 달) 키 — 같은 달의 다른 주차 저장도 같은 기준(마지막 입력)을 잇도록 주차는 넣지 않는다. */
+export function cellCommitMonthKey(rowId: string, month: string, kind: DraftKind): string {
+  return `${kind}::${matrixCoordKey({ rowId, month })}`
+}
+
+/**
+ * 칸 저장 스냅샷의 행 요약(sourceSnapshot.row). 계약·경로·계약 목표·중요도(status · dealType · contractTarget · importance)를
+ * 함께 싣는다(F-17) — 12/1 뒤에는 시트 행을 다시 읽을 수 없어 정정·장부 행이 자기 분류를 들고 있어야 신규/갱신·직접/채널
+ * 합계와 DSH 실적 분해에서 '기타'로 빠지지 않는다. 장부에서 넣은 행(신규)의 칸을 고칠 때도 그 행의 분류를 잇는다(F-18).
+ */
+export function cellDraftSnapshotRow(
+  row: Pick<LedgerRevenueRow, "id" | "customer" | "manager" | "team" | "region" | "productVersion" | "firstPayment" | "status" | "dealType" | "contractTarget" | "importance">,
+  monthAmount: number,
+): Record<string, unknown> {
+  return {
+    id: row.id,
+    customer: row.customer,
+    manager: row.manager,
+    team: row.team,
+    region: row.region,
+    productVersion: row.productVersion,
+    firstPayment: row.firstPayment ?? null,
+    status: row.status ?? null,
+    dealType: row.dealType ?? null,
+    contractTarget: row.contractTarget ?? null,
+    importance: row.importance ?? null,
+    monthAmount,
+  }
 }
 
 // 콕핏/입력 레일의 주차 그리드(W1~W5) 칸별 잠금 마스크 — "확정 주차 읽기전용, 빈 주차 추가만 허용"

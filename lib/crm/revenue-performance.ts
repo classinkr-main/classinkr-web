@@ -1,16 +1,16 @@
 import "server-only"
 
 import type { BranchRevDeal } from "@/lib/repositories/branch-deals"
-import { readRevDealsPreferActive } from "@/lib/branch/read-rev-deals"
-import { fyOf } from "@/lib/branch/fiscal"
+import { readLedgerRevenueDeals } from "@/lib/branch/ledger-revenue"
+import { businessFy, businessYm } from "@/lib/branch/fiscal"
 import { confirmedMonthAmountWithColor, dealHasColorData } from "@/lib/branch/computations/rev-confirmed"
 import { normalizedAccountKey } from "@/lib/branch/account-key"
 
 // CRM 성과 분석 — 매출 rev 딜(CRM 도메인 데이터)을 owner(개인)·팀·월로 재집계.
 // 현황 전용. deals 탭과 독립. 월 키는 "YYYY-MM"(확인됨).
 // 매출 = '확정 매출' 캐논(rev-confirmed.ts confirmedMonthAmount) — 장부와 동일 정의(2026-07-10).
-// 데이터셋도 장부와 동일 규약(readRevDealsPreferActive: DB-native 액티브 임포트 우선)을 따른다 —
-// 미러(branch_rev_deals)에는 색(확도) 없는 행이 많아 그대로 읽으면 장부 수치와 어긋난다.
+// 데이터셋도 장부와 동일 규약(readLedgerRevenueDeals: 시트 행 — DB-native 액티브 임포트 우선 — + 장부 항목, D1)을 따른다 —
+// 미러(branch_rev_deals)에는 색(확도) 없는 행이 많아 그대로 읽으면 장부 수치와 어긋나고, 장부 항목을 빼면 12/1 뒤 매출이 멈춘다.
 
 export interface CrmPerfMonthPoint {
   month: string
@@ -45,12 +45,13 @@ export interface CrmRevenuePerformance {
   windowLimited: boolean
 }
 
-function recentMonthKeys(months: number): string[] {
-  const now = new Date()
+// 끝 달은 지금의 KST 영업월(서버 시계는 UTC — 1일 0~9시 KST 에 지난달로 끝나지 않게). 그다음은 순수 YYYY-MM 산술.
+function recentMonthKeys(months: number, now: Date = new Date()): string[] {
+  const [year, month] = businessYm(now).split("-").map(Number)
   const keys: string[] = []
   for (let i = months - 1; i >= 0; i -= 1) {
-    const date = new Date(now.getFullYear(), now.getMonth() - i, 1)
-    keys.push(`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`)
+    const date = new Date(Date.UTC(year, month - 1 - i, 1))
+    keys.push(`${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`)
   }
   return keys
 }
@@ -103,7 +104,7 @@ export async function getCrmRevenuePerformance(months = 6): Promise<CrmRevenuePe
   const indexByMonth = new Map(monthKeys.map((month, index) => [month, index]))
 
   // 조회 장애를 정상 빈 매출로 캐시하지 않는다. 상위 API의 오류 응답으로 전달한다.
-  const deals = await readRevDealsPreferActive(fyOf(new Date()))
+  const { deals } = await readLedgerRevenueDeals({ fiscalYear: businessFy() })
 
   const monthTotals = new Array<number>(safeMonths).fill(0)
   const teamMap = new Map<string, number[]>()
@@ -168,8 +169,8 @@ export async function getCrmRevenuePerformance(months = 6): Promise<CrmRevenuePe
     byMember,
     dealCount,
     newAccountsByMonth,
-    // readRevDealsPreferActive는 이 파일을 포함한 모든 branch 소비처와 동일하게 현재
-    // 회계연도(fyOf(new Date())) 한 해만 읽는다 — 이전 회계연도에 이미 결제 이력이 있는
+    // readLedgerRevenueDeals는 이 파일을 포함한 모든 branch 소비처와 동일하게 현재
+    // 회계연도(KST 영업일 기준) 한 해만 읽는다 — 이전 회계연도에 이미 결제 이력이 있는
     // 계정이 이번 회계연도 첫 달에 결제하면(연초 갱신) 그 이전 이력을 볼 방법이 이 데이터
     // 원천 안에는 없어 "신규"와 구분할 수 없다. 추측으로 구분하지 않고 항상 true로 정직하게
     // 알린다 — 소비처(UI)는 "조회 기간 내 최초 결제 기준"으로 표기해야 한다.

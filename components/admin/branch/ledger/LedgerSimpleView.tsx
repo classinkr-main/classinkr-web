@@ -2,8 +2,9 @@
 
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 
+import { isZeroLedgerBucket } from "@/lib/branch/computations/revenue-core"
 import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
-import { cny, cnyExact } from "@/lib/branch/money-format"
+import { formatMoney, formatMoneyAmount, formatMoneyExact } from "@/lib/branch/ledger-format"
 import { branchManagerLabel } from "@/lib/branch/personal-scope"
 import { ApprovalBar, InlineCellEditor, type ApprovalOutcome, type LedgerCellEditApi } from "./LedgerSimpleEdit"
 import { SHEET_WRITE_ON_NOTICE, type SheetWriteMode } from "./sheet-write-view"
@@ -16,6 +17,7 @@ import {
   chipKey,
   fiscalPace,
   rowMatchesChips,
+  rowMonthHasRefund,
   SIMPLE_FILTER_CHIPS,
   SIMPLE_GROUP_BY_OPTIONS,
   type SimpleGroupBy,
@@ -24,18 +26,21 @@ import {
 // 장부(A안) 기본 화면. 개인 범위면 고객×월 표(A, 묶기 선택 시 A-1), 팀·전체면 담당자별 합계(A-2).
 // 금액 칸은 그 자리에서 고치고(주차·메모는 상세 레일), 입력·결재 흐름은 REV 렌즈와 같은 경로를 탄다.
 // 표 금액은 ¥ 를 칸 왼쪽에 두고 숫자만 오른쪽 정렬, 전액 확정 칸은 확정 틴트 배경으로 구분한다.
+// 금액은 부호 그대로(D2) — 환불(음수)은 중립색 "-19.5만", 확도 색은 합계가 0 보다 클 때만. 시트 환불이 든 칸은 고치지 않는다.
+// 만 단위 글자는 장부 화면 하나의 규칙(formatMoney — 부호는 ¥ 앞, 정확한 금액은 title, F-44).
 
-const money = (value: number) => `¥${cny(value)}`
-const exact = (value: number) => `¥${cnyExact(value)}`
+const money = (value: number) => formatMoney(value)
+const exact = (value: number) => formatMoneyExact(value)
 const pct = (value: number, goal: number | null) => (goal && goal > 0 ? Math.round((value / goal) * 100) : null)
 
-/** 표 칸 금액 — ¥ 는 칸 왼쪽, 숫자는 오른쪽. 0 이면 "–". */
-function Yen({ value, sign }: { value: number; sign?: string }) {
-  if (!value && !sign) return <span className="block text-right">–</span>
+/** 표 칸 금액 — ¥ 는 칸 왼쪽, 숫자는 오른쪽(부호는 숫자 앞). 0 이면 "–"(plus 면 "0"). plus — 양수에 "+"(목표 대비 차이). */
+function Yen({ value, plus = false }: { value: number; plus?: boolean }) {
+  if (!value && !plus) return <span className="block text-right">–</span>
   return (
     <span className="flex items-center justify-between gap-2">
       <span aria-hidden className="text-[11.5px] font-normal text-[#8A857D]">¥</span>
-      <span><span className="sr-only">¥</span>{sign}{cny(value)}</span>
+      <span aria-hidden>{formatMoneyAmount(value, { plus })}</span>
+      <span className="sr-only">{`${plus && value > 0 ? "+" : ""}${money(value)}`}</span>
     </span>
   )
 }
@@ -70,7 +75,8 @@ function bucketTitle(bucket: RevMonthlyBucket) {
 
 function ProgressBar({ bucket, goal, pace, label, paceLabel }: { bucket: RevMonthlyBucket; goal: number | null; pace: number; label: string; paceLabel?: boolean }) {
   const scale = Math.max(goal ?? 0, bucket.total, 1)
-  const width = (value: number) => `${(value / scale) * 100}%`
+  // 비율은 양수 몫만 그린다(D2 — 환불 · 차감은 막대 길이가 아니다).
+  const width = (value: number) => `${(Math.max(value, 0) / scale) * 100}%`
   const paceLeft = goal ? `${Math.min(pace * goal, scale) / scale * 100}%` : null
   return (
     <div className={`relative ${paceLabel && paceLeft ? "pt-[18px]" : ""}`} role="img" aria-label={label}>
@@ -95,7 +101,8 @@ function SummaryBand({ bucket, goal, pace, goalNote }: { bucket: RevMonthlyBucke
       label: <><ConfText kind="confirmed">확정</ConfText></>,
       value: money(bucket.confirmed),
       note: cPct === null ? "목표 비교 없음" : `${cPct}% · 페이스보다 ${Math.abs(pacePct - cPct)}%p ${cPct >= pacePct ? "앞" : "뒤"}`,
-      tone: CONFIDENCE_TOKENS.confirmed.textClass,
+      // 확정 색은 0 보다 클 때만 — 환불로 음수가 된 확정은 중립색(D2).
+      tone: bucket.confirmed > 0 ? CONFIDENCE_TOKENS.confirmed.textClass : undefined,
     },
     { label: <><ConfText kind="high-confidence">고확도</ConfText></>, value: money(bucket.high), note: goal ? `더하면 ${pct(bucket.confirmed + bucket.high, goal)}%` : "확정 전 단계" },
     { label: <><ConfText kind="expected">예정</ConfText></>, value: money(bucket.open), note: goal ? `전부 들어오면 ${pct(bucket.total, goal)}%` : "입금 예정" },
@@ -135,11 +142,13 @@ function SegButtons<T extends string>({ label, value, options, onChange }: { lab
   )
 }
 
-function AmountCell({ bucket, current, pendingAmount, label, cellKey, onEdit }: {
+function AmountCell({ bucket, current, pendingAmount, refund = false, label, cellKey, onEdit }: {
   bucket: RevMonthlyBucket
   current?: boolean
   /** 이 칸에 대기 중인 변경이 있으면 그 금액(점선 + 점으로 표시). */
   pendingAmount?: number | null
+  /** 시트 환불(음수)이 든 칸 — 툴팁에 '환불 — 시트 값'(고치지 않는다, D2). */
+  refund?: boolean
   /** 수정 가능한 칸이면 칸 이름(스크린리더용)과 열기 함수. */
   label?: string
   /** 수정을 닫은 뒤 포커스를 돌려줄 칸 키. */
@@ -151,10 +160,23 @@ function AmountCell({ bucket, current, pendingAmount, label, cellKey, onEdit }: 
   const shown = pending ? pendingAmount : bucket.total
   // 전액 확정(입금 끝) 칸 — 배경으로 구분한다. 대기 변경이 걸린 칸은 점선이 우선.
   const settled = !pending && bucket.total > 0 && bucket.confirmed >= bucket.total
-  // 확도 = 숫자 글자색(셀 안 아이콘 없음). 대기 변경은 먹색 굵게 + 점선, 빈 칸은 연회색.
-  const tone = pending ? "font-semibold text-[#111110]" : bucket.total <= 0 ? "text-[#C5C0B8]" : `${kind === "expected" ? "font-medium" : "font-semibold"} ${CONF_TEXT[kind]}`
-  const title = pending ? `대기 중 변경 ${exact(shown)} (지금 장부 ${exact(bucket.total)})` : bucket.total > 0 ? `${settled ? "전액 확정 · " : ""}${bucket.total > 0 ? bucketTitle(bucket) : ""}` : undefined
-  const content = shown > 0 || pending
+  // 확도 = 숫자 글자색(셀 안 아이콘 없음) — 합계가 0 보다 클 때만. 대기 변경은 먹색 굵게 + 점선, 환불(음수)은 중립 먹색,
+  // 빈 칸(0)은 연회색.
+  const tone = pending
+    ? "font-semibold text-[#111110]"
+    : bucket.total === 0
+      ? "text-[#C5C0B8]"
+      : bucket.total < 0
+        ? "font-medium text-[#31302E]"
+        : `${kind === "expected" ? "font-medium" : "font-semibold"} ${CONF_TEXT[kind]}`
+  const refundNote = refund ? " · 환불 — 시트 값" : ""
+  // 순액 0 이어도 확도 분해가 남은 상계 칸(확정 +100 · 예정 −100)은 툴팁으로 까닭을 보인다.
+  const title = pending
+    ? `대기 중 변경 ${exact(shown)} (지금 장부 ${exact(bucket.total)})${refundNote}`
+    : !isZeroLedgerBucket(bucket)
+      ? `${settled ? "전액 확정 · " : ""}${exact(bucket.total)} · ${bucketTitle(bucket)}${refundNote}`
+      : refund ? "환불 — 시트 값" : undefined
+  const content = shown !== 0 || pending
     ? <Yen value={shown} />
     : <span className="block text-right">–</span>
   const box = `relative block min-h-9 w-full rounded-md px-1.5 py-2 ${pending ? "outline-dashed outline-[1.5px] -outline-offset-2 outline-[#37352F]" : ""}`
@@ -169,7 +191,7 @@ function AmountCell({ bucket, current, pendingAmount, label, cellKey, onEdit }: 
         <button
           type="button"
           data-cell-key={cellKey}
-          aria-label={`${label} ${pending ? `대기 중 ${money(shown)}` : shown > 0 ? money(shown) : "비어 있음"} — 수정`}
+          aria-label={`${label} ${pending ? `대기 중 ${money(shown)}` : shown !== 0 ? money(shown) : "비어 있음"} — 수정`}
           onClick={onEdit}
           className={`${box} cursor-text text-left hover:bg-[rgba(8,71,52,0.05)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#084734]`}
         >
@@ -182,9 +204,12 @@ function AmountCell({ bucket, current, pendingAmount, label, cellKey, onEdit }: 
   )
 }
 
-/** 칸 → 고칠 딜 후보. 그 달에 금액(또는 대기 변경)이 있는 딜을 먼저, 없으면 수정 가능한 딜 전부. */
+/**
+ * 칸 → 고칠 딜 후보. 그 달에 금액(또는 대기 변경)이 있는 딜을 먼저, 없으면 수정 가능한 딜 전부.
+ * 그 달에 시트 환불이 든 딜은 뺀다(D2 '환불 — 시트 값' — 고치면 월 대체가 환불을 지운다).
+ */
 function cellCandidates(rows: LedgerRevenueRow[], month: string, edit: LedgerCellEditApi) {
-  const editable = rows.filter((row) => edit.editable(row, month))
+  const editable = rows.filter((row) => edit.editable(row, month) && !rowMonthHasRefund(row, month))
   const filled = editable.filter((row) => rowMonthAmount(row, month) > 0 || edit.pending(row, month))
   return filled.length > 0 ? filled : editable
 }
@@ -238,7 +263,9 @@ function DealTable({ rows, months, currentMonth, monthlyGoals, groupBy, expandPa
               {ledger.columns.map((column, index) => (
                 <th key={column.key} scope="col" className={`whitespace-nowrap px-3 py-2.5 text-right align-bottom font-medium ${column.current ? "bg-[#FBFCFB] font-semibold text-[#084734]" : ""}`}>
                   <div>{column.label}{column.current ? " · 이번 달" : ""}</div>
-                  <div className="mt-0.5 text-[11px] font-normal tabular-nums text-[#615D59]">{ledger.cells[index].total > 0 ? money(ledger.cells[index].total) : "–"}</div>
+                  <div className="mt-0.5 text-[11px] font-normal tabular-nums text-[#615D59]" title={ledger.cells[index].total !== 0 ? exact(ledger.cells[index].total) : undefined}>
+                    {ledger.cells[index].total !== 0 ? money(ledger.cells[index].total) : "–"}
+                  </div>
                   <HeaderBar bucket={ledger.cells[index]} scale={column.months.length > 1 ? 1 : ledger.cells[index].total / headerScale} />
                 </th>
               ))}
@@ -271,7 +298,8 @@ function DealTable({ rows, months, currentMonth, monthlyGoals, groupBy, expandPa
                     {line.cells.map((bucket, index) => {
                       const column = ledger.columns[index]
                       const month = column.months.length === 1 ? column.months[0] : null
-                      if (!edit || !month) return <AmountCell key={index} bucket={bucket} current={column.current} />
+                      const refund = column.months.some((item) => line.rows.some((row) => rowMonthHasRefund(row, item)))
+                      if (!edit || !month) return <AmountCell key={index} bucket={bucket} current={column.current} refund={refund} />
                       const hasPending = line.rows.some((row) => edit.pending(row, month))
                       const candidates = cellCandidates(line.rows, month, edit)
                       const cellKey = `${line.key}:${month}`
@@ -297,6 +325,7 @@ function DealTable({ rows, months, currentMonth, monthlyGoals, groupBy, expandPa
                           key={index}
                           bucket={bucket}
                           current={column.current}
+                          refund={refund}
                           pendingAmount={hasPending ? line.rows.reduce((sum, row) => sum + edit.value(row, month), 0) : null}
                           label={`${line.label} ${column.label}`}
                           cellKey={cellKey}
@@ -317,7 +346,7 @@ function DealTable({ rows, months, currentMonth, monthlyGoals, groupBy, expandPa
                 {ledger.cells.map((bucket, index) => (
                   <td key={index} className={`px-3 py-2 tabular-nums ${foot.kind === "confirmed" ? "font-semibold text-[#111110]" : ""}`}><Yen value={foot.pick(bucket)} /></td>
                 ))}
-                <td className={`px-3 py-2 pr-5 font-semibold tabular-nums ${foot.kind === "confirmed" ? CONFIDENCE_TOKENS.confirmed.textClass : "text-[#111110]"}`}><Yen value={foot.pick(ledger.total)} /></td>
+                <td className={`px-3 py-2 pr-5 font-semibold tabular-nums ${foot.kind === "confirmed" && foot.pick(ledger.total) > 0 ? CONFIDENCE_TOKENS.confirmed.textClass : "text-[#111110]"}`} title={exact(foot.pick(ledger.total))}><Yen value={foot.pick(ledger.total)} /></td>
               </tr>
             ))}
             {monthlyGoals ? (
@@ -326,12 +355,12 @@ function DealTable({ rows, months, currentMonth, monthlyGoals, groupBy, expandPa
                 {ledger.columns.map((column, index) => {
                   const goal = columnGoal(column.months)
                   const diff = ledger.cells[index].total - goal
-                  return <td key={column.key} className={`px-3 py-2.5 tabular-nums ${goal > 0 && diff >= 0 ? `font-semibold ${CONFIDENCE_TOKENS.confirmed.textClass}` : ""}`}>{goal > 0 ? <Yen value={Math.abs(diff)} sign={diff >= 0 ? "+" : "−"} /> : <span className="block text-right">–</span>}</td>
+                  return <td key={column.key} className={`px-3 py-2.5 tabular-nums ${goal > 0 && diff >= 0 ? `font-semibold ${CONFIDENCE_TOKENS.confirmed.textClass}` : ""}`} title={goal > 0 ? exact(diff) : undefined}>{goal > 0 ? <Yen value={diff} plus /> : <span className="block text-right">–</span>}</td>
                 })}
                 <td className="px-3 py-2.5 pr-5 font-bold tabular-nums">
                   {(() => {
                     const diff = ledger.total.total - columnGoal(months)
-                    return columnGoal(months) > 0 ? <Yen value={Math.abs(diff)} sign={diff >= 0 ? "+" : "−"} /> : <span className="block text-right">–</span>
+                    return columnGoal(months) > 0 ? <Yen value={diff} plus /> : <span className="block text-right">–</span>
                   })()}
                 </td>
               </tr>
@@ -358,8 +387,8 @@ function ManagerTable({ rows, months, currentMonth, managerGoals, pace, onOpenMa
     const behind = cPct !== null && cPct < pacePct - 15
     return (
       <>
-        <td className="min-w-[96px] px-3 py-3 tabular-nums">{goal ? <Yen value={goal} /> : <span className="block text-right">—</span>}</td>
-        <td className={`min-w-[96px] px-3 py-3 font-semibold tabular-nums ${CONFIDENCE_TOKENS.confirmed.textClass}`} title={exact(bucket.confirmed)}><Yen value={bucket.confirmed} /></td>
+        <td className="min-w-[96px] px-3 py-3 tabular-nums" title={goal ? exact(goal) : undefined}>{goal ? <Yen value={goal} /> : <span className="block text-right">—</span>}</td>
+        <td className={`min-w-[96px] px-3 py-3 font-semibold tabular-nums ${bucket.confirmed > 0 ? CONFIDENCE_TOKENS.confirmed.textClass : "text-[#31302E]"}`} title={exact(bucket.confirmed)}><Yen value={bucket.confirmed} /></td>
         <td className="min-w-[96px] px-3 py-3 tabular-nums" title={exact(bucket.high)}><Yen value={bucket.high} /></td>
         <td className="min-w-[96px] px-3 py-3 tabular-nums text-[#615D59]" title={exact(bucket.open)}><Yen value={bucket.open} /></td>
         <td className="w-[220px] px-3 py-3">
@@ -398,7 +427,7 @@ function ManagerTable({ rows, months, currentMonth, managerGoals, pace, onOpenMa
             {teams.map((team) => (
               <Fragment key={team.team}>
                 <tr className="border-b border-[rgba(0,0,0,0.08)] bg-[#FAF9F6] font-semibold">
-                  <th scope="rowgroup" className="px-3 py-3 pl-5 text-left">{team.team} <span className="text-[12px] font-normal text-[#615D59]">{team.members.length}명</span></th>
+                  <th scope="rowgroup" className="px-3 py-3 pl-5 text-left" title="행에 적힌 팀 기준 합계 — 팀 필터와 같습니다. 목표는 DSH 소속 팀원 목표 합">{team.team} <span className="text-[12px] font-normal text-[#615D59]">{team.members.length}명</span></th>
                   {cells(team.bucket, team.goal, team.team, true)}
                   <td className="px-3 py-3 pr-5 text-right tabular-nums">{team.dueUnconfirmed ? `${team.dueUnconfirmed}건` : "–"}</td>
                 </tr>
@@ -444,6 +473,8 @@ export interface LedgerSimpleViewProps {
   /** 이 범위의 대기 변경(초안·확인됨). */
   pendingDrafts: LedgerDraft[]
   serverQueue: boolean
+  /** F-20: 다른 곳(큐 일괄 · 줄 적용)에서 반영 요청이 나가 있다(useLedgerDraftQueue applyBusy) — 변경 대기 줄 버튼을 잠근다. */
+  applyBusy?: boolean
   /** REV 시트 쓰기 스위치(GET sheetWrite.mode). on 이면 상단 안내 한 줄·반영 확인 문구가 바뀐다. 생략 = off. */
   sheetWriteMode?: SheetWriteMode
   /** 시트 쓰기 기록·동기화 시각을 읽지 못했을 때 서버 문구(배지·이중 집계 제외가 비어 보일 수 있다). */
@@ -465,7 +496,7 @@ export interface LedgerSimpleViewProps {
   onChipsChange?: (next: Set<string>) => void
 }
 
-export default function LedgerSimpleView({ notices = [], rows, months, currentMonth, monthlyGoals, personal, managerGoals, loading, edit, pendingDrafts, serverQueue, sheetWriteMode = "off", sheetWriteHealthMessage = null, onCheckDrafts, onApplyDrafts, onShowQueue, onOpenRow, onOpenManager, view, chrome = true, chips: controlledChips, onChipsChange }: LedgerSimpleViewProps) {
+export default function LedgerSimpleView({ notices = [], rows, months, currentMonth, monthlyGoals, personal, managerGoals, loading, edit, pendingDrafts, serverQueue, applyBusy = false, sheetWriteMode = "off", sheetWriteHealthMessage = null, onCheckDrafts, onApplyDrafts, onShowQueue, onOpenRow, onOpenManager, view, chrome = true, chips: controlledChips, onChipsChange }: LedgerSimpleViewProps) {
   const [groupBy, setGroupBy] = useState<SimpleGroupBy>("none")
   const [teamView, setTeamView] = useState<"members" | "deals">("members")
   const [localChips, setLocalChips] = useState<Set<string>>(() => new Set())
@@ -561,7 +592,7 @@ export default function LedgerSimpleView({ notices = [], rows, months, currentMo
           : "금액 칸을 누르면 그 자리에서 고칩니다(E·H·C 확도, Enter 저장, Esc 취소). 배경이 칠해진 전액 확정 칸과 지난달 묶음 칸은 고칠 수 없습니다. 점선 칸은 아직 반영 전, 고객 이름은 상세를 엽니다."}
       </p>
       ) : null}
-      {tableHidden ? null : <ApprovalBar drafts={pendingDrafts} serverQueue={serverQueue} sheetWriteMode={sheetWriteMode} onCheck={onCheckDrafts} onApply={onApplyDrafts} onShowAll={onShowQueue} />}
+      {tableHidden ? null : <ApprovalBar drafts={pendingDrafts} serverQueue={serverQueue} sheetWriteMode={sheetWriteMode} applyBusy={applyBusy} onCheck={onCheckDrafts} onApply={onApplyDrafts} onShowAll={onShowQueue} />}
     </div>
   )
 }

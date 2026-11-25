@@ -5,7 +5,7 @@ import type { BranchSummaryResponse, Team } from "../types"
 import { adminFetchJson, useBranchJson } from "../client-api"
 import { readWeeklyReportDraft, type BranchWeeklyCompassReport, type ReportModule } from "@/lib/branch/weekly-report-contract"
 import HqWeeklyReport, { type ReportLang } from "./HqWeeklyReport"
-import { cny } from "@/lib/branch/money-format"
+import { cny, yuan } from "@/lib/branch/money-format"
 import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
 import { ACTION_GROUP_ORDER, GROUP_LABEL, actionGroup, actionSection, SECTION_KEYS, type SectionKey } from "@/lib/branch/weekly-action-sections"
 import { SECTION_TITLES } from "./hq-weekly/ReportSection"
@@ -212,7 +212,7 @@ export default function BranchAiInsights({ team, refreshKey, summary, canGenerat
         <div className="grid grid-cols-2 overflow-hidden rounded-xl border border-[rgba(0,0,0,0.08)] bg-white md:grid-cols-4" aria-label="AI가 본 기준 수치">
           <div className="border-b border-r border-[#E8E8E4] px-4 py-3 md:border-b-0">
             <p className="text-[11.5px] text-[#615D59]">기준 · 확정 매출</p>
-            <p className="text-[18px] font-bold tabular-nums" style={{ color: CONFIDENCE_TOKENS.confirmed.color }}>¥{cny(rev?.confirmed ?? 0)}</p>
+            <p className="text-[18px] font-bold tabular-nums" style={{ color: CONFIDENCE_TOKENS.confirmed.color }}>{yuan(rev?.confirmed ?? 0)}</p>
           </div>
           <div className="border-b border-[#E8E8E4] px-4 py-3 md:border-b-0 md:border-r">
             <p className="text-[11.5px] text-[#615D59]">목표 · 달성률</p>

@@ -27,6 +27,7 @@ import { absorptionCutoff, isSheetWriteAbsorbed, oldestSyncedAt } from "@/lib/br
 import {
   appliedDraftConfidenceMaps,
   isRecord,
+  metadataString,
   snapshotField,
   snapshotSheetRowId,
   snapshotText,
@@ -175,6 +176,8 @@ export interface LedgerOverlayResult {
   overrides: Map<string, Set<string>>
   /** 원본 시트 행을 찾지 못한 정정 행(따로 더해진다 — 화면이 경고) */
   unresolved: LedgerRevenueRow[]
+  /** 센 정정(같은 칸 최신, F-17 보강 뒤 행)과 그 원본 시트 행 — 대조 스크립트가 근거 글에 쓴다(같은 짝을 다시 찾지 않게) */
+  resolved: Array<{ correction: LedgerRevenueRow; target: LedgerRevenueRow; month: string }>
   superseded: LedgerOverlaySuperseded[]
   drift: LedgerOverlayDrift[]
   duplicates: LedgerOverlayDuplicate[]
@@ -679,6 +682,7 @@ export function buildLedgerOverlay(input: LedgerOverlayInput): LedgerOverlayResu
     rows: [...plan.appliedRows, ...adjustedSheetRows],
     overrides: plan.overrides,
     unresolved: plan.unresolved,
+    resolved: plan.resolved.map((item) => ({ correction: item.row, target: item.target, month: item.month })),
     superseded: plan.superseded,
     drift: plan.drift,
     duplicates: plan.duplicates,
@@ -727,6 +731,8 @@ function withoutKey<T>(map: Record<string, T> | null | undefined, key: string): 
 function ledgerDealFromRow(row: LedgerRevenueRow, candidate: OverlayCandidate | undefined, contractTarget: number | null): BranchRevDeal {
   const monthlyRed: Record<string, boolean> = { ...(row.monthlyRed ?? {}) }
   for (const month of Object.keys(row.monthlyPayments ?? {})) monthlyRed[month] = monthlyRed[month] ?? false
+  // 입력 때 고른 상품 분류(hardware 등) — 화면(rowProductCategory)처럼 DSH SW/HW 분류(classifyDshDeal)도 저장값을 먼저 본다.
+  const productCategory = metadataString(row.draftMetadata, "productCategory")
   return {
     id: row.id,
     sheet_row: row.sheetRow ?? 0,
@@ -748,6 +754,7 @@ function ledgerDealFromRow(row: LedgerRevenueRow, candidate: OverlayCandidate | 
     monthly_high_conf: { ...(row.monthlyHighConfidence ?? {}) },
     raw: {
       weeklyPayments: { ...(row.weeklyPayments ?? {}) },
+      ...(productCategory ? { productCategory } : {}),
       // 장부에서 온 딜 표시 — 시트 행이 아니다(sheet_row 는 원본 시트 행 번호 참고값, 없으면 0).
       ledgerDeal: {
         origin: candidate?.entryId ? "entry" : "draft",

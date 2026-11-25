@@ -1,9 +1,14 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { countFirstPaymentAccountsByMonth, getCrmRevenuePerformance, type FirstPaymentAccountRow } from "@/lib/crm/revenue-performance"
-import { readRevDealsPreferActive } from "@/lib/branch/read-rev-deals"
 import type { BranchRevDeal } from "@/lib/repositories/branch-deals"
 
-vi.mock("@/lib/branch/read-rev-deals", () => ({ readRevDealsPreferActive: vi.fn() }))
+// D1(2026-11-25): CRM 성과도 시트 행 + 장부 항목(lib/branch/ledger-revenue.ts readLedgerRevenueDeals)으로 읽는다.
+// 이 파일은 그 결과 딜을 어떻게 세는지만 본다 — 합치기 규칙은 tests/branch/ledger-revenue.test.ts.
+const mocks = vi.hoisted(() => ({ readDeals: vi.fn() }))
+vi.mock("@/lib/branch/ledger-revenue", () => ({
+  readLedgerRevenueDeals: async () => ({ deals: await mocks.readDeals() }),
+}))
+const readRevDealsPreferActive = mocks.readDeals
 
 afterEach(() => vi.useRealTimers())
 
@@ -91,7 +96,7 @@ describe("CRM revenue refund reconciliation", () => {
   it.each([120, -120])("preserves a confirmed %s offset when the monthly payment total is explicitly zero", async (confirmed) => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date("2026-10-15T00:00:00Z"))
-    vi.mocked(readRevDealsPreferActive).mockResolvedValueOnce([
+    readRevDealsPreferActive.mockResolvedValueOnce([
       {
         sheet_row: 3, customer_name: "Confidence offset account", team: "MKT", manager: "상계 담당",
         monthly_payments: { "2026-10": 0 }, monthly_confirmed: { "2026-10": confirmed },
@@ -114,12 +119,12 @@ describe("CRM revenue refund reconciliation", () => {
   })
 
   it("propagates a failed ledger read instead of returning a successful zero-revenue report", async () => {
-    vi.mocked(readRevDealsPreferActive).mockRejectedValueOnce(new Error("ledger unavailable"))
+    readRevDealsPreferActive.mockRejectedValueOnce(new Error("ledger unavailable"))
     await expect(getCrmRevenuePerformance()).rejects.toThrow("ledger unavailable")
   })
 
   it("keeps a successfully empty ledger distinct from a failed read", async () => {
-    vi.mocked(readRevDealsPreferActive).mockResolvedValueOnce([])
+    readRevDealsPreferActive.mockResolvedValueOnce([])
     const report = await getCrmRevenuePerformance()
     expect(report.total).toBe(0)
     expect(report.dealCount).toBe(0)
@@ -129,7 +134,7 @@ describe("CRM revenue refund reconciliation", () => {
   it("preserves canonical negative refunds and zero-net team/member histories", async () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date("2026-10-15T00:00:00Z"))
-    vi.mocked(readRevDealsPreferActive).mockResolvedValue([
+    readRevDealsPreferActive.mockResolvedValue([
       { sheet_row: 1, customer_name: "Refund account", team: "BD", manager: "환불 담당", monthly_payments: { "2026-10": -250 }, monthly_red: { "2026-10": true } },
       { sheet_row: 2, customer_name: "Renewal account", team: "MKT", manager: "조정 담당", monthly_payments: { "2026-09": 100, "2026-10": -100 } },
     ] as unknown as BranchRevDeal[])

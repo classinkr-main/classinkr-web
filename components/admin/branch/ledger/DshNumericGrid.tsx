@@ -7,6 +7,9 @@
 // breakdown은 팀 필터와 무관한 Team KR 전사 수치다(summary API 참조).
 // Rate 뷰(2026-07-27 DSH 디벨롭 A): 셀 = Status ÷ Goal 달성률 — 집계는 아래
 // aggregateDshRates(순수 함수, dedupeDshByKind 공유) 참조.
+// 시트 고정 뒤(D4, summary 의 dsh_ledger): 고정 달부터 실적은 서버가 장부 확정으로 바꿔 보낸다 — 열 머리에 '장부'를
+// 붙이고 셀 title 이 출처를 밝힌다. 고정 달 한 달 동안 Status 뷰의 그 달 칸 아래에 시트 실적을 흐리게 둔다.
+// 음수(환불)는 Goal·Status 에서 중립색이다(D2) — 빨강은 Gap(목표 미달)에만 쓴다.
 
 import Link from "next/link"
 import { ArrowLeftRight } from "lucide-react"
@@ -16,15 +19,25 @@ import { cnyExact } from "@/lib/branch/money-format"
 import {
   addDshNumbers,
   dedupeDshByKind,
+  dshActiveSheetCompare,
+  dshCompareTitle,
   dshExactTitle,
+  dshGapTitle,
+  dshLedgerColumnTitle,
+  dshQuarterMonthKeys,
   dshRate,
-  dshRateTitle,
+  dshRateTitleFor,
   dshRateToneClass,
+  dshStatusSource,
+  dshValueTitle,
   emptyDshNumbers,
   formatDshRate,
   formatDshThousands,
+  isDshLedgerMonth,
   subtractDshNumbers,
+  type BranchDshLedgerInfo,
   type DshNumbers,
+  type DshStatusSource,
 } from "./dsh-derive"
 import { formatDateTime, LoadingPanel } from "./shared"
 
@@ -190,30 +203,73 @@ const CELL = "whitespace-nowrap border-b border-r border-[rgba(0,0,0,0.08)] px-2
 
 // 원값 호버(2026-07-17 사용성 디벨롭 항목 1) — formatDshThousands는 1,000 단위로 반올림
 // 표기하므로, title에 원값 전체 자릿수(¥, 반올림 없음)를 병기해 보정한다.
-// 문구 규약은 dsh-derive의 dshExactTitle 단일 소스를 그대로 쓴다(계열 카드 공통).
-const exactTitle = dshExactTitle
+// 문구 규약은 dsh-derive의 dshExactTitle·dshValueTitle 단일 소스를 그대로 쓴다(계열 카드 공통).
+
+// 셀 자리(연간·분기·월) — 장부 달을 걸치는지 보고 title 출처를 정한다.
+type CellSlot = { kind: "annual" } | { kind: "quarter"; index: number } | { kind: "month"; ym: string }
+
+// 뷰·장부 정보로 셀 title 규칙을 만든다. Goal 은 늘 시트 원값이다.
+function cellTitleFor(view: DshGridView, ledger: BranchDshLedgerInfo | null, monthKeys: string[]) {
+  const sourceOf = (slot: CellSlot): DshStatusSource => {
+    if (view === "goal") return "sheet"
+    const months =
+      slot.kind === "month" ? [slot.ym] : slot.kind === "quarter" ? dshQuarterMonthKeys(monthKeys, slot.index) : monthKeys
+    return dshStatusSource(ledger, months)
+  }
+  return {
+    amount: (value: number, slot: CellSlot) =>
+      view === "gap" ? dshGapTitle(value, sourceOf(slot)) : dshValueTitle(value, sourceOf(slot)),
+    rate: (status: number, goal: number, slot: CellSlot) => dshRateTitleFor(status, goal, sourceOf(slot)),
+  }
+}
+
+// 고정 달 비교(흐린 둘째 줄) — Status 뷰의 그 달 칸에만.
+interface CellCompare {
+  month: string
+  value: number
+}
 
 // 원값 접근성(품질 웨이브 2, 항목 8): hover-only title로만 원값을 확인할 수 있던 문제 —
 // 개별 셀 tabIndex 대신 헤더 토글로 표시 자체를 전환한다. 검수(reconciliation) 작업은
 // 여러 셀을 훑어야 해서, 셀 하나하나 포커스/hover하는 것보다 한 번의 토글로 표 전체가
 // 원값으로 바뀌는 쪽이 스크린리더·키보드 사용자 모두에게 더 빠르다 — 텍스트 자체가
 // 원값이 되므로 hover 의존이 없어진다. 집계·산식은 무변경(표시 전환만).
-function numericCells(numbers: GridNumbers, monthKeys: string[], extra = "", showRaw = false) {
-  const tone = (value: number) => (value < 0 ? "text-[#B43E3E]" : "")
+function numericCells(
+  numbers: GridNumbers,
+  monthKeys: string[],
+  extra = "",
+  showRaw = false,
+  options: {
+    title?: (value: number, slot: CellSlot) => string
+    /** Gap 뷰만 음수를 빨강(목표 미달)으로 — Goal·Status 의 음수(환불)는 중립색(D2). */
+    negativeTone?: boolean
+    compare?: CellCompare | null
+  } = {},
+) {
+  const { title = (value: number) => dshExactTitle(value), negativeTone = true, compare = null } = options
+  const tone = (value: number) => (negativeTone && value < 0 ? "text-[#B43E3E]" : "")
   const display = (value: number) => (showRaw ? `¥${cnyExact(value)}` : formatDshThousands(value))
   return (
     <>
-      <td className={`${CELL} cursor-help ${tone(numbers.annual)} ${extra}`} title={exactTitle(numbers.annual)}>{display(numbers.annual)}</td>
+      <td className={`${CELL} cursor-help ${tone(numbers.annual)} ${extra}`} title={title(numbers.annual, { kind: "annual" })}>{display(numbers.annual)}</td>
       {numbers.quarters.map((value, index) => (
-        <td key={`q${index}`} className={`${CELL} cursor-help ${extra || "bg-[#FBFAF7]"} ${tone(value)}`} title={exactTitle(value)}>
+        <td key={`q${index}`} className={`${CELL} cursor-help ${extra || "bg-[#FBFAF7]"} ${tone(value)}`} title={title(value, { kind: "quarter", index })}>
           {display(value)}
         </td>
       ))}
       {monthKeys.map((ym) => {
         const value = numbers.months[ym] ?? 0
+        const sheet = compare && compare.month === ym ? compare.value : null
         return (
-          <td key={ym} className={`${CELL} cursor-help ${tone(value)} ${extra}`} title={exactTitle(value)}>
+          <td
+            key={ym}
+            className={`${CELL} cursor-help ${tone(value)} ${extra}`}
+            title={sheet != null ? dshCompareTitle(value, sheet) : title(value, { kind: "month", ym })}
+          >
             {display(value)}
+            {sheet != null && (
+              <span className="block text-[10px] font-normal text-[#A39E98]">시트 {display(sheet)}</span>
+            )}
           </td>
         )
       })}
@@ -224,21 +280,26 @@ function numericCells(numbers: GridNumbers, monthKeys: string[], extra = "", sho
 // Rate 셀 — 표기는 달성률 %(소수 1자리), title에 실적·목표 원값(¥, 반올림 없음) 쌍을 병기한다.
 // 색 경계는 dshRateToneClass(≥100 그린 / 70~100 주의 / <70 미달 / 목표 없음 회색) — 강조 행
 // (Team KR · Total)에서도 톤 색은 유지한다(달성률 판정 색을 행 강조색으로 덮지 않는다).
-function rateCells(numbers: RateNumbers, monthKeys: string[], extra = "") {
-  const renderCell = (value: DshRateCell, key: string, cellExtra: string) => (
+function rateCells(
+  numbers: RateNumbers,
+  monthKeys: string[],
+  extra = "",
+  title: (status: number, goal: number, slot: CellSlot) => string = (status, goal) => dshRateTitleFor(status, goal, "sheet"),
+) {
+  const renderCell = (value: DshRateCell, key: string, cellExtra: string, slot: CellSlot) => (
     <td
       key={key}
       className={`${CELL} cursor-help ${cellExtra} ${dshRateToneClass(value.pct)}`}
-      title={dshRateTitle(value.status, value.goal)}
+      title={title(value.status, value.goal, slot)}
     >
       {formatDshRate(value.pct)}
     </td>
   )
   return (
     <>
-      {renderCell(numbers.annual, "annual", extra)}
-      {numbers.quarters.map((value, index) => renderCell(value, `q${index}`, extra || "bg-[#FBFAF7]"))}
-      {monthKeys.map((ym) => renderCell(numbers.months[ym] ?? { pct: null, status: 0, goal: 0 }, ym, extra))}
+      {renderCell(numbers.annual, "annual", extra, { kind: "annual" })}
+      {numbers.quarters.map((value, index) => renderCell(value, `q${index}`, extra || "bg-[#FBFAF7]", { kind: "quarter", index }))}
+      {monthKeys.map((ym) => renderCell(numbers.months[ym] ?? { pct: null, status: 0, goal: 0 }, ym, extra, { kind: "month", ym }))}
     </>
   )
 }
@@ -248,9 +309,13 @@ interface DshNumericGridProps {
   view: DshGridView
   onViewChange: (view: DshGridView) => void
   loading?: boolean
+  /** 시트 고정 뒤 장부 실적 표기(summary 의 dsh_ledger). null·없음 = 지금 그대로. */
+  ledger?: BranchDshLedgerInfo | null
+  /** 테스트용 "오늘" 고정 — 고정 달 비교 표시 판정에 쓴다. */
+  now?: Date
 }
 
-export function DshNumericGrid({ breakdown, view, onViewChange, loading = false }: DshNumericGridProps) {
+export function DshNumericGrid({ breakdown, view, onViewChange, loading = false, ledger = null, now: fixedNow }: DshNumericGridProps) {
   // Rate 뷰는 셀 형태(원값 쌍+달성률)가 달라 별도 집계를 태운다 — 둘 다 순수 함수라
   // 비활성 뷰 쪽 memo는 null로 스킵된다(불필요 계산 없음).
   const numeric = useMemo(
@@ -259,6 +324,12 @@ export function DshNumericGrid({ breakdown, view, onViewChange, loading = false 
   )
   const rate = useMemo(() => (view === "rate" ? aggregateDshRates(breakdown) : null), [breakdown, view])
   const monthKeys = (rate ?? numeric)!.monthKeys
+  const now = useMemo(() => fixedNow ?? new Date(), [fixedNow])
+  const titles = cellTitleFor(view, ledger, monthKeys)
+  // 고정 달 한 달 동안 Status 뷰에서만 — 그 달 칸 아래 시트 실적(흐리게).
+  const sheetCompare = view === "status" ? dshActiveSheetCompare(ledger, now) : null
+  const compareFor = (value: number | undefined): CellCompare | null =>
+    sheetCompare && value != null ? { month: sheetCompare.month, value } : null
   // 원값 표시 토글(항목 8) — 기본은 기존 "단위: 천" 축약, 켜면 표 전체가 반올림 없는 원값(¥)으로
   // 바뀐다. 검수용 표시 전환일 뿐 집계·산식은 그대로다. Rate 뷰에서는 본 표기가 %라 전환이
   // 무의미하므로 비활성화한다(원값은 셀 title의 실적÷목표 쌍으로 확인).
@@ -359,8 +430,15 @@ export function DshNumericGrid({ breakdown, view, onViewChange, loading = false 
                     </th>
                   ))}
                   {monthKeys.map((ym) => (
-                    <th key={ym} className={`${CELL} bg-[#F6F5F4] font-bold`}>
+                    <th
+                      key={ym}
+                      className={`${CELL} bg-[#F6F5F4] font-bold`}
+                      {...(ledger && isDshLedgerMonth(ledger, ym) ? { title: dshLedgerColumnTitle(ledger) } : {})}
+                    >
                       {monthLabel(ym)}
+                      {isDshLedgerMonth(ledger, ym) && (
+                        <span className="ml-1 text-[9px] font-semibold normal-case tracking-normal text-[#A39E98]">장부</span>
+                      )}
                     </th>
                   ))}
                   <th className={`${CELL} bg-[#F6F5F4] font-bold`}>비율</th>
@@ -373,7 +451,7 @@ export function DshNumericGrid({ breakdown, view, onViewChange, loading = false 
                       <td className={`${CELL} sticky left-0 z-[1] bg-[#ECFDF5] text-left font-extrabold text-[#084734]`}>
                         Team KR · Total
                       </td>
-                      {rateCells(rate.total, monthKeys, "bg-[#ECFDF5] font-extrabold")}
+                      {rateCells(rate.total, monthKeys, "bg-[#ECFDF5] font-extrabold", titles.rate)}
                       <td className={`${CELL} bg-[#ECFDF5] font-extrabold text-[#084734]`}>–</td>
                     </tr>
                     {CATEGORY_ORDER.filter((category) => rate.rows.some((row) => row.category === category)).map((category) => (
@@ -383,6 +461,7 @@ export function DshNumericGrid({ breakdown, view, onViewChange, loading = false 
                         rows={rate.rows.filter((row) => row.category === category)}
                         monthKeys={monthKeys}
                         columnCount={columnCount}
+                        title={titles.rate}
                       />
                     ))}
                   </>
@@ -392,7 +471,11 @@ export function DshNumericGrid({ breakdown, view, onViewChange, loading = false 
                       <td className={`${CELL} sticky left-0 z-[1] bg-[#ECFDF5] text-left font-extrabold text-[#084734]`}>
                         Team KR · Total
                       </td>
-                      {numericCells(numeric.total, monthKeys, "bg-[#ECFDF5] font-extrabold text-[#084734]", showRawValue)}
+                      {numericCells(numeric.total, monthKeys, "bg-[#ECFDF5] font-extrabold text-[#084734]", showRawValue, {
+                        title: titles.amount,
+                        negativeTone: view === "gap",
+                        compare: compareFor(sheetCompare?.total),
+                      })}
                       <td className={`${CELL} bg-[#ECFDF5] font-extrabold text-[#084734]`}>
                         {view === "gap" ? "–" : formatRatio(numeric.total.annual, numeric.total.annual)}
                       </td>
@@ -407,6 +490,8 @@ export function DshNumericGrid({ breakdown, view, onViewChange, loading = false 
                         showRawValue={showRawValue}
                         totalAnnual={numeric.total.annual}
                         view={view}
+                        title={titles.amount}
+                        compareFor={(key) => compareFor(sheetCompare?.byCombo[key])}
                       />
                     ))}
                   </>
@@ -428,6 +513,8 @@ function CategoryBlock({
   totalAnnual,
   view,
   showRawValue,
+  title,
+  compareFor,
 }: {
   category: string
   rows: GridRow[]
@@ -436,6 +523,9 @@ function CategoryBlock({
   totalAnnual: number
   view: DshGridView
   showRawValue: boolean
+  title?: (value: number, slot: CellSlot) => string
+  /** 조합 키(category|status_type|channel) → 고정 달 시트 실적 비교. */
+  compareFor?: (comboKey: string) => CellCompare | null
 }) {
   return (
     <>
@@ -449,7 +539,11 @@ function CategoryBlock({
           <td className={`${CELL} sticky left-0 z-[1] bg-white text-left font-semibold`}>
             {row.status_type} · {row.channel}
           </td>
-          {numericCells(row, monthKeys, "", showRawValue)}
+          {numericCells(row, monthKeys, "", showRawValue, {
+            title,
+            negativeTone: view === "gap",
+            compare: compareFor?.(`${row.category}|${row.status_type}|${row.channel}`) ?? null,
+          })}
           <td className={`${CELL} text-[#615D59]`}>{view === "gap" ? "–" : formatRatio(row.annual, totalAnnual)}</td>
         </tr>
       ))}
@@ -464,11 +558,13 @@ function RateCategoryBlock({
   rows,
   monthKeys,
   columnCount,
+  title,
 }: {
   category: string
   rows: RateRow[]
   monthKeys: string[]
   columnCount: number
+  title?: (status: number, goal: number, slot: CellSlot) => string
 }) {
   return (
     <>
@@ -481,7 +577,7 @@ function RateCategoryBlock({
           <td className={`${CELL} sticky left-0 z-[1] bg-white text-left font-semibold`}>
             {row.status_type} · {row.channel}
           </td>
-          {rateCells(row, monthKeys)}
+          {rateCells(row, monthKeys, "", title)}
           <td className={`${CELL} text-[#615D59]`}>–</td>
         </tr>
       ))}

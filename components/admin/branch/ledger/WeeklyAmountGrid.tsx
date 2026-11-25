@@ -33,6 +33,8 @@ interface WeeklyAmountGridProps {
   /** Task B(2026-07-23): 확정으로 잠긴 달의 explicit 주차 중 값이 있는 칸(5칸 boolean). true면 그 주차는
    *  읽기전용(🔒)으로 렌더해 확정값 덮어쓰기를 막고, 빈 칸에만 아직 안 지난 주차를 새로 넣게 한다. */
   lockedWeeks?: boolean[]
+  /** 그 달의 시트 주차 칸 수(ledgerMonthWeekCount — 2월 4, F-31). 넘는 주차는 입력 없이 비활성으로 보인다. 생략하면 5. */
+  weekCount?: number
   variant: "rail" | "cockpit"
 }
 
@@ -42,6 +44,7 @@ export function WeeklyAmountGrid({
   onAmountChange,
   onConfidenceChange,
   lockedWeeks,
+  weekCount = 5,
   variant,
 }: WeeklyAmountGridProps) {
   const isCockpit = variant === "cockpit"
@@ -55,7 +58,7 @@ export function WeeklyAmountGrid({
   const amountRefs = useRef<Array<HTMLInputElement | null>>([])
   const onAmountKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>, index: number) => {
     if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return
-    const nextIndex = event.key === "ArrowDown" ? Math.min(index + 1, 4) : Math.max(index - 1, 0)
+    const nextIndex = event.key === "ArrowDown" ? Math.min(index + 1, Math.max(weekCount, 1) - 1) : Math.max(index - 1, 0)
     if (nextIndex === index) return
     event.preventDefault()
     const next = amountRefs.current[nextIndex]
@@ -66,6 +69,23 @@ export function WeeklyAmountGrid({
   return (
     <div className={isCockpit ? "space-y-2" : "space-y-1.5"}>
       {FORECAST_WEEK_RANGE_LABELS.map((rangeLabel, index) => {
+        // 그 달에 없는 주차(2월 W5, F-31) — 입력 없이 비활성. 앞서 넣은 값이 남아 있으면 저장 때 마지막 주차로 합친다
+        // (draftWeeklySaveContract).
+        if (index >= weekCount) {
+          const leftover = weeklyAmounts[index] > 0
+          const note = `시트에 W${weekCount}까지만 있는 달입니다${leftover ? ` — 저장하면 W${weekCount}에 합칩니다` : ""}`
+          return (
+            <div
+              key={rangeLabel}
+              aria-disabled="true"
+              title={note}
+              className={`flex items-center justify-between gap-2 rounded-md border border-dashed border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] px-2 ${isCockpit ? "h-10" : "h-8"}`}
+            >
+              <span className={`${isCockpit ? "text-[12px]" : "text-[11px]"} font-bold text-[#A39E98]`}>W{index + 1}</span>
+              <span className="truncate text-[10.5px] font-semibold text-[#A39E98]">{note}</span>
+            </div>
+          )
+        }
         const zeroWeek = weeklyAmounts[index] <= 0
         // Task B: 확정으로 잠긴 주차칸(값 있는 explicit 주차) — 읽기전용·확도 고정. 빈 칸은 잠기지 않는다.
         const locked = lockedWeeks?.[index] ?? false

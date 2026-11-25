@@ -8,7 +8,11 @@ import dynamic from "next/dynamic"
 import type { KeyboardEvent as ReactKeyboardEvent } from "react"
 import { Loader2 } from "lucide-react"
 import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
-import { ledgerMonthConfirmed, ledgerMonthSplit } from "@/lib/branch/computations/revenue-core"
+import {
+  ledgerMonthBucket,
+  ledgerMonthNet,
+  type LedgerRevenueBucket,
+} from "@/lib/branch/computations/revenue-core"
 import { formatMoney, formatPercent } from "@/lib/branch/ledger-format"
 import { classifySalesLedgerProductCategory } from "@/lib/branch/product-category"
 import type { BranchKpiMemberRow } from "../types"
@@ -16,6 +20,7 @@ import type { BranchKpiMemberRow } from "../types"
 import {
   metadataString,
   mergedWeeklyFromMetadata,
+  snapshotText,
   weeklyConfidenceFromMetadata,
   type DraftConfidence,
   type DraftKind,
@@ -120,16 +125,41 @@ export function rowProductCategory(row: Pick<LedgerRevenueRow, "customer" | "pro
   })
 }
 
-// 주차 입력(explicit) 합계와 월 금액이 어긋난 검수 대상 행. 반올림 오차 ¥1 이내는 정상으로 본다.
+// 주차 입력 합계와 월 금액이 어긋난 검수 대상 행. 반올림 오차 ¥1 이내는 정상으로 본다.
 // 시트에서 주차 셀만 고치고 월 합계를 안 고친(또는 반대) 케이스를 잡는 용도.
+// 부호 그대로 비교한다(D2) — 환불 주가 섞인 달 [+100,000 · −130,000] 과 월 −30,000 은 맞는 달이다. 주차 값이 하나도 없는
+// 달(월합계만 · 빈 달)은 비교하지 않는다. 월 금액은 순액(rowMonthNet — 0 이하로 자르지 않는다).
 export function rowWeeklyMismatch(row: LedgerRevenueRow, month: string): { weekly: number; monthly: number; diff: number } | null {
-  const split = rowWeeklySplit(row, month)
-  if (split.source !== "explicit") return null
-  const monthly = rowMonthAmount(row, month)
-  const diff = split.total - monthly
+  const weeks = rowSignedWeeks(row, month)
+  if (!weeks || !weeks.some((value) => value !== 0)) return null
+  const weekly = weeks.reduce((sum, value) => sum + value, 0)
+  const monthly = rowMonthNet(row, month)
+  const diff = weekly - monthly
   if (Math.abs(diff) <= 1) return null
-  return { weekly: split.total, monthly, diff }
+  return { weekly, monthly, diff }
 }
+
+/** 한 행 × 한 달의 주차 원본 5칸(부호 그대로 — 환불 주는 음수). 주차 배열이 없으면 null. */
+export function rowSignedWeeks(row: Pick<LedgerRevenueRow, "weeklyPayments">, month: string): number[] | null {
+  const raw = row.weeklyPayments?.[month]
+  if (!Array.isArray(raw)) return null
+  return Array.from({ length: 5 }, (_unused, index) => {
+    const value = Number(raw[index])
+    return Number.isFinite(value) ? value : 0
+  })
+}
+
+/**
+ * 그 달에 시트 환불(음수)이 있다 — 순액이 음수이거나 음수 주차가 있다. 환불 달은 장부에서 고치지 않는다('환불 — 시트 값'):
+ * 주차 병합 저장(metadata.weekly)은 음수 주차를 0 으로 읽고, 월 대체는 그 달을 통째로 바꿔 환불이 사라진다(환불 초안 종류는 아직 없다).
+ */
+export function rowMonthHasRefund(row: Pick<LedgerRevenueRow, "weeklyPayments" | "monthlyPayments" | "ledgerOrigin" | "draftMonth" | "revenue">, month: string): boolean {
+  if (rowMonthNet(row, month) < 0) return true
+  return rowSignedWeeks(row, month)?.some((value) => value < 0) ?? false
+}
+
+/** 환불 칸·달의 툴팁 문구(D2) — 매트릭스 칸·시트 칸·레일이 같은 말을 쓴다. */
+export const REFUND_CELL_LABEL = "환불 — 시트 값"
 
 // 웨이브 7 2단(I4) — 낙관적 잠금 충돌(409 {error, draft})의 사용자 안내 문구 SSOT. 큐 행 배지
 // (recordErrors)·매트릭스 토스트·입력 레일 인라인 피드백이 같은 문장을 공유한다(표현 분화 금지).
@@ -144,8 +174,9 @@ export const DRAFT_DEDUPED_RECENT_NOTICE =
 
 // M9-3 — 잠긴 (행, 월) 셀에 수정 초안을 저장하려 할 때의 안내 문구 SSOT. 콕핏 편집기·입력 레일이
 // 각자 복붙하던 리터럴을 하나로 통합한다(표현 분화 금지). 제출 사전차단 경고·인라인 배지가 공유한다.
+// 2026-11-25: 시트 환불이 든 달도 잠긴다(D2 '환불 — 시트 값') — 괄호 안 예시에 환불을 더했다.
 export const LOCK_WARNING_TEXT =
-  "이 딜의 해당 월 셀은 이미 잠겨 있습니다(시트 확정·장부 반영 등) — 수정 초안을 저장할 수 없습니다. 다른 월을 선택하거나 체크 큐에서 확인하세요."
+  "이 딜의 해당 월 셀은 이미 잠겨 있습니다(시트 확정·환불·장부 반영 등) — 수정 초안을 저장할 수 없습니다. 다른 월을 선택하거나 체크 큐에서 확인하세요."
 
 // 입력 레일 저장 결과(품질 웨이브 3, 항목 3) — persisted: 서버에 실제로 저장됐으면 true,
 // 로컬 폴백(장부 적용 불가)이면 false. deduped: 새 초안을 만드는 대신 같은 딜·같은 셀(월/주차)에
@@ -232,6 +263,157 @@ export interface DraftForm {
   /** 주차별 확도 직접 선택 표시 5칸(weeklyConfidence 와 병렬). 주차 분해 저장 때 metadata.weeklyConfidenceTouched 로
       실린다(금액>0 주차만). 없으면 전부 false. */
   weeklyConfidenceTouched?: boolean[]
+  /** 신규 행 계약(F-18) — 시트 Status 어휘 'New'(신규) · 'Renew'(갱신). 신규 입력은 반드시 고른다(newRowClassificationMissing).
+      저장 때 sourceSnapshot.status 로 실린다(newRowClassificationSnapshot). 비었으면 null·생략. */
+  contract?: NewRowContract | null
+  /** 신규 행 경로(F-18) — 시트 Type 어휘 'Direct'(직접) · 'Channel'(채널). 저장 때 sourceSnapshot.dealType. */
+  channel?: NewRowChannel | null
+}
+
+// ── 신규 행 계약·경로(F-18) ─────────────────────────────────────────────────────────────────────
+// 장부에서만 넣은 행은 시트 행이 없어 계약(Status)·경로(Type)를 따로 받는다 — 없으면 신규/갱신·직접/채널 합계와 12/1 뒤
+// DSH 실적 분해(SW/HW × New/Renew × Direct/Channel)에서 '기타'·'(미구분)'으로 빠진다. 값은 시트 어휘 그대로 싣는다
+// (contractLabel · channelLabel · DSH 분해가 같은 말을 읽는다).
+
+export type NewRowContract = "New" | "Renew"
+export type NewRowChannel = "Direct" | "Channel"
+
+export const NEW_ROW_CONTRACT_OPTIONS: ReadonlyArray<{ id: NewRowContract; label: string }> = [
+  { id: "New", label: "신규" },
+  { id: "Renew", label: "갱신" },
+]
+
+export const NEW_ROW_CHANNEL_OPTIONS: ReadonlyArray<{ id: NewRowChannel; label: string }> = [
+  { id: "Direct", label: "직접" },
+  { id: "Channel", label: "채널" },
+]
+
+/** 신규 입력 저장 전 검증 문구 — 레일·콕핏이 같은 말을 쓴다. */
+export const NEW_ROW_CLASSIFICATION_MESSAGE = "계약·경로를 고르세요"
+
+/** 시트·스냅샷 글자 → 계약 값. 'New'·'신규' → New, 'Renew'·'갱신' → Renew, 그 밖은 null. */
+export function parseNewRowContract(value: unknown): NewRowContract | null {
+  if (typeof value !== "string") return null
+  const text = value.trim().toLowerCase()
+  if (text === "new" || text === "신규") return "New"
+  if (text === "renew" || text === "갱신") return "Renew"
+  return null
+}
+
+/** 시트·스냅샷 글자 → 경로 값. 'Direct'·'직접' → Direct, 'Channel'·'채널' → Channel, 그 밖은 null. */
+export function parseNewRowChannel(value: unknown): NewRowChannel | null {
+  if (typeof value !== "string") return null
+  const text = value.trim().toLowerCase()
+  if (text === "direct" || text === "직접") return "Direct"
+  if (text === "channel" || text === "채널") return "Channel"
+  return null
+}
+
+/** 신규 입력인데 계약·경로 중 하나라도 비었나. */
+export function newRowClassificationMissing(form: Pick<DraftForm, "contract" | "channel">): boolean {
+  return !parseNewRowContract(form.contract) || !parseNewRowChannel(form.channel)
+}
+
+/** 신규 행 sourceSnapshot 에 얹을 분류 — { status: 'New'|'Renew', dealType: 'Direct'|'Channel' }. 하나라도 비면 null. */
+export function newRowClassificationSnapshot(
+  form: Pick<DraftForm, "contract" | "channel">,
+): { status: NewRowContract; dealType: NewRowChannel } | null {
+  const status = parseNewRowContract(form.contract)
+  const dealType = parseNewRowChannel(form.channel)
+  return status && dealType ? { status, dealType } : null
+}
+
+/**
+ * 신규 행 저장 스냅샷 — 기존 스냅샷(재편집 초안의 sourceSnapshot 등)에 status·dealType 을 맨 위 키로 얹는다(snapshotText 는
+ * 맨 위 키를 먼저 읽는다). 폼에 분류가 없으면 기존 스냅샷 그대로.
+ */
+export function withNewRowClassification(
+  snapshot: Record<string, unknown> | null | undefined,
+  form: Pick<DraftForm, "contract" | "channel">,
+): Record<string, unknown> | undefined {
+  const classification = newRowClassificationSnapshot(form)
+  if (!classification) return snapshot ?? undefined
+  return { ...(snapshot ?? {}), ...classification }
+}
+
+/** 초안 sourceSnapshot(또는 행)의 status·dealType → 폼 계약·경로(재편집 프리필). 모르는 값은 null. */
+export function draftFormClassificationFromSnapshot(
+  snapshot: Record<string, unknown> | null | undefined,
+): { contract: NewRowContract | null; channel: NewRowChannel | null } {
+  return {
+    contract: parseNewRowContract(snapshotText(snapshot, "status")),
+    channel: parseNewRowChannel(snapshotText(snapshot, "dealType")),
+  }
+}
+
+/**
+ * 신규 입력 계약·경로 선택(F-18) — 레일(InputRailSection)·콕핏(CockpitEditor)이 같은 칸을 쓴다. 폼 안에 있지만 required 속성은
+ * 달지 않는다(같은 폼의 수정 초안 저장까지 브라우저 검증이 막는다) — 신규 저장 버튼이 newRowClassificationMissing 으로 막는다.
+ */
+export function NewRowClassificationFields({
+  contract,
+  channel,
+  onChange,
+  variant = "rail",
+  caption,
+}: {
+  contract: NewRowContract | null | undefined
+  channel: NewRowChannel | null | undefined
+  onChange: (next: { contract?: NewRowContract | null; channel?: NewRowChannel | null }) => void
+  variant?: "rail" | "cockpit"
+  /** 칸 아래 한 줄(예: 선택한 행이 있을 때 "신규 입력에만 쓰입니다"). */
+  caption?: string
+}) {
+  const labelClass = "block text-[11px] font-bold text-[#615D59]"
+  const controlClass = variant === "cockpit"
+    ? "mt-1 h-9 w-full rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-2.5 text-[12px] font-semibold text-[#111110] outline-none transition focus:border-[#084734] focus:bg-white"
+    : "mt-1 h-9 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 text-[12px] font-semibold text-[#111110] outline-none"
+  const contractValue = parseNewRowContract(contract) ?? ""
+  const channelValue = parseNewRowChannel(channel) ?? ""
+  return (
+    <div>
+      <div className={variant === "cockpit" ? "grid grid-cols-2 gap-3" : "grid grid-cols-2 gap-2"}>
+        <label className={labelClass}>
+          계약
+          <select
+            value={contractValue}
+            aria-required="true"
+            aria-invalid={contractValue === "" || undefined}
+            onChange={(event) => onChange({ contract: parseNewRowContract(event.target.value) })}
+            className={controlClass}
+          >
+            <option value="">고르세요</option>
+            {NEW_ROW_CONTRACT_OPTIONS.map((option) => (
+              <option key={option.id} value={option.id}>{option.label}</option>
+            ))}
+          </select>
+        </label>
+        <label className={labelClass}>
+          경로
+          <select
+            value={channelValue}
+            aria-required="true"
+            aria-invalid={channelValue === "" || undefined}
+            onChange={(event) => onChange({ channel: parseNewRowChannel(event.target.value) })}
+            className={controlClass}
+          >
+            <option value="">고르세요</option>
+            {NEW_ROW_CHANNEL_OPTIONS.map((option) => (
+              <option key={option.id} value={option.id}>{option.label}</option>
+            ))}
+          </select>
+        </label>
+      </div>
+      {caption && <p className="mt-1 text-[10.5px] leading-relaxed text-[#615D59]">{caption}</p>}
+    </div>
+  )
+}
+
+/** 장부 행(시트 행·장부 행)의 status·dealType → 폼 계약·경로(같은 고객 신규 입력 프리필). */
+export function draftFormClassificationFromRow(
+  row: Pick<LedgerRevenueRow, "status" | "dealType"> | null | undefined,
+): { contract: NewRowContract | null; channel: NewRowChannel | null } {
+  return { contract: parseNewRowContract(row?.status), channel: parseNewRowChannel(row?.dealType) }
 }
 
 /** 확도 일괄 버튼 — 단일 확도와 주차 5칸을 모두 직접 고른 것으로 표시한다. */
@@ -304,13 +486,9 @@ export interface RevWeeklySplit {
   total: number
 }
 
-// 다중월 매트릭스 셀 1칸의 확도 분해. total = confirmed + high + open (불변식).
-export interface RevMonthlyBucket {
-  total: number
-  confirmed: number
-  high: number
-  open: number
-}
+// 다중월 매트릭스 셀 1칸의 확도 분해. total = confirmed + high + open (불변식). 장부 매출 버킷(revenue-core)과 같은 모양 —
+// 부호 그대로(환불 달은 total < 0).
+export type RevMonthlyBucket = LedgerRevenueBucket
 
 // 모바일 카드·데스크톱 테이블이 공유하는 행 단위 파생값. 두 렌더가 각자 계산하던
 // draftRow/productCategory/weeklySplit/monthAmount/mismatch를 한 번만 계산해 재사용한다.
@@ -505,6 +683,25 @@ export function dominantWeeklyConfidence(
   return dominant
 }
 
+/**
+ * 시트 '2. REV' 에서 그 달의 주차 칸 수 — 2월만 W1~W4, 나머지는 W1~W5(시트 머리 '5w' 7월 포함, F-31). 칸 머리는 모든 행이
+ * 함께 쓰므로 행의 글자색 길이가 아니라 달력 규칙으로 정한다. 시트 쓰기도 2월 W5 값을 W4 에 합친다(sheet-writeback/target).
+ */
+export function ledgerMonthWeekCount(month: string): number {
+  return month.endsWith("-02") ? 4 : 5
+}
+
+/** 그 달에 없는 주차(2월 W5)의 값을 마지막 주차로 합친다 — 5칸 그대로, 없는 주차는 0. */
+export function foldWeeksIntoMonth(weeks: readonly number[], month: string | null | undefined): number[] {
+  const out = Array.from({ length: 5 }, (_unused, index) => Number(weeks[index] ?? 0) || 0)
+  const weekCount = month ? ledgerMonthWeekCount(month) : 5
+  for (let index = weekCount; index < 5; index += 1) {
+    out[weekCount - 1] += out[index]
+    out[index] = 0
+  }
+  return out
+}
+
 // 문자열 버퍼 5칸 → 숫자 5칸. 음수/비숫자는 0 처리(감액은 장부 가감 입력 사용 — 매트릭스 셀
 // onAmountClamped와 동일 규약). 버퍼가 5칸 미만이어도 항상 5칸으로 정규화한다.
 export function draftWeeklyAmounts(weekly: string[]): number[] {
@@ -522,8 +719,9 @@ export function draftWeeklyTotal(weekly: string[]): number {
 // metadata.weeklyConfidence(라운드 3 P1)·metadata.confidence(우세 확도 자동 기록)에 그대로 싣는다.
 // weeklyConfidence는 금액>0 주차만 폼 버퍼 값, 금액 0/빈 주차는 반드시 null(스키마 계약).
 // 조건 미충족이면 null(기존 단일 금액 경로 그대로 — 그 경로는 weeklyConfidence: null 명시).
+// form.month 가 2월이면 W5 값을 W4 에 합친다(시트에 W5 가 없다, F-31) — W4 확도가 없으면 W5 확도를 쓴다.
 export function draftWeeklySaveContract(
-  form: Pick<DraftForm, "operation" | "weeklyMode" | "weekly" | "weeklyConfidence">,
+  form: Pick<DraftForm, "operation" | "weeklyMode" | "weekly" | "weeklyConfidence"> & Partial<Pick<DraftForm, "month">>,
 ): {
   amount: number
   weekly: number[]
@@ -532,12 +730,18 @@ export function draftWeeklySaveContract(
   dominantConfidence: DraftConfidence
 } | null {
   if (!form.weeklyMode || !operationSupportsWeeklySplit(form.operation)) return null
-  const weekly = draftWeeklyAmounts(form.weekly)
+  const raw = draftWeeklyAmounts(form.weekly)
+  const weekly = foldWeeksIntoMonth(raw, form.month)
   const amount = weekly.reduce((sum, value) => sum + value, 0)
   if (amount <= 0) return null
-  const weeklyConfidence = weekly.map((value, index) =>
-    value > 0 ? form.weeklyConfidence[index] ?? "expected" : null,
-  )
+  const weekCount = form.month ? ledgerMonthWeekCount(form.month) : 5
+  const weeklyConfidence = weekly.map((value, index) => {
+    if (!(value > 0)) return null
+    const own = raw[index] > 0 ? form.weeklyConfidence[index] : null
+    // 합쳐진 마지막 주차 — 자기 값이 없으면 합쳐 들어온 주차의 확도를 쓴다.
+    const folded = index === weekCount - 1 ? form.weeklyConfidence.slice(weekCount).find((_value, offset) => raw[weekCount + offset] > 0) : null
+    return own ?? folded ?? form.weeklyConfidence[index] ?? "expected"
+  })
   return {
     amount,
     weekly,
@@ -556,6 +760,9 @@ export function mapNumberValue(map: Record<string, number> | null | undefined, k
   return Number.isFinite(value) ? value : 0
 }
 
+// 편집 · 잠금 · 주차 분해 전용(양수만). 합계 · 필터 · 표시는 rowMonthBucket(workbench-shared) / rowMonthNet 을 쓴다(D1·D2 —
+// 환불 달을 0 으로 자르면 합계가 시트 1행 =Sum() 보다 커진다). 이 값의 소비처: 칸 잠금(isMatrixCellLocked)·칸 시작값·
+// 직전 금액(priorAmount)·붙여넣기 비교·주차 분해(rowWeeklySplit)·주차 예상(buildRevWeekProjection).
 export function rowMonthAmount(row: LedgerRevenueRow, month: string) {
   const mapped = mapNumberValue(row.monthlyPayments, month)
   if (mapped > 0) return mapped
@@ -563,16 +770,23 @@ export function rowMonthAmount(row: LedgerRevenueRow, month: string) {
   return 0
 }
 
-// '확정'의 산식은 rev-confirmed.ts 캐논 단일 정의를 revenue-core 경유로 소비한다(마스터플랜 C2).
-// 시트행은 캐논 전체 규칙(확정맵→red→무색상 과거월 폴백 — 직접 맵 합산의 과소집계 방지),
-// 적용 초안행(ledgerOrigin==="draft")은 확도 맵(appliedDraftConfidenceMaps)이 정본이라
-// 무색상 폴백이 꺼진다 — 예정 입력이 적용 즉시 확정으로 인플레되지 않는다.
-export function rowMonthConfirmed(row: LedgerRevenueRow, month: string) {
-  return ledgerMonthConfirmed(row, month, rowMonthAmount(row, month))
+/** 한 달 순액(부호 그대로 — 환불 음수·명시 0 유지). 장부 매출 한 정의(revenue-core ledgerMonthNet)와 같은 함수다. */
+export function rowMonthNet(row: Pick<LedgerRevenueRow, "monthlyPayments" | "ledgerOrigin" | "draftMonth" | "revenue">, month: string): number {
+  return ledgerMonthNet(row, month)
 }
 
-export function rowMonthHighConfidence(row: LedgerRevenueRow, month: string) {
-  return ledgerMonthSplit(row, month, rowMonthAmount(row, month)).highConfidence
+// '확정'의 산식은 rev-confirmed.ts 캐논 단일 정의를 revenue-core 경유로 소비한다(마스터플랜 C2).
+// 시트행은 캐논 전체 규칙(확정맵→red→무색상 지난달 폴백 — 직접 맵 합산의 과소집계 방지),
+// 적용 초안행(ledgerOrigin==="draft")은 확도 맵(appliedDraftConfidenceMaps)이 정본이라
+// 무색상 폴백이 꺼진다 — 예정 입력이 적용 즉시 확정으로 인플레되지 않는다.
+// 장부 매출 버킷(ledgerMonthBucket)의 한 몫 — 부호 그대로(빨강 환불 −30,000 은 확정 −30,000). today: 읽는 날(KST
+// 'YYYY-MM-DD', 생략하면 지금의 KST 영업일).
+export function rowMonthConfirmed(row: LedgerRevenueRow, month: string, today?: string) {
+  return ledgerMonthBucket(row, month, today).confirmed
+}
+
+export function rowMonthHighConfidence(row: LedgerRevenueRow, month: string, today?: string) {
+  return ledgerMonthBucket(row, month, today).high
 }
 
 function firstPaymentWeekIndex(firstPayment: string | null | undefined, month: string) {
@@ -929,8 +1143,10 @@ export interface BreakdownNumbersRow {
   excludeFromTotals?: boolean
 }
 
+// 0 은 "–". 음수(환불·차감)는 부호를 붙여 중립색으로 — 확도 색은 0 보다 큰 값에만 칠한다(D2).
 export function numberCell(value: number, tone = "text-[#111110]") {
-  if (value <= 0) return <span className="font-semibold text-[#C9C5BF]">–</span>
+  if (!Number.isFinite(value) || value === 0) return <span className="font-semibold text-[#C9C5BF]">–</span>
+  if (value < 0) return <span className="font-semibold text-[#31302E]">{formatMoney(value)}</span>
   return <span className={`font-bold ${tone}`}>{formatMoney(value)}</span>
 }
 

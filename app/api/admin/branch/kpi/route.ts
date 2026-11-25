@@ -6,7 +6,9 @@ import { shareInFlightByArgs } from "@/lib/server/share-in-flight"
 import { BRANCH_READ_ADMIN_API_ROLES, verifyAdmin } from "@/lib/admin-auth"
 import { adminCachedJson } from "@/lib/admin-api-response"
 import { selectKpiRows, KPI_METRICS } from "@/lib/branch/parsers/kpi"
-import { readRevDealsPreferActive } from "@/lib/branch/read-rev-deals"
+import { LEDGER_REVENUE_CACHE_TAGS, readLedgerRevenueDeals, scopeLedgerRevenueDeals } from "@/lib/branch/ledger-revenue"
+import { applyLedgerStatusToDsh } from "@/lib/branch/dsh-ledger"
+import { normalizeBranchMemberName } from "@/lib/branch/member-names"
 import { readDshPreferDb, readKpiBlocksPreferDb } from "@/lib/branch/read-dsh-kpi"
 import { listMembersByTeam, memberPacing, teamPacing } from "@/lib/branch/computations/pacing"
 import { fyOf, resolvePeriodDate } from "@/lib/branch/fiscal"
@@ -37,8 +39,15 @@ function readPeriodParam(url: URL): BranchPeriod | NextResponse {
 const readDsh = (fy: number) => readDshPreferDb(fy)
 const readKpiBlocks = (fy: number) => readKpiBlocksPreferDb(fy)
 
-async function readRevDeals(fy: number, team: BranchTeam) {
-  return readRevDealsPreferActive(fy, { team })
+// 매출 딜 = 시트 행 + 장부 항목(D1, lib/branch/ledger-revenue.ts). 전 팀을 한 번 읽는다 — DSH 실적(D4)은 Team KR 전체가 필요하고,
+// 멤버 딜 수는 아래에서 팀 범위로 좁힌다.
+async function readRevDeals(fy: number) {
+  return (await readLedgerRevenueDeals({ fiscalYear: fy })).deals
+}
+
+// 딜 담당 → 멤버 키. branchManagerMatches 와 같은 규칙(별칭·대소문자 무시, F-42).
+function memberKey(name: string | null | undefined): string | null {
+  return normalizeBranchMemberName(name)?.toLowerCase() ?? null
 }
 
 // pickValue(lib/branch/computations/pacing.ts)·selectKpiRows(lib/branch/parsers/kpi.ts)는
@@ -65,20 +74,26 @@ async function assembleBranchKpiPayload(team: BranchTeam, period: BranchPeriod, 
   const now = dateFromMonthKey(monthKey)
   const teams = team === "ALL" ? ["BD", "MKT", "CSM"] : [team]
   const fy = fyOf(now)
-  const [dsh, kpiBlocks, deals] = await Promise.all([readDsh(fy), readKpiBlocks(fy), readRevDeals(fy, manager ? "ALL" : team)])
+  const [rawDsh, kpiBlocks, allDeals] = await Promise.all([readDsh(fy), readKpiBlocks(fy), readRevDeals(fy)])
+  // DSH 실적을 장부에서(D4) — 시트 고정이 적용 중일 때만. 멤버 상자의 confirmed(pace.status)가 DSH 탭과 같아진다.
+  // now 는 캐시 키(달)에서 만든 달 1일이라, 고정 상태·읽는 날은 실제 지금으로 판정한다(캐시는 60초).
+  const today = new Date()
+  const { dsh } = await applyLedgerStatusToDsh({ dsh: rawDsh, fiscalYear: fy, now: today, deals: allDeals })
+  const deals = scopeLedgerRevenueDeals(allDeals, { team: manager ? "ALL" : team })
   const kpiRows = selectKpiRows(kpiBlocks, period, now)
   const kpiRowsByMember = new Map(kpiRows.map((row) => [row.member, row]))
   const dealsByManager = new Map<string, typeof deals>()
   for (const deal of deals) {
-    if (!deal.manager) continue
-    const managerDeals = dealsByManager.get(deal.manager)
+    const key = memberKey(deal.manager)
+    if (!key) continue
+    const managerDeals = dealsByManager.get(key)
     if (managerDeals) managerDeals.push(deal)
-    else dealsByManager.set(deal.manager, [deal])
+    else dealsByManager.set(key, [deal])
   }
   const teamSummaries = (manager ? [] : teams).map((t) => ({ team: t, ...teamPacing(dsh, t, period, now) }))
   const members = listMembersByTeam(dsh, manager ? "ALL" : team).filter((member) => !manager || branchManagerMatches(member, manager)).map((member) => {
     const pace = memberPacing(dsh, member, period, now)
-    const memberDeals = dealsByManager.get(member) ?? []
+    const memberDeals = dealsByManager.get(memberKey(member) ?? "") ?? []
     const kpiRow = kpiRowsByMember.get(member)
     const kpi = Object.fromEntries(
       KPI_METRICS.map((metric) => [metric, kpiRow?.pairs[metric] ?? { goal: 0, actual: 0 }]),
@@ -103,10 +118,12 @@ async function assembleBranchKpiPayload(team: BranchTeam, period: BranchPeriod, 
   return { teams: teamSummaries, members, ...(manager ? { scope: { manager } } : {}) }
 }
 
+// v2 — 매출 딜이 시트 행 + 장부 항목(D1)이고 DSH 실적이 시트 고정 뒤 장부(D4)다. 장부 항목·초안·시트 쓰기·동기화 런 태그를
+// 함께 건다 — 반영·되돌리기가 장부 항목 태그를 즉시 만료하면 이 조립도 함께 새로 계산된다.
 const getCachedBranchKpiPayload = unstable_cache(
   // 같은 인스턴스의 동시 미스·재검증은 shareInFlightByArgs 로 한 번만 계산한다(unstable_cache 는 인스턴스 안 동시 호출을 합치지 않는다).
-  shareInFlightByArgs("branch-kpi-assembled-v1", assembleBranchKpiPayload),
-  ["branch-kpi-assembled-v1"],
+  shareInFlightByArgs("branch-kpi-assembled-v2", assembleBranchKpiPayload),
+  ["branch-kpi-assembled-v2"],
   {
     revalidate: 60,
     tags: [
@@ -114,6 +131,7 @@ const getCachedBranchKpiPayload = unstable_cache(
       BRANCH_DSH_CACHE_TAG,
       BRANCH_KPI_CACHE_TAG,
       BRANCH_REV_DEALS_CACHE_TAG,
+      ...LEDGER_REVENUE_CACHE_TAGS,
     ],
   },
 )

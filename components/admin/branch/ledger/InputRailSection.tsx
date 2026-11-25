@@ -8,6 +8,8 @@ import {
   DRAFT_CONFIDENCE_OPTIONS,
   DRAFT_OPERATIONS,
   LOCK_WARNING_TEXT,
+  NEW_ROW_CLASSIFICATION_MESSAGE,
+  NewRowClassificationFields,
   REV_PRODUCT_FILTERS,
   draftFormWithConfidence,
   draftFormWithWeekConfidence,
@@ -16,6 +18,8 @@ import {
   draftWeeklyTotal,
   formatMonthLabel,
   formatMoney,
+  ledgerMonthWeekCount,
+  newRowClassificationMissing,
   operationSupportsWeeklySplit,
   productCategoryMeta,
   resultToDraftFeedback,
@@ -158,6 +162,15 @@ export function InputRailSection({
   const weeklyAmounts = draftWeeklyAmounts(draftForm.weekly)
   const railDominantConfidence = dominantWeeklyConfidence(weeklyAmounts, draftForm.weeklyConfidence)
 
+  // 신규 행 계약·경로(F-18) — 신규 입력(new-row 저장·new-row 초안 재저장)은 둘 다 골라야 저장된다. 수정 초안(edit-row)은
+  // 대상 시트 행의 분류를 이어 받아(장부 오버레이) 고르지 않는다.
+  const newRowPossible = !editingDraft || editingDraft.kind === "new-row"
+  const classificationMissing = newRowPossible && newRowClassificationMissing(draftForm)
+  // 지금 Enter·기본 버튼이 신규 저장으로 가는가 — 그때만 막는 안내를 띄운다(수정 초안이 기본이면 신규 버튼만 막는다).
+  const primaryIsNewRow = editingDraft ? editingDraft.kind === "new-row" : primaryDraftKind === "new-row"
+  // 그 달의 시트 주차 칸 수(2월 4, F-31) — 주차 고르기·주차 그리드가 없는 주차를 받지 않는다.
+  const formWeekCount = ledgerMonthWeekCount(draftForm.month || selectedMonth)
+
   // 품질 웨이브 7 — 항목 1: targetCellLocked는 부모가 이미 "지금 제출이 edit-row 경로로 가는지"
   // (editingDraft.kind==="edit-row" 또는 canCreateEditDraft)까지 반영해 계산해준다 — new-row
   // 저장·new-row 초안 편집은 대응 매트릭스 행이 없어 부모 쪽에서 항상 false로 내려온다. 여기서는
@@ -175,6 +188,10 @@ export function InputRailSection({
     if (draftSaving || draftFormInvalid) return
     if (blockedByLock) {
       setFeedback({ kind: "warning", text: LOCK_WARNING_TEXT })
+      return
+    }
+    if (primaryIsNewRow && classificationMissing) {
+      setFeedback({ kind: "warning", text: NEW_ROW_CLASSIFICATION_MESSAGE })
       return
     }
     if (editingDraft) {
@@ -290,6 +307,14 @@ export function InputRailSection({
                   </select>
                 </label>
               </div>
+              {newRowPossible && (
+                <NewRowClassificationFields
+                  contract={draftForm.contract}
+                  channel={draftForm.channel}
+                  onChange={(next) => setDraftForm((current) => ({ ...current, ...next }))}
+                  caption={!editingDraft && canCreateEditDraft ? "신규 입력에만 쓰입니다 — 수정 초안은 그 시트 행의 계약·경로를 따릅니다." : undefined}
+                />
+              )}
               <div className="grid grid-cols-2 gap-2">
                 <label className="block text-[11px] font-bold text-[#615D59]">
                   상품군
@@ -360,7 +385,12 @@ export function InputRailSection({
                       className="mt-1 h-9 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 text-[12px] font-semibold text-[#111110] outline-none"
                     >
                       <option value="month">월합계</option>
-                      {[1, 2, 3, 4, 5].map((week) => <option key={week} value={`w${week}`}>W{week}</option>)}
+                      {/* 시트에 없는 주차(2월 W5, F-31)는 고를 수 없다. */}
+                      {[1, 2, 3, 4, 5].map((week) => (
+                        <option key={week} value={`w${week}`} disabled={week > formWeekCount}>
+                          {week > formWeekCount ? `W${week}(시트에 없음)` : `W${week}`}
+                        </option>
+                      ))}
                     </select>
                   </label>
                 )}
@@ -478,6 +508,7 @@ export function InputRailSection({
                       setDraftForm((current) => draftFormWithWeekConfidence(current, index, key))
                     }
                     lockedWeeks={lockedWeeks}
+                    weekCount={formWeekCount}
                     variant="rail"
                   />
                   {/* 월 합은 읽기전용 자동합계 — 입력 필드가 아니라 표시 전용(직접 수정 불가 원칙). */}
@@ -540,6 +571,12 @@ export function InputRailSection({
                     : "고객명과 0보다 큰 금액을 입력해야 저장할 수 있습니다."}
                 </p>
               )}
+              {/* 신규 입력이 기본 저장일 때만 막는 안내를 띄운다 — 수정 초안이 기본이면 신규 버튼만 막고 툴팁으로 알린다. */}
+              {!draftFormInvalid && primaryIsNewRow && classificationMissing && (
+                <p className="rounded-md border border-[#F2B8B8] bg-[#FCE9E9] px-3 py-2 text-[11px] font-semibold text-[#8F2C2C]" role="alert">
+                  {NEW_ROW_CLASSIFICATION_MESSAGE}
+                </p>
+              )}
               {/* 품질 웨이브 7 — 항목 1: 제출을 시도하기 전에도 잠금 사실을 미리 보여준다(사전검사가
                   버튼 disabled로만 조용히 막으면 왜 막혔는지 알기 어렵다) — 인라인 경고 + 차단. */}
               {blockedByLock && (
@@ -567,7 +604,8 @@ export function InputRailSection({
                       이 버튼과 같은 저장을 수행한다. onClick을 따로 달면 클릭 시 두 번 저장된다. */}
                   <button
                     type="submit"
-                    disabled={draftSaving || draftFormInvalid || blockedByLock}
+                    disabled={draftSaving || draftFormInvalid || blockedByLock || (primaryIsNewRow && classificationMissing)}
+                    title={primaryIsNewRow && classificationMissing ? NEW_ROW_CLASSIFICATION_MESSAGE : undefined}
                     className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-[#084734] px-3 text-[12px] font-bold text-white transition hover:bg-[#065c41] disabled:cursor-not-allowed disabled:opacity-45"
                   >
                     {draftSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
@@ -607,7 +645,8 @@ export function InputRailSection({
                   <button
                     type={primaryDraftKind === "new-row" ? "submit" : "button"}
                     onClick={primaryDraftKind === "new-row" ? undefined : () => void runSave(() => saveDraft("new-row"))}
-                    disabled={draftSaving || draftFormInvalid}
+                    disabled={draftSaving || draftFormInvalid || classificationMissing}
+                    title={classificationMissing ? NEW_ROW_CLASSIFICATION_MESSAGE : undefined}
                     className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-[#084734] px-3 text-[12px] font-bold text-white transition hover:bg-[#065c41] disabled:cursor-not-allowed disabled:opacity-45"
                   >
                     {draftSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}

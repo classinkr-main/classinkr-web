@@ -2,21 +2,35 @@
 //
 // 시트 '2. REV' 처럼 건별 한 줄(같은 기관이 여러 건이면 여러 줄)로 펴고, 기준 달(m0)과 다음 달(m1)만
 // 주차(W1~W5) 칸으로 편다. 지난달은 한 열로 묶고(지난달 고정), 그 뒤 달도 한 열로 묶는다.
-// 금액·확도 분해는 기존 정본(rowMonthBucket · rowWeeklySplit · computeWeekCellStates)만 쓴다 — 여기서 다시 계산하지 않는다.
+// 금액·확도 분해는 기존 정본(장부 매출 버킷 ledgerMonthBucket · rowWeeklySplit · computeWeekCellStates)만 쓴다 — 여기서
+// 다시 계산하지 않는다. 달 금액은 부호 그대로다(D2 — 환불 달도 값이고 합계에서 빠진다, 순액 0 은 값 없음). 확도 색·비율은
+// 합계가 0 보다 클 때만 칠한다. 시트의 음수 칸(환불)은 장부에서 고치지 않는다('환불 — 시트 값').
 import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
+import { ledgerMonthBucket } from "@/lib/branch/computations/revenue-core"
+import { formatMoneyExact } from "@/lib/branch/ledger-format"
 import { currentWeekStart } from "@/lib/branch/sheet-writeback/target"
-import { channelLabel, contractLabel } from "./ledger-simple-logic"
-import { computeWeekCellStates, dominantCellConfidence, isMatrixCellLocked, type MatrixCellCoord } from "./rev-matrix-logic"
+import { channelLabel, contractLabel, rowMonthHasRefund } from "./ledger-simple-logic"
+import {
+  computeWeekCellStates,
+  dominantCellConfidence,
+  isMatrixCellLocked,
+  matrixCoordKey,
+  pendingCellAmount,
+  pendingMatchesKind,
+  rowCommitKind,
+  type MatrixCellCoord,
+  type MatrixEditorActions,
+  type MatrixPendingDraft,
+} from "./rev-matrix-logic"
 import {
   rowProductCategory,
-  rowWeeklyMismatch,
   rowWeeklySplit,
   weeklyConfidenceFromMetadata,
   type DraftConfidence,
   type LedgerRevenueRow,
   type RevMonthlyBucket,
 } from "./shared"
-import { addMonthlyBucket, emptyMonthlyBucket, rowMonthBucket } from "./workbench-shared"
+import { addMonthlyBucket, emptyMonthlyBucket } from "./workbench-shared"
 
 // ── 열 필터 ─────────────────────────────────────────────────────────────────────────────────────
 //
@@ -25,9 +39,10 @@ import { addMonthlyBucket, emptyMonthlyBucket, rowMonthBucket } from "./workbenc
 
 /**
  * 열 필터 조건 하나 — 필터 메뉴의 체크박스 한 칸.
- *  - "any"   값 있음(공백 제외) — 그 칸(월 계는 그 달)에 금액이 있다.
- *  - 확도 키  그 칸에 그 확도 금액이 있다. 단계 목록은 CONFIDENCE_TOKENS 를 돌린다 — 5단계로 바뀌면 토큰 맵만 고친다.
- *  - "empty" 값 없음 — 그 칸이 비었다.
+ *  - "any"   값 있음(공백 제외) — 그 칸(월 계는 그 달)에 금액이 있다(≠ 0). 음수(환불·차감)도 값이다(시트 '공백 제외'와 같다).
+ *  - 확도 키  값이 있고(≠ 0) 그 칸에 그 확도 금액이 있다(≠ 0 — 빨강 환불은 확정). 단계 목록은 CONFIDENCE_TOKENS 를
+ *            돌린다 — 5단계로 바뀌면 토큰 맵만 고친다.
+ *  - "empty" 값 없음 — 그 칸이 비었다(= 0). 순액 0 인 상계 달(+100 · −100)도 값 없음이다.
  */
 export type SheetFilterCondition = "any" | DraftConfidence | "empty"
 
@@ -85,9 +100,8 @@ export const SHEET_FILTER_KEYS: readonly string[] = [0, 1].flatMap((slot) => [
   ...[1, 2, 3, 4, 5].map((week) => `m${slot}.w${week}`),
 ])
 
-/** 들어오면 걸려 있는 필터 — 기준 달 계 · 값 있음("매출 난 것만"). */
+/** 들어오면 걸려 있는 필터 — 기준 달 계 · 값 있음("매출 난 것만" — 환불 달도 남는다). */
 export const DEFAULT_SHEET_FILTERS: SheetColumnFilters = { m0: ["any"] }
-export const DEFAULT_SHEET_FILTER_KEY = "m0"
 
 export const NO_SHEET_FILTERS: SheetColumnFilters = {}
 
@@ -108,10 +122,11 @@ function orderSheetFilterConditions(conditions: readonly string[]): SheetFilterC
  *  1. 모르는 값·겹친 값을 빼고 정규 순서(값 있음 → 확도 토큰 순서 → 값 없음)로 줄 세운다.
  *  2. 빈 집합 → null.
  *  3. 값 있음 + 값 없음 → 모든 행이 통과한다 → null(걸어 봐야 거르는 것이 없는데 열 머리만 초록으로 칠해진다).
- *  4. 값 있음 + 확도 → ["any"]. 확도 조건은 값 있음 안에 든다(확도 금액이 있으면 그 칸·그 달에 값이 있다 —
- *     rowMonthBucket 의 total = 확정 + 고확도 + 예정, 0 이하면 전부 0) — OR 하면 값 있음과 같다.
- * 확도를 전부 골라도 값 있음으로 줄이지 않는다. 월 금액이 0인데 주차 값만 있는 칸은 확도가 없어(weekCellConfidences)
- * 주차 열에서는 뜻이 달라진다.
+ *  4. 값 있음 + 확도 → ["any"]. 확도 조건은 값 있음 안에 든다 — 확도 조건은 값이 있는(≠ 0) 칸·달에서만 맞는다
+ *     (sheetColumnMatches). 부호가 섞인 달도 같다: 순액 0 상계 달(확정 +100 · 예정 −100)은 값 있음도, 어느 확도도
+ *     맞지 않는다 — OR 하면 값 있음과 같다.
+ * 확도를 전부 골라도 값 있음으로 줄이지 않는다. 월 금액이 0 이하인데 주차 값만 있는 칸은 확도가 없어(weekCellConfidences
+ * — 확도는 합계가 0 보다 큰 달에만) 주차 열에서는 뜻이 달라진다.
  */
 export function normalizeSheetFilterSet(conditions: readonly string[] | null | undefined): SheetFilterSet | null {
   const ordered = orderSheetFilterConditions(conditions ?? [])
@@ -160,22 +175,24 @@ const DEFAULT_SHEET_FILTER_PARAM = encodeSheetFilters(DEFAULT_SHEET_FILTERS)
  */
 export function parseSheetFilters(param: string | null): SheetColumnFilters {
   if (param == null) return DEFAULT_SHEET_FILTERS
-  const merged: Record<string, SheetFilterCondition[]> = {}
+  // 열마다 집합 하나에 모은다 — 같은 열이 여러 번 나와도 한 번씩만 더한다(F-51: 배열을 매번 복사하면 긴 cf 에서 제곱으로 느려졌다).
+  const merged = new Map<string, Set<SheetFilterCondition>>()
   for (const part of param.split(",")) {
     const colon = part.indexOf(":")
     if (colon < 0) continue
     const key = part.slice(0, colon).trim()
     if (!parseSheetFilterKey(key)) continue
-    const conditions = part
-      .slice(colon + 1)
-      .split(/[+\s]+/)
-      .flatMap((value) => {
-        const condition = PARAM_TO_CONDITION.get(value)
-        return condition ? [condition] : []
-      })
-    merged[key] = [...(merged[key] ?? []), ...conditions]
+    let set = merged.get(key)
+    if (!set) {
+      set = new Set()
+      merged.set(key, set)
+    }
+    for (const value of part.slice(colon + 1).split(/[+\s]+/)) {
+      const condition = PARAM_TO_CONDITION.get(value)
+      if (condition) set.add(condition)
+    }
   }
-  return normalizeSheetFilters(merged)
+  return normalizeSheetFilters(Object.fromEntries(Array.from(merged, ([key, set]) => [key, Array.from(set)])))
 }
 
 /** 필터 → URL `cf`. 정규형으로 적는다. 기본값이면 null(주소에서 지운다 — 생략 = 기본값 복귀), 비었으면 `none`. */
@@ -388,8 +405,9 @@ export interface SheetFilterChip {
   conditionLabel: string
   conditions: SheetFilterSet
   /**
-   * 지금 행을 거르는가. 그 자리에 달이 없는 필터는 걸려 있어도 건너뛴다(sheetRowPassesFilters) — 그래도 목록에서
-   * 빼지 않는다. 빼면 주소에 남은 필터가 안 보이다가 월을 옮기는 순간 몰래 다시 걸린다(F-2 "숨은 필터 0").
+   * 지금 행을 거르는가. 그 자리에 달이 없는 필터 · 그 달에 없는 주차(2월 W5, F-31)의 필터는 걸려 있어도 건너뛴다
+   * (sheetRowPassesFilters) — 그래도 목록에서 빼지 않는다. 빼면 주소에 남은 필터가 안 보이다가 월을 옮기는 순간 몰래
+   * 다시 걸린다(F-2 "숨은 필터 0").
    */
   applies: boolean
 }
@@ -403,34 +421,77 @@ export function describeSheetFilters(filters: SheetColumnFilters, columns: Sheet
     const monthLabel = sheetFilterColumnLabel(key, columns)
     const columnLabel = monthLabel ?? `${parsed.slot === 0 ? "기준 달" : "다음 달"} ${parsed.week == null ? "계" : `W${parsed.week + 1}`}`
     const conditionLabel = sheetFilterSetLabel(conditions)
-    return [{ key, label: `${columnLabel} ${conditionLabel}`, columnLabel, conditionLabel, conditions, applies: monthLabel != null }]
+    const block = columns.blocks.find((item) => item.slot === parsed.slot)
+    const weekExists = parsed.week == null || (block != null && parsed.week < sheetMonthWeekCount(block.month))
+    return [{ key, label: `${columnLabel} ${conditionLabel}`, columnLabel, conditionLabel, conditions, applies: monthLabel != null && weekExists }]
   })
 }
 
 // ── 행 ──────────────────────────────────────────────────────────────────────────────────────────
 
+/**
+ * 시트 '2. REV' 에서 그 달의 주차 칸 수 — 2월만 W1~W4, 나머지는 W1~W5(시트 머리 '5w' 7월 포함, F-31).
+ * 칸 머리는 모든 행이 함께 쓰므로 행의 글자색 길이가 아니라 달력 규칙으로 정한다.
+ */
+export function sheetMonthWeekCount(month: string): number {
+  return month.endsWith("-02") ? 4 : 5
+}
+
+/** 고칠 수 없는 칸의 까닭 — 툴팁 문구(sheetWeekCellTitle)와 칸 모양이 이것으로 갈린다. */
+export type SheetWeekLock =
+  /** 시트에 없는 주차(2월 W5). */
+  | "absent"
+  /** 장부 정정이 그 달을 대체했다 — 원래 시트 행의 그 달은 전부 잠근다(F-04). */
+  | "corrected"
+  /** 그 달에 시트 환불(음수)이 있다 — 고치면 주차 병합·월 대체가 음수를 지워 환불이 사라진다(D2). */
+  | "refund"
+  /** 확정으로 잠긴 달의 값이 찍힌 칸(computeWeekCellStates). */
+  | "locked"
+
 export interface SheetWeekCell {
-  /** 화면에 보이는 금액(월합계만 있는 행은 W5 에 얹는다 — computeWeekCellStates 규약). */
+  /**
+   * 화면에 보이는 양수 금액. 월합계만 있는 행은 그 달 마지막 주차 칸(W5, 2월은 W4)에 얹는다(computeWeekCellStates 규약).
+   * 음수는 refund 에 따로 싣는다.
+   */
   display: number
   isMonthOnly: boolean
-  /** 값이 있는 칸의 확도. 빈 칸은 null. */
+  /** 값이 있는 칸의 확도(표시·필터용). 빈 칸 · 합계가 0 이하인 달은 null — 확도 색은 합계가 0 보다 클 때만(D2). */
   confidence: DraftConfidence | null
+  /**
+   * 시트의 음수(환불·차감) 금액 — 0 이하. 주차 칸의 음수 그대로, 주차가 없는 환불 달은 순액을 마지막 주차 칸에 둔다
+   * (월합계만과 같다). 중립색 "-130,000" 으로 보이고 고치지 않는다. 합계 행 주차 칸 = display + refund(계와 맞는다).
+   */
+  refund: number
+  /** 환불 칸의 확도 — 필터용(표시는 중립색). 시트 글자색(빨강 = 확정 · 파랑 = 고확도 · 검정 = 예정)을 읽는다. 환불이 아니면 null. */
+  refundConfidence: DraftConfidence | null
+  /** 시트에 없는 주차(2월 W5) — 비활성 칸, 필터 머리도 없다. */
+  absent: boolean
+  /** 장부에서 고칠 수 있는 칸 — 칸 이동 순서(sheetEditableCells)와 클릭 편집 가드(sheetCellEditable)의 정본. */
+  editable: boolean
+  /** 고칠 수 없는 까닭. editable 이면 null. */
+  lock: SheetWeekLock | null
 }
 
 export interface SheetBlockView {
   slot: 0 | 1
   month: string
   bucket: RevMonthlyBucket
-  /** 주차 5칸(표시용). */
+  /** 주차 5칸(표시용). 2월의 W5 는 absent. */
   weeks: SheetWeekCell[]
-  /** rowWeeklySplit 원본 — 칸 편집 컴포넌트(RevMatrixWeekCells)에 그대로 넘긴다. */
+  /** 그 달의 시트 주차 칸 수(sheetMonthWeekCount — 2월 4, 그 밖 5). */
+  weekCount: number
+  /** rowWeeklySplit 원본(explicit · inferred 의 주차, 그 밖은 0). 표시 금액은 weeks 가 정본이다. */
   rawWeeks: number[]
   inferred: boolean
   monthOnlyAmount: number
-  /** 주차 합계와 월 금액이 어긋났다(rowWeeklyMismatch). */
+  /** 주차 합계(부호 그대로)와 월 금액이 어긋났다. */
   mismatch: boolean
   /** 그 달이 잠겼다(isMatrixCellLocked) — 값이 있는 주차 칸은 고칠 수 없다. */
   monthLocked: boolean
+  /** 장부 정정이 이 달을 대체했다(correctedMonths) — 주차 칸 전부 잠금(F-04). */
+  corrected: boolean
+  /** 그 달에 시트 환불(음수)이 있다 — 주차 칸 전부 읽기 전용('환불 — 시트 값'). */
+  refundMonth: boolean
 }
 
 export interface SheetRowView {
@@ -445,8 +506,9 @@ export interface SheetRowView {
   pastByMonth: RevMonthlyBucket[]
   blocks: SheetBlockView[]
   later: RevMonthlyBucket
+  /** FY 합계 — 모든 달을 부호 그대로 더한다(환불 달 포함, 시트 1행 =Sum() 과 같은 뜻). */
   annual: RevMonthlyBucket
-  /** 금액이 있는 달이 전부 확정이고 잠겼다 — 고객명 옆 자물쇠. */
+  /** 금액이 있는 달(합계 > 0)이 전부 확정이고 잠겼다 — 고객명 옆 자물쇠. */
   lockedConfirmed: boolean
   /** 주차·월 불일치가 난 달(회계연도 순) — 고객명 옆 경고. */
   mismatchMonths: string[]
@@ -465,6 +527,7 @@ function uniformConfidence(bucket: RevMonthlyBucket): DraftConfidence | null {
 
 /**
  * 주차 칸별 확도(표시·필터용). 월 확도 분해(bucket)가 정본이라 그 합을 넘겨 칠하지 않는다.
+ *  - 합계가 0 이하인 달(환불 · 상계)은 칠하지 않는다(D2 — 확도 색은 합계가 0 보다 클 때만).
  *  - 그 달이 한 가지 확도뿐이면 값 있는 칸 전부 그 확도.
  *  - 섞였으면 장부 입력 행은 저장된 주차별 확도, 시트 행은 칸 글자색(weeklyColors: r 빨강 · b 파랑 · k 그 밖)을
  *    읽되, 빨강·파랑 칸은 그 달의 확정·고확도 금액이 남아 있을 때만 그 확도로 본다(아직 오지 않은 주차의 빨강은
@@ -501,7 +564,114 @@ export function weekCellConfidences(
   })
 }
 
-export function buildSheetRowView(row: LedgerRevenueRow, columns: SheetColumns, correctedMonths: Set<string> | null = null): SheetRowView {
+/** 환불 칸의 확도(필터용) — 시트 글자색, 모르면 그 달 버킷에서 절댓값이 가장 큰 확도(부호 무관). */
+function refundCellConfidence(mark: string | undefined, bucket: RevMonthlyBucket): DraftConfidence {
+  if (mark === "r") return "confirmed"
+  if (mark === "b") return "high-confidence"
+  if (mark === "k") return "expected"
+  const confirmed = Math.abs(bucket.confirmed)
+  const high = Math.abs(bucket.high)
+  const open = Math.abs(bucket.open)
+  if (confirmed >= high && confirmed >= open && confirmed > 0) return "confirmed"
+  if (high >= open && high > 0) return "high-confidence"
+  return "expected"
+}
+
+/** 한 행 × 한 달의 주차 원본(부호 그대로, 5칸). 배열이 없으면 null. */
+function signedWeeks(row: Pick<LedgerRevenueRow, "weeklyPayments">, month: string): number[] | null {
+  const raw = row.weeklyPayments?.[month]
+  if (!Array.isArray(raw)) return null
+  return Array.from({ length: 5 }, (_unused, index) => {
+    const value = Number(raw[index])
+    return Number.isFinite(value) ? value : 0
+  })
+}
+
+/**
+ * 주차 합계와 월 금액이 어긋났나 — 부호 그대로 비교한다(환불 주가 섞인 달 [+100,000 · −130,000] 과 월 −30,000 은 맞다).
+ * 주차 값이 하나도 없는 달은 비교하지 않는다(월합계만 · 빈 달).
+ */
+function sheetMonthMismatch(row: LedgerRevenueRow, month: string, net: number): boolean {
+  const weeks = signedWeeks(row, month)
+  if (!weeks || !weeks.some((value) => value !== 0)) return false
+  const sum = weeks.reduce((total, value) => total + value, 0)
+  return Math.abs(sum - net) > 1
+}
+
+interface SheetWeekInput {
+  row: LedgerRevenueRow
+  month: string
+  bucket: RevMonthlyBucket
+  rawWeeks: number[]
+  monthOnlyAmount: number
+  monthLocked: boolean
+  corrected: boolean
+}
+
+/**
+ * 한 달의 주차 5칸. 양수 표시는 computeWeekCellStates(정본) 그대로이고, 그 위에
+ *  - 그 달에 없는 주차(2월 W5)는 비운다 — 거기 놓일 금액(월합계만 · 일자 추정 · 시트에 없는 W5 값)은 마지막 주차(W4)로 옮긴다
+ *    (시트 쓰기도 2월 W5 를 W4 에 쓴다, F-31).
+ *  - 시트 음수는 refund 로 싣고(주차가 없는 환불 달은 순액을 마지막 주차에), 그 달 주차는 전부 고치지 않는다(D2).
+ *  - 정정이 대체한 달은 전부 잠근다(F-04).
+ */
+function buildSheetWeekCells(input: SheetWeekInput): { weeks: SheetWeekCell[]; refundMonth: boolean } {
+  const { row, month, bucket, rawWeeks, monthOnlyAmount, monthLocked, corrected } = input
+  const weekCount = sheetMonthWeekCount(month)
+  const last = weekCount - 1
+  const states = computeWeekCellStates(rawWeeks, monthOnlyAmount, monthLocked)
+  const displays = states.map((state) => state.display)
+  const monthOnly = states.map((state) => state.isMonthOnly)
+  const signed = signedWeeks(row, month)
+  const refunds = Array.from({ length: 5 }, (_unused, index) => Math.min(signed?.[index] ?? 0, 0))
+  for (let index = weekCount; index < 5; index += 1) {
+    displays[last] += displays[index]
+    monthOnly[last] = monthOnly[last] || monthOnly[index]
+    refunds[last] += refunds[index]
+    displays[index] = 0
+    monthOnly[index] = false
+    refunds[index] = 0
+  }
+  // 주차 값이 없는 환불 달(월 칸만 음수) — 월합계만처럼 마지막 주차 칸에 둔다(합계 행 W1~W5 가 계와 맞게).
+  const refundMonthOnly = !signed?.some((value) => value !== 0) && bucket.total < 0
+  if (refundMonthOnly) refunds[last] = bucket.total
+  // 환불이 든 달 — 기관별 보기와 같은 정의(rowMonthHasRefund: 순액 < 0 이거나 음수 주차가 있다).
+  const refundMonth = rowMonthHasRefund(row, month)
+  const confidences = weekCellConfidences(row, month, displays, bucket)
+  const marks = row.weeklyColors?.[month] ?? ""
+  const weeks = displays.map((display, index): SheetWeekCell => {
+    const absent = index >= weekCount
+    const refund = refunds[index]
+    const lock: SheetWeekLock | null = absent
+      ? "absent"
+      : corrected
+        ? "corrected"
+        : refundMonth
+          ? "refund"
+          : monthLocked && display > 0
+            ? "locked"
+            : null
+    return {
+      display,
+      isMonthOnly: monthOnly[index] || (refund < 0 && refundMonthOnly && index === last),
+      confidence: confidences[index],
+      refund,
+      refundConfidence: refund < 0 ? refundCellConfidence(refundMonthOnly ? undefined : marks[index], bucket) : null,
+      absent,
+      editable: lock == null,
+      lock,
+    }
+  })
+  return { weeks, refundMonth }
+}
+
+/** today — 확도를 읽는 날(KST 'YYYY-MM-DD'). 생략하면 오늘(캐논 기본값). */
+export function buildSheetRowView(
+  row: LedgerRevenueRow,
+  columns: SheetColumns,
+  correctedMonths: Set<string> | null = null,
+  today?: string,
+): SheetRowView {
   const past = emptyMonthlyBucket()
   const later = emptyMonthlyBucket()
   const annual = emptyMonthlyBucket()
@@ -509,13 +679,14 @@ export function buildSheetRowView(row: LedgerRevenueRow, columns: SheetColumns, 
   let valuedMonths = 0
   let lockedConfirmedMonths = 0
   const visit = (month: string) => {
-    const bucket = rowMonthBucket(row, month)
+    const bucket = ledgerMonthBucket(row, month, today)
+    // FY 합계는 모든 달을 부호 그대로 더한다(환불 달 포함). 잠금 자물쇠는 값이 있는(> 0) 달만 센다.
+    addMonthlyBucket(annual, bucket)
     if (bucket.total > 0) {
       valuedMonths += 1
-      addMonthlyBucket(annual, bucket)
       if (bucket.confirmed >= bucket.total && isMatrixCellLocked(row, month, correctedMonths)) lockedConfirmedMonths += 1
     }
-    if (rowWeeklyMismatch(row, month)) mismatchMonths.push(month)
+    if (sheetMonthMismatch(row, month, bucket.total)) mismatchMonths.push(month)
     return bucket
   }
   const pastByMonth = columns.pastMonths.map((month) => {
@@ -529,18 +700,21 @@ export function buildSheetRowView(row: LedgerRevenueRow, columns: SheetColumns, 
     const rawWeeks = split.source === "explicit" || split.source === "inferred" ? split.weeks : [0, 0, 0, 0, 0]
     const monthOnlyAmount = split.source === "month-only" ? split.total : 0
     const monthLocked = isMatrixCellLocked(row, block.month, correctedMonths)
-    const states = computeWeekCellStates(rawWeeks, monthOnlyAmount, monthLocked)
-    const confidences = weekCellConfidences(row, block.month, states.map((state) => state.display), bucket)
+    const corrected = correctedMonths?.has(block.month) ?? false
+    const { weeks, refundMonth } = buildSheetWeekCells({ row, month: block.month, bucket, rawWeeks, monthOnlyAmount, monthLocked, corrected })
     return {
       slot: block.slot,
       month: block.month,
       bucket,
-      weeks: states.map((state, index) => ({ display: state.display, isMonthOnly: state.isMonthOnly, confidence: confidences[index] })),
+      weeks,
+      weekCount: sheetMonthWeekCount(block.month),
       rawWeeks,
       inferred: split.source === "inferred",
       monthOnlyAmount,
       mismatch: mismatchMonths.includes(block.month),
       monthLocked,
+      corrected,
+      refundMonth,
     }
   })
   for (const month of columns.laterMonths) addMonthlyBucket(later, visit(month))
@@ -576,50 +750,64 @@ export function sortSheetRows<T extends Pick<LedgerRevenueRow, "sheetRow">>(rows
 
 /** `#` 칸 — 무엇을 보이고 툴팁에 무엇이라 적을지. */
 export interface SheetRowNumberCell {
-  /** sheet = 시트 행 번호 · ledger = 장부에서 넣은 행(시트에 없음) · unnumbered = 시트에서 온 행인데 번호가 없다. */
-  kind: "sheet" | "ledger" | "unnumbered"
+  /**
+   * sheet = 시트 행 번호 · correction = 장부 정정 행(시트 그 행의 한 달을 대체 — 값은 시트에 없다) · ledger = 장부에서 넣은
+   * 행(시트에 없음) · unnumbered = 시트에서 온 행인데 번호가 없다.
+   */
+  kind: "sheet" | "correction" | "ledger" | "unnumbered"
   text: string
   title: string
 }
 
 /**
  * `#` 칸(필터 기획 C-1 · D4) — 시트 행 번호(동기화 시점, 필터·정렬과 무관). 장부에서 넣은 행은 "새".
+ * 장부 정정 행(edit-row)은 원래 시트 행 번호에 "*"를 붙여 흐리게 — 같은 번호의 시트 행과 구별하되 체크 큐의 "시트 N행"과
+ * 같은 번호로 찾을 수 있다(F-32).
  * 번호가 없다고 다 장부 행은 아니다 — 시트에서 온 행(ledgerOrigin "sheet")인데 동기화 기록에 행 번호가 빠졌으면 시트에 있는
  * 행이라 "새"(시트에 없음)라고 하지 않는다. 표시는 "–", 툴팁은 번호가 없다는 사실과 행 ID.
  */
-export function sheetRowNumberCell(row: Pick<LedgerRevenueRow, "id" | "sheetRow" | "ledgerOrigin">): SheetRowNumberCell {
+export function sheetRowNumberCell(
+  row: Pick<LedgerRevenueRow, "id" | "sheetRow" | "ledgerOrigin" | "draftKind" | "draftMonth">,
+): SheetRowNumberCell {
+  if (row.sheetRow != null && row.ledgerOrigin === "draft" && row.draftKind === "edit-row") {
+    const month = row.draftMonth ? `${Number(row.draftMonth.slice(5, 7))}월` : "그 달"
+    return { kind: "correction", text: `${row.sheetRow}*`, title: `장부 정정 · 시트 ${row.sheetRow}행의 ${month}을 대체` }
+  }
   if (row.sheetRow != null) return { kind: "sheet", text: String(row.sheetRow), title: `시트 '2. REV' ${row.sheetRow}행(동기화 시점)` }
   if (row.ledgerOrigin === "draft") return { kind: "ledger", text: "새", title: `장부에서 넣은 행 · 시트에 없음 · 장부 행 ID ${row.id}` }
   return { kind: "unnumbered", text: "–", title: `시트에서 온 행 · 동기화 기록에 시트 행 번호가 없음 · 행 ID ${row.id}` }
 }
 
 function bucketHasConfidence(bucket: RevMonthlyBucket, mode: DraftConfidence): boolean {
-  if (mode === "confirmed") return bucket.confirmed > 0
-  if (mode === "high-confidence") return bucket.high > 0
-  return bucket.open > 0
+  if (mode === "confirmed") return bucket.confirmed !== 0
+  if (mode === "high-confidence") return bucket.high !== 0
+  return bucket.open !== 0
 }
 
 /**
- * 칸 하나가 조건 하나에 맞는가.
- *  - 월 "계": 값 있음 = 그 달 금액 > 0, 확도 = 그 달에 그 확도 금액이 조금이라도 있다, 값 없음 = 금액 0 이하.
- *  - 주차: 값 있음 = 보이는 금액 > 0, 확도 = 값이 있고 그 칸의 확도가 같다, 값 없음 = 보이는 금액 0 이하.
+ * 칸 하나가 조건 하나에 맞는가(D2 — 음수도 값이다).
+ *  - 월 "계": 값 있음 = 그 달 순액 ≠ 0, 확도 = 순액 ≠ 0 이고 그 확도 금액 ≠ 0(빨강 환불 −30,000 은 확정), 값 없음 = 순액 0
+ *    (상계로 0 이 된 달 포함 — 미러는 시트의 수식 0 과 빈 칸을 구별하지 못한다).
+ *  - 주차: 값 있음 = 보이는 금액 또는 환불 ≠ 0, 확도 = 값이 있고 그 칸(환불이면 환불 칸)의 확도가 같다, 값 없음 = 둘 다 0.
  */
 function sheetColumnMatches(block: Pick<SheetBlockView, "bucket" | "weeks">, week: number | null, condition: SheetFilterCondition): boolean {
   if (week == null) {
-    if (condition === "any") return block.bucket.total > 0
-    if (condition === "empty") return block.bucket.total <= 0
-    return bucketHasConfidence(block.bucket, condition)
+    if (condition === "any") return block.bucket.total !== 0
+    if (condition === "empty") return block.bucket.total === 0
+    return block.bucket.total !== 0 && bucketHasConfidence(block.bucket, condition)
   }
   const cell = block.weeks[week]
   const display = cell?.display ?? 0
-  if (condition === "any") return display > 0
-  if (condition === "empty") return display <= 0
-  return display > 0 && cell?.confidence === condition
+  const refund = cell?.refund ?? 0
+  if (condition === "any") return display !== 0 || refund !== 0
+  if (condition === "empty") return display === 0 && refund === 0
+  return (display !== 0 && cell?.confidence === condition) || (refund !== 0 && cell?.refundConfidence === condition)
 }
 
 /**
  * 걸린 열 필터를 전부 통과해야 보인다 — 열 안의 조건은 OR(하나라도 맞으면), 열끼리는 AND.
- * 그 자리에 달이 없는 필터(회계연도 끝)와 조건이 빈 열은 건너뛴다. 정규화 전 집합(값 있음 + 값 없음 등)도 같은 뜻으로 읽는다.
+ * 그 자리에 달이 없는 필터(회계연도 끝), 그 달에 없는 주차(2월 W5)의 필터, 조건이 빈 열은 건너뛴다.
+ * 정규화 전 집합(값 있음 + 값 없음 등)도 같은 뜻으로 읽는다.
  */
 export function sheetRowPassesFilters(view: Pick<SheetRowView, "blocks">, filters: SheetColumnFilters): boolean {
   for (const [key, conditions] of Object.entries(filters)) {
@@ -628,6 +816,7 @@ export function sheetRowPassesFilters(view: Pick<SheetRowView, "blocks">, filter
     if (!parsed) continue
     const block = view.blocks.find((item) => item.slot === parsed.slot)
     if (!block) continue
+    if (parsed.week != null && parsed.week >= sheetMonthWeekCount(block.month)) continue
     if (!conditions.some((condition) => sheetColumnMatches(block, parsed.week, condition))) return false
   }
   return true
@@ -770,7 +959,10 @@ export interface SheetTotals {
   annual: RevMonthlyBucket
 }
 
-/** 머리 아래 합계 행 — 지금 보이는 행(필터 반영)만 더한다. */
+/**
+ * 머리 아래 합계 행 — 지금 보이는 행(필터 반영)만 부호 그대로 더한다(환불 포함, D1 · D2). 주차 칸 = 보이는 금액 + 환불이라
+ * W1~W5 합이 계와 맞는다(주차·월이 어긋난 행 제외). 대기 초안은 더하지 않는다(적용분만 — D1).
+ */
 export function sumSheetRows(views: SheetRowView[], columns: SheetColumns): SheetTotals {
   const totals: SheetTotals = {
     past: emptyMonthlyBucket(),
@@ -789,7 +981,7 @@ export function sumSheetRows(views: SheetRowView[], columns: SheetColumns): Shee
       if (!target) return
       addMonthlyBucket(target.bucket, block.bucket)
       block.weeks.forEach((cell, week) => {
-        target.weeks[week] += cell.display
+        target.weeks[week] += cell.display + cell.refund
       })
     })
     addMonthlyBucket(totals.later, view.later)
@@ -798,21 +990,186 @@ export function sumSheetRows(views: SheetRowView[], columns: SheetColumns): Shee
   return totals
 }
 
-// ── 칸 편집 순서 ────────────────────────────────────────────────────────────────────────────────
+// ── 칸 편집 순서 · 편집 가드 ────────────────────────────────────────────────────────────────────
 
 /**
  * 고칠 수 있는 칸 좌표(행 위→아래, 달 왼→오, W1→W5) — 방향키·Tab·Enter 이동의 순서다.
- * 잠긴 달에서도 빈 주차 칸은 열려 있다(computeWeekCellStates) — 값이 찍힌 잠긴 칸만 뺀다.
+ * 잠긴 달에서도 빈 주차 칸은 열려 있다(computeWeekCellStates) — 값이 찍힌 잠긴 칸, 정정이 대체한 달(F-04), 환불이 든 달(D2),
+ * 시트에 없는 주차(2월 W5, F-31)는 뺀다(SheetWeekCell.editable).
  */
 export function sheetEditableCells(views: SheetRowView[]): MatrixCellCoord[] {
   const cells: MatrixCellCoord[] = []
   for (const view of views) {
     for (const block of view.blocks) {
       block.weeks.forEach((cell, week) => {
-        if (block.monthLocked && cell.display > 0) return
+        if (!cell.editable) return
         cells.push({ rowId: view.row.id, month: block.month, week })
       })
     }
   }
   return cells
 }
+
+/** 이 행의 (달, 주차) 칸을 고칠 수 있나. 시트에 펴지 않은 달 · 월 좌표는 시트 칸이 아니라 막지 않는다(true). */
+export function sheetCellEditable(view: Pick<SheetRowView, "blocks">, month: string, week?: number): boolean {
+  if (week == null) return true
+  const block = view.blocks.find((item) => item.month === month)
+  if (!block) return true
+  return block.weeks[week]?.editable ?? false
+}
+
+/**
+ * 시트 칸 편집 가드 — 고칠 수 없는 칸(환불 · 정정 대체 · 없는 주차)은 클릭·더블클릭으로도 선택·편집을 시작하지 않는다.
+ * 방향키·Tab 은 sheetEditableCells 순서만 밟아 이미 건너뛴다. 나머지 동작은 받은 그대로(같은 함수)라 칸 memo 를 깨지 않는다.
+ */
+export function guardSheetCellActions<A extends Pick<MatrixEditorActions, "selectCell" | "beginEdit">>(
+  actions: A,
+  editable: (month: string, week?: number) => boolean,
+): A {
+  return {
+    ...actions,
+    selectCell: (rowId: string, month: string, week?: number) => {
+      if (editable(month, week)) actions.selectCell(rowId, month, week)
+    },
+    beginEdit: (rowId: string, month: string, seed?: string, week?: number) => {
+      if (editable(month, week)) actions.beginEdit(rowId, month, seed, week)
+    },
+  }
+}
+
+// ── 대기 초안 표시(F-19) ────────────────────────────────────────────────────────────────────────
+
+export interface SheetBlockPending {
+  draftId: string
+  confidence: DraftConfidence
+  /**
+   * 대기 초안이 적용되면 그 달 금액(장부 기준) — 월 계 칸이 대기 표시로 보인다. 수정 초안은 그 달을 대체하고, 장부에서 넣은
+   * 행의 칸에 건 초안(신규)은 더해진다. 합계 행 · 결과 줄 · FY 는 적용분만 센다(D1 — 여기 값을 더하지 않는다).
+   */
+  total: number
+  /** 지금 장부 금액(그 달 순액). */
+  current: number
+  /** 주차별 대기 금액 — 대기 초안이 그 칸 값을 바꾸면 그 금액, 아니면 null(5칸). 시트에 없는 주차는 늘 null. */
+  weeks: Array<number | null>
+  /** 주차별 대기 확도(밑줄 · 점 색) — 대기 금액이 있는 칸만. */
+  weekConfidences: Array<DraftConfidence | null>
+}
+
+/**
+ * 행 × 달의 대기 초안(draft · checked) 요약 — 워크벤치가 넘기는 pendingByCell(buildMatrixPendingByCell: `행::달`,
+ * `행::달::wN` 키)을 그대로 읽는다. 칸 편집과 같은 종류 판정(rowCommitKind · pendingMatchesKind)이라 고객 이름으로만 걸린
+ * 신규 초안이 시트 행 금액처럼 보이지 않는다.
+ *  - 주차 키 초안: 그 칸 = pendingCellAmount(주차 병합이면 그 주차 값, 아니면 초안 금액).
+ *  - 월 키 초안에 주차 병합(weekly)이 있으면 지금 칸과 다른 주차만 대기 금액으로 보인다(바뀌지 않은 칸까지 칠하지 않는다).
+ */
+export function sheetBlockPending(
+  row: Pick<LedgerRevenueRow, "id" | "sourceDealId" | "ledgerOrigin">,
+  block: Pick<SheetBlockView, "month" | "bucket" | "weeks">,
+  pendingByCell: ReadonlyMap<string, MatrixPendingDraft> | null | undefined,
+): SheetBlockPending | null {
+  if (!pendingByCell || pendingByCell.size === 0) return null
+  const kind = rowCommitKind(row)
+  const accept = (pending: MatrixPendingDraft | undefined) => (pending && pendingMatchesKind(pending, kind) ? pending : null)
+  const monthPending = accept(pendingByCell.get(matrixCoordKey({ rowId: row.id, month: block.month })))
+  const weeks: Array<number | null> = []
+  const weekConfidences: Array<DraftConfidence | null> = []
+  let firstWeekPending: MatrixPendingDraft | null = null
+  for (let week = 0; week < 5; week += 1) {
+    const cell = block.weeks[week]
+    const own = accept(pendingByCell.get(matrixCoordKey({ rowId: row.id, month: block.month, week })))
+    let amount: number | null = null
+    let source: MatrixPendingDraft | null = null
+    if (cell && !cell.absent) {
+      if (own) {
+        amount = pendingCellAmount(own, week)
+        source = own
+      } else if (monthPending?.weekly) {
+        const value = monthPending.weekly[week] ?? 0
+        if (Math.abs(value - (cell.display + cell.refund)) > 0.5) {
+          amount = value
+          source = monthPending
+        }
+      }
+    }
+    if (own && !firstWeekPending) firstWeekPending = own
+    weeks.push(amount)
+    weekConfidences.push(source ? source.weeklyConfidence?.[week] ?? source.confidence : null)
+  }
+  const base = monthPending ?? firstWeekPending
+  if (!base) return null
+  const current = block.bucket.total
+  return {
+    draftId: base.id,
+    confidence: base.confidence,
+    total: kind === "new-row" ? current + base.amount : base.amount,
+    current,
+    weeks,
+    weekConfidences,
+  }
+}
+
+// ── 주차 칸 표시(툴팁) ──────────────────────────────────────────────────────────────────────────
+
+export interface SheetWeekCellView extends SheetWeekCell {
+  /** 대기 초안이 이 칸을 바꾸면 그 금액(F-19) — 칸이 대기 스타일(밑줄 · 점)로 이 금액을 보인다. 없으면 null. */
+  pendingAmount: number | null
+  pendingConfidence: DraftConfidence | null
+  /** 툴팁 · aria-label. 금액은 원 단위 전체. 대기 중이면 '미입력' 대신 대기 금액과 지금 장부 값을 말한다. */
+  title: string
+}
+
+/**
+ * 시트 주차 칸 하나의 툴팁. interactive — 칸 편집기가 붙어 있다(읽기 전용 표면 '클릭·Enter로 편집'을 말하지 않는다).
+ * lockLabel — 잠긴 값 칸의 이름("시트 확정" · "장부 반영", 매트릭스 칸과 같은 말).
+ */
+export function sheetWeekCellTitle(
+  cell: SheetWeekCell,
+  week: number,
+  month: string,
+  options: { pendingAmount?: number | null; interactive?: boolean; lockLabel?: string } = {},
+): string {
+  const label = `W${week + 1}`
+  if (cell.absent) return `${label} · ${Number(month.slice(5, 7))}월은 시트에 W${sheetMonthWeekCount(month)}까지만 있습니다`
+  const pending = options.pendingAmount ?? null
+  const now = cell.display + cell.refund
+  const confidence = cell.confidence ? ` · ${CONFIDENCE_TOKENS[cell.confidence].label}` : ""
+  const monthOnly = cell.isMonthOnly ? " · 월합계만" : ""
+  const base = pending != null
+    ? `${label} 대기 중 변경 ${formatMoneyExact(pending)} (지금 장부 ${formatMoneyExact(now)})`
+    : cell.refund < 0 && cell.display === 0
+      ? `${label} ${formatMoneyExact(cell.refund)}${monthOnly}`
+      : cell.display > 0
+        ? `${label} ${formatMoneyExact(now)}${confidence}${monthOnly}`
+        : `${label} 미입력`
+  if (cell.lock === "corrected") return `${base} · 장부 정정으로 대체된 달이라 잠금 — 정정 행(번호 *)에서 확인합니다`
+  if (cell.lock === "refund") return cell.refund < 0 ? `${base} · 환불 — 시트 값` : `${base} · 환불이 든 달 — 시트 값이라 장부에서 고치지 않습니다`
+  if (cell.lock === "locked") return `${base} · 🔒 ${options.lockLabel ?? "시트 확정"} 값이라 잠금(실수 방지) — 수정은 우측 패널에서 정정 초안으로`
+  return options.interactive ? `${base} · 클릭·Enter로 편집` : base
+}
+
+/**
+ * 칸 컴포넌트(RevMatrixWeekCells 의 시트 칸)가 그대로 그릴 주차 5칸 — 보이는 값 · 환불 · 없는 주차 · 고칠 수 있는지 · 대기 금액 ·
+ * 툴팁을 한 곳에서 정한다. pending 은 sheetBlockPending.
+ */
+export function sheetWeekCellsForRender(
+  row: Pick<LedgerRevenueRow, "ledgerOrigin">,
+  block: Pick<SheetBlockView, "month" | "weeks">,
+  pending: Pick<SheetBlockPending, "weeks" | "weekConfidences"> | null,
+  options: { interactive?: boolean } = {},
+): SheetWeekCellView[] {
+  const lockLabel = row.ledgerOrigin === "draft" ? "장부 반영" : "시트 확정"
+  return block.weeks.map((cell, week) => {
+    const pendingAmount = pending?.weeks[week] ?? null
+    return {
+      ...cell,
+      pendingAmount,
+      pendingConfidence: pendingAmount != null ? pending?.weekConfidences[week] ?? null : null,
+      title: sheetWeekCellTitle(cell, week, block.month, { pendingAmount, interactive: options.interactive, lockLabel }),
+    }
+  })
+}
+
+// ── 불러오는 중 · 일부만 ────────────────────────────────────────────────────────────────────────
+
+/** 시트 행(파이프라인)을 못 불러왔을 때 표 위 한 줄(F-13) — 장부 입력분만 보이고 합계가 일부라는 사실. */
+export const SHEET_PARTIAL_NOTICE = "시트 행을 못 불러와 장부 입력분만 보입니다"

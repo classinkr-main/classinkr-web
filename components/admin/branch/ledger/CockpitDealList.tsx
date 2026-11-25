@@ -14,16 +14,14 @@ import {
   formatMonthLabel,
   formatMoney,
   productCategoryMeta,
-  rowMonthAmount,
-  rowMonthConfirmed,
-  rowMonthHighConfidence,
   rowProductCategory,
   type LedgerRevenueRow,
 } from "./shared"
+import { rowMonthBucket } from "./workbench-shared"
 
 // 행 단위 확도 톤 — ForecastBoard.cardConfidence와 동일 규약(전액 확정=확정, 고확도 보유=고확도,
-// 나머지=예정). 부분 확정은 톤을 올리지 않는다(셀 합산 인플레 착시 방지).
-function rowConfidenceTone(amount: number, confirmed: number, high: number): ConfidenceKey {
+// 나머지=예정). 부분 확정은 톤을 올리지 않는다(셀 합산 인플레 착시 방지). 합계가 0 이하(환불·빈 달)면 예정(확도 색은 양수만, D2).
+export function rowConfidenceTone(amount: number, confirmed: number, high: number): ConfidenceKey {
   if (amount <= 0) return "expected"
   if (confirmed >= amount - 1) return "confirmed"
   if (high > 0) return "high-confidence"
@@ -110,12 +108,13 @@ export function CockpitDealList({
     const query = term.trim().toLowerCase()
     return rows
       .map((row) => {
-        const amount = rowMonthAmount(row, selectedMonth)
+        // 선택월 금액은 장부 매출 한 정의(D1·D2) — 부호 그대로(환불 달은 음수로 보인다).
+        const bucket = rowMonthBucket(row, selectedMonth)
         const category = rowProductCategory(row)
         return {
           row,
-          amount,
-          tone: rowConfidenceTone(amount, rowMonthConfirmed(row, selectedMonth), rowMonthHighConfidence(row, selectedMonth)),
+          amount: bucket.total,
+          tone: rowConfidenceTone(bucket.total, bucket.confirmed, bucket.high),
           category,
           product: productCategoryMeta(category),
         }
@@ -305,7 +304,7 @@ export function CockpitDealList({
             {items.map(({ row, amount, tone, product }, index) => {
               const token = CONFIDENCE_TOKENS[tone]
               const selected = row.id === selectedRowId
-              const hasAmount = amount > 0
+              const hasAmount = amount !== 0
               return (
                 <li key={row.id}>
                   <button
@@ -327,9 +326,12 @@ export function CockpitDealList({
                         {row.customer || "(무제목)"}
                       </span>
                       <span className={`shrink-0 tabular-nums ${
-                        hasAmount
+                        amount > 0
                           ? "text-[13px] font-bold text-[#111110]"
-                          : "text-[11.5px] font-medium text-[#B0ABA4]"
+                          : hasAmount
+                            // 환불(음수) — 부호를 붙인 중립색(D2).
+                            ? "text-[13px] font-semibold text-[#31302E]"
+                            : "text-[11.5px] font-medium text-[#B0ABA4]"
                       }`}>
                         {formatMoney(amount)}
                       </span>
@@ -343,9 +345,16 @@ export function CockpitDealList({
                           <span className="truncate text-[10.5px] font-medium text-[#88847E]">{row.manager}</span>
                         )}
                       </div>
-                      <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-bold ${token.chipClass}`}>
-                        {token.label}
-                      </span>
+                      {amount < 0 ? (
+                        // 환불 달 — 확도 칩 대신 중립 표시(확도 색은 합계가 0 보다 클 때만, D2).
+                        <span className="shrink-0 rounded-full border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] px-2 py-0.5 text-[10px] font-bold text-[#615D59]">
+                          환불
+                        </span>
+                      ) : (
+                        <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-bold ${token.chipClass}`}>
+                          {token.label}
+                        </span>
+                      )}
                     </div>
                   </button>
                 </li>

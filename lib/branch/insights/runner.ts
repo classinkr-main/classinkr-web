@@ -1,6 +1,7 @@
 import "server-only"
 import { readDshPreferDb, readKpiBlocksPreferDb } from "@/lib/branch/read-dsh-kpi"
-import { listBranchRevDeals } from "@/lib/repositories/branch-deals"
+import { readLedgerRevenueDeals } from "@/lib/branch/ledger-revenue"
+import { applyLedgerStatusToDsh } from "@/lib/branch/dsh-ledger"
 import { listPublicEvents } from "@/lib/repositories/public-events"
 import { summarizeCampaigns } from "@/lib/branch/computations/campaigns"
 import { buildInsightInput, digestInput, type TeamScope } from "./input-builder"
@@ -37,9 +38,11 @@ export async function runInsights(team: TeamScope, force: boolean): Promise<RunI
         }
       }
     }
-    const [dsh, kpi, deals, events, campaigns] = await Promise.all([
-      readDsh(), readKpi(), listBranchRevDeals(), listPublicEvents(), summarizeCampaigns(now),
+    const [sheetDsh, kpi, deals, events, campaigns] = await Promise.all([
+      readDsh(), readKpi(), readLedgerRevenueDeals({ fiscalYear: fyOf(now), now }).then((ledger) => ledger.deals), listPublicEvents(), summarizeCampaigns(now),
     ])
+    // DSH 실적을 장부에서(D4) — 요약·KPI 와 같은 D1 딜로, 시트 고정이 적용 중일 때만 고정 달 이후를 바꾼다.
+    const { dsh } = await applyLedgerStatusToDsh({ dsh: sheetDsh, fiscalYear: fyOf(now), now, deals })
     // Compass 주간 구획 — 끝난 주 기준이라 한 주 동안 입력이 크게 흔들리지 않는다(다이제스트 캐시 유지).
     // 읽기 실패는 인사이트 전체를 막지 않고 state=missing으로 넘겨 AI가 한계를 말하게 한다.
     let compassWeekly: BranchWeeklyCompassReport | null = null

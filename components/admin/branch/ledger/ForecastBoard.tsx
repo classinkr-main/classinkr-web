@@ -8,6 +8,8 @@
 import { useMemo, useState } from "react"
 import { CalendarRange } from "lucide-react"
 import { CONFIDENCE_TOKENS, type ConfidenceKey } from "@/lib/branch/confidence-tokens"
+import { isZeroLedgerBucket } from "@/lib/branch/computations/revenue-core"
+import { getBusinessDateParts } from "@/lib/business-time"
 import { MonthlyGoalBowlChart } from "../MonthlyGoalBowlChart"
 import type { MonthlyGoalPlan } from "@/lib/branch/monthly-goal-chart"
 import {
@@ -19,15 +21,13 @@ import {
   mergedWeeklyFromMetadata,
   OPEN_HATCH_BACKGROUND,
   productCategoryMeta,
-  rowMonthAmount,
-  rowMonthConfirmed,
-  rowMonthHighConfidence,
   rowProductCategory,
   rowWeeklySplit,
   weeklyConfidenceFromMetadata,
   type LedgerRevenueRow,
   type RevProductCategory,
 } from "./shared"
+import { rowMonthBucket } from "./workbench-shared"
 
 // 주차 날짜 구획 라벨의 SSOT는 shared로 이동(입력 레일 주차 분해 그리드와 공용) — 기존 소비처
 // (tests/branch/forecast-board.test.ts 등)의 import 표면 유지를 위한 재수출.
@@ -77,7 +77,9 @@ function cardConfidence(amount: number, confirmed: number, high: number): Confid
   return "expected"
 }
 
-export function buildForecastBoardModel(rows: LedgerRevenueRow[], month: string): ForecastBoardModel {
+// 머리 합계는 장부 매출 한 정의(D1·D2) — 버킷을 부호 그대로 더한다(환불 달은 빠지고, 네 값이 모두 0 인 행만 건너뛴다).
+// 칸반 카드·칼럼은 양수 달만(환불 카드는 없다). today: 확도를 읽는 날(KST, 생략 = 오늘).
+export function buildForecastBoardModel(rows: LedgerRevenueRow[], month: string, today?: string): ForecastBoardModel {
   const columns: ForecastBoardColumn[] = [
     ...([0, 1, 2, 3, 4] as const).map((index) => ({
       id: `w${index + 1}` as ForecastBoardColumn["id"],
@@ -92,17 +94,22 @@ export function buildForecastBoardModel(rows: LedgerRevenueRow[], month: string)
   let monthTotal = 0
   let monthConfirmed = 0
   let monthHighConfidence = 0
+  let monthOpen = 0
   let dealCount = 0
 
   for (const row of rows) {
-    const amount = rowMonthAmount(row, month)
-    if (amount <= 0) continue
-    const confirmed = rowMonthConfirmed(row, month)
-    const high = rowMonthHighConfidence(row, month)
-    monthTotal += amount
-    monthConfirmed += confirmed
-    monthHighConfidence += high
+    const bucket = rowMonthBucket(row, month, today)
+    if (isZeroLedgerBucket(bucket)) continue
+    monthTotal += bucket.total
+    monthConfirmed += bucket.confirmed
+    monthHighConfidence += bucket.high
+    monthOpen += bucket.open
     dealCount += 1
+    // 칸반은 양수 달만 — 환불(음수) 달·상계로 0 이 된 달은 머리 합계에만 든다.
+    if (bucket.total <= 0) continue
+    const amount = bucket.total
+    const confirmed = bucket.confirmed
+    const high = bucket.high
 
     const base = {
       rowId: row.id,
@@ -159,7 +166,8 @@ export function buildForecastBoardModel(rows: LedgerRevenueRow[], month: string)
     monthTotal,
     monthConfirmed,
     monthHighConfidence,
-    monthOpen: Math.max(monthTotal - monthConfirmed - monthHighConfidence, 0),
+    // 자르지 않는다 — 확정 + 고확도 + 예정 = 합계가 늘 성립한다(버킷 불변식).
+    monthOpen,
     dealCount,
   }
 }
@@ -180,6 +188,9 @@ interface ForecastBoardProps {
   onOpenRow: (row: LedgerRevenueRow) => void
   selectedRowId?: string | null
   monthlyGoals?: MonthlyGoalPlan[]
+  /** 오늘(KST 영업일 'YYYY-MM-DD') — 확도를 읽는 날 · 목표 차트의 '이번 달'. 생략하면 지금의 KST 영업일(F-10). */
+  today?: string
+  /** 이번 달('YYYY-MM') — 생략하면 today 의 달. */
   todayMonth?: string
   goalNote?: string
   chartLoading?: boolean
@@ -194,12 +205,16 @@ export function ForecastBoard({
   onOpenRow,
   selectedRowId = null,
   monthlyGoals = [],
-  todayMonth = new Date().toISOString().slice(0, 7),
+  today: todayProp,
+  todayMonth: todayMonthProp,
   goalNote,
   chartLoading = false,
   chartError = null,
 }: ForecastBoardProps) {
-  const model = useMemo(() => buildForecastBoardModel(rows, selectedMonth), [rows, selectedMonth])
+  // 이번 달은 KST 영업일 기준이다 — UTC 로 자르면 매월 1일 00:00~08:59 KST 에 지난달로 읽힌다(F-10).
+  const today = todayProp ?? getBusinessDateParts().date
+  const todayMonth = todayMonthProp ?? today.slice(0, 7)
+  const model = useMemo(() => buildForecastBoardModel(rows, selectedMonth, today), [rows, selectedMonth, today])
   const rowById = useMemo(() => new Map(rows.map((row) => [row.id, row])), [rows])
   const [expandedColumns, setExpandedColumns] = useState<Set<string>>(() => new Set())
 
@@ -272,7 +287,7 @@ export function ForecastBoard({
           <p role="alert" className="py-6 text-xs text-[#B43E3E]">월별 매출 조회 실패 · 0건이 아닙니다.</p>
         ) : (
           <MonthlyGoalBowlChart rows={rows} plans={monthlyGoals} selectedMonth={selectedMonth}
-            todayMonth={todayMonth} onSelectMonth={onSelectMonth} goalNote={goalNote} />
+            todayMonth={todayMonth} today={today} onSelectMonth={onSelectMonth} goalNote={goalNote} />
         )}
       </div>
 

@@ -568,3 +568,24 @@ describe("시트 고정 — 적용 중이면 '시트·' 문구와 행마다 다�
     expect(view.current.queueError).toBe("일괄 적용 중 1건이 DB 장부에 반영되지 않았습니다 — 해당 행에서 다시 적용하세요.")
   })
 })
+
+describe("F-29 — 목록 상한 경고는 저장 성공으로 지워지지 않는다", () => {
+  it("entries 상한 경고가 저장 성공(큐 알림 비움) 뒤에도 남고, 다음 목록 조회가 다시 정한다", async () => {
+    server.override = (request) =>
+      request.method === "GET" && request.url.startsWith("/api/admin/branch/ledger-drafts?")
+        ? { status: 200, body: { drafts: [...server.drafts], entries: [], sheetWrite: server.sheetWrite, sheetWrites: {}, truncated: { openDrafts: false, entries: true } } }
+        : undefined
+    const view = await mount()
+    expect(view.current.queueError).toContain("20,000건")
+
+    const created = await view.current.createDraft(cellInput())
+    await view.settle()
+    expect(created.draft).not.toBeNull()
+    expect(view.current.queueError).toContain("20,000건")
+
+    server.override = null
+    await view.current.reloadDrafts()
+    await view.settle()
+    expect(view.current.queueError).toBeNull()
+  })
+})

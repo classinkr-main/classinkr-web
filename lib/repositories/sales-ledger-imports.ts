@@ -297,9 +297,10 @@ export async function readDshFromActiveImport(fiscalYear: number, knownRunId?: s
   return readCachedDshContentForImportRun(importRunId)
 }
 
-const REV_LINE_COLUMNS =
+// 임포트 줄·월 엔트리 select 열 — 대조 스크립트(lib/branch/reconcile/read-sources.ts)의 캐시 없는 읽기도 같은 열을 쓴다.
+export const REV_LINE_COLUMNS =
   "id,source_row,source_record_key,account_name,branch_contact,location,scale,importance,team,manager,status,deal_type,product,first_payment,remark,total_amount,raw,created_at"
-const REV_PERIOD_ENTRY_COLUMNS = "rev_line_id,period_month,amount,confidence,source_week"
+export const REV_PERIOD_ENTRY_COLUMNS = "rev_line_id,period_month,amount,confidence,source_week"
 
 // 임포트 라인 1건 + 그 라인의 월별 엔트리를 BranchRevDeal(시트 미러 shape)로 복원한다.
 // 전량 읽기(readRevDealsForImportRun)와 단건 상세(readRevDealFromActiveImportById)가 같은

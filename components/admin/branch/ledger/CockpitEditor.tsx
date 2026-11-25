@@ -6,7 +6,8 @@
 //   - 확도 전체 일괄 + 주차별(W1~W5) 금액 + 주차별 3단 확도(예정·고확도·확정)
 // 저장/확도/주차 산식은 전부 InputRailSection과 동일한 shared 헬퍼·부모 핸들러를 재사용한다
 // (draftWeekly*·dominantWeeklyConfidence·saveDraft/saveEditedDraft) — 비즈니스 로직 중복 없음.
-// 참고: New/Renew(상태)·Direct/Channel(타입)·지역·규모는 매출 드래프트 모델에 없다(딜 속성, CRM에서 편집).
+// 참고: 기존 딜의 New/Renew(상태)·Direct/Channel(타입)·지역·규모는 딜 속성이라 읽기 전용 칩으로만 보인다(CRM에서 편집).
+// 신규 딜(새 행)만 계약(신규/갱신)·경로(직접/채널)를 골라야 저장된다(F-18 — sourceSnapshot.status·dealType 으로 실린다).
 
 import { useState, type Dispatch, type FormEvent, type SetStateAction } from "react"
 import { ArrowRight, Loader2, Lock, Plus, Save, X } from "lucide-react"
@@ -15,6 +16,8 @@ import {
   DRAFT_CONFIDENCE_OPTIONS,
   FORECAST_WEEK_RANGE_LABELS,
   LOCK_WARNING_TEXT,
+  NEW_ROW_CLASSIFICATION_MESSAGE,
+  NewRowClassificationFields,
   REV_PRODUCT_FILTERS,
   draftFormWithConfidence,
   draftFormWithWeekConfidence,
@@ -22,6 +25,8 @@ import {
   draftWeeklyAmounts,
   draftWeeklyTotal,
   formatMoney,
+  ledgerMonthWeekCount,
+  newRowClassificationMissing,
   operationSupportsWeeklySplit,
   productCategoryMeta,
   resultToDraftFeedback,
@@ -145,6 +150,10 @@ export function CockpitEditor({
   const dominant = dominantWeeklyConfidence(weeklyAmounts, draftForm.weeklyConfidence)
   const blockedByLock = targetCellLocked
   const primaryDraftKind: DraftKind = canCreateEditDraft ? "edit-row" : "new-row"
+  // 신규 딜 계약·경로(F-18) — 새 행 저장·새 행 초안 재저장은 둘 다 골라야 한다. 기존 딜 수정은 그 딜의 분류를 잇는다.
+  const newRowPossible = !editingDraft || editingDraft.kind === "new-row"
+  const classificationMissing = newRowPossible && newRowClassificationMissing(draftForm)
+  const primaryIsNewRow = editingDraft ? editingDraft.kind === "new-row" : primaryDraftKind === "new-row"
   // M1(a): 주차 합이 비었는데 월 장부금액이 있으면(월합계-only 딜) 원클릭 참조를 노출한다.
   const showMonthAmountReference = weeklySum <= 0 && currentMonthAmount > 0
 
@@ -177,6 +186,10 @@ export function CockpitEditor({
     if (draftSaving || draftFormInvalid) return
     if (blockedByLock) {
       setFeedback({ kind: "warning", text: LOCK_WARNING_TEXT })
+      return
+    }
+    if (primaryIsNewRow && classificationMissing) {
+      setFeedback({ kind: "warning", text: NEW_ROW_CLASSIFICATION_MESSAGE })
       return
     }
     if (editingDraft) void runSave(saveEditedDraft)
@@ -274,6 +287,17 @@ export function CockpitEditor({
           </label>
         </div>
 
+        {/* 신규 딜 계약·경로(F-18) — 기존 딜을 고르면 그 딜의 칩(상태·타입)이 대신 보인다. */}
+        {newRowPossible && (
+          <NewRowClassificationFields
+            contract={draftForm.contract}
+            channel={draftForm.channel}
+            onChange={(next) => setDraftForm((current) => ({ ...current, ...next }))}
+            variant="cockpit"
+            caption={!editingDraft && canCreateEditDraft ? "새 딜로 저장할 때만 쓰입니다 — 이 딜 저장은 딜의 계약·경로를 따릅니다." : undefined}
+          />
+        )}
+
         {/* 확도 전체 일괄 적용 */}
         <div className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-3">
           <div className="mb-2 flex items-center justify-between">
@@ -321,7 +345,8 @@ export function CockpitEditor({
                 aria-label="전액 반영할 주차 선택"
                 className="h-8 rounded-md border border-[#ECD29C] bg-white px-2 text-[11px] font-bold text-[#7A520F] outline-none"
               >
-                {FORECAST_WEEK_RANGE_LABELS.map((rangeLabel, index) => (
+                {/* 시트에 없는 주차(2월 W5, F-31)는 고르지 않는다. */}
+                {FORECAST_WEEK_RANGE_LABELS.slice(0, ledgerMonthWeekCount(draftForm.month)).map((rangeLabel, index) => (
                   <option key={rangeLabel} value={index}>W{index + 1} · {rangeLabel}</option>
                 ))}
               </select>
@@ -333,7 +358,9 @@ export function CockpitEditor({
                 onClick={() =>
                   setDraftForm((current) => ({
                     ...current,
-                    weekly: current.weekly.map((value, i) => (i === prefillWeekIndex ? String(Math.round(currentMonthAmount)) : value)),
+                    weekly: current.weekly.map((value, i) =>
+                      i === Math.min(prefillWeekIndex, ledgerMonthWeekCount(current.month) - 1) ? String(Math.round(currentMonthAmount)) : value,
+                    ),
                   }))
                 }
                 className="inline-flex h-8 items-center gap-1 rounded-md bg-[#084734] px-3 text-[11px] font-bold text-white shadow-sm transition hover:bg-[#065c41] disabled:cursor-not-allowed disabled:opacity-45"
@@ -364,6 +391,7 @@ export function CockpitEditor({
               setDraftForm((current) => draftFormWithWeekConfidence(current, index, key))
             }
             lockedWeeks={lockedWeeks}
+            weekCount={ledgerMonthWeekCount(draftForm.month)}
             variant="cockpit"
           />
         </div>
@@ -393,6 +421,11 @@ export function CockpitEditor({
             고객명을 입력하고 주차 금액을 1칸 이상 넣어야(월 합 0보다 큼) 저장할 수 있습니다.
           </p>
         )}
+        {!draftFormInvalid && primaryIsNewRow && classificationMissing && (
+          <p className="rounded-lg border border-[#F2B8B8] bg-[#FCE9E9] px-3.5 py-2.5 text-[11px] font-semibold text-[#8F2C2C]" role="alert">
+            {NEW_ROW_CLASSIFICATION_MESSAGE}
+          </p>
+        )}
         {blockedByLock && (
           <p className="rounded-lg border border-[#ECD29C] bg-[#FBF1E0] px-3.5 py-2.5 text-[11px] font-semibold leading-relaxed text-[#7A520F]" role="alert">
             {LOCK_WARNING_TEXT}
@@ -417,7 +450,8 @@ export function CockpitEditor({
           <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 pt-1">
             <button
               type="submit"
-              disabled={draftSaving || draftFormInvalid || blockedByLock}
+              disabled={draftSaving || draftFormInvalid || blockedByLock || (primaryIsNewRow && classificationMissing)}
+              title={primaryIsNewRow && classificationMissing ? NEW_ROW_CLASSIFICATION_MESSAGE : undefined}
               className="inline-flex h-10.5 items-center justify-center gap-2 rounded-lg bg-[#084734] px-4 text-[13px] font-bold text-white shadow-[0_1px_2px_rgba(8,71,52,0.12)] transition hover:bg-[#065c41] disabled:cursor-not-allowed disabled:opacity-45"
             >
               {draftSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
@@ -450,7 +484,8 @@ export function CockpitEditor({
             <button
               type="button"
               onClick={() => void runSave(() => saveDraft("new-row"))}
-              disabled={draftSaving || draftFormInvalid}
+              disabled={draftSaving || draftFormInvalid || classificationMissing}
+              title={classificationMissing ? NEW_ROW_CLASSIFICATION_MESSAGE : undefined}
               className="inline-flex h-10.5 items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-[rgba(0,0,0,0.08)] bg-white px-4 text-[13px] font-bold text-[#615D59] transition hover:border-[rgba(0,0,0,0.15)] hover:bg-[#F6F5F4] hover:text-[#111110] disabled:cursor-not-allowed disabled:opacity-45"
             >
               <Plus className="h-4 w-4" />
@@ -461,7 +496,8 @@ export function CockpitEditor({
           <div className="pt-1">
             <button
               type="submit"
-              disabled={draftSaving || draftFormInvalid}
+              disabled={draftSaving || draftFormInvalid || classificationMissing}
+              title={classificationMissing ? NEW_ROW_CLASSIFICATION_MESSAGE : undefined}
               className="inline-flex h-10.5 w-full items-center justify-center gap-2 rounded-lg bg-[#084734] px-4 text-[13px] font-bold text-white shadow-[0_1px_2px_rgba(8,71,52,0.12)] transition hover:bg-[#065c41] disabled:cursor-not-allowed disabled:opacity-45"
             >
               {draftSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}

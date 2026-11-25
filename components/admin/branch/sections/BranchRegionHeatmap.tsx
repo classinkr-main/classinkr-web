@@ -9,7 +9,7 @@ import {
   KOREA_PROVINCE_WIDTH,
 } from "@/lib/branch/korea-province-map"
 import { useBranchJson } from "../client-api"
-import { cny } from "@/lib/branch/money-format"
+import { cny, yuan } from "@/lib/branch/money-format"
 import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
 import { normalizeRegionLabel } from "@/lib/regions/korea-regions"
 import type {
@@ -396,7 +396,7 @@ function HeatMap({ rows, selectedLabel, onSelect, metric }: {
             <span className="text-[12px] font-bold text-[#111110]">{hoveredRow.label}</span>
             {metric === "revenue" ? (
               <span className="text-[12px] font-bold tabular-nums" style={{ color: heatColorRamp(hoveredRow.expected, maxExpected) }}>
-                ¥{cny(hoveredRow.expected)}
+                {yuan(hoveredRow.expected)}
               </span>
             ) : (
               <span className="text-[12px] font-bold tabular-nums" style={{ color: heatColorRamp(hoveredRow.progress, 100) }}>
@@ -406,7 +406,7 @@ function HeatMap({ rows, selectedLabel, onSelect, metric }: {
           </div>
           <p className="mt-1 text-[10.5px] text-[#615D59]">
             {/* :508 DetailPanel과 동일 캐논 — 확정=그린. */}
-            <span className="font-semibold" style={{ color: CONFIDENCE_TOKENS.confirmed.color }}>확정 ¥{cny(hoveredRow.revenue)}</span>
+            <span className="font-semibold" style={{ color: CONFIDENCE_TOKENS.confirmed.color }}>확정 {yuan(hoveredRow.revenue)}</span>
             {hoveredRow.projected > 0 && (
               <span className="ml-1 text-[#615D59]">+ 추정 ¥{cny(hoveredRow.projected)}</span>
             )}
@@ -488,7 +488,7 @@ function CompactRow({ row, rank, selected, onSelect, metric, maxExpected }: {
         <div className="h-full rounded-full transition-[width]" style={{ width: `${barPct}%`, background: barColor, opacity: empty ? 1 : barOpacity }} />
       </div>
       <span className={`text-right font-semibold ${empty ? "text-[#615D59]" : "text-[#111110]"}`}>
-        {metric === "revenue" ? `¥${cny(row.expected)}` : `${row.progress.toFixed(0)}%`}
+        {metric === "revenue" ? yuan(row.expected) : `${row.progress.toFixed(0)}%`}
       </span>
     </button>
   )
@@ -529,9 +529,9 @@ function DetailPanel({ row, metric, selected, onClear }: {
         <div className="shrink-0 text-right">
           <p className="text-[11.5px] font-medium text-[#615D59]">{metric === "revenue" ? "합계(확정+추정)" : "달성률"}</p>
           <p className="text-[20px] font-bold tabular-nums text-[#111110]">
-            {metric === "revenue" ? `¥${cny(row.expected)}` : `${row.progress.toFixed(0)}%`}
+            {metric === "revenue" ? yuan(row.expected) : `${row.progress.toFixed(0)}%`}
           </p>
-          {metric === "progress" && <p className="text-[11px] tabular-nums text-[#615D59]">¥{cny(row.expected)}</p>}
+          {metric === "progress" && <p className="text-[11px] tabular-nums text-[#615D59]">{yuan(row.expected)}</p>}
           {metric === "revenue" && hasGoal && <p className="text-[11px] tabular-nums text-[#615D59]">달성률 {row.progress.toFixed(0)}%</p>}
         </div>
       </div>
@@ -539,7 +539,7 @@ function DetailPanel({ row, metric, selected, onClear }: {
         <div>
           <p className="text-[11.5px] font-medium text-[#615D59]">확정(당월·이전)</p>
           {/* 확정 매출 = 캐논 그린 — 빨강 아님(시트 "빨간 글자=확정"은 입력 관례일 뿐). */}
-          <p className="mt-0.5 text-[14px] font-bold tabular-nums" style={{ color: CONFIDENCE_TOKENS.confirmed.color }}>¥{cny(row.revenue)}</p>
+          <p className="mt-0.5 text-[14px] font-bold tabular-nums" style={{ color: CONFIDENCE_TOKENS.confirmed.color }}>{yuan(row.revenue)}</p>
         </div>
         <div>
           <p className="text-[11.5px] font-medium text-[#615D59]">추정(미래)</p>

@@ -71,8 +71,12 @@ export function buildLedgerEntryHref(
   return `/admin/branch/ledger?${params.toString()}`
 }
 
-/** 장부 수기 입력 확인 링크 — 적용 초안 원천(origin=draft)만, 회계연도 전체(period=Y). */
-export const LEDGER_MANUAL_ENTRIES_HREF = "/admin/branch/ledger?origin=draft&period=Y"
+/**
+ * 장부 수기 입력 확인 링크 — 적용 초안 원천만(origin=draft), 회계연도 전체(period=Y), 열 필터 없이(cf=none).
+ * cf 가 없으면 장부가 기본 열 필터('이번 달 계 값 있음')를 걸어 이번 달 입력만 보인다 — 배지가 센 회계연도 전체 N건과
+ * 어긋났다(F-25). 개인 범위(mgr)는 건드리지 않는다.
+ */
+export const LEDGER_MANUAL_ENTRIES_HREF = "/admin/branch/ledger?origin=draft&period=Y&cf=none"
 
 const LINK_STATUS_LABEL: Record<Exclude<RevenueSheetLinkStatus, null>, string> = {
   candidate: "후보",

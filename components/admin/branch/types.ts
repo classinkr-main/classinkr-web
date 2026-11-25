@@ -1,4 +1,8 @@
 import { CURRENT_BRANCH_TEAMS, LEGACY_BRANCH_TEAMS } from "@/lib/branch/current-organization"
+import type { BranchDshLedgerInfo } from "@/lib/branch/computations/dsh-ledger-status"
+import type { RevMonthWeekMismatch, RevPendingCells } from "@/lib/branch/computations/rev-confirmed"
+
+export type { BranchDshLedgerInfo } from "@/lib/branch/computations/dsh-ledger-status"
 
 export type Team = "ALL" | "BD" | "MKT" | "CSM"
 export type Period = "M" | "Q" | "Y"
@@ -133,11 +137,27 @@ export interface BranchSyncHealth {
   truncated: boolean
 }
 
+/**
+ * summary.revenue — 확정은 시트 행 + 장부 항목(D1, lib/branch/ledger-revenue.ts). 범위는 목표 축(팀, 담당 1명이면 팀 ∩ 담당).
+ * 검색·속성 필터와 무관하다. 구버전 응답에는 confirmed·goal·pacing_pct 만 있다.
+ */
+export interface BranchSummaryRevenue {
+  confirmed: number
+  goal: number
+  pacing_pct: number
+  /** 같은 기간·같은 범위의 시트만 확정(D3) — '장부 가감' = confirmed − sheet_only_confirmed. */
+  sheet_only_confirmed?: number
+  /** 전기(전월·전분기) 확정 — confirmed 와 같은 정의·같은 범위(F-40). 회계연도 안에 전기가 없으면(4월·1분기·연) null. */
+  prev_confirmed?: number | null
+  /** false 면 장부 항목을 읽지 못해 시트만으로 셌다 — 화면은 "시트만"이라고 알린다. */
+  ledger_included?: boolean
+}
+
 export interface BranchSummaryResponse {
   scope?: { manager: string }
   team: Team
   period: Period
-  revenue: { confirmed: number; goal: number; pacing_pct: number }
+  revenue: BranchSummaryRevenue
   bottleneck: { metric: string | null; pct: number; worst_member: string | null }
   closing: { count: number; total_target: number }
   events_30d: { count: number; regions: number }
@@ -166,6 +186,8 @@ export interface BranchSummaryResponse {
    *  → 실패 아님으로 취급(하위호환, fail-soft 기본값 유지). */
   sheetFreshnessError?: boolean
   data_sources?: BranchDataSources
+  /** DSH 실적을 장부에서(D4) — 시트 고정이 적용 중일 때만 실린다. 없으면 실적은 시트 '1. DSH' 그대로. */
+  dsh_ledger?: BranchDshLedgerInfo | null
 }
 
 export interface BranchPipelineRow {
@@ -197,6 +219,10 @@ export interface BranchPipelineRow {
   weeklyColors?: Record<string, string>
   /** 이 행 데이터의 시각(미러 synced_at·액티브 임포트 캡처 시각). 이중 집계 제외 기준(absorptionCutoff)에 쓴다. */
   syncedAt?: string
+  /** 빨간 예정 칸(deal.raw.pendingCells) — 그 주 시작일(KST)부터 캐논이 확정으로 읽는다(F-08). 없으면 키가 없다. */
+  pendingCells?: RevPendingCells
+  /** 월 칸 ≠ 주차 합 표시(deal.raw.monthWeekMismatch) — 캐논이 확정·고확도를 월 합계 안으로 자른다(F-15). */
+  monthWeekMismatch?: Record<string, RevMonthWeekMismatch>
 }
 
 export interface BranchPipelineResponse {

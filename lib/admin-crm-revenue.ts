@@ -5,8 +5,8 @@ import { shareInFlight } from "@/lib/server/share-in-flight"
 
 import { getBranchRevSourceRecordKey, isPlaceholderCrmName } from "@/lib/crm-source-linking"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
-import { readRevDealsFromActiveImport } from "@/lib/repositories/sales-ledger-imports"
-import { fyOf } from "@/lib/branch/fiscal"
+import { businessFy } from "@/lib/branch/fiscal"
+import { isLedgerRevenueDeal, LEDGER_REVENUE_CACHE_TAGS, readLedgerRevenueDeals } from "@/lib/branch/ledger-revenue"
 import { dealHasColorData, splitMonthConfidence } from "@/lib/branch/computations/rev-confirmed"
 import { getBusinessDateParts } from "@/lib/business-time"
 import type {
@@ -288,6 +288,12 @@ function getMonthKeys(months: number) {
 
 function sumBy<T>(rows: T[], selector: (row: T) => number | null | undefined) {
   return rows.reduce((sum, row) => sum + Number(selector(row) ?? 0), 0)
+}
+
+// 장부에서 온 딜(신규 행·원본과 담당이 다른 정정)은 시트 record key 를 만들지 않는다 — 시트 행 번호·고객이 원본과 같아
+// 원본의 확정 링크에 붙거나 매칭 목록 키가 겹치지 않게 'ledger:<딜 id>'로 둔다(링크가 없으니 미매칭으로 병기된다).
+function sheetDealRecordKey(deal: SheetRevDealRow & { raw?: Record<string, unknown> | null }) {
+  return isLedgerRevenueDeal(deal) ? `ledger:${deal.id}` : getBranchRevSourceRecordKey(deal)
 }
 
 function getSheetDealAmount(deal: SheetRevDealRow) {
@@ -1013,8 +1019,14 @@ async function assembleAdminCrmRevenueDashboard(): Promise<CrmRevenueDashboard> 
   // 데이터가 없는 행이 많아(2026-07 실측 310/398) 그대로 집계하면 장부 확정과 어긋난다.
   // record key(getBranchRevSourceRecordKey)는 sheet_row·고객명·first_payment·계약목표로
   // 유도되는 계산 필드라 두 데이터셋에서 동일하게 나온다(링크 매칭 무손실).
-  const activeImportDeals = await readRevDealsFromActiveImport(fyOf(new Date())).catch(() => null)
-  const sheetDeals = activeImportDeals ?? sheetResult.rows
+  // D1(2026-11-25): 시트 행 + 장부 항목(lib/branch/ledger-revenue.ts) — 장부 화면·KR Team 확정과 같은 정의다. 장부에서
+  // 새로 만든 행은 확정 source link 가 없어 미매칭 시트 금액으로 병기된다(합산하지 않는다 — 앱 매출과는 따로 본다).
+  // 정정은 원본 시트 행의 그 달을 대체하므로 record key 는 원본 그대로다.
+  const ledgerRevenue = await readLedgerRevenueDeals({ fiscalYear: businessFy() }).catch((error: unknown) => {
+    console.error("[admin-crm-revenue] REV 딜(시트 + 장부)을 읽지 못해 미러 행으로 집계합니다", error)
+    return null
+  })
+  const sheetDeals: Array<SheetRevDealRow & { raw?: Record<string, unknown> | null }> = ledgerRevenue?.deals ?? sheetResult.rows
   const sourceLinks = sourceLinksResult.rows
   const externalSourceLinks = externalSourceLinksResult.rows
   const externalRecordRows: CrmRevenueExternalRecordRow[] = externalSnapshotResult.rows.map((record) => ({
@@ -1120,7 +1132,7 @@ async function assembleAdminCrmRevenueDashboard(): Promise<CrmRevenueDashboard> 
   const sheetMatches: CrmRevenueSheetMatchRow[] = []
 
   for (const deal of activeSheetDeals) {
-    const recordKey = getBranchRevSourceRecordKey(deal)
+    const recordKey = sheetDealRecordKey(deal)
     const links = sourceLinksByKey.get(recordKey) ?? []
     const sheetDealAmount = getSheetDealAmount(deal)
     // HW/SW/MKT 접두 임시 고객은 매칭 후순위라 linked/unlinked 분리 지표에서 제외한다.
@@ -1166,10 +1178,11 @@ async function assembleAdminCrmRevenueDashboard(): Promise<CrmRevenueDashboard> 
         ownerName: [deal.team, deal.manager].filter(Boolean).join(" · ") || "담당 미지정",
         amount: pastUnconfirmed,
         reason: "시트 과거 예정액 미확정",
-        // 시트 리스크는 매출 장부 REV 렌즈에서 해당 고객 행으로 바로 검수한다.
+        // 시트 리스크는 매출 장부 REV 렌즈에서 해당 고객 행으로 바로 검수한다. 지난달들의 미확정이라 열 필터 없이(cf=none)
+        // 연다 — 기본 열 필터('이번 달 계 값 있음')는 이번 달 값이 없는 그 고객 행을 숨긴다(F-25).
         href: deal.customer_name
-          ? `/admin/branch/ledger?lens=rev&q=${encodeURIComponent(deal.customer_name)}`
-          : "/admin/branch/ledger?lens=rev",
+          ? `/admin/branch/ledger?lens=rev&cf=none&q=${encodeURIComponent(deal.customer_name)}`
+          : "/admin/branch/ledger?lens=rev&cf=none",
       })
     }
     const baseMatch = {
@@ -1225,9 +1238,11 @@ async function assembleAdminCrmRevenueDashboard(): Promise<CrmRevenueDashboard> 
         }
       : null
 
-  // 미매칭 카운트도 임시(placeholder) 고객을 제외한 실제 매칭 대상 기준으로 계산한다.
-  const matchableSheetDeals = activeSheetDeals.filter((deal) => !isPlaceholderCrmName(deal.customer_name))
-  const activeSheetKeys = new Set(matchableSheetDeals.map((deal) => getBranchRevSourceRecordKey(deal)))
+  // 미매칭 카운트도 임시(placeholder) 고객을 제외한 실제 매칭 대상 기준으로 계산한다. 장부에서 온 딜도 뺀다 — REV 링크
+  // 생성(source links)은 시트 행(branch_rev_deals)만 후보로 삼아, 장부 딜은 "미매칭"으로 남아도 풀 방법이 없다(금액은 위
+  // 미매칭 시트 금액에 그대로 병기된다).
+  const matchableSheetDeals = activeSheetDeals.filter((deal) => !isPlaceholderCrmName(deal.customer_name) && !isLedgerRevenueDeal(deal))
+  const activeSheetKeys = new Set(matchableSheetDeals.map((deal) => sheetDealRecordKey(deal)))
   const activeConfirmedSheetKeys = new Set(
     Array.from(confirmedSheetKeys).filter((key) => activeSheetKeys.has(key))
   )
@@ -1446,10 +1461,11 @@ async function assembleAdminCrmRevenueDashboard(): Promise<CrmRevenueDashboard> 
 
   const sheetSource: CrmRevenueSource = {
     ...sheetResult.source,
-    lastSyncedAt: maxDate(sheetDeals.map((deal) => deal.synced_at)),
+    // 동기화 시각은 시트 행만 본다 — 장부 딜의 시각은 반영 시각이다.
+    lastSyncedAt: maxDate(sheetDeals.filter((deal) => !isLedgerRevenueDeal(deal)).map((deal) => deal.synced_at)),
     description:
       sheetResult.source.status === "connected"
-        ? "브랜치 REV 시트 동기화본(branch_rev_deals)을 읽어 비교용으로 병기합니다. 앱 집계와 합산하지 않습니다."
+        ? "브랜치 REV 시트 행과 매출 장부 입력(장부 화면과 같은 매출)을 비교용으로 병기합니다. 앱 집계와 합산하지 않습니다."
         : sheetResult.source.description,
   }
 
@@ -1559,7 +1575,8 @@ const getCachedAdminCrmRevenueDashboard = unstable_cache(
   // 같은 인스턴스의 동시 미스는 shareInFlight 로 한 번만 조립한다(14-테이블 병렬 스캔).
   () => shareInFlight(ADMIN_CRM_REVENUE_CACHE_TAG, assembleAdminCrmRevenueDashboard),
   [ADMIN_CRM_REVENUE_CACHE_TAG],
-  { revalidate: ADMIN_CRM_REVENUE_REVALIDATE_SECONDS, tags: [ADMIN_CRM_REVENUE_CACHE_TAG] },
+  // 장부 항목 태그도 건다 — 반영·되돌리기가 그 태그를 즉시 만료하면 시트 + 장부 매출(D1)이 함께 새로 조립된다.
+  { revalidate: ADMIN_CRM_REVENUE_REVALIDATE_SECONDS, tags: [ADMIN_CRM_REVENUE_CACHE_TAG, ...LEDGER_REVENUE_CACHE_TAGS] },
 )
 
 // 캐시된 12개월 대시보드에서 요청 months만큼 접미부를 잘라낸다. monthly[]·range 외의 모든

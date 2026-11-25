@@ -3,9 +3,10 @@ import "server-only"
 import { createHash } from "node:crypto"
 
 import { normalizedAccountKey } from "@/lib/branch/account-key"
-import { dealHasColorData, splitMonthConfidence } from "@/lib/branch/computations/rev-confirmed"
-import { listBranchRevDeals, type BranchRevDeal } from "@/lib/repositories/branch-deals"
-import { readRevDealsFromActiveImport } from "@/lib/repositories/sales-ledger-imports"
+import { businessReadDate, dealHasColorData, splitMonthConfidence } from "@/lib/branch/computations/rev-confirmed"
+import { businessFy } from "@/lib/branch/fiscal"
+import { isLedgerRevenueDeal, readLedgerRevenueDeals } from "@/lib/branch/ledger-revenue"
+import type { BranchRevDeal } from "@/lib/repositories/branch-deals"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 
 // 주간 마감(Weekly Close): 현재 REV 상태를 sales_ledger_import_runs 스냅샷으로 남기고
@@ -86,23 +87,21 @@ export interface WeeklyCloseDiff {
   movers: WeeklyCloseMover[]
 }
 
-function fiscalYearOf(date: Date): number {
-  const month = date.getUTCMonth() + 1
-  return month >= 4 ? date.getUTCFullYear() : date.getUTCFullYear() - 1
-}
-
 function toNumber(value: unknown): number {
   const numeric = Number(value ?? 0)
   return Number.isFinite(numeric) ? numeric : 0
 }
 
 function recordKeyOf(deal: BranchRevDeal): string {
+  // 장부에서 온 딜(신규 행·원본과 담당이 다른 정정)은 항목·초안 id 로 키를 둔다 — 시트 행 번호·고객으로 만들면 같은 고객의
+  // 장부 행끼리(또는 원본 시트 행과) 키가 겹쳐 마지막 것만 남는다. id 는 스냅샷 사이에 그대로다.
+  if (isLedgerRevenueDeal(deal)) return `ledger:${deal.id}`
   const stored = deal.raw?.source_record_key
   if (typeof stored === "string" && stored.trim()) return stored.trim()
   return `sheet:${deal.sheet_row}:${normalizedAccountKey(deal.customer_name)}`
 }
 
-function snapshotLineOf(deal: BranchRevDeal): SnapshotLine {
+function snapshotLineOf(deal: BranchRevDeal, today?: string): SnapshotLine {
   const months: Record<string, SnapshotMonthAmounts> = {}
   // 확도 3분해는 캐논 splitter(rev-confirmed.ts) — 이전 구현은 monthly_confirmed 맵만 봐서
   // red-불리언·무색상 행의 확정이 스냅샷에서 expected로 강등되던 과소집계가 있었다.
@@ -111,7 +110,7 @@ function snapshotLineOf(deal: BranchRevDeal): SnapshotLine {
     if (!MONTH_RE.test(month)) continue
     const amount = toNumber(rawAmount)
     if (amount === 0) continue
-    const { confirmed, highConfidence, expected } = splitMonthConfidence(deal, month, amount, hasColor)
+    const { confirmed, highConfidence, expected } = splitMonthConfidence(deal, month, amount, hasColor, today)
     months[month] = { amount, confirmed, highConfidence, expected }
   }
 
@@ -152,28 +151,30 @@ function chunked<T>(items: T[], size: number): T[][] {
   return chunks
 }
 
-async function loadCurrentSnapshotLines(fiscalYear: number): Promise<{ lines: SnapshotLine[]; dataSource: string }> {
-  const imported = await readRevDealsFromActiveImport(fiscalYear)
-  // recordKeyOf가 deal.raw?.source_record_key를 읽으므로(branch-deals.ts 기본값은 raw 제외) opt-in.
-  const deals = imported ?? (await listBranchRevDeals(undefined, { withRaw: true }))
+// 마감 스냅샷 = 시트 행(액티브 임포트 우선, 미러 폴백 — raw 포함) + 장부 항목(D1). 장부 항목은 라인으로 남으므로
+// checksum 에도 들어간다 — 12/1 시트 고정 뒤 장부에만 매출이 쌓여도 "변경 없음"으로 끝나지 않는다.
+async function loadCurrentSnapshotLines(fiscalYear: number, now: Date): Promise<{ lines: SnapshotLine[]; dataSource: string }> {
+  const { deals, source } = await readLedgerRevenueDeals({ fiscalYear, now })
+  const today = businessReadDate(now).date
   // 같은 record key가 중복되면(시트 행 밀림 등) 마지막 행이 이긴다 —
   // 스냅샷은 상태 기록이므로 합산보다 결정적 대표값이 안전하다.
   const byKey = new Map<string, SnapshotLine>()
   for (const deal of deals) {
-    const line = snapshotLineOf(deal)
+    const line = snapshotLineOf(deal, today)
     byKey.set(line.key, line)
   }
   return {
     lines: Array.from(byKey.values()),
-    dataSource: imported ? "db-import" : "sheet-fallback",
+    dataSource: source.kind === "import" ? "db-import" : "sheet-fallback",
   }
 }
 
 export async function captureWeeklyCloseSnapshot(actor: string): Promise<WeeklyCloseCaptureResult> {
   const supabase = createSupabaseAdminClient()
   const now = new Date()
-  const fiscalYear = fiscalYearOf(now)
-  const { lines, dataSource } = await loadCurrentSnapshotLines(fiscalYear)
+  // 회계연도는 KST 영업일 기준(4/1 0~9시 KST 에 지난 회계연도로 찍지 않는다).
+  const fiscalYear = businessFy(now)
+  const { lines, dataSource } = await loadCurrentSnapshotLines(fiscalYear, now)
   if (lines.length === 0) {
     throw new Error("스냅샷으로 남길 REV 행이 없습니다. 동기화 후 다시 시도하세요.")
   }

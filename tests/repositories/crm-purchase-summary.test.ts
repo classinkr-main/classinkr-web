@@ -3,7 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 const mocks = vi.hoisted(() => ({ rev: vi.fn(), hw: vi.fn(), links: vi.fn(), client: vi.fn() }))
 vi.mock("server-only", () => ({}))
 vi.mock("next/cache", () => ({ unstable_cache: (fn: unknown) => fn }))
-vi.mock("@/lib/repositories/branch-deals", () => ({ listBranchRevDeals: mocks.rev }))
+// D1: REV 딜은 시트 행 + 장부 항목(lib/branch/ledger-revenue.ts readLedgerRevenueDeals) — 읽기 실패는 그대로 던진다.
+vi.mock("@/lib/branch/ledger-revenue", () => ({ readLedgerRevenueDeals: async () => ({ deals: await mocks.rev() }) }))
 vi.mock("@/lib/repositories/branch-hw", () => ({ listHwOutbound: mocks.hw }))
 vi.mock("@/lib/repositories/crm-source-links", () => ({ listConfirmedHwOutboundAccountLinks: mocks.links }))
 vi.mock("@/lib/supabase/admin", () => ({ createSupabaseAdminClient: mocks.client }))

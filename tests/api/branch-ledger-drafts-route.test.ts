@@ -217,9 +217,13 @@ describe("GET /api/admin/branch/ledger-drafts — reversedDraftIds (P0 되돌리
     expect(json.entries).toEqual([{ id: "entry-1", draftId: "draft-1", entryStatus: "active" }])
     expect(json.reversedDraftIds).toEqual(["draft-2"])
     // active 조회와 reversed 조회를 하나로 합쳐 한도로 자르면 reversed가 active 항목들에 밀려
-    // 잘릴 수 있다 — 반드시 별도 호출 + 별도 한도여야 한다(항목 1 설계 의도). 한도는 목록 상한(1000).
-    expect(listBranchSalesLedgerEntries).toHaveBeenCalledWith({ limit: 1000 })
-    expect(listBranchSalesLedgerEntries).toHaveBeenCalledWith({ status: "reversed", limit: 1000 })
+    // 잘릴 수 있다 — 반드시 별도 호출이어야 한다(항목 1 설계 의도). F-29: 둘 다 회계연도 열두 달로 좁혀 끝까지 읽는다
+    // (예전 1,000건 상한 — 모든 해를 합쳐 오래된 반영분이 조용히 빠졌다).
+    const { businessFy, fiscalYearMonths } = await import("@/lib/branch/fiscal")
+    const fyMonths = fiscalYearMonths(businessFy())
+    const months = { from: fyMonths[0], to: fyMonths[11] }
+    expect(listBranchSalesLedgerEntries).toHaveBeenCalledWith({ months })
+    expect(listBranchSalesLedgerEntries).toHaveBeenCalledWith({ status: "reversed", months })
   })
 
   it("reversed entry에 draftId가 없거나 중복돼도(방어적) 정제된 유일 목록만 내려준다", async () => {
@@ -491,7 +495,7 @@ describe("GET /api/admin/branch/ledger-drafts — 열린 초안·반영값 누�
     expect(json.truncated).toEqual({ openDrafts: false, entries: false })
   })
 
-  it("열린 초안이나 반영값이 상한에 닿으면 truncated로 알린다", async () => {
+  it("열린 초안이 상한에 닿거나 반영값 조회가 안전 상한에 닿으면 truncated로 알린다", async () => {
     mockAdmin()
     const many = Array.from({ length: 1000 }, (_, index) => draft(`open-${index}`, "draft", "2026-10-20T00:00:00Z"))
     listBranchSalesLedgerDrafts.mockImplementation(async (options: { statuses?: string[] } = {}) => ({
@@ -502,13 +506,35 @@ describe("GET /api/admin/branch/ledger-drafts — 열린 초안·반영값 누�
     listBranchSalesLedgerEntries.mockImplementation(async (options: { status?: string } = {}) => ({
       generatedAt: "x",
       health: { ok: true, message: null },
-      entries: options.status === "reversed" ? [] : Array.from({ length: 1000 }, (_, index) => ({ id: `entry-${index}` })),
+      entries: options.status === "reversed" ? [] : [{ id: "entry-1" }],
+      truncated: options.status !== "reversed",
     }))
 
     const { GET } = await import("@/app/api/admin/branch/ledger-drafts/route")
     const json = await (await GET(ledgerDraftsRequest("?status=all"))).json()
 
     expect(json.truncated).toEqual({ openDrafts: true, entries: true })
+  })
+
+  it("F-29: 반영값이 1,000건을 넘어도 저장소가 끝까지 읽었으면 전부 내려주고 truncated 가 아니다", async () => {
+    mockAdmin()
+    listBranchSalesLedgerDrafts.mockResolvedValue({ generatedAt: "x", health: { ok: true, message: null }, drafts: [] })
+    const entries = Array.from({ length: 2_345 }, (_, index) => ({ id: `entry-${index}`, draftId: `d-${index}`, entryStatus: "active", amount: 10 }))
+    listBranchSalesLedgerEntries.mockImplementation(async (options: { status?: string } = {}) => ({
+      generatedAt: "x",
+      health: { ok: true, message: null },
+      entries: options.status === "reversed" ? [] : entries,
+      truncated: false,
+    }))
+
+    const { GET } = await import("@/app/api/admin/branch/ledger-drafts/route")
+    const json = await (await GET(ledgerDraftsRequest("?status=all&fy=2026"))).json()
+
+    expect(json.entries).toHaveLength(2_345)
+    expect(json.entries.reduce((sum: number, entry: { amount: number }) => sum + entry.amount, 0)).toBe(23_450)
+    expect(json.truncated).toEqual({ openDrafts: false, entries: false })
+    // ?fy= 로 회계연도를 고르면 그해 열두 달만 읽는다.
+    expect(listBranchSalesLedgerEntries).toHaveBeenCalledWith({ months: { from: "2026-04", to: "2027-03" } })
   })
 
   it("특정 status 조회는 기존처럼 그 상태만 limit으로 받는다", async () => {

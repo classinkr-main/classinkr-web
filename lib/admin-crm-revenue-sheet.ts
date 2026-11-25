@@ -8,6 +8,15 @@ import { getBusinessDateParts } from "@/lib/business-time"
 import { getCompassRevenue } from "@/lib/compass/bridge"
 import { nextPendingTransition, pendingMonthAmount } from "@/lib/crm/revenue-sheet-pending"
 import { absorptionCutoff, isSheetWriteAbsorbed, oldestSyncedAt } from "@/lib/branch/sheet-writeback/ledger-rules"
+import { businessFy } from "@/lib/branch/fiscal"
+import {
+  isLedgerRevenueDeal,
+  LEDGER_REVENUE_CACHE_TAGS,
+  mergeLedgerSources,
+  readLedgerOverlaySources,
+  type LedgerOverlaySources,
+} from "@/lib/branch/ledger-revenue"
+import type { BranchRevDeal } from "@/lib/repositories/branch-deals"
 import {
   isSheetWritesNotReadyError,
   lastSuccessfulRevSyncStartedAt,
@@ -55,6 +64,12 @@ interface BranchRevDealRow {
   // raw jsonb의 예정분만 경로 선택으로 읽는다(raw 전체는 행 원문이라 무겁다) — 파서가 없던 시기 행은 null.
   pending?: Record<string, number> | null
   pending_weeks?: Record<string, number[]> | null
+  // 장부 오버레이(D1)·읽는 시점 확도(F-08·F-15)에 쓰는 raw 경로 — 정정의 원본 행을 Row ID 로 찾고, 빨간 예정 칸을 그 주
+  // 시작일(KST)에 확정으로 읽는다. 없으면 null.
+  row_id?: unknown
+  row_id_issue?: unknown
+  pending_cells?: unknown
+  month_week_mismatch?: unknown
   synced_at: string
 }
 
@@ -276,6 +291,108 @@ async function readSheetAbsorbedDraftIds(
   }
 }
 
+// ── 장부 오버레이(D1) ──────────────────────────────────────────────────────────────────────
+// 2026-09-10 결정(이 화면은 장부 입력을 볼 수 없어 "미반영" 배지로만 알린다)은 D1(2026-11-25)로 바뀌었다 — 매출은 시트 행 +
+// 장부 항목이다. 미러 행에 장부 화면과 같은 규칙(lib/branch/ledger-overlay.ts)으로 장부 항목을 얹는다: 정정은 원본 행의
+// 그 달을 대체하고, 신규는 장부 행으로 더해진다(확정 source link 가 없으니 미매칭으로 병기 — 합산하지 않는다).
+
+function mirrorRowToDeal(row: BranchRevDealRow): BranchRevDeal {
+  const raw: Record<string, unknown> = {}
+  if (row.pending) raw.monthlyPending = row.pending
+  if (row.pending_weeks) raw.pendingWeeks = row.pending_weeks
+  if (row.row_id != null) raw.rowId = row.row_id
+  if (row.row_id_issue != null) raw.rowIdIssue = row.row_id_issue
+  if (row.pending_cells != null) raw.pendingCells = row.pending_cells
+  if (row.month_week_mismatch != null) raw.monthWeekMismatch = row.month_week_mismatch
+  return {
+    id: row.id,
+    sheet_row: row.sheet_row,
+    customer_name: row.customer_name,
+    branch_contact: row.branch_contact,
+    team: row.team,
+    manager: row.manager,
+    deal_type: row.deal_type,
+    status: row.status,
+    first_payment: row.first_payment,
+    product_version: row.product_version,
+    region: row.region,
+    importance: row.importance,
+    note: row.note,
+    contract_target: row.contract_target == null ? null : numberValue(row.contract_target),
+    monthly_payments: row.monthly_payments ?? {},
+    // 이 화면은 monthly_red 를 읽지 않는다(색 금액 맵만) — 캐논 입력을 화면과 같게 둔다.
+    monthly_red: {},
+    monthly_confirmed: row.monthly_confirmed,
+    monthly_high_conf: row.monthly_high_conf,
+    raw,
+    synced_at: row.synced_at,
+  }
+}
+
+function recordOf<T>(value: unknown): Record<string, T> | null {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, T>) : null
+}
+
+/** 합친 딜 → 화면 행 원천. 장부 딜은 원본 미러 행이 없다. */
+function dealToMirrorRow(deal: BranchRevDeal, original: BranchRevDealRow | undefined): BranchRevDealRow {
+  return {
+    ...(original ?? {}),
+    id: deal.id,
+    sheet_row: deal.sheet_row,
+    customer_name: deal.customer_name,
+    branch_contact: deal.branch_contact,
+    team: deal.team,
+    manager: deal.manager,
+    deal_type: deal.deal_type,
+    status: deal.status,
+    first_payment: deal.first_payment,
+    product_version: deal.product_version,
+    region: deal.region,
+    importance: deal.importance,
+    note: deal.note,
+    contract_target: deal.contract_target,
+    monthly_payments: deal.monthly_payments,
+    monthly_confirmed: deal.monthly_confirmed ?? null,
+    monthly_high_conf: deal.monthly_high_conf ?? null,
+    pending: recordOf<number>(deal.raw?.monthlyPending),
+    pending_weeks: recordOf<number[]>(deal.raw?.pendingWeeks),
+    // 정정한 달은 합치기(mergeLedgerIntoDeals)가 지웠다 — 원본 행 값이 아니라 합친 딜의 raw 를 쓴다.
+    pending_cells: deal.raw?.pendingCells ?? null,
+    month_week_mismatch: deal.raw?.monthWeekMismatch ?? null,
+    synced_at: original?.synced_at ?? deal.synced_at,
+  }
+}
+
+const LEDGER_OVERLAY_READ_FAILED_WARNING =
+  "장부 항목을 읽지 못해 시트(2. REV) 값만 보입니다 — 장부에서 입력한 매출이 합계에서 빠져 있을 수 있습니다."
+
+async function readWorkspaceLedgerSources(warnings: string[], now: Date): Promise<LedgerOverlaySources | null> {
+  try {
+    return await readLedgerOverlaySources(businessFy(now))
+  } catch (error) {
+    console.error("[admin-crm-revenue-sheet] 장부 항목 조회 실패", error)
+    warnings.push(LEDGER_OVERLAY_READ_FAILED_WARNING)
+    return null
+  }
+}
+
+/** 미러 행 + 장부 항목(D1) → 화면이 셀 딜. deal 은 캐논에 넘기는 값(raw 포함), row 는 표시 원천이다. */
+function mergeWorkspaceLedger(
+  mirrorRows: BranchRevDealRow[],
+  sources: LedgerOverlaySources | null,
+  now: Date,
+): Array<{ deal: BranchRevDeal; row: BranchRevDealRow; ledger: boolean }> {
+  const deals = mirrorRows.map(mirrorRowToDeal)
+  const merged = sources && (sources.entries.length > 0 || sources.drafts.length > 0)
+    ? mergeLedgerSources(deals, sources, now).deals
+    : deals
+  const originalById = new Map(mirrorRows.map((row) => [row.id, row]))
+  return merged.map((deal) => {
+    const original = originalById.get(deal.id)
+    return { deal, row: dealToMirrorRow(deal, original), ledger: isLedgerRevenueDeal(deal) }
+  })
+}
+
 async function computeAdminCrmRevenueSheetWorkspace(): Promise<AdminCrmRevenueSheetWorkspace> {
   const sb = createSupabaseAdminClient()
   const warnings: string[] = []
@@ -286,7 +403,7 @@ async function computeAdminCrmRevenueSheetWorkspace(): Promise<AdminCrmRevenueSh
     sb
       .from("branch_rev_deals")
       .select(
-        "id, sheet_row, customer_name, branch_contact, team, manager, deal_type, status, first_payment, product_version, region, importance, note, contract_target, monthly_payments, monthly_confirmed, monthly_high_conf, pending:raw->monthlyPending, pending_weeks:raw->pendingWeeks, synced_at"
+        "id, sheet_row, customer_name, branch_contact, team, manager, deal_type, status, first_payment, product_version, region, importance, note, contract_target, monthly_payments, monthly_confirmed, monthly_high_conf, pending:raw->monthlyPending, pending_weeks:raw->pendingWeeks, row_id:raw->rowId, row_id_issue:raw->rowIdIssue, pending_cells:raw->pendingCells, month_week_mismatch:raw->monthWeekMismatch, synced_at"
       )
       .order("sheet_row", { ascending: true })
       .limit(QUERY_LIMIT),
@@ -300,9 +417,8 @@ async function computeAdminCrmRevenueSheetWorkspace(): Promise<AdminCrmRevenueSh
     sb.from("partner_accounts").select("id, name").limit(2000),
     sb.from("customers").select("id, name, campus_name").limit(2000),
     sb.from("deals").select("id, deal_code, title").limit(2000),
-    // 품질 감사 2026-09-10 — #1: 장부 콕핏/입력 레일에서 적용까지 마친 수기 입력·정정은
-    // branch_rev_deals(REV 시트 동기화 산물)를 절대 건드리지 않는다 — 이 화면은 그 매출을
-    // 구조적으로 볼 수 없다. 서버 병합(row 단위 매칭) 대신 규모만 세어 배지로 알린다.
+    // 장부 입력 건수(배지) — 매출 합계는 아래 장부 오버레이(D1)가 미러 행에 얹는다. 이 조회는 "장부 입력 N건 포함"
+    // 안내만 센다(2026-09-10 "미반영" 배지를 D1 이 대신했다).
     sb
       .from("branch_sales_ledger_entries")
       .select("amount, applied_at, entry_type, draft_id")
@@ -374,19 +490,27 @@ async function computeAdminCrmRevenueSheetWorkspace(): Promise<AdminCrmRevenueSh
   }
 
   const monthMap = new Map<string, AdminCrmRevenueSheetMonthPoint>()
-  const rows = ((sheetResult.data ?? []) as BranchRevDealRow[]).map((deal): AdminCrmRevenueSheetRow => {
+  // 매출 = 미러 행 + 장부 항목(D1). 장부 항목을 못 읽으면 시트 값만 쓰고 경고한다(빈 장부를 정상처럼 보이지 않는다).
+  const overlayNow = new Date()
+  const ledgerSources = await readWorkspaceLedgerSources(warnings, overlayNow)
+  const mergedDeals = mergeWorkspaceLedger((sheetResult.data ?? []) as BranchRevDealRow[], ledgerSources, overlayNow)
+  const rows = mergedDeals.map(({ deal: canonDeal, row: deal, ledger }): AdminCrmRevenueSheetRow => {
     const contractTarget = numberValue(deal.contract_target)
-    const sourceRecordKey = getBranchRevSourceRecordKey({
-      sheet_row: deal.sheet_row,
-      customer_name: deal.customer_name,
-      first_payment: deal.first_payment,
-      contract_target: contractTarget,
-    })
+    // 장부 딜은 시트 record key 를 만들지 않는다 — 원본과 같은 행 번호·고객이라 원본의 링크에 붙지 않게 'ledger:<id>'.
+    const sourceRecordKey = ledger
+      ? `ledger:${deal.id}`
+      : getBranchRevSourceRecordKey({
+          sheet_row: deal.sheet_row,
+          customer_name: deal.customer_name,
+          first_payment: deal.first_payment,
+          contract_target: contractTarget,
+        })
     const link = chooseBestLink(linksByKey.get(sourceRecordKey) ?? [])
     const scheduledAmount = sumRecord(deal.monthly_payments)
     // 확도 분해는 캐논 splitter(rev-confirmed.ts)로 일원화 — raw monthly_confirmed 합산은
     // red-불리언·무색상 폴백이 빠져 장부 확정보다 과소집계된다(구 임포터 ¥103만 vs ¥680만 사건과 동류).
-    const hasColorData = dealHasColorData(deal)
+    // 캐논에는 raw(빨간 예정 칸·월≠주 표시)를 실은 딜을 넘긴다 — 그 주 시작일(KST)에 확정으로 읽힌다(F-08).
+    const hasColorData = dealHasColorData(canonDeal)
     let confirmedAmount = 0
     let highConfidenceAmount = 0
     let expectedAmount = 0
@@ -400,7 +524,7 @@ async function computeAdminCrmRevenueSheetWorkspace(): Promise<AdminCrmRevenueSh
         confirmed,
         highConfidence,
         expected: uncolored,
-      } = splitMonthConfidence(deal, month, amount, hasColorData, businessDate)
+      } = splitMonthConfidence(canonDeal, month, amount, hasColorData, businessDate)
       confirmedAmount += confirmed
       highConfidenceAmount += highConfidence
 
@@ -413,7 +537,8 @@ async function computeAdminCrmRevenueSheetWorkspace(): Promise<AdminCrmRevenueSh
         addMonth(monthMap, month, "pastUnconfirmedAmount", uncolored)
       } else if (uncolored > 0) {
         // ADR-0062: 미확정분 중 빨간 예정 칸 몫은 '확정 예정'으로 떼고 나머지만 무색 예정으로 둔다.
-        const pending = pendingMonthAmount(deal, month, uncolored, currentMonth)
+        // 읽는 날 기준 — 시작일이 온 빨간 칸은 캐논이 이미 확정으로 읽었다(그 몫을 '확정 예정'에 다시 넣지 않는다).
+        const pending = pendingMonthAmount(deal, month, uncolored, currentMonth, businessDate)
         if (pending > 0) {
           pendingAmount += pending
           pendingMonths.push(month)
@@ -424,7 +549,7 @@ async function computeAdminCrmRevenueSheetWorkspace(): Promise<AdminCrmRevenueSh
       }
     }
 
-    const nextTransition = nextPendingTransition(deal, pendingMonths)
+    const nextTransition = nextPendingTransition(deal, pendingMonths, businessDate)
     return {
       id: deal.id,
       sheetRow: deal.sheet_row,
@@ -458,11 +583,15 @@ async function computeAdminCrmRevenueSheetWorkspace(): Promise<AdminCrmRevenueSh
       confidence: link?.confidence ?? null,
       placeholder: isPlaceholderCrmName(deal.customer_name),
       syncedAt: deal.synced_at,
+      // 장부에서 온 행(신규·원본과 담당이 다른 정정) — 시트 행 번호가 아니다. 값이 있을 때만 키를 둔다.
+      ...(ledger ? { ledgerEntry: true } : {}),
     }
   })
 
   const activeRows = rows.filter((row) => !INACTIVE_STATUS_PATTERN.test(row.status ?? ""))
-  const matchableRows = activeRows.filter((row) => !row.placeholder)
+  // 장부에서 온 행은 매칭 대상이 아니다 — REV 링크는 시트 행에만 만들 수 있어 "미매칭"으로 세면 풀 수 없는 수가 남는다.
+  // 금액은 요약·분해 합계에 그대로 들어간다(D1).
+  const matchableRows = activeRows.filter((row) => !row.placeholder && !row.ledgerEntry)
   const teamMap = new Map<string, AdminCrmRevenueSheetBreakdownRow>()
   const managerMap = new Map<string, AdminCrmRevenueSheetBreakdownRow>()
   const statusMap = new Map<string, AdminCrmRevenueSheetBreakdownRow>()
@@ -476,7 +605,8 @@ async function computeAdminCrmRevenueSheetWorkspace(): Promise<AdminCrmRevenueSh
   const linkedRows = matchableRows.filter((row) => row.linkStatus === "confirmed")
   const candidateRows = matchableRows.filter((row) => row.linkStatus === "candidate" || row.linkStatus === "stale")
   const unmatchedRows = matchableRows.filter((row) => row.linkStatus !== "confirmed")
-  const latestSyncedAt = rows.reduce<string | null>((latest, row) => {
+  // 동기화 시각은 시트 행만 본다 — 장부 행의 시각은 반영 시각이다.
+  const latestSyncedAt = rows.filter((row) => !row.ledgerEntry).reduce<string | null>((latest, row) => {
     if (!latest) return row.syncedAt
     return new Date(row.syncedAt).getTime() > new Date(latest).getTime() ? row.syncedAt : latest
   }, null)
@@ -528,7 +658,8 @@ export const ADMIN_CRM_REVENUE_SHEET_CACHE_TAG = "admin-crm-revenue-sheet"
 const getCachedAdminCrmRevenueSheetWorkspace = unstable_cache(
   computeAdminCrmRevenueSheetWorkspace,
   ["admin-crm-revenue-sheet"],
-  { revalidate: 60, tags: [ADMIN_CRM_REVENUE_SHEET_CACHE_TAG] }
+  // 장부 항목 태그도 건다 — 반영·되돌리기가 그 태그를 즉시 만료하면 시트 + 장부 매출(D1)이 함께 새로 조립된다.
+  { revalidate: 60, tags: [ADMIN_CRM_REVENUE_SHEET_CACHE_TAG, ...LEDGER_REVENUE_CACHE_TAGS] }
 )
 
 // 함수 시그니처·이름 불변 유지: 소유 밖 호출부(app/api/admin/crm/revenue-sheet/route.ts)가

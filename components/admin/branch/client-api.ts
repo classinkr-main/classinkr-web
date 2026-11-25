@@ -137,7 +137,11 @@ export function useBranchJson<T>(url: string, refreshKey: number, options: UseBr
 // 시트 동기화 응답 본문 중 화면이 읽는 부분 — 결과 계약(lib/admin/sync-outcome: outcome·outcomeReason·startedAt·
 // warnings) + 장부 임포트 재캡처 결과(lib/branch/sync/run-all.ts RunAllResult · RevImportRecaptureResult 미러).
 // 운영 밖 쓰기 가드(lib/branch/sync/write-guard.ts)가 건너뛴 런은 outcome="skipped"·outcomeReason 을 싣는다.
+// 시트 고정(lib/branch/rev-sheet-lock.ts) 필드 dshOk · ranSources · revSheetLock 은 SyncOutcomeFields 에 이미 있다
+// (describeSyncOutcome 이 그것으로 "DSH·KPI·하드웨어만 읽었습니다" · "12/1 스냅샷을 다시 읽었습니다" 문구를 만든다).
 export type BranchSyncResponseBody = SyncOutcomeFields & {
+  /** 시트 고정 뒤 DSH·KPI 만 읽은 행 수(runAll dsh). */
+  dsh?: number
   revImport?:
     | { status: "inactive" }
     | { status: "captured" | "unchanged"; runId: string; capturedAt: string; lineCount: number }
@@ -150,12 +154,30 @@ export type BranchSyncResponseBody = SyncOutcomeFields & {
 // POST /api/admin/branch/sync — 성공(200)·잠김(200)·부분 실패(500) 어느 쪽이든 본문을 버리지 않고 돌려준다
 // (라운드 5 S-1·S-3). adminFetchJson은 2xx가 아니면 본문을 버리고 문자열만 던져, 부분 실패의 결과 종류·경고와
 // 권한 거부(403)를 구분할 수 없었다. 네트워크 예외는 그대로 던진다(호출부가 오류 배너로 보인다).
+export interface BranchSyncOptions {
+  /**
+   * 시트 고정 중 관리자의 "12/1 스냅샷 다시 읽기" — 고정 중 REV 를 다시 읽는 유일한 길이다. 서버는 본문의
+   * revSnapshotReread 가 글자 그대로 true 일 때만 받고, 권한(ADMIN·SUPER_ADMIN)은 서버 verifyAdmin 이 본다.
+   * true 가 아니면 본문에 싣지 않는다(지금 요청 모양 그대로).
+   */
+  revSnapshotReread?: boolean
+}
+
+/** POST /api/admin/branch/sync 본문 — revSnapshotReread 는 true 일 때만 싣는다. */
+export function branchSyncRequestBody(
+  sources: ReadonlyArray<"rev" | "hw">,
+  opts: BranchSyncOptions = {},
+): { sources: Array<"rev" | "hw">; revSnapshotReread?: true } {
+  return { sources: [...sources], ...(opts.revSnapshotReread === true ? { revSnapshotReread: true as const } : {}) }
+}
+
 export async function postBranchSync(
   sources: Array<"rev" | "hw">,
+  opts: BranchSyncOptions = {},
 ): Promise<{ status: number; body: BranchSyncResponseBody | null }> {
   const response = await sharedAdminFetch("/api/admin/branch/sync", {
     method: "POST",
-    body: JSON.stringify({ sources }),
+    body: JSON.stringify(branchSyncRequestBody(sources, opts)),
   })
   const { status, body } = await readSyncOutcomeResponse(response)
   return { status, body: body as BranchSyncResponseBody | null }

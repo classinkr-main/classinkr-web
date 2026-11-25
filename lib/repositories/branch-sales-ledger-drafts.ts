@@ -4,9 +4,19 @@ import { revalidateTag } from "next/cache"
 
 import { SHEET_WRITE_HISTORY_DELETE_MESSAGE } from "@/lib/branch/sheet-writeback/messages"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
+import { fetchSupabasePages, type SupabasePageResult } from "@/lib/supabase/pagination"
 
 export const BRANCH_SALES_LEDGER_DRAFTS_CACHE_TAG = "branch-sales-ledger-drafts"
 export const BRANCH_SALES_LEDGER_ENTRIES_CACHE_TAG = "branch-sales-ledger-entries"
+
+/**
+ * 반영·되돌리기 뒤 장부 항목 태그를 즉시 만료한다. 서버 매출(lib/branch/ledger-revenue.ts — 확정 타일·KR Team·KPI·
+ * CRM 매출·주간 마감)이 이 태그로 캐시되므로, "max"(오래됨 표시 — 바로 다음 조회는 옛 값)로 두면 적용 직후 새로고침해도
+ * 타일이 그대로다(lib/server/sync-cache-tags.ts 와 같은 이유). { expire: 0 } 은 다음 조회가 새로 계산하게 한다.
+ */
+function expireLedgerEntriesCache() {
+  revalidateTag(BRANCH_SALES_LEDGER_ENTRIES_CACHE_TAG, { expire: 0 })
+}
 
 export const BRANCH_SALES_LEDGER_DRAFT_KINDS = ["new-row", "edit-row"] as const
 export const BRANCH_SALES_LEDGER_DRAFT_STATUSES = ["draft", "checked", "applied", "cancelled"] as const
@@ -195,28 +205,51 @@ export interface UpdateBranchSalesLedgerDraftOptions {
 // 한 번에 내려주는 목록 상한. Supabase(PostgREST) 한 요청의 기본 최대 행 수와 같다.
 export const LEDGER_LIST_MAX = 1000
 
+/**
+ * 달 범위 조회(months)의 안전 상한 — 이만큼은 페이지(1,000행)를 이어 읽는다. 넘으면 truncated 로 알린다.
+ * 회계연도 한 해 장부 항목은 수백 건 규모라 정상 운영에서는 닿지 않는다(F-29).
+ */
+export const LEDGER_PAGED_MAX_ROWS = 20_000
+
+/** 장부 달(ledger_month, 'YYYY-MM') 범위 — 양 끝 포함. 회계연도면 'fy-04' ~ 'fy+1-03'. */
+export interface LedgerMonthRange {
+  from: string
+  to: string
+}
+
 export interface ListBranchSalesLedgerDraftsOptions {
   status?: BranchSalesLedgerDraftStatus | "all"
   /** 여러 상태를 한 번에(예: 열린 초안 draft·checked). 주면 status 보다 우선한다. */
   statuses?: BranchSalesLedgerDraftStatus[]
   limit?: number
+  /** 주면 그 달 범위의 초안을 끝까지 페이지로 읽는다(limit 무시, LEDGER_PAGED_MAX_ROWS 까지). */
+  months?: LedgerMonthRange
 }
 
 export interface ListBranchSalesLedgerDraftsResult {
   generatedAt: string
   health: { ok: boolean; message: string | null }
   drafts: BranchSalesLedgerDraft[]
+  /** 달 범위 조회가 안전 상한에 닿아 일부만 읽었다. 달 범위가 없는 조회에는 싣지 않는다. */
+  truncated?: boolean
 }
 
 export interface ListBranchSalesLedgerEntriesOptions {
   status?: BranchSalesLedgerEntryStatus | "all"
   limit?: number
+  /**
+   * 주면 그 달 범위(ledger_month)의 항목을 끝까지 페이지로 읽는다(limit 무시, LEDGER_PAGED_MAX_ROWS 까지).
+   * 없으면 예전처럼 최근 반영순 limit 건(최대 1,000) — 모든 해를 합쳐 1,000건에서 오래된 반영분이 조용히 빠진다(F-29).
+   */
+  months?: LedgerMonthRange
 }
 
 export interface ListBranchSalesLedgerEntriesResult {
   generatedAt: string
   health: { ok: boolean; message: string | null }
   entries: BranchSalesLedgerEntry[]
+  /** 달 범위 조회가 안전 상한에 닿아 일부만 읽었다. 달 범위가 없는 조회에는 싣지 않는다. */
+  truncated?: boolean
 }
 
 function compactString(value: string | null | undefined) {
@@ -466,6 +499,7 @@ function buildUpdate(input: BranchSalesLedgerDraftUpdateInput, actor: string) {
 export async function listBranchSalesLedgerDrafts(
   options: ListBranchSalesLedgerDraftsOptions = {},
 ): Promise<ListBranchSalesLedgerDraftsResult> {
+  if (options.months) return listBranchSalesLedgerDraftsInMonths(options, options.months)
   const limit = clampInteger(options.limit, 50, 1, LEDGER_LIST_MAX)
   const supabase = createSupabaseAdminClient()
 
@@ -494,6 +528,7 @@ export async function listBranchSalesLedgerDrafts(
 export async function listBranchSalesLedgerEntries(
   options: ListBranchSalesLedgerEntriesOptions = {},
 ): Promise<ListBranchSalesLedgerEntriesResult> {
+  if (options.months) return listBranchSalesLedgerEntriesInMonths(options, options.months)
   const limit = clampInteger(options.limit, 100, 1, LEDGER_LIST_MAX)
   const supabase = createSupabaseAdminClient()
 
@@ -516,6 +551,91 @@ export async function listBranchSalesLedgerEntries(
     generatedAt: new Date().toISOString(),
     health: { ok: true, message: null },
     entries: ((data ?? []) as BranchSalesLedgerEntryRow[]).map(toEntry),
+  }
+}
+
+// ── 달 범위 조회(F-29) ─────────────────────────────────────────────────────────────────────
+// PostgREST 는 한 요청을 max-rows(기본 1,000)에서 오류 없이 자른다 — .limit() 만 올려서는 안 된다. 그래서
+// ledger_month 범위(인덱스 branch_sales_ledger_entries_status_month_idx)로 좁히고, 유일한 정렬 키(반영·수정 시각 +
+// id)로 .range() 페이지를 짧은 페이지가 올 때까지 잇는다(fetchSupabasePages). 안전 상한에 닿을 때만 truncated.
+
+const YM_RANGE_RE = /^\d{4}-(0[1-9]|1[0-2])$/
+
+function assertMonthRange(range: LedgerMonthRange) {
+  if (!YM_RANGE_RE.test(range.from) || !YM_RANGE_RE.test(range.to) || range.from > range.to) {
+    throw new Error(`[branch-sales-ledger] 잘못된 달 범위: ${range.from}..${range.to}`)
+  }
+}
+
+async function listBranchSalesLedgerEntriesInMonths(
+  options: ListBranchSalesLedgerEntriesOptions,
+  range: LedgerMonthRange,
+): Promise<ListBranchSalesLedgerEntriesResult> {
+  assertMonthRange(range)
+  const supabase = createSupabaseAdminClient()
+  const status = options.status ?? "active"
+  const result = await fetchSupabasePages<BranchSalesLedgerEntryRow>({
+    maxRows: LEDGER_PAGED_MAX_ROWS,
+    fetchPage: (from, to) => {
+      let query = supabase
+        .from("branch_sales_ledger_entries")
+        .select("*")
+        .gte("ledger_month", range.from)
+        .lte("ledger_month", range.to)
+      if (status !== "all") query = query.eq("entry_status", status)
+      return query
+        .order("applied_at", { ascending: false })
+        .order("id", { ascending: false })
+        .range(from, to) as unknown as PromiseLike<SupabasePageResult>
+    },
+  })
+  if (result.error) {
+    if (isMissingLedgerInfrastructureError(result.error)) return { ...ledgerNotReadyResult(), truncated: false }
+    throw new Error(`[branch-sales-ledger-entries] 조회 실패: ${result.error.message ?? "unknown"}`)
+  }
+  return {
+    generatedAt: new Date().toISOString(),
+    health: { ok: true, message: null },
+    entries: result.data.map(toEntry),
+    truncated: result.truncated,
+  }
+}
+
+async function listBranchSalesLedgerDraftsInMonths(
+  options: ListBranchSalesLedgerDraftsOptions,
+  range: LedgerMonthRange,
+): Promise<ListBranchSalesLedgerDraftsResult> {
+  assertMonthRange(range)
+  const supabase = createSupabaseAdminClient()
+  const statuses = options.statuses && options.statuses.length > 0
+    ? options.statuses
+    : options.status && options.status !== "all"
+      ? [options.status]
+      : null
+  const result = await fetchSupabasePages<BranchSalesLedgerDraftRow>({
+    maxRows: LEDGER_PAGED_MAX_ROWS,
+    fetchPage: (from, to) => {
+      let query = supabase
+        .from("branch_sales_ledger_drafts")
+        .select("*")
+        .gte("ledger_month", range.from)
+        .lte("ledger_month", range.to)
+      if (statuses) query = query.in("status", statuses)
+      return query
+        .order("updated_at", { ascending: false })
+        .order("id", { ascending: false })
+        .range(from, to) as unknown as PromiseLike<SupabasePageResult>
+    },
+  })
+  if (result.error) {
+    if (isMissingDraftsTableError(result.error)) return { ...notReadyResult(), truncated: false }
+    throw new Error(`[branch-sales-ledger-drafts] 조회 실패: ${result.error.message ?? "unknown"}`)
+  }
+  return {
+    generatedAt: new Date().toISOString(),
+    health: { ok: true, message: null },
+    drafts: result.data.map(toDraft),
+    truncated: result.truncated,
   }
 }
 
@@ -755,7 +875,7 @@ export async function applyBranchSalesLedgerDraft(
   }
 
   revalidateTag(BRANCH_SALES_LEDGER_DRAFTS_CACHE_TAG, "max")
-  revalidateTag(BRANCH_SALES_LEDGER_ENTRIES_CACHE_TAG, "max")
+  expireLedgerEntriesCache()
 
   const row = Array.isArray(data) ? data[0] : data
   return row ? toDraft(row as BranchSalesLedgerDraftRow) : null
@@ -789,7 +909,7 @@ export async function applyBranchSalesLedgerDraftIfUnchanged(
   }
 
   revalidateTag(BRANCH_SALES_LEDGER_DRAFTS_CACHE_TAG, "max")
-  revalidateTag(BRANCH_SALES_LEDGER_ENTRIES_CACHE_TAG, "max")
+  expireLedgerEntriesCache()
 
   const row = Array.isArray(data) ? data[0] : data
   return row ? toDraft(row as BranchSalesLedgerDraftRow) : null
@@ -837,6 +957,65 @@ export async function findActiveManualEditEntries(
   return found
 }
 
+/** (시트 Row ID, 월) 활성 정정 — lib/branch/sheet-writeback/row-correction.ts RowCorrectionEntry 와 같은 모양. */
+export interface ActiveRowCorrectionEntry {
+  id: string
+  draftId: string | null
+  entryType: "manual-edit"
+  entryStatus: "active"
+  month: string
+  sourceSnapshot: Record<string, unknown>
+}
+
+const ACTIVE_ENTRY_ROW_ID_CHUNK = 100
+
+/**
+ * (시트 Row ID, 월)마다 활성 정정(manual-edit) 항목(F-04 반영 전 검사). Row ID 는 sourceSnapshot.sheetBaseline.rowId
+ * ('2. REV' 숨김 열 — 재동기화로 딜 id 가 바뀌어도 그대로)라 JSON 경로로 거른다 — 새 칸·마이그레이션 없이 활성 항목
+ * 전량(select *, 1,000건 상한)을 읽던 검사를 대신한다. 달도 함께 좁히고, 돌아온 행은 (Row ID, 월) 쌍으로 다시 거른다.
+ */
+export async function findActiveManualEditEntriesByRowIds(
+  pairs: Array<{ rowId: string; month: string }>,
+): Promise<ActiveRowCorrectionEntry[]> {
+  const wanted = new Set(pairs.filter((pair) => pair.rowId && pair.month).map((pair) => `${pair.rowId}|${pair.month}`))
+  const rowIds = [...new Set(pairs.map((pair) => pair.rowId).filter(Boolean))]
+  const months = [...new Set(pairs.map((pair) => pair.month).filter(Boolean))]
+  if (rowIds.length === 0 || months.length === 0) return []
+
+  const supabase = createSupabaseAdminClient()
+  const found: ActiveRowCorrectionEntry[] = []
+  for (let start = 0; start < rowIds.length; start += ACTIVE_ENTRY_ROW_ID_CHUNK) {
+    const chunk = rowIds.slice(start, start + ACTIVE_ENTRY_ROW_ID_CHUNK)
+    const { data, error } = await supabase
+      .from("branch_sales_ledger_entries")
+      .select("id, draft_id, ledger_month, source_snapshot")
+      .eq("entry_status", "active")
+      .eq("entry_type", "manual-edit")
+      .in("source_snapshot->sheetBaseline->>rowId", chunk)
+      .in("ledger_month", months)
+    if (error) {
+      if (isMissingLedgerInfrastructureError(error)) throw new Error(INTERNAL_LEDGER_NOT_READY_MESSAGE)
+      throw new Error(`[branch-sales-ledger-entries] 시트 행 정정 조회 실패: ${error.message}`)
+    }
+    for (const row of (data ?? []) as Array<{ id: string; draft_id: string | null; ledger_month: string; source_snapshot: Record<string, unknown> | null }>) {
+      const baseline = row.source_snapshot?.sheetBaseline
+      const rowId = baseline && typeof baseline === "object" && !Array.isArray(baseline)
+        ? (baseline as Record<string, unknown>).rowId
+        : null
+      if (typeof rowId !== "string" || !wanted.has(`${rowId}|${row.ledger_month}`)) continue
+      found.push({
+        id: row.id,
+        draftId: row.draft_id,
+        entryType: "manual-edit",
+        entryStatus: "active",
+        month: row.ledger_month,
+        sourceSnapshot: row.source_snapshot ?? {},
+      })
+    }
+  }
+  return found
+}
+
 /**
  * 적용된 초안(draft)에 연결된 내부 원장 entry를 상쇄(active -> reversed)한다.
  * draft.status는 절대 바꾸지 않는다 — "이 초안이 X일에 적용됐다"는 사실은 감사 추적으로
@@ -876,7 +1055,7 @@ export async function reverseBranchSalesLedgerEntryByDraftId(
   }
 
   revalidateTag(BRANCH_SALES_LEDGER_DRAFTS_CACHE_TAG, "max")
-  revalidateTag(BRANCH_SALES_LEDGER_ENTRIES_CACHE_TAG, "max")
+  expireLedgerEntriesCache()
 
   const row = Array.isArray(data) ? data[0] : data
   return row ? toEntry(row as BranchSalesLedgerEntryRow) : null

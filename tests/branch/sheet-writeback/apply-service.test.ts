@@ -67,7 +67,7 @@ let editDuringWrite: (() => void) | null = null
 // (딜, 월) 활성 정정 항목(장부 유일성 인덱스 대상).
 let activeEntries: Array<{ id: string; draftId: string | null; sourceDealId: string; month: string }> = []
 let activeEntriesFailure: Error | null = null
-// 장부 목록(활성 항목) — 시트 행(Row ID)·월 겹침 검사(F-04)가 읽는다. 호출 순서 기록(calls)에는 넣지 않는다.
+// 장부 항목 — 시트 행(Row ID)·월 겹침 검사(F-04)가 (Row ID, 월) 전용 조회로 읽는다. 호출 순서 기록(calls)에는 넣지 않는다.
 interface LedgerEntryLike { id: string; draftId: string | null; entryType: string; entryStatus: string; month: string; sourceSnapshot: Record<string, unknown> }
 let ledgerEntries: LedgerEntryLike[] = []
 let ledgerEntriesFailure: Error | null = null
@@ -95,11 +95,15 @@ vi.mock("@/lib/repositories/branch-sales-ledger-drafts", () => ({
   isBranchSalesLedgerDraftsNotReadyError: (e: unknown) => e instanceof Error && e.message.includes("매출 장부"),
   isBranchSalesLedgerDuplicateActiveCorrectionError: (e: unknown) => e instanceof Error && e.message === DUPLICATE,
   isBranchSalesLedgerNonPositiveAmountError: () => false,
-  LEDGER_LIST_MAX: 1000,
-  listBranchSalesLedgerEntries: async (options: unknown) => {
-    listEntriesSpy(options)
+  // 실제 조회처럼: 활성 manual-edit 중 (Row ID, 월) 쌍이 겹치는 항목만 돌려준다.
+  findActiveManualEditEntriesByRowIds: async (pairs: Array<{ rowId: string; month: string }>) => {
+    listEntriesSpy(pairs)
     if (ledgerEntriesFailure) throw ledgerEntriesFailure
-    return { generatedAt: "2026-10-23T03:00:00Z", health: { ok: true, message: null }, entries: ledgerEntries }
+    const wanted = new Set(pairs.map((pair) => `${pair.rowId}|${pair.month}`))
+    return ledgerEntries.filter((entry) => {
+      const rowId = (entry.sourceSnapshot.sheetBaseline as { rowId?: unknown } | undefined)?.rowId
+      return entry.entryType === "manual-edit" && entry.entryStatus === "active" && wanted.has(`${String(rowId)}|${entry.month}`)
+    })
   },
 }))
 
@@ -684,7 +688,7 @@ describe("시트 고정 active — 플래그가 켜져 있어도 꺼짐 갈래(F
     expect(results[1]).toMatchObject({ ok: true, sheet: { code: "disabled" } })
     expect(calls).toEqual(["apply:n"])
     expect(attempts).toEqual([])
-    expect(listEntriesSpy).toHaveBeenCalledWith({ limit: 1000 })
+    expect(listEntriesSpy).toHaveBeenCalledWith([{ rowId: ROW_A, month: "2026-10" }])
   })
 
   it("시트에 쓴 정정(고정 전에 쓴 것)은 세지 않는다 — '장부에서 원래 값으로 다시 입력'(F-22)이 통한다", async () => {

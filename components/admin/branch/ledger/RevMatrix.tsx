@@ -23,9 +23,13 @@ import {
   formatMonthLabel,
   formatPercent,
   formatWeekAmount,
+  ledgerMonthWeekCount,
   productCategoryMeta,
   ProductCategoryPill,
+  REFUND_CELL_LABEL,
+  rowMonthNet,
   rowProductCategory,
+  rowSignedWeeks,
   rowWeeklyMismatch,
   rowWeeklySplit,
   type DraftConfidence,
@@ -42,6 +46,13 @@ import {
   EMPTY_BUCKET,
   isMatrixCellEditable,
   isMatrixCellLocked,
+  isWholeMonthLock,
+  matrixCellLockKind,
+  matrixCoordKey,
+  pendingCellAmount,
+  pendingMatchesKind,
+  rowCommitKind,
+  type MatrixCellLockKind,
   MATRIX_ANNUAL_W,
   MATRIX_CUSTOMER_W,
   MATRIX_MONTH_W,
@@ -85,20 +96,31 @@ const MATRIX_TONE = {
   mixed: `font-semibold ${CONFIDENCE_TOKENS.expected.textStrongClass}`,
   // 불일치: 확정(크림슨)과 헷갈리지 않게 숫자는 먹색, 신호는 빨간 ⚠ 아이콘·왼쪽 빨간 선·회색 배경.
   mismatch: "font-bold text-[#111110]",
+  // 환불·차감(합계 < 0, D2): 부호를 붙인 중립 먹색 — 확정 크림슨으로 칠하지 않는다(빨강 환불을 '확정 매출'로 오독하지 않게).
+  refund: "font-semibold text-[#31302E]",
   empty: "text-[#DDD9D3]",
 } as const
 
 // 셀 단일 금액의 확도 톤. 혼재(여러 확도 합산)면 mixed — 예정 톤(월합계 요약 성격).
+// 확도 색은 합계가 0 보다 클 때만(D2) — 0 은 빈 칸, 음수(환불)는 중립 refund 톤.
 function matrixBucketTone(bucket: RevMonthlyBucket): keyof typeof MATRIX_TONE {
-  if (bucket.total <= 0) return "empty"
+  if (bucket.total === 0) return "empty"
+  if (bucket.total < 0) return "refund"
   if (bucket.confirmed === bucket.total) return "confirmed"
   if (bucket.confirmed === 0 && bucket.high === bucket.total) return "high"
   if (bucket.confirmed === 0 && bucket.high === 0) return "open"
   return "mixed"
 }
 
-// 매트릭스 확도 범례 — 셀 숫자 글자색·전액 확정 틴트·불일치와 1:1.
-const MATRIX_TONE_LEGEND_ITEMS: DraftConfidence[] = ["confirmed", "high-confidence", "expected"]
+// 매트릭스 확도 범례 — 셀 숫자 글자색·전액 확정 틴트·불일치와 1:1. 단계 목록은 CONFIDENCE_TOKENS 를 돌린다(5단계로 바뀌면
+// 토큰 맵만 고친다 — F-52).
+const MATRIX_TONE_LEGEND_ITEMS = Object.keys(CONFIDENCE_TOKENS) as DraftConfidence[]
+
+// 원 단위 정확 금액(툴팁) — 부호는 ¥ 앞("-¥30,000"). 칸 글자는 formatWeekAmount("-30,000")로 쓴다.
+function exactYen(value: number): string {
+  const rounded = Math.round(value)
+  return `${rounded < 0 ? "-" : ""}¥${Math.abs(rounded).toLocaleString("ko-KR")}`
+}
 export function MatrixToneLegend() {
   return (
     <span className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[10px] text-[#615D59]">
@@ -116,6 +138,7 @@ export function MatrixToneLegend() {
         불일치
       </span>
       <span>· 잠금=시트확정/장부반영</span>
+      <span className={MATRIX_TONE.refund}>· -1,000=환불(시트 값)</span>
       <span className="hidden lg:inline">· 합산 셀 주황=확도 혼합 포함</span>
       {/* 13인치(lg~xl) 랩탑에서도 단축키 힌트가 보이도록 xl→lg 하향. 편집 진입 시엔 팝오버가 셀 인근 힌트를 재노출한다. */}
       <span className="hidden text-[#A39E98] lg:inline">· Enter 편집 · Tab 이동 · Ctrl+D 아래 복사 · Ctrl+V 엑셀 붙여넣기 · E/H/C 확도(예정·고확도·확정) · Esc 취소</span>
@@ -341,7 +364,10 @@ const RevMatrixMonthCell = memo(function RevMatrixMonthCell({
   editable = false,
   locked = false,
   lockLabel = "시트 확정",
+  lockKind = null,
   pending = null,
+  // 대기 초안이 적용되면 될 그 달 금액(F-19 — 같은 종류 초안만, buildRevMatrixEditContext.pendingTotalOf). null 이면 대기 금액 없음.
+  pendingTotal = null,
   actions = null,
   // 선택/편집/버퍼는 부모(스트립)가 이 셀 기준으로 계산해 원시값으로 내린다 — memo가 셀 단위로
   // 얕은비교되도록. 비편집·비선택 셀은 아래 값들이 상수라 선택·타이핑 리렌더에서 스킵된다.
@@ -362,7 +388,9 @@ const RevMatrixMonthCell = memo(function RevMatrixMonthCell({
   editable?: boolean
   locked?: boolean
   lockLabel?: string
+  lockKind?: MatrixCellLockKind | null
   pending?: MatrixPendingDraft | null
+  pendingTotal?: number | null
   actions?: MatrixEditorActions | null
   selected?: boolean
   isEditingCell?: boolean
@@ -382,17 +410,24 @@ const RevMatrixMonthCell = memo(function RevMatrixMonthCell({
   }, [interactive, editable, selected, isEditingCell])
   const confidenceLabel = (value: DraftConfidence) =>
     DRAFT_CONFIDENCE_OPTIONS.find((option) => option.id === value)?.label ?? value
+  // 대기 중(F-19)이면 '미입력' 대신 대기 금액과 지금 장부 값을 말한다. 환불 달은 합계에 부호를 붙이고 '환불 — 시트 값'.
   const baseTitle =
-    bucket.total > 0
-      ? `합계 ${formatMoney(bucket.total)} · 확정 ${formatMoney(bucket.confirmed)} · 고확도 ${formatMoney(bucket.high)} · 예정 ${formatMoney(bucket.open)}${mismatch ? " · 주차·월 불일치(허용오차 ±¥1)" : ""}`
-      : "미입력"
+    pendingTotal != null
+      ? `대기 중 변경 ${exactYen(pendingTotal)} (지금 장부 ${exactYen(bucket.total)})`
+      : bucket.total !== 0
+        ? `합계 ${formatMoney(bucket.total)} · 확정 ${formatMoney(bucket.confirmed)} · 고확도 ${formatMoney(bucket.high)} · 예정 ${formatMoney(bucket.open)}${mismatch ? " · 주차·월 불일치(허용오차 ±¥1)" : ""}`
+        : "미입력"
   const title = locked
-    ? `${baseTitle} · 🔒 ${lockLabel} 값이라 잠금(실수 방지) — 수정은 우측 패널에서 정정 초안으로`
-    : pending
+    ? lockKind === "refund"
+      ? `${baseTitle} · ${REFUND_CELL_LABEL}`
+      : `${baseTitle} · 🔒 ${lockLabel} 값이라 잠금(실수 방지) — 수정은 우측 패널에서 정정 초안으로`
+    : pending && pendingTotal == null
       ? `${baseTitle} · 미검수 초안 ${formatMoney(pending.amount)} (${confidenceLabel(pending.confidence)})`
       : editable
         ? `${baseTitle} · 클릭·Enter로 편집`
         : baseTitle
+  // 칸에 보이는 금액 — 대기 금액이 있으면 그것(대기 스타일), 아니면 그 달 합계(부호 그대로).
+  const shown = pendingTotal ?? bucket.total
 
   // 편집 진입 셀: input + 확도 팝오버.
   if (isEditingCell && interactive) {
@@ -484,7 +519,7 @@ const RevMatrixMonthCell = memo(function RevMatrixMonthCell({
           style={{ backgroundColor: CONFIDENCE_TOKENS[pending.confidence].color }}
         />
       )}
-      {bucket.total > 0 ? (
+      {shown !== 0 || pendingTotal != null ? (
         <div className="flex items-center justify-between w-full leading-none">
           <span className="text-[9.5px] font-medium text-[#A39E98] select-none pl-0.5">¥</span>
           <span
@@ -492,9 +527,9 @@ const RevMatrixMonthCell = memo(function RevMatrixMonthCell({
               pending ? `font-bold ${CONFIDENCE_TOKENS[pending.confidence].textStrongClass}` : MATRIX_TONE[tone]
             }`}
           >
-            {locked && <Lock className="h-2.5 w-2.5 shrink-0 text-[#9CA3AF]" aria-label={lockLabel} />}
+            {locked && lockKind !== "refund" && <Lock className="h-2.5 w-2.5 shrink-0 text-[#9CA3AF]" aria-label={lockLabel} />}
             {mismatch && !locked && <AlertTriangle className="h-2.5 w-2.5 shrink-0 text-[#EF4444]" />}
-            {formatWeekAmount(bucket.total)}
+            {formatWeekAmount(shown)}
           </span>
         </div>
       ) : (
@@ -535,6 +570,18 @@ const RevMatrixWeekCell = memo(function RevMatrixWeekCell({
   sheetConfidence = null,
   // 시트에서 이 열에 필터가 걸렸다(필터 기획 D-1) — 빈 칸만 옅은 초록 세로 띠, 값 칸은 확도 바탕을 그대로 둔다.
   sheetBand = false,
+  // 시트 음수(환불·차감, ≤ 0) — 부호를 붙인 중립색으로 보이고 고치지 않는다(D2 '환불 — 시트 값').
+  refund = 0,
+  // 그 달에 없는 주차(2월 W5, F-31) — 비활성 칸(포커스·편집 없음).
+  absent = false,
+  // 잠긴 까닭(matrixCellLockKind) — 정정 대체 · 환불 달은 빈 칸까지 잠기고 툴팁이 그 까닭을 말한다.
+  lockKind = null,
+  // 대기 초안이 이 칸을 바꾸면 그 금액(F-19) — 칸이 대기 스타일(확도색 밑줄·점·굵은 확도색 글자)로 이 금액을 보인다.
+  pendingAmount = null,
+  // 대기 금액의 확도(밑줄·점 색). 없으면 pending 초안의 그 주차 확도.
+  pendingAmountConfidence = null,
+  // 툴팁을 부르는 쪽이 정했으면(시트 보기 sheetWeekCellsForRender) 그대로 쓴다.
+  titleOverride,
 }: {
   display: number
   isMonthOnly: boolean
@@ -544,6 +591,12 @@ const RevMatrixWeekCell = memo(function RevMatrixWeekCell({
   compact?: boolean
   sheetConfidence?: DraftConfidence | null
   sheetBand?: boolean
+  refund?: number
+  absent?: boolean
+  lockKind?: MatrixCellLockKind | null
+  pendingAmount?: number | null
+  pendingAmountConfidence?: DraftConfidence | null
+  titleOverride?: string
   month?: string
   rowId?: string
   editable?: boolean
@@ -558,7 +611,7 @@ const RevMatrixWeekCell = memo(function RevMatrixWeekCell({
   editConfidence?: DraftConfidence
   periodHighlighted?: boolean
 }) {
-  const interactive = Boolean(actions && month && rowId)
+  const interactive = Boolean(actions && month && rowId) && !absent
   const cellRef = useRef<HTMLTableCellElement | null>(null)
   useEffect(() => {
     if (interactive && editable && selected && !isEditingCell) cellRef.current?.focus()
@@ -566,17 +619,34 @@ const RevMatrixWeekCell = memo(function RevMatrixWeekCell({
 
   const cellWidth = compact ? SHEET_WEEK_W : MATRIX_WEEK_W
   const confidenceLabel = (v: DraftConfidence) => DRAFT_CONFIDENCE_OPTIONS.find((option) => option.id === v)?.label ?? v
+  const label = `W${weekIndex + 1}`
+  // 지금 장부 값(보이는 양수 + 환불) — 대기 표시 툴팁의 '지금 장부'.
+  const current = display + refund
   // 시트 칸은 글자를 줄이거나 끝을 자를 수 있어 툴팁에 원 단위 전체 금액을 싣는다(매트릭스는 만 단위 요약 그대로).
-  const baseTitle = display > 0
-    ? `W${weekIndex + 1} ${compact ? `¥${formatWeekAmount(display)}` : formatMoney(display)}${compact && sheetConfidence ? ` · ${confidenceLabel(sheetConfidence)}` : ""}${isMonthOnly ? " · 월합계만" : ""}`
-    : `W${weekIndex + 1} 미입력`
-  const title = locked
-    ? `${baseTitle} · 🔒 ${lockLabel} 값이라 잠금(실수 방지) — 수정은 우측 패널에서 정정 초안으로`
-    : pending
-      ? `${baseTitle} · 미검수 초안 ${formatMoney(pending.amount)} (${confidenceLabel(pending.confidence)})`
-      : editable
-        ? `${baseTitle} · 클릭·Enter로 편집`
-        : baseTitle
+  const baseTitle = absent
+    ? `${label} · ${month ? `${Number(month.slice(5, 7))}월은 ` : ""}시트에 W${month ? ledgerMonthWeekCount(month) : 4}까지만 있습니다`
+    : pendingAmount != null
+      ? `${label} 대기 중 변경 ${exactYen(pendingAmount)} (지금 장부 ${exactYen(current)})`
+      : display > 0
+        ? `${label} ${compact ? exactYen(display) : formatMoney(display)}${compact && sheetConfidence ? ` · ${confidenceLabel(sheetConfidence)}` : ""}${isMonthOnly ? " · 월합계만" : ""}`
+        : refund < 0
+          ? `${label} ${compact ? exactYen(refund) : formatMoney(refund)}${isMonthOnly ? " · 월합계만" : ""}`
+          : `${label} 미입력`
+  const title = titleOverride
+    ? titleOverride
+    : absent
+      ? baseTitle
+      : lockKind === "refund" || (refund < 0 && !editable)
+        ? `${baseTitle} · ${REFUND_CELL_LABEL}`
+        : lockKind === "corrected" && !editable
+          ? `${baseTitle} · 장부 정정으로 대체된 달이라 잠금 — 정정 행에서 확인합니다`
+          : locked
+            ? `${baseTitle} · 🔒 ${lockLabel} 값이라 잠금(실수 방지) — 수정은 우측 패널에서 정정 초안으로`
+            : pending && pendingAmount == null
+              ? `${baseTitle} · 미검수 초안 ${formatMoney(pendingCellAmount(pending, weekIndex))} (${confidenceLabel(pending.confidence)})`
+              : editable
+                ? `${baseTitle} · 클릭·Enter로 편집`
+                : baseTitle
 
   // 편집 진입: input + 확도 팝오버. 폭 34px라 px 여백 없이 칸을 꽉 채운다.
   if (isEditingCell && interactive) {
@@ -611,11 +681,18 @@ const RevMatrixWeekCell = memo(function RevMatrixWeekCell({
 
   // 미검수 표시(점·텍스트·밑줄)는 확도별 색 — 주차 슬롯(metadata.weeklyConfidence)이 있으면 그 값을
   // 우선한다(월 우세 확도로 뭉개면 같은 달 안 다른 주차의 확도가 묻힌다 — UX 감사 2026-09-20).
-  const pendingConfidence = pending ? pending.weeklyConfidence?.[weekIndex] ?? pending.confidence : null
+  const pendingConfidence = pendingAmount != null && pendingAmountConfidence
+    ? pendingAmountConfidence
+    : pending
+      ? pending.weeklyConfidence?.[weekIndex] ?? pending.confidence
+      : null
+  // 칸에 보이는 금액 — 대기 금액(F-19) → 양수 표시 → 환불(음수) 순.
+  const shown = pendingAmount ?? (display > 0 ? display : refund < 0 ? refund : 0)
+  const refundShown = pendingAmount == null && display <= 0 && refund < 0
 
   const cellClassName = `relative ${compact ? "h-7 overflow-hidden border-b border-b-[#F0F0EC] px-1 py-0" : "px-1 py-1.5"} text-right align-middle tabular-nums border-l border-[#EDECE8] ${
     periodHighlighted ? "border-l-2 border-l-[#084734]/30" : ""
-  } ${compact && sheetBand && display <= 0 ? "bg-[#ECFDF5]" : bgClass} ${
+  } ${absent ? "bg-[#F6F5F4]" : compact && sheetBand && shown === 0 ? "bg-[#ECFDF5]" : bgClass} ${
     interactive && editable ? "cursor-cell" : ""
   } ${selected ? "ring-2 ring-inset ring-[#084734] z-10 shadow-[0_0_0_1px_#084734]" : ""} focus-visible:outline-none transition-colors`
 
@@ -644,11 +721,19 @@ const RevMatrixWeekCell = memo(function RevMatrixWeekCell({
       }
     : {}
 
+  // 대기 금액이 있는 칸 — 밑줄·점에 더해 점선 테두리(기관별 보기와 같은 대기 표시)로 "아직 장부에 안 들어간 값"임을 보인다.
+  const pendingStyle = pendingAmount != null && pendingConfidence
+    ? { boxShadow: `inset 0 -2px 0 0 ${CONFIDENCE_TOKENS[pendingConfidence].color}`, outline: `1px dashed ${CONFIDENCE_TOKENS[pendingConfidence].color}`, outlineOffset: "-3px" }
+    : pendingConfidence
+      ? { boxShadow: `inset 0 -2px 0 0 ${CONFIDENCE_TOKENS[pendingConfidence].color}` }
+      : {}
+
   return (
     <td
       ref={cellRef}
       title={title}
-      aria-label={interactive ? title : undefined}
+      aria-label={interactive || absent ? title : undefined}
+      aria-disabled={absent || undefined}
       className={cellClassName}
       style={{
         width: cellWidth,
@@ -656,7 +741,7 @@ const RevMatrixWeekCell = memo(function RevMatrixWeekCell({
         maxWidth: cellWidth,
         // 시트 칸: 값 있는 칸의 옅은 바탕 = 그 칸 확도의 틴트(토큰 값 그대로). 대기 중인 칸은 밑줄·점이 우선이라 칠하지 않는다.
         ...(compact && sheetConfidence && display > 0 && !pendingConfidence ? { backgroundColor: CONFIDENCE_TOKENS[sheetConfidence].tintBg } : {}),
-        ...(pendingConfidence ? { boxShadow: `inset 0 -2px 0 0 ${CONFIDENCE_TOKENS[pendingConfidence].color}` } : {}),
+        ...pendingStyle,
       }}
       {...interactiveHandlers}
     >
@@ -667,37 +752,43 @@ const RevMatrixWeekCell = memo(function RevMatrixWeekCell({
           style={{ backgroundColor: CONFIDENCE_TOKENS[pendingConfidence].color }}
         />
       )}
-      {display > 0 && compact ? (
+      {absent ? null : (shown !== 0 || pendingAmount != null) && compact ? (
         // 앞자리가 잘리지 않게(필터 기획 F1): 예전 inline-flex + justify-end 는 넘친 앞자리를 칸 왼쪽 밖으로 밀었다.
         // 블록 글자는 넘치면 왼쪽부터 놓이고 끝이 줄임표가 된다 — 그 전에 자릿수에 맞춰 글자를 한 단계씩 줄인다.
         <span
-          className={`block truncate leading-none ${sheetAmountFontClass(formatWeekAmount(display), SHEET_WEEK_TEXT_W)} ${
-            pendingConfidence
+          className={`block truncate leading-none ${sheetAmountFontClass(formatWeekAmount(shown), SHEET_WEEK_TEXT_W)} ${
+            pendingAmount != null && pendingConfidence
               ? `font-bold ${CONFIDENCE_TOKENS[pendingConfidence].textStrongClass}`
-              : sheetConfidence
-                ? `${sheetConfidence === "expected" ? "font-medium" : sheetConfidence === "confirmed" ? "font-bold" : "font-semibold"} ${CONFIDENCE_TOKENS[sheetConfidence].textStrongClass}`
-                : "font-medium text-[#31302E]"
+              : refundShown
+                ? MATRIX_TONE.refund
+                : pendingConfidence
+                  ? `font-bold ${CONFIDENCE_TOKENS[pendingConfidence].textStrongClass}`
+                  : sheetConfidence
+                    ? `${sheetConfidence === "expected" ? "font-medium" : sheetConfidence === "confirmed" ? "font-bold" : "font-semibold"} ${CONFIDENCE_TOKENS[sheetConfidence].textStrongClass}`
+                    : "font-medium text-[#31302E]"
           }`}
         >
           {/* 시트 칸에는 칸마다 자물쇠를 찍지 않는다(확정 칸 대부분이 잠겨 있어 소음) — 잠금 사유는 툴팁에, 행 전체 잠금은 고객명 옆 자물쇠에 있다. */}
-          {formatWeekAmount(display)}
+          {formatWeekAmount(shown)}
         </span>
-      ) : display > 0 ? (
+      ) : shown !== 0 || pendingAmount != null ? (
         <div className="flex items-center justify-between w-full leading-none">
           <span className="text-[9.5px] font-medium text-[#A39E98] select-none pl-0.5">¥</span>
           <span
             className={`inline-flex items-center gap-0.5 tabular-nums text-[11.5px] ${
               pendingConfidence
                 ? `font-bold ${CONFIDENCE_TOKENS[pendingConfidence].textStrongClass}`
-                : isMonthOnly
-                  ? "font-semibold text-[#7A520F]"
-                  : inferred
-                    ? "font-semibold text-[#6B7280]"
-                    : "font-bold text-[#111827]"
+                : refundShown
+                  ? MATRIX_TONE.refund
+                  : isMonthOnly
+                    ? "font-semibold text-[#7A520F]"
+                    : inferred
+                      ? "font-semibold text-[#6B7280]"
+                      : "font-bold text-[#111827]"
             }`}
           >
-            {locked && <Lock className="h-2.5 w-2.5 shrink-0 text-[#9CA3AF]" aria-label={lockLabel} />}
-            {formatWeekAmount(display)}
+            {locked && !refundShown && pendingAmount == null && <Lock className="h-2.5 w-2.5 shrink-0 text-[#9CA3AF]" aria-label={lockLabel} />}
+            {formatWeekAmount(shown)}
           </span>
         </div>
       ) : compact ? null : (
@@ -710,8 +801,37 @@ const RevMatrixWeekCell = memo(function RevMatrixWeekCell({
 // computeWeekCellStates/weeklyEditLockMask는 ledger/rev-matrix-logic.ts로 이동(로직 무변경) —
 // RevMatrixWeekCells가 위 named import로 그대로 호출한다.
 
+/**
+ * 시트 보기(ledger/LedgerSheet)가 칸마다 미리 정한 주차 칸(ledger-sheet-logic sheetWeekCellsForRender 의 모양과 같다) —
+ * 넘기면 RevMatrixWeekCells 가 보이는 값·환불·없는 주차·편집 가능·대기 금액·툴팁을 그대로 쓴다.
+ */
+export interface RevMatrixSheetCell {
+  /** 보이는 양수 금액(월합계만은 마지막 주차). */
+  display: number
+  isMonthOnly: boolean
+  /** 값 있는 칸의 확도(표시) — 합계가 0 이하인 달은 null. */
+  confidence: DraftConfidence | null
+  /** 시트 음수(환불) — 0 이하. */
+  refund: number
+  /** 그 달에 없는 주차(2월 W5). */
+  absent: boolean
+  /** 장부에서 고칠 수 있는 칸. */
+  editable: boolean
+  /** 대기 초안이 이 칸을 바꾸면 그 금액. */
+  pendingAmount: number | null
+  pendingConfidence: DraftConfidence | null
+  /** 툴팁 · aria-label. */
+  title: string
+}
+
 // 확장된 월의 w1~w5 5칸. editContext가 오면(딜행·비잠금월) 각 칸이 편집 셀이 된다.
-// month-only 행은 W5에 월합계를 얹어 시트 검수 감각을 유지(기존 읽기전용 규약 계승).
+// month-only 행은 마지막 주차(W5, 2월은 W4)에 월합계를 얹어 시트 검수 감각을 유지(기존 읽기전용 규약 계승).
+// 2026-11-25(시트 고정 전):
+//  - 정정이 대체한 달(F-04) · 환불 달(D2)은 빈 칸까지 전부 잠근다(editContext.lockKindOf). 확정으로 잠긴 달은 예전처럼 값 있는
+//    칸만 잠그고 빈 칸은 열어 둔다(2026-07-20 회귀 방지 — editableOf 로 5칸을 통째로 잠그지 않는다).
+//  - 시트 음수 주차는 부호를 붙인 중립색으로 보이고 고치지 않는다('환불 — 시트 값').
+//  - 그 달에 없는 주차(2월 W5, F-31)는 비활성 칸이다.
+//  - 대기 초안이 칸 값을 바꾸면 그 금액을 대기 스타일로 보인다(F-19 — editContext.weekPendingAmountsOf).
 export function RevMatrixWeekCells({
   weeks,
   inferred,
@@ -723,6 +843,7 @@ export function RevMatrixWeekCells({
   compact = false,
   sheetConfidences = null,
   sheetBands = null,
+  sheetCells = null,
 }: {
   weeks: number[]
   inferred: boolean
@@ -736,23 +857,42 @@ export function RevMatrixWeekCells({
   sheetConfidences?: Array<DraftConfidence | null> | null
   /** 장부 건별 시트 전용 — 주차별로 그 열에 필터가 걸렸는지(빈 칸 띠). */
   sheetBands?: ReadonlyArray<boolean> | null
+  /** 장부 건별 시트 전용 — 칸마다 미리 정한 표시(RevMatrixSheetCell). 주면 weeks·monthOnlyAmount·sheetConfidences 대신 이것을 쓴다. */
+  sheetCells?: ReadonlyArray<RevMatrixSheetCell> | null
 }) {
+  const monthKey = month ?? ""
   // 월 단위 잠금은 주차 인덱스와 무관(monthLockedOf) — 한 번만 조회해 순수 함수에 넘긴다.
   // 칸별 잠금(빈 칸은 열림)·표시 금액은 computeWeekCellStates가 결정한다(회귀 테스트가 검증하는 그 함수).
-  const monthLocked = editContext ? editContext.monthLockedOf(month ?? "") : true
-  const cellStates = computeWeekCellStates(weeks, monthOnlyAmount, monthLocked)
+  const monthLocked = editContext ? editContext.monthLockedOf(monthKey) : true
+  const lockKind = editContext ? editContext.lockKindOf(monthKey) : null
+  const wholeMonthLocked = isWholeMonthLock(lockKind)
+  const weekCount = month ? ledgerMonthWeekCount(month) : 5
+  const cellStates = computeWeekCellStates(weeks, monthOnlyAmount, monthLocked, weekCount)
+  // 대기 금액(F-19) — 지금 칸 값(보이는 양수 + 환불)과 다를 때만.
+  const pendingAmounts = !sheetCells && editContext
+    ? editContext.weekPendingAmountsOf(monthKey, cellStates.map((state) => state.display + (state.refund ?? 0)))
+    : null
   const cells: React.ReactNode[] = []
   for (let index = 0; index < 5; index += 1) {
-    const { display, isMonthOnly, locked: cellLocked } = cellStates[index]
+    const sheetCell = sheetCells?.[index] ?? null
+    const state = cellStates[index]
+    const display = sheetCell ? sheetCell.display : state.display
+    const isMonthOnly = sheetCell ? sheetCell.isMonthOnly : state.isMonthOnly
+    const refund = sheetCell ? sheetCell.refund : state.refund ?? 0
+    const absent = sheetCell ? sheetCell.absent : state.absent ?? false
+    const cellLocked = sheetCell ? !sheetCell.editable : state.locked || wholeMonthLocked
     // 잠금 "표시"(🔒 아이콘·"시트 확정 잠금" 툴팁)는 편집 가능한 딜행에만 — 읽기전용 경로(카테고리
     // 합산행 등, editContext 없음)는 애초에 편집 대상이 아니라 잠금 신호가 오표기가 된다(9e8f1fc5
     // 순수 함수화 때 `: false`였던 읽기전용 분기가 `: true` 폴백으로 바뀌며 합산 주차칸마다 🔒가
-    // 찍히던 회귀 — 리팩터 이전 렌더로 복원). 편집 판정(weekEditable)은 기존 그대로다.
-    const weekLocked = Boolean(editContext) && cellLocked
-    const weekEditable = Boolean(editContext) && !cellLocked
+    // 찍히던 회귀 — 리팩터 이전 렌더로 복원).
+    const weekLocked = Boolean(editContext) && cellLocked && !absent
+    const weekEditable = Boolean(editContext) && !cellLocked && !absent
+    const pendingWeek = sheetCell
+      ? (sheetCell.pendingAmount != null ? { amount: sheetCell.pendingAmount, confidence: sheetCell.pendingConfidence } : null)
+      : pendingAmounts?.[index] ?? null
     // 선택/편집은 이 칸 기준으로 계산해 원시값으로 내린다 — 비선택·비편집 칸은 memo 스킵.
-    const weekSelected = Boolean(editContext) && editContext!.isSelectedCell(month ?? "", index)
-    const weekEditing = Boolean(editContext) && editContext!.isEditingCell(month ?? "", index)
+    const weekSelected = Boolean(editContext) && editContext!.isSelectedCell(monthKey, index)
+    const weekEditing = Boolean(editContext) && weekEditable && editContext!.isEditingCell(monthKey, index)
     cells.push(
       <RevMatrixWeekCell
         key={index}
@@ -761,13 +901,16 @@ export function RevMatrixWeekCells({
         inferred={inferred}
         weekIndex={index}
         bgClass={bgClass}
-        month={editContext ? month : undefined}
+        month={editContext || absent ? month : undefined}
         rowId={editContext?.rowId}
         editable={weekEditable}
         locked={weekLocked}
-        lockLabel={editContext ? editContext.lockLabelOf(month ?? "") : undefined}
-        editWarning={editContext ? editContext.weekEditNotice(month ?? "") : undefined}
-        pending={editContext ? editContext.weekPendingOf(month ?? "", index) : null}
+        lockLabel={editContext ? editContext.lockLabelOf(monthKey) : undefined}
+        lockKind={lockKind}
+        editWarning={editContext ? editContext.weekEditNotice(monthKey) : undefined}
+        pending={editContext ? editContext.weekPendingOf(monthKey, index) : null}
+        pendingAmount={pendingWeek?.amount ?? null}
+        pendingAmountConfidence={pendingWeek?.confidence ?? null}
         actions={editContext?.actions ?? null}
         selected={weekSelected}
         isEditingCell={weekEditing}
@@ -775,12 +918,21 @@ export function RevMatrixWeekCells({
         editConfidence={weekEditing ? editContext!.editConfidence : "expected"}
         periodHighlighted={periodHighlighted}
         compact={compact}
-        sheetConfidence={sheetConfidences?.[index] ?? null}
+        sheetConfidence={sheetCell ? sheetCell.confidence : sheetConfidences?.[index] ?? null}
         sheetBand={sheetBands?.[index] ?? false}
+        refund={refund}
+        absent={absent}
+        titleOverride={sheetCell?.title}
       />,
     )
   }
   return <>{cells}</>
+}
+
+/** 칸 대기 금액 한 칸(F-19) — 대기 초안이 적용되면 그 칸에 들어갈 금액과 그 확도. */
+export interface RevMatrixPendingAmount {
+  amount: number
+  confidence: DraftConfidence | null
 }
 
 // 딜행 스트립에만 주입되는 편집 컨텍스트. 그룹 소계행은 이 값을 넘기지 않아 읽기전용 유지.
@@ -795,18 +947,75 @@ export interface RevMatrixEditContext {
   editConfidence: DraftConfidence // 편집 중 확도(편집 셀에만 의미)
   // 잠금 아이콘·툴팁 라벨(월별) — 시트 원천은 "시트 확정", 적용 초안은 "장부 반영", 정정 적용으로
   // 재잠긴 원본 달은 "장부 반영(정정)"(품질 웨이브 4 — 항목 1: 정정이 셀을 지운 게 아니라 대체했음을
-  // 구분해 보여준다 — 재편집을 시도하면 우측 패널 정정 초안으로 유도).
+  // 구분해 보여준다 — 재편집을 시도하면 우측 패널 정정 초안으로 유도), 환불 달은 "환불 — 시트 값".
   lockLabelOf: (month: string) => string
+  /** 잠긴 까닭(matrixCellLockKind) — 정정 대체 · 환불 달은 주차 칸 전부 잠금. 잠기지 않았으면 null. */
+  lockKindOf: (month: string) => MatrixCellLockKind | null
   editableOf: (month: string) => boolean
   lockedOf: (month: string) => boolean
   pendingOf: (month: string) => MatrixPendingDraft | null
+  /**
+   * 대기 초안이 적용되면 될 그 달 금액(F-19) — 이 행 커밋과 같은 종류 초안만(고객 이름으로만 걸린 신규 초안은 시트 행 금액처럼
+   * 보이지 않는다). 수정 초안은 그 달을 대체, 장부 행의 칸에 건 신규 초안은 더한다. 없으면 null.
+   */
+  pendingTotalOf: (month: string, current: number) => number | null
   // 주차(확장월) 칸의 월 단위 잠금 판정. 시트 확정/장부반영 등으로 그 "달"이 잠겼는지만 본다 —
   // 개별 주차 칸의 잠금(확정액이 찍힌 칸만 잠그고 빈 칸은 열기)은 computeWeekCellStates가 결정하므로
   // week 인자를 받지 않는다(이전 weekLockedOf(month, week)는 week를 무시해 5칸을 통째로 잠그는 함정이었다).
   monthLockedOf: (month: string) => boolean
   weekPendingOf: (month: string, week: number) => MatrixPendingDraft | null
+  /** 주차 5칸의 대기 금액(F-19) — currents(지금 칸 값 5칸)와 다른 칸만. ledger-sheet-logic sheetBlockPending 과 같은 규칙. */
+  weekPendingAmountsOf: (month: string, currents: readonly number[]) => Array<RevMatrixPendingAmount | null>
   // 주차 셀 편집 팝오버 고지문 — explicit 행(주차 병합 보존) vs 그 외(월 전체 대체) 구분.
-  weekEditNotice: (month: string) => string
+  weekEditNotice: (month: string) => string | undefined
+}
+
+/**
+ * 행 × 달의 주차 대기 금액(F-19) — 순수 함수. 칸 편집과 같은 종류 판정(rowCommitKind · pendingMatchesKind).
+ *  - 주차 키 초안(`행::달::wN`): 그 칸 = pendingCellAmount(주차 병합이면 그 주차 값, 아니면 초안 금액).
+ *  - 월 키 초안에 주차 병합(weekly)이 있으면 지금 칸 값과 다른 주차만 대기 금액으로 보인다(바뀌지 않은 칸까지 칠하지 않는다).
+ *  - 그 달에 없는 주차(2월 W5)는 늘 null.
+ */
+export function matrixWeekPendingAmounts(
+  row: Pick<LedgerRevenueRow, "id" | "sourceDealId" | "ledgerOrigin">,
+  month: string,
+  currents: readonly number[],
+  pendingByCell: ReadonlyMap<string, MatrixPendingDraft> | null | undefined,
+): Array<RevMatrixPendingAmount | null> {
+  const out: Array<RevMatrixPendingAmount | null> = [null, null, null, null, null]
+  if (!pendingByCell || pendingByCell.size === 0) return out
+  const kind = rowCommitKind(row)
+  const accept = (pending: MatrixPendingDraft | undefined) => (pending && pendingMatchesKind(pending, kind) ? pending : null)
+  const monthPending = accept(pendingByCell.get(matrixCoordKey({ rowId: row.id, month })))
+  const weekCount = ledgerMonthWeekCount(month)
+  for (let week = 0; week < weekCount; week += 1) {
+    const own = accept(pendingByCell.get(matrixCoordKey({ rowId: row.id, month, week })))
+    if (own) {
+      out[week] = { amount: pendingCellAmount(own, week), confidence: own.weeklyConfidence?.[week] ?? own.confidence }
+      continue
+    }
+    if (monthPending?.weekly) {
+      const value = monthPending.weekly[week] ?? 0
+      if (Math.abs(value - (currents[week] ?? 0)) > 0.5) {
+        out[week] = { amount: value, confidence: monthPending.weeklyConfidence?.[week] ?? monthPending.confidence }
+      }
+    }
+  }
+  return out
+}
+
+/** 행 × 달의 대기 금액(그 달 계) — 수정 초안은 대체, 장부 행의 신규 초안은 더한다. 같은 종류 초안이 없으면 null. */
+export function matrixMonthPendingTotal(
+  row: Pick<LedgerRevenueRow, "id" | "sourceDealId" | "ledgerOrigin">,
+  month: string,
+  current: number,
+  pendingByCell: ReadonlyMap<string, MatrixPendingDraft> | null | undefined,
+): number | null {
+  if (!pendingByCell || pendingByCell.size === 0) return null
+  const kind = rowCommitKind(row)
+  const pending = pendingByCell.get(matrixCoordKey({ rowId: row.id, month }))
+  if (!pending || !pendingMatchesKind(pending, kind)) return null
+  return kind === "new-row" ? current + pending.amount : pending.amount
 }
 
 // 딜행의 편집 컨텍스트 조립 — 매트릭스 딜행(RevMatrixDealRow)과 장부 건별 시트 행(ledger/LedgerSheet.tsx)이
@@ -832,6 +1041,7 @@ export function buildRevMatrixEditContext({
   editConfidence: DraftConfidence
   pendingByCell: Map<string, MatrixPendingDraft> | null
 }): RevMatrixEditContext {
+  const lockKindOf = (month: string) => matrixCellLockKind(row, month, correctedMonths)
   return {
     rowId: row.id,
     actions,
@@ -842,19 +1052,37 @@ export function buildRevMatrixEditContext({
     editBuffer,
     editConfidence,
     // 품질 웨이브 4 — 항목 1: 정정으로 재잠긴 달만 "장부 반영(정정)"으로 구분 — 나머지는 기존 규약.
-    lockLabelOf: (month) =>
-      correctedMonths?.has(month) ? "장부 반영(정정)" : row.ledgerOrigin === "draft" ? "장부 반영" : "시트 확정",
+    lockLabelOf: (month) => {
+      const kind = lockKindOf(month)
+      if (kind === "corrected") return "장부 반영(정정)"
+      if (kind === "refund") return REFUND_CELL_LABEL
+      return row.ledgerOrigin === "draft" ? "장부 반영" : "시트 확정"
+    },
+    lockKindOf,
     editableOf: (month) => isMatrixCellEditable(row, month, correctedMonths),
     lockedOf: (month) => isMatrixCellLocked(row, month, correctedMonths),
     pendingOf: (month) => pendingByCell?.get(`${row.id}::${month}`) ?? null,
+    pendingTotalOf: (month, current) => matrixMonthPendingTotal(row, month, current, pendingByCell),
     // 월 단위 잠금 = 그 달 시트 확정 여부. 칸별 잠금은 computeWeekCellStates가 display>0로 좁힌다.
     // 주차 pending = `rowId::month::wN` 키.
     monthLockedOf: (month) => isMatrixCellLocked(row, month, correctedMonths),
     weekPendingOf: (month, week) => pendingByCell?.get(`${row.id}::${month}::w${week + 1}`) ?? null,
-    weekEditNotice: (month) =>
-      rowWeeklySplit(row, month).source === "explicit"
-        ? "커밋 시 이 달 금액이 주차 합계로 재기재됩니다 (기존 주차 병합 보존)"
-        : "적용 시 이 달 전체가 이 값으로 대체됩니다 (주차 분해 없음)",
+    weekPendingAmountsOf: (month, currents) => matrixWeekPendingAmounts(row, month, currents, pendingByCell),
+    // 같은 달에 대기 초안이 있으면 그 초안의 주차 위에 얹는다(mergeWeekCellCommit, F-02) — 시트 주차가 있으면 지킨다.
+    // 시트 주차가 없는 달(일자 추정 · 월합계만)은 그 달이 주차 합으로 바뀐다. 빈 달은 대체할 것이 없어 알리지 않는다.
+    weekEditNotice: (month) => {
+      const kind = rowCommitKind(row)
+      const pending = pendingByCell?.get(`${row.id}::${month}`)
+      if (pending && pendingMatchesKind(pending, kind)) {
+        return pending.weekly || pending.week != null
+          ? "같은 달 대기 초안의 다른 주차는 그대로 두고 이 주차를 바꿉니다 (월 금액 = 주차 합)"
+          : "같은 달 대기 초안(월 금액)이 주차 합으로 바뀝니다"
+      }
+      const split = rowWeeklySplit(row, month)
+      if (split.source === "explicit") return "커밋 시 이 달 금액이 주차 합계로 재기재됩니다 (기존 주차 병합 보존)"
+      if (split.source === "empty") return undefined
+      return "적용 시 이 달 전체가 이 값으로 대체됩니다 (주차 분해 없음)"
+    },
   }
 }
 
@@ -903,7 +1131,7 @@ function RevMatrixMonthStrip({
           className={`relative px-1.5 py-1 text-right align-middle tabular-nums border-l border-[#F2F1EE] ${bgClass}`}
           style={{ width: 80, minWidth: 80, maxWidth: 80 }}
         >
-          {h1Bucket.total > 0 ? (
+          {h1Bucket.total !== 0 ? (
             <div className="flex items-center justify-between w-full leading-none">
               <span className="text-[9.5px] font-medium text-[#A39E98] select-none pl-0.5">¥</span>
               <span className={`text-[11.5px] font-bold tabular-nums ${MATRIX_TONE[matrixBucketTone(h1Bucket)]}`}>
@@ -931,8 +1159,15 @@ function RevMatrixMonthStrip({
                 editContext={editContext}
                 periodHighlighted={periodHighlighted}
               />
-              {/* 확장 중에도 그 달 총액을 잃지 않도록 주차 5칸 뒤에 읽기전용 월계 셀을 유지한다 */}
-              <RevMatrixMonthCell bucket={bucket} mismatch={weekly?.mismatch ?? false} bgClass={bgClass} periodHighlighted={periodHighlighted} />
+              {/* 확장 중에도 그 달 총액을 잃지 않도록 주차 5칸 뒤에 읽기전용 월계 셀을 유지한다 — 대기 초안이 있으면 적용되면 될 금액(F-19). */}
+              <RevMatrixMonthCell
+                bucket={bucket}
+                mismatch={weekly?.mismatch ?? false}
+                bgClass={bgClass}
+                periodHighlighted={periodHighlighted}
+                pending={editContext ? editContext.pendingOf(month) : null}
+                pendingTotal={editContext ? editContext.pendingTotalOf(month, bucket.total) : null}
+              />
             </Fragment>
           )
         }
@@ -949,7 +1184,9 @@ function RevMatrixMonthStrip({
             editable={editContext ? editContext.editableOf(month) : false}
             locked={editContext ? editContext.lockedOf(month) : false}
             lockLabel={editContext ? editContext.lockLabelOf(month) : undefined}
+            lockKind={editContext ? editContext.lockKindOf(month) : null}
             pending={editContext ? editContext.pendingOf(month) : null}
+            pendingTotal={editContext ? editContext.pendingTotalOf(month, bucket.total) : null}
             actions={editContext?.actions ?? null}
             selected={monthSelected}
             isEditingCell={monthEditing}
@@ -1470,13 +1707,14 @@ export const RevMatrixGroupRow = memo(function RevMatrixGroupRow({
         className={`sticky right-0 z-10 border-l border-[#E5E7EB] px-2.5 py-1.5 text-right align-middle tabular-nums ${rowBg} shadow-[-4px_0_12px_-2px_rgba(0,0,0,0.06)]`}
         style={{ width: MATRIX_ANNUAL_W, minWidth: MATRIX_ANNUAL_W, maxWidth: MATRIX_ANNUAL_W }}
       >
-        {annual.total > 0 ? (
+        {annual.total !== 0 ? (
           <>
             <div className="flex items-center justify-between w-full leading-tight">
               <span className="text-[9.5px] font-medium text-[#A39E98] select-none pl-0.5">¥</span>
               <span className={`text-[12px] font-bold ${MATRIX_TONE[annualTone]}`}>{formatWeekAmount(annual.total)}</span>
             </div>
-            {annual.confirmed > 0 && (
+            {/* 확도 비율·색은 합계가 0 보다 클 때만(D2). */}
+            {annual.total > 0 && annual.confirmed > 0 && (
               <span className={`block text-[9.5px] font-semibold leading-tight ${CONFIDENCE_TOKENS.confirmed.textClass}`}>확정 {formatWeekAmount(annual.confirmed)}</span>
             )}
           </>
@@ -1551,11 +1789,22 @@ export const RevMatrixDealRow = memo(function RevMatrixDealRow({
   const annualTone = matrixBucketTone(annual)
   const weeklyByMonth = (month: string) => {
     const split = rowWeeklySplit(row, month)
-    if (split.source === "empty") return null
+    // 환불(음수) 주차·환불 달도 칸에 보인다(D2) — 양수 주차가 없어 rowWeeklySplit 이 비었다고 해도 시트 음수 주차는 싣는다.
+    const signed = rowSignedWeeks(row, month)
+    const hasRefundWeek = signed?.some((value) => value < 0) ?? false
+    const net = rowMonthNet(row, month)
+    if (split.source === "empty" && !hasRefundWeek && net >= 0) return null
+    const weeks = split.source === "explicit" || split.source === "inferred"
+      ? split.weeks
+      : hasRefundWeek && signed
+        ? signed
+        : [0, 0, 0, 0, 0]
+    // 주차 값이 없는 환불 달(월 칸만 음수)은 순액을 마지막 주차의 환불로 둔다(computeWeekCellStates 의 음수 monthOnlyAmount).
+    const monthOnlyAmount = split.source === "month-only" ? split.total : net < 0 && !(signed?.some((value) => value !== 0)) ? net : 0
     return {
-      weeks: split.source === "explicit" || split.source === "inferred" ? split.weeks : [0, 0, 0, 0, 0],
+      weeks,
       inferred: split.source === "inferred",
-      monthOnlyAmount: split.source === "month-only" ? split.total : 0,
+      monthOnlyAmount,
       mismatch: rowWeeklyMismatch(row, month) !== null,
     }
   }
@@ -1635,7 +1884,7 @@ export const RevMatrixDealRow = memo(function RevMatrixDealRow({
         className={`sticky right-0 z-10 border-l border-[#E5E7EB] px-2.5 py-1.5 text-right align-middle tabular-nums ${rowBg} shadow-[-4px_0_12px_-2px_rgba(0,0,0,0.06)]`}
         style={{ width: MATRIX_ANNUAL_W, minWidth: MATRIX_ANNUAL_W, maxWidth: MATRIX_ANNUAL_W }}
       >
-        {annual.total > 0 ? (
+        {annual.total !== 0 ? (
           <div className="flex items-center justify-between w-full leading-tight">
             <span className="text-[9.5px] font-medium text-[#A39E98] select-none pl-0.5">¥</span>
             <span className={`text-[12px] font-bold ${MATRIX_TONE[annualTone]}`}>{formatWeekAmount(annual.total)}</span>
@@ -1704,7 +1953,7 @@ export const RevMatrixCategoryRow = memo(function RevMatrixCategoryRow({
         monthOnlyAmount += split.total
       }
     }
-    if (!weeks.some((value) => value > 0) && monthOnlyAmount === 0) return null
+    if (!weeks.some((value) => value !== 0) && monthOnlyAmount === 0) return null
     return { weeks, inferred: !hasExplicit && hasInferred, monthOnlyAmount, mismatch: false }
   }
   return (
@@ -1769,7 +2018,7 @@ export const RevMatrixCategoryRow = memo(function RevMatrixCategoryRow({
         className={`sticky right-0 z-10 border-l border-[#E5E7EB] px-2.5 py-1.5 text-right align-middle tabular-nums ${rowBg} shadow-[-4px_0_12px_-2px_rgba(0,0,0,0.06)]`}
         style={{ width: MATRIX_ANNUAL_W, minWidth: MATRIX_ANNUAL_W, maxWidth: MATRIX_ANNUAL_W }}
       >
-        {annual.total > 0 ? (
+        {annual.total !== 0 ? (
           <div className="flex items-center justify-between w-full leading-tight">
             <span className="text-[9.5px] font-medium text-[#A39E98] select-none pl-0.5">¥</span>
             <span className={`text-[12px] font-bold ${MATRIX_TONE[annualTone]}`}>{formatWeekAmount(annual.total)}</span>
@@ -1841,6 +2090,9 @@ export const RevMatrixFooter = memo(function RevMatrixFooter({
                 <span className={`text-[9px] font-semibold ${CONFIDENCE_TOKENS["high-confidence"].textClass}`}>{formatWeekAmount(h1Total.high)}</span>
                 <span className={`text-[9px] font-semibold ${CONFIDENCE_TOKENS.expected.textClass}`}>{formatWeekAmount(h1Total.open)}</span>
               </span>
+            ) : h1Total.total < 0 ? (
+              // 합계가 음수(환불이 더 큰 달)면 확도 3단 대신 부호 붙은 중립 합계 하나(D2).
+              <span className={`text-[10.5px] ${MATRIX_TONE.refund}`}>{formatWeekAmount(h1Total.total)}</span>
             ) : (
               <span className="text-[11px] text-[#DDD9D3]">·</span>
             )}
@@ -1868,6 +2120,8 @@ export const RevMatrixFooter = memo(function RevMatrixFooter({
                   <span className={`text-[9.5px] font-semibold ${CONFIDENCE_TOKENS["high-confidence"].textClass}`}>{formatWeekAmount(bucket.high)}</span>
                   <span className={`text-[9.5px] font-semibold ${CONFIDENCE_TOKENS.expected.textClass}`}>{formatWeekAmount(bucket.open)}</span>
                 </span>
+              ) : bucket.total < 0 ? (
+                <span className={`text-[11px] ${MATRIX_TONE.refund}`}>{formatWeekAmount(bucket.total)}</span>
               ) : (
                 <span className="text-[11px] text-[#D1D5DB]">·</span>
               )}

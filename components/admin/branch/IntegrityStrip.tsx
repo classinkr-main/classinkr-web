@@ -36,7 +36,8 @@ interface DataQualityResponse {
 }
 
 function ledgerHref(sheetRow: number): string {
-  return `/admin/branch/ledger?lens=rev&q=${encodeURIComponent(String(sheetRow))}`
+  // 한 행을 찾는 링크라 달 필터(기본 "이번 달 계 값 있음")를 풀어 둔다(cf=none, F-25).
+  return `/admin/branch/ledger?lens=rev&q=${encodeURIComponent(String(sheetRow))}&cf=none`
 }
 
 /**

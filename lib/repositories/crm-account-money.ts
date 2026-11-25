@@ -14,7 +14,8 @@ import {
   type MoneyDealLineItemRow,
   type MoneyHwOutboundRow,
 } from "@/lib/crm/money-line-items"
-import { listBranchRevDeals } from "@/lib/repositories/branch-deals"
+import { businessFy } from "@/lib/branch/fiscal"
+import { readLedgerRevenueDeals } from "@/lib/branch/ledger-revenue"
 import { listHwOutbound, type HwOutbound } from "@/lib/repositories/branch-hw"
 import { listConfirmedHwOutboundAccountLinks } from "@/lib/repositories/crm-source-links"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
@@ -79,15 +80,16 @@ function sumMonthly(payments: Record<string, number> | null | undefined): number
 }
 
 // 고객명(header.name)을 계정키로 정규화해 REV/HW 원장 전량에서 이 계정만 필터·집계한다.
-// 리더(listBranchRevDeals·listHwOutbound)는 unstable_cache(60s)라 계정별 반복 호출도 저렴하다.
+// REV 는 시트 행 + 장부 항목(D1, readLedgerRevenueDeals — 장부 화면과 같은 매출). 리더(REV·장부 입력·listHwOutbound)는
+// unstable_cache(60s)라 계정별 반복 호출도 저렴하다.
 export async function getCrmAccountProductSummary(
   name: string | null | undefined,
 ): Promise<CrmAccountProductSummary> {
   const accountKey = normalizedAccountKey(name)
   if (!accountKey) return EMPTY_CRM_ACCOUNT_PRODUCT_SUMMARY
 
-  const [revDeals, hwOutbound] = await Promise.all([
-    listBranchRevDeals(),
+  const [{ deals: revDeals }, hwOutbound] = await Promise.all([
+    readLedgerRevenueDeals({ fiscalYear: businessFy() }),
     listHwOutbound(),
   ])
 

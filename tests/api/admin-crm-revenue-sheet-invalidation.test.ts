@@ -52,6 +52,7 @@ describe("REV 링크 확정/생성 라우트 → admin-crm-revenue-sheet 무효�
   it("시트 태그 정의는 캐시 옵션의 tags와 같은 상수를 쓴다(태그 문자열 드리프트 방지)", () => {
     const source = readRoute("lib/admin-crm-revenue-sheet.ts")
     expect(source).toContain('export const ADMIN_CRM_REVENUE_SHEET_CACHE_TAG = "admin-crm-revenue-sheet"')
-    expect(source).toContain("tags: [ADMIN_CRM_REVENUE_SHEET_CACHE_TAG]")
+    // D1: 시트 + 장부 매출이라 장부 항목 태그(LEDGER_REVENUE_CACHE_TAGS)도 함께 건다 — 시트 태그는 같은 상수 그대로.
+    expect(source).toContain("tags: [ADMIN_CRM_REVENUE_SHEET_CACHE_TAG, ...LEDGER_REVENUE_CACHE_TAGS]")
   })
 })

@@ -1,6 +1,8 @@
 import "server-only"
 
 import { branchManagerMatches, scopeDshToManager } from "@/lib/branch/personal-scope"
+import { readLedgerRevenueDeals, scopeLedgerRevenueDeals } from "@/lib/branch/ledger-revenue"
+import { applyLedgerStatusToDsh } from "@/lib/branch/dsh-ledger"
 
 import { unstable_cache } from "next/cache"
 import { envSheetId, getSheetModifiedTime } from "@/lib/branch/google-sheets"
@@ -8,12 +10,11 @@ import { resolveSheetFreshnessFromSettled, type SheetFreshnessResult } from "@/l
 import { dedupeDshByKind } from "@/lib/branch/dsh-dedupe"
 import type { DshBreakdownRow } from "@/lib/branch/parsers/dsh"
 import type { BranchRevDeal } from "@/lib/repositories/branch-deals"
-import { readRevDealsPreferActiveWithSource } from "@/lib/branch/read-rev-deals"
 import { readDshPreferDbWithSource, readKpiBlocksPreferDb } from "@/lib/branch/read-dsh-kpi"
 import { selectKpiRows } from "@/lib/branch/parsers/kpi"
 import { classifySalesLedgerProductCategory } from "@/lib/branch/product-category"
-import { fyOf, FISCAL_MONTH_ORDER, fiscalQuarter, ymKey } from "@/lib/branch/fiscal"
-import { summarizeRevenue, bottleneckKpi, closingDeals } from "@/lib/branch/computations/core-kpi"
+import { businessDateAsUtc, fyOf, FISCAL_MONTH_ORDER, fiscalQuarter, ymKey } from "@/lib/branch/fiscal"
+import { summarizeRevenue, bottleneckKpi, closingDeals, confirmedRevenueInMonths } from "@/lib/branch/computations/core-kpi"
 import { confirmedMonthAmount } from "@/lib/branch/computations/rev-confirmed"
 import { listMembersByTeam } from "@/lib/branch/computations/pacing"
 import { summarizeCampaigns } from "@/lib/branch/computations/campaigns"
@@ -53,7 +54,7 @@ function isPrevPeriodAvailable(breakdown: DshBreakdownRow[], scope: "M" | "Q" | 
 
 const PREV_PERIOD_LABEL: Record<"M" | "Q" | "Y", string> = { M: "전월", Q: "전분기", Y: "전년" }
 
-// Monday-based week (Mon 00:00 UTC inclusive — next Mon 00:00 UTC exclusive)
+// 월~일 주(KST 영업일 기준) — 호출부가 businessDateAsUtc(currentDate)를 넘기므로 UTC 필드가 곧 KST 날짜다. 월 00:00 포함 · 다음 월 00:00 제외.
 function startOfWeekMon(d: Date): Date {
   const out = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()))
   const day = out.getUTCDay()
@@ -189,7 +190,8 @@ interface SummaryTimelines {
 }
 
 function projectOverviewTimelines(timelines: SummaryTimelines, now: Date): SummaryTimelines {
-  const todayUtc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
+  // '오늘'은 KST 영업일(0~9시 KST 에 UTC 어제로 읽지 않는다).
+  const todayUtc = businessDateAsUtc(now).getTime()
   const refs = [
     ...timelines.deals.map((row, index) => ({ kind: "deals" as const, index, date: row.date })),
     ...timelines.events.map((row, index) => ({ kind: "events" as const, index, date: row.date })),
@@ -288,15 +290,25 @@ export interface BranchSummaryPayloadQuery {
  */
 export async function buildBranchSummaryPayload(query: BranchSummaryPayloadQuery) {
   const { team, period, periodDate, includeBreakdown, overviewView, now: currentDate, skipSheetFreshness = false, manager } = query
-  const [dshResult, kpi, revResult, campaigns, runs, events, sheetFreshness] = await Promise.all([
-    readDshWithSource(fyOf(periodDate)), readKpi(fyOf(periodDate), period, periodDate), readRevDealsPreferActiveWithSource(fyOf(periodDate), { team: manager ? "ALL" : team }), summarizeCampaigns(currentDate), getRecentSyncRuns(3), listCachedPublicEvents(),
+  const fy = fyOf(periodDate)
+  // 매출 딜 = 시트 행 + 장부 항목(D1, lib/branch/ledger-revenue.ts) — 전 팀·전 담당을 한 번 읽고 아래에서 범위를 건다.
+  const [dshResult, kpi, ledgerRevenue, campaigns, runs, events, sheetFreshness] = await Promise.all([
+    readDshWithSource(fy), readKpi(fy, period, periodDate), readLedgerRevenueDeals({ fiscalYear: fy, now: currentDate }), summarizeCampaigns(currentDate), getRecentSyncRuns(3), listCachedPublicEvents(),
     skipSheetFreshness ? Promise.resolve<SheetFreshnessResult>({ modifiedTime: null, failed: false }) : readSheetFreshness(),
   ])
+  const revResult = { source: ledgerRevenue.source }
   const sheetModifiedAt = sheetFreshness.modifiedTime
-  const dsh = scopeDshToManager(dshResult.dsh, manager)
-  const deals = manager ? revResult.deals.filter((deal) => branchManagerMatches(deal.manager, manager)) : revResult.deals
+  // DSH 실적을 장부에서(D4) — 시트 고정이 적용 중일 때만 고정 달 이후 실적을 장부 확정으로 바꾼다(그 밖에는 같은 참조).
+  // 전 팀·전 담당 D1 딜을 넘긴다(Team KR = 모든 행). 개인 범위는 바꾼 뒤에 건다.
+  const ledgerDsh = await applyLedgerStatusToDsh({ dsh: dshResult.dsh, fiscalYear: fy, now: currentDate, deals: ledgerRevenue.deals })
+  const dsh = scopeDshToManager(ledgerDsh.dsh, manager)
+  // 타일 범위는 목표 축 — 팀, 담당 1명이면 팀 ∩ 담당(F-41: 표와 같다). 담당 일치는 branchManagerMatches(F-42).
+  const revenueScope = { team, manager: manager ?? null }
+  const deals = scopeLedgerRevenueDeals(ledgerRevenue.deals, revenueScope)
+  const sheetOnlyDeals = scopeLedgerRevenueDeals(ledgerRevenue.sheetOnlyDeals, revenueScope)
   const teamMembers = new Set(listMembersByTeam(dsh, team))
-  const revenue = summarizeRevenue(dsh, deals, manager ? "ALL" : team, period, periodDate)
+  const revenueTeam = manager ? "ALL" : team
+  const baseRevenue = summarizeRevenue(dsh, deals, revenueTeam, period, periodDate)
   const bottle = bottleneckKpi(manager ? kpi.filter((row) => branchManagerMatches(row.member, manager)) : kpi, teamMembers)
   const closing = closingDeals(deals, currentDate)
   const events30 = events.filter((e) => {
@@ -332,7 +344,6 @@ export async function buildBranchSummaryPayload(query: BranchSummaryPayloadQuery
     },
   }
 
-  const fy = fyOf(periodDate)
   const months: string[] = FISCAL_MONTH_ORDER.map((m) => `${m >= 4 ? fy : fy + 1}-${String(m).padStart(2, "0")}`)
 
   const teamGoalRow = dsh.rows.find((r) => r.level === "team" && r.team === (manager ? "ALL" : team) && r.kind === "goal")
@@ -398,7 +409,16 @@ export async function buildBranchSummaryPayload(query: BranchSummaryPayloadQuery
         return fyQuarterMonths((q - 1) as 1 | 2 | 3 | 4)
       })()
 
-  const thisWeekStart = startOfWeekMon(currentDate)
+  // D3·F-40 — 같은 기간·같은 범위의 시트만 확정(장부 가감 = 확정 − 시트만), 같은 정의·같은 범위의 전기 확정.
+  const revenue = {
+    ...baseRevenue,
+    sheet_only_confirmed: summarizeRevenue(dsh, sheetOnlyDeals, revenueTeam, period, periodDate).confirmed,
+    prev_confirmed: prevPeriodMonths ? confirmedRevenueInMonths(deals, prevPeriodMonths) : null,
+    ledger_included: ledgerRevenue.info.ledgerReadable,
+  }
+
+  // 주(월요일 시작)는 KST 영업일 기준 — 월요일 0~9시 KST 에 지난주로 읽지 않는다.
+  const thisWeekStart = startOfWeekMon(businessDateAsUtc(currentDate))
   const thisWeekEnd = new Date(thisWeekStart)
   thisWeekEnd.setUTCDate(thisWeekEnd.getUTCDate() + 7)
   const prevWeekStart = new Date(thisWeekStart)
@@ -538,6 +558,10 @@ export async function buildBranchSummaryPayload(query: BranchSummaryPayloadQuery
     // 팀·멤버 그리드(DshTeamGrid) 원천 — breakdown과 동일한 opt-in 플래그에 함께 태운다
     // (같은 소비처 한 곳뿐이라 별도 플래그를 늘리지 않는다). 추가 페이로드는 팀 8행+멤버
     // ~20행 수준으로 breakdown보다 훨씬 작고, 캐시 키 무변경 안전 근거도 위와 동일하다.
-    ...(includeBreakdown ? { dsh_breakdown: breakdown, dsh_rows: manager ? dsh.rows.filter((row) => row.level === "member") : dsh.rows } : {}),
+    // 개인 범위(F-24): scopeDshToManager 가 그 담당 멤버 행 + 합성 ALL 행만 남긴다 — 둘 다 보낸다. 멤버 행만 보내면
+    // 화면의 dshTotalsFromRows(ALL 행 필요)가 늘 비어 'DSH 진도를 계산할 데이터가 없습니다'가 떴다.
+    ...(includeBreakdown ? { dsh_breakdown: breakdown, dsh_rows: dsh.rows } : {}),
+    // DSH 실적을 장부에서(D4) — 시트 고정이 적용 중일 때만 싣는다(없으면 키 없음 — 실적은 시트 그대로).
+    ...(ledgerDsh.info ? { dsh_ledger: ledgerDsh.info } : {}),
   }
 }

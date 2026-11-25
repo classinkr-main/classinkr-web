@@ -28,6 +28,40 @@ describe("pipeline", () => {
     expect(listPipeline(deals, { manager: "minjae" }).map((r) => r.manager)).toEqual(["Minjae"])
     expect(listRevRevenue(deals, { manager: "Minjae" }).map((r) => r.manager)).toEqual(["Minjae"])
   })
+  it("F-42: 담당 일치는 summary·매니저별과 같은 branchManagerMatches(대소문자 무시) — 표와 타일이 같은 행을 센다", () => {
+    const deals = [
+      mk({ id: "a", manager: "예시A", monthly_payments: { "2026-04": 100 } }),
+      mk({ id: "b", manager: "예시a", monthly_payments: { "2026-04": 200 } }),
+      mk({ id: "c", manager: "예시B", monthly_payments: { "2026-04": 300 } }),
+    ]
+    expect(listRevRevenue(deals, { manager: "예시A" }).map((r) => r.id).sort()).toEqual(["a", "b"])
+    expect(listPipeline(deals, { manager: "예시a" }).map((r) => r.id).sort()).toEqual(["a", "b"])
+    // 빈 담당은 거르지 않는다.
+    expect(listRevRevenue(deals, { manager: "  " })).toHaveLength(3)
+  })
+  it("listRevRevenue 행은 읽는 시점 확도 재료(pendingCells·monthWeekMismatch)를 raw 에서 옮긴다", () => {
+    const [row] = listRevRevenue([
+      mk({
+        id: "a",
+        monthly_payments: { "2026-11": 50 },
+        raw: {
+          pendingCells: { "2026-11": [{ week: 4, start: "2026-11-22", amount: 50 }] },
+          monthWeekMismatch: { "2026-11": { month: 0, weeks: 50 } },
+        },
+      }),
+    ])
+    expect(row.pendingCells).toEqual({ "2026-11": [{ week: 4, start: "2026-11-22", amount: 50 }] })
+    expect(row.monthWeekMismatch).toEqual({ "2026-11": { month: 0, weeks: 50 } })
+    const [plain] = listRevRevenue([mk({ id: "b", monthly_payments: { "2026-11": 50 } })])
+    expect("pendingCells" in plain).toBe(false)
+    expect("monthWeekMismatch" in plain).toBe(false)
+  })
+  it("분기 범위는 KST 영업월로 — 분기 첫날 0~9시 KST 에 지난 분기로 읽지 않는다", () => {
+    const rows = listRevRevenue([
+      mk({ id: "a", monthly_payments: { "2026-10": 100, "2026-09": 200 }, monthly_red: { "2026-10": true, "2026-09": true } }),
+    ], undefined, { period: "Q", now: new Date("2026-09-30T15:30:00.000Z") }) // = 2026-10-01 00:30 KST(3분기 시작)
+    expect(rows[0].revenue).toBe(100)
+  })
   it("listRevRevenue can scope revenue to a selected month", () => {
     const rows = listRevRevenue([
       mk({

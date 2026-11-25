@@ -6,6 +6,7 @@ import { ChevronDown } from "lucide-react"
 
 import { describeLedgerStatus, type LedgerCrmInput, type LedgerIntegrityInput, type LedgerStatusTone } from "@/lib/branch/ledger-status-summary"
 import { describeSyncHealth } from "@/lib/branch/sync-health-copy"
+import { formatBranchSyncSchedule } from "@/lib/branch/sync/schedule"
 import { CrmSyncDetail, stripStateFromResponse, type CrmCoverageResponse } from "../CrmSyncStrip"
 import { IntegrityDetail, useIntegrityData } from "../IntegrityStrip"
 import type { BranchSyncHealth } from "../types"
@@ -13,6 +14,25 @@ import type { BranchSyncHealth } from "../types"
 // 장부 상단 상태 한 줄(2026-09-14) — 정합 체크·CRM 연결·동기화 끊김 세 줄을 칸 하나씩으로 합친다.
 // 요약은 한 줄, 상세는 누른 칸 하나만 아래로 펼친다. 가장 심각한 톤은 테두리 한 곳에만 쓰고
 // 채움은 쓰지 않는다(아웃라인 강조). 판정은 lib/branch/ledger-status-summary.ts 순수 함수.
+
+/**
+ * 동기화 칸 맨 아래 일정 한 줄. 시각은 크론 일정 상수(lib/branch/sync/schedule.ts — vercel.json 과 테스트로 대조)에서 만든다
+ * (F-47: 예전 글자 "매일 17:38(KST)"는 실제 일정 09·13·17시와 달랐다). 시트 고정 뒤(revLockedDayLabel = "12월 1일")에는
+ * REV 를 다시 읽지 않는다는 사실을 앞에 둔다.
+ */
+export function ledgerSyncScheduleCopy(revLockedDayLabel?: string | null): string {
+  const schedule = formatBranchSyncSchedule()
+  const day = revLockedDayLabel?.trim()
+  if (day) return `REV는 ${day} 기준 고정 · DSH·KPI·하드웨어는 ${schedule} 자동 동기화`
+  return `${schedule} 자동 동기화, 2일 연속 실패 시 운영방 알림`
+}
+
+/** 동기화 칸이 정상일 때의 한 줄 — 시트 고정 뒤에는 이 칸이 DSH·KPI 읽기만 본다(sync-health 의 "KR Team 시트(DSH·KPI)"). */
+export function ledgerSyncHealthyCopy(revLockedDayLabel?: string | null): string {
+  return revLockedDayLabel?.trim()
+    ? "KR Team 시트(DSH·KPI)가 정상적으로 동기화되고 있습니다."
+    : "매출 시트가 정상적으로 동기화되고 있습니다."
+}
 
 type SegmentId = "sync" | "integrity" | "crm"
 
@@ -52,6 +72,7 @@ export default function LedgerStatusRail({
   crmCoverage,
   refreshKey,
   canRunAdminOperations,
+  revLockedDayLabel = null,
 }: {
   syncHealth: BranchSyncHealth | undefined
   /** 마지막 동기화 시도(성공·실패 무관) 표시 문구 — 부모의 상대시간 포맷을 그대로 받는다. */
@@ -60,6 +81,11 @@ export default function LedgerStatusRail({
   crmCoverage: { data: CrmCoverageResponse | null; loading: boolean; error: string | null }
   refreshKey: number
   canRunAdminOperations: boolean
+  /**
+   * 시트 고정이 active 일 때만 — 고정 날짜 글자("12월 1일", lib/branch/rev-sheet-lock.ts formatLockDayLabel).
+   * 있으면 동기화 칸 일정 줄이 "REV는 12월 1일 기준 고정 · DSH·KPI·하드웨어는 …"가 된다. 없으면 지금 그대로.
+   */
+  revLockedDayLabel?: string | null
 }) {
   const detailId = useId()
   const [open, setOpen] = useState<SegmentId | null>(null)
@@ -136,9 +162,9 @@ export default function LedgerStatusRail({
                   <p className="font-semibold">{syncCopy.action}</p>
                 </>
               ) : (
-                <p>매출 시트가 정상적으로 동기화되고 있습니다.</p>
+                <p>{ledgerSyncHealthyCopy(revLockedDayLabel)}</p>
               )}
-              <p className="text-[11px] text-[#615D59]">마지막 시도 {lastSyncAttemptLabel} · 매일 17:38(KST) 자동 동기화, 2일 연속 실패 시 운영방 알림</p>
+              <p className="text-[11px] text-[#615D59]">마지막 시도 {lastSyncAttemptLabel} · {ledgerSyncScheduleCopy(revLockedDayLabel)}</p>
             </div>
           )}
 

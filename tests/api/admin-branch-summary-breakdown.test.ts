@@ -56,6 +56,19 @@ vi.mock("@/lib/repositories/public-events", () => ({
   listCachedPublicEvents,
 }))
 
+// D1(2026-11-25): 매출 딜 = 시트 행 + 장부 항목(lib/branch/ledger-revenue.ts). 이 파일은 장부 항목이 없는 경우만 본다 —
+// 장부 입력이 있는 경우는 tests/api/admin-branch-summary-ledger-revenue.test.ts.
+vi.mock("@/lib/repositories/branch-sales-ledger-drafts", () => ({
+  listBranchSalesLedgerEntries: vi.fn(async () => ({ generatedAt: "x", health: { ok: true, message: null }, entries: [], truncated: false })),
+  listBranchSalesLedgerDrafts: vi.fn(async () => ({ generatedAt: "x", health: { ok: true, message: null }, drafts: [], truncated: false })),
+}))
+
+vi.mock("@/lib/repositories/branch-sales-ledger-sheet-writes", () => ({
+  latestSheetWritesByDraftIds: vi.fn(async () => new Map()),
+  lastSuccessfulRevSyncStartedAt: vi.fn(async () => null),
+  isSheetWritesNotReadyError: () => false,
+}))
+
 const BREAKDOWN = [
   {
     kind: "goal",
@@ -117,17 +130,21 @@ describe("GET /api/admin/branch/summary — dsh_breakdown", () => {
     })
     readRevDealsPreferActiveWithSource.mockResolvedValue({ deals: [deal("mine", "Junhyuk", "BD", 70), deal("other", "Somang", "MKT", 900)], source: { kind: "mirror", asOf: null } })
     const { GET } = await import("@/app/api/admin/branch/summary/route")
-    const response = await GET(summaryRequest("?team=MKT&period=M&month=2026-10&manager=문준혁&breakdown=1"))
+    // 전체 팀(ALL) + 담당: 그 사람의 딜이 어느 팀에 있든 센다(과거 부서와 무관).
+    const response = await GET(summaryRequest("?period=M&month=2026-10&manager=문준혁&breakdown=1"))
     expect(response.status).toBe(200)
     const body = await response.json()
-    expect(body.revenue).toEqual({ confirmed: 70, goal: 100, pacing_pct: 70 })
+    expect(body.revenue).toEqual({ confirmed: 70, goal: 100, pacing_pct: 70, sheet_only_confirmed: 70, prev_confirmed: 0, ledger_included: true })
     expect(body.monthly_series.goal_cum[6]).toBe(100)
     expect(body.monthly_series.revenue_cum[6]).toBe(70)
     expect(body.dsh_breakdown).toEqual([])
     expect(body.deal_mix.by_category.reduce((sum: number, row: { actual: number }) => sum + row.actual, 0)).toBe(70)
     expect(body.deal_mix.by_category.every((row: { goal: number }) => row.goal === 0)).toBe(true)
+    // F-41: 팀을 고른 채 담당을 고르면 표처럼 팀 ∩ 담당 — MKT 에는 그 사람의 딜이 없다(목표는 개인 목표 그대로).
+    const scoped = await (await GET(summaryRequest("?team=MKT&period=M&month=2026-10&manager=문준혁"))).json()
+    expect(scoped.revenue).toMatchObject({ confirmed: 0, goal: 100, sheet_only_confirmed: 0 })
     const unmapped = await GET(summaryRequest("?period=M&month=2026-10&manager=__unmapped_current_user__"))
-    expect((await unmapped.json()).revenue).toEqual({ confirmed: 0, goal: 0, pacing_pct: 0 })
+    expect((await unmapped.json()).revenue).toMatchObject({ confirmed: 0, goal: 0, pacing_pct: 0 })
   })
 
   it("상단 확정액과 누적선은 첫결제일 공란·순액 0에서도 같은 REV 산식을 쓴다", async () => {
@@ -149,7 +166,8 @@ describe("GET /api/admin/branch/summary — dsh_breakdown", () => {
     const response = await GET(summaryRequest("?period=M&month=2026-10&view=overview"))
     expect(response.status).toBe(200)
     const data = await response.json()
-    expect(data.revenue).toEqual({ confirmed: 80, goal: 100, pacing_pct: 80 })
+    // 전월(9월) 환불 −5 는 전기 확정에 그대로(D2).
+    expect(data.revenue).toEqual({ confirmed: 80, goal: 100, pacing_pct: 80, sheet_only_confirmed: 80, prev_confirmed: -5, ledger_included: true })
     const index = data.monthly_series.months.indexOf("2026-10")
     expect(data.monthly_series.revenue_cum[index] - data.monthly_series.revenue_cum[index - 1]).toBe(80)
     expect(data.monthly_series.goal_cum[index] - data.monthly_series.goal_cum[index - 1]).toBe(100)

@@ -7,24 +7,38 @@
 // 행: Team KR(ALL) 강조 → BD/MKT/CSM(팀 행 토글로 소속 멤버 확장, 접힘 기본).
 // 열: 달성률(연간 기준, 뷰 전환과 무관하게 상시) + 연간 + Q1–Q4 + 월별.
 // Goal/Status/Gap/Rate 뷰 토글은 이 그리드 자체 상태다(수치 그리드와 독립).
+// 시트 고정 뒤(D4, summary 의 dsh_ledger): 고정 달부터 실적은 장부 확정이다 — 열 머리 '장부'·셀 title 로 밝힌다.
+// 장부 담당자가 DSH 멤버에 없으면 서버가 '미배정' 팀 행을 만든다(목표 없음 · Team KR 합계에 포함). 고정 달 한 달 동안
+// Status 뷰의 그 달 칸 아래에 시트 실적을 흐리게 둔다. 음수(환불)는 Goal·Status 에서 중립색이다(D2).
 
 import { ArrowLeftRight, ChevronDown, ChevronRight } from "lucide-react"
 import Link from "next/link"
 import { useMemo, useState } from "react"
 import { TEAMS, type BranchDshRow } from "../types"
-import { branchTeamLabel } from "@/lib/branch/current-organization"
 import {
   buildDshTeamGrid,
   DSH_CELL,
-  dshExactTitle,
+  DSH_UNASSIGNED_TITLE,
+  dshActiveSheetCompare,
+  dshCompareTitle,
+  dshGapTitle,
+  dshLedgerColumnTitle,
+  dshQuarterMonthKeys,
   dshRate,
-  dshRateTitle,
+  dshRateTitleFor,
   dshRateToneClass,
+  dshStatusSource,
+  dshTeamLabel,
+  dshValueTitle,
   emptyDshNumbers,
   formatDshRate,
   formatDshThousands,
+  isDshLedgerMonth,
+  isDshUnassignedTeam,
   subtractDshNumbers,
+  type BranchDshLedgerInfo,
   type DshNumbers,
+  type DshStatusSource,
   type DshTeamGridMember,
   type DshTeamGridTeam,
 } from "./dsh-derive"
@@ -38,10 +52,28 @@ const VIEW_OPTIONS: Array<{ id: DshGridView; label: string }> = [
   { id: "rate", label: "Rate" },
 ]
 
-// 팀 라벨 — ALL은 시트 표기(Team KR)를 따른다.
-function teamLabel(team: string): string {
-  return team === "ALL" ? "Team KR" : branchTeamLabel(team)
+// 팀 라벨 — ALL은 시트 표기(Team KR), 미배정은 "DSH 밖 담당 · 미배정"(dsh-derive dshTeamLabel 단일 소스).
+const teamLabel = dshTeamLabel
+
+// 셀 자리(연간·분기·월) — 장부 달을 걸치는지 보고 title 출처를 정한다.
+type CellSlot = { kind: "annual" } | { kind: "quarter"; index: number } | { kind: "month"; ym: string }
+
+// 셀 표기 문맥 — 뷰·장부 정보·고정 달 비교값. 장부 정보가 없으면 지금 문구 그대로다.
+interface CellContext {
+  view: DshGridView
+  ledger: BranchDshLedgerInfo | null
+  /** 고정 달(비교 달) — Status 뷰에서 고정 달 동안만. */
+  compareMonth: string | null
 }
+
+function slotSource(context: CellContext, monthKeys: string[], slot: CellSlot): DshStatusSource {
+  if (context.view === "goal") return "sheet"
+  const months =
+    slot.kind === "month" ? [slot.ym] : slot.kind === "quarter" ? dshQuarterMonthKeys(monthKeys, slot.index) : monthKeys
+  return dshStatusSource(context.ledger, months)
+}
+
+const SHEET_CONTEXT: CellContext = { view: "status", ledger: null, compareMonth: null }
 
 // 입력 진입점(기획 2026-09-20 §8.4 DSH 행: "입력 진입점이 0개") — 팀 그리드는 읽기 전용이라
 // REV 렌즈로 팀 필터까지 동봉해 넘긴다. 같은 라우트 딥링크라 워크벤치의 URL 동기화(마운트 +
@@ -76,23 +108,43 @@ function numbersForView(
 }
 
 // 금액 셀 묶음(연간+Q1–Q4+월별) — DshNumericGrid numericCells와 같은 규약
-// (단위 천 + 원값 title + 음수 빨강). numbers가 null이면 전 칸 "–".
-function amountCells(numbers: DshNumbers | null, monthKeys: string[], extra = "") {
-  const tone = (value: number) => (value < 0 ? "text-[#B43E3E]" : "")
-  const cell = (value: number | null, key: string, cellExtra: string) => (
-    <td
-      key={key}
-      className={`${DSH_CELL} ${value == null ? "text-[#C9C5BF]" : `cursor-help ${tone(value)}`} ${cellExtra}`}
-      {...(value == null ? {} : { title: dshExactTitle(value) })}
-    >
-      {value == null ? "–" : formatDshThousands(value)}
-    </td>
-  )
+// (단위 천 + 원값 title + Gap 음수 빨강). numbers가 null이면 전 칸 "–".
+// sheetCompare: 고정 달 동안 Status 뷰의 그 달 칸 아래 시트 실적(흐리게).
+function amountCells(
+  numbers: DshNumbers | null,
+  monthKeys: string[],
+  extra = "",
+  context: CellContext = SHEET_CONTEXT,
+  sheetCompare: number | null = null,
+) {
+  // Gap 음수 = 목표 미달(빨강). Goal·Status 의 음수(환불)는 중립색(D2).
+  const tone = (value: number) => (context.view === "gap" && value < 0 ? "text-[#B43E3E]" : "")
+  const titleOf = (value: number, slot: CellSlot) => {
+    const source = slotSource(context, monthKeys, slot)
+    return context.view === "gap" ? dshGapTitle(value, source) : dshValueTitle(value, source)
+  }
+  const cell = (value: number | null, key: string, cellExtra: string, slot: CellSlot) => {
+    const compare = value != null && slot.kind === "month" && slot.ym === context.compareMonth ? sheetCompare : null
+    return (
+      <td
+        key={key}
+        className={`${DSH_CELL} ${value == null ? "text-[#C9C5BF]" : `cursor-help ${tone(value)}`} ${cellExtra}`}
+        {...(value == null ? {} : { title: compare != null ? dshCompareTitle(value, compare) : titleOf(value, slot) })}
+      >
+        {value == null ? "–" : formatDshThousands(value)}
+        {compare != null && (
+          <span className="block text-[10px] font-normal text-[#A39E98]">시트 {formatDshThousands(compare)}</span>
+        )}
+      </td>
+    )
+  }
   return (
     <>
-      {cell(numbers ? numbers.annual : null, "annual", extra)}
-      {[0, 1, 2, 3].map((index) => cell(numbers ? numbers.quarters[index] ?? 0 : null, `q${index}`, extra || "bg-[#FBFAF7]"))}
-      {monthKeys.map((ym) => cell(numbers ? numbers.months[ym] ?? 0 : null, ym, extra))}
+      {cell(numbers ? numbers.annual : null, "annual", extra, { kind: "annual" })}
+      {[0, 1, 2, 3].map((index) =>
+        cell(numbers ? numbers.quarters[index] ?? 0 : null, `q${index}`, extra || "bg-[#FBFAF7]", { kind: "quarter", index }),
+      )}
+      {monthKeys.map((ym) => cell(numbers ? numbers.months[ym] ?? 0 : null, ym, extra, { kind: "month", ym }))}
     </>
   )
 }
@@ -102,14 +154,15 @@ function rateCellsFor(
   entry: { goal: DshNumbers | null; status: DshNumbers | null },
   monthKeys: string[],
   extra = "",
+  context: CellContext = SHEET_CONTEXT,
 ) {
-  const cell = (statusValue: number, goalValue: number, key: string, cellExtra: string) => {
+  const cell = (statusValue: number, goalValue: number, key: string, cellExtra: string, slot: CellSlot) => {
     const pct = dshRate(statusValue, goalValue)
     return (
       <td
         key={key}
         className={`${DSH_CELL} cursor-help ${dshRateToneClass(pct)} ${cellExtra}`}
-        title={dshRateTitle(statusValue, goalValue)}
+        title={dshRateTitleFor(statusValue, goalValue, slotSource(context, monthKeys, slot))}
       >
         {formatDshRate(pct)}
       </td>
@@ -117,22 +170,29 @@ function rateCellsFor(
   }
   return (
     <>
-      {cell(entry.status?.annual ?? 0, entry.goal?.annual ?? 0, "annual", extra)}
+      {cell(entry.status?.annual ?? 0, entry.goal?.annual ?? 0, "annual", extra, { kind: "annual" })}
       {[0, 1, 2, 3].map((index) =>
-        cell(entry.status?.quarters[index] ?? 0, entry.goal?.quarters[index] ?? 0, `q${index}`, extra || "bg-[#FBFAF7]"),
+        cell(entry.status?.quarters[index] ?? 0, entry.goal?.quarters[index] ?? 0, `q${index}`, extra || "bg-[#FBFAF7]", {
+          kind: "quarter",
+          index,
+        }),
       )}
-      {monthKeys.map((ym) => cell(entry.status?.months[ym] ?? 0, entry.goal?.months[ym] ?? 0, ym, extra))}
+      {monthKeys.map((ym) => cell(entry.status?.months[ym] ?? 0, entry.goal?.months[ym] ?? 0, ym, extra, { kind: "month", ym }))}
     </>
   )
 }
 
 // 상시 달성률(연간) 셀 — 뷰 전환과 무관하게 항상 노출한다(팀별 검수의 기준점).
-function annualRateCell(entry: { goal: DshNumbers | null; status: DshNumbers | null }, extra = "") {
+function annualRateCell(
+  entry: { goal: DshNumbers | null; status: DshNumbers | null },
+  extra = "",
+  source: DshStatusSource = "sheet",
+) {
   const status = entry.status?.annual ?? 0
   const goal = entry.goal?.annual ?? 0
   const pct = dshRate(status, goal)
   return (
-    <td className={`${DSH_CELL} cursor-help font-bold ${dshRateToneClass(pct)} ${extra}`} title={dshRateTitle(status, goal)}>
+    <td className={`${DSH_CELL} cursor-help font-bold ${dshRateToneClass(pct)} ${extra}`} title={dshRateTitleFor(status, goal, source)}>
       {formatDshRate(pct)}
     </td>
   )
@@ -142,9 +202,13 @@ interface DshTeamGridProps {
   personalManager?: string
   rows: BranchDshRow[]
   loading?: boolean
+  /** 시트 고정 뒤 장부 실적 표기(summary 의 dsh_ledger). null·없음 = 지금 그대로. */
+  ledger?: BranchDshLedgerInfo | null
+  /** 테스트용 "오늘" 고정 — 고정 달 비교 표시 판정에 쓴다. */
+  now?: Date
 }
 
-export function DshTeamGrid({ rows, loading = false, personalManager }: DshTeamGridProps) {
+export function DshTeamGrid({ rows, loading = false, personalManager, ledger = null, now: fixedNow }: DshTeamGridProps) {
   // 기본 뷰는 Status — 상시 달성률(연간) 열이 목표 대비 판정을 이미 깔고 있어,
   // 팀별 검수에서 먼저 확인하는 건 실적 절대치다(Goal은 토글 한 번).
   const [view, setView] = useState<DshGridView>("status")
@@ -153,6 +217,16 @@ export function DshTeamGrid({ rows, loading = false, personalManager }: DshTeamG
 
   const grid = useMemo(() => buildDshTeamGrid(rows), [rows])
   const { monthKeys, teams } = grid
+  const now = useMemo(() => fixedNow ?? new Date(), [fixedNow])
+  // 고정 달 한 달 동안 Status 뷰에서만 — 그 달 칸 아래 시트 팀·멤버 실적(흐리게).
+  const sheetCompare = view === "status" ? dshActiveSheetCompare(ledger, now) : null
+  const context: CellContext = { view, ledger, compareMonth: sheetCompare?.month ?? null }
+  const annualSource = dshStatusSource(ledger, monthKeys)
+  const compareOf = (kind: "team" | "member", name: string): number | null => {
+    if (!sheetCompare) return null
+    const value = kind === "team" ? sheetCompare.byTeam[name] : sheetCompare.byMember[name]
+    return value ?? null
+  }
 
   const toggleTeam = (team: string) => {
     setExpandedTeams((current) => {
@@ -224,14 +298,31 @@ export function DshTeamGrid({ rows, loading = false, personalManager }: DshTeamG
                     </th>
                   ))}
                   {monthKeys.map((ym) => (
-                    <th key={ym} className={`${DSH_CELL} bg-[#F6F5F4] font-bold`}>
+                    <th
+                      key={ym}
+                      className={`${DSH_CELL} bg-[#F6F5F4] font-bold`}
+                      {...(ledger && isDshLedgerMonth(ledger, ym) ? { title: dshLedgerColumnTitle(ledger) } : {})}
+                    >
                       {`${Number(ym.slice(5))}월`}
+                      {isDshLedgerMonth(ledger, ym) && (
+                        <span className="ml-1 text-[9px] font-semibold normal-case tracking-normal text-[#A39E98]">장부</span>
+                      )}
                     </th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {personalManager ? teams.flatMap(team => team.members).map(member => <MemberRow key={member.member} member={member} view={view} monthKeys={monthKeys} />) : teams.map((team) => (
+                {personalManager ? teams.flatMap(team => team.members).map(member => (
+                  <MemberRow
+                    key={member.member}
+                    member={member}
+                    view={view}
+                    monthKeys={monthKeys}
+                    context={context}
+                    annualSource={annualSource}
+                    sheetCompare={compareOf("member", member.member)}
+                  />
+                )) : teams.map((team) => (
                   <TeamRows
                     key={team.team}
                     team={team}
@@ -239,6 +330,9 @@ export function DshTeamGrid({ rows, loading = false, personalManager }: DshTeamG
                     monthKeys={monthKeys}
                     expanded={expandedTeams.has(team.team)}
                     onToggle={() => toggleTeam(team.team)}
+                    context={context}
+                    annualSource={annualSource}
+                    sheetCompareOf={compareOf}
                   />
                 ))}
               </tbody>
@@ -256,12 +350,19 @@ function TeamRows({
   monthKeys,
   expanded,
   onToggle,
+  context = SHEET_CONTEXT,
+  annualSource = "sheet",
+  sheetCompareOf = () => null,
 }: {
   team: DshTeamGridTeam
   view: DshGridView
   monthKeys: string[]
   expanded: boolean
   onToggle: () => void
+  context?: CellContext
+  annualSource?: DshStatusSource
+  /** 고정 달 시트 실적(비교) — 팀·멤버 이름으로. */
+  sheetCompareOf?: (kind: "team" | "member", name: string) => number | null
 }) {
   const isAll = team.team === "ALL"
   // Team KR(ALL) 행은 기존 Team KR · Total 행 스타일로 강조 — 달성률 셀은 판정 색을
@@ -273,13 +374,20 @@ function TeamRows({
   const hasMembers = team.members.length > 0
   const cells =
     view === "rate"
-      ? rateCellsFor(team, monthKeys, emphasis)
-      : amountCells(numbersForView(view, team, monthKeys), monthKeys, isAll ? `${emphasis} text-[#084734]` : "")
+      ? rateCellsFor(team, monthKeys, emphasis, context)
+      : amountCells(
+          numbersForView(view, team, monthKeys),
+          monthKeys,
+          isAll ? `${emphasis} text-[#084734]` : "",
+          context,
+          sheetCompareOf("team", team.team),
+        )
+  const unassigned = isDshUnassignedTeam(team.team)
 
   return (
     <>
       <tr>
-        <td className={labelClass}>
+        <td className={labelClass} {...(unassigned ? { title: DSH_UNASSIGNED_TITLE } : {})}>
           {hasMembers ? (
             <button
               type="button"
@@ -301,12 +409,20 @@ function TeamRows({
           )}
           <RevLensLink team={team.team} />
         </td>
-        {annualRateCell(team, emphasis)}
+        {annualRateCell(team, emphasis, annualSource)}
         {cells}
       </tr>
       {expanded &&
         team.members.map((member) => (
-          <MemberRow key={member.member} member={member} view={view} monthKeys={monthKeys} />
+          <MemberRow
+            key={member.member}
+            member={member}
+            view={view}
+            monthKeys={monthKeys}
+            context={context}
+            annualSource={annualSource}
+            sheetCompare={sheetCompareOf("member", member.member)}
+          />
         ))}
     </>
   )
@@ -316,21 +432,27 @@ function MemberRow({
   member,
   view,
   monthKeys,
+  context = SHEET_CONTEXT,
+  annualSource = "sheet",
+  sheetCompare = null,
 }: {
   member: DshTeamGridMember
   view: DshGridView
   monthKeys: string[]
+  context?: CellContext
+  annualSource?: DshStatusSource
+  sheetCompare?: number | null
 }) {
   const cells =
     view === "rate"
-      ? rateCellsFor(member, monthKeys, "bg-[#FAFAF8]")
-      : amountCells(numbersForView(view, member, monthKeys), monthKeys, "bg-[#FAFAF8]")
+      ? rateCellsFor(member, monthKeys, "bg-[#FAFAF8]", context)
+      : amountCells(numbersForView(view, member, monthKeys), monthKeys, "bg-[#FAFAF8]", context, sheetCompare)
   return (
     <tr>
       <td className={`${DSH_CELL} sticky left-0 z-[1] bg-[#FAFAF8] text-left`}>
         <span className="pl-5 text-[11px] font-semibold text-[#615D59]">{member.member}</span>
       </td>
-      {annualRateCell(member, "bg-[#FAFAF8]")}
+      {annualRateCell(member, "bg-[#FAFAF8]", annualSource)}
       {cells}
     </tr>
   )

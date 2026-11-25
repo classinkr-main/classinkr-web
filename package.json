@@ -31,6 +31,7 @@
     "measure:admin": "node scripts/measure-admin-api.mjs",
     "check:team-calendar": "node scripts/check-team-calendar-access.mjs",
     "rev:row-ids": "npx tsx scripts/assign-rev-row-ids.ts",
+    "rev:reconcile": "npx --node-options=--conditions=react-server tsx scripts/reconcile-rev-ledger.ts",
     "check:google-ads": "node scripts/check-google-ads-access.mjs"
   },
   "dependencies": {

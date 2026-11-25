@@ -6,7 +6,10 @@ vi.mock("@/lib/admin-auth", () => ({
   requireVerifiedAdminContext: mocks.auth,
   CRM_STAFF_ADMIN_API_ROLES: ["ADMIN", "BRANCH"],
 }))
-vi.mock("@/lib/branch/read-rev-deals", () => ({ readRevDealsPreferActive: mocks.read }))
+// D1: REV 딜은 시트 행 + 장부 항목(lib/branch/ledger-revenue.ts) — 그 읽기가 실패하면 그대로 던진다.
+vi.mock("@/lib/branch/ledger-revenue", () => ({
+  readLedgerRevenueDeals: async () => ({ deals: await mocks.read() }),
+}))
 
 import { GET } from "@/app/api/admin/crm/performance/route"
 

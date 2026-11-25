@@ -198,37 +198,24 @@ function ValueSkeleton({ className = "h-6 w-24" }: { className?: string }) {
   )
 }
 
-// 품질 감사 2026-09-10 — #1(P0): 장부 수기 입력·정정이 이 화면에 반영되지 않는 이중 진실을
-// 운영자가 항상 인지하게 하는 배지. 위 warnings 배너(데이터 조회 실패 등)와 톤은 같은 amber
-// 계열이지만 문구·아이콘(AlertCircle)을 분리해 "조회 실패"와 "구조적 미반영"을 혼동하지 않게 한다.
-// 라운드 5 S-7: 신규(장부에서 만든 행 — 이 화면에 아예 없는 매출)와 정정(시트 행 대체값 — 이 화면은 정정 전
-// 값을 보임)을 나눠 말한다. 예전엔 정정 대체값까지 금액에 더해 "빠진 매출"이 과대하게 읽혔고, 장부의
-// "장부 가감" 타일(신규만)과 정의가 달랐다. 링크는 장부의 적용 초안 원천만·회계연도 전체로 연다.
-// REV 시트 쓰기(ADR-011): 반영 때 '2. REV' 에도 쓴 정정은 그 뒤 동기화가 돌면 이 화면에 이미 들어와 있어
-// 서버(computeManualLedgerGap)가 미반영 수에서 뺀다 — 배너가 그 사실을 한 문장으로 말한다.
+// 장부 입력 안내(D1, 2026-11-25). 2026-09-10 에는 이 화면이 장부 수기 입력·정정을 볼 수 없어 amber "미반영" 경고였다.
+// 이제 이 화면 매출은 시트 행 + 장부 항목(lib/admin-crm-revenue-sheet.ts 장부 오버레이 — 장부 화면과 같은 규칙)이라 같은 수를
+// "포함" 안내로 조용히 보인다(경고 톤·아이콘 없음). 신규(장부에서 만든 행)와 정정(시트 행의 그 달 대체)을 나눠 말하고,
+// 시트에 쓴 정정 중 다음 동기화가 이미 읽은 것은 서버(computeManualLedgerGap)가 뺀다. 링크는 장부의 적용 초안 원천만·
+// 회계연도 전체·열 필터 없이(cf=none) 연다.
 function ManualLedgerGapBanner({ gap }: { gap: AdminCrmRevenueSheetManualLedgerGap }) {
   const newCount = gap.newCount ?? gap.count
   const editCount = gap.editCount ?? 0
   const newAmount = gap.newAmount ?? gap.amount
   return (
-    <div role="status" className="mb-6 flex flex-wrap items-center gap-2 border-l-2 border-amber-200 bg-amber-50/60 px-3 py-2 text-[13px] text-amber-800">
-      <AlertCircle className="h-4 w-4 shrink-0" />
+    <div role="status" className="mb-6 flex flex-wrap items-center gap-2 border-l-2 border-[#e8e8e4] px-3 py-2 text-[13px] text-[#1a1a1a]/60">
       <span>
-        장부에서 적용한 수기 입력이 이 화면에 반영되지 않았습니다 —{" "}
-        {newCount > 0 ? (
-          <>
-            신규 <strong className="font-bold">{formatNumber(newCount)}건</strong>({formatCny(newAmount)} 이 화면 합계 밖)
-          </>
-        ) : null}
-        {newCount > 0 && editCount > 0 ? " · " : null}
-        {editCount > 0 ? (
-          <>
-            정정 <strong className="font-bold">{formatNumber(editCount)}건</strong>(이 화면은 정정 전 값)
-          </>
-        ) : null}
-        {" "}· 최근 적용 {formatDate(gap.latestAppliedAt)}. 시트(2. REV)에도 쓴 정정은 다음 동기화 뒤 이 화면에 들어와 이 수에서 빠집니다.
+        <strong className="font-semibold text-[#111110]">장부 입력 {formatNumber(gap.count)}건 포함</strong>
+        {newCount > 0 ? <> · 신규 {formatNumber(newCount)}건({formatCny(newAmount)})</> : null}
+        {editCount > 0 ? <> · 정정 {formatNumber(editCount)}건</> : null}
+        {" "}· 최근 적용 {formatDate(gap.latestAppliedAt)}
       </span>
-      <Link href={LEDGER_MANUAL_ENTRIES_HREF} className="ml-auto inline-flex items-center gap-1 font-semibold underline underline-offset-2 hover:text-amber-900">
+      <Link href={LEDGER_MANUAL_ENTRIES_HREF} className="ml-auto inline-flex items-center gap-1 font-semibold text-[#111110] underline underline-offset-2">
         장부에서 확인 <ArrowRight className="h-3.5 w-3.5" />
       </Link>
     </div>
@@ -720,7 +707,7 @@ export default function AdminCrmRevenueSheetPage() {
                   <div className="min-w-0">
                     <p className="line-clamp-2 text-[13px] font-semibold text-[#111110]">{row.customerName}</p>
                     <p className="mt-0.5 text-[11px] text-[#1a1a1a]/40">
-                      #{row.sheetRow}
+                      {row.ledgerEntry ? "장부 입력" : `#${row.sheetRow}`}
                       {row.placeholder ? <span className="ml-1 font-semibold text-[#B85C33]">임시명</span> : null}
                       {" · "}
                       {[row.team, row.manager, row.region].filter(Boolean).join(" · ") || "-"}
@@ -841,7 +828,7 @@ export default function AdminCrmRevenueSheetPage() {
                 visibleRows.slice(0, visibleLimit).map((row) => (
                   <tr key={row.id} className="align-top">
                     <td className="py-4 pr-4">
-                      <p className="text-[12px] font-semibold text-[#111110]">#{row.sheetRow}</p>
+                      <p className="text-[12px] font-semibold text-[#111110]">{row.ledgerEntry ? "장부 입력" : `#${row.sheetRow}`}</p>
                       {row.placeholder ? <p className="mt-1 text-[10.5px] font-semibold text-[#B85C33]">임시명</p> : null}
                     </td>
                     <td className="py-4 pr-4">

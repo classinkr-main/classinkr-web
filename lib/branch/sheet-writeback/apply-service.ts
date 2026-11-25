@@ -35,12 +35,11 @@ import {
   applyBranchSalesLedgerDraftIfUnchanged,
   fetchBranchSalesLedgerDraftById,
   findActiveManualEditEntries,
+  findActiveManualEditEntriesByRowIds,
   isBranchSalesLedgerDraftChangedError,
   isBranchSalesLedgerDraftsNotReadyError,
   isBranchSalesLedgerDuplicateActiveCorrectionError,
   isBranchSalesLedgerNonPositiveAmountError,
-  LEDGER_LIST_MAX,
-  listBranchSalesLedgerEntries,
   type BranchSalesLedgerDraft,
 } from "@/lib/repositories/branch-sales-ledger-drafts"
 import {
@@ -160,13 +159,15 @@ async function concurrentlyAppliedDraft(id: string): Promise<BranchSalesLedgerDr
  * 없으면 조회도 하지 않는다. 시트에 쓴 정정은 세지 않는다(감사 표 조회 — 표가 없으면 시트에 쓴 적도 없다).
  * 조회 실패는 던진다(호출부가 fail closed).
  *
- * 활성 항목은 장부 목록 조회(상한 LEDGER_LIST_MAX, 최근 반영 순)로 읽는다 — 활성 항목이 상한을 넘으면 오래된 정정은
- * 이 검사에서 빠지고 기존 SQL 검사(딜 id)만 남는다(전용 조회는 저장소 묶음의 몫).
+ * 활성 정정은 (Row ID, 월) 쌍으로 좁힌 전용 조회(findActiveManualEditEntriesByRowIds)로 읽는다 — 목록 상한 없이
+ * 후보 쌍에 겹치는 항목만 가져온다.
  */
 async function draftsWithActiveRowCorrection(drafts: BranchSalesLedgerDraft[]): Promise<Set<string>> {
   const candidates = drafts.filter((draft) => draft.kind === "edit-row" && snapshotRowId(draft.sourceSnapshot) != null)
   if (candidates.length === 0) return new Set()
-  const { entries } = await listBranchSalesLedgerEntries({ limit: LEDGER_LIST_MAX })
+  const entries = await findActiveManualEditEntriesByRowIds(
+    candidates.map((draft) => ({ rowId: snapshotRowId(draft.sourceSnapshot)!, month: draft.month })),
+  )
   const clashing = clashingEntryDraftIds(candidates, entries)
   const sheetWritten = new Set<string>()
   if (clashing.length > 0) {

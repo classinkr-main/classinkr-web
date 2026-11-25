@@ -7,8 +7,8 @@
 import type { KeyboardEvent as ReactKeyboardEvent, MutableRefObject } from "react"
 import { ArrowDownNarrowWide, ArrowUpNarrowWide, X } from "lucide-react"
 import { formatMoney } from "@/lib/branch/ledger-format"
-import { ledgerMonthSplit } from "@/lib/branch/computations/revenue-core"
-import { fiscalQuarter } from "@/lib/branch/fiscal"
+import { isZeroLedgerBucket, ledgerMonthBucket } from "@/lib/branch/computations/revenue-core"
+import { businessFy, businessQuarter, businessYm, fiscalQuarter, fiscalYearOfYm } from "@/lib/branch/fiscal"
 import { snapshotSheetRowId, snapshotText } from "@/lib/branch/ledger-draft-metadata"
 import { createSheetRowResolver } from "@/lib/branch/ledger-overlay"
 import {
@@ -24,7 +24,7 @@ import {
   metadataString,
   rowMonthAmount,
   rowMonthConfirmed,
-  rowMonthHighConfidence,
+  rowMonthNet,
   rowProductCategory,
   rowWeeklyMismatch,
   rowWeeklySplit,
@@ -279,35 +279,49 @@ function clearStoredRevDbImport() {
   }
 }
 
+// Date.UTC 로 만든 달 시작 Date → 'YYYY-MM'(UTC 게터). YYYY-MM 산술 전용이다 — '지금'을 달로 바꿀 때는 쓰지 않는다
+// (매월 1일 00:00~08:59 KST 에 지난달로 읽힌다, F-10). 지금의 달은 businessMonthKey.
 function ymKeyUtc(date: Date): string {
   return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`
 }
 
-// 시간 게이트(2026-07-20): '미연결' 칩은 미래 '예정' 매출만 있는 계정엔 아직 안 띄운다 —
-// cutoffMonth(보통 이번 달) 이하 달에 확정 매출이 잡혀야 띄운다. 미래 달은 예측치라
-// 안 맞아도 정상이라 검사 대상에서 뺀다(월 키가 YYYY-MM zero-pad라 문자열 비교로 충분).
-function hasConfirmedThroughMonth(monthlyTotals: Record<string, RevMonthlyBucket>, cutoffMonth: string): boolean {
-  return Object.entries(monthlyTotals).some(([month, bucket]) => month <= cutoffMonth && bucket.confirmed > 0)
+/**
+ * '오늘'(KST 영업일) — 장부 화면의 이번 달·회계연도·분기는 이것 하나로 정한다(F-10·F-11).
+ *  - 'YYYY-MM-DD' 또는 'YYYY-MM' 문자열: 그 날(달)로 본다(시간대 없는 순수 산술).
+ *  - Date: 그 순간의 KST 영업일(lib/branch/fiscal businessYm).
+ * 생략하면 지금(new Date())의 KST 영업일 — 호출부는 탭을 밤새 열어 둔 경우(F-11)를 위해 상태로 들고 있는 오늘을 넘긴다.
+ */
+export type LedgerToday = Date | string
+
+function todayYm(today: LedgerToday): string {
+  if (typeof today === "string") return today.slice(0, 7)
+  return businessYm(today)
 }
 
-function fiscalYearOf(date: Date): number {
-  const month = date.getUTCMonth() + 1
-  return month >= 4 ? date.getUTCFullYear() : date.getUTCFullYear() - 1
+/** 지금(또는 today)의 KST 영업월 'YYYY-MM' — 선택월 기본값·'이번 달로' 판정용(ymKeyUtc 대신). */
+function businessMonthKey(today: LedgerToday = new Date()): string {
+  return todayYm(today)
+}
+
+/** today(KST 영업일)의 회계연도(4월 시작). */
+function fiscalYearOf(today: LedgerToday = new Date()): number {
+  return typeof today === "string" ? fiscalYearOfYm(todayYm(today)) : businessFy(today)
 }
 
 // FY 라벨(품질 웨이브 3, 항목 4) — fiscalYearOf 기반 "FY{시작}-{종료}" 2자리 문자열.
 // 브레드크럼·기간 라벨 2곳의 "FY26-27" 하드코딩을 대체하는 단일 계산원 — 회계연도가
-// 바뀌어도 코드 수정 없이 자동으로 다음 연도 라벨을 보여준다.
-function fiscalYearLabel(date: Date): string {
-  const fy = fiscalYearOf(date)
+// 바뀌어도 코드 수정 없이 자동으로 다음 연도 라벨을 보여준다. today 는 KST 영업일(fiscalYearOf).
+function fiscalYearLabel(today: LedgerToday = new Date()): string {
+  const fy = fiscalYearOf(today)
   const startYY = String(fy % 100).padStart(2, "0")
   const endYY = String((fy + 1) % 100).padStart(2, "0")
   return `FY${startYY}-${endYY}`
 }
 
-function buildFiscalMonthOptions(now: Date) {
-  const fy = fiscalYearOf(now)
-  const current = ymKeyUtc(now)
+/** 이번 회계연도 열두 달 선택지 — today(KST 영업일)의 회계연도, current = today 의 달. */
+function buildFiscalMonthOptions(today: LedgerToday = new Date()) {
+  const fy = fiscalYearOf(today)
+  const current = todayYm(today)
   return FISCAL_MONTH_LABELS.map((rawMonth) => {
     const month = Number(rawMonth)
     const value = `${month >= 4 ? fy : fy + 1}-${String(month).padStart(2, "0")}`
@@ -410,20 +424,21 @@ function FilterTag({ label, onClear }: { label: string; onClear: () => void }) {
   )
 }
 
-function rowMonthOpen(row: LedgerRevenueRow, month: string) {
-  return ledgerMonthSplit(row, month, rowMonthAmount(row, month)).expected
+function rowMonthOpen(row: LedgerRevenueRow, month: string, today?: string) {
+  return ledgerMonthBucket(row, month, today).open
 }
 
 // ── 웨이브 5: 장부 기간(M/Q/Y) UX 확장 — 순수 함수만 (tests/branch가 렌더 없이 직접 구동) ──
 
-// 기간 토글이 가리키는 회계월 목록. Q는 "선택월의 분기"가 아니라 "오늘(now) 기준 회계분기"다 —
-// periodLabel("현재 분기")·서버 summary API(period=Q가 selectedMonth를 무시하고 fiscalQuarter(now)만
+// 기간 토글이 가리키는 회계월 목록. Q는 "선택월의 분기"가 아니라 "오늘(today) 기준 회계분기"다 —
+// periodLabel("현재 분기")·서버 summary API(period=Q가 selectedMonth를 무시하고 지금의 회계분기만
 // 쓰는 관례)와 동일하게 맞춘다. M은 항상 [selectedMonth] 단일 원소 — 기존 selectedMonth 단일월
-// 집계와 정확히 같은 모집단이 되어 회귀가 없다. now는 테스트에서 실제 시계에 기대지 않도록 주입 가능.
-export function buildPeriodMonths(period: Period, selectedMonth: string, matrixMonths: string[], now: Date = new Date()): string[] {
+// 집계와 정확히 같은 모집단이 되어 회귀가 없다. today 는 KST 영업일(F-10 — 서버 resolvePeriodDate 와 같은 날)이고
+// 테스트에서 실제 시계에 기대지 않도록 주입 가능('YYYY-MM-DD' 문자열 또는 Date).
+export function buildPeriodMonths(period: Period, selectedMonth: string, matrixMonths: string[], today: LedgerToday = new Date()): string[] {
   if (period === "Y") return matrixMonths
   if (period === "Q") {
-    const quarter = fiscalQuarter(now.getUTCMonth() + 1)
+    const quarter = typeof today === "string" ? fiscalQuarter(Number(todayYm(today).slice(5, 7))) : businessQuarter(today)
     return matrixMonths.filter((month) => fiscalQuarter(Number(month.split("-")[1])) === quarter)
   }
   return [selectedMonth]
@@ -442,17 +457,17 @@ export function periodShortLabel(period: Period, selectedMonth: string, periodMo
   return `${Number(selectedMonth.split("-")[1])}월`
 }
 
-// 담당자별 기간 집계(품질 철칙: 확도 티어 합산은 rowMonthAmount/rowMonthConfirmed/
-// rowMonthHighConfidence를 월 단위로 호출해 합산만 — 새 확도 산식 금지). 금액은 월별로 실제로
+// 담당자별 기간 집계(품질 철칙: 확도 티어 합산은 장부 매출 버킷 rowMonthBucket 을 월 단위로 호출해 합산만 — 새 확도
+// 산식 금지). 부호 그대로(D2 — 환불 달은 빼고, 네 값이 모두 0 인 달만 건너뛴다). 금액은 월별로 실제로
 // 서로 다른 매출이라 월 3개를 더해도 이중계상이 아니다. 건수(rows)만 딜 id로 dedupe한다 —
 // 같은 딜이 분기 3개월 모두에 금액이 있어도 "1건"으로 세야 "N명의 담당자가 M건을 진행"이라는
 // 의미가 유지된다(월별로 세면 3배 부풀려진다).
-export function aggregatePeriodManagerSummaries(rows: LedgerRevenueRow[], months: string[]): RevManagerSummary[] {
+export function aggregatePeriodManagerSummaries(rows: LedgerRevenueRow[], months: string[], today?: string): RevManagerSummary[] {
   const managers = new Map<string, RevManagerSummary & { rowIds: Set<string> }>()
   for (const month of months) {
     for (const row of rows) {
-      const total = rowMonthAmount(row, month)
-      if (total <= 0) continue
+      const bucket = rowMonthBucket(row, month, today)
+      if (isZeroLedgerBucket(bucket)) continue
       const manager = row.manager ?? "미지정"
       const current = managers.get(manager) ?? {
         manager,
@@ -463,10 +478,10 @@ export function aggregatePeriodManagerSummaries(rows: LedgerRevenueRow[], months
         rows: 0,
         rowIds: new Set<string>(),
       }
-      current.total += total
-      current.confirmed += rowMonthConfirmed(row, month)
-      current.highConfidence += rowMonthHighConfidence(row, month)
-      current.open += rowMonthOpen(row, month)
+      current.total += bucket.total
+      current.confirmed += bucket.confirmed
+      current.highConfidence += bucket.high
+      current.open += bucket.open
       current.rowIds.add(row.id)
       managers.set(manager, current)
     }
@@ -483,8 +498,9 @@ export interface PeriodComparisonChip {
 
 // 전기 대비 칩(웨이브 5, 항목 3) — 이전 기간 확정 합계를 REV rows에서 직접 구한다(matrixMonths가
 // 회계연도 12개월을 이미 다 갖고 있어 서버 재조회가 필요 없다). 확정 합산도 위와 동일하게
-// rowMonthConfirmed를 월 단위로만 호출한다. FY 경계를 벗어나는 이전 기간(4월의 전월, Q1의
-// 전분기)이거나 이전 기간 합이 0이면 null을 반환해 렌더 자체를 생략시킨다 — 거짓 0%를 보여주지
+// rowMonthConfirmed(장부 매출 버킷의 확정 — 부호 그대로)를 월 단위로만 호출한다. rows 는 타일과 같은 모집단
+// (팀·담당 1명)을 넘긴다. FY 경계를 벗어나는 이전 기간(4월의 전월, Q1의
+// 전분기)이거나 이전 기간 합이 0 이하이면 null을 반환해 렌더 자체를 생략시킨다 — 거짓 0%를 보여주지
 // 않는다(DealMixSection의 prev_period_available 가드와 동일한 원칙, 그 파일은 참고만 하고 손대지 않음).
 // Y는 비교 대상(전년 FY)이 로드돼 있지 않아 항상 미지원.
 export function buildPrevPeriodComparison(
@@ -522,14 +538,11 @@ export function buildPrevPeriodComparison(
   return { label, deltaPct: ((currentActual - prevConfirmed) / prevConfirmed) * 100 }
 }
 
-// 매트릭스 1행×1월 파생값을 한 번에. rowMonthAmount를 4번 부르던 것을 1번으로 줄여
-// 12개월×수백행 반복(그룹 소계·그랜드토탈)에서 재계산을 억제한다. total=confirmed+high+open 불변식
-// (캐논 splitMonthConfidence가 클램프로 보장).
-function rowMonthBucket(row: LedgerRevenueRow, month: string): RevMonthlyBucket {
-  const total = rowMonthAmount(row, month)
-  if (total <= 0) return { total: 0, confirmed: 0, high: 0, open: 0 }
-  const split = ledgerMonthSplit(row, month, total)
-  return { total, confirmed: split.confirmed, high: split.highConfidence, open: split.expected }
+// 매트릭스 1행×1월 파생값을 한 번에 — 장부 매출 한 정의(D1·D2)의 버킷(revenue-core ledgerMonthBucket) 그대로다.
+// 부호 그대로(환불 달은 total < 0, 순액 0 상계 달은 네 값 0 — 값 없음), total=confirmed+high+open 불변식.
+// 시트 칸·합계 행·결과 줄·기관별/매니저별·요약 띠·REV 매트릭스가 모두 이 값을 쓴다. today: 확도를 읽는 날(KST, 생략 = 오늘).
+function rowMonthBucket(row: LedgerRevenueRow, month: string, today?: string): RevMonthlyBucket {
+  return ledgerMonthBucket(row, month, today)
 }
 
 function emptyMonthlyBucket(): RevMonthlyBucket {
@@ -547,13 +560,18 @@ function rowHasWeeklyInput(row: LedgerRevenueRow, month: string) {
   return rowWeeklySplit(row, month).source === "explicit"
 }
 
+// 검수 필터(접힌 패널). 확정 있음 = 확정 ≠ 0, 미확정 = 고확도 + 예정 ≠ 0(D2 — 빨강 환불은 확정이라 미확정에 들지 않는다).
+// 주차 입력 있음 · 월합계만은 편집 기준(양수 금액)이다.
 function rowMatchesForecastFilter(row: LedgerRevenueRow, month: string, filter: RevForecastFilter) {
   if (filter === "all") return true
   const amount = rowMonthAmount(row, month)
   if (filter === "has-week") return amount > 0 && rowHasWeeklyInput(row, month)
   if (filter === "month-only") return amount > 0 && rowWeeklySplit(row, month).source === "month-only"
-  if (filter === "confirmed") return rowMonthConfirmed(row, month) > 0
-  if (filter === "open") return rowMonthHighConfidence(row, month) + rowMonthOpen(row, month) > 0
+  if (filter === "confirmed") return rowMonthConfirmed(row, month) !== 0
+  if (filter === "open") {
+    const bucket = rowMonthBucket(row, month)
+    return bucket.high + bucket.open !== 0
+  }
   if (filter === "week-mismatch") return rowWeeklyMismatch(row, month) !== null
   return true
 }
@@ -565,7 +583,8 @@ function rowMatchesForecastFilterInMonths(row: LedgerRevenueRow, months: string[
   return months.some((month) => rowMatchesForecastFilter(row, month, filter))
 }
 
-function buildRevProductSummary(rows: LedgerRevenueRow[], month: string): RevProductSummary[] {
+// 상품군별 그 달 합계 — 장부 매출 버킷을 부호 그대로 더한다(네 값이 모두 0 인 행만 건너뛴다).
+function buildRevProductSummary(rows: LedgerRevenueRow[], month: string, today?: string): RevProductSummary[] {
   const summaries = new Map<Exclude<RevProductCategory, "all">, RevProductSummary>([
     ["software", { category: "software", total: 0, confirmed: 0, highConfidence: 0, open: 0, rows: 0 }],
     ["hardware", { category: "hardware", total: 0, confirmed: 0, highConfidence: 0, open: 0, rows: 0 }],
@@ -573,18 +592,59 @@ function buildRevProductSummary(rows: LedgerRevenueRow[], month: string): RevPro
   ])
 
   for (const row of rows) {
-    const total = rowMonthAmount(row, month)
-    if (total <= 0) continue
+    const bucket = rowMonthBucket(row, month, today)
+    if (isZeroLedgerBucket(bucket)) continue
     const category = rowProductCategory(row)
     const current = summaries.get(category)!
-    current.total += total
-    current.confirmed += rowMonthConfirmed(row, month)
-    current.highConfidence += rowMonthHighConfidence(row, month)
-    current.open += rowMonthOpen(row, month)
+    current.total += bucket.total
+    current.confirmed += bucket.confirmed
+    current.highConfidence += bucket.high
+    current.open += bucket.open
     current.rows += 1
   }
 
   return Array.from(summaries.values()).filter((item) => item.rows > 0)
+}
+
+/** 주차 검수(REV) 카드 세 칸 — 그 달 합계 · 확정 · 고확도 · 예정(월합계만 잔여는 따로). */
+export interface RevMonthScalars {
+  total: number
+  confirmed: number
+  high: number
+  /** 주차를 모르는(월합계만) 행의 미확정 잔여 — 양수 달에서만 생긴다. */
+  monthlyOnlyOpen: number
+  /** 나머지 예정 = total − confirmed − high − monthlyOnlyOpen(자르지 않는다 — 네 칸 합이 늘 total). */
+  open: number
+  /** 그 달 값이 있는(네 값 중 하나라도 0 이 아닌) 행 수. */
+  rows: number
+}
+
+/**
+ * 주차 검수 카드 수치(SalesLedgerWorkbench 의 revMonthScalars 를 순수 함수로 옮김) — 장부 매출 버킷을 부호 그대로 더한다(D1·D2).
+ * 환불 달은 합계에서 빠지고 빨강 환불은 확정에서 빠진다. 예정은 0 으로 자르지 않아 네 칸 합이 언제나 합계와 같다.
+ */
+export function buildRevMonthScalars(rows: readonly LedgerRevenueRow[], month: string, today?: string): RevMonthScalars {
+  let total = 0
+  let confirmed = 0
+  let high = 0
+  let monthlyOnlyOpen = 0
+  let count = 0
+  for (const row of rows) {
+    const bucket = rowMonthBucket(row, month, today)
+    if (isZeroLedgerBucket(bucket)) continue
+    count += 1
+    total += bucket.total
+    confirmed += bucket.confirmed
+    high += bucket.high
+    // 월합계만(주차 미상) 행은 양수 달에서만 생긴다(rowWeeklySplit 의 month-only 는 금액 > 0).
+    if (rowWeeklySplit(row, month).source === "month-only") monthlyOnlyOpen += Math.max(bucket.open, 0)
+  }
+  return { total, confirmed, high, monthlyOnlyOpen, open: total - confirmed - high - monthlyOnlyOpen, rows: count }
+}
+
+/** 그 달 값이 있는 행인가(순액 ≠ 0 — 환불 달 포함). 주차 검수 행 수·인박스 칩 판정용. */
+export function rowHasMonthValue(row: LedgerRevenueRow, month: string): boolean {
+  return rowMonthNet(row, month) !== 0
 }
 
 // isRecord · snapshotField · snapshotText 는 lib/branch/ledger-draft-metadata.ts 로 옮겼다(위에서 재수출).
@@ -740,7 +800,7 @@ export {
   storeRevDbImport,
   clearStoredRevDbImport,
   ymKeyUtc,
-  hasConfirmedThroughMonth,
+  businessMonthKey,
   fiscalYearOf,
   fiscalYearLabel,
   buildFiscalMonthOptions,

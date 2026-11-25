@@ -11,13 +11,14 @@
 // summary deal_mix의 REV 확정액(합계·구성별)만 보여준다(달성률·기대 진도 합성 금지).
 // 개인 범위(내 담당)는 summary가 breakdown을 비우므로(scopeDshToManager) 시트 개인 행으로
 // 히어로·월별·기간 카드를 그리고, 개인 단위 데이터가 없는 구성별 분해는 생략한다.
+// 시트 고정 뒤(D4, summary 의 dsh_ledger): 고정 달부터 실적은 서버가 장부 확정으로 바꿔 끼워 보낸다 — 이 카드는
+// 장부 달을 표기(부제·막대 title·'장부' 표시)하고, 고정 달 한 달 동안만 시트 실적을 흐리게 옆에 둔다.
 
 import { ChevronDown, ChevronRight } from "lucide-react"
 import { useMemo, useState } from "react"
 import type { ReactNode } from "react"
 import { cnyExact } from "@/lib/branch/money-format"
 import { formatMoney } from "@/lib/branch/ledger-format"
-import { branchTeamLabel } from "@/lib/branch/current-organization"
 import { branchManagerLabel } from "@/lib/branch/personal-scope"
 import type { BranchDataSourceInfo, BranchDealMix, BranchDshBreakdownRow, BranchDshRow, Team } from "../types"
 import {
@@ -27,15 +28,29 @@ import {
   deriveDshSegments,
   deriveDshTeamProgress,
   deriveDshWeeklyFromDealMix,
+  dshActiveSheetCompare,
+  dshBusinessDay,
+  dshCompareTitle,
   dshCurrentQuarterMonths,
   dshExactTitle,
   dshFiscalYearLabel,
+  dshLedgerErrorMessage,
+  dshLedgerInferredNotes,
+  dshLedgerSubtitle,
+  dshMemberCompare,
   dshMonthLabel,
-  dshRateTitle,
+  dshRateTitleFor,
   dshRateToneClass,
+  dshStatusSource,
+  dshTeamLabel,
   dshTotalsFromRows,
+  dshValueTitle,
+  DSH_UNASSIGNED_TITLE,
   formatDshRate,
   formatDshRateShort,
+  isDshLedgerMonth,
+  isDshUnassignedTeam,
+  type BranchDshLedgerInfo,
   type DshBandScope,
   type DshCompositionSegment,
   type DshMetricTriple,
@@ -43,6 +58,7 @@ import {
   type DshProgress,
   type DshProgressScope,
   type DshScopedPair,
+  type DshStatusSource,
   type DshWeeklyDealMetrics,
   type DshWeeklyDimension,
 } from "./dsh-derive"
@@ -138,26 +154,34 @@ interface HeroView {
   triple: DshMetricTriple
   expected: number
   axis: [string, string]
+  /** 실적 값의 출처(장부 달을 걸치면 title 이 밝힌다). */
+  source: DshStatusSource
 }
 
-function heroView(progress: DshProgress, scope: "M" | "Q" | "Y", now: Date): HeroView {
+function heroView(progress: DshProgress, scope: "M" | "Q" | "Y", now: Date, ledger: BranchDshLedgerInfo | null): HeroView {
   const fy = dshFiscalYearLabel(progress.fiscalYear)
+  const windowMonths = progress.months.map((month) => month.ym)
   if (scope === "Q") {
-    const [first, , last] = dshCurrentQuarterMonths(now)
+    const quarterMonths = dshCurrentQuarterMonths(now)
+    const [first, , last] = quarterMonths
     return {
       title: `${fy} Q${progress.currentQuarter} 진도`,
       triple: progress.quarter,
       expected: progress.elapsed.quarter.pct,
       axis: [dshMonthLabel(first), dshMonthLabel(last)],
+      source: dshStatusSource(ledger, quarterMonths.filter((ym) => windowMonths.includes(ym))),
     }
   }
   if (scope === "M") {
-    const lastDay = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0)).getUTCDate()
+    // 이번 달의 마지막 날 — KST 영업일 기준(F-10).
+    const day = dshBusinessDay(now)
+    const lastDay = new Date(Date.UTC(day.getUTCFullYear(), day.getUTCMonth() + 1, 0)).getUTCDate()
     return {
       title: progress.currentMonthKey ? `${dshMonthLabel(progress.currentMonthKey)} 진도` : "현재 월 진도 (범위 밖)",
       triple: progress.month,
       expected: progress.elapsed.month.pct,
       axis: ["1일", `${lastDay}일`],
+      source: dshStatusSource(ledger, progress.currentMonthKey ? [progress.currentMonthKey] : []),
     }
   }
   const first = progress.months[0]?.ym
@@ -167,6 +191,7 @@ function heroView(progress: DshProgress, scope: "M" | "Q" | "Y", now: Date): Her
     triple: progress.annual,
     expected: progress.elapsed.year.pct,
     axis: [first ? dshMonthLabel(first) : "", last ? dshMonthLabel(last) : ""],
+    source: dshStatusSource(ledger, windowMonths),
   }
 }
 
@@ -193,8 +218,17 @@ function expectedLabelShift(expected: number): string {
   return "translateX(-50%)"
 }
 
-function HeroAnnualStats({ progress, scope }: { progress: DshProgress; scope: DshBandScope }) {
+function HeroAnnualStats({
+  progress,
+  scope,
+  ledger,
+}: {
+  progress: DshProgress
+  scope: DshBandScope
+  ledger: BranchDshLedgerInfo | null
+}) {
   const { remaining, toDate, currentMonthKey } = progress
+  const toDateMonths = currentMonthKey ? progress.months.filter((month) => month.ym <= currentMonthKey).map((month) => month.ym) : []
   return (
     <div className="grid grid-cols-2 border-t border-[rgba(0,0,0,0.08)] pt-5 @min-[880px]:border-l @min-[880px]:border-t-0 @min-[880px]:pt-0">
       <div
@@ -229,7 +263,7 @@ function HeroAnnualStats({ progress, scope }: { progress: DshProgress; scope: Ds
         </p>
         <p
           className={`mt-1.5 text-[24px] font-bold tracking-[-0.02em] tabular-nums ${dshRateToneClass(toDate?.pct ?? null)}`}
-          {...(toDate ? { title: dshRateTitle(toDate.status, toDate.goal) } : {})}
+          {...(toDate ? { title: dshRateTitleFor(toDate.status, toDate.goal, dshStatusSource(ledger, toDateMonths)) } : {})}
         >
           {formatDshRate(toDate?.pct ?? null)}
         </p>
@@ -307,16 +341,18 @@ function ProgressHero({
   subtitle,
   weeklyDealMix,
   team,
+  ledger,
 }: {
   progress: DshProgress
   now: Date
   subtitle: string
   weeklyDealMix: BranchDealMix | null
   team: Team
+  ledger: BranchDshLedgerInfo | null
 }) {
   const [scope, setScope] = useState<DshBandScope>("Y")
   const weekly = useMemo(() => (scope === "W" ? deriveDshWeeklyFromDealMix(weeklyDealMix) : null), [scope, weeklyDealMix])
-  const view = scope === "W" ? null : heroView(progress, scope, now)
+  const view = scope === "W" ? null : heroView(progress, scope, now, ledger)
 
   return (
     <section className={`${CARD} @container px-5 py-[22px] sm:px-[26px]`}>
@@ -325,7 +361,7 @@ function ProgressHero({
           <h2 className="whitespace-nowrap text-[15px] font-bold text-[#111110]">{view ? view.title : "이번 주 확정"}</h2>
           <p className="text-[12px] text-[#615D59]">
             {scope === "W"
-              ? `REV 딜 첫결제일 기준 확정 금액 · 월요일 시작 캘린더 주 · 팀 필터(${team === "ALL" ? "KR 전체" : team}) 적용`
+              ? `REV 딜 첫결제일 기준 확정 금액 · 월~일(KST) 주 · 팀 필터(${team === "ALL" ? "KR 전체" : team}) 적용`
               : subtitle}
           </p>
         </div>
@@ -338,13 +374,13 @@ function ProgressHero({
             <div className="flex flex-wrap items-baseline gap-x-3.5 gap-y-2">
               <span
                 className="text-[44px] font-bold leading-none tracking-[-0.03em] tabular-nums text-[#111110] sm:text-[56px]"
-                title={dshRateTitle(view.triple.status, view.triple.goal)}
+                title={dshRateTitleFor(view.triple.status, view.triple.goal, view.source)}
               >
                 {formatDshRate(view.triple.pct)}
               </span>
               <span className="text-[15px] tabular-nums text-[#615D59]">
                 실적{" "}
-                <b className="cursor-help text-[#111110]" title={dshExactTitle(view.triple.status)}>
+                <b className="cursor-help text-[#111110]" title={dshValueTitle(view.triple.status, view.source)}>
                   {formatMoney(view.triple.status)}
                 </b>{" "}
                 / 목표{" "}
@@ -381,7 +417,7 @@ function ProgressHero({
             이번 주·전주에 첫결제로 잡힌 확정 딜이 없거나 주간 집계를 사용할 수 없습니다 — 월/분기/연도 보기를 이용하세요.
           </p>
         )}
-        <HeroAnnualStats progress={progress} scope={scope} />
+        <HeroAnnualStats progress={progress} scope={scope} ledger={ledger} />
       </div>
     </section>
   )
@@ -391,8 +427,19 @@ function ProgressHero({
 
 // 지난달 = 달성률 판정 색, 당월 = 진행 중(회색 글자·옅은 그린 채움), 미래 = 점선 목표 +
 // 선반영(이미 잡힌 실적)만 회색 채움 — 미래 월 실적 0은 "미달"이 아니라 "아직 안 온 달"이다.
-function MonthlyGoalBars({ months }: { months: DshMonthPace[] }) {
-  const max = Math.max(0, ...months.flatMap((month) => [month.goal, month.status]))
+// 장부 달(시트 고정 뒤)은 달 이름 아래 '장부' 표시와 title 로 실적 출처를 밝힌다. 고정 달 한 달 동안은 그 달 막대에
+// 시트 실적 높이의 점선 눈금(비교)을 둔다.
+function MonthlyGoalBars({
+  months,
+  ledger,
+  compare,
+}: {
+  months: DshMonthPace[]
+  ledger: BranchDshLedgerInfo | null
+  /** 고정 달의 시트 실적(비교) — 고정 달 동안만. */
+  compare: { month: string; value: number } | null
+}) {
+  const max = Math.max(0, ...months.flatMap((month) => [month.goal, month.status]), compare?.value ?? 0)
   const px = (value: number) => (max > 0 ? (Math.max(0, value) / max) * 170 : 0)
   const columns = { gridTemplateColumns: `repeat(${Math.max(1, months.length)}, minmax(0, 1fr))` }
 
@@ -400,7 +447,7 @@ function MonthlyGoalBars({ months }: { months: DshMonthPace[] }) {
     <section className={`${CARD} min-w-0 px-5 py-5 sm:px-6`}>
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h3 className="text-[15px] font-bold text-[#111110]">월별 목표 대비 실적</h3>
-        <div className="flex gap-3.5 text-[11.5px] text-[#615D59]">
+        <div className="flex flex-wrap gap-x-3.5 gap-y-1 text-[11.5px] text-[#615D59]">
           <span className="inline-flex items-center gap-1.5">
             <span aria-hidden className="h-2.5 w-2.5 rounded-[2px] border-[1.5px] border-[#A39E98]" />
             목표
@@ -413,6 +460,12 @@ function MonthlyGoalBars({ months }: { months: DshMonthPace[] }) {
             <span aria-hidden className="h-2.5 w-2.5 rounded-[2px] bg-[#C9C5BF]" />
             선반영
           </span>
+          {compare && (
+            <span className="inline-flex items-center gap-1.5">
+              <span aria-hidden className="w-2.5 border-t-2 border-dashed border-[#C9C5BF]" />
+              시트 DSH({dshMonthLabel(compare.month)} 비교)
+            </span>
+          )}
         </div>
       </div>
       <div className="overflow-x-auto">
@@ -423,12 +476,20 @@ function MonthlyGoalBars({ months }: { months: DshMonthPace[] }) {
               const rateClass = month.isFuture || month.isCurrent ? "text-[#A39E98]" : dshRateToneClass(month.pct)
               const fillClass = month.isFuture ? "bg-[#C9C5BF]" : month.isCurrent ? "bg-[#084734]/75" : "bg-[#084734]"
               const prebooked = month.isFuture && month.status !== 0
+              const fromLedger = isDshLedgerMonth(ledger, month.ym)
+              const sheetValue = compare && compare.month === month.ym ? compare.value : null
+              const barTitle = [
+                `${label} · 목표 ¥${cnyExact(month.goal)} · 실적 ¥${cnyExact(month.status)}${fromLedger ? " (장부 확정)" : ""}${prebooked ? " (선반영)" : ""}`,
+                ...(sheetValue != null
+                  ? [`${label} 시트 DSH 실적 ¥${cnyExact(sheetValue)} — 시트 ‘1. DSH’에 적힌 값(잠금 뒤 고정)`]
+                  : []),
+              ].join("\n")
               return (
                 <div
                   key={month.ym}
                   // relative — sr-only 텍스트(absolute)가 가로 스크롤 영역 밖 문서 폭을 늘리지 않게 가둔다.
                   className={`relative flex h-full flex-col items-stretch justify-end gap-1.5 rounded-t-md px-[3px] ${month.isCurrent ? "bg-[#F2FAF6]" : ""}`}
-                  title={`${label} · 목표 ¥${cnyExact(month.goal)} · 실적 ¥${cnyExact(month.status)}${prebooked ? " (선반영)" : ""}`}
+                  title={barTitle}
                 >
                   <span className={`text-center text-[11.5px] font-bold tabular-nums ${rateClass}`} aria-hidden>
                     {month.isFuture ? "–" : formatDshRateShort(month.pct)}
@@ -436,9 +497,15 @@ function MonthlyGoalBars({ months }: { months: DshMonthPace[] }) {
                   <span className="sr-only">
                     {label} 목표 {formatMoney(month.goal)}, 실적 {formatMoney(month.status)}
                     {month.isFuture ? (prebooked ? ", 선반영" : ", 아직 오지 않은 달") : `, 달성률 ${formatDshRate(month.pct)}`}
+                    {fromLedger ? ", 실적 장부 확정" : ""}
+                    {sheetValue != null ? `, 시트 DSH ${formatMoney(sheetValue)}` : ""}
                   </span>
-                  {/* 막대 영역은 목표·실적 중 큰 쪽 높이 — 초과 달성 채움이 위의 달성률 글자를 덮지 않는다. */}
-                  <div aria-hidden className="relative" style={{ height: `${Math.max(px(month.goal), px(month.status))}px` }}>
+                  {/* 막대 영역은 목표·실적(·시트 비교) 중 큰 쪽 높이 — 초과 달성 채움이 위의 달성률 글자를 덮지 않는다. */}
+                  <div
+                    aria-hidden
+                    className="relative"
+                    style={{ height: `${Math.max(px(month.goal), px(month.status), sheetValue != null ? px(sheetValue) : 0)}px` }}
+                  >
                     <div
                       className={`absolute inset-x-0 bottom-0 rounded-t border-[1.5px] border-b-0 border-[#A39E98] ${month.isFuture ? "border-dashed" : ""}`}
                       style={{ height: `${px(month.goal)}px` }}
@@ -447,6 +514,12 @@ function MonthlyGoalBars({ months }: { months: DshMonthPace[] }) {
                       <div
                         className={`absolute bottom-0 left-[4.5px] right-[4.5px] rounded-t-[2px] ${fillClass}`}
                         style={{ height: `${px(month.status)}px` }}
+                      />
+                    )}
+                    {sheetValue != null && sheetValue > 0 && (
+                      <div
+                        className="absolute inset-x-0 border-t-2 border-dashed border-[#C9C5BF]"
+                        style={{ bottom: `${px(sheetValue)}px` }}
                       />
                     )}
                   </div>
@@ -461,6 +534,9 @@ function MonthlyGoalBars({ months }: { months: DshMonthPace[] }) {
                 className={`text-center text-[12px] ${month.isCurrent ? "font-extrabold text-[#084734]" : "font-semibold text-[#615D59]"}`}
               >
                 {dshMonthLabel(month.ym)}
+                {isDshLedgerMonth(ledger, month.ym) && (
+                  <span className="block text-[10px] font-semibold text-[#A39E98]">장부</span>
+                )}
               </span>
             ))}
           </div>
@@ -476,12 +552,17 @@ function PeriodCard({
   triple,
   expected,
   note,
+  source = "sheet",
+  compareNote,
 }: {
   title: string
   elapsedLabel: string
   triple: DshMetricTriple
   expected: number
   note: string
+  source?: DshStatusSource
+  /** 고정 달 동안 — 시트 실적 비교 한 줄(흐리게). */
+  compareNote?: { text: string; title: string } | null
 }) {
   return (
     <section className={`${CARD} px-5 py-[18px] sm:px-[22px]`}>
@@ -492,7 +573,7 @@ function PeriodCard({
       <div className="mt-2.5 flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
         <span
           className="text-[30px] font-bold leading-none tracking-[-0.02em] tabular-nums text-[#111110]"
-          title={dshRateTitle(triple.status, triple.goal)}
+          title={dshRateTitleFor(triple.status, triple.goal, source)}
         >
           {formatDshRate(triple.pct)}
         </span>
@@ -507,6 +588,11 @@ function PeriodCard({
         markerClass="-bottom-[5px] -top-[5px] w-0.5 bg-[#111110]"
       />
       <p className="mt-2.5 text-[12px] text-[#615D59]">{note}</p>
+      {compareNote && (
+        <p className="mt-1 cursor-help text-[12px] tabular-nums text-[#A39E98]" title={compareNote.title}>
+          {compareNote.text}
+        </p>
+      )}
     </section>
   )
 }
@@ -544,7 +630,18 @@ const BULLET_GRID =
   "grid grid-cols-[minmax(90px,1fr)_minmax(60px,1fr)_52px] items-center gap-3 sm:grid-cols-[minmax(110px,190px)_minmax(80px,1fr)_56px_minmax(0,124px)]"
 
 // 기대 진도 이상이면 그린, 미만이면 주의 — 목표가 없으면(null) 채움 없이 "–".
-function BulletCells({ pair, expected, tone }: { pair: DshScopedPair; expected: number; tone: BulletTone }) {
+function BulletCells({
+  pair,
+  expected,
+  tone,
+  source = "sheet",
+}: {
+  pair: DshScopedPair
+  expected: number
+  tone: BulletTone
+  /** 실적 출처 — 장부 달을 걸치면 title 이 밝힌다. */
+  source?: DshStatusSource
+}) {
   const ahead = pair.pct != null && pair.pct >= expected
   const style = BULLET_STYLE[tone]
   return (
@@ -560,7 +657,7 @@ function BulletCells({ pair, expected, tone }: { pair: DshScopedPair; expected: 
         className={`cursor-help text-right text-[13px] font-bold tabular-nums ${
           pair.pct == null ? "text-[#C9C5BF]" : ahead ? "text-[#084734]" : "text-[#A8741A]"
         }`}
-        title={dshRateTitle(pair.status ?? 0, pair.goal ?? 0)}
+        title={dshRateTitleFor(pair.status ?? 0, pair.goal ?? 0, source)}
       >
         {formatDshRate(pair.pct)}
       </span>
@@ -577,19 +674,21 @@ function BulletRow({
   expected,
   tone,
   divider,
+  source = "sheet",
 }: {
   label: ReactNode
   pair: DshScopedPair
   expected: number
   tone: BulletTone
   divider: "none" | "line" | "soft"
+  source?: DshStatusSource
 }) {
   const style = BULLET_STYLE[tone]
   const border = divider === "line" ? "border-t border-[rgba(0,0,0,0.08)]" : divider === "soft" ? "border-t border-[#F0F0EC]" : ""
   return (
     <div className={`${BULLET_GRID} ${style.pad} ${border}`}>
       <span className={`min-w-0 truncate ${style.label}`}>{label}</span>
-      <BulletCells pair={pair} expected={expected} tone={tone} />
+      <BulletCells pair={pair} expected={expected} tone={tone} source={source} />
     </div>
   )
 }
@@ -613,16 +712,22 @@ function SegmentSection({
   now,
   progress,
   personal,
+  ledger = null,
+  footnotes = [],
 }: {
   breakdown: BranchDshBreakdownRow[]
   now: Date
   progress: DshProgress
   personal: boolean
+  ledger?: BranchDshLedgerInfo | null
+  /** 장부 실적의 추정 건수 각주(시트 고정 뒤). */
+  footnotes?: string[]
 }) {
   const [scope, setScope] = useState<DshProgressScope>("Y")
   const groups = useMemo(() => deriveDshSegments(breakdown, now, scope), [breakdown, now, scope])
   const composition = useMemo(() => deriveDshComposition(breakdown, now, scope), [breakdown, now, scope])
   const view = scopeView(scope, progress, now)
+  const source = dshStatusSource(ledger, scopeMonths(scope, progress, now))
   const axes = composition
     ? [
         { label: "SW : HW", value: compositionText(composition.swHw) },
@@ -661,9 +766,10 @@ function SegmentSection({
                   expected={view.expected}
                   tone="group"
                   divider={groupIndex === 0 ? "none" : "line"}
+                  source={source}
                 />
                 {group.rows.map((row) => (
-                  <BulletRow key={row.key} label={row.label} pair={row} expected={view.expected} tone="row" divider="soft" />
+                  <BulletRow key={row.key} label={row.label} pair={row} expected={view.expected} tone="row" divider="soft" source={source} />
                 ))}
               </div>
             ))}
@@ -677,10 +783,21 @@ function SegmentSection({
               ))}
             </div>
           )}
+          {footnotes.length > 0 && (
+            <p className="mt-2 text-[11.5px] leading-relaxed text-[#A39E98]">{footnotes.join(" · ")}</p>
+          )}
         </>
       )}
     </section>
   )
+}
+
+// 구성별·팀 카드 기간 전환이 고르는 달 — 실적 출처(시트·장부) 판정에 쓴다.
+function scopeMonths(scope: DshProgressScope, progress: DshProgress, now: Date): string[] {
+  const windowMonths = progress.months.map((month) => month.ym)
+  if (scope === "Q") return dshCurrentQuarterMonths(now).filter((ym) => windowMonths.includes(ym))
+  if (scope === "M") return progress.currentMonthKey ? [progress.currentMonthKey] : []
+  return windowMonths
 }
 
 // 구성별·팀 카드 기간 전환의 제목·기대 진도 — 분기·월은 오늘이 속한 현재 기간이다.
@@ -703,20 +820,21 @@ function scopeView(scope: DshProgressScope, progress: DshProgress, now: Date): {
   return { title: "연간 달성", expected: progress.elapsed.year.pct, basis: "연 경과" }
 }
 
-function teamName(team: string): string {
-  return team === "ALL" ? "Team KR" : branchTeamLabel(team)
-}
+// 팀 라벨 — dsh-derive 의 dshTeamLabel(ALL=Team KR · 미배정=DSH 밖 담당) 단일 소스.
+const teamName = dshTeamLabel
 
 function TeamSection({
   rows,
   now,
   progress,
   personal,
+  ledger = null,
 }: {
   rows: BranchDshRow[]
   now: Date
   progress: DshProgress
   personal: boolean
+  ledger?: BranchDshLedgerInfo | null
 }) {
   const [scope, setScope] = useState<DshProgressScope>("Y")
   // 펼친 팀 — 처음엔 멤버가 있는 첫 팀을 연다(시안 기본). 사용자가 접거나 바꾸면 그 선택을 따른다.
@@ -726,6 +844,7 @@ function TeamSection({
   const openTeam = openChoice === undefined ? defaultOpen : openChoice
 
   const { title: scopeTitle, expected, basis: expectedBasis } = scopeView(scope, progress, now)
+  const source = dshStatusSource(ledger, scopeMonths(scope, progress, now))
   const members = personal ? teams.flatMap((team) => team.members) : []
 
   return (
@@ -753,6 +872,7 @@ function TeamSection({
               expected={expected}
               tone="team"
               divider={index === 0 ? "none" : "soft"}
+              source={source}
             />
           ))}
         </div>
@@ -760,7 +880,9 @@ function TeamSection({
         <div className="mt-1 flex flex-col">
           {teams.map((team) => {
             if (team.team === "ALL") {
-              return <BulletRow key="ALL" label={teamName("ALL")} pair={team} expected={expected} tone="total" divider="none" />
+              return (
+                <BulletRow key="ALL" label={teamName("ALL")} pair={team} expected={expected} tone="total" divider="none" source={source} />
+              )
             }
             const open = openTeam === team.team
             return (
@@ -777,10 +899,12 @@ function TeamSection({
                     ) : (
                       <ChevronRight className="h-3.5 w-3.5 shrink-0 text-[#615D59]" aria-hidden />
                     )}
-                    <span className="truncate">{teamName(team.team)}</span>
+                    <span className="truncate" {...(isDshUnassignedTeam(team.team) ? { title: DSH_UNASSIGNED_TITLE } : {})}>
+                      {teamName(team.team)}
+                    </span>
                     <span className="shrink-0 text-[11px] font-medium text-[#A39E98]">{team.members.length}명</span>
                   </span>
-                  <BulletCells pair={team} expected={expected} tone="team" />
+                  <BulletCells pair={team} expected={expected} tone="team" source={source} />
                 </button>
                 {open &&
                   team.members.map((member, index) => (
@@ -791,6 +915,7 @@ function TeamSection({
                       expected={expected}
                       tone="member"
                       divider="soft"
+                      source={source}
                     />
                   ))}
               </div>
@@ -814,6 +939,8 @@ interface DshProgressOverviewProps {
   team?: Team
   // 내 담당 한 명으로 좁혔을 때 — summary가 breakdown을 비우고 개인 행만 보낸다.
   personalManager?: string
+  // 시트 고정 뒤 장부 실적 표기(summary 의 dsh_ledger). null·없음 = 지금 그대로.
+  ledger?: BranchDshLedgerInfo | null
   // 테스트용 "오늘" 고정.
   now?: Date
 }
@@ -826,6 +953,7 @@ export function DshProgressOverview({
   dealMix = null,
   team = "ALL",
   personalManager,
+  ledger = null,
   now: fixedNow,
 }: DshProgressOverviewProps) {
   // "오늘" 기준점 — ssr:false 지연 로드 전용이라 클라이언트에서 1회 고정한다(UTC 해석은 dsh-derive 규약).
@@ -837,31 +965,65 @@ export function DshProgressOverview({
   )
   const progress = useMemo(() => (totals ? deriveDshProgress(totals, now) : null), [totals, now])
 
+  const ledgerError = dshLedgerErrorMessage(ledger)
+  const errorBanner = ledgerError ? (
+    <p role="status" className="rounded-[10px] border border-[#ECD29C] bg-[#FBF1E0] px-4 py-2.5 text-[12px] font-semibold text-[#7A520F]">
+      {ledgerError}
+    </p>
+  ) : null
+
   if (loading && !progress) return <LoadingPanel label="DSH 진도를 계산하는 중" />
   if (!progress) {
     return (
-      <p className={`${CARD} px-4 py-10 text-center text-[12px] text-[#615D59]`}>
-        DSH 진도를 계산할 데이터가 없습니다 — 시트 &lsquo;1. DSH&rsquo; 동기화 후 다시 확인하세요.
-      </p>
+      <div className="space-y-3">
+        {errorBanner}
+        <p className={`${CARD} px-4 py-10 text-center text-[12px] text-[#615D59]`}>
+          DSH 진도를 계산할 데이터가 없습니다 — 시트 &lsquo;1. DSH&rsquo; 동기화 후 다시 확인하세요.
+        </p>
+      </div>
     )
   }
   // 이하 카드들은 시안 밀도(브라우저 기본 줄 높이)에 맞춰 leading-tight를 깔고, 큰 숫자는 개별 지정한다.
 
+  const personalRows = personal && breakdown.length === 0
+  const managerName = branchManagerLabel(personalManager ?? "")
+  const windowMonths = progress.months.map((month) => month.ym)
+  const ledgerShown = ledger && !ledger.error && ledger.ledgerMonths.some((ym) => windowMonths.includes(ym)) ? ledger : null
   const subtitle = [
-    personal && breakdown.length === 0
-      ? `개인 DSH · ${branchManagerLabel(personalManager ?? "")} · 시트 ‘1. DSH’ 개인 행`
-      : "Team KR 전사 · 시트 ‘1. DSH’ 미러 · 팀 필터와 무관",
+    ledgerShown
+      ? dshLedgerSubtitle(ledgerShown, windowMonths, personalRows, managerName)
+      : personalRows
+        ? `개인 DSH · ${managerName} · 시트 ‘1. DSH’ 개인 행`
+        : "Team KR 전사 · 시트 ‘1. DSH’ 미러 · 팀 필터와 무관",
     `오늘 ${progress.elapsed.todayLabel} 기준`,
     ...(dataSource ? [`원천 ${dshSourceLabel(dataSource)}`] : []),
   ].join(" · ")
   const monthTitle = progress.currentMonthKey ? `이번 달 · ${dshMonthLabel(progress.currentMonthKey)}` : "이번 달 · 범위 밖"
 
+  // 고정 달 동안만 — 시트 '1. DSH' 에 적힌 그 달 실적(전사 합계, 개인 범위면 그 멤버 행).
+  const sheetCompare = dshActiveSheetCompare(ledgerShown, now)
+  const compareValue = sheetCompare
+    ? personalRows
+      ? dshMemberCompare(sheetCompare, personalManager)
+      : sheetCompare.total
+    : null
+  const compare = sheetCompare && compareValue != null ? { month: sheetCompare.month, value: compareValue } : null
+  const monthCompareNote =
+    compare && progress.currentMonthKey === compare.month
+      ? {
+          text: `시트 DSH ${formatMoney(compare.value)} · 장부와 차이 ${formatSignedMoney(progress.month.status - compare.value)}`,
+          title: dshCompareTitle(progress.month.status, compare.value),
+        }
+      : null
+  const quarterMonths = dshCurrentQuarterMonths(now).filter((ym) => windowMonths.includes(ym))
+
   return (
     <div className="space-y-5 leading-tight">
-      <ProgressHero progress={progress} now={now} subtitle={subtitle} weeklyDealMix={dealMix} team={team} />
+      {errorBanner}
+      <ProgressHero progress={progress} now={now} subtitle={subtitle} weeklyDealMix={dealMix} team={team} ledger={ledgerShown} />
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,360px),1fr))] gap-5">
-        <MonthlyGoalBars months={progress.months} />
+        <MonthlyGoalBars months={progress.months} ledger={ledgerShown} compare={compare} />
         <div className="grid gap-5">
           <PeriodCard
             title={monthTitle}
@@ -869,6 +1031,8 @@ export function DshProgressOverview({
             triple={progress.month}
             expected={progress.elapsed.month.pct}
             note={monthNote(progress.month, progress.elapsed.month.daysLeft)}
+            source={dshStatusSource(ledgerShown, progress.currentMonthKey ? [progress.currentMonthKey] : [])}
+            compareNote={monthCompareNote}
           />
           <PeriodCard
             title={`현재 분기 · Q${progress.currentQuarter}`}
@@ -876,13 +1040,21 @@ export function DshProgressOverview({
             triple={progress.quarter}
             expected={progress.elapsed.quarter.pct}
             note={quarterNote(progress)}
+            source={dshStatusSource(ledgerShown, quarterMonths)}
           />
         </div>
       </div>
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,520px),1fr))] gap-5">
-        <SegmentSection breakdown={breakdown} now={now} progress={progress} personal={personal} />
-        <TeamSection rows={rows} now={now} progress={progress} personal={personal} />
+        <SegmentSection
+          breakdown={breakdown}
+          now={now}
+          progress={progress}
+          personal={personal}
+          ledger={ledgerShown}
+          footnotes={dshLedgerInferredNotes(ledgerShown)}
+        />
+        <TeamSection rows={rows} now={now} progress={progress} personal={personal} ledger={ledgerShown} />
       </div>
     </div>
   )

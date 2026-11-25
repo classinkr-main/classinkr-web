@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 
 import { adminCachedJson } from "@/lib/admin-api-response"
 import { BRANCH_READ_ADMIN_API_ROLES, CRM_STAFF_ADMIN_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
+import { businessFy, fiscalYearMonths } from "@/lib/branch/fiscal"
 import { isLedgerDraftBodyError, parseLedgerDraftCreateBody } from "@/lib/branch/ledger-draft-body"
 import { currentRevSheetLock, revSheetLockView } from "@/lib/branch/rev-sheet-lock"
 import { currentSheetWriteMode } from "@/lib/branch/sheet-writeback/config"
@@ -85,6 +86,17 @@ function parseBoundedInt(value: string | null, fallback: number, min: number, ma
   return Math.max(min, Math.min(Math.floor(parsed), max))
 }
 
+// 장부 항목은 회계연도 열두 달(ledger_month)로 좁혀 끝까지 읽는다(F-29). ?fy=YYYY 가 없으면 지금의 KST 영업 회계연도 —
+// 장부 화면은 그 회계연도 열두 달만 보여 준다(workbench-shared buildFiscalMonthOptions).
+const FY_PARAM_RE = /^\d{4}$/
+
+function ledgerMonthRange(url: URL): { from: string; to: string } {
+  const raw = url.searchParams.get("fy")
+  const fy = raw && FY_PARAM_RE.test(raw) ? Number(raw) : businessFy()
+  const months = fiscalYearMonths(fy)
+  return { from: months[0], to: months[months.length - 1] }
+}
+
 function notReadyResponse(error: unknown) {
   if (isBranchSalesLedgerDraftsNotReadyError(error)) {
     return NextResponse.json({ error: (error as Error).message }, { status: 503 })
@@ -111,8 +123,10 @@ export async function GET(req: NextRequest) {
     //
     // 누락 방지: status=all 이어도 열린 초안(draft·checked)은 한도 안에서 전부 내려준다 — 최근 N건으로
     // 자르면 큰 붙여넣기 뒤 열린 초안이 목록에서 빠져 결재 바 건수·같은 칸 재편집(PATCH vs 새 초안) 판정이
-    // 틀린다. limit 은 끝난 초안(applied·cancelled) 이력에만 건다. 장부 반영값(entries)도 최근 200건으로
-    // 자르면 오래된 반영분이 합계에서 조용히 빠지므로 상한까지 받고, 상한에 닿으면 truncated 로 알린다.
+    // 틀린다. limit 은 끝난 초안(applied·cancelled) 이력에만 건다. 장부 반영값(entries)과 상쇄 목록은 회계연도
+    // 열두 달로 좁혀 페이지를 끝까지 읽는다(F-29 — 예전엔 모든 해를 합쳐 최근 1,000건에서 오래된 반영분이 합계에서
+    // 조용히 빠졌다). truncated.entries 는 안전 상한(LEDGER_PAGED_MAX_ROWS)에 닿을 때만 참이다.
+    const months = ledgerMonthRange(url)
     const [openDraftResult, closedDraftResult, entryResult, reversedEntryResult, lastRevSync] = await Promise.all([
       status === "all"
         ? listBranchSalesLedgerDrafts({ statuses: ["draft", "checked"], limit: LEDGER_LIST_MAX })
@@ -120,8 +134,8 @@ export async function GET(req: NextRequest) {
       status === "all"
         ? listBranchSalesLedgerDrafts({ statuses: ["applied", "cancelled"], limit })
         : null,
-      listBranchSalesLedgerEntries({ limit: LEDGER_LIST_MAX }),
-      listBranchSalesLedgerEntries({ status: "reversed", limit: LEDGER_LIST_MAX }),
+      listBranchSalesLedgerEntries({ months }),
+      listBranchSalesLedgerEntries({ status: "reversed", months }),
       readLastRevSyncStartedAt(),
     ])
     const draftResult = closedDraftResult
@@ -164,7 +178,7 @@ export async function GET(req: NextRequest) {
       reversedDraftIds,
       truncated: {
         openDrafts: status === "all" && openDraftResult.drafts.length >= LEDGER_LIST_MAX,
-        entries: entryResult.entries.length >= LEDGER_LIST_MAX,
+        entries: entryResult.truncated === true,
       },
       sheetWrite: {
         mode: currentSheetWriteMode(),

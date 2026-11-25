@@ -70,9 +70,11 @@ describe("revenue-core / weekly-close는 branch_sales_ledger_entries를 참조�
     expect(revConfirmed).not.toContain("branch_sales_ledger_entries")
   })
 
-  it("sales-ledger-weekly-close.ts는 REV 딜/스냅샷 테이블만 읽고 내부 원장을 읽지 않는다", () => {
+  it("sales-ledger-weekly-close.ts는 장부 항목을 표로 직접 읽지 않고 D1 집계(readLedgerRevenueDeals)로만 받는다", () => {
+    // D1(2026-11-25): 주간 마감 스냅샷 = 시트 행 + 장부 항목. 상쇄·흡수 제외와 정정 대체는 lib/branch/ledger-revenue.ts →
+    // ledger-overlay.ts 한 곳에서만 한다 — 마감이 내부 원장 표를 따로 읽으면 그 규칙이 갈라진다.
     const weeklyClose = readFileSync(join(process.cwd(), "lib/repositories/sales-ledger-weekly-close.ts"), "utf8")
     expect(weeklyClose).not.toContain("branch_sales_ledger_entries")
-    expect(weeklyClose).toContain("readRevDealsFromActiveImport")
+    expect(weeklyClose).toContain("readLedgerRevenueDeals")
   })
 })

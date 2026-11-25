@@ -35,6 +35,8 @@ export interface AdminCrmRevenueSheetRow {
   confidence: number | null
   placeholder: boolean
   syncedAt: string
+  /** 장부에서 온 행(D1 — 장부 신규 행·원본과 담당이 다른 정정). sheetRow 는 원본 시트 행 번호 참고값(없으면 0)이고 syncedAt 은 반영 시각이다. */
+  ledgerEntry?: boolean
 }
 
 export interface AdminCrmRevenueSheetSummary {
@@ -86,25 +88,22 @@ export interface AdminCrmRevenueSheetCompassCompare {
   diffAmount: number
 }
 
-// 품질 감사 2026-09-10 — #1(P0, 이중 진실): 매출 장부 콕핏/입력 레일에서 저장→적용까지 마친
-// 수기 입력·정정(branch_sales_ledger_entries, entry_status='active')은 branch_rev_deals(구글
-// REV 시트 동기화 산물)를 건드리지 않는다 — 이 화면(REV 시트 기반)은 그 건들을 구조적으로 볼
-// 방법이 없다. 서버 병합(두 서로 다른 식별자 체계를 매칭)은 오매칭·이중계상 위험이 커 이번
-// 범위에서는 하지 않고, 대신 "이 화면 밖에 반영 안 된 장부 매출이 N건 있다"를 셈해 눈에 띄게
-// 알린다 — 화면이 최신이라고 오인하지 않도록.
+// 장부 입력 건수(배지). 2026-09-10 에는 이 화면이 장부 입력(branch_sales_ledger_entries, active)을 볼 수 없어 "미반영 N건"을
+// 경고했다. D1(2026-11-25)부터 이 화면 매출은 시트 행 + 장부 항목이라(lib/admin-crm-revenue-sheet.ts 장부 오버레이 —
+// 장부 화면과 같은 규칙) 같은 수를 "장부 입력 N건 포함" 안내로 보인다. 세는 규칙(시트가 이미 읽은 시트 쓰기 정정 제외)은 그대로다.
 export interface AdminCrmRevenueSheetManualLedgerGap {
-  /** 미반영 건수(신규 + 정정). */
+  /** 장부 입력 건수(신규 + 정정) — 이 화면 매출에 포함돼 있다(D1). 시트가 이미 읽은 시트 쓰기 정정은 뺀다. */
   count: number
-  /** 미반영 건 금액 합(시트 통화 ¥ — branch_sales_ledger_entries.currency 기본값 CNY). 정정 건의 대체값까지
-      더한 값이라 "빠진 매출"로 읽으면 과대하다 — 화면은 newAmount를 쓴다(라운드 5 S-7). 호환을 위해 남긴다. */
+  /** 장부 입력 금액 합(시트 통화 ¥ — branch_sales_ledger_entries.currency 기본값 CNY). 정정 건의 대체값까지
+      더한 값이라 "더해진 매출"로 읽으면 과대하다 — 화면은 newAmount를 쓴다(라운드 5 S-7). 호환을 위해 남긴다. */
   amount: number
   /** 가장 최근 적용 시각 — count가 0이면 null. */
   latestAppliedAt: string | null
-  /** 장부에서 새로 만든 행(entry_type manual-new) — 이 화면에 아예 없는 매출. */
+  /** 장부에서 새로 만든 행(entry_type manual-new) — 이 화면에 장부 행으로 더해져 있다. */
   newCount: number
-  /** 신규 건 금액 합(¥). 이 화면 합계에 더해져야 할 몫. */
+  /** 신규 건 금액 합(¥). */
   newAmount: number
-  /** 시트 행을 대체한 정정(entry_type manual-edit) — 이 화면은 정정 전 값을 보여 준다. 금액은 더하지 않는다. */
+  /** 시트 행의 그 달을 대체한 정정(entry_type manual-edit) — 이 화면은 정정 값을 보인다. */
   editCount: number
 }
 

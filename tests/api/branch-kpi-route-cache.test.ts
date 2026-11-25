@@ -15,7 +15,13 @@ async function loadKpiRoute() {
   vi.resetModules()
   const capturedTags: Record<string, string[]> = {}
   const verifyAdmin = vi.fn(async (): Promise<NextResponse | null> => null)
-  const readRevDealsPreferActive = vi.fn(async () => [])
+  // D1: 매출 딜은 시트 행 + 장부 항목(lib/branch/ledger-revenue.ts readLedgerRevenueDeals)으로 읽는다.
+  const readRevDealsPreferActive = vi.fn(async () => ({
+    deals: [],
+    sheetOnlyDeals: [],
+    source: { kind: "mirror", asOf: null },
+    info: { entryCount: 0, unresolved: 0, superseded: 0, drift: 0, duplicates: 0, truncated: false, ledgerReadable: true },
+  }))
   const readDshPreferDb = vi.fn(async () => EMPTY_DSH)
   const readKpiBlocksPreferDb = vi.fn(async () => EMPTY_KPI_BLOCKS)
 
@@ -23,7 +29,10 @@ async function loadKpiRoute() {
     verifyAdmin,
     BRANCH_READ_ADMIN_API_ROLES: ["ADMIN"],
   }))
-  vi.doMock("@/lib/branch/read-rev-deals", () => ({ readRevDealsPreferActive }))
+  vi.doMock("@/lib/branch/ledger-revenue", async () => ({
+    ...(await vi.importActual<typeof import("@/lib/branch/ledger-revenue")>("@/lib/branch/ledger-revenue")),
+    readLedgerRevenueDeals: readRevDealsPreferActive,
+  }))
   vi.doMock("@/lib/branch/read-dsh-kpi", () => ({ readDshPreferDb, readKpiBlocksPreferDb }))
   vi.doMock("next/cache", () => {
     const stores = new Map<string, Map<string, unknown>>()
@@ -63,13 +72,13 @@ describe("GET /api/admin/branch/kpi — unstable_cache 배선", () => {
 
   afterEach(() => {
     vi.doUnmock("@/lib/admin-auth")
-    vi.doUnmock("@/lib/branch/read-rev-deals")
+    vi.doUnmock("@/lib/branch/ledger-revenue")
     vi.doUnmock("@/lib/branch/read-dsh-kpi")
     vi.doUnmock("next/cache")
     vi.resetModules()
   })
 
-  it("DSH·KPI·REV·액티브임포트 4개 태그를 재사용하고 60초로 캐시한다", async () => {
+  it("DSH·KPI·REV·액티브임포트 4개 태그 + 장부 입력 태그를 재사용하고 60초로 캐시한다", async () => {
     const { route, capturedTags } = await loadKpiRoute()
     const res = await route.GET(req("?team=ALL&period=Q"))
     expect(res.status).toBe(200)
@@ -77,11 +86,16 @@ describe("GET /api/admin/branch/kpi — unstable_cache 배선", () => {
     // 라우트가 태그 상수를 얻으려 실제 lib/repositories/branch-dsh-kpi-mirror.ts를 임포트하고,
     // 그 파일도 자체 unstable_cache(DSH/KPI 미러 각각)를 모듈 스코프에서 부른다 — 이 목은
     // 전체 그래프의 모든 unstable_cache 호출을 잡으므로, 이 라우트가 만든 항목만 키로 골라낸다.
-    expect(capturedTags["branch-kpi-assembled-v1"]).toEqual([
+    // v2(D1·D4): 장부 항목·초안·시트 쓰기·동기화 런 태그를 함께 건다 — 반영·되돌리기가 항목 태그를 즉시 만료하면 새로 조립된다.
+    expect(capturedTags["branch-kpi-assembled-v2"]).toEqual([
       "sales-ledger-imports",
       "branch-dsh",
       "branch-kpi",
       "branch-rev-deals",
+      "branch-sales-ledger-entries",
+      "branch-sales-ledger-drafts",
+      "branch-sales-ledger-sheet-writes",
+      "branch-sync-runs",
     ])
   })
 

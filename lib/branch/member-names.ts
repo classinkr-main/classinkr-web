@@ -27,6 +27,17 @@ export function normalizeBranchMemberName(value: string | null | undefined): str
   return MEMBER_NAME_ALIASES[trimmed.toLowerCase()] ?? trimmed
 }
 
+/** 별칭 표가 아는 정규 이름(중복 없이, 표 순서). 시트 ↔ 장부 대조가 "별칭 표에 없는 이름"을 알릴 때 쓴다. */
+export const BRANCH_MEMBER_CANONICAL_NAMES: readonly string[] = [...new Set(Object.values(MEMBER_NAME_ALIASES))]
+
+const CANONICAL_NAMES_LOWER = new Set(BRANCH_MEMBER_CANONICAL_NAMES.map((name) => name.toLowerCase()))
+
+/** 정규화한 이름이 별칭 표의 정규 이름 중 하나인가(대소문자 무시). 빈 이름은 false. */
+export function isKnownBranchMember(name: string | null | undefined): boolean {
+  const normalized = normalizeBranchMemberName(name)
+  return normalized != null && CANONICAL_NAMES_LOWER.has(normalized.toLowerCase())
+}
+
 // 매니저 영문 정규명 → 한글 이름 별칭(전체명 + 이름만). 한글/영문 교차 검색용.
 // 출처: data/team-calendars.json — 박한=Han · 문준혁=Junhyuk · 진소망=Somang · 이왕찬=Wangchan · 김민재=Minjae · 황찬우=Chanwoo.
 const MEMBER_KOREAN_ALIASES: Record<string, string[]> = {

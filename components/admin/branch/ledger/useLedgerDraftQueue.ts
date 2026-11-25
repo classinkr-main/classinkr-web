@@ -120,11 +120,18 @@ interface LedgerApplyResponse {
 }
 
 // 서버 목록이 상한에 닿았을 때의 경고 문구(없으면 null). 조용히 잘리면 합계가 틀려도 아무도 모른다.
+// 장부 항목은 회계연도 범위를 끝까지 읽는다(F-29) — entries 는 서버 상한(LEDGER_PAGED_MAX_ROWS)에 닿을 때만 켜진다.
 export function ledgerTruncationNotice(truncated: LedgerDraftsResponse["truncated"]): string | null {
   const parts: string[] = []
   if (truncated?.openDrafts) parts.push("열린 초안이 1,000건을 넘어 일부만 보입니다 — 체크 큐에서 먼저 반영·취소하세요")
-  if (truncated?.entries) parts.push("장부 반영값이 1,000건을 넘어 오래된 반영분이 합계에서 빠질 수 있습니다")
+  if (truncated?.entries) parts.push("장부 반영값이 20,000건을 넘어 일부 반영분이 합계에서 빠질 수 있습니다")
   return parts.length > 0 ? parts.join(" · ") : null
+}
+
+// 큐 알림과 목록 상한 경고를 한 줄로(둘 다 없으면 null).
+export function joinQueueNotices(queueError: string | null, truncationNotice: string | null): string | null {
+  if (queueError && truncationNotice) return `${queueError} · ${truncationNotice}`
+  return queueError ?? truncationNotice
 }
 
 // 화면에 들고 있는 초안 목록 상한. 열린 초안(draft·checked)과 아직 서버에 못 올린 local-* 초안은 자르지 않고,
@@ -529,6 +536,9 @@ export function useLedgerDraftQueue() {
   const [queueMode, setQueueMode] = useState<DraftQueueMode>("server")
   const [queueLoading, setQueueLoading] = useState(true)
   const [queueError, setQueueError] = useState<string | null>(null)
+  // 목록 상한 경고(ledgerTruncationNotice) — 큐 알림을 비우는 동작(setQueueError(null))에 지워지지 않게 따로 들고,
+  // 다음 목록 조회가 다시 정한다(F-29). 돌려줄 때 queueError 와 한 줄로 합친다.
+  const [truncationNotice, setTruncationNotice] = useState<string | null>(null)
   // 품질 웨이브 7 — 항목 2: 레코드별 에러(404 "레코드 소실" 등) — draft id → 사용자 대상 메시지.
   // 이 Set/Map은 queueMode를 절대 건드리지 않는다(전역 강등 없음) — 그 행에만 배지로 보여주고
   // 새로고침(loadDrafts)을 유도한다. loadDrafts가 서버 목록을 다시 받아오면 통째로 비운다 —
@@ -622,6 +632,7 @@ export function useLedgerDraftQueue() {
           queueModeRef.current = "local"
           setQueueMode("local")
           setQueueError(data.health.message ?? "서버 입력 큐가 아직 준비되지 않았습니다.")
+          setTruncationNotice(null)
           return { loaded: false, drafts: null, unsynced: localOnly.length }
         }
         // 서버 복구: data.drafts로 무병합 덮어쓰면 오프라인 동안 쌓인 local-* 초안이 화면에서
@@ -660,8 +671,7 @@ export function useLedgerDraftQueue() {
         serverListLoadedRef.current = true
         queueModeRef.current = "server"
         setQueueMode("server")
-        const truncatedNotice = ledgerTruncationNotice(data.truncated)
-        if (truncatedNotice) setQueueError((current) => (current ? `${current} · ${truncatedNotice}` : truncatedNotice))
+        setTruncationNotice(ledgerTruncationNotice(data.truncated))
         return { loaded: true, drafts: loadedDrafts, unsynced: stillLocal.length }
       } catch (error) {
         // 이미 서버 목록을 들고 있으면(한 번이라도 읽었으면) 한 번의 조회 실패로 목록을 지우거나 로컬 큐로 내리지 않는다
@@ -677,6 +687,7 @@ export function useLedgerDraftQueue() {
         queueModeRef.current = "local"
         setQueueMode("local")
         setQueueError(`서버 입력 큐를 불러오지 못해 로컬 큐로 전환했습니다 — ${koreanRequestError(error)}`)
+        setTruncationNotice(null)
         setRecordErrors(new Map())
         return { loaded: false, drafts: null, unsynced: localOnly.length }
       } finally {
@@ -1283,7 +1294,7 @@ export function useLedgerDraftQueue() {
     sheetWrites,
     queueMode,
     queueLoading,
-    queueError,
+    queueError: joinQueueNotices(queueError, truncationNotice),
     unsyncedLocalCount,
     recordErrors,
     savingCellKeys,

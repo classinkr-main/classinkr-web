@@ -64,8 +64,8 @@ describe("branch/summary·chatbot/stats 서버 프리페치 합류(첫 화면 �
 })
 
 describe("매출 딥링크 기간 쿼리(감사 P2 — 착지 화면 불일치)", () => {
-  it("두 매출 카드 모두 /admin/branch/ledger?period=Y로 착지한다(장부 기본값 Q와 어긋나지 않게)", () => {
-    expect(source.match(/href: "\/admin\/branch\/ledger\?period=Y"/g)?.length).toBe(2)
+  it("두 매출 카드 모두 /admin/branch/ledger?period=Y&cf=none 로 착지한다(장부 기본값 Q · 이번 달 열 필터와 어긋나지 않게, F-25)", () => {
+    expect(source.match(/href: "\/admin\/branch\/ledger\?period=Y&cf=none"/g)?.length).toBe(2)
     expect(source).not.toContain('href="/admin/branch/ledger"')
   })
 })

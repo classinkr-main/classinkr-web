@@ -295,6 +295,8 @@ describe("F-04 — 같은 칸 정정이 둘이면 가장 늦게 반영한 것만
     expect(result.superseded[0].row.id).toBe("ledger-e-old")
     expect(result.replacementRows.map((row) => row.id)).toEqual(["ledger-e-new"])
     expect(result.appliedRows.map((row) => row.id)).toEqual(["ledger-e-new"])
+    // 센 정정과 그 원본 행 짝(대조 스크립트가 근거 글에 쓴다) — 진 정정은 없다.
+    expect(result.resolved.map((item) => [item.correction.id, item.target.id, item.month])).toEqual([["ledger-e-new", "line-NEW", "2026-11"]])
   })
 
   it("반영 시각이 같으면 id 순으로 뒤의 것이 이긴다 · 다른 달 정정은 서로 겹치지 않는다", () => {
@@ -654,6 +656,22 @@ describe("mergeLedgerIntoDeals — 서버 딜 단위가 화면 행 단위와 같
     expect(splitMonthConfidence(merged, "2026-12", 8_000, true, "2026-11-30").confirmed).toBe(8_000)
     // 원래 딜에는 그대로 남아 있다.
     expect(Object.keys(only.raw.pendingCells as object)).toEqual(["2026-11", "2026-12"])
+  })
+
+  it("장부 신규 딜은 입력 때 고른 상품 분류를 raw.productCategory 로 싣는다(DSH SW/HW 분류) — 없으면 키도 없다", () => {
+    const hardware = entry({
+      id: "e-hw",
+      draftId: "d-hw",
+      entryType: "manual-new",
+      sourceDealId: undefined,
+      sourceSheetRow: null,
+      metadata: { confidence: "confirmed", week: "month", productCategory: "hardware" },
+    })
+    const plain = entry({ id: "e-sw", draftId: "d-sw", entryType: "manual-new", sourceDealId: undefined, sourceSheetRow: null })
+    const { deals } = mergeLedgerIntoDeals([], { ledgerEntries: [hardware, plain] })
+    const byId = new Map(deals.map((item) => [item.id, item]))
+    expect(byId.get("ledger-e-hw")?.raw.productCategory).toBe("hardware")
+    expect(byId.get("ledger-e-sw")?.raw).not.toHaveProperty("productCategory")
   })
 
   it("장부 항목이 없으면 같은 딜 배열 내용(같은 객체)을 돌려준다", () => {

@@ -14,15 +14,25 @@
 //  - F-1 열 머리를 누르면 그 열 아래에 필터 메뉴(값 있음 · 확도 · 값 없음, 여러 개 = OR, 적용 · 이 열만 보기 · 풀기).
 //  - D-1 걸린 열 머리는 초록 바탕 + 조건 요약(빈 머리의 필터 아이콘 자리), 그 열의 빈 칸은 옅은 초록 띠. D-3 이번 주 열 머리에 초록 점.
 //  - 메뉴로 건 열이 화면 끝에 걸려 있었으면 그 달 묶음이 보이게 가로로 민다(revealSheetColumn).
+//
+// 2026-11-25 잠금 전 정리(D1 · D2 · F-13 · F-19 · F-31 · F-32):
+//  - 금액은 부호 그대로 — 환불(음수)은 "-30,000" 중립색(확정 크림슨 아님), 확도 색은 합계가 0 보다 클 때만.
+//    시트 음수 칸이 든 달은 장부에서 고치지 않는다('환불 — 시트 값' — 클릭 가드 guardSheetCellActions).
+//  - 첫 불러오기 중이면 몸통 · 합계를 감추고 '불러오는 중', 시트 행을 못 불러왔으면 표 위 한 줄(partialNotice).
+//  - 대기 초안이 걸린 달의 계는 적용되면 될 금액을 대기 표시(밑줄 · 점)로 보인다(합계 행은 적용분만).
+//  - 2월 W5 는 시트에 없다 — 머리에 필터 메뉴가 없고 칸을 고칠 수 없다. 장부 정정 행의 # 은 "342*".
 import { memo, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from "react"
 import { createPortal } from "react-dom"
 import { AlertTriangle, Filter, Lock, Pencil, X } from "lucide-react"
 
+import { isZeroLedgerBucket } from "@/lib/branch/computations/revenue-core"
 import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
+import { formatMoneyExact } from "@/lib/branch/ledger-format"
 import { getBusinessDateParts } from "@/lib/business-time"
 import { branchManagerLabel } from "@/lib/branch/personal-scope"
 import {
   clearSheetFilter,
+  guardSheetCellActions,
   objectParticle,
   onlySheetFilter,
   parseSheetFilterKey,
@@ -31,6 +41,8 @@ import {
   SHEET_FILTER_OPTIONS,
   SHEET_SUM_STEPS,
   sheetAmountFontClass,
+  sheetBlockPending,
+  sheetCellEditable,
   sheetCurrentWeekKey,
   sheetFilterColumnLabel,
   sheetFilterDraft,
@@ -38,9 +50,12 @@ import {
   sheetFilterSetLabel,
   sheetFiltersApply,
   sheetMenuAnchorSpan,
+  sheetMonthWeekCount,
   sheetRevealScrollDelta,
   sheetRowNumberCell,
+  sheetWeekCellsForRender,
   toggleSheetFilterCondition,
+  type SheetBlockPending,
   type SheetColumnFilters,
   type SheetColumns,
   type SheetFilterCondition,
@@ -76,15 +91,16 @@ const SUM_TOTAL = `${SUM_BASE} bg-[#E8E8E4]`
 // 필터가 걸린 열의 빈 칸 — 옅은 초록 세로 띠(D-1). 값 칸은 제 바탕(확도 틴트 · 월 계 회색)을 그대로 둔다.
 const BAND_BG = "bg-[#ECFDF5]"
 
-/** 툴팁 금액 — 칸은 글자를 줄이거나 끝을 자를 수 있어, 툴팁에는 늘 원 단위 전체 금액을 싣는다. */
-const exactMoney = (value: number) => `¥${formatWeekAmount(value)}`
+/** 툴팁 금액 — 칸은 글자를 줄이거나 끝을 자를 수 있어, 툴팁에는 늘 원 단위 전체 금액을 싣는다(부호는 ¥ 앞 — "-¥30,000"). */
+const exactMoney = (value: number) => formatMoneyExact(value)
 
+/** 값이 있으면(네 값 중 하나라도 ≠ 0 — 환불 · 상계 달 포함) 합계와 확도 분해. */
 function bucketTitle(label: string, bucket: RevMonthlyBucket) {
-  if (bucket.total <= 0) return undefined
+  if (isZeroLedgerBucket(bucket)) return undefined
   return `${label} ${exactMoney(bucket.total)} · 확정 ${exactMoney(bucket.confirmed)} · 고확도 ${exactMoney(bucket.high)} · 예정 ${exactMoney(bucket.open)}`
 }
 
-/** 한 가지 확도뿐인 금액이면 그 확도 글자색, 섞였으면 먹색. */
+/** 한 가지 확도뿐인 금액이면 그 확도 글자색, 섞였으면 먹색. 합계가 0 이하(환불)면 칠하지 않는다 — 중립색(D2). */
 function bucketTextClass(bucket: RevMonthlyBucket) {
   if (bucket.total <= 0) return ""
   const single = bucket.confirmed >= bucket.total || (bucket.confirmed <= 0 && (bucket.high <= 0 || bucket.open <= 0))
@@ -97,11 +113,11 @@ function bucketTextClass(bucket: RevMonthlyBucket) {
 const monthKo = (month: string) => `${Number(month.slice(5, 7))}월`
 
 /**
- * 금액 글자 — 0 이면 비운다. 칸에 안 들어가면 글자를 한 단계씩 줄이고(sheetAmountFontClass), 마지막 단계에서도
- * 넘치면 블록 글자가 왼쪽부터 놓여 끝이 줄임표가 된다(앞자리는 늘 보인다).
+ * 금액 글자 — 0 이면 비운다. 음수(환불)는 "-30,000" 그대로(글자색은 칸이 정한다 — 중립). 칸에 안 들어가면 글자를 한 단계씩
+ * 줄이고(sheetAmountFontClass), 마지막 단계에서도 넘치면 블록 글자가 왼쪽부터 놓여 끝이 줄임표가 된다(앞자리는 늘 보인다).
  */
 function Amount({ value, width, steps }: { value: number; width: number; steps?: readonly number[] }) {
-  if (value <= 0) return null
+  if (value === 0 || !Number.isFinite(value)) return null
   const text = formatWeekAmount(value)
   return <span className={`block truncate ${sheetAmountFontClass(text, width, steps)}`}>{text}</span>
 }
@@ -146,9 +162,19 @@ const SheetRow = memo(function SheetRow({
   const { row } = view
   const draftRow = row.ledgerOrigin === "draft"
   const rowBg = active ? "[--row-bg:#EAF6F0]" : draftRow ? "[--row-bg:#FFFCF5] hover:[--row-bg:#FBF1E0]" : "[--row-bg:#FFFFFF] hover:[--row-bg:#FAFAF8]"
-  const editContext = actions
-    ? buildRevMatrixEditContext({ row, correctedMonths: view.correctedMonths, actions, selectedCoord, editingCoord, editBuffer, editConfidence, pendingByCell })
+  // 고칠 수 없는 칸(환불 · 정정 대체 · 없는 주차)은 클릭·더블클릭으로도 편집을 시작하지 않는다 — 방향키 순서(sheetEditableCells)와 같은 판정.
+  const guardedActions = useMemo(
+    () => (actions ? guardSheetCellActions(actions, (month, week) => sheetCellEditable(view, month, week)) : null),
+    [actions, view],
+  )
+  const editContext = guardedActions
+    ? buildRevMatrixEditContext({ row, correctedMonths: view.correctedMonths, actions: guardedActions, selectedCoord, editingCoord, editBuffer, editConfidence, pendingByCell })
     : null
+  // 대기 초안(F-19) — 달 계에 적용되면 될 금액을 대기 표시로.
+  const pendingByBlock = useMemo(
+    () => view.blocks.map((block) => sheetBlockPending(row, block, pendingByCell)),
+    [row, view.blocks, pendingByCell],
+  )
   const manager = row.manager ? branchManagerLabel(row.manager) : ""
   const mismatchTitle = view.mismatchMonths.length > 0
     ? `주차 합계와 월 금액이 다릅니다 — ${view.mismatchMonths.map(monthKo).join(", ")}`
@@ -159,7 +185,9 @@ const SheetRow = memo(function SheetRow({
   return (
     <tr className={`group bg-(--row-bg) text-[12px] text-[#31302E] ${rowBg}`}>
       <td
-        className={`${CELL} sticky left-0 z-10 bg-(--row-bg) text-right text-[11px] tabular-nums ${rowNo.kind === "ledger" ? "font-semibold text-[#084734]" : "text-[#615D59]"}`}
+        className={`${CELL} sticky left-0 z-10 bg-(--row-bg) text-right text-[11px] tabular-nums ${
+          rowNo.kind === "ledger" ? "font-semibold text-[#084734]" : rowNo.kind === "correction" ? "text-[#A39E98]" : "text-[#615D59]"
+        }`}
         title={rowNo.title}
       >
         {rowNo.text}
@@ -175,7 +203,11 @@ const SheetRow = memo(function SheetRow({
             {row.customer}
           </button>
           {draftRow ? (
-            <span role="img" aria-label="장부에서 입력한 행" title="장부에서 입력한 행(시트에 없는 행)" className="shrink-0 text-[#615D59]"><Pencil aria-hidden className="h-3 w-3" /></span>
+            rowNo.kind === "correction" ? (
+              <span role="img" aria-label="장부에서 정정한 행" title={`${rowNo.title}(값은 시트에 없음)`} className="shrink-0 text-[#615D59]"><Pencil aria-hidden className="h-3 w-3" /></span>
+            ) : (
+              <span role="img" aria-label="장부에서 입력한 행" title="장부에서 입력한 행(시트에 없는 행)" className="shrink-0 text-[#615D59]"><Pencil aria-hidden className="h-3 w-3" /></span>
+            )
           ) : null}
           {view.mismatchMonths.length > 0 ? (
             <span role="img" aria-label="정합 불일치" title={mismatchTitle} className="shrink-0 text-[#B43E3E]"><AlertTriangle aria-hidden className="h-3 w-3" /></span>
@@ -202,11 +234,13 @@ const SheetRow = memo(function SheetRow({
           </td>
         ))
       )}
-      {view.blocks.map((block) => (
+      {view.blocks.map((block, index) => (
         <SheetBlockCells
           key={block.month}
+          row={row}
           block={block}
           editContext={editContext}
+          pending={pendingByBlock[index] ?? null}
           monthBand={hasFilter(filters, `m${block.slot}`)}
           weekBands={[1, 2, 3, 4, 5].map((week) => hasFilter(filters, `m${block.slot}.w${week}`))}
         />
@@ -225,43 +259,69 @@ const SheetRow = memo(function SheetRow({
 })
 
 function SheetBlockCells({
+  row,
   block,
   editContext,
+  pending,
   monthBand,
   weekBands,
 }: {
+  row: Pick<LedgerRevenueRow, "ledgerOrigin">
   block: SheetRowView["blocks"][number]
   editContext: ReturnType<typeof buildRevMatrixEditContext> | null
+  /** 이 달의 대기 초안(sheetBlockPending) — 계 칸이 적용되면 될 금액을 대기 표시로 보인다(F-19). */
+  pending: SheetBlockPending | null
   monthBand: boolean
   weekBands: boolean[]
 }) {
   const total = block.bucket.total
+  const shown = pending ? pending.total : total
+  const pendingToken = pending ? CONFIDENCE_TOKENS[pending.confidence] : null
+  const title = pending
+    ? `${monthKo(block.month)} 계 대기 포함 ${exactMoney(pending.total)} (지금 장부 ${exactMoney(pending.current)})`
+    : [bucketTitle(`${monthKo(block.month)} 계`, block.bucket), block.mismatch ? "주차 합계와 다릅니다" : null, total < 0 ? "환불 — 시트 값" : null]
+        .filter(Boolean)
+        .join(" · ") || undefined
+  // 칸 컴포넌트에는 시트 보기의 표시 금액을 넘긴다 — 2월 월합계만은 W4(시트에 W5 가 없다, F-31), 그 밖의 월합계만은 W5.
+  const last = block.weeks[4]
+  const monthOnlyOnW5 = last?.isMonthOnly && last.display > 0 ? last.display : 0
+  const weekValues = block.weeks.map((cell, index) => (index === 4 && monthOnlyOnW5 > 0 ? 0 : cell.display))
   return (
     <>
       <td
-        className={`${AMOUNT_CELL} border-l border-l-[#A39E98] ${monthBand && total <= 0 ? BAND_BG : "bg-[#F0F0EC]"} text-right font-bold tabular-nums text-[#111110]`}
-        title={`${bucketTitle(`${monthKo(block.month)} 계`, block.bucket) ?? ""}${block.mismatch ? " · 주차 합계와 다릅니다" : ""}` || undefined}
+        className={`${AMOUNT_CELL} relative border-l border-l-[#A39E98] ${monthBand && shown === 0 && !pending ? BAND_BG : "bg-[#F0F0EC]"} text-right font-bold tabular-nums text-[#111110]`}
+        title={title}
+        style={pendingToken ? { boxShadow: `inset 0 -2px 0 0 ${pendingToken.color}` } : undefined}
       >
+        {pendingToken ? (
+          <span aria-hidden className="absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full" style={{ backgroundColor: pendingToken.color }} />
+        ) : null}
         {/* 앞자리가 잘리지 않게(F1) — 금액 글자가 줄어들 수 있는 칸(min-w-0)이고, 넘치면 왼쪽부터 놓여 끝이 잘린다. */}
         <span className="flex items-center justify-end gap-0.5">
           {block.mismatch ? <AlertTriangle aria-label="주차·월 불일치" className="h-2.5 w-2.5 shrink-0 text-[#B43E3E]" /> : null}
-          {total > 0 ? (
-            <span className={`min-w-0 truncate ${sheetAmountFontClass(formatWeekAmount(total), textW(W.total) - (block.mismatch ? MISMATCH_ICON_W : 0))}`}>
-              {formatWeekAmount(total)}
+          {shown !== 0 || pending ? (
+            <span
+              className={`min-w-0 truncate ${sheetAmountFontClass(formatWeekAmount(shown), textW(W.total) - (block.mismatch ? MISMATCH_ICON_W : 0))} ${
+                pendingToken ? pendingToken.textStrongClass : ""
+              }`}
+            >
+              {formatWeekAmount(shown)}
             </span>
           ) : null}
         </span>
       </td>
+      {/* 주차 칸은 시트 보기가 칸마다 정한 표시(환불 · 없는 주차 · 편집 가능 · 대기 금액 · 툴팁, sheetCells)가 이긴다. */}
       <RevMatrixWeekCells
-        weeks={block.rawWeeks}
+        weeks={weekValues}
         inferred={block.inferred}
-        monthOnlyAmount={block.monthOnlyAmount}
+        monthOnlyAmount={monthOnlyOnW5}
         bgClass=""
         month={block.month}
         editContext={editContext}
         compact
         sheetConfidences={block.weeks.map((cell) => cell.confidence)}
         sheetBands={weekBands}
+        sheetCells={sheetWeekCellsForRender(row, block, pending, { interactive: Boolean(editContext) })}
       />
     </>
   )
@@ -551,7 +611,18 @@ export interface LedgerSheetProps {
   onFiltersChange: (update: (current: SheetColumnFilters) => SheetColumnFilters) => void
   /** 오늘이 속한 달 — 월 띠에 "이번 달"을 붙인다. */
   currentMonth: string
+  /**
+   * 첫 불러오기가 아직 안 끝났다(시트 행 · 장부 큐 중 하나라도, F-13). 몸통은 '불러오는 중' 한 줄이고, 합계 행 금액 · 빈 문구 ·
+   * 0행 안내 · [모두 풀기]를 감춘다 — 장부 입력분만 먼저 온 표를 최종처럼 보이지 않게, 공유 필터 주소를 지우지 않게.
+   */
   loading: boolean
+  /**
+   * 일부만 불러왔다(예: 시트 행을 못 불러와 장부 입력분만 — SHEET_PARTIAL_NOTICE). 표 위에 한 줄로 보이고, 합계 행 이름이
+   * "일부 합계"가 되며 0행 안내 · [모두 풀기]를 감춘다. 없으면 null.
+   */
+  partialNotice?: string | null
+  /** partialNotice 옆 [다시 시도]. 없으면 버튼을 숨긴다. */
+  onRetry?: () => void
   /** 행이 없을 때 문구. */
   emptyText: string
   /** 0행일 때 [모두 풀기] — 없으면 버튼을 숨긴다. */
@@ -572,6 +643,8 @@ export default function LedgerSheet({
   onFiltersChange,
   currentMonth,
   loading,
+  partialNotice = null,
+  onRetry,
   emptyText,
   onClearFilters,
   activeRowId,
@@ -590,11 +663,16 @@ export default function LedgerSheet({
   // 이번 주 열(D-3) — 기준 달이 오늘(업무일 KST)이 든 달일 때만. 시트 쓰기와 같은 주차 규칙(1·8·15·22·29일).
   const currentWeekKey = useMemo(() => sheetCurrentWeekKey(columns, getBusinessDateParts().date), [columns])
   const filtering = useMemo(() => sheetFiltersApply(filters, columns), [filters, columns])
-  // 0행일 때 "어느 필터를 풀면 몇 행"(D-4) — 걸린 열 필터 하나씩 풀어 센다.
+  const partial = Boolean(partialNotice) && !loading
+  // 0행일 때 "어느 필터를 풀면 몇 행"(D-4) — 걸린 열 필터 하나씩 풀어 센다. 불러오는 중 · 일부만이면 세지 않는다(행이 덜 왔다).
   const relaxHint = useMemo(
-    () => (views.length === 0 && !loading ? sheetFilterRelaxHint(allViews, filters, columns) : null),
-    [views.length, loading, allViews, filters, columns],
+    () => (views.length === 0 && !loading && !partialNotice ? sheetFilterRelaxHint(allViews, filters, columns) : null),
+    [views.length, loading, partialNotice, allViews, filters, columns],
   )
+  // 합계 행 이름 — 불러오는 중이면 금액 없이 "불러오는 중", 일부만이면 "일부 합계"(D-4 "필터 결과" · "합계"보다 먼저).
+  const sumLabel = loading ? "불러오는 중" : partial ? "일부 합계" : filtering ? "필터 결과" : "합계"
+  const sumAmount = (value: number, width: number) => (loading ? null : <Amount value={value} width={width} steps={SHEET_SUM_STEPS} />)
+  const sumTitle = (label: string, bucket: RevMonthlyBucket) => (loading ? undefined : bucketTitle(label, bucket))
 
   // 열린 메뉴 — 열 키와 그 머리 버튼(위치·포커스 복귀). 한 번에 하나만.
   const [menu, setMenu] = useState<{ key: string; anchor: HTMLButtonElement } | null>(null)
@@ -644,6 +722,15 @@ export default function LedgerSheet({
   const plainHead = (key: string, text: string, className = "", title?: string) => (
     <th key={key} scope="col" title={title} className={`${HEAD} border-l border-l-[#E8E8E4] bg-[#F6F5F4] font-semibold text-[#31302E] ${className}`}>{text}</th>
   )
+  // 그 달에 없는 주차(2월 W5, F-31) — 필터 메뉴 없이 흐린 머리. 칸도 고칠 수 없다(sheetEditableCells).
+  const absentWeekHead = (key: string, month: string, week: number) => {
+    const note = `${monthKo(month)}은 시트에 W${sheetMonthWeekCount(month)}까지만 있습니다`
+    return (
+      <th key={key} scope="col" title={note} aria-label={`W${week} — ${note}`} className={`${HEAD} border-l border-l-[#E8E8E4] bg-[#F6F5F4] text-right font-normal text-[#C5C0B8]`}>
+        W{week}
+      </th>
+    )
+  }
 
   const menuTitle = menu ? sheetFilterColumnLabel(menu.key, columns) : null
 
@@ -651,9 +738,21 @@ export default function LedgerSheet({
     <div
       role="region"
       aria-label="매출 장부 시트"
+      aria-busy={loading || undefined}
       data-ledger-sheet-scroll
       className="min-h-[240px] flex-1 overflow-auto border-t border-[#E8E8E4] bg-white max-lg:max-h-[calc(100dvh-13rem)]"
     >
+      {partial ? (
+        // 일부만 불러왔다(F-13) — 표 위 한 줄. 가로로 밀어도 왼쪽에 남는다.
+        <div role="status" data-sheet-partial className="sticky left-0 flex flex-wrap items-center gap-3 border-b border-[#ECD29C] bg-[#FBF1E0] px-4 py-1.5 text-[12.5px] font-semibold text-[#7A520F]">
+          <span>⚠ {partialNotice}</span>
+          {onRetry ? (
+            <button type="button" onClick={onRetry} className="min-h-7 rounded-md border border-[#7A520F] bg-white px-2.5 text-[12px] font-semibold text-[#7A520F] hover:bg-[#FFFCF5] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#084734]">
+              다시 시도
+            </button>
+          ) : null}
+        </div>
+      ) : null}
       <table className="w-full border-separate border-spacing-0 tabular-nums" style={{ tableLayout: "fixed", minWidth }}>
         <caption className="sr-only">건별 매출 — 기준 달과 다음 달은 주차 칸, 그 밖의 달은 묶음. # 은 시트 행 번호</caption>
         <colgroup>
@@ -709,57 +808,67 @@ export default function LedgerSheet({
                 : columns.pastMonths.map((month) => plainHead(`past-${month}`, monthKo(month), "text-right"))}
             {columns.blocks.flatMap((block) => [
               filterHead(`m${block.slot}`, "계", true),
-              ...[1, 2, 3, 4, 5].map((week) => filterHead(`m${block.slot}.w${week}`, `W${week}`, false)),
+              ...[1, 2, 3, 4, 5].map((week) =>
+                week > sheetMonthWeekCount(block.month)
+                  ? absentWeekHead(`m${block.slot}.w${week}`, block.month, week)
+                  : filterHead(`m${block.slot}.w${week}`, `W${week}`, false),
+              ),
             ])}
             {laterCols ? plainHead("later", columns.laterLabel ?? "", "text-right", "이후 월 묶음") : null}
             <th scope="col" className={`${HEAD} border-l border-l-[#A39E98] bg-[#E8E8E4] text-right font-bold text-[#111110]`}>FY 합계</th>
             {plainHead("note", "비고", "text-left")}
           </tr>
-          {/* 합계 — 지금 보이는 행만. 열 필터가 걸려 있으면 "필터 결과"(D-4). */}
+          {/* 합계 — 지금 보이는 행만(부호 그대로 · 적용분만). 열 필터가 걸려 있으면 "필터 결과"(D-4), 불러오는 중이면 금액 없이. */}
           <tr>
             <td className={`${SUM} sticky left-0 z-30 text-[11px]`} />
-            <th scope="row" className={`${SUM} sticky z-30 border-l border-l-[#F0F0EC] border-r border-r-[#E8E8E4] text-left text-[11px]`} style={{ left: W.num }}>
-              {filtering ? "필터 결과" : "합계"} <span className="font-medium text-[#615D59]">{views.length.toLocaleString("ko-KR")}행</span>
+            <th
+              scope="row"
+              title={partial ? partialNotice ?? undefined : undefined}
+              className={`${SUM} sticky z-30 border-l border-l-[#F0F0EC] border-r border-r-[#E8E8E4] text-left text-[11px]`}
+              style={{ left: W.num }}
+            >
+              {sumLabel}
+              {loading ? null : <> <span className="font-medium text-[#615D59]">{views.length.toLocaleString("ko-KR")}행</span></>}
             </th>
             <td colSpan={leadCols - 2} className={SUM} />
             {columns.pastMonths.length === 0 ? null : columns.pastPinned ? (
-              <td className={`${SUM} border-l border-l-[#F0F0EC] text-right`} title={bucketTitle(columns.pastLabel ?? "", totals.past)}>
-                <Amount value={totals.past.total} width={textW(W.past)} steps={SHEET_SUM_STEPS} />
+              <td className={`${SUM} border-l border-l-[#F0F0EC] text-right`} title={sumTitle(columns.pastLabel ?? "", totals.past)}>
+                {sumAmount(totals.past.total, textW(W.past))}
               </td>
             ) : (
               totals.pastByMonth.map((bucket, index) => (
-                <td key={columns.pastMonths[index]} className={`${SUM} border-l border-l-[#F0F0EC] text-right`} title={bucketTitle(monthKo(columns.pastMonths[index]), bucket)}>
-                  <Amount value={bucket.total} width={textW(W.past)} steps={SHEET_SUM_STEPS} />
+                <td key={columns.pastMonths[index]} className={`${SUM} border-l border-l-[#F0F0EC] text-right`} title={sumTitle(monthKo(columns.pastMonths[index]), bucket)}>
+                  {sumAmount(bucket.total, textW(W.past))}
                 </td>
               ))
             )}
             {totals.blocks.flatMap((block) => [
-              <td key={`${block.month}-total`} className={`${SUM_TOTAL} border-l border-l-[#A39E98] text-right`} title={bucketTitle(`${monthKo(block.month)} 계`, block.bucket)}>
-                <Amount value={block.bucket.total} width={textW(W.total)} steps={SHEET_SUM_STEPS} />
+              <td key={`${block.month}-total`} className={`${SUM_TOTAL} border-l border-l-[#A39E98] text-right`} title={sumTitle(`${monthKo(block.month)} 계`, block.bucket)}>
+                {sumAmount(block.bucket.total, textW(W.total))}
               </td>,
               ...block.weeks.map((value, week) => (
-                <td key={`${block.month}-w${week}`} className={`${SUM} border-l border-l-[#F0F0EC] text-right`} title={value > 0 ? `W${week + 1} ${exactMoney(value)}` : undefined}>
-                  <Amount value={value} width={textW(SHEET_WEEK_W)} steps={SHEET_SUM_STEPS} />
+                <td key={`${block.month}-w${week}`} className={`${SUM} border-l border-l-[#F0F0EC] text-right`} title={!loading && value !== 0 ? `W${week + 1} ${exactMoney(value)}` : undefined}>
+                  {sumAmount(value, textW(SHEET_WEEK_W))}
                 </td>
               )),
             ])}
             {laterCols ? (
-              <td className={`${SUM} border-l border-l-[#E8E8E4] text-right`} title={bucketTitle(columns.laterLabel ?? "", totals.later)}>
-                <Amount value={totals.later.total} width={textW(W.later)} steps={SHEET_SUM_STEPS} />
+              <td className={`${SUM} border-l border-l-[#E8E8E4] text-right`} title={sumTitle(columns.laterLabel ?? "", totals.later)}>
+                {sumAmount(totals.later.total, textW(W.later))}
               </td>
             ) : null}
-            <td className={`${SUM_TOTAL} border-l border-l-[#A39E98] text-right`} title={bucketTitle("FY 합계", totals.annual)}>
-              <Amount value={totals.annual.total} width={textW(W.fy)} steps={SHEET_SUM_STEPS} />
+            <td className={`${SUM_TOTAL} border-l border-l-[#A39E98] text-right`} title={sumTitle("FY 합계", totals.annual)}>
+              {sumAmount(totals.annual.total, textW(W.fy))}
             </td>
             <td className={`${SUM} border-l border-l-[#E8E8E4]`} />
           </tr>
         </thead>
         <tbody>
-          {views.length === 0 ? (
+          {loading || views.length === 0 ? (
             <tr>
               <td colSpan={totalCols} className="px-4 py-10 text-[13px] text-[#615D59]">
                 <div className="sticky left-4 inline-flex flex-wrap items-center gap-3" role="status">
-                  <span>{loading ? "장부를 불러오는 중입니다." : emptyText}</span>
+                  <span>{loading ? "장부를 불러오는 중입니다." : partial ? "장부에서 넣은 행도 이 범위에는 없습니다." : emptyText}</span>
                   {relaxHint ? (
                     // 어느 필터가 0을 만들었나(D-4) — 하나만 풀었을 때 가장 많이 남는 것. 누르면 그 열만 푼다.
                     <button
@@ -770,7 +879,7 @@ export default function LedgerSheet({
                       &ldquo;{relaxHint.label}&rdquo;{objectParticle(relaxHint.label)} 풀면 {relaxHint.count.toLocaleString("ko-KR")}행
                     </button>
                   ) : null}
-                  {!loading && onClearFilters ? (
+                  {!loading && !partial && onClearFilters ? (
                     <button type="button" onClick={onClearFilters} className="min-h-9 rounded-lg border border-[#084734] bg-white px-3 text-[12.5px] font-semibold text-[#084734] hover:bg-[#ECFDF5] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#084734]">
                       모두 풀기
                     </button>

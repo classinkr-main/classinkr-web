@@ -3,6 +3,7 @@ import type { KpiRow, KpiMetric } from "@/lib/branch/parsers/kpi"
 import type { DshOutput } from "@/lib/branch/parsers/dsh"
 import { teamPacing } from "./pacing"
 import { dealProbability, revenueFromRev } from "./pipeline"
+import { confirmedMonthAmountWithColor, dealHasColorData } from "./rev-confirmed"
 import type { Period } from "./heatmap"
 
 export interface CoreKpiSummary {
@@ -23,6 +24,23 @@ export function summarizeRevenue(dsh: DshOutput, deals: BranchRevDeal[], team: s
     ? ["BD", "MKT", "CSM"].reduce((sum, key) => sum + teamPacing(dsh, key, scope, now).goal, 0)
     : teamPacing(dsh, team, scope, now).goal
   return { confirmed, goal, pacing_pct: goal > 0 ? (confirmed / goal) * 100 : 0 }
+}
+
+/**
+ * 주어진 달들의 확정 합 — revenueFromRev 와 같은 캐논·같은 순회(딜의 월 맵에 있는 달만). 전기 대비(F-40)처럼
+ * 기간이 아니라 달 목록으로 셀 때 쓴다. today: 읽는 시점(KST 'YYYY-MM-DD'), 없으면 지금의 KST 영업일.
+ */
+export function confirmedRevenueInMonths(deals: ReadonlyArray<BranchRevDeal>, months: readonly string[], today?: string): number {
+  const wanted = new Set(months)
+  let total = 0
+  for (const deal of deals) {
+    const hasColor = dealHasColorData(deal)
+    for (const [ym, value] of Object.entries(deal.monthly_payments ?? {})) {
+      if (!wanted.has(ym)) continue
+      total += confirmedMonthAmountWithColor(deal, ym, Number(value), hasColor, today)
+    }
+  }
+  return total
 }
 
 export function bottleneckKpi(rows: KpiRow[], teamMembers: Set<string>): CoreKpiSummary["bottleneck_kpi"] {

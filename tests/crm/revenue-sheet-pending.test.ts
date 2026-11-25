@@ -36,6 +36,25 @@ describe("nextPendingTransition — 가장 이른 예정 칸의 주차·시작�
   })
 })
 
+describe("읽는 시점 예정 칸(raw.pendingCells, F-08) — 시작일이 온 칸은 캐논이 확정으로 읽으므로 예정에서 뺀다", () => {
+  const source = {
+    pending: { "2026-11": 900 },
+    pending_weeks: { "2026-11": [3, 5] },
+    pending_cells: { "2026-11": [{ week: 3, start: "2026-11-15", amount: 400 }, { week: 5, start: "2026-11-29", amount: 500 }] },
+  }
+  it("오늘(11/25) 뒤에 시작하는 칸만 확정 예정 — 파싱 시점 맵(900)이 아니라 500", () => {
+    expect(pendingMonthAmount(source, "2026-11", 900, "2026-11", "2026-11-25")).toBe(500)
+    expect(nextPendingTransition(source, ["2026-11"], "2026-11-25")).toEqual({ week: 5, start: "2026-11-29" })
+    // 모든 칸이 시작했으면 예정 0, 다음 전환 없음.
+    expect(pendingMonthAmount(source, "2026-11", 900, "2026-11", "2026-11-30")).toBe(0)
+    expect(nextPendingTransition(source, ["2026-11"], "2026-11-30")).toBeNull()
+  })
+  it("읽는 날을 주지 않거나 재료가 없으면 예전 파싱 시점 맵", () => {
+    expect(pendingMonthAmount(source, "2026-11", 900, "2026-11")).toBe(900)
+    expect(pendingMonthAmount({ pending: { "2026-11": 900 } }, "2026-11", 900, "2026-11", "2026-11-25")).toBe(900)
+  })
+})
+
 describe("파서 → 캐논 → 예정 분해 왕복", () => {
   it("10/16: 확정 400 · 확정 예정 46,970 · 무색 예정 900 — 합계 보존", () => {
     const grid = [[plain("REV")], HEADER, [...meta, plain(null), red(100), plain(900), red(300), red(46250), red(720)]]

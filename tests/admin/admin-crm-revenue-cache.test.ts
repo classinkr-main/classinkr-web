@@ -29,6 +29,13 @@ vi.mock("next/cache", () => ({
 vi.mock("@/lib/repositories/sales-ledger-imports", () => ({
   readRevDealsFromActiveImport: vi.fn().mockResolvedValue(null),
 }))
+// D1(2026-11-25): REV 딜은 시트 행 + 장부 항목(lib/branch/ledger-revenue.ts)으로 읽는다. 그 모듈은 자기 캐시·REV 리더
+// (unstable_cache 호출부)를 끌어오므로, 이 파일이 검증할 배선(admin-crm-revenue 캐시 등록 1회)과 섞이지 않게 목으로 둔다.
+vi.mock("@/lib/branch/ledger-revenue", () => ({
+  LEDGER_REVENUE_CACHE_TAGS: ["branch-sales-ledger-entries", "branch-sales-ledger-drafts", "branch-sales-ledger-sheet-writes", "branch-sync-runs"],
+  isLedgerRevenueDeal: () => false,
+  readLedgerRevenueDeals: vi.fn().mockRejectedValue(new Error("not used")),
+}))
 
 const MONTHS_12 = Array.from({ length: 12 }, (_, index) => {
   const month = `2026-${String(index + 1).padStart(2, "0")}`
@@ -80,7 +87,11 @@ describe("getAdminCrmRevenueDashboard 캐시 배선", () => {
     expect(mocks.unstableCache).toHaveBeenCalledTimes(1)
     const [, keyParts, options] = mocks.unstableCache.mock.calls[0]
     expect(keyParts).toEqual([ADMIN_CRM_REVENUE_CACHE_TAG])
-    expect(options).toEqual({ revalidate: 45, tags: [ADMIN_CRM_REVENUE_CACHE_TAG] })
+    // 장부 항목 태그도 함께 건다 — 반영·되돌리기가 그 태그를 즉시 만료하면 시트 + 장부 매출이 새로 조립된다.
+    expect(options).toEqual({
+      revalidate: 45,
+      tags: [ADMIN_CRM_REVENUE_CACHE_TAG, "branch-sales-ledger-entries", "branch-sales-ledger-drafts", "branch-sales-ledger-sheet-writes", "branch-sync-runs"],
+    })
 
     const cachedFn = mocks.unstableCache.mock.results[0].value
     await getAdminCrmRevenueDashboard(6)
