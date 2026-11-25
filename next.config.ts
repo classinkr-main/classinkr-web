@@ -138,6 +138,7 @@ const answerIndexNonRuntimeFiles = [
 // (`…/messages/*` 는 `…/[id]/messages/route` 에도 걸렸다). 끝 `*` 로 끝나는 키는 그 꼴까지 생각해 좁힌다.
 const answerIndexRoutes = [
   "/admin/overview",
+  "/api/admin/ai/chat",
   "/api/admin/channel-talk/sync",
   "/api/admin/chatbot/eval",
   "/api/admin/chatbot/questions",
