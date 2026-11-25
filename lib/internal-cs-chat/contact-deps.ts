@@ -20,7 +20,9 @@ import { searchConsultationEvidence } from "./consultation-search"
 
 /** 이름이 이보다 짧으면 질문 글 일치로 고객을 찾지 않는다(흔한 낱말과 겹친다). */
 const MIN_NAME_LENGTH = 3
+/** 서로 다른 이름 기준 최대 후보 수. 같은 이름의 고객은 이 수에 넣지 않고 모두 남긴다(경고 인원수가 잘리지 않게). */
 const MAX_MATCHES = 3
+const MAX_SAME_NAME = 20
 
 function normalize(value: string) {
   return value.replace(/\s+/g, "").toLowerCase()
@@ -36,6 +38,8 @@ export function matchCustomersInText(question: string, rows: Array<{ key: string
   const seenKeys = new Set<string>()
   const longerNames: string[] = []
   const acceptedNames = new Set<string>()
+  const counts = new Map<string, number>()
+  let distinct = 0
   return rows
     .filter((row) => {
       const name = normalize(row.name ?? "")
@@ -54,7 +58,15 @@ export function matchCustomersInText(question: string, rows: Array<{ key: string
       }
       return true
     })
-    .slice(0, MAX_MATCHES)
+    .filter((row) => {
+      const name = normalize(row.name)
+      const perName = (counts.get(name) ?? 0) + 1
+      counts.set(name, perName)
+      if (perName > MAX_SAME_NAME) return false
+      if (perName > 1) return true
+      distinct += 1
+      return distinct <= MAX_MATCHES
+    })
     .map((row) => ({ key: row.key, name: row.name, href: row.href }))
 }
 

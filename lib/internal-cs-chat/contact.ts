@@ -19,6 +19,12 @@ import "server-only"
 import { classifyHqDomain, HQ_DOMAINS } from "./escalation-routing"
 import type { EscalationCandidate } from "./escalation-types"
 
+/** 고객 매칭이 쓰는 정규화(공백 제거·소문자)와 같은 기준으로 같은 이름인지 본다. */
+function isSameCustomerName(a: string, b: string) {
+  const norm = (value: string) => value.replace(/\s+/g, "").toLowerCase()
+  return norm(a ?? "") === norm(b ?? "")
+}
+
 export type ContactKind = "customer_owner" | "hq" | "kr" | "unknown"
 
 export type ContactEvidenceKind =
@@ -157,7 +163,7 @@ export const KR_TOPICS: KrTopic[] = [
     key: "payment",
     area: "결제 수납",
     // '미수신'·'미수강'·'미수령' 은 수납이 아니다('미수'만 낱말로 본다).
-    match: /입금|수납|미수(?!신|강|령)|결제\s*(?:확인|내역|반영|기록|이력)/,
+    match: /입금|수납|미수(?!신|강|령)|(?:대금|잔금|수업료|수강료|금액|납부금|결제금)\s*미수령|결제\s*(?:확인|내역|반영|기록|이력)/,
     role: null,
     roleSource: null,
     resolver: null,
@@ -499,7 +505,7 @@ async function customerCard(
       href: "/admin/channel-talk",
     })
   }
-  const sameName = others.filter((other) => other.name === customer.name)
+  const sameName = others.filter((other) => isSameCustomerName(other.name, customer.name))
   if (sameName.length > 0) {
     gaps.unshift(`같은 이름의 고객이 ${sameName.length + 1}명입니다(${customer.key} 외 ${sameName.map((other) => other.key).join(", ")}) — 고객 화면에서 맞는 고객인지 확인하세요.`)
   }
@@ -520,7 +526,7 @@ async function customerCard(
     evidence,
     verifiedAt: data?.generatedAt ?? null,
     reason: `질문 또는 열린 대화의 고객사 "${customer.name}"`,
-    alternatives: [...others.map((other) => (other.name === customer.name ? `${other.name} (${other.key})` : other.name)), ...extraAlternatives],
+    alternatives: [...others.map((other) => (isSameCustomerName(other.name, customer.name) ? `${other.name} (${other.key})` : other.name)), ...extraAlternatives],
     gaps,
   }
 }

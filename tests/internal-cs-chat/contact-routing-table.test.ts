@@ -11,6 +11,10 @@ const CASES: Array<[string, string]> = [
   ["초대 메일 미수신인데 확인 부탁", "none"],
   ["녹화 파일 미수령 상태예요", "none"],
   ["미수강 학생 목록이 비어요", "none"],
+  // 돈에 쓰인 '미수령'은 수납이다
+  ["잔금 미수령 건 확인해 주세요", "payment"],
+  ["대금 미수령 고객 목록 주세요", "payment"],
+  ["수업료 미수령 문의", "payment"],
   // 진짜 수납
   ["미수금 확인 부탁드려요", "payment"],
   ["미수 잔액이 얼마인가요", "payment"],
@@ -44,7 +48,7 @@ const CASES: Array<[string, string]> = [
 ]
 
 describe("resolveContact 판정 표(R10)", () => {
-  it("30문장", () => expect(CASES).toHaveLength(30))
+  it("33문장", () => expect(CASES).toHaveLength(33))
 
   it.each(CASES)("%s -> %s", async (question, expected) => {
     const card = await resolveContact(question, { listStaff: async () => [] })

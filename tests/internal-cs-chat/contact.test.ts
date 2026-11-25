@@ -210,4 +210,11 @@ describe("resolveContact 동명 고객(R10)", () => {
     expect(card.alternatives.some((item) => item.includes(twin.key))).toBe(true)
     expect(card.gaps.some((item) => item.includes("같은 이름의 고객이 2명"))).toBe(true)
   })
+
+  it("공백만 다른 이름도 같은 이름 경고와 키 표시 대상이다", async () => {
+    const spaced: CustomerRef = { ...CUSTOMER, name: CUSTOMER.name.replace(/(.)(.)/, "$1 $2"), key: "lead:acct-test-3", href: "/h/3" }
+    const card = await resolveContact(`${CUSTOMER.name} 결제 이력`, deps({ findCustomersInText: vi.fn(async () => [CUSTOMER, spaced]) }))
+    expect(card.gaps.some((item) => item.includes("같은 이름의 고객이 2명"))).toBe(true)
+    expect(card.alternatives.some((item) => item.includes(spaced.key))).toBe(true)
+  })
 })
