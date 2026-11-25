@@ -286,9 +286,10 @@ export interface BranchSummaryPayloadQuery {
  */
 export async function buildBranchSummaryPayload(query: BranchSummaryPayloadQuery) {
   const { team, period, periodDate, includeBreakdown, overviewView, now: currentDate, skipSheetFreshness = false, manager } = query
-  const [dshResult, kpi, revResult, campaigns, runs, events, sheetFreshness] = await Promise.all([
+  const [dshResult, kpi, revResult, campaigns, runs, events, sheetFreshness, syncHealthRuns] = await Promise.all([
     readDshWithSource(fyOf(periodDate)), readKpi(fyOf(periodDate), period, periodDate), readRevDealsPreferActiveWithSource(fyOf(periodDate), { team: manager ? "ALL" : team }), summarizeCampaigns(currentDate), getRecentSyncRuns(3), listCachedPublicEvents(),
     skipSheetFreshness ? Promise.resolve<SheetFreshnessResult>({ modifiedTime: null, failed: false }) : readSheetFreshness(),
+    getRecentSyncRuns(60),
   ])
   const sheetModifiedAt = sheetFreshness.modifiedTime
   const dsh = scopeDshToManager(dshResult.dsh, manager)
@@ -305,7 +306,7 @@ export async function buildBranchSummaryPayload(query: BranchSummaryPayloadQuery
   // 소스별 동기화 건강 상태 — lastSync는 "마지막 런" 시각이라 실패한 런도 "방금"으로 보인다.
   // 크론 알림과 같은 판정(computeSyncFailureStreak)으로 마지막 성공·연속 실패 일수를 싣는다.
   // 최근 60런(캐시)이면 하루 3회 크론 + 재시도로 약 3주를 덮고, 넘치면 truncated로 드러난다.
-  const syncHealth = buildSyncHealth(await getRecentSyncRuns(60))
+  const syncHealth = buildSyncHealth(syncHealthRuns)
   // 임포트 폴백만 활성 런의 캡처 시각(source.asOf)을 쓴다. 미러/라이브 폴백의 asOf는
   // 이미 계산된 lastSync/sheetModifiedAt을 재사용한다(같은 값을 다시 조회하는 왕복 없음).
   const lastSync = lastRun?.finished_at ?? lastRun?.started_at ?? null
