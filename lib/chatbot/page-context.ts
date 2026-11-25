@@ -17,6 +17,8 @@ const HOME: PageContext = {
     "클래스인이 뭐예요? 쉽게 알려 주세요",
     "Classin이 Zoom이나 일반 전자칠판과 뭐가 다른가요?",
     "요금/견적은 어떤 항목으로 구성되나요?",
+    // 학생·학부모도 홈으로 들어온다 — 앞 4개 안에 수업 들어가는 법 하나를 둔다(2026-11-25 CX-20)
+    "아이가 수업에 어떻게 들어가요?",
     "우리 학원 90일 도입 순서를 어떻게 잡으면 좋을까요?",
     "전자칠판·녹화·EDB·LMS를 수업 흐름으로 쓰는 방법이 궁금해요",
   ],
@@ -65,21 +67,67 @@ const DOCS: PageContext = {
   teaserEligible: true,
 }
 
+// 문서 종류별 첫 칩(2026-11-25 CX-20). 문구는 이미 쓰던 칩만 쓰고, 빈 환경 /api/chatbot/query 에서
+// '찾지 못했어요'가 아닌 답(direct_answer·handoff)이 나오는 것만 골랐다. 티저·인텐트는 DOCS 그대로다.
+// 문제 해결 문서: 증상 칩과 사람 연결 칩. 문서 끝 '챗봇에게 묻기'가 문서 제목으로 입력을 미리 채운다.
+const DOCS_TROUBLESHOOTING: PageContext = {
+  ...DOCS,
+  key: "docs-troubleshooting",
+  starters: [
+    "방금 본 내용을 우리 학원 상황에 맞게 정리해줄 수 있나요?",
+    "카메라가 안 켜져요",
+    "로그인이 안 돼요",
+    "상담원 연결해 주세요",
+  ],
+}
+
+// 학생 문서: 읽는 사람이 학생·학부모라 원장용 칩('우리 학원 상황에 맞게')을 빼고 수업 들어가기·다시보기·숙제로 둔다.
+const DOCS_STUDENT: PageContext = {
+  ...DOCS,
+  key: "docs-student",
+  starters: [
+    "아이가 수업에 어떻게 들어가요?",
+    "다시보기는 어디서 봐요?",
+    "숙제 제출이 안 돼요",
+    "카메라가 안 켜져요",
+  ],
+}
+
+// 전자칠판·장비 문서
+const DOCS_HARDWARE: PageContext = {
+  ...DOCS,
+  key: "docs-hardware",
+  starters: [
+    "방금 본 내용을 우리 학원 상황에 맞게 정리해줄 수 있나요?",
+    "전자칠판 모델 차이가 뭐예요?",
+    "전자칠판 화면이 안 켜져요",
+    "칠판 A/S는 어떻게 받아요?",
+  ],
+}
+
+// /about·/faq 처럼 따로 정하지 않은 곳. 첫 칩은 용어 없는 소개다(전에는 '수업 시스템 OS 관점'이 먼저 보였다).
 const DEFAULT: PageContext = {
   key: "default",
   teaser: "",
   starters: [
-    "수업 시스템 OS 관점으로 설명해 주세요",
+    "클래스인이 뭐예요? 쉽게 알려 주세요",
     "도입 전 확인 질문을 알려주세요",
     "요금과 전자칠판 패키지 견적이 궁금해요",
   ],
   teaserEligible: false,
 }
 
+// 문제 해결 문서는 분류(start·teacher·admin·student)에 흩어져 있어 주소 끝 이름으로 가린다.
+// lib/docs-troubleshooting 의 문서가 늘면 tests/chatbot/page-context.test.ts 가 빠진 이름을 알려 준다.
+const TROUBLESHOOTING_DOC_PATH = /^\/docs\/(?:(?:troubleshooting|help)(?:\/|$)|[^/]+\/(?:[^/]*-troubleshooting|app-update-cache-reinstall)\/?$)/
+
 const ENTRIES: Array<{ match: (path: string) => boolean; context: PageContext }> = [
   { match: (p) => p === "/", context: HOME },
   { match: (p) => p.startsWith("/product"), context: PRODUCT },
   { match: (p) => p.startsWith("/contact"), context: CONTACT },
+  { match: (p) => TROUBLESHOOTING_DOC_PATH.test(p), context: DOCS_TROUBLESHOOTING },
+  { match: (p) => p.startsWith("/docs/student/"), context: DOCS_STUDENT },
+  { match: (p) => p.startsWith("/docs/hardware/") || p.startsWith("/docs/board/"), context: DOCS_HARDWARE },
   { match: (p) => p.startsWith("/docs"), context: DOCS },
 ]
 

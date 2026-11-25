@@ -49,8 +49,12 @@
     @apply link-body;
   }
 
-  /* 동시 노출(system §4-7) — 배너·챗봇·모바일 메뉴가 열리면 플로팅을 숨긴다(포커스도 빠진다) */
-  :where(.site):has([data-consent-banner]) [data-hide-with-banner] { display: none; }
+  /* 동시 노출(system §4-7) — 배너·챗봇·모바일 메뉴가 열리면 플로팅을 숨긴다(포커스도 빠진다).
+     배너와 함께 숨기는 것은 휴대폰만이다. 데스크톱은 배너(왼쪽 아래)와 챗봇 런처(오른쪽 아래)가 겹치지 않아 둘 다 보인다
+     (DESIGN.md 5-C '뷰포트당 1개' 예외, 2026-11-25) */
+  @media (width < 48rem) {
+    :where(.site):has([data-consent-banner]) [data-hide-with-banner] { display: none; }
+  }
   :where(.site):has(#classin-chatbot-dialog) [data-hide-with-chat] { display: none; }
   :where(.site):has([aria-controls="site-mobile-menu"][aria-expanded="true"]) [data-inert-with-menu="hide"] { display: none; }
 }

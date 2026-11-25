@@ -430,17 +430,18 @@ z는 토큰으로만 쌓는다(X09). 지금의 리터럴(`z-40`·`z-50`·`z-[60]
 | 40 | `--z-header` | Header(ReadingProgress는 P5에서 삭제하고 헤더 hair 위 1px 읽기 괘선으로 바꾼다) | top 0 | top 0 |
 | 42 | `--z-floating` | MobileFloatingCTA(아웃라인) | `left-3`, 하단 safe-area + 16 + 6px | 없음 |
 | 44 | `--z-chatbot` | FloatingChatbot 런처·패널 | `right-3`, 하단 safe-area + 16px | `right-6 bottom-6` |
-| 46 | `--z-consent` | ConsentBanner | `inset-x-3`, 하단 safe-area + 16px | `left-6 bottom-6` |
+| 46 | `--z-consent` | ConsentBanner(그림 48px + 말풍선, 말풍선 폭 `min(13.25rem, 100vw − 4.75rem)`, 설정을 펼치면 `min(14.5rem, …)`) | `left-3`, 하단 safe-area + 12px | 40rem(sm)부터 `left-5 bottom-5` |
 | 50 | (공유 기본값) | Radix Dialog·오버레이 | 가운데 | 가운데 |
 | 60 | `--z-skiplink` | 스킵 링크(포커스 시에만) | `left-4 top-4` | 같음 |
 | 9999 | (공유 기본값) | 토스트 | `inset-x-4`, 하단 safe-area + 80px(제안값, 운영자 확인 중) | `right-4`, `top: header-h + 16px` |
 
 - safe-area 공식은 하나다: 하단 고정 레이어는 `bottom: calc(env(safe-area-inset-bottom) + Npx)`를 쓴다. z가 높은 전폭 래퍼는 `pointer-events-none`, 조작 요소만 `pointer-events-auto`.
-- 쿠키 배너가 열려 있으면 MobileFloatingCTA와 챗봇 런처를 숨긴다(언마운트하지 않아 대화는 남는다).
+- 쿠키 배너가 열려 있으면 휴대폰(< 48rem)에서는 MobileFloatingCTA와 챗봇 런처를 숨긴다(언마운트하지 않아 대화는 남는다). 데스크톱은 배너(왼쪽 아래)와 런처(오른쪽 아래)가 겹치지 않아 함께 보인다. 아래 '뷰포트당 1개'의 예외다(2026-11-25, 쿠키 점검 D10·챗봇 점검 결정 1의 권장안). 휴대폰에서 배너가 챗봇을 가린 채 '챗봇에게 묻기'를 누르면 열림은 예약되고, 배너가 '쿠키 선택 뒤 챗봇이 열려요'를 보이며 포커스를 받는다. 챗봇 티저는 배너가 떠 있는 동안 체류 시간을 세지 않고 보이지도 않는다.
+- 쿠키 배너의 닫기: 첫 방문(미결정)에는 닫기가 없다(V22). 푸터 '쿠키 설정'으로 다시 연 배너에만 닫기(X)와 Esc를 두고, 닫으면 아무것도 저장하지 않으며 포커스는 누른 버튼으로 돌아간다(2026-11-25). 배너 DOM은 스킵 링크 바로 뒤에 둔다(화면 위치는 위 표 그대로).
 - 모바일 메뉴가 열리면 `main`·`footer`는 `inert`, 플로팅(42·44)은 `inert` + 숨김이다(`[data-inert-with-menu]`).
 - 챗봇 패널이 열리면 MobileFloatingCTA를 숨긴다(`[data-hide-with-chat]`, Tab 순서에서도 빠진다).
 - Dialog가 열리면 그 아래 전부를 덮는다(쿠키 배너 포함). 쿠키 배너를 Dialog 위로 올리지 않는다.
-- 떠 있는 요소는 뷰포트당 1개다. 흐름 안의 결정 CTA가 보이면 MobileFloatingCTA를 숨긴다 `target`(2026-10-28).
+- 떠 있는 요소는 뷰포트당 1개다(예외: 데스크톱의 쿠키 배너 + 챗봇 런처, 위 참고). 흐름 안의 결정 CTA가 보이면 MobileFloatingCTA를 숨긴다 `target`(2026-10-28).
 
 ### 배경 교차 리듬 — `[public] retired`
 공개 화면에서는 새로 쓰지 않는다. surfaces 구현 PR이 이 소절을 지면 배정 규칙(C19: 역할로 배정, 구획은 괘선과 여백)으로 교체한다. 지면 배정(V10-A · 2026-10-28): paper가 기본, sunken은 도해·부록·FinalCTA 세 역할(연속 금지), sheet는 섹션 지면으로 쓰지 않고 물건에만, 먹은 Manifesto + 푸터다. 홈은 11지면 + 푸터, 지면 바뀜 6회 이하.

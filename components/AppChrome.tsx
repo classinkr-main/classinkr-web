@@ -136,6 +136,9 @@ export function AppChrome({ children }: { children: ReactNode }) {
           본문 바로가기
         </a>
       ) : null}
+      {/* 쿠키 배너는 화면 아래에 고정되지만 DOM 은 스킵 링크 바로 뒤에 둔다 — 키보드·화면 읽기 사용자가
+          첫 방문에 Tab 두 번 안에 배너에 닿는다(쿠키 점검 C5). 포커스를 배너에 가두지는 않는다 */}
+      {showPublicChrome ? <ConsentBanner /> : null}
       {showPublicChrome ? <ConditionalHeader /> : null}
       {/* 공개만 스킵 링크 목적지, selection 유틸은 어드민만(공개는 site-base) */}
       <main
@@ -168,15 +171,15 @@ export function AppChrome({ children }: { children: ReactNode }) {
           ) : null}
         </>
       ) : null}
-      {showPublicChrome ? <ConsentBanner /> : null}
       {showPublicChrome ? <ChannelTalkLoader /> : null}
       {/* 챗봇은 첫 idle 마운트 이후 계속 떠 있게 유지한다 — readyPath는 한 번
           채워지면 null로 되돌아가지 않으므로, 소프트 내비게이션 중에도 언마운트되지
           않아 대화·열림 상태가 보존된다. MobileFloatingCTA는 기존대로 페이지마다
           재평가한다. */}
-      {/* 동시 노출 표지: 숨김은 site-base CSS(:has)가 맡는다. 언마운트하지 않는다 */}
+      {/* 동시 노출 표지: 숨김은 site-base CSS(:has)가 맡는다. 언마운트하지 않는다.
+          배너와 함께 숨기는 것은 휴대폰만이다. data-chatbot-slot 은 배너가 '챗봇이 가려졌는지' 볼 때 쓴다 */}
       {showPublicChrome && readyPath !== null ? (
-        <div data-hide-with-banner data-inert-with-menu="hide">
+        <div data-hide-with-banner data-chatbot-slot data-inert-with-menu="hide">
           <PublicWidgetBoundary resetKey={`chatbot:${readyPath}`}>
             <FloatingChatbot />
           </PublicWidgetBoundary>
