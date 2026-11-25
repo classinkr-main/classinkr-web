@@ -98,6 +98,13 @@ function getTabAnonymousId() {
   return next
 }
 
+function renewTabAnonymousId() {
+  const next = createAnonymousId()
+  memoryTabAnonymousId = next
+  removeBrowserStorage("session", CHATBOT_TAB_ID_KEY)
+  writeBrowserStorage("session", CHATBOT_TAB_ID_KEY, next)
+}
+
 /** 영구 식별값을 써도 되는지 — '마케팅' 동의가 있고 채널톡 키가 있을 때만. */
 export function canUsePersistentChatbotId() {
   return isChannelTalkConfigured() && currentChoice().marketing
@@ -105,7 +112,12 @@ export function canUsePersistentChatbotId() {
 
 /** 영구 식별값을 지운다('필수만' 저장·철회·동의 전). 탭 단위 값은 두어 이 탭의 대화는 이어진다. */
 export function clearPersistentChatbotId() {
+  const persistent = readBrowserStorage("local", CHANNEL_TALK_ANONYMOUS_ID_KEY)
   removeBrowserStorage("local", CHANNEL_TALK_ANONYMOUS_ID_KEY)
+  // 영구 값은 처음 만들 때 이 탭의 탭 값을 올려 만든 것이라, 탭 값이 같으면 철회 뒤에도 동의 때 쓰던 식별값이 이어진다. 탭 값도 새로 만든다.
+  if (persistent && (persistent === readBrowserStorage("session", CHATBOT_TAB_ID_KEY) || persistent === memoryTabAnonymousId)) {
+    renewTabAnonymousId()
+  }
 }
 
 /**

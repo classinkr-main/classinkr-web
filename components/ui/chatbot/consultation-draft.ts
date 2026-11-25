@@ -74,12 +74,17 @@ export function redactSelfIdentifiedNames(value: string) {
     return next
 }
 
+/** redactPii 의 영어 자리표시를 한국어 표기로 바꾼다(복원한 말풍선·요약이 같은 표기를 쓰게). */
+export function localizeRedactionPlaceholders(value: string) {
+    let next = value
+    for (const [token, label] of Object.entries(PLACEHOLDER_LABELS)) next = next.split(token).join(label)
+    return next
+}
+
 /** 요약·프로필에 싣는 고객 글. 연락처(redactPii)와 스스로 밝힌 이름을 가린다. */
 export function redactHandoffText(value: string, redact = HANDOFF_REDACT_CUSTOMER_PII) {
     if (!redact) return value
-    let next = redactPii(value)
-    for (const [token, label] of Object.entries(PLACEHOLDER_LABELS)) next = next.split(token).join(label)
-    return redactSelfIdentifiedNames(next)
+    return redactSelfIdentifiedNames(localizeRedactionPlaceholders(redactPii(value)))
 }
 
 /** 요약에 가린 자리가 있는지 — 카드가 '연락처·이름은 가렸어요'를 보일지 정한다. */
@@ -157,6 +162,11 @@ function normalizeButtonMentions(value: string) {
     return value.replace(/\[(?:실시간 상담 연결|도입 상담 남기기)\]/g, "[상담 연결]")
 }
 
+/** 답 글이 부르는 카드 버튼 이름을 화면의 실제 버튼 이름으로 맞춘다(운영시간 밖에는 버튼 이름이 다르다). */
+export function alignHandoffButtonMention(value: string, buttonLabel: string) {
+    return value.replace(/\[(?:실시간 상담 연결|도입 상담 남기기)\]/g, `[${buttonLabel}]`)
+}
+
 interface ConsultationDraftOptions {
     redact?: boolean
 }
@@ -188,17 +198,18 @@ export function buildConsultationDraft(
             ? "계정/결제/장비 상태 확인이 필요한 문의입니다."
             : "도입 방식과 운영 흐름 상담이 필요한 문의입니다."
     const summarySource = selectAnswerForSummary(segment, triggerMessage)
-    const answerSummary = summarySource
-        ? clipText(tidyMultiline(normalizeButtonMentions(plainAnswerText(summarySource.content))), ANSWER_SUMMARY_MAX)
-        : ""
+    // 가린 뒤 자른다 — 자르는 경계에 걸친 전화·이메일이 반쯤 남지 않게. 챗봇 답도 고객 글을 되읊을 수 있어 같이 가린다.
     const customer = (text: string) => redactHandoffText(text, redact)
+    const answerSummary = summarySource
+        ? clipText(customer(tidyMultiline(normalizeButtonMentions(plainAnswerText(summarySource.content)))), ANSWER_SUMMARY_MAX)
+        : ""
 
     return [
         "Classin 상담 요청드립니다.",
         intentLine,
-        lastQuestion ? `질문: ${customer(clipText(tidyMultiline(lastQuestion), QUESTION_LINE_MAX))}` : null,
+        lastQuestion ? `질문: ${clipText(customer(tidyMultiline(lastQuestion)), QUESTION_LINE_MAX)}` : null,
         earlier.length > 0
-            ? ["앞서 물은 내용:", ...earlier.map((question) => `- ${customer(clipText(question, QUESTION_LINE_MAX))}`)].join("\n")
+            ? ["앞서 물은 내용:", ...earlier.map((question) => `- ${clipText(customer(question), QUESTION_LINE_MAX)}`)].join("\n")
             : null,
         answerSummary ? `챗봇 확인 내용:\n${answerSummary}` : null,
     ].filter(Boolean).join("\n")
@@ -217,8 +228,8 @@ export function buildHandoffProfile(
     const transcript = segment
         .slice(-HANDOFF_TRANSCRIPT_LIMIT)
         .map((message) => {
-            const text = clipText(oneLine(message.content), HANDOFF_TRANSCRIPT_ITEM_MAX)
-            return message.role === "user" ? `고객: ${redactHandoffText(text, redact)}` : `챗봇: ${text}`
+            const text = clipText(redactHandoffText(oneLine(message.content), redact), HANDOFF_TRANSCRIPT_ITEM_MAX)
+            return message.role === "user" ? `고객: ${text}` : `챗봇: ${text}`
         })
         .join("\n")
 
@@ -226,7 +237,7 @@ export function buildHandoffProfile(
         chatbotHandoff: true,
         chatbotIntent: triggerMessage.handoffIntent ?? "support",
     }
-    if (lastQuestion) profile.lastQuestion = redactHandoffText(clipText(oneLine(lastQuestion), HANDOFF_PROFILE_VALUE_MAX), redact)
+    if (lastQuestion) profile.lastQuestion = clipText(redactHandoffText(oneLine(lastQuestion), redact), HANDOFF_PROFILE_VALUE_MAX)
     if (transcript) profile.chatbotTranscript = transcript.slice(0, HANDOFF_TRANSCRIPT_MAX)
     if (sessionId) profile.chatbotSessionId = sessionId
     return profile

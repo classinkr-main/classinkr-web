@@ -168,7 +168,7 @@ describe("위젯 셸의 모바일·접근성 배선", () => {
         expect(shell).toMatch(/useChatbotHistoryEntry\(\{\s*active: isModal,/)
         expect(modal).toContain("child.inert = true")
         expect(modal).toContain('html.style.overflow = "hidden"')
-        expect(modal).toContain("window.history.pushState({ [HISTORY_STATE_KEY]: token }, \"\")")
+        expect(modal).toContain("target().history.pushState({ [HISTORY_STATE_KEY]: next }, \"\")")
     })
 
     it("링크로 떠나며 닫힐 때는 history 항목을 걷지 않는다(이동이 취소되지 않게)", () => {

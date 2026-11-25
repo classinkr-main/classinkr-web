@@ -17,7 +17,9 @@ import {
 import { ClassInAIIcon } from "@/components/ui/ClassInAIIcon"
 import { CHATBOT_HIT_AREA_CLASS } from "@/components/ui/chatbot-hit-area"
 import type { ChatLinkClick } from "@/components/ui/chatbot-link-navigation"
-import { ConsultationBridge } from "@/components/ui/chatbot/ConsultationBridge"
+import { ConsultationBridge, getChannelTalkLabel } from "@/components/ui/chatbot/ConsultationBridge"
+import { alignHandoffButtonMention } from "@/components/ui/chatbot/consultation-draft"
+import { getSupportHoursState, type SupportHoursState } from "@/lib/contact/support-hours"
 import {
     LinkifiedText,
     flattenAssistantMarkdownLinks,
@@ -600,6 +602,15 @@ export const MessageList = memo(function MessageList({
     // 환영 칩을 낮은 화면에서 펼쳤는지. 접힌 동안은 '추천 질문 n개 보기' 한 줄만 보인다.
     const [starterChipsExpanded, setStarterChipsExpanded] = useState(false)
     const starterChipsId = useId()
+    // 상담 카드마다 카드가 처음 그려질 때의 운영시간 판정을 한 번만 하고 둔다. 답 글의 버튼 이름과 카드 버튼 이름이 같은 판정을 쓴다.
+    const [handoffHoursById] = useState(() => new Map<string, SupportHoursState>())
+    const handoffHoursFor = (messageId: string) => {
+        const known = handoffHoursById.get(messageId)
+        if (known) return known
+        const next = getSupportHoursState()
+        handoffHoursById.set(messageId, next)
+        return next
+    }
     // 지금 턴(마지막 질문 뒤)의 답에만 칩과 펼친 출처를 둔다. 지난 답의 칩은 지우고 출처는 접는다(CX-12).
     const currentTurnStart = findCurrentTurnStart(messages)
 
@@ -615,6 +626,11 @@ export const MessageList = memo(function MessageList({
                     const foldStarterChips = isWelcome && compact && !starterChipsExpanded
                     // 오래된 말풍선은 layout 애니메이션을 끄고 재지 않는다 — 긴 대화에서 입력·스트리밍이 느려지지 않게(CX-13).
                     const animateLayout = shouldAnimateMessageLayout(index, messages.length)
+                    const handoffHours = message.role === "assistant" && message.showHandoffCTA ? handoffHoursFor(message.id) : undefined
+                    // 답 글이 부르는 버튼 이름('[실시간 상담 연결]')을 운영시간 밖에 바뀐 실제 버튼 이름에 맞춘다(CX-07).
+                    const displayContent = handoffHours
+                        ? alignHandoffButtonMention(message.content, getChannelTalkLabel(message.handoffIntent ?? "support", handoffHours))
+                        : message.content
                     return (
                         <motion.div
                             key={message.id}
@@ -643,7 +659,7 @@ export const MessageList = memo(function MessageList({
                                 {/* 화자 표시(CX-27): 답에는 'Classin AI' 머리가 보이고, 사용자 말풍선은 화면 읽기에만 '내 질문'을 붙인다. */}
                                 {message.role === "user" ? <span className="sr-only">내 질문: </span> : null}
                                 <MessageContent
-                                    content={message.content}
+                                    content={displayContent}
                                     role={message.role}
                                     isStreaming={isAssistantStreaming}
                                     animateLayout={isAssistantStreaming}
@@ -748,6 +764,7 @@ export const MessageList = memo(function MessageList({
                                                 messages={messages}
                                                 message={message}
                                                 sessionId={message.sessionId ?? sessionId}
+                                                hours={handoffHours}
                                                 onNavigate={closeAfterInChatNavigation}
                                             />
                                         ) : null}

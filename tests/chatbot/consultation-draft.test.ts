@@ -5,6 +5,7 @@ import {
     buildHandoffProfile,
     hasRedactedPlaceholder,
     isContentfulQuestion,
+    alignHandoffButtonMention,
     redactHandoffText,
     redactSelfIdentifiedNames,
     selectConsultationSegment,
@@ -211,5 +212,44 @@ describe("내용 있는 질문", () => {
         for (const text of ["카메라 안 켜져서 상담원 연결해주세요", "결제 상담 받고 싶어요", "카메라가 안 켜져요"]) {
             expect(isContentfulQuestion(text)).toBe(true)
         }
+    })
+})
+
+describe("가린 뒤 자른다 · 챗봇 줄도 가린다", () => {
+    it("자르는 경계에 걸친 전화번호·이메일이 반쯤 남지 않는다", () => {
+        const phoneAtEdge = `${"가".repeat(190)} 010-1234-5678 로 연락 주세요`
+        const draft = buildConsultationDraft([user("u1", phoneAtEdge), answer("a1", "확인했어요.")], answer("a1", "확인했어요."))
+        expect(draft).not.toMatch(/010-1234|010-123/)
+
+        const longPhone = `${"나".repeat(292)} 01012345678`
+        const profile = buildHandoffProfile([user("u1", longPhone), answer("a1", "확인했어요.")], answer("a1", "확인했어요."))
+        expect(profile.lastQuestion).not.toContain("010123")
+        expect(profile.chatbotTranscript).not.toContain("010123")
+
+        const emailAtEdge = `${"다".repeat(185)} parent.name@school.kr`
+        const emailProfile = buildHandoffProfile([user("u1", emailAtEdge), answer("a1", "확인했어요.")], answer("a1", "확인했어요."))
+        expect(emailProfile.lastQuestion).not.toContain("parent.name@")
+        expect(emailProfile.chatbotTranscript).not.toContain("parent.name@")
+        const emailDraft = buildConsultationDraft([user("u1", emailAtEdge), answer("a1", "확인했어요.")], answer("a1", "확인했어요."))
+        expect(emailDraft).not.toContain("parent.name@")
+    })
+
+    it("챗봇이 고객 글을 되읊은 줄의 이름·연락처도 프로필 대화록과 요약에서 가린다", () => {
+        const echo = answer("a1", "함께 물어보신 '제 이름은 홍길동이고 번호는 010-1234-5678'는 이 답에 담지 못했어요. 카메라 권한을 확인해 주세요.")
+        const messages = [user("u1", "제 이름은 홍길동이고 번호는 010-1234-5678 카메라가 안 켜져요"), echo]
+        const profile = buildHandoffProfile(messages, echo)
+        expect(profile.chatbotTranscript).toContain("챗봇:")
+        expect(profile.chatbotTranscript).not.toContain("홍길동")
+        expect(profile.chatbotTranscript).not.toContain("010-1234-5678")
+        const draft = buildConsultationDraft(messages, echo)
+        expect(draft).toContain("챗봇 확인 내용")
+        expect(draft).not.toContain("홍길동")
+        expect(draft).not.toContain("010-1234-5678")
+    })
+
+    it("답 글의 버튼 이름을 화면의 실제 버튼 이름에 맞춘다", () => {
+        const text = "아래 [실시간 상담 연결]을 누르시면 상담원이 이어서 확인해요."
+        expect(alignHandoffButtonMention(text, "채팅으로 상담 남기기")).toBe("아래 [채팅으로 상담 남기기]을 누르시면 상담원이 이어서 확인해요.")
+        expect(alignHandoffButtonMention(text, "실시간 상담 연결")).toBe(text)
     })
 })

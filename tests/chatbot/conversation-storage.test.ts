@@ -58,7 +58,7 @@ describe("serializeConversation · parseStoredConversation", () => {
     expect(restored?.sessionId).toBe("session-1")
     expect(restored?.sessionOwner).toBe("abcd1234")
     expect(restored?.messages.map((message) => message.id)).toEqual(["u1", "u2", "a2", "u3", "a3"])
-    expect(restored?.messages[0].content).toBe("제 번호는 [phone], 메일은 [email] 이에요")
+    expect(restored?.messages[0].content).toBe("제 번호는 [전화번호], 메일은 [이메일] 이에요")
     const a2 = restored?.messages.find((message) => message.id === "a2")
     const a3 = restored?.messages.find((message) => message.id === "a3")
     expect(a2?.suggestedQuestions).toEqual([])
@@ -107,7 +107,7 @@ describe("serializeConversation · parseStoredConversation", () => {
     ]
     const restored = parseStoredConversation(serializeConversation({ messages }, NOW), NOW)
     expect(restored?.messages[1]).toMatchObject({ showHandoffCTA: true, needsHandoff: true, handoffIntent: "support" })
-    expect(restored?.messages[1].handoffSummary).toBe("질문: 김민준 [phone] 카메라가 안 켜져요")
+    expect(restored?.messages[1].handoffSummary).toBe("질문: 김민준 [전화번호] 카메라가 안 켜져요")
   })
 
   it("마지막 활동 뒤 30분이 지나면 버린다(세션 id 포함)", () => {
@@ -153,7 +153,7 @@ describe("serializeConversation · parseStoredConversation", () => {
     })
     const restored = parseStoredConversation(raw, NOW)
     expect(restored?.messages.map((message) => message.id)).toEqual(["u1", "a1"])
-    expect(restored?.messages[0].content).toBe("제 번호 [phone]")
+    expect(restored?.messages[0].content).toBe("제 번호 [전화번호]")
     expect(restored?.messages[1].sources?.map((source) => source.urlPath)).toEqual(["/docs/a"])
   })
 
@@ -204,5 +204,15 @@ describe("탭 저장소 읽기·쓰기", () => {
     expect(loadStoredConversation(NOW)).toBeNull()
     expect(saveStoredConversation({ messages: turn(1) }, NOW)).toBe(false)
     expect(() => clearStoredConversation()).not.toThrow()
+  })
+})
+
+describe("복원한 말풍선의 가림 표기", () => {
+  it("사용자 글의 영어 자리표시를 상담 요약과 같은 한국어 표기로 보인다(옛 저장값도)", () => {
+    const messages: ChatMessage[] = [{ id: "u1", role: "user", content: "번호 010-2345-6789 메일 kim@example.com" }]
+    const restored = parseStoredConversation(serializeConversation({ messages }, NOW), NOW)
+    expect(restored?.messages[0].content).toBe("번호 [전화번호] 메일 [이메일]")
+    const old = JSON.stringify({ v: 1, savedAt: NOW, lastActiveAt: NOW, messages: [{ id: "u1", role: "user", content: "번호 [phone] 메일 [email]" }] })
+    expect(parseStoredConversation(old, NOW)?.messages[0].content).toBe("번호 [전화번호] 메일 [이메일]")
   })
 })

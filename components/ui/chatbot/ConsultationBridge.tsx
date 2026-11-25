@@ -32,7 +32,7 @@ function getHandoffTopic(intent?: HandoffIntent) {
  * 채널톡(보조) 버튼 이름. 답 글이 '아래 [실시간 상담 연결]로…'·'아래 [도입 상담 남기기]로…'라고 이 이름을 부르므로
  * 운영시간 안에는 그대로 둔다. 운영시간 밖(점심 포함)에는 '실시간'을 빼고 남기는 채팅임을 밝힌다(CX-07).
  */
-function getChannelTalkLabel(intent: HandoffIntent, hours: SupportHoursState) {
+export function getChannelTalkLabel(intent: HandoffIntent, hours: SupportHoursState) {
     if (intent === "demo") return "도입 상담 남기기"
     return hours === "open" ? "실시간 상담 연결" : "채팅으로 상담 남기기"
 }
@@ -60,11 +60,14 @@ export function ConsultationBridge({
     messages,
     message,
     sessionId,
+    hours: hoursFromList,
     onNavigate,
 }: {
     messages: ChatMessage[]
     message: ChatMessage
     sessionId?: string
+    // 목록이 답 글의 버튼 이름을 맞출 때 쓴 운영시간 판정. 같은 판정을 써야 글과 버튼 이름이 어긋나지 않는다.
+    hours?: SupportHoursState
     onNavigate?: (click: ChatLinkClick) => void
 }) {
     const shouldReduceMotion = useReducedMotion()
@@ -82,7 +85,8 @@ export function ConsultationBridge({
         ;(expandedWhileSuperseded ? collapseToggleRef : expandToggleRef).current?.focus()
     }, [expandedWhileSuperseded])
     // 운영시간 판정은 카드가 생길 때 한 번 한다(KST). 창을 오래 열어 둬도 문구가 바뀌며 흔들리지 않는다.
-    const [hours] = useState<SupportHoursState>(() => getSupportHoursState())
+    const [ownHours] = useState<SupportHoursState>(() => getSupportHoursState())
+    const hours = hoursFromList ?? ownHours
 
     // 요약은 이 답까지의 구간에서만 만든다. 구간 앞쪽 메시지는 바뀌지 않으므로 뒤 턴이 와도 같은 글이다.
     const draft = useMemo(() => buildConsultationDraft(messages, message), [messages, message])

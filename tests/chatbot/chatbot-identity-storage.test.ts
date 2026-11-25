@@ -72,6 +72,22 @@ describe("챗봇 식별값 (C3)", () => {
     expect(browser.localStorage.getItem(PERSISTENT_KEY)).toBeNull()
   })
 
+  it("동의한 탭에서 철회하면 동의 때 쓰던 식별값이 이어지지 않고 탭 식별값도 새로 만든다", async () => {
+    const browser = installFakeBrowser()
+    browser.setCookie(consentCookie(CONSENT_POLICY_VERSION, { analytics: true, marketing: true }))
+    const { getChannelTalkAnonymousId, getChannelTalkMemberId } = await loadChannelTalk()
+    const consented = getChannelTalkAnonymousId()
+    expect(browser.localStorage.getItem(PERSISTENT_KEY)).toBe(consented)
+    expect(getChannelTalkMemberId()).toBe(`classin:web:${consented}`)
+
+    browser.setCookie(consentCookie(CONSENT_POLICY_VERSION, { analytics: true, marketing: false }))
+    const after = getChannelTalkAnonymousId()
+    expect(after).toBeTruthy()
+    expect(after).not.toBe(consented)
+    expect(browser.sessionStorage.getItem(TAB_KEY)).toBe(after)
+    expect(getChannelTalkAnonymousId()).toBe(after)
+  })
+
   it("채널톡 키가 없으면 '마케팅' 동의가 있어도 영구 값을 만들지 않는다", async () => {
     vi.stubEnv("NEXT_PUBLIC_CHANNEL_PLUGIN_KEY", "")
     const browser = installFakeBrowser()
