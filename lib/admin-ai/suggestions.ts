@@ -55,3 +55,14 @@ export function resolveAdminAiSuggestions(pathname: string): AdminAiSuggestion[]
   }
   return best?.items ?? DEFAULT_ITEMS
 }
+
+/**
+ * 어느 화면에서나 같은 "묻기" 추천 — 화면별 3개 아래에 붙는다(새 대화 설계 N8, 점검 R28).
+ * 담당자·링크·정책 질문은 매니저가 가장 자주 하는 질문이고, 오더가 아니라 조회(R0)다.
+ * 실제 답 카드는 다음 묶음이 붙이고, 지금은 시안 글 답이 나온다.
+ */
+export const COMMON_ASK_ITEMS: readonly AdminAiSuggestion[] = [
+  { label: "담당자 찾기", risk: "R0", scenario: "who" },
+  { label: "링크 찾기", risk: "R0", scenario: "link" },
+  { label: "정책 묻기", risk: "R0", scenario: "knowledge" },
+]

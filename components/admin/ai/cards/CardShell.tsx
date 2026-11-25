@@ -137,6 +137,18 @@ export function CardShell({
   )
 }
 
+/**
+ * 시안 카드 띠 — 샘플 데이터로 그린 카드가 실제로 실행되는 것처럼 보이지 않게 한다(점검 R16).
+ * 머리말의 작은 글자만으로는 카드 앞에서 놓친다. 서버 오더 엔진이 붙어 live 모드가 되면 그리지 않는다.
+ */
+export function PreviewBand() {
+  return (
+    <p className="rounded-md border border-[#ECD29C] bg-[#FDF6E7] px-2.5 py-[5px] text-[11px] font-semibold text-[#7A520F]">
+      시안 — 실제로 실행되지 않습니다
+    </p>
+  )
+}
+
 export function CardNote({ icon, children }: { icon: ReactNode; children: ReactNode }) {
   return (
     <p className="flex items-start gap-1.5 text-[11px] text-[#615D59]">

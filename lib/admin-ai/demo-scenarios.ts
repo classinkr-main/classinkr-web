@@ -3,7 +3,7 @@
 // 여기 있는 고객·금액·재고는 전부 가짜다. 실제 DB 를 읽지도, 쓰지도 않는다.
 // 화면은 AdminAiClient.mode === "demo" 일 때 "시안 · 샘플 데이터" 표시를 띄운다.
 import { ORDER_TTL_MS } from "./order-state"
-import type { AdminAiTurnResult, AiBlock, OrderTicket } from "./types"
+import type { AdminAiTurnResult, AiBlock, OrderRisk, OrderTicket } from "./types"
 
 export type DemoScenarioKey =
   | "task"
@@ -18,6 +18,11 @@ export type DemoScenarioKey =
   | "amount"
   | "delete"
   | "which"
+  // 묻기(R0) — 오더가 아니다. 답 카드(answer·links·contact, 기획 §11)는 다음 묶음(B4)이 만든다.
+  // 지금은 글 블록으로만 답하고, 시나리오 id 를 셋으로 나눠 두어 B4 가 시나리오별로 카드로 바꿔 끼운다.
+  | "who"
+  | "knowledge"
+  | "link"
 
 interface DemoScenario {
   /** 추천 항목을 눌렀을 때 사용자 말풍선에 들어갈 문장. */
@@ -101,13 +106,13 @@ const SCENARIOS: Record<DemoScenarioKey, DemoScenario> = {
       card: {
         icon: "search",
         title: "최근 기록",
-        target: { label: "한빛수학학원", meta: "기록 3건 · 방금 읽음" },
+        target: { label: "한빛수학학원", meta: "샘플 기록 3건" },
         log: [
           { when: "9월 28일", text: "데모 진행 · 86형 4대 관심" },
           { when: "9월 22일", text: "전화 · 데모 일정 확정" },
           { when: "9월 17일", text: "홈페이지 문의 접수" },
         ],
-        note: "기록 원문에서 뽑은 요약 · 추측 없음",
+        note: "샘플 기록의 요약입니다 · 실제 고객 기록이 아닙니다",
         openLabel: "고객 화면에서 열기",
         openHref: "/admin/crm/customers/unified",
       },
@@ -122,7 +127,7 @@ const SCENARIOS: Record<DemoScenarioKey, DemoScenario> = {
       card: {
         icon: "calendar",
         title: "오늘 후속조치",
-        target: { label: "3건", meta: "CRM 현황의 순서 그대로" },
+        target: { label: "3건", meta: "샘플 목록" },
         table: {
           head: ["고객", "할 일", "기한"],
           rows: [
@@ -146,7 +151,7 @@ const SCENARIOS: Record<DemoScenarioKey, DemoScenario> = {
       card: {
         icon: "stock",
         title: "하드웨어 재고",
-        target: { label: "86형", meta: "방금 읽음" },
+        target: { label: "86형", meta: "샘플 수량" },
         table: {
           head: ["모델", "가용", "예약", "배송예정"],
           rows: [
@@ -173,7 +178,7 @@ const SCENARIOS: Record<DemoScenarioKey, DemoScenario> = {
       target: { label: "도담영어 원장", meta: "010-****-1234" },
       fields: [
         { key: "channel", label: "채널", value: "알림톡", hint: "실패 시 문자로 대체" },
-        { key: "consent", label: "수신 동의", value: "확인됨", verified: true },
+        { key: "consent", label: "수신 동의", value: "샘플 값", hint: "시안은 동의 여부를 확인하지 않음" },
       ],
       message: {
         text: "[Classin] 쇼룸 방문 예약이 확정되었습니다. 10월 2일(금) 14:00, 강남 쇼룸. 변경은 이 번호로 회신해 주세요.",
@@ -186,7 +191,7 @@ const SCENARIOS: Record<DemoScenarioKey, DemoScenario> = {
   },
   pay: {
     say: "한빛수학학원 1차 입금 들어왔어. 결제 확정해 줘.",
-    steps: ["한빛수학학원 거래건 확인", "1차 회차 금액 확인", "결제 확정 권한 확인"],
+    steps: ["한빛수학학원 거래건 확인", "1차 회차 금액 확인", "오더 작성"],
     text: "금액과 회차를 확인해 주세요.",
     order: {
       type: "payment.confirm",
@@ -209,7 +214,7 @@ const SCENARIOS: Record<DemoScenarioKey, DemoScenario> = {
   },
   ship: {
     say: "도담영어 출고 예정 건 오늘 나갔어. 확정해.",
-    steps: ["출고 예정 건 확인", "가용 재고 확인", "입출고 확정 권한 확인"],
+    steps: ["출고 예정 건 확인", "가용 재고 확인", "오더 작성"],
     text: "수량과 출고일을 확인해 주세요.",
     order: {
       type: "hardware.movement.finalize",
@@ -234,7 +239,7 @@ const SCENARIOS: Record<DemoScenarioKey, DemoScenario> = {
   },
   amount: {
     say: "가온학원 견적 10% 깎아 줘.",
-    steps: ["가온학원 견적 확인", "금액 다시 계산", "금액 변경 권한 확인"],
+    steps: ["가온학원 견적 확인", "금액 다시 계산", "오더 작성"],
     text: "새 버전을 만듭니다. 고객에게는 자동으로 나가지 않습니다.",
     order: {
       type: "quote.amount.update",
@@ -285,9 +290,39 @@ const SCENARIOS: Record<DemoScenarioKey, DemoScenario> = {
       },
     },
   },
+  who: {
+    say: "카메라 화질 문제는 본사 누구한테 물어봐?",
+    steps: ["질문 분류", "담당 표 찾기"],
+    text: "시안 답변입니다 — 실제 담당 표를 읽지 않은 예시입니다. 실제 모드에서는 한국 팀 담당 표와 본사 담당 표에서 이 분야의 담당 한 줄을 찾아 알려 드립니다. 담당자 이름은 사내 화면에서만 보입니다.",
+  },
+  knowledge: {
+    say: "견적서에 할인을 넣어도 되나? 승인 규칙이 뭐야?",
+    steps: ["질문 분류", "내부 문서 찾기"],
+    text: "시안 답변입니다 — 실제 문서를 읽지 않은 예시입니다. 실제 모드에서는 답과 함께 근거 문서·확정 여부(확정 · 확인 필요)·고객에게 그대로 전해도 되는지를 표시합니다. 고객에게 보낼 문안은 CS 코파일럿에서 만듭니다.",
+  },
+  link: {
+    say: "견적서 만드는 화면 링크 알려 줘.",
+    steps: ["질문 분류", "링크 찾기"],
+    text: "시안 답변입니다 — 실제 링크 목록을 읽지 않은 예시입니다. 실제 모드에서는 어드민 화면 바로가기와 고객에게 보여 줘도 되는 공개 페이지 링크를 구분해 드립니다. 고객용 링크는 허용 목록에 있는 것만 나옵니다.",
+  },
 }
 
+// 질문형 문장 — 갈매봇에게 "시키는" 말이 아니라 "묻는" 말. 이 판정이 실행 키워드보다 먼저다(2026-11 점검 R4).
+// 실행 키워드("결제"·"출고"·"견적"…)가 문장에 들어 있다는 이유로 묻기만 한 말이 실행 오더 카드로 가면 안 된다.
+// 애매하면 묻기 쪽으로 기운다 — 묻기는 아무것도 바꾸지 않고, 오더는 카드에서 사람이 한 번 더 확인하지만
+// 서버가 붙은 뒤에도 같은 방향이 안전하다.
+const QUESTION = /누구|누가|어디|뭐야|뭔가요|뭐예요|무엇|되나|되는지|됩니까|되나요|가능한가|어떻게|어떤|왜|링크|알려|\?|？|인가요|인지|나요\s*$/
+const WHO = /누구|누가|담당자|연락처|문의\s*처/
+const LINK = /링크|주소|어디서|어디에서|어디로|바로가기|url/i
+// 묻는 말이어도 조회(R0) 시나리오가 있는 것은 그쪽으로 — 오더가 아니다.
+const READ_QUESTIONS: ReadonlyArray<[RegExp, DemoScenarioKey]> = [
+  [/오늘|연락할/, "today"],
+  [/재고/, "stock"],
+  [/요약/, "summary"],
+]
+
 // 위에서부터 먼저 걸린다 — "삭제" 가 "기록" 보다 앞서야 "기록 삭제해 줘" 가 거절로 간다.
+// 질문형이 아닌 문장에만 쓴다.
 const KEYWORDS: ReadonlyArray<[RegExp, DemoScenarioKey]> = [
   [/지워|삭제/, "delete"],
   [/한빛학원/, "which"],
@@ -296,20 +331,46 @@ const KEYWORDS: ReadonlyArray<[RegExp, DemoScenarioKey]> = [
   [/깎|할인|금액|견적/, "amount"],
   [/문자|알림톡|보내/, "sms"],
   [/재고/, "stock"],
+  // "할 일 잡아 줘. 담당은 나" 처럼 담당을 덧붙인 할 일이 리드 담당 변경으로 가지 않게 할 일이 먼저다.
+  [/할 ?일|전화|잡아/, "task"],
   [/상태|담당|맡을/, "lead"],
   [/통화|컨택|연락 달/, "contact"],
-  [/할 ?일|전화|잡아/, "task"],
   [/오늘|연락할/, "today"],
   [/요약|기록/, "summary"],
 ]
 
+// "초안"(새 견적서를 만드는 말)·"예정"(아직 일어나지 않은 일)·"계획" 은 금액·결제·출고를 확정하는 말이 아니다.
+// 확정·완료를 함께 말했을 때만 실행 키워드로 넘기고, 아니면 묻기로 보낸다 —
+// "출고 예정 등록"·"견적 초안 만들어 줘"·"결제 예정일" 이 확정 오더 카드로 가면 안 된다.
+const SOFT_TOPIC = /초안|예정|계획/
+const CONFIRMING = /확정|완료|처리|나갔|들어왔/
+
 export function matchDemoScenario(text: string): DemoScenarioKey | null {
   const normalized = text.trim()
   if (!normalized) return null
+
+  if (QUESTION.test(normalized)) {
+    if (WHO.test(normalized)) return "who"
+    if (LINK.test(normalized)) return "link"
+    for (const [pattern, key] of READ_QUESTIONS) {
+      if (pattern.test(normalized)) return key
+    }
+    return "knowledge"
+  }
+
+  // 삭제 거절은 가장 먼저 — 초안·예정이 섞여도 거절이다.
+  if (/지워|삭제/.test(normalized)) return "delete"
+  if (SOFT_TOPIC.test(normalized) && !CONFIRMING.test(normalized)) return "knowledge"
+
   for (const [pattern, key] of KEYWORDS) {
     if (pattern.test(normalized)) return key
   }
   return null
+}
+
+/** 시나리오가 만드는 오더의 등급 — 묻기·조회·거절·선택은 null. 시험과 화면 표시가 같은 값을 본다. */
+export function demoScenarioRisk(key: DemoScenarioKey): OrderRisk | null {
+  return SCENARIOS[key].order?.risk ?? null
 }
 
 export function demoScenarioPrompt(key: DemoScenarioKey): string {
@@ -321,7 +382,7 @@ export function demoScenarioSteps(key: DemoScenarioKey): string[] {
 }
 
 export const DEMO_FALLBACK_TEXT =
-  "시안 모드라 준비된 예시만 답합니다. 「재고」「할 일」「상태」「문자」「결제」「출고」「견적」「삭제」 같은 말을 넣어 보세요."
+  "시안 모드라 준비된 예시만 답합니다. 「재고」「할 일」「상태」「문자」「결제」「출고」「견적」「삭제」나 「누구」「링크」「되나」 같은 말을 넣어 보세요."
 
 export function buildDemoTurn(
   key: DemoScenarioKey,

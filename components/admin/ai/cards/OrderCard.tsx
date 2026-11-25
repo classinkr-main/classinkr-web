@@ -29,7 +29,8 @@ import {
   type OrderAction,
 } from "@/lib/admin-ai/order-state"
 import type { OrderField, OrderTicket } from "@/lib/admin-ai/types"
-import { AiButton, aiButtonClass, CardNote, CardShell, type CardTone } from "./CardShell"
+import { adminAiStore } from "@/lib/admin-ai/store"
+import { AiButton, aiButtonClass, CardNote, CardShell, PreviewBand, type CardTone } from "./CardShell"
 
 function toneOf(order: OrderTicket): CardTone {
   if (order.state === "failed") return "danger"
@@ -183,7 +184,7 @@ function MetaLine({ order }: { order: OrderTicket }) {
     parts.push(
       <span key="cap" className="inline-flex items-center gap-1">
         <Lock className="h-[11px] w-[11px]" aria-hidden="true" />
-        권한 · {order.capabilityLabel}
+        필요 권한 · {order.capabilityLabel}
       </span>
     )
   }
@@ -227,9 +228,11 @@ function OpenLink({ order }: { order: OrderTicket }) {
 function OrderCardEditor({
   order,
   onAction,
+  preview,
 }: {
   order: OrderTicket
   onAction: (action: OrderAction) => void
+  preview: boolean
 }) {
   const [values, setValues] = useState<Record<string, string>>(() =>
     Object.fromEntries(order.fields.filter((field) => field.editable).map((f) => [f.key, f.value]))
@@ -274,6 +277,7 @@ function OrderCardEditor({
         </>
       }
     >
+      {preview ? <PreviewBand /> : null}
       <AmountBlock order={order} muted={false} />
       {order.fields.length > 0 ? (
         <dl className="flex flex-col border-t border-[#F0F0EC]">
@@ -312,14 +316,19 @@ export function OrderCard({
   order,
   now,
   onAction,
+  preview = adminAiStore.mode === "demo",
 }: {
   order: OrderTicket
   now: number
   onAction: (action: OrderAction) => void
+  /** 시안(샘플 데이터) 카드인지. 기본은 스토어의 모드를 따른다. */
+  preview?: boolean
 }) {
   if (order.state === "editing") {
     // key 로 수정 세션마다 입력값을 새로 시작한다.
-    return <OrderCardEditor key={`${order.id}-edit`} order={order} onAction={onAction} />
+    return (
+      <OrderCardEditor key={`${order.id}-edit`} order={order} onAction={onAction} preview={preview} />
+    )
   }
 
   const closed = isClosedOrderState(order.state)
@@ -338,7 +347,7 @@ export function OrderCard({
             variant={order.risk === "R3" ? "danger" : "primary"}
             onClick={() => onAction({ type: "confirm" })}
           >
-            {order.confirmLabel}
+            {preview ? "시안 확인" : order.confirmLabel}
           </AiButton>
           {canEditOrder(order) ? (
             <AiButton onClick={() => onAction({ type: "edit" })}>
@@ -375,7 +384,7 @@ export function OrderCard({
     footer = (
       <>
         <StatusLine tone="ok" icon={<Check className="h-[13px] w-[13px]" aria-hidden="true" />}>
-          완료 · {order.doneText}
+          {preview ? "시안 완료 · 실제로는 실행되지 않았습니다" : `완료 · ${order.doneText}`}
         </StatusLine>
         {undoable || (order.openLabel && order.target.href) ? (
           <div className="flex flex-wrap gap-1.5">
@@ -404,7 +413,7 @@ export function OrderCard({
     footer = (
       <>
         <StatusLine tone="ok" icon={<Check className="h-[13px] w-[13px]" aria-hidden="true" />}>
-          발송됨
+          {preview ? "시안 발송됨 · 실제로는 나가지 않았습니다" : "발송됨"}
         </StatusLine>
         <p className="text-[11px] text-[#A39E98]">되돌릴 수 없음</p>
       </>
@@ -459,6 +468,7 @@ export function OrderCard({
       muted={closed}
       footer={footer}
     >
+      {preview ? <PreviewBand /> : null}
       <AmountBlock order={order} muted={closed} />
       {order.fields.length > 0 ? (
         <dl className="flex flex-col border-t border-[#F0F0EC]">
