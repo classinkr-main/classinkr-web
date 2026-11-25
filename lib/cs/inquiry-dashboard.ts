@@ -84,6 +84,20 @@ function maskContact(contact?: string | null): string | undefined {
   return trimmed
 }
 
+type Settled<T> = { ok: true; value: T } | { ok: false; error: unknown }
+
+function startSettled<T>(read: () => Promise<T>): Promise<Settled<T>> {
+  return (async () => read())().then(
+    (value): Settled<T> => ({ ok: true, value }),
+    (error): Settled<T> => ({ ok: false, error })
+  )
+}
+
+function unwrapSettled<T>(result: Settled<T>): T {
+  if (!result.ok) throw result.error
+  return result.value
+}
+
 export async function fetchCsInquiryDashboard(options?: {
   period?: CsDashboardPeriod
   now?: Date
@@ -122,14 +136,29 @@ export async function fetchCsInquiryDashboard(options?: {
   const prevPeriodStartMs = period === "all" ? 0 : periodStartMs - periodDurationMs
   const prevPeriodEndMs = periodStartMs
 
+  const fromDateStr = period === "all" ? "2026-01-01" : getKstDateString(new Date(periodStartMs))
+  const toDateStr = todayKstStr
+
+  // 독립적인 읽기는 먼저 모두 시작하고, 기존 위치에서 결과를 소비한다.
+  // 각 읽기는 자체적으로 오류를 settle 하므로 소비 전 reject 가 unhandled 로 새지 않는다.
+  const durableChatsRead = startSettled(() => listDurableConversations(500))
+  const leadsRead = startSettled(() => getLeads())
+  const chatbotStatsRead = startSettled(() =>
+    getChatbotStats(new URLSearchParams({ from: fromDateStr, to: toDateStr }))
+  )
+  const callTasksRead = startSettled(() => listCrmTasks({ taskType: "call", limit: 300 }))
+  const showroomRead = startSettled(() => listShowroomBookings({ from: todayKstStr }))
+  const installRead = startSettled(() => listInstallSchedules({ from: todayKstStr }))
+  const openTasksRead = startSettled(() => listCrmTasks({ status: "open", limit: 20 }))
+
   // 1. Fetch channel talk data
-  const durableChats = await listDurableConversations(500)
+  const durableChats = unwrapSettled(await durableChatsRead)
   const allConversations: ChannelConversationRecord[] = durableChats ?? getConversations()
 
   // 2. Fetch homepage inquiries (leads)
   let allLeads: LeadRecord[] = []
   try {
-    allLeads = await getLeads()
+    allLeads = unwrapSettled(await leadsRead)
   } catch (err) {
     console.warn("[cs-dashboard] getLeads failed, proceeding with empty leads:", err)
   }
@@ -138,11 +167,9 @@ export async function fetchCsInquiryDashboard(options?: {
   const inboundLeads = allLeads.filter((l) => DIRECT_INBOUND_LEAD_SOURCES.has(l.source))
 
   // 3. Chatbot stats
-  const fromDateStr = period === "all" ? "2026-01-01" : getKstDateString(new Date(periodStartMs))
-  const toDateStr = todayKstStr
   let chatbotStats: Awaited<ReturnType<typeof getChatbotStats>> | null = null
   try {
-    chatbotStats = await getChatbotStats(new URLSearchParams({ from: fromDateStr, to: toDateStr }))
+    chatbotStats = unwrapSettled(await chatbotStatsRead)
   } catch (err) {
     console.warn("[cs-dashboard] getChatbotStats failed, using fallback:", err)
   }
@@ -150,7 +177,7 @@ export async function fetchCsInquiryDashboard(options?: {
   // 4. Fetch internal phone call logs (crm_tasks with taskType 'call')
   let allCallTasks: CrmTaskRecord[] = []
   try {
-    const callResult = await listCrmTasks({ taskType: "call", limit: 300 })
+    const callResult = unwrapSettled(await callTasksRead)
     allCallTasks = callResult.rows
   } catch (err) {
     console.warn("[cs-dashboard] listCrmTasks (call) failed, proceeding with empty:", err)
@@ -749,7 +776,7 @@ export async function fetchCsInquiryDashboard(options?: {
 
   // 6b. Showroom visit bookings (쇼룸 방문 예약)
   try {
-    const showroomList = await listShowroomBookings({ from: todayKstStr })
+    const showroomList = unwrapSettled(await showroomRead)
     for (const b of showroomList) {
       if (b.status !== "requested" && b.status !== "confirmed") continue
       if (b.visitDate < todayKstStr) continue
@@ -789,7 +816,7 @@ export async function fetchCsInquiryDashboard(options?: {
 
   // 6c. Hardware installation schedules (설치 지원 일정)
   try {
-    const installList = await listInstallSchedules({ from: todayKstStr })
+    const installList = unwrapSettled(await installRead)
     for (const s of installList) {
       if (s.status === "completed" || s.status === "cancelled") continue
       const diffDays = Math.round(
@@ -818,7 +845,7 @@ export async function fetchCsInquiryDashboard(options?: {
 
   // 6d. CRM Tasks (CS 체크인 및 데모 과업)
   try {
-    const crmResult = await listCrmTasks({ status: "open", limit: 20 })
+    const crmResult = unwrapSettled(await openTasksRead)
     for (const t of crmResult.rows) {
       if (!t.dueAt) continue
       const diffDays = Math.round(

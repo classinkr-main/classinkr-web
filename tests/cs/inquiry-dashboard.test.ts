@@ -43,10 +43,7 @@ vi.mock("@/lib/repositories/crm-tasks", () => ({
   listCrmTasks: mocks.listCrmTasks,
 }))
 
-import {
-  fetchCsInquiryDashboard,
-  CS_CATEGORY_MAP,
-} from "@/lib/cs/inquiry-dashboard"
+import { fetchCsInquiryDashboard } from "@/lib/cs/inquiry-dashboard"
 
 function mockConversation(overrides: Partial<ChannelConversationRecord>): ChannelConversationRecord {
   return {
@@ -346,5 +343,66 @@ describe("CS Inquiry Dashboard Service (fetchCsInquiryDashboard)", () => {
     const crmTask = result.upcomingTasks.find((t) => t.type === "crm_task")
     expect(crmTask).toBeDefined()
     expect(crmTask?.title).toContain("수업 음성 끊김 이슈")
+  })
+
+  it("starts all independent reads before any of them settles", async () => {
+    const fixedNow = new Date("2026-10-14T05:00:00.000Z")
+    const gates: Array<() => void> = []
+    const gated = <T,>(value: T) =>
+      new Promise<T>((resolve) => {
+        gates.push(() => resolve(value))
+      })
+
+    mocks.listDurableConversations.mockImplementation(() => gated([] as ChannelConversationRecord[]))
+    mocks.getLeads.mockImplementation(() => gated([] as LeadRecord[]))
+    mocks.getChatbotStats.mockImplementation(() => gated(null))
+    mocks.listCrmTasks.mockImplementation(() => gated({ rows: [], summary: { total: 0 } }))
+    mocks.listShowroomBookings.mockImplementation(() => gated([]))
+    mocks.listInstallSchedules.mockImplementation(() => gated([]))
+
+    const pending = fetchCsInquiryDashboard({ period: "7d", now: fixedNow })
+    await new Promise((r) => setTimeout(r, 0))
+
+    // 7 reads (listCrmTasks twice) all started while none has resolved.
+    expect(gates).toHaveLength(7)
+    expect(mocks.listCrmTasks).toHaveBeenCalledTimes(2)
+    gates.forEach((open) => open())
+    await expect(pending).resolves.toBeDefined()
+  })
+
+  it("keeps per-source fallbacks when individual reads reject", async () => {
+    const fixedNow = new Date("2026-10-14T05:00:00.000Z")
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+
+    mocks.listDurableConversations.mockResolvedValue([
+      mockConversation({ id: "ct-1", state: "closed" }),
+    ])
+    mocks.getLeads.mockRejectedValue(new Error("leads down"))
+    mocks.getChatbotStats.mockRejectedValue(new Error("stats down"))
+    mocks.listCrmTasks.mockRejectedValue(new Error("crm down"))
+    mocks.listShowroomBookings.mockRejectedValue(new Error("showroom down"))
+    mocks.listInstallSchedules.mockRejectedValue(new Error("install down"))
+
+    const result = await fetchCsInquiryDashboard({ period: "7d", now: fixedNow })
+
+    expect(result.kpis.totalInquiries).toBe(1)
+    expect(result.upcomingTasks.filter((t) => t.type === "showroom" || t.type === "install")).toEqual([])
+    const messages = warn.mock.calls.map((c) => String(c[0]))
+    expect(messages).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("getLeads failed"),
+        expect.stringContaining("getChatbotStats failed"),
+        expect.stringContaining("listCrmTasks (call) failed"),
+        expect.stringContaining("listShowroomBookings error"),
+        expect.stringContaining("listInstallSchedules error"),
+      ])
+    )
+    warn.mockRestore()
+  })
+
+  it("still rejects when the durable conversation read throws", async () => {
+    mocks.listDurableConversations.mockRejectedValue(new Error("durable down"))
+    mocks.getLeads.mockResolvedValue([])
+    await expect(fetchCsInquiryDashboard({ period: "7d" })).rejects.toThrow("durable down")
   })
 })
