@@ -6,7 +6,10 @@ import { ORDER_TTL_MS } from "@/lib/admin-ai/order-state"
 import {
   createAdminAiStore,
   INITIAL_ADMIN_AI_STATE,
+  NEW_CONVERSATION_UNDO_MS,
   reduceAdminAi,
+  selectGraceOrders,
+  selectLiveOrders,
   selectPendingOrders,
 } from "@/lib/admin-ai/store"
 
@@ -162,5 +165,207 @@ describe("admin ai store — 오더와 시계", () => {
     store.actOnOrder("t-1", { type: "undo" })
     store.actOnOrder("없는-오더", { type: "confirm" })
     expect(listener).not.toHaveBeenCalled()
+  })
+})
+
+// ── 새 대화 설계 N1~N7 (점검 R6) ─────────────────────────────────────────────────
+
+function ready(scenario: "task" | "sms" | "pay" = "task") {
+  const store = createAdminAiStore(instantClient())
+  store.ask({ text: "질문", scenario, context: CONTEXT })
+  vi.advanceTimersByTime(100)
+  return store
+}
+
+describe("admin ai store — 새 대화 N1~N4·N7", () => {
+  it("메시지가 없으면 아무 일도 없다(버튼이 꺼진 상태와 같다)", () => {
+    const store = createAdminAiStore(instantClient())
+    const before = store.getState()
+    store.newConversation()
+    expect(store.getState()).toBe(before)
+    expect(store.getState().undoSnapshot).toBeNull()
+  })
+
+  it("새 대화 뒤에도 발송 유예 중인 오더가 오더 목록 맨 위에 남고 발송 취소가 가능하다", () => {
+    const store = createAdminAiStore(instantClient())
+    store.ask({ text: "할 일", scenario: "task", context: CONTEXT })
+    vi.advanceTimersByTime(100)
+    store.ask({ text: "문자", scenario: "sms", context: CONTEXT })
+    vi.advanceTimersByTime(100)
+    store.actOnOrder("t-2", { type: "confirm" })
+    expect(store.getState().orders["t-2"].state).toBe("grace")
+
+    store.newConversation()
+    const state = store.getState()
+    expect(state.messages).toEqual([])
+    expect(selectGraceOrders(state).map((order) => order.id)).toEqual(["t-2"])
+    // 유예 중이 확인 대기보다 위다.
+    expect(selectLiveOrders(state).map((order) => order.id)).toEqual(["t-2", "t-1"])
+
+    store.abortGraceOrders()
+    vi.advanceTimersByTime(60_000)
+    expect(store.getState().orders["t-2"].state).toBe("aborted")
+  })
+
+  it("되돌릴 수 있는 완료 오더도 새 대화 뒤 오더 목록에 남는다", () => {
+    const store = ready("task")
+    store.actOnOrder("t-1", { type: "confirm" })
+    store.newConversation()
+    expect(selectLiveOrders(store.getState()).map((order) => order.id)).toEqual(["t-1"])
+    // 되돌릴 수 없는 결제 확정은 남지 않는다.
+    const pay = ready("pay")
+    pay.actOnOrder("t-1", { type: "confirm" })
+    pay.newConversation()
+    expect(selectLiveOrders(pay.getState())).toEqual([])
+  })
+
+  it("새 대화는 직전 대화 1칸을 두고, 되돌리면 말풍선·맥락 설정이 돌아온다", () => {
+    const store = ready("task")
+    store.setContextEnabled(false)
+    const before = store.getState().messages
+    store.newConversation()
+    expect(store.getState().undoSnapshot?.messages).toHaveLength(before.length)
+    expect(store.getState().contextEnabled).toBe(true)
+
+    store.restoreConversation()
+    const state = store.getState()
+    expect(state.messages.map((message) => message.id)).toEqual(before.map((message) => message.id))
+    expect(state.contextEnabled).toBe(false)
+    expect(state.undoSnapshot).toBeNull()
+    // 오더는 한 번도 사라지지 않았다.
+    expect(selectPendingOrders(state)).toHaveLength(1)
+  })
+
+  it("진행 중이던 답은 멈춘 채 복구되고, 늦게 오는 응답은 버려진다", () => {
+    const store = createAdminAiStore(instantClient())
+    store.ask({ text: "할 일", scenario: "task", context: CONTEXT })
+    expect(store.getState().busy).toBe(true)
+    store.newConversation()
+    expect(store.getState().busy).toBe(false)
+    store.restoreConversation()
+
+    const restored = store.getState()
+    expect(restored.busy).toBe(false)
+    expect(restored.messages[1].pending).toBe(false)
+    expect(restored.messages[1].blocks).toEqual([{ kind: "text", text: "답변을 멈췄습니다." }])
+    // 멈춘 턴의 응답이 시간이 지나 도착해도 오더가 생기지 않는다.
+    vi.advanceTimersByTime(1_000)
+    expect(store.getState().orderIds).toEqual([])
+  })
+
+  it("수정 중인 오더는 새 대화에서 수정 취소로 되돌아가고 만료 시계가 다시 돈다", () => {
+    const store = ready("task")
+    store.actOnOrder("t-1", { type: "edit" })
+    expect(store.getState().orders["t-1"].state).toBe("editing")
+    const paused = store.getState().orders["t-1"].pausedRemainingMs ?? 0
+    expect(paused).toBeGreaterThan(0)
+
+    vi.advanceTimersByTime(2_000)
+    store.newConversation()
+    const order = store.getState().orders["t-1"]
+    expect(order.state).toBe("draft")
+    expect(order.pausedRemainingMs).toBeUndefined()
+    expect(order.expiresAt).toBe(Date.now() + paused)
+    // 시계가 다시 돌아 만료도 된다.
+    vi.advanceTimersByTime(paused)
+    expect(store.getState().orders["t-1"].state).toBe("expired")
+  })
+
+  it("패널을 닫으면 수정 중이던 카드도 같은 방식으로 되돌아간다", () => {
+    const store = ready("task")
+    store.setOpen(true)
+    store.actOnOrder("t-1", { type: "edit" })
+    store.setOpen(false)
+    expect(store.getState().orders["t-1"].state).toBe("draft")
+  })
+
+  it("revertEditingOrders 는 되돌릴 카드가 있었는지 알려 준다", () => {
+    const store = ready("task")
+    expect(store.revertEditingOrders()).toBe(false)
+    store.actOnOrder("t-1", { type: "edit" })
+    expect(store.revertEditingOrders()).toBe(true)
+    expect(store.getState().orders["t-1"].state).toBe("draft")
+  })
+
+  it("되돌리기 칸은 6초 뒤 닫히고, 새 질문을 하면 바로 닫힌다", () => {
+    const store = ready("task")
+    store.newConversation()
+    vi.advanceTimersByTime(NEW_CONVERSATION_UNDO_MS - 1)
+    expect(store.getState().undoSnapshot).not.toBeNull()
+    vi.advanceTimersByTime(1)
+    expect(store.getState().undoSnapshot).toBeNull()
+    store.restoreConversation()
+    expect(store.getState().messages).toEqual([])
+
+    const second = ready("task")
+    second.newConversation()
+    second.ask({ text: "새 질문", scenario: "task", context: CONTEXT })
+    expect(second.getState().undoSnapshot).toBeNull()
+    // 닫힌 뒤에는 되돌려도 새 대화를 덮어쓰지 않는다.
+    second.restoreConversation()
+    expect(second.getState().messages[0].text).toBe("새 질문")
+  })
+
+  it("새 대화마다 입력창을 새로 시작하도록 epoch 가 오른다", () => {
+    const store = ready("task")
+    const before = store.getState().epoch
+    store.newConversation()
+    expect(store.getState().epoch).toBe(before + 1)
+    store.restoreConversation()
+    expect(store.getState().epoch).toBe(before + 2)
+  })
+
+  it("열림·크기는 새 대화로 바뀌지 않는다", () => {
+    const store = ready("task")
+    store.setOpen(true)
+    store.setSize("docked")
+    store.newConversation()
+    expect(store.getState()).toMatchObject({ open: true, size: "docked", view: "chat" })
+  })
+})
+
+describe("admin ai store — 직전 대화 목록(N5 1단계)", () => {
+  it("제목(대화 종류 이름)·시각만 남기고 대화 원문은 담지 않는다", () => {
+    const store = createAdminAiStore(instantClient())
+    store.ask({ text: "한빛수학학원 내일 오후 3시에 데모 후속 전화 할 일 잡아 줘", scenario: "task", context: CONTEXT })
+    vi.advanceTimersByTime(100)
+    store.newConversation()
+
+    const [thread] = store.getState().recentThreads
+    expect(Object.keys(thread).sort()).toEqual(["at", "id", "title"])
+    expect(thread.title).toBe("할 일 생성")
+    expect(thread.title).not.toContain("한빛")
+    expect(thread.at).toBe(Date.now())
+
+    // 되돌리면 목록에서 빠진다 — 같은 대화가 두 번 보이지 않는다.
+    store.restoreConversation()
+    expect(store.getState().recentThreads).toEqual([])
+  })
+
+  it("sessionStorage 에 제목·시각만 쓰고, 전화번호·이름을 친 질문도 저장값에 남지 않는다(F2)", () => {
+    const written: Record<string, string> = {}
+    const storage = {
+      getItem: (key: string) => written[key] ?? null,
+      setItem: (key: string, value: string) => {
+        written[key] = value
+      },
+    }
+    vi.stubGlobal("window", { sessionStorage: storage, localStorage: storage })
+    try {
+      const store = createAdminAiStore(instantClient())
+      store.subscribe(() => undefined)
+      store.ask({ text: "010-1234-5678 도담영어 원장 김철수님께 문자 보내 줘", scenario: "sms", context: CONTEXT })
+      vi.advanceTimersByTime(100)
+      store.newConversation()
+
+      const raw = written["admin-ai:recent-threads:v1"]
+      const saved = JSON.parse(raw)
+      expect(saved).toHaveLength(1)
+      expect(Object.keys(saved[0]).sort()).toEqual(["at", "id", "title"])
+      expect(saved[0].title).toBe("문자·알림톡 1건 발송")
+      for (const piece of ["010-1234", "5678", "김철수", "도담영어"]) expect(raw, piece).not.toContain(piece)
+    } finally {
+      vi.unstubAllGlobals()
+    }
   })
 })

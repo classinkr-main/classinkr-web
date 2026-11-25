@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, useRef } from "react"
 import dynamic from "next/dynamic"
 import { usePathname } from "next/navigation"
 
@@ -30,6 +30,18 @@ function LauncherBinding({ pathname }: { pathname: string }) {
   const pendingCount = selectPendingOrders(state).length
   const launcherBottom = resolveLauncherBottom(pathname)
   const docked = state.open && state.size === "docked"
+  const buttonRef = useRef<HTMLButtonElement>(null)
+  const wasOpen = useRef(state.open)
+
+  // 패널이 닫히면 포커스를 갈매봇 버튼으로 돌려준다 — 닫은 직후 포커스가 BODY 로 떨어지면 키보드 사용자는
+  // 화면 맨 위부터 다시 Tab 해야 한다. 이미 다른 곳에 포커스가 있으면(Ctrl/⌘+J 로 닫은 경우 등) 건드리지 않는다.
+  useEffect(() => {
+    if (wasOpen.current && !state.open) {
+      const active = document.activeElement
+      if (!active || active === document.body) buttonRef.current?.focus({ preventScroll: true })
+    }
+    wasOpen.current = state.open
+  }, [state.open])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -48,6 +60,7 @@ function LauncherBinding({ pathname }: { pathname: string }) {
         <AdminAiPanel state={state} context={context} launcherBottom={launcherBottom} />
       ) : null}
       <button
+        ref={buttonRef}
         type="button"
         onClick={() => adminAiStore.toggleOpen()}
         aria-label={state.open ? "갈매봇 닫기" : "갈매봇 열기"}
