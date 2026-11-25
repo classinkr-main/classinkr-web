@@ -72,11 +72,29 @@ describe("internal-only first source (IC-05)", () => {
     expect(result.deterministicFallback).not.toContain("총판 공급가는 대당")
   })
 
-  it("keeps a public first source's answer as the safe draft", async () => {
+  // 기대값 뒤집음: 예전에는 첫 출처가 공개 문서면 답을 안전 초안으로 실었으나, 내부 문서가 뒤에 섞이면
+  // 답에 내부 발췌가 들어 있을 수 있어 내부 전용 초안으로만 옮긴다(검토 F1).
+  it.each([
+    ["public first, internal second", [publicSource, internalSource]],
+    ["internal first", [internalSource, publicSource]],
+  ])("moves a mixed-source answer out of the safe draft (%s)", async (_label, sources) => {
+    mocks.evaluateChatbotQuery.mockResolvedValue({
+      answer: "관리자 녹화 메뉴에서 확인합니다. SECRET_INTERNAL_MARK",
+      answerMode: "direct_answer",
+      sources,
+    })
+    const result = await buildInternalCsCopilotContext("녹화 메뉴", { includeInternalDocs: true })
+    expect(result.publicEvidence.answer).toBeNull()
+    expect(result.internalContext).not.toContain("공개 고객 응대 안전 초안: 관리자 녹화 메뉴")
+    expect(result.deterministicFallback).not.toContain("SECRET_INTERNAL_MARK")
+    expect(result.internalContext).toContain("SECRET_INTERNAL_MARK")
+  })
+
+  it("keeps a public-only answer as the safe draft", async () => {
     mocks.evaluateChatbotQuery.mockResolvedValue({
       answer: "관리자 녹화 메뉴에서 확인합니다.",
       answerMode: "direct_answer",
-      sources: [publicSource, internalSource],
+      sources: [publicSource],
     })
     const result = await buildInternalCsCopilotContext("녹화 메뉴", { includeInternalDocs: true })
     expect(result.internalContext).toContain("공개 고객 응대 안전 초안: 관리자 녹화 메뉴")
@@ -100,6 +118,20 @@ describe("widget handoff, refusal and self-introduction answers", () => {
       expect(result.internalContext).not.toContain(text)
       expect(result.deterministicFallback).not.toContain(text)
     }
+  })
+})
+
+describe("widget wording variants are not internal evidence", () => {
+  it.each([
+    "상담원에게 연결해 드릴게요. 아래 버튼을 눌러 주세요.",
+    "담당자와 바로 연결해 드리겠습니다.",
+    "저는 클래스인 AI 상담 도우미입니다.",
+    "해당 요청은 답변드릴 수 없습니다.",
+  ])("drops %s", async (answer) => {
+    mocks.evaluateChatbotQuery.mockResolvedValue({ answer, answerMode: "direct_answer", sources: [publicSource] })
+    const result = await buildInternalCsCopilotContext("고객이 화가 나서 문의합니다")
+    expect(result.publicEvidence.answer).toBeNull()
+    expect(result.deterministicFallback).not.toContain(answer)
   })
 })
 
@@ -199,8 +231,9 @@ describe("buildInternalEvidence (structured parts)", () => {
     expect(parts.internalDocs).toEqual([
       expect.objectContaining({ id: "article-internal", customerUse: "internal_only", confirmed: null }),
     ])
-    expect(parts.publicAnswer).toContain("녹화 메뉴")
-    expect(parts.internalDraft).toBeNull()
+    // 공개·내부 출처가 섞인 답은 공개 답으로 내지 않고 내부 초안으로만 둔다(검토 F1).
+    expect(parts.publicAnswer).toBeNull()
+    expect(parts.internalDraft).toContain("녹화 메뉴")
   })
 
   it("marks internal-only curated knowledge and unconfirmed precedents so they are not said to a customer", async () => {

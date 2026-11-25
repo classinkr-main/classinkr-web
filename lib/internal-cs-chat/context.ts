@@ -320,9 +320,10 @@ function buildDeterministicFallback({
 
 // 공개 챗봇 위젯이 고객에게 하는 말(상담 연결 버튼·정책 거절·자기소개)은 내부 근거가 아니다.
 // 답 모드·의도로 먼저 거르고, 문구로 한 번 더 거른다(가짜 응답이나 모드가 비어 있는 응답 대비).
-const WIDGET_HANDOFF_TEXT_RE = /\[실시간 상담 연결\]|(?:담당자|상담원)\s*상담으로\s*바로\s*연결/
-const WIDGET_REFUSAL_TEXT_RE = /도와드리지\s*않습니다/
-const WIDGET_SELF_INTRO_TEXT_RE = /저는\s*AI로\s*답하는/
+const WIDGET_HANDOFF_TEXT_RE =
+  /\[실시간 상담 연결\]|(?:담당자|상담원|상담사)(?:\s*상담)?(?:으로|에게|와|께)\s*(?:바로\s*)?연결|상담(?:원|사|\s*채널)?\s*연결/
+const WIDGET_REFUSAL_TEXT_RE = /도와드리지\s*(?:않습니다|못합니다|못해요)|답변\s*(?:드릴|해\s*드릴)\s*수\s*없|안내해\s*드릴\s*수\s*없/
+const WIDGET_SELF_INTRO_TEXT_RE = /저는\s*(?:클래스인\s*|Classin\s*)?(?:AI|인공지능)/
 
 function classifyWidgetAnswer(result: {
   answer?: string | null
@@ -337,8 +338,9 @@ function classifyWidgetAnswer(result: {
   if (result.detectedIntent === "self_knowledge" || WIDGET_SELF_INTRO_TEXT_RE.test(answer)) {
     return { answer: null, discardedAnswer: "self_intro" }
   }
-  // 첫 출처가 내부 문서면 이 답은 내부 발췌에서 만들어졌다. 공개 안전 초안이 아니라 내부 전용 초안으로 옮긴다.
-  if (result.sources[0] && isInternalDocSource(result.sources[0])) return { answer: null, internalDraft: answer }
+  // 출처 중 하나라도 내부 문서면 이 답에는 내부 발췌가 섞였을 수 있다(출처별 기여를 알 수 없다).
+  // 공개 안전 초안이 아니라 내부 전용 초안으로 옮긴다.
+  if (result.sources.some(isInternalDocSource)) return { answer: null, internalDraft: answer }
   return { answer }
 }
 
