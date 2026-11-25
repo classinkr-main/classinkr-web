@@ -12,7 +12,7 @@
  * Claude 요청: 지시문은 system 블록 하나에 cache_control(ephemeral), 그 뒤 user 메시지에 후보·질문. 고정 지시문(ANSWER_CARD_PICK_INSTRUCTION)
  * 은 수백 토큰이라 모델 최소 캐시 길이(Haiku·Sonnet 계열 1,024~4,096 토큰)보다 짧아 지금은 캐시가 걸리지 않는다(cache_creation·cache_read 가
  * 0 으로 나온다). 고정 예시를 지시문에 붙여 최소 길이를 넘기면 그때부터 걸린다. 후보 줄은 질문마다 달라 캐시 앞부분에 넣지 않는다.
- * 출력은 구조화 출력(output_config.format, {pick: integer} JSON schema)으로 받는다. 강제 tool_choice 는 쓰지 않는다(Sonnet 5.5·Opus 5.5 는
+ * 출력은 구조화 출력(output_config.format, {pick: integer} JSON schema — 복합 질문 고르기는 {picks: integer[]})으로 받는다. 강제 tool_choice 는 쓰지 않는다(Sonnet 5.5·Opus 5.5 는
  * any·tool 을 400 으로 막는다). 사고는 config.ts lowLatencyParams(Sonnet 5.5 between_tools, Haiku 5.5 disabled) + effort low.
  * 응답 usage(input·output·cache_read·cache_creation)를 추정 비용과 함께 하루 상한(budget.ts, 종류 assist)과 흔적에 남긴다.
  * 실패(시간 초과·429·5xx·인증·거절·파싱 실패)는 던지지 않고 이유를 돌려준다 — assist.ts 가 결정형 판정을 그대로 낸다.
@@ -38,7 +38,7 @@ import type {
   AnswerCardPickOutcome,
   AnswerCardPickRequest,
 } from "@/lib/chatbot/answer-index/assist"
-import { parseAnswerCardPick, requestGeminiAnswerCardPick, type GeminiAnswerCardPickResult } from "@/lib/chatbot/llm"
+import { readAnswerCardPickResult, requestGeminiAnswerCardPick, type GeminiAnswerCardPickResult } from "@/lib/chatbot/llm"
 
 import { checkClaudeAssistBudget, recordClaudeUsage } from "./budget"
 import { lowLatencyParams, readAssistPickConfig, type AssistPickConfig } from "./config"
@@ -57,6 +57,14 @@ export const CARD_PICK_JSON_SCHEMA = {
   additionalProperties: false,
 } as const
 
+/** 복합 질문 고르기 스키마(R2 B3): {picks: 정수 배열}(조각 순서). 길이·범위는 assist.ts 가 본다. */
+export const CARD_MULTI_PICK_JSON_SCHEMA = {
+  type: "object",
+  properties: { picks: { type: "array", items: { type: "integer" } } },
+  required: ["picks"],
+  additionalProperties: false,
+} as const
+
 export interface ClaudeCardPickArgs {
   instruction: string
   input: string
@@ -64,6 +72,8 @@ export interface ClaudeCardPickArgs {
   model: string
   apiKey: string
   stage: AnswerCardPickCallUsage["stage"]
+  /** "picks" 면 복합 질문 고르기(스키마 {picks: 정수 배열}). 없으면 단일 고르기(B3 전과 같은 요청). */
+  expect?: "picks"
 }
 
 export interface ClaudeCardPickResult {
@@ -71,9 +81,10 @@ export interface ClaudeCardPickResult {
   usage: AnswerCardPickCallUsage | null
 }
 
-/** Claude 고르기 요청 본문(시험이 캐시 블록 위치를 본다). */
-export function buildClaudeCardPickRequest(args: Pick<ClaudeCardPickArgs, "instruction" | "input" | "model">) {
+/** Claude 고르기 요청 본문(시험이 캐시 블록 위치를 본다). 단일 질문(expect 없음) 본문은 B3 전과 바이트까지 같다. */
+export function buildClaudeCardPickRequest(args: Pick<ClaudeCardPickArgs, "instruction" | "input" | "model" | "expect">) {
   const latency = lowLatencyParams(args.model)
+  const schema = args.expect === "picks" ? CARD_MULTI_PICK_JSON_SCHEMA : CARD_PICK_JSON_SCHEMA
   return {
     model: args.model,
     max_tokens: CLAUDE_CARD_PICK_MAX_TOKENS,
@@ -83,7 +94,7 @@ export function buildClaudeCardPickRequest(args: Pick<ClaudeCardPickArgs, "instr
     ...(latency.thinking ? { thinking: latency.thinking } : {}),
     output_config: {
       ...(latency.output_config ?? {}),
-      format: { type: "json_schema" as const, schema: { ...CARD_PICK_JSON_SCHEMA } },
+      format: { type: "json_schema" as const, schema: { ...schema } },
     },
   }
 }
@@ -141,12 +152,12 @@ export async function requestClaudeAnswerCardPick(args: ClaudeCardPickArgs): Pro
       .map((block) => (block.type === "text" ? block.text : ""))
       .join("")
       .trim()
-    const pick = message.stop_reason === "max_tokens" ? null : parseAnswerCardPick(text)
-    if (pick === null) {
+    const read = message.stop_reason === "max_tokens" ? null : readAnswerCardPickResult(text, args.expect)
+    if (read === null) {
       warn("parse_error", { model, stage: args.stage, stopReason: message.stop_reason ?? null })
       return { outcome: { ok: false, reason: "parse_error", ...base }, usage }
     }
-    return { outcome: { ok: true, pick, ...base }, usage }
+    return { outcome: { ok: true, pick: read.pick, ...(read.picks ? { picks: read.picks } : {}), ...base }, usage }
   } catch (error) {
     const { reason, status } = classifyClaudeError(error)
     warn("request_error", { model, stage: args.stage, status, error: error instanceof Error ? error.name : undefined })

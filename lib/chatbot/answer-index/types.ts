@@ -331,6 +331,12 @@ interface AnswerCardBase {
   auditRef?: string
   /** 공개 페이지 사실(site-facts)에 기대는 카드. 결정 전까지 review(§14 결정 과제 3). */
   evidenceScope?: "docs" | "site"
+  /**
+   * 정책 주제 허용 표시(R2 B3·B6, 사람이 단다). 질문이 사람이 공개 범위를 정한 주제(service.ts isPolicyGovernedTopic)여도 모델 고르기가
+   * 이 카드를 고르면 받아들인다(정책 카드가 아닌 doc·howto·fixed 카드가 정책 주제 안의 사실만 말할 때 — 회원가입·인증·체험 계정 사용법 등).
+   * 없으면 개념 겹침 규칙(assist.ts policyTopicBlocks)으로 정한다.
+   */
+  policyTopicAllowed?: boolean
 }
 
 export interface DocCardAnswer {
@@ -916,10 +922,11 @@ export interface AnswerIndexAssistTrace {
   /** 최종 판정이 모델의 고름을 따랐는지(같은 카드를 골라 결정형 그대로인 경우 포함). */
   accepted: boolean
   /**
-   * 따르지 않은 이유. 묻지 않음: calibration_disabled·out_of_band·gap·absent·segments·policy_card·no_candidates.
+   * 따르지 않은 이유. 묻지 않음: calibration_disabled·out_of_band·gap·absent·segments_decided(복합 질문의 모든 조각을 결정형이 답함)·
+   * no_candidates.
    * 호출 실패: no_connection·circuit_open·access_denied·auth_error·timeout·http_error·parse_error·error.
    * 받아들이지 않음: out_of_range·negative·absent·policy_card·policy_topic·scope·card_unavailable·nodoc(결정형이 NODOC 신호로 답하지 않은
-   * 질문을 카드 답으로 바꾸려 함). 따랐으면 null.
+   * 질문을 카드 답으로 바꾸려 함). 복합 질문은 어느 조각도 따르지 않았을 때 첫 물은 조각의 까닭(조각별은 parts). 따랐으면 null.
    */
   rejectReason: string | null
   /** 결정형 판정(모델 전). */
@@ -939,6 +946,29 @@ export interface AnswerIndexAssistTrace {
   escalated?: boolean
   /** 올림 판단·결과. 올림 조건에 걸렸을 때만 있다. */
   escalation?: AnswerIndexAssistEscalation
+  /**
+   * 고르기 지시문 판(R2 B3): v1 단일 질문 옛 판(기본, 대역 추정과 같은 글), v2 단일 질문 새 판(CHATBOT_ASSIST_PICK_PROMPT=v2),
+   * multi 복합 질문({"picks": […]}). 칸이 없으면 v1 이다(옛 흔적).
+   */
+  prompt?: "v1" | "v2" | "multi"
+  /** 모델에 보인 후보 수. */
+  candidates?: number
+  /** 복합 질문: 모델이 낸 조각별 번호(조각 순서, 응답 그대로). 단일 질문이면 없다. */
+  picks?: number[]
+  /** 복합 질문: 조각마다 받아들였는지와 그 까닭(질문 순서, 넘친 조각은 빼고). */
+  parts?: AnswerIndexAssistPartTrace[]
+}
+
+/** 복합 질문 고르기에서 조각 하나의 결과(R2 B3). */
+export interface AnswerIndexAssistPartTrace {
+  /** 모델에 물은 조각인지(결정형이 이미 답한 조각은 묻지 않고 그대로 둔다 — rejectReason index_kept). */
+  asked: boolean
+  /** 그 조각의 번호(응답 배열에 없으면 null). */
+  pick: number | null
+  pickCard: string | null
+  accepted: boolean
+  /** index_kept·missing·out_of_range·scope·card_unavailable·segment_rank·nodoc·policy_topic·negative·absent. 따랐으면 null. */
+  rejectReason: string | null
 }
 
 export interface AnswerIndexAssistUsage {
@@ -958,9 +988,11 @@ export interface AnswerIndexAssistEscalation {
   model: string | null
   /** 올림 모델의 고름. 부르지 않았거나 실패했으면 null. */
   pick: number | null
+  /** 복합 질문: 올림 모델의 조각별 번호. */
+  picks?: number[]
   ms: number | null
   /** 올림 호출 실패 이유(실패하면 결정형 판정 그대로). */
   failure: string | null
-  /** 고르기 단계(②)의 고름. */
-  first: { provider: "gemini" | "claude" | null; model: string | null; pick: number; pickCard: string | null }
+  /** 고르기 단계(②)의 고름(복합 질문이면 pick 은 첫 조각 번호, picks 는 조각별 번호). */
+  first: { provider: "gemini" | "claude" | null; model: string | null; pick: number; pickCard: string | null; picks?: number[] }
 }
