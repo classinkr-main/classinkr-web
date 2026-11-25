@@ -70,6 +70,37 @@ describe("챗봇 utm (sanitizeChatbotUtm)", () => {
     }
   })
 
+  it("국가번호(+82·82)로 쓴 휴대전화는 버린다", () => {
+    for (const value of ["+82-10-1234-5678", "82 10 1234 5678", "+82 (0)10-1234-5678", "821012345678", "+82.10.123.4567"]) {
+      expect(sanitizeChatbotUtm({ utm_term: value }), value).toEqual({})
+    }
+  })
+
+  it("괄호·겹친 구분자·긴 대시·인코딩·전각으로 감춘 번호와 이메일도 버린다", () => {
+    for (const value of [
+      "(010)1234-5678",
+      "010  1234  5678",
+      "010--1234-5678",
+      "010\u20131234\u20135678",
+      "user%40example.com",
+      "user\uFF20example.com",
+      "user @ example.com",
+      "\uFF10\uFF11\uFF10\uFF11\uFF12\uFF13\uFF14\uFF15\uFF16\uFF17\uFF18",
+    ]) {
+      expect(sanitizeChatbotUtm({ utm_campaign: value }), value).toEqual({})
+    }
+  })
+
+  it("200자 경계에 걸친 이메일·번호도 자르기 전에 검사해 버린다", () => {
+    expect(sanitizeChatbotUtm({ utm_campaign: `${"x".repeat(190)}_user@example.com` })).toEqual({})
+    expect(sanitizeChatbotUtm({ utm_campaign: `${"x".repeat(192)}01012345678` })).toEqual({})
+  })
+
+  it("숫자 ID·일반 문자열은 정규화 뒤에도 남긴다", () => {
+    const keep = { utm_campaign: "120208765432100123", utm_content: "ad-9876543210", utm_term: "8210" }
+    expect(sanitizeChatbotUtm(keep)).toEqual(keep)
+  })
+
   it("추적 제외 경로에서는 비우고 길이는 200자로 자른다", () => {
     expect(sanitizeChatbotUtm({ utm_source: "123456789" }, "/unsubscribe")).toEqual({})
     expect(sanitizeChatbotUtm({ utm_campaign: "1".repeat(500) }).utm_campaign).toHaveLength(200)
