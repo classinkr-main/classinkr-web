@@ -375,22 +375,37 @@ export async function syncArticleChunks(
   const throttleMs = options.throttleMs ?? THROTTLE_MS
   const { model: embedModel } = getInternalEmbedConfig()
 
+  // 청크 임베딩 벡터(수천 개 실수)를 통째로 읽지 않는다: 해시와 임베딩 시각만 읽고, 시각이 없는 행만
+  // '임베딩이 있는지'를 id 수준으로 한 번 더 확인한다(시각 없이 벡터만 있는 옛 행).
   const { data: existingData, error: existingError } = await supabase
     .from("docs_ai_chunks")
-    .select("chunk_index, content_hash, embedding")
+    .select("chunk_index, content_hash, embedding_updated_at")
     .eq("article_id", articleId)
   if (existingError) throw new Error(`기존 청크 조회 실패: ${existingError.message}`)
 
   const existing = new Map<number, ExistingChunk>()
+  const unstamped: number[] = []
   for (const row of (existingData ?? []) as {
     chunk_index: number
     content_hash: string
-    embedding: unknown
+    embedding_updated_at: string | null
   }[]) {
-    existing.set(row.chunk_index, {
-      content_hash: row.content_hash,
-      hasEmbedding: row.embedding != null,
-    })
+    const stamped = row.embedding_updated_at != null
+    existing.set(row.chunk_index, { content_hash: row.content_hash, hasEmbedding: stamped })
+    if (!stamped) unstamped.push(row.chunk_index)
+  }
+  if (unstamped.length > 0) {
+    const { data: withVector, error: vectorError } = await supabase
+      .from("docs_ai_chunks")
+      .select("chunk_index")
+      .eq("article_id", articleId)
+      .in("chunk_index", unstamped)
+      .not("embedding", "is", null)
+    if (vectorError) throw new Error(`기존 청크 임베딩 확인 실패: ${vectorError.message}`)
+    for (const row of (withVector ?? []) as { chunk_index: number }[]) {
+      const chunk = existing.get(row.chunk_index)
+      if (chunk) chunk.hasEmbedding = true
+    }
   }
 
   let embedded = 0

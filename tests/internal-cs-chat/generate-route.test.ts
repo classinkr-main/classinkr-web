@@ -732,6 +732,30 @@ describe("generate route: rerun, context reset and polish", () => {
     expect(mocks.supersedeInternalCsPendingMessages).not.toHaveBeenCalled()
   })
 
+  it("끝까지 쓰이지 못한(불완전) 초안은 metadata 에 표시하고 재생성이어도 옛 초안을 치우지 않으며 보강 큐로도 보내지 않는다(R21)", async () => {
+    setSuccessfulDefaults()
+    loadConversation([msg("u1", "user", "원래 질문"), msg("a1", "assistant", "옛 초안", { metadata: { userMessageId: "u1" } })])
+    mocks.createInternalCsMessage.mockReset().mockResolvedValueOnce(assistantMessage())
+    mocks.generateInternalCsAnswer.mockResolvedValue({
+      ...generation,
+      incomplete: true,
+      finishReason: "MAX_TOKENS",
+      failureKinds: ["incomplete"],
+    })
+
+    const response = await POST(request({ rerunOfUserMessageId: "u1" }), routeContext())
+    const json = await response.json()
+
+    expect(response.status).toBe(201)
+    expect(mocks.createInternalCsMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        metadata: expect.objectContaining({ incomplete: true, finishReason: "MAX_TOKENS", failureKinds: ["incomplete"] }),
+      })
+    )
+    expect(mocks.supersedeInternalCsPendingMessages).not.toHaveBeenCalled()
+    expect(json.result).toMatchObject({ incomplete: true })
+  })
+
   it("rejects a rerun of something that is not a user message of this conversation", async () => {
     setSuccessfulDefaults()
     loadConversation([msg("a1", "assistant", "초안")])

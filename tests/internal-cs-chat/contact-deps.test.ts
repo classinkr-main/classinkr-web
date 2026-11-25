@@ -43,6 +43,30 @@ describe("matchCustomersInText", () => {
     expect(matchCustomersInText("가상학원 견적", ROWS).map((row) => row.key)).toEqual(["neo:a1"])
     expect(matchCustomersInText("AB 문의", ROWS)).toEqual([])
   })
+
+  it("keeps every customer with the same name (distinct keys) instead of silently picking one", () => {
+    const rows = [
+      { key: "neo:d1", name: "동명학원", href: "/h/d1" },
+      { key: "lead:d2", name: "동명학원", href: "/h/d2" },
+      { key: "neo:d1", name: "동명학원", href: "/h/d1" },
+    ]
+    expect(matchCustomersInText("동명학원 결제 이력", rows).map((row) => row.key)).toEqual(["neo:d1", "lead:d2"])
+  })
+})
+
+describe("matchCustomersInText 동명 고객", () => {
+  it("이름 후보는 서로 다른 이름 3개까지만 자르고, 같은 이름 고객은 인원이 잘리지 않게 모두 남긴다", () => {
+    const rows = Array.from({ length: 5 }, (_, i) => ({ key: `neo:s${i}`, name: "동명학원", href: `/h/s${i}` }))
+    expect(matchCustomersInText("동명학원 결제 이력", rows)).toHaveLength(5)
+  })
+
+  it("공백·대소문자만 다른 이름도 같은 이름 고객으로 함께 남긴다", () => {
+    const rows = [
+      { key: "neo:g1", name: "가나학원", href: "/h/g1" },
+      { key: "neo:g2", name: "가나 학원", href: "/h/g2" },
+    ]
+    expect(matchCustomersInText("가나학원 결제 이력", rows).map((row) => row.key)).toEqual(["neo:g1", "neo:g2"])
+  })
 })
 
 describe("buildContactDeps (wired to repository functions, faked here)", () => {

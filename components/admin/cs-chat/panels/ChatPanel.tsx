@@ -34,7 +34,7 @@ import { cn } from "@/lib/utils"
 import { needsReReview } from "@/lib/internal-cs-chat/review-guard"
 
 import AnswerFooterChip from "../components/AnswerFooterChip"
-import ModelStatusBanner from "../components/ModelStatusBanner"
+import ModelStatusBanner, { IncompleteDraftNotice } from "../components/ModelStatusBanner"
 import CommunicationTabs from "../components/CommunicationTabs"
 import ConversationContextCard from "../components/ConversationContextCard"
 import ConversationSwitcher from "../components/ConversationSwitcher"
@@ -69,6 +69,7 @@ import {
   describeMessageSpeaker,
   isContextResetMessage,
   isDeterministicDraft,
+  isIncompleteDraft,
   lastContextBoundaryIndex,
   readContextCard,
   readFailureKinds,
@@ -596,6 +597,7 @@ export default function ChatPanel({
                           {isDeterministicDraft(message) ? (
                             <ModelStatusBanner origin="deterministic" failureKinds={readFailureKinds(message)} className="mt-2" />
                           ) : null}
+                          <IncompleteDraftNotice incomplete={isIncompleteDraft(message)} className="mt-2" />
 
                           {/* 검토 상태·후속 동작 — 승인은 검토 드로어에서만 한다. */}
                           <SmartActionCard

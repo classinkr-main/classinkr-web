@@ -104,7 +104,7 @@ export async function POST(req: NextRequest, context: Context) {
     const upload = await uploadInternalCsAsset(file, { conversationId: id })
     if (!upload.ok) return uploadErrorResponse(upload.error)
 
-    const duplicate = await findInternalCsAssetByHash(id, upload.sha256)
+    const duplicate = await findInternalCsAssetByHash(id, upload.sha256, { signUrls: false })
     if (duplicate && !isInternalCsAssetStorageDeleted(duplicate)) {
       const asset = await getInternalCsAsset(duplicate.id, id)
       return NextResponse.json({ asset: asset ?? duplicate, duplicate: true }, { status: 200 })
@@ -121,13 +121,13 @@ export async function POST(req: NextRequest, context: Context) {
       sha256: upload.sha256,
       metadata: { uploadReused: upload.reused },
       actor,
-    })
+    }, { signUrls: false })
     await updateInternalCsAssetAnalysis({
       conversationId: id,
       assetId: asset.id,
       status: "analyzing",
       actor,
-    })
+    }, { signUrls: false })
 
     // 비전 모델에도 EXIF·GPS 를 뺀 바이트를 보낸다(저장본과 같은 처리). 정리에 실패하면 원본을 보내지 않고 분석을 건너뛴다.
     const rawBytes = new Uint8Array(await file.arrayBuffer())
@@ -160,7 +160,8 @@ export async function POST(req: NextRequest, context: Context) {
       modelName: analysis.model,
       errorMessage: analysis.origin === "deterministic" ? "Automatic image analysis unavailable" : null,
       actor,
-    })
+    }, { signUrls: false })
+    // 응답에 실리는 최종 한 번만 서명 URL 을 만든다(업로드 한 건에 4~5번 만들던 것).
     const responseAsset = await getInternalCsAsset(updated?.id ?? asset.id, id)
 
     return NextResponse.json(

@@ -19,6 +19,12 @@ import "server-only"
 import { classifyHqDomain, HQ_DOMAINS } from "./escalation-routing"
 import type { EscalationCandidate } from "./escalation-types"
 
+/** 고객 매칭이 쓰는 정규화(공백 제거·소문자)와 같은 기준으로 같은 이름인지 본다. */
+function isSameCustomerName(a: string, b: string) {
+  const norm = (value: string) => value.replace(/\s+/g, "").toLowerCase()
+  return norm(a ?? "") === norm(b ?? "")
+}
+
 export type ContactKind = "customer_owner" | "hq" | "kr" | "unknown"
 
 export type ContactEvidenceKind =
@@ -156,7 +162,8 @@ export const KR_TOPICS: KrTopic[] = [
   {
     key: "payment",
     area: "결제 수납",
-    match: /입금|수납|미수|결제\s*(?:확인|내역|반영|기록|이력)/,
+    // '미수신'·'미수강'·'미수령' 은 수납이 아니다('미수'만 낱말로 본다).
+    match: /입금|수납|미수(?!신|강|령)|(?:대금|잔금|수업료|수강료|금액|납부금|결제금)\s*미수령|결제\s*(?:확인|내역|반영|기록|이력)/,
     role: null,
     roleSource: null,
     resolver: null,
@@ -224,17 +231,7 @@ export const KR_TOPICS: KrTopic[] = [
     prepare: ["캠페인·채널 이름", "기간", "보고 싶은 지표"],
     adminLink: "/admin/marketing",
   },
-  {
-    key: "website_error",
-    area: "홈페이지 오류",
-    // 우리 사이트만. 학교·학원·기관 홈페이지 이야기는 고객 쪽 문제다.
-    match: /(?<!(?:학교|학원|기관|고객사?)\s*)(?:홈페이지|웹사이트)|사이트\s*오류|랜딩\s*페이지/,
-    role: null,
-    roleSource: null,
-    resolver: null,
-    prepare: ["페이지 주소", "기기·브라우저", "화면 캡처", "발생 시각"],
-    adminLink: null,
-  },
+  // admin_access 가 website_error 보다 앞: '홈페이지 어드민 계정'은 홈페이지 오류가 아니라 계정 권한 문의다.
   {
     key: "admin_access",
     area: "어드민 계정 권한",
@@ -245,6 +242,17 @@ export const KR_TOPICS: KrTopic[] = [
     resolver: { by: "admin_role", value: "SUPER_ADMIN" },
     prepare: ["계정 이메일(본인 확인)", "필요한 화면·권한", "사유"],
     adminLink: "/admin/users",
+  },
+  {
+    key: "website_error",
+    area: "홈페이지 오류",
+    // 우리 사이트만. 학교·학원·기관 홈페이지 이야기는 고객 쪽 문제다.
+    match: /(?<!(?:학교|학원|기관|고객사?)\s*)(?:홈페이지|웹사이트)|사이트\s*오류|랜딩\s*페이지/,
+    role: null,
+    roleSource: null,
+    resolver: null,
+    prepare: ["페이지 주소", "기기·브라우저", "화면 캡처", "발생 시각"],
+    adminLink: null,
   },
   {
     key: "cs_first",
@@ -497,6 +505,10 @@ async function customerCard(
       href: "/admin/channel-talk",
     })
   }
+  const sameName = others.filter((other) => isSameCustomerName(other.name, customer.name))
+  if (sameName.length > 0) {
+    gaps.unshift(`같은 이름의 고객이 ${sameName.length + 1}명입니다(${customer.key} 외 ${sameName.map((other) => other.key).join(", ")}) — 고객 화면에서 맞는 고객인지 확인하세요.`)
+  }
   // 견적 작성자·사내 CS 상담 배정은 고객 단위로 묶는 조회가 아직 없다(주입 자료 없음).
   gaps.push("견적 작성자·사내 CS 상담 배정은 고객 단위 조회가 없어 근거에 넣지 못했습니다.")
 
@@ -514,7 +526,7 @@ async function customerCard(
     evidence,
     verifiedAt: data?.generatedAt ?? null,
     reason: `질문 또는 열린 대화의 고객사 "${customer.name}"`,
-    alternatives: [...others.map((other) => other.name), ...extraAlternatives],
+    alternatives: [...others.map((other) => (isSameCustomerName(other.name, customer.name) ? `${other.name} (${other.key})` : other.name)), ...extraAlternatives],
     gaps,
   }
 }

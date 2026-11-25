@@ -6,6 +6,7 @@ import {
   authenticateInternalCsBridgeRequest,
   parseInternalCsInboundPayload,
 } from "@/lib/internal-cs-chat/bridge"
+import { isInternalCsBridgeEventReclaimable } from "@/lib/internal-cs-chat/bridge-claim"
 import { buildInternalCsBridgeContext } from "@/lib/internal-cs-chat/bridge-context"
 import { safeInternalCsFileName } from "@/lib/internal-cs-chat/privacy"
 import { analyzeInternalCsImage } from "@/lib/internal-cs-chat/vision"
@@ -13,12 +14,16 @@ import {
   createInternalCsAsset,
   createInternalCsConversation,
   claimInternalCsIntegrationEvent,
+  deleteEmptyInternalCsConversation,
   createInternalCsMessage,
+  findInternalCsMessageByBridgeEvent,
   findInternalCsAssetByHash,
   isInternalCsAssetStorageDeleted,
   getInternalCsAsset,
   getInternalCsConversation,
+  internalCsConversationExists,
   getInternalCsIntegrationEventByIdempotency,
+  InternalCsEventConversationRequiredError,
   isInternalCsChatNotReadyError,
   updateInternalCsAssetAnalysis,
   updateInternalCsIntegrationEvent,
@@ -112,7 +117,8 @@ export async function POST(req: NextRequest) {
       sourceSystem: payload.sourceSystem,
       idempotencyKey: payload.idempotencyKey,
     })
-    if (duplicate) {
+    // failed 이거나 오래 처리 중인 이벤트는 같은 키로 다시 보내면 다시 처리한다(아래 claim 이 조건부로 다시 선점).
+    if (duplicate && !isInternalCsBridgeEventReclaimable(duplicate)) {
       // 같은 멱등 키의 재요청은 처리 상태만 돌려준다. context.request 도 맥락(원문·서명 URL)을 다시 만들어 주지 않는다.
       return NextResponse.json({
         ok: duplicate.status === "completed",
@@ -124,36 +130,48 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    let conversationId = payload.conversationId
-    if (conversationId) {
-      const loaded = await getInternalCsConversation(conversationId)
-      if (!loaded) return NextResponse.json({ error: "Conversation not found" }, { status: 404 })
-    } else {
-      const conversation = await createInternalCsConversation({
-        title: payload.conversation?.title ?? `AI bridge: ${payload.sourceSystem}`,
-        priority: payload.conversation?.priority ?? "normal",
-        tags: [...(payload.conversation?.tags ?? []), `bridge:${payload.sourceSystem}`],
-        customerContext: payload.conversation?.customerContext ?? {},
-        actor,
-      })
-      conversationId = conversation.id
+    if (payload.conversationId) {
+      if (!(await internalCsConversationExists(payload.conversationId))) {
+        return NextResponse.json({ error: "Conversation not found" }, { status: 404 })
+      }
     }
 
-    const claim = await claimInternalCsIntegrationEvent({
-      conversationId,
-      direction: "inbound",
+    // 선점 먼저, 대화는 그 뒤에: 동시 요청·중복 요청이 고아 대화를 남기지 않는다.
+    const claimBase = {
+      direction: "inbound" as const,
       transport: payload.transport,
       eventType: payload.eventType,
       sourceSystem: payload.sourceSystem,
       idempotencyKey: payload.idempotencyKey,
       correlationId: payload.correlationId,
-      status: "accepted",
+      status: "accepted" as const,
       payload: buildInternalCsRedactedEventPayload(payload),
       actor,
-    })
+    }
+    const newConversationInput = {
+      title: payload.conversation?.title ?? `AI bridge: ${payload.sourceSystem}`,
+      priority: payload.conversation?.priority ?? ("normal" as const),
+      tags: [...(payload.conversation?.tags ?? []), `bridge:${payload.sourceSystem}`],
+      customerContext: payload.conversation?.customerContext ?? {},
+      actor,
+    }
+    let conversationId: string | null = payload.conversationId ?? null
+    let claim
+    let fallbackConversationId: string | null = null
+    try {
+      claim = await claimInternalCsIntegrationEvent({ ...claimBase, conversationId })
+    } catch (error) {
+      if (!(error instanceof InternalCsEventConversationRequiredError)) throw error
+      // conversation_id NOT NULL 마이그레이션 전 DB: 옛 순서(대화 먼저)로 물러나되, 선점에 지면 방금 만든 대화를 지운다.
+      const created = await createInternalCsConversation(newConversationInput)
+      conversationId = created.id
+      fallbackConversationId = created.id
+      claim = await claimInternalCsIntegrationEvent({ ...claimBase, conversationId })
+    }
     const event = claim.event
     eventId = event.id
     if (!claim.created) {
+      if (fallbackConversationId) await deleteEmptyInternalCsConversation(fallbackConversationId).catch(() => undefined)
       return NextResponse.json({
         ok: event.status === "completed",
         duplicate: true,
@@ -162,6 +180,19 @@ export async function POST(req: NextRequest) {
         status: event.status,
         result: event.result,
       })
+    }
+    // 다시 선점한 이벤트는 이미 연결된 대화를 그대로 쓴다(재요청이 다른 대화를 들고 와도 이벤트·메시지가 갈라지지 않게).
+    if (claim.reclaimed && event.conversation_id && conversationId !== event.conversation_id) {
+      conversationId = event.conversation_id
+    }
+    if (fallbackConversationId && fallbackConversationId !== conversationId) {
+      await deleteEmptyInternalCsConversation(fallbackConversationId).catch(() => undefined)
+    }
+    if (!conversationId) conversationId = event.conversation_id
+    if (!conversationId) {
+      const conversation = await createInternalCsConversation(newConversationInput)
+      conversationId = conversation.id
+      await updateInternalCsIntegrationEvent({ eventId, status: "accepted", conversationId })
     }
     await updateInternalCsIntegrationEvent({ eventId, status: "processing" })
 
@@ -184,7 +215,7 @@ export async function POST(req: NextRequest) {
         return responseForUploadError(upload.error)
       }
 
-      const existingAsset = await findInternalCsAssetByHash(conversationId, upload.sha256)
+      const existingAsset = await findInternalCsAssetByHash(conversationId, upload.sha256, { signUrls: false })
       if (existingAsset && !isInternalCsAssetStorageDeleted(existingAsset)) {
         assetId = existingAsset.id
         assetResult = { id: existingAsset.id, duplicate: true, status: existingAsset.status }
@@ -201,7 +232,7 @@ export async function POST(req: NextRequest) {
           externalRef: payload.correlationId,
           metadata: { sourceSystem: payload.sourceSystem, uploadReused: upload.reused },
           actor,
-        })
+        }, { signUrls: false })
         assetId = asset.id
 
         if (payload.image?.analyze) {
@@ -210,7 +241,7 @@ export async function POST(req: NextRequest) {
             assetId,
             status: "analyzing",
             actor,
-          })
+          }, { signUrls: false })
           const analysis = await analyzeInternalCsImage({
             bytes: stripImageMetadata(decodedImage.buffer, decodedImage.mimeType) ?? new Uint8Array(0),
             mimeType: decodedImage.mimeType,
@@ -238,9 +269,9 @@ export async function POST(req: NextRequest) {
             modelName: analysis.model,
             errorMessage: analysis.origin === "deterministic" ? "Automatic image analysis unavailable" : null,
             actor,
-          })
+          }, { signUrls: false })
         }
-        const stored = await getInternalCsAsset(assetId, conversationId)
+        const stored = await getInternalCsAsset(assetId, conversationId, { signUrls: false })
         assetResult = {
           id: assetId,
           duplicate: false,
@@ -279,7 +310,11 @@ export async function POST(req: NextRequest) {
         : payload.eventType === "cs.observation.created"
           ? "internal_note"
           : "user"
-      const message = await createInternalCsMessage({
+      // 다시 선점한 이벤트는 앞선 시도가 이미 저장한 메시지를 재사용한다(뒤 단계 실패 뒤 같은 키 재시도가 한 벌 더 만들지 않게).
+      const existingMessage = claim.reclaimed
+        ? await findInternalCsMessageByBridgeEvent(conversationId, eventId)
+        : null
+      const message = existingMessage ?? await createInternalCsMessage({
         conversationId,
         role,
         content: payload.content,
