@@ -38,8 +38,16 @@ export class ClaimStoreError extends Error {
 
 type Fetcher = (input: string, init: RequestInit) => Promise<Response>
 
+/** 다른 일회용 판정(예: 위컴 수신구의 msgid 중복 제거)이 같은 저장소를 쓸 때 — 키 앞머리와 만료만 바꾼다. */
+export interface ClaimStoreOptions {
+  prefix?: string
+  ttlMs?: number
+}
+
 /** Upstash REST `SET NX PX` — 있으면 실패하는 쓰기. */
-export function createUpstashClaimStore(config: UpstashRestConfig, fetcher: Fetcher = fetch): TicketClaimStore {
+export function createUpstashClaimStore(config: UpstashRestConfig, fetcher: Fetcher = fetch, options: ClaimStoreOptions = {}): TicketClaimStore {
+  const prefix = options.prefix ?? CLAIM_KEY_PREFIX
+  const ttlMs = options.ttlMs ?? TICKET_CLAIM_TTL_MS
   return {
     kind: "distributed",
     async claim(ticketId) {
@@ -49,7 +57,7 @@ export function createUpstashClaimStore(config: UpstashRestConfig, fetcher: Fetc
         const res = await fetcher(config.url, {
           method: "POST",
           headers: { Authorization: `Bearer ${config.token}`, "Content-Type": "application/json" },
-          body: JSON.stringify(["SET", `${CLAIM_KEY_PREFIX}${ticketId}`, "1", "NX", "PX", String(TICKET_CLAIM_TTL_MS)]),
+          body: JSON.stringify(["SET", `${prefix}${ticketId}`, "1", "NX", "PX", String(ttlMs)]),
           signal: controller.signal,
         })
         if (!res.ok) throw new ClaimStoreError(`확인 저장소 응답 ${res.status}`)
@@ -70,15 +78,16 @@ export function createUpstashClaimStore(config: UpstashRestConfig, fetcher: Fetc
 }
 
 /** 인스턴스 메모리 — 로컬 개발·시험에서만(allowsMemoryClaims). 판정이 동기라 같은 인스턴스 안의 동시 요청도 한 번만 통과한다. */
-export function createMemoryClaimStore(now: () => number = Date.now): TicketClaimStore {
+export function createMemoryClaimStore(now: () => number = Date.now, options: Pick<ClaimStoreOptions, "ttlMs"> = {}): TicketClaimStore {
   const used = new Map<string, number>()
+  const ttlMs = options.ttlMs ?? TICKET_CLAIM_TTL_MS
   return {
     kind: "memory",
     async claim(ticketId) {
       const at = now()
       for (const [id, until] of used) if (until <= at) used.delete(id)
       if (used.has(ticketId)) return "already_used"
-      used.set(ticketId, at + TICKET_CLAIM_TTL_MS)
+      used.set(ticketId, at + ttlMs)
       return "claimed"
     },
   }
