@@ -131,4 +131,23 @@ describe("FloatingChatbot 입력창 높이 맞춤 연결", () => {
     expect(restore).toBeGreaterThan(collapse)
     expect(body).toContain("heightChanged: height !== prev")
   })
+
+  // 확인 결과(B5 묶음과 부딪침): 휴대폰에서 쿠키 배너가 창을 가린 채 열림이 예약되면 입력 폼이 display:none 안에서 마운트돼
+  // scrollHeight 0 으로 재고 44px·overflow hidden 으로 굳었다. 배너가 닫혀도 다시 재지 않아 문서 CTA 가 미리 채운 둘째 줄이 잘렸다.
+  it("창이 보이지 않는 동안은 재지 않고, 보이게 되면(isVisible) 다시 잰다", () => {
+    const effect = source.slice(source.indexOf("useLayoutEffect(() => {"), source.indexOf("function handleSubmit"))
+    expect(effect).toContain("if (!el || !isVisible) return")
+    expect(effect).toMatch(/\}, \[input, isVisible, inputRef, messagesContainerRef\]\)/)
+    const body = source.match(/const resize = \(\) => \{([\s\S]*?)\n {8}\}/)?.[1] ?? ""
+    const guard = body.indexOf("if (el.getClientRects().length === 0) return")
+    expect(guard).toBeGreaterThan(-1)
+    expect(guard).toBeLessThan(body.indexOf('el.style.height = "auto"'))
+  })
+
+  it("셸은 휴대폰 배너 동시 노출까지 반영한 isPanelVisible 을 입력 폼에 넘긴다", () => {
+    const shell = readFileSync(join(process.cwd(), "components/ui/FloatingChatbot.tsx"), "utf8")
+    expect(shell).toContain("const isPanelVisible = isOpen && !hidden && !(isMobileViewport && consentBannerOpen)")
+    const composer = shell.slice(shell.indexOf("<ChatComposer"), shell.indexOf("/>", shell.indexOf("<ChatComposer")))
+    expect(composer).toContain("isVisible={isPanelVisible}")
+  })
 })

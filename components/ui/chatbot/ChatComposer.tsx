@@ -40,6 +40,8 @@ interface ChatComposerProps {
     draftStore: ComposerDraftStore
     inputRef: RefObject<HTMLTextAreaElement | null>
     messagesContainerRef: RefObject<HTMLDivElement | null>
+    // 창이 지금 화면에 보이는지(셸의 isPanelVisible). 휴대폰에서 쿠키 배너가 떠 있으면 열림이 예약된 채 창이 display:none 이다.
+    isVisible: boolean
     // 429 뒤 남은 대기 초. 0 보다 크면 보내기를 막는다(안내는 오류 말풍선 한 곳에서 한다).
     cooldownSeconds: number
     isSending: boolean
@@ -54,6 +56,7 @@ export function ChatComposer({
     draftStore,
     inputRef,
     messagesContainerRef,
+    isVisible,
     cooldownSeconds,
     isSending,
     isStreaming,
@@ -66,11 +69,16 @@ export function ChatComposer({
     // 입력창이 내용에 맞춰 44px → 112px 까지 늘고, 넘치면 안쪽 스크롤로 바뀐다.
     // 한계는 computed min/max-height 를 읽어 글꼴 확대 상태에서도 CSS(min-h-11·max-h-28)와 같게 둔다.
     // 그리기 전에 맞춰야 한 줄 높이로 깜빡이지 않으므로 layout effect 로 둔다.
+    // 창이 숨겨진 채 마운트되면(휴대폰에서 쿠키 배너가 창을 가린 동안 문서 CTA 가 미리 채운 글로 연 경우) scrollHeight 가 0 이라
+    // 한 줄(44px)·overflow hidden 으로 굳고, 배너가 닫혀도 다시 재지 않아 미리 채운 둘째 줄이 잘린 채 스크롤도 안 됐다.
+    // 보이지 않는 동안은 재지 않고, 보이게 되면(isVisible) 다시 잰다.
     useLayoutEffect(() => {
         const el = inputRef.current
-        if (!el) return
+        if (!el || !isVisible) return
 
         const resize = () => {
+            // 그려지지 않은 입력창(display:none 안 — 모바일 메뉴가 창을 가린 동안 등)은 잴 수 없다. 높이를 그대로 둔다.
+            if (el.getClientRects().length === 0) return
             const container = messagesContainerRef.current
             const wasNearBottom = container ? isNearBottom(container) : false
             const prevScrollTop = container ? container.scrollTop : 0
@@ -103,7 +111,7 @@ export function ChatComposer({
         resize()
         window.addEventListener("resize", resize)
         return () => window.removeEventListener("resize", resize)
-    }, [input, inputRef, messagesContainerRef])
+    }, [input, isVisible, inputRef, messagesContainerRef])
 
     function handleSubmit(event: FormEvent<HTMLFormElement>) {
         event.preventDefault()
