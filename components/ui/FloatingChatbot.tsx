@@ -10,6 +10,7 @@ import {
     ArrowRight,
     Check,
     Copy,
+    CornerDownRight,
     ExternalLink,
     FileText,
     Loader2,
@@ -435,6 +436,51 @@ function ConsultationBridge({
     )
 }
 
+/** 답변 뒤 "이어서 물어보기" — 첫 화면 추천 질문보다 가벼운 칩. 하나씩 차례로 떠오른다. */
+function FollowUpChips({
+    questions,
+    disabled,
+    onAsk,
+}: {
+    questions: string[]
+    disabled: boolean
+    onAsk: (question: string) => void
+}) {
+    const shouldReduceMotion = useReducedMotion()
+    if (questions.length === 0) return null
+
+    return (
+        <div className="mt-3.5">
+            <div className="mb-1.5 flex items-center gap-1.5 px-0.5 text-[11px] font-bold text-[#615D59]">
+                <CornerDownRight className="h-3.5 w-3.5 text-fg-accent" aria-hidden />
+                이어서 물어보기
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+                {questions.map((question, index) => (
+                    <motion.button
+                        key={question}
+                        type="button"
+                        disabled={disabled}
+                        onClick={() => onAsk(question)}
+                        initial={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: 6, scale: 0.97 }}
+                        animate={shouldReduceMotion ? { opacity: 1 } : { opacity: 1, y: 0, scale: 1 }}
+                        transition={{
+                            duration: shouldReduceMotion ? 0.01 : 0.28,
+                            ease: EASING_SOFT_ENTER,
+                            delay: shouldReduceMotion ? 0 : 0.12 + index * CHATBOT_MOTION.settle.stagger,
+                        }}
+                        whileHover={shouldReduceMotion || disabled ? undefined : { y: -1 }}
+                        whileTap={m(CHATBOT_MOTION.tap, shouldReduceMotion)}
+                        className="inline-flex min-h-8 items-center rounded-full border border-fg-accent/20 bg-white/80 px-3 py-1.5 text-left text-[12px] font-semibold leading-4 text-fg-accent transition-colors hover:border-fg-accent/40 hover:bg-fg-accent/8 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none"
+                    >
+                        {question}
+                    </motion.button>
+                ))}
+            </div>
+        </div>
+    )
+}
+
 function FeedbackButtons({
     answerEventId,
     sessionId,
@@ -442,10 +488,14 @@ function FeedbackButtons({
     answerEventId?: string
     sessionId?: string
 }) {
-    const [state, setState] = useState<"idle" | "helpful" | "not_helpful" | "failed">("idle")
+    const shouldReduceMotion = useReducedMotion()
+    const [state, setState] = useState<"idle" | "sending" | "helpful" | "not_helpful" | "failed">("idle")
+    const [lastRating, setLastRating] = useState<"helpful" | "not_helpful" | null>(null)
 
     async function sendFeedback(rating: "helpful" | "not_helpful") {
-        setState(rating)
+        if (state === "sending" || state === "helpful" || state === "not_helpful") return
+        setLastRating(rating)
+        setState("sending")
 
         if (!answerEventId || !sessionId) {
             setState("failed")
@@ -458,38 +508,73 @@ function FeedbackButtons({
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ answerEventId, sessionId, rating }),
             })
-            if (!response.ok) setState("failed")
+            setState(response.ok ? rating : "failed")
         } catch {
             setState("failed")
         }
     }
 
+    const done = state === "helpful" || state === "not_helpful"
+    const buttonClass =
+        "inline-flex h-8 w-8 items-center justify-center rounded-[8px] border border-white/70 bg-white/70 text-[#615D59] transition-colors hover:bg-fg-accent/8 hover:text-fg-accent disabled:cursor-default"
+
     return (
-        <div className="flex items-center gap-1.5">
-            <button
-                type="button"
-                onClick={() => sendFeedback("helpful")}
-                className={cn(
-                    "inline-flex h-8 w-8 items-center justify-center rounded-[8px] border border-white/70 bg-white/70 text-[#615D59] transition-colors hover:bg-fg-accent/8 hover:text-fg-accent",
-                    state === "helpful" && "border-fg-accent/25 bg-fg-accent/8 text-fg-accent"
+        <div className="flex min-h-8 items-center" aria-live="polite">
+            <AnimatePresence mode="popLayout" initial={false}>
+                {done ? (
+                    <motion.span
+                        key="thanks"
+                        initial={m({ opacity: 0, x: 8, scale: 0.96 }, shouldReduceMotion)}
+                        animate={m({ opacity: 1, x: 0, scale: 1 }, shouldReduceMotion)}
+                        transition={m(CHATBOT_MOTION.surfaceSpring, shouldReduceMotion)}
+                        className="inline-flex h-8 items-center gap-1.5 rounded-[8px] bg-fg-accent/8 px-2.5 text-[11px] font-bold text-fg-accent"
+                    >
+                        <motion.span
+                            initial={m({ scale: 0.4, rotate: -20 }, shouldReduceMotion)}
+                            animate={m({ scale: 1, rotate: 0 }, shouldReduceMotion)}
+                            transition={m({ type: "spring", stiffness: 520, damping: 18, delay: 0.05 }, shouldReduceMotion)}
+                            className="flex"
+                        >
+                            {state === "helpful" ? <ThumbsUp className="h-3.5 w-3.5" /> : <Check className="h-3.5 w-3.5" />}
+                        </motion.span>
+                        {state === "helpful" ? "도움이 됐다니 다행이에요" : "알려 주셔서 고마워요"}
+                    </motion.span>
+                ) : (
+                    <motion.span
+                        key="buttons"
+                        exit={m({ opacity: 0, scale: 0.9 }, shouldReduceMotion)}
+                        transition={m(CHATBOT_MOTION.micro, shouldReduceMotion)}
+                        className="flex items-center gap-1.5"
+                    >
+                        {state === "failed" ? (
+                            <span className="mr-1 text-[11px] font-semibold text-[#7A2A13]">전송 실패 · 다시 눌러 주세요</span>
+                        ) : null}
+                        {(["helpful", "not_helpful"] as const).map((rating) => (
+                            <motion.button
+                                key={rating}
+                                type="button"
+                                disabled={state === "sending"}
+                                onClick={() => void sendFeedback(rating)}
+                                whileTap={shouldReduceMotion ? undefined : { scale: 0.85 }}
+                                animate={
+                                    state === "sending" && lastRating === rating && !shouldReduceMotion
+                                        ? { scale: [1, 1.18, 1] }
+                                        : { scale: 1 }
+                                }
+                                transition={{ duration: 0.28 }}
+                                className={cn(
+                                    buttonClass,
+                                    state === "sending" && lastRating === rating && "border-fg-accent/25 bg-fg-accent/8 text-fg-accent"
+                                )}
+                                aria-label={rating === "helpful" ? "도움됨" : "도움 안 됨"}
+                                title={rating === "helpful" ? "도움됨" : "도움 안 됨"}
+                            >
+                                {rating === "helpful" ? <ThumbsUp className="h-4 w-4" /> : <ThumbsDown className="h-4 w-4" />}
+                            </motion.button>
+                        ))}
+                    </motion.span>
                 )}
-                aria-label="도움됨"
-                title="도움됨"
-            >
-                {state === "helpful" ? <Check className="h-4 w-4" /> : <ThumbsUp className="h-4 w-4" />}
-            </button>
-            <button
-                type="button"
-                onClick={() => sendFeedback("not_helpful")}
-                className={cn(
-                    "inline-flex h-8 w-8 items-center justify-center rounded-[8px] border border-white/70 bg-white/70 text-[#615D59] transition-colors hover:bg-fg-accent/8 hover:text-fg-accent",
-                    state === "not_helpful" && "border-fg-accent/25 bg-fg-accent/8 text-fg-accent"
-                )}
-                aria-label="도움 안 됨"
-                title="도움 안 됨"
-            >
-                <ThumbsDown className="h-4 w-4" />
-            </button>
+            </AnimatePresence>
         </div>
     )
 }
@@ -530,6 +615,24 @@ function cleanMessageLine(line: string) {
 
 function orderedLineValue(line: string) {
     return line.match(/^\d+[\.)]\s+(.+)$/)?.[1]?.trim()
+}
+
+/** 빈 줄로 나뉜 번호 목록("1. …\n\n2. …")을 한 목록으로 합친다 — 단계 표시가 한 줄기로 이어지게. */
+function mergeOrderedBlocks(blocks: string[]) {
+    const isOrdered = (block: string) => {
+        const lines = block.split("\n").map((line) => line.trim()).filter(Boolean)
+        return lines.length > 0 && lines.every((line) => orderedLineValue(line) !== undefined)
+    }
+    const merged: string[] = []
+    for (const block of blocks) {
+        const previous = merged[merged.length - 1]
+        if (previous !== undefined && isOrdered(previous) && isOrdered(block)) {
+            merged[merged.length - 1] = `${previous}\n${block}`
+        } else {
+            merged.push(block)
+        }
+    }
+    return merged
 }
 
 /** "2. 설치 기사가…"의 원래 번호. 항목 사이에 빈 줄이 있어 목록이 나뉘어도 1, 1, 1 이 아니라 1, 2, 3 으로 보인다. */
@@ -668,13 +771,45 @@ const MessageContent = memo(function MessageContent({
     }, [messageId, onRevealChange, reveal.revealing])
 
     const showTypingCaret = isStreaming || reveal.revealing
-    const blocks = visibleContent
-        .trim()
-        .split(/\n{2,}/)
-        .map((block) => block.trim())
-        .filter(Boolean)
+    // 답변이 흐르는 동안 새로 생기는 문단·항목만 살짝 떠오른다. 지난 답변·창 다시 열기에서는 정지 상태로 그린다.
+    const animateBlocks =
+        role === "assistant" && !shouldReduceMotion && (isStreaming || reveal.revealing || revealFromStart)
+    const enter = animateBlocks ? { opacity: 0, y: 6 } : false
+    const blockTransition = { duration: 0.32, ease: EASING_SOFT_ENTER }
+
+    const blocks = mergeOrderedBlocks(
+        visibleContent
+            .trim()
+            .split(/\n{2,}/)
+            .map((block) => block.trim())
+            .filter(Boolean)
+    )
 
     if (blocks.length === 0) return null
+
+    const renderItemText = (item: string, withCaret: boolean) => (
+        <span className="flex-1">
+            {item}
+            {withCaret ? <Caret shouldReduceMotion={shouldReduceMotion} /> : null}
+        </span>
+    )
+
+    const renderBullets = (items: string[], blockIndex: number, showCaret: boolean) => (
+        <ul className="space-y-2">
+            {items.map((item, index) => (
+                <motion.li
+                    key={`${blockIndex}-${index}`}
+                    initial={enter}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={blockTransition}
+                    className="flex items-start gap-2.5"
+                >
+                    <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-fg-accent" aria-hidden="true" />
+                    {renderItemText(item, showCaret && index === items.length - 1)}
+                </motion.li>
+            ))}
+        </ul>
+    )
 
     return (
         <motion.div
@@ -684,7 +819,7 @@ const MessageContent = memo(function MessageContent({
             animate={{ opacity: 1 }}
             transition={m(CHATBOT_MOTION.rewriteFade, shouldReduceMotion)}
             className={cn(
-                "space-y-2.5 whitespace-pre-wrap text-sm leading-6 [overflow-wrap:anywhere]",
+                "space-y-3 whitespace-pre-wrap text-sm leading-6 [overflow-wrap:anywhere]",
                 role === "assistant" ? "text-[#111110]" : "text-white"
             )}
         >
@@ -701,20 +836,36 @@ const MessageContent = memo(function MessageContent({
                 const bulletItems = lines.map(bulletLineValue)
 
                 if (orderedItems.length > 0 && orderedItems.every(Boolean)) {
+                    // 단계 표시: 번호 원을 세로선으로 잇는다. 다음 단계가 나타날 때 선이 위에서 아래로 그어진다.
                     return (
-                        <ol key={`${blockIndex}:${block}`} className="space-y-2">
+                        <ol key={`b${blockIndex}`} className="space-y-2.5">
                             {orderedItems.map((item, index) => {
-                                const isLastItem = index === orderedItems.length - 1
+                                const hasNext = index < orderedItems.length - 1
                                 return (
-                                    <li key={`${index}:${item}`} className="flex items-start gap-2.5">
-                                        <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-fg-accent/20 bg-fg-accent/8 text-[10px] font-bold text-fg-accent" aria-hidden="true">
+                                    <motion.li
+                                        key={`${blockIndex}-${index}`}
+                                        initial={enter}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        transition={blockTransition}
+                                        className="relative flex items-start gap-2.5"
+                                    >
+                                        {hasNext ? (
+                                            <motion.span
+                                                aria-hidden
+                                                initial={animateBlocks ? { scaleY: 0 } : false}
+                                                animate={{ scaleY: 1 }}
+                                                transition={{ duration: 0.36, ease: EASING_SOFT_ENTER }}
+                                                className="absolute bottom-[-12px] left-[9.5px] top-[24px] w-px origin-top bg-fg-accent/20"
+                                            />
+                                        ) : null}
+                                        <span
+                                            className="relative mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-fg-accent text-[11px] font-bold leading-none text-fg-on-accent"
+                                            aria-hidden="true"
+                                        >
                                             {orderedLineNumber(lines[index]) ?? index + 1}
                                         </span>
-                                        <span className="flex-1">
-                                            {item}
-                                            {showCaret && isLastItem ? <Caret shouldReduceMotion={shouldReduceMotion} /> : null}
-                                        </span>
-                                    </li>
+                                        {renderItemText(item as string, showCaret && !hasNext)}
+                                    </motion.li>
                                 )
                             })}
                         </ol>
@@ -722,27 +873,11 @@ const MessageContent = memo(function MessageContent({
                 }
 
                 if (bulletItems.length > 0 && bulletItems.every(Boolean)) {
-                    return (
-                        <ul key={`${blockIndex}:${block}`} className="space-y-2">
-                            {bulletItems.map((item, index) => {
-                                const isLastItem = index === bulletItems.length - 1
-                                return (
-                                    <li key={`${index}:${item}`} className="flex items-start gap-2.5">
-                                        <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-fg-accent" aria-hidden="true" />
-                                        <span className="flex-1">
-                                            {item}
-                                            {showCaret && isLastItem ? <Caret shouldReduceMotion={shouldReduceMotion} /> : null}
-                                        </span>
-                                    </li>
-                                )
-                            })}
-                        </ul>
-                    )
+                    return <div key={`b${blockIndex}`}>{renderBullets(bulletItems as string[], blockIndex, showCaret)}</div>
                 }
 
                 // 리드 문장 + 뒤따르는 불릿 목록(예: "보통 이렇게 묶여요.\n- A\n- B")은
-                // 리드 줄을 문단으로, 나머지를 불릿 리스트로 분리해 렌더링한다. 불릿이 섞인 본문에서
-                // 날 대시("- ")가 그대로 보이던 문제를 막는다. 불릿 뒤에 다시 평문이 오는 혼합 블록은
+                // 리드 줄을 문단으로, 나머지를 불릿 리스트로 분리해 렌더링한다. 불릿 뒤에 다시 평문이 오는 혼합 블록은
                 // 오인 렌더를 피하려 이 분기에서 처리하지 않고 아래 <p> 로 보낸다.
                 const firstBulletIndex = lines.findIndex((line) => bulletLineValue(line) !== undefined)
                 if (
@@ -755,36 +890,31 @@ const MessageContent = memo(function MessageContent({
                         .map(bulletLineValue)
                         .filter((value): value is string => Boolean(value))
                     return (
-                        <div key={`${blockIndex}:${block}`} className="space-y-2">
+                        <div key={`b${blockIndex}`} className="space-y-2">
                             {leadLines.length > 0 && (
-                                <p>
+                                <motion.p initial={enter} animate={{ opacity: 1, y: 0 }} transition={blockTransition}>
                                     {leadLines.join("\n")}
                                     {showCaret && trailingBullets.length === 0 ? <Caret shouldReduceMotion={shouldReduceMotion} /> : null}
-                                </p>
+                                </motion.p>
                             )}
-                            <ul className="space-y-2">
-                                {trailingBullets.map((item, index) => {
-                                    const isLastItem = index === trailingBullets.length - 1
-                                    return (
-                                        <li key={`${index}:${item}`} className="flex items-start gap-2.5">
-                                            <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-fg-accent" aria-hidden="true" />
-                                            <span className="flex-1">
-                                                {item}
-                                                {showCaret && isLastItem ? <Caret shouldReduceMotion={shouldReduceMotion} /> : null}
-                                            </span>
-                                        </li>
-                                    )
-                                })}
-                            </ul>
+                            {renderBullets(trailingBullets, blockIndex, showCaret)}
                         </div>
                     )
                 }
 
+                // 답변 첫 문단(핵심 요약)은 조금 더 진하게 — 뒤에 설명이 이어질 때만.
+                const isLead = role === "assistant" && blockIndex === 0 && blocks.length > 1
                 return (
-                    <p key={`${blockIndex}:${block}`}>
+                    <motion.p
+                        key={`b${blockIndex}`}
+                        initial={enter}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={blockTransition}
+                        className={isLead ? "font-semibold" : undefined}
+                    >
                         {lines.map(cleanMessageLine).filter(Boolean).join("\n")}
                         {showCaret ? <Caret shouldReduceMotion={shouldReduceMotion} /> : null}
-                    </p>
+                    </motion.p>
                 )
             })}
         </motion.div>
@@ -1788,7 +1918,14 @@ export function FloatingChatbot() {
                                                                         </button>
                                                                     </div>
                                                                 ) : null}
-                                                                {(message.suggestedQuestions?.length ?? 0) > 0 ? (
+                                                                {(message.suggestedQuestions?.length ?? 0) > 0 && message.id !== "welcome" ? (
+                                                                    <FollowUpChips
+                                                                        questions={message.suggestedQuestions?.slice(0, getSuggestionLimit(message)) ?? []}
+                                                                        disabled={isSending}
+                                                                        onAsk={(question) => void sendQuestion(question)}
+                                                                    />
+                                                                ) : null}
+                                                                {(message.suggestedQuestions?.length ?? 0) > 0 && message.id === "welcome" ? (
                                                                     <div className="mt-3 space-y-2">
                                                                         {message.id === "welcome" ? (
                                                                             <div className="flex items-center gap-1.5 px-0.5 text-[11px] font-bold text-[#615D59]">
