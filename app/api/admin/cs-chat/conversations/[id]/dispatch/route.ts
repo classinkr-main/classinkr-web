@@ -2,8 +2,18 @@ import { randomUUID } from "crypto"
 
 import { NextRequest, NextResponse } from "next/server"
 
-import { CRM_STAFF_ADMIN_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
-import { INTERNAL_CS_BRIDGE_VERSION, signInternalCsBridgeBody } from "@/lib/internal-cs-chat/bridge"
+import {
+  CS_COPILOT_API_ROLES,
+  CS_DISPATCH_CAPABILITY,
+  requireCsCopilotCapability,
+  requireVerifiedAdminContext,
+} from "@/lib/admin-auth"
+import {
+  INTERNAL_CS_BRIDGE_VERSION,
+  signInternalCsBridgeBody,
+  signInternalCsBridgeTimestamped,
+} from "@/lib/internal-cs-chat/bridge"
+import { buildInternalCsBridgeContext } from "@/lib/internal-cs-chat/bridge-context"
 import {
   claimInternalCsIntegrationEvent,
   getInternalCsConversation,
@@ -28,8 +38,11 @@ function firstNonEmpty(...values: Array<string | undefined>) {
 }
 
 export async function POST(req: NextRequest, context: Context) {
-  const admin = await requireVerifiedAdminContext(req, CRM_STAFF_ADMIN_API_ROLES)
+  const admin = await requireVerifiedAdminContext(req, CS_COPILOT_API_ROLES)
   if (admin instanceof NextResponse) return admin
+  // 외부 AI 로 상담 맥락을 내보내는 동작 — capability 가 필요하다(기본 부여 역할은 lib/admin-auth.ts).
+  const capabilityError = requireCsCopilotCapability(admin, CS_DISPATCH_CAPABILITY)
+  if (capabilityError) return capabilityError
 
   const webhookUrl = firstNonEmpty(process.env.INTERNAL_CS_OUTBOUND_WEBHOOK_URL)
   const webhookSecret = firstNonEmpty(process.env.INTERNAL_CS_OUTBOUND_WEBHOOK_SECRET)
@@ -92,46 +105,20 @@ export async function POST(req: NextRequest, context: Context) {
       transport: "webhook",
       idempotencyKey,
       correlationId,
-      context: {
-        conversation: {
-          id: loaded.conversation.id,
-          title: loaded.conversation.title,
-          status: loaded.conversation.status,
-          priority: loaded.conversation.priority,
-          tags: loaded.conversation.tags,
-          lastMessageAt: loaded.conversation.last_message_at,
-        },
-        messages: loaded.messages.map((message) => ({
-          id: message.id,
-          role: message.role,
-          content: message.content,
-          reviewState: message.review_state,
-          correctedContent: message.corrected_content,
-          modelProvider: message.model_provider,
-          modelName: message.model_name,
-          createdAt: message.created_at,
-        })),
-        assets: loaded.assets.map((asset) => ({
-          id: asset.id,
-          kind: asset.kind,
-          fileName: asset.original_file_name,
-          mimeType: asset.mime_type,
-          status: asset.status,
-          analysisSummary: asset.analysis_summary,
-          analysisPayload: asset.analysis_payload,
-          reviewState: asset.review_state,
-          ...(includeOriginalAssets && asset.signed_url ? { signedUrl: asset.signed_url } : {}),
-        })),
-      },
+      context: buildInternalCsBridgeContext(loaded, includeOriginalAssets),
       policy: {
         purpose: "internal_ai_analysis",
         customerDeliveryAllowed: false,
         csOwnerReviewRequired: true,
         originalAssetsIncluded: includeOriginalAssets,
+        textRedacted: !includeOriginalAssets,
       },
     }
     const serialized = JSON.stringify(envelope)
     const signature = signInternalCsBridgeBody(serialized, webhookSecret)
+    // 시각을 묶은 서명은 별도 헤더로 더한다 — 받는 쪽이 body-only 서명을 쓰고 있어도 깨지지 않는다.
+    const timestamp = String(Math.floor(Date.now() / 1000))
+    const signatureV2 = signInternalCsBridgeTimestamped(serialized, timestamp, webhookSecret)
 
     const claim = await claimInternalCsIntegrationEvent({
       conversationId: id,
@@ -167,6 +154,8 @@ export async function POST(req: NextRequest, context: Context) {
       timeoutMs: 8_000,
       headers: {
         "x-internal-cs-signature": `sha256=${signature}`,
+        "x-internal-cs-timestamp": timestamp,
+        "x-internal-cs-signature-v2": `sha256=${signatureV2}`,
         "x-internal-cs-version": INTERNAL_CS_BRIDGE_VERSION,
         "idempotency-key": idempotencyKey,
       },

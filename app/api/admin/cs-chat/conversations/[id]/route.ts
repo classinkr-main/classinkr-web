@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 
-import { CRM_STAFF_ADMIN_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
+import { CS_COPILOT_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
 import {
   cleanInternalCsTags,
   getInternalCsConversation,
@@ -36,7 +36,7 @@ function errorResponse(error: unknown, fallback: string) {
 }
 
 export async function GET(req: NextRequest, context: Context) {
-  const admin = await requireVerifiedAdminContext(req, CRM_STAFF_ADMIN_API_ROLES)
+  const admin = await requireVerifiedAdminContext(req, CS_COPILOT_API_ROLES)
   if (admin instanceof NextResponse) return admin
   const { id } = await context.params
   try {
@@ -50,7 +50,7 @@ export async function GET(req: NextRequest, context: Context) {
 }
 
 export async function PATCH(req: NextRequest, context: Context) {
-  const admin = await requireVerifiedAdminContext(req, CRM_STAFF_ADMIN_API_ROLES)
+  const admin = await requireVerifiedAdminContext(req, CS_COPILOT_API_ROLES)
   if (admin instanceof NextResponse) return admin
   const { id } = await context.params
   const body = await req.json().catch(() => null)

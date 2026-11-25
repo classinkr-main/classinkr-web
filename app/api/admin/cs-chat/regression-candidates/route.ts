@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 
 import { adminCachedJson } from "@/lib/admin-api-response"
-import { CRM_STAFF_ADMIN_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
+import { CS_COPILOT_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
 import {
   isInternalCsChatNotReadyError,
   listInternalCsRegressionCandidates,
@@ -10,7 +10,7 @@ import {
 // 회귀 검수 후보 목록 (계약 5) — 워크스페이스 판정 패널이 소비한다.
 // limit 50, 미판정(not_evaluated) 우선 정렬.
 export async function GET(req: NextRequest) {
-  const admin = await requireVerifiedAdminContext(req, CRM_STAFF_ADMIN_API_ROLES)
+  const admin = await requireVerifiedAdminContext(req, CS_COPILOT_API_ROLES)
   if (admin instanceof NextResponse) return admin
 
   try {
