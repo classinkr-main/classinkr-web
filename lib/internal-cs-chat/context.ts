@@ -12,6 +12,7 @@ import type { InternalCsSourceRef } from "@/lib/internal-cs-chat/gemini"
 import {
   formatIncidentEvidence,
   incidentSourceRefs,
+  maskOrgNames,
   searchIncidentEvidence,
   type IncidentEvidence,
 } from "@/lib/internal-cs-chat/incident-search"
@@ -150,7 +151,7 @@ function consultationSourceRefs(evidence: ConsultationEvidence[]): InternalCsSou
   // href 는 InternalCsSourceRef 필드가 아니다. UI 가 "channel:" 접두어로 href=null(잠금 아이콘)을 유도한다(계약 8).
   return evidence.map((entry) => ({
     id: `channel:${entry.conversationId}`,
-    label: compact(`[상담] ${entry.excerpt}`, 200),
+    label: compact(`[상담] ${maskOrgNames(entry.excerpt)}`, 200),
   }))
 }
 
@@ -163,7 +164,7 @@ function formatConsultationEvidence(evidence: ConsultationEvidence[]) {
       `유사도 ${entry.similarity.toFixed(2)}`,
     ].filter(Boolean).join(" / ")
     return [
-      `${index + 1}. ${compact(entry.excerpt, 700)}`,
+      `${index + 1}. ${compact(maskOrgNames(entry.excerpt), 700)}`,
       `   맥락: ${meta}`,
     ].join("\n")
   })

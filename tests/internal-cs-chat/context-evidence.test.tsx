@@ -121,6 +121,21 @@ describe("widget handoff, refusal and self-introduction answers", () => {
   })
 })
 
+describe("consultation excerpts", () => {
+  it("mask customer organization names in the model context and source labels", async () => {
+    const customer = (INCIDENT_CASES.find((c) => c.id === "D-02a")?.customer ?? "").split(/\s+/)[0]
+    expect(customer.length).toBeGreaterThan(0)
+    mocks.evaluateChatbotQuery.mockResolvedValue({ answer: null, sources: [] })
+    mocks.searchConsultationEvidence.mockResolvedValue([
+      { conversationId: "c1", excerpt: `${customer}에서 수업 중 화면이 멈춘다고 문의`, category: null, tags: [], matchedOrg: null, occurredAt: null, similarity: 0.9 },
+    ])
+    const result = await buildInternalCsCopilotContext("화면이 멈춰요")
+    expect(result.internalContext).not.toContain(customer)
+    expect(result.sourceRefs.map((ref) => ref.label).join("\n")).not.toContain(customer)
+    expect(result.internalContext).toContain("수업 중 화면이 멈춘다")
+  })
+})
+
 describe("widget wording variants are not internal evidence", () => {
   it.each([
     "상담원에게 연결해 드릴게요. 아래 버튼을 눌러 주세요.",
