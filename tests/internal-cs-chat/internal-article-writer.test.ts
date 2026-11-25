@@ -5,6 +5,7 @@ import {
   csKnowledgeSlug,
   deriveArticleTitle,
   deriveKnowledgeMetaFromMessage,
+  embedInternalText,
   ensureKnowledgeHeading,
   promoteMessageToInternalArticle,
   slugFromRelativePath,
@@ -324,5 +325,42 @@ describe("writeInternalCanonDoc (seed 경로 무회귀)", () => {
     })
     // seed 는 content_json 을 건드리지 않는다(기존 값 보존).
     expect(articleUpsert).not.toHaveProperty("content_json")
+  })
+})
+
+describe("embedInternalText (model-transport)", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+  })
+
+  it("sends the key in a header, not in the URL, and returns the vector", async () => {
+    vi.stubEnv("GEMINI_API_KEY", "doc-embed-key")
+    vi.stubEnv("GEMINI_EMBED_DIM", "4")
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ embedding: { values: [0.1, 0.2, 0.3, 0.4] } }),
+    } as unknown as Response)
+    vi.stubGlobal("fetch", fetchMock)
+
+    const values = await embedInternalText("승격할 글")
+
+    expect(values).toEqual([0.1, 0.2, 0.3, 0.4])
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toContain(":embedContent")
+    expect(url).not.toContain("key=")
+    expect(init.headers).toMatchObject({ "x-goog-api-key": "doc-embed-key" })
+    expect(JSON.parse(String(init.body))).toMatchObject({ taskType: "RETRIEVAL_DOCUMENT", outputDimensionality: 4 })
+  })
+
+  it("returns null on an HTTP failure and warns with the kind only", async () => {
+    vi.stubEnv("GEMINI_API_KEY", "doc-embed-key")
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 402, json: async () => ({}) } as unknown as Response))
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+
+    expect(await embedInternalText("글")).toBeNull()
+    expect(warn).toHaveBeenCalledWith("[internal-cs] document embed failed: quota HTTP 402")
   })
 })

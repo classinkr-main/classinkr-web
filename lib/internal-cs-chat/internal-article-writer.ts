@@ -21,6 +21,7 @@ export const CS_KNOWLEDGE_CATEGORY = "cs-knowledge"
 export const CS_KNOWLEDGE_UPDATED_BY = "cs-knowledge-promotion"
 
 const MAX_CHUNK_CHARS = 1400
+const EMBED_DOCUMENT_TIMEOUT_MS = 10_000
 const THROTTLE_MS = 120
 
 export function getInternalEmbedConfig() {
@@ -229,30 +230,24 @@ export function ensureKnowledgeHeading(markdown: string): string {
 export type InternalDocsSupabase = Pick<SupabaseClient, "from">
 
 export async function embedInternalText(text: string): Promise<number[] | null> {
-  const geminiApiKey = process.env.GEMINI_API_KEY
-  if (!geminiApiKey || !text.trim()) return null
+  if (!text.trim()) return null
   const { model, dim } = getInternalEmbedConfig()
-  try {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:embedContent?key=${geminiApiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: `models/${model}`,
-          content: { parts: [{ text }] },
-          taskType: "RETRIEVAL_DOCUMENT",
-          outputDimensionality: dim,
-        }),
-      }
-    )
-    if (!res.ok) return null
-    const data = (await res.json()) as { embedding?: { values?: number[] } }
-    const values = data.embedding?.values
-    return Array.isArray(values) && values.length > 0 ? values : null
-  } catch {
-    return null
-  }
+  // 연결(공개 챗봇 연결 따름·헤더 키)과 실패 분류는 model-transport 가 맡는다. model-transport 는 server-only 라서
+  // tsx 스크립트(seed-internal-canon)가 이 파일을 불러올 때 곧바로 읽히지 않도록, 호출 시점에 불러온다
+  // (스크립트는 server-only 를 가짜로 둔다).
+  const { embedWithInternalCsModel } = await import("@/lib/internal-cs-chat/model-transport")
+  const result = await embedWithInternalCsModel({
+    text,
+    model,
+    dim,
+    taskType: "RETRIEVAL_DOCUMENT",
+    timeoutMs: EMBED_DOCUMENT_TIMEOUT_MS,
+  })
+  if (result.ok) return result.values
+  console.warn(
+    `[internal-cs] document embed failed: ${result.kind}${result.status ? ` HTTP ${result.status}` : ""}`
+  )
+  return null
 }
 
 export interface EnsureDocsCategoryInput {

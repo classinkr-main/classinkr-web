@@ -25,6 +25,17 @@
  * 라우트와 공유한다. 이 스크립트는 대상 수집·환경 로딩·로그만 소유한다.
  */
 
+// 임베딩이 model-transport(server-only)를 지나므로 Next 밖 실행에서는 server-only 를 가짜로 둔다
+// (scripts/chatbot-live-eval.ts 와 같은 방식).
+import Module from "node:module"
+type RequireFn = (this: unknown, id: string) => unknown
+const moduleProto = (Module as unknown as { prototype: { require: RequireFn } }).prototype
+const originalRequire = moduleProto.require
+moduleProto.require = function (this: unknown, id: string) {
+  if (id === "server-only") return {}
+  return originalRequire.call(this, id)
+}
+
 import { existsSync, readFileSync, readdirSync } from "node:fs"
 import { join } from "node:path"
 import { createClient } from "@supabase/supabase-js"

@@ -23,6 +23,9 @@ import {
 import { checkRateLimitDistributed, getClientIp } from "@/lib/server/rate-limit"
 import { uploadInternalCsAssetBuffer } from "@/lib/storage/internal-cs-assets"
 
+// 이미지 분석이 붙으면 크기에 비례해 최대 40초(vision.ts)까지 걸린다.
+export const maxDuration = 60
+
 const MAX_WEBHOOK_BODY_BYTES = 12 * 1024 * 1024
 
 function firstNonEmpty(...values: Array<string | undefined>) {
@@ -268,6 +271,7 @@ export async function POST(req: NextRequest) {
               origin: analysis.origin,
               fallbackUsed: analysis.fallbackUsed,
               attemptedModels: analysis.attemptedModels,
+              failureKinds: analysis.failureKinds,
               guardrails: analysis.guardrails,
             },
             modelProvider: analysis.model ? "google" : null,
