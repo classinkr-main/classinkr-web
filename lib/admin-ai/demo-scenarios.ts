@@ -2,6 +2,8 @@
 //
 // 여기 있는 고객·금액·재고는 전부 가짜다. 실제 DB 를 읽지도, 쓰지도 않는다.
 // 화면은 AdminAiClient.mode === "demo" 일 때 "시안 · 샘플 데이터" 표시를 띄운다.
+import { DEMO_ANSWER_CARD, DEMO_CONTACT_CARD, DEMO_LINKS_CARD } from "./demo-answer-fixtures"
+import { FORBIDDEN_ORDERS } from "./order-catalog"
 import { ORDER_TTL_MS } from "./order-state"
 import type { AdminAiTurnResult, AiBlock, OrderRisk, OrderTicket } from "./types"
 
@@ -18,8 +20,8 @@ export type DemoScenarioKey =
   | "amount"
   | "delete"
   | "which"
-  // 묻기(R0) — 오더가 아니다. 답 카드(answer·links·contact, 기획 §11)는 다음 묶음(B4)이 만든다.
-  // 지금은 글 블록으로만 답하고, 시나리오 id 를 셋으로 나눠 두어 B4 가 시나리오별로 카드로 바꿔 끼운다.
+  // 묻기(R0) — 오더가 아니다. 담당자(contact)·정책 답(answer)·링크(links) 카드로 답한다(기획 §11.9).
+  // 카드 자료는 demo-answer-fixtures.ts — 전부 샘플이고 사람 이름이 없다.
   | "who"
   | "knowledge"
   | "link"
@@ -269,7 +271,8 @@ const SCENARIOS: Record<DemoScenarioKey, DemoScenario> = {
         target: { label: "가온학원", meta: "리드" },
         text: "삭제, 계약 서명, 입출고 취소, 매출 마감, 대량 일괄 변경은 해당 화면에서 직접 합니다.",
         openLabel: "고객 화면 열기",
-        openHref: "/admin/crm/customers/unified",
+        // 금지 오더 표(order-catalog)의 화면 — 링크 목록에서 온 주소다.
+        openHref: FORBIDDEN_ORDERS.find((entry) => entry.label === "삭제")?.href,
       },
     },
   },
@@ -291,19 +294,22 @@ const SCENARIOS: Record<DemoScenarioKey, DemoScenario> = {
     },
   },
   who: {
-    say: "카메라 화질 문제는 본사 누구한테 물어봐?",
+    say: "카메라 담당 누구야?",
     steps: ["질문 분류", "담당 표 찾기"],
-    text: "시안 답변입니다 — 실제 담당 표를 읽지 않은 예시입니다. 실제 모드에서는 한국 팀 담당 표와 본사 담당 표에서 이 분야의 담당 한 줄을 찾아 알려 드립니다. 담당자 이름은 사내 화면에서만 보입니다.",
+    text: "시안 답변입니다 — 실제 담당 표를 읽지 않은 예시입니다.",
+    block: { kind: "contact", card: DEMO_CONTACT_CARD },
   },
   knowledge: {
     say: "견적서에 할인을 넣어도 되나? 승인 규칙이 뭐야?",
     steps: ["질문 분류", "내부 문서 찾기"],
-    text: "시안 답변입니다 — 실제 문서를 읽지 않은 예시입니다. 실제 모드에서는 답과 함께 근거 문서·확정 여부(확정 · 확인 필요)·고객에게 그대로 전해도 되는지를 표시합니다. 고객에게 보낼 문안은 CS 코파일럿에서 만듭니다.",
+    text: "시안 답변입니다 — 실제 문서를 읽지 않은 예시입니다.",
+    block: { kind: "answer", card: DEMO_ANSWER_CARD },
   },
   link: {
-    say: "견적서 만드는 화면 링크 알려 줘.",
+    say: "가격표 링크 알려 줘.",
     steps: ["질문 분류", "링크 찾기"],
-    text: "시안 답변입니다 — 실제 링크 목록을 읽지 않은 예시입니다. 실제 모드에서는 어드민 화면 바로가기와 고객에게 보여 줘도 되는 공개 페이지 링크를 구분해 드립니다. 고객용 링크는 허용 목록에 있는 것만 나옵니다.",
+    text: "시안 답변입니다 — 링크 목록에 있는 주소만 보여 줍니다.",
+    block: { kind: "links", card: DEMO_LINKS_CARD },
   },
 }
 

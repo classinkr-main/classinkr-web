@@ -74,6 +74,12 @@ function describeBlock(block: AiBlock, state: AdminAiState): string | null {
       return `${block.card.title}. ${block.card.text}`
     case "choice":
       return `${block.card.title} ${block.card.options.map((option) => option.label).join(", ")}`
+    case "answer":
+      return `${block.card.title}. ${block.card.answer}`
+    case "links":
+      return `${block.card.title}, 링크 ${block.card.items.length}개`
+    case "contact":
+      return `${block.card.title}, ${block.card.primary?.role ?? "담당표 미입력"}`
     case "steps":
       return null
   }

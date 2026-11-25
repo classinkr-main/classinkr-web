@@ -2,6 +2,7 @@ import type { CSSProperties, ReactNode } from "react"
 import {
   CalendarDays,
   CircleHelp,
+  Link2,
   CreditCard,
   Lock,
   MessageSquare,
@@ -28,6 +29,7 @@ const ICONS: Record<OrderIcon, LucideIcon> = {
   search: Search,
   lock: Lock,
   help: CircleHelp,
+  link: Link2,
 }
 
 export type CardTone = "neutral" | "green" | "warn" | "danger" | "dark" | "closed"

@@ -5,6 +5,7 @@ import Link from "next/link"
 import { Check, Info } from "lucide-react"
 
 import type { ChoiceCard, DenyCard, ReadCard } from "@/lib/admin-ai/types"
+import { isRegisteredInternalHref } from "@/lib/admin-ai/links"
 import { adminAiStore } from "@/lib/admin-ai/store"
 import { aiButtonClass, CardNote, CardShell, PreviewBand } from "./CardShell"
 
@@ -22,9 +23,9 @@ export function ReadCardView({ card }: { card: ReadCard }) {
       riskName="조회"
       tone="neutral"
       footer={
-        card.openLabel && card.openHref ? (
+        card.openLabel && isRegisteredInternalHref(card.openHref) ? (
           <div className="flex flex-wrap gap-1.5">
-            <Link href={card.openHref} className={aiButtonClass("secondary")}>
+            <Link href={card.openHref as string} className={aiButtonClass("secondary")}>
               {card.openLabel}
             </Link>
           </div>
@@ -98,9 +99,9 @@ export function DenyCardView({ card }: { card: DenyCard }) {
       riskName="금지"
       tone="dark"
       footer={
-        card.openLabel && card.openHref ? (
+        card.openLabel && isRegisteredInternalHref(card.openHref) ? (
           <div className="flex flex-wrap gap-1.5">
-            <Link href={card.openHref} className={aiButtonClass("secondary")}>
+            <Link href={card.openHref as string} className={aiButtonClass("secondary")}>
               {card.openLabel}
             </Link>
             <Link href="/admin/ai?tab=catalog" className={aiButtonClass("ghost")}>

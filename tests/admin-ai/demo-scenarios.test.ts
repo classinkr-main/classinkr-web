@@ -89,10 +89,11 @@ describe("시안 시나리오 — 질문형 문장 먼저 판정(R4)", () => {
     }
   })
 
-  it("묻기 시나리오는 글 블록만 낸다 — 답 카드는 다음 묶음이 시나리오 id 로 바꿔 끼운다", () => {
+  it("묻기 시나리오는 오더 없이 글 한 줄과 묻기 카드(담당자·답·링크)를 낸다(B4)", () => {
+    const expected = { who: "contact", knowledge: "answer", link: "links" } as const
     for (const key of ["who", "knowledge", "link"] as const) {
       const turn = buildDemoTurn(key, { now: 1, orderId: "x" })
-      expect(turn.blocks.map((block) => block.kind), key).toEqual(["text"])
+      expect(turn.blocks.map((block) => block.kind), key).toEqual(["text", expected[key]])
       expect(turn.order, key).toBeUndefined()
     }
   })
