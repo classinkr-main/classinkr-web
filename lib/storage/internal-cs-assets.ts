@@ -3,6 +3,7 @@ import "server-only"
 import { createHash } from "crypto"
 
 import { detectImageMime, validateImageFile } from "@/lib/server/image-validation"
+import { stripImageMetadata } from "@/lib/storage/image-metadata"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 
 export const INTERNAL_CS_ASSETS_BUCKET = "internal-cs-assets"
@@ -82,12 +83,16 @@ async function uploadValidatedInternalCsAsset(input: {
     return { ok: false, error: { kind: "bad_signature" } }
   }
 
-  const sha256 = createHash("sha256").update(input.buffer).digest("hex")
+  // EXIF·GPS·XMP 를 뺀 바이트만 저장한다(경로의 해시도 이 바이트 기준). 구조를 읽지 못하면 저장하지 않는다.
+  const cleaned = stripImageMetadata(input.buffer, detectedType)
+  if (!cleaned || cleaned.byteLength === 0) return { ok: false, error: { kind: "bad_signature" } }
+
+  const sha256 = createHash("sha256").update(cleaned).digest("hex")
   const path = `${input.conversationId.toLowerCase()}/${sha256}.${EXTENSION_BY_TYPE[input.mimeType]}`
   const supabase = createSupabaseAdminClient()
   const { error } = await supabase.storage
     .from(INTERNAL_CS_ASSETS_BUCKET)
-    .upload(path, input.buffer, {
+    .upload(path, cleaned, {
       contentType: input.mimeType,
       upsert: false,
     })
@@ -101,7 +106,7 @@ async function uploadValidatedInternalCsAsset(input: {
     path,
     fileName: cleanFileName(input.fileName),
     mimeType: input.mimeType,
-    sizeBytes: input.buffer.byteLength,
+    sizeBytes: cleaned.byteLength,
     sha256,
     reused: Boolean(error),
   }
@@ -173,6 +178,7 @@ export async function createInternalCsAssetSignedUrls(
   return result
 }
 
+/** 보관 기간 정리·관리자 삭제용. 객체가 이미 없어도 성공으로 본다(Supabase remove 는 없는 경로에 오류를 내지 않는다). */
 export async function deleteInternalCsAsset(path: string) {
   const normalized = path.trim()
   if (!normalized) return false
