@@ -25,7 +25,7 @@ vi.mock("@/lib/supabase/admin", () => ({
       state.calls.push(call)
       const chain: Record<string, unknown> = {}
       for (const name of [
-        "select", "insert", "update", "delete", "eq", "neq", "lt", "in", "not", "order", "limit", "maybeSingle", "single",
+        "select", "insert", "update", "delete", "eq", "neq", "lt", "in", "not", "order", "limit", "maybeSingle", "single", "contains",
       ]) {
         chain[name] = (...args: unknown[]) => {
           call.ops.push([name, ...args])
@@ -43,6 +43,7 @@ import {
   claimInternalCsIntegrationEvent,
   createInternalCsMessage,
   getInternalCsConversation,
+  findInternalCsMessageByBridgeEvent,
   InternalCsEventConversationRequiredError,
   internalCsConversationExists,
 } from "@/lib/repositories/internal-cs-chat"
@@ -88,6 +89,23 @@ describe("claimInternalCsIntegrationEvent 재선점(R6)", () => {
     const update = state.calls.find((call) => call.ops.some((op) => op[0] === "update"))!
     expect(has(update, "eq", "status", "failed")).toBe(true)
     expect(has(update, "eq", "updated_at", "2026-11-25T00:00:00.123456+00:00")).toBe(true)
+  })
+
+  it("다시 선점하면 처음 요청이 정한 상태(외부 발송은 processing)로 되돌린다", async () => {
+    const existing = row("failed", "2026-11-25T00:00:00+00:00")
+    state.resolver = resolverFor(existing, { data: { ...existing, status: "processing" }, error: null })
+    await claimInternalCsIntegrationEvent({ ...claimInput, direction: "outbound", status: "processing" })
+    const update = state.calls.find((call) => call.ops.some((op) => op[0] === "update"))!
+    const patch = update.ops.find((op) => op[0] === "update")![1] as { status: string }
+    expect(patch.status).toBe("processing")
+  })
+
+  it("브리지 이벤트가 저장한 메시지를 metadata.bridgeEventId 로 찾는다", async () => {
+    state.resolver = () => ({ data: { id: "m1" }, error: null })
+    expect(await findInternalCsMessageByBridgeEvent("c1", "e1")).toEqual({ id: "m1" })
+    const call = state.calls[0]
+    expect(has(call, "eq", "conversation_id", "c1")).toBe(true)
+    expect(call.ops.some((op) => op[0] === "contains" && op[1] === "metadata" && (op[2] as { bridgeEventId: string }).bridgeEventId === "e1")).toBe(true)
   })
 
   it("오래 처리 중인 이벤트도 다시 선점하고, 방금 시작한 처리 중 이벤트는 건드리지 않는다", async () => {

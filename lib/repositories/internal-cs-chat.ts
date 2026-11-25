@@ -603,6 +603,21 @@ export async function createInternalCsMessage(input: CreateInternalCsMessageInpu
   return data as InternalCsMessageRow
 }
 
+/** 같은 브리지 이벤트가 이미 저장한 메시지(재처리가 한 벌 더 만들지 않도록). */
+export async function findInternalCsMessageByBridgeEvent(conversationId: string, bridgeEventId: string) {
+  const supabase = createSupabaseAdminClient()
+  const { data, error } = await supabase
+    .from("internal_cs_messages")
+    .select("*")
+    .eq("conversation_id", conversationId)
+    .contains("metadata", { bridgeEventId })
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle()
+  if (error) throw databaseError("failed to look up bridge message", error)
+  return (data as InternalCsMessageRow | null) ?? null
+}
+
 export async function listInternalCsAssets(conversationId: string) {
   const supabase = createSupabaseAdminClient()
   const { data, error } = await supabase
@@ -892,7 +907,8 @@ export async function claimInternalCsIntegrationEvent(
       let reclaim = supabase
         .from("internal_cs_integration_events")
         .update({
-          status: "accepted",
+          // 처음 요청이 정한 상태로 되돌린다(외부 발송은 processing, 수신은 accepted).
+          status: insert.status ?? "accepted",
           payload: insert.payload,
           result: {},
           error_message: null,

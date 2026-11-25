@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   deleteEmptyInternalCsConversation: vi.fn(),
   updateInternalCsIntegrationEvent: vi.fn(),
   createInternalCsMessage: vi.fn(),
+  findInternalCsMessageByBridgeEvent: vi.fn(),
   createInternalCsAsset: vi.fn(),
   findInternalCsAssetByHash: vi.fn(),
   getInternalCsAsset: vi.fn(),
@@ -38,6 +39,7 @@ vi.mock("@/lib/repositories/internal-cs-chat", () => ({
   InternalCsEventConversationRequiredError: class InternalCsEventConversationRequiredError extends Error {},
   updateInternalCsIntegrationEvent: mocks.updateInternalCsIntegrationEvent,
   createInternalCsMessage: mocks.createInternalCsMessage,
+  findInternalCsMessageByBridgeEvent: mocks.findInternalCsMessageByBridgeEvent,
   createInternalCsAsset: mocks.createInternalCsAsset,
   findInternalCsAssetByHash: mocks.findInternalCsAssetByHash,
   getInternalCsAsset: mocks.getInternalCsAsset,
@@ -432,5 +434,67 @@ describe("POST /api/webhook/internal-cs — 재선점과 대화 생성 순서", 
     const response = await POST(signedRequest(noConversation()))
     expect(response.status).toBe(202)
     expect(mocks.createInternalCsConversation).not.toHaveBeenCalled()
+  })
+})
+
+import * as repoModule from "@/lib/repositories/internal-cs-chat"
+
+describe("POST /api/webhook/internal-cs — 반박 검토 결함 재현", () => {
+  const noConversation = () => payload({ conversationId: undefined, conversation: { title: "새 상담" }, idempotencyKey: "fresh-1" })
+
+  it("마이그레이션 전 DB 에서 failed 이벤트를 다시 선점하면 이벤트에 연결된 옛 대화를 쓰고, 새로 만든 대화는 지운다", async () => {
+    defaults()
+    mocks.getInternalCsIntegrationEventByIdempotency.mockResolvedValue({
+      id: "event-failed", conversation_id: "old-conv", status: "failed", result: {}, updated_at: new Date().toISOString(),
+    })
+    const Err = (repoModule as unknown as { InternalCsEventConversationRequiredError: new () => Error }).InternalCsEventConversationRequiredError
+    mocks.claimInternalCsIntegrationEvent
+      .mockRejectedValueOnce(new Err())
+      .mockResolvedValueOnce({ created: true, reclaimed: true, event: { id: "event-failed", conversation_id: "old-conv", status: "accepted" } })
+    mocks.createInternalCsConversation.mockResolvedValue({ id: "new-conv" })
+    const response = await POST(signedRequest(noConversation()))
+    const body = await response.json()
+    expect(response.status).toBe(202)
+    expect(mocks.createInternalCsMessage.mock.calls[0][0].conversationId).toBe("old-conv")
+    expect(body.conversationId).toBe("old-conv")
+    expect(mocks.deleteEmptyInternalCsConversation).toHaveBeenCalledWith("new-conv")
+  })
+
+  it("다시 선점한 이벤트에 다른 conversationId 를 들고 와도 이벤트에 연결된 대화를 쓴다", async () => {
+    defaults()
+    mocks.getInternalCsIntegrationEventByIdempotency.mockResolvedValue({
+      id: "event-failed", conversation_id: "old-conv", status: "failed", result: {}, updated_at: new Date().toISOString(),
+    })
+    mocks.claimInternalCsIntegrationEvent.mockResolvedValue({
+      created: true, reclaimed: true, event: { id: "event-failed", conversation_id: "old-conv", status: "accepted" },
+    })
+    const response = await POST(signedRequest(payload()))
+    expect(response.status).toBe(202)
+    expect(mocks.createInternalCsMessage.mock.calls[0][0].conversationId).toBe("old-conv")
+  })
+
+  it("다시 선점했을 때 앞선 시도가 이미 저장한 메시지가 있으면 한 벌 더 만들지 않는다", async () => {
+    defaults()
+    mocks.getInternalCsIntegrationEventByIdempotency.mockResolvedValue({
+      id: "event-1", conversation_id: conversationId, status: "failed", result: {}, updated_at: new Date().toISOString(),
+    })
+    mocks.claimInternalCsIntegrationEvent.mockResolvedValue({
+      created: true, reclaimed: true, event: { id: "event-1", conversation_id: conversationId, status: "accepted" },
+    })
+    mocks.findInternalCsMessageByBridgeEvent.mockResolvedValue({ id: "message-earlier" })
+    const response = await POST(signedRequest(payload()))
+    const body = await response.json()
+    expect(response.status).toBe(202)
+    expect(mocks.createInternalCsMessage).not.toHaveBeenCalled()
+    expect(body.messageId).toBe("message-earlier")
+    expect(mocks.findInternalCsMessageByBridgeEvent).toHaveBeenCalledWith(conversationId, "event-1")
+  })
+
+  it("처음 처리하는 이벤트는 메시지 조회 없이 새로 만든다", async () => {
+    defaults()
+    const response = await POST(signedRequest(payload()))
+    expect(response.status).toBe(202)
+    expect(mocks.findInternalCsMessageByBridgeEvent).not.toHaveBeenCalled()
+    expect(mocks.createInternalCsMessage).toHaveBeenCalledTimes(1)
   })
 })
