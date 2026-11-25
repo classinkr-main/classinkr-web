@@ -88,6 +88,13 @@ export function LandingHero() {
               )
             })}
           </ol>
+          <TrackedLink
+            href={LANDING_FLOW.recordingLink.href}
+            ctaId="introduction_recording_details"
+            className="mt-6 inline-block text-caption font-semibold text-fg-accent underline underline-offset-4"
+          >
+            {LANDING_FLOW.recordingLink.label}
+          </TrackedLink>
         </LandingRailBlock>
       </div>
     </section>
