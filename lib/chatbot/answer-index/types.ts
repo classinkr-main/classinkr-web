@@ -798,6 +798,9 @@ export interface AnswerIndexSegmentDecision {
   absentHit?: string | null
   /** 정해 둔 답 승격으로 정한 조각(조각 글로 센 옛 정규식 표, 또는 원문 승격을 이 조각에 붙임). */
   rescue?: "vote" | null
+  /** 이 조각만 물었을 때 1위 실제 카드와 확신도(못 답한 조각 알림 줄이 '카드가 있을 법한지'를 가리는 데 쓴다. 답 글에는 쓰지 않는다). */
+  topCard?: string
+  topConf?: number
 }
 
 /**
@@ -824,8 +827,13 @@ export interface AnswerIndexTraceSegment {
   card: string | null
   by: "index" | "assist" | "none"
   source?: AnswerIndexSegmentDecision["source"]
+  /** 이 조각만 물었을 때 1위 실제 카드와 확신도(측정용). */
+  topCard?: string
+  topConf?: number
   /** 답 글에서 이 조각 자리를 '못 답함' 알림으로 채우는지(answer·gap 이 아니면 true). */
   notice: boolean
+  /** 알림 종류: retry(카드가 있을 법한데 이번에 못 고름 — 따로 한 번 더 물어봐 달라), absent(공개 안내에 없음 — 상담으로 확인). */
+  noticeKind?: "retry" | "absent"
 }
 
 export interface AnswerIndexDecision {
@@ -874,6 +882,8 @@ export interface AnswerIndexTrace {
   segments: number
   /** 질문을 나눠 정했을 때 조각별 판정(질문 순서). 나누지 않았으면 없다. */
   parts?: AnswerIndexTraceSegment[]
+  /** 복합 질문 답 합치기 기록(R2 B4): 본문 글자 수·상한·결론만 남긴 조각 수·알림으로 바꾼 조각 수. 단일 답이면 없다. */
+  compound?: { chars: number; cap: number; compacted: number; dropped: number }
   /**
    * 고른 카드 id(answer 는 답 카드, gap 은 공백 카드 — absentHit 으로 간 gap 이면 absent.gapCard).
    * 측정 스크립트가 decidedBy index:<card>·index-gap:<card> 로 쓴다(scripts/lib/chatbot-live-eval-checks.ts).

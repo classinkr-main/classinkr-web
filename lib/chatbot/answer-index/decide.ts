@@ -741,6 +741,9 @@ interface SegmentSlot {
   source: NonNullable<AnswerIndexSegmentDecision["source"]> | null
   scoringText: string | null
   absentHit: string | null
+  /** 이 조각만 물었을 때 1위 실제 카드와 확신도(알림 줄이 '있을 법한 카드'를 가리는 데 쓴다). */
+  topCard: string | null
+  topConf: number | null
   /** 이 자리를 정한 판정(답·공백일 때). */
   result: SegmentResult | null
 }
@@ -759,6 +762,7 @@ function slotDecision(slot: SegmentSlot): AnswerIndexSegmentDecision {
     ...(slot.source ? { source: slot.source } : {}),
     ...(slot.scoringText ? { scoringText: slot.scoringText } : {}),
     ...(slot.absentHit ? { absentHit: slot.absentHit } : {}),
+    ...(slot.topCard ? { topCard: slot.topCard, topConf: slot.topConf ?? 0 } : {}),
     ...(slotRescued(slot) ? { rescue: "vote" as const } : {}),
   }
 }
@@ -798,6 +802,8 @@ function combineSegments(
     source: isDecided(part) ? "segment" : null,
     scoringText: analyses[at].scoringText !== analyses[at].text ? analyses[at].scoringText : null,
     absentHit: part.absentHit,
+    topCard: analyses[at].topReal >= 0 ? analyses[at].ranked[analyses[at].topReal].id : null,
+    topConf: analyses[at].topReal >= 0 ? (analyses[at].confs[analyses[at].topReal] ?? null) : null,
     result: isDecided(part) ? part : null,
   }))
   const overflowSlots: AnswerIndexSegmentDecision[] = overflow.map((text) => ({ text, kind: "abstain", card: null, conf: 0, by: "none", source: "overflow" }))
@@ -913,6 +919,7 @@ function traceSegmentOf(segment: AnswerIndexSegmentDecision): AnswerIndexTraceSe
     card: segment.card,
     by: segment.by ?? (segment.card && decided ? "index" : "none"),
     ...(segment.source ? { source: segment.source } : {}),
+    ...(segment.topCard ? { topCard: segment.topCard, topConf: segment.topConf ?? 0 } : {}),
     notice: !decided,
   }
 }
