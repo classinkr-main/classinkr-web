@@ -41,6 +41,7 @@ import {
 } from "./shared"
 import { addMonthlyBucket, emptyMonthlyBucket } from "./workbench-shared"
 import { sheetAmountFontClass } from "./ledger-sheet-logic"
+import { cellSavingKey } from "./ledger-cell-flight"
 import {
   computeWeekCellStates,
   EMPTY_BUCKET,
@@ -582,6 +583,8 @@ const RevMatrixWeekCell = memo(function RevMatrixWeekCell({
   pendingAmountConfidence = null,
   // 툴팁을 부르는 쪽이 정했으면(시트 보기 sheetWeekCellsForRender) 그대로 쓴다.
   titleOverride,
+  // 이 칸 저장이 서버 응답을 기다리는 중(F-05) — aria-busy · '저장 중…' 툴팁 · 옅은 글자.
+  saving = false,
 }: {
   display: number
   isMonthOnly: boolean
@@ -597,6 +600,7 @@ const RevMatrixWeekCell = memo(function RevMatrixWeekCell({
   pendingAmount?: number | null
   pendingAmountConfidence?: DraftConfidence | null
   titleOverride?: string
+  saving?: boolean
   month?: string
   rowId?: string
   editable?: boolean
@@ -632,7 +636,7 @@ const RevMatrixWeekCell = memo(function RevMatrixWeekCell({
         : refund < 0
           ? `${label} ${compact ? exactYen(refund) : formatMoney(refund)}${isMonthOnly ? " · 월합계만" : ""}`
           : `${label} 미입력`
-  const title = titleOverride
+  const restingTitle = titleOverride
     ? titleOverride
     : absent
       ? baseTitle
@@ -647,6 +651,7 @@ const RevMatrixWeekCell = memo(function RevMatrixWeekCell({
               : editable
                 ? `${baseTitle} · 클릭·Enter로 편집`
                 : baseTitle
+  const title = saving ? `저장 중… · ${restingTitle}` : restingTitle
 
   // 편집 진입: input + 확도 팝오버. 폭 34px라 px 여백 없이 칸을 꽉 채운다.
   if (isEditingCell && interactive) {
@@ -694,7 +699,7 @@ const RevMatrixWeekCell = memo(function RevMatrixWeekCell({
     periodHighlighted ? "border-l-2 border-l-[#084734]/30" : ""
   } ${absent ? "bg-[#F6F5F4]" : compact && sheetBand && shown === 0 ? "bg-[#ECFDF5]" : bgClass} ${
     interactive && editable ? "cursor-cell" : ""
-  } ${selected ? "ring-2 ring-inset ring-[#084734] z-10 shadow-[0_0_0_1px_#084734]" : ""} focus-visible:outline-none transition-colors`
+  } ${selected ? "ring-2 ring-inset ring-[#084734] z-10 shadow-[0_0_0_1px_#084734]" : ""} ${saving ? "opacity-60" : ""} focus-visible:outline-none transition-colors`
 
   const interactiveHandlers = interactive
     ? {
@@ -734,6 +739,7 @@ const RevMatrixWeekCell = memo(function RevMatrixWeekCell({
       title={title}
       aria-label={interactive || absent ? title : undefined}
       aria-disabled={absent || undefined}
+      aria-busy={saving || undefined}
       className={cellClassName}
       style={{
         width: cellWidth,
@@ -923,6 +929,7 @@ export function RevMatrixWeekCells({
         refund={refund}
         absent={absent}
         titleOverride={sheetCell?.title}
+        saving={Boolean(editContext?.savingOf?.(monthKey, index))}
       />,
     )
   }
@@ -968,6 +975,8 @@ export interface RevMatrixEditContext {
   weekPendingAmountsOf: (month: string, currents: readonly number[]) => Array<RevMatrixPendingAmount | null>
   // 주차 셀 편집 팝오버 고지문 — explicit 행(주차 병합 보존) vs 그 외(월 전체 대체) 구분.
   weekEditNotice: (month: string) => string | undefined
+  /** 이 행의 그 주차 칸 저장이 서버 응답을 기다리는 중(F-05, 워크벤치 savingCellsByRow). 없으면 늘 아님. */
+  savingOf?: (month: string, week: number) => boolean
 }
 
 /**
@@ -1031,6 +1040,7 @@ export function buildRevMatrixEditContext({
   editBuffer,
   editConfidence,
   pendingByCell,
+  savingCells = null,
 }: {
   row: LedgerRevenueRow
   correctedMonths?: Set<string> | null
@@ -1040,6 +1050,8 @@ export function buildRevMatrixEditContext({
   editBuffer: string
   editConfidence: DraftConfidence
   pendingByCell: Map<string, MatrixPendingDraft> | null
+  /** 이 행의 "저장 중" 칸(cellSavingKey — ledger-cell-flight.ts). 없으면 저장 중 칸 없음. */
+  savingCells?: ReadonlySet<string> | null
 }): RevMatrixEditContext {
   const lockKindOf = (month: string) => matrixCellLockKind(row, month, correctedMonths)
   return {
@@ -1083,6 +1095,7 @@ export function buildRevMatrixEditContext({
       if (split.source === "empty") return undefined
       return "적용 시 이 달 전체가 이 값으로 대체됩니다 (주차 분해 없음)"
     },
+    ...(savingCells && savingCells.size > 0 ? { savingOf: (month: string, week: number) => savingCells.has(cellSavingKey(month, week)) } : {}),
   }
 }
 
@@ -1748,6 +1761,7 @@ export const RevMatrixDealRow = memo(function RevMatrixDealRow({
   editBuffer = "",
   editConfidence = "expected",
   pendingByCell = null,
+  savingCells = null,
   density = "regular",
   periodMonths,
   h1Expanded = false,
@@ -1770,6 +1784,8 @@ export const RevMatrixDealRow = memo(function RevMatrixDealRow({
   editBuffer?: string
   editConfidence?: DraftConfidence
   pendingByCell?: Map<string, MatrixPendingDraft> | null
+  /** 이 행의 "저장 중" 칸(F-05) — 워크벤치 savingCellsByRow 의 이 행 몫. */
+  savingCells?: ReadonlySet<string> | null
   density?: MatrixDensity
   periodMonths?: Set<string> // 웨이브 5 — 항목 1(b): 선택 기간 열 accent
   h1Expanded?: boolean
@@ -1812,7 +1828,7 @@ export const RevMatrixDealRow = memo(function RevMatrixDealRow({
   // isSelectedCell/isEditingCell는 행 스코프 좌표(selectedCoord/editingCoord)와 month·week를 비교한다 —
   // 원 isSelected/isEditing 규약과 동일(행 rowId 일치는 좌표가 이미 이 행일 때만 non-null이라 내포).
   const editContext: RevMatrixEditContext | null = actions
-    ? buildRevMatrixEditContext({ row, correctedMonths: view.correctedMonths, actions, selectedCoord, editingCoord, editBuffer, editConfidence, pendingByCell })
+    ? buildRevMatrixEditContext({ row, correctedMonths: view.correctedMonths, actions, selectedCoord, editingCoord, editBuffer, editConfidence, pendingByCell, savingCells })
     : null
   return (
     <tr role="row" className={`group ${MATRIX_DEAL_ROW_HEIGHT[density]} border-t border-[#EDECE8] transition-colors ${active ? "bg-[#EAF6F0]" : draftRow ? "bg-[#FFFCF5] hover:bg-[#FBF1E0]" : grouped ? "bg-[#FAFAF8] hover:bg-[#F4F4F2]" : "hover:bg-[#F9F9F8]"}`}>

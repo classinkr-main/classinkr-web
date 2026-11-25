@@ -199,10 +199,21 @@ export interface CellSheetHintInput {
   /** KST YYYY-MM-DD */
   today: string
   capturedAt?: string
+  /**
+   * 주차 칸 커밋(F-35) — 그 달 주차 5칸(metadata.weekly, mergeWeekCellCommit). 있으면 amount 는 주차 합이고 서버 반영과 같이
+   * 주차 단위로 판정한다(지난 주차 · 칸 수). 없으면 월 칸 입력.
+   */
+  weekly?: number[] | null
+  /** 주차별 확도(metadata.weeklyConfidence). */
+  weeklyConfidence?: Array<DraftConfidenceLike | null> | null
+  /** 주차별 확도 직접 선택 표시(metadata.weeklyConfidenceTouched). */
+  weeklyConfidenceTouched?: boolean[] | null
+  /** 고친 주차(0~4, metadata.week). */
+  week?: number | null
 }
 
 /**
- * 월 칸(주차 없음) 입력의 칸 아래 한 줄. 서버 plan.ts 와 같은 판정(planWeekWrites)을 미러 값으로 미리 돌린다 —
+ * 월 칸(주차 없음) 입력의 칸 아래 한 줄. 주차 칸 커밋이면(weekly) 그 주차 5칸으로 판정한다(F-35). 서버 plan.ts 와 같은 판정(planWeekWrites)을 미러 값으로 미리 돌린다 —
  * block 이면 화면이 저장을 막는다(그 초안은 켜짐 상태에서 반영할 수 없다). 시트가 그 사이 바뀌었는지는
  * 반영 직전에 서버가 다시 읽어 판정한다(conflict). 시트 쓰기가 꺼져 있으면 호출부가 부르지 않는다.
  */
@@ -223,10 +234,11 @@ export function cellSheetWriteHint(input: CellSheetHintInput): SheetHint | null 
     month: input.month,
     baselineWeeks,
     draftAmount: input.amount,
-    draftWeekly: null,
+    draftWeekly: input.weekly ?? null,
     draftConfidence: input.confidence,
-    draftWeeklyConfidence: null,
+    draftWeeklyConfidence: input.weekly ? input.weeklyConfidence ?? null : null,
     confidenceTouched: input.confidenceTouched,
+    ...(input.weekly ? { draftWeeklyConfidenceTouched: input.weeklyConfidenceTouched ?? null, draftWeek: input.week ?? null } : {}),
     firstPayment,
     today: input.today,
   })

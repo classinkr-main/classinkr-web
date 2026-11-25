@@ -301,9 +301,9 @@ describe("SalesLedgerWorkbench — weeklyConfidence 배선 규약(소스 스캔)
       "const buildCellDraftInput = useCallback",
       "const onMatrixAmountClamped = useCallback",
     )
-    expect(body).toContain("const baseStates = weeklyConfidenceFromMetadata(row.draftMetadata)")
-    expect(body).toContain("if (index === week) return confidence")
-    expect(body).toContain("return baseStates?.[index] ?? null")
+    // 2026-11-25(F-02): 병합은 순수 함수 mergeWeekCellCommit(편집 주차 = 고른 확도, 나머지 = 대기 초안 · 행의 주차 확도 —
+    // tests/branch/rev-matrix-week-commit.test.ts)이 한다. 같은 달 대기 초안(응답 전 저장 포함)이 기준이다.
+    expect(body).toContain("mergeWeekCellCommit({ pendingDraft: pending, sheetRow: row, month, week, amount, confidence })")
     expect(body).toContain("weeklyConfidence: mergedWeeklyConfidence,")
     expect(body).toContain("dominantWeeklyConfidence(mergedWeekly, mergedWeeklyConfidence)")
   })

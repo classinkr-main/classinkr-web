@@ -461,7 +461,8 @@ describe("초안 빌더 배선 — baseline·confidenceTouched", () => {
     const body = source.slice(source.indexOf("const buildCellDraftInput = useCallback"), source.indexOf("const cancelDraftRef = useRef"))
     expect(body).toMatch(/sheetBaselineForRow\(sheetRowById\.get\(sourceDealId\), month, new Date\(\)\.toISOString\(\)\)/)
     expect(body).toMatch(/\.\.\.\(sheetBaseline \? \{ sheetBaseline \} : \{\}\)/)
-    expect(body).toMatch(/firstPayment: row\.firstPayment \?\? null,/)
+    // 행 요약은 cellDraftSnapshotRow(F-17 — 첫 결제일 · 계약 · 경로 · 계약 목표 · 중요도까지, tests/branch/ledger-cell-commit-wiring.test.ts).
+    expect(body).toMatch(/row: cellDraftSnapshotRow\(row, priorAmount\),/)
     // 판정 규칙은 tests/branch/ledger-confidence-touched.test.ts — 기본은 "안 고름"(시트 글자색 그대로).
     expect(body).toMatch(/confidenceTouched: touched\.confidenceTouched,/)
     expect(body).toMatch(/confidencePicked = false,/)

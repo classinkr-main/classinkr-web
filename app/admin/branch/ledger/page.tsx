@@ -3,21 +3,24 @@ import { Suspense } from "react"
 import AdminRouteLoading from "@/components/admin/AdminRouteLoading"
 import SyncHealthBannerServer from "@/components/admin/SyncHealthBannerServer"
 import SalesLedgerWorkbench, { type LedgerPipelinePrefetch } from "@/components/admin/branch/SalesLedgerWorkbench"
+import { ledgerPipelineUrl } from "@/components/admin/branch/ledger/ledger-business-day"
 import type { BranchPipelineResponse } from "@/components/admin/branch/types"
 import { getVerifiedAdminContextForPage } from "@/lib/admin/page-auth"
 import { openPrefetchLane } from "@/lib/admin/prefetch-budget"
 import { BRANCH_READ_ADMIN_API_ROLES, hasAdminApiRole } from "@/lib/admin-auth"
-import { resolvePeriodDate } from "@/lib/branch/fiscal"
+import { fiscalYearOfYm, resolvePeriodDate } from "@/lib/branch/fiscal"
 import { readBranchPipelineRows } from "@/lib/branch/pipeline-rows"
+import { getBusinessDateParts } from "@/lib/business-time"
 
 export const dynamic = "force-dynamic"
 
 // 워크벤치가 첫 렌더에서 부르는 URL — team/period/month 상태 초기값(ALL · Q · month 미포함)이
 // 그대로 쿼리가 된다. ?team=BD 같은 딥링크는 마운트 효과가 상태를 바꾼 뒤 별도 요청으로 나가므로
-// 서버가 미리 만들어야 하는 조합은 항상 이 기본형 하나다.
+// 서버가 미리 만들어야 하는 조합은 항상 이 기본형 하나다. 시드 URL 은 워크벤치 pipelineUrl 과 같은 함수(ledgerPipelineUrl)로
+// 만든다 — 문자 그대로 같아야 시드가 쓰인다. 끝의 fy(화면 회계연도, KST 영업일)가 시드 키에 들어가 4/1 경계에서 서버가 만든
+// 지난 회계연도 시드를 새 회계연도의 브라우저가 받아 쓰지 않는다(F-45).
 const INITIAL_TEAM = "ALL"
 const INITIAL_PERIOD = "Q"
-const INITIAL_PIPELINE_URL = `/api/admin/branch/pipeline?team=${INITIAL_TEAM}&period=${INITIAL_PERIOD}`
 
 /**
  * 첫 화면 서버 프리페치 — GET /api/admin/branch/pipeline과 같은 검증(BRANCH_READ_ADMIN_API_ROLES)·
@@ -52,8 +55,16 @@ async function PersonalSalesLedger() {
   // 클라이언트가 다시 같은 데이터를 요청해 "1.2초 낭비 + 클라이언트 왕복"의 이중비용이 났다
   // (tmp/admin-overhaul-2026-09-10/platform.md §2.0). 이제 그 대기 자체가 없다.
   const lane = openPrefetchLane(() => prefetchLedgerRows(defaultManager))
+  // 오늘(KST 영업일)을 서버에서 한 번 정해 워크벤치 첫 상태(이번 달 · 회계연도)로 넘긴다 — 서버 렌더와 첫 클라이언트 렌더가 같은 달을
+  // 그려 달 경계에서 하이드레이션이 깨지지 않는다(F-45). 그 뒤로는 워크벤치가 1분 틱 · 탭 복귀로 다시 읽는다(F-11).
+  const initialBusinessDate = getBusinessDateParts().date
   const initialPipeline: LedgerPipelinePrefetch = {
-    url: `${INITIAL_PIPELINE_URL}&manager=${encodeURIComponent(defaultManager)}`,
+    url: ledgerPipelineUrl({
+      team: INITIAL_TEAM,
+      period: INITIAL_PERIOD,
+      manager: defaultManager,
+      fy: fiscalYearOfYm(initialBusinessDate),
+    }),
     promise: lane.promise,
     generatedAt: lane.generatedAt,
   }
@@ -80,7 +91,7 @@ async function PersonalSalesLedger() {
         <SyncHealthBannerServer sources={["sheets"]} className="shrink-0 bg-[#FAFAF8] px-4 pt-3" />
       </Suspense>
       <Suspense fallback={<AdminRouteLoading />}>
-        <SalesLedgerWorkbench initialPipeline={initialPipeline} defaultManager={defaultManager} />
+        <SalesLedgerWorkbench initialPipeline={initialPipeline} defaultManager={defaultManager} initialBusinessDate={initialBusinessDate} />
       </Suspense>
     </div>
   )

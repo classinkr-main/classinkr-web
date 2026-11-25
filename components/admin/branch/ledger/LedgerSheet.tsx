@@ -144,6 +144,7 @@ const SheetRow = memo(function SheetRow({
   editBuffer,
   editConfidence,
   pendingByCell,
+  savingCells = null,
 }: {
   view: SheetRowView
   columns: SheetColumns
@@ -158,6 +159,8 @@ const SheetRow = memo(function SheetRow({
   editBuffer: string
   editConfidence: DraftConfidence
   pendingByCell: Map<string, MatrixPendingDraft> | null
+  /** 이 행의 "저장 중" 칸(F-05, ledger-cell-flight cellSavingKey). 저장 중이 아닌 행은 null — 메모가 건너뛴다. */
+  savingCells?: ReadonlySet<string> | null
 }) {
   const { row } = view
   const draftRow = row.ledgerOrigin === "draft"
@@ -168,7 +171,7 @@ const SheetRow = memo(function SheetRow({
     [actions, view],
   )
   const editContext = guardedActions
-    ? buildRevMatrixEditContext({ row, correctedMonths: view.correctedMonths, actions: guardedActions, selectedCoord, editingCoord, editBuffer, editConfidence, pendingByCell })
+    ? buildRevMatrixEditContext({ row, correctedMonths: view.correctedMonths, actions: guardedActions, selectedCoord, editingCoord, editBuffer, editConfidence, pendingByCell, savingCells })
     : null
   // 대기 초안(F-19) — 달 계에 적용되면 될 금액을 대기 표시로.
   const pendingByBlock = useMemo(
@@ -612,6 +615,11 @@ export interface LedgerSheetProps {
   /** 오늘이 속한 달 — 월 띠에 "이번 달"을 붙인다. */
   currentMonth: string
   /**
+   * 오늘(KST 'YYYY-MM-DD') — 이번 주 열 표시. 화면이 상태로 들고 1분마다 다시 읽는 값을 넘기면 자정 · 주가 바뀔 때 따라간다(F-11).
+   * 없으면 그릴 때의 KST 영업일.
+   */
+  today?: string
+  /**
    * 첫 불러오기가 아직 안 끝났다(시트 행 · 장부 큐 중 하나라도, F-13). 몸통은 '불러오는 중' 한 줄이고, 합계 행 금액 · 빈 문구 ·
    * 0행 안내 · [모두 풀기]를 감춘다 — 장부 입력분만 먼저 온 표를 최종처럼 보이지 않게, 공유 필터 주소를 지우지 않게.
    */
@@ -632,6 +640,8 @@ export interface LedgerSheetProps {
   /** 칸 편집 상태(없으면 읽기 전용). */
   editor: LedgerSheetEditorState | null
   pendingByCell: Map<string, MatrixPendingDraft> | null
+  /** 행 id → "저장 중" 칸(F-05 — 칸 저장이 서버 응답을 기다리는 동안 그 주차 칸이 aria-busy · '저장 중…'). 없으면 없음. */
+  savingCells?: ReadonlyMap<string, ReadonlySet<string>> | null
 }
 
 export default function LedgerSheet({
@@ -642,6 +652,7 @@ export default function LedgerSheet({
   filters,
   onFiltersChange,
   currentMonth,
+  today,
   loading,
   partialNotice = null,
   onRetry,
@@ -651,6 +662,7 @@ export default function LedgerSheet({
   onOpenRow,
   editor,
   pendingByCell,
+  savingCells = null,
 }: LedgerSheetProps) {
   const pastCols = columns.pastMonths.length === 0 ? 0 : columns.pastPinned ? 1 : columns.pastMonths.length
   const laterCols = columns.laterMonths.length > 0 ? 1 : 0
@@ -661,7 +673,7 @@ export default function LedgerSheet({
     pastCols * W.past + columns.blocks.length * (W.total + SHEET_WEEK_W * 5) + laterCols * W.later + W.fy + W.note
 
   // 이번 주 열(D-3) — 기준 달이 오늘(업무일 KST)이 든 달일 때만. 시트 쓰기와 같은 주차 규칙(1·8·15·22·29일).
-  const currentWeekKey = useMemo(() => sheetCurrentWeekKey(columns, getBusinessDateParts().date), [columns])
+  const currentWeekKey = useMemo(() => sheetCurrentWeekKey(columns, today ?? getBusinessDateParts().date), [columns, today])
   const filtering = useMemo(() => sheetFiltersApply(filters, columns), [filters, columns])
   const partial = Boolean(partialNotice) && !loading
   // 0행일 때 "어느 필터를 풀면 몇 행"(D-4) — 걸린 열 필터 하나씩 풀어 센다. 불러오는 중 · 일부만이면 세지 않는다(행이 덜 왔다).
@@ -905,6 +917,7 @@ export default function LedgerSheet({
                   editBuffer={isEditingRow ? editor!.buffer : ""}
                   editConfidence={isEditingRow ? editor!.editConfidence : "expected"}
                   pendingByCell={pendingByCell}
+                  savingCells={savingCells?.get(rowId) ?? null}
                 />
               )
             })
