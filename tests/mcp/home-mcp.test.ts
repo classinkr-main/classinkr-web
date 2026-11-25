@@ -8,9 +8,12 @@ vi.mock("@/lib/repositories/hardware-inventory", () => ({
   createHardwareMovementRows: (...a: unknown[]) => createHardwareMovementRows(...a),
   getHardwareDashboard: vi.fn(),
   getHardwareMovementsPage: vi.fn(),
+  // 레지스트리로 옮긴 뒤 hw_plan_movement 는 기존 품목만 고른다(새 품목 행 금지) — 시험 품목 T1
+  listHardwareItems: vi.fn(async () => [{ id: "item-t1", name: "T1", source_aliases: [] }]),
+  findHardwareMovementsByMcpIdempotencyKey: vi.fn(async () => []),
 }))
 vi.mock("@/lib/repositories/hardware-sales-dashboard", () => ({ currentSalesFy: vi.fn(), getHardwareSalesDashboard: vi.fn() }))
-vi.mock("@/lib/auth/audit", () => ({ logAudit: vi.fn() }))
+vi.mock("@/lib/auth/audit", () => ({ logAudit: vi.fn(), logAuditChecked: vi.fn(async () => ({ ok: true })) }))
 vi.mock("@/lib/chatbot/service", () => ({ evaluateChatbotQuery: vi.fn() }))
 vi.mock("@/lib/admin/traffic-summary", () => ({ getCachedTrafficSummary: vi.fn() }))
 vi.mock("@/lib/portal/repositories/activity", () => ({ logActivity: vi.fn() }))
@@ -25,13 +28,15 @@ vi.mock("@/lib/portal/repositories/quote-documents", () => ({
 
 import { handleMcpPayload, resolveMcpCaller, type McpDeps } from "@/lib/mcp/server"
 import { callTool, listTools } from "@/lib/mcp/tools"
+import { LEGACY_SCOPES } from "@/lib/ops-tools/actor"
 
-const caller = { name: "tester" }
+// 행위자가 {name} 에서 {name, scopes, legacy} 로 넓어졌다 — 옛 형식 토큰과 같은 범위
+const caller = { name: "tester", scopes: LEGACY_SCOPES, legacy: true }
 
 describe("resolveMcpCaller", () => {
   const env = "moon:aaaaaaaaaaaaaaaaaaaa,minjae:bbbbbbbbbbbbbbbbbbbb"
   it("맞는 토큰의 이름을 돌려준다", () => {
-    expect(resolveMcpCaller("Bearer bbbbbbbbbbbbbbbbbbbb", env)).toEqual({ name: "minjae" })
+    expect(resolveMcpCaller("Bearer bbbbbbbbbbbbbbbbbbbb", env)).toMatchObject({ name: "minjae", legacy: true })
   })
   it("env 가 비었거나 토큰이 틀리거나 짧으면 null(→401)", () => {
     expect(resolveMcpCaller("Bearer aaaaaaaaaaaaaaaaaaaa", undefined)).toBeNull()
