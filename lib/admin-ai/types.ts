@@ -19,6 +19,8 @@ export type OrderState =
   | "cancelled"
   | "expired"
   | "failed"
+  /** 서버 오더의 확인표가 이미 쓰였다(같은 표를 다시 보냄) — 실행하지 않았고, 결과는 화면에서 본다. */
+  | "processed"
 
 export type OrderIcon =
   | "task"
@@ -115,6 +117,21 @@ export interface OrderTicket {
   failure?: OrderFailure
   /** 오더를 내린 화면 경로. */
   pagePath?: string
+  /**
+   * 서버(실제 모드)가 낸 오더. ticket 은 서버가 서명한 일회용 확인 표 — 카드의 확인 버튼이 이 값을 그대로
+   * POST /api/admin/ai/orders/confirm 에 보낸다. 서명 비밀이 없으면 ticket 이 없고 directHref(화면에서 직접 등록)만 있다.
+   * 시안 오더에는 없다.
+   */
+  server?: OrderServerTicket
+  /** 확인 요청을 서버에 보내 답을 기다리는 중(버튼을 막는다). */
+  submitting?: boolean
+}
+
+export interface OrderServerTicket {
+  ticket?: string
+  /** 화면에서 직접 하는 주소 — 링크 목록(links.ts)에 있는 어드민 주소만 그려진다. */
+  directHref?: string
+  directLabel?: string
 }
 
 export interface ReadCardTable {
@@ -170,10 +187,19 @@ export interface AnswerSource {
 export interface AnswerCard {
   title: string
   target: OrderTarget
-  /** 바로 답 — 한두 문장. */
+  /** 바로 답 — 결론 한 문장(두괄식). */
   answer: string
+  /** 방법 — 한 단계 한 줄. */
+  steps?: string[]
+  /** 조건·주의 — 있을 때만. */
+  cautions?: string[]
   confidence: AnswerConfidence
   sources: AnswerSource[]
+  /**
+   * 고객용 문안 — 공개 챗봇 답 색인 카드의 고객 말투 그대로(매니저 답과 따로 둔다, 점검 R18).
+   * 정책 결정 대기 카드면 status 가 needs-check 이고 note 에 결정 번호가 들어간다.
+   */
+  customerDraft?: { text: string; status: AnswerConfidence; note?: string }
   /** 근거를 못 찾았을 때 등의 보충 한 줄. */
   note?: string
 }

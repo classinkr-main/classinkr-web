@@ -5,9 +5,9 @@ import { useEffect, useRef, useState, type KeyboardEvent } from "react"
 
 import { checkFinalAnswer } from "@/lib/internal-cs-chat/answer-checks"
 
-import ModelStatusBanner from "../components/ModelStatusBanner"
+import ModelStatusBanner, { IncompleteDraftNotice } from "../components/ModelStatusBanner"
 import ReviewWarningList from "../components/ReviewWarningList"
-import { isDeterministicDraft, readFailureKinds, readReviewWarnings } from "../ops-desk"
+import { isDeterministicDraft, isIncompleteDraft, readFailureKinds, readReviewWarnings } from "../ops-desk"
 import type { InternalCsMessage, ReviewChecks } from "../types"
 
 // 검토 드로어 — 본문 영역(relative) 기준 `absolute inset-y-0 right-0`. 본문은 xl에서 pr-[438px]로 양보한다.
@@ -97,6 +97,7 @@ export default function ReviewDrawer({
   ]
   const deterministic = isDeterministicDraft(pendingMessage)
   const failureKinds = readFailureKinds(pendingMessage)
+  const incompleteDraft = isIncompleteDraft(pendingMessage)
 
   function handleKeyDown(event: KeyboardEvent<HTMLElement>) {
     if (event.key === "Escape") {
@@ -158,9 +159,10 @@ export default function ReviewDrawer({
             </details>
           ) : null}
 
-          {deterministic || warnings.length > 0 ? (
+          {deterministic || incompleteDraft || warnings.length > 0 ? (
             <div className="space-y-2 border-b border-black/[0.08] px-5 py-3">
               {deterministic ? <ModelStatusBanner origin="deterministic" failureKinds={failureKinds} /> : null}
+              <IncompleteDraftNotice incomplete={incompleteDraft} />
               <ReviewWarningList warnings={warnings} />
               {warnings.length > 0 ? (
                 <label className="flex cursor-pointer items-start gap-2.5 text-[12px] font-semibold text-[#6B4E00]">

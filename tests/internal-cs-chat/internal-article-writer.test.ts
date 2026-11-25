@@ -2,12 +2,14 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 
 import {
   chunkMarkdown,
+  contentHash,
   csKnowledgeSlug,
   deriveArticleTitle,
   deriveKnowledgeMetaFromMessage,
   embedInternalText,
   ensureKnowledgeHeading,
   promoteMessageToInternalArticle,
+  syncArticleChunks,
   slugFromRelativePath,
   writeInternalCanonDoc,
   type InternalDocsSupabase,
@@ -29,7 +31,7 @@ function smartChain(resolver: (calls: Call[]) => unknown) {
     _calls?: Call[]
   } = {}
   for (const method of [
-    "select", "eq", "neq", "in", "order", "limit", "gte", "delete", "maybeSingle", "single", "upsert", "insert", "update",
+    "select", "eq", "neq", "in", "not", "order", "limit", "gte", "delete", "maybeSingle", "single", "upsert", "insert", "update",
   ]) {
     chain[method] = vi.fn((...args: unknown[]) => {
       calls.push([method, ...args])
@@ -362,5 +364,58 @@ describe("embedInternalText (model-transport)", () => {
 
     expect(await embedInternalText("글")).toBeNull()
     expect(warn).toHaveBeenCalledWith("[internal-cs] document embed failed: quota HTTP 402")
+  })
+})
+
+describe("syncArticleChunks 기존 청크 조회(R22)", () => {
+  it("임베딩 벡터를 읽지 않고(해시·임베딩 시각만), 시각이 없는 행만 벡터 유무를 한 번 더 확인한다", async () => {
+    const chunks = [{ heading: null, content: "가나다" }, { heading: null, content: "라마바" }]
+    const hash = (content: string) => contentHash(content)
+    const supabase = fakeSupabase({
+      docs_ai_chunks: (calls: Call[]) => {
+        if (calls[0]?.[0] !== "select") return { error: null }
+        return calls.some((call) => call[0] === "not")
+          ? { data: [{ chunk_index: 1 }], error: null }
+          : {
+              data: [
+                { chunk_index: 0, content_hash: hash("가나다"), embedding_updated_at: "2026-11-01T00:00:00Z" },
+                { chunk_index: 1, content_hash: hash("라마바"), embedding_updated_at: null },
+              ],
+              error: null,
+            }
+      },
+    })
+    const embed = vi.fn(async () => [0.1, 0.2])
+    const result = await syncArticleChunks(asSupabase(supabase), "article-1", chunks, { source: "test", throttleMs: 0, embed })
+
+    expect(result).toEqual({ embedded: 0, kept: 2, failed: 0 })
+    expect(embed).not.toHaveBeenCalled()
+    const [firstSelect, secondSelect] = supabase.chainsByTable.docs_ai_chunks
+    expect(firstSelect._calls?.[0]).toEqual(["select", "chunk_index, content_hash, embedding_updated_at"])
+    expect(secondSelect._calls?.[0]).toEqual(["select", "chunk_index"])
+    expect(secondSelect._calls?.some((call) => call[0] === "not" && call[1] === "embedding")).toBe(true)
+  })
+
+  it("시각이 모두 있으면 두 번째 조회 없이 한 번만 읽고, 해시가 달라진 청크만 다시 임베딩한다", async () => {
+    const chunks = [{ heading: null, content: "그대로" }, { heading: null, content: "바뀐 글" }]
+    const supabase = fakeSupabase({
+      docs_ai_chunks: (calls: Call[]) =>
+        calls[0]?.[0] === "select"
+          ? {
+              data: [
+                { chunk_index: 0, content_hash: contentHash("그대로"), embedding_updated_at: "2026-11-01T00:00:00Z" },
+                { chunk_index: 1, content_hash: "옛해시", embedding_updated_at: "2026-11-01T00:00:00Z" },
+              ],
+              error: null,
+            }
+          : { error: null },
+    })
+    const embed = vi.fn(async () => [0.1, 0.2])
+    const result = await syncArticleChunks(asSupabase(supabase), "article-1", chunks, { source: "test", throttleMs: 0, embed })
+
+    expect(result).toEqual({ embedded: 1, kept: 1, failed: 0 })
+    expect(embed).toHaveBeenCalledTimes(1)
+    const selects = supabase.chainsByTable.docs_ai_chunks.filter((chain) => chain._calls?.[0]?.[0] === "select")
+    expect(selects).toHaveLength(1)
   })
 })

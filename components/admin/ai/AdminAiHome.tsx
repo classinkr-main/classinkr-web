@@ -1,9 +1,9 @@
 "use client"
 
-import { demoScenarioPrompt } from "@/lib/admin-ai/demo-scenarios"
 import { formatTimeOfDay, riskName } from "@/lib/admin-ai/format"
+import { adminAiMode } from "@/lib/admin-ai/preview"
 import { adminAiStore } from "@/lib/admin-ai/store"
-import { COMMON_ASK_ITEMS, resolveAdminAiSuggestions } from "@/lib/admin-ai/suggestions"
+import { homeSuggestions, type HomeSuggestion } from "@/lib/admin-ai/suggestions"
 import type { RecentThread } from "@/lib/admin-ai/recent-threads"
 import type { AdminAiPageContext, OrderRisk } from "@/lib/admin-ai/types"
 import { GalmaebotAvatar } from "./GalmaebotAvatar"
@@ -24,7 +24,7 @@ export function RiskTag({ risk, sensitive = false }: { risk: OrderRisk; sensitiv
   )
 }
 
-/** 첫 화면 — 인사, 확인 대기 알림, 화면별 추천(정적 목록). */
+/** 첫 화면 — 인사, 확인 대기 알림, 화면별 추천(정적 목록). 실제 모드는 실제로 되는 일만, 기관 이름 없는 문장으로 추천한다. */
 export function AdminAiHome({
   context,
   pendingCount,
@@ -37,7 +37,9 @@ export function AdminAiHome({
   /** 직전 대화(제목·시각만). */
   recentThreads?: readonly RecentThread[]
 }) {
-  const suggestions = resolveAdminAiSuggestions(context.path)
+  const { screen: suggestions, ask: askItems } = homeSuggestions(context.path, adminAiMode() === "live" ? "live" : "demo")
+  const send = (item: HomeSuggestion) =>
+    adminAiStore.ask({ text: item.text, ...(item.scenario ? { scenario: item.scenario } : {}), context })
 
   return (
     <div className="flex flex-col gap-3.5">
@@ -66,13 +68,7 @@ export function AdminAiHome({
           <button
             key={item.label}
             type="button"
-            onClick={() =>
-              adminAiStore.ask({
-                text: demoScenarioPrompt(item.scenario),
-                scenario: item.scenario,
-                context,
-              })
-            }
+            onClick={() => send(item)}
             className="flex w-full items-center gap-2.5 border-b border-[#F0F0EC] px-3 py-2.5 text-left text-[13px] text-[#111110] last:border-b-0 hover:bg-[#FDFDFC] focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[#084734]"
           >
             <span>{item.label}</span>
@@ -85,17 +81,11 @@ export function AdminAiHome({
 
       <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="물어보기">
         <span className="text-[11px] font-semibold text-[#A39E98]">물어보기</span>
-        {COMMON_ASK_ITEMS.map((item) => (
+        {askItems.map((item) => (
           <button
             key={item.label}
             type="button"
-            onClick={() =>
-              adminAiStore.ask({
-                text: demoScenarioPrompt(item.scenario),
-                scenario: item.scenario,
-                context,
-              })
-            }
+            onClick={() => send(item)}
             className="rounded-full border border-[#E8E8E4] bg-white px-2.5 py-1 text-[12px] font-medium text-[#111110] hover:bg-[#F6F5F4] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734]"
           >
             {item.label}
