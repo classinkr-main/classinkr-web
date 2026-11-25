@@ -45,6 +45,7 @@ import { ChatbotTeaser } from "@/components/ui/ChatbotTeaser"
 import { useChatbotTeaser } from "@/components/ui/useChatbotTeaser"
 import { CHATBOT_MOTION, m } from "@/lib/chatbot/motion"
 import { advanceReveal, continuesShownText } from "@/lib/chatbot/stream-reveal"
+import { extractAnswerLinks, stripAnswerAddresses, type AnswerLink } from "@/lib/chatbot/answer-links"
 import {
     isMuted,
     setMuted,
@@ -61,6 +62,8 @@ const CHATBOT_REQUEST_TIMEOUT_MS = 14_000
 const STARTER_SUGGESTION_LIMIT = 4
 const FOLLOW_UP_SUGGESTION_LIMIT = 3
 const ANSWER_SCROLL_TOP_OFFSET_PX = 32
+/** 답변이 시작될 때 자동으로 보여줄 첫 문단 줄 수 — 그 뒤는 사용자가 직접 스크롤. */
+const ANSWER_PREVIEW_LINES = 4
 
 const EASING_SOFT_ENTER = [0.22, 1, 0.36, 1] as const
 
@@ -228,7 +231,8 @@ function buildConsultationDraft(
         triggerMessage.handoffIntent === "support"
             ? "계정/결제/장비 상태 확인이 필요한 문의입니다."
             : "도입 방식과 운영 흐름 상담이 필요한 문의입니다."
-    const answerSummary = triggerMessage.content
+    // 요약 상자는 사용자에게 보이고 상담원에게 그대로 전달된다 — 주소 글자는 빼고 문장만 남긴다.
+    const answerSummary = sanitizeVisibleAssistantText(triggerMessage.content)
         .replace(/\s+/g, " ")
         .replace(/^요약:\s*/i, "")
         .slice(0, 260)
@@ -491,14 +495,22 @@ function FeedbackButtons({
 }
 
 function buildAnswerShareText(message: ChatMessage) {
-    return sanitizeVisibleAssistantText(message.content)
+    const text = sanitizeVisibleAssistantText(message.content)
+    // 화면에서는 주소가 버튼이 되므로, 복사본에는 버튼 대신 "이름: 주소" 줄을 붙여 링크를 잃지 않게 한다.
+    const links = extractAnswerLinks(message.content)
+    if (links.length === 0 || typeof window === "undefined") return text
+    const lines = links.map((link) => `${link.label}: ${new URL(link.href, window.location.origin).toString()}`)
+    return `${text}\n\n${lines.join("\n")}`
 }
 
 function sanitizeVisibleAssistantText(value: string) {
-    return value
-        .replace(/!\[[^\]]*]\([^)]*\)/g, "")
-        .replace(/\[([^\]]+)]\((?:https?:\/\/|\/)[^)]+\)/g, "$1")
-        .replace(/https?:\/\/[^\s)]+/g, "")
+    // 주소는 본문에서 지우고 링크 버튼(AnswerLinks)으로 보여준다.
+    const withoutAddresses = stripAnswerAddresses(
+        value
+            .replace(/!\[[^\]]*]\([^)]*\)/g, "")
+            .replace(/\[([^\]]+)]\((?:https?:\/\/|\/)[^)]+\)/g, "$1")
+    )
+    return withoutAddresses
         .replace(/(?:\/docs|\/images|\/resources)\/[^\s)]+/g, "")
         .replace(/\[image[_\-\s]?\d*]/gi, "")
         // 제품 톤은 마크다운을 쓰지 않는다. 모델이 가끔 흘리는 **굵게** 표시는 평문으로 정리한다.
@@ -518,6 +530,12 @@ function cleanMessageLine(line: string) {
 
 function orderedLineValue(line: string) {
     return line.match(/^\d+[\.)]\s+(.+)$/)?.[1]?.trim()
+}
+
+/** "2. 설치 기사가…"의 원래 번호. 항목 사이에 빈 줄이 있어 목록이 나뉘어도 1, 1, 1 이 아니라 1, 2, 3 으로 보인다. */
+function orderedLineNumber(line: string) {
+    const value = Number(line.match(/^(\d+)[\.)]\s+/)?.[1])
+    return Number.isFinite(value) && value > 0 ? value : undefined
 }
 
 function bulletLineValue(line: string) {
@@ -690,7 +708,7 @@ const MessageContent = memo(function MessageContent({
                                 return (
                                     <li key={`${index}:${item}`} className="flex items-start gap-2.5">
                                         <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-fg-accent/20 bg-fg-accent/8 text-[10px] font-bold text-fg-accent" aria-hidden="true">
-                                            {index + 1}
+                                            {orderedLineNumber(lines[index]) ?? index + 1}
                                         </span>
                                         <span className="flex-1">
                                             {item}
@@ -839,6 +857,55 @@ function AnswerCopyButton({ message }: { message: ChatMessage }) {
     )
 }
 
+/** 답변 속 주소를 대신하는 링크 버튼 — 본문에는 주소를 보이지 않는다. */
+function AnswerLinks({ links }: { links: AnswerLink[] }) {
+    const shouldReduceMotion = useReducedMotion()
+    if (links.length === 0) return null
+
+    return (
+        <div className="mt-3 flex flex-wrap gap-2">
+            {links.map((link, index) => {
+                const className =
+                    "group inline-flex h-9 items-center gap-1.5 rounded-[10px] border border-fg-accent/20 bg-white/80 px-3 text-[12px] font-bold text-fg-accent transition-colors hover:border-fg-accent/40 hover:bg-fg-accent/8 focus-visible:outline-none"
+                const content = (
+                    <>
+                        <span>{link.label}</span>
+                        {link.external ? (
+                            <ExternalLink className="h-3.5 w-3.5 shrink-0 text-fg-accent/70 transition-transform group-hover:translate-x-0.5" aria-hidden />
+                        ) : (
+                            <ArrowRight className="h-3.5 w-3.5 shrink-0 text-fg-accent/70 transition-transform group-hover:translate-x-0.5" aria-hidden />
+                        )}
+                    </>
+                )
+                return (
+                    <motion.span
+                        key={link.href}
+                        className="inline-flex"
+                        initial={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: 6 }}
+                        animate={shouldReduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
+                        transition={{
+                            duration: shouldReduceMotion ? 0.01 : 0.26,
+                            ease: EASING_SOFT_ENTER,
+                            delay: shouldReduceMotion ? 0 : index * CHATBOT_MOTION.settle.stagger,
+                        }}
+                    >
+                        {link.external ? (
+                            <a href={link.href} target="_blank" rel="noopener noreferrer" className={className}>
+                                {content}
+                                <span className="sr-only">(새 창)</span>
+                            </a>
+                        ) : (
+                            <Link href={link.href} className={className}>
+                                {content}
+                            </Link>
+                        )}
+                    </motion.span>
+                )
+            })}
+        </div>
+    )
+}
+
 function SourceLinks({ sources }: { sources?: ChatbotSource[] }) {
     const shouldReduceMotion = useReducedMotion()
     const visibleSources = sources?.slice(0, 2) ?? []
@@ -897,16 +964,29 @@ function SourceLinks({ sources }: { sources?: ChatbotSource[] }) {
     )
 }
 
-/** 답변 버블의 윗부분을 대화 목록 위쪽(오프셋)에 맞춘다. 맞춰졌으면 true. */
-function alignAnswerTop(container: HTMLElement, messageId: string): boolean {
+/**
+ * 새 답변의 첫 문단(약 ANSWER_PREVIEW_LINES 줄)이 보일 만큼만 대화 목록을 올린다. 그 뒤로 이어지는 글은
+ * 아래로 쌓이기만 하고 화면은 따라 내려가지 않는다 — 사용자가 읽으며 직접 스크롤한다.
+ * 답변 윗부분이 위쪽 여백(ANSWER_SCROLL_TOP_OFFSET_PX)보다 더 올라가지는 않는다. 아래로만 움직인다.
+ * 첫 몇 줄이 다 나왔으면 true(더 따라가지 않음).
+ */
+function revealAnswerStart(container: HTMLElement, messageId: string): boolean {
     const message = container.querySelector<HTMLElement>(`[data-chat-message-id="${messageId}"]`)
     if (!message) return false
     const containerRect = container.getBoundingClientRect()
     const messageRect = message.getBoundingClientRect()
-    const nextTop = container.scrollTop + messageRect.top - containerRect.top - ANSWER_SCROLL_TOP_OFFSET_PX
-    container.scrollTop = Math.max(0, nextTop)
-    const alignedTop = message.getBoundingClientRect().top - container.getBoundingClientRect().top
-    return alignedTop <= ANSWER_SCROLL_TOP_OFFSET_PX + 2
+    const textEl = message.querySelector<HTMLElement>(".whitespace-pre-wrap")
+    const lineHeight = textEl ? parseFloat(window.getComputedStyle(textEl).lineHeight) || 24 : 24
+    const textTop = textEl ? textEl.getBoundingClientRect().top : messageRect.top
+    const previewBottom = Math.min(messageRect.bottom, textTop + lineHeight * ANSWER_PREVIEW_LINES)
+
+    const toShowPreview = container.scrollTop + previewBottom - containerRect.bottom + 12
+    const maxTop = container.scrollTop + messageRect.top - containerRect.top - ANSWER_SCROLL_TOP_OFFSET_PX
+    const nextTop = Math.min(toShowPreview, maxTop)
+    if (nextTop > container.scrollTop) container.scrollTop = nextTop
+
+    const textHeight = textEl ? textEl.getBoundingClientRect().height : 0
+    return textHeight >= lineHeight * ANSWER_PREVIEW_LINES - 2 || maxTop <= container.scrollTop + 1
 }
 
 const THINKING_STEP_LABELS = ["질문을 살펴보는 중", "관련 가이드를 찾는 중", "답변을 정리하는 중"] as const
@@ -1197,13 +1277,15 @@ export function FloatingChatbot() {
     useEffect(() => {
         if (!isOpen) return
 
-        if (isSending && isAtBottom) {
+        // 답변을 기다리는 동안(생각 중 표시)만 바닥을 따라간다. 답변이 흐르기 시작하면
+        // revealAnswerStart 가 첫 문단까지만 올리고, 그 뒤로는 사용자가 직접 스크롤한다.
+        if (isSending && !isStreaming && isAtBottom) {
             const container = messagesContainerRef.current
             if (container) {
                 container.scrollTop = container.scrollHeight
             }
         }
-    }, [messages, isSending, isAtBottom, isOpen])
+    }, [messages, isSending, isStreaming, isAtBottom, isOpen])
 
     useEffect(() => {
         if (!isOpen) return
@@ -1213,11 +1295,11 @@ export function FloatingChatbot() {
         const container = messagesContainerRef.current
         if (!container) return
 
-        if (isAtBottom && alignAnswerTop(container, messageId)) {
+        if (isAtBottom && revealAnswerStart(container, messageId)) {
             pendingAssistantScrollIdRef.current = null
             return
         }
-        // 글자가 다 흐를 때까지는 놓지 않는다 — 답변이 길어지는 동안 아래 ResizeObserver 가 계속 맞춘다.
+        // 첫 문단이 다 나올 때까지는 놓지 않는다 — 답변이 길어지는 동안 아래 ResizeObserver 가 계속 맞춘다.
         // 다 끝났는데도 못 맞췄으면(짧은 답변) 놓아서, 나중에 다른 크기 변화로 화면이 끌려가지 않게 한다.
         const answer = messages.find((message) => message.id === messageId)
         if (!isSending && revealingMessageId === null && !answer?.revealPending) {
@@ -1225,7 +1307,7 @@ export function FloatingChatbot() {
         }
     }, [isOpen, isSending, messages, isAtBottom, revealingMessageId])
 
-    // 답변 글자가 흐르며 버블이 길어지는 동안에도 답변 윗부분이 위쪽에 닿을 때까지 따라 내려간다.
+    // 답변 글자가 흐르며 버블이 길어지는 동안 첫 문단(약 4줄)이 보일 때까지만 따라 내려간다.
     useEffect(() => {
         if (!isOpen) return
         const container = messagesContainerRef.current
@@ -1233,8 +1315,9 @@ export function FloatingChatbot() {
         if (!container || !content || typeof ResizeObserver === "undefined") return
         const observer = new ResizeObserver(() => {
             const messageId = pendingAssistantScrollIdRef.current
-            if (!messageId) return
-            if (alignAnswerTop(container, messageId)) pendingAssistantScrollIdRef.current = null
+            if (messageId && revealAnswerStart(container, messageId)) pendingAssistantScrollIdRef.current = null
+            // 스크롤 없이 글이 아래로 늘어나도 "맨 아래인지"를 갱신한다 — 더 읽을 게 있으면 "아래로" 버튼이 뜬다.
+            setIsAtBottom(container.scrollHeight - container.scrollTop - container.clientHeight <= 45)
         })
         observer.observe(content)
         return () => observer.disconnect()
@@ -1685,6 +1768,12 @@ export function FloatingChatbot() {
                                                                     shouldReduceMotion
                                                                 )}
                                                             >
+                                                                <AnswerLinks
+                                                                    links={extractAnswerLinks(
+                                                                        message.content,
+                                                                        (message.sources ?? []).slice(0, 2).map((source) => source.urlPath)
+                                                                    )}
+                                                                />
                                                                 <SourceLinks sources={message.sources} />
                                                                 {message.retryQuestion ? (
                                                                     <div className="mt-3">
