@@ -26,9 +26,21 @@ const picomatch = requireFromHere("next/dist/compiled/picomatch") as (
   options: { dot: boolean; contains?: boolean }
 ) => (value: string) => boolean
 
+// webpack 빌드(collect-build-traces)는 정규화한 경로(`/api/x/[id]`)로, Turbopack 빌드는 끝에 `/route`·`/page` 가
+// 붙은 이름(`/api/x/[id]/route`)으로 키를 맞춘다(실측: `…/messages/*` 키가 `…/[id]/messages/route` 함수에 걸렸다).
+// 두 꼴 가운데 하나라도 맞으면 그 키가 적용된다고 본다.
+function routeNames(route: string) {
+  if (route.endsWith("/route") || route.endsWith("/page")) return [route]
+  const base = route === "/" ? "" : route
+  return [route, `${base}/route`, `${base}/page`]
+}
 function globsFor(map: Record<string, string[]> | undefined, route: string) {
+  const names = routeNames(route)
   return Object.entries(map ?? {})
-    .filter(([glob]) => picomatch(glob, { dot: true, contains: true })(route))
+    .filter(([glob]) => {
+      const isMatch = picomatch(glob, { dot: true, contains: true })
+      return names.some((name) => isMatch(name))
+    })
     .flatMap(([, files]) => files)
 }
 const includesFor = (route: string) => globsFor(nextConfig.outputFileTracingIncludes, route)
@@ -195,6 +207,7 @@ describe("답 색인 함수 번들 추적", () => {
 
   // 라우트 키는 contains 매칭이라(앞뒤 고정이 없다) 키를 품은 더 긴 경로에도 걸린다. 그 라우트에는 답 색인 자료가
   // 더 실릴 뿐(약 22MB) 동작은 같다. 목록이 늘면 키를 좁히거나 여기 이유와 함께 더한다.
+  // 아래 둘은 앞쪽을 고정할 수 없어 남긴다(키를 `/route` 로 끝맺으면 webpack 꼴과 어긋난다).
   const KNOWN_OVERMATCH = [
     "/api/admin/chatbot/recommended-questions/[id]", // "/api/admin/chatbot/recommended-questions" 키
     "/api/admin/overview/operations", // "/admin/overview" 키
@@ -208,6 +221,14 @@ describe("답 색인 함수 번들 추적", () => {
     expect(others.length).toBeGreaterThan(0)
     const leaking = others.filter((route) => includesFor(route).some((glob) => glob.includes("answer-index"))).sort()
     expect(leaking).toEqual([...KNOWN_OVERMATCH].sort())
+  })
+
+  it("Turbopack 꼴(`…/route`)로도 메시지 목록 라우트에는 답 색인 자료가 걸리지 않는다", () => {
+    const list = "/api/admin/cs-chat/conversations/[id]/messages"
+    expect(includesFor(list).some((glob) => glob.includes("answer-index"))).toBe(false)
+    expect(includesFor(`${list}/route`).some((glob) => glob.includes("answer-index"))).toBe(false)
+    expect(includesFor(`${list}/[messageId]`).some((glob) => glob.includes("answer-index"))).toBe(true)
+    expect(includesFor(`${list}/[messageId]/route`).some((glob) => glob.includes("answer-index"))).toBe(true)
   })
 
   it("리드마그넷 PDF 라우트의 public/ 포함은 그대로다(다른 설정을 건드리지 않음)", () => {

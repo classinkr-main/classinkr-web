@@ -134,6 +134,8 @@ const answerIndexNonRuntimeFiles = [
 ];
 // load.ts 를 (lib/chatbot/service.ts 등으로) 끌어오는 라우트·페이지. 동적 세그먼트는 `*`.
 // 새 라우트가 load.ts 를 끌어오면 위 시험이 실패한다 — 여기에 더한다.
+// 키는 contains 매칭이고 Turbopack 빌드는 라우트 이름 끝에 `/route`·`/page` 가 붙은 채 맞춘다
+// (`…/messages/*` 는 `…/[id]/messages/route` 에도 걸렸다). 끝 `*` 로 끝나는 키는 그 꼴까지 생각해 좁힌다.
 const answerIndexRoutes = [
   "/admin/overview",
   "/api/admin/channel-talk/sync",
@@ -143,7 +145,7 @@ const answerIndexRoutes = [
   "/api/admin/chatbot/recommended-questions",
   "/api/admin/chatbot/stats",
   "/api/admin/cs-chat/conversations/*/generate",
-  "/api/admin/cs-chat/conversations/*/messages/*",
+  "/api/admin/cs-chat/conversations/*/messages/*messageId*",
   "/api/admin/cs-chat/regression-eval",
   "/api/admin/cs/dashboard",
   "/api/admin/docs/alpha-readiness",
