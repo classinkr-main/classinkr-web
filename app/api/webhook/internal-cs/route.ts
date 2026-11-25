@@ -6,6 +6,7 @@ import {
   authenticateInternalCsBridgeRequest,
   parseInternalCsInboundPayload,
 } from "@/lib/internal-cs-chat/bridge"
+import { isInternalCsBridgeEventReclaimable } from "@/lib/internal-cs-chat/bridge-claim"
 import { buildInternalCsBridgeContext } from "@/lib/internal-cs-chat/bridge-context"
 import { safeInternalCsFileName } from "@/lib/internal-cs-chat/privacy"
 import { analyzeInternalCsImage } from "@/lib/internal-cs-chat/vision"
@@ -13,12 +14,14 @@ import {
   createInternalCsAsset,
   createInternalCsConversation,
   claimInternalCsIntegrationEvent,
+  deleteEmptyInternalCsConversation,
   createInternalCsMessage,
   findInternalCsAssetByHash,
   isInternalCsAssetStorageDeleted,
   getInternalCsAsset,
   getInternalCsConversation,
   getInternalCsIntegrationEventByIdempotency,
+  InternalCsEventConversationRequiredError,
   isInternalCsChatNotReadyError,
   updateInternalCsAssetAnalysis,
   updateInternalCsIntegrationEvent,
@@ -112,7 +115,8 @@ export async function POST(req: NextRequest) {
       sourceSystem: payload.sourceSystem,
       idempotencyKey: payload.idempotencyKey,
     })
-    if (duplicate) {
+    // failed 이거나 오래 처리 중인 이벤트는 같은 키로 다시 보내면 다시 처리한다(아래 claim 이 조건부로 다시 선점).
+    if (duplicate && !isInternalCsBridgeEventReclaimable(duplicate)) {
       // 같은 멱등 키의 재요청은 처리 상태만 돌려준다. context.request 도 맥락(원문·서명 URL)을 다시 만들어 주지 않는다.
       return NextResponse.json({
         ok: duplicate.status === "completed",
@@ -124,33 +128,42 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    let conversationId = payload.conversationId
-    if (conversationId) {
-      const loaded = await getInternalCsConversation(conversationId)
+    if (payload.conversationId) {
+      const loaded = await getInternalCsConversation(payload.conversationId)
       if (!loaded) return NextResponse.json({ error: "Conversation not found" }, { status: 404 })
-    } else {
-      const conversation = await createInternalCsConversation({
-        title: payload.conversation?.title ?? `AI bridge: ${payload.sourceSystem}`,
-        priority: payload.conversation?.priority ?? "normal",
-        tags: [...(payload.conversation?.tags ?? []), `bridge:${payload.sourceSystem}`],
-        customerContext: payload.conversation?.customerContext ?? {},
-        actor,
-      })
-      conversationId = conversation.id
     }
 
-    const claim = await claimInternalCsIntegrationEvent({
-      conversationId,
-      direction: "inbound",
+    // 선점 먼저, 대화는 그 뒤에: 동시 요청·중복 요청이 고아 대화를 남기지 않는다.
+    const claimBase = {
+      direction: "inbound" as const,
       transport: payload.transport,
       eventType: payload.eventType,
       sourceSystem: payload.sourceSystem,
       idempotencyKey: payload.idempotencyKey,
       correlationId: payload.correlationId,
-      status: "accepted",
+      status: "accepted" as const,
       payload: buildInternalCsRedactedEventPayload(payload),
       actor,
-    })
+    }
+    const newConversationInput = {
+      title: payload.conversation?.title ?? `AI bridge: ${payload.sourceSystem}`,
+      priority: payload.conversation?.priority ?? ("normal" as const),
+      tags: [...(payload.conversation?.tags ?? []), `bridge:${payload.sourceSystem}`],
+      customerContext: payload.conversation?.customerContext ?? {},
+      actor,
+    }
+    let conversationId: string | null = payload.conversationId ?? null
+    let claim
+    try {
+      claim = await claimInternalCsIntegrationEvent({ ...claimBase, conversationId })
+    } catch (error) {
+      if (!(error instanceof InternalCsEventConversationRequiredError)) throw error
+      // conversation_id NOT NULL 마이그레이션 전 DB: 옛 순서(대화 먼저)로 물러나되, 선점에 지면 방금 만든 대화를 지운다.
+      const created = await createInternalCsConversation(newConversationInput)
+      conversationId = created.id
+      claim = await claimInternalCsIntegrationEvent({ ...claimBase, conversationId })
+      if (!claim.created) await deleteEmptyInternalCsConversation(created.id).catch(() => undefined)
+    }
     const event = claim.event
     eventId = event.id
     if (!claim.created) {
@@ -162,6 +175,12 @@ export async function POST(req: NextRequest) {
         status: event.status,
         result: event.result,
       })
+    }
+    if (!conversationId) conversationId = event.conversation_id
+    if (!conversationId) {
+      const conversation = await createInternalCsConversation(newConversationInput)
+      conversationId = conversation.id
+      await updateInternalCsIntegrationEvent({ eventId, status: "accepted", conversationId })
     }
     await updateInternalCsIntegrationEvent({ eventId, status: "processing" })
 

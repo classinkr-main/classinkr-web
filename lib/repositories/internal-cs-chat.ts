@@ -1,5 +1,6 @@
 import "server-only"
 
+import { isInternalCsBridgeEventReclaimable } from "@/lib/internal-cs-chat/bridge-claim"
 import {
   createInternalCsAssetSignedUrls,
   deleteInternalCsAsset,
@@ -136,7 +137,8 @@ export interface InternalCsAssetRow {
 
 export interface InternalCsIntegrationEventRow {
   id: string
-  conversation_id: string
+  // 대화를 만들기 전에 이벤트를 먼저 선점하므로(마이그레이션 적용 후) 잠깐 null 일 수 있다.
+  conversation_id: string | null
   asset_id: string | null
   direction: InternalCsIntegrationDirection
   transport: InternalCsIntegrationTransport
@@ -230,6 +232,8 @@ export interface CreateInternalCsIntegrationEventInput {
 
 export interface UpdateInternalCsIntegrationEventInput {
   eventId: string
+  /** 선점 뒤에 대화를 만든 경우 이벤트에 연결한다. */
+  conversationId?: string
   status: InternalCsIntegrationStatus
   result?: Record<string, unknown>
   errorMessage?: string | null
@@ -532,6 +536,13 @@ export async function createInternalCsConversation(input: CreateInternalCsConver
   return data as InternalCsConversationRow
 }
 
+/** 선점에 졌을 때 방금 만든(메시지·자산이 아직 없는) 고아 대화만 지운다. */
+export async function deleteEmptyInternalCsConversation(id: string) {
+  const supabase = createSupabaseAdminClient()
+  const { error } = await supabase.from("internal_cs_conversations").delete().eq("id", id)
+  if (error) throw databaseError("failed to delete empty conversation", error)
+}
+
 export async function createInternalCsMessage(input: CreateInternalCsMessageInput) {
   const insert = buildInternalCsMessageInsert(input)
   if (!insert.content) throw new Error("Message content is required.")
@@ -788,15 +799,31 @@ export async function createInternalCsIntegrationEvent(
   return data as InternalCsIntegrationEventRow
 }
 
+/** conversation_id NOT NULL 마이그레이션 전 DB 에서 대화 없이 선점하려 할 때. 호출자가 옛 순서로 물러난다. */
+export class InternalCsEventConversationRequiredError extends Error {
+  constructor() {
+    super("[internal-cs-chat] integration event requires a conversation (conversation_id NOT NULL)")
+    this.name = "InternalCsEventConversationRequiredError"
+  }
+}
+
 /**
  * Atomically claims an idempotent integration event. Unlike createInternalCsIntegrationEvent,
  * this preserves whether this caller inserted the unique row so webhook/dispatch routes can stop
  * before repeating model calls, messages, assets, or outbound HTTP requests.
+ *
+ * 같은 멱등 키의 기존 행이 failed 이거나 오래 처리 중(accepted/processing 이 N분 넘음)이면
+ * 조건부 갱신(상태·updated_at 이 읽은 값 그대로일 때만)으로 다시 선점한다 — 동시에 여럿이 와도 한 요청만 created=true.
+ * conversationId 가 null 이면 대화 없이 선점한다(대화는 선점한 쪽이 만들고 updateInternalCsIntegrationEvent 로 연결).
  */
 export async function claimInternalCsIntegrationEvent(
-  input: CreateInternalCsIntegrationEventInput & { idempotencyKey: string }
-): Promise<{ event: InternalCsIntegrationEventRow; created: boolean }> {
-  const insert = buildInternalCsIntegrationEventInsert(input)
+  input: Omit<CreateInternalCsIntegrationEventInput, "conversationId"> & {
+    idempotencyKey: string
+    conversationId: string | null
+  },
+  now: Date = new Date()
+): Promise<{ event: InternalCsIntegrationEventRow; created: boolean; reclaimed?: boolean }> {
+  const insert = buildInternalCsIntegrationEventInsert(input as CreateInternalCsIntegrationEventInput)
   if (!insert.event_type) throw new Error("Integration event type is required.")
   if (!insert.source_system) throw new Error("Integration source system is required.")
   if (!insert.idempotency_key) throw new Error("Integration idempotency key is required.")
@@ -809,13 +836,39 @@ export async function claimInternalCsIntegrationEvent(
     .single()
   if (!error) return { event: data as InternalCsIntegrationEventRow, created: true }
 
+  if (error.code === "23502" && !input.conversationId) throw new InternalCsEventConversationRequiredError()
   if (error.code === "23505") {
     const existing = await getInternalCsIntegrationEventByIdempotency({
       direction: input.direction,
       sourceSystem: insert.source_system,
       idempotencyKey: insert.idempotency_key,
     })
-    if (existing) return { event: existing, created: false }
+    if (existing) {
+      if (!isInternalCsBridgeEventReclaimable(existing, now)) return { event: existing, created: false }
+      let reclaim = supabase
+        .from("internal_cs_integration_events")
+        .update({
+          status: "accepted",
+          payload: insert.payload,
+          result: {},
+          error_message: null,
+          processed_at: null,
+          ...(input.conversationId && !existing.conversation_id ? { conversation_id: input.conversationId } : {}),
+        })
+        .eq("id", existing.id)
+        .eq("status", existing.status)
+      reclaim = existing.updated_at ? reclaim.eq("updated_at", existing.updated_at) : reclaim
+      const { data: reclaimed, error: reclaimError } = await reclaim.select("*").maybeSingle()
+      if (reclaimError) throw databaseError("failed to reclaim integration event", reclaimError)
+      if (reclaimed) return { event: reclaimed as InternalCsIntegrationEventRow, created: true, reclaimed: true }
+      // 다른 요청이 먼저 다시 선점했다: 지금 상태를 읽어 중복으로 돌려준다.
+      const latest = await getInternalCsIntegrationEventByIdempotency({
+        direction: input.direction,
+        sourceSystem: insert.source_system,
+        idempotencyKey: insert.idempotency_key,
+      })
+      return { event: latest ?? existing, created: false }
+    }
   }
   throw databaseError("failed to claim integration event", error)
 }
@@ -832,6 +885,7 @@ export async function updateInternalCsIntegrationEvent(
       : input.processedAt?.toISOString() ?? null,
   }
   if (input.result !== undefined) patch.result = input.result
+  if (input.conversationId) patch.conversation_id = input.conversationId
 
   const supabase = createSupabaseAdminClient()
   const { data, error } = await supabase
