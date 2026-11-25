@@ -781,7 +781,7 @@ export default function ChatPanel({
             ) : null}
             </>
           ) : (
-            <div className="flex min-h-[420px] flex-col items-center justify-center text-center">
+            <div className="flex min-h-[200px] flex-col items-center justify-center py-8 text-center">
               <span className="flex h-12 w-12 items-center justify-center rounded-full bg-[#ECFDF5] text-[#084734]">
                 <Sparkles className="h-5 w-5" />
               </span>
