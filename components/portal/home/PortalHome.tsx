@@ -335,12 +335,16 @@ function fmtRelative(d: string): string {
   return fmtShortDate(d)
 }
 
+// 서울 달력일 번호(1970-01-01 KST 기준). 서버(UTC)와 브라우저(KST)가 같은 날짜 차이를 내도록 로컬 시간대를 쓰지 않는다 —
+// 로컬 자정으로 자르면 KST 00~09시에 서버가 하루 앞선 D-day 를 그려 하이드레이션이 깨졌다.
+function seoulDayIndex(ms: number): number {
+  return Math.floor((ms + 9 * 3_600_000) / 86_400_000)
+}
+
 function daysUntil(d: string): number {
-  const target = new Date(d)
-  const now = new Date()
-  target.setHours(0, 0, 0, 0)
-  now.setHours(0, 0, 0, 0)
-  return Math.ceil((target.getTime() - now.getTime()) / 86400000)
+  const target = new Date(d).getTime()
+  if (Number.isNaN(target)) return Number.NaN
+  return seoulDayIndex(target) - seoulDayIndex(Date.now())
 }
 
 function dealPaymentBadge(deal: DealItem): { label: string; cls: string } {
