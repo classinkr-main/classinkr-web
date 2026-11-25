@@ -76,9 +76,12 @@ docs/active/branch-dashboard-development-log.md   (이 문서)
 | `GOOGLE_PRIVATE_KEY` | 동일 (`\n` escaped) |
 | `GOOGLE_BRANCH_DASHBOARD_SHEET_ID` | Sales Branding 시트 ID |
 | `GOOGLE_BRANCH_HARDWARE_SHEET_ID` | Hardware 시트 ID |
-| `GEMINI_API_KEY` | Google AI Studio key (인사이트 LLM) |
-| `GEMINI_MODEL` | (선택) 기본 cron 모델, default `gemini-2.5-pro` |
-| `GEMINI_FAST_MODEL` | (선택) force=1 사용자 클릭용, default `gemini-2.5-flash` |
+| `ANTHROPIC_API_KEY` | 인사이트 1순위 모델(Claude, Anthropic API). 2026-11-25부터 Claude 먼저 → 실패 시 Gemini (`lib/branch/insights/llm.ts`) |
+| `BRANCH_INSIGHTS_CLAUDE_MODEL` | (선택) default `claude-opus-5-5` |
+| `GOOGLE_VERTEX_PROJECT` / `GOOGLE_VERTEX_LOCATION` | (선택) Gemini 대체 호출을 Vertex AI로. location default `global`. 서비스 계정은 `GOOGLE_VERTEX_SERVICE_ACCOUNT_EMAIL`/`GOOGLE_VERTEX_PRIVATE_KEY`, 없으면 위 공용 계정(Vertex AI User 권한 필요) |
+| `GEMINI_API_KEY` | Google AI Studio key — Vertex 설정 전 Gemini 대체 호출용 |
+| `GEMINI_MODEL` | (선택) Gemini 품질 모델(cron), default `gemini-2.5-pro` |
+| `GEMINI_FAST_MODEL` | (선택) Gemini 빠른 모델(force=1·매니저 인사이트), default `gemini-2.5-flash` |
 | `CRON_SECRET` | 기존 cron 라우트 인증 (재사용) |
 
 > ⚠️ `GEMINI_MODEL=gemini-3.1-pro` 같은 미존재 모델은 코드에서 자동 fallback 됨. `UNSUPPORTED_GEMINI_MODELS` 셋에 추가하면 자동 감지.

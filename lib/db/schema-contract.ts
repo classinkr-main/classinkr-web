@@ -215,6 +215,10 @@ export const SCHEMA_CONTRACT_MIGRATIONS = [
   // 챗봇 Claude 라벨 · 사용량(2026-11-12) — 없어도 코드는 돈다(라벨 건너뜀, 예산은 인스턴스 메모리 합계만).
   // CHATBOT_PROVIDER=claude 를 켜기 전에 적용한다(warning).
   "supabase/migrations/20261112_chatbot_claude_labels.sql",
+  // 총판 정산 스냅샷(2026-11-23) — 쿼드러닝 계정 잔액 보드·Overview 카드. RLS deny-all, 쓰기는 업로드 스크립트뿐.
+  "supabase/migrations/20261123_partner_settlement_snapshots.sql",
+  // 총판 견적서 확인·발행 후 수정(2026-11-24). 미적용이면 새 칸 없이 읽고(42703 폴백) 확인 버튼·발행 후 수정만 막힌다.
+  "supabase/migrations/20261124_distributor_settlement_confirm_revise.sql",
 ] as const
 
 export const SCHEMA_PROBES: SchemaProbe[] = [
@@ -988,6 +992,15 @@ export const SCHEMA_PROBES: SchemaProbe[] = [
   },
   {
     kind: "table",
+    table: "distributor_settlements",
+    label: "총판 견적서 확인·발행 후 수정·할인·문구",
+    columns: ["distributor_confirmed_at", "distributor_confirmed_name", "revised_at", "discount", "document_text"],
+    migration: "supabase/migrations/20261124_distributor_settlement_confirm_revise.sql",
+    severity: "warning",
+    impact: "총판 정산은 그대로 동작하지만 총판의 링크 확인 버튼, 발행 후 금액 수정, 총판 견적서 할인·제목·기타사항 저장이 '적용 필요'로 막힌다.",
+  },
+  {
+    kind: "table",
     table: "distributor_settlement_payments",
     label: "총판 입금 기록",
     columns: ["id", "settlement_id", "amount", "paid_on", "memo", "created_by", "created_at"],
@@ -1128,6 +1141,18 @@ export const SCHEMA_PROBES: SchemaProbe[] = [
     migration: "supabase/migrations/20261112_chatbot_claude_labels.sql",
     severity: "warning",
     impact: "chatbot_llm_usage 와 같다 — 예산 가드가 인스턴스 메모리 합계로만 돈다.",
+  },
+  {
+    kind: "table",
+    table: "partner_settlement_snapshots",
+    label: "총판 정산 스냅샷(쿼드러닝 계정 잔액)",
+    columns: ["partner", "snapshot", "generated_at", "updated_by", "updated_at"],
+    migration: "supabase/migrations/20261123_partner_settlement_snapshots.sql",
+    minimumRows: 1,
+    seedCommand: "node --env-file=.env.local scripts/upload-partner-settlement-snapshot.mjs <snapshot.json>",
+    severity: "warning",
+    impact:
+      "총판 미수금 탭의 쿼드러닝 보드가 '아직 올라오지 않았다' 한 줄로 바뀌고 Overview 정산 잔액 카드가 사라진다. 견적별 총판 미수금은 그대로다.",
   },
 ]
 

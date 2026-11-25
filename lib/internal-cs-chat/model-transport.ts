@@ -29,7 +29,7 @@ import {
   type GeminiOperation,
 } from "@/lib/chatbot/gemini-transport"
 
-export type ModelFailureKind = "auth" | "quota" | "rate" | "timeout" | "shape" | "server"
+export type ModelFailureKind = "auth" | "quota" | "rate" | "timeout" | "shape" | "server" | "incomplete"
 
 export interface ModelAttempt {
   model: string
@@ -236,4 +236,24 @@ export async function embedWithInternalCsModel(input: {
     return { ok: false, kind: "shape" }
   }
   return { ok: true, values }
+}
+
+/**
+ * 후보의 끝난 이유(finishReason). 'STOP' 이 아니면(길이 초과 MAX_TOKENS·안전 차단 SAFETY 등) 끝까지 쓴 글이 아니다.
+ * finishReason 이 없는 응답(옛 형식·시험용)은 끝난 것으로 본다. 프롬프트 자체가 막혀 후보가 없는 경우도 불완전이다.
+ */
+export function readFinishState(data: unknown): { incomplete: boolean; finishReason: string | null } {
+  const response = data as {
+    candidates?: { finishReason?: unknown }[]
+    promptFeedback?: { blockReason?: unknown }
+  }
+  const reason = response?.candidates?.[0]?.finishReason
+  if (typeof reason === "string" && reason && reason !== "STOP" && reason !== "FINISH_REASON_UNSPECIFIED") {
+    return { incomplete: true, finishReason: reason }
+  }
+  const blocked = response?.promptFeedback?.blockReason
+  if (typeof blocked === "string" && blocked && !response?.candidates?.length) {
+    return { incomplete: true, finishReason: `PROMPT_${blocked}` }
+  }
+  return { incomplete: false, finishReason: typeof reason === "string" ? reason : null }
 }

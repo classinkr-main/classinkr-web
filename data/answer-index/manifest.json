@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "dataVersion": "ai-4ab7bcbcbb25",
+  "dataVersion": "ai-53a24f44e9b8",
   "sources": {
     "app/about/AboutPageClient.tsx": "201307dd2bc22b3b",
     "app/about/layout.tsx": "cbced2f28647c89c",
@@ -8,8 +8,8 @@
     "app/checkout/fail/page.tsx": "8c7e1d943e2b82bf",
     "app/checkout/page.tsx": "d0b7fda4a5810aaa",
     "app/checkout/success/page.tsx": "c90f298122dcf206",
-    "app/contact/layout.tsx": "c18d5a66e437cb1f",
-    "app/contact/page.tsx": "5b758b8fcc1e8f62",
+    "app/contact/layout.tsx": "3764ba0929520836",
+    "app/contact/page.tsx": "c0d6c62517c68025",
     "app/data-deletion/page.tsx": "d427dd4428a91125",
     "app/introduction/cases/[slug]/page.tsx": "960ac77ff6d58109",
     "app/introduction/cases/case-page-parts.tsx": "bb2c490b26dc95f7",
@@ -37,10 +37,10 @@
     "components/introduction/IntroFigure.tsx": "3cd4a0e0a69f4848",
     "components/introduction/IntroTable.tsx": "403e26303672a653",
     "components/introduction/IntroVideoPlayer.tsx": "217fc716e33850bd",
-    "components/introduction/landing/landing-copy.ts": "cfc37cc40690532e",
+    "components/introduction/landing/landing-copy.ts": "33acb217a1829374",
     "components/introduction/landing/LandingCases.tsx": "c6e9eb8213441b48",
     "components/introduction/landing/LandingFinalCta.tsx": "20a51e7fb56ad9e6",
-    "components/introduction/landing/LandingHero.tsx": "c1eb679edd82224e",
+    "components/introduction/landing/LandingHero.tsx": "5daef7dea3bb7467",
     "components/introduction/landing/LandingPdfLink.tsx": "cf9864c6415aaee5",
     "components/introduction/landing/LandingSmartClassroom.tsx": "26a00a14351e6805",
     "components/introduction/landing/LandingSoftware.tsx": "ccb1cc60d01a1520",
@@ -187,11 +187,11 @@
       "count": 45
     },
     "audit/C-16.jsonl": {
-      "sha": "2af170b129b0de34",
+      "sha": "2ea3b48f8f13f1d3",
       "count": 45
     },
     "audit/C-17.jsonl": {
-      "sha": "f2b2eaa107afbdce",
+      "sha": "dfc42d85fad57168",
       "count": 45
     },
     "audit/C-18.jsonl": {
@@ -203,7 +203,7 @@
       "count": 5
     },
     "audit/C-20.jsonl": {
-      "sha": "92d12ab9fb0ccd12",
+      "sha": "5b4ab296a3c16f03",
       "count": 45
     },
     "audit/C-21.jsonl": {
@@ -263,7 +263,7 @@
       "count": 44
     },
     "audit/human-queue.json": {
-      "sha": "5ebd0cff40b3c43e",
+      "sha": "12ba90664a7824dd",
       "count": 92
     },
     "calibration.json": {
@@ -387,8 +387,8 @@
       "count": 1151
     },
     "site-facts.json": {
-      "sha": "bd7bad811f02aebc",
-      "count": 1644
+      "sha": "21e2943d0893d437",
+      "count": 1643
     },
     "units.json": {
       "sha": "e6753ac43dffcf31",

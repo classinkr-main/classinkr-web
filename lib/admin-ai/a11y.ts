@@ -57,6 +57,7 @@ const STATE_WORD: Record<OrderState, string> = {
   cancelled: "취소됨",
   expired: "만료됨",
   failed: "실패",
+  processed: "이미 처리됨",
 }
 
 function describeBlock(block: AiBlock, state: AdminAiState): string | null {

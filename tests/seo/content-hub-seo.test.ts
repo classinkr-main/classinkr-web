@@ -147,6 +147,13 @@ describe("sitemap", () => {
     return sitemap()
   }
 
+  it("reports the published first-week guide content revision in the sitemap", async () => {
+    mocks.getDocsContent.mockResolvedValue(null)
+    const entry = (await loadSitemap()).find((route) => route.url === `${SITE_URL}/docs/first-week`)
+
+    expect(entry?.lastModified).toEqual(new Date("2026-11-13"))
+  })
+
   it("lists /resources and /download without a made-up lastModified, plus published event videos", async () => {
     mocks.getDocsContent.mockResolvedValue(null)
 

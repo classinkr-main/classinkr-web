@@ -32,48 +32,48 @@ export async function POST(req: NextRequest) {
 
     if (source === "all") {
       const result = await generateAllCrmLinkCandidates()
-      revalidateTag(ADMIN_CRM_REVENUE_CACHE_TAG, "max")
+      revalidateTag(ADMIN_CRM_REVENUE_CACHE_TAG, { expire: 0 })
       // REV 링크(branch_rev_sheet)가 바뀌면 lib/admin-crm-revenue-sheet.ts의 60초 캐시도 낡는다(D1).
-      revalidateTag(ADMIN_CRM_REVENUE_SHEET_CACHE_TAG, "max")
-      revalidateTag(ADMIN_CRM_COVERAGE_CACHE_TAG, "max")
-      revalidateTag(ADMIN_OS_SUMMARY_CACHE_TAG, "max")
+      revalidateTag(ADMIN_CRM_REVENUE_SHEET_CACHE_TAG, { expire: 0 })
+      revalidateTag(ADMIN_CRM_COVERAGE_CACHE_TAG, { expire: 0 })
+      revalidateTag(ADMIN_OS_SUMMARY_CACHE_TAG, { expire: 0 })
       // 새 후보 링크는 crm-unified-customers.ts 소스 스냅샷(listConfirmedLeadCustomerLinks·
       // listConfirmedLeadNeoLinkLeadIds)의 입력이기도 하다.
-      revalidateTag(ADMIN_CRM_UNIFIED_SNAPSHOT_CACHE_TAG, "max")
+      revalidateTag(ADMIN_CRM_UNIFIED_SNAPSHOT_CACHE_TAG, { expire: 0 })
       return NextResponse.json({ ok: true, source, ...result })
     }
 
     if (source === "xiaoshouyi_snapshot") {
       const result = await generateExternalCrmLinkCandidates()
-      revalidateTag(ADMIN_CRM_REVENUE_CACHE_TAG, "max")
-      revalidateTag(ADMIN_CRM_COVERAGE_CACHE_TAG, "max")
-      revalidateTag(ADMIN_OS_SUMMARY_CACHE_TAG, "max")
+      revalidateTag(ADMIN_CRM_REVENUE_CACHE_TAG, { expire: 0 })
+      revalidateTag(ADMIN_CRM_COVERAGE_CACHE_TAG, { expire: 0 })
+      revalidateTag(ADMIN_OS_SUMMARY_CACHE_TAG, { expire: 0 })
       // 새 후보 링크는 crm-unified-customers.ts 소스 스냅샷(listConfirmedLeadCustomerLinks·
       // listConfirmedLeadNeoLinkLeadIds)의 입력이기도 하다.
-      revalidateTag(ADMIN_CRM_UNIFIED_SNAPSHOT_CACHE_TAG, "max")
+      revalidateTag(ADMIN_CRM_UNIFIED_SNAPSHOT_CACHE_TAG, { expire: 0 })
       return NextResponse.json({ ok: true, source, ...result })
     }
 
     if (source === "lead") {
       const result = await generateLeadLinkCandidates()
-      revalidateTag(ADMIN_CRM_REVENUE_CACHE_TAG, "max")
-      revalidateTag(ADMIN_CRM_COVERAGE_CACHE_TAG, "max")
-      revalidateTag(ADMIN_OS_SUMMARY_CACHE_TAG, "max")
+      revalidateTag(ADMIN_CRM_REVENUE_CACHE_TAG, { expire: 0 })
+      revalidateTag(ADMIN_CRM_COVERAGE_CACHE_TAG, { expire: 0 })
+      revalidateTag(ADMIN_OS_SUMMARY_CACHE_TAG, { expire: 0 })
       // 새 후보 링크는 crm-unified-customers.ts 소스 스냅샷(listConfirmedLeadCustomerLinks·
       // listConfirmedLeadNeoLinkLeadIds)의 입력이기도 하다.
-      revalidateTag(ADMIN_CRM_UNIFIED_SNAPSHOT_CACHE_TAG, "max")
+      revalidateTag(ADMIN_CRM_UNIFIED_SNAPSHOT_CACHE_TAG, { expire: 0 })
       return NextResponse.json({ ok: true, source, ...result })
     }
 
     const result = await generateBranchRevLinkCandidates()
-    revalidateTag(ADMIN_CRM_REVENUE_CACHE_TAG, "max")
+    revalidateTag(ADMIN_CRM_REVENUE_CACHE_TAG, { expire: 0 })
     // REV 링크(branch_rev_sheet)가 바뀌면 lib/admin-crm-revenue-sheet.ts의 60초 캐시도 낡는다(D1).
-    revalidateTag(ADMIN_CRM_REVENUE_SHEET_CACHE_TAG, "max")
-    revalidateTag(ADMIN_CRM_COVERAGE_CACHE_TAG, "max")
-    revalidateTag(ADMIN_OS_SUMMARY_CACHE_TAG, "max")
+    revalidateTag(ADMIN_CRM_REVENUE_SHEET_CACHE_TAG, { expire: 0 })
+    revalidateTag(ADMIN_CRM_COVERAGE_CACHE_TAG, { expire: 0 })
+    revalidateTag(ADMIN_OS_SUMMARY_CACHE_TAG, { expire: 0 })
     // 새 후보 링크는 crm-unified-customers.ts 소스 스냅샷(listConfirmedLeadCustomerLinks·
     // listConfirmedLeadNeoLinkLeadIds)의 입력이기도 하다.
-    revalidateTag(ADMIN_CRM_UNIFIED_SNAPSHOT_CACHE_TAG, "max")
+    revalidateTag(ADMIN_CRM_UNIFIED_SNAPSHOT_CACHE_TAG, { expire: 0 })
     return NextResponse.json({ ok: true, source, ...result })
   } catch (error) {
     console.error("[POST /api/admin/crm/source-links/generate]", error)

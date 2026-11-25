@@ -295,6 +295,8 @@ export async function POST(req: NextRequest, context: Context) {
     })
     const modelStatus = {
       failureKinds: generation.failureKinds,
+      // 끝까지 쓰지 못한 글(길이 초과·안전 차단)이면 화면이 '불완전' 으로 표시한다.
+      ...(generation.incomplete ? { incomplete: true, finishReason: generation.finishReason ?? null } : {}),
       attempts: generation.attempts,
       latencyMs: generation.latencyMs,
       timeBudget: generation.timeBudget,
@@ -306,10 +308,10 @@ export async function POST(req: NextRequest, context: Context) {
         {
           polish: {
             polishOf: polish.value,
-            answer: generation.origin === "model" ? generation.answer : null,
+            answer: generation.origin === "model" && !generation.incomplete ? generation.answer : null,
             origin: generation.origin,
             model: generation.model,
-            reviewWarnings: generation.origin === "model" ? reviewWarnings : [],
+            reviewWarnings: generation.origin === "model" && !generation.incomplete ? reviewWarnings : [],
             ...modelStatus,
           },
           result: {
@@ -362,9 +364,9 @@ export async function POST(req: NextRequest, context: Context) {
     })
 
     // 재검토(Pro)로 새 모델 초안이 나왔으면 같은 질문의 옛 검토 대기 초안을 '사용 안 함'(superseded)으로 바꾼다(결정 9).
-    // 새 초안이 모델 장애로 대체 글이면 옛 초안을 치우지 않는다.
+    // 새 초안이 모델 장애로 대체 글이거나 끝까지 쓰지 못한(불완전) 글이면 옛 초안을 치우지 않는다.
     let supersededMessageIds: string[] = []
-    if (rerun.value && generation.origin === "model") {
+    if (rerun.value && generation.origin === "model" && !generation.incomplete) {
       const olderPending = messages
         .filter((candidate) => (
           candidate.role === "assistant" &&

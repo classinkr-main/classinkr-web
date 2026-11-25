@@ -6,6 +6,8 @@
  * (checkRateLimitDistributed 참고 — env 설정 시 분산 제한 활성화).
  */
 
+import { readUpstashRestConfig } from "./upstash"
+
 interface RateLimitEntry {
   count: number
   resetAt: number
@@ -56,13 +58,12 @@ export async function checkRateLimitDistributed(
   key: string,
   options: RateLimitOptions
 ): Promise<{ allowed: boolean; remaining: number; resetAt: number }> {
-  const url = process.env.UPSTASH_REDIS_REST_URL
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN
-
   // env 가 없으면 분산 모드를 쓰지 않고 즉시 메모리 폴백.
-  if (!url || !token) {
+  const config = readUpstashRestConfig()
+  if (!config) {
     return checkRateLimit(ip, key, options)
   }
+  const { url, token } = config
 
   const storeKey = `${key}:${ip}`
   const controller = new AbortController()

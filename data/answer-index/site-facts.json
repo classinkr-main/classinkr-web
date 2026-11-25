@@ -752,22 +752,15 @@
     "id": "site:app/contact/layout.tsx:4",
     "path": "app/contact/layout.tsx",
     "line": 4,
-    "text": "문의하기",
-    "hash": "64332b6a361f3b73"
+    "text": "클래스인 도입 상담·기술 지원",
+    "hash": "f202ef3eaace7302"
   },
   {
     "id": "site:app/contact/layout.tsx:6",
     "path": "app/contact/layout.tsx",
     "line": 6,
-    "text": "Classin 도입 상담, 서비스 문의, 파트너십 제안 등 무엇이든 편하게 문의해 주세요.",
-    "hash": "850206e948ec9d70"
-  },
-  {
-    "id": "site:app/contact/layout.tsx:6#2",
-    "path": "app/contact/layout.tsx",
-    "line": 6,
-    "text": "빠르게 답변드리겠습니다.",
-    "hash": "03849974c40f8eb4"
+    "text": "학원·교육기관의 Classin 도입 상담, 전자칠판·수업 녹화 문의, 기술 지원과 결제 증빙 요청을 남길 수 있습니다.",
+    "hash": "480d69904a378c36"
   },
   {
     "id": "site:app/contact/page.tsx:26",
@@ -934,237 +927,230 @@
     "id": "site:app/contact/page.tsx:356",
     "path": "app/contact/page.tsx",
     "line": 356,
-    "text": "궁금한 점이 있으신가요?",
-    "hash": "61df3613aceac548"
+    "text": "클래스인 도입 상담·기술 지원",
+    "hash": "f202ef3eaace7302"
   },
   {
-    "id": "site:app/contact/page.tsx:357",
+    "id": "site:app/contact/page.tsx:365",
     "path": "app/contact/page.tsx",
-    "line": 357,
-    "text": "운영 상황부터 함께 확인해드립니다.",
-    "hash": "d0b6b55de0e3f260"
+    "line": 365,
+    "text": "도입 문의, 기술 지원, 결제 증빙까지",
+    "hash": "8ce2e154e260d35f"
   },
   {
     "id": "site:app/contact/page.tsx:366",
     "path": "app/contact/page.tsx",
     "line": 366,
-    "text": "도입 문의, 기술 지원, 결제 증빙까지",
-    "hash": "8ce2e154e260d35f"
-  },
-  {
-    "id": "site:app/contact/page.tsx:367",
-    "path": "app/contact/page.tsx",
-    "line": 367,
     "text": "클래스인 전문 매니저가 필요한 다음 단계를 차분히 안내드립니다.",
     "hash": "30abe1357c800bb0"
   },
   {
-    "id": "site:app/contact/page.tsx:386",
+    "id": "site:app/contact/page.tsx:385",
     "path": "app/contact/page.tsx",
-    "line": 386,
+    "line": 385,
     "text": "상담 내용 남기기",
     "hash": "37d5ffde3dc8029c"
   },
   {
-    "id": "site:app/contact/page.tsx:388",
+    "id": "site:app/contact/page.tsx:387",
     "path": "app/contact/page.tsx",
-    "line": 388,
+    "line": 387,
     "text": "문의 유형과 현재 상황을 남겨주시면 담당 매니저가 필요한 자료와 확인 순서를 정리해 연락드리겠습니다.",
     "hash": "5ebaa0f2e0a0dfc7"
+  },
+  {
+    "id": "site:app/contact/page.tsx:394",
+    "path": "app/contact/page.tsx",
+    "line": 394,
+    "text": "상담 요청이 접수되었습니다",
+    "hash": "0541bd272b725871"
   },
   {
     "id": "site:app/contact/page.tsx:395",
     "path": "app/contact/page.tsx",
     "line": 395,
-    "text": "상담 요청이 접수되었습니다",
-    "hash": "0541bd272b725871"
-  },
-  {
-    "id": "site:app/contact/page.tsx:396",
-    "path": "app/contact/page.tsx",
-    "line": 396,
     "text": "담당 매니저가 내용을 확인한 뒤 이어서 안내드리겠습니다.",
     "hash": "be2b30d001293ef9"
   },
   {
-    "id": "site:app/contact/page.tsx:398",
+    "id": "site:app/contact/page.tsx:397",
     "path": "app/contact/page.tsx",
-    "line": 398,
+    "line": 397,
     "text": "상담 운영시간: {SUPPORT_HOURS_FULL_LABEL}",
     "hash": "b94de739dd80d7b7"
   },
   {
-    "id": "site:app/contact/page.tsx:404",
+    "id": "site:app/contact/page.tsx:403",
     "path": "app/contact/page.tsx",
-    "line": 404,
+    "line": 403,
     "text": "추가 상담 남기기",
     "hash": "88caf61a5e4947a2"
   },
   {
-    "id": "site:app/contact/page.tsx:422",
+    "id": "site:app/contact/page.tsx:421",
     "path": "app/contact/page.tsx",
-    "line": 422,
+    "line": 421,
     "text": "챗봇 대화 요약을 아래 ‘문의 내용’에 넣어 두었어요.",
     "hash": "15357ed7ce16f516"
   },
   {
-    "id": "site:app/contact/page.tsx:422#2",
+    "id": "site:app/contact/page.tsx:421#2",
     "path": "app/contact/page.tsx",
-    "line": 422,
+    "line": 421,
     "text": "기관명·성함·연락처를 채우고 개인정보 동의 뒤 제출하면 접수돼요.",
     "hash": "54020cc5f5c0c58d"
+  },
+  {
+    "id": "site:app/contact/page.tsx:433",
+    "path": "app/contact/page.tsx",
+    "line": 433,
+    "text": "학원명 / 기관명 *",
+    "hash": "994ba404832f14db"
   },
   {
     "id": "site:app/contact/page.tsx:434",
     "path": "app/contact/page.tsx",
     "line": 434,
-    "text": "학원명 / 기관명 *",
-    "hash": "994ba404832f14db"
-  },
-  {
-    "id": "site:app/contact/page.tsx:435",
-    "path": "app/contact/page.tsx",
-    "line": 435,
     "text": "예: 무궁화 학원",
     "hash": "bb439935a45d7eaa"
+  },
+  {
+    "id": "site:app/contact/page.tsx:437",
+    "path": "app/contact/page.tsx",
+    "line": 437,
+    "text": "담당자 성함 *",
+    "hash": "4a3364848068e038"
   },
   {
     "id": "site:app/contact/page.tsx:438",
     "path": "app/contact/page.tsx",
     "line": 438,
-    "text": "담당자 성함 *",
-    "hash": "4a3364848068e038"
-  },
-  {
-    "id": "site:app/contact/page.tsx:439",
-    "path": "app/contact/page.tsx",
-    "line": 439,
     "text": "홍길동 원장",
     "hash": "a9a99d2341e5a2ae"
   },
   {
-    "id": "site:app/contact/page.tsx:444",
+    "id": "site:app/contact/page.tsx:443",
     "path": "app/contact/page.tsx",
-    "line": 444,
+    "line": 443,
     "text": "연락처 *",
     "hash": "7ab861b9808c5e65"
   },
   {
-    "id": "site:app/contact/page.tsx:470",
+    "id": "site:app/contact/page.tsx:469",
     "path": "app/contact/page.tsx",
-    "line": 470,
+    "line": 469,
     "text": "이메일 (선택)",
     "hash": "8d504c360879a12b"
+  },
+  {
+    "id": "site:app/contact/page.tsx:475",
+    "path": "app/contact/page.tsx",
+    "line": 475,
+    "text": "직책 (선택)",
+    "hash": "e09c3c026a110e8f"
   },
   {
     "id": "site:app/contact/page.tsx:476",
     "path": "app/contact/page.tsx",
     "line": 476,
-    "text": "직책 (선택)",
-    "hash": "e09c3c026a110e8f"
-  },
-  {
-    "id": "site:app/contact/page.tsx:477",
-    "path": "app/contact/page.tsx",
-    "line": 477,
     "text": "예: 원장, 부원장, 운영실장",
     "hash": "f66de4aea7bf9522"
   },
   {
-    "id": "site:app/contact/page.tsx:480",
+    "id": "site:app/contact/page.tsx:479",
     "path": "app/contact/page.tsx",
-    "line": 480,
+    "line": 479,
     "text": "학원 규모 (선택)",
     "hash": "7c7cb7f9496d39aa"
   },
   {
-    "id": "site:app/contact/page.tsx:496",
+    "id": "site:app/contact/page.tsx:495",
     "path": "app/contact/page.tsx",
-    "line": 496,
+    "line": 495,
     "text": "문의 유형 *",
     "hash": "e91ac1782bbfd434"
   },
   {
-    "id": "site:app/contact/page.tsx:510",
+    "id": "site:app/contact/page.tsx:509",
     "path": "app/contact/page.tsx",
-    "line": 510,
+    "line": 509,
     "text": "문의 유형을 선택해주세요",
     "hash": "782622ca6a9c4105"
   },
   {
-    "id": "site:app/contact/page.tsx:521",
+    "id": "site:app/contact/page.tsx:520",
     "path": "app/contact/page.tsx",
-    "line": 521,
+    "line": 520,
     "text": "신청하실 * 세미나 신청 | 세미나 | 행사",
     "hash": "dc39bc6620dfb818"
   },
   {
-    "id": "site:app/contact/page.tsx:526",
+    "id": "site:app/contact/page.tsx:525",
     "path": "app/contact/page.tsx",
-    "line": 526,
+    "line": 525,
     "text": "목록을 불러오는 중...",
     "hash": "664e181db81c9e4a"
   },
   {
-    "id": "site:app/contact/page.tsx:530",
+    "id": "site:app/contact/page.tsx:529",
     "path": "app/contact/page.tsx",
-    "line": 530,
+    "line": 529,
     "text": "현재 신청 가능한 가 없습니다. 아래 문의 내용에 원하시는 일정이나 주제를 적어주세요. 세미나 신청 | 세미나 | 행사",
     "hash": "8ad0708994684ee4"
   },
   {
-    "id": "site:app/contact/page.tsx:543",
+    "id": "site:app/contact/page.tsx:542",
     "path": "app/contact/page.tsx",
-    "line": 543,
+    "line": 542,
     "text": "를 선택해주세요 세미나 신청 | 세미나 | 행사",
     "hash": "0fad121430b15800"
   },
   {
-    "id": "site:app/contact/page.tsx:573",
+    "id": "site:app/contact/page.tsx:572",
     "path": "app/contact/page.tsx",
-    "line": 573,
+    "line": 572,
     "text": "상담 진행을 위한 개인정보 수집·이용에 동의합니다.",
     "hash": "61eca8d394df3b58"
   },
   {
-    "id": "site:app/contact/page.tsx:576",
+    "id": "site:app/contact/page.tsx:575",
     "path": "app/contact/page.tsx",
-    "line": 576,
+    "line": 575,
     "text": "수집 항목: 이름, 소속 기관, 연락처, 이메일, 문의 내용 · 이용 목적: 도입 상담과 고객 지원 · 보유 기간: 마지막 상담일로부터 최대 3년.",
     "hash": "2fad17801461188a"
   },
   {
-    "id": "site:app/contact/page.tsx:583",
+    "id": "site:app/contact/page.tsx:582",
     "path": "app/contact/page.tsx",
-    "line": 583,
+    "line": 582,
     "text": "개인정보처리방침",
     "hash": "9fb41de3065c32ce"
+  },
+  {
+    "id": "site:app/contact/page.tsx:600",
+    "path": "app/contact/page.tsx",
+    "line": 600,
+    "text": "제품 업데이트와 교육 운영 인사이트를 이메일로 받아보겠습니다.",
+    "hash": "f56ccb1363804042"
   },
   {
     "id": "site:app/contact/page.tsx:601",
     "path": "app/contact/page.tsx",
     "line": 601,
-    "text": "제품 업데이트와 교육 운영 인사이트를 이메일로 받아보겠습니다.",
-    "hash": "f56ccb1363804042"
-  },
-  {
-    "id": "site:app/contact/page.tsx:602",
-    "path": "app/contact/page.tsx",
-    "line": 602,
     "text": "(선택)",
     "hash": "cb92a1d6629efef9"
   },
   {
-    "id": "site:app/contact/page.tsx:611",
+    "id": "site:app/contact/page.tsx:610",
     "path": "app/contact/page.tsx",
-    "line": 611,
+    "line": 610,
     "text": "상담 요청 접수 중...",
     "hash": "9583f5ee6d505c06"
   },
   {
-    "id": "site:app/contact/page.tsx:613",
+    "id": "site:app/contact/page.tsx:612",
     "path": "app/contact/page.tsx",
-    "line": 613,
+    "line": 612,
     "text": "상담 요청 제출하기",
     "hash": "c77f9b89b3c3d511"
   },
@@ -5708,8 +5694,8 @@
     "id": "site:components/introduction/landing/landing-copy.ts:35",
     "path": "components/introduction/landing/landing-copy.ts",
     "line": 35,
-    "text": "클래스인은 실시간 판서 수업, 별도 설비 없는 자동 수업 녹화, 과제·시험 LMS, AI 튜터를 한 흐름으로 잇는 AI 교육 플랫폼입니다.",
-    "hash": "cbf6c2d421bfcb2f"
+    "text": "클래스인은 실시간 판서 수업, 설정한 수업의 화면 녹화와 다시보기, 과제·시험 LMS, AI 튜터를 한 흐름으로 잇는 AI 교육 플랫폼입니다.",
+    "hash": "38f6f0320ee98031"
   },
   {
     "id": "site:components/introduction/landing/landing-copy.ts:35#2",
@@ -5838,611 +5824,618 @@
     "hash": "eefd67593fcf6091"
   },
   {
-    "id": "site:components/introduction/landing/landing-copy.ts:72",
+    "id": "site:components/introduction/landing/landing-copy.ts:71",
     "path": "components/introduction/landing/landing-copy.ts",
-    "line": 72,
-    "text": "수업 준비 | 드라이브의 수업 자료를 바로 칠판으로 불러옵니다.",
-    "hash": "6091b5f3d9bd6b78"
+    "line": 71,
+    "text": "학원 수업 녹화 방식 보기",
+    "hash": "411a8c24d9f4e57f"
   },
   {
     "id": "site:components/introduction/landing/landing-copy.ts:73",
     "path": "components/introduction/landing/landing-copy.ts",
     "line": 73,
-    "text": "실시간 수업 | 30여 가지 수업 도구와 최대 50페이지 칠판으로 가르칩니다.",
-    "hash": "cfcc9818ca764a05"
+    "text": "수업 준비 | 드라이브의 수업 자료를 바로 칠판으로 불러옵니다.",
+    "hash": "6091b5f3d9bd6b78"
   },
   {
     "id": "site:components/introduction/landing/landing-copy.ts:74",
     "path": "components/introduction/landing/landing-copy.ts",
     "line": 74,
-    "text": "자동 녹화 | 별도 설비 없이 칠판과 카메라를 함께 녹화합니다.",
-    "hash": "f2b8f9b62b3fab47"
+    "text": "실시간 수업 | 30여 가지 수업 도구와 최대 50페이지 칠판으로 가르칩니다.",
+    "hash": "cfcc9818ca764a05"
   },
   {
     "id": "site:components/introduction/landing/landing-copy.ts:75",
     "path": "components/introduction/landing/landing-copy.ts",
     "line": 75,
-    "text": "과제·시험 | LMS로 수업 전·후 학습을 이어 갑니다.",
-    "hash": "83e6c558c779701e"
+    "text": "수업 녹화 | 녹화를 켠 수업은 칠판 화면을 남길 수 있고, 카메라를 연결해 현장 녹화를 설정하면 교실도 담을 수 있습니다.",
+    "hash": "c937f9fd6aefae18"
   },
   {
     "id": "site:components/introduction/landing/landing-copy.ts:76",
     "path": "components/introduction/landing/landing-copy.ts",
     "line": 76,
-    "text": "데이터·AI | 출결·성적이 쌓이고, AI가 개별 피드백을 돕습니다.",
-    "hash": "6ccf44a2d2b41ff6"
+    "text": "과제·시험 | LMS로 수업 전·후 학습을 이어 갑니다.",
+    "hash": "83e6c558c779701e"
   },
   {
-    "id": "site:components/introduction/landing/landing-copy.ts:94",
+    "id": "site:components/introduction/landing/landing-copy.ts:77",
     "path": "components/introduction/landing/landing-copy.ts",
-    "line": 94,
-    "text": "수업을 위한 30여 가지 실시간 수업 도구",
-    "hash": "874bb6e839241814"
+    "line": 77,
+    "text": "데이터·AI | 출결·성적이 쌓이고, AI가 개별 피드백을 돕습니다.",
+    "hash": "6ccf44a2d2b41ff6"
   },
   {
     "id": "site:components/introduction/landing/landing-copy.ts:95",
     "path": "components/introduction/landing/landing-copy.ts",
     "line": 95,
-    "text": "총 50페이지의 디지털 판서",
-    "hash": "75ce174cc450e9d1"
+    "text": "수업을 위한 30여 가지 실시간 수업 도구",
+    "hash": "874bb6e839241814"
   },
   {
     "id": "site:components/introduction/landing/landing-copy.ts:96",
     "path": "components/introduction/landing/landing-copy.ts",
     "line": 96,
-    "text": "강사와 학생 모두 판서하는 인터랙티브 수업",
-    "hash": "779fa183a7eb4077"
+    "text": "총 50페이지의 디지털 판서",
+    "hash": "75ce174cc450e9d1"
   },
   {
-    "id": "site:components/introduction/landing/landing-copy.ts:102",
+    "id": "site:components/introduction/landing/landing-copy.ts:97",
     "path": "components/introduction/landing/landing-copy.ts",
-    "line": 102,
-    "text": "개인 + 공유 드라이브, 세부 권한으로 저작권 보호",
-    "hash": "ea37d8d7b8fe4768"
+    "line": 97,
+    "text": "강사와 학생 모두 판서하는 인터랙티브 수업",
+    "hash": "779fa183a7eb4077"
   },
   {
     "id": "site:components/introduction/landing/landing-copy.ts:103",
     "path": "components/introduction/landing/landing-copy.ts",
     "line": 103,
-    "text": "별도 설비 없는 자동 녹화, 칠판/카메라 듀얼 녹화",
-    "hash": "c9f7c387454d5c4c"
+    "text": "개인 + 공유 드라이브, 세부 권한으로 저작권 보호",
+    "hash": "ea37d8d7b8fe4768"
   },
   {
     "id": "site:components/introduction/landing/landing-copy.ts:104",
     "path": "components/introduction/landing/landing-copy.ts",
     "line": 104,
+    "text": "설정에 따른 칠판 화면 녹화와 선택 카메라 현장 녹화",
+    "hash": "37b8561f836b0005"
+  },
+  {
+    "id": "site:components/introduction/landing/landing-copy.ts:105",
+    "path": "components/introduction/landing/landing-copy.ts",
+    "line": 105,
     "text": "녹화본은 앱 안에서만 열람",
     "hash": "b03edd3411849a20"
   },
   {
-    "id": "site:components/introduction/landing/landing-copy.ts:109",
+    "id": "site:components/introduction/landing/landing-copy.ts:110",
     "path": "components/introduction/landing/landing-copy.ts",
-    "line": 109,
+    "line": 110,
     "text": "녹화 수업·숙제·시험을 묶은 LMS 통합 학습 관리 | 표준화된 커리큘럼 제작과 배포 | 관리를 위한 실시간 모니터링",
     "hash": "b1c397fd41222eda"
   },
   {
-    "id": "site:components/introduction/landing/landing-copy.ts:113",
+    "id": "site:components/introduction/landing/landing-copy.ts:114",
     "path": "components/introduction/landing/landing-copy.ts",
-    "line": 113,
+    "line": 114,
     "text": "출결·성적·녹화본·스크린샷 자동 저장 | 한눈에 파악하는 관리자 대시보드 | 기관 내 시스템과 API 연동",
     "hash": "c7f1f3f8ae0bf75f"
-  },
-  {
-    "id": "site:components/introduction/landing/landing-copy.ts:118",
-    "path": "components/introduction/landing/landing-copy.ts",
-    "line": 118,
-    "text": "기관만의 맞춤형 AI 에이전트와 AI 튜터",
-    "hash": "ceead67313898ef7"
   },
   {
     "id": "site:components/introduction/landing/landing-copy.ts:119",
     "path": "components/introduction/landing/landing-copy.ts",
     "line": 119,
-    "text": "학습 분석 기반 개인화 피드백",
-    "hash": "78c9eae4b784051a"
+    "text": "기관만의 맞춤형 AI 에이전트와 AI 튜터",
+    "hash": "ceead67313898ef7"
   },
   {
     "id": "site:components/introduction/landing/landing-copy.ts:120",
     "path": "components/introduction/landing/landing-copy.ts",
     "line": 120,
+    "text": "학습 분석 기반 개인화 피드백",
+    "hash": "78c9eae4b784051a"
+  },
+  {
+    "id": "site:components/introduction/landing/landing-copy.ts:121",
+    "path": "components/introduction/landing/landing-copy.ts",
+    "line": 121,
     "text": "음성 명령으로 칠판을 다루는 AI 음성 어시스턴트",
     "hash": "e65bcb05be3679b8"
   },
   {
-    "id": "site:components/introduction/landing/landing-copy.ts:125",
+    "id": "site:components/introduction/landing/landing-copy.ts:126",
     "path": "components/introduction/landing/landing-copy.ts",
-    "line": 125,
+    "line": 126,
     "text": "PC를 넘어 전자칠판까지 | 휴대폰·태블릿 BYOD, iOS / Android 모두 지원 | 온·오프라인 통합 하이브리드 수업",
     "hash": "3bae0d272dd99735"
-  },
-  {
-    "id": "site:components/introduction/landing/landing-copy.ts:132",
-    "path": "components/introduction/landing/landing-copy.ts",
-    "line": 132,
-    "text": "클래스인",
-    "hash": "8b00670f4f3d54a1"
   },
   {
     "id": "site:components/introduction/landing/landing-copy.ts:133",
     "path": "components/introduction/landing/landing-copy.ts",
     "line": 133,
-    "text": "미팅이 아닌, 수업을 위해 설계한 플랫폼",
-    "hash": "acd58de2f37ffada"
+    "text": "클래스인",
+    "hash": "8b00670f4f3d54a1"
   },
   {
-    "id": "site:components/introduction/landing/landing-copy.ts:136",
+    "id": "site:components/introduction/landing/landing-copy.ts:134",
     "path": "components/introduction/landing/landing-copy.ts",
-    "line": 136,
-    "text": "여 가지 | 실시간 수업 도구 | 칠판·퀴즈·손들기·타이머 등",
-    "hash": "30c30742c56a2c78"
+    "line": 134,
+    "text": "미팅이 아닌, 수업을 위해 설계한 플랫폼",
+    "hash": "acd58de2f37ffada"
   },
   {
     "id": "site:components/introduction/landing/landing-copy.ts:137",
     "path": "components/introduction/landing/landing-copy.ts",
     "line": 137,
-    "text": "명 | 한 수업 최대 참여 인원",
-    "hash": "4f5944abde1f4166"
+    "text": "여 가지 | 실시간 수업 도구 | 칠판·퀴즈·손들기·타이머 등",
+    "hash": "30c30742c56a2c78"
   },
   {
     "id": "site:components/introduction/landing/landing-copy.ts:138",
     "path": "components/introduction/landing/landing-copy.ts",
     "line": 138,
-    "text": "개 | 학생 카메라 동시 송출",
-    "hash": "5d4dc683ac4610dd"
+    "text": "명 | 한 수업 최대 참여 인원",
+    "hash": "4f5944abde1f4166"
   },
   {
     "id": "site:components/introduction/landing/landing-copy.ts:139",
     "path": "components/introduction/landing/landing-copy.ts",
     "line": 139,
+    "text": "개 | 학생 카메라 동시 송출",
+    "hash": "5d4dc683ac4610dd"
+  },
+  {
+    "id": "site:components/introduction/landing/landing-copy.ts:140",
+    "path": "components/introduction/landing/landing-copy.ts",
+    "line": 140,
     "text": "페이지 | 디지털 판서 칠판(최대)",
     "hash": "67a3b9faeab90dd6"
   },
   {
-    "id": "site:components/introduction/landing/landing-copy.ts:144",
+    "id": "site:components/introduction/landing/landing-copy.ts:145",
     "path": "components/introduction/landing/landing-copy.ts",
-    "line": 144,
+    "line": 145,
     "text": "수업에서 관리까지, 여섯 가지 장면",
     "hash": "554bad6028bbea10"
-  },
-  {
-    "id": "site:components/introduction/landing/landing-copy.ts:160",
-    "path": "components/introduction/landing/landing-copy.ts",
-    "line": 160,
-    "text": "클래스인 소프트웨어·하드웨어·도입 사례를 담은 전체 소개 자료입니다.",
-    "hash": "15332b62c6f4bdeb"
   },
   {
     "id": "site:components/introduction/landing/landing-copy.ts:161",
     "path": "components/introduction/landing/landing-copy.ts",
     "line": 161,
+    "text": "클래스인 소프트웨어·하드웨어·도입 사례를 담은 전체 소개 자료입니다.",
+    "hash": "15332b62c6f4bdeb"
+  },
+  {
+    "id": "site:components/introduction/landing/landing-copy.ts:162",
+    "path": "components/introduction/landing/landing-copy.ts",
+    "line": 162,
     "text": "소개서 PDF 받기",
     "hash": "e5f6b3714852e743"
   },
   {
-    "id": "site:components/introduction/landing/landing-copy.ts:165",
+    "id": "site:components/introduction/landing/landing-copy.ts:166",
     "path": "components/introduction/landing/landing-copy.ts",
-    "line": 165,
+    "line": 166,
     "text": "소개서 전체 보기",
     "hash": "d725d9d1646580d3"
-  },
-  {
-    "id": "site:components/introduction/landing/landing-copy.ts:172",
-    "path": "components/introduction/landing/landing-copy.ts",
-    "line": 172,
-    "text": "학생이 전자칠판 앞에서 직접 판서하며 발표합니다.",
-    "hash": "ebe275f52e358d77"
-  },
-  {
-    "id": "site:components/introduction/landing/landing-copy.ts:172#2",
-    "path": "components/introduction/landing/landing-copy.ts",
-    "line": 172,
-    "text": "교사·학생 누구나 손쉽게 화면을 조작할 수 있습니다.",
-    "hash": "c931e4b92f38bc73"
   },
   {
     "id": "site:components/introduction/landing/landing-copy.ts:173",
     "path": "components/introduction/landing/landing-copy.ts",
     "line": 173,
+    "text": "학생이 전자칠판 앞에서 직접 판서하며 발표합니다.",
+    "hash": "ebe275f52e358d77"
+  },
+  {
+    "id": "site:components/introduction/landing/landing-copy.ts:173#2",
+    "path": "components/introduction/landing/landing-copy.ts",
+    "line": 173,
+    "text": "교사·학생 누구나 손쉽게 화면을 조작할 수 있습니다.",
+    "hash": "c931e4b92f38bc73"
+  },
+  {
+    "id": "site:components/introduction/landing/landing-copy.ts:174",
+    "path": "components/introduction/landing/landing-copy.ts",
+    "line": 174,
     "text": "학생이 태블릿 개인 칠판에 쓴 풀이를 강사가 실시간으로 확인하고 바로 첨삭합니다.",
     "hash": "f1739ec858ce65eb"
   },
   {
-    "id": "site:components/introduction/landing/landing-copy.ts:175",
+    "id": "site:components/introduction/landing/landing-copy.ts:176",
     "path": "components/introduction/landing/landing-copy.ts",
-    "line": 175,
+    "line": 176,
     "text": "교실 학생과 원격 참여 학생이 한 화면에서 함께 수업합니다.",
     "hash": "e011bbad4640bcf2"
   },
   {
-    "id": "site:components/introduction/landing/landing-copy.ts:175#2",
+    "id": "site:components/introduction/landing/landing-copy.ts:176#2",
     "path": "components/introduction/landing/landing-copy.ts",
-    "line": 175,
+    "line": 176,
     "text": "8개 배열 마이크와 AI 음성 추적 카메라가 음성·영상을 지원합니다.",
     "hash": "523613a0299ac0eb"
-  },
-  {
-    "id": "site:components/introduction/landing/landing-copy.ts:181",
-    "path": "components/introduction/landing/landing-copy.ts",
-    "line": 181,
-    "text": "클래스인 X",
-    "hash": "4ddf2f7c4db5dab5"
   },
   {
     "id": "site:components/introduction/landing/landing-copy.ts:182",
     "path": "components/introduction/landing/landing-copy.ts",
     "line": 182,
-    "text": "전자칠판부터 천장 마이크까지, 클래스인과 연결된 AI 스마트 교실",
-    "hash": "1ca173a40c593919"
+    "text": "클래스인 X",
+    "hash": "4ddf2f7c4db5dab5"
   },
   {
     "id": "site:components/introduction/landing/landing-copy.ts:183",
     "path": "components/introduction/landing/landing-copy.ts",
     "line": 183,
-    "text": "{INTRO_SMART_CLASSROOM.lead} 현장 강의부터 온라인 강의, 그룹 학습, 하이브리드 강의까지 다양한 교육 환경에서 쓰입니다.",
-    "hash": "c8d9c19cf00f07e6"
+    "text": "전자칠판부터 천장 마이크까지, 클래스인과 연결된 AI 스마트 교실",
+    "hash": "1ca173a40c593919"
   },
   {
     "id": "site:components/introduction/landing/landing-copy.ts:184",
     "path": "components/introduction/landing/landing-copy.ts",
     "line": 184,
+    "text": "{INTRO_SMART_CLASSROOM.lead} 현장 강의부터 온라인 강의, 그룹 학습, 하이브리드 강의까지 다양한 교육 환경에서 쓰입니다.",
+    "hash": "c8d9c19cf00f07e6"
+  },
+  {
+    "id": "site:components/introduction/landing/landing-copy.ts:185",
+    "path": "components/introduction/landing/landing-copy.ts",
+    "line": 185,
     "text": "클래스인 하이브리드 교실 구성도",
     "hash": "86765adc9b672bd2"
   },
   {
-    "id": "site:components/introduction/landing/landing-copy.ts:186",
+    "id": "site:components/introduction/landing/landing-copy.ts:187",
     "path": "components/introduction/landing/landing-copy.ts",
-    "line": 186,
+    "line": 187,
     "text": "교실 구성",
     "hash": "ea4608ec0850bc36"
-  },
-  {
-    "id": "site:components/introduction/landing/landing-copy.ts:188",
-    "path": "components/introduction/landing/landing-copy.ts",
-    "line": 188,
-    "text": "전자칠판(IFP) | 65 / 75 / 86 / 110인치 · 4K 해상도 · 멀티터치 · 지문·눈부심 방지",
-    "hash": "a3202b39fc7e7428"
   },
   {
     "id": "site:components/introduction/landing/landing-copy.ts:189",
     "path": "components/introduction/landing/landing-copy.ts",
     "line": 189,
-    "text": "AI 모션 트래킹 카메라 | 자동 줌 & 트래킹 · 교사·학생 전용 카메라 구분",
-    "hash": "d436bdd4d5593aee"
+    "text": "전자칠판(IFP) | 65 / 75 / 86 / 110인치 · 4K 해상도 · 멀티터치 · 지문·눈부심 방지",
+    "hash": "a3202b39fc7e7428"
   },
   {
     "id": "site:components/introduction/landing/landing-copy.ts:190",
     "path": "components/introduction/landing/landing-copy.ts",
     "line": 190,
-    "text": "천장 AI 마이크 | 32마이크 어레이 · 80㎡ 수음 · AGC+AEC+ANS 내장",
-    "hash": "afaab38c295ca176"
+    "text": "AI 모션 트래킹 카메라 | 자동 줌 & 트래킹 · 교사·학생 전용 카메라 구분",
+    "hash": "d436bdd4d5593aee"
   },
   {
     "id": "site:components/introduction/landing/landing-copy.ts:191",
     "path": "components/introduction/landing/landing-copy.ts",
     "line": 191,
+    "text": "천장 AI 마이크 | 32마이크 어레이 · 80㎡ 수음 · AGC+AEC+ANS 내장",
+    "hash": "afaab38c295ca176"
+  },
+  {
+    "id": "site:components/introduction/landing/landing-copy.ts:192",
+    "path": "components/introduction/landing/landing-copy.ts",
+    "line": 192,
     "text": "ClassIn 플랫폼 | 판서 · 강의 녹화 · 과제·평가 · 실시간 출석 · LMS 연동",
     "hash": "b14b9bec60c18fb3"
   },
   {
-    "id": "site:components/introduction/landing/landing-copy.ts:197",
+    "id": "site:components/introduction/landing/landing-copy.ts:198",
     "path": "components/introduction/landing/landing-copy.ts",
-    "line": 197,
+    "line": 198,
     "text": "교실에서 달라지는 세 가지 수업",
     "hash": "060436bf6b891179"
-  },
-  {
-    "id": "site:components/introduction/landing/landing-copy.ts:207",
-    "path": "components/introduction/landing/landing-copy.ts",
-    "line": 207,
-    "text": "전자칠판 사양",
-    "hash": "a1c74cfe92705f06"
   },
   {
     "id": "site:components/introduction/landing/landing-copy.ts:208",
     "path": "components/introduction/landing/landing-copy.ts",
     "line": 208,
-    "text": "ClassIn X 전자칠판의 터치·필기·내장 장비",
-    "hash": "0311e9d657caa4d0"
+    "text": "전자칠판 사양",
+    "hash": "a1c74cfe92705f06"
   },
   {
     "id": "site:components/introduction/landing/landing-copy.ts:209",
     "path": "components/introduction/landing/landing-copy.ts",
     "line": 209,
-    "text": "차원이 다른 터치 & 필기 감도",
-    "hash": "d6adaad0d7215027"
+    "text": "ClassIn X 전자칠판의 터치·필기·내장 장비",
+    "hash": "0311e9d657caa4d0"
   },
   {
     "id": "site:components/introduction/landing/landing-copy.ts:210",
     "path": "components/introduction/landing/landing-copy.ts",
     "line": 210,
-    "text": "ClassIn X 전자칠판 주요 사양",
-    "hash": "945ddc19f872ce2b"
+    "text": "차원이 다른 터치 & 필기 감도",
+    "hash": "d6adaad0d7215027"
   },
   {
     "id": "site:components/introduction/landing/landing-copy.ts:211",
     "path": "components/introduction/landing/landing-copy.ts",
     "line": 211,
-    "text": "항목 | 수업에서",
-    "hash": "ac730c572f89cf0e"
+    "text": "ClassIn X 전자칠판 주요 사양",
+    "hash": "945ddc19f872ce2b"
   },
   {
-    "id": "site:components/introduction/landing/landing-copy.ts:213",
+    "id": "site:components/introduction/landing/landing-copy.ts:212",
     "path": "components/introduction/landing/landing-copy.ts",
-    "line": 213,
-    "text": "터치 반응 속도 | 종이에 쓰는 듯한 자연스러운 필기감",
-    "hash": "7ddee0008d1009bd"
+    "line": 212,
+    "text": "항목 | 수업에서",
+    "hash": "ac730c572f89cf0e"
   },
   {
     "id": "site:components/introduction/landing/landing-copy.ts:214",
     "path": "components/introduction/landing/landing-copy.ts",
     "line": 214,
-    "text": "필기 인식 속도 | 0.03~0.06초 | 초저지연 필기 인식",
-    "hash": "716f93c49ad50ce1"
+    "text": "터치 반응 속도 | 종이에 쓰는 듯한 자연스러운 필기감",
+    "hash": "7ddee0008d1009bd"
   },
   {
     "id": "site:components/introduction/landing/landing-copy.ts:215",
     "path": "components/introduction/landing/landing-copy.ts",
     "line": 215,
-    "text": "멀티터치 | 50포인트 | 네 손가락으로 툴바 호출, 두 손가락으로 전환, 손등으로 지우기",
-    "hash": "dbd19b61f64aaeb2"
+    "text": "필기 인식 속도 | 0.03~0.06초 | 초저지연 필기 인식",
+    "hash": "716f93c49ad50ce1"
   },
   {
     "id": "site:components/introduction/landing/landing-copy.ts:216",
     "path": "components/introduction/landing/landing-copy.ts",
     "line": 216,
-    "text": "디스플레이 | 풀 라미네이션 · AG+AF 유리 | 빛 반사를 줄이고 눈부심·지문을 막는 선명한 화면",
-    "hash": "667ff3e3452683d9"
+    "text": "멀티터치 | 50포인트 | 네 손가락으로 툴바 호출, 두 손가락으로 전환, 손등으로 지우기",
+    "hash": "dbd19b61f64aaeb2"
   },
   {
     "id": "site:components/introduction/landing/landing-copy.ts:217",
     "path": "components/introduction/landing/landing-copy.ts",
     "line": 217,
-    "text": "칠판 | 최대 50페이지 무한 스크롤 | 연속 강의, 판서 히스토리 보존",
-    "hash": "a3346d86e0b066e1"
+    "text": "디스플레이 | 풀 라미네이션 · AG+AF 유리 | 빛 반사를 줄이고 눈부심·지문을 막는 선명한 화면",
+    "hash": "667ff3e3452683d9"
   },
   {
     "id": "site:components/introduction/landing/landing-copy.ts:218",
     "path": "components/introduction/landing/landing-copy.ts",
     "line": 218,
-    "text": "내장 마이크·카메라 | 8개 배열 마이크 · AI 음성 추적 카메라 | 원격수업·실시간 발표의 음성·영상 지원",
-    "hash": "a2ba3638c0e48f19"
+    "text": "칠판 | 최대 50페이지 무한 스크롤 | 연속 강의, 판서 히스토리 보존",
+    "hash": "a3346d86e0b066e1"
   },
   {
     "id": "site:components/introduction/landing/landing-copy.ts:219",
     "path": "components/introduction/landing/landing-copy.ts",
     "line": 219,
-    "text": "PC · 로그인 | OPS PC 내장 · NFC 로그인 | 별도 장비 없는 올인원 구성, 강사 환경 빠른 셋업",
-    "hash": "0e274366ba440431"
+    "text": "내장 마이크·카메라 | 8개 배열 마이크 · AI 음성 추적 카메라 | 원격수업·실시간 발표의 음성·영상 지원",
+    "hash": "a2ba3638c0e48f19"
   },
   {
-    "id": "site:components/introduction/landing/landing-copy.ts:224",
+    "id": "site:components/introduction/landing/landing-copy.ts:220",
     "path": "components/introduction/landing/landing-copy.ts",
-    "line": 224,
-    "text": "ClassIn X 전자칠판·카메라·마이크 구성과 스펙을 정리한 제안서입니다.",
-    "hash": "5455f3c6c6d62364"
+    "line": 220,
+    "text": "PC · 로그인 | OPS PC 내장 · NFC 로그인 | 별도 장비 없는 올인원 구성, 강사 환경 빠른 셋업",
+    "hash": "0e274366ba440431"
   },
   {
     "id": "site:components/introduction/landing/landing-copy.ts:225",
     "path": "components/introduction/landing/landing-copy.ts",
     "line": 225,
-    "text": "제안서 PDF",
-    "hash": "1b6761580eb20b52"
+    "text": "ClassIn X 전자칠판·카메라·마이크 구성과 스펙을 정리한 제안서입니다.",
+    "hash": "5455f3c6c6d62364"
   },
   {
-    "id": "site:components/introduction/landing/landing-copy.ts:256",
+    "id": "site:components/introduction/landing/landing-copy.ts:226",
     "path": "components/introduction/landing/landing-copy.ts",
-    "line": 256,
-    "text": "공교육부터 학원까지, 클래스인을 쓰는 {CASE_TOTAL}곳의 교실",
-    "hash": "8c81d688771febb2"
+    "line": 226,
+    "text": "제안서 PDF",
+    "hash": "1b6761580eb20b52"
   },
   {
     "id": "site:components/introduction/landing/landing-copy.ts:257",
     "path": "components/introduction/landing/landing-copy.ts",
     "line": 257,
+    "text": "공교육부터 학원까지, 클래스인을 쓰는 {CASE_TOTAL}곳의 교실",
+    "hash": "8c81d688771febb2"
+  },
+  {
+    "id": "site:components/introduction/landing/landing-copy.ts:258",
+    "path": "components/introduction/landing/landing-copy.ts",
+    "line": 258,
     "text": "강의 녹화와 화판 수업 영상, 그리고 도입 기관의 교실 사진입니다.",
     "hash": "b9a7c52bb54dbb53"
   },
   {
-    "id": "site:components/introduction/landing/landing-copy.ts:257#2",
+    "id": "site:components/introduction/landing/landing-copy.ts:258#2",
     "path": "components/introduction/landing/landing-copy.ts",
-    "line": 257,
+    "line": 258,
     "text": "{SECTORS.map( (sector) => `${sector} ${casesIn(sector).length}곳` ).join(\", \")}의 사례를 모았습니다.",
     "hash": "dbe2862c45bbcbfd"
   },
   {
-    "id": "site:components/introduction/landing/landing-copy.ts:262",
+    "id": "site:components/introduction/landing/landing-copy.ts:263",
     "path": "components/introduction/landing/landing-copy.ts",
-    "line": 262,
+    "line": 263,
     "text": "전자칠판과 카메라로 선명한 수업 영상을 녹화합니다.",
     "hash": "edf3de6c9f025ffd"
   },
   {
-    "id": "site:components/introduction/landing/landing-copy.ts:262#2",
+    "id": "site:components/introduction/landing/landing-copy.ts:263#2",
     "path": "components/introduction/landing/landing-copy.ts",
-    "line": 262,
+    "line": 263,
     "text": "칠판 화면도 별도로 녹화되어 편집에 활용할 수 있습니다.",
     "hash": "534c5b2d2427eb1f"
   },
   {
-    "id": "site:components/introduction/landing/landing-copy.ts:267",
+    "id": "site:components/introduction/landing/landing-copy.ts:268",
     "path": "components/introduction/landing/landing-copy.ts",
-    "line": 267,
+    "line": 268,
     "text": "학생의 필기를 실시간으로 확인하고 첨삭하는 [개인 칠판] 기능을 활용합니다.",
     "hash": "8326c00fc24e46c8"
   },
   {
-    "id": "site:components/introduction/landing/landing-copy.ts:267#2",
+    "id": "site:components/introduction/landing/landing-copy.ts:268#2",
     "path": "components/introduction/landing/landing-copy.ts",
-    "line": 267,
+    "line": 268,
     "text": "정율사관학원, 과사람학원, 세정학원 등이 이 수업 방식을 채택하고 있습니다.",
     "hash": "db06332209f5e72c"
-  },
-  {
-    "id": "site:components/introduction/landing/landing-copy.ts:271",
-    "path": "components/introduction/landing/landing-copy.ts",
-    "line": 271,
-    "text": "디지털 교과서 수업",
-    "hash": "36b06510e69889e5"
   },
   {
     "id": "site:components/introduction/landing/landing-copy.ts:272",
     "path": "components/introduction/landing/landing-copy.ts",
     "line": 272,
+    "text": "디지털 교과서 수업",
+    "hash": "36b06510e69889e5"
+  },
+  {
+    "id": "site:components/introduction/landing/landing-copy.ts:273",
+    "path": "components/introduction/landing/landing-copy.ts",
+    "line": 273,
     "text": "동인천종로엠학원은 디지털 교과서와 태블릿으로 학생과 선생님이 함께 소통하는 양방향 수업을 진행합니다.",
     "hash": "439f2ad5aa85fd71"
   },
   {
-    "id": "site:components/introduction/landing/landing-copy.ts:274",
+    "id": "site:components/introduction/landing/landing-copy.ts:275",
     "path": "components/introduction/landing/landing-copy.ts",
-    "line": 274,
+    "line": 275,
     "text": "동인천종로엠 사례 보기",
     "hash": "90023650de52d73a"
-  },
-  {
-    "id": "site:components/introduction/landing/landing-copy.ts:277",
-    "path": "components/introduction/landing/landing-copy.ts",
-    "line": 277,
-    "text": "도입 기관 영상",
-    "hash": "9fe4b2c1c447185b"
   },
   {
     "id": "site:components/introduction/landing/landing-copy.ts:278",
     "path": "components/introduction/landing/landing-copy.ts",
     "line": 278,
+    "text": "도입 기관 영상",
+    "hash": "9fe4b2c1c447185b"
+  },
+  {
+    "id": "site:components/introduction/landing/landing-copy.ts:279",
+    "path": "components/introduction/landing/landing-copy.ts",
+    "line": 279,
     "text": "클래스인 스마트 교실을 갖춘 학원의 모습과 시스템 활용을 영상으로 확인하세요.",
     "hash": "ecc6bfe64ae44fb7"
   },
   {
-    "id": "site:components/introduction/landing/landing-copy.ts:282",
+    "id": "site:components/introduction/landing/landing-copy.ts:283",
     "path": "components/introduction/landing/landing-copy.ts",
-    "line": 282,
+    "line": 283,
     "text": "사례 보기",
     "hash": "3d51514cf6fffedb"
-  },
-  {
-    "id": "site:components/introduction/landing/landing-copy.ts:286",
-    "path": "components/introduction/landing/landing-copy.ts",
-    "line": 286,
-    "text": "도입 기관",
-    "hash": "aa40fa7ed8a24989"
   },
   {
     "id": "site:components/introduction/landing/landing-copy.ts:287",
     "path": "components/introduction/landing/landing-copy.ts",
     "line": 287,
-    "text": "교실 사진으로 보는 도입 사례",
-    "hash": "6865a837b29c59fe"
+    "text": "도입 기관",
+    "hash": "aa40fa7ed8a24989"
   },
   {
     "id": "site:components/introduction/landing/landing-copy.ts:288",
     "path": "components/introduction/landing/landing-copy.ts",
     "line": 288,
-    "text": "사례 보기",
-    "hash": "3d51514cf6fffedb"
+    "text": "교실 사진으로 보는 도입 사례",
+    "hash": "6865a837b29c59fe"
   },
   {
-    "id": "site:components/introduction/landing/landing-copy.ts:303",
+    "id": "site:components/introduction/landing/landing-copy.ts:289",
     "path": "components/introduction/landing/landing-copy.ts",
-    "line": 303,
-    "text": "사례 색인",
-    "hash": "ed3de3eebbc36578"
+    "line": 289,
+    "text": "사례 보기",
+    "hash": "3d51514cf6fffedb"
   },
   {
     "id": "site:components/introduction/landing/landing-copy.ts:304",
     "path": "components/introduction/landing/landing-copy.ts",
     "line": 304,
-    "text": "{CASE_TOTAL}곳 · 분류별",
-    "hash": "22560909688f33fe"
+    "text": "사례 색인",
+    "hash": "ed3de3eebbc36578"
   },
   {
     "id": "site:components/introduction/landing/landing-copy.ts:305",
     "path": "components/introduction/landing/landing-copy.ts",
     "line": 305,
-    "text": "{casesIn(sector).length}곳",
-    "hash": "8a5f862858e71d9f"
+    "text": "{CASE_TOTAL}곳 · 분류별",
+    "hash": "22560909688f33fe"
   },
   {
     "id": "site:components/introduction/landing/landing-copy.ts:306",
     "path": "components/introduction/landing/landing-copy.ts",
     "line": 306,
+    "text": "{casesIn(sector).length}곳",
+    "hash": "8a5f862858e71d9f"
+  },
+  {
+    "id": "site:components/introduction/landing/landing-copy.ts:307",
+    "path": "components/introduction/landing/landing-copy.ts",
+    "line": 307,
     "text": "고객 사례 {CASE_TOTAL}곳 모두 보기",
     "hash": "d00f7390bcb8166c"
   },
   {
-    "id": "site:components/introduction/landing/landing-copy.ts:315",
+    "id": "site:components/introduction/landing/landing-copy.ts:316",
     "path": "components/introduction/landing/landing-copy.ts",
-    "line": 315,
+    "line": 316,
     "text": "도입 문의",
     "hash": "ec643c1dea304bab"
   },
   {
-    "id": "site:components/introduction/landing/landing-copy.ts:317",
+    "id": "site:components/introduction/landing/landing-copy.ts:318",
     "path": "components/introduction/landing/landing-copy.ts",
-    "line": 317,
+    "line": 318,
     "text": "도입 상담, 쇼룸 체험, 자료 검토 중 편한 방법으로 시작하세요.",
     "hash": "a104b699bb483944"
-  },
-  {
-    "id": "site:components/introduction/landing/landing-copy.ts:319",
-    "path": "components/introduction/landing/landing-copy.ts",
-    "line": 319,
-    "text": "도입 상담",
-    "hash": "28a3c68ddc789c3e"
   },
   {
     "id": "site:components/introduction/landing/landing-copy.ts:320",
     "path": "components/introduction/landing/landing-copy.ts",
     "line": 320,
-    "text": "교실 수, 수업 방식, 이미 쓰는 장비를 알려 주시면 맞는 구성과 도입 순서를 함께 정리해 드립니다.",
-    "hash": "a330d011c60ecb39"
+    "text": "도입 상담",
+    "hash": "28a3c68ddc789c3e"
   },
   {
-    "id": "site:components/introduction/landing/landing-copy.ts:326",
+    "id": "site:components/introduction/landing/landing-copy.ts:321",
     "path": "components/introduction/landing/landing-copy.ts",
-    "line": 326,
-    "text": "목동 쇼룸",
-    "hash": "e897de9ef7343dcd"
+    "line": 321,
+    "text": "교실 수, 수업 방식, 이미 쓰는 장비를 알려 주시면 맞는 구성과 도입 순서를 함께 정리해 드립니다.",
+    "hash": "a330d011c60ecb39"
   },
   {
     "id": "site:components/introduction/landing/landing-copy.ts:327",
     "path": "components/introduction/landing/landing-copy.ts",
     "line": 327,
-    "text": "목동 쇼룸에서는 실제 수업 흐름을 직접 써 볼 수 있습니다.",
-    "hash": "130780988058d5a3"
+    "text": "목동 쇼룸",
+    "hash": "e897de9ef7343dcd"
   },
   {
     "id": "site:components/introduction/landing/landing-copy.ts:328",
     "path": "components/introduction/landing/landing-copy.ts",
     "line": 328,
-    "text": "쇼룸 방문 예약",
-    "hash": "07bcc361743636da"
+    "text": "목동 쇼룸에서는 실제 수업 흐름을 직접 써 볼 수 있습니다.",
+    "hash": "130780988058d5a3"
   },
   {
-    "id": "site:components/introduction/landing/landing-copy.ts:333",
+    "id": "site:components/introduction/landing/landing-copy.ts:329",
     "path": "components/introduction/landing/landing-copy.ts",
-    "line": 333,
-    "text": "자료 받기",
-    "hash": "6b03ee30c7a5a6bb"
+    "line": 329,
+    "text": "쇼룸 방문 예약",
+    "hash": "07bcc361743636da"
   },
   {
     "id": "site:components/introduction/landing/landing-copy.ts:334",
     "path": "components/introduction/landing/landing-copy.ts",
     "line": 334,
+    "text": "자료 받기",
+    "hash": "6b03ee30c7a5a6bb"
+  },
+  {
+    "id": "site:components/introduction/landing/landing-copy.ts:335",
+    "path": "components/introduction/landing/landing-copy.ts",
+    "line": 335,
     "text": "서비스 소개서와 AI 스마트 교실 제안서를 PDF로 받아 검토하세요.",
     "hash": "089bb5e4fae5e05a"
   },
   {
-    "id": "site:components/introduction/landing/landing-copy.ts:336",
+    "id": "site:components/introduction/landing/landing-copy.ts:337",
     "path": "components/introduction/landing/landing-copy.ts",
-    "line": 336,
+    "line": 337,
     "text": "서비스 소개서 PDF",
     "hash": "2cc018c4673ce66d"
   },
   {
-    "id": "site:components/introduction/landing/landing-copy.ts:339",
+    "id": "site:components/introduction/landing/landing-copy.ts:340",
     "path": "components/introduction/landing/landing-copy.ts",
-    "line": 339,
+    "line": 340,
     "text": "AI 스마트 교실 제안서 PDF",
     "hash": "16ebfec292e1591c"
   },

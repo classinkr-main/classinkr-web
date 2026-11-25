@@ -137,8 +137,22 @@ export interface ExternalCrmSyncSchemaReadiness {
 const DEFAULT_SYNC_PAGE_SIZE = 100
 const DEFAULT_SYNC_MAX_PAGES = 20
 const MAX_SYNC_PAGE_SIZE = 100
+// 잠금(진행 중 런) 판정 — 2026-11-23.
+//
+// 예전엔 "running" 행이면 무엇이든 30분 동안 잠금으로 봤고, 코디네이터 heartbeat 는 객체 하나가 끝날 때만 찍었다.
+// 그런데 동기화 라우트에 maxDuration 이 없어 함수 상한(300초)에 걸려 끊기면 잠금 행이 "running" 으로 남는다 —
+// 그 뒤 30분 동안 수동 버튼(force 포함 — 잠금 확인이 force 확인보다 먼저다)과 크론이 전부 200 `locked`(성공처럼 보임)로
+// 아무것도 하지 않았고, 다음 시도도 같은 지점에서 또 끊기면 영영 끝나지 않았다.
+// 이제:
+//  * 체인은 시간 예산(XIAOSHOUYI_SYNC_TIME_BUDGET_MS, 기본 240초) 안에서 페이지·객체를 멈추고 잠금을 스스로 닫는다.
+//  * heartbeat 를 페이지마다 찍는다. 라우트 상한(maxDuration 300초)보다 오래 heartbeat 가 없는 이 서버의 런은 죽은 런이다 —
+//    SERVER_RUN_STALE_MS(6분) 뒤에 잠금에서 빼고 실패로 닫는다.
+//  * 로컬 MCP 스크립트(scripts/sync-neo-via-mcp.mjs — metadata.via, heartbeat 없음)가 만든 런은 예전처럼 30분 동안 잠금으로 본다.
 const ACTIVE_SYNC_STALE_MS = 30 * 60_000
+export const SERVER_RUN_STALE_MS = 6 * 60_000
+export const DEFAULT_SYNC_TIME_BUDGET_MS = 240_000
 const SYNC_LOCK_OBJECT_KEY = "__sync_lock__"
+const TIME_BUDGET_ERROR = "time-budget"
 
 const DEFAULT_OBJECTS: XiaoshouyiObjectConfig[] = [
   {
@@ -344,6 +358,13 @@ function getSyncPageSize() {
   const parsed = Number(readEnv("XIAOSHOUYI_SYNC_PAGE_SIZE") ?? readEnv("XIAOSHOUYI_SYNC_LIMIT"))
   if (!Number.isFinite(parsed)) return DEFAULT_SYNC_PAGE_SIZE
   return Math.min(MAX_SYNC_PAGE_SIZE, Math.max(1, Math.floor(parsed)))
+}
+
+/** 체인 전체 시간 예산(ms) — 라우트 maxDuration(300초) 안에서 응답·스냅샷 재계산 여유를 남긴다. */
+export function getSyncTimeBudgetMs() {
+  const parsed = Number(readEnv("XIAOSHOUYI_SYNC_TIME_BUDGET_MS"))
+  if (!Number.isFinite(parsed) || parsed <= 0) return DEFAULT_SYNC_TIME_BUDGET_MS
+  return Math.min(270_000, Math.max(10_000, Math.floor(parsed)))
 }
 
 function getSyncMaxPages() {
@@ -742,15 +763,33 @@ async function finishRun(
   if (error) throw error
 }
 
-async function heartbeatRun(id: string, completedObjects: number) {
+async function heartbeatRun(id: string, completedObjects: number, currentObject?: string) {
   const sb = createSupabaseAdminClient()
   const { error } = await sb
     .from("external_crm_sync_runs")
-    .update({ metadata: { heartbeatAt: new Date().toISOString(), completedObjects } })
+    .update({
+      metadata: { heartbeatAt: new Date().toISOString(), completedObjects, ...(currentObject ? { currentObject } : {}) },
+    })
     .eq("id", id)
     .eq("status", "running")
 
   if (error) throw error
+}
+
+/** 로컬 MCP 스크립트(scripts/sync-neo-via-mcp.mjs)가 만든 런인가 — heartbeat 를 찍지 않아 긴 창(30분)으로 본다. */
+export function isForeignSyncRun(metadata: unknown): boolean {
+  return Boolean(metadata && typeof metadata === "object" && typeof (metadata as Record<string, unknown>).via === "string")
+}
+
+/**
+ * "running" 행 하나가 아직 살아 있는 동기화인가. 이 서버의 런(코디네이터·객체)은 heartbeat 가 SERVER_RUN_STALE_MS 안에
+ * 있어야 살아 있다. 외부 스크립트 런은 ACTIVE_SYNC_STALE_MS(30분).
+ */
+export function isLiveSyncRun(row: { updated_at?: unknown; metadata?: unknown }, nowMs: number): boolean {
+  const updatedMs = typeof row.updated_at === "string" ? Date.parse(row.updated_at) : Number.NaN
+  if (!Number.isFinite(updatedMs)) return false
+  const windowMs = isForeignSyncRun(row.metadata) ? ACTIVE_SYNC_STALE_MS : SERVER_RUN_STALE_MS
+  return nowMs - updatedMs < windowMs
 }
 
 async function getRecentSuccessfulSyncReuse(
@@ -843,40 +882,60 @@ async function getRecentSuccessfulSyncReuse(
 }
 
 async function expireStaleSyncCoordinators() {
-  const cutoff = new Date(Date.now() - ACTIVE_SYNC_STALE_MS).toISOString()
-  const finishedAt = new Date().toISOString()
+  const nowMs = Date.now()
+  const cutoff = new Date(nowMs - SERVER_RUN_STALE_MS).toISOString()
+  const finishedAt = new Date(nowMs).toISOString()
   const sb = createSupabaseAdminClient()
-  const { error } = await sb
+  // heartbeat 가 끊긴 "running" 행(함수 상한으로 끊긴 이 서버의 런)을 실패로 닫는다. 외부 스크립트 런은 30분 창이라 여기서 거른다.
+  const { data, error } = await sb
+    .from("external_crm_sync_runs")
+    .select("id, object_api_key, updated_at, metadata")
+    .eq("source_system", "xiaoshouyi")
+    .eq("status", "running")
+    .lt("updated_at", cutoff)
+    .limit(200)
+
+  if (error) {
+    console.error("[external-crm sync] stale run lookup failed", error)
+    return
+  }
+  const staleIds = ((data ?? []) as Array<{ id: string; updated_at?: unknown; metadata?: unknown }>)
+    .filter((row) => !isLiveSyncRun(row, nowMs))
+    .map((row) => row.id)
+  if (staleIds.length === 0) return
+
+  const { error: updateError } = await sb
     .from("external_crm_sync_runs")
     .update({
       status: "failed",
       finished_at: finishedAt,
-      error: "동기화 heartbeat가 30분 이상 없어 잠금을 자동 해제했습니다.",
+      error: `동기화 heartbeat가 ${Math.round(SERVER_RUN_STALE_MS / 60_000)}분 넘게 없어(함수 시간 상한으로 끊긴 런) 잠금을 자동 해제했습니다.`,
     })
-    .eq("source_system", "xiaoshouyi")
-    .eq("object_api_key", SYNC_LOCK_OBJECT_KEY)
+    .in("id", staleIds)
     .eq("status", "running")
-    .lt("updated_at", cutoff)
 
-  if (error) {
-    console.error("[external-crm sync] stale coordinator cleanup failed", error)
+  if (updateError) {
+    console.error("[external-crm sync] stale run cleanup failed", updateError)
   }
 }
 
 async function getActiveSyncRunReuse(): Promise<ExternalCrmSyncResult | null> {
   const since = new Date(Date.now() - ACTIVE_SYNC_STALE_MS).toISOString()
   const sb = createSupabaseAdminClient()
-  const { data, error } = await sb
+  const { data: rows, error } = await sb
     .from("external_crm_sync_runs")
-    .select("object_api_key, started_at, rows_scanned, rows_upserted")
+    .select("object_api_key, started_at, updated_at, rows_scanned, rows_upserted, metadata")
     .eq("source_system", "xiaoshouyi")
     .eq("status", "running")
     .gte("updated_at", since)
     .order("updated_at", { ascending: false })
-    .limit(1)
-    .maybeSingle()
+    .limit(20)
 
-  if (error || !data) return null
+  if (error || !rows?.length) return null
+  // 30분 창으로 넓게 읽고, 이 서버의 런은 heartbeat 창(6분)으로 다시 거른다 — 죽은 런이 잠금으로 남지 않게.
+  const nowMs = Date.now()
+  const data = (rows as Array<Record<string, unknown>>).find((row) => isLiveSyncRun(row, nowMs))
+  if (!data) return null
 
   const rawObjectApiKey = String(data.object_api_key ?? "all")
   const objectApiKey = rawObjectApiKey === SYNC_LOCK_OBJECT_KEY ? "all" : rawObjectApiKey
@@ -908,7 +967,8 @@ async function syncXiaoshouyiObject(
   config: XiaoshouyiConfig,
   token: string,
   object: XiaoshouyiObjectConfig,
-  trigger: ExternalCrmSyncTrigger
+  trigger: ExternalCrmSyncTrigger,
+  budget: { deadlineAt: number; onPage?: () => Promise<void> } = { deadlineAt: Number.POSITIVE_INFINITY }
 ): Promise<ExternalCrmSyncObjectResult> {
   const runId = await createRun(object.objectApiKey, trigger)
   if (!runId) throw new Error(`Failed to create sync run for ${object.objectApiKey}`)
@@ -1002,6 +1062,12 @@ async function syncXiaoshouyiObject(
         break
       }
       truncated = page === maxPages - 1
+      if (budget.onPage) await budget.onPage()
+      // 시간 예산을 넘기면 여기서 멈춘다 — 끝까지 못 읽은 런(truncated)이라 stale 표시를 하지 않고, 다음 실행이 이어서 읽는다.
+      if (Date.now() >= budget.deadlineAt) {
+        truncated = true
+        break
+      }
     }
 
     let staleMarked: number | null = null
@@ -1085,6 +1151,7 @@ export async function syncXiaoshouyiSnapshots(
   trigger: ExternalCrmSyncTrigger = "manual",
   options: { force?: boolean; recentSyncTtlMs?: number } = {}
 ): Promise<ExternalCrmSyncResult> {
+  const startedAtMs = Date.now()
   const schema = await getXiaoshouyiSyncSchemaReadiness()
   if (!schema.ok) {
     const message = `Xiaoshouyi sync schema is not ready: ${schema.error ?? "unknown schema issue"}`
@@ -1150,13 +1217,33 @@ export async function syncXiaoshouyiSnapshots(
       }
     }
 
+    const deadlineAt = startedAtMs + getSyncTimeBudgetMs()
     for (const object of runtimeObjects) {
-      results.push(await syncXiaoshouyiObject(config, token, object, trigger))
+      if (Date.now() >= deadlineAt) {
+        // 예산이 다 됐다 — 남은 객체는 시작하지 않는다(실패가 아니라 다음 실행 몫). 잠금은 아래에서 정상으로 닫힌다.
+        results.push({
+          objectApiKey: object.objectApiKey,
+          status: "skipped",
+          rowsScanned: 0,
+          rowsUpserted: 0,
+          error: TIME_BUDGET_ERROR,
+        })
+        continue
+      }
+      const completed = results.length
+      results.push(
+        await syncXiaoshouyiObject(config, token, object, trigger, {
+          deadlineAt,
+          onPage: () => heartbeatRun(coordinatorRunId, completed, object.objectApiKey),
+        })
+      )
       await heartbeatRun(coordinatorRunId, results.length)
     }
 
-    const ok = results.every((result) => result.status === "success")
-    const complete = ok && results.every((result) => !result.truncated)
+    // 예산으로 건너뛴 객체는 실패가 아니다 — 받은 만큼은 반영(스냅샷 재계산)하고 complete=false 로 "덜 받음"을 알린다.
+    const ok = results.every((result) => result.status === "success" || result.error === TIME_BUDGET_ERROR)
+    const budgetSkipped = results.filter((result) => result.error === TIME_BUDGET_ERROR).map((result) => result.objectApiKey)
+    const complete = ok && budgetSkipped.length === 0 && results.every((result) => !result.truncated)
     const rowsScanned = results.reduce((sum, result) => sum + result.rowsScanned, 0)
     const rowsUpserted = results.reduce((sum, result) => sum + result.rowsUpserted, 0)
     const truncatedObjects = results.filter((result) => result.truncated).map((result) => result.objectApiKey)
@@ -1168,7 +1255,12 @@ export async function syncXiaoshouyiSnapshots(
       rowsUpserted,
       cursorValue: complete ? "complete" : "partial",
       error,
-      metadata: { complete, objectCount: results.length, truncatedObjects },
+      metadata: {
+        complete,
+        objectCount: results.length,
+        truncatedObjects,
+        ...(budgetSkipped.length ? { budgetSkippedObjects: budgetSkipped } : {}),
+      },
     })
 
     return { ok, complete, objects: results, error }

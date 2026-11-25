@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react"
 import type { ReactNode } from "react"
 import dynamic from "next/dynamic"
+import { INTRO_CASES, INTRO_CASES_PATH, INTRO_PATH, getIntroCasePath } from "@/lib/introduction/content"
 import {
   Save,
   CheckCircle2,
@@ -754,6 +755,53 @@ const SITE_LINK_GROUPS: SiteLinkGroup[] = [
         description: "상담 문의와 리드 수집 페이지",
       },
     ],
+  },
+  // 서비스 소개서 랜딩(2026-11-06). 대표 1개 + 상황별 전달 자료 2개 + 문서형 원문 + 사례.
+  {
+    title: "서비스 소개서",
+    description: "상담 전·후 고객에게 보내는 소개 랜딩입니다. 대표 랜딩 외에 상황에 맞는 전달용 랜딩을 고릅니다.",
+    links: [
+      {
+        label: "서비스 소개서",
+        path: INTRO_PATH,
+        description: "클래스인·클래스인 X·수업 영상·사례를 한 장에 담은 대표 랜딩",
+        badge: "대표",
+      },
+      {
+        label: "문제→해결 스토리",
+        path: `${INTRO_PATH}/story`,
+        description: "'수업 준비 도구가 너무 많다'에서 시작하는 설득형 — 처음 검토하는 원장님께",
+        badge: "전달용",
+      },
+      {
+        label: "현장 사례 중심",
+        path: `${INTRO_PATH}/proof`,
+        description: "실제 교실 사진·사례 17곳으로 보여 주는 신뢰형 — 사례를 묻는 고객께",
+        badge: "전달용",
+      },
+      {
+        label: "소개서 전체(문서형)",
+        path: `${INTRO_PATH}/full`,
+        description: "Notion 원문 전체 — 도입 배경·타사 비교표·하드웨어 스펙 토글 포함",
+        badge: "원문",
+      },
+      {
+        label: "고객 사례 목록",
+        path: INTRO_CASES_PATH,
+        description: `스마트 교실 구성 사례 ${INTRO_CASES.length}곳 — 공교육·사교육·기타교육 필터`,
+      },
+    ],
+  },
+  // 사례 목록은 lib/introduction/content.ts 의 INTRO_CASES 에서 만든다 — 사례를 더하면 여기도 따라온다.
+  {
+    title: "서비스 소개서 · 고객 사례",
+    description: "사례를 묻는 고객에게 바로 보내기 좋은 기관별 사례 주소입니다.",
+    links: INTRO_CASES.map((item) => ({
+      label: item.name,
+      path: getIntroCasePath(item.slug),
+      description: item.summary.replace(/\*\*(.+?)\*\*/g, "$1"),
+      badge: `${item.sector} · ${item.country}`,
+    })),
   },
   {
     title: "가격·도입",

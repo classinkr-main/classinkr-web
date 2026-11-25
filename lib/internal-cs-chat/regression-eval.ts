@@ -80,6 +80,8 @@ export interface RegressionRegeneration {
   question: string
   answer: string
   origin: "model" | "deterministic"
+  /** 모델이 끝까지 쓰지 못한 글(길이 초과·안전 차단)이면 true — 기준 답과 비교하지 않는다. */
+  incomplete?: boolean
   /** 이 상담의 근거에서 뽑은 다른 고객 기관 이름(다른 고객 이름 검사용). */
   otherCustomerNames?: string[]
   /** 이 상담의 고객 기관(허용). */
@@ -193,53 +195,47 @@ function policyWarningsAgainstReference(
   return checkInternalCsAnswer(regenerated, options).filter((warning) => !referenceCodes.has(warning.code))
 }
 
-export async function runInternalCsRegressionEval(
-  input: { messageIds?: string[]; limit?: number },
+/** 평가 한 번이 쓸 수 있는 전체 시간. 라우트 maxDuration(60초) 안에서 부분 결과를 돌려줄 여유를 남긴다. */
+export const REGRESSION_EVAL_TIME_BUDGET_MS = 50_000
+export const REGRESSION_EVAL_TIME_SHORT_REASON =
+  "시간 부족 — 전체 시간 예산 안에 처리하지 못했습니다. 이 항목만 다시 실행해 주세요"
+
+type CandidateOutcome = { item: RegressionEvalItem } | { skip: string }
+
+async function evaluateCandidate(
+  candidate: InternalCsRegressionEvalCandidate,
   deps: RegressionEvalDeps
-): Promise<RegressionEvalResult> {
-  const limit = clampLimit(input.limit)
-  const candidates = await deps.loadCandidates({ messageIds: input.messageIds, limit })
+): Promise<CandidateOutcome> {
+  const reference = referenceAnswerFor(candidate)
+  if (!reference) {
+    return { skip: "검토 수정본이 없거나 원본과 같거나 즉시 승인(quick_approved)이라 기준 정답으로 쓸 수 없습니다" }
+  }
 
-  const items: RegressionEvalItem[] = []
-  const skipped: RegressionEvalSkipped[] = []
-
-  for (const candidate of candidates) {
-    const reference = referenceAnswerFor(candidate)
-    if (!reference) {
-      skipped.push({
-        messageId: candidate.messageId,
-        reason: "검토 수정본이 없거나 원본과 같거나 즉시 승인(quick_approved)이라 기준 정답으로 쓸 수 없습니다",
-      })
-      continue
+  try {
+    const regeneration = await deps.regenerate(candidate)
+    if (!regeneration.answer.trim()) return { skip: "재생성 결과가 비어 있습니다" }
+    if (regeneration.origin === "deterministic") {
+      return { skip: "재생성이 모델 실패로 결정적 폴백을 반환해 평가에서 제외합니다" }
+    }
+    // 끝까지 생성되지 못한 글(안전 차단·길이 초과)은 기준 답과 비교하지 않는다.
+    if (regeneration.incomplete) {
+      return { skip: "재생성 글이 끝까지 생성되지 못해(불완전) 평가에서 제외합니다" }
     }
 
-    try {
-      const regeneration = await deps.regenerate(candidate)
-      if (!regeneration.answer.trim()) {
-        skipped.push({ messageId: candidate.messageId, reason: "재생성 결과가 비어 있습니다" })
-        continue
-      }
-      if (regeneration.origin === "deterministic") {
-        skipped.push({
-          messageId: candidate.messageId,
-          reason: "재생성이 모델 실패로 결정적 폴백을 반환해 평가에서 제외합니다",
-        })
-        continue
-      }
+    // 비교 대상: 기준 답은 고객용 글이므로 재생성 답에서도 고객 초안 블록만 비교한다. 블록이 없으면 전체 답이다.
+    const draftBlock = extractCustomerDraftBlock(regeneration.answer)
+    const regenerated = draftBlock ?? regeneration.answer
+    const comparedBlock = draftBlock ? ("customer_draft" as const) : ("full_answer" as const)
+    const warnings = policyWarningsAgainstReference(regenerated, reference, {
+      otherCustomerNames: regeneration.otherCustomerNames,
+      allowedNames: regeneration.allowedNames,
+    })
+    const policyWarnings = warningCodes(warnings)
 
-      // 비교 대상: 기준 답은 고객용 글이므로 재생성 답에서도 고객 초안 블록만 비교한다. 블록이 없으면 전체 답이다.
-      const draftBlock = extractCustomerDraftBlock(regeneration.answer)
-      const regenerated = draftBlock ?? regeneration.answer
-      const comparedBlock = draftBlock ? ("customer_draft" as const) : ("full_answer" as const)
-      const warnings = policyWarningsAgainstReference(regenerated, reference, {
-        otherCustomerNames: regeneration.otherCustomerNames,
-        allowedNames: regeneration.allowedNames,
-      })
-      const policyWarnings = warningCodes(warnings)
-
-      // 기준 답에 없던 유출(다른 고객·원가·식별자)은 모델 심판 없이 바로 needs_fix 로 제안한다(비용도 아낀다).
-      if (warnings.some((warning) => LEAK_WARNING_CODES.includes(warning.code))) {
-        items.push({
+    // 기준 답에 없던 유출(다른 고객·원가·식별자)은 모델 심판 없이 바로 needs_fix 로 제안한다(비용도 아낀다).
+    if (warnings.some((warning) => LEAK_WARNING_CODES.includes(warning.code))) {
+      return {
+        item: {
           messageId: candidate.messageId,
           conversationId: candidate.conversationId,
           suggestedOutcome: "needs_fix",
@@ -248,28 +244,23 @@ export async function runInternalCsRegressionEval(
           judgeModel: "answer-checks",
           comparedBlock,
           policyWarnings,
-        })
-        continue
+        },
       }
+    }
 
-      const judgement = await deps.judge({
-        question: regeneration.question,
-        reference,
-        regenerated,
-        comparedBlock,
-        policyWarnings,
-        imageEvidence: regeneration.imageEvidence,
-      })
-      if (!judgement) {
-        skipped.push({ messageId: candidate.messageId, reason: "심판 모델을 호출하지 못했습니다" })
-        continue
-      }
-      if ("skipped" in judgement) {
-        skipped.push({ messageId: candidate.messageId, reason: judgement.reason })
-        continue
-      }
+    const judgement = await deps.judge({
+      question: regeneration.question,
+      reference,
+      regenerated,
+      comparedBlock,
+      policyWarnings,
+      imageEvidence: regeneration.imageEvidence,
+    })
+    if (!judgement) return { skip: "심판 모델을 호출하지 못했습니다" }
+    if ("skipped" in judgement) return { skip: judgement.reason }
 
-      items.push({
+    return {
+      item: {
         messageId: candidate.messageId,
         conversationId: candidate.conversationId,
         suggestedOutcome: judgement.outcome,
@@ -278,9 +269,53 @@ export async function runInternalCsRegressionEval(
         judgeModel: judgement.model,
         comparedBlock,
         policyWarnings,
-      })
-    } catch (error) {
-      skipped.push({ messageId: candidate.messageId, reason: errorMessage(error) })
+      },
+    }
+  } catch (error) {
+    return { skip: errorMessage(error) }
+  }
+}
+
+const TIMED_OUT = Symbol("regression-eval-timed-out")
+
+export async function runInternalCsRegressionEval(
+  input: { messageIds?: string[]; limit?: number },
+  deps: RegressionEvalDeps,
+  options: { budgetMs?: number; now?: () => number } = {}
+): Promise<RegressionEvalResult> {
+  const now = options.now ?? Date.now
+  const deadline = now() + (options.budgetMs ?? REGRESSION_EVAL_TIME_BUDGET_MS)
+  const limit = clampLimit(input.limit)
+  const candidates = await deps.loadCandidates({ messageIds: input.messageIds, limit })
+
+  const items: RegressionEvalItem[] = []
+  const skipped: RegressionEvalSkipped[] = []
+  let outOfTime = false
+
+  for (const candidate of candidates) {
+    const remainingMs = deadline - now()
+    if (outOfTime || remainingMs <= 0) {
+      outOfTime = true
+      skipped.push({ messageId: candidate.messageId, reason: REGRESSION_EVAL_TIME_SHORT_REASON })
+      continue
+    }
+
+    // 후보 하나가 남은 시간을 넘기면 결과를 기다리지 않고 부분 결과로 돌려준다(진행 중이던 호출의 결과는 버린다).
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const outcome = await Promise.race([
+      evaluateCandidate(candidate, deps),
+      new Promise<typeof TIMED_OUT>((resolve) => {
+        timer = setTimeout(() => resolve(TIMED_OUT), remainingMs)
+      }),
+    ]).finally(() => clearTimeout(timer))
+
+    if (outcome === TIMED_OUT) {
+      outOfTime = true
+      skipped.push({ messageId: candidate.messageId, reason: REGRESSION_EVAL_TIME_SHORT_REASON })
+    } else if ("item" in outcome) {
+      items.push(outcome.item)
+    } else {
+      skipped.push({ messageId: candidate.messageId, reason: outcome.skip })
     }
   }
 
@@ -302,7 +337,9 @@ function resolveOriginalQuestion(
   if (linked?.content.trim()) return linked.content
 
   const messageIndex = messages.findIndex((message) => message.id === candidate.messageId)
-  const preceding = messageIndex >= 0 ? messages.slice(0, messageIndex) : messages
+  // 읽은 구간(최근 메시지) 밖의 후보면 엉뚱한 사용자 메시지를 원 질문으로 잡지 않는다.
+  if (messageIndex < 0) return null
+  const preceding = messages.slice(0, messageIndex)
   for (let index = preceding.length - 1; index >= 0; index -= 1) {
     const entry = preceding[index]
     if (entry.role === "user" && entry.content.trim()) return entry.content
@@ -381,6 +418,7 @@ export async function regenerateForCandidate(
     question,
     answer: generation.answer,
     origin: generation.origin,
+    incomplete: generation.incomplete === true,
     // 과거 상담 근거의 기관 이름은 구조화 목록으로 받는다(컨텍스트 글에는 이름이 없다). 글 속 '기관 X' 줄은 예전 형식용.
     otherCustomerNames: [
       ...new Set([...(copilotContext.otherCustomerNames ?? []), ...extractInstitutionNames(copilotContext.internalContext)]),

@@ -1,16 +1,15 @@
-import { revalidateTag } from "next/cache"
 import { after, NextRequest, NextResponse } from "next/server"
 import { checkCronAuth } from "@/lib/server/cron-auth"
 
-import { ADMIN_CRM_REVENUE_CACHE_TAG } from "@/lib/admin-crm-revenue"
+import { expireExternalCrmSyncCaches } from "@/lib/external-crm/sync-cache"
 import {
   notifyExternalCrmSyncOutcome,
   runExternalCrmSyncChain,
 } from "@/lib/external-crm/sync-chain"
-import {
-  getExternalCrmSyncHttpStatus,
-  hasFreshExternalCrmSyncData,
-} from "@/lib/external-crm/sync-result"
+import { getExternalCrmSyncHttpStatus } from "@/lib/external-crm/sync-result"
+
+// 수동 라우트(app/api/admin/crm/external-sync)와 같은 상한 — 체인의 시간 예산이 이 안에서 끝낸다.
+export const maxDuration = 300
 
 export async function GET(req: NextRequest) {
   // 인증은 아래 CRON_SECRET Bearer 하나뿐이다 — Vercel 이 크론에 붙이는 건 그 헤더이지
@@ -32,9 +31,8 @@ export async function GET(req: NextRequest) {
     candidates: chain.candidates ?? null,
     candidatesError: chain.candidatesError ?? null,
   }
-  if (hasFreshExternalCrmSyncData(chain.sync)) {
-    revalidateTag(ADMIN_CRM_REVENUE_CACHE_TAG, "max")
-  }
+  // 예전엔 매출 태그만 "max"로 걸어 NEO 고객·지역 지도·바깥 캐시가 크론 뒤에도 옛 값이었다 — 수동 버튼과 같은 즉시 만료.
+  expireExternalCrmSyncCaches(chain)
   after(() => notifyExternalCrmSyncOutcome(chain, "cron"))
   return NextResponse.json(result, { status: getExternalCrmSyncHttpStatus(chain.sync) })
 }

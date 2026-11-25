@@ -43,14 +43,14 @@ export async function POST(req: NextRequest) {
       actorUserId: admin.userId ?? null,
     })
 
-    revalidateTag(ADMIN_CRM_REVENUE_CACHE_TAG, "max")
+    revalidateTag(ADMIN_CRM_REVENUE_CACHE_TAG, { expire: 0 })
     // REV 링크와 다른 원천이지만, source-links/manual과 같은 이유로 같이 건다(원천 판별
     // 전 분기를 늘리지 않고 무효화 목록을 한 벌로 유지).
-    revalidateTag(ADMIN_CRM_REVENUE_SHEET_CACHE_TAG, "max")
-    revalidateTag(ADMIN_CRM_COVERAGE_CACHE_TAG, "max")
-    revalidateTag(ADMIN_OS_SUMMARY_CACHE_TAG, "max")
+    revalidateTag(ADMIN_CRM_REVENUE_SHEET_CACHE_TAG, { expire: 0 })
+    revalidateTag(ADMIN_CRM_COVERAGE_CACHE_TAG, { expire: 0 })
+    revalidateTag(ADMIN_OS_SUMMARY_CACHE_TAG, { expire: 0 })
     // 확정 링크는 crm-unified-customers.ts 소스 스냅샷의 입력이기도 하다.
-    revalidateTag(ADMIN_CRM_UNIFIED_SNAPSHOT_CACHE_TAG, "max")
+    revalidateTag(ADMIN_CRM_UNIFIED_SNAPSHOT_CACHE_TAG, { expire: 0 })
 
     return NextResponse.json({ ok: true, link })
   } catch (error) {

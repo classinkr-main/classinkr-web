@@ -851,6 +851,13 @@ export default function ProductHWPage() {
                                 강사를 따라가는 현장 녹화도 남깁니다. 수업 중에 만든 자료가 수업 뒤 복습 콘텐츠와
                                 학부모 공유 자료로 이어집니다.
                             </p>
+                            <TrackedLink
+                                href="/product/recording"
+                                ctaId="hw_summary_recording"
+                                className="mt-3 inline-block text-caption font-semibold text-fg-accent underline underline-offset-4"
+                            >
+                                학원 수업 녹화 방식 보기
+                            </TrackedLink>
                             <ul className="mt-6 grid gap-3 text-sm font-semibold text-[#31302E] sm:grid-cols-3">
                                 <li className="rounded-[8px] bg-fg-accent/8 px-4 py-3 text-fg-accent">판서: PDF로 저장</li>
                                 <li className="rounded-[8px] bg-fg-accent/8 px-4 py-3 text-fg-accent">녹화: 추적 카메라 선택 구성</li>

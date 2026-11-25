@@ -2,12 +2,18 @@ import type { Metadata } from "next"
 
 import { ShareUnavailable } from "@/app/share/_components/ShareUnavailable"
 import QuoteDocumentPreview from "@/components/portal/quotes/QuoteDocumentPreview"
-import { getOutstandingAmount } from "@/lib/distributor-settlements"
-import { getDistributorSettlementByToken } from "@/lib/repositories/distributor-settlements"
+import { getOutstandingAmount, resolveDistributorDocumentTitle } from "@/lib/distributor-settlements"
+import {
+  areConfirmReviseColumnsKnownMissing,
+  getDistributorSettlementByToken,
+} from "@/lib/repositories/distributor-settlements"
 import { loadDistributorQuoteView } from "@/lib/server/distributor-settlement-issue"
+
+import DistributorConfirmPanel from "./DistributorConfirmPanel"
 
 // 총판용 견적서 공유 페이지(2026-10-23) — 고객 견적서와 같은 양식, 원가만 담는다.
 // 고객 단가·고객 합계는 싣지 않는다(총판 정산 줄만으로 다시 계산한 문서). 취소하면 토큰이 지워져 404 가 된다.
+// 총판은 이 페이지에서 [견적 확인]을 누른다(2026-11-24) — 확인 메일·사내 알림. 금액이 수정되면 다시 확인한다.
 
 export const dynamic = "force-dynamic"
 
@@ -42,6 +48,7 @@ export default async function SharedDistributorQuotePage({ params }: PageProps) 
   if (!view) return <ShareUnavailable variant="not_found" documentLabel="총판 견적서" />
 
   const documentNumber = `${view.document.quote_number}-D`
+  const documentTitle = resolveDistributorDocumentTitle(settlement, view.customerName, view.version.title)
   const dueDate = formatDate(settlement.dueDate)
   const outstanding = getOutstandingAmount(settlement)
 
@@ -54,7 +61,7 @@ export default async function SharedDistributorQuotePage({ params }: PageProps) 
             <span className="text-xs text-[#1a1a1a]/45">No. {documentNumber}</span>
           </div>
           <h1 className="mt-4 text-2xl font-semibold leading-snug text-[#1a1a1a] sm:text-3xl">
-            {view.customerName ? `${view.customerName} 건 하드웨어 공급` : view.version.title}
+            {documentTitle}
           </h1>
           <p className="mt-2 text-sm text-[#1a1a1a]/60">{settlement.distributorName} 귀중</p>
         </header>
@@ -77,7 +84,16 @@ export default async function SharedDistributorQuotePage({ params }: PageProps) 
           </div>
         </section>
 
-        <QuoteDocumentPreview quote={view.details} documentNumber={documentNumber} title={view.version.title} />
+        <DistributorConfirmPanel
+          token={token}
+          initialConfirmedAt={settlement.confirmedAt}
+          initialConfirmedByName={settlement.confirmedByName}
+          revisedAt={settlement.revisedAt}
+          hasEmail={Boolean(settlement.distributorEmail)}
+          available={!areConfirmReviseColumnsKnownMissing()}
+        />
+
+        <QuoteDocumentPreview quote={view.details} documentNumber={documentNumber} title={documentTitle} />
 
         <footer className="border-t border-black/8 bg-[#F6F5F4] px-6 py-5 text-center text-xs text-[#1a1a1a]/50 sm:px-10 print:hidden">
           이 문서는 하드웨어 총판 정산용으로 발급된 공유 링크입니다. 문의는 담당자에게 직접 회신해 주세요.

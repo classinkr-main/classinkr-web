@@ -1,7 +1,7 @@
 /**
  * 소스 링크 확정/해제/생성 라우트가 crm-unified-customers.ts 소스 스냅샷 태그도 SWR로
  * 무효화하는지 고정하는 정적 계약. 이 네 라우트는 이미 coverage/os-summary/revenue 태그를
- * revalidateTag(tag, "max")로 걸고 있었다(admin-performance-plan-2026-09-02.md §4.4) — 소스
+ * revalidateTag(tag, "max")로 걸고 있었다(2026-11-23부터 즉시 만료 { expire: 0 } — 다음 조회가 옛 값을 받지 않게)(admin-performance-plan-2026-09-02.md §4.4) — 소스
  * 링크 확정/해제/생성이 lib/repositories/crm-unified-customers.ts가 읽는
  * listConfirmedLeadCustomerLinks/listConfirmedLeadNeoLinkLeadIds의 입력이므로 같은 자리에
  * ADMIN_CRM_UNIFIED_SNAPSHOT_CACHE_TAG를 추가로 건다.
@@ -29,8 +29,8 @@ describe("소스 링크 뮤테이션 라우트 → admin-crm-unified-snapshot �
     expect(source).toContain("ADMIN_CRM_UNIFIED_SNAPSHOT_CACHE_TAG")
     expect(source).toContain('from "@/lib/admin/crm/cache-tags"')
 
-    const coverageCalls = source.match(/revalidateTag\(ADMIN_CRM_COVERAGE_CACHE_TAG, "max"\)/g) ?? []
-    const unifiedCalls = source.match(/revalidateTag\(ADMIN_CRM_UNIFIED_SNAPSHOT_CACHE_TAG, "max"\)/g) ?? []
+    const coverageCalls = source.match(/revalidateTag\(ADMIN_CRM_COVERAGE_CACHE_TAG, \{ expire: 0 \}\)/g) ?? []
+    const unifiedCalls = source.match(/revalidateTag\(ADMIN_CRM_UNIFIED_SNAPSHOT_CACHE_TAG, \{ expire: 0 \}\)/g) ?? []
 
     expect(coverageCalls.length).toBeGreaterThan(0)
     expect(unifiedCalls.length).toBe(coverageCalls.length)

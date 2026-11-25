@@ -1,21 +1,19 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
-import { AlertCircle, Loader2, Plus, RefreshCw, Trash2 } from "lucide-react"
+import { useCallback, useEffect, useState } from "react"
+import { AlertCircle, Loader2, Plus, Trash2 } from "lucide-react"
 
 import { adminFetchJson } from "@/lib/admin-client"
 import {
-  DISTRIBUTOR_ISSUE_REASON_LABELS,
-  DISTRIBUTOR_STATUS_LABELS,
-  getOutstandingAmount,
   isDistributorEligibleLine,
-  isSettlementOverdue,
+  type DistributorReceivablePayment,
   type DistributorPriceRule,
   type DistributorPriceTemplate,
 } from "@/lib/distributor-settlements"
 import type { DistributorReceivableRow } from "@/lib/repositories/distributor-settlements"
 import { STANDARD_QUOTE_TEMPLATES } from "@/lib/standard-quote-template"
 
+import DistributorReceivablesBoard from "./DistributorReceivablesBoard"
 import {
   DISTRIBUTOR_PRICE_TEMPLATES_API,
   DISTRIBUTOR_RECEIVABLES_API,
@@ -23,7 +21,6 @@ import {
   INPUT,
   LABEL,
   SOLID_BUTTON,
-  formatDateLabel,
   formatWon,
   parseWonInput,
   todayValue,
@@ -39,6 +36,10 @@ type ReceivablesPayload = {
   receivables: DistributorReceivableRow[]
   /** 검토 대기 — 설치 완료로 자동 준비된 정산·자동 발행 보류 건(발행 전). */
   reviews?: DistributorReceivableRow[]
+  /** 입금 기록(월별 흐름·최근 입금일용). */
+  payments?: DistributorReceivablePayment[]
+  /** 조회가 행 수 한도에 닿아 일부만 읽었다. */
+  truncated?: boolean
 }
 type TemplatesPayload = { available: boolean; warning: string | null; templates: DistributorPriceTemplate[] }
 
@@ -86,7 +87,6 @@ function openQuote(quoteId: string) {
 }
 
 export default function DistributorReceivablesPanel() {
-  const [includePaid, setIncludePaid] = useState(false)
   const [receivables, setReceivables] = useState<ReceivablesPayload | null>(null)
   const [templates, setTemplates] = useState<TemplatesPayload | null>(null)
   const [loading, setLoading] = useState(true)
@@ -100,7 +100,7 @@ export default function DistributorReceivablesPanel() {
     setError(null)
     try {
       const [nextReceivables, nextTemplates] = await Promise.all([
-        adminFetchJson<ReceivablesPayload>(`${DISTRIBUTOR_RECEIVABLES_API}${includePaid ? "?includePaid=1" : ""}`, { cache: "no-store" }),
+        adminFetchJson<ReceivablesPayload>(`${DISTRIBUTOR_RECEIVABLES_API}?includePaid=1`, { cache: "no-store" }),
         adminFetchJson<TemplatesPayload>(DISTRIBUTOR_PRICE_TEMPLATES_API, { cache: "no-store" }),
       ])
       setReceivables(nextReceivables)
@@ -110,25 +110,13 @@ export default function DistributorReceivablesPanel() {
     } finally {
       setLoading(false)
     }
-  }, [includePaid])
+  }, [])
 
   useEffect(() => {
     void load()
   }, [load])
 
   const today = todayValue()
-  const summary = useMemo(() => {
-    const rows = receivables?.receivables ?? []
-    const open = rows.filter((row) => getOutstandingAmount(row) > 0)
-    const overdue = open.filter((row) => isSettlementOverdue(row, today))
-    return {
-      openCount: open.length,
-      openAmount: open.reduce((sum, row) => sum + getOutstandingAmount(row), 0),
-      overdueCount: overdue.length,
-      overdueAmount: overdue.reduce((sum, row) => sum + getOutstandingAmount(row), 0),
-      paidAmount: rows.reduce((sum, row) => sum + row.paidAmount, 0),
-    }
-  }, [receivables, today])
 
   function patchRule(index: number, patch: Partial<RuleDraft>) {
     setTemplateDraft((current) =>
@@ -199,16 +187,6 @@ export default function DistributorReceivablesPanel() {
               C1 물량은 고객이 총액을 총판에게 내고, 총판이 회사가 미리 사 둔 원가를 회사로 입금합니다. 입금이 확인되면 매출 원장에 초안이 올라갑니다.
             </p>
           </div>
-          <div className="flex items-center gap-3">
-            <label className="flex items-center gap-1.5 text-[12.5px] text-[#31302E]">
-              <input type="checkbox" checked={includePaid} onChange={(e) => setIncludePaid(e.target.checked)} className="accent-[#084734]" />
-              입금 완료 포함
-            </label>
-            <button type="button" onClick={() => void load()} disabled={loading} className={GHOST_BUTTON}>
-              {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-              새로고침
-            </button>
-          </div>
         </div>
 
         {error ? (
@@ -220,110 +198,16 @@ export default function DistributorReceivablesPanel() {
           <p role="status" className="px-5 py-4 text-sm text-[#7A520F]">{warning}</p>
         ) : (
           <>
-            <dl className="grid grid-cols-2 gap-4 border-b border-[#e8e8e4] px-5 py-4 sm:grid-cols-3">
-              <div>
-                <dt className="text-[11.5px] font-semibold text-[#78736D]">받을 금액</dt>
-                <dd className="mt-1 text-xl font-bold tabular-nums text-[#111110]">{formatWon(summary.openAmount)}</dd>
-                <dd className="text-[11.5px] text-[#78736D]">{summary.openCount}건</dd>
-              </div>
-              <div>
-                <dt className="text-[11.5px] font-semibold text-[#78736D]">기한 경과</dt>
-                <dd className={`mt-1 text-xl font-bold tabular-nums ${summary.overdueCount > 0 ? "text-[#B43E3E]" : "text-[#111110]"}`}>
-                  {formatWon(summary.overdueAmount)}
-                </dd>
-                <dd className="text-[11.5px] text-[#78736D]">{summary.overdueCount}건</dd>
-              </div>
-              <div>
-                <dt className="text-[11.5px] font-semibold text-[#78736D]">입금된 금액(목록 기준)</dt>
-                <dd className="mt-1 text-xl font-bold tabular-nums text-[#084734]">{formatWon(summary.paidAmount)}</dd>
-              </div>
-            </dl>
-
-            {reviews.length > 0 && (
-              <div aria-label="검토 대기" className="border-b border-[#e8e8e4] bg-[#FFFBF2] px-5 py-3">
-                <p className="text-[12.5px] font-semibold text-[#7A520F]">
-                  검토 대기 {reviews.length}건 — 설치 완료로 자동 준비됐거나 자동 발행이 보류된 정산입니다. 확인 후 발행해 주세요.
-                </p>
-                <ul className="mt-1.5">
-                  {reviews.map((row) => (
-                    <li key={row.id} className="flex flex-wrap items-center justify-between gap-2 border-t border-[#F2E6CC] py-2 first:border-t-0">
-                      <span className="min-w-0 flex-1 text-[12.5px] text-[#31302E]">
-                        <span className="font-semibold">{row.customerName ?? "고객"}</span>
-                        <span className="text-[#78736D]"> · {row.quoteNumber ?? "견적"} · {row.fulfillmentMode}방식</span>
-                        <span className="mt-0.5 block text-[11.5px] text-[#615D59]">{row.reviewRequiredReason}</span>
-                      </span>
-                      <button type="button" onClick={() => openQuote(row.quoteDocumentId)} className={GHOST_BUTTON}>
-                        검토하기
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {loading && rows.length === 0 ? (
-              <p className="flex items-center gap-2 px-5 py-6 text-xs text-[#78736D]">
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                불러오는 중
-              </p>
-            ) : rows.length === 0 ? (
-              <p className="px-5 py-6 text-sm text-[#615D59]">
-                {includePaid ? "발행된 총판 견적서가 없습니다." : "받을 총판 입금이 없습니다."}
-              </p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[760px] text-[12.5px]">
-                  <thead>
-                    <tr className="border-b border-[#e8e8e4] text-left text-[11px] text-[#78736D]">
-                      <th className="px-5 py-2 font-semibold">견적</th>
-                      <th className="py-2 font-semibold">총판</th>
-                      <th className="py-2 font-semibold">발행</th>
-                      <th className="py-2 text-right font-semibold">청구</th>
-                      <th className="py-2 text-right font-semibold">입금</th>
-                      <th className="py-2 text-right font-semibold">남은 금액</th>
-                      <th className="px-5 py-2 text-right font-semibold">기한 · 상태</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.map((row) => {
-                      const overdue = isSettlementOverdue(row, today)
-                      const outstanding = getOutstandingAmount(row)
-                      return (
-                        <tr
-                          key={row.id}
-                          onClick={() => openQuote(row.quoteDocumentId)}
-                          className="cursor-pointer border-b border-[#f0f0ec] hover:bg-[#F6F5F4]"
-                        >
-                          <td className="px-5 py-2.5">
-                            <span className="block font-semibold text-[#111110]">{row.customerName ?? "고객 미상"}</span>
-                            <span className="font-mono text-[11px] text-[#78736D]">{row.quoteNumber ?? "—"}</span>
-                          </td>
-                          <td className="py-2.5 text-[#31302E]">{row.distributorName}</td>
-                          <td className="py-2.5 text-[#31302E]">
-                            {formatDateLabel(row.issuedAt) ?? "—"}
-                            {row.issueReason && (
-                              <span className="block text-[11px] text-[#78736D]">{DISTRIBUTOR_ISSUE_REASON_LABELS[row.issueReason]}</span>
-                            )}
-                          </td>
-                          <td className="py-2.5 text-right tabular-nums">{formatWon(row.totalAmount)}</td>
-                          <td className="py-2.5 text-right tabular-nums text-[#615D59]">{formatWon(row.paidAmount)}</td>
-                          <td className={`py-2.5 text-right font-semibold tabular-nums ${outstanding > 0 ? "text-[#111110]" : "text-[#084734]"}`}>
-                            {formatWon(outstanding)}
-                          </td>
-                          <td className="px-5 py-2.5 text-right">
-                            <span className={`block ${overdue ? "font-semibold text-[#B43E3E]" : "text-[#31302E]"}`}>
-                              {row.dueDate ?? "기한 없음"}
-                              {overdue ? " · 경과" : ""}
-                            </span>
-                            <span className="text-[11px] text-[#78736D]">{DISTRIBUTOR_STATUS_LABELS[row.status]}</span>
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
+            <DistributorReceivablesBoard
+              rows={rows}
+              payments={receivables?.payments ?? []}
+              reviews={reviews}
+              truncated={receivables?.truncated ?? false}
+              today={today}
+              loading={loading}
+              onRefresh={() => void load()}
+              onOpenQuote={openQuote}
+            />
           </>
         )}
       </section>

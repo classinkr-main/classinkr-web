@@ -5,6 +5,7 @@ import Link from "next/link"
 import {
   AlertCircle,
   ArrowRight,
+  Check,
   CheckCircle2,
   Download,
   FileSpreadsheet,
@@ -12,14 +13,23 @@ import {
   Loader2,
   PencilLine,
   RefreshCw,
+  RotateCcw,
   Search,
   Sparkles,
+  X,
 } from "lucide-react"
 
 import { adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
 import { StatTile } from "@/components/admin/viz"
 import { postBranchSync } from "@/components/admin/branch/client-api"
 import { SyncOutcomeNotice } from "@/components/admin/branch/SyncOutcomeNotice"
+import { SourceLinkUndoNotice } from "@/components/admin/crm/matching/SourceLinkUndoNotice"
+import { useSourceLinkActions } from "@/components/admin/crm/matching/useSourceLinkActions"
+import {
+  isSourceLinkActionable,
+  isSourceLinkRevertible,
+  type SourceLinkAction,
+} from "@/lib/crm/source-link-actions"
 import { describeSyncOutcome, type SyncOutcomeNotice as SyncOutcomeNoticeValue } from "@/lib/admin/sync-outcome"
 import { SESSION_CRM_STAFF_ROLES, SESSION_SHEET_SYNC_ROLES, sessionRoleIn } from "@/lib/admin/session-role"
 import {
@@ -30,6 +40,7 @@ import {
   formatPendingTransition,
   isRevenueSheetSyncStale,
   parseRevenueSheetUrlState,
+  recountRevenueSheetLinkSummary,
   serializeRevenueSheetUrlState,
   type RevenueSheetStatusFilter,
 } from "@/lib/crm/revenue-sheet-view"
@@ -287,6 +298,10 @@ export default function AdminCrmRevenueSheetPage() {
   // 눌러도 403만 날 버튼은 미리 숨긴다(S-5) — 보안 경계가 아니라 표시 판정이다(서버가 다시 검사한다).
   const [canSync, setCanSync] = useState(false)
   const [canGenerateLinks, setCanGenerateLinks] = useState(false)
+  // P2 — 행에서 바로 확정·제외(+일괄). 서버 PATCH /api/admin/crm/source-links/*의 CRM_STAFF_ADMIN_API_ROLES와
+  // 같은 묶음(SESSION_CRM_STAFF_ROLES)일 때만 버튼을 보인다 — 아니면 예전처럼 매칭 인박스 링크만.
+  const [canEditLinks, setCanEditLinks] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
   // 표시 상한 — "더 보기"로 늘린다(필터가 바뀌면 처음 상한으로).
   const [visibleLimit, setVisibleLimit] = useState(MAX_VISIBLE_ROWS)
   const [mobileVisibleLimit, setMobileVisibleLimit] = useState(MOBILE_VISIBLE_ROWS)
@@ -296,6 +311,7 @@ export default function AdminCrmRevenueSheetPage() {
   useEffect(() => {
     setCanSync(sessionRoleIn(SESSION_SHEET_SYNC_ROLES))
     setCanGenerateLinks(sessionRoleIn(SESSION_CRM_STAFF_ROLES))
+    setCanEditLinks(sessionRoleIn(SESSION_CRM_STAFF_ROLES))
   }, [])
 
   // 필터 URL 보존(S-9) — 새로고침·링크 공유·뒤로가기에서 검색어·상태·팀이 유지된다. 복원은 마운트 1회,
@@ -319,6 +335,8 @@ export default function AdminCrmRevenueSheetPage() {
   useEffect(() => {
     setVisibleLimit(MAX_VISIBLE_ROWS)
     setMobileVisibleLimit(MOBILE_VISIBLE_ROWS)
+    // 보이지 않게 된 행이 선택에 남아 일괄 처리되지 않게 필터가 바뀌면 선택을 비운다.
+    setSelectedIds(new Set())
   }, [query, statusFilter, teamFilter])
 
   // 기준 시각 상대 표기("N분 전")가 멈춰 보이지 않게 1분마다 갱신한다.
@@ -385,6 +403,89 @@ export default function AdminCrmRevenueSheetPage() {
     }
   }, [load])
 
+  // 실패·결과 문구에 쓸 링크 id → 고객명.
+  const rowLabelByLinkId = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const row of data?.rows ?? []) {
+      if (row.linkId) map.set(row.linkId, row.customerName)
+    }
+    return map
+  }, [data?.rows])
+
+  // P2 — 확정·제외·되돌리기는 매칭 인박스와 같은 훅(useSourceLinkActions)·같은 서버 경로다.
+  // 낙관적으로 행을 먼저 바꾸고 요약 링크 수치도 그 차이만큼 고친다(recountRevenueSheetLinkSummary).
+  // 전체 재조회는 하지 않는다 — 서버 60초 캐시가 직후엔 옛 링크 상태를 돌려줘 방금 바꾼 행을 덮을 수 있다.
+  const {
+    pendingLinkIds,
+    bulkPending,
+    updateSourceLink: runSourceLinkAction,
+    bulkUpdate: runBulkSourceLinkAction,
+    undo,
+    undoLast,
+    dismissUndo,
+  } = useSourceLinkActions<AdminCrmRevenueSheetRow>({
+    updateRows: (updater) =>
+      setData((current) => {
+        if (!current) return current
+        const rows = updater(current.rows)
+        return { ...current, rows, summary: recountRevenueSheetLinkSummary(current.summary, current.rows, rows) }
+      }),
+    patchRow: (row, status) => ({ ...row, linkStatus: status }),
+    onApplied: (ids) =>
+      setSelectedIds((current) => {
+        if (!ids.some((id) => current.has(id))) return current
+        const next = new Set(current)
+        for (const id of ids) next.delete(id)
+        return next
+      }),
+    labelOf: (linkId) => rowLabelByLinkId.get(linkId),
+  })
+
+  const updateSourceLink = useCallback(
+    async (linkId: string, action: SourceLinkAction) => {
+      setError(null)
+      setNotice(null)
+      const run = await runSourceLinkAction(linkId, action)
+      if (run && !run.ok) setError(run.error)
+    },
+    [runSourceLinkAction]
+  )
+
+  const bulkUpdate = useCallback(
+    async (action: "confirm" | "reject") => {
+      const ids = Array.from(selectedIds)
+      if (ids.length === 0) return
+      setError(null)
+      setNotice(null)
+      const run = await runBulkSourceLinkAction(ids, action)
+      if (!run) return
+      if (!run.ok) {
+        setError(run.error)
+        return
+      }
+      // 실패·미처리가 있을 때만 결과 줄을 띄운다 — 전부 성공이면 되돌리기 줄 하나로 충분하다.
+      if (run.result.failed.length > 0 || (run.result.skipped ?? 0) > 0) {
+        setNotice({ tone: "warning", message: run.message ?? "" })
+      }
+    },
+    [runBulkSourceLinkAction, selectedIds]
+  )
+
+  const undoSourceLink = useCallback(async () => {
+    setError(null)
+    const run = await undoLast()
+    if (run && !run.ok) setError(run.error)
+  }, [undoLast])
+
+  const toggleSelect = useCallback((linkId: string) => {
+    setSelectedIds((current) => {
+      const next = new Set(current)
+      if (next.has(linkId)) next.delete(linkId)
+      else next.add(linkId)
+      return next
+    })
+  }, [])
+
   const teams = useMemo(() => {
     const values = new Set((data?.rows ?? []).map((row) => row.team?.trim()).filter((value): value is string => Boolean(value)))
     return Array.from(values).sort((a, b) => a.localeCompare(b, "ko"))
@@ -420,6 +521,25 @@ export default function AdminCrmRevenueSheetPage() {
       })
   }, [data?.rows, query, statusFilter, teamFilter])
 
+  // 일괄 선택 대상 — 데스크톱 표에 실제로 보이는 행 중 후보·재검수(링크 있음)만. 숨은 행은 고르지 않는다.
+  const selectableRows = useMemo(
+    () => visibleRows.slice(0, visibleLimit).filter((row) => isSourceLinkActionable(row)),
+    [visibleLimit, visibleRows]
+  )
+  const allSelected = selectableRows.length > 0 && selectableRows.every((row) => selectedIds.has(row.linkId as string))
+  const toggleSelectAll = useCallback(() => {
+    setSelectedIds((current) => {
+      if (selectableRows.length === 0) return current
+      const next = new Set(current)
+      const everySelected = selectableRows.every((row) => next.has(row.linkId as string))
+      for (const row of selectableRows) {
+        if (everySelected) next.delete(row.linkId as string)
+        else next.add(row.linkId as string)
+      }
+      return next
+    })
+  }, [selectableRows])
+
   const exportCsv = useCallback(() => {
     if (visibleRows.length === 0) return
     downloadCsvFile(`매출시트_REV_${fileDateStamp()}.csv`, toCsv(buildRevenueSheetCsvRows(visibleRows)))
@@ -439,11 +559,99 @@ export default function AdminCrmRevenueSheetPage() {
     return Math.max(1, ...values)
   }, [data?.monthly])
 
+  // 행 연결 작업 — 데스크톱 표 셀과 <sm 카드가 같은 마크업·핸들러를 쓴다.
+  // 권한자: 후보·재검수 행은 ✓확정/✕제외 한 번, 확정·제외 행은 되돌리기(→재검수). 미매칭·다른 대상은 인박스로.
+  const renderLinkActions = (row: AdminCrmRevenueSheetRow) => {
+    const inboxHref = `/admin/crm/matching?name=${encodeURIComponent(row.customerName)}`
+    if (canEditLinks && row.linkId && isSourceLinkActionable(row)) {
+      const linkId = row.linkId
+      const pending = pendingLinkIds.has(linkId)
+      return (
+        <div className="flex flex-wrap items-center justify-end gap-1.5">
+          <button
+            type="button"
+            onClick={() => void updateSourceLink(linkId, "confirm")}
+            disabled={pending}
+            title={`${getTargetLabel(row)}(으)로 연결을 확정합니다`}
+            aria-label={`${row.customerName} 연결 확정`}
+            className="inline-flex h-8 items-center gap-1 rounded-lg border border-[#D7EBDD] bg-[#ECFDF5] px-2 text-[11px] font-semibold text-[#084734] transition-colors hover:bg-[#D7EBDD] disabled:opacity-50"
+          >
+            {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+            확정
+          </button>
+          <button
+            type="button"
+            onClick={() => void updateSourceLink(linkId, "reject")}
+            disabled={pending}
+            title="이 후보를 제외합니다 — 되돌리면 재검수로 돌아옵니다"
+            aria-label={`${row.customerName} 후보 제외`}
+            className="inline-flex h-8 items-center gap-1 rounded-lg border border-[#F6D5C5] bg-[#FEF3EE] px-2 text-[11px] font-semibold text-[#B85C33] transition-colors hover:bg-[#FBE8DD] disabled:opacity-50"
+          >
+            <X className="h-3.5 w-3.5" />
+            제외
+          </button>
+          <Link
+            href={inboxHref}
+            title="다른 대상으로 연결하려면 매칭 인박스에서 검색합니다"
+            className="text-[11px] font-semibold text-[#1a1a1a]/45 hover:underline"
+          >
+            다른 대상
+          </Link>
+        </div>
+      )
+    }
+    if (canEditLinks && row.linkId && isSourceLinkRevertible(row)) {
+      const linkId = row.linkId
+      const pending = pendingLinkIds.has(linkId)
+      return (
+        <div className="flex flex-wrap items-center justify-end gap-1.5">
+          {row.linkStatus === "confirmed" ? (
+            <CheckCircle2 className="h-4 w-4 text-[#084734]" aria-label="CRM 연결 확정" />
+          ) : null}
+          <button
+            type="button"
+            onClick={() => void updateSourceLink(linkId, "stale")}
+            disabled={pending}
+            title={row.linkStatus === "rejected" ? "제외를 되돌리고 재검수로 보냅니다" : "확정을 되돌리고 재검수로 보냅니다"}
+            className="inline-flex h-8 items-center gap-1 rounded-lg border border-[#ECD29C] bg-[#FBF1E0] px-2 text-[11px] font-semibold text-[#7A520F] transition-colors hover:bg-[#ECD29C] disabled:opacity-50"
+          >
+            {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
+            되돌리기
+          </button>
+        </div>
+      )
+    }
+    if (row.linkStatus === "confirmed") {
+      return <CheckCircle2 className="h-4 w-4 text-[#084734]" aria-label="CRM 연결 확정" />
+    }
+    return (
+      <Link
+        // 행 고객명을 인박스 이름 필터로 프리필 — 이탈+재검색 없는 핸드오프(CRM-1).
+        href={inboxHref}
+        className="text-[11px] font-semibold text-[#084734] hover:underline"
+      >
+        연결하기
+      </Link>
+    )
+  }
+
+  // 데스크톱 표 열 수 — 권한자에게만 선택 칸이 붙는다(빈 상태 행 colSpan이 따라간다).
+  const columnCount = canEditLinks ? 12 : 11
+
   return (
     <div className="[&_button]:min-h-11 [&_button]:min-w-11 [&_button]:focus-visible:outline-none [&_button]:focus-visible:ring-2 [&_button]:focus-visible:ring-[#084734] [&_input:not([type=checkbox]):not([type=file])]:min-h-11 [&_input:not([type=checkbox]):not([type=file])]:focus-visible:outline-none [&_input:not([type=checkbox]):not([type=file])]:focus-visible:ring-2 [&_input:not([type=checkbox]):not([type=file])]:focus-visible:ring-[#084734] [&_section_a]:inline-flex [&_section_a]:min-h-11 [&_section_a]:min-w-11 [&_section_a]:items-center [&_section_a]:focus-visible:outline-none [&_section_a]:focus-visible:ring-2 [&_section_a]:focus-visible:ring-[#084734] [&_select]:min-h-11 [&_select]:focus-visible:outline-none [&_select]:focus-visible:ring-2 [&_select]:focus-visible:ring-[#084734] sm:[&_button]:min-h-0 sm:[&_button]:min-w-0 sm:[&_input:not([type=checkbox]):not([type=file])]:min-h-0 sm:[&_section_a]:min-h-0 sm:[&_section_a]:min-w-0 sm:[&_select]:min-h-0">
-      {/* 역할 배너 — 매출시트 = REV 분석·검수 READ 표면, 링크 확정 액션은 매칭 인박스(CRM-1 역할 확정) */}
+      {/* 역할 배너 — 매출시트 = REV 분석·검수 표면. P2부터 후보 링크 확정·제외는 권한자가 행에서 바로,
+          미매칭 행의 대상 검색·수동 연결은 여전히 매칭 인박스(CRM-1). 금액 입력은 장부. */}
       <p className="mb-4 border-b border-[#f0f0ec] pb-3 text-[12px] text-[#1a1a1a]/45">
-        <span className="font-semibold text-[#111110]">분석·검수 전용</span> — 링크 확정은{" "}
+        {canEditLinks ? (
+          <>
+            <span className="font-semibold text-[#111110]">분석·검수</span> — 후보 연결은 행에서 바로 확정·제외, 대상 검색·수동 연결은{" "}
+          </>
+        ) : (
+          <>
+            <span className="font-semibold text-[#111110]">분석·검수 전용</span> — 링크 확정은{" "}
+          </>
+        )}
         <Link href="/admin/crm/matching" className="inline-flex min-h-11 items-center font-semibold text-[#084734] underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] sm:min-h-0">
           매칭 인박스 ↗
         </Link>
@@ -512,6 +720,13 @@ export default function AdminCrmRevenueSheetPage() {
       </div>
 
       <SyncOutcomeNotice notice={notice} onDismiss={() => setNotice(null)} className="mb-6" />
+      <SourceLinkUndoNotice
+        undo={undo}
+        busy={undo ? undo.ids.some((id) => pendingLinkIds.has(id)) : false}
+        onUndo={() => void undoSourceLink()}
+        onDismiss={dismissUndo}
+        className="mb-6"
+      />
       {error ? <div role="alert" className="mb-6 border-l-2 border-[#F6D5C5] pl-3 text-[13px] text-[#B85C33]">{error}</div> : null}
 
       {(data?.warnings.length ?? 0) > 0 ? (
@@ -630,7 +845,9 @@ export default function AdminCrmRevenueSheetPage() {
           <div>
             <h2 className="text-[14px] font-semibold text-[#111110]">REV 행 운영 테이블</h2>
             <p className="mt-1 text-[12px] text-[#1a1a1a]/42">
-              행 이동·고객명 불일치가 있는 동안은 매칭 인박스에서 확정 후 CRM/통계와 연결합니다.
+              {canEditLinks
+                ? "후보 연결은 행에서 바로 확정·제외(여러 건은 선택 후 일괄), 미매칭·다른 대상은 매칭 인박스에서 연결합니다."
+                : "행 이동·고객명 불일치가 있는 동안은 매칭 인박스에서 확정 후 CRM/통계와 연결합니다."}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -701,6 +918,38 @@ export default function AdminCrmRevenueSheetPage() {
           </Link>
         </div>
 
+        {/* P2 일괄 확정·제외 — 권한자에게만. 선택은 표에 보이는 후보·재검수 행만 받는다. */}
+        {canEditLinks && (selectableRows.length > 0 || selectedIds.size > 0) ? (
+          <div className="mb-4 flex flex-wrap items-center gap-2" aria-busy={bulkPending}>
+            <button
+              type="button"
+              onClick={toggleSelectAll}
+              disabled={bulkPending || selectableRows.length === 0}
+              className="inline-flex h-8 items-center rounded-lg border border-[#e8e8e4] bg-white px-2.5 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2] disabled:opacity-50"
+            >
+              {allSelected ? "선택 해제" : `보이는 후보 ${formatNumber(selectableRows.length)}건 선택`}
+            </button>
+            <button
+              type="button"
+              onClick={() => void bulkUpdate("confirm")}
+              disabled={bulkPending || selectedIds.size === 0}
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#D7EBDD] bg-[#ECFDF5] px-2.5 text-[12px] font-semibold text-[#084734] transition-colors hover:bg-[#D7EBDD] disabled:opacity-50"
+            >
+              {bulkPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+              선택 {formatNumber(selectedIds.size)}건 확정
+            </button>
+            <button
+              type="button"
+              onClick={() => void bulkUpdate("reject")}
+              disabled={bulkPending || selectedIds.size === 0}
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#F6D5C5] bg-[#FEF3EE] px-2.5 text-[12px] font-semibold text-[#B85C33] transition-colors hover:bg-[#FBE8DD] disabled:opacity-50"
+            >
+              <X className="h-3.5 w-3.5" />
+              선택 {formatNumber(selectedIds.size)}건 제외
+            </button>
+          </div>
+        ) : null}
+
         {/* <sm 카드 폴백(W2-6·CRM-9) — risk 정렬 그대로 상위 필드(고객/상태/금액/링크상태)를 카드 행으로.
             동일 visibleRows·포매터·딥링크 소비라 기능 손실 0, 넓은 표는 데스크톱 전용. */}
         <div className="space-y-2 sm:hidden">
@@ -717,7 +966,18 @@ export default function AdminCrmRevenueSheetPage() {
             visibleRows.slice(0, mobileVisibleLimit).map((row) => (
               <div key={row.id} className="rounded-xl border border-[#e8e8e4] bg-white p-3">
                 <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
+                  {canEditLinks && row.linkId && isSourceLinkActionable(row) ? (
+                    <label className="-ml-1 inline-flex min-h-11 min-w-11 shrink-0 cursor-pointer items-center justify-center rounded-lg focus-within:ring-2 focus-within:ring-[#084734]">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(row.linkId)}
+                        onChange={() => toggleSelect(row.linkId as string)}
+                        aria-label={`${row.customerName} 선택`}
+                        className="h-4 w-4 accent-[#084734]"
+                      />
+                    </label>
+                  ) : null}
+                  <div className="min-w-0 flex-1">
                     <p className="line-clamp-2 text-[13px] font-semibold text-[#111110]">{row.customerName}</p>
                     <p className="mt-0.5 text-[11px] text-[#1a1a1a]/40">
                       #{row.sheetRow}
@@ -762,19 +1022,13 @@ export default function AdminCrmRevenueSheetPage() {
                   </p>
                 ) : null}
                 <div className="mt-2 flex items-center justify-between gap-2 border-t border-[#f0f0ec] pt-2">
-                  {row.linkStatus === "confirmed" ? (
+                  {row.linkStatus === "confirmed" && !(canEditLinks && row.linkId) ? (
                     <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#084734]">
                       <CheckCircle2 className="h-3.5 w-3.5" />
                       연결 확정
                     </span>
                   ) : (
-                    <Link
-                      // 행 고객명을 인박스 이름 필터로 프리필 — 이탈+재검색 없는 핸드오프(CRM-1).
-                      href={`/admin/crm/matching?name=${encodeURIComponent(row.customerName)}`}
-                      className="text-[11px] font-semibold text-[#084734] hover:underline"
-                    >
-                      연결하기
-                    </Link>
+                    renderLinkActions(row)
                   )}
                   {/* 입력이 필요하면 장부의 이 행으로(라운드 4 P2-10) — 매출시트는 읽기 표면이라 금액 입력을 두지 않는다. */}
                   <Link
@@ -810,6 +1064,18 @@ export default function AdminCrmRevenueSheetPage() {
           <table className="min-w-[1320px] w-full text-left">
             <thead className="text-[11px] uppercase tracking-[0.12em] text-[#1a1a1a]/35">
               <tr>
+                {canEditLinks ? (
+                  <th className="w-10 py-3 pr-2 font-semibold">
+                    <input
+                      type="checkbox"
+                      checked={allSelected}
+                      onChange={toggleSelectAll}
+                      disabled={selectableRows.length === 0 || bulkPending}
+                      aria-label="보이는 후보 행 모두 선택"
+                      className="h-4 w-4 accent-[#084734]"
+                    />
+                  </th>
+                ) : null}
                 <th className="py-3 pr-4 font-semibold">행</th>
                 <th className="py-3 pr-4 font-semibold">고객 / 담당</th>
                 <th className="py-3 pr-4 font-semibold">상태</th>
@@ -826,20 +1092,33 @@ export default function AdminCrmRevenueSheetPage() {
             <tbody className="divide-y divide-[#f0f0ec]">
               {loading && !data ? (
                 <tr>
-                  <td colSpan={11} className="py-16 text-center text-[13px] text-[#1a1a1a]/35">
+                  <td colSpan={columnCount} className="py-16 text-center text-[13px] text-[#1a1a1a]/35">
                     <Loader2 className="mr-2 inline h-4 w-4 animate-spin" />
                     매출시트를 불러오는 중입니다.
                   </td>
                 </tr>
               ) : visibleRows.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="py-16 text-center text-[13px] text-[#1a1a1a]/35">
+                  <td colSpan={columnCount} className="py-16 text-center text-[13px] text-[#1a1a1a]/35">
                     표시할 REV 행이 없습니다.
                   </td>
                 </tr>
               ) : (
                 visibleRows.slice(0, visibleLimit).map((row) => (
                   <tr key={row.id} className="align-top">
+                    {canEditLinks ? (
+                      <td className="py-4 pr-2">
+                        {row.linkId && isSourceLinkActionable(row) ? (
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.has(row.linkId)}
+                            onChange={() => toggleSelect(row.linkId as string)}
+                            aria-label={`${row.customerName} 선택`}
+                            className="h-4 w-4 accent-[#084734]"
+                          />
+                        ) : null}
+                      </td>
+                    ) : null}
                     <td className="py-4 pr-4">
                       <p className="text-[12px] font-semibold text-[#111110]">#{row.sheetRow}</p>
                       {row.placeholder ? <p className="mt-1 text-[10.5px] font-semibold text-[#B85C33]">임시명</p> : null}
@@ -874,17 +1153,7 @@ export default function AdminCrmRevenueSheetPage() {
                     </td>
                     <td className="py-4 text-right">
                       <div className="flex flex-col items-end gap-1.5">
-                        {row.linkStatus === "confirmed" ? (
-                          <CheckCircle2 className="h-4 w-4 text-[#084734]" aria-label="CRM 연결 확정" />
-                        ) : (
-                          <Link
-                            // 행 고객명을 인박스 이름 필터로 프리필 — 이탈+재검색 없는 핸드오프(CRM-1).
-                            href={`/admin/crm/matching?name=${encodeURIComponent(row.customerName)}`}
-                            className="text-[11px] font-semibold text-[#084734] hover:underline"
-                          >
-                            연결하기
-                          </Link>
-                        )}
+                        {renderLinkActions(row)}
                         {/* 입력이 필요하면 장부의 이 행으로(라운드 4 P2-10) — 당월·REV 렌즈·고객명 검색으로 착지. */}
                         <Link
                           href={buildLedgerEntryHref(row, ledgerMonth)}

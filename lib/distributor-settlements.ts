@@ -1,9 +1,12 @@
-import type { PartnerQuoteDetailsInput, PartnerQuoteLineItemInput } from "@/lib/partners-types"
+import { formatKRW } from "@/lib/format"
+import type { PartnerQuoteDetailsInput, PartnerQuoteLineItemInput, QuoteDiscountInput } from "@/lib/partners-types"
 import { readAutomaticQuoteNotes, readQuoteGeneralNotes, writeQuoteGeneralNotes } from "@/lib/quote-composer-notes"
 import {
   CLASSIN_QUOTE_SUPPLIER,
   STANDARD_QUOTE_SUPPLIER,
   finalizeStandardQuoteDetails,
+  normalizeQuoteDiscount,
+  resolveQuoteDiscountAmount,
 } from "@/lib/standard-quote-template"
 
 // 총판 정산(2026-10-23) — 고객 견적 1장에 붙는 '총판용 견적서'와 미수금의 순수 규칙.
@@ -54,6 +57,30 @@ export const DEFAULT_HARDWARE_DISTRIBUTOR = {
   distributorPhone: STANDARD_QUOTE_SUPPLIER.contactPhone,
 } as const
 
+/**
+ * FY2026 채널 유통 가격 정책표의 ClassIn KR → 퀴드러닝 채널공급가(VAT 포함, = 수입원가 + 물류 + 통관 + 창고).
+ * 고객 견적 작성기에서 총판 견적서 초안을 같이 만들 때의 기본 원가다. 구간은 줄 수량 기준(pickTemplateUnitPrice).
+ * 2~10대는 정책표상 1대와 같은 값이라 1·11·21 세 구간만 둔다. 50대 초과는 21~50 구간 값을 그대로 쓴다.
+ * 정책표에 없는 품목(벽걸이·설치·교육)은 원가가 비어 발행 전 사람이 채운다.
+ * 기획: docs/active/distributor-quote-with-customer-quote-plan-2026-11-20.md
+ */
+export const FY2026_CHANNEL_SUPPLY_PRICE_RULES: readonly DistributorPriceRule[] = [
+  ...tierRules("board-86", '전자칠판 86"', [4_870_000, 4_670_000, 4_500_000]),
+  ...tierRules("board-75", '전자칠판 75"', [4_200_000, 4_000_000, 3_850_000]),
+  ...tierRules("camera-t1", "T1 카메라", [840_000, 800_000, 800_000]),
+  ...tierRules("stand", "이동형 스탠드", [270_000, 250_000, 250_000]),
+  ...tierRules("ai-studio-recording-set", '녹화 세트 86" (OMO)', [6_210_000, 5_970_000, 5_800_000]),
+  ...tierRules("ai-studio-recording-set-75", '녹화 세트 75" (OMO)', [5_540_000, 5_300_000, 5_150_000]),
+]
+
+function tierRules(itemCode: string, itemName: string, [one, eleven, twentyOne]: [number, number, number]) {
+  return [
+    { itemCode, itemName, minQuantity: 1, unitPrice: one },
+    { itemCode, itemName, minQuantity: 11, unitPrice: eleven },
+    { itemCode, itemName, minQuantity: 21, unitPrice: twentyOne },
+  ]
+}
+
 export const DISTRIBUTOR_SETTLEMENT_TRIGGERS = ["on_accept", "on_install", "manual"] as const
 export type DistributorSettlementTrigger = (typeof DISTRIBUTOR_SETTLEMENT_TRIGGERS)[number]
 
@@ -98,6 +125,10 @@ export interface DistributorSettlementLine {
   /** 원가. 포함 품목인데 null 이면 아직 금액을 정하지 않은 것이다. */
   unitPrice: number | null
   included: boolean
+  /** 총판 문서에만 찍을 품목 이름(고객 견적 이름을 바꿔 쓸 때). 비우면 itemName. */
+  displayName?: string
+  /** 총판 문서에만 찍을 세부내역. 비우면 itemDescription. */
+  displayDescription?: string
 }
 
 export interface DistributorPriceRule {
@@ -117,7 +148,10 @@ export interface DistributorPriceTemplate {
 }
 
 export interface DistributorSettlementTotals {
+  /** 포함 품목 공급가 합계(할인 전). */
   subtotalAmount: number
+  /** 총판 견적서 할인(원). 공급가 합계를 넘지 않는다. */
+  discountAmount: number
   vatAmount: number
   totalAmount: number
   /** 포함 품목 중 원가가 비어 있는 품목 수. 0 이어야 발행할 수 있다. */
@@ -159,6 +193,18 @@ export interface DistributorSettlementRecord {
   cancelledAt: string | null
   /** H방식 설치 완료 시각(= 매출 인식 시점). */
   installedAt: string | null
+  /** 총판이 공유 링크에서 "확인"을 누른 시각. 발행 후 금액을 고치면 null 로 돌아간다(마이그레이션 미적용이면 늘 null). */
+  confirmedAt: string | null
+  /** 확인을 누른 총판 담당자 이름(선택 입력). */
+  confirmedByName: string | null
+  /** 발행 뒤 금액을 마지막으로 고친 시각. */
+  revisedAt: string | null
+  /** 총판 견적서 할인(고객 견적 할인과 별개). null 이면 할인 없음. */
+  discount: QuoteDiscountInput | null
+  /** 총판 견적서 제목(공유 페이지 큰 제목·문서 제목). null 이면 "{고객사} 건 하드웨어 공급". */
+  documentTitle: string | null
+  /** 총판 견적서 기타사항. null 이면 고객 견적의 기타사항을 그대로 쓴다. 빈 문자열이면 기타사항을 비운다. */
+  generalNotes: string | null
   createdAt: string
   updatedAt: string
 }
@@ -171,6 +217,17 @@ export interface DistributorSettlementPayment {
   memo: string | null
   createdBy: string | null
   createdAt: string
+}
+
+/**
+ * 총판 미수금 목록에 함께 싣는 입금 요약(금액·입금일만). 메모·기록자는 견적 상세에서만 본다.
+ * 최근 입금일·월별 입금 흐름 계산에 쓴다(lib/distributor-receivables-view.ts).
+ */
+export interface DistributorReceivablePayment {
+  settlementId: string
+  amount: number
+  /** 입금일 YYYY-MM-DD. */
+  paidOn: string
 }
 
 /* ─── 대상 품목 · 단가 ───────────────────────────────────── */
@@ -222,7 +279,7 @@ export function buildDistributorLinesFromQuote(
     if (itemCode) codeCounts.set(itemCode, (codeCounts.get(itemCode) ?? 0) + 1)
   }
 
-  return billable.map((line, index) => {
+  const fromQuote = billable.map((line, index) => {
     const sourceLineNumber = line.lineNumber ?? index + 1
     const quantity = Math.max(0, Math.round(Number(line.quantity ?? 0)))
     const prior = previous.get(lineKey(sourceLineNumber, line.itemCode)) ??
@@ -239,8 +296,22 @@ export function buildDistributorLinesFromQuote(
       customerUnitPrice: typeof line.unitPrice === "number" ? line.unitPrice : null,
       unitPrice: prior ? prior.unitPrice : templatePrice,
       included: prior ? prior.included : isDistributorEligibleLine(line),
+      // 총판 문서에만 고쳐 쓴 이름·세부내역은 고객 견적이 바뀌어도 이어받는다.
+      ...(prior?.displayName ? { displayName: prior.displayName } : {}),
+      ...(prior?.displayDescription ? { displayDescription: prior.displayDescription } : {}),
     }
   })
+  // 어드민이 직접 추가한 줄(고객 견적에 없는 배송비·추가 장비·조정 금액 등)은 고객 견적이 바뀌어도 그대로 뒤에 붙인다.
+  const custom = (options.previous ?? []).filter(isCustomDistributorLine)
+  return [...fromQuote, ...custom].slice(0, MAX_DISTRIBUTOR_LINES)
+}
+
+/** 고객 견적 품목 번호는 1부터 — 0 은 어드민이 총판 견적서에 직접 추가한 줄이다. */
+export const CUSTOM_LINE_SOURCE_NUMBER = 0
+export const MAX_DISTRIBUTOR_LINES = 60
+
+export function isCustomDistributorLine(line: Pick<DistributorSettlementLine, "sourceLineNumber">) {
+  return line.sourceLineNumber === CUSTOM_LINE_SOURCE_NUMBER
 }
 
 function lineKey(lineNumber: number, itemCode?: string) {
@@ -259,9 +330,14 @@ export function applyPriceTemplate(
   })
 }
 
+/**
+ * 총판 합계. 할인·부가세 계산은 고객 견적서 양식(calculateStandardQuoteTotals)과 같다 —
+ * 할인은 공급가 합계에서 빼고, 부가세(VAT 별도)는 할인 뒤 공급가에 붙는다. 그래야 문서 총액과 입금 요청 금액이 같다.
+ */
 export function computeDistributorTotals(
   lines: readonly DistributorSettlementLine[],
-  vatIncluded: boolean
+  vatIncluded: boolean,
+  discount?: QuoteDiscountInput | null
 ): DistributorSettlementTotals {
   let subtotalAmount = 0
   let missingPriceCount = 0
@@ -275,8 +351,17 @@ export function computeDistributorTotals(
     }
     subtotalAmount += Math.max(0, Math.round(line.quantity * line.unitPrice))
   }
-  const vatAmount = vatIncluded ? 0 : Math.round(subtotalAmount * 0.1)
-  return { subtotalAmount, vatAmount, totalAmount: subtotalAmount + vatAmount, missingPriceCount, includedCount }
+  const discountAmount = resolveQuoteDiscountAmount(subtotalAmount, discount)
+  const discountedSupplyAmount = subtotalAmount - discountAmount
+  const vatAmount = vatIncluded ? 0 : Math.round(discountedSupplyAmount * 0.1)
+  return {
+    subtotalAmount,
+    discountAmount,
+    vatAmount,
+    totalAmount: discountedSupplyAmount + vatAmount,
+    missingPriceCount,
+    includedCount,
+  }
 }
 
 /** 발행할 수 없는 이유. null 이면 발행 가능. */
@@ -284,13 +369,43 @@ export function getDistributorIssueBlocker(input: {
   lines: readonly DistributorSettlementLine[]
   vatIncluded: boolean
   distributorName: string
+  discount?: QuoteDiscountInput | null
 }): string | null {
   if (!input.distributorName.trim()) return "총판 이름을 입력해 주세요."
-  const totals = computeDistributorTotals(input.lines, input.vatIncluded)
+  const totals = computeDistributorTotals(input.lines, input.vatIncluded, input.discount)
   if (totals.includedCount === 0) return "총판에게 청구할 품목을 하나 이상 포함해 주세요."
   if (totals.missingPriceCount > 0) return `원가(총판 입금가)가 비어 있는 품목이 ${totals.missingPriceCount}개 있습니다.`
   if (totals.totalAmount <= 0) return "총판 청구 금액이 0원입니다."
   return null
+}
+
+/**
+ * 발행 뒤 금액 수정이 안 되는 이유. null 이면 고칠 수 있다.
+ * 발행 조건과 같고, 이미 받은 입금보다 작게 줄이지 못한다(미수가 음수가 된다 — 입금 기록을 먼저 정리한다).
+ */
+export function getDistributorReviseBlocker(input: {
+  lines: readonly DistributorSettlementLine[]
+  vatIncluded: boolean
+  distributorName: string
+  paidAmount: number
+  discount?: QuoteDiscountInput | null
+}): string | null {
+  const blocker = getDistributorIssueBlocker(input)
+  if (blocker) return blocker
+  const { totalAmount } = computeDistributorTotals(input.lines, input.vatIncluded, input.discount)
+  if (totalAmount < input.paidAmount) {
+    return `이미 받은 입금(${formatKRW(input.paidAmount)})보다 작게 줄일 수 없습니다. 입금 기록을 먼저 정리해 주세요.`
+  }
+  return null
+}
+
+/** 총판 견적서 제목 — 따로 정한 제목이 없으면 "{고객사} 건 하드웨어 공급". */
+export function resolveDistributorDocumentTitle(
+  settlement: Pick<DistributorSettlementRecord, "documentTitle">,
+  customerName: string | null | undefined,
+  fallback: string
+) {
+  return settlement.documentTitle?.trim() || (customerName?.trim() ? `${customerName.trim()} 건 하드웨어 공급` : fallback)
 }
 
 /* ─── 총판용 견적서 ───────────────────────────────────────── */
@@ -306,7 +421,8 @@ export function buildDistributorQuoteDetails(
   settlement: Pick<
     DistributorSettlementRecord,
     "distributorName" | "distributorContactName" | "distributorPhone" | "distributorEmail" | "lines" | "vatIncluded" | "notes"
-  >,
+  > &
+    Partial<Pick<DistributorSettlementRecord, "discount" | "generalNotes">>,
   options: { issuedAt?: string | null; customerName?: string | null } = {}
 ): PartnerQuoteDetailsInput {
   const lineItems: PartnerQuoteLineItemInput[] = settlement.lines
@@ -316,8 +432,8 @@ export function buildDistributorQuoteDetails(
       lineNumber: index + 1,
       itemType: line.itemType,
       itemCode: line.itemCode,
-      itemName: line.itemName,
-      itemDescription: line.itemDescription,
+      itemName: line.displayName?.trim() || line.itemName,
+      itemDescription: line.displayDescription?.trim() || line.itemDescription,
       quantity: line.quantity,
       quantityUnit: line.quantityUnit,
       unitPrice: line.unitPrice ?? undefined,
@@ -326,15 +442,24 @@ export function buildDistributorQuoteDetails(
       vatIncluded: settlement.vatIncluded,
     }))
   const customerName = options.customerName?.trim() || customer.recipientCompanyName?.trim()
+  // 수신 = 총판 대표(담당자 칸), 참조 = 총판 실무 담당자(2026-11-20 결정: 퀴드러닝 대표 조혜리 · 참조 배철웅).
+  // 대표 이름은 정산 표에 칸이 없어 등록된 총판(퀴드러닝)일 때만 표준 공급자 정보에서 가져온다.
+  const representativeName =
+    settlement.distributorName.trim() === STANDARD_QUOTE_SUPPLIER.businessName
+      ? STANDARD_QUOTE_SUPPLIER.representativeName
+      : undefined
+  const contactName = settlement.distributorContactName?.trim() || undefined
 
   const quote: PartnerQuoteDetailsInput = {
     ...customer,
     issuedAt: options.issuedAt?.slice(0, 10) || customer.issuedAt,
     recipientCompanyName: settlement.distributorName,
-    recipientContactName: settlement.distributorContactName ?? undefined,
+    recipientContactName: representativeName ?? contactName,
     recipientPhone: settlement.distributorPhone ?? undefined,
     recipientEmail: settlement.distributorEmail ?? undefined,
-    referenceName: customerName ? `고객사 ${customerName}` : customer.referenceName,
+    referenceName: representativeName ? contactName : undefined,
+    // 어느 고객 건인지는 본문 첫 문장에 적는다(참조 칸은 총판 담당자 몫).
+    subjectText: customerName ? `고객사 ${customerName} 건으로 아래와 같이 견적서를 제출합니다.` : undefined,
     // 공급자 블록은 통째로 회사(클래스인)로 바꾼다 — 담당자·연락처는 회사 표준 정보가 없어 비워 둔다.
     supplierBusinessName: CLASSIN_QUOTE_SUPPLIER.businessName,
     supplierBusinessRegistrationNumber: CLASSIN_QUOTE_SUPPLIER.businessRegistrationNumber,
@@ -350,17 +475,25 @@ export function buildDistributorQuoteDetails(
     specialTerms: settlement.notes?.trim() || customer.specialTerms,
     internalMemo: undefined,
     // 고객 견적에만 해당하는 값은 넘기지 않는다 — 총판 문서는 원가 줄만으로 다시 계산한다.
-    //  - 견적 할인: 고객 할인이 원가 합계에서 빠지면 '입금 요청 금액'(정산 합계)과 문서 총액이 어긋난다.
+    //  - 견적 할인: 고객 할인은 넘기지 않고, 총판 견적서에 따로 정한 할인만 쓴다(computeDistributorTotals 와 같은 계산이라
+    //    문서 총액 = 입금 요청 금액).
     //  - 구성 옵션: 녹화 세트 12개월 할부처럼 고객 결제 조건(월 납입 안내)이 총판 문서에 찍히지 않게 한다.
-    quoteDiscount: undefined,
+    quoteDiscount: settlement.discount ?? undefined,
+    showDiscountDetails: true,
     optionSelections: undefined,
     lineItems,
   }
   const automaticNotes = readAutomaticQuoteNotes(customer.optionSelections)
-  return finalizeStandardQuoteDetails({
-    ...quote,
-    generalNotes: writeQuoteGeneralNotes(readQuoteGeneralNotes(customer, automaticNotes), quote, automaticNotes),
-  })
+  // 총판 기타사항을 따로 적었으면 그 문구만 쓴다(빈 문자열이면 비운다). 아니면 고객 견적 기타사항을 옮긴다.
+  const generalNotes =
+    typeof settlement.generalNotes === "string"
+      ? settlement.generalNotes.trim() || undefined
+      : writeQuoteGeneralNotes(readQuoteGeneralNotes(customer, automaticNotes), quote, automaticNotes)
+  const finalized = finalizeStandardQuoteDetails({ ...quote, generalNotes })
+  // 양식은 빈 기타사항을 기본 납품장소 문구로 채운다 — 총판 쪽에서 일부러 비웠으면 그대로 비운다.
+  return settlement.generalNotes === "" || (typeof settlement.generalNotes === "string" && !settlement.generalNotes.trim())
+    ? { ...finalized, generalNotes: undefined }
+    : finalized
 }
 
 /* ─── 설치 완료 → 자동 준비 · 검토 요청 ─────────────────────── */
@@ -522,6 +655,10 @@ export function normalizeDistributorLines(raw: unknown): DistributorSettlementLi
       customerUnitPrice: value.customerUnitPrice == null ? null : nonNegativeInt(value.customerUnitPrice),
       unitPrice,
       included: value.included !== false,
+      ...(optionalText(value.displayName, 200) ? { displayName: optionalText(value.displayName, 200)! } : {}),
+      ...(optionalText(value.displayDescription, 400)
+        ? { displayDescription: optionalText(value.displayDescription, 400)! }
+        : {}),
     })
   }
   return lines
@@ -540,6 +677,10 @@ export interface DistributorSettlementInput {
   vatIncluded: boolean
   dueDate: string | null
   notes: string | null
+  /** 아래 셋은 생략하면 null(할인 없음 · 기본 제목 · 고객 견적 기타사항). */
+  discount?: QuoteDiscountInput | null
+  documentTitle?: string | null
+  generalNotes?: string | null
 }
 
 export function validateDistributorSettlementInput(body: unknown): Validated<DistributorSettlementInput> {
@@ -577,6 +718,10 @@ export function validateDistributorSettlementInput(body: unknown): Validated<Dis
       vatIncluded: body.vatIncluded !== false,
       dueDate,
       notes: optionalText(body.notes, 1000),
+      discount: normalizeQuoteDiscount(body.discount) ?? null,
+      documentTitle: optionalText(body.documentTitle, 80),
+      // null/생략 = 고객 견적 기타사항 그대로, 문자열(빈 문자열 포함) = 이 문구로 덮어쓴다.
+      generalNotes: typeof body.generalNotes === "string" ? body.generalNotes.trim().slice(0, 2000) : null,
     },
   }
 }

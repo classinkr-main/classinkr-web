@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
 
 import { SOFTWARE_PLANS } from "@/lib/billing/plans"
-import { CLASSIN_POSITIONING } from "@/lib/classin-positioning"
+import { CLASSIN_POSITIONING, KOREA_WEBSITE_NAME } from "@/lib/classin-positioning"
 import { BOARD_MODEL_NAMES, BOARD_SPEC_MODELS } from "@/lib/hardware/board-specs"
 
 export const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL ?? "https://classin.co.kr").replace(/\/$/, "")
@@ -88,7 +88,7 @@ export function createPublicMetadata({
       title: socialTitle,
       description,
       url: canonical,
-      siteName: SITE_NAME,
+      siteName: KOREA_WEBSITE_NAME,
       locale: "ko_KR",
       type: "website",
       images: [{ url: ogImage }],
@@ -178,8 +178,8 @@ export function createWebsiteJsonLd(): JsonLdNode {
     "@context": "https://schema.org",
     "@type": "WebSite",
     "@id": WEBSITE_ID,
-    name: SITE_NAME,
-    alternateName: "클래스인",
+    name: KOREA_WEBSITE_NAME,
+    alternateName: ["클래스인", "ClassIn Korea", SITE_NAME],
     url: SITE_URL,
     inLanguage: "ko-KR",
     publisher: { "@id": ORGANIZATION_ID },

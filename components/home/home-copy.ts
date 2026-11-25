@@ -1,10 +1,12 @@
 // components/home/home-copy.ts — 홈 카피 SSOT (스펙 §8, 캔버스 B-T2). H1 은 lib/classin-positioning.ts 의 heroHeadline.
 // 숫자 4개는 docs/active/brand-canon/company-facts.md 의 EEO 공식 수치. 학원 34곳은 옛 LogoBar 목록 그대로.
+import { KOREA_WEBSITE_NAME } from "@/lib/classin-positioning"
+
 export const HOME_COPY = {
   hero: {
     // H1 "칠판은 지워져도, 수업은 남습니다"의 근거 — 무엇이 어떻게 남는지(아래 이득 3행과 같은 순서의 말).
-    // 두 구절 — md 이상에서 "남기고," 뒤에서 줄을 바꾼다(휴대폰은 이어 흐른다)
-    lead: ["Classin 전자칠판은 판서를 교안 파일로, 수업을 녹화로 남기고,", "수업이 끝나면 AI가 강의를 평가합니다."] as const,
+    // 두 문장 — md 이상에서 줄을 바꾼다(휴대폰은 이어 흐른다).
+    lead: [`${KOREA_WEBSITE_NAME}의 전자칠판은 판서를 교안으로 남깁니다.`, "수업 녹화와 AI 강의 평가도 활용할 수 있습니다."] as const,
     primaryCta: "파일럿 상담 신청",
     secondaryCta: "34문항 운영 진단지 받기",
     secondaryHref: "/resources/academy-system-checklist#download",
@@ -81,10 +83,10 @@ export const HOME_COPY = {
       {
         phase: "수업 중",
         product: "자동 녹화",
-        title: "수업만 하면 녹화가 저절로 쌓입니다",
-        titleEmphasis: "저절로",
-        body: "보드로 수업을 시작하면 칠판과 AI 카메라 녹화가 함께 시작되고, 끝나면 클라우드에 저장됩니다. 결석 보강·복습 영상이 그날 바로 생깁니다.",
-        checks: ["칠판 화면과 AI 카메라를 함께 녹화", "수업이 끝나면 클라우드에 자동 저장", "결석 보강·복습 링크로 바로 공유"],
+        title: "녹화한 수업은 다시보기로 남습니다",
+        titleEmphasis: "다시보기",
+        body: "녹화를 설정한 수업은 칠판 화면을 남길 수 있습니다. 카메라를 연결하고 현장 녹화도 켜면 교실 장면을 담을 수 있고, 처리 후 다시보기로 활용합니다.",
+        checks: ["설정한 수업의 칠판 화면 녹화", "카메라를 연결하면 현장 녹화 선택", "처리 후 결석 보강·복습에 활용"],
         // 녹화 수업 랜딩(2026-11-06). 전자칠판(/product/hw)은 그 페이지 작동 방식에서 잇는다
         href: "/product/recording",
         image: {

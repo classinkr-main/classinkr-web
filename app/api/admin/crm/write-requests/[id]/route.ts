@@ -77,7 +77,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       actorUserId: admin.userId,
     })
 
-    revalidateTag(ADMIN_CRM_REVENUE_CACHE_TAG, "max")
+    revalidateTag(ADMIN_CRM_REVENUE_CACHE_TAG, { expire: 0 })
     return NextResponse.json({ ok: true, request })
   } catch (error) {
     console.error("[PATCH /api/admin/crm/write-requests/[id]]", error)

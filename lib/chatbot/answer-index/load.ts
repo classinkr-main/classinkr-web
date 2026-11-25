@@ -45,6 +45,9 @@ export const ANSWER_INDEX_DATA_DIR_REL = "data/answer-index"
  */
 export function answerIndexDataDir(env: Record<string, string | undefined> = process.env) {
   const configured = env.ANSWER_INDEX_DATA_DIR?.trim()
+  // 무시 주석이 없으면 경로가 동적이라 Turbopack 이 프로젝트 전체(public/ 약 450MB·tests/·docs/)를 이 모듈을 쓰는
+  // 함수 번들마다 넣어 Vercel 함수 용량 상한(250MB)을 넘긴다. 런타임이 읽는 자료(ANSWER_INDEX_RUNTIME_*)는
+  // next.config.ts 의 outputFileTracingIncludes 가 넣는다(tests/chatbot/answer-index/trace-includes.test.ts 가 두 목록을 맞춘다).
   return configured
     ? resolve(/* turbopackIgnore: true */ process.cwd(), configured)
     : join(/* turbopackIgnore: true */ process.cwd(), ANSWER_INDEX_DATA_DIR_REL)
@@ -117,10 +120,22 @@ function readJson(path: string): unknown {
   return JSON.parse(readFileSync(path, "utf8"))
 }
 
-const TOP_FILES = ["lexicon.json", "generic-words.json", "absent.json", "legacy-alias.json", "calibration.json", "manifest.json"]
-const RUNTIME_DIRS = ["cards", "variants", "universe"] as const
+/** 런타임이 읽는 자료 폴더 맨 위 파일. next.config.ts outputFileTracingIncludes 의 답 색인 목록과 같아야 한다. */
+export const ANSWER_INDEX_RUNTIME_TOP_FILES = [
+  "lexicon.json",
+  "generic-words.json",
+  "absent.json",
+  "legacy-alias.json",
+  "calibration.json",
+  "manifest.json",
+] as const
+/** 런타임이 읽는 하위 폴더(안의 *.json, 조각 이름은 건너뜀). next.config.ts 와 같아야 한다. */
+export const ANSWER_INDEX_RUNTIME_DIRS = ["cards", "variants", "universe"] as const
+const TOP_FILES: readonly string[] = ANSWER_INDEX_RUNTIME_TOP_FILES
+const RUNTIME_DIRS = ANSWER_INDEX_RUNTIME_DIRS
 // 런타임이 읽지 않는 것(있어도 skipped 에 적지 않는다).
-const NON_RUNTIME = new Set(["units.json", "site-facts.json", "inventory.json", "audit", "eval"])
+export const ANSWER_INDEX_NON_RUNTIME = ["units.json", "site-facts.json", "inventory.json", "audit", "eval"] as const
+const NON_RUNTIME = new Set<string>(ANSWER_INDEX_NON_RUNTIME)
 
 // ─── 지금 문서 ───────────────────────────────────────────────────────────
 

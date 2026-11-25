@@ -22,6 +22,7 @@ import {
   callInternalCsModel,
   failureKindsOf,
   logModelFailures,
+  readFinishState,
   resolveInternalCsConnection,
   stopsModelChain,
   toModelAttempt,
@@ -80,6 +81,13 @@ export interface InternalCsAnswerResult {
   attempts: ModelAttempt[]
   /** 실패한 시도의 종류(중복 없이, 시도 순서). 모델 장애를 화면이 알리고 보강 큐 유입을 막는 데 쓴다. */
   failureKinds: ModelFailureKind[]
+  /**
+   * 모델이 끝까지 쓰지 못한 글(길이 초과·안전 차단 등 finishReason 이 STOP 이 아님)이면 true.
+   * answer 는 끊긴 부분 글이라 완성본으로 다루지 않는다(화면이 '불완전'으로 표시하고 이전 초안을 치우지 않는다).
+   */
+  incomplete?: boolean
+  /** incomplete 일 때 모델이 알려 준 끝난 이유(예: MAX_TOKENS, SAFETY). */
+  finishReason?: string | null
   /** 모델 호출에 쓴 전체 시간(ms). */
   latencyMs: number
   /** 이 요청에 적용한 시간 예산. */
@@ -150,6 +158,9 @@ const BLOCKED_MODELS = new Set([
   "gemini-2.0-flash-lite-001",
   "gemini-1.5-flash",
   "gemini-1.5-pro",
+  // 2.5 계열은 2026-11 부터 404("no longer available") — 허용 목록에서도 뺐다. env 로 지정해도 기본값으로 돌아간다.
+  "gemini-2.5-flash",
+  "gemini-2.5-pro",
 ])
 
 // 내부 CS 텍스트 생성에 사용할 수 있다고 공식 문서로 확인한 현재 모델만 허용한다.
@@ -161,8 +172,6 @@ const ALLOWED_CONFIGURED_MODELS = new Set([
   PREVIOUS_FAST_MODEL,
   "gemini-3.1-pro-preview",
   "gemini-3.1-flash-lite",
-  "gemini-2.5-flash",
-  "gemini-2.5-pro",
 ])
 
 const DEEP_KEYWORDS = [
@@ -331,15 +340,33 @@ function buildContents(input: GenerateInternalCsAnswerInput) {
   return [...history, { role: "user" as const, parts: [{ text: prompt }] }]
 }
 
+/** 응답 길이 상한(토큰). 길이를 임의로 줄이지 않는 시스템 지시와 맞게 넉넉히 두되 무한정은 아니다. INTERNAL_CS_GEMINI_MAX_OUTPUT_TOKENS 로 바꾼다. */
+const DEFAULT_MAX_OUTPUT_TOKENS = 4_096
+/** 생각(thinking)을 높게 켠 호출은 생각 토큰도 출력 상한에 들어갈 수 있어, 답이 잘리지 않게 기본 상한을 최대로 둔다. */
+const DEFAULT_HIGH_THINKING_MAX_OUTPUT_TOKENS = 16_384
+
+export function getInternalCsMaxOutputTokens(options: { highThinking?: boolean } = {}) {
+  return readBoundedInt(
+    process.env.INTERNAL_CS_GEMINI_MAX_OUTPUT_TOKENS,
+    options.highThinking ? DEFAULT_HIGH_THINKING_MAX_OUTPUT_TOKENS : DEFAULT_MAX_OUTPUT_TOKENS,
+    512,
+    16_384
+  )
+}
+
 function buildGenerationConfig(model: string, mode: InternalCsModelMode) {
   const generationConfig: Record<string, unknown> = {}
+  let highThinking = false
 
   // Gemini 4.x and 3.x support thinkingConfig. Flash supports low/high and Pro supports high.
   if (model.startsWith("gemini-4") || model.startsWith("gemini-3.5-flash")) {
-    generationConfig.thinkingConfig = { thinkingLevel: mode === "deep" ? "high" : "low" }
+    highThinking = mode === "deep"
+    generationConfig.thinkingConfig = { thinkingLevel: highThinking ? "high" : "low" }
   } else if (model.startsWith("gemini-3.1-pro")) {
+    highThinking = true
     generationConfig.thinkingConfig = { thinkingLevel: "high" }
   }
+  generationConfig.maxOutputTokens = getInternalCsMaxOutputTokens({ highThinking })
 
   return generationConfig
 }
@@ -434,6 +461,29 @@ export async function generateInternalCsAnswer(
     })
 
     const answer = result.ok ? readCandidateText(result.data) : null
+    const finish = result.ok ? readFinishState(result.data) : { incomplete: false, finishReason: null }
+    if (result.ok && answer && finish.incomplete) {
+      // 길이 초과로 끊긴 글: 다른 모델로 다시 돌려도 같은 길이라 여기서 멈추고, 끊긴 글을 '불완전' 표시로 돌려준다.
+      attempts.push({ model, ok: false, kind: "incomplete", status: result.status, latencyMs: result.latencyMs })
+      logModelFailures("generate", connection.provider, attempts, true)
+      return {
+        answer,
+        mode,
+        model,
+        origin: "model",
+        fallbackUsed: attempts.length > 1,
+        attemptedModels: attempts.map((attempt) => attempt.model),
+        attempts,
+        failureKinds: failureKindsOf(attempts),
+        incomplete: true,
+        finishReason: finish.finishReason,
+        latencyMs: Date.now() - startedAt,
+        timeBudget,
+        citations,
+        reviewState: "pending",
+        guardrails: REVIEW_GUARDRAILS,
+      }
+    }
     if (result.ok && answer) {
       attempts.push(toModelAttempt(model, result))
       logModelFailures("generate", connection.provider, attempts, false)
@@ -454,9 +504,9 @@ export async function generateInternalCsAnswer(
       }
     }
 
-    // 응답은 왔지만 본문이 비었으면 shape 로 센다.
+    // 응답은 왔지만 본문이 비었으면 shape, 안전 차단 등으로 막혔으면 incomplete 로 센다.
     const failedAttempt: ModelAttempt = result.ok
-      ? { model, ok: false, kind: "shape", status: result.status, latencyMs: result.latencyMs }
+      ? { model, ok: false, kind: finish.incomplete ? "incomplete" : "shape", status: result.status, latencyMs: result.latencyMs }
       : toModelAttempt(model, result)
     attempts.push(failedAttempt)
     if (failedAttempt.kind && stopsModelChain(failedAttempt.kind, model, failedAttempt.status)) break

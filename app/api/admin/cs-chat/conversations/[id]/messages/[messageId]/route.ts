@@ -54,7 +54,9 @@ async function findReviewedQuestion(conversationId: string, message: InternalCsM
   if (linked?.content.trim()) return linked.content
 
   const messageIndex = loaded.messages.findIndex((entry) => entry.id === message.id)
-  const preceding = messageIndex >= 0 ? loaded.messages.slice(0, messageIndex) : loaded.messages
+  // 읽은 구간(최근 메시지) 밖의 답변이면 엉뚱한 사용자 메시지를 원 질문으로 잡지 않는다.
+  if (messageIndex < 0) return null
+  const preceding = loaded.messages.slice(0, messageIndex)
   for (let index = preceding.length - 1; index >= 0; index -= 1) {
     const entry = preceding[index]
     if (entry.role === "user" && entry.content.trim()) return entry.content

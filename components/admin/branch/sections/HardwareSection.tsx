@@ -2,22 +2,10 @@
 import Link from "next/link"
 import { useState } from "react"
 import { useBranchJson } from "../client-api"
+import { hwTotalsOf, type BranchHwResponse, type BranchHwStockRow } from "@/lib/branch/hw-summary"
 
-interface StockRow {
-  product: string
-  io_stock: number          // 실재고(장부): 입고 − 완료 출고
-  planned_out: number       // 출고 예정(아직 창고에 있음)
-  available_stock: number   // 가용 재고: 실재고 − 출고 예정
-  sheet_stock: number
-  low: boolean
-}
-interface RecentInstall { customer: string; quantity: number; date: string | null }
-interface HardwareResponse {
-  stock: StockRow[]
-  recent_installs?: RecentInstall[]
-  /** 재고 수치 원천 — ledger(입출고 원장 SSOT) 또는 sheet_staging(원장 미구축 폴백) */
-  source?: "ledger" | "sheet_staging"
-}
+type StockRow = BranchHwStockRow
+type HardwareResponse = BranchHwResponse
 
 const COLORS = {
   green: "#084734",
@@ -41,10 +29,12 @@ function TableView({ rows }: { rows: StockRow[] }) {
   return (
     <div>
       <div className="grid items-end gap-2 px-1 pb-2 text-[10px] font-semibold uppercase tracking-[0.04em] text-[#615D59]"
-        style={{ gridTemplateColumns: "1fr 86px 100px 70px" }}>
+        style={{ gridTemplateColumns: "1fr 64px 64px 64px 64px 60px" }}>
         <span>품목</span>
-        <span className="text-right">가용 재고</span>
-        <span className="text-right">시트 재고</span>
+        <span className="text-right" title="최근 30일 실제 출고(예정 제외)">30일 출고</span>
+        <span className="text-right" title="창고 실재고: 입고 − 완료 출고">재고</span>
+        <span className="text-right" title="출고 예정 — 아직 창고에 있음">출고 예정</span>
+        <span className="text-right" title="가용: 재고 − 출고 예정">가용</span>
         <span className="text-right">상태</span>
       </div>
       {rows.map((s) => {
@@ -52,19 +42,15 @@ function TableView({ rows }: { rows: StockRow[] }) {
         return (
           <div key={s.product}
             className="grid items-center gap-2 border-t border-[rgba(0,0,0,0.06)] px-1 py-2.5"
-            style={{ gridTemplateColumns: "1fr 86px 100px 70px" }}>
+            style={{ gridTemplateColumns: "1fr 64px 64px 64px 64px 60px" }}>
             <div>
               <p className="text-[12.5px] font-semibold text-[#111110]">{s.product}</p>
+              <p className="text-[10px] text-[#615D59]">시트 {s.sheet_stock}대</p>
             </div>
-            <div className="text-right">
-              <p className="text-[16px] font-bold tracking-[-0.01em] text-[#111110]">{s.available_stock}</p>
-              <p className="text-[9.5px] text-[#615D59]">
-                실재고 {s.io_stock} · 예정 −{s.planned_out}
-              </p>
-            </div>
-            <p className="text-right text-[11px] text-[#615D59]">
-              {s.sheet_stock}대
-            </p>
+            <p className="text-right text-[13px] font-semibold tabular-nums text-[#111110]">{s.outbound_30d ?? 0}</p>
+            <p className="text-right text-[13px] font-semibold tabular-nums text-[#111110]">{s.io_stock}</p>
+            <p className="text-right text-[13px] font-semibold tabular-nums text-[#7A520F]">{s.planned_out}</p>
+            <p className="text-right text-[15px] font-bold tabular-nums tracking-[-0.01em] text-[#111110]">{s.available_stock}</p>
             <div className="text-right">
               <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10.5px] font-bold"
                 style={{ background: tone.bg, color: tone.fg }}>
@@ -102,6 +88,8 @@ function GaugeView({ rows }: { rows: StockRow[] }) {
                 )}
               </div>
               <p className="text-[11px] text-[#615D59]">
+                출고 <span className="font-semibold text-[#111110]">{s.outbound_30d ?? 0}</span>
+                <span className="mx-1">·</span>
                 가용 <span className="text-[13px] font-bold text-[#111110]">{s.available_stock}</span>
                 <span className="mx-1">·</span>
                 예정 <span className="font-semibold text-[#A8741A]">{s.planned_out}</span>
@@ -129,6 +117,7 @@ export default function HardwareSection({ refreshKey }: { refreshKey: number }) 
   const [view, setView] = useState<"table" | "gauge">("gauge")
   const hw = useBranchJson<HardwareResponse>("/api/admin/branch/hw", refreshKey)
   const data = hw.data
+  const totals = data ? hwTotalsOf(data) : null
 
   if (hw.loading && !data) return <div className="h-48 animate-pulse rounded-xl bg-[#f0f0ec]" />
   if (hw.error && !data) return <div role="alert" className="rounded-xl border border-[#F2B8B8] bg-[#FCE9E9] p-4 text-[12px] text-[#B43E3E]">{hw.error}</div>
@@ -137,13 +126,14 @@ export default function HardwareSection({ refreshKey }: { refreshKey: number }) 
       표시할 HW 재고 데이터가 없습니다.
     </div>
   )
+  if (!totals) return null
   return (
     <section className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
       <div className="flex items-center justify-between gap-3 border-b border-[rgba(0,0,0,0.08)] px-5 py-3.5">
         <div className="flex items-center gap-2">
           <h2 className="text-[14px] font-bold tracking-[-0.01em] text-[#111110]">HW 재고</h2>
           {data.source === "ledger" ? (
-            <span className="rounded-full border border-[#084734]/15 bg-gradient-to-b from-[#F2FAF6] to-[#E6F5ED] px-2 py-0.5 text-[10px] font-semibold text-[#084734] shadow-2xs" title="입출고 원본(hardware_movements) 기준 — 하드웨어 콘솔과 동일 수치 (재고 SSOT, 2026-07-10 결정)">
+            <span className="rounded-full border border-[#084734]/15 bg-[#E8F6EF] px-2 py-0.5 text-[10px] font-semibold text-[#084734]" title="입출고 원본(hardware_movements) 기준 — 하드웨어 콘솔과 동일 수치 (재고 SSOT, 2026-07-10 결정)">
               원본 기준
             </span>
           ) : data.source === "sheet_staging" ? (
@@ -169,6 +159,19 @@ export default function HardwareSection({ refreshKey }: { refreshKey: number }) 
           </div>
         </div>
       </div>
+      <dl className="grid grid-cols-2 border-b border-[rgba(0,0,0,0.08)] sm:grid-cols-4" aria-label="HW 출고·재고·예정 합계(주요 품목)">
+        {[
+          { label: "최근 30일 출고", value: totals.outbound_30d, title: "실제 출고(예정 제외)" },
+          { label: "창고 재고", value: totals.io_stock, title: "입고 − 완료 출고" },
+          { label: "출고 예정", value: totals.planned_out, title: "아직 창고에 있음", tone: "text-[#7A520F]" },
+          { label: "가용", value: totals.available_stock, title: "재고 − 출고 예정" },
+        ].map((cell, index) => (
+          <div key={cell.label} title={cell.title} className={`px-5 py-3 ${index % 2 === 0 ? "border-r border-[rgba(0,0,0,0.06)]" : ""} ${index === 1 ? "sm:border-r" : ""} ${index < 2 ? "border-b border-[rgba(0,0,0,0.06)] sm:border-b-0" : ""}`}>
+            <dt className="text-[11px] text-[#615D59]">{cell.label}</dt>
+            <dd className={`text-[18px] font-bold tabular-nums ${cell.tone ?? "text-[#111110]"}`}>{cell.value}<span className="ml-0.5 text-[11px] font-medium text-[#615D59]">대</span></dd>
+          </div>
+        ))}
+      </dl>
       <div className="p-5">
         {hw.stale ? (
           <div role="status" className="mb-3 rounded-lg border border-[#ECD29C] bg-[#FBF1E0] px-3 py-2 text-[10.5px] text-[#7A520F]">

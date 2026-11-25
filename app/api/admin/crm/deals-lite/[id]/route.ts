@@ -68,7 +68,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
 
     if (!deal) return NextResponse.json({ error: "Deal not found" }, { status: 404 })
-    revalidateTag(ADMIN_CRM_REVENUE_CACHE_TAG, "max")
+    revalidateTag(ADMIN_CRM_REVENUE_CACHE_TAG, { expire: 0 })
     return NextResponse.json({ deal })
   } catch (error) {
     console.error(`[PATCH /api/admin/crm/deals-lite/${id}]`, error)

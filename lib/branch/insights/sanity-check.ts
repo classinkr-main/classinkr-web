@@ -25,7 +25,12 @@ function extractNumbers(text: string): Array<{ value: number; raw: string; isPct
 
 function collectInputNumbers(input: InsightInput): number[] {
   const nums: number[] = []
-  const push = (n: number | null | undefined) => { if (typeof n === "number" && Number.isFinite(n)) nums.push(n) }
+  // 금액은 보고 문장에서 '¥75.2만'처럼 만 단위로 쓰인다 — 1만 이상 값은 만 단위 표기도 함께 인정한다.
+  const push = (n: number | null | undefined) => {
+    if (typeof n !== "number" || !Number.isFinite(n)) return
+    nums.push(n)
+    if (Math.abs(n) >= 10_000) nums.push(n / 10_000)
+  }
   push(input.team_pacing.goal)
   push(input.team_pacing.status)
   push(input.team_pacing.pacing_pct)
@@ -48,6 +53,32 @@ function collectInputNumbers(input: InsightInput): number[] {
   push(input.bottleneck_kpi.pct)
   for (const slice of [...input.deal_mix.by_category, ...input.deal_mix.by_status_type, ...input.deal_mix.by_channel]) {
     push(slice.goal); push(slice.actual); push(slice.pct)
+  }
+  const pct = (part: number, whole: number) => { if (whole > 0) push((part / whole) * 100) }
+  for (const row of input.performance?.rows ?? []) {
+    push(row.month_goal); push(row.month_actual); push(row.quarter_goal); push(row.quarter_actual); push(row.year_goal); push(row.year_actual)
+    pct(row.month_actual, row.month_goal); pct(row.quarter_actual, row.quarter_goal); pct(row.year_actual, row.year_goal)
+    push(row.month_goal - row.month_actual); push(row.quarter_goal - row.quarter_actual); push(row.year_goal - row.year_actual)
+  }
+  const mc = input.month_collections
+  if (mc) {
+    push(mc.confirmed); push(mc.planned_not_confirmed); push(mc.confirmed + mc.planned_not_confirmed)
+    for (const c of mc.customers) { push(c.confirmed); push(c.planned_not_confirmed); push(c.confirmed + c.planned_not_confirmed) }
+  }
+  const ka = input.ka_quarter
+  if (ka) {
+    push(ka.confirmed); push(ka.open); push(ka.confirmed + ka.open); push(ka.customer_count)
+    if (input.team_pacing.status > 0) push((ka.confirmed / input.team_pacing.status) * 100)
+    for (const c of ka.top_customers) { push(c.confirmed); push(c.open); push(c.confirmed + c.open) }
+  }
+  const c = input.compass_weekly
+  if (c) {
+    for (const pair of [c.inflow, c.lost]) if (pair) { push(pair[0]); push(pair[1]); push(pair[0] - pair[1]) }
+    for (const s of c.stages) { push(s.this_week); push(s.prev_week); push(s.this_week - s.prev_week) }
+    for (const r of c.top_lost_reasons) push(r.count)
+    for (const o of c.owners) { push(o.inflow); push(o.demo); push(o.bd); push(o.won); push(o.lost) }
+    push(c.unassigned_inflow)
+    for (const e of c.evaluation) push(e.rate_pct)
   }
   return nums
 }
@@ -94,5 +125,17 @@ export function checkNumericalSanity(input: InsightInput, output: InsightResult)
     inspect(`next_actions[${i}].title`, a.title)
     inspect(`next_actions[${i}].why`, a.why)
   })
+  ;(output.report_notes ?? []).forEach((note, i) => inspect(`report_notes[${i}]`, note))
+  const report = output.weekly_report
+  if (report) {
+    inspect("weekly_report.performance", report.performance)
+    inspect("weekly_report.collections", report.collections)
+    inspect("weekly_report.activities", report.activities)
+    report.key_points.forEach((point, i) => inspect(`weekly_report.key_points[${i}]`, point))
+    report.ka.forEach((row, i) => {
+      inspect(`weekly_report.ka[${i}].change`, row.change)
+      inspect(`weekly_report.ka[${i}].issue`, row.issue)
+    })
+  }
   return warnings
 }

@@ -1,6 +1,7 @@
 "server-only";
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { fetchAllSupabaseRows } from "@/lib/repositories/branch-hw";
 import type {
   InsertContractDocument,
   UpdateContractDocument,
@@ -8,11 +9,17 @@ import type {
 } from "@/lib/supabase/database.types.v2";
 import type {
   ContractDocument,
+  ContractDocumentListItem,
   ContractDocumentVersion,
   ContractDocumentShare,
   QuoteDocument,
   QuoteDocumentVersion,
 } from "@/lib/portal/types";
+import {
+  CONTRACT_NUMBER_INSERT_ATTEMPTS,
+  generateContractNumber,
+  isUniqueViolation,
+} from "@/lib/contract-number";
 import { getLatestAcceptedQuoteInteraction } from "@/lib/portal/repositories/activity";
 
 function isExpired(expiresAt?: string | null) {
@@ -128,38 +135,28 @@ function resolveQuoteVersionForConversion(input: {
   };
 }
 
-/* ─── Number Generation ─────────────────────────────────── */
-
-async function generateContractNumber(): Promise<string> {
-  const supabase = createSupabaseAdminClient();
-  const year = new Date().getFullYear();
-  const prefix = `C-${year}-`;
-
-  const { count } = await supabase
-    .from("contract_documents")
-    .select("*", { count: "exact", head: true })
-    .like("contract_number", `${prefix}%`);
-
-  const seq = String((count ?? 0) + 1).padStart(3, "0");
-  return `${prefix}${seq}`;
-}
-
 /* ─── Document CRUD ─────────────────────────────────────── */
 
 export async function createContractDocument(
   input: Omit<InsertContractDocument, "contract_number">
 ): Promise<ContractDocument> {
   const supabase = createSupabaseAdminClient();
-  const contractNumber = await generateContractNumber();
 
-  const { data, error } = await supabase
-    .from("contract_documents")
-    .insert({ ...input, contract_number: contractNumber })
-    .select()
-    .single();
+  // 동시 생성으로 번호가 겹치면(유니크 위반) 새 번호로 몇 번 더 시도한다.
+  let lastError: unknown = null;
+  for (let attempt = 0; attempt < CONTRACT_NUMBER_INSERT_ATTEMPTS; attempt++) {
+    const contractNumber = await generateContractNumber();
+    const { data, error } = await supabase
+      .from("contract_documents")
+      .insert({ ...input, contract_number: contractNumber })
+      .select()
+      .single();
 
-  if (error) throw error;
-  return data as ContractDocument;
+    if (!error) return data as ContractDocument;
+    if (!isUniqueViolation(error)) throw error;
+    lastError = error;
+  }
+  throw lastError;
 }
 
 export async function updateContractDocument(
@@ -194,6 +191,151 @@ export async function getContractDocument(
   return data as ContractDocument;
 }
 
+/* ─── 목록 (계약서 탭) ───────────────────────────────────── */
+
+const LIST_IN_CHUNK = 100;
+
+function chunk<T>(items: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size));
+  }
+  return chunks;
+}
+
+type ContractListVersionRow = Pick<
+  ContractDocumentVersion,
+  | "id"
+  | "contract_document_id"
+  | "version_number"
+  | "title"
+  | "total_amount"
+  | "valid_from"
+  | "valid_until"
+  | "partner_signed_at"
+  | "admin_signed_at"
+> & { source_quote: unknown };
+
+function readSourceQuote(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return { id: null, number: null };
+  }
+  const source = value as Record<string, unknown>;
+  return {
+    id: typeof source.quote_document_id === "string" ? source.quote_document_id : null,
+    number: typeof source.quote_number === "string" ? source.quote_number : null,
+  };
+}
+
+/**
+ * /admin/quotes 계약서 탭이 읽는 전환 계약 목록. 견적 "계약 전환"이 쓰는 contract_documents 가 원천이다.
+ * 본문(content_html)과 견적 스냅샷 전체는 싣지 않고, 원본 견적 표식(sourceQuote)만 JSON 경로로 꺼낸다.
+ */
+export async function listContractDocumentsForAdmin(): Promise<ContractDocumentListItem[]> {
+  const supabase = createSupabaseAdminClient();
+
+  // PostgREST 기본 행 제한(1,000)에 잘리지 않게 id 키셋으로 끝까지 읽고, 최근 변경순으로 다시 세운다.
+  const documentRows = (
+    await fetchAllSupabaseRows<ContractDocument>((afterId, limit) => {
+      let query = supabase
+        .from("contract_documents")
+        .select("*")
+        .order("id", { ascending: true })
+        .limit(limit);
+      if (afterId) query = query.gt("id", afterId);
+      return query;
+    })
+  ).sort((left, right) => right.updated_at.localeCompare(left.updated_at));
+  if (documentRows.length === 0) return [];
+
+  const versionRows: ContractListVersionRow[] = [];
+  for (const ids of chunk(documentRows.map((document) => document.id), LIST_IN_CHUNK)) {
+    const { data, error } = await supabase
+      .from("contract_document_versions")
+      .select(
+        "id, contract_document_id, version_number, title, total_amount, valid_from, valid_until, partner_signed_at, admin_signed_at, source_quote:structured_json->sourceQuote"
+      )
+      .in("contract_document_id", ids)
+      .order("version_number", { ascending: false });
+    if (error) throw error;
+    versionRows.push(...((data ?? []) as unknown as ContractListVersionRow[]));
+  }
+
+  const dealRows: Array<{ id: string; title: string | null; customer_id: string | null }> = [];
+  for (const ids of chunk([...new Set(documentRows.map((document) => document.deal_id))], LIST_IN_CHUNK)) {
+    const { data, error } = await supabase.from("deals").select("id, title, customer_id").in("id", ids);
+    if (error) throw error;
+    dealRows.push(...(data ?? []));
+  }
+
+  const customerRows: Array<{ id: string; name: string | null }> = [];
+  const customerIds = [
+    ...new Set(dealRows.map((deal) => deal.customer_id).filter((id): id is string => Boolean(id))),
+  ];
+  for (const ids of chunk(customerIds, LIST_IN_CHUNK)) {
+    const { data, error } = await supabase.from("customers").select("id, name").in("id", ids);
+    if (error) throw error;
+    customerRows.push(...(data ?? []));
+  }
+
+  const dealById = new Map(dealRows.map((deal) => [deal.id, deal]));
+  const customerNameById = new Map(customerRows.map((customer) => [customer.id, customer.name]));
+  const versionsByDocument = new Map<string, ContractListVersionRow[]>();
+  for (const version of versionRows) {
+    const list = versionsByDocument.get(version.contract_document_id);
+    if (list) list.push(version);
+    else versionsByDocument.set(version.contract_document_id, [version]);
+  }
+
+  return documentRows.map((document) => {
+    const versions = (versionsByDocument.get(document.id) ?? []).sort(
+      (left, right) => right.version_number - left.version_number
+    );
+    const version =
+      versions.find((candidate) => candidate.id === document.current_version_id) ?? versions[0] ?? null;
+    const deal = dealById.get(document.deal_id);
+    const sourceQuote = readSourceQuote(version?.source_quote);
+
+    return {
+      id: document.id,
+      deal_id: document.deal_id,
+      contract_number: document.contract_number,
+      status: document.status,
+      created_at: document.created_at,
+      updated_at: document.updated_at,
+      deal_title: deal?.title ?? null,
+      customer_name: deal?.customer_id ? customerNameById.get(deal.customer_id) ?? null : null,
+      version_number: version?.version_number ?? null,
+      title: version?.title ?? null,
+      total_amount: Number(version?.total_amount ?? 0),
+      valid_from: version?.valid_from ?? null,
+      valid_until: version?.valid_until ?? null,
+      partner_signed_at: version?.partner_signed_at ?? null,
+      admin_signed_at: version?.admin_signed_at ?? null,
+      source_quote_document_id: sourceQuote.id,
+      source_quote_number: sourceQuote.number,
+    };
+  });
+}
+
+/** 이 견적에서 전환된 계약(가장 최근 것). 전환한 적이 없으면 null. */
+export async function findContractDocumentBySourceQuote(
+  quoteDocumentId: string
+): Promise<ContractDocument | null> {
+  const supabase = createSupabaseAdminClient();
+
+  const { data, error } = await supabase
+    .from("contract_document_versions")
+    .select("contract_document_id")
+    .eq("structured_json->sourceQuote->>quote_document_id", quoteDocumentId)
+    .order("created_at", { ascending: false })
+    .limit(1);
+  if (error) throw error;
+
+  const contractDocumentId = (data ?? [])[0]?.contract_document_id;
+  return contractDocumentId ? getContractDocument(contractDocumentId) : null;
+}
+
 /* ─── Version CRUD ──────────────────────────────────────── */
 
 export async function createContractDocumentVersion(
@@ -211,10 +353,11 @@ export async function createContractDocumentVersion(
   const version = data as ContractDocumentVersion;
 
   // current_version_id 업데이트
-  await supabase
+  const { error: pointerError } = await supabase
     .from("contract_documents")
     .update({ current_version_id: version.id })
     .eq("id", input.contract_document_id);
+  if (pointerError) throw pointerError;
 
   return version;
 }
@@ -250,7 +393,20 @@ export async function applySignature(
     .single();
 
   if (error) throw error;
-  return data as ContractDocumentVersion;
+  const signed = data as ContractDocumentVersion;
+
+  // 양측 서명이 모두 있으면 서명 순서와 무관하게 completed. 아니면 방금 서명한 쪽 상태.
+  if (signed.partner_signed_at && signed.admin_signed_at) {
+    const { data: completed, error: completeError } = await supabase
+      .from("contract_document_versions")
+      .update({ sign_status: "completed" })
+      .eq("id", versionId)
+      .select()
+      .single();
+    if (completeError) throw completeError;
+    return completed as ContractDocumentVersion;
+  }
+  return signed;
 }
 
 /* ─── Share ─────────────────────────────────────────────── */
@@ -435,28 +591,49 @@ export async function convertQuoteToContract(
   });
 
   // 계약 버전 생성 (견적 내용 복사)
-  const version = await createContractDocumentVersion({
-    contract_document_id: contractDocument.id,
-    version_number: 1,
-    title: resolvedQuote.version.title ?? "계약서",
-    content_html: resolvedQuote.version.content_html ?? null,
-    structured_json: sourceStructuredJson,
-    total_amount: resolvedQuote.version.total_amount ?? 0,
-    valid_from: null,
-    valid_until: resolvedQuote.version.valid_until ?? null,
-    sign_status: "draft",
-    partner_signed_at: null,
-    partner_signature_url: null,
-    admin_signed_at: null,
-    admin_signature_url: null,
-    created_by: createdBy,
-  });
+  // 이후 단계가 실패하면 방금 만든 계약 문서를 지워(버전은 cascade) 반쪽짜리 계약이 남지 않게 한다.
+  const rollbackContract = async () => {
+    const { error: rollbackError } = await supabase
+      .from("contract_documents")
+      .delete()
+      .eq("id", contractDocument.id);
+    if (rollbackError) {
+      console.error("[convertQuoteToContract] rollback failed:", rollbackError);
+    }
+  };
 
-  // 견적 상태 업데이트
-  await supabase
+  let version: ContractDocumentVersion;
+  try {
+    version = await createContractDocumentVersion({
+      contract_document_id: contractDocument.id,
+      version_number: 1,
+      title: resolvedQuote.version.title ?? "계약서",
+      content_html: resolvedQuote.version.content_html ?? null,
+      structured_json: sourceStructuredJson,
+      total_amount: resolvedQuote.version.total_amount ?? 0,
+      valid_from: null,
+      valid_until: resolvedQuote.version.valid_until ?? null,
+      sign_status: "draft",
+      partner_signed_at: null,
+      partner_signature_url: null,
+      admin_signed_at: null,
+      admin_signature_url: null,
+      created_by: createdBy,
+    });
+  } catch (versionError) {
+    await rollbackContract();
+    throw versionError;
+  }
+
+  // 견적 상태 업데이트 — 실패하면 계약을 되돌린다(견적이 그대로면 다시 전환할 수 있어야 한다).
+  const { error: archiveError } = await supabase
     .from("quote_documents")
     .update({ status: "archived" })
     .eq("id", quoteDocId);
+  if (archiveError) {
+    await rollbackContract();
+    throw archiveError;
+  }
 
   return { contractDocument, version };
 }

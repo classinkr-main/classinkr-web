@@ -3,7 +3,7 @@ import { AlertTriangle } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 /** generate 결과의 failureKinds 와 같은 값(lib/internal-cs-chat/model-transport.ts ModelFailureKind). 서버 전용 모듈을 끌어오지 않으려고 문자열로 둔다. */
-export type ModelFailureKindLabel = "auth" | "quota" | "rate" | "timeout" | "shape" | "server"
+export type ModelFailureKindLabel = "auth" | "quota" | "rate" | "timeout" | "shape" | "server" | "incomplete"
 
 export interface ModelStatusBannerProps {
   /** 결과의 origin. 'deterministic' 이면 AI 답이 아니라 근거 요약(대체 글)이라는 뜻이다. */
@@ -19,10 +19,11 @@ const KIND_MESSAGE: Record<ModelFailureKindLabel, string> = {
   timeout: "AI 응답이 제한 시간 안에 오지 않았습니다. 잠시 후 다시 시도하거나 빠른 모드로 질문하세요.",
   shape: "AI 응답 형식을 읽지 못했습니다. 잠시 후 다시 시도하세요.",
   server: "AI 서버 또는 네트워크 오류로 응답을 받지 못했습니다. 잠시 후 다시 시도하세요.",
+  incomplete: "AI 응답이 안전 차단 또는 길이 제한으로 끝까지 만들어지지 않았습니다. 질문을 나누거나 다시 생성하세요.",
 }
 
 // 같은 요청에서 여러 종류가 섞이면 운영 담당자가 먼저 손봐야 하는 순서로 보인다.
-const KIND_PRIORITY: readonly ModelFailureKindLabel[] = ["quota", "auth", "timeout", "rate", "server", "shape"]
+const KIND_PRIORITY: readonly ModelFailureKindLabel[] = ["quota", "auth", "timeout", "rate", "server", "shape", "incomplete"]
 
 export function describeModelFailure(failureKinds: readonly string[] | null | undefined): string | null {
   const kinds = new Set(failureKinds ?? [])
@@ -50,6 +51,30 @@ export default function ModelStatusBanner({ origin, failureKinds, className }: M
       <div className="min-w-0">
         <p className="font-semibold">AI 연결 실패 — 근거 요약만 표시합니다. 이 글은 AI 답이 아닙니다.</p>
         {detail ? <p className="mt-0.5">{detail}</p> : null}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * 모델이 끝까지 쓰지 못한 초안(길이 초과·안전 차단)에 붙이는 안내(R21). 글은 AI 가 쓴 것이지만 끊겼을 수 있어
+ * 완성본처럼 승인하지 않도록 알린다. incomplete 가 아니면 아무것도 그리지 않는다.
+ */
+export function IncompleteDraftNotice({ incomplete, className }: { incomplete?: boolean; className?: string }) {
+  if (!incomplete) return null
+  return (
+    <div
+      role="alert"
+      data-testid="incomplete-draft-notice"
+      className={cn(
+        "flex items-start gap-2 rounded-md border border-[#E7C0C0] bg-[#FCE9E9] px-3 py-2 text-[12px] text-[#8F2C2C]",
+        className
+      )}
+    >
+      <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+      <div className="min-w-0">
+        <p className="font-semibold">불완전한 초안 — 끝까지 만들어지지 않았습니다.</p>
+        <p className="mt-0.5">{KIND_MESSAGE.incomplete} 끊긴 글이므로 내용을 확인하고 보완한 뒤에만 승인하세요.</p>
       </div>
     </div>
   )

@@ -143,8 +143,10 @@ describe("distributor quote document", () => {
     })
 
     expect(details.recipientCompanyName).toBe("하드웨어 총판")
+    // 등록 총판(퀴드러닝)이 아니면 대표 이름을 모른다 — 담당자가 수신 담당 칸, 참조는 비우고 고객사는 본문 첫 문장.
     expect(details.recipientContactName).toBe("김담당")
-    expect(details.referenceName).toBe("고객사 테스트 학원")
+    expect(details.referenceName || undefined).toBeUndefined()
+    expect(details.subjectText).toBe("고객사 테스트 학원 건으로 아래와 같이 견적서를 제출합니다.")
     // C방식: 회사가 총판에게 공급한다 — 고객 견적의 공급자(총판)를 그대로 쓰면 '총판 → 총판' 문서가 된다.
     expect(details.supplierBusinessName).toBe(CLASSIN_QUOTE_SUPPLIER.businessName)
     expect(details.supplierRepresentativeName).toBe(CLASSIN_QUOTE_SUPPLIER.representativeName)

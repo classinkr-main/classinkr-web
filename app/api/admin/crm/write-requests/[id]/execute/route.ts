@@ -19,7 +19,7 @@ export async function POST(req: NextRequest, context: RouteContext) {
   try {
     const request = await executeCrmWriteRequest(id, admin.userId)
     const ok = request.status === "succeeded"
-    if (ok) revalidateTag(ADMIN_CRM_REVENUE_CACHE_TAG, "max")
+    if (ok) revalidateTag(ADMIN_CRM_REVENUE_CACHE_TAG, { expire: 0 })
     return NextResponse.json({ ok, request }, { status: ok ? 200 : 409 })
   } catch (error) {
     console.error("[POST /api/admin/crm/write-requests/[id]/execute]", error)

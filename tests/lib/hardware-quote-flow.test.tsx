@@ -328,15 +328,19 @@ describe("5. C방식 총판용 견적서(배 대표님 · 퀴드러닝 앞)", ()
     })
   })
 
-  it("공급자 = 회사(클래스인), 수신 = 퀴드러닝(배철웅), 참조 = 고객사", () => {
+  it("공급자 = 회사(클래스인), 수신 = 퀴드러닝(대표 조혜리), 참조 = 배철웅, 고객사는 본문 첫 문장", () => {
+    // 2026-11-20 결정: 총판 견적서 수신 담당 칸은 대표 조혜리, 참조는 배철웅.
     const details = buildDistributorQuoteDetails(customer, settlementFor(customer, lines), { customerName: "성남여고" })
     expect(details).toMatchObject({
       supplierBusinessName: "이이오클래스인코리아 유한회사",
       recipientCompanyName: "퀴드러닝",
-      recipientContactName: "배철웅",
+      recipientContactName: "조혜리",
       recipientPhone: "010-9238-5874",
-      referenceName: "고객사 성남여고",
+      referenceName: "배철웅",
+      subjectText: "고객사 성남여고 건으로 아래와 같이 견적서를 제출합니다.",
     })
+    const html = renderToStaticMarkup(<QuoteDocumentPreview quote={details} />)
+    expect(html).toContain("고객사 성남여고 건으로")
   })
 
   it("문서 총액 = 정산 합계(입금 요청 금액) — 고객 할인·할부 조건·고객 단가가 섞이지 않는다", () => {

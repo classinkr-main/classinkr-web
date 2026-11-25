@@ -1,6 +1,6 @@
 # 하드웨어 C방식/H방식 — 총판 정산과 매출 순서
 
-기준 시점: 2026-10-23 (설치 완료 자동 준비·검토 요청 2026-11-10)
+기준 시점: 2026-10-23 (설치 완료 자동 준비·검토 요청 2026-11-10, 고객 동의 자동 생성·총판 확인·발행 후 수정 2026-11-24)
 범위: `/admin/quotes` 견적 상세의 총판 정산 영역, `총판 미수금` 탭, `/share/distributor-quote/[token]`,
 하드웨어 매출 원장 초안. 입고·출고 물량에의 적용은 §6(다음 단계).
 
@@ -77,7 +77,41 @@
 - 원가는 구매 대수·고객마다 다르므로 견적마다 직접 입력하거나 원가 템플릿(품목 × 최소 구매 대수)으로 채운 뒤 덮어쓴다.
 - 고객 단가·고객 합계는 싣지 않는다.
 - 자동 발행 보류: 원가 저장 뒤 고객 견적 버전이 바뀌었거나 원가가 비어 있으면 발행하지 않고 재확인 알림을 남긴다.
-- 이메일 실패는 발행을 되돌리지 않는다(링크 복사·메일 재발송). 발행 후 금액 변경은 취소(입금 없을 때) 후 재설정.
+- 이메일 실패는 발행을 되돌리지 않는다(링크 복사·메일 재발송).
+
+### 4-1. 만드는 시점 — 고객 견적과 동시, 또는 고객이 확인할 때 (2026-11-24)
+
+- **동시**: 고객 견적을 만들 때 견적 상세 › 총판 정산에서 방식·원가를 미리 저장해 둔다. 발행 시점이 '고객 동의 시'면
+  고객이 동의하는 순간 발행된다.
+- **고객 먼저**: 미리 만들어 두지 않았어도, 고객이 공유 링크에서 동의하면 기본 정산을 자동으로 만들고 같은 규칙으로 발행한다
+  (`ensureDefaultSettlementOnAccept` — C방식 · 고객 동의 시 발행 · 마지막에 저장한 총판, 없으면 퀴드러닝 · 원가는 원가 템플릿이
+  하나뿐일 때만 채운다). 원가가 비어 있으면 발행하지 않고 검토 요청 알림을 남긴다 — 사람이 원가를 넣고 발행한다.
+- 자동으로 만들지 않는 경우: 총판에게 청구할 품목(하드웨어·AI Suite)이 없는 견적, 사람이 취소한 정산(되살리지 않는다),
+  발행 시점을 '설치 완료 시'·'직접 발행'으로 정해 둔 정산(그 설정을 따른다).
+
+### 4-2. 총판 확인과 발행 후 금액 수정 (2026-11-24)
+
+- **총판 확인**: 총판용 견적서 링크에 [견적 확인] 버튼이 있다(확인자 이름은 선택). 누르면 확인 시각이 남고, 처음 한 번만
+  총판 이메일로 확인 완료 사본, 사내에는 알림(위컴 + 알림 메일 수신 목록)이 간다. 발행 메일은 "링크에서 확인을 눌러 달라"고 안내한다.
+  견적 상세 › 총판 정산에 "총판 확인: 날짜 · 이름" 또는 "총판 확인 전"이 보인다.
+- **금액 추가**: 고객 견적에 없는 줄(배송비·추가 장비·조정 금액 등)을 '금액 추가'로 직접 넣을 수 있다(`sourceLineNumber` 0).
+  고객 견적이 바뀌어 줄을 다시 만들어도 직접 추가한 줄은 남는다.
+- **발행 후 수정**: C방식 발행 건(입금 대기·일부 입금·입금 완료)은 '금액 수정'으로 줄·원가·부가세·입금 기한을 고칠 수 있다.
+  공유 링크는 그대로이고 금액만 바뀐다. 고치면 총판 확인이 해제되고(다시 확인 받는다), 자동 메일이 켜져 있으면 총판에게
+  '[수정]' 메일이 간다. 상태는 새 합계와 받은 입금으로 다시 정한다(입금 완료였는데 금액을 올리면 일부 입금으로 돌아간다).
+  이미 받은 입금보다 작게 줄일 수는 없다 — 입금 기록을 먼저 정리한다. 방식·발행 시점은 바꾸지 않는다.
+- 입금별 매출 원장 초안은 입금 금액 기준이라 금액 수정과 무관하다.
+
+### 4-3. 총판 견적서 할인 · 문구 (2026-11-24)
+
+- **할인**: 고객 견적 할인은 총판 문서로 넘어가지 않는다(고객 결제 조건이다). 총판 견적서에는 따로 할인을 넣을 수 있다 —
+  고객 견적과 같은 모양(금액 또는 비율 %, 이름 — 비우면 "특별 할인"). 계산도 같다: 공급가 합계에서 빼고, VAT 별도면
+  할인 뒤 금액에 10%를 붙인다. 그래서 문서 총액 = 입금 요청 금액(`computeDistributorTotals`)이다. 문서에는 소계·할인·공급가 줄이 찍힌다.
+- **문구**: 총판 견적서 제목(비우면 "{고객사} 건 하드웨어 공급"), 기타사항(직접 쓰지 않으면 고객 견적 기타사항을 옮기고,
+  직접 쓰면 그 문구만 — 빈칸이면 기타사항을 비운다), 특약사항(기존), 품목별 표시 이름·세부내역(고객 견적 이름을 총판 문서에서만
+  바꿔 쓴다 — 고객 견적이 바뀌어 줄을 다시 만들어도 이어받는다). 직접 추가한 줄은 이름을 바로 고친다.
+- 할인·제목·기타사항은 20261124 마이그레이션 칸(`discount`·`document_text`)에 둔다. 품목 문구는 `lines` JSONB 안(`displayName`·`displayDescription`)이다.
+- 그대로 고정인 것: 공급자 블록(회사 등록 정보)·수신처(총판 등록 정보)·참조(고객사)·문서 번호(`{견적번호}-D`)·발행일.
 
 ## 5. 매출 원장 초안 규칙(두 방식 공통)
 
@@ -86,6 +120,23 @@
 - C방식: 입금 1건 = 초안 1건(`operation = distributor-payment-confirmed`). 입금 기록을 지우면 검수 전 초안만 함께
   지우고, 체크·적용된 초안은 원장에서 직접 정정한다.
 - H방식: 정산 1건 = 초안 1건(`operation = hmode-installation-confirmed`).
+
+## 5-1. 총판 미수금 보드 (2026-11)
+
+`/admin/quotes?tab=receivables` 는 발행된 총판 견적서 전체(미수 + 완납)를 받아 화면에서 거른다.
+
+- **요약**: 받을 금액 · 기한 경과 · 기한 미입력 · 입금 누계(회수율). 필터와 무관하게 전체 발행분 기준이고,
+  타일을 누르면 그 상태로 좁혀진다.
+- **경과 구간**: 받을 금액을 **발행 후 경과일**(30일 이내 / 31~60일 / 61~90일 / 91일 이상)로 나눈다.
+  입금 기한은 사람이 넣는 값이라 비어 있을 수 있어서, 구간은 항상 있는 발행일로 잡는다. 기한 경과 판정은
+  기존대로 입금 기한 기준이다 — 기한이 비어 있으면 기한 경과로 잡히지 않고 "기한 미입력"으로 따로 센다.
+- **월별 흐름**: 최근 6개월의 청구 발행액(발행월)과 입금액(입금월). 달을 누르면 그 달 발행분만 본다.
+- **목록**: 검색(고객·견적번호·총판·딜), 상태, 총판(2곳 이상일 때), 묶음(총판별·발행월별·경과 구간별, 소계),
+  머리글 정렬, CSV 내보내기(보이는 행 그대로). 보던 조건은 주소(`rq`·`rst`·`rdist`·`rage`·`rmonth`·`rsort`·`rgroup`)에
+  남아 새로고침·공유에도 유지된다.
+- **한도**: 미수와 완납을 따로 최근 500건씩 읽는다. 한도에 닿으면 화면에 알린다.
+- 금액은 원화 그대로다. 매출 원장(CNY)과 환산·합산하지 않는다(§5).
+- 입금 기록·삭제·발행은 여전히 견적 상세 › 총판 정산에서 한다. 기한 경과 알림(외부 발송)은 없다.
 
 ## 6. 다음 단계 — 입고·출고 물량
 
@@ -106,5 +157,15 @@
   오더 보장 `ensureSalesOrderForAcceptedQuoteSafely` 다음에 부른다)
 - 매출 초안: `lib/admin/handoff/distributor-payment-to-ledger-draft.ts`
 - API: `app/api/admin/quotes/[id]/distributor-settlement/**`, `app/api/admin/distributor-receivables`, `app/api/admin/distributor-price-templates/**`
+- 미수금 보드 계산(순수): `lib/distributor-receivables-view.ts` — 경과일·구간, 필터·정렬·묶음, 요약, 월별 흐름, CSV, 주소 상태
 - 화면: `components/admin/documents/DistributorSettlementSection.tsx`, `components/admin/documents/DistributorReceivablesPanel.tsx`
-- 마이그레이션: [20261023_distributor_settlements.sql](../../supabase/migrations/20261023_distributor_settlements.sql)
+  (불러오기·원가 템플릿) + `DistributorReceivablesBoard.tsx`·`DistributorReceivablesParts.tsx`(보드)
+- 총판 확인: `app/share/distributor-quote/[token]/DistributorConfirmPanel.tsx`, `app/api/share/distributor-quote/[token]/confirm/route.ts`
+- 마이그레이션: [20261023_distributor_settlements.sql](../../supabase/migrations/20261023_distributor_settlements.sql),
+  [20261124_distributor_settlement_confirm_revise.sql](../../supabase/migrations/20261124_distributor_settlement_confirm_revise.sql)
+- 쿼드러닝 계정 잔액 보드(2026-11-23, 총판 미수금 탭 위쪽 · Overview 카드): 쿼드러닝은 건별 미수가 아니라 계정 잔액 하나
+  (청구 − 쿼드 이체 − 고객 카드)로 맞춘다. 계산은 저장소 밖 정산 대조 스크립트가 하고, 결과 스냅샷을
+  `scripts/upload-partner-settlement-snapshot.mjs`로 올린다. 모양·요약 `lib/partner-settlement.ts`, 저장소
+  `lib/repositories/partner-settlement-snapshot.ts`, API `app/api/admin/partner-settlement`(`?summary=1` = Overview),
+  화면 `components/admin/documents/partner-settlement/`, 마이그레이션
+  [20261123_partner_settlement_snapshots.sql](../../supabase/migrations/20261123_partner_settlement_snapshots.sql)

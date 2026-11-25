@@ -9,12 +9,12 @@ import { RecordingHeroCta } from "@/components/recording/RecordingHeroCta"
 import { createBreadcrumbJsonLd, createPublicMetadata, createWebPageJsonLd } from "@/lib/seo"
 
 const PATH = "/product/recording"
-const NAME = "수업 녹화"
+const NAME = "학원 수업 녹화"
 const DESCRIPTION =
-  "Classin 보드로 수업을 시작하면 칠판 화면과 AI 카메라가 함께 녹화하고, 수업이 끝나면 클라우드에 저장됩니다. 결석 보강과 복습, 시청 확인까지 녹화 하나로 합니다."
+  "Classin 학원 수업 녹화의 시작 설정, 칠판 화면과 선택 카메라의 현장 녹화, 처리 후 다시보기와 시청 권한을 확인하세요."
 
 export const metadata: Metadata = createPublicMetadata({
-  title: "학원 수업 녹화: 수업만 하면 녹화는 저절로",
+  title: "학원 수업 녹화와 다시보기 설정",
   description: DESCRIPTION,
   path: PATH,
   keywords: ["학원 수업 녹화", "수업 녹화", "AI 카메라 녹화", "결석 보강 영상", "수업 다시보기", "Classin"],
@@ -95,9 +95,10 @@ export default function RecordingPage() {
                   </li>
                 ))}
               </ol>
-              <GatewayLink href={how.boardLink.href} className="mt-6">
-                {how.boardLink.label}
-              </GatewayLink>
+              <div className="mt-6 flex flex-col items-start gap-3">
+                <GatewayLink href={how.boardLink.href}>{how.boardLink.label}</GatewayLink>
+                <GatewayLink href={how.guideLink.href}>{how.guideLink.label}</GatewayLink>
+              </div>
             </div>
           </div>
 
@@ -118,6 +119,9 @@ export default function RecordingPage() {
               <p className={ITEM_LABEL}>{how.list.kicker}</p>
               <h3 className={ITEM_TITLE}>{how.list.title}</h3>
               <p className={ITEM_BODY}>{how.list.body}</p>
+              <GatewayLink href={how.replayLink.href} className="mt-3">
+                {how.replayLink.label}
+              </GatewayLink>
             </div>
           </div>
         </Reveal>

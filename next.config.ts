@@ -106,18 +106,60 @@ const leadMagnetPdfFonts = [
   "./node_modules/pretendard/dist/public/static/alternative/Pretendard-SemiBold.ttf",
 ];
 
-// compiled answer-index 런타임 자료(load.ts 는 turbopackIgnore 로cwd 스캔을 건너뛰므로 필수 파일만 명시 포함한다).
-const answerIndexRuntimeData = [
-  "./data/answer-index/cards/*.json",
-  "./data/answer-index/variants/*.json",
-  "./data/answer-index/universe/*.json",
+// 답 색인(lib/chatbot/answer-index/load.ts)이 런타임에 fs 로 읽는 자료. load.ts 의 자료 경로는 turbopackIgnore 라
+// 빌더가 따라가지 않으므로(주석 없으면 프로젝트 전체가 함수마다 실려 250MB 상한을 넘었다) 읽는 파일만 여기서 명시한다.
+// 목록 정본은 load.ts 의 ANSWER_INDEX_RUNTIME_TOP_FILES·ANSWER_INDEX_RUNTIME_DIRS 이고, 조각 이름(cards/a.D1-07.json)과
+// 점검용 audit/·eval/·inventory.json·units.json·site-facts.json 은 넣지 않는다.
+// tests/chatbot/answer-index/trace-includes.test.ts 가 load.ts 목록·load.ts 를 끌어오는 라우트 전부와 대조한다.
+const answerIndexRuntimeFiles = [
   "./data/answer-index/lexicon.json",
   "./data/answer-index/generic-words.json",
   "./data/answer-index/absent.json",
   "./data/answer-index/legacy-alias.json",
   "./data/answer-index/calibration.json",
   "./data/answer-index/manifest.json",
+  "./data/answer-index/cards/*.json",
+  "./data/answer-index/variants/*.json",
+  "./data/answer-index/universe/*.json",
 ];
+// 런타임이 읽지 않는 답 색인 자료. lib/db.ts 처럼 data/ 아래를 동적으로 읽는 모듈 때문에 data/ 전체가 추적되는
+// 함수에도 실리지 않게 모든 함수에서 뺀다(조각 이름 파일 포함).
+const answerIndexNonRuntimeFiles = [
+  "./data/answer-index/audit/**",
+  "./data/answer-index/eval/**",
+  "./data/answer-index/inventory.json",
+  "./data/answer-index/units.json",
+  "./data/answer-index/site-facts.json",
+  "./data/answer-index/{cards,variants,universe}/*.*.json",
+];
+// load.ts 를 (lib/chatbot/service.ts 등으로) 끌어오는 라우트·페이지. 동적 세그먼트는 `*`.
+// 새 라우트가 load.ts 를 끌어오면 위 시험이 실패한다 — 여기에 더한다.
+// 키는 contains 매칭이고 Turbopack 빌드는 라우트 이름 끝에 `/route`·`/page` 가 붙은 채 맞춘다
+// (`…/messages/*` 는 `…/[id]/messages/route` 에도 걸렸다). 끝 `*` 로 끝나는 키는 그 꼴까지 생각해 좁힌다.
+const answerIndexRoutes = [
+  "/admin/overview",
+  "/api/admin/ai/chat",
+  "/api/admin/channel-talk/sync",
+  "/api/admin/chatbot/eval",
+  "/api/admin/chatbot/questions",
+  "/api/admin/chatbot/questions/*",
+  "/api/admin/chatbot/recommended-questions",
+  "/api/admin/chatbot/stats",
+  "/api/admin/cs-chat/conversations/*/generate",
+  "/api/admin/cs-chat/conversations/*/messages/*messageId*",
+  "/api/admin/cs-chat/regression-eval",
+  "/api/admin/cs/dashboard",
+  "/api/admin/docs/alpha-readiness",
+  "/api/admin/docs/gaps",
+  "/api/admin/docs/gaps/draft",
+  "/api/chatbot/feedback",
+  "/api/chatbot/query",
+  "/api/chatbot/query/stream",
+  "/api/cron/channel-talk-sync",
+  "/api/mcp",
+];
+// 답 색인 라우트는 public/·tests/·docs/·supabase/ 를 읽지 않는다. 동적 경로가 다시 생겨도 이 넷은 싣지 않는다.
+const answerIndexRouteExcludes = ["./public/**", "./tests/**", "./docs/**", "./supabase/**"];
 
 const publicAssetCacheHeaders = [
   {
@@ -158,21 +200,15 @@ const nextConfig: NextConfig = {
       "./public/materials/lead-magnets/*.pdf",
     ],
     "/api/admin/lead-magnets/pdf-preview": leadMagnetPdfFonts,
-    "/api/chatbot/query": answerIndexRuntimeData,
-    "/api/chatbot/query/stream": answerIndexRuntimeData,
+    ...Object.fromEntries(answerIndexRoutes.map((route) => [route, answerIndexRuntimeFiles])),
   },
-  // 공개 챗봇 함수 번들에서 개발/감사/평가용 대용량 데이터와 네이버 크롤링 스냅샷을 제외해 콜드 스타트와 번들 크기를 줄인다.
+  // include 뒤에 적용된다(next/dist/build/collect-build-traces.js).
   outputFileTracingExcludes: {
-    "/api/chatbot/**": [
-      "./data/_naver-dev/**",
-      "./data/_naver-pull/**",
-      "./data/answer-index/inventory.json",
-      "./data/answer-index/units.json",
-      "./data/answer-index/site-facts.json",
-      "./data/answer-index/audit/**",
-      "./data/answer-index/eval/**",
-      "./data/chatbot-golden-set.json",
-    ],
+    "/**": answerIndexNonRuntimeFiles,
+    // 공개 챗봇 함수에는 개발·평가용 자료와 네이버 크롤링 스냅샷도 싣지 않는다(콜드 스타트·번들 크기).
+    // 답 색인의 점검용 자료는 위 "/**" 가 이미 뺀다.
+    "/api/chatbot/**": ["./data/_naver-dev/**", "./data/_naver-pull/**", "./data/chatbot-golden-set.json"],
+    ...Object.fromEntries(answerIndexRoutes.map((route) => [route, answerIndexRouteExcludes])),
   },
   images: {
     // 기본값은 webp 단독이다. avif를 앞에 두면 지원 브라우저에서 추가로 ~17% 더 줄어든다.

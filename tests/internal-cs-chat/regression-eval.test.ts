@@ -309,7 +309,16 @@ describe("regenerateForCandidate (default wiring)", () => {
     expect(generateArgs.requiresEvidenceReview).toBe(true)
     expect(generateArgs.sourceRefs).toEqual([{ id: "docs/x", kind: "public_doc" }])
     expect(generateArgs.deterministicFallback).toBe("폴백 초안")
-    expect(result).toEqual({ question: "설치가 안 됩니다", answer: "새 초안", origin: "model", otherCustomerNames: [], allowedNames: [] })
+    expect(result).toEqual({ question: "설치가 안 됩니다", answer: "새 초안", origin: "model", incomplete: false, otherCustomerNames: [], allowedNames: [] })
+  })
+
+  it("읽은 구간 밖의 후보는 창 안의 아무 사용자 메시지를 원 질문으로 쓰지 않는다", async () => {
+    mocks.getInternalCsConversation.mockResolvedValue({
+      conversation: { tags: [], priority: "normal" },
+      messages: [{ id: "user-late", role: "user", content: "다른 질문", review_state: "not_required" }],
+    })
+    await expect(regenerateForCandidate({ ...candidate(), metadata: {} })).rejects.toThrow("원 질문을 찾을 수 없습니다")
+    expect(mocks.generateInternalCsAnswer).not.toHaveBeenCalled()
   })
 
   it("adds approved image evidence to the regeneration and keeps only the current institution as allowed", async () => {
@@ -595,5 +604,74 @@ describe("DB immutability (default deps wiring)", () => {
 
     vi.unstubAllGlobals()
     delete process.env.GEMINI_API_KEY
+  })
+})
+
+describe("runInternalCsRegressionEval 전체 시간 예산(R21)", () => {
+  function many(count: number) {
+    return Array.from({ length: count }, (_, index) => candidate({ messageId: `assistant-${index}` }))
+  }
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it("deep 후보 10건이 각 12초씩 걸려도 55초 안에 끝난 것까지 돌려주고 나머지는 '시간 부족'으로 표시한다", async () => {
+    vi.useFakeTimers()
+    const regenerate = vi.fn(
+      () =>
+        new Promise<{ question: string; answer: string; origin: "model" }>((resolve) => {
+          setTimeout(() => resolve({ question: "질문", answer: "재생성 답", origin: "model" }), 12_000)
+        })
+    )
+    const started = Date.now()
+    const run = runInternalCsRegressionEval(
+      { limit: 10 },
+      {
+        loadCandidates: async () => many(10),
+        regenerate,
+        judge: async () => ({ outcome: "pass" as const, rationale: "동일", model: "judge" }),
+      }
+    )
+    let finishedAt: number | null = null
+    void run.then(() => { finishedAt = Date.now() - started })
+    await vi.advanceTimersByTimeAsync(55_000)
+    const result = await run
+
+    expect(finishedAt).not.toBeNull()
+    expect(finishedAt!).toBeLessThanOrEqual(55_000)
+    expect(result.items.length).toBe(4)
+    expect(result.skipped).toHaveLength(6)
+    expect(result.items.length + result.skipped.length).toBe(10)
+    expect(result.skipped.every((entry) => entry.reason.includes("시간 부족"))).toBe(true)
+    expect(regenerate.mock.calls.length).toBeLessThanOrEqual(5)
+  })
+
+  it("시간이 충분하면 모두 평가하고 시간 부족 항목이 없다", async () => {
+    const result = await runInternalCsRegressionEval(
+      { limit: 3 },
+      {
+        loadCandidates: async () => many(3),
+        regenerate: async () => ({ question: "질문", answer: "재생성 답", origin: "model" as const }),
+        judge: async () => ({ outcome: "pass" as const, rationale: "동일", model: "judge" }),
+      }
+    )
+    expect(result.items).toHaveLength(3)
+    expect(result.skipped).toEqual([])
+  })
+
+  it("끝까지 생성되지 못한(불완전) 재생성 글은 비교하지 않고 건너뛴다", async () => {
+    const judge = vi.fn()
+    const result = await runInternalCsRegressionEval(
+      { limit: 1 },
+      {
+        loadCandidates: async () => [candidate()],
+        regenerate: async () => ({ question: "질문", answer: "끊긴 글", origin: "model" as const, incomplete: true }),
+        judge,
+      }
+    )
+    expect(result.items).toEqual([])
+    expect(result.skipped[0].reason).toContain("불완전")
+    expect(judge).not.toHaveBeenCalled()
   })
 })

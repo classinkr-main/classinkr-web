@@ -70,8 +70,13 @@ export async function POST(
       signerType
     );
 
-    // 계약서 상태 업데이트
-    const newStatus = signerType === "partner" ? "partner_signed" : "admin_signed";
+    // 계약서 상태 업데이트 — 서명 순서와 무관하게 양측 서명이 모두 있으면 completed.
+    const newStatus =
+      version.partner_signed_at && version.admin_signed_at
+        ? "completed"
+        : signerType === "partner"
+          ? "partner_signed"
+          : "admin_signed";
     const { updateContractDocument } = await import(
       "@/lib/portal/repositories/contract-documents"
     );
@@ -80,7 +85,7 @@ export async function POST(
     // 양측 서명 완료(admin_signed = 사실상 계약 확정) 시점에만 매출 원장 입력 큐에
     // forecast 초안을 자동 제안한다. draft까지만 넣으므로 안전(검수→적용은 사람이 함).
     // 서명 응답을 막지 않도록 try/catch로 감싸고 실패는 로그만 남긴다.
-    if (newStatus === "admin_signed") {
+    if (signerType === "admin") {
       try {
         const { proposeLedgerDraftForSignedContract } = await import(
           "@/lib/admin/handoff/contract-to-ledger-draft"

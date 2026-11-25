@@ -21,7 +21,7 @@ import {
   SITE_NAME,
   SITE_URL,
 } from "@/lib/seo";
-import { CLASSIN_POSITIONING } from "@/lib/classin-positioning";
+import { CLASSIN_POSITIONING, KOREA_WEBSITE_NAME } from "@/lib/classin-positioning";
 
 // 루트라 어드민에도 적용된다. 강제 다크 UA 의 자동 반전을 끄고, iOS 브라우저 크롬을 paper 로 칠한다.
 export const viewport: Viewport = {
@@ -51,7 +51,7 @@ export const metadata: Metadata = {
     title: DEFAULT_SITE_TITLE,
     description: CLASSIN_POSITIONING.metadataDescription,
     url: SITE_URL,
-    siteName: SITE_NAME,
+    siteName: KOREA_WEBSITE_NAME,
     locale: "ko_KR",
     type: "website",
     images: [{ url: DEFAULT_OG_IMAGE_PATH }],
