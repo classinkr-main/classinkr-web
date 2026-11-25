@@ -79,6 +79,9 @@ function normalizeLineItem(value: unknown, index: number): PartnerQuoteLineItemI
     quantityUnit: pickString(item, "quantityUnit", "quantity_unit"),
     unitPrice,
     originalUnitPrice: pickNumber(item, "originalUnitPrice", "original_unit_price"),
+    discountDisplayText: pickString(item, "discountDisplayText"),
+    discountRateDisplayText: pickString(item, "discountRateDisplayText"),
+    discountDisplayBasis: item.discountDisplayBasis === "line_total" ? "line_total" : undefined,
     lineSupplyAmount,
     vatIncluded: pickBoolean(item, "vatIncluded", "vat_included") ?? true,
     lineStatus:
