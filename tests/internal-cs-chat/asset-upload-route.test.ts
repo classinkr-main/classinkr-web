@@ -6,6 +6,10 @@ const mocks = vi.hoisted(() => ({
   checkRateLimitDistributed: vi.fn(),
   getInternalCsConversation: vi.fn(),
   uploadInternalCsAsset: vi.fn(),
+  findInternalCsAssetByHash: vi.fn(),
+  createInternalCsAsset: vi.fn(),
+  getInternalCsAsset: vi.fn(),
+  updateInternalCsAssetAnalysis: vi.fn(),
 }))
 
 vi.mock("@/lib/admin-auth", () => ({
@@ -17,12 +21,13 @@ vi.mock("@/lib/server/rate-limit", () => ({
   getClientIp: () => "203.0.113.9",
 }))
 vi.mock("@/lib/repositories/internal-cs-chat", () => ({
-  createInternalCsAsset: vi.fn(),
-  findInternalCsAssetByHash: vi.fn(),
-  getInternalCsAsset: vi.fn(),
+  createInternalCsAsset: mocks.createInternalCsAsset,
+  findInternalCsAssetByHash: mocks.findInternalCsAssetByHash,
+  getInternalCsAsset: mocks.getInternalCsAsset,
+  isInternalCsAssetStorageDeleted: (row: { metadata?: Record<string, unknown> }) => typeof row.metadata?.storageDeletedAt === "string",
   getInternalCsConversation: mocks.getInternalCsConversation,
   isInternalCsChatNotReadyError: () => false,
-  updateInternalCsAssetAnalysis: vi.fn(),
+  updateInternalCsAssetAnalysis: mocks.updateInternalCsAssetAnalysis,
 }))
 vi.mock("@/lib/storage/internal-cs-assets", () => ({
   INTERNAL_CS_ASSET_MAX_BYTES: 8 * 1024 * 1024,
@@ -64,5 +69,21 @@ describe("POST cs-chat assets rate limit", () => {
     mocks.checkRateLimitDistributed.mockResolvedValue({ allowed: false })
     await POST(request(), context)
     expect(mocks.checkRateLimitDistributed.mock.calls[0][0]).toBe("203.0.113.9")
+  })
+})
+
+describe("POST cs-chat assets re-upload of a deleted attachment", () => {
+  it("does not answer with the deleted row as a duplicate; it goes on to revive it through createInternalCsAsset", async () => {
+    mocks.requireVerifiedAdminContext.mockResolvedValue({ role: "ADMIN", userId: "user-42", name: "담당자" })
+    mocks.checkRateLimitDistributed.mockResolvedValue({ allowed: true })
+    mocks.getInternalCsConversation.mockResolvedValue({ id: "conversation-1" })
+    mocks.uploadInternalCsAsset.mockResolvedValue({
+      ok: true, path: "conversation-1/h.png", fileName: "a.png", mimeType: "image/png", sizeBytes: 3, sha256: "a".repeat(64), reused: false,
+    })
+    mocks.findInternalCsAssetByHash.mockResolvedValue({ id: "asset-1", metadata: { storageDeletedAt: "2026-11-01T00:00:00.000Z" } })
+    mocks.createInternalCsAsset.mockRejectedValue(new Error("stop here"))
+    await POST(request(), context).catch(() => undefined)
+    expect(mocks.createInternalCsAsset).toHaveBeenCalledTimes(1)
+    expect(mocks.getInternalCsAsset).not.toHaveBeenCalled()
   })
 })

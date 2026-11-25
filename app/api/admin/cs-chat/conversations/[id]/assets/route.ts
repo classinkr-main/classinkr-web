@@ -8,6 +8,7 @@ import {
 import {
   createInternalCsAsset,
   findInternalCsAssetByHash,
+  isInternalCsAssetStorageDeleted,
   getInternalCsAsset,
   getInternalCsConversation,
   isInternalCsChatNotReadyError,
@@ -101,7 +102,7 @@ export async function POST(req: NextRequest, context: Context) {
     if (!upload.ok) return uploadErrorResponse(upload.error)
 
     const duplicate = await findInternalCsAssetByHash(id, upload.sha256)
-    if (duplicate) {
+    if (duplicate && !isInternalCsAssetStorageDeleted(duplicate)) {
       const asset = await getInternalCsAsset(duplicate.id, id)
       return NextResponse.json({ asset: asset ?? duplicate, duplicate: true }, { status: 200 })
     }

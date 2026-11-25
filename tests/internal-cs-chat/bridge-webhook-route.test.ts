@@ -38,6 +38,7 @@ vi.mock("@/lib/repositories/internal-cs-chat", () => ({
   getInternalCsAsset: mocks.getInternalCsAsset,
   updateInternalCsAssetAnalysis: mocks.updateInternalCsAssetAnalysis,
   isInternalCsChatNotReadyError: mocks.isInternalCsChatNotReadyError,
+  isInternalCsAssetStorageDeleted: (row: { metadata?: Record<string, unknown> }) => typeof row.metadata?.storageDeletedAt === "string",
 }))
 
 vi.mock("@/lib/storage/internal-cs-assets", () => ({

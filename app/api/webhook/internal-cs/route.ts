@@ -15,6 +15,7 @@ import {
   claimInternalCsIntegrationEvent,
   createInternalCsMessage,
   findInternalCsAssetByHash,
+  isInternalCsAssetStorageDeleted,
   getInternalCsAsset,
   getInternalCsConversation,
   getInternalCsIntegrationEventByIdempotency,
@@ -181,7 +182,7 @@ export async function POST(req: NextRequest) {
       }
 
       const existingAsset = await findInternalCsAssetByHash(conversationId, upload.sha256)
-      if (existingAsset) {
+      if (existingAsset && !isInternalCsAssetStorageDeleted(existingAsset)) {
         assetId = existingAsset.id
         assetResult = { id: existingAsset.id, duplicate: true, status: existingAsset.status }
       } else {

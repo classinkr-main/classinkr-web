@@ -600,12 +600,49 @@ export async function createInternalCsAsset(input: CreateInternalCsAssetInput) {
   if (error) {
     if (error.code === "23505") {
       const existing = await findInternalCsAssetByHash(input.conversationId, input.sha256)
+      if (existing && isInternalCsAssetStorageDeleted(existing)) {
+        // 지운 첨부와 같은 이미지를 다시 올렸다. 방금 올린 원본 객체가 고아가 되지 않도록 지운 행을 되살린다.
+        const revived = await reviveInternalCsAsset(existing.id, insert)
+        if (revived) return revived
+        throw databaseError("failed to revive deleted asset", error)
+      }
       if (existing) return existing
     }
     throw databaseError("failed to create asset", error)
   }
   const [asset] = await assetsWithSignedUrls([data as InternalCsAssetRow])
   return asset
+}
+
+/** 객체가 지워진 행을 새 업로드로 되살린다: 파일명·메타데이터·분석 칸을 처음 상태로 돌리고 보관 기간도 새로 센다. */
+async function reviveInternalCsAsset(assetId: string, insert: ReturnType<typeof buildInternalCsAssetInsert>) {
+  const supabase = createSupabaseAdminClient()
+  const { data, error } = await supabase
+    .from("internal_cs_assets")
+    .update({
+      storage_path: insert.storage_path,
+      original_file_name: insert.original_file_name,
+      mime_type: insert.mime_type,
+      size_bytes: insert.size_bytes,
+      status: "uploaded",
+      analysis_summary: null,
+      analysis_payload: {},
+      model_provider: null,
+      model_name: null,
+      error_message: null,
+      analyzed_at: null,
+      review_state: "pending",
+      metadata: insert.metadata,
+      created_at: new Date().toISOString(),
+      updated_by: insert.updated_by,
+    })
+    .eq("id", assetId)
+    .select("*")
+    .maybeSingle()
+  if (error) throw databaseError("failed to revive deleted asset", error)
+  if (!data) return null
+  const [asset] = await assetsWithSignedUrls([data as InternalCsAssetRow])
+  return asset ?? null
 }
 
 export async function updateInternalCsAssetAnalysis(input: UpdateInternalCsAssetAnalysisInput) {
