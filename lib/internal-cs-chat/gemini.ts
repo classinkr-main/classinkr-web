@@ -342,20 +342,31 @@ function buildContents(input: GenerateInternalCsAnswerInput) {
 
 /** 응답 길이 상한(토큰). 길이를 임의로 줄이지 않는 시스템 지시와 맞게 넉넉히 두되 무한정은 아니다. INTERNAL_CS_GEMINI_MAX_OUTPUT_TOKENS 로 바꾼다. */
 const DEFAULT_MAX_OUTPUT_TOKENS = 4_096
+/** 생각(thinking)을 높게 켠 호출은 생각 토큰도 출력 상한에 들어갈 수 있어, 답이 잘리지 않게 기본 상한을 최대로 둔다. */
+const DEFAULT_HIGH_THINKING_MAX_OUTPUT_TOKENS = 16_384
 
-export function getInternalCsMaxOutputTokens() {
-  return readBoundedInt(process.env.INTERNAL_CS_GEMINI_MAX_OUTPUT_TOKENS, DEFAULT_MAX_OUTPUT_TOKENS, 512, 16_384)
+export function getInternalCsMaxOutputTokens(options: { highThinking?: boolean } = {}) {
+  return readBoundedInt(
+    process.env.INTERNAL_CS_GEMINI_MAX_OUTPUT_TOKENS,
+    options.highThinking ? DEFAULT_HIGH_THINKING_MAX_OUTPUT_TOKENS : DEFAULT_MAX_OUTPUT_TOKENS,
+    512,
+    16_384
+  )
 }
 
 function buildGenerationConfig(model: string, mode: InternalCsModelMode) {
-  const generationConfig: Record<string, unknown> = { maxOutputTokens: getInternalCsMaxOutputTokens() }
+  const generationConfig: Record<string, unknown> = {}
+  let highThinking = false
 
   // Gemini 4.x and 3.x support thinkingConfig. Flash supports low/high and Pro supports high.
   if (model.startsWith("gemini-4") || model.startsWith("gemini-3.5-flash")) {
-    generationConfig.thinkingConfig = { thinkingLevel: mode === "deep" ? "high" : "low" }
+    highThinking = mode === "deep"
+    generationConfig.thinkingConfig = { thinkingLevel: highThinking ? "high" : "low" }
   } else if (model.startsWith("gemini-3.1-pro")) {
+    highThinking = true
     generationConfig.thinkingConfig = { thinkingLevel: "high" }
   }
+  generationConfig.maxOutputTokens = getInternalCsMaxOutputTokens({ highThinking })
 
   return generationConfig
 }

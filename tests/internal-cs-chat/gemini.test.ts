@@ -470,6 +470,22 @@ describe("generateInternalCsAnswer finishReason / maxOutputTokens (R21)", () => 
     expect(JSON.parse(String((capped.mock.calls[0][1] as RequestInit).body)).generationConfig.maxOutputTokens).toBe(16384)
   })
 
+  it("high thinking 호출(deep)은 생각 토큰을 감안해 기본 출력 상한을 16384 로 둔다", async () => {
+    vi.stubEnv("INTERNAL_CS_GEMINI_DEEP_MODEL", "gemini-3.1-pro-preview")
+    const fetchMock = vi.fn().mockResolvedValue(finishedResponse("정상 답변", "STOP"))
+    vi.stubGlobal("fetch", fetchMock)
+    await generateInternalCsAnswer({ question: "녹화 메뉴 위치?", requestedMode: "deep" })
+    const config = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body)).generationConfig
+    expect(config.thinkingConfig.thinkingLevel).toBe("high")
+    expect(config.maxOutputTokens).toBe(16384)
+
+    vi.stubEnv("INTERNAL_CS_GEMINI_MAX_OUTPUT_TOKENS", "2048")
+    const overridden = vi.fn().mockResolvedValue(finishedResponse("정상 답변", "STOP"))
+    vi.stubGlobal("fetch", overridden)
+    await generateInternalCsAnswer({ question: "녹화 메뉴 위치?", requestedMode: "deep" })
+    expect(JSON.parse(String((overridden.mock.calls[0][1] as RequestInit).body)).generationConfig.maxOutputTokens).toBe(2048)
+  })
+
   it("treats finishReason STOP as complete", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(finishedResponse("정상 답변", "STOP")))
     const result = await generateInternalCsAnswer({ question: "녹화 메뉴 위치?" })
