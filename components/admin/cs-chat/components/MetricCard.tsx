@@ -23,7 +23,7 @@ export default function MetricCard({
         <p className="text-[11px] font-medium text-[#615D59]">{label}</p>
       </div>
       <p className="mt-2.5 text-[20px] font-semibold tracking-[-0.02em] text-[#31302E]">{value}</p>
-      {sub ? <p className="mt-1 text-[10px] leading-4 text-[#A39E98]">{sub}</p> : null}
+      {sub ? <p className="mt-1 text-[11px] leading-4 text-[#78736D]">{sub}</p> : null}
     </div>
   )
 }

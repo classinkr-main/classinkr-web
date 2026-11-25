@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 
-import { CRM_STAFF_ADMIN_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
+import { CS_COPILOT_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
 import {
   analyzeInternalCsImage,
   type InternalCsVisionMimeType,
@@ -8,16 +8,22 @@ import {
 import {
   createInternalCsAsset,
   findInternalCsAssetByHash,
+  isInternalCsAssetStorageDeleted,
   getInternalCsAsset,
   getInternalCsConversation,
   isInternalCsChatNotReadyError,
   updateInternalCsAssetAnalysis,
 } from "@/lib/repositories/internal-cs-chat"
+import { safeInternalCsFileName } from "@/lib/internal-cs-chat/privacy"
 import { checkRateLimitDistributed, getClientIp } from "@/lib/server/rate-limit"
+import { stripImageMetadata } from "@/lib/storage/image-metadata"
 import {
   INTERNAL_CS_ASSET_MAX_BYTES,
   uploadInternalCsAsset,
 } from "@/lib/storage/internal-cs-assets"
+
+// 큰 사진은 이미지 크기에 비례해 분석 시간이 늘어난다(vision.ts, 최대 40초).
+export const maxDuration = 60
 
 type Context = { params: Promise<{ id: string }> }
 
@@ -53,11 +59,12 @@ function errorStatus(error: unknown) {
 }
 
 export async function POST(req: NextRequest, context: Context) {
-  const admin = await requireVerifiedAdminContext(req, CRM_STAFF_ADMIN_API_ROLES)
+  const admin = await requireVerifiedAdminContext(req, CS_COPILOT_API_ROLES)
   if (admin instanceof NextResponse) return admin
 
+  // 같은 사무실 IP 를 여럿이 나눠 쓰므로 계정 기준으로 센다. 계정 id 가 없으면 이름, 그것도 없으면 IP.
   const { allowed } = await checkRateLimitDistributed(
-    getClientIp(req),
+    admin.userId?.trim() || admin.name?.trim() || getClientIp(req),
     "admin-internal-cs-asset-upload",
     { windowMs: 60_000, max: 20 }
   )
@@ -98,7 +105,7 @@ export async function POST(req: NextRequest, context: Context) {
     if (!upload.ok) return uploadErrorResponse(upload.error)
 
     const duplicate = await findInternalCsAssetByHash(id, upload.sha256)
-    if (duplicate) {
+    if (duplicate && !isInternalCsAssetStorageDeleted(duplicate)) {
       const asset = await getInternalCsAsset(duplicate.id, id)
       return NextResponse.json({ asset: asset ?? duplicate, duplicate: true }, { status: 200 })
     }
@@ -108,7 +115,7 @@ export async function POST(req: NextRequest, context: Context) {
       kind: "screenshot",
       source: "admin_upload",
       storagePath: upload.path,
-      originalFileName: upload.fileName,
+      originalFileName: safeInternalCsFileName(upload.fileName),
       mimeType: upload.mimeType,
       sizeBytes: upload.sizeBytes,
       sha256: upload.sha256,
@@ -122,11 +129,13 @@ export async function POST(req: NextRequest, context: Context) {
       actor,
     })
 
-    const bytes = new Uint8Array(await file.arrayBuffer())
+    // 비전 모델에도 EXIF·GPS 를 뺀 바이트를 보낸다(저장본과 같은 처리). 정리에 실패하면 원본을 보내지 않고 분석을 건너뛴다.
+    const rawBytes = new Uint8Array(await file.arrayBuffer())
+    const bytes = stripImageMetadata(rawBytes, upload.mimeType) ?? new Uint8Array(0)
     const analysis = await analyzeInternalCsImage({
       bytes,
       mimeType: upload.mimeType as InternalCsVisionMimeType,
-      fileName: upload.fileName,
+      fileName: safeInternalCsFileName(upload.fileName),
       instruction,
       requestedMode: requestedMode as "auto" | "fast" | "deep",
     })
@@ -144,6 +153,7 @@ export async function POST(req: NextRequest, context: Context) {
         origin: analysis.origin,
         fallbackUsed: analysis.fallbackUsed,
         attemptedModels: analysis.attemptedModels,
+        failureKinds: analysis.failureKinds,
         guardrails: analysis.guardrails,
       },
       modelProvider: analysis.model ? "google" : null,

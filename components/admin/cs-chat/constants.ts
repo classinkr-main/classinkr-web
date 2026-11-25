@@ -16,6 +16,7 @@ export const INITIAL_CHECKS: ReviewChecks = {
   customer: false,
   evidence: false,
   externalScope: false,
+  warnings: false,
 }
 
 export const MAX_PENDING_ASSETS = 3
@@ -118,3 +119,6 @@ export const REVIEW_META: Record<ReviewState, { label: string; className: string
   changes_requested: { label: "수정 요청", className: "bg-[#FCE9E9] text-[#8F2C2C]" },
   rejected: { label: "사용 안 함", className: "bg-[#F6F5F4] text-[#615D59]" },
 }
+
+/** 승인 상태로 저장됐지만 사람 승인본이 아닌 행(예전 즉시 승인 등)의 표시. */
+export const RE_REVIEW_META = { label: "재검토 필요", className: "bg-[#FCE9E9] text-[#8F2C2C]" } as const

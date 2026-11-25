@@ -10,7 +10,7 @@ import { describe, expect, it } from "vitest"
  * 공개 답변 186건에서 ZIP 마커 0건 — 이 상태가 계약이다.
  */
 
-const PUBLIC_SURFACES = ["lib/chatbot", "app/api/chatbot", "components/ui/FloatingChatbot.tsx"]
+const PUBLIC_SURFACES = ["lib/chatbot", "app/api/chatbot", "components/ui/FloatingChatbot.tsx", "components/ui/chatbot"]
 
 // classin-brand-dataset(2026-07-15 ZIP)에서만 나오는, 공개 답변에 금지된 문구.
 const ZIP_MARKERS = ["시대는 끝났", "가장 교실다운", "MS10A", "30억", "8만+"]

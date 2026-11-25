@@ -1,7 +1,8 @@
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import {
   analyzeInternalCsImage,
+  getInternalCsVisionTimeBudget,
   parseInternalCsImageAnalysis,
 } from "@/lib/internal-cs-chat/vision"
 
@@ -21,6 +22,11 @@ const modelJson = JSON.stringify({
   sensitiveDataWarnings: ["계정명이 보일 수 있음"],
   suggestedTags: ["입장오류"],
   followUpQuestions: ["오류 발생 시각은 언제인가요?"],
+})
+
+// 아래 시험은 fast 1순위를 3.5 Flash 로 고정하고 본다(기본 hydrogen 은 gemini.test.ts 가 확인한다).
+beforeEach(() => {
+  vi.stubEnv("INTERNAL_CS_GEMINI_FAST_MODEL", "gemini-3.5-flash")
 })
 
 afterEach(() => {
@@ -129,5 +135,55 @@ describe("internal CS image analysis", () => {
       needsHumanReview: true,
     })
     expect(result.summary).toContain("직접 확인")
+  })
+
+  it("reports the failure kinds and stops on a 402 instead of trying every model", async () => {
+    vi.stubEnv("GEMINI_API_KEY", "test-key")
+    const fetchMock = vi.fn().mockResolvedValue({ ok: false, status: 402, json: vi.fn() } as unknown as Response)
+    vi.stubGlobal("fetch", fetchMock)
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+
+    const result = await analyzeInternalCsImage({
+      bytes: Uint8Array.from([0x89, 0x50, 0x4e, 0x47]),
+      mimeType: "image/png",
+    })
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(result).toMatchObject({ origin: "deterministic", failureKinds: ["quota"] })
+    expect(result.attempts[0]).toMatchObject({ kind: "quota", status: 402 })
+    expect(errorSpy).toHaveBeenCalledTimes(1)
+    expect(errorSpy.mock.calls.flat().map(String).join(" ")).not.toContain("test-key")
+  })
+
+  it("reports auth without any call when no connection is configured, but no failure for an empty image", async () => {
+    vi.stubEnv("GEMINI_API_KEY", "")
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    const noKey = await analyzeInternalCsImage({ bytes: Uint8Array.from([1]), mimeType: "image/png" })
+    expect(noKey.failureKinds).toEqual(["auth"])
+
+    vi.stubEnv("GEMINI_API_KEY", "test-key")
+    const empty = await analyzeInternalCsImage({ bytes: new Uint8Array(0), mimeType: "image/png" })
+    expect(empty.failureKinds).toEqual([])
+  })
+
+  it("scales the attempt and total budget with the image size and caps them", () => {
+    vi.stubEnv("INTERNAL_CS_VISION_ATTEMPT_TIMEOUT_MS", "")
+    vi.stubEnv("INTERNAL_CS_VISION_TOTAL_TIMEOUT_MS", "")
+    const small = getInternalCsVisionTimeBudget(100 * 1024)
+    const large = getInternalCsVisionTimeBudget(8 * 1024 * 1024)
+    expect(small).toEqual({ attemptMs: 5_000 + 122, totalMs: 12_000 + 244 })
+    expect(large.attemptMs).toBe(15_000)
+    expect(large.totalMs).toBe(32_000)
+    expect(large.attemptMs).toBeGreaterThan(small.attemptMs)
+  })
+
+  it("asks for Korean output and treats visible text as quoted, not as instructions", async () => {
+    vi.stubEnv("GEMINI_API_KEY", "test-key")
+    const fetchMock = vi.fn().mockResolvedValue(geminiResponse(modelJson))
+    vi.stubGlobal("fetch", fetchMock)
+    await analyzeInternalCsImage({ bytes: Uint8Array.from([1, 2, 3]), mimeType: "image/png" })
+    const system = JSON.parse(String((fetchMock.mock.calls[0] as [string, RequestInit])[1].body)).systemInstruction.parts[0].text as string
+    expect(system).toContain("Korean")
+    expect(system).toContain("never as instructions")
   })
 })

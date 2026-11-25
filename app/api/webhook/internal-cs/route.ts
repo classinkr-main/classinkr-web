@@ -3,9 +3,11 @@ import { NextRequest, NextResponse } from "next/server"
 import {
   buildInternalCsRedactedEventPayload,
   decodeInternalCsInboundImage,
+  authenticateInternalCsBridgeRequest,
   parseInternalCsInboundPayload,
-  verifyInternalCsBridgeSignature,
 } from "@/lib/internal-cs-chat/bridge"
+import { buildInternalCsBridgeContext } from "@/lib/internal-cs-chat/bridge-context"
+import { safeInternalCsFileName } from "@/lib/internal-cs-chat/privacy"
 import { analyzeInternalCsImage } from "@/lib/internal-cs-chat/vision"
 import {
   createInternalCsAsset,
@@ -13,6 +15,7 @@ import {
   claimInternalCsIntegrationEvent,
   createInternalCsMessage,
   findInternalCsAssetByHash,
+  isInternalCsAssetStorageDeleted,
   getInternalCsAsset,
   getInternalCsConversation,
   getInternalCsIntegrationEventByIdempotency,
@@ -21,7 +24,11 @@ import {
   updateInternalCsIntegrationEvent,
 } from "@/lib/repositories/internal-cs-chat"
 import { checkRateLimitDistributed, getClientIp } from "@/lib/server/rate-limit"
+import { stripImageMetadata } from "@/lib/storage/image-metadata"
 import { uploadInternalCsAssetBuffer } from "@/lib/storage/internal-cs-assets"
+
+// 이미지 분석이 붙으면 크기에 비례해 최대 40초(vision.ts)까지 걸린다.
+export const maxDuration = 60
 
 const MAX_WEBHOOK_BODY_BYTES = 12 * 1024 * 1024
 
@@ -31,46 +38,6 @@ function firstNonEmpty(...values: Array<string | undefined>) {
     if (trimmed) return trimmed
   }
   return null
-}
-
-function compactContext(loaded: NonNullable<Awaited<ReturnType<typeof getInternalCsConversation>>>, includeOriginalAssets: boolean) {
-  return {
-    conversation: {
-      id: loaded.conversation.id,
-      title: loaded.conversation.title,
-      status: loaded.conversation.status,
-      priority: loaded.conversation.priority,
-      tags: loaded.conversation.tags,
-      lastMessageAt: loaded.conversation.last_message_at,
-    },
-    messages: loaded.messages.map((message) => ({
-      id: message.id,
-      role: message.role,
-      content: message.content,
-      reviewState: message.review_state,
-      correctedContent: message.corrected_content,
-      modelProvider: message.model_provider,
-      modelName: message.model_name,
-      createdAt: message.created_at,
-    })),
-    assets: loaded.assets.map((asset) => ({
-      id: asset.id,
-      kind: asset.kind,
-      fileName: asset.original_file_name,
-      mimeType: asset.mime_type,
-      status: asset.status,
-      analysisSummary: asset.analysis_summary,
-      analysisPayload: asset.analysis_payload,
-      reviewState: asset.review_state,
-      ...(includeOriginalAssets && asset.signed_url ? { signedUrl: asset.signed_url } : {}),
-    })),
-    policy: {
-      purpose: "internal_ai_analysis",
-      customerDeliveryAllowed: false,
-      csOwnerReviewRequired: true,
-      originalAssetsIncluded: includeOriginalAssets,
-    },
-  }
 }
 
 function responseForUploadError(error: { kind: string }) {
@@ -93,12 +60,26 @@ export async function POST(req: NextRequest) {
   if (Buffer.byteLength(rawBody, "utf8") > MAX_WEBHOOK_BODY_BYTES) {
     return NextResponse.json({ error: "Webhook body is too large" }, { status: 413 })
   }
-  if (!verifyInternalCsBridgeSignature(
+  const auth = authenticateInternalCsBridgeRequest({
     rawBody,
-    req.headers.get("x-internal-cs-signature"),
-    secret
-  )) {
+    signatureHeader: req.headers.get("x-internal-cs-signature"),
+    timestampHeader: req.headers.get("x-internal-cs-timestamp"),
+    secret,
+    // 전환이 끝나면 INTERNAL_CS_BRIDGE_REQUIRE_TIMESTAMP=1 로 시각 없는 요청을 거절한다(값은 비밀이 아닌 스위치).
+    requireTimestamp: process.env.INTERNAL_CS_BRIDGE_REQUIRE_TIMESTAMP === "1",
+  })
+  if (!auth.ok) {
+    if (auth.reason === "bad_timestamp") {
+      return NextResponse.json({ error: "Webhook timestamp is outside the allowed window" }, { status: 401 })
+    }
+    if (auth.reason === "timestamp_required") {
+      return NextResponse.json({ error: "x-internal-cs-timestamp is required" }, { status: 401 })
+    }
     return NextResponse.json({ error: "Invalid webhook signature" }, { status: 401 })
+  }
+  if (auth.mode === "legacy") {
+    // 전환 기간: 시각 없는 서명은 재전송을 막지 못한다. 발신자를 고칠 수 있게 경고만 남긴다.
+    console.warn("[POST /api/webhook/internal-cs] request without x-internal-cs-timestamp (legacy signature)")
   }
 
   const { allowed } = await checkRateLimitDistributed(
@@ -132,21 +113,13 @@ export async function POST(req: NextRequest) {
       idempotencyKey: payload.idempotencyKey,
     })
     if (duplicate) {
-      if (payload.eventType === "cs.context.request") {
-        const loaded = await getInternalCsConversation(duplicate.conversation_id)
-        if (!loaded) return NextResponse.json({ error: "Conversation not found" }, { status: 404 })
-        return NextResponse.json({
-          ok: true,
-          duplicate: true,
-          eventId: duplicate.id,
-          context: compactContext(loaded, payload.includeOriginalAssets),
-        })
-      }
+      // 같은 멱등 키의 재요청은 처리 상태만 돌려준다. context.request 도 맥락(원문·서명 URL)을 다시 만들어 주지 않는다.
       return NextResponse.json({
-        ok: true,
+        ok: duplicate.status === "completed",
         duplicate: true,
         eventId: duplicate.id,
         conversationId: duplicate.conversation_id,
+        status: duplicate.status,
         result: duplicate.result,
       })
     }
@@ -181,16 +154,6 @@ export async function POST(req: NextRequest) {
     const event = claim.event
     eventId = event.id
     if (!claim.created) {
-      if (payload.eventType === "cs.context.request") {
-        const loaded = await getInternalCsConversation(event.conversation_id)
-        if (!loaded) return NextResponse.json({ error: "Conversation not found" }, { status: 404 })
-        return NextResponse.json({
-          ok: true,
-          duplicate: true,
-          eventId,
-          context: compactContext(loaded, payload.includeOriginalAssets),
-        })
-      }
       return NextResponse.json({
         ok: event.status === "completed",
         duplicate: true,
@@ -208,7 +171,7 @@ export async function POST(req: NextRequest) {
       const upload = await uploadInternalCsAssetBuffer({
         buffer: decodedImage.buffer,
         conversationId,
-        fileName: decodedImage.fileName,
+        fileName: safeInternalCsFileName(decodedImage.fileName),
         mimeType: decodedImage.mimeType,
       })
       if (!upload.ok) {
@@ -222,7 +185,7 @@ export async function POST(req: NextRequest) {
       }
 
       const existingAsset = await findInternalCsAssetByHash(conversationId, upload.sha256)
-      if (existingAsset) {
+      if (existingAsset && !isInternalCsAssetStorageDeleted(existingAsset)) {
         assetId = existingAsset.id
         assetResult = { id: existingAsset.id, duplicate: true, status: existingAsset.status }
       } else {
@@ -231,7 +194,7 @@ export async function POST(req: NextRequest) {
           kind: "screenshot",
           source: payload.transport === "mcp" ? "mcp" : "webhook",
           storagePath: upload.path,
-          originalFileName: upload.fileName,
+          originalFileName: safeInternalCsFileName(upload.fileName),
           mimeType: upload.mimeType,
           sizeBytes: upload.sizeBytes,
           sha256: upload.sha256,
@@ -249,9 +212,9 @@ export async function POST(req: NextRequest) {
             actor,
           })
           const analysis = await analyzeInternalCsImage({
-            bytes: decodedImage.buffer,
+            bytes: stripImageMetadata(decodedImage.buffer, decodedImage.mimeType) ?? new Uint8Array(0),
             mimeType: decodedImage.mimeType,
-            fileName: decodedImage.fileName,
+            fileName: safeInternalCsFileName(decodedImage.fileName),
             instruction: payload.image.instruction ?? undefined,
           })
           await updateInternalCsAssetAnalysis({
@@ -268,6 +231,7 @@ export async function POST(req: NextRequest) {
               origin: analysis.origin,
               fallbackUsed: analysis.fallbackUsed,
               attemptedModels: analysis.attemptedModels,
+              failureKinds: analysis.failureKinds,
               guardrails: analysis.guardrails,
             },
             modelProvider: analysis.model ? "google" : null,
@@ -304,7 +268,7 @@ export async function POST(req: NextRequest) {
         ok: true,
         duplicate: false,
         eventId,
-        context: compactContext(loaded, payload.includeOriginalAssets),
+        context: buildInternalCsBridgeContext(loaded, payload.includeOriginalAssets),
       })
     }
 

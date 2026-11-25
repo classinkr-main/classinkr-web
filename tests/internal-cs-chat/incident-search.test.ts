@@ -16,10 +16,9 @@ vi.mock("@/lib/internal-cs-chat/consultation-search", () => ({
 import { buildInternalCsCopilotContext } from "@/lib/internal-cs-chat/context"
 import {
   formatIncidentEvidence,
+  INCIDENT_CASES,
   incidentSourceRefs,
   searchIncidentEvidence,
-  INCIDENT_CASES,
-  WORKFLOW_FLOWS,
 } from "@/lib/internal-cs-chat/incident-search"
 
 beforeEach(() => {
@@ -34,13 +33,26 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
+const D02A_CUSTOMER = (INCIDENT_CASES.find((c) => c.id === "D-02a")?.customer ?? "").split(/\s+/)[0]
+
 describe("searchIncidentEvidence", () => {
+  it("does not match precedents on the generic 'error code' marker pair alone", () => {
+    for (const q of ["로그인 에러 코드 12", "결제 오류 코드 1234", "앱 설치 오류 코드 300"]) {
+      expect(searchIncidentEvidence(q).some((r) => r.caseId === "D-21")).toBe(false)
+    }
+  })
+
   it("finds Jeongyul B3 fixed IP conflict incident case (D-02a)", () => {
-    const results = searchIncidentEvidence("정율사관 B3 네트워크 끊김 오류 원인이 뭐야?")
+    const results = searchIncidentEvidence(`${D02A_CUSTOMER} B3 네트워크 끊김 오류 원인이 뭐야?`)
     expect(results.length).toBeGreaterThan(0)
     const d02a = results.find((r) => r.caseId === "D-02a")
     expect(d02a).toBeDefined()
-    expect(d02a?.org).toBe("정율사관 B3")
+    // 고객사 이름은 제목·본문에 싣지 않는다(IC-07). 제목은 "케이스 ID · 증상"이다.
+    expect(d02a).not.toHaveProperty("org")
+    expect(d02a?.title).toMatch(/^D-02a · /)
+    const d02aCustomer = INCIDENT_CASES.find((c) => c.id === "D-02a")?.customer ?? ""
+    expect(d02aCustomer.length).toBeGreaterThan(0)
+    expect(d02a?.title).not.toContain(d02aCustomer.split(/\s+/)[0])
     expect(d02a?.summary).toContain("172.17.0.52")
     expect(d02a?.resolution).toContain("DHCP")
   })
@@ -105,7 +117,7 @@ describe("searchIncidentEvidence", () => {
 
 describe("formatIncidentEvidence and incidentSourceRefs", () => {
   it("formats evidence into structured internal guide text", () => {
-    const sample = searchIncidentEvidence("정율사관 B3 네트워크 끊김")
+    const sample = searchIncidentEvidence(`${D02A_CUSTOMER} B3 네트워크 끊김`)
     const formatted = formatIncidentEvidence(sample)
     expect(formatted).toContain("[선례 오류 케이스 및 점검 흐름]")
     expect(formatted).toContain("D-02a")
@@ -117,7 +129,7 @@ describe("formatIncidentEvidence and incidentSourceRefs", () => {
   })
 
   it("converts evidence entries to InternalCsSourceRef with kind internal_guide", () => {
-    const sample = searchIncidentEvidence("정율사관 B3")
+    const sample = searchIncidentEvidence(`${D02A_CUSTOMER} B3 네트워크 끊김`)
     const refs = incidentSourceRefs(sample)
     expect(refs.length).toBeGreaterThan(0)
     expect(refs[0].kind).toBe("internal_guide")

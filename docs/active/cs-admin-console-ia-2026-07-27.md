@@ -207,7 +207,7 @@ URL이 그대로이므로 [AdminSidebar](../../components/admin/AdminSidebar.tsx
 ### 화면
 
 목록은 `tags @> {evidence:hq_pending}` 인 대화다. 행마다 제목·상태·담당·대기 경과를 보이고,
-펼치면 `buildHqTemplate()` 결과가 그대로 뜨며 복사 버튼이 붙는다.
+펼치면 스마트 WeCom 초안(`buildSmartHqDraft` — 사용자 글·`customer_context`만 입력, AI 답 글 제외)이 뜨고(본사 담당 표는 server-only라 초안·담당 배지는 `POST /api/admin/cs-chat/escalation` 결과로 그리며, 받는 동안 대기·실패 시 다시 시도 표시를 둔다), `buildHqTemplate()` 6항목 틀도 복사할 수 있다. 두 복사와 소통 탭의 본사 초안은 같은 규칙(`prepareInternalDraftCopy`: 승인 잠금 없음, 복사 직전 전화·이메일·계좌·주민번호·생년월일·계정 ID 가림)을 쓴다. 고객 안내 복사만 승인 뒤, 채울 자리(`[확인 후 입력]` 등)가 없을 때 열린다.
 회신이 오면 `evidence:confirmed`로 바꿔 목록에서 빠진다.
 
 **대기 경과는 근사다.** `evidence:hq_pending` 부착 시각을 저장하는 칼럼이 없어 `updated_at`을 쓴다.
@@ -518,3 +518,30 @@ resolveNavPlacement(item.href.split("?")[0], { role, preset, overrides }) !== "d
   행 클릭은 큐로 이동만 한다 — 초안 생성·게시 같은 처리 액션은 여전히 미해결 큐에만
   있으므로 §7의 진입점 단일화는 유지된다.
 - 지표 로딩은 스켈레톤, 실패는 "—"+다시 시도로 분리한다(로딩·실패·0값을 섞지 않는다).
+
+## 16. 2026-11 CS 코파일럿 모델 연결·후검사·생성 라우트 계약(B2)
+
+화면(B4)이 읽는 서버 계약이다. 구현은 `lib/internal-cs-chat/model-transport.ts`·`answer-checks.ts`·`history.ts`와
+`app/api/admin/cs-chat/conversations/[id]/generate/route.ts`.
+
+**모델 연결(IC-03)**
+- 생성·이미지·상담 임베딩·승격 임베딩·회귀 심판은 모두 `model-transport.ts`를 지난다. 기본은 공개 챗봇 연결(`CHATBOT_GEMINI_PROVIDER`)을 따르고,
+  `INTERNAL_CS_GEMINI_PROVIDER`(`chatbot`|`developer`|`vertex`)로 바꾼다. 개발자 키는 `x-goog-api-key` 헤더로만 보낸다.
+- 결과·메시지 metadata에 `failureKinds`(`auth`·`quota`·`rate`·`timeout`·`shape`·`server`), `attempts`(모델·상태·종류·지연), `latencyMs`, `timeBudget`이 실린다.
+  `origin: "deterministic"`이면 AI 답이 아니라 근거 요약이다 — 화면은 성공 알림 대신 `ModelStatusBanner`를 보인다.
+- `auth`·`quota`는 같은 요청의 다음 모델을 건너뛰고 보강 큐에 넣지 않는다. 보강 큐는 "검색 근거 0건이고 모델 호출은 실패하지 않은" 질문만 받는다.
+- 기본 fast 모델은 공개 챗봇과 같은 `gemini-4-hydrogen`(보급형), 이어서 `gemini-3.5-flash`, `gemini-3.1-flash-lite`. deep(Pro)은 기본을 올리지 않았다.
+  `INTERNAL_CS_GEMINI_FAST_MODEL=gemini-3.5-flash`로 되돌린다. 시간 예산: fast 시도 3.5초/전체 8초, deep 시도 18초/전체 30초
+  (`INTERNAL_CS_GEMINI_DEEP_ATTEMPT_TIMEOUT_MS`·`INTERNAL_CS_GEMINI_DEEP_TOTAL_TIMEOUT_MS`), 라우트 `maxDuration` 60초.
+
+**답 후검사(IC-04)**: 결과·metadata에 `reviewWarnings`(금액·무료 체험·환불·보상 약속, 원가·공급가, 다른 고객 기관, 케이스 ID, UID·계정)와 `reviewWarningCodes`. 다른 고객 기관 이름은 모델 컨텍스트 글에 싣지 않고(과거 상담 서술에서 `기관 {이름}` 을 뺐다) `buildInternalCsCopilotContext` 의 `otherCustomerNames`(과거 상담 근거의 `matchedOrg`)로 받아 검사한다.
+경고는 차단이 아니라 검토 신호다. 승인 전 '확인했습니다' 체크는 B4 화면이 건다.
+
+**generate 요청 본문**
+- `rerunOfUserMessageId`: 질문을 다시 저장하지 않는다(metadata `rerunOf`). 새 모델 초안이 나오면 같은 질문의 옛 검토 대기 초안을
+  `rejected` + 라벨 `superseded`로 바꾼다. 새 초안이 장애 대체 글이면 옛 초안을 치우지 않는다.
+- `resetContext: true`(+ 선택 `resetSource`: `manual`|`new_chat`|`mode_change`): `role: system` 경계 행(metadata `kind: "copilot_context_reset"`)을 저장하고,
+  이력은 마지막 경계 뒤만 쓴다. 질문이 없으면 경계만 저장한다.
+- `draftToPolish: <assistant messageId>`: 그 초안을 '미검토 참고' 블록으로 넣고 이력에는 넣지 않는다. 결과는 저장하지 않고 `polish.answer`로만 돌려준다(모델 장애면 `null`).
+- 본사 회신: `role: internal_note` + metadata `kind: "hq_reply"` 행의 최신 글이 '본사 회신(참고, 확정 아님)' 블록으로 들어간다(기록은 B4의 `onRecordHqReply`가 맡는다).
+- 사용자별 분당 30회(generate), 3회(regression-eval)까지.

@@ -32,7 +32,7 @@ export default function PromoteKnowledgeControl({
         <span
           className={cn(
             "inline-flex items-center gap-1 rounded-md font-semibold",
-            compact ? "px-1.5 py-0.5 text-[9px]" : "px-2 py-1 text-[10px]",
+            compact ? "px-1.5 py-0.5 text-[11px]" : "px-2 py-1 text-[11px]",
             indexingPending ? "bg-[#FBF1E0] text-[#7A520F]" : "bg-[#ECFDF5] text-[#084734]"
           )}
         >
@@ -43,7 +43,7 @@ export default function PromoteKnowledgeControl({
         </span>
         <Link
           href={`/admin/docs/${result.articleId}/edit`}
-          className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#084734] hover:underline"
+          className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#084734] hover:underline"
         >
           문서 열기
           <ExternalLink className="h-3 w-3" />
@@ -60,15 +60,15 @@ export default function PromoteKnowledgeControl({
         className={cn(
           "inline-flex items-center gap-1.5 rounded-md border font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-40",
           compact
-            ? "h-6 border-black/[0.08] px-2 text-[10px] text-[#615D59] hover:border-[#084734]/20 hover:bg-[#ECFDF5] hover:text-[#084734]"
-            : "h-7 border-black/[0.08] px-2.5 text-[10px] text-[#084734] hover:bg-[#ECFDF5]"
+            ? "h-6 border-black/[0.08] px-2 text-[11px] text-[#615D59] hover:border-[#084734]/20 hover:bg-[#ECFDF5] hover:text-[#084734]"
+            : "h-7 border-black/[0.08] px-2.5 text-[11px] text-[#084734] hover:bg-[#ECFDF5]"
         )}
       >
         {pending ? <Loader2 className="h-3 w-3 animate-spin" /> : <BookOpen className="h-3 w-3" />}
         {pending ? "승격 중" : "지식으로 승격"}
       </button>
       {result?.status === "error" ? (
-        <p className="flex items-start gap-1 text-[10px] leading-4 text-[#8F2C2C]">
+        <p className="flex items-start gap-1 text-[11px] leading-4 text-[#8F2C2C]">
           <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
           {result.error}
         </p>

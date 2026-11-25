@@ -10,8 +10,11 @@
 
 - 관리자 이미지 업로드: `POST /api/admin/cs-chat/conversations/{conversationId}/assets`
 - 이미지 분석 검토: `PATCH /api/admin/cs-chat/conversations/{conversationId}/assets/{assetId}`
+- 첨부 원본 삭제(되돌릴 수 없음): `DELETE` 같은 경로, `cs.asset.delete` capability(기본 부여는 코파일럿 역할 전체)
 - 서명된 AI/MCP 수신: `POST /api/webhook/internal-cs`
-- 관리자 명시적 외부 분석 요청: `POST /api/admin/cs-chat/conversations/{conversationId}/dispatch`
+  - 같은 멱등 키의 재요청은 처리 상태만 돌려준다(`duplicate: true`, `status`, `result`). `ok` 는 사본이 `completed` 일 때만 `true` 이고, 처리 중·실패 사본에는 `false` 다(HTTP 는 200). 재시도 여부는 `ok` 가 아니라 `status` 로 판단한다.
+- 관리자 명시적 외부 분석 요청: `POST /api/admin/cs-chat/conversations/{conversationId}/dispatch`(`cs.dispatch` capability)
+- 권한: 코파일럿 라우트(`/api/admin/cs-chat/*`)는 모두 `CS_COPILOT_API_ROLES`(지금 값은 CRM 직원 역할과 같다)로 들어온다. 위험 동작은 capability 를 더 본다 — 외부 분석 요청 `cs.dispatch`, 지식 승격 `cs.knowledge.promote`, 회귀 자동 평가 `cs.regression.run`, 첨부 원본 삭제 `cs.asset.delete`. 기본 부여는 코파일럿 역할 전체이고, `CS_COPILOT_STRICT_CAPABILITIES=1` 이면 명시 부여(또는 SUPER_ADMIN)만 인정한다([`lib/admin-auth.ts`](../../lib/admin-auth.ts)).
 - 연동 준비 상태: `GET /api/admin/cs-chat/integrations/status`
 - 데이터 모델: [`../../supabase/migrations/20260716_internal_cs_multimodal_bridge.sql`](../../supabase/migrations/20260716_internal_cs_multimodal_bridge.sql)
 - 저장소 계층: [`../../lib/repositories/internal-cs-chat.ts`](../../lib/repositories/internal-cs-chat.ts)

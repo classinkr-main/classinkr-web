@@ -1,4 +1,5 @@
 import type { InternalCsSourceRef } from "@/lib/internal-cs-chat/gemini"
+import { buildMatchHaystack, matchesKeyword, type MatchHaystack } from "@/lib/internal-cs-chat/match-text"
 
 export type InternalCsKnowledgeStatus =
   | "confirmed"
@@ -22,6 +23,8 @@ export interface InternalCsCuratedKnowledgeEntry {
   recommendedTags: readonly string[]
   sourceRefs: readonly InternalCsSourceRef[]
   alwaysInclude?: boolean
+  /** 결정형 초안(모델 실패 시 자동 정리)에 요약 문장을 싣지 않는다. 원가처럼 수치 자체가 내부 전용인 항목. */
+  hideSummaryInFallback?: boolean
 }
 
 export interface InternalCsKnowledgeSelection {
@@ -296,17 +299,17 @@ const KNOWLEDGE_ENTRIES: readonly InternalCsCuratedKnowledgeEntry[] = [
   },
   {
     id: "messaging-sms-cost",
-    title: "문자(SMS) 발송 단가와 구독 포함량",
+    title: "문자(SMS) 발송 원가",
     status: "conditional",
-    externalUse: "confirmation_required",
+    externalUse: "internal_only",
     summary:
-      "회원가입 등 문자(SMS) 발송은 한국 기준 건당 약 0.4위안(약 80원) 원가가 든다. 엔터프라이즈 구독에는 유료 문자 2,000건이 포함된다. 환율·플랜·초과 단가는 계약 시점 기준으로 확인한다.",
+      "회원가입 등 문자(SMS) 발송은 한국 기준 건당 약 0.4위안(약 80원) 원가가 든다. 환율·플랜·초과 단가는 계약 시점 기준으로 확인한다.",
     handling: [
-      "0.4위안은 위안 원가 기준이라 환율·부가세·재판매 마진에 따라 최종 청구액이 달라진다. 고객에게 원 단가를 확정 금액처럼 말하지 않는다.",
-      "2,000건 포함은 엔터프라이즈 기준이다. 다른 플랜의 포함량·초과분 단가·잔여 건수는 계약 플랜과 최신 단가를 확인한 뒤 안내한다.",
+      "0.4위안은 위안 원가 기준이라 환율·부가세·재판매 마진에 따라 최종 청구액이 달라진다. 원가는 고객에게 말하지 않는다.",
+      "고객이 문자 요금을 물으면 원가가 아니라 계약 플랜의 포함량·초과 단가를 확인한 뒤 담당자가 안내한다.",
       "문자 요금·잔여 건수를 단정하지 말고, 필요하면 계약·본사 확인 경로를 함께 안내한다.",
     ],
-    keywords: ["문자", "sms", "문자 발송", "회원가입 문자", "알림 문자", "문자 요금", "문자 비용", "문자 단가", "엔터프라이즈", "구독 문자", "2000", "2,000", "문자 포인트"],
+    keywords: ["sms", "문자 발송", "문자 요금", "문자 비용", "문자 단가", "문자 원가", "문자 포인트", "알림 문자", "인증 문자"],
     recommendedTags: ["area:billing", "intent:policy", "evidence:conditional"],
     sourceRefs: [
       {
@@ -316,6 +319,27 @@ const KNOWLEDGE_ENTRIES: readonly InternalCsCuratedKnowledgeEntry[] = [
       {
         id: "docs/active/classin-operating-canon-2026-07-02.md",
         label: "Classin 운영 정본",
+      },
+    ],
+    hideSummaryInFallback: true,
+  },
+  {
+    id: "messaging-sms-inclusion",
+    title: "엔터프라이즈 구독의 문자 포함 건수",
+    status: "conditional",
+    externalUse: "confirmation_required",
+    summary:
+      "엔터프라이즈 구독에는 유료 문자 2,000건이 포함된다. 다른 플랜의 포함량·초과분 단가·잔여 건수는 계약 플랜과 최신 단가를 확인한 뒤 안내한다.",
+    handling: [
+      "2,000건 포함은 엔터프라이즈 기준이다. 다른 플랜은 계약서와 최신 단가표로 확인한다.",
+      "잔여 건수와 초과 요금은 계정·계약 조건을 보기 전에 확정하지 않고, 계약·본사 확인 경로를 함께 안내한다.",
+    ],
+    keywords: ["문자 건수", "문자 포함 건수", "문자 몇 건", "구독 문자", "엔터프라이즈 문자", "유료 문자", "문자 2000건", "문자 2,000건", "회원가입 문자"],
+    recommendedTags: ["area:billing", "intent:policy", "evidence:conditional"],
+    sourceRefs: [
+      {
+        id: "docs/active/internal-cs-content-arrangement-2026-07-15.md#가격계약환불보증",
+        label: "문자 단가·구독 포함량 확인 경계",
       },
     ],
   },
@@ -404,7 +428,7 @@ const KNOWLEDGE_ENTRIES: readonly InternalCsCuratedKnowledgeEntry[] = [
       "코드 57은 하트비트 유실이다. 직후 신규 로그인 기록이 있으면 크래시·프리즈 또는 PC 절전·전원 차단이며, 신규 로그인이 없으면 회선 단절이다(D-18).",
       "모바일/태블릿(Android)에서 반복 퇴장(코드 56) 시 LTE 핫스팟 재현 여부를 확인하고, 기기 1대만 로그인했는지 점검한다(D-19).",
     ],
-    keywords: ["코드 56", "코드 57", "code 56", "code 57", "네트워크 끊김", "하트비트", "최대화 풀림", "최대화 해제", "재입실", "반복 퇴장", "강제 종료", "튕김"],
+    keywords: ["코드 56", "코드 57", "code 56", "code 57", "네트워크 끊김", "하트비트", "최대화 풀림", "최대화 해제", "재입실", "반복 퇴장", "강제 종료", "튕김", "수업 끊김", "접속 끊김", "자꾸 끊김"],
     recommendedTags: ["area:software", "topic:network", "intent:incident", "evidence:confirmed"],
     sourceRefs: [
       {
@@ -425,7 +449,7 @@ const KNOWLEDGE_ENTRIES: readonly InternalCsCuratedKnowledgeEntry[] = [
     summary:
       "녹화 미생성은 ①설정 미활성(Recording Settings: Disable)과 ②시작 후 에러(error code 4001, 카메라 미지정)로 구분된다. 코스 목록의 녹색 '현장 녹화가 시작되었습니다'는 시작 이벤트일 뿐 실제 파일 생성을 보장하지 않는다.",
     handling: [
-      "수업 녹화가 아예 안 남았을 때는 같은 계정의 정상 수업과 Recording Settings, Status History를 대조한다(가경관형 D-04).",
+      "수업 녹화가 아예 안 남았을 때는 같은 계정의 정상 수업과 Recording Settings, Status History를 대조한다(D-04형).",
       "녹화 시작 이벤트는 있으나 파일이 없을 때는 error code 4001(카메라 미지정) 여부를 본다. [카메라 녹화] 창 톱니바퀴에서 카메라를 선택하지 않으면 10분 뒤 자동 시작되어도 파일이 생성되지 않는다(D-21).",
       "Android 호스트 기기는 네트워크 단절 시 로컬 녹화 전환(isSwitchToLocal)을 지원하지 않아 녹화가 누락될 수 있으므로 중요한 수업은 PC 호스트를 권장한다(S-03).",
       "녹화본이 생성되지 않아 복구 불가를 안내할 때는 남아 있는 수업 스크린샷 잔존 여부를 함께 확인해 안내한다(D-21).",
@@ -484,20 +508,16 @@ const EXTERNAL_USE_LABELS: Record<InternalCsExternalUse, string> = {
   confirmation_required: "확인 전 외부 단정 금지",
 }
 
-function normalize(value: string) {
-  return value.normalize("NFKC").toLocaleLowerCase("ko-KR").replace(/\s+/g, " ").trim()
-}
-
-function scoreEntry(entry: InternalCsCuratedKnowledgeEntry, haystack: string) {
+function scoreEntry(entry: InternalCsCuratedKnowledgeEntry, haystack: MatchHaystack) {
   if (entry.alwaysInclude) return Number.MAX_SAFE_INTEGER
   return entry.keywords.reduce((score, keyword) => {
-    const normalizedKeyword = normalize(keyword)
-    if (!normalizedKeyword || !haystack.includes(normalizedKeyword)) return score
-    return score + Math.max(1, Math.min(4, normalizedKeyword.length))
+    if (!matchesKeyword(haystack, keyword)) return score
+    return score + Math.max(1, Math.min(4, keyword.replace(/\s+/g, " ").trim().length))
   }, 0)
 }
 
-function dedupeSourceRefs(entries: InternalCsCuratedKnowledgeEntry[]) {
+/** 항목들의 출처를 중복 없이 모은다. 호출하는 쪽이 어떤 항목을 넣을지 정한다(늘 넣는 지식은 근거로 세지 않는다). */
+export function curatedSourceRefsFor(entries: readonly InternalCsCuratedKnowledgeEntry[]) {
   const refs: InternalCsSourceRef[] = []
   const seen = new Set<string>()
   for (const entry of entries) {
@@ -533,7 +553,7 @@ export function selectInternalCsKnowledge(
   queueTags: readonly string[] = [],
   limit = 5
 ): InternalCsKnowledgeSelection {
-  const haystack = normalize([question, ...queueTags].join(" "))
+  const haystack = buildMatchHaystack([question, ...queueTags].join(" "), "keep")
   const mandatory = KNOWLEDGE_ENTRIES.filter((entry) => entry.alwaysInclude)
   const matched = KNOWLEDGE_ENTRIES
     .filter((entry) => !entry.alwaysInclude)
@@ -549,7 +569,7 @@ export function selectInternalCsKnowledge(
   return {
     entries,
     internalContext: formatEntries(entries),
-    sourceRefs: dedupeSourceRefs(entries),
+    sourceRefs: curatedSourceRefsFor(entries),
     recommendedTags,
   }
 }

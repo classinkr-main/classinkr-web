@@ -1,0 +1,1884 @@
+[
+  {
+    "id": "gap:recording/replay-subtitles",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "recording",
+    "topic": "녹화 영상 자막",
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_replay",
+      "C_recording",
+      "C_replay_subtitle"
+    ],
+    "anchors": [
+      "녹화 자막",
+      "다시보기 자막",
+      "영상 자막",
+      "자막 입히기",
+      "자막 파일",
+      "SRT",
+      "자막 달기",
+      "녹화본 번역",
+      "다시보기 번역",
+      "자막 자동 생성"
+    ],
+    "covers": "지난 수업 녹화본이나 다시보기 영상에 자막을 붙이거나 번역 자막을 띄우는 기능은 공개 문서에 없다는 것",
+    "notCovers": [
+      "수업 중 실시간 자막·번역 → doc:/docs/updates/classin-609-update#5/live-caption-what",
+      "녹화 수업 영상 AI 요약 → doc:/docs/teacher/course-activities#3/recorded-ai-summary"
+    ],
+    "negatives": [
+      {
+        "q": "수업 중에 선생님 말을 실시간 자막으로 띄울 수 있나요",
+        "route": "doc:/docs/updates/classin-609-update#5/live-caption-what"
+      },
+      {
+        "q": "실시간 자막 번역 기능은 어디서 켜요",
+        "route": "doc:/docs/updates/classin-609-update#5/live-caption-setup"
+      },
+      {
+        "q": "올린 녹화 수업 영상 AI로 요약해 주나요",
+        "route": "doc:/docs/teacher/course-activities#3/recorded-ai-summary"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": [
+        {
+          "unit": "doc:/docs/updates/classin-609-update#5",
+          "i": 0,
+          "hash": "d376f86b8b29beb6"
+        }
+      ]
+    },
+    "searchLog": [
+      {
+        "query": "녹화 자막",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "다시보기 자막",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "녹화 영상 자막",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "자막",
+        "units": 12,
+        "site": 0,
+        "checked": "무관(수업 중 실시간 자막 번역 기능 안내뿐, 녹화·다시보기 영상 자막 아님)"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-recording",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:recording/file-size-per-hour",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "recording",
+    "topic": "녹화 파일 시간당 용량",
+    "asks": [
+      "quantity"
+    ],
+    "concepts": [
+      "C_recording",
+      "C_file_size",
+      "C_recording_file_size"
+    ],
+    "anchors": [
+      "녹화 파일 크기",
+      "시간당 용량",
+      "한 시간 녹화 용량",
+      "녹화 몇 기가",
+      "녹화 MB",
+      "녹화 파일 용량",
+      "1시간 녹화 크기",
+      "녹화 GB"
+    ],
+    "covers": "수업 한 시간을 녹화하면 파일이 몇 MB·GB가 되는지 같은 녹화 파일 크기 기준은 공개 문서에 없다는 것",
+    "notCovers": [
+      "녹화본이 스토리지에 들어가는지 → doc:/docs/software/admin-monitoring-analytics#5/recording-counts-storage",
+      "현재 스토리지 사용량 → doc:/docs/start/pre-adoption-faq-22-questions#3/cloud-storage-capacity",
+      "수업 한 시간 데이터 사용량 → gap:classroom/data-usage"
+    ],
+    "negatives": [
+      {
+        "q": "녹화본도 학원 스토리지 용량에서 빠지나요",
+        "route": "doc:/docs/software/admin-monitoring-analytics#5/recording-counts-storage"
+      },
+      {
+        "q": "지금 스토리지 얼마나 썼는지 확인하는 곳",
+        "route": "doc:/docs/start/pre-adoption-faq-22-questions#3/cloud-storage-capacity"
+      },
+      {
+        "q": "녹화본 클립 중에 어떤 걸 받아야 할지 모르겠어요",
+        "route": "doc:/docs/admin/recording-file-troubleshooting#2/find-data"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": [
+        {
+          "unit": "doc:/docs/admin/recording-file-troubleshooting#2",
+          "i": 5,
+          "hash": "b0a7df2e186f5c76"
+        }
+      ]
+    },
+    "searchLog": [
+      {
+        "query": "시간당 용량",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "한 시간 용량",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "녹화 용량",
+        "units": 16,
+        "site": 0,
+        "checked": "무관(스토리지 용량·기본 제공량은 계약마다 다르다는 안내, 녹화 파일 시간당 크기 수치 없음)"
+      },
+      {
+        "query": "파일 크기",
+        "units": 12,
+        "site": 0,
+        "checked": "무관(클립 목록에서 파일 크기를 보는 곳·드라이브 업로드 크기 제한, 시간당 크기 수치 없음)"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-recording",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:recording/bulk-download",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "recording",
+    "topic": "녹화본 여러 개 한꺼번에 내려받기",
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_recording_download",
+      "C_download",
+      "C_bulk_download"
+    ],
+    "anchors": [
+      "녹화 일괄 다운로드",
+      "녹화 한꺼번에 다운로드",
+      "전체 녹화 다운",
+      "녹화 한번에 받기",
+      "녹화 여러 개 다운로드",
+      "녹화 묶어서 받기",
+      "녹화 zip 다운로드",
+      "녹화 대량 다운로드"
+    ],
+    "covers": "여러 수업의 녹화본을 한 번에 골라 일괄로 내려받는 기능은 공개 문서에 없다는 것(공개 문서는 클립마다 [다운로드]로 받는 방법만 안내)",
+    "notCovers": [
+      "녹화본 하나 내려받기 → doc:/docs/admin/storage-management#4/view-download",
+      "다운로드가 안 될 때 → doc:/docs/admin/recording-file-troubleshooting#3/download-fail",
+      "숙제 제출물 일괄 다운로드 → fixed:bulk-download-homework-submissions"
+    ],
+    "negatives": [
+      {
+        "q": "지난 수업 녹화본 하나 PC로 받는 경로",
+        "route": "doc:/docs/admin/storage-management#4/view-download"
+      },
+      {
+        "q": "녹화 다운로드 버튼을 눌러도 저장이 안 돼요",
+        "route": "doc:/docs/admin/recording-file-troubleshooting#3/download-fail"
+      },
+      {
+        "q": "학생들 숙제 제출 파일 한꺼번에 받기",
+        "route": "fixed:bulk-download-homework-submissions"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": [
+        {
+          "unit": "doc:/docs/admin/storage-management#4",
+          "i": 6,
+          "hash": "5d239b5b48088865"
+        }
+      ]
+    },
+    "searchLog": [
+      {
+        "query": "일괄 다운로드",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "한꺼번에 다운",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "여러 개 다운로드",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "전체 다운로드",
+        "units": 6,
+        "site": 0,
+        "checked": "무관(통계 수업 소비 다운로드·설치 파일 페이지, 녹화 일괄 다운로드 아님)"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-recording",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:recording/replay-embed",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "recording",
+    "topic": "녹화 영상 홈페이지·블로그에 넣기",
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_recording",
+      "C_web_link",
+      "C_video_embed"
+    ],
+    "anchors": [
+      "임베드",
+      "퍼가기",
+      "iframe",
+      "홈페이지에 영상",
+      "블로그에 녹화",
+      "embed 코드",
+      "삽입 코드",
+      "소스 코드 퍼가기"
+    ],
+    "covers": "녹화 영상을 학원 홈페이지·블로그에 플레이어로 넣는 임베드(퍼가기) 코드는 공개 문서에 없다는 것(공개 문서는 재생 링크를 복사해 보내는 방법을 안내)",
+    "notCovers": [
+      "재생 링크 공유 주의 → doc:guide:recording-download-share/share-link-caution",
+      "앱 없이 링크로 보는 웹 라이브·플레이백 → doc:/docs/software/admin-monitoring-analytics#3/web-live-what"
+    ],
+    "negatives": [
+      {
+        "q": "녹화 재생 링크 보내면 로그인 없이 열려요?",
+        "route": "doc:guide:recording-download-share/share-link-caution"
+      },
+      {
+        "q": "앱 설치 안 한 학부모도 링크로 수업 볼 수 있게",
+        "route": "doc:/docs/software/admin-monitoring-analytics#3/web-live-what"
+      },
+      {
+        "q": "받은 녹화본을 다른 코스 학생들에게 보여 주려면",
+        "route": "doc:/docs/admin/recording-file-troubleshooting#5/move-course"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": [
+        {
+          "unit": "doc:/docs/admin/storage-management#4",
+          "i": 9,
+          "hash": "010a518ba4379ca0"
+        }
+      ]
+    },
+    "searchLog": [
+      {
+        "query": "임베드",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "퍼가기",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "iframe",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "삽입 코드",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "홈페이지에 올",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-recording",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:recording/per-student-recording",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "recording",
+    "topic": "학생별 개별 녹화 파일",
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_recording",
+      "C_camera",
+      "C_per_student_recording"
+    ],
+    "anchors": [
+      "학생별 녹화 파일",
+      "개별 녹화 파일",
+      "학생마다 녹화",
+      "학생 화면 따로 녹화",
+      "학생 카메라 따로 녹화",
+      "각자 녹화 파일",
+      "1인별 녹화"
+    ],
+    "covers": "학생 한 명 한 명의 카메라·화면을 따로 녹화해 학생별 파일로 남기는 기능은 공개 문서에 없다는 것(수업 녹화는 교실 화면과 화면 레이아웃에 들어간 카메라 영역을 함께 남김)",
+    "notCovers": [
+      "수업 녹화에 담기는 화면 → doc:/docs/admin/course-creation#4/class-recording-what",
+      "수업 녹화와 현장 녹화 따로 저장 → doc:/docs/start/pre-adoption-faq-22-questions#3/recording-two-kinds-separate",
+      "녹화에 나오는 사람 범위 → policy:class-40-students-recording-scope"
+    ],
+    "negatives": [
+      {
+        "q": "수업 녹화 켜면 카메라 켠 학생 얼굴도 같이 찍히나요",
+        "route": "doc:/docs/admin/course-creation#4/class-recording-what"
+      },
+      {
+        "q": "현장 녹화 수업에서 학생 카메라 안 띄우게 하려면",
+        "route": "doc:guide:field-recording-camera-setup/onstage-1v0"
+      },
+      {
+        "q": "수업 화면 녹화랑 교실 카메라 녹화를 따로 볼 수 있나요",
+        "route": "doc:/docs/start/pre-adoption-faq-22-questions#3/recording-two-kinds-separate"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": [
+        {
+          "unit": "doc:/docs/admin/course-creation#4",
+          "i": 2,
+          "hash": "6ec098e535e46348"
+        }
+      ]
+    },
+    "searchLog": [
+      {
+        "query": "학생마다 녹화",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "개별 녹화",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "학생별 녹화",
+        "units": 4,
+        "site": 0,
+        "checked": "무관(녹화 수업 학생별 시청 기록, 학생별 녹화 파일 아님)"
+      },
+      {
+        "query": "학생 카메라 녹화",
+        "units": 24,
+        "site": 1,
+        "checked": "무관(무대 카메라 영역이 수업 녹화에 함께 담김·전자칠판 로컬 녹화·장비 소개, 학생별 녹화 파일 아님)"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-recording",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:recording/video-content-search",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "recording",
+    "topic": "녹화 영상 속 말·내용 검색",
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_recording",
+      "C_replay",
+      "C_video_content_search"
+    ],
+    "anchors": [
+      "영상 속 검색",
+      "말한 내용 검색",
+      "키워드로 장면 찾기",
+      "녹화 내용 검색",
+      "음성 검색",
+      "장면 검색",
+      "대사 검색",
+      "키워드 점프"
+    ],
+    "covers": "녹화 영상 안에서 선생님이 말한 낱말이나 판서 내용을 검색해 그 장면으로 가는 기능은 공개 문서에 없다는 것(공개 문서는 수업 이름·코스·기간·태그로 수업을 찾는 방법만 안내)",
+    "notCovers": [
+      "수업 이름·기간으로 녹화본 찾기 → doc:/docs/admin/storage-management#2/lesson-resources",
+      "수업 뒤 AI 요약 → doc:/docs/updates/classin-609-update#3/ai-summary-setup",
+      "다시보기 북마크 → fixed:replay-bookmark"
+    ],
+    "negatives": [
+      {
+        "q": "수업 이름이나 기간으로 지난 녹화본 찾는 곳",
+        "route": "doc:/docs/admin/storage-management#2/lesson-resources"
+      },
+      {
+        "q": "관리자 대시보드에서 녹화본 어디서 찾아요",
+        "route": "doc:/docs/admin/recording-file-troubleshooting#summary/rec-find-overview"
+      },
+      {
+        "q": "수업 끝나면 핵심 개념 요약을 자동으로 만들어 주나요",
+        "route": "doc:/docs/updates/classin-609-update#3/ai-summary-setup"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": [
+        {
+          "unit": "doc:/docs/admin/storage-management#2",
+          "i": 1,
+          "hash": "5c1243e7fb39af59"
+        }
+      ]
+    },
+    "searchLog": [
+      {
+        "query": "영상 검색",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "영상 속 검색",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "키워드 검색",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "말한 내용 검색",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "녹화 검색",
+        "units": 2,
+        "site": 0,
+        "checked": "무관(수업 리소스에서 수업 이름·기간·태그로 검색, 영상 속 내용 검색 아님)"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-recording",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:recording/replay-ab-repeat",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "recording",
+    "topic": "다시보기 구간 반복 재생",
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_replay",
+      "C_ab_repeat"
+    ],
+    "anchors": [
+      "구간 반복",
+      "AB 반복",
+      "반복 재생",
+      "한 부분만 반복",
+      "루프 재생",
+      "부분 반복",
+      "반복 듣기"
+    ],
+    "covers": "다시보기나 녹화 영상에서 정한 구간을 되풀이해 재생하는(A-B 반복) 기능은 공개 문서에 없다는 것",
+    "notCovers": [
+      "녹화 수업 재생 속도·플레이바 설정 → doc:/docs/software/lesson-activities#1/vod-advanced-settings",
+      "다시보기 북마크 → fixed:replay-bookmark",
+      "다시보기 시청 횟수 제한 → doc:/docs/admin/replay-troubleshooting#2/view-limit"
+    ],
+    "negatives": [
+      {
+        "q": "녹화 수업 영상 2배속으로 볼 수 있게 설정하려면",
+        "route": "doc:/docs/software/lesson-activities#1/vod-advanced-settings"
+      },
+      {
+        "q": "학생이 녹화 수업 영상 몇 번 봤는지 알 수 있나요",
+        "route": "doc:/docs/software/lesson-activities#1/vod-watch-records"
+      },
+      {
+        "q": "다시보기 몇 번까지만 볼 수 있게 막혀 있어요",
+        "route": "doc:/docs/admin/replay-troubleshooting#2/view-limit"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "구간 반복",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "반복 재생",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "AB 반복",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "반복 구간",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-recording",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:recording/replay-watch-hours",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "recording",
+    "topic": "다시보기 시청 시간대 제한",
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_replay",
+      "C_replay_access",
+      "C_replay_time_window"
+    ],
+    "anchors": [
+      "시청 시간대",
+      "밤에 다시보기 막기",
+      "야간 시청 제한",
+      "특정 시간만 시청",
+      "새벽 시청 차단",
+      "시간대별 시청 제한"
+    ],
+    "covers": "다시보기를 하루 중 정해진 시간대(예: 밤)에만 열리거나 막히게 하는 설정은 공개 문서에 없다는 것(공개 문서는 다시보기 유효 기간과 시청 횟수 제한을 안내)",
+    "notCovers": [
+      "다시보기 유효 기간 정하기 → howto:guide:cs-figma-digest-982",
+      "다시보기 시청 횟수 제한 → doc:/docs/admin/replay-troubleshooting#2/view-limit"
+    ],
+    "negatives": [
+      {
+        "q": "다시보기를 몇 주 동안만 볼 수 있게 기간 정하는 법",
+        "route": "howto:guide:cs-figma-digest-982"
+      },
+      {
+        "q": "다시보기 볼 수 있는 횟수가 다 찼다고 떠요",
+        "route": "doc:/docs/admin/replay-troubleshooting#2/view-limit"
+      },
+      {
+        "q": "유효 기간이 지나서 다시보기가 안 열려요",
+        "route": "doc:/docs/admin/replay-troubleshooting#2/expiry"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": [
+        {
+          "unit": "doc:/docs/admin/replay-troubleshooting#2",
+          "i": 0,
+          "hash": "f617af796ce17696"
+        }
+      ]
+    },
+    "searchLog": [
+      {
+        "query": "시청 시간대",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "야간 시청",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "시청 가능 시간",
+        "units": 1,
+        "site": 0,
+        "checked": "무관(웹 라이브 가이드 설명, 시간대 제한 아님)"
+      },
+      {
+        "query": "시간대 제한",
+        "units": 1,
+        "site": 0,
+        "checked": "무관(수업 모니터링 화면 설명, 다시보기 시간대 제한 아님)"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-recording",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:recording/recording-fail-alert",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "recording",
+    "topic": "녹화 실패·중단 알림",
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_recording",
+      "C_recording_stop",
+      "C_recording_fail_alert"
+    ],
+    "anchors": [
+      "녹화 실패 알림",
+      "녹화 중단 알림",
+      "녹화 안 되면 알림",
+      "녹화 오류 알림",
+      "녹화 멈춤 경고",
+      "녹화 누락 알림"
+    ],
+    "covers": "녹화가 안 됐거나 중간에 멈췄을 때 강사·관리자에게 자동으로 알림을 보내는 기능은 공개 문서에 없다는 것(공개 문서는 초록 녹화 아이콘으로 녹화 여부를 직접 확인하라고 안내)",
+    "notCovers": [
+      "녹화 중인지 아이콘으로 확인 → doc:/docs/teacher/recording-troubleshooting#2/icon-check",
+      "녹화가 멈추거나 나뉘는 경우 → doc:/docs/teacher/recording-troubleshooting#4/split-causes"
+    ],
+    "negatives": [
+      {
+        "q": "지금 녹화되고 있는지 화면 어디서 봐요",
+        "route": "doc:/docs/teacher/recording-troubleshooting#2/icon-check"
+      },
+      {
+        "q": "녹화가 중간에 끊겨서 파일이 여러 개로 나뉘었어요",
+        "route": "doc:/docs/teacher/recording-troubleshooting#4/split-causes"
+      },
+      {
+        "q": "강사가 잠깐 교실 나갔다 오면 녹화도 멈추나요",
+        "route": "doc:/docs/teacher/recording-troubleshooting#4/teacher-leaves"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": [
+        {
+          "unit": "doc:/docs/teacher/recording-troubleshooting#2",
+          "i": 8,
+          "hash": "b69cfeb95c24710b"
+        }
+      ]
+    },
+    "searchLog": [
+      {
+        "query": "녹화 실패 알림",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "녹화 멈추면 알림",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "녹화 오류 알림",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "녹화 중단 알림",
+        "units": 1,
+        "site": 0,
+        "checked": "무관(전자칠판 로컬 녹화 시작 안내, 실패 알림 아님)"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-recording",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:recording/web-live-latency",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "recording",
+    "topic": "웹 라이브 지연 시간",
+    "asks": [
+      "quantity",
+      "yesno"
+    ],
+    "concepts": [
+      "C_web_live",
+      "C_live_latency"
+    ],
+    "anchors": [
+      "웹 라이브 지연",
+      "라이브 딜레이",
+      "웹 송출 지연",
+      "생중계 몇 초 늦게",
+      "생중계 딜레이",
+      "라이브 레이턴시",
+      "라이브 저지연 모드"
+    ],
+    "covers": "웹 라이브로 송출할 때 시청자 화면이 실제 수업보다 몇 초 늦게 나오는지 같은 지연 시간 수치는 공개 문서에 없다는 것",
+    "notCovers": [
+      "웹 라이브 송출 시작 시점 → doc:/docs/software/admin-monitoring-analytics#3/web-live-setup-link",
+      "수업 접속 지연·서버 리전 → policy:network-latency-region"
+    ],
+    "negatives": [
+      {
+        "q": "웹 라이브 송출은 언제부터 시작되나요",
+        "route": "doc:/docs/software/admin-monitoring-analytics#3/web-live-setup-link"
+      },
+      {
+        "q": "웹 라이브 끝나고 시청자 수랑 채팅 기록 보는 곳",
+        "route": "doc:/docs/software/admin-monitoring-analytics#3/web-live-viewer-data"
+      },
+      {
+        "q": "웹 라이브에 시청 비밀번호 걸 수 있어요?",
+        "route": "doc:/docs/software/admin-monitoring-analytics#3/web-live-viewer-settings"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "딜레이",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "라이브 지연",
+        "units": 0,
+        "site": 1,
+        "checked": "무관(드라이브 자료를 지연 없이 띄운다는 소개 문구, 웹 라이브 지연 아님)"
+      },
+      {
+        "query": "지연 시간",
+        "units": 1,
+        "site": 1,
+        "checked": "무관(천장 마이크 저지연·자료 불러오기 소개, 웹 라이브 지연 수치 아님)"
+      },
+      {
+        "query": "몇 초",
+        "units": 1,
+        "site": 0,
+        "checked": "무관(녹화가 몇십 초 만에 끊길 때 네트워크 확인, 송출 지연 아님)"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-recording",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:recording/replay-quality-select",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "recording",
+    "topic": "다시보기 재생 화질 선택",
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_replay",
+      "C_playback_quality"
+    ],
+    "anchors": [
+      "재생 화질",
+      "다시보기 화질 고르기",
+      "다시보기 화질 낮춰 보기",
+      "저화질 재생",
+      "다시보기 데이터 절약",
+      "재생 해상도",
+      "다시보기 화질 조절"
+    ],
+    "covers": "다시보기를 볼 때 시청자가 재생 화질(예: 저화질·고화질)을 골라 데이터를 줄이는 기능은 공개 문서에 없다는 것",
+    "notCovers": [
+      "녹화본 화질·현장 녹화 해상도 → doc:guide:field-recording-camera-setup/quality-spec",
+      "녹화본 화질과 PC 사양 → fixed:field-recording-quality"
+    ],
+    "negatives": [
+      {
+        "q": "현장 녹화는 해상도 몇으로 저장돼요",
+        "route": "doc:guide:field-recording-camera-setup/quality-spec"
+      },
+      {
+        "q": "녹화본 재생했는데 소리가 하나도 안 들려요",
+        "route": "doc:/docs/admin/recording-file-troubleshooting#3/muted-playback"
+      },
+      {
+        "q": "다시보기에서 수업화면 녹화랑 현장녹화 중에 골라 봐야 하나요",
+        "route": "doc:/docs/admin/replay-troubleshooting#0/two-types"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "재생 화질",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "화질 변경",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "화질 낮",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "데이터 절약",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "화질 선택",
+        "units": 1,
+        "site": 0,
+        "checked": "무관(시스템 설정 고화질 화면 지원 토글 캡션, 다시보기 재생 화질 선택 아님)"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-recording",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:recording/stats-retention",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "recording",
+    "topic": "통계·수업 기록 조회 가능 기간",
+    "asks": [
+      "quantity",
+      "yesno"
+    ],
+    "concepts": [
+      "C_stats_download",
+      "C_stats_retention"
+    ],
+    "anchors": [
+      "통계 보관 기간",
+      "몇 년 전 통계",
+      "작년 통계",
+      "과거 통계",
+      "오래된 수업 기록",
+      "통계 조회 기간",
+      "예전 출결 기록"
+    ],
+    "covers": "관리자 통계·수업 기록을 몇 년 전 것까지 조회하거나 내려받을 수 있는지 보관 기간은 공개 문서에 없다는 것(공개 문서는 한 번에 최대 6개월치를 받는다고 안내)",
+    "notCovers": [
+      "한 번에 받는 통계 기간 → doc:/docs/admin/statistics-data#2/download-period-history",
+      "학생 정보 보관 기간 → fixed:basics-student-data-retention",
+      "계약 종료 뒤 자료 보관 → policy:basics-contract-end-data"
+    ],
+    "negatives": [
+      {
+        "q": "통계 파일 1년치를 한 번에 받을 수 있어요?",
+        "route": "doc:/docs/admin/statistics-data#2/download-period-history"
+      },
+      {
+        "q": "기간별 통계 엑셀 내려받는 경로",
+        "route": "doc:/docs/software/admin-monitoring-analytics#4/stats-download-steps"
+      },
+      {
+        "q": "통계 파일 받으면 어떤 항목이 들어 있어요",
+        "route": "doc:/docs/software/admin-monitoring-analytics#4/stats-file-items"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": [
+        {
+          "unit": "doc:/docs/admin/statistics-data#2",
+          "i": 4,
+          "hash": "ed2ee2a86f1566a5"
+        }
+      ]
+    },
+    "searchLog": [
+      {
+        "query": "과거 통계",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "몇 년",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "과거 기록",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "통계 이력",
+        "units": 2,
+        "site": 0,
+        "checked": "무관(한 번에 최대 6개월치·받은 기록 메뉴 위치, 데이터 보관 기간 아님)"
+      },
+      {
+        "query": "통계 보관",
+        "units": 3,
+        "site": 0,
+        "checked": "무관(받은 통계 파일 보관·공유 주의, 서버 보관 기간 아님)"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-recording",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:recording/analysis-lesson-language",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "recording",
+    "topic": "AI 강의 분석 대상 수업 언어",
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_lesson_analysis",
+      "C_analysis_language"
+    ],
+    "anchors": [
+      "영어 수업 분석",
+      "외국어 수업 분석",
+      "원어민 수업 분석",
+      "분석 지원 언어",
+      "중국어 수업 분석",
+      "영어로 진행한 수업"
+    ],
+    "covers": "영어·중국어처럼 한국어가 아닌 언어로 진행한 수업도 AI 강의 분석이 되는지, 어떤 수업 언어를 지원하는지는 공개 문서에 없다는 것(공개 문서는 분석 결과를 한국어 보고서로 정리한다고 안내)",
+    "notCovers": [
+      "분석 결과가 중국어로 나올 때 → doc:/docs/software/ai-learning-tools#3/lesson-analysis-chinese",
+      "AI 요약 지원 언어 → doc:/docs/teacher/course-activities#3/recorded-ai-summary",
+      "평가 항목 → doc:/docs/updates/classin-ai-lesson-analysis#1/eleven-items"
+    ],
+    "negatives": [
+      {
+        "q": "AI 강의 분석 결과가 중국어로 떠요",
+        "route": "doc:/docs/software/ai-learning-tools#3/lesson-analysis-chinese"
+      },
+      {
+        "q": "녹화 수업 AI 요약은 어떤 언어 영상에서 돼요",
+        "route": "doc:/docs/teacher/course-activities#3/recorded-ai-summary"
+      },
+      {
+        "q": "AI 강의 분석은 어떤 항목으로 점수를 매겨요",
+        "route": "doc:/docs/updates/classin-ai-lesson-analysis#1/eleven-items"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": [
+        {
+          "unit": "doc:/docs/updates/classin-ai-lesson-analysis#0",
+          "i": 1,
+          "hash": "84bf522576e2bb7b"
+        }
+      ]
+    },
+    "searchLog": [
+      {
+        "query": "영어 수업 분석",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "외국어 수업",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "분석 언어",
+        "units": 4,
+        "site": 0,
+        "checked": "무관(평가 4개 영역 중 '언어 표현' 항목, 지원 수업 언어 아님)"
+      },
+      {
+        "query": "수업 언어",
+        "units": 16,
+        "site": 0,
+        "checked": "무관(영어·중국어 AI 어학 활동 안내, 강의 분석 대상 언어 아님)"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-recording",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:recording/web-live-registration",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "recording",
+    "topic": "웹 라이브 사전 신청·시청자 정보 받기",
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_web_live",
+      "C_viewer_permission",
+      "C_live_registration"
+    ],
+    "anchors": [
+      "라이브 사전 신청",
+      "라이브 참가 신청서",
+      "시청자 정보 수집",
+      "라이브 신청 폼",
+      "라이브 참가자 명단",
+      "웹 라이브 사전 등록",
+      "신청자만 시청"
+    ],
+    "covers": "웹 라이브를 보기 전에 시청자에게 사전 신청을 받거나 이름·연락처 같은 참가자 정보를 모으는 신청서 기능은 공개 문서에 없다는 것(공개 문서는 로그인 필요 여부·시청 비밀번호·시청 권한 설정을 안내)",
+    "notCovers": [
+      "웹 라이브 시청 설정 → doc:/docs/software/admin-monitoring-analytics#3/web-live-viewer-settings",
+      "끝난 뒤 시청자별 시청 시간 → doc:/docs/admin/web-live-playback#5/viewer-detail"
+    ],
+    "negatives": [
+      {
+        "q": "웹 라이브를 정해진 사람만 볼 수 있게 할 수 있나요",
+        "route": "doc:/docs/software/admin-monitoring-analytics#3/web-live-viewer-settings"
+      },
+      {
+        "q": "웹 라이브 끝나고 시청자별로 얼마나 봤는지 확인",
+        "route": "doc:/docs/admin/web-live-playback#5/viewer-detail"
+      },
+      {
+        "q": "웹 라이브 수업 만드는 순서 알려 주세요",
+        "route": "doc:/docs/admin/web-live-playback#1/create"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": [
+        {
+          "unit": "doc:/docs/software/admin-monitoring-analytics#3",
+          "i": 6,
+          "hash": "f94b327d47eb5f85"
+        }
+      ]
+    },
+    "searchLog": [
+      {
+        "query": "사전 신청",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "참가 신청",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "시청자 정보",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "시청자 명단",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-recording",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:recording/attendance-edit",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "recording",
+    "topic": "출석 기록 직접 수정",
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_attendance",
+      "C_edit",
+      "C_attendance_edit"
+    ],
+    "anchors": [
+      "출석 수정",
+      "출결 수정",
+      "지각을 출석으로",
+      "결석 처리 변경",
+      "출석 인정",
+      "출석 상태 변경",
+      "출석부 고치기"
+    ],
+    "covers": "자동으로 남은 출석·지각·결석 기록을 강사나 관리자가 직접 고치는(예: 지각을 출석으로 바꾸기) 기능은 공개 문서에 없다는 것(공개 문서는 입장·퇴장 시각으로 남는 출석 표를 보는 곳만 안내)",
+    "notCovers": [
+      "결석·지각 기록 확인 → doc:/docs/admin/course-management#3/attendance-monitoring",
+      "출결 문자 자동 발송 → fixed:attendance-sms",
+      "출결 마감 → fixed:attendance-close-manager-meaning"
+    ],
+    "negatives": [
+      {
+        "q": "특정 학생 지각이나 결석 기록 어디서 봐요",
+        "route": "doc:/docs/admin/course-management#3/attendance-monitoring"
+      },
+      {
+        "q": "결석하면 학부모한테 문자 자동으로 가나요",
+        "route": "fixed:attendance-sms"
+      },
+      {
+        "q": "수업별 출결 내역 엑셀로 받는 곳",
+        "route": "doc:/docs/admin/statistics-data#2/consumption-date-basis-items"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": [
+        {
+          "unit": "doc:/docs/admin/class-monitoring#0",
+          "i": 4,
+          "hash": "af62b119e05e0293"
+        }
+      ]
+    },
+    "searchLog": [
+      {
+        "query": "출석 수정",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "출결 수정",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "지각 처리",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "출석 인정",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "출석 변경",
+        "units": 1,
+        "site": 0,
+        "checked": "무관(정산은 통계 다운로드 엑셀로 따로 정리한다는 안내, 출석 수정 아님)"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-recording",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:recording/analysis-score-dispute",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "recording",
+    "topic": "AI 강의 분석 점수 이의·재분석",
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_lesson_analysis",
+      "C_analysis_dispute"
+    ],
+    "anchors": [
+      "AI 점수 이의",
+      "재분석",
+      "분석 점수 수정",
+      "분석 점수 정정",
+      "AI 평가 이의 제기",
+      "분석 다시 요청",
+      "분석 점수 오류"
+    ],
+    "covers": "AI 강의 분석 점수가 맞지 않다고 느낄 때 강사가 이의를 내거나 점수를 고치거나 다시 분석을 요청하는 절차는 공개 문서에 없다는 것(공개 문서는 점수를 참고 기준과 면담의 출발점으로 쓰라고 안내)",
+    "notCovers": [
+      "분석 보고서 활용 → doc:/docs/updates/classin-ai-lesson-analysis#2/coaching-use",
+      "학원 평가표 반영 → doc:/docs/updates/classin-ai-lesson-analysis#4/custom-agent",
+      "AI 숙제 채점 점수 검토 → doc:/docs/software/classin-ai-feature-guide#1/ai-grading-review"
+    ],
+    "negatives": [
+      {
+        "q": "AI 강의 분석 보고서를 강사 면담에 어떻게 써요",
+        "route": "doc:/docs/updates/classin-ai-lesson-analysis#2/coaching-use"
+      },
+      {
+        "q": "관리자가 강사별 AI 분석 점수 비교하는 곳",
+        "route": "doc:/docs/updates/classin-ai-lesson-analysis#2/admin-compare"
+      },
+      {
+        "q": "AI가 채점한 서술형 숙제 점수 선생님이 확인하고 바꿀 수 있어요",
+        "route": "doc:/docs/software/classin-ai-feature-guide#1/ai-grading-review"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": [
+        {
+          "unit": "doc:/docs/updates/classin-ai-lesson-analysis#0",
+          "i": 2,
+          "hash": "c10613bff9fa53e7"
+        }
+      ]
+    },
+    "searchLog": [
+      {
+        "query": "점수 이의",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "재분석",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "분석 결과 수정",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "점수 수정",
+        "units": 1,
+        "site": 0,
+        "checked": "무관(OMR 결과 확인, AI 강의 분석 점수 아님)"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-recording",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:recording/screenshot-interval",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "recording",
+    "topic": "수업 스크린샷 저장 간격 바꾸기",
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_learning_report",
+      "C_screenshot_interval"
+    ],
+    "anchors": [
+      "스크린샷 간격",
+      "캡처 주기",
+      "캡처 간격 변경",
+      "30초마다 캡처",
+      "Highlights 간격",
+      "캡처 빈도",
+      "스크린샷 주기"
+    ],
+    "covers": "1분마다 자동 저장되는 교실 스크린샷(Highlights) 간격을 더 짧거나 길게 바꾸는 설정은 공개 문서에 없다는 것",
+    "notCovers": [
+      "Highlights란 → doc:/docs/student/class-report#0/highlights",
+      "1분 단위 스크린샷 보는 곳 → doc:/docs/software/admin-monitoring-analytics#2/minute-screenshots-timeline",
+      "1분 사이 설명은 다시보기로 → doc:/docs/student/class-report#3/highlights-gap"
+    ],
+    "negatives": [
+      {
+        "q": "학습 보고서의 Highlights가 뭐예요",
+        "route": "doc:/docs/student/class-report#0/highlights"
+      },
+      {
+        "q": "끝난 수업 1분 단위 화면 기록은 어디서 봐요",
+        "route": "doc:/docs/software/admin-monitoring-analytics#2/minute-screenshots-timeline"
+      },
+      {
+        "q": "Highlights 사이에 놓친 설명은 어떻게 확인해요",
+        "route": "doc:/docs/student/class-report#3/highlights-gap"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": [
+        {
+          "unit": "doc:/docs/student/class-report#0",
+          "i": 2,
+          "hash": "75065e24dc806d68"
+        }
+      ]
+    },
+    "searchLog": [
+      {
+        "query": "간격 변경",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "캡처 주기",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "스크린샷 간격",
+        "units": 3,
+        "site": 0,
+        "checked": "무관(약 1분 간격 자동 저장 안내만, 간격 바꾸는 설정 없음)"
+      },
+      {
+        "query": "간격 설정",
+        "units": 2,
+        "site": 0,
+        "checked": "무관(교실 파라미터의 녹화·질문 간격 설정, 스크린샷 간격 아님)"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-recording",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:recording/report-bulk-pdf",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "recording",
+    "topic": "반 전체 학생 리포트 한꺼번에 저장",
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_learning_report",
+      "C_bulk_report"
+    ],
+    "anchors": [
+      "리포트 일괄 출력",
+      "전체 학생 리포트",
+      "리포트 한꺼번에",
+      "일괄 PDF",
+      "반 전체 성적표",
+      "리포트 대량 저장",
+      "성적표 일괄"
+    ],
+    "covers": "반 학생 전원의 학생별 리포트를 한 번에 PDF로 만들거나 내려받는 일괄 기능은 공개 문서에 없다는 것(공개 문서는 학생마다 [링크 복사] 뒤 인쇄로 PDF를 저장하는 순서를 안내)",
+    "notCovers": [
+      "학생별 리포트 PDF 저장 → doc:/docs/admin/statistics-data#5/student-report-pdf-how",
+      "월간 리포트 자동 생성 → doc:/docs/admin/statistics-data#5/no-auto-monthly-report",
+      "API로 리포트 자동화 → doc:/docs/admin/admin-operation-standardization#9/api-available-scope"
+    ],
+    "negatives": [
+      {
+        "q": "학생 한 명 리포트를 PDF로 저장하는 순서",
+        "route": "doc:/docs/admin/statistics-data#5/student-report-pdf-how"
+      },
+      {
+        "q": "매달 학생 리포트가 자동으로 만들어지나요",
+        "route": "doc:/docs/admin/statistics-data#5/no-auto-monthly-report"
+      },
+      {
+        "q": "학생 성적 리포트에는 어떤 내용이 나와요",
+        "route": "doc:/docs/admin/statistics-data#5/student-report-contents"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": [
+        {
+          "unit": "doc:/docs/admin/statistics-data#summary",
+          "i": 4,
+          "hash": "914a6955316a0457"
+        }
+      ]
+    },
+    "searchLog": [
+      {
+        "query": "리포트 한꺼번에",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "일괄 PDF",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "리포트 일괄",
+        "units": 2,
+        "site": 0,
+        "checked": "무관(API 연동으로 개별 리포트 자동화 안내, 앱 안 일괄 저장 아님)"
+      },
+      {
+        "query": "전체 학생 리포트",
+        "units": 2,
+        "site": 0,
+        "checked": "무관(API 활용·교사가 코스 학생 전체를 보는 권한, 일괄 저장 아님)"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-recording",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:recording/recording-access-log",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "recording",
+    "topic": "녹화본 열람·내려받기 기록",
+    "asks": [
+      "yesno",
+      "who"
+    ],
+    "concepts": [
+      "C_recording_download",
+      "C_access_log"
+    ],
+    "anchors": [
+      "녹화 다운로드 이력",
+      "녹화 열람 기록",
+      "녹화 접근 로그",
+      "녹화 누가 받았는지",
+      "녹화 유출 추적",
+      "녹화 다운로드 로그"
+    ],
+    "covers": "누가 언제 녹화본을 열어 보거나 내려받았는지 남기는 접근 기록(로그)은 공개 문서에 없다는 것(공개 문서는 녹화본을 관리자나 권한 받은 계정만 확인하고 내려받는다고 안내)",
+    "notCovers": [
+      "녹화본 확인·내려받기 권한 → doc:/docs/start/pre-adoption-faq-22-questions#3/recording-who-enable-view",
+      "학생 다시보기 시청 확인 → doc:/docs/admin/replay-troubleshooting#4/viewed",
+      "로그인 기록 → gap:account/login-history"
+    ],
+    "negatives": [
+      {
+        "q": "녹화본은 누가 확인하고 내려받을 수 있어요",
+        "route": "doc:/docs/start/pre-adoption-faq-22-questions#3/recording-who-enable-view"
+      },
+      {
+        "q": "결석한 학생이 다시보기를 실제로 봤는지 확인",
+        "route": "doc:/docs/admin/replay-troubleshooting#4/viewed"
+      },
+      {
+        "q": "녹화 재생 링크를 밖으로 보내도 괜찮을까요",
+        "route": "doc:guide:recording-download-share/share-link-caution"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": [
+        {
+          "unit": "doc:/docs/start/pre-adoption-faq-22-questions#3",
+          "i": 6,
+          "hash": "bebc72113285e61d"
+        }
+      ]
+    },
+    "searchLog": [
+      {
+        "query": "누가 다운",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "열람 기록",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "다운로드 이력",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "다운로드 기록",
+        "units": 5,
+        "site": 1,
+        "checked": "무관(웹 라이브 그래프 다운로드·통계·녹화 삭제 안내와 웹사이트 자료 다운로드 기록 항목, 녹화본 내려받기 기록 아님)"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-recording",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:recording/replay-delayed-release",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "recording",
+    "topic": "다시보기 공개 시점 예약",
+    "asks": [
+      "yesno",
+      "howto",
+      "when"
+    ],
+    "concepts": [
+      "C_replay",
+      "C_replay_period",
+      "C_replay_scheduled_release"
+    ],
+    "anchors": [
+      "다시보기 예약 공개",
+      "공개 시점 예약",
+      "다시보기 나중에 공개",
+      "다시보기 열리는 날짜",
+      "녹화 공개 예약",
+      "다시보기 예약 오픈"
+    ],
+    "covers": "수업이 끝난 뒤 다시보기를 바로 열지 않고 정한 날짜·시각에 학생에게 공개되게 예약하는 설정은 공개 문서에 없다는 것(공개 문서는 다시보기를 열어 두는 기간과 시청 횟수를 정하는 방법을 안내)",
+    "notCovers": [
+      "다시보기 유효 기간 → howto:guide:cs-figma-digest-982",
+      "끝난 직후 녹화본 처리 시간 → doc:/docs/admin/recording-file-troubleshooting#0/just-ended",
+      "수업 예약 게시 → gap:course/scheduled-publish"
+    ],
+    "negatives": [
+      {
+        "q": "다시보기를 언제까지 볼 수 있게 기간 정하는 법",
+        "route": "howto:guide:cs-figma-digest-982"
+      },
+      {
+        "q": "수업 방금 끝났는데 녹화본이 아직 안 보여요",
+        "route": "doc:/docs/admin/recording-file-troubleshooting#0/just-ended"
+      },
+      {
+        "q": "수업 끝난 뒤 들어온 학생도 지난 다시보기 보게 하려면",
+        "route": "doc:/docs/admin/replay-troubleshooting#1/enable-past"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": [
+        {
+          "unit": "doc:/docs/admin/replay-troubleshooting#2",
+          "i": 0,
+          "hash": "f617af796ce17696"
+        }
+      ]
+    },
+    "searchLog": [
+      {
+        "query": "예약 공개",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "나중에 공개",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "다시보기 예약",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "공개 시점",
+        "units": 1,
+        "site": 3,
+        "checked": "무관(시험 결과 공개 시점 안내·소개서 작성 시점 문구, 다시보기 공개 예약 아님)"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-recording",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:recording/report-hide",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "recording",
+    "topic": "학습 보고서 학생에게 숨기기",
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_learning_report",
+      "C_report_visibility"
+    ],
+    "anchors": [
+      "보고서 숨기기",
+      "보고서 비공개",
+      "학습 보고서 끄기",
+      "리포트 안 보이게",
+      "보고서 학생 비공개",
+      "보고서 공개 설정"
+    ],
+    "covers": "수업이 끝나면 자동으로 만들어지는 학습 보고서를 학생·학부모에게 보이지 않게 끄거나 숨기는 설정은 공개 문서에 없다는 것(공개 문서는 학습 보고서가 수업 구성원 전원에게 똑같이 제공된다고 안내)",
+    "notCovers": [
+      "학습 보고서 여는 경로 → doc:/docs/student/class-report#1/open-path",
+      "학습 보고서 공유 → doc:/docs/student/class-report#1/share-report",
+      "판서가 보고서로 가는지 → doc:/docs/software/classroom-tools#2/board-to-report"
+    ],
+    "negatives": [
+      {
+        "q": "끝난 수업 학습 보고서는 어디서 열어요",
+        "route": "doc:/docs/student/class-report#1/open-path"
+      },
+      {
+        "q": "학습 보고서를 학부모한테 공유하려면",
+        "route": "doc:/docs/student/class-report#1/share-report"
+      },
+      {
+        "q": "수업 판서가 학생 학습 보고서에 들어가나요",
+        "route": "doc:/docs/software/classroom-tools#2/board-to-report"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": [
+        {
+          "unit": "doc:/docs/student/class-report#0",
+          "i": 3,
+          "hash": "5afdfa1380540910"
+        }
+      ]
+    },
+    "searchLog": [
+      {
+        "query": "보고서 숨기",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "보고서 끄기",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "보고서 비공개",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "보고서 공개",
+        "units": 1,
+        "site": 0,
+        "checked": "무관(AI 맞춤 분석 에이전트 공개 범위 설정, 학습 보고서 숨김 아님)"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-recording",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  }
+]

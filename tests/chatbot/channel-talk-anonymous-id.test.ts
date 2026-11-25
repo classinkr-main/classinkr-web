@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
+import { CONSENT_POLICY_VERSION } from "@/lib/consent/consent"
+import { consentCookie, installFakeBrowser } from "./helpers/fake-browser-storage"
+
 const KEY = "classinkr_chatbot_anonymous_id"
 
 function memoryStorage(): Storage {
@@ -20,12 +23,21 @@ async function loadModule() {
 }
 
 beforeEach(() => vi.resetModules())
-afterEach(() => vi.unstubAllGlobals())
+afterEach(() => {
+  vi.unstubAllGlobals()
+  vi.unstubAllEnvs()
+})
+
+function installMarketingBrowser() {
+  vi.stubEnv("NEXT_PUBLIC_CHANNEL_PLUGIN_KEY", "test-plugin-key")
+  const browser = installFakeBrowser()
+  browser.setCookie(consentCookie(CONSENT_POLICY_VERSION, { analytics: false, marketing: true }))
+  return browser.localStorage
+}
 
 describe("getChannelTalkAnonymousId", () => {
-  it("persists a generated id and reuses it", async () => {
-    const storage = memoryStorage()
-    vi.stubGlobal("window", { localStorage: storage })
+  it("persists and reuses an id after marketing consent", async () => {
+    const storage = installMarketingBrowser()
     const { getChannelTalkAnonymousId } = await loadModule()
 
     const first = getChannelTalkAnonymousId()
@@ -34,19 +46,17 @@ describe("getChannelTalkAnonymousId", () => {
     expect(getChannelTalkAnonymousId()).toBe(first)
   })
 
-  it("returns the stored id when one exists", async () => {
-    const storage = memoryStorage()
+  it("returns the stored id when marketing consent is active", async () => {
+    const storage = installMarketingBrowser()
     storage.setItem(KEY, "stored-id")
-    vi.stubGlobal("window", { localStorage: storage })
     const { getChannelTalkAnonymousId } = await loadModule()
 
     expect(getChannelTalkAnonymousId()).toBe("stored-id")
   })
 
   it("does not throw when setItem throws and keeps one id for the page view", async () => {
-    const storage = memoryStorage()
+    const storage = installMarketingBrowser()
     storage.setItem = vi.fn(() => { throw new DOMException("quota", "QuotaExceededError") })
-    vi.stubGlobal("window", { localStorage: storage })
     const { buildChannelTalkMemberId, getChannelTalkAnonymousId } = await loadModule()
 
     let first: string | undefined
@@ -97,6 +107,8 @@ describe("chatbot sound mute storage", () => {
     vi.stubGlobal("window", { localStorage: storage })
 
     const sound = await import("@/lib/chatbot/sound")
+    expect(sound.isMuted()).toBe(true)
+    expect(() => sound.setMuted(false)).not.toThrow()
     expect(sound.isMuted()).toBe(false)
     expect(() => sound.setMuted(true)).not.toThrow()
     expect(sound.isMuted()).toBe(true)

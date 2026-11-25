@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import type { InternalCsAssetRow } from "@/lib/repositories/internal-cs-chat"
 
@@ -10,10 +10,13 @@ const mocks = vi.hoisted(() => ({
   isInternalCsChatNotReadyError: vi.fn(() => false),
   buildInternalCsCopilotContext: vi.fn(),
   generateInternalCsAnswer: vi.fn(),
+  supersedeInternalCsPendingMessages: vi.fn(),
+  ingestInternalCsGap: vi.fn(),
+  checkRateLimitDistributed: vi.fn(),
 }))
 
 vi.mock("@/lib/admin-auth", () => ({
-  CRM_STAFF_ADMIN_API_ROLES: ["SUPER_ADMIN", "ADMIN", "BRANCH"],
+  CS_COPILOT_API_ROLES: ["SUPER_ADMIN", "ADMIN", "BRANCH"],
   requireVerifiedAdminContext: mocks.requireVerifiedAdminContext,
 }))
 
@@ -21,6 +24,16 @@ vi.mock("@/lib/repositories/internal-cs-chat", () => ({
   getInternalCsConversation: mocks.getInternalCsConversation,
   createInternalCsMessage: mocks.createInternalCsMessage,
   isInternalCsChatNotReadyError: mocks.isInternalCsChatNotReadyError,
+  supersedeInternalCsPendingMessages: mocks.supersedeInternalCsPendingMessages,
+}))
+
+vi.mock("@/lib/internal-cs-chat/gap-ingest", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/internal-cs-chat/gap-ingest")>("@/lib/internal-cs-chat/gap-ingest")
+  return { ...actual, ingestInternalCsGap: mocks.ingestInternalCsGap }
+})
+
+vi.mock("@/lib/server/rate-limit", () => ({
+  checkRateLimitDistributed: mocks.checkRateLimitDistributed,
 }))
 
 vi.mock("@/lib/internal-cs-chat/context", () => ({
@@ -92,6 +105,10 @@ const generation = {
   origin: "model",
   fallbackUsed: false,
   attemptedModels: ["gemini-3.5-flash"],
+  attempts: [{ model: "gemini-3.5-flash", ok: true, status: 200, latencyMs: 120 }],
+  failureKinds: [],
+  latencyMs: 120,
+  timeBudget: { totalMs: 8_000, attemptMs: 3_500 },
   citations: sourceRefs,
   reviewState: "pending",
   guardrails: [
@@ -174,6 +191,11 @@ function setSuccessfulDefaults() {
     .mockResolvedValueOnce(userMessage())
     .mockResolvedValueOnce(assistantMessage())
 }
+
+beforeEach(() => {
+  mocks.checkRateLimitDistributed.mockResolvedValue({ allowed: true, remaining: 29, resetAt: 0 })
+  mocks.supersedeInternalCsPendingMessages.mockResolvedValue([])
+})
 
 afterEach(() => {
   vi.clearAllMocks()
@@ -433,5 +455,417 @@ describe("POST /api/admin/cs-chat/conversations/[id]/generate", () => {
       userMessageId: "user-message-1",
       assistantMessageSaved: false,
     })
+  })
+})
+
+function loadConversation(messages: unknown[], overrides: Record<string, unknown> = {}) {
+  mocks.getInternalCsConversation.mockResolvedValue({
+    conversation: { ...conversation, ...overrides },
+    messages,
+    assets: [],
+  })
+}
+
+function msg(id: string, role: string, content: string, extra: Record<string, unknown> = {}) {
+  return {
+    id,
+    conversation_id: "conversation-1",
+    role,
+    content,
+    review_state: role === "assistant" ? "pending" : "not_required",
+    corrected_content: null,
+    feedback_labels: [],
+    metadata: {},
+    ...extra,
+  }
+}
+
+function generatedHistory() {
+  return mocks.generateInternalCsAnswer.mock.calls[0][0].history as { role: string; text: string }[]
+}
+
+describe("generate route: model failure, gap queue and review warnings", () => {
+  it("shows the failure kinds in the result and metadata, and does not queue a model outage as a knowledge gap", async () => {
+    setSuccessfulDefaults()
+    mocks.generateInternalCsAnswer.mockResolvedValue({
+      ...generation,
+      answer: "근거 요약",
+      model: null,
+      origin: "deterministic",
+      attemptedModels: ["gemini-4-hydrogen"],
+      attempts: [{ model: "gemini-4-hydrogen", ok: false, kind: "quota", status: 402, latencyMs: 90 }],
+      failureKinds: ["quota"],
+    })
+    // 근거가 하나도 없는 질문이어도 모델 장애라서 넣지 않는다.
+    mocks.buildInternalCsCopilotContext.mockResolvedValue({
+      internalContext: "",
+      sourceRefs: [],
+      deterministicFallback: "담당자 검토 필요",
+      publicEvidence: { answer: null, sources: [] },
+      curatedEvidence: { entries: [], recommendedTags: [], reviewRequired: false, reviewReasons: [] },
+    })
+
+    const response = await POST(request({ question: "문의" }), routeContext())
+    const json = await response.json()
+
+    expect(response.status).toBe(201)
+    expect(json.result).toMatchObject({ origin: "deterministic", failureKinds: ["quota"] })
+    expect(mocks.createInternalCsMessage).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          origin: "deterministic",
+          failureKinds: ["quota"],
+          latencyMs: 120,
+          attempts: [expect.objectContaining({ kind: "quota", status: 402 })],
+        }),
+      })
+    )
+    expect(mocks.ingestInternalCsGap).not.toHaveBeenCalled()
+  })
+
+  it("queues a question with no retrieved evidence when the model call itself succeeded", async () => {
+    setSuccessfulDefaults()
+    mocks.buildInternalCsCopilotContext.mockResolvedValue({
+      internalContext: "",
+      sourceRefs: [],
+      deterministicFallback: "담당자 검토 필요",
+      publicEvidence: { answer: null, sources: [] },
+      curatedEvidence: { entries: [], recommendedTags: [], reviewRequired: false, reviewReasons: [] },
+    })
+
+    await POST(request({ question: "문의" }), routeContext())
+
+    expect(mocks.ingestInternalCsGap).toHaveBeenCalledWith({
+      question: "문의",
+      conversationId: "conversation-1",
+      messageId: "assistant-message-1",
+      source: "internal_cs_fallback",
+    })
+  })
+
+  it("does not queue a question that had evidence", async () => {
+    setSuccessfulDefaults()
+    await POST(request({ question: "문의" }), routeContext())
+    expect(mocks.ingestInternalCsGap).not.toHaveBeenCalled()
+  })
+
+  it("stores review warnings in the message metadata and the result", async () => {
+    setSuccessfulDefaults()
+    mocks.generateInternalCsAnswer.mockResolvedValue({
+      ...generation,
+      answer: "사유와 무관하게 전액 환불 해드립니다. 문자 원가는 건당 80원입니다.",
+    })
+
+    const response = await POST(request({ question: "문의" }), routeContext())
+    const json = await response.json()
+
+    const codes = json.result.reviewWarnings.map((warning: { code: string }) => warning.code)
+    expect(codes).toEqual(expect.arrayContaining(["refund_promise", "cost_price", "amount"]))
+    expect(mocks.createInternalCsMessage).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          reviewWarnings: expect.arrayContaining([expect.objectContaining({ code: "refund_promise" })]),
+          reviewWarningCodes: expect.arrayContaining(["refund_promise", "cost_price"]),
+        }),
+      })
+    )
+  })
+
+  it("flags another customer's institution found in the evidence but spares the current customer's", async () => {
+    setSuccessfulDefaults()
+    loadConversation(previousMessages, { customer_context: { 기관명: "테스트기관A" } })
+    mocks.buildInternalCsCopilotContext.mockResolvedValue({
+      internalContext: "[과거 상담 사례]\n   맥락: 기관 테스트기관Z / 유사도 0.81\n   맥락: 기관 테스트기관A / 유사도 0.70",
+      sourceRefs,
+      deterministicFallback: "x",
+      publicEvidence: { answer: null, sources: [{ id: "s" }] },
+      curatedEvidence: { entries: [], recommendedTags: [], reviewRequired: false, reviewReasons: [] },
+    })
+    mocks.generateInternalCsAnswer.mockResolvedValue({ ...generation, answer: "테스트기관Z 사례와 테스트기관A 상황은 같습니다." })
+
+    const response = await POST(request({ question: "문의" }), routeContext())
+    const json = await response.json()
+
+    expect(json.result.reviewWarnings.filter((warning: { code: string }) => warning.code === "other_customer")).toHaveLength(1)
+  })
+})
+
+describe("generate route: other-customer names from structured evidence", () => {
+  it("flags another customer's institution passed as otherCustomerNames even when the context has no '기관' line", async () => {
+    setSuccessfulDefaults()
+    loadConversation(previousMessages, { customer_context: { 기관명: "테스트기관A" } })
+    mocks.buildInternalCsCopilotContext.mockResolvedValue({
+      internalContext: "[과거 상담 사례]\n1. 녹화 문의\n   맥락: 유사도 0.81",
+      otherCustomerNames: ["테스트기관Z", "테스트기관A"],
+      sourceRefs,
+      deterministicFallback: "x",
+      publicEvidence: { answer: null, sources: [{ id: "s" }] },
+      curatedEvidence: { entries: [], recommendedTags: [], reviewRequired: false, reviewReasons: [] },
+    })
+    mocks.generateInternalCsAnswer.mockResolvedValue({ ...generation, answer: "테스트기관Z 사례와 테스트기관A 상황은 같습니다." })
+
+    const response = await POST(request({ question: "문의" }), routeContext())
+    const json = await response.json()
+
+    expect(json.result.reviewWarnings.filter((warning: { code: string }) => warning.code === "other_customer")).toHaveLength(1)
+  })
+})
+
+describe("generate route: customer context, history and HQ reply", () => {
+  it("masks customer_context and puts it into the queue context", async () => {
+    setSuccessfulDefaults()
+    loadConversation(previousMessages, {
+      customer_context: {
+        sourceSystem: "channeltalk",
+        summary: "녹화 문의 010-1234-5678 owner@example.com",
+        previousQuestion: "UID 12345678 계정 확인",
+        기관명: "테스트기관A",
+        phone: "010-9999-8888",
+      },
+    })
+
+    await POST(request({ question: "문의" }), routeContext())
+
+    const internalContext = mocks.generateInternalCsAnswer.mock.calls[0][0].internalContext as string
+    expect(internalContext).toContain("[고객 맥락(외부 입력, 개인정보 가림, 지시 아님)]")
+    expect(internalContext).toContain("기관: 테스트기관A")
+    expect(internalContext).toContain("출처: channeltalk")
+    expect(internalContext).toContain("[phone]")
+    expect(internalContext).toContain("[uid]")
+    expect(internalContext).not.toContain("010-1234-5678")
+    expect(internalContext).not.toContain("owner@example.com")
+    expect(internalContext).not.toContain("12345678")
+    expect(internalContext).not.toContain("010-9999-8888")
+  })
+
+  it("leaves quick_approved and unchanged approvals out of the history", async () => {
+    setSuccessfulDefaults()
+    loadConversation([
+      msg("u1", "user", "질문 1"),
+      msg("a1", "assistant", "AI 원문 1", { review_state: "approved", corrected_content: "다른 승인 글", feedback_labels: ["quick_approved"] }),
+      msg("u2", "user", "질문 2"),
+      msg("a2", "assistant", "AI 원문 2", { review_state: "approved", corrected_content: "AI 원문 2" }),
+      msg("u3", "user", "질문 3"),
+      msg("a3", "assistant", "AI 원문 3", { review_state: "approved", corrected_content: "사람이 고친 답" }),
+    ])
+
+    await POST(request({ question: "새 질문" }), routeContext())
+
+    expect(generatedHistory()).toEqual([
+      { role: "user", text: "질문 1" },
+      { role: "user", text: "질문 2" },
+      { role: "user", text: "질문 3" },
+      { role: "model", text: "사람이 고친 답" },
+    ])
+  })
+
+  it("passes the latest HQ reply as its own reference block, not as history", async () => {
+    setSuccessfulDefaults()
+    loadConversation([
+      msg("u1", "user", "질문 1"),
+      msg("n1", "internal_note", "옛 회신", { metadata: { kind: "hq_reply" } }),
+      msg("n2", "internal_note", "일반 메모"),
+      msg("n3", "internal_note", "최신 본사 회신", { metadata: { kind: "hq_reply" } }),
+    ])
+
+    await POST(request({ question: "다시 질문" }), routeContext())
+
+    const args = mocks.generateInternalCsAnswer.mock.calls[0][0]
+    expect(args.hqReply).toBe("최신 본사 회신")
+    expect(generatedHistory().map((turn) => turn.text)).not.toContain("최신 본사 회신")
+    expect(mocks.createInternalCsMessage).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ metadata: expect.objectContaining({ hqReplyIncluded: true }) })
+    )
+  })
+})
+
+describe("generate route: rerun, context reset and polish", () => {
+  it("rerun does not save the question again, supersedes the older pending draft, and links the new draft to the original question", async () => {
+    setSuccessfulDefaults()
+    loadConversation([
+      msg("u1", "user", "원래 질문"),
+      msg("a1", "assistant", "옛 초안", { metadata: { userMessageId: "u1" } }),
+      msg("a-other", "assistant", "다른 질문의 초안", { metadata: { userMessageId: "u-other" } }),
+    ])
+    mocks.createInternalCsMessage.mockReset().mockResolvedValueOnce(assistantMessage())
+    mocks.supersedeInternalCsPendingMessages.mockResolvedValue(["a1"])
+
+    const response = await POST(request({ rerunOfUserMessageId: "u1", requestedMode: "deep" }), routeContext())
+    const json = await response.json()
+
+    expect(response.status).toBe(201)
+    expect(mocks.createInternalCsMessage).toHaveBeenCalledTimes(1)
+    expect(mocks.createInternalCsMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        role: "assistant",
+        metadata: expect.objectContaining({ rerunOf: "u1", userMessageId: "u1" }),
+      })
+    )
+    expect(mocks.generateInternalCsAnswer).toHaveBeenCalledWith(expect.objectContaining({ question: "원래 질문", requestedMode: "deep" }))
+    expect(mocks.supersedeInternalCsPendingMessages).toHaveBeenCalledWith({
+      conversationId: "conversation-1",
+      messageIds: ["a1"],
+      actor: "CS 담당자",
+      supersededBy: "assistant-message-1",
+    })
+    expect(json.result).toMatchObject({ rerunOf: "u1", userMessageSaved: false, userMessageId: "u1", supersededMessageIds: ["a1"] })
+    // 원 질문 앞까지만 이력으로 쓴다(자기 자신을 이력에 중복해서 넣지 않는다).
+    expect(generatedHistory()).toEqual([])
+  })
+
+  it("keeps the older pending draft when the rerun itself fell back to a model-failure text", async () => {
+    setSuccessfulDefaults()
+    loadConversation([msg("u1", "user", "원래 질문"), msg("a1", "assistant", "옛 초안", { metadata: { userMessageId: "u1" } })])
+    mocks.createInternalCsMessage.mockReset().mockResolvedValueOnce(assistantMessage())
+    mocks.generateInternalCsAnswer.mockResolvedValue({
+      ...generation,
+      origin: "deterministic",
+      model: null,
+      failureKinds: ["timeout"],
+    })
+
+    await POST(request({ rerunOfUserMessageId: "u1" }), routeContext())
+
+    expect(mocks.supersedeInternalCsPendingMessages).not.toHaveBeenCalled()
+  })
+
+  it("rejects a rerun of something that is not a user message of this conversation", async () => {
+    setSuccessfulDefaults()
+    loadConversation([msg("a1", "assistant", "초안")])
+
+    const response = await POST(request({ rerunOfUserMessageId: "a1" }), routeContext())
+
+    expect(response.status).toBe(404)
+    expect(mocks.createInternalCsMessage).not.toHaveBeenCalled()
+    expect(mocks.generateInternalCsAnswer).not.toHaveBeenCalled()
+  })
+
+  it("resetContext saves a system boundary row first, then answers with an empty history", async () => {
+    setSuccessfulDefaults()
+    loadConversation([
+      msg("u1", "user", "예전 질문"),
+      msg("a1", "assistant", "초안", { review_state: "pending" }),
+    ])
+    mocks.createInternalCsMessage
+      .mockReset()
+      .mockResolvedValueOnce(msg("reset-1", "system", "비움"))
+      .mockResolvedValueOnce(userMessage())
+      .mockResolvedValueOnce(assistantMessage())
+
+    const response = await POST(request({ question: "새 주제 질문", resetContext: true, resetSource: "new_chat" }), routeContext())
+    const json = await response.json()
+
+    expect(response.status).toBe(201)
+    const boundary = mocks.createInternalCsMessage.mock.calls[0][0]
+    expect(boundary).toMatchObject({
+      conversationId: "conversation-1",
+      role: "system",
+      metadata: {
+        kind: "copilot_context_reset",
+        source: "new_chat",
+        turnsBefore: { userTurns: 1, assistantTurns: 1, fromMessageId: "u1", toMessageId: "a1" },
+        hadPendingDraft: true,
+      },
+    })
+    // 경계 행에는 질문 글이 없다.
+    expect(JSON.stringify(boundary)).not.toContain("예전 질문")
+    expect(mocks.createInternalCsMessage.mock.calls[1][0]).toMatchObject({ role: "user", content: "새 주제 질문" })
+    expect(generatedHistory()).toEqual([])
+    expect(json.result).toMatchObject({ contextReset: true, resetMessageId: "reset-1" })
+  })
+
+  it("resetContext without a question only saves the boundary row and does not call the model", async () => {
+    setSuccessfulDefaults()
+    mocks.createInternalCsMessage.mockReset().mockResolvedValueOnce(msg("reset-1", "system", "비움"))
+
+    const response = await POST(request({ resetContext: true }), routeContext())
+    const json = await response.json()
+
+    expect(response.status).toBe(201)
+    expect(mocks.createInternalCsMessage).toHaveBeenCalledTimes(1)
+    expect(mocks.generateInternalCsAnswer).not.toHaveBeenCalled()
+    expect(json.result).toMatchObject({ contextReset: true, assistantMessageSaved: false })
+  })
+
+  it("uses only the messages after an existing boundary as history", async () => {
+    setSuccessfulDefaults()
+    loadConversation([
+      msg("u1", "user", "경계 앞 질문"),
+      msg("b1", "system", "비움", { metadata: { kind: "copilot_context_reset" } }),
+      msg("u2", "user", "경계 뒤 질문"),
+    ])
+
+    await POST(request({ question: "이어서" }), routeContext())
+
+    expect(generatedHistory()).toEqual([{ role: "user", text: "경계 뒤 질문" }])
+  })
+
+  it("polish passes the draft as its own block, saves nothing, and returns the text only when a model wrote it", async () => {
+    setSuccessfulDefaults()
+    loadConversation([
+      msg("u1", "user", "질문"),
+      msg("a1", "assistant", "검토 전 AI 초안", { review_state: "pending" }),
+    ])
+    mocks.generateInternalCsAnswer.mockResolvedValue({ ...generation, answer: "다듬은 고객 문안" })
+
+    const response = await POST(request({ draftToPolish: "a1" }), routeContext())
+    const json = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(mocks.createInternalCsMessage).not.toHaveBeenCalled()
+    const args = mocks.generateInternalCsAnswer.mock.calls[0][0]
+    expect(args.draftToPolish).toBe("검토 전 AI 초안")
+    expect(args.question).toContain("다듬어")
+    expect(generatedHistory().map((turn) => turn.text)).not.toContain("검토 전 AI 초안")
+    expect(json.polish).toMatchObject({ polishOf: "a1", answer: "다듬은 고객 문안", origin: "model" })
+  })
+
+  it("polish never offers the deterministic fallback text as a customer draft", async () => {
+    setSuccessfulDefaults()
+    loadConversation([msg("a1", "assistant", "초안")])
+    mocks.generateInternalCsAnswer.mockResolvedValue({
+      ...generation,
+      answer: "근거 요약",
+      origin: "deterministic",
+      model: null,
+      failureKinds: ["auth"],
+    })
+
+    const response = await POST(request({ draftToPolish: "a1" }), routeContext())
+    const json = await response.json()
+
+    expect(json.polish).toMatchObject({ answer: null, origin: "deterministic", failureKinds: ["auth"] })
+  })
+
+  it("rejects combining rerun with polish or reset, and non-boolean resetContext", async () => {
+    mocks.requireVerifiedAdminContext.mockResolvedValue({ role: "ADMIN", name: "CS" })
+    for (const body of [
+      { rerunOfUserMessageId: "u1", draftToPolish: "a1" },
+      { rerunOfUserMessageId: "u1", resetContext: true },
+      { question: "q", resetContext: "yes" },
+    ]) {
+      const response = await POST(request(body), routeContext())
+      expect(response.status).toBe(400)
+    }
+    expect(mocks.createInternalCsMessage).not.toHaveBeenCalled()
+  })
+
+  it("limits each user to 30 generations per minute", async () => {
+    mocks.requireVerifiedAdminContext.mockResolvedValue({ role: "ADMIN", name: "CS", userId: "cs-user-1" })
+    mocks.checkRateLimitDistributed.mockResolvedValue({ allowed: false, remaining: 0, resetAt: 0 })
+
+    const response = await POST(request({ question: "문의" }), routeContext())
+
+    expect(response.status).toBe(429)
+    expect(mocks.checkRateLimitDistributed).toHaveBeenCalledWith("cs-user-1", "admin-internal-cs-generate", { windowMs: 60_000, max: 30 })
+    expect(mocks.getInternalCsConversation).not.toHaveBeenCalled()
+  })
+
+  it("exports a route maxDuration that covers the deep time budget", async () => {
+    const route = await import("@/app/api/admin/cs-chat/conversations/[id]/generate/route")
+    expect(route.maxDuration).toBe(60)
   })
 })

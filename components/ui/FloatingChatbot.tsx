@@ -1,163 +1,56 @@
 "use client"
 
-import { FormEvent, memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import Image from "next/image"
-import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion"
-import {
-    ArrowRight,
-    Check,
-    Copy,
-    ExternalLink,
-    FileText,
-    Loader2,
-    MessageCircle,
-    RotateCcw,
-    Send,
-    ThumbsDown,
-    ThumbsUp,
-    Volume2,
-    VolumeX,
-    X,
-} from "lucide-react"
+import { ArrowDown, X } from "lucide-react"
 
 import { ClassInAIIcon } from "@/components/ui/ClassInAIIcon"
-import { CHATBOT_HIT_AREA_CLASS } from "@/components/ui/chatbot-hit-area"
 import { cn } from "@/lib/utils"
-import {
-    buildChannelTalkMemberId,
-    getChannelTalkAnonymousId,
-    openChannelTalk,
-    type ChannelTalkProfile,
-} from "@/lib/channel-talk"
-import { CLASSIN_POSITIONING } from "@/lib/classin-positioning"
 import { trackEvent } from "@/lib/analytics"
-import { stashContactPrefill } from "@/lib/tracking-paths"
 import { CHATBOT_DESKTOP_MEDIA_QUERY, shouldCloseChatbotAfterLinkClick, type ChatLinkClick } from "@/components/ui/chatbot-link-navigation"
-import { resolvePageContext, mergeStarters } from "@/lib/chatbot/page-context"
-import { buildPreviousTurnPayload, shouldShowUnresolvedNudge } from "@/lib/chatbot/widget-turn"
 import {
     CHATBOT_OPEN_EVENT,
     openChatbot,
     type ChatbotOpenDetail,
     type ChatbotOpenSource,
 } from "@/lib/chatbot/open-chatbot"
+import { useConsentBannerOpen } from "@/components/consent/banner-presence"
 import { ChatbotTeaser } from "@/components/ui/ChatbotTeaser"
 import { useChatbotTeaser } from "@/components/ui/useChatbotTeaser"
-import { isNearBottom, resolveChatInputHeight, resolveListScrollTopAfterInputResize } from "@/components/ui/chatbot-input-autosize"
+import { isNearBottom } from "@/components/ui/chatbot-input-autosize"
 import { CHATBOT_MOTION, m } from "@/lib/chatbot/motion"
 import {
     isMuted,
     setMuted,
     playOpenSound,
     playCloseSound,
-    playSendSound,
-    playReceiveSound,
 } from "@/lib/chatbot/sound"
+import { ChatbotHeader, NewChatUndoBar } from "@/components/ui/chatbot/ChatbotHeader"
+import { ChatComposer, createComposerDraftStore } from "@/components/ui/chatbot/ChatComposer"
+import { MessageList } from "@/components/ui/chatbot/MessageList"
+import { DEEP_CONSULTATION_ICON_SRC, containerVariants, itemVariants } from "@/components/ui/chatbot/constants"
+import { findQuestionAnchorId, latestMessageSignature } from "@/components/ui/chatbot/message-visibility"
+import { useChatbotConversation } from "@/components/ui/chatbot/useChatbotConversation"
+import {
+    resolveMobilePanelLayout,
+    useChatbotViewport,
+    useIsMobileChatbotViewport,
+} from "@/components/ui/chatbot/useChatbotViewport"
+import { useChatbotHistoryEntry, useModalBackground } from "@/components/ui/chatbot/useMobileChatbotModal"
 
-type HandoffIntent = "demo" | "support"
+// 챗봇 위젯 셸: 런처·패널 틀·열기/닫기·포커스·스크롤·티저를 맡는다.
+// 대화 상태는 chatbot/useChatbotConversation, 헤더·목록·입력 폼·상담 카드는 chatbot/ 아래 모듈이 그린다.
 
-const UNRESOLVED_STREAK_THRESHOLD = 3
-const CHATBOT_REQUEST_TIMEOUT_MS = 14_000
-const STARTER_SUGGESTION_LIMIT = 4
-const FOLLOW_UP_SUGGESTION_LIMIT = 3
-const ANSWER_SCROLL_TOP_OFFSET_PX = 32
+// 새 답을 맞출 때 질문 말풍선 위에 남기는 여백.
+const ANSWER_SCROLL_TOP_OFFSET_PX = 12
+// 질문 말풍선이 목록 높이의 이 비율보다 길면 질문 대신 답 머리를 맞춘다(긴 질문이 답을 밀어내지 않게).
+const QUESTION_ANCHOR_MAX_RATIO = 0.5
+// 끝 말풍선의 머리가 목록 아래 끝에서 이만큼 안쪽까지 내려가 있으면 '보이지 않는 새 답'으로 본다.
+const JUMP_TO_LATEST_FOLD_SLACK_PX = 8
+const FINE_POINTER_QUERY = "(hover: hover) and (pointer: fine)"
 
-const EASING_SOFT_ENTER = [0.22, 1, 0.36, 1] as const
-
-// 다이얼로그 및 자식 요소들의 Staggered 진입 Variants
-const containerVariants = {
-    initial: {
-        opacity: 0,
-        y: 16,
-        scale: 0.93,
-        filter: "blur(6px)",
-    },
-    animate: (shouldReduceMotion: boolean | null) => ({
-        opacity: 1,
-        y: 0,
-        scale: 1,
-        filter: "blur(0px)",
-        transition: m({
-            ...CHATBOT_MOTION.surfaceSpring,
-            staggerChildren: 0.04,
-            delayChildren: 0.03,
-        }, shouldReduceMotion),
-    }),
-    exit: (shouldReduceMotion: boolean | null) => ({
-        opacity: 0,
-        y: 12,
-        scale: 0.95,
-        filter: "blur(6px)",
-        transition: m(CHATBOT_MOTION.exit, shouldReduceMotion),
-    }),
-}
-
-const itemVariants = {
-    initial: { opacity: 0, y: 10 },
-    animate: (shouldReduceMotion: boolean | null) => ({
-        opacity: 1,
-        y: 0,
-        transition: m(CHATBOT_MOTION.enter, shouldReduceMotion),
-    }),
-    exit: (shouldReduceMotion: boolean | null) => ({
-        opacity: 0,
-        y: -6,
-        transition: m(CHATBOT_MOTION.exit, shouldReduceMotion),
-    }),
-}
-
-interface ChatbotSource {
-    title: string
-    heading?: string
-    urlPath: string
-    category: string
-    excerpt: string
-    score: number
-}
-
-interface ChatbotStarterQuestionsResponse {
-    questions?: unknown
-    warning?: string
-}
-
-interface ChatMessage {
-    id: string
-    role: "assistant" | "user"
-    content: string
-    sources?: ChatbotSource[]
-    suggestedQuestions?: string[]
-    answerEventId?: string
-    confidence?: number
-    needsHandoff?: boolean
-    handoffIntent?: HandoffIntent
-    showHandoffCTA?: boolean
-    retryQuestion?: string
-    // 서버 답(meta)의 답 모드. 다음 질문에 직전 턴(context.previousTurn)으로 함께 보낸다. 위젯이 붙인 말풍선에는 없다.
-    answerMode?: string
-}
-
-// /api/chatbot/query/stream 의 NDJSON 이벤트(서버 ChatbotStreamEvent 와 구조 일치).
-// server-only 모듈을 클라이언트에서 import 하지 않기 위해 형태만 로컬에 둔다.
-interface ChatbotStreamMeta {
-    answerMode?: string
-    confidence?: number
-    needsHandoff?: boolean
-    unresolved?: boolean
-    handoffIntent?: HandoffIntent
-    sources?: ChatbotSource[]
-    suggestedQuestions?: string[]
-    sessionId?: string
-    answerEventId?: string
-    warning?: string
-}
-
-type ChatbotStreamEvent =
-    | { type: "delta"; text: string }
-    | { type: "replace"; answer: string }
-    | { type: "meta"; meta: ChatbotStreamMeta }
-    | { type: "error"; error: string }
 
 const hiddenPathPrefixes = [
     "/admin",
@@ -167,769 +60,116 @@ const hiddenPathPrefixes = [
     "/receipt",
 ]
 
-const DEEP_CONSULTATION_ICON_SRC = "/images/chatbot/ai-deep-consultation.webp"
-
 function shouldHideChatbot(pathname: string | null) {
     if (!pathname) return false
     return hiddenPathPrefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))
 }
 
-function shouldUseDeepConsultationIcon(text: string) {
-    return /상담|컨설팅|도입\s*(상담|문의|검토)|견적|담당자|시연|데모|장애|오류|AS|A\/S/i.test(text)
-}
-
-function makeId() {
-    return `${Date.now()}-${Math.random().toString(16).slice(2)}`
-}
-
-// NDJSON 한 줄을 스트림 이벤트로 파싱한다. 빈 줄·깨진 JSON 은 null(무시).
-function parseStreamEvent(line: string): ChatbotStreamEvent | null {
-    const trimmed = line.trim()
-    if (!trimmed) return null
-    try {
-        return JSON.parse(trimmed) as ChatbotStreamEvent
-    } catch {
-        return null
-    }
-}
-
-function getSuggestionLimit(message: ChatMessage) {
-    return message.id === "welcome" ? STARTER_SUGGESTION_LIMIT : FOLLOW_UP_SUGGESTION_LIMIT
-}
-
-const HANDOFF_TRANSCRIPT_LIMIT = 6
-
-// 상담원 연결 시 최근 대화록·인텐트를 채널톡 프로필로 넘긴다 — 상담원이 맥락을 갖고 시작.
-function buildHandoffProfile(
-    messages: ChatMessage[],
-    triggerMessage: ChatMessage,
-    sessionId?: string,
-): ChannelTalkProfile {
-    const lastQuestion = [...messages].reverse().find((m) => m.role === "user")?.content
-    const transcript = messages
-        .slice(-HANDOFF_TRANSCRIPT_LIMIT)
-        .map((m) => `${m.role === "user" ? "고객" : "챗봇"}: ${m.content}`)
-        .join("\n")
-
-    const profile: ChannelTalkProfile = {
-        chatbotHandoff: true,
-        chatbotIntent: triggerMessage.handoffIntent ?? "support",
-    }
-    if (lastQuestion) profile.lastQuestion = lastQuestion.slice(0, 300)
-    if (transcript) profile.chatbotTranscript = transcript.slice(0, 1500)
-    if (sessionId) profile.chatbotSessionId = sessionId
-    return profile
-}
-
-function buildConsultationDraft(
-    messages: ChatMessage[],
-    triggerMessage: ChatMessage,
-) {
-    const lastQuestion = [...messages].reverse().find((m) => m.role === "user")?.content
-    const intentLine =
-        triggerMessage.handoffIntent === "support"
-            ? "계정/결제/장비 상태 확인이 필요한 문의입니다."
-            : "도입 방식과 운영 흐름 상담이 필요한 문의입니다."
-    const answerSummary = triggerMessage.content
-        .replace(/\s+/g, " ")
-        .replace(/^요약:\s*/i, "")
-        .slice(0, 260)
-        .trim()
-
-    return [
-        "Classin 상담 요청드립니다.",
-        intentLine,
-        lastQuestion ? `질문: ${lastQuestion}` : null,
-        answerSummary ? `챗봇 확인 내용: ${answerSummary}` : null,
-    ].filter(Boolean).join("\n")
-}
-
-function getHandoffTopic(intent?: HandoffIntent) {
-    return intent === "demo" ? "도입 상담" : "계정/접속/기술 지원"
-}
-
-function formatActionMessage(intent: HandoffIntent, draftLineCount: number) {
-    return draftLineCount >= 3
-        ? `${getHandoffTopic(intent)} 전용 상담 흐름으로 바로 연결해요.`
-        : `${getHandoffTopic(intent)} 상담을 연결하고 담당자가 바로 이어서 확인할게요.`
-}
-
-function AssistantMeta({ message }: { message: ChatMessage }) {
-    const labels = [
-        message.showHandoffCTA ? "상담 권장" : null,
-    ].filter((label): label is string => Boolean(label))
-
-    return (
-        <div className="mb-2 flex items-center justify-between gap-2 border-b border-fg-accent/[0.08] pb-1.5">
-            <div className="flex items-center gap-1.5 text-[11px] font-bold text-fg-accent">
-                <ClassInAIIcon size={13} variant="brand" />
-                <span>Classin AI</span>
-            </div>
-            {labels.length > 0 ? (
-                <div className="flex flex-wrap gap-1.5">
-                    {labels.map((label) => (
-                        <span
-                            key={label}
-                            className={cn(
-                                "inline-flex h-5 items-center rounded-full border px-2 text-[10px] font-bold",
-                                label === "상담 권장"
-                                    ? "border-fg-accent/15 bg-fg-accent/8 text-fg-accent"
-                                    : "border-black/[0.06] bg-white/70 text-[#615D59]"
-                            )}
-                        >
-                            {label}
-                        </span>
-                    ))}
-                </div>
-            ) : null}
-        </div>
-    )
-}
-
-function ConsultationBridge({
-    messages,
-    message,
-    sessionId,
-    onNavigate,
-}: {
-    messages: ChatMessage[]
-    message: ChatMessage
-    sessionId?: string
-    onNavigate?: (click: ChatLinkClick) => void
-}) {
-    const shouldReduceMotion = useReducedMotion()
-    const [state, setState] = useState<"idle" | "opened" | "copied" | "failed">("idle")
-    const [toast, setToast] = useState<{
-        type: "info" | "success" | "error"
-        text: string
-    } | null>(null)
-    const draft = useMemo(
-        () => buildConsultationDraft(messages, message),
-        [messages, message]
-    )
-    const intentLabel = message.handoffIntent === "support" ? "실시간 상담 연결" : "도입 상담 남기기"
-    const draftLineCount = draft.split("\n").length
-    const topic = getHandoffTopic(message.handoffIntent)
-    // 대화 요약(draft)은 쿼리로 싣지 않는다 — 주소창·리퍼러·분석 URL 로 새어 나간다.
-    // 링크를 누를 때 sessionStorage 로 건네고 문의 페이지가 읽자마자 지운다.
-    const contactHref = `/contact?${new URLSearchParams({
-        source: "chatbot",
-        topic,
-    }).toString()}`
-
-    function openConsultation() {
-        const anonymousId = getChannelTalkAnonymousId()
-        const profile = buildHandoffProfile(messages, message, sessionId)
-        setToast({
-            type: "info",
-            text: "상담창을 여는 중입니다.",
-        })
-        const opened = openChannelTalk({
-            memberId: anonymousId ? buildChannelTalkMemberId(anonymousId) : undefined,
-            profile,
-            chatProfile: profile,
-            draftMessage: draft,
-        })
-
-        setState(opened ? "opened" : "failed")
-        setToast({
-            type: opened ? "success" : "error",
-            text: opened
-                ? "상담창에 요약이 입력됐어요. 전송하면 담당자가 바로 이어서 확인합니다."
-                : "상담창 열기 실패: 브라우저 제약이나 인증 상태를 확인한 뒤 문의폼으로 이동해 주세요.",
-        })
-    }
-
-    async function copyDraft() {
-        try {
-            if (!navigator?.clipboard?.writeText) {
-                throw new Error("clipboard_not_supported")
-            }
-            await navigator.clipboard.writeText(draft)
-            setState("copied")
-            setToast({
-                type: "success",
-                text: "요약을 복사했어요. 문의폼에 붙여 넣으면 그대로 제출됩니다.",
-            })
-        } catch {
-            setState("failed")
-            setToast({
-                type: "error",
-                text: "요약 복사에 실패했어요. 문의폼으로 이동해 수동으로 붙여 넣어 주세요.",
-            })
-        }
-    }
-
-    return (
-        <motion.div
-            initial={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: 8 }}
-            animate={shouldReduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
-            transition={{ duration: shouldReduceMotion ? 0.01 : 0.28, ease: EASING_SOFT_ENTER }}
-            className="mt-3 border-t border-fg-accent/10 pt-3"
-        >
-            <div className="flex items-center gap-2 text-[12px] font-bold text-fg-accent">
-                <MessageCircle className="h-4 w-4" />
-                상담 연결
-            </div>
-            <p className="mt-1 text-[11px] leading-4 text-[#615D59]">
-                {formatActionMessage(message.handoffIntent ?? "support", draftLineCount)}
-            </p>
-            <div className="mt-2 rounded-[12px] border border-white/70 bg-fg-accent/4 px-3 py-2 text-[12px] leading-5 text-[#3B3835] shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]">
-                <p className="whitespace-pre-line [overflow-wrap:anywhere]">{draft}</p>
-            </div>
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-                <motion.button
-                    type="button"
-                    onClick={openConsultation}
-                    whileHover={shouldReduceMotion ? undefined : { scale: 1.03 }}
-                    whileTap={shouldReduceMotion ? undefined : { scale: 0.97 }}
-                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[8px] bg-fg-accent px-3 text-xs font-bold text-fg-on-accent transition-colors hover:bg-fg-accent-hover focus-visible:outline-none"
-                >
-                    <MessageCircle className="h-3.5 w-3.5" />
-                    {intentLabel}
-                </motion.button>
-                <motion.button
-                    type="button"
-                    onClick={() => void copyDraft()}
-                    whileHover={shouldReduceMotion ? undefined : { scale: 1.03 }}
-                    whileTap={shouldReduceMotion ? undefined : { scale: 0.97 }}
-                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[8px] border border-white/70 bg-white/70 px-3 text-xs font-bold text-[#111110] transition-colors hover:bg-fg-accent/8 focus-visible:outline-none"
-                >
-                    {state === "copied" ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-                    요약 복사
-                </motion.button>
-                <Link
-                    href={contactHref}
-                    onClick={(event) => {
-                        // 요약은 주소가 아니라 sessionStorage 로 넘긴다. 저장이 막히면 조용히 빈 폼으로
-                        // 보내지 않고 복사해서 붙여 넣도록 안내한다.
-                        if (stashContactPrefill(draft)) {
-                            onNavigate?.(event)
-                            return
-                        }
-                        event.preventDefault()
-                        setToast({ type: "error", text: "요약을 보관하지 못했어요. 요약을 복사한 뒤 문의폼에 붙여 넣어 주세요." })
-                    }}
-                    className="inline-flex h-9 items-center justify-center rounded-[8px] px-2 text-xs font-bold text-[#615D59] transition-colors hover:bg-white/70 hover:text-fg-accent"
-                >
-                    문의폼으로 이어서 남기기
-                </Link>
-            </div>
-            {toast ? (
-                <p
-                    className={cn(
-                        "mt-2 text-[11px] leading-4",
-                        toast.type === "error" ? "text-[#7A2A13]" : "text-[#615D59]"
-                    )}
-                >
-                    {toast.text}
-                </p>
-            ) : null}
-            {state !== "idle" ? (
-                <p className="mt-2 text-[11px] leading-4 text-[#615D59]">
-                    {state === "opened"
-                        ? "상담창이 열렸어요. 입력된 요약을 전송하면 채널톡 상담 수신함으로 이어집니다."
-                        : state === "copied"
-                          ? "요약을 복사했어요."
-                          : "상담창을 열 수 없으면 문의폼으로 남겨주세요."}
-                </p>
-            ) : null}
-        </motion.div>
-    )
-}
-
-function FeedbackButtons({
-    answerEventId,
-    sessionId,
-}: {
-    answerEventId?: string
-    sessionId?: string
-}) {
-    const [state, setState] = useState<"idle" | "helpful" | "not_helpful" | "failed">("idle")
-
-    async function sendFeedback(rating: "helpful" | "not_helpful") {
-        setState(rating)
-
-        if (!answerEventId || !sessionId) {
-            setState("failed")
-            return
-        }
-
-        try {
-            const response = await fetch("/api/chatbot/feedback", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ answerEventId, sessionId, rating }),
-            })
-            if (!response.ok) setState("failed")
-        } catch {
-            setState("failed")
-        }
-    }
-
-    return (
-        <div className="flex items-center gap-2">
-            <button
-                type="button"
-                onClick={() => sendFeedback("helpful")}
-                className={cn(
-                    "inline-flex h-9 w-9 items-center justify-center rounded-[8px] border border-white/70 bg-white/70 text-[#615D59] transition-colors hover:bg-fg-accent/8 hover:text-fg-accent",
-                    CHATBOT_HIT_AREA_CLASS,
-                    state === "helpful" && "border-fg-accent/25 bg-fg-accent/8 text-fg-accent"
-                )}
-                aria-label="도움됨"
-                title="도움됨"
-            >
-                {state === "helpful" ? <Check className="h-4 w-4" /> : <ThumbsUp className="h-4 w-4" />}
-            </button>
-            <button
-                type="button"
-                onClick={() => sendFeedback("not_helpful")}
-                className={cn(
-                    "inline-flex h-9 w-9 items-center justify-center rounded-[8px] border border-white/70 bg-white/70 text-[#615D59] transition-colors hover:bg-fg-accent/8 hover:text-fg-accent",
-                    CHATBOT_HIT_AREA_CLASS,
-                    state === "not_helpful" && "border-fg-accent/25 bg-fg-accent/8 text-fg-accent"
-                )}
-                aria-label="도움 안 됨"
-                title="도움 안 됨"
-            >
-                <ThumbsDown className="h-4 w-4" />
-            </button>
-        </div>
-    )
-}
-
-function buildAnswerShareText(message: ChatMessage) {
-    return sanitizeVisibleAssistantText(message.content)
-}
-
-function sanitizeVisibleAssistantText(value: string) {
-    return value
-        .replace(/!\[[^\]]*]\([^)]*\)/g, "")
-        .replace(/\[([^\]]+)]\((?:https?:\/\/|\/)[^)]+\)/g, "$1")
-        .replace(/https?:\/\/[^\s)]+/g, "")
-        .replace(/(?:\/docs|\/images|\/resources)\/[^\s)]+/g, "")
-        .replace(/\[image[_\-\s]?\d*]/gi, "")
-        // 제품 톤은 마크다운을 쓰지 않는다. 모델이 가끔 흘리는 **굵게** 표시는 평문으로 정리한다.
-        .replace(/\*\*(.+?)\*\*/g, "$1")
-        .replace(/^\s*(?:출처|참고\s*문서|근거\s*자료|문서\s*보기)\s*:.*$/gim, "")
-        .replace(/[^\S\r\n]{2,}/g, " ")
-        .replace(/[ \t]+\n/g, "\n")
-        .replace(/\n{3,}/g, "\n\n")
-        .trim()
-}
-
-function cleanMessageLine(line: string) {
-    return line
-        .replace(/^(요약|다음 단계|확인 기준|주의):\s*/i, "")
-        .trim()
-}
-
-function orderedLineValue(line: string) {
-    return line.match(/^\d+[\.)]\s+(.+)$/)?.[1]?.trim()
-}
-
-function bulletLineValue(line: string) {
-    return line.match(/^[-•]\s+(.+)$/)?.[1]?.trim()
-}
-
-function Caret({ shouldReduceMotion }: { shouldReduceMotion: boolean | null }) {
-    return (
-        <span
-            className={cn(
-                "inline-block w-[2px] h-[15px] ml-1.5 align-middle rounded-full bg-[#10B981] shadow-[0_0_8px_rgba(16,185,129,0.7)] shrink-0",
-                shouldReduceMotion ? "opacity-100" : "animate-pulse"
-            )}
-            aria-hidden
-        />
-    )
-}
-
-// 이전 메시지들은 props(원시값)가 그대로라 memo로 재파싱(sanitize+split+regex) 건너뜀 — 스트리밍 버블만 갱신.
-const MessageContent = memo(function MessageContent({
-    content,
-    role,
-    isStreaming = false,
-}: {
-    content: string
-    role: ChatMessage["role"]
-    isStreaming?: boolean
-}) {
-    const shouldReduceMotion = useReducedMotion()
-    const visibleContent = role === "assistant" ? sanitizeVisibleAssistantText(content) : content
-    const blocks = visibleContent
-        .trim()
-        .split(/\n{2,}/)
-        .map((block) => block.trim())
-        .filter(Boolean)
-
-    if (blocks.length === 0) return null
-
-    return (
-        <motion.div
-            layout="position"
-            initial={m({ opacity: 0.8 }, shouldReduceMotion)}
-            animate={m({ opacity: 1 }, shouldReduceMotion)}
-            transition={m(CHATBOT_MOTION.tokenFade, shouldReduceMotion)}
-            className={cn(
-                "space-y-2.5 whitespace-pre-wrap text-sm leading-6 [overflow-wrap:anywhere]",
-                role === "assistant" ? "text-[#111110]" : "text-white"
-            )}
-        >
-            {blocks.map((block, blockIndex) => {
-                const isLastBlock = blockIndex === blocks.length - 1
-                const showCaret = isStreaming && isLastBlock
-
-                const lines = block
-                    .split("\n")
-                    .map((line) => line.trim())
-                    .filter(Boolean)
-                    .filter((line) => !/^(권장 순서|확인 기준):\s*$/i.test(line))
-                const orderedItems = lines.map(orderedLineValue)
-                const bulletItems = lines.map(bulletLineValue)
-
-                if (orderedItems.length > 0 && orderedItems.every(Boolean)) {
-                    return (
-                        <ol key={`${blockIndex}:${block}`} className="space-y-2">
-                            {orderedItems.map((item, index) => {
-                                const isLastItem = index === orderedItems.length - 1
-                                return (
-                                    <li key={`${index}:${item}`} className="flex items-start gap-2.5">
-                                        <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-fg-accent/20 bg-fg-accent/8 text-[10px] font-bold text-fg-accent" aria-hidden="true">
-                                            {index + 1}
-                                        </span>
-                                        <span className="flex-1">
-                                            {item}
-                                            {showCaret && isLastItem ? <Caret shouldReduceMotion={shouldReduceMotion} /> : null}
-                                        </span>
-                                    </li>
-                                )
-                            })}
-                        </ol>
-                    )
-                }
-
-                if (bulletItems.length > 0 && bulletItems.every(Boolean)) {
-                    return (
-                        <ul key={`${blockIndex}:${block}`} className="space-y-2">
-                            {bulletItems.map((item, index) => {
-                                const isLastItem = index === bulletItems.length - 1
-                                return (
-                                    <li key={`${index}:${item}`} className="flex items-start gap-2.5">
-                                        <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-fg-accent" aria-hidden="true" />
-                                        <span className="flex-1">
-                                            {item}
-                                            {showCaret && isLastItem ? <Caret shouldReduceMotion={shouldReduceMotion} /> : null}
-                                        </span>
-                                    </li>
-                                )
-                            })}
-                        </ul>
-                    )
-                }
-
-                // 리드 문장 + 뒤따르는 불릿 목록(예: "보통 이렇게 묶여요.\n- A\n- B")은
-                // 리드 줄을 문단으로, 나머지를 불릿 리스트로 분리해 렌더링한다. 불릿이 섞인 본문에서
-                // 날 대시("- ")가 그대로 보이던 문제를 막는다. 불릿 뒤에 다시 평문이 오는 혼합 블록은
-                // 오인 렌더를 피하려 이 분기에서 처리하지 않고 아래 <p> 로 보낸다.
-                const firstBulletIndex = lines.findIndex((line) => bulletLineValue(line) !== undefined)
-                if (
-                    firstBulletIndex > 0 &&
-                    lines.slice(firstBulletIndex).every((line) => bulletLineValue(line) !== undefined)
-                ) {
-                    const leadLines = lines.slice(0, firstBulletIndex).map(cleanMessageLine).filter(Boolean)
-                    const trailingBullets = lines
-                        .slice(firstBulletIndex)
-                        .map(bulletLineValue)
-                        .filter((value): value is string => Boolean(value))
-                    return (
-                        <div key={`${blockIndex}:${block}`} className="space-y-2">
-                            {leadLines.length > 0 && (
-                                <p>
-                                    {leadLines.join("\n")}
-                                    {showCaret && trailingBullets.length === 0 ? <Caret shouldReduceMotion={shouldReduceMotion} /> : null}
-                                </p>
-                            )}
-                            <ul className="space-y-2">
-                                {trailingBullets.map((item, index) => {
-                                    const isLastItem = index === trailingBullets.length - 1
-                                    return (
-                                        <li key={`${index}:${item}`} className="flex items-start gap-2.5">
-                                            <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-fg-accent" aria-hidden="true" />
-                                            <span className="flex-1">
-                                                {item}
-                                                {showCaret && isLastItem ? <Caret shouldReduceMotion={shouldReduceMotion} /> : null}
-                                            </span>
-                                        </li>
-                                    )
-                                })}
-                            </ul>
-                        </div>
-                    )
-                }
-
-                return (
-                    <p key={`${blockIndex}:${block}`}>
-                        {lines.map(cleanMessageLine).filter(Boolean).join("\n")}
-                        {showCaret ? <Caret shouldReduceMotion={shouldReduceMotion} /> : null}
-                    </p>
-                )
-            })}
-        </motion.div>
-    )
-})
-
-function AnswerCopyButton({ message }: { message: ChatMessage }) {
-    const shouldReduceMotion = useReducedMotion()
-    const [state, setState] = useState<"idle" | "copied" | "failed">("idle")
-
-    async function copyAnswer() {
-        try {
-            if (!navigator?.clipboard?.writeText) {
-                throw new Error("clipboard_not_supported")
-            }
-            await navigator.clipboard.writeText(buildAnswerShareText(message))
-            setState("copied")
-            window.setTimeout(() => setState("idle"), 1800)
-        } catch {
-            setState("failed")
-            window.setTimeout(() => setState("idle"), 1800)
-        }
-    }
-
-    return (
-        <motion.button
-            type="button"
-            whileHover={shouldReduceMotion ? undefined : { scale: 1.03 }}
-            whileTap={shouldReduceMotion ? undefined : { scale: 0.96 }}
-            onClick={() => void copyAnswer()}
-            className={cn(
-                "inline-flex h-9 items-center justify-center gap-1.5 rounded-[8px] border px-2.5 text-[11px] font-bold transition-all shadow-[0_1px_2px_rgba(0,0,0,0.03)]",
-                CHATBOT_HIT_AREA_CLASS,
-                state === "copied"
-                    ? "border-fg-accent/30 bg-fg-accent/8 text-fg-accent"
-                    : state === "failed"
-                      ? "border-[#B85C33]/20 bg-[#FBEAE2] text-[#7A2A13]"
-                      : "border-white/80 bg-white/80 text-[#615D59] hover:border-fg-accent/20 hover:bg-fg-accent/8 hover:text-fg-accent"
-            )}
-            aria-label="답변 복사"
-            title="답변 복사"
-        >
-            <AnimatePresence mode="wait" initial={false}>
-                {state === "copied" ? (
-                    <motion.span
-                        key="copied"
-                        initial={{ scale: 0.8, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        exit={{ scale: 0.8, opacity: 0 }}
-                        transition={{ duration: 0.15 }}
-                        className="flex items-center gap-1"
-                    >
-                        <Check className="h-3.5 w-3.5 text-fg-accent" />
-                        <span>복사 완료</span>
-                    </motion.span>
-                ) : (
-                    <motion.span
-                        key="copy"
-                        initial={{ scale: 0.8, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        exit={{ scale: 0.8, opacity: 0 }}
-                        transition={{ duration: 0.15 }}
-                        className="flex items-center gap-1"
-                    >
-                        <Copy className="h-3.5 w-3.5" />
-                        <span>{state === "failed" ? "실패" : "답변 복사"}</span>
-                    </motion.span>
-                )}
-            </AnimatePresence>
-        </motion.button>
-    )
-}
-
-function SourceLinks({
-    sources,
-    onNavigate,
-}: {
-    sources?: ChatbotSource[]
-    onNavigate?: (click: ChatLinkClick) => void
-}) {
-    const shouldReduceMotion = useReducedMotion()
-    const visibleSources = sources?.slice(0, 2) ?? []
-    if (visibleSources.length === 0) return null
-
-    return (
-        <div className="mt-3 space-y-1.5 border-t border-fg-accent/10 pt-3">
-            <div className="flex items-center gap-1.5 text-[11px] font-bold text-[#615D59]">
-                <FileText className="h-3.5 w-3.5 text-fg-accent" aria-hidden="true" />
-                <span>참고한 공식 가이드</span>
-            </div>
-            {visibleSources.map((source, index) => {
-                // 첫 번째 출처는 점수가 가장 높은 '가장 관련 높은' 가이드 — 시각적으로 강조한다.
-                const isTopMatch = index === 0
-                return (
-                    <motion.div
-                        key={`${source.urlPath}:${source.heading ?? source.title}`}
-                        initial={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: 6 }}
-                        animate={shouldReduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
-                        transition={{
-                            duration: shouldReduceMotion ? 0.01 : 0.26,
-                            ease: EASING_SOFT_ENTER,
-                            delay: shouldReduceMotion ? 0 : index * 0.07,
-                        }}
-                    >
-                        <Link
-                            href={source.urlPath}
-                            onClick={(event) => onNavigate?.(event)}
-                            className={cn(
-                                "group block rounded-[12px] border px-3 py-2 text-left transition-all focus-visible:outline-none",
-                                isTopMatch
-                                    ? "border-fg-accent/25 bg-fg-accent/6 hover:border-fg-accent/40 hover:bg-fg-accent/8"
-                                    : "border-white/70 bg-white/60 shadow-[inset_0_1px_0_rgba(255,255,255,0.60)] hover:border-fg-accent/25 hover:bg-fg-accent/7"
-                            )}
-                        >
-                            <span className="flex items-start justify-between gap-2 text-[12px] font-bold leading-5 text-[#111110]">
-                                <span className="flex min-w-0 items-center gap-1.5">
-                                    {isTopMatch ? (
-                                        <span className="shrink-0 rounded-full bg-fg-accent px-1.5 py-0.5 text-[9px] font-bold leading-none text-fg-on-accent">
-                                            추천
-                                        </span>
-                                    ) : null}
-                                    <span className="min-w-0 transition-colors group-hover:text-fg-accent">{source.title}</span>
-                                </span>
-                                <ExternalLink className="mt-0.5 h-3.5 w-3.5 shrink-0 text-fg-accent/70 transition-transform group-hover:translate-x-0.5 group-hover:text-fg-accent" aria-hidden />
-                            </span>
-                            {source.heading ? (
-                                <span className="mt-0.5 block text-[11px] leading-4 text-[#615D59]">
-                                    {source.heading}
-                                </span>
-                            ) : null}
-                        </Link>
-                    </motion.div>
-                )
-            })}
-        </div>
-    )
-}
-
-function ThinkingIndicator({
-    shouldReduceMotion,
-}: {
-    shouldReduceMotion: boolean | null
-}) {
-    return (
-        <motion.div
-            initial={m({ opacity: 0, y: 10, scale: 0.96 }, shouldReduceMotion)}
-            animate={m({ opacity: 1, y: 0, scale: 1 }, shouldReduceMotion)}
-            exit={m({ opacity: 0, y: -6, scale: 0.98 }, shouldReduceMotion)}
-            transition={m(CHATBOT_MOTION.enter, shouldReduceMotion)}
-            className="flex justify-start"
-        >
-            <div
-                role="status"
-                aria-live="off"
-                className="relative overflow-hidden rounded-[18px] rounded-bl-[6px] border border-white/80 bg-[linear-gradient(160deg,rgba(255,255,255,0.92)_0%,rgba(246,253,249,0.85)_100%)] p-3 text-sm backdrop-blur-xl"
-            >
-                {/* 은은한 쉬머 반사 광택 */}
-                {!shouldReduceMotion && (
-                    <motion.div
-                        aria-hidden
-                        className="pointer-events-none absolute inset-0 -translate-x-full bg-[linear-gradient(90deg,transparent_0%,rgba(16,185,129,0.08)_50%,transparent_100%)]"
-                        animate={{ translateX: ["-100%", "200%"] }}
-                        transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
-                    />
-                )}
-
-                <div className="flex items-center gap-2.5">
-                    <div className="relative flex h-6 w-6 shrink-0 items-center justify-center rounded-[8px] border border-fg-accent/15 bg-fg-accent/8 shadow-sm">
-                        <ClassInAIIcon size={13} variant="brand" className="text-fg-accent" />
-                        {!shouldReduceMotion && (
-                            <motion.span
-                                aria-hidden
-                                className="pointer-events-none absolute inset-0 rounded-[8px] border border-[#10B981]/50"
-                                animate={{ scale: [1, 1.25, 1], opacity: [0.6, 0, 0.6] }}
-                                transition={{ duration: 2, repeat: Infinity, ease: "easeOut" }}
-                            />
-                        )}
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <span className="text-xs font-semibold text-fg-accent">ClassIn 가이드 확인 중</span>
-                        <div className="flex items-center gap-1" aria-hidden>
-                            {[0, 1, 2].map((index) => (
-                                <motion.span
-                                    key={index}
-                                    className="h-1.5 w-1.5 rounded-full bg-fg-accent"
-                                    animate={
-                                        shouldReduceMotion
-                                            ? { opacity: 0.5 }
-                                            : { y: [0, -3.5, 0], opacity: [0.35, 1, 0.35] }
-                                    }
-                                    transition={
-                                        shouldReduceMotion
-                                            ? undefined
-                                            : { duration: 1.1, repeat: Infinity, ease: "easeInOut", delay: index * 0.15 }
-                                    }
-                                />
-                            ))}
-                        </div>
-                    </div>
-                </div>
-
-                {/* 스켈레톤 로딩 바 */}
-                <div className="mt-2 space-y-1.5 w-40">
-                    <div className="h-1.5 w-full rounded-full bg-fg-accent/[0.08]" />
-                    <div className="h-1.5 w-2/3 rounded-full bg-fg-accent/[0.05]" />
-                </div>
-            </div>
-        </motion.div>
-    )
+// 닫을 때 포커스를 돌려줄 수 있는 요소인지(연 버튼이 사라졌거나 가려졌으면 런처로 보낸다).
+function canReturnFocusTo(element: HTMLElement | null): element is HTMLElement {
+    if (!element || !element.isConnected) return false
+    if (element.closest("[inert]")) return false
+    if ((element as HTMLButtonElement).disabled) return false
+    return element.getClientRects().length > 0
 }
 
 export function FloatingChatbot() {
     const pathname = usePathname()
     const shouldReduceMotion = useReducedMotion()
     const [isOpen, setIsOpen] = useState(false)
-    const [input, setInput] = useState("")
-    const [sessionId, setSessionId] = useState<string | undefined>()
-    const [isSending, setIsSending] = useState(false)
-    const [isStreaming, setIsStreaming] = useState(false)
-    const [error, setError] = useState<string | null>(null)
-    const [isDeepConsultation, setIsDeepConsultation] = useState(false)
-    const [unresolvedStreak, setUnresolvedStreak] = useState(0)
     const [isAtBottom, setIsAtBottom] = useState(true)
-    const [srAnnouncement, setSrAnnouncement] = useState("")
+    const [showJumpToLatest, setShowJumpToLatest] = useState(false)
     const [muted, setMutedState] = useState(() => isMuted())
+    const rootRef = useRef<HTMLDivElement | null>(null)
     const bottomRef = useRef<HTMLDivElement | null>(null)
     const messagesContainerRef = useRef<HTMLDivElement | null>(null)
     const pendingAssistantScrollIdRef = useRef<string | null>(null)
     const inputRef = useRef<HTMLTextAreaElement | null>(null)
     const triggerRef = useRef<HTMLButtonElement | null>(null)
-    const [conversation, setConversation] = useState<ChatMessage[]>([])
-    const [publishedStarters, setPublishedStarters] = useState<string[]>([])
+    // 창을 연 요소(문서 '챗봇에게 묻기' 버튼·런처 등). 닫을 때 여기로 포커스를 돌려준다(CX-09).
+    const openerRef = useRef<HTMLElement | null>(null)
+    const returnFocusOnCloseRef = useRef(false)
+    // 답 안 링크로 다른 페이지로 가며 닫혔다 — 포커스를 옮기지 않고 history 항목도 걷지 않는다.
+    const closedByNavigationRef = useRef(false)
+    const hasUserMessagesRef = useRef(false)
+    // '새 답변' 버튼: 목록 끝의 지문과, 사용자가 맨 아래에서 마지막으로 본 지문.
+    const latestSignatureRef = useRef("")
+    const seenSignatureRef = useRef("")
+    // 입력 중인 글. 셸이 저장소를 들고 있어 창을 닫았다 열어도 이어지고, 글자를 칠 때는 ChatComposer 만 다시 그려진다.
+    const [draftStore] = useState(createComposerDraftStore)
 
     const hidden = shouldHideChatbot(pathname)
 
-    const pageContext = resolvePageContext(pathname)
-    const needsPublishedStarters = pageContext.starters.length < STARTER_SUGGESTION_LIMIT
-    const messages = useMemo<ChatMessage[]>(() => [
-        {
-            id: "welcome",
-            role: "assistant",
-            content: pageContext.welcome ?? CLASSIN_POSITIONING.chatbot.welcome,
-            suggestedQuestions: mergeStarters(pageContext.starters, publishedStarters, STARTER_SUGGESTION_LIMIT),
+    const {
+        messages,
+        sessionId,
+        isSending,
+        isStreaming,
+        isSlow,
+        cooldownSeconds,
+        isDeepConsultation,
+        setIsDeepConsultation,
+        srAnnouncement,
+        hasUserMessages,
+        canUndoNewChat,
+        sendQuestion,
+        retryTurn,
+        startNewChat,
+        undoNewChat,
+    } = useChatbotConversation({
+        pathname,
+        hidden,
+        isOpen,
+        pendingAssistantScrollIdRef,
+        onBeforeSend: ({ clearDraft }) => {
+            if (clearDraft) draftStore.set("")
+            setIsAtBottom(true)
         },
-        ...conversation,
-    ], [conversation, pageContext, publishedStarters])
+    })
+
     const chatbotTeaser = useChatbotTeaser({ pathname, isOpen })
     const openSourceRef = useRef<ChatbotOpenSource>("button")
     const wasOpenRef = useRef(false)
-    const firstQuestionSentRef = useRef(false)
     const teaserShownTrackedRef = useRef(false)
+
+    // 휴대폰(< 48rem)에서 대화창이 보이는 동안은 모달이다: 뒤쪽 inert·문서 스크롤 잠금·뒤로가기로 닫기(CX-09·CX-11).
+    // 휴대폰은 쿠키 배너가 떠 있으면 대화창을 숨기므로(site-base.css 동시 노출) 그동안은 모달로 다루지 않는다.
+    const isMobileViewport = useIsMobileChatbotViewport()
+    const consentBannerOpen = useConsentBannerOpen()
+    const isPanelVisible = isOpen && !hidden && !(isMobileViewport && consentBannerOpen)
+    const isModal = isPanelVisible && isMobileViewport
+    // 보이는 화면(키보드·가로 모드·글꼴 확대)에 맞춘 높이와 compact(CX-10).
+    const viewport = useChatbotViewport(isPanelVisible)
+    const compact = viewport?.compact ?? false
+    const mobilePanelLayout = isMobileViewport && viewport ? resolveMobilePanelLayout(viewport) : null
+    const hideLauncher = isOpen && Boolean(mobilePanelLayout?.hideLauncher)
+
+    useModalBackground(isModal, rootRef)
+    const { release: releaseHistoryEntry, abandon: abandonHistoryEntry } = useChatbotHistoryEntry({
+        active: isModal,
+        // 뒤로가기(휴대폰 쓸어 넘기기 포함)는 페이지를 떠나지 않고 창만 닫는다.
+        onBack: () => {
+            returnFocusOnCloseRef.current = true
+            setIsOpen(false)
+        },
+    })
+
+    // 닫기 버튼·Esc·딤·런처로 닫는다. 연 요소로 포커스를 돌려주고, 휴대폰에서 쌓은 history 항목을 걷는다.
+    const closeChatbot = useCallback(() => {
+        returnFocusOnCloseRef.current = true
+        releaseHistoryEntry()
+        setIsOpen(false)
+    }, [releaseHistoryEntry])
 
     const toggleMute = () => {
         const nextMute = !muted
         setMutedState(nextMute)
         setMuted(nextMute)
     }
+
+    useLayoutEffect(() => {
+        hasUserMessagesRef.current = hasUserMessages
+    }, [hasUserMessages])
 
     // 다이얼로그 열기/닫기 시점에 음향 효과 재생
     useEffect(() => {
@@ -940,139 +180,138 @@ export function FloatingChatbot() {
         }
     }, [isOpen])
 
-    const context = useMemo(
-        () => {
-            const pageUrl = typeof window === "undefined" ? undefined : window.location.href
-            const searchParams =
-                typeof window === "undefined" ? new URLSearchParams() : new URLSearchParams(window.location.search)
-            const utm = Object.fromEntries(
-                ["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term"]
-                    .map((key) => [key, searchParams.get(key)] as const)
-                    .filter(([, value]) => Boolean(value))
-            )
+    // 열 때 연 요소를 기억한다(포커스를 옮기기 전에 읽는다).
+    useLayoutEffect(() => {
+        if (!isOpen) return
+        const active = document.activeElement
+        const dialog = document.getElementById("classin-chatbot-dialog")
+        openerRef.current =
+            active instanceof HTMLElement && active !== document.body && !dialog?.contains(active) ? active : null
+    }, [isOpen])
 
-            return {
-                channel: "web",
-                path: pathname,
-                pageUrl,
-                utm,
-                showSources: true,
-            }
-        },
-        [pathname]
-    )
-
-    // hidden이어도 isOpen은 강제로 닫지 않는다 — 숨김 페이지(/pricing 등)를 잠깐
-    // 거쳐도 창이 영구히 닫히지 않고, 다시 보이는 페이지로 오면 이전 열림 상태로
-    // 복귀한다. 시각적 숨김은 아래 `if (hidden) return null`이 담당한다.
-    useEffect(() => {
-        if (hidden || !needsPublishedStarters) return
-
-        const controller = new AbortController()
-
-        async function loadStarterQuestions() {
-            try {
-                const response = await fetch("/api/chatbot/recommended-questions", {
-                    cache: "no-store",
-                    signal: controller.signal,
-                })
-                if (!response.ok) return
-                const data = (await response.json()) as ChatbotStarterQuestionsResponse
-                const questions = Array.isArray(data.questions)
-                    ? data.questions
-                        .filter((question): question is string => typeof question === "string")
-                        .map((question) => question.trim())
-                        .filter(Boolean)
-                        .slice(0, STARTER_SUGGESTION_LIMIT)
-                    : []
-
-                setPublishedStarters(questions)
-            } catch (err) {
-                if (err instanceof DOMException && err.name === "AbortError") return
-            }
-        }
-
-        void loadStarterQuestions()
-
-        return () => controller.abort()
-    }, [hidden, needsPublishedStarters])
-
+    // 열면 정밀 포인터(마우스·트랙패드)는 입력창으로, 터치는 대화창 제목으로 포커스를 옮긴다.
+    // 터치에서 키보드가 갑자기 뜨지 않게 입력창에는 주지 않는다(CX-09). 티저·문서 CTA 가 미리 채운 글은 끝에 커서를 둔다(CX-24).
     useEffect(() => {
         if (!isOpen) return
 
         const frame = window.requestAnimationFrame(() => {
-            const shouldAutofocus = window.matchMedia("(hover: hover) and (pointer: fine)").matches
-            if (!shouldAutofocus) return
-            inputRef.current?.focus()
+            if (window.matchMedia(FINE_POINTER_QUERY).matches) {
+                const input = inputRef.current
+                if (!input) return
+                input.focus()
+                const end = input.value.length
+                input.setSelectionRange(end, end)
+                return
+            }
+            document.getElementById("classin-chatbot-title")?.focus({ preventScroll: true })
         })
 
         return () => window.cancelAnimationFrame(frame)
     }, [isOpen])
 
-    // 입력창이 내용에 맞춰 44px → 112px 까지 늘고, 넘치면 안쪽 스크롤로 바뀐다.
-    // 한계는 computed min/max-height 를 읽어 글꼴 확대 상태에서도 CSS(min-h-11·max-h-28)와 같게 둔다.
-    // 그리기 전에 맞춰야 한 줄 높이로 깜빡이지 않으므로 layout effect 로 둔다.
-    useLayoutEffect(() => {
-        if (!isOpen) return
-        const el = inputRef.current
-        if (!el) return
-
-        const resize = () => {
-            const container = messagesContainerRef.current
-            const wasNearBottom = container ? isNearBottom(container) : false
-            const prevScrollTop = container ? container.scrollTop : 0
-            const prev = el.offsetHeight
-
-            el.style.height = "auto"
-            const cs = window.getComputedStyle(el)
-            const { height, overflowY } = resolveChatInputHeight(
-                el.scrollHeight,
-                parseFloat(cs.minHeight),
-                parseFloat(cs.maxHeight),
-            )
-            el.style.height = `${height}px`
-            el.style.overflowY = overflowY
-
-            // 입력창이 커지면 대화 목록이 줄어든다. 맨 아래를 보고 있었다면 계속 맨 아래에 둔다.
-            // 재려고 auto 로 줄인 사이 깎인 scrollTop 은 되돌린다(스크롤 앵커링이 없는 Safari 에서 남는다).
-            if (container) {
-                const nextScrollTop = resolveListScrollTopAfterInputResize({
-                    heightChanged: height !== prev,
-                    wasNearBottom,
-                    prevScrollTop,
-                    scrollTop: container.scrollTop,
-                    scrollHeight: container.scrollHeight,
-                })
-                if (nextScrollTop !== null) container.scrollTop = nextScrollTop
-            }
+    // 닫히면 연 요소(없거나 가려졌으면 런처)로 포커스를 돌려준다. 답 안 링크로 떠나며 닫힌 경우는 다음 페이지로 가는 중이라 두고,
+    // 쌓아 둔 history 항목도 걷지 않는다(걷으면 이동이 취소된다).
+    useEffect(() => {
+        if (isOpen) return
+        if (closedByNavigationRef.current) {
+            closedByNavigationRef.current = false
+            returnFocusOnCloseRef.current = false
+            abandonHistoryEntry()
+            return
         }
+        if (!returnFocusOnCloseRef.current) return
+        returnFocusOnCloseRef.current = false
+        const frame = window.requestAnimationFrame(() => {
+            const opener = openerRef.current
+            openerRef.current = null
+            const target = canReturnFocusTo(opener) ? opener : triggerRef.current
+            target?.focus()
+        })
+        return () => window.cancelAnimationFrame(frame)
+    }, [isOpen, abandonHistoryEntry])
 
-        resize()
-        window.addEventListener("resize", resize)
-        return () => window.removeEventListener("resize", resize)
-    }, [input, isOpen])
-
+    // 처음 열면(아직 질문이 없으면) 환영 말풍선 머리부터 보이게 맨 위에서 시작하고, 이어지는 대화는 맨 아래로 간다(CX-12).
     useEffect(() => {
         if (!isOpen) return
         const frame = window.requestAnimationFrame(() => {
-            bottomRef.current?.scrollIntoView({ behavior: shouldReduceMotion ? "auto" : "smooth" })
+            const container = messagesContainerRef.current
+            if (!container) return
+            if (!hasUserMessagesRef.current) {
+                container.scrollTop = 0
+                setIsAtBottom(isNearBottom(container))
+                return
+            }
+            container.scrollTo({ top: container.scrollHeight, behavior: shouldReduceMotion ? "auto" : "smooth" })
+            seenSignatureRef.current = latestSignatureRef.current
             setIsAtBottom(true)
         })
 
         return () => window.cancelAnimationFrame(frame)
     }, [isOpen, shouldReduceMotion])
 
+    // '새 답변' 버튼: 맨 아래가 아니고, 맨 아래에서 마지막으로 본 뒤 목록 끝이 바뀌었고, 끝 말풍선 머리가 화면 아래로 밀려나 있을 때만.
+    // 답을 질문 기준으로 맞춘 직후처럼 새 답 머리가 보이는 동안에는 띄우지 않는다(CX-12).
+    const updateJumpToLatest = useCallback(() => {
+        const container = messagesContainerRef.current
+        if (!container) return
+        if (isNearBottom(container)) {
+            seenSignatureRef.current = latestSignatureRef.current
+            setShowJumpToLatest(false)
+            return
+        }
+        const unseen = seenSignatureRef.current !== latestSignatureRef.current
+        const items = container.querySelectorAll<HTMLElement>("[data-chat-message-id]")
+        const last = items[items.length - 1]
+        const belowFold =
+            Boolean(last) &&
+            last.getBoundingClientRect().top > container.getBoundingClientRect().bottom - JUMP_TO_LATEST_FOLD_SLACK_PX
+        setShowJumpToLatest(unseen && belowFold)
+    }, [])
+
+    const latestSignature = useMemo(() => latestMessageSignature(messages), [messages])
+    useLayoutEffect(() => {
+        latestSignatureRef.current = latestSignature
+    }, [latestSignature])
+
+    useEffect(() => {
+        if (!isOpen) return
+        const frame = window.requestAnimationFrame(updateJumpToLatest)
+        return () => window.cancelAnimationFrame(frame)
+    }, [isOpen, latestSignature, updateJumpToLatest])
+
     const handleScroll = () => {
         const container = messagesContainerRef.current
         if (!container) return
 
         setIsAtBottom(isNearBottom(container))
+        updateJumpToLatest()
     }
 
+    const jumpToLatest = () => {
+        const container = messagesContainerRef.current
+        if (!container) return
+        pendingAssistantScrollIdRef.current = null
+        seenSignatureRef.current = latestSignatureRef.current
+        container.scrollTo({ top: container.scrollHeight, behavior: shouldReduceMotion ? "auto" : "smooth" })
+        setIsAtBottom(true)
+        setShowJumpToLatest(false)
+        // 버튼이 사라지므로 포커스를 옮겨 둔다: 정밀 포인터는 입력창, 터치는 대화 내용 영역.
+        if (window.matchMedia(FINE_POINTER_QUERY).matches && inputRef.current) {
+            inputRef.current.focus()
+        } else {
+            container.focus({ preventScroll: true })
+        }
+    }
+
+    // 맨 아래를 보고 있으면 답을 받는 동안 따라간다. 마지막 meta(출처·칩·피드백)는 보내기가 끝나는 렌더와 함께 그려지므로
+    // 끝난 직후 한 번 더 따라가 새 칩이 화면 밖에 남지 않게 한다.
+    const followWasSendingRef = useRef(false)
     useEffect(() => {
         if (!isOpen) return
+        const wasSending = followWasSendingRef.current
+        followWasSendingRef.current = isSending
 
-        if (isSending && isAtBottom) {
+        if ((isSending || wasSending) && isAtBottom) {
             const container = messagesContainerRef.current
             if (container) {
                 container.scrollTop = container.scrollHeight
@@ -1080,6 +319,8 @@ export function FloatingChatbot() {
         }
     }, [messages, isSending, isAtBottom, isOpen])
 
+    // 새 답은 그 답을 낳은 질문 말풍선을 목록 위쪽에 맞춰 질문과 답 머리가 함께 보이게 한다(CX-12).
+    // 질문이 너무 길면 답 머리를 맞춘다.
     useEffect(() => {
         if (!isOpen) return
         const messageId = pendingAssistantScrollIdRef.current
@@ -1089,12 +330,19 @@ export function FloatingChatbot() {
         const message = container?.querySelector<HTMLElement>(`[data-chat-message-id="${messageId}"]`)
         if (!container || !message || !isAtBottom) return
 
+        const questionId = findQuestionAnchorId(messages, messageId)
+        const question = questionId
+            ? container.querySelector<HTMLElement>(`[data-chat-message-id="${questionId}"]`)
+            : null
+        const target =
+            question && question.offsetHeight <= container.clientHeight * QUESTION_ANCHOR_MAX_RATIO ? question : message
+
         const containerRect = container.getBoundingClientRect()
-        const messageRect = message.getBoundingClientRect()
-        const nextTop = container.scrollTop + messageRect.top - containerRect.top - ANSWER_SCROLL_TOP_OFFSET_PX
+        const targetRect = target.getBoundingClientRect()
+        const nextTop = container.scrollTop + targetRect.top - containerRect.top - ANSWER_SCROLL_TOP_OFFSET_PX
 
         container.scrollTop = Math.max(0, nextTop)
-        const alignedTop = message.getBoundingClientRect().top - container.getBoundingClientRect().top
+        const alignedTop = target.getBoundingClientRect().top - container.getBoundingClientRect().top
         if (!isSending || alignedTop <= ANSWER_SCROLL_TOP_OFFSET_PX + 2) {
             pendingAssistantScrollIdRef.current = null
         }
@@ -1105,27 +353,27 @@ export function FloatingChatbot() {
         if (!isOpen) return
 
         const handleKeyDown = (event: KeyboardEvent) => {
-            if (event.key === "Escape") {
-                setIsOpen(false)
-                triggerRef.current?.focus()
+            if (event.key === "Escape" && !event.isComposing) {
+                closeChatbot()
             }
         }
 
         document.addEventListener("keydown", handleKeyDown)
         return () => document.removeEventListener("keydown", handleKeyDown)
-    }, [isOpen])
+    }, [isOpen, closeChatbot])
 
     useEffect(() => {
         const handler = (event: Event) => {
             const detail = (event as CustomEvent<ChatbotOpenDetail>).detail
             openSourceRef.current = detail?.source ?? "cta"
-            if (detail?.prefill) setInput(detail.prefill)
+            // 쓰던 글이 있으면 덮지 않는다(CX-24). 비어 있을 때만 미리 채운다.
+            if (detail?.prefill && !draftStore.get().trim()) draftStore.set(detail.prefill)
             if (detail?.intent === "support") setIsDeepConsultation(true)
             setIsOpen(true)
         }
         window.addEventListener(CHATBOT_OPEN_EVENT, handler)
         return () => window.removeEventListener(CHATBOT_OPEN_EVENT, handler)
-    }, [])
+    }, [draftStore, setIsDeepConsultation])
 
     useEffect(() => {
         if (isOpen && !wasOpenRef.current) {
@@ -1141,254 +389,53 @@ export function FloatingChatbot() {
         }
     }, [chatbotTeaser.show, pathname])
 
-    if (hidden) return null
-
-    async function sendQuestion(question: string) {
-        const trimmed = question.trim()
-        if (!trimmed || isSending) return
-
-        if (!firstQuestionSentRef.current) {
-            firstQuestionSentRef.current = true
-            trackEvent("chatbot_first_question", { path: pathname })
-        }
-
-        const anonymousId = getChannelTalkAnonymousId()
-
-        if (shouldUseDeepConsultationIcon(trimmed)) {
-            setIsDeepConsultation(true)
-        }
-
-        setInput("")
-        setError(null)
-        setIsSending(true)
-        setIsStreaming(false)
-        setIsAtBottom(true)
-        playSendSound()
-
-        const userMessage: ChatMessage = {
-            id: makeId(),
-            role: "user",
-            content: trimmed,
-        }
-
-        // 직전 한 턴(직전 질문·직전 답이 물은 정보의 종류·답 모드)을 함께 보내 짧은 대답("휴대폰이요")·이어 묻기("그러면 아이패드는요")를
-        // 앞 턴 주제로 답하게 한다. 서버는 DB 이력이 아니라 이 값만 쓴다(lib/chatbot/conversation-context.ts).
-        const previousTurn = buildPreviousTurnPayload(messages)
-
-        setConversation((current) => [...current, userMessage])
-
-        // 첫 토큰이 오면 그때 어시스턴트 말풍선을 만든다(그 전까지는 ThinkingIndicator 가 보인다).
-        let assistantId: string | null = null
-        const ensureAssistant = () => {
-            if (assistantId) return assistantId
-            const id = makeId()
-            assistantId = id
-            pendingAssistantScrollIdRef.current = id
-            setIsStreaming(true)
-            setConversation((current) => [...current, { id, role: "assistant", content: "" }])
-            return id
-        }
-        const updateAssistant = (updater: (message: ChatMessage) => ChatMessage) => {
-            const id = ensureAssistant()
-            setConversation((current) => current.map((message) => (message.id === id ? updater(message) : message)))
-        }
-
-        let timeoutId: number | undefined
-        try {
-            const controller = new AbortController()
-            timeoutId = window.setTimeout(() => controller.abort(), CHATBOT_REQUEST_TIMEOUT_MS)
-            const response = await fetch("/api/chatbot/query/stream", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                signal: controller.signal,
-                body: JSON.stringify({
-                    message: trimmed,
-                    sessionId,
-                    anonymousId,
-                    // context.path 는 문서 페이지 맥락("방금 본 내용…")에도 쓰인다.
-                    context: previousTurn ? { ...context, previousTurn } : context,
-                }),
-            })
-
-            if (!response.ok || !response.body) {
-                const data = (await response.json().catch(() => ({}))) as { error?: string }
-                throw new Error(
-                    response.status === 429
-                        ? data.error ?? "질문이 잠시 많이 들어왔습니다. 잠깐 후 다시 시도해 주세요."
-                        : data.error ?? "답변을 가져오지 못했습니다."
-                )
-            }
-
-            const handleEvent = (event: ChatbotStreamEvent) => {
-                if (event.type === "delta") {
-                    updateAssistant((message) => ({ ...message, content: message.content + event.text }))
-                    return
-                }
-                if (event.type === "replace") {
-                    updateAssistant((message) => ({ ...message, content: event.answer }))
-                    return
-                }
-                if (event.type === "error") {
-                    throw new Error(event.error)
-                }
-                // meta
-                const meta = event.meta
-                setSessionId(meta.sessionId ?? sessionId)
-                if (meta.needsHandoff || meta.answerMode === "handoff") {
-                    setIsDeepConsultation(true)
-                }
-                const nextStreak = meta.unresolved ? unresolvedStreak + 1 : 0
-                setUnresolvedStreak(nextStreak)
-                updateAssistant((message) => ({
-                    ...message,
-                    sources: meta.sources ?? [],
-                    suggestedQuestions: meta.suggestedQuestions ?? [],
-                    answerEventId: meta.answerEventId,
-                    confidence: meta.confidence,
-                    needsHandoff: meta.needsHandoff,
-                    handoffIntent: meta.handoffIntent,
-                    showHandoffCTA: Boolean(meta.needsHandoff),
-                    answerMode: meta.answerMode,
-                }))
-
-                // 서버가 이미 되묻거나 안내한 답(clarifying_question·fallback) 뒤에는 거의 같은 재촉 말풍선을 또 붙이지 않는다.
-                if (
-                    shouldShowUnresolvedNudge({
-                        streak: nextStreak,
-                        threshold: UNRESOLVED_STREAK_THRESHOLD,
-                        needsHandoff: meta.needsHandoff,
-                        answerMode: meta.answerMode,
-                    })
-                ) {
-                    const intent = meta.handoffIntent ?? "demo"
-                    const nudge =
-                        intent === "support"
-                            ? "정확한 확인을 위해 오류 화면, 사용 기기, 발생 시점을 한 문장으로 알려주세요."
-                            : "도입, 수업 운영, 계정/오류, 결제 중 어느 쪽인지 알려주시면 더 짧게 좁혀드릴게요."
-                    setConversation((current) => [
-                        ...current,
-                        {
-                            id: makeId(),
-                            role: "assistant",
-                            content: nudge,
-                            suggestedQuestions: [],
-                            needsHandoff: false,
-                            handoffIntent: intent,
-                            showHandoffCTA: false,
-                        },
-                    ])
-                }
-            }
-
-            const reader = response.body.getReader()
-            const decoder = new TextDecoder()
-            let buffer = ""
-
-            while (true) {
-                const { value, done } = await reader.read()
-                if (done) break
-                // 데이터가 흐르는 동안에는 유휴 타임아웃을 리셋해 긴 응답이 중간에 끊기지 않게 한다.
-                if (timeoutId) window.clearTimeout(timeoutId)
-                timeoutId = window.setTimeout(() => controller.abort(), CHATBOT_REQUEST_TIMEOUT_MS)
-                buffer += decoder.decode(value, { stream: true })
-
-                let newlineIndex: number
-                while ((newlineIndex = buffer.indexOf("\n")) >= 0) {
-                    const line = buffer.slice(0, newlineIndex).trim()
-                    buffer = buffer.slice(newlineIndex + 1)
-                    // 파싱은 따로 감싸 깨진 JSON 라인만 무시하고, 이벤트 처리(특히 error 이벤트의 throw)는
-                    // 바깥 catch 로 전파시킨다.
-                    const event = parseStreamEvent(line)
-                    if (event) handleEvent(event)
-                }
-            }
-
-            const event = parseStreamEvent(buffer)
-            if (event) handleEvent(event)
-
-            // 어떤 콘텐츠도 받지 못했으면 안내 문구로 마무리한다.
-            if (!assistantId) {
-                const fallbackId = makeId()
-                pendingAssistantScrollIdRef.current = fallbackId
-                setConversation((current) => [
-                    ...current,
-                    {
-                        id: fallbackId,
-                        role: "assistant",
-                        content: "확인 가능한 답변을 찾지 못했습니다.",
-                        suggestedQuestions: [],
-                    },
-                ])
-                setSrAnnouncement("답변 완료: 확인 가능한 답변을 찾지 못했습니다.")
-            } else {
-                setConversation((current) => {
-                    const latestAssistant = current.find((m) => m.id === assistantId)
-                    if (latestAssistant) {
-                        const cleanText = sanitizeVisibleAssistantText(latestAssistant.content)
-                        const hasHandoff = latestAssistant.showHandoffCTA ? " 상담 연결 준비됨." : ""
-                        setSrAnnouncement(`답변 완료: ${cleanText}${hasHandoff}`)
-                    }
-                    return current
-                })
-            }
-            playReceiveSound()
-        } catch (err) {
-            const isAbort = err instanceof DOMException && err.name === "AbortError"
-            setError(isAbort ? "응답이 지연되고 있습니다. 잠깐 후 다시 시도해 주세요." : err instanceof Error ? err.message : "챗봇 응답 중 오류가 발생했습니다.")
-            const errorContent = isAbort
-                ? "응답이 지연되고 있어요. 같은 질문을 다시 시도하거나 질문을 조금 더 짧게 보내주세요."
-                : "지금은 답변을 불러오지 못했습니다. 같은 질문을 다시 시도할 수 있어요."
-            setSrAnnouncement(`답변 오류: ${errorContent}`)
-            const errorMessageId = assistantId ?? makeId()
-            if (!assistantId) {
-                pendingAssistantScrollIdRef.current = errorMessageId
-            }
-            const errorMessage: ChatMessage = {
-                id: errorMessageId,
-                role: "assistant",
-                content: errorContent,
-                sources: [],
-                suggestedQuestions: [],
-                needsHandoff: false,
-                handoffIntent: "support",
-                showHandoffCTA: false,
-                retryQuestion: trimmed,
-            }
-            setConversation((current) =>
-                assistantId
-                    ? current.map((message) => (message.id === assistantId ? errorMessage : message))
-                    : [...current, errorMessage]
-            )
-        } finally {
-            if (timeoutId) window.clearTimeout(timeoutId)
-            setIsSending(false)
-            setIsStreaming(false)
-        }
-    }
-
-    function handleSubmit(event: FormEvent<HTMLFormElement>) {
-        event.preventDefault()
-        void sendQuestion(input)
-    }
-
-    function closeChatbot() {
-        setIsOpen(false)
+    // 새 대화·되돌리기 뒤 포커스: 정밀 포인터면 입력창, 아니면 대화창 제목(h2 tabIndex=-1). 터치에서 키보드가 갑자기 뜨지 않게 한다.
+    // 새 대화 버튼·되돌리기 버튼은 누른 뒤 사라지므로 포커스를 옮겨 둔다(CX-02).
+    const focusAfterConversationReset = () => {
         window.requestAnimationFrame(() => {
-            triggerRef.current?.focus()
+            if (window.matchMedia(FINE_POINTER_QUERY).matches && inputRef.current) {
+                inputRef.current.focus()
+                return
+            }
+            document.getElementById("classin-chatbot-title")?.focus()
+        })
+    }
+
+    const handleNewChat = () => {
+        if (!startNewChat()) return
+        setIsAtBottom(true)
+        focusAfterConversationReset()
+    }
+
+    const handleUndoNewChat = () => {
+        if (!undoNewChat()) return
+        focusAfterConversationReset()
+        window.requestAnimationFrame(() => {
+            const container = messagesContainerRef.current
+            if (container) container.scrollTop = container.scrollHeight
+            seenSignatureRef.current = latestSignatureRef.current
+            setIsAtBottom(true)
         })
     }
 
     // 휴대폰에서 답 안 링크로 다른 페이지(또는 같은 페이지 #앵커)로 가면 대화창과 딤이 목적지를 덮지 않게 닫는다.
     // 다음 페이지로 가는 중이라 런처로 포커스를 옮기지 않는다. 대화 상태(messages·sessionId)는 두므로 다시 열면 이어진다.
-    function closeAfterInChatNavigation(click: ChatLinkClick) {
+    const closeAfterInChatNavigation = useCallback((click: ChatLinkClick) => {
         const isDesktop = window.matchMedia(CHATBOT_DESKTOP_MEDIA_QUERY).matches
         if (!shouldCloseChatbotAfterLinkClick(click, isDesktop)) return
+        closedByNavigationRef.current = true
         setIsOpen(false)
-    }
+    }, [])
+
+    if (hidden) return null
 
     return (
-        <div className="pointer-events-none fixed inset-x-0 bottom-0 z-(--z-chatbot) flex flex-col items-end px-3 pb-[calc(1rem+env(safe-area-inset-bottom))] md:inset-x-auto md:bottom-6 md:right-6 md:px-0 md:pb-0">
-            {/* 모바일 화면 백드롭 딤/블러 오버레이 */}
+        <div
+            ref={rootRef}
+            style={mobilePanelLayout?.wrapperStyle}
+            className="pointer-events-none fixed inset-x-0 bottom-0 z-(--z-chatbot) flex flex-col items-end px-3 pb-[calc(1rem+env(safe-area-inset-bottom))] md:inset-x-auto md:bottom-6 md:right-6 md:px-0 md:pb-0"
+        >
+            {/* 휴대폰 딤: scrim 토큰(blur 없음, DESIGN.md 면 6 · CX-14) */}
             <AnimatePresence>
                 {isOpen && (
                     <motion.div
@@ -1398,7 +445,7 @@ export function FloatingChatbot() {
                         exit={{ opacity: 0 }}
                         transition={{ duration: 0.18 }}
                         onClick={closeChatbot}
-                        className="pointer-events-auto fixed inset-0 z-0 bg-black/20 backdrop-blur-[2px] md:hidden"
+                        className="pointer-events-auto fixed inset-0 z-0 touch-none bg-surface-scrim md:hidden"
                         aria-hidden="true"
                     />
                 )}
@@ -1409,286 +456,96 @@ export function FloatingChatbot() {
                     <motion.div
                         id="classin-chatbot-dialog"
                         role="dialog"
-                        aria-modal="false"
+                        // 휴대폰은 화면을 덮는 모달(뒤쪽 inert), 데스크톱은 페이지 옆에 떠 있는 비모달 창이다(CX-09).
+                        aria-modal={isModal ? "true" : "false"}
                         aria-labelledby="classin-chatbot-title"
                         variants={containerVariants}
                         custom={shouldReduceMotion}
                         initial="initial"
                         animate="animate"
                         exit="exit"
-                        className="pointer-events-auto relative z-10 mb-3 flex h-[min(680px,calc(100svh-5.5rem))] w-full max-w-none origin-bottom overflow-hidden rounded-[26px] border border-white/60 bg-[linear-gradient(152deg,rgba(255,255,255,0.88)_0%,rgba(236,253,245,0.76)_50%,rgba(246,245,244,0.82)_100%)] text-[#111110] backdrop-blur-2xl md:mb-4 md:h-[min(640px,calc(100svh-8rem))] md:w-[424px] md:max-w-[424px] md:origin-bottom-right"
+                        style={mobilePanelLayout?.panelStyle}
+                        // 불투명 면(CX-14): paper 지면 + 1px line-strong + Deep Shadow(떠 있는 층). 반투명 그라데이션·backdrop blur 없음 —
+                        // 밝은 페이지 위에서 뒤 글자가 비치지 않고, 강제 색상(고대비)에서도 1px 선이 경계로 남는다.
+                        // 반경(26px)은 챗봇 모양 결정 전이라 그대로 둔다(DESIGN.md '챗봇 위젯 면').
+                        className="pointer-events-auto relative z-10 mb-3 flex h-[min(680px,calc(100svh-5.5rem))] w-full max-w-[36rem] origin-bottom overflow-hidden rounded-[26px] border border-line-strong bg-surface-paper text-fg-ink shadow-deep md:mb-4 md:h-[min(640px,calc(100svh-8rem))] md:w-[424px] md:max-w-[424px] md:origin-bottom-right"
                     >
-                        <div className="pointer-events-none absolute inset-x-5 top-0 h-px bg-white/80" aria-hidden />
-
                         <div className="relative flex min-h-0 w-full flex-col">
                             {/* 헤더 (Staggered Item 1) */}
-                            <motion.div
-                                variants={itemVariants}
-                                custom={shouldReduceMotion}
-                                className="flex items-center justify-between border-b border-white/50 bg-white/20 px-4 py-3.5 backdrop-blur-xl"
-                            >
-                                <div className="flex min-w-0 items-center gap-3">
-                                    <motion.div
-                                        animate={(!isSending && !isStreaming) ? { scale: [1, 1.15, 1] } : {}}
-                                        transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-                                        className="relative flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-[14px] border border-white/70 bg-[linear-gradient(145deg,rgba(255,255,255,0.82),rgba(209,250,229,0.50))]"
-                                    >
-                                        {isDeepConsultation ? (
-                                            <>
-                                                <Image
-                                                    src={DEEP_CONSULTATION_ICON_SRC}
-                                                    alt=""
-                                                    fill
-                                                    className="object-cover opacity-95"
-                                                    sizes="44px"
-                                                    aria-hidden
-                                                />
-                                                <span className="absolute inset-0 bg-fg-accent/2 mix-blend-soft-light" aria-hidden />
-                                            </>
-                                        ) : (
-                                            <>
-                                                <span className="absolute inset-1 rounded-[10px] bg-fg-accent/6" aria-hidden />
-                                                <ClassInAIIcon size={22} variant="brand" className="relative text-fg-accent" />
-                                            </>
-                                        )}
-                                        {/* 생각 중/스트리밍 중일 때 초록 펄스 링 렌더링 */}
-                                        {(isSending || isStreaming) && !shouldReduceMotion && (
-                                            <>
-                                                <motion.span
-                                                    initial={{ scale: 0.8, opacity: 0.5 }}
-                                                    animate={{ scale: 1.4, opacity: 0 }}
-                                                    transition={{ duration: 1.6, repeat: Infinity, ease: "easeOut" }}
-                                                    className="absolute inset-0 rounded-[14px] border border-fg-accent/40 pointer-events-none"
-                                                />
-                                                <motion.span
-                                                    initial={{ scale: 0.8, opacity: 0.5 }}
-                                                    animate={{ scale: 1.7, opacity: 0 }}
-                                                    transition={{ duration: 1.6, repeat: Infinity, ease: "easeOut", delay: 0.6 }}
-                                                    className="absolute inset-0 rounded-[14px] border border-fg-accent/20 pointer-events-none"
-                                                />
-                                            </>
-                                        )}
-                                    </motion.div>
-                                    <div className="min-w-0">
-                                        <div className="flex items-center gap-1.5">
-                                            <h2 id="classin-chatbot-title" className="truncate text-[15px] font-bold text-[#111110]">Classin 상담 가이드</h2>
-                                            <motion.span
-                                                aria-hidden
-                                                className="h-2 w-2 shrink-0 rounded-full bg-fg-accent"
-                                                animate={shouldReduceMotion ? undefined : { opacity: [1, 0.45, 1], scale: [1, 0.82, 1] }}
-                                                transition={shouldReduceMotion ? undefined : { duration: 2.6, repeat: Infinity, ease: "easeInOut" }}
-                                            />
-                                        </div>
-                                        <p className="mt-0.5 truncate text-xs font-medium text-[#615D59]">운영·도입·CS 상담</p>
-                                    </div>
-                                </div>
-                                <div className="flex items-center gap-3">
-                                    <button
-                                        type="button"
-                                        onClick={toggleMute}
-                                        className={cn(
-                                            "inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/60 bg-white/35 text-[#615D59] shadow-[inset_0_1px_0_rgba(255,255,255,0.60)] transition-colors hover:bg-white/70 hover:text-fg-accent focus-visible:outline-none",
-                                            CHATBOT_HIT_AREA_CLASS
-                                        )}
-                                        aria-label={muted ? "소리 켜기" : "음소거"}
-                                    >
-                                        {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={closeChatbot}
-                                        className={cn(
-                                            "inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/60 bg-white/35 text-[#615D59] shadow-[inset_0_1px_0_rgba(255,255,255,0.60)] transition-colors hover:bg-white/70 hover:text-fg-accent focus-visible:outline-none",
-                                            CHATBOT_HIT_AREA_CLASS
-                                        )}
-                                        aria-label="챗봇 닫기"
-                                    >
-                                        <X className="h-5 w-5" />
-                                    </button>
-                                </div>
-                            </motion.div>
+                            <ChatbotHeader
+                                isDeepConsultation={isDeepConsultation}
+                                isSending={isSending}
+                                isStreaming={isStreaming}
+                                shouldReduceMotion={shouldReduceMotion}
+                                muted={muted}
+                                toggleMute={toggleMute}
+                                closeChatbot={closeChatbot}
+                                canStartNewChat={hasUserMessages}
+                                onNewChat={handleNewChat}
+                                compact={compact}
+                            />
+                            {canUndoNewChat ? <NewChatUndoBar onUndo={handleUndoNewChat} /> : null}
 
                             {/* 대화 내용 목록 (Staggered Item 2) */}
-                            <motion.div
-                                ref={messagesContainerRef}
-                                // 목록 스크롤을 framer 레이아웃 측정에 넣는다. 없으면 입력창이 커질 때 맞춘 맨 아래 위치를
-                                // 메시지 layout 애니메이션이 스크롤 이동으로 오해해 되돌린다.
-                                layoutScroll
-                                onScroll={handleScroll}
-                                variants={itemVariants}
-                                custom={shouldReduceMotion}
-                                className="min-h-0 flex-1 overflow-y-auto px-3.5 py-4 [scrollbar-gutter:stable] [scrollbar-width:thin] md:px-4 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-fg-accent/25 [&::-webkit-scrollbar-track]:bg-transparent"
-                            >
-                                <div className="space-y-4">
-                                    <AnimatePresence mode="popLayout" initial={false}>
-                                        {messages.map((message, index) => {
-                                            const isLast = index === messages.length - 1
-                                            const isAssistantStreaming = isLast && message.role === "assistant" && isStreaming
-                                            return (
-                                                <motion.div
-                                                    key={message.id}
-                                                    data-chat-message-id={message.id}
-                                                    layout="position"
-                                                    initial={m({ opacity: 0, y: 10, scale: 0.98 }, shouldReduceMotion)}
-                                                    animate={m({ opacity: 1, y: 0, scale: 1 }, shouldReduceMotion)}
-                                                    exit={m({ opacity: 0, y: -6, scale: 0.98 }, shouldReduceMotion)}
-                                                    transition={m(CHATBOT_MOTION.enter, shouldReduceMotion)}
-                                                    className={cn(
-                                                        "flex",
-                                                        message.role === "user" ? "justify-end" : "justify-start"
-                                                    )}
-                                                >
-                                                    <div
-                                                        className={cn(
-                                                            "max-w-[92%] rounded-[18px] px-3.5 py-3 text-sm leading-6 backdrop-blur-xl md:max-w-[84%]",
-                                                            message.role === "user"
-                                                                ? "rounded-br-[6px] bg-fg-accent text-fg-on-accent ring-1 ring-white/20"
-                                                                : "rounded-bl-[6px] border border-white/80 bg-[linear-gradient(160deg,rgba(255,255,255,0.92)_0%,rgba(246,253,249,0.85)_100%)] text-[#111110]"
-                                                        )}
-                                                    >
-                                                        {message.role === "assistant" ? <AssistantMeta message={message} /> : null}
-                                                        <MessageContent
-                                                            content={message.content}
-                                                            role={message.role}
-                                                            isStreaming={isAssistantStreaming}
-                                                        />
-                                                        {message.role === "assistant" ? (
-                                                            <>
-                                                                <SourceLinks sources={message.sources} onNavigate={closeAfterInChatNavigation} />
-                                                                {message.retryQuestion ? (
-                                                                    <div className="mt-3">
-                                                                        <button
-                                                                            type="button"
-                                                                            onClick={() => void sendQuestion(message.retryQuestion ?? "")}
-                                                                            disabled={isSending}
-                                                                            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[8px] border border-fg-accent/20 bg-fg-accent/6 px-3 text-xs font-bold text-fg-accent transition-colors hover:bg-fg-accent/14 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none"
-                                                                        >
-                                                                            <RotateCcw className="h-3.5 w-3.5" aria-hidden />
-                                                                            다시 시도
-                                                                        </button>
-                                                                    </div>
-                                                                ) : null}
-                                                                {(message.suggestedQuestions?.length ?? 0) > 0 ? (
-                                                                    <div className="mt-3 space-y-2">
-                                                                        {message.id === "welcome" ? (
-                                                                            <div className="flex items-center gap-1.5 px-0.5 text-[11px] font-bold text-[#615D59]">
-                                                                                <span className="h-1.5 w-1.5 rounded-full bg-fg-accent" />
-                                                                                추천 질문으로 바로 시작하기
-                                                                            </div>
-                                                                        ) : null}
-                                                                        <div className="grid gap-2">
-                                                                            {message.suggestedQuestions?.slice(0, getSuggestionLimit(message)).map((question, index) => (
-                                                                                <motion.button
-                                                                                    key={question}
-                                                                                    type="button"
-                                                                                    disabled={isSending}
-                                                                                    onClick={() => sendQuestion(question)}
-                                                                                    initial={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: 6 }}
-                                                                                    animate={shouldReduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
-                                                                                    transition={{
-                                                                                        duration: shouldReduceMotion ? 0.01 : 0.24,
-                                                                                        ease: EASING_SOFT_ENTER,
-                                                                                        delay: shouldReduceMotion ? 0 : index * 0.06,
-                                                                                    }}
-                                                                                    whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }}
-                                                                                    className="group flex w-full items-center justify-between gap-2 whitespace-normal break-keep rounded-[12px] border border-fg-accent/15 bg-white/75 px-3.5 py-2.5 text-left text-[12px] font-semibold leading-5 text-fg-accent transition-all hover:border-fg-accent/30 hover:bg-fg-accent/8 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none"
-                                                                                >
-                                                                                    <span>{question}</span>
-                                                                                    <ArrowRight className="h-3.5 w-3.5 shrink-0 text-fg-accent/70 transition-transform group-hover:translate-x-0.5" aria-hidden />
-                                                                                </motion.button>
-                                                                            ))}
-                                                                        </div>
-                                                                    </div>
-                                                                ) : null}
-                                                                {message.answerEventId || message.showHandoffCTA ? (
-                                                                    <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-                                                                        <AnswerCopyButton message={message} />
-                                                                        {message.answerEventId ? (
-                                                                            <FeedbackButtons answerEventId={message.answerEventId} sessionId={sessionId} />
-                                                                        ) : null}
-                                                                    </div>
-                                                                ) : null}
-                                                                {message.showHandoffCTA ? (
-                                                                    <ConsultationBridge
-                                                                        messages={messages}
-                                                                        message={message}
-                                                                        sessionId={sessionId}
-                                                                        onNavigate={closeAfterInChatNavigation}
-                                                                    />
-                                                                ) : null}
-                                                            </>
-                                                        ) : null}
-                                                    </div>
-                                                </motion.div>
-                                            )
-                                        })}
-
-                                        {isSending && !isStreaming ? (
-                                            <ThinkingIndicator key="thinking" shouldReduceMotion={shouldReduceMotion} />
-                                        ) : null}
-                                    </AnimatePresence>
-                                    <div ref={bottomRef} />
-                                </div>
-                            </motion.div>
+                            <div className="relative flex min-h-0 flex-1 flex-col">
+                                <motion.div
+                                    ref={messagesContainerRef}
+                                    // 목록 스크롤을 framer 레이아웃 측정에 넣는다. 없으면 입력창이 커질 때 맞춘 맨 아래 위치를
+                                    // 메시지 layout 애니메이션이 스크롤 이동으로 오해해 되돌린다.
+                                    layoutScroll
+                                    onScroll={handleScroll}
+                                    variants={itemVariants}
+                                    custom={shouldReduceMotion}
+                                    // 대화 기록 영역(CX-27). 새 답은 셸의 안내 영역이 한 번 읽으므로 여기서는 낭독하지 않는다(aria-live off).
+                                    // '새 답변' 버튼을 누른 뒤 포커스를 받을 수 있게 tabIndex=-1.
+                                    role="log"
+                                    aria-label="대화 내용"
+                                    aria-live="off"
+                                    tabIndex={-1}
+                                    // 목록 끝에서 더 굴려도 뒤 페이지로 스크롤이 넘어가지 않는다(CX-11).
+                                    className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3.5 py-4 [scrollbar-gutter:stable] [scrollbar-width:thin] md:px-4 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-fg-accent/25 [&::-webkit-scrollbar-track]:bg-transparent"
+                                >
+                                    <MessageList
+                                        messages={messages}
+                                        sessionId={sessionId}
+                                        isSending={isSending}
+                                        isStreaming={isStreaming}
+                                        isSlow={isSlow}
+                                        cooldownSeconds={cooldownSeconds}
+                                        shouldReduceMotion={shouldReduceMotion}
+                                        compact={compact}
+                                        sendQuestion={sendQuestion}
+                                        onRetry={retryTurn}
+                                        closeAfterInChatNavigation={closeAfterInChatNavigation}
+                                        bottomRef={bottomRef}
+                                    />
+                                </motion.div>
+                                {/* 위로 올려 읽는 동안 새 답이 아래에 오면 한 번에 내려가는 버튼(CX-12). 누름 영역 44px. */}
+                                {showJumpToLatest ? (
+                                    <button
+                                        type="button"
+                                        onClick={jumpToLatest}
+                                        aria-label="새 답변으로 이동"
+                                        className="absolute bottom-3 left-1/2 z-10 inline-flex min-h-11 -translate-x-1/2 items-center gap-1.5 rounded-(--radius-control) border border-line-strong bg-surface-sheet px-4 text-label text-fg-ink transition-colors hover:border-fg-accent hover:text-fg-accent"
+                                    >
+                                        <ArrowDown className="h-4 w-4" aria-hidden />
+                                        새 답변
+                                    </button>
+                                ) : null}
+                            </div>
 
                             {/* 하단 폼 및 에러 (Staggered Item 3) */}
-                            <motion.div
-                                variants={itemVariants}
-                                custom={shouldReduceMotion}
-                                className="relative flex flex-col min-h-0 w-full"
-                            >
-                                {error ? (
-                                    <div className="flex items-center justify-between gap-3 border-t border-white/50 bg-[#FBEAE2]/70 px-4 py-2 text-xs font-medium text-[#7A2A13] backdrop-blur-xl">
-                                        <span>{error}</span>
-                                    </div>
-                                ) : null}
-
-                                <form onSubmit={handleSubmit} className="relative overflow-hidden border-t border-white/50 bg-white/25 p-3.5 backdrop-blur-xl w-full">
-                                    {/* 생성 중 상단 은은한 에메랄드 스트리밍 진행 표시선 */}
-                                    {(isSending || isStreaming) && !shouldReduceMotion && (
-                                        <motion.div
-                                            aria-hidden
-                                            className="pointer-events-none absolute inset-x-0 top-0 h-[2px] bg-[linear-gradient(90deg,transparent_0%,#10B981_50%,transparent_100%)]"
-                                            animate={{ x: ["-100%", "100%"] }}
-                                            transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
-                                        />
-                                    )}
-                                    <div className="flex items-end gap-2 rounded-[16px] border border-white/70 bg-white/60 p-1.5 shadow-[0_10px_26px_rgba(49,48,46,0.06),inset_0_1px_0_rgba(255,255,255,0.75)] transition-colors focus-within:border-fg-accent/30 focus-within:bg-white/80 focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-fg-accent">
-                                        <textarea
-                                            ref={inputRef}
-                                            value={input}
-                                            onChange={(event) => setInput(event.target.value)}
-                                            onKeyDown={(event) => {
-                                                if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
-                                                    event.preventDefault()
-                                                    void sendQuestion(input)
-                                                }
-                                            }}
-                                            rows={1}
-                                            maxLength={1000}
-                                            placeholder="질문을 짧게 입력해 주세요"
-                                            aria-label="챗봇 질문 입력"
-                                            data-focus-ring="parent"
-                                            className="min-h-11 max-h-28 flex-1 resize-none rounded-[12px] border-0 bg-transparent px-3 py-2.5 text-[15px] leading-6 text-[#111110] placeholder:text-fg-placeholder focus-visible:outline-none transition-[height] duration-150 ease-out"
-                                        />
-                                        <motion.button
-                                            type="submit"
-                                            disabled={isSending || !input.trim()}
-                                            animate={{
-                                                scale: (isSending || !input.trim()) ? 0.96 : 1,
-                                                opacity: (isSending || !input.trim()) ? 0.45 : 1,
-                                            }}
-                                            whileHover={(isSending || !input.trim()) ? undefined : { scale: 1.05 }}
-                                            whileTap={(isSending || !input.trim()) ? undefined : { scale: 0.95 }}
-                                            transition={m(CHATBOT_MOTION.micro, shouldReduceMotion)}
-                                            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[12px] bg-fg-accent text-fg-on-accent transition-colors hover:bg-fg-accent-hover disabled:cursor-not-allowed disabled:shadow-none focus-visible:outline-none"
-                                            aria-label="질문 보내기"
-                                        >
-                                            {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                                        </motion.button>
-                                    </div>
-                                </form>
-                            </motion.div>
+                            <ChatComposer
+                                draftStore={draftStore}
+                                inputRef={inputRef}
+                                messagesContainerRef={messagesContainerRef}
+                                isVisible={isPanelVisible}
+                                cooldownSeconds={cooldownSeconds}
+                                isSending={isSending}
+                                isStreaming={isStreaming}
+                                shouldReduceMotion={shouldReduceMotion}
+                                sendQuestion={sendQuestion}
+                            />
 
                             {/* 스크린 리더용 안내 전용 영역 (A11y) */}
                             <div className="sr-only" aria-live="polite" aria-atomic="true">
@@ -1716,43 +573,39 @@ export function FloatingChatbot() {
                         onDismiss={() => {
                             trackEvent("chatbot_teaser_dismissed", { path: pathname })
                             chatbotTeaser.dismiss()
+                            // 닫기 버튼이 사라지므로 런처로 포커스를 옮긴다(CX-09).
+                            triggerRef.current?.focus()
                         }}
                     />
                 ) : null}
             </AnimatePresence>
-            <div className="pointer-events-auto relative flex h-14 w-14 items-center justify-center md:h-16 md:w-16">
-                {!isOpen && !shouldReduceMotion ? (
-                    <motion.span
-                        aria-hidden
-                        className="pointer-events-none absolute -inset-1 rounded-full bg-[#10B981]/25 blur-md"
-                        initial={{ scale: 0.96, opacity: 0.38 }}
-                        animate={CHATBOT_MOTION.ambient}
-                        transition={{ duration: CHATBOT_MOTION.ambient.duration, repeat: Infinity, repeatDelay: CHATBOT_MOTION.ambient.repeatDelay, ease: "easeOut" }}
-                    />
-                ) : null}
+            {/* 낮은 화면·키보드가 열린 휴대폰에서는 런처를 감춰 목록 높이를 되찾는다(헤더에 닫기 버튼이 있다, CX-10). */}
+            <div className={cn("pointer-events-auto relative flex h-14 w-14 items-center justify-center md:h-16 md:w-16", hideLauncher && "hidden")}>
                 <motion.button
                     ref={triggerRef}
                     type="button"
                     whileHover={shouldReduceMotion ? undefined : { scale: 1.05 }}
                     whileTap={m(CHATBOT_MOTION.tap, shouldReduceMotion)}
                     onClick={() => {
+                        if (isOpen) {
+                            closeChatbot()
+                            return
+                        }
                         openSourceRef.current = "button"
-                        setIsOpen((current) => !current)
+                        setIsOpen(true)
                     }}
+                    // 런처는 떠 있는 층이라 Deep Shadow 하나를 둔다. 원형은 챗봇 모양 결정 전까지의 예외(DESIGN.md §5 반경).
+                    // 닫힌 런처의 선은 채움과 같은 색이라 평소에는 보이지 않고, 강제 색상에서만 경계로 남는다.
                     className={cn(
-                        "relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-full transition-all duration-200 md:h-16 md:w-16",
+                        "relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-full border shadow-deep transition-colors md:h-16 md:w-16",
                         isOpen
-                            ? "border border-black/[0.08] bg-white text-[#111110] shadow-[0_12px_28px_rgba(0,0,0,0.12),0_4px_10px_rgba(0,0,0,0.04)] hover:bg-[#F6F5F4]"
-                            : "border border-white/20 bg-fg-accent text-fg-on-accent hover:bg-fg-accent-hover"
+                            ? "border-line-strong bg-surface-sheet text-fg-ink hover:bg-surface-sunken"
+                            : "border-fg-accent bg-fg-accent text-fg-on-accent hover:border-fg-accent-hover hover:bg-fg-accent-hover"
                     )}
                     aria-label={isOpen ? "챗봇 닫기" : "챗봇 열기"}
                     aria-expanded={isOpen}
                     aria-controls="classin-chatbot-dialog"
                 >
-                    <span
-                        aria-hidden
-                        className="pointer-events-none absolute inset-px rounded-full bg-white/10"
-                    />
                     <AnimatePresence mode="wait" initial={false}>
                         {isOpen ? (
                             <motion.div
@@ -1763,7 +616,7 @@ export function FloatingChatbot() {
                                 transition={{ duration: 0.18, ease: "easeOut" }}
                                 className="flex items-center justify-center"
                             >
-                                <X className="h-6 w-6 text-[#111110]" />
+                                <X className="h-6 w-6 text-fg-ink" />
                             </motion.div>
                         ) : isDeepConsultation ? (
                             <motion.div
@@ -1782,7 +635,6 @@ export function FloatingChatbot() {
                                     sizes="64px"
                                     aria-hidden
                                 />
-                                <span className="absolute inset-0 bg-fg-accent/20 mix-blend-multiply" aria-hidden />
                             </motion.div>
                         ) : (
                             <motion.div
@@ -1793,23 +645,13 @@ export function FloatingChatbot() {
                                 transition={{ duration: 0.18, ease: "easeOut" }}
                                 className="relative flex items-center justify-center"
                             >
-                                <ClassInAIIcon size={28} variant="white" className="relative drop-shadow-[0_2px_4px_rgba(0,0,0,0.15)] md:h-8 md:w-8" />
+                                <ClassInAIIcon size={28} variant="white" className="relative md:h-8 md:w-8" />
                             </motion.div>
                         )}
                     </AnimatePresence>
 
-                    {/* 실시간 상담 대기 상태 인디케이터 (Live Status Dot) */}
-                    {!isOpen && (
-                        <span
-                            aria-hidden
-                            className="pointer-events-none absolute right-2 top-2 flex h-2.5 w-2.5 md:right-2.5 md:top-2.5"
-                        >
-                            {!shouldReduceMotion && (
-                                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#6EE7B7] opacity-75 duration-1000" />
-                            )}
-                            <span className="relative inline-flex h-2.5 w-2.5 rounded-full border-2 border-fg-accent bg-[#34D399]" />
-                        </span>
-                    )}
+                    {/* 예전의 초록 핑 점('실시간 상담 대기')·후광은 사람 상담원이 기다리는 것처럼 읽혀 뺐다(CX-06).
+                        이 창은 AI 안내이고, 사람 상담은 상담 연결 카드로 이어진다. */}
                 </motion.button>
             </div>
         </div>

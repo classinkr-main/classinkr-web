@@ -1,6 +1,7 @@
 import "server-only"
 
 import { stripLeadSubmitTokens } from "@/lib/chatbot/lead-token"
+import { redactPii, sanitizeChatSessionAttribution } from "@/lib/chatbot/pii"
 import {
   generateChatbotFinalAnswer,
   streamChatbotFinalAnswer,
@@ -319,14 +320,8 @@ function normalizeString(value: unknown) {
   return trimmed || undefined
 }
 
-// 내부 CS 유입(lib/internal-cs-chat/gap-ingest.ts)도 같은 redaction 을 거쳐야 하므로 export 한다.
-export function redactPii(value: string) {
-  return value
-    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[email]")
-    .replace(/\b\d{3}[-\s]?\d{2}[-\s]?\d{5}\b/g, "[business_number]")
-    .replace(/\b(?:\d[ -]?){13,19}\b/g, "[payment_number]")
-    .replace(/\b\d{2,3}[-.\s]?\d{3,4}[-.\s]?\d{4}\b/g, "[phone]")
-}
+// 내부 CS 유입(lib/internal-cs-chat/gap-ingest.ts)도 같은 redaction 을 거쳐야 하므로 다시 내보낸다. 정본은 lib/chatbot/pii.ts(위젯과 공용).
+export { redactPii }
 
 function tokenize(value: string) {
   return Array.from(
@@ -3916,12 +3911,19 @@ async function ensureSession(
   }
 
   const context = getContextObject(input.context)
-  const utm = getContextObject(context.utm)
+  // Referer 헤더·context.utm 은 받은 그대로 저장하지 않는다 — 수신거부 메일 링크의 token·email 이나 utm_term 에 박힌
+  // 수신자 이메일이 chat_sessions 에 평문으로 남는다(CX-04·C4). 위젯도 정화해 보내지만 옛 위젯·직접 호출 대비로 한 번 더.
+  const { referrer, utm } = sanitizeChatSessionAttribution({
+    referrer: meta.referrer,
+    utm: context.utm,
+    path: context.path,
+    pageUrl: context.pageUrl,
+  })
   const sessionInsert: Record<string, unknown> = {
     channel: normalizeChatSessionChannel(context.channel),
     anonymous_id: callerAnonymousId,
     user_agent: meta.userAgent ?? null,
-    referrer: meta.referrer ?? null,
+    referrer,
     utm,
   }
 

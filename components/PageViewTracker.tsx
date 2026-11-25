@@ -3,8 +3,15 @@
 import { usePathname, useSearchParams } from "next/navigation"
 import { useEffect, useRef } from "react"
 
-import { replayPageViewAfterConsent, setGooglePageContext, trackEvent, type AnalyticsParams } from "@/lib/analytics"
-import { currentChoice } from "@/lib/consent/consent"
+import {
+  pendingPageViewFor,
+  replayPageViewAfterConsent,
+  setGooglePageContext,
+  trackEvent,
+  type AnalyticsParams,
+  type PendingPageView,
+} from "@/lib/analytics"
+import { currentChoice, takeTrackerReloadOnNavigation } from "@/lib/consent/consent"
 import { useConsent } from "@/lib/consent/useConsent"
 import { collectLeadAttribution } from "@/lib/marketing-attribution"
 import {
@@ -25,9 +32,10 @@ export function PageViewTracker() {
   const search = searchParams.toString()
   const { choice } = useConsent()
   const lastTrackedKeyRef = useRef<string | null>(null)
-  // 분석 동의 없이 추적된 페이지뷰 — 나중에 같은 페이지에서 동의하면 내부 적재·GA4 page_view 를 한 번 채운다.
-  // 동의 전에는 Google 태그가 없고 trackEvent 도 GA4 를 건너뛰므로, 안 채우면 랜딩 페이지가 GA4 에서 빠진다.
-  const pendingPageViewRef = useRef<AnalyticsParams | null>(null)
+  // 동의 없이 추적된 페이지뷰 — 나중에 같은 페이지에서 동의하면 못 보낸 곳(dataLayer·내부 적재·GA4)만 한 번 채운다.
+  // 동의 전에는 Google 태그가 없고 trackEvent 도 dataLayer·GA4 를 건너뛰므로(쿠키 점검 C9),
+  // 안 채우면 랜딩 페이지가 GTM·GA4 에서 빠진다.
+  const pendingPageViewRef = useRef<{ params: AnalyticsParams; pending: PendingPageView } | null>(null)
   // 광고 귀속 파라미터만 남긴 경로. 이걸 중복 키로 쓰므로 `?prefill=` 을 replaceState 로
   // 지우는 것 같은 쿼리 정리는 새 페이지뷰가 되지 않는다.
   const path = sanitizeTrackingPath(`${pathname}${search ? `?${search}` : ""}`)
@@ -36,6 +44,13 @@ export function PageViewTracker() {
     // 동의 플래그는 키에 넣지 않는다 — 넣으면 배너에서 동의하는 순간 같은 페이지의
     // GA4 page_view 가 한 번 더 나간다. 동의 변경은 아래 effect 가 pending 으로 한 번만 다룬다.
     if (lastTrackedKeyRef.current === path) return
+    // 다른 탭에서(또는 입력 중이라 미룬) 동의 철회 — 이미 불러온 추적 스크립트를 내리려고 이번 이동을
+    // 새 문서 로드로 바꾼다. 새 문서에서 이 페이지뷰를 다시 센다(쿠키 점검 C12). 표시는 문서마다 새로
+    // 시작하므로 첫 로드에는 늘 비어 있고, /checkout 처럼 트래커가 없는 곳을 거쳐 다시 마운트될 때도 잡힌다
+    if (takeTrackerReloadOnNavigation()) {
+      window.location.reload()
+      return
+    }
     lastTrackedKeyRef.current = path
 
     const pageLocation = sanitizeTrackingUrl(window.location.href)
@@ -64,16 +79,20 @@ export function PageViewTracker() {
     }
     trackEvent("page_view", pageViewParams)
     previousTrackedLocation = pageLocation || previousTrackedLocation
-    // trackEvent 가 내부 적재·GA4 여부를 정하는 기준(currentChoice)과 같은 값으로 판단한다.
-    pendingPageViewRef.current = currentChoice().analytics ? null : pageViewParams
+    // trackEvent 가 dataLayer·내부 적재·GA4 여부를 정하는 기준(currentChoice)과 같은 값으로 판단한다.
+    const pending = pendingPageViewFor(currentChoice())
+    pendingPageViewRef.current =
+      pending.dataLayer || pending.analytics ? { params: pageViewParams, pending } : null
   }, [path])
 
   useEffect(() => {
-    const pending = pendingPageViewRef.current
-    if (!choice.analytics || !pending || pending.path !== path) return
-    pendingPageViewRef.current = null
-    replayPageViewAfterConsent(pending)
-  }, [choice.analytics, path])
+    const current = pendingPageViewRef.current
+    if (!current || current.params.path !== path) return
+    if (!choice.analytics && !choice.marketing) return
+    const pending = replayPageViewAfterConsent(current.params, current.pending)
+    pendingPageViewRef.current =
+      pending.dataLayer || pending.analytics ? { params: current.params, pending } : null
+  }, [choice.analytics, choice.marketing, path])
 
   useEffect(() => {
     if (!choice.analytics) return

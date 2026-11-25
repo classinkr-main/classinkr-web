@@ -291,7 +291,7 @@ npm run check:db --  --strict
 
 로컬 Postgres 17 로 검증(2026-11-09): 수정 전 23503 재현, 수정 후 교체 2회·스냅샷 복원 뒤에도 회수가 같은 `source_key` 출고에 붙어 있고, 시트에서 원 줄이 사라지면 실패 없이 연결만 비운다.
 
-### 2026-11-12 챗봇 Claude 라벨 · 사용량 — 서울 프로젝트 미적용
+### 2026-11-12 챗봇 Claude 라벨 · 사용량 — 서울 프로젝트 적용 완료(2026-11-25)
 
 챗봇 Claude 제공자(`lib/chatbot/claude/`, [평가 기록](../chatbot-claude-eval.md)). 기본값 `CHATBOT_PROVIDER=gemini` 인 동안은 급하지 않다 —
 **`CHATBOT_PROVIDER=claude`(또는 `CHATBOT_LABELING_ENABLED=1`)를 켜기 전에 적용한다.**
@@ -299,6 +299,8 @@ npm run check:db --  --strict
 | 파일 | 하는 일 | 미적용 시 | 확인 |
 | --- | --- | --- | --- |
 | `20261112_chatbot_claude_labels.sql` | 답변별 라벨 `chatbot_session_labels`(의도·기관·단계·온도·세션 최고 온도, `chat_sessions` CASCADE)·Claude 호출 사용량 `chatbot_llm_usage`(모델·토큰·추정 USD)·합계 함수 `chatbot_llm_usage_sum(timestamptz)`(service_role 만 실행). RLS on + 활성 관리자 SELECT 정책, anon 권한 회수. 멱등(`IF NOT EXISTS`·`CREATE OR REPLACE`) | 라벨링은 조용히 건너뛰고, 일·월 예산은 인스턴스 메모리 합계로만 잰다(서버리스 인스턴스가 여럿이면 상한을 넘겨 쓸 수 있다). Gemini 기본값이면 영향 없다 | `npm run check:db` 의 `chatbot_session_labels`·`chatbot_llm_usage`·`chatbot_llm_usage_sum` 프로브(warning), 또는 `select to_regclass('public.chatbot_session_labels') is not null and to_regclass('public.chatbot_llm_usage') is not null;` → `true` |
+
+2026-11-25 적용 확인: 서울 프로젝트에 기존 `chatbot_claude_labels` 마이그레이션만 적용했다. 두 테이블의 RLS와 anon 차단, 집계 함수의 service_role 실행 권한과 anon·authenticated 실행 거절, service_role의 두 테이블 INSERT 권한을 카탈로그에서 재확인했다. 제공자·라벨링·답 색인 모델 스위치와 기존 행은 변경하지 않았다.
 
 ## 적용 보류 중인 마이그레이션
 

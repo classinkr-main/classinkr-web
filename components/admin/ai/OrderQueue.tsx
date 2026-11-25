@@ -2,17 +2,21 @@
 
 import Link from "next/link"
 
-import { adminAiStore, selectPendingOrders, type AdminAiState } from "@/lib/admin-ai/store"
+import { adminAiStore, selectLiveOrders, type AdminAiState } from "@/lib/admin-ai/store"
 import { OrderCard } from "./cards/OrderCard"
 
-/** 확인 대기 목록 — 다른 화면에서 만들어 둔 오더를 여기서 마저 처리한다. */
+/**
+ * 오더 탭 — 아직 사람이 손댈 수 있는 오더를 한 곳에 모은다.
+ * 발송 유예 중(30초 안에 취소 가능)을 맨 위에, 그 아래 확인 대기·수정 중, 되돌릴 수 있는 완료 순이다.
+ * 새 대화로 말풍선을 비워도 여기는 그대로다 — 오더는 대화가 아니라 사람이 확인해야 하는 일이다.
+ */
 export function OrderQueue({ state }: { state: AdminAiState }) {
-  const pending = selectPendingOrders(state)
+  const live = selectLiveOrders(state)
 
-  if (pending.length === 0) {
+  if (live.length === 0) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-1 px-6 py-10 text-center">
-        <b className="text-[13px] font-semibold text-[#111110]">확인을 기다리는 오더가 없습니다</b>
+        <b className="text-[13px] font-semibold text-[#111110]">진행 중인 오더가 없습니다</b>
         <p className="text-[12px] text-[#615D59]">
           갈매봇에게 오더를 내리면 실행 전에 여기에 모입니다.
         </p>
@@ -28,7 +32,7 @@ export function OrderQueue({ state }: { state: AdminAiState }) {
 
   return (
     <div className="flex flex-col gap-3">
-      {pending.map((order) => (
+      {live.map((order) => (
         <OrderCard
           key={order.id}
           order={order}
@@ -37,7 +41,7 @@ export function OrderQueue({ state }: { state: AdminAiState }) {
         />
       ))}
       <p className="text-[12px] text-[#A39E98]">
-        확인하지 않은 오더는 15분 뒤 자동으로 만료됩니다.
+        오더는 새 대화에도 남습니다. 확인하지 않은 오더는 15분 뒤 자동으로 만료됩니다.
       </p>
     </div>
   )

@@ -93,6 +93,23 @@ export const HARDWARE_EDITOR_ADMIN_API_ROLES: readonly AdminApiRole[] = [
   "EDITOR",
 ]
 
+// 내부 CS 코파일럿 API 역할. 값은 CRM_STAFF_ADMIN_API_ROLES 와 같다(결정 11 전까지 누가 들어오는지는 바꾸지 않는다).
+// 코파일럿 라우트는 CRM 상수 대신 이 상수를 쓴다 — 나중에 한 곳만 고쳐 범위를 좁힌다.
+export const CS_COPILOT_API_ROLES: readonly AdminApiRole[] = [
+  "SUPER_ADMIN",
+  "ADMIN",
+  "BRANCH",
+  "EDITOR",
+]
+
+// cs.* capability 의 기본 부여 역할. 지금은 코파일럿 API 역할 전체라 기존에 쓰던 사람이 막히지 않는다.
+export const CS_COPILOT_DEFAULT_CAPABILITY_ROLES: readonly AdminApiRole[] = CS_COPILOT_API_ROLES
+
+export const CS_DISPATCH_CAPABILITY: AdminCapability = "cs.dispatch"
+export const CS_KNOWLEDGE_PROMOTE_CAPABILITY: AdminCapability = "cs.knowledge.promote"
+export const CS_REGRESSION_RUN_CAPABILITY: AdminCapability = "cs.regression.run"
+export const CS_ASSET_DELETE_CAPABILITY: AdminCapability = "cs.asset.delete"
+
 export const HARDWARE_FINALIZE_CAPABILITY: AdminCapability = "hardware.finalize"
 export const HARDWARE_INBOUND_CAPABILITY: AdminCapability = "hardware.inbound"
 
@@ -697,6 +714,20 @@ export function requireAdminCapability(
     { error: "Forbidden", requiredCapability: capability },
     { status: 403 }
   )
+}
+
+/**
+ * cs.* capability 검사. 명시 부여(또는 SUPER_ADMIN)가 있거나, 기본 부여 역할이면 통과한다.
+ * CS_COPILOT_STRICT_CAPABILITIES=1 이면 기본 부여를 끄고 명시 부여만 인정한다(값이 비밀이 아닌 스위치).
+ */
+export function requireCsCopilotCapability(
+  admin: Pick<VerifiedAdminContext, "role" | "capabilities">,
+  capability: AdminCapability
+): NextResponse | undefined {
+  if (hasAdminCapability(admin, capability)) return undefined
+  const strict = process.env.CS_COPILOT_STRICT_CAPABILITIES === "1"
+  if (!strict && hasAdminApiRole(admin.role, CS_COPILOT_DEFAULT_CAPABILITY_ROLES)) return undefined
+  return NextResponse.json({ error: "Forbidden", requiredCapability: capability }, { status: 403 })
 }
 
 export function toAdminActorSnapshot(
