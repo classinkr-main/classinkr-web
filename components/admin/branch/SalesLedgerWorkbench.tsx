@@ -51,27 +51,24 @@ import { revLinkedTargetHref } from "@/lib/crm/rev-sync-health"
 import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
 import LedgerSimpleView from "./ledger/LedgerSimpleView"
 import { ApprovalBar, type LedgerCellEditApi } from "./ledger/LedgerSimpleEdit"
-import LedgerTopBar, { SegmentedButtons } from "./ledger/LedgerTopBar"
+import LedgerTopBar, { SegmentedButtons, type LedgerFilterChip } from "./ledger/LedgerTopBar"
 import { LEDGER_TABLE_VIEWS, ledgerTableViewFromParam, lensTabOf, visibleLensTabIds, type LedgerTableView, type LensTabId } from "./ledger/ledger-lens-tabs"
 import {
   buildSheetColumns,
   buildSheetRowView,
-  DEFAULT_SHEET_FILTER_KEY,
+  clearSheetFilter,
   describeSheetFilters,
   filterSheetRows,
   NO_SHEET_FILTERS,
   parseSheetFilters,
   sameSheetFilters,
   serializeSheetFilters,
-  setSheetFilter,
   sheetEditableCells,
-  sheetFilterColumnLabel,
   sortSheetRows,
   sumSheetRows,
   type SheetColumnFilters,
-  type SheetFilterMode,
 } from "./ledger/ledger-sheet-logic"
-import { rowMatchesChips } from "./ledger/ledger-simple-logic"
+import { chipKey, rowMatchesChips, SIMPLE_FILTER_CHIPS } from "./ledger/ledger-simple-logic"
 import { hasFullAdminNav } from "@/components/admin/admin-nav-access"
 import { useAdminNavPreferences } from "@/components/admin/admin-nav-preferences-context"
 // REV 시트 쓰기(ADR-011) — 초안 baseline·칸 아래 힌트·이중 집계 제외의 순수 헬퍼.
@@ -113,6 +110,12 @@ import type { DshGridView } from "./ledger/DshNumericGrid"
 // 서버 렌더 산출물은 원래도 REV 렌즈 — 동작 무변경.
 // 장부 건별 시트(기본 화면). 주차 칸 컴포넌트가 ledger/RevMatrix 에 있어, 정적으로 import 하면 그 파일 전체가
 // 메인 청크로 딸려 온다(품질 감사 2026-09-10 #2 의 분리가 무효) — 다른 매트릭스 조각과 같은 지연 로드로 둔다.
+// 결과 줄 칩 이름 — 접힌 패널의 제품·계약·경로 칩(SW · 신규 · 채널 …)에 시트 열 이름을 붙인다("제품 HW").
+const LEDGER_CHIP_DIMENSION_LABEL: Record<(typeof SIMPLE_FILTER_CHIPS)[number]["dimension"], string> = {
+  product: "제품",
+  contract: "계약",
+  channel: "경로",
+}
 const LedgerSheet = dynamic(() => import("./ledger/LedgerSheet"), {
   ssr: false,
   loading: () => <div role="status" className="min-h-[240px] flex-1 border-t border-[#E8E8E4] bg-white px-4 py-10 text-[13px] text-[#615D59]">장부를 불러오는 중입니다.</div>,
@@ -481,10 +484,9 @@ export default function SalesLedgerWorkbench({
   const [lens, setLens] = useState<LedgerLens>(() => lensFromParam(searchParams.get("lens")))
   // 장부 탭 안 보기(2026-11-23) — 건별 시트가 기본, 기관별·매니저별은 조회용. URL `view`.
   const [ledgerView, setLedgerView] = useState<LedgerTableView>(() => ledgerTableViewFromParam(searchParams.get("view")))
-  // 건별 시트의 열 필터(겹쳐 걸린다, AND). 생략 = 기본("이번 달 계 · 공백 제외"). URL `cf`.
+  // 건별 시트의 열 필터 — 열 안 OR · 열끼리 AND(필터 기획 F-1). 생략 = 기본("이번 달 계 · 값 있음"). URL `cf`.
+  // 열 머리 메뉴가 열고 닫히는 상태는 표(LedgerSheet) 안에 있다 — 주소에 싣지 않는다.
   const [sheetFilters, setSheetFilters] = useState<SheetColumnFilters>(() => parseSheetFilters(searchParams.get("cf")))
-  // 표 위 칩 줄이 지금 다루는 열 — 화면 안 상태(주소에 싣지 않는다).
-  const [sheetFilterKey, setSheetFilterKey] = useState<string>(DEFAULT_SHEET_FILTER_KEY)
   // 지난달 고정 — 켜면 지난달을 회색 묶음 한 열로(기존 "지난달 펼치기"의 반대). URL `past=open` 이 꺼짐.
   const [pastPinned, setPastPinned] = useState(() => searchParams.get("past") !== "open")
   // 요약·필터 펼치기 — 상태 줄·요약 띠·묶기·칩·범례·설명은 이 뒤에 있다. 들어올 때는 늘 접힘.
@@ -1909,22 +1911,11 @@ export default function SalesLedgerWorkbench({
   const sheetViews = useMemo(() => filterSheetRows(sheetAllViews, sheetFilters), [sheetAllViews, sheetFilters])
   const sheetTotals = useMemo(() => sumSheetRows(sheetViews, sheetColumns), [sheetViews, sheetColumns])
   const sheetActiveFilters = useMemo(() => describeSheetFilters(sheetFilters, sheetColumns), [sheetFilters, sheetColumns])
-  // 열 머리 클릭 — 그 열을 고른다. 필터가 없던 열이면 가장 자주 쓰는 "공백 제외"를 바로 걸고(한 번 클릭),
-  // 이미 고른 열을 다시 누르면 그 열의 필터만 푼다. 다른 확도로 바꾸는 것은 표 위 칩 줄에서 한다.
-  const pickSheetFilterColumn = useCallback((key: string) => {
-    setSheetFilters((current) => {
-      if (!current[key]) return setSheetFilter(current, key, "any")
-      return key === sheetFilterKey ? setSheetFilter(current, key, null) : current
-    })
-    setSheetFilterKey(key)
-  }, [sheetFilterKey])
-  const pickSheetFilterMode = useCallback((mode: SheetFilterMode | null) => {
-    setSheetFilters((current) => setSheetFilter(current, sheetFilterKey, mode))
-  }, [sheetFilterKey])
+  // 열 머리 클릭은 필터 메뉴를 연다(D2) — 적용 · 이 열만 보기 · 풀기는 표(LedgerSheet)가 순수 함수로 계산해
+  // 이 setter 로 넘긴다. 기본 필터는 다른 열을 걸어도 자동으로 풀지 않는다(D3 — "이 열만 보기"가 명시적인 길).
   const removeSheetFilter = useCallback((key: string) => {
-    setSheetFilters((current) => setSheetFilter(current, key, null))
+    setSheetFilters((current) => clearSheetFilter(current, key))
   }, [])
-  const clearSheetFilters = useCallback(() => setSheetFilters(NO_SHEET_FILTERS), [])
 
   // 편집가능 셀 좌표(렌더 순서: 행 위→아래, 월 좌→우, 확장월은 w1→w5). 잠금 셀은 제외.
   // 방향키/Tab 순회의 단일 소스. matrixMonths는 4→3 회계연도 순.
@@ -3150,6 +3141,85 @@ export default function SalesLedgerWorkbench({
   ].filter((notice): notice is string => Boolean(notice))
   // 시트 행 memo 가 타이핑마다 깨지지 않게 참조를 고정한다.
   const openLedgerRow = useCallback((row: LedgerRevenueRow) => void loadDealDetail(row), [loadDealDetail])
+  // ── 결과 줄의 걸린 필터(필터 기획 F-2 — 숨은 필터 0) ─────────────────────────────────────────
+  // 장부 탭에서 행을 줄이는 것은 전부 칩으로 보인다: 열 필터(건별 시트만) · 접힌 패널의 제품·계약·경로 칩 · 팀 ·
+  // 상품군 · 지역 · 주차 검수 표에서 건 상태·유형·원천·검수 필터(장부에도 그대로 걸린다) · 검색어 · 버튼으로 못 나타내는
+  // 담당자 선택. [내 담당 | 전체 담당자] 자체는 1줄 토글이 보여 칩으로 만들지 않는다.
+  const customManagerSelection = managerFilter.size > 0 && scopedManager !== defaultManager
+  const sheetColumnChips: LedgerFilterChip[] = sheetActive
+    ? sheetActiveFilters.map((chip) => ({
+        key: `cf:${chip.key}`,
+        label: chip.label,
+        onRemove: () => removeSheetFilter(chip.key),
+        inactive: !chip.applies,
+        title: chip.applies ? undefined : `${chip.label} — 이 달에는 그 열이 없어 지금은 거르지 않습니다. 누르면 풉니다`,
+      }))
+    : []
+  const ledgerRowFilterChips: LedgerFilterChip[] = lens !== "ledger" ? [] : [
+    ...SIMPLE_FILTER_CHIPS.filter((chip) => ledgerChips.has(chipKey(chip))).map((chip) => {
+      const key = chipKey(chip)
+      return {
+        key: `chip:${key}`,
+        label: `${LEDGER_CHIP_DIMENSION_LABEL[chip.dimension]} ${chip.label}`,
+        onRemove: () => setLedgerChips((current) => {
+          const next = new Set(current)
+          next.delete(key)
+          return next
+        }),
+      }
+    }),
+    ...(team !== "ALL" ? [{ key: "team", label: `팀 ${branchTeamLabel(team)}`, onRemove: () => setTeam("ALL") }] : []),
+    ...(productFilter !== "all" ? [{ key: "prod", label: `상품군 ${productCategoryMeta(productFilter).label}`, onRemove: () => setProductFilter("all") }] : []),
+    ...Array.from(regionFilter).map((name) => ({
+      key: `region:${name}`,
+      label: `지역 ${name}`,
+      onRemove: () => setRegionFilter((current) => {
+        const next = new Set(current)
+        next.delete(name)
+        return next
+      }),
+    })),
+    ...(revStatusFilter !== "ALL" ? [{ key: "status", label: `상태 ${revStatusFilter}`, onRemove: () => setRevStatusFilter("ALL") }] : []),
+    ...(revDealTypeFilter !== "ALL" ? [{ key: "type", label: `유형 ${revDealTypeFilter}`, onRemove: () => setRevDealTypeFilter("ALL") }] : []),
+    ...(revOriginFilter !== "all"
+      ? [{ key: "origin", label: REV_ORIGIN_FILTERS.find((item) => item.id === revOriginFilter)?.label ?? "원천", onRemove: () => setRevOriginFilter("all") }]
+      : []),
+    ...(revForecastFilter !== "all"
+      ? [{ key: "fc", label: REV_FORECAST_FILTERS.find((item) => item.id === revForecastFilter)?.label ?? "검수", onRemove: () => setRevForecastFilter("all") }]
+      : []),
+    ...(query.trim() ? [{ key: "q", label: `검색: ${query.trim()}`, onRemove: () => setQuery("") }] : []),
+  ]
+  // 담당자 칩은 [모두 풀기]가 건드리지 않는다(범위는 1줄 토글의 일) — × 를 누르면 전체 담당자로.
+  const managerChips: LedgerFilterChip[] = lens === "ledger" && customManagerSelection
+    ? [{
+        key: "mgr",
+        label: `담당 ${Array.from(managerFilter).map(branchManagerLabel).join(", ")}`,
+        title: "버튼으로 나타낼 수 없는 담당자 선택입니다 — 누르면 전체 담당자로 돌아갑니다",
+        onRemove: () => setManagerFilter(new Set()),
+      }]
+    : []
+  const ledgerFilterChips = [...sheetColumnChips, ...ledgerRowFilterChips, ...managerChips]
+  const canClearLedgerFilters = sheetColumnChips.length + ledgerRowFilterChips.length > 0
+  // 0행 안내 옆 [모두 풀기]는 풀어서 행이 돌아올 수 있을 때만 — 열 필터 전 행이 있는데 열 필터가 0을 만들었거나,
+  // 검색·속성 필터가 행을 줄였을 때. 범위 자체가 비었으면(이번 회계연도 매출 없음 · 담당자 미연결) 풀어도 0행이고
+  // 기본 필터만 꺼져 주소에 cf=none 으로 남는다. 결과 줄의 [모두 풀기]는 그대로 canClearLedgerFilters 를 따른다.
+  const emptySheetCanClear =
+    scopedManager !== UNMAPPED_BRANCH_MEMBER &&
+    ((sheetAllViews.length > 0 && sheetColumnChips.length > 0) || ledgerRowFilterChips.length > 0)
+  // [모두 풀기] — 열 필터(건별 시트일 때) · 속성 칩 · 팀 · 상품군 · 지역 · 검수 필터 · 검색어. 내 담당 · 전체 담당자 범위는 그대로.
+  // 다른 보기(기관별 · 매니저별)에서는 열 필터가 보이지도 걸리지도 않으므로 건드리지 않는다.
+  const clearLedgerFilters = () => {
+    if (sheetActive) setSheetFilters(NO_SHEET_FILTERS)
+    setLedgerChips(new Set())
+    setTeam("ALL")
+    setProductFilter("all")
+    setRegionFilter(new Set())
+    setRevStatusFilter("ALL")
+    setRevDealTypeFilter("ALL")
+    setRevOriginFilter("all")
+    setRevForecastFilter("all")
+    setQuery("")
+  }
   // 기관별·매니저별 표와, 건별 시트의 접힌 요약(요약 띠·칩)이 같은 값을 쓴다.
   const ledgerSimpleProps = {
     notices: ledgerNotices,
@@ -3198,26 +3268,27 @@ export default function SalesLedgerWorkbench({
         onMonthChange={setSelectedMonth}
         onMonthStep={stepSelectedMonth}
         sheet={sheetActive ? {
-          filterCount: sheetActiveFilters.length,
-          onClearFilters: clearSheetFilters,
           pastPinned,
           onTogglePastPinned: () => setPastPinned((value) => !value),
           hasPast: sheetColumns.pastMonths.length > 0,
-          filterColumnLabel: sheetFilterColumnLabel(sheetFilterKey, sheetColumns) ?? "열",
-          filterMode: sheetFilters[sheetFilterKey] ?? null,
-          onPickFilterMode: pickSheetFilterMode,
-          activeFilters: sheetActiveFilters,
-          onRemoveFilter: removeSheetFilter,
+          result: {
+            shown: sheetViews.length,
+            total: sheetAllViews.length,
+            monthLabel: `${sheetColumns.blocks[0]?.label ?? `${Number(sheetColumns.anchor.slice(5, 7))}월`} 계`,
+            sum: sheetTotals.blocks[0]?.bucket.total ?? 0,
+          },
         } : null}
+        filterLine={lens === "ledger" ? { chips: ledgerFilterChips, onClearAll: canClearLedgerFilters ? clearLedgerFilters : null } : null}
         refreshing={refreshing}
         onRefresh={() => void onRefresh()}
         onNewEntry={lens !== "cockpit" ? () => selectRailView("input") : null}
         scope={{
           mine: scopedManager === defaultManager,
           all: managerFilter.size === 0,
+          // 장부 탭에서는 버튼으로 못 나타내는 담당자 선택이 결과 줄 칩("담당 …")으로 보여 여기서는 다른 렌즈만 적는다.
           hint: scopedManager === UNMAPPED_BRANCH_MEMBER
             ? "로그인 계정의 담당자 연결이 필요합니다."
-            : managerFilter.size > 0 && scopedManager !== defaultManager
+            : lens !== "ledger" && customManagerSelection
               ? Array.from(managerFilter).map(branchManagerLabel).join(", ")
               : null,
         }}
@@ -3315,7 +3386,7 @@ export default function SalesLedgerWorkbench({
               <p className="text-[12px] text-[#615D59]">
                 <span>
                   주차 칸을 누르고 숫자를 친 뒤 Enter 로 저장합니다(E·H·C 확도, Tab·방향키 이동, Esc 취소). 자물쇠 칸은 확정이라 잠겼고, 밑줄 친 칸은 아직 반영 전입니다.
-                  열 머리의 필터 아이콘을 누르면 그 열에 값이 있는 행만 남습니다 — 여러 열에 겹쳐 걸 수 있습니다. 고객 이름은 상세를 엽니다.
+                  월 계·주차 열 머리를 누르면 필터 메뉴가 열립니다 — 값 있음 · 확도 · 값 없음을 골라 [적용](다른 열과 겹침)하거나 [이 열만 보기]. # 은 시트 행 번호이고, 고객 이름은 상세를 엽니다.
                 </span>
               </p>
             </>
@@ -3595,10 +3666,10 @@ export default function SalesLedgerWorkbench({
                 <LedgerSheet
                   columns={sheetColumns}
                   views={sheetViews}
+                  allViews={sheetAllViews}
                   totals={sheetTotals}
                   filters={sheetFilters}
-                  selectedFilterKey={sheetFilterKey}
-                  onPickFilterColumn={pickSheetFilterColumn}
+                  onFiltersChange={setSheetFilters}
                   currentMonth={defaultMonthRef.current}
                   // 표는 장부 행만 있으면 그린다 — 목표(요약 띠)를 기다리지 않는다.
                   loading={pipeline.loading && rows.length === 0}
@@ -3607,9 +3678,11 @@ export default function SalesLedgerWorkbench({
                       ? "로그인 계정에 담당자가 연결돼 있지 않아 내 담당 행이 없습니다 — [전체 담당자]로 바꿔 보세요."
                       : sheetAllViews.length > 0
                         ? "걸린 필터에 맞는 행이 없습니다."
-                        : "이 범위에 이번 회계연도 매출이 없습니다."
+                        : ledgerRowFilterChips.length > 0
+                          ? "검색·필터에 맞는 행이 없습니다."
+                          : "이 범위에 이번 회계연도 매출이 없습니다."
                   }
-                  onClearFilters={sheetAllViews.length > 0 && sheetActiveFilters.length > 0 ? clearSheetFilters : undefined}
+                  onClearFilters={emptySheetCanClear ? clearLedgerFilters : undefined}
                   activeRowId={selectedRow?.id ?? null}
                   onOpenRow={openLedgerRow}
                   editor={matrixEditor}
@@ -4633,8 +4706,10 @@ export default function SalesLedgerWorkbench({
         </div>
         {/* M3: 콕핏은 플로팅 레일·FAB를 숨기지만, 헤더 "체크 큐" 버튼으로 연 큐(railView==="queue")만
             예외로 이 패널을 허용한다 — 큐 진입은 헤더 버튼으로 일원화하고 FAB(위)는 계속 콕핏에서 숨긴다. */}
+        {/* 큐 보기는 레일을 flex 열로 둔다 — 레일 높이 안에서 큐 패널이 줄고 큐 목록 혼자 스크롤한다(머리 · 상태 탭 ·
+            일괄 띠는 고정, DraftQueue 주석). 상세 · 입력 보기는 예전처럼 레일 전체가 스크롤한다. */}
         {!sidePanelCollapsed && (lens !== "cockpit" || railView === "queue") && (
-        <aside className={`fixed inset-x-3 bottom-3 top-auto z-50 max-h-[86dvh] overflow-y-auto rounded-xl border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-2 shadow-[0_24px_70px_rgba(17,17,16,0.22)] sm:inset-x-auto sm:bottom-4 sm:right-4 sm:top-4 sm:w-[min(440px,calc(100vw-2rem))] sm:max-h-[calc(100dvh-2rem)] xl:sticky xl:inset-auto xl:z-10 xl:col-start-2 xl:row-start-1 xl:w-full ${sheetActive ? "xl:top-0 xl:max-h-full xl:self-stretch" : "xl:top-6 xl:max-h-[calc(100dvh-3rem)]"} xl:rounded-none xl:border-0 xl:border-l xl:bg-white xl:p-2.5 xl:shadow-none`} aria-label="선택 매출 작업면">
+        <aside className={`${railView === "queue" ? "flex flex-col " : ""}fixed inset-x-3 bottom-3 top-auto z-50 max-h-[86dvh] overflow-y-auto rounded-xl border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-2 shadow-[0_24px_70px_rgba(17,17,16,0.22)] sm:inset-x-auto sm:bottom-4 sm:right-4 sm:top-4 sm:w-[min(440px,calc(100vw-2rem))] sm:max-h-[calc(100dvh-2rem)] xl:sticky xl:inset-auto xl:z-10 xl:col-start-2 xl:row-start-1 xl:w-full ${sheetActive ? "xl:top-0 xl:max-h-full xl:self-stretch" : "xl:top-6 xl:max-h-[calc(100dvh-3rem)]"} xl:rounded-none xl:border-0 xl:border-l xl:bg-white xl:p-2.5 xl:shadow-none`} aria-label="선택 매출 작업면">
           <>
           <div className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-white p-1.5">
             <div className="mb-1.5 flex items-center justify-between gap-2 px-1">
@@ -5066,37 +5141,29 @@ export default function SalesLedgerWorkbench({
             id="ledger-rail-panel-queue"
             role="tabpanel"
             aria-labelledby="ledger-rail-tab-queue"
-            className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-white"
+            className="flex min-h-0 flex-col rounded-lg border border-[rgba(0,0,0,0.08)] bg-white"
           >
-            <div className="flex items-center justify-between border-b border-[rgba(0,0,0,0.08)] px-3 py-2 bg-[#FAFAF8]">
-              <p className="flex items-center gap-1.5 text-[12px] font-bold text-[#111110]">
-                <AlertTriangle className="h-3.5 w-3.5 text-[#A8741A]" />
-                체크 큐
-              </p>
-              <span className="text-[11px] font-semibold text-[#615D59]">
-                {openDrafts.length > 0 ? `대기 ${openDrafts.length}건` : "대기 없음"}
-              </span>
-            </div>
-            <div className="p-2.5">
-              <DraftQueue
-                drafts={drafts}
-                mode={queueMode}
-                loading={queueLoading}
-                error={queueError}
-                reversedDraftIds={reversedDraftIds}
-                recordErrors={recordErrors}
-                sheetWrites={sheetWrites}
-                onReload={() => void reloadDrafts()}
-                onEdit={editDraft}
-                onToggle={toggleDraft}
-                onApply={applyDraft}
-                onCancel={cancelDraft}
-                onDelete={deleteDraft}
-                onReverse={handleReverseEntry}
-                onBulkCheck={checkDrafts}
-                onBulkApply={applyDrafts}
-              />
-            </div>
+            {/* 체크 큐 컴팩트(P0-5): "체크 큐 N" · 검색 · 새로고침 머리 한 줄과 여백은 DraftQueue가 그린다 —
+                여기서 머리 줄을 한 번 더 그리지 않는다(줄 구분선이 패널 가장자리까지 닿게 안쪽 여백도 두지 않는다). */}
+            <DraftQueue
+              drafts={drafts}
+              mode={queueMode}
+              loading={queueLoading}
+              error={queueError}
+              reversedDraftIds={reversedDraftIds}
+              recordErrors={recordErrors}
+              sheetWrites={sheetWrites}
+              sheetWriteMode={sheetWrite.mode}
+              onReload={() => void reloadDrafts()}
+              onEdit={editDraft}
+              onToggle={toggleDraft}
+              onApply={applyDraft}
+              onCancel={cancelDraft}
+              onDelete={deleteDraft}
+              onReverse={handleReverseEntry}
+              onBulkCheck={checkDrafts}
+              onBulkApply={applyDrafts}
+            />
           </section>
           )}
           </>

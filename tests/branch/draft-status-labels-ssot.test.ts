@@ -42,18 +42,25 @@ describe("DRAFT_STATUS_LABELS / draftStatusLabel — SSOT (ledger/shared.tsx)", 
 })
 
 describe("필터 탭·배지 소비처가 SSOT를 참조한다(소스 스캔, 품질 웨이브 7 항목 4)", () => {
-  it("DRAFT_STATUS_FILTERS의 draft/checked/applied 라벨이 DRAFT_STATUS_LABELS를 참조한다(리터럴 재복제 아님)", () => {
+  // 체크 큐 컴팩트(P0-5 · 결정 D5, ledger-filter-plan-2026-11-24): 탭 6개 → 3개(대기 · 적용완료 · 전체).
+  // 검토중 · 체크완료는 대기 안의 점 색으로, 취소됨은 전체 안에서만 보인다 — 남은 단일 상태 탭(적용완료)은
+  // 여전히 SSOT를 참조해야 한다.
+  it("DRAFT_STATUS_FILTERS는 대기 · 적용완료 · 전체 3개이고, 적용완료 라벨은 DRAFT_STATUS_LABELS를 참조한다(리터럴 재복제 아님)", () => {
     const source = queueSource()
     const start = source.indexOf("const DRAFT_STATUS_FILTERS: Array")
     expect(start).toBeGreaterThan(-1)
     const end = source.indexOf("]", start)
     const block = source.slice(start, end)
-    expect(block).toContain('{ id: "draft", label: DRAFT_STATUS_LABELS.draft }')
-    expect(block).toContain('{ id: "checked", label: DRAFT_STATUS_LABELS.checked }')
     expect(block).toContain('{ id: "applied", label: DRAFT_STATUS_LABELS.applied }')
     // "대기"(open 그룹핑)와 "전체"(all)는 단일 상태가 아니라 SSOT 밖에서 그대로 유지.
     expect(block).toContain('{ id: "open", label: "대기" }')
     expect(block).toContain('{ id: "all", label: "전체" }')
+    expect(block.match(/\{ id: "/g) ?? []).toHaveLength(3)
+    // 검토중 · 체크완료 · 취소됨 전용 탭은 없다(D5).
+    expect(block).not.toContain('id: "draft"')
+    expect(block).not.toContain('id: "checked"')
+    expect(block).not.toContain('id: "cancelled"')
+    expect(block).not.toContain('"적용됨"')
   })
 
   it("draftStatusMeta가 하드코딩 문자열 대신 draftStatusLabel을 호출한다", () => {

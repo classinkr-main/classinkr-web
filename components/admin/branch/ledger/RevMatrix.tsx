@@ -36,6 +36,7 @@ import {
   type RevRowView,
 } from "./shared"
 import { addMonthlyBucket, emptyMonthlyBucket } from "./workbench-shared"
+import { sheetAmountFontClass } from "./ledger-sheet-logic"
 import {
   computeWeekCellStates,
   EMPTY_BUCKET,
@@ -69,7 +70,10 @@ const MATRIX_DEAL_ROW_HEIGHT: Record<MatrixDensity, string> = {
   relaxed: "h-10",
 }
 // 장부 건별 시트의 주차 칸 폭(px) — ledger/LedgerSheet.tsx 의 열 폭과 같은 값이어야 한다.
-export const SHEET_WEEK_W = 60
+// 60 → 72(2026-11-25, 필터 기획 C-2 가 · D1): 원 단위 7자리(1,660,000)가 글자를 줄이지 않고 들어가는 폭.
+export const SHEET_WEEK_W = 72
+// 시트 주차 칸의 글자 영역 폭 — 칸 폭 − 왼쪽 선 1px − 좌우 여백(px-1) 8px. 여백을 4px 로 둬서 굵은 7자리가 12px 그대로 든다.
+const SHEET_WEEK_TEXT_W = SHEET_WEEK_W - 9
 // isMatrixDensity는 ledger/rev-matrix-logic.ts로 이동(위 export * 재수출로 이 파일에서도 계속 사용 가능).
 
 // 확도 = 숫자 글자색(셀 안 아이콘 없음). 장부 렌즈(LedgerSimpleView)와 같은 표시이고,
@@ -529,6 +533,8 @@ const RevMatrixWeekCell = memo(function RevMatrixWeekCell({
   // 선택·편집·잠금·대기 표시와 키보드 조작은 매트릭스 칸 그대로다. 기본값이면 기존 매트릭스 렌더와 같다.
   compact = false,
   sheetConfidence = null,
+  // 시트에서 이 열에 필터가 걸렸다(필터 기획 D-1) — 빈 칸만 옅은 초록 세로 띠, 값 칸은 확도 바탕을 그대로 둔다.
+  sheetBand = false,
 }: {
   display: number
   isMonthOnly: boolean
@@ -537,6 +543,7 @@ const RevMatrixWeekCell = memo(function RevMatrixWeekCell({
   bgClass: string
   compact?: boolean
   sheetConfidence?: DraftConfidence | null
+  sheetBand?: boolean
   month?: string
   rowId?: string
   editable?: boolean
@@ -559,8 +566,9 @@ const RevMatrixWeekCell = memo(function RevMatrixWeekCell({
 
   const cellWidth = compact ? SHEET_WEEK_W : MATRIX_WEEK_W
   const confidenceLabel = (v: DraftConfidence) => DRAFT_CONFIDENCE_OPTIONS.find((option) => option.id === v)?.label ?? v
+  // 시트 칸은 글자를 줄이거나 끝을 자를 수 있어 툴팁에 원 단위 전체 금액을 싣는다(매트릭스는 만 단위 요약 그대로).
   const baseTitle = display > 0
-    ? `W${weekIndex + 1} ${formatMoney(display)}${compact && sheetConfidence ? ` · ${confidenceLabel(sheetConfidence)}` : ""}${isMonthOnly ? " · 월합계만" : ""}`
+    ? `W${weekIndex + 1} ${compact ? `¥${formatWeekAmount(display)}` : formatMoney(display)}${compact && sheetConfidence ? ` · ${confidenceLabel(sheetConfidence)}` : ""}${isMonthOnly ? " · 월합계만" : ""}`
     : `W${weekIndex + 1} 미입력`
   const title = locked
     ? `${baseTitle} · 🔒 ${lockLabel} 값이라 잠금(실수 방지) — 수정은 우측 패널에서 정정 초안으로`
@@ -605,9 +613,9 @@ const RevMatrixWeekCell = memo(function RevMatrixWeekCell({
   // 우선한다(월 우세 확도로 뭉개면 같은 달 안 다른 주차의 확도가 묻힌다 — UX 감사 2026-09-20).
   const pendingConfidence = pending ? pending.weeklyConfidence?.[weekIndex] ?? pending.confidence : null
 
-  const cellClassName = `relative ${compact ? "h-7 overflow-hidden border-b border-b-[#F0F0EC] px-1.5 py-0" : "px-1 py-1.5"} text-right align-middle tabular-nums border-l border-[#EDECE8] ${
+  const cellClassName = `relative ${compact ? "h-7 overflow-hidden border-b border-b-[#F0F0EC] px-1 py-0" : "px-1 py-1.5"} text-right align-middle tabular-nums border-l border-[#EDECE8] ${
     periodHighlighted ? "border-l-2 border-l-[#084734]/30" : ""
-  } ${bgClass} ${
+  } ${compact && sheetBand && display <= 0 ? "bg-[#ECFDF5]" : bgClass} ${
     interactive && editable ? "cursor-cell" : ""
   } ${selected ? "ring-2 ring-inset ring-[#084734] z-10 shadow-[0_0_0_1px_#084734]" : ""} focus-visible:outline-none transition-colors`
 
@@ -660,8 +668,10 @@ const RevMatrixWeekCell = memo(function RevMatrixWeekCell({
         />
       )}
       {display > 0 && compact ? (
+        // 앞자리가 잘리지 않게(필터 기획 F1): 예전 inline-flex + justify-end 는 넘친 앞자리를 칸 왼쪽 밖으로 밀었다.
+        // 블록 글자는 넘치면 왼쪽부터 놓이고 끝이 줄임표가 된다 — 그 전에 자릿수에 맞춰 글자를 한 단계씩 줄인다.
         <span
-          className={`inline-flex max-w-full items-center justify-end gap-0.5 whitespace-nowrap text-[12px] leading-none ${
+          className={`block truncate leading-none ${sheetAmountFontClass(formatWeekAmount(display), SHEET_WEEK_TEXT_W)} ${
             pendingConfidence
               ? `font-bold ${CONFIDENCE_TOKENS[pendingConfidence].textStrongClass}`
               : sheetConfidence
@@ -712,6 +722,7 @@ export function RevMatrixWeekCells({
   periodHighlighted = false,
   compact = false,
   sheetConfidences = null,
+  sheetBands = null,
 }: {
   weeks: number[]
   inferred: boolean
@@ -723,6 +734,8 @@ export function RevMatrixWeekCells({
   /** 장부 건별 시트 전용(RevMatrixWeekCell 주석 참조). */
   compact?: boolean
   sheetConfidences?: Array<DraftConfidence | null> | null
+  /** 장부 건별 시트 전용 — 주차별로 그 열에 필터가 걸렸는지(빈 칸 띠). */
+  sheetBands?: ReadonlyArray<boolean> | null
 }) {
   // 월 단위 잠금은 주차 인덱스와 무관(monthLockedOf) — 한 번만 조회해 순수 함수에 넘긴다.
   // 칸별 잠금(빈 칸은 열림)·표시 금액은 computeWeekCellStates가 결정한다(회귀 테스트가 검증하는 그 함수).
@@ -763,6 +776,7 @@ export function RevMatrixWeekCells({
         periodHighlighted={periodHighlighted}
         compact={compact}
         sheetConfidence={sheetConfidences?.[index] ?? null}
+        sheetBand={sheetBands?.[index] ?? false}
       />,
     )
   }

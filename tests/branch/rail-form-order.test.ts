@@ -4,7 +4,7 @@
 //  1) 레일 폼 순서: 확도 블록을 월·금액 블록 뒤로(운영자 멘탈모델 "금액을 친 뒤 확도를 고른다").
 //  2) 첫 필드 autoFocus: 마운트 시 1회, 데스크톱 폭(640px 이상)에서만.
 //  3) 결정 D6: DRAFT_CONFIDENCE_OPTIONS(shared.tsx SSOT)에 hint 추가, 레일 버튼 title/aria-label 반영.
-//  4) 큐 카드 체크/적용 버튼 위계: h-9 min-w-[72px] + 라벨 상시 노출(나머지 4개는 그대로).
+//  4) 큐 카드 체크/적용 버튼 위계 — 2026-11-24 체크 큐 컴팩트(P0-5)로 "금액 밑 다음 단계 알약 하나 + 펼친 줄 글자 링크"로 바뀌었다.
 import { readFileSync } from "fs"
 import { join } from "path"
 import { describe, expect, it } from "vitest"
@@ -103,48 +103,63 @@ describe("InputRailSection — 확도 버튼에 hint를 title/aria-label로 노�
   })
 })
 
-describe("DraftQueue — 체크/적용 버튼 위계(§8.4 항목 4)", () => {
-  it("적용 버튼은 h-9 min-w-[72px] 확대 크기와 '적용' 라벨을 상시 노출한다", () => {
+// 체크 큐 컴팩트(P0-5 · C-4, ledger-filter-plan-2026-11-24) — 위 항목 4의 "카드 하단 버튼 6개" 위계를 대체한다.
+// 줄마다 금액 밑에 다음 단계 알약 하나(검토중 → 체크, 체크완료 → 적용)만 두고, 편집 · 체크 해제 · 되돌리기 ·
+// 취소 · 삭제는 줄을 펼치면 나오는 글자 링크로 옮겼다. 활성 조건 · 확인 다이얼로그는 그대로다.
+describe("DraftQueue — 다음 단계 알약 하나 + 펼친 줄 글자 링크(P0-5)", () => {
+  function block(source: string, marker: string, from = 0) {
+    const start = source.indexOf(marker, from)
+    expect(start, `마커 누락: ${marker}`).toBeGreaterThan(-1)
+    return { start, text: source.slice(start, source.indexOf("</button>", start)) }
+  }
+
+  it("적용 알약은 체크완료 줄에만, 채운 초록(#084734 · 흰 글자)으로 '적용' 라벨과 확인 다이얼로그를 그대로 쓴다", () => {
     const source = read(queuePath)
-    const applyBtnStart = source.indexOf("onClick={() => setConfirmApplyDraft(draft)}")
-    expect(applyBtnStart).toBeGreaterThan(-1)
-    const applyBtnEnd = source.indexOf("</button>", applyBtnStart)
-    const applyBtnBlock = source.slice(applyBtnStart, applyBtnEnd)
-    expect(applyBtnBlock).toContain("h-9 min-w-[72px]")
-    expect(applyBtnBlock).toContain("적용")
-    // 아이콘(Send/Loader2)도 그대로 유지된다.
-    expect(applyBtnBlock).toContain("<Send")
+    const apply = block(source, "onClick={() => setConfirmApplyDraft(draft)}")
+    expect(source.slice(apply.start - 120, apply.start)).toContain('nextStep === "apply"')
+    expect(apply.text).toContain("rounded-full bg-[#084734]")
+    expect(apply.text).toContain("text-white")
+    expect(apply.text).toContain("적용")
+    // 활성 조건은 예전 적용 버튼 식 그대로.
+    expect(apply.text).toContain('disabled={draft.status !== "checked" || mode !== "server" || draft.id.startsWith("local-") || isRowBusy(draft.id)}')
+    expect(apply.text).toContain("aria-label={`${customerName} 적용`}")
   })
 
-  it("체크 버튼은 h-9 min-w-[72px] 확대 크기와 상태별 '체크'/'체크 해제' 라벨을 갖는다", () => {
+  it("체크 알약은 검토중 줄에만, 옅은 초록(#ECFDF5)으로 '체크' — 체크 해제는 펼친 줄의 글자 링크로", () => {
     const source = read(queuePath)
-    const toggleBtnStart = source.indexOf("onClick={() => void runToggle(draft.id)}")
-    expect(toggleBtnStart).toBeGreaterThan(-1)
-    const toggleBtnEnd = source.indexOf("</button>", toggleBtnStart)
-    const toggleBtnBlock = source.slice(toggleBtnStart, toggleBtnEnd)
-    expect(toggleBtnBlock).toContain("h-9 min-w-[72px]")
-    expect(toggleBtnBlock).toContain('draft.status === "checked" ? "체크 해제" : "체크"')
-    expect(toggleBtnBlock).toContain("<CheckCircle2")
+    const check = block(source, "onClick={() => void runToggle(draft.id)}")
+    expect(source.slice(check.start - 120, check.start)).toContain('nextStep === "check"')
+    expect(check.text).toContain("rounded-full bg-[#ECFDF5]")
+    expect(check.text).toContain('disabled={draft.status === "applied" || draft.status === "cancelled" || isRowBusy(draft.id)}')
+    expect(check.text).toContain("aria-label={`${customerName} 체크`}")
+    const uncheck = block(source, "onClick={() => void runToggle(draft.id)}", check.start + 1)
+    expect(source.slice(uncheck.start - 120, uncheck.start)).toContain("rowLinks.uncheck")
+    expect(uncheck.text).toContain("className={ROW_LINK_CLASS}")
+    expect(uncheck.text).toContain("체크 해제")
   })
 
-  it("나머지 4개(편집·되돌리기·취소·삭제) 버튼은 h-8 w-8 아이콘 전용 크기를 그대로 유지한다", () => {
+  it("편집 · 되돌리기 · 취소 · 삭제는 네모 아이콘 버튼이 아니라 글자 링크이고, 이름에 고객명이 들어간다", () => {
     const source = read(queuePath)
     const markers = [
-      "onClick={() => onEdit(draft)}",
-      "onClick={() => setConfirmReverseDraft(draft)}",
-      "onClick={() => setConfirmCancelDraft(draft)}",
-      "onClick={() => setConfirmDeleteDraft(draft)}",
-    ]
-    for (const marker of markers) {
-      const start = source.indexOf(marker)
-      expect(start, `버튼 마커 누락: ${marker}`).toBeGreaterThan(-1)
-      const end = source.indexOf("</button>", start)
-      expect(source.slice(start, end)).toContain("h-8 w-8")
+      ["onClick={() => onEdit(draft)}", "편집"],
+      ["onClick={() => setConfirmReverseDraft(draft)}", "적용 되돌리기"],
+      ["onClick={() => setConfirmCancelDraft(draft)}", "초안 취소"],
+      ["onClick={() => setConfirmDeleteDraft(draft)}", "삭제"],
+    ] as const
+    for (const [marker, label] of markers) {
+      const { text } = block(source, marker)
+      expect(text).toMatch(/className=\{ROW_LINK(_DANGER)?_CLASS\}/)
+      expect(text).not.toContain("h-8 w-8")
+      expect(text).toContain(`aria-label={\`\${customerName} ${label}\`}`)
     }
+    expect(source).toMatch(/const ROW_LINK_CLASS = `[^`]*underline[^`]*`/)
   })
 
-  it("액션 버튼 행에 flex-wrap이 있어 좁은 화면(모바일)에서 줄바꿈된다", () => {
+  it("한 건은 카드 상자가 아니라 구분선 한 줄이고, 줄을 누르면 aria-expanded로 펼친다", () => {
     const source = read(queuePath)
-    expect(source).toContain('className="flex shrink-0 flex-wrap items-center gap-1"')
+    expect(source).toContain("border-b border-[#F0F0EC]")
+    expect(source).toContain("aria-expanded={expanded}")
+    expect(source).toContain("hidden={!expanded}")
+    expect(source).not.toContain("rounded-lg border border-[rgba(0,0,0,0.08)] bg-white p-2.5")
   })
 })
