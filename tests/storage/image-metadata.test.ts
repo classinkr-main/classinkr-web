@@ -69,6 +69,38 @@ describe("stripImageMetadata", () => {
     expect(out[marker + 4 + 6 + 8 + 2 + 9]).toBe(6)
   })
 
+  it("drops everything after the first EOI (secondary images and appended XMP carry their own EXIF)", () => {
+    const exif = Buffer.concat([Buffer.from("Exif\0\0", "latin1"), Buffer.from("MM\0*\0\0\0\x08", "latin1"), Buffer.from("GPS-TAIL-SECRET")])
+    const base = (withExif: boolean) =>
+      Buffer.concat([
+        Buffer.from([0xff, 0xd8]),
+        ...(withExif ? [jpegSegment(0xe1, exif)] : []),
+        jpegSegment(0xda, Buffer.from([1, 1, 0, 0, 63, 0])),
+        Buffer.from([0x11, 0xff, 0x00, 0x22, 0xff, 0xd0, 0x33, 0xff, 0xd9]),
+      ])
+    const withSecondary = Buffer.concat([base(false), base(true)])
+    const out = Buffer.from(stripImageMetadata(withSecondary, "image/jpeg") as Uint8Array)
+    expect(out.includes("GPS-TAIL-SECRET")).toBe(false)
+    expect(out.equals(base(false))).toBe(true) // 바이트 채움 FF00 과 RST 는 화소 데이터로 보존
+
+    const withXmp = Buffer.concat([base(false), Buffer.from("<x:xmpmeta GPSLatitude=37.5>")])
+    const out2 = Buffer.from(stripImageMetadata(withXmp, "image/jpeg") as Uint8Array)
+    expect(out2.includes("GPSLatitude")).toBe(false)
+  })
+
+  it("keeps every scan of a progressive JPEG", () => {
+    const input = Buffer.concat([
+      Buffer.from([0xff, 0xd8]),
+      jpegSegment(0xda, Buffer.from([1, 1, 0, 0, 63, 0])),
+      Buffer.from([0x11, 0x22]),
+      jpegSegment(0xc4, Buffer.from([0, 1, 2, 3])),
+      jpegSegment(0xda, Buffer.from([1, 1, 0, 0, 63, 0])),
+      Buffer.from([0x44, 0x55, 0xff, 0xd9]),
+    ])
+    const out = Buffer.from(stripImageMetadata(input, "image/jpeg") as Uint8Array)
+    expect(out.equals(input)).toBe(true)
+  })
+
   it("returns null for data it cannot parse", () => {
     expect(stripImageMetadata(Buffer.from([0xff, 0xd8, 0x00]), "image/jpeg")).toBeNull()
   })

@@ -109,10 +109,33 @@ function stripJpeg(input: Uint8Array): Uint8Array | null {
     const segmentEnd = offset + length
 
     if (marker === 0xda) {
-      // SOS — 이후는 압축된 화소 데이터라 그대로 복사한다.
+      // SOS — 헤더와 뒤따르는 압축 화소 데이터는 그대로 복사하되, 다음 마커(다중 스캔·EOI)까지만 읽는다.
+      // EOI 뒤에 붙은 꼬리(MPF 보조 이미지·게인맵·덧붙은 XMP 안의 EXIF·GPS)는 버린다.
       insertOrientation()
-      parts.push(input.subarray(markerOffset, input.length))
-      return concat(parts)
+      let scan = segmentEnd
+      while (scan < input.length) {
+        if (input[scan] !== 0xff) {
+          scan += 1
+          continue
+        }
+        const next = input[scan + 1]
+        if (next === undefined) {
+          scan = input.length
+          break
+        }
+        if (next === 0x00 || (next >= 0xd0 && next <= 0xd7)) {
+          scan += 2 // 바이트 채움·RST 는 화소 데이터 안이다
+          continue
+        }
+        if (next === 0xff) {
+          scan += 1 // 채움 바이트
+          continue
+        }
+        break // 마커
+      }
+      parts.push(input.subarray(markerOffset, scan))
+      offset = scan
+      continue
     }
 
     const isApp = marker >= 0xe0 && marker <= 0xef
