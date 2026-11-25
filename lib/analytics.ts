@@ -422,6 +422,28 @@ function sendGa4Event(eventName: EventNames, eventParams: AnalyticsParams) {
   }
 }
 
+/**
+ * dataLayer 는 GTM 이 읽는다. GTM 은 분석이나 마케팅 동의 뒤에만 붙는데(AppChrome), 붙는 순간 배열을
+ * 처음부터 읽으므로 동의 전에 쌓인 이벤트(동의 전 페이지뷰·클릭)까지 처리한다(쿠키 점검 C9).
+ * 그래서 동의가 하나도 없으면 넣지 않고 버린다 — 동의 뒤에 몰아 보내지도 않는다. 지금 페이지의 page_view 만
+ * PageViewTracker 가 동의 순간 replayPageViewAfterConsent 로 한 번 채운다.
+ */
+function hasTagConsent(consent: { analytics: boolean; marketing: boolean }) {
+  return consent.analytics || consent.marketing
+}
+
+function pushDataLayerEvent(eventName: EventNames, eventParams: AnalyticsParams) {
+  try {
+    window.dataLayer = window.dataLayer || []
+    window.dataLayer.push({
+      event: eventName,
+      ...eventParams,
+    })
+  } catch {
+    // Some embedded/webview contexts lock the Window object; continue with other transports.
+  }
+}
+
 export const trackEvent = (
   eventName: EventNames,
   params?: AnalyticsParams,
@@ -437,15 +459,7 @@ export const trackEvent = (
   const eventId =
     typeof eventParams.event_id === "string" ? eventParams.event_id : undefined
 
-  try {
-    window.dataLayer = window.dataLayer || []
-    window.dataLayer.push({
-      event: eventName,
-      ...eventParams,
-    })
-  } catch {
-    // Some embedded/webview contexts lock the Window object; continue with other transports.
-  }
+  if (hasTagConsent(consent)) pushDataLayerEvent(eventName, eventParams)
 
   // 내부 분석 적재는 분석 동의가 있을 때만 (옵트인)
   if (consent.analytics) {
@@ -505,18 +519,43 @@ export const trackEvent = (
   }
 }
 
+/** 동의 전이라 지금 페이지의 page_view 를 아직 보내지 못한 곳. */
+export interface PendingPageView {
+  /** dataLayer(GTM) — 분석이나 마케팅 동의가 생기면 채운다. */
+  dataLayer: boolean
+  /** 내부 적재 + GA4 — 분석 동의가 생기면 채운다. */
+  analytics: boolean
+}
+
+/** page_view 를 막 보낸 뒤, 지금 동의로는 아직 못 보낸 곳. 둘 다 false 면 채울 것이 없다. */
+export function pendingPageViewFor(consent: { analytics: boolean; marketing: boolean }): PendingPageView {
+  return { dataLayer: !hasTagConsent(consent), analytics: !consent.analytics }
+}
+
 /**
- * 동의를 나중에 준 방문자의 현재 페이지뷰를 한 번 채운다 — 내부 적재 + GA4 page_view.
- * 첫 발화 때는 분석 동의가 없어 trackEvent 가 둘 다 건너뛰었으므로 두 번 집계되지 않는다.
- * dataLayer 푸시는 첫 발화 때 이미 나갔고 page_view 는 픽셀 매핑이 없어 여기서 다시 보내지 않는다.
+ * 동의를 나중에 준 방문자의 현재 페이지뷰를 한 번 채운다 — dataLayer(GTM), 내부 적재 + GA4 page_view.
+ * 첫 발화 때 건너뛴 곳(pending)만 지금 동의가 허락하는 만큼 보내고, 아직 못 보낸 곳을 돌려준다.
+ * 그래서 마케팅만 먼저 켜고 나중에 분석을 켜도 dataLayer 와 GA4 에 각각 한 번씩만 들어간다.
+ * page_view 는 픽셀 매핑이 없어 Meta·카카오로는 보내지 않는다(Meta PageView 는 픽셀 스크립트가 보낸다).
  * gtag.js 가 아직 로드 전이면 layout 부트스트랩 큐에 쌓였다가 GA4 config 뒤 재생된다.
  */
-export const replayPageViewAfterConsent = (params: AnalyticsParams) => {
-  if (typeof window === "undefined") return
-  if (!currentChoice().analytics) return
-  const eventParams = normalizeEventParams("page_view", params)
-  sendInternalTracking("page_view", eventParams)
-  sendGa4Event("page_view", eventParams)
+export const replayPageViewAfterConsent = (
+  params: AnalyticsParams,
+  pending: PendingPageView = { dataLayer: true, analytics: true },
+): PendingPageView => {
+  if (typeof window === "undefined") return pending
+  const consent = currentChoice()
+  const sendDataLayer = pending.dataLayer && hasTagConsent(consent)
+  const sendAnalytics = pending.analytics && consent.analytics
+  if (sendDataLayer || sendAnalytics) {
+    const eventParams = normalizeEventParams("page_view", params)
+    if (sendDataLayer) pushDataLayerEvent("page_view", eventParams)
+    if (sendAnalytics) {
+      sendInternalTracking("page_view", eventParams)
+      sendGa4Event("page_view", eventParams)
+    }
+  }
+  return { dataLayer: pending.dataLayer && !sendDataLayer, analytics: pending.analytics && !sendAnalytics }
 }
 
 /* ── 리드 접수 ──────────────────────────────────────────────────────────── */

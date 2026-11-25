@@ -10,6 +10,7 @@ import {
   parseConsent,
   readConsentRaw,
   saveConsent,
+  startConsentSync,
 } from "@/lib/consent/consent"
 
 export interface UseConsentResult {
@@ -24,6 +25,8 @@ export interface UseConsentResult {
 
 function subscribe(onChange: () => void): () => void {
   if (typeof window === "undefined") return () => {}
+  // 다른 탭에서 고른 동의도 이 탭에 반영한다(BroadcastChannel → CONSENT_CHANGE_EVENT, 쿠키 점검 C12)
+  startConsentSync()
   window.addEventListener(CONSENT_CHANGE_EVENT, onChange)
   return () => window.removeEventListener(CONSENT_CHANGE_EVENT, onChange)
 }
