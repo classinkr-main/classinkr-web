@@ -108,6 +108,7 @@ export const CS_COPILOT_DEFAULT_CAPABILITY_ROLES: readonly AdminApiRole[] = CS_C
 export const CS_DISPATCH_CAPABILITY: AdminCapability = "cs.dispatch"
 export const CS_KNOWLEDGE_PROMOTE_CAPABILITY: AdminCapability = "cs.knowledge.promote"
 export const CS_REGRESSION_RUN_CAPABILITY: AdminCapability = "cs.regression.run"
+export const CS_ASSET_DELETE_CAPABILITY: AdminCapability = "cs.asset.delete"
 
 export const HARDWARE_FINALIZE_CAPABILITY: AdminCapability = "hardware.finalize"
 export const HARDWARE_INBOUND_CAPABILITY: AdminCapability = "hardware.inbound"

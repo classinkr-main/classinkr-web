@@ -36,8 +36,8 @@ describe("CS copilot roles and capabilities", () => {
     expect(hasAdminApiRole("PARTNER", CS_COPILOT_API_ROLES)).toBe(false)
   })
 
-  it("registers the three cs capabilities", () => {
-    expect(ADMIN_CAPABILITIES).toEqual(expect.arrayContaining(["cs.dispatch", "cs.knowledge.promote", "cs.regression.run"]))
+  it("registers the cs capabilities", () => {
+    expect(ADMIN_CAPABILITIES).toEqual(expect.arrayContaining(["cs.dispatch", "cs.knowledge.promote", "cs.regression.run", "cs.asset.delete"]))
   })
 
   it("grants the cs capability to every current copilot role by default so nobody is locked out", () => {

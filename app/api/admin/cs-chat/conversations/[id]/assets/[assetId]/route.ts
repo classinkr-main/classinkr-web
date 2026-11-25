@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
 
-import { CS_COPILOT_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
+import {
+  CS_ASSET_DELETE_CAPABILITY,
+  CS_COPILOT_API_ROLES,
+  requireCsCopilotCapability,
+  requireVerifiedAdminContext,
+} from "@/lib/admin-auth"
 import {
   isInternalCsChatNotReadyError,
   purgeInternalCsAssetObject,
@@ -87,6 +92,9 @@ export async function PATCH(req: NextRequest, context: Context) {
 export async function DELETE(req: NextRequest, context: Context) {
   const admin = await requireVerifiedAdminContext(req, CS_COPILOT_API_ROLES)
   if (admin instanceof NextResponse) return admin
+  // 되돌릴 수 없는 동작 — capability 가 필요하다(기본 부여 역할은 lib/admin-auth.ts, 지금은 코파일럿 역할 전체).
+  const capabilityError = requireCsCopilotCapability(admin, CS_ASSET_DELETE_CAPABILITY)
+  if (capabilityError) return capabilityError
 
   const { id, assetId } = await context.params
   try {
