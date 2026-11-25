@@ -20,7 +20,7 @@ import {
 
 interface SalesDashboardSectionProps {
   /** 바뀌면 다시 받는다 — 부모 원장이 새로 고쳐질 때(기록·확정 직후) 같이 맞춘다. */
-  reloadKey?: unknown
+  reloadKey?: string | number
   /** 고객사·기간별 상세(입출고 탭 "출고 · 기간 집계")로 가기. */
   onOpenDetail?: () => void
 }
