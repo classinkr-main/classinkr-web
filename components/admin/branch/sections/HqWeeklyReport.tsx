@@ -10,6 +10,7 @@
 // 입력은 이 브라우저에만 저장된다(공유·서버 저장 아님). 표 복사로 Flowin에 붙여 넣거나 PDF로 내보낸다.
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { ClipboardCopy, FileDown } from "lucide-react"
+import { actionSection, classifyReportModule, type SectionKey } from "@/lib/branch/weekly-action-sections"
 import { dedupeDshByKind } from "@/lib/branch/dsh-dedupe"
 import { fiscalQuarter } from "@/lib/branch/fiscal"
 import { classifySalesLedgerProductCategory } from "@/lib/branch/product-category"
@@ -20,6 +21,9 @@ import { useBranchJson, type BranchJsonState } from "../client-api"
 import { buildDshTeamGrid, dshTotalsFromRows, type DshNumbers } from "../ledger/dsh-derive"
 import { rowMonthAmount, rowMonthConfirmed, rowWeeklySplit, type LedgerRevenueRow } from "../ledger/shared"
 import type { BranchPipelineResponse, BranchSummaryResponse, Team } from "../types"
+import { firstSentence, kstShort, rate, shortDate, wan, wan2 } from "./hq-weekly/format"
+import ReportSection, { REPORT_EXCLUDE_ATTR, SECTION_TITLES } from "./hq-weekly/ReportSection"
+import { CollectSummary, KaSummary, MarketSummary, OtherSummary, PerfSummary, SectionPanel, summaryLabels, type PanelAction } from "./hq-weekly/SectionSummaries"
 
 export type ReportLang = "zh" | "ko"
 
@@ -80,32 +84,8 @@ const CELL = "border border-[#E8E8E4] px-2 py-1.5 align-top"
 const HEAD = `${CELL} bg-[#F6F5F4] text-[11px] font-semibold text-[#615D59]`
 const NUM = `${CELL} text-right tabular-nums`
 
-/** 만 단위 1자리(1,000만 이상은 정수). 0·없음은 "-". */
-function wan(value: number | null | undefined) {
-  if (value == null || !Number.isFinite(value) || value === 0) return "-"
-  const w = value / 10_000
-  return Math.abs(w) >= 1000 ? Math.round(w).toLocaleString("en-US") : w.toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 })
-}
-/** 고객 명세용 만 단위 2자리(템플릿 표기 '9.74'). */
-function wan2(value: number) {
-  return (value / 10_000).toLocaleString("en-US", { maximumFractionDigits: 2 })
-}
-function rate(actual: number, goal: number) {
-  return goal > 0 ? `${((actual / goal) * 100).toFixed(1)}%` : "-"
-}
 function kstToday() {
   return new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10)
-}
-function shortDate(ymd: string) {
-  const [, m, d] = ymd.split("-")
-  return `${Number(m)}/${Number(d)}`
-}
-
-/** ISO 시각 → KST 날짜(M/D). */
-function kstShort(iso: string | null) {
-  if (!iso) return "-"
-  const ms = Date.parse(iso)
-  return Number.isNaN(ms) ? "-" : shortDate(new Date(ms + 9 * 3600_000).toISOString().slice(0, 10))
 }
 
 /** 고객명 비교 키 — 공백·대소문자 무시. */
@@ -120,13 +100,6 @@ export function matchDraftKaRow<T extends { customer: string }>(rows: readonly T
   return rows.find((row) => customerKey(row.customer) === key)
     ?? rows.find((row) => { const other = customerKey(row.customer); return other.length > 1 && (other.includes(key) || key.includes(other)) })
     ?? null
-}
-
-function classifyModule(text: string): keyof (typeof T)["zh"]["modules"] {
-  if (/KA|핵심 고객|대형|계약|追加|추가 구매/i.test(text)) return "KA"
-  if (/설명회|세미나|행사|캠페인|광고|박람회|沙龙|说明会|活动|Meta/i.test(text)) return "market"
-  if (/파트너|공립|공교육|교육청|총판|채널|合作|公立/i.test(text)) return "partner"
-  return "other"
 }
 
 /** 회색 편집 칸 — 값은 상위가 localStorage로 저장한다. AI·자동 초안이 있으면 그 값이 기본값. */
@@ -157,7 +130,7 @@ function EditCell({ id, value, placeholder, onChange, className = "" }: {
 
 interface WeekCustomer { key: string; customer: string; amount: number; pending: number; category: "hw" | "sw"; status: string | null; managers: Set<string> }
 
-export default function HqWeeklyReport({ team, manager, refreshKey, lang, weekly, draft = null, draftWeek = null, notes, actions }: {
+export default function HqWeeklyReport({ team, manager, refreshKey, lang, weekly, draft = null, draftWeek = null, notes, actions, focus = null, pickedActionIndex = null, onFocus, langToggle = null, title: cardTitle }: {
   team: Team
   manager?: string
   refreshKey: number
@@ -171,8 +144,19 @@ export default function HqWeeklyReport({ team, manager, refreshKey, lang, weekly
   notes: string[]
   /** AI 다음 액션 — draft가 없을 때 5.2 초안 */
   actions: ReportAction[]
+  /** 자세히 보기(②)로 펼친 구획 — null이면 문서 전체(①) */
+  focus?: SectionKey | null
+  /** 왼쪽 목록에서 고른 액션 번호(actions 배열 위치) */
+  pickedActionIndex?: number | null
+  /** 구획 머리·최소화로 구획을 고르거나(null이면 전체로 복귀) 바꾼다 */
+  onFocus?: (section: SectionKey | null) => void
+  /** 카드 머리의 언어 전환 */
+  langToggle?: ReactNode
+  /** 카드 머리 제목 */
+  title?: string
 }) {
   const t = T[lang]
+  const S = summaryLabels(lang)
   const today = kstToday()
   const month = today.slice(0, 7)
   const monthNo = Number(month.slice(5, 7))
@@ -325,14 +309,21 @@ export default function HqWeeklyReport({ team, manager, refreshKey, lang, weekly
   }, [summary.data, quarterNo, team, manager, month])
 
   // ── 복사 · PDF ─────────────────────────────────────────────────────────────
+  // 자세히 보기(②) 상태와 무관하게 문서 전체만 나간다 — ②에서만 보이는 요소(data-report-exclude)는 복제본에서 떼고 복사한다.
   const rootRef = useRef<HTMLDivElement>(null)
   const [copied, setCopied] = useState(false)
   const copyReport = async () => {
     const node = rootRef.current
     if (!node) return
+    const clone = node.cloneNode(true) as HTMLElement
+    clone.querySelectorAll(`[${REPORT_EXCLUDE_ATTR}]`).forEach((el) => el.remove())
+    clone.querySelectorAll("[inert]").forEach((el) => el.removeAttribute("inert"))
+    // innerText는 화면에 붙은 노드에서만 줄바꿈을 지킨다 — 화면 밖에 잠시 붙였다가 뗀다.
+    clone.style.cssText = "position:fixed;left:-99999px;top:0;width:960px"
+    document.body.appendChild(clone)
     try {
-      const html = node.innerHTML
-      const text = node.innerText
+      const html = clone.innerHTML
+      const text = clone.innerText
       if (typeof ClipboardItem !== "undefined" && navigator.clipboard?.write) {
         await navigator.clipboard.write([new ClipboardItem({ "text/html": new Blob([html], { type: "text/html" }), "text/plain": new Blob([text], { type: "text/plain" }) })])
       } else {
@@ -341,6 +332,7 @@ export default function HqWeeklyReport({ team, manager, refreshKey, lang, weekly
       setCopied(true)
       window.setTimeout(() => setCopied(false), 2000)
     } catch { /* 클립보드 권한 없음 — 버튼 상태만 그대로 둔다 */ }
+    finally { clone.remove() }
   }
 
   const evaluation = report?.evaluation
@@ -359,38 +351,52 @@ export default function HqWeeklyReport({ team, manager, refreshKey, lang, weekly
       .filter((action) => !action.due || action.due >= today)
       .map((action) => ({
         plan: `${action.title}${action.owner ? ` (${action.owner})` : ""}`,
-        module: action.module ?? classifyModule(`${action.title} ${action.why ?? ""}`),
+        module: action.module ?? classifyReportModule(`${action.title} ${action.why ?? ""}`),
         due: action.due ?? "",
       }))
   })()
   const draftStale = Boolean(draft && draftWeek && report && draftWeek !== report.week.label)
 
-  return (
-    <div className="min-w-0 space-y-2">
-      <div className="flex flex-wrap items-center justify-end gap-2 print:hidden">
-        <span className="mr-auto text-[11.5px] text-[#615D59]">
-          {t.editHint}
-          {draftStale && draftWeek ? <b className="ml-1 font-semibold text-[#7A520F]">{t.draftStale(draftWeek)}</b>
-            : !draft && !notes.length ? <span className="ml-1">{t.draftNone}</span> : null}
-        </span>
-        <button type="button" onClick={copyReport} className="inline-flex min-h-11 items-center gap-1.5 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[12px] font-bold text-[#111110] md:min-h-8">
-          <ClipboardCopy className="h-3.5 w-3.5" aria-hidden="true" />{copied ? t.copied : t.copy}
-        </button>
-        <button type="button" onClick={() => window.print()} className="inline-flex min-h-11 items-center gap-1.5 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[12px] font-bold text-[#111110] md:min-h-8">
-          <FileDown className="h-3.5 w-3.5" aria-hidden="true" />{t.pdf}
-        </button>
-      </div>
-      <div ref={rootRef} className="min-w-0 rounded-xl border border-[rgba(0,0,0,0.08)] bg-white px-5 py-5 text-[12px] text-[#111110]"
-        style={{ fontFamily: lang === "zh" ? 'Inter, "Noto Sans SC", "PingFang SC", Pretendard, system-ui, sans-serif' : "Pretendard, Inter, system-ui, sans-serif" }}>
-        <div className="border-b-2 border-[#084734] pb-3">
-          <h2 className="text-[20px] font-bold tracking-[-0.02em]">{today.replace(/-/g, "")} {t.title}{report ? ` · ${report.week.label}` : ""}</h2>
-          <p className="mt-1 text-[11px] text-[#615D59]">
-            {report ? t.period(shortDate(report.week.startDate), shortDate(report.week.endDate)) : t.loading} · {t.issued} {today.replace(/-/g, ".")}
-          </p>
-        </div>
 
-        {/* 一 */}
-        <h3 className="mt-5 text-[14px] font-bold">{t.s1(monthNo)}</h3>
+  // ── ② 자세히 보기 데이터 ───────────────────────────────────────────────────
+  const focusAction = pickedActionIndex != null ? actions[pickedActionIndex] ?? null : null
+  const sectionActions = (section: SectionKey): PanelAction[] => actions
+    .map((action, index) => ({ action, index }))
+    .filter(({ action }) => actionSection(action) === section)
+    .map(({ action, index }) => ({ index, title: action.title, owner: action.owner, due: action.due ? shortDate(action.due) : undefined }))
+  const sumConfirmed = weeks?.reduce((sum, week) => sum + week.confirmed, 0) ?? 0
+  const sumPending = weeks?.reduce((sum, week) => sum + week.pending, 0) ?? 0
+  const totalRow = performance?.rows.find((row) => row.key === "total") ?? performance?.rows[0]
+  const wanUnit = lang === "zh" ? "万" : "만"
+  const peekOf = (draftText: string | undefined, fallback: string) => (draftText && draftText.trim() ? firstSentence(draftText) : fallback)
+  const peeks: Record<SectionKey, string> = {
+    perf: peekOf(draft?.performance, totalRow
+      ? lang === "zh" ? `${monthNo}月达成 ${rate(totalRow.status.month, totalRow.goal.month)} · 季 ${rate(totalRow.status.quarter, totalRow.goal.quarter)}`
+        : `${monthNo}월 달성 ${rate(totalRow.status.month, totalRow.goal.month)} · 분기 ${rate(totalRow.status.quarter, totalRow.goal.quarter)}`
+      : t.loading),
+    collect: peekOf(draft?.collections, weeks
+      ? lang === "zh" ? `本月已确认 ${wan(sumConfirmed)}${wanUnit} · 计划 ${wan(sumPending)}${wanUnit}` : `이번 달 확정 ${wan(sumConfirmed)}${wanUnit} · 계획 ${wan(sumPending)}${wanUnit}`
+      : t.loading),
+    ka: draftKa[0] ? `${draftKa[0].customer} ${draftKa[0].stage}`.trim() + (draftKa.length > 1 ? ` · +${draftKa.length - 1}` : "")
+      : ka ? (lang === "zh" ? `KA ${ka.customerCount} 家 · 本季确认 ${wan(ka.confirmed)} · 未确认 ${wan(ka.open)}` : `KA ${ka.customerCount}곳 · 분기 확정 ${wan(ka.confirmed)} · 미확정 ${wan(ka.open)}`) : t.loading,
+    market: peekOf(draft?.activities, funnel && funnel.state === "ready"
+      ? lang === "zh" ? `上周流入 ${funnel.inflow.current} 条 · 前一周 ${funnel.inflow.previous} 条` : `지난 주 유입 ${funnel.inflow.current}건 · 그 전 주 ${funnel.inflow.previous}건`
+      : t.loading),
+    other: lang === "zh" ? `要点 ${hasPointsDraft ? Math.max(keyPoints.length, notes.length) : 0} · 下周计划 ${planDrafts.length}` : `요점 ${hasPointsDraft ? Math.max(keyPoints.length, notes.length) : 0} · 다음 주 계획 ${planDrafts.length}`,
+  }
+  const moreLabel = lang === "zh" ? { open: "详细 ›", close: "− 收起" } : { open: "자세히 ›", close: "− 접기" }
+  const select = (section: SectionKey | null) => onFocus?.(section)
+  const aiBox = (text: string | undefined) => text && text.trim() ? <span className="whitespace-pre-wrap">{text}</span> : <span className="text-[#615D59]">{S.noDraft}</span>
+  const panelProps = (section: SectionKey) => ({ actions: sectionActions(section), pickedIndex: pickedActionIndex, lang })
+  const kaPanel = draftKa.length ? draftKa.map((row) => (
+    <p key={row.customer} className="mb-1.5 last:mb-0">
+      <b>{row.customer}</b> {row.stage}{row.change ? ` — ${row.change}` : ""}{row.issue ? `；${S.problem}：${row.issue}` : ""}{row.next_action ? `；${S.next}：${row.next_action}` : ""}
+    </p>
+  )) : <span className="text-[#615D59]">{S.noDraft}</span>
+  const pointsPanel = hasPointsDraft ? <span className="whitespace-pre-wrap">{noteFallback}</span> : <span className="text-[#615D59]">{S.noDraft}</span>
+
+  const sections: Array<{ id: SectionKey; title: ReactNode; doc: ReactNode; summary: ReactNode; panelHeading: string; panelBody: ReactNode }> = [
+    { id: "perf", title: t.s1(monthNo), doc: <>
         {!performance ? <p className="mt-2 text-[#615D59]">{summary.error ? summary.error : t.loading}</p> : (
           <div className="mt-2 overflow-x-auto">
             <table className="w-full min-w-[640px] border-collapse text-[11.5px]">
@@ -417,8 +423,10 @@ export default function HqWeeklyReport({ team, manager, refreshKey, lang, weekly
         )}
         <SummaryLine label={t.summaryLine} ai={Boolean(draft?.performance)} aiLabel={t.aiDraft}>{cell("s1-summary", draft?.performance ?? "", t.summaryLine)}</SummaryLine>
 
-        {/* 二 */}
-        <h3 className="mt-6 text-[14px] font-bold">{t.s2}</h3>
+        </>,
+      summary: <PerfSummary rows={performance?.rows ?? null} scoped={Boolean(performance?.scoped)} monthNo={monthNo} lang={lang} />,
+      panelHeading: S.summaryHead, panelBody: aiBox(draft?.performance) },
+    { id: "collect", title: t.s2, doc: <>
         {!weeks ? <p className="mt-2 text-[#615D59]">{pipeline.error ? pipeline.error : t.loading}</p> : (
           <div className="mt-2 overflow-x-auto">
             <table className="w-full min-w-[640px] border-collapse text-[11.5px]">
@@ -449,8 +457,10 @@ export default function HqWeeklyReport({ team, manager, refreshKey, lang, weekly
         )}
         <SummaryLine label={t.summaryLine} ai={Boolean(draft?.collections)} aiLabel={t.aiDraft}>{cell("s2-summary", draft?.collections ?? "", t.summaryLine)}</SummaryLine>
 
-        {/* 三 */}
-        <h3 className="mt-6 text-[14px] font-bold">{t.s3}</h3>
+        </>,
+      summary: <CollectSummary weeks={weeks} lang={lang} />,
+      panelHeading: S.summaryHead, panelBody: aiBox(draft?.collections) },
+    { id: "ka", title: t.s3, doc: <>
         <p className="mt-1 text-[11px] text-[#615D59]">{t.s3Stages}{draftKa.length ? ` · ${t.aiDraft}` : ""}</p>
         {ka?.compassState === "down" ? <p className="mt-1 text-[11px] text-[#8F2C2C]">{t.compassKaDown}</p> : null}
         {!ka ? <p className="mt-2 text-[#615D59]">{weekly.error ?? t.loading}</p> : ka.customerCount === 0 ? <p className="mt-2 text-[#615D59]">{t.kaEmpty}</p> : (
@@ -481,8 +491,10 @@ export default function HqWeeklyReport({ team, manager, refreshKey, lang, weekly
           </div>
         )}
 
-        {/* 四 */}
-        <h3 className="mt-6 text-[14px] font-bold">{t.s4}</h3>
+        </>,
+      summary: <KaSummary customers={ka ? ka.customers : null} compassState={ka?.compassState} pickedText={focusAction ? `${focusAction.title} ${focusAction.why ?? ""}` : null} lang={lang} />,
+      panelHeading: S.kaHead, panelBody: kaPanel },
+    { id: "market", title: t.s4, doc: <>
         <div className="mt-2 overflow-x-auto">
           <table className="w-full min-w-[720px] border-collapse text-[11.5px]">
             <thead><tr>{[t.no, t.activity, t.type, t.time, t.targetCount, t.budget, t.owner, t.output].map((label) => <th key={label} className={HEAD}>{label}</th>)}</tr></thead>
@@ -518,8 +530,10 @@ export default function HqWeeklyReport({ team, manager, refreshKey, lang, weekly
         )}
         <SummaryLine label={t.summaryLine} ai={Boolean(draft?.activities)} aiLabel={t.aiDraft}>{cell("s4-summary", draft?.activities ?? "", t.summaryLine)}</SummaryLine>
 
-        {/* 五 */}
-        <h3 className="mt-6 text-[14px] font-bold">{t.s5}</h3>
+        </>,
+      summary: <MarketSummary funnel={funnel} events={events} lang={lang} />,
+      panelHeading: S.summaryHead, panelBody: aiBox(draft?.activities) },
+    { id: "other", title: t.s5, doc: <>
         <h4 className="mt-2 text-[12.5px] font-bold">{t.s51} {hasPointsDraft ? <span className="text-[10.5px] font-medium text-[#615D59]">· {t.aiDraft}</span> : null}</h4>
         <div className="mt-1 rounded-sm border border-[#E8E8E4] p-2">{cell("s51", noteFallback, t.s51)}</div>
 
@@ -583,6 +597,56 @@ export default function HqWeeklyReport({ team, manager, refreshKey, lang, weekly
               ))}
             </ul>
           )}
+</>,
+      summary: <OtherSummary memberRows={memberRows} evaluation={evaluation} quarterNo={quarterNo} lang={lang} />,
+      panelHeading: S.pointsHead, panelBody: pointsPanel },
+  ]
+
+  const focusTitle = focus ? SECTION_TITLES[focus] : ""
+  return (
+    <div className="min-w-0 overflow-hidden rounded-xl border border-[rgba(0,0,0,0.08)] bg-white">
+      <div className="flex min-h-14 flex-wrap items-center gap-x-2 gap-y-1 border-b border-[#E8E8E4] px-4 py-2 sm:px-[18px] print:hidden">
+        {focus ? (
+          <>
+            <span className="text-[11.5px] text-[#615D59]">{cardTitle ?? "본사 주간 보고서"} ›</span>
+            <h2 className="text-[13.5px] font-bold text-[#111110]">자세히 보기 · {focusTitle}</h2>
+            <button type="button" {...{ [REPORT_EXCLUDE_ATTR]: "" }} onClick={() => select(null)}
+              className="ml-auto inline-flex min-h-11 items-center rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2.5 text-[12px] font-bold text-[#111110] md:min-h-8">− 최소화</button>
+          </>
+        ) : (
+          <>
+            <h2 className="text-[13.5px] font-bold text-[#111110]">{cardTitle ?? "본사 주간 보고서"}</h2>
+            <span className="text-[11.5px] text-[#615D59]">본사 양식(韩国业务周报)</span>
+            <div className="ml-auto flex flex-wrap items-center gap-2">
+              {langToggle}
+              <button type="button" onClick={copyReport} className="inline-flex min-h-11 items-center gap-1.5 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[12px] font-bold text-[#111110] md:min-h-8">
+                <ClipboardCopy className="h-3.5 w-3.5" aria-hidden="true" />{copied ? t.copied : t.copy}
+              </button>
+              <button type="button" onClick={() => window.print()} className="inline-flex min-h-11 items-center gap-1.5 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[12px] font-bold text-[#111110] md:min-h-8">
+                <FileDown className="h-3.5 w-3.5" aria-hidden="true" />{t.pdf}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+      <p className="px-4 pt-2 text-[11.5px] text-[#615D59] sm:px-[18px] print:hidden">
+        {t.editHint}
+        {draftStale && draftWeek ? <b className="ml-1 font-semibold text-[#7A520F]">{t.draftStale(draftWeek)}</b>
+          : !draft && !notes.length ? <span className="ml-1">{t.draftNone}</span> : null}
+      </p>
+      <div ref={rootRef} className="min-w-0 px-4 pb-4 pt-3 text-[12px] text-[#111110] sm:px-[22px]"
+        style={{ fontFamily: lang === "zh" ? 'Inter, "Noto Sans SC", "PingFang SC", Pretendard, system-ui, sans-serif' : "Pretendard, Inter, system-ui, sans-serif" }}>
+        <div className="border-b-2 border-[#084734] pb-3">
+          <h2 className="text-[20px] font-bold tracking-[-0.02em]">{today.replace(/-/g, "")} {t.title}{report ? ` · ${report.week.label}` : ""}</h2>
+          <p className="mt-1 text-[11px] text-[#615D59]">
+            {report ? t.period(shortDate(report.week.startDate), shortDate(report.week.endDate)) : t.loading} · {t.issued} {today.replace(/-/g, ".")}
+          </p>
+        </div>
+        {sections.map((section, index) => (
+          <ReportSection key={section.id} id={section.id} focus={focus} onFocus={select} first={index === 0} title={section.title}
+            peek={peeks[section.id]} moreLabel={moreLabel} doc={section.doc} summary={section.summary}
+            panel={<SectionPanel heading={section.panelHeading} {...panelProps(section.id)}>{section.panelBody}</SectionPanel>} />
+        ))}
       </div>
     </div>
   )

@@ -17,6 +17,7 @@ import { isPrefetchFresh } from "@/lib/admin/prefetch-freshness"
 import { buildCrmSyncSummary, type CrmSyncSummary, type RevSyncCoverageView } from "@/lib/crm/rev-sync-health"
 import { CURRENT_TEAM_FILTERS, PERIODS, TEAMS, type BranchKpiResponse, type BranchSummaryResponse, type Period, type Team } from "./types"
 import { branchTeamLabel, isLegacyBranchTeam, LEGACY_BRANCH_TEAMS } from "@/lib/branch/current-organization"
+import { regionSelectionKey } from "@/lib/branch/region-heatmap"
 import { getBranchTabDataNeeds, type BranchTab } from "./tab-data-needs"
 import { ADMIN_NAV, ADMIN_NAV_SECTION_META } from "../admin-nav"
 
@@ -213,6 +214,8 @@ export default function BranchDashboardClient({
   const initialPipelineManager = initialBranchManager(searchParams, defaultManager)
   const [pipelineQuery, setPipelineQuery] = useState(initialPipelineQuery)
   const [pipelineManager, setPipelineManager] = useState(initialPipelineManager)
+  // 히트맵에서 고른 지역(표준 라벨, 지도 밖은 원문) — 아래 상위 매출 표를 거르는 데도 쓴다.
+  const [heatmapRegion, setHeatmapRegion] = useState<string | null>(() => regionSelectionKey(searchParams.get("region")))
   const [pipelineFiltersReady, setPipelineFiltersReady] = useState(false)
   const [pipelineView, setPipelineView] = useState<"table" | "kanban">("kanban")
   const [syncError, setSyncError] = useState<string | null>(null)
@@ -261,6 +264,13 @@ export default function BranchDashboardClient({
     const url = new URL(window.location.href)
     if (tab === "overview") url.searchParams.delete("tab")
     else url.searchParams.set("tab", tab)
+    window.history.replaceState(null, "", url.toString())
+  }, [])
+
+  const clearHeatmapRegion = useCallback(() => {
+    setHeatmapRegion(null)
+    const url = new URL(window.location.href)
+    url.searchParams.delete("region")
     window.history.replaceState(null, "", url.toString())
   }, [])
 
@@ -734,12 +744,14 @@ export default function BranchDashboardClient({
 
           {activeTab === "heatmap" && (
             <div id={activePanelId} role="tabpanel" aria-labelledby={activeTabId} className="space-y-6">
-              <BranchRegionHeatmap manager={pipelineManager} team={team} period={period} selectedMonth={selectedMonth} refreshKey={refreshKey} />
+              <BranchRegionHeatmap manager={pipelineManager} team={team} period={period} selectedMonth={selectedMonth} refreshKey={refreshKey}
+                selectedKey={heatmapRegion} onSelectedKeyChange={setHeatmapRegion} />
               {/* 웨이브 7 — F3(히트맵 탭 이중 렌더 해소). 파이프라인 탭에 이미 전체 기능
                   테이블이 있으므로 여기서는 검색/필터 없는 요약(summaryMode)만 보여주고,
                   "전체 파이프라인에서 보기"는 같은 페이지의 파이프라인 탭으로 전환한다. */}
               <PipelineTable scopeManager={pipelineManager} key={`heatmap-rev-${team}-${pipelineManager}`} team={team} period={period} selectedMonth={selectedMonth} refreshKey={refreshKey} onRowClick={openDealLog}
-                summaryMode onViewFullPipeline={() => selectTab("pipeline")} />
+                summaryMode onViewFullPipeline={() => selectTab("pipeline")}
+                regionFilterKey={heatmapRegion} onClearRegionFilter={clearHeatmapRegion} />
             </div>
           )}
 
