@@ -2,14 +2,18 @@
 
 import { useState } from "react"
 import {
+  BookOpen,
   Camera,
   ChevronDown,
+  Database,
   Cpu,
   Globe,
   HelpCircle,
+  KeyRound,
   Laptop,
   Layers,
   MessageCircle,
+  MonitorSmartphone,
   Network,
   PenTool,
   Radio,
@@ -19,9 +23,10 @@ import {
   Tv,
   UserCheck,
   Video,
+  Workflow,
 } from "lucide-react"
 
-import type { HqContactInfo } from "@/lib/internal-cs-chat/escalation-routing"
+import type { EscalationCandidate, HqContactInfo } from "@/lib/internal-cs-chat/escalation-types"
 import { cn } from "@/lib/utils"
 
 const DOMAIN_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -40,17 +45,25 @@ const DOMAIN_ICONS: Record<string, React.ComponentType<{ className?: string }>> 
   sms: MessageCircle,
   cloud_cdn: Cpu,
   general: HelpCircle,
+  hardware_remote: MonitorSmartphone,
+  homework_tapd: Workflow,
+  infra_data: Database,
+  security_account: KeyRound,
+  course_data_log: BookOpen,
 }
 
 export default function EscalationWhoBadge({
   contact,
   issueTypeTag = "【缺陷】",
   compact = false,
+  candidates = [],
   className,
 }: {
   contact: HqContactInfo
   issueTypeTag?: "【缺陷】" | "【需求】" | "【疑似缺陷】"
   compact?: boolean
+  /** 분류 점수가 낮을 때의 후보 2개(서버 응답 context.candidates). 있으면 "확인 필요" 표시와 후보를 보인다. */
+  candidates?: EscalationCandidate[]
   className?: string
 }) {
   const [open, setOpen] = useState(false)
@@ -105,6 +118,11 @@ export default function EscalationWhoBadge({
             {issueTypeTag}
           </span>
         ) : null}
+        {candidates.length > 0 ? (
+          <span className="rounded border border-[#ECD29C] bg-[#FBF1E0] px-1.5 py-0.5 text-[10.5px] font-semibold text-[#7A520F]">
+            분류 확인 필요
+          </span>
+        ) : null}
       </div>
 
       {open ? (
@@ -142,6 +160,22 @@ export default function EscalationWhoBadge({
                 <p className="text-[#A39E98]">• <strong>1차 접점:</strong> {contact.firstLineContact}</p>
               </div>
 
+              {candidates.length > 0 ? (
+                <div>
+                  <span className="block font-semibold text-[#111110]">분류 후보(점수가 낮음)</span>
+                  <p className="mt-0.5 text-[#615D59]">
+                    {candidates.map((candidate) => `${candidate.domainLabel} (${candidate.score}점)`).join(" · ")}
+                  </p>
+                </div>
+              ) : null}
+
+              {contact.channelNote ? (
+                <div>
+                  <span className="block font-semibold text-[#111110]">다른 경로</span>
+                  <p className="mt-0.5 text-[#615D59]">{contact.channelNote}</p>
+                </div>
+              ) : null}
+
               {contact.remoteTool ? (
                 <div>
                   <span className="block font-semibold text-[#111110]">원격 지원 도구</span>
@@ -158,6 +192,10 @@ export default function EscalationWhoBadge({
                 <strong className="block text-[#31302E]">핵심 점검 팁</strong>
                 {contact.guidanceTip}
               </div>
+
+              <p className="text-[10.5px] leading-4 text-[#A39E98]">
+                근거 {contact.source} · 문서 기준일 {contact.verifiedAt}
+              </p>
             </div>
           </div>
         </>

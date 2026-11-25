@@ -23,11 +23,10 @@ import {
   Trash2,
   UserRound,
 } from "lucide-react"
-import { useMemo, type ChangeEvent, type FormEvent, type RefObject } from "react"
+import { type ChangeEvent, type FormEvent, type RefObject } from "react"
 
 import BlogMarkdownRenderer from "@/components/blog/BlogMarkdownRenderer"
 import { ClassInInternalAIIcon } from "@/components/ui/ClassInInternalAIIcon"
-import { extractEscalationContext } from "@/lib/internal-cs-chat/escalation-routing"
 import { cn } from "@/lib/utils"
 
 import AnswerFooterChip from "../components/AnswerFooterChip"
@@ -56,6 +55,7 @@ import {
   sourceHref,
   sourceStatus,
 } from "../formatters"
+import { useEscalation } from "../use-escalation"
 import { isHqPending } from "../hq-desk"
 import type {
   ConversationDetailResponse,
@@ -155,19 +155,8 @@ export default function ChatPanel({
   onQuickApprove?: (messageId: string) => void
   onSelectAlternativeIssue?: (issuePrompt: string) => void
 }) {
-  const escalationContext = useMemo(() => {
-    if (!detail) return null
-    const userTexts = detail.messages
-      .filter((m) => m.role === "user")
-      .map((m) => m.content)
-      .join("\n")
-    return extractEscalationContext(userTexts, {
-      title: detail.conversation.title,
-      tags: detail.conversation.tags,
-      assigneeName: detail.conversation.assignee_name,
-      createdDate: detail.conversation.created_at,
-    })
-  }, [detail])
+  // 칩의 도메인 표시는 서버 결과를 쓴다(B2 — 담당 표는 server-only). 대기·오류 중에는 칩 글만 보인다.
+  const escalationContext = useEscalation(detail).result?.context ?? null
 
   return (
     <div className={cn("flex min-h-0 flex-1 flex-col", reviewOpen && "xl:pr-[438px]")}>
