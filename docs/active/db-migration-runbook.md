@@ -311,6 +311,15 @@ npm run check:db --  --strict
 | --- | --- | --- | --- |
 | `20261123_partner_settlement_snapshots.sql` | 총판마다 최신 정산 스냅샷 한 행 `partner_settlement_snapshots`(`partner` PK·`snapshot` jsonb·`generated_at`·`updated_by`·`updated_at` 트리거). RLS deny-all(정책 0, service_role 전용), 멱등 | 총판 미수금 탭 위 보드가 "아직 올라오지 않았다" 한 줄로 바뀌고 Overview 정산 잔액 카드가 그려지지 않는다. 견적별 총판 미수금은 그대로다 | `npm run check:db` 의 `partner_settlement_snapshots` 프로브(warning, 행 0이면 업로드 안내), 또는 `select to_regclass('public.partner_settlement_snapshots') is not null;` → `true` |
 
+### 2026-11-24 총판 견적서 확인 · 발행 후 수정 · 할인 · 문구 — 서울 프로젝트 미적용
+
+총판이 공유 링크에서 [견적 확인]을 누른 기록과, 발행 뒤 금액 수정 기록([총판 정산](../hardware-ops/distributor-settlement.md) §4-1·§4-2).
+코드는 미적용 DB 에서도 돈다 — 확인 버튼과 발행 후 수정만 막힌다. **이 기능을 쓰기 전에 적용한다.**
+
+| 파일 | 하는 일 | 미적용 시 | 확인 |
+| --- | --- | --- | --- |
+| `20261124_distributor_settlement_confirm_revise.sql` | `distributor_settlements` 에 `distributor_confirmed_at`·`distributor_confirmed_name`(60자 CHECK)·`revised_at`·`discount`(JSONB, mode CHECK)·`document_text`(JSONB) 추가. 멱등(`ADD COLUMN IF NOT EXISTS`·`DROP CONSTRAINT IF EXISTS`) | 정산 조회는 새 칸 없이 다시 읽는다(42703 폴백). 총판 링크에 확인 버튼이 나오지 않고, 발행 후 금액 수정과 할인·제목·기타사항을 넣은 저장은 503 "적용 필요". 발행 전 편집·발행·입금·고객 동의 자동 생성은 그대로 된다 | `npm run check:db` 의 `distributor_settlements`(총판 견적서 확인·발행 후 수정) 프로브(warning), 또는 `select count(*) from information_schema.columns where table_name = 'distributor_settlements' and column_name in ('distributor_confirmed_at','distributor_confirmed_name','revised_at','discount','document_text');` → `5` |
+
 ## 적용 보류 중인 마이그레이션
 
 `check:db`에 걸리지 않는(프로브가 없는) 파일이라도, 아래 파일은 **파일명 순서대로 일괄 적용하지 않는다.**

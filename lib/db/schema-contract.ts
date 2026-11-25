@@ -217,6 +217,8 @@ export const SCHEMA_CONTRACT_MIGRATIONS = [
   "supabase/migrations/20261112_chatbot_claude_labels.sql",
   // 총판 정산 스냅샷(2026-11-23) — 쿼드러닝 계정 잔액 보드·Overview 카드. RLS deny-all, 쓰기는 업로드 스크립트뿐.
   "supabase/migrations/20261123_partner_settlement_snapshots.sql",
+  // 총판 견적서 확인·발행 후 수정(2026-11-24). 미적용이면 새 칸 없이 읽고(42703 폴백) 확인 버튼·발행 후 수정만 막힌다.
+  "supabase/migrations/20261124_distributor_settlement_confirm_revise.sql",
 ] as const
 
 export const SCHEMA_PROBES: SchemaProbe[] = [
@@ -987,6 +989,15 @@ export const SCHEMA_PROBES: SchemaProbe[] = [
     migration: "supabase/migrations/20261023_distributor_settlements.sql",
     severity: "warning",
     impact: "고객 견적은 유지되지만 원가 설정·총판 견적서 발행·미수금 추적이 503으로 차단된다.",
+  },
+  {
+    kind: "table",
+    table: "distributor_settlements",
+    label: "총판 견적서 확인·발행 후 수정·할인·문구",
+    columns: ["distributor_confirmed_at", "distributor_confirmed_name", "revised_at", "discount", "document_text"],
+    migration: "supabase/migrations/20261124_distributor_settlement_confirm_revise.sql",
+    severity: "warning",
+    impact: "총판 정산은 그대로 동작하지만 총판의 링크 확인 버튼, 발행 후 금액 수정, 총판 견적서 할인·제목·기타사항 저장이 '적용 필요'로 막힌다.",
   },
   {
     kind: "table",

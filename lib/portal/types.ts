@@ -212,6 +212,31 @@ export interface ContractDocument {
   updated_at: string;
 }
 
+/**
+ * 계약서 탭 목록용 — 견적에서 전환한 계약(contract_documents) 한 건의 요약.
+ * 제목·금액·서명 시각은 현재 버전에서, 고객·딜 이름은 딜에서 가져온다.
+ */
+export interface ContractDocumentListItem {
+  id: string;
+  deal_id: string;
+  contract_number: string;
+  status: ContractDocumentStatus;
+  created_at: string;
+  updated_at: string;
+  deal_title: string | null;
+  customer_name: string | null;
+  version_number: number | null;
+  title: string | null;
+  total_amount: number;
+  valid_from: string | null;
+  valid_until: string | null;
+  partner_signed_at: string | null;
+  admin_signed_at: string | null;
+  /** 전환의 원본 견적(structured_json.sourceQuote). 견적 없이 만든 계약이면 null. */
+  source_quote_document_id: string | null;
+  source_quote_number: string | null;
+}
+
 export interface ContractDocumentBundle extends ContractDocument {
   versions: ContractDocumentVersion[];
   shares: ContractDocumentShare[];
