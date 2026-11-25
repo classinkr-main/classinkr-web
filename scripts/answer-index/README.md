@@ -97,6 +97,7 @@ id 접두: `field:`·`basics:`·`symptom:`·`svc:`·`template:`·`self:`·`guide
 | V-10 | inventory 의 옛 답 id 가 모두 `legacy-alias.json`에 있음(카드 또는 null), 키·값이 실제 옛 id·카드 | 대응을 시작한 영역은 오류, 아직 없는 영역은 알림(`--strict`면 모두 오류) |
 | V-11 | active policy 카드의 `policyRef`가 대기열에 있음, `evidenceScope: "site"` 카드는 사람 결정 전 `review`, 우주 라벨이 review·disabled 카드를 가리키면 경고 | 오류 |
 | V-12 | 런타임 자료 합계 25MB 이하, 카드 id 형식과 종류·영역, 카드 id 중복, 파일별 스키마(대기열 `blockPhrases`는 문자열 배열, 정답 키 선택 칸 꼴), 우주 라벨·반례 행선 형식, 정답 키에 질문 글 없음, `calibration.json`·`manifest.json` 낡음(경고) | 오류 |
+| V-13 | doc 카드 `first`(결론 문장)·`headline`(결론 한 줄, R2 B6): first 는 답 문장 안(접속어면 앞 문장과 함께), headline 은 60자 이하 요체 한 문장·근거 문장이 카드 안·숫자/[메뉴]/영문 토큰이 카드 문장에 있음·부정 극성이 근거와 같음·카드 문장과 낱말 50% 이상 겹침·안전 규칙·정책 대기 구절 없음 | 오류 |
 
 - `--only <파일>`: 그 파일에 묶인 결과만 보인다(검사는 자료 전체로 돈다). 자료 에이전트는 자기 조각 파일로 돌려 오류 0을 확인한다: `npx tsx scripts/answer-index/verify.ts --only cards/account.D1-07.json --only variants/account.D1-07.json`.
 - 개발용 질문(V-7): 저장소 평가셋은 늘 쓴다. 저장소 밖 묶음(dev5·holdout1·371·dev6~dev8)은 `--dev-sets name=path,…` 또는 `ANSWER_INDEX_DEV_SETS`. 겹친 자료 쪽 글과 묶음 이름만 찍고 평가 질문 글은 찍지 않는다.
