@@ -281,4 +281,27 @@ describe("escalation-routing", () => {
       expect(ctx.deviceModel).toBeNull()
     })
   })
+
+  // 검토(안전-7): 응답 JSON 의 자유 글 칸도 초안과 같은 규칙으로 가린다. 값은 지어낸 것이다.
+  describe("free-text context fields are masked like the drafts", () => {
+    it("masks assigneeName, priority, lessonId and the account-ID note uses the wider labels", () => {
+      const ctx = extractEscalationContext({
+        userMessages: ["계정번호 12345678 로그인 안 됨. lesson id: 01012345678"],
+        assigneeName: "담당 010-2222-3333",
+        priority: "긴급 010-3333-4444",
+      })
+      expect(ctx.hasAccountId).toBe(true)
+      expect(ctx.assigneeName).toBe("담당 [phone]")
+      expect(ctx.priority).toBe("긴급 [phone]")
+      expect(ctx.lessonId).toBe("[phone]")
+      expect(ctx.symptomSummary).not.toContain("12345678")
+      expect(JSON.stringify(ctx)).not.toMatch(/010-?\d{4}-?\d{4}|12345678/)
+    })
+
+    it("masks full-width phone numbers in the HQ draft symptom line", () => {
+      const ctx = extractEscalationContext({ userMessages: ["연락처는 ０１０-１２３４-５６７８ 입니다"] })
+      expect(ctx.symptomSummary).toContain("[phone]")
+      expect(buildSmartHqDraft(ctx)).not.toMatch(/[０-９]{4}|1234-?5678/)
+    })
+  })
 })

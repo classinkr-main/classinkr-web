@@ -24,7 +24,7 @@ import {
   type EscalationResult,
   type HqContactInfo,
 } from "./escalation-types"
-import { redactInternalCsDraft } from "./redact"
+import { hasAccountIdentifier, redactInternalCsDraft, redactInternalCsValue } from "./redact"
 
 export {
   DRAFT_PLACEHOLDER,
@@ -564,14 +564,16 @@ export function extractEscalationContext(input: EscalationInput): EscalationCont
   const institution = institutionResult.value
 
   // 2. 계정 / UID — 있는지만 기록한다.
-  const hasAccountId = /(?:Account|UID|User\s*ID|계정\s*ID|계정|아이디)\s*[:：#]?\s*\d{5,12}(?!\d)/i.test(userText)
+  // 이름표 목록은 가림(redact.ts)과 같다 — 계정번호·아이디는·ID:·영문 섞인 UID 도 잡는다.
+  const hasAccountId = hasAccountIdentifier(userText)
 
   // 3. 수업 ID / 코스 ID 감지 (사용자 글만)
   const lessonMatch = userText.match(/\b(?:수업\s*ID|lesson\s*id|class\s*id|코스\s*ID|강의\s*ID)\s*[:#]?\s*([a-zA-Z0-9_-]{4,20})\b/i)
-  const lessonId = lessonMatch?.[1] ?? null
+  // 초안·응답에 실리는 값이라 가린 값만 남긴다(전화·계좌 꼴 숫자를 수업 ID 로 적은 경우).
+  const lessonId = lessonMatch?.[1] ? redactInternalCsValue(lessonMatch[1]) : null
   // 4. 오류 코드 감지
   const errorMatch = combined.match(/(?:오류\s*코드|에러\s*코드|error\s*code|코드|code|errno)\s*[:#]?\s*(-?\d{2,10}|0x[0-9a-fA-F]+)\b/i)
-  let errorCode = errorMatch?.[1] ?? null
+  let errorCode = errorMatch?.[1] ? redactInternalCsValue(errorMatch[1]) : null
   if (!errorCode) {
     if (/\b4001\b/.test(combined)) errorCode = "4001"
     else if (/\b2001\b/.test(combined)) errorCode = "2001"
@@ -643,8 +645,9 @@ export function extractEscalationContext(input: EscalationInput): EscalationCont
     issueType,
     issueTypeTag,
     symptomSummary: symptom.text || "증상 상세 확인 필요",
-    priority,
-    assigneeName: input.assigneeName ?? null,
+    // 자유 글 칸은 초안과 같은 규칙으로 가린다(응답 JSON 에도 원문이 실리지 않게).
+    priority: priority ? redactInternalCsValue(priority) : null,
+    assigneeName: input.assigneeName ? redactInternalCsValue(input.assigneeName) : null,
     redactionCount: userRedactions + institutionResult.count,
   }
 }
