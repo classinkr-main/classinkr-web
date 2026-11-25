@@ -103,7 +103,10 @@ export interface LedgerTopBarProps {
     onClearAll: (() => void) | null
   } | null
   refreshing: boolean
+  /** 동기화 — REV와 HW 시트를 함께 돌린다. */
   onRefresh: () => void
+  /** 동기화 버튼 옆 HW 칩 "HW 출고 12 · 재고 34 · 예정 5"(최근 30일 출고 · 창고 재고 · 출고 예정). 없으면 숨긴다. */
+  hw?: { label: string; title: string; low: boolean } | null
   /** 매출 입력 버튼 — 콕핏에서는 화면 안에 입력기가 있어 숨긴다. */
   onNewEntry: (() => void) | null
   scope: { mine: boolean; all: boolean; hint: string | null }
@@ -134,6 +137,7 @@ export default function LedgerTopBar({
   filterLine,
   refreshing,
   onRefresh,
+  hw = null,
   onNewEntry,
   scope,
   onScopeMine,
@@ -242,8 +246,18 @@ export default function LedgerTopBar({
           </button>
         ) : null}
         <span className="flex-1" />
+        {hw ? (
+          <a
+            href="/admin/hardware"
+            title={hw.title}
+            className={`inline-flex h-8 shrink-0 items-center rounded-lg px-2 text-[12px] font-semibold tabular-nums transition hover:bg-[#F6F5F4] ${hw.low ? "text-[#7A520F]" : "text-[#615D59]"} ${FOCUS}`}
+          >
+            {hw.label}
+          </a>
+        ) : null}
         <button
           type="button"
+          title="REV 장부와 HW 시트를 함께 동기화"
           onClick={onRefresh}
           disabled={refreshing}
           className={`inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-[#E8E8E4] bg-white px-3 text-[13px] text-[#31302E] transition hover:bg-[#F6F5F4] disabled:opacity-60 ${FOCUS}`}

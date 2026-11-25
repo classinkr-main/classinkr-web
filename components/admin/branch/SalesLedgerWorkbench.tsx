@@ -33,6 +33,7 @@ import {
   X,
 } from "lucide-react"
 import { adminFetchJson, clearBranchRequestCache, postBranchSync, useBranchJson, type BranchJsonState, type BranchSyncResponseBody } from "./client-api"
+import { hwActiveLowCount, hwChipLabel, hwChipTitle, hwTotalsOf, type BranchHwResponse } from "@/lib/branch/hw-summary"
 import { describeSyncOutcome } from "@/lib/admin/sync-outcome"
 import { useVisibleInterval } from "./use-visible-interval"
 // 서버 입력 큐 훅(초안 CRUD·적용·되돌리기·로컬 폴백·낙관적 잠금)은 ledger/useLedgerDraftQueue로
@@ -1160,6 +1161,9 @@ export default function SalesLedgerWorkbench({
     "/api/admin/hardware?scope=customer-links",
     refreshKey
   )
+  // 장부 머리 HW 칩 — 최근 30일 출고 · 창고 재고 · 출고 예정(주요 품목 합계). 동기화 후 refreshKey로 다시 읽는다.
+  const hwSummary = useBranchJson<BranchHwResponse>("/api/admin/branch/hw", refreshKey)
+  const hwChip = useMemo(() => (hwSummary.data ? { label: hwChipLabel(hwTotalsOf(hwSummary.data)), title: hwChipTitle(hwSummary.data), low: hwActiveLowCount(hwSummary.data) > 0 } : null), [hwSummary.data])
   const hardwareCustomerKeys = useMemo(() => {
     const set = new Set<string>()
     for (const customer of hardware.data?.customers ?? []) {
@@ -2713,7 +2717,8 @@ export default function SalesLedgerWorkbench({
       if (canRunAdminOperations) {
         // 응답을 결과 계약으로 읽는다 — 예전엔 다른 동기화가 잠금을 잡아 건너뛴 200 { skipped }도
         // 아무 말 없이 새로고침만 해서 "눌렀는데 그대로"로 보였고, 부분 실패(500)는 본문을 버렸다.
-        const { status, body } = await postBranchSync(["rev"])
+        // REV와 HW(하드웨어 시트)를 함께 동기화한다(2026-11-25) — KR Team 머리줄의 실행 버튼을 장부로 모았다.
+        const { status, body } = await postBranchSync(["rev", "hw"])
         applySyncRevImport(body)
         const outcome = describeSyncOutcome(body, { httpStatus: status })
         if (outcome.tone === "error") setSyncError(outcome.message)
@@ -3281,6 +3286,7 @@ export default function SalesLedgerWorkbench({
         filterLine={lens === "ledger" ? { chips: ledgerFilterChips, onClearAll: canClearLedgerFilters ? clearLedgerFilters : null } : null}
         refreshing={refreshing}
         onRefresh={() => void onRefresh()}
+        hw={hwChip}
         onNewEntry={lens !== "cockpit" ? () => selectRailView("input") : null}
         scope={{
           mine: scopedManager === defaultManager,
