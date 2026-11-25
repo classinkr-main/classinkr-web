@@ -1,0 +1,2899 @@
+[
+  {
+    "id": "doc:/docs/start/login-troubleshooting#7/inquiry-info",
+    "kind": "doc",
+    "tier": "standard",
+    "area": "support",
+    "topic": "로그인 문의할 때 같이 보낼 정보(기기·안 되는 화면·앱 버전·날짜, 비밀번호는 빼기)",
+    "answer": {
+      "lead": "none",
+      "sentences": [
+        {
+          "unit": "doc:/docs/start/login-troubleshooting#7",
+          "ids": [
+            1,
+            2,
+            4,
+            5
+          ],
+          "hashes": [
+            "a3a32cb28856380e",
+            "e7317dabc5cb9e53",
+            "824362a45a0dff12",
+            "28ee2f1de960aed1"
+          ]
+        }
+      ]
+    },
+    "sources": [
+      {
+        "path": "/docs/start/login-troubleshooting",
+        "heading": "로그인이 안 될 때 · 문의할 때 함께 보내 주세요"
+      }
+    ],
+    "asks": [
+      "howto",
+      "definition"
+    ],
+    "concepts": [
+      "C_inquiry_info",
+      "C_login"
+    ],
+    "anchors": [
+      "로그인 문의 정보",
+      "상담 문의 때 보낼 것",
+      "비밀번호 빼고 문의",
+      "앱 버전 확인",
+      "문제 생긴 시각",
+      "기기 종류",
+      "상담 채팅 보낼 내용",
+      "로그인 오류 신고",
+      "로그인 안 될 때 문의"
+    ],
+    "covers": "로그인이 안 될 때 상담에 문의하면서 함께 보내면 좋은 정보(쓰는 기기와 어느 화면에서 무엇이 안 되는지, 앱 버전과 문제가 생긴 날짜·시각)와 비밀번호는 보내지 않는다는 것",
+    "notCovers": [
+      "화면 문구 스크린샷·수업이 안 보일 때 수업 이름과 시작 시각 → doc:/docs/start/login-troubleshooting#7/inquiry-password-screenshot",
+      "문의에 적을 클래스인 아이디 형식(식별 정보를 적으라는 안내는 답에 넣지 않음) → none",
+      "로그인 자체를 스스로 풀어 보는 순서 → howto:login-fail",
+      "비밀번호를 잊었을 때 → howto:login-forgot-password"
+    ],
+    "negatives": [
+      {
+        "q": "비밀번호 잊어버렸는데 어떻게 새로 정해요",
+        "route": "howto:login-forgot-password"
+      },
+      {
+        "q": "로그인 버튼이 회색이라 안 눌려요",
+        "route": "doc:/docs/start/login-troubleshooting#2/login-button-disabled"
+      },
+      {
+        "q": "로그인은 되는데 수업이 안 보여요",
+        "route": "howto:class-not-visible-after-login"
+      },
+      {
+        "q": "로그인할 때 아이디에 뭘 넣어요",
+        "route": "doc:/docs/start/login-troubleshooting#0/login-id-to-use"
+      },
+      {
+        "q": "상담 전화번호가 뭐예요",
+        "route": "fixed:contact-channel"
+      }
+    ],
+    "handoff": "support",
+    "category": "troubleshooting",
+    "intent": "troubleshooting",
+    "suggestedQuestions": [
+      "로그인 문의 때 화면 캡처도 보내야 하나요?"
+    ],
+    "status": "active",
+    "provenance": {
+      "unit": "D1-33",
+      "writer": "D1",
+      "at": "2026-11-20",
+      "legacyIds": [],
+      "reviewer": "agent:opus#D2-33"
+    },
+    "review": {
+      "sampled": 10,
+      "yes": 10,
+      "partial": 0,
+      "no": 0,
+      "actions": [
+        "1차 표본 yes10/partial0/no0",
+        "답 문장 바꿈 [1,3,4,5]→[1,2,4,5]: 3번(클래스인 아이디 +82 휴대폰 번호·이메일)은 공통 규칙 5·플레이북 05(식별 정보를 채팅으로 적으라는 안내 금지)로 빼고 2번(비밀번호는 보내지 마세요)을 넣음",
+        "변형 2개 바꿈(아이디·+82 번호 형식 질문 → 안 되는 화면·날짜 질문)",
+        "반례 행선 고침: 꺼진 howto:login-button → doc:/docs/start/login-troubleshooting#2/login-button-disabled, 상담 전화 none → fixed:contact-channel",
+        "범위 메모 갱신(아이디 형식 → none)"
+      ]
+    }
+  },
+  {
+    "id": "doc:/docs/start/login-troubleshooting#7/inquiry-password-screenshot",
+    "kind": "doc",
+    "tier": "standard",
+    "area": "support",
+    "topic": "로그인 문의 때 비밀번호는 보내지 않기, 화면 문구 스크린샷, 수업이 안 보이면 수업 정보",
+    "answer": {
+      "lead": "none",
+      "sentences": [
+        {
+          "unit": "doc:/docs/start/login-troubleshooting#7",
+          "ids": [
+            1,
+            2,
+            6,
+            7
+          ],
+          "hashes": [
+            "a3a32cb28856380e",
+            "e7317dabc5cb9e53",
+            "cdb6b74b3361b863",
+            "deafba3b21545d2c"
+          ]
+        }
+      ]
+    },
+    "sources": [
+      {
+        "path": "/docs/start/login-troubleshooting",
+        "heading": "로그인이 안 될 때 · 문의할 때 함께 보내 주세요"
+      }
+    ],
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_inquiry_info",
+      "C_password",
+      "C_screenshot"
+    ],
+    "anchors": [
+      "비밀번호 보내도 되나",
+      "비밀번호는 보내지 마세요",
+      "문의에 비번 적기",
+      "스크린샷 첨부",
+      "화면 문구 캡처",
+      "수업이 안 보일 때 문의",
+      "수업 이름 시작 시각",
+      "오류 문구 캡처",
+      "상담에 캡처 보내기"
+    ],
+    "covers": "로그인 문의에는 비밀번호를 보내지 않고, 화면에 뜬 문구는 스크린샷으로, 수업이 안 보이면 수업 이름과 시작 날짜·시각을 함께 보낸다는 것",
+    "notCovers": [
+      "문의에 넣을 기기·안 되는 화면·앱 버전·날짜 → doc:/docs/start/login-troubleshooting#7/inquiry-info",
+      "로그인은 되는데 수업이 안 보일 때 확인할 것 → howto:class-not-visible-after-login",
+      "비밀번호를 잊어서 다시 정하기 → howto:login-forgot-password"
+    ],
+    "negatives": [
+      {
+        "q": "비밀번호 까먹었어요 어디서 바꿔요",
+        "route": "howto:login-forgot-password"
+      },
+      {
+        "q": "PC에서 비밀번호 바꾸는 메뉴가 어디예요",
+        "route": "doc:/docs/start/password-change-pc#0/pc-change-path"
+      },
+      {
+        "q": "수업이 목록에 안 떠요 어떻게 해요",
+        "route": "howto:class-not-visible-after-login"
+      },
+      {
+        "q": "로그인 화면에 이상한 문구 떴는데 무슨 뜻이에요",
+        "route": "howto:login-fail"
+      },
+      {
+        "q": "상담 채팅은 어디서 열어요",
+        "route": "fixed:contact-channel"
+      }
+    ],
+    "handoff": "support",
+    "category": "troubleshooting",
+    "intent": "troubleshooting",
+    "suggestedQuestions": [
+      "로그인 문의 때 화면은 어떻게 보내요?"
+    ],
+    "status": "active",
+    "provenance": {
+      "unit": "D1-33",
+      "writer": "D1",
+      "at": "2026-11-20",
+      "legacyIds": [],
+      "reviewer": "agent:opus#D2-33"
+    },
+    "review": {
+      "sampled": 10,
+      "yes": 9,
+      "partial": 1,
+      "no": 0,
+      "actions": [
+        "1차 표본 yes8/partial2/no0(비밀번호를 빼라는 이유, 상담원이 달라고 할 때)",
+        "변형 1개 바꿈(문서에 답이 없는 '이유' 질문 → '비밀번호까지 보내면 안 되나요')",
+        "반례 행선 고침: 꺼진 howto:password-change-howto → doc:/docs/start/password-change-pc#0/pc-change-path, 상담 채팅 위치 none → fixed:contact-channel"
+      ]
+    }
+  },
+  {
+    "id": "doc:/docs/start/class-connection-troubleshooting#6/inquiry-info",
+    "kind": "doc",
+    "tier": "standard",
+    "area": "support",
+    "topic": "수업 중 끊김이 반복될 때 상담 채널에 보낼 정보(수업 이름·기기와 앱 버전·수업 시작 시각, 비밀번호는 빼기)",
+    "answer": {
+      "lead": "none",
+      "sentences": [
+        {
+          "unit": "doc:/docs/start/class-connection-troubleshooting#6",
+          "ids": [
+            0,
+            1,
+            2,
+            3,
+            5,
+            6
+          ],
+          "hashes": [
+            "01961a6c0961151c",
+            "92d25582dce09011",
+            "ca640ff4b98dbf26",
+            "f3f620c6997852fe",
+            "3511832a4559fdab",
+            "7c55aaeef64b35ab"
+          ]
+        }
+      ]
+    },
+    "sources": [
+      {
+        "path": "/docs/start/class-connection-troubleshooting",
+        "heading": "수업 중 끊기거나 튕길 때 · 그래도 반복되면 문의할 때 보낼 정보"
+      }
+    ],
+    "asks": [
+      "howto",
+      "definition"
+    ],
+    "concepts": [
+      "C_inquiry_info",
+      "C_disconnect"
+    ],
+    "anchors": [
+      "수업 끊김 문의",
+      "튕김 반복 문의",
+      "상담에 보낼 정보",
+      "수업 기록 확인",
+      "수업 시작 시각",
+      "끊김 상담 채널 문의",
+      "앱 버전 확인",
+      "기기 종류",
+      "끊김 신고"
+    ],
+    "covers": "수업 중 끊기거나 튕기는 일이 반복될 때 상담 채널로 문의하면서, 상담원이 수업 기록으로 원인을 확인하도록 보내는 정보(수업 이름, 쓰는 기기와 앱 버전, 수업 시작 날짜와 시각)와 비밀번호는 보내지 않아도 된다는 것",
+    "notCovers": [
+      "어떤 문제가 몇 시쯤 생겼는지·스크린샷이나 영상 → doc:/docs/start/class-connection-troubleshooting#6/inquiry-time-attach",
+      "원격 지원이 필요할 때 받는 방법 → doc:/docs/start/class-connection-troubleshooting#6/remote-support-caution",
+      "끊김 때 스스로 해 볼 조치 → fixed:class-disconnect",
+      "수업 문제 전반의 문의 정보 요약 → doc:/docs/start/class-connection-troubleshooting#summary/conn-contact-info"
+    ],
+    "negatives": [
+      {
+        "q": "수업이 끊길 때 제가 먼저 뭘 해 봐요",
+        "route": "fixed:class-disconnect"
+      },
+      {
+        "q": "화면이 느리고 깨져요",
+        "route": "howto:class-slow"
+      },
+      {
+        "q": "보안 프로그램 때문에 앱이 안 켜져요",
+        "route": "doc:/docs/start/class-connection-troubleshooting#4/conn-security-block"
+      },
+      {
+        "q": "교실 들어가는 버튼을 눌러도 입장이 막혀요",
+        "route": "howto:class-enter-fail"
+      },
+      {
+        "q": "화상 수업에서 내 영상이 까맣게 나와요",
+        "route": "howto:camera-fail"
+      }
+    ],
+    "handoff": "support",
+    "category": "troubleshooting",
+    "intent": "troubleshooting",
+    "suggestedQuestions": [
+      "끊김 문의에 영상도 보내도 되나요?"
+    ],
+    "status": "active",
+    "provenance": {
+      "unit": "D1-33",
+      "writer": "D1",
+      "at": "2026-11-20",
+      "legacyIds": [],
+      "reviewer": "agent:opus#D2-33"
+    },
+    "review": {
+      "sampled": 10,
+      "yes": 10,
+      "partial": 0,
+      "no": 0,
+      "actions": [
+        "1차 표본 yes7/partial3/no0(문의 경로 문장 없음, 수업 이름 없음) → 고친 뒤 새 표본 10개로 다시 봄",
+        "답 문장 바꿈 [1,4,5,6]→[0,1,2,3,5,6]: 0번(상담 채널로 문의)·2번(비밀번호 안 보내도 됨)·3번(수업 이름) 더함, 4번(클래스인 아이디)은 공통 규칙 5로 뺌",
+        "변형 1개 바꿈(아이디 질문 → 상담 채널 문의 질문)",
+        "범위 메모 갱신(요약 카드 class-connection-troubleshooting#summary/conn-contact-info 행선 추가)"
+      ]
+    }
+  },
+  {
+    "id": "doc:/docs/start/class-connection-troubleshooting#6/inquiry-time-attach",
+    "kind": "doc",
+    "tier": "standard",
+    "area": "support",
+    "topic": "수업 끊김 문의 때 수업 이름·몇 시쯤 생겼는지·스크린샷이나 영상",
+    "answer": {
+      "lead": "none",
+      "sentences": [
+        {
+          "unit": "doc:/docs/start/class-connection-troubleshooting#6",
+          "ids": [
+            1,
+            3,
+            7,
+            8
+          ],
+          "hashes": [
+            "92d25582dce09011",
+            "f3f620c6997852fe",
+            "53365d835c595e4e",
+            "0df04e8d38c0e480"
+          ]
+        }
+      ]
+    },
+    "sources": [
+      {
+        "path": "/docs/start/class-connection-troubleshooting",
+        "heading": "수업 중 끊기거나 튕길 때 · 그래도 반복되면 문의할 때 보낼 정보"
+      }
+    ],
+    "asks": [
+      "howto"
+    ],
+    "concepts": [
+      "C_inquiry_info",
+      "C_disconnect",
+      "C_screenshot"
+    ],
+    "anchors": [
+      "수업 이름 알려주기",
+      "문제 시각",
+      "몇 시쯤 끊겼는지",
+      "스크린샷 영상 첨부",
+      "끊김 영상",
+      "화면 녹화 첨부",
+      "어떤 문제",
+      "상담 첨부 파일"
+    ],
+    "covers": "수업 끊김 문의에 수업 이름과 어떤 문제가 몇 시쯤 생겼는지, 스크린샷이나 짧은 영상을 함께 보낸다는 것",
+    "notCovers": [
+      "상담 채널 문의와 기기·앱 버전·수업 시작 시각 → doc:/docs/start/class-connection-troubleshooting#6/inquiry-info",
+      "원격 지원 방법 → doc:/docs/start/class-connection-troubleshooting#6/remote-support-caution"
+    ],
+    "negatives": [
+      {
+        "q": "끊김 말고 소리가 안 들려요 문의는 뭘 보내요",
+        "route": "doc:/docs/start/camera-mic-troubleshooting#7/inquiry-device-info"
+      },
+      {
+        "q": "앱이 멈출 때 문의 정보는요",
+        "route": "doc:/docs/start/app-update-cache-reinstall#7/inquiry-device-info"
+      },
+      {
+        "q": "수업 중에 학생이 튕겼어요 어떻게 해요",
+        "route": "fixed:class-disconnect"
+      },
+      {
+        "q": "수업이 느릴 때 조치",
+        "route": "howto:class-slow"
+      },
+      {
+        "q": "로그인 문의엔 뭘 보내요",
+        "route": "doc:/docs/start/login-troubleshooting#7/inquiry-info"
+      }
+    ],
+    "handoff": "support",
+    "category": "troubleshooting",
+    "intent": "troubleshooting",
+    "suggestedQuestions": [
+      "끊김 문의에 수업 이름도 적어야 하나요?"
+    ],
+    "status": "active",
+    "provenance": {
+      "unit": "D1-33",
+      "writer": "D1",
+      "at": "2026-11-20",
+      "legacyIds": [],
+      "reviewer": "agent:opus#D2-33"
+    },
+    "review": {
+      "sampled": 10,
+      "yes": 10,
+      "partial": 0,
+      "no": 0,
+      "actions": [
+        "1차 표본 yes9/partial1/no0(시각이 기억 안 날 때)",
+        "변형 1개 바꿈(대략 몇 시쯤 적어도 되나로)",
+        "범위 메모 갱신(짝 카드 답 문장 바뀜)"
+      ]
+    }
+  },
+  {
+    "id": "doc:/docs/start/class-connection-troubleshooting#6/remote-support-caution",
+    "kind": "doc",
+    "tier": "standard",
+    "area": "support",
+    "topic": "원격 지원·원격 설치 도움은 상담 채널이 안내한 방법·보낸 링크로만 받기",
+    "answer": {
+      "lead": "none",
+      "sentences": [
+        {
+          "unit": "doc:/docs/start/class-connection-troubleshooting#6",
+          "ids": [
+            9
+          ],
+          "hashes": [
+            "67937e7f551148b9"
+          ]
+        },
+        {
+          "unit": "doc:/docs/start/pc-install-troubleshooting#6",
+          "ids": [
+            1
+          ],
+          "hashes": [
+            "961ef515ba9c29a3"
+          ]
+        }
+      ]
+    },
+    "sources": [
+      {
+        "path": "/docs/start/class-connection-troubleshooting",
+        "heading": "수업 중 끊기거나 튕길 때 · 그래도 반복되면 문의할 때 보낼 정보"
+      },
+      {
+        "path": "/docs/start/pc-install-troubleshooting",
+        "heading": "PC에 클래스인 설치가 안 될 때 · 그래도 안 되면 문의할 때 알려 줄 정보"
+      }
+    ],
+    "asks": [
+      "howto",
+      "yesno",
+      "where"
+    ],
+    "concepts": [
+      "C_remote_support",
+      "C_contact_channel",
+      "C_install"
+    ],
+    "anchors": [
+      "원격 지원",
+      "원격 제어",
+      "원격 도움",
+      "원격 접속 프로그램",
+      "원격 지원 프로그램",
+      "팀뷰어",
+      "상담 채널 링크",
+      "모르는 원격 링크",
+      "원격 프로그램 출처",
+      "안내받은 방법",
+      "링크로만 설치"
+    ],
+    "covers": "원격 지원이 필요하면 상담 채널에서 안내받은 방법으로만 받고, 원격 설치 도움이 필요할 때는 상담 채널이 보낸 링크로만 원격 지원 프로그램을 설치한다는 것(받는 경로와 출처 주의)",
+    "notCovers": [
+      "설치가 어려울 때 상담 채널에 원격 설치 도움을 요청하는 순서 → doc:/docs/start/pc-install#4/remote-install-help",
+      "원격 지원으로 전자칠판 설정을 바꾼 뒤 재시작 → doc:/docs/hardware/board-s-series-safe-use#8/remote-support-restart",
+      "끊김 문의 때 보낼 정보 → doc:/docs/start/class-connection-troubleshooting#6/inquiry-info",
+      "설치가 안 될 때 문의에 보낼 정보 → doc:/docs/start/pc-install-troubleshooting#6/inquiry-info"
+    ],
+    "negatives": [
+      {
+        "q": "설치가 너무 어려운데 원격 설치 요청은 어떻게 해요",
+        "route": "doc:/docs/start/pc-install#4/remote-install-help"
+      },
+      {
+        "q": "원격으로 칠판 설정 바꾼 다음에 껐다 켜야 해요",
+        "route": "doc:/docs/hardware/board-s-series-safe-use#8/remote-support-restart"
+      },
+      {
+        "q": "수업 끊김 문의에 뭘 보내요",
+        "route": "doc:/docs/start/class-connection-troubleshooting#6/inquiry-info"
+      },
+      {
+        "q": "상담원이 전화로 비번 알려 달래요",
+        "route": "none"
+      },
+      {
+        "q": "원격 프로그램 쓰는 데 돈 들어요",
+        "route": "none"
+      }
+    ],
+    "handoff": "support",
+    "category": "troubleshooting",
+    "intent": "troubleshooting",
+    "suggestedQuestions": [
+      "원격 지원은 어떻게 받나요?"
+    ],
+    "status": "active",
+    "provenance": {
+      "unit": "D1-33",
+      "writer": "D1",
+      "at": "2026-11-20",
+      "legacyIds": [],
+      "reviewer": "agent:opus#D2-33"
+    },
+    "review": {
+      "sampled": 10,
+      "yes": 9,
+      "partial": 1,
+      "no": 0,
+      "actions": [
+        "1차 표본 yes7/partial3/no0(원격 지원이 있는지, 누가 해 주는지) → 고친 뒤 새 표본 10개로 다시 봄",
+        "카드 합침: doc:/docs/start/pc-install-troubleshooting#6/remote-install-caution(같은 사실의 1문장 단편)을 이 카드로 합치고 그 카드는 지움. 답 문장에 pc-install-troubleshooting#6 #1을 더해 두 문장(V-3 50자 단편 경고 해소)",
+        "변형 옮김 11개(링크 출처·안전 질문, 그중 '이유' 질문 2개는 바꿈). 원격 설치를 해 달라는 요청 변형 14개는 더 맞는 doc:/docs/start/pc-install#4/remote-install-help(start.D1-38)가 맡아 뺌",
+        "반례 새로 씀(원격 설치 요청 → pc-install#4/remote-install-help, 칠판 원격 지원 뒤 재시작 → board-s-series-safe-use#8/remote-support-restart)",
+        "lead none 유지('아무 링크나 깔아도 되나' 같은 예/아니오 질문에 yes_can 이 붙으면 틀림)"
+      ]
+    }
+  },
+  {
+    "id": "doc:/docs/start/camera-mic-troubleshooting#7/inquiry-device-info",
+    "kind": "doc",
+    "tier": "standard",
+    "area": "support",
+    "topic": "카메라·마이크 문의 때 기기와 운영체제·앱 버전 위치·연결한 장치(비밀번호는 빼기)",
+    "answer": {
+      "lead": "none",
+      "sentences": [
+        {
+          "unit": "doc:/docs/start/camera-mic-troubleshooting#7",
+          "ids": [
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "hashes": [
+            "987bc1992e198de3",
+            "ca640ff4b98dbf26",
+            "a575327e39ecb687",
+            "a07ce876ae360030",
+            "e7ea19836e0135e9"
+          ]
+        }
+      ]
+    },
+    "sources": [
+      {
+        "path": "/docs/start/camera-mic-troubleshooting",
+        "heading": "카메라·마이크가 안 되거나 소리가 안 들릴 때 · 그래도 안 되면 문의할 때 알려 줄 정보"
+      }
+    ],
+    "asks": [
+      "howto",
+      "where"
+    ],
+    "concepts": [
+      "C_inquiry_info",
+      "C_camera",
+      "C_mic",
+      "C_version"
+    ],
+    "anchors": [
+      "카메라 마이크 문의 정보",
+      "앱 버전 보는 곳",
+      "소프트웨어 정보",
+      "연결한 장치",
+      "블루투스 이어폰",
+      "외장 카메라",
+      "운영체제",
+      "전자칠판 기종",
+      "소리 안 들림 문의"
+    ],
+    "covers": "카메라·마이크가 안 되거나 소리가 안 들릴 때 상담에 알려 줄 기기·운영체제, 앱 버전 보는 곳, 연결한 장치와 비밀번호는 보내지 않아도 된다는 것",
+    "notCovers": [
+      "수업 이름·시각·누가 안 들리는지와 스크린샷 → doc:/docs/start/camera-mic-troubleshooting#7/inquiry-when-who",
+      "카메라·마이크 직접 점검 → howto:camera-fail",
+      "보안 프로그램이 카메라·마이크를 막을 때 → doc:/docs/start/class-connection-troubleshooting#4/conn-security-block",
+      "앱 버전 확인·업데이트 일반 → doc:/docs/start/app-update-cache-reinstall#4/mobile-version-check"
+    ],
+    "negatives": [
+      {
+        "q": "카메라가 안 켜져요 먼저 뭘 확인해요",
+        "route": "howto:camera-fail"
+      },
+      {
+        "q": "보안 프로그램이 마이크를 막아요",
+        "route": "doc:/docs/start/class-connection-troubleshooting#4/conn-security-block"
+      },
+      {
+        "q": "로그인 문의 때 앱 버전은 어디서 봐요",
+        "route": "doc:/docs/start/login-troubleshooting#7/inquiry-info"
+      },
+      {
+        "q": "앱이 멈출 때 문의 정보",
+        "route": "doc:/docs/start/app-update-cache-reinstall#7/inquiry-device-info"
+      },
+      {
+        "q": "수업이 끊겨요 상담 준비물",
+        "route": "doc:/docs/start/class-connection-troubleshooting#6/inquiry-info"
+      }
+    ],
+    "handoff": "support",
+    "category": "troubleshooting",
+    "intent": "troubleshooting",
+    "suggestedQuestions": [
+      "카메라 문의 때 누가 안 들리는지도 써야 하나요?"
+    ],
+    "status": "active",
+    "provenance": {
+      "unit": "D1-33",
+      "writer": "D1",
+      "at": "2026-11-20",
+      "legacyIds": [],
+      "reviewer": "agent:opus#D2-33"
+    },
+    "review": {
+      "sampled": 10,
+      "yes": 10,
+      "partial": 0,
+      "no": 0,
+      "actions": [
+        "1차 표본 yes9/partial1/no0(맥락 없는 '앱 버전 위치')",
+        "답 문장 더함 [1,3,4,5]→[1,2,3,4,5]: 2번(비밀번호 안 보내도 됨) — 비밀번호 변형이 no 였음",
+        "변형 4개를 문의 맥락으로 바꿈(맥락 없는 '앱 버전 어디서 봐요'는 버전 확인 카드 몫)",
+        "반례·범위 행선 고침: 꺼진 howto:security-block → class-connection-troubleshooting#4/conn-security-block, 앱 버전 일반 → app-update-cache-reinstall#4/mobile-version-check"
+      ]
+    }
+  },
+  {
+    "id": "doc:/docs/start/camera-mic-troubleshooting#7/inquiry-when-who",
+    "kind": "doc",
+    "tier": "standard",
+    "area": "support",
+    "topic": "카메라·마이크 문의 때 수업 이름·시각·누가 안 들리는지와 문제 화면",
+    "answer": {
+      "lead": "none",
+      "sentences": [
+        {
+          "unit": "doc:/docs/start/camera-mic-troubleshooting#7",
+          "ids": [
+            1,
+            6,
+            7,
+            8
+          ],
+          "hashes": [
+            "987bc1992e198de3",
+            "da2315d853e6e7fa",
+            "5aca6967e72ca19a",
+            "1537df3e27172aab"
+          ]
+        }
+      ]
+    },
+    "sources": [
+      {
+        "path": "/docs/start/camera-mic-troubleshooting",
+        "heading": "카메라·마이크가 안 되거나 소리가 안 들릴 때 · 그래도 안 되면 문의할 때 알려 줄 정보"
+      }
+    ],
+    "asks": [
+      "howto"
+    ],
+    "concepts": [
+      "C_inquiry_info",
+      "C_camera",
+      "C_mic",
+      "C_screenshot"
+    ],
+    "anchors": [
+      "누가 안 들리는지",
+      "강사만 안 들려요",
+      "학생 소리",
+      "수업 시작 시각",
+      "증상 시각",
+      "문제 화면 영상",
+      "문제 화면 캡처",
+      "수업 이름 알려주기"
+    ],
+    "covers": "카메라·마이크 문의에 수업 이름과 시작 날짜·시각, 증상이 생긴 시각과 누가 안 들리는지, 문제 화면 스크린샷이나 짧은 영상을 함께 보낸다는 것",
+    "notCovers": [
+      "기기·앱 버전·연결한 장치 → doc:/docs/start/camera-mic-troubleshooting#7/inquiry-device-info",
+      "카메라 점검 순서 → howto:camera-fail"
+    ],
+    "negatives": [
+      {
+        "q": "카메라 점검 먼저 어떻게 해요",
+        "route": "howto:camera-fail"
+      },
+      {
+        "q": "앱 버전은 어디서 봐요",
+        "route": "doc:/docs/start/app-update-cache-reinstall#4/mobile-version-check"
+      },
+      {
+        "q": "수업이 끊겨서 문의하려는데 시각을 적어야 해요",
+        "route": "doc:/docs/start/class-connection-troubleshooting#6/inquiry-time-attach"
+      },
+      {
+        "q": "앱이 멈추는 문제 문의 정보",
+        "route": "doc:/docs/start/app-update-cache-reinstall#7/inquiry-when-action"
+      },
+      {
+        "q": "예약된 반이 목록에 한 개도 없어요",
+        "route": "howto:class-enter-fail"
+      }
+    ],
+    "handoff": "support",
+    "category": "troubleshooting",
+    "intent": "troubleshooting",
+    "suggestedQuestions": [
+      "누가 안 들리는지도 문의에 써야 하나요?"
+    ],
+    "status": "active",
+    "provenance": {
+      "unit": "D1-33",
+      "writer": "D1",
+      "at": "2026-11-20",
+      "legacyIds": [],
+      "reviewer": "agent:opus#D2-33"
+    },
+    "review": {
+      "sampled": 10,
+      "yes": 10,
+      "partial": 0,
+      "no": 0,
+      "actions": [
+        "표본 yes10",
+        "반례 행선 고침: 맥락 없는 '앱 버전은 어디서 봐요' → app-update-cache-reinstall#4/mobile-version-check"
+      ]
+    }
+  },
+  {
+    "id": "doc:/docs/start/app-update-cache-reinstall#7/inquiry-device-info",
+    "kind": "doc",
+    "tier": "standard",
+    "area": "support",
+    "topic": "앱이 멈출 때 문의에 보낼 기기·운영체제·앱 버전·멈추는 화면(비밀번호는 빼기)",
+    "answer": {
+      "lead": "none",
+      "sentences": [
+        {
+          "unit": "doc:/docs/start/app-update-cache-reinstall#7",
+          "ids": [
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "hashes": [
+            "987bc1992e198de3",
+            "ca640ff4b98dbf26",
+            "99eb169ddf5d1f9e",
+            "7eb66468df301bb2",
+            "ac05d51293d8c65a"
+          ]
+        }
+      ]
+    },
+    "sources": [
+      {
+        "path": "/docs/start/app-update-cache-reinstall",
+        "heading": "앱이 멈추거나 화면이 이상할 때 (업데이트·캐시 삭제·재설치) · 문의할 때 알려 줄 정보"
+      }
+    ],
+    "asks": [
+      "howto",
+      "definition"
+    ],
+    "concepts": [
+      "C_inquiry_info",
+      "C_app_freeze",
+      "C_version"
+    ],
+    "anchors": [
+      "앱 멈춤 문의",
+      "앱 먹통 문의",
+      "화면 이상 문의",
+      "기기 운영체제",
+      "앱 버전",
+      "멈추는 화면",
+      "갤럭시 탭",
+      "전자칠판 앱",
+      "재설치해도 안 될 때"
+    ],
+    "covers": "앱이 멈추거나 화면이 이상해 다시 설치해도 같은 문제가 날 때 상담에 알려 줄 기기·운영체제, 앱 버전, 어느 화면에서 멈추는지와 비밀번호는 보내지 않아도 된다는 것",
+    "notCovers": [
+      "처음 생긴 날짜·해 본 조치·스크린샷 → doc:/docs/start/app-update-cache-reinstall#7/inquiry-when-action",
+      "업데이트·캐시 삭제·재설치 방법 → doc:/docs/start/app-update-cache-reinstall#summary/update-cache-reinstall-overview"
+    ],
+    "negatives": [
+      {
+        "q": "카메라 문의 때 보낼 정보",
+        "route": "doc:/docs/start/camera-mic-troubleshooting#7/inquiry-device-info"
+      },
+      {
+        "q": "로그인 문의 때 보낼 정보",
+        "route": "doc:/docs/start/login-troubleshooting#7/inquiry-info"
+      },
+      {
+        "q": "수업이 끊길 때 상담 정보",
+        "route": "doc:/docs/start/class-connection-troubleshooting#6/inquiry-info"
+      },
+      {
+        "q": "PC 설치 안 될 때 문의 정보",
+        "route": "doc:/docs/start/pc-install-troubleshooting#6/inquiry-info"
+      },
+      {
+        "q": "앱이 자꾸 느려져요 먼저 뭐 해요",
+        "route": "howto:class-slow"
+      }
+    ],
+    "handoff": "support",
+    "category": "troubleshooting",
+    "intent": "troubleshooting",
+    "suggestedQuestions": [
+      "앱이 자꾸 멈추는데 문의 때 뭘 알려요?"
+    ],
+    "status": "active",
+    "provenance": {
+      "unit": "D1-33",
+      "writer": "D1",
+      "at": "2026-11-20",
+      "legacyIds": [],
+      "reviewer": "agent:opus#D2-33"
+    },
+    "review": {
+      "sampled": 10,
+      "yes": 10,
+      "partial": 0,
+      "no": 0,
+      "actions": [
+        "1차 표본 yes9/partial0/no1(비밀번호 질문)",
+        "답 문장 더함 [1,3,4,5]→[1,2,3,4,5]: 2번(비밀번호 안 보내도 됨)",
+        "범위 메모 행선 none → app-update-cache-reinstall#summary/update-cache-reinstall-overview"
+      ]
+    }
+  },
+  {
+    "id": "doc:/docs/start/app-update-cache-reinstall#7/inquiry-when-action",
+    "kind": "doc",
+    "tier": "standard",
+    "area": "support",
+    "topic": "앱 문제 문의 때 처음 생긴 날짜·해 본 조치(업데이트·캐시·재설치)·스크린샷",
+    "answer": {
+      "lead": "none",
+      "sentences": [
+        {
+          "unit": "doc:/docs/start/app-update-cache-reinstall#7",
+          "ids": [
+            1,
+            6,
+            7,
+            8
+          ],
+          "hashes": [
+            "987bc1992e198de3",
+            "f3df599541c12400",
+            "b445c2219b98f863",
+            "1537df3e27172aab"
+          ]
+        }
+      ]
+    },
+    "sources": [
+      {
+        "path": "/docs/start/app-update-cache-reinstall",
+        "heading": "앱이 멈추거나 화면이 이상할 때 (업데이트·캐시 삭제·재설치) · 문의할 때 알려 줄 정보"
+      }
+    ],
+    "asks": [
+      "howto"
+    ],
+    "concepts": [
+      "C_inquiry_info",
+      "C_app_freeze",
+      "C_cache",
+      "C_reinstall"
+    ],
+    "anchors": [
+      "해 본 조치",
+      "업데이트 했어요",
+      "캐시 삭제 했어요",
+      "재설치 했어요",
+      "증상 처음 생긴 날",
+      "문제 화면 영상",
+      "어디까지 해봤는지",
+      "상담에 조치 내역"
+    ],
+    "covers": "앱 문제 문의에 증상이 처음 생긴 날짜와 시각, 업데이트·캐시 삭제·재설치 중 어디까지 해 봤는지, 문제 화면 스크린샷이나 짧은 영상을 함께 보낸다는 것",
+    "notCovers": [
+      "기기·앱 버전·멈추는 화면 → doc:/docs/start/app-update-cache-reinstall#7/inquiry-device-info",
+      "업데이트·캐시 삭제·재설치 하는 방법 → doc:/docs/start/app-update-cache-reinstall#summary/update-cache-reinstall-overview"
+    ],
+    "negatives": [
+      {
+        "q": "앱 버전 어디서 봐요",
+        "route": "doc:/docs/start/app-update-cache-reinstall#4/mobile-version-check"
+      },
+      {
+        "q": "캐시 어떻게 지워요",
+        "route": "doc:/docs/start/app-update-cache-reinstall#2/pc-cache-clear"
+      },
+      {
+        "q": "마이크 문의에 시각을 적어야 해요",
+        "route": "doc:/docs/start/camera-mic-troubleshooting#7/inquiry-when-who"
+      },
+      {
+        "q": "수업 끊김 문의에 영상 보내도 돼요",
+        "route": "doc:/docs/start/class-connection-troubleshooting#6/inquiry-time-attach"
+      },
+      {
+        "q": "재설치하면 수업 기록 사라져요",
+        "route": "fixed:update-lost-materials"
+      }
+    ],
+    "handoff": "support",
+    "category": "troubleshooting",
+    "intent": "troubleshooting",
+    "suggestedQuestions": [
+      "앱 문제 문의에 해 본 조치도 적어야 하나요?"
+    ],
+    "status": "active",
+    "provenance": {
+      "unit": "D1-33",
+      "writer": "D1",
+      "at": "2026-11-20",
+      "legacyIds": [],
+      "reviewer": "agent:opus#D2-33"
+    },
+    "review": {
+      "sampled": 10,
+      "yes": 10,
+      "partial": 0,
+      "no": 0,
+      "actions": [
+        "1차 표본 yes9/partial1/no0(시작일을 모를 때)",
+        "변형 1개 바꿈(시작일도 써야 하나로)",
+        "반례 행선 고침: 캐시 지우기 none → app-update-cache-reinstall#2/pc-cache-clear, 재설치 뒤 기록 none → fixed:update-lost-materials, 앱 버전 → app-update-cache-reinstall#4/mobile-version-check",
+        "범위 메모 행선 none → update-cache-reinstall-overview"
+      ]
+    }
+  },
+  {
+    "id": "doc:/docs/start/pc-install-troubleshooting#6/inquiry-info",
+    "kind": "doc",
+    "tier": "standard",
+    "area": "support",
+    "topic": "PC 설치가 안 될 때 문의에 보낼 컴퓨터·운영체제·설치 파일 이름·멈춘 단계·화면 문구",
+    "answer": {
+      "lead": "none",
+      "sentences": [
+        {
+          "unit": "doc:/docs/start/pc-install-troubleshooting#6",
+          "ids": [
+            2,
+            3,
+            4,
+            5
+          ],
+          "hashes": [
+            "62ebf1ff156a111b",
+            "8eb96d996f51ca8f",
+            "7b18beca9627b822",
+            "9751648ea86752a5"
+          ]
+        }
+      ]
+    },
+    "sources": [
+      {
+        "path": "/docs/start/pc-install-troubleshooting",
+        "heading": "PC에 클래스인 설치가 안 될 때 · 그래도 안 되면 문의할 때 알려 줄 정보"
+      }
+    ],
+    "asks": [
+      "howto",
+      "definition"
+    ],
+    "concepts": [
+      "C_inquiry_info",
+      "C_install"
+    ],
+    "anchors": [
+      "설치 안 됨 문의",
+      "설치 파일 이름",
+      "컴퓨터 종류",
+      "운영체제 64비트",
+      "맥북 M2",
+      "멈춘 단계",
+      "다운로드 단계",
+      "설치 화면 캡처",
+      "설치 실패 신고"
+    ],
+    "covers": "PC에 설치가 안 될 때 상담에 알려 줄 컴퓨터 종류·운영체제, 받은 설치 파일 이름, 어느 단계에서 멈췄는지, 화면 문구 스크린샷",
+    "notCovers": [
+      "원격 설치 도움을 받을 때 링크 출처 → doc:/docs/start/class-connection-troubleshooting#6/remote-support-caution",
+      "설치가 안 될 때 먼저 스스로 볼 것 → doc:/docs/start/pc-install-troubleshooting#0/install-first-checks",
+      "설치 뒤 보안 프로그램 때문에 켜지지 않을 때 → doc:/docs/start/pc-install-troubleshooting#5/installed-but-not-launching"
+    ],
+    "negatives": [
+      {
+        "q": "보안 프로그램이 설치를 막아요",
+        "route": "doc:/docs/start/pc-install-troubleshooting#5/installed-but-not-launching"
+      },
+      {
+        "q": "로그인이 안 돼요 문의 정보",
+        "route": "doc:/docs/start/login-troubleshooting#7/inquiry-info"
+      },
+      {
+        "q": "앱이 멈출 때 문의 정보",
+        "route": "doc:/docs/start/app-update-cache-reinstall#7/inquiry-device-info"
+      },
+      {
+        "q": "설치 파일은 어디서 받아요",
+        "route": "howto:guide:classin-app-download"
+      },
+      {
+        "q": "맥에도 설치돼요",
+        "route": "doc:/docs/start/pc-install-troubleshooting#summary/windows-7-mac-chip-requirements"
+      }
+    ],
+    "handoff": "support",
+    "category": "troubleshooting",
+    "intent": "troubleshooting",
+    "suggestedQuestions": [
+      "설치가 안 돼서 문의하면 뭘 알려줘야 해요?"
+    ],
+    "status": "active",
+    "provenance": {
+      "unit": "D1-33",
+      "writer": "D1",
+      "at": "2026-11-20",
+      "legacyIds": [],
+      "reviewer": "agent:opus#D2-33"
+    },
+    "review": {
+      "sampled": 10,
+      "yes": 10,
+      "partial": 0,
+      "no": 0,
+      "actions": [
+        "1차 표본 yes9/partial1/no0(문의 경로 질문 — 0번 상담 채널 문장은 단위 첫 문장인 접속어라 못 씀)",
+        "변형 2개 바꿈(상담 어떻게 → 뭘 알려줘요, 단위에 없는 비밀번호 질문 → 에러 화면 질문)",
+        "반례·범위 행선 고침: 꺼진 howto:security-block → pc-install-troubleshooting#5/installed-but-not-launching, 설치 파일 none → howto:guide:classin-app-download, 맥 설치 none → pc-install-troubleshooting#summary/windows-7-mac-chip-requirements, 스스로 풀기 none → pc-install-troubleshooting#0/install-first-checks, 원격 설치 → 합친 remote-support-caution"
+      ]
+    }
+  },
+  {
+    "id": "doc:/docs/admin/billing-upgrade#6/consult-message-template",
+    "kind": "doc",
+    "tier": "standard",
+    "area": "support",
+    "topic": "유료 전환 상담 요청 때 운영 규모(강사 수·동시 수업 수·학생 수)를 채워 보내는 문구",
+    "answer": {
+      "lead": "none",
+      "sentences": [
+        {
+          "unit": "doc:/docs/admin/billing-upgrade#6",
+          "ids": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "hashes": [
+            "a3fd775e2fc40223",
+            "d9a7adcd7c27e600",
+            "8abe222c0d123eda",
+            "ff09d56f522df0c5",
+            "6ad84175c344907b",
+            "4fdb6836a10367e0"
+          ]
+        }
+      ]
+    },
+    "sources": [
+      {
+        "path": "/docs/admin/billing-upgrade",
+        "heading": "유료 계정 전환 · 상담을 요청할 때 보낼 문구"
+      }
+    ],
+    "asks": [
+      "howto",
+      "definition"
+    ],
+    "concepts": [
+      "C_price",
+      "C_message_template",
+      "C_paid_conversion"
+    ],
+    "anchors": [
+      "유료 전환 상담 문구",
+      "상담 요청 문구",
+      "견적 문의 문구",
+      "운영 규모 보내기",
+      "강사 수 동시 수업 수 학생 수",
+      "요금제 추천 요청",
+      "세금계산서 안내 요청",
+      "상담 템플릿",
+      "유료 전환 문의 양식"
+    ],
+    "covers": "유료 전환 상담을 요청할 때 운영 규모를 함께 보내면 요금제 추천과 견적 안내가 빨라지고, 학원 이름·유료 전환 준비·강사 수·동시에 여는 수업 수·학생 수·요금제와 견적·세금계산서 발급 방법 안내 요청이 든 문구에 숫자만 채워 보낸다는 것",
+    "notCovers": [
+      "유료 전환 절차와 메인 관리자 아이디 → doc:/docs/admin/billing-upgrade#1/main-admin-id",
+      "실제 요금 → policy:software-plan-overview",
+      "세금계산서·영수증 처리를 결제 전에 확인하기 → doc:/docs/admin/billing-upgrade#1/invoice-before-pay"
+    ],
+    "negatives": [
+      {
+        "q": "유료 전환하면 메인 관리자는 누가 돼요",
+        "route": "doc:/docs/admin/billing-upgrade#1/main-admin-id"
+      },
+      {
+        "q": "요금제 얼마예요",
+        "route": "policy:software-plan-overview"
+      },
+      {
+        "q": "할인 받을 수 있어요",
+        "route": "policy:discount-negotiation"
+      },
+      {
+        "q": "무료 체험은 어디서 신청해요",
+        "route": "doc:/docs/software/software-pricing-quote-bundle-faq#2/free-trial"
+      },
+      {
+        "q": "로그인 문의 때 보낼 정보",
+        "route": "doc:/docs/start/login-troubleshooting#7/inquiry-info"
+      }
+    ],
+    "handoff": "demo",
+    "category": "billing",
+    "intent": "billing_support",
+    "suggestedQuestions": [
+      "유료 전환 상담은 어떻게 요청하나요?"
+    ],
+    "status": "active",
+    "provenance": {
+      "unit": "D1-33",
+      "writer": "D1",
+      "at": "2026-11-20",
+      "legacyIds": [],
+      "reviewer": "agent:opus#D2-33"
+    },
+    "review": {
+      "sampled": 10,
+      "yes": 10,
+      "partial": 0,
+      "no": 0,
+      "actions": [
+        "1차 표본 yes8/partial2/no0(학원 이름·유료 전환 준비 문구가 빠짐)",
+        "답 문장 더함 [0,1,4,5]→[0,1,2,3,4,5]: '아래 문구에 숫자만 채워 보내세요' 뒤 문구 첫 두 줄(인사·유료 전환 준비)이 빠져 문구가 끊겨 있었음",
+        "반례·범위 행선 고침: 할인 none → policy:discount-negotiation, 세금계산서 none → doc:/docs/admin/billing-upgrade#1/invoice-before-pay",
+        "답 글에 금액 숫자·할인/환불 약속 없음 확인"
+      ]
+    }
+  },
+  {
+    "id": "howto:guide:cs-figma-digest-1427",
+    "kind": "howto",
+    "tier": "standard",
+    "area": "support",
+    "topic": "PC 앱에서 소프트웨어 로그 보고하는 순서(프로필 > 계정 및 설정 > 시스템 설정 > 소프트웨어 로그 보고 > 보고하기)",
+    "answer": {
+      "guide": "cs-figma-digest-1427"
+    },
+    "asks": [
+      "howto",
+      "where"
+    ],
+    "concepts": [
+      "C_log_report",
+      "C_pc",
+      "C_software_log"
+    ],
+    "anchors": [
+      "소프트웨어 로그 보고",
+      "로그 보고하기",
+      "로그 제출",
+      "PC 로그 추출",
+      "데이터 로그",
+      "시스템 설정 로그",
+      "로그 보내기",
+      "문제 진단용 로그",
+      "보고하기 버튼"
+    ],
+    "covers": "PC 앱 좌측 하단 프로필 이미지에서 [계정 및 설정] > [시스템 설정] > [소프트웨어 로그 보고]의 [보고하기]를 눌러 소프트웨어 로그를 제출하는 순서",
+    "notCovers": [
+      "전자칠판에서 로그 보고 → howto:guide:cs-figma-digest-1516",
+      "전자칠판 Windows 버튼 지연·튕김 안내 → doc:guide:cs-figma-digest-1535/windows-button-notice",
+      "로그를 보낸 뒤 상담에 알릴 정보 → doc:/docs/start/app-update-cache-reinstall#7/inquiry-device-info"
+    ],
+    "negatives": [
+      {
+        "q": "전자칠판에서 로그는 어떻게 보내요",
+        "route": "howto:guide:cs-figma-digest-1516"
+      },
+      {
+        "q": "앱 버전은 어디서 봐요",
+        "route": "doc:/docs/start/app-update-cache-reinstall#4/mobile-version-check"
+      },
+      {
+        "q": "레지스트리 복구는 뭐예요",
+        "route": "none"
+      },
+      {
+        "q": "앱이 멈춰요 먼저 할 일",
+        "route": "doc:/docs/start/app-update-cache-reinstall#summary/update-cache-reinstall-overview"
+      },
+      {
+        "q": "비밀번호는 어디서 바꿔요",
+        "route": "doc:/docs/start/password-change-pc#0/pc-change-path"
+      }
+    ],
+    "handoff": "support",
+    "category": "troubleshooting",
+    "intent": "troubleshooting",
+    "suggestedQuestions": [
+      "PC 앱 로그는 어디서 보내요?"
+    ],
+    "status": "active",
+    "provenance": {
+      "unit": "D1-33",
+      "writer": "D1",
+      "at": "2026-11-20",
+      "legacyIds": [],
+      "reviewer": "agent:opus#D2-33"
+    },
+    "review": {
+      "sampled": 10,
+      "yes": 10,
+      "partial": 0,
+      "no": 0,
+      "actions": [
+        "표본 yes10",
+        "반례 행선 고침: 꺼진 howto:password-change-howto → password-change-pc#0/pc-change-path, 앱 버전 → app-update-cache-reinstall#4/mobile-version-check, 앱 멈춤 → update-cache-reinstall-overview"
+      ]
+    }
+  },
+  {
+    "id": "howto:guide:cs-figma-digest-1516",
+    "kind": "howto",
+    "tier": "standard",
+    "area": "support",
+    "topic": "전자칠판에서 소프트웨어 로그 보고하는 순서(프로필 이미지 > 계정 및 설정 > 시스템 설정 > 소프트웨어 로그 보고)",
+    "answer": {
+      "guide": "cs-figma-digest-1516"
+    },
+    "asks": [
+      "howto",
+      "where"
+    ],
+    "concepts": [
+      "C_log_report",
+      "C_board",
+      "C_software_log"
+    ],
+    "anchors": [
+      "전자칠판 로그 보고",
+      "칠판 로그 제출",
+      "전자칠판 로그 보내기",
+      "IFP 로그",
+      "칠판 데이터 로그",
+      "칠판 소프트웨어 로그",
+      "칠판 보고하기",
+      "개발팀에 로그 보고"
+    ],
+    "covers": "전자칠판 클래스인 화면 좌측 하단 프로필 이미지에서 [계정 및 설정] > [시스템 설정] > [소프트웨어 로그 보고]의 [보고하기]를 눌러 로그를 개발팀에 보고하는 순서",
+    "notCovers": [
+      "PC 앱에서 로그 보고 → howto:guide:cs-figma-digest-1427",
+      "전자칠판 Windows 버튼 지연·튕김 안내 → doc:guide:cs-figma-digest-1535/windows-button-notice",
+      "하드웨어 드라이버 복구 → none"
+    ],
+    "negatives": [
+      {
+        "q": "PC에서 로그는 어떻게 보내요",
+        "route": "howto:guide:cs-figma-digest-1427"
+      },
+      {
+        "q": "칠판에서 Windows 버튼 누르면 끊겨요",
+        "route": "doc:guide:cs-figma-digest-1535/windows-button-notice"
+      },
+      {
+        "q": "하드웨어 드라이버 복구는 뭐예요",
+        "route": "none"
+      },
+      {
+        "q": "칠판 앱이 멈춰요",
+        "route": "doc:/docs/start/app-update-cache-reinstall#summary/update-cache-reinstall-overview"
+      },
+      {
+        "q": "칠판 소리가 안 나요",
+        "route": "doc:/docs/start/camera-mic-troubleshooting#summary/cam-overview"
+      }
+    ],
+    "handoff": "support",
+    "category": "hardware",
+    "intent": "hardware_support",
+    "suggestedQuestions": [
+      "전자칠판에서 로그는 어떻게 보내요?"
+    ],
+    "status": "active",
+    "provenance": {
+      "unit": "D1-33",
+      "writer": "D1",
+      "at": "2026-11-20",
+      "legacyIds": [],
+      "reviewer": "agent:opus#D2-33"
+    },
+    "review": {
+      "sampled": 10,
+      "yes": 10,
+      "partial": 0,
+      "no": 0,
+      "actions": [
+        "1차 표본 yes9/partial1/no0(로그와 무관한 '프로필 이미지 누르면 뭐가 나와요')",
+        "변형 1개 바꿈(로그 보내기 맥락으로)",
+        "반례 행선 고침: 칠판 앱 멈춤 → update-cache-reinstall-overview, 칠판 소리 → camera-mic-troubleshooting#summary/cam-overview"
+      ]
+    }
+  },
+  {
+    "id": "howto:guide:cs-figma-digest-1535",
+    "kind": "howto",
+    "tier": "standard",
+    "area": "support",
+    "topic": "전자칠판 Windows 버튼 사용 시 지연·튕김 오류 안내와 오류 로그 전송 순서",
+    "answer": {
+      "guide": "cs-figma-digest-1535"
+    },
+    "asks": [
+      "howto",
+      "symptom"
+    ],
+    "concepts": [
+      "C_log_report",
+      "C_board",
+      "C_disconnect"
+    ],
+    "anchors": [
+      "전자칠판 에러 안내",
+      "칠판 Windows 버튼",
+      "칠판 바탕화면 이용",
+      "칠판 지연 튕김",
+      "칠판 4/23 업데이트",
+      "수업 네트워크 지연",
+      "오류 로그 전송",
+      "칠판 튕김 오류"
+    ],
+    "covers": "전자칠판 수업 중 Windows 버튼으로 바탕화면을 쓰면 수업 네트워크와 연결 기기에 지연·튕김이 생기는 오류 안내와, 오류 로그를 [보고하기]로 전송하는 순서",
+    "notCovers": [
+      "일반 칠판 로그 보고 순서 → howto:guide:cs-figma-digest-1516",
+      "PC 앱 로그 보고 → howto:guide:cs-figma-digest-1427",
+      "수업 끊김 때 상담에 보낼 정보 → doc:/docs/start/class-connection-troubleshooting#6/inquiry-info"
+    ],
+    "negatives": [
+      {
+        "q": "PC에서 로그 보고 어떻게 해요",
+        "route": "howto:guide:cs-figma-digest-1427"
+      },
+      {
+        "q": "칠판에서 로그는 어떻게 보내요",
+        "route": "howto:guide:cs-figma-digest-1516"
+      },
+      {
+        "q": "수업이 끊기면 먼저 뭘 해요",
+        "route": "fixed:class-disconnect"
+      },
+      {
+        "q": "칠판 소리 문제",
+        "route": "doc:/docs/start/camera-mic-troubleshooting#summary/cam-overview"
+      },
+      {
+        "q": "칠판 앱 업데이트는 어떻게 해요",
+        "route": "doc:/docs/start/app-update-cache-reinstall#5/board-update"
+      }
+    ],
+    "handoff": "support",
+    "category": "hardware",
+    "intent": "hardware_support",
+    "suggestedQuestions": [
+      "전자칠판에서 Windows 버튼 누르면 왜 끊겨요?"
+    ],
+    "status": "review",
+    "provenance": {
+      "unit": "D1-33",
+      "writer": "D1",
+      "at": "2026-11-20",
+      "legacyIds": [],
+      "reviewer": "agent:opus#D2-33"
+    },
+    "review": {
+      "sampled": 10,
+      "yes": 9,
+      "partial": 1,
+      "no": 0,
+      "actions": [
+        "표본 yes9/partial1/no0(일반 '칠판 연결 기기 튕김 원인')",
+        "status review: 답 첫 단계가 시한 지난 공지(제목 '~4/23', '4/23 신규 업데이트에서 개선될 예정·그 전까지 사용 지양', 원본 다이제스트 2026-06-21) — 지금도 유효한지 사람 결정 필요. 칠판 로그 보내기만 묻는 질문은 howto:guide:cs-figma-digest-1516 이 맡음",
+        "doc:guide:cs-figma-digest-1535/windows-button-notice 와 공지 질문 변형이 겹침 — 다시 켤 때 한 장으로 합치거나 공지 질문을 그 카드로 옮길 것",
+        "반례 행선 고침: 칠판 소리 → cam-overview, 칠판 앱 업데이트 none → app-update-cache-reinstall#5/board-update"
+      ]
+    }
+  },
+  {
+    "id": "doc:guide:cs-figma-digest-1535/windows-button-notice",
+    "kind": "doc",
+    "tier": "standard",
+    "area": "support",
+    "topic": "전자칠판 수업 중 Windows 버튼으로 바탕화면 이용 시 지연·튕김 오류와 4/23 업데이트 전 사용 지양",
+    "answer": {
+      "lead": "none",
+      "sentences": [
+        {
+          "unit": "guide:cs-figma-digest-1535",
+          "ids": [
+            4,
+            5
+          ],
+          "hashes": [
+            "3ebc2f39e0a8b801",
+            "e70a7f38fef66872"
+          ]
+        }
+      ]
+    },
+    "sources": [
+      {
+        "path": "/docs/guide/cs-figma-digest-1535",
+        "heading": "전자칠판 에러 안내 ~4/23"
+      }
+    ],
+    "asks": [
+      "yesno",
+      "symptom"
+    ],
+    "concepts": [
+      "C_board_windows_notice",
+      "C_board",
+      "C_disconnect"
+    ],
+    "anchors": [
+      "Windows 버튼 오류",
+      "바탕화면 이용 지연",
+      "수업 네트워크 지연",
+      "연결 기기 튕김",
+      "4/23 신규 업데이트",
+      "기능 사용 지양",
+      "일부 계정 오류"
+    ],
+    "covers": "일부 계정에서 수업 중 Windows 버튼을 눌러 바탕화면으로 이용하면 수업 네트워크와 연결 기기에 지연·튕김이 생기며, 4/23 신규 업데이트에서 개선될 예정이라 그 전까지 사용을 지양해 달라는 안내",
+    "notCovers": [
+      "오류 로그를 보내는 순서 → howto:guide:cs-figma-digest-1535",
+      "일반 칠판 로그 보고 → howto:guide:cs-figma-digest-1516"
+    ],
+    "negatives": [
+      {
+        "q": "칠판 로그 보고하는 순서",
+        "route": "howto:guide:cs-figma-digest-1516"
+      },
+      {
+        "q": "칠판에서 끊기면 어디에 문의해요",
+        "route": "fixed:contact-channel"
+      },
+      {
+        "q": "수업 끊김 일반 조치",
+        "route": "fixed:class-disconnect"
+      },
+      {
+        "q": "칠판 전원을 켰는데 아무 화면도 안 떠요",
+        "route": "doc:/docs/hardware/board-basic-operation#6/no-screen-checks"
+      },
+      {
+        "q": "칠판 소리 문제",
+        "route": "doc:/docs/start/camera-mic-troubleshooting#summary/cam-overview"
+      }
+    ],
+    "handoff": "support",
+    "category": "hardware",
+    "intent": "hardware_support",
+    "suggestedQuestions": [
+      "칠판에서 Windows 버튼 써도 되나요?"
+    ],
+    "status": "review",
+    "provenance": {
+      "unit": "D1-33",
+      "writer": "D1",
+      "at": "2026-11-20",
+      "legacyIds": [],
+      "reviewer": "agent:opus#D2-33"
+    },
+    "review": {
+      "sampled": 10,
+      "yes": 10,
+      "partial": 0,
+      "no": 0,
+      "actions": [
+        "표본 yes10, lead none 확인",
+        "status review: 시한 지난 공지('~4/23' 업데이트 전까지 Windows 버튼 사용 지양, 원본 다이제스트 2026-06-21) — 사람 결정 대기",
+        "반례 행선 고침: 문의처 none → fixed:contact-channel, 칠판 화면 안 나옴 none → board-basic-operation#6/no-screen-checks, 칠판 소리 → cam-overview"
+      ]
+    }
+  },
+  {
+    "id": "fixed:mobile-data-usage",
+    "kind": "fixed",
+    "tier": "standard",
+    "area": "support",
+    "topic": "모바일 수업 한 시간 데이터 사용량(수치 공개 없음)·모바일 권장 인터넷 속도",
+    "asks": [
+      "quantity",
+      "yesno"
+    ],
+    "concepts": [
+      "C_mobile",
+      "C_mobile_data_usage"
+    ],
+    "anchors": [
+      "모바일 데이터 사용량",
+      "수업 한 시간 데이터",
+      "데이터 얼마나",
+      "폰 데이터 요금",
+      "LTE 수업",
+      "통신 데이터",
+      "데이터 소모"
+    ],
+    "covers": "모바일로 한 시간 수업을 들을 때 데이터가 얼마나 드는지는 공개 안내에 수치가 없다는 것과 공개된 모바일 권장 인터넷 속도(6Mbps 이상)",
+    "notCovers": [
+      "PC 인터넷 속도 기준 → doc:/docs/start/pc-install#5/min-spec",
+      "수업이 끊기고 느릴 때 → doc:/docs/start/class-connection-troubleshooting#summary/conn-drop-overview",
+      "소프트웨어 요금 → none"
+    ],
+    "negatives": [
+      {
+        "q": "수업이 자꾸 끊기고 버벅여요",
+        "route": "doc:/docs/start/class-connection-troubleshooting#summary/conn-drop-overview"
+      },
+      {
+        "q": "PC 인터넷 속도는 얼마나 돼야 해요",
+        "route": "doc:/docs/start/pc-install#5/min-spec"
+      },
+      {
+        "q": "요금은 뭘 기준으로 계산돼요",
+        "route": "none"
+      }
+    ],
+    "handoff": null,
+    "category": "troubleshooting",
+    "intent": "troubleshooting",
+    "suggestedQuestions": [],
+    "status": "active",
+    "provenance": {
+      "unit": "D4-25",
+      "writer": "agent:sonnet",
+      "at": "2026-11-20",
+      "legacyIds": [
+        "field:mobile-data-usage"
+      ]
+    },
+    "answer": {
+      "text": "요금이 걱정되시죠. 한 시간 수업에 데이터가 얼마나 드는지는 공개 안내에 수치가 없어요. 참고로 공개 안내의 모바일 권장 인터넷 속도는 6Mbps 이상이에요.",
+      "textHash": "21e06d6ebbd3a0a2"
+    },
+    "auditRef": "audit/C-25.jsonl#field:mobile-data-usage",
+    "policyGoverned": false
+  },
+  {
+    "id": "fixed:ssl-inspection-pinning",
+    "kind": "fixed",
+    "tier": "standard",
+    "area": "support",
+    "topic": "앱 인증서 고정·SSL 검사 예외 FQDN 목록(공개 안내 없음, 기술지원 요청)",
+    "asks": [
+      "yesno",
+      "where"
+    ],
+    "concepts": [
+      "C_network",
+      "C_ssl_inspection"
+    ],
+    "anchors": [
+      "SSL 검사 예외",
+      "인증서 고정",
+      "certificate pinning",
+      "복호화 예외",
+      "UTM 예외 도메인",
+      "SSL 인스펙션",
+      "예외 FQDN"
+    ],
+    "covers": "앱이 인증서 고정을 쓰는지와 SSL 검사 예외 도메인 목록이 공개 안내에 없고 기술지원에 요청해야 한다는 것",
+    "notCovers": [
+      "방화벽에서 열어야 할 네트워크 주소 일반 → none",
+      "수업 중 접속이 끊길 때 → doc:/docs/start/class-connection-troubleshooting#summary/conn-drop-overview"
+    ],
+    "negatives": [
+      {
+        "q": "수업 중에 끊겨요",
+        "route": "doc:/docs/start/class-connection-troubleshooting#summary/conn-drop-overview"
+      },
+      {
+        "q": "인터넷 속도 몇 Mbps 필요해요",
+        "route": "doc:/docs/start/pc-install#5/min-spec"
+      },
+      {
+        "q": "상담 연락 방법이 뭐예요",
+        "route": "fixed:contact-channel"
+      }
+    ],
+    "handoff": "support",
+    "category": "troubleshooting",
+    "intent": "troubleshooting",
+    "suggestedQuestions": [],
+    "status": "active",
+    "provenance": {
+      "unit": "D4-25",
+      "writer": "agent:sonnet",
+      "at": "2026-11-20",
+      "legacyIds": [
+        "field:ssl-inspection-pinning"
+      ]
+    },
+    "answer": {
+      "text": "앱이 인증서 고정(certificate pinning)을 쓰는지, SSL 검사에서 예외로 둘 FQDN 목록은 공개 안내에 나와 있지 않아요. 그래서 '고정을 쓴다, 안 쓴다'고 단정하지 않을게요.\n\n공식 예외 도메인 목록은 아래 [실시간 상담 연결]로 기술지원에 요청해 주세요. UTM 제품명, 실패한 시각, 앱 버전을 함께 알려 주시면 빨라요.",
+      "textHash": "ebc58f1f6765a0ca"
+    },
+    "auditRef": "audit/C-25.jsonl#field:ssl-inspection-pinning",
+    "policyGoverned": false
+  },
+  {
+    "id": "fixed:udp-block-tcp-fallback",
+    "kind": "fixed",
+    "tier": "standard",
+    "area": "support",
+    "topic": "UDP 차단 시 TCP 443 전환·지연 영향(공개 안내 없음)·인터넷 속도 기준",
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_network",
+      "C_udp_block"
+    ],
+    "anchors": [
+      "UDP 차단",
+      "TCP 443",
+      "UDP 막으면",
+      "방화벽 UDP",
+      "TCP 우회",
+      "포트 프로토콜",
+      "네트워크 요구사항"
+    ],
+    "covers": "UDP를 막았을 때 TCP 443 전환과 지연·화질 영향은 공개 안내에 근거가 없다는 것과 공개된 PC 인터넷 속도 기준",
+    "notCovers": [
+      "방화벽 SSL 검사 예외 → fixed:ssl-inspection-pinning",
+      "회선 이중화 끊김 → fixed:dual-isp-load-balancing-reconnect",
+      "수업 끊김 일반 → doc:/docs/start/class-connection-troubleshooting#summary/conn-drop-overview"
+    ],
+    "negatives": [
+      {
+        "q": "SSL 검사 예외 도메인 알려주세요",
+        "route": "fixed:ssl-inspection-pinning"
+      },
+      {
+        "q": "회선 두 개 쓰는데 끊겨요",
+        "route": "fixed:dual-isp-load-balancing-reconnect"
+      },
+      {
+        "q": "수업이 끊겨요",
+        "route": "doc:/docs/start/class-connection-troubleshooting#summary/conn-drop-overview"
+      }
+    ],
+    "handoff": "support",
+    "category": "troubleshooting",
+    "intent": "troubleshooting",
+    "suggestedQuestions": [],
+    "status": "active",
+    "provenance": {
+      "unit": "D4-25",
+      "writer": "agent:sonnet",
+      "at": "2026-11-20",
+      "legacyIds": [
+        "field:udp-block-tcp-fallback"
+      ]
+    },
+    "answer": {
+      "text": "UDP를 막았을 때 TCP 443으로 자동 전환되는지, 그때 지연이나 화질이 얼마나 나빠지는지는 공개 안내에 근거 자료가 없어요. 그래서 추측으로 답하지 않을게요.\n\n공개 안내로 확인되는 건 이 정도예요.\n- 인터넷 기준: PC 2Mbps 이상(학생, 녹화하지 않는 강사), 수업을 녹화하는 강사 4Mbps 이상, 현장 녹화 PC 업로드 3Mbps 이상\n\n공식 네트워크 요구사항(포트·프로토콜) 자료는 아래 [실시간 상담 연결]로 기술지원에 요청해 주세요.",
+      "textHash": "84a689238301082f"
+    },
+    "auditRef": "audit/C-25.jsonl#field:udp-block-tcp-fallback",
+    "policyGoverned": false
+  },
+  {
+    "id": "fixed:qos-dscp-marking",
+    "kind": "fixed",
+    "tier": "standard",
+    "area": "support",
+    "topic": "DSCP 마킹·QoS 분류용 공식 IP 대역·도메인(공개 안내 없음)",
+    "asks": [
+      "yesno",
+      "where"
+    ],
+    "concepts": [
+      "C_network",
+      "C_qos_dscp"
+    ],
+    "anchors": [
+      "DSCP 마킹",
+      "QoS 설정",
+      "QoS 분류",
+      "패킷 우선순위",
+      "클래스인 IP 대역",
+      "EF AF41",
+      "목적지 목록"
+    ],
+    "covers": "음성·영상 패킷의 DSCP 마킹과 분류에 쓸 공식 IP 대역·도메인 목록이 공개 안내에 없다는 것",
+    "notCovers": [
+      "SSL 검사 예외 → fixed:ssl-inspection-pinning",
+      "UDP 차단 영향 → fixed:udp-block-tcp-fallback",
+      "회선 이중화 → fixed:dual-isp-load-balancing-reconnect"
+    ],
+    "negatives": [
+      {
+        "q": "SSL 검사 예외 주소가 뭐예요",
+        "route": "fixed:ssl-inspection-pinning"
+      },
+      {
+        "q": "UDP 막으면 어떻게 돼요",
+        "route": "fixed:udp-block-tcp-fallback"
+      },
+      {
+        "q": "수업 화질이 나빠요",
+        "route": "doc:/docs/start/class-connection-troubleshooting#summary/conn-drop-overview"
+      }
+    ],
+    "handoff": "support",
+    "category": "troubleshooting",
+    "intent": "troubleshooting",
+    "suggestedQuestions": [],
+    "status": "active",
+    "provenance": {
+      "unit": "D4-25",
+      "writer": "agent:sonnet",
+      "at": "2026-11-20",
+      "legacyIds": [
+        "field:qos-dscp-marking"
+      ]
+    },
+    "answer": {
+      "text": "ClassIn 음성·영상 패킷에 DSCP 마킹(EF, AF41 등)이 붙어 나가는지, 분류에 쓸 공식 IP 대역·도메인 목록이 공개돼 있는지는 공개 안내에 없어요. 그래서 추측으로 답하지 않을게요.\n\n공식 네트워크 요구사항(포트·프로토콜·목적지) 자료는 아래 [실시간 상담 연결]로 기술지원에 요청해 주세요.",
+      "textHash": "b5d038597a48d98f"
+    },
+    "auditRef": "audit/C-25.jsonl#field:qos-dscp-marking",
+    "policyGoverned": false
+  },
+  {
+    "id": "fixed:vdi-rdp-support",
+    "kind": "fixed",
+    "tier": "standard",
+    "area": "support",
+    "topic": "VDI·RDP 공식 지원 여부(공개 안내 없음)·PC 설치 기준",
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_install",
+      "C_vdi_rdp"
+    ],
+    "anchors": [
+      "VDI 지원",
+      "RDP 수업",
+      "가상 데스크톱",
+      "원격 데스크톱",
+      "media optimization",
+      "redirection",
+      "video capture start failed",
+      "가상 머신"
+    ],
+    "covers": "VDI·RDP를 공식 지원하는지와 관련 권장 설정이 공개 안내에 없다는 것과 공개된 PC 설치 기준",
+    "notCovers": [
+      "PC 설치 사양 일반 → doc:/docs/start/pc-install#summary/pc-supported-os",
+      "카메라가 안 보일 때 일반 → doc:/docs/start/camera-mic-troubleshooting#summary/cam-overview"
+    ],
+    "negatives": [
+      {
+        "q": "PC 설치 사양이 어떻게 돼요",
+        "route": "doc:/docs/start/pc-install#summary/pc-supported-os"
+      },
+      {
+        "q": "웹캠이 인식이 안 돼요",
+        "route": "doc:/docs/start/camera-mic-troubleshooting#summary/cam-overview"
+      },
+      {
+        "q": "맥에서도 설치돼요",
+        "route": "doc:/docs/start/pc-install#summary/pc-supported-os"
+      }
+    ],
+    "handoff": "support",
+    "category": "troubleshooting",
+    "intent": "troubleshooting",
+    "suggestedQuestions": [],
+    "status": "active",
+    "provenance": {
+      "unit": "D4-25",
+      "writer": "agent:sonnet",
+      "at": "2026-11-20",
+      "legacyIds": [
+        "field:vdi-rdp-support"
+      ]
+    },
+    "answer": {
+      "text": "세 가지 답드릴게요.\n\n1) VDI·RDP를 공식 지원 환경으로 보는지: 공개 안내에 나와 있지 않아요. 공개 안내의 PC 설치 기준은 윈도우(7 이상, 32/64비트), 맥(인텔 또는 Apple Silicon), 리눅스(x86_64 또는 arm)에 앱을 직접 설치하는 방식이에요.\n2) media optimization·redirection 권장 설정: 공개 안내에 문서화된 내용이 없어요. 'video capture start failed (-2)' 오류의 뜻도 공개 안내에 없어서 추측하지 않을게요.\n3) 지원하지 않는다는 명확한 답: 지원 여부 자체가 공개 안내로 확인되지 않아, 공식 답은 기술지원에서 받으셔야 해요.\n\n로그와 재현 순서를 아래 [실시간 상담 연결]로 기술지원에 보내 공식 지원 여부를 서면으로 받으세요.",
+      "textHash": "06d0738ce11a2bbe"
+    },
+    "auditRef": "audit/C-25.jsonl#field:vdi-rdp-support",
+    "policyGoverned": false
+  },
+  {
+    "id": "fixed:dual-isp-load-balancing-reconnect",
+    "kind": "fixed",
+    "tier": "standard",
+    "area": "support",
+    "topic": "회선 이중화·로드밸런싱 중 공인 IP 변경 끊김 여부와 분류 목록(공개 안내 없음)",
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_network",
+      "C_dual_isp"
+    ],
+    "anchors": [
+      "듀얼 회선",
+      "로드밸런싱",
+      "공인 IP 변경",
+      "출발지 IP",
+      "회선 이중화",
+      "세션 고정",
+      "multi-WAN"
+    ],
+    "covers": "출발지 공인 IP가 바뀌면 끊기는지와 분류에 쓸 도메인·IP 대역 목록이 공개 안내에 없다는 것",
+    "notCovers": [
+      "UDP 차단 영향 → fixed:udp-block-tcp-fallback",
+      "SSL 검사 예외 → fixed:ssl-inspection-pinning",
+      "수업 끊김 일반 → doc:/docs/start/class-connection-troubleshooting#summary/conn-drop-overview"
+    ],
+    "negatives": [
+      {
+        "q": "UDP 막으면 어떻게 돼요",
+        "route": "fixed:udp-block-tcp-fallback"
+      },
+      {
+        "q": "SSL 예외 도메인 알려주세요",
+        "route": "fixed:ssl-inspection-pinning"
+      },
+      {
+        "q": "수업 중에 끊겨요",
+        "route": "doc:/docs/start/class-connection-troubleshooting#summary/conn-drop-overview"
+      }
+    ],
+    "handoff": "support",
+    "category": "troubleshooting",
+    "intent": "troubleshooting",
+    "suggestedQuestions": [],
+    "status": "active",
+    "provenance": {
+      "unit": "D4-25",
+      "writer": "agent:sonnet",
+      "at": "2026-11-20",
+      "legacyIds": [
+        "field:dual-isp-load-balancing-reconnect"
+      ]
+    },
+    "answer": {
+      "text": "두 가지 답드릴게요.\n\n1) 출발지 공인 IP가 바뀌면 끊기는 구조인지: 공개 안내에 나와 있지 않아서 단정하지 않을게요.\n2) 분류 기준으로 쓸 도메인·IP 대역 목록: 공개 안내에 없어요.\n\n공식 목록은 아래 [실시간 상담 연결]로 기술지원에 요청하세요. 끊긴 시각과 회선 구성을 함께 보내 주시면 빨라요.",
+      "textHash": "812f61a621aa2829"
+    },
+    "auditRef": "audit/C-25.jsonl#field:dual-isp-load-balancing-reconnect",
+    "policyGoverned": false
+  },
+  {
+    "id": "fixed:vpn-abroad-class-loading",
+    "kind": "fixed",
+    "tier": "standard",
+    "area": "support",
+    "topic": "해외에서 수업 입장(VPN 없이 대부분 가능·제한 경우·핫스팟·기기 테스트)",
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_overseas_access"
+    ],
+    "anchors": [
+      "해외 수업",
+      "해외에서 접속",
+      "VPN",
+      "중국 필리핀 싱가포르",
+      "해외 로딩",
+      "해외 와이파이",
+      "핫스팟",
+      "기기 테스트"
+    ],
+    "covers": "해외에서 VPN 없이 로그인·학습 활동·수업 입장이 대부분 되는지, 보안 내부망·기기 권한 제한, 핫스팟 비교, 기기 테스트 방법",
+    "notCovers": [
+      "해외 번호로 가입·인증 → doc:/docs/start/signup#2/id-type",
+      "수업이 끊기고 느릴 때 → doc:/docs/start/class-connection-troubleshooting#summary/conn-drop-overview",
+      "수업 입장이 안 될 때 일반 → howto:class-not-visible-after-login"
+    ],
+    "negatives": [
+      {
+        "q": "해외 번호로 가입돼요",
+        "route": "doc:/docs/start/signup#2/id-type"
+      },
+      {
+        "q": "수업이 끊겨요",
+        "route": "doc:/docs/start/class-connection-troubleshooting#summary/conn-drop-overview"
+      },
+      {
+        "q": "로그인은 되는데 수업이 안 보여요",
+        "route": "howto:class-not-visible-after-login"
+      }
+    ],
+    "handoff": null,
+    "category": "troubleshooting",
+    "intent": "troubleshooting",
+    "suggestedQuestions": [],
+    "status": "active",
+    "provenance": {
+      "unit": "D4-25",
+      "writer": "agent:sonnet",
+      "at": "2026-11-20",
+      "legacyIds": [
+        "field:vpn-abroad-class-loading"
+      ]
+    },
+    "answer": {
+      "text": "공개 안내 기준으로 중국, 필리핀, 싱가포르 같은 해외에서도 VPN 없이 로그인, 학습 활동, 수업 입장이 대부분 돼요. 다만 외부 프로그램을 막는 보안 내부망이나, 앱의 카메라·마이크 접근을 막아 둔 기기에서는 제한될 수 있습니다.\n\n1. 숙소 와이파이가 약하면 휴대폰 데이터(핫스팟)로 바꿔 비교해요.\n2. 수업 전에 미리 해 보려면 PC 왼쪽 아래 프로필 > [계정 및 설정] > [기기 테스트]에서 확인합니다.\n\n해외 접속 품질은 장소와 인터넷에 따라 달라 제가 보장할 수 없어요.",
+      "textHash": "1700faf2cbeaaca7"
+    },
+    "auditRef": "audit/C-25.jsonl#field:vpn-abroad-class-loading",
+    "policyGoverned": false
+  },
+  {
+    "id": "fixed:bluetooth-headset-call-quality",
+    "kind": "fixed",
+    "tier": "standard",
+    "area": "support",
+    "topic": "블루투스 헤드폰 사용 시 마이크·스피커 장치 고르기와 기기 테스트",
+    "asks": [
+      "howto",
+      "symptom"
+    ],
+    "concepts": [
+      "C_mic",
+      "C_external_mic"
+    ],
+    "anchors": [
+      "블루투스 헤드폰",
+      "블루투스 음질",
+      "헤드셋 소리 탁함",
+      "마이크 스피커 선택",
+      "마이크 시험",
+      "기기 테스트",
+      "에어팟"
+    ],
+    "covers": "블루투스 헤드폰을 쓸 때 설정 창에서 마이크와 스피커를 따로 고르고 시험하는 방법과 수업 전 기기 테스트",
+    "notCovers": [
+      "마이크 소리가 안 들릴 때 → doc:/docs/start/camera-mic-troubleshooting#1/cam-mic-test",
+      "카메라 문제 → doc:/docs/start/camera-mic-troubleshooting#summary/cam-overview"
+    ],
+    "negatives": [
+      {
+        "q": "마이크가 아예 안 돼요",
+        "route": "doc:/docs/start/camera-mic-troubleshooting#1/cam-mic-test"
+      },
+      {
+        "q": "웹캠이 인식이 안 돼요",
+        "route": "doc:/docs/start/camera-mic-troubleshooting#summary/cam-overview"
+      },
+      {
+        "q": "소리가 울려요 에코가 나요",
+        "route": "howto:audio-echo"
+      }
+    ],
+    "handoff": null,
+    "category": "troubleshooting",
+    "intent": "troubleshooting",
+    "suggestedQuestions": [],
+    "status": "active",
+    "provenance": {
+      "unit": "D4-25",
+      "writer": "agent:sonnet",
+      "at": "2026-11-20",
+      "legacyIds": [
+        "field:bluetooth-headset-call-quality"
+      ]
+    },
+    "answer": {
+      "text": "이렇게 바꿔 보세요.\n1. 클래스인 설정 창의 [마이크]에서 노트북 내장 마이크(또는 따로 연결한 마이크)를 골라요.\n2. [스피커]에서 블루투스 헤드폰을 골라요.\n3. [시험]을 눌러 말할 때 막대가 초록색으로 움직이는지 봐요. 수업 전에는 프로필 > [계정 및 설정] > [기기 테스트]에서 미리 확인할 수 있어요.",
+      "textHash": "15a0f6cd2b807ca9"
+    },
+    "auditRef": "audit/C-25.jsonl#field:bluetooth-headset-call-quality",
+    "policyGoverned": false
+  },
+  {
+    "id": "policy:teacher-training-support",
+    "kind": "policy",
+    "tier": "standard",
+    "area": "support",
+    "topic": "도입 교육(기본 2회)·신규 강사 교육 범위와 비용(공개 안내 없음)·기관 교육 코스",
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_teacher_training",
+      "C_teacher_turnover"
+    ],
+    "anchors": [
+      "강사 교육",
+      "온보딩 교육",
+      "신규 강사 교육",
+      "교육 2회",
+      "기관 교육 코스",
+      "교육 비용",
+      "강사 이직"
+    ],
+    "covers": "도입 때 관리자·강사 교육 기본 2회, 신규 강사마다 교육이 있는지와 추가 비용은 공개 안내에 없다는 것, 기관 교육 코스 녹화 강의",
+    "notCovers": [
+      "교육 일반 요금·계약 조건 → none",
+      "관리자 사용법 자체 → doc:/docs/admin/teacher-onboarding#5/institution-training"
+    ],
+    "negatives": [
+      {
+        "q": "강사 계정 추가는 어떻게 해요",
+        "route": "doc:/docs/admin/teacher-onboarding#5/institution-training"
+      },
+      {
+        "q": "요금은 얼마예요",
+        "route": "none"
+      },
+      {
+        "q": "도입 상담은 어떻게 해요",
+        "route": "fixed:contact-channel"
+      }
+    ],
+    "handoff": "demo",
+    "category": "consultation",
+    "intent": "sales_consulting",
+    "suggestedQuestions": [],
+    "status": "active",
+    "provenance": {
+      "unit": "D4-25",
+      "writer": "agent:sonnet",
+      "at": "2026-11-20",
+      "legacyIds": [
+        "field:teacher-training-support"
+      ]
+    },
+    "answer": {
+      "text": "강사가 자주 바뀌는 학원이라면 꼭 확인하셔야 할 부분이에요.\n\n1. 도입 때 교육: 공개 안내 기준으로 시스템 설정·온보딩 단계에서 관리자와 강사 대상 교육을 기본 2회 해요.\n2. 신규 강사 때마다: 그 뒤 새 강사가 들어올 때마다 와 주는지, 추가 교육에 비용이 따로 있는지는 공개 안내에 나와 있지 않아요. 계약 조건에 따라 다를 수 있어 영업 담당 확인이 필요해요.\n3. 스스로 익히는 자료: 클래스인 상담 채널(홈페이지 하단 채팅)에 기관 교육 코스 초대를 요청하면, 전자칠판·수업 도구·관리자 페이지 사용법을 녹화 강의로 볼 수 있어요. 신규 강사는 이 코스로 먼저 익히게 하면 돼요.\n\n계약 전에 아래 [도입 상담 남기기]로 '신규 강사 교육을 어떻게, 몇 번, 비용은 어떻게 지원하는지'를 물어보시고 답을 계약서에 서면으로 넣어 두세요.",
+      "textHash": "d58a9e354a2f96ce",
+      "policyRef": "HQ-2501"
+    },
+    "auditRef": "audit/C-25.jsonl#field:teacher-training-support",
+    "policyGoverned": true
+  },
+  {
+    "id": "policy:student-contacts-marketing-use",
+    "kind": "policy",
+    "tier": "standard",
+    "area": "support",
+    "topic": "학생 연락처의 마케팅·영업 이용 여부(공개 안내 없음)와 개인정보처리방침 확인·계약 협의",
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_contact_marketing_use"
+    ],
+    "anchors": [
+      "연락처 마케팅",
+      "학생 정보 영업",
+      "이용 목적",
+      "제3자 제공",
+      "마케팅 이용 금지",
+      "개인정보 활용",
+      "다른 학원 영업"
+    ],
+    "covers": "학원이 올린 학생 연락처를 마케팅이나 다른 학원 영업에 쓰는지 공개 안내에 없다는 것과 개인정보처리방침 확인·계약서 이용 제한 협의",
+    "notCovers": [
+      "개인정보 삭제 요청 → doc:/docs/start/pre-adoption-faq-22-questions#4/privacy-handling-basis",
+      "보관 기간 → fixed:basics-student-data-retention"
+    ],
+    "negatives": [
+      {
+        "q": "데이터 삭제는 어떻게 요청해요",
+        "route": "none"
+      },
+      {
+        "q": "개인정보 책임자는 누구예요",
+        "route": "fixed:contact-channel"
+      },
+      {
+        "q": "도입 상담 어떻게 해요",
+        "route": "fixed:contact-channel"
+      }
+    ],
+    "handoff": "demo",
+    "category": "consultation",
+    "intent": "sales_consulting",
+    "suggestedQuestions": [],
+    "status": "active",
+    "provenance": {
+      "unit": "D4-25",
+      "writer": "agent:sonnet",
+      "at": "2026-11-20",
+      "legacyIds": [
+        "field:student-contacts-marketing-use"
+      ]
+    },
+    "answer": {
+      "text": "소문만으로 답하지 않고, 근거로 말씀드릴게요.\n\n학원이 올린 학생 연락처를 클래스인이 마케팅이나 다른 학원 영업에 쓰는지는 공개 안내에 나와 있지 않아요. 그래서 절대 안 쓴다고도, 쓴다고도 제가 단정하지 않을게요. 근거는 클래스인 공식 개인정보처리방침의 이용 목적과 제3자 제공 항목에서 직접 확인하세요.\n\n계약서에 이용 제한 조항을 넣는 건 계약 협의 사항이에요. 아래 [도입 상담 남기기]로 '학생 연락처의 이용 목적 제한과 마케팅 이용 금지를 계약서에 명시하고 싶다'고 남겨 서면으로 받아 두세요.",
+      "textHash": "0c5907f541604f68",
+      "policyRef": "HQ-2502"
+    },
+    "auditRef": "audit/C-25.jsonl#field:student-contacts-marketing-use",
+    "policyGoverned": true
+  },
+  {
+    "id": "fixed:vague-extend-the-time",
+    "kind": "fixed",
+    "tier": "standard",
+    "area": "support",
+    "topic": "\"시간 늘리고 싶어요\" 모호 질문: 수업 길이·다시보기 기간·시험 시간·숙제 마감 중 어느 것인지",
+    "asks": [
+      "howto",
+      "where"
+    ],
+    "concepts": [
+      "C_class_duration_limit",
+      "C_class_end_time"
+    ],
+    "anchors": [
+      "시간 늘리기",
+      "시간 연장",
+      "수업 시간 늘려",
+      "수업 길이",
+      "다시보기 기간",
+      "응시 시간",
+      "숙제 마감"
+    ],
+    "covers": "어떤 시간을 늘리려는지에 따라 수업 진행 시간·다시보기 유효 기간·시험 응시 시간·숙제 마감 위치를 갈라 안내하는 것",
+    "notCovers": [
+      "수업 진행 시간 자세한 변경 방법 → doc:/docs/admin/course-management#1/bulk-edit-lessons",
+      "다시보기 기간 자세히 → doc:/docs/admin/institution-settings#4/replay-permission"
+    ],
+    "negatives": [
+      {
+        "q": "수업 시간이 끝나기 전에 연장하고 싶어요",
+        "route": "doc:/docs/admin/course-management#1/bulk-edit-lessons"
+      },
+      {
+        "q": "다시보기 얼마 동안 볼 수 있어요",
+        "route": "doc:/docs/admin/institution-settings#4/replay-permission"
+      },
+      {
+        "q": "시험 시간 설정은 어디서 해요",
+        "route": "doc:/docs/teacher/course-activities#5/exam-create"
+      }
+    ],
+    "handoff": null,
+    "category": "admin",
+    "intent": "admin_operations",
+    "suggestedQuestions": [],
+    "status": "active",
+    "provenance": {
+      "unit": "D4-25",
+      "writer": "agent:sonnet",
+      "at": "2026-11-20",
+      "legacyIds": [
+        "field:vague-extend-the-time"
+      ]
+    },
+    "answer": {
+      "curatedRef": {
+        "module": "field",
+        "id": "vague-extend-the-time",
+        "textHash": "9eef44a89487e00b"
+      }
+    },
+    "auditRef": "audit/C-25.jsonl#field:vague-extend-the-time",
+    "policyGoverned": false
+  },
+  {
+    "id": "doc:/docs/start/signup#0/forgot-child-login-id",
+    "kind": "doc",
+    "tier": "standard",
+    "area": "support",
+    "topic": "아이디(가입한 번호·이메일)를 잊었을 때: 학원 등록 번호 확인·비밀번호 새로 정하기",
+    "asks": [
+      "howto"
+    ],
+    "concepts": [
+      "C_login_id",
+      "C_registered_id"
+    ],
+    "anchors": [
+      "아이디 까먹음",
+      "아이디 잊음",
+      "아이 아이디",
+      "아이디 모를 때",
+      "가입한 번호 모름",
+      "등록된 아이디 확인",
+      "아이디가 뭔지"
+    ],
+    "covers": "클래스인 아이디가 휴대폰 번호나 이메일이라는 것, 학원이 그 번호·이메일로 등록한다는 것, 비밀번호는 새로 정할 수 있다는 것",
+    "notCovers": [
+      "비밀번호 잊었을 때 자세히 → howto:login-forgot-password",
+      "인증코드가 안 올 때 → doc:/docs/start/signup#4/code-not-received",
+      "임시 비밀번호 로그인 → doc:/docs/start/signup#0/temp-password-account"
+    ],
+    "negatives": [
+      {
+        "q": "비밀번호를 잊었어요",
+        "route": "howto:login-forgot-password"
+      },
+      {
+        "q": "인증 문자가 안 오는데요",
+        "route": "doc:/docs/start/signup#4/code-not-received"
+      },
+      {
+        "q": "학원에서 문자로 임시 비밀번호 받았어요",
+        "route": "doc:/docs/start/signup#0/temp-password-account"
+      },
+      {
+        "q": "가입할 때 아이디는 뭘로 만들어요",
+        "route": "doc:/docs/start/signup#2/id-type"
+      },
+      {
+        "q": "가입했는데 학원에 뭘 알려야 해요",
+        "route": "doc:/docs/start/signup#0/tell-academy-id"
+      }
+    ],
+    "handoff": "support",
+    "category": "troubleshooting",
+    "intent": "troubleshooting",
+    "suggestedQuestions": [],
+    "status": "active",
+    "provenance": {
+      "unit": "D4-25",
+      "writer": "agent:sonnet",
+      "at": "2026-11-20",
+      "legacyIds": [
+        "field:forgot-child-id"
+      ]
+    },
+    "answer": {
+      "lead": "none",
+      "sentences": [
+        {
+          "unit": "doc:/docs/start/signup#2",
+          "ids": [
+            0
+          ],
+          "hashes": [
+            "0ae0799ff67db813"
+          ]
+        },
+        {
+          "unit": "doc:/docs/start/signup#0",
+          "ids": [
+            7
+          ],
+          "hashes": [
+            "564fc61e8f17496a"
+          ]
+        },
+        {
+          "unit": "doc:/docs/start/signup#4",
+          "ids": [
+            14
+          ],
+          "hashes": [
+            "f2ac66c517f66725"
+          ]
+        }
+      ]
+    },
+    "sources": [
+      {
+        "path": "/docs/start/signup",
+        "heading": "회원 가입 · 가입하기 전에 · 이메일이나 휴대폰 번호로 인증하기 · 가입이 막힐 때"
+      }
+    ],
+    "auditRef": "audit/C-25.jsonl#field:forgot-child-id"
+  },
+  {
+    "id": "fixed:save-default-webcam-classin",
+    "kind": "fixed",
+    "tier": "standard",
+    "area": "support",
+    "topic": "기본 카메라 저장 설정 여부와 입장 전 장비 테스트에서 웹캠 고르기",
+    "answer": {
+      "text": "기본 카메라를 저장해 두는 설정은 공개 안내에 없어요.\n\n대신 이렇게 해 보세요.\n1. 공개 안내에는 교실에 들어가기 직전 [장비 테스트] 화면에서 카메라, 마이크, 스피커를 고르라고 나와 있어요. 기기가 두 개 이상 연결돼 있으면 여기서 실제로 쓸 장비가 선택돼 있는지 봐요. 들어가기 전에 쓰실 웹캠을 골라 미리보기에 얼굴이 나오는지 확인하는 걸 습관으로 해요.\n2. 수업 중에도 설정 창에서 장치를 다시 고를 수 있어요.\n\n그래도 매번 다른 카메라로 돌아가면 상담 채널(공식 홈페이지 하단 채팅)에 PC 종류와 앱 버전을 알려 물어보세요.",
+      "textHash": "035ec999832f9c6d"
+    },
+    "auditRef": "audit/C-26.jsonl#field:save-default-webcam-classin",
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_camera",
+      "C_device_test",
+      "C_multi_device"
+    ],
+    "anchors": [
+      "기본 카메라 저장",
+      "웹캠 기본 설정",
+      "카메라 자동 선택",
+      "매번 카메라 선택",
+      "외장 웹캠 고정"
+    ],
+    "covers": "기본 카메라를 저장해 두는 설정은 공개 안내에 없다는 것과, 교실 입장 전 장비 테스트에서 카메라를 고르고 수업 중에도 설정 창에서 장치를 다시 고를 수 있다는 것",
+    "notCovers": [
+      "카메라가 아예 안 잡힘 → doc:/docs/start/camera-mic-troubleshooting#0/cam-first-checks",
+      "카메라 권한 허용 → doc:/docs/start/camera-mic-troubleshooting#0/cam-permission"
+    ],
+    "negatives": [
+      {
+        "q": "카메라가 아예 안 보여요 권한 허용은 어디서 해요",
+        "route": "doc:/docs/start/camera-mic-troubleshooting#0/cam-permission"
+      },
+      {
+        "q": "수업 중에 소리가 안 들려요",
+        "route": "doc:/docs/start/camera-mic-troubleshooting#0/cam-first-checks"
+      }
+    ],
+    "handoff": null,
+    "category": "troubleshooting",
+    "intent": "troubleshooting",
+    "suggestedQuestions": [
+      "카메라가 안 잡혀요",
+      "장비 테스트는 어디서 해요?"
+    ],
+    "policyGoverned": false,
+    "evidenceScope": "docs",
+    "status": "active",
+    "provenance": {
+      "unit": "D4-26",
+      "writer": "agent:sonnet#D4-26",
+      "at": "2026-11-20",
+      "legacyIds": [
+        "field:save-default-webcam-classin"
+      ]
+    }
+  },
+  {
+    "id": "howto:vague-error",
+    "kind": "howto",
+    "tier": "standard",
+    "area": "support",
+    "topic": "무슨 오류인지 모를 때 문구·상황·기기를 알려 주고 자주 있는 경우부터 확인",
+    "answer": {
+      "symptomTopic": "vague-error"
+    },
+    "auditRef": "audit/C-26.jsonl#symptom:vague-error",
+    "asks": [
+      "symptom",
+      "howto"
+    ],
+    "concepts": [
+      "C_vague_error",
+      "C_login"
+    ],
+    "anchors": [
+      "오류가 나요",
+      "에러가 떠요",
+      "안 돼요",
+      "오류 문구",
+      "오류 코드"
+    ],
+    "covers": "어떤 오류인지 정해지지 않은 질문에 화면 오류 문구·한 일·쓰는 기기를 알려 달라고 되묻고, 로그인·앱·끊김·카메라·녹화·기관 등록의 자주 있는 확인법을 먼저 안내하는 것",
+    "notCovers": [
+      "로그인이 안 됨 → doc:/docs/start/login-troubleshooting#7/inquiry-info",
+      "수업 중 끊김 → doc:/docs/start/class-connection-troubleshooting#0/conn-urgent-first",
+      "카메라·마이크 → doc:/docs/start/camera-mic-troubleshooting#0/cam-first-checks"
+    ],
+    "negatives": [
+      {
+        "q": "수업 중에 자꾸 튕기고 끊겨요",
+        "route": "doc:/docs/start/class-connection-troubleshooting#0/conn-urgent-first"
+      },
+      {
+        "q": "마이크 권한 허용은 어디서 해요",
+        "route": "doc:/docs/start/camera-mic-troubleshooting#0/cam-permission"
+      }
+    ],
+    "handoff": null,
+    "category": "troubleshooting",
+    "intent": "troubleshooting",
+    "suggestedQuestions": [
+      "로그인이 안 돼요",
+      "수업 중에 계속 튕겨요",
+      "녹화가 안 돼요"
+    ],
+    "evidenceScope": "docs",
+    "status": "active",
+    "provenance": {
+      "unit": "D4-26",
+      "writer": "agent:sonnet#D4-26",
+      "at": "2026-11-20",
+      "legacyIds": [
+        "symptom:vague-error"
+      ]
+    }
+  },
+  {
+    "id": "policy:site-entry-button-integration",
+    "kind": "policy",
+    "tier": "head",
+    "area": "support",
+    "topic": "자사 사이트 입장 버튼에서 ClassIn 수업으로 바로 연결 가능 여부",
+    "answer": {
+      "text": "자사 사이트의 입장 버튼에서 ClassIn 수업으로 바로 연결하는 건 기본 제공 기능으로 안내돼 있지 않아요. 공식 API로 연결하는 개발 작업이 필요할 수 있어요.\n\n수업 링크, 로그인 방식, 학생 권한, 수업 생성 주체, 반복 시간표, API 또는 운영 자동화 범위를 같이 봐야 해요.\n\n현재 사이트에서 회원 인증을 어떻게 하고 있는지, 수업이 매번 수동 생성인지 반복 일정인지, 충전형/구독형 중 어떤 계약을 검토 중인지 알려주시면 연동 확인 항목으로 좁혀드릴게요.",
+      "textHash": "e42bd8a8d9584f9f",
+      "policyRef": "HQ-1204"
+    },
+    "auditRef": "audit/C-26.jsonl#template:사이트 입장 버튼 연동 확인",
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_api",
+      "C_site_entry_button",
+      "C_integration_cost"
+    ],
+    "anchors": [
+      "입장 버튼 연동",
+      "사이트에서 수업 입장",
+      "홈페이지 입장 버튼",
+      "자사 사이트 연동",
+      "수업 링크 연결"
+    ],
+    "covers": "자사 사이트의 입장 버튼에서 수업으로 바로 연결하는 것은 기본 제공 기능으로 안내돼 있지 않고 공식 API 개발이 필요할 수 있다는 것",
+    "notCovers": [
+      "LTI·Moodle 같은 LMS 연동 → fixed:lti-moodle-integration",
+      "학생이 수업에 들어가는 방법 → doc:/docs/student/class-join-replay#0/join-methods"
+    ],
+    "negatives": [
+      {
+        "q": "학생이 수업에 들어가는 방법이 뭐예요",
+        "route": "doc:/docs/student/class-join-replay#0/join-methods"
+      },
+      {
+        "q": "무들 같은 LMS랑 연동돼요",
+        "route": "fixed:lti-moodle-integration"
+      }
+    ],
+    "handoff": null,
+    "category": "classroom_consulting",
+    "intent": "docs_lookup",
+    "policyGoverned": true,
+    "evidenceScope": "docs",
+    "status": "active",
+    "provenance": {
+      "unit": "D4-26",
+      "writer": "agent:sonnet#D4-26",
+      "at": "2026-11-20",
+      "legacyIds": [
+        "template:사이트 입장 버튼 연동 확인"
+      ]
+    }
+  },
+  {
+    "id": "policy:contract-confirm-needed",
+    "kind": "policy",
+    "tier": "head",
+    "area": "support",
+    "topic": "계약·계정 상태에 따라 달라 담당자가 확인해야 하는 정책 항목",
+    "answer": {
+      "text": "이 내용은 계약과 계정 상태에 따라 달라서 담당자가 확인해 안내드려야 해요.\n\n아래 상담 연결로 남겨 주시면 현재 계정과 계약 기준으로 확인해 드립니다.",
+      "textHash": "f56ced8abb0b3bdc",
+      "policyRef": "HQ-0804"
+    },
+    "auditRef": "audit/C-26.jsonl#template:확인 필요한 정책·계약 항목",
+    "asks": [
+      "yesno",
+      "who"
+    ],
+    "concepts": [
+      "C_contract_terms",
+      "C_consult_request",
+      "C_account_state"
+    ],
+    "anchors": [
+      "계약에 따라 달라요",
+      "계정 상태 확인",
+      "담당자 확인 필요",
+      "정책 계약 항목",
+      "계약 기준 확인"
+    ],
+    "covers": "계약과 계정 상태에 따라 달라지는 내용은 채팅이 아니라 담당자가 현재 계정·계약 기준으로 확인해 안내한다는 것",
+    "notCovers": [
+      "환불·세금계산서 확인 시점 → doc:/docs/admin/billing-upgrade#1/invoice-before-pay",
+      "요금제 금액·견적 요청 → doc:/docs/software/software-pricing-quote-bundle-faq#summary/price-trial-quote",
+      "서버 위치 → policy:basics-data-server-location",
+      "무료 체험·파일럿 → policy:trial-pilot-check"
+    ],
+    "negatives": [
+      {
+        "q": "결제하기 전에 환불 조건을 확인할 수 있나요",
+        "route": "doc:/docs/admin/billing-upgrade#1/invoice-before-pay"
+      },
+      {
+        "q": "요금제 견적은 어디서 받아요",
+        "route": "doc:/docs/software/software-pricing-quote-bundle-faq#summary/price-trial-quote"
+      },
+      {
+        "q": "서버가 어느 나라에 있어요",
+        "route": "policy:basics-data-server-location"
+      }
+    ],
+    "handoff": "support",
+    "category": "sales_consulting",
+    "intent": "sales_consulting",
+    "policyGoverned": true,
+    "evidenceScope": "docs",
+    "status": "active",
+    "provenance": {
+      "unit": "D4-26",
+      "writer": "agent:sonnet#D4-26",
+      "at": "2026-11-20",
+      "legacyIds": [
+        "template:확인 필요한 정책·계약 항목"
+      ]
+    }
+  },
+  {
+    "id": "fixed:self-capabilities",
+    "kind": "fixed",
+    "tier": "head",
+    "area": "support",
+    "topic": "AI 상담 가이드가 할 수 있는 일과 답하는 범위",
+    "answer": {
+      "curatedRef": {
+        "module": "self",
+        "id": "capabilities",
+        "textHash": "02e94d06f472e714"
+      }
+    },
+    "auditRef": "audit/C-26.jsonl#self:capabilities",
+    "asks": [
+      "definition",
+      "yesno"
+    ],
+    "concepts": [
+      "C_chatbot_capabilities",
+      "C_ai_feature"
+    ],
+    "anchors": [
+      "챗봇 기능",
+      "너 뭐 할 수 있어",
+      "상담 가이드 범위",
+      "물어볼 수 있는 것",
+      "도와줄 수 있는 일"
+    ],
+    "covers": "AI 상담 가이드가 도입·수업 운영·전자칠판·계정·오류·요금/견적 질문을 정리해 주고 공개 문서와 검수된 상담 Q&A 기준으로 답한다는 것",
+    "notCovers": [
+      "사람 상담원인지 → fixed:self-identity",
+      "답변 기준·믿을 수 있는지 → fixed:self-answer-principles",
+      "학습 데이터·로그 → fixed:self-source-boundary"
+    ],
+    "negatives": [
+      {
+        "q": "너 사람이야?",
+        "route": "fixed:self-identity"
+      },
+      {
+        "q": "네 답을 믿어도 돼?",
+        "route": "fixed:self-answer-principles"
+      },
+      {
+        "q": "제 질문이 저장돼요?",
+        "route": "fixed:self-source-boundary"
+      }
+    ],
+    "handoff": null,
+    "category": "self_knowledge",
+    "intent": "self_knowledge",
+    "suggestedQuestions": [
+      "도입 전 확인 질문을 알려주세요",
+      "수업 운영 문제를 해결하고 싶어요",
+      "전자칠판 설치 전 체크할 것을 알려주세요"
+    ],
+    "policyGoverned": false,
+    "evidenceScope": "docs",
+    "status": "active",
+    "provenance": {
+      "unit": "D4-26",
+      "writer": "agent:sonnet#D4-26",
+      "at": "2026-11-20",
+      "legacyIds": [
+        "self:capabilities"
+      ]
+    }
+  },
+  {
+    "id": "fixed:self-answer-principles",
+    "kind": "fixed",
+    "tier": "head",
+    "area": "support",
+    "topic": "챗봇 답변 원칙(공감 후 운영 기준, 공개 문서 우선, 확인 필요 분리)",
+    "answer": {
+      "curatedRef": {
+        "module": "self",
+        "id": "answer_principles",
+        "textHash": "92a068d0f4d29467"
+      }
+    },
+    "auditRef": "audit/C-26.jsonl#self:answer_principles",
+    "asks": [
+      "definition",
+      "yesno"
+    ],
+    "concepts": [
+      "C_answer_principles"
+    ],
+    "anchors": [
+      "답변 원칙",
+      "답변 기준",
+      "믿어도 돼",
+      "정확해",
+      "말투"
+    ],
+    "covers": "답변이 짧은 공감 뒤 수업 운영 기준을 먼저 잡고, 공개 문서와 검수된 상담 원칙을 우선하며, 가격·계약·개인정보·서버·장비 상태는 확인 필요로 분리하고 지원하지 않는 영역은 과장하지 않는다는 것",
+    "notCovers": [
+      "뭘 할 수 있는지 → fixed:self-capabilities",
+      "출처·로그 → fixed:self-source-boundary",
+      "실제 계약·금액 → policy:contract-confirm-needed"
+    ],
+    "negatives": [
+      {
+        "q": "너 뭐 할 수 있어?",
+        "route": "fixed:self-capabilities"
+      },
+      {
+        "q": "무슨 자료로 답해?",
+        "route": "fixed:self-source-boundary"
+      },
+      {
+        "q": "계약 조건 알려줘",
+        "route": "policy:contract-confirm-needed"
+      }
+    ],
+    "handoff": null,
+    "category": "self_knowledge",
+    "intent": "self_knowledge",
+    "suggestedQuestions": [
+      "Classin이 어떤 서비스인지 알려주세요",
+      "도입 전 확인 질문을 알려주세요",
+      "요금/견적은 어떤 항목으로 구성되나요?"
+    ],
+    "policyGoverned": false,
+    "evidenceScope": "docs",
+    "status": "active",
+    "provenance": {
+      "unit": "D4-26",
+      "writer": "agent:sonnet#D4-26",
+      "at": "2026-11-20",
+      "legacyIds": [
+        "self:answer_principles"
+      ]
+    }
+  },
+  {
+    "id": "fixed:self-source-boundary",
+    "kind": "fixed",
+    "tier": "head",
+    "area": "support",
+    "topic": "챗봇이 참고하는 자료 범위와 질문 로그·개인정보 취급",
+    "answer": {
+      "curatedRef": {
+        "module": "self",
+        "id": "source_boundary",
+        "textHash": "fa2e215873c8885a"
+      }
+    },
+    "auditRef": "audit/C-26.jsonl#self:source_boundary",
+    "asks": [
+      "definition",
+      "yesno"
+    ],
+    "concepts": [
+      "C_answer_sources",
+      "C_chatbot_data_retention"
+    ],
+    "anchors": [
+      "답변 출처",
+      "참고 자료",
+      "질문 로그",
+      "개인정보 채팅",
+      "채팅에 적어도 되나"
+    ],
+    "covers": "답변에 공개 문서·검수된 상담 Q&A·도입 전 질문 매트릭스·수업 운영·전자칠판 가이드를 참고하고, 질문·답변 로그는 반복 질문과 FAQ 보강에만 쓰며, 학원 내부 정보·학생 개인정보는 채팅창에 적지 말고 상담 채널로 전달한다는 것",
+    "notCovers": [
+      "서비스의 개인정보 처리방침 → doc:/docs/start/pre-adoption-faq-22-questions#4/privacy-handling-basis",
+      "뭘 할 수 있는지 → fixed:self-capabilities"
+    ],
+    "negatives": [
+      {
+        "q": "서비스 개인정보처리방침 내용이 뭐예요",
+        "route": "doc:/docs/start/pre-adoption-faq-22-questions#4/privacy-handling-basis"
+      },
+      {
+        "q": "너 사람이야?",
+        "route": "fixed:self-identity"
+      }
+    ],
+    "handoff": null,
+    "category": "self_knowledge",
+    "intent": "self_knowledge",
+    "suggestedQuestions": [
+      "도입 전 확인 질문을 알려주세요",
+      "전자칠판 설치 전 체크할 것을 알려주세요",
+      "개인정보 처리 기준이 궁금해요"
+    ],
+    "policyGoverned": false,
+    "evidenceScope": "docs",
+    "status": "active",
+    "provenance": {
+      "unit": "D4-26",
+      "writer": "agent:sonnet#D4-26",
+      "at": "2026-11-20",
+      "legacyIds": [
+        "self:source_boundary"
+      ]
+    }
+  },
+  {
+    "id": "fixed:self-identity",
+    "kind": "fixed",
+    "tier": "head",
+    "area": "support",
+    "topic": "상담 가이드가 사람이 아닌 AI라는 정체 안내",
+    "answer": {
+      "curatedRef": {
+        "module": "self",
+        "id": "identity",
+        "textHash": "14dfb6349dca8423"
+      }
+    },
+    "auditRef": "audit/C-26.jsonl#self:identity",
+    "asks": [
+      "yesno",
+      "definition"
+    ],
+    "concepts": [
+      "C_chatbot_identity"
+    ],
+    "anchors": [
+      "너 사람이야",
+      "AI 맞아",
+      "챗봇인가요",
+      "상담원인지 봇인지",
+      "정체"
+    ],
+    "covers": "상담 가이드가 사람 상담원이 아니라 AI이고 공개 문서 기준으로 답하며 사람과 이야기하려면 \"상담원 연결해 주세요\"라고 남기면 된다는 것",
+    "notCovers": [
+      "상담원 연결 요청 자체 → none",
+      "뭘 할 수 있는지 → fixed:self-capabilities"
+    ],
+    "negatives": [
+      {
+        "q": "사람 상담원 연결해 주세요",
+        "route": "none"
+      },
+      {
+        "q": "너 뭐 할 수 있어?",
+        "route": "fixed:self-capabilities"
+      }
+    ],
+    "handoff": null,
+    "category": "self_knowledge",
+    "intent": "self_knowledge",
+    "suggestedQuestions": [
+      "Classin이 어떤 서비스인지 알려주세요",
+      "수업 운영 문제를 해결하고 싶어요",
+      "전자칠판 패키지를 보고 싶어요"
+    ],
+    "policyGoverned": false,
+    "evidenceScope": "docs",
+    "status": "active",
+    "provenance": {
+      "unit": "D4-26",
+      "writer": "agent:sonnet#D4-26",
+      "at": "2026-11-20",
+      "legacyIds": [
+        "self:identity"
+      ]
+    }
+  },
+  {
+    "id": "fixed:self-emotional-concern",
+    "kind": "fixed",
+    "tier": "head",
+    "area": "support",
+    "topic": "새 도구 도입 걱정(기존 LMS·ERP 충돌, 강사 전환 피로)과 상담에서 정하는 순서",
+    "answer": {
+      "text": "새로운 도구의 도입은 당연히 낯설고 여러 걱정이 앞서실 수 있습니다. 특히 규모가 있는 학원일수록 기존 시스템(LMS, ERP 등)과의 충돌 여부나 강사 전환 과도기 피로감에 대해 신중해지는 것은 당연합니다.\n\n결제·오프라인 출석·고급 리포트는 기존 시스템이나 공식 API 연동으로 역할을 나눕니다. 상담은 가장 불안한 항목 3개를 고르고, 바로 답할 것과 확인할 것을 나눈 뒤, 쇼룸에서 직접 보고, 견적 범위와 90일 파일럿으로 이어 갑니다.\n\n혹시 현재 선생님들의 수업 준비 중 어떤 부분이 업무 시간을 가장 많이 차지하나요?",
+      "textHash": "88fa1376e59f2b37"
+    },
+    "auditRef": "audit/C-26.jsonl#self:emotional_concern",
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_lms",
+      "C_api",
+      "C_pilot",
+      "C_showroom",
+      "C_adoption_worry"
+    ],
+    "anchors": [
+      "도입 걱정",
+      "기존 시스템 충돌",
+      "강사 전환 피로",
+      "도입이 낯설어요",
+      "혼선 걱정"
+    ],
+    "covers": "도입이 낯설고 기존 LMS·ERP 충돌이나 강사 전환 피로가 걱정될 때, 결제·오프라인 출석·고급 리포트는 기존 시스템이나 공식 API 연동으로 역할을 나누고 상담에서 불안 항목을 정해 쇼룸·견적 범위·90일 파일럿으로 잇는다는 것",
+    "notCovers": [
+      "LMS·ERP 연동 가능 여부 자체 → fixed:lti-moodle-integration",
+      "파일럿 가격 → policy:trial-pilot-check"
+    ],
+    "negatives": [
+      {
+        "q": "기존 LMS랑 API로 연동 가능한가요",
+        "route": "fixed:lti-moodle-integration"
+      },
+      {
+        "q": "파일럿 비용이 얼마예요",
+        "route": "policy:trial-pilot-check"
+      }
+    ],
+    "handoff": null,
+    "category": "emotional_consulting",
+    "intent": "emotional_consulting",
+    "suggestedQuestions": [
+      "클래스인을 도입하면 어떤 업무 리소스가 줄어드나요?",
+      "기존 학원 LMS나 ERP와 연동이 가능한가요?",
+      "강사님들의 반발을 최소화하며 점진적으로 전환하는 방법이 있나요?"
+    ],
+    "policyGoverned": false,
+    "evidenceScope": "docs",
+    "status": "active",
+    "provenance": {
+      "unit": "D4-26",
+      "writer": "agent:sonnet#D4-26",
+      "at": "2026-11-20",
+      "legacyIds": [
+        "self:emotional_concern"
+      ]
+    }
+  }
+]
