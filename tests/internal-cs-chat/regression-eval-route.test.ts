@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 // 러너 lib 는 spy 로 배선만 검증하고, 후보 조회 repo 함수는 실제 구현을 가짜 supabase 로 구동한다.
 const mocks = vi.hoisted(() => ({
@@ -7,6 +7,11 @@ const mocks = vi.hoisted(() => ({
   requireVerifiedAdminContext: vi.fn(),
   runInternalCsRegressionEval: vi.fn(),
   createDefaultRegressionEvalDeps: vi.fn(() => ({ deps: true })),
+  checkRateLimitDistributed: vi.fn(),
+}))
+
+vi.mock("@/lib/server/rate-limit", () => ({
+  checkRateLimitDistributed: mocks.checkRateLimitDistributed,
 }))
 
 vi.mock("@/lib/supabase/admin", () => ({
@@ -50,6 +55,10 @@ function evalRequest(body?: Record<string, unknown>) {
   })
 }
 
+beforeEach(() => {
+  mocks.checkRateLimitDistributed.mockResolvedValue({ allowed: true, remaining: 2, resetAt: 0 })
+})
+
 afterEach(() => {
   vi.clearAllMocks()
   vi.restoreAllMocks()
@@ -80,6 +89,7 @@ describe("listInternalCsRegressionEvalCandidates", () => {
         content: "미판정 답변",
         correctedContent: "수정본",
         reviewState: "changes_requested",
+        feedbackLabels: [],
         metadata: { userMessageId: "user-1" },
       },
     ])
@@ -103,6 +113,21 @@ describe("listInternalCsRegressionEvalCandidates", () => {
 })
 
 describe("POST /api/admin/cs-chat/regression-eval", () => {
+  it("limits each user to 3 evaluation runs per minute", async () => {
+    mocks.requireVerifiedAdminContext.mockResolvedValue({ role: "ADMIN", name: "CS", userId: "cs-user-1" })
+    mocks.checkRateLimitDistributed.mockResolvedValue({ allowed: false, remaining: 0, resetAt: 0 })
+
+    const response = await regressionEvalPost(evalRequest())
+
+    expect(response.status).toBe(429)
+    expect(mocks.checkRateLimitDistributed).toHaveBeenCalledWith(
+      "cs-user-1",
+      "admin-internal-cs-regression-eval",
+      { windowMs: 60_000, max: 3 }
+    )
+    expect(mocks.runInternalCsRegressionEval).not.toHaveBeenCalled()
+  })
+
   it("requires an authorized CS/admin session", async () => {
     mocks.requireVerifiedAdminContext.mockResolvedValue(
       NextResponse.json({ error: "Forbidden" }, { status: 403 })

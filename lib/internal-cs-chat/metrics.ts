@@ -11,7 +11,9 @@ import "server-only"
 import { unstable_cache } from "next/cache"
 import { shareInFlightByArgs } from "@/lib/server/share-in-flight"
 import {
+  getInternalCsContextResetStats,
   getInternalCsMetricsAggregate,
+  type InternalCsContextResetStats,
   type InternalCsMetricsAggregate,
 } from "@/lib/repositories/internal-cs-chat"
 
@@ -27,7 +29,11 @@ export interface InternalCsMetrics {
     changesRequested: number
     pending: number
     approvalRate: number | null
+    /** 새 초안으로 대체돼 사용 안 함 처리된 옛 초안 수. 승인율 분모에 들어가지 않는다. */
+    superseded: number
   }
+  /** 같은 상담 안에서 코파일럿 맥락을 비운 횟수(IC-25). perConversation = total / 기간 안 상담 수. */
+  contextResets: { total: number; perConversation: number | null }
   regression: {
     notEvaluated: number
     pass: number
@@ -50,7 +56,8 @@ function roundHours(value: number | null): number | null {
 
 export function buildInternalCsMetrics(
   aggregate: InternalCsMetricsAggregate,
-  nowMs: number
+  nowMs: number,
+  resetStats: InternalCsContextResetStats = { resets: 0, superseded: 0 }
 ): InternalCsMetrics {
   const days = aggregate.days
   const to = new Date(nowMs).toISOString()
@@ -71,10 +78,16 @@ export function buildInternalCsMetrics(
       changesRequested: aggregate.reviewChangesRequested,
       pending: aggregate.reviewPending,
       // 판정된 초안(승인+수정요청) 중 승인 비율. 미판정(pending)은 분모에서 제외한다.
+      // 새 초안으로 대체된 초안(rejected + superseded 라벨)은 승인·수정 요청이 아니라서 분모에 들어가지 않는다.
       approvalRate: rate(
         aggregate.reviewApproved,
         aggregate.reviewApproved + aggregate.reviewChangesRequested
       ),
+      superseded: resetStats.superseded,
+    },
+    contextResets: {
+      total: resetStats.resets,
+      perConversation: rate(resetStats.resets, aggregate.conversations),
     },
     regression: {
       notEvaluated: aggregate.regressionNotEvaluated,
@@ -90,9 +103,22 @@ export function buildInternalCsMetrics(
   }
 }
 
+// 맥락 비우기·대체 건수는 보조 지표다. 이 조회가 실패해도 계기판 본 집계를 막지 않고 0 으로 두되, 원인은 남긴다.
+async function loadResetStats(days: number): Promise<InternalCsContextResetStats> {
+  try {
+    return await getInternalCsContextResetStats(days)
+  } catch (error) {
+    console.warn("[internal-cs] context reset stats unavailable:", error instanceof Error ? error.message : error)
+    return { resets: 0, superseded: 0 }
+  }
+}
+
 async function loadInternalCsMetrics(days: number): Promise<InternalCsMetrics> {
-  const aggregate = await getInternalCsMetricsAggregate(days)
-  return buildInternalCsMetrics(aggregate, Date.now())
+  const [aggregate, resetStats] = await Promise.all([
+    getInternalCsMetricsAggregate(days),
+    loadResetStats(days),
+  ])
+  return buildInternalCsMetrics(aggregate, Date.now(), resetStats)
 }
 
 /**
@@ -116,8 +142,11 @@ export async function getInternalCsMetrics(days: number, nowMs?: number): Promis
   // nowMs는 테스트 전용 결정론 경로다(회귀 스냅샷이 "지금"에 좌우되면 안 된다) — 캐시를
   // 거치지 않고 항상 재계산한다(기존 동작 그대로 유지).
   if (nowMs !== undefined) {
-    const aggregate = await getInternalCsMetricsAggregate(days)
-    return buildInternalCsMetrics(aggregate, nowMs)
+    const [aggregate, resetStats] = await Promise.all([
+      getInternalCsMetricsAggregate(days),
+      loadResetStats(days),
+    ])
+    return buildInternalCsMetrics(aggregate, nowMs, resetStats)
   }
   return getCachedInternalCsMetrics(days)
 }

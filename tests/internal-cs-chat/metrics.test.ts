@@ -3,13 +3,18 @@ import { describe, expect, it, vi } from "vitest"
 // 계약 1 계기판 조립기 — 순수 변환(빈 DB에서 null/0 shape, 분모 0 → rate null).
 const mocks = vi.hoisted(() => ({
   getInternalCsMetricsAggregate: vi.fn(),
+  getInternalCsContextResetStats: vi.fn(),
 }))
 
 vi.mock("@/lib/repositories/internal-cs-chat", async () => {
   const actual = await vi.importActual<typeof import("@/lib/repositories/internal-cs-chat")>(
     "@/lib/repositories/internal-cs-chat"
   )
-  return { ...actual, getInternalCsMetricsAggregate: mocks.getInternalCsMetricsAggregate }
+  return {
+    ...actual,
+    getInternalCsMetricsAggregate: mocks.getInternalCsMetricsAggregate,
+    getInternalCsContextResetStats: mocks.getInternalCsContextResetStats,
+  }
 })
 
 import { buildInternalCsMetrics, getInternalCsMetrics } from "@/lib/internal-cs-chat/metrics"
@@ -30,7 +35,8 @@ describe("buildInternalCsMetrics", () => {
       volume: { questions: 0, conversations: 0 },
       fallbackRate: null,
       evidenceMix: { knowledge: 0, docs: 0, channel: 0, none: 0 },
-      review: { approved: 0, changesRequested: 0, pending: 0, approvalRate: null },
+      review: { approved: 0, changesRequested: 0, pending: 0, approvalRate: null, superseded: 0 },
+      contextResets: { total: 0, perConversation: null },
       regression: { notEvaluated: 0, pass: 0, needsFix: 0, promoted: 0, excluded: 0 },
       leadTimeHours: { median: null, p90: null },
     })
@@ -59,7 +65,8 @@ describe("buildInternalCsMetrics", () => {
         leadTimeMedianHours: 2.345,
         leadTimeP90Hours: 9.6789,
       },
-      NOW
+      NOW,
+      { resets: 6, superseded: 2 }
     )
 
     expect(metrics.range).toEqual({
@@ -77,7 +84,11 @@ describe("buildInternalCsMetrics", () => {
       changesRequested: 3,
       pending: 8,
       approvalRate: 0.75,
+      superseded: 2,
     })
+    // 대체된(superseded) 초안 2건은 승인율 분모에 들어가지 않는다: 여전히 9/(9+3).
+    // 맥락 비우기: 6회 / 상담 12건 = 0.5
+    expect(metrics.contextResets).toEqual({ total: 6, perConversation: 0.5 })
     expect(metrics.regression).toEqual({
       notEvaluated: 4,
       pass: 3,
@@ -103,10 +114,12 @@ describe("buildInternalCsMetrics", () => {
 describe("getInternalCsMetrics", () => {
   it("threads the repo aggregate through the builder", async () => {
     mocks.getInternalCsMetricsAggregate.mockResolvedValue(emptyInternalCsMetricsAggregate(30))
+    mocks.getInternalCsContextResetStats.mockResolvedValue({ resets: 0, superseded: 0 })
 
     const metrics = await getInternalCsMetrics(30, NOW)
 
     expect(mocks.getInternalCsMetricsAggregate).toHaveBeenCalledWith(30)
+    expect(mocks.getInternalCsContextResetStats).toHaveBeenCalledWith(30)
     expect(metrics.range.days).toBe(30)
     expect(metrics.fallbackRate).toBeNull()
   })

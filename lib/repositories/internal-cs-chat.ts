@@ -911,6 +911,80 @@ export async function updateInternalCsRegressionOutcome(input: {
   return currentOutcome === "promoted" ? { status: "promoted_conflict" } : { status: "not_found" }
 }
 
+/** 새 초안이 나와 대체된 옛 대기 초안에 붙는 라벨(검토 상태는 rejected). 승인율 분모에서 빠진다. */
+export const INTERNAL_CS_SUPERSEDED_LABEL = "superseded"
+
+/**
+ * 재검토(rerun)로 새 초안이 나왔을 때 같은 질문의 옛 '검토 대기' 초안을 사용 안 함(rejected + superseded 라벨)으로 바꾼다.
+ * 대기(pending) 상태인 행만 바꾸고, 이미 사람이 검토한 행은 건드리지 않는다. 대화 상태는 바꾸지 않는다.
+ * 바뀐 행의 id 를 돌려준다.
+ */
+export async function supersedeInternalCsPendingMessages(input: {
+  conversationId: string
+  messageIds: string[]
+  actor: string
+  supersededBy: string
+  now?: Date
+}): Promise<string[]> {
+  const ids = [...new Set(input.messageIds.map((id) => id.trim()).filter(Boolean))].slice(0, 20)
+  if (ids.length === 0) return []
+  const supabase = createSupabaseAdminClient()
+  const { data, error } = await supabase
+    .from("internal_cs_messages")
+    .update({
+      review_state: "rejected",
+      reviewed_by: input.actor,
+      reviewed_at: (input.now ?? new Date()).toISOString(),
+      review_note: `새 초안(${input.supersededBy})으로 대체됨`,
+      feedback_labels: [INTERNAL_CS_SUPERSEDED_LABEL],
+    })
+    .eq("conversation_id", input.conversationId)
+    .eq("role", "assistant")
+    .eq("review_state", "pending")
+    .in("id", ids)
+    .select("id")
+  if (error) throw databaseError("failed to supersede pending drafts", error)
+  return ((data ?? []) as { id: string }[]).map((row) => row.id)
+}
+
+export interface InternalCsContextResetStats {
+  /** 기간 안에 저장된 맥락 비우기 경계 행의 수. */
+  resets: number
+  /** 기간 안에 새 초안으로 대체돼 사용 안 함 처리된 초안 수. */
+  superseded: number
+}
+
+/**
+ * 기간 안의 맥락 비우기·대체 건수(IC-25·IC-13). 계기판 RPC(internal_cs_metrics)를 바꾸지 않고 따로 센다.
+ * 테이블이 없으면(마이그레이션 미적용) 0 이다.
+ */
+export async function getInternalCsContextResetStats(days: number): Promise<InternalCsContextResetStats> {
+  const safeDays = clampInteger(days, 7, 1, 366)
+  const since = new Date(Date.now() - safeDays * 86_400_000).toISOString()
+  const supabase = createSupabaseAdminClient()
+  const [resets, superseded] = await Promise.all([
+    supabase
+      .from("internal_cs_messages")
+      .select("id", { count: "exact", head: true })
+      .eq("role", "system")
+      .eq("metadata->>kind", "copilot_context_reset")
+      .gte("created_at", since),
+    supabase
+      .from("internal_cs_messages")
+      .select("id", { count: "exact", head: true })
+      .eq("role", "assistant")
+      .contains("feedback_labels", [INTERNAL_CS_SUPERSEDED_LABEL])
+      .gte("created_at", since),
+  ])
+  for (const result of [resets, superseded]) {
+    if (result.error) {
+      if (isMissingTableError(result.error)) return { resets: 0, superseded: 0 }
+      throw databaseError("failed to count context resets", result.error)
+    }
+  }
+  return { resets: resets.count ?? 0, superseded: superseded.count ?? 0 }
+}
+
 // ─── 운영 계기판 집계 (계약 1) ──────────────────────────────
 // DB 안에서 단일 RPC(internal_cs_metrics)로 집계한다. 대량 행을 앱으로 끌어와 접지 않는다.
 export interface InternalCsMetricsAggregate {
@@ -1044,11 +1118,13 @@ export interface InternalCsRegressionEvalCandidate {
   content: string
   correctedContent: string | null
   reviewState: InternalCsReviewState
+  /** quick_approved 처럼 기준 정답에서 뺄 행을 가려내는 검토 라벨. */
+  feedbackLabels?: string[]
   metadata: Record<string, unknown>
 }
 
 const REGRESSION_EVAL_CANDIDATE_SELECT =
-  "id, conversation_id, content, corrected_content, review_state, metadata"
+  "id, conversation_id, content, corrected_content, review_state, feedback_labels, metadata"
 
 interface RegressionEvalCandidateRow {
   id: string
@@ -1056,6 +1132,7 @@ interface RegressionEvalCandidateRow {
   content: string
   corrected_content: string | null
   review_state: InternalCsReviewState
+  feedback_labels?: string[] | null
   metadata: Record<string, unknown> | null
 }
 
@@ -1066,6 +1143,7 @@ function toRegressionEvalCandidate(row: RegressionEvalCandidateRow): InternalCsR
     content: row.content,
     correctedContent: trimOrNull(row.corrected_content),
     reviewState: row.review_state,
+    feedbackLabels: Array.isArray(row.feedback_labels) ? row.feedback_labels : [],
     metadata: row.metadata ?? {},
   }
 }

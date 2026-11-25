@@ -518,3 +518,30 @@ resolveNavPlacement(item.href.split("?")[0], { role, preset, overrides }) !== "d
   행 클릭은 큐로 이동만 한다 — 초안 생성·게시 같은 처리 액션은 여전히 미해결 큐에만
   있으므로 §7의 진입점 단일화는 유지된다.
 - 지표 로딩은 스켈레톤, 실패는 "—"+다시 시도로 분리한다(로딩·실패·0값을 섞지 않는다).
+
+## 16. 2026-11 CS 코파일럿 모델 연결·후검사·생성 라우트 계약(B2)
+
+화면(B4)이 읽는 서버 계약이다. 구현은 `lib/internal-cs-chat/model-transport.ts`·`answer-checks.ts`·`history.ts`와
+`app/api/admin/cs-chat/conversations/[id]/generate/route.ts`.
+
+**모델 연결(IC-03)**
+- 생성·이미지·상담 임베딩·승격 임베딩·회귀 심판은 모두 `model-transport.ts`를 지난다. 기본은 공개 챗봇 연결(`CHATBOT_GEMINI_PROVIDER`)을 따르고,
+  `INTERNAL_CS_GEMINI_PROVIDER`(`chatbot`|`developer`|`vertex`)로 바꾼다. 개발자 키는 `x-goog-api-key` 헤더로만 보낸다.
+- 결과·메시지 metadata에 `failureKinds`(`auth`·`quota`·`rate`·`timeout`·`shape`·`server`), `attempts`(모델·상태·종류·지연), `latencyMs`, `timeBudget`이 실린다.
+  `origin: "deterministic"`이면 AI 답이 아니라 근거 요약이다 — 화면은 성공 알림 대신 `ModelStatusBanner`를 보인다.
+- `auth`·`quota`는 같은 요청의 다음 모델을 건너뛰고 보강 큐에 넣지 않는다. 보강 큐는 "검색 근거 0건이고 모델 호출은 실패하지 않은" 질문만 받는다.
+- 기본 fast 모델은 공개 챗봇과 같은 `gemini-4-hydrogen`(보급형), 이어서 `gemini-3.5-flash`, `gemini-3.1-flash-lite`. deep(Pro)은 기본을 올리지 않았다.
+  `INTERNAL_CS_GEMINI_FAST_MODEL=gemini-3.5-flash`로 되돌린다. 시간 예산: fast 시도 3.5초/전체 8초, deep 시도 18초/전체 30초
+  (`INTERNAL_CS_GEMINI_DEEP_ATTEMPT_TIMEOUT_MS`·`INTERNAL_CS_GEMINI_DEEP_TOTAL_TIMEOUT_MS`), 라우트 `maxDuration` 60초.
+
+**답 후검사(IC-04)**: 결과·metadata에 `reviewWarnings`(금액·무료 체험·환불·보상 약속, 원가·공급가, 다른 고객 기관, 케이스 ID, UID·계정)와 `reviewWarningCodes`.
+경고는 차단이 아니라 검토 신호다. 승인 전 '확인했습니다' 체크는 B4 화면이 건다.
+
+**generate 요청 본문**
+- `rerunOfUserMessageId`: 질문을 다시 저장하지 않는다(metadata `rerunOf`). 새 모델 초안이 나오면 같은 질문의 옛 검토 대기 초안을
+  `rejected` + 라벨 `superseded`로 바꾼다. 새 초안이 장애 대체 글이면 옛 초안을 치우지 않는다.
+- `resetContext: true`(+ 선택 `resetSource`: `manual`|`new_chat`|`mode_change`): `role: system` 경계 행(metadata `kind: "copilot_context_reset"`)을 저장하고,
+  이력은 마지막 경계 뒤만 쓴다. 질문이 없으면 경계만 저장한다.
+- `draftToPolish: <assistant messageId>`: 그 초안을 '미검토 참고' 블록으로 넣고 이력에는 넣지 않는다. 결과는 저장하지 않고 `polish.answer`로만 돌려준다(모델 장애면 `null`).
+- 본사 회신: `role: internal_note` + metadata `kind: "hq_reply"` 행의 최신 글이 '본사 회신(참고, 확정 아님)' 블록으로 들어간다(기록은 B4의 `onRecordHqReply`가 맡는다).
+- 사용자별 분당 30회(generate), 3회(regression-eval)까지.
