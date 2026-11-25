@@ -4,6 +4,7 @@ import { SOFTWARE_PLANS } from "@/lib/billing/plans"
 import { CLASSIN_POSITIONING } from "@/lib/classin-positioning"
 import {
   COMPANY_LEGAL_NAME,
+  DEFAULT_SITE_TITLE,
   SITE_NAME,
   SITE_URL,
   createArticleJsonLd,
@@ -87,6 +88,7 @@ describe("createPublicMetadata absoluteTitle", () => {
     expect(meta.title).toBe("요금제")
     expect(meta.openGraph?.title).toBe(`요금제 | ${SITE_NAME}`)
     expect(meta.twitter?.title).toBe(`요금제 | ${SITE_NAME}`)
+    expect(meta.openGraph).toMatchObject({ siteName: "클래스인 코리아", locale: "ko_KR" })
   })
 
   it("canonical·noIndex 는 absoluteTitle 과 무관하게 동작한다", () => {
@@ -96,9 +98,24 @@ describe("createPublicMetadata absoluteTitle", () => {
   })
 })
 
+describe("home brand identity", () => {
+  it("keeps the existing homepage title and clarifies the recording condition in its description", () => {
+    expect(DEFAULT_SITE_TITLE).toBe("클래스인 Classin | 수업 녹화·AI 강의 평가까지 되는 학원 전자칠판")
+    const description = CLASSIN_POSITIONING.metadataDescription
+    const meta = createPublicMetadata({ absoluteTitle: DEFAULT_SITE_TITLE, description, path: "/" })
+    expect(description).toContain("클래스인 코리아")
+    expect(description).toContain("녹화를 설정한 수업")
+    expect(meta.alternates?.canonical).toBe(`${SITE_URL}/`)
+    expect(meta.description).toBe(description)
+    expect(meta.openGraph).toMatchObject({ description, title: DEFAULT_SITE_TITLE, siteName: "클래스인 코리아" })
+  })
+})
+
 describe("site-level JSON-LD", () => {
   it("Organization 은 대체 이름·법인명·주소·설명을 담고 근거 없는 필드는 싣지 않는다", () => {
     const org = createOrganizationJsonLd()
+    expect(org.name).toBe("Classin")
+    expect(org.brand).toMatchObject({ name: "Classin" })
     expect(org.alternateName).toEqual(["클래스인", "ClassIn"])
     expect(org.legalName).toBe(COMPANY_LEGAL_NAME)
     expect(org.legalName).toBe("이이오클래스인코리아 유한회사")
@@ -131,7 +148,13 @@ describe("site-level JSON-LD", () => {
 
   it("WebSite 는 대체 이름을 갖고 SearchAction 이 noindex 검색 결과 페이지를 가리킨다", () => {
     const site = createWebsiteJsonLd()
-    expect(site.alternateName).toBe("클래스인")
+    expect(site).toMatchObject({
+      name: "클래스인 코리아",
+      alternateName: ["클래스인", "ClassIn Korea", "Classin"],
+      inLanguage: "ko-KR",
+      url: SITE_URL,
+      publisher: { "@id": createOrganizationJsonLd()["@id"] },
+    })
     expect(site.potentialAction).toMatchObject({
       "@type": "SearchAction",
       target: { "@type": "EntryPoint", urlTemplate: `${SITE_URL}/docs/search?q={search_term_string}` },

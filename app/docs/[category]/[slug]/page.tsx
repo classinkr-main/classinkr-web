@@ -25,11 +25,11 @@ import {
   resolveDocsRedirect,
 } from "@/lib/docs-content"
 import { JsonLd } from "@/components/seo/JsonLd"
+import { KOREA_WEBSITE_NAME } from "@/lib/classin-positioning"
 import { createDocStructuredData, pickDocShareImage } from "@/lib/docs-structured-data"
 import {
   DEFAULT_OG_IMAGE_PATH,
   DEFAULT_TWITTER_IMAGE_PATH,
-  SITE_NAME,
   toAbsoluteUrl,
 } from "@/lib/seo"
 
@@ -88,7 +88,7 @@ export async function generateMetadata({
       title: socialTitle,
       description: metaDescription,
       url: canonicalUrl,
-      siteName: SITE_NAME,
+      siteName: KOREA_WEBSITE_NAME,
       locale: "ko_KR",
       type: "article",
       modifiedTime: doc.updatedAt,
