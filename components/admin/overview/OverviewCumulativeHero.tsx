@@ -76,7 +76,9 @@ function CumulativeFigure({
   href,
   hrefLabel,
   onRetry,
+  compact = false,
 }: {
+  compact?: boolean
   label: string
   unit: string
   state: SectionState
@@ -92,9 +94,9 @@ function CumulativeFigure({
   return (
     <div className="min-w-0" aria-busy={state === "loading"}>
       <div className="flex items-center justify-between gap-3">
-        <p className="text-sm font-medium text-[#31302E]">{label}</p>
-        <Link href={href} className="inline-flex items-center gap-1 text-xs font-semibold text-[#084734] hover:text-[#065c41]">
-          {hrefLabel}
+        <p className={`font-medium text-[#31302E] ${compact ? "text-[13px]" : "text-sm"}`}>{label}</p>
+        <Link href={href} aria-label={hrefLabel} className="inline-flex items-center gap-1 text-xs font-semibold text-[#084734] hover:text-[#065c41]">
+          {compact ? null : hrefLabel}
           <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
         </Link>
       </div>
@@ -102,17 +104,17 @@ function CumulativeFigure({
         <div className="mt-3 space-y-3">
           <Skeleton className="h-14 w-40" />
           <Skeleton className="h-4 w-56" />
-          <Skeleton className="h-[120px] w-full" />
+          {compact ? null : <Skeleton className="h-[120px] w-full" />}
         </div>
       ) : state === "ready" && value !== null ? (
         <>
-          <p className={`mt-2 text-[52px] font-bold leading-none tracking-[-0.04em] sm:text-[64px] ${accent ? "text-[#084734]" : "text-[#111110]"}`}>
+          <p className={`mt-2 font-bold leading-none tracking-[-0.04em] ${compact ? "text-[36px] sm:text-[40px]" : "text-[52px] sm:text-[64px]"} ${accent ? "text-[#084734]" : "text-[#111110]"}`}>
             {value.toLocaleString("ko-KR")}
-            <span className="ml-1.5 text-2xl font-semibold tracking-normal text-[#111110]">{unit}</span>
+            <span className={`ml-1.5 font-semibold tracking-normal text-[#111110] ${compact ? "text-base" : "text-2xl"}`}>{unit}</span>
           </p>
-          <p className="mt-3 text-sm text-[#31302E]">{delta}</p>
-          {series && series.length > 1 ? (
-            <div className="mt-4" role="img" aria-label={`${label} 월말 누적 추이, ${ymLabel(series[0].ym)} ${series[0].cumulative.toLocaleString("ko-KR")}${unit}에서 ${ymLabel(series[series.length - 1].ym)} ${series[series.length - 1].cumulative.toLocaleString("ko-KR")}${unit}`}>
+          <p className={`mt-2 text-[#31302E] ${compact ? "text-xs" : "text-sm"}`}>{delta}</p>
+          {!compact && series && series.length > 1 ? (
+            <div className={compact ? "mt-2" : "mt-4"} role="img" aria-label={`${label} 월말 누적 추이, ${ymLabel(series[0].ym)} ${series[0].cumulative.toLocaleString("ko-KR")}${unit}에서 ${ymLabel(series[series.length - 1].ym)} ${series[series.length - 1].cumulative.toLocaleString("ko-KR")}${unit}`}>
               <CumulativeTrendChart data={series.map((point) => ({ label: ymLabel(point.ym), count: point.cumulative }))} suffix={unit} />
               <div className="mt-1 flex justify-between text-[11px] tabular-nums text-[#615D59]" aria-hidden="true">
                 <span>{ymLabel(series[0].ym)}</span>
@@ -128,7 +130,7 @@ function CumulativeFigure({
           {state === "error" ? <SourceRetry label={label} onRetry={onRetry} /> : null}
         </div>
       )}
-      <p className="mt-3 text-[11px] leading-relaxed text-[#615D59]">{caption}</p>
+      <p className={`${compact ? "mt-2" : "mt-3"} text-[11px] leading-relaxed text-[#615D59]`}>{caption}</p>
     </div>
   )
 }
@@ -141,11 +143,17 @@ export function OverviewCumulativeHero({
   summary,
   loading,
   onRetry,
+  variant = "hero",
+  className = "mb-6",
 }: {
   summary: OverviewCumulativeSummary | null
   loading: boolean
   onRetry: () => void
+  /** compact: 첫 줄 오른쪽 칸(브리핑형) — 두 숫자를 위아래로 쌓고 추이선을 낮춘다. */
+  variant?: "hero" | "compact"
+  className?: string
 }) {
+  const compact = variant === "compact"
   const customers = summary?.customers.status === "ready" ? summary.customers : null
   const units = summary?.units.status === "ready" ? summary.units : null
   const customerData = customers?.data ?? null
@@ -154,39 +162,41 @@ export function OverviewCumulativeHero({
   const fy = customerData ? fyLabel(customerData.ledgerFiscalYear) : "이번 FY"
 
   return (
-    <section aria-labelledby="overview-cumulative-heading" className={`mb-6 rounded-2xl border ${BORDER} bg-white px-5 py-7 sm:px-9 sm:py-8`}>
-      <h2 id="overview-cumulative-heading" className="text-xs font-semibold text-[#615D59]">지금까지 · 누적</h2>
-      <div className="mt-5 grid grid-cols-1 gap-10 lg:grid-cols-2 lg:gap-0">
+    <section aria-labelledby="overview-cumulative-heading" className={`${className} rounded-2xl border ${BORDER} bg-white ${compact ? "px-5 py-4 sm:px-6" : "px-5 py-7 sm:px-9 sm:py-8"}`}>
+      <h2 id="overview-cumulative-heading" className={compact ? "text-[16px] font-bold text-[#111110]" : "text-xs font-semibold text-[#615D59]"}>{compact ? <>누적 <span className="ml-1 text-[12px] font-normal text-[#615D59]">전사 · 도입 이후</span></> : "지금까지 · 누적"}</h2>
+      <div className={compact ? "mt-4 grid grid-cols-2 gap-5" : "mt-5 grid grid-cols-1 gap-10 lg:grid-cols-2 lg:gap-0"}>
         <CumulativeFigure
           label="누적 고객"
           unit="곳"
           state={sectionState(summary?.customers, loading)}
           value={customerData?.total ?? null}
           accent
-          delta={customerData ? <>이번 회계연도 <b className="font-semibold text-[#084734]">+{customerData.fyAdded.toLocaleString("ko-KR")}곳</b> · 이번 달 +{customerData.monthAdded.toLocaleString("ko-KR")}곳</> : null}
+          delta={customerData && compact ? <>{fy} <b className="font-semibold text-[#084734]">+{customerData.fyAdded.toLocaleString("ko-KR")}</b> · 이번 달 +{customerData.monthAdded.toLocaleString("ko-KR")}</> : customerData ? <>이번 회계연도 <b className="font-semibold text-[#084734]">+{customerData.fyAdded.toLocaleString("ko-KR")}곳</b> · 이번 달 +{customerData.monthAdded.toLocaleString("ko-KR")}곳</> : null}
           series={customerData?.series ?? null}
           href="/admin/branch/ledger?period=Y"
           hrefLabel="매출 장부"
           onRetry={onRetry}
-          caption={<>
+          compact={compact}
+          caption={compact ? <>기준: 결제 이력 기관 · 중복 제거 · 취소·해지 제외 · {fy} 장부<br />원천: REV 매출 장부{customersAsOf ? ` · ${customersAsOf}` : ""}</> : <>
             기준: 결제 이력이 있는 기관(첫 결제일 또는 확정 매출 월) · 기관 키로 중복 제거 · 취소·해지 제외 · {fy} 장부에 남은 기관만
             {customerData && customerData.undatedCount > 0 ? <> · 첫 결제 월 미상 {customerData.undatedCount}곳은 합계에만</> : null}
             <br />원천: REV 매출 장부{customers?.sourceKind === "mirror" ? "(시트 미러)" : ""}{customersAsOf ? ` · ${customersAsOf} 기준` : ""}
           </>}
         />
-        <div className={`lg:border-l ${BORDER} lg:pl-10`}>
+        <div className={compact ? `min-w-0 border-l ${BORDER} pl-5` : `lg:border-l ${BORDER} lg:pl-10`}>
           <CumulativeFigure
             label="누적 판매"
             unit="대"
             state={sectionState(summary?.units, loading)}
             value={unitData?.total ?? null}
             accent={false}
-            delta={unitData ? <>이번 회계연도 <b className="font-semibold text-[#084734]">+{unitData.fyAdded.toLocaleString("ko-KR")}대</b> · 이번 달 +{unitData.monthAdded.toLocaleString("ko-KR")}대 · 배송 예정 {unitData.planned.toLocaleString("ko-KR")}대 별도</> : null}
+            delta={unitData && compact ? <>{fy} <b className="font-semibold text-[#084734]">+{unitData.fyAdded.toLocaleString("ko-KR")}</b> · 이번 달 +{unitData.monthAdded.toLocaleString("ko-KR")}<br />배송 예정 {unitData.planned.toLocaleString("ko-KR")}대 별도</> : unitData ? <>이번 회계연도 <b className="font-semibold text-[#084734]">+{unitData.fyAdded.toLocaleString("ko-KR")}대</b> · 이번 달 +{unitData.monthAdded.toLocaleString("ko-KR")}대 · 배송 예정 {unitData.planned.toLocaleString("ko-KR")}대 별도</> : null}
             series={unitData?.series ?? null}
             href="/admin/hardware"
             hrefLabel="하드웨어 재고"
             onRetry={onRetry}
-            caption={<>
+            compact={compact}
+            caption={compact ? <>기준: 전자칠판 실판매 출고 · 예정·프로모션·샘플·A/S 제외<br />원천: 하드웨어 재고 원장{unitData?.firstYm ? ` · ${ymLabel(unitData.firstYm)}부터` : ""}</> : <>
               기준: 전자칠판 실판매 출고 수량 · 예정·프로모션·샘플·A/S·내부 이동·무효 제외
               {unitData && unitData.returned > 0 ? <> · 회수 {unitData.returned.toLocaleString("ko-KR")}대는 빼지 않고 별도</> : null}
               {unitData && unitData.undated > 0 ? <> · 출고일 미상 {unitData.undated}대는 합계에만</> : null}

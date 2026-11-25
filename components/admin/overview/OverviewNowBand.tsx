@@ -66,9 +66,9 @@ function Cell({ label, href, linkLabel, children }: { label: string; href: strin
 
 function BigValue({ value, unit, tone = "text-[#111110]" }: { value: string; unit: string; tone?: string }) {
   return (
-    <p className={`text-[40px] font-bold leading-none tracking-[-0.03em] tabular-nums ${tone}`}>
+    <p className={`text-[44px] font-bold leading-none tracking-[-0.035em] tabular-nums sm:text-[56px] ${tone}`}>
       {value}
-      <span className="ml-1 text-[16px] font-semibold tracking-normal">{unit}</span>
+      <span className="ml-1 text-[18px] font-semibold tracking-normal">{unit}</span>
     </p>
   )
 }
@@ -181,6 +181,58 @@ function FeedRow({ item }: { item: IntakeFeedItem }) {
   )
 }
 
+function IntakeFeed({ intake, maxItems, standalone = false }: { intake: LiveIntakeState; maxItems: number; standalone?: boolean }) {
+  const intakeData = intake.data
+  const intakeMeasured = intakeData ? intakeData.adminMeasured || intakeData.compassMeasured : false
+  const feed = intakeData?.items.slice(0, maxItems) ?? []
+  return (
+      <div className={standalone ? "flex h-full flex-col" : "border-t border-[rgba(0,0,0,0.08)]"}>
+        <div className="flex items-center justify-between gap-3 px-5 pb-1.5 pt-3.5 sm:px-6">
+          {standalone ? <h2 id="overview-today-inquiries-heading" className="text-[16px] font-bold text-[#111110]">오늘 들어온 문의</h2> : <h3 className="text-[13px] font-bold text-[#111110]">오늘 들어온 문의</h3>}
+          <span className="text-[12px] text-[#615D59]">최근순</span>
+        </div>
+        {!intakeData && !intake.error ? (
+          <div className="space-y-2 px-5 pb-4 pt-1 sm:px-6">
+            <Skeleton className="h-9 w-full" />
+            <Skeleton className="h-9 w-full" />
+          </div>
+        ) : !intakeData || !intakeMeasured ? (
+          <p className="px-5 pb-5 pt-1 text-[13px] text-[#615D59] sm:px-6">오늘 문의 목록을 불러오지 못했습니다.</p>
+        ) : feed.length === 0 ? (
+          <p className="px-5 pb-5 pt-1 text-[13px] text-[#615D59] sm:px-6">오늘 들어온 문의가 아직 없습니다.</p>
+        ) : (
+          <ul>
+            {feed.map((item) => (
+              <FeedRow key={item.key} item={item} />
+            ))}
+          </ul>
+        )}
+        <div className={`${standalone ? "mt-auto " : ""}flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-5 py-2 sm:px-6`}>
+          <span className="text-[12px] text-[#615D59]">
+            {intakeData && !intakeData.compassMeasured
+              ? "Compass 연결이 끊겨 어드민 리드만 셉니다 · 연결되면 자동으로 다시 셉니다"
+              : `어드민 리드 + Compass 리드 · 전화번호가 같으면 1건으로 셉니다${intakeData && intakeData.overlapCount > 0 ? ` (겹침 ${COUNT.format(intakeData.overlapCount)}건)` : ""}`}
+          </span>
+          <Link href={`${LEADS_BOARD_HREF}?sort=newest&unconfirmed=1`} className="inline-flex items-center text-[13px] font-semibold text-[#084734] hover:underline">
+            리드 목록 모두 보기 →
+          </Link>
+        </div>
+      </div>
+  )
+}
+
+/** "오늘 들어온 문의" 피드만 따로 — 띠와 같은 useLiveIntake 상태를 받는다(같은 응답·같은 갱신 주기). */
+export function OverviewTodayInquiries({ intake, maxItems = 6, className = "" }: { intake: LiveIntakeState; maxItems?: number; className?: string }) {
+  return (
+    <section
+      aria-labelledby="overview-today-inquiries-heading"
+      className={`overflow-hidden rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white ${className}`}
+    >
+      <IntakeFeed intake={intake} maxItems={maxItems} standalone />
+    </section>
+  )
+}
+
 export interface OverviewNowBandProps {
   visitorState: SourceState
   visitorToday: { visitors: number; homeVisitors: number } | null
@@ -191,6 +243,9 @@ export interface OverviewNowBandProps {
   onLeadRetry: () => void
   intake: LiveIntakeState
   maxItems?: number
+  /** false 면 "오늘 들어온 문의" 피드를 띠 안에 그리지 않는다 — Overview 는 피드를 옆 칸(OverviewTodayInquiries)에 둔다. */
+  showFeed?: boolean
+  className?: string
 }
 
 export function OverviewNowBand({
@@ -202,13 +257,14 @@ export function OverviewNowBand({
   onLeadRetry,
   intake,
   maxItems = 5,
+  showFeed = true,
+  className = "mb-7",
 }: OverviewNowBandProps) {
   const intakeData = intake.data
   const intakeMeasured = intakeData ? intakeData.adminMeasured || intakeData.compassMeasured : false
   const intakePartial = intakeData ? !intakeData.adminMeasured || !intakeData.compassMeasured || intakeData.compassTruncated : false
   const breakdown = intakeData && intakeMeasured ? sourceBreakdown(intakeData) : null
   const asOf = intakeData?.windows.nowIso ?? null
-  const feed = intakeData?.items.slice(0, maxItems) ?? []
   const leadsReady = leadState === "ready" && companyMetrics != null
   const unresponded = companyMetrics?.unrespondedCount ?? 0
   const late = companyMetrics?.unresponded24hCount ?? 0
@@ -218,7 +274,7 @@ export function OverviewNowBand({
   return (
     <section
       aria-labelledby="overview-now-heading"
-      className="relative mb-7 overflow-hidden rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[rgba(0,0,0,0.04)_0px_4px_18px,rgba(0,0,0,0.027)_0px_2px_7.8px,rgba(0,0,0,0.02)_0px_0.8px_2.9px]"
+      className={`relative ${className} overflow-hidden rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[rgba(0,0,0,0.04)_0px_4px_18px,rgba(0,0,0,0.027)_0px_2px_7.8px,rgba(0,0,0,0.02)_0px_0.8px_2.9px]`}
     >
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[rgba(0,0,0,0.08)] px-5 py-3 sm:px-6">
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
@@ -246,7 +302,7 @@ export function OverviewNowBand({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-px bg-[rgba(0,0,0,0.08)] lg:grid-cols-4">
+      <div className="grid flex-1 grid-cols-2 gap-px bg-[rgba(0,0,0,0.08)] lg:grid-cols-4">
         <Cell label="오늘 방문" href={TRAFFIC_HREF} linkLabel="트래픽">
           {visitorState === "loading" && !visitorToday ? (
             <ValueSkeleton />
@@ -312,38 +368,7 @@ export function OverviewNowBand({
         </Cell>
       </div>
 
-      <div className="border-t border-[rgba(0,0,0,0.08)]">
-        <div className="flex items-center justify-between gap-3 px-5 pb-1.5 pt-3.5 sm:px-6">
-          <h3 className="text-[13px] font-bold text-[#111110]">오늘 들어온 문의</h3>
-          <span className="text-[12px] text-[#615D59]">최근순</span>
-        </div>
-        {!intakeData && !intake.error ? (
-          <div className="space-y-2 px-5 pb-4 pt-1 sm:px-6">
-            <Skeleton className="h-9 w-full" />
-            <Skeleton className="h-9 w-full" />
-          </div>
-        ) : !intakeData || !intakeMeasured ? (
-          <p className="px-5 pb-5 pt-1 text-[13px] text-[#615D59] sm:px-6">오늘 문의 목록을 불러오지 못했습니다.</p>
-        ) : feed.length === 0 ? (
-          <p className="px-5 pb-5 pt-1 text-[13px] text-[#615D59] sm:px-6">오늘 들어온 문의가 아직 없습니다.</p>
-        ) : (
-          <ul>
-            {feed.map((item) => (
-              <FeedRow key={item.key} item={item} />
-            ))}
-          </ul>
-        )}
-        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-5 py-2 sm:px-6">
-          <span className="text-[12px] text-[#615D59]">
-            {intakeData && !intakeData.compassMeasured
-              ? "Compass 연결이 끊겨 어드민 리드만 셉니다 · 연결되면 자동으로 다시 셉니다"
-              : `어드민 리드 + Compass 리드 · 전화번호가 같으면 1건으로 셉니다${intakeData && intakeData.overlapCount > 0 ? ` (겹침 ${COUNT.format(intakeData.overlapCount)}건)` : ""}`}
-          </span>
-          <Link href={`${LEADS_BOARD_HREF}?sort=newest&unconfirmed=1`} className="inline-flex items-center text-[13px] font-semibold text-[#084734] hover:underline">
-            리드 목록 모두 보기 →
-          </Link>
-        </div>
-      </div>
+      {showFeed ? <IntakeFeed intake={intake} maxItems={maxItems} /> : null}
     </section>
   )
 }

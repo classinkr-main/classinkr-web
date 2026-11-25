@@ -72,8 +72,8 @@ import type { AdminBlogOverviewSummary } from "@/lib/admin/overview/blog-summary
 import type { EmailCampaign } from "@/lib/marketing-types"
 import type { BugReport } from "@/lib/bugs-data"
 import type { PatchNote } from "@/lib/patch-notes-data"
-import { OverviewBriefing, OverviewOperationsPanels, OverviewScorecard, type OverviewMetric } from "@/components/admin/overview/OverviewWorkspace"
-import { OverviewNowBand } from "@/components/admin/overview/OverviewNowBand"
+import { OverviewOperationsPanels, OverviewScorecard, type OverviewMetric } from "@/components/admin/overview/OverviewWorkspace"
+import { OverviewNowBand, OverviewTodayInquiries } from "@/components/admin/overview/OverviewNowBand"
 import { useLiveIntake } from "@/components/admin/overview/useLiveIntake"
 import type { OverviewOperationsSummary } from "@/lib/admin/overview/operations-summary"
 import type { OverviewCumulativeSummary } from "@/lib/admin/overview/cumulative-summary"
@@ -384,6 +384,8 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
   const [loading, setLoading] = useState(true)
   const [chartRange, setChartRange] = useState<7 | 30>(7)
   const [alertsExpanded, setAlertsExpanded] = useState(false)
+  // 브리핑형 하단(퍼널·전체 지표·일정·콘텐츠·캠페인·연동·채널) 펼침 — 기본은 접힘.
+  const [moreOpen, setMoreOpen] = useState(false)
   const [operations, setOperations] = useState<OverviewOperationsSummary | null>(null)
   const [operationsLoading, setOperationsLoading] = useState(true)
   const [operationsRefreshKey, setOperationsRefreshKey] = useState(0)
@@ -986,10 +988,6 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
     metric({ id: "content", group: "유입·콘텐츠", label: "공개 블로그", value: `${osSummary?.content.blogPublished ?? 0}건`, note: osSourceError("content") ?? "현재 공개 상태", reference: `기존 운영 기준 ${osSummary?.content.target ?? "—"}건`, href: "/admin/blog", state: osSourceState("content"), progress: osSummary?.content.target ? (osSummary.content.blogPublished ?? 0) / osSummary.content.target * 100 : undefined }, "os"),
     metric({ id: "events", group: "유입·콘텐츠", label: "공개 행사", value: `${osSummary?.events.count ?? 0}건`, note: osSourceError("events") ?? "현재 공개 상태", reference: `기존 운영 기준 ${osSummary?.events.target ?? "—"}건`, href: "/admin/events", state: osSourceState("events"), progress: osSummary?.events.target ? (osSummary.events.count ?? 0) / osSummary.events.target * 100 : undefined }, "os"),
   ]
-  const heroMetrics = [metrics[0], metrics[4], metrics[6], {
-    ...metrics[8], label: "연간 매출 달성", value: branchSummary?.revenue.goal ? `${Math.round(branchSummary.revenue.confirmed / branchSummary.revenue.goal * 100)}%` : "—",
-    note: `확정 ${fmtCny(branchSummary?.revenue.confirmed ?? 0)} / 승인 목표 ${fmtCny(branchSummary?.revenue.goal ?? 0)} · CNY`,
-  }]
 
   return (
     <div className="relative mx-auto max-w-[1440px] px-4 pt-6 pb-16 sm:px-6 sm:pt-8 lg:px-8 lg:pb-20 [&_a]:min-h-11 [&_button]:min-h-11 [&_a]:focus-visible:outline-none [&_a]:focus-visible:ring-2 [&_a]:focus-visible:ring-[#084734] [&_a]:focus-visible:ring-offset-2 [&_button]:focus-visible:outline-none [&_button]:focus-visible:ring-2 [&_button]:focus-visible:ring-[#084734] [&_button]:focus-visible:ring-offset-2">
@@ -1065,9 +1063,11 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
         </div>
       ) : null}
 
-      <OverviewCumulativeHero summary={cumulative} loading={cumulativeLoading} onRetry={retryCumulative} />
-
+      {/* 1줄: 지금(왼쪽, 큰 숫자) + 누적(오른쪽) — 시안 ① 브리핑형 */}
+      <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-12">
       <OverviewNowBand
+        className="flex flex-col lg:col-span-8"
+        showFeed={false}
         visitorState={sourceStates.visitor}
         visitorToday={visitorStats ? { visitors: visitorStats.today.visitors, homeVisitors: visitorStats.today.homeVisitors } : null}
         onVisitorRetry={() => retrySource("visitor")}
@@ -1076,14 +1076,13 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
         onLeadRetry={() => retrySource("leads")}
         intake={liveIntake}
       />
+      <OverviewCumulativeHero variant="compact" className="lg:col-span-4" summary={cumulative} loading={cumulativeLoading} onRetry={retryCumulative} />
+      </div>
 
-      <OverviewBriefing metrics={heroMetrics} summary={<>
-        {unrespondedSignal ? unrespondedSignal.unresponded24hCount > 0 ? <>24시간 넘게 신규 상태인 내 리드 <span className="text-[#B43E3E]">{unrespondedSignal.unresponded24hCount}건</span>을 확인하세요. </> : <>24시간 이상 신규 상태로 남은 내 담당 리드는 없습니다. </> : <>리드 후속 현황을 확인하고 있습니다. </>}
-        {demos ? <>앞으로 7일 데모 <span className="text-[#084734]">{demos.truncated ? "최소 " : ""}{demos.next7Count}회</span>, </> : <>{operationsLoading ? "데모 일정을 불러오는 중입니다. " : "데모 원천 확인이 필요합니다. "}</>}
-        {installations ? <>설치·배송 예정 <span className="text-[#084734]">{installations.units}대</span>가 대기 중입니다.</> : <>{operationsLoading ? "설치·배송 현황을 불러오는 중입니다." : "설치·배송 원천 확인이 필요합니다."}</>}
-      </>} />
 
-      <section className="mb-10" aria-labelledby="overview-focus-heading">
+      {/* 2줄: 먼저 볼 것 + 오늘 들어온 문의 */}
+      <div className="mb-10 grid grid-cols-1 gap-6 lg:grid-cols-12">
+      <section className="min-w-0 lg:col-span-7" aria-labelledby="overview-focus-heading">
         <div className="mb-4 flex items-center justify-between gap-3">
           <h2 id="overview-focus-heading" className="text-xl font-bold tracking-[-0.025em] text-[#111110]">먼저 볼 {Math.min(3, operationalAlerts.length)}가지</h2>
           <span className="text-xs text-[#615D59]">주의 {actionableOperationalAlertCount} · 기존 운영 우선순위</span>
@@ -1101,10 +1100,12 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
           </>}
         </div>
       </section>
-
-      <OverviewCumulativeMonthly summary={cumulative} loading={cumulativeLoading} onRetry={retryCumulative} />
+      <OverviewTodayInquiries intake={liveIntake} className="lg:col-span-5" />
+      </div>
 
       <OverviewOperationsPanels leadState={sourceStates.leads} onLeadRetry={() => retrySource("leads")} leads={sourceStates.leads === "ready" ? { new: companyFunnel.newLeads, contacted: companyFunnel.contactedLeads, converted: companyFunnel.converted, closed: companyFunnel.closedLeads } : null} operations={operations} loading={operationsLoading} onRetry={retryOperations} />
+
+      <OverviewCumulativeMonthly summary={cumulative} loading={cumulativeLoading} onRetry={retryCumulative} />
 
       <div className="grid grid-cols-1 gap-6 mb-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <section
@@ -1216,6 +1217,15 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
         </section>
       </div>
 
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white px-5 py-3 sm:px-6">
+        <p className="text-[13px] text-[#615D59]">세일즈 퍼널 · 전체 지표 · 이번 주 일정 · 콘텐츠 · 캠페인 · 연동 · 채널 지표</p>
+        <button type="button" onClick={() => setMoreOpen((value) => !value)} aria-expanded={moreOpen} aria-controls="overview-more-sections" className="inline-flex items-center gap-1 rounded-md border border-[#E8E8E4] bg-white px-3 text-[12px] font-semibold text-[#111110] hover:border-[#C8C8C4]">
+          {moreOpen ? "접기" : "펼치기"}
+          {moreOpen ? <ChevronUp className="h-3.5 w-3.5" aria-hidden="true" /> : <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />}
+        </button>
+      </div>
+      {/* 브리핑형(시안 ①): 첫 두 줄 아래의 넓은 목록·지표판은 접어 두고, 펼치면 지금까지와 같은 화면을 그린다. */}
+      <div id="overview-more-sections" hidden={!moreOpen} className="mt-6">
       <div className="overflow-hidden rounded-2xl border border-[#e8e8e4] bg-white shadow-[0_1px_0_rgba(17,17,16,0.02)]">
         <div className="flex flex-col gap-3 border-b border-[#e8e8e4] px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
           <h2 className="text-[14px] font-semibold text-[#111110]">세일즈 퍼널 / 최근 유입 <span className="text-[11px] font-normal text-[#615D59]">전사</span></h2>
@@ -1561,6 +1571,7 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
             </div>
           )}
         </SectionCard>
+      </div>
       </div>
     </div>
   )
