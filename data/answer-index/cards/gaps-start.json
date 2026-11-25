@@ -2090,5 +2090,89 @@
         "checked": "관련 문장 없음 확인"
       }
     ]
+  },
+  {
+    "id": "gap:start/mirror-app-target",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "start",
+    "topic": "클래스인 Mirror 앱의 설치 대상",
+    "textHash": "",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "asks": [
+      "definition",
+      "howto",
+      "yesno"
+    ],
+    "concepts": [
+      "C_mirror_app",
+      "C_mobile"
+    ],
+    "anchors": [
+      "Mirror 앱",
+      "미러 앱",
+      "클래스인 미러",
+      "스토어 검색",
+      "태블릿 앱 이름",
+      "미러 설치"
+    ],
+    "covers": "앱 스토어에서 Mirror 이름으로 보이는 앱이 누구를 위한 것이고 설치해야 하는지는 공개 안내에 없다는 것",
+    "notCovers": [
+      "휴대폰·태블릿에 앱 설치하는 방법 → doc:/docs/start/mobile-install#summary/mobile-install-overview",
+      "휴대폰·태블릿 설치 방법과 지원 기종 → fixed:basics-mobile-device-support",
+      "휴대폰·태블릿과 PC 기능 차이 → doc:/docs/start/mobile-install#4/mobile-vs-pc-features"
+    ],
+    "negatives": [
+      {
+        "q": "휴대폰에 클래스인 앱 설치하는 방법",
+        "route": "doc:/docs/start/mobile-install#summary/mobile-install-overview"
+      },
+      {
+        "q": "태블릿에서 지원되는 기종이 뭐예요",
+        "route": "fixed:basics-mobile-device-support"
+      },
+      {
+        "q": "태블릿과 PC 기능 차이가 있나요",
+        "route": "doc:/docs/start/mobile-install#4/mobile-vs-pc-features"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "provenance": {
+      "unit": "R2-B6",
+      "writer": "agent:fable#B6",
+      "at": "2026-11-25",
+      "legacyIds": []
+    },
+    "searchLog": [
+      {
+        "query": "Mirror",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "미러 앱",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "클래스인 미러",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "스토어 검색",
+        "units": 2,
+        "site": 0,
+        "checked": "해당 방법 설명 없음 확인(관련 문장은 다른 주제)"
+      }
+    ]
   }
 ]

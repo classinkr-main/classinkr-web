@@ -2744,5 +2744,93 @@
       "at": "2026-11-20",
       "legacyIds": []
     }
+  },
+  {
+    "id": "gap:board/touch-calibration-manual",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "board",
+    "topic": "전자칠판 터치 보정 매뉴얼",
+    "textHash": "",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": [
+        {
+          "unit": "doc:/docs/hardware/board-writing-touch#2",
+          "i": 1,
+          "hash": "4e16365a1f711264"
+        }
+      ]
+    },
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_touch_calibration"
+    ],
+    "anchors": [
+      "터치 보정",
+      "보정 매뉴얼",
+      "터치 틀어짐",
+      "터치 위치 어긋남",
+      "보정 방법",
+      "사용설명서 다운로드"
+    ],
+    "covers": "전자칠판 터치 보정 방법을 적은 매뉴얼이 따로 있는지, 어디서 받는지는 공개 안내에 없다는 것",
+    "notCovers": [
+      "화면 멈춤·터치 불량이 반복될 때 A/S 접수 → doc:/docs/hardware/board-basic-operation#7/as-when-no-disassemble",
+      "전자칠판 기본 조작 한눈에 → doc:/docs/hardware/board-basic-operation#summary/basic-operation-overview",
+      "보드 화면이 안 나올 때 → doc:/docs/hardware/board-basic-operation#6/no-screen-checks"
+    ],
+    "negatives": [
+      {
+        "q": "터치가 계속 멈추면 어디에 접수해요",
+        "route": "doc:/docs/hardware/board-basic-operation#7/as-when-no-disassemble"
+      },
+      {
+        "q": "전자칠판 버튼 위치와 기본 조작",
+        "route": "doc:/docs/hardware/board-basic-operation#summary/basic-operation-overview"
+      },
+      {
+        "q": "칠판 화면이 켜지지 않아요",
+        "route": "doc:/docs/hardware/board-basic-operation#6/no-screen-checks"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "provenance": {
+      "unit": "R2-B6",
+      "writer": "agent:fable#B6",
+      "at": "2026-11-25",
+      "legacyIds": []
+    },
+    "searchLog": [
+      {
+        "query": "터치 보정",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "보정 매뉴얼",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "터치 틀어",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "영점",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ]
   }
 ]

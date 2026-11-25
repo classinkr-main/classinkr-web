@@ -1612,6 +1612,30 @@
       "decidedAt": null,
       "blockPhrases": [],
       "note": "R2 B6: review 로 내림. 확인 뒤 문서 문장이 바뀌면 카드 복구."
+    },
+    {
+      "id": "HQ-3503",
+      "topic": "상담 기록에서 자주 나오지만 공개 문서에 근거가 없는 주제(공백 카드로 두고 사실 확인 요청)",
+      "currentText": "공개 안내에 없는 내용이라 상담으로 확인해 드린다는 공백 카드 10종: gap:recording/external-attendance-sync, gap:recording/watermark-control, gap:admin/proxy-register-check, gap:start/tablet-landscape-cutoff, gap:classroom/onstage-one-to-one-camera, gap:support/overseas-remote-support, gap:admin/monitoring-contact-sms, gap:start/mirror-app-target, gap:classroom/sgf-multiple-open, gap:board/touch-calibration-manual.",
+      "conflict": "이 10개는 상담 기록에서 반복해 물어보지만 저장소 공개 문서(units.json·site-facts.json)에서 답을 지지하는 문장을 찾지 못했다. 상담원이 말한 내용은 사실로 옮겨 적지 않았다. 담당자가 공식 근거를 정하기 전에는 챗봇이 '있다/없다/된다'를 단정하면 안 된다.",
+      "proposal": "담당자(상담·제품)가 각 주제의 실제 가능 범위(외부 출결 연동 방식, 워터마크 표시·해제 주체, 대리 등록 확인 위치, 태블릿 가로 화면 권장 해상도, 온스테이지 1:1 카메라 배치, 해외 원격 지원 가능 여부, 모니터링 연락의 발송 방식·비용, Mirror 앱 대상, sgf 동시 열기, 터치 보정 매뉴얼 위치)를 문서로 정하면, 근거 문장을 문서에 먼저 넣고 extract 를 다시 돌려 doc 카드로 바꾼다. 금액·무상·약속 문구는 쓰지 않는다.",
+      "affectedCards": [
+        "gap:recording/external-attendance-sync",
+        "gap:recording/watermark-control",
+        "gap:admin/proxy-register-check",
+        "gap:start/tablet-landscape-cutoff",
+        "gap:classroom/onstage-one-to-one-camera",
+        "gap:support/overseas-remote-support",
+        "gap:admin/monitoring-contact-sms",
+        "gap:start/mirror-app-target",
+        "gap:classroom/sgf-multiple-open",
+        "gap:board/touch-calibration-manual"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": [],
+      "note": "R2 B6: 이 항목은 결정 전에도 답을 막지 않는다(공백 카드는 단정하지 않음). 결정이 나면 카드 종류를 바꾼다."
     }
   ]
 }

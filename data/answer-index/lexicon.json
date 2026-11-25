@@ -37452,5 +37452,80 @@
       "상대 카메라"
     ],
     "ambiguous": []
+  },
+  {
+    "id": "C_monitoring_contact",
+    "kind": "object",
+    "generic": false,
+    "parents": [],
+    "doc": [
+      "모니터링 연락"
+    ],
+    "visitor": [
+      "연락 기능",
+      "연락 버튼",
+      "모니터링에서 연락",
+      "연락 문자 요금",
+      "교사에게 연락하기"
+    ],
+    "ambiguous": []
+  },
+  {
+    "id": "C_mirror_app",
+    "kind": "object",
+    "generic": false,
+    "parents": [
+      "C_mobile"
+    ],
+    "doc": [
+      "Mirror 앱"
+    ],
+    "visitor": [
+      "클래스인 미러",
+      {
+        "form": "미러 앱",
+        "boundary": "both"
+      },
+      "mirror로 검색",
+      "Mirror 설치",
+      "클래스 미러"
+    ],
+    "ambiguous": []
+  },
+  {
+    "id": "C_sgf_file",
+    "kind": "object",
+    "generic": false,
+    "parents": [],
+    "doc": [
+      "sgf 파일"
+    ],
+    "visitor": [
+      "기보 파일",
+      "sgf 두 개",
+      "sgf 동시에",
+      "바둑 기보",
+      "sgf 열기"
+    ],
+    "ambiguous": []
+  },
+  {
+    "id": "C_touch_calibration",
+    "kind": "action",
+    "generic": false,
+    "parents": [
+      "C_board"
+    ],
+    "doc": [
+      "터치 보정"
+    ],
+    "visitor": [
+      "터치 틀어짐",
+      "터치 위치 어긋남",
+      "터치 영점",
+      "보정 매뉴얼",
+      "터치 보정 방법"
+    ],
+    "ambiguous": []
   }
 ]
