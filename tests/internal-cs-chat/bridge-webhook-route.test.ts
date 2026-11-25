@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   getClientIp: vi.fn(() => "127.0.0.1"),
   getInternalCsIntegrationEventByIdempotency: vi.fn(),
   getInternalCsConversation: vi.fn(),
+  internalCsConversationExists: vi.fn(),
   createInternalCsConversation: vi.fn(),
   claimInternalCsIntegrationEvent: vi.fn(),
   deleteEmptyInternalCsConversation: vi.fn(),
@@ -30,6 +31,7 @@ vi.mock("@/lib/server/rate-limit", () => ({
 vi.mock("@/lib/repositories/internal-cs-chat", () => ({
   getInternalCsIntegrationEventByIdempotency: mocks.getInternalCsIntegrationEventByIdempotency,
   getInternalCsConversation: mocks.getInternalCsConversation,
+  internalCsConversationExists: mocks.internalCsConversationExists,
   createInternalCsConversation: mocks.createInternalCsConversation,
   claimInternalCsIntegrationEvent: mocks.claimInternalCsIntegrationEvent,
   deleteEmptyInternalCsConversation: mocks.deleteEmptyInternalCsConversation,
@@ -135,6 +137,7 @@ function defaults() {
   mocks.checkRateLimitDistributed.mockResolvedValue({ allowed: true, remaining: 59, resetAt: 0 })
   mocks.getInternalCsIntegrationEventByIdempotency.mockResolvedValue(null)
   mocks.getInternalCsConversation.mockResolvedValue(loaded)
+  mocks.internalCsConversationExists.mockResolvedValue(true)
   mocks.claimInternalCsIntegrationEvent.mockResolvedValue({
     created: true,
     event: { id: "event-1" },

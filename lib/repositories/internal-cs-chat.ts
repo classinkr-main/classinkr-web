@@ -493,7 +493,29 @@ async function assetsWithSignedUrls(rows: InternalCsAssetRow[]) {
   }))
 }
 
-export async function getInternalCsConversation(id: string) {
+/** 서명 URL 이 필요 없는 호출(분석 상태·id 만 쓰는 중간 단계)은 signUrls:false 로 서명 요청을 건너뛴다. */
+export interface InternalCsAssetReadOptions {
+  signUrls?: boolean
+}
+
+async function finishAssetRows(rows: InternalCsAssetRow[], options?: InternalCsAssetReadOptions) {
+  if (options?.signUrls === false) return rows.map((row) => ({ ...row, signed_url: null }))
+  return assetsWithSignedUrls(rows)
+}
+
+/** 화면이 한 번에 읽는 최근 메시지 수 상한. 더 긴 대화는 최근 쪽만 읽고 messagesTruncated 로 알린다. */
+export const INTERNAL_CS_CONVERSATION_MESSAGE_LIMIT = 500
+
+/** 대화가 있는지만 확인한다(첨부 서명 URL·메시지·이벤트를 읽지 않는다). */
+export async function internalCsConversationExists(id: string) {
+  const supabase = createSupabaseAdminClient()
+  const { data, error } = await supabase.from("internal_cs_conversations").select("id").eq("id", id).maybeSingle()
+  if (error) throw databaseError("failed to check conversation", error)
+  return Boolean(data)
+}
+
+export async function getInternalCsConversation(id: string, options: { messageLimit?: number } = {}) {
+  const messageLimit = clampInteger(options.messageLimit, INTERNAL_CS_CONVERSATION_MESSAGE_LIMIT, 1, 2_000)
   const supabase = createSupabaseAdminClient()
   const [
     { data: conversation, error },
@@ -502,7 +524,13 @@ export async function getInternalCsConversation(id: string) {
     { data: integrationEvents, error: integrationEventsError },
   ] = await Promise.all([
     supabase.from("internal_cs_conversations").select("*").eq("id", id).maybeSingle(),
-    supabase.from("internal_cs_messages").select("*").eq("conversation_id", id).order("created_at"),
+    // 최근 쪽 한 장(limit+1 로 더 있는지 확인)만 읽고 시간 순으로 되돌린다.
+    supabase
+      .from("internal_cs_messages")
+      .select("*")
+      .eq("conversation_id", id)
+      .order("created_at", { ascending: false })
+      .limit(messageLimit + 1),
     supabase.from("internal_cs_assets").select("*").eq("conversation_id", id).order("created_at"),
     supabase
       .from("internal_cs_integration_events")
@@ -517,9 +545,12 @@ export async function getInternalCsConversation(id: string) {
   if (integrationEventsError) throw databaseError("failed to load integration events", integrationEventsError)
   if (!conversation) return null
   const signedAssets = await assetsWithSignedUrls((assets ?? []) as InternalCsAssetRow[])
+  const newestFirst = (messages ?? []) as InternalCsMessageRow[]
+  const messagesTruncated = newestFirst.length > messageLimit
   return {
     conversation: conversation as InternalCsConversationRow,
-    messages: (messages ?? []) as InternalCsMessageRow[],
+    messages: newestFirst.slice(0, messageLimit).reverse(),
+    messagesTruncated,
     assets: signedAssets,
     integrationEvents: (integrationEvents ?? []) as InternalCsIntegrationEventRow[],
   }
@@ -551,14 +582,22 @@ export async function createInternalCsMessage(input: CreateInternalCsMessageInpu
   if (error) throw databaseError("failed to create message", error)
 
   const now = (data as InternalCsMessageRow).created_at
-  const conversationPatch = {
-    last_message_at: now,
-    updated_by: input.actor,
-    ...(input.role === "assistant" ? { status: "waiting_review" } : {}),
+  const basePatch = { last_message_at: now, updated_by: input.actor }
+  if (input.role === "assistant") {
+    // 검토 대기로 올리되 보관(archived)된 대화는 되살리지 않는다 — 상태 조건을 건 한 문장.
+    const { data: moved, error: moveError } = await supabase
+      .from("internal_cs_conversations")
+      .update({ ...basePatch, status: "waiting_review" })
+      .eq("id", input.conversationId)
+      .neq("status", "archived")
+      .select("id")
+    if (moveError) throw databaseError("message saved but conversation state update failed", moveError)
+    if ((moved ?? []).length > 0) return data as InternalCsMessageRow
   }
+  // user·system·internal_note 이거나 보관된 대화: 상태는 그대로 두고 마지막 메시지 시각만 갱신한다.
   const { error: updateError } = await supabase
     .from("internal_cs_conversations")
-    .update(conversationPatch)
+    .update(basePatch)
     .eq("id", input.conversationId)
   if (updateError) throw databaseError("message saved but conversation state update failed", updateError)
   return data as InternalCsMessageRow
@@ -575,7 +614,7 @@ export async function listInternalCsAssets(conversationId: string) {
   return assetsWithSignedUrls((data ?? []) as InternalCsAssetRow[])
 }
 
-export async function findInternalCsAssetByHash(conversationId: string, sha256: string) {
+export async function findInternalCsAssetByHash(conversationId: string, sha256: string, options?: InternalCsAssetReadOptions) {
   const supabase = createSupabaseAdminClient()
   const { data, error } = await supabase
     .from("internal_cs_assets")
@@ -585,22 +624,22 @@ export async function findInternalCsAssetByHash(conversationId: string, sha256: 
     .maybeSingle()
   if (error) throw databaseError("failed to find asset by hash", error)
   if (!data) return null
-  const [asset] = await assetsWithSignedUrls([data as InternalCsAssetRow])
+  const [asset] = await finishAssetRows([data as InternalCsAssetRow], options)
   return asset ?? null
 }
 
-export async function getInternalCsAsset(assetId: string, conversationId?: string) {
+export async function getInternalCsAsset(assetId: string, conversationId?: string, options?: InternalCsAssetReadOptions) {
   const supabase = createSupabaseAdminClient()
   let query = supabase.from("internal_cs_assets").select("*").eq("id", assetId)
   if (conversationId) query = query.eq("conversation_id", conversationId)
   const { data, error } = await query.maybeSingle()
   if (error) throw databaseError("failed to load asset", error)
   if (!data) return null
-  const [asset] = await assetsWithSignedUrls([data as InternalCsAssetRow])
+  const [asset] = await finishAssetRows([data as InternalCsAssetRow], options)
   return asset ?? null
 }
 
-export async function createInternalCsAsset(input: CreateInternalCsAssetInput) {
+export async function createInternalCsAsset(input: CreateInternalCsAssetInput, options?: InternalCsAssetReadOptions) {
   const insert = buildInternalCsAssetInsert(input)
   if (!insert.storage_path) throw new Error("Asset storage path is required.")
   if (!insert.original_file_name) throw new Error("Asset file name is required.")
@@ -610,10 +649,10 @@ export async function createInternalCsAsset(input: CreateInternalCsAssetInput) {
   const { data, error } = await supabase.from("internal_cs_assets").insert(insert).select("*").single()
   if (error) {
     if (error.code === "23505") {
-      const existing = await findInternalCsAssetByHash(input.conversationId, input.sha256)
+      const existing = await findInternalCsAssetByHash(input.conversationId, input.sha256, options)
       if (existing && isInternalCsAssetStorageDeleted(existing)) {
         // 지운 첨부와 같은 이미지를 다시 올렸다. 방금 올린 원본 객체가 고아가 되지 않도록 지운 행을 되살린다.
-        const revived = await reviveInternalCsAsset(existing.id, insert)
+        const revived = await reviveInternalCsAsset(existing.id, insert, options)
         if (revived) return revived
         throw databaseError("failed to revive deleted asset", error)
       }
@@ -621,12 +660,16 @@ export async function createInternalCsAsset(input: CreateInternalCsAssetInput) {
     }
     throw databaseError("failed to create asset", error)
   }
-  const [asset] = await assetsWithSignedUrls([data as InternalCsAssetRow])
+  const [asset] = await finishAssetRows([data as InternalCsAssetRow], options)
   return asset
 }
 
 /** 객체가 지워진 행을 새 업로드로 되살린다: 파일명·메타데이터·분석 칸을 처음 상태로 돌리고 보관 기간도 새로 센다. */
-async function reviveInternalCsAsset(assetId: string, insert: ReturnType<typeof buildInternalCsAssetInsert>) {
+async function reviveInternalCsAsset(
+  assetId: string,
+  insert: ReturnType<typeof buildInternalCsAssetInsert>,
+  options?: InternalCsAssetReadOptions
+) {
   const supabase = createSupabaseAdminClient()
   const { data, error } = await supabase
     .from("internal_cs_assets")
@@ -652,11 +695,11 @@ async function reviveInternalCsAsset(assetId: string, insert: ReturnType<typeof 
     .maybeSingle()
   if (error) throw databaseError("failed to revive deleted asset", error)
   if (!data) return null
-  const [asset] = await assetsWithSignedUrls([data as InternalCsAssetRow])
+  const [asset] = await finishAssetRows([data as InternalCsAssetRow], options)
   return asset ?? null
 }
 
-export async function updateInternalCsAssetAnalysis(input: UpdateInternalCsAssetAnalysisInput) {
+export async function updateInternalCsAssetAnalysis(input: UpdateInternalCsAssetAnalysisInput, options?: InternalCsAssetReadOptions) {
   const supabase = createSupabaseAdminClient()
   const { data, error } = await supabase
     .from("internal_cs_assets")
@@ -667,7 +710,7 @@ export async function updateInternalCsAssetAnalysis(input: UpdateInternalCsAsset
     .maybeSingle()
   if (error) throw databaseError("failed to update asset analysis", error)
   if (!data) return null
-  const [asset] = await assetsWithSignedUrls([data as InternalCsAssetRow])
+  const [asset] = await finishAssetRows([data as InternalCsAssetRow], options)
   return asset ?? null
 }
 
@@ -698,7 +741,8 @@ export async function purgeInternalCsAssetObject(input: {
   reason: "retention" | "admin_delete"
   now?: Date
 }) {
-  const asset = await getInternalCsAsset(input.assetId, input.conversationId)
+  // 원본을 지우는 일이라 서명 URL 은 만들지 않는다.
+  const asset = await getInternalCsAsset(input.assetId, input.conversationId, { signUrls: false })
   if (!asset || isInternalCsAssetStorageDeleted(asset)) return null
   const removed = await deleteInternalCsAsset(asset.storage_path)
   if (!removed) throw new Error("Failed to delete the asset object from storage.")

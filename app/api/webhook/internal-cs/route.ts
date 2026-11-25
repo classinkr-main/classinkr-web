@@ -20,6 +20,7 @@ import {
   isInternalCsAssetStorageDeleted,
   getInternalCsAsset,
   getInternalCsConversation,
+  internalCsConversationExists,
   getInternalCsIntegrationEventByIdempotency,
   InternalCsEventConversationRequiredError,
   isInternalCsChatNotReadyError,
@@ -129,8 +130,9 @@ export async function POST(req: NextRequest) {
     }
 
     if (payload.conversationId) {
-      const loaded = await getInternalCsConversation(payload.conversationId)
-      if (!loaded) return NextResponse.json({ error: "Conversation not found" }, { status: 404 })
+      if (!(await internalCsConversationExists(payload.conversationId))) {
+        return NextResponse.json({ error: "Conversation not found" }, { status: 404 })
+      }
     }
 
     // 선점 먼저, 대화는 그 뒤에: 동시 요청·중복 요청이 고아 대화를 남기지 않는다.
@@ -203,7 +205,7 @@ export async function POST(req: NextRequest) {
         return responseForUploadError(upload.error)
       }
 
-      const existingAsset = await findInternalCsAssetByHash(conversationId, upload.sha256)
+      const existingAsset = await findInternalCsAssetByHash(conversationId, upload.sha256, { signUrls: false })
       if (existingAsset && !isInternalCsAssetStorageDeleted(existingAsset)) {
         assetId = existingAsset.id
         assetResult = { id: existingAsset.id, duplicate: true, status: existingAsset.status }
@@ -220,7 +222,7 @@ export async function POST(req: NextRequest) {
           externalRef: payload.correlationId,
           metadata: { sourceSystem: payload.sourceSystem, uploadReused: upload.reused },
           actor,
-        })
+        }, { signUrls: false })
         assetId = asset.id
 
         if (payload.image?.analyze) {
@@ -229,7 +231,7 @@ export async function POST(req: NextRequest) {
             assetId,
             status: "analyzing",
             actor,
-          })
+          }, { signUrls: false })
           const analysis = await analyzeInternalCsImage({
             bytes: stripImageMetadata(decodedImage.buffer, decodedImage.mimeType) ?? new Uint8Array(0),
             mimeType: decodedImage.mimeType,
@@ -257,9 +259,9 @@ export async function POST(req: NextRequest) {
             modelName: analysis.model,
             errorMessage: analysis.origin === "deterministic" ? "Automatic image analysis unavailable" : null,
             actor,
-          })
+          }, { signUrls: false })
         }
-        const stored = await getInternalCsAsset(assetId, conversationId)
+        const stored = await getInternalCsAsset(assetId, conversationId, { signUrls: false })
         assetResult = {
           id: assetId,
           duplicate: false,
