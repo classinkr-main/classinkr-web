@@ -1151,6 +1151,436 @@
         "제가 대신 접수를 도와드릴"
       ],
       "note": "self:event_inquiry 의 근거 없는 문장(정기 개최·매달 웨비나·전국 주요 도시·'/events' 메뉴)과 self:event_apply_assist 의 대리 접수(채팅에 이름·휴대폰 번호 요구) 형태. 지금 걸리는 active 카드는 없거나 이 항목 policy 카드뿐(예외)."
+    },
+    {
+      "id": "HQ-1401",
+      "topic": "소개(추천)하는 분께 드리는 혜택 문의 응대 문구와 문의 때 요청 사항",
+      "currentText": "field:board-referral-benefit 답: '소개하시는 분께 드리는 혜택이 있는지는 공개 안내에 없어서, 영업 담당자에게 확인해 드려야 해요. 소개받는 원장님은 홈페이지 문의 페이지(/contact)에서 도입 상담을 남기시거나 쇼룸 예약(/showroom)으로 실제 보드를 보러 오시면 돼요. 문의하실 때 소개해 주신 학원 이름을 함께 적어 달라고 전해 주세요.'",
+      "conflict": "공개 문서·공개 페이지에 소개 혜택 내용이 없다(검색 0건). 답은 혜택 없음·있음을 말하지 않고 '영업 담당자 확인'을 약속하며, 소개한 학원 이름을 적게 하는 요청은 문서에 없다. 문의 페이지(/contact)는 문서에 있으나 '/showroom' 경로는 문서·페이지 줄에 없고 '쇼룸 방문 예약하기'는 공개 페이지 줄(site:components/contact/ContactDirectChannels.tsx:73)에만 있다. 결정: 소개 혜택 질문에 '공개 안내에 없다'까지만 말할지, 영업 담당 확인·학원 이름 요청 문구를 쓸지, 쇼룸 예약 경로 표기.",
+      "proposal": "소개 혜택은 공개 안내에 없다고만 말하고, 도입 상담은 문의 페이지(/contact)에서 남기도록 안내(영업 담당·학원 이름 요청 문구는 뺌).",
+      "affectedCards": [
+        "field:board-referral-benefit"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": []
+    },
+    {
+      "id": "HQ-1402",
+      "topic": "칠판 화면 분할 기능 — 공개 소개 페이지 한 줄('슬라이딩 바를 통한 화면 분할 기능')을 챗봇 답에 쓸지",
+      "currentText": "field:board-split-screen 답: '칠판 화면을 반으로 나눠 교재와 판서를 함께 띄우는 기능과 방법은 공개 안내에 정리돼 있지 않아요.'",
+      "conflict": "공개 소개 페이지(site:lib/introduction/content.ts:756)에 '슬라이딩 바를 통한 화면 분할 기능'이 소개돼 있어 '공개 안내에 없다'는 말이 부분적으로 틀린다. 사용 방법·모델별 지원 범위는 어느 문서에도 없다. 페이지 사실에만 기대는 고침이라 사람 결정이 필요하다. 결정: 소개 문구를 인용해 기능이 소개돼 있다고 말할지, 계속 '없다'고 말할지.",
+      "proposal": "공개 소개 페이지에는 '슬라이딩 바를 통한 화면 분할 기능'이 소개돼 있지만, 사용 방법은 공개 안내에 정리돼 있지 않아요.",
+      "affectedCards": [
+        "field:board-split-screen"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": []
+    },
+    {
+      "id": "HQ-1501",
+      "topic": "보안 점검(모의해킹·취약점 점검)의 사전 승인 필요 여부와 이용약관 금지 조항 안내 범위",
+      "currentText": "field:pentest-prior-approval 답: '사전 승인 필요 여부와 약관상 금지 조항: 공개 안내에 나와 있지 않아요. 이용약관 원문을 확인하시고, 공식 창구에서 서면으로 확인받으세요.' 신청 경로·일정·출발지 IP 공유도 공개 안내에 없다고 안내.",
+      "conflict": "이용약관 공개 페이지에 금지 행위가 있다: site:app/terms/page.tsx:99 '무단 접근, 해킹, 보안 취약점 악용, 네트워크 공격 등 서비스 운영을 방해하는 행위'. 따라서 '약관상 금지 조항은 공개 안내에 없다'는 부재 주장은 틀리다(absence_claim_wrong). 다만 사전 승인 절차·신청 경로가 공개돼 있는지는 근거 없음. 결정: (1) 약관 금지 행위 문구를 그대로 인용할지, (2) 사전 승인·신청 창구 안내 범위, (3) 보안 담당 확인 연결 문구.",
+      "proposal": null,
+      "affectedCards": [
+        "field:pentest-prior-approval"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": [
+        "약관상 금지 조항: 공개 안내에 나와 있지 않아요"
+      ]
+    },
+    {
+      "id": "HQ-1502",
+      "topic": "AI 카메라의 얼굴 인식·얼굴 데이터 저장·보관 기간과 별도 동의 필요 여부 안내 범위",
+      "currentText": "field:ai-camera-face-recognition-data 답: '얼굴 인식 여부와 얼굴 데이터 저장·보관 기간: 공개 안내에 나와 있지 않아요. 그래서 저장하지 않는다고도, 저장한다고도 말씀드리지 않을게요.' 따로 동의가 필요한지는 법적 판단이라 정할 수 없다고 하고, 도입 상담으로 처리 방식(저장 여부·보관 기간·서버 위치)을 서면 요청하고 개인정보처리방침도 확인하라고 안내.",
+      "conflict": "공개 문서는 S1 이 앉아 있던 학생이 일어서면 그 학생을 찾아 확대한다는 동작만 말하고(doc:/docs/hardware/cam-t1-s1#summary@4), 얼굴 인식·얼굴 데이터 처리는 다루지 않는다. 개인정보·법적 판단 주제이며 '서면으로 요청하세요'는 약속 성격에 가깝고 문서 근거가 없다. 서버 위치는 HQ-1301 범위. 결정: (1) 부재 문구를 그대로 쓸지, (2) 서면 요청 안내와 개인정보처리방침 연결 문구를 쓸지.",
+      "proposal": null,
+      "affectedCards": [
+        "field:ai-camera-face-recognition-data"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": []
+    },
+    {
+      "id": "HQ-1601",
+      "topic": "도입 일정(납기)·개원 전 설치 완료·지연 배상·임시 기기 조건 안내 범위",
+      "currentText": "field:board-delivery-lead-time-penalty 답: '납기가 보통 몇 주인지는 공개 안내에 나와 있지 않아서 숫자로 말씀드리지 않을게요. 개원 전에 설치가 끝난다고 약속드릴 수도 없어요.' / '지연 배상·임시 기기 조건: 계약서에 넣을 수 있는지는 영업 담당과 협의할 사항이에요.' / '지연 때 조건도 함께 물어 서면으로 받아 두세요.'",
+      "conflict": "공개 문서에는 납기·지연 배상·임시 기기 조건 근거가 0건이다(검색 납기 0건). 문서는 설치 날 시간이 늘어나지 않도록 네트워크·전원을 미리 확인하라는 것(doc:/docs/hardware/board-install-readiness#2 문장 1)과 견적의 설치·온보딩 구성(doc:/docs/start/value-and-cost-framing#0 문장 9)만 말한다. 부재 주장은 맞지만 계약 조건 주제라 지연 배상 언급과 서면 확인 권유를 챗봇이 어디까지 할지 사람이 정해야 한다. 결정 전까지 카드는 정책 카드(글은 사람 소유)로 두고 legacy 경로의 옛 글은 그대로 둔다.",
+      "proposal": null,
+      "affectedCards": [
+        "field:board-delivery-lead-time-penalty"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": []
+    },
+    {
+      "id": "HQ-1602",
+      "topic": "필기 인식 지연 수치 — 공개 소개 페이지의 '초저지연 필기인식 0.03~0.06초' 문구를 챗봇 답에 쓸지",
+      "currentText": "field:board-touch-type-latency 답: '펜으로 쓴 글씨가 화면에 나타나기까지의 체감 지연은 쓰는 프로그램과 환경에 따라 달라서, 규격서 숫자는 터치 응답 속도 2ms가 기준이에요.'",
+      "conflict": "공개 소개 페이지에 '초고속 반응 속도 2ms, 초저지연 필기인식 0.03~0.06초'(site:lib/introduction/content.ts:729)가 있으나 공개 문서(규격서)에는 필기 인식 지연 숫자가 없다(검색 0건). 점검 고침안은 근거 없는 '체감 지연은 환경에 따라 달라서' 서술을 지우고 규격서 2ms 문장만 남겼다. 페이지에만 기대는 수치라 사람이 쓸지 정해야 한다.",
+      "proposal": "공개 소개 페이지 문구를 그대로 인용: '초저지연 필기인식 0.03~0.06초'(출처가 공개 소개 페이지임을 밝힘).",
+      "affectedCards": [
+        "field:board-touch-type-latency"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": []
+    },
+    {
+      "id": "HQ-1603",
+      "topic": "칠판 카메라 내장 여부 — 공개 소개 페이지 표('내장 마이크·카메라')와 공개 문서(카메라를 칠판에 따로 더하는 구성)의 불일치",
+      "currentText": "field:remote-classroom-camera-viewing 답: '참고로 공개 안내 기준 칠판에 카메라가 내장돼 있지는 않고, 교실마다 웹캠이나 T1·S1 같은 카메라를 따로 붙여요.'",
+      "conflict": "공개 문서는 견적을 전자칠판에 카메라를 더한 구성으로 설명하고(doc:/docs/start/value-and-cost-framing#0 문장 1) AI 카메라를 붙이면 하이브리드 수업을 한다고 한다(doc:/docs/hardware/board-overview#summary 문장 5). 그러나 공개 소개 페이지 표는 '내장 마이크·카메라 | 8개 배열 마이크 · AI 음성 추적 카메라'(site:components/introduction/landing/landing-copy.ts:218)와 '배열 마이크 + AI 음성 추적 카메라 | 8개 내장'(site:components/introduction/story/story-copy.ts:392)으로 적어 카메라가 내장된 것처럼 읽힌다. '내장돼 있지 않다'는 단정은 근거가 약해 고침안에서 지웠다. 결정: 칠판 카메라 내장 여부를 어떻게 말할지(정본).",
+      "proposal": null,
+      "affectedCards": [
+        "field:remote-classroom-camera-viewing"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": []
+    },
+    {
+      "id": "HQ-1701",
+      "topic": "칠판의 AI 음성 어시스턴트(음성 명령)·상시 청취·음성 데이터 처리에 대한 챗봇 안내 범위",
+      "currentText": "field:board-voice-assistant-always-listening 답: '공개 안내에 칠판의 음성 비서·상시 청취 기능은 나와 있지 않아요. 그래서 있다고도, 없다고도 단정하지 않을게요.' 음성이 기기 안에서 처리되는지 외부로 보내지는지, 관리자가 칠판 마이크 접근을 끌 수 있는지도 공개 안내에 없다고 안내.",
+      "conflict": "공개 페이지에 기능 문구가 있다(site-only, 공개 문서 단위에는 없음): site:components/introduction/landing/landing-copy.ts:120 '음성 명령으로 칠판을 다루는 AI 음성 어시스턴트', site:lib/introduction/content.ts:244 '수업 중 음성 명령으로 전자 칠판 내 다양한 기능 실행 가능', site:lib/introduction/content.ts:602 '수업 중 음성 명령으로 다양한 기능 실행(예: “화면 공유 시작”, “질문창 열어줘”)'. 따라서 '칠판의 음성 비서 기능은 공개 안내에 나와 있지 않다'는 부재 주장은 absence_claim_wrong(site-only). 다만 한국 제공 범위·버전·계약, 상시 청취 여부, 음성 처리 위치는 근거가 없다. 결정: (1) 페이지 문구를 인용해 AI 음성 어시스턴트 소개 안내를 할지, (2) 한국 제공 범위·버전·계약 확인 문구, (3) 상시 청취·음성 처리 위치는 '공개 안내에 없음'으로 계속 둘지.",
+      "proposal": null,
+      "affectedCards": [
+        "field:board-voice-assistant-always-listening"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": [
+        "음성 비서·상시 청취 기능은 나와 있지 않아요"
+      ]
+    },
+    {
+      "id": "HQ-1702",
+      "topic": "USB 실물화상기(외부 문서 카메라)를 칠판에 연결해 쓸 수 있는지 안내 범위",
+      "currentText": "field:board-usb-document-camera 답: 'USB 실물화상기를 보조 카메라로 쓸 수 있는지(모델 호환)와 그 화면 위에 바로 판서할 수 있는지는 공개 안내에 없어요.' 보조 카메라(듀얼 POV)·웹캠 현장 녹화 카메라 안내 후 상담 연결.",
+      "conflict": "공개 문서에는 '실물화상기'가 없고 보조 카메라(듀얼 POV)·웹캠만 있다. 공개 페이지에는 '기타 연동 | 마이크·스피커·외부 문서 카메라 등 교육용 장비'(site:lib/introduction/content.ts:487, 경쟁 비교표의 한 줄, 표 주석에 소개서 작성 시점 2025년 표기)가 있다. 이 줄을 근거로 외부 문서 카메라 연동을 안내할지, 모델 호환·판서 가능 여부는 계속 '공개 안내에 없음'으로 둘지 결정 필요(공개 페이지에만 기대는 사실).",
+      "proposal": null,
+      "affectedCards": [
+        "field:board-usb-document-camera"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null
+    },
+    {
+      "id": "HQ-1703",
+      "topic": "교육부 학습지원 소프트웨어 필수기준 등 학교 심의 항목의 충족 여부와 항목별 근거 문서 제공 안내 범위",
+      "currentText": "field:school-required-standards-evidence-channel 답: '교육부 학습지원 소프트웨어 필수기준을 충족하는지, 항목별 근거 문서를 공식으로 주는지는 공개 안내에 없어요. 그래서 충족한다고 말씀드릴 수 없고 체크리스트 항목을 대신 채워 드리지도 않을게요.' 공식 요청 창구는 상담 채널, 개인정보는 개인정보처리방침과 계약 기준이라고 안내.",
+      "conflict": "공개 문서·공개 페이지 검색에서 필수기준·학습지원·인증·심의 항목 충족을 말하는 문장이 없다(무결과). 충족 여부 단정·근거 문서 제공 약속은 근거가 없어 챗봇이 할 수 없다. 결정: 학교 심의용 근거 문서 요청을 상담 채널로 연결하는 문구와, 개인정보처리방침·계약 기준 인용 범위를 정한다(HQ-1303 보안 문구와 함께 볼 것).",
+      "proposal": null,
+      "affectedCards": [
+        "field:school-required-standards-evidence-channel"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null
+    },
+    {
+      "id": "HQ-1801",
+      "topic": "설치비·설치 항목 안내 — 체크아웃 하드웨어 주문 화면의 '설치' 표기를 챗봇 답에 쓸지와 금액 비공개 범위",
+      "currentText": "basics:basics-install-fee: '설치비는 체크아웃의 하드웨어 주문 화면에 설치 항목으로 표시돼 있고, 교실 수와 설치 환경에 따라 최종 견적이 달라질 수 있어요. 그래서 이 채팅에서는 금액을 확정해 말씀드리지 않아요.'",
+      "conflict": "'체크아웃 화면에 설치 항목이 표시된다'는 문장은 공개 문서 단위에 없고 공개 페이지 줄에만 있다(site-only): site:components/checkout/CheckoutRequestForm.tsx:506 '전자칠판 설치', :146 '설치 유형을 선택해 주세요.'. 공개 문서에는 '방식에 따라 필요한 인력과 비용이 달라지니 견적 전에 정해 두세요'(doc:/docs/hardware/hardware-spec-installation-faq#1 #1)만 있다. 결정: (1) 체크아웃 화면의 설치 항목 표기를 인용해 안내할지, (2) 설치비 금액은 계속 비공개로 둘지(금액 비공개 원칙 HQ-08·HQ-0801 연동).",
+      "proposal": null,
+      "affectedCards": [
+        "basics:basics-install-fee"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": [
+        "하드웨어 주문 화면에 설치 항목"
+      ]
+    },
+    {
+      "id": "HQ-2001",
+      "topic": "만 14세 미만 아동 개인정보·법정대리인 동의 — 챗봇이 개인정보처리방침 문장을 인용해도 되는지",
+      "currentText": "field:child-data-consent 답: '공개 안내에는 만 14세 미만 가입 때 법정대리인 동의를 받는 절차나 해당 처리방침 조항이 정리돼 있지 않아요. 그래서 클래스인 가입 단계에서 받는지, 학원이 따로 받아야 하는지 제가 단정하지 않을게요.'",
+      "conflict": "공개 페이지 개인정보처리방침(site:app/privacy/page.tsx:501)에 '회사는 만 14세 미만 아동의 개인정보를 원칙적으로 수집하지 않으며, 수집이 필요한 경우 법정대리인의 동의를 받아 처리합니다.'가 있다(absence_claim_wrong). 다만 이 방침의 적용 범위는 웹사이트 상담·예약 등(privacy:291)이라 수업 서비스 가입에도 해당하는지 문서로는 확인되지 않는다. 결정: 방침 문장을 그대로 인용하되 적용 범위를 어떻게 밝힐지.",
+      "proposal": "클래스인 개인정보처리방침에는 만 14세 미만 아동의 개인정보를 원칙적으로 수집하지 않으며, 수집이 필요한 경우 법정대리인의 동의를 받아 처리한다고 나와 있어요. 다만 클래스인 가입 단계에서 받는지, 학원이 따로 받아야 하는지는 제가 단정하지 않을게요.",
+      "affectedCards": [
+        "field:child-data-consent"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": []
+    },
+    {
+      "id": "HQ-2002",
+      "topic": "상담 연락처의 보유 기간·처리 정지 요청 안내 범위(영업 전화 중단 요청)",
+      "currentText": "field:stop-sales-calls-privacy 답: '공개 안내에는 개인정보를 클래스인 개인정보처리방침에 따라 처리한다고만 나와 있고, 보관 범위·기간은 나와 있지 않아요.' 그리고 상담 연결로 삭제·처리 정지를 요청하라고 안내.",
+      "conflict": "공개 문의 페이지(site:app/contact/page.tsx:555)에 '보유 기간: 마지막 상담일로부터 최대 3년'이 있고, 처리방침(site:app/privacy/page.tsx:479, :509)에 처리 정지·삭제 요청 문구가 있어 '보관 기간이 나와 있지 않다'는 문장이 틀렸다(absence_claim_wrong). 공개 페이지에만 근거가 있고 기간 숫자(3년)를 챗봇이 말해도 되는지, 요청 창구를 이메일로 안내할지 상담 연결로 안내할지 결정이 필요하다.",
+      "proposal": "문의 페이지에는 상담과 고객 지원을 위한 개인정보의 보유 기간이 마지막 상담일로부터 최대 3년이라고 나와 있어요. 삭제나 처리 정지를 원하시면 같은 상담 연결로 요청하세요.",
+      "affectedCards": [
+        "field:stop-sales-calls-privacy"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": []
+    },
+    {
+      "id": "HQ-2101",
+      "topic": "챗봇 대화 보관 기간(최대 3년)·Gemini 전송·열람/삭제 요청 방법을 챗봇 답에 인용하는 범위(개인정보처리방침 문구)",
+      "currentText": "self:input_privacy 답은 '입력한 내용이 저장되는지, 얼마나 보관되는지는 공식 개인정보처리방침을 기준으로 확인해 주세요. 저장되지 않는다고 단정할 수 없어요'까지만 말하고, self:privacy_boundary 답은 챗봇 대화 저장·최대 3년 보관·Gemini 전송을 말하되 열람·삭제 요청 방법은 담당자 확인으로만 안내한다.",
+      "conflict": "공개 개인정보처리방침에는 '챗봇 대화와 상담 채팅 기록: 마지막 대화일로부터 최대 3년'(site:app/privacy/page.tsx:419), '챗봇 대화는 챗봇을 쓸 때만 Gemini로 보냅니다.'(:479), '사용자는 자신의 개인정보에 대해 열람, 정정, 삭제, 처리 정지, 동의 철회를 요청할 수 있습니다.'(:509)가 있다. 공개 문서 단위에는 없는 공개 페이지(site-only) 사실이고, 개인정보처리방침은 웹사이트·챗봇 처리 범위 기준이다. 결정: (1) 보관 기간·Gemini 전송 문구를 input_privacy 답에 그대로 더할지, (2) 열람·삭제 요청 권리 문구를 privacy_boundary 답에 그대로 더할지.",
+      "proposal": "input_privacy: '제가 저장되지 않는다고 단정할 수는 없어요.' 뒤에 처리방침 문장 인용(챗봇 대화와 상담 채팅 기록: 마지막 대화일로부터 최대 3년 / 챗봇 대화는 챗봇을 쓸 때만 Gemini로 보냅니다.)을 더한다. privacy_boundary: '챗봇 대화는 챗봇을 쓸 때만 Gemini로 보내져요.' 뒤에 처리방침 문장 인용(사용자는 자신의 개인정보에 대해 열람, 정정, 삭제, 처리 정지, 동의 철회를 요청할 수 있습니다.)을 더한다.",
+      "affectedCards": [
+        "self:input_privacy",
+        "self:privacy_boundary"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": []
+    },
+    {
+      "id": "HQ-2201",
+      "topic": "스토리지 기본 제공 용량·추가 요금·견적 안내 범위(녹화본이 스토리지를 차지할 때)",
+      "currentText": "field:recording-storage-quota-overage 답: '녹화본은 학원 스토리지 용량에 들어가요. 기본으로 주는 용량과 그보다 많이 쓸 때의 요금은 요금제·계약마다 달라서 공개 안내에 숫자가 없어요. 그래서 제가 금액을 말씀드릴 수 없어요.' 그리고 [도입 상담 남기기]로 사용 규모를 남기면 그 기준으로 용량과 비용을 견적에 넣어 준다고 안내.",
+      "conflict": "공개 문서는 '무료로 제공되는 범위는 요금제·계약마다 달라 상담 채널에서 확인합니다'(doc:/docs/admin/admin-operation-standardization#6@5)까지만 말한다. 금액·용량 숫자 비공개 원칙(HQ-08)에 닿는 주제이고, '견적에 넣어 준다'는 약속 성격의 문장과 '도입 상담 남기기' 연결은 문서 근거가 없다. 결정: (1) 용량·요금 비공개 문구를 문서 문장 그대로 쓸지, (2) 견적 안내·상담 연결 문구를 쓸지.",
+      "proposal": null,
+      "affectedCards": [
+        "field:recording-storage-quota-overage"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": []
+    },
+    {
+      "id": "HQ-2301",
+      "topic": "API 녹화 파일 다운로드·대량 반출과 NAS 등 외부 저장소 복제가 이용약관상 허용되는지 안내하는 범위",
+      "currentText": "field:api-recording-download-nas-backup-terms 답: '외부 저장소 복제가 이용약관상 허용되는지: 공개 안내로 확인할 수 없어서 단정하지 않을게요. ... 동의서에 ClassIn에 보관한다고만 돼 있다면, NAS 같은 외부 저장소로 옮기는 건 동의 범위를 넘을 수 있어요.'",
+      "conflict": "공개 문서에는 API로 계정·수업·입장·스케줄을 연결한다는 문장과 녹화본을 관리자 대시보드에서 내려받는다는 문장만 있고, API 녹화 다운로드 URL·대량 다운로드 제한·약관상 외부 복제 허용 여부는 없다. 동의 범위를 넘을 수 있다는 판단은 법적 해석이라 근거 없이 고칠 수 없다. 결정: 약관·동의 범위 문구를 챗봇이 어디까지 말할지.",
+      "proposal": null,
+      "affectedCards": [
+        "field:api-recording-download-nas-backup-terms"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": []
+    },
+    {
+      "id": "HQ-2302",
+      "topic": "수업 녹화 사실을 학생·학부모에게 알리고 동의를 받으라는 안내(채용 시범 강의·분쟁 대비·표시 안내 포함)를 챗봇이 어디까지 할지",
+      "currentText": "field:recording-indicator-students-tell, field:recording-job-interview-demo, field:recording-evidence-originality-legal 답: '수업 시작 때 오늘 수업은 복습용으로 녹화돼요라고 한마디 해 주세요', '녹화 전에 목적·보는 사람·보관 기간을 알리고 동의를 받아 두는 게 안전해요', '녹화 목적을 학생·학부모에게 미리 알리고 동의를 받아 두세요'",
+      "conflict": "공개 문서에는 학원 내부 동의 절차를 함께 확인하라는 한 문장(개인정보처리방침과 권한 관리 기준)만 있고, 녹화 고지·동의서 항목·보관 기간 안내와 법적 증거 능력 판단은 없다. 사람이 정할 법적 성격의 안내라 근거 없이 고칠 수 없다. 결정: 동의·고지 권고 문구 유지 여부와 법률 전문가 상담 안내 문구.",
+      "proposal": null,
+      "affectedCards": [
+        "field:recording-indicator-students-tell",
+        "field:recording-job-interview-demo",
+        "field:recording-evidence-originality-legal"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": []
+    },
+    {
+      "id": "HQ-2401",
+      "topic": "본인 상담 통화 녹음 열람·제공 요청과 상담 통화 녹음 보관 안내 범위(개인정보처리방침 수집 항목·보관 기간 인용 여부)",
+      "currentText": "field:support-call-recording-file-request 답: '상담 전화를 어떻게 녹음·보관하는지, 본인에게 녹음을 들려주거나 파일로 주는지와 그 절차는 공개 안내에 없어요 … 보내 드린다고도, 언제까지라고도 제가 약속드릴 수 없어요' 그리고 처리방침 위치 안내와 [실시간 상담 연결]로 '본인 상담 통화 녹음 열람(제공) 요청'을 함께 남기라고 안내.",
+      "conflict": "개인정보처리방침에는 '상담 통화 녹음: 직원이 상담 통화를 녹음한 경우 그 녹음 파일'(site:app/privacy/page.tsx:327)이 수집 항목으로, '상담 통화 녹음 파일: 해당 상담 기록과 같은 기간'(site:app/privacy/page.tsx:417)이 보관 기간으로 있다. 그래서 '녹음·보관 방식이 공개 안내에 없다'는 부재 주장은 틀리다(absence_claim_wrong, site-only). 반대로 본인에게 녹음을 들려주거나 파일로 제공하는 절차·기한은 공개 문서·페이지 어디에도 없다. 결정: (1) 처리방침의 수집 항목·보관 기간 문장을 답에 그대로 인용할지, (2) 본인 통화 제공 요청을 상담으로 접수한다는 안내를 쓸지, (3) 환불 재확인 안내를 이 답에서 분리할지(환불 안내 범위는 HQ-0802).",
+      "proposal": null,
+      "affectedCards": [
+        "field:support-call-recording-file-request"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": []
+    },
+    {
+      "id": "HQ-2501",
+      "topic": "새로 들어온 강사 교육(도입 때 기본 2회 이후 추가 교육)의 방문 여부·비용을 챗봇이 어디까지 안내할지, 계약 전 서면 확인을 권하는 문구",
+      "currentText": "field:teacher-training-support 답: '신규 강사 때마다 와 주는지, 추가 교육에 비용이 따로 있는지는 공개 안내에 나와 있지 않아요. 계약 조건에 따라 다를 수 있어 영업 담당 확인이 필요해요.' / '답을 계약서에 서면으로 넣어 두세요.'",
+      "conflict": "공개 문서는 도입 때 관리자·강사 교육 기본 2회(company-overview#6 5)와 기관 교육 코스 초대 요청(teacher-onboarding#5 6)만 말한다. 추가 교육 비용·방문 여부와 계약서에 넣으라는 권유는 근거가 없고 계약·비용 정책 주제다. 결정: 챗봇이 '계약에 따라 다르다'와 서면 확인 권유를 어디까지 말할지.",
+      "proposal": null,
+      "affectedCards": [
+        "field:teacher-training-support"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": []
+    },
+    {
+      "id": "HQ-2502",
+      "topic": "학원이 올린 학생 연락처를 클래스인이 마케팅·영업에 쓰는지에 대한 답 범위와 계약서 이용 제한 조항 안내",
+      "currentText": "field:student-contacts-marketing-use 답: '클래스인이 마케팅이나 다른 학원 영업에 쓰는지는 공개 안내에 나와 있지 않아요. 절대 안 쓴다고도, 쓴다고도 제가 단정하지 않을게요.' / '계약서에 이용 제한 조항을 넣는 건 계약 협의 사항이에요.'",
+      "conflict": "공개 문서에는 상담에서 학생 학습 데이터와 마케팅 목적 데이터를 섞어 설명하지 않는다는 문장(pre-adoption-faq-22-questions#4 12)만 있고, 학원이 올린 학생 연락처의 이용 목적은 공개 페이지 개인정보처리방침(app/privacy/page.tsx 7절 제3자 제공 등)이 웹사이트 수집 정보 기준이라 학원 학생 연락처에 같은 기준이 적용되는지 근거로 확인되지 않는다. 개인정보·계약 정책 주제라 챗봇이 고칠 수 없다. 결정: 단정하지 않는 현재 문구와 방침 확인 안내, 계약서 명시 권유를 유지할지.",
+      "proposal": null,
+      "affectedCards": [
+        "field:student-contacts-marketing-use"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": []
+    },
+    {
+      "id": "HQ-2601",
+      "topic": "리셀러(지역 총판) 계약 고객의 1차 지원 주체·에스컬레이션·본사 직접 접수 가능 여부, 리셀러 폐업·계약 종료 때 라이선스와 데이터 승계 안내 범위",
+      "currentText": "field:reseller-support-escalation-succession 답: '리셀러 계약에서 누가 1차 지원을 맡는지는 공개 안내에 없어요.' / '리셀러 폐업·계약 종료 때 라이선스와 데이터 승계는 공개 안내에 없어요.' / '계약 전에 아래 항목을 계약서 조항이나 서면 확인서로 받으세요.'",
+      "conflict": "공개 문서·공개 페이지에 리셀러·총판 관련 설명이 없다(검색 결과 없음). 문서가 말하는 것은 상담 채널과 담당 매니저 배정, 무상 보증 기간(기본 1년, 프로모션 최대 2년), 이용 기간·계정 상태·스토리지 보관 정책의 분리 확인뿐이다. 답은 계약 형태에 따른 지원 범위와 서면 확인 권유를 말하는데 이는 계약 정책 주제다. 결정: 챗봇이 리셀러 계약 고객에게 '계약서로 확인하라'는 권유와 4개 확인 항목 목록을 어디까지 말할지.",
+      "proposal": null,
+      "affectedCards": [
+        "field:reseller-support-escalation-succession"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": []
+    },
+    {
+      "id": "HQ-2701",
+      "topic": "휴직·퇴사 강사 계정 비활성화가 요금에 미치는 영향 안내 범위",
+      "currentText": "field:teacher-leave-pause-handover 답: '요금은 계정 수를 기준으로 한다고 안내돼 있지만, 휴직 중에 비활성화해도 되는지, 그러면 요금이 바로 줄어드는지, 복직할 때 다시 쓰면 그대로인지는 공개 안내에 없어요. 계약마다 달라서 [실시간 상담 연결]로 확인하세요.'",
+      "conflict": "공개 문서는 '요금은 계정 수를 기준으로 한다'(doc:/docs/start/value-and-cost-framing#1@3)와 강사 비활성화 방법(doc:/docs/admin/teacher-onboarding#6@5)만 말하고, 비활성화가 요금에 반영되는지는 말하지 않는다. 요금·계약 주제(HQ-1101·HQ-0804와 인접)라 사람이 공개 범위를 정해야 한다. 결정: (1) 계정 수 기준 문장까지만 쓸지, (2) 비활성화 시 요금 변동은 상담으로만 안내할지.",
+      "proposal": null,
+      "affectedCards": [
+        "field:teacher-leave-pause-handover"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": []
+    },
+    {
+      "id": "HQ-2702",
+      "topic": "API 호출 한도·재시도 정책·호출량 과금·이벤트(webhook)·응답 시간대 안내 범위",
+      "currentText": "field:api-rate-limit-429·field:api-webhook-events·field:api-datetime-timezone-offset 답: 공개 안내에 호출 한도·webhook·시간대 규격이 없다고 말하고 ClassIn(EEO) 공식 API 문서 주소와 실시간 상담 연결을 안내. 429 답에는 '분당 60건' 같은 수치와 지수 백오프 권고가 들어 있음.",
+      "conflict": "공개 문서는 API 도킹 메뉴 위치(doc:/docs/admin/admin-operation-standardization#9@14)와 '데이터 구독과 코스/수업 정보 조회 API'(doc:/docs/start/academy-system-os-positioning#5@5)까지만 있고 한도·webhook·시간대·과금은 없다(검색 0건). 외부 문서 주소와 수치, 호출량 과금 언급은 문서 근거가 없고 약속·수치 성격이다. 결정: (1) 부재 문장과 API 도킹 위치까지만 쓸지, (2) 외부 API 문서 주소를 챗봇 답에 쓸지, (3) 일반 재시도 권고 수치를 쓸지.",
+      "proposal": null,
+      "affectedCards": [
+        "field:api-rate-limit-429",
+        "field:api-webhook-events",
+        "field:api-datetime-timezone-offset"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": []
+    },
+    {
+      "id": "HQ-2703",
+      "topic": "보안 취약점 신고 창구와 로그 설정 문의 안내 범위",
+      "currentText": "field:log-plaintext-vuln 답: 'PC 앱 로그 설정과 보안 취약점 전용 신고 채널은 공개 안내에 없다'고 하고, 실시간 상담에 '보안 취약점 신고'라고 남기게 안내. 공용 PC 로그 폴더 권한 제한 같은 일반 권고 포함.",
+      "conflict": "공개 문서·페이지에 취약점 신고 채널과 로그 설정 문장이 없다(검색 0건). 상담 연결 안내와 로그 폴더 권고는 문서 근거가 없는 운영 안내이고 보안 주제(HQ-1303과 인접)라 사람이 범위를 정해야 한다. 결정: (1) 부재 문장만 쓸지, (2) 상담 채널로 접수하게 안내할지.",
+      "proposal": null,
+      "affectedCards": [
+        "field:log-plaintext-vuln"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": []
+    },
+    {
+      "id": "HQ-2801",
+      "topic": "외국인 대표·외국인등록증으로 기관 인증이 되는지, 사업자등록 전에 학원 체험판을 열어도 되는지 안내 범위",
+      "currentText": "field:foreigner-academy-before-business-registration 답: '외국인등록증은 이 목록에 없어서 된다고 말 못 해요.' '사업자등록 전에 학원 체험판을 열어도 되는지는 상담에서 확인해 보세요.' 그리고 비즈니스 요금제 체험판·문의 페이지 2주 무료 체험 문구.",
+      "conflict": "공개 문서의 기관 인증 서류 목록(doc:/docs/admin/account-verification#3@6, #4@1~3)에는 외국인등록증이 없고, 사업자등록 전 학원 체험판 개설 가능 여부를 말하는 문장도 없다(검색 0건). 체험 문구는 HQ-03(2주 표기)·HQ-0805와 겹친다. 결정: (1) 외국인등록증은 목록에 없다고만 말할지, (2) 사업자등록 전 체험판 가능 여부를 상담으로만 안내할지, (3) 2주 체험 문구를 함께 쓸지.",
+      "proposal": null,
+      "affectedCards": [
+        "field:foreigner-academy-before-business-registration"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": []
+    },
+    {
+      "id": "HQ-2802",
+      "topic": "녹화본 다운로드 범위: 관리자 콘솔 내려받기(공개 문서)와 소개 페이지 \"앱 안에서만 열람, 다운로드 차단 + 워터마크\" 문구",
+      "currentText": "basics:basics-recording-download 답: '네, 내려받을 수 있어요. 학원 관리자가 ... [녹화된 수업 비디오]에서 영상을 보고 내려받아요.' '학생이 직접 내려받는 기능은 공개 안내에 없어서 ...'",
+      "conflict": "공개 문서(doc:/docs/admin/storage-management#4@1,@5,@6, doc:/docs/admin/billing-upgrade#4@6)는 관리자가 콘솔에서 녹화본을 보고 내려받는다고 하고, 공개 소개 페이지(site:components/introduction/story/story-copy.ts:315, site:lib/introduction/content.ts:515)는 '녹화본은 앱 안에서만 열람, 다운로드 차단 + 워터마크'라고 쓴다. 두 문구가 서로 다른 대상(학생 열람 vs 관리자 콘솔)을 말하는지 사람이 정해야 한다. 결정: 답 첫머리를 '네, 내려받을 수 있어요'로 둘지, 관리자 콘솔 내려받기와 학생 열람을 나눠 쓸지.",
+      "proposal": null,
+      "affectedCards": [
+        "basics:basics-recording-download"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": []
+    },
+    {
+      "id": "HQ-2803",
+      "topic": "내 정보(위치·접속 정보) 열람 요청 방법 안내 범위: 개인정보처리방침 열람·삭제 요청 문구 인용",
+      "currentText": "field:admin-sees-teacher-location-ip 답: '내 정보를 열람해 달라고 요청하는 방법은 공개 안내에 없어요. 처리방침에 적힌 방법을 먼저 보세요.'",
+      "conflict": "공개 페이지 개인정보처리방침에는 '사용자는 자신의 개인정보에 대해 열람, 정정, 삭제, 처리 정지, 동의 철회를 요청할 수 있습니다'(site:app/privacy/page.tsx:509)와 '개인정보 보호 문의, 열람·삭제 요청, 고충 처리는 아래에서 받습니다'(site:app/privacy/page.tsx:565)가 있어 '요청하는 방법은 공개 안내에 없다'는 부재 주장은 틀리다(absence_claim_wrong). 다만 학원 관리자 화면에 위치·IP가 보이는지는 근거가 없고, 처리방침은 웹사이트·챗봇 개인정보 기준이라 수업 앱 정보에 같은 절차가 적용되는지는 사람이 정해야 한다. HQ-2401(본인 상담 통화 녹음 열람)과 인접. 결정: 처리방침 문구를 그대로 인용할지, 적용 범위(웹사이트·챗봇)를 함께 밝힐지.",
+      "proposal": null,
+      "affectedCards": [
+        "field:admin-sees-teacher-location-ip"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": []
+    },
+    {
+      "id": "HQ-3001",
+      "topic": "학원 이름·로고 전용 앱(화이트라벨) 문의 응대 범위와 견적 안내 문구",
+      "currentText": "field:white-label-academy-app-logo 답: \"확인된 것만 말씀드릴게요.\\n\\n1) 학원 이름·로고로 된 전용 앱(화이트라벨): 공개 안내에 나와 있지 않아요. 비용도 말씀드릴 수 없어요.\\n2) 앱 안 학원 로고: 공개 안내 기준 관리자 대시보드 [일반 설정]에서 코스 기본 커버와 브랜드 로고 이미지를 바꾸면 학원이 만든 코스 전체 커버에 적용돼요. 학교 소개를 채워 두면 학생에게 가는 학습 보고서 같은 곳에 함께 표시돼요.\\n\\n전용 앱이 필요하시면 아래 [도입 상담 남기기]로 원하는 범위(앱 이름, 아이콘, 앱 안 로고)를 적어 가능 여부와 비용을 견적으로 받아 보세요.\"",
+      "conflict": "공개 문서·페이지에 학원 전용 앱(화이트라벨) 제공 여부를 정한 문장이 없고(검색 0건), 사이트 소개서 비교표에는 타사 항목의 '전용 앱' 문구만 있다. 답은 '공개 안내에 나와 있지 않아요', '비용도 말씀드릴 수 없어요', '가능 여부와 비용을 견적으로 받아 보세요'라고 말해 비용·견적 안내 범위(금액 비공개 원칙)에 닿는다. 앱 안 학원 로고(코스 기본 커버·브랜드 로고, 학교 소개)는 institution-settings 문서 근거가 있다.",
+      "proposal": null,
+      "affectedCards": [
+        "field:white-label-academy-app-logo"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null
+    },
+    {
+      "id": "HQ-3101",
+      "topic": "도입 시작 조건 안내: 전자칠판 없이 앱만으로 시작할 수 있는지, 노트북 내장 카메라·마이크로 시작할 수 있는지, 학원에서 쓰려면 유료 계정 전환이 필요한지(2주 무료 체험 문구는 HQ-03·HQ-14와 함께)",
+      "currentText": "basics:basics-start-what-to-buy: '이미 있는 PC나 노트북, 태블릿에 클래스인 앱을 설치해서 시작할 수 있어요. 전자칠판을 먼저 사야 하는 건 아니에요. … 노트북 카메라·마이크로도 시작할 수 있고, 학원에서 쓰려면 소프트웨어를 유료 계정으로 전환해야 해요. 요금제와 2주 무료 체험은 도입 상담(/contact)에서 안내해 드려요.'",
+      "conflict": "공개 문서에는 PC·모바일에 앱을 설치해 쓰는 방법(doc:/docs/start/pc-install#summary, doc:/docs/start/mobile-install#summary)만 있고, '전자칠판을 먼저 사야 하는 건 아니다'(검색 0건)와 '노트북 카메라·마이크로도 시작할 수 있다'(검색 0건)를 말하는 문장이 없다. '학원에서 쓰려면 유료 계정으로 전환'은 doc:/docs/admin/billing-upgrade 가 무료 버전으로 시작하고 학원은 유료 전환한다는 흐름과 닿아 있어 HQ-14 와 같은 계열이다. '2주 무료 체험'은 doc:/docs/start/pre-adoption-faq-22-questions#1 문장 11 이 말하지만 HQ-03 이 유효성을 결정하는 중이다. 결정: (1) 칠판 없이 시작 가능하다는 안내를 챗봇이 해도 되는지, (2) 노트북 내장 카메라·마이크로 시작 가능하다는 안내를 해도 되는지, (3) 유료 전환 필요 문구를 쓸지, (4) 2주 체험 문구를 쓸지(HQ-03).",
+      "proposal": null,
+      "affectedCards": [
+        "basics:basics-start-what-to-buy"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": [
+        "전자칠판을 먼저 사야 하는 건 아니"
+      ]
+    },
+    {
+      "id": "HQ-3401",
+      "topic": "시험 정답을 알려 달라는 요청의 거절 문구와 대신 도와주는 범위 안내",
+      "currentText": "svc:exam-answer 답: '시험 정답은 알려 드릴 수 없어요. 스스로 풀어 봐야 실력이 되니까요. 대신 시험 화면이 안 열리거나, 제출이 안 되거나, 응시하다 화면이 멈추는 것처럼 막히는 문제는 바로 도와 드릴게요. 어떤 화면에서 막혔는지 짧게 알려 주세요.'",
+      "conflict": "공개 문서·페이지에 시험 정답 요청 응대 기준과 챗봇이 바로 도와 줄 수 있는 문제 범위(화면 안 열림·제출 안 됨·응시 중 멈춤)를 정한 문장이 없다. 사람이 정한 응대 문구이므로 근거 없이 고칠 수 없다. 결정: 거절 문구 유지 여부, '바로 도와 드릴게요' 약속 범위, 시험 문제·정답 자료 요청까지 같은 문구로 막을지.",
+      "proposal": null,
+      "affectedCards": [
+        "svc:exam-answer"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": []
     }
   ]
 }

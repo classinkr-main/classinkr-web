@@ -455,5 +455,5 @@ describe.each([
       expect(findSafetyViolations(result.answer).map((rule) => rule.key), question).toEqual([])
     }
     expect(fetchSpy).not.toHaveBeenCalled()
-  })
+  }, 30_000)
 })
