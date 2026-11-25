@@ -49,17 +49,104 @@ export interface RouteDecision {
 // ── 조각 나누기 ──────────────────────────────────────────────────────────────────────────
 
 const SENTENCE_BREAK = /(?<=[?？!])\s*|(?<=[가-힣A-Za-z0-9)])[.。]\s+|[.。]$|\n+/
-// "…하고, …" "…이고, …" "…며, …" 처럼 쉼표가 붙은 이음 — 쉼표 없는 "바꾸고 내가 맡을게" 는 한 조각이다.
-const CLAUSE_BREAK = /(?<=[가-힣])(?:고|며|면서|구)\s*,\s*|\s*,?\s*그리고\s+|\s+또\s+(?=[가-힣])/
+// 늘 끊는 이음 — "…하고, …" "…이고, …" "…며, …"(쉼표가 붙은 이음 어미)와 "그리고"·"또". 앞 조각에 이음 어미를 남겨 원형으로 되돌린다.
+const ALWAYS_BREAK = /(?<=[가-힣](?:고|며|면서|구))\s*,\s*|\s*,?\s*그리고\s+|\s+또\s+(?=[가-힣])/
+// 쉼표 없는 이음(검토 동작-2) — 청하거나 시키는 동사 + 고. "환불 규정 알려 주고 담당자도 알려 줘", "출고 예정 등록하고 견적 초안도 만들어 줘".
+// 끊은 뒤 양쪽 꼴을 보고 받아들인다(acceptVerbSplit). "바꾸고 내가 맡을게"·"만들고 나서 …"는 끊지 않는다.
+const VERB_JOINT =
+  /(?<=(?:(?:알려|보여|찾아|설명해|정리해|확인해|만들어|보내|넣어|잡아|등록해|뽑아)\s*주|(?:등록|작성|추가|생성|확인|조회|정리|설명)\s*하|만들|보내|넣|잡)(?:고|구))\s+(?!나서|나면|난\s|있|싶|다시|나니)/g
+// 명사 이음 — "견적 목록이랑 딜 목록 보여 줘". 양쪽에 서로 다른 조회 대상이 있을 때만 끊는다.
+const NOUN_JOINT = /(?<=[가-힣A-Za-z0-9])(?:이랑|랑|하고|과|와)\s+/g
+/** 오른쪽 조각의 청하는 꼬리 — 명사로 끝난 왼쪽 조각이 빌려 쓴다("견적 목록" + "보여 줘"). */
+const ASK_TAIL = /(?:보여|알려|찾아|정리해|확인해|뽑아|조회해)\s*(?:줘|주세요|줄래|주라)?\s*[?？.!]*$|[?？]$/
+const VERBISH_END = /(?:줘|주세요|해|하|요|야|니|냐|까|어|지)\s*[?？.!]*$/
 
 const CONNECTIVE_HEAD = /^(?:왜냐(?:면|하면)|그러니까|그러니|그래서|그런데|근데|참고로|아\s|어\s)/
 
+/**
+ * 이음 어미로 끝난 앞 조각을 원형 꼬리로 되돌린다 — "설명해 주고" → "설명해 줘", "등록하고"(뒤가 시키는 말) → "등록해 줘".
+ * 되돌린 꼴이 시키는 말인데 뒤 조각이 시키는 말이 아니면 되돌리지 않는다(끼인 동사로 오더를 만들지 않는다).
+ */
+function restoreJoint(piece: string, nextForm: SentenceForm | null): string {
+  const command = nextForm === "command"
+  let restored: string | null = null
+  if (/주(?:고|구)$/.test(piece)) restored = piece.replace(/주(?:고|구)$/, "줘")
+  else if (/하(?:고|구)$/.test(piece)) restored = piece.replace(/하(?:고|구)$/, command ? "해 줘" : "해")
+  else {
+    const stem = piece.match(/(만들|보내|넣|잡)(?:고|구)$/)
+    if (stem) {
+      const base = { 만들: "만들어", 보내: "보내", 넣: "넣어", 잡: "잡아" }[stem[1] as "만들" | "보내" | "넣" | "잡"]
+      restored = `${piece.slice(0, piece.length - stem[0].length)}${base}${command ? " 줘" : ""}`
+    }
+  }
+  if (!restored) return piece
+  if (detectForm(restored) === "command" && !command) return piece
+  return restored
+}
+
+function readToolOf(text: string): string | undefined {
+  return READ_TOOLS.find((entry) => entry.match.test(text))?.tool
+}
+
+/** 쉼표 없는 동사 이음을 받아들일지 — 양쪽이 묻거나 시키는 꼴이고, 시키는 앞 조각은 뒤도 시키는 말일 때만. */
+function acceptVerbSplit(left: string, right: string): string | null {
+  const rightForm = detectForm(right)
+  if (rightForm === "statement") return null
+  const restored = restoreJoint(left, rightForm)
+  if (restored === left) return null
+  const leftForm = detectForm(restored)
+  if (leftForm === "statement") return null
+  if (leftForm === "command" && rightForm !== "command") return null
+  return restored
+}
+
+function splitAt(piece: string, joint: RegExp, accept: (left: string, right: string) => string | null): string[] {
+  const out: string[] = []
+  let rest = piece
+  for (;;) {
+    joint.lastIndex = 0
+    let taken = false
+    for (const match of rest.matchAll(joint)) {
+      const at = match.index ?? 0
+      const left = rest.slice(0, at).trim()
+      const right = rest.slice(at + match[0].length).trim()
+      if (!left || !right) continue
+      const leftText = accept(left, right)
+      if (leftText == null) continue
+      out.push(leftText)
+      rest = right
+      taken = true
+      break
+    }
+    if (!taken) break
+  }
+  out.push(rest)
+  return out
+}
+
+function acceptNounSplit(left: string, right: string): string | null {
+  if (left.length > 20 || VERBISH_END.test(left)) return null
+  const leftTool = readToolOf(left)
+  const rightTool = readToolOf(right)
+  if (!leftTool || !rightTool || leftTool === rightTool) return null
+  const tail = right.match(ASK_TAIL)?.[0].trim()
+  return tail ? `${left} ${tail}` : left
+}
+
 export function splitPieces(text: string): string[] {
-  return text
-    .split(SENTENCE_BREAK)
-    .flatMap((piece) => (piece ?? "").split(CLAUSE_BREAK))
-    .map((piece) => (piece ?? "").trim())
-    .filter((piece) => piece.length > 0)
+  const sentences = text.split(SENTENCE_BREAK).map((piece) => (piece ?? "").trim()).filter(Boolean)
+  const out: string[] = []
+  for (const sentence of sentences) {
+    const clauses = sentence.split(ALWAYS_BREAK).map((piece) => (piece ?? "").trim()).filter(Boolean)
+    clauses.forEach((clause, index) => {
+      const next = clauses[index + 1]
+      const restored = next ? restoreJoint(clause, detectForm(next)) : clause
+      for (const verbPiece of splitAt(restored, VERB_JOINT, acceptVerbSplit)) {
+        out.push(...splitAt(verbPiece, NOUN_JOINT, acceptNounSplit))
+      }
+    })
+  }
+  return out
 }
 
 export interface SegmentPart {
@@ -71,11 +158,14 @@ export interface SegmentPart {
 
 const BARE_COMMAND = /^(?:확정|등록|처리|진행|해|부탁)\S{0,4}[.!]*$/
 
+/** 한 턴에 답하는 조각 수의 상한 — 넘는 조각은 답하지 않고 "다시 물어봐 주세요"로 알린다(dropped). */
+export const MAX_SEGMENTS = 4
+
 /**
  * 질문 조각. 서술 조각은 다음 조각(없으면 앞 조각)에 붙인다. 이음말로 시작하는 조각과 대상 없는 짧은 지시("확정해.")는
- * 앞 조각에 붙인다. 조각은 최대 max 개 — 넘으면 나머지를 마지막 조각에 붙인다(한 턴에 카드가 끝없이 늘지 않게).
+ * 앞 조각에 붙인다. 조각은 최대 max 개 — 넘는 조각은 dropped 로 돌려준다(말없이 합치거나 버리지 않는다).
  */
-export function splitSegmentParts(text: string, max = 4): SegmentPart[] {
+export function splitSegmentPartsDetailed(text: string, max = MAX_SEGMENTS): { parts: SegmentPart[]; dropped: string[] } {
   const pieces = splitPieces(text.replace(/\s+/g, " ").trim())
   const out: SegmentPart[] = []
   let carry = ""
@@ -97,14 +187,14 @@ export function splitSegmentParts(text: string, max = 4): SegmentPart[] {
     if (last) last.text = `${last.text} ${carry}`
     else out.push({ text: carry, core: carry })
   }
-  if (out.length > max) {
-    const rest = out.slice(max - 1)
-    return [...out.slice(0, max - 1), { text: rest.map((p) => p.text).join(" "), core: rest[0].core }]
-  }
-  return out
+  return { parts: out.slice(0, max), dropped: out.slice(max).map((part) => part.text) }
 }
 
-export function splitSegments(text: string, max = 4): string[] {
+export function splitSegmentParts(text: string, max = MAX_SEGMENTS): SegmentPart[] {
+  return splitSegmentPartsDetailed(text, max).parts
+}
+
+export function splitSegments(text: string, max = MAX_SEGMENTS): string[] {
   return splitSegmentParts(text, max).map((part) => part.text)
 }
 
@@ -156,21 +246,30 @@ export function classifyWrite(text: string): WriteKind {
 
 // ── 묻기 갈래 점수 ───────────────────────────────────────────────────────────────────────
 
-const WHO = /누구(?!나|든|라도|에게나)|누가|담당자\s*(?:가|는|좀)?\s*(?:누|어디|알려)|어디(?:에|로)?\s*물어|문의처|연락처는?\s*(?:어디|누구)|누구한테|누구에게|누구랑/
+const WHO =
+  /누구(?!나|든|라도|에게나)|누가|담당자\s*(?:가|는|좀)?\s*(?:누|어디|알려)|담당(?:자)?\s*(?:연락처|이름)|어디(?:에|로)?\s*물어|문의처|연락처는?\s*(?:어디|누구)|누구한테|누구에게|누구랑/
+/** "누가 수업에 들어왔는지"처럼 누가가 간접 의문 안에 있으면 담당자를 묻는 말이 아니다. */
+const INDIRECT_WHO = /누가[^?？.]*?(?:는지|었는지|았는지|했는지|인지|던지)/g
 const WHO_SOFT = /담당|본사|물어|문의/
 const LINK_OBJ = /링크|주소|url|바로\s*가기/i
 const LINK_FORM = /(?:화면|페이지|메뉴|탭)\s*(?:은|는|이|가)?\s*(?:어디|어딨)|어디서\s*(?:해|하|봐|보|열|등록|확정|만들)|어디에\s*있|어디\s*있/
 /** 링크 낱말이 있어도 증상·사용법이면 링크 찾기가 아니다("수업 링크로 입장이 안 돼요"). */
 const SYMPTOM = /안\s*(?:돼|되|열|와|들어|보여|나와)|입장|접속|오류|에러|깨져|깨지|끊겨|느려|먹통|실패/
-const KNOWLEDGE_FORM = /방법|어떻게|절차|정책|규정|규칙|가능|되나|되는지|돼\s*[?？]|수\s*있|설명|왜|뜻|의미|차이|기준|조건|하려면|하면|되면|되나요|나요/
+const KNOWLEDGE_FORM =
+  /방법|어떻게|절차|정책|규정|규칙|가능|되나|되는지|돼\s*[?？]|수\s*있|설명|왜|뜻|의미|차이|기준|조건|하려면|하면|되면|되나요|나요|(?:하는|만드는|쓰는|보내는|넣는|여는|거는|올리는|받는|켜는|끄는)\s*법/
 const PRODUCT = /클래스인|classin|수업|녹화|카메라|화면|학생|교사|선생님|계정|앱|설치|요금|가격|환불|결제\s*수단|교실|칠판|강의|숙제|출석|알림/i
 
 const READ_FORM =
-  /보여|목록|현황|몇\s*(?:대|개|건|번)|몇\s*대|얼마|조회|내역|이력|남았|남아|있어\s*[?？.!]*$|상태|버전|기록|됐(?:니|나|어\s*[?？]|는지|었지)|했(?:니|나|어\s*[?？]|던가)|했어\s*[?？]|들어왔|나갔(?:니|나)|언제|확인해|봐\s*줘|비교|뭐임|알려/
+  /보여|목록|현황|몇\s*(?:대|개|건|번|명)|얼마|조회|내역|이력|남았|남아|있어\s*[?？.!]*$|상태|버전|기록|됐(?:니|나|어\s*[?？]|는지|었지)|했(?:니|나|어\s*[?？]|던가)|했어\s*[?？]|들어왔|나갔(?:니|나)|언제|확인해|봐\s*줘|비교|뭐임|뭐야|알려|(?:재고|품목|현황|목록|내역|합계|단계)(?:은|는|도|이|가)?\s*[?？.!]*$/
+/** 화면·페이지가 어디 있는지 묻는 말 — 조회가 아니라 링크다("리드 목록 페이지 어디 있어?"). */
+const SCREEN_WHERE = /(?:화면|페이지|메뉴|탭)\s*(?:은|는|이|가)?\s*(?:어디|어딨)/
 
 const READ_TOOLS: Array<{ match: RegExp; tool: Extract<ReadTarget, { kind: "tool" }>["tool"] }> = [
-  { match: /재고|가용|남은\s*수량|몇\s*대\s*(?:남|있)/, tool: "hw_stock" },
-  { match: /입출고|(?:출고|입고|배송)\s*(?:기록|내역|현황|이력|예정\s*건)|최근\s*출고|출고\s*(?:언제|됐|몇)|출고됐|출고\s*언제/, tool: "hw_movements" },
+  { match: /재고|가용|남은\s*수량|몇\s*대\s*(?:남|있)|주문\s*권장/, tool: "hw_stock" },
+  {
+    match: /입출고|(?:출고|입고|배송)\s*(?:기록|내역|현황|이력|예정\s*건)|최근\s*출고|출고\s*(?:언제|됐|몇)|(?:출고|입고)(?:됐|된)|출고\s*언제/,
+    tool: "hw_movements",
+  },
   { match: /판매\s*(?:량|집계|현황|대수)|팔렸|팔린|몇\s*대\s*팔/, tool: "hw_sales" },
   { match: /딜|영업\s*기회/, tool: "deals_list" },
   { match: /견적/, tool: "quotes_list" },
@@ -199,7 +298,7 @@ export function scoreBranches(text: string): { scores: Record<AskBranch, number>
   const symptom = SYMPTOM.test(text)
   const knowledgeForm = KNOWLEDGE_FORM.test(text)
 
-  if (WHO.test(text)) scores.contact += 5
+  if (WHO.test(text.replace(INDIRECT_WHO, " "))) scores.contact += 5
   else if (WHO_SOFT.test(text) && /알려|찾아|어디/.test(text) && !knowledgeForm) scores.contact += 2
 
   if (LINK_OBJ.test(text)) scores.link += 2
@@ -207,7 +306,7 @@ export function scoreBranches(text: string): { scores: Record<AskBranch, number>
   if (scores.link > 0 && /알려|줘|복사|보내|좀|어디/.test(text)) scores.link += 1
   if (symptom) scores.link = Math.min(scores.link, 1)
 
-  const read = symptom ? undefined : matchRead(text)
+  const read = symptom || SCREEN_WHERE.test(text) ? undefined : matchRead(text)
   if (read && READ_FORM.test(text)) {
     scores.read += 4
     if (read.kind === "tool" && read.tool === "quotes_list" && !/목록|얼마|금액|몇\s*번|버전|비교|내역|상태|현황|보여|뭐\s*있|합계/.test(text)) {
@@ -237,7 +336,10 @@ export function routeSegment(text: string, core: string = text): RouteDecision {
     return { text: trimmed, form, branch: "unknown", scores }
   }
 
-  const ranked = (Object.entries(scores) as Array<[AskBranch, number]>).sort((a, b) => b[1] - a[1])
+  // 점수가 같으면 지식(기본 갈래)이 앞서지만, 링크·주소·바로가기를 분명히 청했으면 링크가 앞선다.
+  const linkAsked = LINK_OBJ.test(trimmed)
+  const tieRank = (branch: AskBranch) => (linkAsked && branch === "link" ? -1 : 0)
+  const ranked = (Object.entries(scores) as Array<[AskBranch, number]>).sort((a, b) => b[1] - a[1] || tieRank(a[0]) - tieRank(b[0]))
   const [first, second] = ranked
   const decision: RouteDecision = { text: trimmed, form, branch: first[0], scores, ...(first[0] === "read" && read ? { read } : {}) }
   // 분명한 요청 갈래(담당자·링크·조회) 둘이 3점 이상이고 1점 안쪽으로 붙으면 되묻는다. 지식은 기본 갈래라 되묻기 후보가 아니다.
@@ -248,7 +350,13 @@ export function routeSegment(text: string, core: string = text): RouteDecision {
 }
 
 export function routeMessage(text: string): RouteDecision[] {
-  return splitSegmentParts(text).map((part) => routeSegment(part.text, part.core))
+  return routeMessageDetailed(text).decisions
+}
+
+/** 조각별 갈래와, 상한을 넘어 이번 턴에 답하지 않는 조각(dropped). */
+export function routeMessageDetailed(text: string): { decisions: RouteDecision[]; dropped: string[] } {
+  const { parts, dropped } = splitSegmentPartsDetailed(text)
+  return { decisions: parts.map((part) => routeSegment(part.text, part.core)), dropped }
 }
 
 export const BRANCH_LABEL: Record<AskBranch, string> = {

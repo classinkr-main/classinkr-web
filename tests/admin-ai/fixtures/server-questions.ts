@@ -56,3 +56,45 @@ export const DECOY_QUESTIONS: ReadonlyArray<[string, string[]]> = [
   ["출고라는 말이 무슨 뜻이야", ["read", "write"]],
   ["누구나 쓸 수 있는 기본 화면 설정 방법", ["contact", "write"]],
 ]
+
+/**
+ * 쉼표 없는 이음·"A랑 B"·명령 둘 — [문장, 조각별 갈래(쓰기는 write:종류, 조회는 read:도구)].
+ * 2026-11 서버 1단계 검토(동작-2): 질문 하나가 말없이 버려지던 문장들.
+ */
+export const COMPOUND_NO_COMMA: ReadonlyArray<[string, string[]]> = [
+  ["환불 규정 알려 주고 담당자도 알려 줘", ["knowledge", "contact"]],
+  ["출고 예정 3대 등록하고, 견적 초안도 만들어 줘", ["write:hw_plan", "write:quote_draft"]],
+  ["T1 카메라 2대 출고 예정 등록하고 견적 초안도 만들어 줘", ["write:hw_plan", "write:quote_draft"]],
+  ["견적 목록이랑 딜 목록 보여 줘", ["read:quotes_list", "read:deals_list"]],
+  ["재고 현황하고 방문자 현황 알려 줘", ["read:hw_stock", "read:site_traffic"]],
+  ["T1 카메라랑 86형 재고", ["read:hw_stock"]],
+  ["요금제 차이 설명해 주고, 견적 목록도 보여 줘", ["knowledge", "read:quotes_list"]],
+  ["딜 목록 보여 주고 견적 화면 링크도 줘", ["read:deals_list", "link"]],
+  // 끊으면 안 되는 이음 — 한 조각
+  ["상태 바꾸고 내가 맡을게", ["write:lead"]],
+]
+
+/** 조회 재현율(동작-3) — [문장, 조회 대상(도구 이름 또는 화면 주제)]. */
+export const READ_RECALL: ReadonlyArray<[string, string]> = [
+  ["지난 7일 방문자 몇 명이야?", "site_traffic"],
+  ["T1 카메라 가용 재고", "hw_stock"],
+  ["주문 권장 뜬 품목 있어?", "hw_stock"],
+  ["어제 출고된 거 있어?", "hw_movements"],
+  ["재고 부족한 품목", "hw_stock"],
+  ["가용 재고 0인 품목", "hw_stock"],
+  ["오늘 할 일 뭐야", "task"],
+  ["가온학원 딜 단계 뭐야", "deals_list"],
+  ["이번 달 출고 내역 보여 줘", "hw_movements"],
+  ["입고된 품목 있어?", "hw_movements"],
+]
+
+/** 미끼 낱말 추가분(동작-3·동작-7) — [문장, 가야 할 갈래]. */
+export const DECOY_MORE: ReadonlyArray<[string, string]> = [
+  ["견적 초안 만드는 법 알려 줘", "knowledge"],
+  ["누가 수업에 들어왔는지 확인하는 방법", "knowledge"],
+  ["카메라 담당자 연락처", "contact"],
+  ["HW 재고 화면 링크 줘", "link"],
+  ["쇼룸 예약 화면 바로가기", "link"],
+  ["리드 목록 페이지 어디 있어?", "link"],
+  ["공개 요금 페이지 주소 알려 줘", "link"],
+]
