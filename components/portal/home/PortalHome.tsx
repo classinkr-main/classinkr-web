@@ -842,6 +842,8 @@ export function PortalHome(props: PortalHomeProps = {}) {
   const canCreateInPortal = overview.mode === "v2" && props.allowCreate !== false
 
   const todayStr = new Date().toLocaleDateString("ko-KR", {
+    // 서버(UTC)와 브라우저(KST)가 같은 날짜를 그리도록 서울 시간대로 고정한다 — KST 00~09시에 하루 어긋나 하이드레이션이 깨졌다.
+    timeZone: "Asia/Seoul",
     year: "numeric", month: "long", day: "numeric", weekday: "short",
   })
 
