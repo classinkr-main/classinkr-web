@@ -110,10 +110,10 @@ export function RevenueGoalChartCard({ flow, summary, manager, selectedMonth }: 
 }
 
 /** 선택월 주차별 확정·고확도·예정 막대. */
-export function RevenueWeekCard({ flow, selectedMonth }: { flow: RevenueFlow; selectedMonth: string }) {
+export function RevenueWeekCard({ flow, selectedMonth, bare = false }: { flow: RevenueFlow; selectedMonth: string; bare?: boolean }) {
   const { pipeline, peakWeek } = flow
   return (
-    <section className={`${CARD} p-4`} aria-label="주차별 확도">
+    <section className={bare ? "min-w-0" : `${CARD} p-4`} aria-label="주차별 확도">
       <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
         <h2 className="flex items-center gap-1.5 text-[13px] font-bold text-[#111110]">
           <CalendarDays className="h-3.5 w-3.5 text-[#084734]" aria-hidden="true" />
@@ -148,9 +148,9 @@ export function RevenueWeekCard({ flow, selectedMonth }: { flow: RevenueFlow; se
 }
 
 /** 누적 페이싱 — 실적 · 예상 포함 · 목표. */
-export function RevenuePacingCard({ summary, loading }: { summary: BranchSummaryResponse | null; loading: boolean }) {
+export function RevenuePacingCard({ summary, loading, bare = false }: { summary: BranchSummaryResponse | null; loading: boolean; bare?: boolean }) {
   return (
-    <section className={`${CARD} p-4`} aria-label="누적 페이싱">
+    <section className={bare ? "min-w-0" : `${CARD} p-4`} aria-label="누적 페이싱">
       <h2 className="mb-2 text-[13px] font-bold text-[#111110]">누적 페이싱</h2>
       {loading && !summary ? (
         <LoadingPanel label="누적 흐름을 불러오는 중" />
@@ -166,6 +166,45 @@ export function RevenuePacingCard({ summary, loading }: { summary: BranchSummary
           />
         </>
       )}
+    </section>
+  )
+}
+
+/**
+ * 개요 A 시안의 '매출 누적 흐름' — 월별 목표 차트 + 누적 페이싱 + 주차별 확도를 한 카드 안에 붙인다.
+ * 세 차트는 기존 구현 그대로(카드 겉틀만 벗김). 데이터는 useRevenueFlow가 한 번만 읽은 값을 공유한다.
+ */
+export function RevenueFlowCard({ flow, summary, manager, selectedMonth }: {
+  flow: RevenueFlow
+  summary: BranchSummaryResponse | null
+  manager?: string
+  selectedMonth: string
+}) {
+  const { pipeline } = flow
+  return (
+    <section className={`${CARD} flex flex-col gap-5 p-4 sm:p-5`} aria-label="매출 누적 흐름">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-[14px] font-bold tracking-[-0.01em] text-[#111110]">매출 누적 흐름</h2>
+        <Link
+          href="/admin/branch/ledger"
+          className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-md px-2 text-[12px] font-semibold text-[#084734] hover:underline md:min-h-0 md:min-w-0"
+        >
+          수치 검수 →
+        </Link>
+      </div>
+      {pipeline.data && summary ? (
+        <>
+          {pipeline.stale && <p role="status" className="-mb-2 text-xs text-[#7A520F]">갱신 실패 — 저장된 REV 데이터 표시 중</p>}
+          <MonthlyGoalBowlChart rows={flow.ledgerRows} plans={flow.monthlyGoals} selectedMonth={selectedMonth}
+            todayMonth={flow.todayMonth} density="compact" goalNote={manager ? "승인 개인 DSH 목표 · 동일 담당자의 REV 원천 기준" : "승인 DSH 목표 · 현재 팀의 REV 원천 기준. 장부 적용분은 매출 장부에서 별도 검수합니다."} />
+        </>
+      ) : pipeline.error ? (
+        <p role="alert" className="py-5 text-xs text-[#B43E3E]">월별 매출 조회 실패 · 0건이 아닙니다.</p>
+      ) : <LoadingPanel label="월별 목표·매출을 불러오는 중" />}
+      <div className="grid gap-6 border-t border-[rgba(0,0,0,0.08)] pt-5 lg:grid-cols-2">
+        <RevenuePacingCard summary={summary} loading={false} bare />
+        <RevenueWeekCard flow={flow} selectedMonth={selectedMonth} bare />
+      </div>
     </section>
   )
 }
