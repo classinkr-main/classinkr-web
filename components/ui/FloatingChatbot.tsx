@@ -1,11 +1,12 @@
 "use client"
 
-import { FormEvent, memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
+import { FormEvent, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion"
 import {
+    ArrowDown,
     ArrowRight,
     Check,
     Copy,
@@ -43,6 +44,7 @@ import {
 import { ChatbotTeaser } from "@/components/ui/ChatbotTeaser"
 import { useChatbotTeaser } from "@/components/ui/useChatbotTeaser"
 import { CHATBOT_MOTION, m } from "@/lib/chatbot/motion"
+import { continuesShownText, nextRevealLength } from "@/lib/chatbot/stream-reveal"
 import {
     isMuted,
     setMuted,
@@ -122,6 +124,8 @@ interface ChatMessage {
     id: string
     role: "assistant" | "user"
     content: string
+    /** 이번 대화에서 막 받은 답변 — 한 번에 통째로 와도 처음부터 흘려 보여준다. 다 흐르면 false. */
+    revealPending?: boolean
     sources?: ChatbotSource[]
     suggestedQuestions?: string[]
     answerEventId?: string
@@ -532,18 +536,88 @@ function Caret({ shouldReduceMotion }: { shouldReduceMotion: boolean | null }) {
     )
 }
 
+/**
+ * 스트리밍 답변을 일정한 속도로 흘려 보여준다. 네트워크 청크가 몰려 와도 글자가 툭툭 끊기지 않고,
+ * 스트림이 끝나면 남은 글자를 빠르게 마저 보여준다. 이미 보여준 앞부분과 이어지지 않는 텍스트가
+ * 오면(preview→final replace) 한 번에 바꾸고 revision 을 올려 크로스페이드한다. 동작 줄이기에서는 즉시 전부.
+ */
+function useStreamReveal(
+    text: string,
+    streaming: boolean,
+    revealFromStart: boolean,
+    shouldReduceMotion: boolean | null
+) {
+    const [reveal, setReveal] = useState(() => ({
+        source: text,
+        shown: streaming || revealFromStart ? 0 : text.length,
+        revision: 0,
+    }))
+
+    // 이전 렌더의 텍스트와 비교해 파생 상태를 맞춘다(렌더 중 setState — React 권장 패턴).
+    let current = reveal
+    if (text !== reveal.source) {
+        current = continuesShownText(reveal.source, text, reveal.shown)
+            ? { ...reveal, source: text }
+            : { source: text, shown: text.length, revision: reveal.revision + 1 }
+        setReveal(current)
+    }
+
+    const target = current.source.length
+    const shownLength = current.shown
+
+    useEffect(() => {
+        if (shouldReduceMotion || shownLength >= target) return
+        const frame = window.requestAnimationFrame(() => {
+            setReveal((previous) =>
+                previous.source === text
+                    ? { ...previous, shown: nextRevealLength(previous.source, previous.shown, streaming) }
+                    : previous
+            )
+        })
+        return () => window.cancelAnimationFrame(frame)
+    }, [shownLength, target, text, streaming, shouldReduceMotion])
+
+    const visibleLength = shouldReduceMotion ? target : shownLength
+    return {
+        text: current.source.slice(0, visibleLength),
+        revealing: visibleLength < target,
+        revision: current.revision,
+    }
+}
+
 // 이전 메시지들은 props(원시값)가 그대로라 memo로 재파싱(sanitize+split+regex) 건너뜀 — 스트리밍 버블만 갱신.
 const MessageContent = memo(function MessageContent({
     content,
     role,
     isStreaming = false,
+    revealFromStart = false,
+    messageId,
+    onRevealChange,
 }: {
     content: string
     role: ChatMessage["role"]
     isStreaming?: boolean
+    revealFromStart?: boolean
+    messageId?: string
+    /** 글자가 아직 흐르는 중인지 부모에 알린다 — 다 흐른 뒤에 출처·추천 질문·버튼을 띄운다. */
+    onRevealChange?: (messageId: string, revealing: boolean) => void
 }) {
     const shouldReduceMotion = useReducedMotion()
-    const visibleContent = role === "assistant" ? sanitizeVisibleAssistantText(content) : content
+    const sanitizedContent = role === "assistant" ? sanitizeVisibleAssistantText(content) : content
+    const isAssistant = role === "assistant"
+    const reveal = useStreamReveal(
+        sanitizedContent,
+        isStreaming && isAssistant,
+        revealFromStart && isAssistant,
+        shouldReduceMotion
+    )
+    const visibleContent = reveal.text
+
+    useEffect(() => {
+        if (messageId && onRevealChange) onRevealChange(messageId, reveal.revealing)
+    }, [messageId, onRevealChange, reveal.revealing])
+
+    const showTypingCaret = isStreaming || reveal.revealing
     const blocks = visibleContent
         .trim()
         .split(/\n{2,}/)
@@ -554,10 +628,11 @@ const MessageContent = memo(function MessageContent({
 
     return (
         <motion.div
-            layout="position"
-            initial={m({ opacity: 0.8 }, shouldReduceMotion)}
-            animate={m({ opacity: 1 }, shouldReduceMotion)}
-            transition={m(CHATBOT_MOTION.tokenFade, shouldReduceMotion)}
+            // 활성 스트리밍 버블에는 layout 애니메이션을 걸지 않는다(토큰마다 리사이즈 → 메인스레드 thrash).
+            key={reveal.revision}
+            initial={reveal.revision > 0 && !shouldReduceMotion ? { opacity: 0 } : false}
+            animate={{ opacity: 1 }}
+            transition={m(CHATBOT_MOTION.rewriteFade, shouldReduceMotion)}
             className={cn(
                 "space-y-2.5 whitespace-pre-wrap text-sm leading-6 [overflow-wrap:anywhere]",
                 role === "assistant" ? "text-[#111110]" : "text-white"
@@ -565,7 +640,7 @@ const MessageContent = memo(function MessageContent({
         >
             {blocks.map((block, blockIndex) => {
                 const isLastBlock = blockIndex === blocks.length - 1
-                const showCaret = isStreaming && isLastBlock
+                const showCaret = showTypingCaret && isLastBlock
 
                 const lines = block
                     .split("\n")
@@ -790,74 +865,81 @@ function SourceLinks({ sources }: { sources?: ChatbotSource[] }) {
     )
 }
 
+/** 답변 버블의 윗부분을 대화 목록 위쪽(오프셋)에 맞춘다. 맞춰졌으면 true. */
+function alignAnswerTop(container: HTMLElement, messageId: string): boolean {
+    const message = container.querySelector<HTMLElement>(`[data-chat-message-id="${messageId}"]`)
+    if (!message) return false
+    const containerRect = container.getBoundingClientRect()
+    const messageRect = message.getBoundingClientRect()
+    const nextTop = container.scrollTop + messageRect.top - containerRect.top - ANSWER_SCROLL_TOP_OFFSET_PX
+    container.scrollTop = Math.max(0, nextTop)
+    const alignedTop = message.getBoundingClientRect().top - container.getBoundingClientRect().top
+    return alignedTop <= ANSWER_SCROLL_TOP_OFFSET_PX + 2
+}
+
+const THINKING_STEP_LABELS = ["질문을 살펴보는 중", "관련 가이드를 찾는 중", "답변을 정리하는 중"] as const
+
+/**
+ * 생각 중 표시 — 은은한 빛이 지나가는 문구 하나. 시간이 지나면 문구가 단계별로 바뀌고 마지막 단계에서 멈춘다.
+ * 아이콘 링·튀는 점·스켈레톤을 겹치지 않는다(로딩 중 움직임은 문구 쉬머와 입력창 진행선 둘뿐).
+ */
 function ThinkingIndicator({
     shouldReduceMotion,
 }: {
     shouldReduceMotion: boolean | null
 }) {
+    const [step, setStep] = useState(0)
+
+    useEffect(() => {
+        const timers = CHATBOT_MOTION.thinkingSteps.slice(1).map((seconds, index) =>
+            window.setTimeout(() => setStep(index + 1), seconds * 1000)
+        )
+        return () => timers.forEach((timer) => window.clearTimeout(timer))
+    }, [])
+
+    const label = THINKING_STEP_LABELS[Math.min(step, THINKING_STEP_LABELS.length - 1)]
+
     return (
         <motion.div
-            initial={m({ opacity: 0, y: 10, scale: 0.96 }, shouldReduceMotion)}
-            animate={m({ opacity: 1, y: 0, scale: 1 }, shouldReduceMotion)}
-            exit={m({ opacity: 0, y: -6, scale: 0.98 }, shouldReduceMotion)}
+            initial={m({ opacity: 0, y: 8 }, shouldReduceMotion)}
+            animate={m({ opacity: 1, y: 0 }, shouldReduceMotion)}
+            exit={m({ opacity: 0, y: -4, filter: "blur(2px)" }, shouldReduceMotion)}
             transition={m(CHATBOT_MOTION.enter, shouldReduceMotion)}
             className="flex justify-start"
         >
             <div
                 role="status"
                 aria-live="off"
-                className="relative overflow-hidden rounded-[18px] rounded-bl-[6px] border border-white/80 bg-[linear-gradient(160deg,rgba(255,255,255,0.92)_0%,rgba(246,253,249,0.85)_100%)] p-3 text-sm backdrop-blur-xl"
+                className="flex items-center gap-2.5 rounded-[18px] rounded-bl-[6px] border border-white/80 bg-[linear-gradient(160deg,rgba(255,255,255,0.92)_0%,rgba(246,253,249,0.85)_100%)] px-3 py-2.5 text-sm backdrop-blur-xl"
             >
-                {/* 은은한 쉬머 반사 광택 */}
-                {!shouldReduceMotion && (
-                    <motion.div
-                        aria-hidden
-                        className="pointer-events-none absolute inset-0 -translate-x-full bg-[linear-gradient(90deg,transparent_0%,rgba(16,185,129,0.08)_50%,transparent_100%)]"
-                        animate={{ translateX: ["-100%", "200%"] }}
-                        transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
-                    />
-                )}
-
-                <div className="flex items-center gap-2.5">
-                    <div className="relative flex h-6 w-6 shrink-0 items-center justify-center rounded-[8px] border border-fg-accent/15 bg-fg-accent/8 shadow-sm">
-                        <ClassInAIIcon size={13} variant="brand" className="text-fg-accent" />
-                        {!shouldReduceMotion && (
-                            <motion.span
-                                aria-hidden
-                                className="pointer-events-none absolute inset-0 rounded-[8px] border border-[#10B981]/50"
-                                animate={{ scale: [1, 1.25, 1], opacity: [0.6, 0, 0.6] }}
-                                transition={{ duration: 2, repeat: Infinity, ease: "easeOut" }}
-                            />
-                        )}
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <span className="text-xs font-semibold text-fg-accent">ClassIn 가이드 확인 중</span>
-                        <div className="flex items-center gap-1" aria-hidden>
-                            {[0, 1, 2].map((index) => (
+                <span className="relative flex h-6 w-6 shrink-0 items-center justify-center rounded-[8px] border border-fg-accent/15 bg-fg-accent/8">
+                    <ClassInAIIcon size={13} variant="brand" className="text-fg-accent" />
+                </span>
+                <span className="relative block h-5 overflow-hidden">
+                    <AnimatePresence mode="popLayout" initial={false}>
+                        <motion.span
+                            key={label}
+                            initial={m({ opacity: 0, y: 8, filter: "blur(2px)" }, shouldReduceMotion)}
+                            animate={m({ opacity: 1, y: 0, filter: "blur(0px)" }, shouldReduceMotion)}
+                            exit={m({ opacity: 0, y: -8, filter: "blur(2px)" }, shouldReduceMotion)}
+                            transition={m(CHATBOT_MOTION.enter, shouldReduceMotion)}
+                            className="block whitespace-nowrap text-xs font-semibold leading-5"
+                        >
+                            {shouldReduceMotion ? (
+                                <span className="text-fg-accent">{label}</span>
+                            ) : (
                                 <motion.span
-                                    key={index}
-                                    className="h-1.5 w-1.5 rounded-full bg-fg-accent"
-                                    animate={
-                                        shouldReduceMotion
-                                            ? { opacity: 0.5 }
-                                            : { y: [0, -3.5, 0], opacity: [0.35, 1, 0.35] }
-                                    }
-                                    transition={
-                                        shouldReduceMotion
-                                            ? undefined
-                                            : { duration: 1.1, repeat: Infinity, ease: "easeInOut", delay: index * 0.15 }
-                                    }
-                                />
-                            ))}
-                        </div>
-                    </div>
-                </div>
-
-                {/* 스켈레톤 로딩 바 */}
-                <div className="mt-2 space-y-1.5 w-40">
-                    <div className="h-1.5 w-full rounded-full bg-fg-accent/[0.08]" />
-                    <div className="h-1.5 w-2/3 rounded-full bg-fg-accent/[0.05]" />
-                </div>
+                                    className="bg-[linear-gradient(90deg,var(--color-fg-accent)_0%,var(--color-fg-accent)_35%,#6EE7B7_50%,var(--color-fg-accent)_65%,var(--color-fg-accent)_100%)] bg-size-[200%_100%] bg-clip-text text-transparent"
+                                    initial={{ backgroundPosition: "100% 0%" }}
+                                    animate={{ backgroundPosition: "-100% 0%" }}
+                                    transition={{ duration: CHATBOT_MOTION.shimmer.duration, repeat: Infinity, ease: "linear" }}
+                                >
+                                    {label}
+                                </motion.span>
+                            )}
+                        </motion.span>
+                    </AnimatePresence>
+                </span>
             </div>
         </motion.div>
     )
@@ -894,6 +976,19 @@ export function FloatingChatbot() {
             suggestedQuestions: resolvePageContext(pathname).starters.slice(0, STARTER_SUGGESTION_LIMIT),
         },
     ])
+    // 글자가 아직 흐르는 답변 id — 다 흐른 뒤에 출처·추천 질문·버튼을 띄운다.
+    const [revealingMessageId, setRevealingMessageId] = useState<string | null>(null)
+    const handleRevealChange = useCallback((messageId: string, revealing: boolean) => {
+        setRevealingMessageId((current) => (revealing ? messageId : current === messageId ? null : current))
+        if (!revealing) {
+            // 다 흘렀으면 표시를 내린다 — 창을 닫았다 열어도 지난 답변을 다시 흘리지 않는다.
+            setMessages((current) =>
+                current.some((message) => message.id === messageId && message.revealPending)
+                    ? current.map((message) => (message.id === messageId ? { ...message, revealPending: false } : message))
+                    : current
+            )
+        }
+    }, [])
 
     const hidden = shouldHideChatbot(pathname)
 
@@ -1047,6 +1142,17 @@ export function FloatingChatbot() {
         }
     }, [isOpen])
 
+    // 답변을 받는 중(자동 스크롤·글자 흐름)에는 띄우지 않는다 — 다 끝난 뒤 아래에 더 읽을 게 있을 때만.
+    const canScrollDown =
+        !isAtBottom && messages.length > 1 && !isSending && !isStreaming && revealingMessageId === null
+
+    function scrollToLatest() {
+        const container = messagesContainerRef.current
+        if (!container) return
+        container.scrollTo({ top: container.scrollHeight, behavior: shouldReduceMotion ? "auto" : "smooth" })
+        setIsAtBottom(true)
+    }
+
     const handleScroll = () => {
         const container = messagesContainerRef.current
         if (!container) return
@@ -1073,19 +1179,34 @@ export function FloatingChatbot() {
         if (!messageId) return
 
         const container = messagesContainerRef.current
-        const message = container?.querySelector<HTMLElement>(`[data-chat-message-id="${messageId}"]`)
-        if (!container || !message || !isAtBottom) return
+        if (!container) return
 
-        const containerRect = container.getBoundingClientRect()
-        const messageRect = message.getBoundingClientRect()
-        const nextTop = container.scrollTop + messageRect.top - containerRect.top - ANSWER_SCROLL_TOP_OFFSET_PX
-
-        container.scrollTop = Math.max(0, nextTop)
-        const alignedTop = message.getBoundingClientRect().top - container.getBoundingClientRect().top
-        if (!isSending || alignedTop <= ANSWER_SCROLL_TOP_OFFSET_PX + 2) {
+        if (isAtBottom && alignAnswerTop(container, messageId)) {
+            pendingAssistantScrollIdRef.current = null
+            return
+        }
+        // 글자가 다 흐를 때까지는 놓지 않는다 — 답변이 길어지는 동안 아래 ResizeObserver 가 계속 맞춘다.
+        // 다 끝났는데도 못 맞췄으면(짧은 답변) 놓아서, 나중에 다른 크기 변화로 화면이 끌려가지 않게 한다.
+        const answer = messages.find((message) => message.id === messageId)
+        if (!isSending && revealingMessageId === null && !answer?.revealPending) {
             pendingAssistantScrollIdRef.current = null
         }
-    }, [isOpen, isSending, messages, isAtBottom])
+    }, [isOpen, isSending, messages, isAtBottom, revealingMessageId])
+
+    // 답변 글자가 흐르며 버블이 길어지는 동안에도 답변 윗부분이 위쪽에 닿을 때까지 따라 내려간다.
+    useEffect(() => {
+        if (!isOpen) return
+        const container = messagesContainerRef.current
+        const content = messagesContentRef.current
+        if (!container || !content || typeof ResizeObserver === "undefined") return
+        const observer = new ResizeObserver(() => {
+            const messageId = pendingAssistantScrollIdRef.current
+            if (!messageId) return
+            if (alignAnswerTop(container, messageId)) pendingAssistantScrollIdRef.current = null
+        })
+        observer.observe(content)
+        return () => observer.disconnect()
+    }, [isOpen])
 
 
     useEffect(() => {
@@ -1168,7 +1289,7 @@ export function FloatingChatbot() {
             assistantId = id
             pendingAssistantScrollIdRef.current = id
             setIsStreaming(true)
-            setMessages((current) => [...current, { id, role: "assistant", content: "" }])
+            setMessages((current) => [...current, { id, role: "assistant", content: "", revealPending: true }])
             return id
         }
         const updateAssistant = (updater: (message: ChatMessage) => ChatMessage) => {
@@ -1418,32 +1539,24 @@ export function FloatingChatbot() {
                                                 <ClassInAIIcon size={22} variant="brand" className="relative text-fg-accent" />
                                             </>
                                         )}
-                                        {/* 생각 중/스트리밍 중일 때 초록 펄스 링 렌더링 */}
-                                        {(isSending || isStreaming) && !shouldReduceMotion && (
-                                            <>
-                                                <motion.span
-                                                    initial={{ scale: 0.8, opacity: 0.5 }}
-                                                    animate={{ scale: 1.4, opacity: 0 }}
-                                                    transition={{ duration: 1.6, repeat: Infinity, ease: "easeOut" }}
-                                                    className="absolute inset-0 rounded-[14px] border border-fg-accent/40 pointer-events-none"
-                                                />
-                                                <motion.span
-                                                    initial={{ scale: 0.8, opacity: 0.5 }}
-                                                    animate={{ scale: 1.7, opacity: 0 }}
-                                                    transition={{ duration: 1.6, repeat: Infinity, ease: "easeOut", delay: 0.6 }}
-                                                    className="absolute inset-0 rounded-[14px] border border-fg-accent/20 pointer-events-none"
-                                                />
-                                            </>
-                                        )}
                                     </motion.div>
                                     <div className="min-w-0">
                                         <div className="flex items-center gap-1.5">
                                             <h2 id="classin-chatbot-title" className="truncate text-[15px] font-bold text-[#111110]">Classin 상담 가이드</h2>
+                                            {/* 평소엔 정지한 점. 답변을 준비하는 동안에만 숨쉰다(로딩 상태 한정 반복). */}
                                             <motion.span
                                                 aria-hidden
                                                 className="h-2 w-2 shrink-0 rounded-full bg-fg-accent"
-                                                animate={shouldReduceMotion ? undefined : { opacity: [1, 0.45, 1], scale: [1, 0.82, 1] }}
-                                                transition={shouldReduceMotion ? undefined : { duration: 2.6, repeat: Infinity, ease: "easeInOut" }}
+                                                animate={
+                                                    !shouldReduceMotion && (isSending || isStreaming)
+                                                        ? { opacity: [1, 0.4, 1], scale: [1, 0.8, 1] }
+                                                        : { opacity: 1, scale: 1 }
+                                                }
+                                                transition={
+                                                    !shouldReduceMotion && (isSending || isStreaming)
+                                                        ? { duration: 1.2, repeat: Infinity, ease: "easeInOut" }
+                                                        : m(CHATBOT_MOTION.micro, shouldReduceMotion)
+                                                }
                                             />
                                         </div>
                                         <p className="mt-0.5 truncate text-xs font-medium text-[#615D59]">운영·도입·CS 상담</p>
@@ -1472,6 +1585,8 @@ export function FloatingChatbot() {
                             {/* 대화 내용 목록 (Staggered Item 2) */}
                             <motion.div
                                 ref={messagesContainerRef}
+                                // 스크롤 영역 안 layout 애니메이션이 스크롤 오프셋을 반영하도록(겹쳐 날아오는 현상 방지)
+                                layoutScroll
                                 onScroll={handleScroll}
                                 variants={itemVariants}
                                 custom={shouldReduceMotion}
@@ -1482,15 +1597,31 @@ export function FloatingChatbot() {
                                         {messages.map((message, index) => {
                                             const isLast = index === messages.length - 1
                                             const isAssistantStreaming = isLast && message.role === "assistant" && isStreaming
+                                            const isUser = message.role === "user"
+                                            // 답변 글자가 다 흐른 뒤에만 출처·추천 질문·버튼을 띄운다.
+                                            const isAnswerSettled =
+                                                !isAssistantStreaming && revealingMessageId !== message.id && !message.revealPending
                                             return (
                                                 <motion.div
                                                     key={message.id}
                                                     data-chat-message-id={message.id}
-                                                    layout="position"
-                                                    initial={m({ opacity: 0, y: 10, scale: 0.98 }, shouldReduceMotion)}
-                                                    animate={m({ opacity: 1, y: 0, scale: 1 }, shouldReduceMotion)}
+                                                    // 스트리밍 중인 버블은 layout 애니메이션 제외(토큰마다 리사이즈 thrash 방지).
+                                                    layout={isAssistantStreaming ? false : "position"}
+                                                    initial={m(
+                                                        isUser
+                                                            ? { opacity: 0, y: 14, scale: 0.94 }
+                                                            : { opacity: 0, y: 8, filter: "blur(3px)" },
+                                                        shouldReduceMotion
+                                                    )}
+                                                    animate={m(
+                                                        isUser
+                                                            ? { opacity: 1, y: 0, scale: 1 }
+                                                            : { opacity: 1, y: 0, filter: "blur(0px)" },
+                                                        shouldReduceMotion
+                                                    )}
                                                     exit={m({ opacity: 0, y: -6, scale: 0.98 }, shouldReduceMotion)}
-                                                    transition={m(CHATBOT_MOTION.enter, shouldReduceMotion)}
+                                                    transition={m(isUser ? CHATBOT_MOTION.bubbleSpring : CHATBOT_MOTION.enter, shouldReduceMotion)}
+                                                    style={{ transformOrigin: isUser ? "100% 100%" : "0% 100%" }}
                                                     className={cn(
                                                         "flex",
                                                         message.role === "user" ? "justify-end" : "justify-start"
@@ -1509,9 +1640,19 @@ export function FloatingChatbot() {
                                                             content={message.content}
                                                             role={message.role}
                                                             isStreaming={isAssistantStreaming}
+                                                            revealFromStart={Boolean(message.revealPending)}
+                                                            messageId={message.id}
+                                                            onRevealChange={message.role === "assistant" ? handleRevealChange : undefined}
                                                         />
-                                                        {message.role === "assistant" ? (
-                                                            <>
+                                                        {message.role === "assistant" && isAnswerSettled ? (
+                                                            <motion.div
+                                                                initial={m({ opacity: 0, y: 6 }, shouldReduceMotion)}
+                                                                animate={m({ opacity: 1, y: 0 }, shouldReduceMotion)}
+                                                                transition={m(
+                                                                    { duration: CHATBOT_MOTION.settle.duration, ease: CHATBOT_MOTION.settle.ease },
+                                                                    shouldReduceMotion
+                                                                )}
+                                                            >
                                                                 <SourceLinks sources={message.sources} />
                                                                 {message.retryQuestion ? (
                                                                     <div className="mt-3">
@@ -1569,7 +1710,7 @@ export function FloatingChatbot() {
                                                                 {message.showHandoffCTA ? (
                                                                     <ConsultationBridge messages={messages} message={message} sessionId={sessionId} />
                                                                 ) : null}
-                                                            </>
+                                                            </motion.div>
                                                         ) : null}
                                                     </div>
                                                 </motion.div>
@@ -1591,6 +1732,25 @@ export function FloatingChatbot() {
                                 custom={shouldReduceMotion}
                                 className="relative flex flex-col min-h-0 w-full shrink-0"
                             >
+                                {/* 위로 스크롤해 읽는 중이면 "아래로" 버튼을 띄운다 */}
+                                <AnimatePresence>
+                                    {canScrollDown ? (
+                                        <motion.button
+                                            key="scroll-to-bottom"
+                                            type="button"
+                                            onClick={scrollToLatest}
+                                            initial={m({ opacity: 0, y: 8, scale: 0.92 }, shouldReduceMotion)}
+                                            animate={m({ opacity: 1, y: 0, scale: 1 }, shouldReduceMotion)}
+                                            exit={m({ opacity: 0, y: 6, scale: 0.95 }, shouldReduceMotion)}
+                                            transition={m(CHATBOT_MOTION.surfaceSpring, shouldReduceMotion)}
+                                            whileTap={m(CHATBOT_MOTION.tap, shouldReduceMotion)}
+                                            className="absolute -top-12 right-4 z-10 inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/80 bg-white/90 text-fg-accent shadow-[0_8px_20px_rgba(17,17,16,0.12)] backdrop-blur-xl transition-colors hover:bg-white focus-visible:outline-none"
+                                            aria-label="대화 맨 아래로 이동"
+                                        >
+                                            <ArrowDown className="h-4 w-4" aria-hidden />
+                                        </motion.button>
+                                    ) : null}
+                                </AnimatePresence>
                                 {error ? (
                                     <div className="flex items-center justify-between gap-3 border-t border-white/50 bg-[#FBEAE2]/70 px-4 py-2 text-xs font-medium text-[#7A2A13] backdrop-blur-xl">
                                         <span>{error}</span>
@@ -1638,7 +1798,32 @@ export function FloatingChatbot() {
                                             className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[12px] bg-fg-accent text-fg-on-accent transition-colors hover:bg-fg-accent-hover disabled:cursor-not-allowed disabled:shadow-none focus-visible:outline-none"
                                             aria-label="질문 보내기"
                                         >
-                                            {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                                            <AnimatePresence mode="popLayout" initial={false}>
+                                                {isSending ? (
+                                                    <motion.span
+                                                        key="sending"
+                                                        initial={m({ opacity: 0, scale: 0.6 }, shouldReduceMotion)}
+                                                        animate={m({ opacity: 1, scale: 1 }, shouldReduceMotion)}
+                                                        exit={m({ opacity: 0, scale: 0.6 }, shouldReduceMotion)}
+                                                        transition={m(CHATBOT_MOTION.micro, shouldReduceMotion)}
+                                                        className="flex"
+                                                    >
+                                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                                    </motion.span>
+                                                ) : (
+                                                    <motion.span
+                                                        key="send"
+                                                        // 보낼 때 종이비행기가 오른쪽 위로 날아가고, 다음 질문 때 아래에서 다시 들어온다.
+                                                        initial={m({ opacity: 0, x: -6, y: 6 }, shouldReduceMotion)}
+                                                        animate={m({ opacity: 1, x: 0, y: 0 }, shouldReduceMotion)}
+                                                        exit={m({ opacity: 0, x: 10, y: -10 }, shouldReduceMotion)}
+                                                        transition={m(CHATBOT_MOTION.enter, shouldReduceMotion)}
+                                                        className="flex"
+                                                    >
+                                                        <Send className="h-4 w-4" />
+                                                    </motion.span>
+                                                )}
+                                            </AnimatePresence>
                                         </motion.button>
                                     </div>
                                 </form>
@@ -1675,26 +1860,30 @@ export function FloatingChatbot() {
                 ) : null}
             </AnimatePresence>
             <div className="pointer-events-auto relative flex h-14 w-14 items-center justify-center md:h-16 md:w-16">
+                {/* 처음 나타날 때 한 번만 퍼지는 물결 — 무한 반복 없음(cards_motion C07). */}
                 {!isOpen && !shouldReduceMotion ? (
                     <motion.span
                         aria-hidden
-                        className="pointer-events-none absolute -inset-1 rounded-full bg-[#10B981]/25 blur-md"
-                        initial={{ scale: 0.96, opacity: 0.38 }}
-                        animate={CHATBOT_MOTION.ambient}
-                        transition={{ duration: CHATBOT_MOTION.ambient.duration, repeat: Infinity, repeatDelay: CHATBOT_MOTION.ambient.repeatDelay, ease: "easeOut" }}
+                        className="pointer-events-none absolute inset-0 rounded-full border-2 border-[#10B981]/45"
+                        initial={{ scale: 1, opacity: 0 }}
+                        animate={{ scale: [1, 1.55], opacity: [0.7, 0] }}
+                        transition={{ duration: 1.1, ease: "easeOut", delay: 0.45, repeat: 1, repeatDelay: 0.35 }}
                     />
                 ) : null}
                 <motion.button
                     ref={triggerRef}
                     type="button"
-                    whileHover={shouldReduceMotion ? undefined : { scale: 1.05 }}
+                    initial={shouldReduceMotion ? false : { opacity: 0, scale: 0.6, y: 12 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    transition={m(CHATBOT_MOTION.surfaceSpring, shouldReduceMotion)}
+                    whileHover={shouldReduceMotion ? undefined : { scale: 1.06, y: -1 }}
                     whileTap={m(CHATBOT_MOTION.tap, shouldReduceMotion)}
                     onClick={() => {
                         openSourceRef.current = "button"
                         setIsOpen((current) => !current)
                     }}
                     className={cn(
-                        "relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-full transition-all duration-200 md:h-16 md:w-16",
+                        "relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-full shadow-[0_10px_24px_rgba(8,71,52,0.22)] transition-[background-color,border-color,box-shadow,color] duration-200 md:h-16 md:w-16",
                         isOpen
                             ? "border border-black/[0.08] bg-white text-[#111110] shadow-[0_12px_28px_rgba(0,0,0,0.12),0_4px_10px_rgba(0,0,0,0.04)] hover:bg-[#F6F5F4]"
                             : "border border-white/20 bg-fg-accent text-fg-on-accent hover:bg-fg-accent-hover"

@@ -40,19 +40,39 @@ export const CHATBOT_MOTION = {
         duration: 0.14,
         ease: "easeOut" as const,
     },
-    // 외곽 링 펄스 등 주변 앰비언트 모션
-    ambient: {
-        scale: [0.96, 1.22] as number[],
-        opacity: [0.38, 0] as number[],
-        duration: 3.8,
-        repeatDelay: 1.2,
-    },
-    // 로딩 쉬머 물결 애니메이션
+    // 로딩 쉬머 물결 애니메이션 (로딩 상태 한정 반복)
     shimmer: {
         duration: 1.8,
         repeat: Infinity,
         ease: "easeInOut" as const,
     },
+    // 말풍선 등장 스프링 — 내 질문은 입력창(오른쪽 아래)에서 튀어 오르듯, 답변은 부드럽게 떠오른다.
+    bubbleSpring: {
+        type: "spring" as const,
+        stiffness: 420,
+        damping: 32,
+        mass: 0.8,
+    },
+    // 스트리밍 글자 흐름 속도(lib/chatbot/stream-reveal.ts). 60fps 기준 최소 120자/초.
+    streamReveal: {
+        minCharsPerFrame: 2,
+        maxCharsPerFrame: 24,
+        followRate: 0.08,
+        flushRate: 0.22,
+    },
+    // 답변이 통째로 다시 쓰일 때(preview→final replace) 크로스페이드
+    rewriteFade: {
+        duration: 0.18,
+        ease: "easeOut" as const,
+    },
+    // 답변이 다 흐른 뒤 출처·추천 질문·버튼이 떠오르는 순서
+    settle: {
+        duration: 0.32,
+        ease: CHATBOT_EASING.softEnter,
+        stagger: 0.07,
+    },
+    // 생각 중 문구 단계 전환 시점(초). 마지막 단계에서 멈춘다(무한 순환 없음).
+    thinkingSteps: [0, 1.4, 3.2] as number[],
 } as const
 
 /**
