@@ -10,7 +10,7 @@
 //  4. 1·2위 점수가 가까우면 되묻는다(후보 2개 카드). 모델 어댑터가 있으면 그 둘 중에서만 고르게 한다.
 // 순수 모듈이다(I/O·server-only 없음) — 시험과 이후 위컴 방 어댑터가 그대로 부른다.
 
-export type AskBranch = "knowledge" | "contact" | "link" | "read"
+export type AskBranch = "knowledge" | "contact" | "link" | "read" | "consultations"
 export type Branch = AskBranch | "write" | "unknown"
 
 /** 조회 도구(lib/ops-tools 레지스트리의 R0, mcpName). screen 은 도구가 없는 조회 — 화면 링크로 안내한다. */
@@ -264,6 +264,22 @@ const READ_FORM =
 /** 화면·페이지가 어디 있는지 묻는 말 — 조회가 아니라 링크다("리드 목록 페이지 어디 있어?"). */
 const SCREEN_WHERE = /(?:화면|페이지|메뉴|탭)\s*(?:은|는|이|가)?\s*(?:어디|어딨)/
 
+// 상담 내역 찾기 — 묻는 대상(상담·문의·채팅·채널톡)과 묻는 꼴(찾아·있었나·보여·뭐였지·언제·최근) 또는 고객(기관 이름·"이 고객")이
+// 함께일 때만. "상담 연결 방법은?" 같은 정보 질문, 담당자·화면 위치를 묻는 말, 응대 방법을 묻는 말은 이 갈래가 아니다.
+const CONSULT_OBJ = /상담(?!원)|문의(?!처)|채팅(?!창)|채널톡|cs\s*(?:대화|건|내역)/i
+const CONSULT_RECORD = /이력|기록|내역/
+const CONSULT_FORM =
+  /찾아|있었|있어|있나|있는지|들어온|들어왔|(?:왔|온)\s*(?:거|게|건|어|나|었)|보여|뭐였|뭐\s*(?:문의|상담|물어)|무슨\s*(?:문의|상담)|언제|최근|요즘|지난|이번\s*(?:주|달)|했(?:지|나|던|었|어\s*[?？])|목록|몇\s*건/
+const CONSULT_CUSTOMER = /[가-힣A-Za-z0-9]{2,}(?:학원|어학원|에듀|교육|스쿨|센터|학교|아카데미|교습소)|(?:^|\s)(?:이|해당)\s*(?:고객|학원|기관|곳)/
+const CONSULT_NOT = /방법|어떻게|절차|정책|규정|규칙|하려면|(?:하는|거는|여는|받는|남기는)\s*법|연결\s*(?:하|해|방법|은|는)|신청|답해|답하|응대|뜻|의미|기능|설정|버튼|가능/
+
+/** 상담 내역을 찾는 말인가 — 시험: tests/admin-ai/fixtures/intent-table.ts CONSULTATION_ASKS·CONSULTATION_NOT. */
+export function isConsultationAsk(text: string): boolean {
+  if (!CONSULT_OBJ.test(text) || CONSULT_NOT.test(text)) return false
+  if (WHO.test(text.replace(INDIRECT_WHO, " ")) || LINK_FORM.test(text)) return false
+  return CONSULT_FORM.test(text) || CONSULT_CUSTOMER.test(text) || CONSULT_RECORD.test(text)
+}
+
 const READ_TOOLS: Array<{ match: RegExp; tool: Extract<ReadTarget, { kind: "tool" }>["tool"] }> = [
   { match: /재고|가용|남은\s*수량|몇\s*대\s*(?:남|있)|주문\s*권장/, tool: "hw_stock" },
   {
@@ -294,7 +310,7 @@ function matchRead(text: string): ReadTarget | undefined {
 }
 
 export function scoreBranches(text: string): { scores: Record<AskBranch, number>; read?: ReadTarget } {
-  const scores: Record<AskBranch, number> = { knowledge: 1, contact: 0, link: 0, read: 0 }
+  const scores: Record<AskBranch, number> = { knowledge: 1, contact: 0, link: 0, read: 0, consultations: 0 }
   const symptom = SYMPTOM.test(text)
   const knowledgeForm = KNOWLEDGE_FORM.test(text)
 
@@ -314,6 +330,8 @@ export function scoreBranches(text: string): { scores: Record<AskBranch, number>
     }
     if (knowledgeForm) scores.read -= 3
   }
+
+  if (isConsultationAsk(text)) scores.consultations += CONSULT_RECORD.test(text) ? 8 : 7
 
   if (knowledgeForm) scores.knowledge += 2
   if (PRODUCT.test(text)) scores.knowledge += 1
@@ -364,4 +382,5 @@ export const BRANCH_LABEL: Record<AskBranch, string> = {
   contact: "담당자 찾기",
   link: "화면·주소 링크",
   read: "데이터 조회",
+  consultations: "상담 내역 찾기",
 }

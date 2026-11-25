@@ -245,6 +245,42 @@ export interface ChoiceCard {
   note?: string
 }
 
+// ── 상담 내역 찾기(R0) — 채널톡 상담·내부 CS 대화 목록과 그 상담으로 가는 링크 ──
+
+export type ConsultationSource = "channel_talk" | "internal_cs"
+
+export interface ConsultationListItem {
+  id: string
+  source: ConsultationSource
+  /** 날짜(YYYY-MM-DD, KST). 없으면 "날짜 없음". */
+  date?: string
+  /** 고객·기관 표시 — 상담 글을 볼 수 있는 역할에만 싣는다. */
+  who?: string
+  /** 한 줄 요지 — 가린 글. 상담 글을 볼 수 있는 역할에만 싣는다. */
+  summary?: string
+  /** 상태 이름(진행 중·종료…). */
+  status: string
+  /** 그 상담을 여는 어드민 주소 — 링크 관문(isAllowedAdminHref)을 지난 주소만 그려진다. */
+  href?: string
+}
+
+export interface ConsultationsCard {
+  title: string
+  target: OrderTarget
+  /** 맨 위 결론 한 줄(두괄식) — "… 상담 3건을 찾았습니다(최근 30일)." / "찾지 못했습니다 — 조건: …". */
+  headline: string
+  items: ConsultationListItem[]
+  /** 보인 것보다 더 있는 건수(0 이면 없음). */
+  moreCount?: number
+  /** 무엇으로 찾았는지 — "고객 · 낱말 · 기간 · 최근 N건 안에서". */
+  basis: string
+  /** 상담 글을 볼 수 없는 역할 — 건수만 보이고 CS 담당 안내를 단다. */
+  restricted?: boolean
+  note?: string
+  /** 상담 Inbox 등 화면 바로가기 — 링크 목록 id. */
+  openLinkId?: string
+}
+
 export interface AiStep {
   label: string
   done: boolean
@@ -260,6 +296,7 @@ export type AiBlock =
   | { kind: "answer"; card: AnswerCard }
   | { kind: "links"; card: LinksCard }
   | { kind: "contact"; card: ContactCard }
+  | { kind: "consultations"; card: ConsultationsCard }
 
 export interface AiMessage {
   id: string
