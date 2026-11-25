@@ -25,7 +25,7 @@ function expectKeyInHeaderOnly(fetchMock: ReturnType<typeof vi.fn>) {
 }
 
 function stubEmbeddingFetch(values: number[] = Array.from({ length: 768 }, () => 0.01)) {
-  const fetchMock = vi.fn(async (url: string | URL | Request, _init?: RequestInit) => {
+  const fetchMock = vi.fn<(url: string | URL | Request, init?: RequestInit) => Promise<Response>>(async (url) => {
     if (String(url).includes(":embedContent")) {
       return { ok: true, json: async () => ({ embedding: { values } }) } as unknown as Response
     }

@@ -115,7 +115,7 @@ describe("runInternalCsRegressionEval (orchestrator, injected deps)", () => {
   }
 
   it("clamps limit into [1, 10] with a default of 5", async () => {
-    const load = vi.fn(async (_input: { messageIds?: string[]; limit: number }) => [])
+    const load = vi.fn<(input: { messageIds?: string[]; limit: number }) => Promise<never[]>>(async () => [])
     await runInternalCsRegressionEval({ limit: 50 }, deps({ loadCandidates: load }))
     await runInternalCsRegressionEval({}, deps({ loadCandidates: load }))
     await runInternalCsRegressionEval({ limit: 0 }, deps({ loadCandidates: load }))
@@ -390,10 +390,8 @@ describe("judgeRegression", () => {
 
   it("parses a pass/needs_fix verdict and embeds both answers in the prompt", async () => {
     process.env.GEMINI_API_KEY = "test-key"
-    const fetchSpy = vi.fn(async (
-      _url: string,
-      _init: { body: string; headers: Record<string, string>; signal?: AbortSignal }
-    ) => ({
+    type FetchArgs = [url: string, init: { body: string; headers: Record<string, string>; signal?: AbortSignal }]
+    const fetchSpy = vi.fn<(...args: FetchArgs) => Promise<{ ok: boolean; json: () => Promise<unknown> }>>(async () => ({
       ok: true,
       json: async () => ({
         candidates: [{ content: { parts: [{ text: JSON.stringify({ outcome: "needs_fix", rationale: "가격 단정" }) }] } }],
