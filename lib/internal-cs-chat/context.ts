@@ -16,7 +16,9 @@ import {
   type IncidentEvidence,
 } from "@/lib/internal-cs-chat/incident-search"
 import {
+  curatedSourceRefsFor,
   selectInternalCsKnowledge,
+  type InternalCsCuratedKnowledgeEntry,
   type InternalCsExternalUse,
   type InternalCsKnowledgeStatus,
 } from "@/lib/internal-cs-chat/knowledge"
@@ -26,7 +28,12 @@ export interface InternalCsCopilotContext {
   sourceRefs: InternalCsSourceRef[]
   deterministicFallback: string
   publicEvidence: {
+    /** 고객에게 그대로 보내도 되는 공개 위젯 답. 첫 출처가 내부 문서이거나 상담 연결·거절·자기소개 답이면 null 이다. */
     answer: string | null
+    /** 첫 출처가 내부 문서일 때 위젯 답을 여기로 옮긴다. 내부 전용이라 고객 초안·결정형 초안에는 싣지 않는다. */
+    internalDraft?: string | null
+    /** answer 를 버린 이유(상담 연결·정책 거절·자기소개·위젯 문구). 버린 답은 어디에도 싣지 않는다. */
+    discardedAnswer?: DiscardedWidgetAnswer
     sources: ChatbotSource[]
     warning?: string
   }
@@ -44,6 +51,8 @@ export interface InternalCsCopilotContext {
   }
   incidentEvidence?: IncidentEvidence[]
 }
+
+export type DiscardedWidgetAnswer = "handoff" | "policy_refusal" | "self_intro"
 
 export interface BuildInternalCsCopilotContextOptions {
   queueTags?: readonly string[]
@@ -78,24 +87,6 @@ const HQ_COMMUNICATION_GUIDE = [
   "- Request: 본사가 답해야 할 질문 1~3개, 원인/조치/버그/ETA 중 필요한 항목, 요청 회신 시각",
   "- 회신에는 적용 모델·시장·효력 발생일·근거 문서 버전을 요청하고 원문과 한국어 요약을 함께 보존한다.",
 ].join("\n")
-
-const INTERNAL_GUIDE_REFS: InternalCsSourceRef[] = [
-  {
-    id: "docs/active/classin-operating-canon-2026-07-02.md",
-    label: "Classin 운영 정본",
-    kind: "internal_guide",
-  },
-  {
-    id: "docs/active/internal-crm-backend-operating-plan-2026-06-26.md",
-    label: "내부 CRM 운영 계획",
-    kind: "internal_guide",
-  },
-  {
-    id: "docs/active/classin-pre-adoption-question-matrix-2026-06-18.md",
-    label: "도입 전 질문·확인 단계",
-    kind: "internal_guide",
-  },
-]
 
 function boundedTimeoutMs() {
   const parsed = Number(process.env.INTERNAL_CS_PUBLIC_CONTEXT_TIMEOUT_MS)
@@ -136,13 +127,23 @@ function sourceRef(source: ChatbotSource): InternalCsSourceRef {
   return { id, label, kind: "public_doc" }
 }
 
-function dedupeSourceRefs(sourceRefs: InternalCsSourceRef[]) {
+interface KeyedSourceRef {
+  /** 중복 제거 키. 같은 문서의 서로 다른 선례(D-18, D-19)가 한 줄로 합쳐지지 않게 id 와 caseId 를 함께 쓴다. */
+  key: string
+  ref: InternalCsSourceRef
+}
+
+function keyed(ref: InternalCsSourceRef, caseId?: string): KeyedSourceRef {
+  return { key: `${ref.id}|${caseId ?? ""}`, ref }
+}
+
+function dedupeSourceRefs(sourceRefs: KeyedSourceRef[]) {
   const seen = new Set<string>()
-  return sourceRefs.filter((source) => {
-    if (seen.has(source.id)) return false
-    seen.add(source.id)
+  return sourceRefs.filter(({ key }) => {
+    if (seen.has(key)) return false
+    seen.add(key)
     return true
-  })
+  }).map(({ ref }) => ref)
 }
 
 function consultationSourceRefs(evidence: ConsultationEvidence[]): InternalCsSourceRef[] {
@@ -159,7 +160,6 @@ function formatConsultationEvidence(evidence: ConsultationEvidence[]) {
   const lines = evidence.slice(0, 4).map((entry, index) => {
     const meta = [
       entry.tags.length ? `태그 ${entry.tags.slice(0, 6).join(", ")}` : "",
-      entry.matchedOrg ? `기관 ${compact(entry.matchedOrg, 60)}` : "",
       `유사도 ${entry.similarity.toFixed(2)}`,
     ].filter(Boolean).join(" / ")
     return [
@@ -193,9 +193,9 @@ function formatPublicEvidence(answer: string | null, sources: ChatbotSource[], w
 
 // 내부 전용 문서 근거는 공개 가이드와 다른 블록으로 싣는다. 같은 블록에 섞이면 모델이 "공개 경로"로 읽어
 // 고객 초안에 그대로 옮길 수 있다(externalUse 규칙이 적용되지 않는 경로였다).
-function formatInternalDocEvidence(sources: ChatbotSource[]) {
+function formatInternalDocEvidence(sources: ChatbotSource[], internalDraft: string | null = null) {
   const internalSources = sources.filter(isInternalDocSource)
-  if (internalSources.length === 0) return ""
+  if (internalSources.length === 0 && !internalDraft) return ""
   const sections = internalSources.slice(0, 4).map((source, index) => [
     `${index + 1}. ${compact(source.title, 160)}${source.heading ? ` / ${compact(source.heading, 120)}` : ""}`,
     "   사용 범위: 내부 전용 — 고객 초안에는 요지만 옮기고 원문·내부 경로·식별 정보는 싣지 않는다",
@@ -205,8 +205,9 @@ function formatInternalDocEvidence(sources: ChatbotSource[]) {
   return [
     "[내부 전용 문서 근거]",
     "내부 담당자 답변에만 사용한다. 고객 전달 초안에서는 외부 사용 경계에 따라 제외하거나 '확인 필요'로 표시한다.",
+    internalDraft ? `내부 전용 초안(고객 전달 금지, 첫 출처가 내부 문서): ${compact(internalDraft, 1_500)}` : "",
     ...sections,
-  ].join("\n")
+  ].filter(Boolean).join("\n")
 }
 
 function requestedBoardModel(question: string) {
@@ -223,7 +224,8 @@ function relevantWeightEvidence(question: string, publicEvidence: InternalCsCopi
 
   const evidenceText = [
     publicEvidence.answer ?? "",
-    ...publicEvidence.sources.map((source) => `${source.title} ${source.heading ?? ""} ${source.excerpt}`),
+    // 내부 전용 문서 발췌는 "바로 답변"이 되지 않도록 공개 출처만 쓴다.
+    ...publicEvidence.sources.filter((source) => !isInternalDocSource(source)).map((source) => `${source.title} ${source.heading ?? ""} ${source.excerpt}`),
   ].join("\n")
   const modelPattern = new RegExp(`${model.replace("S", "S\\s*")}(?:(?!S\\s*(?:65|75|86|98|110)).){0,180}?(\\d+(?:\\.\\d+)?)\\s*kg`, "is")
   const weight = evidenceText.match(modelPattern)?.[1]
@@ -260,6 +262,12 @@ function relevantWeightEvidence(question: string, publicEvidence: InternalCsCopi
   ].join("\n")
 }
 
+const EXTERNAL_USE_TAGS: Record<InternalCsExternalUse, string> = {
+  internal_only: "[내부 전용]",
+  confirmation_required: "[확인 전 외부 단정 금지]",
+  reviewed_summary_allowed: "[담당자 검토 후 안내 가능]",
+}
+
 function buildDeterministicFallback({
   question,
   publicEvidence,
@@ -269,22 +277,32 @@ function buildDeterministicFallback({
 }: {
   question: string
   publicEvidence: InternalCsCopilotContext["publicEvidence"]
-  selectedFacts: ReturnType<typeof selectInternalCsKnowledge>["entries"]
+  selectedFacts: InternalCsCuratedKnowledgeEntry[]
   consultationCount: number
   incidentEvidence?: IncidentEvidence[]
 }) {
+  // 이 글은 모델이 실패했을 때 상담원이 받는 "고객 응대 안전 초안"이다. 내부 문서 발췌(internalDraft)와
+  // 위젯의 상담 연결·거절·자기소개 답은 들어오지 못하고, 공개 근거(answer)와 정리 지식·선례로만 짠다.
+  const hasEvidence = selectedFacts.length > 0 || incidentEvidence.length > 0
   const focusedWeightAnswer = relevantWeightEvidence(question, publicEvidence)
-  const directAnswer = focusedWeightAnswer || [
-    "## 바로 답변",
-    publicEvidence.answer
-      ? publicEvidence.answer.trim()
-      : "현재 질문과 직접 일치하는 근거를 찾지 못했습니다. 확인되지 않은 사실은 만들지 않습니다.",
-  ].join("\n\n")
+  const directAnswer = focusedWeightAnswer
+    || (publicEvidence.answer ? ["## 바로 답변", publicEvidence.answer.trim()].join("\n\n") : "")
+    || (hasEvidence
+      ? ""
+      : [
+          "## 바로 답변",
+          "현재 질문과 직접 일치하는 근거를 찾지 못했습니다. 확인되지 않은 사실은 만들지 않습니다.",
+        ].join("\n\n"))
 
   const evidenceSummary = selectedFacts.length > 0
     ? [
         "## 확인 상태",
-        ...selectedFacts.map((entry) => `- **${statusLabel(entry.status)} · ${entry.title}:** ${entry.summary}`),
+        ...selectedFacts.map((entry) => {
+          const summary = entry.hideSummaryInFallback
+            ? "수치는 내부 컨텍스트에서만 확인합니다. 고객 안내에는 쓰지 않습니다."
+            : entry.summary
+          return `- **${statusLabel(entry.status)} · ${entry.title}** ${EXTERNAL_USE_TAGS[entry.externalUse]}: ${summary}`
+        }),
       ].join("\n")
     : ""
   const incidentSummary = incidentEvidence.length > 0
@@ -298,6 +316,30 @@ function buildDeterministicFallback({
     : ""
 
   return [directAnswer, evidenceSummary, incidentSummary, consultationSummary].filter(Boolean).join("\n\n")
+}
+
+// 공개 챗봇 위젯이 고객에게 하는 말(상담 연결 버튼·정책 거절·자기소개)은 내부 근거가 아니다.
+// 답 모드·의도로 먼저 거르고, 문구로 한 번 더 거른다(가짜 응답이나 모드가 비어 있는 응답 대비).
+const WIDGET_HANDOFF_TEXT_RE = /\[실시간 상담 연결\]|(?:담당자|상담원)\s*상담으로\s*바로\s*연결/
+const WIDGET_REFUSAL_TEXT_RE = /도와드리지\s*않습니다/
+const WIDGET_SELF_INTRO_TEXT_RE = /저는\s*AI로\s*답하는/
+
+function classifyWidgetAnswer(result: {
+  answer?: string | null
+  answerMode?: string
+  detectedIntent?: string
+  sources: ChatbotSource[]
+}): Pick<InternalCsCopilotContext["publicEvidence"], "answer" | "internalDraft" | "discardedAnswer"> {
+  const answer = result.answer?.trim() || null
+  if (!answer) return { answer: null }
+  if (result.answerMode === "handoff" || WIDGET_HANDOFF_TEXT_RE.test(answer)) return { answer: null, discardedAnswer: "handoff" }
+  if (WIDGET_REFUSAL_TEXT_RE.test(answer)) return { answer: null, discardedAnswer: "policy_refusal" }
+  if (result.detectedIntent === "self_knowledge" || WIDGET_SELF_INTRO_TEXT_RE.test(answer)) {
+    return { answer: null, discardedAnswer: "self_intro" }
+  }
+  // 첫 출처가 내부 문서면 이 답은 내부 발췌에서 만들어졌다. 공개 안전 초안이 아니라 내부 전용 초안으로 옮긴다.
+  if (result.sources[0] && isInternalDocSource(result.sources[0])) return { answer: null, internalDraft: answer }
+  return { answer }
 }
 
 async function getPublicEvidence(
@@ -323,7 +365,12 @@ async function getPublicEvidence(
     })
     return await Promise.race([
       evaluateChatbotQuery(question, queryOptions).then((result) => ({
-        answer: result.answer?.trim() || null,
+        ...classifyWidgetAnswer({
+          answer: result.answer,
+          answerMode: result.answerMode,
+          detectedIntent: (result as { detectedIntent?: string }).detectedIntent,
+          sources: result.sources,
+        }),
         sources: result.sources.slice(0, 4),
         ...(result.warning ? { warning: result.warning } : {}),
       })),
@@ -339,27 +386,53 @@ async function getPublicEvidence(
   }
 }
 
+interface CollectedEvidence {
+  curated: ReturnType<typeof selectInternalCsKnowledge>
+  publicEvidence: InternalCsCopilotContext["publicEvidence"]
+  consultationEvidence: ConsultationEvidence[]
+  incidentEvidence: IncidentEvidence[]
+}
+
+// 공개 근거, 과거 상담 사례, 오류 선례/확인 흐름을 병렬 조회한다. 모두 never-throw 지만 방어적으로 빈 배열 폴백을 둔다.
+async function collectEvidence(
+  question: string,
+  options: BuildInternalCsCopilotContextOptions & { withConsultation: boolean }
+): Promise<CollectedEvidence> {
+  const curated = selectInternalCsKnowledge(question, options.queueTags)
+  const [publicEvidence, consultationEvidence, incidentEvidence] = await Promise.all([
+    getPublicEvidence(question, { includeInternalDocs: options.includeInternalDocs }),
+    options.withConsultation
+      ? searchConsultationEvidence(question).catch(() => [] as ConsultationEvidence[])
+      : Promise.resolve([] as ConsultationEvidence[]),
+    Promise.resolve(searchIncidentEvidence(question)).catch(() => [] as IncidentEvidence[]),
+  ])
+  return { curated, publicEvidence, consultationEvidence, incidentEvidence }
+}
+
+// 컨텍스트에 실제로 실린 근거만 출처로 붙인다. 늘 넣는 지식(정본 우선순위·응대 톤)은 모든 답에 들어가는 규칙일 뿐
+// 이 질문의 근거가 아니므로 세지 않고, 문자열로 나가지 않는 항목(공개 4건·내부 4건·상담 4건 밖)도 뺀다.
+function loadedSourceRefs({ curated, publicEvidence, consultationEvidence, incidentEvidence }: CollectedEvidence) {
+  const matchedEntries = curated.entries.filter((entry) => !entry.alwaysInclude)
+  const publicSources = publicEvidence.sources.filter((source) => !isInternalDocSource(source)).slice(0, 4)
+  const internalSources = publicEvidence.sources.filter(isInternalDocSource).slice(0, 4)
+  return dedupeSourceRefs([
+    ...curatedSourceRefsFor(matchedEntries).map((ref) => keyed(ref)),
+    ...incidentSourceRefs(incidentEvidence.slice(0, 4)).map((ref, index) => keyed(ref, incidentEvidence[index]?.caseId ?? incidentEvidence[index]?.id)),
+    ...publicSources.map((source) => keyed(sourceRef(source))),
+    ...internalSources.map((source) => keyed(sourceRef(source))),
+    ...consultationSourceRefs(consultationEvidence.slice(0, 4)).map((ref) => keyed(ref)),
+  ])
+}
+
 export async function buildInternalCsCopilotContext(
   question: string,
   options: BuildInternalCsCopilotContextOptions = {}
 ): Promise<InternalCsCopilotContext> {
-  const curated = selectInternalCsKnowledge(question, options.queueTags)
-  // 공개 근거, 과거 상담 사례, 오류 선례/확인 흐름을 병렬 조회한다. 모두 never-throw 지만 방어적으로 빈 배열 폴백을 둔다.
-  const [publicEvidence, consultationEvidence, incidentEvidence] = await Promise.all([
-    getPublicEvidence(question, { includeInternalDocs: options.includeInternalDocs }),
-    searchConsultationEvidence(question).catch(() => [] as ConsultationEvidence[]),
-    Promise.resolve(searchIncidentEvidence(question)).catch(() => [] as IncidentEvidence[]),
-  ])
-  const publicSourceRefs = publicEvidence.sources.map(sourceRef)
+  const collected = await collectEvidence(question, { ...options, withConsultation: true })
+  const { curated, publicEvidence, consultationEvidence, incidentEvidence } = collected
   const consultationBlock = formatConsultationEvidence(consultationEvidence)
   const incidentBlock = formatIncidentEvidence(incidentEvidence)
-  const sourceRefs = dedupeSourceRefs([
-    ...INTERNAL_GUIDE_REFS,
-    ...curated.sourceRefs,
-    ...incidentSourceRefs(incidentEvidence),
-    ...publicSourceRefs,
-    ...consultationSourceRefs(consultationEvidence),
-  ])
+  const sourceRefs = loadedSourceRefs(collected)
   const selectedFacts = curated.entries.filter((entry) => !entry.alwaysInclude)
   const reviewReasons = selectedFacts
     .filter((entry) =>
@@ -379,7 +452,7 @@ export async function buildInternalCsCopilotContext(
   return {
     internalContext: [
       formatPublicEvidence(publicEvidence.answer, publicEvidence.sources, publicEvidence.warning),
-      formatInternalDocEvidence(publicEvidence.sources),
+      formatInternalDocEvidence(publicEvidence.sources, publicEvidence.internalDraft ?? null),
       curated.internalContext,
       incidentBlock,
       consultationBlock,
@@ -402,5 +475,182 @@ export async function buildInternalCsCopilotContext(
       reviewReasons,
     },
     incidentEvidence,
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 구조화 근거 부품. 코파일럿 컨텍스트(문자열)와 같은 검색 결과에서 만들며, 나중에 매니저용 답 조립기와
+// 위컴 방 답이 채널과 무관하게 같이 쓴다. 고객사 이름·원가 수치처럼 내부 전용 값의 처리는 항목마다 customerUse 로 알린다.
+// ---------------------------------------------------------------------------
+
+/**
+ * 이 근거를 고객에게 말해도 되는지.
+ * - allowed: 공개 문서. 그대로 안내할 수 있다.
+ * - review: 담당자가 검토한 뒤 요약해서 안내할 수 있다.
+ * - confirm_first: 계약·본사·현장 확인 전에는 외부에 단정하지 않는다.
+ * - internal_only: 고객에게 말하지 않는다(내부 판단 근거).
+ */
+export type InternalEvidenceCustomerUse = "allowed" | "review" | "confirm_first" | "internal_only"
+
+export interface InternalEvidenceSourceRef {
+  id: string
+  label?: string
+}
+
+interface InternalEvidenceBase {
+  id: string
+  title: string
+  summary: string
+  /** 확정된 사실인가. null 이면 이 경로에서는 알 수 없다(내부 문서 청크의 확정 여부는 service.ts 가 아직 넘기지 않는다). */
+  confirmed: boolean | null
+  customerUse: InternalEvidenceCustomerUse
+  /** 근거의 기준일(YYYY-MM-DD). 출처 문서 이름에 날짜가 있을 때만 채운다. */
+  asOf: string | null
+  sources: InternalEvidenceSourceRef[]
+}
+
+export interface InternalCuratedEvidence extends InternalEvidenceBase {
+  kind: "curated"
+  status: InternalCsKnowledgeStatus
+  externalUse: InternalCsExternalUse
+  handling: string[]
+  recommendedTags: string[]
+}
+
+export interface InternalIncidentEvidence extends InternalEvidenceBase {
+  kind: "incident" | "workflow"
+  caseId?: string
+  causeStatus?: string
+  resolution?: string
+  steps: string[]
+}
+
+export interface InternalPublicDocEvidence extends InternalEvidenceBase {
+  kind: "public_doc"
+  heading?: string
+  urlPath: string
+  excerpt: string
+}
+
+export interface InternalDocEvidence extends InternalEvidenceBase {
+  kind: "internal_doc"
+  heading?: string
+  excerpt: string
+}
+
+export interface InternalEvidenceParts {
+  curated: InternalCuratedEvidence[]
+  incidents: InternalIncidentEvidence[]
+  publicDocs: InternalPublicDocEvidence[]
+  internalDocs: InternalDocEvidence[]
+  /** 고객에게 그대로 나가도 되는 공개 위젯 답. 없으면 null. 참고용이며 근거 항목이 아니다. */
+  publicAnswer: string | null
+  /** 첫 출처가 내부 문서라 내부 전용으로 옮긴 위젯 답. */
+  internalDraft: string | null
+  warning?: string
+}
+
+export interface BuildInternalEvidenceOptions {
+  queueTags?: readonly string[]
+  /** 기본 true. 내부 전용 문서 청크까지 검색한다. 공개 챗봇 경로는 이 함수를 쓰지 않는다. */
+  includeInternalDocs?: boolean
+}
+
+const DATE_IN_PATH_RE = /(\d{4}-\d{2}-\d{2})/
+
+function latestDate(ids: readonly string[]) {
+  const dates = ids.map((id) => id.match(DATE_IN_PATH_RE)?.[1]).filter((value): value is string => Boolean(value))
+  return dates.length > 0 ? dates.sort().at(-1) ?? null : null
+}
+
+function curatedCustomerUse(externalUse: InternalCsExternalUse): InternalEvidenceCustomerUse {
+  switch (externalUse) {
+    case "reviewed_summary_allowed":
+      return "review"
+    case "confirmation_required":
+      return "confirm_first"
+    default:
+      return "internal_only"
+  }
+}
+
+function toCuratedEvidence(entry: InternalCsCuratedKnowledgeEntry): InternalCuratedEvidence {
+  return {
+    kind: "curated",
+    id: entry.id,
+    title: entry.title,
+    summary: entry.summary,
+    status: entry.status,
+    externalUse: entry.externalUse,
+    handling: [...entry.handling],
+    recommendedTags: [...entry.recommendedTags],
+    confirmed: entry.status === "confirmed",
+    customerUse: curatedCustomerUse(entry.externalUse),
+    asOf: latestDate(entry.sourceRefs.map((ref) => ref.id)),
+    sources: entry.sourceRefs.map((ref) => ({ id: ref.id, ...(ref.label ? { label: ref.label } : {}) })),
+  }
+}
+
+function toIncidentEvidence(entry: IncidentEvidence): InternalIncidentEvidence {
+  const isCase = Boolean(entry.caseId)
+  const confirmed = isCase ? entry.causeStatus === "확정" : true
+  return {
+    kind: isCase ? "incident" : "workflow",
+    id: entry.id,
+    ...(entry.caseId ? { caseId: entry.caseId } : {}),
+    title: entry.title,
+    summary: entry.summary,
+    ...(entry.causeStatus ? { causeStatus: entry.causeStatus } : {}),
+    ...(entry.resolution ? { resolution: entry.resolution } : {}),
+    steps: entry.workflowSteps ?? [],
+    confirmed,
+    customerUse: confirmed ? "review" : "confirm_first",
+    asOf: latestDate([entry.sourceFile]),
+    sources: [{ id: entry.sourceFile, label: `[선례] ${entry.title}` }],
+  }
+}
+
+function toSourceEvidence(source: ChatbotSource, kind: "public_doc" | "internal_doc") {
+  const id = source.articleId || source.urlPath
+  const base = {
+    id,
+    title: compact(source.title, 160),
+    summary: compact(source.excerpt, 400),
+    ...(source.heading ? { heading: compact(source.heading, 120) } : {}),
+    excerpt: compact(source.excerpt, 900),
+    asOf: null,
+    sources: [{ id, label: compact([source.title, source.heading].filter(Boolean).join(" · "), 200) }],
+  }
+  if (kind === "public_doc") {
+    return { ...base, kind, urlPath: source.urlPath, confirmed: true, customerUse: "allowed" } as InternalPublicDocEvidence
+  }
+  return { ...base, kind, confirmed: null, customerUse: "internal_only" } as InternalDocEvidence
+}
+
+/**
+ * 질문에 맞는 근거를 부품으로 돌려준다(정리 지식·선례·공개 문서·내부 문서).
+ * 코파일럿 컨텍스트와 같은 검색을 쓰지만 문자열을 만들지 않는다. 상담 내역 검색(DB)은 하지 않는다.
+ */
+export async function buildInternalEvidence(
+  question: string,
+  options: BuildInternalEvidenceOptions = {}
+): Promise<InternalEvidenceParts> {
+  const { curated, publicEvidence, incidentEvidence } = await collectEvidence(question, {
+    queueTags: options.queueTags,
+    includeInternalDocs: options.includeInternalDocs ?? true,
+    withConsultation: false,
+  })
+  return {
+    curated: curated.entries.filter((entry) => !entry.alwaysInclude).map(toCuratedEvidence),
+    incidents: incidentEvidence.map(toIncidentEvidence),
+    publicDocs: publicEvidence.sources
+      .filter((source) => !isInternalDocSource(source))
+      .map((source) => toSourceEvidence(source, "public_doc") as InternalPublicDocEvidence),
+    internalDocs: publicEvidence.sources
+      .filter(isInternalDocSource)
+      .map((source) => toSourceEvidence(source, "internal_doc") as InternalDocEvidence),
+    publicAnswer: publicEvidence.answer,
+    internalDraft: publicEvidence.internalDraft ?? null,
+    ...(publicEvidence.warning ? { warning: publicEvidence.warning } : {}),
   }
 }
