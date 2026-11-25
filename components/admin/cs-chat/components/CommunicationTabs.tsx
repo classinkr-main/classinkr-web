@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useCallback, useMemo, useState } from "react"
 import {
   CheckCircle2,
   Copy,
@@ -9,22 +9,49 @@ import {
   MessageCircle,
   RefreshCw,
   Send,
+  ShieldCheck,
   Sparkles,
   Users,
 } from "lucide-react"
 
 import {
-  buildSmartCustomerDraft,
   buildSmartHandoffMessage,
   buildSmartHqDraft,
-  extractEscalationContext,
 } from "@/lib/internal-cs-chat/escalation-routing"
+import { redactionNotice } from "@/lib/internal-cs-chat/redact"
 import { cn } from "@/lib/utils"
 
 import EscalationWhoBadge from "./EscalationWhoBadge"
+import {
+  buildCustomerDraftBase,
+  escalationContextFromDetail,
+  hasDraftPlaceholder,
+  prepareInternalDraftCopy,
+} from "../formatters"
 import type { ConversationDetailResponse } from "../types"
 
 export type CommunicationTabId = "customer" | "hq" | "handoff"
+
+// 소통 초안 편집본은 이 패널이 접히면(언마운트) 사라졌다(IC-11). 탭 메모리에만 대화별로 남긴다 —
+// 브라우저 저장소에는 쓰지 않는다(고객 글이 섞인 초안을 디스크에 남기지 않기 위해). 새로고침하면 비워진다.
+const editedDraftMemory = new Map<string, Record<string, string>>()
+
+export function recallCommunicationDrafts(conversationId: string | null) {
+  return (conversationId && editedDraftMemory.get(conversationId)) || {}
+}
+
+export function rememberCommunicationDrafts(conversationId: string, drafts: Record<string, string>) {
+  if (Object.keys(drafts).length > 0) editedDraftMemory.set(conversationId, drafts)
+  else editedDraftMemory.delete(conversationId)
+}
+
+/** 시험용: 대화별 편집본 메모리를 비운다. */
+export function resetCommunicationDraftMemory() {
+  editedDraftMemory.clear()
+}
+
+// 사내용 탭(본사·인수인계)은 승인 잠금 없이 복사한다. 고객 탭만 승인과 채울 자리 검사를 거친다.
+const INTERNAL_TABS = new Set<CommunicationTabId>(["hq", "handoff"])
 
 export default function CommunicationTabs({
   detail,
@@ -33,6 +60,7 @@ export default function CommunicationTabs({
   onCopyText,
   legacyTemplates,
   className,
+  defaultTab = "customer",
 }: {
   detail: ConversationDetailResponse | null
   isApproved: boolean
@@ -40,33 +68,36 @@ export default function CommunicationTabs({
   onCopyText: (text: string, label: string) => void
   legacyTemplates?: Array<{ id: string; label: string; content: string }>
   className?: string
+  defaultTab?: CommunicationTabId
 }) {
-  const [activeTab, setActiveTab] = useState<CommunicationTabId>("customer")
-  const [editedDrafts, setEditedDrafts] = useState<Record<string, string>>({})
+  const conversationId = detail?.conversation.id ?? null
+  const [activeTab, setActiveTab] = useState<CommunicationTabId>(defaultTab)
+  const [editedState, setEditedState] = useState<{ id: string | null; drafts: Record<string, string> }>(() => ({
+    id: conversationId,
+    drafts: recallCommunicationDrafts(conversationId),
+  }))
+  // 대화가 바뀌면 그 대화의 편집본으로 갈아 끼운다(렌더 중 상태 맞추기).
+  if (editedState.id !== conversationId) {
+    setEditedState({ id: conversationId, drafts: recallCommunicationDrafts(conversationId) })
+  }
+  const editedDrafts = editedState.id === conversationId ? editedState.drafts : {}
+  const setEditedDrafts = useCallback(
+    (update: (prev: Record<string, string>) => Record<string, string>) => {
+      setEditedState((prev) => {
+        const drafts = update(prev.drafts)
+        if (prev.id) rememberCommunicationDrafts(prev.id, drafts)
+        return { id: prev.id, drafts }
+      })
+    },
+    []
+  )
   const [copiedId, setCopiedId] = useState<string | null>(null)
 
-  // 1. 대화 맥락에서 스마트 에스컬레이션 컨텍스트 자동 추출
-  const context = useMemo(() => {
-    if (!detail) return null
-    const allUserTexts = detail.messages
-      .filter((m) => m.role === "user")
-      .map((m) => m.content)
-      .join("\n")
-    const assistantTexts = detail.messages
-      .filter((m) => m.role === "assistant")
-      .map((m) => m.content)
-      .join("\n")
-    const combined = `${allUserTexts}\n${assistantTexts}`
+  // 1. 초안 입력: 사용자 글·customer_context·대화 메타만(AI 답 글 제외 — IC-02).
+  const context = useMemo(() => (detail ? escalationContextFromDetail(detail) : null), [detail])
+  const customerBase = useMemo(() => buildCustomerDraftBase(detail), [detail])
 
-    return extractEscalationContext(combined, {
-      title: detail.conversation.title,
-      tags: detail.conversation.tags,
-      assigneeName: detail.conversation.assignee_name,
-      createdDate: detail.conversation.created_at,
-    })
-  }, [detail])
-
-  // 2. 스마트 3-Way 템플릿 기본 생성
+  // 2. 탭별 기본 초안. 고객 탭은 승인된 교정본, 없으면 대기 안내 틀이다.
   const defaultTemplates = useMemo(() => {
     if (!context) {
       return {
@@ -77,11 +108,13 @@ export default function CommunicationTabs({
     }
 
     return {
-      customer: buildSmartCustomerDraft(context),
+      customer: customerBase.text,
       hq: buildSmartHqDraft(context),
       handoff: buildSmartHandoffMessage(context),
     }
-  }, [context, legacyTemplates])
+  }, [context, customerBase, legacyTemplates])
+  const redactionCount = (context?.redactionCount ?? 0) + (activeTab === "customer" ? customerBase.redactionCount : 0)
+  const notice = activeTab === "customer" && customerBase.source === "holding" ? null : redactionNotice(redactionCount)
 
   const tabsConfig = [
     {
@@ -89,8 +122,11 @@ export default function CommunicationTabs({
       label: "고객 카카오톡 안내",
       shortLabel: "고객 안내",
       icon: MessageCircle,
-      targetBadge: "외부 전달용 (안전 필터)",
-      description: "사실과 추정을 엄격히 분리하고 내부 식별자(IP, 서버명, 에러코드)를 제외한 카카오톡 맞춤 안내문입니다.",
+      targetBadge: "외부 전달용 · 승인 후 복사",
+      description:
+        customerBase.source === "approved"
+          ? "담당자가 승인한 최종 답입니다. 전화·이메일·계좌·계정 ID는 가렸고, 이름·주소는 직접 확인해 주세요."
+          : "승인된 답이 없어 대기 안내 틀을 넣었습니다. [ ] 자리를 채워야 복사할 수 있습니다.",
     },
     {
       id: "hq" as const,
@@ -98,7 +134,8 @@ export default function CommunicationTabs({
       shortLabel: "HQ WeCom",
       icon: Globe2,
       targetBadge: `HQ 담당: ${context?.contact.primaryContact ?? "소통팀"}`,
-      description: "HQ 보고 템플릿 v2 준수: WeCom 중국어(UTC+8 변환, 완충 어휘) + English + 한국어 참조 3단 구조입니다.",
+      description:
+        "사내용 본사 보고 초안(중국어·영어·한국어)입니다. 승인 없이 복사할 수 있고, 복사할 때 전화·이메일·계좌·계정 ID를 가립니다.",
     },
     {
       id: "handoff" as const,
@@ -106,19 +143,32 @@ export default function CommunicationTabs({
       shortLabel: "사내 인수인계",
       icon: Users,
       targetBadge: "사내 CRM / Notion",
-      description: "티켓 ID, 단말 스펙, 증상, 확인된 사실, 다음 조치 액션을 공유하기 위한 내부 인수인계 표준 양식입니다.",
+      description: "사내 인수인계 양식입니다. 확인한 사실과 고객 안내 상태는 [확인 후 입력] 자리에 직접 적어 주세요.",
     },
   ]
 
   const currentContent = editedDrafts[activeTab] ?? defaultTemplates[activeTab] ?? ""
   const isEdited = activeTab in editedDrafts && editedDrafts[activeTab] !== defaultTemplates[activeTab]
 
-  const handleCopy = (id: string, label: string, content: string) => {
-    if (!isApproved) {
+  const isInternalTab = INTERNAL_TABS.has(activeTab)
+  const customerHasPlaceholder = activeTab === "customer" && hasDraftPlaceholder(currentContent)
+  const copyBlockedReason = isInternalTab
+    ? null
+    : !isApproved
+      ? "담당자 승인 후 복사 가능합니다"
+      : customerHasPlaceholder
+        ? "[ ] 자리를 채운 뒤 복사할 수 있습니다"
+        : null
+  const canCopy = copyBlockedReason === null
+
+  const handleCopy = (id: CommunicationTabId, label: string, content: string) => {
+    if (!INTERNAL_TABS.has(id) && !isApproved) {
       onOpenReview()
       return
     }
-    onCopyText(content, `${label} 초안을 복사했습니다.`)
+    if (!canCopy) return
+    // 사내 탭은 HqPanel 과 같은 규칙(prepareInternalDraftCopy), 고객 탭도 복사 직전에 한 번 더 가린다.
+    onCopyText(prepareInternalDraftCopy(content).text, `${label} 초안을 복사했습니다.`)
     setCopiedId(id)
     setTimeout(() => setCopiedId(null), 2000)
   }
@@ -139,7 +189,7 @@ export default function CommunicationTabs({
           <div className="flex items-center gap-2">
             <LockKeyhole className="h-4 w-4 shrink-0 text-[#A8741A]" />
             <span>
-              소통 초안은 <strong>담당자 검토·승인(허가) 후</strong> 복사할 수 있습니다.
+              고객 안내는 <strong>담당자 검토·승인(허가) 후</strong> 복사할 수 있습니다. 본사·인수인계 초안은 사내용이라 바로 복사됩니다.
             </span>
           </div>
           <button
@@ -154,7 +204,7 @@ export default function CommunicationTabs({
         <div className="flex items-center gap-2 rounded-lg border border-[#BDEFD8] bg-[#ECFDF5] px-4 py-2.5 text-[11.5px] text-[#084734]">
           <CheckCircle2 className="h-4 w-4 shrink-0" />
           <span>
-            담당자 검토·승인 완료 — 고객 및 본사 전달이 <strong>허가</strong>되었습니다.
+            담당자 검토·승인 완료 — 승인된 답을 고객 안내로 복사할 수 있습니다(<strong>허가</strong>).
           </span>
         </div>
       )}
@@ -236,6 +286,12 @@ export default function CommunicationTabs({
 
         {/* 편집 가능한 에디터 본문 */}
         <div className="p-3.5">
+          {notice ? (
+            <p className="mb-2 inline-flex items-center gap-1.5 rounded-md border border-[#ECD29C] bg-[#FBF1E0] px-2.5 py-1 text-[11px] font-semibold text-[#7A520F]">
+              <ShieldCheck className="h-3.5 w-3.5" aria-hidden />
+              {notice}
+            </p>
+          ) : null}
           <textarea
             value={currentContent}
             onChange={(e) =>
@@ -270,10 +326,10 @@ export default function CommunicationTabs({
               </span>
             ) : null}
 
-            {!isApproved ? (
-              <span className="inline-flex items-center gap-1 rounded-sm bg-[#F6F5F4] px-2 py-1 text-[10px] font-medium text-[#A39E98]">
+            {copyBlockedReason ? (
+              <span className="inline-flex items-center gap-1 rounded-sm bg-[#F6F5F4] px-2 py-1 text-[10px] font-medium text-[#615D59]">
                 <LockKeyhole className="h-3 w-3" />
-                승인 필요
+                {!isApproved ? "승인 필요" : "자리 채우기 필요"}
               </span>
             ) : null}
 
@@ -286,11 +342,11 @@ export default function CommunicationTabs({
                   currentContent
                 )
               }
-              disabled={!isApproved}
-              title={isApproved ? "초안 복사" : "담당자 승인 후 복사 가능합니다"}
+              disabled={!canCopy}
+              title={copyBlockedReason ?? "초안 복사"}
               className={cn(
                 "inline-flex h-8 items-center gap-1.5 rounded-lg border px-3 text-[11px] font-semibold transition-all shadow-xs",
-                isApproved
+                canCopy
                   ? "border-[#084734] bg-[#084734] text-white hover:bg-[#065C41] active:scale-[0.98]"
                   : "cursor-not-allowed border-black/[0.08] bg-[#F6F5F4] text-[#A39E98] opacity-60"
               )}
@@ -300,7 +356,7 @@ export default function CommunicationTabs({
                   <CheckCircle2 className="h-3.5 w-3.5" />
                   복사 완료
                 </>
-              ) : isApproved ? (
+              ) : canCopy ? (
                 <>
                   <Copy className="h-3.5 w-3.5" />
                   초안 복사

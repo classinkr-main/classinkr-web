@@ -1,6 +1,13 @@
 // 내부 CS 에스컬레이션 라우팅 및 3-Way 스마트 소통 템플릿 엔진.
 // 정본: docs/active/cs-error-cases-index-2026-10-02.md (부록 B 오류코드, 부록 C HQ 담당자 15개 도메인)
 // 정본: docs/active/cs-error-cases-workflow-rules-2026-10-02.md (2장 지킬 규칙, 3장 HQ 보고 템플릿 v2)
+//
+// 안전 규칙(IC-02, 2026-11 CS 코파일럿 점검 B1):
+// - 입력은 사용자 글·customer_context·대화 메타뿐이다. AI 답 글은 받지 않는다.
+// - 모든 출력 칸은 redactInternalCsDraft(전화·이메일·계좌·주민번호·생년월일·UID)를 거친다.
+// - 하지 않은 일("점검 완료", "검토 완료", "임시 안내 완료")을 사실처럼 적지 않고 DRAFT_PLACEHOLDER 자리를 둔다.
+
+import { redactInternalCsDraft } from "./redact"
 
 export interface HqContactInfo {
   domain: string
@@ -17,8 +24,10 @@ export interface HqContactInfo {
 export interface EscalationContext {
   domain: string
   contact: HqContactInfo
+  /** customer_context 에서만 가져온 기관명(가림 적용). 사용자 글·AI 답에서는 추측하지 않는다. */
   institution: string | null
-  accountId: string | null
+  /** 사용자 글에 계정 ID·UID 가 있었는지. 값은 초안에 싣지 않는다(본사 공유 전 담당자가 직접 넣는다). */
+  hasAccountId: boolean
   lessonId: string | null
   lessonName: string | null
   errorCode: string | null
@@ -28,10 +37,31 @@ export interface EscalationContext {
   beijingTime: string | null
   issueType: "bug" | "requirement" | "suspected_bug"
   issueTypeTag: "【缺陷】" | "【需求】" | "【疑似缺陷】"
+  /** 사용자 글 첫 줄(가림 적용, 200자). */
   symptomSummary: string
-  rawQuestion: string
+  /** 대화의 우선순위(conversation.priority). 없으면 null — 초안은 "[확인 후 입력]" 자리를 둔다. */
+  priority: string | null
   assigneeName: string | null
+  /** 입력(사용자 글·customer_context 값)에서 가린 개인정보 개수. */
+  redactionCount: number
 }
+
+/**
+ * 초안 입력. AI 답 글은 받지 않는다 — 모델 답에 인용된 다른 고객의 이름·시각·"점검 완료" 같은 문장이
+ * 기관·발생 시각·확인 사실 칸으로 새어 들어가지 않게 하려는 것이다(IC-02).
+ */
+export interface EscalationInput {
+  /** 상담원·고객이 쓴 글(role=user)만. */
+  userMessages: string[]
+  customerContext?: Record<string, unknown> | null
+  title?: string | null
+  tags?: string[]
+  priority?: string | null
+  assigneeName?: string | null
+}
+
+/** 사실을 확인하기 전에는 채우지 않는 자리. 고객 안내 복사는 이 자리가 남아 있으면 막힌다. */
+export const DRAFT_PLACEHOLDER = "[확인 후 입력]"
 
 export const HQ_DOMAINS: Record<string, HqContactInfo> = {
   camera: {
@@ -195,19 +225,35 @@ export const HQ_DOMAINS: Record<string, HqContactInfo> = {
   },
 }
 
-// 알려진 고객사/기관명 딕셔너리
-const KNOWN_INSTITUTIONS = [
-  "정율사관", "정율사관 온라인", "JYSK",
-  "에듀온픽", "KJ영재센터", "Sook's coaching", "쑥쑥코칭", "쏙쏙코칭",
-  "12inedu", "캐슬에듀", "쉴라", "쉴라의 영어 다이아그램",
-  "Rami English", "라미잉글리쉬", "형아람",
-  "이미숙국어", "이미숙국어 가경관",
-  "과사람", "철의국어", "철의국어입시학원",
-  "차준호국어", "광주 ALCC", "The Solution Edu",
-  "플라잉글리쉬", "킹콩수학학원", "에스키어학원",
-  "미소에듀", "국풍온", "국풍H&C", "모나르떼", "윤유경플러스학원",
-  "아이온영어", "리아잉글리쉬", "NS 과학수학", "Renewgen",
+// customer_context 에서 기관명을 찾는 열쇠. 브리지·상담 Inbox 가 넘기는 칸 이름이 아직 하나로 정해지지 않아(결정 14)
+// 흔한 이름을 차례로 본다. 고객사 이름 목록을 코드에 두지 않는다 — 다른 고객 이름이 초안에 붙는 원인이었다.
+const INSTITUTION_CONTEXT_KEYS = [
+  "institution",
+  "institutionName",
+  "organization",
+  "organizationName",
+  "orgName",
+  "company",
+  "companyName",
+  "school",
+  "academy",
+  "기관",
+  "기관명",
+  "고객사",
+  "학원",
 ]
+
+function institutionFromContext(context: Record<string, unknown> | null | undefined) {
+  if (!context || typeof context !== "object") return { value: null as string | null, count: 0 }
+  for (const key of INSTITUTION_CONTEXT_KEYS) {
+    const raw = context[key]
+    if (typeof raw === "string" && raw.trim()) {
+      const redacted = redactInternalCsDraft(raw.trim().slice(0, 80))
+      return { value: redacted.text, count: redacted.count }
+    }
+  }
+  return { value: null, count: 0 }
+}
 
 /**
  * 한국 시각(KST, UTC+9) 문자열을 중국 북경 시각(UTC+8, KST - 1시간)으로 자동 변환.
@@ -242,42 +288,24 @@ export function convertKstToBeijingTime(timeStr: string | null): string | null {
 }
 
 /**
- * 대화 내용과 메타데이터에서 에스컬레이션 컨텍스트 및 변수를 자동 추출.
+ * 사용자 글·customer_context·대화 메타에서 에스컬레이션 컨텍스트를 뽑는다.
+ * 분류(도메인·오류 코드·기기)에는 원문을 쓰지만, 초안에 실리는 값(현상·기관)은 가린 값만 남긴다.
  */
-export function extractEscalationContext(
-  text: string,
-  options?: {
-    title?: string
-    tags?: string[]
-    assigneeName?: string | null
-    createdDate?: string | null
-  }
-): EscalationContext {
-  const combined = `${options?.title ?? ""} ${text}`
+export function extractEscalationContext(input: EscalationInput): EscalationContext {
+  const userText = input.userMessages.map((message) => message.trim()).filter(Boolean).join("\n")
+  const title = input.title?.trim() ?? ""
+  const combined = `${title} ${userText}`
 
-  // 1. 기관명 감지
-  let institution: string | null = null
-  for (const inst of KNOWN_INSTITUTIONS) {
-    if (combined.includes(inst)) {
-      institution = inst
-      break
-    }
-  }
-  if (!institution) {
-    const instMatch = combined.match(/(?:기관|학원|고객사)\s*[:#]?\s*([가-힣a-zA-Z0-9\s]{2,15})(?:학원|센터|어학원|에듀)?/)
-    if (instMatch?.[1]) {
-      institution = instMatch[1].trim()
-    }
-  }
+  // 1. 기관명 — customer_context 에서만.
+  const institutionResult = institutionFromContext(input.customerContext)
+  const institution = institutionResult.value
 
-  // 2. 계정 / UID 감지
-  const accountMatch = combined.match(/\b(?:Account|UID|User\s*ID|계정\s*ID|계정|UID:)\s*[:#]?\s*(\d{6,10})\b/i)
-  const accountId = accountMatch?.[1] ?? null
+  // 2. 계정 / UID — 있는지만 기록한다.
+  const hasAccountId = /(?:Account|UID|User\s*ID|계정\s*ID|계정|아이디)\s*[:：#]?\s*\d{5,12}(?!\d)/i.test(userText)
 
-  // 3. 수업 ID / 코스 ID 감지
-  const lessonMatch = combined.match(/\b(?:수업\s*ID|lesson\s*id|class\s*id|코스\s*ID|강의\s*ID)\s*[:#]?\s*([a-zA-Z0-9_-]{4,20})\b/i)
+  // 3. 수업 ID / 코스 ID 감지 (사용자 글만)
+  const lessonMatch = userText.match(/\b(?:수업\s*ID|lesson\s*id|class\s*id|코스\s*ID|강의\s*ID)\s*[:#]?\s*([a-zA-Z0-9_-]{4,20})\b/i)
   const lessonId = lessonMatch?.[1] ?? null
-
   // 4. 오류 코드 감지
   const errorMatch = combined.match(/(?:오류\s*코드|에러\s*코드|error\s*code|코드|code|errno)\s*[:#]?\s*(-?\d{2,10}|0x[0-9a-fA-F]+)\b/i)
   let errorCode = errorMatch?.[1] ?? null
@@ -308,11 +336,11 @@ export function extractEscalationContext(
   }
 
   // 6. 앱 버전 감지
-  const versionMatch = combined.match(/\b(6\.\d+\.\d+(?:\.\d+)?)\b/)
+  const versionMatch = userText.match(/\b(6\.\d+\.\d+(?:\.\d+)?)\b/)
   const appVersion = versionMatch?.[1] ?? null
 
   // 7. 시각 감지 (KST 및 UTC+8 변환)
-  const timeMatch = combined.match(/\b([01]?\d|2[0-3]):([0-5]\d)\b/)
+  const timeMatch = userText.match(/\b([01]?\d|2[0-3]):([0-5]\d)\b/)
   const kstTime = timeMatch ? `${timeMatch[1]}:${timeMatch[2]} (KST)` : null
   const beijingTime = convertKstToBeijingTime(timeMatch ? `${timeMatch[1]}:${timeMatch[2]}` : null)
 
@@ -356,8 +384,8 @@ export function extractEscalationContext(
   }
 
   // 태그에 area:가 명시되어 있다면 우선 반영
-  if (options?.tags) {
-    for (const tag of options.tags) {
+  if (input.tags) {
+    for (const tag of input.tags) {
       if (tag === "area:camera") matchedDomain = "camera"
       else if (tag === "area:board") matchedDomain = "board"
       else if (tag === "area:network") matchedDomain = "network"
@@ -371,15 +399,17 @@ export function extractEscalationContext(
 
   const contact = HQ_DOMAINS[matchedDomain] ?? HQ_DOMAINS.general
 
-  // 현상 요약 (첫 문장 추출)
-  const lines = text.split("\n").map((l) => l.trim()).filter(Boolean)
-  const symptomSummary = lines[0] ?? "증상 상세 확인 필요"
+  // 현상 요약: 사용자 글 첫 줄(가림 적용). 가린 개수는 사용자 글 전체 기준이다(초안 위 "개인정보 N건" 문구).
+  const firstLine = userText.split("\n").map((line) => line.trim()).find(Boolean)
+  const symptom = redactInternalCsDraft(firstLine ? firstLine.slice(0, 200) : "")
+  const userRedactions = redactInternalCsDraft(`${title}\n${userText}`).count
+  const priority = typeof input.priority === "string" && input.priority.trim() ? input.priority.trim() : null
 
   return {
     domain: matchedDomain,
     contact,
     institution,
-    accountId,
+    hasAccountId,
     lessonId,
     lessonName: null,
     errorCode,
@@ -389,74 +419,38 @@ export function extractEscalationContext(
     beijingTime,
     issueType,
     issueTypeTag,
-    symptomSummary,
-    rawQuestion: text,
-    assigneeName: options?.assigneeName ?? null,
+    symptomSummary: symptom.text || "증상 상세 확인 필요",
+    priority,
+    assigneeName: input.assigneeName ?? null,
+    redactionCount: userRedactions + institutionResult.count,
   }
 }
 
-/**
- * 고객 안내문 내부 정보 마스킹 헬퍼
- * 규칙: IP 주소, 내부 NIC명, 민감한 시스템 식별자 등 고객에게 불필요한 내부 정보 제거.
- */
-export function sanitizeCustomerContent(text: string): string {
-  return text
-    .replace(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g, "[내부 네트워크]")
-    .replace(/\b(ASIX|Realtek|PoE|RTSP)\b/gi, "")
-    .replace(/\s+/g, " ")
-    .trim()
+function finalize(lines: string[]) {
+  // 마지막 방어선: 위 칸들은 이미 가린 값이지만, 조립된 글 전체를 한 번 더 거른다(멱등).
+  return redactInternalCsDraft(lines.join("\n")).text
+}
+
+function accountLine(context: EscalationContext) {
+  return context.hasAccountId ? `${DRAFT_PLACEHOLDER} (대화에 계정 ID 있음 — 공유 범위 확인 뒤 직접 입력)` : DRAFT_PLACEHOLDER
 }
 
 /**
- * 1. 고객 안내용 카카오톡 문안 생성
- * 원칙: 사실과 추정 분리, 내부 식별자(IP, 서버명, 에러코드) 제외, 친근하고 명확한 안내.
- */
-export function buildSmartCustomerDraft(context: EscalationContext): string {
-  const greeting = context.institution
-    ? `안녕하세요, ${context.institution} 담당자님. 클래스인 기술지원팀입니다.`
-    : "안녕하세요, 고객님. 클래스인 기술지원팀입니다."
-
-  const timeLabel = context.kstTime ? ` (발생 시각: ${context.kstTime})` : ""
-  const safeSymptom = sanitizeCustomerContent(context.symptomSummary)
-
-  return [
-    greeting,
-    `문의주신 현상${timeLabel} 관련 확인 결과 안내드립니다.`,
-    "",
-    "▪ 확인된 현상 및 원인",
-    `- 확인된 내용: ${safeSymptom}`,
-    context.deviceModel ? `- 대상 기기: ${context.deviceModel}` : "- 상세 환경 및 로그 점검을 완료하였습니다.",
-    "- 판정: 현재 지사 기술팀 및 본사 협의를 통해 정확한 원인을 분석 중입니다.",
-    "",
-    "▪ 영향 및 복구",
-    "- 서비스 이용 및 데이터 보존 상태를 면밀히 점검하고 있습니다.",
-    "- 필요 시 임시 우회 방안 또는 설정 조정을 즉시 지원해 드리겠습니다.",
-    "",
-    "▪ 다음 조치 및 안내 예정",
-    context.assigneeName
-      ? `- 담당자: ${context.assigneeName} 매니저가 전담하여 후속 조치 진행 예정입니다.`
-      : "- 담당 엔지니어가 추가 확인 후 신속히 다음 안내를 드리겠습니다.",
-    "- 수업 진행 중 동일 증상이 발생하면 언제든 편하게 제보해 주세요.",
-    "",
-    "감사합니다.",
-  ].join("\n")
-}
-
-/**
- * 2. HQ 보고 템플릿 v2 (중국어 발송용 + English + 한국어 사내참조)
+ * 1. HQ 보고 템플릿 v2 (중국어 발송용 + English + 한국어 사내참조)
  * 원칙: 완충 표현, UTC+8 북경 시각 자동 변환, 결함 태그, 담당자 WeCom 멘션.
+ * 계정 ID 는 넣지 않는다(국외 공유 범위 미정 — 결정 3). 한국 지사가 확인한 사항은 담당자가 채운다.
  */
 export function buildSmartHqDraft(context: EscalationContext): string {
-  const accountStr = context.accountId ? `${context.accountId}` : "확인 필요"
-  const orgStr = context.institution ? `${context.institution}` : "확인 필요"
-  const lessonStr = context.lessonId ? `${context.lessonId}` : "확인 필요"
+  const accountStr = accountLine(context)
+  const orgStr = context.institution ?? "확인 필요"
+  const lessonStr = context.lessonId ?? "확인 필요"
   const timeStr = context.beijingTime ?? "확인 필요 (北京时间, UTC+8)"
   const deviceStr = context.deviceModel ?? "확인 필요"
   const osStr = "Windows / Android 확인 필요"
   const verStr = context.appVersion ?? "6.0.x 확인 필요"
   const errorInfoStr = context.errorCode ? `에러 코드/문구: ${context.errorCode}` : "세부 지표 점검 필요"
 
-  return [
+  return finalize([
     `// ==========================================`,
     `// [HQ WeCom 발송용 中文] ${context.contact.wecomMention}`,
     `// ==========================================`,
@@ -471,7 +465,7 @@ export function buildSmartHqDraft(context: EscalationContext): string {
     "Error info :",
     `- 现象: ${context.symptomSummary}`,
     `- 错误代码: ${errorInfoStr}`,
-    `- 韩国分社测试与控制台状态: 网络与设备基础配置已排查`,
+    `- 韩国分社已确认事项: ${DRAFT_PLACEHOLDER}`,
     `- 确认要点: 请协助排查服务器日志与底层原因，确认是否有已知缺陷或修复方案`,
     "",
     `// ==========================================`,
@@ -484,6 +478,7 @@ export function buildSmartHqDraft(context: EscalationContext): string {
     `- Start Time : ${timeStr}`,
     `- Device : ${deviceStr} / Version : ${verStr}`,
     `Error info : ${context.symptomSummary} (Error: ${errorInfoStr})`,
+    `Korea branch checks : ${DRAFT_PLACEHOLDER}`,
     "",
     `// ==========================================`,
     `// [한국어 사내 참조용]`,
@@ -492,26 +487,28 @@ export function buildSmartHqDraft(context: EscalationContext): string {
     `- HQ 담당: ${context.contact.primaryContact} (${context.contact.remoteTool ?? "원격 지원"})`,
     `- 발생 시각: ${context.kstTime ?? "미확인 (KST)"}`,
     `- 현상 요약: ${context.symptomSummary}`,
+    `- 한국 지사 확인 사항: ${DRAFT_PLACEHOLDER}`,
     `- 가이드 팁: ${context.contact.guidanceTip}`,
-  ].join("\n")
+  ])
 }
 
 /**
- * 3. 사내 인수인계 / CRM용 템플릿
+ * 2. 사내 인수인계 / CRM용 템플릿. 우선순위는 대화 값을 따르고, 확인한 사실·고객 안내 상태는 담당자가 채운다.
  */
 export function buildSmartInternalHandoffDraft(context: EscalationContext): string {
-  return [
+  const priority = context.priority ? context.priority.toUpperCase() : DRAFT_PLACEHOLDER
+  return finalize([
     `[CS-CASE] ${context.institution ? `[${context.institution}] ` : ""}${context.contact.domainLabel} 건 인수인계`,
-    `우선순위 / 태그: HIGH / ${context.contact.recommendedTag}`,
+    `우선순위 / 태그: ${priority} / ${context.contact.recommendedTag}`,
     `HQ 소통 경로: ${context.contact.primaryContact} (도구: ${context.contact.remoteTool ?? "RustDesk"})`,
-    `식별 정보: 기관 [${context.institution ?? "미확보"}] · 계정 [${context.accountId ?? "미확보"}] · 수업 [${context.lessonId ?? "미확보"}]`,
+    `식별 정보: 기관 [${context.institution ?? "미확보"}] · 계정 ${accountLine(context)} · 수업 [${context.lessonId ?? "미확보"}]`,
     `단말 환경: ${context.deviceModel ?? "기기 확인 필요"} · 버전 ${context.appVersion ?? "미확인"}`,
     `현상 및 에러: ${context.symptomSummary}${context.errorCode ? ` (코드: ${context.errorCode})` : ""}`,
-    "확인된 사실: 지사 1차 로그 및 재현 조건 검토 완료",
-    "고객 안내 상태: 사실/추정 분리 임시 안내 완료",
-    "다음 조치: HQ 회신 대기 및 현장 2차 모니터링",
+    `확인된 사실: ${DRAFT_PLACEHOLDER}`,
+    `고객 안내 상태: ${DRAFT_PLACEHOLDER}`,
+    "다음 조치: HQ 회신 대기",
     `담당 매니저: ${context.assigneeName ?? "지정 필요"}`,
-  ].join("\n")
+  ])
 }
 
 export const buildSmartHandoffMessage = buildSmartInternalHandoffDraft

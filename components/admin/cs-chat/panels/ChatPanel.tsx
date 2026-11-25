@@ -27,7 +27,6 @@ import { useMemo, type ChangeEvent, type FormEvent, type RefObject } from "react
 
 import BlogMarkdownRenderer from "@/components/blog/BlogMarkdownRenderer"
 import { ClassInInternalAIIcon } from "@/components/ui/ClassInInternalAIIcon"
-import { extractEscalationContext } from "@/lib/internal-cs-chat/escalation-routing"
 import { cn } from "@/lib/utils"
 
 import AnswerFooterChip from "../components/AnswerFooterChip"
@@ -53,6 +52,7 @@ import {
   fileKey,
   formatTime,
   normalizeSourceRefs,
+  escalationContextFromDetail,
   sourceHref,
   sourceStatus,
 } from "../formatters"
@@ -155,19 +155,7 @@ export default function ChatPanel({
   onQuickApprove?: (messageId: string) => void
   onSelectAlternativeIssue?: (issuePrompt: string) => void
 }) {
-  const escalationContext = useMemo(() => {
-    if (!detail) return null
-    const userTexts = detail.messages
-      .filter((m) => m.role === "user")
-      .map((m) => m.content)
-      .join("\n")
-    return extractEscalationContext(userTexts, {
-      title: detail.conversation.title,
-      tags: detail.conversation.tags,
-      assigneeName: detail.conversation.assignee_name,
-      createdDate: detail.conversation.created_at,
-    })
-  }, [detail])
+  const escalationContext = useMemo(() => (detail ? escalationContextFromDetail(detail) : null), [detail])
 
   return (
     <div className={cn("flex min-h-0 flex-1 flex-col", reviewOpen && "xl:pr-[438px]")}>

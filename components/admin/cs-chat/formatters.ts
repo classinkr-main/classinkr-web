@@ -3,7 +3,14 @@
 //
 // buildCustomerHoldingTemplate · buildInternalHandoffTemplate · buildHqTemplate 세 함수는
 // 답변 카드의 "소통 초안 3종"과 본사 확인 화면이 함께 쓰는 고정 포맷이다.
-// 출력 문자열은 회귀 대상이므로 한 글자도 바꾸지 않는다.
+// 출력 문자열은 회귀 대상이라 시험(tests/internal-cs-chat/formatters.test.ts)으로 고정한다. 바꿀 때는 시험과 함께,
+// 이유를 커밋 글에 적는다(2026-11 B1: 사용자 글·제목 가림, "개인정보 최소화·제거" 라벨을 사실대로 고침).
+
+import {
+  extractEscalationContext,
+  type EscalationInput,
+} from "@/lib/internal-cs-chat/escalation-routing"
+import { redactInternalCsDraft, redactInternalCsValue } from "@/lib/internal-cs-chat/redact"
 
 import type {
   ConversationDetailResponse,
@@ -132,6 +139,12 @@ export function sourceStatus(source: InternalCsSourceRef) {
     if (source.reviewState === "approved") return { label: "담당자 확인", tone: "confirmed" as const }
     return { label: "이미지 미검토", tone: "pending" as const }
   }
+  // 선례(incident-search)·과거 상담(channel:)·내부 문서는 고객에게 그대로 옮기면 안 되는 근거다(IC-21).
+  if (source.label?.startsWith("[선례]")) return { label: "선례 · 내부 전용", tone: "pending" as const }
+  if (source.id.startsWith("channel:")) return { label: "과거 상담 · 내부 전용", tone: "pending" as const }
+  if (source.externalUse === "internal_only" || (source.kind as string | undefined) === "internal_doc") {
+    return { label: "내부 전용", tone: "pending" as const }
+  }
   if (source.verificationStatus === "confirmed") {
     return { label: "확정", tone: "confirmed" as const }
   }
@@ -153,6 +166,94 @@ export function sourceHref(source: InternalCsSourceRef) {
   return null
 }
 
+/**
+ * 새 탭으로 여는 근거 링크. sourceHref 는 같은 탭 링크(공개 문서)용이라 그대로 두고, 작업면을 떠나면 안 되는
+ * 내부 근거는 이 함수로 따로 만든다. channel: 근거는 상담 Inbox(/admin/channel-talk)로 간다 — Inbox 가 상담 id
+ * 깊은 링크를 받는 형식은 아직 정하지 않았으므로(결정 14) 목록으로 연다.
+ */
+export function sourceLink(source: InternalCsSourceRef): { href: string; newTab: boolean } | null {
+  if (source.id.startsWith("channel:")) return { href: "/admin/channel-talk", newTab: true }
+  const href = sourceHref(source)
+  return href ? { href, newTab: true } : null
+}
+
+/** 이미지 분석이 남긴 민감정보 경고(analysis_payload.sensitiveDataWarnings). 없으면 빈 배열. */
+export function assetSensitiveWarnings(asset: InternalCsAsset): string[] {
+  const payload = [asset.analysis_payload, asset.analysis_json].find(
+    (value): value is Record<string, unknown> => Boolean(value) && typeof value === "object" && !Array.isArray(value)
+  )
+  const raw = payload?.sensitiveDataWarnings
+  if (!Array.isArray(raw)) return []
+  return raw
+    .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+    .map((value) => redactInternalCsValue(value.trim()))
+}
+
+/**
+ * 화면에 보일 첨부 파일명. 이름에 전화·이메일·계좌 같은 값이 있으면 확장자만 남긴 "첨부 이미지"로 바꾼다
+ * (이름 칸에 사람 이름이 함께 들어 있는 경우가 많아 부분 가림 대신 통째로 숨긴다).
+ */
+export function maskAssetFileName(name: string | null | undefined) {
+  const value = name?.trim()
+  if (!value) return "첨부 이미지"
+  // 파일명은 "_" 로 낱말을 잇는 경우가 많다. 경계(\b)가 잡히도록 구분자를 공백으로 바꿔 검사한다.
+  const { count } = redactInternalCsDraft(value.replace(/[_+]/g, " "))
+  if (count === 0) return value
+  const extension = value.match(/\.[A-Za-z0-9]{2,5}$/)?.[0] ?? ""
+  return `첨부 이미지${extension}`
+}
+
+/** 초안 생성기 입력. AI 답 글은 넣지 않는다(IC-02) — 사용자 글·customer_context·대화 메타만. */
+export function escalationInputFromDetail(detail: ConversationDetailResponse): EscalationInput {
+  return {
+    userMessages: detail.messages.filter((message) => message.role === "user").map((message) => message.content),
+    customerContext: detail.conversation.customer_context,
+    title: detail.conversation.title,
+    tags: detail.conversation.tags,
+    priority: detail.conversation.priority,
+    assigneeName: detail.conversation.assignee_name,
+  }
+}
+
+export function escalationContextFromDetail(detail: ConversationDetailResponse) {
+  return extractEscalationContext(escalationInputFromDetail(detail))
+}
+
+/**
+ * 본사(WeCom)·사내 초안 복사 규칙 — HqPanel 과 CommunicationTabs 가 같은 함수를 쓴다.
+ * 사내용이라 승인 잠금은 없고, 복사 직전에 한 번 더 가린다(담당자가 고쳐 쓴 글에 연락처가 들어가도 걸러진다).
+ */
+export function prepareInternalDraftCopy(text: string) {
+  return redactInternalCsDraft(text)
+}
+
+/** "[확인 후 입력]"·"[확인된 내용 입력]"·"[회신 예정 시각]" 같은 채울 자리가 남아 있는지. */
+export function hasDraftPlaceholder(text: string) {
+  return /\[[^\]\n]*(?:입력|예정 시각)[^\]\n]*\]/.test(text)
+}
+
+/** 가장 최근에 승인된 답의 교정본(고객에게 보낼 최종본). 없으면 null. */
+export function latestApprovedAnswer(detail: ConversationDetailResponse | null) {
+  if (!detail) return null
+  const approved = [...detail.messages]
+    .reverse()
+    .find((message) => message.role === "assistant" && message.review_state === "approved" && message.corrected_content?.trim())
+  return approved?.corrected_content?.trim() ?? null
+}
+
+/**
+ * 고객 안내 초안의 기준. 승인된 교정본이 있으면 그것을(가림 적용), 없으면 대기 안내 틀을 쓴다.
+ * 대기 안내 틀은 채울 자리가 있어 그대로는 복사되지 않는다(hasDraftPlaceholder).
+ */
+export function buildCustomerDraftBase(detail: ConversationDetailResponse | null) {
+  const approved = latestApprovedAnswer(detail)
+  if (approved) {
+    const redacted = redactInternalCsDraft(approved)
+    return { text: redacted.text, redactionCount: redacted.count, source: "approved" as const }
+  }
+  return { text: buildCustomerHoldingTemplate(detail), redactionCount: 0, source: "holding" as const }
+}
+
 export function getLastQuestion(detail: ConversationDetailResponse) {
   return [...detail.messages].reverse().find((message) => message.role === "user")?.content
 }
@@ -171,12 +272,12 @@ export function buildCustomerHoldingTemplate(detail: ConversationDetailResponse 
 export function buildInternalHandoffTemplate(detail: ConversationDetailResponse | null) {
   if (!detail) return ""
   return [
-    `[CS-${detail.conversation.id}] ${detail.conversation.title}`,
+    `[CS-${detail.conversation.id}] ${redactInternalCsValue(detail.conversation.title)}`,
     `우선순위 / 상태: ${detail.conversation.priority} / ${detail.conversation.status}`,
     `담당자: ${detail.conversation.assignee_name ?? "지정 필요"}`,
     `분류 태그: ${detail.conversation.tags.join(", ") || "분류 필요"}`,
     "제품·모델·세대·앱 버전: 확인 필요",
-    `문의 / 현상: ${getLastQuestion(detail) ?? "입력 필요"}`,
+    `문의 / 현상: ${redactInternalCsValue(getLastQuestion(detail)) || "입력 필요"}`,
     "영향·긴급도: 입력 필요",
     "확인한 내용 / 시도 결과: 입력 필요",
     "고객에게 안내한 내용: 입력 필요",
@@ -191,14 +292,14 @@ export function buildHqTemplate(detail: ConversationDetailResponse | null) {
   const area = detail.conversation.tags
     .find((tag) => tag.startsWith("area:"))
     ?.slice("area:".length) || "AREA"
-  const lastQuestion = getLastQuestion(detail)
+  const lastQuestion = redactInternalCsValue(getLastQuestion(detail))
   return [
-    `[KR-CS][${detail.conversation.priority.toUpperCase()}][${area}][${detail.conversation.id}] ${detail.conversation.title}`,
+    `[KR-CS][${detail.conversation.priority.toUpperCase()}][${area}][${detail.conversation.id}] ${redactInternalCsValue(detail.conversation.title)}`,
     "",
     "1. Case",
     `- 내부 케이스 ID: ${detail.conversation.id}`,
     `- 한국 담당자: ${detail.conversation.assignee_name ?? "지정 필요"}`,
-    "- 발생 시각(KST) / 기관·계정 식별자: 입력 필요 (개인정보 최소화)",
+    "- 발생 시각(KST) / 기관·계정 식별자: 입력 필요 (전화·이메일·계좌·이름은 적지 않음)",
     "- 제품·모델·세대·앱 버전: 확인 필요",
     "",
     "2. Impact",
@@ -206,14 +307,14 @@ export function buildHqTemplate(detail: ConversationDetailResponse | null) {
     "- 수업 차단 여부 / 고객 요구 시한: 확인 필요",
     "",
     "3. Question / Reproduction",
-    `- 현상: ${lastQuestion ?? "질문과 현상을 입력해 주세요."}`,
+    `- 현상: ${lastQuestion || "질문과 현상을 입력해 주세요."}`,
     "- 재현 절차 / Expected / Actual / Frequency: 입력 필요",
     "",
     "4. Korea checks",
     "- 이미 확인한 항목 / 시도한 조치 / 임시 우회 결과: 입력 필요",
     "",
     "5. Evidence",
-    `- 개인정보 제거 첨부 ${detail.assets?.length ?? 0}건 / 내부 근거 링크: 입력 필요`,
+    `- 첨부 이미지 ${detail.assets?.length ?? 0}건(원본 — 개인정보 포함 여부 직접 확인) / 내부 근거 링크: 입력 필요`,
     "",
     "6. Request to HQ",
     "- 답변이 필요한 질문 1~3개: 입력 필요",

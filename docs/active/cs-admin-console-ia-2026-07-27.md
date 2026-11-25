@@ -207,7 +207,7 @@ URL이 그대로이므로 [AdminSidebar](../../components/admin/AdminSidebar.tsx
 ### 화면
 
 목록은 `tags @> {evidence:hq_pending}` 인 대화다. 행마다 제목·상태·담당·대기 경과를 보이고,
-펼치면 `buildHqTemplate()` 결과가 그대로 뜨며 복사 버튼이 붙는다.
+펼치면 스마트 WeCom 초안(`buildSmartHqDraft` — 사용자 글·`customer_context`만 입력, AI 답 글 제외)이 뜨고, `buildHqTemplate()` 6항목 틀도 복사할 수 있다. 두 복사와 소통 탭의 본사 초안은 같은 규칙(`prepareInternalDraftCopy`: 승인 잠금 없음, 복사 직전 전화·이메일·계좌·주민번호·생년월일·계정 ID 가림)을 쓴다. 고객 안내 복사만 승인 뒤, 채울 자리(`[확인 후 입력]` 등)가 없을 때 열린다.
 회신이 오면 `evidence:confirmed`로 바꿔 목록에서 빠진다.
 
 **대기 경과는 근사다.** `evidence:hq_pending` 부착 시각을 저장하는 칼럼이 없어 `updated_at`을 쓴다.
