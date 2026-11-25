@@ -100,7 +100,8 @@ CRM 하위 탭은 같은 컬럼에 `crm:<href>` 키(`hidden`·`shown`)로 저장
 | CRM·그로스 | CRM, 캠페인(마케팅 허브), 리드, Branch, 캘린더 | [그로스 플레이북](playbook/04-growth-crm.md), 마케팅 허브는 [마케팅 탭 재구성 기획](marketing-tab-dashboard-restructure-2026-09-14.md) |
 | 외부 네오CRM 되밀기 | 리드 등록, 콜·데모·방문·메모 쓰기, 승인 큐 | [네오CRM 되밀기 지침](neocrm-writeback-guide-2026-09-07.md) |
 | 공개 챗봇·CS 운영 | RAG, 공개 챗봇, 외부 CS 대시보드 | [챗봇 플레이북](playbook/05-chatbot.md), [CS 콘솔 IA](cs-admin-console-ia-2026-07-27.md) |
-| 갈매봇·원격 오더 | 어드민 전역 AI 위젯, `/admin/ai`(시안 스위치, 기본 꺼짐), 오더 카드·오더 등급 | [갈매봇 위젯·원격 오더 기획](admin-ai-widget-remote-order-plan-2026-09-28.md). 셸 연결은 Admin 코어, 대화는 챗봇/CS, 오더 핸들러는 해당 도메인 |
+| 갈매봇·원격 오더 | 어드민 전역 AI 위젯(묻기: 지식·담당자·링크, 오더), `/admin/ai`(시안 스위치, 기본 꺼짐·운영에서는 무시), 오더 카드·오더 등급, 새 대화 | [갈매봇 위젯·원격 오더 기획](admin-ai-widget-remote-order-plan-2026-09-28.md), [구조와 작업 리스트](admin-ai-structure-worklist-2026-09-29.md)(묶음 B1~B7). 셸 연결은 Admin 코어, 대화는 챗봇/CS, 오더 핸들러는 해당 도메인 |
+| 홈페이지 MCP·공용 도구 | `app/api/mcp`, `lib/mcp`(외부 AI 클라이언트용 도구 입구·어댑터), `lib/ops-tools`(도구 정의 정본 `registry.ts`·실행기 `run.ts`, 운영은 [홈페이지 MCP 운영](home-mcp-operations.md)) | 기획 §6.5 — MCP는 오더 엔진의 또 다른 입구이고 도구 정의는 갈매봇과 한 벌을 공유한다. 읽기는 공용 원천, **쓰기는 다른 신뢰 모델**(클라이언트 승인 → S2 뒤 서버 티켓)이라 갈매봇은 MCP 쓰기를 부르지 않는다. 담당자 안내(D)의 재료는 `lib/internal-cs-chat/escalation-routing.ts`, 링크 안내(C)는 `lib/admin-ai/links.ts`(B4 신설). 내부 CS 브리지(`internal-cs-ai-bridge.md`)의 MCP와는 다른 물건이다 |
 | 플랫폼·데이터 | Supabase, migration, cron, 알림, Portal V2 | [플랫폼 플레이북](playbook/06-platform-data.md), [운영 장애·Cron·Webhook 지침](operational-failure-handling-guidelines.md), [ADR-010](../adr/ADR-010-operational-failure-containment.md), [DB 마이그레이션 런북](db-migration-runbook.md), [Supabase 운영 복구·하드닝 계획](supabase-operational-recovery-hardening-plan-2026-09-01.md) |
 | 하드웨어 C/H 방식·총판 정산 | `/admin/quotes` 견적 상세 총판 정산, 총판 미수금 탭, 총판용 견적서, 하드웨어 매출 인식 시점 | [총판 정산 — C방식/H방식](../hardware-ops/distributor-settlement.md) |
 | KR Team·매출 장부 | `/admin/branch`, `/admin/branch/ledger`, 동기화·정합성 | [Classin KR Team 스킬](../../.codex/skills/classin-kr-team/SKILL.md), [월별 목표·채움 차트](revenue-monthly-goal-chart.md). 장부 반영 때 '2. REV' 시트 쓰기는 [ADR-011](../adr/ADR-011-rev-sheet-writeback-from-ledger.md)·[REV 시트 쓰기 런북](rev-sheet-writeback-runbook.md) — 반영은 `lib/branch/sheet-writeback/apply-service.ts` 하나로만 |
@@ -122,6 +123,9 @@ Admin 코어는 `app/api/admin/*`, `components/admin/*`, `lib/repositories/*` �
   보조, 인사이트)은 이 탭으로 옮기지 않고 바로가기만 둔다 — 각 화면이 계속 정본이다.
 - 갈매봇은 오더 티켓을 작성만 한다. 쓰기는 사람이 확인 버튼을 눌러야 실행되고, 오더 등급(R0~R4)은
   코드에 고정한다.
+- 갈매봇은 **묻기(지식·담당자·링크, R0)**와 오더(R1 이상)를 한다. 질문형 문장("누구야·링크 알려줘·되나·초안·예정")은 실행 오더
+  카드로 보내지 않는다. 오더함 표에서는 확인하지 않고 "카드 열기"로 카드에서만 확인한다. 시안(샘플 데이터)은 운영
+  (`VERCEL_ENV=production`)에서 스위치를 무시한다.
 - `/admin/branch`는 성과·탐색, `/admin/branch/ledger`는 입력·검수·마감 작업면이다.
 - Notion 마케팅 캘린더 원천은 라이브 읽기 전용이다. 이 규칙은 Admin 자체 일정 엔티티의 DB
   저장을 금지하는 것이 아니라, Notion 원천 이벤트를 별도 정본으로 복제하거나 양방향 쓰기하지

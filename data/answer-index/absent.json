@@ -2854,5 +2854,4023 @@
       "checkedAt": "2026-11-20",
       "checker": "agent:sonnet#D5-pricing"
     }
+  },
+  {
+    "id": "absent:admin/admin-audit-log",
+    "label": "관리자 작업 기록(감사 로그)",
+    "forms": [
+      "감사 로그",
+      "설정 변경 이력",
+      "작업 이력",
+      "관리자 작업 기록",
+      "관리자 활동 로그"
+    ],
+    "area": "admin",
+    "gapCard": "gap:admin/admin-audit-log",
+    "verified": {
+      "grep": [
+        "감사 로그",
+        "설정 변경 이력",
+        "작업 이력",
+        "관리자 작업 기록",
+        "관리자 활동 로그"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-admin"
+    }
+  },
+  {
+    "id": "absent:admin/console-browser",
+    "label": "관리자 대시보드 권장 브라우저",
+    "forms": [
+      "권장 브라우저",
+      "브라우저 호환성",
+      "대시보드 권장 브라우저"
+    ],
+    "area": "admin",
+    "gapCard": "gap:admin/console-browser",
+    "verified": {
+      "grep": [
+        "권장 브라우저",
+        "브라우저 호환성",
+        "대시보드 권장 브라우저"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-admin"
+    }
+  },
+  {
+    "id": "absent:admin/teacher-bulk-register",
+    "label": "강사 일괄 등록",
+    "forms": [
+      "교사 일괄 등록",
+      "강사 일괄 등록",
+      "교사 엑셀 등록",
+      "강사 엑셀 등록",
+      "교사 대량 등록",
+      "강사 대량 등록"
+    ],
+    "area": "admin",
+    "gapCard": "gap:admin/teacher-bulk-register",
+    "verified": {
+      "grep": [
+        "교사 일괄 등록",
+        "강사 일괄 등록",
+        "교사 엑셀 등록",
+        "강사 엑셀 등록",
+        "교사 대량 등록",
+        "강사 대량 등록"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-admin"
+    }
+  },
+  {
+    "id": "absent:admin/teacher-reactivate",
+    "label": "비활성화한 강사 다시 활성화",
+    "forms": [
+      "교사 재활성화",
+      "강사 재활성화",
+      "강사 복직",
+      "교사 복직",
+      "교사 다시 활성화",
+      "강사 다시 활성화"
+    ],
+    "area": "admin",
+    "gapCard": "gap:admin/teacher-reactivate",
+    "verified": {
+      "grep": [
+        "교사 재활성화",
+        "강사 재활성화",
+        "강사 복직",
+        "교사 복직",
+        "교사 다시 활성화",
+        "강사 다시 활성화"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-admin"
+    }
+  },
+  {
+    "id": "absent:admin/admin-password-reset",
+    "label": "관리자의 비밀번호 초기화",
+    "forms": [
+      "관리자가 비밀번호 초기화",
+      "관리자가 비번 초기화",
+      "비밀번호 대신 초기화",
+      "비밀번호 일괄 초기화",
+      "비번 일괄 초기화"
+    ],
+    "area": "admin",
+    "gapCard": "gap:admin/admin-password-reset",
+    "verified": {
+      "grep": [
+        "관리자가 비밀번호 초기화",
+        "관리자가 비번 초기화",
+        "비밀번호 대신 초기화",
+        "비밀번호 일괄 초기화",
+        "비번 일괄 초기화"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-admin"
+    }
+  },
+  {
+    "id": "absent:admin/sibling-same-number",
+    "label": "형제·자매 같은 번호 등록",
+    "forms": [
+      "형제 같은 번호",
+      "같은 번호로 형제",
+      "쌍둥이 같은 번호",
+      "엄마 번호 하나로",
+      "같은 번호로 두 명",
+      "번호 하나로 두 명",
+      "한 번호로 두 명"
+    ],
+    "area": "admin",
+    "gapCard": "gap:admin/sibling-same-number",
+    "verified": {
+      "grep": [
+        "형제 같은 번호",
+        "같은 번호로 형제",
+        "쌍둥이 같은 번호",
+        "엄마 번호 하나로",
+        "같은 번호로 두 명",
+        "번호 하나로 두 명",
+        "한 번호로 두 명"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-admin"
+    }
+  },
+  {
+    "id": "absent:admin/student-suspend",
+    "label": "휴원생 계정 일시 정지",
+    "forms": [
+      "휴원생",
+      "휴학생",
+      "학생 계정 정지",
+      "계정 일시 정지",
+      "계정 일시정지"
+    ],
+    "area": "admin",
+    "gapCard": "gap:admin/student-suspend",
+    "verified": {
+      "grep": [
+        "휴원생",
+        "휴학생",
+        "학생 계정 정지",
+        "계정 일시 정지",
+        "계정 일시정지"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-admin"
+    }
+  },
+  {
+    "id": "absent:admin/verification-renewal",
+    "label": "계정 인증 갱신",
+    "forms": [
+      "인증 갱신",
+      "계정 인증 유효",
+      "기관 인증 유효",
+      "계정 인증 만료",
+      "기관 인증 만료",
+      "인증 연장",
+      "계정 재인증",
+      "기관 재인증"
+    ],
+    "area": "admin",
+    "gapCard": "gap:admin/verification-renewal",
+    "verified": {
+      "grep": [
+        "인증 갱신",
+        "계정 인증 유효",
+        "기관 인증 유효",
+        "계정 인증 만료",
+        "기관 인증 만료",
+        "인증 연장",
+        "계정 재인증",
+        "기관 재인증"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-admin"
+    }
+  },
+  {
+    "id": "absent:admin/drive-version-history",
+    "label": "공유 드라이브 파일 버전 기록",
+    "forms": [
+      "버전 기록",
+      "버전 복원",
+      "버전 되돌리기",
+      "드라이브 덮어쓰기",
+      "덮어쓴 파일"
+    ],
+    "area": "admin",
+    "gapCard": "gap:admin/drive-version-history",
+    "verified": {
+      "grep": [
+        "버전 기록",
+        "버전 복원",
+        "버전 되돌리기",
+        "드라이브 덮어쓰기",
+        "덮어쓴 파일"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-admin"
+    }
+  },
+  {
+    "id": "absent:admin/monitoring-alert",
+    "label": "수업 이상 자동 알림",
+    "forms": [
+      "교사 미입장 알림",
+      "강사 미입장 알림",
+      "강사 지각 알림",
+      "교사 지각 알림",
+      "선생님 지각 알림",
+      "강사 결근 알림",
+      "수업 이상 알림"
+    ],
+    "area": "admin",
+    "gapCard": "gap:admin/monitoring-alert",
+    "verified": {
+      "grep": [
+        "교사 미입장 알림",
+        "강사 미입장 알림",
+        "강사 지각 알림",
+        "교사 지각 알림",
+        "선생님 지각 알림",
+        "강사 결근 알림",
+        "수업 이상 알림"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-admin"
+    }
+  },
+  {
+    "id": "absent:admin/storage-alert",
+    "label": "스토리지 용량 부족 알림",
+    "forms": [
+      "용량 알림",
+      "용량 경고",
+      "용량 부족 알림",
+      "용량 임박",
+      "스토리지 알림",
+      "스토리지 경고"
+    ],
+    "area": "admin",
+    "gapCard": "gap:admin/storage-alert",
+    "verified": {
+      "grep": [
+        "용량 알림",
+        "용량 경고",
+        "용량 부족 알림",
+        "용량 임박",
+        "스토리지 알림",
+        "스토리지 경고"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-admin"
+    }
+  },
+  {
+    "id": "absent:admin/auto-delete-notice",
+    "label": "자동 삭제 사전 알림",
+    "forms": [
+      "삭제 예고",
+      "삭제 예정 알림",
+      "자동 삭제 알림",
+      "지워지기 전 알림",
+      "삭제 전 미리 알림"
+    ],
+    "area": "admin",
+    "gapCard": "gap:admin/auto-delete-notice",
+    "verified": {
+      "grep": [
+        "삭제 예고",
+        "삭제 예정 알림",
+        "자동 삭제 알림",
+        "지워지기 전 알림",
+        "삭제 전 미리 알림"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-admin"
+    }
+  },
+  {
+    "id": "absent:admin/storage-per-teacher",
+    "label": "강사별 스토리지 사용량",
+    "forms": [
+      "강사별 용량",
+      "교사별 용량",
+      "강사별 사용량",
+      "교사별 사용량",
+      "선생님별 용량",
+      "계정별 용량"
+    ],
+    "area": "admin",
+    "gapCard": "gap:admin/storage-per-teacher",
+    "verified": {
+      "grep": [
+        "강사별 용량",
+        "교사별 용량",
+        "강사별 사용량",
+        "교사별 사용량",
+        "선생님별 용량",
+        "계정별 용량"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-admin"
+    }
+  },
+  {
+    "id": "absent:admin/student-access-hours",
+    "label": "학생 앱 이용 시간 제한",
+    "forms": [
+      "심야 접속",
+      "야간 사용 금지",
+      "밤에 접속 못",
+      "접속 가능 시간대",
+      "앱 이용 시간"
+    ],
+    "area": "admin",
+    "gapCard": "gap:admin/student-access-hours",
+    "verified": {
+      "grep": [
+        "심야 접속",
+        "야간 사용 금지",
+        "밤에 접속 못",
+        "접속 가능 시간대",
+        "앱 이용 시간"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-admin"
+    }
+  },
+  {
+    "id": "absent:admin/hide-student-contact",
+    "label": "강사 화면 연락처 가리기",
+    "forms": [
+      "연락처 가리기",
+      "번호 숨기기",
+      "연락처 마스킹",
+      "번호 비공개",
+      "연락처 숨김",
+      "연락처 안 보이게"
+    ],
+    "area": "admin",
+    "gapCard": "gap:admin/hide-student-contact",
+    "verified": {
+      "grep": [
+        "연락처 가리기",
+        "번호 숨기기",
+        "연락처 마스킹",
+        "번호 비공개",
+        "연락처 숨김",
+        "연락처 안 보이게"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-admin"
+    }
+  },
+  {
+    "id": "absent:admin/student-last-login",
+    "label": "학생 마지막 접속일",
+    "forms": [
+      "마지막 접속",
+      "최근 접속일",
+      "마지막 로그인",
+      "마지막 접속일",
+      "미접속 학생"
+    ],
+    "area": "admin",
+    "gapCard": "gap:admin/student-last-login",
+    "verified": {
+      "grep": [
+        "마지막 접속",
+        "최근 접속일",
+        "마지막 로그인",
+        "마지막 접속일",
+        "미접속 학생"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-admin"
+    }
+  },
+  {
+    "id": "absent:admin/monitor-speak",
+    "label": "모니터링 중 관리자 발언",
+    "forms": [
+      "관리자 발언",
+      "관리자 마이크",
+      "관리자 귓속말",
+      "모니터링 중 채팅",
+      "참관 중 채팅"
+    ],
+    "area": "admin",
+    "gapCard": "gap:admin/monitor-speak",
+    "verified": {
+      "grep": [
+        "관리자 발언",
+        "관리자 마이크",
+        "관리자 귓속말",
+        "모니터링 중 채팅",
+        "참관 중 채팅"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-admin"
+    }
+  },
+  {
+    "id": "absent:admin/drive-external-share",
+    "label": "공유 드라이브 외부 공유",
+    "forms": [
+      "드라이브 외부 공유",
+      "자료실 외부 공유",
+      "공유 드라이브 외부",
+      "드라이브 외부인",
+      "학원 밖 공유"
+    ],
+    "area": "admin",
+    "gapCard": "gap:admin/drive-external-share",
+    "verified": {
+      "grep": [
+        "드라이브 외부 공유",
+        "자료실 외부 공유",
+        "공유 드라이브 외부",
+        "드라이브 외부인",
+        "학원 밖 공유"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-admin"
+    }
+  },
+  {
+    "id": "absent:admin/teacher-register-notice",
+    "label": "교사 등록 알림",
+    "forms": [
+      "교사 등록 알림",
+      "강사 등록 알림",
+      "교사 추가 알림",
+      "교사 등록 통보"
+    ],
+    "area": "admin",
+    "gapCard": "gap:admin/teacher-register-notice",
+    "verified": {
+      "grep": [
+        "교사 등록 알림",
+        "강사 등록 알림",
+        "교사 추가 알림",
+        "교사 등록 통보"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-admin"
+    }
+  },
+  {
+    "id": "absent:admin/verification-document-retention",
+    "label": "인증 서류 보관·삭제",
+    "forms": [
+      "서류 보관",
+      "서류 파기",
+      "신분증 보관",
+      "증명서 보관",
+      "인증 서류 삭제"
+    ],
+    "area": "admin",
+    "gapCard": "gap:admin/verification-document-retention",
+    "verified": {
+      "grep": [
+        "서류 보관",
+        "서류 파기",
+        "신분증 보관",
+        "증명서 보관",
+        "인증 서류 삭제"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-admin"
+    }
+  },
+  {
+    "id": "absent:board/printer-connect",
+    "label": "전자칠판 프린터 연결",
+    "forms": [
+      "프린터 연결",
+      "칠판 프린터",
+      "프린터 드라이버",
+      "복합기 연결"
+    ],
+    "area": "board",
+    "gapCard": "gap:board/printer-connect",
+    "verified": {
+      "grep": [
+        "프린터 연결",
+        "칠판 프린터",
+        "프린터 드라이버",
+        "복합기 연결"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-board"
+    }
+  },
+  {
+    "id": "absent:board/office-license",
+    "label": "내장 PC(OPS) 오피스·윈도우 라이선스",
+    "forms": [
+      "오피스 설치",
+      "MS 오피스",
+      "한컴오피스",
+      "윈도우 정품",
+      "오피스 라이선스"
+    ],
+    "area": "board",
+    "gapCard": "gap:board/office-license",
+    "verified": {
+      "grep": [
+        "오피스 설치",
+        "MS 오피스",
+        "한컴오피스",
+        "윈도우 정품",
+        "오피스 라이선스"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-board"
+    }
+  },
+  {
+    "id": "absent:board/install-duration",
+    "label": "전자칠판 설치 작업 소요 시간",
+    "forms": [
+      "설치 몇 시간",
+      "설치 소요 시간",
+      "설치 작업 시간",
+      "하루 만에 설치"
+    ],
+    "area": "board",
+    "gapCard": "gap:board/install-duration",
+    "verified": {
+      "grep": [
+        "설치 몇 시간",
+        "설치 소요 시간",
+        "설치 작업 시간",
+        "하루 만에 설치"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-board"
+    }
+  },
+  {
+    "id": "absent:board/damage-insurance",
+    "label": "전자칠판 파손·도난 보험",
+    "forms": [
+      "파손 보험",
+      "칠판 보험",
+      "도난 보험",
+      "파손 보상"
+    ],
+    "area": "board",
+    "gapCard": "gap:board/damage-insurance",
+    "verified": {
+      "grep": [
+        "파손 보험",
+        "칠판 보험",
+        "도난 보험",
+        "파손 보상"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-board"
+    }
+  },
+  {
+    "id": "absent:board/anti-theft-lock",
+    "label": "전자칠판 도난 방지 잠금장치",
+    "forms": [
+      "도난 방지",
+      "켄싱턴 락",
+      "잠금장치",
+      "도난 방지 잠금"
+    ],
+    "area": "board",
+    "gapCard": "gap:board/anti-theft-lock",
+    "verified": {
+      "grep": [
+        "도난 방지",
+        "켄싱턴 락",
+        "잠금장치",
+        "도난 방지 잠금"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-board"
+    }
+  },
+  {
+    "id": "absent:board/height-adjust",
+    "label": "전자칠판 높이 조절 스탠드",
+    "forms": [
+      "높이 조절",
+      "높낮이 조절",
+      "전동 스탠드",
+      "휠체어"
+    ],
+    "area": "board",
+    "gapCard": "gap:board/height-adjust",
+    "verified": {
+      "grep": [
+        "높이 조절",
+        "높낮이 조절",
+        "전동 스탠드",
+        "휠체어"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-board"
+    }
+  },
+  {
+    "id": "absent:board/portrait-mode",
+    "label": "전자칠판 세로 설치·세로 화면",
+    "forms": [
+      "세로 설치",
+      "칠판 세로",
+      "피벗 모드",
+      "세로 거치"
+    ],
+    "area": "board",
+    "gapCard": "gap:board/portrait-mode",
+    "verified": {
+      "grep": [
+        "세로 설치",
+        "칠판 세로",
+        "피벗 모드",
+        "세로 거치"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-board"
+    }
+  },
+  {
+    "id": "absent:board/operating-noise",
+    "label": "전자칠판 작동 소음",
+    "forms": [
+      "팬 소리",
+      "작동 소음",
+      "칠판 소음",
+      "팬 소음"
+    ],
+    "area": "board",
+    "gapCard": "gap:board/operating-noise",
+    "verified": {
+      "grep": [
+        "팬 소리",
+        "작동 소음",
+        "칠판 소음",
+        "팬 소음"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-board"
+    }
+  },
+  {
+    "id": "absent:board/antibacterial",
+    "label": "전자칠판 화면 항균 코팅",
+    "forms": [
+      "항균 코팅",
+      "항균 유리",
+      "살균 기능",
+      "항균 처리"
+    ],
+    "area": "board",
+    "gapCard": "gap:board/antibacterial",
+    "verified": {
+      "grep": [
+        "항균 코팅",
+        "항균 유리",
+        "살균 기능",
+        "항균 처리"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-board"
+    }
+  },
+  {
+    "id": "absent:board/pen-pressure",
+    "label": "전용 펜 필압 감지",
+    "forms": [
+      "필압",
+      "필압 감지",
+      "압력 감지",
+      "펜 압력"
+    ],
+    "area": "board",
+    "gapCard": "gap:board/pen-pressure",
+    "verified": {
+      "grep": [
+        "필압",
+        "필압 감지",
+        "압력 감지",
+        "펜 압력"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-board"
+    }
+  },
+  {
+    "id": "absent:board/pen-color-auto",
+    "label": "펜마다 다른 색 자동 구분",
+    "forms": [
+      "펜마다 색",
+      "펜마다 다른 색",
+      "펜 색 자동",
+      "펜별 색상"
+    ],
+    "area": "board",
+    "gapCard": "gap:board/pen-color-auto",
+    "verified": {
+      "grep": [
+        "펜마다 색",
+        "펜마다 다른 색",
+        "펜 색 자동",
+        "펜별 색상"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-board"
+    }
+  },
+  {
+    "id": "absent:board/signage-mode",
+    "label": "전자칠판 사이니지·홍보 화면 모드",
+    "forms": [
+      "디지털 사이니지",
+      "사이니지",
+      "광고판",
+      "홍보 화면 모드"
+    ],
+    "area": "board",
+    "gapCard": "gap:board/signage-mode",
+    "verified": {
+      "grep": [
+        "디지털 사이니지",
+        "사이니지",
+        "광고판",
+        "홍보 화면 모드"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-board"
+    }
+  },
+  {
+    "id": "absent:board/custom-wallpaper",
+    "label": "칠판 배경화면·부팅 화면 학원 로고",
+    "forms": [
+      "칠판 배경 사진",
+      "부팅 로고",
+      "부팅 화면",
+      "배경화면 바꾸"
+    ],
+    "area": "board",
+    "gapCard": "gap:board/custom-wallpaper",
+    "verified": {
+      "grep": [
+        "칠판 배경 사진",
+        "부팅 로고",
+        "부팅 화면",
+        "배경화면 바꾸"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-board"
+    }
+  },
+  {
+    "id": "absent:board/multi-mirroring",
+    "label": "여러 기기 화면 동시 미러링",
+    "forms": [
+      "동시 미러링",
+      "분할 미러링",
+      "미러링 여러 대",
+      "다중 미러링"
+    ],
+    "area": "board",
+    "gapCard": "gap:board/multi-mirroring",
+    "verified": {
+      "grep": [
+        "동시 미러링",
+        "분할 미러링",
+        "미러링 여러 대",
+        "다중 미러링"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-board"
+    }
+  },
+  {
+    "id": "absent:board/auto-brightness",
+    "label": "화면 밝기 자동 조절",
+    "forms": [
+      "자동 밝기",
+      "조도 센서",
+      "밝기 센서",
+      "밝기 자동 조절"
+    ],
+    "area": "board",
+    "gapCard": "gap:board/auto-brightness",
+    "verified": {
+      "grep": [
+        "자동 밝기",
+        "조도 센서",
+        "밝기 센서",
+        "밝기 자동 조절"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-board"
+    }
+  },
+  {
+    "id": "absent:board/power-outage",
+    "label": "정전 뒤 칠판 자동 켜짐",
+    "forms": [
+      "정전되",
+      "정전 후",
+      "정전이",
+      "전기 나가",
+      "차단기 내려"
+    ],
+    "area": "board",
+    "gapCard": "gap:board/power-outage",
+    "verified": {
+      "grep": [
+        "정전되",
+        "정전 후",
+        "정전이",
+        "전기 나가",
+        "차단기 내려"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-board"
+    }
+  },
+  {
+    "id": "absent:board/central-control",
+    "label": "학교 중앙 제어 시스템 연동(RS-232)",
+    "forms": [
+      "중앙 제어",
+      "RS-232",
+      "일괄 전원",
+      "중앙 통제"
+    ],
+    "area": "board",
+    "gapCard": "gap:board/central-control",
+    "verified": {
+      "grep": [
+        "중앙 제어",
+        "RS-232",
+        "일괄 전원",
+        "중앙 통제"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-board"
+    }
+  },
+  {
+    "id": "absent:board/usb-port-block",
+    "label": "칠판 USB 포트 사용 막기",
+    "forms": [
+      "USB 차단",
+      "USB 막기",
+      "USB 잠금",
+      "포트 잠금"
+    ],
+    "area": "board",
+    "gapCard": "gap:board/usb-port-block",
+    "verified": {
+      "grep": [
+        "USB 차단",
+        "USB 막기",
+        "USB 잠금",
+        "포트 잠금"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-board"
+    }
+  },
+  {
+    "id": "absent:board/harmful-site-block",
+    "label": "칠판 인터넷 유해 사이트 차단",
+    "forms": [
+      "유해 사이트",
+      "사이트 차단",
+      "사이트 접속 제한",
+      "유해물 차단"
+    ],
+    "area": "board",
+    "gapCard": "gap:board/harmful-site-block",
+    "verified": {
+      "grep": [
+        "유해 사이트",
+        "사이트 차단",
+        "사이트 접속 제한",
+        "유해물 차단"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-board"
+    }
+  },
+  {
+    "id": "absent:board/camera-zoom-ratio",
+    "label": "T1·S1 카메라 줌 배율",
+    "forms": [
+      "줌 배율",
+      "광학 줌",
+      "몇 배 줌",
+      "디지털 줌"
+    ],
+    "area": "board",
+    "gapCard": "gap:board/camera-zoom-ratio",
+    "verified": {
+      "grep": [
+        "줌 배율",
+        "광학 줌",
+        "몇 배 줌",
+        "디지털 줌"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-board"
+    }
+  },
+  {
+    "id": "absent:board/waterproof-rating",
+    "label": "전자칠판 방수·방진 등급",
+    "forms": [
+      "방수 등급",
+      "방수 되",
+      "방진 등급",
+      "IP 등급",
+      "생활 방수"
+    ],
+    "area": "board",
+    "gapCard": "gap:board/waterproof-rating",
+    "verified": {
+      "grep": [
+        "방수 등급",
+        "방수 되",
+        "방진 등급",
+        "IP 등급",
+        "생활 방수"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-board"
+    }
+  },
+  {
+    "id": "absent:board/student-tablet-sale",
+    "label": "학생용 태블릿 판매",
+    "forms": [
+      "태블릿 구매",
+      "태블릿 판매",
+      "태블릿 같이",
+      "학생용 태블릿"
+    ],
+    "area": "board",
+    "gapCard": "gap:board/student-tablet-sale",
+    "verified": {
+      "grep": [
+        "태블릿 구매",
+        "태블릿 판매",
+        "태블릿 같이",
+        "학생용 태블릿"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-board"
+    }
+  },
+  {
+    "id": "absent:board/wall-restore",
+    "label": "칠판 철거 뒤 벽 원상 복구",
+    "forms": [
+      "원상 복구",
+      "벽 구멍 메우",
+      "앵커 자국",
+      "벽 보수"
+    ],
+    "area": "board",
+    "gapCard": "gap:board/wall-restore",
+    "verified": {
+      "grep": [
+        "원상 복구",
+        "벽 구멍 메우",
+        "앵커 자국",
+        "벽 보수"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-board"
+    }
+  },
+  {
+    "id": "absent:board/usage-log",
+    "label": "칠판 사용 기록·가동 시간",
+    "forms": [
+      "칠판 사용 기록",
+      "가동 시간",
+      "사용 이력",
+      "전원 기록"
+    ],
+    "area": "board",
+    "gapCard": "gap:board/usage-log",
+    "verified": {
+      "grep": [
+        "칠판 사용 기록",
+        "가동 시간",
+        "사용 이력",
+        "전원 기록"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-board"
+    }
+  },
+  {
+    "id": "absent:board/boot-time",
+    "label": "칠판 부팅 시간",
+    "forms": [
+      "부팅 시간",
+      "부팅 속도",
+      "켜지는 시간",
+      "부팅이 느"
+    ],
+    "area": "board",
+    "gapCard": "gap:board/boot-time",
+    "verified": {
+      "grep": [
+        "부팅 시간",
+        "부팅 속도",
+        "켜지는 시간",
+        "부팅이 느"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-board"
+    }
+  },
+  {
+    "id": "absent:board/ops-upgrade",
+    "label": "내장 PC(OPS) 사양 업그레이드",
+    "forms": [
+      "메모리 증설",
+      "램 증설",
+      "SSD 교체",
+      "OPS 업그레이드"
+    ],
+    "area": "board",
+    "gapCard": "gap:board/ops-upgrade",
+    "verified": {
+      "grep": [
+        "메모리 증설",
+        "램 증설",
+        "SSD 교체",
+        "OPS 업그레이드"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-board"
+    }
+  },
+  {
+    "id": "absent:board/camera-privacy-shutter",
+    "label": "카메라 렌즈 가리개",
+    "forms": [
+      "렌즈 가리개",
+      "카메라 덮개",
+      "프라이버시 셔터",
+      "렌즈 커버"
+    ],
+    "area": "board",
+    "gapCard": "gap:board/camera-privacy-shutter",
+    "verified": {
+      "grep": [
+        "렌즈 가리개",
+        "카메라 덮개",
+        "프라이버시 셔터",
+        "렌즈 커버"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-board"
+    }
+  },
+  {
+    "id": "absent:board/face-blur",
+    "label": "카메라 영상 학생 얼굴 모자이크",
+    "forms": [
+      "얼굴 모자이크",
+      "얼굴 블러",
+      "얼굴 흐리게",
+      "얼굴 가림"
+    ],
+    "area": "board",
+    "gapCard": "gap:board/face-blur",
+    "verified": {
+      "grep": [
+        "얼굴 모자이크",
+        "얼굴 블러",
+        "얼굴 흐리게",
+        "얼굴 가림"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-board"
+    }
+  },
+  {
+    "id": "absent:board/overseas-shipping",
+    "label": "전자칠판 해외 배송·설치",
+    "forms": [
+      "해외 배송",
+      "해외 설치",
+      "해외 A/S",
+      "해외로 보내"
+    ],
+    "area": "board",
+    "gapCard": "gap:board/overseas-shipping",
+    "verified": {
+      "grep": [
+        "해외 배송",
+        "해외 설치",
+        "해외 A/S",
+        "해외로 보내"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-board"
+    }
+  },
+  {
+    "id": "absent:board/refurbished-board",
+    "label": "중고·리퍼 전자칠판 구매",
+    "forms": [
+      "중고 칠판",
+      "리퍼 칠판",
+      "리퍼브",
+      "전시품"
+    ],
+    "area": "board",
+    "gapCard": "gap:board/refurbished-board",
+    "verified": {
+      "grep": [
+        "중고 칠판",
+        "리퍼 칠판",
+        "리퍼브",
+        "전시품"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-board"
+    }
+  },
+  {
+    "id": "absent:board/maintenance-contract",
+    "label": "정기 방문 점검·유지보수 계약",
+    "forms": [
+      "칠판 정기 점검",
+      "유지보수 계약",
+      "정기 방문 점검",
+      "연간 점검"
+    ],
+    "area": "board",
+    "gapCard": "gap:board/maintenance-contract",
+    "verified": {
+      "grep": [
+        "칠판 정기 점검",
+        "유지보수 계약",
+        "정기 방문 점검",
+        "연간 점검"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-board"
+    }
+  },
+  {
+    "id": "absent:board/crane-delivery",
+    "label": "사다리차·크레인 반입",
+    "forms": [
+      "사다리차",
+      "크레인",
+      "창문 반입",
+      "창문으로 반입"
+    ],
+    "area": "board",
+    "gapCard": "gap:board/crane-delivery",
+    "verified": {
+      "grep": [
+        "사다리차",
+        "크레인",
+        "창문 반입",
+        "창문으로 반입"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-board"
+    }
+  },
+  {
+    "id": "absent:board/dry-marker",
+    "label": "일반 보드마커로 칠판 화면에 쓰기",
+    "forms": [
+      "보드마커",
+      "화이트보드 마커",
+      "유성 매직",
+      "유성 마커"
+    ],
+    "area": "board",
+    "gapCard": "gap:board/dry-marker",
+    "verified": {
+      "grep": [
+        "보드마커",
+        "화이트보드 마커",
+        "유성 매직",
+        "유성 마커"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-board"
+    }
+  },
+  {
+    "id": "absent:homework/exam-shuffle",
+    "label": "시험 문항·보기 순서 섞기",
+    "forms": [
+      "문항 섞기",
+      "보기 섞기",
+      "선지 섞기",
+      "순서 섞기",
+      "문제 섞기",
+      "랜덤 출제",
+      "문제 셔플",
+      "순서 랜덤"
+    ],
+    "area": "homework",
+    "gapCard": "gap:homework/exam-shuffle",
+    "verified": {
+      "grep": [
+        "문항 섞기",
+        "보기 섞기",
+        "선지 섞기",
+        "순서 섞기",
+        "문제 섞기",
+        "랜덤 출제",
+        "문제 셔플",
+        "순서 랜덤"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-homework"
+    }
+  },
+  {
+    "id": "absent:homework/exam-retake",
+    "label": "시험 재응시",
+    "forms": [
+      "재응시",
+      "재시험",
+      "응시 횟수",
+      "응시 기회",
+      "재응시 횟수"
+    ],
+    "area": "homework",
+    "gapCard": "gap:homework/exam-retake",
+    "verified": {
+      "grep": [
+        "재응시",
+        "재시험",
+        "응시 횟수",
+        "응시 기회",
+        "재응시 횟수"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-homework"
+    }
+  },
+  {
+    "id": "absent:homework/exam-password",
+    "label": "시험 응시 비밀번호",
+    "forms": [
+      "시험 비밀번호",
+      "응시 비밀번호",
+      "시험 암호",
+      "응시 코드",
+      "시험 비번",
+      "응시 암호"
+    ],
+    "area": "homework",
+    "gapCard": "gap:homework/exam-password",
+    "verified": {
+      "grep": [
+        "시험 비밀번호",
+        "응시 비밀번호",
+        "시험 암호",
+        "응시 코드",
+        "시험 비번",
+        "응시 암호"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-homework"
+    }
+  },
+  {
+    "id": "absent:homework/deadline-extension",
+    "label": "학생별 마감 연장",
+    "forms": [
+      "마감 연장",
+      "기한 연장",
+      "개별 마감",
+      "학생별 마감",
+      "마감일 연장",
+      "마감 늘려"
+    ],
+    "area": "homework",
+    "gapCard": "gap:homework/deadline-extension",
+    "verified": {
+      "grep": [
+        "마감 연장",
+        "기한 연장",
+        "개별 마감",
+        "학생별 마감",
+        "마감일 연장",
+        "마감 늘려"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-homework"
+    }
+  },
+  {
+    "id": "absent:homework/late-penalty",
+    "label": "늦은 제출 감점",
+    "forms": [
+      "감점",
+      "지각 감점",
+      "늦은 제출 감점",
+      "점수 차감"
+    ],
+    "area": "homework",
+    "gapCard": "gap:homework/late-penalty",
+    "verified": {
+      "grep": [
+        "감점",
+        "지각 감점",
+        "늦은 제출 감점",
+        "점수 차감"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-homework"
+    }
+  },
+  {
+    "id": "absent:homework/grade-excel-export",
+    "label": "성적 엑셀 내보내기",
+    "forms": [
+      "성적 엑셀",
+      "성적 내보내기",
+      "점수 엑셀",
+      "성적 추출",
+      "성적표 엑셀"
+    ],
+    "area": "homework",
+    "gapCard": "gap:homework/grade-excel-export",
+    "verified": {
+      "grep": [
+        "성적 엑셀",
+        "성적 내보내기",
+        "점수 엑셀",
+        "성적 추출",
+        "성적표 엑셀"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-homework"
+    }
+  },
+  {
+    "id": "absent:homework/exam-math-formula",
+    "label": "시험 문제 수식 입력",
+    "forms": [
+      "수식 입력",
+      "수식 편집",
+      "수학 기호",
+      "LaTeX",
+      "수식편집기"
+    ],
+    "area": "homework",
+    "gapCard": "gap:homework/exam-math-formula",
+    "verified": {
+      "grep": [
+        "수식 입력",
+        "수식 편집",
+        "수학 기호",
+        "LaTeX",
+        "수식편집기"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-homework"
+    }
+  },
+  {
+    "id": "absent:homework/exam-extra-time",
+    "label": "학생별 시험 시간 연장",
+    "forms": [
+      "시험 시간 연장",
+      "응시 시간 연장",
+      "시험 시간 더",
+      "추가 시간 부여"
+    ],
+    "area": "homework",
+    "gapCard": "gap:homework/exam-extra-time",
+    "verified": {
+      "grep": [
+        "시험 시간 연장",
+        "응시 시간 연장",
+        "시험 시간 더",
+        "추가 시간 부여"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-homework"
+    }
+  },
+  {
+    "id": "absent:homework/exam-disconnect",
+    "label": "시험 중 연결 끊김 시 답안 보존",
+    "forms": [
+      "시험 중 끊김",
+      "시험 보다 끊",
+      "시험 보다 튕",
+      "답안 날아",
+      "답안 자동 저장",
+      "응시 중 튕"
+    ],
+    "area": "homework",
+    "gapCard": "gap:homework/exam-disconnect",
+    "verified": {
+      "grep": [
+        "시험 중 끊김",
+        "시험 보다 끊",
+        "시험 보다 튕",
+        "답안 날아",
+        "답안 자동 저장",
+        "응시 중 튕"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-homework"
+    }
+  },
+  {
+    "id": "absent:homework/homework-media-length",
+    "label": "숙제 영상·녹음 길이 한도",
+    "forms": [
+      "영상 길이 제한",
+      "녹음 길이 제한",
+      "녹음 시간 제한",
+      "몇 분까지 녹음",
+      "몇 분까지 올릴",
+      "동영상 길이 제한"
+    ],
+    "area": "homework",
+    "gapCard": "gap:homework/homework-media-length",
+    "verified": {
+      "grep": [
+        "영상 길이 제한",
+        "녹음 길이 제한",
+        "녹음 시간 제한",
+        "몇 분까지 녹음",
+        "몇 분까지 올릴",
+        "동영상 길이 제한"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-homework"
+    }
+  },
+  {
+    "id": "absent:homework/group-assignment",
+    "label": "조별 과제",
+    "forms": [
+      "조별 과제",
+      "그룹 과제",
+      "팀 과제",
+      "모둠 과제",
+      "조별 숙제",
+      "팀 프로젝트"
+    ],
+    "area": "homework",
+    "gapCard": "gap:homework/group-assignment",
+    "verified": {
+      "grep": [
+        "조별 과제",
+        "그룹 과제",
+        "팀 과제",
+        "모둠 과제",
+        "조별 숙제",
+        "팀 프로젝트"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-homework"
+    }
+  },
+  {
+    "id": "absent:homework/exam-print",
+    "label": "시험지 인쇄",
+    "forms": [
+      "시험지 인쇄",
+      "시험지 출력",
+      "시험지 프린트",
+      "문제지 인쇄",
+      "문제지 출력"
+    ],
+    "area": "homework",
+    "gapCard": "gap:homework/exam-print",
+    "verified": {
+      "grep": [
+        "시험지 인쇄",
+        "시험지 출력",
+        "시험지 프린트",
+        "문제지 인쇄",
+        "문제지 출력"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-homework"
+    }
+  },
+  {
+    "id": "absent:homework/wrong-answer-note",
+    "label": "오답노트",
+    "forms": [
+      "오답노트",
+      "오답 노트",
+      "오답 정리",
+      "오답 모음",
+      "오답모아"
+    ],
+    "area": "homework",
+    "gapCard": "gap:homework/wrong-answer-note",
+    "verified": {
+      "grep": [
+        "오답노트",
+        "오답 노트",
+        "오답 정리",
+        "오답 모음",
+        "오답모아"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-homework"
+    }
+  },
+  {
+    "id": "absent:homework/question-content",
+    "label": "기출·교재 문항 콘텐츠",
+    "forms": [
+      "기출문제",
+      "기출 문항",
+      "교재 문제 연동",
+      "문제 콘텐츠",
+      "문제 DB"
+    ],
+    "area": "homework",
+    "gapCard": "gap:homework/question-content",
+    "verified": {
+      "grep": [
+        "기출문제",
+        "기출 문항",
+        "교재 문제 연동",
+        "문제 콘텐츠",
+        "문제 DB"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-homework"
+    }
+  },
+  {
+    "id": "absent:homework/voice-feedback",
+    "label": "선생님 음성 피드백",
+    "forms": [
+      "음성 피드백",
+      "음성 첨삭",
+      "음성 코멘트",
+      "녹음 피드백",
+      "보이스 메모"
+    ],
+    "area": "homework",
+    "gapCard": "gap:homework/voice-feedback",
+    "verified": {
+      "grep": [
+        "음성 피드백",
+        "음성 첨삭",
+        "음성 코멘트",
+        "녹음 피드백",
+        "보이스 메모"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-homework"
+    }
+  },
+  {
+    "id": "absent:homework/grade-appeal",
+    "label": "채점 이의 신청",
+    "forms": [
+      "채점 이의",
+      "점수 이의",
+      "성적 이의",
+      "점수 정정",
+      "이의제기"
+    ],
+    "area": "homework",
+    "gapCard": "gap:homework/grade-appeal",
+    "verified": {
+      "grep": [
+        "채점 이의",
+        "점수 이의",
+        "성적 이의",
+        "점수 정정",
+        "이의제기"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-homework"
+    }
+  },
+  {
+    "id": "absent:homework/self-assessment",
+    "label": "학생 자기평가",
+    "forms": [
+      "자기평가",
+      "자가 평가",
+      "셀프 평가",
+      "자기 점검표"
+    ],
+    "area": "homework",
+    "gapCard": "gap:homework/self-assessment",
+    "verified": {
+      "grep": [
+        "자기평가",
+        "자가 평가",
+        "셀프 평가",
+        "자기 점검표"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-homework"
+    }
+  },
+  {
+    "id": "absent:homework/paper-omr-scan",
+    "label": "종이 답안지 스캔 채점",
+    "forms": [
+      "답안지 스캔",
+      "OMR 스캔",
+      "종이 OMR",
+      "종이 답안지",
+      "마킹지"
+    ],
+    "area": "homework",
+    "gapCard": "gap:homework/paper-omr-scan",
+    "verified": {
+      "grep": [
+        "답안지 스캔",
+        "OMR 스캔",
+        "종이 OMR",
+        "종이 답안지",
+        "마킹지"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-homework"
+    }
+  },
+  {
+    "id": "absent:homework/letter-grade",
+    "label": "등급제 성적 표시",
+    "forms": [
+      "등급제",
+      "성적 등급",
+      "학점",
+      "ABC 등급",
+      "등급으로 표시"
+    ],
+    "area": "homework",
+    "gapCard": "gap:homework/letter-grade",
+    "verified": {
+      "grep": [
+        "등급제",
+        "성적 등급",
+        "학점",
+        "ABC 등급",
+        "등급으로 표시"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-homework"
+    }
+  },
+  {
+    "id": "absent:homework/achievement-standards",
+    "label": "교육과정 성취기준 연결",
+    "forms": [
+      "성취기준",
+      "성취수준",
+      "교육과정 연계"
+    ],
+    "area": "homework",
+    "gapCard": "gap:homework/achievement-standards",
+    "verified": {
+      "grep": [
+        "성취기준",
+        "성취수준",
+        "교육과정 연계"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-homework"
+    }
+  },
+  {
+    "id": "absent:homework/exam-calculator",
+    "label": "시험 중 계산기",
+    "forms": [
+      "계산기",
+      "공학용 계산기"
+    ],
+    "area": "homework",
+    "gapCard": "gap:homework/exam-calculator",
+    "verified": {
+      "grep": [
+        "계산기",
+        "공학용 계산기"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-homework"
+    }
+  },
+  {
+    "id": "absent:homework/answer-length-limit",
+    "label": "답안 글자 수 제한",
+    "forms": [
+      "글자 수 제한",
+      "최소 글자 수",
+      "최대 글자 수",
+      "단어 수 제한"
+    ],
+    "area": "homework",
+    "gapCard": "gap:homework/answer-length-limit",
+    "verified": {
+      "grep": [
+        "글자 수 제한",
+        "최소 글자 수",
+        "최대 글자 수",
+        "단어 수 제한"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-homework"
+    }
+  },
+  {
+    "id": "absent:homework/submit-notify-teacher",
+    "label": "학생 제출 시 선생님 알림",
+    "forms": [
+      "제출하면 알림",
+      "제출 즉시 알림",
+      "제출 알림 받",
+      "제출될 때마다 알림"
+    ],
+    "area": "homework",
+    "gapCard": "gap:homework/submit-notify-teacher",
+    "verified": {
+      "grep": [
+        "제출하면 알림",
+        "제출 즉시 알림",
+        "제출 알림 받",
+        "제출될 때마다 알림"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-homework"
+    }
+  },
+  {
+    "id": "absent:homework/exam-question-limit",
+    "label": "시험 최대 문항 수",
+    "forms": [
+      "최대 문항",
+      "문항 수 제한",
+      "문제 수 제한",
+      "몇 문제까지",
+      "문항 개수 제한"
+    ],
+    "area": "homework",
+    "gapCard": "gap:homework/exam-question-limit",
+    "verified": {
+      "grep": [
+        "최대 문항",
+        "문항 수 제한",
+        "문제 수 제한",
+        "몇 문제까지",
+        "문항 개수 제한"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-homework"
+    }
+  },
+  {
+    "id": "absent:homework/exam-video-question",
+    "label": "시험 문항 영상 첨부",
+    "forms": [
+      "동영상 문항",
+      "영상 문항",
+      "문제에 동영상",
+      "문항에 영상",
+      "문제에 영상"
+    ],
+    "area": "homework",
+    "gapCard": "gap:homework/exam-video-question",
+    "verified": {
+      "grep": [
+        "동영상 문항",
+        "영상 문항",
+        "문제에 동영상",
+        "문항에 영상",
+        "문제에 영상"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-homework"
+    }
+  },
+  {
+    "id": "absent:homework/adaptive-recommend",
+    "label": "수준별 맞춤 문제 추천",
+    "forms": [
+      "맞춤 문제",
+      "문제 추천",
+      "적응형 학습",
+      "수준별 문제",
+      "난이도 자동 조절"
+    ],
+    "area": "homework",
+    "gapCard": "gap:homework/adaptive-recommend",
+    "verified": {
+      "grep": [
+        "맞춤 문제",
+        "문제 추천",
+        "적응형 학습",
+        "수준별 문제",
+        "난이도 자동 조절"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-homework"
+    }
+  },
+  {
+    "id": "absent:homework/worksheet-annotate",
+    "label": "학습지 위 필기 제출",
+    "forms": [
+      "학습지에 필기",
+      "학습지 위에",
+      "PDF에 필기",
+      "문제지에 필기",
+      "문제지 위에"
+    ],
+    "area": "homework",
+    "gapCard": "gap:homework/worksheet-annotate",
+    "verified": {
+      "grep": [
+        "학습지에 필기",
+        "학습지 위에",
+        "PDF에 필기",
+        "문제지에 필기",
+        "문제지 위에"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-homework"
+    }
+  },
+  {
+    "id": "absent:recording/replay-subtitles",
+    "label": "녹화 영상 자막",
+    "forms": [
+      "녹화 자막",
+      "다시보기 자막",
+      "녹화 영상 자막",
+      "자막 입히기",
+      "녹화본 번역",
+      "다시보기 번역"
+    ],
+    "area": "recording",
+    "gapCard": "gap:recording/replay-subtitles",
+    "verified": {
+      "grep": [
+        "녹화 자막",
+        "다시보기 자막",
+        "녹화 영상 자막",
+        "자막 입히기",
+        "녹화본 번역",
+        "다시보기 번역"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-recording"
+    }
+  },
+  {
+    "id": "absent:recording/file-size-per-hour",
+    "label": "녹화 파일 시간당 용량",
+    "forms": [
+      "시간당 용량",
+      "녹화 파일 크기",
+      "녹화 몇 기가",
+      "한 시간 녹화 용량",
+      "녹화 파일 용량"
+    ],
+    "area": "recording",
+    "gapCard": "gap:recording/file-size-per-hour",
+    "verified": {
+      "grep": [
+        "시간당 용량",
+        "녹화 파일 크기",
+        "녹화 몇 기가",
+        "한 시간 녹화 용량",
+        "녹화 파일 용량"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-recording"
+    }
+  },
+  {
+    "id": "absent:recording/bulk-download",
+    "label": "녹화본 일괄 내려받기",
+    "forms": [
+      "녹화 일괄",
+      "녹화본 일괄",
+      "녹화 전체 다운",
+      "녹화 대량 다운",
+      "녹화 한꺼번에"
+    ],
+    "area": "recording",
+    "gapCard": "gap:recording/bulk-download",
+    "verified": {
+      "grep": [
+        "녹화 일괄",
+        "녹화본 일괄",
+        "녹화 전체 다운",
+        "녹화 대량 다운",
+        "녹화 한꺼번에"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-recording"
+    }
+  },
+  {
+    "id": "absent:recording/replay-embed",
+    "label": "녹화 영상 임베드(퍼가기)",
+    "forms": [
+      "임베드",
+      "퍼가기",
+      "iframe",
+      "삽입 코드",
+      "embed 코드"
+    ],
+    "area": "recording",
+    "gapCard": "gap:recording/replay-embed",
+    "verified": {
+      "grep": [
+        "임베드",
+        "퍼가기",
+        "iframe",
+        "삽입 코드",
+        "embed 코드"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-recording"
+    }
+  },
+  {
+    "id": "absent:recording/per-student-recording",
+    "label": "학생별 개별 녹화",
+    "forms": [
+      "학생별 녹화 파일",
+      "개별 녹화 파일",
+      "학생마다 녹화",
+      "학생 개별 녹화",
+      "각자 녹화"
+    ],
+    "area": "recording",
+    "gapCard": "gap:recording/per-student-recording",
+    "verified": {
+      "grep": [
+        "학생별 녹화 파일",
+        "개별 녹화 파일",
+        "학생마다 녹화",
+        "학생 개별 녹화",
+        "각자 녹화"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-recording"
+    }
+  },
+  {
+    "id": "absent:recording/video-content-search",
+    "label": "녹화 영상 속 내용 검색",
+    "forms": [
+      "영상 속 검색",
+      "말한 내용 검색",
+      "녹화 음성 검색",
+      "장면 검색",
+      "대사 검색",
+      "키워드 점프"
+    ],
+    "area": "recording",
+    "gapCard": "gap:recording/video-content-search",
+    "verified": {
+      "grep": [
+        "영상 속 검색",
+        "말한 내용 검색",
+        "녹화 음성 검색",
+        "장면 검색",
+        "대사 검색",
+        "키워드 점프"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-recording"
+    }
+  },
+  {
+    "id": "absent:recording/replay-ab-repeat",
+    "label": "다시보기 구간 반복",
+    "forms": [
+      "구간 반복",
+      "AB 반복",
+      "반복 재생",
+      "루프 재생",
+      "부분 반복"
+    ],
+    "area": "recording",
+    "gapCard": "gap:recording/replay-ab-repeat",
+    "verified": {
+      "grep": [
+        "구간 반복",
+        "AB 반복",
+        "반복 재생",
+        "루프 재생",
+        "부분 반복"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-recording"
+    }
+  },
+  {
+    "id": "absent:recording/replay-watch-hours",
+    "label": "다시보기 시청 시간대 제한",
+    "forms": [
+      "시청 시간대",
+      "야간 시청",
+      "새벽 시청",
+      "시간대별 시청",
+      "밤에 다시보기"
+    ],
+    "area": "recording",
+    "gapCard": "gap:recording/replay-watch-hours",
+    "verified": {
+      "grep": [
+        "시청 시간대",
+        "야간 시청",
+        "새벽 시청",
+        "시간대별 시청",
+        "밤에 다시보기"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-recording"
+    }
+  },
+  {
+    "id": "absent:recording/recording-fail-alert",
+    "label": "녹화 실패·중단 알림",
+    "forms": [
+      "녹화 실패 알림",
+      "녹화 중단 알림",
+      "녹화 오류 알림",
+      "녹화 누락 알림",
+      "녹화 멈춤 경고"
+    ],
+    "area": "recording",
+    "gapCard": "gap:recording/recording-fail-alert",
+    "verified": {
+      "grep": [
+        "녹화 실패 알림",
+        "녹화 중단 알림",
+        "녹화 오류 알림",
+        "녹화 누락 알림",
+        "녹화 멈춤 경고"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-recording"
+    }
+  },
+  {
+    "id": "absent:recording/web-live-latency",
+    "label": "웹 라이브 지연 시간",
+    "forms": [
+      "라이브 딜레이",
+      "웹 송출 지연",
+      "웹 라이브 지연",
+      "생중계 딜레이",
+      "생중계 지연",
+      "라이브 레이턴시"
+    ],
+    "area": "recording",
+    "gapCard": "gap:recording/web-live-latency",
+    "verified": {
+      "grep": [
+        "라이브 딜레이",
+        "웹 송출 지연",
+        "웹 라이브 지연",
+        "생중계 딜레이",
+        "생중계 지연",
+        "라이브 레이턴시"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-recording"
+    }
+  },
+  {
+    "id": "absent:recording/replay-quality-select",
+    "label": "다시보기 재생 화질 선택",
+    "forms": [
+      "재생 화질",
+      "다시보기 화질",
+      "다시보기 저화질",
+      "재생 해상도"
+    ],
+    "area": "recording",
+    "gapCard": "gap:recording/replay-quality-select",
+    "verified": {
+      "grep": [
+        "재생 화질",
+        "다시보기 화질",
+        "다시보기 저화질",
+        "재생 해상도"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-recording"
+    }
+  },
+  {
+    "id": "absent:recording/stats-retention",
+    "label": "통계 조회 가능 기간",
+    "forms": [
+      "과거 통계",
+      "작년 통계",
+      "통계 보관 기간",
+      "몇 년 전 통계",
+      "통계 조회 기간"
+    ],
+    "area": "recording",
+    "gapCard": "gap:recording/stats-retention",
+    "verified": {
+      "grep": [
+        "과거 통계",
+        "작년 통계",
+        "통계 보관 기간",
+        "몇 년 전 통계",
+        "통계 조회 기간"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-recording"
+    }
+  },
+  {
+    "id": "absent:recording/analysis-lesson-language",
+    "label": "AI 강의 분석 대상 수업 언어",
+    "forms": [
+      "영어 수업 분석",
+      "외국어 수업 분석",
+      "원어민 수업 분석",
+      "분석 지원 언어",
+      "중국어 수업 분석"
+    ],
+    "area": "recording",
+    "gapCard": "gap:recording/analysis-lesson-language",
+    "verified": {
+      "grep": [
+        "영어 수업 분석",
+        "외국어 수업 분석",
+        "원어민 수업 분석",
+        "분석 지원 언어",
+        "중국어 수업 분석"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-recording"
+    }
+  },
+  {
+    "id": "absent:recording/web-live-registration",
+    "label": "웹 라이브 사전 신청",
+    "forms": [
+      "라이브 사전 신청",
+      "웹 라이브 신청",
+      "라이브 참가 신청",
+      "시청자 정보 수집",
+      "라이브 신청 폼"
+    ],
+    "area": "recording",
+    "gapCard": "gap:recording/web-live-registration",
+    "verified": {
+      "grep": [
+        "라이브 사전 신청",
+        "웹 라이브 신청",
+        "라이브 참가 신청",
+        "시청자 정보 수집",
+        "라이브 신청 폼"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-recording"
+    }
+  },
+  {
+    "id": "absent:recording/attendance-edit",
+    "label": "출석 기록 직접 수정",
+    "forms": [
+      "출석 수정",
+      "출결 수정",
+      "지각 처리",
+      "출석 인정",
+      "출석 상태 변경"
+    ],
+    "area": "recording",
+    "gapCard": "gap:recording/attendance-edit",
+    "verified": {
+      "grep": [
+        "출석 수정",
+        "출결 수정",
+        "지각 처리",
+        "출석 인정",
+        "출석 상태 변경"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-recording"
+    }
+  },
+  {
+    "id": "absent:recording/analysis-score-dispute",
+    "label": "AI 강의 분석 점수 이의·재분석",
+    "forms": [
+      "AI 점수 이의",
+      "재분석",
+      "분석 점수 수정",
+      "분석 점수 정정",
+      "분석 이의"
+    ],
+    "area": "recording",
+    "gapCard": "gap:recording/analysis-score-dispute",
+    "verified": {
+      "grep": [
+        "AI 점수 이의",
+        "재분석",
+        "분석 점수 수정",
+        "분석 점수 정정",
+        "분석 이의"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-recording"
+    }
+  },
+  {
+    "id": "absent:recording/screenshot-interval",
+    "label": "수업 스크린샷 저장 간격",
+    "forms": [
+      "캡처 주기",
+      "캡처 간격",
+      "스크린샷 주기",
+      "캡처 빈도",
+      "스크린샷 간격 변경"
+    ],
+    "area": "recording",
+    "gapCard": "gap:recording/screenshot-interval",
+    "verified": {
+      "grep": [
+        "캡처 주기",
+        "캡처 간격",
+        "스크린샷 주기",
+        "캡처 빈도",
+        "스크린샷 간격 변경"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-recording"
+    }
+  },
+  {
+    "id": "absent:recording/report-bulk-pdf",
+    "label": "학생 리포트 일괄 저장",
+    "forms": [
+      "리포트 일괄",
+      "일괄 PDF",
+      "리포트 한꺼번에",
+      "성적표 일괄",
+      "리포트 대량"
+    ],
+    "area": "recording",
+    "gapCard": "gap:recording/report-bulk-pdf",
+    "verified": {
+      "grep": [
+        "리포트 일괄",
+        "일괄 PDF",
+        "리포트 한꺼번에",
+        "성적표 일괄",
+        "리포트 대량"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-recording"
+    }
+  },
+  {
+    "id": "absent:recording/recording-access-log",
+    "label": "녹화본 열람·내려받기 기록",
+    "forms": [
+      "녹화 다운로드 이력",
+      "녹화 열람 기록",
+      "녹화 접근 로그",
+      "녹화 다운로드 로그",
+      "녹화 유출"
+    ],
+    "area": "recording",
+    "gapCard": "gap:recording/recording-access-log",
+    "verified": {
+      "grep": [
+        "녹화 다운로드 이력",
+        "녹화 열람 기록",
+        "녹화 접근 로그",
+        "녹화 다운로드 로그",
+        "녹화 유출"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-recording"
+    }
+  },
+  {
+    "id": "absent:recording/replay-delayed-release",
+    "label": "다시보기 공개 시점 예약",
+    "forms": [
+      "다시보기 공개 예약",
+      "공개 시점 예약",
+      "다시보기 예약",
+      "녹화 공개 예약",
+      "다시보기 오픈 예약"
+    ],
+    "area": "recording",
+    "gapCard": "gap:recording/replay-delayed-release",
+    "verified": {
+      "grep": [
+        "다시보기 공개 예약",
+        "공개 시점 예약",
+        "다시보기 예약",
+        "녹화 공개 예약",
+        "다시보기 오픈 예약"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-recording"
+    }
+  },
+  {
+    "id": "absent:recording/report-hide",
+    "label": "학습 보고서 숨기기",
+    "forms": [
+      "보고서 숨기",
+      "보고서 비공개",
+      "보고서 끄기",
+      "리포트 숨기",
+      "리포트 비공개"
+    ],
+    "area": "recording",
+    "gapCard": "gap:recording/report-hide",
+    "verified": {
+      "grep": [
+        "보고서 숨기",
+        "보고서 비공개",
+        "보고서 끄기",
+        "리포트 숨기",
+        "리포트 비공개"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-recording"
+    }
+  },
+  {
+    "id": "absent:start/install-size",
+    "label": "설치 파일·앱 용량",
+    "forms": [
+      "설치 용량",
+      "앱 용량",
+      "설치 파일 용량",
+      "설치 파일 크기",
+      "앱 사이즈"
+    ],
+    "area": "start",
+    "gapCard": "gap:start/install-size",
+    "verified": {
+      "grep": [
+        "설치 용량",
+        "앱 용량",
+        "설치 파일 용량",
+        "설치 파일 크기",
+        "앱 사이즈"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-start"
+    }
+  },
+  {
+    "id": "absent:start/offline-installer",
+    "label": "인터넷 없이 설치하는 오프라인 설치 파일",
+    "forms": [
+      "오프라인 설치",
+      "인터넷 없이 설치",
+      "오프라인 인스톨러",
+      "USB로 설치"
+    ],
+    "area": "start",
+    "gapCard": "gap:start/offline-installer",
+    "verified": {
+      "grep": [
+        "오프라인 설치",
+        "인터넷 없이 설치",
+        "오프라인 인스톨러",
+        "USB로 설치"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-start"
+    }
+  },
+  {
+    "id": "absent:start/mass-deploy",
+    "label": "여러 컴퓨터 일괄 설치",
+    "forms": [
+      "일괄 설치",
+      "대량 설치",
+      "한꺼번에 설치",
+      "무인 설치",
+      "MSI 설치",
+      "사일런트 설치"
+    ],
+    "area": "start",
+    "gapCard": "gap:start/mass-deploy",
+    "verified": {
+      "grep": [
+        "일괄 설치",
+        "대량 설치",
+        "한꺼번에 설치",
+        "무인 설치",
+        "MSI 설치",
+        "사일런트 설치"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-start"
+    }
+  },
+  {
+    "id": "absent:start/windows-arm",
+    "label": "윈도우 ARM 노트북 지원",
+    "forms": [
+      "스냅드래곤",
+      "윈도우 ARM",
+      "ARM 노트북",
+      "코파일럿 PC",
+      "ARM64"
+    ],
+    "area": "start",
+    "gapCard": "gap:start/windows-arm",
+    "verified": {
+      "grep": [
+        "스냅드래곤",
+        "윈도우 ARM",
+        "ARM 노트북",
+        "코파일럿 PC",
+        "ARM64"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-start"
+    }
+  },
+  {
+    "id": "absent:start/windows-s-mode",
+    "label": "윈도우 S 모드 노트북 설치",
+    "forms": [
+      "S 모드",
+      "마이크로소프트 스토어",
+      "MS 스토어",
+      "윈도우 스토어",
+      "에스모드"
+    ],
+    "area": "start",
+    "gapCard": "gap:start/windows-s-mode",
+    "verified": {
+      "grep": [
+        "S 모드",
+        "마이크로소프트 스토어",
+        "MS 스토어",
+        "윈도우 스토어",
+        "에스모드"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-start"
+    }
+  },
+  {
+    "id": "absent:start/linux-distro",
+    "label": "리눅스 배포판별 지원",
+    "forms": [
+      "우분투",
+      "데비안",
+      "페도라",
+      "리눅스 민트",
+      "리눅스 배포판",
+      "하모니카OS"
+    ],
+    "area": "start",
+    "gapCard": "gap:start/linux-distro",
+    "verified": {
+      "grep": [
+        "우분투",
+        "데비안",
+        "페도라",
+        "리눅스 민트",
+        "리눅스 배포판",
+        "하모니카OS"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-start"
+    }
+  },
+  {
+    "id": "absent:start/no-play-store",
+    "label": "플레이 스토어 없는 기기에 앱 설치",
+    "forms": [
+      "APK",
+      "원스토어",
+      "플레이 스토어 없는",
+      "구글 플레이 없는",
+      "학습지 태블릿",
+      "화웨이"
+    ],
+    "area": "start",
+    "gapCard": "gap:start/no-play-store",
+    "verified": {
+      "grep": [
+        "APK",
+        "원스토어",
+        "플레이 스토어 없는",
+        "구글 플레이 없는",
+        "학습지 태블릿",
+        "화웨이"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-start"
+    }
+  },
+  {
+    "id": "absent:start/downgrade",
+    "label": "이전 버전으로 되돌리기",
+    "forms": [
+      "버전 다운그레이드",
+      "앱 다운그레이드",
+      "이전 버전으로",
+      "예전 버전으로",
+      "옛날 버전으로"
+    ],
+    "area": "start",
+    "gapCard": "gap:start/downgrade",
+    "verified": {
+      "grep": [
+        "버전 다운그레이드",
+        "앱 다운그레이드",
+        "이전 버전으로",
+        "예전 버전으로",
+        "옛날 버전으로"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-start"
+    }
+  },
+  {
+    "id": "absent:start/auto-update-off",
+    "label": "자동 업데이트 끄기",
+    "forms": [
+      "자동 업데이트 끄",
+      "자동 업데이트 해제",
+      "자동 업데이트 설정",
+      "업데이트 알림 끄",
+      "자동 업뎃"
+    ],
+    "area": "start",
+    "gapCard": "gap:start/auto-update-off",
+    "verified": {
+      "grep": [
+        "자동 업데이트 끄",
+        "자동 업데이트 해제",
+        "자동 업데이트 설정",
+        "업데이트 알림 끄",
+        "자동 업뎃"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-start"
+    }
+  },
+  {
+    "id": "absent:start/beta-program",
+    "label": "베타 테스트 참여",
+    "forms": [
+      "베타",
+      "베타 테스트",
+      "테스트 버전",
+      "얼리 액세스",
+      "테스터 신청"
+    ],
+    "area": "start",
+    "gapCard": "gap:start/beta-program",
+    "verified": {
+      "grep": [
+        "베타",
+        "베타 테스트",
+        "테스트 버전",
+        "얼리 액세스",
+        "테스터 신청"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-start"
+    }
+  },
+  {
+    "id": "absent:start/auto-launch",
+    "label": "컴퓨터 켤 때 자동 실행 설정",
+    "forms": [
+      "컴퓨터 켜면 자동",
+      "부팅 시 자동",
+      "부팅할 때 자동",
+      "시작 프로그램",
+      "자동 실행 끄"
+    ],
+    "area": "start",
+    "gapCard": "gap:start/auto-launch",
+    "verified": {
+      "grep": [
+        "컴퓨터 켜면 자동",
+        "부팅 시 자동",
+        "부팅할 때 자동",
+        "시작 프로그램",
+        "자동 실행 끄"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-start"
+    }
+  },
+  {
+    "id": "absent:start/battery-drain",
+    "label": "수업 중 배터리 소모",
+    "forms": [
+      "배터리 소모",
+      "배터리가 빨리",
+      "절전 모드",
+      "저전력 모드",
+      "배터리 광탈"
+    ],
+    "area": "start",
+    "gapCard": "gap:start/battery-drain",
+    "verified": {
+      "grep": [
+        "배터리 소모",
+        "배터리가 빨리",
+        "절전 모드",
+        "저전력 모드",
+        "배터리 광탈"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-start"
+    }
+  },
+  {
+    "id": "absent:start/peripheral-recommend",
+    "label": "웹캠·헤드셋 추천 제품",
+    "forms": [
+      "웹캠 추천",
+      "헤드셋 추천",
+      "마이크 추천",
+      "캠 추천",
+      "로지텍"
+    ],
+    "area": "start",
+    "gapCard": "gap:start/peripheral-recommend",
+    "verified": {
+      "grep": [
+        "웹캠 추천",
+        "헤드셋 추천",
+        "마이크 추천",
+        "캠 추천",
+        "로지텍"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-start"
+    }
+  },
+  {
+    "id": "absent:start/dual-monitor",
+    "label": "듀얼 모니터로 수업 화면 나눠 쓰기",
+    "forms": [
+      "듀얼 모니터",
+      "모니터 두 대",
+      "모니터 2대",
+      "확장 모니터",
+      "보조 모니터"
+    ],
+    "area": "start",
+    "gapCard": "gap:start/dual-monitor",
+    "verified": {
+      "grep": [
+        "듀얼 모니터",
+        "모니터 두 대",
+        "모니터 2대",
+        "확장 모니터",
+        "보조 모니터"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-start"
+    }
+  },
+  {
+    "id": "absent:start/ui-font-scale",
+    "label": "앱 글자 크기·화면 배율 조정",
+    "forms": [
+      "화면 배율",
+      "메뉴 글씨",
+      "앱 글씨 크기",
+      "앱 글자 크기",
+      "UI 크기"
+    ],
+    "area": "start",
+    "gapCard": "gap:start/ui-font-scale",
+    "verified": {
+      "grep": [
+        "화면 배율",
+        "메뉴 글씨",
+        "앱 글씨 크기",
+        "앱 글자 크기",
+        "UI 크기"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-start"
+    }
+  },
+  {
+    "id": "absent:start/installer-safety",
+    "label": "설치 파일 바이러스·안전성 확인",
+    "forms": [
+      "바이러스",
+      "악성코드",
+      "악성 프로그램",
+      "디지털 서명",
+      "알 수 없는 게시자"
+    ],
+    "area": "start",
+    "gapCard": "gap:start/installer-safety",
+    "verified": {
+      "grep": [
+        "바이러스",
+        "악성코드",
+        "악성 프로그램",
+        "디지털 서명",
+        "알 수 없는 게시자"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-start"
+    }
+  },
+  {
+    "id": "absent:start/pen-tablet",
+    "label": "PC용 펜 태블릿 연결",
+    "forms": [
+      "와콤",
+      "판 태블릿",
+      "판타블렛",
+      "펜타블렛",
+      "드로잉 패드",
+      "액정 타블렛"
+    ],
+    "area": "start",
+    "gapCard": "gap:start/pen-tablet",
+    "verified": {
+      "grep": [
+        "와콤",
+        "판 태블릿",
+        "판타블렛",
+        "펜타블렛",
+        "드로잉 패드",
+        "액정 타블렛"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-start"
+    }
+  },
+  {
+    "id": "absent:start/screen-rotation",
+    "label": "태블릿·휴대폰 화면 가로·세로 회전",
+    "forms": [
+      "가로 모드",
+      "세로 모드",
+      "자동 회전",
+      "회전 잠금"
+    ],
+    "area": "start",
+    "gapCard": "gap:start/screen-rotation",
+    "verified": {
+      "grep": [
+        "가로 모드",
+        "세로 모드",
+        "자동 회전",
+        "회전 잠금"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-start"
+    }
+  },
+  {
+    "id": "absent:start/split-screen",
+    "label": "태블릿 분할 화면·덱스 모드",
+    "forms": [
+      "스플릿 뷰",
+      "멀티 윈도우",
+      "삼성 덱스",
+      "덱스 모드",
+      "슬라이드 오버",
+      "PIP 모드"
+    ],
+    "area": "start",
+    "gapCard": "gap:start/split-screen",
+    "verified": {
+      "grep": [
+        "스플릿 뷰",
+        "멀티 윈도우",
+        "삼성 덱스",
+        "덱스 모드",
+        "슬라이드 오버",
+        "PIP 모드"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-start"
+    }
+  },
+  {
+    "id": "absent:start/no-sim-phone",
+    "label": "유심 없는 공기계로 수업 듣기",
+    "forms": [
+      "공기계",
+      "유심",
+      "USIM",
+      "와이파이 전용",
+      "개통 안 한"
+    ],
+    "area": "start",
+    "gapCard": "gap:start/no-sim-phone",
+    "verified": {
+      "grep": [
+        "공기계",
+        "유심",
+        "USIM",
+        "와이파이 전용",
+        "개통 안 한"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-start"
+    }
+  },
+  {
+    "id": "absent:start/parental-control",
+    "label": "자녀 보호 앱이 설치·실행을 막을 때",
+    "forms": [
+      "패밀리 링크",
+      "스크린 타임",
+      "유해 차단",
+      "키즈폰"
+    ],
+    "area": "start",
+    "gapCard": "gap:start/parental-control",
+    "verified": {
+      "grep": [
+        "패밀리 링크",
+        "스크린 타임",
+        "유해 차단",
+        "키즈폰"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-start"
+    }
+  },
+  {
+    "id": "absent:start/internet-speed-test",
+    "label": "내 인터넷 속도 재는 방법",
+    "forms": [
+      "속도 측정",
+      "속도 테스트",
+      "스피드 테스트",
+      "인터넷 속도 재"
+    ],
+    "area": "start",
+    "gapCard": "gap:start/internet-speed-test",
+    "verified": {
+      "grep": [
+        "속도 측정",
+        "속도 테스트",
+        "스피드 테스트",
+        "인터넷 속도 재"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-start"
+    }
+  },
+  {
+    "id": "absent:start/korean-input",
+    "label": "한글 입력이 안 될 때",
+    "forms": [
+      "한글 입력",
+      "한글이 안 쳐",
+      "한영 전환",
+      "한글 자판",
+      "한글 타자"
+    ],
+    "area": "start",
+    "gapCard": "gap:start/korean-input",
+    "verified": {
+      "grep": [
+        "한글 입력",
+        "한글이 안 쳐",
+        "한영 전환",
+        "한글 자판",
+        "한글 타자"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-start"
+    }
+  },
+  {
+    "id": "absent:support/inquiry-response-time",
+    "label": "문의 답변 소요 시간",
+    "forms": [
+      "답변 소요 시간",
+      "답장 언제",
+      "회신 기간",
+      "답장 며칠",
+      "답변까지 며칠"
+    ],
+    "area": "support",
+    "gapCard": "gap:support/inquiry-response-time",
+    "verified": {
+      "grep": [
+        "답변 소요 시간",
+        "답장 언제",
+        "회신 기간",
+        "답장 며칠",
+        "답변까지 며칠"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-support"
+    }
+  },
+  {
+    "id": "absent:support/agent-wait-time",
+    "label": "상담원 연결 대기 시간",
+    "forms": [
+      "상담 대기 시간",
+      "상담 대기 순번",
+      "상담원 연결 대기",
+      "연결 대기 시간"
+    ],
+    "area": "support",
+    "gapCard": "gap:support/agent-wait-time",
+    "verified": {
+      "grep": [
+        "상담 대기 시간",
+        "상담 대기 순번",
+        "상담원 연결 대기",
+        "연결 대기 시간"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-support"
+    }
+  },
+  {
+    "id": "absent:support/inquiry-status",
+    "label": "문의 접수 내역·처리 상태 조회",
+    "forms": [
+      "접수 내역",
+      "처리 상태 조회",
+      "티켓 번호",
+      "문의 내역",
+      "티켓 상태"
+    ],
+    "area": "support",
+    "gapCard": "gap:support/inquiry-status",
+    "verified": {
+      "grep": [
+        "접수 내역",
+        "처리 상태 조회",
+        "티켓 번호",
+        "문의 내역",
+        "티켓 상태"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-support"
+    }
+  },
+  {
+    "id": "absent:support/support-call-booking",
+    "label": "상담 통화·원격 지원 시간 예약",
+    "forms": [
+      "콜백 예약",
+      "통화 시간 지정",
+      "전화 시간 예약",
+      "원격 지원 예약"
+    ],
+    "area": "support",
+    "gapCard": "gap:support/support-call-booking",
+    "verified": {
+      "grep": [
+        "콜백 예약",
+        "통화 시간 지정",
+        "전화 시간 예약",
+        "원격 지원 예약"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-support"
+    }
+  },
+  {
+    "id": "absent:support/sms-consult",
+    "label": "문자 메시지 상담",
+    "forms": [
+      "SMS 상담",
+      "문자로 상담",
+      "문자 메시지 상담",
+      "문자로 문의"
+    ],
+    "area": "support",
+    "gapCard": "gap:support/sms-consult",
+    "verified": {
+      "grep": [
+        "SMS 상담",
+        "문자로 상담",
+        "문자 메시지 상담",
+        "문자로 문의"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-support"
+    }
+  },
+  {
+    "id": "absent:support/manager-contact",
+    "label": "담당 매니저 연락처 확인·변경",
+    "forms": [
+      "매니저 연락처",
+      "매니저 번호",
+      "매니저 교체",
+      "매니저 변경"
+    ],
+    "area": "support",
+    "gapCard": "gap:support/manager-contact",
+    "verified": {
+      "grep": [
+        "매니저 연락처",
+        "매니저 번호",
+        "매니저 교체",
+        "매니저 변경"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-support"
+    }
+  },
+  {
+    "id": "absent:support/feature-request",
+    "label": "기능 제안·개선 요청 창구",
+    "forms": [
+      "기능 제안",
+      "기능 건의",
+      "건의 사항",
+      "기능 개선 요청"
+    ],
+    "area": "support",
+    "gapCard": "gap:support/feature-request",
+    "verified": {
+      "grep": [
+        "기능 제안",
+        "기능 건의",
+        "건의 사항",
+        "기능 개선 요청"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-support"
+    }
+  },
+  {
+    "id": "absent:support/bug-fix-timeline",
+    "label": "오류 수정 일정·처리 기간",
+    "forms": [
+      "버그 수정",
+      "패치 일정",
+      "수정 일정",
+      "버그 언제",
+      "오류 수정 일정"
+    ],
+    "area": "support",
+    "gapCard": "gap:support/bug-fix-timeline",
+    "verified": {
+      "grep": [
+        "버그 수정",
+        "패치 일정",
+        "수정 일정",
+        "버그 언제",
+        "오류 수정 일정"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-support"
+    }
+  },
+  {
+    "id": "absent:support/maintenance-schedule",
+    "label": "서버 정기 점검 일정",
+    "forms": [
+      "서버 점검",
+      "서버 정기 점검",
+      "시스템 점검"
+    ],
+    "area": "support",
+    "gapCard": "gap:support/maintenance-schedule",
+    "verified": {
+      "grep": [
+        "서버 점검",
+        "서버 정기 점검",
+        "시스템 점검"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-support"
+    }
+  },
+  {
+    "id": "absent:support/outage-report",
+    "label": "장애 발생 확인서·원인 보고서",
+    "forms": [
+      "장애 확인서",
+      "장애 보고서",
+      "원인 보고서",
+      "RCA 보고서",
+      "장애 경위서",
+      "장애 증명"
+    ],
+    "area": "support",
+    "gapCard": "gap:support/outage-report",
+    "verified": {
+      "grep": [
+        "장애 확인서",
+        "장애 보고서",
+        "원인 보고서",
+        "RCA 보고서",
+        "장애 경위서",
+        "장애 증명"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-support"
+    }
+  },
+  {
+    "id": "absent:support/after-hours-support",
+    "label": "야간·주말 수업 중 긴급 지원",
+    "forms": [
+      "야간 지원",
+      "주말 지원",
+      "휴일 지원",
+      "24시간 지원",
+      "야간 긴급"
+    ],
+    "area": "support",
+    "gapCard": "gap:support/after-hours-support",
+    "verified": {
+      "grep": [
+        "야간 지원",
+        "주말 지원",
+        "휴일 지원",
+        "24시간 지원",
+        "야간 긴급"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-support"
+    }
+  },
+  {
+    "id": "absent:support/repair-duration",
+    "label": "전자칠판 수리 소요 기간",
+    "forms": [
+      "수리 소요",
+      "수리 며칠",
+      "수리 완료까지",
+      "고치는 데 며칠"
+    ],
+    "area": "support",
+    "gapCard": "gap:support/repair-duration",
+    "verified": {
+      "grep": [
+        "수리 소요",
+        "수리 며칠",
+        "수리 완료까지",
+        "고치는 데 며칠"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-support"
+    }
+  },
+  {
+    "id": "absent:support/regional-onsite",
+    "label": "지방·도서 지역 출장 지원",
+    "forms": [
+      "지방 출장",
+      "도서 지역",
+      "섬 지역",
+      "지방 A/S",
+      "지방 설치",
+      "도서 산간"
+    ],
+    "area": "support",
+    "gapCard": "gap:support/regional-onsite",
+    "verified": {
+      "grep": [
+        "지방 출장",
+        "도서 지역",
+        "섬 지역",
+        "지방 A/S",
+        "지방 설치",
+        "도서 산간"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-support"
+    }
+  },
+  {
+    "id": "absent:support/loaner-board",
+    "label": "수리 기간 대체 장비",
+    "forms": [
+      "대체 장비",
+      "대체 칠판",
+      "임시 칠판",
+      "대여 칠판",
+      "예비 칠판",
+      "대체품"
+    ],
+    "area": "support",
+    "gapCard": "gap:support/loaner-board",
+    "verified": {
+      "grep": [
+        "대체 장비",
+        "대체 칠판",
+        "임시 칠판",
+        "대여 칠판",
+        "예비 칠판",
+        "대체품"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-support"
+    }
+  },
+  {
+    "id": "absent:support/impersonation-check",
+    "label": "클래스인 사칭 연락 확인",
+    "forms": [
+      "사칭",
+      "가짜 상담원",
+      "보이스피싱",
+      "가짜 직원"
+    ],
+    "area": "support",
+    "gapCard": "gap:support/impersonation-check",
+    "verified": {
+      "grep": [
+        "사칭",
+        "가짜 상담원",
+        "보이스피싱",
+        "가짜 직원"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-support"
+    }
+  },
+  {
+    "id": "absent:trust/ai-training-use",
+    "label": "수업 데이터의 AI 모델 학습 활용",
+    "forms": [
+      "모델 학습",
+      "AI 훈련",
+      "AI 학습용",
+      "AI 학습에 써",
+      "AI 학습에 쓰"
+    ],
+    "area": "trust",
+    "gapCard": "gap:trust/ai-training-use",
+    "verified": {
+      "grep": [
+        "모델 학습",
+        "AI 훈련",
+        "AI 학습용",
+        "AI 학습에 써",
+        "AI 학습에 쓰"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-trust"
+    }
+  },
+  {
+    "id": "absent:trust/overseas-privacy-law",
+    "label": "해외 개인정보 법규(GDPR·COPPA) 준수",
+    "forms": [
+      "GDPR",
+      "COPPA",
+      "FERPA",
+      "해외 개인정보법"
+    ],
+    "area": "trust",
+    "gapCard": "gap:trust/overseas-privacy-law",
+    "verified": {
+      "grep": [
+        "GDPR",
+        "COPPA",
+        "FERPA",
+        "해외 개인정보법"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-trust"
+    }
+  },
+  {
+    "id": "absent:trust/security-review-docs",
+    "label": "보안 백서·보안성 검토 자료",
+    "forms": [
+      "보안 백서",
+      "보안성 검토",
+      "보안 점검표",
+      "보안 감사",
+      "영향평가"
+    ],
+    "area": "trust",
+    "gapCard": "gap:trust/security-review-docs",
+    "verified": {
+      "grep": [
+        "보안 백서",
+        "보안성 검토",
+        "보안 점검표",
+        "보안 감사",
+        "영향평가"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-trust"
+    }
+  },
+  {
+    "id": "absent:trust/backup-disaster-recovery",
+    "label": "서비스 데이터 백업·재해 복구",
+    "forms": [
+      "백업 주기",
+      "재해 복구",
+      "서버 이중화",
+      "랜섬웨어"
+    ],
+    "area": "trust",
+    "gapCard": "gap:trust/backup-disaster-recovery",
+    "verified": {
+      "grep": [
+        "백업 주기",
+        "재해 복구",
+        "서버 이중화",
+        "랜섬웨어"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-trust"
+    }
+  },
+  {
+    "id": "absent:trust/cloud-provider",
+    "label": "클라우드 인프라 업체",
+    "forms": [
+      "AWS",
+      "알리바바",
+      "Azure",
+      "클라우드 업체",
+      "어느 클라우드"
+    ],
+    "area": "trust",
+    "gapCard": "gap:trust/cloud-provider",
+    "verified": {
+      "grep": [
+        "AWS",
+        "알리바바",
+        "Azure",
+        "클라우드 업체",
+        "어느 클라우드"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-trust"
+    }
+  },
+  {
+    "id": "absent:trust/end-to-end-encryption",
+    "label": "수업 영상·채팅 종단간 암호화",
+    "forms": [
+      "종단간 암호화",
+      "E2EE",
+      "영상 암호화",
+      "채팅 암호화"
+    ],
+    "area": "trust",
+    "gapCard": "gap:trust/end-to-end-encryption",
+    "verified": {
+      "grep": [
+        "종단간 암호화",
+        "E2EE",
+        "영상 암호화",
+        "채팅 암호화"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-trust"
+    }
+  },
+  {
+    "id": "absent:trust/password-storage",
+    "label": "비밀번호 암호화 저장",
+    "forms": [
+      "비밀번호 암호화",
+      "비밀번호 해시",
+      "비번 암호화"
+    ],
+    "area": "trust",
+    "gapCard": "gap:trust/password-storage",
+    "verified": {
+      "grep": [
+        "비밀번호 암호화",
+        "비밀번호 해시",
+        "비번 암호화"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-trust"
+    }
+  },
+  {
+    "id": "absent:trust/vulnerability-report",
+    "label": "보안 취약점 제보 창구",
+    "forms": [
+      "버그 바운티",
+      "취약점 제보",
+      "취약점 신고",
+      "보안 제보"
+    ],
+    "area": "trust",
+    "gapCard": "gap:trust/vulnerability-report",
+    "verified": {
+      "grep": [
+        "버그 바운티",
+        "취약점 제보",
+        "취약점 신고",
+        "보안 제보"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-trust"
+    }
+  },
+  {
+    "id": "absent:trust/ddos-security-monitoring",
+    "label": "디도스 대응·보안 관제",
+    "forms": [
+      "디도스",
+      "DDoS",
+      "보안 관제",
+      "침입 탐지"
+    ],
+    "area": "trust",
+    "gapCard": "gap:trust/ddos-security-monitoring",
+    "verified": {
+      "grep": [
+        "디도스",
+        "DDoS",
+        "보안 관제",
+        "침입 탐지"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-trust"
+    }
+  },
+  {
+    "id": "absent:trust/privacy-insurance",
+    "label": "개인정보 배상책임보험",
+    "forms": [
+      "배상책임보험",
+      "사이버 보험",
+      "개인정보 보험"
+    ],
+    "area": "trust",
+    "gapCard": "gap:trust/privacy-insurance",
+    "verified": {
+      "grep": [
+        "배상책임보험",
+        "사이버 보험",
+        "개인정보 보험"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-trust"
+    }
+  },
+  {
+    "id": "absent:trust/deletion-certificate",
+    "label": "개인정보 파기 확인서",
+    "forms": [
+      "파기 확인서",
+      "삭제 확인서",
+      "파기 증명",
+      "삭제 증명서"
+    ],
+    "area": "trust",
+    "gapCard": "gap:trust/deletion-certificate",
+    "verified": {
+      "grep": [
+        "파기 확인서",
+        "삭제 확인서",
+        "파기 증명",
+        "삭제 증명서"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-trust"
+    }
+  },
+  {
+    "id": "absent:trust/location-data",
+    "label": "앱 위치 정보 수집",
+    "forms": [
+      "위치 정보",
+      "GPS",
+      "위치 권한",
+      "위치 수집"
+    ],
+    "area": "trust",
+    "gapCard": "gap:trust/location-data",
+    "verified": {
+      "grep": [
+        "위치 정보",
+        "GPS",
+        "위치 권한",
+        "위치 수집"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-trust"
+    }
+  },
+  {
+    "id": "absent:trust/chat-profanity-filter",
+    "label": "채팅 욕설·비속어 자동 차단",
+    "forms": [
+      "욕설 필터",
+      "욕설 차단",
+      "금칙어",
+      "비속어"
+    ],
+    "area": "trust",
+    "gapCard": "gap:trust/chat-profanity-filter",
+    "verified": {
+      "grep": [
+        "욕설 필터",
+        "욕설 차단",
+        "금칙어",
+        "비속어"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-trust"
+    }
+  },
+  {
+    "id": "absent:trust/user-report-block",
+    "label": "부적절한 사용자 신고·차단",
+    "forms": [
+      "신고 기능",
+      "사용자 차단",
+      "신고하기",
+      "메시지 차단",
+      "유저 차단"
+    ],
+    "area": "trust",
+    "gapCard": "gap:trust/user-report-block",
+    "verified": {
+      "grep": [
+        "신고 기능",
+        "사용자 차단",
+        "신고하기",
+        "메시지 차단",
+        "유저 차단"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-trust"
+    }
+  },
+  {
+    "id": "absent:trust/live-video-retention",
+    "label": "녹화하지 않은 수업 영상 저장",
+    "forms": [
+      "실시간 영상 보관",
+      "영상이 서버에 남",
+      "생방송 영상 저장"
+    ],
+    "area": "trust",
+    "gapCard": "gap:trust/live-video-retention",
+    "verified": {
+      "grep": [
+        "실시간 영상 보관",
+        "영상이 서버에 남",
+        "생방송 영상 저장"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-trust"
+    }
+  },
+  {
+    "id": "absent:trust/nda",
+    "label": "비밀유지계약(NDA)",
+    "forms": [
+      "비밀유지계약",
+      "기밀유지",
+      "비밀유지 서약"
+    ],
+    "area": "trust",
+    "gapCard": "gap:trust/nda",
+    "verified": {
+      "grep": [
+        "비밀유지계약",
+        "기밀유지",
+        "비밀유지 서약"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-trust"
+    }
+  },
+  {
+    "id": "absent:trust/staff-privacy-training",
+    "label": "회사 직원 개인정보 보호 교육",
+    "forms": [
+      "보안 교육",
+      "개인정보 교육",
+      "보안 서약서",
+      "직원 보안"
+    ],
+    "area": "trust",
+    "gapCard": "gap:trust/staff-privacy-training",
+    "verified": {
+      "grep": [
+        "보안 교육",
+        "개인정보 교육",
+        "보안 서약서",
+        "직원 보안"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-trust"
+    }
+  },
+  {
+    "id": "absent:trust/in-app-ads",
+    "label": "앱 안 광고 노출",
+    "forms": [
+      "앱 광고",
+      "광고 나와",
+      "광고 나오",
+      "광고가 떠",
+      "인앱 광고"
+    ],
+    "area": "trust",
+    "gapCard": "gap:trust/in-app-ads",
+    "verified": {
+      "grep": [
+        "앱 광고",
+        "광고 나와",
+        "광고 나오",
+        "광고가 떠",
+        "인앱 광고"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-trust"
+    }
+  },
+  {
+    "id": "absent:trust/rooted-device",
+    "label": "루팅·탈옥 기기 사용",
+    "forms": [
+      "루팅",
+      "탈옥",
+      "rooting"
+    ],
+    "area": "trust",
+    "gapCard": "gap:trust/rooted-device",
+    "verified": {
+      "grep": [
+        "루팅",
+        "탈옥",
+        "rooting"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-20",
+      "checker": "agent:opus#D5-trust"
+    }
   }
 ]

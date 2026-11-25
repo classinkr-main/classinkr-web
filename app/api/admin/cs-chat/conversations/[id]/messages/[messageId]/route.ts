@@ -1,9 +1,14 @@
+import { revalidateTag } from "next/cache"
 import { NextRequest, NextResponse } from "next/server"
 
-import { CRM_STAFF_ADMIN_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
+import { CS_COPILOT_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
 import { ingestInternalCsGap } from "@/lib/internal-cs-chat/gap-ingest"
+import { INTERNAL_CS_METRICS_CACHE_TAG } from "@/lib/internal-cs-chat/metrics"
+import { checkFinalAnswer, WARNINGS_ACKNOWLEDGED_LABEL } from "@/lib/internal-cs-chat/answer-checks"
+import { hasQuickApprovedLabel, isSameAsOriginal } from "@/lib/internal-cs-chat/review-guard"
 import {
   getInternalCsConversation,
+  getInternalCsMessageById,
   INTERNAL_CS_REGRESSION_OUTCOMES,
   isInternalCsChatNotReadyError,
   reviewInternalCsMessage,
@@ -23,6 +28,16 @@ function actorName(admin: { name?: string; userId?: string; role: string }) {
 
 function optionalString(value: unknown) {
   return typeof value === "string" ? value.trim() || null : null
+}
+
+// 지표 카드(lib/internal-cs-chat/metrics.ts unstable_cache)가 판정 직후에도 옛 값을 보이지 않게 한다.
+// 무효화 실패는 응답을 막지 않는다(TTL 60초가 남은 안전망).
+function invalidateInternalCsMetrics() {
+  try {
+    revalidateTag(INTERNAL_CS_METRICS_CACHE_TAG, "max")
+  } catch (error) {
+    console.error("[internal-cs] failed to revalidate metrics cache:", error instanceof Error ? error.message : error)
+  }
 }
 
 // 수정 요청된 답변의 원 질문을 찾는다: generate 라우트가 남긴 metadata.userMessageId 링크를
@@ -68,7 +83,7 @@ async function queueReviewGap(conversationId: string, message: InternalCsMessage
 }
 
 export async function PATCH(req: NextRequest, context: Context) {
-  const admin = await requireVerifiedAdminContext(req, CRM_STAFF_ADMIN_API_ROLES)
+  const admin = await requireVerifiedAdminContext(req, CS_COPILOT_API_ROLES)
   if (admin instanceof NextResponse) return admin
   const { id, messageId } = await context.params
   const body = await req.json().catch(() => null)
@@ -93,6 +108,9 @@ export async function PATCH(req: NextRequest, context: Context) {
   if (raw.excludeFromGapQueue !== undefined && typeof raw.excludeFromGapQueue !== "boolean") {
     return NextResponse.json({ error: "excludeFromGapQueue must be a boolean" }, { status: 400 })
   }
+  if (raw.warningsAcknowledged !== undefined && typeof raw.warningsAcknowledged !== "boolean") {
+    return NextResponse.json({ error: "warningsAcknowledged must be a boolean" }, { status: 400 })
+  }
   const correctedContent = optionalString(raw.correctedContent)
   if (!isRegressionOnly && raw.decision === "approved" && !correctedContent) {
     return NextResponse.json(
@@ -100,8 +118,50 @@ export async function PATCH(req: NextRequest, context: Context) {
       { status: 400 }
     )
   }
+  let feedbackLabels = raw.feedbackLabels as string[] | undefined
+  if (!isRegressionOnly && raw.decision === "approved" && hasQuickApprovedLabel(feedbackLabels)) {
+    return NextResponse.json(
+      { error: "즉시 승인은 받지 않습니다. 검토 드로어에서 확인 3종을 거쳐 고객용 최종 답을 따로 써 주세요." },
+      { status: 400 }
+    )
+  }
 
   try {
+    // 승인 경계(IC-01): 고객용 최종본이 AI 원문과 같으면(공백 차이만) 검토 없이 원문을 내보내는 것이다.
+    if (!isRegressionOnly && raw.decision === "approved") {
+      const original = await getInternalCsMessageById(messageId)
+      if (!original || original.conversation_id !== id || original.role !== "assistant") {
+        return NextResponse.json({ error: "Assistant message not found" }, { status: 404 })
+      }
+      if (isSameAsOriginal(correctedContent, original.content)) {
+        return NextResponse.json(
+          { error: "고객용 최종 답이 AI 초안 원문과 같습니다. 검토한 내용을 반영해 따로 써 주세요." },
+          { status: 400 }
+        )
+      }
+      // 최종본 재검사(검토 안전-3): 생성 때 원문에만 돌던 후검사를 사람이 고친 최종본에도 돌린다.
+      // 내부 표시는 확인으로 넘길 수 없고, high 경고(약속·원가·식별자)는 검토 화면의 경고 확인을 받아야 한다.
+      const finalCheck = checkFinalAnswer(correctedContent)
+      if (finalCheck.internalMarkers.length > 0) {
+        return NextResponse.json(
+          { error: `고객용 최종 답에 내부 표시가 남아 있습니다(${finalCheck.internalMarkers.join(", ")}). 지우고 다시 승인해 주세요.` },
+          { status: 400 }
+        )
+      }
+      if (finalCheck.warnings.length > 0) {
+        if (raw.warningsAcknowledged !== true) {
+          return NextResponse.json(
+            {
+              error: "고객용 최종 답에 확인이 필요한 표현(약속·원가·식별자)이 있습니다. 검토 경고를 확인한 뒤 승인해 주세요.",
+              warningCodes: [...new Set(finalCheck.warnings.map((warning) => warning.code))],
+            },
+            { status: 400 }
+          )
+        }
+        feedbackLabels = [...new Set([...(feedbackLabels ?? []), WARNINGS_ACKNOWLEDGED_LABEL])]
+      }
+    }
+
     // 경량 경로는 regression_outcome 만 갱신한다 — 검토 필드(review_state/reviewed_*/
     // review_note/corrected_content/feedback_labels)와 대화 상태는 불변.
     if (isRegressionOnly) {
@@ -117,6 +177,7 @@ export async function PATCH(req: NextRequest, context: Context) {
       if (result.status === "not_found") {
         return NextResponse.json({ error: "Assistant message not found" }, { status: 404 })
       }
+      invalidateInternalCsMetrics()
       return NextResponse.json({ message: result.message })
     }
 
@@ -126,7 +187,7 @@ export async function PATCH(req: NextRequest, context: Context) {
       decision: raw.decision as "approved" | "changes_requested" | "rejected",
       reviewNote: optionalString(raw.reviewNote),
       correctedContent,
-      feedbackLabels: raw.feedbackLabels as string[] | undefined,
+      feedbackLabels,
       regressionCandidate: raw.regressionCandidate === true,
       regressionOutcome: raw.regressionOutcome as InternalCsRegressionOutcome | undefined,
       conversationAction: raw.conversationAction as "keep_open" | "resolve" | "archive" | undefined,
@@ -139,6 +200,7 @@ export async function PATCH(req: NextRequest, context: Context) {
       await queueReviewGap(id, message)
     }
 
+    invalidateInternalCsMetrics()
     return NextResponse.json({ message })
   } catch (error) {
     console.error(`[PATCH /api/admin/cs-chat/conversations/${id}/messages/${messageId}]`, error)

@@ -21,6 +21,8 @@ const ALLOWED_EVENTS = new Set([
   "chatbot_teaser_dismissed",
   "chatbot_opened",
   "chatbot_first_question",
+  "chatbot_new_chat",
+  "chatbot_conversation_restored",
   // 퍼널 보조 이벤트(lib/analytics.ts EventNames 와 함께 갱신)
   "contact_start",
   "showroom_start",
@@ -119,6 +121,9 @@ const ALLOWED_PARAM_KEYS: Record<string, Set<string>> = {
   chatbot_teaser_dismissed: new Set(["event_id", "path"]),
   chatbot_opened: new Set(["event_id", "source"]),
   chatbot_first_question: new Set(["event_id", "path"]),
+  // 질문 글은 받지 않는다 — 대화 길이 구간과 상담·오류 여부만.
+  chatbot_new_chat: new Set(["event_id", "source", "turns", "had_handoff", "had_error"]),
+  chatbot_conversation_restored: new Set(["event_id", "turns"]),
   contact_start: new Set(["event_id", "form_type", "page_path"]),
   showroom_start: new Set(["event_id", "form_type", "page_path"]),
   // 전화번호·메일 주소 값은 받지 않는다 — 위치 라벨과 경로만.

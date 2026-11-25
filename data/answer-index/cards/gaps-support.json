@@ -1,0 +1,1370 @@
+[
+  {
+    "id": "gap:support/inquiry-response-time",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "support",
+    "topic": "문의 답변 소요 시간",
+    "asks": [
+      "when",
+      "quantity"
+    ],
+    "concepts": [
+      "C_contact_channel",
+      "C_response_time"
+    ],
+    "anchors": [
+      "답변 소요 시간",
+      "답장 언제",
+      "회신 기간",
+      "메일 답변",
+      "문의 답변 시간",
+      "카톡 답장",
+      "문의하면 언제 연락",
+      "응답 속도"
+    ],
+    "covers": "메일·문의 페이지·카카오톡 채널로 문의한 뒤 답변을 받기까지 걸리는 시간은 공개 안내에 없다는 것",
+    "notCovers": [
+      "상담 전화 운영 시간(문의 페이지 문장만 있음) → none",
+      "실시간 상담원 연결 대기 시간 → gap:support/agent-wait-time",
+      "계정 인증 처리 기간 → doc:/docs/admin/account-verification#summary/processing-time",
+      "장애 대응 시간 기준·SLA → policy:sla-availability"
+    ],
+    "negatives": [
+      {
+        "q": "계정 인증 신청하면 보통 며칠 걸려요",
+        "route": "doc:/docs/admin/account-verification#summary/processing-time"
+      },
+      {
+        "q": "클래스인에 공식으로 문의 넣는 창구가 어디예요",
+        "route": "fixed:formal-complaint-channel"
+      },
+      {
+        "q": "장애 나면 몇 시간 안에 대응한다는 기준이 있나요",
+        "route": "policy:sla-availability"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "답장",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "답변 시간",
+        "units": 18,
+        "site": 0,
+        "checked": "무관(강사·운영팀 시간과 운영비 문장, 답변 소요 시간 아님)"
+      },
+      {
+        "query": "응답 시간",
+        "units": 0,
+        "site": 2,
+        "checked": "무관(AI 튜터 실시간 질의응답 소개)"
+      },
+      {
+        "query": "회신",
+        "units": 1,
+        "site": 2,
+        "checked": "무관(사업자등록번호 칸 안내·행사 신청 개인정보 항목)"
+      },
+      {
+        "query": "영업일",
+        "units": 0,
+        "site": 2,
+        "checked": "무관(체크아웃 신청 뒤 담당자 연락 시점 — 도입 신청 한정, 일반 문의 답변 시간 아님)"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-support",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:support/agent-wait-time",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "support",
+    "topic": "상담원 연결 대기 시간",
+    "asks": [
+      "when",
+      "quantity"
+    ],
+    "concepts": [
+      "C_contact_channel",
+      "C_agent_wait"
+    ],
+    "anchors": [
+      "상담원 연결 대기",
+      "상담 대기 순번",
+      "상담 대기 시간",
+      "상담원 언제 연결",
+      "채팅 상담 대기",
+      "연결 중",
+      "상담 연결 지연"
+    ],
+    "covers": "실시간 상담을 눌러 상담원과 연결되기까지 기다리는 시간이나 대기 순번은 공개 안내에 없다는 것",
+    "notCovers": [
+      "사람 상담원과 이야기하는 방법 → fixed:self-identity",
+      "메일·문의 답변 소요 시간 → gap:support/inquiry-response-time",
+      "정식 항의 접수 → fixed:formal-complaint-channel"
+    ],
+    "negatives": [
+      {
+        "q": "챗봇 말고 사람이랑 얘기하고 싶어요",
+        "route": "fixed:self-identity"
+      },
+      {
+        "q": "정식으로 항의 접수하고 싶은데 어떻게 해요",
+        "route": "fixed:formal-complaint-channel"
+      },
+      {
+        "q": "수업 끊김 문의할 때 뭘 같이 보내야 해요",
+        "route": "doc:/docs/start/class-connection-troubleshooting#6/inquiry-info"
+      }
+    ],
+    "handoff": "support",
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "support",
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "대기 시간",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "연결 대기",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "상담원 연결",
+        "units": 0,
+        "site": 3,
+        "checked": "무관(개인정보처리방침의 상담원 연결 때 받는 정보·위탁 항목, 대기 시간 아님)"
+      },
+      {
+        "query": "상담원",
+        "units": 3,
+        "site": 3,
+        "checked": "무관(상담원이 수업 기록으로 원인 확인·상담원 연결 때 받는 정보)"
+      },
+      {
+        "query": "통화 중",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-support",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:support/inquiry-status",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "support",
+    "topic": "문의 접수 내역·처리 상태 조회",
+    "asks": [
+      "where",
+      "howto"
+    ],
+    "concepts": [
+      "C_contact_channel",
+      "C_ticket_status"
+    ],
+    "anchors": [
+      "접수 내역",
+      "처리 상태",
+      "문의 진행 상황",
+      "티켓 번호",
+      "접수 번호 조회",
+      "문의 내역",
+      "A/S 진행 상황",
+      "지난 문의 이어서"
+    ],
+    "covers": "이미 남긴 문의나 A/S 접수의 내역과 처리 상태를 조회하는 방법은 공개 안내에 없다는 것",
+    "notCovers": [
+      "A/S 접수할 때 보낼 내용 → doc:/docs/hardware/hardware-spec-installation-faq#3/as-request-steps",
+      "문의 답변 소요 시간 → gap:support/inquiry-response-time",
+      "오류 수정 일정 → gap:support/bug-fix-timeline"
+    ],
+    "negatives": [
+      {
+        "q": "칠판 고장 접수할 때 뭘 적어서 보내요",
+        "route": "doc:/docs/hardware/hardware-spec-installation-faq#3/as-request-steps"
+      },
+      {
+        "q": "로그인 안 될 때 문의에 같이 보낼 정보가 뭐예요",
+        "route": "doc:/docs/start/login-troubleshooting#7/inquiry-info"
+      },
+      {
+        "q": "PC 앱에서 로그 보고하는 방법 알려 주세요",
+        "route": "howto:guide:cs-figma-digest-1427"
+      }
+    ],
+    "handoff": "support",
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "support",
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "접수 내역",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "처리 상황",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "티켓",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "접수 번호",
+        "units": 3,
+        "site": 2,
+        "checked": "무관(A/S 접수 때 보낼 시리얼 번호·체크아웃 접수번호 표시·개인정보 항목, 조회 방법 아님)"
+      },
+      {
+        "query": "진행 상황",
+        "units": 3,
+        "site": 1,
+        "checked": "무관(할 일 진행 상황·스타터 가이드·데이터 삭제 요청 진행 안내)"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-support",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:support/support-call-booking",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "support",
+    "topic": "상담 통화·원격 지원 시간 예약",
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_contact_channel",
+      "C_callback_booking"
+    ],
+    "anchors": [
+      "통화 시간 지정",
+      "콜백 예약",
+      "전화 시간 예약",
+      "원격 지원 예약",
+      "원하는 시간에 전화",
+      "시간 맞춰 연락",
+      "통화 가능 시간"
+    ],
+    "covers": "기술지원 상담 전화나 원격 지원을 원하는 시간에 받도록 미리 예약하는 방법은 공개 안내에 없다는 것",
+    "notCovers": [
+      "원격 설치 도움 요청 → doc:/docs/start/pc-install#4/remote-install-help",
+      "목동 쇼룸 방문 예약 → doc:/docs/start/customer-stories#9/showroom-visit",
+      "도입 신청 화면의 설치·상담 희망일(체크아웃 페이지 문장만 있음) → none"
+    ],
+    "negatives": [
+      {
+        "q": "설치가 너무 어려운데 원격으로 깔아 줄 수 있어요",
+        "route": "doc:/docs/start/pc-install#4/remote-install-help"
+      },
+      {
+        "q": "목동 쇼룸 가서 칠판 직접 보고 싶어요",
+        "route": "doc:/docs/start/customer-stories#9/showroom-visit"
+      },
+      {
+        "q": "도입 상담 요청할 때 어떤 문장으로 보내면 돼요",
+        "route": "doc:/docs/start/pre-adoption-faq-22-questions#7/consult-request-template"
+      }
+    ],
+    "handoff": "support",
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "support",
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "통화 시간",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "콜백",
+        "units": 1,
+        "site": 1,
+        "checked": "무관(숙제 채점 탭 이름·데이터 삭제 안내 URL 설명)"
+      },
+      {
+        "query": "다시 전화",
+        "units": 2,
+        "site": 0,
+        "checked": "무관(학생을 코스에서 내보냈다가 다시 추가)"
+      },
+      {
+        "query": "원격 지원",
+        "units": 6,
+        "site": 2,
+        "checked": "무관(원격 지원은 상담 채널이 안내한 방법·보낸 링크로만 받는다는 문장·원격수업 음성 지원 소개, 시간 예약 아님)"
+      },
+      {
+        "query": "희망 날짜",
+        "units": 0,
+        "site": 4,
+        "checked": "무관(체크아웃·쇼룸 신청서의 희망 날짜 — 도입 신청 한정, 기술지원 통화 예약 아님)"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-support",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:support/sms-consult",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "support",
+    "topic": "문자 메시지 상담",
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_contact_channel",
+      "C_sms_consult"
+    ],
+    "anchors": [
+      "문자 상담",
+      "문자로 문의",
+      "문자 메시지 상담",
+      "SMS 상담",
+      "문자로 답변",
+      "문자로 연락"
+    ],
+    "covers": "휴대폰 문자(SMS)로 상담·문의를 주고받을 수 있는지는 공개 안내에 없다는 것",
+    "notCovers": [
+      "인증 문자가 오지 않을 때 → doc:/docs/start/login-troubleshooting#4/auth-code-missing",
+      "대리 등록 학생 임시 비밀번호 문자가 안 갈 때 → doc:/docs/admin/student-onboarding#5/sms-not-received",
+      "공식 문의 창구 → fixed:formal-complaint-channel"
+    ],
+    "negatives": [
+      {
+        "q": "인증번호 문자가 안 와서 가입을 못 해요",
+        "route": "doc:/docs/start/login-troubleshooting#4/auth-code-missing"
+      },
+      {
+        "q": "대리 등록한 학생한테 안내 문자가 안 갔대요",
+        "route": "doc:/docs/admin/student-onboarding#5/sms-not-received"
+      },
+      {
+        "q": "클래스인 공식 문의 창구가 어디예요",
+        "route": "fixed:formal-complaint-channel"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "문자 상담",
+        "units": 4,
+        "site": 0,
+        "checked": "무관(임시 비밀번호·인증 문자가 안 올 때 상담 채널로 문의 — 문자로 상담하는 경로 아님)"
+      },
+      {
+        "query": "문자로 상담",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "문자 문의",
+        "units": 6,
+        "site": 0,
+        "checked": "무관(인증·임시 비밀번호 문자가 안 오면 공식 홈페이지 하단 채팅으로 문의)"
+      },
+      {
+        "query": "SMS",
+        "units": 2,
+        "site": 0,
+        "checked": "무관(대리 등록 SMS 발송과 요금 안내)"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-support",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:support/manager-contact",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "support",
+    "topic": "담당 매니저 연락처 확인·변경",
+    "asks": [
+      "where",
+      "howto"
+    ],
+    "concepts": [
+      "C_account_manager",
+      "C_manager_contact"
+    ],
+    "anchors": [
+      "담당 매니저 연락처",
+      "매니저 번호",
+      "매니저 바꾸기",
+      "담당자 변경",
+      "우리 학원 담당자",
+      "매니저 연락 방법",
+      "매니저 교체"
+    ],
+    "covers": "계약 뒤 배정된 담당 매니저의 연락처를 확인하거나 담당 매니저를 바꾸는 방법은 공개 안내에 없다는 것과 공개된 담당 매니저 배정 문장",
+    "notCovers": [
+      "계약하면 담당 매니저가 배정되는지·교육 2회 → doc:/docs/start/company-overview#6/manager-training",
+      "AI 칠판처럼 꺼진 기능을 매니저에게 켜 달라고 요청 → doc:/docs/software/ai-learning-tools#4/ai-board-what-enable",
+      "Enterprise 전담 매니저 구축 지원 → doc:/docs/software/software-pricing-quote-bundle-faq#0/enterprise-contract"
+    ],
+    "negatives": [
+      {
+        "q": "계약하면 학원에 담당자가 따로 붙나요",
+        "route": "doc:/docs/start/company-overview#6/manager-training"
+      },
+      {
+        "q": "AI 칠판 쓰려면 매니저한테 뭐라고 요청해요",
+        "route": "doc:/docs/software/ai-learning-tools#4/ai-board-what-enable"
+      },
+      {
+        "q": "엔터프라이즈 계약하면 뭐가 더 들어가요",
+        "route": "doc:/docs/software/software-pricing-quote-bundle-faq#0/enterprise-contract"
+      }
+    ],
+    "handoff": "support",
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "support",
+      "related": [
+        {
+          "unit": "doc:/docs/start/company-overview#6",
+          "i": 4,
+          "hash": "41dff3b502d1a783"
+        }
+      ]
+    },
+    "searchLog": [
+      {
+        "query": "매니저 연락처",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "담당 매니저",
+        "units": 32,
+        "site": 2,
+        "checked": "무관(계약하면 담당 매니저 배정·꺼진 기능 활성화는 매니저에게 요청·문의 페이지 담당 매니저 연락 — 연락처 확인·변경 방법 없음, 배정 문장은 관련 문장으로 씀)"
+      },
+      {
+        "query": "매니저 변경",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "담당자 변경",
+        "units": 1,
+        "site": 0,
+        "checked": "무관(코스 담임·운영 담당자를 잘못 지우지 않기)"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-support",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:support/feature-request",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "support",
+    "topic": "기능 제안·개선 요청 창구",
+    "asks": [
+      "where",
+      "howto"
+    ],
+    "concepts": [
+      "C_feature_request"
+    ],
+    "anchors": [
+      "기능 제안",
+      "개선 요청",
+      "건의 사항",
+      "기능 건의",
+      "의견 보내기",
+      "개발팀에 건의",
+      "불편 사항 접수"
+    ],
+    "covers": "없는 기능을 새로 넣어 달라거나 불편한 점을 고쳐 달라고 제안·건의하는 창구는 공개 안내에 없다는 것",
+    "notCovers": [
+      "이미 있는데 꺼져 있는 기능을 켜 달라는 요청(AI 칠판 등) → doc:/docs/software/ai-learning-tools#4/ai-board-what-enable",
+      "개인 칠판 인원 제한 해제 신청 → doc:/docs/teacher/classin-607-update#4/personal-board-no-limit-requirements",
+      "신규 기능 출시 일정 → gap:company/product-roadmap",
+      "우리 학원만을 위한 맞춤 기능 개발 → gap:company/custom-dev",
+      "새 버전에서 달라진 점 → doc:/docs/updates/classin-609-update#summary/609-whats-new"
+    ],
+    "negatives": [
+      {
+        "q": "AI 칠판 기능 켜 달라고 하려면 어디에 말해요",
+        "route": "doc:/docs/software/ai-learning-tools#4/ai-board-what-enable"
+      },
+      {
+        "q": "이번 6.0.9 업데이트에서 뭐가 바뀌었어요",
+        "route": "doc:/docs/updates/classin-609-update#summary/609-whats-new"
+      },
+      {
+        "q": "개인 칠판 인원 제한 풀려면 뭘 해야 돼요",
+        "route": "doc:/docs/teacher/classin-607-update#4/personal-board-no-limit-requirements"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "기능 제안",
+        "units": 1,
+        "site": 0,
+        "checked": "무관('기능을 더 사자는 제안이 아니라' 소개 문장)"
+      },
+      {
+        "query": "기능 요청",
+        "units": 8,
+        "site": 1,
+        "checked": "무관(꺼진 기능은 담당 매니저에게 활성화 요청·특정 오류 개선 예정 안내·Meta 연동 기능 제공 — 새 기능 제안 창구 아님)"
+      },
+      {
+        "query": "개선 요청",
+        "units": 1,
+        "site": 0,
+        "checked": "무관(전자칠판 Windows 버튼 오류 개선 예정과 협조 요청)"
+      },
+      {
+        "query": "건의",
+        "units": 1,
+        "site": 0,
+        "checked": "무관(보호 잠금 필터 문장의 글자 일치)"
+      },
+      {
+        "query": "피드백",
+        "units": 51,
+        "site": 17,
+        "checked": "무관(숙제 첨삭·AI 학습 피드백)"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-support",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:support/bug-fix-timeline",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "support",
+    "topic": "오류 수정 일정·처리 기간",
+    "asks": [
+      "when"
+    ],
+    "concepts": [
+      "C_bug_fix"
+    ],
+    "anchors": [
+      "버그 수정",
+      "오류 수정 일정",
+      "언제 고쳐져요",
+      "패치 일정",
+      "수정 기간",
+      "오류 처리 기간",
+      "수정 버전"
+    ],
+    "covers": "신고한 앱 오류·버그가 언제 고쳐지는지, 처리에 얼마나 걸리는지는 공개 안내에 없다는 것",
+    "notCovers": [
+      "소프트웨어 로그 보고하는 순서 → howto:guide:cs-figma-digest-1427",
+      "앱 문제 문의에 보낼 정보 → doc:/docs/start/app-update-cache-reinstall#7/inquiry-device-info",
+      "최신 버전으로 업데이트하는 방법 → doc:/docs/start/app-update-cache-reinstall#1/pc-update",
+      "신규 기능 출시 일정 → gap:company/product-roadmap",
+      "문의 접수 내역·처리 상태 → gap:support/inquiry-status"
+    ],
+    "negatives": [
+      {
+        "q": "오류 생겼을 때 로그 보내는 방법",
+        "route": "howto:guide:cs-figma-digest-1427"
+      },
+      {
+        "q": "앱이 자꾸 멈추는데 문의할 때 뭘 알려 줘요",
+        "route": "doc:/docs/start/app-update-cache-reinstall#7/inquiry-device-info"
+      },
+      {
+        "q": "PC 앱 최신 버전으로 올리는 법",
+        "route": "doc:/docs/start/app-update-cache-reinstall#1/pc-update"
+      }
+    ],
+    "handoff": "support",
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "support",
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "버그",
+        "units": 1,
+        "site": 0,
+        "checked": "무관(화면 캡션 설명)"
+      },
+      {
+        "query": "오류 수정",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "수정 일정",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "개선될 예정",
+        "units": 2,
+        "site": 0,
+        "checked": "무관(특정 전자칠판 Windows 버튼 오류의 지난 개선 예정 안내, 일반 수정 일정 아님)"
+      },
+      {
+        "query": "처리 기간",
+        "units": 1,
+        "site": 3,
+        "checked": "무관(계정 인증 처리 기간·개인정보 처리 안내)"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-support",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:support/maintenance-schedule",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "support",
+    "topic": "서버 정기 점검 일정",
+    "asks": [
+      "when",
+      "yesno"
+    ],
+    "concepts": [
+      "C_server_maintenance"
+    ],
+    "anchors": [
+      "서버 점검",
+      "서버 정기 점검",
+      "서버 점검 시간",
+      "시스템 점검",
+      "서버 점검 공지",
+      "점검 날짜"
+    ],
+    "covers": "클래스인 서버·서비스 정기 점검을 언제 하는지와 점검 일정을 어디서 보는지는 공개 안내에 없다는 것",
+    "notCovers": [
+      "새 버전 배포 일정(6.0.7) → doc:/docs/teacher/classin-607-update#0/607-release-schedule",
+      "전자칠판 OPS 업데이트 시간대 → doc:/docs/hardware/board-install-readiness#7/ops-update",
+      "장애 공지 채널·가용성 → policy:sla-availability",
+      "관리자 수업 모니터링 점검 시간 정하기 → doc:/docs/admin/class-monitoring#1/check-time-contact"
+    ],
+    "negatives": [
+      {
+        "q": "6.0.7 버전은 언제부터 배포돼요",
+        "route": "doc:/docs/teacher/classin-607-update#0/607-release-schedule"
+      },
+      {
+        "q": "칠판 업데이트는 수업 없는 시간에 해야 하나요",
+        "route": "doc:/docs/hardware/board-install-readiness#7/ops-update"
+      },
+      {
+        "q": "관리자가 수업 모니터링은 언제 보면 좋아요",
+        "route": "doc:/docs/admin/class-monitoring#1/check-time-contact"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "서버 점검",
+        "units": 1,
+        "site": 0,
+        "checked": "무관(도입 전 질문이 서버·계약 같은 위험 점검에 가깝다는 소개)"
+      },
+      {
+        "query": "정기 점검",
+        "units": 1,
+        "site": 0,
+        "checked": "무관(기기 테스트로 같은 점검을 미리 하기)"
+      },
+      {
+        "query": "점검 공지",
+        "units": 3,
+        "site": 0,
+        "checked": "무관(도입 단계별 점검·주 단위 운영 점검)"
+      },
+      {
+        "query": "서비스 중단",
+        "units": 0,
+        "site": 2,
+        "checked": "무관(약관: 운영·기술상 필요로 서비스를 변경·중단할 수 있음 — 정기 점검 일정 아님)"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-support",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:support/outage-report",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "support",
+    "topic": "장애 발생 확인서·원인 보고서",
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_outage_report"
+    ],
+    "anchors": [
+      "장애 확인서",
+      "장애 원인 보고서",
+      "RCA",
+      "장애 사실 확인",
+      "장애 경위서",
+      "원인 분석 보고",
+      "장애 증명"
+    ],
+    "covers": "특정 시간에 서비스 장애가 있었는지 공식으로 확인해 주거나 원인 보고서를 주는지는 공개 안내에 없다는 것",
+    "notCovers": [
+      "가용성·장애 공지 채널·대응 시간·장애 보상 → policy:sla-availability",
+      "수업 끊김 문의에 보낼 정보 → doc:/docs/start/class-connection-troubleshooting#6/inquiry-info",
+      "끝난 수업의 입퇴장 기록 보기 → doc:/docs/admin/class-monitoring#4/past-class-record"
+    ],
+    "negatives": [
+      {
+        "q": "어제 수업 학생들 입장 퇴장 기록 어디서 봐요",
+        "route": "doc:/docs/admin/class-monitoring#4/past-class-record"
+      },
+      {
+        "q": "수업이 계속 끊겨서 문의하려는데 뭘 적어요",
+        "route": "doc:/docs/start/class-connection-troubleshooting#6/inquiry-info"
+      },
+      {
+        "q": "서비스 가용성 몇 퍼센트 보장해요",
+        "route": "policy:sla-availability"
+      }
+    ],
+    "handoff": "support",
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "support",
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "장애",
+        "units": 0,
+        "site": 1,
+        "checked": "무관(약관 책임 제한: 외부 플랫폼·통신망 장애 등으로 인한 손해 — 확인서·보고서 아님)"
+      },
+      {
+        "query": "장애 확인",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "원인 보고",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "확인서",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "RCA",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-support",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:support/after-hours-support",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "support",
+    "topic": "야간·주말 수업 중 긴급 지원",
+    "asks": [
+      "yesno",
+      "when"
+    ],
+    "concepts": [
+      "C_contact_channel",
+      "C_after_hours_support"
+    ],
+    "anchors": [
+      "야간 지원",
+      "주말 지원",
+      "휴일 지원",
+      "야간 긴급 지원",
+      "저녁 수업 중 오류",
+      "주말 수업 중 문제",
+      "24시간 지원"
+    ],
+    "covers": "저녁·야간·주말·휴일 수업 중에 문제가 생겼을 때 바로 도와주는 긴급 지원이 있는지는 공개 안내에 없다는 것",
+    "notCovers": [
+      "상담 전화 운영 시간(문의 페이지 문장만 있음) → none",
+      "수업 직전·수업 중 끊김 때 먼저 할 것 → doc:/docs/start/class-connection-troubleshooting#0/conn-urgent-first",
+      "전자칠판 연기·타는 냄새 → doc:/docs/hardware/board-basic-operation#6/smoke-smell-emergency",
+      "장애 대응 시간 기준(SLA) → policy:sla-availability"
+    ],
+    "negatives": [
+      {
+        "q": "수업 시작했는데 학생들이 계속 튕겨요 지금 뭐부터 해요",
+        "route": "doc:/docs/start/class-connection-troubleshooting#0/conn-urgent-first"
+      },
+      {
+        "q": "칠판에서 타는 냄새가 나요",
+        "route": "doc:/docs/hardware/board-basic-operation#6/smoke-smell-emergency"
+      },
+      {
+        "q": "장애 나면 몇 시간 안에 대응해 준다는 계약 조건 있어요",
+        "route": "policy:sla-availability"
+      }
+    ],
+    "handoff": "support",
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "support",
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "야간",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "주말",
+        "units": 0,
+        "site": 1,
+        "checked": "무관(체크아웃 설치·상담 희망일에서 주말·공휴일 제외 — 긴급 지원 아님)"
+      },
+      {
+        "query": "평일",
+        "units": 0,
+        "site": 1,
+        "checked": "무관(문의 페이지 지사 전화 운영 시간 — 전화 시간만, 야간·주말 긴급 지원 여부 아님, missing 으로 따로 보고)"
+      },
+      {
+        "query": "긴급",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "24시간",
+        "units": 2,
+        "site": 0,
+        "checked": "무관(기관 설정 삭제 작업 최대 24시간)"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-support",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:support/repair-duration",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "support",
+    "topic": "전자칠판 수리 소요 기간",
+    "asks": [
+      "when",
+      "quantity"
+    ],
+    "concepts": [
+      "C_board",
+      "C_warranty",
+      "C_repair_duration"
+    ],
+    "anchors": [
+      "수리 소요 기간",
+      "수리 며칠",
+      "고치는 데 얼마나",
+      "수리 소요",
+      "수리 완료까지",
+      "기사 방문까지",
+      "수리 일정"
+    ],
+    "covers": "전자칠판 A/S를 접수한 뒤 점검·수리가 끝나기까지 걸리는 기간은 공개 안내에 없다는 것과 공개된 출장 점검·A/S 접수 경로 문장",
+    "notCovers": [
+      "무상 보증 기간·무상 출장 점검 → doc:/docs/hardware/hardware-spec-installation-faq#3/warranty-onsite",
+      "A/S 접수 때 보낼 내용 → doc:/docs/hardware/hardware-spec-installation-faq#3/as-request-steps",
+      "수리 중 대체 장비 → gap:support/loaner-board",
+      "보증 뒤 유상 수리 비용 → none"
+    ],
+    "negatives": [
+      {
+        "q": "전자칠판 무상 보증은 몇 년이에요",
+        "route": "doc:/docs/hardware/hardware-spec-installation-faq#3/warranty-onsite"
+      },
+      {
+        "q": "칠판 고장 신고할 때 시리얼 번호도 보내요",
+        "route": "doc:/docs/hardware/hardware-spec-installation-faq#3/as-request-steps"
+      },
+      {
+        "q": "칠판 화면이 아예 안 켜져요",
+        "route": "doc:/docs/hardware/board-basic-operation#6/no-screen-checks"
+      }
+    ],
+    "handoff": "support",
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "support",
+      "related": [
+        {
+          "unit": "doc:/docs/hardware/hardware-spec-installation-faq#3",
+          "i": 0,
+          "hash": "374c7fd7de8114f8"
+        },
+        {
+          "unit": "doc:/docs/hardware/hardware-spec-installation-faq#3",
+          "i": 3,
+          "hash": "6b5354b8e3dd3a00"
+        }
+      ]
+    },
+    "searchLog": [
+      {
+        "query": "수리 기간",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "수리",
+        "units": 1,
+        "site": 1,
+        "checked": "무관(점검과 수리는 설치 담당자나 A/S에 맡김·논술 강사 소개 — 기간 없음)"
+      },
+      {
+        "query": "출장",
+        "units": 5,
+        "site": 0,
+        "checked": "무관(정품 출장 점검 지원·무상 보증 기간 출장 점검 — 수리 기간 없음, 지원 문장은 관련 문장으로 씀)"
+      },
+      {
+        "query": "며칠",
+        "units": 7,
+        "site": 0,
+        "checked": "무관(계정 인증 처리 며칠)"
+      },
+      {
+        "query": "A/S 기간",
+        "units": 6,
+        "site": 2,
+        "checked": "무관(무상 A/S 보증 기간 기본 1년·개인정보 보관 기간 안내 — 수리 소요 기간 아님)"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-support",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:support/regional-onsite",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "support",
+    "topic": "지방·도서 지역 출장 지원",
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_board",
+      "C_regional_onsite"
+    ],
+    "anchors": [
+      "지방 출장",
+      "지방 A/S",
+      "섬 지역",
+      "도서 지역",
+      "지역 출장 범위",
+      "먼 지역 방문",
+      "지방 설치"
+    ],
+    "covers": "서울·수도권 밖 지방이나 섬(도서) 지역까지 설치·출장 점검을 와 주는지는 공개 안내에 없다는 것과 공개된 정품 출장 점검 문장",
+    "notCovers": [
+      "정품 칠판 출장 점검·무상 보증 기간 → doc:/docs/hardware/hardware-spec-installation-faq#3/warranty-onsite",
+      "학원으로 찾아오는 도입 상담 → gap:company/field-visit",
+      "목동 쇼룸 방문 → doc:/docs/start/customer-stories#9/showroom-visit",
+      "출장비·설치비 조정 → policy:installation-fee-waive-request"
+    ],
+    "negatives": [
+      {
+        "q": "정품 칠판은 고장 나면 출장 점검 와 주나요",
+        "route": "doc:/docs/hardware/hardware-spec-installation-faq#3/warranty-onsite"
+      },
+      {
+        "q": "쇼룸 가서 실제 칠판 써 볼 수 있어요",
+        "route": "doc:/docs/start/customer-stories#9/showroom-visit"
+      },
+      {
+        "q": "도입 상담은 어디로 신청해요",
+        "route": "doc:/docs/start/company-overview#9/adoption-inquiry"
+      }
+    ],
+    "handoff": "support",
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "support",
+      "related": [
+        {
+          "unit": "doc:/docs/hardware/hardware-spec-installation-faq#3",
+          "i": 0,
+          "hash": "374c7fd7de8114f8"
+        }
+      ]
+    },
+    "searchLog": [
+      {
+        "query": "지방",
+        "units": 7,
+        "site": 0,
+        "checked": "무관(띄어쓰기 무시 일치: '네 가지 방법' 등)"
+      },
+      {
+        "query": "제주",
+        "units": 3,
+        "site": 0,
+        "checked": "무관(띄어쓰기 무시 일치: '[결제] > [주문 세부정보]' 등)"
+      },
+      {
+        "query": "섬",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "도서 지역",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "출장",
+        "units": 5,
+        "site": 0,
+        "checked": "무관(정품 출장 점검 지원·무상 보증 기간 출장 점검 — 지역 범위 없음, 지원 문장은 관련 문장으로 씀)"
+      },
+      {
+        "query": "전국",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-support",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:support/loaner-board",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "support",
+    "topic": "수리 기간 대체 장비",
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_board",
+      "C_loaner_device"
+    ],
+    "anchors": [
+      "대체 장비",
+      "임시 칠판",
+      "대여 칠판",
+      "수리 중 빌려",
+      "대체 기기",
+      "예비 칠판",
+      "대체품"
+    ],
+    "covers": "전자칠판을 수리하는 동안 쓸 임시 대체 장비를 빌려주는지는 공개 안내에 없다는 것",
+    "notCovers": [
+      "무상 보증 기간·출장 점검 → doc:/docs/hardware/hardware-spec-installation-faq#3/warranty-onsite",
+      "수리 소요 기간 → gap:support/repair-duration",
+      "전자칠판 렌탈·분할 납부로 들이기 → policy:board-installment-rental",
+      "A/S 접수 때 보낼 내용 → doc:/docs/hardware/hardware-spec-installation-faq#3/as-request-steps"
+    ],
+    "negatives": [
+      {
+        "q": "칠판을 렌탈로 들일 수 있어요",
+        "route": "policy:board-installment-rental"
+      },
+      {
+        "q": "A/S 접수하려면 어떤 정보가 필요해요",
+        "route": "doc:/docs/hardware/hardware-spec-installation-faq#3/as-request-steps"
+      },
+      {
+        "q": "보증 기간 안이면 출장 점검 받을 수 있나요",
+        "route": "doc:/docs/hardware/hardware-spec-installation-faq#3/warranty-onsite"
+      }
+    ],
+    "handoff": "support",
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "support",
+      "related": [
+        {
+          "unit": "doc:/docs/hardware/hardware-spec-installation-faq#3",
+          "i": 3,
+          "hash": "6b5354b8e3dd3a00"
+        }
+      ]
+    },
+    "searchLog": [
+      {
+        "query": "대체 장비",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "대체 기기",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "임대",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "대여",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "대체",
+        "units": 6,
+        "site": 1,
+        "checked": "무관(Zoom 대체재·대체 강사·교사를 대체하지 않음)"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-support",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:support/impersonation-check",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "support",
+    "topic": "클래스인 사칭 연락 확인",
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_impersonation"
+    ],
+    "anchors": [
+      "사칭 전화",
+      "클래스인 사칭",
+      "가짜 상담원",
+      "의심 문자",
+      "보이스피싱",
+      "직원 맞는지 확인",
+      "공식 연락 확인"
+    ],
+    "covers": "클래스인 직원이라며 온 전화·문자·링크가 진짜인지 확인하는 방법은 공개 안내에 없다는 것과 공개된 원격 지원은 상담 채널 안내로만 받는다는 문장",
+    "notCovers": [
+      "원격 지원·원격 설치를 받는 경로 → doc:/docs/start/class-connection-troubleshooting#6/remote-support-caution",
+      "원격 설치 도움 요청 → doc:/docs/start/pc-install#4/remote-install-help",
+      "문의 때 비밀번호는 보내지 않기 → doc:/docs/start/login-troubleshooting#7/inquiry-password-screenshot",
+      "계정 도용·해킹 의심 → gap:account/account-hijack",
+      "공식 설치 파일 다운로드 주소 확인 → doc:guide:cs-figma-digest-1623/official-download-domain"
+    ],
+    "negatives": [
+      {
+        "q": "클래스인 설치 파일 받는 공식 주소가 맞는지 보고 싶어요",
+        "route": "doc:guide:cs-figma-digest-1623/official-download-domain"
+      },
+      {
+        "q": "로그인 문의할 때 비밀번호도 같이 보내야 해요",
+        "route": "doc:/docs/start/login-troubleshooting#7/inquiry-password-screenshot"
+      },
+      {
+        "q": "원격 지원은 어떤 방법으로 받는 거예요",
+        "route": "doc:/docs/start/class-connection-troubleshooting#6/remote-support-caution"
+      }
+    ],
+    "handoff": "support",
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "support",
+      "related": [
+        {
+          "unit": "doc:/docs/start/class-connection-troubleshooting#6",
+          "i": 9,
+          "hash": "67937e7f551148b9"
+        },
+        {
+          "unit": "doc:/docs/start/pc-install#4",
+          "i": 13,
+          "hash": "f46b8e8f41dd7ae5"
+        }
+      ]
+    },
+    "searchLog": [
+      {
+        "query": "사칭",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "보이스피싱",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "가짜",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "피싱",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "링크로만",
+        "units": 2,
+        "site": 0,
+        "checked": "관련(원격 지원 프로그램은 상담 채널이 보낸 링크로만 설치 — 사칭 확인 방법은 아님, 관련 문장으로 씀)"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-support",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  }
+]

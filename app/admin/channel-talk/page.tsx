@@ -1,6 +1,6 @@
 "use client"
 
-import { useSearchParams } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   Check,
@@ -39,6 +39,7 @@ import {
   isQuestionAlreadyPromoted,
   leadBoardDeepLink,
 } from "@/lib/channel-talk-loop"
+import { buildCopilotHandoffRequest, copilotConversationHref } from "@/lib/channel-talk-copilot-handoff"
 import { useUrlState } from "@/lib/use-url-state"
 import { cn } from "@/lib/utils"
 
@@ -210,6 +211,30 @@ function ChannelTalkInbox() {
   const [transcriptLoading, setTranscriptLoading] = useState(false)
   const [transcriptMessages, setTranscriptMessages] = useState<TranscriptMessage[]>([])
   const [transcriptError, setTranscriptError] = useState<string | null>(null)
+  const router = useRouter()
+  const [copilotOpening, setCopilotOpening] = useState(false)
+  const [copilotError, setCopilotError] = useState<string | null>(null)
+
+  // 이 상담을 내부 CS 코파일럿 대화로 넘긴다. 이름·연락처는 빼고 가린 맥락(customerContext)과 bridge:channel-talk 태그를 채운다.
+  const askCopilot = useCallback(async () => {
+    if (!selectedChatConversation || copilotOpening) return
+    setCopilotOpening(true)
+    setCopilotError(null)
+    try {
+      const request = buildCopilotHandoffRequest(selectedChatConversation, transcriptMessages)
+      const result = await adminFetchJson<{ conversation?: { id?: string } }>("/api/admin/cs-chat/conversations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(request),
+      })
+      const conversationId = result.conversation?.id
+      if (!conversationId) throw new Error("코파일럿 대화를 만들지 못했습니다.")
+      router.push(copilotConversationHref(conversationId))
+    } catch (error) {
+      setCopilotError(error instanceof Error ? error.message : "코파일럿 대화를 만들지 못했습니다.")
+      setCopilotOpening(false)
+    }
+  }, [selectedChatConversation, transcriptMessages, copilotOpening, router])
 
   const load = useCallback(async (force = false) => {
     setLoadError(null)
@@ -249,6 +274,8 @@ function ChannelTalkInbox() {
   // Load transcript messages when a conversation is selected for quick view
   const openChatModal = useCallback(async (conversation: Conversation) => {
     setSelectedChatConversation(conversation)
+    setCopilotOpening(false)
+    setCopilotError(null)
     setTranscriptLoading(true)
     setTranscriptError(null)
     setTranscriptMessages([])
@@ -862,7 +889,7 @@ function ChannelTalkInbox() {
                       {/* Bottom CRM Registration Row */}
                       <div className="mt-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-t border-black/[0.04] pt-2.5 text-xs">
                         <div className="text-[11px] text-[#A39E98]">
-                          담당자 배정: <span className="font-semibold text-[#111110]">김민재 매니저 (CS/Ops)</span>
+                          메시지 {conversation.messageCount}건
                         </div>
 
                         <div className="flex flex-wrap items-center gap-2">
@@ -1041,7 +1068,7 @@ function ChannelTalkInbox() {
 
               <div className="mt-4 flex items-center justify-between border-t border-black/[0.04] pt-2 text-[11px] text-[#A39E98]">
                 <span>일평균 인바운드: {Math.round((activityTotals.conversations / 14) * 10) / 10}건/일</span>
-                <span>담당 매니저: 김민재</span>
+                <span>담당자 표시는 채널톡 연동 후 제공됩니다</span>
               </div>
             </div>
           </div>
@@ -1178,12 +1205,21 @@ function ChannelTalkInbox() {
                       </span>
                     </div>
                     <p className="text-[10.5px] sm:text-[11px] text-[#A39E98]">
-                      {selectedChatConversation.phone || "연락처 미등록"} · 담당: 김민재 매니저 (CS/Ops)
+                      {selectedChatConversation.phone || "연락처 미등록"}
                     </p>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void askCopilot()}
+                    disabled={copilotOpening || transcriptLoading}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-[#084734]/20 bg-white px-3 py-1.5 text-[11px] font-bold text-[#084734] hover:bg-[#ECFDF5] disabled:opacity-60"
+                  >
+                    {copilotOpening ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                    코파일럿에 묻기
+                  </button>
                   <button
                     type="button"
                     onClick={() => setSelectedChatConversation(null)}
@@ -1194,6 +1230,12 @@ function ChannelTalkInbox() {
                   </button>
                 </div>
               </div>
+
+              {copilotError ? (
+                <div role="alert" className="border-b border-black/[0.06] bg-[#FCE9E9] px-4 py-2 text-xs text-[#8F2C2C]">
+                  {copilotError}
+                </div>
+              ) : null}
 
               {/* Modal Body: Split 2 columns (Left: Chat stream, Right: Figma guide supporter) */}
               <div className="flex-1 flex flex-col md:flex-row min-h-0 overflow-hidden">
@@ -1227,7 +1269,7 @@ function ChannelTalkInbox() {
                             )}
                           >
                             <span className="text-[9.5px] sm:text-[10px] text-[#A39E98] mb-1">
-                              {isCustomer ? "고객" : isAgent ? "담당 매니저 (민재)" : "봇 안내"}
+                              {isCustomer ? "고객" : isAgent ? "상담원" : "봇 안내"}
                             </span>
                             <div
                               className={cn(

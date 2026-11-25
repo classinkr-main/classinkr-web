@@ -357,6 +357,21 @@ REV 매출의 3단 확도(확정/고확도/예정)는 본질 기능이라 서로
 - Radius: `--radius-control`(공개 4px · 어드민 6px)
 - Focus: `2px solid #084734` outline
 
+### 챗봇 위젯 면 [public] — `in force`(2026-11-25, 챗봇 점검 CX-14·CX-15·CX-16·CX-06·CX-29)
+
+코드: `components/ui/FloatingChatbot.tsx`(런처·패널 틀), `components/ui/chatbot/*.tsx`(헤더·목록·입력·상담 카드·답 글 링크), `components/ui/ChatbotTeaser.tsx`. 레이어·모달·높이 규칙은 5-C에 있다.
+
+- **면은 불투명하다.** 패널은 `surface-paper` + 1px `line-strong` + Deep Shadow(`shadow-deep`, 떠 있는 층) 하나다. 헤더와 입력 바닥은 `surface-sheet` + `line-hair` 한 줄로 목록과 가른다. 답 말풍선은 `surface-sheet` + `line-hair`, 질문 말풍선은 `fg-accent` 채움 + 같은 색 1px 선이다. 반투명 그라데이션·`backdrop-filter`·색 후광·안쪽 하이라이트는 쓰지 않는다. 밝은 페이지(/faq·홈) 위에서 뒤 글자가 비치지 않는다.
+- **선과 강제 색상.** 칩·출처 카드·작은 버튼은 `surface-sheet` + `line-strong`이고 hover는 선을 `fg-accent`로 진하게 한다. 입력 상자는 조작 경계 `line-control`이다. 패널·말풍선·칩·입력이 모두 1px 선을 가져 강제 색상(Windows 고대비)에서도 경계가 남는다.
+- **딤과 티저.** 휴대폰 딤은 `bg-surface-scrim`(blur 없음)이다. 티저는 쿠키 배너와 같은 떠 있는 층(`surface-sheet` + `line-strong` + Deep Shadow)이다.
+- **색은 토큰 유틸만 쓴다.** 위젯 파일에는 hex·rgba 리터럴이 0개다. 오류 글자는 `fg-danger` 하나다(예전의 `#7A2A13`·`#FBEAE2` 복사 실패 면은 없앴다).
+- **글자는 13px 이상이다.** 라벨·칩·출처·상태는 `text-note`·`text-label`(13), 목록 번호는 `text-folio`(13), 답 본문은 `text-caption`(14), 제목은 `text-ui`(15)이고 입력은 보증 규칙대로 16px다. 9~12px 리터럴은 쓰지 않는다. 알약 배지('추천'·'상담 권장')는 `status-dot` + 13px 글자로 바꿨다.
+- **포커스와 비활성.** 입력 상자는 포커스 때 테두리를 `fg-accent`로 바꾸고 2px 링을 −1px 겹쳐 한 선으로 그린다(§6). 비활성 전송·다시 시도·칩은 흐린 초록이 아니라 `surface-skeleton` 면 + `fg-muted` 글자다. 보이는 36px 버튼은 `CHATBOT_HIT_AREA_CLASS`, 32px 버튼은 `CHATBOT_HIT_AREA_32_CLASS`로 누름 영역 44px를 둔다.
+- **상태 점.** 런처와 헤더에는 상태 점·핑·후광을 두지 않는다. 초록 점이 '실시간 상담원 대기'로 읽혀 AI 안내 창이 사람 상담처럼 보였다(CX-06). 사람 상담은 상담 연결 카드로만 잇는다.
+- **답 글 링크.** 사이트 안 공개 경로('(/contact)'·'/showroom'·'/docs/…')와 이 사이트 주소는 `next/link` 본문 링크(`link-body`)로 그린다. 휴대폰에서 누르면 대화창을 닫는다. 외부 주소는 지우지 않고 새 창 링크(`rel="noopener noreferrer"`, 화면 읽기 '(새 창)')로 둔다. 원본 이미지(마크다운 이미지·`/images/` 경로·이미지 파일 주소)는 지운다.
+- **반경은 결정 대기다**(챗봇 점검 결정 2). 지금 값은 패널 26px, 말풍선 18px(꼬리 쪽 6px), 칩·출처·상담 요약 12px, 작은 버튼 8px, 입력 상자 16px(안쪽 버튼 12px), 헤더 아이콘 상자 14px, 런처·헤더 아이콘 버튼 원형이다. 편집 지면 규칙(떠 있는 층 6px, 컨트롤 4px, 카드 0)으로 맞출지, 원형 예외를 둘지 정하면 이 줄과 §5 반경을 함께 고친다.
+- **다크 모드는 지원하지 않는다.** 공개 사이트는 `prefers-color-scheme`에 반응하지 않고, 챗봇도 밝은 면 하나다. 먹 지면(`surface-ink`)은 다크 모드가 아니다. 고대비는 지원한다(`prefers-contrast: more`의 선 두께, 강제 색상의 1px 경계). 사이트 전체의 다크 모드 정책은 챗봇 점검 결정 12에서 정한다.
+
 ---
 
 ## 5. 레이아웃 원칙 [공통]
@@ -430,17 +445,20 @@ z는 토큰으로만 쌓는다(X09). 지금의 리터럴(`z-40`·`z-50`·`z-[60]
 | 40 | `--z-header` | Header(ReadingProgress는 P5에서 삭제하고 헤더 hair 위 1px 읽기 괘선으로 바꾼다) | top 0 | top 0 |
 | 42 | `--z-floating` | MobileFloatingCTA(아웃라인) | `left-3`, 하단 safe-area + 16 + 6px | 없음 |
 | 44 | `--z-chatbot` | FloatingChatbot 런처·패널 | `right-3`, 하단 safe-area + 16px | `right-6 bottom-6` |
-| 46 | `--z-consent` | ConsentBanner | `inset-x-3`, 하단 safe-area + 16px | `left-6 bottom-6` |
+| 46 | `--z-consent` | ConsentBanner(그림 48px + 말풍선, 말풍선 폭 `min(13.25rem, 100vw − 4.75rem)`, 설정을 펼치면 `min(14.5rem, …)`) | `left-3`, 하단 safe-area + 12px | 40rem(sm)부터 `left-5 bottom-5` |
 | 50 | (공유 기본값) | Radix Dialog·오버레이 | 가운데 | 가운데 |
 | 60 | `--z-skiplink` | 스킵 링크(포커스 시에만) | `left-4 top-4` | 같음 |
 | 9999 | (공유 기본값) | 토스트 | `inset-x-4`, 하단 safe-area + 80px(제안값, 운영자 확인 중) | `right-4`, `top: header-h + 16px` |
 
 - safe-area 공식은 하나다: 하단 고정 레이어는 `bottom: calc(env(safe-area-inset-bottom) + Npx)`를 쓴다. z가 높은 전폭 래퍼는 `pointer-events-none`, 조작 요소만 `pointer-events-auto`.
-- 쿠키 배너가 열려 있으면 MobileFloatingCTA와 챗봇 런처를 숨긴다(언마운트하지 않아 대화는 남는다).
+- 쿠키 배너가 열려 있으면 휴대폰(< 48rem)에서는 MobileFloatingCTA와 챗봇 런처를 숨긴다(언마운트하지 않아 대화는 남는다). 데스크톱은 배너(왼쪽 아래)와 런처(오른쪽 아래)가 겹치지 않아 함께 보인다. 아래 '뷰포트당 1개'의 예외다(2026-11-25, 쿠키 점검 D10·챗봇 점검 결정 1의 권장안). 휴대폰에서 배너가 챗봇을 가린 채 '챗봇에게 묻기'를 누르면 열림은 예약되고, 배너가 '쿠키 선택 뒤 챗봇이 열려요'를 보이며 포커스를 받는다. 챗봇 티저는 배너가 떠 있는 동안 체류 시간을 세지 않고 보이지도 않는다.
+- 쿠키 배너의 닫기: 첫 방문(미결정)에는 닫기가 없다(V22). 푸터 '쿠키 설정'으로 다시 연 배너에만 닫기(X)와 Esc를 두고, 닫으면 아무것도 저장하지 않으며 포커스는 누른 버튼으로 돌아간다(2026-11-25). 배너 DOM은 스킵 링크 바로 뒤에 둔다(화면 위치는 위 표 그대로).
 - 모바일 메뉴가 열리면 `main`·`footer`는 `inert`, 플로팅(42·44)은 `inert` + 숨김이다(`[data-inert-with-menu]`).
 - 챗봇 패널이 열리면 MobileFloatingCTA를 숨긴다(`[data-hide-with-chat]`, Tab 순서에서도 빠진다).
+- 휴대폰(< 48rem)의 챗봇 패널은 모달이다(2026-11-25, 챗봇 점검 CX-09·CX-11): `aria-modal="true"`, 패널 자리의 형제(스킵 링크·배너·헤더·`main`·푸터·하단 CTA)는 `inert`, 문서 스크롤은 잠근다(`overflow: hidden`, 스크롤 위치는 그대로). 열 때 같은 주소의 history 항목을 하나 쌓아 뒤로가기 한 번이면 페이지를 떠나지 않고 패널만 닫는다. 닫으면 연 요소(없으면 런처)로 포커스를 돌려준다. 데스크톱 패널은 비모달이다. 터치로 열면 포커스는 입력창이 아니라 패널 제목으로 간다(키보드가 갑자기 뜨지 않게).
+- 챗봇 패널 높이는 보이는 화면(visualViewport)을 따른다(CX-10): 키보드가 올라오면 그만큼 패널을 올리고, 보이는 높이가 34rem 미만(가로 모드·키보드·글꼴 확대)이면 헤더를 버튼 높이 한 줄로 줄이고 부제·환영 칩을 접고 휴대폰 런처를 감춘다. 휴대폰 가로 폭은 최대 36rem. viewport 메타의 `interactive-widget`·`viewport-fit=cover`는 쓰지 않는다(뒤쪽은 결정 대기, 실기기 키보드 확인은 사람 확인 항목).
 - Dialog가 열리면 그 아래 전부를 덮는다(쿠키 배너 포함). 쿠키 배너를 Dialog 위로 올리지 않는다.
-- 떠 있는 요소는 뷰포트당 1개다. 흐름 안의 결정 CTA가 보이면 MobileFloatingCTA를 숨긴다 `target`(2026-10-28).
+- 떠 있는 요소는 뷰포트당 1개다(예외: 데스크톱의 쿠키 배너 + 챗봇 런처, 위 참고). 흐름 안의 결정 CTA가 보이면 MobileFloatingCTA를 숨긴다 `target`(2026-10-28).
 
 ### 배경 교차 리듬 — `[public] retired`
 공개 화면에서는 새로 쓰지 않는다. surfaces 구현 PR이 이 소절을 지면 배정 규칙(C19: 역할로 배정, 구획은 괘선과 여백)으로 교체한다. 지면 배정(V10-A · 2026-10-28): paper가 기본, sunken은 도해·부록·FinalCTA 세 역할(연속 금지), sheet는 섹션 지면으로 쓰지 않고 물건에만, 먹은 Manifesto + 푸터다. 홈은 11지면 + 푸터, 지면 바뀜 6회 이하.

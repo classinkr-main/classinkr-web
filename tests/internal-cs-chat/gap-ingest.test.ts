@@ -10,10 +10,18 @@ const mocks = vi.hoisted(() => ({
   requireVerifiedAdminContext: vi.fn(),
   reviewInternalCsMessage: vi.fn(),
   getInternalCsConversation: vi.fn(),
+  getInternalCsMessageById: vi.fn(),
+  revalidateTag: vi.fn(),
   createInternalCsMessage: vi.fn(),
   buildInternalCsCopilotContext: vi.fn(),
   generateInternalCsAnswer: vi.fn(),
 }))
+
+// 승인·판정 뒤 지표 캐시 무효화(revalidateTag)는 Next 요청 문맥 밖에서 던지므로 가짜로 둔다.
+vi.mock("next/cache", async () => {
+  const actual = await vi.importActual<typeof import("next/cache")>("next/cache")
+  return { ...actual, revalidateTag: mocks.revalidateTag }
+})
 
 vi.mock("@/lib/supabase/admin", () => ({
   createSupabaseAdminClient: mocks.createSupabaseAdminClient,
@@ -27,7 +35,7 @@ vi.mock("@/lib/chatbot/service", async () => {
 })
 
 vi.mock("@/lib/admin-auth", () => ({
-  CRM_STAFF_ADMIN_API_ROLES: ["SUPER_ADMIN", "ADMIN", "BRANCH"],
+  CS_COPILOT_API_ROLES: ["SUPER_ADMIN", "ADMIN", "BRANCH"],
   requireVerifiedAdminContext: mocks.requireVerifiedAdminContext,
 }))
 
@@ -36,6 +44,7 @@ vi.mock("@/lib/repositories/internal-cs-chat", () => ({
   isInternalCsChatNotReadyError: vi.fn(() => false),
   reviewInternalCsMessage: mocks.reviewInternalCsMessage,
   getInternalCsConversation: mocks.getInternalCsConversation,
+  getInternalCsMessageById: mocks.getInternalCsMessageById,
   createInternalCsMessage: mocks.createInternalCsMessage,
   updateInternalCsRegressionOutcome: vi.fn(),
 }))
@@ -48,7 +57,7 @@ vi.mock("@/lib/internal-cs-chat/gemini", () => ({
   generateInternalCsAnswer: mocks.generateInternalCsAnswer,
 }))
 
-import { ingestInternalCsGap } from "@/lib/internal-cs-chat/gap-ingest"
+import { ingestInternalCsGap, shouldIngestInternalCsGap } from "@/lib/internal-cs-chat/gap-ingest"
 import { PATCH } from "@/app/api/admin/cs-chat/conversations/[id]/messages/[messageId]/route"
 import { POST as generatePost } from "@/app/api/admin/cs-chat/conversations/[id]/generate/route"
 
@@ -59,6 +68,16 @@ async function importRealService() {
 afterEach(() => {
   vi.clearAllMocks()
   vi.restoreAllMocks()
+})
+
+describe("shouldIngestInternalCsGap", () => {
+  it("ingests only evidence-less questions without model failures, and never reruns", () => {
+    expect(shouldIngestInternalCsGap({ failureKinds: [], evidenceNone: true })).toBe(true)
+    expect(shouldIngestInternalCsGap({ failureKinds: ["quota"], evidenceNone: true })).toBe(false)
+    expect(shouldIngestInternalCsGap({ failureKinds: ["timeout"], evidenceNone: true })).toBe(false)
+    expect(shouldIngestInternalCsGap({ failureKinds: [], evidenceNone: false })).toBe(false)
+    expect(shouldIngestInternalCsGap({ failureKinds: [], evidenceNone: true, isRerun: true })).toBe(false)
+  })
 })
 
 describe("ingestInternalCsGap", () => {
@@ -526,6 +545,14 @@ describe("message review PATCH gap ingestion hook", () => {
       name: "CS 담당자",
       userId: "cs-1",
     })
+    // 승인 경계(IC-01)가 원문과 교정본을 비교한다 — 원문은 검토 전 초안이다.
+    mocks.getInternalCsMessageById.mockResolvedValue({
+      id: assistantMessageId,
+      conversation_id: conversationId,
+      role: "assistant",
+      content: "검토 전 초안",
+      feedback_labels: [],
+    })
     if (options.lookupFails) {
       mocks.getInternalCsConversation.mockRejectedValue(new Error("lookup failed"))
     } else {
@@ -608,7 +635,7 @@ describe("generate route fallback gap ingestion hook", () => {
     "unverified_claims_must_be_labeled",
   ]
 
-  function generation(origin: "model" | "deterministic") {
+  function generation(origin: "model" | "deterministic", failureKinds: string[] = []) {
     return {
       answer: origin === "deterministic" ? "AI 초안을 생성하지 못했습니다." : "모델 답변",
       mode: "fast",
@@ -616,6 +643,10 @@ describe("generate route fallback gap ingestion hook", () => {
       origin,
       fallbackUsed: origin === "deterministic",
       attemptedModels: ["gemini-3.5-flash"],
+      attempts: [],
+      failureKinds,
+      latencyMs: 10,
+      timeBudget: { totalMs: 8_000, attemptMs: 3_500 },
       citations: [],
       reviewState: "pending",
       guardrails,
@@ -633,7 +664,10 @@ describe("generate route fallback gap ingestion hook", () => {
     )
   }
 
-  function setDefaults(origin: "model" | "deterministic") {
+  function setDefaults(
+    origin: "model" | "deterministic",
+    { failureKinds = [], evidence = false }: { failureKinds?: string[]; evidence?: boolean } = {}
+  ) {
     mocks.requireVerifiedAdminContext.mockResolvedValue({
       role: "ADMIN",
       name: "CS 담당자",
@@ -655,17 +689,19 @@ describe("generate route fallback gap ingestion hook", () => {
       internalContext: "내부 근거",
       sourceRefs: [],
       deterministicFallback: "확인된 자료만으로 답변해 주세요.",
-      publicEvidence: { answer: null, sources: [] },
+      publicEvidence: { answer: null, sources: evidence ? [{ id: "source-1" }] : [] },
       curatedEvidence: null,
     })
-    mocks.generateInternalCsAnswer.mockResolvedValue(generation(origin))
+    mocks.generateInternalCsAnswer.mockResolvedValue(generation(origin, failureKinds))
     mocks.createInternalCsMessage
       .mockReset()
       .mockResolvedValueOnce({ id: "user-message-1", role: "user" })
       .mockResolvedValueOnce({ id: "assistant-message-1", role: "assistant" })
   }
 
-  it("ingests the question as internal_cs_fallback when the saved answer is the deterministic fallback", async () => {
+  // 의미를 바꾼 시험: 이전에는 '모델이 전부 실패해 대체 글이 저장됨'이 유입 조건이었다. 모델 장애는 지식 공백이 아니므로
+  // 이제 '검색 근거가 하나도 없고 모델 호출은 실패하지 않음'이 조건이다(IC-03 model-6).
+  it("ingests the question as internal_cs_fallback when no evidence was found and the model call did not fail", async () => {
     setDefaults("deterministic")
 
     const response = await generatePost(generateRequest("전자칠판 견적 기준을 알려줘"), {
@@ -687,8 +723,19 @@ describe("generate route fallback gap ingestion hook", () => {
     )
   })
 
-  it("does not ingest when a model answered", async () => {
-    setDefaults("model")
+  it("does not ingest when the model call failed, even with no evidence (outage, not a knowledge gap)", async () => {
+    setDefaults("deterministic", { failureKinds: ["quota"] })
+
+    const response = await generatePost(generateRequest("전자칠판 견적 기준을 알려줘"), {
+      params: Promise.resolve({ id: "conversation-1" }),
+    })
+
+    expect(response.status).toBe(201)
+    expect(mocks.upsertQuestionCluster).not.toHaveBeenCalled()
+  })
+
+  it("does not ingest when evidence was found and a model answered", async () => {
+    setDefaults("model", { evidence: true })
 
     const response = await generatePost(generateRequest("전자칠판 견적 기준을 알려줘"), {
       params: Promise.resolve({ id: "conversation-1" }),

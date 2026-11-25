@@ -50,16 +50,21 @@ describe("shouldCloseChatbotAfterLinkClick", () => {
 })
 
 describe("FloatingChatbot wiring", () => {
-  const source = readFileSync(path.join(process.cwd(), "components/ui/FloatingChatbot.tsx"), "utf8")
+  const read = (file: string) => readFileSync(path.join(process.cwd(), file), "utf8")
+  const source = read("components/ui/FloatingChatbot.tsx")
+  const messageList = read("components/ui/chatbot/MessageList.tsx")
 
   it("passes the close-after-navigation handler to source links and the contact bridge", () => {
-    expect(source).toContain("<SourceLinks sources={message.sources} onNavigate={closeAfterInChatNavigation} />")
-    expect(source).toMatch(/<ConsultationBridge[\s\S]*?onNavigate=\{closeAfterInChatNavigation\}[\s\S]*?\/>/)
-    expect(source).toContain("onClick={(event) => onNavigate?.(event)}")
+    expect(source).toContain("closeAfterInChatNavigation={closeAfterInChatNavigation}")
+    expect(messageList).toContain("<SourceLinks sources={message.sources} onNavigate={closeAfterInChatNavigation} />")
+    expect(messageList).toMatch(/<ConsultationBridge[\s\S]*?onNavigate=\{closeAfterInChatNavigation\}[\s\S]*?\/>/)
+    expect(messageList).toContain("onClick={(event) => onNavigate?.(event)}")
   })
 
   it("decides with the desktop media query and keeps the conversation state", () => {
-    const body = source.match(/function closeAfterInChatNavigation\(click: ChatLinkClick\) \{([\s\S]*?)\n {4}\}/)?.[1] ?? ""
+    const body =
+      source.match(/const closeAfterInChatNavigation = useCallback\(\(click: ChatLinkClick\) => \{([\s\S]*?)\n {4}\}, \[\]\)/)?.[1] ?? ""
+    expect(body).not.toBe("")
     expect(body).toContain("window.matchMedia(CHATBOT_DESKTOP_MEDIA_QUERY).matches")
     expect(body).toContain("shouldCloseChatbotAfterLinkClick(click, isDesktop)")
     expect(body).toContain("setIsOpen(false)")

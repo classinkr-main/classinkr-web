@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs"
+import { readFileSync, readdirSync } from "node:fs"
 import { join } from "node:path"
 
 import { renderToStaticMarkup } from "react-dom/server"
@@ -42,7 +42,12 @@ describe("ChatbotTeaser 닫기 버튼", () => {
 })
 
 describe("FloatingChatbot 작은 버튼", () => {
-  const source = readFileSync(join(process.cwd(), "components/ui/FloatingChatbot.tsx"), "utf8")
+  // 위젯은 셸(FloatingChatbot.tsx)과 components/ui/chatbot/ 모듈로 나뉘어 있다. 버튼이 어느 파일로 옮겨도 함께 본다.
+  const widgetFiles = [
+    "components/ui/FloatingChatbot.tsx",
+    ...readdirSync(join(process.cwd(), "components/ui/chatbot")).map((name) => `components/ui/chatbot/${name}`),
+  ]
+  const source = widgetFiles.map((file) => readFileSync(join(process.cwd(), file), "utf8")).join("\n")
 
   it("음소거·닫기·도움됨·도움 안 됨·답변 복사에 누름 영역 클래스를 쓴다", () => {
     const uses = source.match(/^\s*CHATBOT_HIT_AREA_CLASS,?\s*$/gm) ?? []

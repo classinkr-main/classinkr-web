@@ -1,0 +1,2010 @@
+[
+  {
+    "id": "gap:start/install-size",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "start",
+    "topic": "설치 파일·앱 용량",
+    "asks": [
+      "quantity"
+    ],
+    "concepts": [
+      "C_installer",
+      "C_install",
+      "C_install_size"
+    ],
+    "anchors": [
+      "설치 용량",
+      "앱 용량",
+      "설치 파일 크기",
+      "앱 크기",
+      "몇 기가",
+      "디스크 공간",
+      "업데이트 용량",
+      "저장 공간 얼마나"
+    ],
+    "covers": "PC 설치 파일·휴대폰 앱이 차지하는 용량이나 설치에 필요한 디스크 공간 숫자는 공개 안내에 없다는 것",
+    "notCovers": [
+      "설치가 안 될 때 저장 공간 확인 → doc:/docs/start/pc-install-troubleshooting#0/install-first-checks",
+      "PC 최소 메모리 사양 → doc:/docs/start/pc-install#5/min-spec",
+      "앱에 쌓인 캐시 용량 보기 → doc:/docs/start/app-update-cache-reinstall#4/mobile-cache-clear",
+      "녹화 파일 용량 → gap:recording/file-size-per-hour",
+      "학원 클라우드 저장 용량 → policy:basics-storage-quota"
+    ],
+    "negatives": [
+      {
+        "q": "설치가 안 되는데 저장 공간도 봐야 하나요",
+        "route": "doc:/docs/start/pc-install-troubleshooting#0/install-first-checks"
+      },
+      {
+        "q": "노트북 메모리 몇 기가 있어야 돌아가요",
+        "route": "doc:/docs/start/pc-install#5/min-spec"
+      },
+      {
+        "q": "폰 앱에 쌓인 캐시 용량은 어디서 봐요",
+        "route": "doc:/docs/start/app-update-cache-reinstall#4/mobile-cache-clear"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "설치 용량",
+        "units": 5,
+        "site": 0,
+        "checked": "무관(전자칠판 설치 전 멀티탭 용량·캐시 용량 문장, 설치 파일 용량 아님)"
+      },
+      {
+        "query": "앱 크기",
+        "units": 2,
+        "site": 0,
+        "checked": "무관(안드로이드 마이크 입력 크기)"
+      },
+      {
+        "query": "설치 파일 크기",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "디스크",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "용량",
+        "units": 63,
+        "site": 2,
+        "checked": "무관(학원 스토리지·첨부 파일·멀티탭 용량, 앱 설치 용량 숫자 없음)"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-start",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:start/offline-installer",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "start",
+    "topic": "인터넷 없이 설치하는 오프라인 설치 파일",
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_installer",
+      "C_install",
+      "C_offline_installer"
+    ],
+    "anchors": [
+      "오프라인 설치",
+      "오프라인 설치 파일",
+      "인터넷 없이 설치",
+      "USB로 설치",
+      "설치 파일 옮기기",
+      "폐쇄망 설치",
+      "오프라인 인스톨러"
+    ],
+    "covers": "인터넷이 안 되는 PC에 USB 등으로 옮겨 설치하는 오프라인 설치 파일이 있는지, 설치 중 인터넷이 꼭 필요한지는 공개 안내에 없다는 것",
+    "notCovers": [
+      "인터넷이 끊겨도 칠판 필기 → doc:/docs/start/pre-adoption-faq-22-questions#5/offline-board-writing",
+      "윈도우 설치 파일 받는 곳 → doc:/docs/start/pc-install#1/windows-steps",
+      "다운로드한 설치 파일 찾기 → doc:/docs/start/pc-install-troubleshooting#1/find-downloaded-installer",
+      "학교 방화벽에서 열 도메인 → fixed:web-filter-domains"
+    ],
+    "negatives": [
+      {
+        "q": "와이파이 나가도 판서는 계속 돼요?",
+        "route": "doc:/docs/start/pre-adoption-faq-22-questions#5/offline-board-writing"
+      },
+      {
+        "q": "받아 둔 설치 파일이 어디 저장됐는지 모르겠어요",
+        "route": "doc:/docs/start/pc-install-troubleshooting#1/find-downloaded-installer"
+      },
+      {
+        "q": "윈도우용 설치 파일은 어디서 받아요",
+        "route": "doc:/docs/start/pc-install#1/windows-steps"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "오프라인 설치",
+        "units": 1,
+        "site": 0,
+        "checked": "무관(도입 상담 준비물의 온라인·오프라인 수업 비중)"
+      },
+      {
+        "query": "인터넷 없이",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "설치 파일 공유",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "USB",
+        "units": 11,
+        "site": 0,
+        "checked": "무관(전자칠판 USB 포트·카메라 전원)"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-start",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:start/mass-deploy",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "start",
+    "topic": "여러 컴퓨터 일괄 설치",
+    "asks": [
+      "howto",
+      "yesno"
+    ],
+    "concepts": [
+      "C_install",
+      "C_installer",
+      "C_mass_deploy"
+    ],
+    "anchors": [
+      "일괄 설치",
+      "대량 설치",
+      "한꺼번에 설치",
+      "원격 배포",
+      "MSI",
+      "무인 설치",
+      "전산실 설치",
+      "컴퓨터실 설치"
+    ],
+    "covers": "학교 전산실·학원 강의실 PC 여러 대에 한꺼번에 깔거나 MSI·무인 설치로 배포하는 방법은 공개 안내에 없다는 것",
+    "notCovers": [
+      "관리자가 관리하는 컴퓨터에서 설치가 막힐 때 → doc:/docs/start/pc-install-troubleshooting#0/install-managed-computer",
+      "설치를 원격으로 도와받기 → doc:/docs/start/pc-install#4/remote-install-help",
+      "전자칠판 MDM 등록 → fixed:board-mdm",
+      "학생 명단 한꺼번에 올리기 → fixed:student-list-excel-import"
+    ],
+    "negatives": [
+      {
+        "q": "학교에서 관리하는 노트북이라 설치 권한이 없대요",
+        "route": "doc:/docs/start/pc-install-troubleshooting#0/install-managed-computer"
+      },
+      {
+        "q": "학생 명단을 엑셀로 한 번에 넣을 수 있나요",
+        "route": "fixed:student-list-excel-import"
+      },
+      {
+        "q": "설치가 너무 어려운데 원격으로 해 주실 수 있어요",
+        "route": "doc:/docs/start/pc-install#4/remote-install-help"
+      }
+    ],
+    "handoff": "demo",
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "demo",
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "일괄 설치",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "대량 설치",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "MSI",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "무인 설치",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "전산실",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "한 번에 설치",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-start",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:start/windows-arm",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "start",
+    "topic": "윈도우 ARM 노트북 지원",
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_pc",
+      "C_installer",
+      "C_windows_arm"
+    ],
+    "anchors": [
+      "윈도우 ARM",
+      "ARM 노트북",
+      "스냅드래곤",
+      "퀄컴 노트북",
+      "코파일럿 PC",
+      "서피스 프로 X",
+      "ARM64"
+    ],
+    "covers": "스냅드래곤 같은 ARM 칩을 쓰는 윈도우 노트북에서 클래스인이 되는지는 공개 안내에 없다는 것(윈도우는 32·64비트 설치 파일만 안내)",
+    "notCovers": [
+      "윈도우 32비트·64비트 설치 파일 → doc:/docs/start/pc-install#1/windows-version-bit",
+      "맥 M 시리즈 칩 → doc:/docs/start/pc-install#2/mac-chip-version",
+      "리눅스 arm 설치 파일 → doc:/docs/start/pc-install#3/linux-install"
+    ],
+    "negatives": [
+      {
+        "q": "맥북 M3 쓰는데 어떤 설치 파일 받아요",
+        "route": "doc:/docs/start/pc-install#2/mac-chip-version"
+      },
+      {
+        "q": "리눅스 arm용 파일도 있나요",
+        "route": "doc:/docs/start/pc-install#3/linux-install"
+      },
+      {
+        "q": "윈도우 32비트 컴퓨터에도 깔려요?",
+        "route": "doc:/docs/start/pc-install#1/windows-version-bit"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "스냅드래곤",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "ARM",
+        "units": 3,
+        "site": 0,
+        "checked": "무관(리눅스 arm 설치 파일만, 윈도우 ARM 언급 없음)"
+      },
+      {
+        "query": "코파일럿",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "서피스",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-start",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:start/windows-s-mode",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "start",
+    "topic": "윈도우 S 모드 노트북 설치",
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_pc",
+      "C_install",
+      "C_windows_s_mode"
+    ],
+    "anchors": [
+      "S 모드",
+      "윈도우 S 모드",
+      "S모드 해제",
+      "마이크로소프트 스토어",
+      "스토어 앱만 설치",
+      "MS 스토어",
+      "에스모드"
+    ],
+    "covers": "마이크로소프트 스토어 앱만 설치되는 윈도우 S 모드 노트북에서 클래스인을 까는 방법, 마이크로소프트 스토어 배포 여부는 공개 안내에 없다는 것(PC는 공식 홈페이지 다운로드 페이지에서 받음)",
+    "notCovers": [
+      "PC 설치 파일 받는 곳 → howto:guide:classin-app-download",
+      "관리자가 막아 둔 컴퓨터 → doc:/docs/start/pc-install-troubleshooting#0/install-managed-computer",
+      "윈도우 지원 버전 → doc:/docs/start/pc-install#1/windows-version-bit"
+    ],
+    "negatives": [
+      {
+        "q": "PC용 클래스인은 어디서 내려받아요",
+        "route": "howto:guide:classin-app-download"
+      },
+      {
+        "q": "회사 컴퓨터라 프로그램 설치가 막혀 있어요",
+        "route": "doc:/docs/start/pc-install-troubleshooting#0/install-managed-computer"
+      },
+      {
+        "q": "윈도우 7 노트북도 설치돼요?",
+        "route": "doc:/docs/start/pc-install#1/windows-version-bit"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "S 모드",
+        "units": 9,
+        "site": 0,
+        "checked": "무관(방해 금지 모드·카메라 모드·음악 모드)"
+      },
+      {
+        "query": "마이크로소프트 스토어",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "Microsoft Store",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "S모드",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-start",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:start/linux-distro",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "start",
+    "topic": "리눅스 배포판별 지원",
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_pc",
+      "C_installer",
+      "C_linux_distro"
+    ],
+    "anchors": [
+      "우분투",
+      "데비안",
+      "페도라",
+      "리눅스 민트",
+      "리눅스 배포판",
+      "deb 패키지",
+      "rpm",
+      "하모니카OS"
+    ],
+    "covers": "리눅스용 설치 파일(x86_64·arm)은 있지만 우분투·데비안 같은 배포판별 지원 범위나 패키지 형식은 공개 안내에 없다는 것",
+    "notCovers": [
+      "리눅스용 설치 파일 종류 → doc:/docs/start/pc-install#3/linux-install",
+      "PC 지원 운영체제 → doc:/docs/start/pc-install#summary/pc-supported-os",
+      "크롬북 → fixed:chromebook-support"
+    ],
+    "negatives": [
+      {
+        "q": "리눅스에서도 클래스인 깔 수 있나요",
+        "route": "doc:/docs/start/pc-install#3/linux-install"
+      },
+      {
+        "q": "PC는 어떤 운영체제를 지원해요",
+        "route": "doc:/docs/start/pc-install#summary/pc-supported-os"
+      },
+      {
+        "q": "크롬북으로 수업 들어도 되나요",
+        "route": "fixed:chromebook-support"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "우분투",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "Ubuntu",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "deb",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "배포판",
+        "units": 0,
+        "site": 1,
+        "checked": "무관(약관의 복제·배포·판매 금지 문장)"
+      },
+      {
+        "query": "리눅스 버전",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-start",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:start/no-play-store",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "start",
+    "topic": "플레이 스토어 없는 기기에 앱 설치",
+    "asks": [
+      "yesno",
+      "howto",
+      "where"
+    ],
+    "concepts": [
+      "C_mobile",
+      "C_android",
+      "C_install",
+      "C_no_play_store"
+    ],
+    "anchors": [
+      "APK",
+      "apk 파일",
+      "원스토어",
+      "화웨이",
+      "플레이 스토어 없는",
+      "구글 서비스 없는",
+      "학습지 태블릿",
+      "전용 학습 태블릿",
+      "갤럭시 스토어"
+    ],
+    "covers": "구글 플레이 스토어가 없는 안드로이드 기기(학습지 전용 태블릿·화웨이 등)에 APK나 다른 앱 마켓으로 설치하는 방법은 공개 안내에 없다는 것(안드로이드는 플레이 스토어에서 받는다는 안내만 있음)",
+    "notCovers": [
+      "갤럭시·안드로이드에 플레이 스토어로 설치 → doc:/docs/start/mobile-install#0/android-steps",
+      "안드로이드 최소 버전 → doc:/docs/start/mobile-install#5/mobile-min-spec",
+      "크롬북 → fixed:chromebook-support"
+    ],
+    "negatives": [
+      {
+        "q": "갤럭시 탭에 클래스인 앱 까는 순서",
+        "route": "doc:/docs/start/mobile-install#0/android-steps"
+      },
+      {
+        "q": "안드로이드 버전 몇 이상이어야 앱이 깔려요",
+        "route": "doc:/docs/start/mobile-install#5/mobile-min-spec"
+      },
+      {
+        "q": "크롬북에서도 수업 들을 수 있나요",
+        "route": "fixed:chromebook-support"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": [
+        {
+          "unit": "doc:/docs/start/mobile-install#0",
+          "i": 0,
+          "hash": "d6a77d801f078044"
+        }
+      ]
+    },
+    "searchLog": [
+      {
+        "query": "APK",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "원스토어",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "화웨이",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "학습지 태블릿",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "갤럭시 스토어",
+        "units": 2,
+        "site": 0,
+        "checked": "관련(갤럭시·안드로이드는 플레이 스토어에서 받는다는 안내 — related 로 씀), 다른 마켓 설치 방법은 없음"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-start",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:start/downgrade",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "start",
+    "topic": "이전 버전으로 되돌리기",
+    "asks": [
+      "howto",
+      "yesno"
+    ],
+    "concepts": [
+      "C_old_version",
+      "C_version",
+      "C_update",
+      "C_version_rollback"
+    ],
+    "anchors": [
+      "이전 버전",
+      "옛날 버전",
+      "버전 다운그레이드",
+      "버전 되돌리기",
+      "예전 버전 설치",
+      "롤백",
+      "구버전 설치 파일"
+    ],
+    "covers": "업데이트한 클래스인을 예전 버전으로 되돌리거나 지난 버전 설치 파일을 받는 방법은 공개 안내에 없다는 것",
+    "notCovers": [
+      "업데이트가 강제인지 → doc:/docs/updates/classin-609-update#0/609-not-forced",
+      "업데이트 뒤 안 켜질 때 → fixed:update-then-wont-open",
+      "현재 버전 확인 → doc:/docs/start/app-update-cache-reinstall#1/pc-version-compare",
+      "요금제 낮추기 → policy:plan-downgrade-features-records"
+    ],
+    "negatives": [
+      {
+        "q": "업데이트 안 하고 지금 버전 계속 써도 돼요",
+        "route": "doc:/docs/updates/classin-609-update#0/609-not-forced"
+      },
+      {
+        "q": "업데이트하고 나서 프로그램이 아예 안 열려요",
+        "route": "fixed:update-then-wont-open"
+      },
+      {
+        "q": "내 PC 클래스인이 최신 버전인지 확인하는 법",
+        "route": "doc:/docs/start/app-update-cache-reinstall#1/pc-version-compare"
+      }
+    ],
+    "handoff": "support",
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "support",
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "이전 버전",
+        "units": 2,
+        "site": 1,
+        "checked": "무관(다시보기 허용 문구·중복 저장 파일명·개인정보처리방침 이전 버전)"
+      },
+      {
+        "query": "옛 버전",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "다운그레이드",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "구버전",
+        "units": 1,
+        "site": 2,
+        "checked": "무관(구버전이면 최신으로 업데이트하라는 안내·동의 문구 버전)"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-start",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:start/auto-update-off",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "start",
+    "topic": "자동 업데이트 끄기",
+    "asks": [
+      "howto",
+      "yesno"
+    ],
+    "concepts": [
+      "C_update",
+      "C_forced_update",
+      "C_auto_update_setting"
+    ],
+    "anchors": [
+      "자동 업데이트",
+      "자동 업데이트 끄기",
+      "자동 업데이트 해제",
+      "업데이트 알림 끄기",
+      "업데이트 미루기",
+      "업데이트 안 뜨게"
+    ],
+    "covers": "클래스인 자동 업데이트를 끄거나 켜는 설정, 업데이트 알림이 뜨지 않게 하는 방법은 공개 안내에 없다는 것",
+    "notCovers": [
+      "업데이트가 강제인지 → doc:/docs/updates/classin-609-update#0/609-not-forced",
+      "PC 업데이트 방법 → howto:update-pc",
+      "아이폰·아이패드 업데이트 → doc:/docs/start/mobile-install#1/ios-update"
+    ],
+    "negatives": [
+      {
+        "q": "이번 6.0.9 업데이트 꼭 받아야 하는 거예요?",
+        "route": "doc:/docs/updates/classin-609-update#0/609-not-forced"
+      },
+      {
+        "q": "PC 클래스인 최신으로 올리는 방법",
+        "route": "howto:update-pc"
+      },
+      {
+        "q": "아이패드 클래스인 업데이트는 어떻게 해요",
+        "route": "doc:/docs/start/mobile-install#1/ios-update"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "자동 업데이트",
+        "units": 5,
+        "site": 0,
+        "checked": "무관(매직펜 획 자동 사라짐·보고서 자동 생성·자동 로그인)"
+      },
+      {
+        "query": "업데이트 끄",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "업데이트 알림",
+        "units": 2,
+        "site": 0,
+        "checked": "무관(비강제 업데이트·실행할 때 업데이트 알림이 뜬다는 안내, 끄는 설정 없음)"
+      },
+      {
+        "query": "비강제",
+        "units": 2,
+        "site": 0,
+        "checked": "무관(6.0.7 비강제 업데이트 배포 안내, 자동 업데이트 설정 아님)"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-start",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:start/beta-program",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "start",
+    "topic": "베타 테스트 참여",
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_version",
+      "C_update",
+      "C_beta_program"
+    ],
+    "anchors": [
+      "베타",
+      "베타 테스트",
+      "베타 버전",
+      "테스트 버전",
+      "미리 써 보기",
+      "얼리 액세스",
+      "테스터 신청"
+    ],
+    "covers": "정식 배포 전 새 버전을 먼저 써 보는 베타 테스트·테스터 신청 방법은 공개 안내에 없다는 것",
+    "notCovers": [
+      "6.0.9에서 달라진 점 → doc:/docs/updates/classin-609-update#summary/609-whats-new",
+      "업데이트가 강제인지 → doc:/docs/updates/classin-609-update#0/609-not-forced",
+      "다음 기능 출시 일정 → gap:company/product-roadmap",
+      "기능 제안 창구 → gap:support/feature-request"
+    ],
+    "negatives": [
+      {
+        "q": "6.0.9 버전에서 뭐가 새로 생겼어요",
+        "route": "doc:/docs/updates/classin-609-update#summary/609-whats-new"
+      },
+      {
+        "q": "새 업데이트 안 받으면 기능이 안 보이나요",
+        "route": "doc:/docs/updates/classin-609-update#0/609-not-forced"
+      },
+      {
+        "q": "PC 클래스인 업그레이드 버튼 어디 있어요",
+        "route": "howto:update-pc"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "베타",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "테스트 버전",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "미리 써",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "그레이",
+        "units": 28,
+        "site": 1,
+        "checked": "무관(6.0.7 그레이 배포 날짜 안내만 있고 참여 방법 없음, 나머지는 회색 화면 묘사)"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-start",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:start/auto-launch",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "start",
+    "topic": "컴퓨터 켤 때 자동 실행 설정",
+    "asks": [
+      "howto",
+      "yesno"
+    ],
+    "concepts": [
+      "C_pc",
+      "C_auto_launch"
+    ],
+    "anchors": [
+      "자동 실행",
+      "시작 프로그램",
+      "부팅 시 실행",
+      "컴퓨터 켜면 자동",
+      "자동 시작 끄기",
+      "백그라운드 실행",
+      "트레이 아이콘"
+    ],
+    "covers": "윈도우·맥을 켤 때 클래스인이 저절로 실행되게 하거나 끄는 설정, 창을 닫은 뒤 백그라운드 실행을 끝내는 방법은 공개 안내에 없다는 것",
+    "notCovers": [
+      "설치 뒤 클래스인 켜는 곳 → doc:/docs/start/pc-install#1/windows-relaunch",
+      "PC 자동 로그인 → doc:/docs/start/password-change-pc#2/auto-login",
+      "갑자기 안 켜질 때 → doc:/docs/start/pc-install-troubleshooting#5/previously-installed-suddenly-not-launching"
+    ],
+    "negatives": [
+      {
+        "q": "설치 끝나고 클래스인 아이콘은 어디서 찾아요",
+        "route": "doc:/docs/start/pc-install#1/windows-relaunch"
+      },
+      {
+        "q": "매번 비밀번호 안 치고 로그인되게 할 수 있어요",
+        "route": "doc:/docs/start/password-change-pc#2/auto-login"
+      },
+      {
+        "q": "잘 쓰던 클래스인이 오늘따라 안 켜져요",
+        "route": "doc:/docs/start/pc-install-troubleshooting#5/previously-installed-suddenly-not-launching"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "자동 실행",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "시작 프로그램",
+        "units": 1,
+        "site": 0,
+        "checked": "무관(비밀번호 변경은 설치한 프로그램 로그인 화면에서 시작한다는 문장)"
+      },
+      {
+        "query": "부팅",
+        "units": 1,
+        "site": 0,
+        "checked": "무관(파일럿 단계에서 부팅부터 녹화까지 반복 점검)"
+      },
+      {
+        "query": "자동 시작",
+        "units": 12,
+        "site": 0,
+        "checked": "무관(현장 녹화 자동 시작·대량 작업 메뉴)"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-start",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:start/battery-drain",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "start",
+    "topic": "수업 중 배터리 소모",
+    "asks": [
+      "quantity",
+      "yesno"
+    ],
+    "concepts": [
+      "C_mobile",
+      "C_battery"
+    ],
+    "anchors": [
+      "배터리 소모",
+      "배터리 닳",
+      "배터리가 빨리",
+      "충전하면서 수업",
+      "배터리 절약",
+      "절전 모드",
+      "저전력 모드"
+    ],
+    "covers": "수업 한 시간에 휴대폰·태블릿·노트북 배터리가 얼마나 닳는지, 배터리를 아끼는 설정이나 절전 모드에서 써도 되는지는 공개 안내에 없다는 것",
+    "notCovers": [
+      "기기가 뜨겁고 화면이 느릴 때 → howto:class-slow",
+      "수업 데이터 사용량 → gap:classroom/data-usage",
+      "휴대폰·태블릿 권장 사양 → doc:/docs/start/mobile-install#5/mobile-recommended-spec",
+      "전자칠판 펜 충전 → fixed:board-pen-charge"
+    ],
+    "negatives": [
+      {
+        "q": "수업하면 폰이 뜨거워지고 화면이 버벅여요",
+        "route": "howto:class-slow"
+      },
+      {
+        "q": "태블릿은 어느 정도 사양이면 여유 있게 써요",
+        "route": "doc:/docs/start/mobile-install#5/mobile-recommended-spec"
+      },
+      {
+        "q": "노트북으로 수업하는데 화면이 자꾸 깨져요",
+        "route": "doc:/docs/start/class-connection-troubleshooting#2/conn-screen-slow"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "배터리",
+        "units": 2,
+        "site": 0,
+        "checked": "무관(화면 캡처의 상태바 배터리 표시 묘사)"
+      },
+      {
+        "query": "발열",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "절전",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "저사양",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "노트북 배터리",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-start",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:start/peripheral-recommend",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "start",
+    "topic": "웹캠·헤드셋 추천 제품",
+    "asks": [
+      "compare",
+      "yesno"
+    ],
+    "concepts": [
+      "C_camera",
+      "C_peripheral_recommend"
+    ],
+    "anchors": [
+      "웹캠 추천",
+      "헤드셋 추천",
+      "마이크 추천",
+      "어떤 웹캠",
+      "캠 추천",
+      "호환 웹캠",
+      "인증 장비 목록",
+      "로지텍"
+    ],
+    "covers": "PC 수업에 쓸 웹캠·헤드셋·마이크의 추천 모델이나 호환 인증 목록은 공개 안내에 없다는 것",
+    "notCovers": [
+      "처음 시작할 때 살 것 → policy:start-what-to-buy",
+      "이어폰·헤드셋을 마이크·스피커로 고르기 → fixed:earphone-audio",
+      "현장 녹화 카메라 고르기 → fixed:field-recording-two-cameras",
+      "교실용 추적 카메라 → doc:/docs/hardware/cam-t1-s1#summary/classin-cam-overview"
+    ],
+    "negatives": [
+      {
+        "q": "처음 시작하려면 장비 뭐부터 사야 돼요",
+        "route": "policy:start-what-to-buy"
+      },
+      {
+        "q": "헤드셋 꽂았는데 마이크를 어떻게 골라요",
+        "route": "fixed:earphone-audio"
+      },
+      {
+        "q": "강사를 따라가는 클래스인 카메라가 뭐예요",
+        "route": "doc:/docs/hardware/cam-t1-s1#summary/classin-cam-overview"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "헤드셋",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "추천 모델",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "로지텍",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "웹캠",
+        "units": 132,
+        "site": 0,
+        "checked": "무관(현장 녹화·카메라 선택 안내, 추천 제품 없음)"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-start",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:start/dual-monitor",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "start",
+    "topic": "듀얼 모니터로 수업 화면 나눠 쓰기",
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_pc",
+      "C_dual_monitor"
+    ],
+    "anchors": [
+      "듀얼 모니터",
+      "모니터 두 대",
+      "두 번째 모니터",
+      "확장 모니터",
+      "보조 모니터",
+      "화면 두 개"
+    ],
+    "covers": "PC에 모니터 두 대를 연결해 칠판·자료·학생 화면을 나눠 띄우는 방법은 공개 안내에 없다는 것(비디오 갤러리를 2번 모니터로 보내는 안내만 있음)",
+    "notCovers": [
+      "비디오 갤러리 열기와 송출 모니터 선택 → howto:cs-figma-digest-2190-video-gallery",
+      "칠판에 노트북 HDMI 연결 → doc:/docs/start/pre-adoption-faq-22-questions#5/ops-no-external-pc",
+      "TV·빔프로젝터에 띄우기 → gap:classroom/tv-cast"
+    ],
+    "negatives": [
+      {
+        "q": "비디오 갤러리는 어떻게 켜요",
+        "route": "howto:cs-figma-digest-2190-video-gallery"
+      },
+      {
+        "q": "전자칠판에 노트북을 HDMI로 꽂아 써도 돼요",
+        "route": "doc:/docs/start/pre-adoption-faq-22-questions#5/ops-no-external-pc"
+      },
+      {
+        "q": "PC 권장 해상도는 얼마예요",
+        "route": "doc:/docs/start/pc-install#5/recommended-spec"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": [
+        {
+          "unit": "guide:cs-figma-digest-2190",
+          "i": 4,
+          "hash": "3e69b0d6c1a4db3e"
+        }
+      ]
+    },
+    "searchLog": [
+      {
+        "query": "듀얼 모니터",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "모니터 두",
+        "units": 8,
+        "site": 0,
+        "checked": "무관(관리자 수업 모니터링 문장)"
+      },
+      {
+        "query": "모니터",
+        "units": 170,
+        "site": 9,
+        "checked": "관련 1건(비디오 갤러리 송출 모니터를 1·2 모니터 중 고름 — related 로 씀), 나머지는 수업 모니터링"
+      },
+      {
+        "query": "두 화면",
+        "units": 76,
+        "site": 1,
+        "checked": "무관(두 손가락 제스처·녹화 화면 두 가지)"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-start",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:start/ui-font-scale",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "start",
+    "topic": "앱 글자 크기·화면 배율 조정",
+    "asks": [
+      "howto",
+      "yesno"
+    ],
+    "concepts": [
+      "C_font_size",
+      "C_ui_scale"
+    ],
+    "anchors": [
+      "메뉴 글씨",
+      "앱 글씨 크기",
+      "앱 글자 크기",
+      "화면 배율",
+      "UI 크기",
+      "글씨가 작아 안 보여",
+      "버튼 크게"
+    ],
+    "covers": "클래스인 앱·PC 프로그램의 메뉴 글씨 크기나 화면 배율을 키우는 설정은 공개 안내에 없다는 것(실시간 자막 창 글자 크기만 안내)",
+    "notCovers": [
+      "실시간 자막 창 글자 크기 → doc:/docs/updates/classin-609-update#5/live-caption-settings",
+      "칠판 확대·축소 → gap:classroom/board-zoom",
+      "휴대폰에서 버튼이 안 보일 때 → doc:/docs/start/mobile-install#4/button-missing",
+      "앱 표시 언어 → fixed:app-language-switch-translation"
+    ],
+    "negatives": [
+      {
+        "q": "실시간 자막 글씨를 더 크게 볼 수 있어요",
+        "route": "doc:/docs/updates/classin-609-update#5/live-caption-settings"
+      },
+      {
+        "q": "태블릿에서는 PC에 있던 버튼이 안 보여요",
+        "route": "doc:/docs/start/mobile-install#4/button-missing"
+      },
+      {
+        "q": "앱 화면을 영어로 바꿀 수 있나요",
+        "route": "fixed:app-language-switch-translation"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "글자 크기",
+        "units": 1,
+        "site": 0,
+        "checked": "무관(실시간 자막 창 글자 크기 설정만)"
+      },
+      {
+        "query": "배율",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "폰트",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "글씨",
+        "units": 24,
+        "site": 0,
+        "checked": "무관(손글씨 인식·빨간 글씨 표시·판서 글씨)"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-start",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:start/installer-safety",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "start",
+    "topic": "설치 파일 바이러스·안전성 확인",
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_installer",
+      "C_security_program",
+      "C_installer_safety"
+    ],
+    "anchors": [
+      "바이러스",
+      "악성코드",
+      "설치 파일 안전",
+      "디지털 서명",
+      "알 수 없는 게시자",
+      "위험 파일 경고",
+      "무결성"
+    ],
+    "covers": "클래스인 설치 파일의 바이러스 검사 결과·디지털 서명·해시값 같은 안전성 확인 자료는 공개 안내에 없다는 것(공식 다운로드 출처만 안내)",
+    "notCovers": [
+      "공식 다운로드 도메인 → doc:guide:cs-figma-digest-1623/official-download-domain",
+      "백신과 부딪혀 안 켜질 때 → doc:/docs/start/pc-install#4/security-program-conflict",
+      "스토어에서 진짜 앱 고르기 → doc:guide:classin-app-download/mobile-store-install-developer-check",
+      "회사 보안 수준·인증 → fixed:basics-security-posture"
+    ],
+    "negatives": [
+      {
+        "q": "클래스인 공식 다운로드 주소가 뭐예요",
+        "route": "doc:guide:cs-figma-digest-1623/official-download-domain"
+      },
+      {
+        "q": "백신 프로그램이랑 충돌해서 실행이 안 돼요",
+        "route": "doc:/docs/start/pc-install#4/security-program-conflict"
+      },
+      {
+        "q": "스토어에 비슷한 앱이 많은데 진짜는 어떤 거예요",
+        "route": "doc:guide:classin-app-download/mobile-store-install-developer-check"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": [
+        {
+          "unit": "guide:cs-figma-digest-1623",
+          "i": 11,
+          "hash": "d5b78c290b4adfc8"
+        }
+      ]
+    },
+    "searchLog": [
+      {
+        "query": "바이러스",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "악성",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "디지털 서명",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "설치 파일 안전",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "공식 다운로드",
+        "units": 27,
+        "site": 0,
+        "checked": "관련(공식 다운로드 페이지·출처 도메인 안내 — related 로 씀), 안전성 검사 자료는 없음"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-start",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:start/pen-tablet",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "start",
+    "topic": "PC용 펜 태블릿 연결",
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_pc",
+      "C_pen_tablet"
+    ],
+    "anchors": [
+      "펜 태블릿",
+      "판 태블릿",
+      "와콤",
+      "판타블렛",
+      "드로잉 패드",
+      "액정 타블렛",
+      "판서 패드",
+      "XP-PEN"
+    ],
+    "covers": "PC에 와콤 같은 펜 태블릿·드로잉 패드를 연결해 판서하는 방법이나 지원 모델은 공개 안내에 없다는 것",
+    "notCovers": [
+      "태블릿·전자칠판에서 펜으로 풀이 쓰기 → doc:/docs/updates/classin-ai-blackboard-609#2/tablet-pen",
+      "보조 카메라로 손 필기 비추기 → doc:/docs/software/classroom-tools#6/extra-tools",
+      "태블릿 펜이 꼭 있어야 하는지 → gap:classroom/stylus-required",
+      "전자칠판 전용 펜 → fixed:board-pen-charge"
+    ],
+    "negatives": [
+      {
+        "q": "태블릿에서 펜으로 바로 풀이를 쓸 수 있어요",
+        "route": "doc:/docs/updates/classin-ai-blackboard-609#2/tablet-pen"
+      },
+      {
+        "q": "손으로 쓰는 공책을 카메라로 따로 보여 주고 싶어요",
+        "route": "doc:/docs/software/classroom-tools#6/extra-tools"
+      },
+      {
+        "q": "예전에 만든 판서 파일 불러오는 법",
+        "route": "doc:/docs/software/classroom-tools#3/edb-open-save"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "와콤",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "타블렛",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "드로잉",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "판서 패드",
+        "units": 0,
+        "site": 1,
+        "checked": "무관(서비스 소개 비교표의 '판서모니터' 장비 칸)"
+      },
+      {
+        "query": "펜 태블릿",
+        "units": 1,
+        "site": 1,
+        "checked": "무관(태블릿·전자칠판에서 펜으로 풀이를 쓴다는 안내, PC 연결 펜 태블릿 아님)"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-start",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:start/screen-rotation",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "start",
+    "topic": "태블릿·휴대폰 화면 가로·세로 회전",
+    "asks": [
+      "howto",
+      "yesno"
+    ],
+    "concepts": [
+      "C_mobile",
+      "C_screen_rotation"
+    ],
+    "anchors": [
+      "가로 모드",
+      "세로 모드",
+      "자동 회전",
+      "회전 잠금",
+      "가로 화면",
+      "세로 화면",
+      "화면 방향"
+    ],
+    "covers": "휴대폰·태블릿 앱에서 수업 화면을 가로·세로로 돌리거나 한 방향으로 고정하는 방법은 공개 안내에 없다는 것",
+    "notCovers": [
+      "휴대폰·태블릿과 PC 화면 배치 차이 → doc:/docs/start/mobile-install#4/mobile-vs-pc-features",
+      "버튼이 안 보일 때 → doc:/docs/start/mobile-install#4/button-missing",
+      "카메라 화면 좌우 반전 → fixed:camera-mirror",
+      "추적 카메라 회전 → doc:/docs/hardware/board-ai-camera-mic#6/cam-rotate-flip",
+      "시험 화면이 기기에 따라 가로·세로로 나옴 → doc:/docs/student/course-submit-activity#5/exam-device"
+    ],
+    "negatives": [
+      {
+        "q": "폰이랑 PC에서 보이는 기능이 다른가요",
+        "route": "doc:/docs/start/mobile-install#4/mobile-vs-pc-features"
+      },
+      {
+        "q": "내 카메라 화면이 거울처럼 뒤집혀 보여요",
+        "route": "fixed:camera-mirror"
+      },
+      {
+        "q": "교실 추적 카메라 영상 방향 돌리는 법",
+        "route": "doc:/docs/hardware/board-ai-camera-mic#6/cam-rotate-flip"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "가로 모드",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "세로 모드",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "화면 회전",
+        "units": 2,
+        "site": 0,
+        "checked": "무관(T1·S1 카메라 회전·반전은 CMS에서)"
+      },
+      {
+        "query": "회전 잠금",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-start",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:start/split-screen",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "start",
+    "topic": "태블릿 분할 화면·덱스 모드",
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_mobile",
+      "C_split_screen"
+    ],
+    "anchors": [
+      "스플릿 뷰",
+      "멀티 윈도우",
+      "삼성 덱스",
+      "덱스 모드",
+      "슬라이드 오버",
+      "PIP 모드",
+      "두 앱 동시에"
+    ],
+    "covers": "아이패드 스플릿 뷰·갤럭시 멀티 윈도우·삼성 덱스처럼 태블릿 화면을 나눠 클래스인과 다른 앱을 함께 띄우는 사용은 공개 안내에 없다는 것",
+    "notCovers": [
+      "칠판 화면 분할 → fixed:board-split-screen",
+      "태블릿과 PC 기능 차이 → doc:/docs/start/mobile-install#4/mobile-vs-pc-features",
+      "아이패드 앱 설치 → doc:/docs/start/mobile-install#1/ios-steps"
+    ],
+    "negatives": [
+      {
+        "q": "태블릿으로 하면 PC보다 못 쓰는 기능이 있어요",
+        "route": "doc:/docs/start/mobile-install#4/mobile-vs-pc-features"
+      },
+      {
+        "q": "아이패드에 클래스인 앱 설치하는 방법",
+        "route": "doc:/docs/start/mobile-install#1/ios-steps"
+      },
+      {
+        "q": "갤럭시탭 클래스인 업데이트는 어디서 해요",
+        "route": "doc:guide:cs-figma-digest-1741/tablet-update-and-version-menu"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "분할",
+        "units": 4,
+        "site": 3,
+        "checked": "무관(화면 3분할 레이아웃 묘사)"
+      },
+      {
+        "query": "스플릿",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "멀티 윈도우",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "덱스",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-start",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:start/no-sim-phone",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "start",
+    "topic": "유심 없는 공기계로 수업 듣기",
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_mobile",
+      "C_no_sim_phone"
+    ],
+    "anchors": [
+      "공기계",
+      "유심 없는 폰",
+      "유심 없이",
+      "와이파이 전용",
+      "개통 안 한 폰",
+      "전화 안 되는 폰",
+      "데이터 없는 폰"
+    ],
+    "covers": "유심이 없는 공기계·와이파이 전용 기기로 클래스인 앱 가입·로그인·수업을 하는 데 대한 안내는 공개 안내에 없다는 것",
+    "notCovers": [
+      "휴대폰 번호·이메일 아이디 → doc:/docs/start/signup#2/id-type",
+      "와이파이가 약할 때 → fixed:basics-internet-speed-wifi",
+      "휴대폰만으로 수업 듣기 → fixed:basics-teach-tablet-phone-only",
+      "휴대폰 최소 사양 → doc:/docs/start/mobile-install#5/mobile-min-spec"
+    ],
+    "negatives": [
+      {
+        "q": "휴대폰 번호 말고 이메일로도 가입돼요",
+        "route": "doc:/docs/start/signup#2/id-type"
+      },
+      {
+        "q": "와이파이가 약한 집에서도 수업 들을 수 있나요",
+        "route": "fixed:basics-internet-speed-wifi"
+      },
+      {
+        "q": "오래된 아이폰도 앱이 깔리나요",
+        "route": "doc:/docs/start/mobile-install#5/mobile-min-spec"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "공기계",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "유심",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "USIM",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "와이파이만",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-start",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:start/parental-control",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "start",
+    "topic": "자녀 보호 앱이 설치·실행을 막을 때",
+    "asks": [
+      "symptom",
+      "howto"
+    ],
+    "concepts": [
+      "C_mobile",
+      "C_install",
+      "C_parental_control_app"
+    ],
+    "anchors": [
+      "패밀리 링크",
+      "스크린 타임",
+      "유해 차단 앱",
+      "키즈폰",
+      "앱 설치 승인",
+      "사용 시간 제한 앱",
+      "콘텐츠 제한"
+    ],
+    "covers": "구글 패밀리 링크·스크린 타임·유해 차단 앱 같은 기기의 자녀 관리 기능이 클래스인 설치·실행을 막을 때 허용하는 방법은 공개 안내에 없다는 것",
+    "notCovers": [
+      "클래스인 안의 청소년 모드 → doc:/docs/student/student-profile#5/teen-mode",
+      "앱 설치가 안 될 때 기본 점검 → doc:/docs/start/mobile-install#5/mobile-install-fails",
+      "카메라·마이크 권한 → doc:/docs/start/camera-mic-troubleshooting#summary/cam-overview"
+    ],
+    "negatives": [
+      {
+        "q": "클래스인에 청소년 모드가 있다던데 뭐예요",
+        "route": "doc:/docs/student/student-profile#5/teen-mode"
+      },
+      {
+        "q": "폰에 앱 설치가 안 되는데 저장 공간 문제일까요",
+        "route": "doc:/docs/start/mobile-install#5/mobile-install-fails"
+      },
+      {
+        "q": "카메라가 안 켜지면 권한부터 봐야 하나요",
+        "route": "doc:/docs/start/camera-mic-troubleshooting#summary/cam-overview"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "자녀 보호",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "패밀리 링크",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "유해",
+        "units": 1,
+        "site": 0,
+        "checked": "무관(운영팀과 공유할 항목 안내)"
+      },
+      {
+        "query": "청소년 모드",
+        "units": 3,
+        "site": 0,
+        "checked": "무관(클래스인 앱 자체의 청소년 모드 — 기기의 자녀 관리 앱 아님)"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-start",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:start/internet-speed-test",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "start",
+    "topic": "내 인터넷 속도 재는 방법",
+    "asks": [
+      "howto"
+    ],
+    "concepts": [
+      "C_internet_speed",
+      "C_speed_test"
+    ],
+    "anchors": [
+      "속도 측정",
+      "속도 테스트",
+      "스피드 테스트",
+      "인터넷 속도 재기",
+      "속도 재는 사이트",
+      "네트워크 진단"
+    ],
+    "covers": "집이나 학원 인터넷이 클래스인 기준 속도를 넘는지 직접 재는 방법·측정 도구는 공개 안내에 없다는 것(필요한 속도 기준만 안내)",
+    "notCovers": [
+      "필요한 인터넷 속도 기준 → fixed:basics-internet-speed-wifi",
+      "수업 중 끊김 조치 → doc:/docs/start/class-connection-troubleshooting#0/conn-urgent-first",
+      "전자칠판 카메라 설치 전 랜 속도 확인 → doc:/docs/board/webcam-cms-setup-t1-panorama#0/precheck"
+    ],
+    "negatives": [
+      {
+        "q": "수업하려면 인터넷이 몇 Mbps는 돼야 해요",
+        "route": "fixed:basics-internet-speed-wifi"
+      },
+      {
+        "q": "수업 도중에 계속 튕길 때 급하게 해 볼 것",
+        "route": "doc:/docs/start/class-connection-troubleshooting#0/conn-urgent-first"
+      },
+      {
+        "q": "추적 카메라 설치 전에 랜선 규격도 봐야 하나요",
+        "route": "doc:/docs/board/webcam-cms-setup-t1-panorama#0/precheck"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "속도 측정",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "속도 테스트",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "속도 확인",
+        "units": 2,
+        "site": 0,
+        "checked": "무관(전자칠판 카메라 설치 전 랜 속도 170Mbps 확인 — 재는 방법 없음)"
+      },
+      {
+        "query": "인터넷 속도",
+        "units": 6,
+        "site": 0,
+        "checked": "무관(최소·권장 속도 기준만, 재는 방법 없음)"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-start",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:start/korean-input",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "start",
+    "topic": "한글 입력이 안 될 때",
+    "asks": [
+      "symptom",
+      "howto"
+    ],
+    "concepts": [
+      "C_korean_input"
+    ],
+    "anchors": [
+      "한글 입력",
+      "한글이 안 쳐져",
+      "한영 전환",
+      "한글 자판",
+      "한글 타자",
+      "입력기",
+      "IME"
+    ],
+    "covers": "클래스인 채팅·칠판 글상자 등에서 한글이 입력되지 않거나 한영 전환이 안 될 때의 조치는 공개 안내에 없다는 것",
+    "notCovers": [
+      "앱 표시 언어 바꾸기 → fixed:app-language-switch-translation",
+      "설치 때 한국어 선택 → doc:guide:cs-figma-digest-2340/language-select-popup",
+      "비밀번호에 한글을 못 쓰는 규칙 → doc:/docs/start/password-change-pc#1/new-password-rules",
+      "전자칠판 무선 키보드 끊김 → doc:/docs/hardware/board-basic-operation#6/wireless-keyboard-mouse"
+    ],
+    "negatives": [
+      {
+        "q": "설치할 때 한국어로 고르는 창이 떠요",
+        "route": "doc:guide:cs-figma-digest-2340/language-select-popup"
+      },
+      {
+        "q": "비밀번호에 한글 넣으면 왜 오류 나요",
+        "route": "doc:/docs/start/password-change-pc#1/new-password-rules"
+      },
+      {
+        "q": "칠판 무선 키보드가 자꾸 끊겨요",
+        "route": "doc:/docs/hardware/board-basic-operation#6/wireless-keyboard-mouse"
+      }
+    ],
+    "handoff": "support",
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "support",
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "한글 입력",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "IME",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "자판",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "한글",
+        "units": 12,
+        "site": 0,
+        "checked": "무관(비밀번호에 한글 금지·HWP 파일·카메라 이름 규칙)"
+      },
+      {
+        "query": "키보드",
+        "units": 4,
+        "site": 0,
+        "checked": "무관(전자칠판 무선 키보드 수신기·화면 키보드 토글)"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-start",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  }
+]

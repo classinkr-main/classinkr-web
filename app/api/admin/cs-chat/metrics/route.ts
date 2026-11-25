@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 
 import { adminCachedJson } from "@/lib/admin-api-response"
-import { CRM_STAFF_ADMIN_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
+import { CS_COPILOT_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
 import { getInternalCsMetrics } from "@/lib/internal-cs-chat/metrics"
 import { isInternalCsChatNotReadyError } from "@/lib/repositories/internal-cs-chat"
 
@@ -10,7 +10,7 @@ import { isInternalCsChatNotReadyError } from "@/lib/repositories/internal-cs-ch
 const ALLOWED_DAYS = new Set([7, 30])
 
 export async function GET(req: NextRequest) {
-  const admin = await requireVerifiedAdminContext(req, CRM_STAFF_ADMIN_API_ROLES)
+  const admin = await requireVerifiedAdminContext(req, CS_COPILOT_API_ROLES)
   if (admin instanceof NextResponse) return admin
 
   const requestedDays = Number(req.nextUrl.searchParams.get("days"))

@@ -24,13 +24,14 @@ export function ChatbotTeaser({
             animate={m({ opacity: 1, y: 0 }, shouldReduceMotion)}
             exit={m({ opacity: 0, y: 6 }, shouldReduceMotion)}
             transition={m(CHATBOT_MOTION.micro, shouldReduceMotion)}
-            className="pointer-events-auto mb-3 flex max-w-[244px] items-center gap-2 rounded-[14px] border border-black/[0.08] bg-white/90 px-3 py-2.5 shadow-[0_10px_24px_rgba(49,48,46,0.10)] backdrop-blur-xl"
+            // 떠 있는 층: 불투명 sheet + 1px line-strong + Deep Shadow(쿠키 배너·대화창과 같다). 반투명·blur 없음(CX-14·CX-15).
+            className="pointer-events-auto mb-3 flex max-w-[244px] items-center gap-2 rounded-[14px] border border-line-strong bg-surface-sheet px-3 py-2.5 shadow-deep"
         >
-            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-fg-accent" aria-hidden />
+            <span className="status-dot" aria-hidden />
             <button
                 type="button"
                 onClick={onOpen}
-                className="flex-1 rounded-[8px] text-left text-[12.5px] font-medium leading-snug text-[#3B3835] focus-visible:outline-none"
+                className="flex-1 rounded-[8px] text-left text-note font-medium text-fg-body"
             >
                 {text}
             </button>
@@ -39,11 +40,11 @@ export function ChatbotTeaser({
                 onClick={onDismiss}
                 aria-label="알림 닫기"
                 className={cn(
-                    "inline-flex h-8 w-8 shrink-0 items-center justify-center text-fg-muted transition-colors hover:text-fg-ink focus-visible:outline-none",
+                    "inline-flex h-8 w-8 shrink-0 items-center justify-center text-fg-muted transition-colors hover:text-fg-ink",
                     CHATBOT_HIT_AREA_32_CLASS
                 )}
             >
-                <X className="h-4 w-4" />
+                <X className="h-4 w-4" aria-hidden />
             </button>
         </motion.div>
     )

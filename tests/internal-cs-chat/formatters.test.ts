@@ -4,11 +4,24 @@ import { describe, expect, it } from "vitest"
 // 답변 카드의 "소통 초안 3종"과 본사 확인 화면(tab=hq)이 같은 함수를 공유하며,
 // 담당자가 그대로 복사해 고객·내부·본사로 보내는 문안이라 한 글자만 바뀌어도 회귀다.
 // 워크스페이스 분할(2026-07-27) 때 순수 모듈로 떨어져 나오면서 계약을 여기에 못 박는다.
+// 2026-11 B1: 본사 틀의 "(개인정보 최소화)"·"개인정보 제거 첨부" 문구가 사실과 달라(가림이 없었고 첨부는 원본)
+// 기대값을 고쳤다. 사용자 글·제목은 이제 가림을 거친다.
 import {
+  assetSensitiveWarnings,
+  buildCustomerDraftBase,
   buildCustomerHoldingTemplate,
   buildHqTemplate,
   buildInternalHandoffTemplate,
+  escalationInputFromDetail,
   getLastQuestion,
+  hasDraftPlaceholder,
+  latestApprovedAnswer,
+  maskAssetFileName,
+  needsReReview,
+  prepareInternalDraftCopy,
+  sourceHref,
+  sourceLink,
+  sourceStatus,
 } from "@/components/admin/cs-chat/formatters"
 import type {
   ConversationDetailResponse,
@@ -114,7 +127,7 @@ describe("소통 초안 3종", () => {
         "1. Case",
         "- 내부 케이스 ID: 11111111-2222-3333-4444-555555555555",
         "- 한국 담당자: CS 담당자",
-        "- 발생 시각(KST) / 기관·계정 식별자: 입력 필요 (개인정보 최소화)",
+        "- 발생 시각(KST) / 기관·계정 식별자: 입력 필요 (전화·이메일·계좌·이름은 적지 않음)",
         "- 제품·모델·세대·앱 버전: 확인 필요",
         "",
         "2. Impact",
@@ -129,7 +142,7 @@ describe("소통 초안 3종", () => {
         "- 이미 확인한 항목 / 시도한 조치 / 임시 우회 결과: 입력 필요",
         "",
         "5. Evidence",
-        "- 개인정보 제거 첨부 2건 / 내부 근거 링크: 입력 필요",
+        "- 첨부 이미지 2건(원본 — 개인정보 포함 여부 직접 확인) / 내부 근거 링크: 입력 필요",
         "",
         "6. Request to HQ",
         "- 답변이 필요한 질문 1~3개: 입력 필요",
@@ -152,5 +165,126 @@ describe("소통 초안 3종", () => {
     // area: 태그가 없으면 제목 줄의 분류 자리는 리터럴 AREA로 남는다.
     expect(buildHqTemplate(bare)).toContain("[KR-CS][HIGH][AREA]")
     expect(buildHqTemplate(bare)).toContain("- 현상: 질문과 현상을 입력해 주세요.")
+  })
+})
+
+describe("초안 안전화(B1)", () => {
+  // 지어낸 값이다.
+  const PII_QUESTION = "연락처 010-2345-6789, 환불 계좌 신한 110-123-456789, UID 12345678 확인 부탁"
+  const RAW = ["010-2345-6789", "110-123-456789", "12345678"]
+
+  function withMessages(messages: InternalCsMessage[]): ConversationDetailResponse {
+    return { ...DETAIL, messages }
+  }
+
+  it("masks the user's question in the fixed HQ and handoff templates", () => {
+    const detail = withMessages([message("user", PII_QUESTION)])
+    for (const draft of [buildHqTemplate(detail), buildInternalHandoffTemplate(detail)]) {
+      for (const raw of RAW) expect(draft).not.toContain(raw)
+      expect(draft).toContain("[phone]")
+    }
+  })
+
+  it("feeds only user messages, customer_context and conversation meta to the draft generator", () => {
+    const aiAnswer = { ...message("assistant", "다른 기관 선례: 20:10 점검을 완료하였습니다"), id: "a-1" }
+    const input = escalationInputFromDetail(withMessages([message("user", "녹화가 안 돼요"), aiAnswer]))
+    expect(input.userMessages).toEqual(["녹화가 안 돼요"])
+    expect(JSON.stringify(input)).not.toContain("20:10")
+    expect(input.priority).toBe("high")
+    expect(input.customerContext).toEqual({})
+  })
+
+  it("bases the customer draft on the approved correction, masked, and otherwise on the holding template", () => {
+    const approved: InternalCsMessage = {
+      ...message("assistant", "AI 원문"),
+      id: "a-2",
+      review_state: "approved",
+      corrected_content: "확인 결과를 010-2345-6789 로 안내드리겠습니다.",
+    }
+    const base = buildCustomerDraftBase(withMessages([message("user", PII_QUESTION), approved]))
+    expect(base.source).toBe("approved")
+    expect(base.text).not.toContain("010-2345-6789")
+    expect(base.redactionCount).toBe(1)
+    expect(hasDraftPlaceholder(base.text)).toBe(false)
+
+    const holding = buildCustomerDraftBase(withMessages([message("user", PII_QUESTION)]))
+    expect(holding.source).toBe("holding")
+    expect(holding.text).toBe(buildCustomerHoldingTemplate(DETAIL))
+    expect(hasDraftPlaceholder(holding.text)).toBe(true)
+    for (const raw of RAW) expect(holding.text).not.toContain(raw)
+  })
+
+  // 검토(안전-1): 즉시 승인(⚡) 때 저장된 행(quick_approved 라벨, 교정본 = AI 원문)은 사람이 확인한 최종본이 아니다.
+  // 이력·회귀 기준(history.ts)과 같은 규칙으로 고객 초안의 기준에서 뺀다. 값은 지어낸 것이다.
+  it("skips legacy quick-approved rows and corrections identical to the AI original", () => {
+    const internal = "## 내부 분석\n[선례] 가상학원 상담에서 같은 증상. 원가 2만원.\n## 고객 전달 초안(검토 전)\n안녕하세요."
+    const legacy: InternalCsMessage = {
+      ...message("assistant", internal),
+      id: "a-legacy",
+      review_state: "approved",
+      corrected_content: internal,
+      feedback_labels: ["quick_approved"],
+    }
+    const base = buildCustomerDraftBase(withMessages([message("user", "질문"), legacy]))
+    expect(base.source).toBe("holding")
+    expect(base.text).not.toContain("[선례]")
+    expect(latestApprovedAnswer(withMessages([legacy]))).toBeNull()
+    expect(needsReReview(legacy)).toBe(true)
+
+    // 라벨이 없어도 교정본이 원문과 (공백·문장부호·폭 없는 문자만 다르게) 같으면 같은 취급.
+    const sameAsOriginal: InternalCsMessage = { ...legacy, id: "a-same", feedback_labels: [], corrected_content: `${internal}.\u200B` }
+    expect(buildCustomerDraftBase(withMessages([sameAsOriginal])).source).toBe("holding")
+    expect(needsReReview(sameAsOriginal)).toBe(true)
+
+    // 그 앞의 사람 승인본은 그대로 기준이 된다.
+    const human: InternalCsMessage = {
+      ...message("assistant", "AI 원문"),
+      id: "a-human",
+      review_state: "approved",
+      corrected_content: "확인 결과를 안내드리겠습니다.",
+      feedback_labels: ["human_approved"],
+    }
+    const mixed = buildCustomerDraftBase(withMessages([human, legacy]))
+    expect(mixed.source).toBe("approved")
+    expect(mixed.text).toBe("확인 결과를 안내드리겠습니다.")
+    expect(needsReReview(human)).toBe(false)
+  })
+
+  it("detects fill-in placeholders but not redaction tokens", () => {
+    expect(hasDraftPlaceholder("현재 확인된 범위: [확인된 내용 입력]")).toBe(true)
+    expect(hasDraftPlaceholder("확인 사항: [확인 후 입력]")).toBe(true)
+    expect(hasDraftPlaceholder("다음 안내: 담당자 · [회신 예정 시각]")).toBe(true)
+    expect(hasDraftPlaceholder("연락처 [phone] 로 안내드립니다.")).toBe(false)
+  })
+
+  it("applies the same masking rule to every internal draft copy", () => {
+    expect(prepareInternalDraftCopy(PII_QUESTION)).toEqual({
+      text: "연락처 [phone], 환불 계좌 신한 [account], UID [uid] 확인 부탁",
+      count: 3,
+    })
+  })
+
+  it("labels internal-only, precedent and past-consultation sources", () => {
+    expect(sourceStatus({ id: "doc-1", externalUse: "internal_only" })?.label).toBe("내부 전용")
+    expect(sourceStatus({ id: "cases/d-18.md", label: "[선례] 화질 저하", kind: "internal_guide" })?.label).toBe("선례 · 내부 전용")
+    expect(sourceStatus({ id: "channel:abc", label: "[상담] 발췌" })?.label).toBe("과거 상담 · 내부 전용")
+    expect(sourceStatus({ id: "/docs/a", verificationStatus: "confirmed" })?.label).toBe("확정")
+  })
+
+  it("links channel sources to the consultation inbox in a new tab without changing sourceHref", () => {
+    expect(sourceHref({ id: "channel:abc" })).toBeNull()
+    expect(sourceLink({ id: "channel:abc" })).toEqual({ href: "/admin/channel-talk", newTab: true })
+    expect(sourceLink({ id: "/docs/a#x" })).toEqual({ href: "/docs/a", newTab: true })
+    expect(sourceLink({ id: "docs/internal.md" })).toBeNull()
+  })
+
+  it("reads sensitive-data warnings from the analysis payload and hides PII-looking file names", () => {
+    expect(
+      assetSensitiveWarnings({ id: "x", analysis_payload: { sensitiveDataWarnings: ["전화번호 010-2345-6789 노출", 3, ""] } })
+    ).toEqual(["전화번호 [phone] 노출"])
+    expect(assetSensitiveWarnings({ id: "x" })).toEqual([])
+    expect(maskAssetFileName("캡처_고객_010-2345-6789.png")).toBe("첨부 이미지.png")
+    expect(maskAssetFileName("board-error.jpg")).toBe("board-error.jpg")
+    expect(maskAssetFileName(null)).toBe("첨부 이미지")
   })
 })

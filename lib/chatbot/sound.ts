@@ -3,22 +3,15 @@
  * Creates pure, clean micro audio feedbacks without downloading files
  */
 
+import { readBrowserStorage, writeBrowserStorage } from "@/lib/chatbot/browser-storage"
+
 let audioCtx: AudioContext | null = null
 
 const isBrowser = typeof window !== "undefined"
-let isMutedState = false
-
 const MUTED_STORAGE_KEY = "classin_chatbot_muted"
-
-// Restore settings from localStorage on client side.
-// 저장소 접근이 막힌 브라우저에서는 모듈 로드 자체가 깨지지 않도록 기본값(소리 켬)으로 둔다.
-if (isBrowser) {
-    try {
-        isMutedState = window.localStorage.getItem(MUTED_STORAGE_KEY) === "true"
-    } catch {
-        isMutedState = false
-    }
-}
+// null 이면 아직 저장값을 읽지 않았다. 모듈을 읽는 순간 저장소에 손대지 않는다 — 저장소가 막힌 브라우저에서
+// 여기서 던지면 위젯 경계가 런처까지 지웠다(CX-19). 읽기·쓰기는 browser-storage 도우미가 감싼다.
+let isMutedState: boolean | null = null
 
 function getAudioContext(): AudioContext | null {
     if (!isBrowser) return null
@@ -31,19 +24,17 @@ function getAudioContext(): AudioContext | null {
     return audioCtx
 }
 
+/** 소리는 기본으로 꺼져 있다. 사용자가 켜 둔 선택("false" 저장)만 따른다(CX-24). */
 export function isMuted(): boolean {
+    if (isMutedState === null) {
+        isMutedState = readBrowserStorage("local", MUTED_STORAGE_KEY) !== "false"
+    }
     return isMutedState
 }
 
 export function setMuted(muted: boolean): void {
     isMutedState = muted
-    if (isBrowser) {
-        try {
-            window.localStorage.setItem(MUTED_STORAGE_KEY, muted ? "true" : "false")
-        } catch {
-            // 저장 불가 — 이번 페이지뷰 동안만 음소거 상태를 유지한다.
-        }
-    }
+    writeBrowserStorage("local", MUTED_STORAGE_KEY, muted ? "true" : "false")
 }
 
 /**
@@ -51,7 +42,7 @@ export function setMuted(muted: boolean): void {
  * Sine wave sweep that rises smoothly from 320Hz to 640Hz (Arpeggio effect)
  */
 export function playOpenSound(): void {
-    if (isMutedState) return
+    if (isMuted()) return
     const ctx = getAudioContext()
     if (!ctx) return
 
@@ -83,7 +74,7 @@ export function playOpenSound(): void {
  * Sine wave sweep that falls smoothly from 500Hz to 250Hz
  */
 export function playCloseSound(): void {
-    if (isMutedState) return
+    if (isMuted()) return
     const ctx = getAudioContext()
     if (!ctx) return
 
@@ -115,7 +106,7 @@ export function playCloseSound(): void {
  * Short band-passed noise burst (Swoosh effect)
  */
 export function playSendSound(): void {
-    if (isMutedState) return
+    if (isMuted()) return
     const ctx = getAudioContext()
     if (!ctx) return
 
@@ -159,7 +150,7 @@ export function playSendSound(): void {
  * Resonant double-sine wave synthesis mimicking a metal bell (Ting effect)
  */
 export function playReceiveSound(): void {
-    if (isMutedState) return
+    if (isMuted()) return
     const ctx = getAudioContext()
     if (!ctx) return
 

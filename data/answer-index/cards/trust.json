@@ -1,0 +1,1441 @@
+[
+  {
+    "id": "doc:/docs/start/pre-adoption-faq-22-questions#4/student-signup-in-app",
+    "kind": "doc",
+    "tier": "standard",
+    "area": "trust",
+    "topic": "학생 가입은 PC·모바일 클래스인 앱에서(학원 안내로 코스 참여, API 연동 학원은 등록 방식이 다름)",
+    "answer": {
+      "lead": "yes_can",
+      "leadBasis": {
+        "unit": "doc:/docs/start/pre-adoption-faq-22-questions#4",
+        "i": 4,
+        "hash": "f312c0e2d9337033"
+      },
+      "sentences": [
+        {
+          "unit": "doc:/docs/start/pre-adoption-faq-22-questions#4",
+          "ids": [
+            4,
+            5
+          ],
+          "hashes": [
+            "f312c0e2d9337033",
+            "8237c3e1dde4da6e"
+          ]
+        }
+      ]
+    },
+    "sources": [
+      {
+        "path": "/docs/start/pre-adoption-faq-22-questions",
+        "heading": "가입과 개인정보"
+      }
+    ],
+    "asks": [
+      "yesno",
+      "howto",
+      "where"
+    ],
+    "concepts": [
+      "C_signup",
+      "C_mobile",
+      "C_pc",
+      "C_course_join",
+      "C_api",
+      "C_student_signup"
+    ],
+    "anchors": [
+      "학생 가입",
+      "앱에서 가입",
+      "모바일 앱 가입",
+      "PC 앱 가입",
+      "학생 회원가입",
+      "학원 안내",
+      "코스 참여",
+      "API 계정 연동",
+      "등록·초대 방식",
+      "애들 가입",
+      "학생 계정 만들기",
+      "아이 회원가입",
+      "원생 가입"
+    ],
+    "covers": "도입 전에 학생이 PC나 모바일 클래스인 앱에서 직접 가입하고 학원 안내에 따라 코스·수업에 참여하는지와, API로 계정을 연동하는 학원은 등록·초대 방식이 다를 수 있다는 것",
+    "notCovers": [
+      "가입 화면에서 누르는 순서(회원 가입 버튼·인증코드·비밀번호) → howto:guide:classin-account-signup",
+      "홈페이지에서 가입하면 안 되는 이유 → doc:/docs/start/signup#0/signup-in-app-not-website",
+      "학원이 학생 계정을 대신 만드는 대리 등록 방법 → doc:/docs/admin/student-onboarding#0/choose-method-by-count",
+      "학부모도 따로 가입해야 하는지 → fixed:basics-parent-signup",
+      "API로 무엇을 연동할 수 있는지 → doc:/docs/admin/admin-operation-standardization#9/api-available-scope"
+    ],
+    "negatives": [
+      {
+        "q": "가입하는데 인증 문자가 안 와서 진행이 안 돼요",
+        "route": "howto:signup-fail"
+      },
+      {
+        "q": "엄마 아빠도 계정 하나씩 만들어야 해요?",
+        "route": "fixed:basics-parent-signup"
+      },
+      {
+        "q": "원생 백 명 계정을 학원에서 한 번에 등록할 수 있나요",
+        "route": "doc:/docs/admin/student-onboarding#0/choose-method-by-count"
+      },
+      {
+        "q": "홈페이지에서 가입했더니 체험판 고르라는 화면이 나와요",
+        "route": "howto:login-trial-screen"
+      },
+      {
+        "q": "API로 연결하면 계정이랑 수업 개설까지 자동으로 되나요",
+        "route": "doc:/docs/admin/admin-operation-standardization#9/api-available-scope"
+      }
+    ],
+    "handoff": null,
+    "category": "onboarding",
+    "intent": "onboarding",
+    "suggestedQuestions": [
+      "가입할 때 어떤 개인정보가 필요한가요?"
+    ],
+    "status": "active",
+    "provenance": {
+      "unit": "D1-27",
+      "writer": "D1",
+      "at": "2026-11-20",
+      "legacyIds": [],
+      "reviewer": "D2"
+    },
+    "review": {
+      "sampled": 10,
+      "yes": 9,
+      "partial": 1,
+      "no": 0,
+      "actions": []
+    }
+  },
+  {
+    "id": "doc:/docs/start/pre-adoption-faq-22-questions#4/signup-required-info",
+    "kind": "doc",
+    "tier": "standard",
+    "area": "trust",
+    "topic": "가입할 때 필요한 개인정보(전화번호 또는 이메일, 인증 뒤 비밀번호·기본 프로필)",
+    "answer": {
+      "lead": "none",
+      "sentences": [
+        {
+          "unit": "doc:/docs/start/pre-adoption-faq-22-questions#4",
+          "ids": [
+            7,
+            8
+          ],
+          "hashes": [
+            "effa995ff85bf802",
+            "e8be2223b7d981c6"
+          ]
+        }
+      ]
+    },
+    "sources": [
+      {
+        "path": "/docs/start/pre-adoption-faq-22-questions",
+        "heading": "가입과 개인정보"
+      }
+    ],
+    "asks": [
+      "definition",
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_signup",
+      "C_phone_number",
+      "C_login_id",
+      "C_verification_code",
+      "C_password",
+      "C_profile",
+      "C_signup_personal_info"
+    ],
+    "anchors": [
+      "가입 개인정보",
+      "가입할 때 필요한 정보",
+      "전화번호로 가입",
+      "이메일로 가입",
+      "가입 인증",
+      "비밀번호 설정",
+      "기본 프로필",
+      "가입 필수 정보",
+      "회원가입 입력 정보",
+      "수집 항목",
+      "메일 주소로 가입",
+      "폰 번호 없이 가입"
+    ],
+    "covers": "클래스인에 가입할 때 넣는 개인정보가 무엇인지(전화번호 또는 이메일로 가입하고 인증을 마친 뒤 비밀번호와 기본 프로필을 설정)",
+    "notCovers": [
+      "생년월일·성별 입력 여부 → gap:account/signup-birthdate",
+      "휴대폰 번호 입력 형식(+82, 맨 앞 0 빼기) → doc:/docs/start/signup#2/phone-number-format",
+      "가입 뒤 아이디를 이메일↔휴대폰 번호로 바꾸기 → doc:/docs/start/signup#2/id-type",
+      "인증코드가 오지 않거나 가입이 막힐 때 → howto:signup-fail",
+      "가입한 개인정보를 어떤 기준으로 처리하는지 → doc:/docs/start/pre-adoption-faq-22-questions#4/privacy-handling-basis"
+    ],
+    "negatives": [
+      {
+        "q": "회원가입 때 생일이랑 성별도 넣어야 해요?",
+        "route": "gap:account/signup-birthdate"
+      },
+      {
+        "q": "휴대폰 번호 쓸 때 010의 0은 빼야 하나요",
+        "route": "doc:/docs/start/signup#2/phone-number-format"
+      },
+      {
+        "q": "메일로 만든 아이디를 폰 번호 아이디로 바꿀래요",
+        "route": "doc:/docs/start/signup#2/id-type"
+      },
+      {
+        "q": "인증번호 받기 눌러도 아무것도 안 와요",
+        "route": "howto:signup-fail"
+      },
+      {
+        "q": "가입하면서 넣은 정보는 어느 나라 서버에 저장되나요",
+        "route": "policy:basics-data-server-location"
+      }
+    ],
+    "handoff": null,
+    "category": "onboarding",
+    "intent": "onboarding",
+    "suggestedQuestions": [
+      "개인정보는 어떻게 처리되나요?"
+    ],
+    "status": "active",
+    "provenance": {
+      "unit": "D1-27",
+      "writer": "D1",
+      "at": "2026-11-20",
+      "legacyIds": [],
+      "reviewer": "D2"
+    },
+    "review": {
+      "sampled": 10,
+      "yes": 8,
+      "partial": 2,
+      "no": 0,
+      "actions": []
+    }
+  },
+  {
+    "id": "doc:/docs/start/pre-adoption-faq-22-questions#4/privacy-handling-basis",
+    "kind": "doc",
+    "tier": "standard",
+    "area": "trust",
+    "topic": "학생 개인정보 처리 기준(개인정보처리방침·학원 권한 관리 기준·학원 내부 동의 절차)",
+    "answer": {
+      "lead": "none",
+      "sentences": [
+        {
+          "unit": "doc:/docs/start/pre-adoption-faq-22-questions#4",
+          "ids": [
+            10,
+            11,
+            12
+          ],
+          "hashes": [
+            "85f7004a7e46f2fb",
+            "79bd18b13c16ff59",
+            "04461f45591f37f4"
+          ]
+        }
+      ]
+    },
+    "sources": [
+      {
+        "path": "/docs/start/pre-adoption-faq-22-questions",
+        "heading": "가입과 개인정보"
+      }
+    ],
+    "asks": [
+      "howto",
+      "definition",
+      "yesno"
+    ],
+    "concepts": [
+      "C_privacy_handling",
+      "C_privacy_policy_doc",
+      "C_academy_internal_consent",
+      "C_learning_vs_marketing_data"
+    ],
+    "anchors": [
+      "개인정보 처리",
+      "개인정보처리방침",
+      "학원 권한 관리",
+      "내부 동의 절차",
+      "보관·처리 위치",
+      "학습 데이터",
+      "마케팅 목적 데이터",
+      "학생 개인정보",
+      "원생 정보 관리",
+      "정보 관리 기준",
+      "개인정보 동의 절차",
+      "아이 정보 처리"
+    ],
+    "covers": "도입할 때 학생 개인정보를 어떤 기준으로 처리하는지(클래스인 개인정보처리방침·학원 권한 관리 기준·학원 내부 동의 절차), 구체적인 보관·처리 위치는 정책 확인 뒤 답한다는 것, 학습 데이터와 마케팅 목적 데이터를 섞어 설명하지 않는다는 것",
+    "notCovers": [
+      "서버가 어느 나라에 있는지·국외 이전 → policy:basics-data-server-location",
+      "보안 인증·해킹 대비·보안 사고 이력 → fixed:basics-security-posture",
+      "학생 정보를 몇 년 보관하는지·삭제 → fixed:basics-student-data-retention",
+      "개인정보 유출 사고 때 책임·배상 → policy:breach-liability",
+      "수업 녹화에 학부모 동의가 필요한지 → fixed:basics-recording-parental-consent"
+    ],
+    "negatives": [
+      {
+        "q": "서버가 한국에 있는 거 맞죠?",
+        "route": "policy:basics-data-server-location"
+      },
+      {
+        "q": "정보보호 인증 같은 거 받은 회사예요?",
+        "route": "fixed:basics-security-posture"
+      },
+      {
+        "q": "그만둔 학생 정보는 몇 년 지나면 지워져요?",
+        "route": "fixed:basics-student-data-retention"
+      },
+      {
+        "q": "정보가 새어 나가면 회사가 배상해 주나요",
+        "route": "policy:breach-liability"
+      },
+      {
+        "q": "수업 영상 찍으려면 부모님 동의서 받아야 해요?",
+        "route": "fixed:basics-recording-parental-consent"
+      }
+    ],
+    "handoff": "demo",
+    "category": "consultation",
+    "intent": "sales_consulting",
+    "suggestedQuestions": [
+      "메인 서버는 어디에 있나요?"
+    ],
+    "status": "active",
+    "provenance": {
+      "unit": "D1-27",
+      "writer": "D1",
+      "at": "2026-11-20",
+      "legacyIds": [],
+      "reviewer": "D2"
+    },
+    "review": {
+      "sampled": 10,
+      "yes": 8,
+      "partial": 2,
+      "no": 0,
+      "actions": []
+    }
+  },
+  {
+    "id": "fixed:trial-recording-privacy",
+    "kind": "fixed",
+    "tier": "standard",
+    "area": "trust",
+    "topic": "체험·도입 전 녹화본 저장 위치·열람 범위와 회사 직원 열람·광고 사용 원칙",
+    "answer": {
+      "curatedRef": {
+        "module": "field",
+        "id": "trial-recording-privacy",
+        "textHash": "a174f8fd0c4be70e"
+      }
+    },
+    "auditRef": "audit/C-20.jsonl#field:trial-recording-privacy",
+    "asks": [
+      "yesno",
+      "who",
+      "where"
+    ],
+    "concepts": [
+      "C_recording",
+      "C_admin_data",
+      "C_recording_privacy"
+    ],
+    "anchors": [
+      "녹화본 저장 위치",
+      "녹화본 누가 보나",
+      "직원 녹화 열람",
+      "녹화 광고 사용",
+      "녹화 홍보 사용",
+      "녹화 프라이버시",
+      "녹화 열람 권한"
+    ],
+    "covers": "녹화본이 학원 스토리지에 저장되고 교사·학생·학원 관리자가 어디서 보는지와, 회사 직원 열람·광고 홍보 사용 원칙은 공개 안내에 정리돼 있지 않다는 것",
+    "notCovers": [
+      "녹화본 보관 기간·자동 삭제 → fixed:basics-recording-retention-period",
+      "녹화 동의서 양식·동의 책임 → policy:recording-consent-form-liability",
+      "서버 위치 → policy:basics-data-server-location"
+    ],
+    "negatives": [
+      {
+        "q": "녹화 파일은 몇 개월 지나면 자동으로 지워지나요",
+        "route": "fixed:basics-recording-retention-period"
+      },
+      {
+        "q": "녹화 동의서 양식 주나요",
+        "route": "policy:recording-consent-form-liability"
+      },
+      {
+        "q": "녹화 서버가 어느 나라에 있어요",
+        "route": "policy:basics-data-server-location"
+      }
+    ],
+    "handoff": "support",
+    "category": "admin",
+    "intent": "docs_lookup",
+    "policyGoverned": false,
+    "evidenceScope": "docs",
+    "status": "active",
+    "provenance": {
+      "unit": "D4-20",
+      "writer": "agent:sonnet#D4-20",
+      "at": "2026-11-20",
+      "legacyIds": [
+        "field:trial-recording-privacy"
+      ]
+    }
+  },
+  {
+    "id": "fixed:sbom-cve-policy",
+    "kind": "fixed",
+    "tier": "standard",
+    "area": "trust",
+    "topic": "SBOM(SPDX·CycloneDX)·서드파티 라이브러리 취약점(CVE) 대응 정책 공개 여부",
+    "answer": {
+      "curatedRef": {
+        "module": "field",
+        "id": "sbom-cve-policy",
+        "textHash": "4d5acc812fd88949"
+      }
+    },
+    "auditRef": "audit/C-20.jsonl#field:sbom-cve-policy",
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_security",
+      "C_sbom",
+      "C_cve_policy"
+    ],
+    "anchors": [
+      "SBOM",
+      "SPDX",
+      "CycloneDX",
+      "CVE 대응",
+      "취약점 공지",
+      "소프트웨어 자재명세서",
+      "서드파티 라이브러리 취약점",
+      "공급망 보안"
+    ],
+    "covers": "PC 앱과 Android 앱의 SBOM 제공과 서드파티 라이브러리 CVE 대응·공지 정책이 공개 안내에 없다는 것과 상담 연결로 서면 답변을 요청하는 방법",
+    "notCovers": [
+      "보안 인증 보유 현황 → fixed:security-certifications",
+      "기관 보안 설정(2단계 인증·비밀번호) → fixed:security-policy-controls",
+      "저장 데이터 암호화·IP 제한 → fixed:security-encryption-ip"
+    ],
+    "negatives": [
+      {
+        "q": "ISMS 인증 받았나요",
+        "route": "fixed:security-certifications"
+      },
+      {
+        "q": "교사 계정 2단계 인증 강제할 수 있어요",
+        "route": "fixed:security-policy-controls"
+      },
+      {
+        "q": "저장 데이터 암호화 되나요",
+        "route": "fixed:security-encryption-ip"
+      }
+    ],
+    "handoff": "support",
+    "category": "security",
+    "intent": "docs_lookup",
+    "policyGoverned": false,
+    "evidenceScope": "docs",
+    "status": "active",
+    "provenance": {
+      "unit": "D4-20",
+      "writer": "agent:sonnet#D4-20",
+      "at": "2026-11-20",
+      "legacyIds": [
+        "field:sbom-cve-policy"
+      ]
+    }
+  },
+  {
+    "id": "fixed:trial-data-deletion",
+    "kind": "fixed",
+    "tier": "standard",
+    "area": "trust",
+    "topic": "체험 중 넣은 학생 정보 삭제(공개 안내에 자동 삭제 없음, 상담 요청, 직접 지우는 방법)",
+    "answer": {
+      "text": "체험 중에 넣은 학생 정보를 어떻게 지우는지 미리 챙기시는 건 중요해요. 개인정보 처리와 삭제 기준은 클래스인 개인정보처리방침과 계약을 따르고, 공개 안내에는 체험 데이터를 자동으로 지운다는 내용이 없어요.\n\n도입하지 않기로 하시면 아래 [실시간 상담 연결]로 삭제를 요청해 주세요. 학생 이름이나 전화번호는 이 채팅창에 적지 않으셔도 됩니다.\n\n직접 정리할 수 있는 것도 있어요. 코스 [구성원]에서 [멤버 삭제]로 학생을 빼고, 관리자 대시보드 [스토리지] > [수업 리소스]에서 수업 데이터를 지웁니다. 지운 데이터는 복구되지 않아요.",
+      "textHash": "4ba93bb6c389e9b1"
+    },
+    "auditRef": "audit/C-20.jsonl#field:trial-data-deletion",
+    "asks": [
+      "howto",
+      "yesno"
+    ],
+    "concepts": [
+      "C_free_trial",
+      "C_data_deletion",
+      "C_lesson_data_delete"
+    ],
+    "anchors": [
+      "체험 데이터 삭제",
+      "체험 학생 정보 삭제",
+      "체험 후 데이터 정리",
+      "도입 안 하면 삭제",
+      "체험 데이터 자동 삭제",
+      "체험 계정 데이터"
+    ],
+    "covers": "체험 중에 넣은 학생 정보를 지우는 방법: 공개 안내에 자동 삭제 내용이 없다는 것, 상담 연결로 삭제를 요청하는 것, 코스 [구성원]·[스토리지] > [수업 리소스]에서 직접 지우는 것",
+    "notCovers": [
+      "코스에서 학생 구성원 삭제 상세 → doc:/docs/teacher/course-members#4/remove-member",
+      "수업 데이터 삭제 순서 상세 → doc:/docs/admin/storage-management#6/delete-steps",
+      "계정 삭제·회원 탈퇴 → fixed:account-delete"
+    ],
+    "negatives": [
+      {
+        "q": "코스에서 학생 한 명 삭제하는 법",
+        "route": "doc:/docs/teacher/course-members#4/remove-member"
+      },
+      {
+        "q": "수업 리소스에서 데이터 골라 지우는 순서",
+        "route": "doc:/docs/admin/storage-management#6/delete-steps"
+      },
+      {
+        "q": "앱에서 내 계정 탈퇴하는 순서 알려주세요",
+        "route": "fixed:account-delete"
+      }
+    ],
+    "handoff": "support",
+    "category": "admin",
+    "intent": "docs_lookup",
+    "policyGoverned": false,
+    "evidenceScope": "docs",
+    "status": "active",
+    "provenance": {
+      "unit": "D4-20",
+      "writer": "agent:sonnet#D4-20",
+      "at": "2026-11-20",
+      "legacyIds": [
+        "field:trial-data-deletion"
+      ]
+    }
+  },
+  {
+    "id": "fixed:child-data-consent",
+    "kind": "fixed",
+    "tier": "standard",
+    "area": "trust",
+    "topic": "만 14세 미만 아동 개인정보와 법정대리인 동의(처리방침 문장 인용, 가입 단계 여부는 단정 안 함)",
+    "answer": {
+      "text": "클래스인 개인정보처리방침에는 만 14세 미만 아동의 개인정보를 원칙적으로 수집하지 않으며, 수집이 필요한 경우 법정대리인의 동의를 받아 처리한다고 나와 있어요. 다만 클래스인 가입 단계에서 받는지, 학원이 따로 받아야 하는지는 제가 단정하지 않을게요.\n\n1. 클래스인 공식 개인정보처리방침에서 아동 개인정보 항목을 먼저 확인합니다.\n2. 책임 주체와 절차는 아래 [실시간 상담 연결]로 개인정보 담당 부서의 공식 답변을 요청합니다.\n3. 학원이 받아야 할 동의서가 무엇인지 같은 법적 판단은 학원 측 법률 자문으로 확인합니다.",
+      "textHash": "08f8af28eaf058db"
+    },
+    "auditRef": "audit/C-20.jsonl#field:child-data-consent",
+    "asks": [
+      "yesno",
+      "who",
+      "where"
+    ],
+    "concepts": [
+      "C_parental_consent",
+      "C_child_personal_info"
+    ],
+    "anchors": [
+      "만 14세 미만",
+      "아동 개인정보",
+      "법정대리인 동의",
+      "미성년자 가입 동의",
+      "초등학생 개인정보",
+      "보호자 동의"
+    ],
+    "covers": "개인정보처리방침에 만 14세 미만 아동의 개인정보를 원칙적으로 수집하지 않고 필요하면 법정대리인 동의를 받아 처리한다고 나와 있다는 것과, 가입 단계에서 받는지 학원이 받아야 하는지는 단정하지 않는다는 것",
+    "notCovers": [
+      "학부모가 따로 가입해야 하는지 → fixed:basics-parent-signup",
+      "학생 개인정보 처리 기준 일반 → doc:/docs/start/pre-adoption-faq-22-questions#4/privacy-handling-basis",
+      "녹화 동의서·동의 책임 → policy:recording-consent-form-liability"
+    ],
+    "negatives": [
+      {
+        "q": "학부모도 계정 만들어야 해요",
+        "route": "fixed:basics-parent-signup"
+      },
+      {
+        "q": "학생 개인정보는 어떤 기준으로 처리돼요",
+        "route": "doc:/docs/start/pre-adoption-faq-22-questions#4/privacy-handling-basis"
+      },
+      {
+        "q": "녹화 동의서 양식 있나요",
+        "route": "policy:recording-consent-form-liability"
+      }
+    ],
+    "handoff": "support",
+    "category": "admin",
+    "intent": "docs_lookup",
+    "policyGoverned": false,
+    "evidenceScope": "site",
+    "status": "review",
+    "provenance": {
+      "unit": "D4-20",
+      "writer": "agent:sonnet#D4-20",
+      "at": "2026-11-20",
+      "legacyIds": [
+        "field:child-data-consent"
+      ]
+    }
+  },
+  {
+    "id": "fixed:security-encryption-ip",
+    "kind": "fixed",
+    "tier": "standard",
+    "area": "trust",
+    "topic": "저장 데이터 암호화 방식과 IP·지역 기준 접근 제한 지원 여부(공개 안내 기준)",
+    "answer": {
+      "text": "확인된 것과 아닌 것을 나눠 드릴게요.\n\n- 저장 시 암호화(at-rest): 녹화본·업로드 자료의 암호화 방식은 공개 문서에 나와 있지 않아요. 있다고도 없다고도 단정하지 않을게요.\n- 접속 IP 제한: 공개 FAQ에는 IP나 지역 기준으로 접근을 제한하는 기능을 지원하지 않는다고 나와 있어요. 관리자 콘솔 접속만 학원 고정 IP로 제한하는 기능도 공개 안내에는 없습니다.\n\n공식 답변이 필요하시면 아래 [실시간 상담 연결]로 항목을 적어 요청해 주세요. 개인정보 처리 기준은 클래스인 공식 개인정보처리방침에서 함께 확인하시면 됩니다.",
+      "textHash": "cf9c9f8abae7ab3f"
+    },
+    "auditRef": "audit/C-20.jsonl#field:security-encryption-ip",
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_security",
+      "C_encryption",
+      "C_access_control"
+    ],
+    "anchors": [
+      "저장 암호화",
+      "녹화본 암호화",
+      "업로드 자료 암호화",
+      "IP 제한",
+      "접속 IP 제한",
+      "지역 접근 제한",
+      "관리자 콘솔 고정 IP"
+    ],
+    "covers": "녹화본·업로드 자료의 저장 시 암호화 방식은 공개 문서에 없다는 것과, IP·지역 기준 접근 제한과 관리자 콘솔 고정 IP 제한 기능은 공개 안내에 지원한다는 내용이 없다는 것",
+    "notCovers": [
+      "보안 인증 보유 현황 → fixed:security-certifications",
+      "기관 보안 설정(2단계 인증·비밀번호) → fixed:security-policy-controls",
+      "SBOM·CVE 대응 → fixed:sbom-cve-policy"
+    ],
+    "negatives": [
+      {
+        "q": "ISO 27001 받았나요",
+        "route": "fixed:security-certifications"
+      },
+      {
+        "q": "교사 계정 2단계 인증 강제 가능해요",
+        "route": "fixed:security-policy-controls"
+      },
+      {
+        "q": "SBOM 제공하나요",
+        "route": "fixed:sbom-cve-policy"
+      }
+    ],
+    "handoff": "support",
+    "category": "admin",
+    "intent": "docs_lookup",
+    "policyGoverned": false,
+    "evidenceScope": "docs",
+    "status": "active",
+    "provenance": {
+      "unit": "D4-20",
+      "writer": "agent:sonnet#D4-20",
+      "at": "2026-11-20",
+      "legacyIds": [
+        "field:security-encryption-ip"
+      ]
+    }
+  },
+  {
+    "id": "fixed:security-certifications",
+    "kind": "fixed",
+    "tier": "standard",
+    "area": "trust",
+    "topic": "ISMS-P·ISO/IEC 27001·SOC 2 같은 정보보호 인증 보유 현황(공개 안내 없음, 상담으로 요청)",
+    "answer": {
+      "text": "ISMS-P, ISO/IEC 27001, SOC 2 같은 정보보호 인증 보유 현황과 인증 범위·유효기간은 공개 안내에 나와 있지 않아요. 보유 여부를 단정하지 않을게요.\n\n위탁사 보안 평가에 필요한 공식 답변과 인증서 사본은 아래 [도입 상담 남기기]나 상담 채널로 요청해 주세요.",
+      "textHash": "4f0338320bc6888a"
+    },
+    "auditRef": "audit/C-20.jsonl#field:security-certifications",
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_certification",
+      "C_security",
+      "C_infosec_certification"
+    ],
+    "anchors": [
+      "ISMS-P",
+      "ISO 27001",
+      "SOC 2",
+      "정보보호 인증",
+      "보안 인증서",
+      "인증 유효기간",
+      "인증 범위"
+    ],
+    "covers": "ISMS-P·ISO/IEC 27001·SOC 2 같은 정보보호 인증의 보유 현황과 범위·유효기간이 공개 안내에 없다는 것과, 인증서 사본과 공식 답변을 상담으로 요청하는 방법",
+    "notCovers": [
+      "보안 태세 일반(인증·사고 이력) → fixed:basics-security-posture",
+      "저장 데이터 암호화·IP 제한 → fixed:security-encryption-ip",
+      "SBOM·CVE 대응 → fixed:sbom-cve-policy"
+    ],
+    "negatives": [
+      {
+        "q": "SBOM 제공하나요",
+        "route": "fixed:sbom-cve-policy"
+      },
+      {
+        "q": "저장 데이터 암호화 되나요",
+        "route": "fixed:security-encryption-ip"
+      },
+      {
+        "q": "개인정보 유출 사고 책임은 누구예요",
+        "route": "policy:breach-liability"
+      }
+    ],
+    "handoff": "demo",
+    "category": "consultation",
+    "intent": "sales_consulting",
+    "policyGoverned": false,
+    "evidenceScope": "docs",
+    "status": "active",
+    "provenance": {
+      "unit": "D4-20",
+      "writer": "agent:sonnet#D4-20",
+      "at": "2026-11-20",
+      "legacyIds": [
+        "field:security-certifications"
+      ]
+    }
+  },
+  {
+    "id": "fixed:stop-sales-calls-privacy",
+    "kind": "fixed",
+    "tier": "standard",
+    "area": "trust",
+    "topic": "영업 전화 중단·연락 방식 변경 요청과 상담 개인정보 보유 기간·삭제 요청",
+    "answer": {
+      "text": "검토 중이라고 하셨는데 전화가 계속 와서 불편하셨겠어요. 죄송합니다.\n\n1. 전화 그만 오게 하기: 아래 [실시간 상담 연결]로 '영업 전화를 그만 받고 싶다'거나 '문자·메일로만 연락해 달라'고 남겨 주세요. 원하시는 연락 방식을 함께 적으시면 돼요.\n2. 번호와 학원 정보 보관: 문의 페이지에는 상담과 고객 지원을 위한 개인정보의 보유 기간이 마지막 상담일로부터 최대 3년이라고 나와 있어요. 삭제나 처리 정지를 원하시면 같은 상담 연결로 요청하세요.",
+      "textHash": "a940b1229adc3a4d"
+    },
+    "auditRef": "audit/C-20.jsonl#field:stop-sales-calls-privacy",
+    "asks": [
+      "howto",
+      "when"
+    ],
+    "concepts": [
+      "C_contact_channel",
+      "C_data_retention",
+      "C_stop_sales_calls"
+    ],
+    "anchors": [
+      "영업 전화 중단",
+      "전화 그만",
+      "문자로만 연락",
+      "연락 방식 변경",
+      "상담 정보 보유 기간",
+      "연락처 삭제 요청",
+      "처리 정지 요청"
+    ],
+    "covers": "상담 연결로 영업 전화 중단·연락 방식 변경을 요청하는 방법과, 문의 페이지에 나온 상담 개인정보 보유 기간, 삭제·처리 정지 요청 방법",
+    "notCovers": [
+      "대표 전화·상담 경로 안내 → fixed:contact-channel",
+      "체험·도입 문의 개인정보 일반 → doc:/docs/start/pre-adoption-faq-22-questions#4/privacy-handling-basis",
+      "체험 중 넣은 학생 정보 삭제 → fixed:trial-data-deletion"
+    ],
+    "negatives": [
+      {
+        "q": "상담 전화번호가 어떻게 되나요",
+        "route": "fixed:contact-channel"
+      },
+      {
+        "q": "학생 개인정보는 어떤 기준으로 처리돼요",
+        "route": "doc:/docs/start/pre-adoption-faq-22-questions#4/privacy-handling-basis"
+      },
+      {
+        "q": "체험 데이터 삭제하고 싶어요",
+        "route": "fixed:trial-data-deletion"
+      }
+    ],
+    "handoff": "support",
+    "category": "consultation",
+    "intent": "sales_consulting",
+    "policyGoverned": false,
+    "evidenceScope": "site",
+    "status": "review",
+    "provenance": {
+      "unit": "D4-20",
+      "writer": "agent:sonnet#D4-20",
+      "at": "2026-11-20",
+      "legacyIds": [
+        "field:stop-sales-calls-privacy"
+      ]
+    }
+  },
+  {
+    "id": "fixed:api-key-scope-ip-expiry",
+    "kind": "fixed",
+    "tier": "standard",
+    "area": "trust",
+    "topic": "API 키 권한 범위(scope)·IP allowlist·만료일 지정 지원 여부(공개 안내 없음)",
+    "answer": {
+      "text": "공개 안내로 확인되는 건 API 도킹 메뉴가 관리자 대시보드 [계정 정보]에 있고, 연동 범위는 계약 조건과 공식 API 문서를 기준으로 담당자와 정한다는 것까지예요.\n\n1) 키·자격 증명별 권한 범위(scope) 나누기: 공개 안내에 나와 있지 않아요.\n2) 키별 출발지 IP allowlist: 공개 안내에 나와 있지 않아요.\n3) 키 만료일 지정: 공개 안내에 나와 있지 않아요.\n\n아래 [실시간 상담 연결]로 세 항목(scope, IP 제한, 만료)을 API 기술지원에 서면으로 물어보세요.",
+      "textHash": "575b5e2e89352a65"
+    },
+    "auditRef": "audit/C-20.jsonl#field:api-key-scope-ip-expiry",
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_api",
+      "C_security",
+      "C_api_key_scope"
+    ],
+    "anchors": [
+      "API 키 권한 범위",
+      "API scope",
+      "키별 IP 제한",
+      "API IP allowlist",
+      "API 키 만료일",
+      "API 자격 증명",
+      "연동 키 권한"
+    ],
+    "covers": "API 키·자격 증명별 권한 범위, 출발지 IP allowlist, 만료일 지정이 공개 안내에 없다는 것과, 연동 범위는 계약 조건과 공식 API 문서를 기준으로 담당자와 정한다는 것",
+    "notCovers": [
+      "API로 연동할 수 있는 범위 → doc:/docs/admin/admin-operation-standardization#9/api-available-scope",
+      "API 버전·폐기 정책 → fixed:api-versioning-deprecation-policy",
+      "저장 데이터 암호화·IP 제한 → fixed:security-encryption-ip"
+    ],
+    "negatives": [
+      {
+        "q": "API로 뭘 연동할 수 있어요",
+        "route": "doc:/docs/admin/admin-operation-standardization#9/api-available-scope"
+      },
+      {
+        "q": "API 버전이 바뀌면 어떻게 돼요",
+        "route": "fixed:api-versioning-deprecation-policy"
+      },
+      {
+        "q": "관리자 콘솔 접속 IP를 제한할 수 있어요",
+        "route": "fixed:security-encryption-ip"
+      }
+    ],
+    "handoff": "support",
+    "category": "security",
+    "intent": "docs_lookup",
+    "policyGoverned": false,
+    "evidenceScope": "docs",
+    "status": "active",
+    "provenance": {
+      "unit": "D4-20",
+      "writer": "agent:sonnet#D4-20",
+      "at": "2026-11-20",
+      "legacyIds": [
+        "field:api-key-scope-ip-expiry"
+      ]
+    }
+  },
+  {
+    "id": "policy:recording-consent-form-liability",
+    "kind": "policy",
+    "tier": "standard",
+    "area": "trust",
+    "topic": "녹화 동의서 양식 제공 여부와 동의 책임(법적 판단은 단정 안 함, 보관 기간·다시보기 기간 맞추기)",
+    "answer": {
+      "text": "두 가지 답드릴게요.\n\n1) 동의서 양식: 클래스인이 녹화 동의서 양식을 제공하는지는 공개 안내에 없어요. 아래 [도입 상담 남기기]로 요청해 보시고, 없다면 학원이 직접 만드셔야 해요. 공개 안내도 개인정보는 클래스인 개인정보처리방침과 함께 학원 내부 동의 절차를 확인하라고 해요.\n2) 책임: 일반적으로 학생 얼굴·목소리를 녹화해 개인정보를 처리하는 쪽은 수업을 운영하는 학원이라, 동의도 학원이 받는 게 원칙이에요. 동의 없이 녹화했을 때 책임이 누구에게 얼마나 있는지는 법적 판단이라 제가 단정할 수 없어요. 계약 전에 개인정보 전문가에게 확인하세요.\n\n동의서에는 보통 녹화 목적(다시보기·결석 보강), 보관 기간, 볼 수 있는 사람을 적어요. 클래스인에서는 보관 기간을 [일반 설정] > [저장 설정]의 자동 삭제로, 볼 수 있는 기간을 코스의 다시보기 유효 기간으로 맞출 수 있어요.",
+      "textHash": "93106366cad9c927",
+      "policyRef": "HQ-2302"
+    },
+    "auditRef": "audit/C-20.jsonl#field:recording-consent-form-liability",
+    "asks": [
+      "yesno",
+      "howto",
+      "who"
+    ],
+    "concepts": [
+      "C_recording",
+      "C_parental_consent"
+    ],
+    "anchors": [
+      "녹화 동의서",
+      "녹화 동의서 양식",
+      "녹화 동의 책임",
+      "동의 없이 녹화",
+      "녹화 촬영 동의",
+      "학부모 녹화 동의"
+    ],
+    "covers": "녹화 동의서 양식을 클래스인이 제공하는지는 공개 안내에 없다는 것, 동의 책임은 법적 판단이라 단정하지 않는다는 것, 보관 기간과 다시보기 기간을 설정으로 맞추는 방법(사람이 정한 문구)",
+    "notCovers": [
+      "녹화본 저장 위치·열람 범위 → fixed:trial-recording-privacy",
+      "녹화 자동 삭제 설정 상세 → doc:/docs/admin/institution-settings#6/auto-delete-setup",
+      "아동 개인정보 법정대리인 동의 → fixed:child-data-consent"
+    ],
+    "negatives": [
+      {
+        "q": "수업 영상 열람 가능한 사람 범위가 궁금해요",
+        "route": "fixed:trial-recording-privacy"
+      },
+      {
+        "q": "녹화 자동 삭제 어떻게 켜요",
+        "route": "doc:/docs/admin/institution-settings#6/auto-delete-setup"
+      },
+      {
+        "q": "만 14세 미만 가입 동의",
+        "route": "fixed:child-data-consent"
+      }
+    ],
+    "handoff": "demo",
+    "category": "consultation",
+    "intent": "sales_consulting",
+    "policyGoverned": true,
+    "evidenceScope": "docs",
+    "status": "active",
+    "provenance": {
+      "unit": "D4-20",
+      "writer": "agent:sonnet#D4-20",
+      "at": "2026-11-20",
+      "legacyIds": [
+        "field:recording-consent-form-liability"
+      ]
+    }
+  },
+  {
+    "id": "policy:data-export-lock-in",
+    "kind": "policy",
+    "tier": "standard",
+    "area": "trust",
+    "topic": "도입 전 데이터 내보내기·이전 범위(녹화본·명단·성적·API)와 계약 종료 후 삭제 기간 안내",
+    "answer": {
+      "text": "나중에 옮길 때를 걱정하시는 게 당연해요. 도입 전에 확인하시는 게 맞아요. 공개 안내로 확인되는 것과 안 되는 것을 나눠 드릴게요.\n\n- 녹화본: 관리자 대시보드 [수업 녹화 데이터]에서 수업별로 원본을 내려받을 수 있어요. 파일 형식은 공개 안내에 적혀 있지 않아요.\n- 학생 명단: [기관 관리] > [수업 관리] 검색 결과를 [Excel로 내보내기]로 받을 수 있어요(수업·교사·학생). 학원 전체 학생 명단을 한 번에 내보내는 메뉴는 공개 안내로 확인되지 않아요.\n- 숙제·시험 기록: 학생별 성적 화면을 PDF로 저장하고, [결제] > [통계 다운로드]로 수업 기록을 Excel로 받아요. 문항과 답안까지 원본 데이터로 한 번에 내보내는 기능은 공개 안내에 없어요.\n- API: 계약 조건에 따라 코스·수업 정보를 조회(GET)해 자체 시스템으로 가져올 수 있어요.\n\n계약이 끝난 뒤 데이터가 며칠 안에 지워지는지는 공개 안내에 없어요. 약관·계약서 기준을 따르니, 도입 전에 아래 [도입 상담 남기기]로 보존·삭제 기간과 내보내기 범위를 서면으로 받아 두세요.",
+      "textHash": "aa74219e8ac36491",
+      "policyRef": "HQ-0202"
+    },
+    "auditRef": "audit/C-20.jsonl#field:data-export-lock-in",
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_data_migration",
+      "C_roster_export",
+      "C_recording_download",
+      "C_vendor_lock_in"
+    ],
+    "anchors": [
+      "락인",
+      "데이터 내보내기",
+      "데이터 이전",
+      "계약 종료 후 데이터",
+      "다른 플랫폼 이전",
+      "녹화본 내려받기",
+      "명단 내보내기"
+    ],
+    "covers": "나중에 옮길 때 내려받거나 내보낼 수 있는 자료(녹화본·수업별 학생 명단·성적 화면·통계·API 조회)와 확인되지 않는 것, 계약 종료 후 삭제 기간은 약관·계약서 기준(사람이 정한 문구)",
+    "notCovers": [
+      "수업 녹화 내려받기 방법 → fixed:basics-recording-download",
+      "학생 명단 내보내기(전체) → gap:course/roster-export",
+      "학생 개인정보 보관 기간 → fixed:basics-student-data-retention"
+    ],
+    "negatives": [
+      {
+        "q": "녹화본 내려받는 방법 알려주세요",
+        "route": "fixed:basics-recording-download"
+      },
+      {
+        "q": "학생 명단 엑셀로 내보내기 되나요",
+        "route": "gap:course/roster-export"
+      },
+      {
+        "q": "학생 정보 보관 기간이 얼마예요",
+        "route": "fixed:basics-student-data-retention"
+      }
+    ],
+    "handoff": "demo",
+    "category": "consultation",
+    "intent": "sales_consulting",
+    "policyGoverned": true,
+    "evidenceScope": "docs",
+    "status": "active",
+    "provenance": {
+      "unit": "D4-20",
+      "writer": "agent:sonnet#D4-20",
+      "at": "2026-11-20",
+      "legacyIds": [
+        "field:data-export-lock-in"
+      ]
+    }
+  },
+  {
+    "id": "policy:company-origin-data-transfer",
+    "kind": "policy",
+    "tier": "standard",
+    "area": "trust",
+    "topic": "회사 국적·계약 당사자 질문과 학생 데이터 국외 이전(공개 확인 범위만 설명)",
+    "answer": {
+      "text": "설명회에서 정확히 답하실 수 있게 확인된 범위로 말씀드릴게요.\n\n1. 회사: 클래스인(ClassIn)은 글로벌 에듀테크 기업 EEO(Empower Education Online)가 만든 교육용 SaaS예요. EEO는 2014년에 설립됐고, 한국 법인 이이오클래스인코리아는 2022년 10월 서울 목동에 설립됐어요.\n2. 계약 상대: 실제로 어느 법인과 계약하는지는 견적서·계약서에 적힌 계약 당사자를 보셔야 해요. 공개 안내에는 따로 정리돼 있지 않아요.\n3. 학생 데이터의 국외 이전: 데이터가 어디에 저장되고 해외로 이전되는지는 공개 안내에 없어서 제가 단정할 수 없어요. 클래스인 공식 개인정보처리방침의 국외 이전 항목을 직접 확인하시고, 설명회 자료로 쓸 공식 답변은 아래 [도입 상담 남기기]로 요청하세요.",
+      "textHash": "e7df2178fdfbcd8a",
+      "policyRef": "HQ-1301"
+    },
+    "auditRef": "audit/C-20.jsonl#field:company-origin-data-transfer",
+    "asks": [
+      "yesno",
+      "who"
+    ],
+    "concepts": [
+      "C_server_location",
+      "C_headquarters"
+    ],
+    "anchors": [
+      "중국 회사",
+      "회사 국적",
+      "해외 회사",
+      "계약 당사자",
+      "국외 이전",
+      "학생 데이터 해외",
+      "설명회 회사 질문"
+    ],
+    "covers": "EEO·한국 법인 설립 사실, 계약 상대는 견적서·계약서에서 확인한다는 것, 학생 데이터 국외 이전은 공개 안내로 단정할 수 없고 개인정보처리방침을 확인하라는 것(사람이 정한 문구)",
+    "notCovers": [
+      "서버 위치·데이터 처리 지역 → policy:basics-data-server-location",
+      "회사 소개(설립·법인) → doc:/docs/start/company-overview#1",
+      "개인정보 처리 기준 일반 → doc:/docs/start/pre-adoption-faq-22-questions#4/privacy-handling-basis"
+    ],
+    "negatives": [
+      {
+        "q": "서버가 한국에 있나요",
+        "route": "policy:basics-data-server-location"
+      },
+      {
+        "q": "개인정보는 어떤 기준으로 처리돼요",
+        "route": "doc:/docs/start/pre-adoption-faq-22-questions#4/privacy-handling-basis"
+      },
+      {
+        "q": "개인정보 유출 사고 책임",
+        "route": "policy:breach-liability"
+      }
+    ],
+    "handoff": "demo",
+    "category": "consultation",
+    "intent": "sales_consulting",
+    "policyGoverned": true,
+    "evidenceScope": "docs",
+    "status": "active",
+    "provenance": {
+      "unit": "D4-20",
+      "writer": "agent:sonnet#D4-20",
+      "at": "2026-11-20",
+      "legacyIds": [
+        "field:company-origin-data-transfer"
+      ]
+    }
+  },
+  {
+    "id": "policy:breach-notification-terms",
+    "kind": "policy",
+    "tier": "standard",
+    "area": "trust",
+    "topic": "개인정보 유출 사고 통지 시한·채널·담당자 등록·통지 내용(공개 안내 없음, 서면 요청)",
+    "answer": {
+      "text": "세 가지 답드릴게요.\n\n1) 고객사 통지 시한·채널이 처리방침이나 계약서에 명시돼 있는지: 공개 안내에는 사고 통지 시한과 채널이 나와 있지 않아요. 그래서 제가 시한을 말씀드리지 않을게요.\n2) 학원 보안 담당자 연락처를 따로 등록하는 곳: 공개 안내에 나와 있지 않아요.\n3) 통지 내용에 유출 항목·범위·대응 조치가 들어가는지: 이것도 공개 안내에 없어요.\n\n공개 안내 기준으로 개인정보 처리는 클래스인 공식 개인정보처리방침과 계약을 따라요. 법정 신고 기한을 맞추려면 아래 [실시간 상담 연결]로 '사고 통지 시한·채널·내용과 보안 담당자 등록 방법'을 개인정보·계약 담당에게 서면으로 요청하시고, 계약서나 위탁 계약 문서에 반영해 두세요.",
+      "textHash": "c133be19eb8fe437",
+      "policyRef": "HQ-1203"
+    },
+    "auditRef": "audit/C-20.jsonl#field:breach-notification-terms",
+    "asks": [
+      "yesno",
+      "when",
+      "howto"
+    ],
+    "concepts": [
+      "C_breach_liability",
+      "C_breach_notification"
+    ],
+    "anchors": [
+      "사고 통지 시한",
+      "유출 통지",
+      "침해 사고 통지",
+      "보안 담당자 연락처 등록",
+      "통지 채널",
+      "유출 항목 범위"
+    ],
+    "covers": "고객사 통지 시한·채널, 보안 담당자 연락처 등록, 통지 내용의 유출 항목·범위·대응 조치가 공개 안내에 없다는 것과 서면 요청 방법(사람이 정한 문구)",
+    "notCovers": [
+      "유출 사고 책임·배상 → policy:breach-liability",
+      "처리 위탁 계약서(DPA)·수탁사 현황 → policy:dpa-subprocessor-docs",
+      "보안 인증 보유 → fixed:security-certifications"
+    ],
+    "negatives": [
+      {
+        "q": "유출되면 회사가 배상해 주나요",
+        "route": "policy:breach-liability"
+      },
+      {
+        "q": "DPA 양식 받을 수 있나요",
+        "route": "policy:dpa-subprocessor-docs"
+      },
+      {
+        "q": "ISMS 인증 있나요",
+        "route": "fixed:security-certifications"
+      }
+    ],
+    "handoff": "support",
+    "category": "security",
+    "intent": "sales_consulting",
+    "policyGoverned": true,
+    "evidenceScope": "docs",
+    "status": "active",
+    "provenance": {
+      "unit": "D4-20",
+      "writer": "agent:sonnet#D4-20",
+      "at": "2026-11-20",
+      "legacyIds": [
+        "field:breach-notification-terms"
+      ]
+    }
+  },
+  {
+    "id": "policy:dpa-subprocessor-docs",
+    "kind": "policy",
+    "tier": "head",
+    "area": "trust",
+    "topic": "DPA(개인정보 처리 위탁 계약서) 양식과 수탁사·재위탁 현황 요청",
+    "answer": {
+      "text": "개인정보 처리 위탁 계약서(DPA) 양식이나 수탁사·재위탁 현황은 공개 문서에 따로 올라와 있지 않아서, 내용을 제가 지어 말씀드리지 않을게요.\n\n처리 기준은 공식 개인정보처리방침에서 먼저 확인해 주세요. 계약에 필요한 문서는 아래 [도입 상담 남기기]에 'DPA 양식·수탁사 현황 요청'이라고 남겨 주시면 담당자가 제공 가능한 문서를 안내해 드립니다.",
+      "textHash": "c5dff0ae5fe45a91",
+      "policyRef": "HQ-01"
+    },
+    "auditRef": "audit/C-21.jsonl#svc:dpa",
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_dpa",
+      "C_subprocessor_list",
+      "C_breach_liability"
+    ],
+    "anchors": [
+      "DPA",
+      "처리 위탁 계약서",
+      "수탁사 현황",
+      "재위탁 현황",
+      "위탁 계약서 양식",
+      "수탁자 목록"
+    ],
+    "covers": "개인정보 처리 위탁 계약서(DPA) 양식과 수탁사·재위탁 현황을 공개 문서에서 확인할 수 없다는 것과 도입 상담으로 제공 가능한 문서를 요청하는 방법(사람이 정한 문구)",
+    "notCovers": [
+      "개인정보 처리 기준 일반 → doc:/docs/start/pre-adoption-faq-22-questions#4/privacy-handling-basis",
+      "개인정보 유출 때 책임·배상 → policy:breach-liability",
+      "서버가 있는 나라 → policy:basics-data-server-location"
+    ],
+    "negatives": [
+      {
+        "q": "학생 개인정보를 어떤 기준으로 처리하나요",
+        "route": "doc:/docs/start/pre-adoption-faq-22-questions#4/privacy-handling-basis"
+      },
+      {
+        "q": "정보가 유출되면 회사가 배상해 주나요",
+        "route": "policy:breach-liability"
+      },
+      {
+        "q": "서버가 한국에 있나요",
+        "route": "policy:basics-data-server-location"
+      }
+    ],
+    "handoff": "demo",
+    "category": "consultation",
+    "intent": "sales_consulting",
+    "policyGoverned": true,
+    "evidenceScope": "docs",
+    "status": "active",
+    "provenance": {
+      "unit": "D4-21",
+      "writer": "agent:sonnet#D4-21",
+      "at": "2026-11-20",
+      "legacyIds": [
+        "svc:dpa"
+      ]
+    }
+  },
+  {
+    "id": "fixed:security-policy-controls",
+    "kind": "fixed",
+    "tier": "head",
+    "area": "trust",
+    "topic": "기관 보안 설정(2단계 인증·비밀번호 정책) 공개 안내 여부와 하위 계정 권한 좁게 주기",
+    "answer": {
+      "text": "교사 계정에 2단계 인증을 강제하거나 비밀번호 길이·변경 주기를 기관 단위로 정하는 설정은 공개 안내에 없어서, 있다고 말씀드리지 않을게요.\n\n지금 공개 안내로 할 수 있는 건 권한을 좁게 주는 쪽이에요. 하위 계정에는 꼭 필요한 메뉴만 주세요. [권한 관리] 화면에도 하위 계정은 학원 데이터에 접근할 수 있으니 신중하게 설정하라는 안내가 있습니다. 퇴사한 강사는 하위 계정 권한을 먼저 지운 뒤 [기관 관리] > [교사]에서 비활성화합니다.\n\n보안 정책 요건이 있으면 아래 [실시간 상담 연결]로 필요한 항목을 알려 주세요. 담당자가 지원 범위를 확인해 드립니다.",
+      "textHash": "d50b04fca2295fb6"
+    },
+    "auditRef": "audit/C-21.jsonl#svc:security-policy",
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_permission",
+      "C_menu_permission",
+      "C_account_security",
+      "C_two_factor",
+      "C_password_rule"
+    ],
+    "anchors": [
+      "2단계 인증",
+      "이중 인증",
+      "비밀번호 정책",
+      "비밀번호 길이",
+      "비밀번호 변경 주기",
+      "하위 계정 권한 좁게",
+      "교사 계정 보안"
+    ],
+    "covers": "교사 계정의 2단계 인증 강제나 기관 단위 비밀번호 길이·변경 주기 설정은 공개 안내에 없다는 것과, 하위 계정에 필요한 메뉴만 주고 퇴사 강사를 비활성화하는 방법",
+    "notCovers": [
+      "하위 계정 권한 범위와 데이터 접근 주의 상세 → doc:/docs/admin/teacher-onboarding#3/subaccount-scope-caution",
+      "강사가 그만둘 때 정리 순서 상세 → doc:/docs/admin/teacher-onboarding#6/teacher-leaves",
+      "개인정보 처리 기준 → doc:/docs/start/pre-adoption-faq-22-questions#4/privacy-handling-basis",
+      "보안 인증·사고 이력 → fixed:basics-security-posture"
+    ],
+    "negatives": [
+      {
+        "q": "강사가 그만둘 때 코스 인계는 어떻게 해요",
+        "route": "doc:/docs/admin/teacher-onboarding#6/teacher-leaves"
+      },
+      {
+        "q": "하위 계정 강사가 볼 수 있는 범위가 어디까지예요",
+        "route": "doc:/docs/admin/teacher-onboarding#3/subaccount-scope-caution"
+      },
+      {
+        "q": "보안 인증 받은 회사예요",
+        "route": "fixed:basics-security-posture"
+      },
+      {
+        "q": "학생 개인정보는 어떤 기준으로 처리돼요",
+        "route": "doc:/docs/start/pre-adoption-faq-22-questions#4/privacy-handling-basis"
+      }
+    ],
+    "handoff": "support",
+    "category": "admin",
+    "intent": "docs_lookup",
+    "policyGoverned": false,
+    "evidenceScope": "docs",
+    "status": "active",
+    "provenance": {
+      "unit": "D4-21",
+      "writer": "agent:sonnet#D4-21",
+      "at": "2026-11-20",
+      "legacyIds": [
+        "svc:security-policy"
+      ]
+    }
+  },
+  {
+    "id": "fixed:self-memory-boundary",
+    "kind": "fixed",
+    "tier": "head",
+    "area": "trust",
+    "topic": "챗봇이 이전 대화를 기억하는 범위(현재 질문을 이해하는 맥락으로만 참고)",
+    "answer": {
+      "curatedRef": {
+        "module": "self",
+        "id": "memory_boundary",
+        "textHash": "f66da6690349f262"
+      }
+    },
+    "auditRef": "audit/C-21.jsonl#self:memory_boundary",
+    "asks": [
+      "yesno",
+      "definition"
+    ],
+    "concepts": [
+      "C_chat_memory"
+    ],
+    "anchors": [
+      "이전 대화 기억",
+      "나를 기억",
+      "대화 맥락",
+      "방금 질문 기억",
+      "저장된 프로필"
+    ],
+    "covers": "이 챗봇이 이전 대화를 현재 질문을 이해하는 맥락으로만 참고하고, 저장된 개인 프로필처럼 단정하지 않으며, 현재 질문과 사용자가 직접 준 정보 안에서만 답한다는 것",
+    "notCovers": [
+      "입력한 내용 저장·보관 → fixed:self-input-privacy",
+      "챗봇 대화 보관 기간·삭제 요청 → fixed:self-privacy-boundary",
+      "답변에 쓰는 자료 범위 → fixed:self-source-boundary",
+      "뭘 할 수 있는지 → fixed:self-capabilities"
+    ],
+    "negatives": [
+      {
+        "q": "챗봇 대화는 몇 년 보관돼요",
+        "route": "fixed:self-privacy-boundary"
+      },
+      {
+        "q": "여기에 학생 이름 써도 돼요",
+        "route": "fixed:self-input-privacy"
+      },
+      {
+        "q": "어떤 자료를 보고 답해요",
+        "route": "fixed:self-source-boundary"
+      },
+      {
+        "q": "너 뭐 할 수 있어",
+        "route": "fixed:self-capabilities"
+      }
+    ],
+    "handoff": null,
+    "category": "self_knowledge",
+    "intent": "self_knowledge",
+    "policyGoverned": false,
+    "evidenceScope": "docs",
+    "status": "active",
+    "provenance": {
+      "unit": "D4-21",
+      "writer": "agent:sonnet#D4-21",
+      "at": "2026-11-20",
+      "legacyIds": [
+        "self:memory_boundary"
+      ]
+    }
+  },
+  {
+    "id": "fixed:self-input-privacy",
+    "kind": "fixed",
+    "tier": "head",
+    "area": "trust",
+    "topic": "챗봇에 입력한 내용의 저장·보관 여부와 개인정보 입력 주의",
+    "answer": {
+      "text": "저는 AI로 답하는 Classin 상담 가이드예요. 답변은 클래스인 공개 문서(문서센터 안내)를 근거로 합니다.\n\n입력하신 내용이 저장되는지, 얼마나 보관되고 어디에 쓰이는지는 클래스인 공식 개인정보처리방침을 기준으로 확인해 주세요. 제가 '저장되지 않는다'고 단정할 수는 없어요. 개인정보처리방침에는 \"챗봇 대화와 상담 채팅 기록: 마지막 대화일로부터 최대 3년\", \"챗봇 대화는 챗봇을 쓸 때만 Gemini로 보냅니다.\"라고 나와 있어요.\n\n그래서 판단이 서기 전까지는 학생 이름·연락처 같은 개인정보나 학원 내부 정보는 입력하지 마시고, 일반적인 질문 형태로 물어봐 주세요. 학원 정보를 전달해야 하면 상담 채널에서 담당자에게 직접 전달하시면 됩니다.",
+      "textHash": "49cc8d05bfa63cb9"
+    },
+    "auditRef": "audit/C-21.jsonl#self:input_privacy",
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_chatbot_data_retention",
+      "C_data_deletion"
+    ],
+    "anchors": [
+      "입력 내용 저장",
+      "개인정보 입력",
+      "학생 이름 입력",
+      "채팅에 개인정보",
+      "입력한 내용 보관"
+    ],
+    "covers": "챗봇에 입력한 내용이 저장되는지·보관 기간·용도는 공식 개인정보처리방침 기준이고 저장되지 않는다고 단정할 수 없다는 것, 학생 개인정보·학원 내부 정보는 입력하지 않고 상담 채널로 전달하라는 것",
+    "notCovers": [
+      "대화 기록 삭제·열람 요청 → fixed:self-privacy-boundary",
+      "이전 대화 기억 범위 → fixed:self-memory-boundary",
+      "답변 참고 자료와 질문 로그 → fixed:self-source-boundary",
+      "서비스(수업·학생 정보)의 개인정보 처리 기준 → doc:/docs/start/pre-adoption-faq-22-questions#4/privacy-handling-basis"
+    ],
+    "negatives": [
+      {
+        "q": "챗봇이 지난 대화를 기억해요",
+        "route": "fixed:self-memory-boundary"
+      },
+      {
+        "q": "챗봇 대화 기록 삭제를 요청하고 싶어요",
+        "route": "fixed:self-privacy-boundary"
+      },
+      {
+        "q": "학생 정보를 몇 년 보관하나요",
+        "route": "fixed:basics-student-data-retention"
+      },
+      {
+        "q": "학생 개인정보는 어떤 기준으로 처리돼요",
+        "route": "doc:/docs/start/pre-adoption-faq-22-questions#4/privacy-handling-basis"
+      }
+    ],
+    "handoff": null,
+    "category": "self_knowledge",
+    "intent": "self_knowledge",
+    "policyGoverned": false,
+    "evidenceScope": "site",
+    "status": "review",
+    "provenance": {
+      "unit": "D4-21",
+      "writer": "agent:sonnet#D4-21",
+      "at": "2026-11-20",
+      "legacyIds": [
+        "self:input_privacy"
+      ]
+    }
+  },
+  {
+    "id": "fixed:self-privacy-boundary",
+    "kind": "fixed",
+    "tier": "head",
+    "area": "trust",
+    "topic": "챗봇 대화·상담 채팅 기록 보관(최대 3년)·Gemini 전송과 열람·삭제 요청 안내",
+    "answer": {
+      "text": "네, 챗봇 대화와 상담 채팅 기록은 저장되고, 마지막 대화일로부터 최대 3년 보관해요. 개인정보처리방침에 적힌 기준이에요.\n\n챗봇 대화는 챗봇을 쓸 때만 Gemini로 보내져요. 개인정보처리방침에는 \"사용자는 자신의 개인정보에 대해 열람, 정정, 삭제, 처리 정지, 동의 철회를 요청할 수 있습니다.\"라고 나와 있어요.\n\n삭제 요청의 처리 상태처럼 실제로 봐야 하는 내용은 채팅에서 단정하지 않고 담당자 확인으로 안내해요. 삭제나 정정이 필요한 내용이 있으면 어떤 정보에 대한 요청인지 알려 주세요. 담당자 상담으로 이어질 수 있게 정리해 드릴게요.",
+      "textHash": "3baf3bdb7795e400"
+    },
+    "auditRef": "audit/C-21.jsonl#self:privacy_boundary",
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_chatbot_data_retention",
+      "C_chatbot_llm_transfer",
+      "C_data_deletion"
+    ],
+    "anchors": [
+      "챗봇 대화 보관",
+      "상담 채팅 기록",
+      "최대 3년",
+      "Gemini 전송",
+      "대화 삭제 요청",
+      "열람 정정 삭제"
+    ],
+    "covers": "챗봇 대화와 상담 채팅 기록이 저장되어 마지막 대화일로부터 최대 3년 보관된다는 것, 챗봇을 쓸 때만 Gemini로 전송된다는 것, 열람·정정·삭제·처리 정지·동의 철회 요청 권리와 삭제·정정 요청 안내",
+    "notCovers": [
+      "입력해도 되는 정보·저장 단정 불가 → fixed:self-input-privacy",
+      "이전 대화 기억 범위 → fixed:self-memory-boundary",
+      "학생 정보 보관 기간 → fixed:basics-student-data-retention",
+      "학생 개인정보 처리 기준 → doc:/docs/start/pre-adoption-faq-22-questions#4/privacy-handling-basis"
+    ],
+    "negatives": [
+      {
+        "q": "학생이 탈퇴하면 학생 정보는 몇 년 보관돼요",
+        "route": "fixed:basics-student-data-retention"
+      },
+      {
+        "q": "여기에 학원 내부 자료 올려도 돼요",
+        "route": "fixed:self-input-privacy"
+      },
+      {
+        "q": "챗봇이 아까 한 말 기억해요",
+        "route": "fixed:self-memory-boundary"
+      },
+      {
+        "q": "수업 녹화본은 얼마나 보관돼요",
+        "route": "fixed:basics-recording-retention-period"
+      }
+    ],
+    "handoff": null,
+    "category": "self_knowledge",
+    "intent": "self_knowledge",
+    "policyGoverned": false,
+    "evidenceScope": "site",
+    "status": "review",
+    "provenance": {
+      "unit": "D4-21",
+      "writer": "agent:sonnet#D4-21",
+      "at": "2026-11-20",
+      "legacyIds": [
+        "self:privacy_boundary"
+      ]
+    }
+  }
+]

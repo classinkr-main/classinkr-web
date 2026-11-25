@@ -15,7 +15,8 @@ export interface InternalCsConversation {
   assignee_user_id: string | null
   assignee_name: string | null
   tags: string[]
-  customer_context: Record<string, unknown>
+  /** 브리지·상담 Inbox가 채우는 맥락. 목록 API는 내려주지 않을 수 있어 optional(IC-10). */
+  customer_context?: Record<string, unknown> | null
   last_message_at: string | null
   // 목록 API는 select("*")라 두 시각이 모두 온다. 본사 확인 화면이 등록 시각(created_at)과
   // 대기 경과 근사(updated_at)를 각각 쓴다 — hq-desk.ts hqWaitingSince 주석 참조.
@@ -27,7 +28,7 @@ export interface InternalCsConversation {
 export interface InternalCsSourceRef {
   id: string
   label?: string
-  kind?: "public_doc" | "internal_guide" | "curated_knowledge" | "internal_asset"
+  kind?: "public_doc" | "internal_doc" | "internal_guide" | "curated_knowledge" | "internal_asset"
   verificationStatus?: "confirmed" | "conditional" | "conflicting_sources" | "hq_confirmation_required"
   externalUse?: "reviewed_summary_allowed" | "internal_only" | "confirmation_required"
   reviewState?: "pending" | "approved" | "changes_requested" | "rejected"
@@ -207,11 +208,29 @@ export interface IntegrationStatusResponse {
 export interface GenerateResponse {
   message: InternalCsMessage
   result: {
-    mode: "fast" | "deep"
-    model: string | null
-    fallbackUsed: boolean
+    mode?: "fast" | "deep"
+    model?: string | null
+    fallbackUsed?: boolean
+    /** 'deterministic' 이면 모델이 실패해 근거 요약으로 대신한 글이다(IC-03). */
+    origin?: "model" | "deterministic"
+    failureKinds?: string[]
     userMessageSaved: boolean
+    userMessageId?: string | null
     assistantMessageSaved: boolean
+    contextReset?: boolean
+    supersededMessageIds?: string[]
+  }
+}
+
+/** POST …/generate 에 draftToPolish 를 보냈을 때의 응답. 저장하지 않고 최종 칸에만 넣는다. */
+export interface PolishResponse {
+  polish: {
+    polishOf: string
+    answer: string | null
+    origin: "model" | "deterministic"
+    model: string | null
+    reviewWarnings?: Array<{ code: string; severity: "high" | "medium"; label: string; excerpt: string }>
+    failureKinds?: string[]
   }
 }
 
@@ -219,4 +238,6 @@ export interface ReviewChecks {
   customer: boolean
   evidence: boolean
   externalScope: boolean
+  /** 검토 경고(reviewWarnings)가 있을 때만 필요한 확인(IC-04). 경고가 없으면 무시한다. */
+  warnings?: boolean
 }

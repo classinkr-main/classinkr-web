@@ -1,6 +1,7 @@
 import "server-only"
 
 import { SITE_URL } from "@/lib/seo"
+import { sanitizeChatbotPageUrl } from "@/lib/chatbot/pii"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import {
   createUserChat,
@@ -165,15 +166,17 @@ function toProfileValue(value: string | number | boolean | null | undefined) {
   return compact(trimmed, MAX_PROFILE_VALUE_LENGTH)
 }
 
-function absolutePageUrl(candidate: ChannelTalkHandoffCandidate) {
-  if (candidate.pageUrl) return candidate.pageUrl
-  if (candidate.referrer) return candidate.referrer
-  if (!candidate.path) return SITE_URL
-  try {
-    return new URL(candidate.path, SITE_URL).toString()
-  } catch {
-    return SITE_URL
+/**
+ * 상담 전환 본문 '페이지:' 줄·lastPage 프로필·저장 payload 에 싣는 주소. 위젯이 보낸 pageUrl·요청 리퍼러·경로 어느 것이든
+ * 서버에서 한 번 더 정화한다(CX-04): origin + 경로 + 광고 귀속 쿼리만 남기고, 추적 제외 경로(/unsubscribe·/share·/account 등)는
+ * 경로만 남긴다. 옛 위젯이나 직접 호출이 쿼리째 보내도 수신거부 토큰·이메일이 상담 수신함에 평문으로 남지 않는다.
+ */
+export function absolutePageUrl(candidate: Pick<ChannelTalkHandoffCandidate, "pageUrl" | "referrer" | "path">) {
+  for (const raw of [candidate.pageUrl, candidate.referrer, candidate.path]) {
+    const cleaned = sanitizeChatbotPageUrl(raw, SITE_URL)
+    if (cleaned) return cleaned
   }
+  return SITE_URL
 }
 
 function buildMemberId(candidate: Pick<ChannelTalkHandoffCandidate, "sessionId" | "anonymousId">) {

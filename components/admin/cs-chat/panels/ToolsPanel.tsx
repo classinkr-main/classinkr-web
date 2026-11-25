@@ -65,6 +65,8 @@ export default function ToolsPanel({
   bridgeState,
   integrationLoading,
   metricsLoadState,
+  metricsDays = 7,
+  onMetricsDaysChange,
   metricCards,
   regressionEvalRunState,
   regressionCandidates,
@@ -97,6 +99,9 @@ export default function ToolsPanel({
   bridgeState: ReturnType<typeof integrationState>
   integrationLoading: boolean
   metricsLoadState: AsyncLoadState
+  /** 지표 기간(일). API 는 7·30 을 받는다(loop-6). */
+  metricsDays?: 7 | 30
+  onMetricsDaysChange?: (days: 7 | 30) => void
   metricCards: Array<{ key: string; icon: LucideIcon; label: string; value: string; sub?: string }>
   regressionEvalRunState: RegressionEvalRunState
   regressionCandidates: RegressionCandidateItem[]
@@ -159,9 +164,9 @@ export default function ToolsPanel({
   }, [activeSub])
 
   return (
-    <section ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto bg-[#FAFAF8]">
+    <section ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto bg-white">
       <div className={cn(CONSOLE_CONTENT_CLASS, "py-7")}>
-      <div className="mx-auto max-w-[920px]">
+      <div className="max-w-[920px]">
         <h2 className="text-[20px] font-semibold tracking-[-0.02em]">운영 데스크</h2>
         <p className="mt-1 text-[12px] text-[#615D59]">오늘 처리할 검수와 큐 상태를 한 화면에서 확인합니다.</p>
 
@@ -194,11 +199,11 @@ export default function ToolsPanel({
             href="/admin/docs?tab=gaps&source=chatbot"
             className="group relative border-b border-black/[0.08] px-5 py-4 transition-colors hover:bg-[#FAFAF8] sm:border-b-0"
           >
-            <p className="text-[10px] font-bold uppercase tracking-[0.13em] text-[#A39E98]">보강 큐 · 챗봇</p>
+            <p className="text-[11px] font-bold uppercase tracking-[0.13em] text-[#78736D]">보강 큐 · 챗봇</p>
             <p className="mt-2 text-[27px] font-bold leading-none tracking-[-0.02em] text-[#111110] tabular-nums">
               {docsGapsSummary ? `${docsGapsSummary.chatbot}${docsGapsSummary.capped ? "+" : ""}` : "—"}
             </p>
-            <p className="mt-1.5 truncate text-[10.5px] text-[#A39E98]">
+            <p className="mt-1.5 truncate text-[11px] text-[#78736D]">
               {docsGapsSummary ? `무결과 검색 ${docsGapsSummary.zeroResult} 별도` : "집계 대기"}
             </p>
             <ArrowUpRight className="absolute right-4 top-4 h-3.5 w-3.5 text-[#D8D5D1] transition-colors group-hover:text-[#084734]" />
@@ -207,11 +212,11 @@ export default function ToolsPanel({
             href="/admin/docs?tab=gaps&source=internal_cs"
             className="group relative border-b border-l border-black/[0.08] px-5 py-4 transition-colors hover:bg-[#FAFAF8] sm:border-b-0"
           >
-            <p className="text-[10px] font-bold uppercase tracking-[0.13em] text-[#A39E98]">보강 큐 · 내부 CS</p>
+            <p className="text-[11px] font-bold uppercase tracking-[0.13em] text-[#78736D]">보강 큐 · 내부 CS</p>
             <p className="mt-2 text-[27px] font-bold leading-none tracking-[-0.02em] text-[#111110] tabular-nums">
               {docsGapsSummary ? docsGapsSummary.internalCs : "—"}
             </p>
-            <p className="mt-1.5 truncate text-[10.5px] text-[#A39E98]">
+            <p className="mt-1.5 truncate text-[11px] text-[#78736D]">
               {docsGapsSummary
                 ? `폴백 ${docsGapsSummary.internalCsFallback} · 수정 요청 ${docsGapsSummary.internalCsReview}`
                 : "집계 대기"}
@@ -226,20 +231,20 @@ export default function ToolsPanel({
             onClick={() => setSubParam("regression")}
             className="group relative border-black/[0.08] px-5 py-4 text-left transition-colors hover:bg-[#FAFAF8] sm:border-l"
           >
-            <p className="text-[10px] font-bold uppercase tracking-[0.13em] text-[#A39E98]">회귀 검수 대기</p>
+            <p className="text-[11px] font-bold uppercase tracking-[0.13em] text-[#78736D]">회귀 검수 대기</p>
             <p className="mt-2 text-[27px] font-bold leading-none tracking-[-0.02em] text-[#111110] tabular-nums">
               {regressionLoadState === "loaded" ? regressionPendingCount : "—"}
             </p>
-            <p className="mt-1.5 truncate text-[10.5px] text-[#A39E98]">회귀 검수 탭에서 바로 판정</p>
+            <p className="mt-1.5 truncate text-[11px] text-[#78736D]">회귀 검수 탭에서 바로 판정</p>
             <ArrowUpRight className="absolute right-4 top-4 h-3.5 w-3.5 text-[#D8D5D1] transition-colors group-hover:text-[#084734]" />
           </button>
           <div className="relative border-l border-black/[0.08] px-5 py-4">
-            <p className="text-[10px] font-bold uppercase tracking-[0.13em] text-[#A39E98]">AI 브리지</p>
+            <p className="text-[11px] font-bold uppercase tracking-[0.13em] text-[#78736D]">AI 브리지</p>
             <p className="mt-3.5 flex items-center gap-2 text-[14px] font-bold leading-none text-[#111110]">
               <span className={cn("h-[7px] w-[7px] rounded-full", bridgeState.ready ? "bg-[#084734]" : "bg-[#A8741A]")} />
               {integrationLoading ? "확인 중" : bridgeState.ready ? "연결됨" : bridgeState.configured ? bridgeState.status : "설정 필요"}
             </p>
-            <p className="mt-2 truncate text-[10.5px] text-[#A39E98] tabular-nums">
+            <p className="mt-2 truncate text-[11px] text-[#78736D] tabular-nums">
               {bridgeState.lastCheckedAt ? `마지막 확인 ${formatTime(bridgeState.lastCheckedAt)}` : "상태 미확인"}
             </p>
           </div>
@@ -247,14 +252,33 @@ export default function ToolsPanel({
 
         {/* 코파일럿 운영 지표 (계약 1) — 최근 7일 성과. 큐(스탯 스트립) 다음, 일감(회귀) 이전. */}
         <div className="mt-8 flex items-baseline justify-between gap-3">
-          <h3 className="text-[10px] font-bold uppercase tracking-[0.13em] text-[#31302E]">
-            운영 지표 <span className="font-medium normal-case tracking-normal text-[#A39E98]">최근 7일</span>
+          <h3 className="text-[11px] font-bold uppercase tracking-[0.13em] text-[#31302E]">
+            운영 지표 <span className="font-medium normal-case tracking-normal text-[#78736D]">최근 {metricsDays}일</span>
           </h3>
+          {onMetricsDaysChange ? (
+            <div role="group" aria-label="지표 기간" className="ml-auto flex h-8 overflow-hidden rounded-md border border-black/[0.12] bg-white">
+              {([7, 30] as const).map((days, index) => (
+                <button
+                  key={days}
+                  type="button"
+                  onClick={() => onMetricsDaysChange(days)}
+                  aria-pressed={metricsDays === days}
+                  className={cn(
+                    "px-3 text-[12px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734]",
+                    index > 0 && "border-l border-black/[0.10]",
+                    metricsDays === days ? "bg-[#31302E] text-white" : "bg-white text-[#615D59] hover:text-[#111110]"
+                  )}
+                >
+                  {days}일
+                </button>
+              ))}
+            </div>
+          ) : null}
           {metricsLoadState === "failed" ? (
             <button
               type="button"
               onClick={() => onRetryMetrics()}
-              className="inline-flex h-7 items-center gap-1.5 rounded-md border border-black/[0.08] px-2.5 text-[10px] font-semibold text-[#615D59] hover:bg-[#F6F5F4] hover:text-[#31302E]"
+              className="inline-flex h-8 items-center gap-1.5 rounded-md border border-black/[0.08] px-2.5 text-[12px] font-semibold text-[#615D59] hover:bg-[#F6F5F4] hover:text-[#31302E]"
             >
               <RefreshCcw className="h-3 w-3" />
               다시 시도
@@ -275,10 +299,10 @@ export default function ToolsPanel({
         {activeSub === "regression" ? (
         <>
         <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
-          <h3 className="flex items-baseline gap-2.5 text-[10px] font-bold uppercase tracking-[0.13em] text-[#31302E]">
+          <h3 className="flex items-baseline gap-2.5 text-[11px] font-bold uppercase tracking-[0.13em] text-[#31302E]">
             <span>회귀 검수 대기</span>
             {regressionLoadState === "loaded" ? (
-              <span className="font-medium normal-case tracking-normal text-[#A39E98] tabular-nums">
+              <span className="font-medium normal-case tracking-normal text-[#78736D] tabular-nums">
                 미판정 {regressionPendingCount}건 · 전체 {regressionCandidates.length}건
               </span>
             ) : null}
@@ -289,7 +313,7 @@ export default function ToolsPanel({
             disabled={
               regressionEvalRunState === "running" || regressionLoadState !== "loaded" || regressionCandidates.length === 0
             }
-            className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md border border-black/[0.08] px-2.5 text-[10px] font-semibold text-[#084734] hover:bg-[#ECFDF5] disabled:cursor-not-allowed disabled:text-[#A39E98] disabled:hover:bg-transparent"
+            className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md border border-black/[0.08] px-2.5 text-[12px] font-semibold text-[#084734] hover:bg-[#ECFDF5] disabled:cursor-not-allowed disabled:text-[#78736D] disabled:hover:bg-transparent"
           >
             {regressionEvalRunState === "running" ? (
               <Loader2 className="h-3 w-3 animate-spin" />
@@ -299,7 +323,7 @@ export default function ToolsPanel({
             {regressionEvalRunState === "running" ? "평가 중" : "자동 평가 실행"}
           </button>
         </div>
-        <p className="mt-1.5 text-[10px] leading-4 text-[#A39E98]">
+        <p className="mt-1.5 text-[11px] leading-4 text-[#78736D]">
           AI가 통과 / 수정 필요를 참고용으로만 제안합니다. 실제 판정은 행의 버튼으로 직접 확정해야 저장됩니다.
         </p>
         {regressionEvalError ? (
@@ -343,12 +367,12 @@ export default function ToolsPanel({
                     )}
                   >
                     <div className="min-w-0 flex-1">
-                      <p className={cn("line-clamp-2 text-[12.5px] leading-5", judgedChip ? "text-[#A39E98]" : "text-[#31302E]")}>
+                      <p className={cn("line-clamp-2 text-[12.5px] leading-5", judgedChip ? "text-[#78736D]" : "text-[#31302E]")}>
                         {item.excerpt}
                       </p>
-                      <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] text-[#A39E98]">
+                      <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-[#78736D]">
                         {reviewLabel ? (
-                          <span className="inline-flex h-[17px] items-center rounded-full border border-black/[0.10] bg-white px-2 text-[9px] font-semibold text-[#615D59]">
+                          <span className="inline-flex h-[17px] items-center rounded-full border border-black/[0.10] bg-white px-2 text-[11px] font-semibold text-[#615D59]">
                             내부CS · {reviewLabel}
                           </span>
                         ) : null}
@@ -357,7 +381,7 @@ export default function ToolsPanel({
                         {suggestion && !judgedChip ? (
                           <span
                             className={cn(
-                              "inline-flex h-[17px] items-center gap-1 rounded-full px-2 text-[9px] font-semibold",
+                              "inline-flex h-[17px] items-center gap-1 rounded-full px-2 text-[11px] font-semibold",
                               suggestion.suggestedOutcome === "pass"
                                 ? "bg-[#ECFDF5] text-[#084734]"
                                 : "bg-[#FBF1E0] text-[#7A520F]"
@@ -378,19 +402,19 @@ export default function ToolsPanel({
                       </div>
                       {suggestion && !judgedChip ? (
                         <details className="mt-1">
-                          <summary className="cursor-pointer text-[10px] font-medium text-[#084734] hover:underline">
+                          <summary className="cursor-pointer text-[11px] font-medium text-[#084734] hover:underline">
                             AI 판단 근거
                           </summary>
-                          <p className="mt-1 max-w-[420px] text-[10px] leading-4 text-[#615D59]">
+                          <p className="mt-1 max-w-[420px] text-[11px] leading-4 text-[#615D59]">
                             {suggestion.rationale}
                           </p>
-                          <p className="mt-1 text-[10px] text-[#A39E98]">판정 모델: {suggestion.judgeModel}</p>
+                          <p className="mt-1 text-[11px] text-[#78736D]">판정 모델: {suggestion.judgeModel}</p>
                         </details>
                       ) : null}
                     </div>
                     <div className="flex shrink-0 items-center gap-1.5 self-start sm:self-center">
                       {judgedChip ? (
-                        <span className={cn("inline-flex h-6 items-center gap-1.5 rounded-md px-2 text-[10px] font-bold", judgedChip.className)}>
+                        <span className={cn("inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[12px] font-bold", judgedChip.className)}>
                           <CheckCircle2 className="h-3 w-3" />
                           {judgedChip.label}
                         </span>
@@ -402,7 +426,7 @@ export default function ToolsPanel({
                               type="button"
                               onClick={() => onJudge(item, action.value)}
                               className={cn(
-                                "h-6 bg-white px-2 text-[10px] font-semibold text-[#31302E] transition-colors",
+                                "h-8 bg-white px-2.5 text-[12px] font-semibold text-[#31302E] transition-colors",
                                 index > 0 && "border-l border-black/[0.10]",
                                 action.hoverClassName
                               )}
@@ -448,7 +472,7 @@ export default function ToolsPanel({
         {/* ── sub=bridge — 설정·연동. AI 브리지 한 줄 요약 행 + 전송 옵션/최근 기록 펼침. */}
         {activeSub === "bridge" ? (
         <>
-        <h3 className="mt-5 text-[10px] font-bold uppercase tracking-[0.13em] text-[#31302E]">내부 AI/MCP 분석</h3>
+        <h3 className="mt-5 text-[11px] font-bold uppercase tracking-[0.13em] text-[#31302E]">내부 AI/MCP 분석</h3>
         <div className="mt-2.5 overflow-hidden rounded-[10px] border border-black/[0.08] bg-white">
           <div className="flex flex-wrap items-center gap-3 px-5 py-3.5">
             <span className={cn(
@@ -465,7 +489,7 @@ export default function ToolsPanel({
             </span>
             <div className="min-w-0 flex-1">
               <p className="truncate text-[12.5px] font-semibold text-[#31302E]">{bridgeState.label}</p>
-              <p className="mt-0.5 truncate text-[10.5px] text-[#A39E98]">{bridgeState.message}</p>
+              <p className="mt-0.5 truncate text-[11px] text-[#78736D]">{bridgeState.message}</p>
             </div>
             <button
               type="button"
@@ -489,7 +513,7 @@ export default function ToolsPanel({
               type="button"
               onClick={() => onDispatch()}
               disabled={!hasDispatchContext || !bridgeState.ready || integrationLoading || dispatching}
-              className="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-md bg-[#084734] px-3 text-[11px] font-semibold text-white hover:bg-[#065C41] disabled:cursor-not-allowed disabled:bg-[#A39E98]"
+              className="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-md bg-[#084734] px-3 text-[11px] font-semibold text-white hover:bg-[#065C41] disabled:cursor-not-allowed disabled:bg-[#78736D]"
             >
               {dispatching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
               {dispatching ? "전송 중" : "현재 대화 보내기"}
@@ -510,14 +534,14 @@ export default function ToolsPanel({
                 />
                 <span>
                   원본 이미지도 포함
-                  <span className="block text-[10px] text-[#A39E98]">민감정보 포함 가능성을 확인했으며 내부 분석 범위로 전송합니다.</span>
+                  <span className="block text-[11px] text-[#78736D]">민감정보 포함 가능성을 확인했으며 내부 분석 범위로 전송합니다.</span>
                 </span>
               </label>
               {integrationEvents.length > 0 ? (
                 <>
                   <div className="mt-4 flex items-center justify-between gap-3">
                     <p className="text-[11px] font-semibold text-[#31302E]">최근 연동 기록</p>
-                    <span className="text-[10px] text-[#A39E98] tabular-nums">{integrationEvents.length}건</span>
+                    <span className="text-[11px] text-[#78736D] tabular-nums">{integrationEvents.length}건</span>
                   </div>
                   <ul className="mt-2 space-y-2">
                     {integrationEvents.slice(0, 5).map((event) => {
@@ -533,9 +557,9 @@ export default function ToolsPanel({
                             <p className="truncate text-[11px] font-semibold text-[#31302E]">
                               {event.transport ?? event.integration ?? event.source_system ?? "AI 브리지"} · {event.status ?? "처리 중"}
                             </p>
-                            <p className="mt-0.5 line-clamp-2 text-[10px] leading-4 text-[#615D59]">{integrationEventSummary(event)}</p>
+                            <p className="mt-0.5 line-clamp-2 text-[11px] leading-4 text-[#615D59]">{integrationEventSummary(event)}</p>
                           </div>
-                          <span className="shrink-0 text-[10px] text-[#A39E98]">{formatTime(integrationEventWhen(event))}</span>
+                          <span className="shrink-0 text-[11px] text-[#78736D]">{formatTime(integrationEventWhen(event))}</span>
                         </li>
                       )
                     })}
@@ -556,7 +580,7 @@ export default function ToolsPanel({
         {/* 콘솔 밖 바로가기 — 6개 → 1개(constants.ts 참조).
             나머지 5개는 CS 콘솔 가로 메뉴와 목적지가 그대로 겹쳐 지웠다.
             남은 하나는 설정(연동)이라 콘솔 밖 표면이고, 성격상 이 브리지 탭이 제자리다. */}
-        <h3 className="mt-8 text-[10px] font-bold uppercase tracking-[0.13em] text-[#31302E]">콘솔 밖 바로가기</h3>
+        <h3 className="mt-8 text-[11px] font-bold uppercase tracking-[0.13em] text-[#31302E]">콘솔 밖 바로가기</h3>
         <div className="mt-2.5 grid grid-cols-1 gap-2 sm:grid-cols-2">
           {OPERATING_TOOLS.map((tool) => {
             const Icon = tool.icon
@@ -572,7 +596,7 @@ export default function ToolsPanel({
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[12.5px] font-semibold text-[#31302E]">{tool.title}</span>
-                  <span className="mt-0.5 block truncate text-[10.5px] text-[#A39E98]">{tool.description}</span>
+                  <span className="mt-0.5 block truncate text-[11px] text-[#78736D]">{tool.description}</span>
                 </span>
                 <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-[#D8D5D1] transition-colors group-hover:text-[#084734]" />
               </Link>
