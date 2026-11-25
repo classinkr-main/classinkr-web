@@ -134,6 +134,8 @@ event 저장 로그에는 원본 base64나 메시지 본문을 복제하지 않�
 
 `sourceSystem + direction + idempotencyKey`는 DB unique 제약으로 중복 누적을 막는다. 전달 방식은 at-least-once로 보고, 호출자는 동일 작업 재시도 시 같은 idempotency key를 재사용해야 한다. 처리 중 장애가 난 event는 `failed` 상태와 일반화된 오류만 기록한다.
 
+같은 키의 재요청 처리: `completed` 이벤트는 다시 처리하지 않고 저장된 결과(`ok:true`, `duplicate:true`)를 돌려준다. `failed` 이벤트와 5분 넘게 `accepted`/`processing` 에 머문 이벤트(처리하던 요청이 죽은 경우)는 같은 키로 다시 보내면 **다시 처리**한다(상태·갱신 시각을 조건으로 한 조건부 갱신이라 동시에 여러 요청이 와도 한 요청만 선점한다). 방금 시작한 `processing` 이벤트는 `ok:false`, `duplicate:true`, `status:"processing"` 으로 답하므로 호출자는 잠시 뒤 같은 키로 다시 보낸다. 새 대화(`conversation`)를 만드는 이벤트는 이벤트를 먼저 선점한 요청만 대화를 만들어 중복 요청이 빈 대화를 남기지 않는다(`internal_cs_integration_events.conversation_id` NULL 허용 마이그레이션 `20261125_internal_cs_event_claim_before_conversation.sql` 적용 후. 적용 전에는 옛 순서로 물러나되 선점에 진 요청이 만든 빈 대화를 지운다).
+
 ## context request와 원본 공개 범위
 
 기본 context 응답에는 다음만 포함한다.
