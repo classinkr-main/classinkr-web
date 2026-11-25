@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "dataVersion": "ai-1b81c2a68dfd",
+  "dataVersion": "ai-4ab7bcbcbb25",
   "sources": {
     "app/about/AboutPageClient.tsx": "201307dd2bc22b3b",
     "app/about/layout.tsx": "cbced2f28647c89c",
@@ -9,7 +9,7 @@
     "app/checkout/page.tsx": "d0b7fda4a5810aaa",
     "app/checkout/success/page.tsx": "c90f298122dcf206",
     "app/contact/layout.tsx": "c18d5a66e437cb1f",
-    "app/contact/page.tsx": "f84dfe501e365b19",
+    "app/contact/page.tsx": "5b758b8fcc1e8f62",
     "app/data-deletion/page.tsx": "d427dd4428a91125",
     "app/introduction/cases/[slug]/page.tsx": "960ac77ff6d58109",
     "app/introduction/cases/case-page-parts.tsx": "bb2c490b26dc95f7",
@@ -78,12 +78,14 @@
     "data/chatbot-fresh-open-set.json": "43b6a81ff871c62a",
     "data/chatbot-golden-set.json": "e189390b124f5183",
     "data/chatbot-persona-eval-set.json": "d34d3ee4d751f7ed",
+    "lib/chatbot/answer-index/doc-units.ts": "253caea59ea8633d",
+    "lib/chatbot/answer-index/sentences.ts": "176f1c8f87fd2d99",
     "lib/chatbot/doc-outline.ts": "c9c194daba7b15fb",
-    "lib/chatbot/quick-answers-basics.ts": "147f6fd96d96c2ce",
+    "lib/chatbot/quick-answers-basics.ts": "cd54d16557fd2c69",
     "lib/chatbot/quick-answers-field.ts": "683e2a13a83ea93f",
     "lib/chatbot/self-knowledge.ts": "4f1ee990ebd1c5d2",
-    "lib/chatbot/service.ts": "a16f3065b656a474",
-    "lib/chatbot/source-grounding.ts": "c785c0c515fade9c",
+    "lib/chatbot/service.ts": "0e5caf025f4eeb8d",
+    "lib/chatbot/source-grounding.ts": "df853483aa6bd647",
     "lib/chatbot/symptom-topics-field.ts": "2d9ae8dda5294096",
     "lib/chatbot/symptom-triage.ts": "2c33c3e918cf5d9f",
     "lib/cs-figma-enrichments.generated.ts": "34532e43bdaecfee",
@@ -113,11 +115,11 @@
     "lib/introduction/content.ts": "9df4b51bce23a8f3",
     "scripts/answer-index/lib/areas.ts": "97f79812d8a2784c",
     "scripts/answer-index/lib/inventory.ts": "04b50635f9f306b7",
-    "scripts/answer-index/lib/sentences.ts": "d43caabbd0c848cc",
+    "scripts/answer-index/lib/sentences.ts": "0f479ccda597d354",
     "scripts/answer-index/lib/site-facts.ts": "cf6aadc2a64fd5a3",
     "scripts/answer-index/lib/text-rules.ts": "0a9e5da9e29ddc00",
     "scripts/answer-index/lib/ts-extract.ts": "9c2be4e06e2b2ccf",
-    "scripts/answer-index/lib/units.ts": "ef9883049e199852"
+    "scripts/answer-index/lib/units.ts": "d9f9d82c08b38c61"
   },
   "outputs": {
     "absent.json": {
@@ -373,7 +375,7 @@
       "count": 4
     },
     "inventory.json": {
-      "sha": "566dcdba55c131ab",
+      "sha": "cdcecce35f3836ad",
       "count": 1459
     },
     "legacy-alias.json": {
@@ -385,8 +387,8 @@
       "count": 1151
     },
     "site-facts.json": {
-      "sha": "714fbcf3f542585d",
-      "count": 1641
+      "sha": "bd7bad811f02aebc",
+      "count": 1644
     },
     "units.json": {
       "sha": "e6753ac43dffcf31",
@@ -502,118 +504,8 @@
     }
   },
   "inputs": {
-    "devSets": [
-      {
-        "name": "dev5",
-        "sha": "35aee9790d7bdbd4"
-      },
-      {
-        "name": "holdout1",
-        "sha": "8c655dbe30b10fbd"
-      },
-      {
-        "name": "input371",
-        "sha": "10ae0565a06e0c34"
-      }
-    ],
-    "failureLogs": [
-      {
-        "name": "failures-0.json",
-        "sha": "44987a9b2b619da6"
-      },
-      {
-        "name": "failures-1.json",
-        "sha": "bf2bdf64d777d9bb"
-      },
-      {
-        "name": "failures-2.json",
-        "sha": "757afc4d2401fe9c"
-      },
-      {
-        "name": "failures-3.json",
-        "sha": "4166eb8905cb70fe"
-      },
-      {
-        "name": "failures-4.json",
-        "sha": "88504fc42290b8ae"
-      },
-      {
-        "name": "failures-5.json",
-        "sha": "5e7f7d3fcf68909e"
-      },
-      {
-        "name": "failures-6.json",
-        "sha": "56ab2d35a4333172"
-      },
-      {
-        "name": "failures-7.json",
-        "sha": "4aef8d8a75ec61d3"
-      },
-      {
-        "name": "failures-8.json",
-        "sha": "221b8e64756a1d24"
-      },
-      {
-        "name": "failures-9.json",
-        "sha": "5bbd53753b78ef63"
-      },
-      {
-        "name": "failures2-changed-0.json",
-        "sha": "e2d09f76901175fa"
-      },
-      {
-        "name": "failures2-changed-1.json",
-        "sha": "57ac215541f7f20b"
-      },
-      {
-        "name": "failures2-changed-2.json",
-        "sha": "1cd3643f9b1cc1e0"
-      },
-      {
-        "name": "failures2-changed-3.json",
-        "sha": "5726115c6b6eb129"
-      },
-      {
-        "name": "failures2-holdout-0.json",
-        "sha": "780b2dcb6b44883c"
-      },
-      {
-        "name": "failures2-holdout-1.json",
-        "sha": "aeebb7f3d8b99fb5"
-      },
-      {
-        "name": "failures2-holdout-2.json",
-        "sha": "2cb91f065d3de79f"
-      },
-      {
-        "name": "failures3-changed3-0.json",
-        "sha": "c53d6e78e9fd5194"
-      },
-      {
-        "name": "failures3-hold1-0.json",
-        "sha": "b3c002407af8c008"
-      },
-      {
-        "name": "failures3-hold1-1.json",
-        "sha": "428b62d87277a33a"
-      },
-      {
-        "name": "failures3-hold1-2.json",
-        "sha": "19d1c777fe0791a6"
-      },
-      {
-        "name": "failures-holdout1-0.json",
-        "sha": "572bf117226152df"
-      },
-      {
-        "name": "failures-holdout1-1.json",
-        "sha": "c19b0226a97c94da"
-      },
-      {
-        "name": "failures-holdout1-2.json",
-        "sha": "64975e2998bb22c9"
-      }
-    ]
+    "devSets": [],
+    "failureLogs": []
   },
   "generation": {
     "D1-01": {
