@@ -40,9 +40,10 @@ export function buildWecomBridgeDeps(config: WecomAibotConfig): BridgeDeps {
   return {
     userMap: config.userMap,
     lookupAdmin: (email) => lookupAdminByEmail(email),
-    orchestratorDeps: (admin) => {
+    orchestratorDeps: (admin, chatType) => {
       const sub = staffKey(admin)
-      const base = buildServerOrchestratorDeps({ sub })
+      // 단체방은 답이 방 전체에 보인다 — 담당자 찾기에서 CRM 고객 조회를 끈다(브리지 groupScopedDeps 가 한 번 더 막는다).
+      const base = buildServerOrchestratorDeps({ sub, customerContacts: chatType !== "group" })
       // 위컴에서는 확인표를 발급하지 않는다 — 미리보기까지만(확인은 로그인한 어드민 화면에서).
       return { ...base, previewWrite: (kind, ctx) => previewWriteTurn(kind, ctx, { ops: serverOpsDeps, ticketSecret: null, sub, newId: randomUUID }) }
     },

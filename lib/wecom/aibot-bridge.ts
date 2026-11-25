@@ -3,8 +3,9 @@
 // 경계(총괄 기본값, docs/active/wecom-aibot-bridge.md §방에서 보이는 것):
 //  - 연결표에 없는 사람: 자료 없이 "연결되지 않은 계정입니다 — 어드민에서 써 주세요"만.
 //  - 연결된 사람: 그 어드민 계정의 역할로 조율기를 부른다. 비활성·역할 없음·갈매봇 역할 밖이면 거절.
-//  - 단체방(chattype group): 답이 방 전체에 보인다 — 클래스인 정보 답·링크·담당자 안내만. 조회 도구·쓰기 미리보기는
-//    "1:1 로 물어봐 주세요". 행위자 범위도 비운다(이중 잠금).
+//  - 단체방(chattype group): 답이 방 전체에 보인다 — 클래스인 정보 답·링크·사내 역할 담당 안내만. 조회 도구·쓰기 미리보기·
+//    고객사 담당(CRM 담당·딜 담당·고객 키)은 "1:1 로 물어봐 주세요". 행위자 범위도 비운다(이중 잠금). 담당자 찾기는
+//    행위자 범위를 보지 않으므로 deps 에서 따로 막는다(서버는 고객 조회를 끄고, 여기서 고객사 카드를 바꾼다).
 //  - 1:1(single): 조회 도구까지. 쓰기(견적 초안·배송 예정)는 미리보기 요지와 "어드민에서 확인" 주소만 —
 //    확인표를 발급하지 않으므로(ticketSecret null) 위컴에서 실행되는 길이 없다.
 //  - 연락처 원문(pii 범위)은 위컴으로 내보내지 않는다 — 역할과 상관없이 가린 값.
@@ -14,6 +15,7 @@ import type { OrchestratorDeps, TurnInput, WriteTurnResult } from "@/lib/admin-a
 import type { OpsDeps } from "@/lib/admin-ai/server/tools"
 import type { AiBlock, OrderTicket } from "@/lib/admin-ai/types"
 import { hasAdminApiRole } from "@/lib/admin-auth"
+import type { ContactCard as InternalContactCard } from "@/lib/internal-cs-chat/contact"
 import type { OpsActor } from "@/lib/ops-tools/actor"
 
 import type { AdminAccountLookup } from "./aibot-accounts"
@@ -39,6 +41,11 @@ export interface WecomInboundMessage {
   msgtype: string
   responseUrl?: string
   text: string | null
+  /**
+   * 100719 compat_info.source("非普通回调时返回" — 예: ai_assistant·channel). 일반 콜백이면 없다. 처리는 일반 글과 같고
+   * 로그에만 싣는다(실물에서 어떤 경로가 섞여 오는지 확인 전). 짧은 영문 소문자 값만 받고, 그 밖은 "other".
+   */
+  compatSource?: string
 }
 
 const str = (value: unknown) => (typeof value === "string" ? value : "")
@@ -67,6 +74,9 @@ export function parseInboundMessage(raw: unknown): WecomInboundMessage | null {
         .join(" ")
     }
   }
+  const compat = data.compat_info && typeof data.compat_info === "object" ? (data.compat_info as Record<string, unknown>) : null
+  const compatRaw = compat ? str(compat.source).trim() : ""
+  const compatSource = compat ? (/^[a-z_]{1,32}$/.test(compatRaw) ? compatRaw : "other") : ""
   return {
     msgid,
     aibotid,
@@ -76,6 +86,7 @@ export function parseInboundMessage(raw: unknown): WecomInboundMessage | null {
     ...(str(data.chatid).trim() ? { chatid: str(data.chatid).trim() } : {}),
     ...(str(data.response_url).trim() ? { responseUrl: str(data.response_url).trim() } : {}),
     text,
+    ...(compatSource ? { compatSource } : {}),
   }
 }
 
@@ -96,7 +107,32 @@ const groupDeny = (label: string): AiBlock => ({
   card: { title: "1:1 로 물어봐 주세요", target: { label, meta: "단체방" }, text: GROUP_SCOPE_TEXT },
 })
 
-/** 단체방 — 조회 도구·쓰기 미리보기를 막는 deps. */
+/** 단체방에서 고객사 담당 카드 대신 내는 카드 — 담당 이름·고객 이름·고객 키·후보를 싣지 않는다. */
+export const GROUP_CUSTOMER_CONTACT: InternalContactCard = {
+  kind: "customer_owner",
+  who: "고객사 담당 — 1:1 로 물어봐 주세요",
+  backup: null,
+  prepare: ["고객사 이름"],
+  channel: { label: "갈매봇 1:1 대화", href: null },
+  evidence: [],
+  verifiedAt: null,
+  reason: GROUP_SCOPE_TEXT,
+  alternatives: [],
+  gaps: [],
+}
+
+/**
+ * 단체방 담당자 찾기 — 열린 고객을 넘기지 않고, 고객사 담당 카드(CRM 담당·딜 담당·같은 이름 고객 키)는 1:1 안내로 바꾼다.
+ * 서버 연결은 단체방에서 고객 조회(통합 고객 목록·고객 360) 자체를 끄고(aibot-server.ts), 여기서 한 번 더 막는다(이중 잠금).
+ * 담당자 갈래뿐 아니라 근거를 못 찾은 묻기 갈래의 담당자 대체 길도 이 함수를 지난다.
+ */
+async function groupResolveContact(base: OrchestratorDeps, question: string): Promise<InternalContactCard> {
+  const card = await base.resolveContact(question, null)
+  // 고객 이름·후보 고객은 고객사 갈래 카드에만 실린다(contact.ts customerCard). 다른 갈래는 사내 역할 안내라 그대로.
+  return card.kind === "customer_owner" ? GROUP_CUSTOMER_CONTACT : card
+}
+
+/** 단체방 — 조회 도구·쓰기 미리보기·고객 담당 조회를 막는 deps. */
 export function groupScopedDeps(base: OrchestratorDeps): OrchestratorDeps {
   const ops: OpsDeps = {
     ...base.ops,
@@ -111,7 +147,12 @@ export function groupScopedDeps(base: OrchestratorDeps): OrchestratorDeps {
     },
     describeError: async (error) => (error instanceof GroupScopeError ? GROUP_SCOPE_TEXT : base.ops.describeError(error)),
   }
-  return { ...base, ops, previewWrite: async () => ({ blocks: [groupDeny("오더")] }) }
+  return {
+    ...base,
+    ops,
+    resolveContact: (question) => groupResolveContact(base, question),
+    previewWrite: async () => ({ blocks: [groupDeny("오더")] }),
+  }
 }
 
 const NO_TICKET_TAIL = /\s*(?:카드에서 확인하면 실행합니다\.|확인 설정\(서명·확인 저장소\)이 없어 여기서는 실행하지 않습니다 — 화면에서 직접 등록해 주세요\.)\s*$/u
@@ -146,8 +187,8 @@ export interface BridgeDeps {
   /** 위컴 userid → 어드민 이메일(연결표). */
   userMap: ReadonlyMap<string, string>
   lookupAdmin: (email: string) => Promise<AdminAccountLookup>
-  /** 조율기 deps — 계정 키(sub)로 만든다. 서버는 buildServerOrchestratorDeps(ticketSecret 없이). */
-  orchestratorDeps: (admin: StaffIdentity) => OrchestratorDeps
+  /** 조율기 deps — 계정 키(sub)로 만든다. 서버는 buildServerOrchestratorDeps(ticketSecret 없이), 단체방은 고객 조회를 끈 담당자 찾기. */
+  orchestratorDeps: (admin: StaffIdentity, chatType: ChatType) => OrchestratorDeps
   collectTurn: (input: TurnInput, deps: OrchestratorDeps) => Promise<{ blocks: AiBlock[]; orders: OrderTicket[] }>
   siteUrl: string
   now: () => number
@@ -177,7 +218,7 @@ export async function answerWecomMessage(message: WecomInboundMessage, deps: Bri
   if (!hasAdminApiRole(account.admin.role, GALMAE_CHAT_ROLES)) return { markdown: ACCOUNT_DENIED_TEXT, outcome: "account_denied" }
 
   try {
-    const base = deps.orchestratorDeps(account.admin)
+    const base = deps.orchestratorDeps(account.admin, message.chattype)
     const orchestrator = message.chattype === "group" ? groupScopedDeps(base) : singleScopedDeps(base)
     const { blocks, orders } = await deps.collectTurn(
       { text: question, context: null, actor: wecomActor(account.admin, message.chattype), now: deps.now() },

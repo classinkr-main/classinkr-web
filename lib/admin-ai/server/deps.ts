@@ -60,9 +60,12 @@ export const serverOpsDeps: OpsDeps = {
   },
 }
 
-/** sub 는 행위자 키(actor.ts staffKey) — 쓰기 확인 표에 서명해 싣는다. */
-export function buildServerOrchestratorDeps(options: { sub: string }): OrchestratorDeps {
-  const contactDeps = buildContactDeps()
+/**
+ * sub 는 행위자 키(actor.ts staffKey) — 쓰기 확인 표에 서명해 싣는다.
+ * customerContacts:false — 담당자 찾기에서 고객사 갈래(CRM 고객 조회)를 끈다(위컴 단체방처럼 답이 여러 사람에게 보일 때).
+ */
+export function buildServerOrchestratorDeps(options: { sub: string; customerContacts?: boolean }): OrchestratorDeps {
+  const contactDeps = buildContactDeps({ customers: options.customerContacts !== false })
   // 카드에 표를 실을지(확인 버튼) — 표 비밀 + 일회용 저장소가 있을 때만(ticket-claims.ts 한 곳에서 판정).
   const ticketSecret = readConfirmSetup().cardSecret
   return {

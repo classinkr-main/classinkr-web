@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest"
 import type { StaffIdentity } from "@/lib/admin-ai/server/actor"
 import { collectTurn } from "@/lib/admin-ai/server/orchestrator"
 import type { AiBlock, OrderTicket } from "@/lib/admin-ai/types"
+import type { ContactCard as InternalContactCard } from "@/lib/internal-cs-chat/contact"
 import {
   ACCOUNT_DENIED_TEXT,
   answerWecomMessage,
@@ -67,6 +68,14 @@ describe("위컴 수신 글 읽기", () => {
     })
     expect(parseInboundMessage({ msgid: "x", aibotid: "b", chattype: "group", msgtype: "text" })).toBeNull()
     expect(parseInboundMessage({ msgid: "x", aibotid: "b", chattype: "other", from: { userid: "u" }, msgtype: "text" })).toBeNull()
+  })
+
+  it("compat_info(일반 콜백이 아닐 때만 옴)는 출처 값만 읽는다 — 짧은 영문 소문자가 아니면 other", () => {
+    const base = { msgid: "x", aibotid: "b", chattype: "single", from: { userid: "u" }, msgtype: "text", text: { content: "hi" } }
+    expect(parseInboundMessage(base)?.compatSource).toBeUndefined()
+    expect(parseInboundMessage({ ...base, compat_info: { source: "ai_assistant" } })?.compatSource).toBe("ai_assistant")
+    expect(parseInboundMessage({ ...base, compat_info: { source: "x y\nmsg=forged" } })?.compatSource).toBe("other")
+    expect(parseInboundMessage({ ...base, compat_info: { source: "channel" } })?.text).toBe("hi")
   })
 
   it("그림·파일 글은 text 가 없고(null), 멘션은 걷어 낸다", () => {
@@ -158,6 +167,47 @@ describe("방에서 보이는 것의 경계", () => {
     const reply = await answerWecomMessage(message({ chattype: "group", text: "@갈매봇 수업 녹화는 어떻게 해?" }), deps)
     expect(reply.markdown).toContain("수업 녹화")
     expect(reply.markdown).not.toContain(GROUP_SCOPE_TEXT)
+  })
+
+  it("단체방 — 고객 이름이 든 담당자 질문에도 고객 담당 이름·고객 키·고객 이름을 내지 않는다(담당자·근거 없음 대체 길 모두)", async () => {
+    // 실제 resolveContact 의 customerCard 와 같은 꼴 — 질문에 고객 이름이 있으면 CRM 담당을 돌려준다.
+    const CUSTOMER = "샘플고객학원"
+    const customerCard = (question: string): InternalContactCard =>
+      question.includes(CUSTOMER)
+        ? {
+            kind: "customer_owner",
+            who: "담당 매니저 — 담당샘플갑",
+            backup: "딜 담당 — 딜담당샘플을",
+            prepare: ["고객사 이름"],
+            channel: { label: "고객 화면에서 담당 확인", href: "/admin/crm/customers/x" },
+            evidence: [{ kind: "owner_assignment", label: "담당 지정: 담당샘플갑", count: 1, href: "/admin/crm/customers/x" }],
+            verifiedAt: null,
+            reason: `질문 또는 열린 대화의 고객사 "${CUSTOMER}"`,
+            alternatives: ["다른고객샘플"],
+            gaps: ["같은 이름의 고객이 2명입니다(lead:abc 외 lead:def)"],
+          }
+        : { kind: "kr", who: "영업 담당", backup: null, prepare: [], channel: { label: "사내 메신저", href: null }, evidence: [], verifiedAt: null, reason: "한국 지사 업무", alternatives: [], gaps: [] }
+    const seen: Array<{ chatType: string; openCustomer: unknown }> = []
+    const { deps } = bridge({
+      orchestratorDeps: (_admin, chatType) => ({
+        ...fakeDeps().deps,
+        resolveContact: async (question, openCustomer) => {
+          seen.push({ chatType, openCustomer })
+          return customerCard(question)
+        },
+      }),
+    })
+    for (const text of [`${CUSTOMER} 담당 누구야?`, `${CUSTOMER} 연락처 알려줘`, `${CUSTOMER} 누구한테 물어?`, `그럼 ${CUSTOMER} 담당은?`]) {
+      const reply = await answerWecomMessage(message({ chattype: "group", chatid: "room-1", text: `@갈매봇 ${text}` }), deps)
+      expect(reply.markdown, text).not.toMatch(/담당샘플갑|딜담당샘플을|샘플고객학원|다른고객샘플|lead:/)
+      expect(reply.markdown, text).toContain(GROUP_SCOPE_TEXT)
+    }
+    expect(seen.length).toBeGreaterThan(0)
+    expect(seen.every((call) => call.chatType === "group" && call.openCustomer === null)).toBe(true)
+
+    // 1:1 은 그대로(역할 범위 안의 담당 안내).
+    const single = await answerWecomMessage(message({ text: `${CUSTOMER} 담당 누구야?` }), deps)
+    expect(single.markdown).toContain("담당샘플갑")
   })
 
   it("쓰기 요청 — 위컴에서는 실행·미리보기 표를 만들지 않는다(단체방은 1:1 안내, 1:1 은 값이 모자라면 되묻기)", async () => {

@@ -1,12 +1,12 @@
 import { describe, expect, it, vi } from "vitest"
 
-const hoisted = vi.hoisted(() => ({ postJson: vi.fn<(...args: unknown[]) => Promise<{ ok: boolean; status: number; json: () => Promise<unknown>; text: () => Promise<string> }>>(async () => ({ ok: true, status: 200, json: async () => ({ errcode: 0 }), text: async () => "" })) }))
+const hoisted = vi.hoisted(() => ({ buildServerOrchestratorDeps: vi.fn<(options: { sub: string; customerContacts?: boolean }) => object>(() => ({})), postJson: vi.fn<(...args: unknown[]) => Promise<{ ok: boolean; status: number; json: () => Promise<unknown>; text: () => Promise<string> }>>(async () => ({ ok: true, status: 200, json: async () => ({ errcode: 0 }), text: async () => "" })) }))
 
-vi.mock("@/lib/admin-ai/server/deps", () => ({ buildServerOrchestratorDeps: () => ({}), serverOpsDeps: {} }))
+vi.mock("@/lib/admin-ai/server/deps", () => ({ buildServerOrchestratorDeps: hoisted.buildServerOrchestratorDeps, serverOpsDeps: {} }))
 vi.mock("@/lib/wecom/aibot-accounts", () => ({ lookupAdminByEmail: async () => ({ ok: false, reason: "not_found" }) }))
 vi.mock("@/lib/server/post-json", () => ({ postJson: hoisted.postJson }))
 
-import { getWecomDedupStore, isWecomResponseUrl, sendResponseMarkdown } from "@/lib/wecom/aibot-server"
+import { buildWecomBridgeDeps, getWecomDedupStore, isWecomResponseUrl, sendResponseMarkdown } from "@/lib/wecom/aibot-server"
 
 // 저장소 판정은 갈매봇 확인표(ticket-claims.ts)와 같다 — 운영·미리보기·자체 호스팅에서 Upstash 가 없으면 null(수신을 열지 않는다).
 describe("msgid 중복 제거 저장소", () => {
@@ -46,5 +46,16 @@ describe("response_url 보내기", () => {
     expect(hoisted.postJson).not.toHaveBeenCalled()
     expect((await sendResponseMarkdown("https://qyapi.weixin.qq.com/cgi-bin/x", "hi")).ok).toBe(true)
     expect(hoisted.postJson.mock.calls[0][1]).toEqual({ msgtype: "markdown", markdown: { content: "hi" } })
+  })
+})
+
+describe("조율기 연결", () => {
+  it("단체방은 담당자 찾기에서 CRM 고객 조회를 끈다 — 1:1 은 켠다", () => {
+    const deps = buildWecomBridgeDeps({ token: "t", key: Buffer.alloc(32), botId: "b", userMap: new Map(), allowedChatIds: new Set() })
+    const admin = { source: "supabase" as const, role: "ADMIN", userId: "user-1", capabilities: [] }
+    deps.orchestratorDeps(admin, "group")
+    deps.orchestratorDeps(admin, "single")
+    const calls = hoisted.buildServerOrchestratorDeps.mock.calls.map(([options]) => options.customerContacts)
+    expect(calls).toEqual([false, true])
   })
 })
