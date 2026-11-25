@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "dataVersion": "ai-d7b742926456",
+  "dataVersion": "ai-1b81c2a68dfd",
   "sources": {
     "app/about/AboutPageClient.tsx": "201307dd2bc22b3b",
     "app/about/layout.tsx": "cbced2f28647c89c",
@@ -121,8 +121,8 @@
   },
   "outputs": {
     "absent.json": {
-      "sha": "585211a363c5930e",
-      "count": 118
+      "sha": "f6b41cb3e338ce40",
+      "count": 276
     },
     "audit/C-01.jsonl": {
       "sha": "d9db556cf3c253b6",
@@ -176,17 +176,109 @@
       "sha": "ebe45529cda768f6",
       "count": 45
     },
+    "audit/C-14.jsonl": {
+      "sha": "7ef12c42d4569d5a",
+      "count": 45
+    },
+    "audit/C-15.jsonl": {
+      "sha": "d25a6a3dc0744d37",
+      "count": 45
+    },
+    "audit/C-16.jsonl": {
+      "sha": "2af170b129b0de34",
+      "count": 45
+    },
+    "audit/C-17.jsonl": {
+      "sha": "f2b2eaa107afbdce",
+      "count": 45
+    },
+    "audit/C-18.jsonl": {
+      "sha": "0e4fa8871806edba",
+      "count": 45
+    },
+    "audit/C-19.jsonl": {
+      "sha": "4314921e87144183",
+      "count": 5
+    },
+    "audit/C-20.jsonl": {
+      "sha": "92d12ab9fb0ccd12",
+      "count": 45
+    },
+    "audit/C-21.jsonl": {
+      "sha": "b1e67d8391bca3de",
+      "count": 15
+    },
+    "audit/C-22.jsonl": {
+      "sha": "2962cf48d90fa9b4",
+      "count": 45
+    },
+    "audit/C-23.jsonl": {
+      "sha": "076076a1c5f5c3c9",
+      "count": 45
+    },
+    "audit/C-24.jsonl": {
+      "sha": "b0970190cf234da7",
+      "count": 34
+    },
+    "audit/C-25.jsonl": {
+      "sha": "ea7450a13e668c8d",
+      "count": 45
+    },
+    "audit/C-26.jsonl": {
+      "sha": "18f5e34c99b19cc9",
+      "count": 28
+    },
+    "audit/C-27.jsonl": {
+      "sha": "16920bd5cade0beb",
+      "count": 45
+    },
+    "audit/C-28.jsonl": {
+      "sha": "b1bf54dad1bfd526",
+      "count": 45
+    },
+    "audit/C-29.jsonl": {
+      "sha": "441dcd2504a34199",
+      "count": 8
+    },
+    "audit/C-30.jsonl": {
+      "sha": "579fc17392bb7794",
+      "count": 45
+    },
+    "audit/C-31.jsonl": {
+      "sha": "d43bb67ed4928202",
+      "count": 45
+    },
+    "audit/C-32.jsonl": {
+      "sha": "9d3e198807f2a176",
+      "count": 9
+    },
+    "audit/C-33.jsonl": {
+      "sha": "0a8544fb057025e1",
+      "count": 45
+    },
+    "audit/C-34.jsonl": {
+      "sha": "5fb59ae161a7f15d",
+      "count": 44
+    },
     "audit/human-queue.json": {
-      "sha": "07775d7e2bba9737",
-      "count": 62
+      "sha": "5ebd0cff40b3c43e",
+      "count": 92
     },
     "calibration.json": {
-      "sha": "d67829ebae4048cc",
+      "sha": "ac909a03e0038824",
       "count": 8
     },
     "cards/account.json": {
       "sha": "df624f31a783b4b4",
       "count": 112
+    },
+    "cards/admin.json": {
+      "sha": "2f4ef0b6e0d3b240",
+      "count": 177
+    },
+    "cards/board.json": {
+      "sha": "fee85bb3ddb93c1e",
+      "count": 343
     },
     "cards/classroom.json": {
       "sha": "a9ded8dfd75b35f4",
@@ -204,6 +296,14 @@
       "sha": "7c9443f0708c07c0",
       "count": 23
     },
+    "cards/gaps-admin.json": {
+      "sha": "cc679fdae208a957",
+      "count": 20
+    },
+    "cards/gaps-board.json": {
+      "sha": "69e6322bcef96d7e",
+      "count": 33
+    },
     "cards/gaps-classroom.json": {
       "sha": "46b6702cf5476f31",
       "count": 20
@@ -216,20 +316,60 @@
       "sha": "8faeeebdd5e6b597",
       "count": 24
     },
+    "cards/gaps-homework.json": {
+      "sha": "6ebfb2fa5bfb52d1",
+      "count": 27
+    },
     "cards/gaps-pricing.json": {
       "sha": "1b0dfd3e170f9052",
       "count": 25
+    },
+    "cards/gaps-recording.json": {
+      "sha": "426f2f0bd10fb669",
+      "count": 21
+    },
+    "cards/gaps-start.json": {
+      "sha": "fa3dc987b5d3a172",
+      "count": 23
+    },
+    "cards/gaps-support.json": {
+      "sha": "35872a122a0e2ed0",
+      "count": 15
+    },
+    "cards/gaps-trust.json": {
+      "sha": "2157e2f4e148c875",
+      "count": 19
+    },
+    "cards/homework.json": {
+      "sha": "8728a664f7e6dae0",
+      "count": 223
     },
     "cards/pricing.json": {
       "sha": "4cb1e183345ea3e3",
       "count": 127
     },
+    "cards/recording.json": {
+      "sha": "dfa332736403f97f",
+      "count": 212
+    },
+    "cards/start.json": {
+      "sha": "5186b2ce60a7ea3e",
+      "count": 133
+    },
+    "cards/support.json": {
+      "sha": "c5411f62a3bb06f1",
+      "count": 36
+    },
+    "cards/trust.json": {
+      "sha": "47ed272e62e16de2",
+      "count": 20
+    },
     "eval/calibration-set.json": {
-      "sha": "e19b3abca1e0950e",
+      "sha": "a0aa88a6fbfe6b8e",
       "count": 288
     },
     "generic-words.json": {
-      "sha": "44a051c05d6aa169",
+      "sha": "de22e8eecfadf952",
       "count": 4
     },
     "inventory.json": {
@@ -237,12 +377,12 @@
       "count": 1459
     },
     "legacy-alias.json": {
-      "sha": "3e6294e4da45f158",
-      "count": 620
+      "sha": "e6d68a1b95c44c1e",
+      "count": 1459
     },
     "lexicon.json": {
-      "sha": "c37489095e4a7097",
-      "count": 601
+      "sha": "26a04704343381e2",
+      "count": 1151
     },
     "site-facts.json": {
       "sha": "714fbcf3f542585d",
@@ -253,20 +393,28 @@
       "count": 741
     },
     "universe/s001.json": {
-      "sha": "8ad5d1be692c950f",
+      "sha": "31dea403a79991e5",
       "count": 1997
     },
     "universe/s002.json": {
-      "sha": "0133c3a437b8fda7",
+      "sha": "c375ac35b4b826c8",
       "count": 1995
     },
     "universe/s003.json": {
-      "sha": "c777145eb7c708e6",
+      "sha": "0f3c4b4307f42c8f",
       "count": 869
     },
     "variants/account.json": {
       "sha": "24023e4faeb38ef7",
       "count": 120
+    },
+    "variants/admin.json": {
+      "sha": "983030e1d9797186",
+      "count": 196
+    },
+    "variants/board.json": {
+      "sha": "3f989f07ce577cce",
+      "count": 385
     },
     "variants/classroom.json": {
       "sha": "108e88ae33c0343b",
@@ -284,6 +432,14 @@
       "sha": "ad2e30671e81d809",
       "count": 22
     },
+    "variants/gaps-admin.json": {
+      "sha": "358dbc3e0e8f85d6",
+      "count": 20
+    },
+    "variants/gaps-board.json": {
+      "sha": "c28e3410db6c11dc",
+      "count": 33
+    },
     "variants/gaps-classroom.json": {
       "sha": "8b5c1e8732821c04",
       "count": 20
@@ -296,13 +452,53 @@
       "sha": "c1e5f20c4a3e6e05",
       "count": 24
     },
+    "variants/gaps-homework.json": {
+      "sha": "dbe32bb637d305df",
+      "count": 27
+    },
     "variants/gaps-pricing.json": {
       "sha": "abb313320606c1e3",
       "count": 24
     },
+    "variants/gaps-recording.json": {
+      "sha": "0a557beb94af2f59",
+      "count": 21
+    },
+    "variants/gaps-start.json": {
+      "sha": "aef4b3f46bcff5cb",
+      "count": 23
+    },
+    "variants/gaps-support.json": {
+      "sha": "32d3fd18e75739a5",
+      "count": 15
+    },
+    "variants/gaps-trust.json": {
+      "sha": "57b0ccbed3b18e38",
+      "count": 19
+    },
+    "variants/homework.json": {
+      "sha": "4ec31524ddc34858",
+      "count": 249
+    },
     "variants/pricing.json": {
       "sha": "7c9873230e52980b",
       "count": 150
+    },
+    "variants/recording.json": {
+      "sha": "124bf8e76e8c72c8",
+      "count": 225
+    },
+    "variants/start.json": {
+      "sha": "b3416adbba5b9c5f",
+      "count": 158
+    },
+    "variants/support.json": {
+      "sha": "cec1eadec29552b4",
+      "count": 56
+    },
+    "variants/trust.json": {
+      "sha": "60a8f3d30b6e8553",
+      "count": 41
     }
   },
   "inputs": {
@@ -790,23 +986,494 @@
       ],
       "sha": "43159b195782bb4f"
     },
-    "D1-sup": {
-      "part": "D1-sup",
+    "D1-21": {
+      "part": "D1-21",
       "files": [
-        "cards/classroom.D1-sup.json",
-        "cards/pricing.D1-sup.json",
-        "variants/classroom.D1-sup.json",
-        "variants/pricing.D1-sup.json"
+        "cards/board.D1-21.json",
+        "variants/board.D1-21.json"
+      ],
+      "counts": {
+        "cards": 49,
+        "variants": 1229
+      },
+      "writers": [
+        "agent:opus#D1",
+        "agent:sonnet#D2"
+      ],
+      "reviewers": [
+        "agent:sonnet#D2"
+      ],
+      "sha": "a0fd086d01d080e1"
+    },
+    "D1-22": {
+      "part": "D1-22",
+      "files": [
+        "cards/board.D1-22.json",
+        "variants/board.D1-22.json"
+      ],
+      "counts": {
+        "cards": 46,
+        "variants": 1151
+      },
+      "writers": [
+        "agent:opus#D2-22",
+        "agent:sonnet#D1"
+      ],
+      "reviewers": [
+        "agent:opus#D2-22"
+      ],
+      "sha": "ebe83cf949cc625c"
+    },
+    "D1-23": {
+      "part": "D1-23",
+      "files": [
+        "cards/board.D1-23.json",
+        "variants/board.D1-23.json"
+      ],
+      "counts": {
+        "cards": 61,
+        "variants": 1500
+      },
+      "writers": [
+        "agent:opus#D1",
+        "agent:opus#D2"
+      ],
+      "reviewers": [
+        "agent:opus#D2"
+      ],
+      "sha": "83927245caa62b98"
+    },
+    "D1-24": {
+      "part": "D1-24",
+      "files": [
+        "cards/board.D1-24.json",
+        "variants/board.D1-24.json"
+      ],
+      "counts": {
+        "cards": 51,
+        "variants": 1288
+      },
+      "writers": [
+        "agent:opus#D1",
+        "agent:opus#D2-24"
+      ],
+      "reviewers": [
+        "agent:opus#D2-24"
+      ],
+      "sha": "050f858850a36c95"
+    },
+    "D1-25": {
+      "part": "D1-25",
+      "files": [
+        "cards/board.D1-25.json",
+        "variants/board.D1-25.json"
+      ],
+      "counts": {
+        "cards": 29,
+        "variants": 725
+      },
+      "writers": [
+        "agent:opus#D1"
+      ],
+      "reviewers": [
+        "agent:opus#D2"
+      ],
+      "sha": "c27795ceeb399a5a"
+    },
+    "D1-26": {
+      "part": "D1-26",
+      "files": [
+        "cards/board.D1-26.json",
+        "variants/board.D1-26.json"
+      ],
+      "counts": {
+        "cards": 35,
+        "variants": 880
+      },
+      "writers": [
+        "agent:opus#D2-26",
+        "agent:sonnet#D1"
+      ],
+      "reviewers": [
+        "agent:opus#D2-26"
+      ],
+      "sha": "f91dcbea38b8d531"
+    },
+    "D1-27": {
+      "part": "D1-27",
+      "files": [
+        "cards/trust.D1-27.json",
+        "variants/trust.D1-27.json"
       ],
       "counts": {
         "cards": 3,
-        "variants": 75
+        "variants": 81
       },
       "writers": [
-        "agent:sonnet#D1-sup"
+        "D1"
+      ],
+      "reviewers": [
+        "D2"
+      ],
+      "sha": "d1c77e5d509acda7"
+    },
+    "D1-28": {
+      "part": "D1-28",
+      "files": [
+        "cards/recording.D1-28.json",
+        "variants/recording.D1-28.json"
+      ],
+      "counts": {
+        "cards": 46,
+        "variants": 1196
+      },
+      "writers": [
+        "agent:opus#D1"
+      ],
+      "reviewers": [
+        "agent:opus#D2"
+      ],
+      "sha": "fa42b4ca3044cadd"
+    },
+    "D1-29": {
+      "part": "D1-29",
+      "files": [
+        "cards/recording.D1-29.json",
+        "variants/recording.D1-29.json"
+      ],
+      "counts": {
+        "cards": 33,
+        "variants": 776
+      },
+      "writers": [
+        "D1",
+        "agent:opus#D2-29"
+      ],
+      "reviewers": [
+        "agent:opus#D2-29"
+      ],
+      "sha": "bc7b5ef4942c3e90"
+    },
+    "D1-30": {
+      "part": "D1-30",
+      "files": [
+        "cards/recording.D1-30.json",
+        "variants/recording.D1-30.json"
+      ],
+      "counts": {
+        "cards": 52,
+        "variants": 1328
+      },
+      "writers": [
+        "D1",
+        "D2"
+      ],
+      "reviewers": [
+        "D2"
+      ],
+      "sha": "e14e3ceece0251af"
+    },
+    "D1-31": {
+      "part": "D1-31",
+      "files": [
+        "cards/recording.D1-31.json",
+        "variants/recording.D1-31.json"
+      ],
+      "counts": {
+        "cards": 29,
+        "variants": 605
+      },
+      "writers": [
+        "D1",
+        "agent:opus#D2-31"
+      ],
+      "reviewers": [
+        "agent:opus#D2-31"
+      ],
+      "sha": "d7cc15819b199614"
+    },
+    "D1-32": {
+      "part": "D1-32",
+      "files": [
+        "cards/recording.D1-32.json",
+        "variants/recording.D1-32.json"
+      ],
+      "counts": {
+        "cards": 9,
+        "variants": 225
+      },
+      "writers": [
+        "D1"
+      ],
+      "reviewers": [
+        "D2"
+      ],
+      "sha": "f8cc02cc40c5d58c"
+    },
+    "D1-33": {
+      "part": "D1-33",
+      "files": [
+        "cards/support.D1-33.json",
+        "variants/support.D1-33.json"
+      ],
+      "counts": {
+        "cards": 15,
+        "variants": 386
+      },
+      "writers": [
+        "D1"
+      ],
+      "reviewers": [
+        "agent:opus#D2-33"
+      ],
+      "sha": "a2f876c1259933a4"
+    },
+    "D1-34": {
+      "part": "D1-34",
+      "files": [
+        "cards/admin.D1-34.json",
+        "variants/admin.D1-34.json"
+      ],
+      "counts": {
+        "cards": 42,
+        "variants": 1051
+      },
+      "writers": [
+        "agent:opus#D1",
+        "agent:sonnet#D2"
+      ],
+      "reviewers": [
+        "agent:sonnet#D2"
+      ],
+      "sha": "c34511d8e134d26b"
+    },
+    "D1-35": {
+      "part": "D1-35",
+      "files": [
+        "cards/admin.D1-35.json",
+        "variants/admin.D1-35.json"
+      ],
+      "counts": {
+        "cards": 34,
+        "variants": 854
+      },
+      "writers": [
+        "D1",
+        "D2"
+      ],
+      "reviewers": [
+        "agent:opus#D2-35"
+      ],
+      "sha": "7e979499e816f0ec"
+    },
+    "D1-36": {
+      "part": "D1-36",
+      "files": [
+        "cards/admin.D1-36.json",
+        "variants/admin.D1-36.json"
+      ],
+      "counts": {
+        "cards": 36,
+        "variants": 905
+      },
+      "writers": [
+        "D1"
+      ],
+      "reviewers": [
+        "agent:sonnet#D2-36"
+      ],
+      "sha": "86e21a1937448ed2"
+    },
+    "D1-37": {
+      "part": "D1-37",
+      "files": [
+        "cards/admin.D1-37.json",
+        "variants/admin.D1-37.json"
+      ],
+      "counts": {
+        "cards": 37,
+        "variants": 858
+      },
+      "writers": [
+        "D1",
+        "agent:opus#D2-37"
+      ],
+      "reviewers": [
+        "agent:opus#D2-37"
+      ],
+      "sha": "0f08d3c684045f79"
+    },
+    "D1-38": {
+      "part": "D1-38",
+      "files": [
+        "cards/start.D1-38.json",
+        "variants/start.D1-38.json"
+      ],
+      "counts": {
+        "cards": 33,
+        "variants": 1002
+      },
+      "writers": [
+        "agent:opus#D1"
+      ],
+      "reviewers": [
+        "agent:opus#D2"
+      ],
+      "sha": "637da21f6dc9f940"
+    },
+    "D1-39": {
+      "part": "D1-39",
+      "files": [
+        "cards/start.D1-39.json",
+        "variants/start.D1-39.json"
+      ],
+      "counts": {
+        "cards": 51,
+        "variants": 1420
+      },
+      "writers": [
+        "agent:opus#D1",
+        "agent:opus#D2-39"
+      ],
+      "reviewers": [
+        "agent:opus#D2-39"
+      ],
+      "sha": "64608b80e35aeabb"
+    },
+    "D1-40": {
+      "part": "D1-40",
+      "files": [
+        "cards/start.D1-40.json",
+        "variants/start.D1-40.json"
+      ],
+      "counts": {
+        "cards": 19,
+        "variants": 475
+      },
+      "writers": [
+        "agent:opus#D1"
+      ],
+      "reviewers": [
+        "agent:opus#D2"
+      ],
+      "sha": "0b67c638da0b33e3"
+    },
+    "D1-41": {
+      "part": "D1-41",
+      "files": [
+        "cards/homework.D1-41.json",
+        "variants/homework.D1-41.json"
+      ],
+      "counts": {
+        "cards": 47,
+        "variants": 1178
+      },
+      "writers": [
+        "agent:opus#D1"
+      ],
+      "reviewers": [
+        "agent:opus#D2"
+      ],
+      "sha": "16cc184b33afb95c"
+    },
+    "D1-42": {
+      "part": "D1-42",
+      "files": [
+        "cards/homework.D1-42.json",
+        "variants/homework.D1-42.json"
+      ],
+      "counts": {
+        "cards": 50,
+        "variants": 1253
+      },
+      "writers": [
+        "D1",
+        "agent:opus#D2-42"
+      ],
+      "reviewers": [
+        "agent:opus#D2-42"
+      ],
+      "sha": "fd258e51b2becf44"
+    },
+    "D1-43": {
+      "part": "D1-43",
+      "files": [
+        "cards/homework.D1-43.json",
+        "variants/homework.D1-43.json"
+      ],
+      "counts": {
+        "cards": 47,
+        "variants": 1175
+      },
+      "writers": [
+        "D1"
+      ],
+      "reviewers": [
+        "D2"
+      ],
+      "sha": "c1ae65508c3c7d70"
+    },
+    "D1-44": {
+      "part": "D1-44",
+      "files": [
+        "cards/homework.D1-44.json",
+        "variants/homework.D1-44.json"
+      ],
+      "counts": {
+        "cards": 28,
+        "variants": 677
+      },
+      "writers": [
+        "D1"
+      ],
+      "reviewers": [
+        "agent:opus#D2-44"
+      ],
+      "sha": "8fd6f42ff206b351"
+    },
+    "D1-45": {
+      "part": "D1-45",
+      "files": [
+        "cards/homework.D1-45.json",
+        "variants/homework.D1-45.json"
+      ],
+      "counts": {
+        "cards": 10,
+        "variants": 250
+      },
+      "writers": [
+        "D1"
+      ],
+      "reviewers": [
+        "D2"
+      ],
+      "sha": "931bb2112a1e672e"
+    },
+    "D1-sup": {
+      "part": "D1-sup",
+      "files": [
+        "cards/admin.D1-sup.json",
+        "cards/board.D1-sup.json",
+        "cards/homework.D1-sup.json",
+        "cards/recording.D1-sup.json",
+        "cards/support.D1-sup.json",
+        "cards/trust.D1-sup.json",
+        "variants/admin.D1-sup.json",
+        "variants/board.D1-sup.json",
+        "variants/homework.D1-sup.json",
+        "variants/recording.D1-sup.json",
+        "variants/support.D1-sup.json",
+        "variants/trust.D1-sup.json"
+      ],
+      "counts": {
+        "cards": 3,
+        "variants": 92
+      },
+      "writers": [
+        "agent:opus#D1-sup"
       ],
       "reviewers": [],
-      "sha": "2f2abc351acefd48"
+      "sha": "281420ce2ea5a2c5"
     },
     "D3-00": {
       "part": "D3-00",
@@ -1001,6 +1668,292 @@
       "writers": [],
       "reviewers": [],
       "sha": "84b7175de902d884"
+    },
+    "D3-14": {
+      "part": "D3-14",
+      "files": [
+        "audit/C-14.D3-14.jsonl",
+        "audit/human-queue.D3-14.json"
+      ],
+      "counts": {
+        "audit": 45,
+        "human-queue": 2
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "99f6eaa265a43f8e"
+    },
+    "D3-15": {
+      "part": "D3-15",
+      "files": [
+        "audit/C-15.D3-15.jsonl",
+        "audit/human-queue.D3-15.json"
+      ],
+      "counts": {
+        "audit": 45,
+        "human-queue": 2
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "2e2eb0c0323d2e0a"
+    },
+    "D3-16": {
+      "part": "D3-16",
+      "files": [
+        "audit/C-16.D3-16.jsonl",
+        "audit/human-queue.D3-16.json"
+      ],
+      "counts": {
+        "audit": 45,
+        "human-queue": 3
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "f10221979b769658"
+    },
+    "D3-17": {
+      "part": "D3-17",
+      "files": [
+        "audit/C-17.D3-17.jsonl",
+        "audit/human-queue.D3-17.json"
+      ],
+      "counts": {
+        "audit": 45,
+        "human-queue": 3
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "fad66cf21c638f34"
+    },
+    "D3-18": {
+      "part": "D3-18",
+      "files": [
+        "audit/C-18.D3-18.jsonl",
+        "audit/human-queue.D3-18.json"
+      ],
+      "counts": {
+        "audit": 45,
+        "human-queue": 1
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "2f9628c52e68e8e4"
+    },
+    "D3-19": {
+      "part": "D3-19",
+      "files": [
+        "audit/C-19.D3-19.jsonl"
+      ],
+      "counts": {
+        "audit": 5
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "f50d1c7970dabba0"
+    },
+    "D3-20": {
+      "part": "D3-20",
+      "files": [
+        "audit/C-20.D3-20.jsonl",
+        "audit/human-queue.D3-20.json"
+      ],
+      "counts": {
+        "audit": 45,
+        "human-queue": 2
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "11269d6692cb7c11"
+    },
+    "D3-21": {
+      "part": "D3-21",
+      "files": [
+        "audit/C-21.D3-21.jsonl",
+        "audit/human-queue.D3-21.json"
+      ],
+      "counts": {
+        "audit": 15,
+        "human-queue": 1
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "c5cbea66a935ee1b"
+    },
+    "D3-22": {
+      "part": "D3-22",
+      "files": [
+        "audit/C-22.D3-22.jsonl",
+        "audit/human-queue.D3-22.json"
+      ],
+      "counts": {
+        "audit": 45,
+        "human-queue": 1
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "794ebe6d39c3716c"
+    },
+    "D3-23": {
+      "part": "D3-23",
+      "files": [
+        "audit/C-23.D3-23.jsonl",
+        "audit/human-queue.D3-23.json"
+      ],
+      "counts": {
+        "audit": 45,
+        "human-queue": 2
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "a5287733d2385a5d"
+    },
+    "D3-24": {
+      "part": "D3-24",
+      "files": [
+        "audit/C-24.D3-24.jsonl",
+        "audit/human-queue.D3-24.json"
+      ],
+      "counts": {
+        "audit": 34,
+        "human-queue": 1
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "26d72434e6bdc1d8"
+    },
+    "D3-25": {
+      "part": "D3-25",
+      "files": [
+        "audit/C-25.D3-25.jsonl",
+        "audit/human-queue.D3-25.json"
+      ],
+      "counts": {
+        "audit": 45,
+        "human-queue": 2
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "34fb9224181b5166"
+    },
+    "D3-26": {
+      "part": "D3-26",
+      "files": [
+        "audit/C-26.D3-26.jsonl",
+        "audit/human-queue.D3-26.json"
+      ],
+      "counts": {
+        "audit": 28,
+        "human-queue": 1
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "df0be32cd257f20f"
+    },
+    "D3-27": {
+      "part": "D3-27",
+      "files": [
+        "audit/C-27.D3-27.jsonl",
+        "audit/human-queue.D3-27.json"
+      ],
+      "counts": {
+        "audit": 45,
+        "human-queue": 3
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "a4f0db7fe0dcd9ec"
+    },
+    "D3-28": {
+      "part": "D3-28",
+      "files": [
+        "audit/C-28.D3-28.jsonl",
+        "audit/human-queue.D3-28.json"
+      ],
+      "counts": {
+        "audit": 45,
+        "human-queue": 3
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "a55109381b1c11f3"
+    },
+    "D3-29": {
+      "part": "D3-29",
+      "files": [
+        "audit/C-29.D3-29.jsonl"
+      ],
+      "counts": {
+        "audit": 8
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "c5fe075644e15f38"
+    },
+    "D3-30": {
+      "part": "D3-30",
+      "files": [
+        "audit/C-30.D3-30.jsonl",
+        "audit/human-queue.D3-30.json"
+      ],
+      "counts": {
+        "audit": 45,
+        "human-queue": 1
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "bd22f286f1cae2d4"
+    },
+    "D3-31": {
+      "part": "D3-31",
+      "files": [
+        "audit/C-31.D3-31.jsonl",
+        "audit/human-queue.D3-31.json"
+      ],
+      "counts": {
+        "audit": 45,
+        "human-queue": 1
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "cd481d63bcfde053"
+    },
+    "D3-32": {
+      "part": "D3-32",
+      "files": [
+        "audit/C-32.D3-32.jsonl"
+      ],
+      "counts": {
+        "audit": 9
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "a9e5256a2bea82dd"
+    },
+    "D3-33": {
+      "part": "D3-33",
+      "files": [
+        "audit/C-33.D3-33.jsonl"
+      ],
+      "counts": {
+        "audit": 45
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "1d56bbbe15a43678"
+    },
+    "D3-34": {
+      "part": "D3-34",
+      "files": [
+        "audit/C-34.D3-34.jsonl",
+        "audit/human-queue.D3-34.json"
+      ],
+      "counts": {
+        "audit": 44,
+        "human-queue": 1
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "a34956d7d15353e2"
     },
     "D4-01": {
       "part": "D4-01",
@@ -1236,6 +2189,384 @@
       "reviewers": [],
       "sha": "1ee306433850bae7"
     },
+    "D4-14": {
+      "part": "D4-14",
+      "files": [
+        "cards/board.D4-14.json",
+        "legacy-alias.D4-14.json",
+        "variants/board.D4-14.json"
+      ],
+      "counts": {
+        "cards": 25,
+        "legacy-alias": 45,
+        "variants": 689
+      },
+      "writers": [
+        "agent:sonnet#D4-14"
+      ],
+      "reviewers": [],
+      "sha": "8ffadf9824ec6db0"
+    },
+    "D4-15": {
+      "part": "D4-15",
+      "files": [
+        "cards/board.D4-15.json",
+        "legacy-alias.D4-15.json",
+        "variants/board.D4-15.json"
+      ],
+      "counts": {
+        "cards": 8,
+        "legacy-alias": 45,
+        "variants": 265
+      },
+      "writers": [
+        "agent:sonnet#D4-15"
+      ],
+      "reviewers": [],
+      "sha": "46d876177de5c82b"
+    },
+    "D4-16": {
+      "part": "D4-16",
+      "files": [
+        "cards/board.D4-16.json",
+        "legacy-alias.D4-16.json",
+        "variants/board.D4-16.json"
+      ],
+      "counts": {
+        "cards": 24,
+        "legacy-alias": 45,
+        "variants": 608
+      },
+      "writers": [
+        "agent:sonnet#D4-16"
+      ],
+      "reviewers": [],
+      "sha": "67072066bd2756ce"
+    },
+    "D4-17": {
+      "part": "D4-17",
+      "files": [
+        "cards/board.D4-17.json",
+        "legacy-alias.D4-17.json",
+        "variants/board.D4-17.json"
+      ],
+      "counts": {
+        "cards": 2,
+        "legacy-alias": 45,
+        "variants": 111
+      },
+      "writers": [
+        "agent:sonnet#D4-17"
+      ],
+      "reviewers": [],
+      "sha": "6332b9e3ee5f2a14"
+    },
+    "D4-18": {
+      "part": "D4-18",
+      "files": [
+        "cards/board.D4-18.json",
+        "legacy-alias.D4-18.json",
+        "variants/board.D4-18.json"
+      ],
+      "counts": {
+        "cards": 11,
+        "legacy-alias": 45,
+        "variants": 751
+      },
+      "writers": [
+        "agent:sonnet#D4-18"
+      ],
+      "reviewers": [],
+      "sha": "7c414f7299a7fc39"
+    },
+    "D4-19": {
+      "part": "D4-19",
+      "files": [
+        "cards/board.D4-19.json",
+        "legacy-alias.D4-19.json",
+        "variants/board.D4-19.json"
+      ],
+      "counts": {
+        "cards": 1,
+        "legacy-alias": 5,
+        "variants": 100
+      },
+      "writers": [
+        "agent:sonnet#D4-19"
+      ],
+      "reviewers": [],
+      "sha": "5d481730933471be"
+    },
+    "D4-20": {
+      "part": "D4-20",
+      "files": [
+        "cards/trust.D4-20.json",
+        "legacy-alias.D4-20.json",
+        "variants/trust.D4-20.json"
+      ],
+      "counts": {
+        "cards": 12,
+        "legacy-alias": 45,
+        "variants": 308
+      },
+      "writers": [
+        "agent:sonnet#D4-20"
+      ],
+      "reviewers": [],
+      "sha": "ff2832dccf43338e"
+    },
+    "D4-21": {
+      "part": "D4-21",
+      "files": [
+        "cards/trust.D4-21.json",
+        "legacy-alias.D4-21.json",
+        "variants/trust.D4-21.json"
+      ],
+      "counts": {
+        "cards": 5,
+        "legacy-alias": 15,
+        "variants": 310
+      },
+      "writers": [
+        "agent:sonnet#D4-21"
+      ],
+      "reviewers": [],
+      "sha": "c9ec204e5da43300"
+    },
+    "D4-22": {
+      "part": "D4-22",
+      "files": [
+        "cards/recording.D4-22.json",
+        "legacy-alias.D4-22.json",
+        "variants/recording.D4-22.json"
+      ],
+      "counts": {
+        "cards": 13,
+        "legacy-alias": 45,
+        "variants": 346
+      },
+      "writers": [
+        "agent:sonnet#D4-22"
+      ],
+      "reviewers": [],
+      "sha": "4f2f00b816ae0d4d"
+    },
+    "D4-23": {
+      "part": "D4-23",
+      "files": [
+        "cards/recording.D4-23.json",
+        "legacy-alias.D4-23.json",
+        "variants/recording.D4-23.json"
+      ],
+      "counts": {
+        "cards": 8,
+        "legacy-alias": 45,
+        "variants": 217
+      },
+      "writers": [
+        "agent:sonnet#D4-23"
+      ],
+      "reviewers": [],
+      "sha": "4eaeaadf8da8246e"
+    },
+    "D4-24": {
+      "part": "D4-24",
+      "files": [
+        "cards/recording.D4-24.json",
+        "legacy-alias.D4-24.json",
+        "variants/recording.D4-24.json"
+      ],
+      "counts": {
+        "cards": 21,
+        "legacy-alias": 34,
+        "variants": 645
+      },
+      "writers": [
+        "agent:sonnet"
+      ],
+      "reviewers": [],
+      "sha": "a499e03042231e91"
+    },
+    "D4-25": {
+      "part": "D4-25",
+      "files": [
+        "cards/support.D4-25.json",
+        "legacy-alias.D4-25.json",
+        "variants/support.D4-25.json"
+      ],
+      "counts": {
+        "cards": 12,
+        "legacy-alias": 45,
+        "variants": 308
+      },
+      "writers": [
+        "agent:sonnet"
+      ],
+      "reviewers": [],
+      "sha": "7a1f349ced161b96"
+    },
+    "D4-26": {
+      "part": "D4-26",
+      "files": [
+        "cards/support.D4-26.json",
+        "legacy-alias.D4-26.json",
+        "variants/support.D4-26.json"
+      ],
+      "counts": {
+        "cards": 9,
+        "legacy-alias": 28,
+        "variants": 515
+      },
+      "writers": [
+        "agent:sonnet#D4-26"
+      ],
+      "reviewers": [],
+      "sha": "5740bc6e8bff6b90"
+    },
+    "D4-27": {
+      "part": "D4-27",
+      "files": [
+        "cards/admin.D4-27.json",
+        "legacy-alias.D4-27.json",
+        "variants/admin.D4-27.json"
+      ],
+      "counts": {
+        "cards": 1,
+        "legacy-alias": 45,
+        "variants": 50
+      },
+      "writers": [
+        "agent:sonnet"
+      ],
+      "reviewers": [],
+      "sha": "90ca9f92f4376320"
+    },
+    "D4-28": {
+      "part": "D4-28",
+      "files": [
+        "cards/admin.D4-28.json",
+        "legacy-alias.D4-28.json",
+        "variants/admin.D4-28.json"
+      ],
+      "counts": {
+        "cards": 21,
+        "legacy-alias": 45,
+        "variants": 904
+      },
+      "writers": [
+        "agent:sonnet"
+      ],
+      "reviewers": [],
+      "sha": "9baf5b93f47fa96b"
+    },
+    "D4-29": {
+      "part": "D4-29",
+      "files": [
+        "cards/admin.D4-29.json",
+        "legacy-alias.D4-29.json",
+        "variants/admin.D4-29.json"
+      ],
+      "counts": {
+        "cards": 5,
+        "legacy-alias": 8,
+        "variants": 221
+      },
+      "writers": [
+        "agent:sonnet#D4-29"
+      ],
+      "reviewers": [],
+      "sha": "e3d2c212cadbd674"
+    },
+    "D4-30": {
+      "part": "D4-30",
+      "files": [
+        "cards/start.D4-30.json",
+        "legacy-alias.D4-30.json",
+        "variants/start.D4-30.json"
+      ],
+      "counts": {
+        "cards": 7,
+        "legacy-alias": 45,
+        "variants": 207
+      },
+      "writers": [
+        "agent:sonnet#D4-30"
+      ],
+      "reviewers": [],
+      "sha": "7e72bbf7dc4a130a"
+    },
+    "D4-31": {
+      "part": "D4-31",
+      "files": [
+        "cards/start.D4-31.json",
+        "legacy-alias.D4-31.json",
+        "variants/start.D4-31.json"
+      ],
+      "counts": {
+        "cards": 17,
+        "legacy-alias": 45,
+        "variants": 904
+      },
+      "writers": [
+        "agent:sonnet#D4-31"
+      ],
+      "reviewers": [],
+      "sha": "dbf45db49ee523d3"
+    },
+    "D4-32": {
+      "part": "D4-32",
+      "files": [
+        "cards/start.D4-32.json",
+        "legacy-alias.D4-32.json",
+        "variants/start.D4-32.json"
+      ],
+      "counts": {
+        "cards": 6,
+        "legacy-alias": 9,
+        "variants": 187
+      },
+      "writers": [
+        "agent:sonnet#D4-32"
+      ],
+      "reviewers": [],
+      "sha": "156fbdacb5f1b064"
+    },
+    "D4-33": {
+      "part": "D4-33",
+      "files": [
+        "cards/homework.D4-33.json",
+        "legacy-alias.D4-33.json",
+        "variants/homework.D4-33.json"
+      ],
+      "counts": {
+        "cards": 20,
+        "legacy-alias": 45,
+        "variants": 522
+      },
+      "writers": [
+        "agent:sonnet"
+      ],
+      "reviewers": [],
+      "sha": "55edb78653f6d4b9"
+    },
+    "D4-34": {
+      "part": "D4-34",
+      "files": [
+        "cards/homework.D4-34.json",
+        "legacy-alias.D4-34.json",
+        "variants/homework.D4-34.json"
+      ],
+      "counts": {
+        "cards": 21,
+        "legacy-alias": 44,
+        "variants": 635
+      },
+      "writers": [
+        "agent:sonnet"
+      ],
+      "reviewers": [],
+      "sha": "0a5f0b698ceaec87"
+    },
     "D4-guide": {
       "part": "D4-guide",
       "files": [
@@ -1247,6 +2578,18 @@
       "writers": [],
       "reviewers": [],
       "sha": "7c284f574c12da8c"
+    },
+    "D4-guide-p2": {
+      "part": "D4-guide-p2",
+      "files": [
+        "legacy-alias.D4-guide-p2.json"
+      ],
+      "counts": {
+        "legacy-alias": 66
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "6bd45877f097e0e5"
     },
     "D5-account": {
       "part": "D5-account",
@@ -1265,6 +2608,42 @@
       ],
       "reviewers": [],
       "sha": "b16d5255ea06277a"
+    },
+    "D5-admin": {
+      "part": "D5-admin",
+      "files": [
+        "absent.D5-admin.json",
+        "cards/gaps-admin.D5-admin.json",
+        "variants/gaps-admin.D5-admin.json"
+      ],
+      "counts": {
+        "absent": 20,
+        "cards": 20,
+        "variants": 301
+      },
+      "writers": [
+        "agent:opus"
+      ],
+      "reviewers": [],
+      "sha": "92100791f47a6522"
+    },
+    "D5-board": {
+      "part": "D5-board",
+      "files": [
+        "absent.D5-board.json",
+        "cards/gaps-board.D5-board.json",
+        "variants/gaps-board.D5-board.json"
+      ],
+      "counts": {
+        "absent": 33,
+        "cards": 33,
+        "variants": 495
+      },
+      "writers": [
+        "agent:opus"
+      ],
+      "reviewers": [],
+      "sha": "8cec860fddcdfb96"
     },
     "D5-classroom": {
       "part": "D5-classroom",
@@ -1320,6 +2699,24 @@
       "reviewers": [],
       "sha": "7357540b2b27e479"
     },
+    "D5-homework": {
+      "part": "D5-homework",
+      "files": [
+        "absent.D5-homework.json",
+        "cards/gaps-homework.D5-homework.json",
+        "variants/gaps-homework.D5-homework.json"
+      ],
+      "counts": {
+        "absent": 27,
+        "cards": 27,
+        "variants": 406
+      },
+      "writers": [
+        "agent:opus"
+      ],
+      "reviewers": [],
+      "sha": "c090c984015edcb6"
+    },
     "D5-pricing": {
       "part": "D5-pricing",
       "files": [
@@ -1337,6 +2734,78 @@
       ],
       "reviewers": [],
       "sha": "8a706b0a1359ec9c"
+    },
+    "D5-recording": {
+      "part": "D5-recording",
+      "files": [
+        "absent.D5-recording.json",
+        "cards/gaps-recording.D5-recording.json",
+        "variants/gaps-recording.D5-recording.json"
+      ],
+      "counts": {
+        "absent": 21,
+        "cards": 21,
+        "variants": 315
+      },
+      "writers": [
+        "agent:opus"
+      ],
+      "reviewers": [],
+      "sha": "8716dc17e49d3ffd"
+    },
+    "D5-start": {
+      "part": "D5-start",
+      "files": [
+        "absent.D5-start.json",
+        "cards/gaps-start.D5-start.json",
+        "variants/gaps-start.D5-start.json"
+      ],
+      "counts": {
+        "absent": 23,
+        "cards": 23,
+        "variants": 345
+      },
+      "writers": [
+        "agent:opus"
+      ],
+      "reviewers": [],
+      "sha": "a66130719eee28ad"
+    },
+    "D5-support": {
+      "part": "D5-support",
+      "files": [
+        "absent.D5-support.json",
+        "cards/gaps-support.D5-support.json",
+        "variants/gaps-support.D5-support.json"
+      ],
+      "counts": {
+        "absent": 15,
+        "cards": 15,
+        "variants": 225
+      },
+      "writers": [
+        "agent:opus"
+      ],
+      "reviewers": [],
+      "sha": "3181c3cf325e2db8"
+    },
+    "D5-trust": {
+      "part": "D5-trust",
+      "files": [
+        "absent.D5-trust.json",
+        "cards/gaps-trust.D5-trust.json",
+        "variants/gaps-trust.D5-trust.json"
+      ],
+      "counts": {
+        "absent": 19,
+        "cards": 19,
+        "variants": 285
+      },
+      "writers": [
+        "agent:opus"
+      ],
+      "reviewers": [],
+      "sha": "aebb10fe6e92ed11"
     },
     "D6-01": {
       "part": "D6-01",
@@ -1364,6 +2833,104 @@
       "reviewers": [],
       "sha": "999982f7a89298ba"
     },
+    "D6-P2": {
+      "part": "D6-P2",
+      "files": [
+        "generic-words.D6-P2.json",
+        "lexicon.D6-P2.json"
+      ],
+      "counts": {
+        "generic-words": 15,
+        "lexicon": 852
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "c65bd0a156cb4d8c"
+    },
+    "D6-P2c1": {
+      "part": "D6-P2c1",
+      "files": [
+        "lexicon.D6-P2c1.json"
+      ],
+      "counts": {
+        "lexicon": 80
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "4c74dbb7a92561c5"
+    },
+    "D6-P2c2": {
+      "part": "D6-P2c2",
+      "files": [
+        "lexicon.D6-P2c2.json"
+      ],
+      "counts": {
+        "lexicon": 80
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "9dfb8ca678b7beb8"
+    },
+    "D6-P2c3": {
+      "part": "D6-P2c3",
+      "files": [
+        "lexicon.D6-P2c3.json"
+      ],
+      "counts": {
+        "lexicon": 80
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "f68796397f966050"
+    },
+    "D6-P2c4": {
+      "part": "D6-P2c4",
+      "files": [
+        "lexicon.D6-P2c4.json"
+      ],
+      "counts": {
+        "lexicon": 80
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "a5dcfd2342608c9b"
+    },
+    "D6-P2c5": {
+      "part": "D6-P2c5",
+      "files": [
+        "lexicon.D6-P2c5.json"
+      ],
+      "counts": {
+        "lexicon": 80
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "9c26d1984f98874e"
+    },
+    "D6-P2c6": {
+      "part": "D6-P2c6",
+      "files": [
+        "lexicon.D6-P2c6.json"
+      ],
+      "counts": {
+        "lexicon": 80
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "7f9eb89608b3a337"
+    },
+    "D6-P2c7": {
+      "part": "D6-P2c7",
+      "files": [
+        "lexicon.D6-P2c7.json"
+      ],
+      "counts": {
+        "lexicon": 70
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "101cb6876980295e"
+    },
     "D7-account-1": {
       "part": "D7-account-1",
       "files": [
@@ -1387,6 +2954,78 @@
       "writers": [],
       "reviewers": [],
       "sha": "8ae51f7690debf39"
+    },
+    "D7-admin-1": {
+      "part": "D7-admin-1",
+      "files": [
+        "variants/admin.D7-admin-1.json"
+      ],
+      "counts": {
+        "variants": 3000
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "bc72f009889b8d1c"
+    },
+    "D7-admin-2": {
+      "part": "D7-admin-2",
+      "files": [
+        "variants/admin.D7-admin-2.json"
+      ],
+      "counts": {
+        "variants": 895
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "f4d8db2966d83cbd"
+    },
+    "D7-board-1": {
+      "part": "D7-board-1",
+      "files": [
+        "variants/board.D7-board-1.json"
+      ],
+      "counts": {
+        "variants": 3000
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "f1eff78c6fdb2545"
+    },
+    "D7-board-2": {
+      "part": "D7-board-2",
+      "files": [
+        "variants/board.D7-board-2.json"
+      ],
+      "counts": {
+        "variants": 1000
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "9a0d7db9e3f605fa"
+    },
+    "D7-board-3": {
+      "part": "D7-board-3",
+      "files": [
+        "variants/board.D7-board-3.json"
+      ],
+      "counts": {
+        "variants": 1000
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "cc15edbbf6ff0773"
+    },
+    "D7-board-4": {
+      "part": "D7-board-4",
+      "files": [
+        "variants/board.D7-board-4.json"
+      ],
+      "counts": {
+        "variants": 640
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "53632712e8c5a445"
     },
     "D7-classroom-1": {
       "part": "D7-classroom-1",
@@ -1508,6 +3147,42 @@
       "reviewers": [],
       "sha": "fb428a13b8e6061f"
     },
+    "D7-homework-1": {
+      "part": "D7-homework-1",
+      "files": [
+        "variants/homework.D7-homework-1.json"
+      ],
+      "counts": {
+        "variants": 865
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "78afe8b15a9dcc79"
+    },
+    "D7-homework-2": {
+      "part": "D7-homework-2",
+      "files": [
+        "variants/homework.D7-homework-2.json"
+      ],
+      "counts": {
+        "variants": 1000
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "82c607232f62b9e0"
+    },
+    "D7-homework-3": {
+      "part": "D7-homework-3",
+      "files": [
+        "variants/homework.D7-homework-3.json"
+      ],
+      "counts": {
+        "variants": 505
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "6f0c6de5964891bb"
+    },
     "D7-pricing-1": {
       "part": "D7-pricing-1",
       "files": [
@@ -1532,6 +3207,90 @@
       "reviewers": [],
       "sha": "8163f91880148d6f"
     },
+    "D7-recording-1": {
+      "part": "D7-recording-1",
+      "files": [
+        "variants/recording.D7-recording-1.json"
+      ],
+      "counts": {
+        "variants": 3000
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "5c78cd8c01dbc180"
+    },
+    "D7-recording-2": {
+      "part": "D7-recording-2",
+      "files": [
+        "variants/recording.D7-recording-2.json"
+      ],
+      "counts": {
+        "variants": 1000
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "8b8b7405e5a805a0"
+    },
+    "D7-recording-3": {
+      "part": "D7-recording-3",
+      "files": [
+        "variants/recording.D7-recording-3.json"
+      ],
+      "counts": {
+        "variants": 312
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "bb8d9f0e472ca643"
+    },
+    "D7-start-1": {
+      "part": "D7-start-1",
+      "files": [
+        "variants/start.D7-start-1.json"
+      ],
+      "counts": {
+        "variants": 920
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "32ce5e755f69f4d3"
+    },
+    "D7-start-2": {
+      "part": "D7-start-2",
+      "files": [
+        "variants/start.D7-start-2.json"
+      ],
+      "counts": {
+        "variants": 620
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "4f851494f5dc1acf"
+    },
+    "D7-support-1": {
+      "part": "D7-support-1",
+      "files": [
+        "variants/support.D7-support-1.json"
+      ],
+      "counts": {
+        "variants": 470
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "cdfba23499ff2d51"
+    },
+    "D7-trust-1": {
+      "part": "D7-trust-1",
+      "files": [
+        "variants/trust.D7-trust-1.json"
+      ],
+      "counts": {
+        "variants": 320
+      },
+      "writers": [],
+      "reviewers": [],
+      "sha": "a6d4f5679e3ab4df"
+    },
     "M-01": {
       "part": "M-01",
       "files": [
@@ -1546,6 +3305,35 @@
       "writers": [],
       "reviewers": [],
       "sha": "cfb033af571d1bf4"
+    },
+    "P2-merge-fix": {
+      "part": "P2-merge-fix",
+      "files": [
+        "cards/admin.json",
+        "cards/board.json",
+        "cards/homework.json",
+        "cards/recording.json",
+        "cards/start.json",
+        "cards/support.json",
+        "cards/trust.json",
+        "lexicon.json",
+        "variants/admin.json",
+        "variants/board.json",
+        "variants/gaps-admin.json",
+        "variants/gaps-board.json",
+        "variants/homework.json",
+        "variants/recording.json"
+      ],
+      "counts": {
+        "cards": 246,
+        "lexicon": 8,
+        "variants": 92
+      },
+      "writers": [
+        "agent:opus#P2-merge"
+      ],
+      "reviewers": [],
+      "sha": "6bd817213a1bbb78"
     }
   }
 }

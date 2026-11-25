@@ -184,10 +184,10 @@
     "q": "과제 제출 기능은 어떻게 작동하나요?",
     "p": "P1-081",
     "m": "haiku",
-    "label": "missing:doc:/docs/student/course-submit-activity#summary",
-    "conf": 0.55,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "missing:doc:/docs/student/homework-submit-troubleshooting#summary"
+    "label": "doc:/docs/student/course-submit-activity#2/homework-submit",
+    "conf": 0.6,
+    "labeler": "A",
+    "label2": null
   },
   {
     "id": "u-0002042",
@@ -314,10 +314,10 @@
     "q": "녹화 영상이 외부에 노출될 가능성은 없나요?",
     "p": "P1-081",
     "m": "haiku",
-    "label": "none",
+    "label": "howto:recording-link-public",
     "conf": 0.55,
-    "labeler": "A=B",
-    "label2": "none"
+    "labeler": "A·B 엇갈림→C",
+    "label2": "doc:/docs/admin/storage-management#4/share-link"
   },
   {
     "id": "u-0002056",
@@ -344,10 +344,10 @@
     "q": "보안 인증 자료를 요청할 수 있나요?",
     "p": "P1-081",
     "m": "haiku",
-    "label": "none",
-    "conf": 0.6,
-    "labeler": "A",
-    "label2": null
+    "label": "fixed:security-certifications",
+    "conf": 0.55,
+    "labeler": "A=B",
+    "label2": "fixed:security-certifications"
   },
   {
     "id": "u-0002059",
@@ -384,10 +384,10 @@
     "q": "강사가 실수로 녹화를 삭제하면 복구되나요?",
     "p": "P1-081",
     "m": "haiku",
-    "label": "missing:doc:/docs/admin/replay-troubleshooting#3",
-    "conf": 0.6,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "doc:/docs/teacher/course-units#6/delete-data"
+    "label": "fixed:basics-recording-delete",
+    "conf": 0.8,
+    "labeler": "A",
+    "label2": null
   },
   {
     "id": "u-0002063",
@@ -414,20 +414,20 @@
     "q": "모바일 앱에서도 똑같이 사용할 수 있나요?",
     "p": "P1-081",
     "m": "haiku",
-    "label": "missing:doc:/docs/start/mobile-install#4",
-    "conf": 0.65,
+    "label": "doc:/docs/start/mobile-install#4/mobile-vs-pc-features",
+    "conf": 0.75,
     "labeler": "A·B 엇갈림→C",
-    "label2": "doc:/docs/software/software-overview#0/app-and-dashboard"
+    "label2": "doc:/docs/start/mobile-install#4/button-missing"
   },
   {
     "id": "u-0002066",
     "q": "태블릿에서도 원활하게 작동하나요?",
     "p": "P1-081",
     "m": "haiku",
-    "label": "missing:doc:/docs/start/mobile-install#5",
-    "conf": 0.5,
+    "label": "fixed:basics-mobile-device-support",
+    "conf": 0.6,
     "labeler": "A·B 엇갈림→C",
-    "label2": "doc:/docs/software/software-overview#0/app-and-dashboard"
+    "label2": "fixed:basics-teach-tablet-phone-only"
   },
   {
     "id": "u-0002067",
@@ -444,10 +444,10 @@
     "q": "설치 파일 용량이 큰가요?",
     "p": "P1-081",
     "m": "haiku",
-    "label": "none",
-    "conf": 0.55,
-    "labeler": "A=B",
-    "label2": "none"
+    "label": "gap:start/install-size",
+    "conf": 0.9,
+    "labeler": "A",
+    "label2": null
   },
   {
     "id": "u-0002069",
@@ -544,20 +544,20 @@
     "q": "기존 수강생 명단을 가져올 수 있나요?",
     "p": "P1-081",
     "m": "haiku",
-    "label": "missing:doc:/docs/admin/student-onboarding#summary",
-    "conf": 0.6,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "gap:company/data-migration"
+    "label": "fixed:student-list-excel-import",
+    "conf": 0.8,
+    "labeler": "A",
+    "label2": null
   },
   {
     "id": "u-0002079",
     "q": "엑셀로 학생 정보를 일괄 등록할 수 있나요?",
     "p": "P1-081",
     "m": "haiku",
-    "label": "missing:doc:/docs/admin/student-onboarding#summary",
-    "conf": 0.75,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "none"
+    "label": "doc:/docs/admin/student-onboarding#3/excel-import-steps",
+    "conf": 0.7,
+    "labeler": "A",
+    "label2": null
   },
   {
     "id": "u-0002080",
@@ -704,10 +704,10 @@
     "q": "강의실 설치 환경 점검은 누가 해주나요?",
     "p": "P1-081",
     "m": "haiku",
-    "label": "missing:doc:/docs/hardware/board-install-readiness#summary",
-    "conf": 0.45,
+    "label": "doc:/docs/hardware/board-install-readiness#summary/checklist-overview",
+    "conf": 0.5,
     "labeler": "A·B 엇갈림→C",
-    "label2": "doc:/docs/start/value-and-cost-framing#0/install-onboarding-scope"
+    "label2": "fixed:basics-install-self"
   },
   {
     "id": "u-0002095",
@@ -954,20 +954,20 @@
     "q": "개인정보 처리방침 최신본을 주실 수 있나요?",
     "p": "P1-081",
     "m": "haiku",
-    "label": "none",
-    "conf": 0.55,
+    "label": "doc:/docs/start/pre-adoption-faq-22-questions#4/privacy-handling-basis",
+    "conf": 0.5,
     "labeler": "A=B",
-    "label2": "none"
+    "label2": "doc:/docs/start/pre-adoption-faq-22-questions#4/privacy-handling-basis"
   },
   {
     "id": "u-0002120",
     "q": "처리위탁 업체 목록을 확인할 수 있나요?",
     "p": "P1-081",
     "m": "haiku",
-    "label": "none",
-    "conf": 0.5,
-    "labeler": "A=B",
-    "label2": "none"
+    "label": "policy:dpa-subprocessor-docs",
+    "conf": 0.8,
+    "labeler": "A",
+    "label2": null
   },
   {
     "id": "u-0002121",
@@ -1154,10 +1154,10 @@
     "q": "퀴즈 결과는 자동으로 집계되나요?",
     "p": "P1-081",
     "m": "haiku",
-    "label": "missing:doc:/docs/teacher/course-activities#5",
-    "conf": 0.4,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "doc:/docs/software/classroom-tools#4/student-quizzes"
+    "label": "fixed:quiz-results-after-class",
+    "conf": 0.75,
+    "labeler": "A",
+    "label2": null
   },
   {
     "id": "u-0002140",
@@ -1404,10 +1404,10 @@
     "q": "사업자등록증 사본이 필요하신가요?",
     "p": "P1-081",
     "m": "haiku",
-    "label": "missing:doc:/docs/admin/account-verification#summary",
-    "conf": 0.5,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "doc:/docs/admin/billing-upgrade#1/popup-info"
+    "label": "fixed:basics-business-registration-signup",
+    "conf": 0.8,
+    "labeler": "A",
+    "label2": null
   },
   {
     "id": "u-0002165",
@@ -1425,7 +1425,7 @@
     "p": "P1-081",
     "m": "haiku",
     "label": "none",
-    "conf": 0.5,
+    "conf": 0.4,
     "labeler": "A=B",
     "label2": "none"
   },
@@ -1445,7 +1445,7 @@
     "p": "P1-081",
     "m": "haiku",
     "label": "none",
-    "conf": 0.5,
+    "conf": 0.4,
     "labeler": "A=B",
     "label2": "none"
   },
@@ -1924,30 +1924,30 @@
     "q": "학습관리시스템과 연동이 되는지 여쭙습니다.",
     "p": "P1-089",
     "m": "sonnet",
-    "label": "missing:doc:/docs/admin/admin-operation-standardization#9",
-    "conf": 0.5,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "doc:/docs/software/app-capabilities-map#6/api-what-for"
+    "label": "doc:/docs/admin/admin-operation-standardization#9/api-available-scope",
+    "conf": 0.4,
+    "labeler": "A=B",
+    "label2": "doc:/docs/admin/admin-operation-standardization#9/api-available-scope"
   },
   {
     "id": "u-0002217",
     "q": "저희 대학 학사 시스템과 자료를 주고받을 수 있습니까?",
     "p": "P1-089",
     "m": "sonnet",
-    "label": "missing:doc:/docs/admin/admin-operation-standardization#9",
-    "conf": 0.5,
+    "label": "doc:/docs/admin/admin-operation-standardization#9/api-new-integration-data",
+    "conf": 0.6,
     "labeler": "A·B 엇갈림→C",
-    "label2": "doc:/docs/software/app-capabilities-map#6/api-what-for"
+    "label2": "doc:/docs/admin/admin-operation-standardization#9/api-available-scope"
   },
   {
     "id": "u-0002218",
     "q": "회원 정보를 일괄 등록하는 방법이 있는지 알고 싶습니다.",
     "p": "P1-089",
     "m": "sonnet",
-    "label": "missing:doc:/docs/admin/student-onboarding#summary",
-    "conf": 0.65,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "none"
+    "label": "doc:/docs/admin/student-onboarding#summary/student-register-methods",
+    "conf": 0.6,
+    "labeler": "A=B",
+    "label2": "doc:/docs/admin/student-onboarding#summary/student-register-methods"
   },
   {
     "id": "u-0002219",
@@ -2004,10 +2004,10 @@
     "q": "브라우저만으로 접속할 수 있는지, 설치가 꼭 필요한지 알려 주십시오.",
     "p": "P1-089",
     "m": "sonnet",
-    "label": "missing:doc:/docs/start/pc-install#summary",
-    "conf": 0.5,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "doc:/docs/teacher/lesson-web-live#summary/web-live-what"
+    "label": "fixed:basics-web-browser-only",
+    "conf": 0.85,
+    "labeler": "A",
+    "label2": null
   },
   {
     "id": "u-0002225",
@@ -2104,7 +2104,7 @@
     "q": "손들기와 같은 참여 신호 기능이 있습니까?",
     "p": "P1-089",
     "m": "sonnet",
-    "label": "missing:doc:/docs/teacher/lesson-option-concepts#2",
+    "label": "doc:/docs/software/app-capabilities-map#2/tool-overview",
     "conf": 0.4,
     "labeler": "A·B 엇갈림→C",
     "label2": "none"
@@ -2124,7 +2124,7 @@
     "q": "출석부를 PDF로 출력해 결재 서류에 첨부할 수 있겠습니까?",
     "p": "P1-089",
     "m": "sonnet",
-    "label": "doc:/docs/admin/course-management#6/settlement-excel",
+    "label": "doc:/docs/software/admin-monitoring-analytics#4/stats-file-items",
     "conf": 0.4,
     "labeler": "A·B 엇갈림→C",
     "label2": "none"
@@ -2134,9 +2134,9 @@
     "q": "감사나 점검에 대비해 접속 로그를 제출할 수 있는지 알고 싶습니다.",
     "p": "P1-089",
     "m": "sonnet",
-    "label": "none",
-    "conf": 0.55,
-    "labeler": "A=B",
+    "label": "gap:admin/admin-audit-log",
+    "conf": 0.45,
+    "labeler": "A·B 엇갈림→C",
     "label2": "none"
   },
   {
@@ -2154,10 +2154,10 @@
     "q": "개인정보 보호 관련 인증이나 방침이 공개되어 있는지요?",
     "p": "P1-089",
     "m": "sonnet",
-    "label": "missing:doc:/docs/start/pre-adoption-faq-22-questions#4",
+    "label": "fixed:basics-security-posture",
     "conf": 0.5,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "none"
+    "labeler": "A=B",
+    "label2": "fixed:basics-security-posture"
   },
   {
     "id": "u-0002240",
@@ -2184,10 +2184,10 @@
     "q": "공공기관 보안 점검 기준에 대응한 자료를 받을 수 있겠습니까?",
     "p": "P1-089",
     "m": "sonnet",
-    "label": "none",
-    "conf": 0.5,
-    "labeler": "A=B",
-    "label2": "none"
+    "label": "gap:trust/security-review-docs",
+    "conf": 0.7,
+    "labeler": "A",
+    "label2": null
   },
   {
     "id": "u-0002243",
@@ -2304,30 +2304,30 @@
     "q": "부산 지역에도 방문 설치나 점검이 가능한지 궁금합니다.",
     "p": "P1-089",
     "m": "sonnet",
-    "label": "missing:doc:/docs/hardware/hardware-spec-installation-faq#3",
-    "conf": 0.4,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "doc:/docs/start/value-and-cost-framing#0/install-onboarding-scope"
+    "label": "gap:support/regional-onsite",
+    "conf": 0.8,
+    "labeler": "A",
+    "label2": null
   },
   {
     "id": "u-0002255",
     "q": "장비 보증 기간과 무상 수리 범위가 어떻게 되는지요?",
     "p": "P1-089",
     "m": "sonnet",
-    "label": "missing:doc:/docs/hardware/hardware-spec-installation-faq#3",
-    "conf": 0.75,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "none"
+    "label": "doc:/docs/hardware/hardware-spec-installation-faq#3/warranty-onsite",
+    "conf": 0.6,
+    "labeler": "A",
+    "label2": null
   },
   {
     "id": "u-0002256",
     "q": "전자칠판이 고장 나면 어디로 연락해야 합니까?",
     "p": "P1-089",
     "m": "sonnet",
-    "label": "missing:doc:/docs/hardware/hardware-spec-installation-faq#3",
-    "conf": 0.75,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "none"
+    "label": "doc:/docs/hardware/hardware-spec-installation-faq#3/as-request-steps",
+    "conf": 0.55,
+    "labeler": "A=B",
+    "label2": "doc:/docs/hardware/hardware-spec-installation-faq#3/as-request-steps"
   },
   {
     "id": "u-0002257",
@@ -2394,10 +2394,10 @@
     "q": "수업 녹화가 실패했을 때 복구할 방법이 있습니까?",
     "p": "P1-089",
     "m": "sonnet",
-    "label": "missing:doc:/docs/teacher/recording-troubleshooting#summary",
+    "label": "howto:recording-fail",
     "conf": 0.45,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "none"
+    "labeler": "A=B",
+    "label2": "howto:recording-fail"
   },
   {
     "id": "u-0002264",
@@ -2434,10 +2434,10 @@
     "q": "관리자용 사용 설명서가 한글로 제공되는지요?",
     "p": "P1-089",
     "m": "sonnet",
-    "label": "none",
+    "label": "fixed:training-materials",
     "conf": 0.45,
     "labeler": "A=B",
-    "label2": "none"
+    "label2": "fixed:training-materials"
   },
   {
     "id": "u-0002268",
@@ -2634,20 +2634,20 @@
     "q": "교실에 설치할 카메라와 마이크는 어떤 제품을 쓰면 되는지요?",
     "p": "P1-089",
     "m": "sonnet",
-    "label": "missing:doc:/docs/hardware/board-ai-camera-mic#summary",
-    "conf": 0.65,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "none"
+    "label": "doc:/docs/hardware/board-ai-camera-mic#8/extra-equipment-lineup",
+    "conf": 0.5,
+    "labeler": "A=B",
+    "label2": "doc:/docs/hardware/board-ai-camera-mic#8/extra-equipment-lineup"
   },
   {
     "id": "u-0002288",
     "q": "기존에 보유한 장비를 그대로 연결해도 되는지 궁금합니다.",
     "p": "P1-089",
     "m": "sonnet",
-    "label": "missing:doc:/docs/hardware/board-install-readiness#3",
-    "conf": 0.4,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "none"
+    "label": "fixed:basics-existing-tv-projector",
+    "conf": 0.6,
+    "labeler": "A",
+    "label2": null
   },
   {
     "id": "u-0002289",
@@ -2725,19 +2725,19 @@
     "p": "P1-089",
     "m": "sonnet",
     "label": "fixed:student-speaking-time-stats",
-    "conf": 0.5,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "missing:guide:cs-figma-digest-1558"
+    "conf": 0.75,
+    "labeler": "A=B",
+    "label2": "fixed:student-speaking-time-stats"
   },
   {
     "id": "u-0002297",
     "q": "성적 산출에 출석 점수를 자동 반영할 수 있습니까?",
     "p": "P1-089",
     "m": "sonnet",
-    "label": "none",
+    "label": "doc:/docs/admin/class-monitoring#5/attendance-vs-grades",
     "conf": 0.5,
     "labeler": "A=B",
-    "label2": "none"
+    "label2": "doc:/docs/admin/class-monitoring#5/attendance-vs-grades"
   },
   {
     "id": "u-0002298",
@@ -2804,20 +2804,20 @@
     "q": "빨리 감기로 시청하는 경우를 막을 수 있습니까?",
     "p": "P1-089",
     "m": "sonnet",
-    "label": "missing:doc:/docs/teacher/course-activities#3",
+    "label": "doc:/docs/student/course-submit-activity#1/watch-limits",
     "conf": 0.7,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "none"
+    "labeler": "A",
+    "label2": null
   },
   {
     "id": "u-0002305",
     "q": "영상 다운로드를 학습자가 하지 못하도록 제한할 수 있는지요?",
     "p": "P1-089",
     "m": "sonnet",
-    "label": "missing:doc:/docs/teacher/course-activities#3",
-    "conf": 0.5,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "none"
+    "label": "howto:prevent-download",
+    "conf": 0.8,
+    "labeler": "A=B",
+    "label2": "howto:prevent-download"
   },
   {
     "id": "u-0002306",
@@ -3095,7 +3095,7 @@
     "p": "P1-089",
     "m": "sonnet",
     "label": "none",
-    "conf": 0.55,
+    "conf": 0.5,
     "labeler": "A=B",
     "label2": "none"
   },
@@ -3174,20 +3174,20 @@
     "q": "과제 표절 검사 기능이 연동되는지 문의드립니다.",
     "p": "P1-089",
     "m": "sonnet",
-    "label": "none",
-    "conf": 0.5,
+    "label": "fixed:ai-written-homework-detection",
+    "conf": 0.45,
     "labeler": "A=B",
-    "label2": "none"
+    "label2": "fixed:ai-written-homework-detection"
   },
   {
     "id": "u-0002342",
     "q": "채점 결과를 학습자에게 개별 피드백으로 전달할 수 있습니까?",
     "p": "P1-089",
     "m": "sonnet",
-    "label": "doc:/docs/student/course-grades#4/homework-feedback-where",
-    "conf": 0.55,
+    "label": "doc:/docs/teacher/course-activities#4/feedback",
+    "conf": 0.6,
     "labeler": "A·B 엇갈림→C",
-    "label2": "none"
+    "label2": "doc:/docs/student/course-grades#4/homework-feedback-where"
   },
   {
     "id": "u-0002343",
@@ -3674,10 +3674,10 @@
     "q": "사용 중에 모르는 점이 생기면 원격으로 화면을 보며 도와주시는지요?",
     "p": "P1-089",
     "m": "sonnet",
-    "label": "missing:doc:/docs/start/class-connection-troubleshooting#6",
+    "label": "doc:/docs/start/class-connection-troubleshooting#6/remote-support-caution",
     "conf": 0.5,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "none"
+    "labeler": "A=B",
+    "label2": "doc:/docs/start/class-connection-troubleshooting#6/remote-support-caution"
   },
   {
     "id": "u-0002392",
@@ -4014,10 +4014,10 @@
     "q": "아이패드로 수업해도 되나요?",
     "p": "P1-097",
     "m": "haiku",
-    "label": "doc:/docs/teacher/course-units#3/any-device",
-    "conf": 0.5,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "missing:doc:/docs/start/mobile-install#summary"
+    "label": "doc:/docs/start/mobile-install#summary/mobile-class-on-phone",
+    "conf": 0.7,
+    "labeler": "A",
+    "label2": null
   },
   {
     "id": "u-0002428",
@@ -4044,10 +4044,10 @@
     "q": "설치 파일 필요해요?",
     "p": "P1-097",
     "m": "haiku",
-    "label": "missing:doc:/docs/start/pc-install#summary",
-    "conf": 0.55,
+    "label": "fixed:basics-web-browser-only",
+    "conf": 0.5,
     "labeler": "A·B 엇갈림→C",
-    "label2": "doc:/docs/start/class-connection-troubleshooting#4/conn-installer-match"
+    "label2": "doc:/docs/start/pc-install-troubleshooting#summary/windows-install-steps-overview"
   },
   {
     "id": "u-0002431",
@@ -4064,10 +4064,10 @@
     "q": "설치 없이 웹으로 들어가나요?",
     "p": "P1-097",
     "m": "haiku",
-    "label": "doc:/docs/teacher/lesson-web-live#summary/web-live-what",
-    "conf": 0.45,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "missing:doc:/docs/start/pc-install#summary"
+    "label": "fixed:basics-web-browser-only",
+    "conf": 0.8,
+    "labeler": "A",
+    "label2": null
   },
   {
     "id": "u-0002434",
@@ -4294,10 +4294,10 @@
     "q": "학생 개인정보 안전해요?",
     "p": "P1-097",
     "m": "haiku",
-    "label": "none",
-    "conf": 0.45,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "missing:doc:/docs/start/pre-adoption-faq-22-questions#4"
+    "label": "fixed:basics-security-posture",
+    "conf": 0.6,
+    "labeler": "A=B",
+    "label2": "fixed:basics-security-posture"
   },
   {
     "id": "u-0002457",
@@ -4324,10 +4324,10 @@
     "q": "개인정보 보호 정책 어떻게 돼요?",
     "p": "P1-097",
     "m": "haiku",
-    "label": "missing:doc:/docs/start/pre-adoption-faq-22-questions#4",
-    "conf": 0.55,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "none"
+    "label": "fixed:basics-security-posture",
+    "conf": 0.5,
+    "labeler": "A=B",
+    "label2": "fixed:basics-security-posture"
   },
   {
     "id": "u-0002460",
@@ -4524,28 +4524,28 @@
     "q": "전자칠판도 파세요?",
     "p": "P1-097",
     "m": "haiku",
-    "label": "missing:doc:/docs/hardware/board-overview#4",
-    "conf": 0.6,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "doc:/docs/software/software-pricing-quote-bundle-faq#1/board-bundle-quote"
+    "label": "policy:basics-sells-hardware",
+    "conf": 0.8,
+    "labeler": "A=B",
+    "label2": "policy:basics-sells-hardware"
   },
   {
     "id": "u-0002482",
     "q": "장비 해외 배송 되나요?",
     "p": "P1-097",
     "m": "haiku",
-    "label": "none",
-    "conf": 0.5,
-    "labeler": "A=B",
-    "label2": "none"
+    "label": "gap:board/overseas-shipping",
+    "conf": 0.9,
+    "labeler": "A",
+    "label2": null
   },
   {
     "id": "u-0002483",
     "q": "110V에서 써도 되나요?",
     "p": "P1-097",
     "m": "haiku",
-    "label": "none",
-    "conf": 0.6,
+    "label": "doc:/docs/hardware/board-install-readiness#6/conditions",
+    "conf": 0.8,
     "labeler": "A",
     "label2": null
   },
@@ -4554,8 +4554,8 @@
     "q": "장비 AS 미국에서 받을 수 있어요?",
     "p": "P1-097",
     "m": "haiku",
-    "label": "none",
-    "conf": 0.6,
+    "label": "gap:board/overseas-shipping",
+    "conf": 0.75,
     "labeler": "A",
     "label2": null
   },
@@ -4564,8 +4564,8 @@
     "q": "장비 보증 기간 얼마예요?",
     "p": "P1-097",
     "m": "haiku",
-    "label": "none",
-    "conf": 0.6,
+    "label": "doc:/docs/hardware/hardware-spec-installation-faq#3/warranty-onsite",
+    "conf": 0.7,
     "labeler": "A",
     "label2": null
   },
@@ -4574,20 +4574,20 @@
     "q": "화상 카메라 따로 사야 해요?",
     "p": "P1-097",
     "m": "haiku",
-    "label": "doc:/docs/software/software-pricing-quote-bundle-faq#1/board-bundle-quote",
-    "conf": 0.45,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "none"
+    "label": "policy:start-what-to-buy",
+    "conf": 0.5,
+    "labeler": "A=B",
+    "label2": "policy:start-what-to-buy"
   },
   {
     "id": "u-0002487",
     "q": "마이크 필요해요?",
     "p": "P1-097",
     "m": "haiku",
-    "label": "missing:doc:/docs/start/pre-adoption-faq-22-questions#5",
-    "conf": 0.4,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "none"
+    "label": "doc:/docs/start/pre-adoption-faq-22-questions#5/builtin-external-mic",
+    "conf": 0.75,
+    "labeler": "A",
+    "label2": null
   },
   {
     "id": "u-0002488",
@@ -4604,10 +4604,10 @@
     "q": "장비 없이 노트북만 있으면 돼요?",
     "p": "P1-097",
     "m": "haiku",
-    "label": "policy:fit-small-private",
-    "conf": 0.45,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "none"
+    "label": "policy:basics-board-not-required",
+    "conf": 0.8,
+    "labeler": "A",
+    "label2": null
   },
   {
     "id": "u-0002490",
@@ -4774,20 +4774,20 @@
     "q": "교육 영상 있어요?",
     "p": "P1-097",
     "m": "haiku",
-    "label": "missing:doc:/docs/hardware/board-basic-operation#8",
-    "conf": 0.55,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "none"
+    "label": "fixed:training-materials",
+    "conf": 0.5,
+    "labeler": "A=B",
+    "label2": "fixed:training-materials"
   },
   {
     "id": "u-0002507",
     "q": "사용 설명서 한글로 있어요?",
     "p": "P1-097",
     "m": "haiku",
-    "label": "missing:doc:/docs/hardware/board-basic-operation#8",
-    "conf": 0.45,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "none"
+    "label": "fixed:basics-manual-public",
+    "conf": 0.8,
+    "labeler": "A=B",
+    "label2": "fixed:basics-manual-public"
   },
   {
     "id": "u-0002508",
@@ -5514,10 +5514,10 @@
     "q": "해외에서 쓸 때 법적 문제 없어요?",
     "p": "P1-097",
     "m": "haiku",
-    "label": "none",
-    "conf": 0.45,
+    "label": "gap:trust/overseas-privacy-law",
+    "conf": 0.4,
     "labeler": "A=B",
-    "label2": "none"
+    "label2": "gap:trust/overseas-privacy-law"
   },
   {
     "id": "u-0002583",
@@ -5724,20 +5724,20 @@
     "q": "앱이 안드로이드도 되나요",
     "p": "P2-005",
     "m": "sonnet",
-    "label": "missing:doc:/docs/start/mobile-install#summary",
-    "conf": 0.7,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "none"
+    "label": "fixed:basics-mobile-device-support",
+    "conf": 0.65,
+    "labeler": "A",
+    "label2": null
   },
   {
     "id": "u-0002605",
     "q": "아이폰도 되죠?",
     "p": "P2-005",
     "m": "sonnet",
-    "label": "missing:doc:/docs/start/mobile-install#summary",
-    "conf": 0.7,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "none"
+    "label": "fixed:basics-mobile-device-support",
+    "conf": 0.65,
+    "labeler": "A",
+    "label2": null
   },
   {
     "id": "u-0002607",
@@ -5976,18 +5976,18 @@
     "m": "sonnet",
     "label": "none",
     "conf": 0.5,
-    "labeler": "A=B",
-    "label2": "none"
+    "labeler": "A·B 엇갈림→C",
+    "label2": "fixed:basics-parent-signup"
   },
   {
     "id": "u-0002632",
     "q": "엑셀로 한번에 올릴수잇나요",
     "p": "P2-005",
     "m": "sonnet",
-    "label": "missing:doc:/docs/admin/student-onboarding#3",
-    "conf": 0.5,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "none"
+    "label": "doc:/docs/admin/student-onboarding#3/excel-import-steps",
+    "conf": 0.75,
+    "labeler": "A",
+    "label2": null
   },
   {
     "id": "u-0002633",
@@ -6214,10 +6214,10 @@
     "q": "품새 영상 숙제 받을수잇나요",
     "p": "P2-005",
     "m": "sonnet",
-    "label": "missing:doc:/docs/teacher/course-activities#4",
-    "conf": 0.6,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "none"
+    "label": "doc:/docs/software/lesson-activities#2/homework-submit-formats",
+    "conf": 0.7,
+    "labeler": "A",
+    "label2": null
   },
   {
     "id": "u-0002657",
@@ -6304,10 +6304,10 @@
     "q": "개인정보 보호 괜찮은가요",
     "p": "P2-005",
     "m": "sonnet",
-    "label": "missing:doc:/docs/start/pre-adoption-faq-22-questions#4",
-    "conf": 0.5,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "none"
+    "label": "fixed:basics-security-posture",
+    "conf": 0.6,
+    "labeler": "A",
+    "label2": null
   },
   {
     "id": "u-0002666",
@@ -6444,10 +6444,10 @@
     "q": "한국어 지원 잘되나요",
     "p": "P2-005",
     "m": "sonnet",
-    "label": "missing:doc:/docs/admin/admin-operation-standardization#2",
-    "conf": 0.4,
+    "label": "doc:/docs/admin/admin-operation-standardization#2/console-vs-app",
+    "conf": 0.5,
     "labeler": "A·B 엇갈림→C",
-    "label2": "none"
+    "label2": "gap:account/app-language"
   },
   {
     "id": "u-0002681",
@@ -6514,10 +6514,10 @@
     "q": "교육 영상 잇나요",
     "p": "P2-005",
     "m": "sonnet",
-    "label": "missing:doc:/docs/hardware/board-basic-operation#8",
+    "label": "fixed:training-materials",
     "conf": 0.5,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "none"
+    "labeler": "A=B",
+    "label2": "fixed:training-materials"
   },
   {
     "id": "u-0002688",
@@ -6904,20 +6904,20 @@
     "q": "전자칠판도 파시나요",
     "p": "P2-005",
     "m": "sonnet",
-    "label": "missing:doc:/docs/hardware/board-overview#4",
-    "conf": 0.6,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "doc:/docs/start/value-and-cost-framing#5/board-only-purchase"
+    "label": "policy:basics-sells-hardware",
+    "conf": 0.8,
+    "labeler": "A=B",
+    "label2": "policy:basics-sells-hardware"
   },
   {
     "id": "u-0002727",
     "q": "태권도장에 칠판 필요할까요",
     "p": "P2-005",
     "m": "sonnet",
-    "label": "policy:fit-small-private",
-    "conf": 0.4,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "none"
+    "label": "policy:basics-board-not-required",
+    "conf": 0.7,
+    "labeler": "A",
+    "label2": null
   },
   {
     "id": "u-0002728",
@@ -6964,8 +6964,8 @@
     "q": "장비 as 는 어떻게 되요",
     "p": "P2-005",
     "m": "sonnet",
-    "label": "missing:doc:/docs/hardware/hardware-spec-installation-faq#3",
-    "conf": 0.75,
+    "label": "doc:/docs/hardware/hardware-spec-installation-faq#3/as-request-steps",
+    "conf": 0.65,
     "labeler": "A",
     "label2": null
   },
@@ -6974,10 +6974,10 @@
     "q": "도장 바닥에 설치해도되나요",
     "p": "P2-005",
     "m": "sonnet",
-    "label": "none",
-    "conf": 0.6,
-    "labeler": "A",
-    "label2": null
+    "label": "doc:/docs/hardware/board-s-series-safe-use#2/stand-floor-wall-fixing",
+    "conf": 0.45,
+    "labeler": "A·B 엇갈림→C",
+    "label2": "doc:/docs/hardware/hardware-spec-installation-faq#1/stand-floor-door-width"
   },
   {
     "id": "u-0002734",
@@ -7004,10 +7004,10 @@
     "q": "태블릿으로도 되나요",
     "p": "P2-005",
     "m": "sonnet",
-    "label": "missing:doc:/docs/start/mobile-install#4",
-    "conf": 0.6,
-    "labeler": "A",
-    "label2": null
+    "label": "fixed:basics-teach-tablet-phone-only",
+    "conf": 0.55,
+    "labeler": "A·B 엇갈림→C",
+    "label2": "doc:/docs/start/mobile-install#summary/mobile-class-on-phone"
   },
   {
     "id": "u-0002737",
@@ -7294,20 +7294,20 @@
     "q": "학부모 단톡방이랑 같이 쓸수잇나요",
     "p": "P2-005",
     "m": "sonnet",
-    "label": "missing:doc:/docs/admin/admin-operation-standardization#7",
-    "conf": 0.45,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "none"
+    "label": "doc:/docs/admin/admin-operation-standardization#7/messenger-to-classin-record",
+    "conf": 0.4,
+    "labeler": "A=B",
+    "label2": "doc:/docs/admin/admin-operation-standardization#7/messenger-to-classin-record"
   },
   {
     "id": "u-0002766",
     "q": "기존 카톡 공지랑 뭐가 편해요",
     "p": "P2-005",
     "m": "sonnet",
-    "label": "missing:doc:/docs/admin/admin-operation-standardization#7",
-    "conf": 0.35,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "doc:/docs/student/chat#0/course-notice"
+    "label": "doc:/docs/admin/admin-operation-standardization#7/messenger-to-classin-record",
+    "conf": 0.5,
+    "labeler": "A=B",
+    "label2": "doc:/docs/admin/admin-operation-standardization#7/messenger-to-classin-record"
   },
   {
     "id": "u-0002767",
@@ -7444,20 +7444,20 @@
     "q": "설치 파일 어디서 받아요",
     "p": "P2-005",
     "m": "sonnet",
-    "label": "missing:doc:/docs/start/pc-install#summary",
+    "label": "howto:guide:classin-app-download",
     "conf": 0.7,
     "labeler": "A·B 엇갈림→C",
-    "label2": "missing:guide:cs-figma-digest-1644"
+    "label2": "howto:guide:cs-figma-digest-1695"
   },
   {
     "id": "u-0002781",
     "q": "pc버전도 잇어요?",
     "p": "P2-005",
     "m": "sonnet",
-    "label": "doc:/docs/software/software-overview#0/app-and-dashboard",
-    "conf": 0.6,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "missing:guide:cs-figma-digest-1644"
+    "label": "doc:/docs/start/pc-install#summary/pc-supported-os",
+    "conf": 0.7,
+    "labeler": "A",
+    "label2": null
   },
   {
     "id": "u-0002782",
@@ -7834,10 +7834,10 @@
     "q": "정전 나믄 녹화허던 거 날아가냐",
     "p": "P2-013",
     "m": "opus",
-    "label": "missing:doc:/docs/teacher/recording-troubleshooting#4",
+    "label": "howto:recording-split",
     "conf": 0.5,
     "labeler": "A·B 엇갈림→C",
-    "label2": "doc:/docs/teacher/lesson-option-concepts#1/stops"
+    "label2": "none"
   },
   {
     "id": "u-0002820",
@@ -7864,10 +7864,10 @@
     "q": "녹화본 부모한테 보내줄 수 있냐?",
     "p": "P2-013",
     "m": "opus",
-    "label": "missing:doc:/docs/admin/storage-management#4",
+    "label": "howto:guide:recording-download-share",
     "conf": 0.5,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "none"
+    "labeler": "A=B",
+    "label2": "howto:guide:recording-download-share"
   },
   {
     "id": "u-0002823",
@@ -7894,10 +7894,10 @@
     "q": "학습지 사진 찍어 올리믄 되는 거냐",
     "p": "P2-013",
     "m": "opus",
-    "label": "missing:doc:/docs/student/course-submit-activity#3",
-    "conf": 0.45,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "none"
+    "label": "doc:/docs/student/course-submit-activity#3/mobile-photo-submit",
+    "conf": 0.6,
+    "labeler": "A",
+    "label2": null
   },
   {
     "id": "u-0002826",
@@ -8066,8 +8066,8 @@
     "m": "opus",
     "label": "fixed:basics-recording-parental-consent",
     "conf": 0.5,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "none"
+    "labeler": "A=B",
+    "label2": "fixed:basics-recording-parental-consent"
   },
   {
     "id": "u-0002843",
@@ -8114,10 +8114,10 @@
     "q": "주말에 고장 나도 받아주냐",
     "p": "P2-013",
     "m": "opus",
-    "label": "none",
-    "conf": 0.45,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "missing:doc:/docs/hardware/hardware-spec-installation-faq#3"
+    "label": "gap:support/after-hours-support",
+    "conf": 0.6,
+    "labeler": "A",
+    "label2": null
   },
   {
     "id": "u-0002848",
@@ -8164,48 +8164,48 @@
     "q": "전자칠판 터치가 안 먹으믄 기사 오냐",
     "p": "P2-013",
     "m": "opus",
-    "label": "missing:doc:/docs/hardware/hardware-spec-installation-faq#3",
-    "conf": 0.5,
+    "label": "doc:/docs/hardware/hardware-spec-installation-faq#3/warranty-onsite",
+    "conf": 0.45,
     "labeler": "A=B",
-    "label2": "missing:doc:/docs/hardware/hardware-spec-installation-faq#3"
+    "label2": "doc:/docs/hardware/hardware-spec-installation-faq#3/warranty-onsite"
   },
   {
     "id": "u-0002853",
     "q": "제주에 AS 센터 있냐?",
     "p": "P2-013",
     "m": "opus",
-    "label": "missing:doc:/docs/hardware/hardware-spec-installation-faq#3",
-    "conf": 0.4,
-    "labeler": "A=B",
-    "label2": "missing:doc:/docs/hardware/hardware-spec-installation-faq#3"
+    "label": "gap:support/regional-onsite",
+    "conf": 0.65,
+    "labeler": "A·B 엇갈림→C",
+    "label2": "doc:/docs/hardware/hardware-spec-installation-faq#3/warranty-onsite"
   },
   {
     "id": "u-0002854",
     "q": "수리허젠 허믄 육지로 보내야 되냐",
     "p": "P2-013",
     "m": "opus",
-    "label": "missing:doc:/docs/hardware/hardware-spec-installation-faq#3",
-    "conf": 0.35,
-    "labeler": "A=B",
-    "label2": "missing:doc:/docs/hardware/hardware-spec-installation-faq#3"
+    "label": "gap:support/regional-onsite",
+    "conf": 0.6,
+    "labeler": "A·B 엇갈림→C",
+    "label2": "doc:/docs/hardware/hardware-spec-installation-faq#3/warranty-onsite"
   },
   {
     "id": "u-0002855",
     "q": "수리비는 따로 받냐",
     "p": "P2-013",
     "m": "opus",
-    "label": "missing:doc:/docs/hardware/hardware-spec-installation-faq#3",
+    "label": "doc:/docs/hardware/hardware-spec-installation-faq#3/warranty-onsite",
     "conf": 0.4,
     "labeler": "A=B",
-    "label2": "missing:doc:/docs/hardware/hardware-spec-installation-faq#3"
+    "label2": "doc:/docs/hardware/hardware-spec-installation-faq#3/warranty-onsite"
   },
   {
     "id": "u-0002856",
     "q": "무상 보증은 몇 년이냐",
     "p": "P2-013",
     "m": "opus",
-    "label": "missing:doc:/docs/hardware/hardware-spec-installation-faq#3",
-    "conf": 0.8,
+    "label": "doc:/docs/hardware/hardware-spec-installation-faq#3/warranty-onsite",
+    "conf": 0.75,
     "labeler": "A",
     "label2": null
   },
@@ -8214,10 +8214,10 @@
     "q": "전자칠판 크기는 어떤 거 있냐",
     "p": "P2-013",
     "m": "opus",
-    "label": "missing:doc:/docs/hardware/hardware-spec-installation-faq#summary",
-    "conf": 0.65,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "doc:/docs/hardware/board-lineup-specs#0/s65-quote-check"
+    "label": "policy:board-lineup",
+    "conf": 0.75,
+    "labeler": "A=B",
+    "label2": "policy:board-lineup"
   },
   {
     "id": "u-0002858",
@@ -8244,10 +8244,10 @@
     "q": "설치허믄 벽 뚫어야 되냐?",
     "p": "P2-013",
     "m": "opus",
-    "label": "missing:doc:/docs/hardware/hardware-spec-installation-faq#1",
-    "conf": 0.6,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "doc:/docs/start/value-and-cost-framing#0/install-onboarding-scope"
+    "label": "doc:/docs/hardware/board-lineup-specs#1/wall-stand-as",
+    "conf": 0.5,
+    "labeler": "A=B",
+    "label2": "doc:/docs/hardware/board-lineup-specs#1/wall-stand-as"
   },
   {
     "id": "u-0002861",
@@ -8264,18 +8264,18 @@
     "q": "집에 있는 노트북으로도 되냐",
     "p": "P2-013",
     "m": "opus",
-    "label": "doc:/docs/start/pc-install#summary/internet-speed-guide",
-    "conf": 0.5,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "missing:doc:/docs/start/pc-install#5"
+    "label": "policy:start-what-to-buy",
+    "conf": 0.7,
+    "labeler": "A",
+    "label2": null
   },
   {
     "id": "u-0002863",
     "q": "노트북 사양은 얼마나 돼야 되냐",
     "p": "P2-013",
     "m": "opus",
-    "label": "missing:doc:/docs/start/pc-install#5",
-    "conf": 0.7,
+    "label": "doc:/docs/start/pc-install#5/min-spec",
+    "conf": 0.6,
     "labeler": "A",
     "label2": null
   },
@@ -8284,8 +8284,8 @@
     "q": "윈도우 옛날 버전도 돌아가냐",
     "p": "P2-013",
     "m": "opus",
-    "label": "missing:doc:/docs/start/pc-install#summary",
-    "conf": 0.7,
+    "label": "doc:/docs/start/pc-install#1/windows-version-bit",
+    "conf": 0.75,
     "labeler": "A",
     "label2": null
   },
@@ -8294,10 +8294,10 @@
     "q": "맥에서도 되냐?",
     "p": "P2-013",
     "m": "opus",
-    "label": "missing:doc:/docs/start/pc-install#summary",
+    "label": "fixed:basics-mac-support",
     "conf": 0.8,
-    "labeler": "A",
-    "label2": null
+    "labeler": "A=B",
+    "label2": "fixed:basics-mac-support"
   },
   {
     "id": "u-0002866",
@@ -8314,10 +8314,10 @@
     "q": "아이패드 하나 새로 사야 되냐",
     "p": "P2-013",
     "m": "opus",
-    "label": "doc:/docs/teacher/course-units#3/any-device",
-    "conf": 0.4,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "missing:guide:classin-app-download"
+    "label": "policy:start-what-to-buy",
+    "conf": 0.5,
+    "labeler": "A=B",
+    "label2": "policy:start-what-to-buy"
   },
   {
     "id": "u-0002868",
@@ -8644,10 +8644,10 @@
     "q": "사용법 동영상 있냐",
     "p": "P2-013",
     "m": "opus",
-    "label": "missing:doc:/docs/hardware/board-basic-operation#8",
-    "conf": 0.4,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "none"
+    "label": "fixed:training-materials",
+    "conf": 0.5,
+    "labeler": "A=B",
+    "label2": "fixed:training-materials"
   },
   {
     "id": "u-0002902",
@@ -8934,10 +8934,10 @@
     "q": "가입헐 때 사업자번호 필요허냐",
     "p": "P2-013",
     "m": "opus",
-    "label": "missing:doc:/docs/admin/account-verification#summary",
-    "conf": 0.45,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "none"
+    "label": "fixed:basics-business-registration-signup",
+    "conf": 0.8,
+    "labeler": "A",
+    "label2": null
   },
   {
     "id": "u-0002931",
@@ -9264,10 +9264,10 @@
     "q": "구구단 같은 거 반복 연습시킬 수 있냐",
     "p": "P2-013",
     "m": "opus",
-    "label": "missing:doc:/docs/software/lesson-activities#2",
+    "label": "doc:/docs/teacher/course-activities#4/daily-task",
     "conf": 0.5,
     "labeler": "A·B 엇갈림→C",
-    "label2": "doc:/docs/teacher/drive-materials#3/edx-in-class"
+    "label2": "none"
   },
   {
     "id": "u-0002964",
@@ -9284,9 +9284,9 @@
     "q": "애들 손 들기 기능 있냐",
     "p": "P2-013",
     "m": "opus",
-    "label": "missing:guide:cs-figma-digest-1558",
-    "conf": 0.35,
-    "labeler": "A·B 엇갈림→C",
+    "label": "none",
+    "conf": 0.45,
+    "labeler": "A=B",
     "label2": "none"
   },
   {
@@ -9345,9 +9345,9 @@
     "p": "P2-013",
     "m": "opus",
     "label": "none",
-    "conf": 0.5,
+    "conf": 0.4,
     "labeler": "A·B 엇갈림→C",
-    "label2": "missing:doc:/docs/admin/storage-management#4"
+    "label2": "gap:recording/replay-embed"
   },
   {
     "id": "u-0002972",
@@ -9364,10 +9364,10 @@
     "q": "스피커 마이크 따로 사야 되냐",
     "p": "P2-013",
     "m": "opus",
-    "label": "none",
-    "conf": 0.6,
-    "labeler": "A",
-    "label2": null
+    "label": "doc:/docs/hardware/board-overview#1/builtin-mic-speaker-camera",
+    "conf": 0.55,
+    "labeler": "A=B",
+    "label2": "doc:/docs/hardware/board-overview#1/builtin-mic-speaker-camera"
   },
   {
     "id": "u-0002974",
@@ -9395,9 +9395,9 @@
     "p": "P2-013",
     "m": "opus",
     "label": "none",
-    "conf": 0.7,
-    "labeler": "A",
-    "label2": null
+    "conf": 0.4,
+    "labeler": "A=B",
+    "label2": "none"
   },
   {
     "id": "u-0002977",
@@ -9454,10 +9454,10 @@
     "q": "별점 같은 거 어디서 보냐",
     "p": "P2-013",
     "m": "opus",
-    "label": "missing:guide:cs-figma-digest-1462",
-    "conf": 0.5,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "clarify"
+    "label": "doc:guide:cs-figma-digest-1462/star-rating",
+    "conf": 0.45,
+    "labeler": "A=B",
+    "label2": "doc:guide:cs-figma-digest-1462/star-rating"
   },
   {
     "id": "u-0002983",
@@ -9634,10 +9634,10 @@
     "q": "학생이 태블릿으로 접속해도 되나요?",
     "p": "P2-021",
     "m": "sonnet",
-    "label": "missing:doc:/docs/start/mobile-install#summary",
-    "conf": 0.6,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "doc:/docs/teacher/course-units#3/any-device"
+    "label": "doc:/docs/start/mobile-install#summary/mobile-class-on-phone",
+    "conf": 0.55,
+    "labeler": "A=B",
+    "label2": "doc:/docs/start/mobile-install#summary/mobile-class-on-phone"
   },
   {
     "id": "u-0003003",
@@ -9704,10 +9704,10 @@
     "q": "수업 시간 알림 문자 같은 것도 가나요?",
     "p": "P2-021",
     "m": "sonnet",
-    "label": "missing:doc:/docs/admin/institution-settings#5",
-    "conf": 0.6,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "gap:account/app-push-settings"
+    "label": "doc:/docs/admin/institution-settings#5/smart-homeroom-sms",
+    "conf": 0.55,
+    "labeler": "A=B",
+    "label2": "doc:/docs/admin/institution-settings#5/smart-homeroom-sms"
   },
   {
     "id": "u-0003010",
@@ -9844,10 +9844,10 @@
     "q": "학생이 과제 사진 찍어서 올릴 수 있나요?",
     "p": "P2-021",
     "m": "sonnet",
-    "label": "missing:doc:/docs/student/course-submit-activity#3",
-    "conf": 0.7,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "doc:/docs/updates/classin-ai-blackboard-609#2/student-answer-methods"
+    "label": "doc:/docs/student/course-submit-activity#3/mobile-photo-submit",
+    "conf": 0.8,
+    "labeler": "A=B",
+    "label2": "doc:/docs/student/course-submit-activity#3/mobile-photo-submit"
   },
   {
     "id": "u-0003024",
@@ -9864,10 +9864,10 @@
     "q": "숙제 채점하고 코멘트 달 수 있나요?",
     "p": "P2-021",
     "m": "sonnet",
-    "label": "missing:doc:/docs/teacher/course-activities#4",
-    "conf": 0.55,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "none"
+    "label": "doc:/docs/teacher/course-activities#4/feedback",
+    "conf": 0.7,
+    "labeler": "A=B",
+    "label2": "doc:/docs/teacher/course-activities#4/feedback"
   },
   {
     "id": "u-0003026",
@@ -9894,10 +9894,10 @@
     "q": "학생별 성적 추이를 볼 수 있나요? 📈",
     "p": "P2-021",
     "m": "sonnet",
-    "label": "missing:doc:/docs/admin/statistics-data#5",
-    "conf": 0.6,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "missing:doc:/docs/software/admin-monitoring-analytics#6"
+    "label": "doc:/docs/admin/statistics-data#5/student-report-contents",
+    "conf": 0.5,
+    "labeler": "A=B",
+    "label2": "doc:/docs/admin/statistics-data#5/student-report-contents"
   },
   {
     "id": "u-0003029",
@@ -9934,20 +9934,20 @@
     "q": "학생별 수업 시간 합계를 볼 수 있나요?",
     "p": "P2-021",
     "m": "sonnet",
-    "label": "missing:doc:/docs/admin/statistics-data#3",
-    "conf": 0.45,
+    "label": "doc:/docs/admin/statistics-data#3/per-person-class-time",
+    "conf": 0.5,
     "labeler": "A·B 엇갈림→C",
-    "label2": "doc:/docs/admin/course-management#3/lesson-data-report"
+    "label2": "doc:/docs/admin/statistics-data#0/one-file-for-all"
   },
   {
     "id": "u-0003033",
     "q": "이번 달 수업 횟수를 자동으로 세어주나요?",
     "p": "P2-021",
     "m": "sonnet",
-    "label": "missing:doc:/docs/admin/class-monitoring#5",
-    "conf": 0.5,
+    "label": "doc:/docs/admin/statistics-data#summary/month-end-stats-flow",
+    "conf": 0.55,
     "labeler": "A·B 엇갈림→C",
-    "label2": "doc:/docs/start/academy-system-os-positioning#4/admin-data-overview"
+    "label2": "doc:/docs/admin/statistics-data#0/one-file-for-all"
   },
   {
     "id": "u-0003034",
@@ -10004,10 +10004,10 @@
     "q": "엑셀 파일 가져오기 되나요? 😊",
     "p": "P2-021",
     "m": "sonnet",
-    "label": "missing:doc:/docs/admin/student-onboarding#3",
-    "conf": 0.45,
+    "label": "fixed:student-list-excel-import",
+    "conf": 0.55,
     "labeler": "A·B 엇갈림→C",
-    "label2": "gap:company/data-migration"
+    "label2": "doc:/docs/admin/student-onboarding#3/excel-import-steps"
   },
   {
     "id": "u-0003040",
@@ -10054,10 +10054,10 @@
     "q": "과외 시간표를 캘린더로 볼 수 있나요? 📅",
     "p": "P2-021",
     "m": "sonnet",
-    "label": "missing:doc:/docs/student/todo-calendar#summary",
-    "conf": 0.55,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "gap:course/calendar-sync"
+    "label": "doc:/docs/student/todo-calendar#1/calendar",
+    "conf": 0.5,
+    "labeler": "A=B",
+    "label2": "doc:/docs/student/todo-calendar#1/calendar"
   },
   {
     "id": "u-0003045",
@@ -10314,8 +10314,8 @@
     "q": "장비 고장 나면 AS는 어떻게 되나요?",
     "p": "P2-021",
     "m": "sonnet",
-    "label": "none",
-    "conf": 0.6,
+    "label": "doc:/docs/hardware/hardware-spec-installation-faq#3/as-request-steps",
+    "conf": 0.7,
     "labeler": "A",
     "label2": null
   },
@@ -10324,8 +10324,8 @@
     "q": "AS 기간은 보통 얼마인가요?",
     "p": "P2-021",
     "m": "sonnet",
-    "label": "none",
-    "conf": 0.6,
+    "label": "doc:/docs/hardware/hardware-spec-installation-faq#3/warranty-onsite",
+    "conf": 0.7,
     "labeler": "A",
     "label2": null
   },
@@ -10334,10 +10334,10 @@
     "q": "웹캠이나 마이크도 따로 사야 하나요?",
     "p": "P2-021",
     "m": "sonnet",
-    "label": "fixed:audio-quality",
-    "conf": 0.4,
+    "label": "policy:start-what-to-buy",
+    "conf": 0.45,
     "labeler": "A·B 엇갈림→C",
-    "label2": "none"
+    "label2": "doc:/docs/start/pre-adoption-faq-22-questions#5/builtin-external-mic"
   },
   {
     "id": "u-0003075",
@@ -10464,10 +10464,10 @@
     "q": "녹화가 안 됐는데 복구할 수 있나요?",
     "p": "P2-021",
     "m": "sonnet",
-    "label": "missing:doc:/docs/admin/recording-file-troubleshooting#0",
+    "label": "howto:recording-file-missing",
     "conf": 0.45,
     "labeler": "A·B 엇갈림→C",
-    "label2": "none"
+    "label2": "howto:recording-fail"
   },
   {
     "id": "u-0003089",
@@ -10504,20 +10504,20 @@
     "q": "개인정보는 안전하게 보관되나요?",
     "p": "P2-021",
     "m": "sonnet",
-    "label": "missing:doc:/docs/start/pre-adoption-faq-22-questions#4",
-    "conf": 0.45,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "fixed:basics-student-data-retention"
+    "label": "fixed:basics-security-posture",
+    "conf": 0.6,
+    "labeler": "A=B",
+    "label2": "fixed:basics-security-posture"
   },
   {
     "id": "u-0003093",
     "q": "학생 정보가 유출될 일은 없겠죠? 😟",
     "p": "P2-021",
     "m": "sonnet",
-    "label": "policy:breach-liability",
-    "conf": 0.45,
+    "label": "fixed:basics-security-posture",
+    "conf": 0.6,
     "labeler": "A·B 엇갈림→C",
-    "label2": "none"
+    "label2": "policy:breach-liability"
   },
   {
     "id": "u-0003094",
@@ -10534,10 +10534,10 @@
     "q": "미성년자 학생 개인정보 동의는 어떻게 하나요?",
     "p": "P2-021",
     "m": "sonnet",
-    "label": "none",
-    "conf": 0.6,
-    "labeler": "A",
-    "label2": null
+    "label": "fixed:basics-fit-elementary",
+    "conf": 0.45,
+    "labeler": "A=B",
+    "label2": "fixed:basics-fit-elementary"
   },
   {
     "id": "u-0003096",
@@ -10574,10 +10574,10 @@
     "q": "리포트는 자동으로 만들어지나요?",
     "p": "P2-021",
     "m": "sonnet",
-    "label": "missing:doc:/docs/student/class-report#0",
-    "conf": 0.55,
+    "label": "doc:/docs/student/class-report#summary/report-overview",
+    "conf": 0.45,
     "labeler": "A·B 엇갈림→C",
-    "label2": "doc:/docs/student/chat#0/lesson-report-notice"
+    "label2": "doc:/docs/admin/statistics-data#5/no-auto-monthly-report"
   },
   {
     "id": "u-0003100",
@@ -10914,10 +10914,10 @@
     "q": "앱스토어에서 앱 받으면 되나요? 📲",
     "p": "P2-021",
     "m": "sonnet",
-    "label": "missing:doc:/docs/start/mobile-install#summary",
-    "conf": 0.7,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "none"
+    "label": "doc:/docs/start/mobile-install#summary/mobile-install-overview",
+    "conf": 0.55,
+    "labeler": "A=B",
+    "label2": "doc:/docs/start/mobile-install#summary/mobile-install-overview"
   },
   {
     "id": "u-0003134",
@@ -10954,10 +10954,10 @@
     "q": "챗봇 말고 사람이랑 통화할 수 있나요?",
     "p": "P2-021",
     "m": "sonnet",
-    "label": "missing:doc:/docs/hardware/board-overview#4",
-    "conf": 0.35,
+    "label": "fixed:self-identity",
+    "conf": 0.6,
     "labeler": "A·B 엇갈림→C",
-    "label2": "none"
+    "label2": "gap:support/support-call-booking"
   },
   {
     "id": "u-0003138",
@@ -11464,10 +11464,10 @@
     "q": "전자칠판도 파나요?",
     "p": "P2-029",
     "m": "haiku",
-    "label": "missing:doc:/docs/hardware/board-overview#4",
-    "conf": 0.55,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "doc:/docs/start/value-and-cost-framing#5/board-only-purchase"
+    "label": "policy:basics-sells-hardware",
+    "conf": 0.8,
+    "labeler": "A",
+    "label2": null
   },
   {
     "id": "u-0003191",
@@ -11504,10 +11504,10 @@
     "q": "녹화파일 학생한테 링크 줄 수 있어요?",
     "p": "P2-029",
     "m": "haiku",
-    "label": "missing:doc:/docs/admin/storage-management#4",
+    "label": "howto:guide:recording-download-share",
     "conf": 0.5,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "doc:/docs/admin/course-management#3/recording-data-admin"
+    "labeler": "A=B",
+    "label2": "howto:guide:recording-download-share"
   },
   {
     "id": "u-0003195",
@@ -11524,10 +11524,10 @@
     "q": "숙제 검사는 어떻게 해요",
     "p": "P2-029",
     "m": "haiku",
-    "label": "missing:doc:/docs/teacher/course-activities#4",
-    "conf": 0.5,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "none"
+    "label": "doc:/docs/teacher/course-activities#4/feedback",
+    "conf": 0.45,
+    "labeler": "A=B",
+    "label2": "doc:/docs/teacher/course-activities#4/feedback"
   },
   {
     "id": "u-0003197",
@@ -11895,17 +11895,17 @@
     "p": "P2-029",
     "m": "haiku",
     "label": "none",
-    "conf": 0.6,
-    "labeler": "A",
-    "label2": null
+    "conf": 0.4,
+    "labeler": "A·B 엇갈림→C",
+    "label2": "doc:/docs/start/pre-adoption-faq-22-questions#3/content-ownership"
   },
   {
     "id": "u-0003234",
     "q": "학생 이름 노출 안 되나요?",
     "p": "P2-029",
     "m": "haiku",
-    "label": "doc:/docs/teacher/teacher-profile#3/student-nickname",
-    "conf": 0.35,
+    "label": "clarify",
+    "conf": 0.4,
     "labeler": "A·B 엇갈림→C",
     "label2": "none"
   },
@@ -11914,30 +11914,30 @@
     "q": "학생 개인정보 안전한가요?",
     "p": "P2-029",
     "m": "haiku",
-    "label": "missing:doc:/docs/start/pre-adoption-faq-22-questions#4",
-    "conf": 0.45,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "fixed:basics-student-data-retention"
+    "label": "fixed:basics-security-posture",
+    "conf": 0.6,
+    "labeler": "A",
+    "label2": null
   },
   {
     "id": "u-0003236",
     "q": "개인정보 보안 어떻게 되어 있어요",
     "p": "P2-029",
     "m": "haiku",
-    "label": "missing:doc:/docs/start/pre-adoption-faq-22-questions#4",
-    "conf": 0.45,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "fixed:basics-student-data-retention"
+    "label": "fixed:basics-security-posture",
+    "conf": 0.6,
+    "labeler": "A=B",
+    "label2": "fixed:basics-security-posture"
   },
   {
     "id": "u-0003237",
     "q": "해킹 같은 거 걱정 없어요?",
     "p": "P2-029",
     "m": "haiku",
-    "label": "none",
-    "conf": 0.45,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "gap:account/account-hijack"
+    "label": "fixed:basics-security-posture",
+    "conf": 0.55,
+    "labeler": "A=B",
+    "label2": "fixed:basics-security-posture"
   },
   {
     "id": "u-0003238",
@@ -12054,10 +12054,10 @@
     "q": "설치 어떻게 해요",
     "p": "P2-029",
     "m": "haiku",
-    "label": "missing:doc:/docs/start/pc-install#summary",
-    "conf": 0.7,
-    "labeler": "A",
-    "label2": null
+    "label": "fixed:basics-install-self",
+    "conf": 0.45,
+    "labeler": "A=B",
+    "label2": "fixed:basics-install-self"
   },
   {
     "id": "u-0003253",
@@ -12384,10 +12384,10 @@
     "q": "전화로 상담 돼요?",
     "p": "P2-029",
     "m": "haiku",
-    "label": "missing:doc:/docs/hardware/board-overview#4",
-    "conf": 0.4,
+    "label": "fixed:self-identity",
+    "conf": 0.45,
     "labeler": "A·B 엇갈림→C",
-    "label2": "none"
+    "label2": "gap:support/support-call-booking"
   },
   {
     "id": "u-0003287",
@@ -12424,7 +12424,7 @@
     "q": "장비 고장나면 AS 어떻게 해요?",
     "p": "P2-029",
     "m": "haiku",
-    "label": "missing:doc:/docs/hardware/hardware-spec-installation-faq#3",
+    "label": "doc:/docs/hardware/hardware-spec-installation-faq#3/as-request-steps",
     "conf": 0.7,
     "labeler": "A",
     "label2": null
@@ -12604,10 +12604,10 @@
     "q": "채점은 어떻게 해요",
     "p": "P2-029",
     "m": "haiku",
-    "label": "missing:doc:/docs/teacher/course-activities#4",
-    "conf": 0.5,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "doc:/docs/software/app-capabilities-map#3/ai-grading-drafting"
+    "label": "doc:/docs/teacher/course-activities#4/feedback",
+    "conf": 0.35,
+    "labeler": "A=B",
+    "label2": "doc:/docs/teacher/course-activities#4/feedback"
   },
   {
     "id": "u-0003309",
@@ -12694,10 +12694,10 @@
     "q": "수업 몇 시간 했는지 확인 가능?",
     "p": "P2-029",
     "m": "haiku",
-    "label": "missing:doc:/docs/admin/statistics-data#summary",
-    "conf": 0.55,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "doc:/docs/start/academy-system-os-positioning#4/admin-data-overview"
+    "label": "howto:stats-export",
+    "conf": 0.45,
+    "labeler": "A=B",
+    "label2": "howto:stats-export"
   },
   {
     "id": "u-0003318",
@@ -12744,30 +12744,30 @@
     "q": "사용법 영상 있어요?",
     "p": "P2-029",
     "m": "haiku",
-    "label": "missing:doc:/docs/hardware/board-basic-operation#8",
-    "conf": 0.4,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "gap:company/sns-channel"
+    "label": "fixed:training-materials",
+    "conf": 0.5,
+    "labeler": "A=B",
+    "label2": "fixed:training-materials"
   },
   {
     "id": "u-0003323",
     "q": "설명서 어디 있음?",
     "p": "P2-029",
     "m": "haiku",
-    "label": "missing:doc:/docs/hardware/board-basic-operation#8",
-    "conf": 0.35,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "none"
+    "label": "fixed:basics-manual-public",
+    "conf": 0.7,
+    "labeler": "A",
+    "label2": null
   },
   {
     "id": "u-0003324",
     "q": "매뉴얼 pdf 있나요?",
     "p": "P2-029",
     "m": "haiku",
-    "label": "missing:doc:/docs/hardware/board-basic-operation#8",
-    "conf": 0.45,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "none"
+    "label": "fixed:basics-manual-public",
+    "conf": 0.7,
+    "labeler": "A",
+    "label2": null
   },
   {
     "id": "u-0003325",
@@ -13024,10 +13024,10 @@
     "q": "전주에서도 A/S 받을 수 있어요?",
     "p": "P2-029",
     "m": "haiku",
-    "label": "missing:doc:/docs/hardware/hardware-spec-installation-faq#3",
-    "conf": 0.4,
-    "labeler": "A=B",
-    "label2": "missing:doc:/docs/hardware/hardware-spec-installation-faq#3"
+    "label": "gap:support/regional-onsite",
+    "conf": 0.65,
+    "labeler": "A",
+    "label2": null
   },
   {
     "id": "u-0003351",
@@ -13114,10 +13114,10 @@
     "q": "영어 발음 평가 해줘요?",
     "p": "P2-029",
     "m": "haiku",
-    "label": "missing:doc:/docs/software/lesson-activities#5",
+    "label": "doc:/docs/software/lesson-activities#5/language-activities",
     "conf": 0.6,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "doc:/docs/software/app-capabilities-map#3/ai-language-activity"
+    "labeler": "A",
+    "label2": null
   },
   {
     "id": "u-0003360",
@@ -13194,10 +13194,10 @@
     "q": "칠판 필기 지우개 기능 있어요?",
     "p": "P2-029",
     "m": "haiku",
-    "label": "missing:doc:/docs/hardware/board-basic-operation#1",
-    "conf": 0.45,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "doc:/docs/software/app-capabilities-map#2/board-tools"
+    "label": "doc:/docs/hardware/board-writing-touch#2/erase-palm-clear-all",
+    "conf": 0.7,
+    "labeler": "A",
+    "label2": null
   },
   {
     "id": "u-0003369",
@@ -13234,8 +13234,8 @@
     "q": "교재 PDF에 바로 필기 가능해요?",
     "p": "P2-029",
     "m": "haiku",
-    "label": "missing:doc:/docs/hardware/board-writing-touch#0",
-    "conf": 0.5,
+    "label": "doc:/docs/hardware/board-writing-touch#0/vs-chalkboard",
+    "conf": 0.55,
     "labeler": "A·B 엇갈림→C",
     "label2": "fixed:basics-material-upload-pdf"
   },
@@ -13364,20 +13364,20 @@
     "q": "Windows, Mac 둘 다 지원하나요?",
     "p": "P2-037",
     "m": "sonnet",
-    "label": "missing:doc:/docs/start/pc-install#summary",
-    "conf": 0.6,
-    "labeler": "A",
-    "label2": null
+    "label": "doc:/docs/start/pc-install#summary/pc-supported-os",
+    "conf": 0.75,
+    "labeler": "A=B",
+    "label2": "doc:/docs/start/pc-install#summary/pc-supported-os"
   },
   {
     "id": "u-0003386",
     "q": "iPad나 Android tablet도 되나요?",
     "p": "P2-037",
     "m": "sonnet",
-    "label": "missing:doc:/docs/start/mobile-install#summary",
-    "conf": 0.65,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "none"
+    "label": "fixed:basics-mobile-device-support",
+    "conf": 0.8,
+    "labeler": "A",
+    "label2": null
   },
   {
     "id": "u-0003387",
@@ -13504,10 +13504,10 @@
     "q": "학생별 수업 시간 자동 집계되나요?",
     "p": "P2-037",
     "m": "sonnet",
-    "label": "missing:doc:/docs/admin/statistics-data#3",
-    "conf": 0.6,
+    "label": "doc:/docs/admin/statistics-data#3/per-person-class-time",
+    "conf": 0.5,
     "labeler": "A·B 엇갈림→C",
-    "label2": "doc:/docs/start/academy-system-os-positioning#4/admin-data-overview"
+    "label2": "doc:/docs/admin/statistics-data#0/one-file-for-all"
   },
   {
     "id": "u-0003400",
@@ -14115,7 +14115,7 @@
     "p": "P2-037",
     "m": "sonnet",
     "label": "none",
-    "conf": 0.4,
+    "conf": 0.5,
     "labeler": "A=B",
     "label2": "none"
   },
@@ -14144,10 +14144,10 @@
     "q": "과제 채점하고 코멘트 달 수 있나요?",
     "p": "P2-037",
     "m": "sonnet",
-    "label": "missing:doc:/docs/teacher/course-activities#4",
-    "conf": 0.6,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "doc:/docs/updates/classin-609-update#4/continuous-grading"
+    "label": "doc:/docs/teacher/course-activities#4/feedback",
+    "conf": 0.7,
+    "labeler": "A=B",
+    "label2": "doc:/docs/teacher/course-activities#4/feedback"
   },
   {
     "id": "u-0003465",
@@ -14344,10 +14344,10 @@
     "q": "개인정보 보호는 어떻게 되나요?",
     "p": "P2-037",
     "m": "sonnet",
-    "label": "missing:doc:/docs/start/pre-adoption-faq-22-questions#4",
-    "conf": 0.45,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "fixed:basics-student-data-retention"
+    "label": "fixed:basics-security-posture",
+    "conf": 0.55,
+    "labeler": "A=B",
+    "label2": "fixed:basics-security-posture"
   },
   {
     "id": "u-0003485",
@@ -14394,10 +14394,10 @@
     "q": "기존 Excel 학생 명단 한 번에 업로드 되나요?",
     "p": "P2-037",
     "m": "sonnet",
-    "label": "missing:doc:/docs/admin/student-onboarding#3",
-    "conf": 0.7,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "none"
+    "label": "fixed:student-list-excel-import",
+    "conf": 0.75,
+    "labeler": "A",
+    "label2": null
   },
   {
     "id": "u-0003490",
@@ -14784,10 +14784,10 @@
     "q": "실수로 녹화본을 삭제했는데 되살릴 수 있나요?",
     "p": "P2-037",
     "m": "sonnet",
-    "label": "missing:doc:/docs/admin/replay-troubleshooting#3",
-    "conf": 0.65,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "doc:/docs/teacher/course-create#4/close-what-remains"
+    "label": "fixed:basics-recording-delete",
+    "conf": 0.8,
+    "labeler": "A",
+    "label2": null
   },
   {
     "id": "u-0003529",
@@ -14845,7 +14845,7 @@
     "p": "P2-037",
     "m": "sonnet",
     "label": "none",
-    "conf": 0.5,
+    "conf": 0.55,
     "labeler": "A=B",
     "label2": "none"
   },
@@ -14894,10 +14894,10 @@
     "q": "제 수업 녹화본을 다른 사람이 볼 수 있진 않죠?",
     "p": "P2-037",
     "m": "sonnet",
-    "label": "missing:doc:/docs/start/pre-adoption-faq-22-questions#3",
-    "conf": 0.45,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "doc:/docs/admin/course-management#3/recording-data-admin"
+    "label": "fixed:trial-recording-privacy",
+    "conf": 0.4,
+    "labeler": "A=B",
+    "label2": "fixed:trial-recording-privacy"
   },
   {
     "id": "u-0003540",
@@ -14994,10 +14994,10 @@
     "q": "데이터 백업은 제가 따로 해야 하나요?",
     "p": "P2-037",
     "m": "sonnet",
-    "label": "missing:doc:/docs/start/pre-adoption-faq-22-questions#3",
-    "conf": 0.65,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "doc:/docs/admin/course-management#4/before-close-backup"
+    "label": "gap:trust/backup-disaster-recovery",
+    "conf": 0.45,
+    "labeler": "A=B",
+    "label2": "gap:trust/backup-disaster-recovery"
   },
   {
     "id": "u-0003550",
@@ -15024,10 +15024,10 @@
     "q": "챗봇 말고 실제 담당자랑 통화할 수 있나요?",
     "p": "P2-037",
     "m": "sonnet",
-    "label": "missing:doc:/docs/hardware/board-overview#4",
-    "conf": 0.35,
+    "label": "fixed:self-identity",
+    "conf": 0.6,
     "labeler": "A·B 엇갈림→C",
-    "label2": "doc:/docs/start/company-overview#9/adoption-inquiry"
+    "label2": "gap:support/support-call-booking"
   },
   {
     "id": "u-0003553",
@@ -15294,10 +15294,10 @@
     "q": "상담원이랑 바로 통화 되나요",
     "p": "P2-045",
     "m": "haiku",
-    "label": "missing:doc:/docs/hardware/board-overview#4",
-    "conf": 0.35,
+    "label": "fixed:self-identity",
+    "conf": 0.5,
     "labeler": "A·B 엇갈림→C",
-    "label2": "none"
+    "label2": "gap:support/agent-wait-time"
   },
   {
     "id": "u-0003580",
@@ -15344,8 +15344,8 @@
     "q": "과제 제출은 어떻게 해요",
     "p": "P2-045",
     "m": "haiku",
-    "label": "missing:doc:/docs/student/course-submit-activity#summary",
-    "conf": 0.75,
+    "label": "doc:/docs/student/course-submit-activity#2/homework-submit",
+    "conf": 0.7,
     "labeler": "A",
     "label2": null
   },
@@ -15464,10 +15464,10 @@
     "q": "아이 개인정보 안전한가요",
     "p": "P2-045",
     "m": "haiku",
-    "label": "missing:doc:/docs/start/pre-adoption-faq-22-questions#4",
-    "conf": 0.45,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "fixed:basics-student-data-retention"
+    "label": "fixed:basics-security-posture",
+    "conf": 0.55,
+    "labeler": "A=B",
+    "label2": "fixed:basics-security-posture"
   },
   {
     "id": "u-0003599",
@@ -15534,20 +15534,20 @@
     "q": "아이폰에서도 돼요?",
     "p": "P2-045",
     "m": "haiku",
-    "label": "missing:doc:/docs/start/mobile-install#summary",
+    "label": "fixed:basics-mobile-device-support",
     "conf": 0.7,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "none"
+    "labeler": "A",
+    "label2": null
   },
   {
     "id": "u-0003606",
     "q": "태블릿으로 수업 들어도 되나요",
     "p": "P2-045",
     "m": "haiku",
-    "label": "missing:doc:/docs/start/mobile-install#summary",
-    "conf": 0.6,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "doc:/docs/teacher/course-units#3/any-device"
+    "label": "doc:/docs/start/mobile-install#summary/mobile-class-on-phone",
+    "conf": 0.55,
+    "labeler": "A=B",
+    "label2": "doc:/docs/start/mobile-install#summary/mobile-class-on-phone"
   },
   {
     "id": "u-0003607",
@@ -15794,10 +15794,10 @@
     "q": "시험 문제 올릴 수 있어요?",
     "p": "P2-045",
     "m": "haiku",
-    "label": "missing:doc:/docs/teacher/course-activities#5",
-    "conf": 0.55,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "doc:/docs/teacher/drive-materials#4/question-bank-load"
+    "label": "doc:/docs/software/lesson-activities#3/exam-create-methods",
+    "conf": 0.45,
+    "labeler": "A=B",
+    "label2": "doc:/docs/software/lesson-activities#3/exam-create-methods"
   },
   {
     "id": "u-0003634",
@@ -15844,10 +15844,10 @@
     "q": "문자 요금 따로 나와요?",
     "p": "P2-045",
     "m": "haiku",
-    "label": "missing:doc:/docs/admin/institution-settings#5",
+    "label": "doc:/docs/admin/student-onboarding#4/proxy-temp-password",
     "conf": 0.5,
     "labeler": "A·B 엇갈림→C",
-    "label2": "none"
+    "label2": "doc:/docs/admin/institution-settings#5/smart-homeroom-sms"
   },
   {
     "id": "u-0003639",
@@ -15864,10 +15864,10 @@
     "q": "지워진 녹화 복구 돼요?",
     "p": "P2-045",
     "m": "haiku",
-    "label": "missing:doc:/docs/admin/replay-troubleshooting#3",
-    "conf": 0.65,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "doc:/docs/teacher/course-create#4/close-what-remains"
+    "label": "fixed:basics-recording-delete",
+    "conf": 0.8,
+    "labeler": "A",
+    "label2": null
   },
   {
     "id": "u-0003643",
@@ -15914,10 +15914,10 @@
     "q": "설명서 있어요? 아니면 영상이라도",
     "p": "P2-045",
     "m": "haiku",
-    "label": "doc:/docs/teacher/drive-materials#0/resource-library",
-    "conf": 0.4,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "missing:doc:/docs/hardware/board-basic-operation#8"
+    "label": "fixed:basics-manual-public",
+    "conf": 0.6,
+    "labeler": "A",
+    "label2": null
   },
   {
     "id": "u-0003648",
@@ -16304,50 +16304,50 @@
     "q": "장비 고장 나면 어떡해요",
     "p": "P2-045",
     "m": "haiku",
-    "label": "missing:doc:/docs/hardware/hardware-spec-installation-faq#3",
-    "conf": 0.6,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "none"
+    "label": "doc:/docs/hardware/hardware-spec-installation-faq#3/as-request-steps",
+    "conf": 0.65,
+    "labeler": "A",
+    "label2": null
   },
   {
     "id": "u-0003687",
     "q": "전자칠판 A/S 기간 얼마나 돼요",
     "p": "P2-045",
     "m": "haiku",
-    "label": "missing:doc:/docs/hardware/hardware-spec-installation-faq#3",
-    "conf": 0.6,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "none"
+    "label": "doc:/docs/hardware/hardware-spec-installation-faq#3/warranty-onsite",
+    "conf": 0.7,
+    "labeler": "A",
+    "label2": null
   },
   {
     "id": "u-0003688",
     "q": "보증기간 몇 년이에요",
     "p": "P2-045",
     "m": "haiku",
-    "label": "missing:doc:/docs/hardware/hardware-spec-installation-faq#3",
-    "conf": 0.55,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "none"
+    "label": "doc:/docs/hardware/hardware-spec-installation-faq#3/warranty-onsite",
+    "conf": 0.75,
+    "labeler": "A",
+    "label2": null
   },
   {
     "id": "u-0003689",
     "q": "고장 나면 무상이에요?",
     "p": "P2-045",
     "m": "haiku",
-    "label": "missing:doc:/docs/hardware/hardware-spec-installation-faq#3",
-    "conf": 0.5,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "none"
+    "label": "doc:/docs/hardware/hardware-spec-installation-faq#3/warranty-onsite",
+    "conf": 0.65,
+    "labeler": "A=B",
+    "label2": "doc:/docs/hardware/hardware-spec-installation-faq#3/warranty-onsite"
   },
   {
     "id": "u-0003690",
     "q": "수리비 얼마 나와요",
     "p": "P2-045",
     "m": "haiku",
-    "label": "missing:doc:/docs/hardware/hardware-spec-installation-faq#3",
-    "conf": 0.4,
+    "label": "none",
+    "conf": 0.55,
     "labeler": "A·B 엇갈림→C",
-    "label2": "none"
+    "label2": "doc:/docs/hardware/hardware-spec-installation-faq#3/warranty-onsite"
   },
   {
     "id": "u-0003691",
@@ -16634,10 +16634,10 @@
     "q": "학교 보안 심사 통과했어요?",
     "p": "P2-045",
     "m": "haiku",
-    "label": "none",
+    "label": "gap:trust/security-review-docs",
     "conf": 0.55,
     "labeler": "A=B",
-    "label2": "none"
+    "label2": "gap:trust/security-review-docs"
   },
   {
     "id": "u-0003720",
@@ -16676,8 +16676,8 @@
     "m": "haiku",
     "label": "doc:/docs/start/academy-system-os-positioning#4/admin-data-overview",
     "conf": 0.5,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "none"
+    "labeler": "A=B",
+    "label2": "doc:/docs/start/academy-system-os-positioning#4/admin-data-overview"
   },
   {
     "id": "u-0003724",
@@ -16825,29 +16825,29 @@
     "p": "P2-045",
     "m": "haiku",
     "label": "none",
-    "conf": 0.45,
-    "labeler": "A=B",
-    "label2": "none"
+    "conf": 0.5,
+    "labeler": "A·B 엇갈림→C",
+    "label2": "fixed:basics-security-posture"
   },
   {
     "id": "u-0003739",
     "q": "해킹당한 적 있어요?",
     "p": "P2-045",
     "m": "haiku",
-    "label": "none",
-    "conf": 0.45,
-    "labeler": "A=B",
-    "label2": "none"
+    "label": "fixed:basics-security-posture",
+    "conf": 0.6,
+    "labeler": "A",
+    "label2": null
   },
   {
     "id": "u-0003740",
     "q": "보안 인증 뭐 받았어요",
     "p": "P2-045",
     "m": "haiku",
-    "label": "gap:company/press-awards",
-    "conf": 0.55,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "none"
+    "label": "fixed:security-certifications",
+    "conf": 0.85,
+    "labeler": "A",
+    "label2": null
   },
   {
     "id": "u-0003741",
@@ -17084,7 +17084,7 @@
     "q": "수업 시간표 한눈에 볼 수 있어요?",
     "p": "P2-045",
     "m": "haiku",
-    "label": "missing:doc:/docs/student/todo-calendar#1",
+    "label": "doc:/docs/student/todo-calendar#1/calendar",
     "conf": 0.6,
     "labeler": "A·B 엇갈림→C",
     "label2": "gap:course/timetable-export"
@@ -17214,10 +17214,10 @@
     "q": "과제 냈는지 안 냈는지 여서 나옵니꺼?",
     "p": "P2-053",
     "m": "opus",
-    "label": "missing:doc:/docs/student/homework-submit-troubleshooting#2",
-    "conf": 0.5,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "fixed:notify-non-submitters-parents"
+    "label": "doc:guide:cs-figma-digest-2103/teacher-submission-status",
+    "conf": 0.6,
+    "labeler": "A",
+    "label2": null
   },
   {
     "id": "u-0003779",
@@ -17244,28 +17244,28 @@
     "q": "앱 깔아야 되능교?",
     "p": "P2-053",
     "m": "opus",
-    "label": "doc:/docs/software/software-overview#0/app-and-dashboard",
-    "conf": 0.5,
+    "label": "fixed:basics-web-browser-only",
+    "conf": 0.55,
     "labeler": "A·B 엇갈림→C",
-    "label2": "missing:doc:/docs/start/mobile-install#summary"
+    "label2": "fixed:basics-student-app-install"
   },
   {
     "id": "u-0003782",
     "q": "앱 이름이 뭐라예? 검색이 안 되네예",
     "p": "P2-053",
     "m": "opus",
-    "label": "missing:doc:/docs/start/mobile-install#summary",
-    "conf": 0.5,
+    "label": "fixed:basics-app-name",
+    "conf": 0.85,
     "labeler": "A=B",
-    "label2": "missing:doc:/docs/start/mobile-install#summary"
+    "label2": "fixed:basics-app-name"
   },
   {
     "id": "u-0003783",
     "q": "갤럭시 폰에도 깔리지예?",
     "p": "P2-053",
     "m": "opus",
-    "label": "missing:doc:/docs/start/mobile-install#0",
-    "conf": 0.75,
+    "label": "doc:/docs/start/mobile-install#0/android-steps",
+    "conf": 0.7,
     "labeler": "A",
     "label2": null
   },
@@ -17324,10 +17324,10 @@
     "q": "개인정보 새 나가는 건 아이지예?",
     "p": "P2-053",
     "m": "opus",
-    "label": "policy:breach-liability",
-    "conf": 0.45,
+    "label": "fixed:basics-security-posture",
+    "conf": 0.6,
     "labeler": "A·B 엇갈림→C",
-    "label2": "missing:doc:/docs/start/pre-adoption-faq-22-questions#4"
+    "label2": "policy:breach-liability"
   },
   {
     "id": "u-0003790",
@@ -17415,9 +17415,9 @@
     "p": "P2-053",
     "m": "opus",
     "label": "missing:guide:cs-figma-digest-1658",
-    "conf": 0.5,
+    "conf": 0.45,
     "labeler": "A·B 엇갈림→C",
-    "label2": "none"
+    "label2": "doc:/docs/start/signup#2/verification-code"
   },
   {
     "id": "u-0003799",
@@ -17824,10 +17824,10 @@
     "q": "고장 나믄 어데다 전화하능교?",
     "p": "P2-053",
     "m": "opus",
-    "label": "missing:doc:/docs/hardware/hardware-spec-installation-faq#3",
-    "conf": 0.5,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "doc:/docs/start/class-connection-troubleshooting#summary/conn-contact-info"
+    "label": "doc:/docs/hardware/hardware-spec-installation-faq#3/as-request-steps",
+    "conf": 0.6,
+    "labeler": "A",
+    "label2": null
   },
   {
     "id": "u-0003841",
@@ -17984,7 +17984,7 @@
     "q": "숙제 여서 내는 깁니꺼?",
     "p": "P2-053",
     "m": "opus",
-    "label": "missing:doc:/docs/student/course-submit-activity#summary",
+    "label": "doc:/docs/student/course-submit-activity#2/homework-submit",
     "conf": 0.65,
     "labeler": "A",
     "label2": null
@@ -17994,10 +17994,10 @@
     "q": "숙제 사진 찍어서 올리는 기라예?",
     "p": "P2-053",
     "m": "opus",
-    "label": "missing:doc:/docs/student/course-submit-activity#3",
+    "label": "doc:/docs/student/course-submit-activity#3/mobile-photo-submit",
     "conf": 0.6,
-    "labeler": "A",
-    "label2": null
+    "labeler": "A·B 엇갈림→C",
+    "label2": "doc:/docs/student/course-submit-activity#2/submit-format-devices"
   },
   {
     "id": "u-0003858",
@@ -18044,10 +18044,10 @@
     "q": "2배속으로 볼 수 있습니꺼?",
     "p": "P2-053",
     "m": "opus",
-    "label": "missing:doc:/docs/student/course-submit-activity#1",
-    "conf": 0.55,
-    "labeler": "A=B",
-    "label2": "missing:doc:/docs/student/course-submit-activity#1"
+    "label": "howto:replay-speed",
+    "conf": 0.8,
+    "labeler": "A",
+    "label2": null
   },
   {
     "id": "u-0003863",
@@ -18064,8 +18064,8 @@
     "q": "수업 시간표 여서 확인 되능교?",
     "p": "P2-053",
     "m": "opus",
-    "label": "missing:doc:/docs/student/todo-calendar#1",
-    "conf": 0.6,
+    "label": "doc:/docs/student/todo-calendar#1/calendar",
+    "conf": 0.55,
     "labeler": "A·B 엇갈림→C",
     "label2": "gap:course/timetable-export"
   },
@@ -18116,8 +18116,8 @@
     "m": "opus",
     "label": "doc:/docs/start/academy-system-os-positioning#4/admin-data-overview",
     "conf": 0.5,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "none"
+    "labeler": "A=B",
+    "label2": "doc:/docs/start/academy-system-os-positioning#4/admin-data-overview"
   },
   {
     "id": "u-0003870",
@@ -18354,10 +18354,10 @@
     "q": "컴퓨터 사양 낮아도 돌아가능교?",
     "p": "P2-053",
     "m": "opus",
-    "label": "missing:doc:/docs/start/pc-install#5",
-    "conf": 0.65,
-    "labeler": "A",
-    "label2": null
+    "label": "doc:/docs/start/pc-install#5/min-spec",
+    "conf": 0.5,
+    "labeler": "A=B",
+    "label2": "doc:/docs/start/pc-install#5/min-spec"
   },
   {
     "id": "u-0003894",
@@ -18374,7 +18374,7 @@
     "q": "윈도우 7에서도 됩니꺼?",
     "p": "P2-053",
     "m": "opus",
-    "label": "missing:doc:/docs/start/pc-install#5",
+    "label": "doc:/docs/start/pc-install-troubleshooting#summary/windows-7-mac-chip-requirements",
     "conf": 0.7,
     "labeler": "A",
     "label2": null
@@ -18384,10 +18384,10 @@
     "q": "맥북은 되는교?",
     "p": "P2-053",
     "m": "opus",
-    "label": "missing:doc:/docs/start/pc-install#summary",
-    "conf": 0.65,
-    "labeler": "A",
-    "label2": null
+    "label": "fixed:basics-mac-support",
+    "conf": 0.8,
+    "labeler": "A=B",
+    "label2": "fixed:basics-mac-support"
   },
   {
     "id": "u-0003897",
@@ -18414,10 +18414,10 @@
     "q": "펜 따로 사야 되능교?",
     "p": "P2-053",
     "m": "opus",
-    "label": "missing:doc:/docs/hardware/board-install-readiness#7",
-    "conf": 0.5,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "none"
+    "label": "doc:/docs/hardware/board-install-readiness#7/pens",
+    "conf": 0.75,
+    "labeler": "A=B",
+    "label2": "doc:/docs/hardware/board-install-readiness#7/pens"
   },
   {
     "id": "u-0003900",
@@ -18704,10 +18704,10 @@
     "q": "업데이트 하고 나서 안 열려예",
     "p": "P2-053",
     "m": "opus",
-    "label": "missing:doc:/docs/start/pc-install-troubleshooting#5",
-    "conf": 0.45,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "doc:/docs/start/class-connection-troubleshooting#3/conn-update"
+    "label": "fixed:update-then-wont-open",
+    "conf": 0.85,
+    "labeler": "A",
+    "label2": null
   },
   {
     "id": "u-0003929",
@@ -18734,10 +18734,10 @@
     "q": "로그아웃은 어데서 하능교?",
     "p": "P2-053",
     "m": "opus",
-    "label": "none",
-    "conf": 0.5,
+    "label": "missing:guide:cs-figma-digest-1741",
+    "conf": 0.4,
     "labeler": "A·B 엇갈림→C",
-    "label2": "missing:guide:cs-figma-digest-1741"
+    "label2": "none"
   },
   {
     "id": "u-0003932",
@@ -18784,10 +18784,10 @@
     "q": "전자칠판 고장 나믄 AS 됩니꺼?",
     "p": "P2-053",
     "m": "opus",
-    "label": "missing:doc:/docs/hardware/hardware-spec-installation-faq#3",
-    "conf": 0.75,
+    "label": "doc:/docs/hardware/hardware-spec-installation-faq#3/warranty-onsite",
+    "conf": 0.6,
     "labeler": "A·B 엇갈림→C",
-    "label2": "none"
+    "label2": "doc:/docs/hardware/hardware-spec-installation-faq#3/as-request-steps"
   },
   {
     "id": "u-0003937",
@@ -19214,20 +19214,20 @@
     "q": "태블릿으로도돼?",
     "p": "P2-061",
     "m": "haiku",
-    "label": "missing:doc:/docs/start/mobile-install#summary",
+    "label": "fixed:basics-teach-tablet-phone-only",
     "conf": 0.55,
     "labeler": "A·B 엇갈림→C",
-    "label2": "doc:/docs/software/software-overview#0/app-and-dashboard"
+    "label2": "doc:/docs/start/mobile-install#summary/mobile-class-on-phone"
   },
   {
     "id": "u-0003981",
     "q": "핸드폰으로하면돼",
     "p": "P2-061",
     "m": "haiku",
-    "label": "doc:/docs/software/software-overview#0/app-and-dashboard",
-    "conf": 0.5,
+    "label": "fixed:basics-teach-tablet-phone-only",
+    "conf": 0.55,
     "labeler": "A·B 엇갈림→C",
-    "label2": "missing:doc:/docs/start/mobile-install#summary"
+    "label2": "doc:/docs/start/mobile-install#summary/mobile-class-on-phone"
   },
   {
     "id": "u-0003982",
@@ -19585,9 +19585,9 @@
     "p": "P2-061",
     "m": "haiku",
     "label": "none",
-    "conf": 0.6,
-    "labeler": "A",
-    "label2": null
+    "conf": 0.45,
+    "labeler": "A=B",
+    "label2": "none"
   },
   {
     "id": "u-0004018",
@@ -19604,18 +19604,18 @@
     "q": "숙제어디서봐",
     "p": "P2-061",
     "m": "haiku",
-    "label": "missing:doc:/docs/student/todo-calendar#summary",
-    "conf": 0.55,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "doc:/docs/student/course-grades#4/homework-feedback-where"
+    "label": "doc:/docs/student/course-submit-activity#0/where-activities",
+    "conf": 0.7,
+    "labeler": "A",
+    "label2": null
   },
   {
     "id": "u-0004020",
     "q": "숙제제출어떻게해",
     "p": "P2-061",
     "m": "haiku",
-    "label": "missing:doc:/docs/student/homework-submit-troubleshooting#summary",
-    "conf": 0.65,
+    "label": "doc:/docs/student/course-submit-activity#2/homework-submit",
+    "conf": 0.7,
     "labeler": "A",
     "label2": null
   },
@@ -19634,30 +19634,30 @@
     "q": "사진찍어서올려도돼",
     "p": "P2-061",
     "m": "haiku",
-    "label": "missing:doc:/docs/student/course-submit-activity#3",
-    "conf": 0.6,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "doc:/docs/updates/classin-ai-blackboard-609#2/student-answer-methods"
+    "label": "doc:/docs/student/course-submit-activity#3/mobile-photo-submit",
+    "conf": 0.75,
+    "labeler": "A",
+    "label2": null
   },
   {
     "id": "u-0004023",
     "q": "제출버튼없어",
     "p": "P2-061",
     "m": "haiku",
-    "label": "missing:doc:/docs/student/course-submit-activity#summary",
-    "conf": 0.5,
+    "label": "doc:/docs/student/course-submit-activity#3/mobile-button-name",
+    "conf": 0.45,
     "labeler": "A·B 엇갈림→C",
-    "label2": "missing:doc:/docs/student/homework-submit-troubleshooting#summary"
+    "label2": "doc:/docs/student/homework-submit-troubleshooting#summary/submit-final-button"
   },
   {
     "id": "u-0004024",
     "q": "제출했는지어떻게알아",
     "p": "P2-061",
     "m": "haiku",
-    "label": "missing:doc:/docs/student/homework-submit-troubleshooting#2",
-    "conf": 0.65,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "missing:doc:/docs/student/homework-submit-troubleshooting#summary"
+    "label": "doc:/docs/student/homework-submit-troubleshooting#2/check-submitted",
+    "conf": 0.75,
+    "labeler": "A",
+    "label2": null
   },
   {
     "id": "u-0004025",
@@ -19684,20 +19684,20 @@
     "q": "시간표어디있어",
     "p": "P2-061",
     "m": "haiku",
-    "label": "missing:doc:/docs/student/todo-calendar#summary",
-    "conf": 0.55,
+    "label": "doc:/docs/student/todo-calendar#1/calendar",
+    "conf": 0.6,
     "labeler": "A·B 엇갈림→C",
-    "label2": "clarify"
+    "label2": "gap:course/timetable-export"
   },
   {
     "id": "u-0004028",
     "q": "오늘수업몇시야",
     "p": "P2-061",
     "m": "haiku",
-    "label": "missing:doc:/docs/student/todo-calendar#summary",
-    "conf": 0.45,
+    "label": "doc:/docs/student/todo-calendar#1/calendar",
+    "conf": 0.5,
     "labeler": "A·B 엇갈림→C",
-    "label2": "none"
+    "label2": "doc:/docs/student/todo-calendar#summary/todo-calendar-overview"
   },
   {
     "id": "u-0004029",
@@ -19735,9 +19735,9 @@
     "p": "P2-061",
     "m": "haiku",
     "label": "howto:chat-notification-off",
-    "conf": 0.75,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "none"
+    "conf": 0.8,
+    "labeler": "A",
+    "label2": null
   },
   {
     "id": "u-0004033",
@@ -19745,9 +19745,9 @@
     "p": "P2-061",
     "m": "haiku",
     "label": "howto:chat-notification-off",
-    "conf": 0.65,
-    "labeler": "A·B 엇갈림→C",
-    "label2": "none"
+    "conf": 0.75,
+    "labeler": "A",
+    "label2": null
   },
   {
     "id": "u-0004034",
