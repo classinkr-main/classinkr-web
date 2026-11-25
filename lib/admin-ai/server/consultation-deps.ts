@@ -3,7 +3,8 @@ import "server-only"
 // 상담 내역 찾기(consultations.ts)의 서버 연결 — 기존 저장소 조회 함수만 쓴다(새 쿼리·색인·마이그레이션 없음).
 //
 //  - 채널톡 상담: listDurableConversationsLite(Supabase 경량 목록 — 상담 Inbox API 와 같은 함수, 전문·연락처 칸은 넘기지 않는다).
-//    Supabase 가 없으면 로컬 JSON(getConversations)으로 떨어진다(개발 환경 — Inbox API 와 같은 규칙).
+//    Supabase 가 없을 때만 로컬 JSON(getConversations)으로 떨어진다(개발 환경). Supabase 가 설정됐는데 읽지 못하면 출처 실패다
+//    (Inbox API 와 달리 JSON 으로 넘어가지 않는다 — 장애를 "상담 0건"으로 보이지 않게).
 //  - 내부 CS 대화: listInternalCsConversations(목록 칸만 — customer_context 원문 없음, 한 번에 200건 상한).
 //  - 고객 찾기: buildContactDeps().findCustomersInText(CRM 통합 고객 이름 일치).
 //  - 임베딩 검색: ADMIN_AI_CONSULTATION_SEMANTIC=1 일 때만(비용·범위 결정 전이라 기본 끔). 채널톡 상담 청크 검색을 쓴다.
@@ -69,8 +70,17 @@ export function internalCsRecordOf(row: InternalCsConversationListRow): Consulta
   }
 }
 
+/** 채널톡 저장소가 설정됐는데 목록을 읽지 못했다 — 출처 실패(failed)로 알린다. */
+class ChannelTalkUnavailable extends Error {
+  name = "ChannelTalkUnavailable"
+}
+
 async function loadChannelTalk(limit: number): Promise<ConsultationBatch | null> {
+  const supabase = channelConversationsSupabaseEnabled()
   const durable = await listDurableConversationsLite(limit)
+  // listDurableConversationsLite 는 Supabase 오류를 삼키고 null 을 돌려준다. 설정된 환경에서 로컬 JSON(운영에서는 대개 빈 파일)으로
+  // 넘어가면 장애가 "상담 0건"으로 보이고 1분 캐시된다 — 실패로 던진다(캐시는 실패를 지운다).
+  if (!durable && supabase) throw new ChannelTalkUnavailable()
   const rows: ChannelConversationListRecord[] =
     durable ??
     getConversations()
