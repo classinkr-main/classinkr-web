@@ -194,7 +194,7 @@ describe("generateInternalCsAnswer", () => {
     const prompt = body.contents.at(-1)?.parts[0]?.text ?? ""
     expect(prompt).toContain("필요한 만큼 충분히")
     // 출력 길이는 지시로 줄이지 않되, 끊김·비용 폭주를 막는 토큰 상한(R21)은 둔다.
-    expect(body.generationConfig.maxOutputTokens).toBe(4096)
+    expect((body as { generationConfig?: { maxOutputTokens?: number } }).generationConfig?.maxOutputTokens).toBe(4096)
   })
 
   it("does not truncate a complete internal answer at the previous application limit", async () => {
