@@ -19,6 +19,8 @@ export type OrderState =
   | "cancelled"
   | "expired"
   | "failed"
+  /** 서버 오더의 확인표가 이미 쓰였다(같은 표를 다시 보냄) — 실행하지 않았고, 결과는 화면에서 본다. */
+  | "processed"
 
 export type OrderIcon =
   | "task"

@@ -4,8 +4,9 @@ import "server-only"
 //
 // 미리보기 때 {표 id, 도구, 인자, 인자 지문, 미리보기 요약 해시, 만료, 행위자}를 서버 비밀(ADMIN_AI_TICKET_SECRET)로
 // HMAC-SHA256 서명해 카드에 싣는다. 확인 때 서명·만료(15분)·행위자 일치를 본다(역할 재검사·미리보기 대조·실행은 confirm.ts).
-// 같은 표를 두 번 누르면 표 id 가 idempotency_key 라 실행은 한 번이다(lib/ops-tools/guard.ts — 인스턴스 메모리, HW 배송 예정은
-// 도메인 행으로도 찾는다). 비밀이 없으면 표를 만들지 않는다(미리보기까지만, 카드는 "화면에서 직접 등록").
+// 표는 한 번만 쓴다 — 확인 때 표 id 를 여러 서버가 함께 보는 저장소에 원자적으로 한 번만 적고(ticket-claims.ts), 이미 있으면
+// 실행하지 않는다(confirm.ts, 409). 비밀이 없거나 운영에서 그 저장소가 없으면 표를 만들지 않는다(미리보기까지만, 카드는
+// "화면에서 직접 등록" — readConfirmSetup 한 곳에서 판정).
 // 표 안의 인자는 서명만 하고 암호화하지 않는다 — 그 사람이 방금 미리본 자기 인자다. 비밀·연락처 원문을 싣지 않는다.
 import { createHash, createHmac, randomUUID, timingSafeEqual } from "crypto"
 

@@ -22,7 +22,13 @@ export interface AdminAiAskInput {
   history?: string[]
 }
 
-export type AdminAiConfirmResult = { ok: true; text: string } | { ok: false; text: string }
+export type AdminAiConfirmResult =
+  | { ok: true; text: string }
+  /**
+   * alreadyProcessed: 확인표가 이미 쓰였다(409 already_processed) — 카드는 "이미 처리됨" + 화면 링크.
+   * consumed: 표를 쓴 뒤 실행이 실패했다 — 같은 카드로는 다시 확인할 수 없다(새 미리보기).
+   */
+  | { ok: false; text: string; alreadyProcessed?: boolean; consumed?: boolean }
 
 export interface AdminAiTurnHandlers {
   onStep: (label: string) => void
@@ -197,9 +203,20 @@ export function createLiveAdminAiClient(
           credentials: "same-origin",
           body: JSON.stringify({ ticket }),
         })
-        const body = (await res.json().catch(() => null)) as { ok?: boolean; result?: string; error?: string } | null
+        const body = (await res.json().catch(() => null)) as {
+          ok?: boolean
+          result?: string
+          error?: string
+          code?: string
+          consumed?: boolean
+        } | null
         if (res.ok && body?.ok) return { ok: true, text: body.result ?? "실행했습니다." }
-        return { ok: false, text: body?.error ?? httpErrorText(res.status) }
+        return {
+          ok: false,
+          text: body?.error ?? httpErrorText(res.status),
+          ...(res.status === 409 && body?.code === "already_processed" ? { alreadyProcessed: true } : {}),
+          ...(body?.consumed === true ? { consumed: true } : {}),
+        }
       } catch {
         return { ok: false, text: "확인 요청을 보내지 못했습니다. 연결을 확인해 주세요." }
       }

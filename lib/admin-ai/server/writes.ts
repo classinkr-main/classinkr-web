@@ -214,7 +214,10 @@ export function orderFromPreview(input: {
 
 export interface WriteDeps {
   ops: OpsDeps
-  /** 확인 표 서명 비밀(ADMIN_AI_TICKET_SECRET). 없으면 미리보기까지만 — 카드는 "화면에서 직접 등록". */
+  /**
+   * 확인 표 서명 비밀 — readConfirmSetup().cardSecret(표 비밀 + 일회용 저장소가 있을 때만 값).
+   * 없으면 미리보기까지만 — 카드는 "화면에서 직접 등록".
+   */
   ticketSecret: string | null
   /** 행위자 키(actor.ts staffKey) — 표의 sub. */
   sub: string
@@ -283,6 +286,6 @@ export async function previewWriteTurn(
     picked.tool === "quote_create_draft"
       ? `견적 초안을 만들 준비가 됐습니다${total != null ? ` — 합계 ${krw(total)}` : ""}.`
       : `배송 예정 ${str(preview.summary.product)} ${units(num(preview.summary.quantity) ?? 0, "대")}를 등록할 준비가 됐습니다.`
-  const tail = issued ? " 카드에서 확인하면 실행합니다." : " 확인 서명 설정이 없어 여기서는 실행하지 않습니다 — 화면에서 직접 등록해 주세요."
+  const tail = issued ? " 카드에서 확인하면 실행합니다." : " 확인 설정(서명·확인 저장소)이 없어 여기서는 실행하지 않습니다 — 화면에서 직접 등록해 주세요."
   return { blocks: [{ kind: "text", text: `${lead}${tail}` }, { kind: "order", orderId: order.id }], order }
 }

@@ -3,12 +3,21 @@ import { dirname, join, resolve } from "node:path"
 
 import { describe, expect, it, vi } from "vitest"
 
-import { confirmOrder, type ConfirmDeps } from "@/lib/admin-ai/server/confirm"
+import { ALREADY_PROCESSED_TEXT, confirmOrder, type ConfirmDeps } from "@/lib/admin-ai/server/confirm"
 import { collectTurn, type TurnInput } from "@/lib/admin-ai/server/orchestrator"
+import {
+  ClaimStoreError,
+  createMemoryClaimStore,
+  createUpstashClaimStore,
+  readConfirmSetup,
+  TICKET_CLAIM_TTL_MS,
+  type TicketClaimStore,
+} from "@/lib/admin-ai/server/ticket-claims"
 import { issueTicket, TICKET_TTL_MS, verifyTicket } from "@/lib/admin-ai/server/tickets"
 import { previewWriteTurn } from "@/lib/admin-ai/server/writes"
 import { runOpsTool } from "@/lib/ops-tools/run"
-import type { ToolArgs, WriteToolDef } from "@/lib/ops-tools/types"
+import { OpsToolError } from "@/lib/ops-tools/errors"
+import type { OpsToolDef, ToolArgs, WriteToolDef } from "@/lib/ops-tools/types"
 
 import { STAFF_ACTOR, fakeDeps } from "./fakes"
 
@@ -80,10 +89,34 @@ describe("쓰기 — 조율기는 preview 만 부른다", () => {
   })
 })
 
+/** 여러 서버가 함께 보는 저장소의 가짜 — SET NX 처럼 있으면 실패한다. 판정 전에 한 틱 쉬어 동시 요청이 겹치게 한다. */
+function fakeSharedStore() {
+  const used = new Set<string>()
+  const claim = vi.fn(async (id: string) => {
+    await new Promise((r) => setTimeout(r, 0))
+    if (used.has(id)) return "already_used" as const
+    used.add(id)
+    return "claimed" as const
+  })
+  const store: TicketClaimStore = { kind: "distributed", claim }
+  return { store, claim, used }
+}
+
+/** idempotency 메모리를 함께 쓰지 않는 실행기 — 서로 다른 서버 인스턴스를 흉내 낸다(분당 상한·메모리 replay 없음). */
+const instanceRun: ConfirmDeps["run"] = async (def: OpsToolDef, args, actor) => {
+  if (!("execute" in def)) throw new Error("not write")
+  const preview = await def.preview(args, actor)
+  const result = await def.execute(preview, actor, {})
+  return { value: result.output }
+}
+
 describe("확인 경로 — POST /api/admin/ai/orders/confirm 의 판정(confirm.ts)", () => {
-  function setup(options: { secret?: string | null; summaryTotal?: number } = {}) {
+  function setup(options: { secret?: string | null; summaryTotal?: number; claims?: TicketClaimStore | null; failExecute?: boolean } = {}) {
     let total = 1_100_000
-    const execute = vi.fn(async () => ({ output: { id: "q-1", quote_number: "Q-0001" } }))
+    const execute = vi.fn(async () => {
+      if (options.failExecute) throw new OpsToolError("견적 초안을 저장하지 못했습니다.", "execute_failed")
+      return { output: { id: "q-1", quote_number: "Q-0001" } }
+    })
     const def: WriteToolDef = {
       id: "fake.quote",
       mcpName: "quote_create_draft",
@@ -96,10 +129,13 @@ describe("확인 경로 — POST /api/admin/ai/orders/confirm 의 판정(confirm
       execute,
     }
     const audit = vi.fn(async () => undefined)
+    const shared = fakeSharedStore()
     const deps: ConfirmDeps = {
       getTool: (name) => (name === "quote_create_draft" ? def : undefined),
       run: runOpsTool,
       secret: options.secret === undefined ? SECRET : options.secret,
+      claims: options.claims === undefined ? shared.store : options.claims,
+      screenHref: (tool) => (tool === "quote_create_draft" ? "/admin/quotes" : undefined),
       describeError: async (error) => (error instanceof Error ? error.message : "오류"),
       audit,
       now: () => NOW + 1000,
@@ -108,7 +144,7 @@ describe("확인 경로 — POST /api/admin/ai/orders/confirm 의 판정(confirm
     // 미리보기 요약을 표와 같게 맞춘다(deal_id 포함)
     const args = ticket.payload.args
     const fresh = issueTicket({ tool: "quote_create_draft", args, summary: { deal_id: args.deal_id, total }, sub: "user-1" }, SECRET, NOW)
-    return { deps, execute, audit, ticket: fresh.ticket, setTotal: (v: number) => (total = v) }
+    return { deps, execute, audit, claim: shared.claim, ticket: fresh.ticket, jti: fresh.payload.jti, setTotal: (v: number) => (total = v) }
   }
 
   it("정상 확인은 한 번 실행하고 실제 어드민으로 감사한다", async () => {
@@ -120,13 +156,87 @@ describe("확인 경로 — POST /api/admin/ai/orders/confirm 의 판정(confirm
     if (result.status === 200) expect(result.body.result).toContain("Q-0001")
   })
 
-  it("같은 표를 두 번 눌러도 실행은 한 번이다", async () => {
+  it("같은 표를 순서대로 두 번 보내면 둘째는 실행하지 않고 409 '이미 처리됨'(화면 링크)이다", async () => {
     const { deps, execute, ticket } = setup()
     const first = await confirmOrder(ticket, STAFF, deps)
     const second = await confirmOrder(ticket, STAFF, deps)
     expect(first.status).toBe(200)
-    expect(second.status).toBe(200)
-    if (second.status === 200) expect(second.body.replayed).toBe(true)
+    expect(second.status).toBe(409)
+    if (second.status !== 200) {
+      expect(second.body.code).toBe("already_processed")
+      expect(second.body.error).toBe(ALREADY_PROCESSED_TEXT)
+      expect(second.body.href).toBe("/admin/quotes")
+    }
+    expect(execute).toHaveBeenCalledTimes(1)
+  })
+
+  it("같은 표를 동시에 두 번(같은 인스턴스) — 실행 1회, 하나는 409", async () => {
+    const { deps, execute, ticket } = setup()
+    const results = await Promise.all([confirmOrder(ticket, STAFF, deps), confirmOrder(ticket, STAFF, deps)])
+    expect(results.map((r) => r.status).sort()).toEqual([200, 409])
+    expect(execute).toHaveBeenCalledTimes(1)
+  })
+
+  it("같은 표를 동시에 두 서버로 — 메모리를 나누지 않아도 함께 보는 저장소가 실행을 한 번으로 막는다", async () => {
+    const { deps, execute, claim, ticket } = setup()
+    const results = await Promise.all([
+      confirmOrder(ticket, STAFF, { ...deps, run: instanceRun }),
+      confirmOrder(ticket, STAFF, { ...deps, run: instanceRun }),
+    ])
+    expect(results.map((r) => r.status).sort()).toEqual([200, 409])
+    expect(claim).toHaveBeenCalledTimes(2)
+    expect(execute).toHaveBeenCalledTimes(1)
+  })
+
+  it("표 사용 표시는 서명·역할·미리보기 대조가 끝난 뒤에만 한다", async () => {
+    const { deps, claim, ticket, setTotal } = setup()
+    await confirmOrder(ticket, { ...STAFF, role: "VIEWER" }, deps)
+    await confirmOrder(ticket, { ...STAFF, userId: "user-2" }, deps)
+    setTotal(999)
+    await confirmOrder(ticket, STAFF, deps)
+    expect(claim).not.toHaveBeenCalled()
+  })
+
+  it("저장소 오류(연결 실패)면 실행하지 않고 503 — 실패하면 닫힌다", async () => {
+    const { deps, execute, ticket } = setup({
+      claims: { kind: "distributed", claim: async () => Promise.reject(new ClaimStoreError()) },
+    })
+    const result = await confirmOrder(ticket, STAFF, deps)
+    expect(result.status).toBe(503)
+    if (result.status !== 200) expect(result.body.code).toBe("claim_store_unavailable")
+    expect(execute).not.toHaveBeenCalled()
+  })
+
+  it("실행이 실패해도 표시는 남는다 — 같은 표를 다시 보내면 409, 실패 답은 새 미리보기를 안내한다", async () => {
+    const { deps, execute, ticket } = setup({ failExecute: true })
+    const first = await confirmOrder(ticket, STAFF, deps)
+    expect(first.status).toBe(422)
+    if (first.status !== 200) {
+      expect(first.body.consumed).toBe(true)
+      expect(first.body.error).toContain("새 미리보기")
+    }
+    const second = await confirmOrder(ticket, STAFF, deps)
+    expect(second.status).toBe(409)
+    if (second.status !== 200) expect(second.body.code).toBe("already_processed")
+    expect(execute).toHaveBeenCalledTimes(1)
+  })
+
+  it("저장소가 없으면(운영) 503 이고 실행 0회", async () => {
+    const { deps, execute, ticket } = setup({ claims: null })
+    const result = await confirmOrder(ticket, STAFF, deps)
+    expect(result.status).toBe(503)
+    if (result.status !== 200) expect(result.body.code).toBe("claim_store_missing")
+    expect(execute).not.toHaveBeenCalled()
+  })
+
+  it("메모리 대신 판정(운영 아님)은 한 번만 통과하고 응답에 그렇다고 표시한다", async () => {
+    const { deps, execute, ticket } = setup({ claims: createMemoryClaimStore(() => NOW) })
+    const first = await confirmOrder(ticket, STAFF, deps)
+    const second = await confirmOrder(ticket, STAFF, { ...deps, run: instanceRun })
+    expect(first.status).toBe(200)
+    expect(first.body.claimStore).toBe("memory")
+    expect(second.status).toBe(409)
+    expect(second.body.claimStore).toBe("memory")
     expect(execute).toHaveBeenCalledTimes(1)
   })
 
@@ -178,6 +288,66 @@ describe("확인 경로 — POST /api/admin/ai/orders/confirm 의 판정(confirm
     const result = await confirmOrder(ticket, STAFF, deps)
     expect(result.status).toBe(409)
     expect(execute).not.toHaveBeenCalled()
+  })
+})
+
+describe("확인을 열 조건 — readConfirmSetup 한 곳", () => {
+  const UPSTASH = { UPSTASH_REDIS_REST_URL: "https://redis.invalid", UPSTASH_REDIS_REST_TOKEN: "token-for-test" }
+
+  it("운영 + 저장소 없음: 확인 저장소 없음, 카드에 표를 싣지 않는다 → 확인 버튼 없이 '화면에서 직접 등록'", async () => {
+    const setup = readConfirmSetup({ ADMIN_AI_TICKET_SECRET: SECRET, VERCEL_ENV: "production" })
+    expect(setup.claims).toBeNull()
+    expect(setup.cardSecret).toBeNull()
+    expect(setup.blocked).toBe("claim_store_missing")
+    const { deps, execute } = withWrites(setup.cardSecret)
+    const result = await collectTurn(turn("T1 카메라 견적 초안 만들어 줘", DEAL), deps)
+    const order = result.orders[0]
+    expect(order.server?.ticket).toBeUndefined()
+    expect(order.server?.directHref).toBe("/admin/quotes")
+    expect(execute).not.toHaveBeenCalled()
+  })
+
+  it("운영이 아닌 곳 + 저장소 없음: 인스턴스 메모리로 대신한다", () => {
+    for (const VERCEL_ENV of [undefined, "preview", "development"]) {
+      const setup = readConfirmSetup({ ADMIN_AI_TICKET_SECRET: SECRET, VERCEL_ENV })
+      expect(setup.claims?.kind).toBe("memory")
+      expect(setup.cardSecret).toBe(SECRET)
+    }
+  })
+
+  it("저장소가 있으면 운영에서도 연다(분산), 비밀이 없으면 열지 않는다", () => {
+    const setup = readConfirmSetup({ ADMIN_AI_TICKET_SECRET: SECRET, VERCEL_ENV: "production", ...UPSTASH })
+    expect(setup.claims?.kind).toBe("distributed")
+    expect(setup.cardSecret).toBe(SECRET)
+    const noSecret = readConfirmSetup({ VERCEL_ENV: "production", ...UPSTASH })
+    expect(noSecret.cardSecret).toBeNull()
+    expect(noSecret.blocked).toBe("no_secret")
+  })
+
+  it("Upstash 표시는 SET NX PX(표 만료 + 여유) 한 번 — 있으면 already_used, 연결 실패면 던진다", async () => {
+    const keys = new Set<string>()
+    const bodies: unknown[] = []
+    const fetcher = vi.fn(async (_url: string, init: RequestInit) => {
+      const command = JSON.parse(String(init.body)) as string[]
+      bodies.push(command)
+      const fresh = !keys.has(command[1])
+      keys.add(command[1])
+      return new Response(JSON.stringify({ result: fresh ? "OK" : null }), { status: 200 })
+    })
+    const store = createUpstashClaimStore({ url: "https://redis.invalid", token: "t" }, fetcher)
+    expect(await store.claim("jti-1")).toBe("claimed")
+    expect(await store.claim("jti-1")).toBe("already_used")
+    expect(bodies[0]).toEqual(["SET", "admin-ai:ticket-used:jti-1", "1", "NX", "PX", String(TICKET_CLAIM_TTL_MS)])
+    expect(TICKET_CLAIM_TTL_MS).toBeGreaterThan(TICKET_TTL_MS)
+
+    const down = createUpstashClaimStore({ url: "https://redis.invalid", token: "t" }, async () => {
+      throw new TypeError("fetch failed")
+    })
+    await expect(down.claim("jti-2")).rejects.toBeInstanceOf(ClaimStoreError)
+    const bad = createUpstashClaimStore({ url: "https://redis.invalid", token: "t" }, async () => new Response("{}", { status: 500 }))
+    await expect(bad.claim("jti-3")).rejects.toBeInstanceOf(ClaimStoreError)
+    const errored = createUpstashClaimStore({ url: "https://redis.invalid", token: "t" }, async () => new Response(JSON.stringify({ error: "ERR" }), { status: 200 }))
+    await expect(errored.claim("jti-4")).rejects.toBeInstanceOf(ClaimStoreError)
   })
 })
 

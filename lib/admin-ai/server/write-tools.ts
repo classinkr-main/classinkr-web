@@ -8,8 +8,18 @@ import { hwPlanMovement } from "@/lib/ops-tools/defs/hardware"
 import { quoteCreateDraft } from "@/lib/ops-tools/defs/quotes"
 import type { OpsToolDef } from "@/lib/ops-tools/types"
 
+import { internalHrefOf } from "../links"
+
 export const GALMAE_WRITE_TOOLS: readonly OpsToolDef[] = [quoteCreateDraft, hwPlanMovement]
 
 const BY_MCP_NAME: ReadonlyMap<string, OpsToolDef> = new Map(GALMAE_WRITE_TOOLS.map((def) => [def.mcpName, def]))
 
 export const getGalmaeWriteTool = (mcpName: string): OpsToolDef | undefined => BY_MCP_NAME.get(mcpName)
+
+/** 쓰기 도구의 어드민 화면 — 확인 답(이미 처리됨·실패)에 싣는 링크. 링크 목록에 있는 주소만. */
+const SCREEN_LINK_ID: Readonly<Record<string, string>> = { quote_create_draft: "admin:quotes", hw_plan_movement: "admin:hardware" }
+
+export const galmaeWriteScreenHref = (mcpName: string): string | undefined => {
+  const id = SCREEN_LINK_ID[mcpName]
+  return id ? internalHrefOf(id) : undefined
+}

@@ -28,9 +28,10 @@ const CLOSED_STATES: ReadonlySet<OrderState> = new Set([
   "undone",
   "expired",
   "aborted",
+  "processed",
 ])
 
-/** 취소·되돌림·만료·발송 취소 — 강조를 빼고 그리는 상태. */
+/** 취소·되돌림·만료·발송 취소·이미 처리됨 — 강조를 빼고 그리는 상태. */
 export function isClosedOrderState(state: OrderState): boolean {
   return CLOSED_STATES.has(state)
 }

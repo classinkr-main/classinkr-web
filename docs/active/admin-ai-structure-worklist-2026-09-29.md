@@ -340,7 +340,7 @@ B3 ────────┘
 | 담당자·링크 | `resolveContact`(열린 고객 먼저)·`findLinks` 를 카드로. 링크 목록에 맞는 화면이 없으면 근거 문서 답으로 넘긴다 | `lib/admin-ai/server/contact.ts` |
 | 조회 | `lib/ops-tools` R0 도구(재고·입출고·판매·딜·견적·방문)를 스태프 행위자로 실행기를 거쳐 부른다. 요약 한 줄(두괄식, 통화·단위) + 표 + 해당 어드민 화면 링크. 도구가 없는 조회(결제·문자 이력·할 일·통화 기록·리드 상태)는 "아직 준비 중 — 화면에서" 카드 | `lib/admin-ai/server/tools.ts`, `actor.ts` |
 | 쓰기 | 견적 초안(`quote_create_draft`)·HW 배송 예정(`hw_plan_movement`)만. 조율기는 **preview 만** 부르고 오더 카드(서버 계산 금액)를 낸다. 실행은 아래 확인 경로에서만 | `lib/admin-ai/server/writes.ts` |
-| 확인 | `POST /api/admin/ai/orders/confirm` — 서명·만료(15분)·행위자 일치 → 역할 재검사 → 실행기(`idempotency_key` = 표 id) → 실행 직전 preview 를 다시 계산해 서명된 요약과 대조 → 감사(도구 감사 + `logAdminAudit` `admin_ai.order.confirm`). **이 경로는 모델 어댑터·조율기를 import 하지 않는다**(모듈 그래프 시험) | `lib/admin-ai/server/confirm.ts`, `tickets.ts` |
+| 확인 | `POST /api/admin/ai/orders/confirm` — 서명·만료(15분)·행위자 일치 → 역할 재검사 → 실행기(`idempotency_key` = 표 id) → 실행 직전 preview 를 다시 계산해 서명된 요약과 대조 → **표 사용 표시(여러 서버가 함께 보는 저장소에 원자적으로 한 번)** → 실행 → 감사(도구 감사 + `logAdminAudit` `admin_ai.order.confirm`). 표시가 이미 있으면 실행하지 않고 409 "이미 처리된 확인입니다 — 결과는 화면에서 확인하세요"(화면 링크). **이 경로는 모델 어댑터·조율기를 import 하지 않는다**(모듈 그래프 시험) | `lib/admin-ai/server/confirm.ts`, `tickets.ts`, `ticket-claims.ts` |
 | 화면 | `liveAdminAiClient` 가 스트림을 기존 블록·카드로 그린다. 서버 오더의 확인은 서버 답으로만 완료·실패. 답 카드에 방법·주의·고객용 문안 칸 | `lib/admin-ai/client.ts`, `store.ts`, `components/admin/ai/cards/*` |
 
 **스위치·환경변수(사용자가 정하고 넣는다)**
@@ -350,14 +350,19 @@ B3 ────────┘
 | `NEXT_PUBLIC_ADMIN_AI_LIVE` | 빌드·서버 | `"1"` 이면 실제 모드 — 위젯이 서버와 대화하고 `/api/admin/ai/chat`·`/orders/confirm` 이 열린다. 아니면 404 이고 위젯은 시안 스위치를 따른다. 판정은 `lib/admin-ai/preview.ts` `adminAiMode()` 한 곳. 운영에서도 켤 수 있다(실제 자료) — 켜는 결정은 사용자 몫 |
 | `NEXT_PUBLIC_ADMIN_AI_PREVIEW` | 빌드 | 기존 시안 스위치. 실제 스위치가 꺼져 있고 운영이 아닐 때만 시안 |
 | `ADMIN_AI_TICKET_SECRET` | 서버 비밀(32자 이상) | 쓰기 확인 표 서명. **없으면 쓰기는 미리보기까지만**이고 카드는 확인 버튼 대신 "화면에서 직접 등록" 링크다. 바꾸면 발급된 표가 모두 무효가 된다 |
+| `UPSTASH_REDIS_REST_URL`·`UPSTASH_REDIS_REST_TOKEN` | 서버 비밀 | 표 일회용 판정 저장소 — 분산 요청 제한(`lib/server/rate-limit.ts`)과 같은 연결(`lib/server/upstash.ts`). **운영(`VERCEL_ENV=production`)에서 없으면 쓰기 확인을 열지 않는다**(표를 발급하지 않고 카드는 "화면에서 직접 등록", 확인 경로는 503 `claim_store_missing`). 운영이 아닌 곳에서는 인스턴스 메모리로 대신하고 응답(`claimStore: "memory"`)·로그에 표시한다 |
+
+**운영에서 쓰기(확인 버튼)를 여는 조건**: `ADMIN_AI_TICKET_SECRET` + `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` 셋 다(그리고 `NEXT_PUBLIC_ADMIN_AI_LIVE=1`). 판정은 `lib/admin-ai/server/ticket-claims.ts` `readConfirmSetup()` 한 곳 — 대화 쪽 카드의 표 발급과 확인 라우트가 같이 쓴다.
 
 역할: 대화·조회는 CRM 스태프 역할, 견적 초안은 견적 API 와 같은 역할 묶음, HW 배송 예정은 HW 출고 등록 API 와 같은 역할 묶음(`lib/admin-ai/server/actor.ts`). 연락처 원문은 SUPER_ADMIN·ADMIN 화면에만, 모델 입력은 늘 가린다.
 
 **쓰기 확인 방식과 한계(DB 표 없음)**
 
 - 표 = `{표 id, 도구, 인자, 인자 지문, 미리보기 요약 해시, 만료, 행위자}` 를 HMAC-SHA256 으로 서명한 문자열. 카드에 싣고 확인 때 그대로 돌려받는다. 인자는 서명만 하고 암호화하지 않는다(본인이 방금 미리본 값).
-- 같은 표를 두 번 눌러도 실행은 한 번 — 실행기의 idempotency 는 **인스턴스 메모리** 기준이다. HW 배송 예정은 도메인 행으로도 다시 찾지만, 견적 초안은 실을 칸이 없어 인스턴스가 다르면 두 번 만들어질 수 있다(B7 오더 저장소에서 막는다).
-- 표를 서버가 지우지 못한다(일회용 판정이 메모리) — 만료 15분이 상한이다. 오더함은 새로고침하면 사라진다(서버 이력 없음).
+- **표는 한 번만 쓴다(2026-11-25, 사용자 결정 "지금 막기")** — 확인 때 실행 직전에 표 id 를 Upstash 에 `SET admin-ai:ticket-used:<표 id> 1 NX PX 1200000`(표 만료 15분 + 여유 5분)으로 적는다. 적기에 성공한 요청만 실행한다. 이미 있으면(다른 서버·같은 서버·동시 요청) 실행하지 않고 409 `already_processed` — 같은 결과를 다시 돌려주지 않는다. 카드는 "이미 처리됨 · 결과는 화면에서 확인하세요" + 화면 링크로 바뀐다.
+- 저장소 오류(연결 실패·시간 초과)면 실행하지 않고 503 `claim_store_unavailable` — 실패하면 닫힌다.
+- **실행이 실패해도 표시는 그대로 둔다** — 같은 표를 다시 보내면 409 다(다시 누르면 중복 위험). 실패 답은 `consumed: true` 이고 카드는 "새 미리보기로 다시 확인"을 안내한다. 사용자는 다시 요청해 새 미리보기(새 표)를 받아 확인한다.
+- 표시 앞의 검사(서명·만료·계정·역할·미리보기 대조)에서 걸리면 표시는 남지 않는다. 오더함은 새로고침하면 사라진다(서버 이력 없음).
 - 되돌리기는 이번 범위가 아니다 — 카드에 "되돌리기는 화면에서".
 - 문자 발송·결제 확정·금액 변경·리드 변경·할 일·삭제 등 다른 오더는 "아직 준비 중 — 화면에서" 카드다.
 
@@ -376,7 +381,7 @@ B3 ────────┘
 | 확인 경로의 import | 공용 레지스트리 대신 쓰기 정의만 담은 표(`write-tools.ts`). 그래프 시험이 `lib/chatbot/llm`·`service`·`internal-cs-chat/gemini`·레지스트리를 금지 | `confirm/route.ts`, `writes-confirm.test.ts` |
 | 입력 | 화면 맥락 경로의 `..`·`//`·역슬래시 거절, 연락처 꼴 이름표는 비움, 본문 64KB 넘으면 413. 계정 id 없는 세션의 행위자 키는 출처·역할·이름 해시 | `request.ts`, `chat/route.ts`, `actor.ts`, `input-guards.test.ts` |
 
-**`ADMIN_AI_TICKET_SECRET` 을 운영에 넣기 전 조건(검토 안전-2, 미해결)**: 같은 표를 서로 다른 서버 인스턴스에 동시에 보내면 견적 초안이 두 번 만들어질 수 있다(일회용 판정이 인스턴스 메모리). 운영에 비밀을 넣기 전에 ① 이미 쓰는 분산 저장(Upstash)에 표 id 를 한 번만 넣는 방식(SET NX, 15분)으로 막거나 ② B7 오더 저장소가 붙은 뒤에 넣는다 — 사용자가 정한다. 비밀이 없으면 쓰기는 미리보기까지만이라 이 길은 열리지 않는다.
+**검토 안전-2(같은 표 동시 실행) — 닫음(2026-11-25)**: 사용자 결정 "지금 막기"로 위 일회용 판정을 넣었다. 운영에서 쓰기를 열려면 표 비밀과 분산 저장소가 둘 다 있어야 하고(위 조건), 하나라도 없으면 확인 버튼이 나오지 않는다. 시험: `tests/admin-ai/server/writes-confirm.test.ts`(동시 두 번 → 실행 1회·409, 순서대로 두 번 → 둘째 409, 저장소 없음 + 운영 → 503·버튼 없음, 개발 → 메모리, 저장소 오류 → 503, 실행 실패 뒤 → 409), `tests/admin-ai/live-client.test.tsx`(카드 "이미 처리됨").
 
 **아직인 것**
 

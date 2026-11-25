@@ -324,6 +324,7 @@ const CLOSED_LABEL: Partial<Record<OrderTicket["state"], string>> = {
   undone: "되돌림 · 원래대로 돌렸습니다",
   aborted: "발송 취소됨 · 나간 메시지 없음",
   expired: "만료됨 · 15분 동안 확인하지 않음",
+  processed: "이미 처리됨 · 결과는 화면에서 확인하세요",
 }
 
 export function OrderCard({

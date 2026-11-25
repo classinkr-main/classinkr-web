@@ -222,6 +222,59 @@ describe("서버 오더 확인 — 화면 상태", () => {
     expect(html).not.toContain("다시 작성")
   })
 
+  it("409 이미 처리됨이면 카드가 '이미 처리됨'으로 바뀌고 화면 링크를 보인다(확인 버튼 없음)", async () => {
+    const fetcher = vi.fn(async () =>
+      new Response(JSON.stringify({ ok: false, code: "already_processed", error: "이미 처리된 확인입니다 — 결과는 화면에서 확인하세요.", href: "/admin/quotes" }), { status: 409 })
+    )
+    const live = createLiveAdminAiClient(fetcher as unknown as typeof fetch)
+    const client: AdminAiClient = {
+      mode: "live",
+      ask: (_input, handlers) => {
+        handlers.onDone({ blocks: [{ kind: "order", orderId: ORDER.id }], order: ORDER })
+        return () => undefined
+      },
+      confirmOrder: live.confirmOrder,
+    }
+    const store = createAdminAiStore(client)
+    store.ask({ text: "견적 초안 만들어 줘", context: null })
+    store.actOnOrder(ORDER.id, { type: "confirm" })
+    await vi.waitFor(() => expect(store.getState().orders[ORDER.id].state).toBe("processed"))
+    expect(fetcher).toHaveBeenCalledTimes(1)
+    const order = store.getState().orders[ORDER.id]
+    const html = renderToStaticMarkup(<OrderCard order={order} now={NOW} onAction={() => undefined} preview={false} />)
+    expect(html).toContain("이미 처리됨")
+    expect(html).toContain("견적 화면에서 직접 만들기")
+    expect(html).not.toContain(">견적 초안 만들기</button>")
+    // 다시 눌러도 요청이 가지 않는다.
+    store.actOnOrder(ORDER.id, { type: "confirm" })
+    expect(fetcher).toHaveBeenCalledTimes(1)
+  })
+
+  it("표를 쓴 뒤 실행이 실패하면 새 미리보기로 다시 확인하라고 보인다", async () => {
+    const fetcher = vi.fn(async () =>
+      new Response(
+        JSON.stringify({ ok: false, code: "execute_failed", error: "저장하지 못했습니다. 이 확인은 다시 쓸 수 없습니다 — 다시 요청해 새 미리보기를 받아 확인해 주세요.", consumed: true }),
+        { status: 422 }
+      )
+    )
+    const live = createLiveAdminAiClient(fetcher as unknown as typeof fetch)
+    const client: AdminAiClient = {
+      mode: "live",
+      ask: (_input, handlers) => {
+        handlers.onDone({ blocks: [{ kind: "order", orderId: ORDER.id }], order: ORDER })
+        return () => undefined
+      },
+      confirmOrder: live.confirmOrder,
+    }
+    const store = createAdminAiStore(client)
+    store.ask({ text: "견적 초안 만들어 줘", context: null })
+    store.actOnOrder(ORDER.id, { type: "confirm" })
+    await vi.waitFor(() => expect(store.getState().orders[ORDER.id].state).toBe("failed"))
+    const html = renderToStaticMarkup(<OrderCard order={store.getState().orders[ORDER.id]} now={NOW} onAction={() => undefined} preview={false} />)
+    expect(html).toContain("새 미리보기")
+    expect(html).not.toContain("다시 작성")
+  })
+
   it("서명 표가 없는 서버 오더는 확인 버튼 대신 '화면에서 직접' 링크다", () => {
     const order = { ...ORDER, server: { directHref: "/admin/quotes", directLabel: "견적 화면에서 직접 만들기" } }
     const html = renderToStaticMarkup(<OrderCard order={order} now={NOW} onAction={() => undefined} preview={false} />)
