@@ -8,6 +8,7 @@ import { KPI_METRICS, type KpiBlocks, type KpiMetric, type KpiPair, type KpiRow 
 import { normalizeBranchMemberName } from "@/lib/branch/member-names"
 import type { BranchRevDeal } from "@/lib/repositories/branch-deals"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
+import { shareInFlightByArgs } from "@/lib/server/share-in-flight"
 
 export const SALES_LEDGER_IMPORTS_CACHE_TAG = "sales-ledger-imports"
 
@@ -369,6 +370,19 @@ function mapRevLineToDeal(line: RevLineDbRow, entries: RevPeriodEntryDbRow[]): B
 
 async function readRevDealsForImportRun(importRunId: string, team: string): Promise<BranchRevDeal[] | null> {
   const supabase = createSupabaseAdminClient()
+  // 엔트리 조회는 importRunId 만 필요하므로 라인 조회와 동시에 시작한다. 판정 순서는 그대로
+  // (라인 오류 → 라인 0건 → 엔트리 오류)이며, 라인 단계에서 일찍 반환/throw 해도 엔트리 promise 의
+  // reject 가 unhandled 로 새지 않게 noop catch 를 붙여 둔다(정상 경로에선 아래에서 그대로 await).
+  const entriesRead = fetchAllRows<RevPeriodEntryDbRow>((from, to) =>
+    supabase
+      .from("branch_rev_period_entries")
+      .select(REV_PERIOD_ENTRY_COLUMNS)
+      .eq("import_run_id", importRunId)
+      .order("id")
+      .range(from, to),
+  )
+  entriesRead.catch(() => {})
+
   const { rows: lines, error: lineError } = await fetchAllRows<RevLineDbRow>((from, to) => {
     let lineQuery = supabase
       .from("branch_rev_lines")
@@ -384,14 +398,7 @@ async function readRevDealsForImportRun(importRunId: string, team: string): Prom
 
   if (lines.length === 0) return null
 
-  const { rows: entryData, error: entryError } = await fetchAllRows<RevPeriodEntryDbRow>((from, to) =>
-    supabase
-      .from("branch_rev_period_entries")
-      .select(REV_PERIOD_ENTRY_COLUMNS)
-      .eq("import_run_id", importRunId)
-      .order("id")
-      .range(from, to),
-  )
+  const { rows: entryData, error: entryError } = await entriesRead
 
   if (entryError) {
     if (isMissingSalesLedgerImportTableError(entryError)) return null
@@ -414,7 +421,8 @@ async function readRevDealsForImportRun(importRunId: string, team: string): Prom
 // 자연히 갈리고, 캡처/활성화 경로의 revalidateTag(SALES_LEDGER_IMPORTS_CACHE_TAG)
 // (activateRevImportRun에서 호출)가 태그로도 즉시 무효화한다.
 const readCachedRevDealsForImportRun = unstable_cache(
-  async (importRunId: string, team: string) => readRevDealsForImportRun(importRunId, team),
+  // 같은 인스턴스의 동시 미스·재검증은 shareInFlightByArgs 로 한 번만 읽는다(unstable_cache 는 인스턴스 안 동시 호출을 합치지 않는다).
+  shareInFlightByArgs("sales-ledger-rev-import-run", readRevDealsForImportRun),
   ["sales-ledger-rev-import-run"],
   { revalidate: 300, tags: [SALES_LEDGER_IMPORTS_CACHE_TAG] },
 )

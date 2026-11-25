@@ -262,3 +262,186 @@ describe("DSH/KPI active-import content caching", () => {
     expect(client.activeSourceQueryCount).toBe(1)
   })
 })
+
+// REV 읽기: 라인/엔트리 동시 조회 + 인스턴스 내 in-flight 공유.
+describe("REV active-import read (concurrent lines/entries, shared in-flight)", () => {
+  type PageResult = { data: unknown[] | null; error: { code?: string; message: string } | null }
+
+  interface RevFixture {
+    lines: () => Promise<PageResult>
+    entries: () => Promise<PageResult>
+  }
+
+  async function loadRevRepository(fixture: RevFixture) {
+    vi.resetModules()
+    const calls = { lines: 0, entries: 0, order: [] as string[] }
+    const client = {
+      from: vi.fn((table: string) => {
+        if (table === "sales_ledger_active_sources") {
+          const builder = {
+            select: () => builder,
+            eq: () => builder,
+            then: (resolve: (v: { data: unknown; error: null }) => void) =>
+              resolve({
+                data: [
+                  { tab_key: "rev", import_run_id: "run-1", sales_ledger_import_runs: { started_at: "2026-07-01T00:00:00Z" } },
+                ],
+                error: null,
+              }),
+          }
+          return builder
+        }
+        const isLines = table === "branch_rev_lines"
+        const builder = {
+          select: () => builder,
+          eq: () => builder,
+          order: () => builder,
+          range: () => {
+            const key = isLines ? "lines" : "entries"
+            calls[key] += 1
+            calls.order.push(key)
+            return isLines ? fixture.lines() : fixture.entries()
+          },
+        }
+        return builder
+      }),
+    }
+    vi.doMock("@/lib/supabase/admin", () => ({ createSupabaseAdminClient: vi.fn(() => client) }))
+    // 실제 unstable_cache 처럼 동시 미스를 합치지 않는 스텁(완료 후에만 메모이즈).
+    vi.doMock("next/cache", () => ({
+      revalidateTag: vi.fn(),
+      unstable_cache: (fn: (...args: unknown[]) => Promise<unknown>) => {
+        const store = new Map<string, unknown>()
+        return async (...args: unknown[]) => {
+          const key = JSON.stringify(args)
+          if (store.has(key)) return store.get(key)
+          const result = await fn(...args)
+          store.set(key, result)
+          return result
+        }
+      },
+    }))
+    const repository = await import("@/lib/repositories/sales-ledger-imports")
+    const shared = await import("@/lib/server/share-in-flight")
+    shared.__resetShareInFlightForTests()
+    return { repository, calls }
+  }
+
+  const LINE = {
+    id: "line-1",
+    source_row: 5,
+    source_record_key: "k1",
+    account_name: "A학원",
+    branch_contact: null,
+    location: null,
+    scale: null,
+    importance: null,
+    team: "BD",
+    manager: "Han",
+    status: null,
+    deal_type: null,
+    product: null,
+    first_payment: null,
+    remark: null,
+    total_amount: 100,
+    raw: {},
+    created_at: "2026-07-01T00:00:00Z",
+  }
+  const ok = (data: unknown[]): Promise<PageResult> => Promise.resolve({ data, error: null })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.resetModules()
+  })
+
+  it("starts the entries read before the lines read has resolved", async () => {
+    let releaseLines: () => void = () => {}
+    const { repository, calls } = await loadRevRepository({
+      lines: () => new Promise<PageResult>((resolve) => { releaseLines = () => resolve({ data: [LINE], error: null }) }),
+      entries: () => ok([]),
+    })
+
+    const pending = repository.readRevDealsFromActiveImport(2026)
+    await new Promise((r) => setTimeout(r, 0))
+    expect(calls.order).toEqual(["entries", "lines"])
+    releaseLines()
+    const deals = await pending
+    expect(deals).toHaveLength(1)
+  })
+
+  it("shares one underlying read between concurrent callers with the same (importRunId, team)", async () => {
+    const { repository, calls } = await loadRevRepository({
+      lines: () => ok([LINE]),
+      entries: () => ok([]),
+    })
+
+    const [a, b] = await Promise.all([
+      repository.readRevDealsFromActiveImport(2026),
+      repository.readRevDealsFromActiveImport(2026),
+    ])
+
+    expect(calls.lines).toBe(1)
+    expect(calls.entries).toBe(1)
+    expect(a).toEqual(b)
+  })
+
+  it("does not merge callers with a different team", async () => {
+    const { repository, calls } = await loadRevRepository({
+      lines: () => ok([LINE]),
+      entries: () => ok([]),
+    })
+
+    await Promise.all([
+      repository.readRevDealsFromActiveImport(2026),
+      repository.readRevDealsFromActiveImport(2026, { team: "BD" }),
+    ])
+
+    expect(calls.lines).toBe(2)
+  })
+
+  it("line error wins over an entries error (missing table -> null, other -> throw)", async () => {
+    const missing = await loadRevRepository({
+      lines: () => Promise.resolve({ data: null, error: { code: "42P01", message: 'relation "branch_rev_lines" does not exist' } }),
+      entries: () => Promise.resolve({ data: null, error: { message: "entries boom" } }),
+    })
+    await expect(missing.repository.readRevDealsFromActiveImport(2026)).resolves.toBeNull()
+
+    const other = await loadRevRepository({
+      lines: () => Promise.resolve({ data: null, error: { message: "lines boom" } }),
+      entries: () => Promise.resolve({ data: null, error: { message: "entries boom" } }),
+    })
+    await expect(other.repository.readRevDealsFromActiveImport(2026)).rejects.toThrow(
+      "[sales-ledger-imports] REV line import read failed: lines boom",
+    )
+  })
+
+  it("returns null for zero lines even when the entries read rejects (no unhandled rejection)", async () => {
+    const unhandled = vi.fn()
+    process.on("unhandledRejection", unhandled)
+    const { repository } = await loadRevRepository({
+      lines: () => ok([]),
+      entries: () => Promise.reject(new Error("entries rejected")),
+    })
+
+    await expect(repository.readRevDealsFromActiveImport(2026)).resolves.toBeNull()
+    await new Promise((r) => setTimeout(r, 10))
+    process.off("unhandledRejection", unhandled)
+    expect(unhandled).not.toHaveBeenCalled()
+  })
+
+  it("entries error is reported after lines succeed (missing -> null, other -> throw)", async () => {
+    const missing = await loadRevRepository({
+      lines: () => ok([LINE]),
+      entries: () => Promise.resolve({ data: null, error: { code: "42P01", message: 'relation "branch_rev_period_entries" does not exist' } }),
+    })
+    await expect(missing.repository.readRevDealsFromActiveImport(2026)).resolves.toBeNull()
+
+    const other = await loadRevRepository({
+      lines: () => ok([LINE]),
+      entries: () => Promise.resolve({ data: null, error: { message: "entries boom" } }),
+    })
+    await expect(other.repository.readRevDealsFromActiveImport(2026)).rejects.toThrow(
+      "[sales-ledger-imports] REV period import read failed: entries boom",
+    )
+  })
+})
