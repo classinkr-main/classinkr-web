@@ -13,7 +13,7 @@
 | `npx tsx scripts/answer-index/search.ts "<낱말>" [--in unit,site,inventory] [--area <영역>] [--any] [--limit 20] [--json]` | 에이전트용 전문 검색 |
 | `npx tsx scripts/answer-index/search.ts --unit "<단위 id>"` · `--site "<site id>"` | 단위 하나(번호 붙은 문장·표시·해시), 페이지 문장 하나 |
 | `npx tsx scripts/answer-index/merge.ts [조각 …] [--dry-run] [--replace] [--keep-parts]` | 나눠 쓴 조각을 합친다 |
-| `npm run answer-index:verify` (= `npx tsx scripts/answer-index/verify.ts`) | V-1~V-12 검사. 오류가 있으면 종료 코드 1 |
+| `npm run answer-index:verify` (= `npx tsx scripts/answer-index/verify.ts`) | V-1~V-13 검사. 오류가 있으면 종료 코드 1 |
 | `npm run answer-index:compile [-- --json]` | 런타임과 같이 자료를 읽고 색인을 만들어 판·색인 해시·개수·크기·걸린 시간·색인에서 뺀 카드(이유별)를 찍는다. 파일은 쓰지 않는다 |
 | `npm run answer-index:calibrate [-- --dry-run] [-- --out <파일>] [-- --no-grid] [-- --report <보고.md>] [-- --no-cache]` | 질문 우주(`universe/`)를 관점 5겹으로 나눈 교차 맞춤으로 `calibration.json`을 쓰고 `manifest.json`을 다시 쓴다. 보정 묶음(`eval/calibration-set.json`)은 외부 확인 수치만 낸다. 쓸 우주 문항이 없으면 기본 문턱·계수로 만든다. 격자 108점을 다 훑으면 수십 분 걸려 진행을 찍고 격자 점 결과를 `node_modules/.cache/answer-index-calibrate/`에 둔다(`--report`: 점수 대 NODOC 곡선 등 질문 글 없는 보고) |
 | `npm run answer-index:cv [-- --folds 5] [-- --out <파일>] [-- --no-votes]` | 변형 5겹 교차 검증: 1위·결정 정답률, 못 찾음·엉뚱한 카드 비율, 종류·영역별 표, 혼동 표 |

@@ -1,5 +1,5 @@
 /**
- * 답 색인 자료 검사 V-1~V-12(사양 §6). CLI 는 scripts/answer-index/verify.ts.
+ * 답 색인 자료 검사 V-1~V-13(사양 §6). CLI 는 scripts/answer-index/verify.ts.
  *
  * - 오류(error)가 하나라도 있으면 실패다. 경고(warning)·알림(info)은 실패가 아니다.
  * - 자료가 아직 없는 영역(카드·nav 표시가 하나도 없는 영역)은 덮기 검사(V-9)·옛 id 대응 검사(V-10)를 알림으로만 낸다.
@@ -45,6 +45,7 @@ export const VERIFY_RULES = [
   { rule: "V-10", title: "옛 정해 둔 답 id 가 legacy-alias.json 에 있음(카드 또는 null)" },
   { rule: "V-11", title: "active policy 카드의 policyRef 가 사람 결정 대기열에 있음, site 근거 카드는 결정 전 review" },
   { rule: "V-12", title: "자료 합계 25MB 이하, 카드 id 형식, 스키마" },
+  { rule: "V-13", title: "first·headline 칸(R2): first 는 답 문장 안(접속어면 앞 문장과 함께), headline 은 60자 이하·요체 마침표·근거 문장이 카드 안·숫자/[메뉴]/영문 토큰이 카드 문장에 있음·부정 극성 일치·안전/정책 구절 없음" },
 ] as const
 
 export type VerifyRule = (typeof VERIFY_RULES)[number]["rule"] | "load"
@@ -94,6 +95,13 @@ export interface VerifyResult {
 }
 
 export const MAX_DATA_BYTES = 25 * 1024 * 1024
+
+/** R2 B6: 모호 규칙이 의무인 짧은 사전 형태(한 명의·수상한·독서에 걸림). */
+export const RISKY_SHORT_FORMS: readonly string[] = ["명의", "독", "수상"]
+/** R2 B6: 없는 개념 형태로 한 낱말만 쓰면 안 되는 말(구로 적는다). */
+export const ABSENT_BARE_FORMS_DENY: readonly string[] = ["수상", "채용", "총판", "대기실", "베타"]
+/** V-13: headline 길이 상한(글자 수). */
+export const HEADLINE_MAX_CHARS = 60
 
 /** 카드 등급별 최소 변형 수(§4.3·§5.2·§5.8). */
 export const MIN_VARIANTS = {
@@ -501,6 +509,12 @@ export async function runVerify(options: VerifyOptions = {}): Promise<VerifyResu
       add("V-5", "warning", item.file, `${absent.id}: verified.unitHits·siteHits(${verified.unitHits}·${verified.siteHits})가 다시 센 값(${unitHits}·${siteHits})과 다름`)
     }
     if (typeof absent.gapCard === "string" && !cardById.has(absent.gapCard)) add("V-5", "warning", item.file, `${absent.id}: gapCard 가 카드에 없음(${absent.gapCard})`)
+    // R2 B6 lint: 짧은 낱말 하나는 다른 뜻(수상한·채용 중·대기 중)에 걸려 엉뚱한 공백 답을 낳는다 — 구로 적는다.
+    for (const form of absent.forms) {
+      const compact = form.replace(/\s+/g, "")
+      if (ABSENT_BARE_FORMS_DENY.includes(compact)) add("V-5", "error", item.file, `${absent.id}: 짧은 낱말 "${form}" 한 개는 없는 개념 형태로 쓰지 않는다(구로 적는다: ${ABSENT_BARE_FORMS_DENY.join("·")})`)
+      else if (compact.length <= 2) add("V-5", "warning", item.file, `${absent.id}: 2글자 이하 형태 "${form}" — 다른 뜻에 걸리지 않는지 보고 구로 바꾼다`)
+    }
   }
   {
     const docVariants: string[] = []
@@ -545,6 +559,17 @@ export async function runVerify(options: VerifyOptions = {}): Promise<VerifyResu
       const owners = formOwners.get(key) ?? []
       if (!owners.some((owner) => owner.concept === concept.id)) owners.push({ concept: concept.id, file: item.file })
       formOwners.set(key, owners)
+    }
+  }
+  // R2 B6 lint: 문장 속 관형·수량 구에 흔한 짧은 형태는 끝 경계만으로 막히지 않는다 — 모호 규칙(requiresAny·notWith)을 의무로 한다.
+  for (const item of data.lexicon) {
+    const concept = item.value
+    if (!isObject(concept) || typeof concept.id !== "string") continue
+    for (const form of [...(concept.doc ?? []), ...(concept.visitor ?? [])]) {
+      const compact = formOf(form).replace(/\s+/g, "")
+      if (!RISKY_SHORT_FORMS.includes(compact)) continue
+      const ruled = (concept.ambiguous ?? []).some((rule) => rule.form.replace(/\s+/g, "") === compact && ((rule.requiresAny?.length ?? 0) > 0 || (rule.notWith?.length ?? 0) > 0))
+      if (!ruled) add("V-6", "error", item.file, `${concept.id}: 형태 "${compact}"는 '한 명의'·'수상한'처럼 다른 낱말에 걸리기 쉬워 모호 규칙(requiresAny 또는 notWith)이 있어야 함`)
     }
   }
   for (const [form, owners] of formOwners) {
@@ -726,6 +751,83 @@ export async function runVerify(options: VerifyOptions = {}): Promise<VerifyResu
     for (const item of data.universe) {
       const label = isObject(item.value) ? item.value.label : null
       if (typeof label === "string" && inactive.has(label)) add("V-11", "warning", item.file, `우주 ${item.value.id}: 색인에서 빠지는 카드(review·disabled)를 라벨로 씀(${label})`)
+    }
+  }
+
+  // ── V-13 first·headline(R2) ──
+  {
+    const policyPhrases = pendingPolicyPhrases(data.humanQueue.map((item) => item.value))
+    const NEGATION = /(않|없|못|안\s|불가|아니|말고|금지|지 마)/
+    const tokensOf = (text: string) => {
+      const tokens = new Set<string>()
+      for (const m of text.matchAll(/\d[\d,.]*/g)) tokens.add(m[0].replace(/[.,]$/, ""))
+      for (const m of text.matchAll(/\[[^\]]+\]/g)) tokens.add(m[0].replace(/\s+/g, ""))
+      for (const m of text.matchAll(/[A-Za-z][A-Za-z0-9.+-]*/g)) tokens.add(m[0].toLowerCase())
+      return tokens
+    }
+    const gramsOf = (text: string) => {
+      const compact = text.replace(/[^가-힣A-Za-z0-9]/g, "")
+      const out = new Set<string>()
+      for (let i = 0; i < compact.length - 1; i += 1) out.add(compact.slice(i, i + 2))
+      return out
+    }
+    for (const card of cards) {
+      const value = card.value
+      if (value.kind !== "doc" || !isObject(value.answer)) continue
+      const answer = value.answer as Record<string, unknown>
+      const refs = (Array.isArray(answer.sentences) ? answer.sentences : []).filter(isObject)
+      const inCard = (unit: unknown, i: unknown) => refs.some((ref) => ref.unit === unit && Array.isArray(ref.ids) && typeof i === "number" && (ref.ids as number[]).includes(i))
+      const level: VerifyLevel = value.status === "disabled" ? "warning" : "error"
+      const cardTexts = refs.flatMap((ref) => (Array.isArray(ref.ids) ? (ref.ids as number[]) : []).map((i) => fileUnits.get(String(ref.unit))?.sentences[i]?.text ?? ""))
+      if (answer.first !== undefined) {
+        const first = answer.first
+        if (!isObject(first) || typeof first.unit !== "string" || typeof first.i !== "number") add("V-13", "error", card.file, `${value.id}: first 는 { unit, i[, hash] }`)
+        else {
+          const sentence = fileUnits.get(first.unit)?.sentences[first.i]
+          if (!inCard(first.unit, first.i)) add("V-13", level, card.file, `${value.id}: first(${first.unit} #${first.i})가 답 문장에 없음`)
+          else if (!sentence) add("V-13", level, card.file, `${value.id}: first 문장이 단위에 없음(${first.unit} #${first.i})`)
+          else {
+            if (typeof first.hash === "string" && first.hash !== sentence.hash) add("V-13", level, card.file, `${value.id}: first 해시가 지금 문장과 다름`)
+            if (sentence.flags.includes("connective") && !inCard(first.unit, first.i - 1)) add("V-13", level, card.file, `${value.id}: first 가 접속어 문장인데 앞 문장이 카드에 없음`)
+            if (sentence.flags.some((flag) => flag === "caption" || flag === "meta" || flag === "nav" || flag === "table")) add("V-13", level, card.file, `${value.id}: first 로 쓸 수 없는 문장 표시(${sentence.flags.join(",")})`)
+          }
+        }
+      }
+      if (answer.headline !== undefined) {
+        const headline = answer.headline
+        if (!isObject(headline) || typeof headline.text !== "string" || !Array.isArray(headline.basis) || headline.basis.length === 0) {
+          add("V-13", "error", card.file, `${value.id}: headline 은 { text, basis[1+] }`)
+          continue
+        }
+        const text = headline.text.trim()
+        if (text.length === 0 || text.length > HEADLINE_MAX_CHARS) add("V-13", level, card.file, `${value.id}: headline 길이 ${text.length}자(1~${HEADLINE_MAX_CHARS})`)
+        if (!/(요|죠)\.$/.test(text)) add("V-13", level, card.file, `${value.id}: headline 은 요체 한 문장 마침표(…요.)로 끝난다`)
+        if (/[?!]/.test(text) || text.split(/(?<=[.])\s/).length > 1) add("V-13", level, card.file, `${value.id}: headline 은 문장 하나`)
+        const basisTexts: string[] = []
+        for (const ref of headline.basis as unknown[]) {
+          if (!isObject(ref) || typeof ref.unit !== "string" || typeof ref.i !== "number") {
+            add("V-13", level, card.file, `${value.id}: headline.basis 항목은 { unit, i, hash }`)
+            continue
+          }
+          const sentence = fileUnits.get(ref.unit)?.sentences[ref.i]
+          if (!inCard(ref.unit, ref.i) || !sentence) add("V-13", level, card.file, `${value.id}: headline 근거(${ref.unit} #${ref.i})가 카드 문장에 없음`)
+          else {
+            if (typeof ref.hash === "string" && ref.hash !== sentence.hash) add("V-13", level, card.file, `${value.id}: headline 근거 해시가 지금 문장과 다름`)
+            basisTexts.push(sentence.text)
+          }
+        }
+        const joined = cardTexts.join(" ")
+        const cardTokens = tokensOf(joined)
+        for (const token of tokensOf(text)) if (!cardTokens.has(token)) add("V-13", level, card.file, `${value.id}: headline 의 "${token}"이(가) 카드 문장에 없음(숫자·[메뉴]·영문은 카드 문장 것만)`)
+        if (basisTexts.length > 0 && NEGATION.test(text) !== NEGATION.test(basisTexts.join(" "))) add("V-13", level, card.file, `${value.id}: headline 부정 극성이 근거 문장과 다름`)
+        const cardGrams = gramsOf(joined)
+        const headGrams = gramsOf(text)
+        const shared = Array.from(headGrams).filter((gram) => cardGrams.has(gram)).length
+        if (headGrams.size > 0 && shared / headGrams.size < 0.5) add("V-13", level, card.file, `${value.id}: headline 낱말이 카드 문장과 ${Math.round((shared / headGrams.size) * 100)}%만 겹침(50% 이상이어야 함)`)
+        for (const rule of findSafetyViolations(text)) add("V-13", level, card.file, `${value.id}: headline 에 ${rule.label}`)
+        const normalized = normalizeForOverlap(text)
+        for (const phrase of policyPhrases) if (normalized.includes(phrase.key)) add("V-13", level, card.file, `${value.id}: headline 에 정책 대기 ${phrase.item} 구절`)
+      }
     }
   }
 
