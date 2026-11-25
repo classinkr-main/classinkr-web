@@ -22,6 +22,9 @@ import {
   uploadInternalCsAsset,
 } from "@/lib/storage/internal-cs-assets"
 
+// 큰 사진은 이미지 크기에 비례해 분석 시간이 늘어난다(vision.ts, 최대 40초).
+export const maxDuration = 60
+
 type Context = { params: Promise<{ id: string }> }
 
 const MAX_MULTIPART_BYTES = INTERNAL_CS_ASSET_MAX_BYTES + 512 * 1024
@@ -150,6 +153,7 @@ export async function POST(req: NextRequest, context: Context) {
         origin: analysis.origin,
         fallbackUsed: analysis.fallbackUsed,
         attemptedModels: analysis.attemptedModels,
+        failureKinds: analysis.failureKinds,
         guardrails: analysis.guardrails,
       },
       modelProvider: analysis.model ? "google" : null,

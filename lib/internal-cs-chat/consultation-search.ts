@@ -1,6 +1,7 @@
 import "server-only"
 
 import { redactPii } from "@/lib/chatbot/service"
+import { embedWithInternalCsModel } from "@/lib/internal-cs-chat/model-transport"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 
 /**
@@ -60,47 +61,23 @@ function hasSupabaseServerEnv() {
 }
 
 async function embedConsultationQuery(question: string): Promise<number[] | null> {
-  const apiKey = process.env.GEMINI_API_KEY?.trim()
   // 임베딩 전 PII 마스킹 — 고객 전화/이메일이 외부 임베딩 API로 유출되는 것을 막고, redactPii 통과본으로 저장된 상담 청크와 같은 토큰 공간에서 매칭 정합을 맞춘다.
   const redactedQuestion = redactPii(question)
-  if (!apiKey || !redactedQuestion.trim()) return null
+  if (!redactedQuestion.trim()) return null
 
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), EMBED_TIMEOUT_MS)
-
-  try {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${EMBED_MODEL}:embedContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        signal: controller.signal,
-        body: JSON.stringify({
-          model: `models/${EMBED_MODEL}`,
-          content: { parts: [{ text: redactedQuestion }] },
-          taskType: "RETRIEVAL_QUERY",
-          outputDimensionality: EMBED_DIM,
-        }),
-      }
-    )
-
-    if (!res.ok) {
-      console.warn(`[internal-cs] consultation search embed failed: HTTP ${res.status}`)
-      return null
-    }
-    const data = (await res.json()) as { embedding?: { values?: number[] } }
-    const values = data.embedding?.values
-    return Array.isArray(values) && values.length > 0 ? values : null
-  } catch (error) {
-    // 네트워크 예외와 2초 abort 모두 여기로 온다. 키/입력 부재(위 조기 return)는 조용히 둔다.
-    console.warn(
-      "[internal-cs] consultation search embed error:",
-      error instanceof Error ? error.message : error
-    )
-    return null
-  } finally {
-    clearTimeout(timeout)
-  }
+  // 연결(공개 챗봇 연결 따름·헤더 키)과 실패 분류는 model-transport 가 맡는다. 키가 없으면 kind=auth 로 돌아온다.
+  const result = await embedWithInternalCsModel({
+    text: redactedQuestion,
+    model: EMBED_MODEL,
+    dim: EMBED_DIM,
+    taskType: "RETRIEVAL_QUERY",
+    timeoutMs: EMBED_TIMEOUT_MS,
+  })
+  if (result.ok) return result.values
+  console.warn(
+    `[internal-cs] consultation search embed failed: ${result.kind}${result.status ? ` HTTP ${result.status}` : ""}`
+  )
+  return null
 }
 
 function toEvidence(row: MatchChannelChunkRow): ConsultationEvidence {

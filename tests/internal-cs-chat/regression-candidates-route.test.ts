@@ -13,7 +13,15 @@ const mocks = vi.hoisted(() => ({
   reviewInternalCsMessage: vi.fn(),
   updateInternalCsRegressionOutcome: vi.fn(),
   getInternalCsConversation: vi.fn(),
+  getInternalCsMessageById: vi.fn(),
+  revalidateTag: vi.fn(),
 }))
+
+// 판정 뒤 지표 캐시 무효화(revalidateTag)는 Next 요청 문맥 밖에서 던지므로 가짜로 둔다.
+vi.mock("next/cache", async () => {
+  const actual = await vi.importActual<typeof import("next/cache")>("next/cache")
+  return { ...actual, revalidateTag: mocks.revalidateTag }
+})
 
 vi.mock("@/lib/supabase/admin", () => ({
   createSupabaseAdminClient: mocks.createSupabaseAdminClient,
@@ -54,6 +62,7 @@ vi.mock("@/lib/repositories/internal-cs-chat", async () => {
     reviewInternalCsMessage: mocks.reviewInternalCsMessage,
     updateInternalCsRegressionOutcome: mocks.updateInternalCsRegressionOutcome,
     getInternalCsConversation: mocks.getInternalCsConversation,
+    getInternalCsMessageById: mocks.getInternalCsMessageById,
   }
 })
 
@@ -499,6 +508,13 @@ describe("PATCH messages/[messageId] regression-outcome-only path", () => {
 
   it("keeps the full review path unchanged when decision is present", async () => {
     mocks.requireVerifiedAdminContext.mockResolvedValue({ role: "ADMIN", name: "CS 담당자" })
+    mocks.getInternalCsMessageById.mockResolvedValue({
+      id: messageId,
+      conversation_id: conversationId,
+      role: "assistant",
+      content: "AI 초안 원문",
+      feedback_labels: [],
+    })
     mocks.reviewInternalCsMessage.mockResolvedValue({
       id: messageId,
       review_state: "approved",

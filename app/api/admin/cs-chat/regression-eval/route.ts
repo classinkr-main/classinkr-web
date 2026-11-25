@@ -6,6 +6,7 @@ import {
   runInternalCsRegressionEval,
 } from "@/lib/internal-cs-chat/regression-eval"
 import { isInternalCsChatNotReadyError } from "@/lib/repositories/internal-cs-chat"
+import { checkRateLimitDistributed } from "@/lib/server/rate-limit"
 
 // 후보 최대 10건 × (재생성 + 심판) 순차 LLM 호출 — 기본 함수 타임아웃을 넘을 수 있어 1분으로 연장.
 export const maxDuration = 60
@@ -16,6 +17,14 @@ export const maxDuration = 60
 export async function POST(req: NextRequest) {
   const admin = await requireVerifiedAdminContext(req, CRM_STAFF_ADMIN_API_ROLES)
   if (admin instanceof NextResponse) return admin
+
+  // 한 번에 최대 10건 × (재생성 + 심판)을 부르는 비싼 요청이라 사용자별 분당 3회로 제한한다(IC-16).
+  const { allowed } = await checkRateLimitDistributed(
+    admin.userId || admin.name?.trim() || admin.role,
+    "admin-internal-cs-regression-eval",
+    { windowMs: 60_000, max: 3 }
+  )
+  if (!allowed) return NextResponse.json({ error: "Too many requests" }, { status: 429 })
 
   const body = await req.json().catch(() => null)
   const raw =
