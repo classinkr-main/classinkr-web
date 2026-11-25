@@ -11,7 +11,7 @@ import "server-only"
 // 표는 한 번만 쓴다: 표시에 성공한 요청만 실행한다. 표시가 이미 있으면(다른 서버·같은 서버·앞선 실패) 실행하지 않고
 // 409 already_processed("이미 처리된 확인입니다 — 결과는 화면에서 확인하세요")다. 같은 결과를 다시 돌려주지 않는다.
 // 실행이 실패해도 표시는 그대로 둔다(다시 누르면 중복 위험) — 사용자는 새 미리보기를 받아 다시 확인한다(consumed).
-// 저장소가 없으면(운영) 503 claim_store_missing, 저장소 오류면 실행하지 않고 503 claim_store_unavailable(실패하면 닫힌다).
+// 저장소가 없으면(로컬 개발·시험이 아닌 곳) 503 claim_store_missing, 저장소 오류면 실행하지 않고 503 claim_store_unavailable(실패하면 닫힌다).
 // idempotency_key 는 여전히 표 id 다 — 같은 인스턴스에서 앞 실행을 기다린 뒤 replay 로 끝나면 그것도 409 다.
 // 감사: 도구 정의가 auditOps 로 남기고(mcp:galmae-…), 여기서 실제 어드민으로 logAdminAudit 를 한 줄 더 남긴다.
 // 되돌리기는 이번 범위가 아니다(카드에 "되돌리기는 화면에서").

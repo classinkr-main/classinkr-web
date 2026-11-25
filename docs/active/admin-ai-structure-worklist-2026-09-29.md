@@ -350,9 +350,9 @@ B3 ────────┘
 | `NEXT_PUBLIC_ADMIN_AI_LIVE` | 빌드·서버 | `"1"` 이면 실제 모드 — 위젯이 서버와 대화하고 `/api/admin/ai/chat`·`/orders/confirm` 이 열린다. 아니면 404 이고 위젯은 시안 스위치를 따른다. 판정은 `lib/admin-ai/preview.ts` `adminAiMode()` 한 곳. 운영에서도 켤 수 있다(실제 자료) — 켜는 결정은 사용자 몫 |
 | `NEXT_PUBLIC_ADMIN_AI_PREVIEW` | 빌드 | 기존 시안 스위치. 실제 스위치가 꺼져 있고 운영이 아닐 때만 시안 |
 | `ADMIN_AI_TICKET_SECRET` | 서버 비밀(32자 이상) | 쓰기 확인 표 서명. **없으면 쓰기는 미리보기까지만**이고 카드는 확인 버튼 대신 "화면에서 직접 등록" 링크다. 바꾸면 발급된 표가 모두 무효가 된다 |
-| `UPSTASH_REDIS_REST_URL`·`UPSTASH_REDIS_REST_TOKEN` | 서버 비밀 | 표 일회용 판정 저장소 — 분산 요청 제한(`lib/server/rate-limit.ts`)과 같은 연결(`lib/server/upstash.ts`). **운영(`VERCEL_ENV=production`)에서 없으면 쓰기 확인을 열지 않는다**(표를 발급하지 않고 카드는 "화면에서 직접 등록", 확인 경로는 503 `claim_store_missing`). 운영이 아닌 곳에서는 인스턴스 메모리로 대신하고 응답(`claimStore: "memory"`)·로그에 표시한다 |
+| `UPSTASH_REDIS_REST_URL`·`UPSTASH_REDIS_REST_TOKEN` | 서버 비밀 | 표 일회용 판정 저장소 — 분산 요청 제한(`lib/server/rate-limit.ts`)과 같은 연결(`lib/server/upstash.ts`). **없으면 로컬 개발·시험 말고는 쓰기 확인을 열지 않는다**(표를 발급하지 않고 카드는 "화면에서 직접 등록", 확인 경로는 503 `claim_store_missing`). Vercel 운영·미리보기, 자체 호스팅 `next build && next start`, `NODE_ENV` 가 없거나 다른 값인 곳이 모두 닫힌다. 인스턴스 메모리로 대신하는 곳은 `NODE_ENV` 가 `development`·`test` 이고 `VERCEL_ENV` 가 `production`·`preview` 가 아닐 때뿐이다(값은 앞뒤 공백·대소문자를 다듬어 비교, `allowsMemoryClaims`). 그때는 응답(`claimStore: "memory"`)·로그에 표시한다 |
 
-**운영에서 쓰기(확인 버튼)를 여는 조건**: `ADMIN_AI_TICKET_SECRET` + `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` 셋 다(그리고 `NEXT_PUBLIC_ADMIN_AI_LIVE=1`). 판정은 `lib/admin-ai/server/ticket-claims.ts` `readConfirmSetup()` 한 곳 — 대화 쪽 카드의 표 발급과 확인 라우트가 같이 쓴다.
+**배포(운영·미리보기·자체 호스팅)에서 쓰기(확인 버튼)를 여는 조건**: `ADMIN_AI_TICKET_SECRET` + `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` 셋 다(그리고 `NEXT_PUBLIC_ADMIN_AI_LIVE=1`). 판정은 `lib/admin-ai/server/ticket-claims.ts` `readConfirmSetup()` 한 곳 — 대화 쪽 카드의 표 발급과 확인 라우트가 같이 쓴다.
 
 역할: 대화·조회는 CRM 스태프 역할, 견적 초안은 견적 API 와 같은 역할 묶음, HW 배송 예정은 HW 출고 등록 API 와 같은 역할 묶음(`lib/admin-ai/server/actor.ts`). 연락처 원문은 SUPER_ADMIN·ADMIN 화면에만, 모델 입력은 늘 가린다.
 
@@ -381,7 +381,7 @@ B3 ────────┘
 | 확인 경로의 import | 공용 레지스트리 대신 쓰기 정의만 담은 표(`write-tools.ts`). 그래프 시험이 `lib/chatbot/llm`·`service`·`internal-cs-chat/gemini`·레지스트리를 금지 | `confirm/route.ts`, `writes-confirm.test.ts` |
 | 입력 | 화면 맥락 경로의 `..`·`//`·역슬래시 거절, 연락처 꼴 이름표는 비움, 본문 64KB 넘으면 413. 계정 id 없는 세션의 행위자 키는 출처·역할·이름 해시 | `request.ts`, `chat/route.ts`, `actor.ts`, `input-guards.test.ts` |
 
-**검토 안전-2(같은 표 동시 실행) — 닫음(2026-11-25)**: 사용자 결정 "지금 막기"로 위 일회용 판정을 넣었다. 운영에서 쓰기를 열려면 표 비밀과 분산 저장소가 둘 다 있어야 하고(위 조건), 하나라도 없으면 확인 버튼이 나오지 않는다. 시험: `tests/admin-ai/server/writes-confirm.test.ts`(동시 두 번 → 실행 1회·409, 순서대로 두 번 → 둘째 409, 저장소 없음 + 운영 → 503·버튼 없음, 개발 → 메모리, 저장소 오류 → 503, 실행 실패 뒤 → 409), `tests/admin-ai/live-client.test.tsx`(카드 "이미 처리됨").
+**검토 안전-2(같은 표 동시 실행) — 닫음(2026-11-25)**: 사용자 결정 "지금 막기"로 위 일회용 판정을 넣었다. 로컬 개발·시험이 아닌 모든 곳에서 쓰기를 열려면 표 비밀과 분산 저장소가 둘 다 있어야 하고(위 조건), 하나라도 없으면 확인 버튼이 나오지 않는다. 반박 확인 고침: 처음에는 `VERCEL_ENV === "production"` 한 값만 닫아서 자체 호스팅 운영(`NODE_ENV=production`, `VERCEL_ENV` 없음)·Vercel 미리보기·`" production"` 같은 어긋난 값이 메모리로 열렸다 — 이제 메모리를 허용할 곳(로컬 `next dev`·시험)을 좁게 적고 나머지는 닫는다. 시험: `tests/admin-ai/server/writes-confirm.test.ts`(동시 두 번 → 실행 1회·409, 순서대로 두 번 → 둘째 409, 저장소 없음 + Vercel 운영·미리보기·자체 호스팅 운영·값 없음·어긋난 값 → 표 없음·503, 저장소 있으면 운영·미리보기 모두 분산, 로컬 개발·시험 → 메모리, 저장소 오류 → 503, 실행 실패 뒤 → 409), `tests/admin-ai/live-client.test.tsx`(카드 "이미 처리됨").
 
 **아직인 것**
 

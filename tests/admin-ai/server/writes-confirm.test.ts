@@ -221,7 +221,7 @@ describe("확인 경로 — POST /api/admin/ai/orders/confirm 의 판정(confirm
     expect(execute).toHaveBeenCalledTimes(1)
   })
 
-  it("저장소가 없으면(운영) 503 이고 실행 0회", async () => {
+  it("저장소가 없으면(로컬 개발·시험 아님) 503 이고 실행 0회", async () => {
     const { deps, execute, ticket } = setup({ claims: null })
     const result = await confirmOrder(ticket, STAFF, deps)
     expect(result.status).toBe(503)
@@ -229,7 +229,7 @@ describe("확인 경로 — POST /api/admin/ai/orders/confirm 의 판정(confirm
     expect(execute).not.toHaveBeenCalled()
   })
 
-  it("메모리 대신 판정(운영 아님)은 한 번만 통과하고 응답에 그렇다고 표시한다", async () => {
+  it("메모리 대신 판정(로컬 개발·시험)은 한 번만 통과하고 응답에 그렇다고 표시한다", async () => {
     const { deps, execute, ticket } = setup({ claims: createMemoryClaimStore(() => NOW) })
     const first = await confirmOrder(ticket, STAFF, deps)
     const second = await confirmOrder(ticket, STAFF, { ...deps, run: instanceRun })
@@ -307,17 +307,48 @@ describe("확인을 열 조건 — readConfirmSetup 한 곳", () => {
     expect(execute).not.toHaveBeenCalled()
   })
 
-  it("운영이 아닌 곳 + 저장소 없음: 인스턴스 메모리로 대신한다", () => {
-    for (const VERCEL_ENV of [undefined, "preview", "development"]) {
-      const setup = readConfirmSetup({ ADMIN_AI_TICKET_SECRET: SECRET, VERCEL_ENV })
-      expect(setup.claims?.kind).toBe("memory")
-      expect(setup.cardSecret).toBe(SECRET)
+  it("로컬 개발·시험(NODE_ENV development·test, Vercel 배포 아님) + 저장소 없음: 인스턴스 메모리로 대신한다", () => {
+    for (const NODE_ENV of ["development", "test"]) {
+      for (const VERCEL_ENV of [undefined, "development"]) {
+        const setup = readConfirmSetup({ ADMIN_AI_TICKET_SECRET: SECRET, NODE_ENV, VERCEL_ENV })
+        expect(setup.claims?.kind).toBe("memory")
+        expect(setup.cardSecret).toBe(SECRET)
+      }
+    }
+  })
+
+  it("그 밖의 모든 곳 + 저장소 없음: 닫는다 — 자체 호스팅 next start, Vercel 미리보기, 값이 빠지거나 어긋난 경우", () => {
+    const closed: Record<string, string | undefined>[] = [
+      // 자체 호스팅 `next build && next start` 운영 — VERCEL_ENV 가 없다.
+      { NODE_ENV: "production" },
+      { NODE_ENV: "production", VERCEL_ENV: undefined },
+      // Vercel 미리보기 — 실데이터에 붙어 있을 수 있다.
+      { NODE_ENV: "production", VERCEL_ENV: "preview" },
+      { NODE_ENV: "development", VERCEL_ENV: "preview" },
+      { NODE_ENV: "development", VERCEL_ENV: "production" },
+      // 앞뒤 공백·대소문자가 어긋난 값도 운영으로 본다.
+      { NODE_ENV: "development", VERCEL_ENV: " production" },
+      { NODE_ENV: "development", VERCEL_ENV: "Preview" },
+      { NODE_ENV: " production" },
+      // 값이 아예 없으면 개발이라고 짐작하지 않는다.
+      {},
+      { NODE_ENV: "" },
+      { NODE_ENV: "staging" },
+    ]
+    for (const env of closed) {
+      const setup = readConfirmSetup({ ADMIN_AI_TICKET_SECRET: SECRET, ...env })
+      expect(setup.claims, JSON.stringify(env)).toBeNull()
+      expect(setup.cardSecret, JSON.stringify(env)).toBeNull()
+      expect(setup.blocked, JSON.stringify(env)).toBe("claim_store_missing")
     }
   })
 
   it("저장소가 있으면 운영에서도 연다(분산), 비밀이 없으면 열지 않는다", () => {
     const setup = readConfirmSetup({ ADMIN_AI_TICKET_SECRET: SECRET, VERCEL_ENV: "production", ...UPSTASH })
     expect(setup.claims?.kind).toBe("distributed")
+    for (const env of [{ NODE_ENV: "production" }, { NODE_ENV: "production", VERCEL_ENV: "preview" }]) {
+      expect(readConfirmSetup({ ADMIN_AI_TICKET_SECRET: SECRET, ...env, ...UPSTASH }).claims?.kind).toBe("distributed")
+    }
     expect(setup.cardSecret).toBe(SECRET)
     const noSecret = readConfirmSetup({ VERCEL_ENV: "production", ...UPSTASH })
     expect(noSecret.cardSecret).toBeNull()

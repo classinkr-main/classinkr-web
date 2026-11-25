@@ -13,7 +13,7 @@ import { runOpsTool } from "@/lib/ops-tools/run"
 
 // 갈매봇 오더 확인(실행) — 사람이 카드에서 누른 확인만 여기로 온다. 이 경로에는 모델이 없다(lib/admin-ai/server/confirm.ts).
 // 세션 쿠키 + same-origin(requireVerifiedAdminContext) → 서명 표 검증·역할 재검사·미리보기 대조 → 표 사용 표시(한 번) → 실행기 → 감사.
-// 확인을 열 수 있는지(표 비밀 + 일회용 저장소)는 readConfirmSetup 한 곳에서 본다 — 운영에서 저장소가 없으면 503.
+// 확인을 열 수 있는지(표 비밀 + 일회용 저장소)는 readConfirmSetup 한 곳에서 본다 — 저장소가 없으면 로컬 개발·시험 말고는 503.
 export const dynamic = "force-dynamic"
 
 export async function POST(req: NextRequest) {
@@ -25,8 +25,8 @@ export async function POST(req: NextRequest) {
   const body = (await req.json().catch(() => null)) as { ticket?: unknown } | null
   const setup = readConfirmSetup()
   if (setup.claims?.kind === "memory") {
-    // 운영이 아닌 곳의 대신 판정 — 여러 인스턴스 사이의 중복은 막지 못한다.
-    console.warn("[admin-ai/confirm] 확인 저장소 미설정: 표 일회용 판정을 인스턴스 메모리로 대신한다(운영 아님).")
+    // 로컬 개발·시험의 대신 판정 — 여러 인스턴스 사이의 중복은 막지 못한다.
+    console.warn("[admin-ai/confirm] 확인 저장소 미설정: 표 일회용 판정을 인스턴스 메모리로 대신한다(로컬 개발·시험).")
   }
   const result = await confirmOrder(body?.ticket, admin, {
     getTool: getGalmaeWriteTool,
