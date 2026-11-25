@@ -15,7 +15,9 @@ import {
   escalationInputFromDetail,
   getLastQuestion,
   hasDraftPlaceholder,
+  latestApprovedAnswer,
   maskAssetFileName,
+  needsReReview,
   prepareInternalDraftCopy,
   sourceHref,
   sourceLink,
@@ -210,6 +212,42 @@ describe("초안 안전화(B1)", () => {
     expect(holding.text).toBe(buildCustomerHoldingTemplate(DETAIL))
     expect(hasDraftPlaceholder(holding.text)).toBe(true)
     for (const raw of RAW) expect(holding.text).not.toContain(raw)
+  })
+
+  // 검토(안전-1): 즉시 승인(⚡) 때 저장된 행(quick_approved 라벨, 교정본 = AI 원문)은 사람이 확인한 최종본이 아니다.
+  // 이력·회귀 기준(history.ts)과 같은 규칙으로 고객 초안의 기준에서 뺀다. 값은 지어낸 것이다.
+  it("skips legacy quick-approved rows and corrections identical to the AI original", () => {
+    const internal = "## 내부 분석\n[선례] 가상학원 상담에서 같은 증상. 원가 2만원.\n## 고객 전달 초안(검토 전)\n안녕하세요."
+    const legacy: InternalCsMessage = {
+      ...message("assistant", internal),
+      id: "a-legacy",
+      review_state: "approved",
+      corrected_content: internal,
+      feedback_labels: ["quick_approved"],
+    }
+    const base = buildCustomerDraftBase(withMessages([message("user", "질문"), legacy]))
+    expect(base.source).toBe("holding")
+    expect(base.text).not.toContain("[선례]")
+    expect(latestApprovedAnswer(withMessages([legacy]))).toBeNull()
+    expect(needsReReview(legacy)).toBe(true)
+
+    // 라벨이 없어도 교정본이 원문과 (공백·문장부호·폭 없는 문자만 다르게) 같으면 같은 취급.
+    const sameAsOriginal: InternalCsMessage = { ...legacy, id: "a-same", feedback_labels: [], corrected_content: `${internal}.\u200B` }
+    expect(buildCustomerDraftBase(withMessages([sameAsOriginal])).source).toBe("holding")
+    expect(needsReReview(sameAsOriginal)).toBe(true)
+
+    // 그 앞의 사람 승인본은 그대로 기준이 된다.
+    const human: InternalCsMessage = {
+      ...message("assistant", "AI 원문"),
+      id: "a-human",
+      review_state: "approved",
+      corrected_content: "확인 결과를 안내드리겠습니다.",
+      feedback_labels: ["human_approved"],
+    }
+    const mixed = buildCustomerDraftBase(withMessages([human, legacy]))
+    expect(mixed.source).toBe("approved")
+    expect(mixed.text).toBe("확인 결과를 안내드리겠습니다.")
+    expect(needsReReview(human)).toBe(false)
   })
 
   it("detects fill-in placeholders but not redaction tokens", () => {

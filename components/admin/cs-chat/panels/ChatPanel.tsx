@@ -31,6 +31,7 @@ import { type ChangeEvent, type FormEvent, type RefObject, useCallback, useEffec
 import BlogMarkdownRenderer from "@/components/blog/BlogMarkdownRenderer"
 import { ClassInInternalAIIcon } from "@/components/ui/ClassInInternalAIIcon"
 import { cn } from "@/lib/utils"
+import { needsReReview } from "@/lib/internal-cs-chat/review-guard"
 
 import AnswerFooterChip from "../components/AnswerFooterChip"
 import ModelStatusBanner from "../components/ModelStatusBanner"
@@ -47,6 +48,7 @@ import {
   CONSOLE_CONTENT_CLASS,
   MAX_PENDING_ASSETS,
   MODEL_MODE_SEGMENTS,
+  RE_REVIEW_META,
   REVIEW_META,
 } from "../constants"
 import {
@@ -521,11 +523,13 @@ export default function ChatPanel({
                   </article>
                 )
               }
-              const review = REVIEW_META[message.review_state]
+              // 예전 즉시 승인 행(quick_approved·교정본 = AI 원문)은 승인 최종본으로 보이지 않고 '재검토 필요'로 보인다(검토 안전-1).
+              const reReview = needsReReview(message)
+              const review = reReview ? RE_REVIEW_META : REVIEW_META[message.review_state]
               const sources = normalizeSourceRefs(message.source_refs)
               const isLatestAssistant = latestAssistant?.id === message.id
-              const isApproved = message.review_state === "approved"
-              const visibleContent = message.corrected_content && message.review_state === "approved"
+              const isApproved = message.review_state === "approved" && !reReview
+              const visibleContent = message.corrected_content && isApproved
                 ? message.corrected_content
                 : message.content
 
@@ -563,7 +567,8 @@ export default function ChatPanel({
                           "overflow-hidden rounded-lg border border-black/[0.08] bg-white",
                           // 검토 상태 레일 — 스크롤 중에도 초안/승인 상태가 읽히는 1차 신호.
                           message.review_state === "pending" && "border-l-[3px] border-l-[#ECD29C]",
-                          message.review_state === "approved" && "border-l-[3px] border-l-[#BDEFD8]",
+                          isApproved && "border-l-[3px] border-l-[#BDEFD8]",
+                          reReview && "border-l-[3px] border-l-[#F2B8B8]",
                           message.review_state === "changes_requested" && "border-l-[3px] border-l-[#F2B8B8]"
                         )}
                       >
@@ -612,7 +617,7 @@ export default function ChatPanel({
                             }}
                           />
 
-                          {message.review_state === "approved" && message.corrected_content ? (
+                          {isApproved && message.corrected_content ? (
                             <div className="mt-3 border-t border-black/[0.06] pt-3">
                               <PromoteKnowledgeControl
                                 pending={promotingMessageId === message.id}

@@ -4,6 +4,7 @@ import { useState } from "react"
 import { Building, CheckCircle2, Check, Copy, LockKeyhole, PanelRightOpen, Sparkles, XCircle } from "lucide-react"
 
 import { cn } from "@/lib/utils"
+import { needsReReview } from "@/lib/internal-cs-chat/review-guard"
 import type { InternalCsMessage } from "../types"
 
 interface SmartActionCardProps {
@@ -31,7 +32,9 @@ export default function SmartActionCard({
   onCopyCustomerHolding,
   onRequestHq,
 }: SmartActionCardProps) {
-  const isApproved = message.review_state === "approved"
+  // 예전 즉시 승인 행(교정본 = AI 원문)은 승인 상태여도 고객용 최종 답으로 쓰지 않는다(검토 안전-1).
+  const reReview = needsReReview(message)
+  const isApproved = message.review_state === "approved" && !reReview
   const isPending = message.review_state === "pending"
   const [hintConfirmed, setHintConfirmed] = useState(false)
 
@@ -92,6 +95,10 @@ export default function SmartActionCard({
             <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-[#084734]">
               <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
               담당자 승인 완료 · 고객용 최종 답이 확정되었습니다
+            </span>
+          ) : reReview ? (
+            <span className="text-[11px] font-semibold text-[#8F2C2C]">
+              재검토 필요 · 예전 즉시 승인본이라 고객용 최종 답으로 쓰지 않습니다
             </span>
           ) : message.review_state === "rejected" ? (
             <span className="text-[11px] text-[#615D59]">사용 안 함</span>

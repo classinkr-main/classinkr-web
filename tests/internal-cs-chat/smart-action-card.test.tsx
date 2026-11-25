@@ -29,6 +29,9 @@ const mockApprovedMessage: InternalCsMessage = {
   ...mockPendingMessage,
   id: "msg-ops-approved",
   review_state: "approved",
+  // 승인 라우트는 사람이 고친 고객용 최종본(교정본)을 요구한다. 교정본 없는 승인 행은 '재검토 필요'로 보인다(검토 안전-1).
+  corrected_content: "OPS 전원 설정과 슬롯 접촉을 먼저 확인해 주세요.",
+  feedback_labels: ["human_approved"],
   reviewed_by: "김담당",
   reviewed_at: new Date().toISOString(),
 }
@@ -85,6 +88,23 @@ describe("SmartActionCard component", () => {
     expect(html).not.toContain("지식 승격")
     expect(html).not.toContain("검토 열기")
     expect(html).toContain("고객 안내 복사")
+  })
+})
+
+describe("SmartActionCard legacy quick-approved rows", () => {
+  it("예전 즉시 승인 행은 승인 완료로 보이지 않고 재검토 필요로 보이며 고객 안내 복사를 잠근다(검토 안전-1)", () => {
+    const legacy: InternalCsMessage = {
+      ...mockApprovedMessage,
+      id: "msg-legacy",
+      corrected_content: mockPendingMessage.content,
+      feedback_labels: ["quick_approved"],
+    }
+    const html = renderToStaticMarkup(
+      <SmartActionCard message={legacy} isLatest onOpenReview={vi.fn()} onCopyCustomerHolding={vi.fn()} onRequestHq={vi.fn()} />
+    )
+    expect(html).not.toContain("담당자 승인 완료")
+    expect(html).toContain("재검토 필요")
+    expect(html).toContain("담당자 승인 후 복사 가능")
   })
 })
 

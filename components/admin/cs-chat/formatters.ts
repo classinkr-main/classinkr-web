@@ -8,6 +8,7 @@
 
 import type { EscalationInput } from "@/lib/internal-cs-chat/escalation-types"
 import { redactInternalCsDraft, redactInternalCsValue } from "@/lib/internal-cs-chat/redact"
+import { isUsableApprovedAnswer, needsReReview } from "@/lib/internal-cs-chat/review-guard"
 
 import type {
   ConversationDetailResponse,
@@ -225,14 +226,19 @@ export function hasDraftPlaceholder(text: string) {
   return /\[[^\]\n]*(?:입력|예정 시각)[^\]\n]*\]/.test(text)
 }
 
-/** 가장 최근에 승인된 답의 교정본(고객에게 보낼 최종본). 없으면 null. */
+/**
+ * 가장 최근에 사람이 승인한 답의 교정본(고객에게 보낼 최종본). 없으면 null.
+ * 예전 즉시 승인 행(quick_approved)이나 교정본이 AI 원문과 같은 행은 내부 분석이 섞인 원문이라 건너뛴다
+ * (history.ts 와 같은 규칙 — isUsableApprovedAnswer).
+ */
 export function latestApprovedAnswer(detail: ConversationDetailResponse | null) {
   if (!detail) return null
-  const approved = [...detail.messages]
-    .reverse()
-    .find((message) => message.role === "assistant" && message.review_state === "approved" && message.corrected_content?.trim())
+  const approved = [...detail.messages].reverse().find((message) => isUsableApprovedAnswer(message))
   return approved?.corrected_content?.trim() ?? null
 }
+
+/** 승인 상태로 저장됐지만 사람 승인본으로 쓸 수 없는 답(예전 즉시 승인 등) — 화면은 '재검토 필요'로 보인다. */
+export { needsReReview }
 
 /**
  * 고객 안내 초안의 기준. 승인된 교정본이 있으면 그것을(가림 적용), 없으면 대기 안내 틀을 쓴다.

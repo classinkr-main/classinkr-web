@@ -9,7 +9,7 @@
  * - 미검토 초안(pending)·수정 요청·사용 안 함은 넣지 않는다.
  */
 import type { InternalCsChatTurn } from "@/lib/internal-cs-chat/gemini"
-import { hasQuickApprovedLabel, isSameAsOriginal } from "@/lib/internal-cs-chat/review-guard"
+import { isUsableApprovedAnswer } from "@/lib/internal-cs-chat/review-guard"
 
 export const CONTEXT_RESET_KIND = "copilot_context_reset"
 export const MAX_HISTORY_TURNS = 8
@@ -39,11 +39,7 @@ export function messagesAfterLastContextReset<T extends HistoryMessage>(messages
 
 /** 사람이 확인해 쓴 승인본인지(이력·회귀 기준으로 쓸 수 있는지). */
 export function isHumanApprovedAnswer(message: HistoryMessage) {
-  if (message.role !== "assistant" || message.review_state !== "approved") return false
-  if (hasQuickApprovedLabel(message.feedback_labels)) return false
-  const corrected = message.corrected_content?.trim()
-  if (!corrected) return false
-  return !isSameAsOriginal(corrected, message.content)
+  return isUsableApprovedAnswer(message)
 }
 
 export function buildApprovedHistory(messages: readonly HistoryMessage[]): InternalCsChatTurn[] {
