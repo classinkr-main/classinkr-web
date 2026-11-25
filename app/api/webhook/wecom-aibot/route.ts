@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from "crypto"
+import { createHmac, randomUUID } from "crypto"
 import { after, NextRequest, NextResponse } from "next/server"
 
 import { checkRateLimitDistributed, getClientIp } from "@/lib/server/rate-limit"
@@ -13,7 +13,7 @@ import { buildWecomBridgeDeps, getWecomDedupStore, sendResponseMarkdown } from "
 // GET: URL 검증(msg_signature·timestamp·nonce·echostr → 1초 안에 평문, 101033).
 // POST: {"encrypt"} 본문 → 서명·시각 창(±5분)·크기 상한·요청 제한 → 복호화 → msgid 중복 제거 → 보낸 사람 확인 →
 //       조율기 → 위컴 글. 짧으면 바로(스트림 finish), 길면 "확인 중" 스트림으로 답하고 after 로 response_url 에 한 번.
-// 로그에는 글 내용·userid 원문을 싣지 않는다(해시·결과 코드만).
+// 로그에는 글 내용·userid 원문을 싣지 않는다(열쇠를 섞은 HMAC 앞 12자·결과 코드만 — 가명이다. 열쇠를 가진 쪽은 되짚을 수 있다).
 export const runtime = "nodejs"
 export const maxDuration = 60
 export const dynamic = "force-dynamic"
@@ -29,7 +29,8 @@ export const RATE_LIMITED_TEXT = "요청이 너무 잦습니다. 잠시 뒤 다�
 
 const notFound = () => NextResponse.json({ error: "Not found" }, { status: 404 })
 const emptyOk = () => new NextResponse(null, { status: 200 })
-const hashOf = (value: string) => createHash("sha256").update(value).digest("hex").slice(0, 12)
+/** 로그·중복 제거·요청 제한 키 — EncodingAESKey 를 열쇠로 한 HMAC(소금 없는 해시는 userid 목록으로 되짚을 수 있다). */
+const keyOf = (config: WecomAibotConfig, value: string) => createHmac("sha256", config.key).update(value).digest("hex").slice(0, 12)
 const log = (line: string) => console.info(`[wecom-aibot] ${line}`)
 
 type Gate = { ok: true; config: WecomAibotConfig; store: NonNullable<ReturnType<typeof getWecomDedupStore>> } | { ok: false }
@@ -132,7 +133,7 @@ export async function POST(req: NextRequest) {
     return emptyOk()
   }
 
-  const msgKey = hashOf(message.msgid)
+  const msgKey = keyOf(config, message.msgid)
   try {
     if ((await store.claim(msgKey)) === "already_used") {
       log(`duplicate msg=${msgKey}`)
@@ -144,12 +145,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unavailable" }, { status: 503 })
   }
 
-  const userKey = hashOf(message.fromUserId)
+  const userKey = keyOf(config, message.fromUserId)
   const userLimit = await checkRateLimitDistributed(userKey, "wecom-aibot-user", USER_RATE_LIMIT)
   if (!userLimit.allowed) return streamReply(config, nonce, RATE_LIMITED_TEXT)
 
   const started = Date.now()
   const inbound = message
+  // 100719 compat_info("非普通回调时返回") — 어떤 경로의 콜백이 섞여 오는지 시험 방에서 보려고 출처 값만 남긴다(처리는 같다).
+  const compatTag = inbound.compatSource ? ` compat=${inbound.compatSource}` : ""
   const answer: Promise<BridgeReply> = answerWecomMessage(inbound, buildWecomBridgeDeps(config))
   let timer: ReturnType<typeof setTimeout> | undefined
   const inline = await Promise.race([
@@ -161,7 +164,7 @@ export async function POST(req: NextRequest) {
   if (timer) clearTimeout(timer)
 
   if (inline) {
-    log(`answered chat=${inbound.chattype} user=${userKey} msg=${msgKey} outcome=${inline.outcome} mode=inline ms=${Date.now() - started}`)
+    log(`answered chat=${inbound.chattype}${compatTag} user=${userKey} msg=${msgKey} outcome=${inline.outcome} mode=inline ms=${Date.now() - started}`)
     return streamReply(config, nonce, inline.markdown)
   }
 
@@ -171,7 +174,7 @@ export async function POST(req: NextRequest) {
     const reply = await answer
     const sent = responseUrl ? await sendResponseMarkdown(responseUrl, reply.markdown) : { ok: false, status: null }
     log(
-      `answered chat=${inbound.chattype} user=${userKey} msg=${msgKey} outcome=${reply.outcome} mode=response_url sent=${sent.ok ? "ok" : `fail:${sent.status ?? "none"}`} ms=${Date.now() - started}`
+      `answered chat=${inbound.chattype}${compatTag} user=${userKey} msg=${msgKey} outcome=${reply.outcome} mode=response_url sent=${sent.ok ? "ok" : `fail:${sent.status ?? "none"}`} ms=${Date.now() - started}`
     )
   })
   return streamReply(config, nonce, responseUrl ? PENDING_TEXT : `${PENDING_TEXT} (답 주소가 없어 다시 올리지 못할 수 있습니다 — 어드민 갈매봇에서 물어봐 주세요.)`)

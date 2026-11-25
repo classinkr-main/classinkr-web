@@ -1,3 +1,4 @@
+import { createHash } from "crypto"
 import { NextRequest } from "next/server"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
@@ -231,5 +232,8 @@ describe("수신 POST", () => {
     expect(lines).toContain("[wecom-aibot] answered")
     expect(lines).not.toContain("wx-staff-1")
     expect(lines).not.toContain("녹화")
+    // 소금 없는 sha256 이면 userid 목록으로 되짚을 수 있다 — 로그 키는 비밀 열쇠를 섞은 HMAC 이다.
+    expect(lines).not.toContain(createHash("sha256").update("wx-staff-1").digest("hex").slice(0, 12))
+    expect(lines).toMatch(/user=[0-9a-f]{12}/)
   })
 })
