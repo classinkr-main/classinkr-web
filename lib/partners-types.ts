@@ -379,6 +379,8 @@ export interface PartnerQuoteLineItemInput {
   originalUnitPrice?: number
   /** 품목 세부 내역 아래에 표시하는 할인 안내 문구. */
   discountDisplayText?: string
+  discountRateDisplayText?: string
+  discountDisplayBasis?: "line_total"
   quantity?: number
   quantityUnit?: string
   lineSupplyAmount?: number

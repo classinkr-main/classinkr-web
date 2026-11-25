@@ -6,6 +6,7 @@ import {
   formatQuoteDiscountLabel,
   formatStandardQuoteCurrency,
   getQuoteInstallmentNote,
+  getQuoteLineDiscountRate,
   isQuoteNoteLine,
 } from "@/lib/standard-quote-template"
 import styles from "./quote-paper.module.css"
@@ -85,13 +86,18 @@ export default function QuoteDocumentPreview({ quote, documentNumber, title, edi
         <thead><tr><th>No.</th><th>품목 / 세부내역</th><th>수량</th><th>단가</th><th>공급가액</th></tr></thead>
         <tbody>{(quote.lineItems ?? []).map((line, index) => {
           const defaultDiscountText = showDiscountDetails ? formatDefaultQuoteLineDiscount(line) : undefined
+          const discountRate = defaultDiscountText ? getQuoteLineDiscountRate(line.originalUnitPrice, line.unitPrice) : undefined
           return <tr key={`${index}-${line.itemCode}`}>
             <td>{line.lineNumber ?? index + 1}</td>
             <td><strong>{line.itemName}</strong>{line.itemDescription && <p>{line.itemDescription}</p>}
               {defaultDiscountText && <p>{line.discountDisplayText?.trim() || defaultDiscountText}</p>}
             </td>
             <td>{isQuoteNoteLine(line) ? "–" : <>{line.quantity ?? "–"}{line.quantityUnit}</>}</td>
-            <td>{isQuoteNoteLine(line) ? "–" : money(line.unitPrice)}</td><td>{lineAmount(line)}</td>
+            <td>
+              {isQuoteNoteLine(line) ? "–" : money(line.unitPrice)}
+              {discountRate != null && <p>{line.discountRateDisplayText?.trim() || `${discountRate}% 할인`}</p>}
+            </td>
+            <td>{lineAmount(line)}</td>
           </tr>
         })}</tbody>
       </table>}

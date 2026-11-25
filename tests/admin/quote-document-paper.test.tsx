@@ -42,6 +42,43 @@ describe("shared quote paper", () => {
     expect(html).toContain("할인 −500,000원 / 세트")
     expect(html).toContain("7,800,000")
   })
+  it("shows each saved item rate under the unit price when customer discount display is enabled", () => {
+    const lines = [
+      { ...quote.lineItems![0], itemName: "전자칠판", originalUnitPrice: 5_400_000, unitPrice: 4_900_000 },
+      {
+        ...quote.lineItems![0], itemName: "T1 카메라", originalUnitPrice: 1_200_000,
+        unitPrice: 0, discountDisplayText: "도입 지원",
+      },
+    ]
+    const saved = normalizeQuoteDetailsFromStructuredJson({ quoteDetails: { ...quote, vatIncluded: true, lineItems: lines } })
+    expect(saved.grandTotalAmount).toBe(4_900_000)
+    const visible = renderToStaticMarkup(<QuoteDocumentPreview quote={{ ...saved, showDiscountDetails: true }} />)
+    expect(visible).toContain("<td>4,900,000<p>9.3% 할인</p></td>")
+    expect(visible).toContain("<td>0<p>100% 할인</p></td>")
+    expect(visible).toContain("도입 지원")
+
+    const hidden = renderToStaticMarkup(<QuoteDocumentPreview quote={{ ...saved, showDiscountDetails: false }} />)
+    expect(hidden).toContain("4,900,000")
+    expect(hidden).not.toContain("% 할인")
+    expect(hidden).not.toContain("도입 지원")
+  })
+  it("uses an editable rate caption and recalculates the automatic line-total caption without changing prices", () => {
+    const draft = buildConfigurableStandardQuoteDetails({ templateId: "board_75", baseQuantity: 2 })
+    draft.lineItems![0] = {
+      ...draft.lineItems![0], originalUnitPrice: 5_400_000, unitPrice: 4_900_000,
+      discountRateDisplayText: "도입가 적용", discountDisplayBasis: "line_total",
+    }
+    const saved = normalizeQuoteDetailsFromStructuredJson({ quoteDetails: draft })
+    const rebuilt = buildConfigurableStandardQuoteDetails({ templateId: "board_75", input: saved, baseQuantity: 3 })
+    expect(saved.grandTotalAmount).toBe(9_800_000)
+    expect(rebuilt.grandTotalAmount).toBe(14_700_000)
+    const visible = renderToStaticMarkup(<QuoteDocumentPreview quote={rebuilt} />)
+    expect(visible).toContain("<td>4,900,000<p>도입가 적용</p></td>")
+    expect(visible).toContain("정가 합계 16,200,000원 · 할인 합계 −1,500,000원")
+    const hidden = renderToStaticMarkup(<QuoteDocumentPreview quote={{ ...rebuilt, showDiscountDetails: false }} />)
+    expect(hidden).not.toContain("도입가 적용")
+    expect(hidden).not.toContain("할인 합계")
+  })
   it("keeps net totals when saved presentation settings hide both kinds of discount", () => {
     const pricedQuote: PartnerQuoteDetailsInput = {
       ...quote,

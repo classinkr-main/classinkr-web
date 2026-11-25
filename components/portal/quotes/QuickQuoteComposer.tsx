@@ -76,11 +76,13 @@ import {
   formatDefaultQuoteLineDiscount,
   formatStandardQuoteCurrency,
   getOnlineSuiteTermMonths,
+  getQuoteLineDiscountRate,
   getQuoteNotePresets,
   getStandardQuoteDefaultSelections,
   getStandardQuoteOptionGroups,
   getStandardQuoteTemplate,
   inferStandardQuoteTemplateId,
+  isPendingQuoteLine,
   isRecordingStudioTemplate,
   isRetiredQuoteTemplate,
   isSoftwareQuoteTemplate,
@@ -589,6 +591,12 @@ function isBundleSheet(sheet: ComposerSheet) {
 function getListPrice(line: PartnerQuoteLineItemInput) {
   if (!line.itemCode || line.itemCode === RECHARGE_ITEM_CODE) return undefined
   return getProductBySku(line.itemCode)?.unit_price
+}
+
+function getLineWithDefaultDiscountPrice(line: PartnerQuoteLineItemInput) {
+  if (line.originalUnitPrice != null || line.lineStatus === "informational" || isPendingQuoteLine(line)) return line
+  const originalUnitPrice = getListPrice(line)
+  return getQuoteLineDiscountRate(originalUnitPrice, line.unitPrice) == null ? line : { ...line, originalUnitPrice }
 }
 
 function sheetSubtotal(sheet: ComposerSheet) {
@@ -1111,6 +1119,7 @@ export default function QuickQuoteComposer({
     const quote: PartnerQuoteDetailsInput = {
       ...sheet.quote,
       ...supplierFor(sheet),
+      lineItems: sheet.quote.lineItems?.map(getLineWithDefaultDiscountPrice),
       templateId: sheet.templateId,
       optionSelections: writeAutomaticQuoteNotes(sheet.optionSelections, shared.automaticNotes),
       recipientCompanyName: activeCustomerName,
@@ -2301,12 +2310,17 @@ export default function QuickQuoteComposer({
     const priceChanged = listPrice != null && line.unitPrice != null && line.unitPrice !== listPrice
     const changePct = priceChanged ? Math.round((1 - (line.unitPrice ?? 0) / (listPrice ?? 1)) * 1000) / 10 : 0
     const isRechargeLine = sheet.templateId === "business_recharge" && line.itemCode === RECHARGE_ITEM_CODE
+    const discountBasis = line.originalUnitPrice ?? listPrice
+    const discountRate = !informational && !pending && !isRechargeLine
+      ? getQuoteLineDiscountRate(discountBasis, line.unitPrice)
+      : undefined
+    const defaultDiscountRateText = discountRate == null ? undefined : `${discountRate}% 할인`
     const isInstallation = line.itemType === "installation" || line.optionGroupId === "installation_mode"
     const isCharge = isCustomQuoteCharge(line)
     const installationItemCode = isInstallation ? line.itemCode : undefined
     const editablePriceCode = isCharge ? line.itemCode : installationItemCode
     const quantityEditable = canEditLineQuantity(line)
-    const defaultDiscountText = formatDefaultQuoteLineDiscount(line)
+    const defaultDiscountText = formatDefaultQuoteLineDiscount(getLineWithDefaultDiscountPrice(line))
     const isMain = line.optionGroupId === "main_product"
     const canMove = (sheet.quote.lineItems?.length ?? 0) > 1
 
@@ -2413,6 +2427,18 @@ export default function QuickQuoteComposer({
                 }}
                 className={`${EDITABLE_CLASS} field-sizing-content w-full resize-y text-[11px] text-[#615D59]`}
               />
+              <select
+                aria-label={`${line.itemName} 기본 할인 문구 기준`}
+                title="기본 할인 문구 기준"
+                value={line.discountDisplayBasis ?? "per_unit"}
+                onChange={(event) => updateLine(sheet.line, lineIndex, {
+                  discountDisplayBasis: event.target.value === "line_total" ? "line_total" : undefined,
+                })}
+                className={`${PAPER_SELECT_CLASS} w-fit text-[11px]`}
+              >
+                <option value="per_unit">단위당</option>
+                <option value="line_total">품목 합계</option>
+              </select>
               {line.discountDisplayText && (
                 <button
                   type="button"
@@ -2469,7 +2495,38 @@ export default function QuickQuoteComposer({
               }`}
             />
           )}
-          {priceChanged && (
+          {defaultDiscountRateText && (
+            <>
+              <textarea
+                aria-label={`${line.itemName} 할인율 표시 문구`}
+                rows={1}
+                value={line.discountRateDisplayText ?? defaultDiscountRateText}
+                onChange={(event) => updateLine(sheet.line, lineIndex, { discountRateDisplayText: event.target.value })}
+                onBlur={(event) => {
+                  const value = event.target.value.trim()
+                  updateLine(sheet.line, lineIndex, {
+                    discountRateDisplayText: value && value !== defaultDiscountRateText ? value : undefined,
+                  })
+                }}
+                className={`${EDITABLE_CLASS} field-sizing-content w-full resize-y text-right text-[10.5px] font-semibold text-[#7A520F]`}
+              />
+              {line.discountRateDisplayText && (
+                <button
+                  type="button"
+                  className="text-[10.5px] text-[#615D59] underline"
+                  onClick={() => updateLine(sheet.line, lineIndex, { discountRateDisplayText: undefined })}
+                >
+                  기본 할인율 문구로
+                </button>
+              )}
+              {line.priceLocked !== true && (
+                <button type="button" className="text-[10.5px] text-[#615D59] underline" onClick={() => updateLine(sheet.line, lineIndex, { unitPrice: discountBasis })}>
+                  정가로
+                </button>
+              )}
+            </>
+          )}
+          {priceChanged && !defaultDiscountRateText && (
             <button
               type="button"
               title={`정가 ${formatStandardQuoteCurrency(listPrice)}원`}
@@ -2492,7 +2549,14 @@ export default function QuickQuoteComposer({
                   value={formatStandardQuoteCurrency(line.originalUnitPrice)}
                   onChange={(event) => updateLine(sheet.line, lineIndex, { originalUnitPrice: parseNumericInput(event.target.value) ?? 0 })}
                   className={`${EDITABLE_CLASS} w-full text-right tabular-nums`} />
-                <button type="button" onClick={() => updateLine(sheet.line, lineIndex, { originalUnitPrice: undefined, discountDisplayText: undefined })}>할인 내역 삭제</button>
+                <button type="button" onClick={() => updateLine(sheet.line, lineIndex, {
+                  originalUnitPrice: undefined,
+                  discountDisplayText: undefined,
+                  discountRateDisplayText: undefined,
+                  discountDisplayBasis: undefined,
+                })}>
+                  {getQuoteLineDiscountRate(listPrice, line.unitPrice) == null ? "할인 내역 삭제" : "기본 할인 기준으로"}
+                </button>
               </label>
             )
           )}
@@ -2689,21 +2753,6 @@ export default function QuickQuoteComposer({
 
         {/* 견적 할인 — 견적서 합계에 소계·할인·공급가액 줄로 찍힌다. */}
         {renderDiscountEditor(sheet, totals)}
-        <label className="flex w-fit items-center gap-1.5 px-1 text-[11.5px] text-[#615D59]">
-          <input
-            type="checkbox"
-            checked={quote.showDiscountDetails !== false}
-            onChange={(event) => {
-              const showDiscountDetails = event.target.checked
-              updateSheet(sheet.line, (current) => ({
-                ...current,
-                quote: { ...current.quote, showDiscountDetails },
-              }))
-            }}
-            className="accent-[#084734]"
-          />
-          고객용 할인 내역 표시
-        </label>
 
         {/* ClassIn Business 충전형 — 충전 금액 직접 수정 & 빠른 금액 */}
         {sheet.templateId === "business_recharge" && (
@@ -2928,7 +2977,23 @@ export default function QuickQuoteComposer({
               <option value="included">단위: 원 · VAT 포함</option>
               <option value="excluded">단위: 원 · VAT 별도</option>
             </select>),
-            items: (          <div role="table" aria-label="품목" className="overflow-x-auto">
+            items: (<>
+          <label className="mb-2 ml-auto flex w-fit items-center gap-1.5 text-[11.5px] text-[#615D59]">
+            <input
+              type="checkbox"
+              checked={quote.showDiscountDetails !== false}
+              onChange={(event) => {
+                const showDiscountDetails = event.target.checked
+                updateSheet(sheet.line, (current) => ({
+                  ...current,
+                  quote: { ...current.quote, showDiscountDetails },
+                }))
+              }}
+              className="accent-[#084734]"
+            />
+            고객용 할인 내역 표시
+          </label>
+          <div role="table" aria-label="품목" className="overflow-x-auto">
             <div className="sm:min-w-[560px]">
               <div
                 role="row"
@@ -2941,7 +3006,7 @@ export default function QuickQuoteComposer({
                 <span role="columnheader" className="text-right">공급가액</span>
                 <span />
               </div>
-              {(quote.lineItems ?? []).map((line, lineIndex) => renderLineRow(sheet, line, lineIndex))}
+              {(sheet.quote.lineItems ?? []).map((line, lineIndex) => renderLineRow(sheet, line, lineIndex))}
 
               <div className="flex flex-wrap items-center gap-2 border-b border-[#F0F0EC] py-2">
                 <button
@@ -3014,7 +3079,7 @@ export default function QuickQuoteComposer({
                 </button>
               )}
             </div>
-          </div>),
+          </div></>),
             addenda: (<>
             {termMonths && (
               <p className="text-right text-[11.5px] text-[#615D59]">

@@ -866,11 +866,21 @@ export function formatStandardQuoteCurrency(value?: number | null) {
 }
 
 export function formatDefaultQuoteLineDiscount(line: PartnerQuoteLineItemInput) {
-  const { originalUnitPrice, unitPrice, quantityUnit } = line
+  const { originalUnitPrice, unitPrice, quantityUnit, quantity } = line
   if (originalUnitPrice == null || unitPrice == null || originalUnitPrice <= unitPrice) return undefined
+  if (line.discountDisplayBasis === "line_total" && quantity != null && quantity > 0) {
+    const originalTotal = Math.round(originalUnitPrice * quantity)
+    const discountTotal = originalTotal - Math.round(unitPrice * quantity)
+    return `정가 합계 ${formatStandardQuoteCurrency(originalTotal)}원 · 할인 합계 −${formatStandardQuoteCurrency(discountTotal)}원`
+  }
   const original = formatStandardQuoteCurrency(originalUnitPrice)
   const discount = formatStandardQuoteCurrency(originalUnitPrice - unitPrice)
   return `정가 ${original}원 · 할인 −${discount}원 / ${quantityUnit || "개"}`
+}
+
+export function getQuoteLineDiscountRate(originalUnitPrice: number | undefined, unitPrice: number | undefined) {
+  if (!originalUnitPrice || unitPrice == null || unitPrice < 0 || originalUnitPrice <= unitPrice) return undefined
+  return Math.round((1 - unitPrice / originalUnitPrice) * 1_000) / 10
 }
 
 export function isPendingQuoteLine(item: Pick<PartnerQuoteLineItemInput, "lineStatus" | "billingMode" | "unitPrice">) {
@@ -924,6 +934,8 @@ export function mergeStandardQuoteLineItems(
       unitPrice,
       originalUnitPrice: current?.originalUnitPrice,
       discountDisplayText: current?.discountDisplayText,
+      discountRateDisplayText: current?.discountRateDisplayText,
+      discountDisplayBasis: current?.discountDisplayBasis,
       vatIncluded: current?.vatIncluded ?? true,
       lineStatus: current?.lineStatus ?? line.lineStatus,
       billingMode: current?.billingMode ?? line.billingMode,
@@ -1164,6 +1176,8 @@ export function buildConfigurableStandardQuoteDetails({
       unitPrice: mainExisting?.unitPrice ?? mainTemplateLine.unitPrice,
       originalUnitPrice: mainExisting?.originalUnitPrice,
       discountDisplayText: mainExisting?.discountDisplayText,
+      discountRateDisplayText: mainExisting?.discountRateDisplayText,
+      discountDisplayBasis: mainExisting?.discountDisplayBasis,
       vatIncluded: mainExisting?.vatIncluded ?? true,
       lineStatus: "priced",
       billingMode: "included_in_quote",
@@ -1216,6 +1230,8 @@ export function buildConfigurableStandardQuoteDetails({
           : existingLine?.unitPrice ?? config.unitPrice,
       originalUnitPrice: keepEditedText ? existingLine?.originalUnitPrice : undefined,
       discountDisplayText: keepEditedText ? existingLine?.discountDisplayText : undefined,
+      discountRateDisplayText: keepEditedText ? existingLine?.discountRateDisplayText : undefined,
+      discountDisplayBasis: keepEditedText ? existingLine?.discountDisplayBasis : undefined,
       vatIncluded: existingLine?.vatIncluded ?? true,
       lineStatus: config.lineStatus,
       billingMode: config.billingMode,
