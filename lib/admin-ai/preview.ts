@@ -27,7 +27,32 @@ export function isAdminAiProductionEnv(): boolean {
   )
 }
 
-export function isAdminAiPreviewEnabled(): boolean {
+/** 시안(샘플 데이터) 스위치 — 운영에서는 늘 꺼짐. */
+export function isAdminAiDemoEnabled(): boolean {
   if (isAdminAiProductionEnv()) return false
   return process.env.NEXT_PUBLIC_ADMIN_AI_PREVIEW === "1"
+}
+
+// 실제 모드(서버 1단계, 2026-11) — NEXT_PUBLIC_ADMIN_AI_LIVE === "1" 이면 위젯이 서버(POST /api/admin/ai/chat)와 대화한다.
+// 서버 API 도 같은 함수로 켜짐을 본다(꺼져 있으면 404). 시안과 달리 실제 자료라 운영에서도 켤 수 있다 — 켜는 결정은 사용자가 한다
+// (docs/active/admin-ai-structure-worklist-2026-09-29.md "서버 1단계 구현 현황"). 위 글자 그대로 규칙과 같은 이유로 "1" 만 켠다.
+export function isAdminAiLiveEnabled(): boolean {
+  return process.env.NEXT_PUBLIC_ADMIN_AI_LIVE === "1"
+}
+
+export type AdminAiMode = "live" | "demo" | "off"
+
+/** 갈매봇 모드 — 시안/실제 전환은 이 함수 한 곳에서만 정한다. 실제 스위치가 시안보다 먼저다. */
+export function adminAiMode(): AdminAiMode {
+  if (isAdminAiLiveEnabled()) return "live"
+  if (isAdminAiDemoEnabled()) return "demo"
+  return "off"
+}
+
+/**
+ * 갈매봇을 화면에 올리는가(셸 런처·내비 항목·/admin/ai). 이름은 시안 시절 그대로 두었다(호출부·시험이 많다) —
+ * 지금 뜻은 "실제 모드이거나, 운영이 아닌 곳의 시안 모드".
+ */
+export function isAdminAiPreviewEnabled(): boolean {
+  return adminAiMode() !== "off"
 }

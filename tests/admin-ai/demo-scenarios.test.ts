@@ -10,6 +10,8 @@ import {
 } from "@/lib/admin-ai/demo-scenarios"
 import { COMMON_ASK_ITEMS } from "@/lib/admin-ai/suggestions"
 
+import { INTENT_ASKS, INTENT_COMMANDS } from "./fixtures/intent-table"
+
 // 점검 R4 — 묻기만 했는데 실행 오더 카드(R2 민감)가 나오던 문장 표.
 // 시나리오 id 가 정확히 무엇이든 "R1 이상 오더 카드로 가지 않는다" 가 계약이다.
 const QUESTIONS: ReadonlyArray<[string, DemoScenarioKey | null]> = [
@@ -51,16 +53,7 @@ describe("시안 시나리오 — 질문형 문장 먼저 판정(R4)", () => {
   })
 
   it("점검 재검토: 흔한 의문형·조회형 문장 33개도 R1 이상 오더 카드로 가지 않는다(F1)", () => {
-    const asks = [
-      "가온학원 견적 얼마야", "견적 금액 얼마였지", "출고 언제 돼", "출고 언제 나가", "결제 내역 보여 줘",
-      "출고 현황 보여 줘", "할인 정책 설명해 줘", "알림톡 템플릿 뭐 있어", "도담영어한테 문자 보냈었나",
-      "입금 됐는지 확인해 줘", "결제 상태 좀 봐 줘", "견적 몇 번 버전이야", "할인율 최대 몇 %야",
-      "출고 몇 대 했어", "견적서 양식 보여줘", "문자 발송 이력 보여 줘", "결제 수단 뭐뭐 돼",
-      "입금 확인 방법 설명", "견적 승인 절차 정리해 줘", "환불 규정 알려줄래", "결제했어?",
-      "출고됐니", "입금 들어왔니", "도담영어 상태 뭐임", "새움에듀 담당 바뀌었어", "할 일 목록 보여 줘",
-      "통화 기록 보여 줘", "견적 비교해 봐", "가온학원 결제 했던가", "출고 확정 됐었지", "견적 할인 가능?",
-      "결제 확정 취소할 수 있어", "출고 취소 방법",
-    ]
+    const asks = INTENT_ASKS
     expect(asks).toHaveLength(33)
     for (const text of asks) {
       const key = matchDemoScenario(text)
@@ -70,16 +63,7 @@ describe("시안 시나리오 — 질문형 문장 먼저 판정(R4)", () => {
   })
 
   it("점검 재검토: 알려·왜·어떤·누가·링크가 섞여도 시키는 말은 오더로 간다(F1)", () => {
-    const cmds: ReadonlyArray<[string, DemoScenarioKey]> = [
-      ["도담영어 원장님한테 쇼룸 예약 알려 줘", "sms"],
-      ["도담영어에 결제 링크 문자로 보내 줘", "sms"],
-      ["어떤 경우든 가온학원 견적 10% 깎아 줘", "amount"],
-      ["한빛수학학원 결제 확정해. 왜냐면 입금됐거든", "pay"],
-      ["결제 계획대로 입금 들어왔어 확정해", "pay"],
-      ["출고 예정 3대 오늘 나갔어", "ship"],
-      ["누가 봐도 데모 끝났으니 새움에듀 상태 바꿔", "lead"],
-      ["가온학원 견적 초안에서 10% 깎아 확정", "amount"],
-    ]
+    const cmds = INTENT_COMMANDS
     for (const [text, key] of cmds) expect(matchDemoScenario(text), text).toBe(key)
   })
 
