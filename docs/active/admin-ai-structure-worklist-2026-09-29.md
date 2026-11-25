@@ -1,6 +1,6 @@
 # 갈매봇 구조와 작업 리스트 (2026-09-29)
 
-상태: 실행 로드맵. 프론트 1차는 끝났고 서버는 착수 전이다. 2026-11-25: 갈매봇 점검 결과로 §1·§2.3·§2.7·§3·작업 순서를 갱신했고, 작업 순서는 S1′→S2에서 **묶음 B1~B7**로 바꿨다(§4 끝). 사용자가 아직 정하지 않은 항목은 "결정 대기"(기획 §9.1)다.
+상태: 실행 로드맵. 프론트 1차는 끝났고 **서버 1단계(B6 — 조회·묻기, 쓰기는 미리보기·사람 확인)가 들어왔다(§4.1, 2026-11-25)**. 2026-11-25: 갈매봇 점검 결과로 §1·§2.3·§2.7·§3·작업 순서를 갱신했고, 작업 순서는 S1′→S2에서 **묶음 B1~B7**로 바꿨다(§4 끝). 사용자가 아직 정하지 않은 항목은 "결정 대기"(기획 §9.1)다.
 기준 문서: [갈매봇 위젯·원격 오더 기획](admin-ai-widget-remote-order-plan-2026-09-28.md) — 무엇을·왜는 그 문서가 정본이고, 이 문서는 어떤 구조로·어떤 순서로 만드는지만 다룬다.
 조사 방식: 조회·쓰기 후보 함수, 인증·감사, LLM·스트리밍, 마이그레이션·테스트 관례를 코드에서 대조했다. 확인하지 못한 것은 "확인 못 함"으로 적었다.
 
@@ -19,10 +19,10 @@
 | 화면(위젯·탭·카드) | 있음 | `components/admin/ai/`, `app/admin/ai/` |
 | 화면 상태·오더 상태 전이 | 있음 | `lib/admin-ai/store.ts`, `order-state.ts` |
 | 대화 클라이언트 경계 | 있음(시안 구현만) | `lib/admin-ai/client.ts` |
-| 대화 API · 조율기 · LLM 도구 호출 | **없음** | — |
+| 대화 API · 조율기 | **있음(B6, 결정형)** — 모델 연결은 인터페이스와 가짜만 | `app/api/admin/ai/chat`, `lib/admin-ai/server/` |
 | 오더 레지스트리 · 핸들러 | **없음** — 단, 홈 MCP가 도구 층 하나를 따로 갖고 있다 | `lib/mcp/tools.ts` |
 | 묻기(지식·담당자·링크) 결정형 함수 | **없음** — 재료는 있다(`escalation-routing.ts`, `context.ts`, `admin-nav.ts`) | B2·B4 |
-| 오더 저장소 · 확인 API | **없음** | — |
+| 오더 저장소 · 확인 API | 확인 API는 **있음(B6, DB 표 없이 서명 표)**, 오더 저장소는 없음 | `app/api/admin/ai/orders/confirm`, `lib/admin-ai/server/tickets.ts` |
 
 ## 2. 구조
 
@@ -327,6 +327,46 @@ B1 ─▶ B4 ─┐
 B2 ─▶ B5 ─┼─▶ B6 ─▶ B7
 B3 ────────┘
 ```
+
+### 4.1 서버 1단계 구현 현황 (B6, 2026-11-25)
+
+**되는 것**
+
+| 영역 | 무엇이 되나 | 코드 |
+|---|---|---|
+| 대화 API | `POST /api/admin/ai/chat` — `requireVerifiedAdminContext`(CRM 스태프 역할: SUPER_ADMIN·ADMIN·BRANCH·EDITOR), 계정별 분당 20회, NDJSON 스트림(step·block·order·done·error), `maxDuration` 60. 본문 `{ messages(최근 12개), pageContext? }` | `app/api/admin/ai/chat/route.ts`, `lib/admin-ai/server/request.ts`, `lib/admin-ai/stream-protocol.ts` |
+| 갈래 | 모델 없는 결정형이 기본. 메시지를 질문 조각(최대 4)으로 나누고 조각마다 묻기·담당자·링크·조회·쓰기·모름으로 가른다. 묻는 대상과 묻는 꼴을 함께 점수로 보며, 쓰기는 문장 끝의 시키는 꼴이 분명할 때만. 요청 갈래 둘이 가까우면 되묻기 카드(후보 2개). 시안의 질문 33·명령 8 표를 서버 시험이 같이 쓴다 | `lib/admin-ai/server/router.ts`, `orchestrator.ts`, `tests/admin-ai/fixtures/intent-table.ts` |
+| 묻기(클래스인 정보) | `answerKnowledge(question, deps)` — 두괄식(결론 한 문장 → 방법 한 단계 한 줄 → 조건·주의), 확정/확인 필요 배지, 근거 출처(링크 목록 id만), 답 색인 상위 카드는 "고객용 문안" 칸(fixed·policy 카드, conf ≥ 0.7, 정책 질문엔 정책 카드만), 근거가 없으면 "근거를 찾지 못했습니다" + 담당자 + 코파일럿 링크 | `lib/admin-ai/server/knowledge.ts`, `deps.ts` |
+| 담당자·링크 | `resolveContact`(열린 고객 먼저)·`findLinks` 를 카드로. 링크 목록에 맞는 화면이 없으면 근거 문서 답으로 넘긴다 | `lib/admin-ai/server/contact.ts` |
+| 조회 | `lib/ops-tools` R0 도구(재고·입출고·판매·딜·견적·방문)를 스태프 행위자로 실행기를 거쳐 부른다. 요약 한 줄(두괄식, 통화·단위) + 표 + 해당 어드민 화면 링크. 도구가 없는 조회(결제·문자 이력·할 일·통화 기록·리드 상태)는 "아직 준비 중 — 화면에서" 카드 | `lib/admin-ai/server/tools.ts`, `actor.ts` |
+| 쓰기 | 견적 초안(`quote_create_draft`)·HW 배송 예정(`hw_plan_movement`)만. 조율기는 **preview 만** 부르고 오더 카드(서버 계산 금액)를 낸다. 실행은 아래 확인 경로에서만 | `lib/admin-ai/server/writes.ts` |
+| 확인 | `POST /api/admin/ai/orders/confirm` — 서명·만료(15분)·행위자 일치 → 역할 재검사 → 실행기(`idempotency_key` = 표 id) → 실행 직전 preview 를 다시 계산해 서명된 요약과 대조 → 감사(도구 감사 + `logAdminAudit` `admin_ai.order.confirm`). **이 경로는 모델 어댑터·조율기를 import 하지 않는다**(모듈 그래프 시험) | `lib/admin-ai/server/confirm.ts`, `tickets.ts` |
+| 화면 | `liveAdminAiClient` 가 스트림을 기존 블록·카드로 그린다. 서버 오더의 확인은 서버 답으로만 완료·실패. 답 카드에 방법·주의·고객용 문안 칸 | `lib/admin-ai/client.ts`, `store.ts`, `components/admin/ai/cards/*` |
+
+**스위치·환경변수(사용자가 정하고 넣는다)**
+
+| 이름 | 어디 | 뜻 |
+|---|---|---|
+| `NEXT_PUBLIC_ADMIN_AI_LIVE` | 빌드·서버 | `"1"` 이면 실제 모드 — 위젯이 서버와 대화하고 `/api/admin/ai/chat`·`/orders/confirm` 이 열린다. 아니면 404 이고 위젯은 시안 스위치를 따른다. 판정은 `lib/admin-ai/preview.ts` `adminAiMode()` 한 곳. 운영에서도 켤 수 있다(실제 자료) — 켜는 결정은 사용자 몫 |
+| `NEXT_PUBLIC_ADMIN_AI_PREVIEW` | 빌드 | 기존 시안 스위치. 실제 스위치가 꺼져 있고 운영이 아닐 때만 시안 |
+| `ADMIN_AI_TICKET_SECRET` | 서버 비밀(32자 이상) | 쓰기 확인 표 서명. **없으면 쓰기는 미리보기까지만**이고 카드는 확인 버튼 대신 "화면에서 직접 등록" 링크다. 바꾸면 발급된 표가 모두 무효가 된다 |
+
+역할: 대화·조회는 CRM 스태프 역할, 견적 초안은 견적 API 와 같은 역할 묶음, HW 배송 예정은 HW 출고 등록 API 와 같은 역할 묶음(`lib/admin-ai/server/actor.ts`). 연락처 원문은 SUPER_ADMIN·ADMIN 화면에만, 모델 입력은 늘 가린다.
+
+**쓰기 확인 방식과 한계(DB 표 없음)**
+
+- 표 = `{표 id, 도구, 인자, 인자 지문, 미리보기 요약 해시, 만료, 행위자}` 를 HMAC-SHA256 으로 서명한 문자열. 카드에 싣고 확인 때 그대로 돌려받는다. 인자는 서명만 하고 암호화하지 않는다(본인이 방금 미리본 값).
+- 같은 표를 두 번 눌러도 실행은 한 번 — 실행기의 idempotency 는 **인스턴스 메모리** 기준이다. HW 배송 예정은 도메인 행으로도 다시 찾지만, 견적 초안은 실을 칸이 없어 인스턴스가 다르면 두 번 만들어질 수 있다(B7 오더 저장소에서 막는다).
+- 표를 서버가 지우지 못한다(일회용 판정이 메모리) — 만료 15분이 상한이다. 오더함은 새로고침하면 사라진다(서버 이력 없음).
+- 되돌리기는 이번 범위가 아니다 — 카드에 "되돌리기는 화면에서".
+- 문자 발송·결제 확정·금액 변경·리드 변경·할 일·삭제 등 다른 오더는 "아직 준비 중 — 화면에서" 카드다.
+
+**아직인 것**
+
+- 모델 연결(Vertex·Claude): `lib/admin-ai/server/llm/adapter.ts` 인터페이스(`route`·`pick`)와 시험용 가짜만 있다. `getAdminAiModelAdapter()` 는 늘 null — 키·공급자 결정(기획 §9.1 결정 11) 뒤에 붙인다.
+- 답 색인 doc 카드(문서 문장 조립)·howto 카드는 고객용 문안으로 쓰지 않는다(공개 챗봇 서비스 조립 함수가 필요하다). 상담 사례 건수는 deps 칸만 있고 기본 연결은 꺼져 있다(임베딩 검색 비용·R17 범위 결정 전).
+- CRM 조회(고객 360·오늘 후속조치)·화면 이동 도구·장애 화면(S1-7·S1-10·S1-13), 위컴 방 어댑터(조율기는 화면과 무관한 `runTurn`·`collectTurn` 이라 그대로 부를 수 있다).
+- B7: 오더 저장소·취소·되돌리기·MCP 쓰기의 표 통일·오더함 서버 영속.
 
 ## 5. 아직 정해지지 않은 것
 
