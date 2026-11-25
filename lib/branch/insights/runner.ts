@@ -8,6 +8,8 @@ import { callGemini, type GeminiMode } from "./gemini-runner"
 import { checkNumericalSanity, type NumericalWarning } from "./sanity-check"
 import { findInsightByDigest, getLatestInsight, insertInsight, type BranchInsight } from "@/lib/repositories/branch-insights"
 import { fyOf } from "@/lib/branch/fiscal"
+import { buildBranchWeeklyCompassReport } from "@/lib/branch/weekly-report"
+import type { BranchWeeklyCompassReport } from "@/lib/branch/weekly-report-contract"
 
 // DB-우선 사다리(액티브 임포트 → 시트 미러 → 라이브 시트 초기 폴백) — summary/kpi와 동일 규약.
 // 시트 장애 시에도 마지막 스냅샷으로 인사이트 입력을 만들 수 있다(기존엔 stale 인사이트로만 강등).
@@ -37,12 +39,21 @@ export async function runInsights(team: TeamScope, force: boolean): Promise<RunI
     const [dsh, kpi, deals, events, campaigns] = await Promise.all([
       readDsh(), readKpi(), listBranchRevDeals(), listPublicEvents(), summarizeCampaigns(now),
     ])
+    // Compass 주간 구획 — 끝난 주 기준이라 한 주 동안 입력이 크게 흔들리지 않는다(다이제스트 캐시 유지).
+    // 읽기 실패는 인사이트 전체를 막지 않고 state=missing으로 넘겨 AI가 한계를 말하게 한다.
+    let compassWeekly: BranchWeeklyCompassReport | null = null
+    try {
+      compassWeekly = await buildBranchWeeklyCompassReport({ now, team, deals })
+    } catch (error) {
+      console.error("[branch insights] Compass weekly report failed:", error instanceof Error ? error.message : error)
+    }
     const input = buildInsightInput({
       team, scope: "Q", now, dsh, kpi,
       deals: team === "ALL" ? deals : deals.filter((d) => d.team === team),
       events: events.map((e) => ({ title: e.title, startsAt: e.startsAt, location: e.location })),
       campaigns: campaigns.recent.map((c) => ({ subject: c.subject, sentAt: c.sentAt, openPct: c.openPct })),
       hwAlerts: [],
+      compassWeekly,
     })
     const digest = digestInput(input)
     if (!force) {
@@ -64,7 +75,8 @@ export async function runInsights(team: TeamScope, force: boolean): Promise<RunI
     const saved = await insertInsight({
       team, fiscal_period: input.fiscalPeriod,
       one_liner: result.one_liner, next_actions: result.next_actions,
-      raw_response: { ...((raw as object) ?? {}), _model: usedModel, _mode: mode, _retried: retried, _warnings: warnings },
+      // report_notes는 테이블 칼럼이 없어 raw_response._report_notes에 함께 둔다(마이그레이션 없이 화면이 읽는다).
+      raw_response: { ...((raw as object) ?? {}), _model: usedModel, _mode: mode, _retried: retried, _warnings: warnings, _report_notes: result.report_notes ?? [], _compass_week: compassWeekly?.week.label ?? null },
       input_digest: digest,
     })
     return { from: "fresh", insight: saved, numerical_warnings: warnings.length > 0 ? warnings : undefined, retried }

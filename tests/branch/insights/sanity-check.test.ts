@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest"
 import { checkNumericalSanity } from "@/lib/branch/insights/sanity-check"
-import type { InsightInput } from "@/lib/branch/insights/input-builder"
+import { toInsightCompassBlock, toInsightKaBlock, type InsightInput } from "@/lib/branch/insights/input-builder"
 import type { InsightResult } from "@/lib/branch/insights/gemini-runner"
 
 const mkInput = (over: Partial<InsightInput> = {}): InsightInput => ({
@@ -19,6 +19,8 @@ const mkInput = (over: Partial<InsightInput> = {}): InsightInput => ({
   managers: [], regions: [],
   bottleneck_kpi: { name: "ACC", pct: 2.3, worst_member: "Junhyuk" },
   closing_deals: [], events_30d: [], campaigns_30d: [], hw_alerts: [],
+  ka_quarter: toInsightKaBlock(null),
+  compass_weekly: toInsightCompassBlock(null),
   ...over,
 })
 
@@ -44,5 +46,15 @@ describe("checkNumericalSanity", () => {
       next_actions: [],
     } as InsightResult)
     expect(w.length).toBe(0)
+  })
+
+  it("보고서 4줄도 검사하고 KA·Compass 주간 수치와 만 단위 금액은 입력으로 인정한다", () => {
+    const compass = { ...toInsightCompassBlock(null), state: "ready" as const, inflow: [34, 21] as [number, number], stages: [{ stage: "데모", this_week: 15, prev_week: 18 }] }
+    const ka = { ...toInsightKaBlock(null), state: "ready" as const, confirmed: 420000, open: 180000, customer_count: 6 }
+    const w = checkNumericalSanity(mkInput({ compass_weekly: compass, ka_quarter: ka }), {
+      one_liner: "", next_actions: [],
+      report_notes: ["매출 달성률 17%입니다.", "KA 확정 ¥42.0만, 미확정 ¥18만입니다.", "유입 34건으로 그 전 주보다 13건 늘었습니다.", "데모가 77건입니다."],
+    } as InsightResult)
+    expect(w.map((x) => x.field)).toEqual(["report_notes[3]"])
   })
 })
