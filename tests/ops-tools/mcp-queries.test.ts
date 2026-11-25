@@ -19,6 +19,20 @@ const getPath = (row: Row, path: string): unknown => {
   return row[path]
 }
 
+/** PostgREST ilike 처럼 — % 와 * 는 여러 글자, _ 는 한 글자, \ 다음 글자는 그대로. 대소문자 무시 */
+function likeToRegExp(pattern: string): RegExp {
+  const escapeRe = (c: string) => c.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+  let re = ""
+  for (let i = 0; i < pattern.length; i++) {
+    const ch = pattern[i]
+    if (ch === "\\" && i + 1 < pattern.length) re += escapeRe(pattern[++i])
+    else if (ch === "%" || ch === "*") re += "[\\s\\S]*"
+    else if (ch === "_") re += "[\\s\\S]"
+    else re += escapeRe(ch)
+  }
+  return new RegExp(`^${re}$`, "i")
+}
+
 function makeDb(tables: Record<string, Row[]>) {
   const calls: Call[] = []
   const db = {
@@ -57,8 +71,8 @@ function makeDb(tables: Record<string, Row[]>) {
               expect((val as unknown[]).length).toBeLessThanOrEqual(MCP_ID_CHUNK)
               rows = rows.filter((r) => (val as unknown[]).includes(getPath(r, col)))
             } else if (op === "ilike") {
-              const needle = String(val).replace(/^%|%$/g, "").replace(/\\([\\%_])/g, "$1").toLowerCase()
-              rows = rows.filter((r) => String(getPath(r, col) ?? "").toLowerCase().includes(needle))
+              const re = likeToRegExp(String(val))
+              rows = rows.filter((r) => re.test(String(getPath(r, col) ?? "")))
             } else if (op === "gte") rows = rows.filter((r) => String(getPath(r, col)) >= String(val))
             else if (op === "lte") rows = rows.filter((r) => String(getPath(r, col)) <= String(val))
             else if (op === "is") rows = rows.filter((r) => (getPath(r, col) ?? null) === val)
@@ -151,6 +165,15 @@ describe("딜 조회", () => {
     for (const c of inCalls) for (const o of c.ops) if (o.op === "in") expect((o.args[1] as unknown[]).length).toBeLessThanOrEqual(100)
   })
 
+  it("검색어 속 * 는 글자 그대로다 — PostgREST 가 ilike 의 * 를 % 로 읽어도 결과는 전처럼 포함 검색(반박 검토 2026-11-25)", async () => {
+    const { db } = makeDb({ ...seedDeals(20), admin_profiles: [] })
+    // DB 는 '딜*1' 을 '딜%1' 로 읽어 '딜 1'·'딜 11' 을 돌려주지만, 전에는 글자 그대로 '딜*1' 을 찾아 아무것도 없었다
+    const r = await searchDealsForMcp({ query: "딜*1", limit: 10 }, db)
+    expect(r.items).toEqual([])
+    const star = makeDb({ customers: [{ id: "c-s", name: "별*학원", campus_name: null, region_label: null }], deals: [{ id: "d-s", title: "별 딜", status: "open", current_stage: "lead", owner_id: null, updated_at: iso(1), customer_id: "c-s" }], admin_profiles: [] })
+    expect((await searchDealsForMcp({ query: "별*학", limit: 10 }, star.db)).items.map((d) => d.id)).toEqual(["d-s"])
+  })
+
   it("검색어 속 % _ 는 글자 그대로 찾는다", () => {
     expect(likePattern("a%b_c\\d")).toBe("%a\\%b\\_c\\\\d%")
   })
@@ -221,6 +244,19 @@ describe("견적 조회", () => {
     expect(all.items.map((d) => d.id)).not.toContain("q-00003")
     const one = await searchQuotesForMcp({ dealId: "d-00001", limit: 10 }, db)
     expect(one.items.map((d) => d.id)).toEqual(["q-00001"])
+  })
+
+  it("현재 버전 제목이 비어 기본 제목 '견적서' 로 보이는 견적도 '견적서' 로 찾는다(반박 검토 2026-11-25)", async () => {
+    const seed = seedQuotes(3)
+    ;(seed.quote_document_versions[1] as Row).title = null
+    const { db } = makeDb(seed)
+    const r = await searchQuotesForMcp({ query: "견적서", limit: 10 }, db)
+    expect(r.items.map((d) => d.id)).toEqual(["q-00001"])
+    expect(r.items[0].title).toBe("견적서")
+    // 옛 버전 제목만 비어 있고 현재 버전에 제목이 있으면 맞지 않는다
+    seed.quote_document_versions.push({ id: "v-old-null", quote_document_id: "q-00002", version_number: 0, title: null, subtotal: 1, discount_amount: 0, tax_amount: 0, total_amount: 1 })
+    const again = await searchQuotesForMcp({ query: "견적서", limit: 10 }, makeDb(seed).db)
+    expect(again.items.map((d) => d.id)).toEqual(["q-00001"])
   })
 
   it("현재 버전 제목이 아닌 옛 버전 제목만 맞는 견적은 거른다", async () => {

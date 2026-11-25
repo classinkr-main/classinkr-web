@@ -11,29 +11,49 @@ import { readUpstashRestConfig } from "./upstash"
 interface RateLimitEntry {
   count: number
   resetAt: number
+  /** 이 창의 한도 — 상한에서 버릴 키를 고를 때 막혀 있는 키를 남기려고 둔다 */
+  max: number
 }
 
 const store = new Map<string, RateLimitEntry>()
 
-/** 메모리 저장소 키 수 상한 — 키 하나는 약 250B 라 약 12MB. 넘치면 가장 오래 들어온 키부터 버린다(한도를 느슨하게 할 뿐 막지는 않는다). */
+/**
+ * 메모리 저장소 키 수 상한 — 키 하나는 약 250B 라 약 12MB. 넘치면 만료 키를 먼저 쓸고, 그래도 넘치면 한도에 닿지 않은
+ * 오래된 키부터 버린다(그 키의 카운트가 처음부터 다시 셀 뿐이다). 한도에 닿아 막혀 있는 키는 마지막까지 남긴다 — 버리면 막힘이 풀린다.
+ */
 export const RATE_LIMIT_MAX_KEYS = 50_000
 /** 만료된 키를 쓸어 내는 간격 — 호출마다 전체를 훑지 않는다. */
 const SWEEP_INTERVAL_MS = 10_000
 let lastSweepAt = 0
 
-function sweepExpired(now: number) {
-  if (now - lastSweepAt < SWEEP_INTERVAL_MS) return
+function sweepAll(now: number) {
   lastSweepAt = now
   for (const [k, e] of store) if (now > e.resetAt) store.delete(k)
 }
 
-/** 상한에 닿으면 가장 오래 들어온 10% 를 한 번에 버린다 — 하나씩 버리면 Map 의 앞쪽 빈 칸을 매번 건너뛰느라 느려진다 */
-function evictOverflow() {
+function sweepExpired(now: number) {
+  if (now - lastSweepAt < SWEEP_INTERVAL_MS) return
+  sweepAll(now)
+}
+
+/**
+ * 상한에 닿으면: 만료 키를 바로 쓸고(쓸기 간격을 기다리지 않는다), 그래도 넘치면 10% 를 한 번에 버린다 — 하나씩 버리면 Map 의
+ * 앞쪽 빈 칸을 매번 건너뛰느라 느려진다. Map 순서는 창이 시작된 순서다(창이 새로 시작하면 맨 뒤로 옮긴다, checkRateLimit).
+ * 한도에 닿지 않은 키를 먼저 버리고, 모자랄 때만 막혀 있는 키를 오래된 순으로 버린다.
+ */
+function evictOverflow(now: number) {
+  if (store.size < RATE_LIMIT_MAX_KEYS) return
+  sweepAll(now)
   if (store.size < RATE_LIMIT_MAX_KEYS) return
   let drop = Math.ceil(RATE_LIMIT_MAX_KEYS / 10)
+  for (const [k, e] of store) {
+    if (e.count >= e.max) continue
+    store.delete(k)
+    if (--drop <= 0) return
+  }
   for (const k of store.keys()) {
     store.delete(k)
-    if (--drop <= 0) break
+    if (--drop <= 0) return
   }
 }
 
@@ -65,8 +85,10 @@ export function checkRateLimit(
 
   if (!entry || now > entry.resetAt) {
     const resetAt = now + options.windowMs
-    if (!entry) evictOverflow()
-    store.set(storeKey, { count: 1, resetAt })
+    // 창이 새로 시작한 키는 지웠다 다시 넣어 Map 맨 뒤로 보낸다 — 처음 들어온 순서로 남으면 상한에서 살아 있는 키가 먼저 버려진다
+    if (entry) store.delete(storeKey)
+    else evictOverflow(now)
+    store.set(storeKey, { count: 1, resetAt, max: options.max })
     return { allowed: true, remaining: options.max - 1, resetAt }
   }
 

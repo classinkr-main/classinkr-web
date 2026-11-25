@@ -93,6 +93,10 @@
     무효 처리된 기록도 같은 키면 replay 한다(결과의 `status` 를 본다).
     같은 키 **동시** 두 번은 부분 유니크 색인(`20261125_hardware_movements_mcp_idempotency_unique.sql`, 적용 뒤)이 두 번째 insert 를
     23505 로 막고, 코드는 먼저 만든 행을 찾아 처음 결과를 돌려준다(`code=replayed`). 적용 전에는 조회 후 판단만 한다(동시 두 건이면 드물게 두 번).
+    색인·키 조회는 MCP 가 만든 예정 행만 본다 — 어드민 출고 확정이 만든 출고 행은 예정 행의 `raw.mcp` 를 물려받지만
+    (`converted_from_movement_id` 있음) 제외하고, 색인은 무효 처리된 행도 뺀다. 적용 때 진짜 중복(살아 있는 예정 행 두 줄)이 있으면
+    WARNING 만 남기고 색인을 만들지 않는다 — 늦게 만든 예정 행을 어드민에서 무효 처리하고 다시 적용한다(확정 출고 행은 건드리지 않는다).
+    로컬 재현: `tests/fixtures/hw-mcp-idempotency-index/run-local.sh`(일회용 PostgreSQL 클러스터).
   - `quote_create_draft`: 키를 실을 칸이 없어 **공용 저장소(Upstash, `UPSTASH_REDIS_REST_*`)** 에서 `SET NX` 로 같은 키 동시 실행을 한 번으로 막는다
     (진행 중이면 최대 5초 기다렸다가 처음 결과, 못 기다리면 `idempotency_in_progress`; 실행이 실패하면 키를 지운다). 저장소가 없거나 호출이 실패하면
     **닫지 않고 인스턴스 메모리로 판정**하고, 그때는 키를 준 호출의 결과에 `idempotency_scope: "instance_memory"` 칸이 더해지고 로그 코드에 `idem_memory` 가 붙는다.

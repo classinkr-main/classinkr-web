@@ -46,6 +46,40 @@ describe("메모리 저장소 크기", () => {
   })
 })
 
+describe("상한에서 버릴 키 고르기(반박 검토 2026-11-25)", () => {
+  const fill = (n: number, prefix: string) => {
+    for (let i = 0; i < n; i++) checkRateLimit(`${prefix}-${i}`, "flood", opts)
+  }
+
+  it("한도에 닿아 막혀 있는 살아 있는 키는 상한에서 버리지 않는다(버리면 한도가 풀린다)", () => {
+    for (let i = 0; i < 5; i++) checkRateLimit("blocked", "flood", opts)
+    expect(checkRateLimit("blocked", "flood", opts).allowed).toBe(false)
+    fill(RATE_LIMIT_MAX_KEYS + 10, "ip") // 상한을 넘겨 오래된 키를 버리게 한다
+    expect(rateLimitStoreSizeForTest()).toBeLessThanOrEqual(RATE_LIMIT_MAX_KEYS)
+    expect(checkRateLimit("blocked", "flood", opts)).toMatchObject({ allowed: false, remaining: 0 })
+  })
+
+  it("창이 끝나 새로 시작한 키는 맨 뒤로 간다 — 처음 들어온 순서 때문에 먼저 버려지지 않는다", () => {
+    checkRateLimit("renewed", "flood", { windowMs: 1_000, max: 5 })
+    fill(6_000, "early") // renewed 보다 늦게 들어온 살아 있는 키들 — 상한에서 버리는 10%(5,000)보다 많다
+    vi.setSystemTime(new Date("2026-11-25T00:00:02Z")) // renewed 의 창이 지남(쓸기 간격 10초 전이라 아직 저장소에 있다)
+    checkRateLimit("renewed", "flood", opts) // 새 창 1번째
+    checkRateLimit("renewed", "flood", opts) // 2번째
+    fill(RATE_LIMIT_MAX_KEYS - 6_000 + 10, "ip") // 상한에 닿아 한 번 버리게 한다
+    expect(checkRateLimit("renewed", "flood", opts)).toMatchObject({ allowed: true, remaining: 2 }) // 3번째 — 카운트가 살아 있다
+  })
+
+  it("상한에서는 만료된 키부터 버린다(쓸기 간격을 기다리지 않는다)", () => {
+    fill(RATE_LIMIT_MAX_KEYS - 1, "old")
+    vi.setSystemTime(new Date("2026-11-25T00:00:05Z"))
+    for (let i = 0; i < 5; i++) checkRateLimit("live", "flood", opts)
+    vi.setSystemTime(new Date("2026-11-25T00:01:01Z")) // old-* 만료, live 는 아직(00:01:05 까지)
+    checkRateLimit("new", "flood", opts)
+    expect(rateLimitStoreSizeForTest()).toBe(2)
+    expect(checkRateLimit("live", "flood", opts).allowed).toBe(false)
+  })
+})
+
 describe("분산 저장소 시간 제한", () => {
   it("Upstash 가 0.5초 안에 답하지 않으면 중단하고 메모리로 폴백한다(전에는 1.5초)", async () => {
     vi.stubEnv("UPSTASH_REDIS_REST_URL", "https://redis.example.test")

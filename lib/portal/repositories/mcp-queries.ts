@@ -144,11 +144,19 @@ export async function searchDealsForMcp(filters: McpListFilters, db: Db = create
     for (const ids of chunk(Array.from(customerIds))) sources.push(dealQuery().in("customer_id", ids))
 
     const merged = new Map<string, DealRaw>()
+    let sawFull = false
     for (const { data, error } of await Promise.all(sources)) {
       if (error) throw error
-      for (const row of (data ?? []) as DealRaw[]) merged.set(row.id, row)
+      const got = (data ?? []) as DealRaw[]
+      if (got.length > limit) sawFull = true
+      for (const row of got) merged.set(row.id, row)
     }
-    rows = Array.from(merged.values()).sort(byUpdatedDesc).slice(0, limit + 1)
+    // DB 후보는 상위 집합이다 — PostgREST 는 ilike 의 * 를 % 로 읽는다(likePattern 이 막지 못한다). 전처럼 글자 그대로 포함인지 다시 본다.
+    // 다시 걸러 빠진 행이 있고 어느 갈래가 limit+1 까지 찼으면, 그 뒤에 맞는 딜이 더 있을 수 있어 more 로 알린다.
+    const candidates = Array.from(merged.values())
+    const exact = candidates.filter((d) => includesText(query, d.title, d.customers?.name, d.customers?.campus_name))
+    if (sawFull && exact.length < candidates.length) incomplete = true
+    rows = exact.sort(byUpdatedDesc).slice(0, limit + 1)
   }
 
   const more = rows.length > limit || incomplete
@@ -177,6 +185,9 @@ export type McpQuoteFilters = McpListFilters & { dealId?: string; status?: strin
 type QuoteDocRow = { id: string; deal_id: string; quote_number: string; current_version_id: string | null; status: string; updated_at: string }
 type DealInfo = { id: string; title: string; customer_id: string; customer_name: string | null }
 type VersionTitle = { id: string; quote_document_id: string; title: string | null; version_number: number }
+
+/** 제목 없는 견적의 목록 제목(documents.ts 와 같다) */
+const DEFAULT_QUOTE_TITLE = "견적서"
 
 const DOC_SELECT = "id, deal_id, quote_number, current_version_id, status, updated_at"
 
@@ -292,6 +303,14 @@ export async function searchQuotesForMcp(filters: McpQuoteFilters, db: Db = crea
     const versionDocIds = Array.from(new Set(((versions ?? []) as Array<{ quote_document_id: string }>).slice(0, MCP_SCAN_CAP).map((v) => v.quote_document_id)))
     if (((versions ?? []) as unknown[]).length > MCP_SCAN_CAP) incomplete = true
     for (const ids of chunk(versionDocIds)) take(await selectQuoteDocs(db, filters, (q) => q.in("id", ids), MCP_SCAN_CAP))
+    // 제목 없는 버전 — 목록은 기본 제목 "견적서" 로 보이고 전에는 그 글자로도 찾혔다. 검색어가 그 안에 들면 후보에 넣는다
+    if (includesText(query, DEFAULT_QUOTE_TITLE)) {
+      const { data: untitled, error: untitledError } = await db.from("quote_document_versions").select("quote_document_id").is("title", null).limit(MCP_SCAN_CAP + 1)
+      if (untitledError) throw untitledError
+      if (((untitled ?? []) as unknown[]).length > MCP_SCAN_CAP) incomplete = true
+      const untitledDocIds = Array.from(new Set(((untitled ?? []) as Array<{ quote_document_id: string }>).slice(0, MCP_SCAN_CAP).map((v) => v.quote_document_id)))
+      for (const ids of chunk(untitledDocIds)) take(await selectQuoteDocs(db, filters, (q) => q.in("id", ids), MCP_SCAN_CAP))
+    }
     candidates = Array.from(merged.values()).sort(byUpdatedDesc)
   }
 
@@ -302,7 +321,7 @@ export async function searchQuotesForMcp(filters: McpQuoteFilters, db: Db = crea
     const titles = await loadCurrentTitles(db, matched)
     matched = matched.filter((d) => {
       const deal = deals.get(d.deal_id)
-      return includesText(query, deal?.customer_name, titles.get(d.id) ?? "견적서", d.quote_number, deal?.title)
+      return includesText(query, deal?.customer_name, titles.get(d.id) ?? DEFAULT_QUOTE_TITLE, d.quote_number, deal?.title)
     })
   }
   const more = matched.length > limit || incomplete
@@ -371,7 +390,7 @@ export async function searchQuotesForMcp(filters: McpQuoteFilters, db: Db = crea
       customer_name: deal?.customer_name ?? null,
       deal_title: deal?.title ?? "",
       document_number: doc.quote_number,
-      title: current?.title ?? "견적서",
+      title: current?.title ?? DEFAULT_QUOTE_TITLE,
       template_id: current?.template_id ?? null,
       status: doc.status,
       version_count: docVersions.length,

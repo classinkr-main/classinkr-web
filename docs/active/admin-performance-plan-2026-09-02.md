@@ -24,7 +24,7 @@
 | 경로 | 미들웨어(`proxy.ts`) | 라우트 가드(`lib/admin-auth.ts`) | 합계 |
 |---|---|---|---|
 | `/admin/*` 페이지 | `updateSupabaseSession()`의 `getUser()` 1회 + `hasSupabaseAdminSession()`의 `getUser()` 1회와 `admin_profiles` 1회(쿠키 키 60초 캐시, 인스턴스별) | 페이지는 클라이언트 렌더라 없음. 대신 브라우저가 `getUser()`와 `admin_profiles`를 조회 | 캐시 미스 3회 + 브라우저 2회 |
-| `/api/admin/*` | `getUser()` 1회(캐시 없음) | `getUser()` 1회 + `admin_profiles` 1회(쿠키 키 60초 캐시, 진행 중 promise 공유, 인스턴스별) | 캐시 미스 3회, 히트 1회 |
+| `/api/admin/*` | `getUser()` 1회(캐시 없음) | `getUser()` 1회 + `admin_profiles` 1회(쿠키 키 15초 캐시 — 2026-11-25 60초에서 줄임, 진행 중 promise 공유, 인스턴스별) | 캐시 미스 3회, 히트 1회 |
 
 Next 16의 `proxy`는 Node.js 런타임 기본이므로 함수 리전(sin1)에서 실행된다. GoTrue 왕복은 리전 간 지연이 아니라 호출 자체의 처리 시간(수십 ms)이 비용이다. 화면 하나가 API를 20번 부르면 인증 처리만 20~60회다.
 
@@ -90,7 +90,7 @@ Next 16의 `proxy`는 Node.js 런타임 기본이므로 함수 리전(sin1)에�
 |---|---|
 | `lib/supabase/middleware.ts` | `verifySupabaseAuthUser()` 신설. `auth.getClaims()`로 JWKS 로컬 검증을 먼저 시도하고, 없거나 실패하면 `getUser()`로 폴백한다. `updateSupabaseSession()`이 `{ response, user }`를 반환하며 세션 갱신 쿠키 기록은 그대로다 |
 | `proxy.ts` | `/admin` 페이지 경로에서 `getUser()` 재호출을 없애고 미들웨어 검증 결과로 `admin_profiles`만 조회한다. 60초 캐시·역할 판정·레거시 HMAC 경로 무변경 |
-| `lib/admin-auth.ts` | API 가드가 같은 검증기를 쓴다. 60초 컨텍스트 캐시·진행 중 promise 공유 무변경 |
+| `lib/admin-auth.ts` | API 가드가 같은 검증기를 쓴다. 컨텍스트 캐시(당시 60초, 2026-11-25 부터 15초)·진행 중 promise 공유 무변경 |
 | `tests/auth/supabase-claims-session.test.ts` | 왕복 예산·폴백·비활성 프로필 거부 16건 |
 
 요청당 GoTrue 왕복(비대칭 서명 키 프로젝트 기준):
@@ -103,7 +103,7 @@ Next 16의 `proxy`는 Node.js 런타임 기본이므로 함수 리전(sin1)에�
 | `/api/admin/*` | 컨텍스트 캐시 히트 | 1 | 0 |
 | 토큰 만료 시 | — | 갱신 1 | 갱신 1 |
 
-신뢰 모델의 변화는 하나다. 사용자 삭제·차단이 토큰 만료(최대 1시간)까지 늦게 반영될 수 있다. 즉시 차단이 필요하면 `admin_profiles.status`를 바꾸는 경로(최대 60초)를 쓴다. HS256 레거시 키 프로젝트에서는 auth-js가 내부적으로 서버 검증으로 폴백하므로 보안 수준은 같고 이득만 없다.
+신뢰 모델의 변화는 하나다. 사용자 삭제·차단이 토큰 만료(최대 1시간)까지 늦게 반영될 수 있다. 즉시 차단이 필요하면 `admin_profiles.status`를 바꾸는 경로를 쓴다(어드민 API 는 최대 15초, `proxy.ts` 페이지 진입 캐시·셸 세션 캐시는 최대 60초). HS256 레거시 키 프로젝트에서는 auth-js가 내부적으로 서버 검증으로 폴백하므로 보안 수준은 같고 이득만 없다.
 
 ### 4.2 인덱스·프로브·측정 도구 (하위 티어)
 
