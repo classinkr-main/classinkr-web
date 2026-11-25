@@ -2,7 +2,7 @@
 
 import Image from "next/image"
 import { motion } from "framer-motion"
-import { Volume2, VolumeX, X } from "lucide-react"
+import { MessageSquarePlus, Volume2, VolumeX, X } from "lucide-react"
 
 import { ClassInAIIcon } from "@/components/ui/ClassInAIIcon"
 import { CHATBOT_HIT_AREA_CLASS } from "@/components/ui/chatbot-hit-area"
@@ -17,9 +17,12 @@ interface ChatbotHeaderProps {
     muted: boolean
     toggleMute: () => void
     closeChatbot: () => void
+    // 사용자 질문이 하나라도 있을 때만 새 대화 버튼을 보인다.
+    canStartNewChat: boolean
+    onNewChat: () => void
 }
 
-// 대화창 헤더: 상담 아이콘(생각 중 펄스 링), 제목, 음소거·닫기 버튼.
+// 대화창 헤더: 상담 아이콘(생각 중 펄스 링), 제목, 새 대화·음소거·닫기 버튼.
 export function ChatbotHeader({
     isDeepConsultation,
     isSending,
@@ -28,6 +31,8 @@ export function ChatbotHeader({
     muted,
     toggleMute,
     closeChatbot,
+    canStartNewChat,
+    onNewChat,
 }: ChatbotHeaderProps) {
     return (
         <motion.div
@@ -79,7 +84,7 @@ export function ChatbotHeader({
                 </motion.div>
                 <div className="min-w-0">
                     <div className="flex items-center gap-1.5">
-                        <h2 id="classin-chatbot-title" className="truncate text-[15px] font-bold text-[#111110]">Classin 상담 가이드</h2>
+                        <h2 id="classin-chatbot-title" tabIndex={-1} className="truncate text-[15px] font-bold text-[#111110]">Classin 상담 가이드</h2>
                         <motion.span
                             aria-hidden
                             className="h-2 w-2 shrink-0 rounded-full bg-fg-accent"
@@ -91,6 +96,21 @@ export function ChatbotHeader({
                 </div>
             </div>
             <div className="flex items-center gap-3">
+                {/* 새 대화(CX-02): 데스크톱은 글자를 함께, 휴대폰은 아이콘만. '다시 시도'의 RotateCcw 와 겹치지 않게 다른 아이콘을 쓴다. */}
+                {canStartNewChat ? (
+                    <button
+                        type="button"
+                        onClick={onNewChat}
+                        className={cn(
+                            "inline-flex h-9 min-w-9 items-center justify-center gap-1.5 rounded-[8px] border border-line-strong bg-surface-sheet px-2 text-label text-fg-muted transition-colors hover:text-fg-accent",
+                            CHATBOT_HIT_AREA_CLASS
+                        )}
+                        aria-label="새 대화 시작"
+                    >
+                        <MessageSquarePlus className="h-4 w-4" aria-hidden />
+                        <span className="hidden md:inline" aria-hidden>새 대화</span>
+                    </button>
+                ) : null}
                 <button
                     type="button"
                     onClick={toggleMute}
@@ -115,5 +135,28 @@ export function ChatbotHeader({
                 </button>
             </div>
         </motion.div>
+    )
+}
+
+// 새 대화 뒤 목록 위에 두는 되돌리기 띠(CX-02). 확인 창 대신 바로 비우고 여기서 복구한다.
+// 다음 질문을 보내거나 창을 닫을 때까지 남는다 — 시간 제한이 없어 시간 제한 접근성 문제가 없다.
+export function NewChatUndoBar({ onUndo }: { onUndo: () => void }) {
+    return (
+        <div
+            role="status"
+            className="flex items-center justify-between gap-3 border-b border-line-hair bg-surface-sheet px-4 py-1.5 text-note text-fg-muted"
+        >
+            <span>대화를 비웠어요</span>
+            <button
+                type="button"
+                onClick={onUndo}
+                className={cn(
+                    "inline-flex h-9 items-center justify-center rounded-[8px] px-2 text-label text-fg-accent underline-offset-4 transition-colors hover:underline",
+                    CHATBOT_HIT_AREA_CLASS
+                )}
+            >
+                되돌리기
+            </button>
+        </div>
     )
 }

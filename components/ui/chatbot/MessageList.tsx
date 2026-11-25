@@ -26,6 +26,7 @@ import {
 import type { ChatbotSource, ChatMessage } from "@/components/ui/chatbot/types"
 import { cn } from "@/lib/utils"
 import { CHATBOT_MOTION, m } from "@/lib/chatbot/motion"
+import { buildRetryLabel, WIDGET_INTERRUPTED_NOTICE } from "@/lib/chatbot/widget-turn"
 
 function getSuggestionLimit(message: ChatMessage) {
     return message.id === "welcome" ? STARTER_SUGGESTION_LIMIT : FOLLOW_UP_SUGGESTION_LIMIT
@@ -436,10 +437,14 @@ function SourceLinks({
     )
 }
 
+// 대기 말풍선. 스크린 리더에는 보낼 때('답변을 찾는 중이에요')와 늦어질 때 셸의 안내 영역이 한 번씩 알리므로,
+// 여기는 live 영역이 아니다(예전의 role=status + aria-live=off 를 정리했다, CX-09).
 function ThinkingIndicator({
     shouldReduceMotion,
+    isSlow,
 }: {
     shouldReduceMotion: boolean | null
+    isSlow: boolean
 }) {
     return (
         <motion.div
@@ -450,8 +455,6 @@ function ThinkingIndicator({
             className="flex justify-start"
         >
             <div
-                role="status"
-                aria-live="off"
                 className="relative overflow-hidden rounded-[18px] rounded-bl-[6px] border border-white/80 bg-[linear-gradient(160deg,rgba(255,255,255,0.92)_0%,rgba(246,253,249,0.85)_100%)] p-3 text-sm backdrop-blur-xl"
             >
                 {/* 은은한 쉬머 반사 광택 */}
@@ -477,7 +480,7 @@ function ThinkingIndicator({
                         )}
                     </div>
                     <div className="flex items-center gap-2">
-                        <span className="text-xs font-semibold text-fg-accent">ClassIn 가이드 확인 중</span>
+                        <span className="text-xs font-semibold text-fg-accent">{isSlow ? "답변이 조금 늦어지고 있어요" : "ClassIn 가이드 확인 중"}</span>
                         <div className="flex items-center gap-1" aria-hidden>
                             {[0, 1, 2].map((index) => (
                                 <motion.span
@@ -514,8 +517,14 @@ interface MessageListProps {
     sessionId?: string
     isSending: boolean
     isStreaming: boolean
+    // 첫 글자가 6초 넘게 오지 않으면 대기 말풍선 문구를 바꾼다(CX-01).
+    isSlow: boolean
+    // 429 뒤 남은 대기 초. 다시 시도 버튼을 막고 남은 초를 보인다(CX-01).
+    cooldownSeconds: number
     shouldReduceMotion: boolean | null
     sendQuestion: (question: string) => Promise<void>
+    // 실패한 말풍선 자리에서 같은 질문을 다시 받는다(사용자 말풍선은 그대로).
+    onRetry: (messageId: string) => void
     closeAfterInChatNavigation: (click: ChatLinkClick) => void
     bottomRef: RefObject<HTMLDivElement | null>
 }
@@ -527,8 +536,11 @@ export const MessageList = memo(function MessageList({
     sessionId,
     isSending,
     isStreaming,
+    isSlow,
+    cooldownSeconds,
     shouldReduceMotion,
     sendQuestion,
+    onRetry,
     closeAfterInChatNavigation,
     bottomRef,
 }: MessageListProps) {
@@ -569,16 +581,22 @@ export const MessageList = memo(function MessageList({
                                 {message.role === "assistant" ? (
                                     <>
                                         <SourceLinks sources={message.sources} onNavigate={closeAfterInChatNavigation} />
+                                        {message.interrupted ? (
+                                            <p className="mt-2 border-t border-line-hair pt-2 text-note text-fg-muted">
+                                                {WIDGET_INTERRUPTED_NOTICE}
+                                            </p>
+                                        ) : null}
                                         {message.retryQuestion ? (
                                             <div className="mt-3">
                                                 <button
                                                     type="button"
-                                                    onClick={() => void sendQuestion(message.retryQuestion ?? "")}
-                                                    disabled={isSending}
+                                                    onClick={() => onRetry(message.id)}
+                                                    disabled={isSending || cooldownSeconds > 0}
+                                                    aria-label={buildRetryLabel(message.retryQuestion)}
                                                     className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[8px] border border-fg-accent/20 bg-fg-accent/6 px-3 text-xs font-bold text-fg-accent transition-colors hover:bg-fg-accent/14 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none"
                                                 >
                                                     <RotateCcw className="h-3.5 w-3.5" aria-hidden />
-                                                    다시 시도
+                                                    {cooldownSeconds > 0 ? `다시 시도 (${cooldownSeconds}초)` : "다시 시도"}
                                                 </button>
                                             </div>
                                         ) : null}
@@ -618,7 +636,8 @@ export const MessageList = memo(function MessageList({
                                             <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
                                                 <AnswerCopyButton message={message} />
                                                 {message.answerEventId ? (
-                                                    <FeedbackButtons answerEventId={message.answerEventId} sessionId={sessionId} />
+                                                    // 피드백은 그 답을 받은 세션으로 보낸다 — 새 대화·되돌리기·복원 뒤에도 answerEventId 와 짝이 맞는다.
+                                                    <FeedbackButtons answerEventId={message.answerEventId} sessionId={message.sessionId ?? sessionId} />
                                                 ) : null}
                                             </div>
                                         ) : null}
@@ -626,7 +645,7 @@ export const MessageList = memo(function MessageList({
                                             <ConsultationBridge
                                                 messages={messages}
                                                 message={message}
-                                                sessionId={sessionId}
+                                                sessionId={message.sessionId ?? sessionId}
                                                 onNavigate={closeAfterInChatNavigation}
                                             />
                                         ) : null}
@@ -638,7 +657,7 @@ export const MessageList = memo(function MessageList({
                 })}
 
                 {isSending && !isStreaming ? (
-                    <ThinkingIndicator key="thinking" shouldReduceMotion={shouldReduceMotion} />
+                    <ThinkingIndicator key="thinking" shouldReduceMotion={shouldReduceMotion} isSlow={isSlow} />
                 ) : null}
             </AnimatePresence>
             <div ref={bottomRef} />

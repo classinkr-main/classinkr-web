@@ -40,6 +40,9 @@ export type EventNames =
   | "chatbot_teaser_dismissed"
   | "chatbot_opened"
   | "chatbot_first_question"
+  // 새 대화(헤더 버튼)·대화 복원(새로고침·같은 탭 이동 뒤). 질문 글은 싣지 않고 대화 길이 구간만 싣는다.
+  | "chatbot_new_chat"
+  | "chatbot_conversation_restored"
   // 퍼널 보조 이벤트 — GA4 에도 같은 이름으로 간다.
   | "contact_start"
   | "showroom_start"
@@ -255,6 +258,10 @@ const GA4_PARAM_KEYS = new Set([
   // 보조 이벤트
   "link_location",
   "pricing_surface",
+  // 챗봇 새 대화·복원(질문 글 없이 구간·여부만)
+  "turns",
+  "had_handoff",
+  "had_error",
 ])
 
 /** 링크·페이지 값이 실리는 키 — 쿼리·메일 주소·전화번호가 구글로 가지 않게 정화한다. */

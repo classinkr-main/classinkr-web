@@ -1,6 +1,7 @@
 import "server-only"
 
 import { stripLeadSubmitTokens } from "@/lib/chatbot/lead-token"
+import { redactPii } from "@/lib/chatbot/pii"
 import {
   generateChatbotFinalAnswer,
   streamChatbotFinalAnswer,
@@ -317,14 +318,8 @@ function normalizeString(value: unknown) {
   return trimmed || undefined
 }
 
-// 내부 CS 유입(lib/internal-cs-chat/gap-ingest.ts)도 같은 redaction 을 거쳐야 하므로 export 한다.
-export function redactPii(value: string) {
-  return value
-    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[email]")
-    .replace(/\b\d{3}[-\s]?\d{2}[-\s]?\d{5}\b/g, "[business_number]")
-    .replace(/\b(?:\d[ -]?){13,19}\b/g, "[payment_number]")
-    .replace(/\b\d{2,3}[-.\s]?\d{3,4}[-.\s]?\d{4}\b/g, "[phone]")
-}
+// 내부 CS 유입(lib/internal-cs-chat/gap-ingest.ts)도 같은 redaction 을 거쳐야 하므로 다시 내보낸다. 정본은 lib/chatbot/pii.ts(위젯과 공용).
+export { redactPii }
 
 function tokenize(value: string) {
   return Array.from(

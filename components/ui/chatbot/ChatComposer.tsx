@@ -40,19 +40,21 @@ interface ChatComposerProps {
     draftStore: ComposerDraftStore
     inputRef: RefObject<HTMLTextAreaElement | null>
     messagesContainerRef: RefObject<HTMLDivElement | null>
-    error: string | null
+    // 429 뒤 남은 대기 초. 0 보다 크면 보내기를 막는다(안내는 오류 말풍선 한 곳에서 한다).
+    cooldownSeconds: number
     isSending: boolean
     isStreaming: boolean
     shouldReduceMotion: boolean | null
     sendQuestion: (question: string) => Promise<void>
 }
 
-// 입력 폼·입력 상태·오류 띠. 입력 상태를 여기서 구독해 글자를 칠 때 대화 목록과 셸이 다시 그려지지 않는다.
+// 입력 폼·입력 상태. 입력 상태를 여기서 구독해 글자를 칠 때 대화 목록과 셸이 다시 그려지지 않는다.
+// 오류는 말풍선 한 곳에서만 말한다 — 예전 입력창 위 오류 띠('Failed to fetch' 원문이 보이던 곳)는 없앴다(CX-01).
 export function ChatComposer({
     draftStore,
     inputRef,
     messagesContainerRef,
-    error,
+    cooldownSeconds,
     isSending,
     isStreaming,
     shouldReduceMotion,
@@ -108,18 +110,15 @@ export function ChatComposer({
         void sendQuestion(input)
     }
 
+    const isCoolingDown = cooldownSeconds > 0
+    const isSubmitBlocked = isSending || isCoolingDown || !input.trim()
+
     return (
         <motion.div
             variants={itemVariants}
             custom={shouldReduceMotion}
             className="relative flex flex-col min-h-0 w-full"
         >
-            {error ? (
-                <div className="flex items-center justify-between gap-3 border-t border-white/50 bg-[#FBEAE2]/70 px-4 py-2 text-xs font-medium text-[#7A2A13] backdrop-blur-xl">
-                    <span>{error}</span>
-                </div>
-            ) : null}
-
             <form onSubmit={handleSubmit} className="relative overflow-hidden border-t border-white/50 bg-white/25 p-3.5 backdrop-blur-xl w-full">
                 {/* 생성 중 상단 은은한 에메랄드 스트리밍 진행 표시선 */}
                 {(isSending || isStreaming) && !shouldReduceMotion && (
@@ -143,25 +142,26 @@ export function ChatComposer({
                         }}
                         rows={1}
                         maxLength={1000}
-                        placeholder="질문을 짧게 입력해 주세요"
+                        placeholder={isCoolingDown ? `${cooldownSeconds}초 뒤에 다시 보낼 수 있어요` : "질문을 짧게 입력해 주세요"}
                         aria-label="챗봇 질문 입력"
                         data-focus-ring="parent"
                         className="min-h-11 max-h-28 flex-1 resize-none rounded-[12px] border-0 bg-transparent px-3 py-2.5 text-[15px] leading-6 text-[#111110] placeholder:text-fg-placeholder focus-visible:outline-none transition-[height] duration-150 ease-out"
                     />
                     <motion.button
                         type="submit"
-                        disabled={isSending || !input.trim()}
+                        disabled={isSubmitBlocked}
                         animate={{
-                            scale: (isSending || !input.trim()) ? 0.96 : 1,
-                            opacity: (isSending || !input.trim()) ? 0.45 : 1,
+                            scale: isSubmitBlocked ? 0.96 : 1,
+                            opacity: isSubmitBlocked ? 0.45 : 1,
                         }}
-                        whileHover={(isSending || !input.trim()) ? undefined : { scale: 1.05 }}
-                        whileTap={(isSending || !input.trim()) ? undefined : { scale: 0.95 }}
+                        whileHover={isSubmitBlocked ? undefined : { scale: 1.05 }}
+                        whileTap={isSubmitBlocked ? undefined : { scale: 0.95 }}
                         transition={m(CHATBOT_MOTION.micro, shouldReduceMotion)}
                         className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[12px] bg-fg-accent text-fg-on-accent transition-colors hover:bg-fg-accent-hover disabled:cursor-not-allowed disabled:shadow-none focus-visible:outline-none"
-                        aria-label="질문 보내기"
+                        // 보내는 동안에는 스피너에 이름을 준다(CX-09). 대기 중에는 남은 초를 들려준다.
+                        aria-label={isSending ? "답변을 기다리는 중" : isCoolingDown ? `${cooldownSeconds}초 뒤에 보낼 수 있어요` : "질문 보내기"}
                     >
-                        {isSending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                        {isSending ? <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden /> : <Send className="h-4 w-4" aria-hidden />}
                     </motion.button>
                 </div>
             </form>

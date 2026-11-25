@@ -26,7 +26,7 @@ import {
     playOpenSound,
     playCloseSound,
 } from "@/lib/chatbot/sound"
-import { ChatbotHeader } from "@/components/ui/chatbot/ChatbotHeader"
+import { ChatbotHeader, NewChatUndoBar } from "@/components/ui/chatbot/ChatbotHeader"
 import { ChatComposer, createComposerDraftStore } from "@/components/ui/chatbot/ChatComposer"
 import { MessageList } from "@/components/ui/chatbot/MessageList"
 import { DEEP_CONSULTATION_ICON_SRC, containerVariants, itemVariants } from "@/components/ui/chatbot/constants"
@@ -72,17 +72,24 @@ export function FloatingChatbot() {
         sessionId,
         isSending,
         isStreaming,
-        error,
+        isSlow,
+        cooldownSeconds,
         isDeepConsultation,
         setIsDeepConsultation,
         srAnnouncement,
+        hasUserMessages,
+        canUndoNewChat,
         sendQuestion,
+        retryTurn,
+        startNewChat,
+        undoNewChat,
     } = useChatbotConversation({
         pathname,
         hidden,
+        isOpen,
         pendingAssistantScrollIdRef,
-        onBeforeSend: () => {
-            draftStore.set("")
+        onBeforeSend: ({ clearDraft }) => {
+            if (clearDraft) draftStore.set("")
             setIsAtBottom(true)
         },
     })
@@ -186,7 +193,8 @@ export function FloatingChatbot() {
         const handler = (event: Event) => {
             const detail = (event as CustomEvent<ChatbotOpenDetail>).detail
             openSourceRef.current = detail?.source ?? "cta"
-            if (detail?.prefill) draftStore.set(detail.prefill)
+            // 쓰던 글이 있으면 덮지 않는다(CX-24). 비어 있을 때만 미리 채운다.
+            if (detail?.prefill && !draftStore.get().trim()) draftStore.set(detail.prefill)
             if (detail?.intent === "support") setIsDeepConsultation(true)
             setIsOpen(true)
         }
@@ -207,6 +215,33 @@ export function FloatingChatbot() {
             trackEvent("chatbot_teaser_shown", { path: pathname })
         }
     }, [chatbotTeaser.show, pathname])
+
+    // 새 대화·되돌리기 뒤 포커스: 정밀 포인터면 입력창, 아니면 대화창 제목(h2 tabIndex=-1). 터치에서 키보드가 갑자기 뜨지 않게 한다.
+    // 새 대화 버튼·되돌리기 버튼은 누른 뒤 사라지므로 포커스를 옮겨 둔다(CX-02).
+    const focusAfterConversationReset = () => {
+        window.requestAnimationFrame(() => {
+            if (window.matchMedia("(hover: hover) and (pointer: fine)").matches && inputRef.current) {
+                inputRef.current.focus()
+                return
+            }
+            document.getElementById("classin-chatbot-title")?.focus()
+        })
+    }
+
+    const handleNewChat = () => {
+        if (!startNewChat()) return
+        setIsAtBottom(true)
+        focusAfterConversationReset()
+    }
+
+    const handleUndoNewChat = () => {
+        if (!undoNewChat()) return
+        focusAfterConversationReset()
+        window.requestAnimationFrame(() => {
+            bottomRef.current?.scrollIntoView({ behavior: "auto" })
+            setIsAtBottom(true)
+        })
+    }
 
     // 휴대폰에서 답 안 링크로 다른 페이지(또는 같은 페이지 #앵커)로 가면 대화창과 딤이 목적지를 덮지 않게 닫는다.
     // 다음 페이지로 가는 중이라 런처로 포커스를 옮기지 않는다. 대화 상태(messages·sessionId)는 두므로 다시 열면 이어진다.
@@ -269,7 +304,10 @@ export function FloatingChatbot() {
                                 muted={muted}
                                 toggleMute={toggleMute}
                                 closeChatbot={closeChatbot}
+                                canStartNewChat={hasUserMessages}
+                                onNewChat={handleNewChat}
                             />
+                            {canUndoNewChat ? <NewChatUndoBar onUndo={handleUndoNewChat} /> : null}
 
                             {/* 대화 내용 목록 (Staggered Item 2) */}
                             <motion.div
@@ -287,8 +325,11 @@ export function FloatingChatbot() {
                                     sessionId={sessionId}
                                     isSending={isSending}
                                     isStreaming={isStreaming}
+                                    isSlow={isSlow}
+                                    cooldownSeconds={cooldownSeconds}
                                     shouldReduceMotion={shouldReduceMotion}
                                     sendQuestion={sendQuestion}
+                                    onRetry={retryTurn}
                                     closeAfterInChatNavigation={closeAfterInChatNavigation}
                                     bottomRef={bottomRef}
                                 />
@@ -299,7 +340,7 @@ export function FloatingChatbot() {
                                 draftStore={draftStore}
                                 inputRef={inputRef}
                                 messagesContainerRef={messagesContainerRef}
-                                error={error}
+                                cooldownSeconds={cooldownSeconds}
                                 isSending={isSending}
                                 isStreaming={isStreaming}
                                 shouldReduceMotion={shouldReduceMotion}
