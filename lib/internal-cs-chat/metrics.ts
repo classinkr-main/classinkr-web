@@ -100,12 +100,9 @@ async function loadInternalCsMetrics(days: number): Promise<InternalCsMetrics> {
  * Fluid 콜드 인스턴스마다 비어 있었다. unstable_cache(Data Cache)로 교체해 인스턴스 간
  * 공유한다. TTL은 옛 METRICS_CACHE_TTL_MS와 같은 60초로 유지한다.
  *
- * 무효화 배선은 없다 — 이 조립이 읽는 원천(내부 상담 대화·리뷰·회귀 평가)의 쓰기 경로는
- * app/api/admin/cs-chat/conversations/**·regression-eval/** 등인데, 이번 라운드의 담당
- * 범위는 app/api/admin/cs-chat/metrics/**로 한정돼 그 쓰기 경로들을 배선할 권한이 없다
- * (다른 파트 소유 파일). TTL만이 신선도 수단이고, Phase 4 원칙(무효화 없으면 TTL을 올리지
- * 않는다)에 따라 60초를 그대로 둔다 — chatbot 파트 에이전트가 무효화를 배선하면 그때
- * TTL 상향을 재검토할 수 있다.
+ * 무효화 배선(2026-11 B1): 검토 PATCH(conversations/[id]/messages/[messageId])와 지식 승격
+ * (messages/[messageId]/promote-knowledge)이 끝에서 이 태그를 revalidateTag 한다. 대화 생성·회귀 평가 등
+ * 나머지 쓰기 경로는 아직 배선하지 않았으므로 TTL 60초를 그대로 둔다.
  */
 export const INTERNAL_CS_METRICS_CACHE_TAG = "internal-cs-metrics"
 

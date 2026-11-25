@@ -10,10 +10,18 @@ const mocks = vi.hoisted(() => ({
   requireVerifiedAdminContext: vi.fn(),
   reviewInternalCsMessage: vi.fn(),
   getInternalCsConversation: vi.fn(),
+  getInternalCsMessageById: vi.fn(),
+  revalidateTag: vi.fn(),
   createInternalCsMessage: vi.fn(),
   buildInternalCsCopilotContext: vi.fn(),
   generateInternalCsAnswer: vi.fn(),
 }))
+
+// 승인·판정 뒤 지표 캐시 무효화(revalidateTag)는 Next 요청 문맥 밖에서 던지므로 가짜로 둔다.
+vi.mock("next/cache", async () => {
+  const actual = await vi.importActual<typeof import("next/cache")>("next/cache")
+  return { ...actual, revalidateTag: mocks.revalidateTag }
+})
 
 vi.mock("@/lib/supabase/admin", () => ({
   createSupabaseAdminClient: mocks.createSupabaseAdminClient,
@@ -36,6 +44,7 @@ vi.mock("@/lib/repositories/internal-cs-chat", () => ({
   isInternalCsChatNotReadyError: vi.fn(() => false),
   reviewInternalCsMessage: mocks.reviewInternalCsMessage,
   getInternalCsConversation: mocks.getInternalCsConversation,
+  getInternalCsMessageById: mocks.getInternalCsMessageById,
   createInternalCsMessage: mocks.createInternalCsMessage,
   updateInternalCsRegressionOutcome: vi.fn(),
 }))
@@ -525,6 +534,14 @@ describe("message review PATCH gap ingestion hook", () => {
       role: "ADMIN",
       name: "CS 담당자",
       userId: "cs-1",
+    })
+    // 승인 경계(IC-01)가 원문과 교정본을 비교한다 — 원문은 검토 전 초안이다.
+    mocks.getInternalCsMessageById.mockResolvedValue({
+      id: assistantMessageId,
+      conversation_id: conversationId,
+      role: "assistant",
+      content: "검토 전 초안",
+      feedback_labels: [],
     })
     if (options.lookupFails) {
       mocks.getInternalCsConversation.mockRejectedValue(new Error("lookup failed"))
