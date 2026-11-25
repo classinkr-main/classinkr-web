@@ -1488,6 +1488,24 @@ export async function createHardwareMovementRows(
   return inserted
 }
 
+/**
+ * 운영 도구(홈 MCP) 쓰기의 idempotency_key 로 이미 만든 기록을 찾는다 — 키는 raw.mcp.idempotency_key 에,
+ * 호출자는 raw.mcp.caller 에 실려 있다(lib/ops-tools/defs/hardware.ts). 서버리스 인스턴스가 달라도 같은 키로
+ * 두 번 만들지 않게 하는 DB 쪽 확인이다. 무효 처리된 행도 돌려준다(같은 키 = 같은 요청).
+ */
+export async function findHardwareMovementsByMcpIdempotencyKey(caller: string, key: string): Promise<HardwareMovement[]> {
+  const sb = createSupabaseAdminClient()
+  const { data, error } = await sb
+    .from("hardware_movements")
+    .select(HARDWARE_MOVEMENT_LEDGER_COLUMNS)
+    .eq("raw->mcp->>caller", caller)
+    .eq("raw->mcp->>idempotency_key", key)
+    .order("created_at", { ascending: true })
+    .limit(50)
+  if (error) throw error
+  return (data ?? []) as unknown as HardwareMovement[]
+}
+
 export async function createHardwareMovement(input: CreateHardwareMovementInput): Promise<HardwareMovement> {
   const inserted = await createHardwareMovementRows(input)
   const movement = inserted[0]
