@@ -129,4 +129,47 @@ describe("PATCH review route approval boundary", () => {
     expect((await patch("{broken")).status).toBe(400)
     expect(mocks.reviewInternalCsMessage).not.toHaveBeenCalled()
   })
+
+  // 검토(안전-3): 원문에 '.' 이나 U+200B 하나 더한 글, 내부 표시가 남은 글, 사람이 더한 약속이 서버 가드를 넘던 길.
+  it("rejects a correction that differs from the original only by punctuation or a zero-width space", async () => {
+    arrange()
+    expect((await patch({ decision: "approved", correctedContent: `${ORIGINAL}.` })).status).toBe(400)
+    expect((await patch({ decision: "approved", correctedContent: `${ORIGINAL}\u200B` })).status).toBe(400)
+    expect(mocks.reviewInternalCsMessage).not.toHaveBeenCalled()
+  })
+
+  it("rejects internal markers in the final answer even with warnings acknowledged", async () => {
+    arrange()
+    const response = await patch({
+      decision: "approved",
+      correctedContent: "안녕하세요.\n[선례] 같은 증상이 있었습니다.",
+      feedbackLabels: ["human_approved"],
+      warningsAcknowledged: true,
+    })
+    expect(response.status).toBe(400)
+    expect(mocks.reviewInternalCsMessage).not.toHaveBeenCalled()
+  })
+
+  it("requires warningsAcknowledged for high-severity promises in the final answer and records it", async () => {
+    arrange()
+    const body = {
+      decision: "approved",
+      correctedContent: "확인했습니다. 환불을 진행해 드리겠습니다.",
+      feedbackLabels: ["human_approved"],
+    }
+    const blocked = await patch(body)
+    expect(blocked.status).toBe(400)
+    expect(mocks.reviewInternalCsMessage).not.toHaveBeenCalled()
+
+    const acknowledged = await patch({ ...body, warningsAcknowledged: true })
+    expect(acknowledged.status).toBe(200)
+    expect(mocks.reviewInternalCsMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ feedbackLabels: ["human_approved", "warnings_acknowledged"] })
+    )
+  })
+
+  it("rejects a non-boolean warningsAcknowledged", async () => {
+    arrange()
+    expect((await patch({ decision: "approved", correctedContent: "따로 쓴 답", warningsAcknowledged: "yes" })).status).toBe(400)
+  })
 })

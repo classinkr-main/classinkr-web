@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { CRM_STAFF_ADMIN_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
 import { ingestInternalCsGap } from "@/lib/internal-cs-chat/gap-ingest"
 import { INTERNAL_CS_METRICS_CACHE_TAG } from "@/lib/internal-cs-chat/metrics"
+import { checkFinalAnswer, WARNINGS_ACKNOWLEDGED_LABEL } from "@/lib/internal-cs-chat/answer-checks"
 import { hasQuickApprovedLabel, isSameAsOriginal } from "@/lib/internal-cs-chat/review-guard"
 import {
   getInternalCsConversation,
@@ -107,6 +108,9 @@ export async function PATCH(req: NextRequest, context: Context) {
   if (raw.excludeFromGapQueue !== undefined && typeof raw.excludeFromGapQueue !== "boolean") {
     return NextResponse.json({ error: "excludeFromGapQueue must be a boolean" }, { status: 400 })
   }
+  if (raw.warningsAcknowledged !== undefined && typeof raw.warningsAcknowledged !== "boolean") {
+    return NextResponse.json({ error: "warningsAcknowledged must be a boolean" }, { status: 400 })
+  }
   const correctedContent = optionalString(raw.correctedContent)
   if (!isRegressionOnly && raw.decision === "approved" && !correctedContent) {
     return NextResponse.json(
@@ -114,7 +118,7 @@ export async function PATCH(req: NextRequest, context: Context) {
       { status: 400 }
     )
   }
-  const feedbackLabels = raw.feedbackLabels as string[] | undefined
+  let feedbackLabels = raw.feedbackLabels as string[] | undefined
   if (!isRegressionOnly && raw.decision === "approved" && hasQuickApprovedLabel(feedbackLabels)) {
     return NextResponse.json(
       { error: "즉시 승인은 받지 않습니다. 검토 드로어에서 확인 3종을 거쳐 고객용 최종 답을 따로 써 주세요." },
@@ -134,6 +138,27 @@ export async function PATCH(req: NextRequest, context: Context) {
           { error: "고객용 최종 답이 AI 초안 원문과 같습니다. 검토한 내용을 반영해 따로 써 주세요." },
           { status: 400 }
         )
+      }
+      // 최종본 재검사(검토 안전-3): 생성 때 원문에만 돌던 후검사를 사람이 고친 최종본에도 돌린다.
+      // 내부 표시는 확인으로 넘길 수 없고, high 경고(약속·원가·식별자)는 검토 화면의 경고 확인을 받아야 한다.
+      const finalCheck = checkFinalAnswer(correctedContent)
+      if (finalCheck.internalMarkers.length > 0) {
+        return NextResponse.json(
+          { error: `고객용 최종 답에 내부 표시가 남아 있습니다(${finalCheck.internalMarkers.join(", ")}). 지우고 다시 승인해 주세요.` },
+          { status: 400 }
+        )
+      }
+      if (finalCheck.warnings.length > 0) {
+        if (raw.warningsAcknowledged !== true) {
+          return NextResponse.json(
+            {
+              error: "고객용 최종 답에 확인이 필요한 표현(약속·원가·식별자)이 있습니다. 검토 경고를 확인한 뒤 승인해 주세요.",
+              warningCodes: [...new Set(finalCheck.warnings.map((warning) => warning.code))],
+            },
+            { status: 400 }
+          )
+        }
+        feedbackLabels = [...new Set([...(feedbackLabels ?? []), WARNINGS_ACKNOWLEDGED_LABEL])]
       }
     }
 

@@ -1,6 +1,7 @@
 // 운영 데스크(CS 코파일럿 · 운영 도구 탭)의 순수 로직.
 // 스탯 스트립 집계와 회귀 판정 메타를 UI에서 분리해 노드 환경 테스트로 계약을 고정한다.
 
+import { checkFinalAnswer } from "@/lib/internal-cs-chat/answer-checks"
 import { isSameAsOriginal } from "@/lib/internal-cs-chat/review-guard"
 
 import type { InternalCsMessage, ReviewChecks } from "./types"
@@ -147,10 +148,15 @@ export function reviewApprovalState(input: {
   if (input.original && isSameAsOriginal(draft, input.original)) {
     return { canApprove: false, reason: "최종 답변이 AI 초안과 같습니다. 고객용으로 고쳐 써 주세요." }
   }
+  // 최종본 재검사(검토 안전-3) — 승인 라우트와 같은 함수. 내부 표시는 확인으로 넘길 수 없다.
+  const finalCheck = checkFinalAnswer(draft)
+  if (finalCheck.internalMarkers.length > 0) {
+    return { canApprove: false, reason: `최종 답에 내부 표시가 남아 있습니다(${finalCheck.internalMarkers.join(", ")}).` }
+  }
   if (!input.checks.customer || !input.checks.evidence || !input.checks.externalScope) {
     return { canApprove: false, reason: "확인 3종을 모두 체크해 주세요." }
   }
-  if (input.warningCount > 0 && !input.checks.warnings) {
+  if ((input.warningCount > 0 || finalCheck.warnings.length > 0) && !input.checks.warnings) {
     return { canApprove: false, reason: "검토 경고를 읽고 확인했는지 체크해 주세요." }
   }
   return { canApprove: true, reason: null }

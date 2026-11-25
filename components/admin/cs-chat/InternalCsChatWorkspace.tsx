@@ -1504,6 +1504,8 @@ function InternalCsChatWorkspaceInner() {
               correctedContent,
               reviewNote: reviewNote || undefined,
               feedbackLabels: decision === "changes_requested" ? ["human_revision_requested"] : ["human_approved"],
+              // 경고 확인 체크(생성 때 경고·최종본 경고). 라우트가 최종본의 high 경고에 이 값을 요구한다(검토 안전-3).
+              warningsAcknowledged: decision === "approved" ? Boolean(reviewChecks.warnings) : undefined,
               regressionCandidate: decision === "changes_requested" || regressionCandidate,
               regressionOutcome: decision === "changes_requested" ? "needs_fix" : "not_evaluated",
               conversationAction,

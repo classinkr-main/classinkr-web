@@ -62,3 +62,19 @@ describe("readReviewWarnings", () => {
     expect(readReviewWarnings({ metadata: {} })).toEqual([])
   })
 })
+
+// 검토(안전-3): 승인 버튼도 라우트와 같은 최종본 재검사를 따른다.
+describe("reviewApprovalState — final answer re-check", () => {
+  it("blocks internal markers in the final answer regardless of checks", () => {
+    const state = reviewApprovalState({ ...base, checks: { ...checks, warnings: true }, finalDraft: "## 내부 분석\n안내드립니다." })
+    expect(state.canApprove).toBe(false)
+    expect(state.reason).toContain("내부 표시")
+  })
+
+  it("requires the warning acknowledgement when the final answer itself carries a promise", () => {
+    const draft = "확인했습니다. 환불을 진행해 드리겠습니다."
+    expect(reviewApprovalState({ ...base, finalDraft: draft }).canApprove).toBe(false)
+    expect(reviewApprovalState({ ...base, finalDraft: draft, checks: { ...checks, warnings: true } }).canApprove).toBe(true)
+  })
+})
+

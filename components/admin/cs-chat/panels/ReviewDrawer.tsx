@@ -3,6 +3,8 @@
 import { BookOpen, ExternalLink, Loader2, LockKeyhole, Sparkles, UserRound, X } from "lucide-react"
 import { useEffect, useRef, useState, type KeyboardEvent } from "react"
 
+import { checkFinalAnswer } from "@/lib/internal-cs-chat/answer-checks"
+
 import ModelStatusBanner from "../components/ModelStatusBanner"
 import ReviewWarningList from "../components/ReviewWarningList"
 import { isDeterministicDraft, readFailureKinds, readReviewWarnings } from "../ops-desk"
@@ -87,7 +89,12 @@ export default function ReviewDrawer({
     return () => query.removeEventListener("change", sync)
   }, [])
 
-  const warnings = readReviewWarnings(pendingMessage)
+  // 생성 때 원문에서 찾은 경고 + 지금 쓰는 최종본에서 찾은 high 경고(검토 안전-3). 승인 라우트도 최종본을 다시 검사한다.
+  const finalCheck = checkFinalAnswer(finalDraft)
+  const warnings = [
+    ...readReviewWarnings(pendingMessage),
+    ...finalCheck.warnings.map((warning) => ({ ...warning, label: `최종 답: ${warning.label}` })),
+  ]
   const deterministic = isDeterministicDraft(pendingMessage)
   const failureKinds = readFailureKinds(pendingMessage)
 
