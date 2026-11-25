@@ -8,7 +8,7 @@ import { ArrowRight, LayoutGrid, List, Lock, MessageSquare, Plus } from "lucide-
 import { formatClock, formatTimeOfDay } from "@/lib/admin-ai/format"
 import {
   ADMIN_AI_TOOLS,
-  FORBIDDEN_ORDER_LABELS,
+  FORBIDDEN_ORDERS,
   ORDER_CATALOG,
 } from "@/lib/admin-ai/order-catalog"
 import { nextTabIndex } from "@/lib/admin-ai/a11y"
@@ -362,7 +362,21 @@ function CatalogPane() {
             <tr>
               <td className="border-b border-[#F0F0EC] px-2.5 py-[11px] text-[#615D59]">—</td>
               <td className="border-b border-[#F0F0EC] px-2.5 py-[11px] text-[#615D59]">
-                {FORBIDDEN_ORDER_LABELS.join(" · ")}
+                {FORBIDDEN_ORDERS.map((entry, index) => (
+                  <span key={entry.label}>
+                    {index > 0 ? " · " : null}
+                    {entry.href ? (
+                      <Link
+                        href={entry.href}
+                        className="underline decoration-[#E8E8E4] underline-offset-2 hover:text-[#111110] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734]"
+                      >
+                        {entry.label}
+                      </Link>
+                    ) : (
+                      entry.label
+                    )}
+                  </span>
+                ))}
               </td>
               <td className="border-b border-[#F0F0EC] px-2.5 py-[11px]">
                 <RiskTag risk="R4" />
