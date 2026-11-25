@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs"
+import { readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
 
@@ -60,9 +60,12 @@ describe("오더 카탈로그 — 묻기·홈페이지 MCP 대응(2026-11 점검
     expect(byId("quote.draft.create")?.label).toContain("고객에게 나가지 않음")
   })
 
-  it("lib/mcp/tools.ts 의 도구 이름이 카탈로그 mcp 칸과 정확히 맞는다(빠짐·겹침·없는 이름 없음)", () => {
-    const source = readFileSync(join(process.cwd(), "lib/mcp/tools.ts"), "utf8")
-    const tools = Array.from(source.matchAll(/\b(?:read|write)\(\s*"([a-z_]+)"/g), (match) => match[1])
+  it("lib/ops-tools/defs 의 홈페이지 MCP 도구 이름이 카탈로그 mcp 칸과 정확히 맞는다(빠짐·겹침·없는 이름 없음)", () => {
+    // 도구 정의는 B3 에서 lib/mcp/tools.ts 가 아니라 공용 도구 층(lib/ops-tools/defs/*.ts)으로 옮겨졌다
+    const defsDir = join(process.cwd(), "lib/ops-tools/defs")
+    const tools = readdirSync(defsDir)
+      .filter((file) => file.endsWith(".ts"))
+      .flatMap((file) => Array.from(readFileSync(join(defsDir, file), "utf8").matchAll(/\bmcpName:\s*"([a-z_]+)"/g), (match) => match[1]))
     expect(tools.length).toBeGreaterThanOrEqual(11)
     const claimed = ORDER_CATALOG.flatMap((entry) => entry.mcp ?? [])
     expect(new Set(claimed).size).toBe(claimed.length)
