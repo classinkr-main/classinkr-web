@@ -144,6 +144,17 @@ const CHECK_VIOLATION_CODE = "23514"
 export const HANDOFF_RETRY_AFTER_MS = 15 * 60_000
 /** 보내기 시도(처음 포함) 상한. 이만큼 시도하고도 못 보냈으면 포기 표시하고 알림 한 번. */
 export const HANDOFF_MAX_SEND_ATTEMPTS = 3
+/**
+ * cron 이 다시 보내는 건 만든 지 이 시간 안의 것만이다. 더 오래된 백로그(옛 코드가 남긴 failed 등)는 몇 달 지난 질문에
+ * 상담원이 답하게 되므로 다시 보내지 않고 알림 없이 포기 표시(reason expired)만 한다.
+ */
+export const HANDOFF_RETRY_MAX_AGE_MS = 24 * 60 * 60_000
+const EXPIRE_BATCH_LIMIT = 100
+/**
+ * 채널톡 상담 글 전체 길이 상한. 채널톡 쪽 상한을 확인하지 못해 보수적으로 둔다 — 넘으면 [앞서 물은 내용]을 오래된 것부터 빼고,
+ * 그래도 넘으면 칸별 길이를 줄이고, 마지막에는 잘라 낸다.
+ */
+export const MAX_HANDOFF_MESSAGE_LENGTH = 4000
 const RETRY_BATCH_LIMIT = 20
 const RECENT_TURN_LIMIT = 6
 const RECENT_TURN_MAX_LENGTH = 200
@@ -242,8 +253,16 @@ function isSendingMarker(value: string | null | undefined) {
   return typeof value === "string" && value.startsWith(SENDING_MARKER)
 }
 
-function isClaimable(row: Pick<ExistingHandoffRow, "status" | "last_error">) {
-  return CLAIMABLE_STATUSES.includes(row.status) && !isSendingMarker(row.last_error)
+/**
+ * 선점해 보낼 수 있는 행인가. 마이그레이션 전에는 cron 이 포기한 건도 status 가 failed 로 남으므로
+ * payload.retry.gaveUpAt 표시를 같이 본다 — 포기한 건을 '별로예요'가 다시 집어 상한을 넘겨 보내지 않게.
+ */
+function isClaimable(row: Pick<ExistingHandoffRow, "status" | "last_error" | "payload">) {
+  return (
+    CLAIMABLE_STATUSES.includes(row.status) &&
+    !isSendingMarker(row.last_error) &&
+    !hasGaveUpMark(row.payload)
+  )
 }
 
 /**
@@ -315,13 +334,14 @@ function shouldSend(candidate: ChannelTalkHandoffCandidate, forceReason?: string
   )
 }
 
-function sourceLines(sources: HandoffSource[]) {
+function sourceLines(sources: HandoffSource[], titleMax?: number) {
   const lines = sources.slice(0, 3).map((source, index) => {
     const heading = source.heading ? ` / ${source.heading}` : ""
     const url = source.urlPath.startsWith("http")
       ? source.urlPath
       : new URL(source.urlPath, SITE_URL).toString()
-    return `${index + 1}. ${source.title}${heading}\n   ${url}`
+    const title = titleMax ? compact(`${source.title}${heading}`, titleMax) : `${source.title}${heading}`
+    return `${index + 1}. ${title}\n   ${url}`
   })
   return lines.length > 0 ? lines.join("\n") : "없음"
 }
@@ -363,27 +383,48 @@ export function formatHandoffMessage(
   feedback?: FeedbackHandoffOptions,
   extras: HandoffMessageExtras = {}
 ) {
+  const allTurns = recentTurnLines(
+    extras.recentTurns !== undefined ? extras.recentTurns : candidate.recentTurns
+  )
+
+  // 길이 상한(F6): 앞서 물은 내용을 오래된 것부터 뺀 뒤, 그래도 넘으면 칸별 길이를 줄이고, 마지막에는 잘라 낸다.
+  for (let keep = allTurns.length; keep >= 0; keep -= 1) {
+    const message = buildHandoffMessage(candidate, reasons, feedback, extras, allTurns.slice(allTurns.length - keep), false)
+    if (message.length <= MAX_HANDOFF_MESSAGE_LENGTH) return message
+  }
+  const tight = buildHandoffMessage(candidate, reasons, feedback, extras, [], true)
+  if (tight.length <= MAX_HANDOFF_MESSAGE_LENGTH) return tight
+  const tail = "\n…(글이 길어 뒷부분을 줄였어요)"
+  return `${tight.slice(0, MAX_HANDOFF_MESSAGE_LENGTH - tail.length)}${tail}`
+}
+
+function buildHandoffMessage(
+  candidate: ChannelTalkHandoffCandidate,
+  reasons: string[],
+  feedback: FeedbackHandoffOptions | undefined,
+  extras: HandoffMessageExtras,
+  turns: string[],
+  tight: boolean
+) {
+  const questionMax = tight ? 700 : MAX_MESSAGE_SECTION_LENGTH
+  const answerMax = tight ? 400 : MAX_ANSWER_SUMMARY_LENGTH
   const feedbackLines =
     feedback?.rating === "not_helpful"
       ? [
           "",
           "[사용자 피드백]",
           "평가: 별로예요(도움 안 됨)",
-          ...(feedback.comment ? [`코멘트: ${compact(feedback.comment, 500)}`] : []),
+          ...(feedback.comment ? [`코멘트: ${compact(feedback.comment, tight ? 200 : 500)}`] : []),
         ]
       : []
-
-  const turns = recentTurnLines(
-    extras.recentTurns !== undefined ? extras.recentTurns : candidate.recentTurns
-  )
 
   return [
     `${HANDOFF_MESSAGE_MARKER} ${describeHandoffIntent(candidate.handoffIntent)} — ${describeHandoffReasons(reasons)}`,
     "",
     HANDOFF_QUESTION_HEADER,
-    compactMultiline(candidate.question),
+    compactMultiline(candidate.question, questionMax),
     ...(candidate.routingQuestion && candidate.routingQuestion !== candidate.question
-      ? [`${HANDOFF_ROUTING_QUESTION_PREFIX} ${compactMultiline(candidate.routingQuestion)}`]
+      ? [`${HANDOFF_ROUTING_QUESTION_PREFIX} ${compactMultiline(candidate.routingQuestion, questionMax)}`]
       : []),
     ...(turns.length > 0 ? ["", "[앞서 물은 내용]", ...turns] : []),
     "",
@@ -391,11 +432,11 @@ export function formatHandoffMessage(
     contactLine(extras.contact),
     "",
     "[챗봇 답 요약]",
-    compactMultiline(candidate.answer, MAX_ANSWER_SUMMARY_LENGTH) || "(답 없음)",
+    compactMultiline(candidate.answer, answerMax) || "(답 없음)",
     ...feedbackLines,
     "",
     "[참고 문서]",
-    sourceLines(candidate.sources),
+    sourceLines(candidate.sources, tight ? 120 : undefined),
     "",
     "[기술 정보 — 상담에는 필요 없어요]",
     `전환 사유 코드: ${reasons.join(", ")}`,
@@ -571,6 +612,7 @@ async function claimHandoff(
       .eq("id", row.id)
       .in("status", [...CLAIMABLE_STATUSES])
       .eq("attempt_count", attempts)
+      .is("payload->retry->gaveUpAt", null)
       .select(HANDOFF_COLUMNS)
       .maybeSingle()
 
@@ -690,12 +732,16 @@ async function sendClaimedHandoff(
     const channelMessage = await writeUserChatMessage(userChat.id, message, botName())
     channelMessageId = channelMessage?.id ?? null
   } catch (error) {
-    await updateHandoff(supabase, row.id, {
-      status: "failed",
-      last_error: errorMessage(error).slice(0, 1000),
-    }).catch((updateError) => {
-      console.warn("[chatbot] failed to mark channel talk handoff as failed:", errorMessage(updateError))
-    })
+    // 보내지 못한 것은 확실하다 — failed 기록이 한 번 실패해도 한 번 더 적는다. 끝내 못 적으면 선점 표시가 남아
+    // cron 이 "보냈는지 모름"으로 포기하므로(다시 보내지 않음) 여기서 최대한 남긴다.
+    const failedPatch = { status: "failed", last_error: errorMessage(error).slice(0, 1000) }
+    try {
+      await updateHandoff(supabase, row.id, failedPatch)
+    } catch {
+      await updateHandoff(supabase, row.id, failedPatch).catch((updateError) => {
+        console.warn("[chatbot] failed to mark channel talk handoff as failed:", errorMessage(updateError))
+      })
+    }
     throw error
   }
 
@@ -880,6 +926,41 @@ async function claimFeedbackRelay(
   return (data as ExistingHandoffRow | null) ?? null
 }
 
+/**
+ * '별로예요'를 이미 상담방에 전달한 뒤 나중에 코멘트가 오면(처음 전달에는 코멘트가 없었을 때만) 코멘트만 한 번 붙인다.
+ * payload.feedback.commentRelayedAt 이 없는 행만 바꾸는 조건부 갱신으로 선점하므로 동시에 와도 한 번이다.
+ */
+async function relayLateFeedbackComment(
+  supabase: SupabaseAdmin,
+  row: ExistingHandoffRow,
+  options: FeedbackHandoffOptions
+) {
+  const comment = options.comment?.trim()
+  if (!comment || row.status !== "sent" || !row.channel_user_chat_id) return
+  const feedback = (row.payload?.feedback ?? {}) as Record<string, unknown>
+  if (feedback.comment || feedback.commentRelayedAt) return
+
+  const relayedAt = new Date().toISOString()
+  const { data, error } = await supabase
+    .from(HANDOFF_TABLE)
+    .update({
+      payload: { ...(row.payload ?? {}), feedback: { ...feedback, comment, commentRelayedAt: relayedAt } },
+      updated_at: relayedAt,
+    })
+    .eq("id", row.id)
+    .is("payload->feedback->commentRelayedAt", null)
+    .select(HANDOFF_COLUMNS)
+    .maybeSingle()
+  if (error) throw error
+  if (!data) return
+
+  await writeUserChatMessage(
+    row.channel_user_chat_id,
+    ["[사용자 피드백 추가]", `코멘트: ${compact(comment, 500)}`].join("\n"),
+    botName()
+  )
+}
+
 export async function maybeCreateChannelTalkFeedbackHandoff(
   answerEventId: string,
   options: FeedbackHandoffOptions
@@ -889,8 +970,11 @@ export async function maybeCreateChannelTalkFeedbackHandoff(
   try {
     const supabase = createSupabaseAdminClient()
     const existing = await getExistingHandoff(supabase, answerEventId)
-    // 같은 답의 '별로예요'는 한 번만 채널톡으로 간다.
-    if (existing && hasFeedbackMark(existing.payload)) return
+    // 같은 답의 '별로예요'는 한 번만 채널톡으로 간다. 처음 전달에 없던 코멘트만 한 번 더 붙인다.
+    if (existing && hasFeedbackMark(existing.payload)) {
+      await relayLateFeedbackComment(supabase, existing, options)
+      return
+    }
     if (existing && existing.status !== "sent" && !isClaimable(existing)) return
 
     const candidate = await fetchAnswerCandidate(supabase, answerEventId)
@@ -962,7 +1046,8 @@ export interface SaveChatbotFeedbackOnceResult {
 
 /**
  * chatbot_feedback 를 답(answer_event_id) 하나에 한 행으로 저장한다. 이미 있으면 같은 값이면 그대로, 다르면(평가를 바꿈) 고친다.
- * 동시 저장이 20261125_chatbot_feedback_answer_unique.sql 의 유니크에 걸리면(23505) 다시 읽어 고친다.
+ * 동시 저장이 supabase/pending/chatbot_feedback_answer_unique.sql(service.ts 가 이 함수를 부른 뒤 migrations 로 옮김)의
+ * 유니크에 걸리면(23505) 다시 읽어 고친다.
  * service.ts saveChatbotFeedback 의 insert 를 이 함수로 바꾸는 한 줄이 필요하다(이 묶음은 service.ts 를 고치지 않는다).
  */
 export async function saveChatbotFeedbackOnce(
@@ -1026,6 +1111,8 @@ export interface ChannelTalkHandoffRetryResult {
   failed: number
   skipped: number
   gaveUp: number
+  /** 만든 지 HANDOFF_RETRY_MAX_AGE_MS 가 지나 다시 보내지 않고 포기 표시한 건수(알림 없음). */
+  expired: number
   notified: boolean
 }
 
@@ -1066,17 +1153,18 @@ async function buildRetryCandidate(
 async function markGaveUp(
   supabase: SupabaseAdmin,
   row: ExistingHandoffRow,
-  reason: "max_attempts" | "unknown_delivery"
+  reason: "max_attempts" | "unknown_delivery" | "expired"
 ) {
   const now = new Date().toISOString()
+  const keptError = row.last_error && !isSendingMarker(row.last_error) ? row.last_error : null
   const patch = {
     payload: { ...(row.payload ?? {}), retry: { gaveUpAt: now, reason } },
     last_error:
       reason === "unknown_delivery"
         ? "보냈는지 확인하지 못함(보내는 중 멈췄거나 보낸 뒤 기록 실패) — 채널톡에서 확인해 주세요."
-        : row.last_error && !isSendingMarker(row.last_error)
-          ? row.last_error
-          : "재전송 상한에 닿아 포기",
+        : reason === "expired"
+          ? `만든 지 ${HANDOFF_RETRY_MAX_AGE_MS / 3_600_000}시간이 지나 다시 보내지 않음${keptError ? ` (마지막 오류: ${keptError.slice(0, 500)})` : ""}`
+          : keptError ?? "재전송 상한에 닿아 포기",
     updated_at: now,
   }
   const run = (value: Record<string, unknown>) =>
@@ -1097,7 +1185,8 @@ async function markGaveUp(
 }
 
 /**
- * cron 한 번: 마지막 손질 뒤 15분 넘은 pending·failed 를 다시 보낸다(보내기 전 선점을 똑같이 거친다).
+ * cron 한 번: 만든 지 24시간 안이고 마지막 손질 뒤 15분 넘은 pending·failed 를 다시 보낸다(보내기 전 선점을 똑같이 거친다).
+ * 만든 지 24시간이 지난 건은 다시 보내지 않고 알림 없이 포기 표시(expired)만 한다.
  * 보내기 시도가 HANDOFF_MAX_SEND_ATTEMPTS 에 닿았거나, 선점 표시(sending)가 15분 넘게 남은 건(보냈는지 모름)은
  * 다시 보내지 않고 포기 표시한 뒤, 이번 실행에서 새로 포기한 건을 묶어 알림을 한 번 보낸다.
  */
@@ -1113,6 +1202,7 @@ export async function retryChannelTalkHandoffs(
     failed: 0,
     skipped: 0,
     gaveUp: 0,
+    expired: 0,
     notified: false,
   }
   if (!result.enabled) return result
@@ -1121,11 +1211,37 @@ export async function retryChannelTalkHandoffs(
   const supabase = createSupabaseAdminClient()
   const now = options.now ?? new Date()
   const cutoff = new Date(now.getTime() - HANDOFF_RETRY_AFTER_MS).toISOString()
+  const maxAgeCutoff = new Date(now.getTime() - HANDOFF_RETRY_MAX_AGE_MS).toISOString()
+
+  // 만든 지 오래된 백로그는 다시 보내지 않는다(F1) — 몇 달 전 질문이 고객에게 다시 가고 건마다 '긴급 상담 요청'이 울리지 않게.
+  // 알림 없이 포기 표시만 하고 건수는 결과(expired)로 남긴다.
+  const { data: staleData, error: staleError } = await supabase
+    .from(HANDOFF_TABLE)
+    .select(HANDOFF_COLUMNS)
+    .in("status", ["pending", "failed", "sending"])
+    .lt("created_at", maxAgeCutoff)
+    .is("payload->retry->gaveUpAt", null)
+    .order("created_at", { ascending: true })
+    .limit(EXPIRE_BATCH_LIMIT)
+  if (staleError) throw staleError
+  for (const row of (staleData ?? []) as ExistingHandoffRow[]) {
+    try {
+      if (await markGaveUp(supabase, row, "expired")) result.expired += 1
+    } catch (expireError) {
+      result.ok = false
+      console.warn("[chatbot] channel talk handoff expire error:", errorMessage(expireError))
+    }
+  }
+  if (result.expired > 0) {
+    console.warn(`[chatbot] channel talk handoff: ${result.expired} stale handoff(s) expired without resend`)
+  }
+
   const { data, error } = await supabase
     .from(HANDOFF_TABLE)
     .select(HANDOFF_COLUMNS)
     .in("status", ["pending", "failed", "sending"])
     .lt("updated_at", cutoff)
+    .gte("created_at", maxAgeCutoff)
     .is("payload->retry->gaveUpAt", null)
     .order("updated_at", { ascending: true })
     .limit(options.limit ?? RETRY_BATCH_LIMIT)

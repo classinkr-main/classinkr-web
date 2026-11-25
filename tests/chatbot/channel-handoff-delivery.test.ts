@@ -204,6 +204,7 @@ describe("재전송 cron", () => {
       payload: { question: "견적 받으려면 [email] 으로 연락 주세요", message: "[챗봇 상담 전환] 저장된 글" },
       attempt_count: 0,
       last_error: null,
+      created_at: ago(30),
       ...row,
     })
   }
@@ -295,9 +296,13 @@ describe("'별로예요' 피드백 전달", () => {
       maybeCreateChannelTalkFeedbackHandoff(EVENT_ID, { rating: "not_helpful" }),
       maybeCreateChannelTalkFeedbackHandoff(EVENT_ID, { rating: "not_helpful" }),
     ])
+    await maybeCreateChannelTalkFeedbackHandoff(EVENT_ID, { rating: "not_helpful" })
+    expect(channel.writeUserChatMessage).toHaveBeenCalledTimes(1)
+    // 처음 전달에 없던 코멘트는 코멘트만 한 번 더 붙는다(반박 검토 F5 — channel-handoff-review-fixes.test.ts).
     await maybeCreateChannelTalkFeedbackHandoff(EVENT_ID, { rating: "not_helpful", comment: "또 눌러요" })
 
-    expect(channel.writeUserChatMessage).toHaveBeenCalledTimes(1)
+    expect(channel.writeUserChatMessage).toHaveBeenCalledTimes(2)
+    expect(String(channel.writeUserChatMessage.mock.calls[1][1])).toContain("[사용자 피드백 추가]")
     expect(channel.writeUserChatMessage.mock.calls[0][0]).toBe("ch-chat-9")
     expect((fake.rows("chatbot_channel_handoffs")[0].payload as Record<string, unknown>).feedback).toMatchObject({
       rating: "not_helpful",

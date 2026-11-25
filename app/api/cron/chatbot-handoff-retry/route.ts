@@ -8,7 +8,8 @@ export const maxDuration = 60
 
 /**
  * 챗봇 → 채널톡 상담 전환 중 pending·failed 로 남은 건을 다시 보낸다(R11·handoff-4).
- * 15분 넘게 손대지 않은 건만, 보내기 시도 3회까지. 그 뒤에는 포기 표시하고 WeCom 으로 알림 한 번.
+ * 만든 지 24시간 안이고 15분 넘게 손대지 않은 건만, 보내기 시도 3회까지. 그 뒤에는 포기 표시하고 WeCom 으로 알림 한 번.
+ * 24시간이 지난 옛 백로그는 다시 보내지 않고 알림 없이 포기 표시만 한다(결과의 expired).
  * 별도 켜기 스위치는 없다 — vercel.json crons 에 등록하는 것이 켜는 결정이다. 상담 전환 자체가 꺼져 있으면(채널톡 키 없음,
  * CHANNEL_TALK_HANDOFF_MODE=off 등) 아무것도 하지 않고 enabled:false 로 답한다.
  */
