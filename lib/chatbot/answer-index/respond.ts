@@ -729,7 +729,15 @@ export function buildAnswerIndexCore(
     finish(abstainParts("nodoc", question, ctx.host, conf), { decision: "abstain", card: null, partial: false, absentTail: null, decidedBy: null, unavailable: reason })
 
   if (decision.kind === "clarify") return finish(clarifyParts(question, ctx.host), { partial: false })
-  if (decision.kind === "abstain") return finish(abstainParts(decision.abstainReason === "symptom" ? "symptom" : "nodoc", question, ctx.host, conf), { partial: false })
+  if (decision.kind === "abstain") {
+    // 나뉜 질문의 어느 조각도 못 정했으면 고정 못 찾음 문구 하나(카드가 있을 법한 조각도 '없다'고 말하게 된다) 대신 조각마다 사실대로 한 줄씩 낸다.
+    const pieces = decision.segments
+    if (framing === "full" && decision.abstainReason !== "symptom" && pieces && pieces.length >= 2) {
+      const compound = buildCompound(decision, pieces, input, shape, abstainParts("nodoc", question, ctx.host, conf))
+      if (compound?.ok) return finish(compound.parts, { ...compound.overrides, partial: false, absentTail: null })
+    }
+    return finish(abstainParts(decision.abstainReason === "symptom" ? "symptom" : "nodoc", question, ctx.host, conf), { partial: false })
+  }
 
   const cardAt = decision.card ? ctx.index.cardById.get(decision.card) : undefined
   if (cardAt === undefined) return unavailable(`missing_card:${decision.card ?? ""}`)
@@ -776,7 +784,7 @@ type CompoundResult =
  * 복합 질문 답(계획 §2.3). 조각을 질문 순서로 잇는다. 같은 카드로 답한 조각이 여럿이면 처음 한 번만 싣는다.
  * 모든 조각이 한 카드로 답했고 못 답한 조각이 없으면 null(한 카드 답으로 만든다).
  */
-function buildCompound(decision: AnswerIndexDecision, segments: AnswerIndexSegmentDecision[], input: RenderInput, shape: boolean): CompoundResult | null {
+function buildCompound(decision: AnswerIndexDecision, segments: AnswerIndexSegmentDecision[], input: RenderInput, shape: boolean, base: AnswerIndexCoreParts | null = null): CompoundResult | null {
   const { ctx } = input
   const { framing } = input
   const pieces: Piece[] = []
@@ -829,18 +837,21 @@ function buildCompound(decision: AnswerIndexDecision, segments: AnswerIndexSegme
   const notices = pieces.filter((piece) => !isAnswerPiece(piece))
   if (answered.length === 0 && pieces.every((piece) => piece.kind === "retry") && failures.length > 0) return { ok: false, reason: failures[0] }
   // 한 카드 답으로 충분한 경우(조각이 모두 같은 카드, 알림 없음)는 단일 답 경로가 처리한다.
-  if (notices.length === 0 && answered.length <= 1) return null
-  if (!undecided && failures.length === 0 && renderedCards.size <= 1) return null
-  if (answered.length === 0 && notices.every((piece) => piece.kind === "absent" && !piece.card)) return null
+  if (!base) {
+    if (notices.length === 0 && answered.length <= 1) return null
+    if (!undecided && failures.length === 0 && renderedCards.size <= 1) return null
+    if (answered.length === 0 && notices.every((piece) => piece.kind === "absent" && !piece.card)) return null
+  }
 
   const first = answered[0] ?? pieces.find((piece): piece is PieceNotice => piece.card !== null && piece.parts !== null)
-  if (!first || !first.parts) return null
-  const parts: AnswerIndexCoreParts = { ...first.parts, response: { ...first.parts.response } }
+  const source = first?.parts ?? base
+  if (!source) return null
+  const parts: AnswerIndexCoreParts = { ...source, response: { ...source.response } }
   const response = parts.response
 
   // 합친 출처·추천 질문·상담 필요.
   response.sources = []
-  response.suggestedQuestions = []
+  response.suggestedQuestions = base ? [...base.response.suggestedQuestions] : []
   response.needsHandoff = false
   for (const piece of pieces) {
     if (!piece.parts) continue

@@ -438,6 +438,26 @@ describe("respond: two-part questions (R2 B4)", () => {
     expect(withGap.answerIndex.parts?.[1]).toMatchObject({ notice: true, noticeKind: "absent" })
   })
 
+  it("states each part when no part could be decided, instead of one fixed 'not found' text", () => {
+    const none = decision("abstain", null, {
+      abstainReason: "nodoc",
+      segments: [
+        { text: "출석부 엑셀", kind: "abstain", card: null, conf: 0.2, topCard: CARDS.count, topConf: 0.2 },
+        { text: "보안 인증 있나요", kind: "abstain", card: null, conf: 0.05, topCard: CARDS.count, topConf: 0.03 },
+      ],
+    })
+    const { core } = respond(none, "질문", { env: ON })
+    expect(core.response.answer).toBe(
+      ["【첫 번째 질문】", SEGMENT_RETRY_LINE, "", "【두 번째 질문】", SEGMENT_ABSENT_LINE, "", COMPOUND_CLOSING_LINE].join("\n")
+    )
+    expect(core.response).toMatchObject({ answerMode: "fallback", unresolved: true, needsHandoff: true })
+    expect(core.answerIndex.decision).toBe("abstain")
+    expect(core.answerIndex.parts?.map((part) => part.noticeKind)).toEqual(["retry", "absent"])
+    // 되묻기·증상 못 찾음은 지금 문구 그대로, 조각이 하나뿐이면 고정 문구.
+    expect(respond(decision("abstain", null, { abstainReason: "symptom", segments: none.segments }), "질문", { env: ON }).core.response.answer).toBe(SYMPTOM_ABSTAIN)
+    expect(respond(decision("abstain", null, { abstainReason: "nodoc" }), "질문", { env: ON }).core.response.answer).toBe(NO_SOURCE)
+  })
+
   it("keeps the notice for policy-governed cards too and adds no absent tail after them", () => {
     for (const id of [EXTRA.policy, EXTRA.verbatimPolicy]) {
       const { core } = respond(
