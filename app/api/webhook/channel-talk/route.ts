@@ -1,9 +1,9 @@
 import { createHmac, timingSafeEqual } from "crypto"
 
-import { NextRequest, NextResponse } from "next/server"
+import { after, NextRequest, NextResponse } from "next/server"
 
 import { emitNotificationEvent } from "@/lib/notifications/emit-event"
-import { createCrmCustomerEvent } from "@/lib/repositories/crm-events"
+import { getOrCreateCrmCustomerEventBySource } from "@/lib/repositories/crm-events"
 
 interface ChannelWebhookEntity {
   personType?: string
@@ -53,10 +53,23 @@ function verifyUrlToken(req: NextRequest, expectedToken?: string): boolean {
 }
 
 /**
+ * 응답 뒤에 돌 작업을 응답이 닫히기 전에 등록한다(R9). 예전에는 void 로 띄워 Vercel 함수가 200 직후 멈추면 WeCom 알림·CRM 기록이
+ * 잘렸다. after 는 핸들러가 응답을 돌려주기 전에 불러야 실행이 보장된다 — 응답을 만든 뒤 등록하면 이미 닫힌 응답에 걸려
+ * 돌지 않는다. 요청 밖(스크립트·시험)에서는 after 가 던지므로 그대로 돌린다.
+ */
+function runAfterResponse(task: () => Promise<unknown>) {
+  try {
+    after(task)
+  } catch {
+    void task()
+  }
+}
+
+/**
  * 채널톡 인바운드 웹훅 — 고객 신규 메시지를 실시간 알림으로 연결한다.
  * 채널톡 일반 Webhook은 custom header를 넣을 수 없어 URL token을 우선 지원한다.
  * HMAC 서명을 제공하는 통합은 CHANNEL_TALK_WEBHOOK_SECRET으로도 검증할 수 있다.
- * 전체 대화 본문은 크론/수동 동기화가 채우고, 여기서는 알림만 발행한다(저FS 부하).
+ * 전체 대화 본문은 크론/수동 동기화가 채우고, 여기서는 알림·CRM 완결 기록만 응답 뒤 작업(after)으로 남긴다.
  */
 export async function POST(req: NextRequest) {
   const urlToken = firstNonEmpty(
@@ -90,28 +103,32 @@ export async function POST(req: NextRequest) {
   const isUserMessage =
     (payload.type === "message" || payload.event === "push") && entity?.personType === "user"
 
+  const tasks: Array<() => Promise<unknown>> = []
+
   if (isUserMessage) {
     const text =
       typeof entity?.plainText === "string" && entity.plainText.trim()
         ? entity.plainText.trim().slice(0, 140)
         : "새 상담 메시지가 도착했습니다."
 
-    void emitNotificationEvent({
-      eventType: "channel_talk.message",
-      notificationType: "action_required",
-      categoryTag: "lead",
-      severity: "info",
-      scopeTag: "org_admin",
-      title: "채널톡 새 상담 메시지",
-      message: text,
-      routeUrl: "/admin/channel-talk",
-      source: "channel_talk",
-      sourceId: typeof entity?.chatId === "string" ? entity.chatId : undefined,
-      payload: { chatId: entity?.chatId ?? null },
-      channels: ["wecom_cs_webhook"],
-    }).catch((error) => {
-      console.error("[webhook/channel-talk] notification emit failed:", error)
-    })
+    tasks.push(() =>
+      emitNotificationEvent({
+        eventType: "channel_talk.message",
+        notificationType: "action_required",
+        categoryTag: "lead",
+        severity: "info",
+        scopeTag: "org_admin",
+        title: "채널톡 새 상담 메시지",
+        message: text,
+        routeUrl: "/admin/channel-talk",
+        source: "channel_talk",
+        sourceId: typeof entity?.chatId === "string" ? entity.chatId : undefined,
+        payload: { chatId: entity?.chatId ?? null },
+        channels: ["wecom_cs_webhook"],
+      }).catch((error) => {
+        console.error("[webhook/channel-talk] notification emit failed:", error)
+      })
+    )
   }
 
   const isChatClosed =
@@ -122,21 +139,30 @@ export async function POST(req: NextRequest) {
   if (isChatClosed) {
     const chatId = typeof entity?.chatId === "string" ? entity.chatId : null
     if (chatId) {
-      void createCrmCustomerEvent({
-        targetType: "customer",
-        targetId: null,
-        sourceType: "site_inflow",
-        sourceId: `channel:${chatId}`,
-        occurredAt: new Date().toISOString(),
-        title: "채널톡 실시간 상담 완결",
-        summary: `채널톡 대화(${chatId})가 완결되어 CRM 타임라인에 실시간 스탬프되었습니다.`,
-        body: typeof entity?.plainText === "string" ? entity.plainText : null,
-        sentiment: "neutral",
-        tags: ["channel_talk", "cs_inquiry", "realtime_webhook"],
-      }).catch((error) => {
-        console.error("[webhook/channel-talk] crm event emission failed:", error)
-      })
+      // 같은 상담(chatId)이 여러 번 닫혀도 기록은 하나, 다른 상담은 본문이 같아도(대개 null) 따로 남는다 —
+      // 출처 id(channel:{chatId}) 기준으로 찾고 없을 때만 만든다. 예전 createCrmCustomerEvent 는 10초 안의 같은 제목·본문을
+      // 출처 id 없이 중복으로 봐서 서로 다른 상담이 하나로 뭉개졌다.
+      tasks.push(() =>
+        getOrCreateCrmCustomerEventBySource({
+          targetType: "customer",
+          targetId: null,
+          sourceType: "site_inflow",
+          sourceId: `channel:${chatId}`,
+          occurredAt: new Date().toISOString(),
+          title: "채널톡 실시간 상담 완결",
+          summary: `채널톡 대화(${chatId})가 완결되어 CRM 타임라인에 실시간 스탬프되었습니다.`,
+          body: typeof entity?.plainText === "string" ? entity.plainText : null,
+          sentiment: "neutral",
+          tags: ["channel_talk", "cs_inquiry", "realtime_webhook"],
+        }).catch((error) => {
+          console.error("[webhook/channel-talk] crm event emission failed:", error)
+        })
+      )
     }
+  }
+
+  if (tasks.length > 0) {
+    runAfterResponse(() => Promise.allSettled(tasks.map((task) => task())))
   }
 
   return NextResponse.json({ ok: true })
