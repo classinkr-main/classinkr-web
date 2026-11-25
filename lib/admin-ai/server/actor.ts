@@ -7,6 +7,8 @@ import "server-only"
 //  - 견적 초안: 견적 API 와 같은 CRM_STAFF_ADMIN_API_ROLES. HW 배송 예정: HW 출고 등록 API 와 같은 HARDWARE_EDITOR_ADMIN_API_ROLES.
 //  - pii(연락처 원문): 화면 표시용으로 SUPER_ADMIN·ADMIN 만. 모델 입력은 범위와 상관없이 늘 가린다(llm/adapter.ts).
 // 이름은 `galmae-<계정 id>` — 운영 도구 감사(auditOps)에 mcp:galmae-… 로 남고, 확인 경로는 실제 어드민 감사(logAdminAudit)를 따로 남긴다.
+import { createHash } from "crypto"
+
 import {
   CRM_STAFF_ADMIN_API_ROLES,
   HARDWARE_EDITOR_ADMIN_API_ROLES,
@@ -27,10 +29,15 @@ export const GALMAE_WRITE_ROLES: Readonly<Record<string, readonly AdminApiRole[]
 
 export type StaffIdentity = Pick<VerifiedAdminContext, "role" | "name" | "userId" | "source" | "capabilities">
 
-/** 표·감사에 쓰는 행위자 키 — 계정 id 가 없으면(개발 우회·레거시 세션) 출처와 이름. */
+/**
+ * 표·감사에 쓰는 행위자 키. 계정 id 가 있으면 그것. 없으면(개발 우회·레거시 세션) 출처·역할·원래 이름의 해시 —
+ * 이름의 공백을 지우거나 역할을 빼면 "스태프 가"와 "스태프가", 이름 없는 같은 역할 세션들이 한 키를 나눠 쓴다(검토 안전-3).
+ */
 export function staffKey(admin: StaffIdentity): string {
-  const raw = admin.userId?.trim() || `${admin.source}:${admin.name?.trim() || admin.role}`
-  return raw.replace(/[^A-Za-z0-9가-힣_:@.-]/g, "").slice(0, 80) || "unknown"
+  const id = admin.userId?.trim()
+  if (id) return id.replace(/[^A-Za-z0-9가-힣_:@.-]/g, "").slice(0, 80) || "unknown"
+  const nameHash = createHash("sha256").update(admin.name ?? "").digest("hex").slice(0, 16)
+  return `${admin.source}:${admin.role}:${nameHash}`.replace(/[^A-Za-z0-9_:@.-]/g, "").slice(0, 80)
 }
 
 export function staffScopes(admin: Pick<VerifiedAdminContext, "role">): OpsScope[] {

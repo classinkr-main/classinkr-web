@@ -5,10 +5,10 @@ import { adminAiMode } from "@/lib/admin-ai/preview"
 import { GALMAE_CHAT_ROLES } from "@/lib/admin-ai/server/actor"
 import { confirmOrder } from "@/lib/admin-ai/server/confirm"
 import { readTicketSecret } from "@/lib/admin-ai/server/tickets"
+import { getGalmaeWriteTool } from "@/lib/admin-ai/server/write-tools"
 import { logAdminAudit } from "@/lib/auth/audit"
 import { classifyToolError, UNKNOWN_TOOL_ERROR_TEXT } from "@/lib/ops-tools/errors"
 import { maskContactText } from "@/lib/ops-tools/redact"
-import { getOpsToolByMcpName } from "@/lib/ops-tools/registry"
 import { runOpsTool } from "@/lib/ops-tools/run"
 
 // 갈매봇 오더 확인(실행) — 사람이 카드에서 누른 확인만 여기로 온다. 이 경로에는 모델이 없다(lib/admin-ai/server/confirm.ts).
@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
 
   const body = (await req.json().catch(() => null)) as { ticket?: unknown } | null
   const result = await confirmOrder(body?.ticket, admin, {
-    getTool: getOpsToolByMcpName,
+    getTool: getGalmaeWriteTool,
     run: runOpsTool,
     secret: readTicketSecret(),
     describeError: async (error) => {

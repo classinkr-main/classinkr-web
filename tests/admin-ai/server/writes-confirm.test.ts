@@ -215,8 +215,18 @@ describe("확인 경로 모듈 그래프 — 모델이 없다", () => {
   it("확인 라우트와 confirm.ts 는 모델 어댑터·조율기·대화 deps 를 import 하지 않는다", () => {
     const files = [...graph(join(root, "app/api/admin/ai/orders/confirm/route.ts"))].map((f) => f.slice(root.length + 1))
     expect(files).toContain("lib/admin-ai/server/confirm.ts")
-    const forbidden = files.filter((f) => f.startsWith("lib/admin-ai/server/llm/") || f === "lib/admin-ai/server/orchestrator.ts" || f === "lib/admin-ai/server/deps.ts")
+    const MODEL_PATHS = [
+      "lib/admin-ai/server/orchestrator.ts",
+      "lib/admin-ai/server/deps.ts",
+      "lib/chatbot/llm.ts",
+      "lib/chatbot/service.ts",
+      "lib/internal-cs-chat/gemini.ts",
+      "lib/ops-tools/registry.ts",
+    ]
+    const forbidden = files.filter((f) => f.startsWith("lib/admin-ai/server/llm/") || f.startsWith("lib/chatbot/llm/") || MODEL_PATHS.includes(f))
     expect(forbidden).toEqual([])
+    // 쓰기 도구 정의는 직접 들어온다(레지스트리 없이).
+    expect(files).toContain("lib/admin-ai/server/write-tools.ts")
   })
 
   it("대화 라우트는 조율기를 거쳐 모델 어댑터를 쓴다(그래프 시험이 실제로 잡는지 확인)", () => {

@@ -5,7 +5,7 @@ import { adminAiMode } from "@/lib/admin-ai/preview"
 import { GALMAE_CHAT_ROLES, staffActor, staffKey } from "@/lib/admin-ai/server/actor"
 import { buildServerOrchestratorDeps } from "@/lib/admin-ai/server/deps"
 import { runTurn } from "@/lib/admin-ai/server/orchestrator"
-import { parseChatBody } from "@/lib/admin-ai/server/request"
+import { MAX_BODY_BYTES, parseChatBody } from "@/lib/admin-ai/server/request"
 import { ADMIN_AI_STREAM_CONTENT_TYPE, encodeStreamEvent, type AdminAiStreamEvent } from "@/lib/admin-ai/stream-protocol"
 import { checkRateLimitDistributed } from "@/lib/server/rate-limit"
 
@@ -34,7 +34,18 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  const parsed = parseChatBody(await req.json().catch(() => null))
+  // 본문 상한 — 선언된 길이를 먼저 보고, 실제로 읽은 길이도 다시 본다(검토 안전-5).
+  const declared = Number(req.headers.get("content-length") ?? "0")
+  if (Number.isFinite(declared) && declared > MAX_BODY_BYTES) return NextResponse.json({ error: "질문이 너무 깁니다." }, { status: 413 })
+  const rawBody = await req.text().catch(() => "")
+  if (new TextEncoder().encode(rawBody).length > MAX_BODY_BYTES) return NextResponse.json({ error: "질문이 너무 깁니다." }, { status: 413 })
+  let body: unknown = null
+  try {
+    body = JSON.parse(rawBody)
+  } catch {
+    body = null
+  }
+  const parsed = parseChatBody(body)
   if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 })
 
   const actor = staffActor(admin)

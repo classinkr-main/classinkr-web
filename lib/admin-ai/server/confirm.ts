@@ -1,7 +1,9 @@
 import "server-only"
 
 // 쓰기 확인 경로 — 사람이 오더 카드에서 확인한 표(티켓)를 실행한다. 이 경로에는 모델이 없다:
-// 이 파일과 그 import 는 llm/·orchestrator·deps 를 부르지 않는다(tests/admin-ai/server/confirm.test.ts 의 모듈 그래프 시험).
+// 이 파일과 확인 라우트의 import 는 llm/·orchestrator·deps 와 공개 챗봇 서비스·모델(lib/chatbot/service·llm,
+// lib/internal-cs-chat/gemini)을 부르지 않는다. 도구는 공용 레지스트리가 아니라 쓰기 정의만 담은 작은 표(write-tools.ts)에서
+// 찾는다(tests/admin-ai/server/writes-confirm.test.ts 의 모듈 그래프 시험).
 //
 // 순서: 서명·만료(15분)·행위자 일치(tickets.ts) → 역할 재검사(작성 뒤 역할이 바뀌면 거절) → 레지스트리 쓰기 도구 →
 //       실행기 runOpsTool(범위·가린 값·분당 상한·idempotency) — idempotency_key 는 표 id 라 같은 표를 두 번 눌러도 실행은 한 번.

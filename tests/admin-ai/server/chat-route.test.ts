@@ -69,6 +69,12 @@ describe("POST /api/admin/ai/chat — 가드", () => {
     expect((await POST(request(ask("안녕"), { "x-test-role": "EDITOR", "x-test-user": "other-user" }))).status).toBe(200)
   })
 
+  it("본문이 상한(64KB)을 넘으면 읽기 전에 413", async () => {
+    const big = { messages: [{ role: "user", text: "x".repeat(70 * 1024) }] }
+    const res = await POST(request(big, { "x-test-role": "ADMIN", "x-test-user": "big-body-user" }))
+    expect(res.status).toBe(413)
+  })
+
   it("본문이 잘못되면 400", async () => {
     const res = await POST(request({ messages: [] }, { "x-test-role": "ADMIN" }))
     expect(res.status).toBe(400)

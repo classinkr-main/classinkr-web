@@ -4,6 +4,8 @@ import type { AdminAiEntity, AdminAiPageContext } from "../types"
 
 export const MAX_MESSAGES = 12
 export const MAX_TEXT = 1000
+/** 본문 상한 — 메시지 12개 × 1000자에 화면 맥락을 더해도 넉넉하다. 넘으면 읽기 전에 413(검토 안전-5). */
+export const MAX_BODY_BYTES = 64 * 1024
 
 export interface ChatRequestBody {
   text: string
@@ -15,16 +17,34 @@ const ENTITY_TYPES = new Set<AdminAiEntity["type"]>(["lead", "customer", "deal",
 
 const isRecord = (v: unknown): v is Record<string, unknown> => Boolean(v) && typeof v === "object" && !Array.isArray(v)
 
+/** 연락처 꼴(전화·이메일) — 화면 맥락 이름표에 들어 있으면 버린다. 이름표는 배송 예정의 받는 곳으로 저장될 수 있다. */
+const CONTACT_LIKE = /\d{2,4}[-.\s]?\d{3,4}[-.\s]?\d{4}|[^\s@]+@[^\s@]+\.[^\s@]+/
+const CONTROL_CHARS = /[\u0000-\u001f\u007f]/g
+
+/** 어드민 경로만 받는다. 상위 경로(..)·빈 마디(//)·역슬래시는 거절한다(검토 안전-5). */
+function safeAdminPath(raw: unknown): string | null {
+  const path = typeof raw === "string" ? raw.trim() : ""
+  if (!/^\/admin(?:\/|$|\?)/.test(path) || path.length > 300) return null
+  const pathname = path.split(/[?#]/)[0]
+  if (pathname.includes("//") || pathname.includes("\\") || /(?:^|\/)\.{1,2}(?:\/|$)/.test(pathname) || /%2e|%2f|%5c/i.test(pathname)) return null
+  return path
+}
+
+function cleanLabel(raw: unknown): string {
+  const label = typeof raw === "string" ? raw.replace(CONTROL_CHARS, " ").trim().slice(0, 80) : ""
+  return CONTACT_LIKE.test(label) ? "" : label
+}
+
 function parseContext(raw: unknown): AdminAiPageContext | null {
   if (!isRecord(raw)) return null
-  const path = typeof raw.path === "string" ? raw.path.trim() : ""
-  if (!/^\/admin(?:\/|$|\?)/.test(path) || path.length > 300) return null
-  const label = typeof raw.label === "string" ? raw.label.slice(0, 80) : ""
+  const path = safeAdminPath(raw.path)
+  if (!path) return null
+  const label = cleanLabel(raw.label)
   let entity: AdminAiEntity | undefined
   if (isRecord(raw.entity)) {
     const { type, id, label: entityLabel } = raw.entity
     if (typeof type === "string" && ENTITY_TYPES.has(type as AdminAiEntity["type"]) && typeof id === "string" && /^[A-Za-z0-9:_-]{1,80}$/.test(id)) {
-      entity = { type: type as AdminAiEntity["type"], id, label: typeof entityLabel === "string" ? entityLabel.slice(0, 80) : "" }
+      entity = { type: type as AdminAiEntity["type"], id, label: cleanLabel(entityLabel) }
     }
   }
   return { path, label, ...(entity ? { entity } : {}) }
