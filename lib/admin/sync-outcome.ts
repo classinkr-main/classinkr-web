@@ -5,6 +5,11 @@
 // 사유가 있어 건너뛰었다(skipped) · 일부 소스만 썼다(partial) · 실패했다(failed). 예전 화면은 HTTP 200이면
 // 전부 "완료"로 보여 줬다 — 잠금에 걸린 200 { skipped: true }도 "동기화를 완료했습니다"가 됐다.
 // 이 모듈의 describeSyncOutcome 하나로 모든 버튼이 같은 문구·톤을 쓰고, 완료가 아니면 "완료"라고 말하지 않는다.
+//
+// 시트 고정(lib/branch/rev-sheet-lock.ts) 중에는 요청이 REV 를 포함해도 DSH·KPI(+하드웨어)만 돈다 — 완료 문구가 그 사실을
+// 말한다(REV 를 다시 읽은 것처럼 보이지 않게). 관리자의 "12/1 스냅샷 다시 읽기"는 그 완료 문구를 따로 쓴다.
+
+import { revLockedSyncNote, revSnapshotRereadDoneNote } from "@/lib/branch/rev-sheet-lock"
 
 export type SyncOutcome = "done" | "running" | "skipped" | "partial" | "failed"
 
@@ -20,8 +25,14 @@ export interface SyncOutcomeFields {
   ok?: boolean
   skipped?: boolean
   revOk?: boolean
+  /** 시트 고정 뒤 DSH·KPI 만 돌린 부분의 성공 여부(runAll dshOk). */
+  dshOk?: boolean
   hw?: unknown
   error?: string
+  /** 실제로 돌린 부분(runAll ranSources — "rev"·"dsh"·"hw"). */
+  ranSources?: readonly string[]
+  /** 시트 고정이 active 일 때만 — reread 는 고정 중 REV 를 다시 읽었는지(12/1 스냅샷 다시 읽기). */
+  revSheetLock?: { lockedAt: string; reread: boolean } | null
 }
 
 export type SyncNoticeTone = "success" | "info" | "warning" | "error"
@@ -32,14 +43,27 @@ export interface SyncOutcomeNotice {
 }
 
 /**
- * 러너 결과(runAll의 ok·skipped·revOk·hw)에서 결과 종류를 정한다 — 설계 §7.2 규칙 그대로.
- * - ok → done, skipped → running, ok가 아니고 revOk이거나 hw 결과가 있으면 partial, 나머지 failed.
+ * 러너 결과(runAll의 ok·skipped·revOk·dshOk·hw)에서 결과 종류를 정한다 — 설계 §7.2 규칙 그대로.
+ * - ok → done, skipped → running, ok가 아니고 revOk·dshOk 이거나 hw 결과가 있으면 partial, 나머지 failed.
+ *   (시트 고정 뒤 DSH 는 성공·HW 는 실패한 런을 "실패"로 말하면 반영된 DSH 목표까지 없던 일처럼 보인다.)
  */
-export function resolveSyncOutcome(result: Pick<SyncOutcomeFields, "ok" | "skipped" | "revOk" | "hw">): SyncOutcome {
+export function resolveSyncOutcome(
+  result: Pick<SyncOutcomeFields, "ok" | "skipped" | "revOk" | "dshOk" | "hw">,
+): SyncOutcome {
   if (result.ok) return "done"
   if (result.skipped) return "running"
-  if (result.revOk === true || Boolean(result.hw)) return "partial"
+  if (result.revOk === true || result.dshOk === true || Boolean(result.hw)) return "partial"
   return "failed"
+}
+
+/** 완료(done) 문구 — 시트 고정 중이면 REV 를 건너뛴 사실(또는 스냅샷 다시 읽기)을 말한다. */
+function doneMessage(body: SyncOutcomeFields): string {
+  const lock = body.revSheetLock
+  if (lock?.lockedAt) {
+    if (lock.reread) return `${revSnapshotRereadDoneNote(lock.lockedAt)}.`
+    return `동기화를 마쳤습니다 — ${revLockedSyncNote(lock.lockedAt, body.ranSources ?? ["dsh", "hw"])}.`
+  }
+  return "동기화를 마쳤습니다 — 화면을 최신 값으로 다시 불러왔습니다."
 }
 
 function minutesAgoLabel(startedAt: string | undefined, now: number): string | null {
@@ -75,7 +99,7 @@ export function describeSyncOutcome(
     case "done":
       return warning
         ? { tone: "warning", message: `동기화를 마쳤습니다 — 확인할 것: ${warning}` }
-        : { tone: "success", message: "동기화를 마쳤습니다 — 화면을 최신 값으로 다시 불러왔습니다." }
+        : { tone: "success", message: doneMessage(body) }
     case "running": {
       const since = minutesAgoLabel(body.startedAt, now)
       return {

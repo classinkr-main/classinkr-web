@@ -16,6 +16,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
 import { normalizedAccountKey } from "@/lib/branch/account-key"
+import { weekIndexFromToken } from "@/lib/branch/ledger-draft-metadata"
 
 import { confidenceFromShortcut } from "./confidence-shortcuts"
 // 라운드 4 P1-5 — buildPasteNewRowInputs가 만드는 초안의 타입. 이 파일은 순수 로직만 담아
@@ -114,35 +115,9 @@ export function lookupMatrixPending(
   return (weekKey ? accept(pendingByCell.get(weekKey)) : null) ?? accept(pendingByCell.get(matrixCoordKey({ rowId: coord.rowId, month: coord.month }))) ?? null
 }
 
-// metadata.week 문자열("w1".."w5") → 0~4 인덱스. "month"/그 외/누락이면 null.
-export function weekIndexFromToken(token: string | null | undefined): number | null {
-  if (!token) return null
-  const match = /^w([1-5])$/.exec(token)
-  return match ? Number(match[1]) - 1 : null
-}
-
-// 적용된 초안행의 weeklyPayments 구성. draft metadata.week가 wN이면 그 주차에 금액을 얹어
-// { [month]: [.., amount, ..] }를 만든다(주차 합==월합이라 rowWeeklyMismatch 오탐 없음).
-// week가 "month"/누락이면 주차 정보 없음 → {} (기존 동작 유지, month-only로 렌더).
-function weeklyPaymentsFromWeekToken(month: string, amount: number, weekToken: string | null | undefined): Record<string, number[]> {
-  const weekIdx = weekIndexFromToken(weekToken)
-  if (weekIdx == null) return {}
-  const weeks = Array.from({ length: 5 }, (_, index) => (index === weekIdx ? amount : 0))
-  return { [month]: weeks }
-}
-
-// 적용된 초안행의 weeklyPayments 복원: 주차 병합 초안(metadata.weekly)이 있으면 그 배열을
-// 그대로(단일 주차 토큰보다 우선) 쓴다 — explicit 주차 행의 주차 셀 편집이 나머지 주차를
-// 보존(월 금액=주차 합 재기재)하기 위한 경로. 없으면 기존 단일 주차 토큰 규약으로 폴백.
-export function weeklyPaymentsFromDraftMetadata(
-  month: string,
-  amount: number,
-  metadata: Record<string, unknown> | null | undefined,
-): Record<string, number[]> {
-  const merged = mergedWeeklyFromMetadata(metadata)
-  if (merged) return { [month]: merged }
-  return weeklyPaymentsFromWeekToken(month, amount, metadataString(metadata, "week"))
-}
+// weekIndexFromToken(metadata.week "w1".."w5" → 0~4) · weeklyPaymentsFromDraftMetadata(적용 초안 행의 주차 맵)는
+// 장부 오버레이와 함께 lib/branch/ledger-draft-metadata.ts 로 옮겼다(2026-11-25). 같은 이름으로 다시 내보낸다.
+export { weekIndexFromToken, weeklyPaymentsFromDraftMetadata } from "@/lib/branch/ledger-draft-metadata"
 
 // 셀에 걸린 미검수(draft|checked) 초안 요약. 낙관적 앰버 표시·툴팁용 + 재편집/커밋 타겟 판정용.
 // id: PATCH 타겟(같은 셀 재편집 시 새 초안 대신 이 초안을 갱신). weekly: 주차 병합 배열(metadata.weekly) —

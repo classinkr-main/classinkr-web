@@ -1,5 +1,5 @@
 import type { FormattedCell } from "@/lib/branch/google-sheets"
-import { fiscalQuarter } from "@/lib/branch/fiscal"
+import { fiscalQuarter, ymKey } from "@/lib/branch/fiscal"
 import { normalizeBranchMemberName } from "@/lib/branch/member-names"
 
 export const KPI_RANGE = "'3. KPI'!A1:AL200"
@@ -63,7 +63,8 @@ function quarterCalendarMonths(q: 1 | 2 | 3 | 4): number[] {
 export function selectKpiRows(blocks: KpiBlocks, period: "M" | "Q" | "Y", now: Date): KpiRow[] {
   if (period === "Y") return blocks.fy
 
-  const calMonth = now.getUTCMonth() + 1
+  // 지금(now) → 달은 KST 영업일 기준(F-10) — 1일 00:00~08:59 KST 에 지난달 KPI 를 고르지 않는다.
+  const calMonth = Number(ymKey(now).slice(5, 7))
   if (period === "M") {
     const mRows = blocks.months[calMonth]
     return mRows?.length ? mRows : blocks.fy

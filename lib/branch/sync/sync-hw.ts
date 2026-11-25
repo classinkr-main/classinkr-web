@@ -2,11 +2,12 @@ import "server-only"
 import { readRangeWithFormat, envSheetId } from "@/lib/branch/google-sheets"
 import { HW_RANGES, parseInbound, parseOutbound, parseStock, parseSalesMonthly } from "@/lib/branch/parsers/hw"
 import { replaceHwInbound, replaceHwOutbound, replaceHwStock, replaceHwSalesMonthly } from "@/lib/repositories/branch-hw"
-import { fyOf } from "@/lib/branch/fiscal"
+import { businessFy } from "@/lib/branch/fiscal"
 
 export async function syncHw(): Promise<{ inbound: number; outbound: number; stock: number; sales: number }> {
   const sheetId = envSheetId("hardware")
-  const refFy = fyOf(new Date())
+  // 회계연도는 KST 업무일로 정한다(F-26 — UTC 면 4월 1일 0~9시 KST 에 한 해 늦다). 하드웨어 시트는 고정 대상이 아니다.
+  const refFy = businessFy()
   const [inboundGrid, outboundGrid, stockGrid, salesGrid] = await Promise.all([
     readRangeWithFormat(sheetId, HW_RANGES.inbound),
     readRangeWithFormat(sheetId, HW_RANGES.outbound),

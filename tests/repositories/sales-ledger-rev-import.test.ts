@@ -185,10 +185,11 @@ describe("캡처 버전 순위", () => {
     expect(captureVersionRank(version)).toBe(rank)
   })
 
-  it("현재 캡처 버전은 rev-native:v2 — checksum 프리픽스와 같은 값이다", async () => {
+  // v3(2026-11-25): 무색상 행은 확도 없이(format_unavailable), 빨간 예정 칸은 예정으로 남겨 읽을 때 판정한다(F-08·F-09).
+  it("현재 캡처 버전은 rev-native:v3 — checksum 프리픽스와 같은 값이다", async () => {
     const { REV_IMPORT_CAPTURE_VERSION, captureVersionRank } = await import("@/lib/repositories/sales-ledger-rev-import")
-    expect(REV_IMPORT_CAPTURE_VERSION).toBe("rev-native:v2")
-    expect(captureVersionRank(REV_IMPORT_CAPTURE_VERSION)).toBe(2)
+    expect(REV_IMPORT_CAPTURE_VERSION).toBe("rev-native:v3")
+    expect(captureVersionRank(REV_IMPORT_CAPTURE_VERSION)).toBe(3)
   })
 
   it("활성 run 이 엄격히 높을 때만 유지한다 — 같거나 낮으면 최신 캡처가 이긴다", async () => {
@@ -207,18 +208,18 @@ describe("activateRevImportRun 캡처 버전 단조성", () => {
     vi.resetModules()
   })
 
-  it("활성 run 이 더 높은 버전(v3)이면 포인터를 덮지 않고 사유를 돌려준다 — 캐시도 건드리지 않는다", async () => {
+  it("활성 run 이 더 높은 버전(v4)이면 포인터를 덮지 않고 사유를 돌려준다 — 캐시도 건드리지 않는다", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
-    const { repository, client } = await loadRepository(null, { import_run_id: "run-v3", parser_version: "rev-native:v3" })
+    const { repository, client } = await loadRepository(null, { import_run_id: "run-v4", parser_version: "rev-native:v4" })
 
-    const result = await repository.activateRevImportRun("run-v2", 2026, "tester")
+    const result = await repository.activateRevImportRun("run-v3", 2026, "tester")
 
     expect(result.activated).toBe(false)
+    expect(result.keptReason).toContain("rev-native:v4")
     expect(result.keptReason).toContain("rev-native:v3")
-    expect(result.keptReason).toContain("rev-native:v2")
     expect(client.upsert).not.toHaveBeenCalled()
     expect(revalidateTag).not.toHaveBeenCalled()
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining("active=run-v3 candidate=run-v2"))
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("active=run-v4 candidate=run-v3"))
   })
 
   it("활성 run 이 라벨 이전 기본값(sales-ledger-import-v1)이면 덮는다 — 하위 호환", async () => {
@@ -234,7 +235,7 @@ describe("activateRevImportRun 캡처 버전 단조성", () => {
   })
 
   it("같은 버전이면 덮는다 — 같은 코드의 최신 캡처가 이긴다", async () => {
-    const { repository, client } = await loadRepository(null, { import_run_id: "run-a", parser_version: "rev-native:v2" })
+    const { repository, client } = await loadRepository(null, { import_run_id: "run-a", parser_version: "rev-native:v3" })
 
     const result = await repository.activateRevImportRun("run-b", 2026, "tester")
 
@@ -346,13 +347,13 @@ describe("captureRevDbImport 기록과 recapture 유지(kept)", () => {
     const result = await repository.captureRevDbImport("tester")
 
     const run = client.inserts["sales_ledger_import_runs"]?.[0]
-    expect(run?.parser_version).toBe("rev-native:v2")
+    expect(run?.parser_version).toBe("rev-native:v3")
     expect(run?.metadata).toMatchObject({
       purpose: "rev-native",
-      captureVersion: "rev-native:v2",
+      captureVersion: "rev-native:v3",
       runtime: { env: "preview", deploymentId: "dpl_pr42", sha: "927e177" },
     })
-    expect(result).toMatchObject({ runId: "run-new", activated: true, deduped: false, captureVersion: "rev-native:v2" })
+    expect(result).toMatchObject({ runId: "run-new", activated: true, deduped: false, captureVersion: "rev-native:v3" })
     expect(result.keptReason).toBeUndefined()
     expect(client.upsert).toHaveBeenCalledTimes(1)
   })
@@ -360,33 +361,33 @@ describe("captureRevDbImport 기록과 recapture 유지(kept)", () => {
   it("활성 run 이 더 높은 버전이면 캡처는 하되 활성화하지 않고 keptReason 을 싣는다", async () => {
     vi.spyOn(console, "warn").mockImplementation(() => {})
     const { repository, client } = await loadCapture({
-      import_run_id: "run-v3",
-      sales_ledger_import_runs: { status: "succeeded", started_at: "2026-10-27T09:00:00Z", parser_version: "rev-native:v3" },
+      import_run_id: "run-v4",
+      sales_ledger_import_runs: { status: "succeeded", started_at: "2026-10-27T09:00:00Z", parser_version: "rev-native:v4" },
     })
 
     const result = await repository.captureRevDbImport("tester")
 
     expect(client.inserts["sales_ledger_import_runs"]).toHaveLength(1)
     expect(result.activated).toBe(false)
-    expect(result.keptReason).toContain("rev-native:v3")
+    expect(result.keptReason).toContain("rev-native:v4")
     expect(client.upsert).not.toHaveBeenCalled()
   })
 
   it("recaptureActiveRevImport 는 그 경우 kept 로 돌려준다 — runId 는 화면이 계속 읽는 활성 run", async () => {
     vi.spyOn(console, "warn").mockImplementation(() => {})
     const { repository } = await loadCapture({
-      import_run_id: "run-v3",
-      sales_ledger_import_runs: { status: "succeeded", started_at: "2026-10-27T09:00:00Z", parser_version: "rev-native:v3" },
+      import_run_id: "run-v4",
+      sales_ledger_import_runs: { status: "succeeded", started_at: "2026-10-27T09:00:00Z", parser_version: "rev-native:v4" },
     })
 
     const result = await repository.recaptureActiveRevImport("sync:cron")
 
     expect(result).toEqual({
       status: "kept",
-      runId: "run-v3",
+      runId: "run-v4",
       capturedAt: "2026-10-27T09:00:00Z",
       lineCount: 1,
-      reason: expect.stringContaining("rev-native:v3"),
+      reason: expect.stringContaining("rev-native:v4"),
       capturedRunId: "run-new",
     })
   })

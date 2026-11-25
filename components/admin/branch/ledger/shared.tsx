@@ -11,12 +11,30 @@ import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
 import { ledgerMonthConfirmed, ledgerMonthSplit } from "@/lib/branch/computations/revenue-core"
 import { formatMoney, formatPercent } from "@/lib/branch/ledger-format"
 import { classifySalesLedgerProductCategory } from "@/lib/branch/product-category"
-import type { BranchKpiMemberRow, BranchPipelineRow } from "../types"
+import type { BranchKpiMemberRow } from "../types"
+// 초안 metadata 판독·장부 행 타입은 서버도 쓰도록 lib 로 옮겼다(2026-11-25) — 이 파일은 같은 이름으로 다시 내보낸다.
+import {
+  metadataString,
+  mergedWeeklyFromMetadata,
+  weeklyConfidenceFromMetadata,
+  type DraftConfidence,
+  type DraftKind,
+} from "@/lib/branch/ledger-draft-metadata"
+import type { LedgerRevenueRow } from "@/lib/branch/ledger-overlay"
 
 // 포매터 SSOT는 lib/branch/ledger-format — 섹션 파일들이 shared를 단일 진입점으로 쓰도록 재수출한다.
 export { formatMoney, formatPercent } from "@/lib/branch/ledger-format"
 
-export type DraftKind = "new-row" | "edit-row"
+export {
+  draftConfidenceFromMetadata,
+  isDraftConfidence,
+  mergedWeeklyFromMetadata,
+  metadataString,
+  weeklyConfidenceFromMetadata,
+} from "@/lib/branch/ledger-draft-metadata"
+export type { DraftConfidence, DraftKind } from "@/lib/branch/ledger-draft-metadata"
+export type { LedgerRevenueRow } from "@/lib/branch/ledger-overlay"
+
 export type DraftStatus = "draft" | "checked" | "applied" | "cancelled"
 
 // 품질 웨이브 7 — 항목 4: draft 상태 라벨 SSOT. 이전엔 필터 탭("검토"/"체크"/"적용")과 배지
@@ -69,67 +87,9 @@ export interface LedgerDraft {
   checkedAt?: string | null
 }
 
-export type LedgerRevenueRow = BranchPipelineRow & {
-  ledgerOrigin: "sheet" | "draft"
-  draftId?: string
-  draftKind?: DraftKind
-  draftMonth?: string
-  draftNote?: string
-  draftMetadata?: Record<string, unknown>
-  sourceDealId?: string
-  /** 수정초안 오버라이드로 색 맵을 로컬 삭제한 파생 행이 원본의 색 보유 여부를 보존하는 힌트
-      (lib/branch/computations/revenue-core.ts 캐논 무색상 폴백 판정용). */
-  confidenceColorHint?: boolean
-}
-
-export type DraftConfidence = "expected" | "high-confidence" | "confirmed"
-
-// SalesLedgerWorkbench에서 물리 이동(웨이브 7 2단 F5): 초안 metadata 문자열 필드 안전 판독 —
-// 워크벤치 본체와 ledger/DraftQueue가 함께 쓴다.
-export function metadataString(metadata: Record<string, unknown> | null | undefined, key: string): string | null {
-  const value = metadata?.[key]
-  if (typeof value !== "string") return null
-  const trimmed = value.trim()
-  return trimmed ? trimmed : null
-}
-
-// SalesLedgerWorkbench에서 물리 이동(웨이브 7 2단 F5): 주차 병합 초안(metadata.weekly 5칸)
-// 판독 — 워크벤치 본체(주차 복원)와 ledger/DraftQueue(주차 표기)가 함께 쓴다.
-// 주차 병합 초안의 metadata.weekly(5칸 배열) 검증·정규화. 유효하지 않으면 null.
-export function mergedWeeklyFromMetadata(metadata: Record<string, unknown> | null | undefined): number[] | null {
-  const weekly = metadata?.weekly
-  if (!Array.isArray(weekly) || weekly.length !== 5) return null
-  if (!weekly.every((value) => typeof value === "number" && Number.isFinite(value))) return null
-  const weeks = weekly.map((value) => Math.max(value, 0))
-  return weeks.some((value) => value > 0) ? weeks : null
-}
-
-// 라운드 3(P1) — 주차별 확도 개별 기록: metadata.weeklyConfidence(5칸, metadata.weekly와 병렬)
-// 검증 판독기. mergedWeeklyFromMetadata와 대칭 규약 —
-//   - 필드 부재/무효(배열 아님·길이≠5·무효 원소)는 "없음"(null)으로 판독해 기존 폴백
-//     (초안 단위 metadata.confidence — draftConfidenceFromMetadata)을 그대로 태운다(완전 하위호환).
-//   - 전 칸 null(신호 없음)도 "없음"으로 본다 — mergedWeekly의 some(>0) 가드와 대칭.
-//   - 유효 원소는 null(금액 0/빈 주차) 또는 DraftConfidence 3단뿐이다.
-export function weeklyConfidenceFromMetadata(
-  metadata: Record<string, unknown> | null | undefined,
-): Array<DraftConfidence | null> | null {
-  const raw = metadata?.weeklyConfidence
-  if (!Array.isArray(raw) || raw.length !== 5) return null
-  if (!raw.every((value) => value === null || isDraftConfidence(value))) return null
-  const states = raw.map((value) => (isDraftConfidence(value) ? value : null))
-  return states.some((value) => value != null) ? states : null
-}
-
-// SalesLedgerWorkbench에서 물리 이동(웨이브 7 2단 F5): 워크벤치 본체와 ledger/RevMatrix가
-// 함께 쓰는 확도/상품군/주차 검수 판독 헬퍼 — 로직 무변경.
-export function isDraftConfidence(value: unknown): value is DraftConfidence {
-  return value === "expected" || value === "high-confidence" || value === "confirmed"
-}
-
-export function draftConfidenceFromMetadata(metadata: Record<string, unknown> | null | undefined): DraftConfidence {
-  const raw = metadataString(metadata, "confidence")?.replace("_", "-")
-  return isDraftConfidence(raw) ? raw : "expected"
-}
+// LedgerRevenueRow · DraftConfidence · metadataString · mergedWeeklyFromMetadata · weeklyConfidenceFromMetadata ·
+// isDraftConfidence · draftConfidenceFromMetadata 는 lib/branch/{ledger-overlay, ledger-draft-metadata}.ts 로 옮겼다
+// (서버 집계·대조 스크립트가 같은 함수를 쓴다). 위 export … from 으로 같은 이름을 다시 내보낸다.
 
 export function isStoredProductCategory(value: unknown): value is Exclude<RevProductCategory, "all"> {
   return value === "software" || value === "hardware" || value === "unknown"

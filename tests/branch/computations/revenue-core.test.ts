@@ -61,10 +61,11 @@ describe("ledgerMonthConfirmed — 시트행 캐논 패리티", () => {
     })
   }
 
-  it("무색상 시트행: 과거~당월 전액 확정, 미래 월 0 (직접 맵 합산의 과소집계 방지)", () => {
+  // 2026-11-25 결정(F-09): 무색상 폴백은 이번 KST 영업월 "이전" 달만 확정 — 이번 달·미래 월은 예정.
+  it("무색상 시트행: 지난달까지 전액 확정, 이번 달·미래 월 0 (직접 맵 합산의 과소집계 방지)", () => {
     const row = sheetRow()
     expect(ledgerMonthConfirmed(row, "2026-06", 1000, TODAY)).toBe(1000)
-    expect(ledgerMonthConfirmed(row, TODAY, 1000, TODAY)).toBe(1000)
+    expect(ledgerMonthConfirmed(row, TODAY, 1000, TODAY)).toBe(0)
     expect(ledgerMonthConfirmed(row, "2026-08", 1000, TODAY)).toBe(0)
   })
 

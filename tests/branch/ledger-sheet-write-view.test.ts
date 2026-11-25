@@ -16,13 +16,16 @@ import {
   sheetAbsorbedDraftIds,
   sheetBaselineForRow,
   SHEET_WRITE_HISTORY_DELETE_MESSAGE,
+  SHEET_WRITTEN_REVERSE_MESSAGE,
   sheetWriteBadge,
+  sheetWrittenReverseMessage,
   summarizeApplyOutcomes,
   toApplyOutcome,
   type ApplySheetOutcome,
   type SheetRowLike,
   type SheetWriteView,
 } from "@/components/admin/branch/ledger/sheet-write-view"
+import { buildLedgerOverlay } from "@/lib/branch/ledger-overlay"
 import { parseSheetBaseline } from "@/lib/branch/sheet-writeback/baseline"
 import { REV_WRITE_MAX_DRAFTS } from "@/lib/branch/sheet-writeback/config"
 import { SHEET_WRITE_MESSAGES } from "@/lib/branch/sheet-writeback/messages"
@@ -90,21 +93,54 @@ describe("오버레이 제외 — sheetAbsorbedDraftIds + excludeSheetAbsorbedRo
     expect(excludeSheetAbsorbedRows(rows, new Set())).toBe(rows)
   })
 
-  it("워크벤치 appliedDraftRows 가 두 갈래(적용 항목 있음/없음) 모두 이 제외를 거치고, 그 결과로 정정 월을 만든다", () => {
+  // 2026-11-25: 워크벤치 useMemo 합성은 lib/branch/ledger-overlay.ts buildLedgerOverlay 로 옮겼다 — 소스 문자열 대신 동작으로 본다.
+  it("오버레이는 두 갈래(적용 항목 있음/없음) 모두 이 제외를 거치고, 제외된 정정은 정정 월도 만들지 않는다", () => {
+    const sheetWrites = { "d-1": written("2026-10-22T00:00:00.000Z") }
+    const sheet = {
+      id: "line-1",
+      sheetRow: 12,
+      customer: "예시학원1",
+      manager: "예시A",
+      team: "BD",
+      region: null,
+      revenue: 0,
+      monthlyPayments: { "2026-10": 3_000 },
+      syncedAt: "2026-10-23T03:05:00.000Z",
+    }
+    const correction = {
+      id: "d-1",
+      kind: "edit-row" as const,
+      status: "applied",
+      sourceDealId: "line-1",
+      sourceSheetRow: 12,
+      customer: "예시학원1",
+      manager: "예시A",
+      team: "BD",
+      month: "2026-10",
+      amount: 3_000,
+      note: "",
+    }
+    const common = { sheetRows: [sheet], sheetWrites, lastRevSyncStartedAt: LAST_SYNC }
+    const withEntries = buildLedgerOverlay({
+      ...common,
+      ledgerEntries: [{ ...correction, id: "e-1", draftId: "d-1", entryType: "manual-edit", entryStatus: "active", appliedAt: "2026-10-22T00:00:00.000Z" }],
+    })
+    const fallbackOnly = buildLedgerOverlay({ ...common, ledgerEntries: [], drafts: [correction] })
+    for (const result of [withEntries, fallbackOnly]) {
+      expect([...result.absorbedDraftIds]).toEqual(["d-1"])
+      expect(result.appliedRows).toEqual([])
+      expect(result.overrides.size).toBe(0)
+      expect(result.rows.map((row) => row.id)).toEqual(["line-1"])
+    }
+  })
+
+  it("워크벤치는 시트 쓰기 기록과 마지막 동기화 시각을 오버레이에 넘기고, 정정 월은 그 결과에서만 받는다", () => {
     const source = readFileSync(join(process.cwd(), "components/admin/branch/SalesLedgerWorkbench.tsx"), "utf8")
-    const start = source.indexOf("const appliedDraftRows = useMemo")
-    const end = source.indexOf("}, [appliedDraftFallbackRows, ledgerEntryRows, sheetAbsorbedIds])", start)
+    const start = source.indexOf("const ledgerOverlay = useMemo(")
     expect(start).toBeGreaterThan(-1)
-    expect(end).toBeGreaterThan(start)
-    const body = source.slice(start, end)
-    expect(body).toMatch(/if \(ledgerEntryRows\.length === 0\) return excludeSheetAbsorbedRows\(appliedDraftFallbackRows, sheetAbsorbedIds\)/)
-    expect(body).toMatch(/return excludeSheetAbsorbedRows\(\[\s*\.\.\.ledgerEntryRows,/)
-    // 기준 시각은 서버 동기화와 이 화면 시트 행의 데이터 시각 중 이른 쪽(absorptionCutoff).
-    expect(source).toMatch(/sheetAbsorbedDraftIds\(sheetWrites, absorptionCutoff\(sheetWrite\.lastRevSyncStartedAt, sheetRowsSyncedAt\)\)/)
-    // editRowOverrideMonths 는 appliedDraftRows → replacementAppliedDraftRows 에서만 만든다(제외가 정정 월에도 반영).
-    expect(source).toMatch(/return appliedDraftRows\.filter\(\(row\) => row\.draftKind === "edit-row"\)/)
-    // 2026-10-26: 원본 행 찾기(Row ID·행 번호·고객·상품)를 거쳐 정정 월을 만든다 — 입력은 여전히 replacementAppliedDraftRows 뿐.
-    expect(source).toMatch(/resolveCorrectionTargets\(replacementAppliedDraftRows, sheetRows,/)
+    const block = source.slice(start, source.indexOf("const rows = ledgerOverlay.rows", start))
+    expect(block).toMatch(/buildLedgerOverlay\(\{[\s\S]*sheetWrites,[\s\S]*lastRevSyncStartedAt: sheetWrite\.lastRevSyncStartedAt,/)
+    expect(block).toContain("const editRowOverrideMonths = ledgerOverlay.overrides")
   })
 })
 
@@ -265,8 +301,9 @@ describe("반영 결과 — toApplyOutcome · summarizeApplyOutcomes", () => {
     expect(summary).toEqual({ text: "3건 시트에 반영 · 1건 장부에만(새 행) · 1건 충돌 — 시트가 바뀌었습니다", failed: true })
   })
 
-  it("실패 코드는 messages.ts 문구, 응답 없음은 다시 반영 안내", () => {
-    expect(summarizeApplyOutcomes([outcome("past_week", false), outcome(null, false)])?.text).toBe(
+  // 2026-11-25(F-33): "응답 없음"은 코드 없이 상태 0(네트워크·마감)일 때만이다 — 코드 없는 409 는 서버가 보낸 사유를 쓴다.
+  it("실패 코드는 messages.ts 문구, 응답 없음(상태 0)은 새로고침 안내", () => {
+    expect(summarizeApplyOutcomes([outcome("past_week", false), { ...outcome(null, false), status: 0 }])?.text).toBe(
       `1건 ${SHEET_WRITE_MESSAGES.past_week} · 1건 ${APPLY_NO_RESPONSE_MESSAGE}`,
     )
   })
@@ -322,10 +359,10 @@ describe("삭제 가드 — 반영을 시도한 초안은 삭제 대신 취소",
     const hook = readFileSync(join(process.cwd(), "components/admin/branch/ledger/useLedgerDraftQueue.ts"), "utf8")
     const body = hook.slice(hook.indexOf("const deleteDraft = useCallback"), hook.indexOf("const reverseEntry = useCallback"))
     const guard = body.indexOf("error.message === SHEET_WRITE_HISTORY_DELETE_MESSAGE")
-    const downgrade = body.indexOf('setQueueMode("local")')
     expect(guard).toBeGreaterThan(-1)
-    expect(downgrade).toBeGreaterThan(guard)
-    expect(body.slice(guard, downgrade)).toMatch(/setRecordError\(id, SHEET_WRITE_HISTORY_DELETE_MESSAGE\)\n\s+return\n/)
+    expect(body.slice(guard)).toMatch(/setRecordError\(id, SHEET_WRITE_HISTORY_DELETE_MESSAGE\)\n\s+return\n/)
+    // 2026-11-25(F-06): 네트워크·서버 오류도 이제 큐를 내리지 않는다(그 행에 다시 시도 안내).
+    expect(body).not.toContain('setQueueMode("local")')
   })
 })
 
@@ -348,7 +385,11 @@ describe("되돌리기 가드 — 시트에 쓴 정정은 장부에서만 상쇄
     const queue = readFileSync(join(process.cwd(), "components/admin/branch/ledger/DraftQueue.tsx"), "utf8")
     const button = queue.slice(queue.indexOf("onClick={() => setConfirmReverseDraft(draft)}"), queue.indexOf("<RotateCcw"))
     expect(button).toMatch(/isRowBusy\(draft\.id\) \|\|\n\s+sheetBlocksReverse\(draft\.id\)\n/)
-    expect(button).toMatch(/sheetBlocksReverse\(draft\.id\) \? SHEET_WRITTEN_REVERSE_MESSAGE/)
+    // 2026-11-25(F-22): 사유는 sheetWrittenReverseMessage(sheetLock) — 고정 전엔 SHEET_WRITTEN_REVERSE_MESSAGE 그대로다
+    // (고정 뒤 문구는 tests/branch/ledger-draft-queue-lock.test.ts).
+    expect(button).toMatch(/sheetBlocksReverse\(draft\.id\) \? sheetWrittenReverseMessage\(sheetLock\)/)
+    expect(sheetWrittenReverseMessage(null)).toBe(SHEET_WRITTEN_REVERSE_MESSAGE)
+    expect(sheetWrittenReverseMessage({ lockedAt: "2026-12-01", active: false })).toBe(SHEET_WRITTEN_REVERSE_MESSAGE)
     expect(queue).toMatch(/const sheetBlocksReverse = \(id: string\) => blocksLedgerReverse\(sheetWrites\?\.\[id\]\)/)
     // 문구는 라우트 409 와 같은 상수(messages.ts) — 라우트가 같은 상수를 import 해 쓰는지는
     // tests/branch/sheet-writeback/ledger-rules.test.ts 가 본다.

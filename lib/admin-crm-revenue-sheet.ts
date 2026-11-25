@@ -4,6 +4,7 @@ import { unstable_cache } from "next/cache"
 import { getBranchRevSourceRecordKey, isPlaceholderCrmName } from "@/lib/crm-source-linking"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import { dealHasColorData, splitMonthConfidence } from "@/lib/branch/computations/rev-confirmed"
+import { getBusinessDateParts } from "@/lib/business-time"
 import { getCompassRevenue } from "@/lib/compass/bridge"
 import { nextPendingTransition, pendingMonthAmount } from "@/lib/crm/revenue-sheet-pending"
 import { absorptionCutoff, isSheetWriteAbsorbed, oldestSyncedAt } from "@/lib/branch/sheet-writeback/ledger-rules"
@@ -79,11 +80,6 @@ function numberValue(value: unknown) {
 
 function sumRecord(record: Record<string, number> | null | undefined) {
   return Object.values(record ?? {}).reduce((sum, value) => sum + numberValue(value), 0)
-}
-
-function getCurrentMonthKey() {
-  const now = new Date()
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`
 }
 
 function getMetadataString(metadata: Record<string, unknown> | null, key: string) {
@@ -283,7 +279,8 @@ async function readSheetAbsorbedDraftIds(
 async function computeAdminCrmRevenueSheetWorkspace(): Promise<AdminCrmRevenueSheetWorkspace> {
   const sb = createSupabaseAdminClient()
   const warnings: string[] = []
-  const currentMonth = getCurrentMonthKey()
+  // 지금 → 달은 KST 영업일로만 바꾼다(서버 시계는 UTC). 캐논에는 영업일을 넘겨 빨간 예정 칸을 그 주 시작일(KST)에 올린다.
+  const { date: businessDate, month: currentMonth } = getBusinessDateParts()
 
   const [sheetResult, linksResult, accountsResult, customersResult, dealsResult, manualLedgerResult] = await Promise.all([
     sb
@@ -403,7 +400,7 @@ async function computeAdminCrmRevenueSheetWorkspace(): Promise<AdminCrmRevenueSh
         confirmed,
         highConfidence,
         expected: uncolored,
-      } = splitMonthConfidence(deal, month, amount, hasColorData, currentMonth)
+      } = splitMonthConfidence(deal, month, amount, hasColorData, businessDate)
       confirmedAmount += confirmed
       highConfidenceAmount += highConfidence
 

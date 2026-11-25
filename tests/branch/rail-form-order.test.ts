@@ -115,24 +115,29 @@ describe("DraftQueue — 다음 단계 알약 하나 + 펼친 줄 글자 링크(
 
   it("적용 알약은 체크완료 줄에만, 채운 초록(#084734 · 흰 글자)으로 '적용' 라벨과 확인 다이얼로그를 그대로 쓴다", () => {
     const source = read(queuePath)
-    const apply = block(source, "onClick={() => setConfirmApplyDraft(draft)}")
-    expect(source.slice(apply.start - 120, apply.start)).toContain('nextStep === "apply"')
+    // 2026-11-25(F-39): 알약에 key·ref 가 붙어 onClick 이 길어졌다 — 갈래 시작(nextStep === "apply")부터 그 버튼 끝까지 본다.
+    const apply = block(source, 'nextStep === "apply" ? (')
+    expect(apply.text).toContain("setConfirmApplyDraft(draft)")
     expect(apply.text).toContain("rounded-full bg-[#084734]")
     expect(apply.text).toContain("text-white")
     expect(apply.text).toContain("적용")
-    // 활성 조건은 예전 적용 버튼 식 그대로.
-    expect(apply.text).toContain('disabled={draft.status !== "checked" || mode !== "server" || draft.id.startsWith("local-") || isRowBusy(draft.id)}')
+    // 활성 조건은 예전 적용 버튼 식 그대로 — 다만 진행 중(줄·다른 반영)은 disabled 가 아니라 aria-disabled 라 누른 알약이
+    // 포커스를 잃지 않는다(F-39 · F-20, 2026-11-25).
+    expect(apply.text).toContain('disabled={draft.status !== "checked" || mode !== "server" || draft.id.startsWith("local-")}')
+    expect(apply.text).toContain("aria-disabled={isRowBusy(draft.id) || applyBusy || undefined}")
+    expect(apply.text).toContain("if (isRowBusy(draft.id) || applyBusy) return")
     expect(apply.text).toContain("aria-label={`${customerName} 적용`}")
   })
 
   it("체크 알약은 검토중 줄에만, 옅은 초록(#ECFDF5)으로 '체크' — 체크 해제는 펼친 줄의 글자 링크로", () => {
     const source = read(queuePath)
-    const check = block(source, "onClick={() => void runToggle(draft.id)}")
-    expect(source.slice(check.start - 120, check.start)).toContain('nextStep === "check"')
+    const check = block(source, 'nextStep === "check" ? (')
+    expect(check.text).toContain("onClick={() => void runToggle(draft.id)}")
     expect(check.text).toContain("rounded-full bg-[#ECFDF5]")
-    expect(check.text).toContain('disabled={draft.status === "applied" || draft.status === "cancelled" || isRowBusy(draft.id)}')
+    expect(check.text).toContain('disabled={draft.status === "applied" || draft.status === "cancelled"}')
+    expect(check.text).toContain("aria-disabled={isRowBusy(draft.id) || undefined}")
     expect(check.text).toContain("aria-label={`${customerName} 체크`}")
-    const uncheck = block(source, "onClick={() => void runToggle(draft.id)}", check.start + 1)
+    const uncheck = block(source, "onClick={() => void runToggle(draft.id)}", check.start + check.text.length)
     expect(source.slice(uncheck.start - 120, uncheck.start)).toContain("rowLinks.uncheck")
     expect(uncheck.text).toContain("className={ROW_LINK_CLASS}")
     expect(uncheck.text).toContain("체크 해제")

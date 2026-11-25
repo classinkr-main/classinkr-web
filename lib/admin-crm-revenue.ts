@@ -8,6 +8,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import { readRevDealsFromActiveImport } from "@/lib/repositories/sales-ledger-imports"
 import { fyOf } from "@/lib/branch/fiscal"
 import { dealHasColorData, splitMonthConfidence } from "@/lib/branch/computations/rev-confirmed"
+import { getBusinessDateParts } from "@/lib/business-time"
 import type {
   CrmRevenueDashboard,
   CrmRevenueDocumentRow,
@@ -1091,8 +1092,9 @@ async function assembleAdminCrmRevenueDashboard(): Promise<CrmRevenueDashboard> 
   // 시트 운영 규칙: 주차(w1~w5) 칸의 빨간 글자 = 확정 매출, 파란 글자 = 클로징 임박(90%+),
   // 나머지는 예상·목표. 파서가 월별 "금액" 맵(monthly_confirmed/monthly_high_conf)으로 분해해 둔다.
   // 색 데이터가 전혀 없는 행은 브랜치 집계(pipeline/summary)와 동일하게
-  // 과거~당월분을 전액 확정으로 간주한다(색 규칙 도입 전 동기화분 fallback).
-  const currentMonthKey = getMonthKey(new Date().toISOString()) ?? ""
+  // 이번 KST 영업월 이전 달만 전액 확정으로 간주한다(색 규칙 도입 전 동기화분 fallback — 읽는 시점 판정).
+  // 캐논에는 KST 영업일을 넘긴다 — 빨간 예정 칸이 그 주 시작일(KST)에 확정으로 올라간다(F-08·F-09).
+  const { date: businessDate, month: currentMonthKey } = getBusinessDateParts()
   const activeSheetDeals = sheetDeals.filter((deal) => !SHEET_INACTIVE_PATTERN.test(deal.status ?? ""))
   let sheetConfirmedAmount = 0
   let sheetHighConfidenceAmount = 0
@@ -1140,7 +1142,7 @@ async function assembleAdminCrmRevenueDashboard(): Promise<CrmRevenueDashboard> 
         confirmed,
         highConfidence: highConf,
         expected: remaining,
-      } = splitMonthConfidence(deal, month, total, hasColorData, currentMonthKey)
+      } = splitMonthConfidence(deal, month, total, hasColorData, businessDate)
 
       if (confirmed > 0) {
         sheetConfirmedAmount += confirmed

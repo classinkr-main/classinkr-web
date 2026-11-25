@@ -21,3 +21,22 @@ export function isImportStale(
   const comparisonTime = Number.isFinite(syncStart) && syncStart <= syncTime ? syncStart : syncTime
   return importTime < comparisonTime
 }
+
+/** REV 를 실제로 읽은 동기화 런(source all·rev)의 최소 모양 — branch_sync_runs 행. */
+export interface RevSyncRunLike {
+  source: string
+  status: string
+  started_at: string
+  finished_at: string | null
+}
+
+/**
+ * 최근 런 목록(최신 먼저)에서 REV 를 실제로 읽은 마지막 성공 런의 시각. 시트 고정 뒤 크론은 DSH·KPI·하드웨어만
+ * 읽는다(source dsh·dsh+hw) — 그 런과 REV 임포트 캡처 시각을 비교하면 임포트가 영원히 "시트보다 오래됨"으로 보인다
+ * (design-1 F8). lib/repositories/branch-sales-ledger-sheet-writes.ts lastSuccessfulRevSyncStartedAt 과 같은 원천 집합.
+ */
+export function latestRevSyncRun(runs: readonly RevSyncRunLike[]): { lastRevSync: string | null; lastRevSyncStartedAt: string | null } {
+  const run = runs.find((item) => item.status === "success" && (item.source === "all" || item.source === "rev"))
+  if (!run) return { lastRevSync: null, lastRevSyncStartedAt: null }
+  return { lastRevSync: run.finished_at ?? run.started_at, lastRevSyncStartedAt: run.started_at }
+}

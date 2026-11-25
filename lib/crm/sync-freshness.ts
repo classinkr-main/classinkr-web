@@ -67,13 +67,21 @@ export interface SyncFreshness {
   relativeLabel: string
 }
 
-/** ISO 문자열 하나로 경과시간·stale 여부·상대시간 문구를 한 번에 구한다. */
+/**
+ * ISO 문자열 하나로 경과시간·stale 여부·상대시간 문구를 한 번에 구한다.
+ *
+ * frozenLabel: 일부러 더 읽지 않는 원천(시트 고정 뒤 REV — lib/branch/rev-sheet-lock.ts)은 경과시간과 상관없이
+ * stale 이 아니다. 넘기면 stale=false 에 상대시간 대신 그 라벨("12/1 고정")을 싣는다(경과시간 hours 는 그대로 계산한다).
+ */
 export function getSyncFreshness(
   value: string | null | undefined,
   thresholdHours: number = CRM_SYNC_STALE_AFTER_HOURS,
-  nowMs: number = Date.now()
+  nowMs: number = Date.now(),
+  options: { frozenLabel?: string | null } = {}
 ): SyncFreshness {
   const hours = hoursSinceIso(value, nowMs)
+  const frozenLabel = options.frozenLabel?.trim()
+  if (frozenLabel) return { hours, stale: false, relativeLabel: frozenLabel }
   return {
     hours,
     stale: hours === null || hours > thresholdHours,

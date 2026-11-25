@@ -26,12 +26,18 @@ export async function completeBranchSync(
   // 잠김(다른 실행이 도는 중)·운영 밖 가드로 건너뛰었으면 아무것도 바뀌지 않았다 — 만료하지 않는다.
   if (result.skipped) return { ...result, outcome: outcomeOf(result) }
 
-  const revSucceeded = sources.includes("rev") && (result.revOk === true || result.ok)
-  const hwSucceeded = sources.includes("hw") && Boolean(result.hw)
+  // 요청 원천이 아니라 실제로 돌린 부분으로 고른다 — 시트 고정 중이면 요청의 rev 가 dsh(DSH·KPI 만)로 바뀌어 돌았다.
+  // REV 미러·장부 임포트·CRM 매출 캐시를 만료하거나 링크 유지보수를 돌리면 바뀌지 않은 것을 다시 계산할 뿐 아니라,
+  // REV 를 읽지 않은 런이 REV 를 읽은 것처럼 보인다. ranSources 가 없는 결과(옛 러너·목)는 요청 원천으로 본다.
+  const ran: readonly string[] = result.ranSources ?? sources
+  const revSucceeded = ran.includes("rev") && (result.revOk === true || result.ok)
+  const dshSucceeded = ran.includes("dsh") && (result.dshOk === true || result.ok)
+  const hwSucceeded = ran.includes("hw") && Boolean(result.hw)
   // 실패한 런도 실행 기록은 새로 생겼다 — 상태 줄이 옛 "마지막 동기화"를 보이지 않게 항상 만료한다.
   const bundles: SyncCacheTagBundle[] = ["branchSyncRun"]
   if (hwSucceeded) bundles.push("branchHw")
   if (revSucceeded) bundles.push("branchRev")
+  if (dshSucceeded) bundles.push("branchDsh")
   expireSyncCacheTags(...bundles)
 
   if (!revSucceeded) return { ...result, outcome: outcomeOf(result) }

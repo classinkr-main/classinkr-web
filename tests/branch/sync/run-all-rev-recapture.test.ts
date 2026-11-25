@@ -40,7 +40,7 @@ describe("runAll — REV 장부 임포트 자동 재캡처", () => {
 
     const result = await runAll({ trigger: "cron" })
 
-    expect(recaptureActiveRevImport).toHaveBeenCalledWith("sync:cron")
+    expect(recaptureActiveRevImport).toHaveBeenCalledWith("sync:cron", { fiscalYear: expect.any(Number) })
     expect(result.ok).toBe(true)
     expect(result.revOk).toBe(true)
     expect(result.revImport).toEqual(expect.objectContaining({ status: "captured", runId: "run-new" }))

@@ -34,10 +34,11 @@ describe("confirmedMonthAmount 캐논", () => {
     expect(confirmedMonthAmountWithColor(d, "2026-06", 1000, true, TODAY)).toBe(0)
   })
 
-  it("무색상 폴백: 과거~당월은 전액 확정, 미래 월은 0 (월 가드)", () => {
+  // 2026-11-25 결정(F-09): 이번 KST 영업월 "이전" 달만 확정 — 이번 달 검은 금액은 아직 예정이다.
+  it("무색상 폴백: 지난달까지는 전액 확정, 이번 달·미래 월은 0 (월 가드)", () => {
     const d = deal({})
     expect(confirmedMonthAmountWithColor(d, "2026-06", 1000, false, TODAY)).toBe(1000)
-    expect(confirmedMonthAmountWithColor(d, TODAY, 1000, false, TODAY)).toBe(1000)
+    expect(confirmedMonthAmountWithColor(d, TODAY, 1000, false, TODAY)).toBe(0)
     // 미래 월을 확정으로 올리면 매출이 부풀려진다 — 2026-07-10 실측 ¥492.9만 케이스
     expect(confirmedMonthAmountWithColor(d, "2026-08", 1000, false, TODAY)).toBe(0)
     expect(confirmedMonthAmountWithColor(d, "2027-01", 1000, false, TODAY)).toBe(0)

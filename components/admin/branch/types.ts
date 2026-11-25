@@ -153,6 +153,11 @@ export interface BranchSummaryResponse {
   lastSync: string | null
   /** lastSync와 같은 동기화 런의 시작 시각. 구버전 응답에는 없음. */
   lastSyncStartedAt?: string | null
+  /** REV 를 실제로 읽은 마지막 성공 런(source all·rev)의 시각·시작 — REV 임포트 신선도 비교 기준. 구버전 응답에는 없음. */
+  lastRevSync?: string | null
+  lastRevSyncStartedAt?: string | null
+  /** 시트 고정(BRANCH_REV_SHEET_LOCKED_AT) — 예정·적용 중일 때만 값. 구버전 응답에는 없음. */
+  revSheetLock?: { lockedAt: string; active: boolean } | null
   lastError: string | null
   sheetModifiedAt: string | null
   /** 품질 감사 2026-09-10 — #2: true면 sheetModifiedAt=null이 "시트에 값 없음"이 아니라
@@ -174,6 +179,8 @@ export interface BranchPipelineRow {
   dealType?: string | null
   productVersion?: string | null
   firstPayment?: string | null
+  /** 중요도(KA 등) — RevRevenueRow 미러, 값이 있을 때만 키가 있다. */
+  importance?: string | null
   contractTarget?: number
   revenue: number
   monthlyPayments?: Record<string, number>

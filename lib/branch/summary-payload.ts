@@ -18,6 +18,8 @@ import { confirmedMonthAmount } from "@/lib/branch/computations/rev-confirmed"
 import { listMembersByTeam } from "@/lib/branch/computations/pacing"
 import { summarizeCampaigns } from "@/lib/branch/computations/campaigns"
 import { getRecentSyncRuns } from "@/lib/repositories/branch-sync"
+import { latestRevSyncRun } from "@/lib/branch/data-source-freshness"
+import { currentRevSheetLock, revSheetLockView } from "@/lib/branch/rev-sheet-lock"
 import { computeSyncFailureStreak, isPermissionError, type SyncSourceKey } from "@/lib/branch/sync/failure-streak"
 import { listCachedPublicEvents } from "@/lib/repositories/public-events"
 
@@ -305,14 +307,17 @@ export async function buildBranchSummaryPayload(query: BranchSummaryPayloadQuery
   // 소스별 동기화 건강 상태 — lastSync는 "마지막 런" 시각이라 실패한 런도 "방금"으로 보인다.
   // 크론 알림과 같은 판정(computeSyncFailureStreak)으로 마지막 성공·연속 실패 일수를 싣는다.
   // 최근 60런(캐시)이면 하루 3회 크론 + 재시도로 약 3주를 덮고, 넘치면 truncated로 드러난다.
-  const syncHealth = buildSyncHealth(await getRecentSyncRuns(60))
+  const healthRuns = await getRecentSyncRuns(60)
+  const syncHealth = buildSyncHealth(healthRuns)
+  // REV 를 실제로 읽은 마지막 성공 런(all·rev) — 시트 고정 뒤 DSH·하드웨어만 읽는 런과 REV 임포트를 비교하지 않는다(design-1 F8).
+  const { lastRevSync, lastRevSyncStartedAt } = latestRevSyncRun(healthRuns)
   // 임포트 폴백만 활성 런의 캡처 시각(source.asOf)을 쓴다. 미러/라이브 폴백의 asOf는
   // 이미 계산된 lastSync/sheetModifiedAt을 재사용한다(같은 값을 다시 조회하는 왕복 없음).
   const lastSync = lastRun?.finished_at ?? lastRun?.started_at ?? null
   const data_sources = {
     rev: {
       kind: revResult.source.kind,
-      asOf: revResult.source.kind === "import" ? revResult.source.asOf : lastSync,
+      asOf: revResult.source.kind === "import" ? revResult.source.asOf : revResult.source.kind === "mirror" ? lastRevSync : lastSync,
       ...(revResult.source.runId ? { runId: revResult.source.runId } : {}),
     },
     dsh: {
@@ -498,6 +503,11 @@ export async function buildBranchSummaryPayload(query: BranchSummaryPayloadQuery
     // lastSync와 같은 런의 시작. runAll 내부 재캡처는 finished_at보다 앞서므로
     // 임포트 신선도 비교에는 이 실행 구간이 필요하다(초 단위 임의 허용 금지).
     lastSyncStartedAt: lastRun?.started_at ?? null,
+    // REV 임포트 신선도 비교 기준 — REV 를 읽은 마지막 성공 런(시트 고정 뒤 DSH·하드웨어 런은 빼고 본다).
+    lastRevSync,
+    lastRevSyncStartedAt,
+    // 시트 고정(env BRANCH_REV_SHEET_LOCKED_AT) — 예정·적용 중일 때만 값이 있다. 상태 줄이 REV 를 "12/1 고정"으로 보인다.
+    revSheetLock: revSheetLockView(currentRevSheetLock(currentDate)),
     lastError: lastRun?.status === "failed" ? lastRun.error ?? "동기화 실패" : null,
     sheetModifiedAt,
     // 품질 감사 2026-09-10 — #2: sheetModifiedAt이 null인 이유가 "시트에 값이 없음"인지

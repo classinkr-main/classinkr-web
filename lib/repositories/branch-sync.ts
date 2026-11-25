@@ -4,7 +4,9 @@ import type { SyncRuntimeInfo } from "@/lib/branch/sync/write-guard"
 import { isMissingColumnMessage } from "@/lib/db/schema-contract"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 
-export type SyncSource = "rev" | "hw" | "all" | "insights"
+// "dsh"·"dsh+hw" — 시트 고정(lib/branch/rev-sheet-lock.ts) 뒤 REV 대신 DSH·KPI 만 읽은 런(lib/branch/sync/sync-parts.ts).
+// source 칸은 CHECK 제약 없는 text 라 스키마 변경이 없다. REV 를 읽은 런만 "all"·"rev" 다.
+export type SyncSource = "rev" | "hw" | "all" | "insights" | "dsh" | "dsh+hw"
 export type SyncTrigger = "cron" | "manual"
 export type SyncStatus = "running" | "success" | "failed"
 

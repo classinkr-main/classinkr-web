@@ -39,6 +39,11 @@ export const SYNC_CACHE_TAG_BUNDLES = {
   ],
   /** REV 링크 유지보수(crm_source_links)가 바꾸는 CRM 매출 조립. */
   branchRevLinks: [ADMIN_CRM_REVENUE_CACHE_TAG, ADMIN_CRM_REVENUE_SHEET_CACHE_TAG],
+  /**
+   * 시트 고정(lib/branch/rev-sheet-lock.ts) 뒤 DSH·KPI 만 읽은 런 — REV 미러·장부 임포트·CRM 매출은 바뀌지 않았으므로
+   * 만료하지 않는다(branchRev 와 달리).
+   */
+  branchDsh: [BRANCH_SEG_CACHE_TAG, BRANCH_DSH_CACHE_TAG, BRANCH_KPI_CACHE_TAG, BRANCH_SYNC_RUNS_CACHE_TAG],
   /** HW 시트 미러(branch_hw_*)와 그것을 함께 읽는 하드웨어 조립. */
   branchHw: [BRANCH_SEG_CACHE_TAG, BRANCH_HW_CACHE_TAG, HARDWARE_INVENTORY_CACHE_TAG, BRANCH_SYNC_RUNS_CACHE_TAG],
 } as const

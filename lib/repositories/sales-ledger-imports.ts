@@ -50,7 +50,7 @@ interface KpiDbRow {
   metrics: Record<string, unknown> | null
 }
 
-interface RevLineDbRow {
+export interface RevLineDbRow {
   id: string
   source_row: number
   source_record_key: string
@@ -71,7 +71,7 @@ interface RevLineDbRow {
   created_at: string
 }
 
-interface RevPeriodEntryDbRow {
+export interface RevPeriodEntryDbRow {
   rev_line_id: string
   period_month: string
   amount: number | string
@@ -304,7 +304,12 @@ const REV_PERIOD_ENTRY_COLUMNS = "rev_line_id,period_month,amount,confidence,sou
 // 임포트 라인 1건 + 그 라인의 월별 엔트리를 BranchRevDeal(시트 미러 shape)로 복원한다.
 // 전량 읽기(readRevDealsForImportRun)와 단건 상세(readRevDealFromActiveImportById)가 같은
 // 함수를 거쳐야 두 경로의 응답 shape·확도 의미가 갈라지지 않는다.
-function mapRevLineToDeal(line: RevLineDbRow, entries: RevPeriodEntryDbRow[]): BranchRevDeal {
+//
+// 확도 없는 줄(엔트리가 전부 format_unavailable — v3 캡처의 무색상 행, CSV 임포트)은 색 맵을 하나도 만들지 않는다.
+// 그래야 캐논이 미러 행과 똑같이 "색 데이터 없음"으로 보고 읽는 시점의 KST 영업월로 무색상 폴백을 판정한다
+// (F-09 — 예전에는 monthly_red=false 키를 만들어 폴백이 꺼지고, 캡처한 달 기준으로 굳은 확정/예상만 남았다).
+// 빨간 예정 칸(line.raw.pendingCells)은 raw 에 그대로 남아 캐논이 읽을 때 확정으로 올린다(F-08).
+export function mapRevLineToDeal(line: RevLineDbRow, entries: RevPeriodEntryDbRow[]): BranchRevDeal {
   const monthlyPayments: Record<string, number> = {}
   const monthlyConfirmed: Record<string, number> = {}
   const monthlyHighConfidence: Record<string, number> = {}
@@ -329,7 +334,8 @@ function mapRevLineToDeal(line: RevLineDbRow, entries: RevPeriodEntryDbRow[]): B
     } else if (entry.confidence === "high_confidence") {
       addToNumberMap(monthlyHighConfidence, entry.period_month, amount)
       if (monthlyRed[entry.period_month] !== true) monthlyRed[entry.period_month] = false
-    } else if (entry.confidence === "expected" || entry.confidence === "format_unavailable" || hasExplicitConfidence) {
+    } else if (hasExplicitConfidence) {
+      // 예상 엔트리(또는 확도 있는 줄에 섞인 format_unavailable)는 "색 데이터 있음, 이 달은 확정 아님"이다.
       if (monthlyRed[entry.period_month] !== true) monthlyRed[entry.period_month] = false
     }
   }

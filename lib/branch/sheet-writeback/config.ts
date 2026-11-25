@@ -7,6 +7,10 @@
 // 스위치는 기본 꺼짐이다. env BRANCH_REV_SHEET_WRITE_ENABLED 가 글자 그대로 "1" 이고
 // VERCEL_ENV 가 글자 그대로 "production" 일 때만 켜진다 — Preview·로컬에서는 어떤 값을
 // 넣어도 원본 시트에 쓰지 않는다. 꺼져 있으면 반영은 지금과 똑같이 장부(DB)에만 남는다.
+// 시트 고정(BRANCH_REV_SHEET_LOCKED_AT — lib/branch/rev-sheet-lock.ts) 날짜가 되면 플래그와 상관없이 꺼진다.
+
+import { getBusinessDateParts } from "@/lib/business-time"
+import { isRevSheetLockActive, resolveRevSheetLock } from "@/lib/branch/rev-sheet-lock"
 
 export const REV_WRITE_TARGET = {
   spreadsheetId: "1vBYyKc_pd5Kb2xyhDWG8lWMAd7fGsRcBoF_wK1wUc7Q",
@@ -23,18 +27,31 @@ export const REV_WRITE_TIMEOUT_MS = 8_000
 
 export type SheetWriteMode = "on" | "off"
 
-export function resolveSheetWriteMode(env: {
-  BRANCH_REV_SHEET_WRITE_ENABLED?: string
-  VERCEL_ENV?: string
-}): SheetWriteMode {
+/**
+ * @param today 오늘(KST YYYY-MM-DD) — 시트 고정 판정에만 쓴다. 테스트는 날짜를 직접 넘긴다.
+ */
+export function resolveSheetWriteMode(
+  env: {
+    BRANCH_REV_SHEET_WRITE_ENABLED?: string
+    VERCEL_ENV?: string
+    BRANCH_REV_SHEET_LOCKED_AT?: string
+  },
+  today: string = getBusinessDateParts().date,
+): SheetWriteMode {
+  // 시트가 고정됐으면(그날 0시 KST부터) 쓰기 플래그가 남아 있어도 끈다 — 잠긴 시트에 쓰다 매번 실패하지 않게(F-07).
+  if (isRevSheetLockActive(resolveRevSheetLock(env.BRANCH_REV_SHEET_LOCKED_AT, today))) return "off"
   // 글자 그대로만 비교한다 — " 1"·"true"·"01"·"preview" 는 모두 꺼짐.
   return env.BRANCH_REV_SHEET_WRITE_ENABLED === "1" && env.VERCEL_ENV === "production" ? "on" : "off"
 }
 
 export function currentSheetWriteMode(): SheetWriteMode {
   // process.env.X 를 리터럴로 읽는다 — 변수 키로 바꾸면 번들러가 env 를 못 찾아 조용히 꺼진다.
-  return resolveSheetWriteMode({
-    BRANCH_REV_SHEET_WRITE_ENABLED: process.env.BRANCH_REV_SHEET_WRITE_ENABLED,
-    VERCEL_ENV: process.env.VERCEL_ENV,
-  })
+  return resolveSheetWriteMode(
+    {
+      BRANCH_REV_SHEET_WRITE_ENABLED: process.env.BRANCH_REV_SHEET_WRITE_ENABLED,
+      VERCEL_ENV: process.env.VERCEL_ENV,
+      BRANCH_REV_SHEET_LOCKED_AT: process.env.BRANCH_REV_SHEET_LOCKED_AT,
+    },
+    getBusinessDateParts().date,
+  )
 }

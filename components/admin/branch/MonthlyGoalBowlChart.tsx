@@ -5,7 +5,7 @@ import { Check } from "lucide-react"
 import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
 import { formatMoney } from "@/lib/branch/ledger-format"
 import {
-  buildMonthlyGoalChart, type MonthlyGoalChartSource, type MonthlyGoalPlan,
+  buildMonthlyGoalChart, monthlyGoalSegments, type MonthlyGoalChartSource, type MonthlyGoalPlan,
 } from "@/lib/branch/monthly-goal-chart"
 
 const SERIES = [
@@ -13,6 +13,8 @@ const SERIES = [
   { key: "highConfidence" as const, token: CONFIDENCE_TOKENS["high-confidence"] },
   { key: "expected" as const, token: CONFIDENCE_TOKENS.expected },
 ]
+// 환불·차감(0선 아래)과 순액 0 이하 달의 상계분(0선 위)은 확도 색 없이 무채색으로 그린다(D2).
+const NEUTRAL_FILL = "#C9C5BF"
 const WIDTH = 960
 const HEIGHT = 300
 const LEFT = 58
@@ -24,15 +26,25 @@ interface Props {
   plans: MonthlyGoalPlan[]
   selectedMonth: string
   todayMonth: string
+  /** KST 영업일 'YYYY-MM-DD' — 빨간 예정 칸의 확정 전환을 그날로 판정한다. 없으면 todayMonth(이번 달이면 오늘). */
+  today?: string
   onSelectMonth?: (month: string) => void
   goalNote?: string
   /** "compact" — 개요 콕핏처럼 카드 폭이 좁을 때 최소 폭을 낮춰 가로 스크롤 없이 12개월을 다 보인다. */
   density?: "default" | "compact"
 }
 
+function segmentFill(key: ReturnType<typeof monthlyGoalSegments>[number]["key"], hatchId: string): string {
+  if (key === "expected") return `url(#${hatchId})`
+  if (key === "confirmed") return CONFIDENCE_TOKENS.confirmed.color
+  if (key === "highConfidence") return CONFIDENCE_TOKENS["high-confidence"].color
+  return NEUTRAL_FILL
+}
+
 /** 3b: 공통 금액 축의 넓은 목표 그릇 + 좁은 확도 스택. 수치는 캐논에서, 좌표만 SVG에서 계산한다. */
-export function MonthlyGoalBowlChart({ rows, plans, selectedMonth, todayMonth, onSelectMonth, goalNote, density = "default" }: Props) {
-  const points = useMemo(() => buildMonthlyGoalChart(rows, plans, todayMonth), [rows, plans, todayMonth])
+export function MonthlyGoalBowlChart({ rows, plans, selectedMonth, todayMonth, today, onSelectMonth, goalNote, density = "default" }: Props) {
+  const asOf = today && today.startsWith(todayMonth) ? today : todayMonth
+  const points = useMemo(() => buildMonthlyGoalChart(rows, plans, asOf), [rows, plans, asOf])
   const [inspectedMonth, setInspectedMonth] = useState<string | null>(null)
   const [detailMonth, setDetailMonth] = useState<string | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -95,15 +107,12 @@ export function MonthlyGoalBowlChart({ rows, plans, selectedMonth, todayMonth, o
             const x = LEFT + band * index + band / 2
             const goalTop = scaleY(point.goal ?? 0)
             const labelY = scaleY(Math.max(point.goal ?? 0, point.positive)) - 12
-            let positive = 0
-            let negative = 0
-            const segments = SERIES.map(({ key, token }) => {
-              const value = point[key]
-              const start = value >= 0 ? positive : negative
-              if (value >= 0) positive += value
-              else negative += value
-              return { key, token, value, y: Math.min(scaleY(start), scaleY(start + value)), height: Math.abs(scaleY(start) - scaleY(start + value)) }
-            }).filter((segment) => segment.value !== 0)
+            // 음수 예정 조각은 그리지 않는다(F-15) — 음수는 무채색 차감 한 조각, 확도 색은 순액 양수 달의 양수 금액만.
+            const segments = monthlyGoalSegments(point).map((segment) => ({
+              ...segment,
+              y: Math.min(scaleY(segment.start), scaleY(segment.start + segment.value)),
+              height: Math.abs(scaleY(segment.start) - scaleY(segment.start + segment.value)),
+            }))
             const rate = point.rate == null ? "—" : `${point.future ? "~" : ""}${point.rate.toFixed(1)}%`
             const accessible = `${point.month}, 목표 ${point.goal == null ? "비교 불가" : formatMoney(point.goal)}, 확정 ${formatMoney(point.confirmed)}, 고확도 ${formatMoney(point.highConfidence)}, 예정 ${formatMoney(point.expected)}, ${point.rateBasis} ${rate}${point.achieved ? ", 확정 목표 달성" : ""}`
             return (
@@ -141,7 +150,7 @@ export function MonthlyGoalBowlChart({ rows, plans, selectedMonth, todayMonth, o
                   <rect x={x - band * 0.22} y={baseline} width={band * 0.44} height={scaleY(point.negative) - baseline} rx="9" />
                 </clipPath>
                 <g opacity={point.future ? 0.65 : 1} clipPath={`url(#${hatchId}-${index})`} className="transition-opacity duration-300 group-hover:opacity-95">
-                  {segments.map((segment) => <rect key={segment.key} data-confidence={segment.key} x={x - band * 0.22} y={segment.y} width={band * 0.44} height={segment.height} fill={segment.key === "expected" ? `url(#${hatchId})` : segment.token.color} />)}
+                  {segments.map((segment) => <rect key={segment.key} data-confidence={segment.key} x={x - band * 0.22} y={segment.y} width={band * 0.44} height={segment.height} fill={segmentFill(segment.key, hatchId)} />)}
                 </g>
                 {point.achieved && (
                   <g>
@@ -168,7 +177,7 @@ export function MonthlyGoalBowlChart({ rows, plans, selectedMonth, todayMonth, o
         <span className="font-semibold text-[#111110]">합계 {formatMoney(active.total)} CNY</span>
       </div>
       <figcaption className="mt-2 text-[10.5px] leading-relaxed text-[#615D59]">
-        상단 %: 지난달은 확정 · 당월은 확정+고확도 커버 · 미래 월 ~는 예정 포함 예상치. 빗금은 예정, 체크는 확정액만으로 목표 달성. 음수·상계는 0선 아래에 표시합니다.
+        상단 %: 지난달은 확정 · 당월은 확정+고확도 커버 · 미래 월 ~는 예정 포함 예상치. 빗금은 예정, 체크는 확정액만으로 목표 달성. 환불·차감은 0선 아래 회색으로 표시합니다.
         {goalNote ? ` ${goalNote}` : " 목표는 승인 DSH · 금액은 현재 REV 모집단 기준입니다."}
       </figcaption>
     </figure>

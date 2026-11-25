@@ -5,7 +5,8 @@ import { createHash } from "node:crypto"
 import { revalidateTag, unstable_cache } from "next/cache"
 
 import { normalizedAccountKey } from "@/lib/branch/account-key"
-import { splitMonthConfidence } from "@/lib/branch/computations/rev-confirmed"
+import { dealHasColorData, readRevMonthWeekMismatch, splitMonthConfidence } from "@/lib/branch/computations/rev-confirmed"
+import { businessFy } from "@/lib/branch/fiscal"
 import { describeSyncRuntime } from "@/lib/branch/sync/write-guard"
 import { listBranchRevDealsFresh, type BranchRevDeal } from "@/lib/repositories/branch-deals"
 import { SALES_LEDGER_IMPORTS_CACHE_TAG } from "@/lib/repositories/sales-ledger-imports"
@@ -28,10 +29,15 @@ const INSERT_CHUNK = 400
 // 엔트리로 남기는가)가 바뀔 때만 올린다. 같은 프리픽스로 같은 checksum 이 나오면 같은 의미의 캡처다
 // (dedupe 의 근거). v2(2026-10-15): 부호 있는 확도 성분과 명시 0원 월을 엔트리로 보존 — v1 run 은 이
 // 값을 잃었을 수 있어 재사용하지 않는다.
+// v3(2026-11-25, 12/1 시트 잠금 준비 — F-08·F-09): 시간에 따라 바뀌는 확도를 캡처에 굳히지 않는다.
+//   - 색 데이터가 없는 행은 확도 없이 format_unavailable 엔트리로 남긴다 — 읽을 때 캐논이 그때의 KST 영업월로
+//     무색상 폴백을 판정한다(v2 는 캡처한 달 기준 확정/예상을 굳혀 미러 경로와 달이 바뀌면 어긋났다).
+//   - 빨간 예정 칸은 캡처 시점에 확정으로 올리지 않는다(raw.pendingCells 가 줄에 남아 읽을 때 올린다).
+//   - checksum 이 파싱 날짜·캡처 달에 따라 바뀌지 않는다(revImportChecksum) — 얼린 시트를 다시 읽으면 dedupe 된다.
 //
 // 이 라벨 이전에 만들어진 run 은 전부 컬럼 기본값 'sales-ledger-import-v1'(v2 데이터로 캡처했어도)이라
 // captureVersionRank 가 1 로 읽는다 — 하위 호환: 그 run 위로는 언제나 활성화할 수 있다.
-export const REV_IMPORT_CAPTURE_VERSION = "rev-native:v2"
+export const REV_IMPORT_CAPTURE_VERSION = "rev-native:v3"
 
 /**
  * 캡처 버전 라벨의 순위. "rev-native:v2" → 2, 컬럼 기본값 "sales-ledger-import-v1" → 1,
@@ -80,47 +86,134 @@ function chunked<T>(items: T[], size: number): T[][] {
   return chunks
 }
 
+// 캡처·활성 포인터의 회계연도 — KST 영업일 기준(F-10·F-26). UTC 로 정하면 4월 1일 00:00~08:59 KST 에 지난 회계연도로 캡처한다.
 function fiscalYearOf(date: Date): number {
-  const month = date.getUTCMonth() + 1
-  return month >= 4 ? date.getUTCFullYear() : date.getUTCFullYear() - 1
+  return businessFy(date)
 }
 
-// 같은 시트 미러 상태를 다시 캡처하면 같은 checksum이 나오도록 결정적으로 직렬화한다.
-// 캡처 산출물에 들어가는 전부(라인 필드·월별 금액/확도/red·raw=주차 폴백 소스)를 포함해
-// 어느 하나라도 바뀌면 새 run, 전부 같으면 dedupe. "rev-native:" 프리픽스로 weekly-close
-// 스냅샷 checksum(같은 fiscal_year·source_kind='manual' 유니크 인덱스 공간 공유)과의
-// 충돌 가능성을 차단한다. raw는 branch_rev_deals jsonb에서 읽혀 키 순서가 결정적이다.
-function revImportChecksum(deals: BranchRevDeal[]): string {
+function rawRecord(deal: BranchRevDeal): Record<string, unknown> {
+  const raw = deal.raw
+  return raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {}
+}
+
+function rawMonthNumbers(raw: Record<string, unknown>, key: string): Record<string, number> {
+  const value = raw[key]
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {}
+  const out: Record<string, number> = {}
+  for (const [month, amount] of Object.entries(value)) {
+    if (FISCAL_MONTH_RE.test(month) && typeof amount === "number" && Number.isFinite(amount)) out[month] = amount
+  }
+  return out
+}
+
+function rawMonthHasEntries(raw: Record<string, unknown>, key: string, month: string): boolean {
+  const value = raw[key]
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false
+  const entries = (value as Record<string, unknown>)[month]
+  return Array.isArray(entries) && entries.length > 0
+}
+
+// 파싱 날짜에 따라 바뀌는 raw 키 — checksum 에서 빼고, 대신 날짜와 무관한 "빨간 칸 전체"로 접어 넣는다.
+const DATE_DEPENDENT_RAW_KEYS = new Set(["monthlyPending", "pendingWeeks", "pendingCells"])
+
+/**
+ * 같은 시트 상태를 다시 캡처하면 같은 checksum 이 나오도록 결정적으로 직렬화한다.
+ * 캡처 산출물에 들어가는 전부(라인 필드·월별 금액/확도/red·raw=주차 폴백 소스)를 포함해 어느 하나라도 바뀌면
+ * 새 run, 전부 같으면 dedupe. "rev-native:" 프리픽스로 weekly-close 스냅샷 checksum(같은 fiscal_year·
+ * source_kind='manual' 유니크 인덱스 공간 공유)과의 충돌 가능성을 차단한다. raw는 branch_rev_deals jsonb에서
+ * 읽혀 키 순서가 결정적이다.
+ *
+ * 파싱 날짜·캡처 달과 무관하다(v3, F-08·F-09): 빨간 칸은 확정 맵 + 아직 시작 안 한 예정 칸(monthlyPending)을 더한
+ * "빨간 칸 전체"로, red 플래그는 "빨간 칸이 하나라도 있나"로 접는다. 그래서 얼린 시트를 12/8 에 다시 읽어도 12/1
+ * 캡처와 같은 checksum 이다(예정 → 확정 전환은 읽을 때 캐논이 한다). 무색상 행의 확도는 캡처하지 않는다.
+ */
+export function revImportChecksum(deals: BranchRevDeal[]): string {
   const sortedMonths = (map: Record<string, unknown> | null | undefined) =>
     Object.entries(map ?? {})
       .filter(([month]) => FISCAL_MONTH_RE.test(month))
       .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
   const canonical = deals
-    .map((deal) => ({
-      key: recordKeyOf(deal),
-      row: deal.sheet_row,
-      account: deal.customer_name || "미지정",
-      contact: deal.branch_contact ?? null,
-      location: deal.region ?? null,
-      importance: deal.importance ?? null,
-      team: deal.team ?? null,
-      manager: deal.manager ?? null,
-      status: deal.status ?? null,
-      dealType: deal.deal_type ?? null,
-      product: deal.product_version ?? null,
-      firstPayment: deal.first_payment ?? null,
-      remark: deal.note ?? null,
-      total: toNumber(deal.contract_target),
-      payments: sortedMonths(deal.monthly_payments).map(([month, value]) => [month, toNumber(value)]),
-      confirmed: sortedMonths(deal.monthly_confirmed).map(([month, value]) => [month, toNumber(value)]),
-      highConf: sortedMonths(deal.monthly_high_conf).map(([month, value]) => [month, toNumber(value)]),
-      red: sortedMonths(deal.monthly_red).map(([month, value]) => [month, value === true]),
-      raw: deal.raw ?? {},
-    }))
+    .map((deal) => {
+      const raw = rawRecord(deal)
+      const pending = rawMonthNumbers(raw, "monthlyPending")
+      const stableRaw = Object.fromEntries(Object.entries(raw).filter(([key]) => !DATE_DEPENDENT_RAW_KEYS.has(key)))
+      return {
+        key: recordKeyOf(deal),
+        row: deal.sheet_row,
+        account: deal.customer_name || "미지정",
+        contact: deal.branch_contact ?? null,
+        location: deal.region ?? null,
+        importance: deal.importance ?? null,
+        team: deal.team ?? null,
+        manager: deal.manager ?? null,
+        status: deal.status ?? null,
+        dealType: deal.deal_type ?? null,
+        product: deal.product_version ?? null,
+        firstPayment: deal.first_payment ?? null,
+        remark: deal.note ?? null,
+        total: toNumber(deal.contract_target),
+        payments: sortedMonths(deal.monthly_payments).map(([month, value]) => [month, toNumber(value)]),
+        redAll: sortedMonths(deal.monthly_confirmed).map(([month, value]) => [month, toNumber(value) + (pending[month] ?? 0)]),
+        highConf: sortedMonths(deal.monthly_high_conf).map(([month, value]) => [month, toNumber(value)]),
+        redAny: sortedMonths({ ...(deal.monthly_red ?? {}), ...pending })
+          .map(([month]) => [month, deal.monthly_red?.[month] === true || rawMonthHasEntries(raw, "pendingWeeks", month)]),
+        raw: stableRaw,
+      }
+    })
     .sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : a.row - b.row))
-  // v2 preserves signed confidence components and explicit zeroes. A v1 run of the same
-  // mirror can have lost these values, so it must not be reused after this correction.
   return createHash("sha256").update(`${REV_IMPORT_CAPTURE_VERSION}:${JSON.stringify(canonical)}`).digest("hex")
+}
+
+export type RevImportEntryConfidence = "confirmed" | "high_confidence" | "expected" | "format_unavailable"
+
+export interface RevImportEntryDraft {
+  period_month: string
+  amount: number
+  confidence: RevImportEntryConfidence
+}
+
+/**
+ * 한 딜의 period entry(월 × 확도). 순수 — 캡처 날짜에 따라 바뀌지 않는다(v3).
+ *  - 색 데이터가 전혀 없는 행: 달마다 format_unavailable 한 건(금액 그대로). 읽을 때 확도 없음으로 복원돼
+ *    캐논이 그때의 KST 영업월로 무색상 폴백을 판정한다(sales-ledger-imports.ts mapRevLineToDeal).
+ *  - 색 있는 행: 캐논 분해(확정맵 → red-불리언 전액)를 쓰되 빨간 예정 칸(raw.pendingCells)은 넘기지 않는다 —
+ *    예정은 예정으로 남기고, 줄 raw 에 남은 pendingCells 를 읽을 때 캐논이 올린다. 월≠주 합 표시는 넘긴다.
+ *  - 환불·순액 0 상계의 색별 금액은 순액보다 클 수 있다. 양수로 다시 클램프하지 않는다.
+ */
+export function revImportEntriesForDeal(deal: BranchRevDeal): RevImportEntryDraft[] {
+  const entries: RevImportEntryDraft[] = []
+  const hasColor = dealHasColorData(deal)
+  const mismatch = readRevMonthWeekMismatch(deal.raw)
+  const source = {
+    monthly_red: deal.monthly_red,
+    monthly_confirmed: deal.monthly_confirmed,
+    monthly_high_conf: deal.monthly_high_conf,
+    ...(mismatch ? { raw: { monthWeekMismatch: mismatch } } : {}),
+  }
+  for (const [month, rawAmount] of Object.entries(deal.monthly_payments ?? {})) {
+    if (!FISCAL_MONTH_RE.test(month)) continue
+    const amount = toNumber(rawAmount)
+    if (!hasColor) {
+      entries.push({ period_month: month, amount, confidence: "format_unavailable" })
+      continue
+    }
+    // 금액맵만 보면 색 금액 도입 전 동기화분(red=true, 맵 비어 있음)의 확정이 expected로 강등되므로 캐논을 쓴다.
+    const { confirmed, highConfidence: high, expected } = splitMonthConfidence(source, month, amount, true)
+    const monthEntriesStart = entries.length
+    for (const [confidence, amt] of [["confirmed", confirmed], ["high_confidence", high], ["expected", expected]] as const) {
+      const explicitZero = confidence === "confirmed"
+        ? deal.monthly_confirmed?.[month] === 0
+        : confidence === "high_confidence" && deal.monthly_high_conf?.[month] === 0
+      // 명시 확정 0은 legacy red=true의 전액 확정 폴백을 막는 정보다.
+      if (amt === 0 && !explicitZero) continue
+      entries.push({ period_month: month, amount: amt, confidence })
+    }
+    // 값이 입력된 0월과 빈 월을 구분한다(주차별 +매출/-환불이 상계될 수 있다).
+    if (entries.length === monthEntriesStart) {
+      entries.push({ period_month: month, amount: 0, confidence: "expected" })
+    }
+  }
+  return entries
 }
 
 // 유니크 인덱스: sales_ledger_import_runs_checksum_idx
@@ -286,11 +379,16 @@ export async function getActiveRevImportStatus(): Promise<ActiveRevImportStatus>
 }
 
 // 시트 미러 → 버전드 DB 임포트 + (기본) 활성화. 실패 시 run을 failed로 남기고 throw.
-export async function captureRevDbImport(actor: string, options?: { activate?: boolean }): Promise<RevDbImportResult> {
+// fiscalYear: 이 캡처를 어느 회계연도로 남길지. 없으면 지금의 KST 영업일 회계연도. 시트 잠금 중 "12/1 스냅샷 다시 읽기"는
+// 잠금 날짜의 회계연도를 넘겨야 한다 — 4월 1일 뒤에 다시 읽어도 FY26-27 스냅샷이 FY27-28 로 저장되지 않게(F-26).
+export async function captureRevDbImport(
+  actor: string,
+  options?: { activate?: boolean; fiscalYear?: number },
+): Promise<RevDbImportResult> {
   const activate = options?.activate ?? true
   const supabase = createSupabaseAdminClient()
   const now = new Date()
-  const fiscalYear = fiscalYearOf(now)
+  const fiscalYear = options?.fiscalYear ?? fiscalYearOf(now)
 
   // raw(원본 84칸 row) 보존이 이 마이그레이션의 충실도 핵심(파일 상단 주석 참조) — opt-in 필수.
   // 캐시판(listBranchRevDeals)은 동기화 직후 SWR로 이전 미러를 줄 수 있어 스냅샷에는 직독판을 쓴다.
@@ -364,36 +462,16 @@ export async function captureRevDbImport(actor: string, options?: { activate?: b
     for (const deal of deals) {
       const lineId = lineIdByKey.get(recordKeyOf(deal))
       if (!lineId) continue
-      for (const [month, rawAmount] of Object.entries(deal.monthly_payments ?? {})) {
-        if (!FISCAL_MONTH_RE.test(month)) continue
-        const amount = toNumber(rawAmount)
-        // 확도 분해는 시트폴백과 동일 규칙(금액맵 → red-불리언 전액 → 무색상 전액)을
-        // 쓴다. 금액맵만 보면 색 금액 도입 전 동기화분(red=true, 맵 비어 있음)·무색상 레거시 행의 확정이
-        // expected로 강등돼, DB-native 전환 직후 확정 합계가 시트폴백 대비 급감한다.
-        // 환불·순액 0 상계의 색별 금액은 순액보다 클 수 있다. 양수로 다시 클램프하지 않는다.
-        const { confirmed, highConfidence: high, expected } = splitMonthConfidence(deal, month, amount)
-        const monthEntriesStart = entryRows.length
-        for (const [confidence, amt] of [["confirmed", confirmed], ["high_confidence", high], ["expected", expected]] as const) {
-          const explicitZero = confidence === "confirmed"
-            ? deal.monthly_confirmed?.[month] === 0
-            : confidence === "high_confidence" && deal.monthly_high_conf?.[month] === 0
-          // 명시 확정 0은 legacy red=true의 전액 확정 폴백을 막는 정보다.
-          if (amt === 0 && !explicitZero) continue
-          entryRows.push({
-            import_run_id: runId,
-            rev_line_id: lineId,
-            fiscal_year: fiscalYear,
-            period_month: month,
-            amount: amt,
-            confidence,
-            source_row: deal.sheet_row,
-          })
-        }
-        // 값이 입력된 0월과 빈 월을 구분한다(주차별 +매출/-환불이 상계될 수 있다).
-        if (entryRows.length === monthEntriesStart) {
-          entryRows.push({ import_run_id: runId, rev_line_id: lineId, fiscal_year: fiscalYear,
-            period_month: month, amount: 0, confidence: "expected", source_row: deal.sheet_row })
-        }
+      for (const entry of revImportEntriesForDeal(deal)) {
+        entryRows.push({
+          import_run_id: runId,
+          rev_line_id: lineId,
+          fiscal_year: fiscalYear,
+          period_month: entry.period_month,
+          amount: entry.amount,
+          confidence: entry.confidence,
+          source_row: deal.sheet_row,
+        })
       }
     }
     for (const chunk of chunked(entryRows, INSERT_CHUNK)) {
@@ -459,10 +537,15 @@ export type RevImportRecaptureResult =
 // 캡처한다 — 없으면(시트 미러 모드) 아무것도 하지 않는다. 여기서 새로 활성화하면 시트 모드로
 // 운영 중인 배포가 조용히 DB-native로 뒤집힌다. 활성 여부는 캐시(60초) 대신 직접 조회한다.
 // 캡처 실패는 던진다 — 호출부(runAll)가 동기화 성공은 유지한 채 경고로 싣는다.
-export async function recaptureActiveRevImport(actor: string): Promise<RevImportRecaptureResult> {
-  const status = await lookupActiveRevImportStatus(fiscalYearOf(new Date()))
+// fiscalYear: 없으면 지금의 KST 영업일 회계연도(captureRevDbImport 와 같다).
+export async function recaptureActiveRevImport(
+  actor: string,
+  options?: { fiscalYear?: number },
+): Promise<RevImportRecaptureResult> {
+  const fiscalYear = options?.fiscalYear ?? fiscalYearOf(new Date())
+  const status = await lookupActiveRevImportStatus(fiscalYear)
   if (!status.active || !status.runId) return { status: "inactive" }
-  const result = await captureRevDbImport(actor)
+  const result = await captureRevDbImport(actor, { fiscalYear })
   if (!result.activated) {
     return {
       status: "kept",

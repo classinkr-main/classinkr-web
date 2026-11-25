@@ -135,12 +135,13 @@ describe("CRM revenue refund reconciliation", () => {
     ] as unknown as BranchRevDeal[])
 
     const report = await getCrmRevenuePerformance(3)
-    expect(report.total).toBe(-250)
-    expect(report.monthly.map((point) => point.revenue)).toEqual([0, 100, -350])
+    // 색 없는 행은 현재 KST 영업월(10월)보다 앞선 달만 확정이다(결정 — 읽는 시점 판정). 10월 −100 은 예정이라 빠진다.
+    expect(report.total).toBe(-150)
+    expect(report.monthly.map((point) => point.revenue)).toEqual([0, 100, -250])
     expect(report.byTeam.find((group) => group.name === "BD")?.total).toBe(-250)
-    expect(report.byTeam.find((group) => group.name === "MKT")).toMatchObject({ total: 0, monthly: [0, 100, -100] })
+    expect(report.byTeam.find((group) => group.name === "MKT")).toMatchObject({ total: 100, monthly: [0, 100, 0] })
     expect(report.byMember.find((group) => group.name === "환불 담당")?.total).toBe(-250)
-    expect(report.byMember.find((group) => group.name === "조정 담당")).toMatchObject({ total: 0, monthly: [0, 100, -100] })
+    expect(report.byMember.find((group) => group.name === "조정 담당")).toMatchObject({ total: 100, monthly: [0, 100, 0] })
     expect(report.byTeam.reduce((sum, group) => sum + group.total, 0)).toBe(report.total)
     expect(report.byMember.reduce((sum, group) => sum + group.total, 0)).toBe(report.total)
     expect(report.newAccountsByMonth.find((point) => point.month === "2026-10")?.count).toBe(0)

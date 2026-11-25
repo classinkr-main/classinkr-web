@@ -9,7 +9,8 @@ import { describe, expect, it } from "vitest"
 //     200/400/409/404/503 응답을 createDraft/updateDraft와 동일한 계약(DraftMutationResult)으로
 //     번역한다.
 //  3) 배치 요청 자체가 실패(네트워크/타임아웃)하면 create 항목은 로컬 폴백, update 항목은 낙관
-//     편집 없이 실패로 남기고 이후 청크는 보내지 않는다 — 큐를 local로 강등한다(단건 계약과 동일).
+//     편집 없이 실패로 남기고 이후 청크는 보내지 않는다 — 큐는 강등하지 않는다(2026-11-25 F-06: 단건 계약과 동일 —
+//     다음 저장은 다시 서버로 간다. 동작은 tests/branch/ledger-draft-queue-hook.test.ts).
 //  4) LedgerDraftInput.status(P0-2 자가 체크 힌트)는 로컬 폴백(makeLocalDraft)에서 항상 draft로
 //     강제된다 — 로컬 임시 초안은 체크·적용 게이트를 건너뛸 수 없다.
 //  5) LedgerDraft에 createdBy/checkedBy/checkedAt 클라 타입이 추가돼 서버가 이미 보내던 필드를
@@ -39,7 +40,7 @@ function sliceFn(source: string, startMarker: string, endMarker: string) {
 const checkDraftsBody = () => sliceFn(
   hookSource(),
   "const checkDrafts = useCallback",
-  "}, [clearRecordError, queueMode, setRecordError, updateLocalDrafts])",
+  "}, [clearRecordError, setRecordError, updateLocalDrafts])",
 )
 
 const applyDraftsBody = () => sliceFn(
@@ -51,7 +52,7 @@ const applyDraftsBody = () => sliceFn(
 const persistDraftsBatchBody = () => sliceFn(
   hookSource(),
   "const persistDraftsBatch = useCallback",
-  "}, [clearRecordError, queueMode, setRecordError, updateLocalDrafts])",
+  "}, [clearRecordError, loadDrafts, setRecordError, updateLocalDrafts])",
 )
 
 describe("checkDrafts/applyDrafts — 단건 순차 PATCH 대신 배치 엔드포인트를 쓴다(P0-1)", () => {
@@ -142,24 +143,26 @@ describe("persistDraftsBatch — 여러 건 생성/수정을 배치 POST로 묶�
     expect(okBranch).toContain("clearRecordError(nextDraft.id)")
   })
 
-  it("청크 요청 자체 실패(네트워크/타임아웃)는 create 항목을 makeLocalDraft로 로컬 폴백하고 update 항목은 낙관 편집 없이 실패시키며, 큐를 local로 강등한다", () => {
+  it("청크 요청 자체 실패(네트워크/타임아웃)는 create 항목을 makeLocalDraft로 로컬 폴백하고 update 항목은 낙관 편집 없이 실패시키되, 큐는 강등하지 않는다(F-06)", () => {
     const body = persistDraftsBatchBody()
     const catchIndex = body.indexOf("} catch (error) {")
     expect(catchIndex).toBeGreaterThan(-1)
     const catchBody = body.slice(catchIndex)
     expect(catchBody).toContain("makeLocalDraft(item.input)")
-    expect(catchBody).toContain('setQueueMode("local")')
-    expect(catchBody).toContain("draft: null }")
+    expect(catchBody).not.toContain('setQueueMode("local")')
+    expect(catchBody).toContain("draft: null, error: reason }")
     expect(catchBody).toContain("break")
   })
 
-  it("비서버 모드에서는 로컬 규약(id 없으면 makeLocalDraft, 있으면 applyDraftInput)을 그대로 반복한다", () => {
+  it("큐 모드와 상관없이 서버에 먼저 보낸다 — 로컬 규약은 local-* update 항목(applyDraftInput)뿐이다(F-06)", () => {
     const body = persistDraftsBatchBody()
-    const localBranchEnd = body.indexOf("// local-* update 항목은 서버로 보내지 않는다")
-    expect(localBranchEnd).toBeGreaterThan(-1)
-    const localBranch = body.slice(0, localBranchEnd)
-    expect(localBranch).toContain("makeLocalDraft(item.input)")
+    expect(body).not.toContain('queueMode !== "server"')
+    const serverLoop = body.indexOf("for (let start = 0; start < serverIndices.length")
+    expect(serverLoop).toBeGreaterThan(-1)
+    const localBranch = body.slice(0, serverLoop)
+    expect(localBranch).toContain('item.id.startsWith("local-")')
     expect(localBranch).toContain("applyDraftInput(draft, item.input)")
+    expect(localBranch).not.toContain("makeLocalDraft(item.input)")
   })
 })
 
@@ -167,7 +170,7 @@ describe("updateDraft 409 — checked-by-other 사유 분기(라운드 4 P0-1, �
   const updateDraftBody = () => sliceFn(
     hookSource(),
     "const updateDraft = useCallback",
-    "}, [clearRecordError, queueMode, setRecordError, updateLocalDrafts])",
+    "}, [clearRecordError, setRecordError, updateLocalDrafts])",
   )
 
   it("data.reason이 checked-by-other면 서버 문구(data.error)를 배지에 쓰고, 아니면 기존 DRAFT_CONFLICT_MESSAGE를 그대로 쓴다", () => {
@@ -210,13 +213,16 @@ describe("LedgerDraftInput.status — P0-2 자가 체크 힌트(로컬 폴백은
     expect(statusIndex).toBeGreaterThan(spreadIndex)
   })
 
-  it("localDraftToInput은 status 필드를 싣지 않는다(재전송은 항상 draft로 열린다)", () => {
+  // 2026-11-25(F-06): 재전송에서 자가 체크가 사라지지 않게 셀 커밋 초안은 checked 로 다시 연다 — 동작은
+  // tests/branch/ledger-draft-queue-hook.test.ts 의 localDraftToInput 표가 본다. 여기서는 그 갈래만 확인한다.
+  it("localDraftToInput은 셀 커밋 초안(또는 로컬에서 체크한 초안)만 status: checked 를 싣는다", () => {
     const source = hookSource()
     const fnStart = source.indexOf("function localDraftToInput(")
     expect(fnStart).toBeGreaterThan(-1)
     const fnEnd = source.indexOf("\n}", fnStart)
     const body = source.slice(fnStart, fnEnd)
-    expect(body).not.toContain("status:")
+    expect(body).toContain('draft.status === "checked" || isCellOriginDraft(draft)')
+    expect(body).toContain('...(selfChecked ? { status: "checked" as const } : {})')
   })
 })
 

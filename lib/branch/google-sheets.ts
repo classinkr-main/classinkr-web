@@ -30,7 +30,48 @@ export async function readRange(spreadsheetId: string, range: string): Promise<s
 }
 
 export interface CellFormat { red?: number; green?: number; blue?: number }
-export interface FormattedCell { value: string | number | null; bg: CellFormat | null; fg?: CellFormat | null }
+export interface FormattedCell {
+  /** 표시 글자(formattedValue) — 머리·텍스트·날짜는 이 값을 읽는다. */
+  value: string | number | null
+  bg: CellFormat | null
+  fg?: CellFormat | null
+  /**
+   * 칸의 실제 숫자(effectiveValue.numberValue). 숫자 칸일 때만 있다. 금액은 이 값을 먼저 읽는다(F-28) —
+   * 표시 형식이 '(1,750)'·'¥(1,750)'·'−1,750' 이어도 시트 =Sum() 이 더하는 값과 같다(lib/branch/sheet-number.ts).
+   * 날짜 칸도 일련번호가 들어오므로 날짜·텍스트 열은 value 를 읽어야 한다.
+   */
+  numberValue?: number
+}
+
+export const FORMATTED_CELL_FIELDS =
+  "sheets.data.rowData.values(formattedValue,effectiveValue,effectiveFormat.backgroundColor,effectiveFormat.textFormat.foregroundColor,userEnteredValue)"
+
+interface SheetsApiCell {
+  formattedValue?: string | null
+  effectiveValue?: { numberValue?: number | null } | null
+  userEnteredValue?: { stringValue?: string | null; numberValue?: number | null } | null
+  effectiveFormat?: {
+    backgroundColor?: unknown
+    textFormat?: { foregroundColor?: unknown } | null
+  } | null
+}
+
+/** Sheets API 칸 → FormattedCell. 숫자 칸만 numberValue 키를 싣는다(그리드가 커도 빈 키를 늘리지 않는다). */
+export function toFormattedCell(cell: SheetsApiCell): FormattedCell {
+  const out: FormattedCell = {
+    value:
+      cell.formattedValue != null && cell.formattedValue !== ""
+        ? cell.formattedValue
+        : cell.userEnteredValue?.stringValue ??
+          cell.userEnteredValue?.numberValue ??
+          null,
+    bg: (cell.effectiveFormat?.backgroundColor as CellFormat | null | undefined) ?? null,
+    fg: (cell.effectiveFormat?.textFormat?.foregroundColor as CellFormat | null | undefined) ?? null,
+  }
+  const numeric = cell.effectiveValue?.numberValue
+  if (typeof numeric === "number" && Number.isFinite(numeric)) out.numberValue = numeric
+  return out
+}
 
 export async function readRangeWithFormat(spreadsheetId: string, range: string): Promise<FormattedCell[][]> {
   return withRetry(async () => {
@@ -38,22 +79,10 @@ export async function readRangeWithFormat(spreadsheetId: string, range: string):
       spreadsheetId,
       ranges: [range],
       includeGridData: true,
-      fields:
-        "sheets.data.rowData.values(formattedValue,effectiveFormat.backgroundColor,effectiveFormat.textFormat.foregroundColor,userEnteredValue)",
+      fields: FORMATTED_CELL_FIELDS,
     })
     const data = res.data.sheets?.[0]?.data?.[0]?.rowData ?? []
-    return data.map((row) =>
-      (row.values ?? []).map((cell): FormattedCell => ({
-        value:
-          cell.formattedValue != null && cell.formattedValue !== ""
-            ? cell.formattedValue
-            : cell.userEnteredValue?.stringValue ??
-              cell.userEnteredValue?.numberValue ??
-              null,
-        bg: (cell.effectiveFormat?.backgroundColor as CellFormat | null | undefined) ?? null,
-        fg: (cell.effectiveFormat?.textFormat?.foregroundColor as CellFormat | null | undefined) ?? null,
-      }))
-    )
+    return data.map((row) => (row.values ?? []).map((cell) => toFormattedCell(cell as SheetsApiCell)))
   }, range)
 }
 

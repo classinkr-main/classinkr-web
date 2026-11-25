@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { adminCachedJson } from "@/lib/admin-api-response"
 import { BRANCH_READ_ADMIN_API_ROLES, CRM_STAFF_ADMIN_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
 import { isLedgerDraftBodyError, parseLedgerDraftCreateBody } from "@/lib/branch/ledger-draft-body"
+import { currentRevSheetLock, revSheetLockView } from "@/lib/branch/rev-sheet-lock"
 import { currentSheetWriteMode } from "@/lib/branch/sheet-writeback/config"
 import { isSheetWriteCode, SHEET_WRITE_MESSAGES } from "@/lib/branch/sheet-writeback/messages"
 import {
@@ -152,6 +153,9 @@ export async function GET(req: NextRequest) {
       : lastRevSync.failed
         ? { ok: false, message: REV_SYNC_READ_FAILED_MESSAGE }
         : sheetWritesHealth
+    // 시트 고정(lib/branch/rev-sheet-lock.ts) — 예정·적용 중일 때만 {lockedAt, active} 를 싣는다. 없음·형식 틀림이면 칸을
+    // 아예 싣지 않는다(응답이 지금과 같다 — 화면은 칸이 없으면 null 로 읽는다). 적용 중이면 mode 도 늘 "off" 다(config.ts).
+    const lock = revSheetLockView(currentRevSheetLock())
 
     return adminCachedJson({
       ...draftResult,
@@ -166,6 +170,7 @@ export async function GET(req: NextRequest) {
         mode: currentSheetWriteMode(),
         lastRevSyncStartedAt: lastRevSync.value,
         health: sheetWriteHealth,
+        ...(lock ? { lock } : {}),
       },
       sheetWrites,
     })

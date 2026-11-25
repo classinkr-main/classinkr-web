@@ -14,6 +14,9 @@
 - 시트에 쓰는 런타임 경로는 [sheets-client.ts](../../lib/branch/sheet-writeback/sheets-client.ts) 하나다.
   반영 진입점은 [apply-service.ts](../../lib/branch/sheet-writeback/apply-service.ts) 하나다.
 - 모든 시도는 `public.branch_sales_ledger_sheet_writes`에 한 행씩 남는다(§4). 이 표는 지우지 않는다.
+- **시트 고정 스위치** — env `BRANCH_REV_SHEET_LOCKED_AT=YYYY-MM-DD`(KST 날짜, [rev-sheet-lock.ts](../../lib/branch/rev-sheet-lock.ts)).
+  그날 0시(KST)부터 시트 쓰기는 `BRANCH_REV_SHEET_WRITE_ENABLED`와 상관없이 꺼지고(`disabled`), 크론·수동 동기화는 REV를 읽지 않고
+  DSH·KPI·하드웨어만 읽는다(실행 기록 `source = dsh+hw`·`dsh`). 비우거나 형식이 틀리면(서버 로그 경고 한 번) 지금과 똑같다. 절차는 §8.
 
 ## 1. 켜기 순서
 
@@ -90,7 +93,9 @@
 | `identity_changed` | 그 행 A열 고객이 초안과 다름 | 새로고침. 정렬로 ID가 떨어졌으면 §5 |
 | `layout_changed` | 2행 머리 구조가 바뀜 | 관리자 확인 — 머리를 되돌리기 전까지 쓰기 전부 거절 |
 | `not_allowed` | 대상(id·탭·gid·env)이나 요청이 허용 목록 밖 | `GOOGLE_BRANCH_DASHBOARD_SHEET_ID` 확인. 시트는 그대로다 |
-| `sheet_permission` | 401·403 | 서비스계정 공유 확인. 시트는 그대로다 |
+| `sheet_permission` | 읽기 401·403, 쓰기 401(서비스계정 공유 끊김) | 서비스계정 공유 확인. 시트·장부 그대로다 |
+| `sheet_locked` | 시트가 쓰기를 거부함(쓰기 403 — 서비스계정이 뷰어로 내려갔거나 보호 범위). 시트 고정 스위치보다 시트를 먼저 잠근 경우다. 시트·장부 그대로, 초안은 체크 완료 그대로 | 잠금이 맞으면 `BRANCH_REV_SHEET_LOCKED_AT`을 오늘 날짜로 넣고(또는 `BRANCH_REV_SHEET_WRITE_ENABLED`를 지우고) 재배포 → 같은 초안을 다시 반영하면 장부에만(`disabled`). 잠금이 실수면 시트 편집 권한을 되돌린다 |
+| `row_corrected` | 같은 시트 행(Row ID)·월에 이미 활성 장부 정정이 있다 — 동기화로 딜 id 가 바뀌어도 같은 칸에 정정을 겹쳐 쌓지 않는다(켜짐, 또는 고정 뒤 꺼짐에서 확인) | 큐에서 기존 정정을 되돌린 뒤 다시 입력한다 |
 | `sheet_error` | 그 밖 4xx 또는 다시 읽기 실패 | 시트는 그대로다. 잠시 뒤 다시 |
 | `outcome_unknown` | 5xx·8초 마감·되읽기 없음 — 썼는지 모름(202) | **다시 보내지 않았다.** 잠시 뒤 다시 반영을 누르면 다시 읽어 판정한다(이미 쓰였으면 `already_written`) |
 | `row_shifted` | 쓰는 사이 행이 움직임 — 그 자리 행의 원래 값·색으로 되돌림(`error` = `restored`) | 감사 행 `cells`로 그 자리 칸이 원래대로인지 확인 |
@@ -102,7 +107,7 @@
 | `not_applied` | 시트에 손대기 전에 멈춤(체크 완료 아님·감사 기록 실패·50건 초과 등) | 문구대로. 시트는 그대로다 |
 
 시트에 반영된 초안은 앱에서 되돌리지 않는다(409). 시트에서 직접 되돌리거나 원래 값으로 다시 입력한다(`no_change`는 예외 — 시트에
-쓴 것이 없다). 반영을 한 번이라도 시도한 초안(감사 행 있음 — 거절·실패 포함)은 감사 기록을 지키려고 삭제할 수 없다(409).
+쓴 것이 없다). 이 막음은 스위치와 상관없다. 시트 고정 뒤에는 시트를 고칠 수 없으므로 문구가 "장부에서 원래 값으로 다시 입력하세요"로 바뀐다. 반영을 한 번이라도 시도한 초안(감사 행 있음 — 거절·실패 포함)은 감사 기록을 지키려고 삭제할 수 없다(409).
 큐에서 취소로 정리한다.
 
 값 있는 칸의 글자색은 사용자가 그 칸(주차 단위면 그 주차)의 확도를 직접 바꿨을 때만 쓴다. 화면이 채운 기본 확도(매트릭스 팝오버의
@@ -225,3 +230,40 @@ ID는 행 번호와 무관해서 정렬해도 행과 같이 움직인다. 단 �
 - §4의 7일 분포를 본다. `conflict`·`unknown`·`failed`가 늘면 원인을 코드표(§3)로 가른다.
 - 동기화 경고의 Row ID 줄이 0이 아니면 §5를 처리한다.
 - 반영 라우트는 `maxDuration` 60초다. 시트 호출은 각각 8초 마감이고, 읽기 + 쓰기(+ 되돌리기) + DB가 그 안에 든다.
+
+## 8. 시트 고정(12월 1일) — `BRANCH_REV_SHEET_LOCKED_AT`
+
+2026-12-01 00:00 KST부터 '2. REV'는 12/1 스냅샷으로만 남고 새 매출의 원본은 장부(`branch_sales_ledger_entries`)다
+([검토 문서 D5](ledger-revenue-usage-review-2026-11-25.md)). 스위치는 날짜 기반이라 당일 배포가 필요 없다.
+
+1. D-3까지 Production(리허설은 Preview)에 `BRANCH_REV_SHEET_LOCKED_AT=2026-12-01`을 넣고 재배포한다. 값은 글자 그대로
+   `YYYY-MM-DD`다. `12/1`·`2026-12-1`은 무시되고(서버 로그에 경고 한 번) 지금처럼 동작한다.
+2. 확인: 장부에서 Network의 `GET /api/admin/branch/ledger-drafts` 응답에 `sheetWrite.lock = {"lockedAt":"2026-12-01","active":false}`가
+   있어야 한다(키가 없으면 값이 틀렸거나 반영 전이다). Preview에 지난 날짜를 넣어 고정 뒤 화면을 미리 본다(Preview 동기화는 쓰기
+   가드로 건너뜀이 정상).
+3. 12/1 0시(KST) 자동 전환 — 배포 없음. 마지막 자동 REV 읽기는 11/30 17시 크론이다. 그 뒤로 시트 쓰기 모드는 `off`,
+   `sheetWrite.lock.active = true`, 크론은 DSH·KPI·하드웨어만 읽는다. 동기화 상태는 REV를 "12/1 고정"으로 보이고 오래됨 경고를 내지 않는다.
+4. 시트 잠그기(사람): 매니저 편집 → 보기. 서비스계정은 최소 뷰어로 남긴다(공유를 끊으면 DSH 목표 동기화와 5단계가 실패한다).
+5. 관리자(ADMIN·SUPER_ADMIN)가 "12/1 스냅샷 다시 읽기"를 한 번 누른다(= `POST /api/admin/branch/sync`
+   `{"sources":["rev"],"revSnapshotReread":true}`, 고정 중 REV를 다시 읽는 유일한 길). 11/30 17시 뒤 시트 수정분은 이 읽기로만
+   들어온다. 결과 줄이 "12/1 스냅샷을 다시 읽었습니다"인지, 실행 기록 `source`가 `rev`인지 본다.
+6. 이 스냅샷으로 시트↔장부 대조를 한다.
+7. 읽기 전용 SQL:
+
+```sql
+-- 12/1 이후 rev 는 5단계 수동 1건뿐, 나머지는 dsh+hw(또는 dsh)
+select started_at, source, trigger, status, error
+from public.branch_sync_runs
+where started_at > '2026-11-30'
+order by started_at desc;
+
+-- 고정 뒤 시트 쓰기 시도 — 0
+select count(*) from public.branch_sales_ledger_sheet_writes
+where created_at >= '2026-11-30T15:00:00Z';
+```
+
+되돌리기:
+
+- 날짜 전: 값을 바꾸거나 지우고 재배포한다.
+- 날짜 뒤: 값을 지우고 재배포하면 다음 크론부터 REV를 다시 읽고 시트 쓰기는 플래그대로다. 고정 동안 장부에 넣은 반영은 시트에 없다 —
+  그 금액을 시트에 다시 치면 장부 항목과 두 번 더해진다. 시트로 옮기려면 장부 항목을 먼저 되돌린다.

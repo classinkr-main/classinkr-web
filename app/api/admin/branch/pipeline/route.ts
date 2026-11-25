@@ -30,6 +30,7 @@ export async function GET(req: NextRequest) {
   const url = new URL(req.url)
   const team = readTeamParam(url); if (team instanceof NextResponse) return team
   const period = readPeriodParam(url); if (period instanceof NextResponse) return period
+  // 기준일은 KST 영업일(resolvePeriodDate) — 캐시 키는 그 영업월이라 페이지 프리페치와 같은 엔트리를 쓴다(F-50).
   const periodDate = period ? resolvePeriodDate(period, url.searchParams.get("month"), new Date()) : null
   if (period && !periodDate) return NextResponse.json({ error: "Invalid month query" }, { status: 400 })
   try {

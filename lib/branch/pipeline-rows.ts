@@ -3,13 +3,14 @@ import "server-only"
 import { unstable_cache } from "next/cache"
 import { shareInFlightByArgs } from "@/lib/server/share-in-flight"
 
-import { listBranchRevDeals, BRANCH_REV_DEALS_CACHE_TAG } from "@/lib/repositories/branch-deals"
+import { listBranchRevDeals, BRANCH_REV_DEALS_CACHE_TAG, type BranchRevDeal } from "@/lib/repositories/branch-deals"
 import {
   readRevDealsFromActiveImport,
   SALES_LEDGER_IMPORTS_CACHE_TAG,
 } from "@/lib/repositories/sales-ledger-imports"
 import { listRevRevenue, type RevRevenueRow } from "@/lib/branch/computations/pipeline"
-import { fyOf } from "@/lib/branch/fiscal"
+import { revReadTimeFields, type RevReadTimeFields } from "@/lib/branch/computations/rev-confirmed"
+import { dateFromYmMonth, fyOf, ymKey } from "@/lib/branch/fiscal"
 
 export type BranchPipelineTeam = "ALL" | "BD" | "MKT" | "CSM"
 export type BranchPipelinePeriod = "M" | "Q" | "Y"
@@ -17,10 +18,28 @@ export type BranchPipelinePeriod = "M" | "Q" | "Y"
 export interface BranchPipelineRowsQuery {
   team?: BranchPipelineTeam
   period?: BranchPipelinePeriod
-  /** resolvePeriodDate(period, month, now)의 결과. period가 없으면 null. */
+  /** resolvePeriodDate(period, month, now)의 결과. period가 없으면 null. 캐시 키에는 이 날짜의 KST 영업월만 쓴다. */
   periodDate?: Date | null
   manager?: string
   region?: string
+}
+
+/**
+ * 파이프라인 행 + 읽는 시점 확도 재료(빨간 예정 칸 pendingCells · 월≠주 합 monthWeekMismatch). 화면이 서버와 같은
+ * 캐논(revenue-core → rev-confirmed)으로 확정을 판정하게 deal.raw 에서 옮겨 싣는다 — 없으면 키가 없다.
+ */
+export type BranchPipelineRevenueRow = RevRevenueRow & RevReadTimeFields
+
+// listRevRevenue 가 읽는 시점 재료를 아직 싣지 않으면 여기서 deal.raw 에서 옮긴다. 이미 실었으면(pipeline.ts 가
+// revReadTimeFields 를 쓰게 되면) 그대로 둔다 — 두 번 계산하지 않는다.
+function readTimeFieldAttacher(deals: BranchRevDeal[]): (row: RevRevenueRow) => BranchPipelineRevenueRow {
+  const rawById = new Map(deals.map((deal) => [deal.id, deal.raw]))
+  return (row) => {
+    const existing = row as BranchPipelineRevenueRow
+    if (existing.pendingCells || existing.monthWeekMismatch) return existing
+    const fields = revReadTimeFields(rawById.get(row.id))
+    return fields.pendingCells || fields.monthWeekMismatch ? { ...row, ...fields } : row
+  }
 }
 
 /**
@@ -30,9 +49,10 @@ export interface BranchPipelineRowsQuery {
  * CPU 재계산이 매 요청 실행됐다 — 콜드 인스턴스는 이 재계산에 더해 소스 캐시 조회 왕복까지
  * 겹친다. 인자는 team/manager/region을 원래 호출과 한 글자도 다르지 않게 그대로 넘긴다
  * (undefined 포함) — 정규화하면 미러 폴백 회귀 가드(tests/api/branch-pipeline-weekly-
- * payments.test.ts)가 보는 호출 인자가 달라진다. periodDate(Date)만 ISO 문자열로 낮춰
- * 캐시 키 인자로 쓰고, 캐시된 함수 안에서 복원한다 — Date 참조는 매번 달라 보여 캐시 키가
- * 안정적이지 않다.
+ * payments.test.ts)가 보는 호출 인자가 달라진다. periodDate(Date)는 KST 영업월 'YYYY-MM'으로
+ * 낮춰 캐시 키 인자로 쓰고, 캐시된 함수 안에서 그 달 1일(UTC 자정)로 복원한다(F-50) — 예전에는
+ * ISO 시각(밀리초 포함)을 키로 써서 분기·연 보기의 페이지 프리페치와 API 라우트가 같은 엔트리를 한 번도
+ * 나눠 쓰지 못했다. 이 조립이 periodDate 로 보는 것은 회계연도·분기·달뿐이라 1일로 바꿔도 결과가 같다.
  *
  * 태그는 새로 만들지 않고 하위 소스가 이미 쓰는 두 태그를 재사용한다 — 액티브 임포트
  * 재캡처(activateRevImportRun → revalidateTag(SALES_LEDGER_IMPORTS_CACHE_TAG,"max"))나
@@ -47,11 +67,11 @@ export interface BranchPipelineRowsQuery {
 async function assembleBranchPipelineRows(
   team: BranchPipelineTeam | undefined,
   period: BranchPipelinePeriod | undefined,
-  periodDateIso: string | null,
+  periodMonth: string | null,
   manager: string | undefined,
   region: string | undefined,
-): Promise<RevRevenueRow[]> {
-  const periodDate = periodDateIso ? new Date(periodDateIso) : null
+): Promise<BranchPipelineRevenueRow[]> {
+  const periodDate = periodMonth ? dateFromYmMonth(periodMonth) : null
   const fy = fyOf(periodDate ?? new Date())
   // listRevRevenue가 deal.raw(weeklyPayments/row)로 주차 프로젝션을 계산하므로
   // 미러 폴백에서는 raw를 명시적으로 opt-in한다(branch-deals.ts 기본값은 raw 제외).
@@ -62,17 +82,25 @@ async function assembleBranchPipelineRows(
     deals,
     { team, manager, region },
     period && periodDate ? { period, now: periodDate } : undefined
-  )
+  ).map(readTimeFieldAttacher(deals))
 }
 
 const getCachedBranchPipelineRows = unstable_cache(
   // 같은 인스턴스의 동시 미스·재검증은 shareInFlightByArgs 로 한 번만 계산한다(unstable_cache 는 인스턴스 안 동시 호출을 합치지 않는다).
   // v2(2026-10-23): rows 에 rowId·rowIdIssue·weeklyColors(시트 쓰기, ADR-011)가 더해졌다 — 옛 모양 캐시를 쓰지 않게 키를 올렸다.
   // v3(2026-10-23): rows 에 syncedAt(행 데이터 시각 — 이중 집계 제외 기준)이 더해졌다.
-  shareInFlightByArgs("branch-pipeline-rows-v3", assembleBranchPipelineRows),
-  ["branch-pipeline-rows-v3"],
+  // v4(2026-11-25): 기간 키가 ISO 시각에서 KST 영업월 'YYYY-MM' 으로 바뀌고(F-50), rows 에 pendingCells·
+  // monthWeekMismatch(읽는 시점 확도 재료, F-08·F-15)와 importance(정정이 원본 행에서 옮겨 받는 중요도, F-17)가 더해졌다.
+  shareInFlightByArgs("branch-pipeline-rows-v4", assembleBranchPipelineRows),
+  ["branch-pipeline-rows-v4"],
   { revalidate: 60, tags: [SALES_LEDGER_IMPORTS_CACHE_TAG, BRANCH_REV_DEALS_CACHE_TAG] },
 )
+
+/** 캐시 키의 기간 — 기준일의 KST 영업월 'YYYY-MM'(기준일이 없거나 틀리면 null). 같은 달의 요청은 같은 키다(F-50). */
+export function pipelinePeriodCacheMonth(periodDate: Date | null | undefined): string | null {
+  if (!periodDate || Number.isNaN(periodDate.getTime())) return null
+  return ymKey(periodDate)
+}
 
 /**
  * GET /api/admin/branch/pipeline 응답의 rows를 만드는 조립 로직.
@@ -80,17 +108,17 @@ const getCachedBranchPipelineRows = unstable_cache(
  * 라우트(app/api/admin/branch/pipeline/route.ts)와 페이지 서버 프리페치
  * (app/admin/branch/ledger/page.tsx)가 같은 함수를 써야 두 경로의 rows shape이 갈라지지 않는다.
  * 두 소비처가 같은 Data Cache 엔트리를 공유한다 — 프리페치가 1.2초 예산 안에서 콜드 미스를
- * 기다리는 동안 다른 인스턴스가 이미 데워 둔 값이 있으면 그 값을 바로 받는다.
+ * 기다리는 동안 다른 인스턴스가 이미 데워 둔 값이 있으면 그 값을 바로 받는다(키는 KST 영업월).
  * 쿼리 파싱·검증(team/period/month 400)과 인증은 각 호출부가 담당한다.
  */
 export async function readBranchPipelineRows(
   query: BranchPipelineRowsQuery = {}
-): Promise<RevRevenueRow[]> {
+): Promise<BranchPipelineRevenueRow[]> {
   const { team, period, periodDate = null, manager, region } = query
   return getCachedBranchPipelineRows(
     team,
     period,
-    periodDate ? periodDate.toISOString() : null,
+    pipelinePeriodCacheMonth(periodDate),
     manager,
     region,
   )

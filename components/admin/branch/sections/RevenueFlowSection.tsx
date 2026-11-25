@@ -6,6 +6,7 @@
 import Link from "next/link"
 import { useMemo } from "react"
 import { CalendarDays } from "lucide-react"
+import { getBusinessDateParts } from "@/lib/business-time"
 import { useBranchJson, type BranchJsonState } from "../client-api"
 import {
   buildRevWeekProjection,
@@ -30,6 +31,8 @@ export interface RevenueFlow {
   monthGoal: number | null
   monthlyGoals: { month: string; goal: number }[]
   todayMonth: string
+  /** KST 영업일 'YYYY-MM-DD' — 차트가 빨간 예정 칸의 확정 전환을 그날로 판정한다. */
+  today: string
 }
 
 export function useRevenueFlow({ manager, summary, team, period, selectedMonth, refreshKey }: {
@@ -72,9 +75,11 @@ export function useRevenueFlow({ manager, summary, team, period, selectedMonth, 
       goal: (series?.goal_cum[index] ?? 0) - (index > 0 ? series?.goal_cum[index - 1] ?? 0 : 0),
     }))
   }, [summary])
-  const todayMonth = useMemo(() => new Date().toISOString().slice(0, 7), [])
+  // 지금 → 달은 KST 영업일로(UTC 로 자르면 매달 1일 0~9시 KST 에 지난달로 읽힌다 — F-10).
+  const today = useMemo(() => getBusinessDateParts().date, [])
+  const todayMonth = today.slice(0, 7)
 
-  return { pipeline, ledgerRows, weekProjection, peakWeek, monthGoal, monthlyGoals, todayMonth }
+  return { pipeline, ledgerRows, weekProjection, peakWeek, monthGoal, monthlyGoals, todayMonth, today }
 }
 
 /** 월별 목표·채움 차트(3b) — 승인 DSH 월 목표 대비 확정·고확도·예정. */
@@ -100,7 +105,7 @@ export function RevenueGoalChartCard({ flow, summary, manager, selectedMonth }: 
         <>
           {pipeline.stale && <p role="status" className="mb-2 text-xs text-[#7A520F]">갱신 실패 — 저장된 REV 데이터 표시 중</p>}
           <MonthlyGoalBowlChart rows={flow.ledgerRows} plans={flow.monthlyGoals} selectedMonth={selectedMonth}
-            todayMonth={flow.todayMonth} density="compact" goalNote={manager ? "승인 개인 DSH 목표 · 동일 담당자의 REV 원천 기준" : "승인 DSH 목표 · 현재 팀의 REV 원천 기준. 장부 적용분은 매출 장부에서 별도 검수합니다."} />
+            todayMonth={flow.todayMonth} today={flow.today} density="compact" goalNote={manager ? "승인 개인 DSH 목표 · 동일 담당자의 REV 원천 기준" : "승인 DSH 목표 · 현재 팀의 REV 원천 기준. 장부 적용분은 매출 장부에서 별도 검수합니다."} />
         </>
       ) : pipeline.error ? (
         <p role="alert" className="py-5 text-xs text-[#B43E3E]">월별 매출 조회 실패 · 0건이 아닙니다.</p>
@@ -196,7 +201,7 @@ export function RevenueFlowCard({ flow, summary, manager, selectedMonth }: {
         <>
           {pipeline.stale && <p role="status" className="-mb-2 text-xs text-[#7A520F]">갱신 실패 — 저장된 REV 데이터 표시 중</p>}
           <MonthlyGoalBowlChart rows={flow.ledgerRows} plans={flow.monthlyGoals} selectedMonth={selectedMonth}
-            todayMonth={flow.todayMonth} density="compact" goalNote={manager ? "승인 개인 DSH 목표 · 동일 담당자의 REV 원천 기준" : "승인 DSH 목표 · 현재 팀의 REV 원천 기준. 장부 적용분은 매출 장부에서 별도 검수합니다."} />
+            todayMonth={flow.todayMonth} today={flow.today} density="compact" goalNote={manager ? "승인 개인 DSH 목표 · 동일 담당자의 REV 원천 기준" : "승인 DSH 목표 · 현재 팀의 REV 원천 기준. 장부 적용분은 매출 장부에서 별도 검수합니다."} />
         </>
       ) : pipeline.error ? (
         <p role="alert" className="py-5 text-xs text-[#B43E3E]">월별 매출 조회 실패 · 0건이 아닙니다.</p>

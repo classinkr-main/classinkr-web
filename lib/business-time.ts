@@ -116,3 +116,17 @@ export function getBusinessDateParts(date = new Date()) {
     month: businessDate.slice(0, 7),
   }
 }
+
+/**
+ * KST 달력 성분(년·월·일) — getBusinessDateParts 와 같은 날짜를 고정 +09:00(DST 없음)으로 계산한다.
+ * Intl 포매터를 만들지 않으므로 행·월을 도는 루프(회계연도·월 키 판정) 안에서 불러도 된다.
+ * 파싱할 수 없는 Date 는 NaN 성분을 돌려준다(호출부가 걸러야 한다).
+ */
+export function getBusinessCalendarParts(date = new Date()) {
+  const shifted = new Date(date.getTime() + BUSINESS_UTC_OFFSET_MS)
+  return {
+    year: shifted.getUTCFullYear(),
+    month: shifted.getUTCMonth() + 1,
+    day: shifted.getUTCDate(),
+  }
+}

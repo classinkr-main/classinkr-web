@@ -75,14 +75,11 @@ import { useAdminNavPreferences } from "@/components/admin/admin-nav-preferences
 // REV 시트 쓰기(ADR-011) — 초안 baseline·칸 아래 힌트·이중 집계 제외의 순수 헬퍼.
 import {
   cellSheetWriteHint,
-  absorptionCutoff,
-  excludeSheetAbsorbedRows,
-  oldestSyncedAt,
-  sheetAbsorbedDraftIds,
   sheetBaselineForRow,
 } from "./ledger/sheet-write-view"
+// 장부 오버레이(D1, 시트 행 + 적용 항목 − 상쇄 − 시트 흡수 · 정정 대체)의 정본 — 서버도 같은 함수를 쓴다.
+import { buildLedgerOverlay } from "@/lib/branch/ledger-overlay"
 import { getBusinessDateParts } from "@/lib/business-time"
-import { ledgerRowHasColor } from "@/lib/branch/computations/revenue-core"
 import { dealHasColorData, splitMonthConfidence } from "@/lib/branch/computations/rev-confirmed"
 import { formatMoney, formatPercent } from "@/lib/branch/ledger-format"
 import { isSheetAheadOfSync } from "@/lib/branch/sheet-freshness"
@@ -215,7 +212,6 @@ import {
   useMatrixEditor,
   weeklyConfidenceTouchedFromMetadata,
   weeklyEditLockMask,
-  weeklyPaymentsFromDraftMetadata,
   type MatrixCellCoord,
   type MatrixDensity,
   type MatrixPastePlan,
@@ -385,7 +381,6 @@ import {
   addMonthlyBucket,
   aggregatePeriodManagerSummaries,
   alignOpenDraftsToSheetRows,
-  appliedDraftConfidenceMaps,
   buildFiscalMonthOptions,
   buildPeriodMonths,
   buildPrevPeriodComparison,
@@ -410,7 +405,6 @@ import {
   periodShortLabel,
   relativeTimeFromNow,
   replaceEquivalentSet,
-  resolveCorrectionTargets,
   REV_FORECAST_FILTERS,
   REV_ORIGIN_FILTERS,
   REV_PAGE_SIZES,
@@ -423,9 +417,6 @@ import {
   SelectedWeekBars,
   serializeMultiFilterParam,
   shiftMonth,
-  snapshotField,
-  snapshotSheetRowId,
-  snapshotText,
   storeRevDbImport,
   ymKeyUtc,
 } from "./ledger/workbench-shared"
@@ -1228,96 +1219,24 @@ export default function SalesLedgerWorkbench({
     }))
   }, [pipeline.data?.rows])
   const members = useMemo(() => kpi.data?.members ?? [], [kpi.data?.members])
-  const ledgerEntryRows = useMemo<LedgerRevenueRow[]>(() => {
-    return ledgerEntries
-      .filter((entry) => entry.entryStatus === "active")
-      // REV 매트릭스는 M/Q 토글과 무관하게 회계연도 12개월 전체를 보여준다. 시트행은 period로
-      // 안 거르는데 적용초안만 걸러 분기 밖 입력이 행째 사라지던 버그 → 표시 열(matrixMonths)로 스코프.
-      .filter((entry) => matrixMonths.includes(entry.month))
-      .filter((entry) => team === "ALL" || entry.team === team)
-      .map((entry) => ({
-        id: `ledger-${entry.id}`,
-        sheetRow: entry.sourceSheetRow ?? undefined,
-        customer: entry.customer || "고객명 미입력",
-        manager: entry.manager || null,
-        team: entry.team || null,
-        region: snapshotText(entry.sourceSnapshot, "region"),
-        revenue: entry.amount,
-        status: snapshotText(entry.sourceSnapshot, "status"),
-        dealType: snapshotText(entry.sourceSnapshot, "dealType"),
-        productVersion: snapshotText(entry.sourceSnapshot, "productVersion"),
-        firstPayment: snapshotText(entry.sourceSnapshot, "firstPayment"),
-        contractTarget: Number(snapshotField(entry.sourceSnapshot, "contractTarget") ?? 0),
-        monthlyPayments: { [entry.month]: entry.amount },
-        ...appliedDraftConfidenceMaps(entry.month, entry.amount, entry.metadata),
-        // 주차 초안: 병합 배열(metadata.weekly) 우선, 없으면 단일 주차 토큰(metadata.week). 주차합==월합 유지.
-        weeklyPayments: weeklyPaymentsFromDraftMetadata(entry.month, entry.amount, entry.metadata),
-        ledgerOrigin: "draft" as const,
-        draftId: entry.draftId,
-        draftKind: entry.entryType === "manual-edit" ? "edit-row" : "new-row",
-        draftMonth: entry.month,
-        draftNote: entry.note,
-        draftMetadata: entry.metadata,
-        sourceDealId: entry.sourceDealId,
-      }))
-  }, [ledgerEntries, matrixMonths, team])
-  const appliedDraftFallbackRows = useMemo<LedgerRevenueRow[]>(() => {
-    return drafts
-      .filter((draft) => draft.status === "applied")
-      .filter((draft) => !draft.id.startsWith("local-"))
-      // 웨이브 5 — "되돌리기": draft.status는 상쇄 후에도 "applied" 그대로다(감사 추적 보존).
-      // reversedDraftIds 없이는 이 안전망(entries 누락 시 applied draft를 대체 표시)이 방금
-      // 상쇄된 항목까지 "아직 동기화 안 된 신규 적용"으로 오인해 되살린다 — 반드시 함께 걸러야
-      // ledgerEntryRows의 active 필터가 매트릭스에서 해당 반영분을 실제로 소거할 수 있다.
-      .filter((draft) => !reversedDraftIds.has(draft.id))
-      // 버그 #3과 동일: 적용초안은 M/Q가 아니라 표시 열(matrixMonths) 스코프. 분기 밖 적용분 증발 방지.
-      .filter((draft) => matrixMonths.includes(draft.month))
-      .filter((draft) => team === "ALL" || draft.team === team)
-      .map((draft) => ({
-        id: `draft-${draft.id}`,
-        sheetRow: draft.sourceSheetRow ?? undefined,
-        customer: draft.customer || "고객명 미입력",
-        manager: draft.manager || null,
-        team: draft.team || null,
-        region: snapshotText(draft.sourceSnapshot, "region"),
-        revenue: draft.amount,
-        status: snapshotText(draft.sourceSnapshot, "status"),
-        dealType: snapshotText(draft.sourceSnapshot, "dealType"),
-        productVersion: snapshotText(draft.sourceSnapshot, "productVersion"),
-        firstPayment: snapshotText(draft.sourceSnapshot, "firstPayment"),
-        contractTarget: Number(snapshotField(draft.sourceSnapshot, "contractTarget") ?? 0),
-        monthlyPayments: { [draft.month]: draft.amount },
-        ...appliedDraftConfidenceMaps(draft.month, draft.amount, draft.metadata),
-        // 주차 초안: 병합 배열(metadata.weekly) 우선, 없으면 단일 주차 토큰(metadata.week). 주차합==월합 유지.
-        weeklyPayments: weeklyPaymentsFromDraftMetadata(draft.month, draft.amount, draft.metadata),
-        ledgerOrigin: "draft" as const,
-        draftId: draft.id,
-        draftKind: draft.kind,
-        draftMonth: draft.month,
-        draftNote: draft.note,
-        draftMetadata: draft.metadata,
-        sourceDealId: draft.sourceDealId,
-      }))
-  }, [drafts, matrixMonths, team, reversedDraftIds])
-  // REV 시트 쓰기(ADR-011) — 반영 때 '2. REV' 에도 쓴 정정은, 쓴 뒤에 시작한 REV 동기화가 성공하면 시트 행
-  // (미러)이 이미 그 값을 갖는다. 그 초안을 오버레이에 또 얹으면 같은 칸을 시트 값과 정정 값이 함께 맡는다 —
-  // 미러가 읽은 초안은 오버레이(그리고 그 초안이 만드는 editRowOverrideMonths)에서 뺀다(시트가 정본).
-  // 기준은 서버의 마지막 동기화가 아니라 "이 화면이 가진 시트 행"의 데이터 시각까지 본 것(absorptionCutoff) —
-  // 다른 화면이 동기화했거나 동기화 직후 옛 미러가 한 번 돌아왔으면 이 화면 행에는 쓰기가 아직 없다.
-  const sheetRowsSyncedAt = useMemo(() => oldestSyncedAt(sheetRows), [sheetRows])
-  const sheetAbsorbedIds = useMemo(
-    () => sheetAbsorbedDraftIds(sheetWrites, absorptionCutoff(sheetWrite.lastRevSyncStartedAt, sheetRowsSyncedAt)),
-    [sheetWrites, sheetWrite.lastRevSyncStartedAt, sheetRowsSyncedAt],
+  // 장부 오버레이(D1) — 시트 행 + 적용 항목(+항목 없는 적용 초안) − 상쇄 − 시트가 이미 읽은 시트 쓰기 초안.
+  // 정정(edit-row)은 원본 시트 행의 그 달을 대체하고(같은 칸 정정이 여럿이면 가장 늦은 것만), 신규는 더한다.
+  // 규칙 정본은 lib/branch/ledger-overlay.ts(buildLedgerOverlay) — 서버 집계·DSH·대조 스크립트가 같은 함수를 쓴다.
+  // 적용분은 M/Q 토글이 아니라 표시 열(matrixMonths)로 스코프한다(분기 밖 입력이 행째 사라지던 버그).
+  // ledgerOverlay.superseded · .drift · .duplicates 는 화면 경고용(같은 칸 겹친 정정 · 정정 뒤 시트 변경 · 신규 이중 입력 의심).
+  const ledgerOverlay = useMemo(
+    () => buildLedgerOverlay({
+      sheetRows,
+      ledgerEntries,
+      drafts,
+      reversedDraftIds,
+      sheetWrites,
+      lastRevSyncStartedAt: sheetWrite.lastRevSyncStartedAt,
+      months: matrixMonths,
+      team,
+    }),
+    [sheetRows, ledgerEntries, drafts, reversedDraftIds, sheetWrites, sheetWrite.lastRevSyncStartedAt, matrixMonths, team],
   )
-  const appliedDraftRows = useMemo<LedgerRevenueRow[]>(() => {
-    if (ledgerEntryRows.length === 0) return excludeSheetAbsorbedRows(appliedDraftFallbackRows, sheetAbsorbedIds)
-
-    const entryDraftIds = new Set(ledgerEntryRows.map((row) => row.draftId).filter(Boolean))
-    return excludeSheetAbsorbedRows([
-      ...ledgerEntryRows,
-      ...appliedDraftFallbackRows.filter((row) => !row.draftId || !entryDraftIds.has(row.draftId)),
-    ], sheetAbsorbedIds)
-  }, [appliedDraftFallbackRows, ledgerEntryRows, sheetAbsorbedIds])
   // 초안 baseline(sourceSnapshot.sheetBaseline)은 오버레이를 얹기 전 시트 행(미러) 그대로에서 만든다 —
   // 반영 직전에 서버가 다시 읽는 '2. REV' 칸과 같은 출처여야 비교가 맞는다. 필터와 무관하게 전 행.
   const sheetRowById = useMemo(() => {
@@ -1325,63 +1244,12 @@ export default function SalesLedgerWorkbench({
     for (const row of sheetRows) map.set(row.id, row)
     return map
   }, [sheetRows])
-  const additiveAppliedDraftRows = useMemo(() => {
-    return appliedDraftRows.filter((row) => row.draftKind !== "edit-row" && !row.draftId?.startsWith("local-"))
-  }, [appliedDraftRows])
-  const replacementAppliedDraftRows = useMemo(() => {
-    return appliedDraftRows.filter((row) => row.draftKind === "edit-row")
-  }, [appliedDraftRows])
-  // 적용된 수정(edit-row) 초안은 원본 시트행의 "그 달"을 대체한다(신규 추가가 아니라 정정).
-  // (원본 시트행 id→월집합). 시트를 다시 가져오면 행 id 가 바뀌므로 행 번호·고객·상품으로도 원본을 찾는다
-  // (resolveCorrectionTargets) — 못 찾은 정정은 장부 화면이 경고한다.
-  const correctionTargets = useMemo(() => {
-    // 반영값·초안이 만들 때 본 시트 Row ID(시트 쓰기 baseline) — 원본 행을 찾는 1순위 키.
-    const sheetRowIdByDraftId = new Map<string, string>()
-    for (const draft of drafts) {
-      const rowId = snapshotSheetRowId(draft.sourceSnapshot)
-      if (rowId) sheetRowIdByDraftId.set(draft.id, rowId)
-    }
-    for (const entry of ledgerEntries) {
-      const rowId = snapshotSheetRowId(entry.sourceSnapshot)
-      if (rowId && entry.draftId) sheetRowIdByDraftId.set(entry.draftId, rowId)
-    }
-    return resolveCorrectionTargets(replacementAppliedDraftRows, sheetRows, (row) => sheetRowIdByDraftId.get(row.draftId ?? "") ?? null)
-  }, [drafts, ledgerEntries, replacementAppliedDraftRows, sheetRows])
-  const editRowOverrideMonths = correctionTargets.overrides
-  // 원본 시트행 + 적용초안행을 합치되, 수정초안이 가리키는 (딜, 월) 셀은 원본에서 제거한다.
-  // 안 그러면 원본 금액 + 정정 금액이 그 달의 월·연간·그룹·합계행에 이중 계상된다
-  // (amount-change=대체, forecast-add=원본 0이라 무영향 — 둘 다 안전).
-  const rows = useMemo(() => {
-    if (editRowOverrideMonths.size === 0) return [...appliedDraftRows, ...sheetRows]
-    const adjustedSheetRows = sheetRows.map((row) => {
-      const overrides = editRowOverrideMonths.get(row.id)
-      if (!overrides || overrides.size === 0) return row
-      const monthlyPayments = { ...(row.monthlyPayments ?? {}) }
-      const monthlyConfirmed = { ...(row.monthlyConfirmed ?? {}) }
-      const monthlyHighConfidence = { ...(row.monthlyHighConfidence ?? {}) }
-      const monthlyRed = { ...(row.monthlyRed ?? {}) }
-      const weeklyPayments = { ...(row.weeklyPayments ?? {}) }
-      for (const month of overrides) {
-        delete monthlyPayments[month]
-        delete monthlyConfirmed[month]
-        delete monthlyHighConfidence[month]
-        delete monthlyRed[month]
-        delete weeklyPayments[month]
-      }
-      return {
-        ...row,
-        monthlyPayments,
-        monthlyConfirmed,
-        monthlyHighConfidence,
-        monthlyRed,
-        weeklyPayments,
-        // 색 보유 여부는 오버라이드 삭제 '전' 원본 기준으로 보존 — 색이 그 달에만 있던 행을
-        // 지운 뒤 맵으로 재판정하면 남은 과거 월이 무색상 폴백으로 확정 오집계된다.
-        confidenceColorHint: ledgerRowHasColor(row),
-      }
-    })
-    return [...appliedDraftRows, ...adjustedSheetRows]
-  }, [appliedDraftRows, sheetRows, editRowOverrideMonths])
+  const additiveAppliedDraftRows = ledgerOverlay.additiveRows
+  const replacementAppliedDraftRows = ledgerOverlay.replacementRows
+  // 적용된 수정(edit-row)이 대체하는 원본 시트 행의 달(원본 시트행 id→월집합)과 원본을 못 찾은 정정(화면 경고).
+  const correctionTargets = ledgerOverlay
+  const editRowOverrideMonths = ledgerOverlay.overrides
+  const rows = ledgerOverlay.rows
 
   const managerOptions = useMemo(() => {
     return Array.from(new Set(rows.map((row) => row.manager).filter((value): value is string => Boolean(value))))

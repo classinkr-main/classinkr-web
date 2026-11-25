@@ -15,7 +15,12 @@
 //
 // 정직 규칙: 원문 오류 문자열은 화면·로그로 내보내지 않는다. 분류(권한/설정 누락/네트워크/기타)와
 // 고정 문구 힌트로만 바꾼다 — 키·토큰·내부 URL이 오류 문구에 섞여 있을 수 있다.
+//
+// 시트 고정(BRANCH_REV_SHEET_LOCKED_AT — lib/branch/rev-sheet-lock.ts)이 active 면 KR Team 시트의 REV 는 일부러 읽지 않는다.
+// 그동안 판정은 DSH·KPI 런("dsh"·"dsh+hw")으로 하고(failure-streak.ts syncRunCoversSource), REV 자리에는 "12/1 고정"을
+// 보인다 — REV 를 건너뛴 것이 멈춤(stale)·실패 띠로 읽히지 않는다.
 
+import { currentRevSheetLock, isRevSheetLockActive, revSheetFrozenLabel, type RevSheetLock } from "@/lib/branch/rev-sheet-lock"
 import { getBusinessDateParts } from "@/lib/business-time"
 import {
   computeSyncFailureStreak,
@@ -92,6 +97,11 @@ export interface SyncSourceHealth {
   failuresTruncated: boolean
   /** 조회한 기록 안에서 자동(크론) 실행이 한 번이라도 성공했는가. */
   autoSucceededInWindow: boolean
+  /**
+   * 시트 고정 중인 KR Team 시트(sheets)만 — REV 는 lockedAt 기준으로 고정돼 다시 읽지 않는다. label 은 "12/1 고정".
+   * 판정(state)·시각은 DSH·KPI 런 기준이다. 그 밖은 없다.
+   */
+  revFrozen?: { lockedAt: string; label: string }
 }
 
 export interface SyncHealthReport {
@@ -306,7 +316,9 @@ export type BranchSyncRunRow = SyncRunLike & { trigger?: string | null }
 export function computeBranchSourceHealth(
   runs: readonly BranchSyncRunRow[],
   source: "sheets" | "hw",
-  nowMs: number = Date.now()
+  nowMs: number = Date.now(),
+  // 서버 셸(sync-health-server.ts)은 넘기지 않는다 — 그 시각의 env 로 정한다. 브라우저에서는 env 가 없어 늘 unset 이다.
+  revSheetLock: RevSheetLock = currentRevSheetLock(new Date(nowMs))
 ): SyncSourceHealth {
   const key = source === "sheets" ? "rev" : "hw"
   const list = runs.slice()
@@ -336,6 +348,9 @@ export function computeBranchSourceHealth(
     consecutiveFailureDays: streak.failedDays,
     failuresTruncated: streak.truncated,
     autoSucceededInWindow: autoStreak.lastSuccessAt !== null,
+    ...(source === "sheets" && isRevSheetLockActive(revSheetLock)
+      ? { revFrozen: { lockedAt: revSheetLock.lockedAt, label: revSheetFrozenLabel(revSheetLock.lockedAt) } }
+      : {}),
   }
 }
 
@@ -393,6 +408,20 @@ export function formatKstSyncTime(value: string | null | undefined): { day: stri
   return { day, dayTime: `${day} ${parts.hour}:${parts.minute}` }
 }
 
+/** 원천 이름 — 시트 고정 중인 KR Team 시트는 지금 읽는 탭(DSH·KPI)만 이름에 둔다. */
+function sourceLabel(health: SyncSourceHealth): string {
+  return health.revFrozen ? "KR Team 시트(DSH·KPI)" : SYNC_HEALTH_SOURCE_LABEL[health.source]
+}
+
+function sourceScopeLabel(health: SyncSourceHealth): string {
+  return health.revFrozen ? "시트(DSH·KPI)" : SOURCE_SCOPE_LABEL[health.source]
+}
+
+/** 시트 고정 중이면 " · REV는 12/1 고정" — 시각·상태와 상관없이 붙는다. */
+function frozenSuffix(health: SyncSourceHealth): string {
+  return health.revFrozen ? ` · REV는 ${health.revFrozen.label}` : ""
+}
+
 function successWord(trigger: SyncTriggerKind | null): string {
   if (trigger === "manual") return "수동 동기화"
   if (trigger === "cron") return "자동 동기화"
@@ -402,18 +431,18 @@ function successWord(trigger: SyncTriggerKind | null): string {
 function describeAsOf(health: SyncSourceHealth, nowMs: number): string {
   const when = formatKstSyncTime(health.lastSuccessAt)
   if (!when) {
-    return health.failuresTruncated || health.consecutiveFailures > 0
+    return (health.failuresTruncated || health.consecutiveFailures > 0
       ? "최근 기록에 성공한 동기화가 없음 — 이 화면 수치의 기준 시점을 알 수 없음"
-      : "동기화 기록 없음 — 이 화면 수치의 기준 시점을 알 수 없음"
+      : "동기화 기록 없음 — 이 화면 수치의 기준 시점을 알 수 없음") + frozenSuffix(health)
   }
   const age = formatAgeHours(hoursSinceIso(health.lastSuccessAt, nowMs))
   const word = successWord(health.lastSuccessTrigger)
   const label = word === "동기화 성공" ? `마지막 동기화 성공 ${when.day}(${age})` : `마지막 ${word} ${when.day}(${age})`
-  return `${label} · 이 화면의 ${SOURCE_SCOPE_LABEL[health.source]} 수치는 그 시점 값`
+  return `${label} · 이 화면의 ${sourceScopeLabel(health)} 수치는 그 시점 값${frozenSuffix(health)}`
 }
 
 function failingHeadline(health: SyncSourceHealth): string {
-  const label = SYNC_HEALTH_SOURCE_LABEL[health.source]
+  const label = sourceLabel(health)
   const times = `${health.consecutiveFailures}회${health.failuresTruncated ? " 이상" : ""} 연속`
   if (health.source === "neo" && health.failureClass === "config") {
     return health.failureHint === "neo_credentials"
@@ -474,7 +503,7 @@ function describeDetails(health: SyncSourceHealth): string[] {
  * 확인 불가(unknown)는 정상인 척하지 않고 중립 톤 한 줄로 알린다.
  */
 export function describeSyncSourceHealth(health: SyncSourceHealth, nowMs: number = Date.now()): SyncHealthCopy | null {
-  const label = SYNC_HEALTH_SOURCE_LABEL[health.source]
+  const label = sourceLabel(health)
   if (health.state === "ok") return null
 
   if (health.state === "unknown") {
@@ -482,7 +511,7 @@ export function describeSyncSourceHealth(health: SyncSourceHealth, nowMs: number
       source: health.source,
       tone: "neutral",
       headline: `${label} 동기화 상태 확인 불가`,
-      asOf: `실행 기록을 읽지 못해 이 화면의 ${SOURCE_SCOPE_LABEL[health.source]} 수치가 언제 값인지 확인하지 못했습니다`,
+      asOf: `실행 기록을 읽지 못해 이 화면의 ${sourceScopeLabel(health)} 수치가 언제 값인지 확인하지 못했습니다${frozenSuffix(health)}`,
       action: null,
       details: [],
     }
@@ -530,7 +559,7 @@ export function worstSyncHealthTone(copies: readonly SyncHealthCopy[]): SyncHeal
 /** 정상 원천의 조용한 한 줄(운영 상태 요약용). */
 export function describeHealthySyncSource(health: SyncSourceHealth, nowMs: number = Date.now()): string {
   const when = formatKstSyncTime(health.lastSuccessAt)
-  if (!when) return "정상"
+  if (!when) return `정상${frozenSuffix(health)}`
   const trigger = health.lastSuccessTrigger ? `${TRIGGER_LABEL[health.lastSuccessTrigger]}, ` : ""
-  return `정상 · 마지막 성공 ${when.dayTime}(${trigger}${formatAgeHours(hoursSinceIso(health.lastSuccessAt, nowMs))})`
+  return `정상 · 마지막 성공 ${when.dayTime}(${trigger}${formatAgeHours(hoursSinceIso(health.lastSuccessAt, nowMs))})${frozenSuffix(health)}`
 }

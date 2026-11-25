@@ -41,12 +41,19 @@ const DAY_MS = 86_400_000
  * 예전에는 모든 런이 "all"로 남아, HW가 이틀째 실패 중이어도 누가 REV만 새로고침하면 그 성공이
  * HW의 성공으로 읽혀 연속 실패가 0으로 돌아갔다(경고 띠·크론 알림 둘 다).
  *
+ * 시트 고정(lib/branch/rev-sheet-lock.ts) 뒤의 "dsh"(DSH·KPI 만)는 매출 시트 원천("rev" 키 — 같은 스프레드시트)만
+ * 돌린 런이고, "dsh+hw" 는 두 원천 모두다. 고정 중에는 REV 를 일부러 읽지 않으므로 DSH·KPI 성공이 매출 시트의 성공이다
+ * — 그래야 REV 를 건너뛴 것이 멈춤(stale)·실패로 읽히지 않는다. 새 값을 여기 가르치지 않으면 아래 하위 호환 갈래가
+ * "dsh" 를 두 원천 모두로 읽어 DSH 성공이 HW 연속 실패를 지운다.
+ *
  * 하위 호환: "all"·빈 값(옛 기록 포함)은 예전 해석 그대로 두 원천을 모두 돌린 런으로 본다. 수정
  * 이전에 REV만 돌린 옛 "all" 행은 구분할 방법이 없어 그대로 읽힌다 — 최근 60런 창에서 밀려나며 사라진다.
  */
 export function syncRunCoversSource(run: Pick<SyncRunLike, "source">, source: SyncSourceKey): boolean {
   const recorded = run.source
   if (recorded === "rev" || recorded === "hw") return recorded === source
+  if (recorded === "dsh") return source === "rev"
+  if (recorded === "dsh+hw") return true
   return true
 }
 

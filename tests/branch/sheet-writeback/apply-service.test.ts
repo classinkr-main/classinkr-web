@@ -67,6 +67,13 @@ let editDuringWrite: (() => void) | null = null
 // (딜, 월) 활성 정정 항목(장부 유일성 인덱스 대상).
 let activeEntries: Array<{ id: string; draftId: string | null; sourceDealId: string; month: string }> = []
 let activeEntriesFailure: Error | null = null
+// 장부 목록(활성 항목) — 시트 행(Row ID)·월 겹침 검사(F-04)가 읽는다. 호출 순서 기록(calls)에는 넣지 않는다.
+interface LedgerEntryLike { id: string; draftId: string | null; entryType: string; entryStatus: string; month: string; sourceSnapshot: Record<string, unknown> }
+let ledgerEntries: LedgerEntryLike[] = []
+let ledgerEntriesFailure: Error | null = null
+const listEntriesSpy = vi.fn()
+// 초안 id → 최신 시트 쓰기 시도(status·code).
+let sheetWriteRecords = new Map<string, { status: string; code: string }>()
 vi.mock("@/lib/repositories/branch-sales-ledger-drafts", () => ({
   applyBranchSalesLedgerDraft: (id: string, actor: string) => applyImpl(id, actor),
   // 실제 RPC 처럼: checked 가 아니면 null, updated_at 이 계획 때와 다르면 던지고, 같으면 기존 apply.
@@ -88,6 +95,12 @@ vi.mock("@/lib/repositories/branch-sales-ledger-drafts", () => ({
   isBranchSalesLedgerDraftsNotReadyError: (e: unknown) => e instanceof Error && e.message.includes("매출 장부"),
   isBranchSalesLedgerDuplicateActiveCorrectionError: (e: unknown) => e instanceof Error && e.message === DUPLICATE,
   isBranchSalesLedgerNonPositiveAmountError: () => false,
+  LEDGER_LIST_MAX: 1000,
+  listBranchSalesLedgerEntries: async (options: unknown) => {
+    listEntriesSpy(options)
+    if (ledgerEntriesFailure) throw ledgerEntriesFailure
+    return { generatedAt: "2026-10-23T03:00:00Z", health: { ok: true, message: null }, entries: ledgerEntries }
+  },
 }))
 
 // ── 시트 쓰기 감사 저장소 목(메모리) ─────────────────────────────
@@ -120,6 +133,9 @@ vi.mock("@/lib/repositories/branch-sales-ledger-sheet-writes", () => ({
   },
   isSheetWritesNotReadyError: (e: unknown) => e instanceof Error && e.message.includes("마이그레이션"),
   findLedgerEntryIdByDraftId: async (draftId: string) => `entry-of-${draftId}`,
+  // 다른 초안의 최신 시트 쓰기 시도(행 겹침 검사가 시트에 쓴 정정을 뺄 때 읽는다).
+  latestSheetWritesByDraftIds: async (ids: string[]) =>
+    new Map(ids.filter((id) => sheetWriteRecords.has(id)).map((id) => [id, sheetWriteRecords.get(id)!])),
 }))
 
 import { applyLedgerDraftsWithSheetWrite } from "@/lib/branch/sheet-writeback/apply-service"
@@ -220,6 +236,10 @@ beforeEach(() => {
   editDuringWrite = null
   activeEntries = []
   activeEntriesFailure = null
+  ledgerEntries = []
+  ledgerEntriesFailure = null
+  sheetWriteRecords = new Map()
+  listEntriesSpy.mockClear()
   applyImpl.mockClear()
   sheetsGet.mockReset()
   sheetsBatchUpdate.mockReset()
@@ -228,6 +248,8 @@ beforeEach(() => {
   vi.stubEnv("BRANCH_REV_SHEET_WRITE_ENABLED", "1")
   vi.stubEnv("VERCEL_ENV", "production")
   vi.stubEnv("GOOGLE_BRANCH_DASHBOARD_SHEET_ID", TARGET)
+  // 시트 고정 스위치는 기본 없음 — 실행 환경에 남은 값이 섞이지 않게 비운다(고정 시나리오는 아래 describe 가 넣는다).
+  vi.stubEnv("BRANCH_REV_SHEET_LOCKED_AT", "")
   vi.spyOn(console, "error").mockImplementation(() => {})
   vi.spyOn(console, "warn").mockImplementation(() => {})
 
@@ -362,9 +384,10 @@ describe("on 모드 — 실패는 장부를 건드리지 않는다", () => {
     expect(applyImpl).toHaveBeenCalledTimes(1)
   })
 
+  // 쓰기 단계의 403 은 바로 앞 다시 읽기가 성공한 뒤라 공유 끊김이 아니라 시트 잠김이다(F-07 — sheet_locked, 409).
   it.each([
     [{ status: 400 }, "sheet_error", 502],
-    [{ status: 403 }, "sheet_permission", 409],
+    [{ status: 403 }, "sheet_locked", 409],
   ])("batchUpdate 4xx(%j) → failed·장부 반영 0회", async (error, code, status) => {
     sheetsBatchUpdate.mockRejectedValue(error)
     addDraft({ id: "a" })
@@ -607,5 +630,215 @@ describe("on 모드 — 시트에 쓴 것과 다른 내용을 장부에 남기�
     expect(results[0]).toMatchObject({ ok: true, sheet: { code: "no_change", message: "시트에서 바뀌는 칸이 없어 장부만 기록" } })
     expect(sheetsBatchUpdate).not.toHaveBeenCalled()
     expect(attempts[0]).toMatchObject({ status: "written", code: "no_change" })
+  })
+})
+
+// ── 시트 고정(BRANCH_REV_SHEET_LOCKED_AT, D5) · 시트 행 겹침(F-04) · 동시 반영(F-20) · 시트 잠김(F-07) ──────────
+
+function rowEntry(partial: Partial<LedgerEntryLike> & { id: string; draftId: string | null }): LedgerEntryLike {
+  return { entryType: "manual-edit", entryStatus: "active", month: "2026-10", sourceSnapshot: { sheetBaseline: baselineA }, ...partial }
+}
+
+/** 첫 반영 RPC 가 초안을 applied 로 바꾸게 한다(다음 RPC 는 실제처럼 null). */
+function applyMarksDraftApplied() {
+  applyImpl.mockImplementationOnce(async (id: string, actor: string) => {
+    calls.push(`apply:${id}`)
+    const draft = drafts.get(id)
+    if (!draft || draft.status !== "checked") return null
+    const applied = { ...draft, status: "applied" as const, appliedBy: actor, appliedAt: new Date().toISOString() }
+    drafts.set(id, applied)
+    return applied
+  })
+}
+
+describe("시트 고정 active — 플래그가 켜져 있어도 꺼짐 갈래(F-07)", () => {
+  beforeEach(() => {
+    vi.stubEnv("BRANCH_REV_SHEET_LOCKED_AT", "2026-10-01") // 오늘(KST 10-23)은 고정 뒤
+  })
+
+  it("시트를 읽지도 쓰지도 않고 감사 행도 없이 장부에만(disabled)", async () => {
+    addDraft({ id: "a" })
+    addDraft({ id: "n", kind: "new-row" })
+    const { mode, results } = await applyLedgerDraftsWithSheetWrite(["a", "n"], "tester")
+    expect(mode).toBe("off")
+    expect(results.map((result) => [result.id, result.ok, result.status, result.sheet.code])).toEqual([
+      ["a", true, 200, "disabled"],
+      ["n", true, 200, "disabled"],
+    ])
+    expect(calls.filter((call) => call.startsWith("sheets."))).toEqual([])
+    expect(calls.some((call) => call.startsWith("insert:"))).toBe(false)
+    expect(attempts).toEqual([])
+  })
+
+  it("같은 시트 행·월에 활성 정정이 있으면 row_corrected 409 — 딜 id 가 달라도(재동기화 뒤) 막는다(F-04)", async () => {
+    ledgerEntries = [rowEntry({ id: "e-old", draftId: "old" })]
+    addDraft({ id: "a", sourceDealId: "deal-after-resync" })
+    addDraft({ id: "n", kind: "new-row" })
+    const { results } = await applyLedgerDraftsWithSheetWrite(["a", "n"], "tester")
+    expect(results[0]).toMatchObject({
+      ok: false,
+      status: 409,
+      sheet: { code: "row_corrected" },
+      error: "이 시트 행·월에 이미 적용된 장부 정정이 있어 반영하지 않았습니다 — 기존 정정을 되돌린 뒤 다시 입력해 주세요",
+    })
+    expect(results[1]).toMatchObject({ ok: true, sheet: { code: "disabled" } })
+    expect(calls).toEqual(["apply:n"])
+    expect(attempts).toEqual([])
+    expect(listEntriesSpy).toHaveBeenCalledWith({ limit: 1000 })
+  })
+
+  it("시트에 쓴 정정(고정 전에 쓴 것)은 세지 않는다 — '장부에서 원래 값으로 다시 입력'(F-22)이 통한다", async () => {
+    ledgerEntries = [rowEntry({ id: "e-old", draftId: "old" })]
+    sheetWriteRecords.set("old", { status: "written", code: "written" })
+    addDraft({ id: "a", sourceDealId: "deal-after-resync" })
+    const { results } = await applyLedgerDraftsWithSheetWrite(["a"], "tester")
+    expect(results[0]).toMatchObject({ ok: true, sheet: { code: "disabled" } })
+  })
+
+  it("같은 요청 안에서 같은 행·월을 노리는 두 초안은 앞의 것만 반영한다", async () => {
+    addDraft({ id: "a" })
+    addDraft({ id: "b", amount: 700 })
+    const { results } = await applyLedgerDraftsWithSheetWrite(["a", "b"], "tester")
+    expect(results.map((result) => [result.id, result.ok, result.sheet.code])).toEqual([
+      ["a", true, "disabled"],
+      ["b", false, "row_corrected"],
+    ])
+  })
+
+  it("겹침 확인이 실패하면 정정 초안은 반영하지 않는다(fail closed) — 새 행은 그대로", async () => {
+    ledgerEntriesFailure = new Error("[branch-sales-ledger-entries] 조회 실패: timeout")
+    addDraft({ id: "a" })
+    addDraft({ id: "n", kind: "new-row" })
+    const { results } = await applyLedgerDraftsWithSheetWrite(["a", "n"], "tester")
+    expect(results[0]).toMatchObject({ ok: false, status: 500, sheet: { code: "not_applied" } })
+    expect(results[1]).toMatchObject({ ok: true, sheet: { code: "disabled" } })
+    expect(calls).toEqual(["apply:n"])
+  })
+
+  it("같은 id 를 두 번 보내도(겹친 일괄 반영) 두 번째는 실패가 아니라 반영됨(F-20)", async () => {
+    addDraft({ id: "a" })
+    applyMarksDraftApplied()
+    const { results } = await applyLedgerDraftsWithSheetWrite(["a", "a"], "tester")
+    expect(results.map((result) => [result.ok, result.status, result.sheet.code, result.draft?.status])).toEqual([
+      [true, 200, "disabled", "applied"],
+      [true, 200, "disabled", "applied"],
+    ])
+  })
+
+  it("다른 요청이 방금 반영한 초안은 반영됨, 오래전에 반영된 초안은 지금처럼 409", async () => {
+    addDraft({ id: "fresh", status: "applied", appliedAt: "2026-10-23T02:58:00Z" })
+    addDraft({ id: "old", status: "applied", appliedAt: "2026-10-20T02:58:00Z" })
+    const { results } = await applyLedgerDraftsWithSheetWrite(["fresh", "old"], "tester")
+    expect(results[0]).toMatchObject({ ok: true, status: 200, sheet: { code: "disabled" } })
+    expect(results[1]).toMatchObject({ ok: false, status: 409, error: "체크 완료 초안만 적용할 수 있습니다." })
+  })
+})
+
+describe("시트 고정 예정·없음 — 꺼짐 갈래는 지금 그대로(RPC 하나)", () => {
+  it("예정(날짜 전)이면 겹침 검사·초안 조회를 하지 않는다", async () => {
+    vi.stubEnv("BRANCH_REV_SHEET_LOCKED_AT", "2026-12-01")
+    vi.stubEnv("BRANCH_REV_SHEET_WRITE_ENABLED", "")
+    ledgerEntries = [rowEntry({ id: "e-old", draftId: "old" })]
+    addDraft({ id: "a" })
+    const { results } = await applyLedgerDraftsWithSheetWrite(["a"], "tester")
+    expect(results[0]).toMatchObject({ ok: true, sheet: { code: "disabled" } })
+    expect(listEntriesSpy).not.toHaveBeenCalled()
+  })
+})
+
+describe("on 모드 — 시트 행·월 겹침(F-04)은 시트에 쓰기 전에 멈춘다", () => {
+  it("같은 Row ID·월의 활성 정정 → row_corrected — batchUpdate 0회·장부 반영 0회·감사 행 refused", async () => {
+    ledgerEntries = [rowEntry({ id: "e-old", draftId: "old" })]
+    addDraft({ id: "a", sourceDealId: "deal-after-resync" })
+    const { results } = await applyLedgerDraftsWithSheetWrite(["a"], "tester")
+    expect(results[0]).toMatchObject({ ok: false, status: 409, sheet: { code: "row_corrected" } })
+    expect(sheetsBatchUpdate).not.toHaveBeenCalled()
+    expect(applyImpl).not.toHaveBeenCalled()
+    expect(attempts.map((attempt) => [attempt.status, attempt.code])).toEqual([["refused", "row_corrected"]])
+  })
+
+  it("되돌린 항목·다른 달·시트에 쓴 정정은 막지 않는다", async () => {
+    ledgerEntries = [
+      rowEntry({ id: "e-rev", draftId: "reversed", entryStatus: "reversed" }),
+      rowEntry({ id: "e-nov", draftId: "nov", month: "2026-11" }),
+      rowEntry({ id: "e-sheet", draftId: "sheet-written" }),
+    ]
+    sheetWriteRecords.set("sheet-written", { status: "written", code: "written" })
+    addDraft({ id: "a" })
+    const { results } = await applyLedgerDraftsWithSheetWrite(["a"], "tester")
+    expect(results[0]).toMatchObject({ ok: true, sheet: { code: "written" } })
+  })
+})
+
+describe("on 모드 — 동시 반영(F-20)", () => {
+  it("시트에 쓰는 사이 다른 요청이 장부에 반영했으면 db_apply_failed 가 아니라 already_written(ok)", async () => {
+    addDraft({ id: "a" })
+    editDuringWrite = () => {
+      const draft = drafts.get("a")!
+      drafts.set("a", { ...draft, status: "applied", appliedBy: "other", appliedAt: "2026-10-23T03:00:00Z" })
+    }
+    const { results } = await applyLedgerDraftsWithSheetWrite(["a"], "tester")
+    expect(results[0]).toMatchObject({ id: "a", ok: true, status: 200, sheet: { code: "already_written" } })
+    expect(results[0].draft?.status).toBe("applied")
+    expect(attempts[0]).toMatchObject({ status: "written", code: "already_written", entryId: "entry-of-a" })
+  })
+
+  it("요청이 닿기 전에 다른 요청이 방금 반영했으면 시트를 읽지 않고 반영됨(ok)", async () => {
+    addDraft({ id: "a", status: "applied", appliedAt: "2026-10-23T02:59:00Z" })
+    addDraft({ id: "n", kind: "new-row", status: "applied", appliedAt: "2026-10-23T02:59:00Z" })
+    const { results } = await applyLedgerDraftsWithSheetWrite(["a", "n"], "tester")
+    expect(results.map((result) => [result.ok, result.sheet.code])).toEqual([
+      [true, "already_written"],
+      [true, "new_row_app_only"],
+    ])
+    expect(sheetsGet).not.toHaveBeenCalled()
+    expect(applyImpl).not.toHaveBeenCalled()
+  })
+
+  it("반영된 지 오래된 초안의 db null 은 지금처럼 db_apply_failed", async () => {
+    addDraft({ id: "a" })
+    editDuringWrite = () => {
+      const draft = drafts.get("a")!
+      drafts.set("a", { ...draft, status: "applied", appliedAt: "2026-10-01T00:00:00Z" })
+    }
+    const { results } = await applyLedgerDraftsWithSheetWrite(["a"], "tester")
+    expect(results[0]).toMatchObject({ ok: false, status: 500, sheet: { code: "db_apply_failed" } })
+  })
+})
+
+describe("on 모드 — 시트가 먼저 잠긴 경우(F-07)", () => {
+  it("보호된 칸 400 → sheet_locked 409·감사 행 failed·장부 반영 0회", async () => {
+    sheetsBatchUpdate.mockRejectedValue(
+      Object.assign(new Error("You are trying to edit a protected cell or object."), { code: 400 }),
+    )
+    addDraft({ id: "a" })
+    const { results } = await applyLedgerDraftsWithSheetWrite(["a"], "tester")
+    expect(results[0]).toMatchObject({
+      ok: false,
+      status: 409,
+      sheet: { code: "sheet_locked", message: "시트가 잠겨 시트 쓰기를 할 수 없습니다 — 관리자에게 시트 쓰기 끄기를 요청하세요" },
+    })
+    expect(applyImpl).not.toHaveBeenCalled()
+    expect(attempts[0]).toMatchObject({ status: "failed", code: "sheet_locked" })
+  })
+
+  it("읽기 단계 403 은 지금처럼 sheet_permission(공유 끊김)", async () => {
+    sheetsGet.mockRejectedValue({ code: 403 })
+    addDraft({ id: "a" })
+    const { results } = await applyLedgerDraftsWithSheetWrite(["a"], "tester")
+    expect(results[0]).toMatchObject({ ok: false, sheet: { code: "sheet_permission" } })
+    expect(sheetsBatchUpdate).not.toHaveBeenCalled()
+  })
+})
+
+describe("on 모드 — 회계연도는 KST 업무일(F-26)", () => {
+  it("2027-04-01 0시 KST(= 03-31 15:00Z) 이후에는 FY2027 로 읽어 2026-10 블록이 없다 — UTC 면 9시간 늦게 넘어간다", async () => {
+    addDraft({ id: "a" })
+    vi.setSystemTime(new Date("2027-03-31T14:59:00Z")) // KST 03-31 23:59 — FY2026, 지난 주차
+    const before = await applyLedgerDraftsWithSheetWrite(["a"], "tester")
+    expect(before.results[0].sheet.code).toBe("past_week")
+    vi.setSystemTime(new Date("2027-03-31T15:05:00Z")) // KST 04-01 00:05 — FY2027
+    const after = await applyLedgerDraftsWithSheetWrite(["a"], "tester")
+    expect(after.results[0]).toMatchObject({ ok: false, sheet: { code: "month_not_in_sheet" } })
   })
 })

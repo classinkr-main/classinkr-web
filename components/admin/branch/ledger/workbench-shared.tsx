@@ -6,10 +6,11 @@
 
 import type { KeyboardEvent as ReactKeyboardEvent, MutableRefObject } from "react"
 import { ArrowDownNarrowWide, ArrowUpNarrowWide, X } from "lucide-react"
-import { normalizedAccountKey } from "@/lib/branch/account-key"
 import { formatMoney } from "@/lib/branch/ledger-format"
 import { ledgerMonthSplit } from "@/lib/branch/computations/revenue-core"
 import { fiscalQuarter } from "@/lib/branch/fiscal"
+import { snapshotSheetRowId, snapshotText } from "@/lib/branch/ledger-draft-metadata"
+import { createSheetRowResolver } from "@/lib/branch/ledger-overlay"
 import {
   PERIODS,
   TEAMS,
@@ -19,9 +20,7 @@ import {
 import { LENS_TAB_ORDER } from "./ledger-lens-tabs"
 import {
   DRAFT_OPERATIONS,
-  draftConfidenceFromMetadata,
   formatMonthLabel,
-  mergedWeeklyFromMetadata,
   metadataString,
   rowMonthAmount,
   rowMonthConfirmed,
@@ -29,7 +28,6 @@ import {
   rowProductCategory,
   rowWeeklyMismatch,
   rowWeeklySplit,
-  weeklyConfidenceFromMetadata,
   type DraftOperation,
   type LedgerDraft,
   type LedgerRevenueRow,
@@ -70,86 +68,16 @@ interface DealDetailResponse {
   error?: string
 }
 
-// 수정(edit-row) 초안·반영값 → 그 수정이 가리키는 지금의 원본 시트 행 찾기. 시트를 다시 가져오면 시트 행 id
-// (임포트 줄 id)가 새로 만들어지므로 id 만 보면 원본을 못 찾는다. 그래서
-//   1) 같은 시트 Row ID('2. REV' 숨김 열, ADR-011 — 정렬·행 삽입에도 안 바뀐다) → 2) 같은 id
-//   → 3) 같은 시트 행 번호 + 같은 고객 → 4) 같은 고객 + 같은 상품인 행이 딱 하나
-// 순서로 찾고, 모두 실패하면 undefined(고르지 않는다 — 잘못 붙이는 것보다 경고가 낫다).
-export interface SheetRowRef {
-  /** 초안·반영값이 만들 때 본 시트 Row ID(sourceSnapshot.sheetBaseline.rowId). */
-  sheetRowId?: string | null
-  sourceDealId?: string | null
-  sheetRow?: number | null
-  customer: string
-  productVersion?: string | null
-}
-
-/** 초안·반영값 sourceSnapshot 에 실린 시트 Row ID(시트 쓰기 baseline). 없으면 null. */
-export function snapshotSheetRowId(snapshot: Record<string, unknown> | null | undefined): string | null {
-  const baseline = snapshot && isRecord(snapshot.sheetBaseline) ? snapshot.sheetBaseline : null
-  const rowId = baseline?.rowId
-  return typeof rowId === "string" && rowId.trim() ? rowId.trim() : null
-}
-
-export function createSheetRowResolver(sheetRows: LedgerRevenueRow[]): (ref: SheetRowRef) => LedgerRevenueRow | undefined {
-  const byId = new Map(sheetRows.map((row) => [row.id, row]))
-  // 형식이 맞고 한 번만 나온 Row ID 만 키로 쓴다(rowIdIssue 가 있으면 그 행은 Row ID 로 찾지 않는다).
-  const byRowId = new Map<string, LedgerRevenueRow>()
-  for (const row of sheetRows) if (row.rowId && !row.rowIdIssue) byRowId.set(row.rowId, row)
-  const byAccount = new Map<string, LedgerRevenueRow[]>()
-  for (const row of sheetRows) {
-    const key = normalizedAccountKey(row.customer)
-    const list = byAccount.get(key)
-    if (list) list.push(row)
-    else byAccount.set(key, [row])
-  }
-  const sameText = (a: string | null | undefined, b: string | null | undefined) => (a ?? "").trim() === (b ?? "").trim()
-  return (ref) => {
-    const stable = ref.sheetRowId ? byRowId.get(ref.sheetRowId) : undefined
-    if (stable) return stable
-    const exact = ref.sourceDealId ? byId.get(ref.sourceDealId) : undefined
-    if (exact) return exact
-    const sameAccount = byAccount.get(normalizedAccountKey(ref.customer)) ?? []
-    const sameRow = ref.sheetRow != null ? sameAccount.filter((row) => row.sheetRow === ref.sheetRow) : []
-    if (sameRow.length === 1) return sameRow[0]
-    const sameProduct = ref.productVersion ? sameAccount.filter((row) => sameText(row.productVersion, ref.productVersion)) : []
-    return sameProduct.length === 1 ? sameProduct[0] : undefined
-  }
-}
-
-// 적용된 수정 → 대체하는 원본 시트 행의 달. 못 찾은 수정은 unresolved — 원본이 지워졌는지 이름이 바뀌었는지
-// 알 수 없으므로 조용히 넘기지 않고 화면이 경고한다(정정 금액은 별도 행으로 남는다).
-export interface CorrectionTargetResult {
-  /** 원본 시트 행 id → 정정으로 대체된 달 */
-  overrides: Map<string, Set<string>>
-  /** 원본 시트 행을 찾지 못한 정정 행 */
-  unresolved: LedgerRevenueRow[]
-}
-
-export function resolveCorrectionTargets(
-  corrections: LedgerRevenueRow[],
-  sheetRows: LedgerRevenueRow[],
-  /** 정정 행 → 만들 때 본 시트 Row ID(반영값 sourceSnapshot). 없으면 Row ID 단계를 건너뛴다. */
-  sheetRowIdOf: (correction: LedgerRevenueRow) => string | null = () => null,
-): CorrectionTargetResult {
-  const overrides = new Map<string, Set<string>>()
-  const unresolved: LedgerRevenueRow[] = []
-  if (corrections.length === 0) return { overrides, unresolved }
-  const resolve = createSheetRowResolver(sheetRows)
-  for (const correction of corrections) {
-    const month = correction.draftMonth
-    if (!month) continue
-    const target = resolve({ ...correction, sheetRowId: sheetRowIdOf(correction) })
-    if (!target) {
-      unresolved.push(correction)
-      continue
-    }
-    const months = overrides.get(target.id) ?? new Set<string>()
-    months.add(month)
-    overrides.set(target.id, months)
-  }
-  return { overrides, unresolved }
-}
+// 원본 시트 행 찾기(SheetRowRef · createSheetRowResolver · resolveCorrectionTargets · CorrectionTargetResult)와
+// snapshotSheetRowId 는 lib/branch/{ledger-overlay, ledger-draft-metadata}.ts 로 옮겼다(2026-11-25 — 서버 집계·
+// 대조 스크립트가 같은 함수를 쓴다). 아래 export … from 으로 같은 이름을 다시 내보낸다.
+export {
+  createSheetRowResolver,
+  resolveCorrectionTargets,
+  type CorrectionTargetResult,
+  type SheetRowRef,
+} from "@/lib/branch/ledger-overlay"
+export { appliedDraftConfidenceMaps, snapshotField, snapshotSheetRowId, snapshotText } from "@/lib/branch/ledger-draft-metadata"
 
 // 열린 수정 초안의 원천 딜 id 를 지금 시트 행 id 로 맞춘다(화면 매칭용 사본 — 저장된 초안은 그대로).
 // 시트를 다시 가져온 뒤에도 그 칸의 대기 표시가 남고, 같은 칸 재편집이 새 수정 초안 대신 그 초안을 고치게
@@ -177,43 +105,7 @@ export function alignOpenDraftsToSheetRows(drafts: LedgerDraft[], sheetRows: Led
   return changed ? next : drafts
 }
 
-// 적용된 초안(장부 엔트리)의 확도를 행 확도 맵으로 변환. 확도와 무관하게 전액
-// monthlyConfirmed+red로 만들면 '예정' 입력도 적용 즉시 확정으로 집계된다(확정·달성률 인플레).
-// 라운드 3(P1): 유효한 weekly+weeklyConfidence(주차별 확도 병렬 배열)가 있으면 초안 단위
-// 확도 대신 주차 합 exact로 분해한다 —
-//   - monthlyConfirmed[month] = Σ(confirmed 주차 금액), monthlyHighConfidence = Σ(high-confidence).
-//   - monthlyRed[month]는 전액 확정(¥1 오차 허용 — confirmed 합 ≥ amount-1)일 때만 true.
-//     부분 확정을 red로 만들면 캐논(rev-confirmed)의 red 폴백이 월 전체를 확정으로 오집계한다.
-// weeklyConfidence 부재/무효(기존 초안)는 기존 로직 그대로 — 완전 하위호환.
-// export: tests/branch/weekly-confidence.test.ts가 exact 합·red 규칙을 직접 검증한다.
-export function appliedDraftConfidenceMaps(
-  month: string,
-  amount: number,
-  metadata: Record<string, unknown> | null | undefined,
-): Pick<LedgerRevenueRow, "monthlyConfirmed" | "monthlyHighConfidence" | "monthlyRed"> {
-  const weekly = mergedWeeklyFromMetadata(metadata)
-  const states = weekly ? weeklyConfidenceFromMetadata(metadata) : null
-  if (weekly && states) {
-    let confirmed = 0
-    let highConfidence = 0
-    weekly.forEach((value, index) => {
-      if (value <= 0) return
-      if (states[index] === "confirmed") confirmed += value
-      else if (states[index] === "high-confidence") highConfidence += value
-    })
-    return {
-      monthlyConfirmed: confirmed > 0 ? { [month]: confirmed } : {},
-      monthlyHighConfidence: highConfidence > 0 ? { [month]: highConfidence } : {},
-      monthlyRed: amount > 0 && confirmed >= amount - 1 ? { [month]: true } : {},
-    }
-  }
-  const confidence = draftConfidenceFromMetadata(metadata)
-  return {
-    monthlyConfirmed: confidence === "confirmed" ? { [month]: amount } : {},
-    monthlyHighConfidence: confidence === "high-confidence" ? { [month]: amount } : {},
-    monthlyRed: confidence === "confirmed" ? { [month]: true } : {},
-  }
-}
+// appliedDraftConfidenceMaps(적용 초안·항목의 확도 → 행 확도 맵)는 lib/branch/ledger-draft-metadata.ts 로 옮겼다(위에서 재수출).
 
 // export: 웨이브 5 회귀 테스트(tests/branch)가 순수 집계 함수와 함께 이 타입을 직접 검증한다.
 export interface RevManagerSummary {
@@ -695,26 +587,7 @@ function buildRevProductSummary(rows: LedgerRevenueRow[], month: string): RevPro
   return Array.from(summaries.values()).filter((item) => item.rows > 0)
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value)
-}
-
-function snapshotField(snapshot: Record<string, unknown> | undefined, key: string): unknown {
-  if (!snapshot) return undefined
-  const direct = snapshot[key]
-  if (direct != null) return direct
-  const detail = isRecord(snapshot.detail) ? snapshot.detail[key] : undefined
-  if (detail != null) return detail
-  const row = isRecord(snapshot.row) ? snapshot.row[key] : undefined
-  return row
-}
-
-function snapshotText(snapshot: Record<string, unknown> | undefined, key: string): string | null {
-  const value = snapshotField(snapshot, key)
-  if (typeof value !== "string") return null
-  const trimmed = value.trim()
-  return trimmed ? trimmed : null
-}
+// isRecord · snapshotField · snapshotText 는 lib/branch/ledger-draft-metadata.ts 로 옮겼다(위에서 재수출).
 
 function MetricTile({
   label,
@@ -886,8 +759,6 @@ export {
   rowMatchesForecastFilter,
   rowMatchesForecastFilterInMonths,
   buildRevProductSummary,
-  snapshotField,
-  snapshotText,
   MetricTile,
   revSortAriaValue,
   RevSortHeader,

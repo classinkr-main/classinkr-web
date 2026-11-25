@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 
 import { CRM_STAFF_ADMIN_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
 import { isLedgerDraftBodyError, parseLedgerDraftUpdateBody } from "@/lib/branch/ledger-draft-body"
+import { currentRevSheetLock, isRevSheetLockActive, sheetWrittenReverseLockedMessage } from "@/lib/branch/rev-sheet-lock"
 import { applyLedgerDraftsWithSheetWrite } from "@/lib/branch/sheet-writeback/apply-service"
 import { sheetWriteBlocksReverse } from "@/lib/branch/sheet-writeback/ledger-rules"
 import { SHEET_WRITTEN_REVERSE_MESSAGE } from "@/lib/branch/sheet-writeback/messages"
@@ -113,8 +114,18 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       // 줄 모르게 된다. 시트가 정본이므로 되돌리기는 시트에서 직접 하거나 원래 값으로 다시 입력해 반영한다.
       // "sending" 도 막는다 — 장부 항목은 시트 쓰기를 되읽어 확인한 뒤에만 생기므로, 항목이 있는데 시도가 sending 이면
       // 시트에는 쓰였고 감사 행 갱신만 실패한 것이다(항목이 없으면 어차피 상쇄할 것이 없다). 판정 정본은 ledger-rules.ts.
+      //
+      // 시트 고정(F-22) 뒤에도 가드는 같다(플래그가 꺼져도 시트에 쓴 값은 12/1 스냅샷에 남아 있다). 다만 "시트에서 직접
+      // 되돌리기"는 더 못 하므로 문구만 "장부에서 원래 값으로 다시 입력"으로 바꾼다.
       const sheetWrite = await latestSheetWrite(id)
       if (sheetWriteBlocksReverse(sheetWrite?.status, sheetWrite?.code)) {
+        const lock = currentRevSheetLock()
+        if (isRevSheetLockActive(lock)) {
+          return NextResponse.json(
+            { error: sheetWrittenReverseLockedMessage(lock.lockedAt), reason: "sheet-written" },
+            { status: 409 },
+          )
+        }
         return NextResponse.json({ error: SHEET_WRITTEN_REVERSE_MESSAGE, reason: "sheet-written" }, { status: 409 })
       }
 

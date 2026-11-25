@@ -19,6 +19,8 @@ export async function GET(req: NextRequest) {
   if (authResult !== "ok") {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 })
   }
+  // 시트 고정(BRANCH_REV_SHEET_LOCKED_AT) 날짜부터는 runAll 이 REV 를 건너뛰고 DSH·KPI·하드웨어만 읽는다(실행 기록 dsh+hw).
+  // 완료 처리는 result.ranSources 로 실제로 돌린 부분의 캐시만 만료한다.
   const result = await runAll({ trigger: "cron" })
   const completed = await completeBranchSync(result)
   // 연속 실패 알림은 이 크론에서만 판정한다(수동 재시도마다 판정하면 같은 날 중복 발송). 크론은 하루 3번

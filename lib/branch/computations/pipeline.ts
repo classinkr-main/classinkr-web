@@ -40,6 +40,8 @@ export interface RevRevenueRow {
   dealType: string | null
   productVersion: string | null
   firstPayment: string | null
+  /** 중요도(KA 등) — 값이 있을 때만 키를 싣는다. 장부 정정이 원본 시트 행에서 옮겨 받는다(F-17). */
+  importance?: string | null
   contractTarget: number
   revenue: number
   monthlyPayments: Record<string, number>
@@ -225,6 +227,7 @@ export function listRevRevenue(
       dealType: d.deal_type,
       productVersion: d.product_version,
       firstPayment: d.first_payment,
+      ...(d.importance ? { importance: d.importance } : {}),
       contractTarget: Number(d.contract_target ?? 0),
       revenue: revenueFromRev(d, scope?.period, scope?.now),
       monthlyPayments: sparseNumberMap(d.monthly_payments, true),

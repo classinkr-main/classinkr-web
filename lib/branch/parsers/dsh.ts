@@ -1,5 +1,6 @@
 import type { FormattedCell } from "@/lib/branch/google-sheets"
 import { normalizeBranchMemberName } from "@/lib/branch/member-names"
+import { isUnparsedSheetAmount, sheetCellAmount } from "@/lib/branch/sheet-number"
 
 export const DSH_RANGE = "'1. DSH'!A1:W300"
 // Real DSH layout: A=team-label (mostly empty), B=section, C=cat, D=new/renew, E=direct/channel,
@@ -31,10 +32,15 @@ export interface DshBreakdownRow {
 
 export interface DshOutput { rows: DshRow[]; members: Record<string, string>; breakdown?: DshBreakdownRow[] }
 
-function asNum(v: unknown): number {
-  if (v == null) return 0
-  const cleaned = typeof v === "number" ? v : Number(String(v).replace(/[¥₩$€£,\s]/g, ""))
-  return Number.isFinite(cleaned) ? cleaned : 0
+// 금액 칸 → 숫자. 칸의 실제 숫자(effectiveValue)를 먼저 읽는다 — '(1,750)'·'−1,750' 환불이 0 으로 사라지지 않는다(F-28).
+// 못 읽으면 예전처럼 0 이고, 파싱 진단(onUnparsed)에 칸을 알린다.
+type UnparsedSink = (row: number, col: number, cell: FormattedCell | undefined) => void
+
+function asNum(cell: FormattedCell | undefined, row: number, col: number, onUnparsed?: UnparsedSink): number {
+  const amount = sheetCellAmount(cell)
+  if (amount != null) return amount
+  if (onUnparsed && isUnparsedSheetAmount(cell)) onUnparsed(row, col, cell)
+  return 0
 }
 
 const ymRe = /^(\d{4})-(\d{1,2})$/
@@ -65,17 +71,23 @@ function normalizeTeam(v: unknown): string | null {
   return null
 }
 
-function readNumericRow(grid: FormattedCell[][], rowIdx: number, monthMap: Array<{ idx: number; ym: string }>) {
+function readNumericRow(
+  grid: FormattedCell[][],
+  rowIdx: number,
+  monthMap: Array<{ idx: number; ym: string }>,
+  onUnparsed?: UnparsedSink,
+) {
   const row = grid[rowIdx] ?? []
+  const num = (col: number) => asNum(row[col], rowIdx, col, onUnparsed)
   const months: Record<string, number> = {}
-  for (const { idx, ym } of monthMap) months[ym] = asNum(row[idx]?.value)
+  for (const { idx, ym } of monthMap) months[ym] = num(idx)
   return {
-    annual: asNum(row[DSH_COLS.annual]?.value),
+    annual: num(DSH_COLS.annual),
     quarters: [
-      asNum(row[DSH_COLS.q1]?.value),
-      asNum(row[DSH_COLS.q1 + 1]?.value),
-      asNum(row[DSH_COLS.q1 + 2]?.value),
-      asNum(row[DSH_COLS.q4]?.value),
+      num(DSH_COLS.q1),
+      num(DSH_COLS.q1 + 1),
+      num(DSH_COLS.q1 + 2),
+      num(DSH_COLS.q4),
     ] as [number, number, number, number],
     months,
   }
@@ -110,7 +122,37 @@ function addNumericRow(target: DshRow, source: ReturnType<typeof readNumericRow>
   }
 }
 
+/** DSH 파싱 진단 — 값이 적혀 있는데 금액으로 못 읽은 칸(같은 칸은 한 번만 센다). */
+export interface DshParseStats {
+  unparsedAmountCells: number
+  unparsedSamples: Array<{ row: number; col: number; text: string }>
+}
+
 export function parseDsh(grid: FormattedCell[][], refFy: number): DshOutput {
+  return parseDshWithStats(grid, refFy).output
+}
+
+/** 못 읽은 금액 칸 경고 한 줄(동기화가 싣는다). 없으면 undefined. */
+export function dshParseWarning(stats: DshParseStats): string | undefined {
+  if (stats.unparsedAmountCells === 0) return undefined
+  const where = stats.unparsedSamples.map((sample) => `${sample.row}행 '${sample.text}'`).join(", ")
+  return `DSH 금액으로 못 읽은 칸 ${stats.unparsedAmountCells}개${where ? `(${where})` : ""}`
+}
+
+export function parseDshWithStats(grid: FormattedCell[][], refFy: number): { output: DshOutput; stats: DshParseStats } {
+  const stats: DshParseStats = { unparsedAmountCells: 0, unparsedSamples: [] }
+  const seenUnparsed = new Set<string>()
+  const onUnparsed: UnparsedSink = (row, col, cell) => {
+    const key = `${row}:${col}`
+    if (seenUnparsed.has(key)) return
+    seenUnparsed.add(key)
+    stats.unparsedAmountCells += 1
+    if (stats.unparsedSamples.length < 5) stats.unparsedSamples.push({ row: row + 1, col, text: String(cell?.value ?? "").slice(0, 40) })
+  }
+  return { output: parseDshGrid(grid, refFy, onUnparsed), stats }
+}
+
+function parseDshGrid(grid: FormattedCell[][], refFy: number, onUnparsed: UnparsedSink): DshOutput {
   if (grid.length < 2) return { rows: [], members: {}, breakdown: [] }
   const headers = grid[0] ?? []
   const monthMap: Array<{ idx: number; ym: string }> = []
@@ -154,7 +196,7 @@ export function parseDsh(grid: FormattedCell[][], refFy: number): DshOutput {
     if (!currentKind) continue
     // 소계 행(Software Sum/Hardware Sum)은 구성 행의 합이므로 누적하면 2중 계상이다.
     if (isDshSubtotalRow(row)) continue
-    const source = readNumericRow(grid, r, monthMap)
+    const source = readNumericRow(grid, r, monthMap, onUnparsed)
     if (source.annual === 0 && source.quarters.every((q) => q === 0) && Object.values(source.months).every((m) => m === 0)) continue
     addNumericRow(getTeamRow(currentTeam, currentKind), source)
   }
@@ -166,7 +208,7 @@ export function parseDsh(grid: FormattedCell[][], refFy: number): DshOutput {
     const kindText = asText(grid[r]?.[4]?.value).toLowerCase()
     if (member && (kindText === "goal" || kindText === "status" || kindText === "rate")) currentMember = member
     if (!currentMember || (kindText !== "goal" && kindText !== "status")) continue
-    const numeric = readNumericRow(grid, r, monthMap)
+    const numeric = readNumericRow(grid, r, monthMap, onUnparsed)
     memberRows.push({ level: "member", team: "", member: currentMember, kind: kindText, ...numeric })
   }
 
@@ -219,21 +261,15 @@ export function parseDsh(grid: FormattedCell[][], refFy: number): DshOutput {
     // CHANNEL_ORDER와 짝을 맞춰야 한다.
     if (chanRaw && chanRaw !== "Direct" && chanRaw !== "Channel") continue
     const chan = chanRaw || "(미구분)"
-    const bMonths: Record<string, number> = {}
-    for (const { idx, ym } of monthMap) bMonths[ym] = asNum(row[idx]?.value)
+    const numeric = readNumericRow(grid, r, monthMap, onUnparsed)
     breakdown.push({
       kind: bKind,
       category: cat,
       status_type: stat,
       channel: chan,
-      annual: asNum(row[DSH_COLS.annual]?.value),
-      quarters: [
-        asNum(row[DSH_COLS.q1]?.value),
-        asNum(row[DSH_COLS.q1 + 1]?.value),
-        asNum(row[DSH_COLS.q1 + 2]?.value),
-        asNum(row[DSH_COLS.q4]?.value),
-      ] as [number, number, number, number],
-      months: bMonths,
+      annual: numeric.annual,
+      quarters: numeric.quarters,
+      months: numeric.months,
     })
   }
 

@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest"
 // 웨이브 7 2단(S4): DraftQueue는 워크벤치에서 next/dynamic으로 지연 로드된다 — 정적 재수출을
 // 남기면 청크 분리가 무효화되므로 draftStatusMeta는 소유 모듈에서 직접 import한다.
 import { draftStatusMeta } from "@/components/admin/branch/ledger/DraftQueue"
+import { buildLedgerOverlay } from "@/lib/branch/ledger-overlay"
 
 // 웨이브 5 — 장부 "되돌리기" 버튼 UI 배선 회귀 가드.
 // 백엔드(PATCH .../ledger-drafts/{id} action=reverse)는 이미 라이브 — 이 스위트는 프런트 배선만 본다:
@@ -13,11 +14,10 @@ import { draftStatusMeta } from "@/components/admin/branch/ledger/DraftQueue"
 //     "적용됨"→"적용완료" 등으로 통일됐다 — 분기 로직은 그대로, 문구만 갱신.
 //  2) 훅의 reverseEntry가 서버 응답 entry를 그대로 ledgerEntries에 병합하는지(로컬에서 상태를
 //     임의로 뒤집지 않음 — 기존 ledgerEntryRows의 active 필터가 자연히 신뢰할 수 있게).
-//  3) appliedDraftFallbackRows(entries 누락 시 applied draft를 대체 표시하는 안전망)가
-//     reversedDraftIds로 상쇄된 draft를 걸러내는지 — 이게 없으면 재조회 시 되돌린 행이
-//     되살아난다(GET 목록 엔드포인트가 entry_status=active만 반환하기 때문).
-// 소스 스캔 방식은 tests/branch/ledger-entry-reversal-exclusion.test.ts와 동일 관례를 따른다
-// (ledgerEntryRows/appliedDraftFallbackRows는 훅 상태에 묶인 비export useMemo라 직접 호출 불가).
+//  3) 적용 초안 안전망(entries 누락 시 applied draft를 대체 표시)이 reversedDraftIds로 상쇄된
+//     draft를 걸러내는지 — 이게 없으면 재조회 시 되돌린 행이 되살아난다(GET 목록 엔드포인트가
+//     entry_status=active만 반환하기 때문). 2026-11-25부터 이 합성은 순수 함수
+//     lib/branch/ledger-overlay.ts buildLedgerOverlay라 동작으로 검증한다(워크벤치 배선만 소스 스캔).
 const workbenchPath = join(process.cwd(), "components/admin/branch/SalesLedgerWorkbench.tsx")
 // 웨이브 7 2단(F5): 서버 입력 큐 훅(useLedgerDraftQueue: reverseEntry·loadDrafts 포함)은
 // ledger/useLedgerDraftQueue.ts로 물리 이동됐다(로직 무변경) — 훅 내부를 보는 스캔은 이 파일을 읽는다.
@@ -99,27 +99,39 @@ describe("reverseEntry 훅 — 서버 응답을 그대로 신뢰(웨이브 5)", 
   })
 })
 
-describe("appliedDraftFallbackRows — 상쇄된 draft를 대체 표시 안전망에서 제외(웨이브 5)", () => {
-  it("draft.status==='applied' 필터 뒤에 reversedDraftIds 제외 필터가 온다", () => {
-    const source = workbenchSource()
-    const memoStart = source.indexOf("const appliedDraftFallbackRows = useMemo")
-    expect(memoStart).toBeGreaterThan(-1)
-    const memoEnd = source.indexOf("}, [drafts, matrixMonths, team, reversedDraftIds])", memoStart)
-    expect(memoEnd).toBeGreaterThan(memoStart)
-    const memoBody = source.slice(memoStart, memoEnd)
-
-    const appliedFilterIndex = memoBody.indexOf('.filter((draft) => draft.status === "applied")')
-    const reversedFilterIndex = memoBody.indexOf(".filter((draft) => !reversedDraftIds.has(draft.id))")
-    const mapIndex = memoBody.indexOf(".map((draft) => ({")
-
-    expect(appliedFilterIndex).toBeGreaterThan(-1)
-    expect(reversedFilterIndex).toBeGreaterThan(appliedFilterIndex)
-    expect(mapIndex).toBeGreaterThan(reversedFilterIndex)
+describe("적용 초안 안전망 — 상쇄된 draft를 대체 표시에서 제외(웨이브 5, 2026-11-25 buildLedgerOverlay로 이동)", () => {
+  // entries 가 비어 안전망(applied draft 대체 표시)을 탈 때도 상쇄된 draft 는 되살아나지 않는다.
+  const appliedDraft = (id: string, amount: number) => ({
+    id,
+    kind: "new-row" as const,
+    status: "applied",
+    customer: "예시학원1",
+    manager: "예시A",
+    team: "BD",
+    month: "2026-11",
+    amount,
+    note: "",
+    metadata: { confidence: "confirmed" },
   })
 
-  it("reversedDraftIds가 의존성 배열에 들어가 상쇄 직후(재조회 없이도) 즉시 재계산된다", () => {
+  it("status==='applied'라도 reversedDraftIds 에 있으면 대체 표시 행이 되지 않는다", () => {
+    const result = buildLedgerOverlay({
+      sheetRows: [],
+      ledgerEntries: [],
+      drafts: [appliedDraft("d-reversed", 9_000), appliedDraft("d-live", 1_000)],
+      reversedDraftIds: new Set(["d-reversed"]),
+    })
+    expect(result.fallbackRows.map((row) => row.id)).toEqual(["draft-d-live"])
+    expect(result.rows.map((row) => row.id)).toEqual(["draft-d-live"])
+  })
+
+  it("워크벤치가 reversedDraftIds 를 오버레이 입력과 memo 의존성에 함께 넘긴다(상쇄 직후 재조회 없이 재계산)", () => {
     const source = workbenchSource()
-    expect(source).toContain("}, [drafts, matrixMonths, team, reversedDraftIds])")
+    const start = source.indexOf("const ledgerOverlay = useMemo(")
+    expect(start).toBeGreaterThan(-1)
+    const block = source.slice(start, source.indexOf("const rows = ledgerOverlay.rows", start))
+    expect(block).toContain("reversedDraftIds,")
+    expect(block).toMatch(/\[sheetRows, ledgerEntries, drafts, reversedDraftIds, [^\]]*\]/)
   })
 })
 

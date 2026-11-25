@@ -7,11 +7,34 @@ import { cny, cnyExact } from "@/lib/branch/money-format"
 import { planBulkApply, planBulkCheck } from "./draft-bulk-plan"
 import { productLabel } from "./ledger-simple-logic"
 import type { DraftConfidence, LedgerDraft, LedgerRevenueRow } from "./shared"
-import { summarizeApplyOutcomes, type ApplySheetOutcome, type SheetHint, type SheetWriteMode } from "./sheet-write-view"
+import {
+  APPLY_SKIPPED_IN_FLIGHT_MESSAGE,
+  applyFailuresNeedDetail,
+  summarizeApplyOutcomes,
+  type ApplySheetOutcome,
+  type SheetHint,
+  type SheetWriteMode,
+} from "./sheet-write-view"
 
 // 장부(A안) 입력·수정 — 칸 안에서 바로(금액 + 확도 글자 띠 예·고·확) + 시안 3(확인·반영을 하단 한 줄로).
 // 저장은 워크벤치의 onCommitCell(매트릭스 칸 커밋과 같은 경로: 셀당 초안 1건, 같은 칸 재편집은 PATCH,
 // 자가 체크)로, 확인·반영은 체크 큐의 checkDrafts/applyDrafts 로 간다 — 새 저장 경로를 만들지 않는다.
+//
+// 2026-11-25(F-34): 저장 결과는 셋 — 서버에 저장됨(닫는다) · 이 브라우저에만 임시 저장됨(아직 안 보냄 + 다시 시도) ·
+// 거절(충돌·검증 — 편집기를 열어 두고 입력칸으로 포커스를 돌린다). 저장 중에도 입력칸은 disabled 가 아니라 readOnly 라
+// 포커스를 잃지 않는다(Enter·Esc 가 계속 먹는다). 결재 바는 다른 곳의 반영이 진행 중이면 잠그고 "반영 중…"(F-20).
+
+/**
+ * 칸 저장 결과. true·"saved" 는 서버에 저장됨, "local" 은 서버에 못 보내 이 브라우저에만 임시 저장됨(로컬 초안),
+ * false·"rejected" 는 저장되지 않음(충돌·검증 거부·행 없음). 불리언은 예전 호출부 호환.
+ */
+export type CellCommitResult = boolean | "saved" | "local" | "rejected"
+
+export function cellCommitOutcome(result: CellCommitResult): "saved" | "local" | "rejected" {
+  if (result === true || result === "saved") return "saved"
+  if (result === "local") return "local"
+  return "rejected"
+}
 
 /** 워크벤치가 넘기는 칸 편집 계약. rowId·month 는 매트릭스 좌표와 같다(주차 없음 = 월 칸). */
 export interface LedgerCellEditApi {
@@ -20,7 +43,12 @@ export interface LedgerCellEditApi {
   confidence: (row: LedgerRevenueRow, month: string) => DraftConfidence
   pending: (row: LedgerRevenueRow, month: string) => { amount: number } | null
   /** confidenceTouched: 사용자가 확도 키·띠를 눌러 직접 골랐는지(REV 시트 쓰기 — 안 골랐으면 칸 색을 그대로 둔다). */
-  commit: (rowId: string, month: string, amount: number, confidence: DraftConfidence, confidenceTouched: boolean) => Promise<boolean>
+  commit: (rowId: string, month: string, amount: number, confidence: DraftConfidence, confidenceTouched: boolean) => Promise<CellCommitResult>
+  /**
+   * 아직 서버에 못 보낸 임시 초안을 지금 다시 보낸다(훅 retryUnsentDrafts) — 다 보냈으면 true. 있으면 "local" 저장 뒤 편집기가
+   * "아직 안 보냄 · 다시 시도"를 보이고, 없으면 그냥 닫는다(F-34).
+   */
+  retryUnsent?: () => Promise<boolean>
   /**
    * REV 시트 쓰기가 켜져 있을 때만 — 칸 아래 한 줄(어느 주차에 쓰는지·왜 막히는지). block 이면 저장을 막는다.
    * 없으면(꺼짐) 힌트 없이 지금과 같다.
@@ -126,6 +154,8 @@ export function InlineCellEditor({ label, month, candidates, edit, onClose, onMo
   const initialConfidence = edit.confidence(row, month)
   const [draft, setDraft] = useState<InlineEditorDraft>(() => initialInlineEditorDraft(initialValue, initialConfidence))
   const [saving, setSaving] = useState(false)
+  // F-34: 서버에 못 보내고 이 브라우저에만 임시 저장된 뒤의 상태 — idle(다시 시도 가능) · retrying · failed(다시 보내기도 실패).
+  const [unsent, setUnsent] = useState<"idle" | "retrying" | "failed" | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const parsedAmount = parseAmountInput(draft.amount)
   // REV 시트 쓰기 켜짐일 때만 값이 있다 — 입력이 바뀔 때마다 서버 반영과 같은 판정으로 다시 계산한다.
@@ -141,13 +171,14 @@ export function InlineCellEditor({ label, month, candidates, edit, onClose, onMo
     const next = candidates.find((candidate) => candidate.id === id)
     if (!next) return
     setRow(next)
+    setUnsent(null)
     setDraft(initialInlineEditorDraft(edit.value(next, month), edit.confidence(next, month)))
   }
 
   const chooseConfidence = (next: DraftConfidence) => setDraft((current) => pickInlineConfidence(current, next))
 
   const save = async () => {
-    if (saving) return
+    if (saving || unsent === "retrying") return
     const decision = decideInlineSave(draft, { value: initialValue, confidence: initialConfidence }, hint)
     if (decision.type === "invalid" || decision.type === "blocked") return
     if (decision.type === "unchanged") {
@@ -155,9 +186,32 @@ export function InlineCellEditor({ label, month, candidates, edit, onClose, onMo
       return
     }
     setSaving(true)
-    const ok = await edit.commit(row.id, month, decision.amount, decision.confidence, decision.confidenceTouched)
+    const outcome = cellCommitOutcome(await edit.commit(row.id, month, decision.amount, decision.confidence, decision.confidenceTouched))
     setSaving(false)
-    if (ok) onClose()
+    if (outcome === "saved") {
+      onClose()
+      return
+    }
+    if (outcome === "local" && !edit.retryUnsent) {
+      // 값은 임시 초안으로 남았다(칸은 대기 표시, 화면 배너가 미전송을 알린다) — 다시 시도할 길이 없으면 닫는다.
+      onClose()
+      return
+    }
+    if (outcome === "local") setUnsent("idle")
+    // 거절(충돌·검증)이거나 아직 안 보냄 — 편집기를 열어 두고 입력칸으로 포커스를 돌려 Enter·Esc 가 계속 먹게 한다.
+    inputRef.current?.focus()
+  }
+
+  const retryUnsent = async () => {
+    if (!edit.retryUnsent || unsent === "retrying") return
+    setUnsent("retrying")
+    const sent = await edit.retryUnsent()
+    if (sent) {
+      onClose()
+      return
+    }
+    setUnsent("failed")
+    inputRef.current?.focus()
   }
 
   const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
@@ -181,7 +235,7 @@ export function InlineCellEditor({ label, month, candidates, edit, onClose, onMo
       onKeyDown={onKeyDown}
       onBlur={(event) => {
         // 칸 밖으로 포커스가 나가면 저장하지 않고 닫는다(Enter·↵ 만 저장).
-        if (!saving && !event.currentTarget.contains(event.relatedTarget as Node | null)) onClose(false)
+        if (!saving && unsent !== "retrying" && !event.currentTarget.contains(event.relatedTarget as Node | null)) onClose(false)
       }}
       className="flex min-w-[124px] flex-col gap-1"
     >
@@ -213,7 +267,9 @@ export function InlineCellEditor({ label, month, candidates, edit, onClose, onMo
             setDraft((current) => ({ ...current, amount }))
           }}
           placeholder="0"
-          disabled={saving}
+          // disabled 면 포커스가 문서 몸통으로 떨어져 실패 뒤 Enter 가 먹지 않는다 — 저장 중에는 읽기 전용으로만(F-34).
+          readOnly={saving}
+          aria-busy={saving || undefined}
           className="w-full min-w-0 bg-transparent text-right text-[13px] font-semibold tabular-nums text-[#111110] outline-none"
         />
       </label>
@@ -259,6 +315,23 @@ export function InlineCellEditor({ label, month, candidates, edit, onClose, onMo
           {saving ? "…" : "↵"}
         </button>
       </div>
+      {unsent ? (
+        // F-34: 서버에 못 보낸 임시 저장 — 아직 장부에 적용할 수 없다. 다시 시도는 못 보낸 임시 초안을 서버로 다시 보낸다.
+        <p role="status" data-cell-unsent={unsent} className="flex max-w-[220px] items-center gap-1.5 text-[11px] leading-snug text-[#7A520F]">
+          <span className="min-w-0 flex-1">
+            {unsent === "failed" ? "아직 안 보냄 — 다시 보내지 못했습니다" : "아직 안 보냄 — 이 브라우저에만 임시 저장됨"}
+          </span>
+          <button
+            type="button"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => void retryUnsent()}
+            disabled={unsent === "retrying"}
+            className="shrink-0 rounded px-1 font-semibold underline underline-offset-2 hover:text-[#111110] disabled:opacity-50"
+          >
+            {unsent === "retrying" ? "보내는 중…" : "다시 시도"}
+          </button>
+        </p>
+      ) : null}
       {hint ? (
         // 시트 쓰기 힌트(켜짐일 때만) — block 이면 저장이 막힌 이유라 alert 로 읽힌다.
         <p
@@ -290,23 +363,32 @@ export function approvalConfirmText(count: number, total: number, sheetWriteMode
 /**
  * 결과 줄. 반영은 시트 쓰기 결과가 있으면 코드별 건수("3건 시트에 반영 · 1건 충돌 — 시트가 바뀌었습니다 · 1건
  * 장부에만(새 행)"), 꺼짐이면 지금 문구. 실패가 하나라도 있으면 alert(부분 성공을 성공처럼 말하지 않는다).
+ * " — 모두 보기에서 사유 확인"은 행마다 볼 사유가 있을 때만 — 응답 없음(새로고침 안내)·시트 잠김·권한(관리자 안내)뿐이면
+ * 문구가 이미 할 일을 말한다(F-07·F-33). 보낸 것이 없으면(전부 다른 곳에서 반영 중, F-20) 그렇게 말한다.
  */
 export function approvalResultLine(action: "check" | "apply", outcome: ApprovalOutcome): { text: string; alert: boolean } {
   const verb = action === "check" ? "확인" : "반영"
-  const sheet = action === "apply" ? summarizeApplyOutcomes(outcome.sheetResults ?? []) : null
+  const results = outcome.sheetResults ?? []
+  if (action === "apply" && outcome.done === 0 && outcome.failed === 0 && results.length === 0) {
+    return { text: APPLY_SKIPPED_IN_FLIGHT_MESSAGE, alert: false }
+  }
+  const sheet = action === "apply" ? summarizeApplyOutcomes(results) : null
   if (sheet) {
-    return { text: sheet.failed ? `${sheet.text} — 모두 보기에서 사유 확인` : sheet.text, alert: sheet.failed || outcome.failed > 0 }
+    const detail = sheet.failed && applyFailuresNeedDetail(results)
+    return { text: detail ? `${sheet.text} — 모두 보기에서 사유 확인` : sheet.text, alert: sheet.failed || outcome.failed > 0 }
   }
   if (outcome.failed > 0) return { text: `${outcome.done}건 ${verb}, ${outcome.failed}건 실패 — 모두 보기에서 사유 확인`, alert: true }
   return { text: `${outcome.done}건 ${verb}됨`, alert: false }
 }
 
 /** 시안 3 — 대기 중인 변경을 화면 아래 한 줄(어두운 바)로. 확인·반영은 체크 큐와 같은 일괄 함수, 반영은 한 번 더 묻는다. */
-export function ApprovalBar({ drafts, serverQueue, sheetWriteMode = "off", onCheck, onApply, onShowAll }: {
+export function ApprovalBar({ drafts, serverQueue, sheetWriteMode = "off", applyBusy = false, onCheck, onApply, onShowAll }: {
   drafts: LedgerDraft[]
   serverQueue: boolean
   /** REV 시트 쓰기 스위치 — on 이면 확인 문구가 시트(2. REV)와 장부에 반영한다고 말한다. */
   sheetWriteMode?: SheetWriteMode
+  /** F-20: 다른 곳(큐 일괄·줄 적용)에서 반영 요청이 나가 있다(훅 applyBusy) — 버튼을 잠그고 "반영 중…"으로 보인다. */
+  applyBusy?: boolean
   onCheck: (ids: string[]) => Promise<ApprovalOutcome>
   onApply: (ids: string[]) => Promise<ApprovalOutcome>
   onShowAll: () => void
@@ -358,17 +440,17 @@ export function ApprovalBar({ drafts, serverQueue, sheetWriteMode = "off", onChe
         <>
           <span className="text-[12.5px]">{approvalConfirmText(applyPlan.count, applyPlan.total, sheetWriteMode)}</span>
           <button type="button" disabled={busy} onClick={() => setConfirming(false)} className="min-h-10 rounded-lg border border-[rgba(255,255,255,0.4)] px-3 text-[13px] font-semibold text-white">취소</button>
-          <button type="button" disabled={busy} onClick={() => void run("apply")} className="min-h-10 rounded-lg bg-white px-4 text-[13px] font-semibold text-[#084734] disabled:opacity-50">{busy ? "반영 중…" : "반영"}</button>
+          <button type="button" disabled={busy || applyBusy} onClick={() => void run("apply")} className="min-h-10 rounded-lg bg-white px-4 text-[13px] font-semibold text-[#084734] disabled:opacity-50">{busy || applyBusy ? "반영 중…" : "반영"}</button>
         </>
       ) : (
         <>
           <button type="button" onClick={onShowAll} className="min-h-10 px-2 text-[12.5px] text-[#D9D4CB] underline-offset-2 hover:text-white hover:underline">모두 보기</button>
           {checkPlan.count > 0 ? (
-            <button type="button" disabled={busy} onClick={() => void run("check")} className="min-h-10 rounded-lg border border-white px-3 text-[13px] font-semibold text-white disabled:opacity-50">{checkPlan.count}건 확인</button>
+            <button type="button" disabled={busy || applyBusy} onClick={() => void run("check")} className="min-h-10 rounded-lg border border-white px-3 text-[13px] font-semibold text-white disabled:opacity-50">{checkPlan.count}건 확인</button>
           ) : null}
           {applyPlan.count > 0 && serverQueue ? (
-            <button type="button" disabled={busy} onClick={() => { setResult(null); setConfirming(true) }} className="min-h-10 rounded-lg bg-white px-4 text-[13px] font-semibold text-[#084734] disabled:opacity-50">
-              {applyPlan.count}건 {sheetWriteMode === "on" ? "시트·장부에" : "장부에"} 반영
+            <button type="button" disabled={busy || applyBusy} onClick={() => { setResult(null); setConfirming(true) }} className="min-h-10 rounded-lg bg-white px-4 text-[13px] font-semibold text-[#084734] disabled:opacity-50">
+              {applyBusy ? "반영 중…" : `${applyPlan.count}건 ${sheetWriteMode === "on" ? "시트·장부에" : "장부에"} 반영`}
             </button>
           ) : null}
         </>

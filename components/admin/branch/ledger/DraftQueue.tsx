@@ -10,6 +10,15 @@
 // 배지 4~5개 · 버튼 6개라 900px 패널에 3건 남짓만 보였다. 표시만 바꿨다 — 한 건 = 한 줄(약 40px, 카드 상자
 // 없음), 금액 밑에 다음 단계 버튼 하나(체크 또는 적용), 나머지 동작은 줄을 펼치면 나오는 글자 링크로 옮겼다.
 // 동작 · 활성 조건 · 확인 다이얼로그 · 상태 계산은 그대로다.
+//
+// 2026-11-25 시트 고정 전 정비:
+//  - F-20: 반영 요청이 나가 있는 초안(훅 applyingIds)은 줄 적용·일괄 반영을 잠그고 "반영 중…"으로 보인다(applyBusy).
+//  - F-21: 일괄 체크·반영은 화면 범위(bulkScope — 결재 바와 같은 담당자·팀)만 센다. 담당자가 여럿이면 "전체 담당자 N건"으로
+//    말하고 확인 문구에 담당자별 건수를 붙인다.
+//  - F-39: 체크·적용 알약은 진행 중에 disabled 대신 aria-disabled — 누른 알약이 포커스를 잃지 않는다. 누른 글자 링크가
+//    사라지면(체크 해제) 그 줄의 알약으로 포커스를 돌린다.
+//  - F-46: 활성 회계연도 밖의 달은 "26년 4월"처럼 해를 붙인다(fiscalMonths).
+//  - 시트 고정(sheetLock)이 적용 중이면 되돌리기 막힘 사유가 "장부에서 원래 값으로 다시 입력"으로 바뀐다(F-22).
 
 import { useEffect, useId, useMemo, useRef, useState } from "react"
 import { AlertTriangle, Loader2, RefreshCw, RotateCcw, Search, Send, Trash2, XCircle } from "lucide-react"
@@ -17,14 +26,16 @@ import { AlertTriangle, Loader2, RefreshCw, RotateCcw, Search, Send, Trash2, XCi
 import { matchesTokens, tokenize } from "../search-tokens"
 import { useDialogFocus } from "../../use-dialog-focus"
 import { planBulkApply, planBulkCheck } from "./draft-bulk-plan"
+import type { RevSheetLockView } from "@/lib/branch/rev-sheet-lock"
 import { isSelfCheckedDraft, SELF_CHECK_BADGE_LABEL, SELF_CHECK_BADGE_TITLE } from "./self-check"
 import {
   blocksLedgerDelete,
   blocksLedgerReverse,
   SHEET_WRITE_HISTORY_DELETE_MESSAGE,
-  SHEET_WRITTEN_REVERSE_MESSAGE,
   sheetWriteBadge,
+  sheetWrittenReverseMessage,
   summarizeApplyOutcomes,
+  APPLY_SKIPPED_IN_FLIGHT_MESSAGE,
   type ApplySheetOutcome,
   type SheetWriteBadgeTone,
   type SheetWriteMode,
@@ -152,9 +163,11 @@ function rowLinksForStatus(status: DraftStatus) {
 // 키보드 포커스 링 — 어드민 공통(#084734 · 2px · offset 2px). 줄 버튼 · 알약 · 글자 링크가 같은 링을 쓴다.
 const FOCUS_RING = "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734]"
 // 펼친 줄의 글자 링크(P0-5) — 네모 아이콘 버튼 대신 상자 없는 밑줄 글자. 꺼진 링크는 밑줄을 빼고 흐리게 두되
-// title로 이유를 보인다(시트 쓰기 가드 · 서버 큐 아님 등).
-const ROW_LINK_CLASS = `inline-flex items-center gap-1 rounded-sm text-[11.5px] font-semibold text-[#31302E] underline decoration-[rgba(0,0,0,0.28)] underline-offset-2 transition hover:text-[#111110] hover:decoration-current disabled:cursor-not-allowed disabled:no-underline disabled:opacity-45 ${FOCUS_RING}`
-const ROW_LINK_DANGER_CLASS = `inline-flex items-center gap-1 rounded-sm text-[11.5px] font-semibold text-[#B43E3E] underline decoration-[#B43E3E]/40 underline-offset-2 transition hover:text-[#8F2C2C] hover:decoration-current disabled:cursor-not-allowed disabled:no-underline disabled:opacity-45 ${FOCUS_RING}`
+// title로 이유를 보인다(시트 쓰기 가드 · 서버 큐 아님 등). 진행 중(aria-disabled — 포커스를 지키려고 disabled 대신, F-39)도
+// 같은 모양으로 흐리게.
+const ROW_LINK_DISABLED = "disabled:cursor-not-allowed disabled:no-underline disabled:opacity-45 aria-disabled:cursor-not-allowed aria-disabled:no-underline aria-disabled:opacity-45"
+const ROW_LINK_CLASS = `inline-flex items-center gap-1 rounded-sm text-[11.5px] font-semibold text-[#31302E] underline decoration-[rgba(0,0,0,0.28)] underline-offset-2 transition hover:text-[#111110] hover:decoration-current ${ROW_LINK_DISABLED} ${FOCUS_RING}`
+const ROW_LINK_DANGER_CLASS = `inline-flex items-center gap-1 rounded-sm text-[11.5px] font-semibold text-[#B43E3E] underline decoration-[#B43E3E]/40 underline-offset-2 transition hover:text-[#8F2C2C] hover:decoration-current ${ROW_LINK_DISABLED} ${FOCUS_RING}`
 
 // 라운드 3(P1) — 주차 병합 초안의 주차별 확도 도트: metadata.weekly + weeklyConfidence가 둘 다
 // 유효할 때만 금액>0 주차를 W라벨+3px 원(CONFIDENCE_TOKENS color)으로 한 줄 표기한다.
@@ -197,6 +210,32 @@ function draftMatchesQuery(draft: LedgerDraft, query: string) {
   ])
 }
 
+/**
+ * 줄 둘째 줄의 달(F-46) — 활성 회계연도의 달이면 장부 월 머리와 같은 "11월", 밖이면 "26년 4월"(같은 "4월"이 두 해를 가리키지
+ * 않게). fiscalMonths 가 없으면 지금처럼 달만.
+ */
+export function queueMonthLabel(month: string, fiscalMonths?: readonly string[] | null): string {
+  const match = /^(\d{4})-(\d{2})$/.exec(month)
+  const monthNumber = match ? Number(match[2]) : 0
+  if (!match || !monthNumber) return formatMonthLabel(month)
+  if (!fiscalMonths || fiscalMonths.length === 0 || fiscalMonths.includes(month)) return `${monthNumber}월`
+  return `${match[1].slice(2)}년 ${monthNumber}월`
+}
+
+/**
+ * 일괄 반영 대상의 담당자별 건수(F-21) — 많은 순(같으면 이름순) "예시A 2건 · 예시B 1건". owners 는 담당자 수(빈 담당자는
+ * "담당자 없음" 하나로 센다).
+ */
+export function bulkOwnerBreakdown(drafts: ReadonlyArray<Pick<LedgerDraft, "manager">>): { owners: number; text: string } {
+  const counts = new Map<string, number>()
+  for (const draft of drafts) {
+    const owner = draft.manager?.trim() || "담당자 없음"
+    counts.set(owner, (counts.get(owner) ?? 0) + 1)
+  }
+  const ordered = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "ko"))
+  return { owners: counts.size, text: ordered.map(([owner, count]) => `${owner} ${count}건`).join(" · ") }
+}
+
 export function DraftQueue({
   drafts,
   mode,
@@ -206,6 +245,11 @@ export function DraftQueue({
   recordErrors,
   sheetWrites,
   sheetWriteMode = "off",
+  sheetLock = null,
+  applyingIds,
+  applyBusy = false,
+  bulkScope = null,
+  fiscalMonths = null,
   onReload,
   onEdit,
   onToggle,
@@ -235,6 +279,16 @@ export function DraftQueue({
   // 라운드 2: "4건 시트·장부에 적용" 바로 아래 "4건 시트·장부에 반영"). 줄 알약 "적용" · 상태 "적용완료"는 초안 한 건의
   // 단계 이름(SSOT)이라 그대로 둔다 — "적용하면 장부에 반영된다"(자가 체크 저장 안내)와 같은 짝이다. 없으면 꺼짐(장부에만).
   sheetWriteMode?: SheetWriteMode
+  // 시트 고정(GET sheetWrite.lock) — 적용 중이면 되돌리기 막힘 사유를 고정 뒤 문구로(F-22). 없으면 지금 문구.
+  sheetLock?: RevSheetLockView | null
+  // F-20: 훅의 반영 진행 중 초안 id(결재 바·큐 일괄·줄 적용 공통)와 그 여부. 진행 중이면 줄 적용·일괄 반영을 잠근다.
+  applyingIds?: ReadonlySet<string>
+  applyBusy?: boolean
+  // F-21: 일괄 체크·반영이 세는 범위 — 결재 바(pendingDrafts)와 같은 담당자·팀 조건. 없으면 보이는 목록 전체(담당자가 여럿이면
+  // "전체 담당자 N건"으로 말한다). 목록 자체는 거르지 않는다.
+  bulkScope?: ((draft: LedgerDraft) => boolean) | null
+  // F-46: 활성 회계연도의 달(YYYY-MM) — 밖의 달은 줄에 해를 붙인다. 없으면 지금처럼 달만.
+  fiscalMonths?: readonly string[] | null
   onReload: () => void
   onEdit: (draft: LedgerDraft) => void
   onToggle: (id: string) => void | Promise<void>
@@ -298,8 +352,19 @@ export function DraftQueue({
   }, [queryMatchedDrafts])
   // 머리 줄 "체크 큐 N"은 검색과 무관한 대기(draft+checked) 건수 — 빠른 작업 탭 배지와 같은 값.
   const openCount = useMemo(() => drafts.filter((draft) => draftMatchesFilter(draft, "open")).length, [drafts])
-  const bulkCheckPlan = useMemo(() => planBulkCheck(visibleDrafts), [visibleDrafts])
-  const bulkApplyPlan = useMemo(() => planBulkApply(visibleDrafts), [visibleDrafts])
+  // F-21: 일괄은 화면 범위(bulkScope)만 — 결재 바와 같은 건수가 되게. 범위 밖 체크완료는 건수만 조용히 알린다.
+  const scopedDrafts = useMemo(() => (bulkScope ? visibleDrafts.filter(bulkScope) : visibleDrafts), [bulkScope, visibleDrafts])
+  const bulkCheckPlan = useMemo(() => planBulkCheck(scopedDrafts), [scopedDrafts])
+  const bulkApplyPlan = useMemo(() => planBulkApply(scopedDrafts), [scopedDrafts])
+  const bulkApplyOwners = useMemo(
+    () => bulkOwnerBreakdown(scopedDrafts.filter((draft) => draft.status === "checked" && !draft.id.startsWith("local-"))),
+    [scopedDrafts],
+  )
+  const bulkApplyMultiOwner = bulkApplyOwners.owners > 1
+  const outOfScopeChecked = useMemo(
+    () => (bulkScope ? visibleDrafts.filter((draft) => draft.status === "checked" && !bulkScope(draft)).length : 0),
+    [bulkScope, visibleDrafts],
+  )
   // 일괄 적용은 DB 장부에 기록하는 동작이라 한 번 더 확인한다(단건 적용 다이얼로그와 같은 원칙, 인라인).
   const [bulkApplyConfirm, setBulkApplyConfirm] = useState(false)
   const [bulkBusy, setBulkBusy] = useState<"check" | "apply" | null>(null)
@@ -319,9 +384,16 @@ export function DraftQueue({
     setBulkBusy("apply")
     try {
       const result = await onBulkApply(bulkApplyPlan.ids)
-      // 시트 쓰기 결과가 있으면 코드별 건수로(ApprovalBar 결과 줄과 같은 문구), 꺼짐이면 지금 문구.
+      // 시트 쓰기 결과가 있으면 코드별 건수로(ApprovalBar 결과 줄과 같은 문구), 꺼짐이면 지금 문구. 보낸 것이 없으면(전부
+      // 다른 곳에서 반영 중 — F-20) 그렇게 말한다.
       const sheet = summarizeApplyOutcomes(result.sheetResults ?? [])
-      setBulkResult(sheet ? sheet.text : `반영 ${result.done}건${result.failed ? ` · 실패 ${result.failed}건` : ""}`)
+      setBulkResult(
+        sheet
+          ? sheet.text
+          : result.done === 0 && result.failed === 0
+            ? APPLY_SKIPPED_IN_FLIGHT_MESSAGE
+            : `반영 ${result.done}건${result.failed ? ` · 실패 ${result.failed}건` : ""}`,
+      )
     } finally {
       setBulkBusy(null)
       setBulkApplyConfirm(false)
@@ -375,16 +447,39 @@ export function DraftQueue({
   // 체크토글·삭제 in-flight 표시 — InputRailSection의 draftSaving+Loader2 패턴 재사용.
   // 한 초안에 동시에 한 동작만(토글 중 삭제 클릭 등 이중 요청 방지) 진행되게 버튼도 함께 잠근다.
   const [rowActionBusy, setRowActionBusy] = useState<{ id: string; action: "toggle" | "cancel" | "delete" } | null>(null)
-  const isRowBusy = (id: string) => rowActionBusy?.id === id || applyingId === id || reversingId === id
+  // F-20: 훅이 반영 요청을 보내고 있는 초안(다른 화면의 일괄 반영 포함)도 그 줄의 동작을 잠근다.
+  const isRowBusy = (id: string) => rowActionBusy?.id === id || applyingId === id || reversingId === id || Boolean(applyingIds?.has(id))
   // REV 시트 쓰기(ADR-011): 시트에도 쓴 정정은 장부에서만 상쇄하지 않는다(서버가 409 로 막는 조건과 같다).
   const sheetBlocksReverse = (id: string) => blocksLedgerReverse(sheetWrites?.[id])
   // 반영을 한 번이라도 시도한 초안(감사 행 있음)은 서버가 삭제를 막는다(감사 기록 보존) — 삭제 대신 취소로 정리한다.
   const sheetBlocksDelete = (id: string) => blocksLedgerDelete(sheetWrites?.[id])
+  // F-39: 줄의 다음 단계 알약 · 줄 버튼 DOM. 토글 뒤 포커스가 문서 몸통으로 떨어졌으면(누른 "체크 해제" 링크가 사라짐) 그 줄의
+  // 알약(없으면 줄 버튼)으로 되돌린다. 알약 자체는 같은 요소로 남고(글자만 바뀜) 진행 중에도 disabled 가 아니라 포커스를 지킨다.
+  const pillRefs = useRef(new Map<string, HTMLButtonElement>())
+  const rowButtonRefs = useRef(new Map<string, HTMLButtonElement>())
+  const pendingFocusRef = useRef<string | null>(null)
+  const registerPill = (id: string) => (node: HTMLButtonElement | null) => {
+    if (node) pillRefs.current.set(id, node)
+    else pillRefs.current.delete(id)
+  }
+  useEffect(() => {
+    const id = pendingFocusRef.current
+    if (!id || rowActionBusy) return
+    pendingFocusRef.current = null
+    if (typeof document === "undefined") return
+    const active = document.activeElement
+    if (active && active !== document.body) return
+    const target = pillRefs.current.get(id) ?? rowButtonRefs.current.get(id)
+    target?.focus()
+  })
   const runToggle = async (id: string) => {
+    // 진행 중 이중 요청 방지 — 버튼은 aria-disabled 라 눌리기는 한다(포커스를 지키려고 disabled 를 쓰지 않는다).
+    if (isRowBusy(id)) return
     setRowActionBusy({ id, action: "toggle" })
     try {
       await onToggle(id)
     } finally {
+      pendingFocusRef.current = id
       setRowActionBusy(null)
     }
   }
@@ -623,8 +718,9 @@ export function DraftQueue({
             const rowLinks = rowLinksForStatus(draft.status)
             // 둘째 줄 — "11월 W2 · 담당자 · 시트 342행 · 수정". 시트 행 번호는 장부 `#` 열과 같은 번호(sourceSheetRow).
             const metaText = [
-              // 장부 월 머리("11월")와 같은 꼴. 연도까지 필요한 곳(펼침 경고·확인 창)은 formatMonthLabel 그대로.
-              `${Number(draft.month.split("-")[1]) ? `${Number(draft.month.split("-")[1])}월` : formatMonthLabel(draft.month)}${weekMatch ? ` W${weekMatch[1]}` : ""}`,
+              // 장부 월 머리("11월")와 같은 꼴 — 활성 회계연도 밖이면 해를 붙인다(F-46). 연도까지 필요한 곳(펼침 경고·확인 창)은
+              // formatMonthLabel 그대로.
+              `${queueMonthLabel(draft.month, fiscalMonths)}${weekMatch ? ` W${weekMatch[1]}` : ""}`,
               draft.manager || "-",
               draft.sourceSheetRow ? `시트 ${draft.sourceSheetRow}행` : "새 행",
               draft.kind === "edit-row" ? "수정" : "신규",
@@ -651,6 +747,10 @@ export function DraftQueue({
                   />
                   {/* 줄 본문 = 펼침 버튼. 고객명(굵게) + 둘째 줄 글자(배지 대신 — 수정 · 신규 · 자가 체크 · 시트 쓰기). */}
                   <button
+                    ref={(node) => {
+                      if (node) rowButtonRefs.current.set(draft.id, node)
+                      else rowButtonRefs.current.delete(draft.id)
+                    }}
                     type="button"
                     onClick={() => setExpandedId(expanded ? null : draft.id)}
                     aria-expanded={expanded}
@@ -712,10 +812,13 @@ export function DraftQueue({
                     </span>
                     {nextStep === "check" ? (
                       <button
+                        key={`next-step-${draft.id}`}
+                        ref={registerPill(draft.id)}
                         type="button"
                         onClick={() => void runToggle(draft.id)}
-                        disabled={draft.status === "applied" || draft.status === "cancelled" || isRowBusy(draft.id)}
-                        className={`inline-flex h-[18px] min-w-[40px] items-center justify-center gap-1 rounded-full bg-[#ECFDF5] px-2 text-[11px] font-bold text-[#084734] transition hover:bg-[#BDEFD8] disabled:cursor-not-allowed disabled:opacity-50 ${FOCUS_RING}`}
+                        disabled={draft.status === "applied" || draft.status === "cancelled"}
+                        aria-disabled={isRowBusy(draft.id) || undefined}
+                        className={`inline-flex h-[18px] min-w-[40px] items-center justify-center gap-1 rounded-full bg-[#ECFDF5] px-2 text-[11px] font-bold text-[#084734] transition hover:bg-[#BDEFD8] disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 ${FOCUS_RING}`}
                         aria-label={`${customerName} 체크`}
                         title="초안 체크"
                       >
@@ -726,15 +829,27 @@ export function DraftQueue({
                       </button>
                     ) : nextStep === "apply" ? (
                       <button
+                        key={`next-step-${draft.id}`}
+                        ref={registerPill(draft.id)}
                         type="button"
-                        onClick={() => setConfirmApplyDraft(draft)}
-                        disabled={draft.status !== "checked" || mode !== "server" || draft.id.startsWith("local-") || isRowBusy(draft.id)}
-                        className={`inline-flex h-[18px] min-w-[40px] items-center justify-center gap-1 rounded-full bg-[#084734] px-2 text-[11px] font-bold text-white transition hover:bg-[#065c41] disabled:cursor-not-allowed disabled:opacity-40 ${FOCUS_RING}`}
+                        onClick={() => {
+                          if (isRowBusy(draft.id) || applyBusy) return
+                          setConfirmApplyDraft(draft)
+                        }}
+                        disabled={draft.status !== "checked" || mode !== "server" || draft.id.startsWith("local-")}
+                        aria-disabled={isRowBusy(draft.id) || applyBusy || undefined}
+                        className={`inline-flex h-[18px] min-w-[40px] items-center justify-center gap-1 rounded-full bg-[#084734] px-2 text-[11px] font-bold text-white transition hover:bg-[#065c41] disabled:cursor-not-allowed disabled:opacity-40 aria-disabled:cursor-not-allowed aria-disabled:opacity-40 ${FOCUS_RING}`}
                         aria-label={`${customerName} 적용`}
-                        title={mode !== "server" || localOnly ? "로컬 임시 초안은 DB 장부에 적용할 수 없습니다" : "체크 완료 초안 적용"}
+                        title={
+                          mode !== "server" || localOnly
+                            ? "로컬 임시 초안은 DB 장부에 적용할 수 없습니다"
+                            : applyBusy && !applyingIds?.has(draft.id)
+                              ? "다른 반영이 끝난 뒤 적용할 수 있습니다"
+                              : "체크 완료 초안 적용"
+                        }
                       >
-                        {applyingId === draft.id ? <Loader2 aria-hidden className="h-3 w-3 animate-spin" /> : null}
-                        적용
+                        {applyingId === draft.id || applyingIds?.has(draft.id) ? <Loader2 aria-hidden className="h-3 w-3 animate-spin" /> : null}
+                        {applyingIds?.has(draft.id) ? "반영 중…" : "적용"}
                       </button>
                     ) : (
                       <span className="text-[11px] font-semibold leading-[18px] text-[#615D59]">{statusLabel}</span>
@@ -809,7 +924,8 @@ export function DraftQueue({
                         <button
                           type="button"
                           onClick={() => void runToggle(draft.id)}
-                          disabled={draft.status === "applied" || draft.status === "cancelled" || isRowBusy(draft.id)}
+                          disabled={draft.status === "applied" || draft.status === "cancelled"}
+                          aria-disabled={isRowBusy(draft.id) || undefined}
                           className={ROW_LINK_CLASS}
                           aria-label={`${customerName} 체크 해제`}
                           title="체크를 풀면 다시 편집할 수 있습니다"
@@ -834,7 +950,7 @@ export function DraftQueue({
                           }
                           className={ROW_LINK_CLASS}
                           aria-label={`${customerName} 적용 되돌리기`}
-                          title={reversedDraftIds.has(draft.id) ? "이미 상쇄된 적용입니다" : sheetBlocksReverse(draft.id) ? SHEET_WRITTEN_REVERSE_MESSAGE : "적용 되돌리기"}
+                          title={reversedDraftIds.has(draft.id) ? "이미 상쇄된 적용입니다" : sheetBlocksReverse(draft.id) ? sheetWrittenReverseMessage(sheetLock) : "적용 되돌리기"}
                         >
                           {reversingId === draft.id ? <Loader2 aria-hidden className="h-3 w-3 animate-spin" /> : null}
                           적용 되돌리기
@@ -887,7 +1003,7 @@ export function DraftQueue({
       {/* 일괄 동작(2026-09-14) — 목록 아래 고정 띠(P0-5). 왼쪽 "보이는 초안 N건 체크", 오른쪽 "체크완료 N건 · ¥합계
           [N건 (시트·)장부에 반영]"(인라인 확인을 한 번 더 거친다 — 표 아래 변경 대기 줄과 같은 말). 할 일이 없으면 띠 자체를 숨긴다. 목록만 스크롤하므로
           sticky 가 아니라 흐름 안의 마지막 줄이다(줄어들지 않는다). */}
-      {(onBulkCheck || onBulkApply) && (bulkCheckPlan.count > 0 || bulkApplyPlan.count > 0 || bulkResult) && (
+      {(onBulkCheck || onBulkApply) && (bulkCheckPlan.count > 0 || bulkApplyPlan.count > 0 || bulkResult || outOfScopeChecked > 0) && (
         <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1.5 rounded-b-lg border-t border-[#F0F0EC] bg-white px-3 py-2">
           {onBulkCheck && bulkCheckPlan.count > 0 && (
             <button
@@ -903,6 +1019,10 @@ export function DraftQueue({
           {bulkResult && !bulkApplyConfirm && (
             <span role="status" className="text-[11px] font-semibold text-[#615D59]">{bulkResult}</span>
           )}
+          {outOfScopeChecked > 0 && !bulkApplyConfirm && (
+            // F-21: 화면 범위 밖(다른 담당자·팀)의 체크완료는 여기서 반영하지 않는다 — 건수만 조용히.
+            <span className="text-[11px] text-[#615D59]">다른 담당자 체크완료 {outOfScopeChecked}건 제외</span>
+          )}
           <span className="flex-1" />
           {onBulkApply && bulkApplyPlan.count > 0 && !bulkApplyConfirm && (
             // 누르기 전에 장부에 쓰일 건수 · 합계를 보인다(C-4 "체크된 2건 · ¥합계 [적용]"). 요약과 버튼은 한 묶음 —
@@ -915,23 +1035,36 @@ export function DraftQueue({
               <button
                 type="button"
                 onClick={() => setBulkApplyConfirm(true)}
-                disabled={bulkBusy !== null}
+                disabled={bulkBusy !== null || applyBusy}
                 className={`inline-flex h-7 items-center gap-1 rounded-md bg-[#084734] px-3 text-[11.5px] font-bold text-white transition hover:bg-[#065c41] disabled:cursor-not-allowed disabled:opacity-50 ${FOCUS_RING}`}
               >
-                {bulkApplyPlan.count}건 {sheetWriteMode === "on" ? "시트·장부에" : "장부에"} 반영
+                {applyBusy ? (
+                  <>
+                    <Loader2 aria-hidden className="h-3 w-3 animate-spin" />
+                    반영 중…
+                  </>
+                ) : (
+                  <>
+                    {bulkApplyMultiOwner ? "전체 담당자 " : ""}
+                    {bulkApplyPlan.count}건 {sheetWriteMode === "on" ? "시트·장부에" : "장부에"} 반영
+                  </>
+                )}
               </button>
             </span>
           )}
           {bulkApplyConfirm && (
             <span role="alert" className="flex basis-full flex-wrap items-center gap-1.5 text-[11px] font-bold text-[#111110]">
               <span className="min-w-0 flex-1">
+                {bulkApplyMultiOwner ? "전체 담당자 " : ""}
                 {bulkApplyPlan.count}건 · {formatMoney(bulkApplyPlan.total)}을 {sheetWriteMode === "on" ? "시트(2. REV)와 DB 장부에" : "DB 장부에"} 반영합니다
                 {bulkApplyPlan.skippedLocal > 0 ? ` (로컬 임시 ${bulkApplyPlan.skippedLocal}건 제외)` : ""}
+                {/* F-21: 담당자가 여럿이면 누구의 초안을 반영하는지 확인 문구에 담당자별 건수를 붙인다. */}
+                {bulkApplyMultiOwner ? <span className="block font-semibold text-[#615D59]">{bulkApplyOwners.text}</span> : null}
               </span>
               <button
                 type="button"
                 onClick={() => void runBulkApply()}
-                disabled={bulkBusy !== null}
+                disabled={bulkBusy !== null || applyBusy}
                 className={`inline-flex h-7 items-center gap-1 rounded-md bg-[#084734] px-3 text-white transition hover:bg-[#065c41] disabled:opacity-50 ${FOCUS_RING}`}
               >
                 {bulkBusy === "apply" ? <Loader2 aria-hidden className="h-3 w-3 animate-spin" /> : null}
@@ -981,7 +1114,7 @@ export function DraftQueue({
             <button
               type="button"
               onClick={() => void confirmAndApply(confirmApplyDraft.id)}
-              disabled={applyingId === confirmApplyDraft.id}
+              disabled={applyingId === confirmApplyDraft.id || Boolean(applyingIds?.has(confirmApplyDraft.id))}
               className="inline-flex h-9 items-center gap-2 rounded-md bg-[#084734] px-3 text-[12px] font-bold text-white transition hover:bg-[#065c41] disabled:cursor-not-allowed disabled:opacity-45"
             >
               {applyingId === confirmApplyDraft.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}

@@ -34,6 +34,8 @@ export const SHEET_WRITE_CODES = [
   "no_change",
   "active_correction",
   "draft_changed",
+  "sheet_locked",
+  "row_corrected",
 ] as const
 
 export type SheetWriteCode = (typeof SHEET_WRITE_CODES)[number]
@@ -77,6 +79,12 @@ export const SHEET_WRITE_MESSAGES: Record<SheetWriteCode, string> = {
   // 시트에 쓰는 사이 초안이 고쳐졌다 — 시트에는 고치기 전 초안 값이 남을 수 있고, 장부에는 기록하지 않았다
   // (시트에 쓴 것과 다른 금액을 장부에 남기지 않는다).
   draft_changed: "반영하는 사이 초안이 바뀌어 장부에 기록하지 않았습니다 — 시트에는 바뀌기 전 초안 값이 들어갔을 수 있으니 새로고침 뒤 확인해 주세요",
+  // 시트를 다시 읽을 수는 있는데 쓰기를 거부했다(보호된 칸·범위, 서비스계정이 뷰어로 내려감) — 시트 고정 스위치보다 시트를
+  // 먼저 잠근 경우. 다시 눌러도 같다 — 관리자가 시트 쓰기를 꺼야(또는 고정 날짜를 넣어야) 장부에만 반영된다.
+  sheet_locked: "시트가 잠겨 시트 쓰기를 할 수 없습니다 — 관리자에게 시트 쓰기 끄기를 요청하세요",
+  // 같은 시트 행(Row ID)·월에 이미 활성 정정이 있다 — 동기화마다 바뀌는 딜 id 로는 못 막는 겹침(F-04). 겹쳐 적으면 두 정정이
+  // 함께 읽힐 수 있어 반영하지 않는다(시트·장부 그대로).
+  row_corrected: "이 시트 행·월에 이미 적용된 장부 정정이 있어 반영하지 않았습니다 — 기존 정정을 되돌린 뒤 다시 입력해 주세요",
 }
 
 /**
@@ -85,6 +93,7 @@ export const SHEET_WRITE_MESSAGES: Record<SheetWriteCode, string> = {
  */
 export const SHEET_WRITTEN_REVERSE_MESSAGE =
   "시트에 반영된 항목입니다 — 시트에서 직접 되돌리거나 원래 값으로 다시 입력해 주세요"
+// 시트 고정 뒤의 같은 가드 문구는 lib/branch/rev-sheet-lock.ts sheetWrittenReverseLockedMessage(고정 날짜가 문구에 든다).
 
 /**
  * 시트 쓰기 감사 행이 있는 초안(반영을 한 번이라도 시도 — 거절·실패 포함)의 하드 삭제를 막을 때의 문구. 감사 기록은

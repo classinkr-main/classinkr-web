@@ -3,7 +3,13 @@ import { isBlueText, isRedBg, isRedText } from "@/lib/branch/google-sheets"
 import { REV_ROW_ID_HEADER } from "@/lib/branch/sheet-writeback/config"
 import { weekColorOf } from "@/lib/branch/sheet-writeback/colors"
 import { isValidRowId } from "@/lib/branch/sheet-writeback/row-id"
+import { fiscalYearOfYm } from "@/lib/branch/fiscal"
+import { isUnparsedSheetAmount, sheetCellAmount } from "@/lib/branch/sheet-number"
+import type { RevMonthWeekMismatch, RevPendingCell } from "@/lib/branch/computations/rev-confirmed"
 import { getBusinessDateParts } from "@/lib/business-time"
+
+// 예정 칸(raw.pendingCells)·월≠주 합(raw.monthWeekMismatch)의 모양은 캐논(rev-confirmed.ts)이 정한다 — 파서는 싣기만 한다.
+export type { RevMonthWeekMismatch, RevPendingCell }
 
 // 84열(A~CF) 뒤 숨김 "Row ID" 열(CG)까지 읽도록 CZ 로 넓혔다(ADR-011 — 장부 반영 때 시트 쓰기).
 // 월 블록은 머리 글자로 찾으므로 오른쪽 여유 열은 금액에 섞이지 않는다. 행 상한(1000)은 그대로다.
@@ -170,15 +176,6 @@ export function normalizeMonthHeader(value: unknown, refFy: number): string | nu
 }
 
 function asString(v: unknown): string | null { if (v == null) return null; const s = String(v).trim(); return s.length ? s : null }
-function asNumber(v: unknown): number | null {
-  if (v == null || v === "") return null
-  if (typeof v === "number") return Number.isFinite(v) ? v : null
-  // Strip currency symbols, thousand separators, and whitespace
-  const cleaned = String(v).replace(/[¥₩$€£,\s]/g, "")
-  if (cleaned === "" || cleaned === "-") return null
-  const n = Number(cleaned)
-  return Number.isFinite(n) ? n : null
-}
 function asDate(v: unknown): string | null {
   const s = asString(v)
   if (!s) return null
@@ -197,17 +194,25 @@ export function ledgerCellStart(ym: string, week: number): string {
 // 시작일이 오늘(KST, YYYY-MM-DD) 뒤인 칸의 빨간 금액은 결제가 아니라 예정이다. 시작일 당일부터 확정.
 export const isFutureLedgerCell = (ym: string, week: number, today: string) => ledgerCellStart(ym, week) > today
 
-export function parseRev(grid: FormattedCell[][], opts?: { refFy?: number; today?: string }): RevDealParsed[] {
-  if (grid.length < 2) return []
-  const refFy = opts?.refFy ?? new Date().getUTCFullYear()
-  // 테스트 주입용. 기본값은 동기화 시점의 KST 오늘 — 그 주가 오면 다음 동기화가 확정으로 올린다.
-  const today = opts?.today ?? getBusinessDateParts().date
-  const headers = grid[1] ?? []
-  const cols = resolveRevColumns(headers)
-  // 헤더 구조: 월 합계 칸("4".."12","1".."3") 뒤에 그 달의 주차 칸(w1~w5)이 이어진다.
-  // 색 표시는 주차 칸에 들어가므로 월 블록 단위로 함께 읽는다. ("5w" 같은 오타 헤더도 허용)
-  const monthBlocks: Array<{ ym: string; totalIdx: number; weekIdxs: number[] }> = []
-  for (let i = cols.monthlyStart; i < headers.length; i++) {
+/** '2. REV' 월 블록 — 월 합계 칸 하나와 그 뒤 주차 칸들(w1~w5, '5w' 같은 표기 포함). */
+export interface RevMonthBlock {
+  ym: string
+  totalIdx: number
+  weekIdxs: number[]
+}
+
+/**
+ * 머리 행에서 월 블록을 찾는다. 월 합계 칸("4".."12","1".."3") 뒤에 그 달의 주차 칸이 이어진다 — 색 표시는
+ * 주차 칸에 들어가므로 월 블록 단위로 함께 읽는다. 7월 다섯째 주처럼 "5w" 로 적힌 머리도 주차다. 2월은 주차가 넷이다.
+ * refFy 는 "4"~"12" 의 해, "1"~"3" 은 refFy+1 년이다. 대조 도구(reconcile)가 파서와 같은 열 배치를 쓰게 내보낸다.
+ */
+export function resolveRevMonthBlocks(
+  headers: FormattedCell[],
+  refFy: number,
+  monthlyStart: number = REV_COLS.monthlyStart,
+): RevMonthBlock[] {
+  const monthBlocks: RevMonthBlock[] = []
+  for (let i = monthlyStart; i < headers.length; i++) {
     const v = headers[i]?.value
     if (v == null) continue
     const s = String(v).trim()
@@ -217,6 +222,53 @@ export function parseRev(grid: FormattedCell[][], opts?: { refFy?: number; today
       monthBlocks.push({ ym: `${year}-${String(month).padStart(2, "0")}`, totalIdx: i, weekIdxs: [] })
     } else if (/^(w\d|\dw)$/i.test(s) && monthBlocks.length > 0) {
       monthBlocks[monthBlocks.length - 1].weekIdxs.push(i)
+    }
+  }
+  return monthBlocks
+}
+
+/** 파싱 진단 — 동기화가 경고로 싣는다(F-28 못 읽은 금액 칸, F-15 월≠주 합). */
+export interface RevParseStats {
+  /** 값이 적혀 있는데 금액으로 못 읽은 월·주차 칸 수(고객 행만). */
+  unparsedAmountCells: number
+  /** 못 읽은 칸 예시(최대 5개) — 시트 행 번호(1-based)·열(0-based)·표시 글자. */
+  unparsedSamples: Array<{ row: number; col: number; text: string }>
+  /** 월 칸 ≠ 주차 칸 합인 (행, 달) 수. */
+  monthWeekMismatches: number
+}
+
+export interface RevParseOptions {
+  /** 월 머리 "4"~"3" 을 어느 회계연도로 읽을지. 없으면 today(KST)의 회계연도(F-26 — 예전 기본값은 달력 연도였다). */
+  refFy?: number
+  /** 파싱 기준일(KST 'YYYY-MM-DD'). 없으면 지금의 KST 영업일. */
+  today?: string
+}
+
+const UNPARSED_SAMPLE_LIMIT = 5
+// 월 칸과 주차 합을 같다고 보는 허용 오차(반 펀) — 소수 합산 오차만 흡수한다.
+const MONTH_WEEK_TOLERANCE = 0.005
+
+export function parseRev(grid: FormattedCell[][], opts?: RevParseOptions): RevDealParsed[] {
+  return parseRevWithStats(grid, opts).deals
+}
+
+export function parseRevWithStats(
+  grid: FormattedCell[][],
+  opts?: RevParseOptions,
+): { deals: RevDealParsed[]; stats: RevParseStats } {
+  const stats: RevParseStats = { unparsedAmountCells: 0, unparsedSamples: [], monthWeekMismatches: 0 }
+  if (grid.length < 2) return { deals: [], stats }
+  // 파싱 기준일. 테스트 주입용 — 기본값은 동기화 시점의 KST 오늘. 예정 칸은 raw.pendingCells 로 남아 읽는 시점에 판정된다.
+  const today = opts?.today ?? getBusinessDateParts().date
+  const refFy = opts?.refFy ?? fiscalYearOfYm(today)
+  const headers = grid[1] ?? []
+  const cols = resolveRevColumns(headers)
+  const monthBlocks = resolveRevMonthBlocks(headers, refFy, cols.monthlyStart)
+  const noteUnparsed = (cell: FormattedCell | undefined, r: number, col: number) => {
+    if (!isUnparsedSheetAmount(cell)) return
+    stats.unparsedAmountCells += 1
+    if (stats.unparsedSamples.length < UNPARSED_SAMPLE_LIMIT) {
+      stats.unparsedSamples.push({ row: r + 1, col, text: String(cell?.value ?? "").slice(0, 40) })
     }
   }
 
@@ -246,12 +298,18 @@ export function parseRev(grid: FormattedCell[][], opts?: { refFy?: number; today
     const monthly_pending: Record<string, number> = {}
     // 예정 칸의 주차 번호(1~5, 월 합계 칸 = 0) — 화면이 "w4 시작 10/22에 확정 전환"을 말하는 근거.
     const pending_weeks: Record<string, number[]> = {}
+    // 예정 칸 하나하나(주차·시작일·금액) — 캐논이 읽는 시점(KST)에 시작일이 지난 칸을 확정으로 올린다(F-08).
+    const pending_cells: Record<string, RevPendingCell[]> = {}
+    // 적어 둔 월 칸 ≠ 주차 합(F-15) — 캐논이 확정·고확도를 월 합계 안으로 자른다.
+    const month_week_mismatch: Record<string, RevMonthWeekMismatch> = {}
     // 그 달 주차 칸 순서의 확도 글자("rk--b"). 값 있는 칸(>0)은 글자색(r 빨강·b 파랑·k 그 밖),
     // 값 없는 칸은 '-'. 초안 baseline(sheet-writeback/baseline.ts)이 읽는다 — 키는 weekly_payments 와 같다.
     const weekly_colors: Record<string, string> = {}
     for (const block of monthBlocks) {
       const totalCell = row[block.totalIdx]
-      const total = asNumber(totalCell?.value)
+      // 금액은 칸의 실제 숫자(effectiveValue)를 먼저 읽는다 — '(1,750)'·'−1,750' 환불이 빠지지 않는다(F-28).
+      const total = sheetCellAmount(totalCell)
+      noteUnparsed(totalCell, r, block.totalIdx)
       // block.weekIdxs는 헤더 텍스트로 찾은 이 달의 실제 주차 열 위치다. 값은 이 순서
       // 그대로 배열에 담아 내려보낸다 — 다운스트림에서 고정 오프셋 공식으로 열 위치를
       // 재추정하면(예전 weeklyPaymentsFromRaw 폴백) 블록 하나라도 어긋날 때 이후 달의
@@ -266,10 +324,12 @@ export function parseRev(grid: FormattedCell[][], opts?: { refFy?: number; today
       let pending = 0
       let hasPending = false
       const pendingWeekNos: number[] = []
+      const pendingCells: RevPendingCell[] = []
       let weekMarks = ""
       for (const [weekPos, weekIdx] of block.weekIdxs.entries()) {
         const cell = row[weekIdx]
-        const n = cell ? asNumber(cell.value) : null
+        const n = sheetCellAmount(cell)
+        noteUnparsed(cell, r, weekIdx)
         const amount = n ?? 0
         weekValues.push(amount)
         // 글자색만 본다(배경 빨강 호환은 확정 집계에만) — 쓰기 직전 비교(plan.ts liveWeeks)도 글자색만 본다.
@@ -279,7 +339,11 @@ export function parseRev(grid: FormattedCell[][], opts?: { refFy?: number; today
         weekSum += n
         // 운영 규칙: 빨간 글자 = 확정 매출 (과거 배경색 표기 호환), 파란 글자 = 클로징 임박(90%+)
         if (isRedText(cell.fg) || isRedBg(cell.bg)) {
-          if (isFutureLedgerCell(block.ym, weekPos + 1, today)) { pending += n; hasPending = true; pendingWeekNos.push(weekPos + 1) }
+          const week = weekPos + 1
+          if (isFutureLedgerCell(block.ym, week, today)) {
+            pending += n; hasPending = true; pendingWeekNos.push(week)
+            pendingCells.push({ week, start: ledgerCellStart(block.ym, week), amount: n })
+          }
           else { confirmed += n; hasConfirmed = true }
         }
         else if (isBlueText(cell.fg)) { highConf += n; hasHighConf = true }
@@ -290,11 +354,20 @@ export function parseRev(grid: FormattedCell[][], opts?: { refFy?: number; today
       if (hasWeekValue) {
         weekly_payments[block.ym] = weekValues
         weekly_colors[block.ym] = weekMarks
+        // 월 칸에 상수를 적어 주차 합과 달라진 달(예: 월 0 · 주차 빨강 500). 진짜 상계(+100 빨강 · −100 검정 → 월 0)는
+        // 주차 합도 0 이라 여기 걸리지 않는다 — 캐논의 부호 보존 규칙은 그대로다.
+        if (total != null && Math.abs(total - weekSum) > MONTH_WEEK_TOLERANCE) {
+          month_week_mismatch[block.ym] = { month: total, weeks: weekSum }
+          stats.monthWeekMismatches += 1
+        }
       }
       // 주차 입력 없이 월 합계 칸에만 적고 색을 칠한 행 호환
       if (!hasWeekValue && total != null && totalCell) {
         if (isRedText(totalCell.fg) || isRedBg(totalCell.bg)) {
-          if (isFutureLedgerCell(block.ym, 0, today)) { pending = monthTotal; hasPending = true; pendingWeekNos.push(0) }
+          if (isFutureLedgerCell(block.ym, 0, today)) {
+            pending = monthTotal; hasPending = true; pendingWeekNos.push(0)
+            pendingCells.push({ week: 0, start: ledgerCellStart(block.ym, 0), amount: monthTotal })
+          }
           else { confirmed = monthTotal; hasConfirmed = true }
         }
         else if (isBlueText(totalCell.fg)) { highConf = monthTotal; hasHighConf = true }
@@ -304,11 +377,13 @@ export function parseRev(grid: FormattedCell[][], opts?: { refFy?: number; today
         monthly_red[block.ym] = true // 기존 브랜치 집계(boolean 기반) 호환 플래그
       } else if (hasPending) {
         // 빨간 칸이 전부 예정이면 확정 0을 명시한다 — 비워 두면 캐논의 무색상 폴백이 당월 전액을 확정으로 올린다.
+        // 이 0 키가 있어야 캐논이 pendingCells 를 확정으로 올린다(키가 지워진 달은 올리지 않는다).
         monthly_confirmed[block.ym] = 0
       }
       if (hasPending) {
         monthly_pending[block.ym] = pending
         pending_weeks[block.ym] = pendingWeekNos
+        pending_cells[block.ym] = pendingCells
       }
       if (hasHighConf) monthly_high_conf[block.ym] = highConf
     }
@@ -335,24 +410,38 @@ export function parseRev(grid: FormattedCell[][], opts?: { refFy?: number; today
       region: asString(row[cols.region]?.value),
       importance: asString(row[cols.importance]?.value),
       note: asString(row[cols.note]?.value),
-      contract_target: asNumber(row[cols.contractTarget]?.value),
+      contract_target: sheetCellAmount(row[cols.contractTarget]),
       monthly_payments, monthly_red, monthly_confirmed, monthly_high_conf, weekly_payments,
       // weeklyPayments도 raw에 실어 보낸다 — pipeline.ts의 weeklyPaymentsFromRaw가
       // deal.raw.weeklyPayments를 우선 사용하므로, 고정 오프셋 추정 폴백을 타지 않는다.
-      // monthlyPending은 표시용 — 확정 집계(rev-confirmed.ts)에서는 예상(expected) 몫으로 남는다.
+      // monthlyPending은 표시용 — 확정 집계(rev-confirmed.ts)는 pendingCells 를 읽는 시점(KST)에 판정한다.
       // rowId·rowIdIssue·weeklyColors 는 시트 쓰기(ADR-011)용 — 금액·확도 집계는 읽지 않는다.
+      // pendingCells·monthWeekMismatch 는 있을 때만 싣는다(대부분의 행은 없다 — raw 를 늘리지 않는다).
       raw: {
         row: row.map((c) => c?.value ?? null),
         weeklyPayments: weekly_payments,
         monthlyPending: monthly_pending,
         pendingWeeks: pending_weeks,
+        ...(Object.keys(pending_cells).length > 0 ? { pendingCells: pending_cells } : {}),
+        ...(Object.keys(month_week_mismatch).length > 0 ? { monthWeekMismatch: month_week_mismatch } : {}),
         rowId,
         rowIdIssue,
         weeklyColors: weekly_colors,
       },
     })
   }
-  return out
+  return { deals: out, stats }
+}
+
+/** 파싱 진단 경고 한 줄(동기화가 싣는다). 문제가 없으면 undefined — 동기화 실패로 치지 않는다(경고만). */
+export function revParseWarning(stats: RevParseStats): string | undefined {
+  const parts: string[] = []
+  if (stats.unparsedAmountCells > 0) {
+    const where = stats.unparsedSamples.map((sample) => `${sample.row}행 '${sample.text}'`).join(", ")
+    parts.push(`금액으로 못 읽은 칸 ${stats.unparsedAmountCells}개${where ? `(${where})` : ""}`)
+  }
+  if (stats.monthWeekMismatches > 0) parts.push(`월 칸과 주차 합이 다른 달 ${stats.monthWeekMismatches}개`)
+  return parts.length > 0 ? `REV ${parts.join(" · ")}` : undefined
 }
 
 export interface RevRowIdSummary {

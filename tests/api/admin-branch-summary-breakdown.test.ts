@@ -411,10 +411,10 @@ describe("GET /api/admin/branch/summary — dsh_breakdown", () => {
     expect(json.lastSync).toBe("2026-07-16T09:00:00Z")
   })
 
-  it("falls back to lastSync for a mirror-sourced REV read (no runId)", async () => {
+  it("falls back to the last REV-reading sync for a mirror-sourced REV read (no runId)", async () => {
     mockHappyPath()
     getRecentSyncRuns.mockResolvedValue([
-      { finished_at: "2026-07-16T09:00:00Z", started_at: "2026-07-16T08:55:00Z", status: "success" },
+      { source: "all", finished_at: "2026-07-16T09:00:00Z", started_at: "2026-07-16T08:55:00Z", status: "success" },
     ])
 
     const { GET } = await import("@/app/api/admin/branch/summary/route")
@@ -423,5 +423,24 @@ describe("GET /api/admin/branch/summary — dsh_breakdown", () => {
 
     expect(json.data_sources.rev).toEqual({ kind: "mirror", asOf: "2026-07-16T09:00:00Z" })
     expect(json.data_sources.rev.runId).toBeUndefined()
+    expect(json.lastRevSync).toBe("2026-07-16T09:00:00Z")
+    expect(json.lastRevSyncStartedAt).toBe("2026-07-16T08:55:00Z")
+  })
+
+  it("a newer DSH·HW-only run (sheet lock) does not move the REV mirror asOf", async () => {
+    mockHappyPath()
+    getRecentSyncRuns.mockResolvedValue([
+      { source: "dsh+hw", finished_at: "2026-12-02T00:01:00Z", started_at: "2026-12-02T00:00:00Z", status: "success" },
+      { source: "rev", finished_at: "2026-11-30T08:02:00Z", started_at: "2026-11-30T08:00:00Z", status: "success" },
+    ])
+
+    const { GET } = await import("@/app/api/admin/branch/summary/route")
+    const response = await GET(summaryRequest())
+    const json = await response.json()
+
+    expect(json.lastSync).toBe("2026-12-02T00:01:00Z")
+    expect(json.data_sources.rev).toEqual({ kind: "mirror", asOf: "2026-11-30T08:02:00Z" })
+    expect(json.lastRevSync).toBe("2026-11-30T08:02:00Z")
+    expect(json.lastRevSyncStartedAt).toBe("2026-11-30T08:00:00Z")
   })
 })

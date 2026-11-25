@@ -7,6 +7,7 @@ import {
   parseLedgerDraftCreateBody,
   parseLedgerDraftUpdateBody,
 } from "@/lib/branch/ledger-draft-body"
+import { currentRevSheetLock, revSheetLockView } from "@/lib/branch/rev-sheet-lock"
 import { applyLedgerDraftsWithSheetWrite, type ApplyItemResult } from "@/lib/branch/sheet-writeback/apply-service"
 import type { SheetWriteCode } from "@/lib/branch/sheet-writeback/messages"
 import {
@@ -342,10 +343,12 @@ export async function PATCH(req: NextRequest) {
         if (!item) throw new Error(`apply-service returned no result for draft ${id}`)
         return toBatchApplyResult(item)
       })
+      // GET 과 같은 sheetWrite 모양 — 시트 고정이 예정·적용 중일 때만 lock 을 싣는다(없으면 지금과 같은 응답).
+      const lock = revSheetLockView(currentRevSheetLock())
       return NextResponse.json({
         results,
         summary: { ...summarize(results), sheet: countSheetCodes(results) },
-        sheetWrite: { mode },
+        sheetWrite: { mode, ...(lock ? { lock } : {}) },
       })
     }
 

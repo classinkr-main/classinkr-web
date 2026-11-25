@@ -45,16 +45,18 @@ function sliceFn(source: string, startMarker: string, endMarker: string) {
   return source.slice(start, end)
 }
 
+// 2026-11-25(F-06·F-05): updateDraft·createDraft 는 큐 모드에 기대지 않는다(서버 초안은 늘 서버로) — 의존성 배열에서
+// queueMode 가 빠졌고, createDraft 는 같은 칸 잇기·응답 유실 재조회 때문에 loadDrafts·updateDraft 를 쓴다.
 const updateDraftBody = () => sliceFn(
   hookSource(),
   "const updateDraft = useCallback",
-  "}, [clearRecordError, queueMode, setRecordError, updateLocalDrafts])",
+  "}, [clearRecordError, setRecordError, updateLocalDrafts])",
 )
 
 const createDraftBody = () => sliceFn(
   hookSource(),
   "const createDraft = useCallback",
-  "}, [queueMode, updateLocalDrafts])",
+  "}, [loadDrafts, updateDraft, updateLocalDrafts])",
 )
 
 describe("충돌 안내 문구 SSOT (ledger/shared.tsx)", () => {
@@ -95,14 +97,13 @@ describe("updateDraft — expectedUpdatedAt 동봉(웨이브 7 2단, I4)", () =>
     expect(body).toContain("return { draft: null, conflict: true }")
   })
 
-  it("409 분기는 전역 강등(setQueueMode local) 경로를 절대 타지 않는다 — 충돌 처리(try)가 강등(catch)보다 먼저 등장하고 그 안에서 return한다", () => {
+  it("409 분기는 그 안에서 return하고, updateDraft 어디에도 전역 강등(setQueueMode local)이 없다(F-06)", () => {
     const body = updateDraftBody()
     const conflictGateIndex = body.indexOf("if (response.status === 409 && data?.draft) {")
     const conflictReturnIndex = body.indexOf("return { draft: null, conflict: true }")
-    const queueDemoteIndex = body.indexOf('setQueueMode("local")')
     expect(conflictGateIndex).toBeGreaterThan(-1)
     expect(conflictReturnIndex).toBeGreaterThan(conflictGateIndex)
-    expect(queueDemoteIndex).toBeGreaterThan(conflictReturnIndex)
+    expect(body).not.toContain('setQueueMode("local")')
   })
 
   it("400(서버 검증 거부)은 서버 문구(data?.error)를 그대로 validationMessage로 반환한다 — 큐 강등·로컬 폴백 없음", () => {
@@ -128,7 +129,7 @@ describe("status 전이·apply·reverse 경로는 expectedUpdatedAt을 보내지
     const body = sliceFn(
       hookSource(),
       "const toggleDraft = useCallback",
-      "}, [clearRecordError, drafts, queueMode, setRecordError, updateLocalDrafts])",
+      "}, [clearRecordError, drafts, setRecordError, updateLocalDrafts])",
     )
     expect(body).toContain("JSON.stringify({ status })")
     expect(body).not.toContain("expectedUpdatedAt")
@@ -161,12 +162,12 @@ describe("createDraft — dedupedRecent 패스스루 + 400 검증 거부(웨이�
     expect(validationBranch).not.toContain('setQueueMode("local")')
   })
 
-  it("네트워크/5xx catch의 로컬 폴백은 기존 그대로 유지된다(무음 유실 방지 계약 불변)", () => {
+  it("네트워크/5xx catch의 로컬 폴백은 유지하되(무음 유실 방지) 큐는 강등하지 않는다 — 다음 저장은 다시 서버로(F-06)", () => {
     const body = createDraftBody()
     const catchIndex = body.indexOf("} catch (error) {")
     expect(catchIndex).toBeGreaterThan(-1)
     expect(body.slice(catchIndex)).toContain("makeLocalDraft(input)")
-    expect(body.slice(catchIndex)).toContain('setQueueMode("local")')
+    expect(body).not.toContain('setQueueMode("local")')
   })
 })
 

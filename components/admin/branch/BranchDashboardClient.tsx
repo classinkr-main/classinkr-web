@@ -563,6 +563,9 @@ export default function BranchDashboardClient({
             <SyncStatusBar
               lastSync={lastSync}
               lastSyncStartedAt={summary.data?.lastSyncStartedAt}
+              lastRevSync={summary.data?.lastRevSync}
+              lastRevSyncStartedAt={summary.data?.lastRevSyncStartedAt}
+              revSheetLock={summary.data?.revSheetLock}
               lastError={lastError}
               lastErrorOrigin={lastErrorOrigin}
               sheetModifiedAt={sheetModifiedAt}

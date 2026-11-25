@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest"
 
 import * as sheetWriteView from "@/components/admin/branch/ledger/sheet-write-view"
 import { isSheetWriteAbsorbedByMirror } from "@/lib/admin-crm-revenue-sheet"
+import * as ledgerOverlay from "@/lib/branch/ledger-overlay"
 import {
   absorptionCutoff,
   isSheetWriteAbsorbed,
@@ -82,9 +83,13 @@ describe("absorptionCutoff — 이중 집계 제외 기준은 화면이 가진 �
   it("화면과 매출시트 배너가 같은 함수 객체를 쓴다", () => {
     expect(sheetWriteView.absorptionCutoff).toBe(absorptionCutoff)
     expect(sheetWriteView.oldestSyncedAt).toBe(oldestSyncedAt)
+    // 2026-11-25: 화면 오버레이 합성은 lib/branch/ledger-overlay.ts(buildLedgerOverlay — 서버 집계도 같은 함수)로 옮겼다.
+    expect(ledgerOverlay.absorptionCutoff).toBe(absorptionCutoff)
+    expect(ledgerOverlay.oldestSyncedAt).toBe(oldestSyncedAt)
+    const overlaySource = readFileSync(join(process.cwd(), "lib/branch/ledger-overlay.ts"), "utf8")
+    expect(overlaySource).toMatch(/absorptionCutoff\(sources\.lastRevSyncStartedAt \?\? null, oldestSyncedAt\(sheetRows\)\)/)
     const workbench = readFileSync(join(process.cwd(), "components/admin/branch/SalesLedgerWorkbench.tsx"), "utf8")
-    expect(workbench).toMatch(/sheetAbsorbedDraftIds\(sheetWrites, absorptionCutoff\(sheetWrite\.lastRevSyncStartedAt, sheetRowsSyncedAt\)\)/)
-    expect(workbench).toMatch(/const sheetRowsSyncedAt = useMemo\(\(\) => oldestSyncedAt\(sheetRows\), \[sheetRows\]\)/)
+    expect(workbench).toMatch(/lastRevSyncStartedAt: sheetWrite\.lastRevSyncStartedAt,/)
     const banner = readFileSync(join(process.cwd(), "lib/admin-crm-revenue-sheet.ts"), "utf8")
     expect(banner).toMatch(/const cutoff = absorptionCutoff\(lastRevSyncStartedAt, mirrorSyncedAt\)/)
     expect(banner).toMatch(/isSheetWriteAbsorbedByMirror\(record, cutoff\)/)

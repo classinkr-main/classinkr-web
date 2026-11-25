@@ -3,17 +3,17 @@ import { join } from "path"
 import { describe, expect, it } from "vitest"
 import { isDraftRecordError } from "@/components/admin/branch/SalesLedgerWorkbench"
 
-// 회귀 방지(품질 웨이브 7, 항목 2): updateDraft/toggleDraft/deleteDraft의 catch가 에러 종류와
-// 무관하게 무조건 setQueueMode("local")로 큐 전체를 강등시키던 문제 —
-//  1) 404(레코드 소실: 다른 곳에서 이미 삭제/적용됨)는 전역 강등 없이 그 행에만 에러를 붙여야
-//     한다(isDraftRecordError 판정, 실제 export 함수 호출로 검증).
-//  2) 5xx/네트워크만 기존처럼 큐를 로컬로 내린다.
-//  3) 두 경우 모두 "서버-id 섀도 편집"(실패한 요청을 서버 id 그대로 로컬에 낙관 반영해
-//     재전송 판별(localDraftsRef가 "local-" 접두만 봄)에서 빠져 무음 소실되던 경로)을 만들지
-//     않는다 — 큐가 "server"이고 id가 서버 발급이면, 성공이든 두 실패 분기든 항상 return하고
+// 회귀 방지(품질 웨이브 7, 항목 2 → 2026-11-25 F-06): updateDraft/toggleDraft/deleteDraft의 catch가 에러 종류와
+// 무관하게 setQueueMode("local")로 큐 전체를 강등시키던 문제 —
+//  1) 404(레코드 소실: 다른 곳에서 이미 삭제/적용됨)는 전역 강등 없이 그 행에만 에러를 붙인다
+//     (isDraftRecordError 판정, 실제 export 함수 호출로 검증).
+//  2) 5xx/네트워크도 이제 큐를 내리지 않는다(F-06 — 예전엔 한 번의 실패로 세션 내내 로컬 큐였다). 그 행에 "다시 시도"
+//     에러를 붙이고 서버 모드 그대로 둔다. 실제 동작(500 뒤 queueMode)은 tests/branch/ledger-draft-queue-hook.test.ts 가
+//     훅을 직접 돌려 본다.
+//  3) 어느 경우든 "서버-id 섀도 편집"(실패한 요청을 서버 id 그대로 로컬에 낙관 반영해 재전송 판별(localDraftsRef가
+//     "local-" 접두만 봄)에서 빠져 무음 소실되던 경로)을 만들지 않는다 — 서버 발급 id 면 성공이든 실패든 항상 return하고
 //     아래 updateLocalDrafts로 떨어지지 않는다.
-// 소스 스캔 방식은 tests/branch/ledger-entry-reverse-action.test.ts와 동일 관례를 따른다
-// (useLedgerDraftQueue는 훅 내부 클로저라 직접 렌더하지 않고는 호출할 수 없다).
+// 소스 스캔 방식은 tests/branch/ledger-entry-reverse-action.test.ts와 동일 관례를 따른다.
 const workbenchPath = join(process.cwd(), "components/admin/branch/SalesLedgerWorkbench.tsx")
 // 웨이브 7 2단(F5): useLedgerDraftQueue(updateDraft/toggleDraft/deleteDraft/loadDrafts 포함)는
 // ledger/useLedgerDraftQueue.ts로 물리 이동됐다(로직 무변경) — 훅 내부 스캔은 이 파일을 읽는다.
@@ -61,98 +61,88 @@ describe("isDraftRecordError — 4xx 레코드 오류 판정(품질 웨이브 7,
   })
 })
 
-describe("updateDraft — 레코드 오류는 전역 강등 없이 그 행에만(품질 웨이브 7, 항목 2)", () => {
+// 서버 발급 id 갈래(if (!id.startsWith("local-")) { … })의 본문 — 그 뒤 로컬 갈래와 나눠 본다.
+function serverBranch(body: string, localMarker: string) {
+  const start = body.indexOf('if (!id.startsWith("local-")) {')
+  expect(start, "서버-id 갈래를 찾지 못함").toBeGreaterThan(-1)
+  const end = body.indexOf(localMarker, start)
+  expect(end, `로컬 갈래 마커를 찾지 못함: ${localMarker}`).toBeGreaterThan(start)
+  return body.slice(start, end)
+}
+
+describe("updateDraft — 레코드 오류·네트워크 오류 모두 그 행에만(품질 웨이브 7 항목 2 · F-06)", () => {
   const fnBody = () => sliceFn(
     hookSource(),
     "const updateDraft = useCallback",
-    "}, [clearRecordError, queueMode, setRecordError, updateLocalDrafts])",
+    "}, [clearRecordError, setRecordError, updateLocalDrafts])",
   )
 
-  it("catch에서 isDraftRecordError로 먼저 분기하고, 맞으면 setRecordError만 호출한 뒤 즉시 return한다", () => {
+  it("catch에서 isDraftRecordError로 먼저 분기해 레코드 오류 배지를 달고, 그 밖의 오류는 '다시 시도' 행 에러로 남긴다", () => {
     const body = fnBody()
     const catchIndex = body.indexOf("} catch (error) {")
     const recordCheckIndex = body.indexOf("if (isDraftRecordError(error)) {")
     const setRecordErrorIndex = body.indexOf("setRecordError(id)")
-    const setQueueModeLocalIndex = body.indexOf('setQueueMode("local")')
-
+    const retryIndex = body.indexOf('rowActionFailureMessage("고친 값을 저장하지", error)')
     expect(catchIndex).toBeGreaterThan(-1)
     expect(recordCheckIndex).toBeGreaterThan(catchIndex)
     expect(setRecordErrorIndex).toBeGreaterThan(recordCheckIndex)
-    // 레코드 오류 분기가 setQueueMode("local") 호출보다 먼저 등장하고 그 안에서 return한다 —
-    // 즉 레코드 오류는 큐 전체 강등 경로를 절대 타지 않는다.
-    expect(setQueueModeLocalIndex).toBeGreaterThan(setRecordErrorIndex)
+    expect(retryIndex).toBeGreaterThan(setRecordErrorIndex)
+    expect(body).toContain("return { draft: null, error: message }")
+  })
+
+  it("어느 실패에서도 큐를 로컬로 내리지 않는다(F-06)", () => {
+    expect(fnBody()).not.toContain('setQueueMode("local")')
   })
 
   it("성공 시 clearRecordError(id)로 이전 행별 에러를 지운다", () => {
     expect(fnBody()).toContain("clearRecordError(id)")
   })
 
-  it("서버-id 초안(id가 local- 아님)의 두 실패 분기(레코드 오류·5xx) 모두 return하고, 그 아래 updateLocalDrafts로 떨어지지 않는다", () => {
+  it("서버-id 초안은 큐 모드와 상관없이 서버로 보내고, 그 갈래 어디에서도 로컬 낙관 편집(updateLocalDrafts)으로 떨어지지 않는다", () => {
     const body = fnBody()
-    // if (queueMode === "server" && !id.startsWith("local-")) { ... } 블록 안에서
-    // catch의 두 분기가 각각 값 반환으로 끝나는지 — 웨이브 7 2단(I4)에서 반환형이
-    // DraftMutationResult로 바뀌어 "return null" 대신 "return { draft: null }" 리터럴이 정확히
-    // 2회(레코드 오류 분기, 5xx 분기)여야 한다. 409 충돌·400 검증 분기는 판별 플래그가 붙은
-    // "return { draft: null, ... }"라 이 리터럴에 매칭되지 않는다(성공 경로의
-    // return { draft: nextDraft }도 별개 문자열).
-    const failureReturnCount = (body.match(/return \{ draft: null \}/g) ?? []).length
-    expect(failureReturnCount).toBe(2)
-    // 서버-id 블록 어디에서도 로컬 낙관 편집(updateLocalDrafts)으로 떨어지지 않는다 — 로컬 폴백은
-    // 블록 밖(local-*/로컬 큐 전용) 경로에만 존재한다.
-    const serverBlockStart = body.indexOf('if (queueMode === "server" && !id.startsWith("local-")) {')
-    const localFallbackIndex = body.indexOf("updateLocalDrafts((items) =>")
-    expect(serverBlockStart).toBeGreaterThan(-1)
-    const catchEnd = body.lastIndexOf('setQueueMode("local")')
-    expect(localFallbackIndex).toBeGreaterThan(catchEnd)
-  })
-
-  it("5xx/네트워크 분기 메시지는 '로컬 폴백'이 아니라 재시도를 안내한다(더 이상 로컬에 낙관 반영하지 않으므로)", () => {
-    expect(fnBody()).toContain("서버 초안 수정에 실패했습니다(네트워크/서버 오류) — 재연결 후 다시 시도하세요.")
+    expect(body).not.toContain("queueMode")
+    const server = serverBranch(body, "let updated: LedgerDraft | null = null")
+    expect(server).not.toContain("updateLocalDrafts(")
+    // 서버 갈래는 runInChain 결과를 그대로 return 한다 — 아래 로컬 갈래로 흘러가지 않는다.
+    expect(server).toContain("return await runInChain(updateChainsRef.current, id,")
   })
 })
 
-describe("toggleDraft — 레코드 오류는 전역 강등 없이 그 행에만(품질 웨이브 7, 항목 2)", () => {
+describe("toggleDraft — 레코드 오류·네트워크 오류 모두 그 행에만(품질 웨이브 7 항목 2 · F-06)", () => {
   const fnBody = () => sliceFn(
     hookSource(),
     "const toggleDraft = useCallback",
-    "}, [clearRecordError, drafts, queueMode, setRecordError, updateLocalDrafts])",
+    "}, [clearRecordError, drafts, setRecordError, updateLocalDrafts])",
   )
 
-  it("catch에서 isDraftRecordError로 먼저 분기하고 setRecordError 후 즉시 return한다(로컬 상태 토글 없음)", () => {
+  it("catch에서 isDraftRecordError로 먼저 분기하고, 그 밖의 오류는 '체크 상태를 바꾸지 못했습니다' 행 에러로 남긴다", () => {
     const body = fnBody()
     const catchIndex = body.indexOf("} catch (error) {")
     const recordCheckIndex = body.indexOf("if (isDraftRecordError(error)) {")
     const setRecordErrorIndex = body.indexOf("setRecordError(id)")
-    const setQueueModeLocalIndex = body.indexOf('setQueueMode("local")')
-
+    const retryIndex = body.indexOf('setRecordError(id, rowActionFailureMessage("체크 상태를 바꾸지", error))')
     expect(catchIndex).toBeGreaterThan(-1)
     expect(recordCheckIndex).toBeGreaterThan(catchIndex)
     expect(setRecordErrorIndex).toBeGreaterThan(recordCheckIndex)
-    expect(setQueueModeLocalIndex).toBeGreaterThan(setRecordErrorIndex)
+    expect(retryIndex).toBeGreaterThan(setRecordErrorIndex)
+    expect(body).not.toContain('setQueueMode("local")')
   })
 
   it("성공 시 clearRecordError(id)를 호출한다", () => {
     expect(fnBody()).toContain("clearRecordError(id)")
   })
 
-  it("서버-id 초안의 두 실패 분기 모두 명시적으로 return한다(하단 updateLocalDrafts로 흘러가지 않음)", () => {
-    const body = fnBody()
-    // if(...) { try { ... } catch (error) { if (record) { ...; return } ...; return } }
-    // 블록을 벗어나는 지점(다음 updateLocalDrafts 호출) 앞에 return이 두 번 더 있어야 한다.
-    const ifBlockStart = body.indexOf('if (queueMode === "server" && !id.startsWith("local-")) {')
-    const updateLocalDraftsIndex = body.indexOf("updateLocalDrafts((items) => items.map((draft) =>")
-    const ifBlock = body.slice(ifBlockStart, updateLocalDraftsIndex)
-    const returnCount = (ifBlock.match(/\breturn\b/g) ?? []).length
-    // return(성공) + return(레코드 오류) + return(5xx) = 3
-    expect(returnCount).toBe(3)
+  it("서버-id 초안의 세 갈래(성공·레코드 오류·네트워크 오류) 모두 명시적으로 return한다(하단 updateLocalDrafts로 흘러가지 않음)", () => {
+    const server = serverBranch(fnBody(), "updateLocalDrafts((items) => items.map((draft) =>")
+    expect((server.match(/\breturn\b/g) ?? []).length).toBe(3)
   })
 })
 
-describe("deleteDraft — 레코드 오류는 전역 강등 없이 그 행에만(품질 웨이브 7, 항목 2)", () => {
+describe("deleteDraft — 레코드 오류·네트워크 오류 모두 그 행에만(품질 웨이브 7 항목 2 · F-06)", () => {
   const fnBody = () => sliceFn(
     hookSource(),
     "const deleteDraft = useCallback",
-    "}, [clearRecordError, queueMode, setRecordError, updateLocalDrafts])",
+    "const reverseEntry = useCallback",
   )
 
   it("catch에서 isDraftRecordError로 먼저 분기하고 setRecordError 후 즉시 return한다(로컬에서 조용히 지우지 않음)", () => {
@@ -160,12 +150,11 @@ describe("deleteDraft — 레코드 오류는 전역 강등 없이 그 행에만
     const catchIndex = body.indexOf("} catch (error) {")
     const recordCheckIndex = body.indexOf("if (isDraftRecordError(error)) {")
     const setRecordErrorIndex = body.indexOf("setRecordError(id)")
-    const setQueueModeLocalIndex = body.indexOf('setQueueMode("local")')
-
     expect(catchIndex).toBeGreaterThan(-1)
     expect(recordCheckIndex).toBeGreaterThan(catchIndex)
     expect(setRecordErrorIndex).toBeGreaterThan(recordCheckIndex)
-    expect(setQueueModeLocalIndex).toBeGreaterThan(setRecordErrorIndex)
+    expect(body).toContain('setRecordError(id, rowActionFailureMessage("초안을 삭제하지", error))')
+    expect(body).not.toContain('setQueueMode("local")')
   })
 
   it("성공 시 clearRecordError(id)를 호출한다", () => {

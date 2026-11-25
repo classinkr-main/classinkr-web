@@ -3,6 +3,7 @@ import { useState } from "react"
 import { AlertTriangle, CheckCircle2, Clock } from "lucide-react"
 import { classifySyncFailure, SYNC_FAILURE_CLASS_LABEL } from "@/lib/admin/sync-health"
 import { isImportStale } from "@/lib/branch/data-source-freshness"
+import { revSheetFrozenLabel } from "@/lib/branch/rev-sheet-lock"
 import { isSheetAheadOfSync } from "@/lib/branch/sheet-freshness"
 import { formatCNY } from "@/lib/crm/money-format"
 import type { CrmSyncSummary, RevSyncHealth } from "@/lib/crm/rev-sync-health"
@@ -34,6 +35,14 @@ export function pickSyncStatusError(input: {
 interface SyncStatusBarProps {
   lastSync: string | null
   lastSyncStartedAt?: string | null
+  /**
+   * REV 를 실제로 읽은 마지막 성공 런(source all·rev)의 시각·시작. REV 임포트 신선도는 이 값과 비교한다 — 시트 고정 뒤
+   * 크론은 DSH·하드웨어만 읽어 lastSync 와 비교하면 임포트가 늘 "오래됨"이다(design-1 F8). undefined(구버전 응답)면 lastSync.
+   */
+  lastRevSync?: string | null
+  lastRevSyncStartedAt?: string | null
+  /** 시트 고정(BRANCH_REV_SHEET_LOCKED_AT) — 적용 중이면 REV 원천 라벨을 "12/1 고정"으로 보인다. */
+  revSheetLock?: { lockedAt: string; active: boolean } | null
   lastError: string | null
   /** lastError 의 출처(pickSyncStatusError). 생략하면 request — 실행 기록으로 확인되지 않은 실패를 원천 갱신 실패로 단정하지 않는다. */
   lastErrorOrigin?: SyncStatusErrorOrigin | null
@@ -71,13 +80,17 @@ function relativeTime(iso: string, now: number): string {
 // 항목 5: 이 바의 "라벨·시간 표기(상대시간)"를 기준으로 삼아 소스별 asOf도 절대시각(formatDateTime)
 // 대신 relativeTime으로 통일한다 — 위 헤더(마지막 동기화·시트 수정)와 동일한 표기라야 "REV 임포트가
 // 13일 전"처럼 스테일 정도가 한눈에 비교된다(2026-07-16 사고 재발 감지력).
-function sourceLabel(source: BranchDataSourceInfo, now: number): string {
-  if (source.kind === "import") return `장부 임포트${source.asOf ? ` (${relativeTime(source.asOf, now)})` : ""}`
-  if (source.kind === "mirror") return "시트 미러"
+// frozenLabel(시트 고정 — "12/1 고정")이 있으면 상대 시각 대신 그 라벨을 보인다(시트를 더 읽지 않으니 "N일 전"은 뜻이 없다).
+function sourceLabel(source: BranchDataSourceInfo, now: number, frozenLabel?: string | null): string {
+  if (source.kind === "import") {
+    if (frozenLabel) return `장부 임포트 (${frozenLabel})`
+    return `장부 임포트${source.asOf ? ` (${relativeTime(source.asOf, now)})` : ""}`
+  }
+  if (source.kind === "mirror") return frozenLabel ? `시트 미러 (${frozenLabel})` : "시트 미러"
   return "라이브 시트"
 }
 
-export default function SyncStatusBar({ lastSync, lastSyncStartedAt, lastError, lastErrorOrigin = null, sheetModifiedAt, dataSources, staleSince = null, crmSync = null, sheetFreshnessError = false }: SyncStatusBarProps) {
+export default function SyncStatusBar({ lastSync, lastSyncStartedAt, lastRevSync, lastRevSyncStartedAt, revSheetLock = null, lastError, lastErrorOrigin = null, sheetModifiedAt, dataSources, staleSince = null, crmSync = null, sheetFreshnessError = false }: SyncStatusBarProps) {
   // Tick once a minute so relative timestamps stay current without a refetch.
   // visibility-aware(코덱스 감사 #15): 백그라운드 탭에서는 멈추고 복귀 즉시 1회 따라잡는다.
   const [now, setNow] = useState(() => Date.now())
@@ -96,7 +109,11 @@ export default function SyncStatusBar({ lastSync, lastSyncStartedAt, lastError, 
   // 최신 시트를 가림) 재발 시 이 배너로 드러난다. sheetAhead(시트가 미러보다 앞섬)와는
   // 별개 신호다: sheetAhead는 라이브 시트 대 미러 동기화 시각을 비교하고, 이건 "서빙 중인
   // 임포트 런"이 그 미러 동기화보다도 뒤처졌는지를 본다.
-  const revImportStale = dataSources?.rev.kind === "import" && isImportStale(dataSources.rev.asOf, lastSync, lastSyncStartedAt)
+  // REV 는 REV 를 읽은 마지막 성공 런과 비교한다(구버전 응답이면 lastSync) — DSH·하드웨어만 읽은 런보다 오래됐다고 경고하지 않는다.
+  const revSyncAt = lastRevSync === undefined ? lastSync : lastRevSync
+  const revSyncStartedAt = lastRevSync === undefined ? lastSyncStartedAt : lastRevSyncStartedAt
+  const revImportStale = dataSources?.rev.kind === "import" && isImportStale(dataSources.rev.asOf, revSyncAt, revSyncStartedAt)
+  const revFrozenLabel = revSheetLock?.active ? revSheetFrozenLabel(revSheetLock.lockedAt) : null
   const dshImportStale = dataSources?.dsh.kind === "import" && isImportStale(dataSources.dsh.asOf, lastSync, lastSyncStartedAt)
   const importStale = Boolean(revImportStale || dshImportStale)
 
@@ -117,7 +134,7 @@ export default function SyncStatusBar({ lastSync, lastSyncStartedAt, lastError, 
 
   // 2층 머리줄 1층의 동기화 칸 — 상태(마지막 동기화·실패 여부)와 장부 링크만 둔다. 동기화 실행은 장부(/admin/branch/ledger)에서 한다.
   // 1440px에서도 한 줄에 들어가도록 문구를 줄이고, 원천 라벨(REV·DSH)은 아주 넓은 화면에서만 펼친다(그 밖에는 상태 문구의 title).
-  const sourceTitle = dataSources ? `REV ${sourceLabel(dataSources.rev, now)} · DSH ${sourceLabel(dataSources.dsh, now)}` : undefined
+  const sourceTitle = dataSources ? `REV ${sourceLabel(dataSources.rev, now, revFrozenLabel)} · DSH ${sourceLabel(dataSources.dsh, now)}` : undefined
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-[12px] lg:justify-end">
       <span className="inline-flex min-w-0 items-center gap-1.5">
@@ -172,7 +189,7 @@ export default function SyncStatusBar({ lastSync, lastSyncStartedAt, lastError, 
       {dataSources && (
         <>
           <span className={`hidden 2xl:inline ${revImportStale ? "font-semibold text-[#7A520F]" : "text-[#615D59]"}`}>
-            REV {sourceLabel(dataSources.rev, now)}
+            REV {sourceLabel(dataSources.rev, now, revFrozenLabel)}
           </span>
           <span className={`hidden 2xl:inline ${dshImportStale ? "font-semibold text-[#7A520F]" : "text-[#615D59]"}`}>
             DSH {sourceLabel(dataSources.dsh, now)}

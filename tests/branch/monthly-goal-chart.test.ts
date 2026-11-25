@@ -25,10 +25,11 @@ describe("3b 월별 목표 그릇 차트 — REV 캐논 소비", () => {
     expect(point).toMatchObject({ achieved: true, rate: 125, positive: 125, total: 125 })
   })
 
-  it("무색상 과거 월 폴백과 명시적 0을 캐논대로 유지하며 미래를 확정으로 올리지 않는다", () => {
+  // 2026-11-25 결정(F-09): 무색상 폴백은 이번 영업월 "이전" 달만 확정 — 이번 달·미래는 예정.
+  it("무색상 과거 월 폴백과 명시적 0을 캐논대로 유지하며 이번 달·미래를 확정으로 올리지 않는다", () => {
     const months = ["2026-09", "2026-10", "2026-11"]
     const plain = row({ monthlyPayments: Object.fromEntries(months.map((month) => [month, 100])) })
-    expect(buildMonthlyGoalChart([plain], months.map((month) => ({ month, goal: 200 })), TODAY).map((point) => point.confirmed)).toEqual([100, 100, 0])
+    expect(buildMonthlyGoalChart([plain], months.map((month) => ({ month, goal: 200 })), TODAY).map((point) => point.confirmed)).toEqual([100, 0, 0])
     const [zero] = buildMonthlyGoalChart([row({ monthlyPayments: { [TODAY]: 100 }, monthlyConfirmed: { [TODAY]: 0 } })], [{ month: TODAY, goal: 200 }], TODAY)
     expect(zero).toMatchObject({ confirmed: 0, expected: 100, rate: 0 })
   })
@@ -49,7 +50,7 @@ describe("3b 월별 목표 그릇 차트 — REV 캐논 소비", () => {
 
   it("누락·0·필터로 생략한 목표에는 달성률과 체크를 만들지 않는다", () => {
     for (const goal of [null, 0, -1, Number.NaN]) {
-      const [point] = buildMonthlyGoalChart([row({ monthlyPayments: { [TODAY]: 100 } })], [{ month: TODAY, goal }], TODAY)
+      const [point] = buildMonthlyGoalChart([row({ monthlyPayments: { [TODAY]: 100 }, monthlyConfirmed: { [TODAY]: 100 } })], [{ month: TODAY, goal }], TODAY)
       expect(point).toMatchObject({ goal: null, rate: null, achieved: false, confirmed: 100 })
     }
   })
