@@ -2,7 +2,14 @@ import { describe, expect, it } from "vitest"
 
 import { detectForm, isConsultationAsk, routeMessage, routeSegment, splitSegments } from "@/lib/admin-ai/server/router"
 
-import { CONSULTATION_ASKS, CONSULTATION_NOT, INTENT_ASKS, INTENT_COMMANDS } from "../fixtures/intent-table"
+import {
+  CONSULTATION_ASKS,
+  CONSULTATION_COMPOUND,
+  CONSULTATION_CRM_KEEP,
+  CONSULTATION_NOT,
+  INTENT_ASKS,
+  INTENT_COMMANDS,
+} from "../fixtures/intent-table"
 import {
   COMPOUND_NO_COMMA,
   COMPOUND_QUESTIONS,
@@ -132,6 +139,24 @@ describe("상담 내역 갈래 — 판정 표(새 문장 30개)", () => {
         expect(decision.scores.consultations, `${text} / ${decision.text}`).toBe(0)
         expect(decision.branch, text).not.toBe("consultations")
       }
+    }
+  })
+
+  const branchOf = (decision: ReturnType<typeof routeSegment>) =>
+    decision.branch === "read" && decision.read
+      ? `read:${decision.read.kind === "tool" ? decision.read.tool : decision.read.topic}`
+      : decision.branch
+
+  it("CRM 상담 단계·일정 문장 — 상담이 다른 대상의 이름이면 옛 판정 그대로다", () => {
+    for (const [text, expected] of CONSULTATION_CRM_KEEP) {
+      expect(isConsultationAsk(text), text).toBe(false)
+      expect(routeMessage(text).map(branchOf), text).toEqual(expected)
+    }
+  })
+
+  it("복합 문장은 상담 내역 조각과 다른 조각을 둘 다 답한다", () => {
+    for (const [text, expected] of CONSULTATION_COMPOUND) {
+      expect(routeMessage(text).map(branchOf), text).toEqual(expected)
     }
   })
 
