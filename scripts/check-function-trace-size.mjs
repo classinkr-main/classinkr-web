@@ -1,13 +1,16 @@
 // 빌드 뒤 서버 함수 추적(.next/server/**/*.nft.json) 크기 검사. `npm run build` 다음에 `npm run check:trace-size`.
 //
 // - 모든 함수: 추적 파일 합계가 Vercel 함수 용량 상한(250MB, 압축 전)을 넘으면 실패.
-// - 답 색인 로더(lib/chatbot/answer-index/load.ts)가 번들에 든 함수: 60MB·1000파일 이하, public/·tests/ 0개,
+// - 답 색인 로더(lib/chatbot/answer-index/load.ts)가 번들에 든 함수: 80MB·2000파일 이하, public/·tests/ 0개,
 //   답 색인 런타임 자료(manifest.json·cards/·variants/·universe/ 등) 전부 포함, 점검용 자료(audit/·eval/ 등) 0개.
 //   load.ts 의 자료 경로는 turbopackIgnore 라 런타임 자료는 next.config.ts 의 outputFileTracingIncludes 가 넣는다.
 //   새 라우트가 load.ts 를 끌어오는데 그 목록에 없으면 여기서 "런타임 자료 빠짐" 으로 걸린다.
 //
 // 빌드 흐름(build·postbuild)에는 넣지 않았다. CI 에 넣을지는 따로 정한다.
-// 옵션: --dir <프로젝트 루트>  --max-mb 250  --index-max-mb 60  --index-max-files 1000  --json(표 대신 JSON)
+// 상한 근거(2026-11-25 실측): 답 색인 함수는 65.3~65.5MB·1,478~1,484파일이다. 그 가운데 googleapis 가 32.8MB·904파일
+// (상담 연결 → 알림 → lib/email.ts → lib/google.ts 사슬로 실제 쓰인다), 답 색인 런타임 자료가 21.6MB·57파일이다.
+// 고치기 전에는 public/ 까지 실려 561MB·6,900파일이었다. 여유를 두되 그 회귀는 확실히 잡는 값으로 둔다.
+// 옵션: --dir <프로젝트 루트>  --max-mb 250  --index-max-mb 80  --index-max-files 2000  --json(표 대신 JSON)
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs"
 import path from "node:path"
 
@@ -18,8 +21,8 @@ function option(name, fallback) {
 }
 const ROOT = path.resolve(option("--dir", process.cwd()))
 const MAX_MB = Number(option("--max-mb", "250"))
-const INDEX_MAX_MB = Number(option("--index-max-mb", "60"))
-const INDEX_MAX_FILES = Number(option("--index-max-files", "1000"))
+const INDEX_MAX_MB = Number(option("--index-max-mb", "80"))
+const INDEX_MAX_FILES = Number(option("--index-max-files", "2000"))
 const AS_JSON = args.includes("--json")
 const SERVER_DIR = path.join(ROOT, ".next", "server")
 const DATA_REL = "data/answer-index/"
