@@ -1779,5 +1779,94 @@
         "checked": "관련 문장 없음 확인"
       }
     ]
+  },
+  {
+    "id": "gap:admin/proxy-register-check",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "admin",
+    "topic": "학생 추가 때 대리 등록 체크 여부 확인",
+    "textHash": "",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "support",
+      "related": [
+        {
+          "unit": "doc:/docs/admin/student-onboarding#4",
+          "i": 5,
+          "hash": "6cc773e01f1acd30"
+        }
+      ]
+    },
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_academy_created_account",
+      "C_course_member"
+    ],
+    "anchors": [
+      "대리 등록 확인",
+      "대리 등록 체크",
+      "대리 등록했는지",
+      "대리 등록 여부",
+      "체크했는지 확인",
+      "가입 학생 구분"
+    ],
+    "covers": "학생을 추가한 뒤 그 학생이 대리 등록으로 만들어졌는지, 추가할 때 대리 등록을 체크했는지를 나중에 확인하는 방법은 공개 안내에 없다는 것",
+    "notCovers": [
+      "[학생 대리 등록] 옵션이 안 보일 때 → doc:/docs/admin/student-onboarding#4/proxy-option-missing",
+      "대리 등록으로 학생 대신 만드는 순서 → doc:/docs/admin/student-onboarding#4/proxy-register-how",
+      "임시 비밀번호 문자가 안 갈 때 → doc:/docs/admin/student-onboarding#5/sms-not-received"
+    ],
+    "negatives": [
+      {
+        "q": "대리 등록 옵션이 화면에 안 보여요",
+        "route": "doc:/docs/admin/student-onboarding#4/proxy-option-missing"
+      },
+      {
+        "q": "가입 안 한 학생을 대신 만드는 순서가 궁금해요",
+        "route": "doc:/docs/admin/student-onboarding#4/proxy-register-how"
+      },
+      {
+        "q": "대리 등록한 학생에게 임시 비밀번호 문자가 안 와요",
+        "route": "doc:/docs/admin/student-onboarding#5/sms-not-received"
+      }
+    ],
+    "handoff": "support",
+    "status": "active",
+    "provenance": {
+      "unit": "R2-B6",
+      "writer": "agent:fable#B6",
+      "at": "2026-11-25",
+      "legacyIds": []
+    },
+    "searchLog": [
+      {
+        "query": "대리 등록 여부",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "대리 등록했는지",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "체크 확인",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "가입 학생 구분",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ]
   }
 ]

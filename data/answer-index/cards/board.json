@@ -1064,7 +1064,12 @@
             "281965b2cb640d0c"
           ]
         }
-      ]
+      ],
+      "first": {
+        "unit": "doc:/docs/hardware/board-basic-operation#2",
+        "i": 3,
+        "hash": "c8031e59d1042e85"
+      }
     },
     "sources": [
       {
@@ -1168,7 +1173,12 @@
             "aa6445d6c783dedb"
           ]
         }
-      ]
+      ],
+      "first": {
+        "unit": "doc:/docs/hardware/board-basic-operation#2",
+        "i": 4,
+        "hash": "aa6445d6c783dedb"
+      }
     },
     "sources": [
       {
@@ -1270,7 +1280,12 @@
             "6cb6c5b3839e526a"
           ]
         }
-      ]
+      ],
+      "first": {
+        "unit": "doc:/docs/hardware/board-basic-operation#2",
+        "i": 5,
+        "hash": "b62f6e1b2d03b5c2"
+      }
     },
     "sources": [
       {
@@ -1870,7 +1885,17 @@
             "e414dacbc8f479fb"
           ]
         }
-      ]
+      ],
+      "headline": {
+        "text": "터치까지 쓰려면 HDMI 신호와 HDMI Touch 연결이 둘 다 필요해요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/hardware/board-basic-operation#4",
+            "i": 6,
+            "hash": "51c20759f6d9606e"
+          }
+        ]
+      }
     },
     "sources": [
       {
@@ -2373,7 +2398,17 @@
             "01bb7ff2b4dedae1"
           ]
         }
-      ]
+      ],
+      "headline": {
+        "text": "화면이 안 나오면 전원 플러그부터 입력 소스까지 차례로 봐요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/hardware/board-basic-operation#6",
+            "i": 2,
+            "hash": "dfb267e4ae6dc8c4"
+          }
+        ]
+      }
     },
     "sources": [
       {
@@ -5468,6 +5503,16 @@
         "unit": "doc:/docs/hardware/board-ai-camera-mic#1",
         "i": 8,
         "hash": "612a8ee81aaff20c"
+      },
+      "headline": {
+        "text": "원격 학생 목소리가 안 들리면 온스테이지와 마이크 권한을 봐요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/hardware/board-ai-camera-mic#1",
+            "i": 8,
+            "hash": "612a8ee81aaff20c"
+          }
+        ]
       }
     },
     "sources": [
@@ -5568,7 +5613,17 @@
           ]
         }
       ],
-      "lead": "none"
+      "lead": "none",
+      "headline": {
+        "text": "학생 발언까지 담으려면 교실 크기와 좌석 배치를 같이 봐요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/hardware/board-ai-camera-mic#1",
+            "i": 3,
+            "hash": "0a4b24dfb8580dfe"
+          }
+        ]
+      }
     },
     "sources": [
       {
@@ -5678,6 +5733,16 @@
         "unit": "doc:/docs/hardware/board-ai-camera-mic#summary",
         "i": 3,
         "hash": "72388b90f167096e"
+      },
+      "headline": {
+        "text": "입장 전 장비 테스트에서 카메라·마이크·스피커를 확인해요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/hardware/board-ai-camera-mic#summary",
+            "i": 3,
+            "hash": "72388b90f167096e"
+          }
+        ]
       }
     },
     "sources": [
@@ -6365,6 +6430,16 @@
         "unit": "doc:/docs/hardware/board-ai-camera-mic#4",
         "i": 4,
         "hash": "3031c12aff01dac2"
+      },
+      "headline": {
+        "text": "녹화에 소리가 안 들어가면 최신 버전으로 올리고 캐시를 지워요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/hardware/board-ai-camera-mic#4",
+            "i": 4,
+            "hash": "3031c12aff01dac2"
+          }
+        ]
       }
     },
     "sources": [
@@ -6953,6 +7028,16 @@
         "unit": "doc:/docs/hardware/board-ai-camera-mic#6",
         "i": 7,
         "hash": "a9d65f1308bc25b3"
+      },
+      "headline": {
+        "text": "추적이 끊기면 그 자리가 제외 영역인지 설치 담당자에게 물어요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/hardware/board-ai-camera-mic#6",
+            "i": 7,
+            "hash": "a9d65f1308bc25b3"
+          }
+        ]
       }
     },
     "sources": [
@@ -7435,6 +7520,16 @@
         "unit": "doc:/docs/hardware/board-ai-camera-mic#8",
         "i": 2,
         "hash": "2d3ba048b5034a12"
+      },
+      "headline": {
+        "text": "넓은 교실에서는 천장형 마이크로 보강해요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/hardware/board-ai-camera-mic#8",
+            "i": 2,
+            "hash": "2d3ba048b5034a12"
+          }
+        ]
       }
     },
     "sources": [
@@ -8864,6 +8959,16 @@
         "unit": "doc:/docs/hardware/mic-dt2-pro#5",
         "i": 6,
         "hash": "2fe53a077f19cb2c"
+      },
+      "headline": {
+        "text": "마이크 반경 0.5m 안에는 소음·진동원을 두지 않아요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/hardware/mic-dt2-pro#5",
+            "i": 6,
+            "hash": "2fe53a077f19cb2c"
+          }
+        ]
       }
     },
     "sources": [
@@ -11368,7 +11473,17 @@
           ]
         }
       ],
-      "lead": "none"
+      "lead": "none",
+      "headline": {
+        "text": "사람으로 잘못 알아볼 곳은 인식 제외 구역으로 지정해요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/hardware/cam-t1-s1#6",
+            "i": 5,
+            "hash": "609875951868010f"
+          }
+        ]
+      }
     },
     "sources": [
       {
@@ -12575,7 +12690,22 @@
           ]
         }
       ],
-      "lead": "none"
+      "lead": "none",
+      "headline": {
+        "text": "전원은 접지 3구 콘센트(국내 220V)를 쓰고 Type-C는 1.5m 이내예요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/hardware/hardware-spec-installation-faq#1",
+            "i": 11,
+            "hash": "403353d2e7182a49"
+          },
+          {
+            "unit": "doc:/docs/hardware/hardware-spec-installation-faq#1",
+            "i": 12,
+            "hash": "c472bcb913b98293"
+          }
+        ]
+      }
     },
     "sources": [
       {
@@ -12870,7 +13000,17 @@
           ]
         }
       ],
-      "lead": "how_to"
+      "lead": "how_to",
+      "headline": {
+        "text": "화면은 전원을 끄고 물을 조금 묻힌 천으로 닦아요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/hardware/hardware-spec-installation-faq#2",
+            "i": 6,
+            "hash": "27ce5fb780f2e8fa"
+          }
+        ]
+      }
     },
     "sources": [
       {
@@ -16977,7 +17117,17 @@
             "aee60f5f690ab471"
           ]
         }
-      ]
+      ],
+      "headline": {
+        "text": "OPS는 Windows에 16GB 메모리, 256GB SSD가 기준이에요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/hardware/board-lineup-specs#4",
+            "i": 1,
+            "hash": "37bf85ba3b0a91c8"
+          }
+        ]
+      }
     },
     "sources": [
       {
@@ -18799,6 +18949,16 @@
       "leadBasis": {
         "unit": "doc:/docs/hardware/board-install-readiness#2",
         "i": 6
+      },
+      "headline": {
+        "text": "카메라를 함께 설치하면 랜선이 Cat 6 이상인지 확인해요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/hardware/board-install-readiness#2",
+            "i": 6,
+            "hash": "34ec26cfae852f85"
+          }
+        ]
       }
     },
     "sources": [
@@ -23251,7 +23411,12 @@
             "d32a0c0c0aeb4f02"
           ]
         }
-      ]
+      ],
+      "first": {
+        "unit": "doc:/docs/hardware/board-s-series-safe-use#7",
+        "i": 1,
+        "hash": "dbcd0031b0bc0508"
+      }
     },
     "sources": [
       {
@@ -24200,6 +24365,16 @@
         "unit": "doc:/docs/board/webcam-cms-setup-t1-panorama#0",
         "i": 4,
         "hash": "8428ba2fc32e45b0"
+      },
+      "headline": {
+        "text": "랜선을 뺐다 꽂아 보면 메인 네트워크를 구분해요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/board/webcam-cms-setup-t1-panorama#0",
+            "i": 4,
+            "hash": "8428ba2fc32e45b0"
+          }
+        ]
       }
     },
     "sources": [
@@ -24836,7 +25011,17 @@
             "d7adba43dbc3c718"
           ]
         }
-      ]
+      ],
+      "headline": {
+        "text": "CMS는 카메라 설정값과 트래킹 화각을 잡는 프로그램이에요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/board/webcam-cms-setup-t1-panorama#3",
+            "i": 0,
+            "hash": "3133a9c6d23d9871"
+          }
+        ]
+      }
     },
     "sources": [
       {
@@ -25249,7 +25434,17 @@
             "661d17ccb840e009"
           ]
         }
-      ]
+      ],
+      "headline": {
+        "text": "교사가 Blocking zone 안에 서면 트래킹 대상이 아니에요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/board/webcam-cms-setup-t1-panorama#5",
+            "i": 2,
+            "hash": "661d17ccb840e009"
+          }
+        ]
+      }
     },
     "sources": [
       {
@@ -26219,7 +26414,17 @@
             "0add08d35d3095d1"
           ]
         }
-      ]
+      ],
+      "headline": {
+        "text": "Panorama 화면에는 Clip area 영역이 그대로 나가요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/board/webcam-cms-setup-t1-panorama#9",
+            "i": 1,
+            "hash": "64c93f8baa60bbdc"
+          }
+        ]
+      }
     },
     "sources": [
       {
@@ -26307,7 +26512,7 @@
     "area": "board",
     "topic": "OT1 PTZ 카메라에는 Clip area가 없음",
     "answer": {
-      "lead": "none",
+      "lead": "not_supported",
       "sentences": [
         {
           "unit": "doc:/docs/board/webcam-cms-setup-t1-panorama#9",
@@ -26320,7 +26525,12 @@
             "c851d9b5fe604d93"
           ]
         }
-      ]
+      ],
+      "leadBasis": {
+        "unit": "doc:/docs/board/webcam-cms-setup-t1-panorama#9",
+        "i": 8,
+        "hash": "4f26aba9e7ec3e4d"
+      }
     },
     "sources": [
       {

@@ -1581,6 +1581,37 @@
       "decidedBy": null,
       "decidedAt": null,
       "blockPhrases": []
+    },
+    {
+      "id": "HQ-3501",
+      "topic": "가입한 아이디를 바꿀 수 있는지 — 카드는 '종류 변경 불가', 상담 기록은 '가능'으로 갈림(fact_conflict)",
+      "currentText": "doc:guide:classin-account-signup/login-id-type-change 답: '로그인 아이디를 이메일에서 휴대폰 번호로, 또는 그 반대로 바꿀 수는 없습니다. 꼭 바꿔야 하면 탈퇴한 뒤 새로 가입합니다.' 같은 말이 doc:/docs/start/signup#2/id-type 에도 있음.",
+      "conflict": "공개 문서는 '아이디 종류(이메일↔휴대폰 번호) 변경 불가'만 말한다. 그런데 '가입한 아이디를 변경할 수 있느냐'는 질문에 상담원이 '가능'이라고 답한 기록이 있어(실제 질문 측정 i260), 카드의 '바꿀 수 없다' 단정이 질문 전체에 맞는지 근거가 없다. 같은 종류 안에서 번호·이메일 값을 바꾸는 것(gap:account/phone-number-change 주제)과 종류를 바꾸는 것이 섞여 답이 틀릴 수 있다.",
+      "proposal": "담당자가 '종류 변경'과 '같은 종류 안에서 값 변경'의 실제 가능 범위를 확인해 문서(signup·가이드)를 먼저 고친다. 확인 전에는 이 카드를 답에 쓰지 않고(status review) 아이디 종류 변경 질문은 signup#2/id-type 카드나 상담으로 간다. 확인 뒤 문장이 바뀌면 extract 를 다시 돌리고 카드를 active 로 되돌린다.",
+      "affectedCards": [
+        "doc:guide:classin-account-signup/login-id-type-change",
+        "doc:/docs/start/signup#2/id-type"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": [],
+      "note": "R2 B6: login-id-type-change 를 review 로 내림. signup#2/id-type 은 종류 변경 불가만 좁게 말해 active 유지(같은 확인 대상)."
+    },
+    {
+      "id": "HQ-3502",
+      "topic": "수업 녹화 워터마크를 없앨 수 있는지 — 카드가 '워터마크로 저작권을 보호'만 말하는데 답이 '네, 할 수 있어요'로 나감(absence/lead_wrong)",
+      "currentText": "doc:/docs/start/company-overview#3/recording-watermark 답: '녹화는 클라우드에 자동으로 남고, 칠판 화면과 카메라 화면 두 가지로 보며, 워터마크로 저작권을 보호합니다.' 예/아니오 질문에 '네, 할 수 있어요.'가 앞에 붙어 '워터마크를 지울 수 있다'로 읽힘.",
+      "conflict": "공개 문서에는 워터마크가 있다는 것만 있고, 표시 내용(이름·전화번호 등)·끄고 켜기·누가 설정하는지는 없다. 카드는 지울 수 있다고 단정하지 않지만 답 앞머리가 그렇게 읽히게 만든다. 상담 기록상 설정 주체 확인이 필요한 주제다(실제 질문 측정 i188).",
+      "proposal": "워터마크 표시·해제 범위는 담당자가 확인해 공개 문서에 적는다. 그 전에는 이 카드를 답에 쓰지 않고(status review) 워터마크 질문은 gap:recording/watermark-control(공개 안내에 없음, 상담으로 확인)로 간다. 녹화 클라우드 저장 설명은 recording 영역 다른 카드(class-recording-what)가 맡는다.",
+      "affectedCards": [
+        "doc:/docs/start/company-overview#3/recording-watermark"
+      ],
+      "decision": null,
+      "decidedBy": null,
+      "decidedAt": null,
+      "blockPhrases": [],
+      "note": "R2 B6: review 로 내림. 확인 뒤 문서 문장이 바뀌면 카드 복구."
     }
   ]
 }

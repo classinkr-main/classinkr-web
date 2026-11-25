@@ -6004,7 +6004,7 @@
     "area": "recording",
     "topic": "받은 녹화본을 다른 코스에서 학생에게 보이기",
     "answer": {
-      "lead": "none",
+      "lead": "not_supported",
       "sentences": [
         {
           "unit": "doc:/docs/admin/recording-file-troubleshooting#5",
@@ -6025,7 +6025,12 @@
             "2ef8bf6a2a39ae57"
           ]
         }
-      ]
+      ],
+      "leadBasis": {
+        "unit": "doc:/docs/admin/recording-file-troubleshooting#5",
+        "i": 0,
+        "hash": "277e790929ac1df0"
+      }
     },
     "sources": [
       {
@@ -7381,11 +7386,11 @@
     "area": "recording",
     "topic": "코스 다시보기 시청 횟수 제한 확인·풀기",
     "answer": {
-      "lead": "how_to",
+      "lead": "yes_can",
       "leadBasis": {
         "unit": "doc:/docs/admin/replay-troubleshooting#2",
-        "i": 2,
-        "hash": "43bc2e47dc5ce2f6"
+        "i": 0,
+        "hash": "f617af796ce17696"
       },
       "sentences": [
         {
@@ -8052,7 +8057,12 @@
             "b21d4b97217d42bb"
           ]
         }
-      ]
+      ],
+      "first": {
+        "unit": "doc:/docs/teacher/recording-troubleshooting#summary",
+        "i": 1,
+        "hash": "2efb82813cf85476"
+      }
     },
     "sources": [
       {

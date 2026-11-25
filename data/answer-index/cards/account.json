@@ -26,7 +26,17 @@
             "a78b0bb93371f19d"
           ]
         }
-      ]
+      ],
+      "headline": {
+        "text": "회원 가입은 홈페이지가 아니라 설치한 앱에서 해요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/start/signup#summary",
+            "i": 1,
+            "hash": "0b93355b292c2a9d"
+          }
+        ]
+      }
     },
     "sources": [
       {
@@ -334,7 +344,17 @@
             "73eb54ac98eef243"
           ]
         }
-      ]
+      ],
+      "headline": {
+        "text": "가입을 마치면 번호나 이메일을 학원에 알려 주세요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/start/signup#0",
+            "i": 7,
+            "hash": "564fc61e8f17496a"
+          }
+        ]
+      }
     },
     "sources": [
       {
@@ -1809,7 +1829,17 @@
             "6d4936034ea38378"
           ]
         }
-      ]
+      ],
+      "headline": {
+        "text": "PC는 로그인 화면 하단 [비밀번호 변경]에서 새로 정해요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/start/password-change-pc#summary",
+            "i": 2,
+            "hash": "82becca78bf3b24c"
+          }
+        ]
+      }
     },
     "sources": [
       {
@@ -2624,7 +2654,17 @@
             "10d7b6d2b42d0399"
           ]
         }
-      ]
+      ],
+      "headline": {
+        "text": "모바일은 로그인 화면 하단에서 인증코드로 새로 정해요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/start/password-change-mobile#summary",
+            "i": 3,
+            "hash": "ec1a7dcf81dc086f"
+          }
+        ]
+      }
     },
     "sources": [
       {
@@ -2920,7 +2960,17 @@
             "e36df61d841074a7"
           ]
         }
-      ]
+      ],
+      "headline": {
+        "text": "[인증 코드로 로그인]을 누르면 비밀번호 없이 들어가요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/start/password-change-mobile#0",
+            "i": 1,
+            "hash": "cbe1ac744baa9b4c"
+          }
+        ]
+      }
     },
     "sources": [
       {
@@ -3998,6 +4048,16 @@
         "unit": "doc:/docs/start/login-troubleshooting#3",
         "i": 4,
         "hash": "8ad39d08d07599e9"
+      },
+      "headline": {
+        "text": "이미 가입돼 가입이 막히는 이메일이 내 아이디예요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/start/login-troubleshooting#3",
+            "i": 5,
+            "hash": "71de9faf634ac35a"
+          }
+        ]
       }
     },
     "sources": [
@@ -4109,7 +4169,17 @@
             "62f1ad64dd1b8de2"
           ]
         }
-      ]
+      ],
+      "headline": {
+        "text": "인증코드가 오지 않으면 번호 형식, 스팸함, 문자 차단을 봐요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/start/login-troubleshooting#summary",
+            "i": 6,
+            "hash": "cb291c33dfcc7769"
+          }
+        ]
+      }
     },
     "sources": [
       {
@@ -4226,7 +4296,8 @@
         "행선 고침: 대표 연락처 반례 none → fixed:basics-contact-channel, [인증코드 받기] 안 눌림 → code-delivery-resend, 임시 비밀번호 문자 → academy-temp-password-sms",
         "변형 옮김 4(재전송 3 → code-delivery-resend, 임시 비밀번호 1 → academy-temp-password-sms), 공개 답 없는 변형 1 지움(도착 시간), 새 변형 5"
       ]
-    }
+    },
+    "policyTopicAllowed": true
   },
   {
     "id": "doc:/docs/start/login-troubleshooting#4/code-delivery-resend",
@@ -4920,7 +4991,12 @@
             "b9e69d5242939404"
           ]
         }
-      ]
+      ],
+      "first": {
+        "unit": "doc:/docs/start/login-troubleshooting#summary",
+        "i": 2,
+        "hash": "bc92cd7b14979101"
+      }
     },
     "sources": [
       {
@@ -5577,6 +5653,16 @@
         "unit": "doc:/docs/teacher/teacher-profile#3",
         "i": 4,
         "hash": "ed18ca0ac8c697ed"
+      },
+      "headline": {
+        "text": "'학생의 코스 내 닉네임 수정을 허용'을 켜면 학생이 바꿔요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/teacher/teacher-profile#3",
+            "i": 4,
+            "hash": "ed18ca0ac8c697ed"
+          }
+        ]
       }
     },
     "sources": [
@@ -5876,7 +5962,17 @@
             "3aab242cf77c9966"
           ]
         }
-      ]
+      ],
+      "headline": {
+        "text": "PC는 [계정 및 설정] > [개인 정보]에서 바꿔요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/student/student-profile#summary",
+            "i": 2,
+            "hash": "260d9a71c81db52c"
+          }
+        ]
+      }
     },
     "sources": [
       {
@@ -7604,7 +7700,7 @@
     "handoff": null,
     "category": "onboarding",
     "intent": "docs_lookup",
-    "status": "active",
+    "status": "review",
     "provenance": {
       "unit": "D1-03",
       "writer": "D1",
@@ -7931,7 +8027,12 @@
             "148734ae9126cf58"
           ]
         }
-      ]
+      ],
+      "first": {
+        "unit": "guide:classin-account-delete",
+        "i": 24,
+        "hash": "148734ae9126cf58"
+      }
     },
     "sources": [
       {
@@ -9534,7 +9635,8 @@
         "symptom:login-forgot-password"
       ]
     },
-    "auditRef": "audit/C-02.jsonl#symptom:login-forgot-password"
+    "auditRef": "audit/C-02.jsonl#symptom:login-forgot-password",
+    "policyTopicAllowed": true
   },
   {
     "id": "howto:login-button",

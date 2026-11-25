@@ -1596,5 +1596,90 @@
       "at": "2026-11-20",
       "legacyIds": []
     }
+  },
+  {
+    "id": "gap:classroom/onstage-one-to-one-camera",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "classroom",
+    "topic": "온스테이지 1:1 수업에서 카메라가 보이는 방식",
+    "textHash": "",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "asks": [
+      "yesno",
+      "howto",
+      "symptom"
+    ],
+    "concepts": [
+      "C_onstage",
+      "C_camera",
+      "C_one_to_one_camera"
+    ],
+    "anchors": [
+      "1대1 수업",
+      "일대일 수업",
+      "1대1 카메라",
+      "상대 카메라",
+      "온스테이지 1대1",
+      "카메라 한 명만"
+    ],
+    "covers": "온스테이지로 1:1 수업을 할 때 두 사람의 카메라가 서로 어떻게 보이는지, 한쪽 카메라만 켜질 때의 원인은 공개 안내에 없다는 것",
+    "notCovers": [
+      "학생을 스테이지에 올리는 방법 → doc:/docs/software/classroom-tools#5/onstage-basics",
+      "온스테이지 인원 설정 → doc:/docs/teacher/course-units#4/onstage-count",
+      "학생 목소리만 안 들릴 때 → doc:/docs/start/camera-mic-troubleshooting#5/cam-student-voice"
+    ],
+    "negatives": [
+      {
+        "q": "학생을 스테이지에 올리는 방법이 뭐예요",
+        "route": "doc:/docs/software/classroom-tools#5/onstage-basics"
+      },
+      {
+        "q": "온스테이지 인원수는 어디서 설정하나요",
+        "route": "doc:/docs/teacher/course-units#4/onstage-count"
+      },
+      {
+        "q": "원격 수강생 쪽 소리 문제를 강사가 점검하는 순서가 궁금해요",
+        "route": "doc:/docs/start/camera-mic-troubleshooting#5/cam-student-voice"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "provenance": {
+      "unit": "R2-B6",
+      "writer": "agent:fable#B6",
+      "at": "2026-11-25",
+      "legacyIds": []
+    },
+    "searchLog": [
+      {
+        "query": "1대1",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "일대일",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "상대 카메라",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "카메라 한 명",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ]
   }
 ]

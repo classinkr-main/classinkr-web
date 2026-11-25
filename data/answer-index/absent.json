@@ -706,7 +706,9 @@
     "id": "absent:classroom/waiting-room",
     "label": "대기실·입장 승인",
     "forms": [
-      "대기실",
+      "대기실 기능",
+      "대기실 설정",
+      "대기실 만들",
       "입장승인",
       "입장허락",
       "입장대기",
@@ -716,7 +718,9 @@
     "gapCard": "gap:classroom/waiting-room",
     "verified": {
       "grep": [
-        "대기실",
+        "대기실 기능",
+        "대기실 설정",
+        "대기실 만들",
         "입장승인",
         "입장허락",
         "입장대기",
@@ -724,8 +728,8 @@
       ],
       "unitHits": 0,
       "siteHits": 0,
-      "checkedAt": "2026-11-20",
-      "checker": "script:search+manual"
+      "checkedAt": "2026-11-25",
+      "checker": "script:search+manual+agent:fable#B6"
     }
   },
   {
@@ -1147,7 +1151,9 @@
     "id": "absent:company/reseller",
     "label": "총판·대리점",
     "forms": [
-      "총판",
+      "총판 모집",
+      "총판 계약",
+      "총판 문의",
       "대리점",
       "리셀러",
       "영업파트너"
@@ -1156,15 +1162,17 @@
     "gapCard": "gap:company/reseller",
     "verified": {
       "grep": [
-        "총판",
+        "총판 모집",
+        "총판 계약",
+        "총판 문의",
         "대리점",
         "리셀러",
         "영업파트너"
       ],
       "unitHits": 0,
       "siteHits": 0,
-      "checkedAt": "2026-11-20",
-      "checker": "script:search+manual"
+      "checkedAt": "2026-11-25",
+      "checker": "script:search+manual+agent:fable#B6"
     }
   },
   {
@@ -1172,7 +1180,8 @@
     "label": "채용·입사 지원",
     "forms": [
       "채용공고",
-      "채용",
+      "채용 계획",
+      "채용 일정",
       "입사지원",
       "인턴십"
     ],
@@ -1181,14 +1190,15 @@
     "verified": {
       "grep": [
         "채용공고",
-        "채용",
+        "채용 계획",
+        "채용 일정",
         "입사지원",
         "인턴십"
       ],
       "unitHits": 0,
       "siteHits": 0,
-      "checkedAt": "2026-11-20",
-      "checker": "script:search+manual"
+      "checkedAt": "2026-11-25",
+      "checker": "script:search+manual+agent:fable#B6"
     }
   },
   {
@@ -1221,8 +1231,9 @@
     "forms": [
       "언론보도",
       "보도자료",
-      "수상",
-      "어워드"
+      "수상 이력",
+      "수상 경력",
+      "수상 내역"
     ],
     "area": "company",
     "gapCard": "gap:company/press-awards",
@@ -1230,13 +1241,14 @@
       "grep": [
         "언론보도",
         "보도자료",
-        "수상",
-        "어워드"
+        "수상 이력",
+        "수상 경력",
+        "수상 내역"
       ],
-      "unitHits": 1,
+      "unitHits": 0,
       "siteHits": 0,
-      "checkedAt": "2026-11-20",
-      "checker": "script:search+manual",
+      "checkedAt": "2026-11-25",
+      "checker": "script:search+manual+agent:fable#B6",
       "sameMeaningNote": "걸린 문장은 이 개념과 다른 뜻(낱말 일부가 다른 말에 들어간 경우)"
     }
   },
@@ -5681,8 +5693,10 @@
     "id": "absent:start/beta-program",
     "label": "베타 테스트 참여",
     "forms": [
-      "베타",
+      "베타 테스트 신청",
       "베타 테스트",
+      "베타 신청",
+      "베타 참여",
       "테스트 버전",
       "얼리 액세스",
       "테스터 신청"
@@ -5691,16 +5705,18 @@
     "gapCard": "gap:start/beta-program",
     "verified": {
       "grep": [
-        "베타",
+        "베타 테스트 신청",
         "베타 테스트",
+        "베타 신청",
+        "베타 참여",
         "테스트 버전",
         "얼리 액세스",
         "테스터 신청"
       ],
       "unitHits": 0,
       "siteHits": 0,
-      "checkedAt": "2026-11-20",
-      "checker": "agent:opus#D5-start"
+      "checkedAt": "2026-11-25",
+      "checker": "agent:opus#D5-start+agent:fable#B6"
     }
   },
   {
@@ -6871,6 +6887,54 @@
       "siteHits": 0,
       "checkedAt": "2026-11-20",
       "checker": "agent:opus#D5-trust"
+    }
+  },
+  {
+    "id": "absent:start/tablet-landscape-cutoff",
+    "label": "태블릿 가로 화면 잘림",
+    "forms": [
+      "태블릿 가로 화면 잘림",
+      "가로 화면에서 잘려",
+      "화면 오른쪽이 잘려",
+      "화면 우측이 잘려"
+    ],
+    "area": "start",
+    "gapCard": "gap:start/tablet-landscape-cutoff",
+    "verified": {
+      "grep": [
+        "태블릿 가로 화면 잘림",
+        "가로 화면에서 잘려",
+        "화면 오른쪽이 잘려",
+        "화면 우측이 잘려"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-25",
+      "checker": "agent:fable#B6"
+    }
+  },
+  {
+    "id": "absent:classroom/onstage-one-to-one-camera",
+    "label": "온스테이지 1:1 수업 카메라",
+    "forms": [
+      "1대1 수업 카메라",
+      "일대일 수업 카메라",
+      "1대1 카메라",
+      "일대일 카메라"
+    ],
+    "area": "classroom",
+    "gapCard": "gap:classroom/onstage-one-to-one-camera",
+    "verified": {
+      "grep": [
+        "1대1 수업 카메라",
+        "일대일 수업 카메라",
+        "1대1 카메라",
+        "일대일 카메라"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-25",
+      "checker": "agent:fable#B6"
     }
   }
 ]
