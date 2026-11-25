@@ -357,6 +357,21 @@ REV 매출의 3단 확도(확정/고확도/예정)는 본질 기능이라 서로
 - Radius: `--radius-control`(공개 4px · 어드민 6px)
 - Focus: `2px solid #084734` outline
 
+### 챗봇 위젯 면 [public] — `in force`(2026-11-25, 챗봇 점검 CX-14·CX-15·CX-16·CX-06·CX-29)
+
+코드: `components/ui/FloatingChatbot.tsx`(런처·패널 틀), `components/ui/chatbot/*.tsx`(헤더·목록·입력·상담 카드·답 글 링크), `components/ui/ChatbotTeaser.tsx`. 레이어·모달·높이 규칙은 5-C에 있다.
+
+- **면은 불투명하다.** 패널은 `surface-paper` + 1px `line-strong` + Deep Shadow(`shadow-deep`, 떠 있는 층) 하나다. 헤더와 입력 바닥은 `surface-sheet` + `line-hair` 한 줄로 목록과 가른다. 답 말풍선은 `surface-sheet` + `line-hair`, 질문 말풍선은 `fg-accent` 채움 + 같은 색 1px 선이다. 반투명 그라데이션·`backdrop-filter`·색 후광·안쪽 하이라이트는 쓰지 않는다. 밝은 페이지(/faq·홈) 위에서 뒤 글자가 비치지 않는다.
+- **선과 강제 색상.** 칩·출처 카드·작은 버튼은 `surface-sheet` + `line-strong`이고 hover는 선을 `fg-accent`로 진하게 한다. 입력 상자는 조작 경계 `line-control`이다. 패널·말풍선·칩·입력이 모두 1px 선을 가져 강제 색상(Windows 고대비)에서도 경계가 남는다.
+- **딤과 티저.** 휴대폰 딤은 `bg-surface-scrim`(blur 없음)이다. 티저는 쿠키 배너와 같은 떠 있는 층(`surface-sheet` + `line-strong` + Deep Shadow)이다.
+- **색은 토큰 유틸만 쓴다.** 위젯 파일에는 hex·rgba 리터럴이 0개다. 오류 글자는 `fg-danger` 하나다(예전의 `#7A2A13`·`#FBEAE2` 복사 실패 면은 없앴다).
+- **글자는 13px 이상이다.** 라벨·칩·출처·상태는 `text-note`·`text-label`(13), 목록 번호는 `text-folio`(13), 답 본문은 `text-caption`(14), 제목은 `text-ui`(15)이고 입력은 보증 규칙대로 16px다. 9~12px 리터럴은 쓰지 않는다. 알약 배지('추천'·'상담 권장')는 `status-dot` + 13px 글자로 바꿨다.
+- **포커스와 비활성.** 입력 상자는 포커스 때 테두리를 `fg-accent`로 바꾸고 2px 링을 −1px 겹쳐 한 선으로 그린다(§6). 비활성 전송·다시 시도·칩은 흐린 초록이 아니라 `surface-skeleton` 면 + `fg-muted` 글자다. 보이는 36px 버튼은 `CHATBOT_HIT_AREA_CLASS`, 32px 버튼은 `CHATBOT_HIT_AREA_32_CLASS`로 누름 영역 44px를 둔다.
+- **상태 점.** 런처와 헤더에는 상태 점·핑·후광을 두지 않는다. 초록 점이 '실시간 상담원 대기'로 읽혀 AI 안내 창이 사람 상담처럼 보였다(CX-06). 사람 상담은 상담 연결 카드로만 잇는다.
+- **답 글 링크.** 사이트 안 공개 경로('(/contact)'·'/showroom'·'/docs/…')와 이 사이트 주소는 `next/link` 본문 링크(`link-body`)로 그린다. 휴대폰에서 누르면 대화창을 닫는다. 외부 주소는 지우지 않고 새 창 링크(`rel="noopener noreferrer"`, 화면 읽기 '(새 창)')로 둔다. 원본 이미지(마크다운 이미지·`/images/` 경로·이미지 파일 주소)는 지운다.
+- **반경은 결정 대기다**(챗봇 점검 결정 2). 지금 값은 패널 26px, 말풍선 18px(꼬리 쪽 6px), 칩·출처·상담 요약 12px, 작은 버튼 8px, 입력 상자 16px(안쪽 버튼 12px), 헤더 아이콘 상자 14px, 런처·헤더 아이콘 버튼 원형이다. 편집 지면 규칙(떠 있는 층 6px, 컨트롤 4px, 카드 0)으로 맞출지, 원형 예외를 둘지 정하면 이 줄과 §5 반경을 함께 고친다.
+- **다크 모드는 지원하지 않는다.** 공개 사이트는 `prefers-color-scheme`에 반응하지 않고, 챗봇도 밝은 면 하나다. 먹 지면(`surface-ink`)은 다크 모드가 아니다. 고대비는 지원한다(`prefers-contrast: more`의 선 두께, 강제 색상의 1px 경계). 사이트 전체의 다크 모드 정책은 챗봇 점검 결정 12에서 정한다.
+
 ---
 
 ## 5. 레이아웃 원칙 [공통]

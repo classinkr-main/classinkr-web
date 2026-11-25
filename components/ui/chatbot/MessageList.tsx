@@ -8,7 +8,6 @@ import {
     Check,
     ChevronDown,
     Copy,
-    ExternalLink,
     FileText,
     RotateCcw,
     ThumbsDown,
@@ -19,6 +18,11 @@ import { ClassInAIIcon } from "@/components/ui/ClassInAIIcon"
 import { CHATBOT_HIT_AREA_CLASS } from "@/components/ui/chatbot-hit-area"
 import type { ChatLinkClick } from "@/components/ui/chatbot-link-navigation"
 import { ConsultationBridge } from "@/components/ui/chatbot/ConsultationBridge"
+import {
+    LinkifiedText,
+    flattenAssistantMarkdownLinks,
+    prepareAssistantDisplayText,
+} from "@/components/ui/chatbot/MessageText"
 import { EASING_SOFT_ENTER } from "@/components/ui/chatbot/constants"
 import {
     findCurrentTurnStart,
@@ -31,37 +35,34 @@ import { cn } from "@/lib/utils"
 import { CHATBOT_MOTION, m } from "@/lib/chatbot/motion"
 import { buildRetryLabel, WIDGET_INTERRUPTED_NOTICE } from "@/lib/chatbot/widget-turn"
 
+// 답 머리: 화자(Classin AI)와 상태. 상태는 알약 배지 대신 점 + 13px 글자다(DESIGN.md §4 Pill Badge retired, CX-16).
 function AssistantMeta({ message }: { message: ChatMessage }) {
-    const labels = [
-        message.showHandoffCTA ? "상담 권장" : null,
-    ].filter((label): label is string => Boolean(label))
-
     return (
-        <div className="mb-2 flex items-center justify-between gap-2 border-b border-fg-accent/[0.08] pb-1.5">
-            <div className="flex items-center gap-1.5 text-[11px] font-bold text-fg-accent">
-                <ClassInAIIcon size={13} variant="brand" />
+        <div className="mb-2 flex items-center justify-between gap-2 border-b border-line-hair pb-1.5">
+            <div className="flex items-center gap-1.5 text-label text-fg-muted">
+                <ClassInAIIcon size={14} variant="brand" />
                 <span>Classin AI</span>
             </div>
-            {labels.length > 0 ? (
-                <div className="flex flex-wrap gap-1.5">
-                    {labels.map((label) => (
-                        <span
-                            key={label}
-                            className={cn(
-                                "inline-flex h-5 items-center rounded-full border px-2 text-[10px] font-bold",
-                                label === "상담 권장"
-                                    ? "border-fg-accent/15 bg-fg-accent/8 text-fg-accent"
-                                    : "border-black/[0.06] bg-white/70 text-[#615D59]"
-                            )}
-                        >
-                            {label}
-                        </span>
-                    ))}
-                </div>
+            {message.showHandoffCTA ? (
+                <span className="inline-flex items-center gap-1.5 text-note text-fg-muted">
+                    <span className="status-dot" aria-hidden />
+                    상담 권장
+                </span>
             ) : null}
         </div>
     )
 }
+
+type FeedbackRating = "helpful" | "not_helpful"
+
+// 누른 쪽은 aria-pressed=true 다. 저장되면 '의견 고마워요', 실패하면 '저장하지 못했어요'를 한 줄로 보이고(role=status 라
+// 스크린 리더도 듣는다). 실패하면 눌림을 풀어 다시 누를 수 있게 한다(CX-25). 예전에는 실패해도 아무 표시가 없었다.
+export const FEEDBACK_SAVED_NOTICE = "의견 고마워요"
+export const FEEDBACK_FAILED_NOTICE = "저장하지 못했어요"
+
+const FEEDBACK_BUTTON_CLASS =
+    "inline-flex h-9 w-9 items-center justify-center rounded-[8px] border border-line-strong bg-surface-sheet text-fg-muted transition-colors hover:border-fg-accent hover:text-fg-accent"
+const FEEDBACK_BUTTON_PRESSED_CLASS = "border-fg-accent text-fg-accent"
 
 function FeedbackButtons({
     answerEventId,
@@ -70,13 +71,19 @@ function FeedbackButtons({
     answerEventId?: string
     sessionId?: string
 }) {
-    const [state, setState] = useState<"idle" | "helpful" | "not_helpful" | "failed">("idle")
+    const [pressed, setPressed] = useState<FeedbackRating | null>(null)
+    const [status, setStatus] = useState<"idle" | "saving" | "saved" | "failed">("idle")
 
-    async function sendFeedback(rating: "helpful" | "not_helpful") {
-        setState(rating)
+    async function sendFeedback(rating: FeedbackRating) {
+        setPressed(rating)
+        setStatus("saving")
 
+        const fail = () => {
+            setPressed(null)
+            setStatus("failed")
+        }
         if (!answerEventId || !sessionId) {
-            setState("failed")
+            fail()
             return
         }
 
@@ -86,40 +93,51 @@ function FeedbackButtons({
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ answerEventId, sessionId, rating }),
             })
-            if (!response.ok) setState("failed")
+            if (response.ok) setStatus("saved")
+            else fail()
         } catch {
-            setState("failed")
+            fail()
         }
     }
 
+    const notice = status === "saved" ? FEEDBACK_SAVED_NOTICE : status === "failed" ? FEEDBACK_FAILED_NOTICE : ""
+
     return (
-        <div className="flex items-center gap-2">
-            <button
-                type="button"
-                onClick={() => sendFeedback("helpful")}
-                className={cn(
-                    "inline-flex h-9 w-9 items-center justify-center rounded-[8px] border border-white/70 bg-white/70 text-[#615D59] transition-colors hover:bg-fg-accent/8 hover:text-fg-accent",
-                    CHATBOT_HIT_AREA_CLASS,
-                    state === "helpful" && "border-fg-accent/25 bg-fg-accent/8 text-fg-accent"
-                )}
-                aria-label="도움됨"
-                title="도움됨"
-            >
-                {state === "helpful" ? <Check className="h-4 w-4" /> : <ThumbsUp className="h-4 w-4" />}
-            </button>
-            <button
-                type="button"
-                onClick={() => sendFeedback("not_helpful")}
-                className={cn(
-                    "inline-flex h-9 w-9 items-center justify-center rounded-[8px] border border-white/70 bg-white/70 text-[#615D59] transition-colors hover:bg-fg-accent/8 hover:text-fg-accent",
-                    CHATBOT_HIT_AREA_CLASS,
-                    state === "not_helpful" && "border-fg-accent/25 bg-fg-accent/8 text-fg-accent"
-                )}
-                aria-label="도움 안 됨"
-                title="도움 안 됨"
-            >
-                <ThumbsDown className="h-4 w-4" />
-            </button>
+        <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1">
+            {/* 안내 영역은 처음부터 두어야 바뀐 글을 스크린 리더가 읽는다. */}
+            <p role="status" className={cn("text-note", status === "failed" ? "text-fg-danger" : "text-fg-muted")}>
+                {notice}
+            </p>
+            <div role="group" aria-label="이 답변이 도움이 됐나요?" className="flex items-center gap-2">
+                <button
+                    type="button"
+                    onClick={() => sendFeedback("helpful")}
+                    aria-pressed={pressed === "helpful"}
+                    className={cn(
+                        FEEDBACK_BUTTON_CLASS,
+                        CHATBOT_HIT_AREA_CLASS,
+                        pressed === "helpful" && FEEDBACK_BUTTON_PRESSED_CLASS
+                    )}
+                    aria-label="도움됨"
+                    title="도움됨"
+                >
+                    {pressed === "helpful" ? <Check className="h-4 w-4" aria-hidden /> : <ThumbsUp className="h-4 w-4" aria-hidden />}
+                </button>
+                <button
+                    type="button"
+                    onClick={() => sendFeedback("not_helpful")}
+                    aria-pressed={pressed === "not_helpful"}
+                    className={cn(
+                        FEEDBACK_BUTTON_CLASS,
+                        CHATBOT_HIT_AREA_CLASS,
+                        pressed === "not_helpful" && FEEDBACK_BUTTON_PRESSED_CLASS
+                    )}
+                    aria-label="도움 안 됨"
+                    title="도움 안 됨"
+                >
+                    <ThumbsDown className="h-4 w-4" aria-hidden />
+                </button>
+            </div>
         </div>
     )
 }
@@ -128,20 +146,10 @@ function buildAnswerShareText(message: ChatMessage) {
     return sanitizeVisibleAssistantText(message.content)
 }
 
+// 복사·스크린 리더 안내에 쓰는 평문. 원본 이미지는 지우고, 주소·사이트 경로는 문장 중간에서 지우지 않는다(CX-17).
+// 마크다운 링크는 이름만 남긴다. 화면은 같은 다듬기(prepareAssistantDisplayText) 뒤 링크를 그린다(MessageText).
 export function sanitizeVisibleAssistantText(value: string) {
-    return value
-        .replace(/!\[[^\]]*]\([^)]*\)/g, "")
-        .replace(/\[([^\]]+)]\((?:https?:\/\/|\/)[^)]+\)/g, "$1")
-        .replace(/https?:\/\/[^\s)]+/g, "")
-        .replace(/(?:\/docs|\/images|\/resources)\/[^\s)]+/g, "")
-        .replace(/\[image[_\-\s]?\d*]/gi, "")
-        // 제품 톤은 마크다운을 쓰지 않는다. 모델이 가끔 흘리는 **굵게** 표시는 평문으로 정리한다.
-        .replace(/\*\*(.+?)\*\*/g, "$1")
-        .replace(/^\s*(?:출처|참고\s*문서|근거\s*자료|문서\s*보기)\s*:.*$/gim, "")
-        .replace(/[^\S\r\n]{2,}/g, " ")
-        .replace(/[ \t]+\n/g, "\n")
-        .replace(/\n{3,}/g, "\n\n")
-        .trim()
+    return flattenAssistantMarkdownLinks(prepareAssistantDisplayText(value))
 }
 
 function cleanMessageLine(line: string) {
@@ -162,7 +170,7 @@ function Caret({ shouldReduceMotion }: { shouldReduceMotion: boolean | null }) {
     return (
         <span
             className={cn(
-                "inline-block w-[2px] h-[15px] ml-1.5 align-middle rounded-full bg-[#10B981] shadow-[0_0_8px_rgba(16,185,129,0.7)] shrink-0",
+                "inline-block w-[2px] h-[15px] ml-1.5 align-middle rounded-full bg-fg-accent shrink-0",
                 shouldReduceMotion ? "opacity-100" : "animate-pulse"
             )}
             aria-hidden
@@ -176,15 +184,22 @@ const MessageContent = memo(function MessageContent({
     role,
     isStreaming = false,
     animateLayout = false,
+    onNavigate,
 }: {
     content: string
     role: ChatMessage["role"]
     isStreaming?: boolean
     // 최근 말풍선만 layout 애니메이션을 켠다(CX-13).
     animateLayout?: boolean
+    // 답 글 속 사이트 링크를 누르면 부른다(휴대폰이면 대화창을 닫는다, CX-17).
+    onNavigate?: (click: ChatLinkClick) => void
 }) {
     const shouldReduceMotion = useReducedMotion()
-    const visibleContent = role === "assistant" ? sanitizeVisibleAssistantText(content) : content
+    // 답 글은 링크를 남긴 채 다듬고(CX-17), 사용자 글은 그대로 둔다(링크로 그리지 않는다).
+    const visibleContent = role === "assistant" ? prepareAssistantDisplayText(content) : content
+    // 목록 항목 값은 every(Boolean) 로 걸렀지만 타입은 string | undefined 라 빈 글로 받는다.
+    const renderText = (text: string | undefined) =>
+        role === "assistant" ? <LinkifiedText text={text ?? ""} onNavigate={onNavigate} /> : text
     const blocks = visibleContent
         .trim()
         .split(/\n{2,}/)
@@ -200,8 +215,8 @@ const MessageContent = memo(function MessageContent({
             animate={m({ opacity: 1 }, shouldReduceMotion)}
             transition={m(CHATBOT_MOTION.tokenFade, shouldReduceMotion)}
             className={cn(
-                "space-y-2.5 whitespace-pre-wrap text-sm leading-6 [overflow-wrap:anywhere]",
-                role === "assistant" ? "text-[#111110]" : "text-white"
+                "space-y-2.5 whitespace-pre-wrap text-caption leading-6 [overflow-wrap:anywhere]",
+                role === "assistant" ? "text-fg-ink" : "text-fg-on-accent"
             )}
         >
             {blocks.map((block, blockIndex) => {
@@ -222,12 +237,13 @@ const MessageContent = memo(function MessageContent({
                             {orderedItems.map((item, index) => {
                                 const isLastItem = index === orderedItems.length - 1
                                 return (
-                                    <li key={`${index}:${item}`} className="flex items-start gap-2.5">
-                                        <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-fg-accent/20 bg-fg-accent/8 text-[10px] font-bold text-fg-accent" aria-hidden="true">
-                                            {index + 1}
+                                    <li key={`${index}:${item}`} className="flex items-start gap-2">
+                                        {/* 번호는 장식이라 읽지 않는다(목록이 순서를 알린다). 원 배지 대신 13px 숫자(CX-16). */}
+                                        <span className="min-w-4 shrink-0 text-folio leading-6 tabular-nums text-fg-muted" aria-hidden="true">
+                                            {index + 1}.
                                         </span>
                                         <span className="flex-1">
-                                            {item}
+                                            {renderText(item)}
                                             {showCaret && isLastItem ? <Caret shouldReduceMotion={shouldReduceMotion} /> : null}
                                         </span>
                                     </li>
@@ -246,7 +262,7 @@ const MessageContent = memo(function MessageContent({
                                     <li key={`${index}:${item}`} className="flex items-start gap-2.5">
                                         <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-fg-accent" aria-hidden="true" />
                                         <span className="flex-1">
-                                            {item}
+                                            {renderText(item)}
                                             {showCaret && isLastItem ? <Caret shouldReduceMotion={shouldReduceMotion} /> : null}
                                         </span>
                                     </li>
@@ -274,7 +290,7 @@ const MessageContent = memo(function MessageContent({
                         <div key={`${blockIndex}:${block}`} className="space-y-2">
                             {leadLines.length > 0 && (
                                 <p>
-                                    {leadLines.join("\n")}
+                                    {renderText(leadLines.join("\n"))}
                                     {showCaret && trailingBullets.length === 0 ? <Caret shouldReduceMotion={shouldReduceMotion} /> : null}
                                 </p>
                             )}
@@ -285,7 +301,7 @@ const MessageContent = memo(function MessageContent({
                                         <li key={`${index}:${item}`} className="flex items-start gap-2.5">
                                             <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-fg-accent" aria-hidden="true" />
                                             <span className="flex-1">
-                                                {item}
+                                                {renderText(item)}
                                                 {showCaret && isLastItem ? <Caret shouldReduceMotion={shouldReduceMotion} /> : null}
                                             </span>
                                         </li>
@@ -298,7 +314,7 @@ const MessageContent = memo(function MessageContent({
 
                 return (
                     <p key={`${blockIndex}:${block}`}>
-                        {lines.map(cleanMessageLine).filter(Boolean).join("\n")}
+                        {renderText(lines.map(cleanMessageLine).filter(Boolean).join("\n"))}
                         {showCaret ? <Caret shouldReduceMotion={shouldReduceMotion} /> : null}
                     </p>
                 )
@@ -332,13 +348,13 @@ function AnswerCopyButton({ message }: { message: ChatMessage }) {
             whileTap={shouldReduceMotion ? undefined : { scale: 0.96 }}
             onClick={() => void copyAnswer()}
             className={cn(
-                "inline-flex h-9 items-center justify-center gap-1.5 rounded-[8px] border px-2.5 text-[11px] font-bold transition-all shadow-[0_1px_2px_rgba(0,0,0,0.03)]",
+                "inline-flex h-9 items-center justify-center gap-1.5 rounded-[8px] border bg-surface-sheet px-2.5 text-label transition-colors",
                 CHATBOT_HIT_AREA_CLASS,
                 state === "copied"
-                    ? "border-fg-accent/30 bg-fg-accent/8 text-fg-accent"
+                    ? "border-fg-accent text-fg-accent"
                     : state === "failed"
-                      ? "border-[#B85C33]/20 bg-[#FBEAE2] text-[#7A2A13]"
-                      : "border-white/80 bg-white/80 text-[#615D59] hover:border-fg-accent/20 hover:bg-fg-accent/8 hover:text-fg-accent"
+                      ? "border-fg-danger text-fg-danger"
+                      : "border-line-strong text-fg-muted hover:border-fg-accent hover:text-fg-accent"
             )}
             aria-label="답변 복사"
             title="답변 복사"
@@ -353,7 +369,7 @@ function AnswerCopyButton({ message }: { message: ChatMessage }) {
                         transition={{ duration: 0.15 }}
                         className="flex items-center gap-1"
                     >
-                        <Check className="h-3.5 w-3.5 text-fg-accent" />
+                        <Check className="h-3.5 w-3.5" aria-hidden />
                         <span>복사 완료</span>
                     </motion.span>
                 ) : (
@@ -365,8 +381,8 @@ function AnswerCopyButton({ message }: { message: ChatMessage }) {
                         transition={{ duration: 0.15 }}
                         className="flex items-center gap-1"
                     >
-                        <Copy className="h-3.5 w-3.5" />
-                        <span>{state === "failed" ? "실패" : "답변 복사"}</span>
+                        <Copy className="h-3.5 w-3.5" aria-hidden />
+                        <span>{state === "failed" ? "복사 실패" : "답변 복사"}</span>
                     </motion.span>
                 )}
             </AnimatePresence>
@@ -390,9 +406,9 @@ function SourceLinks({
     if (visibleSources.length === 0) return null
 
     return (
-        <div className={cn("space-y-1.5", showHeading && "mt-3 border-t border-fg-accent/10 pt-3")}>
+        <div className={cn("space-y-1.5", showHeading && "mt-3 border-t border-line-hair pt-3")}>
             {showHeading ? (
-                <div className="flex items-center gap-1.5 text-[11px] font-bold text-[#615D59]">
+                <div className="flex items-center gap-1.5 text-note text-fg-muted">
                     <FileText className="h-3.5 w-3.5 text-fg-accent" aria-hidden="true" />
                     <span>참고한 공식 가이드</span>
                 </div>
@@ -414,26 +430,21 @@ function SourceLinks({
                         <Link
                             href={source.urlPath}
                             onClick={(event) => onNavigate?.(event)}
-                            className={cn(
-                                "group block rounded-[12px] border px-3 py-2 text-left transition-all focus-visible:outline-none",
-                                isTopMatch
-                                    ? "border-fg-accent/25 bg-fg-accent/6 hover:border-fg-accent/40 hover:bg-fg-accent/8"
-                                    : "border-white/70 bg-white/60 shadow-[inset_0_1px_0_rgba(255,255,255,0.60)] hover:border-fg-accent/25 hover:bg-fg-accent/7"
-                            )}
+                            className="group block rounded-[12px] border border-line-strong bg-surface-sheet px-3 py-2 text-left transition-colors hover:border-fg-accent"
                         >
-                            <span className="flex items-start justify-between gap-2 text-[12px] font-bold leading-5 text-[#111110]">
-                                <span className="flex min-w-0 items-center gap-1.5">
-                                    {isTopMatch ? (
-                                        <span className="shrink-0 rounded-full bg-fg-accent px-1.5 py-0.5 text-[9px] font-bold leading-none text-fg-on-accent">
-                                            추천
-                                        </span>
-                                    ) : null}
-                                    <span className="min-w-0 transition-colors group-hover:text-fg-accent">{source.title}</span>
+                            {/* 가장 관련 높은 가이드는 알약 대신 점 + '추천' 13px 글자로 표시한다(CX-16). */}
+                            {isTopMatch ? (
+                                <span className="mb-0.5 flex items-center gap-1.5 text-note text-fg-muted">
+                                    <span className="status-dot" aria-hidden />
+                                    추천
                                 </span>
-                                <ExternalLink className="mt-0.5 h-3.5 w-3.5 shrink-0 text-fg-accent/70 transition-transform group-hover:translate-x-0.5 group-hover:text-fg-accent" aria-hidden />
+                            ) : null}
+                            <span className="flex items-start justify-between gap-2 text-label text-fg-ink">
+                                <span className="min-w-0 transition-colors group-hover:text-fg-accent">{source.title}</span>
+                                <ArrowRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-fg-accent arrow-nudge" aria-hidden />
                             </span>
                             {source.heading ? (
-                                <span className="mt-0.5 block text-[11px] leading-4 text-[#615D59]">
+                                <span className="mt-0.5 block text-note text-fg-muted">
                                     {source.heading}
                                 </span>
                             ) : null}
@@ -501,32 +512,22 @@ function ThinkingIndicator({
             className="flex justify-start"
         >
             <div
-                className="relative overflow-hidden rounded-[18px] rounded-bl-[6px] border border-white/80 bg-[linear-gradient(160deg,rgba(255,255,255,0.92)_0%,rgba(246,253,249,0.85)_100%)] p-3 text-sm backdrop-blur-xl"
+                className="relative overflow-hidden rounded-[18px] rounded-bl-[6px] border border-line-hair bg-surface-sheet p-3"
             >
-                {/* 은은한 쉬머 반사 광택 */}
-                {!shouldReduceMotion && (
-                    <motion.div
-                        aria-hidden
-                        className="pointer-events-none absolute inset-0 -translate-x-full bg-[linear-gradient(90deg,transparent_0%,rgba(16,185,129,0.08)_50%,transparent_100%)]"
-                        animate={{ translateX: ["-100%", "200%"] }}
-                        transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
-                    />
-                )}
-
                 <div className="flex items-center gap-2.5">
-                    <div className="relative flex h-6 w-6 shrink-0 items-center justify-center rounded-[8px] border border-fg-accent/15 bg-fg-accent/8 shadow-sm">
-                        <ClassInAIIcon size={13} variant="brand" className="text-fg-accent" />
+                    <div className="relative flex h-6 w-6 shrink-0 items-center justify-center rounded-[8px] border border-line-hair bg-surface-sheet">
+                        <ClassInAIIcon size={14} variant="brand" className="text-fg-accent" />
                         {!shouldReduceMotion && (
                             <motion.span
                                 aria-hidden
-                                className="pointer-events-none absolute inset-0 rounded-[8px] border border-[#10B981]/50"
+                                className="pointer-events-none absolute inset-0 rounded-[8px] border border-fg-accent/50"
                                 animate={{ scale: [1, 1.25, 1], opacity: [0.6, 0, 0.6] }}
                                 transition={{ duration: 2, repeat: Infinity, ease: "easeOut" }}
                             />
                         )}
                     </div>
                     <div className="flex items-center gap-2">
-                        <span className="text-xs font-semibold text-fg-accent">{isSlow ? "답변이 조금 늦어지고 있어요" : "ClassIn 가이드 확인 중"}</span>
+                        <span className="text-label text-fg-muted">{isSlow ? "답변이 조금 늦어지고 있어요" : "ClassIn 가이드 확인 중"}</span>
                         <div className="flex items-center gap-1" aria-hidden>
                             {[0, 1, 2].map((index) => (
                                 <motion.span
@@ -549,9 +550,9 @@ function ThinkingIndicator({
                 </div>
 
                 {/* 스켈레톤 로딩 바 */}
-                <div className="mt-2 space-y-1.5 w-40">
-                    <div className="h-1.5 w-full rounded-full bg-fg-accent/[0.08]" />
-                    <div className="h-1.5 w-2/3 rounded-full bg-fg-accent/[0.05]" />
+                <div className="mt-2 w-40 space-y-1.5" aria-hidden>
+                    <div className="h-1.5 w-full bg-surface-skeleton" />
+                    <div className="h-1.5 w-2/3 bg-surface-skeleton" />
                 </div>
             </div>
         </motion.div>
@@ -626,11 +627,13 @@ export const MessageList = memo(function MessageList({
                             )}
                         >
                             <div
+                                // 불투명 면(CX-14): 답은 sheet + hair 선, 질문은 그린 채움. 반투명·blur 없음.
+                                // 강제 색상(고대비)에서도 말풍선 경계가 남게 질문 말풍선에도 같은 색 선을 둔다.
                                 className={cn(
-                                    "max-w-[92%] rounded-[18px] px-3.5 py-3 text-sm leading-6 backdrop-blur-xl md:max-w-[84%]",
+                                    "max-w-[92%] rounded-[18px] border px-3.5 py-3 text-caption leading-6 md:max-w-[84%]",
                                     message.role === "user"
-                                        ? "rounded-br-[6px] bg-fg-accent text-fg-on-accent ring-1 ring-white/20"
-                                        : "rounded-bl-[6px] border border-white/80 bg-[linear-gradient(160deg,rgba(255,255,255,0.92)_0%,rgba(246,253,249,0.85)_100%)] text-[#111110]"
+                                        ? "rounded-br-[6px] border-fg-accent bg-fg-accent text-fg-on-accent"
+                                        : "rounded-bl-[6px] border-line-hair bg-surface-sheet text-fg-ink"
                                 )}
                             >
                                 {message.role === "assistant" ? <AssistantMeta message={message} /> : null}
@@ -641,6 +644,7 @@ export const MessageList = memo(function MessageList({
                                     role={message.role}
                                     isStreaming={isAssistantStreaming}
                                     animateLayout={isAssistantStreaming}
+                                    onNavigate={closeAfterInChatNavigation}
                                 />
                                 {message.role === "assistant" ? (
                                     <>
@@ -661,7 +665,10 @@ export const MessageList = memo(function MessageList({
                                                     onClick={() => onRetry(message.id)}
                                                     disabled={isSending || cooldownSeconds > 0}
                                                     aria-label={buildRetryLabel(message.retryQuestion)}
-                                                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[8px] border border-fg-accent/20 bg-fg-accent/6 px-3 text-xs font-bold text-fg-accent transition-colors hover:bg-fg-accent/14 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none"
+                                                    className={cn(
+                                                        "inline-flex h-9 items-center justify-center gap-1.5 rounded-[8px] border border-line-strong bg-surface-sheet px-3 text-label text-fg-accent transition-colors hover:border-fg-accent disabled:cursor-not-allowed disabled:border-line-hair disabled:bg-surface-skeleton disabled:text-fg-muted",
+                                                        CHATBOT_HIT_AREA_CLASS
+                                                    )}
                                                 >
                                                     <RotateCcw className="h-3.5 w-3.5" aria-hidden />
                                                     {cooldownSeconds > 0 ? `다시 시도 (${cooldownSeconds}초)` : "다시 시도"}
@@ -694,8 +701,8 @@ export const MessageList = memo(function MessageList({
                                         {suggestions.length > 0 && !foldStarterChips ? (
                                             <div className="mt-3 space-y-2" id={isWelcome ? starterChipsId : undefined}>
                                                 {isWelcome ? (
-                                                    <div className="flex items-center gap-1.5 px-0.5 text-[11px] font-bold text-[#615D59]">
-                                                        <span className="h-1.5 w-1.5 rounded-full bg-fg-accent" />
+                                                    <div className="flex items-center gap-1.5 px-0.5 text-note text-fg-muted">
+                                                        <span className="status-dot" aria-hidden />
                                                         추천 질문으로 바로 시작하기
                                                     </div>
                                                 ) : null}
@@ -714,10 +721,11 @@ export const MessageList = memo(function MessageList({
                                                                 delay: shouldReduceMotion ? 0 : index * 0.06,
                                                             }}
                                                             whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }}
-                                                            className="group flex w-full items-center justify-between gap-2 whitespace-normal break-keep rounded-[12px] border border-fg-accent/15 bg-white/75 px-3.5 py-2.5 text-left text-[12px] font-semibold leading-5 text-fg-accent transition-all hover:border-fg-accent/30 hover:bg-fg-accent/8 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none"
+                                                            // 칩 13px(CX-16), 불투명 면 + 선(CX-14). 비활성(답 받는 중)은 skeleton 면.
+                                                            className="group flex w-full items-center justify-between gap-2 whitespace-normal break-keep rounded-[12px] border border-line-strong bg-surface-sheet px-3.5 py-2.5 text-left text-label text-fg-accent transition-colors hover:border-fg-accent disabled:cursor-not-allowed disabled:border-line-hair disabled:bg-surface-skeleton disabled:text-fg-muted"
                                                         >
                                                             <span>{question}</span>
-                                                            <ArrowRight className="h-3.5 w-3.5 shrink-0 text-fg-accent/70 transition-transform group-hover:translate-x-0.5" aria-hidden />
+                                                            <ArrowRight className="h-3.5 w-3.5 shrink-0 arrow-nudge" aria-hidden />
                                                         </motion.button>
                                                     ))}
                                                 </div>

@@ -119,17 +119,20 @@ export function ChatComposer({
             custom={shouldReduceMotion}
             className="relative flex flex-col min-h-0 w-full"
         >
-            <form onSubmit={handleSubmit} className="relative overflow-hidden border-t border-white/50 bg-white/25 p-3.5 backdrop-blur-xl w-full">
-                {/* 생성 중 상단 은은한 에메랄드 스트리밍 진행 표시선 */}
+            {/* 불투명 sheet 면 + 위 hair 선(CX-14). 반투명·blur 없음. */}
+            <form onSubmit={handleSubmit} className="relative w-full overflow-hidden border-t border-line-hair bg-surface-sheet p-3.5">
+                {/* 답을 받는 동안 위 가장자리를 지나가는 진행 표시선. 단색 accent 토큰(CX-15) */}
                 {(isSending || isStreaming) && !shouldReduceMotion && (
                     <motion.div
                         aria-hidden
-                        className="pointer-events-none absolute inset-x-0 top-0 h-[2px] bg-[linear-gradient(90deg,transparent_0%,#10B981_50%,transparent_100%)]"
-                        animate={{ x: ["-100%", "100%"] }}
+                        className="pointer-events-none absolute left-0 top-0 h-[2px] w-1/3 bg-fg-accent"
+                        animate={{ x: ["-100%", "300%"] }}
                         transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
                     />
                 )}
-                <div className="flex items-end gap-2 rounded-[16px] border border-white/70 bg-white/60 p-1.5 shadow-[0_10px_26px_rgba(49,48,46,0.06),inset_0_1px_0_rgba(255,255,255,0.75)] transition-colors focus-within:border-fg-accent/30 focus-within:bg-white/80 focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-fg-accent">
+                {/* 입력 상자: 조작 경계는 line-control 1px. 포커스는 테두리를 accent 로 바꾸고 그 위에 2px 링을 −1px 겹쳐
+                    한 선으로 그린다(DESIGN.md §6 '입력은 한 선', CX-16). 예전에는 옅은 테두리와 2px 떨어진 링이 이중선이었다. */}
+                <div className="flex items-end gap-2 rounded-[16px] border border-line-control bg-surface-sheet p-1.5 transition-colors focus-within:border-fg-accent focus-within:outline-2 focus-within:-outline-offset-1 focus-within:outline-fg-accent">
                     <textarea
                         ref={inputRef}
                         value={input}
@@ -145,19 +148,16 @@ export function ChatComposer({
                         placeholder={isCoolingDown ? `${cooldownSeconds}초 뒤에 다시 보낼 수 있어요` : "질문을 짧게 입력해 주세요"}
                         aria-label="챗봇 질문 입력"
                         data-focus-ring="parent"
-                        className="min-h-11 max-h-28 flex-1 resize-none rounded-[12px] border-0 bg-transparent px-3 py-2.5 text-[15px] leading-6 text-[#111110] placeholder:text-fg-placeholder focus-visible:outline-none transition-[height] duration-150 ease-out"
+                        className="min-h-11 max-h-28 flex-1 resize-none rounded-[12px] border-0 bg-transparent px-3 py-2.5 text-ui leading-6 text-fg-ink placeholder:text-fg-placeholder focus-visible:outline-none transition-[height] duration-150 ease-out"
                     />
+                    {/* 비활성(빈 입력·보내는 중·429 대기)은 흐린 초록이 아니라 skeleton 면 + 흐린 아이콘이다 — 눌리는 것처럼 보이지 않게(CX-16). */}
                     <motion.button
                         type="submit"
                         disabled={isSubmitBlocked}
-                        animate={{
-                            scale: isSubmitBlocked ? 0.96 : 1,
-                            opacity: isSubmitBlocked ? 0.45 : 1,
-                        }}
                         whileHover={isSubmitBlocked ? undefined : { scale: 1.05 }}
                         whileTap={isSubmitBlocked ? undefined : { scale: 0.95 }}
                         transition={m(CHATBOT_MOTION.micro, shouldReduceMotion)}
-                        className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[12px] bg-fg-accent text-fg-on-accent transition-colors hover:bg-fg-accent-hover disabled:cursor-not-allowed disabled:shadow-none focus-visible:outline-none"
+                        className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[12px] border border-fg-accent bg-fg-accent text-fg-on-accent transition-colors enabled:hover:border-fg-accent-hover enabled:hover:bg-fg-accent-hover disabled:cursor-not-allowed disabled:border-line-hair disabled:bg-surface-skeleton disabled:text-fg-muted"
                         // 보내는 동안에는 스피너에 이름을 준다(CX-09). 대기 중에는 남은 초를 들려준다.
                         aria-label={isSending ? "답변을 기다리는 중" : isCoolingDown ? `${cooldownSeconds}초 뒤에 보낼 수 있어요` : "질문 보내기"}
                     >

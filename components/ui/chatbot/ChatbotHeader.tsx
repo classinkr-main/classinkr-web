@@ -24,8 +24,13 @@ interface ChatbotHeaderProps {
     compact?: boolean
 }
 
+// 헤더의 둥근 아이콘 버튼(음소거·닫기). 불투명 sheet 면 + hair 선, hover 는 선과 글자를 진하게(CX-14·CX-15).
+const HEADER_ICON_BUTTON_CLASS =
+    "inline-flex h-9 w-9 items-center justify-center rounded-full border border-line-hair bg-surface-sheet text-fg-muted transition-colors hover:border-line-strong hover:text-fg-ink"
+
 // 대화창 헤더: 상담 아이콘(생각 중 펄스 링), 제목, 새 대화·음소거·닫기 버튼.
 // 제목은 자르지 않고 줄을 바꾸며, 자리가 모자라면(글꼴 200% 등) 버튼 줄이 아래로 내려간다 — 제목 폭이 0 이 되지 않는다(CX-10).
+// 면은 불투명 sheet 이고 아래 hair 선 하나로 목록과 가른다(CX-14). 제목 옆의 깜빡이는 초록 점('지금 연결됨'처럼 읽힌다)은 뺐다(CX-06).
 export function ChatbotHeader({
     isDeepConsultation,
     isSending,
@@ -43,7 +48,7 @@ export function ChatbotHeader({
             variants={itemVariants}
             custom={shouldReduceMotion}
             className={cn(
-                "flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-white/50 bg-white/20 px-4 backdrop-blur-xl",
+                "flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-line-hair bg-surface-sheet px-4",
                 compact ? "py-2" : "py-3.5"
             )}
         >
@@ -53,25 +58,19 @@ export function ChatbotHeader({
                     <motion.div
                         animate={(!isSending && !isStreaming && !shouldReduceMotion) ? { scale: [1, 1.15, 1] } : {}}
                         transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-                        className="relative flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-[14px] border border-white/70 bg-[linear-gradient(145deg,rgba(255,255,255,0.82),rgba(209,250,229,0.50))]"
+                        className="relative flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-[14px] border border-line-hair bg-surface-sheet"
                     >
                         {isDeepConsultation ? (
-                            <>
-                                <Image
-                                    src={DEEP_CONSULTATION_ICON_SRC}
-                                    alt=""
-                                    fill
-                                    className="object-cover opacity-95"
-                                    sizes="44px"
-                                    aria-hidden
-                                />
-                                <span className="absolute inset-0 bg-fg-accent/2 mix-blend-soft-light" aria-hidden />
-                            </>
+                            <Image
+                                src={DEEP_CONSULTATION_ICON_SRC}
+                                alt=""
+                                fill
+                                className="object-cover"
+                                sizes="44px"
+                                aria-hidden
+                            />
                         ) : (
-                            <>
-                                <span className="absolute inset-1 rounded-[10px] bg-fg-accent/6" aria-hidden />
-                                <ClassInAIIcon size={22} variant="brand" className="relative text-fg-accent" />
-                            </>
+                            <ClassInAIIcon size={22} variant="brand" className="relative text-fg-accent" />
                         )}
                         {/* 생각 중/스트리밍 중일 때 초록 펄스 링 렌더링 */}
                         {(isSending || isStreaming) && !shouldReduceMotion && (
@@ -93,16 +92,8 @@ export function ChatbotHeader({
                     </motion.div>
                 )}
                 <div className="min-w-0">
-                    <div className="flex items-center gap-1.5">
-                        <h2 id="classin-chatbot-title" tabIndex={-1} className="min-w-0 break-keep text-[15px] font-bold text-[#111110]">Classin 상담 가이드</h2>
-                        <motion.span
-                            aria-hidden
-                            className="h-2 w-2 shrink-0 rounded-full bg-fg-accent"
-                            animate={shouldReduceMotion ? undefined : { opacity: [1, 0.45, 1], scale: [1, 0.82, 1] }}
-                            transition={shouldReduceMotion ? undefined : { duration: 2.6, repeat: Infinity, ease: "easeInOut" }}
-                        />
-                    </div>
-                    {compact ? null : <p className="mt-0.5 break-keep text-xs font-medium text-[#615D59]">운영·도입·CS 상담</p>}
+                    <h2 id="classin-chatbot-title" tabIndex={-1} className="min-w-0 break-keep text-ui font-semibold text-fg-ink">Classin 상담 가이드</h2>
+                    {compact ? null : <p className="mt-0.5 break-keep text-note text-fg-muted">운영·도입·CS 상담</p>}
                 </div>
             </div>
             <div className="ml-auto flex shrink-0 items-center gap-2">
@@ -112,7 +103,7 @@ export function ChatbotHeader({
                         type="button"
                         onClick={onNewChat}
                         className={cn(
-                            "inline-flex h-9 min-w-9 items-center justify-center gap-1.5 rounded-[8px] border border-line-strong bg-surface-sheet px-2 text-label text-fg-muted transition-colors hover:text-fg-accent",
+                            "inline-flex h-9 min-w-9 items-center justify-center gap-1.5 rounded-[8px] border border-line-strong bg-surface-sheet px-2 text-label text-fg-muted transition-colors hover:border-fg-accent hover:text-fg-accent",
                             CHATBOT_HIT_AREA_CLASS
                         )}
                         aria-label="새 대화 시작"
@@ -125,23 +116,23 @@ export function ChatbotHeader({
                     type="button"
                     onClick={toggleMute}
                     className={cn(
-                        "inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/60 bg-white/35 text-[#615D59] shadow-[inset_0_1px_0_rgba(255,255,255,0.60)] transition-colors hover:bg-white/70 hover:text-fg-accent focus-visible:outline-none",
+                        HEADER_ICON_BUTTON_CLASS,
                         CHATBOT_HIT_AREA_CLASS
                     )}
                     aria-label={muted ? "소리 켜기" : "음소거"}
                 >
-                    {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+                    {muted ? <VolumeX className="h-4 w-4" aria-hidden /> : <Volume2 className="h-4 w-4" aria-hidden />}
                 </button>
                 <button
                     type="button"
                     onClick={closeChatbot}
                     className={cn(
-                        "inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/60 bg-white/35 text-[#615D59] shadow-[inset_0_1px_0_rgba(255,255,255,0.60)] transition-colors hover:bg-white/70 hover:text-fg-accent focus-visible:outline-none",
+                        HEADER_ICON_BUTTON_CLASS,
                         CHATBOT_HIT_AREA_CLASS
                     )}
                     aria-label="챗봇 닫기"
                 >
-                    <X className="h-5 w-5" />
+                    <X className="h-5 w-5" aria-hidden />
                 </button>
             </div>
         </motion.div>

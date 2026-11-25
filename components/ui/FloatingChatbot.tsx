@@ -435,7 +435,7 @@ export function FloatingChatbot() {
             style={mobilePanelLayout?.wrapperStyle}
             className="pointer-events-none fixed inset-x-0 bottom-0 z-(--z-chatbot) flex flex-col items-end px-3 pb-[calc(1rem+env(safe-area-inset-bottom))] md:inset-x-auto md:bottom-6 md:right-6 md:px-0 md:pb-0"
         >
-            {/* 모바일 화면 백드롭 딤/블러 오버레이 */}
+            {/* 휴대폰 딤: scrim 토큰(blur 없음, DESIGN.md 면 6 · CX-14) */}
             <AnimatePresence>
                 {isOpen && (
                     <motion.div
@@ -445,7 +445,7 @@ export function FloatingChatbot() {
                         exit={{ opacity: 0 }}
                         transition={{ duration: 0.18 }}
                         onClick={closeChatbot}
-                        className="pointer-events-auto fixed inset-0 z-0 touch-none bg-black/20 backdrop-blur-[2px] md:hidden"
+                        className="pointer-events-auto fixed inset-0 z-0 touch-none bg-surface-scrim md:hidden"
                         aria-hidden="true"
                     />
                 )}
@@ -465,10 +465,11 @@ export function FloatingChatbot() {
                         animate="animate"
                         exit="exit"
                         style={mobilePanelLayout?.panelStyle}
-                        className="pointer-events-auto relative z-10 mb-3 flex h-[min(680px,calc(100svh-5.5rem))] w-full max-w-[36rem] origin-bottom overflow-hidden rounded-[26px] border border-white/60 bg-[linear-gradient(152deg,rgba(255,255,255,0.88)_0%,rgba(236,253,245,0.76)_50%,rgba(246,245,244,0.82)_100%)] text-[#111110] backdrop-blur-2xl md:mb-4 md:h-[min(640px,calc(100svh-8rem))] md:w-[424px] md:max-w-[424px] md:origin-bottom-right"
+                        // 불투명 면(CX-14): paper 지면 + 1px line-strong + Deep Shadow(떠 있는 층). 반투명 그라데이션·backdrop blur 없음 —
+                        // 밝은 페이지 위에서 뒤 글자가 비치지 않고, 강제 색상(고대비)에서도 1px 선이 경계로 남는다.
+                        // 반경(26px)은 챗봇 모양 결정 전이라 그대로 둔다(DESIGN.md '챗봇 위젯 면').
+                        className="pointer-events-auto relative z-10 mb-3 flex h-[min(680px,calc(100svh-5.5rem))] w-full max-w-[36rem] origin-bottom overflow-hidden rounded-[26px] border border-line-strong bg-surface-paper text-fg-ink shadow-deep md:mb-4 md:h-[min(640px,calc(100svh-8rem))] md:w-[424px] md:max-w-[424px] md:origin-bottom-right"
                     >
-                        <div className="pointer-events-none absolute inset-x-5 top-0 h-px bg-white/80" aria-hidden />
-
                         <div className="relative flex min-h-0 w-full flex-col">
                             {/* 헤더 (Staggered Item 1) */}
                             <ChatbotHeader
@@ -579,15 +580,6 @@ export function FloatingChatbot() {
             </AnimatePresence>
             {/* 낮은 화면·키보드가 열린 휴대폰에서는 런처를 감춰 목록 높이를 되찾는다(헤더에 닫기 버튼이 있다, CX-10). */}
             <div className={cn("pointer-events-auto relative flex h-14 w-14 items-center justify-center md:h-16 md:w-16", hideLauncher && "hidden")}>
-                {!isOpen && !shouldReduceMotion ? (
-                    <motion.span
-                        aria-hidden
-                        className="pointer-events-none absolute -inset-1 rounded-full bg-[#10B981]/25 blur-md"
-                        initial={{ scale: 0.96, opacity: 0.38 }}
-                        animate={CHATBOT_MOTION.ambient}
-                        transition={{ duration: CHATBOT_MOTION.ambient.duration, repeat: Infinity, repeatDelay: CHATBOT_MOTION.ambient.repeatDelay, ease: "easeOut" }}
-                    />
-                ) : null}
                 <motion.button
                     ref={triggerRef}
                     type="button"
@@ -601,20 +593,18 @@ export function FloatingChatbot() {
                         openSourceRef.current = "button"
                         setIsOpen(true)
                     }}
+                    // 런처는 떠 있는 층이라 Deep Shadow 하나를 둔다. 원형은 챗봇 모양 결정 전까지의 예외(DESIGN.md §5 반경).
+                    // 닫힌 런처의 선은 채움과 같은 색이라 평소에는 보이지 않고, 강제 색상에서만 경계로 남는다.
                     className={cn(
-                        "relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-full transition-all duration-200 md:h-16 md:w-16",
+                        "relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-full border shadow-deep transition-colors md:h-16 md:w-16",
                         isOpen
-                            ? "border border-black/[0.08] bg-white text-[#111110] shadow-[0_12px_28px_rgba(0,0,0,0.12),0_4px_10px_rgba(0,0,0,0.04)] hover:bg-[#F6F5F4]"
-                            : "border border-white/20 bg-fg-accent text-fg-on-accent hover:bg-fg-accent-hover"
+                            ? "border-line-strong bg-surface-sheet text-fg-ink hover:bg-surface-sunken"
+                            : "border-fg-accent bg-fg-accent text-fg-on-accent hover:border-fg-accent-hover hover:bg-fg-accent-hover"
                     )}
                     aria-label={isOpen ? "챗봇 닫기" : "챗봇 열기"}
                     aria-expanded={isOpen}
                     aria-controls="classin-chatbot-dialog"
                 >
-                    <span
-                        aria-hidden
-                        className="pointer-events-none absolute inset-px rounded-full bg-white/10"
-                    />
                     <AnimatePresence mode="wait" initial={false}>
                         {isOpen ? (
                             <motion.div
@@ -625,7 +615,7 @@ export function FloatingChatbot() {
                                 transition={{ duration: 0.18, ease: "easeOut" }}
                                 className="flex items-center justify-center"
                             >
-                                <X className="h-6 w-6 text-[#111110]" />
+                                <X className="h-6 w-6 text-fg-ink" />
                             </motion.div>
                         ) : isDeepConsultation ? (
                             <motion.div
@@ -644,7 +634,6 @@ export function FloatingChatbot() {
                                     sizes="64px"
                                     aria-hidden
                                 />
-                                <span className="absolute inset-0 bg-fg-accent/20 mix-blend-multiply" aria-hidden />
                             </motion.div>
                         ) : (
                             <motion.div
@@ -655,23 +644,13 @@ export function FloatingChatbot() {
                                 transition={{ duration: 0.18, ease: "easeOut" }}
                                 className="relative flex items-center justify-center"
                             >
-                                <ClassInAIIcon size={28} variant="white" className="relative drop-shadow-[0_2px_4px_rgba(0,0,0,0.15)] md:h-8 md:w-8" />
+                                <ClassInAIIcon size={28} variant="white" className="relative md:h-8 md:w-8" />
                             </motion.div>
                         )}
                     </AnimatePresence>
 
-                    {/* 실시간 상담 대기 상태 인디케이터 (Live Status Dot) */}
-                    {!isOpen && (
-                        <span
-                            aria-hidden
-                            className="pointer-events-none absolute right-2 top-2 flex h-2.5 w-2.5 md:right-2.5 md:top-2.5"
-                        >
-                            {!shouldReduceMotion && (
-                                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#6EE7B7] opacity-75 duration-1000" />
-                            )}
-                            <span className="relative inline-flex h-2.5 w-2.5 rounded-full border-2 border-fg-accent bg-[#34D399]" />
-                        </span>
-                    )}
+                    {/* 예전의 초록 핑 점('실시간 상담 대기')·후광은 사람 상담원이 기다리는 것처럼 읽혀 뺐다(CX-06).
+                        이 창은 AI 안내이고, 사람 상담은 상담 연결 카드로 이어진다. */}
                 </motion.button>
             </div>
         </div>

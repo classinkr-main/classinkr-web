@@ -184,7 +184,7 @@ export function ConsultationBridge({
             initial={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: 8 }}
             animate={shouldReduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
             transition={{ duration: shouldReduceMotion ? 0.01 : 0.28, ease: EASING_SOFT_ENTER }}
-            className="mt-3 border-t border-fg-accent/10 pt-3"
+            className="mt-3 border-t border-line-hair pt-3"
         >
             {/* 머리 줄: 제목과 (휴대폰) 요약 펼치기 · (뒤에 새 카드가 생긴 뒤 펼쳤으면) 접기. 버튼 줄이 바로 아래 오도록 한 줄에 둔다. */}
             <div className="flex items-center justify-between gap-2">
