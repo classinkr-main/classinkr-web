@@ -77,6 +77,8 @@ import type { PartnerSettlementSummary } from "@/lib/partner-settlement"
 import { OverviewNowBand } from "@/components/admin/overview/OverviewNowBand"
 import { useLiveIntake } from "@/components/admin/overview/useLiveIntake"
 import type { OverviewOperationsSummary } from "@/lib/admin/overview/operations-summary"
+import type { OverviewCumulativeSummary } from "@/lib/admin/overview/cumulative-summary"
+import { OverviewCumulativeHero, OverviewCumulativeMonthly } from "@/components/admin/overview/OverviewCumulativeHero"
 
 const OVERVIEW_FETCH_TIMEOUT_MS = 12_000
 
@@ -387,6 +389,11 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
   const [operationsLoading, setOperationsLoading] = useState(true)
   const [operationsRefreshKey, setOperationsRefreshKey] = useState(0)
   const retryOperations = () => { setOperationsLoading(true); setOperationsRefreshKey((value) => value + 1) }
+  // 히어로 누적 고객(REV 장부) · 누적 판매(하드웨어 원장) — 다른 레인을 기다리지 않고 독립 조회한다.
+  const [cumulative, setCumulative] = useState<OverviewCumulativeSummary | null>(null)
+  const [cumulativeLoading, setCumulativeLoading] = useState(true)
+  const [cumulativeRefreshKey, setCumulativeRefreshKey] = useState(0)
+  const retryCumulative = () => { setCumulativeLoading(true); setCumulativeRefreshKey((value) => value + 1) }
   // "지금" 띠의 오늘 문의 — 마케팅 허브 '오늘 유입'과 같은 응답·캐시 슬롯(전사, 1분 갱신).
   const liveIntake = useLiveIntake({ refreshKey })
   // 방문·문의 2단 추이의 30일 방문 — 첫 화면은 7일 방문(프리페치 레인)만 받으므로 30일을 고를 때만 따로 읽는다.
@@ -436,6 +443,20 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
     }).catch(() => undefined)
     return () => { cancelled = true }
   }, [refreshKey])
+
+  useEffect(() => {
+    let cancelled = false
+    void adminFetchJsonCached<OverviewCumulativeSummary>("/api/admin/overview/cumulative", {
+      adminTimeoutMs: OVERVIEW_FETCH_TIMEOUT_MS,
+    }, { ttlMs: 0, force: true, persist: false }).then((data) => {
+      if (!cancelled) setCumulative(data)
+    }).catch(() => {
+      if (!cancelled) setCumulative(null)
+    }).finally(() => {
+      if (!cancelled) setCumulativeLoading(false)
+    })
+    return () => { cancelled = true }
+  }, [refreshKey, cumulativeRefreshKey])
 
   // loadSourceQuiet의 안전판 — 언마운트 뒤 도착하는 레인/폴백 페치 결과가 setState를
   // 부르지 않게 한다(15초 ceiling까지 살아있는 레인이 있어, 사용자가 이미 다른 탭으로
@@ -865,13 +886,16 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
   const failedOperationsLabels = !operationsLoading
     ? [operations?.demos.status !== "ready" ? "데모" : null, operations?.installations.status !== "ready" ? "설치·배송" : null].filter((label): label is string => Boolean(label))
     : []
-  const failedSourceLabels = [...failedRequestSourceLabels, ...failedOsSourceLabels, ...failedOperationsLabels]
+  const failedCumulativeLabels = !cumulativeLoading
+    ? [cumulative?.customers.status === "ready" || cumulative?.customers.status === "forbidden" ? null : "누적 고객", cumulative?.units.status === "ready" || cumulative?.units.status === "forbidden" ? null : "누적 판매"].filter((label): label is string => Boolean(label))
+    : []
+  const failedSourceLabels = [...failedRequestSourceLabels, ...failedOsSourceLabels, ...failedOperationsLabels, ...failedCumulativeLabels]
   const osSourceState = (key: OsSummarySourceKey): OverviewSourceState => {
     if (sourceStates.os !== "ready") return sourceStates.os
     return osSummary?.sources?.[key]?.status === "ready" ? "ready" : "error"
   }
   const osSourceError = (key: OsSummarySourceKey) => osSummary?.sources?.[key]?.error ?? undefined
-  const retryOverview = () => { setOperationsLoading(true); setRefreshKey((current) => current + 1) }
+  const retryOverview = () => { setOperationsLoading(true); setCumulativeLoading(true); setRefreshKey((current) => current + 1) }
 
   // 위젯 단위 재시도 — retryOverview("전체 다시 시도")는 14개 소스를 전부 force로 다시 부르는
   // 넓은 폴백으로 상단 배너에만 남겨 두고, 개별 KPI 카드의 "다시 시도"는 실패한 소스 하나만
@@ -975,17 +999,6 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
     metric({ id: "content", group: "유입·콘텐츠", label: "공개 블로그", value: `${osSummary?.content.blogPublished ?? 0}건`, note: osSourceError("content") ?? "현재 공개 상태", reference: `기존 운영 기준 ${osSummary?.content.target ?? "—"}건`, href: "/admin/blog", state: osSourceState("content"), progress: osSummary?.content.target ? (osSummary.content.blogPublished ?? 0) / osSummary.content.target * 100 : undefined }, "os"),
     metric({ id: "events", group: "유입·콘텐츠", label: "공개 행사", value: `${osSummary?.events.count ?? 0}건`, note: osSourceError("events") ?? "현재 공개 상태", reference: `기존 운영 기준 ${osSummary?.events.target ?? "—"}건`, href: "/admin/events", state: osSourceState("events"), progress: osSummary?.events.target ? (osSummary.events.count ?? 0) / osSummary.events.target * 100 : undefined }, "os"),
   ]
-  const metricById = (id: string) => metrics.find((row) => row.id === id) as OverviewMetric
-  const visitorDays = visitorStats?.daily ?? []
-  const yesterdayVisitors = visitorDays.length > 1 ? visitorDays[visitorDays.length - 2].visitors : 0
-  // 방문자 → 리드 유입 줄. 방문·리드 모두 전사 기준(위 운영 지표는 내 담당 기준).
-  const company = companyMetrics
-  const inflowMetrics: OverviewMetric[] = [
-    { ...metricById("visitors"), id: "inflow-visitors-today", label: "오늘 방문자", value: `${(visitorStats?.today.visitors ?? 0).toLocaleString()}명`, note: `어제 ${yesterdayVisitors.toLocaleString()}명 · 홈(/) 오늘 ${(visitorStats?.today.homeVisitors ?? 0).toLocaleString()}명` },
-    metricById("visitors"),
-    { id: "inflow-leads", group: "유입", label: "이번 주 리드 · 전사", value: `${(company?.thisWeekLeads ?? 0).toLocaleString()}건`, note: `최근 7일 · 오늘 ${company?.todayLeads ?? 0}건 · 테스트 제외`, href: "/admin/crm/customers/leads?owner=", state: sourceStates.leads, onRetry: () => retrySource("leads") },
-    { id: "inflow-homepage", group: "유입", label: "홈페이지 문의 · 전사", value: `${(company?.homepageThisWeek ?? 0).toLocaleString()}건`, note: `최근 7일 · 홈페이지 경로 리드 · 오늘 ${company?.homepageToday ?? 0}건`, href: "/admin/crm/customers/leads?group=homepage&owner=", state: sourceStates.leads, onRetry: () => retrySource("leads") },
-  ]
   const heroMetrics = [metrics[0], metrics[4], metrics[6], {
     ...metrics[8], label: "연간 매출 달성", value: branchSummary?.revenue.goal ? `${Math.round(branchSummary.revenue.confirmed / branchSummary.revenue.goal * 100)}%` : "—",
     note: `확정 ${fmtCny(branchSummary?.revenue.confirmed ?? 0)} / 승인 목표 ${fmtCny(branchSummary?.revenue.goal ?? 0)} · CNY`,
@@ -1024,7 +1037,7 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
       {/* 헤더 — eyebrow·소개문은 제거(사이드바가 위치를, 섹션이 내용을 이미 말한다).
           확보한 공간은 숫자에게 주고, 우측은 상시 바로가기만 남긴다. */}
       <div className="relative mb-7 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-        <div><h1 className="text-2xl font-bold tracking-[-0.02em] text-[#111110]">Overview</h1><p className="mt-2 text-xs text-[#615D59]">새 문의·방문·유입 추이는 전사 · 진행 중 리드·데모·설치·매출은 내 담당</p></div>
+        <div><h1 className="text-2xl font-bold tracking-[-0.02em] text-[#111110]">Overview</h1><p className="mt-2 text-xs text-[#615D59]">누적·새 문의·방문·유입 추이는 전사 · 진행 중 리드·데모·설치·매출은 내 담당</p></div>
         <div className="flex flex-wrap items-center gap-2">
           {[
             { href: "/admin/crm/customers/leads?sort=newest&unconfirmed=1", label: "문의 목록" },
@@ -1065,6 +1078,8 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
         </div>
       ) : null}
 
+      <OverviewCumulativeHero summary={cumulative} loading={cumulativeLoading} onRetry={retryCumulative} />
+
       <OverviewNowBand
         visitorState={sourceStates.visitor}
         visitorToday={visitorStats ? { visitors: visitorStats.today.visitors, homeVisitors: visitorStats.today.homeVisitors } : null}
@@ -1075,7 +1090,7 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
         intake={liveIntake}
       />
 
-      <OverviewBriefing metrics={heroMetrics} inflow={{ title: "유입 · 방문자 → 리드", metrics: inflowMetrics }} summary={<>
+      <OverviewBriefing metrics={heroMetrics} summary={<>
         {unrespondedSignal ? unrespondedSignal.unresponded24hCount > 0 ? <>24시간 넘게 신규 상태인 내 리드 <span className="text-[#B43E3E]">{unrespondedSignal.unresponded24hCount}건</span>을 확인하세요. </> : <>24시간 이상 신규 상태로 남은 내 담당 리드는 없습니다. </> : <>리드 후속 현황을 확인하고 있습니다. </>}
         {demos ? <>앞으로 7일 데모 <span className="text-[#084734]">{demos.truncated ? "최소 " : ""}{demos.next7Count}회</span>, </> : <>{operationsLoading ? "데모 일정을 불러오는 중입니다. " : "데모 원천 확인이 필요합니다. "}</>}
         {installations ? <>설치·배송 예정 <span className="text-[#084734]">{installations.units}대</span>가 대기 중입니다.</> : <>{operationsLoading ? "설치·배송 현황을 불러오는 중입니다." : "설치·배송 원천 확인이 필요합니다."}</>}
@@ -1099,6 +1114,8 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
           </>}
         </div>
       </section>
+
+      <OverviewCumulativeMonthly summary={cumulative} loading={cumulativeLoading} onRetry={retryCumulative} />
 
       <OverviewOperationsPanels leadState={sourceStates.leads} onLeadRetry={() => retrySource("leads")} leads={sourceStates.leads === "ready" ? { new: companyFunnel.newLeads, contacted: companyFunnel.contactedLeads, converted: companyFunnel.converted, closed: companyFunnel.closedLeads } : null} operations={operations} loading={operationsLoading} onRetry={retryOperations} />
 
