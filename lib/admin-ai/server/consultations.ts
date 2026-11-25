@@ -20,6 +20,7 @@ import { redactInternalCsValue } from "@/lib/internal-cs-chat/redact"
 
 import { buildDeepLink, getLinkById, type DeepLinkKind } from "../links"
 import type { AiBlock, ConsultationListItem, ConsultationSource, ConsultationsCard } from "../types"
+import { isConsultationAsk } from "./router"
 import { periodOf, type Period } from "./tools"
 
 /** 저장소 한 줄을 고른 꼴 — 출처마다 서버 연결이 이 꼴로 바꿔 넘긴다. */
@@ -99,9 +100,16 @@ export interface ConsultationSearchResult {
     scanned: Array<{ source: ConsultationSource; read: number; limit: number; capped: boolean }>
     /** 한 출처라도 상한까지 읽었다. */
     capped: boolean
+    /**
+     * 상한까지 읽은 출처가 거슬러 간 가장 이른 날짜(KST, 출처가 여럿이면 그중 늦은 쪽) — 그 이전 상담은 읽지 못했다.
+     * 상한에 걸리지 않았으면 null.
+     */
+    coverageFrom: string | null
     semantic: boolean
   }
   restricted: boolean
+  /** 상한 때문에 읽지 못한 기간이 묻는 기간에 걸친다 — 건수는 "최소 n건", 없음은 "그 이전은 확인하지 못했습니다". */
+  partial: boolean
   /** 읽지 못한 출처. */
   failed: ConsultationSource[]
 }
@@ -143,7 +151,7 @@ const DEICTIC = /(?:^|\s)(?:이|해당)\s*(?:고객|학원|기관|곳|업체|회
 const PARTICLE = /(?:에서는|에서|에게|한테|으로|로|은|는|이|가|을|를|의|도|만|부터|까지|이랑|랑|하고|과|와|에|께서)$/
 /** 상담을 가리키는 말·묻는 꼴·흔한 동사 조각 — 찾는 낱말이 아니다. */
 const STOP =
-  /^(?:상담|상담건|상담글|문의|문의건|채팅|채널톡|대화|이력|기록|내역|건|거|것|게|뭐|뭐야|뭐였지|뭐였어|무슨|어떤|어느|언제|언제야|있어|있나|있었나|있었어|있었지|있는지|있었는지|없어|없나|들어온|들어왔|들어왔어|들어왔나|들어온지|온|왔|왔어|왔나|했지|했나|했어|했던|했는지|한|하던|된|된다|된다는|된대|되는|돼|돼요|안|안됨|안돼|못|보여|보여줘|보여주세요|찾아|찾아줘|찾아봐|알려|알려줘|줘|주세요|좀|최근|요즘|지난|그|저|이|우리|고객|고객사|기관|학원|관련|관한|대한|대해|들|목록|전부|모두|다|혹시|혹은|또는|및|있다는|했다는|라는|이라는|다는|방법|어떻게|절차|설명|설명해|가능|가능해|되나|되는지|하는|하려면|하면|할|수|왜|켜|켜는|클래스인|classin|수업|교실|학생|교사|선생님|기능)$/
+  /^(?:상담|상담건|상담글|문의|문의건|채팅|채널톡|대화|이력|기록|내역|건|거|것|게|뭐|뭐야|뭐였지|뭐였어|무슨|어떤|어느|언제|언제야|있어|있나|있었나|있었어|있었지|있는지|있었는지|없어|없나|들어온|들어왔|들어왔어|들어왔나|들어온지|온|왔|왔어|왔나|했지|했나|했어|했던|했는지|한|하던|된|된다|된다는|된대|되는|돼|돼요|안|안됨|안돼|못|보여|보여줘|보여주세요|찾아|찾아줘|찾아봐|알려|알려줘|줘|주세요|좀|최근|요즘|지난|그|저|이|우리|고객|고객사|기관|학원|관련|관한|대한|대해|들|목록|전부|모두|다|혹시|혹은|또는|및|있다는|했다는|라는|이라는|다는|방법|어떻게|절차|설명|설명해|가능|가능해|되나|되는지|하는|하려면|하면|할|수|왜|켜|켜는|클래스인|classin|수업|교실|학생|교사|선생님|기능|해당|내용|몇|건수|원장님|그때|전에|예전|요새|최근에)$/
 const SYNONYMS: readonly (readonly string[])[] = [
   ["환불", "반환"],
   ["오류", "에러", "실패"],
@@ -160,23 +168,50 @@ export interface KeywordToken {
   variants: string[]
 }
 
-/** 찾는 낱말 — 기간 말·고객 이름·상담을 가리키는 말·묻는 꼴·조사를 덜어 낸다. */
+/** 묻는 꼴의 앞머리 — "언제였지", "뭐였더라", "있었나요", "했었어", "많아", "달라는". */
+const PREDICATE_HEAD = /^(?:언제|뭐|무엇|무슨|어디|있|없|했|많|달라|됐|될|그랬|어땠)/
+/** 묻는 꼴·서술의 꼬리 — "있었나요", "뭐였더라", "건이야", "들어왔어". */
+const PREDICATE_TAIL =
+  /(?:했지|했나|했어|했던|했는지|한다는|된다는|됐나|됐어|었나|었지|었어|았나|았지|았어|였나|였지|였어|인가|는지|던가|더라|더라고|나요|가요|어요|아요|에요|예요|해요|이야|거야|건가|래요|대요)$/
+/** 호칭·사람을 가리키는 말 — "원장님", "담당자", "선생님". 찾는 주제가 아니다. */
+const PERSON_WORD = /님$|^(?:담당자?|직원|매니저|학부모|학생들?|선생|원장|실장|대표)$/
+/** 띄어 쓴 기관 이름을 한 낱말로 — "가나 학원" → "가나학원"(두 글자 "가나"가 "…가 나요"에 맞지 않게). */
+const SPACED_ORG = /([가-힣A-Za-z0-9]{2,})\s+(학원|어학원|에듀|교육|스쿨|아카데미|교습소)(?=$|[\s?？!.,]|[이가은는을를의에도랑와과])/g
+const NOT_ORG_HEAD = /^(?:해당|우리|저희|다른|모든|어느|어떤|이번|지난|그|이|저)$/
+
+/** 받침 ㄴ 으로 끝나는 글자 + "다" — "잡힌다", "들린다"(서술형 동사). */
+function endsWithNieunDa(token: string): boolean {
+  if (token.length < 2 || !token.endsWith("다")) return false
+  const code = token.charCodeAt(token.length - 2) - 0xac00
+  return code >= 0 && code < 11172 && code % 28 === 4
+}
+
+function isPredicateToken(token: string): boolean {
+  return PREDICATE_HEAD.test(token) || PREDICATE_TAIL.test(token) || endsWithNieunDa(token) || /^건(?:이|인)/.test(token)
+}
+
+/** 찾는 낱말 — 기간 말·고객 이름·상담을 가리키는 말·묻는 꼴·조사·호칭을 덜어 낸다. */
 export function consultationKeywords(question: string, customerNames: readonly string[] = []): KeywordToken[] {
-  let text = question.replace(PERIOD_WORDS, " ")
+  let text = question.replace(PERIOD_WORDS, " ").replace(/몇\s*(?:건|번|개|명)\S*/g, " ")
   for (const name of customerNames) {
     if (name.trim()) text = text.split(name).join(" ")
   }
+  text = text.replace(SPACED_ORG, (whole, head: string, suffix: string) => (NOT_ORG_HEAD.test(head) ? whole : `${head}${suffix}`))
   const out: KeywordToken[] = []
   const seen = new Set<string>()
   for (const raw of text.toLowerCase().replace(/[?？!.,~·…"'()“”‘’]/g, " ").split(/\s+/)) {
     let token = raw.trim()
     if (!token || STOP.test(token)) continue
+    // "가나학원 화면에서" — 어디서 묻는지이지 찾는 주제가 아니다.
+    if (/^(?:화면|페이지|여기|이곳)(?:에서|에서는|에선)$/.test(token)) continue
     token = token.replace(PARTICLE, "")
     if (!token || STOP.test(token)) continue
-    // 묻는 꼴로 끝나는 동사 조각("문의했지", "상담했던", "안된다는")은 낱말이 아니다.
-    if (/(?:했지|했나|했어|했던|했는지|한다는|된다는|됐나|됐어|었나|었지|았나|았지|인가|는지|던가)$/.test(token)) continue
+    // 묻는 꼴·서술 동사 조각("문의했지", "언제였지", "잡힌다", "있었나요")은 낱말이 아니다.
+    if (isPredicateToken(token) || PERSON_WORD.test(token)) continue
+    // "환불해" → "환불"(명사 + 해).
+    token = token.replace(/^([가-힣]{2,})해(?:서|도)?$/, "$1")
     if (/^(?:상담|문의|채팅)/.test(token) && token.length <= 5) continue
-    if (token.length < 2 || seen.has(token)) continue
+    if (token.length < 2 || STOP.test(token) || seen.has(token)) continue
     seen.add(token)
     const variants = token.length >= 3 && /[가-힣]$/.test(token) ? [token, token.slice(0, -1)] : [token]
     const group = SYNONYMS.find((words) => words.some((word) => variants.includes(word)))
@@ -184,6 +219,21 @@ export function consultationKeywords(question: string, customerNames: readonly s
     out.push({ word: token, variants })
   }
   return out
+}
+
+/** 묻기 답의 관련 상담 줄에 쓰는 낱말(둘까지) — 추천 문장이 상담 내역 갈래로 가는 낱말만. 건수와 추천 문장이 같은 낱말을 쓴다. */
+export function relatedConsultationWords(question: string): string[] {
+  const words: string[] = []
+  for (const keyword of consultationKeywords(question)) {
+    if (words.length >= 2) break
+    if (isConsultationAsk(relatedConsultationAsk([...words, keyword.word]))) words.push(keyword.word)
+  }
+  return words
+}
+
+/** 관련 상담 줄의 추천 문장 — 상담 내역 갈래로 가는 꼴. */
+export function relatedConsultationAsk(words: readonly string[]): string {
+  return words.length ? `${words.join(" ")} 상담 최근에 있었나?` : "관련 상담 최근에 있었나?"
 }
 
 // ── 맞춤 ─────────────────────────────────────────────────────────────────────────────────
@@ -195,14 +245,26 @@ function kstDate(iso: string | null): string | null {
   return new Date(ms + KST_MS).toISOString().slice(0, 10)
 }
 
-function haystackOf(record: ConsultationRecord): string {
-  return normalize([record.subject, record.extra ?? "", record.tags.join(" "), record.org ?? "", record.person ?? ""].join(" "))
+function haystackOf(record: ConsultationRecord): { joined: string; words: string[] } {
+  const text = [record.subject, record.extra ?? "", record.tags.join(" "), record.org ?? "", record.person ?? ""].join(" ").toLowerCase()
+  return { joined: normalize(text), words: text.split(/[\s,.!?？/()·]+/).filter(Boolean) }
+}
+
+/**
+ * 낱말 하나가 상담 글에 있나. 두 글자 이하는 한 낱말 안에서만 맞춘다("가나"가 "…가 나요"의 띄어쓰기를 넘어 맞지 않게).
+ * 세 글자 이상은 띄어쓰기를 지운 글에서도 맞춘다("화면공유" ↔ "화면 공유").
+ */
+function hasVariant(haystack: { joined: string; words: string[] }, variant: string): boolean {
+  const needle = normalize(variant)
+  if (!needle) return false
+  if (haystack.words.some((word) => word.includes(needle))) return true
+  return needle.length >= 3 && haystack.joined.includes(needle)
 }
 
 function matchesKeywords(record: ConsultationRecord, keywords: readonly KeywordToken[]): boolean {
   if (keywords.length === 0) return true
   const haystack = haystackOf(record)
-  return keywords.every((keyword) => keyword.variants.some((variant) => haystack.includes(normalize(variant))))
+  return keywords.every((keyword) => keyword.variants.some((variant) => hasVariant(haystack, variant)))
 }
 
 function leadIdOf(customer: CustomerRef): string | null {
@@ -224,8 +286,26 @@ function inPeriod(record: ConsultationRecord, period: Period | null): boolean {
   return Boolean(date) && (date as string) >= period.from && (date as string) <= period.to
 }
 
+/** 비껴 쓴 이메일("sample @ example . com", "sample[at]example.com")을 가림이 알아보는 꼴로 되돌린다. */
+const OBFUSCATED_EMAIL =
+  /([A-Za-z0-9._%+-]+)\s*(?:@|＠|\[\s*at\s*\]|\(\s*at\s*\)|\s+at\s+)\s*([A-Za-z0-9-]+(?:\s*(?:\.|\[\s*dot\s*\]|\(\s*dot\s*\)|\s+dot\s+)\s*[A-Za-z0-9-]+)+)/gi
+/** 호칭 앞 이름 — "샘플이름 선생님께". 흔한 말(담당·담임·과목 등)은 이름이 아니다. */
+const NAMED_TITLE = /(?<![가-힣])([가-힣]{2,4})(\s*)(선생님|원장님|실장님|대표님|팀장님|부장님|과장님|매니저님|씨)(?![가-힣]{2})/g
+const NOT_NAME =
+  /^(?:담당|담임|수학|영어|국어|과학|사회|원어민|학원|센터|우리|저희|해당|다른|모든|여러|부원장|본사|지사|원장|교사|강사|학부모|고객|상담|관리|운영|교무|행정)$/
+
+function redactSummary(value: string): string {
+  const unmasked = value.replace(OBFUSCATED_EMAIL, (_whole, local: string, domain: string) =>
+    `${local}@${domain.replace(/\s*(?:\[\s*dot\s*\]|\(\s*dot\s*\)|\s+dot\s+)\s*/gi, ".").replace(/\s*\.\s*/g, ".")}`
+  )
+  const named = unmasked.replace(NAMED_TITLE, (whole, name: string, gap: string, title: string) =>
+    NOT_NAME.test(name) ? whole : `[name]${gap}${title}`
+  )
+  return redactInternalCsValue(named)
+}
+
 function summaryOf(record: ConsultationRecord): string {
-  const line = oneLine(redactInternalCsValue(record.subject))
+  const line = oneLine(redactSummary(record.subject))
   if (!line) return "요지 없음"
   return line.length > SUMMARY_MAX_CHARS ? `${line.slice(0, SUMMARY_MAX_CHARS - 1).trimEnd()}…` : line
 }
@@ -234,8 +314,8 @@ function whoOf(record: ConsultationRecord): string {
   const org = record.org?.trim()
   const person = record.person?.trim()
   if (record.source === "internal_cs") return org || "사내 CS 대화"
-  if (org && person && normalize(org) !== normalize(person)) return `${org} · ${redactInternalCsValue(person)}`
-  return org || (person ? redactInternalCsValue(person) : "이름 없는 고객")
+  if (org && person && normalize(org) !== normalize(person)) return `${org} · ${redactSummary(person)}`
+  return org || (person ? redactSummary(person) : "이름 없는 고객")
 }
 
 async function settle<T>(task: (() => Promise<T>) | undefined): Promise<{ ok: true; value: T } | { ok: false } | null> {
@@ -286,6 +366,19 @@ export async function findConsultations(question: string, deps: ConsultationDeps
     records.push(...batch)
   }
   const capped = scanned.some((entry) => entry.capped)
+  // 상한까지 읽은 출처마다 거슬러 간 가장 이른 날짜 — 그중 늦은 쪽부터가 모든 출처를 다 읽은 범위다.
+  let coverageFrom: string | null = null
+  for (const entry of scanned) {
+    if (!entry.capped) continue
+    const dates = records
+      .filter((record) => record.source === entry.source)
+      .map((record) => kstDate(record.at))
+      .filter((date): date is string => Boolean(date))
+      .sort()
+    const oldest = dates[0]
+    if (oldest && (!coverageFrom || oldest > coverageFrom)) coverageFrom = oldest
+  }
+  const partial = capped && (!period || !coverageFrom || period.from < coverageFrom)
 
   const scoped = records.filter((record) => inPeriod(record, period) && (!customer || matchesCustomer(record, customer)))
   const matched = new Map<string, ConsultationRecord>()
@@ -331,15 +424,27 @@ export async function findConsultations(question: string, deps: ConsultationDeps
     more: Math.max(0, total - MAX_CONSULTATION_ITEMS),
     period,
     periodUnsupported: periodRaw === "unsupported",
-    basis: { customer: customer?.name ?? null, customerFrom, keywords: keywords.map((k) => k.word), scanned, capped, semantic: semanticUsed },
+    basis: {
+      customer: customer?.name ?? null,
+      customerFrom,
+      keywords: keywords.map((k) => k.word),
+      scanned,
+      capped,
+      coverageFrom,
+      semantic: semanticUsed,
+    },
     restricted,
+    partial,
     failed,
   }
 }
 
-/** 질문 낱말과 맞는 상담 건수 — 묻기 답의 "관련 상담 n건" 줄(고객·기간 없이, 원문 없이). 낱말이 없으면 null. */
+/** 질문 낱말과 맞는 상담 건수 — 묻기 답의 "관련 상담 n건" 줄(고객·기간 없이, 원문 없이). 낱말이 없으면 null. 상한에 걸리면 최소 건수다. */
 export async function countRelatedConsultations(question: string, deps: ConsultationDeps): Promise<number | null> {
-  const keywords = consultationKeywords(question)
+  // 추천 문장(relatedConsultationAsk)과 같은 낱말로 센다 — 추천대로 물으면 같은 건수가 나온다.
+  const words = relatedConsultationWords(question)
+  if (words.length === 0) return null
+  const keywords = consultationKeywords(relatedConsultationAsk(words))
   if (keywords.length === 0) return null
   const scanLimit = Math.max(1, Math.min(1_000, Math.trunc(deps.scanLimit ?? DEFAULT_SCAN_LIMIT)))
   const [channel, internal] = await Promise.all([
@@ -366,7 +471,10 @@ function basisLine(result: ConsultationSearchResult): string {
   if (result.period) parts.push(`기간 ${result.period.label}`)
   if (!result.basis.customer && !result.basis.keywords.length && !result.period) parts.push("조건 없음(최근 상담)")
   const scanned = result.basis.scanned.map((entry) => `${SOURCE_LABEL[entry.source]} ${entry.read}건`).join("·")
-  if (scanned) parts.push(result.basis.capped ? `최근 상담 안에서(${scanned})` : `읽은 상담 전부에서(${scanned})`)
+  if (scanned) {
+    const since = result.basis.capped && result.basis.coverageFrom ? `, ${result.basis.coverageFrom} 이후` : ""
+    parts.push(result.basis.capped ? `최근 상담 안에서(${scanned}${since})` : `읽은 상담 전부에서(${scanned})`)
+  }
   if (result.basis.semantic) parts.push("비슷한 상담 검색 포함")
   return parts.join(" · ")
 }
@@ -386,10 +494,17 @@ export function consultationsBlock(result: ConsultationSearchResult): AiBlock {
   if (result.failed.length) notes.push(`${result.failed.map((source) => SOURCE_LABEL[source]).join("·")} 상담을 읽지 못했습니다 — 화면에서 확인해 주세요.`)
   const openLinkId = getLinkById(CONSULTATION_INBOX_LINK_ID) ? CONSULTATION_INBOX_LINK_ID : undefined
 
+  // 상한 때문에 묻는 기간을 다 읽지 못했으면 결론 줄에서 밝힌다 — "없음"·건수가 그 이전을 포함하지 않는다.
+  const gap = result.partial ? (result.basis.coverageFrom ? `${result.basis.coverageFrom} 이전은 확인하지 못했습니다` : "오래된 상담은 확인하지 못했습니다") : ""
+  const count = result.partial ? `최소 ${result.total}건` : `${result.total}건`
   let headline: string
-  if (result.total === 0) headline = `찾지 못했습니다 — 조건: ${basis}`
-  else if (result.restricted) headline = `${subjectOf(result)}상담 ${result.total}건이 있습니다${periodTail}.`
-  else headline = `${subjectOf(result)}상담 ${result.total}건을 찾았습니다${periodTail}.`
+  if (result.total === 0) headline = `찾지 못했습니다${gap ? `(${gap})` : ""} — 조건: ${basis}`
+  else if (result.restricted) headline = `${subjectOf(result)}상담 ${count}이 있습니다${periodTail}.`
+  else headline = `${subjectOf(result)}상담 ${count}을 찾았습니다${periodTail}.`
+  if (result.total > 0 && gap) notes.push(`${gap} — 상담 화면에서 더 찾아 주세요.`)
+  if (result.total === 0 && result.basis.keywords.length >= 2) {
+    notes.push(`낱말 ${result.basis.keywords.map((word) => `'${word}'`).join("·")}이 모두 들어간 상담만 찾습니다 — 낱말을 줄여 다시 물어 주세요.`)
+  }
 
   if (result.restricted && result.total > 0) notes.unshift("상담 글은 CS 담당 역할만 볼 수 있습니다 — 내용은 CS 담당에게 요청해 주세요.")
   if (result.more > 0) notes.push(`최신 ${MAX_CONSULTATION_ITEMS}건만 보였습니다. 나머지 ${result.more}건은 상담 화면에서 보세요.`)
