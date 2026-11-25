@@ -20,6 +20,8 @@ import { escalationInputFromDetail } from "@/components/admin/cs-chat/formatters
 import type { ConversationDetailResponse } from "@/components/admin/cs-chat/types"
 import {
   ESCALATION_ENDPOINT,
+  ESCALATION_MEMORY_LIMIT,
+  escalationMemorySize,
   loadEscalation,
   readEscalationResult,
   resetEscalationMemory,
@@ -147,4 +149,16 @@ describe("loadEscalation (client loader)", () => {
     await expect(loadEscalation(d)).resolves.toBe(ok)
     expect(mocks.adminFetchJson).toHaveBeenCalledTimes(2)
   })
+
+  it("keeps at most ESCALATION_MEMORY_LIMIT results and drops the least recently used (검토 동작-7)", async () => {
+    const ok = { context: { domain: "general" }, hqDraft: "", handoffDraft: "" } as unknown as EscalationResult
+    mocks.adminFetchJson.mockResolvedValue(ok)
+    const first = detail("질문 0")
+    await loadEscalation(first)
+    for (let index = 1; index <= ESCALATION_MEMORY_LIMIT; index += 1) await loadEscalation(detail(`질문 ${index}`))
+    expect(escalationMemorySize()).toBe(ESCALATION_MEMORY_LIMIT)
+    expect(readEscalationResult(first)).toBeNull()
+    expect(readEscalationResult(detail(`질문 ${ESCALATION_MEMORY_LIMIT}`))).toBe(ok)
+  })
 })
+

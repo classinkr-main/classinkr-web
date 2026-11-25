@@ -21,6 +21,29 @@ export type EscalationState =
   | { status: "error"; result: null; error: string }
 
 const resultMemory = new Map<string, EscalationResult>()
+/** 기억하는 결과 수 상한(검토 동작-7). 넘으면 가장 오래 쓰지 않은 것부터 버린다. */
+export const ESCALATION_MEMORY_LIMIT = 50
+
+function remember(key: string, result: EscalationResult) {
+  resultMemory.delete(key)
+  resultMemory.set(key, result)
+  while (resultMemory.size > ESCALATION_MEMORY_LIMIT) {
+    const oldest = resultMemory.keys().next().value
+    if (oldest === undefined) break
+    resultMemory.delete(oldest)
+  }
+}
+
+function recall(key: string) {
+  const hit = resultMemory.get(key)
+  if (hit) remember(key, hit)
+  return hit ?? null
+}
+
+/** 시험용: 지금 기억하는 결과 수. */
+export function escalationMemorySize() {
+  return resultMemory.size
+}
 const inFlight = new Map<string, Promise<EscalationResult>>()
 
 /** 같은 입력이면 같은 열쇠. 대화 id 를 앞에 두어 대화가 바뀌면 다른 열쇠다. */
@@ -34,7 +57,7 @@ export function escalationKeyFromDetail(detail: ConversationDetailResponse) {
 
 /** 시험·서버 렌더용: 결과를 미리 넣어 둔다(서버 응답과 같은 꼴). */
 export function primeEscalationResult(detail: ConversationDetailResponse, result: EscalationResult) {
-  resultMemory.set(escalationKeyFromDetail(detail), result)
+  remember(escalationKeyFromDetail(detail), result)
 }
 
 /** 시험용: 메모리를 비운다. */
@@ -44,7 +67,7 @@ export function resetEscalationMemory() {
 }
 
 export function readEscalationResult(detail: ConversationDetailResponse | null) {
-  return detail ? resultMemory.get(escalationKeyFromDetail(detail)) ?? null : null
+  return detail ? recall(escalationKeyFromDetail(detail)) : null
 }
 
 type Fetcher = (input: EscalationInput) => Promise<EscalationResult>
@@ -62,13 +85,13 @@ const defaultFetcher: Fetcher = (input) =>
 export function loadEscalation(detail: ConversationDetailResponse, fetcher: Fetcher = defaultFetcher) {
   const input = escalationInputFromDetail(detail)
   const key = escalationKey(detail.conversation.id, input)
-  const cached = resultMemory.get(key)
+  const cached = recall(key)
   if (cached) return Promise.resolve(cached)
   const pending = inFlight.get(key)
   if (pending) return pending
   const request = fetcher(input)
     .then((result) => {
-      resultMemory.set(key, result)
+      remember(key, result)
       return result
     })
     .finally(() => inFlight.delete(key))
