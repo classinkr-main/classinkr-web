@@ -9,6 +9,8 @@
 -- 이 마이그레이션 전에도 코드는 깨지지 않는다: 'sending'·'abandoned' 갱신이 check 제약(23514)에 걸리면 상태는 그대로 두고
 -- attempt_count 조건과 last_error 의 'sending:' 표시·payload.retry.gaveUpAt 표시만으로 같은 보장을 한다.
 --
+-- 롤백: supabase/rollbacks/20261125_chatbot_handoff_claim_retry.rollback.sql(sending·abandoned 행을 failed 로 먼저 바꾼 뒤 제약을 되돌린다).
+--
 -- 통계 영향: 챗봇 운영 대시보드(summarizeChannelHandoffs)는 상태 분포에 sending·abandoned 를 그대로 세고, total 에 포함한다.
 -- sent/pending/failed/skipped 개별 값은 그대로다. lead-digest-alerts 는 sent 만 센다.
 

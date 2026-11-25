@@ -10,7 +10,13 @@
 --
 -- 이 마이그레이션 전에도 코드는 깨지지 않는다(색인이 없으면 조회 후 만들기만 한다 — 동시 두 건이면 드물게 두 행).
 --
--- 먼저 확인할 것: 운영에 이미 같은 상담의 완결 기록이 여러 행이면 아래 검사가 마이그레이션을 멈춘다(조용히 지우지 않는다).
+-- 잠금: 이 저장소의 마이그레이션은 트랜잭션 안에서 돌아 CREATE INDEX CONCURRENTLY 를 쓰지 않는다(20260914_leads_phone_key.sql 과 같음).
+-- 색인을 만드는 동안 crm_customer_events 쓰기가 막힌다 — 표 크기만큼 걸리므로 유입이 적은 때 적용한다. 쓰기를 막을 수 없으면
+-- 트랜잭션 밖(SQL Editor 에서 이 파일 대신 단독 문장)으로 같은 정의에 CONCURRENTLY 를 붙여 먼저 만들어 두면 아래는 건너뛴다.
+-- 롤백: supabase/rollbacks/20261125_crm_events_channel_source_unique.rollback.sql
+--
+-- 먼저 확인할 것: 운영에 이미 같은 상담의 완결 기록이 여러 행이면 아래 검사는 색인을 만들지 않고 WARNING 만 남긴다
+-- (조용히 지우지 않고, 같은 묶음의 다른 마이그레이션도 멈추지 않는다 — 코드는 색인 없이도 깨지지 않는다).
 --   select source_id, count(*) from public.crm_customer_events
 --    where source_type = 'site_inflow' and source_id like 'channel:%'
 --    group by source_id having count(*) > 1 order by count(*) desc;
@@ -35,11 +41,11 @@ begin
       having count(*) > 1
     ) d;
   if duplicate_sources > 0 then
-    raise exception '채널톡 완결 기록 중복 % 건(source_id 기준) — 이 파일 머리 주석의 확인·정리 쿼리를 먼저 실행하세요.', duplicate_sources;
+    raise warning '채널톡 완결 기록 중복 % 건(source_id 기준) — 유니크 색인을 만들지 않았다. 이 파일 머리 주석의 확인·정리 쿼리를 실행한 뒤 다시 적용하세요.', duplicate_sources;
+  else
+    create unique index if not exists crm_customer_events_channel_source_uidx
+      on public.crm_customer_events (source_type, source_id)
+      where source_type = 'site_inflow'
+        and source_id like 'channel:%';
   end if;
 end $$;
-
-create unique index if not exists crm_customer_events_channel_source_uidx
-  on public.crm_customer_events (source_type, source_id)
-  where source_type = 'site_inflow'
-    and source_id like 'channel:%';
