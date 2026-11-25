@@ -1,6 +1,10 @@
 // 운영 데스크(CS 코파일럿 · 운영 도구 탭)의 순수 로직.
 // 스탯 스트립 집계와 회귀 판정 메타를 UI에서 분리해 노드 환경 테스트로 계약을 고정한다.
 
+import { isSameAsOriginal } from "@/lib/internal-cs-chat/review-guard"
+
+import type { InternalCsMessage, ReviewChecks } from "./types"
+
 export interface DocsGapsDeskSummary {
   chatbot: number
   internalCs: number
@@ -96,4 +100,73 @@ export function regressionOutcomeChip(outcome: string) {
     return REGRESSION_OUTCOME_CHIPS[outcome]
   }
   return null
+}
+
+// ── 검토 드로어 승인 조건(IC-04·IC-26) ─────────────────────────────────────────
+
+export interface ReviewWarningLike {
+  code: string
+  severity: "high" | "medium"
+  label: string
+  excerpt: string
+}
+
+/** 서버(generate)가 metadata.reviewWarnings 에 남긴 답 후검사 결과를 검증해 꺼낸다. 모양이 틀린 항목은 버린다. */
+export function readReviewWarnings(message: Pick<InternalCsMessage, "metadata"> | null | undefined): ReviewWarningLike[] {
+  const raw = message?.metadata?.reviewWarnings
+  if (!Array.isArray(raw)) return []
+  return raw.flatMap((item) => {
+    if (!item || typeof item !== "object") return []
+    const value = item as Record<string, unknown>
+    if (typeof value.code !== "string" || typeof value.label !== "string") return []
+    return [{
+      code: value.code,
+      severity: value.severity === "high" ? ("high" as const) : ("medium" as const),
+      label: value.label,
+      excerpt: typeof value.excerpt === "string" ? value.excerpt : "",
+    }]
+  })
+}
+
+export interface ReviewApprovalState {
+  canApprove: boolean
+  /** 승인 버튼이 꺼진 이유 한 줄. 켜져 있으면 null. 화면이 버튼 곁에 그대로 적는다. */
+  reason: string | null
+}
+
+export function reviewApprovalState(input: {
+  checks: ReviewChecks
+  warningCount: number
+  hasPending: boolean
+  finalDraft: string
+  original: string | null | undefined
+}): ReviewApprovalState {
+  if (!input.hasPending) return { canApprove: false, reason: "검토 대기 초안이 없습니다." }
+  const draft = input.finalDraft.trim()
+  if (!draft) return { canApprove: false, reason: "고객 전달용 최종 답변을 먼저 작성해 주세요." }
+  if (input.original && isSameAsOriginal(draft, input.original)) {
+    return { canApprove: false, reason: "최종 답변이 AI 초안과 같습니다. 고객용으로 고쳐 써 주세요." }
+  }
+  if (!input.checks.customer || !input.checks.evidence || !input.checks.externalScope) {
+    return { canApprove: false, reason: "확인 3종을 모두 체크해 주세요." }
+  }
+  if (input.warningCount > 0 && !input.checks.warnings) {
+    return { canApprove: false, reason: "검토 경고를 읽고 확인했는지 체크해 주세요." }
+  }
+  return { canApprove: true, reason: null }
+}
+
+/** 검토 대기 초안을 오래된 순서로. 가장 마지막이 최신이다(드로어는 최신을 연다). */
+export function pendingDrafts(messages: InternalCsMessage[]) {
+  return messages.filter((message) => message.role === "assistant" && message.review_state === "pending")
+}
+
+/** 이 초안이 모델 실패로 만든 대체 글인가(IC-03). */
+export function isDeterministicDraft(message: Pick<InternalCsMessage, "metadata"> | null | undefined) {
+  return message?.metadata?.origin === "deterministic"
+}
+
+export function readFailureKinds(message: Pick<InternalCsMessage, "metadata"> | null | undefined): string[] {
+  const raw = message?.metadata?.failureKinds
+  return Array.isArray(raw) ? raw.filter((kind): kind is string => typeof kind === "string") : []
 }

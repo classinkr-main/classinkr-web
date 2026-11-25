@@ -16,6 +16,7 @@ export const INITIAL_CHECKS: ReviewChecks = {
   customer: false,
   evidence: false,
   externalScope: false,
+  warnings: false,
 }
 
 export const MAX_PENDING_ASSETS = 3

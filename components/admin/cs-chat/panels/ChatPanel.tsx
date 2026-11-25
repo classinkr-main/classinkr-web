@@ -1,7 +1,6 @@
 "use client"
 
 import Image from "next/image"
-import Link from "next/link"
 import {
   AlertTriangle,
   BookOpen,
@@ -23,13 +22,14 @@ import {
   Trash2,
   UserRound,
 } from "lucide-react"
-import { type ChangeEvent, type FormEvent, type RefObject } from "react"
+import { type ChangeEvent, type FormEvent, type RefObject, useEffect, useRef } from "react"
 
 import BlogMarkdownRenderer from "@/components/blog/BlogMarkdownRenderer"
 import { ClassInInternalAIIcon } from "@/components/ui/ClassInInternalAIIcon"
 import { cn } from "@/lib/utils"
 
 import AnswerFooterChip from "../components/AnswerFooterChip"
+import ModelStatusBanner from "../components/ModelStatusBanner"
 import CommunicationTabs from "../components/CommunicationTabs"
 import ConversationSwitcher from "../components/ConversationSwitcher"
 import PromoteKnowledgeControl from "../components/PromoteKnowledgeControl"
@@ -52,9 +52,10 @@ import {
   fileKey,
   formatTime,
   normalizeSourceRefs,
-  sourceHref,
+  sourceLink,
   sourceStatus,
 } from "../formatters"
+import { isDeterministicDraft, readFailureKinds } from "../ops-desk"
 import { useEscalation } from "../use-escalation"
 import { isHqPending } from "../hq-desk"
 import type {
@@ -65,6 +66,7 @@ import type {
   ModelMode,
   PromotionResult,
 } from "../types"
+import type { InflightTurn, WorkspaceBand } from "../InternalCsChatWorkspace"
 
 export type ChatAnswerDisclosure = "sources" | "hq" | "regression" | null
 
@@ -74,6 +76,9 @@ export default function ChatPanel({
   isPending,
   reviewOpen,
   setReviewOpen,
+  onOpenReview,
+  onRejectDraft,
+  scrollToMessage,
   selectedId,
   queueConversations,
   handleSelect,
@@ -109,14 +114,27 @@ export default function ChatPanel({
   assetError,
   composer,
   setComposer,
-  onQuickApprove,
-  onSelectAlternativeIssue,
 }: {
   detail: ConversationDetailResponse | null
   loading: boolean
   isPending: boolean
   reviewOpen: boolean
   setReviewOpen: (open: boolean) => void
+  /** 검토 드로어를 열고 그 초안으로 스레드를 스크롤한다. 없으면 setReviewOpen(true)만 한다. */
+  onOpenReview?: (messageId?: string) => void
+  /** 초안을 '사용 안 함'으로 치운다(IC-13). */
+  onRejectDraft?: (messageId: string) => void
+  /** 이 시각 이후 이 id 의 메시지로 스크롤한다(검토 열기). nonce 가 바뀔 때마다 한 번 움직인다. */
+  scrollToMessage?: { id: string; nonce: number } | null
+  /** (4-b) 답을 기다리는 요청. */
+  generating?: InflightTurn | null
+  focusRequest?: number
+  band?: WorkspaceBand | null
+  onUndoBand?: () => void
+  onRejectPending?: () => void
+  onClearContext?: () => void
+  contextResetPending?: boolean
+  restoredAttachmentNames?: string[]
   selectedId: string | null
   queueConversations: InternalCsConversation[]
   handleSelect: (conversation: InternalCsConversation) => void
@@ -152,11 +170,26 @@ export default function ChatPanel({
   assetError: string | null
   composer: string
   setComposer: (value: string) => void
-  onQuickApprove?: (messageId: string) => void
-  onSelectAlternativeIssue?: (issuePrompt: string) => void
 }) {
   // 칩의 도메인 표시는 서버 결과를 쓴다(B2 — 담당 표는 server-only). 대기·오류 중에는 칩 글만 보인다.
   const escalationContext = useEscalation(detail).result?.context ?? null
+  const openReview = (messageId?: string) => {
+    if (onOpenReview) onOpenReview(messageId)
+    else setReviewOpen(true)
+  }
+  const scrollerRef = useRef<HTMLDivElement | null>(null)
+
+  // 검토 열기 — 대상 초안의 머리가 보이는 영역 안에 오도록 스크롤한다(IC-01·IC-14).
+  const scrollNonce = scrollToMessage?.nonce
+  const scrollTargetId = scrollToMessage?.id
+  useEffect(() => {
+    if (!scrollTargetId) return
+    const scroller = scrollerRef.current
+    const target = scroller?.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(scrollTargetId)}"]`)
+    if (!scroller || !target) return
+    const offset = target.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop
+    scroller.scrollTo({ top: Math.max(0, offset - 12), behavior: "auto" })
+  }, [scrollNonce, scrollTargetId])
 
   return (
     <div className={cn("flex min-h-0 flex-1 flex-col", reviewOpen && "xl:pr-[438px]")}>
@@ -217,7 +250,6 @@ export default function ChatPanel({
                   ? "border-[#ECD29C] bg-[#FBF1E0] text-[#7A520F] hover:bg-[#F6E7CE]"
                   : "border-black/[0.08] bg-white text-[#615D59] hover:bg-[#F6F5F4] hover:text-[#31302E]"
               )}
-              title={pendingMessage ? "AI 답변 검토·승인 후 본사 확인 요청을 진행할 수 있습니다" : undefined}
             >
               <Building className="h-4 w-4" />
               <span className="hidden sm:inline">
@@ -227,7 +259,7 @@ export default function ChatPanel({
           ) : null}
           <button
             type="button"
-            onClick={() => setReviewOpen(true)}
+            onClick={() => openReview(pendingMessage?.id)}
             disabled={!pendingMessage}
             className="relative inline-flex h-9 items-center gap-2 rounded-md border border-black/[0.08] bg-white px-3 text-[12px] font-semibold transition-colors hover:bg-[#F6F5F4] disabled:cursor-not-allowed disabled:opacity-40"
           >
@@ -241,7 +273,7 @@ export default function ChatPanel({
       </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto bg-white">
+      <div ref={scrollerRef} className="min-h-0 flex-1 overflow-y-auto bg-white">
         <div className={cn(CONSOLE_CONTENT_CLASS, "py-7")}>
         <div className={cn("w-full max-w-[820px] space-y-8", reviewOpen ? "xl:mr-auto xl:ml-0" : "mx-auto")}>
           {loading && !detail ? (
@@ -260,7 +292,7 @@ export default function ChatPanel({
                 : message.content
 
               return (
-                <article key={message.id} className="flex gap-3 sm:gap-4">
+                <article key={message.id} data-message-id={message.id} className="flex gap-3 sm:gap-4">
                   <span className={cn(
                     "mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full",
                     message.role === "assistant" ? "bg-[#084734] text-white shadow-xs" : "bg-[#F0EFED] text-[#31302E]"
@@ -309,16 +341,23 @@ export default function ChatPanel({
                               "[&_hr]:!my-5"
                             )}
                           />
-                          <div className="mt-3 flex flex-wrap items-center gap-2 text-[10px] text-[#A39E98]">
-                            {message.model_name ? <span>{message.model_name}</span> : <span>결정론적 안전 초안</span>}
+                          <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-[#78736D]">
+                            {isDeterministicDraft(message)
+                              ? <span className="font-semibold text-[#8F2C2C]">모델 실패 · 자동 정리(검토 필요)</span>
+                              : message.model_name ? <span>{message.model_name}</span> : <span>자동 정리 초안</span>}
                             {message.model_mode ? <span>· {message.model_mode}</span> : null}
                           </div>
+                          {isDeterministicDraft(message) ? (
+                            <ModelStatusBanner origin="deterministic" failureKinds={readFailureKinds(message)} className="mt-2" />
+                          ) : null}
 
-                          {/* 스마트 제안 UI (상황 확인 '이런 거 맞냐', 즉시 허용/승인, 후속 진행 UI) */}
+                          {/* 검토 상태·후속 동작 — 승인은 검토 드로어에서만 한다. */}
                           <SmartActionCard
                             message={message}
-                            isLatest={isLatestAssistant}
-                            onQuickApprove={(id) => onQuickApprove?.(id)}
+                            isLatest={pendingMessage?.id === message.id}
+                            issueHint={escalationContext && escalationContext.confidence === "high" ? escalationContext.contact.domainLabel : null}
+                            onOpenReview={(id) => openReview(id)}
+                            onReject={onRejectDraft}
                             onCopyCustomerHolding={() => {
                               const customerTemplate = communicationTemplates.find((t) => t.id === "customer")?.content
                               if (customerTemplate) {
@@ -330,15 +369,6 @@ export default function ChatPanel({
                                 void requestHqConfirmation(detail.conversation)
                               }
                             }}
-                            onPromoteKnowledge={
-                              message.review_state === "approved"
-                                ? () => void promoteMessageToKnowledge(message.id)
-                                : undefined
-                            }
-                            onSelectAlternativeIssue={(issuePrompt) => {
-                              onSelectAlternativeIssue?.(issuePrompt)
-                            }}
-                            canPromote={message.review_state === "approved"}
                           />
 
                           {/* 승인(허가) 게이트 상태 배너 */}
@@ -346,23 +376,23 @@ export default function ChatPanel({
                             <div className="mt-3 flex items-center justify-between gap-2 rounded-md border border-[#ECD29C] bg-[#FBF1E0] px-3.5 py-2 text-[11px] text-[#7A520F]">
                               <span className="flex items-center gap-1.5">
                                 <LockKeyhole className="h-3.5 w-3.5 shrink-0 text-[#A8741A]" />
-                                AI 초안 — 외부 전달 및 소통 작업은 <strong>담당자 검토·승인(허가) 후</strong> 가능합니다.
+                                AI 초안 — 고객에게 보내려면 <strong>검토 드로어에서 확인과 최종 답 작성</strong>이 필요합니다.
                               </span>
                               <button
                                 type="button"
-                                onClick={() => setReviewOpen(true)}
-                                className="inline-flex shrink-0 items-center gap-1 rounded bg-white px-2 py-1 text-[11px] font-semibold text-[#7A520F] shadow-xs hover:bg-[#F6E7CE]"
+                                onClick={() => openReview(message.id)}
+                                className="inline-flex shrink-0 items-center gap-1 rounded bg-white px-2 py-1 text-[11px] font-semibold text-[#7A520F] shadow-xs hover:bg-[#F6E7CE] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]"
                               >
-                                검토·승인 열기
+                                검토 열기
                               </button>
                             </div>
                           ) : message.review_state === "approved" ? (
                             <div className="mt-3 flex items-center justify-between gap-2 rounded-md border border-[#BDEFD8] bg-[#ECFDF5] px-3.5 py-2 text-[11px] text-[#084734]">
                               <span className="flex items-center gap-1.5">
                                 <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-[#084734]" />
-                                담당자 검토·승인 완료 — 외부 전달 및 소통 템플릿 복사가 <strong>허가</strong>되었습니다.
+                                담당자 검토·승인 완료 — 고객용 최종 답이 <strong>확정</strong>되었습니다.
                               </span>
-                              <span className="text-[10px] text-[#615D59]">
+                              <span className="text-[11px] text-[#615D59]">
                                 {message.reviewed_by ? `${message.reviewed_by} · ` : ""}{message.reviewed_at ? formatTime(message.reviewed_at) : ""}
                               </span>
                             </div>
@@ -423,7 +453,7 @@ export default function ChatPanel({
                               {sources.length > 0 ? (
                                 <div className="space-y-2">
                                   {sources.map((source) => {
-                                    const href = sourceHref(source)
+                                    const link = sourceLink(source)
                                     const status = sourceStatus(source)
                                     const content = (
                                       <>
@@ -442,17 +472,21 @@ export default function ChatPanel({
                                             {status.label}
                                           </span>
                                         ) : null}
-                                        {href ? <ExternalLink className="h-3.5 w-3.5 shrink-0" /> : <LockKeyhole className="h-3.5 w-3.5 shrink-0 text-[#A39E98]" />}
+                                        {link ? <ExternalLink className="h-3.5 w-3.5 shrink-0" aria-hidden="true" /> : <LockKeyhole className="h-3.5 w-3.5 shrink-0 text-[#78736D]" aria-hidden="true" />}
                                       </>
                                     )
-                                    return href ? (
-                                      <Link
+                                    // 근거 링크는 새 탭으로 연다 — 같은 탭 이동은 쓰던 최종 답과 검토 상태를 놓치게 한다(IC-11).
+                                    return link ? (
+                                      <a
                                         key={source.id}
-                                        href={href}
-                                        className="flex items-center gap-3 rounded-md border border-black/[0.08] bg-white px-3 py-2.5 text-[12px] text-[#31302E] hover:border-[#084734]/20 hover:text-[#084734]"
+                                        href={link.href}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="flex items-center gap-3 rounded-md border border-black/[0.08] bg-white px-3 py-2.5 text-[12px] text-[#31302E] hover:border-[#084734]/20 hover:text-[#084734] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]"
                                       >
                                         {content}
-                                      </Link>
+                                        <span className="sr-only">(새 탭에서 열림)</span>
+                                      </a>
                                     ) : (
                                       <div key={source.id} className="flex items-center gap-3 rounded-md border border-black/[0.08] bg-white px-3 py-2.5 text-[12px] text-[#31302E]">
                                         {content}
@@ -471,7 +505,7 @@ export default function ChatPanel({
                                 <CommunicationTabs
                                   detail={detail}
                                   isApproved={isApproved}
-                                  onOpenReview={() => setReviewOpen(true)}
+                                  onOpenReview={() => openReview(pendingMessage?.id)}
                                   onCopyText={copyText}
                                   legacyTemplates={communicationTemplates}
                                 />
@@ -699,7 +733,7 @@ export default function ChatPanel({
         {/* 원클릭 빠른 작업 프리셋 (오탈자/모호성 없는 고속 질의) */}
         <div className={cn("mb-2", reviewOpen ? "max-w-none" : "mx-auto max-w-[980px]")}>
           <QuickPromptChips
-            onSelectPrompt={(promptText) => setComposer(promptText)}
+            onSelectPrompt={(promptText) => setComposer(composer.trim() ? `${composer.trimEnd()}\n${promptText}` : promptText)}
             disabled={isPending || uploadingAssets}
           />
         </div>
