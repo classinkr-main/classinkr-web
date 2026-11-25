@@ -155,3 +155,13 @@ npm run build
 - 기준 문서는 repo-relative 링크만 사용한다.
 - 브랜치명, 로컬 절대경로, 실제 비밀번호 예시는 남기지 않는다.
 - 오래된 사고 메모는 현재 상태 단정에 쓰지 않고, `docs/README.md`가 지정한 최신 정본과 실제 코드로 재검증한다.
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+## This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->
