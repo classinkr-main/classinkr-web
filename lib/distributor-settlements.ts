@@ -54,6 +54,30 @@ export const DEFAULT_HARDWARE_DISTRIBUTOR = {
   distributorPhone: STANDARD_QUOTE_SUPPLIER.contactPhone,
 } as const
 
+/**
+ * FY2026 채널 유통 가격 정책표의 ClassIn KR → 퀴드러닝 채널공급가(VAT 포함, = 수입원가 + 물류 + 통관 + 창고).
+ * 고객 견적 작성기에서 총판 견적서 초안을 같이 만들 때의 기본 원가다. 구간은 줄 수량 기준(pickTemplateUnitPrice).
+ * 2~10대는 정책표상 1대와 같은 값이라 1·11·21 세 구간만 둔다. 50대 초과는 21~50 구간 값을 그대로 쓴다.
+ * 정책표에 없는 품목(벽걸이·설치·교육)은 원가가 비어 발행 전 사람이 채운다.
+ * 기획: docs/active/distributor-quote-with-customer-quote-plan-2026-11-20.md
+ */
+export const FY2026_CHANNEL_SUPPLY_PRICE_RULES: readonly DistributorPriceRule[] = [
+  ...tierRules("board-86", '전자칠판 86"', [4_870_000, 4_670_000, 4_500_000]),
+  ...tierRules("board-75", '전자칠판 75"', [4_200_000, 4_000_000, 3_850_000]),
+  ...tierRules("camera-t1", "T1 카메라", [840_000, 800_000, 800_000]),
+  ...tierRules("stand", "이동형 스탠드", [270_000, 250_000, 250_000]),
+  ...tierRules("ai-studio-recording-set", '녹화 세트 86" (OMO)', [6_210_000, 5_970_000, 5_800_000]),
+  ...tierRules("ai-studio-recording-set-75", '녹화 세트 75" (OMO)', [5_540_000, 5_300_000, 5_150_000]),
+]
+
+function tierRules(itemCode: string, itemName: string, [one, eleven, twentyOne]: [number, number, number]) {
+  return [
+    { itemCode, itemName, minQuantity: 1, unitPrice: one },
+    { itemCode, itemName, minQuantity: 11, unitPrice: eleven },
+    { itemCode, itemName, minQuantity: 21, unitPrice: twentyOne },
+  ]
+}
+
 export const DISTRIBUTOR_SETTLEMENT_TRIGGERS = ["on_accept", "on_install", "manual"] as const
 export type DistributorSettlementTrigger = (typeof DISTRIBUTOR_SETTLEMENT_TRIGGERS)[number]
 
@@ -337,15 +361,24 @@ export function buildDistributorQuoteDetails(
       vatIncluded: settlement.vatIncluded,
     }))
   const customerName = options.customerName?.trim() || customer.recipientCompanyName?.trim()
+  // 수신 = 총판 대표(담당자 칸), 참조 = 총판 실무 담당자(2026-11-20 결정: 퀴드러닝 대표 조혜리 · 참조 배철웅).
+  // 대표 이름은 정산 표에 칸이 없어 등록된 총판(퀴드러닝)일 때만 표준 공급자 정보에서 가져온다.
+  const representativeName =
+    settlement.distributorName.trim() === STANDARD_QUOTE_SUPPLIER.businessName
+      ? STANDARD_QUOTE_SUPPLIER.representativeName
+      : undefined
+  const contactName = settlement.distributorContactName?.trim() || undefined
 
   const quote: PartnerQuoteDetailsInput = {
     ...customer,
     issuedAt: options.issuedAt?.slice(0, 10) || customer.issuedAt,
     recipientCompanyName: settlement.distributorName,
-    recipientContactName: settlement.distributorContactName ?? undefined,
+    recipientContactName: representativeName ?? contactName,
     recipientPhone: settlement.distributorPhone ?? undefined,
     recipientEmail: settlement.distributorEmail ?? undefined,
-    referenceName: customerName ? `고객사 ${customerName}` : customer.referenceName,
+    referenceName: representativeName ? contactName : undefined,
+    // 어느 고객 건인지는 본문 첫 문장에 적는다(참조 칸은 총판 담당자 몫).
+    subjectText: customerName ? `고객사 ${customerName} 건으로 아래와 같이 견적서를 제출합니다.` : undefined,
     // 공급자 블록은 통째로 회사(클래스인)로 바꾼다 — 담당자·연락처는 회사 표준 정보가 없어 비워 둔다.
     supplierBusinessName: CLASSIN_QUOTE_SUPPLIER.businessName,
     supplierBusinessRegistrationNumber: CLASSIN_QUOTE_SUPPLIER.businessRegistrationNumber,

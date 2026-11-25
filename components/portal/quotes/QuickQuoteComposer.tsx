@@ -30,6 +30,13 @@ import QuoteDisplaySettings, { type QuoteDisplaySettingsProps } from "./QuoteDis
 import paperStyles from "./quote-paper.module.css"
 
 import { Button } from "@/components/ui/button"
+import {
+  buildDistributorLinesFromQuote,
+  computeDistributorTotals,
+  type DistributorPriceRule,
+  type DistributorSettlementLine,
+} from "@/lib/distributor-settlements"
+import { buildCumulativeTierNudge, type CumulativeTierNudge } from "@/lib/hardware-market-price-tiers"
 import { getQuoteDetailsFromStructuredJson, normalizeQuoteDetailsFromStructuredJson } from "@/lib/portal/quote-details"
 import { portalFetch } from "@/lib/portal/portal-fetch"
 import { getProductBySku } from "@/lib/product-templates"
@@ -211,6 +218,34 @@ type QuickQuoteComposerProps = {
    * "기존 고객" 모드로 해당 고객·거래를 자동 선택한다. (새 고객 암묵 생성 없음)
    */
   prefill?: QuickQuotePrefill | null
+  /**
+   * 하드웨어 견적을 저장할 때 총판(퀴드러닝)용 견적서 초안도 같이 만든다(어드민 전용, 선택).
+   * 원가와 저장 호출은 주입한다 — 포털 번들에 원가·어드민 클라이언트가 들어가지 않게.
+   * 기획: docs/active/distributor-quote-with-customer-quote-plan-2026-11-20.md
+   */
+  distributorQuote?: QuickQuoteDistributorQuoteOption
+  /**
+   * 기존 고객이 명확히 매칭됐을 때(수신 칸 = 등록 고객) 그 고객의 승인된 오더 품목별 누적 수량을 읽는다(어드민 전용, 선택).
+   * 있으면 누적 대수 기준 시장 구간가를 추천만 한다 — 단가는 작성자가 '적용'을 눌러야 바뀐다.
+   */
+  loadCustomerUnits?: (customerId: string) => Promise<Record<string, number>>
+}
+
+export type QuickQuoteDistributorQuoteOption = {
+  /** 품목 코드 × 최소 수량 → 총판 공급가(VAT 포함). */
+  rules: readonly DistributorPriceRule[]
+  /** 화면 표기용 총판 이름(예: "퀴드러닝 · 배철웅"). */
+  distributorLabel: string
+  /** 공급가 원천(원가 템플릿) 표기·선택. 템플릿이 없으면 seedAction 으로 정책표를 템플릿으로 저장하게 한다. */
+  priceSource?: {
+    label: string
+    options?: { id: string; label: string }[]
+    selectedId?: string | null
+    onSelect?: (id: string) => void
+    seedAction?: { label: string; busy?: boolean; onClick: () => void }
+  }
+  /** 고객 견적 저장 직후 호출 — 발행 전 총판 정산 초안을 만들거나 갱신한다. 실패하면 throw. */
+  onSave: (input: { quoteDocumentId: string; lines: DistributorSettlementLine[] }) => Promise<void>
 }
 
 export type QuickQuotePrefill = {
@@ -261,6 +296,8 @@ type ComposerSheet = {
   templateId: StandardQuoteTemplateId
   optionSelections: StandardQuoteOptionSelections
   quote: PartnerQuoteDetailsInput
+  /** 대표 품목 행을 지운 장. 템플릿이 다시 짜여도 대표 행을 되살리지 않는다(장의 틀은 유지). */
+  mainRemoved?: boolean
 }
 
 type SharedQuoteFields = {
@@ -441,8 +478,9 @@ const EDITABLE_CLASS =
   "min-w-0 rounded-none border-0 border-b border-dashed border-transparent bg-transparent px-0.5 py-px outline-none transition-colors placeholder:text-[#A39E98] hover:border-[#CFCBC5] hover:bg-[#FCFCFA] focus:border-solid focus:border-[#084734] focus:bg-white"
 const PAPER_SELECT_CLASS =
   "h-7 rounded-[4px] border border-transparent bg-transparent px-1 text-[12px] text-[#31302E] outline-none transition-colors hover:border-[#E3E0DB] focus-visible:border-[#084734]"
+// 누르는 순간 살짝 눌려 들어가고(scale·inset 그림자) 놓으면 튀어 오르는 손맛. 모션 최소화 설정은 존중한다.
 const RAIL_BUTTON_CLASS =
-  "flex w-full items-baseline gap-2 rounded-[6px] px-2 py-[7px] text-left text-[#111110] transition-colors hover:bg-white disabled:opacity-60"
+  "flex w-full items-baseline gap-2 rounded-[6px] px-2 py-[7px] text-left text-[#111110] transition-[background-color,box-shadow,transform] duration-150 ease-out hover:bg-white hover:shadow-[0_1px_2px_rgba(17,17,16,0.06)] active:scale-[0.97] active:bg-[#EFEDE8] active:shadow-[inset_0_1px_2px_rgba(17,17,16,0.12)] active:duration-75 disabled:opacity-60 disabled:active:scale-100 motion-reduce:transition-none motion-reduce:active:scale-100"
 const RAIL_ACTIVE_CLASS = "bg-white font-semibold shadow-[inset_2px_0_0_#084734]"
 const RAIL_HEADING_CLASS = "mx-2 mb-1.5 text-[11.5px] font-semibold text-[#78736D]"
 const OPTION_CHIP_CLASS =
@@ -492,6 +530,14 @@ function buildSharedFields(today: string, generalNotes = ""): SharedQuoteFields 
   }
 }
 
+/** 대표 품목을 지운 채 저장된 견적인지 — 불러온 뒤 옵션을 바꿔도 대표 행이 되살아나지 않게 이어받는다. */
+function inferMainRemoved(quote: PartnerQuoteDetailsInput, templateId: StandardQuoteTemplateId) {
+  const mainCode = getStandardQuoteTemplate(templateId).lines[0]?.itemCode ?? templateId
+  return !(quote.lineItems ?? []).some(
+    (item) => item.optionGroupId === "main_product" || item.itemCode === mainCode
+  )
+}
+
 function restoreSheet(quote: PartnerQuoteDetailsInput): ComposerSheet {
   const templateId = inferStandardQuoteTemplateId(quote)
   return {
@@ -499,6 +545,7 @@ function restoreSheet(quote: PartnerQuoteDetailsInput): ComposerSheet {
     templateId,
     optionSelections: quote.optionSelections ?? getStandardQuoteDefaultSelections(templateId),
     quote,
+    mainRemoved: inferMainRemoved(quote, templateId),
   }
 }
 
@@ -599,6 +646,31 @@ function getLineWithDefaultDiscountPrice(line: PartnerQuoteLineItemInput) {
   return getQuoteLineDiscountRate(originalUnitPrice, line.unitPrice) == null ? line : { ...line, originalUnitPrice }
 }
 
+/** 대표 품목을 지운 장에서 템플릿이 되살린 대표 행을 걷어낸다. */
+function stripRemovedMain(sheet: ComposerSheet): ComposerSheet {
+  if (!sheet.mainRemoved) return sheet
+  const items = sheet.quote.lineItems ?? []
+  if (!items.some((item) => item.optionGroupId === "main_product")) return sheet
+  return {
+    ...sheet,
+    quote: finalizeStandardQuoteDetails(
+      { ...sheet.quote, lineItems: renumberQuoteLines(items.filter((item) => item.optionGroupId !== "main_product")) },
+      sheet.templateId
+    ),
+  }
+}
+
+/**
+ * 견적서로 만들 품목이 있는 장인지. 대표 품목·직접 추가한 품목·금액이 있는 옵션 품목이 하나도 없으면
+ * (0원 부속 행·안내 문구만 남은 장) 틀은 화면에 두되 견적서는 생성하지 않는다.
+ */
+function sheetHasQuotableItems(sheet: ComposerSheet) {
+  return (sheet.quote.lineItems ?? []).some((item) => {
+    if (item.lineStatus === "informational" || item.itemType === "note_only") return false
+    return item.optionGroupId === "main_product" || item.isUserAdded === true || Number(item.unitPrice ?? 0) > 0
+  })
+}
+
 function sheetSubtotal(sheet: ComposerSheet) {
   return calculateStandardQuoteTotals(sheet.quote.lineItems, true).subtotalAmount
 }
@@ -692,6 +764,13 @@ function buildDefaultDealTitle(sheets: ComposerSheet[], customerName?: string | 
   const subject = sheets
     .map((sheet) => {
       const template = getStandardQuoteTemplate(sheet.templateId)
+      // 대표 품목을 지운 장은 템플릿 이름 대신 남은 첫 품목으로 부른다(지운 칠판이 제목에 남지 않게).
+      if (sheet.mainRemoved) {
+        const first = (sheet.quote.lineItems ?? []).find(
+          (item) => item.lineStatus !== "informational" && item.itemType !== "note_only"
+        )
+        return first ? `${first.itemName} ${first.quantity ?? 1}${first.quantityUnit ?? ""}` : template.label
+      }
       return `${template.label} ${getMainQuantity(sheet)}${quantityUnitOf(sheet.templateId)}`
     })
     .join(" + ")
@@ -942,6 +1021,8 @@ export default function QuickQuoteComposer({
   onDeleteTemplate,
   displaySettings,
   prefill = null,
+  distributorQuote,
+  loadCustomerUnits,
 }: QuickQuoteComposerProps) {
   const today = getTodayDateValue()
   const isPortalApi = apiBase === "/api/portal"
@@ -968,6 +1049,9 @@ export default function QuickQuoteComposer({
   const [showAllRecent, setShowAllRecent] = useState(false)
   const [showAllTemplates, setShowAllTemplates] = useState(false)
   const [toolsExpanded, setToolsExpanded] = useState(false)
+  // 품목 카탈로그에서 방금 넣은 항목 — 잠깐 초록 체크로 바뀌어 "들어갔다"를 알려준다.
+  const [justAddedId, setJustAddedId] = useState<string | null>(null)
+  const justAddedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [deletingTemplateId, setDeletingTemplateId] = useState<string | null>(null)
   const [templateDeleteError, setTemplateDeleteError] = useState<string | null>(null)
   // 최근 견적 복제 직후 안내(고객만 비웠음 + 옛 단가 되돌리기)
@@ -986,6 +1070,10 @@ export default function QuickQuoteComposer({
   const browserDraftActive = useRef(false)
   const [linkCopied, setLinkCopied] = useState(false)
   const [saveToast, setSaveToast] = useState<string | null>(null)
+  // HW 견적 저장 시 총판 견적서 초안을 같이 만들지(주입됐을 때만 의미가 있다).
+  const [distributorEnabled, setDistributorEnabled] = useState(true)
+  // 매칭된 고객의 승인 오더 누적 수량(품목 코드별) — 구간가 추천용.
+  const [customerUnits, setCustomerUnits] = useState<{ customerId: string; units: Record<string, number> } | null>(null)
   const [errorToast, setErrorToast] = useState<ErrorToastState | null>(null)
   // 공급자 담당자 override(제품군별). 비우면 공급자 블록 기본값(SW=클래스인 매니저, HW=퀴드러닝 담당자).
   const [managers, setManagers] = useState<Record<QuoteProductLine, ManagerOverride>>({
@@ -1113,6 +1201,25 @@ export default function QuickQuoteComposer({
     (customerMode === "existing" ? selectedCustomer?.name ?? "" : recipientInput.trim())
   const customerReady = Boolean(initialDraft ||
     (customerMode === "existing" ? selectedCustomer : recipientInput.trim()))
+  // 누적 대수 넛지는 등록 고객과 정확히 매칭됐을 때만(새 고객·부분 일치에는 보이지 않는다).
+  const matchedCustomerId = customerMode === "existing" && selectedCustomer ? selectedCustomerId : ""
+
+  useEffect(() => {
+    if (!open || !loadCustomerUnits || !matchedCustomerId) return
+    if (customerUnits?.customerId === matchedCustomerId) return
+    let cancelled = false
+    loadCustomerUnits(matchedCustomerId)
+      .then((units) => {
+        if (!cancelled) setCustomerUnits({ customerId: matchedCustomerId, units })
+      })
+      .catch(() => {
+        // 추천은 보조 기능 — 실패하면 조용히 넘어간다(견적 작성은 그대로).
+        if (!cancelled) setCustomerUnits({ customerId: matchedCustomerId, units: {} })
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [customerUnits?.customerId, loadCustomerUnits, matchedCustomerId, open])
 
   /** 저장·화면에 쓰는 한 장의 최종 견적(수신·조건·메모·공급자를 합쳐 finalize). */
   function composeSheetQuote(sheet: ComposerSheet) {
@@ -1145,7 +1252,9 @@ export default function QuickQuoteComposer({
     const quote = composeSheetQuote(sheet)
     return { sheet, quote, totals: calculateStandardQuoteTotals(quote.lineItems, quote.vatIncluded ?? true, quote.quoteDiscount) }
   })
-  const isSplit = sheets.length > 1
+  // 품목이 없는 장은 틀만 화면에 남고 생성·저장·장 수 계산에서 빠진다.
+  const quotableSheets = composedSheets.filter((entry) => sheetHasQuotableItems(entry.sheet))
+  const isSplit = quotableSheets.length > 1
   const composerMode = quoteComposerMode(sheets[0]?.templateId ?? initialTemplateId)
   const hiddenTemplateIds = displaySettings?.preferences.hiddenTemplateIds ?? []
   const showRecentQuotes = displaySettings?.preferences.showRecentQuotes ?? true
@@ -1160,8 +1269,8 @@ export default function QuickQuoteComposer({
   const templateCount = visibleTeamTemplates.length + visibleTemplates.length
   const displayedTeamTemplates = showAllTemplates ? visibleTeamTemplates : visibleTeamTemplates.slice(0, QUOTE_WORKSPACE_PREVIEW_LIMIT)
   const displayedBaseTemplates = showAllTemplates ? visibleTemplates : visibleTemplates.slice(0, Math.max(0, QUOTE_WORKSPACE_PREVIEW_LIMIT - displayedTeamTemplates.length))
-  const grandTotalAll = composedSheets.reduce((sum, entry) => sum + entry.totals.grandTotalAmount, 0)
-  const lineItemCount = sheets.reduce((sum, sheet) => sum + (sheet.quote.lineItems?.length ?? 0), 0)
+  const grandTotalAll = quotableSheets.reduce((sum, entry) => sum + entry.totals.grandTotalAmount, 0)
+  const lineItemCount = quotableSheets.reduce((sum, entry) => sum + (entry.sheet.quote.lineItems?.length ?? 0), 0)
   const canCreateQuote = customerReady && lineItemCount > 0
   const hasNoExpiration = !shared.validUntil
   const validityPresetValue = hasNoExpiration
@@ -1171,7 +1280,7 @@ export default function QuickQuoteComposer({
   const preflightChecks = [
     { label: customerReady ? "수신" : "수신 비어 있음", ok: customerReady },
     { label: `품목 ${lineItemCount}개`, ok: lineItemCount > 0 },
-    { label: isSplit ? "견적서 2장" : "견적서 1장", ok: true },
+    { label: isSplit ? "견적서 2장" : quotableSheets.length === 0 ? "견적서 0장" : "견적서 1장", ok: quotableSheets.length > 0 },
     { label: hasNoExpiration ? "유효기한 없음" : "유효기한", ok: true },
   ]
   // 복제해 온 단가 중 지금 정가와 다른 행(옛 단가)
@@ -1325,6 +1434,8 @@ export default function QuickQuoteComposer({
     setPendingRechargeAmount(null)
     setUnderMinConfirmed(false)
     setPendingSubmitAction(null)
+    setDistributorEnabled(true)
+    setCustomerUnits(null)
     setError(null)
   }, [hasPrefillTarget, initialDraft, initialPresetId, initialQuantity, initialTemplateId, open, prefill?.customerId, prefill?.customerName, prefill?.dealId, today])
 
@@ -1333,8 +1444,17 @@ export default function QuickQuoteComposer({
       if (errorToastTimerRef.current) {
         clearTimeout(errorToastTimerRef.current)
       }
+      if (justAddedTimerRef.current) {
+        clearTimeout(justAddedTimerRef.current)
+      }
     }
   }, [])
+
+  function flashCatalogAdded(id: string) {
+    if (justAddedTimerRef.current) clearTimeout(justAddedTimerRef.current)
+    setJustAddedId(id)
+    justAddedTimerRef.current = setTimeout(() => setJustAddedId(null), 900)
+  }
 
   // 딜/고객 프리필 — 목록 로드가 끝난 뒤 한 번만 고객·거래를 선택한다.
   // 자동은 '선택 제안'까지이며, 새 고객을 암묵 생성하지 않는다.
@@ -1416,7 +1536,7 @@ export default function QuickQuoteComposer({
     } = {}
   ): ComposerSheet {
     const optionSelections = next.optionSelections ?? sheet.optionSelections
-    return {
+    return stripRemovedMain({
       ...sheet,
       optionSelections,
       quote: buildConfigurableStandardQuoteDetails({
@@ -1430,7 +1550,7 @@ export default function QuickQuoteComposer({
         optionSelections,
         baseQuantity: next.baseQuantity ?? getMainQuantity(sheet),
       }),
-    }
+    })
   }
 
   function withLineItems(sheet: ComposerSheet, lineItems: PartnerQuoteLineItemInput[]): ComposerSheet {
@@ -1569,8 +1689,13 @@ export default function QuickQuoteComposer({
       const items = sheet.quote.lineItems ?? []
       const target = items[lineIndex]
       if (!target) return sheet
-      // 대표 품목을 지우면 그 공급자 견적서 한 장이 통째로 빠진다.
-      if (target.optionGroupId === "main_product") return null
+      // 대표 품목을 지워도 장(틀)은 남기고 그 행만 뺀다. 품목이 하나도 안 남으면 생성 단계에서 건너뛴다.
+      if (target.optionGroupId === "main_product") {
+        return withLineItems(
+          { ...sheet, mainRemoved: true },
+          renumberQuoteLines(items.filter((_, index) => index !== lineIndex))
+        )
+      }
       if (target.isUserAdded === true) {
         // finalize 는 기존 lineNumber 를 존중하므로 삭제 후 번호를 다시 매긴다(번호 구멍 방지).
         return withLineItems(sheet, renumberQuoteLines(items.filter((_, index) => index !== lineIndex)))
@@ -1601,7 +1726,11 @@ export default function QuickQuoteComposer({
       item.id !== "wall_mount" &&
       (item.id === "bundle_86_t1_wall" ? isBundleSheet(sheet) : !(item.id === "board_86" && isBundleSheet(sheet)))
     if (isMainOfSheet) {
-      updateSheet(line, (current) => rebuildSheet(current, { baseQuantity: getMainQuantity(current) + 1 }))
+      updateSheet(line, (current) =>
+        current.mainRemoved
+          ? rebuildSheet({ ...current, mainRemoved: false }, { baseQuantity: 1 })
+          : rebuildSheet(current, { baseQuantity: getMainQuantity(current) + 1 })
+      )
       return
     }
 
@@ -1708,7 +1837,9 @@ export default function QuickQuoteComposer({
       templateId
     )
     setDiscountDrafts({})
-    setSheets([{ line: sheetLineOf(templateId), templateId, optionSelections, quote }])
+    // 대표 품목을 지운 채 저장된 견적이면 그 상태를 이어받는다 — 옵션을 바꿔도 대표 행이 되살아나지 않게.
+    const mainRemoved = inferMainRemoved(quote, templateId)
+    setSheets([{ line: sheetLineOf(templateId), templateId, optionSelections, quote, mainRemoved }])
     const validityDays = daysBetween(details.issuedAt, details.validUntil)
     const automaticNotes = readAutomaticQuoteNotes(optionSelections)
     setShared((current) => ({
@@ -2090,7 +2221,7 @@ export default function QuickQuoteComposer({
   async function executeSubmit(action: CreateAction) {
     if (submittingAction) return
 
-    const targets = composedSheets.filter((entry) => (entry.sheet.quote.lineItems?.length ?? 0) > 0)
+    const targets = quotableSheets
     if (targets.length === 0) return
 
     setSubmittingAction(action)
@@ -2102,6 +2233,7 @@ export default function QuickQuoteComposer({
     const savedLines: QuoteProductLine[] = []
     const links: ShareLink[] = []
     let customerName = ""
+    let distributorNotice: string | null = null
 
     try {
       const { customer, created: customerCreated } = await resolveCustomer()
@@ -2218,6 +2350,27 @@ export default function QuickQuoteComposer({
           }
         }
 
+        // 총판 견적서 초안 — 고객 견적이 저장된 뒤에만, 실패해도 고객 견적은 되돌리지 않는다.
+        if (distributorQuote && distributorEnabled && sheet.line === "hardware") {
+          const distributorLines = buildDistributorLinesFromQuote(preparedQuote.lineItems, { rules: distributorQuote.rules })
+          const { missingPriceCount, includedCount } = computeDistributorTotals(distributorLines, true)
+          if (includedCount > 0) {
+            try {
+              await distributorQuote.onSave({ quoteDocumentId: payload.document.id, lines: distributorLines })
+              distributorNotice =
+                missingPriceCount > 0
+                  ? `총판 견적서 초안 생성 · 원가 빈 품목 ${missingPriceCount}개`
+                  : "총판 견적서 초안 생성"
+            } catch (distributorIssue) {
+              const reason = distributorIssue instanceof Error ? distributorIssue.message : "알 수 없는 오류"
+              showErrorToast(
+                `견적서 ${payload.document.quote_number}는 저장했지만 총판 견적서 초안을 만들지 못했습니다: ${reason} — 견적 상세 › 총판 정산에서 다시 저장하세요.`,
+                "총판 견적서"
+              )
+            }
+          }
+        }
+
         await onCreated({
           action,
           templateId: sheet.templateId,
@@ -2247,7 +2400,8 @@ export default function QuickQuoteComposer({
 
       if (action === "save") {
         // 임시저장 → 토스트 표시, 모달 유지
-        setSaveToast(targets.length > 1 ? `견적서 ${targets.length}장 임시 저장 완료` : "임시 저장 완료")
+        const savedLabel = targets.length > 1 ? `견적서 ${targets.length}장 임시 저장 완료` : "임시 저장 완료"
+        setSaveToast(distributorNotice ? `${savedLabel} · ${distributorNotice}` : savedLabel)
         setTimeout(() => setSaveToast(null), 2000)
         return
       }
@@ -2278,7 +2432,7 @@ export default function QuickQuoteComposer({
 
   async function handleSaveTemplate() {
     const name = templateDraftName?.trim()
-    const entry = composedSheets[0]
+    const entry = quotableSheets[0]
     if (!onSaveTemplate || !name || !entry || isSplit) return
     setTemplateSaveState({ status: "saving" })
     try {
@@ -2597,8 +2751,8 @@ export default function QuickQuoteComposer({
         {canRemoveLine(sheet, line) ? (
           <button
             type="button"
-            aria-label={isMain ? "이 견적서 장 삭제" : `${line.itemName} 행 삭제`}
-            title={isMain ? "대표 품목을 지우면 이 견적서 한 장이 빠집니다" : "행 삭제"}
+            aria-label={`${line.itemName} 행 삭제`}
+            title={isMain ? "대표 품목 행만 지웁니다 — 견적서 틀은 남고, 품목이 없으면 생성되지 않습니다" : "행 삭제"}
             onClick={() => removeLine(sheet.line, lineIndex)}
             className={`flex h-6 w-6 items-center justify-center rounded-[4px] text-[#78736D] transition-opacity hover:bg-[#F0F0EC] hover:text-[#111110] ${
               line.optionGroupId === "installation_mode" || isCharge ? "" : "opacity-0 focus-visible:opacity-100 group-hover:opacity-100"
@@ -2751,6 +2905,8 @@ export default function QuickQuoteComposer({
           ))}
         </div>
 
+        {sheet.line === "hardware" && renderTierNudges(sheet, quote)}
+
         {/* 견적 할인 — 견적서 합계에 소계·할인·공급가액 줄로 찍힌다. */}
         {renderDiscountEditor(sheet, totals)}
 
@@ -2828,7 +2984,7 @@ export default function QuickQuoteComposer({
                     aria-label="새 거래 제목"
                     value={newDealTitle}
                     onChange={(event) => setNewDealTitle(event.target.value)}
-                    placeholder={`비우면 "${buildDefaultDealTitle(sheets, activeCustomerName || null)}"`}
+                    placeholder={`비우면 "${buildDefaultDealTitle(quotableSheets.map((entry) => entry.sheet), activeCustomerName || null)}"`}
                     className={`${EDITABLE_CLASS} min-w-[180px] flex-1 text-[11.5px] text-[#615D59]`}
                   />
                 )}
@@ -3007,6 +3163,11 @@ export default function QuickQuoteComposer({
                 <span />
               </div>
               {(sheet.quote.lineItems ?? []).map((line, lineIndex) => renderLineRow(sheet, line, lineIndex))}
+              {!sheetHasQuotableItems(sheet) && (
+                <p className="border-b border-[#F0F0EC] py-3 text-center text-[12px] text-[#78736D]">
+                  품목이 없어 이 견적서는 생성되지 않습니다. 왼쪽 품목을 눌러 다시 추가하세요.
+                </p>
+              )}
 
               <div className="flex flex-wrap items-center gap-2 border-b border-[#F0F0EC] py-2">
                 <button
@@ -3115,9 +3276,201 @@ export default function QuickQuoteComposer({
           </div>),
           }}
         />
+        {distributorQuote && sheet.line === "hardware" && sheetHasQuotableItems(sheet) && renderDistributorPanel(quote)}
       </section>
     )
   }
+
+  /** 이미 산 적 있는 고객 — 누적 대수 구간가 추천. 적용은 작성자가 누른다(자동 변경 없음). */
+  function renderTierNudges(sheet: ComposerSheet, quote: PartnerQuoteDetailsInput) {
+    if (!matchedCustomerId || customerUnits?.customerId !== matchedCustomerId) return null
+    const nudges = (quote.lineItems ?? [])
+      .map((line, lineIndex) => ({ lineIndex, nudge: buildCumulativeTierNudge(line, customerUnits.units) }))
+      .filter((entry): entry is { lineIndex: number; nudge: CumulativeTierNudge } => entry.nudge != null)
+    if (nudges.length === 0) return null
+    return (
+      <div role="note" aria-label="누적 구매 구간가 추천" className="grid gap-1 rounded-[8px] border border-[#D9E7DF] bg-[#F3F9F5] px-3 py-2 text-[12px]">
+        {nudges.map(({ lineIndex, nudge }) => (
+          <div key={`${nudge.itemCode}-${lineIndex}`} className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span className="text-[#31302E]">
+              <b>{activeCustomerName}</b> 누적 {nudge.itemName} {nudge.priorQuantity}대 + 이번 {nudge.currentQuantity}대 ={" "}
+              <b>{nudge.cumulativeQuantity}대</b> · {nudge.tierLabel} 시장가{" "}
+              <b className="tabular-nums">{formatStandardQuoteCurrency(nudge.recommendedUnitPrice)}원</b>
+              <span className="text-[#78736D]"> (지금 {formatStandardQuoteCurrency(nudge.currentUnitPrice)}원)</span>
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                setActivePick(null)
+                updateLine(sheet.line, lineIndex, { unitPrice: nudge.recommendedUnitPrice })
+              }}
+              className="h-6 rounded-full border border-[#084734] px-2.5 text-[11.5px] font-semibold text-[#084734] transition-[background-color,transform] hover:bg-[#ECFDF5] active:scale-95 motion-reduce:transform-none"
+            >
+              추천가 적용
+            </button>
+          </div>
+        ))}
+      </div>
+    )
+  }
+
+  /** 총판(퀴드러닝)용 견적서 미리 계산 — 작성자만 보는 편집 도구(종이·공유 링크에는 찍히지 않는다). */
+  function renderDistributorPanel(quote: PartnerQuoteDetailsInput) {
+    if (!distributorQuote) return null
+    const priceSource = distributorQuote.priceSource
+    const lines = buildDistributorLinesFromQuote(quote.lineItems, { rules: distributorQuote.rules })
+    const included = lines.filter((line) => line.included)
+    const totals = computeDistributorTotals(lines, true)
+    const customerSum = included.reduce(
+      (sum, line) => sum + (line.customerUnitPrice == null ? 0 : line.customerUnitPrice * line.quantity),
+      0
+    )
+    const pricedCustomerSum = included.reduce(
+      (sum, line) =>
+        line.unitPrice == null || line.customerUnitPrice == null ? sum : sum + line.customerUnitPrice * line.quantity,
+      0
+    )
+    return (
+      <div role="region" aria-label="총판 견적서" className="grid gap-2 rounded-[8px] border border-[#E3E0DB] bg-white px-3 py-2.5 text-[12px]">
+        <label className="flex cursor-pointer flex-wrap items-center gap-x-2 gap-y-0.5">
+          <input
+            type="checkbox"
+            checked={distributorEnabled}
+            onChange={(event) => setDistributorEnabled(event.target.checked)}
+            className="h-3.5 w-3.5 accent-[#084734]"
+          />
+          <span className="font-semibold text-[#111110]">총판 견적서 같이 만들기</span>
+          <span className="text-[11px] text-[#78736D]">
+            {distributorQuote.distributorLabel} · 공급가 VAT 포함 · 저장 시 발행 전 초안만 만들고, 발송은 고객 동의 때
+          </span>
+        </label>
+        {distributorEnabled && priceSource && (
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11.5px] text-[#615D59]">
+            <span>공급가 기준</span>
+            {priceSource.options && priceSource.options.length > 1 && priceSource.onSelect ? (
+              <select
+                aria-label="공급가 원가 템플릿"
+                value={priceSource.selectedId ?? ""}
+                onChange={(event) => priceSource.onSelect?.(event.target.value)}
+                className={`${PAPER_SELECT_CLASS} border-[#E3E0DB]`}
+              >
+                {priceSource.options.map((option) => (
+                  <option key={option.id} value={option.id}>{option.label}</option>
+                ))}
+              </select>
+            ) : (
+              <b className="font-semibold text-[#31302E]">{priceSource.label}</b>
+            )}
+            {priceSource.seedAction && (
+              <button
+                type="button"
+                disabled={priceSource.seedAction.busy}
+                onClick={priceSource.seedAction.onClick}
+                className="text-[#084734] underline underline-offset-[3px] disabled:opacity-50"
+              >
+                {priceSource.seedAction.busy ? "저장 중…" : priceSource.seedAction.label}
+              </button>
+            )}
+          </div>
+        )}
+        {distributorEnabled && (
+          included.length === 0 ? (
+            <p className="text-[11.5px] text-[#78736D]">총판에게 청구할 하드웨어 품목이 없습니다.</p>
+          ) : (
+            <>
+              <div role="table" aria-label="총판 공급가" className="grid gap-0.5">
+                <div role="row" className="grid grid-cols-[minmax(0,1fr)_44px_88px_88px_88px] gap-2 border-b border-[#F0F0EC] pb-1 text-[11px] text-[#78736D]">
+                  <span role="columnheader">품목</span>
+                  <span role="columnheader" className="text-right">수량</span>
+                  <span role="columnheader" className="text-right">고객 단가</span>
+                  <span role="columnheader" className="text-right">공급 단가</span>
+                  <span role="columnheader" className="text-right">차액/대</span>
+                </div>
+                {included.map((line) => (
+                  <div key={`${line.sourceLineNumber}-${line.itemCode ?? line.itemName}`} role="row" className="grid grid-cols-[minmax(0,1fr)_44px_88px_88px_88px] gap-2 tabular-nums">
+                    <span role="cell" className="truncate">{line.itemName}</span>
+                    <span role="cell" className="text-right">{line.quantity}{line.quantityUnit ?? ""}</span>
+                    <span role="cell" className="text-right text-[#78736D]">{formatStandardQuoteCurrency(line.customerUnitPrice ?? undefined)}</span>
+                    <span role="cell" className={`text-right ${line.unitPrice == null ? "text-[#B85C33]" : "font-semibold"}`}>
+                      {line.unitPrice == null ? "원가 없음" : formatStandardQuoteCurrency(line.unitPrice)}
+                    </span>
+                    <span role="cell" className="text-right text-[#615D59]">
+                      {line.unitPrice == null || line.customerUnitPrice == null
+                        ? "–"
+                        : formatStandardQuoteCurrency(line.customerUnitPrice - line.unitPrice)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <p className="flex flex-wrap justify-end gap-x-4 text-[12px]">
+                <span className="text-[#78736D]">고객가 합계 {formatStandardQuoteCurrency(customerSum)}원</span>
+                <span className="font-semibold text-[#111110]">총판 공급가 합계 {formatStandardQuoteCurrency(totals.totalAmount)}원</span>
+                <span className="text-[#615D59]">차액 {formatStandardQuoteCurrency(pricedCustomerSum - totals.totalAmount)}원</span>
+              </p>
+              {totals.missingPriceCount > 0 && (
+                <p className="text-[11.5px] text-[#B85C33]">
+                  정책표에 없는 품목 {totals.missingPriceCount}개는 원가가 비어 있습니다 — 저장 후 견적 상세 › 총판 정산에서 채워야 발행됩니다.
+                </p>
+              )}
+            </>
+          )
+        )}
+      </div>
+    )
+  }
+
+  // HW·HW+SW 믹스 견적은 품목을 골라 담는 일이 주 작업이라 카탈로그를 레일 맨 위로 올린다.
+  const catalogFirst = composerMode === "hardware" || isSplit
+  const catalogSection = (
+                <section aria-label="품목 카탈로그" className={catalogFirst ? "" : "border-t border-[#E3E0DB] pt-3.5"}>
+                  <p className={RAIL_HEADING_CLASS}>품목 · 눌러서 추가</p>
+                  {quickChargeSheet && quoteChargeOptions.map(([kind, option]) => (
+                    <button
+                      key={kind}
+                      type="button"
+                      onClick={() => addQuoteCharge(quickChargeSheet.line, kind)}
+                      aria-label={`${kind === "custom" ? "직접 입력 항목" : option.label} 추가`}
+                      className={`${RAIL_BUTTON_CLASS} items-center text-[12.5px] font-semibold`}
+                    >
+                      <Plus className="h-3.5 w-3.5 text-[#084734]" aria-hidden="true" />
+                      {option.label}
+                    </button>
+                  ))}
+                  {visibleCatalogItems.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      title={`${item.label} · ${item.description}`}
+                      onClick={() => {
+                        handleCatalogAdd(item)
+                        flashCatalogAdded(item.id)
+                      }}
+                      className={`group ${RAIL_BUTTON_CLASS} items-center py-1.5 ${justAddedId === item.id ? "bg-[#ECFDF5] hover:bg-[#ECFDF5] shadow-[inset_2px_0_0_#084734]" : ""}`}
+                    >
+                      <span className="min-w-0 flex-1">
+                        <span className="text-[12.5px] font-semibold">{item.label}</span>{" "}
+                        <span className="text-[10.5px] text-[#78736D]">
+                          {item.templateId === "online_suite" ? "HW+SW" : isSoftwareQuoteTemplate(item.templateId) ? "SW" : "HW"}
+                          {item.badge ? ` · ${item.badge}` : ""}
+                        </span>
+                        <span className="block text-[11.5px] tabular-nums text-[#78736D]">
+                          {formatQuickAddPrice(item.price)}
+                        </span>
+                      </span>
+                      <span
+                        aria-hidden="true"
+                        className={`flex h-6 w-6 items-center justify-center rounded-[6px] border transition-[background-color,border-color,color,transform] duration-150 ease-out group-hover:scale-110 group-active:scale-90 motion-reduce:transform-none ${
+                          justAddedId === item.id
+                            ? "border-[#084734] bg-[#084734] text-white"
+                            : "border-[#D6D3CE] text-[#615D59] group-hover:border-[#084734] group-hover:text-[#084734] group-active:bg-[#084734] group-active:text-white"
+                        }`}
+                      >
+                        {justAddedId === item.id ? <Check className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
+                      </span>
+                    </button>
+                  ))}
+                </section>
+  )
 
   const saveDisabled = Boolean(submittingAction) || lineItemCount === 0 || (loadingOptions && customerReady && !initialDraft)
   const submitDisabled = Boolean(submittingAction) || (loadingOptions && !initialDraft) || !canCreateQuote
@@ -3384,9 +3737,10 @@ export default function QuickQuoteComposer({
                 <span>최근 견적·템플릿·품목</span><span>{toolsExpanded ? "접기" : "펼치기"}</span>
               </button>
               <div id="quote-composer-tools" className={toolsExpanded ? "contents" : "hidden lg:contents"}>
+                {catalogFirst && catalogSection}
                 {displaySettings && <QuoteDisplaySettings {...displaySettings} />}
                 {!initialDraft && showRecentQuotes && recentQuotes.length > 0 && (
-                  <section aria-label="최근 견적서">
+                  <section aria-label="최근 견적서" className={catalogFirst ? "border-t border-[#E3E0DB] pt-3.5" : undefined}>
                     <p className={RAIL_HEADING_CLASS}>
                       최근 견적서 <span className="font-normal">· 고객만 바꿔 재사용</span>
                     </p>
@@ -3491,11 +3845,11 @@ export default function QuickQuoteComposer({
                       {templateDraftName === null ? (
                         <button
                           type="button"
-                          disabled={isSplit || sheets.length === 0}
+                          disabled={isSplit || quotableSheets.length === 0}
                           title={isSplit ? "템플릿은 공급자 1곳 기준입니다 — 견적서가 1장일 때 저장하세요" : undefined}
                           onClick={() => {
                             setTemplateSaveState(null)
-                            setTemplateDraftName(sheets[0] ? buildDefaultDealTitle([sheets[0]]) : "")
+                            setTemplateDraftName(quotableSheets[0] ? buildDefaultDealTitle([quotableSheets[0].sheet]) : "")
                           }}
                           className="w-fit text-left text-[#31302E] underline decoration-[#CFCBC5] underline-offset-[3px] hover:decoration-[#084734] disabled:cursor-not-allowed disabled:text-[#A39E98]"
                         >
@@ -3552,47 +3906,7 @@ export default function QuickQuoteComposer({
                   )}
                 </div>
 
-                <div className="border-t border-[#E3E0DB] pt-3.5">
-                  <p className={RAIL_HEADING_CLASS}>품목 · 눌러서 추가</p>
-                  {quickChargeSheet && quoteChargeOptions.map(([kind, option]) => (
-                    <button
-                      key={kind}
-                      type="button"
-                      onClick={() => addQuoteCharge(quickChargeSheet.line, kind)}
-                      aria-label={`${kind === "custom" ? "직접 입력 항목" : option.label} 추가`}
-                      className={`${RAIL_BUTTON_CLASS} items-center text-[12.5px] font-semibold`}
-                    >
-                      <Plus className="h-3.5 w-3.5 text-[#084734]" aria-hidden="true" />
-                      {option.label}
-                    </button>
-                  ))}
-                  {visibleCatalogItems.map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      title={`${item.label} · ${item.description}`}
-                      onClick={() => handleCatalogAdd(item)}
-                      className={`group ${RAIL_BUTTON_CLASS} items-center py-1.5`}
-                    >
-                      <span className="min-w-0 flex-1">
-                        <span className="text-[12.5px] font-semibold">{item.label}</span>{" "}
-                        <span className="text-[10.5px] text-[#78736D]">
-                          {item.templateId === "online_suite" ? "HW+SW" : isSoftwareQuoteTemplate(item.templateId) ? "SW" : "HW"}
-                          {item.badge ? ` · ${item.badge}` : ""}
-                        </span>
-                        <span className="block text-[11.5px] tabular-nums text-[#78736D]">
-                          {formatQuickAddPrice(item.price)}
-                        </span>
-                      </span>
-                      <span
-                        aria-hidden="true"
-                        className="flex h-6 w-6 items-center justify-center rounded-[6px] border border-[#D6D3CE] text-[#615D59] transition-colors group-hover:border-[#084734] group-hover:text-[#084734]"
-                      >
-                        <Plus className="h-3.5 w-3.5" />
-                      </span>
-                    </button>
-                  ))}
-                </div>
+                {!catalogFirst && catalogSection}
               </div>
             </nav>
 

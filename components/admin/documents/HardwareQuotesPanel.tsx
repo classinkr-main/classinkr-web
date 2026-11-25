@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   AlertCircle,
   Check,
@@ -17,12 +17,18 @@ import { useCrmOwners } from "@/components/admin/crm/useCrmOwners"
 import { useQuoteWorkspacePreferences } from "@/components/admin/quote-templates/useQuoteWorkspacePreferences"
 import QuickQuoteComposer, {
   type QuickQuoteCreatedPayload,
+  type QuickQuoteDistributorQuoteOption,
   type QuickQuoteDraft,
   type QuickQuoteManagerOption,
   type QuickQuotePrefill,
   type QuickQuoteTeamTemplate,
 } from "@/components/portal/quotes/QuickQuoteComposer"
 import { adminFetchJson } from "@/lib/admin-client"
+import {
+  DEFAULT_HARDWARE_DISTRIBUTOR,
+  FY2026_CHANNEL_SUPPLY_PRICE_RULES,
+  type DistributorPriceTemplate,
+} from "@/lib/distributor-settlements"
 import type { PartnerQuoteDetailsInput } from "@/lib/partners-types"
 import {
   quoteDetailsToTeamTemplateInput,
@@ -38,6 +44,7 @@ import {
   DEFAULT_HARDWARE_QUOTE_TEMPLATE_ID,
   isQuoteNoteLine,
   resolveQuoteProductLine,
+  STANDARD_QUOTE_SUPPLIER,
   type QuoteProductLine,
   type StandardQuoteTemplateId,
 } from "@/lib/standard-quote-template"
@@ -515,6 +522,102 @@ export default function HardwareQuotesPanel({
     })
     await loadTeamTemplates()
   }
+
+  // 총판 공급가 원천 — 어드민 원가 템플릿(총판 정산 화면에서 고친다)이 정본이다. 템플릿이 하나도 없을 때만
+  // 코드의 FY2026 정책표 값을 쓰고, 그 값을 템플릿으로 저장하는 버튼을 보여 준다(그 뒤로는 화면에서 고친다).
+  const [priceTemplates, setPriceTemplates] = useState<DistributorPriceTemplate[] | null>(null)
+  const [priceTemplateId, setPriceTemplateId] = useState<string | null>(null)
+  const [seedingPriceTemplate, setSeedingPriceTemplate] = useState(false)
+
+  async function loadPriceTemplates(preferId?: string) {
+    try {
+      const payload = await adminFetchJson<{ templates?: DistributorPriceTemplate[] }>("/api/admin/distributor-price-templates", {
+        cache: "no-store",
+      })
+      // 최근에 고친 템플릿을 기본으로 고른다.
+      const templates = [...(payload.templates ?? [])].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
+      setPriceTemplates(templates)
+      setPriceTemplateId((current) => {
+        const wanted = preferId ?? current
+        return wanted && templates.some((template) => template.id === wanted) ? wanted : templates[0]?.id ?? null
+      })
+    } catch {
+      // 원가 템플릿을 못 읽어도 정책표 기본값으로 계속 쓴다.
+      setPriceTemplates([])
+    }
+  }
+
+  useEffect(() => {
+    if (composerOpen) void loadPriceTemplates()
+  }, [composerOpen])
+
+  async function seedPriceTemplate() {
+    setSeedingPriceTemplate(true)
+    try {
+      const payload = await adminFetchJson<{ template?: DistributorPriceTemplate }>("/api/admin/distributor-price-templates", {
+        method: "POST",
+        body: JSON.stringify({
+          name: "FY2026 채널 공급가",
+          rules: FY2026_CHANNEL_SUPPLY_PRICE_RULES,
+          notes: "FY2026 채널 유통 가격 정책표 — ClassIn KR → 퀴드러닝 채널공급가(VAT 포함)",
+        }),
+      })
+      await loadPriceTemplates(payload.template?.id)
+    } catch (seedError) {
+      window.alert(seedError instanceof Error ? seedError.message : "원가 템플릿을 저장하지 못했습니다.")
+    } finally {
+      setSeedingPriceTemplate(false)
+    }
+  }
+
+  const selectedPriceTemplate = priceTemplates?.find((template) => template.id === priceTemplateId) ?? null
+
+  /**
+   * 고객 HW 견적 저장 때 총판(퀴드러닝)용 견적서 초안을 같이 만든다 — 기존 총판 정산 저장 API(C방식, 고객 동의 시 발행).
+   * 발행된 정산은 API 가 409 로 막는다(작성기가 오류 토스트로 알린다).
+   */
+  const distributorQuote = useMemo<QuickQuoteDistributorQuoteOption>(
+    () => ({
+      rules: selectedPriceTemplate?.rules ?? FY2026_CHANNEL_SUPPLY_PRICE_RULES,
+      distributorLabel: `${DEFAULT_HARDWARE_DISTRIBUTOR.distributorName} · 대표 ${STANDARD_QUOTE_SUPPLIER.representativeName} · 참조 ${DEFAULT_HARDWARE_DISTRIBUTOR.distributorContactName}`,
+      priceSource: {
+        label: selectedPriceTemplate ? `원가 템플릿 「${selectedPriceTemplate.name}」` : "FY2026 정책표(기본값)",
+        options: (priceTemplates ?? []).map((template) => ({ id: template.id, label: `원가 템플릿 「${template.name}」` })),
+        selectedId: priceTemplateId,
+        onSelect: setPriceTemplateId,
+        seedAction:
+          priceTemplates && priceTemplates.length === 0
+            ? { label: "정책표를 원가 템플릿으로 저장(이후 화면에서 수정)", busy: seedingPriceTemplate, onClick: () => void seedPriceTemplate() }
+            : undefined,
+      },
+      onSave: async ({ quoteDocumentId, lines }) => {
+        await adminFetchJson(`/api/admin/quotes/${quoteDocumentId}/distributor-settlement`, {
+          method: "PUT",
+          body: JSON.stringify({
+            ...DEFAULT_HARDWARE_DISTRIBUTOR,
+            fulfillmentMode: "C",
+            issueTrigger: "on_accept",
+            autoEmail: true,
+            priceTemplateId: selectedPriceTemplate?.id ?? null,
+            lines,
+            vatIncluded: true,
+            // notes 는 총판 견적서 특약사항으로 찍히므로 비워 둔다.
+            notes: null,
+          }),
+        })
+      },
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [priceTemplates, priceTemplateId, seedingPriceTemplate, selectedPriceTemplate]
+  )
+
+  const loadCustomerUnits = useCallback(async (customerId: string) => {
+    const payload = await adminFetchJson<{ units?: Record<string, number> }>(
+      `/api/admin/hardware/customer-units?customerId=${encodeURIComponent(customerId)}`,
+      { cache: "no-store" }
+    )
+    return payload.units ?? {}
+  }, [])
 
   async function handleDeleteTemplate(id: string) {
     await adminFetchJson(`${QUOTE_TEMPLATES_API}/${id}`, { method: "DELETE" })
@@ -1279,6 +1382,8 @@ export default function HardwareQuotesPanel({
         displaySettings={{ preferences, onChange: updatePreferences, storageError }}
         prefill={composerDraft ? null : prefill}
         initialDraft={composerDraft}
+        distributorQuote={distributorQuote}
+        loadCustomerUnits={loadCustomerUnits}
         onCreated={handleCreated}
       />
     </div>

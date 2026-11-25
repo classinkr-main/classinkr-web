@@ -68,6 +68,8 @@ Admin 관련 작업은 [Admin 지침 맵](./active/admin-guidance-map.md)에서 
   - 하드웨어 재고관리 프로세스 정의서(2026-10-27)와 현재 구현의 차이, 결정 대기 질문, 만드는 순서
 - [hardware-ops/distributor-settlement.md](./hardware-ops/distributor-settlement.md)
   - **하드웨어 C방식/H방식 총판 정산.** 총판용 견적서 발행(고객 동의·설치 완료·직접), 원가 미수금, 방식별 매출 원장 초안 시점
+- [active/distributor-quote-with-customer-quote-plan-2026-11-20.md](./active/distributor-quote-with-customer-quote-plan-2026-11-20.md)
+  - **고객 견적 작성 시 총판(퀴드러닝) 견적서 같이 만들기(구현 · 결정 확정).** FY2026 정책표 → 원가 템플릿 공급가, 작성기 총판 공급가 표·저장 시 정산 초안, 수신 대표 조혜리·참조 배철웅, 프로모션 증정 토글, 누적 대수 구간가 추천
 - [active/erp-blueprint-2026-06-22.md](./active/erp-blueprint-2026-06-22.md)
   - 어드민 → 지사 운영 OS(ERP) 청사진 & 실행 로드맵(Account 360 스파인·귀속·노션 캘린더 라이브 연동·거버넌스 결정)
 - [active/marketing-tab-dashboard-restructure-2026-09-14.md](./active/marketing-tab-dashboard-restructure-2026-09-14.md)
