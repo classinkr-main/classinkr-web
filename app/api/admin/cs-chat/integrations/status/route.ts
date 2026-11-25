@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server"
 
-import { CRM_STAFF_ADMIN_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
+import { CS_COPILOT_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
 import { INTERNAL_CS_BRIDGE_VERSION } from "@/lib/internal-cs-chat/bridge"
 import { getInternalCsGeminiModels } from "@/lib/internal-cs-chat/gemini"
 import { INTERNAL_CS_ASSET_MAX_BYTES } from "@/lib/storage/internal-cs-assets"
 
 export async function GET(req: NextRequest) {
-  const admin = await requireVerifiedAdminContext(req, CRM_STAFF_ADMIN_API_ROLES)
+  const admin = await requireVerifiedAdminContext(req, CS_COPILOT_API_ROLES)
   if (admin instanceof NextResponse) return admin
 
   const inboundConfigured = Boolean(

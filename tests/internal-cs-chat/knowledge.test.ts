@@ -34,17 +34,28 @@ describe("internal CS curated knowledge", () => {
     expect(result.recommendedTags).toContain("intent:hq_confirmation")
   })
 
-  it("surfaces SMS cost as a confirm-before-external conditional fact", () => {
-    const result = selectInternalCsKnowledge("엔터프라이즈 구독에 회원가입 문자 몇 건 포함돼?")
-    const sms = result.entries.find((entry) => entry.id === "messaging-sms-cost")
+  it("splits SMS cost (internal only) from the enterprise inclusion count (confirm before external)", () => {
+    const inclusion = selectInternalCsKnowledge("엔터프라이즈 구독에 회원가입 문자 몇 건 포함돼?")
+      .entries.find((entry) => entry.id === "messaging-sms-inclusion")
+    expect(inclusion).toMatchObject({ status: "conditional", externalUse: "confirmation_required" })
+    expect(inclusion?.summary).toContain("2,000건")
+    expect(inclusion?.summary).not.toContain("위안")
 
-    expect(sms).toMatchObject({
-      status: "conditional",
-      externalUse: "confirmation_required",
-    })
-    expect(sms?.summary).toContain("0.4위안")
-    expect(sms?.summary).toContain("2,000건")
-    expect(result.internalContext).toContain("문자")
+    const cost = selectInternalCsKnowledge("회원가입 문자 발송 단가가 얼마야?").entries
+      .find((entry) => entry.id === "messaging-sms-cost")
+    expect(cost).toMatchObject({ externalUse: "internal_only", hideSummaryInFallback: true })
+    expect(cost?.summary).toContain("0.4위안")
+  })
+
+  it.each([
+    "칠판에 한글 문자가 깨져요",
+    "2000명 동시 수업 되나요?",
+    "엔터프라이즈 플랜 관리자 권한은?",
+    "비밀번호에 특수문자 포함해야 하나요?",
+  ])("does not pick an SMS entry for an unrelated question: %s", (question) => {
+    const ids = selectInternalCsKnowledge(question).entries.map((entry) => entry.id)
+    expect(ids).not.toContain("messaging-sms-cost")
+    expect(ids).not.toContain("messaging-sms-inclusion")
   })
 
   it("always injects source precedence and support tone", () => {

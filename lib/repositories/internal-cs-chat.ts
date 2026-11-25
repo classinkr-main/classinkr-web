@@ -2,6 +2,7 @@ import "server-only"
 
 import {
   createInternalCsAssetSignedUrls,
+  deleteInternalCsAsset,
   INTERNAL_CS_ASSETS_BUCKET,
   type InternalCsAssetMimeType,
 } from "@/lib/storage/internal-cs-assets"
@@ -413,6 +414,29 @@ export function buildInternalCsReviewPatch(input: ReviewInternalCsMessageInput) 
   }
 }
 
+// 목록 화면이 쓰는 칸만. customer_context(상담 원문 맥락)는 목록으로 내려보내지 않고 상세 조회에서만 준다.
+export const INTERNAL_CS_CONVERSATION_LIST_COLUMNS = [
+  "id",
+  "title",
+  "status",
+  "priority",
+  "assignee_user_id",
+  "assignee_name",
+  "tags",
+  "created_by",
+  "updated_by",
+  "resolved_at",
+  "resolved_by",
+  "archived_at",
+  "archived_by",
+  "archive_reason",
+  "last_message_at",
+  "created_at",
+  "updated_at",
+].join(", ")
+
+export type InternalCsConversationListRow = Omit<InternalCsConversationRow, "customer_context">
+
 export async function listInternalCsConversations(options: {
   status?: InternalCsStatus | "all"
   assigneeUserId?: string
@@ -425,7 +449,7 @@ export async function listInternalCsConversations(options: {
   const supabase = createSupabaseAdminClient()
   let query = supabase
     .from("internal_cs_conversations")
-    .select("*", { count: "exact" })
+    .select(INTERNAL_CS_CONVERSATION_LIST_COLUMNS, { count: "exact" })
     .order("last_message_at", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false })
     .range(offset, offset + limit - 1)
@@ -437,7 +461,7 @@ export async function listInternalCsConversations(options: {
 
   const { data, error, count } = await query
   if (error) throw databaseError("failed to list conversations", error)
-  const rows = (data ?? []) as InternalCsConversationRow[]
+  const rows = (data ?? []) as unknown as InternalCsConversationListRow[]
   return {
     conversations: rows,
     pagination: {
@@ -450,9 +474,14 @@ export async function listInternalCsConversations(options: {
   }
 }
 
+/** 보관 기간 정리·관리자 삭제로 원본 객체가 지워진 첨부인지(metadata.storageDeletedAt). 마이그레이션 없이 표시한다. */
+export function isInternalCsAssetStorageDeleted(row: Pick<InternalCsAssetRow, "metadata">) {
+  return typeof row.metadata?.storageDeletedAt === "string"
+}
+
 async function assetsWithSignedUrls(rows: InternalCsAssetRow[]) {
   const signedByPath = await createInternalCsAssetSignedUrls(
-    rows.map((row) => row.storage_path)
+    rows.filter((row) => !isInternalCsAssetStorageDeleted(row)).map((row) => row.storage_path)
   )
   return rows.map((row) => ({
     ...row,
@@ -571,12 +600,49 @@ export async function createInternalCsAsset(input: CreateInternalCsAssetInput) {
   if (error) {
     if (error.code === "23505") {
       const existing = await findInternalCsAssetByHash(input.conversationId, input.sha256)
+      if (existing && isInternalCsAssetStorageDeleted(existing)) {
+        // 지운 첨부와 같은 이미지를 다시 올렸다. 방금 올린 원본 객체가 고아가 되지 않도록 지운 행을 되살린다.
+        const revived = await reviveInternalCsAsset(existing.id, insert)
+        if (revived) return revived
+        throw databaseError("failed to revive deleted asset", error)
+      }
       if (existing) return existing
     }
     throw databaseError("failed to create asset", error)
   }
   const [asset] = await assetsWithSignedUrls([data as InternalCsAssetRow])
   return asset
+}
+
+/** 객체가 지워진 행을 새 업로드로 되살린다: 파일명·메타데이터·분석 칸을 처음 상태로 돌리고 보관 기간도 새로 센다. */
+async function reviveInternalCsAsset(assetId: string, insert: ReturnType<typeof buildInternalCsAssetInsert>) {
+  const supabase = createSupabaseAdminClient()
+  const { data, error } = await supabase
+    .from("internal_cs_assets")
+    .update({
+      storage_path: insert.storage_path,
+      original_file_name: insert.original_file_name,
+      mime_type: insert.mime_type,
+      size_bytes: insert.size_bytes,
+      status: "uploaded",
+      analysis_summary: null,
+      analysis_payload: {},
+      model_provider: null,
+      model_name: null,
+      error_message: null,
+      analyzed_at: null,
+      review_state: "pending",
+      metadata: insert.metadata,
+      created_at: new Date().toISOString(),
+      updated_by: insert.updated_by,
+    })
+    .eq("id", assetId)
+    .select("*")
+    .maybeSingle()
+  if (error) throw databaseError("failed to revive deleted asset", error)
+  if (!data) return null
+  const [asset] = await assetsWithSignedUrls([data as InternalCsAssetRow])
+  return asset ?? null
 }
 
 export async function updateInternalCsAssetAnalysis(input: UpdateInternalCsAssetAnalysisInput) {
@@ -608,6 +674,59 @@ export async function reviewInternalCsAsset(input: ReviewInternalCsAssetInput) {
   if (!data) return null
   const [asset] = await assetsWithSignedUrls([data as InternalCsAssetRow])
   return asset ?? null
+}
+
+/**
+ * 첨부 원본 객체를 지우고 행에는 지운 시각만 남긴다. 파일 이름·OCR 추출문(식별정보가 섞이기 쉬운 칸)도 비운다.
+ * 분석 요약·검토 이력은 남겨 둔다. 이미 지운 첨부는 건너뛴다(null).
+ */
+export async function purgeInternalCsAssetObject(input: {
+  assetId: string
+  conversationId?: string
+  actor: string
+  reason: "retention" | "admin_delete"
+  now?: Date
+}) {
+  const asset = await getInternalCsAsset(input.assetId, input.conversationId)
+  if (!asset || isInternalCsAssetStorageDeleted(asset)) return null
+  const removed = await deleteInternalCsAsset(asset.storage_path)
+  if (!removed) throw new Error("Failed to delete the asset object from storage.")
+
+  const { extractedText: _extractedText, ...payloadWithoutText } = (asset.analysis_payload ?? {}) as Record<string, unknown>
+  void _extractedText
+  const supabase = createSupabaseAdminClient()
+  const { data, error } = await supabase
+    .from("internal_cs_assets")
+    .update({
+      original_file_name: "deleted",
+      analysis_payload: payloadWithoutText,
+      metadata: {
+        ...(asset.metadata ?? {}),
+        storageDeletedAt: (input.now ?? new Date()).toISOString(),
+        storageDeletedReason: input.reason,
+        storageDeletedBy: input.actor,
+      },
+      updated_by: input.actor,
+    })
+    .eq("id", asset.id)
+    .select("*")
+    .maybeSingle()
+  if (error) throw databaseError("asset object deleted but row update failed", error)
+  return (data as InternalCsAssetRow | null) ?? null
+}
+
+/** 보관 기간이 지난(cutoff 이전 생성) 첨부 중 원본이 아직 남은 것. */
+export async function listInternalCsAssetsPastRetention(input: { cutoff: Date; limit?: number }) {
+  const supabase = createSupabaseAdminClient()
+  const { data, error } = await supabase
+    .from("internal_cs_assets")
+    .select("*")
+    .lt("created_at", input.cutoff.toISOString())
+    .is("metadata->storageDeletedAt", null)
+    .order("created_at")
+    .limit(clampInteger(input.limit, 100, 1, 500))
+  if (error) throw databaseError("failed to list assets past retention", error)
+  return ((data ?? []) as InternalCsAssetRow[]).filter((row) => !isInternalCsAssetStorageDeleted(row))
 }
 
 export async function listInternalCsIntegrationEvents(conversationId: string, limit = 100) {

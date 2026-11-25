@@ -17,3 +17,20 @@ import { redactPii } from "@/lib/chatbot/service"
 export function redactInternalCsText(value: string | null | undefined) {
   return redactPii(value ?? "")
 }
+
+/**
+ * 첨부 파일 이름은 고객 이름·전화번호가 들어 있는 경우가 많다("캡처_홍길동_010-….png").
+ * 저장·표시·외부 전달 전에 전화·이메일 같은 식별정보를 가리고, 확장자는 남긴다.
+ * (이름 자체는 기계가 알아볼 수 없으므로 저장하지 않으려면 호출 쪽에서 파일명을 대체해야 한다.)
+ */
+export function safeInternalCsFileName(value: string | null | undefined, maxLength = 120) {
+  const name = (value ?? "").trim()
+  if (!name) return "capture"
+  const dot = name.lastIndexOf(".")
+  const hasExt = dot > 0 && name.length - dot <= 6
+  const base = hasExt ? name.slice(0, dot) : name
+  const ext = hasExt ? name.slice(dot) : ""
+  // "_" 는 단어 문자라 "캡처_010-1234-5678" 처럼 붙은 번호를 경계로 알아보지 못한다 — 가리기 전에 공백으로 바꾼다.
+  const redacted = redactInternalCsText(base.replace(/_/g, " ")).replace(/[\u0000-\u001f\u007f/\\]/g, "").trim()
+  return `${(redacted || "capture").slice(0, Math.max(1, maxLength - ext.length))}${ext}`
+}
