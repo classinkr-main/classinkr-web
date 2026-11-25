@@ -207,9 +207,10 @@ describe("답 색인 함수 번들 추적", () => {
 
   // 라우트 키는 contains 매칭이라(앞뒤 고정이 없다) 키를 품은 더 긴 경로에도 걸린다. 그 라우트에는 답 색인 자료가
   // 더 실릴 뿐(약 22MB) 동작은 같다. 목록이 늘면 키를 좁히거나 여기 이유와 함께 더한다.
-  // 아래 둘은 앞쪽을 고정할 수 없어 남긴다(키를 `/route` 로 끝맺으면 webpack 꼴과 어긋난다).
+  // 아래 셋은 앞쪽을 고정할 수 없어 남긴다(키를 `/route` 로 끝맺으면 webpack 꼴과 어긋난다).
   const KNOWN_OVERMATCH = [
     "/api/admin/chatbot/recommended-questions/[id]", // "/api/admin/chatbot/recommended-questions" 키
+    "/api/admin/overview/cumulative", // "/admin/overview" 키 (Overview 누적 히어로 API)
     "/api/admin/overview/operations", // "/admin/overview" 키
   ]
 
