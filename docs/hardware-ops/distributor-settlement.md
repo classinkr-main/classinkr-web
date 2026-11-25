@@ -127,3 +127,9 @@
 - 화면: `components/admin/documents/DistributorSettlementSection.tsx`, `components/admin/documents/DistributorReceivablesPanel.tsx`
   (불러오기·원가 템플릿) + `DistributorReceivablesBoard.tsx`·`DistributorReceivablesParts.tsx`(보드)
 - 마이그레이션: [20261023_distributor_settlements.sql](../../supabase/migrations/20261023_distributor_settlements.sql)
+- 쿼드러닝 계정 잔액 보드(2026-11-23, 총판 미수금 탭 위쪽 · Overview 카드): 쿼드러닝은 건별 미수가 아니라 계정 잔액 하나
+  (청구 − 쿼드 이체 − 고객 카드)로 맞춘다. 계산은 저장소 밖 정산 대조 스크립트가 하고, 결과 스냅샷을
+  `scripts/upload-partner-settlement-snapshot.mjs`로 올린다. 모양·요약 `lib/partner-settlement.ts`, 저장소
+  `lib/repositories/partner-settlement-snapshot.ts`, API `app/api/admin/partner-settlement`(`?summary=1` = Overview),
+  화면 `components/admin/documents/partner-settlement/`, 마이그레이션
+  [20261123_partner_settlement_snapshots.sql](../../supabase/migrations/20261123_partner_settlement_snapshots.sql)

@@ -302,6 +302,15 @@ npm run check:db --  --strict
 
 2026-11-25 적용 확인: 서울 프로젝트에 기존 `chatbot_claude_labels` 마이그레이션만 적용했다. 두 테이블의 RLS와 anon 차단, 집계 함수의 service_role 실행 권한과 anon·authenticated 실행 거절, service_role의 두 테이블 INSERT 권한을 카탈로그에서 재확인했다. 제공자·라벨링·답 색인 모델 스위치와 기존 행은 변경하지 않았다.
 
+### 2026-11-23 총판 정산 스냅샷 — 서울 프로젝트 미적용
+
+[총판 정산](../hardware-ops/distributor-settlement.md) §7 의 쿼드러닝 계정 보드. 코드보다 먼저든 나중이든 된다(폴백이 있다).
+적용 뒤 스냅샷을 한 번 올린다: `node --env-file=.env.local scripts/upload-partner-settlement-snapshot.mjs <snapshot.json>`(운영 DB에 쓴다).
+
+| 파일 | 하는 일 | 미적용 시 | 확인 |
+| --- | --- | --- | --- |
+| `20261123_partner_settlement_snapshots.sql` | 총판마다 최신 정산 스냅샷 한 행 `partner_settlement_snapshots`(`partner` PK·`snapshot` jsonb·`generated_at`·`updated_by`·`updated_at` 트리거). RLS deny-all(정책 0, service_role 전용), 멱등 | 총판 미수금 탭 위 보드가 "아직 올라오지 않았다" 한 줄로 바뀌고 Overview 정산 잔액 카드가 그려지지 않는다. 견적별 총판 미수금은 그대로다 | `npm run check:db` 의 `partner_settlement_snapshots` 프로브(warning, 행 0이면 업로드 안내), 또는 `select to_regclass('public.partner_settlement_snapshots') is not null;` → `true` |
+
 ## 적용 보류 중인 마이그레이션
 
 `check:db`에 걸리지 않는(프로브가 없는) 파일이라도, 아래 파일은 **파일명 순서대로 일괄 적용하지 않는다.**

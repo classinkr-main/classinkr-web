@@ -215,6 +215,8 @@ export const SCHEMA_CONTRACT_MIGRATIONS = [
   // 챗봇 Claude 라벨 · 사용량(2026-11-12) — 없어도 코드는 돈다(라벨 건너뜀, 예산은 인스턴스 메모리 합계만).
   // CHATBOT_PROVIDER=claude 를 켜기 전에 적용한다(warning).
   "supabase/migrations/20261112_chatbot_claude_labels.sql",
+  // 총판 정산 스냅샷(2026-11-23) — 쿼드러닝 계정 잔액 보드·Overview 카드. RLS deny-all, 쓰기는 업로드 스크립트뿐.
+  "supabase/migrations/20261123_partner_settlement_snapshots.sql",
 ] as const
 
 export const SCHEMA_PROBES: SchemaProbe[] = [
@@ -1128,6 +1130,18 @@ export const SCHEMA_PROBES: SchemaProbe[] = [
     migration: "supabase/migrations/20261112_chatbot_claude_labels.sql",
     severity: "warning",
     impact: "chatbot_llm_usage 와 같다 — 예산 가드가 인스턴스 메모리 합계로만 돈다.",
+  },
+  {
+    kind: "table",
+    table: "partner_settlement_snapshots",
+    label: "총판 정산 스냅샷(쿼드러닝 계정 잔액)",
+    columns: ["partner", "snapshot", "generated_at", "updated_by", "updated_at"],
+    migration: "supabase/migrations/20261123_partner_settlement_snapshots.sql",
+    minimumRows: 1,
+    seedCommand: "node --env-file=.env.local scripts/upload-partner-settlement-snapshot.mjs <snapshot.json>",
+    severity: "warning",
+    impact:
+      "총판 미수금 탭의 쿼드러닝 보드가 '아직 올라오지 않았다' 한 줄로 바뀌고 Overview 정산 잔액 카드가 사라진다. 견적별 총판 미수금은 그대로다.",
   },
 ]
 

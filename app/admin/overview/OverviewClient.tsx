@@ -72,7 +72,8 @@ import type { AdminBlogOverviewSummary } from "@/lib/admin/overview/blog-summary
 import type { EmailCampaign } from "@/lib/marketing-types"
 import type { BugReport } from "@/lib/bugs-data"
 import type { PatchNote } from "@/lib/patch-notes-data"
-import { OverviewBriefing, OverviewOperationsPanels, OverviewScorecard, type OverviewMetric } from "@/components/admin/overview/OverviewWorkspace"
+import { OverviewBriefing, OverviewOperationsPanels, OverviewPartnerSettlement, OverviewScorecard, type OverviewMetric } from "@/components/admin/overview/OverviewWorkspace"
+import type { PartnerSettlementSummary } from "@/lib/partner-settlement"
 import { OverviewNowBand } from "@/components/admin/overview/OverviewNowBand"
 import { useLiveIntake } from "@/components/admin/overview/useLiveIntake"
 import type { OverviewOperationsSummary } from "@/lib/admin/overview/operations-summary"
@@ -423,6 +424,18 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
     })
     return () => { cancelled = true }
   }, [refreshKey, operationsRefreshKey])
+
+  // 쿼드러닝 정산 잔액 — 스냅샷이 없거나(미적용·행 없음) 권한이 없으면(403) 카드를 그리지 않는다.
+  const [partnerSettlement, setPartnerSettlement] = useState<PartnerSettlementSummary | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    void adminFetchJsonCached<{ summary: PartnerSettlementSummary | null }>("/api/admin/partner-settlement?summary=1", {
+      adminTimeoutMs: OVERVIEW_FETCH_TIMEOUT_MS,
+    }, { ttlMs: 60_000, persist: false }).then((data) => {
+      if (!cancelled) setPartnerSettlement(data?.summary ?? null)
+    }).catch(() => undefined)
+    return () => { cancelled = true }
+  }, [refreshKey])
 
   // loadSourceQuiet의 안전판 — 언마운트 뒤 도착하는 레인/폴백 페치 결과가 setState를
   // 부르지 않게 한다(15초 ceiling까지 살아있는 레인이 있어, 사용자가 이미 다른 탭으로
@@ -1088,6 +1101,8 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
       </section>
 
       <OverviewOperationsPanels leadState={sourceStates.leads} onLeadRetry={() => retrySource("leads")} leads={sourceStates.leads === "ready" ? { new: companyFunnel.newLeads, contacted: companyFunnel.contactedLeads, converted: companyFunnel.converted, closed: companyFunnel.closedLeads } : null} operations={operations} loading={operationsLoading} onRetry={retryOperations} />
+
+      {partnerSettlement ? <OverviewPartnerSettlement summary={partnerSettlement} /> : null}
 
       <div className="grid grid-cols-1 gap-6 mb-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <section
