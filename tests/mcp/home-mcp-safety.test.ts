@@ -45,8 +45,8 @@ import { POST } from "@/app/api/mcp/route"
 import { authenticateMcp, formatMcpLog, handleMcpPayload, parseMcpTokenEntry, type McpCaller, type McpDeps } from "@/lib/mcp/server"
 import { callTool, isWriteTool, listTools } from "@/lib/mcp/tools"
 import { LEGACY_SCOPES, type OpsScope } from "@/lib/ops-tools/actor"
-import { WRITE_RATE_LIMIT, resetOpsGuardsForTest } from "@/lib/ops-tools/guard"
-import { RAW_EMAIL_PATTERN, RAW_PHONE_PATTERN, redactContacts } from "@/lib/ops-tools/redact"
+import { WRITE_RATE_LIMIT, fingerprintArgs, idempotencyKeyHash, resetOpsGuardsForTest } from "@/lib/ops-tools/guard"
+import { maskContactText, redactContacts } from "@/lib/ops-tools/redact"
 import { buildStandardQuoteDetails, mergeStandardQuoteLineItems, resolveQuoteSupplier } from "@/lib/standard-quote-template"
 
 const legacy: McpCaller = { name: "tester", scopes: LEGACY_SCOPES, legacy: true }
@@ -59,6 +59,8 @@ const DEAL_ID = "00000000-0000-4000-8000-000000000001"
 const QUOTE_ID = "3f2b9c1e-7a4d-4e8b-9c2f-1a2b3c4d5e6f"
 
 const textOf = (r: { content: { text: string }[] }) => r.content[0].text
+/** 가림 판정용 독립 기대값 — 구현의 식을 가져다 쓰지 않는다. 시험 표본의 원문 번호·주소 조각 */
+const RAW_SAMPLES = ["1234-5678", "9876-5432", "2222-3333", "teacher@", "boss@"]
 const hwArgs = (extra: Record<string, unknown> = {}) => ({ product_name: "T1", quantity: 2, planned_date: "2026-12-01", customer: "A학원", ...extra })
 const rpcCall = (id: number, name: string, args: Record<string, unknown>) => ({ jsonrpc: "2.0", id, method: "tools/call", params: { name, arguments: args } })
 const mcpDeps = (caller: McpCaller, log?: McpDeps["log"]): McpDeps => ({ caller, listTools, callTool, isWriteTool, log })
@@ -121,6 +123,40 @@ describe("인증 — 토큰 두 형식", () => {
     expect(authenticateMcp(`Bearer ${TOKEN_A}`, "", now)).toEqual({ ok: false, reason: "unconfigured" })
     expect(authenticateMcp(`Bearer ${TOKEN_A}`, undefined, now)).toEqual({ ok: false, reason: "unconfigured" })
     expect(authenticateMcp("Bearer zzzzzzzzzzzzzzzzzzzz", env, now)).toEqual({ ok: false, reason: "invalid" })
+  })
+
+  it("같은 토큰이 옛 줄과 넓힌 줄에 함께 있으면 순서와 상관없이 거절한다(넓힌 줄의 범위·만료가 무시되지 않게)", () => {
+    const err = vi.spyOn(console, "error").mockImplementation(() => undefined)
+    expect(authenticateMcp(`Bearer ${TOKEN_A}`, `moon:${TOKEN_A},moon:${TOKEN_A};scope=read;exp=2020-01-01`, now)).toEqual({ ok: false, reason: "duplicate" })
+    expect(authenticateMcp(`Bearer ${TOKEN_A}`, `moon:${TOKEN_A};scope=read;exp=2027-01-01,moon:${TOKEN_A}`, now)).toEqual({ ok: false, reason: "duplicate" })
+    expect(authenticateMcp(`Bearer ${TOKEN_A}`, `a:${TOKEN_A},b:${TOKEN_A}`, now)).toEqual({ ok: false, reason: "duplicate" })
+    // 다른 토큰은 영향 없다. 설정 경고는 값 없이 한 번
+    expect(authenticateMcp(`Bearer ${TOKEN_B}`, `a:${TOKEN_A},b:${TOKEN_A},c:${TOKEN_B}`, now).ok).toBe(true)
+    const logged = err.mock.calls.flat().join(" ")
+    expect(logged).toContain("duplicate_tokens=1")
+    expect(logged).not.toContain(TOKEN_A)
+    err.mockRestore()
+  })
+
+  it("이름이 겹치는 줄은 동작은 그대로, 설정 경고만 남긴다", () => {
+    const err = vi.spyOn(console, "error").mockImplementation(() => undefined)
+    const env2 = `moon:${TOKEN_A},moon:${TOKEN_B};scope=read;exp=2027-01-01`
+    expect(authenticateMcp(`Bearer ${TOKEN_B}`, env2, now)).toMatchObject({ ok: true, caller: { name: "moon", scopes: ["read"] } })
+    expect(err.mock.calls.flat().join(" ")).toContain("duplicate_names=1")
+    err.mockRestore()
+  })
+
+  it("넓힌 형식 표시는 대소문자·'=' 앞 공백과 상관없다 — 틀린 키 줄은 줄 전체로도 통과하지 않는다", () => {
+    for (const line of [`${TOKEN_A};Scope=read;exp=2027-01-01`, `${TOKEN_A};SCOPE=read;exp=2027-01-01`, `${TOKEN_A};foo=1`]) {
+      expect(parseMcpTokenEntry(`moon:${line}`), line).toBeNull()
+      expect(authenticateMcp(`Bearer ${line}`, `moon:${line}`, now).ok, line).toBe(false)
+      expect(authenticateMcp(`Bearer ${TOKEN_A}`, `moon:${line}`, now).ok, line).toBe(false)
+    }
+    // '=' 앞뒤 공백은 넓힌 형식으로 읽고 적힌 범위만 준다
+    expect(authenticateMcp(`Bearer ${TOKEN_A}`, `moon:${TOKEN_A};scope =read; exp = 2027-01-01`, now)).toEqual({
+      ok: true,
+      caller: { name: "moon", scopes: ["read"], legacy: false },
+    })
   })
 
   it("틀린 넓힌 형식 줄(모르는 범위·날짜·키, 만료 없음)은 어떤 토큰과도 맞지 않는다", () => {
@@ -235,8 +271,15 @@ describe("쓰기 안전", () => {
     const first = await callTool("hw_plan_movement", hwArgs({ idempotency_key: "k-1" }), legacy)
     const second = await callTool("hw_plan_movement", hwArgs({ idempotency_key: "k-1" }), legacy)
     expect(createHardwareMovementRows).toHaveBeenCalledTimes(1)
-    expect(createHardwareMovementRows.mock.calls[0][0].raw).toEqual({ mcp: { caller: "tester", idempotency_key: "k-1" } })
-    expect(JSON.parse(textOf(second))).toEqual({ replayed: true, note: expect.any(String), result: JSON.parse(textOf(first)) })
+    // 키 원문은 기록에 싣지 않는다 — (호출자, 도구, 키) 해시와 인자 지문만
+    const raw = createHardwareMovementRows.mock.calls[0][0].raw
+    expect(raw).toEqual({
+      mcp: { caller: "tester", idempotency_key_hash: idempotencyKeyHash("tester", "hw_plan_movement", "k-1"), args_fingerprint: fingerprintArgs(hwArgs()) },
+    })
+    expect(JSON.stringify(raw)).not.toContain("k-1")
+    // replay 는 처음 결과와 같은 꼴(배열) — replay 여부는 로그 코드로만
+    expect(textOf(second)).toBe(textOf(first))
+    expect(Array.isArray(JSON.parse(textOf(second)))).toBe(true)
     expect(second.logCode).toBe("replayed")
 
     const q1 = await callTool("quote_create_draft", { deal_id: DEAL_ID, template_id: "camera_t1", idempotency_key: "q-1" }, legacy)
@@ -256,14 +299,72 @@ describe("쓰기 안전", () => {
     expect(createHardwareMovementRows).toHaveBeenCalledTimes(3)
   })
 
-  it("다른 인스턴스가 같은 키로 이미 만든 HW 기록은 DB 에서 찾아 다시 만들지 않는다", async () => {
-    findHardwareMovementsByMcpIdempotencyKey.mockResolvedValue([
-      { id: "m-old", product_name: "T1", quantity: 2, occurred_at: "2026-12-01", to_location: "A학원", status: "배송 예정", lot_no: null },
-    ])
+  const oldRow = (args: Record<string, unknown> | null) => ({
+    id: "m-old",
+    product_name: "T1",
+    quantity: 2,
+    occurred_at: "2026-12-01",
+    to_location: "A학원",
+    status: "배송 예정",
+    lot_no: null,
+    raw: { mcp: { caller: "tester", ...(args ? { args_fingerprint: fingerprintArgs(args) } : {}) } },
+  })
+
+  it("다른 인스턴스가 같은 키·같은 인자로 이미 만든 HW 기록은 DB 에서 찾아 다시 만들지 않는다", async () => {
+    findHardwareMovementsByMcpIdempotencyKey.mockResolvedValue([oldRow(hwArgs())])
     const res = await callTool("hw_plan_movement", hwArgs({ idempotency_key: "k-3" }), legacy)
-    expect(findHardwareMovementsByMcpIdempotencyKey).toHaveBeenCalledWith("tester", "k-3")
+    expect(findHardwareMovementsByMcpIdempotencyKey).toHaveBeenCalledWith("tester", idempotencyKeyHash("tester", "hw_plan_movement", "k-3"))
     expect(createHardwareMovementRows).not.toHaveBeenCalled()
-    expect(JSON.parse(textOf(res))).toMatchObject({ replayed: true, result: [{ id: "m-old" }] })
+    expect(JSON.parse(textOf(res))).toMatchObject([{ id: "m-old" }])
+    expect(res.logCode).toBe("replayed")
+  })
+
+  it("다른 인스턴스가 같은 키로 만든 기록과 인자가 다르면 거절하고, 원래 인자의 재시도는 막지 않는다", async () => {
+    findHardwareMovementsByMcpIdempotencyKey.mockResolvedValue([oldRow({ ...hwArgs(), quantity: 1 })])
+    const other = await callTool("hw_plan_movement", hwArgs({ idempotency_key: "k1", quantity: 99, customer: "B학원" }), legacy)
+    expect(other.isError).toBe(true)
+    expect(other.logCode).toBe("idempotency_conflict")
+    expect(createHardwareMovementRows).not.toHaveBeenCalled()
+    const retry = await callTool("hw_plan_movement", hwArgs({ idempotency_key: "k1", quantity: 1 }), legacy)
+    expect(retry.isError).toBeUndefined()
+    expect(retry.logCode).toBe("replayed")
+    expect(createHardwareMovementRows).not.toHaveBeenCalled()
+  })
+
+  it("DB 기록에 인자 지문이 없으면 같은 요청인지 알 수 없어 거절한다", async () => {
+    findHardwareMovementsByMcpIdempotencyKey.mockResolvedValue([oldRow(null)])
+    const res = await callTool("hw_plan_movement", hwArgs({ idempotency_key: "k-4" }), legacy)
+    expect(res.logCode).toBe("idempotency_conflict")
+    expect(createHardwareMovementRows).not.toHaveBeenCalled()
+  })
+
+  it("같은 키 재시도(replay)는 분당 상한을 쓰지 않는다", async () => {
+    for (let i = 0; i < WRITE_RATE_LIMIT.max + 2; i++) {
+      const r = await callTool("hw_plan_movement", hwArgs({ idempotency_key: "same" }), legacy)
+      expect(r.isError, `call ${i}`).toBeUndefined()
+    }
+    expect(createHardwareMovementRows).toHaveBeenCalledTimes(1)
+    // 남은 상한으로 새 쓰기가 max-1 번 더 된다
+    for (let i = 0; i < WRITE_RATE_LIMIT.max - 1; i++) expect((await callTool("hw_plan_movement", hwArgs(), legacy)).isError).toBeUndefined()
+    expect((await callTool("hw_plan_movement", hwArgs(), legacy)).logCode).toBe("rate_limited")
+  })
+
+  it("입력 오류로 끝난 쓰기는 상한에서 되돌리고, 상한에 걸린 호출은 DB 를 읽지 않는다", async () => {
+    for (let i = 0; i < WRITE_RATE_LIMIT.max + 3; i++) await callTool("hw_plan_movement", hwArgs({ product_name: "없는것" }), legacy)
+    for (let i = 0; i < WRITE_RATE_LIMIT.max; i++) expect((await callTool("hw_plan_movement", hwArgs(), legacy)).isError).toBeUndefined()
+    listHardwareItems.mockClear()
+    expect((await callTool("hw_plan_movement", hwArgs(), legacy)).logCode).toBe("rate_limited")
+    expect(listHardwareItems).not.toHaveBeenCalled()
+  })
+
+  it("묶음의 첫 쓰기가 입력 오류로 실패하면 고친 두 번째 쓰기는 실행된다", async () => {
+    const out = (await handleMcpPayload(
+      [rpcCall(1, "hw_plan_movement", hwArgs({ product_name: "없는것" })), rpcCall(2, "hw_plan_movement", hwArgs()), rpcCall(3, "hw_plan_movement", hwArgs())],
+      mcpDeps(legacy)
+    )) as { result: { isError?: boolean; content: { text: string }[] } }[]
+    expect(out.map((r) => r.result.isError ?? false)).toEqual([true, false, true])
+    expect(out[2].result.content[0].text).toContain("쓰기 도구는 1개까지")
+    expect(createHardwareMovementRows).toHaveBeenCalledTimes(1)
   })
 
   it(`호출자별 쓰기는 분당 ${WRITE_RATE_LIMIT.max}번까지`, async () => {
@@ -303,16 +404,18 @@ describe("hw_plan_movement — 새 품목을 만들지 않는다", () => {
     expect(createHardwareMovementRows).not.toHaveBeenCalled()
   })
 
-  it("없는 item_id 는 거절, 있는 item_id 는 그 품목 이름으로", async () => {
+  it("없는 item_id 는 거절, 있는 item_id 는 그 품목으로", async () => {
     expect((await callTool("hw_plan_movement", hwArgs({ item_id: "nope" }), legacy)).isError).toBe(true)
     expect(createHardwareMovementRows).not.toHaveBeenCalled()
+    // item_id 로 고르면 기록의 품목 이름은 전처럼 받은 이름, 결과 꼴도 전처럼 배열
     const res = await callTool("hw_plan_movement", hwArgs({ item_id: "item-86", product_name: "86인치" }), legacy)
-    expect(createHardwareMovementRows.mock.calls[0][0]).toMatchObject({ itemId: "item-86", productName: "86인치 보드" })
-    expect(textOf(res)).toContain("product_name_differs")
+    expect(createHardwareMovementRows.mock.calls[0][0]).toMatchObject({ itemId: "item-86", productName: "86인치" })
+    expect(Array.isArray(JSON.parse(textOf(res)))).toBe(true)
+    expect(textOf(res)).not.toContain("product_name_differs")
   })
 })
 
-describe("quote_create_draft — 합계는 서버 계산, 단가 지정은 경고", () => {
+describe("quote_create_draft — 합계는 서버 계산, 결과 꼴·메모는 전과 같다", () => {
   const expectedDetails = (lines: { line: number; quantity?: number; unitPrice?: number }[]) => {
     const items = mergeStandardQuoteLineItems("camera_t1")
     for (const l of lines) items[l.line - 1] = { ...items[l.line - 1], quantity: l.quantity ?? items[l.line - 1].quantity, unitPrice: l.unitPrice ?? items[l.line - 1].unitPrice }
@@ -328,7 +431,7 @@ describe("quote_create_draft — 합계는 서버 계산, 단가 지정은 경�
     expect(body).not.toHaveProperty("price_warnings")
   })
 
-  it("단가를 바꾸면 합계는 서버가 다시 계산하고 기준 단가와의 차이·변동률을 경고로 싣는다. 합계 인자는 무시", async () => {
+  it("단가를 바꾸면 합계는 서버가 다시 계산한다. 합계 인자는 무시, 결과·메모에 경고를 더하지 않는다(감사에만 줄 수)", async () => {
     const base = mergeStandardQuoteLineItems("camera_t1")[0].unitPrice as number
     const res = await callTool(
       "quote_create_draft",
@@ -340,11 +443,10 @@ describe("quote_create_draft — 합계는 서버 계산, 단가 지정은 경�
     expect(want.grandTotalAmount).toBeGreaterThan(1)
     expect(createQuoteDocumentVersion.mock.calls[0][0].total_amount).toBe(want.grandTotalAmount)
     expect(body.total).toBe(want.grandTotalAmount)
-    expect(body.price_warnings).toEqual([
-      { line_number: 1, name: expect.any(String), template_unit_price: base, unit_price: base / 2, diff: -base / 2, change_pct: -50 },
-    ])
+    expect(Object.keys(body).sort()).toEqual(["customer", "id", "lines", "next", "quote_number", "status", "subtotal", "title", "total", "vat"])
     const memo = createQuoteDocumentVersion.mock.calls[0][0].structured_json.quoteDetails.internalMemo as string
-    expect(memo).toContain("단가 지정 1줄")
+    expect(memo).toBe("MCP 초안(tester)")
+    expect(logAuditChecked).toHaveBeenCalledWith(expect.objectContaining({ action: "quote.create_draft", payload: expect.objectContaining({ price_overrides: 1 }) }))
   })
 })
 
@@ -366,22 +468,32 @@ describe("감사·오류", () => {
     )
   })
 
-  it("쓰기 뒤 감사 실패는 삼키지 않고 결과에 audit_warning 으로 싣는다", async () => {
+  it("쓰기 뒤 감사 실패는 삼키지 않고 로그 코드로 남긴다 — 결과 꼴은 전과 같다", async () => {
     logAuditChecked.mockResolvedValue({ ok: false, code: "db_42501" })
     const res = await callTool("quote_create_draft", { deal_id: DEAL_ID, template_id: "camera_t1" }, legacy)
     expect(res.isError).toBeUndefined()
-    expect(JSON.parse(textOf(res)).audit_warning).toContain("db_42501")
+    expect(res.logCode).toBe("audit_db_42501")
+    expect(JSON.parse(textOf(res))).not.toHaveProperty("audit_warning")
     const hw = await callTool("hw_plan_movement", hwArgs(), legacy)
-    expect(JSON.parse(textOf(hw))).toMatchObject({ movements: [{ id: "m1" }], audit_warning: expect.stringContaining("db_42501") })
+    expect(JSON.parse(textOf(hw))).toMatchObject([{ id: "m1" }])
+    expect(hw.logCode).toBe("audit_db_42501")
   })
 
-  it("모르는 DB 오류는 원문 없이 코드만 돌려준다", async () => {
+  it("DB 오류 판정은 전과 같다(4xx 꼴은 글을 돌려준다) — 다만 글 속 연락처는 가린다", async () => {
     createHardwareMovementRows.mockRejectedValue({ message: "duplicate key value violates unique constraint \"x\" Key (memo)=(010-1234-5678)", code: "23505" })
     const res = await callTool("hw_plan_movement", hwArgs(), legacy)
     expect(res.isError).toBe(true)
-    expect(textOf(res)).not.toMatch(/duplicate|constraint|010-1234/)
-    expect(textOf(res)).toContain("db_23505")
+    expect(textOf(res)).toContain("duplicate key value")
+    expect(textOf(res)).toContain("010-****-5678")
+    expect(textOf(res)).not.toContain("1234-5678")
     expect(res.logCode).toBe("db_23505")
+  })
+
+  it("모르는 오류(5xx 꼴)는 전과 같은 고정 문구, 코드는 로그에만", async () => {
+    createHardwareMovementRows.mockRejectedValue({ message: "connection to server at 10.0.0.1 failed", code: "08006" })
+    const res = await callTool("hw_plan_movement", hwArgs(), legacy)
+    expect(textOf(res)).toBe("서버 쪽에서 실패했다. 잠시 뒤 다시 시도한다")
+    expect(res.logCode).toBe("db_08006")
   })
 
   it("저장소의 한국어 규칙 오류(중복·재고)는 고칠 수 있게 글을 돌려준다", async () => {
@@ -430,17 +542,18 @@ describe("연락처 가림", () => {
     })
   }
 
-  it("기본(옛 형식 포함)은 응답에 전화·이메일 꼴이 없고, 연락처 든 읽기를 감사에 남긴다", async () => {
+  it("기본(옛 형식 포함)은 고객 연락처를 가리고 회사(공급자) 연락처는 두며, 연락처 든 읽기를 감사에 남긴다", async () => {
     quoteWithContacts()
     const res = await callTool("quote_get", { id: QUOTE_ID }, legacy)
     const out = textOf(res)
-    expect(out).not.toMatch(RAW_PHONE_PATTERN)
-    expect(out).not.toMatch(RAW_EMAIL_PATTERN)
-    expect(out).not.toContain("9876-5432")
-    expect(out).toContain("010-****-5678")
+    for (const raw of ["010-1234-5678", "9876-5432", "teacher@", "boss@"]) expect(out).not.toContain(raw)
+    expect(out).toContain('"recipientPhone": "010-****-5678"')
+    expect(out).toContain('"recipientEmail": "***@school.example.kr"')
+    expect(out).toContain("+82-10-****-5432")
+    expect(out).toContain('"supplierContactPhone": "02 3456 7890"')
     expect(out).toContain("Q-2026-0001")
     expect(logAuditChecked).toHaveBeenCalledWith(
-      expect.objectContaining({ action: "mcp.read_contacts", targetType: "mcp_tool", targetId: QUOTE_ID, payload: expect.objectContaining({ tool: "quote_get", contact_fields: 4, revealed: false }) })
+      expect.objectContaining({ action: "mcp.read_contacts", targetType: "mcp_tool", targetId: QUOTE_ID, payload: expect.objectContaining({ tool: "quote_get", contact_fields: 3, revealed: false }) })
     )
     expect(JSON.stringify(logAuditChecked.mock.calls)).not.toContain("1234-5678")
   })
@@ -448,15 +561,89 @@ describe("연락처 가림", () => {
   it("pii 범위가 있는 넓힌 형식 토큰에만 원문", async () => {
     quoteWithContacts()
     const out = textOf(await callTool("quote_get", { id: QUOTE_ID }, scoped(["read", "pii"])))
-    expect(out).toMatch(RAW_PHONE_PATTERN)
+    expect(out).toContain("010-1234-5678")
     expect(out).toContain("teacher@school.example.kr")
     expect(logAuditChecked).toHaveBeenCalledWith(expect.objectContaining({ action: "mcp.read_contacts", payload: expect.objectContaining({ revealed: true }) }))
   })
 
-  it("id·번호 칸은 전화 꼴이어도 건드리지 않는다(다음 호출 인자로 쓰인다)", () => {
-    const { value, masked } = redactContacts({ quote_number: "Q-01012345678", item_id: "010-1234-5678", memo: "010-1234-5678" })
-    expect(value).toEqual({ quote_number: "Q-01012345678", item_id: "010-1234-5678", memo: "010-****-5678" })
-    expect(masked).toBe(1)
+  it("식별자 칸·시리얼·uuid·주문코드는 그대로 둔다(잘못 가리지 않는다)", () => {
+    const uuid = "abcdef01-2345-6789-abcd-ef0123456789"
+    const input = {
+      quote_number: "Q-01012345678",
+      item_id: "010-1234-5678",
+      created_by: uuid,
+      voided_by: uuid,
+      serials: ["SN0212345678", "C1A0312345678", "010-1234-5678"],
+      raw: { crmLink: { orderCode: "0101234567" }, mcp: { idempotency_key_hash: "0".repeat(64) } },
+      memo: "주문 0212345678 · SN0212345678",
+      lot_no: "L-010-1234-5678",
+    }
+    const { value, masked } = redactContacts(input)
+    expect(value).toEqual(input)
+    expect(masked).toBe(0)
+  })
+
+  it("연락처 키는 식별자처럼 보여도 가린다", () => {
+    const { value } = redactContacts({ phone_number: "010-1234-5678", mobile_no: "01012345678", contactNumber: "010 1234 5678", tel_no: "02-123-4567" })
+    expect(value).toEqual({ phone_number: "010-****-5678", mobile_no: "010-****-5678", contactNumber: "010-****-5678", tel_no: "02-****-4567" })
+  })
+
+  it("여러 전화·이메일 표기를 가린다(독립 표본)", () => {
+    const cases: [string, string][] = [
+      ["010-1234-5678", "010-****-5678"],
+      ["(010)1234-5678", "010-****-5678"],
+      ["(02) 123-4567", "02-****-4567"],
+      ["010 - 1234 - 5678", "010-****-5678"],
+      ["010–1234–5678", "010-****-5678"],
+      ["010_1234_5678", "010-****-5678"],
+      ["010.1234.5678", "010-****-5678"],
+      ["01012345678", "010-****-5678"],
+      ["８２-10-1234-5678", "+82-10-****-5678"],
+      ["82-10-1234-5678", "+82-10-****-5678"],
+      ["+82 10-9876-5432", "+82-10-****-5432"],
+      ["+82(0)10 1234 5678", "+82-10-****-5678"],
+      ["０１０-１２３４-５６７８", "010-****-5678"],
+      ["moon@classin.kr", "***@classin.kr"],
+      ["moon [at] classin.kr", "***@classin.kr"],
+      ["moon(at)classin[dot]kr", "***@classin.kr"],
+      ["moon＠classin.kr", "***@classin.kr"],
+    ]
+    for (const [input, want] of cases) expect(maskContactText(`연락 ${input} 로`), input).toBe(`연락 ${want} 로`)
+    // 전화가 아닌 숫자열은 그대로
+    for (const keep of ["2026-11-25", "총 1,234,567원", "SN0212345678", "주문 0212345678", "v2.0.1234.5678x"]) expect(maskContactText(keep), keep).toBe(keep)
+  })
+
+  it("공개 챗봇 답(내부 문서 없이)은 회사 공개 연락처를 가리지 않고 감사하지 않는다. 내부 문서 답은 가린다", async () => {
+    evaluateChatbotQuery.mockResolvedValue({ answer: "고객센터 02-6956-1234, help@classin.co.kr", sources: [] })
+    const pub = textOf(await callTool("chatbot_ask", { question: "연락처" }, legacy))
+    expect(pub).toContain("02-6956-1234")
+    expect(pub).toContain("help@classin.co.kr")
+    expect(logAuditChecked).not.toHaveBeenCalled()
+    const internal = textOf(await callTool("chatbot_ask", { question: "연락처", internal: true }, legacy))
+    expect(internal).toContain("02-****-1234")
+    expect(logAuditChecked).toHaveBeenCalledTimes(1)
+    // internal 범위가 없어 무시된 경우는 공개 답이다
+    expect(textOf(await callTool("chatbot_ask", { question: "연락처", internal: true }, scoped(["read"])))).toContain("02-6956-1234")
+  })
+
+  it("입력·규칙 오류 글 속 연락처도 가린다", async () => {
+    createHardwareMovementRows.mockRejectedValue(new Error("이미 같은 CRM 오더가 반영되어 있습니다(담당 010-1234-5678)."))
+    const res = await callTool("hw_plan_movement", hwArgs(), legacy)
+    expect(textOf(res)).toContain("010-****-5678")
+    expect(textOf(res)).not.toContain("1234-5678")
+  })
+
+  it("가린 값을 쓰기 인자로 다시 넣으면 실행하지 않고 거절한다", async () => {
+    const res = await callTool("hw_plan_movement", hwArgs({ customer: "가나학원 원장 010-****-5678" }), legacy)
+    expect(res.isError).toBe(true)
+    expect(res.logCode).toBe("masked_input")
+    expect(textOf(res)).toContain("customer")
+    const q = await callTool("quote_create_draft", { deal_id: DEAL_ID, template_id: "camera_t1", internal_memo: "메일 ***@academy.co.kr" }, legacy)
+    expect(q.logCode).toBe("masked_input")
+    expect(createHardwareMovementRows).not.toHaveBeenCalled()
+    expect(createQuoteDocument).not.toHaveBeenCalled()
+    // 상한도 쓰지 않는다
+    for (let i = 0; i < WRITE_RATE_LIMIT.max; i++) expect((await callTool("hw_plan_movement", hwArgs(), legacy)).isError).toBeUndefined()
   })
 
   it("연락처가 없는 읽기는 감사하지 않는다", async () => {
@@ -468,7 +655,7 @@ describe("연락처 가림", () => {
     const res = await callTool("hw_plan_movement", hwArgs({ customer: "A학원 010-2222-3333", memo: "담당 010-2222-3333" }), legacy)
     expect(createHardwareMovementRows.mock.calls[0][0]).toMatchObject({ toLocation: "A학원 010-2222-3333" })
     expect(createHardwareMovementRows.mock.calls[0][0].memo).toContain("010-2222-3333")
-    expect(textOf(res)).not.toMatch(RAW_PHONE_PATTERN)
+    for (const raw of RAW_SAMPLES) expect(textOf(res)).not.toContain(raw)
   })
 })
 

@@ -1,11 +1,12 @@
 /**
- * 운영 도구 오류 판정 — 고칠 수 있는 입력·규칙 오류는 글을 그대로, 모르는 오류(DB·버그)는 코드만 밖으로 낸다.
+ * 운영 도구 오류 판정 — 고칠 수 있는 입력·규칙 오류는 글을, 모르는 오류(DB 접속·버그)는 고정 문구를 호출자에게 낸다.
  *
- * 전에는 HW 입출고 API 의 toErrorResponse 정규식으로 4xx/5xx 를 갈랐는데, Postgres 영문 오류
- * ("duplicate key value violates …")가 4xx 로 분류돼 원문이 응답에 실렸다(점검 R30). 이제는
- * 알려진 오류 클래스와 저장소가 던지는 한국어 규칙 문구만 원문으로 돌려준다.
+ * 판정은 바꾸기 전과 같다: HW 입출고 API 의 toErrorResponse(검증·규칙·중복·재고 부족 → 4xx). 4xx 는 글을 그대로 돌려준다.
+ * 이 판정은 Postgres 영문 오류("duplicate key value violates …")도 4xx 로 보아 원문을 돌려준다(점검 R30) — 이를 코드만으로
+ * 바꾸는 일은 총괄 결정 밖이라 이번에는 되돌렸다(docs/active/home-mcp-operations.md §7). 돌려주는 글의 연락처는 가린다(run.ts).
+ * 로그에는 글 원문 없이 닫힌 코드만 싣는다.
  */
-import { HardwareApiValidationError } from "@/app/api/admin/hardware/_validation"
+import { HardwareApiValidationError, toErrorResponse } from "@/app/api/admin/hardware/_validation"
 import { LotRuleError } from "@/lib/hardware/inventory-process"
 import { MovementRuleError } from "@/lib/hardware/movement-rules"
 
@@ -18,10 +19,6 @@ export class OpsToolError extends Error {
     this.code = code
   }
 }
-
-const HANGUL = /[가-힣]/
-/** 저장소가 던지는 한국어 규칙 문구 중 사람이 고칠 수 있는 것(중복·재고·수량·없음) */
-const USER_FIXABLE = /찾을 수 없|찾지 못|이미|중복|처리된|예정.*아니|부족|재고|수량|물류번호/
 
 const safeCode = (v: string) => v.replace(/[^A-Za-z0-9_]/g, "").slice(0, 40) || "unknown"
 
@@ -38,14 +35,14 @@ export function opsErrorCode(e: unknown): string {
 
 export type ClassifiedToolError = { kind: "user"; message: string; code: string } | { kind: "unknown"; code: string }
 
-export function classifyToolError(e: unknown): ClassifiedToolError {
+/** 모르는 오류일 때 호출자가 받는 글 — 바꾸기 전과 같다(코드는 로그에만) */
+export const UNKNOWN_TOOL_ERROR_TEXT = "서버 쪽에서 실패했다. 잠시 뒤 다시 시도한다"
+
+export async function classifyToolError(e: unknown): Promise<ClassifiedToolError> {
   if (e instanceof OpsToolError) return { kind: "user", message: e.message, code: safeCode(e.code) }
-  if (e instanceof HardwareApiValidationError || e instanceof MovementRuleError || e instanceof LotRuleError) {
-    return { kind: "user", message: e.message, code: "invalid_input" }
-  }
-  // Supabase 오류는 Error 가 아니라 { message, code } 객체로 온다 → 여기서 걸러지지 않고 unknown 이 된다
-  if (e instanceof Error && e.constructor === Error && HANGUL.test(e.message) && USER_FIXABLE.test(e.message)) {
-    return { kind: "user", message: e.message.slice(0, 300), code: "rule_rejected" }
-  }
-  return { kind: "unknown", code: opsErrorCode(e) }
+  const res = toErrorResponse(e, "")
+  if (res.status >= 500) return { kind: "unknown", code: opsErrorCode(e) }
+  const body = (await res.json()) as { error?: string }
+  const known = e instanceof HardwareApiValidationError || e instanceof MovementRuleError || e instanceof LotRuleError
+  return { kind: "user", message: body.error || "입력을 확인한다.", code: known ? "invalid_input" : e instanceof Error && e.constructor === Error ? "rule_rejected" : opsErrorCode(e) }
 }

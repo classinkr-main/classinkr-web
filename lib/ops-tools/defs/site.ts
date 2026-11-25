@@ -18,6 +18,8 @@ export const chatbotAsk: ReadToolDef = {
   description:
     "공개 챗봇에 질문을 넣어 실제 답·출처·상담 연결 판단을 본다. 분석 로그에 남지 않는다. internal=true 면 내부 CS 문서까지 근거로 쓴다(코파일럿과 같음).",
   inputSchema: schema({ question: { type: "string", maxLength: 1000 }, internal: { type: "boolean", default: false } }, ["question"]),
+  // 내부 문서를 쓰지 않은 답은 공개 사이트에 그대로 나가는 글이다 — 회사 고객센터 번호·메일을 운영자가 확인할 수 있게 가리지 않는다
+  publicResult: (args, actor) => !(args.internal === true && hasScope(actor, "internal")),
   async run(args, actor) {
     const question = readRequiredString(args, "question", "question")
     if (question.length > 1000) throw new OpsToolError("question 은 1000자까지.")

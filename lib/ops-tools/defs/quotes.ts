@@ -8,7 +8,7 @@ import {
   readRequiredEnum,
   readRequiredPositiveInt,
 } from "@/app/api/admin/hardware/_validation"
-import { auditOps, auditWarningField } from "@/lib/ops-tools/audit"
+import { auditOps } from "@/lib/ops-tools/audit"
 import { includesText, limitOf, schema } from "@/lib/ops-tools/defs/shared"
 import { OpsToolError } from "@/lib/ops-tools/errors"
 import { type ReadToolDef, type ToolArgs, type WriteToolDef, defineWrite } from "@/lib/ops-tools/types"
@@ -129,7 +129,7 @@ export const quoteTemplates: ReadToolDef = {
     })),
 }
 
-/** 기준 단가(템플릿 표준가)와 다른 단가 지정 한 줄 — 결과의 price_warnings 에 싣는다 */
+/** 기준 단가(템플릿 표준가)와 다른 단가 지정 한 줄 — preview 경고와 감사 payload 에만 싣는다(MCP 결과 꼴은 그대로) */
 export type PriceOverrideWarning = {
   line_number: number
   name: string
@@ -215,16 +215,14 @@ export const quoteCreateDraft: WriteToolDef = defineWrite<QuotePlan>({
     const [deal] = await listDealListItems({ dealId })
     if (!deal) throw new OpsToolError("그 id 의 딜이 없다.", "not_found")
 
-    const memoParts = [memo, `MCP 초안(${actor.name})`]
-    if (priceWarnings.length) memoParts.push(`단가 지정 ${priceWarnings.length}줄(기준 단가와 다름 — 확인 필요)`)
-    // 합계(subtotal·VAT·total)는 이 계산값만 쓴다 — 호출 인자에서 합계를 받지 않는다
+    // 내부 메모는 바꾸기 전과 같다. 합계(subtotal·VAT·total)는 이 계산값만 쓴다 — 호출 인자에서 합계를 받지 않는다
     const details = buildStandardQuoteDetails(
       {
         templateId,
         recipientCompanyName: deal.customer_name ?? undefined,
         ...resolveQuoteSupplier(templateId),
         validUntil,
-        internalMemo: memoParts.filter(Boolean).join(" · "),
+        internalMemo: [memo, `MCP 초안(${actor.name})`].filter(Boolean).join(" · "),
         lineItems,
       },
       templateId
@@ -300,7 +298,8 @@ export const quoteCreateDraft: WriteToolDef = defineWrite<QuotePlan>({
         after_json: { ...document, current_version_id: version.id } as unknown as Record<string, unknown>,
       }).catch((e: unknown) => console.error(`[mcp] activity_failed tool=quote_create_draft code=${e instanceof Error ? e.name.replace(/\W/g, "") : "unknown"}`))
     }
-    return {
+    // 결과 꼴은 바꾸기 전과 같다. 감사 실패는 로그 코드로만(전에는 logAudit 이 삼켰다)
+    const output = {
       id: document.id,
       quote_number: document.quote_number,
       status: "draft",
@@ -310,11 +309,8 @@ export const quoteCreateDraft: WriteToolDef = defineWrite<QuotePlan>({
       vat: version.tax_amount,
       total: version.total_amount,
       lines: details.lineItems?.map((l) => ({ name: l.itemName, quantity: l.quantity, unit_price: l.unitPrice, status: l.lineStatus })),
-      ...(priceWarnings.length
-        ? { price_warnings: priceWarnings, price_warning_note: "기준 단가(템플릿 표준가)와 다른 단가가 들어갔다. 보내기 전에 사람이 확인한다." }
-        : {}),
-      ...auditWarningField(audit),
       next: "어드민 견적 탭에서 이 번호를 열어 옵션·담당자 연락처를 확인한 뒤 공유한다.",
     }
+    return { output, ...(audit.ok ? {} : { auditFailure: audit.code }) }
   },
 })

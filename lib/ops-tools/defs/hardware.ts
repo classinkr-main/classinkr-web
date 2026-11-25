@@ -11,7 +11,7 @@ import {
 } from "@/app/api/admin/hardware/_validation"
 import { HARDWARE_OUTBOUND_TYPES, HARDWARE_PROGRESS_STATUS, type HardwareOutboundType } from "@/lib/hardware/inventory-process"
 import { type OpsActor, actorDisplayName } from "@/lib/ops-tools/actor"
-import { auditOps, auditWarningField } from "@/lib/ops-tools/audit"
+import { auditOps } from "@/lib/ops-tools/audit"
 import { includesText, limitOf, schema } from "@/lib/ops-tools/defs/shared"
 import { OpsToolError } from "@/lib/ops-tools/errors"
 import { type ReadToolDef, type WriteToolDef, defineWrite } from "@/lib/ops-tools/types"
@@ -77,6 +77,7 @@ export const hwSales: ReadToolDef = {
 }
 
 type HwPlan = {
+  /** name 은 기록에 실을 품목 이름 — item_id 로 골랐으면 전처럼 받은 product_name, 이름으로 골랐으면 그 품목의 이름 */
   item: { id: string; name: string }
   quantity: number
   plannedDate: string
@@ -150,9 +151,11 @@ export const hwPlanMovement: WriteToolDef = defineWrite<HwPlan>({
     const outboundType = readOptionalEnum(args, "outbound_type", "outbound_type", HARDWARE_OUTBOUND_TYPES) ?? "sales"
     const referenceNo = readOptionalString(args, "reference_no", "reference_no")
     const lotNo = readOptionalString(args, "lot_no", "lot_no")
-    const item = await resolveExistingItem(itemId, productName)
-    const warnings = normalizeName(item.name) !== normalizeName(productName) && itemId
-      ? [{ code: "product_name_differs", message: `item_id 의 품목 이름(${item.name})으로 등록한다(받은 이름: ${productName}).` }]
+    const found = await resolveExistingItem(itemId, productName)
+    // item_id 로 고른 경우 기록의 품목 이름은 전처럼 받은 이름이다(바꾸기 전 동작). 다르면 미리보기 경고로만 알린다
+    const item = itemId ? { id: found.id, name: productName } : found
+    const warnings = itemId && normalizeName(found.name) !== normalizeName(productName)
+      ? [{ code: "product_name_differs", message: `item_id 의 품목 이름은 ${found.name} 이다(받은 이름: ${productName}).` }]
       : []
     return {
       plan: { item, quantity, plannedDate, customer, outboundType, referenceNo, lotNo, memo },
@@ -160,7 +163,7 @@ export const hwPlanMovement: WriteToolDef = defineWrite<HwPlan>({
       warnings,
     }
   },
-  async execute({ plan, warnings }, actor, meta) {
+  async execute({ plan }, actor, meta) {
     const name = actorDisplayName(actor)
     const rows = await createHardwareMovementRows(
       {
@@ -177,7 +180,12 @@ export const hwPlanMovement: WriteToolDef = defineWrite<HwPlan>({
         lotNo: plan.lotNo,
         memo: [plan.memo, `MCP 등록(${actor.name})`].filter(Boolean).join(" · "),
         createdBy: name,
-        raw: { mcp: { caller: actor.name, ...(meta.idempotencyKey ? { idempotency_key: meta.idempotencyKey } : {}) } },
+        raw: {
+          mcp: {
+            caller: actor.name,
+            ...(meta.idempotency ? { idempotency_key_hash: meta.idempotency.keyHash, args_fingerprint: meta.idempotency.fingerprint } : {}),
+          },
+        },
       },
       { actor: { userId: null, name, isInventoryManager: false } }
     )
@@ -187,13 +195,13 @@ export const hwPlanMovement: WriteToolDef = defineWrite<HwPlan>({
       targetId: rows[0]?.id,
       payload: { ids: rows.map((r) => r.id), product_name: rows[0]?.product_name, quantity: rows.reduce((s, r) => s + r.quantity, 0) },
     })
-    const out = movementOutput(rows)
-    const extra = { ...auditWarningField(audit), ...(warnings.length ? { warnings } : {}) }
-    // 결과 꼴은 전과 같은 배열 — 경고·감사 실패가 있을 때만 객체로 감싼다
-    return Object.keys(extra).length ? { movements: out, ...extra } : out
+    // 결과 꼴은 바꾸기 전과 같은 배열 하나. 감사 실패는 로그 코드로만(전에는 logAudit 이 삼켰다)
+    return { output: movementOutput(rows), ...(audit.ok ? {} : { auditFailure: audit.code }) }
   },
-  async findExisting(actor: OpsActor, key: string) {
-    const rows = await findHardwareMovementsByMcpIdempotencyKey(actor.name, key)
-    return rows.length ? movementOutput(rows) : null
+  async findExisting(actor: OpsActor, keyHash: string) {
+    const rows = await findHardwareMovementsByMcpIdempotencyKey(actor.name, keyHash)
+    if (!rows.length) return null
+    const mcp = (rows[0].raw as { mcp?: { args_fingerprint?: unknown } } | null)?.mcp
+    return { result: { output: movementOutput(rows) }, fingerprint: typeof mcp?.args_fingerprint === "string" ? mcp.args_fingerprint : null }
   },
 })
