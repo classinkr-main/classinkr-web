@@ -168,3 +168,37 @@ describe("KR contact table", () => {
     expect(rows).toEqual([expect.objectContaining({ topic: "as", primaryName: "담당 자", verifiedAt: null })])
   })
 })
+
+// 검토(동작-3): 낱말 하나로 한국 갈래가 이기던 질문과, 이긴 갈래 밖 후보가 숨던 것을 고정한다. 질문은 지어낸 것이다.
+describe("resolveContact routing probes", () => {
+  it.each([
+    ["광고 차단 프로그램 켜면 수업 입장이 안 돼요", "marketing"],
+    ["학교 홈페이지에 넣은 ClassIn 링크가 안 열려요", "website_error"],
+    ["관리자 계정으로 학생 추가가 안 돼요", "admin_access"],
+    ["기관 관리자 권한으로 수업 생성이 안돼요", "admin_access"],
+    ["계약 기간 끝났는데 로그인이 막혔어요", "contract"],
+  ])("%j no longer routes to the Korea topic %s", async (question, wrongTopic) => {
+    const card = await resolveContact(question, {})
+    const topic = KR_TOPICS.find((item) => item.key === wrongTopic)!
+    expect(card.reason).not.toBe(`한국 지사 업무: ${topic.area}`)
+  })
+
+  it("still routes our own business words to the Korea table", async () => {
+    for (const question of ["어드민 계정 권한 요청", "계약 갱신 문의", "마케팅 캠페인 리드 유입", "홈페이지 문의 폼이 안 열려요"]) {
+      expect((await resolveContact(question, {})).kind).toBe("kr")
+    }
+  })
+
+  it("keeps the HQ domain as an alternative when a Korea topic wins", async () => {
+    const card = await resolveContact("배송 중 파손된 전자칠판 화면이 안 켜져요", {})
+    expect(card.kind).toBe("kr")
+    expect(card.alternatives.some((item) => item.startsWith("본사 "))).toBe(true)
+  })
+
+  it("keeps the HQ domain as an alternative when a customer is named in a fault question", async () => {
+    const card = await resolveContact(`${CUSTOMER.name} T1 카메라 화질이 흐려요`, deps())
+    expect(card.kind).toBe("customer_owner")
+    expect(card.alternatives).toContain(`본사 ${HQ_DOMAINS.camera.domainLabel}`)
+  })
+})
+

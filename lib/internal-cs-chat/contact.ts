@@ -176,7 +176,8 @@ export const KR_TOPICS: KrTopic[] = [
   {
     key: "contract",
     area: "계약",
-    match: /계약(?:금|서|\s*조건)?/,
+    // 계약 업무 말이 붙을 때만(계약 기간이 끝나 로그인이 막힘 같은 기술 문의는 본사·일반으로 — 검토 동작-3).
+    match: /계약(?:금|서|\s*조건|\s*(?:갱신|연장|해지|체결|문의|담당))/,
     role: "BD 팀 (리드→상담→견적→계약 클로징)",
     roleSource: `lib/branch/current-organization.ts · ${PLAYBOOK}`,
     resolver: null,
@@ -216,7 +217,7 @@ export const KR_TOPICS: KrTopic[] = [
   {
     key: "marketing",
     area: "마케팅 캠페인",
-    match: /마케팅|캠페인|광고|리드\s*유입/,
+    match: /마케팅|캠페인|광고(?!\s*차단)|리드\s*유입/,
     role: "MKT 팀 (리드 발굴·양성)",
     roleSource: `lib/branch/current-organization.ts · ${PLAYBOOK}`,
     resolver: null,
@@ -226,7 +227,8 @@ export const KR_TOPICS: KrTopic[] = [
   {
     key: "website_error",
     area: "홈페이지 오류",
-    match: /홈페이지|웹사이트|사이트\s*오류|랜딩\s*페이지/,
+    // 우리 사이트만. 학교·학원·기관 홈페이지 이야기는 고객 쪽 문제다.
+    match: /(?<!(?:학교|학원|기관|고객사?)\s*)(?:홈페이지|웹사이트)|사이트\s*오류|랜딩\s*페이지/,
     role: null,
     roleSource: null,
     resolver: null,
@@ -236,7 +238,8 @@ export const KR_TOPICS: KrTopic[] = [
   {
     key: "admin_access",
     area: "어드민 계정 권한",
-    match: /어드민\s*(?:계정|권한|로그인)|관리자\s*(?:계정|권한)/,
+    // 우리 어드민만. '기관 관리자 계정'은 ClassIn 기관 관리 화면이라 본사 쪽이다.
+    match: /어드민\s*(?:계정|권한|로그인)|(?:사이트|홈페이지|CRM)\s*관리자\s*(?:계정|권한)/,
     role: "SUPER_ADMIN (슈퍼 어드민)",
     roleSource: "docs/active/admin-os-operating-decisions-2026-07-11.md §1",
     resolver: { by: "admin_role", value: "SUPER_ADMIN" },
@@ -443,7 +446,8 @@ async function customerCard(
   question: string,
   customer: CustomerRef,
   others: CustomerRef[],
-  deps: ResolveContactDeps
+  deps: ResolveContactDeps,
+  extraAlternatives: string[] = []
 ): Promise<ContactCard> {
   const [evidenceResult, consultationResult] = await Promise.all([
     safe(deps.loadCustomerEvidence ? () => deps.loadCustomerEvidence!(customer) : undefined, null),
@@ -510,12 +514,18 @@ async function customerCard(
     evidence,
     verifiedAt: data?.generatedAt ?? null,
     reason: `질문 또는 열린 대화의 고객사 "${customer.name}"`,
-    alternatives: others.map((other) => other.name),
+    alternatives: [...others.map((other) => other.name), ...extraAlternatives],
     gaps,
   }
 }
 
-function krCard(topic: KrTopic, rows: KrContactRow[], staff: StaffMember[], staffFailed: boolean): ContactCard {
+function krCard(
+  topic: KrTopic,
+  rows: KrContactRow[],
+  staff: StaffMember[],
+  staffFailed: boolean,
+  alternatives: string[] = []
+): ContactCard {
   const row = rows.find((item) => item.topic === topic.key) ?? null
   const byRole = staffFor(topic.resolver, staff)
   const directors = branchDirectors(staff)
@@ -549,7 +559,7 @@ function krCard(topic: KrTopic, rows: KrContactRow[], staff: StaffMember[], staf
     evidence,
     verifiedAt: row?.verifiedAt ?? null,
     reason: `한국 지사 업무: ${topic.area}`,
-    alternatives: [],
+    alternatives,
     gaps,
   }
 }
@@ -601,20 +611,24 @@ export async function resolveContact(
   // ① 고객사
   const found = await safe(deps.findCustomersInText ? () => deps.findCustomersInText!(text) : undefined, [] as CustomerRef[])
   const customers = found.value.length > 0 ? found.value : options.openCustomer ? [options.openCustomer] : []
+  // 이긴 갈래 말고 다른 갈래 후보도 alternatives 로 보인다(검토 동작-3 — 고장 문의가 고객사·한국 갈래로 가도
+  // 본사 영역을 함께 보이게).
+  const topic = KR_TOPICS.find((item) => item.match.test(text))
+  const classification = classifyHqDomain(text, options.tags ?? [])
+  const hqAlternative = classification.domain !== "general" ? [`본사 ${HQ_DOMAINS[classification.domain]?.domainLabel ?? classification.domain}`] : []
   if (customers.length > 0) {
-    return customerCard(text, customers[0], customers.slice(1), deps)
+    const krAlternative = topic && topic.key !== "hq_escalation" ? [`한국 지사 ${topic.area}`] : []
+    return customerCard(text, customers[0], customers.slice(1), deps, [...krAlternative, ...hqAlternative])
   }
 
   const staffResult = await safe(deps.listStaff, [] as StaffMember[])
 
   // ② 한국 지사 업무(R20: 본사보다 먼저)
-  const topic = KR_TOPICS.find((item) => item.match.test(text))
   if (topic && topic.key !== "hq_escalation") {
-    return krCard(topic, deps.krContacts ?? readKrContacts(), staffResult.value, staffResult.failed)
+    return krCard(topic, deps.krContacts ?? readKrContacts(), staffResult.value, staffResult.failed, hqAlternative)
   }
 
   // ③ 본사 기술
-  const classification = classifyHqDomain(text, options.tags ?? [])
   if (classification.domain !== "general") return hqCard(classification.domain, classification.candidates)
   // "본사에 문의" 처럼 영역을 모르는 본사 요청은 1차 접점(小助手)으로.
   if (topic) return hqCard("general", classification.candidates)
