@@ -1,0 +1,2288 @@
+[
+  {
+    "id": "gap:homework/exam-shuffle",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "homework",
+    "topic": "시험 문항·보기 순서 섞기",
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_exam",
+      "C_question_shuffle"
+    ],
+    "anchors": [
+      "문항 섞기",
+      "보기 섞기",
+      "선지 섞기",
+      "순서 섞기",
+      "문제 순서 랜덤",
+      "랜덤 출제",
+      "문제 셔플",
+      "학생마다 다른 순서"
+    ],
+    "covers": "시험 문항이나 보기(선지) 순서를 학생마다 무작위로 섞는 기능은 공개 문서에 없다는 것",
+    "notCovers": [
+      "문제은행에서 문항 불러와 다시 쓰기 → doc:/docs/software/lesson-activities#summary/question-bank-reuse",
+      "시험 중 다른 앱 전환 감지 → fixed:exam-cheating-detection"
+    ],
+    "negatives": [
+      {
+        "q": "문제은행에 모아 둔 문제로 다음 시험 만들 수 있나요",
+        "route": "doc:/docs/software/lesson-activities#summary/question-bank-reuse"
+      },
+      {
+        "q": "시험 보는 중에 학생이 다른 앱 켜면 알 수 있어요?",
+        "route": "fixed:exam-cheating-detection"
+      },
+      {
+        "q": "시험 끝나고 선지별로 몇 명이 골랐는지 보여요?",
+        "route": "doc:/docs/software/lesson-activities#3/exam-result-analysis"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "섞기",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "순서 섞",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "무작위",
+        "units": 2,
+        "site": 1,
+        "checked": "무관(교실 도구 랜덤 발표자 뽑기·개인정보 익명 식별값)"
+      },
+      {
+        "query": "문항 순서",
+        "units": 24,
+        "site": 0,
+        "checked": "무관(AI 칠판 문항 게시 순서 안내, 시험 문항 섞기 아님)"
+      },
+      {
+        "query": "선지 순서",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-homework",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:homework/exam-retake",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "homework",
+    "topic": "시험 재응시 횟수 설정",
+    "asks": [
+      "yesno",
+      "howto",
+      "quantity"
+    ],
+    "concepts": [
+      "C_exam",
+      "C_exam_retake"
+    ],
+    "anchors": [
+      "재응시",
+      "재시험",
+      "응시 횟수",
+      "응시 기회",
+      "다시 응시",
+      "두 번 응시",
+      "시험 한 번 더"
+    ],
+    "covers": "학생이 같은 시험을 다시 보게 하거나 응시 횟수를 정하는 기능은 공개 문서에 없다는 것",
+    "notCovers": [
+      "시험 본 뒤 틀린 문제 다시 보기 → fixed:student-exam-see-wrong-answers",
+      "마감 뒤에도 시험 제출 허용 → doc:/docs/teacher/course-activities#4/late-submission-allowed"
+    ],
+    "negatives": [
+      {
+        "q": "시험 다 보고 나서 틀린 문제 다시 볼 수 있어요?",
+        "route": "fixed:student-exam-see-wrong-answers"
+      },
+      {
+        "q": "마감 시간 지나서도 시험 제출되게 할 수 있나요",
+        "route": "doc:/docs/teacher/course-activities#4/late-submission-allowed"
+      },
+      {
+        "q": "이미 낸 숙제 고쳐서 다시 내도 되나요",
+        "route": "doc:/docs/student/course-submit-activity#2/edit-after-submit"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "재응시",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "응시 횟수",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "응시 기회",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "재시험",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-homework",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:homework/exam-password",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "homework",
+    "topic": "시험 응시 비밀번호",
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_exam",
+      "C_exam_password"
+    ],
+    "anchors": [
+      "시험 비밀번호",
+      "응시 비밀번호",
+      "시험 암호",
+      "응시 코드",
+      "시험 잠금",
+      "응시 암호"
+    ],
+    "covers": "시험에 비밀번호나 응시 코드를 걸어 아는 학생만 시작하게 하는 기능은 공개 문서에 없다는 것",
+    "notCovers": [
+      "시험을 특정 학생에게만 게시 → doc:/docs/teacher/course-activities#1/publish-settings",
+      "코스 입장 비밀번호 → gap:course/course-password"
+    ],
+    "negatives": [
+      {
+        "q": "학생끼리 시험 성적 못 보게 막을 수 있나요",
+        "route": "doc:/docs/teacher/course-activities#5/exam-hide-scores"
+      },
+      {
+        "q": "활동 올릴 때 게시 대상 학생 고르는 곳",
+        "route": "doc:/docs/teacher/course-activities#1/publish-settings"
+      },
+      {
+        "q": "시험 응시 시간은 어디서 정해요",
+        "route": "doc:/docs/software/lesson-activities#3/exam-auto-grading"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "시험 비밀번호",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "응시 비밀번호",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "응시 코드",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "시험 암호",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-homework",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:homework/deadline-extension",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "homework",
+    "topic": "학생별 숙제 마감 연장",
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_late_submission",
+      "C_deadline_extension"
+    ],
+    "anchors": [
+      "마감 연장",
+      "기한 연장",
+      "개별 마감",
+      "학생별 마감",
+      "한 명만 마감",
+      "마감 늘리기",
+      "특정 학생 연장"
+    ],
+    "covers": "숙제·시험 마감 시간을 특정 학생에게만 따로 늘려 주는 기능은 공개 문서에 없다는 것과 공개된 마감 뒤 제출 허용 설정",
+    "notCovers": [
+      "반 전체에 마감 뒤 제출 허용 → doc:/docs/teacher/course-activities#4/late-submission-allowed",
+      "학생이 마감 지난 숙제 다시 내기 → fixed:homework-deadline-missed"
+    ],
+    "negatives": [
+      {
+        "q": "마감 지나도 숙제 받을 수 있게 하는 설정 있나요",
+        "route": "doc:/docs/teacher/course-activities#4/late-submission-allowed"
+      },
+      {
+        "q": "마감 지난 숙제 지금이라도 낼 수 있어요?",
+        "route": "fixed:homework-deadline-missed"
+      },
+      {
+        "q": "숙제 만들 때 시작이랑 마감 시간 정하는 법",
+        "route": "fixed:create-homework-with-deadline"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": [
+        {
+          "unit": "doc:/docs/teacher/course-activities#4",
+          "i": 10,
+          "hash": "f12e40fb01b15372"
+        },
+        {
+          "unit": "doc:/docs/teacher/course-activities#5",
+          "i": 16,
+          "hash": "83b9933b8afa3ab3"
+        }
+      ]
+    },
+    "searchLog": [
+      {
+        "query": "마감 연장",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "기한 연장",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "개별 마감",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "마감 시간 변경",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-homework",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:homework/late-penalty",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "homework",
+    "topic": "늦은 제출 감점",
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_late_submission",
+      "C_late_penalty"
+    ],
+    "anchors": [
+      "감점",
+      "지각 감점",
+      "늦은 제출 감점",
+      "늦게 내면 감점",
+      "점수 차감",
+      "하루 늦을 때마다"
+    ],
+    "covers": "마감 뒤에 낸 숙제·시험 점수를 자동으로 깎는 규칙은 공개 문서에 없다는 것과 공개된 마감 뒤 제출 허용 설정",
+    "notCovers": [
+      "늦게 낸 숙제 제출 시각 표시 → fixed:late-homework-submit-time-visible",
+      "마감 뒤 제출 허용 → doc:/docs/teacher/course-activities#4/late-submission-allowed"
+    ],
+    "negatives": [
+      {
+        "q": "늦게 낸 숙제는 언제 냈는지 시각이 보이나요",
+        "route": "fixed:late-homework-submit-time-visible"
+      },
+      {
+        "q": "마감 후에도 제출 허용하는 옵션 어디 있어요",
+        "route": "doc:/docs/teacher/course-activities#4/late-submission-allowed"
+      },
+      {
+        "q": "숙제 점수랑 코멘트는 어디서 줘요",
+        "route": "doc:/docs/teacher/course-activities#4/feedback"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": [
+        {
+          "unit": "doc:/docs/teacher/course-activities#4",
+          "i": 10,
+          "hash": "f12e40fb01b15372"
+        },
+        {
+          "unit": "doc:/docs/teacher/course-activities#5",
+          "i": 16,
+          "hash": "83b9933b8afa3ab3"
+        }
+      ]
+    },
+    "searchLog": [
+      {
+        "query": "감점",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "지각 제출",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "늦은 제출",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "\"활동 종료 후 제출\"",
+        "units": 1,
+        "site": 0,
+        "checked": "관련(시험 마감 뒤 제출 허용 설정) — related 로 넣음, 감점 규칙은 없음"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-homework",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:homework/grade-excel-export",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "homework",
+    "topic": "성적 엑셀 내보내기",
+    "asks": [
+      "yesno",
+      "howto",
+      "where"
+    ],
+    "concepts": [
+      "C_lms",
+      "C_grade_export"
+    ],
+    "anchors": [
+      "성적 엑셀",
+      "성적 내보내기",
+      "점수 엑셀",
+      "성적 다운로드",
+      "성적 파일",
+      "점수 표 내려받기",
+      "성적 추출"
+    ],
+    "covers": "숙제·시험 성적을 엑셀 파일로 내려받는 기능은 공개 문서에 없다는 것과 공개된 학생별 리포트 PDF 저장",
+    "notCovers": [
+      "학생별 월간 리포트 PDF 저장 → doc:/docs/admin/statistics-data#summary/month-end-stats-flow",
+      "수업 횟수·출석 통계 엑셀 → doc:/docs/admin/statistics-data#0/stats-two-menus"
+    ],
+    "negatives": [
+      {
+        "q": "학생별 월간 리포트 PDF로 저장하는 순서",
+        "route": "doc:/docs/admin/statistics-data#summary/month-end-stats-flow"
+      },
+      {
+        "q": "수업 횟수 통계 엑셀로 받는 곳이 어디예요",
+        "route": "doc:/docs/admin/statistics-data#0/stats-two-menus"
+      },
+      {
+        "q": "시험 문제를 엑셀 양식으로 한꺼번에 올릴 수 있나요",
+        "route": "doc:/docs/teacher/course-activities#5/exam-bulk-add"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": [
+        {
+          "unit": "doc:/docs/admin/statistics-data#summary",
+          "i": 4,
+          "hash": "914a6955316a0457"
+        }
+      ]
+    },
+    "searchLog": [
+      {
+        "query": "성적 내보내기",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "성적 엑셀",
+        "units": 2,
+        "site": 0,
+        "checked": "무관(도입 전 성적을 엑셀에 따로 두던 상황 설명)"
+      },
+      {
+        "query": "성적 다운로드",
+        "units": 1,
+        "site": 0,
+        "checked": "무관(성적은 코스 [성적]에서 본다는 문장, 엑셀 내보내기 아님)"
+      },
+      {
+        "query": "점수 엑셀",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-homework",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:homework/exam-math-formula",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "homework",
+    "topic": "시험 문제 수식 입력",
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_exam",
+      "C_math_equation"
+    ],
+    "anchors": [
+      "수식 입력",
+      "수식 편집기",
+      "수학 기호",
+      "LaTeX",
+      "분수 입력",
+      "루트 기호",
+      "수학 공식 입력"
+    ],
+    "covers": "시험 문제를 만들 때 수식 편집기로 수학 기호를 넣는 기능은 공개 문서에 없다는 것과 문제에 사진을 붙이는 방법",
+    "notCovers": [
+      "AI 칠판 손글씨 수식 인식 → doc:/docs/updates/classin-609-update#2/ai-board-609-improve",
+      "시험 문제에 사진 붙이기 → doc:/docs/teacher/course-activities#5/exam-manual-add"
+    ],
+    "negatives": [
+      {
+        "q": "시험 문제에 그림 파일 붙일 수 있어요?",
+        "route": "doc:/docs/teacher/course-activities#5/exam-manual-add"
+      },
+      {
+        "q": "AI 칠판이 손으로 쓴 풀이도 읽어서 채점하나요",
+        "route": "doc:/docs/updates/classin-609-update#2/ai-board-609-improve"
+      },
+      {
+        "q": "워드 파일로 시험 문제 한 번에 올리는 법",
+        "route": "doc:/docs/teacher/course-activities#5/exam-bulk-add"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": [
+        {
+          "unit": "doc:/docs/teacher/course-activities#5",
+          "i": 7,
+          "hash": "50249dbc3ec68f2e"
+        }
+      ]
+    },
+    "searchLog": [
+      {
+        "query": "수식 입력",
+        "units": 5,
+        "site": 0,
+        "checked": "무관(AI 칠판 문제·답 입력 방법, 시험 문항 수식 편집기 아님)"
+      },
+      {
+        "query": "수학 기호",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "LaTeX",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "수식 편집",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-homework",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:homework/exam-extra-time",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "homework",
+    "topic": "학생별 시험 시간 연장",
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_exam",
+      "C_exam_extra_time"
+    ],
+    "anchors": [
+      "시험 시간 연장",
+      "응시 시간 연장",
+      "추가 시간",
+      "시간 더 주기",
+      "학생별 응시 시간",
+      "개별 시간 연장"
+    ],
+    "covers": "특정 학생에게만 시험 응시 시간을 더 주거나 진행 중에 늘리는 기능은 공개 문서에 없다는 것과 응시 시간을 정하는 곳",
+    "notCovers": [
+      "시험 응시 시간 설정 → doc:/docs/software/lesson-activities#3/exam-auto-grading",
+      "마감 뒤 시험 제출 허용 → doc:/docs/teacher/course-activities#4/late-submission-allowed"
+    ],
+    "negatives": [
+      {
+        "q": "시험 응시 시간은 어디서 설정해요",
+        "route": "doc:/docs/software/lesson-activities#3/exam-auto-grading"
+      },
+      {
+        "q": "시험 끝난 뒤에도 제출받을 수 있나요",
+        "route": "doc:/docs/teacher/course-activities#4/late-submission-allowed"
+      },
+      {
+        "q": "학생별로 시험 푸는 데 걸린 시간 보여요?",
+        "route": "doc:/docs/software/lesson-activities#3/exam-result-analysis"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": [
+        {
+          "unit": "doc:/docs/software/lesson-activities#3",
+          "i": 6,
+          "hash": "183d02e25313b774"
+        }
+      ]
+    },
+    "searchLog": [
+      {
+        "query": "시간 연장",
+        "units": 2,
+        "site": 0,
+        "checked": "무관(수업 연장 제한 시간축)"
+      },
+      {
+        "query": "응시 시간 연장",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "\"응시 시간\"",
+        "units": 4,
+        "site": 0,
+        "checked": "관련(시험 전체 응시 시간 설정) — related 로 넣음, 학생별 연장은 없음"
+      },
+      {
+        "query": "시험 시간 추가",
+        "units": 7,
+        "site": 0,
+        "checked": "무관(새 시험 추가 화면·시간 설정 일반)"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-homework",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:homework/exam-disconnect",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "homework",
+    "topic": "시험 중 연결 끊김 시 답안 보존",
+    "asks": [
+      "yesno",
+      "symptom",
+      "howto"
+    ],
+    "concepts": [
+      "C_exam",
+      "C_disconnect",
+      "C_exam_answer_autosave"
+    ],
+    "anchors": [
+      "시험 중 끊김",
+      "시험 보다 튕김",
+      "답안 날아감",
+      "답안 자동 저장",
+      "시험 중 인터넷 끊김",
+      "이어서 풀기"
+    ],
+    "covers": "시험 도중 인터넷이 끊기거나 앱이 꺼졌을 때 쓰던 답안이 남는지와 이어 푸는 방법은 공개 문서에 없다는 것",
+    "notCovers": [
+      "수업 중 끊김·튕김 점검 → fixed:class-disconnect",
+      "시험 볼 때 권장 기기 → doc:/docs/student/course-submit-activity#5/exam-device"
+    ],
+    "negatives": [
+      {
+        "q": "수업 중에 자꾸 튕기면 뭐부터 봐요",
+        "route": "fixed:class-disconnect"
+      },
+      {
+        "q": "시험은 휴대폰보다 태블릿으로 보는 게 나아요?",
+        "route": "doc:/docs/student/course-submit-activity#5/exam-device"
+      },
+      {
+        "q": "숙제 쓰다가 초안으로 저장해 둘 수 있나요",
+        "route": "doc:/docs/student/course-submit-activity#3/draft-save"
+      }
+    ],
+    "handoff": "support",
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "support",
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "시험 끊김",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "답안 저장",
+        "units": 1,
+        "site": 0,
+        "checked": "무관(교사 연속 채점 초안 저장)"
+      },
+      {
+        "query": "응시 중 튕",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "\"시험\" 네트워크",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-homework",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:homework/homework-media-length",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "homework",
+    "topic": "숙제 영상·녹음 길이 한도",
+    "asks": [
+      "quantity",
+      "yesno"
+    ],
+    "concepts": [
+      "C_homework_attach",
+      "C_media_length_limit"
+    ],
+    "anchors": [
+      "영상 길이 제한",
+      "녹음 길이 제한",
+      "몇 분까지 녹음",
+      "몇 분까지 촬영",
+      "동영상 숙제 길이",
+      "녹음 시간 제한"
+    ],
+    "covers": "숙제로 내는 영상·음성 녹음을 몇 분까지 올릴 수 있는지는 공개 문서에 없다는 것",
+    "notCovers": [
+      "숙제 제출 형식(글·사진·음성·영상) → doc:/docs/software/lesson-activities#2/homework-submit-formats",
+      "드라이브 파일 하나 업로드 크기 → fixed:basics-file-upload-size"
+    ],
+    "negatives": [
+      {
+        "q": "숙제를 영상으로 내게 할 수 있나요",
+        "route": "doc:/docs/software/lesson-activities#2/homework-submit-formats"
+      },
+      {
+        "q": "휴대폰 숙제에 음성 파일도 붙일 수 있어요?",
+        "route": "doc:/docs/student/course-submit-activity#3/mobile-attach-types"
+      },
+      {
+        "q": "드라이브에 파일 하나 최대 몇 기가까지 올라가요",
+        "route": "fixed:basics-file-upload-size"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "녹음 길이",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "영상 길이 제한",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "\"숙제\" 영상 길이",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "몇 분까지",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-homework",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:homework/group-assignment",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "homework",
+    "topic": "조별 과제",
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_learning_activity",
+      "C_group_assignment"
+    ],
+    "anchors": [
+      "조별 과제",
+      "그룹 과제",
+      "팀 과제",
+      "모둠 과제",
+      "팀 프로젝트",
+      "조별 숙제",
+      "조원"
+    ],
+    "covers": "학생을 조로 묶어 한 조가 과제를 함께 내고 같은 점수를 받는 기능은 공개 문서에 없다는 것",
+    "notCovers": [
+      "수업 중 조별 활동 도구 → howto:breakout-groups",
+      "토론 활동 → doc:/docs/teacher/course-activities#7/discussion"
+    ],
+    "negatives": [
+      {
+        "q": "수업 시간에 조별 활동 시키는 도구 있나요",
+        "route": "howto:breakout-groups"
+      },
+      {
+        "q": "학생들이 의견 올리고 댓글 다는 토론 활동 만들기",
+        "route": "doc:/docs/teacher/course-activities#7/discussion"
+      },
+      {
+        "q": "학생끼리 서로 숙제 보고 평가하게 할 수 있나요",
+        "route": "fixed:homework-peer-review-anonymous"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "조별 과제",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "그룹 과제",
+        "units": 0,
+        "site": 1,
+        "checked": "무관(소개 페이지 기능 나열)"
+      },
+      {
+        "query": "팀 과제",
+        "units": 2,
+        "site": 0,
+        "checked": "무관(운영팀·과제 안내 문장)"
+      },
+      {
+        "query": "모둠 과제",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-homework",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:homework/exam-print",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "homework",
+    "topic": "시험지 인쇄",
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_exam",
+      "C_exam_print"
+    ],
+    "anchors": [
+      "시험지 인쇄",
+      "시험지 출력",
+      "시험지 프린트",
+      "문제지 인쇄",
+      "종이 시험지",
+      "시험지 PDF 저장"
+    ],
+    "covers": "만든 시험지를 종이로 인쇄하거나 PDF로 내보내는 기능은 공개 문서에 없다는 것",
+    "notCovers": [
+      "학생별 월간 리포트 PDF 저장 → doc:/docs/admin/statistics-data#summary/month-end-stats-flow",
+      "가진 시험지 파일로 OMR 카드 만들기 → doc:/docs/teacher/course-activities#6/omr"
+    ],
+    "negatives": [
+      {
+        "q": "학생 성적 리포트를 PDF로 저장할 수 있나요",
+        "route": "doc:/docs/admin/statistics-data#summary/month-end-stats-flow"
+      },
+      {
+        "q": "갖고 있는 시험지 파일로 답만 입력받을 수 있어요?",
+        "route": "doc:/docs/teacher/course-activities#6/omr"
+      },
+      {
+        "q": "만든 시험지를 문제 은행에 저장해 두려면요",
+        "route": "doc:guide:bulk-exam-upload/question-bank-save"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "시험지 인쇄",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "프린트",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "종이로",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "시험지 출력",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-homework",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:homework/wrong-answer-note",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "homework",
+    "topic": "오답노트 자동 정리",
+    "asks": [
+      "yesno",
+      "where"
+    ],
+    "concepts": [
+      "C_exam",
+      "C_wrong_answer_note"
+    ],
+    "anchors": [
+      "오답노트",
+      "오답 노트",
+      "오답 정리",
+      "오답 모음",
+      "틀린 문제 모아보기",
+      "오답 복습"
+    ],
+    "covers": "학생이 틀린 문제를 여러 시험에 걸쳐 자동으로 모아 오답노트를 만들어 주는 기능은 공개 문서에 없다는 것과 시험별 틀린 문제 확인 방법",
+    "notCovers": [
+      "시험 본 뒤 틀린 문제 보기 → doc:/docs/student/course-submit-activity#5/exam-result-review",
+      "반 전체 문제별 정답률 → doc:/docs/software/lesson-activities#3/exam-result-analysis"
+    ],
+    "negatives": [
+      {
+        "q": "시험 끝나고 틀린 문제 어디서 봐요",
+        "route": "doc:/docs/student/course-submit-activity#5/exam-result-review"
+      },
+      {
+        "q": "반 전체가 많이 틀린 문항 찾는 법",
+        "route": "doc:/docs/software/lesson-activities#3/exam-result-analysis"
+      },
+      {
+        "q": "AI 평가 보고 약한 단원부터 복습하는 법",
+        "route": "doc:/docs/student/ai-features#4/eval-review-plan"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": [
+        {
+          "unit": "doc:/docs/student/course-submit-activity#5",
+          "i": 4,
+          "hash": "e608d3fe1cecba33"
+        }
+      ]
+    },
+    "searchLog": [
+      {
+        "query": "오답노트",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "오답 노트",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "오답 정리",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "\"틀린 문제\"",
+        "units": 3,
+        "site": 0,
+        "checked": "관련(시험별 틀린 문제 확인) — related 로 넣음, 자동 오답노트는 없음"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-homework",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:homework/question-content",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "homework",
+    "topic": "기출·교재 문항 콘텐츠 제공",
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_question_bank",
+      "C_question_content"
+    ],
+    "anchors": [
+      "기출문제",
+      "기출 문항",
+      "교재 문제",
+      "문제 콘텐츠",
+      "내신 기출",
+      "수능 기출",
+      "문제 DB"
+    ],
+    "covers": "클래스인이 기출문제·교재 문항 같은 시험 문제 콘텐츠를 따로 제공하는지는 공개 문서에 없다는 것과 문제은행 제공 범위가 기관 설정·계약에 따라 다르다는 것",
+    "notCovers": [
+      "자주 내는 문항을 문제은행에 모아 다시 쓰기 → doc:/docs/software/lesson-activities#summary/question-bank-reuse",
+      "AI로 시험 문제 만들기 → doc:/docs/teacher/course-activities#5/exam-ai"
+    ],
+    "negatives": [
+      {
+        "q": "자주 내는 문제를 문제은행에 저장해 다시 쓸 수 있나요",
+        "route": "doc:/docs/software/lesson-activities#summary/question-bank-reuse"
+      },
+      {
+        "q": "주제랑 난이도 넣으면 AI가 시험 문제 만들어 줘요?",
+        "route": "doc:/docs/teacher/course-activities#5/exam-ai"
+      },
+      {
+        "q": "엑셀 템플릿으로 문제 수십 개 한 번에 올리기",
+        "route": "doc:/docs/teacher/course-activities#5/exam-bulk-add"
+      }
+    ],
+    "handoff": "demo",
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "demo",
+      "related": [
+        {
+          "unit": "doc:/docs/software/lesson-activities#summary",
+          "i": 4,
+          "hash": "210b00b2a40b0195"
+        },
+        {
+          "unit": "doc:/docs/software/lesson-activities#summary",
+          "i": 5,
+          "hash": "9217d640a7b1817d"
+        }
+      ]
+    },
+    "searchLog": [
+      {
+        "query": "기출문제",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "교재 문제",
+        "units": 8,
+        "site": 0,
+        "checked": "무관(교재 음원 소리 문제·같은 교재 반 운영)"
+      },
+      {
+        "query": "콘텐츠 제공",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "\"문제은행 제공\"",
+        "units": 3,
+        "site": 0,
+        "checked": "관련(문제은행 제공 범위는 기관 설정·계약에 따라 다름) — related 로 넣음, 기출 콘텐츠 언급은 없음"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-homework",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:homework/voice-feedback",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "homework",
+    "topic": "선생님 음성 피드백",
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_homework_feedback",
+      "C_voice_feedback"
+    ],
+    "anchors": [
+      "음성 피드백",
+      "음성 첨삭",
+      "녹음 피드백",
+      "음성 코멘트",
+      "목소리 코멘트",
+      "보이스 메모"
+    ],
+    "covers": "선생님이 숙제 피드백을 음성으로 녹음해 남기는 기능은 공개 문서에 없다는 것과 공개된 첨삭·코멘트 방법",
+    "notCovers": [
+      "숙제 첨삭·코멘트·재채점 → doc:/docs/teacher/course-activities#4/feedback",
+      "학생이 음성으로 숙제 내기 → doc:/docs/software/lesson-activities#2/homework-submit-formats"
+    ],
+    "negatives": [
+      {
+        "q": "숙제에 빨간색으로 직접 첨삭할 수 있나요",
+        "route": "doc:/docs/teacher/course-activities#4/feedback"
+      },
+      {
+        "q": "학생이 숙제를 음성 녹음으로 내도 되나요",
+        "route": "doc:/docs/software/lesson-activities#2/homework-submit-formats"
+      },
+      {
+        "q": "선생님 피드백이 학생 화면에는 어떻게 보여요",
+        "route": "fixed:homework-feedback-hidden"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": [
+        {
+          "unit": "doc:/docs/teacher/course-activities#4",
+          "i": 20,
+          "hash": "48fb907c4995f41c"
+        }
+      ]
+    },
+    "searchLog": [
+      {
+        "query": "음성 피드백",
+        "units": 1,
+        "site": 1,
+        "checked": "무관(학생 음성 녹음 제출·소개 페이지 AI 음성 어시스턴트)"
+      },
+      {
+        "query": "음성 첨삭",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "녹음 피드백",
+        "units": 1,
+        "site": 0,
+        "checked": "무관(학생 음성 녹음 제출)"
+      },
+      {
+        "query": "음성 코멘트",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-homework",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:homework/grade-appeal",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "homework",
+    "topic": "채점 이의 신청",
+    "asks": [
+      "yesno",
+      "howto",
+      "where"
+    ],
+    "concepts": [
+      "C_grade_appeal"
+    ],
+    "anchors": [
+      "이의 신청",
+      "채점 이의",
+      "점수 이의",
+      "점수 정정",
+      "채점 항의",
+      "점수 잘못 매겨짐"
+    ],
+    "covers": "학생이 채점 결과에 이의를 신청하거나 점수 정정을 요청하는 기능은 공개 문서에 없다는 것",
+    "notCovers": [
+      "진행 중 시험 문항 오류 수정 → fixed:exam-question-error-midway",
+      "선생님이 이미 준 피드백 고치기 → doc:/docs/teacher/course-activities#4/feedback"
+    ],
+    "negatives": [
+      {
+        "q": "점수 칸이 비어 있는데 0점인 거예요?",
+        "route": "doc:/docs/student/course-grades#2/blank-vs-zero"
+      },
+      {
+        "q": "시험 보는 중에 문제가 잘못된 걸 알았을 때 고치는 법",
+        "route": "fixed:exam-question-error-midway"
+      },
+      {
+        "q": "이미 채점한 숙제 점수 다시 매기는 법",
+        "route": "doc:/docs/teacher/course-activities#4/feedback"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "이의 신청",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "점수 정정",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "채점 오류",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "이의제기",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-homework",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:homework/self-assessment",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "homework",
+    "topic": "학생 자기평가",
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_self_assessment"
+    ],
+    "anchors": [
+      "자기평가",
+      "자가 평가",
+      "셀프 평가",
+      "스스로 평가",
+      "자기 점검표",
+      "학습 성찰"
+    ],
+    "covers": "학생이 스스로 학습을 평가하는 자기평가 활동이나 양식은 공개 문서에 없다는 것",
+    "notCovers": [
+      "AI 평가 탭 → doc:/docs/software/ai-learning-tools#2/ai-evaluation-where",
+      "학생끼리 숙제 동료 평가 → fixed:homework-peer-review-anonymous"
+    ],
+    "negatives": [
+      {
+        "q": "AI 평가 탭에서는 뭘 볼 수 있어요",
+        "route": "doc:/docs/software/ai-learning-tools#2/ai-evaluation-where"
+      },
+      {
+        "q": "토론 활동에서 학생 의견에 점수 줄 수 있나요",
+        "route": "doc:/docs/teacher/course-activities#7/discussion-manage"
+      },
+      {
+        "q": "학생끼리 서로 숙제 평가하게 하기",
+        "route": "fixed:homework-peer-review-anonymous"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "자기평가",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "자가 평가",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "스스로 평가",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "셀프 평가",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-homework",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:homework/paper-omr-scan",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "homework",
+    "topic": "종이 답안지 스캔 채점",
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_paper_scan_grading"
+    ],
+    "anchors": [
+      "답안지 스캔",
+      "OMR 스캔",
+      "종이 OMR",
+      "종이 답안지",
+      "스캐너 채점",
+      "마킹지 스캔"
+    ],
+    "covers": "종이 OMR 답안지를 스캔해 자동 채점하는 기능은 공개 문서에 없다는 것과 공개된 OMR 카드·오프라인 시험 점수 입력 범위",
+    "notCovers": [
+      "가진 시험지 파일로 OMR 카드 만들기 → doc:/docs/teacher/course-activities#6/omr",
+      "오프라인 시험 점수 일괄 입력 → doc:/docs/teacher/course-activities#5/exam-bulk-score"
+    ],
+    "negatives": [
+      {
+        "q": "갖고 있는 시험지 파일 그대로 OMR 카드로 쓸 수 있나요",
+        "route": "doc:/docs/teacher/course-activities#6/omr"
+      },
+      {
+        "q": "학원에서 본 종이 시험 점수 한꺼번에 입력돼요?",
+        "route": "doc:/docs/teacher/course-activities#5/exam-bulk-score"
+      },
+      {
+        "q": "OMR 카드 시험 휴대폰으로 보면 어떻게 보여요",
+        "route": "doc:/docs/teacher/course-activities#6/omr-mobile"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": [
+        {
+          "unit": "doc:/docs/software/lesson-activities#3",
+          "i": 10,
+          "hash": "242c198f87a93874"
+        },
+        {
+          "unit": "doc:/docs/teacher/course-activities#5",
+          "i": 19,
+          "hash": "8841fc8ba04f8f76"
+        }
+      ]
+    },
+    "searchLog": [
+      {
+        "query": "답안지 스캔",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "스캐너",
+        "units": 0,
+        "site": 2,
+        "checked": "무관(소개 페이지 비교표의 OMR 스캐너 대체 언급, 스캔 채점 기능 아님)"
+      },
+      {
+        "query": "종이 답안지",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "\"오프라인 시험\"",
+        "units": 1,
+        "site": 0,
+        "checked": "관련(오프라인 시험 점수 일괄 업로드 없음) — related 로 넣음"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-homework",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:homework/letter-grade",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "homework",
+    "topic": "등급제 성적 표시",
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_letter_grade"
+    ],
+    "anchors": [
+      "성적 등급",
+      "등급제",
+      "A등급",
+      "학점",
+      "등급으로 표시",
+      "등급 환산",
+      "ABC 등급"
+    ],
+    "covers": "점수를 A·B·C 같은 등급이나 학점으로 바꿔 보여 주는 기능은 공개 문서에 없다는 것",
+    "notCovers": [
+      "종합 성적(평균) 뜻 → doc:/docs/student/course-grades#2/overall-average",
+      "시험 100점 만점 환산 → fixed:exam-per-question-points-partial-100"
+    ],
+    "negatives": [
+      {
+        "q": "종합 성적 평균은 어떻게 계산돼요",
+        "route": "doc:/docs/student/course-grades#2/overall-average"
+      },
+      {
+        "q": "시험 점수를 100점 만점으로 바꿔 보여 줄 수 있나요",
+        "route": "fixed:exam-per-question-points-partial-100"
+      },
+      {
+        "q": "시험 게시 전에 성적 카테고리 정하는 곳",
+        "route": "doc:guide:cs-figma-digest-2034/exam-detail-settings"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "등급",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "학점",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "성적 환산",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "등급제",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-homework",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:homework/achievement-standards",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "homework",
+    "topic": "교육과정 성취기준 연결",
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_achievement_standard"
+    ],
+    "anchors": [
+      "성취기준",
+      "성취 기준",
+      "교육과정 성취기준",
+      "성취수준",
+      "교육과정 연계",
+      "성취기준 코드"
+    ],
+    "covers": "숙제·시험 문항을 교육과정 성취기준에 연결해 관리하는 기능은 공개 문서에 없다는 것",
+    "notCovers": [
+      "문제은행 학습 단계·과목 분류 → doc:/docs/teacher/course-activities#5/exam-manual-add",
+      "단원으로 활동 묶기 → doc:/docs/teacher/course-activities#1/default-unit"
+    ],
+    "negatives": [
+      {
+        "q": "문제은행에 저장할 때 학년이랑 과목으로 분류할 수 있나요",
+        "route": "doc:/docs/teacher/course-activities#5/exam-manual-add"
+      },
+      {
+        "q": "단원 안 정하고 활동 올리면 어디로 가요",
+        "route": "doc:/docs/teacher/course-activities#1/default-unit"
+      },
+      {
+        "q": "앞 활동 끝내야 다음 활동 열리게 하기",
+        "route": "doc:/docs/teacher/course-activities#1/prereq"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "성취기준",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "성취 기준",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "교육과정 기준",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "성취수준",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-homework",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:homework/exam-calculator",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "homework",
+    "topic": "시험 중 계산기 사용",
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_exam",
+      "C_calculator"
+    ],
+    "anchors": [
+      "계산기",
+      "공학용 계산기",
+      "시험 계산기",
+      "계산기 허용",
+      "계산기 띄우기"
+    ],
+    "covers": "시험 화면에서 계산기를 쓰게 하거나 막는 기능은 공개 문서에 없다는 것",
+    "notCovers": [
+      "시험 볼 때 쓰는 기기 → doc:/docs/student/course-submit-activity#5/exam-device",
+      "시험 중 다른 앱 전환 감지 → fixed:exam-cheating-detection"
+    ],
+    "negatives": [
+      {
+        "q": "시험은 어떤 기기로 보는 게 좋아요",
+        "route": "doc:/docs/student/course-submit-activity#5/exam-device"
+      },
+      {
+        "q": "시험 지문이랑 문제를 나란히 띄울 수 있나요",
+        "route": "fixed:exam-split-view-highlight"
+      },
+      {
+        "q": "시험 중에 학생이 다른 앱으로 넘어가면 기록돼요?",
+        "route": "fixed:exam-cheating-detection"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "계산기",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "공학용",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "시험 중 도구",
+        "units": 2,
+        "site": 0,
+        "checked": "무관(문서 안내·교실 안 활동 열기)"
+      },
+      {
+        "query": "계산 기능",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-homework",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:homework/answer-length-limit",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "homework",
+    "topic": "서술형 답안 글자 수 제한",
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_answer_length_limit"
+    ],
+    "anchors": [
+      "글자 수 제한",
+      "답안 글자 수",
+      "최소 글자 수",
+      "최대 글자 수",
+      "단어 수 제한",
+      "몇 자 이상"
+    ],
+    "covers": "서술형 답안이나 숙제 글의 최소·최대 글자 수를 정하는 기능은 공개 문서에 없다는 것",
+    "notCovers": [
+      "숙제 제출 형식 정하기 → doc:/docs/software/lesson-activities#2/homework-submit-formats",
+      "주관식은 교사 채점 → doc:/docs/software/lesson-activities#3/exam-auto-grading"
+    ],
+    "negatives": [
+      {
+        "q": "숙제를 글로만 내게 할 수 있나요",
+        "route": "doc:/docs/software/lesson-activities#2/homework-submit-formats"
+      },
+      {
+        "q": "시험 주관식 문제는 자동 채점돼요?",
+        "route": "doc:/docs/software/lesson-activities#3/exam-auto-grading"
+      },
+      {
+        "q": "숙제 AI 채점에 모범 답안 넣는 법",
+        "route": "doc:/docs/software/lesson-activities#2/homework-ai-grading"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "글자 수 제한",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "답안 길이",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "최소 글자",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "단어 수 제한",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-homework",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:homework/submit-notify-teacher",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "homework",
+    "topic": "학생 제출 시 선생님 알림",
+    "asks": [
+      "yesno",
+      "where"
+    ],
+    "concepts": [
+      "C_submit",
+      "C_teacher_submit_alert"
+    ],
+    "anchors": [
+      "제출하면 알림",
+      "제출 알림 받기",
+      "제출 즉시 알림",
+      "숙제 들어오면 알림",
+      "제출될 때마다 알림"
+    ],
+    "covers": "학생이 숙제·시험을 낼 때마다 선생님에게 알림이 가는지는 공개 문서에 없다는 것과 선생님 화면의 제출 현황",
+    "notCovers": [
+      "숙제 제출 현황 보기 → doc:guide:cs-figma-digest-2103/teacher-submission-status",
+      "미제출 학생에게 알림 보내기 → fixed:notify-non-submitters-parents"
+    ],
+    "negatives": [
+      {
+        "q": "선생님 PC에서 누가 숙제 냈는지 보는 화면",
+        "route": "doc:guide:cs-figma-digest-2103/teacher-submission-status"
+      },
+      {
+        "q": "숙제 안 낸 학생들한테 한꺼번에 알림 보내기",
+        "route": "fixed:notify-non-submitters-parents"
+      },
+      {
+        "q": "수업 알림이 휴대폰에 안 떠요",
+        "route": "howto:class-notification"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": [
+        {
+          "unit": "guide:cs-figma-digest-2103",
+          "i": 9,
+          "hash": "0b916b97bac99c04"
+        }
+      ]
+    },
+    "searchLog": [
+      {
+        "query": "제출하면 알림",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "제출 즉시 알림",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "선생님 알림",
+        "units": 5,
+        "site": 0,
+        "checked": "무관(학생이 받는 수업 평가·채점 알림)"
+      },
+      {
+        "query": "\"제출 현황\"",
+        "units": 6,
+        "site": 0,
+        "checked": "관련(교사 화면 제출 현황) — related 로 넣음, 제출 알림은 없음"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-homework",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:homework/exam-question-limit",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "homework",
+    "topic": "시험 최대 문항 수",
+    "asks": [
+      "quantity",
+      "yesno"
+    ],
+    "concepts": [
+      "C_exam",
+      "C_question_count_limit"
+    ],
+    "anchors": [
+      "최대 문항 수",
+      "문항 수 제한",
+      "문제 수 제한",
+      "몇 문제까지",
+      "문항 개수 제한"
+    ],
+    "covers": "시험 하나에 넣을 수 있는 최대 문항 수는 공개 문서에 없다는 것",
+    "notCovers": [
+      "시험 문제 대량 추가 → doc:/docs/teacher/course-activities#5/exam-bulk-add",
+      "문항별 배점 → fixed:exam-per-question-points-partial-100"
+    ],
+    "negatives": [
+      {
+        "q": "시험 문제 많을 때 한 번에 올리는 방법",
+        "route": "doc:/docs/teacher/course-activities#5/exam-bulk-add"
+      },
+      {
+        "q": "대량 추가한 문제 중 인식 안 된 것 확인하는 법",
+        "route": "doc:guide:cs-figma-digest-2161/recognition-check"
+      },
+      {
+        "q": "문항마다 배점 다르게 줄 수 있나요",
+        "route": "fixed:exam-per-question-points-partial-100"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "최대 문항",
+        "units": 1,
+        "site": 0,
+        "checked": "무관(AI 보드 문항 글자 수 500자 안내)"
+      },
+      {
+        "query": "문항 수 제한",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "문제 수 제한",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "몇 문제까지",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-homework",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:homework/exam-video-question",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "homework",
+    "topic": "시험 문항 영상 첨부",
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_exam",
+      "C_video_question"
+    ],
+    "anchors": [
+      "동영상 문항",
+      "영상 문항",
+      "문제에 동영상",
+      "시험 영상 첨부",
+      "영상 보고 푸는 문제"
+    ],
+    "covers": "시험 문항에 동영상을 넣는 기능은 공개 문서에 없다는 것과 문제에 사진을 붙이는 방법",
+    "notCovers": [
+      "시험 듣기 음원 첨부 → fixed:exam-listening-audio-limit",
+      "녹화 수업으로 영상 올리기 → doc:/docs/teacher/course-activities#3/recorded-upload"
+    ],
+    "negatives": [
+      {
+        "q": "시험 문제에 사진 넣는 방법",
+        "route": "doc:/docs/teacher/course-activities#5/exam-manual-add"
+      },
+      {
+        "q": "영어 듣기 시험에 음원 파일 넣을 수 있나요",
+        "route": "fixed:exam-listening-audio-limit"
+      },
+      {
+        "q": "찍어 둔 강의 영상을 학생에게 보여 주는 활동",
+        "route": "doc:/docs/teacher/course-activities#3/recorded-upload"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": [
+        {
+          "unit": "doc:/docs/teacher/course-activities#5",
+          "i": 7,
+          "hash": "50249dbc3ec68f2e"
+        }
+      ]
+    },
+    "searchLog": [
+      {
+        "query": "동영상 문항",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "영상 문항",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "문제에 동영상",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "\"문제에 사진\"",
+        "units": 1,
+        "site": 0,
+        "checked": "관련(시험 문제에 사진 첨부) — related 로 넣음, 동영상 첨부는 없음"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-homework",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:homework/adaptive-recommend",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "homework",
+    "topic": "수준별 맞춤 문제 자동 추천",
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_adaptive_learning"
+    ],
+    "anchors": [
+      "맞춤 문제 추천",
+      "수준별 문제",
+      "적응형 학습",
+      "문제 추천",
+      "개인 맞춤 문제",
+      "난이도 자동 조절"
+    ],
+    "covers": "학생 수준에 맞춰 다음 문제를 자동으로 골라 주는 적응형 학습 기능은 공개 문서에 없다는 것",
+    "notCovers": [
+      "AI 평가로 복습 범위 정하기 → doc:/docs/student/ai-features#4/eval-review-plan",
+      "AI 출제 난이도 지정 → doc:/docs/software/ai-learning-tools#3/ai-exam-generation"
+    ],
+    "negatives": [
+      {
+        "q": "AI 평가 보고 다음에 뭘 복습할지 정하기",
+        "route": "doc:/docs/student/ai-features#4/eval-review-plan"
+      },
+      {
+        "q": "AI 출제할 때 난이도 고를 수 있어요?",
+        "route": "doc:/docs/software/ai-learning-tools#3/ai-exam-generation"
+      },
+      {
+        "q": "앞 단계 끝내야 다음 활동 열리게 하는 설정",
+        "route": "doc:/docs/teacher/course-activities#1/prereq"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "맞춤 문제",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "적응형 학습",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "문제 추천",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "수준별 문제",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-homework",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:homework/worksheet-annotate",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "homework",
+    "topic": "학습지 위에 바로 필기해 제출",
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_homework_attach",
+      "C_worksheet_annotate"
+    ],
+    "anchors": [
+      "학습지에 필기",
+      "학습지 위에 풀이",
+      "PDF에 필기",
+      "문제지에 바로 쓰기",
+      "펜으로 풀어서 제출",
+      "학습지 위에"
+    ],
+    "covers": "선생님이 올린 학습지·PDF 위에 학생이 바로 펜으로 풀어 제출하는 기능은 공개 문서에 없다는 것과 공개된 숙제 제출 형식",
+    "notCovers": [
+      "휴대폰으로 숙제 사진 찍어 내기 → doc:/docs/student/course-submit-activity#3/mobile-photo-submit",
+      "선생님 빨간색 첨삭 → doc:/docs/teacher/course-activities#4/feedback"
+    ],
+    "negatives": [
+      {
+        "q": "휴대폰으로 숙제 사진 찍어서 내는 순서",
+        "route": "doc:/docs/student/course-submit-activity#3/mobile-photo-submit"
+      },
+      {
+        "q": "갖고 있는 시험지 파일로 답만 받는 방법",
+        "route": "doc:/docs/teacher/course-activities#6/omr"
+      },
+      {
+        "q": "선생님이 숙제에 빨간 펜으로 고쳐 줄 수 있나요",
+        "route": "doc:/docs/teacher/course-activities#4/feedback"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": [
+        {
+          "unit": "doc:/docs/teacher/course-activities#4",
+          "i": 1,
+          "hash": "a1ba06e74f609a90"
+        }
+      ]
+    },
+    "searchLog": [
+      {
+        "query": "학습지",
+        "units": 0,
+        "site": 1,
+        "checked": "무관(소개 페이지 'AI 기반 학습 지원')"
+      },
+      {
+        "query": "필기해서 제출",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "PDF에 필기",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "문제지에 필기",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-homework",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  }
+]

@@ -1,0 +1,2748 @@
+[
+  {
+    "id": "gap:board/printer-connect",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "board",
+    "topic": "전자칠판 프린터 연결",
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_board",
+      "C_board_port",
+      "C_printer"
+    ],
+    "anchors": [
+      "프린터 연결",
+      "칠판에서 인쇄",
+      "프린터 드라이버",
+      "복합기 연결",
+      "칠판 출력물",
+      "인쇄 메뉴"
+    ],
+    "covers": "전자칠판(OPS)에 프린터를 연결하거나 칠판 화면·판서를 바로 종이로 인쇄하는 방법은 공개 안내에 없다는 것",
+    "notCovers": [
+      "수업 중 판서 저장·공유(로컬·드라이브·QR) → doc:/docs/hardware/board-writing-touch#4/save-share-in-class",
+      "칠판 포트 용도 → doc:/docs/hardware/board-s-series-safe-use#6/usb-ports",
+      "학생 리포트 PDF 저장 → doc:/docs/admin/statistics-data#5/student-report-pdf-how"
+    ],
+    "negatives": [
+      {
+        "q": "수업 끝나고 판서한 거 파일로 저장해서 애들한테 줄 수 있어요?",
+        "route": "doc:/docs/hardware/board-writing-touch#4/save-share-in-class"
+      },
+      {
+        "q": "칠판 옆에 있는 USB 포트는 각각 뭐 꽂는 데예요",
+        "route": "doc:/docs/hardware/board-s-series-safe-use#6/usb-ports"
+      },
+      {
+        "q": "학생별 월간 리포트 PDF로 저장하는 순서",
+        "route": "doc:/docs/admin/statistics-data#5/student-report-pdf-how"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "프린터",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "프린트",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "인쇄 연결",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "출력 기기",
+        "units": 2,
+        "site": 0,
+        "checked": "무관(소리 출력 장치 문장, 프린터 아님)"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-board",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:board/office-license",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "board",
+    "topic": "내장 PC(OPS) 오피스·윈도우 라이선스",
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_ops",
+      "C_office_license"
+    ],
+    "anchors": [
+      "오피스 설치",
+      "MS 오피스",
+      "한컴오피스",
+      "윈도우 정품",
+      "정품 인증",
+      "오피스 라이선스",
+      "기본 설치 프로그램"
+    ],
+    "covers": "칠판 안 윈도우 PC(OPS)에 MS 오피스·한컴오피스 같은 문서 프로그램이 들어 있는지, 윈도우가 어떤 라이선스인지는 공개 안내에 없다는 것",
+    "notCovers": [
+      "OPS 모델별 CPU·메모리·저장공간 → doc:/docs/hardware/board-lineup-specs#4/ops-spec",
+      "칠판 OS 보안 패치·MDM → fixed:board-mdm",
+      "구독 없이 칠판만 쓸 때 윈도우 프로그램 → policy:board-without-subscription-meet",
+      "HWP 파일 올리기 → doc:/docs/teacher/drive-materials#1/file-types"
+    ],
+    "negatives": [
+      {
+        "q": "칠판 안에 든 컴퓨터 사양이 어떻게 돼요 램이랑 SSD",
+        "route": "doc:/docs/hardware/board-lineup-specs#4/ops-spec"
+      },
+      {
+        "q": "한글 파일 수업 자료로 올리면 열려요?",
+        "route": "doc:/docs/teacher/drive-materials#1/file-types"
+      },
+      {
+        "q": "전자칠판 쓰려면 외장 PC 따로 사야 하나요",
+        "route": "doc:/docs/hardware/board-overview#3/no-external-pc"
+      }
+    ],
+    "handoff": "demo",
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "demo",
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "오피스",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "한컴",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "라이선스",
+        "units": 2,
+        "site": 0,
+        "checked": "무관(다른 시스템 라이선스 기간·견적 항목의 소프트웨어 라이선스)"
+      },
+      {
+        "query": "정품",
+        "units": 1,
+        "site": 0,
+        "checked": "무관(정품 보드 출장 점검 문장)"
+      },
+      {
+        "query": "워드",
+        "units": 15,
+        "site": 0,
+        "checked": "무관(시험 문제 워드 템플릿·워드프레스 연동)"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-board",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:board/install-duration",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "board",
+    "topic": "전자칠판 설치 작업 소요 시간",
+    "asks": [
+      "when",
+      "quantity"
+    ],
+    "concepts": [
+      "C_board",
+      "C_installation",
+      "C_install_duration"
+    ],
+    "anchors": [
+      "설치 시간",
+      "설치 몇 시간",
+      "설치 작업 시간",
+      "설치하는 데 얼마나",
+      "하루 만에 설치",
+      "반나절 설치",
+      "설치 기간"
+    ],
+    "covers": "설치 당일 칠판·카메라 설치 작업이 몇 시간 걸리는지, 하루에 몇 대까지 설치하는지는 공개 안내에 없다는 것",
+    "notCovers": [
+      "주문 뒤 납기·배송 기간 → gap:pricing/delivery-lead",
+      "설치 당일 확인할 것 → doc:/docs/hardware/board-install-readiness#summary/install-day-check",
+      "설치 전 확인 항목 → doc:/docs/hardware/board-install-readiness#summary/checklist-overview",
+      "설치비 → policy:basics-install-fee"
+    ],
+    "negatives": [
+      {
+        "q": "설치하는 날 끝나기 전에 뭐뭐 확인해야 돼요?",
+        "route": "doc:/docs/hardware/board-install-readiness#summary/install-day-check"
+      },
+      {
+        "q": "설치 전에 학원에서 미리 준비해 둘 게 있나요",
+        "route": "doc:/docs/hardware/board-install-readiness#summary/checklist-overview"
+      },
+      {
+        "q": "벽걸이랑 이동형 스탠드 중에 뭐가 나아요",
+        "route": "doc:/docs/hardware/board-install-readiness#0/methods-compare"
+      }
+    ],
+    "handoff": "demo",
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "demo",
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "설치 시간",
+        "units": 5,
+        "site": 0,
+        "checked": "무관(설치 날 시간이 늘지 않게 미리 확인·업데이트 시간대 — 작업 소요 시간 없음)"
+      },
+      {
+        "query": "몇 시간",
+        "units": 1,
+        "site": 0,
+        "checked": "무관(녹화가 몇십 초만 되고 끊김)"
+      },
+      {
+        "query": "작업 시간",
+        "units": 13,
+        "site": 0,
+        "checked": "무관(운영팀 시간·스토리지 삭제 작업·대량 작업)"
+      },
+      {
+        "query": "설치 당일",
+        "units": 12,
+        "site": 0,
+        "checked": "무관(설치 당일 확인 항목·엘리베이터 확인 — 소요 시간 없음)"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-board",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:board/damage-insurance",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "board",
+    "topic": "전자칠판 파손·도난 보험",
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_board",
+      "C_warranty",
+      "C_insurance"
+    ],
+    "anchors": [
+      "파손 보험",
+      "칠판 보험",
+      "도난 보험",
+      "보험 가입",
+      "깨지면 보상",
+      "학생이 깨뜨리면",
+      "파손 보상"
+    ],
+    "covers": "전자칠판 파손·도난에 대비한 보험 상품이나 사용자 과실 파손 보상은 공개 안내에 없다는 것",
+    "notCovers": [
+      "무상 보증 기간·출장 점검 → doc:/docs/hardware/hardware-spec-installation-faq#3/warranty-onsite",
+      "파손·연기가 보일 때 할 일 → doc:/docs/hardware/board-basic-operation#6/smoke-smell-emergency",
+      "보증 연장 → fixed:board-warranty-lifetime",
+      "수리 소요 기간 → gap:support/repair-duration"
+    ],
+    "negatives": [
+      {
+        "q": "칠판 무상 A/S 기간이 얼마나 돼요",
+        "route": "doc:/docs/hardware/hardware-spec-installation-faq#3/warranty-onsite"
+      },
+      {
+        "q": "칠판에 금 가고 이상한 냄새 나면 어떻게 해요",
+        "route": "doc:/docs/hardware/board-basic-operation#6/smoke-smell-emergency"
+      },
+      {
+        "q": "고장 접수할 때 뭘 같이 보내야 하나요",
+        "route": "doc:/docs/hardware/hardware-spec-installation-faq#3/as-request-steps"
+      }
+    ],
+    "handoff": "demo",
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "demo",
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "보험",
+        "units": 4,
+        "site": 0,
+        "checked": "무관(보험사 업무용 보안 앱 문장)"
+      },
+      {
+        "query": "파손",
+        "units": 1,
+        "site": 0,
+        "checked": "무관(파손이 보이면 전원 끄고 A/S — 보험 없음)"
+      },
+      {
+        "query": "도난",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-board",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:board/anti-theft-lock",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "board",
+    "topic": "전자칠판 도난 방지 잠금장치",
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_board",
+      "C_anti_theft"
+    ],
+    "anchors": [
+      "도난 방지",
+      "잠금장치",
+      "켄싱턴 락",
+      "자물쇠로 묶기",
+      "OPS 도난",
+      "보안 와이어"
+    ],
+    "covers": "칠판 본체나 OPS를 도난에서 지키는 잠금장치(켄싱턴 락·보안 와이어 등)를 달 수 있는지는 공개 안내에 없다는 것",
+    "notCovers": [
+      "터치 잠금 → doc:/docs/hardware/board-basic-operation#2/touch-lock",
+      "쉬는 시간 터치 잠금·비밀번호 잠금 → fixed:board-lock-during-break",
+      "스탠드·벽걸이 고정 → doc:/docs/hardware/board-s-series-safe-use#2/stand-floor-wall-fixing",
+      "파손·도난 보험 → gap:board/damage-insurance"
+    ],
+    "negatives": [
+      {
+        "q": "학생들이 칠판 못 만지게 잠가 두는 방법",
+        "route": "doc:/docs/hardware/board-basic-operation#2/touch-lock"
+      },
+      {
+        "q": "이동형 스탠드 바닥에 고정할 수 있어요?",
+        "route": "doc:/docs/hardware/board-s-series-safe-use#2/stand-floor-wall-fixing"
+      },
+      {
+        "q": "쉬는 시간에 애들이 칠판 누르는 거 막고 싶어요",
+        "route": "fixed:board-lock-during-break"
+      }
+    ],
+    "handoff": "demo",
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "demo",
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "도난",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "잠금장치",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "켄싱턴",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "자물쇠",
+        "units": 4,
+        "site": 0,
+        "checked": "무관(녹화 보호 잠금의 자물쇠 아이콘)"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-board",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:board/height-adjust",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "board",
+    "topic": "전자칠판 높이 조절 스탠드",
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_board",
+      "C_stand",
+      "C_height_adjust"
+    ],
+    "anchors": [
+      "높이 조절",
+      "높낮이 조절",
+      "전동 스탠드",
+      "리프트 스탠드",
+      "휠체어 높이",
+      "아이들 키 높이",
+      "낮게 설치"
+    ],
+    "covers": "칠판 높이를 올리고 내리는 높이 조절(전동) 스탠드나 낮은 설치 높이 옵션은 공개 안내에 없다는 것",
+    "notCovers": [
+      "설치 방식 비교 → doc:/docs/hardware/board-install-readiness#0/methods-compare",
+      "이동형 스탠드 옮기기·고정 → doc:/docs/hardware/board-s-series-safe-use#2/stand-floor-wall-fixing",
+      "모델별 치수 → doc:/docs/hardware/board-lineup-specs#2/all-models-size-weight",
+      "손이 안 닿는 버튼 → doc:/docs/hardware/board-basic-operation#1/five-finger-panel"
+    ],
+    "negatives": [
+      {
+        "q": "이동형 스탠드랑 벽걸이 장단점 알려 주세요",
+        "route": "doc:/docs/hardware/board-install-readiness#0/methods-compare"
+      },
+      {
+        "q": "칠판 모델별 가로세로 크기랑 무게 비교",
+        "route": "doc:/docs/hardware/board-lineup-specs#2/all-models-size-weight"
+      },
+      {
+        "q": "칠판 위쪽 버튼에 손이 안 닿아요",
+        "route": "doc:/docs/hardware/board-basic-operation#1/five-finger-panel"
+      }
+    ],
+    "handoff": "demo",
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "demo",
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "높이 조절",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "전동",
+        "units": 0,
+        "site": 2,
+        "checked": "무관(약관의 복제·재판매 금지 문장)"
+      },
+      {
+        "query": "휠체어",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "스탠드 높이",
+        "units": 1,
+        "site": 0,
+        "checked": "무관(본체 치수 표기 순서 문장)"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-board",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:board/portrait-mode",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "board",
+    "topic": "전자칠판 세로 설치·세로 화면",
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_board",
+      "C_portrait"
+    ],
+    "anchors": [
+      "세로 설치",
+      "칠판 세로",
+      "세로로 세워",
+      "피벗",
+      "90도 돌려",
+      "세로 거치",
+      "세로 화면"
+    ],
+    "covers": "칠판을 세로로 세워 설치하거나 칠판 화면을 세로 방향으로 돌려 쓰는 방법은 공개 안내에 없다는 것",
+    "notCovers": [
+      "T1·S1 카메라 화면 회전 → doc:/docs/board/webcam-cms-setup-t1-panorama#11/rotate-flip-in-cms",
+      "공통 화면 사양(16:9) → doc:/docs/hardware/board-lineup-specs#2/common-display",
+      "휴대폰·태블릿 앱 화면 회전 → gap:start/screen-rotation",
+      "벽걸이 벽체 보강 → doc:/docs/hardware/hardware-spec-installation-faq#1/wall-mount-reinforcement"
+    ],
+    "negatives": [
+      {
+        "q": "칠판 카메라 화면이 뒤집혀 나와요 돌리는 법",
+        "route": "doc:/docs/board/webcam-cms-setup-t1-panorama#11/rotate-flip-in-cms"
+      },
+      {
+        "q": "칠판 화면 비율이랑 해상도가 뭐예요",
+        "route": "doc:/docs/hardware/board-lineup-specs#2/common-display"
+      },
+      {
+        "q": "벽걸이로 달 때 석고보드 벽이면 괜찮아요?",
+        "route": "doc:/docs/hardware/hardware-spec-installation-faq#1/wall-mount-reinforcement"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "세로 모드",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "세로로",
+        "units": 3,
+        "site": 0,
+        "checked": "무관(휴대폰에서 시험지가 세로로 보임)"
+      },
+      {
+        "query": "피벗",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "화면 회전",
+        "units": 2,
+        "site": 0,
+        "checked": "무관(T1·S1 카메라 화면 회전은 CMS에서)"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-board",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:board/operating-noise",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "board",
+    "topic": "전자칠판 작동 소음",
+    "asks": [
+      "yesno",
+      "quantity"
+    ],
+    "concepts": [
+      "C_board",
+      "C_fan_noise"
+    ],
+    "anchors": [
+      "팬 소리",
+      "작동 소음",
+      "칠판 소음",
+      "쿨링팬",
+      "데시벨",
+      "조용한지",
+      "팬리스"
+    ],
+    "covers": "칠판이 켜져 있을 때 나는 팬 소리 같은 평소 작동 소음 크기는 공개 안내에 없다는 것",
+    "notCovers": [
+      "타는 냄새·이상한 소리가 날 때 → doc:/docs/hardware/hardware-spec-installation-faq#3/emergency-burning-smell",
+      "뒷면이 따뜻할 때 → fixed:board-heat",
+      "천장 마이크 주변 소음원 → doc:/docs/hardware/mic-dt2-pro#5/dt2-noise-distance"
+    ],
+    "negatives": [
+      {
+        "q": "칠판에서 갑자기 탁탁 소리 나고 타는 냄새 나요",
+        "route": "doc:/docs/hardware/hardware-spec-installation-faq#3/emergency-burning-smell"
+      },
+      {
+        "q": "천장 마이크 근처에 에어컨 있어도 돼요?",
+        "route": "doc:/docs/hardware/mic-dt2-pro#5/dt2-noise-distance"
+      },
+      {
+        "q": "칠판 뒤가 뜨끈한데 괜찮은 건가요",
+        "route": "fixed:board-heat"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "소음",
+        "units": 11,
+        "site": 0,
+        "checked": "무관(마이크 배경 소음·교실 소음 조건)"
+      },
+      {
+        "query": "팬",
+        "units": 1,
+        "site": 1,
+        "checked": "무관(마이크 주변 팬 소음원·팬데믹)"
+      },
+      {
+        "query": "시끄",
+        "units": 1,
+        "site": 0,
+        "checked": "무관(수업 옵션 문서 문장, 칠판 소음 아님)"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-board",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:board/antibacterial",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "board",
+    "topic": "전자칠판 화면 항균 코팅",
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_board",
+      "C_antibacterial"
+    ],
+    "anchors": [
+      "항균 코팅",
+      "항균 유리",
+      "살균 기능",
+      "세균",
+      "위생 코팅",
+      "UV 살균",
+      "항균 인증"
+    ],
+    "covers": "칠판 화면에 항균 코팅이나 살균 기능이 있는지는 공개 안내에 없다는 것(공개된 코팅은 AG 방현·AF 지문방지)",
+    "notCovers": [
+      "화면 청소 방법·쓰면 안 되는 세제 → doc:/docs/hardware/board-s-series-safe-use#3/cleaning-method",
+      "방현·지문방지 코팅과 햇빛 반사 → fixed:board-anti-glare",
+      "보호 필름 → fixed:screen-protector-film"
+    ],
+    "negatives": [
+      {
+        "q": "칠판 화면 알코올 티슈로 닦아도 돼요?",
+        "route": "doc:/docs/hardware/board-s-series-safe-use#3/cleaning-method"
+      },
+      {
+        "q": "창가라 햇빛 반사가 심할까 봐 걱정돼요",
+        "route": "fixed:board-anti-glare"
+      },
+      {
+        "q": "칠판 화면에 보호 필름 붙여도 되나요",
+        "route": "fixed:screen-protector-film"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": [
+        {
+          "unit": "doc:/docs/hardware/board-install-readiness#7",
+          "i": 2,
+          "hash": "99b277c6a2c90158"
+        }
+      ]
+    },
+    "searchLog": [
+      {
+        "query": "항균",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "살균",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "소독",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-board",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:board/pen-pressure",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "board",
+    "topic": "전용 펜 필압 감지",
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_board_pen",
+      "C_pen_pressure"
+    ],
+    "anchors": [
+      "필압",
+      "필압 감지",
+      "세게 누르면 굵게",
+      "압력 감지",
+      "펜 압력",
+      "굵기 자동",
+      "붓글씨 느낌"
+    ],
+    "covers": "칠판 펜을 세게 누르면 선이 굵어지는 필압 감지 기능이 있는지는 공개 안내에 없다는 것(공개된 건 터치 응답 속도·필기 높이·정밀도)",
+    "notCovers": [
+      "여러 명 동시 쓰기·손가락과 펜 인식 → doc:/docs/hardware/board-writing-touch#1/multi-user-writing",
+      "터치 응답 속도·정밀도 → doc:/docs/hardware/board-writing-touch#1/touch-spec",
+      "펜 충전 → fixed:board-pen-charge",
+      "PC용 펜 태블릿 → gap:start/pen-tablet"
+    ],
+    "negatives": [
+      {
+        "q": "칠판에 여러 명이 동시에 써도 인식돼요?",
+        "route": "doc:/docs/hardware/board-writing-touch#1/multi-user-writing"
+      },
+      {
+        "q": "칠판 펜 끝이 부러졌는데 어디서 사요",
+        "route": "doc:/docs/start/pre-adoption-faq-22-questions#5/pen-tip-purchase"
+      },
+      {
+        "q": "칠판 터치 반응 속도가 얼마나 빨라요",
+        "route": "doc:/docs/hardware/board-writing-touch#1/touch-spec"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": [
+        {
+          "unit": "doc:/docs/hardware/board-writing-touch#1",
+          "i": 2,
+          "hash": "d49a9700925f81ac"
+        }
+      ]
+    },
+    "searchLog": [
+      {
+        "query": "필압",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "압력",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "굵기",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-board",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:board/pen-color-auto",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "board",
+    "topic": "펜마다 다른 색 자동 구분",
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_board_pen",
+      "C_pen_color"
+    ],
+    "anchors": [
+      "펜마다 색",
+      "펜별 색상",
+      "두 펜 다른 색",
+      "펜 색 자동",
+      "빨간 펜 파란 펜",
+      "펜 색 인식"
+    ],
+    "covers": "펜 두 개를 쓸 때 펜마다 다른 색으로 자동 구분해 써지는 기능이 있는지는 공개 안내에 없다는 것",
+    "notCovers": [
+      "기본 제공 펜 구성 → doc:/docs/hardware/board-install-readiness#7/pens",
+      "손가락 개수별 동작·펜 도구 호출 → doc:/docs/hardware/board-basic-operation#1/finger-gestures",
+      "여러 명 동시 쓰기 → doc:/docs/hardware/board-writing-touch#1/multi-user-writing"
+    ],
+    "negatives": [
+      {
+        "q": "칠판 살 때 펜은 몇 개 같이 와요?",
+        "route": "doc:/docs/hardware/board-install-readiness#7/pens"
+      },
+      {
+        "q": "네 손가락으로 누르면 뭐가 떠요",
+        "route": "doc:/docs/hardware/board-basic-operation#1/finger-gestures"
+      },
+      {
+        "q": "학생 두 명이 같이 나와서 써도 돼요",
+        "route": "doc:/docs/hardware/board-writing-touch#1/multi-user-writing"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "펜 색",
+        "units": 1,
+        "site": 0,
+        "checked": "무관(형광펜 강조 캡처 설명)"
+      },
+      {
+        "query": "펜마다",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "색 구분",
+        "units": 2,
+        "site": 0,
+        "checked": "무관(녹화 옵션 구분·출석 색 표시)"
+      },
+      {
+        "query": "두 펜",
+        "units": 3,
+        "site": 0,
+        "checked": "무관(손가락 개수별 동작·손가락과 전용 펜 인식 — 펜별 색 구분 없음)"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-board",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:board/signage-mode",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "board",
+    "topic": "전자칠판 사이니지·홍보 화면 모드",
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_board",
+      "C_signage"
+    ],
+    "anchors": [
+      "디지털 사이니지",
+      "광고판",
+      "홍보 영상 반복",
+      "안내 화면 띄워두기",
+      "로비 홍보",
+      "키오스크 모드",
+      "슬라이드쇼 반복"
+    ],
+    "covers": "수업이 없을 때 칠판을 학원 홍보·공지 화면(디지털 사이니지)으로 띄워 두는 모드가 있는지는 공개 안내에 없다는 것",
+    "notCovers": [
+      "같은 화면 오래 띄울 때 잔상·화면 끄기 → doc:/docs/hardware/board-s-series-safe-use#3/burn-in-screen-off",
+      "무선 미러링으로 기기 화면 띄우기 → doc:/docs/hardware/board-basic-operation#3/wireless-mirroring-steps",
+      "예약 전원 → fixed:board-scheduled-power-off-on"
+    ],
+    "negatives": [
+      {
+        "q": "같은 화면 오래 켜 두면 칠판에 자국 남아요?",
+        "route": "doc:/docs/hardware/board-s-series-safe-use#3/burn-in-screen-off"
+      },
+      {
+        "q": "폰에 있는 영상을 칠판에 선 없이 띄우고 싶어요",
+        "route": "doc:/docs/hardware/board-basic-operation#3/wireless-mirroring-steps"
+      },
+      {
+        "q": "밤에 칠판 저절로 꺼지게 설정돼요?",
+        "route": "fixed:board-scheduled-power-off-on"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "사이니지",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "광고판",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "홍보 화면",
+        "units": 3,
+        "site": 0,
+        "checked": "무관(로그인 창 홍보 배너 캡처 설명)"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-board",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:board/custom-wallpaper",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "board",
+    "topic": "칠판 배경화면·부팅 화면 학원 로고",
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_board",
+      "C_wallpaper"
+    ],
+    "anchors": [
+      "칠판 배경화면",
+      "부팅 로고",
+      "부팅 화면",
+      "시작 화면 로고",
+      "홈 화면 배경",
+      "바탕화면 사진"
+    ],
+    "covers": "칠판 홈 화면 배경이나 켤 때 나오는 화면에 학원 로고·사진을 넣는 방법은 공개 안내에 없다는 것",
+    "notCovers": [
+      "앱·교실 화면 학원 브랜딩 → gap:company/branding",
+      "계정 인증 브랜드 로고 규격 → doc:/docs/admin/account-verification#2/brand-logo-size",
+      "켜면 나오는 기본 OPS 화면·입력 소스 → doc:/docs/hardware/board-s-series-safe-use#4/input-source-no-signal"
+    ],
+    "negatives": [
+      {
+        "q": "계정 인증할 때 올리는 브랜드 로고 크기 제한 있어요?",
+        "route": "doc:/docs/admin/account-verification#2/brand-logo-size"
+      },
+      {
+        "q": "칠판 입력 소스가 회색으로 떠요 신호 없음",
+        "route": "doc:/docs/hardware/board-s-series-safe-use#4/input-source-no-signal"
+      },
+      {
+        "q": "칠판 처음 켜서 수업 들어가는 순서",
+        "route": "fixed:board-first-use-flow"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "배경화면",
+        "units": 2,
+        "site": 0,
+        "checked": "무관(앱 콘텐츠 목록 캡처 설명)"
+      },
+      {
+        "query": "바탕 화면",
+        "units": 24,
+        "site": 0,
+        "checked": "무관(PC 바탕 화면 아이콘으로 실행·칠판 윈도우 시작 메뉴 — 바꾸는 방법 없음)"
+      },
+      {
+        "query": "부팅 화면",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "로고",
+        "units": 69,
+        "site": 2,
+        "checked": "무관(계정 인증 브랜드 로고 규격·약관·글자 겹침)"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-board",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:board/multi-mirroring",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "board",
+    "topic": "여러 기기 화면 동시 미러링",
+    "asks": [
+      "yesno",
+      "quantity"
+    ],
+    "concepts": [
+      "C_board",
+      "C_screen_share",
+      "C_multi_mirroring"
+    ],
+    "anchors": [
+      "동시 미러링",
+      "분할 미러링",
+      "다중 미러링",
+      "화면 여러 개",
+      "폰 두 대 동시에",
+      "미러링 몇 대"
+    ],
+    "covers": "노트북·휴대폰 여러 대 화면을 칠판에 한꺼번에 나눠 띄우는(분할) 무선 미러링이 되는지와 동시 연결 대수는 공개 안내에 없다는 것",
+    "notCovers": [
+      "무선 미러링 순서 → doc:/docs/hardware/board-basic-operation#3/wireless-mirroring-steps",
+      "수업 중 미러링·화면 공유 → doc:/docs/hardware/board-basic-operation#3/mirroring-during-class",
+      "미러링 방식·VLAN → fixed:board-mirroring-vlan-protocol",
+      "태블릿 분할 화면 → gap:start/split-screen"
+    ],
+    "negatives": [
+      {
+        "q": "노트북 화면 칠판에 무선으로 띄우는 순서",
+        "route": "doc:/docs/hardware/board-basic-operation#3/wireless-mirroring-steps"
+      },
+      {
+        "q": "수업 중에 미러링하면 원격 학생도 보여요?",
+        "route": "doc:/docs/hardware/board-basic-operation#3/mirroring-during-class"
+      },
+      {
+        "q": "미러링이 안 넘어가요 와이파이 문제인가요",
+        "route": "doc:/docs/hardware/board-basic-operation#3/mirroring-network-hotspot"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "동시 미러링",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "여러 기기",
+        "units": 5,
+        "site": 0,
+        "checked": "무관(여러 기기 소리 울림·대량 작업)"
+      },
+      {
+        "query": "분할 화면",
+        "units": 1,
+        "site": 1,
+        "checked": "무관(슬라이딩 바 화면 분할 소개 — 여러 기기 동시 미러링 아님)"
+      },
+      {
+        "query": "미러링 동시에",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-board",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:board/auto-brightness",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "board",
+    "topic": "화면 밝기 자동 조절",
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_board",
+      "C_auto_brightness"
+    ],
+    "anchors": [
+      "자동 밝기",
+      "조도 센서",
+      "밝기 센서",
+      "빛 센서",
+      "주변 밝기 따라",
+      "밝기 자동 조절"
+    ],
+    "covers": "교실 조명에 따라 칠판 화면 밝기가 저절로 바뀌는 자동 밝기(조도 센서)가 있는지는 공개 안내에 없다는 것과, 공개 안내는 제어 메뉴에서 밝기를 직접 맞추라고 한다는 것",
+    "notCovers": [
+      "밝기·눈 보호 모드 직접 맞추기 → doc:/docs/hardware/board-basic-operation#2/eye-care-brightness",
+      "화면 밝기 사양 → doc:/docs/hardware/board-lineup-specs#2/common-display",
+      "한 대만 누렇게 보임 → fixed:one-board-yellowish-color"
+    ],
+    "negatives": [
+      {
+        "q": "칠판 화면 밝기 어디서 낮춰요",
+        "route": "doc:/docs/hardware/board-basic-operation#2/eye-care-brightness"
+      },
+      {
+        "q": "칠판 하나만 화면이 누렇게 보여요",
+        "route": "fixed:one-board-yellowish-color"
+      },
+      {
+        "q": "칠판 화면 밝기 사양이 어떻게 돼요",
+        "route": "doc:/docs/hardware/board-lineup-specs#2/common-display"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": [
+        {
+          "unit": "doc:/docs/hardware/board-basic-operation#2",
+          "i": 4,
+          "hash": "aa6445d6c783dedb"
+        }
+      ]
+    },
+    "searchLog": [
+      {
+        "query": "자동 밝기",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "조도",
+        "units": 1,
+        "site": 1,
+        "checked": "무관(구조도·수업 보조 도구 글자 겹침)"
+      },
+      {
+        "query": "밝기 센서",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "밝기",
+        "units": 15,
+        "site": 0,
+        "checked": "관련(제어 메뉴에서 밝기를 직접 맞춤 — 자동 조절 없음, 관련 문장으로 씀)"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-board",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:board/power-outage",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "board",
+    "topic": "정전 뒤 칠판 자동 켜짐",
+    "asks": [
+      "yesno",
+      "symptom"
+    ],
+    "concepts": [
+      "C_board",
+      "C_scheduled_power",
+      "C_power_outage"
+    ],
+    "anchors": [
+      "정전",
+      "정전 후 자동 켜짐",
+      "전기 나감",
+      "차단기",
+      "UPS",
+      "무정전 전원장치",
+      "전원 복구"
+    ],
+    "covers": "정전 뒤 전기가 다시 들어오면 칠판이 저절로 켜지는지, 정전·순간 전원 차단이 칠판에 무리를 주는지는 공개 안내에 없다는 것",
+    "notCovers": [
+      "화면이 안 나올 때 보는 순서 → doc:/docs/hardware/board-basic-operation#6/no-screen-checks",
+      "번개·장기 미사용 때 플러그 뽑기 → doc:/docs/hardware/board-s-series-safe-use#0/idle-unplug-condensation",
+      "인터넷이 끊겨도 되는 칠판 필기 → doc:/docs/start/pre-adoption-faq-22-questions#5/offline-board-writing",
+      "예약 전원 → fixed:board-scheduled-power-off-on"
+    ],
+    "negatives": [
+      {
+        "q": "칠판 전원 눌러도 화면이 까매요",
+        "route": "doc:/docs/hardware/board-basic-operation#6/no-screen-checks"
+      },
+      {
+        "q": "천둥 치는 날 칠판 플러그 뽑아야 돼요?",
+        "route": "doc:/docs/hardware/board-s-series-safe-use#0/idle-unplug-condensation"
+      },
+      {
+        "q": "와이파이 끊겨도 칠판에 필기는 돼요?",
+        "route": "doc:/docs/start/pre-adoption-faq-22-questions#5/offline-board-writing"
+      }
+    ],
+    "handoff": "support",
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "support",
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "정전",
+        "units": 83,
+        "site": 1,
+        "checked": "무관(계정 전환·유료 전환 문장의 글자 겹침)"
+      },
+      {
+        "query": "전기가 나가",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "전원 복구",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "자동으로 켜",
+        "units": 6,
+        "site": 0,
+        "checked": "무관(필기 자동 저장·학생 자동 온스테이지 등)"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-board",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:board/central-control",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "board",
+    "topic": "학교 중앙 제어 시스템 연동(RS-232)",
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_board",
+      "C_central_control"
+    ],
+    "anchors": [
+      "중앙 제어",
+      "RS-232",
+      "일괄 전원 제어",
+      "방송실 제어",
+      "원격 전원 끄기",
+      "시리얼 제어",
+      "제어 프로토콜"
+    ],
+    "covers": "학교 방송실·중앙 제어 시스템에서 여러 교실 칠판의 전원·입력·볼륨을 한꺼번에 제어(RS-232·LAN 제어)하는 연동은 공개 안내에 없다는 것",
+    "notCovers": [
+      "예약 전원 → fixed:board-scheduled-power-off-on",
+      "칠판 OS 보안 패치·MDM → fixed:board-mdm",
+      "LAN 포트·수동 IP → doc:/docs/hardware/board-s-series-safe-use#6/lan-manual-ip",
+      "고정 IP 설치 준비 → doc:/docs/hardware/board-install-readiness#2/static-ip"
+    ],
+    "negatives": [
+      {
+        "q": "칠판 유선 랜에 수동 IP 넣을 때 뭐가 필요해요",
+        "route": "doc:/docs/hardware/board-s-series-safe-use#6/lan-manual-ip"
+      },
+      {
+        "q": "고정 IP 쓰는 학원은 설치 날 뭘 준비해요",
+        "route": "doc:/docs/hardware/board-install-readiness#2/static-ip"
+      },
+      {
+        "q": "칠판 OS 보안 패치나 MDM 등록 돼요?",
+        "route": "fixed:board-mdm"
+      }
+    ],
+    "handoff": "demo",
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "demo",
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "RS-232",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "중앙 제어",
+        "units": 2,
+        "site": 0,
+        "checked": "무관(화면 캡처의 중앙 영역·창 제어 아이콘 설명)"
+      },
+      {
+        "query": "일괄 제어",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "원격 제어",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-board",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:board/usb-port-block",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "board",
+    "topic": "칠판 USB 포트 사용 막기",
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_board",
+      "C_board_port",
+      "C_usb_block"
+    ],
+    "anchors": [
+      "USB 차단",
+      "USB 막기",
+      "USB 잠금",
+      "포트 잠금",
+      "저장장치 차단",
+      "이동식 디스크 차단"
+    ],
+    "covers": "학생이 칠판 USB 포트에 저장장치를 꽂아 쓰지 못하게 막는 설정이나 포트 잠금 부품이 있는지는 공개 안내에 없다는 것",
+    "notCovers": [
+      "포트 용도 → doc:/docs/hardware/board-s-series-safe-use#6/usb-ports",
+      "무선 키보드·마우스 수신기 → doc:/docs/hardware/board-basic-operation#6/wireless-keyboard-mouse",
+      "칠판 MDM 등록 → fixed:board-mdm"
+    ],
+    "negatives": [
+      {
+        "q": "칠판 USB 포트 어디에 뭐 꽂아요",
+        "route": "doc:/docs/hardware/board-s-series-safe-use#6/usb-ports"
+      },
+      {
+        "q": "무선 마우스가 칠판에서 자꾸 끊겨요",
+        "route": "doc:/docs/hardware/board-basic-operation#6/wireless-keyboard-mouse"
+      },
+      {
+        "q": "USB 프레젠터 수신기 꽂아서 써도 돼요?",
+        "route": "fixed:usb-presenter"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "USB 차단",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "USB 잠금",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "포트 막기",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "USB",
+        "units": 11,
+        "site": 0,
+        "checked": "무관(USB 수신기·카메라 USB 전원·포트 확인 — 차단 설정 없음)"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-board",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:board/harmful-site-block",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "board",
+    "topic": "칠판 인터넷 유해 사이트 차단",
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_board",
+      "C_site_block"
+    ],
+    "anchors": [
+      "유해 사이트",
+      "사이트 차단",
+      "인터넷 제한",
+      "성인 사이트",
+      "허용 사이트만",
+      "게임 사이트 막기"
+    ],
+    "covers": "칠판에서 열 수 있는 웹사이트를 막거나 유해 사이트를 거르는 기능이 있는지는 공개 안내에 없다는 것",
+    "notCovers": [
+      "수업 도구 브라우저 즐겨찾기 → doc:/docs/admin/institution-settings#2/browser-favorites",
+      "칠판 내장 브라우저·다른 브라우저 설치 → fixed:board-builtin-browser-webview",
+      "방화벽에서 열어야 할 도메인 → fixed:web-filter-domains",
+      "기기 자녀 보호 앱 → gap:start/parental-control"
+    ],
+    "negatives": [
+      {
+        "q": "수업 도구 브라우저에 자주 가는 사이트 미리 넣어 둘 수 있어요?",
+        "route": "doc:/docs/admin/institution-settings#2/browser-favorites"
+      },
+      {
+        "q": "칠판에 크롬 깔아서 써도 돼요?",
+        "route": "fixed:board-builtin-browser-webview"
+      },
+      {
+        "q": "학교 방화벽에서 열어야 할 주소 알려 주세요",
+        "route": "fixed:web-filter-domains"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "유해 사이트",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "사이트 차단",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "웹 필터",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "차단",
+        "units": 10,
+        "site": 3,
+        "checked": "무관(문자 차단·녹화본 다운로드 차단)"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-board",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:board/camera-zoom-ratio",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "board",
+    "topic": "T1·S1 카메라 줌 배율",
+    "asks": [
+      "quantity",
+      "yesno"
+    ],
+    "concepts": [
+      "C_ai_camera",
+      "C_zoom_ratio"
+    ],
+    "anchors": [
+      "줌 배율",
+      "광학 줌",
+      "몇 배 줌",
+      "디지털 줌",
+      "확대 배율",
+      "줌 사양"
+    ],
+    "covers": "T1·S1 카메라의 광학·디지털 줌 배율 숫자는 공개 안내에 없다는 것(공개된 건 렌즈 초점 거리와 전체·확대 화면 자동 전환)",
+    "notCovers": [
+      "센서·해상도 → doc:/docs/hardware/cam-t1-s1#4/cam-sensor-resolution",
+      "전체·확대 화면 자동 전환 → doc:/docs/hardware/cam-t1-s1#1/wide-closeup-auto-switch",
+      "T1·S1 사양 차이 → doc:/docs/hardware/cam-t1-s1#4/t1-s1-spec-diff"
+    ],
+    "negatives": [
+      {
+        "q": "T1 카메라 해상도 4K예요?",
+        "route": "doc:/docs/hardware/cam-t1-s1#4/cam-sensor-resolution"
+      },
+      {
+        "q": "카메라가 교실 전체랑 강사 확대 화면을 같이 찍어요?",
+        "route": "doc:/docs/hardware/cam-t1-s1#1/wide-closeup-auto-switch"
+      },
+      {
+        "q": "T1이랑 S1 사양 뭐가 달라요",
+        "route": "doc:/docs/hardware/cam-t1-s1#4/t1-s1-spec-diff"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": [
+        {
+          "unit": "doc:/docs/hardware/cam-t1-s1#4",
+          "i": 4,
+          "hash": "0964d74779e0114c"
+        }
+      ]
+    },
+    "searchLog": [
+      {
+        "query": "배율",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "광학 줌",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "줌 배율",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "망원",
+        "units": 1,
+        "site": 0,
+        "checked": "관련(T1 망원·S1 광각 렌즈 — 배율 숫자 없음, 관련 문장으로 씀)"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-board",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:board/waterproof-rating",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "board",
+    "topic": "전자칠판 방수·방진 등급",
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_board",
+      "C_waterproof"
+    ],
+    "anchors": [
+      "방수",
+      "방진",
+      "IP 등급",
+      "생활 방수",
+      "방수 등급",
+      "물에 강한지"
+    ],
+    "covers": "칠판의 방수·방진 등급(IP 등급)은 공개 안내에 없다는 것과 공개된 작동 환경(온도·습도)",
+    "notCovers": [
+      "물이 들어갔을 때 → fixed:water-sprayed-into-board",
+      "습한 날 화면 안쪽이 뿌옇게 보일 때 → doc:/docs/hardware/board-s-series-safe-use#1/foggy-screen-moisture",
+      "직사광선·습기·먼지 피하기 → doc:/docs/hardware/board-install-readiness#6/placement-sunlight"
+    ],
+    "negatives": [
+      {
+        "q": "청소하다가 칠판에 물을 뿌렸어요 어떡하죠",
+        "route": "fixed:water-sprayed-into-board"
+      },
+      {
+        "q": "습한 날 칠판 화면 안쪽이 뿌옇게 됐어요",
+        "route": "doc:/docs/hardware/board-s-series-safe-use#1/foggy-screen-moisture"
+      },
+      {
+        "q": "칠판 두면 안 되는 장소가 있나요",
+        "route": "doc:/docs/hardware/board-install-readiness#6/placement-sunlight"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": [
+        {
+          "unit": "doc:/docs/hardware/hardware-spec-installation-faq#2",
+          "i": 2,
+          "hash": "eabcdd5db45f61f9"
+        }
+      ]
+    },
+    "searchLog": [
+      {
+        "query": "방수",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "방진",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "IP 등급",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "생활 방수",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-board",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:board/student-tablet-sale",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "board",
+    "topic": "학생용 태블릿 판매",
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_tablet_sale"
+    ],
+    "anchors": [
+      "태블릿 구매",
+      "태블릿 판매",
+      "학생용 태블릿",
+      "태블릿 묶음",
+      "패드 대량 구매",
+      "학생 단말기"
+    ],
+    "covers": "클래스인이 학생용 태블릿을 함께 팔거나 칠판과 묶어 공급하는지는 공개 안내에 없다는 것",
+    "notCovers": [
+      "시작할 때 필요한 기기 → policy:start-what-to-buy",
+      "휴대폰·태블릿 최소 사양 → doc:/docs/start/mobile-install#5/mobile-min-spec",
+      "칠판 견적 구성 → doc:/docs/software/software-pricing-quote-bundle-faq#1/board-bundle-quote"
+    ],
+    "negatives": [
+      {
+        "q": "클래스인 시작하려면 뭘 새로 사야 돼요",
+        "route": "policy:start-what-to-buy"
+      },
+      {
+        "q": "오래된 태블릿도 앱 돌아가요? 최소 사양",
+        "route": "doc:/docs/start/mobile-install#5/mobile-min-spec"
+      },
+      {
+        "q": "칠판 견적에 뭐뭐 들어가요",
+        "route": "doc:/docs/software/software-pricing-quote-bundle-faq#1/board-bundle-quote"
+      }
+    ],
+    "handoff": "demo",
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "demo",
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "태블릿 구매",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "태블릿 판매",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "학생 태블릿",
+        "units": 4,
+        "site": 5,
+        "checked": "무관(학생이 태블릿으로 응시·개인 칠판 소개 — 판매 없음)"
+      },
+      {
+        "query": "태블릿 지급",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-board",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:board/wall-restore",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "board",
+    "topic": "칠판 철거 뒤 벽 원상 복구",
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_board",
+      "C_wall_mount",
+      "C_wall_restore"
+    ],
+    "anchors": [
+      "원상 복구",
+      "벽 구멍",
+      "앵커 자국",
+      "벽 보수",
+      "철거 후 벽",
+      "임대 원상복구"
+    ],
+    "covers": "벽걸이 칠판을 떼어 낸 뒤 앵커 구멍 메우기 같은 벽 원상 복구를 해 주는지는 공개 안내에 없다는 것",
+    "notCovers": [
+      "벽걸이 벽체 보강 → doc:/docs/hardware/hardware-spec-installation-faq#1/wall-mount-reinforcement",
+      "벽걸이 칠판 다른 벽으로 옮기기 → policy:wall-board-move-warranty",
+      "쓰던 칠판 교체·수거 → policy:board-trade-in-discount"
+    ],
+    "negatives": [
+      {
+        "q": "석고보드 벽에도 칠판 걸 수 있어요?",
+        "route": "doc:/docs/hardware/hardware-spec-installation-faq#1/wall-mount-reinforcement"
+      },
+      {
+        "q": "벽에 건 칠판 반대편 벽으로 옮겨도 돼요",
+        "route": "policy:wall-board-move-warranty"
+      },
+      {
+        "q": "벽 안에 매립하는 설치는 어때요",
+        "route": "doc:/docs/hardware/board-install-readiness#0/embedded"
+      }
+    ],
+    "handoff": "demo",
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "demo",
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "원상 복구",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "도색",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "벽 보수",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "타공",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-board",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:board/usage-log",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "board",
+    "topic": "칠판 사용 기록·가동 시간",
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_board",
+      "C_device_usage_log"
+    ],
+    "anchors": [
+      "칠판 사용 기록",
+      "칠판 가동 시간",
+      "칠판 켜진 시간",
+      "사용 이력",
+      "전원 켠 기록",
+      "누적 사용 시간"
+    ],
+    "covers": "칠판 기기 자체가 언제 켜지고 몇 시간 쓰였는지 같은 기기 사용 기록을 보는 기능은 공개 안내에 없다는 것",
+    "notCovers": [
+      "원장·실장이 보는 수업·출결·녹화 기록 → doc:/docs/hardware/board-overview#0/director-records",
+      "지난 수업 캡처·입퇴장 기록 → doc:/docs/admin/class-monitoring#4/past-class-record",
+      "수업 모니터링 화면 → doc:/docs/admin/class-monitoring#0/monitoring-screen",
+      "관리자 작업 기록 → gap:admin/admin-audit-log"
+    ],
+    "negatives": [
+      {
+        "q": "원장이 수업 출결이랑 녹화 기록을 한꺼번에 볼 수 있나요",
+        "route": "doc:/docs/hardware/board-overview#0/director-records"
+      },
+      {
+        "q": "지난 수업 교실 캡처는 어디서 봐요",
+        "route": "doc:/docs/admin/class-monitoring#4/past-class-record"
+      },
+      {
+        "q": "관리자 수업 모니터링 화면에서 뭘 볼 수 있어요",
+        "route": "doc:/docs/admin/class-monitoring#0/monitoring-screen"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "사용 기록",
+        "units": 20,
+        "site": 1,
+        "checked": "무관(수업 기록·설정 변경 기록·데이터 삭제 항목 — 기기 사용 기록 아님)"
+      },
+      {
+        "query": "가동 시간",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "전원 기록",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "사용 이력",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-board",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:board/boot-time",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "board",
+    "topic": "칠판 부팅 시간",
+    "asks": [
+      "when",
+      "quantity"
+    ],
+    "concepts": [
+      "C_board",
+      "C_boot_time"
+    ],
+    "anchors": [
+      "부팅 시간",
+      "부팅 속도",
+      "켜지는 데 얼마나",
+      "켜는 시간",
+      "켜자마자",
+      "시동 시간"
+    ],
+    "covers": "칠판 전원을 눌러 수업 화면을 쓸 수 있을 때까지 걸리는 부팅 시간은 공개 안내에 없다는 것",
+    "notCovers": [
+      "전원 버튼 짧게·길게 누를 때 → doc:/docs/hardware/board-basic-operation#0/power-button",
+      "화면이 안 나올 때 → doc:/docs/hardware/board-basic-operation#6/no-screen-checks",
+      "처음 켜서 수업 들어가는 순서 → fixed:board-first-use-flow"
+    ],
+    "negatives": [
+      {
+        "q": "칠판 전원 버튼 짧게 누르면 뭐가 돼요",
+        "route": "doc:/docs/hardware/board-basic-operation#0/power-button"
+      },
+      {
+        "q": "칠판 켰는데 화면이 안 나와요",
+        "route": "doc:/docs/hardware/board-basic-operation#6/no-screen-checks"
+      },
+      {
+        "q": "처음 칠판 켜서 수업 들어가기까지 순서",
+        "route": "fixed:board-first-use-flow"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "부팅",
+        "units": 1,
+        "site": 0,
+        "checked": "무관(같은 수업을 부팅부터 녹화까지 반복 점검 — 소요 시간 없음)"
+      },
+      {
+        "query": "켜지는 시간",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "부팅 속도",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "켜는 데",
+        "units": 3,
+        "site": 0,
+        "checked": "무관(자동 삭제 켜기·온보딩 안내·보안 프로그램)"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-board",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:board/ops-upgrade",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "board",
+    "topic": "내장 PC(OPS) 사양 업그레이드",
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_ops",
+      "C_board_spec",
+      "C_ops_upgrade"
+    ],
+    "anchors": [
+      "OPS 업그레이드",
+      "메모리 증설",
+      "램 추가",
+      "SSD 교체",
+      "OPS 교체 구매",
+      "고사양 OPS"
+    ],
+    "covers": "칠판 OPS의 메모리·SSD를 늘리거나 더 높은 사양 OPS로 바꿔 사는 업그레이드가 되는지는 공개 안내에 없다는 것",
+    "notCovers": [
+      "모델별 OPS 사양 → doc:/docs/hardware/board-lineup-specs#4/ops-spec",
+      "OPS 탈착 전 전원 끄기 → doc:/docs/hardware/hardware-spec-installation-faq#2/ops-swap-power-off",
+      "OPS가 무엇인지 → doc:/docs/start/value-and-cost-framing#0/ops-builtin-pc",
+      "칠판 소비전력·OPS 기준 사양 → fixed:board-power-ops"
+    ],
+    "negatives": [
+      {
+        "q": "S86 OPS CPU가 뭐예요",
+        "route": "doc:/docs/hardware/board-lineup-specs#4/ops-spec"
+      },
+      {
+        "q": "OPS 뺄 때 전원 꺼야 돼요?",
+        "route": "doc:/docs/hardware/hardware-spec-installation-faq#2/ops-swap-power-off"
+      },
+      {
+        "q": "칠판 안에 들어가는 OPS가 뭔데요",
+        "route": "doc:/docs/start/value-and-cost-framing#0/ops-builtin-pc"
+      }
+    ],
+    "handoff": "demo",
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "demo",
+      "related": [
+        {
+          "unit": "doc:/docs/hardware/hardware-spec-installation-faq#2",
+          "i": 8,
+          "hash": "d45a918bed152528"
+        }
+      ]
+    },
+    "searchLog": [
+      {
+        "query": "증설",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "OPS 교체",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "업그레이드",
+        "units": 26,
+        "site": 1,
+        "checked": "무관(앱 버전 업그레이드)"
+      },
+      {
+        "query": "SSD",
+        "units": 6,
+        "site": 0,
+        "checked": "관련(OPS 기본 메모리·SSD 사양 — 증설·교체 판매 없음)"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-board",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:board/camera-privacy-shutter",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "board",
+    "topic": "카메라 렌즈 가리개",
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_ai_camera",
+      "C_lens_cover"
+    ],
+    "anchors": [
+      "렌즈 가리개",
+      "카메라 덮개",
+      "프라이버시 셔터",
+      "렌즈 커버",
+      "카메라 가림막",
+      "카메라 가리기"
+    ],
+    "covers": "칠판 카메라·T1·S1 카메라 렌즈를 물리적으로 가리는 덮개(프라이버시 셔터)가 있는지는 공개 안내에 없다는 것",
+    "notCovers": [
+      "수업 중 카메라 바꾸기 → doc:/docs/hardware/board-ai-camera-mic#2/switch-device-mid-class",
+      "AI 카메라 얼굴 인식·저장 → policy:ai-camera-face-recognition-data",
+      "카메라 각도를 손으로 돌리기 → fixed:board-camera-tilt"
+    ],
+    "negatives": [
+      {
+        "q": "수업하다가 카메라 다른 걸로 바꿀 수 있어요",
+        "route": "doc:/docs/hardware/board-ai-camera-mic#2/switch-device-mid-class"
+      },
+      {
+        "q": "AI 카메라가 애들 얼굴 저장하나요",
+        "route": "policy:ai-camera-face-recognition-data"
+      },
+      {
+        "q": "칠판 카메라 각도 손으로 돌려도 돼요?",
+        "route": "fixed:board-camera-tilt"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "가리개",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "렌즈 덮개",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "셔터",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "카메라 가리기",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-board",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:board/face-blur",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "board",
+    "topic": "카메라 영상 학생 얼굴 모자이크",
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_ai_camera",
+      "C_face_blur"
+    ],
+    "anchors": [
+      "얼굴 모자이크",
+      "얼굴 블러",
+      "얼굴 가리기",
+      "학생 얼굴 흐리게",
+      "초상권 보호",
+      "얼굴 안 나오게"
+    ],
+    "covers": "카메라 영상이나 녹화본에서 학생 얼굴을 자동으로 모자이크(블러) 처리하는 기능은 공개 안내에 없다는 것",
+    "notCovers": [
+      "AI 카메라 얼굴 인식·저장 → policy:ai-camera-face-recognition-data",
+      "녹화 공유 범위·제목 규칙 → doc:/docs/hardware/board-ai-camera-mic#5/rec-usage-share",
+      "가상 배경·뷰티 필터 → fixed:camera-beauty-filter",
+      "S1이 앉은 학생을 따라가지 않음 → doc:/docs/hardware/cam-t1-s1#7/s1-seated-not-tracked"
+    ],
+    "negatives": [
+      {
+        "q": "녹화 영상 누구까지 볼 수 있게 정해야 돼요",
+        "route": "doc:/docs/hardware/board-ai-camera-mic#5/rec-usage-share"
+      },
+      {
+        "q": "카메라 배경 흐리게 하거나 가상 배경 돼요?",
+        "route": "fixed:camera-beauty-filter"
+      },
+      {
+        "q": "S1이 앉아 있는 애들은 안 잡던데 고장이에요?",
+        "route": "doc:/docs/hardware/cam-t1-s1#7/s1-seated-not-tracked"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "모자이크",
+        "units": 3,
+        "site": 0,
+        "checked": "무관(가이드 캡처의 개인정보 모자이크 설명)"
+      },
+      {
+        "query": "블러",
+        "units": 13,
+        "site": 0,
+        "checked": "무관(가이드 캡처의 흐림 처리 설명)"
+      },
+      {
+        "query": "얼굴 가리기",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "흐림 처리",
+        "units": 4,
+        "site": 0,
+        "checked": "무관(가이드 캡처의 흐림 처리 설명)"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-board",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:board/overseas-shipping",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "board",
+    "topic": "전자칠판 해외 배송·설치",
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_board",
+      "C_overseas_shipping"
+    ],
+    "anchors": [
+      "해외 배송",
+      "해외 설치",
+      "해외 A/S",
+      "외국으로 보내",
+      "해외 지점 칠판",
+      "국제 배송"
+    ],
+    "covers": "전자칠판을 해외로 보내거나 해외 현장에 설치·A/S 해 주는지는 공개 안내에 없다는 것",
+    "notCovers": [
+      "해외 한인학교 도입 → gap:company/korean-school-overseas",
+      "해외 결제 → gap:pricing/overseas-payment",
+      "국내 전원 연결 조건 → doc:/docs/hardware/board-s-series-safe-use#0/power-outlet"
+    ],
+    "negatives": [
+      {
+        "q": "칠판 콘센트는 일반 220V 쓰면 돼요?",
+        "route": "doc:/docs/hardware/board-s-series-safe-use#0/power-outlet"
+      },
+      {
+        "q": "해외 번호로도 클래스인 가입돼요",
+        "route": "doc:/docs/start/signup#2/id-type"
+      },
+      {
+        "q": "정품 칠판은 출장 점검 받을 수 있어요",
+        "route": "doc:/docs/hardware/hardware-spec-installation-faq#3/warranty-onsite"
+      }
+    ],
+    "handoff": "demo",
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "demo",
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "해외 배송",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "해외 설치",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "수출",
+        "units": 1,
+        "site": 0,
+        "checked": "무관(글자 겹침)"
+      },
+      {
+        "query": "해외",
+        "units": 13,
+        "site": 8,
+        "checked": "무관(해외 번호 가입·해외 교수 초빙 사례)"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-board",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:board/refurbished-board",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "board",
+    "topic": "중고·리퍼 전자칠판 구매",
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_board",
+      "C_refurbished"
+    ],
+    "anchors": [
+      "중고 칠판",
+      "리퍼 칠판",
+      "리퍼브",
+      "전시품",
+      "진열 상품",
+      "중고 구매"
+    ],
+    "covers": "클래스인이 중고·리퍼(전시품) 전자칠판을 파는지는 공개 안내에 없다는 것",
+    "notCovers": [
+      "쓰던 칠판 반납·재매입 → policy:board-return-buyback",
+      "쓰던 칠판 보상 판매 → policy:board-trade-in-discount",
+      "분할 납부·렌탈 → policy:board-installment-rental",
+      "칠판만 따로 구매 → doc:/docs/hardware/board-overview#4/board-only-price-inquiry"
+    ],
+    "negatives": [
+      {
+        "q": "칠판만 따로 살 수 있어요?",
+        "route": "doc:/docs/hardware/board-overview#4/board-only-price-inquiry"
+      },
+      {
+        "q": "칠판 남한테 넘기기 전에 지워야 할 게 있나요",
+        "route": "fixed:board-wipe-before-transfer"
+      },
+      {
+        "q": "교실 크기별로 어떤 모델 봐야 해요",
+        "route": "doc:/docs/hardware/board-lineup-specs#0/pick-by-class-size"
+      }
+    ],
+    "handoff": "demo",
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "demo",
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "중고",
+        "units": 14,
+        "site": 0,
+        "checked": "무관(중·고등 글자 겹침·요금제 문장)"
+      },
+      {
+        "query": "리퍼",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "전시품",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "반품 제품",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-board",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:board/maintenance-contract",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "board",
+    "topic": "정기 방문 점검·유지보수 계약",
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_board",
+      "C_warranty",
+      "C_maintenance_contract"
+    ],
+    "anchors": [
+      "정기 점검",
+      "유지보수 계약",
+      "정기 방문",
+      "연간 점검",
+      "예방 점검",
+      "관리 계약"
+    ],
+    "covers": "고장이 없어도 정해진 주기로 방문해 칠판을 점검해 주는 정기 점검·유지보수 계약이 있는지는 공개 안내에 없다는 것과 공개된 무상 출장 점검 기준",
+    "notCovers": [
+      "무상 보증·출장 점검 → doc:/docs/hardware/hardware-spec-installation-faq#3/warranty-onsite",
+      "설치 후 첫 주 점검 → doc:/docs/hardware/board-s-series-safe-use#8/week-one-checklist",
+      "지방 출장 지원 → gap:support/regional-onsite",
+      "수리 소요 기간 → gap:support/repair-duration"
+    ],
+    "negatives": [
+      {
+        "q": "설치하고 첫 주에 우리가 직접 뭘 점검하면 돼요",
+        "route": "doc:/docs/hardware/board-s-series-safe-use#8/week-one-checklist"
+      },
+      {
+        "q": "보증 기간 안에 고장 나면 출장 와 주나요",
+        "route": "doc:/docs/hardware/hardware-spec-installation-faq#3/warranty-onsite"
+      },
+      {
+        "q": "A/S 접수 순서 알려 주세요",
+        "route": "doc:/docs/hardware/hardware-spec-installation-faq#3/as-request-steps"
+      }
+    ],
+    "handoff": "demo",
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "demo",
+      "related": [
+        {
+          "unit": "doc:/docs/hardware/hardware-spec-installation-faq#3",
+          "i": 7,
+          "hash": "2e6cd3cc871b0ceb"
+        }
+      ]
+    },
+    "searchLog": [
+      {
+        "query": "정기 점검",
+        "units": 1,
+        "site": 0,
+        "checked": "무관(앱 기기 테스트 문장)"
+      },
+      {
+        "query": "유지보수",
+        "units": 1,
+        "site": 0,
+        "checked": "무관(전자칠판 고를 때 설치·유지보수가 단순한지 보기)"
+      },
+      {
+        "query": "유지 보수",
+        "units": 1,
+        "site": 0,
+        "checked": "무관(전자칠판 고를 때 설치·유지보수가 단순한지 보기)"
+      },
+      {
+        "query": "방문 점검",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-board",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:board/crane-delivery",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "board",
+    "topic": "사다리차·크레인 반입",
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_board",
+      "C_installation",
+      "C_crane"
+    ],
+    "anchors": [
+      "사다리차",
+      "크레인",
+      "창문 반입",
+      "엘리베이터 없는 건물",
+      "계단으로 못 올려",
+      "고층 반입"
+    ],
+    "covers": "포장한 칠판이 계단·엘리베이터로 못 들어갈 때 사다리차·크레인으로 창문 반입을 해 주는지는 공개 안내에 없다는 것과 공개된 반입 경로 확인 안내",
+    "notCovers": [
+      "반입 경로 확인 → doc:/docs/hardware/board-install-readiness#1/delivery-path",
+      "옮기는 인원·무게 → doc:/docs/hardware/board-s-series-safe-use#2/moving-people",
+      "바닥 수평·문폭 → doc:/docs/hardware/hardware-spec-installation-faq#1/stand-floor-door-width"
+    ],
+    "negatives": [
+      {
+        "q": "칠판 상자가 우리 건물 계단으로 들어갈지 뭘 확인해요",
+        "route": "doc:/docs/hardware/board-install-readiness#1/delivery-path"
+      },
+      {
+        "q": "칠판 옮길 때 몇 명이 들어야 돼요",
+        "route": "doc:/docs/hardware/board-s-series-safe-use#2/moving-people"
+      },
+      {
+        "q": "스탠드 칠판 지나가려면 문 폭이 얼마나 돼야 해요",
+        "route": "doc:/docs/hardware/hardware-spec-installation-faq#1/stand-floor-door-width"
+      }
+    ],
+    "handoff": "demo",
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "demo",
+      "related": [
+        {
+          "unit": "doc:/docs/hardware/hardware-spec-installation-faq#1",
+          "i": 10,
+          "hash": "78817ba3e9140afe"
+        }
+      ]
+    },
+    "searchLog": [
+      {
+        "query": "사다리차",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "크레인",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "계단",
+        "units": 4,
+        "site": 0,
+        "checked": "관련(포장된 보드가 출입문·엘리베이터·계단을 지나는지 미리 확인 — 사다리차·크레인 없음, 관련 문장으로 씀)"
+      },
+      {
+        "query": "엘리베이터",
+        "units": 4,
+        "site": 0,
+        "checked": "관련(같은 반입 경로 확인 문장 — 사다리차·크레인 없음)"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-board",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  },
+  {
+    "id": "gap:board/dry-marker",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "board",
+    "topic": "일반 보드마커로 칠판 화면에 쓰기",
+    "asks": [
+      "yesno"
+    ],
+    "concepts": [
+      "C_board",
+      "C_board_pen",
+      "C_dry_marker"
+    ],
+    "anchors": [
+      "보드마커",
+      "화이트보드 마커",
+      "유성 매직",
+      "마커로 써도",
+      "마카",
+      "분필"
+    ],
+    "covers": "칠판 유리 화면에 일반 보드마커·유성 매직·분필로 직접 써도 되는지는 공개 안내에 없다는 것",
+    "notCovers": [
+      "손가락·전용 펜 인식 → doc:/docs/hardware/board-writing-touch#1/multi-user-writing",
+      "화면 청소 방법·세제 → doc:/docs/hardware/board-s-series-safe-use#3/cleaning-method",
+      "기본 제공 펜 → doc:/docs/hardware/board-install-readiness#7/pens",
+      "펜 충전 → fixed:board-pen-charge"
+    ],
+    "negatives": [
+      {
+        "q": "칠판 펜 없으면 손가락으로도 써져요?",
+        "route": "doc:/docs/hardware/board-writing-touch#1/multi-user-writing"
+      },
+      {
+        "q": "칠판 화면 닦을 때 어떤 천 써야 돼요",
+        "route": "doc:/docs/hardware/board-s-series-safe-use#3/cleaning-method"
+      },
+      {
+        "q": "칠판 기본으로 펜 몇 자루 줘요",
+        "route": "doc:/docs/hardware/board-install-readiness#7/pens"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "searchLog": [
+      {
+        "query": "마커",
+        "units": 1,
+        "site": 0,
+        "checked": "무관(접속 그래프의 마커 표시)"
+      },
+      {
+        "query": "보드마커",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "화이트보드",
+        "units": 1,
+        "site": 0,
+        "checked": "무관(다운로드 화면 목업 설명)"
+      },
+      {
+        "query": "매직",
+        "units": 18,
+        "site": 0,
+        "checked": "무관(매직펜은 앱 판서 도구)"
+      }
+    ],
+    "provenance": {
+      "unit": "D5-board",
+      "writer": "agent:opus",
+      "at": "2026-11-20",
+      "legacyIds": []
+    }
+  }
+]
