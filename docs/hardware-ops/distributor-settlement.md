@@ -87,6 +87,23 @@
   지우고, 체크·적용된 초안은 원장에서 직접 정정한다.
 - H방식: 정산 1건 = 초안 1건(`operation = hmode-installation-confirmed`).
 
+## 5-1. 총판 미수금 보드 (2026-11)
+
+`/admin/quotes?tab=receivables` 는 발행된 총판 견적서 전체(미수 + 완납)를 받아 화면에서 거른다.
+
+- **요약**: 받을 금액 · 기한 경과 · 기한 미입력 · 입금 누계(회수율). 필터와 무관하게 전체 발행분 기준이고,
+  타일을 누르면 그 상태로 좁혀진다.
+- **경과 구간**: 받을 금액을 **발행 후 경과일**(30일 이내 / 31~60일 / 61~90일 / 91일 이상)로 나눈다.
+  입금 기한은 사람이 넣는 값이라 비어 있을 수 있어서, 구간은 항상 있는 발행일로 잡는다. 기한 경과 판정은
+  기존대로 입금 기한 기준이다 — 기한이 비어 있으면 기한 경과로 잡히지 않고 "기한 미입력"으로 따로 센다.
+- **월별 흐름**: 최근 6개월의 청구 발행액(발행월)과 입금액(입금월). 달을 누르면 그 달 발행분만 본다.
+- **목록**: 검색(고객·견적번호·총판·딜), 상태, 총판(2곳 이상일 때), 묶음(총판별·발행월별·경과 구간별, 소계),
+  머리글 정렬, CSV 내보내기(보이는 행 그대로). 보던 조건은 주소(`rq`·`rst`·`rdist`·`rage`·`rmonth`·`rsort`·`rgroup`)에
+  남아 새로고침·공유에도 유지된다.
+- **한도**: 미수와 완납을 따로 최근 500건씩 읽는다. 한도에 닿으면 화면에 알린다.
+- 금액은 원화 그대로다. 매출 원장(CNY)과 환산·합산하지 않는다(§5).
+- 입금 기록·삭제·발행은 여전히 견적 상세 › 총판 정산에서 한다. 기한 경과 알림(외부 발송)은 없다.
+
 ## 6. 다음 단계 — 입고·출고 물량
 
 하드웨어 재고(입고·출고)도 같은 C/H 구분으로 움직인다. 아직 연결하지 않았고, 붙일 때의 기준은 다음과 같다.
@@ -106,5 +123,7 @@
   오더 보장 `ensureSalesOrderForAcceptedQuoteSafely` 다음에 부른다)
 - 매출 초안: `lib/admin/handoff/distributor-payment-to-ledger-draft.ts`
 - API: `app/api/admin/quotes/[id]/distributor-settlement/**`, `app/api/admin/distributor-receivables`, `app/api/admin/distributor-price-templates/**`
+- 미수금 보드 계산(순수): `lib/distributor-receivables-view.ts` — 경과일·구간, 필터·정렬·묶음, 요약, 월별 흐름, CSV, 주소 상태
 - 화면: `components/admin/documents/DistributorSettlementSection.tsx`, `components/admin/documents/DistributorReceivablesPanel.tsx`
+  (불러오기·원가 템플릿) + `DistributorReceivablesBoard.tsx`·`DistributorReceivablesParts.tsx`(보드)
 - 마이그레이션: [20261023_distributor_settlements.sql](../../supabase/migrations/20261023_distributor_settlements.sql)
