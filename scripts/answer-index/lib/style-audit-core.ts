@@ -92,7 +92,8 @@ export function analyzeStyle(input: StyleInput): StyleRecord {
   const lines = text.split("\n")
   const nonEmpty = lines.filter((line) => line.trim())
   const maxLine = nonEmpty.reduce((max, line) => Math.max(max, line.length), 0)
-  const first = input.lead?.trim() || splitSentences(text)[0] || ""
+  // 목록 표시("1.")는 문장이 아니다: 첫 문장을 고를 때 줄 앞 표시를 뗀다.
+  const first = input.lead?.trim() || splitSentences(text.replace(/(^|\n)\s*(?:\d+[.)]|[-•·*–])\s+/g, "$1"))[0] || ""
   const listKinds = LIST_MARKERS.filter(([, pattern]) => pattern.test(text)).map(([name]) => name)
   const numbered = nonEmpty.filter((line) => /^\s*\d+[.)]\s/.test(line))
   const tail = nonEmpty.slice(-3)
@@ -106,7 +107,11 @@ export function analyzeStyle(input: StyleInput): StyleRecord {
     maxLine,
     longLine120: maxLine > 120,
     longLine60: maxLine > 60,
-    pathStuck: lines.some((line) => /\S[^\n]*\s경로\s*[:：]/.test(line) || /\S경로\s*[:：]/.test(line)),
+    // 목록 항목 맨 앞의 "경로:"("1. 경로: …")는 자기 줄이다. 다른 글 뒤에 붙은 것만 센다.
+    pathStuck: lines.some((raw) => {
+      const line = raw.replace(/^\s*(?:\d+[.)]|[-•·*–])\s+/, "")
+      return /\S[^\n]*\s경로\s*[:：]/.test(line) || /\S경로\s*[:：]/.test(line)
+    }),
     listKinds,
     listMix: listKinds.length >= 2,
     longNumberedItem: numbered.some((line) => splitSentences(line).length >= 3),

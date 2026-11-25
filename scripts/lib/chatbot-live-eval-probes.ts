@@ -86,7 +86,16 @@ export const UNANSWERED_NOTICE_PATTERNS: readonly RegExp[] = [
   /함께 물어보신 다른 내용은/,
   /이 질문만 따로 보내 주시면/,
   /공개 안내에는 없는 내용이라/,
+  /따로 한 번 더 물어봐 주세요/,
 ]
+
+/** 알림 줄 가운데 '공개 안내에 없다'고 말하는 것(거짓 알림 판정은 이쪽만 본다: '다시 물어봐 달라'는 카드가 있어도 거짓이 아니다). */
+export const ABSENCE_NOTICE_PATTERNS: readonly RegExp[] = [/함께 물어보신 다른 내용은/, /공개 안내에는 없는 내용이라/]
+
+export function hasAbsenceNotice(answer: string | null | undefined): boolean {
+  if (!answer) return false
+  return ABSENCE_NOTICE_PATTERNS.some((pattern) => pattern.test(answer))
+}
 
 export function hasUnansweredNotice(answer: string | null | undefined): boolean {
   if (!answer) return false
@@ -197,6 +206,8 @@ export interface FragmentRecord {
   answeredCards: string[]
   /** 답 글에 '일부를 못 답했다'는 알림 줄이 있는지. */
   notice: boolean
+  /** 알림 줄 가운데 '공개 안내에 없다'고 말하는 줄이 있는지(거짓 알림 판정용). */
+  absenceNotice: boolean
   perFragment: FragmentSoloResult[]
 }
 
@@ -293,6 +304,7 @@ export function buildFragmentRecord(input: FragmentRecordInput): FragmentRecord 
     for (const segment of segments) if (ANSWERED_KINDS.has(segment.kind)) push(segment.card)
   }
   const notice = hasUnansweredNotice(input.answer)
+  const absenceNotice = hasAbsenceNotice(input.answer)
 
   const perFragment: FragmentSoloResult[] = (input.expect ?? []).map((fragment, index) => {
     const pattern = new RegExp(fragment.cardPattern)
@@ -310,7 +322,7 @@ export function buildFragmentRecord(input: FragmentRecordInput): FragmentRecord 
     }
   })
 
-  return { source, segmentCount: segments.length || 1, segments, answeredCards, notice, perFragment }
+  return { source, segmentCount: segments.length || 1, segments, answeredCards, notice, absenceNotice, perFragment }
 }
 
 // ---------------------------------------------------------------------------
@@ -414,8 +426,8 @@ export function summarizeFragments(rows: readonly FragmentRowInput[]): FragmentS
     }
     if (record.notice) {
       noticeRows += 1
-      if (per.some((item) => !item.answered && item.soloTop === true)) falseNotice += 1
-      if (per.some((item) => !item.answered && item.soloAnswered === true)) falseNoticeStrict += 1
+      if (record.absenceNotice && per.some((item) => !item.answered && item.soloTop === true)) falseNotice += 1
+      if (record.absenceNotice && per.some((item) => !item.answered && item.soloAnswered === true)) falseNoticeStrict += 1
     }
   }
   const singleRows = rows.filter((row) => row.single && row.fragments)

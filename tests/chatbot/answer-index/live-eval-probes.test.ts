@@ -4,6 +4,7 @@ import { parseEvalCases } from "@/scripts/lib/chatbot-live-eval-checks"
 import {
   buildFragmentRecord,
   classifyDecoy,
+  hasAbsenceNotice,
   hasUnansweredNotice,
   outcomeSignature,
   summarizeDecoys,
@@ -103,7 +104,13 @@ describe("buildFragmentRecord", () => {
   it("알림 줄을 알아본다", () => {
     expect(hasUnansweredNotice("함께 물어보신 다른 내용은 공개 안내에서 찾지 못했어요.")).toBe(true)
     expect(hasUnansweredNotice("【체험】 이 질문만 따로 보내 주시면 이어서 안내해 드릴게요.")).toBe(true)
+    expect(hasUnansweredNotice("【두 번째 질문】\n이 내용은 따로 한 번 더 물어봐 주세요.")).toBe(true)
     expect(hasUnansweredNotice("녹화는 [수업 설정]에서 켜요.")).toBe(false)
+  })
+
+  it("'공개 안내에 없다'는 알림만 거짓 알림 후보로 본다", () => {
+    expect(hasAbsenceNotice("【외부 출결】\n공개 안내에는 없는 내용이라 상담으로 확인해 드릴게요.")).toBe(true)
+    expect(hasAbsenceNotice("【두 번째 질문】\n이 내용은 따로 한 번 더 물어봐 주세요.")).toBe(false)
   })
 })
 
@@ -114,6 +121,7 @@ describe("summarizeFragments", () => {
     segments: [],
     answeredCards: answered.some(Boolean) ? ["x"] : [],
     notice,
+    absenceNotice: notice,
     perFragment: answered.map((value, index) => ({
       topic: `t${index}`,
       answered: value,

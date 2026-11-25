@@ -3,8 +3,10 @@
  * 글을 고치지 않고 판정만 한다. 모델·네트워크·데이터베이스를 부르지 않는다.
  *
  * 실행:
- *   npx tsx scripts/answer-index/style-audit.ts [--cards] [--answers <결과.jsonl|목록.json>]... [--data-dir <자료 폴더>] [--out <요약.json>] [--examples N]
+ *   npx tsx scripts/answer-index/style-audit.ts [--cards] [--shape] [--answers <결과.jsonl|목록.json>]... [--data-dir <자료 폴더>] [--out <요약.json>] [--examples N] [--shape-report <파일.json>]
  *
+ * - --shape: 카드 답을 respond.ts 와 같은 순서(리드 붙이기 → shape.ts 다듬기)로 그려 점검한다(없으면 다듬지 않은 글). 다듬을 때는 글자 보존도 같이 검사한다:
+ *   공백·줄바꿈·표기 기호·목록 표시를 뺀 글자열이 전후로 같아야 한다(뺀 빈 리드·겹친 끝맺음은 목록으로 따로 대조). 어긋난 카드는 --shape-report 로 쓴다.
  * - --cards: 자료 폴더(--data-dir > ANSWER_INDEX_DATA_DIR > data/answer-index)의 모든 카드를 답으로 그려 점검한다(종류별 요약).
  *   doc 카드는 문장 묶기·리드를 런타임과 같은 함수로 그린다. 상담 안내·끝맺음은 카드 밖(respond.ts)이라 여기에는 없다.
  * - --answers: 실제 답. chatbot-live-eval 결과 줄({answer, decidedBy})이나 [{text|answer, kind?}] 배열. 종류는 decidedBy 앞 토큰이다.
@@ -17,6 +19,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { basename, dirname, resolve } from "node:path"
 import { argValues, hasFlag } from "./lib/common"
 import { analyzeStyle, summarizeStyle, type StyleRecord } from "./lib/style-audit-core"
+import { contentSignature, findWidgetBreaks, shapeAnswer } from "../../lib/chatbot/answer-index/shape"
 
 // server-only 가 걸린 모듈을 CLI 에서 불러오기 위한 가림(scripts/chatbot-live-eval.ts 와 같은 방식).
 type RequireFn = (this: unknown, id: string) => unknown
@@ -37,11 +40,27 @@ interface Audited {
   kind: string
   id: string
   record: StyleRecord
+  /** 점검한 글(--list 가 보여 준다). */
+  text?: string
 }
 
 type SentenceItem = { group: string; id: number; text: string }
 
-async function auditCards(dir: string | undefined): Promise<Audited[]> {
+interface ShapeReport {
+  cards: number
+  changed: number
+  reverted: string[]
+  /** 글자 보존이 어긋난 카드(전후 글자열이 다름). */
+  mismatched: { id: string; kind: string }[]
+  /** 위젯이 깨뜨려 그리는 덩이가 있는 카드(번호 줄이 다른 줄과 섞임). */
+  widgetBroken: { id: string; kind: string }[]
+  /** 다듬기 전 글에서 같은 판정으로 센 카드 수(비교용). */
+  widgetBrokenBefore: number
+  removedLeads: Record<string, number>
+  removedClosings: { id: string; text: string }[]
+}
+
+async function auditCards(dir: string | undefined, shape: boolean, report: ShapeReport): Promise<Audited[]> {
   const { loadAnswerIndexData, answerIndexDataDir } = await import("@/lib/chatbot/answer-index/load")
   const { curatedLegacyText, curatedTextHash, symptomTopicById, findPublicGuide } = await import("@/lib/chatbot/answer-index/curated")
   const { groupSentenceParagraphs } = await import("@/lib/chatbot/answer-index/paragraphs")
@@ -91,7 +110,24 @@ async function auditCards(dir: string | undefined): Promise<Audited[]> {
       console.error(`그리기 실패 ${card.id}: ${(error as Error).message}`)
     }
     if (!text) continue
-    out.push({ kind: card.kind, id: card.id, record: analyzeStyle({ text, lead, asks: card.kind === "gap" ? null : card.asks }) })
+    // respond.ts 와 같은 순서: 리드를 첫 문단 앞에 붙인 뒤(다듬을 때는) shape 를 건다.
+    const composed = lead ? `${lead} ${text}` : text
+    let final = composed
+    if (shape) {
+      const result = shapeAnswer(composed)
+      final = result.text
+      report.cards += 1
+      if (final !== composed) report.changed += 1
+      if (result.reverted) report.reverted.push(card.id)
+      for (const removed of result.removedLeads) report.removedLeads[removed] = (report.removedLeads[removed] ?? 0) + 1
+      for (const removed of result.removedClosings) report.removedClosings.push({ id: card.id, text: removed })
+      let expected = contentSignature(composed)
+      for (const removed of [...result.removedLeads, ...result.removedClosings]) expected = expected.replace(contentSignature(removed), "")
+      if (findWidgetBreaks(composed).length > 0) report.widgetBrokenBefore += 1
+      if (findWidgetBreaks(final).length > 0) report.widgetBroken.push({ id: card.id, kind: card.kind })
+      if (!result.reverted && expected !== contentSignature(final)) report.mismatched.push({ id: card.id, kind: card.kind })
+    }
+    out.push({ kind: card.kind, id: card.id, text: final, record: analyzeStyle({ text: final, asks: card.kind === "gap" ? null : card.asks }) })
   }
   return out
 }
@@ -138,12 +174,29 @@ async function main() {
   const wantCards = hasFlag(argv, "--cards")
   if (!wantCards && answerFiles.length === 0) usage("--cards 나 --answers 가 필요합니다.")
   const examples = Number(argValues(argv, "--examples")[0] ?? 0)
+  const shape = hasFlag(argv, "--shape")
+  const shapeReport: ShapeReport = { cards: 0, changed: 0, reverted: [], mismatched: [], widgetBroken: [], widgetBrokenBefore: 0, removedLeads: {}, removedClosings: [] }
   const dirArg = argValues(argv, "--data-dir")[0]
   const result: Record<string, unknown> = {}
   const report = (title: string, items: Audited[]) => {
     const summary = groupSummary(items)
     result[title] = summary
     printSummary(title, summary)
+    const listFlag = argValues(argv, "--list")[0]
+    if (listFlag) {
+      const [flag, kind] = listFlag.split(":")
+      for (const item of items) {
+        if (kind && item.kind !== kind) continue
+        const record = item.record as unknown as Record<string, unknown>
+        const hit =
+          flag === "firstLine"
+            ? item.record.firstLine !== "conclusion"
+            : flag === "closingTwoPlus"
+              ? item.record.closingLines >= 2
+              : Boolean(record[flag]) && record[flag] !== 0
+        if (hit) console.log(`--- [${item.kind}] ${item.id} ${flag}\n${(item.text ?? "").slice(0, 600)}`)
+      }
+    }
     if (examples > 0) {
       const shown: Record<string, number> = {}
       for (const item of items) {
@@ -153,7 +206,17 @@ async function main() {
       }
     }
   }
-  if (wantCards) report("cards", await auditCards(dirArg ? resolve(process.cwd(), dirArg) : undefined))
+  if (wantCards) report("cards", await auditCards(dirArg ? resolve(process.cwd(), dirArg) : undefined, shape, shapeReport))
+  if (wantCards && shape) {
+    console.log(
+      `shape: 카드 ${shapeReport.cards} · 바뀐 카드 ${shapeReport.changed} · 안전 규칙으로 되돌림 ${shapeReport.reverted.length} · 글자 보존 어긋남 ${shapeReport.mismatched.length} · 위젯이 깨뜨려 그릴 덩이 ${shapeReport.widgetBroken.length}(다듬기 전 ${shapeReport.widgetBrokenBefore}장) · 뺀 빈 리드 ${Object.values(shapeReport.removedLeads).reduce((a, b) => a + b, 0)} · 뺀 끝맺음 ${shapeReport.removedClosings.length}`
+    )
+    const reportPath = argValues(argv, "--shape-report")[0]
+    if (reportPath) {
+      mkdirSync(dirname(resolve(process.cwd(), reportPath)), { recursive: true })
+      writeFileSync(resolve(process.cwd(), reportPath), `${JSON.stringify(shapeReport, null, 2)}\n`)
+    }
+  }
   for (const file of answerFiles) report(`answers:${basename(file)}`, auditAnswers(file))
   const out = argValues(argv, "--out")[0]
   if (out) {
