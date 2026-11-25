@@ -12,6 +12,7 @@ import {
 import { HARDWARE_OUTBOUND_TYPES, HARDWARE_PROGRESS_STATUS, type HardwareOutboundType } from "@/lib/hardware/inventory-process"
 import { type OpsActor, actorDisplayName } from "@/lib/ops-tools/actor"
 import { auditOps } from "@/lib/ops-tools/audit"
+import { idempotencyConflict } from "@/lib/ops-tools/guard"
 import { includesText, limitOf, schema } from "@/lib/ops-tools/defs/shared"
 import { OpsToolError } from "@/lib/ops-tools/errors"
 import { type ReadToolDef, type WriteToolDef, defineWrite } from "@/lib/ops-tools/types"
@@ -87,6 +88,8 @@ type HwPlan = {
   lotNo: string | undefined
   memo: string | undefined
 }
+
+const isUniqueViolation = (e: unknown) => Boolean(e && typeof e === "object" && (e as { code?: unknown }).code === "23505")
 
 const normalizeName = (v: string) => v.replace(/\s+/g, " ").trim()
 
@@ -165,30 +168,40 @@ export const hwPlanMovement: WriteToolDef = defineWrite<HwPlan>({
   },
   async execute({ plan }, actor, meta) {
     const name = actorDisplayName(actor)
-    const rows = await createHardwareMovementRows(
-      {
-        itemId: plan.item.id,
-        productName: plan.item.name,
-        movementType: "outbound",
-        quantity: plan.quantity,
-        occurredAt: plan.plannedDate,
-        fromLocation: "창고",
-        toLocation: plan.customer,
-        status: HARDWARE_PROGRESS_STATUS.planned,
-        outboundType: plan.outboundType,
-        referenceNo: plan.referenceNo,
-        lotNo: plan.lotNo,
-        memo: [plan.memo, `MCP 등록(${actor.name})`].filter(Boolean).join(" · "),
-        createdBy: name,
-        raw: {
-          mcp: {
-            caller: actor.name,
-            ...(meta.idempotency ? { idempotency_key_hash: meta.idempotency.keyHash, args_fingerprint: meta.idempotency.fingerprint } : {}),
-          },
+    const input = {
+      itemId: plan.item.id,
+      productName: plan.item.name,
+      movementType: "outbound" as const,
+      quantity: plan.quantity,
+      occurredAt: plan.plannedDate,
+      fromLocation: "창고",
+      toLocation: plan.customer,
+      status: HARDWARE_PROGRESS_STATUS.planned,
+      outboundType: plan.outboundType,
+      referenceNo: plan.referenceNo,
+      lotNo: plan.lotNo,
+      memo: [plan.memo, `MCP 등록(${actor.name})`].filter(Boolean).join(" · "),
+      createdBy: name,
+      raw: {
+        mcp: {
+          caller: actor.name,
+          ...(meta.idempotency ? { idempotency_key_hash: meta.idempotency.keyHash, args_fingerprint: meta.idempotency.fingerprint } : {}),
         },
       },
-      { actor: { userId: null, name, isInventoryManager: false } }
-    )
+    }
+    let rows: HardwareMovement[]
+    try {
+      rows = await createHardwareMovementRows(input, { actor: { userId: null, name, isInventoryManager: false } })
+    } catch (e) {
+      // 같은 키로 동시에 들어온 두 번째 호출 — 유니크 색인(마이그레이션 20261125_hardware_movements_mcp_idempotency_unique)이
+      // 23505 로 막았다. 먼저 만든 행을 찾아 "이미 처리됨, 처음 결과"로 돌려준다. 색인 전에는 이 갈래에 오지 않는다
+      if (!meta.idempotency || !isUniqueViolation(e)) throw e
+      const existing = await findHardwareMovementsByMcpIdempotencyKey(actor.name, meta.idempotency.keyHash)
+      if (!existing.length) throw e // 다른 유니크 제약(원본 키 등)이다
+      const stored = (existing[0].raw as { mcp?: { args_fingerprint?: unknown } } | null)?.mcp?.args_fingerprint
+      if (stored !== meta.idempotency.fingerprint) throw idempotencyConflict()
+      return { output: movementOutput(existing), replayed: true }
+    }
     const audit = await auditOps(actor, {
       action: "hardware.plan_movement",
       targetType: "hardware_movement",

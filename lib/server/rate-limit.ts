@@ -15,6 +15,37 @@ interface RateLimitEntry {
 
 const store = new Map<string, RateLimitEntry>()
 
+/** 메모리 저장소 키 수 상한 — 키 하나는 약 250B 라 약 12MB. 넘치면 가장 오래 들어온 키부터 버린다(한도를 느슨하게 할 뿐 막지는 않는다). */
+export const RATE_LIMIT_MAX_KEYS = 50_000
+/** 만료된 키를 쓸어 내는 간격 — 호출마다 전체를 훑지 않는다. */
+const SWEEP_INTERVAL_MS = 10_000
+let lastSweepAt = 0
+
+function sweepExpired(now: number) {
+  if (now - lastSweepAt < SWEEP_INTERVAL_MS) return
+  lastSweepAt = now
+  for (const [k, e] of store) if (now > e.resetAt) store.delete(k)
+}
+
+/** 상한에 닿으면 가장 오래 들어온 10% 를 한 번에 버린다 — 하나씩 버리면 Map 의 앞쪽 빈 칸을 매번 건너뛰느라 느려진다 */
+function evictOverflow() {
+  if (store.size < RATE_LIMIT_MAX_KEYS) return
+  let drop = Math.ceil(RATE_LIMIT_MAX_KEYS / 10)
+  for (const k of store.keys()) {
+    store.delete(k)
+    if (--drop <= 0) break
+  }
+}
+
+/** 시험 전용 */
+export function resetRateLimitStoreForTest() {
+  store.clear()
+  lastSweepAt = 0
+}
+export function rateLimitStoreSizeForTest() {
+  return store.size
+}
+
 interface RateLimitOptions {
   /** 제한 시간 창 (밀리초) */
   windowMs: number
@@ -29,10 +60,12 @@ export function checkRateLimit(
 ): { allowed: boolean; remaining: number; resetAt: number } {
   const now = Date.now()
   const storeKey = `${key}:${ip}`
+  sweepExpired(now)
   const entry = store.get(storeKey)
 
   if (!entry || now > entry.resetAt) {
     const resetAt = now + options.windowMs
+    if (!entry) evictOverflow()
     store.set(storeKey, { count: 1, resetAt })
     return { allowed: true, remaining: options.max - 1, resetAt }
   }
@@ -44,6 +77,11 @@ export function checkRateLimit(
   entry.count++
   return { allowed: true, remaining: options.max - entry.count, resetAt: entry.resetAt }
 }
+
+/**
+ * Upstash 호출 시간 제한 — 모든 요청 앞에 직렬로 걸리므로 짧게 둔다(전에는 1.5초). 넘으면 메모리로 폴백한다.
+ */
+const UPSTASH_TIMEOUT_MS = 500
 
 /**
  * 분산 rate limiter (Upstash Redis REST). 동기 checkRateLimit 와 동일한 형태를 반환하되,
@@ -67,7 +105,7 @@ export async function checkRateLimitDistributed(
 
   const storeKey = `${key}:${ip}`
   const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 1500)
+  const timeout = setTimeout(() => controller.abort(), UPSTASH_TIMEOUT_MS)
 
   try {
     // 원자적 INCR + (첫 요청일 때만) PEXPIRE 를 pipeline 으로 처리.
