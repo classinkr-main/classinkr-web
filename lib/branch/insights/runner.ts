@@ -4,7 +4,8 @@ import { listBranchRevDeals } from "@/lib/repositories/branch-deals"
 import { listPublicEvents } from "@/lib/repositories/public-events"
 import { summarizeCampaigns } from "@/lib/branch/computations/campaigns"
 import { buildInsightInput, digestInput, type TeamScope } from "./input-builder"
-import { callGemini, type GeminiMode } from "./gemini-runner"
+import { callInsightModel } from "./gemini-runner"
+import type { InsightMode } from "./llm"
 import { checkNumericalSanity, type NumericalWarning } from "./sanity-check"
 import { findInsightByDigest, getLatestInsight, insertInsight, type BranchInsight } from "@/lib/repositories/branch-insights"
 import { fyOf } from "@/lib/branch/fiscal"
@@ -60,23 +61,25 @@ export async function runInsights(team: TeamScope, force: boolean): Promise<RunI
       const cached = await findInsightByDigest(team, digest)
       if (cached) return { from: "cache", insight: cached }
     }
-    const mode: GeminiMode = force ? "fast" : "quality"
-    let { result, raw, model: usedModel } = await callGemini(input, mode)
+    const mode: InsightMode = force ? "fast" : "quality"
+    const first = await callInsightModel(input, mode)
+    let { result, raw, model: usedModel, provider } = first
+    let fallbackReason = first.fallbackReason
     let warnings = checkNumericalSanity(input, result)
     let retried = false
     if (warnings.length >= 3) {
       retried = true
-      const retry = await callGemini(input, mode)
+      const retry = await callInsightModel(input, mode)
       const retryWarnings = checkNumericalSanity(input, retry.result)
       if (retryWarnings.length < warnings.length) {
-        result = retry.result; raw = retry.raw; usedModel = retry.model; warnings = retryWarnings
+        result = retry.result; raw = retry.raw; usedModel = retry.model; provider = retry.provider; fallbackReason = retry.fallbackReason; warnings = retryWarnings
       }
     }
     const saved = await insertInsight({
       team, fiscal_period: input.fiscalPeriod,
       one_liner: result.one_liner, next_actions: result.next_actions,
       // weekly_report(본사 양식 간이 보고)는 테이블 칼럼이 없어 raw_response._weekly_report에 둔다(마이그레이션 없이 화면이 읽는다).
-      raw_response: { ...((raw as object) ?? {}), _model: usedModel, _mode: mode, _retried: retried, _warnings: warnings, _weekly_report: result.weekly_report ?? null, _compass_week: compassWeekly?.week.label ?? null },
+      raw_response: { ...((raw as object) ?? {}), _model: usedModel, _provider: provider, _fallback_reason: fallbackReason ?? null, _mode: mode, _retried: retried, _warnings: warnings, _weekly_report: result.weekly_report ?? null, _compass_week: compassWeekly?.week.label ?? null },
       input_digest: digest,
     })
     return { from: "fresh", insight: saved, numerical_warnings: warnings.length > 0 ? warnings : undefined, retried }

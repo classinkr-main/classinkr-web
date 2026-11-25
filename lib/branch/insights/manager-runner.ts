@@ -1,6 +1,7 @@
 import "server-only"
 import { MANAGER_INSIGHT_SYSTEM_PROMPT, MANAGER_INSIGHT_RESPONSE_SCHEMA } from "./prompt"
 import type { ManagerInsightInput } from "./manager-input-builder"
+import { generateStructured, type JsonSchema } from "./llm"
 
 export interface ManagerInsightResult {
   summary: string
@@ -9,37 +10,20 @@ export interface ManagerInsightResult {
   next_actions: Array<{ title: string; why: string; due?: string }>
 }
 
-const DEFAULT_FAST = "gemini-2.5-flash"
-const UNSUPPORTED = new Set(["gemini-3.1-pro"])
-
-function resolveFastModel(): string {
-  const c = process.env.GEMINI_FAST_MODEL?.trim()
-  if (!c || UNSUPPORTED.has(c)) return DEFAULT_FAST
-  return c
+function validateManagerInsight(value: unknown): ManagerInsightResult {
+  const parsed = value as ManagerInsightResult
+  if (!parsed || typeof parsed.summary !== "string" || !parsed.summary || !Array.isArray(parsed.next_actions)) throw new Error("invalid manager insight response shape")
+  return parsed
 }
 
+/** 매니저 1:1 인사이트 — Claude(Anthropic API) 먼저, 실패하면 Gemini(빠른 모델). */
 export async function callManagerInsight(input: ManagerInsightInput): Promise<{ result: ManagerInsightResult; raw: unknown; model: string }> {
-  const apiKey = process.env.GEMINI_API_KEY
-  if (!apiKey) throw new Error("GEMINI_API_KEY not set")
-  const model = resolveFastModel()
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`
-  const body = {
-    systemInstruction: { parts: [{ text: MANAGER_INSIGHT_SYSTEM_PROMPT }] },
-    contents: [{ role: "user", parts: [{ text: JSON.stringify(input) }] }],
-    generationConfig: {
-      responseMimeType: "application/json",
-      responseSchema: MANAGER_INSIGHT_RESPONSE_SCHEMA,
-      temperature: 0.4,
-    },
-  }
-  const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json", "Connection": "close" }, body: JSON.stringify(body) })
-  if (!res.ok) {
-    const t = await res.text()
-    throw new Error(`Gemini ${res.status}: ${t}`)
-  }
-  const json = await res.json() as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> }
-  const text = json.candidates?.[0]?.content?.parts?.[0]?.text ?? ""
-  const parsed = JSON.parse(text) as ManagerInsightResult
-  if (!parsed.summary || !Array.isArray(parsed.next_actions)) throw new Error("invalid Gemini response shape")
-  return { result: parsed, raw: json, model }
+  const out = await generateStructured({
+    system: MANAGER_INSIGHT_SYSTEM_PROMPT,
+    user: JSON.stringify(input),
+    schema: MANAGER_INSIGHT_RESPONSE_SCHEMA as unknown as JsonSchema,
+    mode: "fast",
+    validate: validateManagerInsight,
+  })
+  return { result: out.result, raw: { ...((out.raw as object) ?? {}), _provider: out.provider, _fallback_reason: out.fallbackReason ?? null }, model: out.model }
 }

@@ -18,7 +18,7 @@ interface InsightPayload {
   next_actions: NextAction[]
   generated_at: string
   fiscal_period?: string
-  raw_response?: { _model?: string; _mode?: string; _retried?: boolean; _warnings?: unknown[]; _report_notes?: unknown; _weekly_report?: unknown; _compass_week?: string | null } | null
+  raw_response?: { _model?: string; _mode?: string; _retried?: boolean; _warnings?: unknown[]; _report_notes?: unknown; _weekly_report?: unknown; _compass_week?: string | null; _provider?: string; _fallback_reason?: string | null } | null
 }
 
 interface InsightResp {
@@ -202,6 +202,9 @@ export default function BranchAiInsights({ team, refreshKey, summary, canGenerat
   const rawNotes = insight?.raw_response?._report_notes
   const reportNotes = Array.isArray(rawNotes) ? rawNotes.filter((note): note is string => typeof note === "string" && note.trim() !== "") : []
   const draftWeek = insight?.raw_response?._compass_week ?? null
+  // 어느 모델이 썼는지 — Claude가 실패해 Gemini가 대신 쓴 경우를 구분한다(예전 캐시는 표시 없음).
+  const providerLabel = insight?.raw_response?._provider === "claude" ? "Claude"
+    : insight?.raw_response?._provider?.startsWith("gemini") ? (insight.raw_response._fallback_reason ? "Gemini(대체)" : "Gemini") : null
 
   return (
     <section className="space-y-4">
@@ -235,7 +238,7 @@ export default function BranchAiInsights({ team, refreshKey, summary, canGenerat
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <h2 className="text-[13.5px] font-bold text-[#111110]">{manager || summary?.scope?.manager ? "내 담당 · 이번 주 할 일" : "이번 주 할 일"}</h2>
             <span className="text-[11.5px] text-[#615D59]">
-              {[generatedAt ? `생성 ${generatedAt}` : null, insight?.fiscal_period ? `기준 ${insight.fiscal_period}` : null, from && insight ? FROM_LABEL[from] : null].filter(Boolean).join(" · ")}
+              {[generatedAt ? `생성 ${generatedAt}` : null, insight?.fiscal_period ? `기준 ${insight.fiscal_period}` : null, from && insight ? FROM_LABEL[from] : null, providerLabel].filter(Boolean).join(" · ")}
             </span>
             {canGenerate ? (
               <button type="button" onClick={handleRegenerate} disabled={refreshing}

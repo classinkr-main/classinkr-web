@@ -1,6 +1,7 @@
 import "server-only"
 import { INSIGHT_SYSTEM_PROMPT, INSIGHT_RESPONSE_SCHEMA } from "./prompt"
 import type { InsightInput } from "./input-builder"
+import { callGeminiStructured, generateStructured, type InsightMode, type JsonSchema, type StructuredCall, type StructuredResult } from "./llm"
 import type { ReportModule, WeeklyReportDraft } from "@/lib/branch/weekly-report-contract"
 
 export type { ReportModule, WeeklyReportDraft }
@@ -14,48 +15,27 @@ export interface InsightResult {
   report_notes?: string[]
 }
 
-export type GeminiMode = "quality" | "fast"
+export type GeminiMode = InsightMode
 
-const DEFAULT_GEMINI_MODEL = "gemini-2.5-pro"
-const DEFAULT_GEMINI_FAST_MODEL = "gemini-2.5-flash"
-const UNSUPPORTED_GEMINI_MODELS = new Set(["gemini-3.1-pro"])
-
-function resolveModel(envName: "GEMINI_MODEL" | "GEMINI_FAST_MODEL", fallback: string): string {
-  const configured = process.env[envName]?.trim()
-  if (!configured || UNSUPPORTED_GEMINI_MODELS.has(configured)) return fallback
-  return configured
+function validateInsight(value: unknown): InsightResult {
+  const parsed = value as InsightResult
+  if (!parsed || typeof parsed.one_liner !== "string" || !parsed.one_liner || !Array.isArray(parsed.next_actions)) {
+    throw new Error("invalid insight response shape")
+  }
+  return parsed
 }
 
+function insightCall(input: InsightInput, mode: InsightMode): StructuredCall<InsightResult> {
+  return { system: INSIGHT_SYSTEM_PROMPT, user: JSON.stringify(input), schema: INSIGHT_RESPONSE_SCHEMA as unknown as JsonSchema, mode, validate: validateInsight }
+}
+
+/** Gemini만 부른다(Vertex 설정이 있으면 Vertex, 없으면 AI Studio 키). */
 export async function callGemini(input: InsightInput, mode: GeminiMode = "quality"): Promise<{ result: InsightResult; raw: unknown; model: string }> {
-  const apiKey = process.env.GEMINI_API_KEY
-  if (!apiKey) throw new Error("GEMINI_API_KEY not set")
-  const model = mode === "fast"
-    ? resolveModel("GEMINI_FAST_MODEL", DEFAULT_GEMINI_FAST_MODEL)
-    : resolveModel("GEMINI_MODEL", DEFAULT_GEMINI_MODEL)
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`
-  const body = {
-    systemInstruction: { parts: [{ text: INSIGHT_SYSTEM_PROMPT }] },
-    contents: [{ role: "user", parts: [{ text: JSON.stringify(input) }] }],
-    generationConfig: {
-      responseMimeType: "application/json",
-      responseSchema: INSIGHT_RESPONSE_SCHEMA,
-      temperature: 0.4,
-    },
-  }
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "Connection": "close" },
-    body: JSON.stringify(body),
-  })
-  if (!res.ok) {
-    const t = await res.text()
-    throw new Error(`Gemini ${res.status}: ${t}`)
-  }
-  const json = await res.json() as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> }
-  const text = json.candidates?.[0]?.content?.parts?.[0]?.text ?? ""
-  const parsed = JSON.parse(text) as InsightResult
-  if (!parsed.one_liner || !Array.isArray(parsed.next_actions)) {
-    throw new Error("invalid Gemini response shape")
-  }
-  return { result: parsed, raw: json, model }
+  const out = await callGeminiStructured(insightCall(input, mode))
+  return { result: out.result, raw: out.raw, model: out.model }
+}
+
+/** 인사이트 생성 — Claude(Anthropic API) 먼저, 실패하면 Gemini. */
+export async function callInsightModel(input: InsightInput, mode: InsightMode = "quality"): Promise<StructuredResult<InsightResult>> {
+  return generateStructured(insightCall(input, mode))
 }
