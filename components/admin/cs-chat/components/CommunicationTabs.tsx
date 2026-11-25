@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   Copy,
   Globe2,
+  Loader2,
   LockKeyhole,
   MessageCircle,
   RefreshCw,
@@ -14,21 +15,17 @@ import {
   Users,
 } from "lucide-react"
 
-import {
-  buildSmartHandoffMessage,
-  buildSmartHqDraft,
-} from "@/lib/internal-cs-chat/escalation-routing"
 import { redactionNotice } from "@/lib/internal-cs-chat/redact"
 import { cn } from "@/lib/utils"
 
 import EscalationWhoBadge from "./EscalationWhoBadge"
 import {
   buildCustomerDraftBase,
-  escalationContextFromDetail,
   hasDraftPlaceholder,
   prepareInternalDraftCopy,
 } from "../formatters"
 import type { ConversationDetailResponse } from "../types"
+import { useEscalation } from "../use-escalation"
 
 export type CommunicationTabId = "customer" | "hq" | "handoff"
 
@@ -93,13 +90,15 @@ export default function CommunicationTabs({
   )
   const [copiedId, setCopiedId] = useState<string | null>(null)
 
-  // 1. 초안 입력: 사용자 글·customer_context·대화 메타만(AI 답 글 제외 — IC-02).
-  const context = useMemo(() => (detail ? escalationContextFromDetail(detail) : null), [detail])
+  // 1. 본사 담당 분류·본사/인수인계 초안은 서버가 만든다(B2 — 담당 표는 server-only). 입력은 사용자 글·
+  //    customer_context·대화 메타만(AI 답 글 제외 — IC-02).
+  const escalation = useEscalation(detail)
+  const context = escalation.result?.context ?? null
   const customerBase = useMemo(() => buildCustomerDraftBase(detail), [detail])
 
   // 2. 탭별 기본 초안. 고객 탭은 승인된 교정본, 없으면 대기 안내 틀이다.
   const defaultTemplates = useMemo(() => {
-    if (!context) {
+    if (!detail) {
       return {
         customer: legacyTemplates?.find((t) => t.id === "customer" || t.id.includes("customer"))?.content ?? "",
         hq: legacyTemplates?.find((t) => t.id === "hq")?.content ?? "",
@@ -109,10 +108,10 @@ export default function CommunicationTabs({
 
     return {
       customer: customerBase.text,
-      hq: buildSmartHqDraft(context),
-      handoff: buildSmartHandoffMessage(context),
+      hq: escalation.result?.hqDraft ?? "",
+      handoff: escalation.result?.handoffDraft ?? "",
     }
-  }, [context, customerBase, legacyTemplates])
+  }, [detail, escalation.result, customerBase, legacyTemplates])
   const redactionCount = (context?.redactionCount ?? 0) + (activeTab === "customer" ? customerBase.redactionCount : 0)
   const notice = activeTab === "customer" && customerBase.source === "holding" ? null : redactionNotice(redactionCount)
 
@@ -151,9 +150,15 @@ export default function CommunicationTabs({
   const isEdited = activeTab in editedDrafts && editedDrafts[activeTab] !== defaultTemplates[activeTab]
 
   const isInternalTab = INTERNAL_TABS.has(activeTab)
+  // 사내 탭 초안이 아직 서버에서 오지 않았다(대기·오류). 담당자가 직접 쓴 편집본이 있으면 그것은 복사할 수 있다.
+  const internalDraftPending = Boolean(detail) && isInternalTab && escalation.status !== "ready" && !(activeTab in editedDrafts)
   const customerHasPlaceholder = activeTab === "customer" && hasDraftPlaceholder(currentContent)
   const copyBlockedReason = isInternalTab
-    ? null
+    ? internalDraftPending
+      ? escalation.status === "error"
+        ? "초안을 불러오지 못했습니다. 다시 시도해 주세요"
+        : "초안을 만드는 중입니다"
+      : null
     : !isApproved
       ? "담당자 승인 후 복사 가능합니다"
       : customerHasPlaceholder
@@ -210,6 +215,31 @@ export default function CommunicationTabs({
       )}
 
       {/* 2. HQ 에스컬레이션 라우팅 뱃지 헤더 */}
+      {detail && escalation.status === "loading" ? (
+        <div
+          role="status"
+          className="flex items-center gap-2 rounded-lg border border-black/[0.08] bg-[#FAFAF8] px-3.5 py-2.5 text-[11.5px] text-[#615D59]"
+        >
+          <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+          본사 담당 추천과 사내 초안을 만드는 중입니다.
+        </div>
+      ) : null}
+      {detail && escalation.status === "error" ? (
+        <div
+          role="alert"
+          className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#F2B8B8] bg-[#FCE9E9] px-3.5 py-2.5 text-[11.5px] text-[#A62626]"
+        >
+          <span>본사 담당 추천과 사내 초안을 불러오지 못했습니다. {escalation.error}</span>
+          <button
+            type="button"
+            onClick={escalation.retry}
+            className="inline-flex items-center gap-1 rounded-md bg-white px-2.5 py-1 text-[11px] font-semibold text-[#A62626] hover:bg-[#F8DADA]"
+          >
+            <RefreshCw className="h-3 w-3" aria-hidden />
+            다시 시도
+          </button>
+        </div>
+      ) : null}
       {context ? (
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-black/[0.08] bg-[#FAFAF8] px-3.5 py-2.5">
           <div className="flex items-center gap-2">
@@ -218,6 +248,7 @@ export default function CommunicationTabs({
             <EscalationWhoBadge
               contact={context.contact}
               issueTypeTag={context.issueTypeTag}
+              candidates={context.candidates}
             />
           </div>
           <div className="flex items-center gap-2 text-[11px] text-[#615D59]">
@@ -329,7 +360,7 @@ export default function CommunicationTabs({
             {copyBlockedReason ? (
               <span className="inline-flex items-center gap-1 rounded-sm bg-[#F6F5F4] px-2 py-1 text-[10px] font-medium text-[#615D59]">
                 <LockKeyhole className="h-3 w-3" />
-                {!isApproved ? "승인 필요" : "자리 채우기 필요"}
+                {isInternalTab ? (escalation.status === "error" ? "불러오기 실패" : "불러오는 중") : !isApproved ? "승인 필요" : "자리 채우기 필요"}
               </span>
             ) : null}
 

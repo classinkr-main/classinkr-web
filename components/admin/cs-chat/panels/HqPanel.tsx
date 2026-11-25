@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Building, CheckCircle2, ChevronRight, Clock, Copy, Loader2, MessageSquare, ShieldCheck, Undo2 } from "lucide-react"
+import { Building, CheckCircle2, ChevronRight, Clock, Copy, Loader2, MessageSquare, RotateCw, ShieldCheck, Undo2 } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
@@ -10,18 +10,17 @@ import EscalationWhoBadge from "../components/EscalationWhoBadge"
 import { CONSOLE_CONTENT_CLASS } from "../constants"
 import {
   buildHqTemplate,
-  escalationContextFromDetail,
   formatDay,
   prepareInternalDraftCopy,
 } from "../formatters"
 import { formatWaitingElapsed, hqWaitingSince, isHqStale } from "../hq-desk"
-import { buildSmartHqDraft } from "@/lib/internal-cs-chat/escalation-routing"
+import { useEscalation } from "../use-escalation"
 import { redactionNotice } from "@/lib/internal-cs-chat/redact"
 import type { ConversationDetailResponse, InternalCsConversation } from "../types"
 
 // 본사 확인(§6) — 신규 테이블·API 없이 tags[]만으로 세운 화면.
 // 목록은 워크스페이스가 이미 받아 둔 conversations(status=all 한 번 받은 응답)를 evidence:hq_pending으로 거른 것이다.
-// 펼침 본문은 스마트 WeCom 초안(buildSmartHqDraft — 사용자 글·customer_context 만 입력, 개인정보 가림)이고,
+// 펼침 본문은 스마트 WeCom 초안(서버 POST /api/admin/cs-chat/escalation — 사용자 글·customer_context 만 입력, 개인정보 가림)이고,
 // buildHqTemplate()의 6항목 고정 틀은 복사 버튼으로 함께 낸다. 두 복사 모두 prepareInternalDraftCopy 를 거친다
 // (소통 탭의 본사 초안과 같은 규칙: 사내용이라 승인 잠금 없음, 복사 직전 가림).
 //
@@ -202,92 +201,21 @@ export default function HqPanel({
 
                 {expanded ? (
                   <div className="border-t border-black/[0.06] bg-[#FAFAF8] px-4 py-4 sm:px-6">
-                    {rowDetail ? (() => {
-                      const hqContext = escalationContextFromDetail(rowDetail)
-                      const smartDraft = buildSmartHqDraft(hqContext)
-                      const notice = redactionNotice(hqContext.redactionCount)
-                      const replyId = `hq-reply-${conversation.id}`
-                      return (
-                        <>
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <div className="flex items-center gap-2">
-                              <h3 className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#31302E]">
-                                본사 요청 초안
-                              </h3>
-                              <EscalationWhoBadge
-                                contact={hqContext.contact}
-                                issueTypeTag={hqContext.issueTypeTag}
-                                compact
-                              />
-                            </div>
-                            <div className="flex flex-wrap items-center gap-2">
-                              <button
-                                type="button"
-                                onClick={() => copyInternal(smartDraft, "스마트 WeCom 초안을 복사했습니다.")}
-                                className="inline-flex h-8 items-center gap-1.5 rounded-md border border-[#084734]/30 bg-[#ECFDF5] px-2.5 text-[11px] font-semibold text-[#084734] hover:bg-[#D5F7E8]"
-                              >
-                                <Copy className="h-3 w-3" />
-                                스마트 WeCom 복사
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => copyInternal(buildHqTemplate(rowDetail), "본사 확인 초안을 복사했습니다.")}
-                                className="inline-flex h-8 items-center gap-1.5 rounded-md border border-black/[0.08] bg-white px-2.5 text-[11px] font-semibold hover:bg-[#F6F5F4]"
-                              >
-                                <Copy className="h-3 w-3" />
-                                고정 초안 복사
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => onOpenConversation(conversation)}
-                                className="inline-flex h-8 items-center gap-1.5 rounded-md border border-black/[0.08] bg-white px-2.5 text-[11px] font-semibold text-[#615D59] hover:bg-[#F6F5F4] hover:text-[#31302E]"
-                              >
-                                <MessageSquare className="h-3 w-3" />
-                                대화 열기
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => void completeHq(conversation)}
-                                disabled={busy}
-                                className="inline-flex h-8 items-center gap-1.5 rounded-md bg-[#084734] px-3 text-[11px] font-semibold text-white transition-colors hover:bg-[#065C41] disabled:cursor-not-allowed disabled:bg-[#A39E98]"
-                              >
-                                {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3 w-3" />}
-                                본사 확인 완료
-                              </button>
-                            </div>
-                          </div>
-                          {notice ? (
-                            <p className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-[#ECD29C] bg-[#FBF1E0] px-2.5 py-1 text-[11px] font-semibold text-[#7A520F]">
-                              <ShieldCheck className="h-3.5 w-3.5" aria-hidden />
-                              {notice}
-                            </p>
-                          ) : null}
-                          <pre className="mt-3 max-h-[420px] overflow-auto whitespace-pre-wrap rounded-md border border-black/[0.08] bg-white px-3.5 py-3 font-sans text-[11.5px] leading-5 text-[#31302E]">
-                            {smartDraft}
-                          </pre>
-                          {onRecordHqReply ? (
-                            <div className="mt-3">
-                              <label htmlFor={replyId} className="text-[11px] font-semibold text-[#31302E]">
-                                본사 회신 붙여넣기
-                              </label>
-                              <textarea
-                                id={replyId}
-                                value={replyDrafts[conversation.id] ?? ""}
-                                onChange={(event) =>
-                                  setReplyDrafts((prev) => ({ ...prev, [conversation.id]: event.target.value }))
-                                }
-                                rows={4}
-                                placeholder="WeCom 회신을 붙여 넣으면 본사 확인 완료 때 대화에 내부 메모로 남깁니다."
-                                className="mt-1.5 w-full resize-y rounded-md border border-black/[0.10] bg-white px-3 py-2 text-[11.5px] leading-5 text-[#31302E] outline-none focus:border-[#084734]/50 focus:ring-2 focus:ring-[#084734]/10"
-                              />
-                            </div>
-                          ) : null}
-                          <p className="mt-2 text-[10.5px] leading-4 text-[#615D59]">
-                            회신을 받으면 본사 확인 완료를 눌러 주세요 — 근거 태그가 확정으로 바뀌고 이 목록에서 빠집니다.
-                          </p>
-                        </>
-                      )
-                    })() : (
+                    {rowDetail ? (
+                      <HqRowBody
+                        detail={rowDetail}
+                        conversation={conversation}
+                        busy={busy}
+                        replyDraft={replyDrafts[conversation.id] ?? ""}
+                        onReplyDraftChange={(value) =>
+                          setReplyDrafts((prev) => ({ ...prev, [conversation.id]: value }))
+                        }
+                        showReply={Boolean(onRecordHqReply)}
+                        copyInternal={copyInternal}
+                        onOpenConversation={onOpenConversation}
+                        onComplete={() => void completeHq(conversation)}
+                      />
+                    ) : (
                       <p className="flex items-center gap-2 py-3 text-[12px] text-[#615D59]">
                         <Loader2 className="h-3.5 w-3.5 animate-spin" />
                         본사 요청 초안을 준비하는 중입니다.
@@ -301,5 +229,139 @@ export default function HqPanel({
         </div>
       )}
     </section>
+  )
+}
+
+/** 펼친 행 본문. 스마트 WeCom 초안과 담당 배지는 서버 결과(useEscalation)로 그린다 — 담당 표는 server-only(B2). */
+function HqRowBody({
+  detail,
+  conversation,
+  busy,
+  replyDraft,
+  onReplyDraftChange,
+  showReply,
+  copyInternal,
+  onOpenConversation,
+  onComplete,
+}: {
+  detail: ConversationDetailResponse
+  conversation: InternalCsConversation
+  busy: boolean
+  replyDraft: string
+  onReplyDraftChange: (value: string) => void
+  showReply: boolean
+  copyInternal: (text: string, success: string) => void
+  onOpenConversation: (conversation: InternalCsConversation) => void
+  onComplete: () => void
+}) {
+  const escalation = useEscalation(detail)
+  const smartDraft = escalation.result?.hqDraft ?? null
+  const notice = redactionNotice(escalation.result?.context.redactionCount ?? 0)
+  const replyId = `hq-reply-${conversation.id}`
+  return (
+    <>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <h3 className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#31302E]">
+            본사 요청 초안
+          </h3>
+          {escalation.result ? (
+            <EscalationWhoBadge
+              contact={escalation.result.context.contact}
+              issueTypeTag={escalation.result.context.issueTypeTag}
+              candidates={escalation.result.context.candidates}
+              compact
+            />
+          ) : null}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => smartDraft && copyInternal(smartDraft, "스마트 WeCom 초안을 복사했습니다.")}
+            disabled={!smartDraft}
+            className="inline-flex h-8 items-center gap-1.5 rounded-md border border-[#084734]/30 bg-[#ECFDF5] px-2.5 text-[11px] font-semibold text-[#084734] hover:bg-[#D5F7E8] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <Copy className="h-3 w-3" />
+            스마트 WeCom 복사
+          </button>
+          <button
+            type="button"
+            onClick={() => copyInternal(buildHqTemplate(detail), "본사 확인 초안을 복사했습니다.")}
+            className="inline-flex h-8 items-center gap-1.5 rounded-md border border-black/[0.08] bg-white px-2.5 text-[11px] font-semibold hover:bg-[#F6F5F4]"
+          >
+            <Copy className="h-3 w-3" />
+            고정 초안 복사
+          </button>
+          <button
+            type="button"
+            onClick={() => onOpenConversation(conversation)}
+            className="inline-flex h-8 items-center gap-1.5 rounded-md border border-black/[0.08] bg-white px-2.5 text-[11px] font-semibold text-[#615D59] hover:bg-[#F6F5F4] hover:text-[#31302E]"
+          >
+            <MessageSquare className="h-3 w-3" />
+            대화 열기
+          </button>
+          <button
+            type="button"
+            onClick={onComplete}
+            disabled={busy}
+            className="inline-flex h-8 items-center gap-1.5 rounded-md bg-[#084734] px-3 text-[11px] font-semibold text-white transition-colors hover:bg-[#065C41] disabled:cursor-not-allowed disabled:bg-[#A39E98]"
+          >
+            {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3 w-3" />}
+            본사 확인 완료
+          </button>
+        </div>
+      </div>
+      {notice ? (
+        <p className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-[#ECD29C] bg-[#FBF1E0] px-2.5 py-1 text-[11px] font-semibold text-[#7A520F]">
+          <ShieldCheck className="h-3.5 w-3.5" aria-hidden />
+          {notice}
+        </p>
+      ) : null}
+      {escalation.status === "loading" ? (
+        <p role="status" className="mt-3 flex items-center gap-2 text-[12px] text-[#615D59]">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+          본사 담당 추천과 WeCom 초안을 만드는 중입니다. 고정 초안은 바로 복사할 수 있습니다.
+        </p>
+      ) : null}
+      {escalation.status === "error" ? (
+        <div
+          role="alert"
+          className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-md border border-[#F2B8B8] bg-[#FCE9E9] px-3 py-2 text-[11.5px] text-[#8F2C2C]"
+        >
+          <span>WeCom 초안을 불러오지 못했습니다. {escalation.error} 고정 초안은 바로 복사할 수 있습니다.</span>
+          <button
+            type="button"
+            onClick={escalation.retry}
+            className="inline-flex h-7 items-center gap-1 rounded-md bg-white px-2.5 text-[11px] font-semibold text-[#8F2C2C] hover:bg-[#F8DADA]"
+          >
+            <RotateCw className="h-3 w-3" aria-hidden />
+            다시 시도
+          </button>
+        </div>
+      ) : null}
+      {smartDraft ? (
+        <pre className="mt-3 max-h-[420px] overflow-auto whitespace-pre-wrap rounded-md border border-black/[0.08] bg-white px-3.5 py-3 font-sans text-[11.5px] leading-5 text-[#31302E]">
+          {smartDraft}
+        </pre>
+      ) : null}
+      {showReply ? (
+        <div className="mt-3">
+          <label htmlFor={replyId} className="text-[11px] font-semibold text-[#31302E]">
+            본사 회신 붙여넣기
+          </label>
+          <textarea
+            id={replyId}
+            value={replyDraft}
+            onChange={(event) => onReplyDraftChange(event.target.value)}
+            rows={4}
+            placeholder="WeCom 회신을 붙여 넣으면 본사 확인 완료 때 대화에 내부 메모로 남깁니다."
+            className="mt-1.5 w-full resize-y rounded-md border border-black/[0.10] bg-white px-3 py-2 text-[11.5px] leading-5 text-[#31302E] outline-none focus:border-[#084734]/50 focus:ring-2 focus:ring-[#084734]/10"
+          />
+        </div>
+      ) : null}
+      <p className="mt-2 text-[10.5px] leading-4 text-[#615D59]">
+        회신을 받으면 본사 확인 완료를 눌러 주세요 — 근거 태그가 확정으로 바뀌고 이 목록에서 빠집니다.
+      </p>
+    </>
   )
 }

@@ -6,10 +6,7 @@
 // 출력 문자열은 회귀 대상이라 시험(tests/internal-cs-chat/formatters.test.ts)으로 고정한다. 바꿀 때는 시험과 함께,
 // 이유를 커밋 글에 적는다(2026-11 B1: 사용자 글·제목 가림, "개인정보 최소화·제거" 라벨을 사실대로 고침).
 
-import {
-  extractEscalationContext,
-  type EscalationInput,
-} from "@/lib/internal-cs-chat/escalation-routing"
+import type { EscalationInput } from "@/lib/internal-cs-chat/escalation-types"
 import { redactInternalCsDraft, redactInternalCsValue } from "@/lib/internal-cs-chat/redact"
 
 import type {
@@ -213,10 +210,6 @@ export function escalationInputFromDetail(detail: ConversationDetailResponse): E
     priority: detail.conversation.priority,
     assigneeName: detail.conversation.assignee_name,
   }
-}
-
-export function escalationContextFromDetail(detail: ConversationDetailResponse) {
-  return extractEscalationContext(escalationInputFromDetail(detail))
 }
 
 /**

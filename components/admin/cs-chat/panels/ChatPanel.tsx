@@ -23,7 +23,7 @@ import {
   Trash2,
   UserRound,
 } from "lucide-react"
-import { useMemo, type ChangeEvent, type FormEvent, type RefObject } from "react"
+import { type ChangeEvent, type FormEvent, type RefObject } from "react"
 
 import BlogMarkdownRenderer from "@/components/blog/BlogMarkdownRenderer"
 import { ClassInInternalAIIcon } from "@/components/ui/ClassInInternalAIIcon"
@@ -52,10 +52,10 @@ import {
   fileKey,
   formatTime,
   normalizeSourceRefs,
-  escalationContextFromDetail,
   sourceHref,
   sourceStatus,
 } from "../formatters"
+import { useEscalation } from "../use-escalation"
 import { isHqPending } from "../hq-desk"
 import type {
   ConversationDetailResponse,
@@ -155,7 +155,8 @@ export default function ChatPanel({
   onQuickApprove?: (messageId: string) => void
   onSelectAlternativeIssue?: (issuePrompt: string) => void
 }) {
-  const escalationContext = useMemo(() => (detail ? escalationContextFromDetail(detail) : null), [detail])
+  // 칩의 도메인 표시는 서버 결과를 쓴다(B2 — 담당 표는 server-only). 대기·오류 중에는 칩 글만 보인다.
+  const escalationContext = useEscalation(detail).result?.context ?? null
 
   return (
     <div className={cn("flex min-h-0 flex-1 flex-col", reviewOpen && "xl:pr-[438px]")}>

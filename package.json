@@ -15,6 +15,7 @@
     "generate:segment-landings": "node scripts/generate-segment-landings.mjs",
     "check:vercel-crons": "node scripts/check-vercel-crons.mjs",
     "check:design-tokens": "node scripts/check-design-tokens.mjs",
+    "check:client-secrets": "node scripts/check-client-bundle-secrets.mjs",
     "check:public-content": "node scripts/check-public-content-visibility.mjs",
     "sync:cs-figma-guides": "node scripts/generate-cs-figma-guides.mjs",
     "sync:cs-figma-assets": "node scripts/generate-cs-figma-assets-manifest.mjs",
