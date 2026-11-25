@@ -20,7 +20,7 @@ import {
   Users,
 } from "lucide-react"
 
-import { ADMIN_AI_HREF, isAdminAiPreviewEnabled } from "@/lib/admin-ai/preview"
+import { ADMIN_AI_HREF, adminAiMode, isAdminAiPreviewEnabled } from "@/lib/admin-ai/preview"
 
 /**
  * 운영 정본 역할은 SUPER_ADMIN / ADMIN / BRANCH 3종이다.
@@ -95,7 +95,8 @@ export function normalizeAdminRole(role: string): AdminRole {
 }
 
 // AI 올인원 항목 — 시안 스위치가 켜졌을 때만 ADMIN_NAV 의 Overview 바로 아래에 들어간다(아래 배열 주석).
-const ADMIN_AI_NAV_ITEM: AdminNavItem = { href: ADMIN_AI_HREF, label: "AI 올인원", icon: Sparkles, section: "home", badge: "시안", category: "home", maturity: "wip", keywords: "ai 올인원 갈매봇 챗봇 어시스턴트 오더 원격 오더 오더함 카탈로그 assistant order" }
+// 실제 모드(서버 1단계)에서는 "시안" 배지를 달지 않는다 — 실제 자료로 답한다(검토 안전-4).
+const ADMIN_AI_NAV_ITEM: AdminNavItem = { href: ADMIN_AI_HREF, label: "AI 올인원", icon: Sparkles, section: "home", ...(adminAiMode() === "live" ? {} : { badge: "시안" }), category: "home", maturity: "wip", keywords: "ai 올인원 갈매봇 챗봇 어시스턴트 오더 원격 오더 오더함 카탈로그 assistant order" }
 
 // IA 재편(2026-07-04): 6섹션 → 4섹션 병합. "너무 세분화" 해소 — 비즈니스 분석(Analytics)은
 // marketing으로, 매출 성과(KR Team·매출 장부)는 sales로 옮겨 잡탕이던 "분석" 섹션을 해체.

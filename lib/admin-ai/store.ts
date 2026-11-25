@@ -71,6 +71,20 @@ export type AdminAiEvent =
   | { type: "turn-done"; assistantId: string; result: AdminAiTurnResult; now: number }
   | { type: "turn-stopped"; assistantId: string }
   | { type: "order-action"; orderId: string; action: OrderAction; now: number }
+  /** 서버 오더 확인 요청을 보냈다(답이 올 때까지 버튼을 막는다). */
+  | { type: "order-submit"; orderId: string }
+  /** 서버 오더 확인의 답 — 성공이면 완료, 실패면 실패 사유. */
+  | {
+      type: "order-server-result"
+      orderId: string
+      ok: boolean
+      text: string
+      now: number
+      /** 확인표가 이미 쓰였다 — "이미 처리됨"(실행하지 않음, 결과는 화면에서). */
+      alreadyProcessed?: boolean
+      /** 표를 쓴 뒤 실패 — 같은 카드로 다시 확인할 수 없다. */
+      consumed?: boolean
+    }
   | { type: "tick"; now: number }
   | { type: "hydrate"; open: boolean; size: AdminAiPanelSize }
 
@@ -266,6 +280,29 @@ export function reduceAdminAi(state: AdminAiState, event: AdminAiEvent): AdminAi
       if (!order) return state
       const next = transitionOrder(order, event.action, event.now)
       if (next === order) return state
+      return { ...state, now: event.now, orders: { ...state.orders, [order.id]: next } }
+    }
+
+    case "order-submit": {
+      const order = state.orders[event.orderId]
+      if (!order || order.state !== "draft" || order.submitting) return state
+      return { ...state, orders: { ...state.orders, [order.id]: { ...order, submitting: true } } }
+    }
+
+    case "order-server-result": {
+      const order = state.orders[event.orderId]
+      if (!order?.submitting) return state
+      const settled = { ...order, submitting: false }
+      // 서버가 실행했으면 카드 만료 시계와 상관없이 완료로 그린다(실행 판정은 서버가 했다).
+      const next: OrderTicket = event.ok
+        ? { ...settled, state: "done", executedAt: event.now, doneText: event.text }
+        : event.alreadyProcessed
+          ? { ...settled, state: "processed" }
+          : {
+              ...settled,
+              state: "failed",
+              failure: { reason: event.text, note: event.consumed ? "실행되지 않았습니다 · 새 미리보기로 다시 확인" : "실행되지 않았습니다" },
+            }
       return { ...state, now: event.now, orders: { ...state.orders, [order.id]: next } }
     }
 
@@ -478,8 +515,13 @@ export function createAdminAiStore(client: AdminAiClient = adminAiClient) {
       currentAssistantId = assistantId
       dispatch({ type: "ask", userId: nextId("u"), assistantId, text })
 
+      // 실제 모드는 앞선 질문 몇 개를 함께 보낸다(짧은 되물음의 대상을 잇는 데만 쓴다).
+      const history = state.messages
+        .filter((message) => message.role === "user" && message.text)
+        .map((message) => message.text as string)
+        .slice(-5, -1)
       stopCurrentTurn = client.ask(
-        { text, scenario: input.scenario, context: state.contextEnabled ? input.context : null },
+        { text, scenario: input.scenario, context: state.contextEnabled ? input.context : null, history },
         {
           onStep: (label) => dispatch({ type: "step", assistantId, label }),
           onDone: (result) => {
@@ -500,6 +542,25 @@ export function createAdminAiStore(client: AdminAiClient = adminAiClient) {
     },
 
     actOnOrder(orderId: string, action: OrderAction) {
+      const order = state.orders[orderId]
+      // 서버 오더의 확인은 화면에서 상태를 넘기지 않고 서버 확인 경로의 답을 기다린다.
+      if (order?.server && action.type === "confirm") {
+        const ticket = order.server.ticket
+        if (!ticket || !client.confirmOrder || order.state !== "draft" || order.submitting) return
+        dispatch({ type: "order-submit", orderId })
+        void client.confirmOrder(ticket).then((result) => {
+          dispatch({
+            type: "order-server-result",
+            orderId,
+            ok: result.ok,
+            text: result.text,
+            now: Date.now(),
+            ...(!result.ok && result.alreadyProcessed ? { alreadyProcessed: true } : {}),
+            ...(!result.ok && result.consumed ? { consumed: true } : {}),
+          })
+        })
+        return
+      }
       dispatch({ type: "order-action", orderId, action, now: Date.now() })
     },
   }

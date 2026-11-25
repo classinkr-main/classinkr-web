@@ -308,11 +308,23 @@ function OrderCardEditor({
   )
 }
 
+/** 서버 오더의 "화면에서 직접" 링크 — 링크 목록에 있는 어드민 주소만 그린다. */
+function DirectLink({ order, variant }: { order: OrderTicket; variant: "primary" | "secondary" | "ghost" }) {
+  const href = order.server?.directHref
+  if (!href || !isRegisteredInternalHref(href)) return null
+  return (
+    <Link href={href} className={aiButtonClass(variant)}>
+      {order.server?.directLabel ?? "화면에서 직접"}
+    </Link>
+  )
+}
+
 const CLOSED_LABEL: Partial<Record<OrderTicket["state"], string>> = {
   cancelled: "취소됨 · 아무것도 바뀌지 않았습니다",
   undone: "되돌림 · 원래대로 돌렸습니다",
   aborted: "발송 취소됨 · 나간 메시지 없음",
   expired: "만료됨 · 15분 동안 확인하지 않음",
+  processed: "이미 처리됨 · 결과는 화면에서 확인하세요",
 }
 
 export function OrderCard({
@@ -346,12 +358,19 @@ export function OrderCard({
         </StatusLine>
         <div className="flex flex-wrap gap-1.5">
           {/* 확인 버튼에 자동 포커스를 주지 않는다 — Enter 연타로 실행되는 것을 막는다. */}
-          <AiButton
-            variant={order.risk === "R3" ? "danger" : "primary"}
-            onClick={() => onAction({ type: "confirm" })}
-          >
-            {preview ? "시안 확인" : order.confirmLabel}
-          </AiButton>
+          {order.server && !order.server.ticket ? (
+            // 서명 비밀이 없는 서버 오더 — 여기서 실행하지 않고 화면으로 보낸다.
+            <DirectLink order={order} variant="primary" />
+          ) : (
+            <AiButton
+              variant={order.risk === "R3" ? "danger" : "primary"}
+              onClick={() => onAction({ type: "confirm" })}
+              disabled={order.submitting}
+              aria-busy={order.submitting || undefined}
+            >
+              {preview ? "시안 확인" : order.submitting ? "실행 중…" : order.confirmLabel}
+            </AiButton>
+          )}
           {canEditOrder(order) ? (
             <AiButton onClick={() => onAction({ type: "edit" })}>
               {order.message ? "문구 수정" : "수정"}
@@ -432,9 +451,13 @@ export function OrderCard({
         </StatusLine>
         <div className="flex flex-wrap gap-1.5">
           <OpenLink order={order} />
-          <AiButton variant="ghost" onClick={() => onAction({ type: "redraft" })}>
-            다시 작성
-          </AiButton>
+          {order.server ? (
+            <DirectLink order={order} variant="ghost" />
+          ) : (
+            <AiButton variant="ghost" onClick={() => onAction({ type: "redraft" })}>
+              다시 작성
+            </AiButton>
+          )}
         </div>
       </>
     )
@@ -454,7 +477,12 @@ export function OrderCard({
           {CLOSED_LABEL[order.state]}
         </StatusLine>
         <div className="flex flex-wrap gap-1.5">
-          <AiButton onClick={() => onAction({ type: "redraft" })}>다시 작성</AiButton>
+          {/* 서버 오더는 확인 표가 일회용이라 다시 작성하지 않는다 — 다시 요청하거나 화면에서 한다. */}
+          {order.server ? (
+            <DirectLink order={order} variant="secondary" />
+          ) : (
+            <AiButton onClick={() => onAction({ type: "redraft" })}>다시 작성</AiButton>
+          )}
         </div>
       </>
     )

@@ -53,6 +53,7 @@ const STATE_META: Record<OrderState, { label: string; tone: string }> = {
   undone: { label: "되돌림", tone: "text-[#A39E98]" },
   aborted: { label: "발송 취소됨", tone: "text-[#A39E98]" },
   expired: { label: "만료됨", tone: "text-[#A39E98]" },
+  processed: { label: "이미 처리됨", tone: "text-[#A39E98]" },
 }
 
 function OrderStateText({ order, now }: { order: OrderTicket; now: number }) {
