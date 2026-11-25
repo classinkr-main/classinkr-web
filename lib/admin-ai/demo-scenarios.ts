@@ -313,11 +313,37 @@ const SCENARIOS: Record<DemoScenarioKey, DemoScenario> = {
   },
 }
 
-// 질문형 문장 — 갈매봇에게 "시키는" 말이 아니라 "묻는" 말. 이 판정이 실행 키워드보다 먼저다(2026-11 점검 R4).
-// 실행 키워드("결제"·"출고"·"견적"…)가 문장에 들어 있다는 이유로 묻기만 한 말이 실행 오더 카드로 가면 안 된다.
-// 애매하면 묻기 쪽으로 기운다 — 묻기는 아무것도 바꾸지 않고, 오더는 카드에서 사람이 한 번 더 확인하지만
-// 서버가 붙은 뒤에도 같은 방향이 안전하다.
-const QUESTION = /누구|누가|어디|뭐야|뭔가요|뭐예요|무엇|되나|되는지|됩니까|되나요|가능한가|어떻게|어떤|왜|링크|알려|\?|？|인가요|인지|나요\s*$/
+// 오더인가 묻기인가 — 기본값은 "묻기·조회"다(2026-11 점검 R4, 검토 F1).
+// 실행 오더 카드는 시키는 말(명령형 동사)이 분명할 때만 나온다. "결제"·"출고"·"견적" 같은 실행 키워드가
+// 문장에 들어 있다는 이유로 묻기만 한 말이 R1 이상 오더 카드로 가면 안 된다.
+// 묻기는 아무것도 바꾸지 않고, 오더는 카드에서 사람이 한 번 더 확인하지만 애매하면 묻기 쪽이 안전하다.
+// 서버 라우터를 붙일 때도 같은 시험 표(tests/admin-ai/demo-scenarios.test.ts)를 재사용한다.
+
+/** 의문 표지 — 명령 동사가 함께 있어도 묻는 말이다. */
+const STRONG_QUESTION = new RegExp(
+  [
+    "[?？]",
+    "얼마|언제|몇|뭐|무엇|뭔가요|어떻게|가능",
+    "되나|되는지|됩니까|인가요|나요\\s*$",
+    "[는은인던을]지(?:\\s|$|[.])",
+    "수\\s*있",
+    "(?:었|았|였|했|됐|있|없|되)나\\s*[.]?$",
+    "(?:었|았|였|했|됐)지\\s*[.]?$",
+    "던가\\s*[.]?$",
+    "[니냐]\\s*[.]?$",
+    "임\\s*$",
+  ].join("|")
+)
+/** 조회·설명을 시키는 말 — "해 줘"로 끝나도 바꾸는 일이 아니다. */
+const LOOKUP =
+  /보여\s*(?:줘|주)|봐\s*줘|비교|설명|요약|정리|내역|현황|이력|목록|방법|절차|규정|양식|템플릿|조회|확인해|궁금/
+/** 묻는 말에 흔하지만 명령 문장에도 섞여 들어가는 말 — 명령 동사가 없을 때만 묻기로 본다. */
+const WEAK_QUESTION = /누구|누가|어디|어떤|왜|링크|알려/
+/** 사람·고객에게 전하라는 "알려 줘" — 묻는 말이 아니라 문자 발송 지시다. */
+const NOTIFY_PERSON = /(?:한테|에게|께)\s*[^.]*알려/
+/** 시키는 말 — 실행 오더 카드는 이 중 하나가 있을 때만 나온다. */
+const COMMAND =
+  /바꿔|바꾸고|바꿀게|맡을게|맡아|달래|잡아|확정해|확정하|확정할게|깎아|깎고|보내\s*줘|보내줘|보내고|보내라|보내\s*$|지워|삭제해|삭제하|남겨|기록해|등록해|처리해|만들어|해\s*줘|해줘|나갔|들어왔|끝났|통화했|연락했/
 const WHO = /누구|누가|담당자|연락처|문의\s*처/
 const LINK = /링크|주소|어디서|어디에서|어디로|바로가기|url/i
 // 묻는 말이어도 조회(R0) 시나리오가 있는 것은 그쪽으로 — 오더가 아니다.
@@ -328,14 +354,15 @@ const READ_QUESTIONS: ReadonlyArray<[RegExp, DemoScenarioKey]> = [
 ]
 
 // 위에서부터 먼저 걸린다 — "삭제" 가 "기록" 보다 앞서야 "기록 삭제해 줘" 가 거절로 간다.
-// 질문형이 아닌 문장에만 쓴다.
+// 시키는 말에만 쓴다.
 const KEYWORDS: ReadonlyArray<[RegExp, DemoScenarioKey]> = [
   [/지워|삭제/, "delete"],
   [/한빛학원/, "which"],
+  // 결제 링크를 문자로 보내라는 말은 결제 확정이 아니라 문자 발송이다.
+  [/문자|알림톡|보내/, "sms"],
   [/결제|입금|수납/, "pay"],
   [/출고|입고|입출고/, "ship"],
   [/깎|할인|금액|견적/, "amount"],
-  [/문자|알림톡|보내/, "sms"],
   [/재고/, "stock"],
   // "할 일 잡아 줘. 담당은 나" 처럼 담당을 덧붙인 할 일이 리드 담당 변경으로 가지 않게 할 일이 먼저다.
   [/할 ?일|전화|잡아/, "task"],
@@ -351,22 +378,36 @@ const KEYWORDS: ReadonlyArray<[RegExp, DemoScenarioKey]> = [
 const SOFT_TOPIC = /초안|예정|계획/
 const CONFIRMING = /확정|완료|처리|나갔|들어왔/
 
+function isCommand(text: string): boolean {
+  if (STRONG_QUESTION.test(text) || LOOKUP.test(text)) return false
+  if (NOTIFY_PERSON.test(text)) return true
+  return COMMAND.test(text)
+}
+
+/** 묻는 말 — 담당자·링크·조회·정책 답 중 하나로 간다. 실행 키워드도 묻기 주제도 없으면 null. */
+function matchAsk(text: string): DemoScenarioKey | null {
+  if (WHO.test(text)) return "who"
+  if (LINK.test(text)) return "link"
+  for (const [pattern, key] of READ_QUESTIONS) {
+    if (pattern.test(text)) return key
+  }
+  const asked = STRONG_QUESTION.test(text) || LOOKUP.test(text) || WEAK_QUESTION.test(text)
+  if (asked || SOFT_TOPIC.test(text) || KEYWORDS.some(([pattern]) => pattern.test(text))) {
+    return "knowledge"
+  }
+  return null
+}
+
 export function matchDemoScenario(text: string): DemoScenarioKey | null {
   const normalized = text.trim()
   if (!normalized) return null
 
-  if (QUESTION.test(normalized)) {
-    if (WHO.test(normalized)) return "who"
-    if (LINK.test(normalized)) return "link"
-    for (const [pattern, key] of READ_QUESTIONS) {
-      if (pattern.test(normalized)) return key
-    }
-    return "knowledge"
-  }
+  if (!isCommand(normalized)) return matchAsk(normalized)
 
   // 삭제 거절은 가장 먼저 — 초안·예정이 섞여도 거절이다.
   if (/지워|삭제/.test(normalized)) return "delete"
   if (SOFT_TOPIC.test(normalized) && !CONFIRMING.test(normalized)) return "knowledge"
+  if (NOTIFY_PERSON.test(normalized)) return "sms"
 
   for (const [pattern, key] of KEYWORDS) {
     if (pattern.test(normalized)) return key
