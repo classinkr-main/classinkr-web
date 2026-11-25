@@ -3,10 +3,11 @@
  * 글을 고치지 않고 판정만 한다. 모델·네트워크·데이터베이스를 부르지 않는다.
  *
  * 실행:
- *   npx tsx scripts/answer-index/style-audit.ts [--cards] [--shape] [--answers <결과.jsonl|목록.json>]... [--data-dir <자료 폴더>] [--out <요약.json>] [--examples N] [--shape-report <파일.json>]
+ *   npx tsx scripts/answer-index/style-audit.ts [--cards] [--shape] [--no-conclusion] [--answers <결과.jsonl|목록.json>]... [--data-dir <자료 폴더>] [--out <요약.json>] [--examples N] [--shape-report <파일.json>]
  *
  * - --shape: 카드 답을 respond.ts 와 같은 순서(리드 붙이기 → shape.ts 다듬기)로 그려 점검한다(없으면 다듬지 않은 글). 다듬을 때는 글자 보존도 같이 검사한다:
  *   공백·줄바꿈·표기 기호·목록 표시를 뺀 글자열이 전후로 같아야 한다(뺀 빈 리드·겹친 끝맺음은 목록으로 따로 대조). 어긋난 카드는 --shape-report 로 쓴다.
+ * - --no-conclusion: doc 카드의 first(결론 문장)·headline(결론 한 줄)을 쓰지 않고 그린다(전후 비교용). 기본은 쓴다(런타임 respond.ts 와 같다).
  * - --cards: 자료 폴더(--data-dir > ANSWER_INDEX_DATA_DIR > data/answer-index)의 모든 카드를 답으로 그려 점검한다(종류별 요약).
  *   doc 카드는 문장 묶기·리드를 런타임과 같은 함수로 그린다. 상담 안내·끝맺음은 카드 밖(respond.ts)이라 여기에는 없다.
  * - --answers: 실제 답. chatbot-live-eval 결과 줄({answer, decidedBy})이나 [{text|answer, kind?}] 배열. 종류는 decidedBy 앞 토큰이다.
@@ -60,7 +61,7 @@ interface ShapeReport {
   removedClosings: { id: string; text: string }[]
 }
 
-async function auditCards(dir: string | undefined, shape: boolean, report: ShapeReport): Promise<Audited[]> {
+async function auditCards(dir: string | undefined, shape: boolean, report: ShapeReport, conclusion: boolean): Promise<Audited[]> {
   const { loadAnswerIndexData, answerIndexDataDir } = await import("@/lib/chatbot/answer-index/load")
   const { curatedLegacyText, curatedTextHash, symptomTopicById, findPublicGuide } = await import("@/lib/chatbot/answer-index/curated")
   const { groupSentenceParagraphs } = await import("@/lib/chatbot/answer-index/paragraphs")
@@ -84,8 +85,39 @@ async function auditCards(dir: string | undefined, shape: boolean, report: Shape
             if (sentence) items.push({ group: ref.unit, id: sentence.i, text: sentence.text })
           }
         }
-        text = groupSentenceParagraphs(items).join("\n\n")
-        lead = card.answer.lead && card.answer.lead !== "none" ? ((LEAD_TEXT as Record<string, string>)[card.answer.lead] ?? null) : null
+        let paragraphs = groupSentenceParagraphs(items)
+        // R2 B6: 결론 문장(first)은 맨 앞 문단으로, 결론 한 줄(headline)은 리드 자리에 둔다(respond.ts docParagraphs·headlineFor 와 같은 규칙).
+        const live = (ref: { unit: string; i: number; hash?: string }) => {
+          const sentence = data.currentUnits.get(ref.unit)?.sentences[ref.i]
+          return sentence && (ref.hash === undefined || sentence.hash === ref.hash) ? sentence : null
+        }
+        let headline: string | null = null
+        if (conclusion) {
+          const first = card.answer.first as { unit: string; i: number; hash?: string } | undefined
+          if (first && live(first)) {
+            const at = items.findIndex((item) => item.group === first.unit && item.id === first.i)
+            if (at > 0) {
+              const groups: SentenceItem[][] = []
+              let current: SentenceItem[] = []
+              for (const item of items) {
+                const previous = current.at(-1)
+                if (previous && (previous.group !== item.group || item.id !== previous.id + 1)) {
+                  groups.push(current)
+                  current = []
+                }
+                current.push(item)
+              }
+              if (current.length > 0) groups.push(current)
+              const rest = groups.map((group) => group.filter((item) => item !== items[at]).map((item) => item.text).join(" ")).filter(Boolean)
+              paragraphs = [items[at].text, ...rest]
+            }
+          } else if (card.answer.headline && (card.answer.headline.basis as Array<{ unit: string; i: number; hash?: string }>).every((ref) => live(ref))) {
+            headline = String(card.answer.headline.text).trim()
+          }
+        }
+        if (headline) paragraphs = [headline, ...paragraphs]
+        text = paragraphs.join("\n\n")
+        lead = !headline && card.answer.lead && card.answer.lead !== "none" ? ((LEAD_TEXT as Record<string, string>)[card.answer.lead] ?? null) : null
       } else if (card.kind === "fixed") {
         text = "text" in card.answer ? card.answer.text : curatedLegacyText(card.answer.curatedRef)
       } else if (card.kind === "policy") {
@@ -206,7 +238,7 @@ async function main() {
       }
     }
   }
-  if (wantCards) report("cards", await auditCards(dirArg ? resolve(process.cwd(), dirArg) : undefined, shape, shapeReport))
+  if (wantCards) report("cards", await auditCards(dirArg ? resolve(process.cwd(), dirArg) : undefined, shape, shapeReport, !hasFlag(argv, "--no-conclusion")))
   if (wantCards && shape) {
     console.log(
       `shape: 카드 ${shapeReport.cards} · 바뀐 카드 ${shapeReport.changed} · 안전 규칙으로 되돌림 ${shapeReport.reverted.length} · 글자 보존 어긋남 ${shapeReport.mismatched.length} · 위젯이 깨뜨려 그릴 덩이 ${shapeReport.widgetBroken.length}(다듬기 전 ${shapeReport.widgetBrokenBefore}장) · 뺀 빈 리드 ${Object.values(shapeReport.removedLeads).reduce((a, b) => a + b, 0)} · 뺀 끝맺음 ${shapeReport.removedClosings.length}`
