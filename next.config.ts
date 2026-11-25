@@ -122,6 +122,9 @@ const nextConfig: NextConfig = {
       process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 8) ??
       process.env.VERCEL_DEPLOYMENT_ID ??
       "dev",
+    // 갈매봇 시안(lib/admin-ai/preview.ts)의 운영 차단 — VERCEL_ENV 는 서버에만 있어, 브라우저 판정이
+    // 서버와 같아지도록 빌드 때 값을 구워 넣는다. 비밀값이 아니라 배포 종류(production·preview)다.
+    NEXT_PUBLIC_ADMIN_AI_ENV: process.env.VERCEL_ENV ?? "",
   },
   // googleapis·exceljs는 순수 JS 대용량 패키지다. 서버 번들에 포함하지 않고 런타임에 Node가
   // node_modules에서 require하게 두면 빌드가 가벼워지고, lib/google.ts·xlsx-grid.ts의 지연

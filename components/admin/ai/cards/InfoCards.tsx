@@ -5,11 +5,14 @@ import Link from "next/link"
 import { Check, Info } from "lucide-react"
 
 import type { ChoiceCard, DenyCard, ReadCard } from "@/lib/admin-ai/types"
-import { aiButtonClass, CardNote, CardShell } from "./CardShell"
+import { isRegisteredInternalHref } from "@/lib/admin-ai/links"
+import { adminAiStore } from "@/lib/admin-ai/store"
+import { aiButtonClass, CardNote, CardShell, PreviewBand } from "./CardShell"
 
 /** 조회(R0) 결과 — 확인 절차가 없고 하단에는 화면 열기만 둔다. */
 export function ReadCardView({ card }: { card: ReadCard }) {
   const table = card.table
+  const preview = adminAiStore.mode === "demo"
 
   return (
     <CardShell
@@ -20,15 +23,16 @@ export function ReadCardView({ card }: { card: ReadCard }) {
       riskName="조회"
       tone="neutral"
       footer={
-        card.openLabel && card.openHref ? (
+        card.openLabel && isRegisteredInternalHref(card.openHref) ? (
           <div className="flex flex-wrap gap-1.5">
-            <Link href={card.openHref} className={aiButtonClass("secondary")}>
+            <Link href={card.openHref as string} className={aiButtonClass("secondary")}>
               {card.openLabel}
             </Link>
           </div>
         ) : undefined
       }
     >
+      {preview ? <PreviewBand /> : null}
       {table ? (
         <table className="w-full border-collapse text-[12px] tabular-nums">
           <thead>
@@ -95,9 +99,9 @@ export function DenyCardView({ card }: { card: DenyCard }) {
       riskName="금지"
       tone="dark"
       footer={
-        card.openLabel && card.openHref ? (
+        card.openLabel && isRegisteredInternalHref(card.openHref) ? (
           <div className="flex flex-wrap gap-1.5">
-            <Link href={card.openHref} className={aiButtonClass("secondary")}>
+            <Link href={card.openHref as string} className={aiButtonClass("secondary")}>
               {card.openLabel}
             </Link>
             <Link href="/admin/ai?tab=catalog" className={aiButtonClass("ghost")}>
@@ -121,9 +125,11 @@ export function ChoiceCardView({
   onPick?: (label: string) => void
 }) {
   const [picked, setPicked] = useState<number | null>(null)
+  const preview = adminAiStore.mode === "demo"
 
   return (
     <CardShell icon="help" title={card.title} target={card.target} tone="neutral">
+      {preview ? <PreviewBand /> : null}
       <div className="flex flex-col gap-1.5">
         {card.options.map((option, index) => {
           const on = picked === index

@@ -32,6 +32,7 @@ export type OrderIcon =
   | "search"
   | "lock"
   | "help"
+  | "link"
 
 /**
  * 되돌리기 방식.
@@ -141,7 +142,74 @@ export interface DenyCard {
   target: OrderTarget
   text: string
   openLabel?: string
+  /** 해당 화면 주소 — 링크 목록(links.ts)에 있는 어드민 주소만 그려진다. */
   openHref?: string
+}
+
+// ── 묻기(R0) 블록 — 오더가 아니라 답·링크·담당자를 카드로 낸다(기획 §11.9) ──
+
+/** 근거 문서의 상태. "confirmed" 는 사람이 확정한 내용, "needs-check" 는 초안·오래됨·충돌 등 확인이 필요한 내용. */
+export type AnswerConfidence = "confirmed" | "needs-check"
+
+/** 출처의 성격 — public: 공개 문서, internal: 사내 문서, consultation: 상담 사례(원문은 싣지 않는다). */
+export type AnswerSourceKind = "public" | "internal" | "consultation"
+
+export interface AnswerSource {
+  /** 문서 이름(상담 사례는 "상담 사례 N건" 같은 요약). */
+  title: string
+  /** 문서 안의 위치(절·항목). */
+  where?: string
+  kind: AnswerSourceKind
+  status: AnswerConfidence
+  /** 고객에게 그대로 전해도 되는 문서인가. 사내 문서·상담 사례는 false. */
+  externalUse: boolean
+  /** 열 수 있는 화면 — 링크 목록의 id 만 쓴다. */
+  linkId?: string
+}
+
+export interface AnswerCard {
+  title: string
+  target: OrderTarget
+  /** 바로 답 — 한두 문장. */
+  answer: string
+  confidence: AnswerConfidence
+  sources: AnswerSource[]
+  /** 근거를 못 찾았을 때 등의 보충 한 줄. */
+  note?: string
+}
+
+export interface LinksCardItem {
+  /** 링크 목록의 id. 목록에 없으면 그리지 않는다. */
+  linkId: string
+  note?: string
+}
+
+export interface LinksCard {
+  title: string
+  target: OrderTarget
+  items: LinksCardItem[]
+  note?: string
+}
+
+export interface ContactPerson {
+  /** 역할 이름 — "카메라 담당(본사)" 처럼. 사람 이름은 사내 담당표(서버)에서만 온다. */
+  role: string
+  /** 담당표에 이름이 있을 때만(사내 전용). */
+  name?: string
+  /** 연락 채널(사내 메신저 방·메일 등). 전화번호는 두지 않는다. */
+  channel?: string
+}
+
+export interface ContactCard {
+  title: string
+  target: OrderTarget
+  primary?: ContactPerson
+  backup?: ContactPerson
+  /** 연락하기 전에 준비해 갈 것. */
+  prepare?: string[]
+  /** 담당표 행을 마지막으로 확인한 날(YYYY-MM-DD). 없으면 확인일 미입력. */
+  checkedAt?: string
+  note?: string
 }
 
 export interface ChoiceCard {
@@ -163,6 +231,9 @@ export type AiBlock =
   | { kind: "read"; card: ReadCard }
   | { kind: "deny"; card: DenyCard }
   | { kind: "choice"; card: ChoiceCard }
+  | { kind: "answer"; card: AnswerCard }
+  | { kind: "links"; card: LinksCard }
+  | { kind: "contact"; card: ContactCard }
 
 export interface AiMessage {
   id: string
