@@ -439,7 +439,7 @@ function deriveOrgNames() {
       add(part)
       for (const token of part.split(" ")) add(token)
     }
-    // 키워드에 줄임 표기로 들어 있는 고객사 이름("kj영재", "쉴라")도 같이 가린다.
+    // 키워드에 줄임 표기로 들어 있는 고객사 이름도 같이 가린다.
     const compactCustomer = normalizePlain(c.customer, "strip").replace(/\s+/g, "")
     for (const keyword of c.keywords) {
       const compactKeyword = normalizePlain(keyword, "strip").replace(/\s+/g, "")
@@ -467,6 +467,8 @@ function isOrgAlias(keyword: string) {
 
 const GENERIC_SYMPTOM_WORDS = new Set(["수업", "고객", "학생", "기록", "화면", "확인", "설정", "문의", "오류", "발생", "관리자", "사용", "상태"])
 
+const CODE_MARKER_WORDS = new Set(["error", "code", "코드", "오류", "에러"])
+
 /** 증상 문장에서 연속한 두 낱말("네트워크 끊김")이 질문에 그대로 있으면 증상이 맞은 것으로 본다. 흔한 낱말 쌍은 제외한다. */
 function symptomPhraseMatches(haystack: ReturnType<typeof buildMatchHaystack>, symptom: string) {
   const tokens = normalizePlain(symptom, "strip").split(" ").filter((token) => token.length >= 2)
@@ -474,6 +476,8 @@ function symptomPhraseMatches(haystack: ReturnType<typeof buildMatchHaystack>, s
     const [a, b] = [tokens[i], tokens[i + 1]]
     if (GENERIC_SYMPTOM_WORDS.has(a) && GENERIC_SYMPTOM_WORDS.has(b)) continue
     if (a.length + b.length < 6) continue
+    // 오류 표지어만으로 된 쌍("error code")은 증상이 아니다. match-text 가 "코드 N"·"N 오류"를 모두 "error code N"으로 바꾸므로 오탐이 된다.
+    if (CODE_MARKER_WORDS.has(a) && CODE_MARKER_WORDS.has(b)) continue
     if (matchesKeyword(haystack, `${a} ${b}`)) return true
   }
   return false
