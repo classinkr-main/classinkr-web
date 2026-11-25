@@ -76,9 +76,9 @@ describe("웨이브 7 — U5. BranchDashboardClient 팀/기간 필터 칩 모바
 })
 
 describe("KR Team Overview 상태·정합성 컨트롤 모바일 터치 타깃", () => {
-  it("동기화 버튼과 CRM 링크가 모바일 44px다", () => {
+  it("장부 동기화 링크와 CRM 링크가 모바일 44px다", () => {
     const source = syncStatusBarSource()
-    expect(source.match(/min-h-11 min-w-11/g)?.length).toBeGreaterThanOrEqual(3)
+    expect(source.match(/min-h-11 min-w-11/g)?.length).toBeGreaterThanOrEqual(2)
   })
 
   it("정합성 요약 버튼과 상세 액션이 모바일 44px다", () => {

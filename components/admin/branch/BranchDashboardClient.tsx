@@ -3,12 +3,11 @@ import { branchManagerMatches, initialBranchManager, UNMAPPED_BRANCH_MEMBER } fr
 import dynamic from "next/dynamic"
 import { useSearchParams } from "next/navigation"
 import type { KeyboardEvent } from "react"
-import { useState, useCallback, useEffect, useMemo, useRef, use } from "react"
-import { AlertTriangle, CalendarDays, ChevronLeft, RefreshCw } from "lucide-react"
+import { useState, useCallback, useEffect, useMemo, useRef, useSyncExternalStore, use } from "react"
+import { AlertTriangle, CalendarDays, RefreshCw } from "lucide-react"
 import SyncStatusBar, { pickSyncStatusError } from "./SyncStatusBar"
 import type { DealModalDeal } from "./sections/DealModal"
-import { adminFetchJson, clearBranchRequestCache, postBranchSync, useBranchJson, type BranchJsonState } from "./client-api"
-import { describeSyncOutcome, resolveSyncOutcome } from "@/lib/admin/sync-outcome"
+import { adminFetchJson, clearBranchRequestCache, useBranchJson, type BranchJsonState } from "./client-api"
 import CompassTeamSection from "./sections/CompassTeamSection"
 import { PIPELINE_ACTION_LIST_SIZE } from "./sections/pipeline-action-constants"
 import type { CompassKrTeamResult } from "@/lib/compass/kr-team-contract"
@@ -19,12 +18,6 @@ import { CURRENT_TEAM_FILTERS, PERIODS, TEAMS, type BranchKpiResponse, type Bran
 import { branchTeamLabel, isLegacyBranchTeam, LEGACY_BRANCH_TEAMS } from "@/lib/branch/current-organization"
 import { regionSelectionKey } from "@/lib/branch/region-heatmap"
 import { getBranchTabDataNeeds, type BranchTab } from "./tab-data-needs"
-import { ADMIN_NAV, ADMIN_NAV_SECTION_META } from "../admin-nav"
-
-// 브레드크럼 세그먼트는 admin-nav.ts SSOT에서 파생한다 — "분석" 하드코딩 대신 /admin/branch가
-// 실제로 속한 섹션 라벨(현재 "영업·매출")을 읽는다. IA가 다시 재편돼도 이 화면은 자동으로 따라간다.
-const BRANCH_NAV_ITEM = ADMIN_NAV.find((item) => item.href === "/admin/branch")
-const BRANCH_SECTION_LABEL = BRANCH_NAV_ITEM ? ADMIN_NAV_SECTION_META[BRANCH_NAV_ITEM.section].label : "영업·매출"
 
 const BRANCH_TABS: Array<{ id: BranchTab; label: string }> = [
   { id: "overview", label: "개요" },
@@ -34,6 +27,11 @@ const BRANCH_TABS: Array<{ id: BranchTab; label: string }> = [
 ]
 
 const PERIOD_LABEL: Record<Period, string> = { M: "이번 달", Q: "이번 분기", Y: "연간 누적" }
+
+// 구독할 외부 변경이 없는 스냅샷(세션 값은 마운트 후 1회 읽는다).
+function subscribeNever(): () => void {
+  return () => {}
+}
 
 function canRunAdminOperationsFromSession(): boolean {
   if (typeof window === "undefined") return false
@@ -216,25 +214,20 @@ export default function BranchDashboardClient({
   const [pipelineManager, setPipelineManager] = useState(initialPipelineManager)
   // 히트맵에서 고른 지역(표준 라벨, 지도 밖은 원문) — 아래 상위 매출 표를 거르는 데도 쓴다.
   const [heatmapRegion, setHeatmapRegion] = useState<string | null>(() => regionSelectionKey(searchParams.get("region")))
-  const [pipelineFiltersReady, setPipelineFiltersReady] = useState(false)
+  // 마운트 후에만 true — SSR·하이드레이션 패스는 false(useSyncExternalStore 서버 스냅샷).
+  const pipelineFiltersReady = useSyncExternalStore(subscribeNever, () => true, () => false)
   const [pipelineView, setPipelineView] = useState<"table" | "kanban">("kanban")
-  const [syncError, setSyncError] = useState<string | null>(null)
   const [refreshKey, setRefreshKey] = useState(0)
-  const [refreshing, setRefreshing] = useState(false)
   const [selectedDeal, setSelectedDeal] = useState<DealModalDeal | null>(null)
   // SSR은 sessionStorage에 접근할 수 없어 항상 false를 렌더한다 — 초기화 함수로 즉시 세션값을
   // 읽으면 클라 첫 렌더(마운트 전 hydrate 패스)가 서버 렌더와 어긋나 하이드레이션 에러가 난다
   // (RefreshCw 버튼 라벨이 "다시 불러오기" → "지금 동기화"로 갈리는 실측 케이스). false로 고정하고
   // 아래 useEffect가 마운트 후 실제 세션 값으로 갱신한다(라벨이 잠깐 바뀌는 건 허용).
-  const [canRunAdminOperations, setCanRunAdminOperations] = useState(false)
+  const canRunAdminOperations = useSyncExternalStore(subscribeNever, canRunAdminOperationsFromSession, () => false)
   // CRM 싱크 칩(B안) 데이터 — coverage 응답을 요약으로 접어 SyncStatusBar에 prop으로 1회
   // 전달한다(칩은 자체 fetch 없음). 실패·미지원(구 서버)·권한 없음은 null = 칩 미표시(fail-soft).
   const [crmSync, setCrmSync] = useState<CrmSyncSummary | null>(null)
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([])
-
-  useEffect(() => {
-    setCanRunAdminOperations(canRunAdminOperationsFromSession())
-  }, [])
 
   useEffect(() => {
     let alive = true
@@ -254,9 +247,6 @@ export default function BranchDashboardClient({
       alive = false
     }
   }, [])
-
-  // 계정 기본값은 서버에서 검증한 담당자다. 공용 브라우저의 예전 핀을 다른 계정에 적용하지 않는다.
-  useEffect(() => { setPipelineFiltersReady(true) }, [])
 
   // 탭 전환 시 URL도 동기화 — 뒤로가기 히스토리를 오염시키지 않게 replaceState 사용.
   const selectTab = useCallback((tab: BranchTab) => {
@@ -401,9 +391,8 @@ export default function BranchDashboardClient({
   // 실행되지 않으므로 절대 불필요하게 suspend하지 않는다 — 후보가 있는 첫 렌더(기본 조합
   // 콜드 진입)에서만 부모의 <Suspense>가 settle을 대신 기다린다.
   const summarySeedResolved = summarySeedCandidate ? use(summarySeedCandidate.promise) : null
-  useEffect(() => {
-    if (summarySeedLive && summarySeedCandidate == null) setSummarySeedLive(false)
-  }, [summarySeedLive, summarySeedCandidate])
+  // 후보가 사라지면 시드를 폐기한다 — 렌더 중 가드된 setState(React 공식 파생 상태 패턴).
+  if (summarySeedLive && summarySeedCandidate == null) setSummarySeedLive(false)
   // promise가 null로 settle되면(비인증·역할 부족·ceilingMs 초과) 시드 없음과 동일하게 취급 —
   // 아래 useBranchJson이 기존 클라이언트 페치 경로를 그대로 탄다.
   const summarySeed =
@@ -439,33 +428,17 @@ export default function BranchDashboardClient({
   const monthOptions = useMemo(() => buildMonthOptions(new Date()), [])
   const activePeriodLabel = period === "M" ? formatMonthLabel(selectedMonth) : PERIOD_LABEL[period]
 
-  const onRefresh = useCallback(async () => {
-    setSyncError(null)
-    setRefreshing(true)
-    try {
-      if (canRunAdminOperations) {
-        // 결과 계약으로 읽는다 — 잠금에 걸려 건너뛴 200 { skipped }·부분 실패(500)를 "완료"처럼 넘기지 않는다.
-        // 이 화면은 알림 자리가 상태 줄 하나라, 완료가 아닌 결과만 그 줄에 올린다.
-        const { status, body } = await postBranchSync(["rev", "hw"])
-        const kind = body?.outcome ?? resolveSyncOutcome(body ?? {})
-        if (status === 401 || status === 403 || kind !== "done") {
-          setSyncError(describeSyncOutcome(body, { httpStatus: status }).message)
-        }
-      }
-    } catch (e) {
-      setSyncError(e instanceof Error ? e.message : String(e))
-    } finally {
-      clearBranchRequestCache()
-      setRefreshKey((k) => k + 1)
-      setRefreshing(false)
-    }
-  }, [canRunAdminOperations])
+  // 다시 불러오기만 한다 — 시트 동기화 실행은 장부(/admin/branch/ledger)의 동기화 버튼이 맡는다.
+  const onRefresh = useCallback(() => {
+    clearBranchRequestCache()
+    setRefreshKey((k) => k + 1)
+  }, [])
 
   const lastSync = summary.data?.lastSync ?? null
   // 화면 요청 오류(수동 동기화 POST → 요약 GET)가 실행 기록 오류보다 앞선다. 출처(origin)로 "원천 갱신 실패"
   // 머리말을 실행 기록 오류에만 붙인다(SyncStatusBar).
   const { lastError, lastErrorOrigin } = pickSyncStatusError({
-    syncError,
+    syncError: null,
     summaryError: summary.error,
     runError: summary.data?.lastError,
   })
@@ -503,104 +476,109 @@ export default function BranchDashboardClient({
 
   return (
     <div className="pb-24">
-      {/* TopBar — breadcrumb + title + description + refresh */}
-      <header className="border-b border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-4 py-3 sm:px-6 sm:pb-5 sm:pt-6 lg:px-9 lg:pt-8">
-        <div className="flex items-start justify-between gap-4">
-          <div className="min-w-0 flex-1">
-            <div className="hidden flex-wrap items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-[#615D59] sm:flex">
-              <span>ADMIN</span>
-              <span className="opacity-50">›</span>
-              <span className="inline-flex items-center gap-1">
-                <ChevronLeft className="h-3 w-3" /> {BRANCH_SECTION_LABEL}
-              </span>
-              <span className="opacity-50">›</span>
-              <span>KR Team</span>
+      {/* 머리줄 2층(시안 2026-11-24 Head) — 1층: 제목·팀·기간·범위·동기화 상태 / 2층: 탭. 동기화 실행은 장부(/admin/branch/ledger)로 옮겼다. */}
+      <header className="border-b border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-4 pt-3 sm:px-6 sm:pt-5 lg:px-9">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <h1
+            className="mr-1 text-[22px] font-bold leading-tight tracking-[-0.02em] text-[#111110] sm:text-[26px]"
+            title="현재 조직 BD · MKT · 전체 매출에는 이전 조직의 장부 이력이 포함될 수 있습니다. 통화 ¥ — 본사 보고 기준"
+          >
+            KR Team
+          </h1>
+          {showTeamFilter && (
+            <div className="flex gap-1 rounded-full border border-[rgba(0,0,0,0.08)] bg-white p-1" role="group" aria-label="팀 필터">
+              {CURRENT_TEAM_FILTERS.map((t) => (
+                <button key={t} type="button" onClick={() => selectTeam(t)}
+                  aria-pressed={team === t}
+                  // 웨이브 7 — U5(터치 타깃). 좁은 뷰포트(<md)에서만 최소 44px로
+                  // 확대 — 데스크톱 밀도는 md:min-h-0으로 원복.
+                  className={`inline-flex min-h-11 min-w-11 items-center justify-center rounded-full px-3 py-1.5 text-[12px] font-semibold transition md:min-h-0 md:min-w-0 ${
+                    team === t ? "bg-[#111110] text-white" : "text-[#615D59] hover:text-[#111110]"
+                  }`}>
+                  {t === "ALL" ? "KR 전체" : t}
+                </button>
+              ))}
             </div>
-            <h1 className="text-[24px] font-bold leading-tight tracking-[-0.02em] text-[#111110] sm:mt-2 sm:text-[30px]">
-              KR Team
-            </h1>
-          </div>
-
-          <div className="flex shrink-0 items-center gap-2">
-            <button type="button" onClick={onRefresh} disabled={refreshing}
-              className="inline-flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 py-1.5 text-[12px] font-bold text-[#111110] transition hover:bg-[#F6F5F4] disabled:opacity-60 md:min-h-0 md:min-w-0">
-              <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
-              새로고침
-            </button>
-          </div>
-        </div>
-
-        {/* Filters: team + period (conditional per tab) */}
-        {(showTeamFilter || showPeriodFilter) && (
-          <div className="mt-3 flex flex-wrap items-center gap-2 sm:mt-5">
-            {showTeamFilter && (
-              <div className="flex gap-1 rounded-full border border-[rgba(0,0,0,0.08)] bg-white p-1" role="group" aria-label="팀 필터">
-                {CURRENT_TEAM_FILTERS.map((t) => (
-                  <button key={t} type="button" onClick={() => selectTeam(t)}
-                    aria-pressed={team === t}
-                    // 웨이브 7 — U5(터치 타깃). 좁은 뷰포트(<md)에서만 최소 44px로
-                    // 확대 — 데스크톱 밀도는 md:min-h-0으로 원복.
-                    className={`inline-flex min-h-11 min-w-11 items-center justify-center rounded-full px-3 py-1.5 text-[12px] font-semibold transition md:min-h-0 md:min-w-0 ${
-                      team === t ? "bg-[#111110] text-white" : "text-[#615D59] hover:text-[#111110]"
+          )}
+          {showTeamFilter ? <label className="inline-flex min-h-11 items-center gap-2 text-[12px] text-[#615D59] md:min-h-0">
+            이전 조직
+            <select aria-label="이전 조직 이력" value={isLegacyBranchTeam(team) ? team : ""} onChange={(event) => selectTeam((event.target.value || "ALL") as Team)} className="min-h-11 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 text-[16px] md:min-h-0 md:text-[12px]">
+              <option value="">이력 선택</option>
+              {LEGACY_BRANCH_TEAMS.map((legacy) => <option key={legacy} value={legacy}>{branchTeamLabel(legacy)}</option>)}
+            </select>
+          </label> : null}
+          {showPeriodFilter && (
+            <>
+              <div className="inline-flex rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] p-[3px]" role="group" aria-label="기간 필터">
+                {PERIODS.map((p) => (
+                  <button key={p} type="button" onClick={() => selectPeriod(p)}
+                    aria-pressed={period === p}
+                    // 웨이브 7 — U5. 팀 필터 칩과 동일한 모바일 44px 규약.
+                    className={`inline-flex min-h-11 min-w-11 items-center justify-center rounded-md px-3 py-1.5 text-[12px] font-semibold transition md:min-h-0 md:min-w-0 ${
+                      period === p ? "bg-white text-[#111110] shadow-[0_1px_2px_rgba(0,0,0,0.06)]" : "text-[#615D59]"
                     }`}>
-                    {t === "ALL" ? "KR 전체" : t}
+                    {p}
                   </button>
                 ))}
               </div>
-            )}
-            {showTeamFilter ? <label className="inline-flex min-h-11 items-center gap-2 text-[12px] text-[#615D59]">
-              이전 조직
-              <select aria-label="이전 조직 이력" value={isLegacyBranchTeam(team) ? team : ""} onChange={(event) => selectTeam((event.target.value || "ALL") as Team)} className="min-h-11 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 text-[16px] md:text-[12px]">
-                <option value="">이력 선택</option>
-                {LEGACY_BRANCH_TEAMS.map((legacy) => <option key={legacy} value={legacy}>{branchTeamLabel(legacy)}</option>)}
-              </select>
-            </label> : null}
-            {showPeriodFilter && (
-              <>
-                <div className="inline-flex rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] p-[3px]" role="group" aria-label="기간 필터">
-                  {PERIODS.map((p) => (
-                    <button key={p} type="button" onClick={() => selectPeriod(p)}
-                      aria-pressed={period === p}
-                      // 웨이브 7 — U5. 팀 필터 칩과 동일한 모바일 44px 규약.
-                      className={`inline-flex min-h-11 min-w-11 items-center justify-center rounded-md px-3 py-1.5 text-[12px] font-semibold transition md:min-h-0 md:min-w-0 ${
-                        period === p ? "bg-white text-[#111110] shadow-[0_1px_2px_rgba(0,0,0,0.06)]" : "text-[#615D59]"
-                      }`}>
-                      {p}
-                    </button>
-                  ))}
-                </div>
-                {period === "M" && (
-                  <label className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-[rgba(0,0,0,0.08)] bg-white px-2.5 text-[12px] font-semibold text-[#615D59] md:min-h-0 md:h-[35px]">
-                    <CalendarDays className="h-3.5 w-3.5 text-[#084734]" aria-hidden="true" />
-                    <span className="sr-only">월 선택</span>
-                    <select
-                      value={selectedMonth}
-                      onChange={(event) => selectMonth(event.target.value)}
-                      className="min-h-11 bg-transparent pr-1 text-[12px] font-semibold text-[#111110] outline-none md:min-h-0 md:h-7"
-                      aria-label="월별 데이터 월 선택"
-                    >
-                      {monthOptions.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}{option.hint ? ` · ${option.hint}` : ""}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                )}
-              </>
-            )}
+              {period === "M" && (
+                <label className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-[rgba(0,0,0,0.08)] bg-white px-2.5 text-[12px] font-semibold text-[#615D59] md:min-h-0 md:h-[35px]">
+                  <CalendarDays className="h-3.5 w-3.5 text-[#084734]" aria-hidden="true" />
+                  <span className="sr-only">월 선택</span>
+                  <select
+                    value={selectedMonth}
+                    onChange={(event) => selectMonth(event.target.value)}
+                    className="min-h-11 bg-transparent pr-1 text-[12px] font-semibold text-[#111110] outline-none md:min-h-0 md:h-7"
+                    aria-label="월별 데이터 월 선택"
+                  >
+                    {monthOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}{option.hint ? ` · ${option.hint}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+            </>
+          )}
+          <div className="inline-flex rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] p-[3px]" role="group" aria-label="데이터 범위"
+            title={pipelineManager === UNMAPPED_BRANCH_MEMBER ? "로그인 계정의 담당자 연결이 필요합니다." : pipelineManager ? `${pipelineManager} · 개인 목표와 데이터` : "명시적으로 선택한 팀·전체 범위"}>
+            <button type="button" aria-pressed={pipelineManager === defaultManager}
+              className={`inline-flex min-h-11 min-w-11 items-center justify-center rounded-md px-3 py-1.5 text-[12px] font-semibold transition md:min-h-0 md:min-w-0 ${
+                pipelineManager === defaultManager ? "bg-white text-[#111110] shadow-[0_1px_2px_rgba(0,0,0,0.06)]" : "text-[#615D59]"
+              }`}
+              onClick={() => { selectTeam("ALL"); onPipelineFilterChange({ query: pipelineQuery, manager: defaultManager }) }}>내 담당</button>
+            <button type="button" aria-pressed={!pipelineManager}
+              className={`inline-flex min-h-11 min-w-11 items-center justify-center rounded-md px-3 py-1.5 text-[12px] font-semibold transition md:min-h-0 md:min-w-0 ${
+                !pipelineManager ? "bg-white text-[#111110] shadow-[0_1px_2px_rgba(0,0,0,0.06)]" : "text-[#615D59]"
+              }`}
+              onClick={() => selectTeam("ALL")}>전체</button>
           </div>
-        )}
+          <button type="button" onClick={onRefresh}
+            className="inline-flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 py-1.5 text-[12px] font-bold text-[#111110] transition hover:bg-[#F6F5F4] md:min-h-0 md:min-w-0">
+            <RefreshCw className="h-3.5 w-3.5" />
+            새로고침
+          </button>
+          <div className="min-w-0 lg:ml-auto">
+            <SyncStatusBar
+              lastSync={lastSync}
+              lastSyncStartedAt={summary.data?.lastSyncStartedAt}
+              lastError={lastError}
+              lastErrorOrigin={lastErrorOrigin}
+              sheetModifiedAt={sheetModifiedAt}
+              dataSources={dataSources}
+              staleSince={summaryStaleSince}
+              crmSync={crmSync}
+              sheetFreshnessError={sheetFreshnessError}
+            />
+          </div>
+        </div>
 
-        {isLegacyBranchTeam(team) ? <p role="status" className="mt-3 border-l-2 border-[#A8741A] pl-3 text-[13px] text-[#615D59]">{branchTeamLabel(team)}를 조회 중입니다. 현재 조직은 BD · MKT이며, 과거 장부의 담당·팀 귀속은 보존됩니다.</p> : <p className="mt-3 text-[12px] text-[#615D59]">현재 조직 BD · MKT · 전체 매출에는 이전 조직의 장부 이력이 포함될 수 있습니다.</p>}
+        {pipelineManager === UNMAPPED_BRANCH_MEMBER ? <p role="status" className="mt-2 text-[12px] text-[#7A520F]">로그인 계정의 담당자 연결이 필요합니다.</p> : null}
+        {isLegacyBranchTeam(team) ? <p role="status" className="mt-2 border-l-2 border-[#A8741A] pl-3 text-[13px] text-[#615D59]">{branchTeamLabel(team)}를 조회 중입니다. 현재 조직은 BD · MKT이며, 과거 장부의 담당·팀 귀속은 보존됩니다.</p> : null}
 
-        {/* 단위 표기 규칙 명시(항목 1) — 화면 전체의 ¥ 축약 표기가 어느 통화 기준인지 1회 고지. */}
-        <p className="mt-2 hidden text-[10.5px] font-medium text-[#615D59]/80 sm:block">통화 ¥ — 본사 보고 기준</p>
-      </header>
-
-      {/* Sub-tabs */}
-      <div className="border-b border-[rgba(0,0,0,0.08)] bg-[#EBE8E2] px-2 sm:px-4 lg:px-9">
-        <div className="admin-scroll-snap-x no-scrollbar -mb-px flex flex-nowrap gap-0 overflow-x-auto" role="tablist" aria-label="지사 대시보드 보기">
+        {/* 2층 — 탭 */}
+        <div className="admin-scroll-snap-x no-scrollbar -mb-px mt-2 flex flex-nowrap gap-0 overflow-x-auto" role="tablist" aria-label="지사 대시보드 보기">
           {BRANCH_TABS.map((tab, index) => {
             const active = activeTab === tab.id
             return (
@@ -615,10 +593,8 @@ export default function BranchDashboardClient({
                 ref={(node) => { tabRefs.current[index] = node }}
                 onClick={() => selectTab(tab.id)}
                 onKeyDown={(event) => onTabKeyDown(event, index)}
-                className={`relative mt-1 flex min-h-11 min-w-11 shrink-0 flex-col items-start justify-center gap-0.5 rounded-t-lg px-4 py-2.5 text-left transition md:min-h-0 md:min-w-0 sm:px-5 sm:py-3 ${
-                  active
-                    ? "bg-[#FAFAF8] text-[#111110]"
-                    : "bg-transparent text-[#615D59] hover:text-[#111110]"
+                className={`relative flex min-h-11 min-w-11 shrink-0 items-center justify-center px-4 py-2.5 text-left transition md:min-h-0 md:min-w-0 sm:px-5 ${
+                  active ? "text-[#111110]" : "text-[#615D59] hover:text-[#111110]"
                 }`}
               >
                 <span className="whitespace-nowrap text-[13px] font-bold tracking-[-0.01em]">{tab.label}</span>
@@ -629,29 +605,10 @@ export default function BranchDashboardClient({
             )
           })}
         </div>
-      </div>
+      </header>
 
       {/* Tab content */}
       <div className="px-4 pt-4 sm:px-6 sm:pt-6 lg:px-9">
-        <SyncStatusBar
-          lastSync={lastSync}
-          lastSyncStartedAt={summary.data?.lastSyncStartedAt}
-          lastError={lastError}
-          lastErrorOrigin={lastErrorOrigin}
-          sheetModifiedAt={sheetModifiedAt}
-          dataSources={dataSources}
-          onRefresh={onRefresh}
-          syncEnabled={canRunAdminOperations}
-          staleSince={summaryStaleSince}
-          crmSync={crmSync}
-          sheetFreshnessError={sheetFreshnessError}
-        />
-
-        <div className="mt-4 flex flex-wrap items-center gap-2" role="group" aria-label="데이터 범위">
-          <button type="button" aria-pressed={pipelineManager === defaultManager} className="min-h-11 rounded-md border px-3 text-sm" onClick={() => { selectTeam("ALL"); onPipelineFilterChange({ query: pipelineQuery, manager: defaultManager }) }}>내 담당</button>
-          <button type="button" aria-pressed={!pipelineManager} className="min-h-11 rounded-md border px-3 text-sm" onClick={() => selectTeam("ALL")}>전체</button>
-          <span className="text-xs text-[#615D59]">{pipelineManager === UNMAPPED_BRANCH_MEMBER ? "로그인 계정의 담당자 연결이 필요합니다." : pipelineManager ? `${pipelineManager} · 개인 목표와 데이터` : "명시적으로 선택한 팀·전체 범위"}</span>
-        </div>
         <div className="mt-4 sm:mt-6">
           {activeTab === "overview" && (
             <div

@@ -11,7 +11,7 @@ function renderBar(asOf: string, extra: { sheetFreshnessError?: boolean; lastErr
   }
   return renderToStaticMarkup(createElement(SyncStatusBar, {
     lastSync: "2026-10-15T02:58:49.279Z", lastSyncStartedAt: "2026-10-15T02:58:30Z",
-    lastError: null, dataSources, onRefresh: async () => {}, ...extra,
+    lastError: null, dataSources, ...extra,
   }))
 }
 
