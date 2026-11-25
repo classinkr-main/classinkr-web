@@ -338,3 +338,31 @@ describe("클립보드 복사", () => {
     expect(await copyText("x", undefined)).toBe(false)
   })
 })
+
+describe("오더 카드 열기 링크 — 링크 목록 밖 주소는 그리지 않는다(F7)", () => {
+  const base = buildDemoTurn("task", { now: NOW, orderId: "o1" }).order!
+  const done = (href: string) => ({ ...base, state: "done" as const, target: { ...base.target, href } })
+
+  it("목록 밖 주소는 열기 링크가 없다", async () => {
+    const { OrderCard } = await import("@/components/admin/ai/cards/OrderCard")
+    const html = renderToStaticMarkup(<OrderCard order={done("https://evil.example")} now={NOW} onAction={() => undefined} preview />)
+    expect(html).not.toContain("evil.example")
+  })
+
+  it("목록에 있는 주소는 그린다", async () => {
+    const { OrderCard } = await import("@/components/admin/ai/cards/OrderCard")
+    const html = renderToStaticMarkup(<OrderCard order={done("/admin/crm")} now={NOW} onAction={() => undefined} preview />)
+    expect(html).toContain('href="/admin/crm"')
+  })
+})
+
+describe("묻기 링크 카드 — 만들기 동작 주소를 열지 않는다(F5)", () => {
+  it("시안 링크 카드의 줄은 새로 만들기·action= 주소가 아니다", () => {
+    for (const item of DEMO_LINKS_CARD.items) {
+      const entry = getLinkById(item.linkId)
+      expect(entry, item.linkId).toBeDefined()
+      const href = entry && "href" in entry ? String(entry.href) : ""
+      expect(href, item.linkId).not.toMatch(/action=|\/new(?:$|[?#])/)
+    }
+  })
+})

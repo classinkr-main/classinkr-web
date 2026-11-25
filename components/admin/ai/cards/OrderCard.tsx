@@ -29,6 +29,7 @@ import {
   type OrderAction,
 } from "@/lib/admin-ai/order-state"
 import type { OrderField, OrderTicket } from "@/lib/admin-ai/types"
+import { isRegisteredInternalHref } from "@/lib/admin-ai/links"
 import { adminAiStore } from "@/lib/admin-ai/store"
 import { AiButton, aiButtonClass, CardNote, CardShell, PreviewBand, type CardTone } from "./CardShell"
 
@@ -216,9 +217,11 @@ function MetaLine({ order }: { order: OrderTicket }) {
 }
 
 function OpenLink({ order }: { order: OrderTicket }) {
-  if (!order.openLabel || !order.target.href) return null
+  // 링크 목록(lib/admin-ai/links)에 있는 주소만 그린다 — 서버 오더가 붙어 target.href 에 임의 값이 와도 막힌다.
+  const href = order.target.href
+  if (!order.openLabel || !href || !isRegisteredInternalHref(href)) return null
   return (
-    <Link href={order.target.href} className={aiButtonClass("secondary")}>
+    <Link href={href} className={aiButtonClass("secondary")}>
       {order.openLabel}
     </Link>
   )
@@ -386,7 +389,7 @@ export function OrderCard({
         <StatusLine tone="ok" icon={<Check className="h-[13px] w-[13px]" aria-hidden="true" />}>
           {preview ? "시안 완료 · 실제로는 실행되지 않았습니다" : `완료 · ${order.doneText}`}
         </StatusLine>
-        {undoable || (order.openLabel && order.target.href) ? (
+        {undoable || (order.openLabel && isRegisteredInternalHref(order.target.href)) ? (
           <div className="flex flex-wrap gap-1.5">
             <OpenLink order={order} />
             {undoable ? (

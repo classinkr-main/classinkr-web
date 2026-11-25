@@ -15,7 +15,8 @@
 // 운영 차단(2026-11 점검 R16): 시안은 샘플 데이터라 운영에서는 스위치가 "1" 이어도 켜지지 않는다.
 // VERCEL_ENV 는 서버 전용이라 브라우저 번들에는 없다. 서버·브라우저 판정이 갈리면 hydration 이 깨지므로
 // next.config.ts 의 env 가 같은 값을 NEXT_PUBLIC_ADMIN_AI_ENV 로 구워 넣고, 둘 중 하나라도
-// "production" 이면 막는다. 실수로 스위치가 운영 환경변수에 들어가도 화면에 시안이 올라가지 않는다.
+// "production" 이면 막는다. 이 차단은 Vercel(VERCEL_ENV) 기준이다 — Vercel 밖에서 `next start` 로 운영하면
+// VERCEL_ENV 가 없어 막히지 않으니, 그런 배포에서는 NEXT_PUBLIC_ADMIN_AI_PREVIEW 를 켜지 않는다. 실수로 스위치가 운영 환경변수에 들어가도 화면에 시안이 올라가지 않는다.
 export const ADMIN_AI_HREF = "/admin/ai"
 
 /** 운영 배포인지 — 시안(샘플 데이터)을 절대 켜지 않는 환경. */

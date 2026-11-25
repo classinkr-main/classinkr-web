@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs"
+import { join } from "node:path"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 // 점검 R16 — 시안(샘플 데이터)은 운영에서 스위치가 "1" 이어도 켜지지 않는다.
@@ -39,5 +41,12 @@ describe("갈매봇 시안 스위치 — 운영 차단", () => {
     vi.stubEnv(FLAG, undefined)
     vi.stubEnv("VERCEL_ENV", "preview")
     expect(await enabled()).toBe(false)
+  })
+})
+
+describe("갈매봇 시안 스위치 — 빌드 설정", () => {
+  it("next.config.ts 가 VERCEL_ENV 를 NEXT_PUBLIC_ADMIN_AI_ENV 로 구워 넣는다(지워지면 브라우저 판정만 운영에서 켜진다)", () => {
+    const config = readFileSync(join(process.cwd(), "next.config.ts"), "utf8")
+    expect(config).toMatch(/NEXT_PUBLIC_ADMIN_AI_ENV\s*:\s*process\.env\.VERCEL_ENV/)
   })
 })

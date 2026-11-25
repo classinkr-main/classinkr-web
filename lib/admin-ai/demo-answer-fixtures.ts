@@ -46,7 +46,8 @@ export const DEMO_LINKS_CARD: LinksCard = {
   items: [
     { linkId: "public:pricing" },
     { linkId: "public:brochure" },
-    { linkId: "admin:quotes-tab-hardware-action-new" },
+    // 묻기 카드에는 화면 링크만 둔다 — "새로 만들기" 동작 주소는 묻기 답이 쓰기 화면을 바로 열게 된다.
+    { linkId: "admin:quotes" },
   ],
   note: "고객용만 고객에게 보냅니다 · 어드민 화면은 내부용입니다",
 }
