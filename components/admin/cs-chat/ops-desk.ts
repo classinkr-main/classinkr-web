@@ -301,3 +301,22 @@ export function readContextCard(context: unknown): ContextCardData | null {
   const any = card.source || card.summary || card.lastQuestion || card.institution || card.documents.length > 0
   return any ? card : null
 }
+
+/**
+ * 질문 보내기가 실패한 뒤, 서버가 무엇을 이미 저장했는지 본다(검토 동작-4).
+ * generate 라우트는 맥락 비우기 경계 행과 사용자 질문을 모델 호출 전에 저장하므로, 뒤에서 실패해도 남아 있을 수 있다.
+ * 보내기 전의 메시지 id 목록(knownIds)에 없던 행 중 같은 질문(user)·경계 행이 있으면 저장된 것으로 본다.
+ * 질문이 저장됐으면 입력창에 돌려놓지 않는다(다시 보내면 같은 질문·경계 행이 두 번 저장된다).
+ */
+export function failedSendOutcome(
+  knownIds: ReadonlySet<string>,
+  messagesAfter: ReadonlyArray<Pick<InternalCsMessage, "id" | "role" | "content" | "metadata">>,
+  question: string
+) {
+  const fresh = messagesAfter.filter((message) => !knownIds.has(message.id))
+  return {
+    questionSaved: fresh.some((message) => message.role === "user" && message.content.trim() === question.trim()),
+    resetSaved: fresh.some((message) => isContextResetMessage(message)),
+  }
+}
+

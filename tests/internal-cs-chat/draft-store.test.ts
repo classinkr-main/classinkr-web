@@ -7,7 +7,9 @@ import {
   draftHasContent,
   emptyDraft,
   NEW_DRAFT_KEY,
+  reconcileReviewTarget,
 } from "@/components/admin/cs-chat/draft-store"
+import { reviewApprovalState } from "@/components/admin/cs-chat/ops-desk"
 
 function memoryStorage(initial: Record<string, string> = {}) {
   const data = new Map(Object.entries(initial))
@@ -123,3 +125,44 @@ describe("draft-store (대화별 작업 초안)", () => {
     expect(store.get("c2").resetPending).toBe(false)
   })
 })
+
+// 검토(동작-1): 새 질문·Pro 재검토로 검토 대기 초안이 A → B 로 바뀌면 A 를 보고 켠 체크로 B 를 승인할 수 없어야 한다.
+describe("reconcileReviewTarget (검토 대기 초안이 바뀔 때)", () => {
+  const ticked = { customer: true, evidence: true, externalScope: true, warnings: true }
+
+  it("초안 A 에서 켠 체크는 새 대기 초안 B 에서 비워지고 승인 버튼이 꺼진다", () => {
+    const draftA = { reviewTargetId: "msg-a", finalDraft: "A 를 보고 쓴 고객용 답입니다.", reviewNote: "A 메모", checks: ticked }
+    expect(reviewApprovalState({ checks: draftA.checks, warningCount: 0, hasPending: true, finalDraft: draftA.finalDraft, original: "A 원문" }).canApprove).toBe(true)
+
+    const next = reconcileReviewTarget(draftA, "msg-b")
+    expect(next.changed).toBe(true)
+    expect(next.reviewTargetId).toBe("msg-b")
+    expect(next.reviewNote).toBe("")
+    expect(next.carriedFinalDraft).toBe(true)
+    expect(reviewApprovalState({ checks: next.checks, warningCount: 0, hasPending: true, finalDraft: draftA.finalDraft, original: "B 원문" }).canApprove).toBe(false)
+  })
+
+  it("같은 대기 초안이면(같은 대화 다시 불러오기) 아무것도 바꾸지 않는다", () => {
+    const draft = { reviewTargetId: "msg-a", finalDraft: "쓰던 글", reviewNote: "메모", checks: ticked }
+    const same = reconcileReviewTarget(draft, "msg-a")
+    expect(same.changed).toBe(false)
+    expect(same.checks).toBe(ticked)
+    expect(same.reviewNote).toBe("메모")
+  })
+
+  it("처음 보는 대기 초안이거나 대기 초안이 사라지면 체크를 비우되 이어 쓴 글 안내는 띄우지 않는다", () => {
+    expect(reconcileReviewTarget({ reviewTargetId: null, finalDraft: "", reviewNote: "", checks: ticked }, "msg-a")).toMatchObject({ changed: true, carriedFinalDraft: false })
+    expect(reconcileReviewTarget({ reviewTargetId: "msg-a", finalDraft: "글", reviewNote: "", checks: ticked }, null)).toMatchObject({ changed: true, carriedFinalDraft: false, reviewTargetId: null })
+  })
+
+  it("검토 대상 id 를 저장소에 담고, 깨진 값은 null 로 읽는다", () => {
+    const store = createDraftStore({ getStorage: () => null })
+    store.set("c1", { ...emptyDraft(), finalDraft: "글", reviewTargetId: "msg-a" })
+    expect(store.get("c1").reviewTargetId).toBe("msg-a")
+    const broken = memoryStorage({
+      [DRAFT_STORE_KEY]: JSON.stringify({ v: 1, savedAt: Date.now(), byConversation: { c2: { finalDraft: "x", reviewTargetId: 42 } } }),
+    })
+    expect(createDraftStore({ getStorage: () => broken }).get("c2").reviewTargetId).toBeNull()
+  })
+})
+

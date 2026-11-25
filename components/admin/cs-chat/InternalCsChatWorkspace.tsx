@@ -24,6 +24,7 @@ import {
 
 import CsConsoleNav from "@/components/admin/cs/CsConsoleNav"
 import { adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
+import { redactInternalCsDraft, redactionNotice } from "@/lib/internal-cs-chat/redact"
 import { useUrlState } from "@/lib/use-url-state"
 
 import WorkspaceHeader from "./components/WorkspaceHeader"
@@ -44,6 +45,7 @@ import { DEMO_CONVERSATION, DEMO_DETAIL, DEMO_MESSAGES } from "./demo-data"
 import {
   createDraftStore,
   NEW_DRAFT_KEY,
+  reconcileReviewTarget,
   type ConversationDraft,
   type DraftStore,
 } from "./draft-store"
@@ -67,6 +69,7 @@ import {
 } from "./hq-desk"
 import {
   correctedContentForReview,
+  failedSendOutcome,
   initialCustomerDraft,
   pendingDrafts,
   readReviewWarnings,
@@ -167,6 +170,7 @@ function InternalCsChatWorkspaceInner() {
   const [reviewChecks, setReviewChecks] = useState<ReviewChecks>(INITIAL_CHECKS)
   const [finalDraft, setFinalDraft] = useState("")
   const [reviewNote, setReviewNote] = useState("")
+  const [reviewTargetId, setReviewTargetId] = useState<string | null>(null)
   const [regressionCandidate, setRegressionCandidate] = useState(false)
   const [excludeFromGapQueue, setExcludeFromGapQueue] = useState(false)
   const [expanded, setExpanded] = useState<"sources" | "hq" | "regression" | null>(null)
@@ -268,6 +272,7 @@ function InternalCsChatWorkspaceInner() {
     finalDraft: "",
     reviewNote: "",
     reviewChecks: INITIAL_CHECKS as ReviewChecks,
+    reviewTargetId: null as string | null,
     contextResetPending: false,
     restoredAttachmentNames: [] as string[],
   })
@@ -277,6 +282,7 @@ function InternalCsChatWorkspaceInner() {
     finalDraft,
     reviewNote,
     reviewChecks,
+    reviewTargetId,
     contextResetPending,
     restoredAttachmentNames,
   }
@@ -292,6 +298,7 @@ function InternalCsChatWorkspaceInner() {
       reviewNote: latest.reviewNote,
       checks: latest.reviewChecks,
       resetPending: latest.contextResetPending,
+      reviewTargetId: latest.reviewTargetId,
     }
   }, [])
 
@@ -312,6 +319,7 @@ function InternalCsChatWorkspaceInner() {
     setFinalDraft(draft.finalDraft)
     setReviewNote(draft.reviewNote)
     setReviewChecks(draft.checks)
+    setReviewTargetId(draft.reviewTargetId)
     setContextResetPending(draft.resetPending)
     setPendingFiles(files)
     pendingFilesOwnerRef.current = key
@@ -337,7 +345,7 @@ function InternalCsChatWorkspaceInner() {
   // 작업 중인 값이 바뀔 때마다 저장한다. 키는 상태와 같은 렌더에서 바뀌므로 다른 대화에 섞이지 않는다.
   useEffect(() => {
     persistActiveDraft()
-  }, [composer, pendingFiles, finalDraft, reviewNote, reviewChecks, contextResetPending, restoredAttachmentNames, persistActiveDraft])
+  }, [composer, pendingFiles, finalDraft, reviewNote, reviewChecks, reviewTargetId, contextResetPending, restoredAttachmentNames, persistActiveDraft])
 
   // 쓰던 글이 있으면 탭을 닫거나 새로고침할 때 경고한다(초안이 있을 때만).
   useEffect(() => {
@@ -376,12 +384,29 @@ function InternalCsChatWorkspaceInner() {
     // 같은 대화를 다시 불러올 때(새로고침·생성 뒤) 쓰던 입력은 건드리지 않는다.
     const serverCorrected = initialCustomerDraft(pending)
     if (serverCorrected) setFinalDraft(serverCorrected)
+    // 검토 대기 초안이 바뀌었으면(새 질문·Pro 재검토) 앞 초안을 보고 채운 확인 체크·메모를 비운다(검토 동작-1).
+    // 같은 렌더 안에서 바뀐 상태는 아직 latestRef 에 없으므로, 방금 바꿔 끼운 대화는 저장소 값을 기준으로 본다.
+    const base = switched ? getDraftStore().get(id) : {
+      reviewTargetId: latestRef.current.reviewTargetId,
+      finalDraft: latestRef.current.finalDraft,
+      reviewNote: latestRef.current.reviewNote,
+      checks: latestRef.current.reviewChecks,
+    }
+    const reconciled = reconcileReviewTarget(base, pending?.id ?? null)
+    if (reconciled.changed) {
+      setReviewTargetId(reconciled.reviewTargetId)
+      setReviewChecks(reconciled.checks)
+      setReviewNote(reconciled.reviewNote)
+      if (reconciled.carriedFinalDraft && !serverCorrected) {
+        setPolishNotice("새 AI 초안이 도착해 확인 체크를 비웠습니다. 최종 답 칸의 글은 이전 초안을 보고 쓴 것이니 새 초안과 맞는지 확인해 주세요.")
+      }
+    }
     if (switched) {
       setRegressionCandidate(pending?.regression_candidate ?? false)
       setExcludeFromGapQueue(false)
     }
     return loaded
-  }, [demoMode, switchActiveConversation])
+  }, [demoMode, getDraftStore, switchActiveConversation])
 
   const loadIntegrationStatus = useCallback(async () => {
     setIntegrationAttempted(true)
@@ -1109,10 +1134,11 @@ function InternalCsChatWorkspaceInner() {
 
   // 생성 요청 뒤처리. 같은 화면에 있을 때만 상세를 다시 불러온다 — 그 사이 다른 대화로 옮겼다면 선택을 바꾸지 않고
   // 목록과 배지만 갱신한다(IC-08 늦은 응답).
-  async function settleGenerate(conversationId: string, epoch: number, response: GenerateResponse, successNotice: string) {
+  async function settleGenerate(conversationId: string, response: GenerateResponse, successNotice: string) {
     await refreshList()
     if (!mountedRef.current) return
-    const sameView = viewEpochRef.current === epoch && selectedIdRef.current === conversationId
+    // 지금 보고 있는 상담이면 불러온다. A→B→A 로 다녀와도 같은 상담이다(검토 동작-2 — 화면 세대 번호로 보면 놓친다).
+    const sameView = selectedIdRef.current === conversationId
     if (!sameView) {
       setNotice("다른 상담에서 요청한 AI 초안이 도착했습니다. 목록에서 해당 상담을 열어 확인해 주세요.")
       return
@@ -1186,6 +1212,10 @@ function InternalCsChatWorkspaceInner() {
 
     const epoch = viewEpochRef.current
     const resetContext = contextResetPending
+    // 실패 뒤 서버가 이미 저장한 행을 가려내려고 보내기 전 메시지 id 를 적어 둔다(검토 동작-4).
+    const knownMessageIds = new Set(
+      detail && detail.conversation.id === selectedIdRef.current ? detail.messages.map((message) => message.id) : []
+    )
     const generation = ++generationRef.current
     setInflightFor(originKey, { gen: generation, question, startedAt: Date.now(), kind: "ask" })
     let conversationId = selectedIdRef.current
@@ -1240,19 +1270,39 @@ function InternalCsChatWorkspaceInner() {
       patchDraftFor(draftKey, { clearFiles: true, ...(resetContext ? { resetPending: false } : {}) })
       await settleGenerate(
         conversationId,
-        epoch,
         response,
         "AI 초안이 생성되었습니다. 고객에게 보내려면 검토가 필요합니다."
       )
     } catch (submitError) {
-      // 보낸 글은 돌려놓는다 — 그 사이 다른 대화로 옮겼어도 원래 대화의 입력창으로 돌아간다.
-      if (draftKey === activeKeyRef.current) {
-        if (!latestRef.current.composer.trim()) setComposer(question)
-      } else {
-        const stored = getDraftStore().get(draftKey)
-        if (!stored.composer.trim()) patchDraftFor(draftKey, { composer: question })
+      // 서버가 모델 호출 전에 질문·경계 행을 저장했을 수 있다. 확인되면 입력창에 돌려놓지 않고 화면을 다시 불러온다
+      // (다시 보내면 같은 질문과 경계 행이 두 번 저장된다 — 검토 동작-4). 확인하지 못하면 예전처럼 돌려놓는다.
+      let questionSaved = false
+      if (conversationId) {
+        try {
+          const after = await adminFetchJson<ConversationDetailResponse>(`/api/admin/cs-chat/conversations/${conversationId}`)
+          const outcome = failedSendOutcome(knownMessageIds, after.messages, question)
+          questionSaved = outcome.questionSaved
+          if (outcome.resetSaved) patchDraftFor(draftKey, { resetPending: false })
+          if (mountedRef.current && selectedIdRef.current === conversationId) await loadConversation(conversationId)
+          await refreshList()
+        } catch {
+          // 확인 실패 — 아래에서 입력을 돌려놓는다.
+        }
       }
-      setError(submitError instanceof Error ? submitError.message : "답변 초안을 생성하지 못했습니다.")
+      if (!questionSaved) {
+        // 보낸 글은 돌려놓는다 — 그 사이 다른 대화로 옮겼어도 원래 대화의 입력창으로 돌아간다.
+        if (draftKey === activeKeyRef.current) {
+          if (!latestRef.current.composer.trim()) setComposer(question)
+        } else {
+          const stored = getDraftStore().get(draftKey)
+          if (!stored.composer.trim()) patchDraftFor(draftKey, { composer: question })
+        }
+      }
+      setError(
+        questionSaved
+          ? "질문은 저장했지만 AI 초안을 만들지 못했습니다. 같은 질문을 다시 보내면 두 번 저장되니, 답 카드가 있으면 'Pro 재검토'로 다시 만들어 주세요."
+          : submitError instanceof Error ? submitError.message : "답변 초안을 생성하지 못했습니다."
+      )
     } finally {
       setInflightFor(draftKey, null)
       setInflightFor(originKey, null)
@@ -1263,7 +1313,13 @@ function InternalCsChatWorkspaceInner() {
     // 재검토는 같은 질문을 새로 저장하지 않는다 — 원 질문 id 를 보내 서버가 이어 붙인다(IC-13).
     const linkedId = typeof pendingMessage?.metadata?.userMessageId === "string" ? pendingMessage.metadata.userMessageId : null
     const lastUser = [...(detail?.messages ?? [])].reverse().find((message) => message.role === "user")
-    const target = (linkedId && detail?.messages.find((message) => message.id === linkedId && message.role === "user")) || lastUser
+    // 마지막 질문에 아직 답이 없으면(생성 실패 뒤 질문만 저장된 경우 — 검토 동작-4) 그 질문을 다시 만든다.
+    const messages = detail?.messages ?? []
+    const lastUserIndex = lastUser ? messages.lastIndexOf(lastUser) : -1
+    const lastUserUnanswered = lastUserIndex >= 0 && !messages.slice(lastUserIndex + 1).some((message) => message.role === "assistant")
+    const target = lastUserUnanswered
+      ? lastUser
+      : (linkedId && detail?.messages.find((message) => message.id === linkedId && message.role === "user")) || lastUser
     const originKey = activeKeyRef.current
     if (!target?.content || !selectedId || inflight[originKey] || contextResetPending) return
     if (process.env.NODE_ENV === "development" && demoMode) {
@@ -1284,7 +1340,6 @@ function InternalCsChatWorkspaceInner() {
     }
     setError(null)
     setBand(null)
-    const epoch = viewEpochRef.current
     const conversationId = selectedId
     const generation = ++generationRef.current
     setInflightFor(originKey, { gen: generation, question: null, startedAt: Date.now(), kind: "rerun" })
@@ -1300,7 +1355,6 @@ function InternalCsChatWorkspaceInner() {
         const replaced = response.result?.supersededMessageIds?.length ?? 0
         await settleGenerate(
           conversationId,
-          epoch,
           response,
           replaced > 0
             ? `Pro 심층 검토 초안을 추가했습니다. 이전 대기 초안 ${replaced}개는 사용 안 함으로 정리했습니다.`
@@ -1430,6 +1484,13 @@ function InternalCsChatWorkspaceInner() {
     }
   }
 
+  /** 승인 직후 복사도 다른 복사와 같이 먼저 가린다(검토 안전-6). 저장되는 교정본은 그대로다. */
+  async function copyApprovedAnswer(text: string) {
+    const masked = redactInternalCsDraft(text)
+    const notice = redactionNotice(masked.count)
+    await copyText(masked.text, notice ? `승인된 최종 답변을 복사했습니다(${notice}).` : "승인된 최종 답변을 복사했습니다.")
+  }
+
   function submitReview(decision: "approved" | "changes_requested") {
     if (!detail || !pendingMessage || isPending) return
     if (decision === "approved" && !canApprove) {
@@ -1482,7 +1543,7 @@ function InternalCsChatWorkspaceInner() {
         ? { ...conversation, status: nextStatus, updated_at: now, last_message_at: now }
         : conversation))
       if (decision === "approved") {
-        void copyText(correctedContent ?? "", "승인된 최종 답변을 복사했습니다.")
+        void copyApprovedAnswer(correctedContent ?? "")
         setReviewOpen(false)
       } else {
         setNotice("수정 요청을 기록하고 회귀 개선 후보로 남겼습니다.")
@@ -1514,7 +1575,7 @@ function InternalCsChatWorkspaceInner() {
           }
         )
         if (decision === "approved") {
-          await copyText(correctedContent ?? "", "승인된 최종 답변을 복사했습니다.")
+          await copyApprovedAnswer(correctedContent ?? "")
           setReviewOpen(false)
         } else {
           setNotice("수정 요청을 기록하고 회귀 개선 후보로 남겼습니다.")
@@ -1643,7 +1704,15 @@ function InternalCsChatWorkspaceInner() {
         metadata: { kind: "hq_reply" },
       }),
     })
-    if (selectedIdRef.current === conversation.id) await loadConversation(conversation.id)
+    // 저장은 끝났다. 다시 불러오기가 실패해도 '저장 실패'로 보이지 않게 따로 알린다 — 다시 누르면 같은 회신이
+    // 두 번 저장되기 때문이다(검토 동작-5).
+    if (selectedIdRef.current === conversation.id) {
+      try {
+        await loadConversation(conversation.id)
+      } catch {
+        setError("본사 회신은 저장했지만 화면을 새로 불러오지 못했습니다. 다시 저장하지 말고 상담을 새로 열어 확인해 주세요.")
+      }
+    }
     setHqDetails((current) => {
       if (!(conversation.id in current)) return current
       const next = { ...current }

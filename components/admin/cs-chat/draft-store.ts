@@ -24,6 +24,8 @@ export interface ConversationDraft {
   checks: ReviewChecks
   /** 맥락 비우기를 눌렀고 아직 다음 질문을 보내지 않은 상태. 다음 generate 본문에 resetContext:true 를 싣는다. */
   resetPending: boolean
+  /** 확인 체크·검토 메모를 어느 검토 대기 초안(메시지 id)을 보고 채웠는지. 대기 초안이 바뀌면 비운다(검토 동작-1). */
+  reviewTargetId: string | null
 }
 
 export const EMPTY_CHECKS: ReviewChecks = { customer: false, evidence: false, externalScope: false, warnings: false }
@@ -36,6 +38,7 @@ export function emptyDraft(): ConversationDraft {
     reviewNote: "",
     checks: { ...EMPTY_CHECKS },
     resetPending: false,
+    reviewTargetId: null,
   }
 }
 
@@ -77,6 +80,7 @@ function sanitizeDraft(value: unknown): ConversationDraft {
     reviewNote: typeof source.reviewNote === "string" ? source.reviewNote : "",
     checks: sanitizeChecks(source.checks),
     resetPending: source.resetPending === true,
+    reviewTargetId: typeof source.reviewTargetId === "string" && source.reviewTargetId ? source.reviewTargetId : null,
   }
 }
 
@@ -100,6 +104,28 @@ function draftIsDefault(draft: ConversationDraft) {
     !draft.checks.externalScope &&
     !draft.checks.warnings
   )
+}
+
+/**
+ * 검토 대기 초안이 바뀌었을 때(새 질문·Pro 재검토·다른 사람의 생성) 검토 입력을 맞춘다(검토 동작-1).
+ * 확인 체크(경고 확인 포함)와 검토 메모는 앞 초안을 보고 채운 것이라 비운다. 최종 답 칸의 글은 지우지 않고
+ * (Pro 재검토 뒤 쓰던 글을 잃지 않게) carriedFinalDraft 로 알린다 — 체크가 비었으므로 다시 읽고 체크해야 승인된다.
+ * 대기 초안이 같으면 아무것도 바꾸지 않는다(changed:false).
+ */
+export function reconcileReviewTarget(
+  draft: Pick<ConversationDraft, "reviewTargetId" | "finalDraft" | "reviewNote" | "checks">,
+  pendingMessageId: string | null
+): { changed: boolean; reviewTargetId: string | null; checks: ReviewChecks; reviewNote: string; carriedFinalDraft: boolean } {
+  if (draft.reviewTargetId === pendingMessageId) {
+    return { changed: false, reviewTargetId: pendingMessageId, checks: draft.checks, reviewNote: draft.reviewNote, carriedFinalDraft: false }
+  }
+  return {
+    changed: true,
+    reviewTargetId: pendingMessageId,
+    checks: { ...EMPTY_CHECKS },
+    reviewNote: "",
+    carriedFinalDraft: Boolean(pendingMessageId && draft.reviewTargetId && draft.finalDraft.trim()),
+  }
 }
 
 export interface DraftStore {

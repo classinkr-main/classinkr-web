@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest"
 // UI 마크업은 게이트(eslint·build)와 시각 확인으로 검증하고, 여기서는 데이터 계약을 고정한다.
 import {
   correctedContentForReview,
+  failedSendOutcome,
   initialCustomerDraft,
   REGRESSION_JUDGE_ACTIONS,
   regressionOutcomeChip,
@@ -119,3 +120,23 @@ describe("regression judge metadata", () => {
     expect(regressionOutcomeChip("not_evaluated")).toBeNull()
   })
 })
+
+// 검토(동작-4): 보내기 실패 뒤 서버가 이미 저장한 질문·경계 행을 가려 입력창 복원·재전송 중복을 막는다.
+describe("failedSendOutcome", () => {
+  const known = new Set(["m1"])
+  const before = [{ id: "m1", role: "user" as const, content: "이전 질문", metadata: {} }]
+
+  it("detects a saved question and a saved context-reset row that were not there before sending", () => {
+    const after = [
+      ...before,
+      { id: "r1", role: "system" as const, content: "맥락 비움", metadata: { kind: "copilot_context_reset" } },
+      { id: "u2", role: "user" as const, content: "새 질문", metadata: {} },
+    ]
+    expect(failedSendOutcome(known, after, "새 질문 ")).toEqual({ questionSaved: true, resetSaved: true })
+  })
+
+  it("reports nothing saved when only old rows exist", () => {
+    expect(failedSendOutcome(known, before, "이전 질문")).toEqual({ questionSaved: false, resetSaved: false })
+  })
+})
+
