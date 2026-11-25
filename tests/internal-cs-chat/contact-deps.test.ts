@@ -43,6 +43,15 @@ describe("matchCustomersInText", () => {
     expect(matchCustomersInText("가상학원 견적", ROWS).map((row) => row.key)).toEqual(["neo:a1"])
     expect(matchCustomersInText("AB 문의", ROWS)).toEqual([])
   })
+
+  it("keeps every customer with the same name (distinct keys) instead of silently picking one", () => {
+    const rows = [
+      { key: "neo:d1", name: "동명학원", href: "/h/d1" },
+      { key: "lead:d2", name: "동명학원", href: "/h/d2" },
+      { key: "neo:d1", name: "동명학원", href: "/h/d1" },
+    ]
+    expect(matchCustomersInText("동명학원 결제 이력", rows).map((row) => row.key)).toEqual(["neo:d1", "lead:d2"])
+  })
 })
 
 describe("buildContactDeps (wired to repository functions, faked here)", () => {

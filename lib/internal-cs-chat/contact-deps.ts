@@ -26,10 +26,16 @@ function normalize(value: string) {
   return value.replace(/\s+/g, "").toLowerCase()
 }
 
-/** 질문 글 안에 이름이 그대로 들어 있는 고객. 긴 이름이 먼저(짧은 이름이 긴 이름 안에 들어 있는 경우를 피한다). */
+/**
+ * 질문 글 안에 이름이 그대로 들어 있는 고객. 긴 이름이 먼저(짧은 이름이 긴 이름 안에 들어 있는 경우를 피한다).
+ * 이름이 완전히 같은 고객이 여럿이면 하나만 고르지 않고 모두 남긴다(같은 키만 한 번으로 센다) —
+ * 호출자가 첫 고객을 대표로, 나머지를 후보로 보인다.
+ */
 export function matchCustomersInText(question: string, rows: Array<{ key: string; name: string; href: string }>): CustomerRef[] {
   const haystack = normalize(question)
-  const seen = new Set<string>()
+  const seenKeys = new Set<string>()
+  const longerNames: string[] = []
+  const acceptedNames = new Set<string>()
   return rows
     .filter((row) => {
       const name = normalize(row.name ?? "")
@@ -37,9 +43,15 @@ export function matchCustomersInText(question: string, rows: Array<{ key: string
     })
     .sort((a, b) => normalize(b.name).length - normalize(a.name).length)
     .filter((row) => {
+      if (seenKeys.has(row.key)) return false
       const name = normalize(row.name)
-      if ([...seen].some((longer) => longer.includes(name))) return false
-      seen.add(name)
+      // 더 긴 이름 안에 들어 있는 짧은 이름만 버린다. 같은 이름은 버리지 않는다.
+      if (longerNames.some((longer) => longer.length > name.length && longer.includes(name))) return false
+      seenKeys.add(row.key)
+      if (!acceptedNames.has(name)) {
+        acceptedNames.add(name)
+        longerNames.push(name)
+      }
       return true
     })
     .slice(0, MAX_MATCHES)
