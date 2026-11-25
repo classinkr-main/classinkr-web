@@ -271,7 +271,10 @@ export function extractCustomerDraftBlock(answer: string | null | undefined): st
   return block || null
 }
 
-/** 근거 글에서 '기관 이름' 줄을 뽑는다(과거 상담 사례의 `기관 OOO` 맥락). 코드에 이름을 두지 않고 근거에서만 찾는다. */
+/**
+ * 근거 글에서 '기관 이름' 줄을 뽑는다(과거 상담 사례의 `기관 OOO` 맥락). 코드에 이름을 두지 않고 근거에서만 찾는다.
+ * 지금 컨텍스트(context.ts)는 이 줄을 싣지 않고 이름을 otherCustomerNames 로 따로 넘긴다 — 이 함수는 예전 형식 근거용이다.
+ */
 export function extractInstitutionNames(contextText: string | null | undefined): string[] {
   const names = new Set<string>()
   for (const match of (contextText ?? "").matchAll(/(?:^|\s\/\s|맥락:\s*)기관\s+([^/\n]{2,60}?)(?=\s\/\s|\n|$)/g)) {

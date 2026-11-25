@@ -286,7 +286,12 @@ export async function POST(req: NextRequest, context: Context) {
     const currentInstitution = extractCustomerContextFields(loaded.conversation.customer_context).institution
     const reviewWarnings = checkInternalCsAnswer(generation.answer, {
       allowedNames: currentInstitution ? [currentInstitution] : [],
-      otherCustomerNames: extractInstitutionNames(copilotContext.internalContext),
+      // 과거 상담 근거의 기관 이름은 구조화 목록으로 받는다(컨텍스트 글에는 이름을 싣지 않는다).
+      // 글 속 '기관 X' 줄 읽기는 예전 형식 근거를 위해 함께 둔다.
+      otherCustomerNames: [
+        ...(copilotContext.otherCustomerNames ?? []),
+        ...extractInstitutionNames(copilotContext.internalContext),
+      ],
     })
     const modelStatus = {
       failureKinds: generation.failureKinds,

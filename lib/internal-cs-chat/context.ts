@@ -51,6 +51,11 @@ export interface InternalCsCopilotContext {
     reviewReasons: string[]
   }
   incidentEvidence?: IncidentEvidence[]
+  /**
+   * 과거 상담 근거가 걸린 기관 이름(중복 없음). 모델 컨텍스트에는 싣지 않고(과거 상담 서술에서 '기관 {이름}' 을 뺐다),
+   * 생성 라우트의 답 후검사(answer-checks 의 다른 고객 이름 경고)에만 넘긴다.
+   */
+  otherCustomerNames?: string[]
 }
 
 export type DiscardedWidgetAnswer = "handoff" | "policy_refusal" | "self_intro"
@@ -153,6 +158,15 @@ function consultationSourceRefs(evidence: ConsultationEvidence[]): InternalCsSou
     id: `channel:${entry.conversationId}`,
     label: compact(`[상담] ${maskOrgNames(entry.excerpt)}`, 200),
   }))
+}
+
+function consultationOrgNames(evidence: ConsultationEvidence[]) {
+  const names = new Set<string>()
+  for (const entry of evidence) {
+    const name = entry.matchedOrg?.trim()
+    if (name) names.add(name)
+  }
+  return [...names]
 }
 
 function formatConsultationEvidence(evidence: ConsultationEvidence[]) {
@@ -478,6 +492,7 @@ export async function buildInternalCsCopilotContext(
       reviewReasons,
     },
     incidentEvidence,
+    otherCustomerNames: consultationOrgNames(consultationEvidence),
   }
 }
 

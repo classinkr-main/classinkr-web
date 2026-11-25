@@ -381,7 +381,10 @@ export async function regenerateForCandidate(
     question,
     answer: generation.answer,
     origin: generation.origin,
-    otherCustomerNames: extractInstitutionNames(copilotContext.internalContext),
+    // 과거 상담 근거의 기관 이름은 구조화 목록으로 받는다(컨텍스트 글에는 이름이 없다). 글 속 '기관 X' 줄은 예전 형식용.
+    otherCustomerNames: [
+      ...new Set([...(copilotContext.otherCustomerNames ?? []), ...extractInstitutionNames(copilotContext.internalContext)]),
+    ],
     allowedNames,
     imageEvidence: assetEvidence.text || undefined,
   }

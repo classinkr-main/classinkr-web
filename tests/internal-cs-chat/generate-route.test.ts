@@ -592,6 +592,27 @@ describe("generate route: model failure, gap queue and review warnings", () => {
   })
 })
 
+describe("generate route: other-customer names from structured evidence", () => {
+  it("flags another customer's institution passed as otherCustomerNames even when the context has no '기관' line", async () => {
+    setSuccessfulDefaults()
+    loadConversation(previousMessages, { customer_context: { 기관명: "테스트기관A" } })
+    mocks.buildInternalCsCopilotContext.mockResolvedValue({
+      internalContext: "[과거 상담 사례]\n1. 녹화 문의\n   맥락: 유사도 0.81",
+      otherCustomerNames: ["테스트기관Z", "테스트기관A"],
+      sourceRefs,
+      deterministicFallback: "x",
+      publicEvidence: { answer: null, sources: [{ id: "s" }] },
+      curatedEvidence: { entries: [], recommendedTags: [], reviewRequired: false, reviewReasons: [] },
+    })
+    mocks.generateInternalCsAnswer.mockResolvedValue({ ...generation, answer: "테스트기관Z 사례와 테스트기관A 상황은 같습니다." })
+
+    const response = await POST(request({ question: "문의" }), routeContext())
+    const json = await response.json()
+
+    expect(json.result.reviewWarnings.filter((warning: { code: string }) => warning.code === "other_customer")).toHaveLength(1)
+  })
+})
+
 describe("generate route: customer context, history and HQ reply", () => {
   it("masks customer_context and puts it into the queue context", async () => {
     setSuccessfulDefaults()

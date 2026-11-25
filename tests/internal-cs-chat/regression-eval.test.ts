@@ -341,6 +341,29 @@ describe("regenerateForCandidate (default wiring)", () => {
     expect(result.otherCustomerNames).toEqual(["테스트기관Z"])
   })
 
+  it("takes other-customer names from the structured context list when the context text has no '기관' line", async () => {
+    mocks.getInternalCsConversation.mockResolvedValue({
+      conversation: { tags: [], priority: "normal", customer_context: null },
+      messages: [
+        { id: "user-1", role: "user", content: "설치가 안 됩니다", review_state: "not_required" },
+        { id: "assistant-1", role: "assistant", content: "원본", review_state: "changes_requested" },
+      ],
+      assets: [],
+    })
+    mocks.buildInternalCsCopilotContext.mockResolvedValue({
+      internalContext: "[과거 상담 사례]\n1. 설치 문의\n   맥락: 유사도 0.80",
+      otherCustomerNames: ["테스트기관Z"],
+      sourceRefs: [],
+      deterministicFallback: "폴백",
+      publicEvidence: { answer: null, sources: [] },
+      curatedEvidence: { entries: [], recommendedTags: [], reviewRequired: false, reviewReasons: [] },
+    })
+
+    const result = await regenerateForCandidate(candidate())
+
+    expect(result.otherCustomerNames).toEqual(["테스트기관Z"])
+  })
+
   it("uses the history rules: quick-approved answers and rows before a reset boundary are not history", async () => {
     mocks.getInternalCsConversation.mockResolvedValue({
       conversation: { tags: [], priority: "normal" },
