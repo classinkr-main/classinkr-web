@@ -90,23 +90,52 @@ export const demoAdminAiClient: AdminAiClient = {
 }
 
 const LIVE_ERROR_TEXT = "답을 받지 못했습니다. 잠시 뒤 다시 물어봐 주세요."
+/** done 도 error 도 없이 스트림이 끝났을 때(함수 시간 초과·연결 끊김) — 받은 블록 뒤에 붙인다(검토 동작-6). */
+export const LIVE_CUT_TEXT = "답이 중간에 끊겼습니다 — 다시 물어봐 주세요."
+/** 클라이언트 전체 시간 상한을 넘겨 멈췄을 때. */
+export const LIVE_TIMEOUT_TEXT = "답이 너무 오래 걸려 멈췄습니다 — 다시 물어봐 주세요."
+/** 한 턴의 전체 시간 상한 — 서버 함수 상한(60초)보다 짧게 둔다. */
+export const LIVE_TURN_TIMEOUT_MS = 45_000
 
 function httpErrorText(status: number): string {
   if (status === 401) return "로그인이 끝났습니다. 다시 로그인한 뒤 물어봐 주세요."
   if (status === 403) return "이 계정의 역할로는 갈매봇을 쓸 수 없습니다."
+  if (status === 413) return "질문이 너무 깁니다. 줄여서 다시 물어봐 주세요."
   if (status === 429) return "요청이 너무 잦습니다. 잠시 뒤 다시 물어봐 주세요."
   return LIVE_ERROR_TEXT
 }
 
-/** NDJSON 응답을 읽어 단계는 onStep 으로, 블록·오더는 모아 onDone 으로 넘긴다. fetch 는 시험에서 바꿔 끼운다. */
-export function createLiveAdminAiClient(fetcher: typeof fetch = (...args) => fetch(...args)): AdminAiClient {
+/**
+ * NDJSON 응답을 읽어 단계는 onStep 으로, 블록·오더는 모아 onDone 으로 넘긴다. fetch 는 시험에서 바꿔 끼운다.
+ * 끝이 정직해야 한다: done 없이 끝나거나 연결이 끊기면 받은 블록은 남기고 "중간에 끊겼습니다" 한 줄을 붙인다.
+ * 전체 시간 상한(timeoutMs)을 넘기면 요청을 멈추고 같은 식으로 알린다.
+ */
+export function createLiveAdminAiClient(
+  fetcher: typeof fetch = (...args) => fetch(...args),
+  options: { timeoutMs?: number } = {}
+): AdminAiClient {
+  const timeoutMs = options.timeoutMs ?? LIVE_TURN_TIMEOUT_MS
   return {
     mode: "live",
     ask(input, handlers) {
       const controller = new AbortController()
       let stopped = false
+      let timedOut = false
+      const timer = setTimeout(() => {
+        timedOut = true
+        controller.abort()
+      }, timeoutMs)
       const finish = (result: AdminAiTurnResult) => {
+        clearTimeout(timer)
         if (!stopped) handlers.onDone(result)
+      }
+      const blocks: AiBlock[] = []
+      let order: OrderTicket | undefined
+      /** 오더 블록이 가리키는 오더가 없으면 그 블록을 버린다(화면이 빈 카드를 그리지 않게). */
+      const result = (tail: string | null): AdminAiTurnResult => {
+        const kept = blocks.filter((block) => block.kind !== "order" || block.orderId === order?.id)
+        if (tail) kept.push({ kind: "text", text: tail })
+        return { blocks: kept.length ? kept : [{ kind: "text", text: LIVE_ERROR_TEXT }], ...(order ? { order } : {}) }
       }
       void (async () => {
         try {
@@ -126,10 +155,9 @@ export function createLiveAdminAiClient(fetcher: typeof fetch = (...args) => fet
           }
           const reader = res.body.getReader()
           const decoder = new TextDecoder()
-          const blocks: AiBlock[] = []
-          let order: OrderTicket | undefined
           let buffer = ""
           let failed: string | null = null
+          let ended = false
           for (;;) {
             const { value, done } = await reader.read()
             if (value) buffer += decoder.decode(value, { stream: !done })
@@ -139,20 +167,25 @@ export function createLiveAdminAiClient(fetcher: typeof fetch = (...args) => fet
               if (event.type === "step" && !stopped) handlers.onStep(event.label)
               else if (event.type === "block") blocks.push(event.block)
               else if (event.type === "order" && !order) order = event.order
-              else if (event.type === "error") failed = event.message
+              else if (event.type === "error") {
+                failed = event.message
+                ended = true
+              } else if (event.type === "done") ended = true
             }
             if (done) break
           }
           if (failed) blocks.push({ kind: "text", text: failed })
-          // 오더 블록이 가리키는 오더가 없으면 그 블록을 버린다(화면이 빈 카드를 그리지 않게).
-          const kept = blocks.filter((block) => block.kind !== "order" || block.orderId === order?.id)
-          finish({ blocks: kept.length ? kept : [{ kind: "text", text: LIVE_ERROR_TEXT }], ...(order ? { order } : {}) })
+          finish(result(ended ? null : blocks.length ? LIVE_CUT_TEXT : null))
         } catch {
-          if (!stopped) finish({ blocks: [{ kind: "text", text: LIVE_ERROR_TEXT }] })
+          if (stopped) return
+          // 받은 블록은 버리지 않는다 — 끊긴 자리를 알리는 한 줄을 붙인다.
+          const tail = timedOut ? LIVE_TIMEOUT_TEXT : blocks.length ? LIVE_CUT_TEXT : null
+          finish(result(tail))
         }
       })()
       return () => {
         stopped = true
+        clearTimeout(timer)
         controller.abort()
       }
     },

@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { AdminAiConversation } from "@/components/admin/ai/AdminAiConversation"
 import { OrderCard } from "@/components/admin/ai/cards/OrderCard"
-import { createLiveAdminAiClient, type AdminAiClient } from "@/lib/admin-ai/client"
+import { LIVE_CUT_TEXT, LIVE_TIMEOUT_TEXT, createLiveAdminAiClient, type AdminAiClient } from "@/lib/admin-ai/client"
 import { createAdminAiStore } from "@/lib/admin-ai/store"
 import { encodeStreamEvent, type AdminAiStreamEvent } from "@/lib/admin-ai/stream-protocol"
 import type { AdminAiTurnResult, OrderTicket } from "@/lib/admin-ai/types"
@@ -117,6 +117,63 @@ describe("liveAdminAiClient — NDJSON 스트림을 기존 블록으로", () => 
     vi.stubEnv("NEXT_PUBLIC_ADMIN_AI_LIVE", "")
     expect((await import("@/lib/admin-ai/client")).adminAiClient.mode).toBe("demo")
     vi.unstubAllEnvs()
+  })
+})
+
+/** 줄을 한 번에 하나씩 읽게 내주고, 다 내준 뒤 닫거나(close) 연결 리셋처럼 오류를 낸다(error). */
+function rawStream(lines: string[], end: "close" | "error" = "close"): Response {
+  const encoder = new TextEncoder()
+  let index = 0
+  const stream = new ReadableStream<Uint8Array>({
+    pull(controller) {
+      if (index < lines.length) controller.enqueue(encoder.encode(lines[index++]))
+      else if (end === "close") controller.close()
+      else controller.error(new Error("connection reset"))
+    },
+  })
+  return new Response(stream, { status: 200 })
+}
+
+describe("끊긴 스트림은 정직하게 그린다(검토 동작-6)", () => {
+  const step = encodeStreamEvent({ type: "step", label: "근거 문서 찾기" })
+  const first = encodeStreamEvent({ type: "block", block: { kind: "text", text: "첫 조각 답" } })
+
+  it("done 없이 닫히면 받은 블록 뒤에 '중간에 끊겼습니다'를 붙인다", async () => {
+    const { result } = await askOnce(createLiveAdminAiClient((async () => rawStream([step, first])) as unknown as typeof fetch))
+    expect(result.blocks).toEqual([{ kind: "text", text: "첫 조각 답" }, { kind: "text", text: LIVE_CUT_TEXT }])
+  })
+
+  it("반쯤 온 줄로 끝나도 완성처럼 그리지 않는다", async () => {
+    const { result } = await askOnce(createLiveAdminAiClient((async () => rawStream([step, first, '{"type":"block","block":{"kind":"te'])) as unknown as typeof fetch))
+    expect(result.blocks.at(-1)).toEqual({ kind: "text", text: LIVE_CUT_TEXT })
+  })
+
+  it("블록을 받은 뒤 연결이 리셋되면 받은 블록은 남기고 끊김을 알린다", async () => {
+    const { result } = await askOnce(createLiveAdminAiClient((async () => rawStream([step, first], "error")) as unknown as typeof fetch))
+    expect(result.blocks).toEqual([{ kind: "text", text: "첫 조각 답" }, { kind: "text", text: LIVE_CUT_TEXT }])
+  })
+
+  it("전체 시간 상한을 넘기면 멈추고 받은 블록 뒤에 시간 초과를 알린다", async () => {
+    // 멈춘 스트림 — abort 가 읽기를 깨우도록 fetch 처럼 signal 을 본다.
+    const hanging = (async (_url: string, init: RequestInit) => {
+      const encoder = new TextEncoder()
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(encoder.encode(step))
+          controller.enqueue(encoder.encode(first))
+          init.signal?.addEventListener("abort", () => controller.error(new DOMException("aborted", "AbortError")))
+        },
+      })
+      return new Response(stream, { status: 200 })
+    }) as unknown as typeof fetch
+    const { result } = await askOnce(createLiveAdminAiClient(hanging, { timeoutMs: 30 }))
+    expect(result.blocks).toEqual([{ kind: "text", text: "첫 조각 답" }, { kind: "text", text: LIVE_TIMEOUT_TEXT }])
+  })
+
+  it("done 으로 정상 종료하면 끊김 표시를 붙이지 않는다", async () => {
+    const done = encodeStreamEvent({ type: "done" })
+    const { result } = await askOnce(createLiveAdminAiClient((async () => rawStream([step, first, done])) as unknown as typeof fetch))
+    expect(result.blocks).toEqual([{ kind: "text", text: "첫 조각 답" }])
   })
 })
 
