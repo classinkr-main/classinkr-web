@@ -38,8 +38,7 @@
  *   - 없는 개념: 질문의 없는 개념을 그 카드가 모두 덮는다.
  *   - 공백: 결정이 gap 이 아니다(없는 개념·공백 카드 판정은 그대로 둔다). 되묻기·두 조각을 이은 답도 그대로 둔다.
  *   - NODOC: 반례 'none' 자리가 1위가 아니고, 우주 이웃의 'none' 몫이 VOTE_RESCUE_MAX_KNN_NONE(0.5) 미만이다.
- *   - 가드(R2 B2, voteGuardAllows): 증상 판별에서만 나온 표는 주절이 다른 대상의 방법·위치를 물으면 쓰지 않고, 정책 카드는 질문의
- *     비일반 개념을 하나라도 설명할 때만 쓴다.
+ *   - 가드(R2 B2, voteGuardAllows): 증상 판별에서만 나온 표는 주절이 다른 대상의 방법·위치를 물으면 쓰지 않는다.
  * 반례: 상위 5 후보마다 negMargin > 0 이면 탈락, 반례 행선 카드에 NEG_ROUTE_BONUS × 반례 코사인 가산, 행선이 none 이면
  * 탈락한 카드 점수로 'none' 자리를 만든다(1위가 되면 못 찾음).
  * 끈 카드(CHATBOT_COMPILED_DISABLED_CARDS)는 후보·이웃 라벨·표·반례 행선·없는 개념 공백 카드에서 빠지고 다음 순위가 경쟁한다.
@@ -57,7 +56,7 @@ import {
 } from "./checks"
 import { legacyVoteSources } from "./legacy-votes"
 import type { AbsentMatch } from "./lexicon"
-import { askingSentencesOf, detectAskType, hasOwnTopicWords, INDEX_SYMPTOM_RE, splitQuestion } from "./normalize"
+import { askingSentencesOf, detectAskType, hasOwnTopicWords, INDEX_SYMPTOM_RE, normalizeText, splitQuestion } from "./normalize"
 import { isCompiledScope } from "./scope"
 import { compositeScore, confidenceOf, knnCountFeature, scoreCandidates, sortCandidates, type KnnSummary, type ScoreComponents } from "./score"
 import type {
@@ -367,9 +366,9 @@ export type ThresholdFn = (kind: AnswerCardKind) => number
 export function gapEligible(index: CompiledAnswerIndex, analysis: Pick<SegmentAnalysis, "ranked" | "query" | "absentTargets">, at: number) {
   const candidate = analysis.ranked[at]
   if (!candidate || candidate.card < 0) return false
-  // 질문이 묻는 대상인 없는 개념의 공백 카드면 그대로 공백 답이다(그 주제를 물었다).
+  // 질문이 묻는 대상인 없는 개념의 공백 카드면 그대로 공백 답이다(그 주제를 물었다). 꾸미는 자리(modifier)는 아래 덮임 규칙으로 본다.
   for (const item of analysis.absentTargets) {
-    if (item.target && index.absent.byId.get(item.match.id)?.gapCard === candidate.id) return true
+    if (item.target && item.reason !== "modifier" && index.absent.byId.get(item.match.id)?.gapCard === candidate.id) return true
   }
   // 묻는 꼴: 예/아니오 꼴(되나요·있나요)은 무엇이든 물을 수 있어 어긋남으로 보지 않는다.
   if (analysis.query.askType !== "yesno" && askTypeMatch(index, analysis.query, candidate.card) === 0) return false
@@ -519,7 +518,11 @@ function withTopicCarry(index: CompiledAnswerIndex, pieces: string[], contexts: 
     }
     let carried: string[] = []
     for (let back = at - 1; back >= 0 && carried.length === 0; back -= 1) {
-      carried = Array.from(new Set(topicConcepts(index, analyses[back]).map((concept) => concept.form)))
+      const concepts = topicConcepts(index, analyses[back])
+      // 앞 조각의 주절(상황 절 뒤) 개념을 먼저 쓴다("비밀번호 바꾸려는데 인증코드가 어디로 와요?" → 인증코드).
+      const main = normalizeText(mainClauseOf(analyses[back].text)).replace(/\s+/g, "")
+      const inMain = concepts.filter((concept) => main.includes(concept.form.replace(/\s+/g, "").toLowerCase()))
+      carried = Array.from(new Set((inMain.length > 0 ? inMain : concepts).map((concept) => concept.form)))
     }
     analyses.push(carried.length > 0 ? analyzeSegment(index, `${carried.join(" ")} ${pieces[at]}`, context, pieces[at]) : own)
   }
@@ -622,10 +625,10 @@ export function mainClauseOf(question: string) {
 
 /**
  * 정해 둔 답 승격의 표 카드 가드(계획 §3 vote rescue).
- * - 증상 판별(symptom:)에서만 나온 표이고, 증상은 앞 절의 상황이고 주절은 방법·위치 질문이며 그 대상(주절의 비일반 개념)을 표 카드가
- *   설명하지 못하면 승격하지 않는다("화면 공유가 안 되는데 지난 코스를 정리하는 방법" → 화면 공유 실패 카드 아님).
- * - 정책 카드(policy, 또는 사람이 정한 fixed)는 질문의 비일반 개념을 그 카드가 하나라도 설명할 때만 승격한다(개념 겹침: 낱말 하나 표로
- *   사람이 정한 답을 다른 주제 질문에 붙이지 않게).
+ * 증상 판별(symptom:)에서만 나온 표이고, 증상은 앞 절의 상황이고 주절은 방법·위치 질문이며 그 대상(주절의 비일반 개념)을 표 카드가
+ * 설명하지 못하면 승격하지 않는다("화면 공유가 안 되는데 지난 코스를 정리하는 방법" → 화면 공유 실패 카드 아님).
+ * 정책 카드 승격을 좁히는 일(좁힌 정책 주제가 참일 때만)은 정책 주제 정규식이 있는 service.ts 묶음(B5)이 한다. 개념 겹침으로 막아 보니
+ * 사전에 없는 낱말(학원 이름·수량)로 묻는 정책 질문의 맞는 승격 7건이 막혀(input371 good 164→157) 넣지 않았다.
  */
 function voteGuardAllows(index: CompiledAnswerIndex, segment: SegmentAnalysis, symptomOnly: ReadonlySet<string>, candidate: RankedCandidate) {
   if (symptomOnly.has(candidate.id)) {
@@ -642,15 +645,6 @@ function voteGuardAllows(index: CompiledAnswerIndex, segment: SegmentAnalysis, s
       })
       if (foreign) return false
     }
-  }
-  const compiled = index.cards[candidate.card].card
-  const policyCard = compiled.kind === "policy" || (compiled.kind === "fixed" && compiled.policyGoverned === true)
-  if (policyCard) {
-    const topics = segment.query.conceptIds.filter((id) => {
-      const concept = index.lexicon.concepts.get(id)
-      return Boolean(concept) && !concept!.generic
-    })
-    if (!topics.some((id) => conceptExplained(index, id, candidate.card))) return false
   }
   return true
 }
