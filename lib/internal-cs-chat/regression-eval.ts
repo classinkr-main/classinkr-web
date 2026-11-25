@@ -337,7 +337,9 @@ function resolveOriginalQuestion(
   if (linked?.content.trim()) return linked.content
 
   const messageIndex = messages.findIndex((message) => message.id === candidate.messageId)
-  const preceding = messageIndex >= 0 ? messages.slice(0, messageIndex) : messages
+  // 읽은 구간(최근 메시지) 밖의 후보면 엉뚱한 사용자 메시지를 원 질문으로 잡지 않는다.
+  if (messageIndex < 0) return null
+  const preceding = messages.slice(0, messageIndex)
   for (let index = preceding.length - 1; index >= 0; index -= 1) {
     const entry = preceding[index]
     if (entry.role === "user" && entry.content.trim()) return entry.content

@@ -312,6 +312,15 @@ describe("regenerateForCandidate (default wiring)", () => {
     expect(result).toEqual({ question: "설치가 안 됩니다", answer: "새 초안", origin: "model", incomplete: false, otherCustomerNames: [], allowedNames: [] })
   })
 
+  it("읽은 구간 밖의 후보는 창 안의 아무 사용자 메시지를 원 질문으로 쓰지 않는다", async () => {
+    mocks.getInternalCsConversation.mockResolvedValue({
+      conversation: { tags: [], priority: "normal" },
+      messages: [{ id: "user-late", role: "user", content: "다른 질문", review_state: "not_required" }],
+    })
+    await expect(regenerateForCandidate({ ...candidate(), metadata: {} })).rejects.toThrow("원 질문을 찾을 수 없습니다")
+    expect(mocks.generateInternalCsAnswer).not.toHaveBeenCalled()
+  })
+
   it("adds approved image evidence to the regeneration and keeps only the current institution as allowed", async () => {
     mocks.getInternalCsConversation.mockResolvedValue({
       conversation: { tags: [], priority: "normal", customer_context: { 기관명: "테스트기관A" } },
