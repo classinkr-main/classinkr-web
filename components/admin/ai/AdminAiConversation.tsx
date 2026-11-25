@@ -99,7 +99,8 @@ export function AdminAiConversation({
   }, [count, lastBlocks])
 
   return (
-    <div className={`flex flex-col gap-3 ${className}`} aria-live="polite">
+    // 대화 전체를 aria-live 로 두지 않는다 — 카드 시계가 매초 읽힌다. 새 답변은 AdminAiAnnouncer 가 알린다.
+    <div className={`flex flex-col gap-3 ${className}`}>
       {state.messages.map((message) => (
         <Message key={message.id} message={message} state={state} />
       ))}
