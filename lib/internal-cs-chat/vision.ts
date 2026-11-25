@@ -9,6 +9,7 @@ import {
   callInternalCsModel,
   failureKindsOf,
   logModelFailures,
+  readFinishState,
   resolveInternalCsConnection,
   stopsModelChain,
   toModelAttempt,
@@ -244,7 +245,9 @@ export async function analyzeInternalCsImage(
     })
 
     const rawText = result.ok ? readCandidateText(result.data) : null
-    const analysis = rawText ? parseInternalCsImageAnalysis(rawText) : null
+    // 길이 초과·안전 차단으로 끝난 응답은 JSON 이 우연히 읽혀도 완성본으로 받지 않는다.
+    const finish = result.ok ? readFinishState(result.data) : { incomplete: false, finishReason: null }
+    const analysis = rawText && !finish.incomplete ? parseInternalCsImageAnalysis(rawText) : null
     if (result.ok && analysis) {
       attempts.push(toModelAttempt(model, result))
       logModelFailures("vision", connection.provider, attempts, false)
@@ -263,7 +266,7 @@ export async function analyzeInternalCsImage(
     }
 
     const failedAttempt: ModelAttempt = result.ok
-      ? { model, ok: false, kind: "shape", status: result.status, latencyMs: result.latencyMs }
+      ? { model, ok: false, kind: finish.incomplete ? "incomplete" : "shape", status: result.status, latencyMs: result.latencyMs }
       : toModelAttempt(model, result)
     attempts.push(failedAttempt)
     if (failedAttempt.kind && stopsModelChain(failedAttempt.kind, model, failedAttempt.status)) break

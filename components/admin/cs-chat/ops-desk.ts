@@ -172,6 +172,11 @@ export function isDeterministicDraft(message: Pick<InternalCsMessage, "metadata"
   return message?.metadata?.origin === "deterministic"
 }
 
+/** 이 초안이 길이 초과·안전 차단으로 끝까지 쓰이지 못한 글인가(R21). */
+export function isIncompleteDraft(message: Pick<InternalCsMessage, "metadata"> | null | undefined) {
+  return message?.metadata?.incomplete === true
+}
+
 export function readFailureKinds(message: Pick<InternalCsMessage, "metadata"> | null | undefined): string[] {
   const raw = message?.metadata?.failureKinds
   return Array.isArray(raw) ? raw.filter((kind): kind is string => typeof kind === "string") : []

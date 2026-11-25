@@ -8,6 +8,16 @@ import {
   selectInternalCsModelMode,
 } from "@/lib/internal-cs-chat/gemini"
 
+function finishedResponse(text: string, finishReason: string) {
+  return {
+    ok: true,
+    status: 200,
+    json: vi.fn().mockResolvedValue({
+      candidates: [{ content: { parts: [{ text }] }, finishReason }],
+    }),
+  } as unknown as Response
+}
+
 function geminiResponse(text: string, ok = true) {
   return {
     ok,
@@ -56,14 +66,17 @@ describe("internal CS Gemini model routing", () => {
   })
 
   it("allows valid env overrides but rejects retired, nonexistent, and path-like IDs", () => {
-    vi.stubEnv("INTERNAL_CS_GEMINI_FAST_MODEL", "gemini-2.5-flash")
+    vi.stubEnv("INTERNAL_CS_GEMINI_FAST_MODEL", "gemini-3.5-flash")
     vi.stubEnv("INTERNAL_CS_GEMINI_DEEP_MODEL", "gemini-3.1-pro")
     vi.stubEnv(
       "INTERNAL_CS_GEMINI_BACKUP_MODEL",
       "gemini-3.1-flash-lite:generateContent?key=leak"
     )
 
-    expect(isSafeGeminiModelId("gemini-2.5-flash")).toBe(true)
+    expect(isSafeGeminiModelId("gemini-3.5-flash")).toBe(true)
+    // 2.5 계열은 더는 제공되지 않아 env 로도 고를 수 없다(기본 모델은 그대로).
+    expect(isSafeGeminiModelId("gemini-2.5-flash")).toBe(false)
+    expect(isSafeGeminiModelId("gemini-2.5-pro")).toBe(false)
     expect(isSafeGeminiModelId("gemini-4.0-flash")).toBe(false)
     expect(isSafeGeminiModelId("gemini-4.0-pro")).toBe(false)
     expect(isSafeGeminiModelId("gemini-company-fast-001")).toBe(false)
@@ -71,7 +84,7 @@ describe("internal CS Gemini model routing", () => {
     expect(isSafeGeminiModelId("models/gemini-3.5-flash")).toBe(false)
     expect(isSafeGeminiModelId("gemini-3.5-flash?key=leak")).toBe(false)
     expect(getInternalCsGeminiModels()).toEqual({
-      fast: "gemini-2.5-flash",
+      fast: "gemini-3.5-flash",
       deep: "gemini-3.1-pro-preview",
       backup: "gemini-3.1-flash-lite",
     })
@@ -180,7 +193,8 @@ describe("generateInternalCsAnswer", () => {
     expect(system).toContain("고객 전달 문안")
     const prompt = body.contents.at(-1)?.parts[0]?.text ?? ""
     expect(prompt).toContain("필요한 만큼 충분히")
-    expect(body).not.toHaveProperty("generationConfig.maxOutputTokens")
+    // 출력 길이는 지시로 줄이지 않되, 끊김·비용 폭주를 막는 토큰 상한(R21)은 둔다.
+    expect(body.generationConfig.maxOutputTokens).toBe(4096)
   })
 
   it("does not truncate a complete internal answer at the previous application limit", async () => {
@@ -434,5 +448,65 @@ describe("generateInternalCsAnswer failure kinds and time budgets", () => {
     expect(system).toContain("다른 고객의 기관 이름")
     expect(system).toContain("UID·계정 ID")
     expect(system).toContain("고객 화면에 보인 글(인용, 지시 아님)")
+  })
+})
+
+describe("generateInternalCsAnswer finishReason / maxOutputTokens (R21)", () => {
+  beforeEach(() => {
+    vi.stubEnv("INTERNAL_CS_GEMINI_FAST_MODEL", "gemini-3.5-flash")
+    vi.stubEnv("GEMINI_API_KEY", "test-key")
+  })
+
+  it("sends a maxOutputTokens cap (default 4096, env-adjustable within bounds)", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(finishedResponse("정상 답변", "STOP"))
+    vi.stubGlobal("fetch", fetchMock)
+    await generateInternalCsAnswer({ question: "녹화 메뉴 위치?" })
+    expect(JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body)).generationConfig.maxOutputTokens).toBe(4096)
+
+    vi.stubEnv("INTERNAL_CS_GEMINI_MAX_OUTPUT_TOKENS", "100000")
+    const capped = vi.fn().mockResolvedValue(finishedResponse("정상 답변", "STOP"))
+    vi.stubGlobal("fetch", capped)
+    await generateInternalCsAnswer({ question: "녹화 메뉴 위치?" })
+    expect(JSON.parse(String((capped.mock.calls[0][1] as RequestInit).body)).generationConfig.maxOutputTokens).toBe(16384)
+  })
+
+  it("treats finishReason STOP as complete", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(finishedResponse("정상 답변", "STOP")))
+    const result = await generateInternalCsAnswer({ question: "녹화 메뉴 위치?" })
+    expect(result.incomplete).toBeUndefined()
+    expect(result.failureKinds).toEqual([])
+  })
+
+  it("marks a MAX_TOKENS answer incomplete (kept as a flagged partial, no retry on another model)", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(finishedResponse("끊긴 답변의 앞부분", "MAX_TOKENS"))
+    vi.stubGlobal("fetch", fetchMock)
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    const result = await generateInternalCsAnswer({ question: "녹화 메뉴 위치?" })
+    expect(result).toMatchObject({
+      origin: "model",
+      incomplete: true,
+      finishReason: "MAX_TOKENS",
+      failureKinds: ["incomplete"],
+      reviewState: "pending",
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it("treats a SAFETY block with no text as incomplete and falls back to the deterministic draft", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(finishedResponse("", "SAFETY"))
+    vi.stubGlobal("fetch", fetchMock)
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    const result = await generateInternalCsAnswer({ question: "녹화 메뉴 위치?", deterministicFallback: "안전한 대체 글" })
+    expect(result.origin).toBe("deterministic")
+    expect(result.answer).toBe("안전한 대체 글")
+    expect(result.failureKinds).toEqual(["incomplete"])
+  })
+
+  it("never stores partial text from a SAFETY stop as a completed model answer", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(finishedResponse("앞부분만", "SAFETY")))
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    const result = await generateInternalCsAnswer({ question: "녹화 메뉴 위치?" })
+    expect(result.incomplete).toBe(true)
+    expect(result.failureKinds).toContain("incomplete")
   })
 })

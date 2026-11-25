@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server"
 import { describe, expect, it } from "vitest"
 
 // 저장소에 jsdom 이 없어 서버 렌더 결과로 확인한다(다른 화면 시험과 같은 방식).
-import ModelStatusBanner, { describeModelFailure } from "@/components/admin/cs-chat/components/ModelStatusBanner"
+import ModelStatusBanner, { describeModelFailure, IncompleteDraftNotice } from "@/components/admin/cs-chat/components/ModelStatusBanner"
 import ReviewWarningList from "@/components/admin/cs-chat/components/ReviewWarningList"
 
 describe("ModelStatusBanner", () => {
@@ -32,6 +32,17 @@ describe("ModelStatusBanner", () => {
     expect(describeModelFailure(["timeout", "quota"])).toContain("사용 한도")
     expect(describeModelFailure(["bogus"])).toBeNull()
     expect(describeModelFailure(undefined)).toBeNull()
+  })
+})
+
+describe("IncompleteDraftNotice (R21)", () => {
+  it("불완전 초안이면 role=alert 안내를 보이고, 아니면 아무것도 그리지 않는다", () => {
+    const html = renderToStaticMarkup(<IncompleteDraftNotice incomplete />)
+    expect(html).toContain('role="alert"')
+    expect(html).toContain("불완전한 초안")
+    expect(describeModelFailure(["incomplete"])).toContain("끝까지 만들어지지 않았습니다")
+    expect(renderToStaticMarkup(<IncompleteDraftNotice incomplete={false} />)).toBe("")
+    expect(renderToStaticMarkup(<IncompleteDraftNotice />)).toBe("")
   })
 })
 
