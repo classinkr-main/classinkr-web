@@ -1,11 +1,12 @@
 "use client"
 
-import { memo, useState, type RefObject } from "react"
+import { memo, useId, useState, type RefObject } from "react"
 import Link from "next/link"
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion"
 import {
     ArrowRight,
     Check,
+    ChevronDown,
     Copy,
     ExternalLink,
     FileText,
@@ -18,19 +19,17 @@ import { ClassInAIIcon } from "@/components/ui/ClassInAIIcon"
 import { CHATBOT_HIT_AREA_CLASS } from "@/components/ui/chatbot-hit-area"
 import type { ChatLinkClick } from "@/components/ui/chatbot-link-navigation"
 import { ConsultationBridge } from "@/components/ui/chatbot/ConsultationBridge"
+import { EASING_SOFT_ENTER } from "@/components/ui/chatbot/constants"
 import {
-    EASING_SOFT_ENTER,
-    FOLLOW_UP_SUGGESTION_LIMIT,
-    STARTER_SUGGESTION_LIMIT,
-} from "@/components/ui/chatbot/constants"
+    findCurrentTurnStart,
+    navigableSources,
+    resolveVisibleSuggestions,
+    shouldAnimateMessageLayout,
+} from "@/components/ui/chatbot/message-visibility"
 import type { ChatbotSource, ChatMessage } from "@/components/ui/chatbot/types"
 import { cn } from "@/lib/utils"
 import { CHATBOT_MOTION, m } from "@/lib/chatbot/motion"
 import { buildRetryLabel, WIDGET_INTERRUPTED_NOTICE } from "@/lib/chatbot/widget-turn"
-
-function getSuggestionLimit(message: ChatMessage) {
-    return message.id === "welcome" ? STARTER_SUGGESTION_LIMIT : FOLLOW_UP_SUGGESTION_LIMIT
-}
 
 function AssistantMeta({ message }: { message: ChatMessage }) {
     const labels = [
@@ -176,10 +175,13 @@ const MessageContent = memo(function MessageContent({
     content,
     role,
     isStreaming = false,
+    animateLayout = false,
 }: {
     content: string
     role: ChatMessage["role"]
     isStreaming?: boolean
+    // 최근 말풍선만 layout 애니메이션을 켠다(CX-13).
+    animateLayout?: boolean
 }) {
     const shouldReduceMotion = useReducedMotion()
     const visibleContent = role === "assistant" ? sanitizeVisibleAssistantText(content) : content
@@ -193,7 +195,7 @@ const MessageContent = memo(function MessageContent({
 
     return (
         <motion.div
-            layout="position"
+            layout={animateLayout ? "position" : false}
             initial={m({ opacity: 0.8 }, shouldReduceMotion)}
             animate={m({ opacity: 1 }, shouldReduceMotion)}
             transition={m(CHATBOT_MOTION.tokenFade, shouldReduceMotion)}
@@ -375,20 +377,26 @@ function AnswerCopyButton({ message }: { message: ChatMessage }) {
 function SourceLinks({
     sources,
     onNavigate,
+    showHeading = true,
 }: {
     sources?: ChatbotSource[]
     onNavigate?: (click: ChatLinkClick) => void
+    // 접힌 출처를 펼칠 때는 제목 줄과 윗선을 접기 버튼이 대신한다.
+    showHeading?: boolean
 }) {
     const shouldReduceMotion = useReducedMotion()
-    const visibleSources = sources?.slice(0, 2) ?? []
+    // 주소가 없는 출처(복원 저장에서 빠진 경우 등)는 누를 수 없으니 건너뛴다(CX-19).
+    const visibleSources = navigableSources(sources).slice(0, 2)
     if (visibleSources.length === 0) return null
 
     return (
-        <div className="mt-3 space-y-1.5 border-t border-fg-accent/10 pt-3">
-            <div className="flex items-center gap-1.5 text-[11px] font-bold text-[#615D59]">
-                <FileText className="h-3.5 w-3.5 text-fg-accent" aria-hidden="true" />
-                <span>참고한 공식 가이드</span>
-            </div>
+        <div className={cn("space-y-1.5", showHeading && "mt-3 border-t border-fg-accent/10 pt-3")}>
+            {showHeading ? (
+                <div className="flex items-center gap-1.5 text-[11px] font-bold text-[#615D59]">
+                    <FileText className="h-3.5 w-3.5 text-fg-accent" aria-hidden="true" />
+                    <span>참고한 공식 가이드</span>
+                </div>
+            ) : null}
             {visibleSources.map((source, index) => {
                 // 첫 번째 출처는 점수가 가장 높은 '가장 관련 높은' 가이드 — 시각적으로 강조한다.
                 const isTopMatch = index === 0
@@ -433,6 +441,44 @@ function SourceLinks({
                     </motion.div>
                 )
             })}
+        </div>
+    )
+}
+
+// 지난 답의 출처는 한 줄로 접어 둔다(CX-12). 펼치면 같은 링크를 보인다 — 긴 대화에서 출처 카드가 쌓이지 않게 한다.
+function CollapsedSourceLinks({
+    sources,
+    onNavigate,
+}: {
+    sources?: ChatbotSource[]
+    onNavigate?: (click: ChatLinkClick) => void
+}) {
+    const [expanded, setExpanded] = useState(false)
+    const listId = useId()
+    const count = Math.min(navigableSources(sources).length, 2)
+    if (count === 0) return null
+
+    return (
+        <div className="mt-3 border-t border-line-hair pt-1.5">
+            <button
+                type="button"
+                onClick={() => setExpanded((value) => !value)}
+                aria-expanded={expanded}
+                aria-controls={listId}
+                className={cn(
+                    "inline-flex min-h-9 items-center gap-1.5 text-note text-fg-muted transition-colors hover:text-fg-ink",
+                    CHATBOT_HIT_AREA_CLASS
+                )}
+            >
+                <FileText className="h-3.5 w-3.5 text-fg-accent" aria-hidden="true" />
+                <span>참고한 공식 가이드 {count}개</span>
+                <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", expanded && "rotate-180")} aria-hidden="true" />
+            </button>
+            {expanded ? (
+                <div id={listId} className="mt-1.5">
+                    <SourceLinks sources={sources} onNavigate={onNavigate} showHeading={false} />
+                </div>
+            ) : null}
         </div>
     )
 }
@@ -522,6 +568,8 @@ interface MessageListProps {
     // 429 뒤 남은 대기 초. 다시 시도 버튼을 막고 남은 초를 보인다(CX-01).
     cooldownSeconds: number
     shouldReduceMotion: boolean | null
+    // 낮은 화면(키보드·가로 모드·글꼴 확대)에서는 환영 칩을 접어 둔다(CX-10).
+    compact?: boolean
     sendQuestion: (question: string) => Promise<void>
     // 실패한 말풍선 자리에서 같은 질문을 다시 받는다(사용자 말풍선은 그대로).
     onRetry: (messageId: string) => void
@@ -539,22 +587,35 @@ export const MessageList = memo(function MessageList({
     isSlow,
     cooldownSeconds,
     shouldReduceMotion,
+    compact = false,
     sendQuestion,
     onRetry,
     closeAfterInChatNavigation,
     bottomRef,
 }: MessageListProps) {
+    // 환영 칩을 낮은 화면에서 펼쳤는지. 접힌 동안은 '추천 질문 n개 보기' 한 줄만 보인다.
+    const [starterChipsExpanded, setStarterChipsExpanded] = useState(false)
+    const starterChipsId = useId()
+    // 지금 턴(마지막 질문 뒤)의 답에만 칩과 펼친 출처를 둔다. 지난 답의 칩은 지우고 출처는 접는다(CX-12).
+    const currentTurnStart = findCurrentTurnStart(messages)
+
     return (
         <div className="space-y-4">
             <AnimatePresence mode="popLayout" initial={false}>
                 {messages.map((message, index) => {
                     const isLast = index === messages.length - 1
                     const isAssistantStreaming = isLast && message.role === "assistant" && isStreaming
+                    const isCurrentTurn = index > currentTurnStart
+                    const suggestions = resolveVisibleSuggestions(message, { isCurrentTurn })
+                    const isWelcome = message.id === "welcome"
+                    const foldStarterChips = isWelcome && compact && !starterChipsExpanded
+                    // 오래된 말풍선은 layout 애니메이션을 끄고 재지 않는다 — 긴 대화에서 입력·스트리밍이 느려지지 않게(CX-13).
+                    const animateLayout = shouldAnimateMessageLayout(index, messages.length)
                     return (
                         <motion.div
                             key={message.id}
                             data-chat-message-id={message.id}
-                            layout="position"
+                            layout={animateLayout ? "position" : false}
                             initial={m({ opacity: 0, y: 10, scale: 0.98 }, shouldReduceMotion)}
                             animate={m({ opacity: 1, y: 0, scale: 1 }, shouldReduceMotion)}
                             exit={m({ opacity: 0, y: -6, scale: 0.98 }, shouldReduceMotion)}
@@ -573,14 +634,21 @@ export const MessageList = memo(function MessageList({
                                 )}
                             >
                                 {message.role === "assistant" ? <AssistantMeta message={message} /> : null}
+                                {/* 화자 표시(CX-27): 답에는 'Classin AI' 머리가 보이고, 사용자 말풍선은 화면 읽기에만 '내 질문'을 붙인다. */}
+                                {message.role === "user" ? <span className="sr-only">내 질문: </span> : null}
                                 <MessageContent
                                     content={message.content}
                                     role={message.role}
                                     isStreaming={isAssistantStreaming}
+                                    animateLayout={isAssistantStreaming}
                                 />
                                 {message.role === "assistant" ? (
                                     <>
-                                        <SourceLinks sources={message.sources} onNavigate={closeAfterInChatNavigation} />
+                                        {isCurrentTurn ? (
+                                            <SourceLinks sources={message.sources} onNavigate={closeAfterInChatNavigation} />
+                                        ) : (
+                                            <CollapsedSourceLinks sources={message.sources} onNavigate={closeAfterInChatNavigation} />
+                                        )}
                                         {message.interrupted ? (
                                             <p className="mt-2 border-t border-line-hair pt-2 text-note text-fg-muted">
                                                 {WIDGET_INTERRUPTED_NOTICE}
@@ -600,16 +668,39 @@ export const MessageList = memo(function MessageList({
                                                 </button>
                                             </div>
                                         ) : null}
-                                        {(message.suggestedQuestions?.length ?? 0) > 0 ? (
-                                            <div className="mt-3 space-y-2">
-                                                {message.id === "welcome" ? (
+                                        {suggestions.length > 0 && foldStarterChips ? (
+                                            <div className="mt-3">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setStarterChipsExpanded(true)
+                                                        // 이 버튼은 펼치면 사라지므로 첫 칩으로 포커스를 옮긴다.
+                                                        window.requestAnimationFrame(() => {
+                                                            document.getElementById(starterChipsId)?.querySelector<HTMLButtonElement>("button")?.focus()
+                                                        })
+                                                    }}
+                                                    aria-expanded={false}
+                                                    aria-controls={starterChipsId}
+                                                    className={cn(
+                                                        "inline-flex min-h-9 items-center gap-1.5 text-label text-fg-accent transition-colors hover:text-fg-ink",
+                                                        CHATBOT_HIT_AREA_CLASS
+                                                    )}
+                                                >
+                                                    <span>추천 질문 {suggestions.length}개 보기</span>
+                                                    <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
+                                                </button>
+                                            </div>
+                                        ) : null}
+                                        {suggestions.length > 0 && !foldStarterChips ? (
+                                            <div className="mt-3 space-y-2" id={isWelcome ? starterChipsId : undefined}>
+                                                {isWelcome ? (
                                                     <div className="flex items-center gap-1.5 px-0.5 text-[11px] font-bold text-[#615D59]">
                                                         <span className="h-1.5 w-1.5 rounded-full bg-fg-accent" />
                                                         추천 질문으로 바로 시작하기
                                                     </div>
                                                 ) : null}
                                                 <div className="grid gap-2">
-                                                    {message.suggestedQuestions?.slice(0, getSuggestionLimit(message)).map((question, index) => (
+                                                    {suggestions.map((question, index) => (
                                                         <motion.button
                                                             key={question}
                                                             type="button"

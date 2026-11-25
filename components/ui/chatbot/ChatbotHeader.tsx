@@ -20,9 +20,12 @@ interface ChatbotHeaderProps {
     // 사용자 질문이 하나라도 있을 때만 새 대화 버튼을 보인다.
     canStartNewChat: boolean
     onNewChat: () => void
+    // 낮은 화면(키보드·가로 모드·글꼴 확대)에서는 한 줄로 줄이고 부제를 감춘다(CX-10).
+    compact?: boolean
 }
 
 // 대화창 헤더: 상담 아이콘(생각 중 펄스 링), 제목, 새 대화·음소거·닫기 버튼.
+// 제목은 자르지 않고 줄을 바꾸며, 자리가 모자라면(글꼴 200% 등) 버튼 줄이 아래로 내려간다 — 제목 폭이 0 이 되지 않는다(CX-10).
 export function ChatbotHeader({
     isDeepConsultation,
     isSending,
@@ -33,58 +36,65 @@ export function ChatbotHeader({
     closeChatbot,
     canStartNewChat,
     onNewChat,
+    compact = false,
 }: ChatbotHeaderProps) {
     return (
         <motion.div
             variants={itemVariants}
             custom={shouldReduceMotion}
-            className="flex items-center justify-between border-b border-white/50 bg-white/20 px-4 py-3.5 backdrop-blur-xl"
+            className={cn(
+                "flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-white/50 bg-white/20 px-4 backdrop-blur-xl",
+                compact ? "py-2" : "py-3.5"
+            )}
         >
-            <div className="flex min-w-0 items-center gap-3">
-                <motion.div
-                    animate={(!isSending && !isStreaming) ? { scale: [1, 1.15, 1] } : {}}
-                    transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-                    className="relative flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-[14px] border border-white/70 bg-[linear-gradient(145deg,rgba(255,255,255,0.82),rgba(209,250,229,0.50))]"
-                >
-                    {isDeepConsultation ? (
-                        <>
-                            <Image
-                                src={DEEP_CONSULTATION_ICON_SRC}
-                                alt=""
-                                fill
-                                className="object-cover opacity-95"
-                                sizes="44px"
-                                aria-hidden
-                            />
-                            <span className="absolute inset-0 bg-fg-accent/2 mix-blend-soft-light" aria-hidden />
-                        </>
-                    ) : (
-                        <>
-                            <span className="absolute inset-1 rounded-[10px] bg-fg-accent/6" aria-hidden />
-                            <ClassInAIIcon size={22} variant="brand" className="relative text-fg-accent" />
-                        </>
-                    )}
-                    {/* 생각 중/스트리밍 중일 때 초록 펄스 링 렌더링 */}
-                    {(isSending || isStreaming) && !shouldReduceMotion && (
-                        <>
-                            <motion.span
-                                initial={{ scale: 0.8, opacity: 0.5 }}
-                                animate={{ scale: 1.4, opacity: 0 }}
-                                transition={{ duration: 1.6, repeat: Infinity, ease: "easeOut" }}
-                                className="absolute inset-0 rounded-[14px] border border-fg-accent/40 pointer-events-none"
-                            />
-                            <motion.span
-                                initial={{ scale: 0.8, opacity: 0.5 }}
-                                animate={{ scale: 1.7, opacity: 0 }}
-                                transition={{ duration: 1.6, repeat: Infinity, ease: "easeOut", delay: 0.6 }}
-                                className="absolute inset-0 rounded-[14px] border border-fg-accent/20 pointer-events-none"
-                            />
-                        </>
-                    )}
-                </motion.div>
+            <div className="flex min-w-0 flex-[1_1_9rem] items-center gap-3">
+                {/* 낮은 화면에서는 장식 아이콘을 빼 헤더를 버튼 높이 한 줄로 줄인다(CX-10). */}
+                {compact ? null : (
+                    <motion.div
+                        animate={(!isSending && !isStreaming && !shouldReduceMotion) ? { scale: [1, 1.15, 1] } : {}}
+                        transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+                        className="relative flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-[14px] border border-white/70 bg-[linear-gradient(145deg,rgba(255,255,255,0.82),rgba(209,250,229,0.50))]"
+                    >
+                        {isDeepConsultation ? (
+                            <>
+                                <Image
+                                    src={DEEP_CONSULTATION_ICON_SRC}
+                                    alt=""
+                                    fill
+                                    className="object-cover opacity-95"
+                                    sizes="44px"
+                                    aria-hidden
+                                />
+                                <span className="absolute inset-0 bg-fg-accent/2 mix-blend-soft-light" aria-hidden />
+                            </>
+                        ) : (
+                            <>
+                                <span className="absolute inset-1 rounded-[10px] bg-fg-accent/6" aria-hidden />
+                                <ClassInAIIcon size={22} variant="brand" className="relative text-fg-accent" />
+                            </>
+                        )}
+                        {/* 생각 중/스트리밍 중일 때 초록 펄스 링 렌더링 */}
+                        {(isSending || isStreaming) && !shouldReduceMotion && (
+                            <>
+                                <motion.span
+                                    initial={{ scale: 0.8, opacity: 0.5 }}
+                                    animate={{ scale: 1.4, opacity: 0 }}
+                                    transition={{ duration: 1.6, repeat: Infinity, ease: "easeOut" }}
+                                    className="absolute inset-0 rounded-[14px] border border-fg-accent/40 pointer-events-none"
+                                />
+                                <motion.span
+                                    initial={{ scale: 0.8, opacity: 0.5 }}
+                                    animate={{ scale: 1.7, opacity: 0 }}
+                                    transition={{ duration: 1.6, repeat: Infinity, ease: "easeOut", delay: 0.6 }}
+                                    className="absolute inset-0 rounded-[14px] border border-fg-accent/20 pointer-events-none"
+                                />
+                            </>
+                        )}
+                    </motion.div>
+                )}
                 <div className="min-w-0">
                     <div className="flex items-center gap-1.5">
-                        <h2 id="classin-chatbot-title" tabIndex={-1} className="truncate text-[15px] font-bold text-[#111110]">Classin 상담 가이드</h2>
+                        <h2 id="classin-chatbot-title" tabIndex={-1} className="min-w-0 break-keep text-[15px] font-bold text-[#111110]">Classin 상담 가이드</h2>
                         <motion.span
                             aria-hidden
                             className="h-2 w-2 shrink-0 rounded-full bg-fg-accent"
@@ -92,10 +102,10 @@ export function ChatbotHeader({
                             transition={shouldReduceMotion ? undefined : { duration: 2.6, repeat: Infinity, ease: "easeInOut" }}
                         />
                     </div>
-                    <p className="mt-0.5 truncate text-xs font-medium text-[#615D59]">운영·도입·CS 상담</p>
+                    {compact ? null : <p className="mt-0.5 break-keep text-xs font-medium text-[#615D59]">운영·도입·CS 상담</p>}
                 </div>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="ml-auto flex shrink-0 items-center gap-2">
                 {/* 새 대화(CX-02): 데스크톱은 글자를 함께, 휴대폰은 아이콘만. '다시 시도'의 RotateCcw 와 겹치지 않게 다른 아이콘을 쓴다. */}
                 {canStartNewChat ? (
                     <button

@@ -1,10 +1,10 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import Image from "next/image"
 import { usePathname } from "next/navigation"
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion"
-import { X } from "lucide-react"
+import { ArrowDown, X } from "lucide-react"
 
 import { ClassInAIIcon } from "@/components/ui/ClassInAIIcon"
 import { cn } from "@/lib/utils"
@@ -16,6 +16,7 @@ import {
     type ChatbotOpenDetail,
     type ChatbotOpenSource,
 } from "@/lib/chatbot/open-chatbot"
+import { useConsentBannerOpen } from "@/components/consent/banner-presence"
 import { ChatbotTeaser } from "@/components/ui/ChatbotTeaser"
 import { useChatbotTeaser } from "@/components/ui/useChatbotTeaser"
 import { isNearBottom } from "@/components/ui/chatbot-input-autosize"
@@ -30,12 +31,25 @@ import { ChatbotHeader, NewChatUndoBar } from "@/components/ui/chatbot/ChatbotHe
 import { ChatComposer, createComposerDraftStore } from "@/components/ui/chatbot/ChatComposer"
 import { MessageList } from "@/components/ui/chatbot/MessageList"
 import { DEEP_CONSULTATION_ICON_SRC, containerVariants, itemVariants } from "@/components/ui/chatbot/constants"
+import { findQuestionAnchorId, latestMessageSignature } from "@/components/ui/chatbot/message-visibility"
 import { useChatbotConversation } from "@/components/ui/chatbot/useChatbotConversation"
+import {
+    resolveMobilePanelLayout,
+    useChatbotViewport,
+    useIsMobileChatbotViewport,
+} from "@/components/ui/chatbot/useChatbotViewport"
+import { useChatbotHistoryEntry, useModalBackground } from "@/components/ui/chatbot/useMobileChatbotModal"
 
 // 챗봇 위젯 셸: 런처·패널 틀·열기/닫기·포커스·스크롤·티저를 맡는다.
 // 대화 상태는 chatbot/useChatbotConversation, 헤더·목록·입력 폼·상담 카드는 chatbot/ 아래 모듈이 그린다.
 
-const ANSWER_SCROLL_TOP_OFFSET_PX = 32
+// 새 답을 맞출 때 질문 말풍선 위에 남기는 여백.
+const ANSWER_SCROLL_TOP_OFFSET_PX = 12
+// 질문 말풍선이 목록 높이의 이 비율보다 길면 질문 대신 답 머리를 맞춘다(긴 질문이 답을 밀어내지 않게).
+const QUESTION_ANCHOR_MAX_RATIO = 0.5
+// 끝 말풍선의 머리가 목록 아래 끝에서 이만큼 안쪽까지 내려가 있으면 '보이지 않는 새 답'으로 본다.
+const JUMP_TO_LATEST_FOLD_SLACK_PX = 8
+const FINE_POINTER_QUERY = "(hover: hover) and (pointer: fine)"
 
 
 const hiddenPathPrefixes = [
@@ -51,17 +65,36 @@ function shouldHideChatbot(pathname: string | null) {
     return hiddenPathPrefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))
 }
 
+// 닫을 때 포커스를 돌려줄 수 있는 요소인지(연 버튼이 사라졌거나 가려졌으면 런처로 보낸다).
+function canReturnFocusTo(element: HTMLElement | null): element is HTMLElement {
+    if (!element || !element.isConnected) return false
+    if (element.closest("[inert]")) return false
+    if ((element as HTMLButtonElement).disabled) return false
+    return element.getClientRects().length > 0
+}
+
 export function FloatingChatbot() {
     const pathname = usePathname()
     const shouldReduceMotion = useReducedMotion()
     const [isOpen, setIsOpen] = useState(false)
     const [isAtBottom, setIsAtBottom] = useState(true)
+    const [showJumpToLatest, setShowJumpToLatest] = useState(false)
     const [muted, setMutedState] = useState(() => isMuted())
+    const rootRef = useRef<HTMLDivElement | null>(null)
     const bottomRef = useRef<HTMLDivElement | null>(null)
     const messagesContainerRef = useRef<HTMLDivElement | null>(null)
     const pendingAssistantScrollIdRef = useRef<string | null>(null)
     const inputRef = useRef<HTMLTextAreaElement | null>(null)
     const triggerRef = useRef<HTMLButtonElement | null>(null)
+    // 창을 연 요소(문서 '챗봇에게 묻기' 버튼·런처 등). 닫을 때 여기로 포커스를 돌려준다(CX-09).
+    const openerRef = useRef<HTMLElement | null>(null)
+    const returnFocusOnCloseRef = useRef(false)
+    // 답 안 링크로 다른 페이지로 가며 닫혔다 — 포커스를 옮기지 않고 history 항목도 걷지 않는다.
+    const closedByNavigationRef = useRef(false)
+    const hasUserMessagesRef = useRef(false)
+    // '새 답변' 버튼: 목록 끝의 지문과, 사용자가 맨 아래에서 마지막으로 본 지문.
+    const latestSignatureRef = useRef("")
+    const seenSignatureRef = useRef("")
     // 입력 중인 글. 셸이 저장소를 들고 있어 창을 닫았다 열어도 이어지고, 글자를 칠 때는 ChatComposer 만 다시 그려진다.
     const [draftStore] = useState(createComposerDraftStore)
 
@@ -99,11 +132,44 @@ export function FloatingChatbot() {
     const wasOpenRef = useRef(false)
     const teaserShownTrackedRef = useRef(false)
 
+    // 휴대폰(< 48rem)에서 대화창이 보이는 동안은 모달이다: 뒤쪽 inert·문서 스크롤 잠금·뒤로가기로 닫기(CX-09·CX-11).
+    // 휴대폰은 쿠키 배너가 떠 있으면 대화창을 숨기므로(site-base.css 동시 노출) 그동안은 모달로 다루지 않는다.
+    const isMobileViewport = useIsMobileChatbotViewport()
+    const consentBannerOpen = useConsentBannerOpen()
+    const isPanelVisible = isOpen && !hidden && !(isMobileViewport && consentBannerOpen)
+    const isModal = isPanelVisible && isMobileViewport
+    // 보이는 화면(키보드·가로 모드·글꼴 확대)에 맞춘 높이와 compact(CX-10).
+    const viewport = useChatbotViewport(isPanelVisible)
+    const compact = viewport?.compact ?? false
+    const mobilePanelLayout = isMobileViewport && viewport ? resolveMobilePanelLayout(viewport) : null
+    const hideLauncher = isOpen && Boolean(mobilePanelLayout?.hideLauncher)
+
+    useModalBackground(isModal, rootRef)
+    const { release: releaseHistoryEntry, abandon: abandonHistoryEntry } = useChatbotHistoryEntry({
+        active: isModal,
+        // 뒤로가기(휴대폰 쓸어 넘기기 포함)는 페이지를 떠나지 않고 창만 닫는다.
+        onBack: () => {
+            returnFocusOnCloseRef.current = true
+            setIsOpen(false)
+        },
+    })
+
+    // 닫기 버튼·Esc·딤·런처로 닫는다. 연 요소로 포커스를 돌려주고, 휴대폰에서 쌓은 history 항목을 걷는다.
+    const closeChatbot = useCallback(() => {
+        returnFocusOnCloseRef.current = true
+        releaseHistoryEntry()
+        setIsOpen(false)
+    }, [releaseHistoryEntry])
+
     const toggleMute = () => {
         const nextMute = !muted
         setMutedState(nextMute)
         setMuted(nextMute)
     }
+
+    useLayoutEffect(() => {
+        hasUserMessagesRef.current = hasUserMessages
+    }, [hasUserMessages])
 
     // 다이얼로그 열기/닫기 시점에 음향 효과 재생
     useEffect(() => {
@@ -114,39 +180,138 @@ export function FloatingChatbot() {
         }
     }, [isOpen])
 
+    // 열 때 연 요소를 기억한다(포커스를 옮기기 전에 읽는다).
+    useLayoutEffect(() => {
+        if (!isOpen) return
+        const active = document.activeElement
+        const dialog = document.getElementById("classin-chatbot-dialog")
+        openerRef.current =
+            active instanceof HTMLElement && active !== document.body && !dialog?.contains(active) ? active : null
+    }, [isOpen])
+
+    // 열면 정밀 포인터(마우스·트랙패드)는 입력창으로, 터치는 대화창 제목으로 포커스를 옮긴다.
+    // 터치에서 키보드가 갑자기 뜨지 않게 입력창에는 주지 않는다(CX-09). 티저·문서 CTA 가 미리 채운 글은 끝에 커서를 둔다(CX-24).
     useEffect(() => {
         if (!isOpen) return
 
         const frame = window.requestAnimationFrame(() => {
-            const shouldAutofocus = window.matchMedia("(hover: hover) and (pointer: fine)").matches
-            if (!shouldAutofocus) return
-            inputRef.current?.focus()
+            if (window.matchMedia(FINE_POINTER_QUERY).matches) {
+                const input = inputRef.current
+                if (!input) return
+                input.focus()
+                const end = input.value.length
+                input.setSelectionRange(end, end)
+                return
+            }
+            document.getElementById("classin-chatbot-title")?.focus({ preventScroll: true })
         })
 
         return () => window.cancelAnimationFrame(frame)
     }, [isOpen])
 
+    // 닫히면 연 요소(없거나 가려졌으면 런처)로 포커스를 돌려준다. 답 안 링크로 떠나며 닫힌 경우는 다음 페이지로 가는 중이라 두고,
+    // 쌓아 둔 history 항목도 걷지 않는다(걷으면 이동이 취소된다).
+    useEffect(() => {
+        if (isOpen) return
+        if (closedByNavigationRef.current) {
+            closedByNavigationRef.current = false
+            returnFocusOnCloseRef.current = false
+            abandonHistoryEntry()
+            return
+        }
+        if (!returnFocusOnCloseRef.current) return
+        returnFocusOnCloseRef.current = false
+        const frame = window.requestAnimationFrame(() => {
+            const opener = openerRef.current
+            openerRef.current = null
+            const target = canReturnFocusTo(opener) ? opener : triggerRef.current
+            target?.focus()
+        })
+        return () => window.cancelAnimationFrame(frame)
+    }, [isOpen, abandonHistoryEntry])
+
+    // 처음 열면(아직 질문이 없으면) 환영 말풍선 머리부터 보이게 맨 위에서 시작하고, 이어지는 대화는 맨 아래로 간다(CX-12).
     useEffect(() => {
         if (!isOpen) return
         const frame = window.requestAnimationFrame(() => {
-            bottomRef.current?.scrollIntoView({ behavior: shouldReduceMotion ? "auto" : "smooth" })
+            const container = messagesContainerRef.current
+            if (!container) return
+            if (!hasUserMessagesRef.current) {
+                container.scrollTop = 0
+                setIsAtBottom(isNearBottom(container))
+                return
+            }
+            container.scrollTo({ top: container.scrollHeight, behavior: shouldReduceMotion ? "auto" : "smooth" })
+            seenSignatureRef.current = latestSignatureRef.current
             setIsAtBottom(true)
         })
 
         return () => window.cancelAnimationFrame(frame)
     }, [isOpen, shouldReduceMotion])
 
+    // '새 답변' 버튼: 맨 아래가 아니고, 맨 아래에서 마지막으로 본 뒤 목록 끝이 바뀌었고, 끝 말풍선 머리가 화면 아래로 밀려나 있을 때만.
+    // 답을 질문 기준으로 맞춘 직후처럼 새 답 머리가 보이는 동안에는 띄우지 않는다(CX-12).
+    const updateJumpToLatest = useCallback(() => {
+        const container = messagesContainerRef.current
+        if (!container) return
+        if (isNearBottom(container)) {
+            seenSignatureRef.current = latestSignatureRef.current
+            setShowJumpToLatest(false)
+            return
+        }
+        const unseen = seenSignatureRef.current !== latestSignatureRef.current
+        const items = container.querySelectorAll<HTMLElement>("[data-chat-message-id]")
+        const last = items[items.length - 1]
+        const belowFold =
+            Boolean(last) &&
+            last.getBoundingClientRect().top > container.getBoundingClientRect().bottom - JUMP_TO_LATEST_FOLD_SLACK_PX
+        setShowJumpToLatest(unseen && belowFold)
+    }, [])
+
+    const latestSignature = useMemo(() => latestMessageSignature(messages), [messages])
+    useLayoutEffect(() => {
+        latestSignatureRef.current = latestSignature
+    }, [latestSignature])
+
+    useEffect(() => {
+        if (!isOpen) return
+        const frame = window.requestAnimationFrame(updateJumpToLatest)
+        return () => window.cancelAnimationFrame(frame)
+    }, [isOpen, latestSignature, updateJumpToLatest])
+
     const handleScroll = () => {
         const container = messagesContainerRef.current
         if (!container) return
 
         setIsAtBottom(isNearBottom(container))
+        updateJumpToLatest()
     }
 
+    const jumpToLatest = () => {
+        const container = messagesContainerRef.current
+        if (!container) return
+        pendingAssistantScrollIdRef.current = null
+        seenSignatureRef.current = latestSignatureRef.current
+        container.scrollTo({ top: container.scrollHeight, behavior: shouldReduceMotion ? "auto" : "smooth" })
+        setIsAtBottom(true)
+        setShowJumpToLatest(false)
+        // 버튼이 사라지므로 포커스를 옮겨 둔다: 정밀 포인터는 입력창, 터치는 대화 내용 영역.
+        if (window.matchMedia(FINE_POINTER_QUERY).matches && inputRef.current) {
+            inputRef.current.focus()
+        } else {
+            container.focus({ preventScroll: true })
+        }
+    }
+
+    // 맨 아래를 보고 있으면 답을 받는 동안 따라간다. 마지막 meta(출처·칩·피드백)는 보내기가 끝나는 렌더와 함께 그려지므로
+    // 끝난 직후 한 번 더 따라가 새 칩이 화면 밖에 남지 않게 한다.
+    const followWasSendingRef = useRef(false)
     useEffect(() => {
         if (!isOpen) return
+        const wasSending = followWasSendingRef.current
+        followWasSendingRef.current = isSending
 
-        if (isSending && isAtBottom) {
+        if ((isSending || wasSending) && isAtBottom) {
             const container = messagesContainerRef.current
             if (container) {
                 container.scrollTop = container.scrollHeight
@@ -154,6 +319,8 @@ export function FloatingChatbot() {
         }
     }, [messages, isSending, isAtBottom, isOpen])
 
+    // 새 답은 그 답을 낳은 질문 말풍선을 목록 위쪽에 맞춰 질문과 답 머리가 함께 보이게 한다(CX-12).
+    // 질문이 너무 길면 답 머리를 맞춘다.
     useEffect(() => {
         if (!isOpen) return
         const messageId = pendingAssistantScrollIdRef.current
@@ -163,12 +330,19 @@ export function FloatingChatbot() {
         const message = container?.querySelector<HTMLElement>(`[data-chat-message-id="${messageId}"]`)
         if (!container || !message || !isAtBottom) return
 
+        const questionId = findQuestionAnchorId(messages, messageId)
+        const question = questionId
+            ? container.querySelector<HTMLElement>(`[data-chat-message-id="${questionId}"]`)
+            : null
+        const target =
+            question && question.offsetHeight <= container.clientHeight * QUESTION_ANCHOR_MAX_RATIO ? question : message
+
         const containerRect = container.getBoundingClientRect()
-        const messageRect = message.getBoundingClientRect()
-        const nextTop = container.scrollTop + messageRect.top - containerRect.top - ANSWER_SCROLL_TOP_OFFSET_PX
+        const targetRect = target.getBoundingClientRect()
+        const nextTop = container.scrollTop + targetRect.top - containerRect.top - ANSWER_SCROLL_TOP_OFFSET_PX
 
         container.scrollTop = Math.max(0, nextTop)
-        const alignedTop = message.getBoundingClientRect().top - container.getBoundingClientRect().top
+        const alignedTop = target.getBoundingClientRect().top - container.getBoundingClientRect().top
         if (!isSending || alignedTop <= ANSWER_SCROLL_TOP_OFFSET_PX + 2) {
             pendingAssistantScrollIdRef.current = null
         }
@@ -179,15 +353,14 @@ export function FloatingChatbot() {
         if (!isOpen) return
 
         const handleKeyDown = (event: KeyboardEvent) => {
-            if (event.key === "Escape") {
-                setIsOpen(false)
-                triggerRef.current?.focus()
+            if (event.key === "Escape" && !event.isComposing) {
+                closeChatbot()
             }
         }
 
         document.addEventListener("keydown", handleKeyDown)
         return () => document.removeEventListener("keydown", handleKeyDown)
-    }, [isOpen])
+    }, [isOpen, closeChatbot])
 
     useEffect(() => {
         const handler = (event: Event) => {
@@ -220,7 +393,7 @@ export function FloatingChatbot() {
     // 새 대화 버튼·되돌리기 버튼은 누른 뒤 사라지므로 포커스를 옮겨 둔다(CX-02).
     const focusAfterConversationReset = () => {
         window.requestAnimationFrame(() => {
-            if (window.matchMedia("(hover: hover) and (pointer: fine)").matches && inputRef.current) {
+            if (window.matchMedia(FINE_POINTER_QUERY).matches && inputRef.current) {
                 inputRef.current.focus()
                 return
             }
@@ -238,7 +411,9 @@ export function FloatingChatbot() {
         if (!undoNewChat()) return
         focusAfterConversationReset()
         window.requestAnimationFrame(() => {
-            bottomRef.current?.scrollIntoView({ behavior: "auto" })
+            const container = messagesContainerRef.current
+            if (container) container.scrollTop = container.scrollHeight
+            seenSignatureRef.current = latestSignatureRef.current
             setIsAtBottom(true)
         })
     }
@@ -248,20 +423,18 @@ export function FloatingChatbot() {
     const closeAfterInChatNavigation = useCallback((click: ChatLinkClick) => {
         const isDesktop = window.matchMedia(CHATBOT_DESKTOP_MEDIA_QUERY).matches
         if (!shouldCloseChatbotAfterLinkClick(click, isDesktop)) return
+        closedByNavigationRef.current = true
         setIsOpen(false)
     }, [])
 
     if (hidden) return null
 
-    function closeChatbot() {
-        setIsOpen(false)
-        window.requestAnimationFrame(() => {
-            triggerRef.current?.focus()
-        })
-    }
-
     return (
-        <div className="pointer-events-none fixed inset-x-0 bottom-0 z-(--z-chatbot) flex flex-col items-end px-3 pb-[calc(1rem+env(safe-area-inset-bottom))] md:inset-x-auto md:bottom-6 md:right-6 md:px-0 md:pb-0">
+        <div
+            ref={rootRef}
+            style={mobilePanelLayout?.wrapperStyle}
+            className="pointer-events-none fixed inset-x-0 bottom-0 z-(--z-chatbot) flex flex-col items-end px-3 pb-[calc(1rem+env(safe-area-inset-bottom))] md:inset-x-auto md:bottom-6 md:right-6 md:px-0 md:pb-0"
+        >
             {/* 모바일 화면 백드롭 딤/블러 오버레이 */}
             <AnimatePresence>
                 {isOpen && (
@@ -272,7 +445,7 @@ export function FloatingChatbot() {
                         exit={{ opacity: 0 }}
                         transition={{ duration: 0.18 }}
                         onClick={closeChatbot}
-                        className="pointer-events-auto fixed inset-0 z-0 bg-black/20 backdrop-blur-[2px] md:hidden"
+                        className="pointer-events-auto fixed inset-0 z-0 touch-none bg-black/20 backdrop-blur-[2px] md:hidden"
                         aria-hidden="true"
                     />
                 )}
@@ -283,14 +456,16 @@ export function FloatingChatbot() {
                     <motion.div
                         id="classin-chatbot-dialog"
                         role="dialog"
-                        aria-modal="false"
+                        // 휴대폰은 화면을 덮는 모달(뒤쪽 inert), 데스크톱은 페이지 옆에 떠 있는 비모달 창이다(CX-09).
+                        aria-modal={isModal ? "true" : "false"}
                         aria-labelledby="classin-chatbot-title"
                         variants={containerVariants}
                         custom={shouldReduceMotion}
                         initial="initial"
                         animate="animate"
                         exit="exit"
-                        className="pointer-events-auto relative z-10 mb-3 flex h-[min(680px,calc(100svh-5.5rem))] w-full max-w-none origin-bottom overflow-hidden rounded-[26px] border border-white/60 bg-[linear-gradient(152deg,rgba(255,255,255,0.88)_0%,rgba(236,253,245,0.76)_50%,rgba(246,245,244,0.82)_100%)] text-[#111110] backdrop-blur-2xl md:mb-4 md:h-[min(640px,calc(100svh-8rem))] md:w-[424px] md:max-w-[424px] md:origin-bottom-right"
+                        style={mobilePanelLayout?.panelStyle}
+                        className="pointer-events-auto relative z-10 mb-3 flex h-[min(680px,calc(100svh-5.5rem))] w-full max-w-[36rem] origin-bottom overflow-hidden rounded-[26px] border border-white/60 bg-[linear-gradient(152deg,rgba(255,255,255,0.88)_0%,rgba(236,253,245,0.76)_50%,rgba(246,245,244,0.82)_100%)] text-[#111110] backdrop-blur-2xl md:mb-4 md:h-[min(640px,calc(100svh-8rem))] md:w-[424px] md:max-w-[424px] md:origin-bottom-right"
                     >
                         <div className="pointer-events-none absolute inset-x-5 top-0 h-px bg-white/80" aria-hidden />
 
@@ -306,34 +481,57 @@ export function FloatingChatbot() {
                                 closeChatbot={closeChatbot}
                                 canStartNewChat={hasUserMessages}
                                 onNewChat={handleNewChat}
+                                compact={compact}
                             />
                             {canUndoNewChat ? <NewChatUndoBar onUndo={handleUndoNewChat} /> : null}
 
                             {/* 대화 내용 목록 (Staggered Item 2) */}
-                            <motion.div
-                                ref={messagesContainerRef}
-                                // 목록 스크롤을 framer 레이아웃 측정에 넣는다. 없으면 입력창이 커질 때 맞춘 맨 아래 위치를
-                                // 메시지 layout 애니메이션이 스크롤 이동으로 오해해 되돌린다.
-                                layoutScroll
-                                onScroll={handleScroll}
-                                variants={itemVariants}
-                                custom={shouldReduceMotion}
-                                className="min-h-0 flex-1 overflow-y-auto px-3.5 py-4 [scrollbar-gutter:stable] [scrollbar-width:thin] md:px-4 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-fg-accent/25 [&::-webkit-scrollbar-track]:bg-transparent"
-                            >
-                                <MessageList
-                                    messages={messages}
-                                    sessionId={sessionId}
-                                    isSending={isSending}
-                                    isStreaming={isStreaming}
-                                    isSlow={isSlow}
-                                    cooldownSeconds={cooldownSeconds}
-                                    shouldReduceMotion={shouldReduceMotion}
-                                    sendQuestion={sendQuestion}
-                                    onRetry={retryTurn}
-                                    closeAfterInChatNavigation={closeAfterInChatNavigation}
-                                    bottomRef={bottomRef}
-                                />
-                            </motion.div>
+                            <div className="relative flex min-h-0 flex-1 flex-col">
+                                <motion.div
+                                    ref={messagesContainerRef}
+                                    // 목록 스크롤을 framer 레이아웃 측정에 넣는다. 없으면 입력창이 커질 때 맞춘 맨 아래 위치를
+                                    // 메시지 layout 애니메이션이 스크롤 이동으로 오해해 되돌린다.
+                                    layoutScroll
+                                    onScroll={handleScroll}
+                                    variants={itemVariants}
+                                    custom={shouldReduceMotion}
+                                    // 대화 기록 영역(CX-27). 새 답은 셸의 안내 영역이 한 번 읽으므로 여기서는 낭독하지 않는다(aria-live off).
+                                    // '새 답변' 버튼을 누른 뒤 포커스를 받을 수 있게 tabIndex=-1.
+                                    role="log"
+                                    aria-label="대화 내용"
+                                    aria-live="off"
+                                    tabIndex={-1}
+                                    // 목록 끝에서 더 굴려도 뒤 페이지로 스크롤이 넘어가지 않는다(CX-11).
+                                    className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3.5 py-4 [scrollbar-gutter:stable] [scrollbar-width:thin] md:px-4 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-fg-accent/25 [&::-webkit-scrollbar-track]:bg-transparent"
+                                >
+                                    <MessageList
+                                        messages={messages}
+                                        sessionId={sessionId}
+                                        isSending={isSending}
+                                        isStreaming={isStreaming}
+                                        isSlow={isSlow}
+                                        cooldownSeconds={cooldownSeconds}
+                                        shouldReduceMotion={shouldReduceMotion}
+                                        compact={compact}
+                                        sendQuestion={sendQuestion}
+                                        onRetry={retryTurn}
+                                        closeAfterInChatNavigation={closeAfterInChatNavigation}
+                                        bottomRef={bottomRef}
+                                    />
+                                </motion.div>
+                                {/* 위로 올려 읽는 동안 새 답이 아래에 오면 한 번에 내려가는 버튼(CX-12). 누름 영역 44px. */}
+                                {showJumpToLatest ? (
+                                    <button
+                                        type="button"
+                                        onClick={jumpToLatest}
+                                        aria-label="새 답변으로 이동"
+                                        className="absolute bottom-3 left-1/2 z-10 inline-flex min-h-11 -translate-x-1/2 items-center gap-1.5 rounded-(--radius-control) border border-line-strong bg-surface-sheet px-4 text-label text-fg-ink transition-colors hover:border-fg-accent hover:text-fg-accent"
+                                    >
+                                        <ArrowDown className="h-4 w-4" aria-hidden />
+                                        새 답변
+                                    </button>
+                                ) : null}
+                            </div>
 
                             {/* 하단 폼 및 에러 (Staggered Item 3) */}
                             <ChatComposer
@@ -373,11 +571,14 @@ export function FloatingChatbot() {
                         onDismiss={() => {
                             trackEvent("chatbot_teaser_dismissed", { path: pathname })
                             chatbotTeaser.dismiss()
+                            // 닫기 버튼이 사라지므로 런처로 포커스를 옮긴다(CX-09).
+                            triggerRef.current?.focus()
                         }}
                     />
                 ) : null}
             </AnimatePresence>
-            <div className="pointer-events-auto relative flex h-14 w-14 items-center justify-center md:h-16 md:w-16">
+            {/* 낮은 화면·키보드가 열린 휴대폰에서는 런처를 감춰 목록 높이를 되찾는다(헤더에 닫기 버튼이 있다, CX-10). */}
+            <div className={cn("pointer-events-auto relative flex h-14 w-14 items-center justify-center md:h-16 md:w-16", hideLauncher && "hidden")}>
                 {!isOpen && !shouldReduceMotion ? (
                     <motion.span
                         aria-hidden
@@ -393,8 +594,12 @@ export function FloatingChatbot() {
                     whileHover={shouldReduceMotion ? undefined : { scale: 1.05 }}
                     whileTap={m(CHATBOT_MOTION.tap, shouldReduceMotion)}
                     onClick={() => {
+                        if (isOpen) {
+                            closeChatbot()
+                            return
+                        }
                         openSourceRef.current = "button"
-                        setIsOpen((current) => !current)
+                        setIsOpen(true)
                     }}
                     className={cn(
                         "relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-full transition-all duration-200 md:h-16 md:w-16",
