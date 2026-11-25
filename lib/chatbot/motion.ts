@@ -53,12 +53,15 @@ export const CHATBOT_MOTION = {
         damping: 32,
         mass: 0.8,
     },
-    // 스트리밍 글자 흐름 속도(lib/chatbot/stream-reveal.ts). 60fps 기준 최소 120자/초.
+    // 답변이 말하듯 흐르는 속도(lib/chatbot/stream-reveal.ts): 어절 단위, 문장 끝에서 잠깐 멈춤,
+    // 긴 답변은 전체가 대략 2.5초(+짧은 멈춤) 안에 끝나도록 처음부터 빨라진다.
     streamReveal: {
-        minCharsPerFrame: 2,
-        maxCharsPerFrame: 24,
-        followRate: 0.08,
-        flushRate: 0.22,
+        charsPerSecond: 70,
+        maxCatchUpSeconds: 2.5,
+        sentencePauseMs: 150,
+        lineBreakPauseMs: 230,
+        maxWordLength: 14,
+        maxWordsPerStep: 3,
     },
     // 답변이 통째로 다시 쓰일 때(preview→final replace) 크로스페이드
     rewriteFade: {

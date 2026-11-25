@@ -44,7 +44,7 @@ import {
 import { ChatbotTeaser } from "@/components/ui/ChatbotTeaser"
 import { useChatbotTeaser } from "@/components/ui/useChatbotTeaser"
 import { CHATBOT_MOTION, m } from "@/lib/chatbot/motion"
-import { continuesShownText, nextRevealLength } from "@/lib/chatbot/stream-reveal"
+import { advanceReveal, continuesShownText } from "@/lib/chatbot/stream-reveal"
 import {
     isMuted,
     setMuted,
@@ -537,8 +537,8 @@ function Caret({ shouldReduceMotion }: { shouldReduceMotion: boolean | null }) {
 }
 
 /**
- * 스트리밍 답변을 일정한 속도로 흘려 보여준다. 네트워크 청크가 몰려 와도 글자가 툭툭 끊기지 않고,
- * 스트림이 끝나면 남은 글자를 빠르게 마저 보여준다. 이미 보여준 앞부분과 이어지지 않는 텍스트가
+ * 답변을 말하듯 흘려 보여준다 — 어절 단위로 나타나고 문장 끝에서 잠깐 멈춘다(lib/chatbot/stream-reveal.ts).
+ * 네트워크 청크가 몰려 오거나 한 번에 통째로 와도 같은 리듬으로 흐른다. 이미 보여준 앞부분과 이어지지 않는 텍스트가
  * 오면(preview→final replace) 한 번에 바꾸고 revision 을 올려 크로스페이드한다. 동작 줄이기에서는 즉시 전부.
  */
 function useStreamReveal(
@@ -551,6 +551,10 @@ function useStreamReveal(
         source: text,
         shown: streaming || revealFromStart ? 0 : text.length,
         revision: 0,
+        /** 문장 끝에서 이 시각(performance.now 기준)까지 쉬었다가 다음 어절로. 새 청크가 와도 연장되지 않는다. */
+        pauseUntil: 0,
+        /** 직전 어절을 보여준 시각 — 다음 어절까지 걸린 시간을 여기서부터 잰다(리렌더 지연을 버리지 않는다). */
+        steppedAt: 0,
     }))
 
     // 이전 렌더의 텍스트와 비교해 파생 상태를 맞춘다(렌더 중 setState — React 권장 패턴).
@@ -558,24 +562,52 @@ function useStreamReveal(
     if (text !== reveal.source) {
         current = continuesShownText(reveal.source, text, reveal.shown)
             ? { ...reveal, source: text }
-            : { source: text, shown: text.length, revision: reveal.revision + 1 }
+            : { source: text, shown: text.length, revision: reveal.revision + 1, pauseUntil: 0, steppedAt: 0 }
         setReveal(current)
     }
 
     const target = current.source.length
     const shownLength = current.shown
+    const pauseUntil = current.pauseUntil
+    const steppedAt = current.steppedAt
 
     useEffect(() => {
         if (shouldReduceMotion || shownLength >= target) return
-        const frame = window.requestAnimationFrame(() => {
+        let frame = 0
+        // 쉬는 시간이 있었다면 쉰 뒤부터, 아니면 직전 어절을 보여준 시각부터 잰다.
+        let since = Math.max(steppedAt, pauseUntil)
+        const tick = (now: number) => {
+            if (!since) since = now
+            // 한 번에 나오는 어절 수는 advanceReveal 이 제한한다(청크를 기다리다 재개해도 쏟아지지 않음).
+            const elapsed = Math.max(0, now - since)
+            const step = advanceReveal(text, shownLength, elapsed)
+            if (step.shown === shownLength) {
+                frame = window.requestAnimationFrame(tick)
+                return
+            }
+            // 문장 끝이면 그 문장까지 보여주고, 다음 effect 가 pauseMs 만큼 숨을 고른 뒤 이어 간다.
             setReveal((previous) =>
                 previous.source === text
-                    ? { ...previous, shown: nextRevealLength(previous.source, previous.shown, streaming) }
+                    ? {
+                          ...previous,
+                          shown: step.shown,
+                          pauseUntil: step.pauseMs > 0 ? now + step.pauseMs : 0,
+                          steppedAt: now,
+                      }
                     : previous
             )
-        })
-        return () => window.cancelAnimationFrame(frame)
-    }, [shownLength, target, text, streaming, shouldReduceMotion])
+        }
+        const start = () => {
+            frame = window.requestAnimationFrame(tick)
+        }
+        const wait = pauseUntil - performance.now()
+        const pauseTimer = wait > 0 ? window.setTimeout(start, wait) : 0
+        if (!pauseTimer) start()
+        return () => {
+            window.cancelAnimationFrame(frame)
+            if (pauseTimer) window.clearTimeout(pauseTimer)
+        }
+    }, [shownLength, target, text, pauseUntil, steppedAt, shouldReduceMotion])
 
     const visibleLength = shouldReduceMotion ? target : shownLength
     return {
