@@ -337,6 +337,22 @@ export interface DocCardAnswer {
   lead?: AnswerLead
   leadBasis?: SingleSentenceRef
   sentences: SentenceRef[]
+  /**
+   * 결론 문장(R2 두괄식, 계획 §4.4 C). sentences 안의 한 문장을 맨 앞으로 옮긴다(문장 집합은 같고 순서만 바뀐다). 아직 렌더하지 않는다(B4).
+   * V-13(a): sentences 에 있어야 한다.
+   */
+  first?: SingleSentenceRef
+  /** 새로 쓴 결론 한 줄(≤60자, 근거 문장 토큰 ⊂ 카드 문장 토큰, V-13 c~e). 카드 글을 덮지 않는다. 아직 렌더하지 않는다(B4). */
+  headline?: CardHeadline
+}
+
+/** 카드 결론 한 줄(R2 headline 파일럿). 근거 문장과 만든 기록을 같이 둔다. */
+export interface CardHeadline {
+  text: string
+  /** 결론이 기대는 카드 문장(하나 이상). */
+  basis: SingleSentenceRef[]
+  /** 만든 기록(audit/<batch>.jsonl#<id>): 만든 방법·검사 결과. */
+  auditRef?: string
 }
 
 export interface DocAnswerCard extends AnswerCardBase {
@@ -755,10 +771,55 @@ export interface AnswerIndexCandidate {
 }
 
 export interface AnswerIndexSegmentDecision {
+  /** 조각 글(원문을 자른 것). */
   text: string
   kind: AnswerIndexDecisionKind
   card: string | null
   conf: number
+  /**
+   * 이 조각을 누가 정했나: index(결정형 — 조각 판정·원문 판정·다른 조각과 같은 카드), assist(모델 고르기, B3), none(못 정함).
+   * 없으면 card 가 있을 때 index 로 본다.
+   */
+  by?: "index" | "assist" | "none"
+  /**
+   * 결정형 안에서의 출처: segment(조각 판정), whole(원문 판정을 이 조각에 붙임), shared(다른 조각이 답한 카드가 이 조각의 1위),
+   * overflow(최대 조각 수를 넘어 답하지 않음).
+   */
+  source?: "segment" | "whole" | "shared" | "overflow"
+  /** 주제를 이어 붙여 점수를 낸 글(주어를 잃은 조각, "요금은요?" → "<앞 조각 주제> 요금은요?"). 답 글에는 쓰지 않는다. */
+  scoringText?: string
+  /** 이 조각에 걸린 없는 개념(묻는 대상일 때만). */
+  absentHit?: string | null
+  /** 정해 둔 답 승격으로 정한 조각(조각 글로 센 옛 정규식 표, 또는 원문 승격을 이 조각에 붙임). */
+  rescue?: "vote" | null
+}
+
+/**
+ * 주의 표시(R2 낱말 장치: 낱말 하나는 결정이 아니라 표시). 결정형이 알아본 신호를 모델 지시문·측정에 넘긴다.
+ * absent: 없는 개념 형태가 질문에 있음(target 이면 그 자리가 묻는 대상 — 공백·꼬리 판정에 쓴다, 아니면 수식어·비교·제외 문맥이라 쓰지 않는다).
+ * policy_topic·handoff 는 앞단(service.ts, B5)이 채운다.
+ */
+export interface AnswerIndexCaution {
+  kind: "absent" | "policy_topic" | "handoff"
+  /** absent 개념 id 등. */
+  id: string | null
+  /** 맞춘 글(형태). */
+  form: string | null
+  /** 그 자리가 묻는 대상인지. */
+  target: boolean
+  /** target 이 아니면 그 까닭(modifier·comparison·exclusion·adjectival). */
+  reason?: string | null
+}
+
+/** 흔적에 싣는 조각 하나(사양 §3.7 segments[], 계획 §2.6). */
+export interface AnswerIndexTraceSegment {
+  text: string
+  kind: AnswerIndexDecisionKind
+  card: string | null
+  by: "index" | "assist" | "none"
+  source?: AnswerIndexSegmentDecision["source"]
+  /** 답 글에서 이 조각 자리를 '못 답함' 알림으로 채우는지(answer·gap 이 아니면 true). */
+  notice: boolean
 }
 
 export interface AnswerIndexDecision {
@@ -789,6 +850,8 @@ export interface AnswerIndexDecision {
    * 그 카드로 답했으면 "vote". 흔적에는 decidedBy "index:vote-rescue" 로 남는다.
    */
   rescue?: "vote" | null
+  /** 주의 표시(없는 개념 형태 등). 없거나 빈 배열이면 신호 없음. */
+  cautions?: AnswerIndexCaution[]
 }
 
 /** ChatbotCore.answerIndex 에 싣는 흔적. 응답에는 싣지 않는다. */
@@ -801,7 +864,10 @@ export interface AnswerIndexTrace {
   conf: number | null
   unexplained: string[]
   absentHit: string | null
+  /** 조각 수(나누지 않았으면 1, 색인이 정하지 않았으면 0). 조각별 판정은 parts. */
   segments: number
+  /** 질문을 나눠 정했을 때 조각별 판정(질문 순서). 나누지 않았으면 없다. */
+  parts?: AnswerIndexTraceSegment[]
   /**
    * 고른 카드 id(answer 는 답 카드, gap 은 공백 카드 — absentHit 으로 간 gap 이면 absent.gapCard).
    * 측정 스크립트가 decidedBy index:<card>·index-gap:<card> 로 쓴다(scripts/lib/chatbot-live-eval-checks.ts).

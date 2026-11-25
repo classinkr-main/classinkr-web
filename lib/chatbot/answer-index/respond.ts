@@ -532,9 +532,11 @@ export function buildAnswerIndexCore(
   let tailed = false
   let unanswered = false
 
-  // 두 조각: 다른 카드로 답한 조각을 잇고, 못 찾은 조각은 한 줄(full 일 때만).
+  // 두 조각: 다른 카드로 답한 조각을 잇고, 못 찾은 조각은 한 줄(full 일 때만). 같은 카드는 한 번만 잇는다(조각 둘이 같은 카드를 가리킬 수 있다).
+  const rendered = new Set<string>(decision.card ? [decision.card] : [])
   for (const segment of decision.segments ?? []) {
-    if (segment.card && segment.card === decision.card) continue
+    if (segment.card && rendered.has(segment.card) && (segment.kind === "answer" || segment.kind === "gap")) continue
+    if (segment.card) rendered.add(segment.card)
     const segmentAt = segment.card ? ctx.index.cardById.get(segment.card) : undefined
     const segmentResult =
       (segment.kind === "answer" || segment.kind === "gap") && segmentAt !== undefined

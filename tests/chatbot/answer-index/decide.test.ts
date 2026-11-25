@@ -127,9 +127,20 @@ describe("결정 규칙(§3.5)", () => {
   })
 
   it("없는 개념: 나머지를 1위가 충분히 덮고 답할 만하면 답 + 없는 부분 꼬리", () => {
+    const question = "ISMS 쓰는 학원도 녹화 다시보기 어디서 봐요"
+    const decision = decide(index, question)
+    expect(decision).toMatchObject({ kind: "answer", card: CARDS.replay, absentHit: "A_isms", absentTail: "A_isms", partial: true, segments: null })
+    expect(decidedByFromAnswerIndex(trace(question))).toBe(`index-partial:${CARDS.replay}`)
+  })
+
+  it("없는 개념을 따로 묻는 조각은 그 조각 자리에 공백 카드로 답한다(R2 나누기 v2)", () => {
     const question = "녹화 다시보기 어디서 봐요 ISMS 인증도 있나요"
     const decision = decide(index, question)
-    expect(decision).toMatchObject({ kind: "answer", card: CARDS.replay, absentHit: "A_isms", absentTail: "A_isms", partial: true })
+    expect(decision).toMatchObject({ kind: "answer", card: CARDS.replay, absentHit: "A_isms", partial: true })
+    expect(decision.segments?.map((segment) => [segment.kind, segment.card])).toEqual([
+      ["answer", CARDS.replay],
+      ["gap", CARDS.gapCert],
+    ])
     expect(decidedByFromAnswerIndex(trace(question))).toBe(`index-partial:${CARDS.replay}`)
   })
 

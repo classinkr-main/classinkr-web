@@ -310,10 +310,28 @@ export function compileAbsent(items: readonly AbsentConcept[]): CompiledAbsent {
   return { byId, matcher: new FormMatcher(entries) }
 }
 
-/** 없는 개념 맞춤(위치 순). */
+/**
+ * 관형형 끝(R2 B2): 형태 바로 뒤에 붙어 그 낱말을 끝내는 '한·인·된·할·하는·되는·적인·스러운'(수상한 결제·채용한 강사·베타인 기능).
+ * 끝 경계 글자 표(END_BOUNDARY_CHARS)는 '한'을 조사·어미 첫 글자로 보아 짧은 형태를 맞추지만, 낱말이 거기서 끝나면 그 형태는 뒤 명사를
+ * 꾸미는 말이지 묻는 대상이 아니다. 없는 개념(absent) 맞춤에만 쓴다(개념 사전은 '확인한 결과'의 '확인'처럼 붙어야 한다).
+ */
+const ADJECTIVAL_ENDINGS = ["스러운", "적인", "하는", "되는", "한", "인", "된", "할"]
+
+export function adjectivalEndingAt(compact: string, wordStart: readonly boolean[], end: number): string | null {
+  if (end >= compact.length || wordStart[end]) return null
+  for (const ending of ADJECTIVAL_ENDINGS) {
+    const stop = end + ending.length
+    if (compact.startsWith(ending, end) && (stop >= compact.length || wordStart[stop])) return ending
+  }
+  return null
+}
+
+/** 없는 개념 맞춤(위치 순). 관형형 끝이 붙은 맞춤(adjectivalEndingAt)은 버린다. */
 export function matchAbsent(normalized: string, absent: CompiledAbsent): AbsentMatch[] {
   if (absent.matcher.size === 0 || !normalized) return []
+  const { compact, wordStart } = compactWithBoundaries(normalized)
   return findForms(absent.matcher, normalized)
+    .filter((match) => adjectivalEndingAt(compact, wordStart, match.end) === null)
     .map((match) => ({ id: match.owner, form: match.form, start: match.start, end: match.end }))
     .sort((a, b) => a.start - b.start || b.end - a.end || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
 }
