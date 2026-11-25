@@ -22,6 +22,7 @@ import {
   type GeminiOperation,
 } from "./gemini-transport"
 import type { AnswerCardPickOutcome } from "./answer-index/assist"
+import { splitQuestion } from "./answer-index/normalize"
 import type { ChatbotSource } from "./service"
 import {
   getGroundingText,
@@ -392,6 +393,14 @@ const THIRD_PARTY_ADOPTION_REQUIREMENT =
 // 기본 지식으로 답할 수 있는 범위만 답하고, 나머지는 확인되지 않았다고 밝히게 한다.
 const WEAK_GROUNDING_REQUIREMENT =
   "근거 없음 주의: 이 질문에 맞는 내부 검증 정보가 없다. 질문이 묻는 기능·설정·목록이 있는지 확인되지 않았으면 있다고도 없다고도 말하지 말고, 첫 문장에서 '공개 안내에서 확인되지 않았어요'라고 밝혀. 기능 목록·메뉴 이름·옵션·단축키·지원 형식·수치·사례·도입 추세 같은 세부를 새로 지어내지 마. 시스템 지시에 있는 Classin 기본 지식(제품 정체성, 도입 흐름, 수업 운영 흐름)을 묻는 질문일 때만 그 범위에서 한두 문장으로 답해. 끝에는 확인 질문 하나 또는 상담 연결을 안내해."
+
+// R2 B3(운영 담당 지시 "질문 2개를 한 번에 하면 하나로 쏠린다"): 질문이 여러 물음으로 나뉘면(답 색인 나누기 v2) 순서대로 모두 답하게 한다.
+// 나뉘지 않는 질문의 프롬프트는 그대로다(이 줄은 나뉜 질문에만 붙는다). 머리 줄 【주제】는 결정 4, 상담 안내 한 줄은 결정 2.
+export function multiQuestionRequirement(question: string): string | null {
+  const count = splitQuestion(question).segments.length
+  if (count < 2) return null
+  return `질문 여러 개 주의: 이 질문에는 물음이 ${count}개 있다. 하나만 답하지 말고 질문 순서대로 모두 답해. 물음마다 【주제】 머리 줄 한 줄을 쓰고 그다음 첫 문장에 결론을 쓴다. 근거에 없는 물음은 빼지 말고 그 물음 자리에 '공개 안내에 없어요'라고 밝힌다. 길이는 물음마다 4줄 이내(전체 10줄 이내)로 하고, 상담 안내는 필요할 때만 맨 끝에 한 줄.`
+}
 
 interface GenerateArgs {
   /** PII 가 제거된 질문 텍스트 */
@@ -1449,6 +1458,7 @@ export function buildFinalAnswerPrompt({
     pickFinalAnswerRequirement(category, intent),
     weakGrounding ? WEAK_GROUNDING_REQUIREMENT : GROUNDED_ANSWER_REQUIREMENT,
     asksAboutThirdPartyAdoption(question) ? THIRD_PARTY_ADOPTION_REQUIREMENT : null,
+    multiQuestionRequirement(question),
   ]
     .filter(Boolean)
     .join("\n\n")

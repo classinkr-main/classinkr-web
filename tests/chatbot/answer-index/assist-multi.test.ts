@@ -26,8 +26,10 @@ import { buildClaudeCardPickRequest } from "@/lib/chatbot/claude/card-pick"
 import {
   __resetModelCircuitForTests,
   buildAnswerCardPickGenerationConfig,
+  buildFinalAnswerPrompt,
   isAnswerCardMultiPickRequestBody,
   isAnswerCardPickRequestBody,
+  multiQuestionRequirement,
   parseAnswerCardPicks,
   readAnswerCardPickResult,
 } from "@/lib/chatbot/llm"
@@ -40,7 +42,7 @@ import { CARDS, compileFixture } from "./index-fixture"
  * - {"picks": […]} 파서·호환({"pick": n} → 조각 1)·길이 불일치·범위 밖 번호.
  * - 조각별 후보(몫 5·5 / 5·3·2, "← 조각 n")와 입력(답함 표시·주의 줄), 조각별 받아들이기, 결정형이 답한 조각 보존.
  * - 정책 주제 거절은 개념 겹침·허용 표시, 없는 개념은 묻는 대상(상황 절 밖)일 때만.
- * - 설정값: 후보 수·대역·단일 지시문 판.
+ * - 설정값: 후보 수·대역·단일 지시문 판. legacy 생성 지시문의 복합 질문 한 줄.
  */
 
 // 픽스처 색인: 앞 조각(녹화 다시보기)은 결정형이 답하고, 뒤 조각(강퇴)은 문턱 아래다.
@@ -453,5 +455,19 @@ describe("compiled route with a compound question (fake Gemini)", () => {
     expect(result.answerIndex?.assist).toMatchObject({ prompt: "multi", accepted: true })
     const replayAt = result.answer.indexOf("[다시보기]")
     expect(replayAt).toBeGreaterThanOrEqual(0)
+  })
+})
+
+describe("legacy generation: one compound-question line", () => {
+  it("adds the line only when the question splits into fragments", () => {
+    expect(multiQuestionRequirement("녹화 영상 다시보기 어디서 봐요")).toBeNull()
+    const line = multiQuestionRequirement(MIXED)
+    expect(line).toContain("물음이 2개")
+    expect(line).toContain("【주제】")
+    const base = { category: "support", intent: undefined, answerMode: "direct_answer" as const, draftAnswer: "초안", sources: [] }
+    const single = buildFinalAnswerPrompt({ ...base, question: "녹화 영상 다시보기 어디서 봐요" })
+    expect(single).not.toContain("질문 여러 개 주의")
+    const multi = buildFinalAnswerPrompt({ ...base, question: MIXED })
+    expect(multi.endsWith(line!)).toBe(true)
   })
 })
