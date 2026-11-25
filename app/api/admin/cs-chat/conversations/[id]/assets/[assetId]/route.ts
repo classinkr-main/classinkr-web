@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
 
-import { CRM_STAFF_ADMIN_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
+import { CS_COPILOT_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
 import {
   isInternalCsChatNotReadyError,
+  purgeInternalCsAssetObject,
   reviewInternalCsAsset,
 } from "@/lib/repositories/internal-cs-chat"
 
@@ -15,7 +16,7 @@ function actorName(admin: { name?: string; userId?: string; role: string }) {
 }
 
 export async function PATCH(req: NextRequest, context: Context) {
-  const admin = await requireVerifiedAdminContext(req, CRM_STAFF_ADMIN_API_ROLES)
+  const admin = await requireVerifiedAdminContext(req, CS_COPILOT_API_ROLES)
   if (admin instanceof NextResponse) return admin
 
   const body = await req.json().catch(() => null)
@@ -76,6 +77,34 @@ export async function PATCH(req: NextRequest, context: Context) {
         error: isInternalCsChatNotReadyError(error)
           ? error.message
           : "Failed to review image analysis",
+      },
+      { status: isInternalCsChatNotReadyError(error) ? 503 : 500 }
+    )
+  }
+}
+
+// 첨부 원본 삭제. 객체를 지우고 행에는 지운 시각만 남긴다(파일 이름·OCR 추출문은 비운다). 되돌릴 수 없다.
+export async function DELETE(req: NextRequest, context: Context) {
+  const admin = await requireVerifiedAdminContext(req, CS_COPILOT_API_ROLES)
+  if (admin instanceof NextResponse) return admin
+
+  const { id, assetId } = await context.params
+  try {
+    const asset = await purgeInternalCsAssetObject({
+      assetId,
+      conversationId: id,
+      actor: actorName(admin),
+      reason: "admin_delete",
+    })
+    if (!asset) return NextResponse.json({ error: "Asset not found or already deleted" }, { status: 404 })
+    return NextResponse.json({ asset, deleted: true })
+  } catch (error) {
+    console.error(`[DELETE /api/admin/cs-chat/conversations/${id}/assets/${assetId}]`, error)
+    return NextResponse.json(
+      {
+        error: isInternalCsChatNotReadyError(error)
+          ? error.message
+          : "Failed to delete the asset",
       },
       { status: isInternalCsChatNotReadyError(error) ? 503 : 500 }
     )
