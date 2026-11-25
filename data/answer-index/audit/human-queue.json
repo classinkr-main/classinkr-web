@@ -1242,7 +1242,7 @@
       "id": "HQ-1603",
       "topic": "칠판 카메라 내장 여부 — 공개 소개 페이지 표('내장 마이크·카메라')와 공개 문서(카메라를 칠판에 따로 더하는 구성)의 불일치",
       "currentText": "field:remote-classroom-camera-viewing 답: '참고로 공개 안내 기준 칠판에 카메라가 내장돼 있지는 않고, 교실마다 웹캠이나 T1·S1 같은 카메라를 따로 붙여요.'",
-      "conflict": "공개 문서는 견적을 전자칠판에 카메라를 더한 구성으로 설명하고(doc:/docs/start/value-and-cost-framing#0 문장 1) AI 카메라를 붙이면 하이브리드 수업을 한다고 한다(doc:/docs/hardware/board-overview#summary 문장 5). 그러나 공개 소개 페이지 표는 '내장 마이크·카메라 | 8개 배열 마이크 · AI 음성 추적 카메라'(site:components/introduction/landing/landing-copy.ts:218)와 '배열 마이크 + AI 음성 추적 카메라 | 8개 내장'(site:components/introduction/story/story-copy.ts:392)으로 적어 카메라가 내장된 것처럼 읽힌다. '내장돼 있지 않다'는 단정은 근거가 약해 고침안에서 지웠다. 결정: 칠판 카메라 내장 여부를 어떻게 말할지(정본).",
+      "conflict": "공개 문서는 견적을 전자칠판에 카메라를 더한 구성으로 설명하고(doc:/docs/start/value-and-cost-framing#0 문장 1) AI 카메라를 붙이면 하이브리드 수업을 한다고 한다(doc:/docs/hardware/board-overview#summary 문장 5). 그러나 공개 소개 페이지 표는 '내장 마이크·카메라 | 8개 배열 마이크 · AI 음성 추적 카메라'(site:components/introduction/landing/landing-copy.ts:219)와 '배열 마이크 + AI 음성 추적 카메라 | 8개 내장'(site:components/introduction/story/story-copy.ts:392)으로 적어 카메라가 내장된 것처럼 읽힌다. '내장돼 있지 않다'는 단정은 근거가 약해 고침안에서 지웠다. 결정: 칠판 카메라 내장 여부를 어떻게 말할지(정본).",
       "proposal": null,
       "affectedCards": [
         "field:remote-classroom-camera-viewing"
@@ -1256,7 +1256,7 @@
       "id": "HQ-1701",
       "topic": "칠판의 AI 음성 어시스턴트(음성 명령)·상시 청취·음성 데이터 처리에 대한 챗봇 안내 범위",
       "currentText": "field:board-voice-assistant-always-listening 답: '공개 안내에 칠판의 음성 비서·상시 청취 기능은 나와 있지 않아요. 그래서 있다고도, 없다고도 단정하지 않을게요.' 음성이 기기 안에서 처리되는지 외부로 보내지는지, 관리자가 칠판 마이크 접근을 끌 수 있는지도 공개 안내에 없다고 안내.",
-      "conflict": "공개 페이지에 기능 문구가 있다(site-only, 공개 문서 단위에는 없음): site:components/introduction/landing/landing-copy.ts:120 '음성 명령으로 칠판을 다루는 AI 음성 어시스턴트', site:lib/introduction/content.ts:244 '수업 중 음성 명령으로 전자 칠판 내 다양한 기능 실행 가능', site:lib/introduction/content.ts:602 '수업 중 음성 명령으로 다양한 기능 실행(예: “화면 공유 시작”, “질문창 열어줘”)'. 따라서 '칠판의 음성 비서 기능은 공개 안내에 나와 있지 않다'는 부재 주장은 absence_claim_wrong(site-only). 다만 한국 제공 범위·버전·계약, 상시 청취 여부, 음성 처리 위치는 근거가 없다. 결정: (1) 페이지 문구를 인용해 AI 음성 어시스턴트 소개 안내를 할지, (2) 한국 제공 범위·버전·계약 확인 문구, (3) 상시 청취·음성 처리 위치는 '공개 안내에 없음'으로 계속 둘지.",
+      "conflict": "공개 페이지에 기능 문구가 있다(site-only, 공개 문서 단위에는 없음): site:components/introduction/landing/landing-copy.ts:121 '음성 명령으로 칠판을 다루는 AI 음성 어시스턴트', site:lib/introduction/content.ts:244 '수업 중 음성 명령으로 전자 칠판 내 다양한 기능 실행 가능', site:lib/introduction/content.ts:602 '수업 중 음성 명령으로 다양한 기능 실행(예: “화면 공유 시작”, “질문창 열어줘”)'. 따라서 '칠판의 음성 비서 기능은 공개 안내에 나와 있지 않다'는 부재 주장은 absence_claim_wrong(site-only). 다만 한국 제공 범위·버전·계약, 상시 청취 여부, 음성 처리 위치는 근거가 없다. 결정: (1) 페이지 문구를 인용해 AI 음성 어시스턴트 소개 안내를 할지, (2) 한국 제공 범위·버전·계약 확인 문구, (3) 상시 청취·음성 처리 위치는 '공개 안내에 없음'으로 계속 둘지.",
       "proposal": null,
       "affectedCards": [
         "field:board-voice-assistant-always-listening"
@@ -1328,7 +1328,7 @@
       "id": "HQ-2002",
       "topic": "상담 연락처의 보유 기간·처리 정지 요청 안내 범위(영업 전화 중단 요청)",
       "currentText": "field:stop-sales-calls-privacy 답: '공개 안내에는 개인정보를 클래스인 개인정보처리방침에 따라 처리한다고만 나와 있고, 보관 범위·기간은 나와 있지 않아요.' 그리고 상담 연결로 삭제·처리 정지를 요청하라고 안내.",
-      "conflict": "공개 문의 페이지(site:app/contact/page.tsx:576)에 '보유 기간: 마지막 상담일로부터 최대 3년'이 있고, 처리방침(site:app/privacy/page.tsx:479, :509)에 처리 정지·삭제 요청 문구가 있어 '보관 기간이 나와 있지 않다'는 문장이 틀렸다(absence_claim_wrong). 공개 페이지에만 근거가 있고 기간 숫자(3년)를 챗봇이 말해도 되는지, 요청 창구를 이메일로 안내할지 상담 연결로 안내할지 결정이 필요하다.",
+      "conflict": "공개 문의 페이지(site:app/contact/page.tsx:575)에 '보유 기간: 마지막 상담일로부터 최대 3년'이 있고, 처리방침(site:app/privacy/page.tsx:479, :509)에 처리 정지·삭제 요청 문구가 있어 '보관 기간이 나와 있지 않다'는 문장이 틀렸다(absence_claim_wrong). 공개 페이지에만 근거가 있고 기간 숫자(3년)를 챗봇이 말해도 되는지, 요청 창구를 이메일로 안내할지 상담 연결로 안내할지 결정이 필요하다.",
       "proposal": "문의 페이지에는 상담과 고객 지원을 위한 개인정보의 보유 기간이 마지막 상담일로부터 최대 3년이라고 나와 있어요. 삭제나 처리 정지를 원하시면 같은 상담 연결로 요청하세요.",
       "affectedCards": [
         "field:stop-sales-calls-privacy"
