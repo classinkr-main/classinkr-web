@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { readFileSync } from "node:fs"
+import { readFileSync, readdirSync } from "node:fs"
 import path from "node:path"
 
 import { stashContactPrefill, takeContactPrefill } from "@/lib/tracking-paths"
@@ -34,7 +34,12 @@ describe("chatbot contact draft", () => {
   })
 
   it("keeps the chatbot on the page with a notice when the draft cannot be stored", () => {
-    const source = readFileSync(path.join(process.cwd(), "components/ui/FloatingChatbot.tsx"), "utf8")
+    // 위젯은 셸과 components/ui/chatbot/ 모듈로 나뉘어 있다. 상담 카드는 ConsultationBridge.tsx 에 있다.
+    const widgetFiles = [
+      "components/ui/FloatingChatbot.tsx",
+      ...readdirSync(path.join(process.cwd(), "components/ui/chatbot")).map((name) => `components/ui/chatbot/${name}`),
+    ]
+    const source = widgetFiles.map((file) => readFileSync(path.join(process.cwd(), file), "utf8")).join("\n")
     expect(source).toMatch(/if \(stashContactPrefill\(draft\)\) \{\s*onNavigate\?\.\(event\)\s*return\s*\}/)
     expect(source).toContain("event.preventDefault()")
     expect(source).not.toMatch(/prefill:\s*draft/)

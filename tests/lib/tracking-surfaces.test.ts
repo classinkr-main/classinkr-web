@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs"
+import { readFileSync, readdirSync } from "node:fs"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
 
@@ -86,7 +86,11 @@ describe("lead submission wiring", () => {
 
 describe("URL hygiene wiring", () => {
   it("the chatbot no longer puts the conversation draft in the contact URL", () => {
-    const source = read("components/ui/FloatingChatbot.tsx")
+    // 위젯은 셸과 components/ui/chatbot/ 모듈로 나뉘어 있다(상담 카드는 ConsultationBridge.tsx).
+    const source = [
+      "components/ui/FloatingChatbot.tsx",
+      ...readdirSync(join(projectRoot, "components/ui/chatbot")).map((name) => `components/ui/chatbot/${name}`),
+    ].map(read).join("\n")
     expect(source).not.toMatch(/prefill:\s*draft/)
     expect(source).toContain("stashContactPrefill(draft)")
   })

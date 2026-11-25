@@ -7,7 +7,7 @@
 공개 하이브리드 RAG 챗봇, 위젯·teaser, 챗봇/CS 운영 화면과 해당 API/repository를 소유한다.
 
 - 공개 API: `app/api/chatbot/*`
-- 공개 UI: `components/ui/FloatingChatbot.tsx`, `ChatbotTeaser.tsx`, `useChatbotTeaser.ts`
+- 공개 UI: `components/ui/FloatingChatbot.tsx`(셸), `components/ui/chatbot/*`(대화 상태 훅·헤더·목록·입력 폼·상담 카드), `ChatbotTeaser.tsx`, `useChatbotTeaser.ts`
 - 엔진: `lib/chatbot/*`, `data/chatbot-golden-set.json`, `data/chatbot-first-contact-set.json`
 - 어드민 화면: `app/admin/chatbot`, `app/admin/cs-inquiries`, `app/admin/cs-chatbot`, 상담 Inbox인 `app/admin/channel-talk`
 - 어드민 API: `app/api/admin/chatbot/*`, `app/api/admin/cs-chat/*`, 상담 대화용 `app/api/admin/channel-talk/*`
@@ -36,6 +36,7 @@
 - `lib/chatbot/channel-handoff.ts`, `doc-gaps.ts`, `eval.ts`, `alpha-readiness.ts`, `alpha-db-contract.ts`
 - `scripts/chatbot-live-eval.ts`: 질문 묶음을 실제 모델로 돌려 답을 JSONL로 남기는 측정 스크립트(사용법은 `scripts/chatbot-persona-loop/README.md`)
 - `components/admin/cs/CsInquiryDashboard.tsx`, `components/admin/cs/CsConsoleNav.tsx`
+- 위젯: `components/ui/FloatingChatbot.tsx`는 런처·패널 틀·열기/닫기·포커스·스크롤·티저만 맡는다. 대화 상태(메시지·세션·보내기·스트림 파싱·오류·스크린 리더 안내·추천 질문·요청 context)는 `components/ui/chatbot/useChatbotConversation.ts`, 화면은 같은 폴더의 `ChatbotHeader.tsx`·`MessageList.tsx`(memo)·`ChatComposer.tsx`(입력 상태·오류 띠)·`ConsultationBridge.tsx`, 상담 요약·채널톡 프로필 순수 함수는 `consultation-draft.ts`에 있다. 입력 상태는 `ChatComposer`가 셸의 작은 저장소(`createComposerDraftStore`)를 구독해 들고 있으므로 글자를 칠 때 셸과 목록이 다시 그려지지 않는다
 
 임베딩 차원, 유사도 하한과 teaser 대상 페이지는 코드와 테스트를 정본으로 확인한다. 시점별 운영 수치나 활성화 건수는 이 플레이북에 복제하지 않는다. 구조를 바꾼 경위와 측정값은 기록 문서에 있다: [첫 방문자 질문 점검(2026-11-13)](../chatbot-first-contact-audit-2026-11-13.md), [구조 변경과 측정(2026-11-18)](../chatbot-structure-round-2026-11-18.md).
 

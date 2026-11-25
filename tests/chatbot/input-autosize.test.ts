@@ -117,7 +117,8 @@ describe("resolveListScrollTopAfterInputResize", () => {
 })
 
 describe("FloatingChatbot 입력창 높이 맞춤 연결", () => {
-  const source = readFileSync(join(process.cwd(), "components/ui/FloatingChatbot.tsx"), "utf8")
+  // 입력 폼과 높이 맞춤은 components/ui/chatbot/ChatComposer.tsx 에 있다.
+  const source = readFileSync(join(process.cwd(), "components/ui/chatbot/ChatComposer.tsx"), "utf8")
 
   it("재기 전 목록 scrollTop 을 잡아 두고, 높이를 정한 뒤 resolveListScrollTopAfterInputResize 로 되돌린다", () => {
     const body = source.match(/const resize = \(\) => \{([\s\S]*?)\n {8}\}/)?.[1] ?? ""

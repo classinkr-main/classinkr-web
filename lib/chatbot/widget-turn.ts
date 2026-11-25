@@ -1,5 +1,5 @@
 /**
- * 챗봇 위젯(components/ui/FloatingChatbot.tsx)이 쓰는 대화 맥락 도우미. 클라이언트에서 돌므로 서버 전용 모듈을 가져오지 않는다.
+ * 챗봇 위젯(components/ui/chatbot/useChatbotConversation.ts)이 쓰는 대화 맥락 도우미. 클라이언트에서 돌므로 서버 전용 모듈을 가져오지 않는다.
  *
  * - buildPreviousTurnPayload: 위젯 자기 메시지 상태에서 직전 한 턴(질문·직전 답의 끝 질문 종류·답 모드)을 만든다.
  *   서버 계약(lib/chatbot/conversation-context.ts, context.previousTurn)과 측정 스크립트(scripts/lib/chatbot-live-eval-checks.ts
