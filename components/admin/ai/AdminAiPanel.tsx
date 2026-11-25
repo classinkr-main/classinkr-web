@@ -164,7 +164,11 @@ export default function AdminAiPanel({
             title="새 대화"
             aria-label="새 대화"
             disabled={state.messages.length === 0}
-            onClick={() => adminAiStore.newConversation()}
+            onClick={() => {
+              adminAiStore.newConversation()
+              // 누른 버튼은 곧 꺼진다 — 포커스가 문서 끝으로 떨어져 Esc 가 패널을 닫지 않도록 입력창으로 옮긴다.
+              requestAnimationFrame(() => inputRef.current?.focus({ preventScroll: true }))
+            }}
             className="flex h-[30px] items-center justify-center gap-1 rounded-md px-[7px] text-[12px] font-semibold text-[#31302E] transition hover:bg-[#F6F5F4] disabled:cursor-not-allowed disabled:text-[#A39E98] disabled:hover:bg-transparent focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#084734]"
           >
             <Plus className="h-[15px] w-[15px]" aria-hidden="true" />

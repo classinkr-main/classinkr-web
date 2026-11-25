@@ -73,9 +73,11 @@ function OrderStateText({ order, now }: { order: OrderTicket; now: number }) {
 function ChatPane({
   state,
   onShowPending,
+  composerInputRef,
 }: {
   state: AdminAiState
   onShowPending: () => void
+  composerInputRef: React.Ref<HTMLInputElement>
 }) {
   const orders = selectOrders(state)
   const pending = selectPendingOrders(state)
@@ -110,6 +112,7 @@ function ChatPane({
         <div className="px-[clamp(16px,4vw,48px)] pb-5">
           <AdminAiComposer
             key={state.epoch}
+            inputRef={composerInputRef}
             busy={state.busy}
             context={WORKSPACE_CONTEXT}
             className="mx-auto w-full max-w-[620px]"
@@ -402,6 +405,7 @@ export default function AdminAiWorkspace({ initialTab }: { initialTab: AdminAiTa
   const pendingCount = countActionableOrders(state)
   const demo = adminAiStore.mode === "demo"
   const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({})
+  const composerInputRef = useRef<HTMLInputElement>(null)
 
   // Esc — 수정 중인 카드를 수정 취소로 되돌린다(위젯 패널과 같은 규칙). 이 화면에는 닫을 패널이 없다.
   useEffect(() => {
@@ -451,6 +455,8 @@ export default function AdminAiWorkspace({ initialTab }: { initialTab: AdminAiTa
           onClick={() => {
             adminAiStore.newConversation()
             select("chat")
+            // 누른 버튼이 꺼지므로 포커스를 입력창으로 옮긴다.
+            requestAnimationFrame(() => composerInputRef.current?.focus({ preventScroll: true }))
           }}
         >
           <Plus className="h-[15px] w-[15px]" aria-hidden="true" />새 대화
@@ -507,7 +513,11 @@ export default function AdminAiWorkspace({ initialTab }: { initialTab: AdminAiTa
         className="bg-white"
       >
         {tab === "chat" ? (
-          <ChatPane state={state} onShowPending={() => select("orders")} />
+          <ChatPane
+            state={state}
+            onShowPending={() => select("orders")}
+            composerInputRef={composerInputRef}
+          />
         ) : null}
         {tab === "orders" ? <OrdersPane state={state} /> : null}
         {tab === "tools" ? <ToolsPane /> : null}
