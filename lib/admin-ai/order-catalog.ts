@@ -14,8 +14,9 @@ export interface OrderCatalogEntry {
   undoNote?: string
   roles: string
   /**
-   * 같은 일을 하는 홈페이지 MCP 도구 이름(lib/mcp/tools.ts). 도구 정본이 한 곳(lib/ops-tools)으로 모이면
-   * 이 칸이 그 레지스트리와 맞는지 시험이 본다 — 지금은 두 목록이 갈라지지 않게 이름만 적어 둔다.
+   * 같은 일을 하는 홈페이지 MCP 도구 이름(정본: lib/ops-tools/registry.ts 의 OPS_TOOLS 의 mcpName).
+   * 이 칸이 그 레지스트리와 맞는지, 조회(R0)·쓰기 구분이 같은지 tests/admin-ai/catalog-and-context.test.ts 가 본다.
+   * 등급 이름은 척도가 다르다 — 여기 R0~R4 는 확인 단계, 레지스트리의 R0/R1 은 조회/등록.
    */
   mcp?: readonly string[]
 }
