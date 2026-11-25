@@ -145,7 +145,18 @@ describe("buildInternalCsCopilotContext", () => {
     expect(result.publicEvidence.warning).toContain("검색에 실패")
     expect(result.internalContext).toContain("본사 확인·소통 기준")
     expect(result.internalContext).toContain("정리된 내부 CS 지식")
+    // 정리 지식(본사 확인 요청 구성)이 잡혔으므로 "근거를 찾지 못했습니다" 줄은 나오지 않고 확인 상태가 먼저 온다(IC-05).
+    expect(result.deterministicFallback).not.toContain("찾지 못했습니다")
+    expect(result.deterministicFallback).toContain("## 확인 상태")
+  })
+
+  it("says nothing was found only when no curated knowledge or precedent matched", async () => {
+    mocks.evaluateChatbotQuery.mockResolvedValue({ answer: null, sources: [] })
+
+    const result = await buildInternalCsCopilotContext("일반 문의")
+
     expect(result.deterministicFallback).toContain("직접 일치하는 근거를 찾지 못했습니다")
+    expect(result.sourceRefs).toEqual([])
   })
 
   it("answers S110 net weight directly without unrelated lineup copy", async () => {
