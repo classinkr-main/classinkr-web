@@ -1,6 +1,6 @@
 "use client"
 
-import { FormEvent, memo, useEffect, useMemo, useRef, useState } from "react"
+import { FormEvent, memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
@@ -879,6 +879,10 @@ export function FloatingChatbot() {
     const [muted, setMutedState] = useState(() => isMuted())
     const bottomRef = useRef<HTMLDivElement | null>(null)
     const messagesContainerRef = useRef<HTMLDivElement | null>(null)
+    const dialogRef = useRef<HTMLDivElement | null>(null)
+    const dialogHeaderRef = useRef<HTMLDivElement | null>(null)
+    const messagesContentRef = useRef<HTMLDivElement | null>(null)
+    const dialogFooterRef = useRef<HTMLDivElement | null>(null)
     const pendingAssistantScrollIdRef = useRef<string | null>(null)
     const inputRef = useRef<HTMLTextAreaElement | null>(null)
     const triggerRef = useRef<HTMLButtonElement | null>(null)
@@ -1001,6 +1005,47 @@ export function FloatingChatbot() {
 
         return () => window.cancelAnimationFrame(frame)
     }, [isOpen, shouldReduceMotion])
+
+    // 대화창 높이를 내용(헤더 + 대화 내용 + 입력창)에 맞춘다. 답변이 길어지면 창이 위로 부드럽게 커지고,
+    // CSS max-h/min-h(데스크톱 최대 880px·모바일 화면 높이, 둘 다 화면을 넘지 않음)에 닿으면 대화 목록
+    // 안에서 스크롤된다. 대화 목록 래퍼는 flow-root 라 마지막 메시지 여백까지 offsetHeight 에 잡힌다.
+    // 스트리밍 중 토큰마다 리렌더하지 않도록 state 대신 DOM style 에 바로 쓴다.
+    useLayoutEffect(() => {
+        if (!isOpen) return
+        const dialog = dialogRef.current
+        const header = dialogHeaderRef.current
+        const content = messagesContentRef.current
+        const footer = dialogFooterRef.current
+        const list = messagesContainerRef.current
+        if (!dialog || !header || !content || !footer || !list) return
+
+        const applyHeight = () => {
+            const listStyle = window.getComputedStyle(list)
+            const listPadding = parseFloat(listStyle.paddingTop) + parseFloat(listStyle.paddingBottom)
+            const dialogBorder = dialog.offsetHeight - dialog.clientHeight
+            const natural =
+                header.offsetHeight + content.offsetHeight + listPadding + footer.offsetHeight + dialogBorder
+            // 높이 전환이 최대치를 넘는 목표로 달리면 첫 프레임에 바로 잘려 툭 튄다 — 미리 min/max 로 자른다.
+            const dialogStyle = window.getComputedStyle(dialog)
+            const maxHeight = parseFloat(dialogStyle.maxHeight)
+            const minHeight = parseFloat(dialogStyle.minHeight)
+            let next = Math.ceil(natural)
+            if (Number.isFinite(maxHeight)) next = Math.min(next, maxHeight)
+            if (Number.isFinite(minHeight)) next = Math.max(next, minHeight)
+            dialog.style.height = `${next}px`
+        }
+
+        applyHeight()
+        window.addEventListener("resize", applyHeight)
+        const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(applyHeight)
+        observer?.observe(header)
+        observer?.observe(content)
+        observer?.observe(footer)
+        return () => {
+            window.removeEventListener("resize", applyHeight)
+            observer?.disconnect()
+        }
+    }, [isOpen])
 
     const handleScroll = () => {
         const container = messagesContainerRef.current
@@ -1327,6 +1372,7 @@ export function FloatingChatbot() {
             <AnimatePresence>
                 {isOpen && (
                     <motion.div
+                        ref={dialogRef}
                         id="classin-chatbot-dialog"
                         role="dialog"
                         aria-modal="false"
@@ -1336,13 +1382,14 @@ export function FloatingChatbot() {
                         initial="initial"
                         animate="animate"
                         exit="exit"
-                        className="pointer-events-auto relative z-10 mb-3 flex h-[min(680px,calc(100svh-5.5rem))] w-full max-w-none origin-bottom overflow-hidden rounded-[26px] border border-white/60 bg-[linear-gradient(152deg,rgba(255,255,255,0.88)_0%,rgba(236,253,245,0.76)_50%,rgba(246,245,244,0.82)_100%)] text-[#111110] backdrop-blur-2xl md:mb-4 md:h-[min(640px,calc(100svh-8rem))] md:w-[424px] md:max-w-[424px] md:origin-bottom-right"
+                        className="pointer-events-auto relative z-10 mb-3 flex max-h-[calc(100svh-5.5rem)] min-h-[min(360px,calc(100svh-5.5rem))] w-full max-w-none origin-bottom overflow-hidden rounded-[26px] border border-white/60 bg-[linear-gradient(152deg,rgba(255,255,255,0.88)_0%,rgba(236,253,245,0.76)_50%,rgba(246,245,244,0.82)_100%)] text-[#111110] backdrop-blur-2xl md:mb-4 md:max-h-[min(880px,calc(100svh-8rem))] md:min-h-[min(360px,calc(100svh-8rem))] md:w-[424px] md:max-w-[424px] md:origin-bottom-right transition-[height] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none"
                     >
                         <div className="pointer-events-none absolute inset-x-5 top-0 h-px bg-white/80" aria-hidden />
 
                         <div className="relative flex min-h-0 w-full flex-col">
                             {/* 헤더 (Staggered Item 1) */}
                             <motion.div
+                                ref={dialogHeaderRef}
                                 variants={itemVariants}
                                 custom={shouldReduceMotion}
                                 className="flex items-center justify-between border-b border-white/50 bg-white/20 px-4 py-3.5 backdrop-blur-xl"
@@ -1430,7 +1477,7 @@ export function FloatingChatbot() {
                                 custom={shouldReduceMotion}
                                 className="min-h-0 flex-1 overflow-y-auto px-3.5 py-4 [scrollbar-gutter:stable] [scrollbar-width:thin] md:px-4 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-fg-accent/25 [&::-webkit-scrollbar-track]:bg-transparent"
                             >
-                                <div className="space-y-4">
+                                <div ref={messagesContentRef} className="flow-root space-y-4">
                                     <AnimatePresence mode="popLayout" initial={false}>
                                         {messages.map((message, index) => {
                                             const isLast = index === messages.length - 1
@@ -1539,9 +1586,10 @@ export function FloatingChatbot() {
 
                             {/* 하단 폼 및 에러 (Staggered Item 3) */}
                             <motion.div
+                                ref={dialogFooterRef}
                                 variants={itemVariants}
                                 custom={shouldReduceMotion}
-                                className="relative flex flex-col min-h-0 w-full"
+                                className="relative flex flex-col min-h-0 w-full shrink-0"
                             >
                                 {error ? (
                                     <div className="flex items-center justify-between gap-3 border-t border-white/50 bg-[#FBEAE2]/70 px-4 py-2 text-xs font-medium text-[#7A2A13] backdrop-blur-xl">
