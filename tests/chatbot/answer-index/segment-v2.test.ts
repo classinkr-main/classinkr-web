@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import { absentTargetOf } from "@/lib/chatbot/answer-index/checks"
 import { prepareQuery } from "@/lib/chatbot/answer-index/compile"
-import { decide, mainClauseOf, toAnswerIndexTrace } from "@/lib/chatbot/answer-index/decide"
+import { decide, mainClauseOf, situationMainClause, toAnswerIndexTrace } from "@/lib/chatbot/answer-index/decide"
 import { adjectivalEndingAt, compactWithBoundaries } from "@/lib/chatbot/answer-index/lexicon"
 import {
   askingSentencesOf,
@@ -197,6 +197,18 @@ describe("관형형 끝·없는 개념이 묻는 대상인지", () => {
     expect(target("휴원 기간에도 녹화본 볼 수 있나요", "휴원")).toEqual({ target: false, reason: "adjunct" })
     expect(target("논문 pdf 띄우는 방법", "논문")).toEqual({ target: false, reason: "modifier" })
     expect(target("다음 달에 재가입할 예정입니다. 계정 탈퇴는 어떻게 해요?", "재가입")).toEqual({ target: false, reason: "context" })
+  })
+
+  it("한 문장 안의 상황 절·조사 + 관형형·관형형 + 사람은 묻는 대상이 아니다(R2 검토 품질-6)", () => {
+    expect(target("졸업 논문 준비하는 대학원생인데, 화면 공유는 어떻게 하나요?", "논문")).toEqual({ target: false, reason: "context" })
+    expect(target("재계약 앞두고 궁금한데 녹화본은 얼마나 보관돼요?", "재계약")).toEqual({ target: false, reason: "context" })
+    expect(target("팩스로 받은 명단을 엑셀로 올릴 수 있나요?", "팩스")).toEqual({ target: false, reason: "modifier" })
+    expect(target("논문 쓰는 학생도 녹화를 다시 볼 수 있나요?", "논문")).toEqual({ target: false, reason: "modifier" })
+    // 주절에 그 낱말이 있거나 쉼표만 있으면 그대로 묻는 대상이다.
+    expect(target("학원 관리 중인데, ISMS 인증 있나요?", "isms").target).toBe(true)
+    expect(target("isms, 개인정보 인증 있나요?", "isms").target).toBe(true)
+    expect(situationMainClause("졸업 논문 준비하는 대학원생인데, 화면 공유는 어떻게 하나요?")).toBe("화면 공유는 어떻게 하나요?")
+    expect(situationMainClause("화면 공유는 어떻게 하나요?")).toBeNull()
   })
 
   it("그 개념을 묻거나 괄호 풀이가 붙으면 묻는 대상이다", () => {

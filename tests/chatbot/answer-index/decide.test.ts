@@ -127,10 +127,12 @@ describe("결정 규칙(§3.5)", () => {
   })
 
   it("없는 개념: 나머지를 1위가 충분히 덮고 답할 만하면 답 + 없는 부분 꼬리", () => {
-    const question = "ISMS 쓰는 학원도 녹화 다시보기 어디서 봐요"
+    const question = "ISMS도 녹화 다시보기 어디서 봐요"
     const decision = decide(index, question)
     expect(decision).toMatchObject({ kind: "answer", card: CARDS.replay, absentHit: "A_isms", absentTail: "A_isms", partial: true, segments: null })
     expect(decidedByFromAnswerIndex(trace(question))).toBe(`index-partial:${CARDS.replay}`)
+    // '형태 + 관형형 + 사람·곳'은 꾸미는 말이라 꼬리를 붙이지 않는다(R2 검토 품질-6: "ISMS 쓰는 학원도 …"는 ISMS 를 묻지 않는다).
+    expect(decide(index, "ISMS 쓰는 학원도 녹화 다시보기 어디서 봐요")).toMatchObject({ kind: "answer", card: CARDS.replay, absentHit: null, absentTail: null })
   })
 
   it("없는 개념을 따로 묻는 조각은 그 조각 자리에 공백 카드로 답한다(R2 나누기 v2)", () => {

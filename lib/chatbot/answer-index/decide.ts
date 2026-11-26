@@ -50,13 +50,14 @@ import {
   checkCandidate,
   conceptExplained,
   coverageWithoutSpan,
+  gapWordCoverage,
   NEG_ROUTE_BONUS,
   scoreNegatives,
   type CandidateCheck,
 } from "./checks"
 import { legacyVoteSources } from "./legacy-votes"
 import type { AbsentMatch } from "./lexicon"
-import { askingSentencesOf, detectAskType, hasOwnTopicWords, INDEX_SYMPTOM_RE, normalizeText, splitQuestion } from "./normalize"
+import { askingSentencesOf, detectAskType, hasOwnTopicWords, INDEX_SYMPTOM_RE, isAskingSegment, normalizeText, segmentHasContent, splitQuestion } from "./normalize"
 import { isCompiledScope } from "./scope"
 import { compositeScore, confidenceOf, knnCountFeature, scoreCandidates, sortCandidates, type KnnSummary, type ScoreComponents } from "./score"
 import type {
@@ -360,8 +361,8 @@ export function analyzeSegment(index: CompiledAnswerIndex, text: string, context
 export type ThresholdFn = (kind: AnswerCardKind) => number
 
 /**
- * 공백 카드 자리 at 이 공백 답을 낼 만한지: 묻는 대상인 없는 개념의 공백 카드이거나, 묻는 꼴이 어긋나지 않고(카드 asks 에 질문 묻는 꼴이 있거나, 둘 중 하나가 비었거나,
- * 질문이 예/아니오 꼴) 질문 내용 덮임이 GAP_MIN_COVERAGE 이상.
+ * 공백 카드 자리 at 이 공백 답을 낼 만한지: 묻는 대상인 없는 개념의 공백 카드이거나, 묻는 꼴이 어긋나지 않고(카드 asks 에 질문 묻는 꼴이 있거나, 둘 중 하나가
+ * 비었거나, 질문이 예/아니오 꼴) 질문 내용 덮임(IDF) 또는 내용 낱말 덮임(gapWordCoverage)이 GAP_MIN_COVERAGE 이상.
  */
 export function gapEligible(index: CompiledAnswerIndex, analysis: Pick<SegmentAnalysis, "ranked" | "query" | "absentTargets">, at: number) {
   const candidate = analysis.ranked[at]
@@ -372,7 +373,9 @@ export function gapEligible(index: CompiledAnswerIndex, analysis: Pick<SegmentAn
   }
   // 묻는 꼴: 예/아니오 꼴(되나요·있나요)은 무엇이든 물을 수 있어 어긋남으로 보지 않는다.
   if (analysis.query.askType !== "yesno" && askTypeMatch(index, analysis.query, candidate.card) === 0) return false
-  return (candidate.check?.coverage ?? 0) >= GAP_MIN_COVERAGE
+  // 덮임: 질문 전체 IDF 덮임, 또는 질문 내용 낱말이 공백 카드 주제·anchors·개념으로 덮이는 몫(공백 카드 자체를 묻는 짧은 질문 — "채팅 기록도
+  // 저장되나요"는 IDF 덮임 0.48·낱말 덮임 1.0, 품질-6). 묻는 꼴이 어긋나면 낱말 덮임이 높아도 공백 답을 내지 않는다(방법을 묻는 질문에 맞는 카드가 있을 수 있다).
+  return (candidate.check?.coverage ?? 0) >= GAP_MIN_COVERAGE || gapWordCoverage(index, analysis.query, candidate.card) >= GAP_MIN_COVERAGE
 }
 
 /** 분석 + 문턱 → 조각 판정(§3.5). */
@@ -582,7 +585,7 @@ export function resolveDecision(index: CompiledAnswerIndex, analysis: QuestionAn
   const rescueOn = analysis.voteRescue !== "off" && analysis.inScope
   const parts = analysis.parts
     ? analysis.parts.map((part, at) => {
-        const result = resolveSegment(index, part, partThreshold)
+        const result = headConceptGuard(index, part, resolveSegment(index, part, partThreshold))
         if (!rescueOn || result.kind !== "abstain") return result
         // 조각 승격: 그 조각 글로 센 표 카드가 조각 순위 상위 VOTE_RESCUE_TOP 안에 있고 검사를 통과하면 그 카드로 답한다.
         const pick = rescueCandidate(index, part, analysis.partVotes[at] ?? [], analysis.partSymptomOnlyVotes[at] ?? new Set())
@@ -603,7 +606,56 @@ export function resolveDecision(index: CompiledAnswerIndex, analysis: QuestionAn
       })
     : null
   const base = combineSegments(resolveSegment(index, analysis.whole, threshold), parts, analysis.parts, analysis.overflow, cautionsOf(analysis.whole))
-  return annotateSegments(index, analysis, applyVoteRescue(index, analysis, base), threshold)
+  const rescued = applyVoteRescue(index, analysis, base)
+  return annotateSegments(index, analysis, mainClauseRescue(index, analysis, rescued, threshold), threshold)
+}
+
+/**
+ * 조각의 머리 개념(주절에서 마지막으로 맞은 비일반 개념 — 한국어는 묻는 대상이 술어 바로 앞에 온다): "강사 계정 탈퇴는 어디서 해요"의 '탈퇴'.
+ * 주절에 비일반 개념이 없으면 null.
+ */
+function headConcept(index: CompiledAnswerIndex, analysis: SegmentAnalysis): string | null {
+  const main = normalizeText(mainClauseOf(analysis.text)).replace(/\s+/g, "")
+  const inMain = topicConcepts(index, analysis).filter((concept) => main.includes(concept.form.replace(/\s+/g, "").toLowerCase()))
+  return inMain.length > 0 ? inMain[inMain.length - 1].id : null
+}
+
+/**
+ * 조각 답의 머리 개념 가드(R2 검토 품질-7): 조각을 답한 카드가 그 조각의 머리 개념을 설명하지 못하면 답하지 않는다(알림 줄로). 낱말이 겹쳐
+ * 문턱을 넘은 엉뚱한 카드("강사 계정 탈퇴는 어디서 해요" → 아이디 형식 안내)를 막는다. 공백 카드·없는 개념 판정은 그대로 둔다.
+ */
+function headConceptGuard(index: CompiledAnswerIndex, analysis: SegmentAnalysis, result: SegmentResult): SegmentResult {
+  if (result.kind !== "answer" || !result.card) return result
+  const head = headConcept(index, analysis)
+  const card = index.cardById.get(result.card)
+  // 상위 개념만 겹치는 카드(계정 일반 카드가 '탈퇴'를 묻는 조각)는 설명으로 보지 않는다: 카드 개념(과 그 상위)에 머리 개념 자체가 있어야 한다.
+  if (!head || card === undefined || index.cards[card].conceptClosure.has(head)) return result
+  return { ...result, ...analysis.fallback, card: null, absentTail: null }
+}
+
+/** 한 문장 안의 상황 절 끝('…인데,'·'…한데'·'…지만'·'…앞두고'). 쉼표·마침표로는 가르지 않는다. */
+const SITUATION_CLAUSE_END_RE = /(?:는데|은데|인데|한데|던데|지만|니까|앞두고)(?:요)?[,，]?\s+/g
+
+/** 상황 절 뒤 주절(묻는 꼴일 때만). 상황 절이 없으면 null. */
+export function situationMainClause(question: string): string | null {
+  const parts = question.split(SITUATION_CLAUSE_END_RE).map((part) => part.trim()).filter(Boolean)
+  if (parts.length < 2) return null
+  const main = parts[parts.length - 1]
+  return isAskingSegment(main) && segmentHasContent(main) ? main : null
+}
+
+/**
+ * 주절 다시 보기(R2 검토 품질-6): 나뉘지 않은 질문을 원문으로 정하지 못했고(못 찾음, 증상 제외) 상황 절('논문 쓰는 대학원생인데,') 뒤 주절이
+ * 묻는 꼴이면, 주절만으로 다시 정해 답이 나오면 그 카드로 답한다(상황 설명 낱말이 덮임·확신도를 깎아 맞는 카드가 문턱 밑으로 내려간 경우).
+ * 증상 못 찾음·되묻기·답한 판정은 그대로 둔다.
+ */
+function mainClauseRescue(index: CompiledAnswerIndex, analysis: QuestionAnalysis, decision: AnswerIndexDecision, threshold: ThresholdFn): AnswerIndexDecision {
+  if (decision.kind !== "abstain" || decision.abstainReason === "symptom" || decision.segments || analysis.parts) return decision
+  const main = situationMainClause(analysis.whole.text)
+  if (!main) return decision
+  const result = resolveSegment(index, analyzeSegment(index, main, { votes: analysis.votes }), threshold)
+  if (result.kind !== "answer" || !result.card) return decision
+  return toDecision({ ...result, text: analysis.whole.text }, null, cautionsOf(analysis.whole))
 }
 
 const SEGMENT_LABEL_MAX = 14
@@ -652,7 +704,11 @@ function annotateSegments(index: CompiledAnswerIndex, analysis: QuestionAnalysis
     const label = segmentLabel(index, own)
     if (label) extra.label = label
     if (own.fallback.abstainReason === "symptom") extra.symptom = true
-    if (!isDecided(segment)) extra.alone = resolveSegment(index, alone(), threshold).kind
+    // 따로 물었을 때도 머리 개념 가드를 건다(가드에 걸린 카드로 '따로 물어봐 주세요'를 약속하지 않게).
+    if (!isDecided(segment)) {
+      const solo = alone()
+      extra.alone = headConceptGuard(index, solo, resolveSegment(index, solo, threshold)).kind
+    }
     return { ...segment, ...extra }
   })
   return { ...decision, segments }

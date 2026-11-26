@@ -306,7 +306,6 @@ const SITUATION_END_RE = /(?:는데|은데|인데|ㄴ데|던데|한데|는데요
 const CONDITIONAL_HEAD_RE = /^(?:있다면|없다면|된다면|되면|안\s*되면|그렇다면|그러면|그럼|그렇게\s*하면)(?:\s|$)/
 /** 고르는 질문(같은 질문의 두 선택지). */
 const ALTERNATIVE_HEAD_RE = /^(?:아님|아니면|혹은|또는)(?:\s|$)/
-const VERBAL_AFTER_HAGO_RE = /^(?:싶|나서|나면|나니|난\s|있|계시|보|와|오|가|다니|해서|해야|지내|말|놀)/
 const CLAUSE_CONNECTOR_RE = /^(?:그리고요?|근데|그런데|그리고\s*또|아울러)(?:\s|$)/
 
 function stripEnd(text: string) {
@@ -638,6 +637,10 @@ function findClauseSplit(sentence: string): SplitPoint | null {
   }
   // '…하는 법하고 …'처럼 '하다'가 붙지 않는 머리 명사 뒤 '하고'만 명사를 잇는 말로 본다.
   for (const match of sentence.matchAll(/(?<=(?:방법|법|기능|여부|기준|가격|요금|위치|결과))하고\s+/g)) {
+    candidates.push({ at: match.index ?? 0, length: match[0].length, nounJoin: true })
+  }
+  // 'X하고 Y하는 기능·방법'(과제 제출하고 채점하는 기능): 두 기능을 잇는 동사 '-하고'. 왼쪽은 'X'(명사)로 자른다.
+  for (const match of sentence.matchAll(/(?<=[가-힣]{2})하고\s+(?=[^,，]*?(?:하는|되는)\s*(?:기능|방법))/g)) {
     candidates.push({ at: match.index ?? 0, length: match[0].length, nounJoin: true })
   }
   for (const match of sentence.matchAll(/(?<=[가-힣])\s*(?:되고|돼고|있고|없고|가능하고)\s+(?=\S+도(?:\s|$))/g)) {
