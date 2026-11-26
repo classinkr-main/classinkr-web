@@ -92,6 +92,8 @@ Admin 관련 작업은 [Admin 지침 맵](./active/admin-guidance-map.md)에서 
   - **CRM 탭 실행 로드맵.** 5작업면·돈흐름·데이터층의 현황 진단, 정책-코드 불일치 총괄, 개선 후보 ID(H/C/R/D)와 4 Wave 실행 순서, 사용자 결정 항목, 문서 정리 제안
 - [active/crm-inquiry-notable-plan-2026-11-05.md](./active/crm-inquiry-notable-plan-2026-11-05.md)
   - **CRM 문의·특이사항 바로 보기 — B(리드 수신함) 선택, 종류 라벨 확정판.** 홈페이지 문의·빠른 리드가 안 보이고 특이사항이 먼저 오지 않으며 타고 들어가는 게 많은 이유(코드 근거), 공통 바닥 F1~F6(특이사항 규칙 하나·재문의 내용 연결 등), 시안 A 현황 띠 · B 리드 수신함 2단 · C 시트형 표 · D 전역 패널 비교, B 확정판의 리드 종류 라벨 체계(문의·데모·쇼룸·도입·광고 리드폼·행사 신청·리드마그넷·구독 × 채널, §10), 결정 D1~D10. 목업 [mockups/crm-inquiry-notable-2026-11-05.html](./active/mockups/crm-inquiry-notable-2026-11-05.html)
+- [active/crm-customer-events-manual-note-format-2026-11-26.md](./active/crm-customer-events-manual-note-format-2026-11-26.md)
+  - **CRM 활동 기록 수기 적재 형식(고객 이력).** 전달본 정리 건을 `crm_customer_events` 수기 기록 행(`neo_account`·`manual_note`·태그 billing/quote/as/api/cs-case·`source_id`=영문 파일 이름)으로 넣는 형식, 마이그레이션에서 확인한 제약(수기 기록은 유니크 색인 없음), 다시 돌려도 안전한 적재·되돌리기 SQL 틀, 갈매봇 "고객 이력" 갈래가 읽는 방식. 적재는 사람이 한다
 - [active/internal-crm-backend-operating-plan-2026-06-26.md](./active/internal-crm-backend-operating-plan-2026-06-26.md)
   - 자체 CRM 백엔드/운영 기준. 시트·OCRM·HQ CRM은 참고/동기화 원천으로 두고, Admin CRM의 고객 스파인·회의록·녹음·다음 액션 구조를 정의
 - [active/internal-cs-ai-bridge.md](./active/internal-cs-ai-bridge.md)
