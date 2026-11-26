@@ -264,6 +264,16 @@ describe("compiled router with fixture cards", () => {
     expect(fetchSpy).not.toHaveBeenCalled()
   })
 
+  it("splits a line-break bullet list after the service folds whitespace, through the service path (R2 검토 품질-9)", async () => {
+    stubCompiledEnv("")
+    // 서비스(normalizeQuestion)는 줄바꿈을 공백으로 접는다. 접힌 점 목록도 항목마다 조각이 되어 한쪽으로 쏠리지 않는다.
+    const result = await evaluateChatbotQuery("- 수업 중 학생 채팅 막는 방법\n- 녹화 영상 다시보기 보는 방법")
+    expect(result.answerIndex?.segments).toBe(2)
+    expect(result.answerIndex?.parts?.map((part) => part.card)).toEqual([CARDS.chat, CARDS.replay])
+    expect(result.answer).toContain("[채팅 금지]")
+    expect(fetchSpy).not.toHaveBeenCalled()
+  })
+
   it("lets CHATBOT_COMPILED_DISABLED_CARDS switch a card off without a deploy", async () => {
     stubCompiledEnv("")
     vi.stubEnv("CHATBOT_COMPILED_DISABLED_CARDS", CARDS.chat)
