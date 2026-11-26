@@ -7,6 +7,7 @@ import {
   isClosingLine,
   isEmptyLeadSentence,
   shapeAnswer,
+  shapeOptionsFor,
   shapeLayout,
   unifyNotation,
 } from "@/lib/chatbot/answer-index/shape"
@@ -139,6 +140,26 @@ describe("shape: closing lines", () => {
     const result = shapeAnswer(`녹화는 [수업 설정]에서 켜요.\n\n${closing.join("\n")}`)
     expect(result.text).toBe(`녹화는 [수업 설정]에서 켜요.\n\n${closing[1]}`)
     expect(result.removedClosings).toEqual([closing[0]])
+  })
+
+  it("removes only closing-template lines: a fact line that looks like a closing stays (R2 검토 회귀-3)", () => {
+    // 사실·단서가 든 상담 안내 두 줄은 둘 다 남는다.
+    const facts = "해외 카드 결제는 공개 안내에 없어요. 결제 담당자가 확인해 드려야 해요.\n아래 상담 연결로 남겨 주시면 확인해 드립니다."
+    expect(shapeAnswer(`요금 안내입니다.\n\n${facts}`).removedClosings).toEqual([])
+    // 사실 줄 + 틀 줄이면 틀 줄만 지운다(사실 줄이 맨 끝이 아니어도).
+    const mixed = shapeAnswer("녹화는 [수업 설정]에서 켜요.\n\n필요하면 녹화 예시를 담당자에게 보내 확인을 요청해 주세요.\n따라 하다 막히는 부분이 있으면 담당자 상담으로 이어 드릴게요.")
+    expect(mixed.removedClosings).toEqual(["따라 하다 막히는 부분이 있으면 담당자 상담으로 이어 드릴게요."])
+    expect(mixed.text).toContain("필요하면 녹화 예시를 담당자에게 보내 확인을 요청해 주세요.")
+    // 사람이 쓴 글·공백 답은 끝맺음을 지우지 않는다.
+    for (const kind of ["policy", "fixed", "gap"]) expect(shapeOptionsFor(kind).keepClosings).toBe(true)
+    for (const kind of ["doc", "howto"]) expect(shapeOptionsFor(kind).keepClosings).toBe(false)
+  })
+
+  it("splits a lone numbered item into one sentence per line unless the text holds inline list marks (품질-14)", () => {
+    const lone = shapeAnswer("1. 내가 학생으로 들어간 수업은 [수업 기록]에서 날짜를 고른 뒤 영상을 눌러 다시 봅니다. 보이지 않으면 담당 선생님께 녹화 여부를 물어봅니다.")
+    expect(lone.text).toBe("내가 학생으로 들어간 수업은 [수업 기록]에서 날짜를 고른 뒤 영상을 눌러 다시 봅니다.\n보이지 않으면 담당 선생님께 녹화 여부를 물어봅니다.")
+    const inline = shapeAnswer("1) 설치: 앱 스토어에서 받아 설치하고 실행해 주세요. 2) 가입: 앱을 열고 [회원 가입]을 눌러 번호로 가입해 주세요.")
+    expect(findWidgetBreaks(inline.text)).toEqual([])
   })
 
   it("leaves a single closing line and the 'keepClosings' option alone", () => {

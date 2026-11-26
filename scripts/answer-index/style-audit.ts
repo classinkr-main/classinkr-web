@@ -7,7 +7,10 @@
  *
  * - --shape: 카드 답을 respond.ts 와 같은 순서(리드 붙이기 → shape.ts 다듬기)로 그려 점검한다(없으면 다듬지 않은 글). 다듬을 때는 글자 보존도 같이 검사한다:
  *   공백·줄바꿈·표기 기호·목록 표시를 뺀 글자열이 전후로 같아야 한다(뺀 빈 리드·겹친 끝맺음은 목록으로 따로 대조). 어긋난 카드는 --shape-report 로 쓴다.
- * - --no-conclusion: doc 카드의 first(결론 문장)·headline(결론 한 줄)을 쓰지 않고 그린다(전후 비교용). 기본은 쓴다(런타임 respond.ts 와 같다).
+ * - --no-conclusion: doc 카드의 first(결론 문장)를 쓰지 않고 그린다(전후 비교용). 기본은 쓴다(런타임 respond.ts 와 같다).
+ * - --headline: doc 카드의 headline(결론 한 줄)을 그린다(런타임 CHATBOT_COMPILED_HEADLINE=on 과 같다 — 근거가 첫 문단에 있으면 그리지 않는다). 기본은 끔.
+ * - 다듬을 때 사람이 쓴 글(policy·fixed)·공백 답은 끝맺음을 지우지 않는다(shapeOptionsFor). 지운 끝맺음은 끝맺음 틀 줄이어야 하고(아니면 removedNonTemplate),
+ *   글자 보존 대조는 틀 줄·빈 리드만 빼고 한다.
  * - --cards: 자료 폴더(--data-dir > ANSWER_INDEX_DATA_DIR > data/answer-index)의 모든 카드를 답으로 그려 점검한다(종류별 요약).
  *   doc 카드는 문장 묶기·리드를 런타임과 같은 함수로 그린다. 상담 안내·끝맺음은 카드 밖(respond.ts)이라 여기에는 없다.
  * - --answers: 실제 답. chatbot-live-eval 결과 줄({answer, decidedBy})이나 [{text|answer, kind?}] 배열. 종류는 decidedBy 앞 토큰이다.
@@ -20,7 +23,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { basename, dirname, resolve } from "node:path"
 import { argValues, hasFlag } from "./lib/common"
 import { analyzeStyle, summarizeStyle, type StyleRecord } from "./lib/style-audit-core"
-import { contentSignature, findWidgetBreaks, shapeAnswer } from "../../lib/chatbot/answer-index/shape"
+import { contentSignature, findWidgetBreaks, isClosingTemplate, shapeAnswer, shapeOptionsFor } from "../../lib/chatbot/answer-index/shape"
 
 // server-only 가 걸린 모듈을 CLI 에서 불러오기 위한 가림(scripts/chatbot-live-eval.ts 와 같은 방식).
 type RequireFn = (this: unknown, id: string) => unknown
@@ -45,13 +48,11 @@ interface Audited {
   text?: string
 }
 
-type SentenceItem = { group: string; id: number; text: string }
-
 interface ShapeReport {
   cards: number
   changed: number
   reverted: string[]
-  /** 글자 보존이 어긋난 카드(전후 글자열이 다름). */
+  /** 글자 보존이 어긋난 카드(전후 글자열이 다름 — 지운 줄은 빈 리드·끝맺음 틀 줄만 빼고 대조한다). */
   mismatched: { id: string; kind: string }[]
   /** 위젯이 깨뜨려 그리는 덩이가 있는 카드(번호 줄이 다른 줄과 섞임). */
   widgetBroken: { id: string; kind: string }[]
@@ -59,107 +60,37 @@ interface ShapeReport {
   widgetBrokenBefore: number
   removedLeads: Record<string, number>
   removedClosings: { id: string; text: string }[]
+  /** 끝맺음 틀(CLOSING_TEMPLATE_LINES)이 아닌데 지운 줄 — 0 이어야 한다(R2 검토 회귀-3). */
+  removedNonTemplate: { id: string; text: string }[]
 }
 
-async function auditCards(dir: string | undefined, shape: boolean, report: ShapeReport, conclusion: boolean): Promise<Audited[]> {
-  const { loadAnswerIndexData, answerIndexDataDir } = await import("@/lib/chatbot/answer-index/load")
-  const { curatedLegacyText, curatedTextHash, symptomTopicById, findPublicGuide } = await import("@/lib/chatbot/answer-index/curated")
-  const { groupSentenceParagraphs } = await import("@/lib/chatbot/answer-index/paragraphs")
-  const { LEAD_TEXT, gapLeadLine, GAP_RELATED_INTRO } = await import("@/lib/chatbot/answer-index/respond")
-  const { buildSymptomTopicAnswer, buildVagueErrorAnswer } = await import("@/lib/chatbot/symptom-triage")
-  const { formatCsFigmaGuideAnswer } = await import("@/lib/cs-figma-guides")
-  const data = loadAnswerIndexData({ curatedTextHash, dir: dir ?? answerIndexDataDir(process.env) })
-  console.error(`카드 ${data.cards.length}(뺀 카드 ${data.excluded.length}) · 읽기 문제 ${data.problems.length}`)
+async function auditCards(dir: string | undefined, shape: boolean, report: ShapeReport, conclusion: boolean, headline: boolean): Promise<Audited[]> {
+  const { renderCardTexts } = await import("./lib/card-texts")
+  const rendered = await renderCardTexts({ dir, conclusion, headline, onError: (id, error) => console.error(`그리기 실패 ${id}: ${error.message}`) })
+  console.error(`카드 ${rendered.total}(뺀 카드 ${rendered.excluded}) · 읽기 문제 ${rendered.problems}`)
   const out: Audited[] = []
-  // 카드 종류마다 answer 의 꼴이 달라 칸을 느슨하게 읽는다(그리기 실패는 아래에서 잡는다).
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  for (const card of data.cards as unknown as Array<Record<string, any>>) {
-    let text: string | null = null
-    let lead: string | null = null
-    try {
-      if (card.kind === "doc") {
-        const items: SentenceItem[] = []
-        for (const ref of card.answer.sentences ?? []) {
-          for (const sentenceId of ref.ids as number[]) {
-            const sentence = data.currentUnits.get(ref.unit)?.sentences[sentenceId]
-            if (sentence) items.push({ group: ref.unit, id: sentence.i, text: sentence.text })
-          }
-        }
-        let paragraphs = groupSentenceParagraphs(items)
-        // R2 B6: 결론 문장(first)은 맨 앞 문단으로, 결론 한 줄(headline)은 리드 자리에 둔다(respond.ts docParagraphs·headlineFor 와 같은 규칙).
-        const live = (ref: { unit: string; i: number; hash?: string }) => {
-          const sentence = data.currentUnits.get(ref.unit)?.sentences[ref.i]
-          return sentence && (ref.hash === undefined || sentence.hash === ref.hash) ? sentence : null
-        }
-        let headline: string | null = null
-        if (conclusion) {
-          const first = card.answer.first as { unit: string; i: number; hash?: string } | undefined
-          if (first && live(first)) {
-            const at = items.findIndex((item) => item.group === first.unit && item.id === first.i)
-            if (at > 0) {
-              const groups: SentenceItem[][] = []
-              let current: SentenceItem[] = []
-              for (const item of items) {
-                const previous = current.at(-1)
-                if (previous && (previous.group !== item.group || item.id !== previous.id + 1)) {
-                  groups.push(current)
-                  current = []
-                }
-                current.push(item)
-              }
-              if (current.length > 0) groups.push(current)
-              const rest = groups.map((group) => group.filter((item) => item !== items[at]).map((item) => item.text).join(" ")).filter(Boolean)
-              paragraphs = [items[at].text, ...rest]
-            }
-          } else if (card.answer.headline && (card.answer.headline.basis as Array<{ unit: string; i: number; hash?: string }>).every((ref) => live(ref))) {
-            headline = String(card.answer.headline.text).trim()
-          }
-        }
-        if (headline) paragraphs = [headline, ...paragraphs]
-        text = paragraphs.join("\n\n")
-        lead = !headline && card.answer.lead && card.answer.lead !== "none" ? ((LEAD_TEXT as Record<string, string>)[card.answer.lead] ?? null) : null
-      } else if (card.kind === "fixed") {
-        text = "text" in card.answer ? card.answer.text : curatedLegacyText(card.answer.curatedRef)
-      } else if (card.kind === "policy") {
-        text = card.answer.text
-      } else if (card.kind === "howto") {
-        if (card.answer.guide) {
-          const guide = findPublicGuide(card.answer.guide)
-          text = guide ? formatCsFigmaGuideAnswer(guide) : null
-        } else {
-          const topic = symptomTopicById(card.answer.symptomTopic)
-          text = topic ? (buildSymptomTopicAnswer(topic, { question: "" })?.answer ?? null) : buildVagueErrorAnswer().answer
-        }
-      } else if (card.kind === "gap") {
-        const items: SentenceItem[] = []
-        for (const related of (card.answer?.related ?? []).slice(0, 2)) {
-          const sentence = data.currentUnits.get(related.unit)?.sentences[related.i]
-          if (sentence) items.push({ group: related.unit, id: sentence.i, text: sentence.text })
-        }
-        text = [gapLeadLine(card.topic), items.length ? `${GAP_RELATED_INTRO}\n${groupSentenceParagraphs(items).join("\n")}` : null].filter(Boolean).join("\n\n")
-      }
-    } catch (error) {
-      console.error(`그리기 실패 ${card.id}: ${(error as Error).message}`)
-    }
-    if (!text) continue
-    // respond.ts 와 같은 순서: 리드를 첫 문단 앞에 붙인 뒤(다듬을 때는) shape 를 건다.
-    const composed = lead ? `${lead} ${text}` : text
+  for (const card of rendered.cards) {
+    // respond.ts 와 같은 순서: 리드를 첫 문단 앞에 붙인 뒤(다듬을 때는) shape 를 건다. 사람이 쓴 글·공백 답은 끝맺음을 지우지 않는다.
+    const composed = card.lead ? `${card.lead} ${card.text}` : card.text
     let final = composed
     if (shape) {
-      const result = shapeAnswer(composed)
+      const result = shapeAnswer(composed, shapeOptionsFor(card.policyGoverned ? "policy" : card.kind))
       final = result.text
       report.cards += 1
       if (final !== composed) report.changed += 1
       if (result.reverted) report.reverted.push(card.id)
       for (const removed of result.removedLeads) report.removedLeads[removed] = (report.removedLeads[removed] ?? 0) + 1
-      for (const removed of result.removedClosings) report.removedClosings.push({ id: card.id, text: removed })
+      for (const removed of result.removedClosings) {
+        report.removedClosings.push({ id: card.id, text: removed })
+        if (!isClosingTemplate(removed)) report.removedNonTemplate.push({ id: card.id, text: removed })
+      }
       let expected = contentSignature(composed)
-      for (const removed of [...result.removedLeads, ...result.removedClosings]) expected = expected.replace(contentSignature(removed), "")
+      for (const removed of [...result.removedLeads, ...result.removedClosings.filter(isClosingTemplate)]) expected = expected.replace(contentSignature(removed), "")
       if (findWidgetBreaks(composed).length > 0) report.widgetBrokenBefore += 1
       if (findWidgetBreaks(final).length > 0) report.widgetBroken.push({ id: card.id, kind: card.kind })
       if (!result.reverted && expected !== contentSignature(final)) report.mismatched.push({ id: card.id, kind: card.kind })
     }
-    out.push({ kind: card.kind, id: card.id, text: final, record: analyzeStyle({ text: final, asks: card.kind === "gap" ? null : card.asks }) })
+    out.push({ kind: card.kind, id: card.id, text: final, record: analyzeStyle({ text: final, asks: card.asks }) })
   }
   return out
 }
@@ -207,7 +138,7 @@ async function main() {
   if (!wantCards && answerFiles.length === 0) usage("--cards 나 --answers 가 필요합니다.")
   const examples = Number(argValues(argv, "--examples")[0] ?? 0)
   const shape = hasFlag(argv, "--shape")
-  const shapeReport: ShapeReport = { cards: 0, changed: 0, reverted: [], mismatched: [], widgetBroken: [], widgetBrokenBefore: 0, removedLeads: {}, removedClosings: [] }
+  const shapeReport: ShapeReport = { cards: 0, changed: 0, reverted: [], mismatched: [], widgetBroken: [], widgetBrokenBefore: 0, removedLeads: {}, removedClosings: [], removedNonTemplate: [] }
   const dirArg = argValues(argv, "--data-dir")[0]
   const result: Record<string, unknown> = {}
   const report = (title: string, items: Audited[]) => {
@@ -238,10 +169,10 @@ async function main() {
       }
     }
   }
-  if (wantCards) report("cards", await auditCards(dirArg ? resolve(process.cwd(), dirArg) : undefined, shape, shapeReport, !hasFlag(argv, "--no-conclusion")))
+  if (wantCards) report("cards", await auditCards(dirArg ? resolve(process.cwd(), dirArg) : undefined, shape, shapeReport, !hasFlag(argv, "--no-conclusion"), hasFlag(argv, "--headline")))
   if (wantCards && shape) {
     console.log(
-      `shape: 카드 ${shapeReport.cards} · 바뀐 카드 ${shapeReport.changed} · 안전 규칙으로 되돌림 ${shapeReport.reverted.length} · 글자 보존 어긋남 ${shapeReport.mismatched.length} · 위젯이 깨뜨려 그릴 덩이 ${shapeReport.widgetBroken.length}(다듬기 전 ${shapeReport.widgetBrokenBefore}장) · 뺀 빈 리드 ${Object.values(shapeReport.removedLeads).reduce((a, b) => a + b, 0)} · 뺀 끝맺음 ${shapeReport.removedClosings.length}`
+      `shape: 카드 ${shapeReport.cards} · 바뀐 카드 ${shapeReport.changed} · 안전 규칙으로 되돌림 ${shapeReport.reverted.length} · 글자 보존 어긋남 ${shapeReport.mismatched.length} · 위젯이 깨뜨려 그릴 덩이 ${shapeReport.widgetBroken.length}(다듬기 전 ${shapeReport.widgetBrokenBefore}장) · 뺀 빈 리드 ${Object.values(shapeReport.removedLeads).reduce((a, b) => a + b, 0)} · 뺀 끝맺음 ${shapeReport.removedClosings.length}(틀 아닌 줄 ${shapeReport.removedNonTemplate.length})`
     )
     const reportPath = argValues(argv, "--shape-report")[0]
     if (reportPath) {

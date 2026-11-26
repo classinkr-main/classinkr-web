@@ -4,7 +4,8 @@
  * 지키는 것
  * - 문장 순서와 글자 내용은 그대로다. 바꾸는 것은 줄바꿈·빈 줄·목록 표시(1. 한 가지)·메뉴 표기([이름], [A] > [B])뿐이다.
  *   글자를 없애는 곳은 둘이다: 뒤에 결론이 있는 빈 리드·예고("이렇게 하면 돼요." "아래 순서대로 따라 하시면 됩니다." "두 가지 답드릴게요.")와
- *   끝에 겹친 끝맺음 줄. 둘 다 결과에 따로 적어 돌려준다(시험이 목록으로 대조한다).
+ *   끝에 겹친 끝맺음 틀 줄(CLOSING_TEMPLATE_LINES 와 글자까지 같은 줄만 — 사실·단서가 든 줄은 끝맺음처럼 보여도 지우지 않는다). 둘 다 결과에 따로
+ *   적어 돌려준다(시험이 전체 카드로 대조한다). 사람이 쓴 글(policy·fixed)과 공백 답은 끝맺음을 지우지 않는다(shapeOptionsFor).
  * - 말투(요체·니다체)는 바꾸지 않는다(결정 3: 사용자 결정 대기).
  * - 위젯이 그리는 규칙에 맞춘다(components/ui/chatbot/MessageList.tsx): 빈 줄로 덩이를 나누고, 덩이의 줄이 전부 "1." 이거나 전부 "-" 일 때만 목록으로 그린다.
  *   리드 줄 바로 아래 번호 목록이 붙으면 목록이 생글자로 나오므로, 문장 줄과 목록 사이에는 늘 빈 줄을 둔다. 번호 목록은 덩이 안에서 끊기지 않게 한 덩이로 모으고
@@ -50,6 +51,25 @@ export function isClosingLine(line: string): boolean {
   if (!text || text.length > CLOSING_LINE_MAX) return false
   if (/^(?:\d+[.)]|[-•·*])\s/.test(text)) return false
   return CLOSING_LINE_RE.test(text) && splitIntoSentences(text).length <= 2
+}
+
+/**
+ * 끝맺음 틀 문구(상담 안내만 있고 사실이 없는 고정 줄): 증상·가이드 답(symptom-triage.ts)과 복합 답(respond.ts)이 붙이는 줄이다.
+ * 겹친 끝맺음 정리·복합 답의 끝맺음 거두기는 이 줄과 글자까지 같은 줄만 다룬다(R2 검토 회귀-3·품질-2·품질-4).
+ */
+export const CLOSING_TEMPLATE_LINES: readonly string[] = [
+  "그래도 안 되면 담당자 상담으로 이어 드릴게요.",
+  "따라 하다 막히는 부분이 있으면 담당자 상담으로 이어 드릴게요.",
+  "더 궁금한 점은 \"상담원 연결\"이라고 남겨 주세요.",
+]
+
+export function isClosingTemplate(line: string): boolean {
+  return CLOSING_TEMPLATE_LINES.includes(line.trim())
+}
+
+/** 카드 종류별 다듬기 선택: 사람이 쓴 글(policy·fixed)·공백 답·상담 연결은 끝맺음을 지우지 않는다(doc·howto 만 틀 줄 겹침을 정리한다). */
+export function shapeOptionsFor(kind: string): ShapeOptions {
+  return { keepClosings: !(kind === "doc" || kind === "howto") }
 }
 
 // ─── 덩이·줄 ─────────────────────────────────────────────────────────────
@@ -241,6 +261,12 @@ function isHeadingLine(line: string): boolean {
   return line.length <= 24 || /[:：]$/.test(line)
 }
 
+/** 번호를 뗀 단일 항목 글: 한 문장 한 줄로 나눈다. 나눈 줄이 목록 표시로 시작하면(글 안의 "2) …") 위젯이 목록으로 그려 깨지므로 나누지 않는다. */
+function singleItemLines(text: string): string[] {
+  const lines = sentenceLines(text)
+  return lines.some((line) => lineKind(line) !== "plain") ? [text] : lines
+}
+
 /**
  * 같은 답 안에 번호 목록과 점 목록이 섞이면 목록 표시를 한 가지(번호)로 맞춘다. 번호는 덩이마다 1부터 다시 매긴다.
  * 점 목록은 순서가 없는 점검 항목이라 번호를 붙이면 "1. 1단계 …"처럼 읽히므로 표시를 떼고 한 줄씩 둔다(앞 소제목 줄과 한 덩이).
@@ -251,8 +277,8 @@ function unifyListMarks(blocks: string[][]): string[][] {
   for (const lines of blocks) {
     const kind = blockKind(lines)
     if (kind === "ordered") {
-      // 항목이 하나뿐인 번호 목록은 번호를 떼어 문장으로 둔다(위젯이 번호를 다시 1로 그리므로 번호가 틀려 보인다).
-      out.push(lines.length === 1 ? [itemText(lines[0])] : lines.map((line, at) => `${at + 1}. ${itemText(line)}`))
+      // 항목이 하나뿐인 번호 목록은 번호를 떼어 문장으로 둔다(위젯이 번호를 다시 1로 그리므로 번호가 틀려 보인다). 뗀 글도 한 문장 한 줄로 나눈다.
+      out.push(lines.length === 1 ? singleItemLines(itemText(lines[0])) : lines.map((line, at) => `${at + 1}. ${itemText(line)}`))
     } else if (kind === "bullet" && hasOrdered) {
       const plain = lines.map(itemText)
       const previous = out.at(-1)
@@ -282,14 +308,19 @@ function stripEmptyLead(blocks: string[][], removed: string[]): string[][] {
   return out
 }
 
-/** 끝 세 줄 안에 끝맺음이 둘 이상이면 마지막 하나만 남긴다(끝맺음만 있는 줄만 지운다). */
+/**
+ * 끝 세 줄 안에 끝맺음이 둘 이상이면 틀 줄(CLOSING_TEMPLATE_LINES)만 지운다: 다른 끝맺음 줄(사실·단서가 든 상담 안내)이 있으면 틀 줄을 모두,
+ * 틀 줄만 겹쳤으면 마지막 하나를 남긴다. 틀이 아닌 줄은 끝맺음처럼 보여도 지우지 않는다.
+ */
 function dedupeClosings(blocks: string[][], removed: string[]): string[][] {
   const flat: { block: number; line: number }[] = []
   blocks.forEach((lines, block) => lines.forEach((_line, line) => flat.push({ block, line })))
   const tail = flat.slice(-3)
-  const closings = tail.filter((at) => isClosingLine(blocks[at.block][at.line]))
+  const closings = tail.filter((at) => isClosingLine(blocks[at.block][at.line]) || isClosingTemplate(blocks[at.block][at.line]))
   if (closings.length < 2) return blocks
-  const drop = closings.slice(0, -1)
+  const templates = closings.filter((at) => isClosingTemplate(blocks[at.block][at.line]))
+  if (templates.length === 0) return blocks
+  const drop = templates.length === closings.length ? templates.slice(0, -1) : templates
   const out = blocks.map((lines) => [...lines])
   for (const at of drop) {
     removed.push(out[at.block][at.line])
