@@ -17,6 +17,7 @@ import {
 import { normalizePhoneKey } from "@/lib/compass/normalize";
 import { summarizeLeadResponseStatus } from "@/lib/crm/lead-response-status";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { fetchSupabasePages } from "@/lib/supabase/pagination";
 import type { Lead, LeadInsert, LeadUpdate } from "@/lib/supabase/database.types";
 import { parseNaverAd, type NaverAdAttribution } from "@/lib/naver-ad-params";
 import {
@@ -1595,9 +1596,23 @@ export async function getLeadChannelStats(limit = 8): Promise<LeadChannelStat[]>
     rows = leads.map((lead) => ({ source: lead.source ?? null, status: lead.status }));
   } else {
     const supabase = createSupabaseAdminClient();
-    const { data, error } = await supabase.from("leads").select("source, status");
-    if (error) throw new Error(`[leads] 채널 집계 실패: ${error.message ?? "unknown database error"}`);
-    rows = (data ?? []) as Array<{ source: string | null; status: string }>;
+    // PostgREST max-rows(1000)에서 조용히 잘리지 않도록 id 정렬 range 페이지로 전량 읽는다.
+    const result = await fetchSupabasePages<{ source: string | null; status: string }>({
+      maxRows: LEAD_MAX_ROWS,
+      fetchPage: (from, to) =>
+        supabase
+          .from("leads")
+          .select("source, status, id", from === 0 ? { count: "exact" } : undefined)
+          .order("id", { ascending: true })
+          .range(from, to),
+    });
+    if (result.error) {
+      throw new Error(`[leads] 채널 집계 실패: ${result.error.message ?? "unknown database error"}`);
+    }
+    if (result.truncated) {
+      throw new Error(`[leads] 채널 집계 실패: 리드가 ${LEAD_MAX_ROWS}행 상한을 넘었습니다`);
+    }
+    rows = result.data;
   }
 
   const map = new Map<string, { total: number; converted: number }>();
