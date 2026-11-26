@@ -91,4 +91,21 @@ describe("syncRev — Row ID 경고", () => {
     expect(parts[0]).toMatch(/^REV 범위\('2\. REV'!A1:CZ1000\)가 상한에 도달했습니다/)
     expect(parts[1]).toBe("Row ID 열 없음 — 시트 쓰기 불가(행 ID 스크립트 필요)")
   })
+
+  it("빈 그리드면 reject — replaceBranchRevDeals 호출 안 함(미러 보존)", async () => {
+    serve([])
+    const { syncRev } = await import("@/lib/branch/sync/sync-rev")
+    await expect(syncRev()).rejects.toThrow(/시트 범위가 비어 있습니다/)
+    expect(replaceBranchRevDeals).not.toHaveBeenCalled()
+    expect(replaceBranchDshMirror).not.toHaveBeenCalled()
+  })
+
+  it("고객 머리가 바뀌어 전 행이 건너뛰어지면 reject", async () => {
+    const grid = revGrid({ rowIdHeader: true, ids: ["r_0123456789ab"] })
+    grid[1] = [plain("Renamed"), ...grid[1].slice(1)]
+    serve(grid)
+    const { syncRev } = await import("@/lib/branch/sync/sync-rev")
+    await expect(syncRev()).rejects.toThrow(/고객\(Account\) 열 머리/)
+    expect(replaceBranchRevDeals).not.toHaveBeenCalled()
+  })
 })
