@@ -41,12 +41,10 @@ describe("R15 조각 답은 그 종류 θ + 0.1 이상일 때만", () => {
     expect(replay).toBeGreaterThanOrEqual(theta + SEGMENT_CONF_MARGIN)
     const decision = resolveDecision(index, analysis, () => theta)
     expect(decision.segments?.[0]).toMatchObject({ kind: "answer", card: CARDS.replay, source: "segment" })
-    // 강퇴 조각은 제 판정으로 답하지 않는다(원문 판정이 그 조각 1위 카드로 정했을 때만 원문 판정으로 채운다).
-    const second = decision.segments?.[1]
-    expect(second?.source).not.toBe("segment")
-    if (second?.kind === "answer") expect(second).toMatchObject({ card: CARDS.kick, source: "whole" })
-    else expect(second).toMatchObject({ kind: "abstain", card: null })
-    expect(decision).toMatchObject({ kind: "answer", card: CARDS.replay })
+    // 강퇴 조각은 제 판정으로 답하지 않는다. 이 픽스처에서는 원문 판정도 강퇴 카드로 정하지 않아 그 조각은 못 정함(알림 줄 대상)이다(R2 검토 회귀-12: 한 결과로 고정).
+    expect(decision.segments?.[1]).toMatchObject({ kind: "abstain", card: null })
+    expect(decision.segments?.[1]?.source).toBeUndefined()
+    expect(decision).toMatchObject({ kind: "answer", card: CARDS.replay, partial: true })
     // 여유를 넘는 문턱이면 두 조각 모두 제 판정으로 답한다.
     const loose = resolveDecision(index, analysis, () => kick - SEGMENT_CONF_MARGIN - 0.01)
     expect(loose.segments?.map((segment) => [segment.kind, segment.card, segment.source])).toEqual([
