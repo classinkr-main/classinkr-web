@@ -138,7 +138,8 @@ export function useBranchJson<T>(url: string, refreshKey: number, options: UseBr
       .then((result) => {
         if (!active) return
         const isErrorFallback = result.staleReason === "error"
-        setState({
+        // 응답을 기다리는 사이 url 이 바뀌었으면(월·담당자 전환) 옛 url 의 응답으로 새 상태를 덮지 않는다.
+        setState((previous) => previous.key !== stateKey ? previous : {
           key: stateKey,
           data: result.data,
           error: null,
