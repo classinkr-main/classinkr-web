@@ -444,7 +444,8 @@ interface CachedAnswerEntry {
 }
 
 // 2026-11-23: 쇼룸 실시간 응답·수업 워크플로 통합에 맞춰 캐시 판을 올렸다.
-const ANSWER_CACHE_VERSION = "answer-20261123-v1"
+// 20261126: R2 B5 앞단 낱말 장치(정책 주제·즉시 상담·거절·이미 해 봄·시험·영어)와 공감 줄 자리가 바뀌어 같은 글의 답이 달라진다.
+const ANSWER_CACHE_VERSION = "answer-20261126-v1"
 const ANSWER_CACHE_TTL_MS = 5 * 60 * 1000
 const ANSWER_CACHE_MAX = 200
 const answerCache = new Map<string, { expiresAt: number; value: CachedAnswerEntry }>()

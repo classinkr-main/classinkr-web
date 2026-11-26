@@ -195,6 +195,24 @@ export function englishLeadLine(englishSummary?: string, hasSteps = true) {
     : `I'll answer in Korean below. If anything is unclear, type "상담원 연결" to talk to a person, or ask again with a short phrase like "login not working".`
 }
 
+// 목록·번호 줄로 시작하는 문단(결론 문장이 없다).
+const LIST_PARAGRAPH_RE = /^(?:\d+[.)]\s|[-•·*]\s|【)/
+// 예고만 하는 첫 문단("세무 담당께 드릴 수 있게 정리할게요.", "아래 순서대로 따라 하시면 됩니다.")은 결론이 아니다.
+const PREVIEW_PARAGRAPH_RE = /(?:드릴게요|할게요|볼게요|드리겠습니다|하겠습니다|따라\s*하시면\s*(?:됩니다|돼요)|이렇게\s*하면\s*돼요)[.!:]?$/
+
+/**
+ * 공감 한마디의 자리(R2 B5, 두괄식): 첫 문단이 결론 문장이고 뒤에 문단이 더 있으면 공감은 결론 다음 문단에 둔다
+ * ("[결론]\n\n걱정되셨겠어요. 같이 차근차근 확인해 볼게요.\n\n1. …"). 한 문단짜리 답, 목록·예고 문단으로 시작하는 답은 지금처럼 맨 앞이다.
+ * 화난·반복 문의의 사과는 맨 앞에 둔다(사과를 먼저 하는 상담 원칙, 상담 연결 줄과 같은 줄).
+ */
+function withOpener(answer: string, opener: string, tone: ConversationTone) {
+  if (tone.angry || tone.repeated) return `${opener}\n\n${answer}`
+  const paragraphs = answer.split("\n\n")
+  const first = paragraphs[0].trim()
+  if (paragraphs.length < 2 || LIST_PARAGRAPH_RE.test(first) || PREVIEW_PARAGRAPH_RE.test(first)) return `${opener}\n\n${answer}`
+  return [paragraphs[0], opener, ...paragraphs.slice(1)].join("\n\n")
+}
+
 /**
  * 답변 앞에 공감 한마디·영어 요약을 붙이고, 화난/반복 문의면 상담 연결을 켠다. 여러 번 불러도 결과가 같다.
  */
@@ -232,8 +250,8 @@ export function applyToneToAnswer(
     const head = `${HANDOFF_NOW_LINE}${prior && next.startsWith(prior) ? ` ${prior}` : ""}${refund}`
     if (prior && next.startsWith(prior)) next = next.slice(prior.length).replace(/^\n\n/, "")
     next = alreadyToned || !opener ? `${head}\n\n${next}` : `${opener} ${head}\n\n먼저 해 보실 수 있는 조치도 함께 남겨 둘게요.\n\n${next}`
-  } else if (opener && !alreadyToned) {
-    next = `${opener}\n\n${next}`
+  } else if (opener && !alreadyToned && !next.split("\n\n").includes(opener)) {
+    next = withOpener(next, opener, tone)
   }
   if (tone.english && !/^(?:In short:|I'll answer|Yes —)/.test(next)) {
     next = `${englishLeadLine(options.englishSummary, /^\d\.\s/m.test(next))}\n\n${next}`
