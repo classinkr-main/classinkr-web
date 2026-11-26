@@ -119,12 +119,12 @@ describe("isAdminAiPreviewEnabled — 글자 그대로 \"1\" 만 켠다", () => 
 })
 
 describe("꺼짐(기본) — 시안이 운영 화면 어디에도 드러나지 않는다", () => {
-  it("ADMIN_NAV·상시 목록에 AI 올인원이 없다 — 16개, 상시 9", async () => {
+  it("ADMIN_NAV·상시 목록에 AI 올인원이 없다 — 17개, 상시 9", async () => {
     const { nav, access } = await loadWithFlag("")
     const hrefs = nav.ADMIN_NAV.map((item) => item.href)
     expect(hrefs).not.toContain("/admin/ai")
     // 2026-10 마케팅 프로젝트가 캠페인 관리의 탭이 되며 17 → 16.
-    expect(nav.ADMIN_NAV).toHaveLength(16)
+    expect(nav.ADMIN_NAV).toHaveLength(17)
     expect(access.DEFAULT_PRIMARY_HREFS).not.toContain("/admin/ai")
     // 2026-11-04 마케팅 허브가 상시로 올라와 9 → 10. 2026-11-09 D안 KR Team·매출 장부 접힘 10 → 8.
     expect(access.DEFAULT_PRIMARY_HREFS).toHaveLength(9)
@@ -145,7 +145,7 @@ describe("꺼짐(기본) — 시안이 운영 화면 어디에도 드러나지 �
       "/admin/chatbot",
     ])
     const accessible = access.getAccessibleAdminNavItems(resolved).map((item) => item.href)
-    expect(accessible).toHaveLength(16)
+    expect(accessible).toHaveLength(17)
     expect(accessible).not.toContain("/admin/ai")
     const rows = access.buildNavPreferenceRows({ role: "SUPER_ADMIN", overrides: {} })
     expect(rows.map((row) => row.item.href)).not.toContain("/admin/ai")
@@ -177,7 +177,7 @@ describe("꺼짐(기본) — 시안이 운영 화면 어디에도 드러나지 �
 describe("켜짐(NEXT_PUBLIC_ADMIN_AI_PREVIEW=1) — 시안 미리보기", () => {
   it("AI 올인원은 네 업무 메뉴 뒤에 home 범주로 들어온다", async () => {
     const { nav } = await loadWithFlag("1")
-    expect(nav.ADMIN_NAV).toHaveLength(17)
+    expect(nav.ADMIN_NAV).toHaveLength(18)
     expect(nav.ADMIN_NAV.slice(0, 5).map((item) => item.href)).toEqual([
       "/admin/overview",
       "/admin/branch/ledger",
@@ -191,7 +191,7 @@ describe("켜짐(NEXT_PUBLIC_ADMIN_AI_PREVIEW=1) — 시안 미리보기", () =>
     expect(ai?.maturity).toBe("wip")
   })
 
-  it("상시 10 / 접힘 6 / 숨김 1 — AI는 상시 목록 5번째다", async () => {
+  it("상시 10 / 접힘 7 / 숨김 1 — AI는 상시 목록 5번째다", async () => {
     const { access } = await loadWithFlag("1")
     expect(access.DEFAULT_PRIMARY_HREFS).toHaveLength(10)
     expect(access.DEFAULT_PRIMARY_HREFS[4]).toBe("/admin/ai")
@@ -201,7 +201,7 @@ describe("켜짐(NEXT_PUBLIC_ADMIN_AI_PREVIEW=1) — 시안 미리보기", () =>
       "/admin/overview",
     ])
     expect(resolved.primary[4]?.href).toBe("/admin/ai")
-    expect(resolved.folded.flatMap((group) => group.items)).toHaveLength(6)
+    expect(resolved.folded.flatMap((group) => group.items)).toHaveLength(7)
     expect(resolved.hidden).toHaveLength(1)
     expect(access.getAccessibleAdminNavItems(resolved).map((item) => item.href)).toContain("/admin/ai")
   })

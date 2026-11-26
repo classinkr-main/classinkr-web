@@ -319,6 +319,9 @@ npm run check:db --  --strict
 | 파일 | 하는 일 | 미적용 시 | 확인 |
 | --- | --- | --- | --- |
 | `20261124_distributor_settlement_confirm_revise.sql` | `distributor_settlements` 에 `distributor_confirmed_at`·`distributor_confirmed_name`(60자 CHECK)·`revised_at`·`discount`(JSONB, mode CHECK)·`document_text`(JSONB) 추가. 멱등(`ADD COLUMN IF NOT EXISTS`·`DROP CONSTRAINT IF EXISTS`) | 정산 조회는 새 칸 없이 다시 읽는다(42703 폴백). 총판 링크에 확인 버튼이 나오지 않고, 발행 후 금액 수정과 할인·제목·기타사항을 넣은 저장은 503 "적용 필요". 발행 전 편집·발행·입금·고객 동의 자동 생성은 그대로 된다 | `npm run check:db` 의 `distributor_settlements`(총판 견적서 확인·발행 후 수정) 프로브(warning), 또는 `select count(*) from information_schema.columns where table_name = 'distributor_settlements' and column_name in ('distributor_confirmed_at','distributor_confirmed_name','revised_at','discount','document_text');` → `5` |
+| `20261125031832_admin_requests.sql` | 홈페이지 관리자 요청, 로그 및 캡처 보관 테이블. RLS와 service role 전용 접근을 적용한다. | 홈페이지 관리자 요청을 조회하거나 등록할 수 없다. | `npm run check:db`의 `admin_requests` 프로브 |
+| `20261125062633_admin_requests_reporter_review.sql` | 요청자의 해결 확인과 재확인 기록, 상태 필터 인덱스. 관리자 요청 테이블 생성 뒤 적용한다. | 관리자 요청 목록 및 요청자의 처리 결과 확인에 실패한다. | `npm run check:db`의 요청자 해결 확인 프로브 |
+| `20261125083325_admin_requests_retry_receipts.sql` | 접수 내용의 해시와 최근 요청 변경 영수증. 본문이나 답변을 영수증에 중복 저장하지 않는다. | 요청 접수와 상태 변경을 저장하거나 재시도할 수 없다. | `npm run check:db`의 관리자 요청 재시도 영수증 프로브 |
 
 ### 2026-11-26 REV 엔트리 읽기 색인 · 중복 색인 정리 — 서울 프로젝트 미적용
 

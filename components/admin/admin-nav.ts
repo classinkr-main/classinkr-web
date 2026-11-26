@@ -13,6 +13,7 @@ import {
   LayoutDashboard,
   Magnet,
   Megaphone,
+  MessageSquarePlus,
   PackageCheck,
   ReceiptText,
   Settings,
@@ -140,7 +141,7 @@ export const ADMIN_NAV: AdminNavItem[] = [
   // 갈매봇 위젯(components/admin/ai)의 전체 화면판이다. home 범주 블록 안, Overview 바로 아래.
   // 서버 오더 엔진이 붙기 전이라 시안(샘플 데이터)으로 동작한다 — maturity "wip".
   // (2026-10-19 통합 병합) 기획 D13 — 시안 스위치(NEXT_PUBLIC_ADMIN_AI_PREVIEW=1)가 꺼져 있으면(기본)
-  // 이 항목은 배열에 없다(lib/admin-ai/preview.ts). 그때 전체는 16이다.
+  // 이 항목은 배열에 없다(lib/admin-ai/preview.ts). 그때 전체는 17이다.
   ...(isAdminAiPreviewEnabled() ? [ADMIN_AI_NAV_ITEM] : []),
 
   // 영업·고객 — 하루의 첫 동선: 오늘 일정 → 들어온 문의·고객(CRM 배지).
@@ -181,6 +182,7 @@ export const ADMIN_NAV: AdminNavItem[] = [
   // 회원 관리는 Settings "회원" 탭(?tab=members)으로 흡수됨 — /admin/users는 그 탭으로 redirect 스텁.
   // ⌘K 검색어(회원·사용자·권한)를 Settings 항목 keywords에 병합해 검색성 보존.
   { href: "/admin/settings", label: "설정", icon: Settings, section: "system", category: "system", keywords: "설정 settings 환경 회원 사용자 users 권한 계정" },
+  { href: "/admin/requests", label: "요청", icon: MessageSquarePlus, section: "system", category: "system", keywords: "오류 버그 개선 문의 로그 캡처 테스트" },
   { href: "/admin/dev", label: "개발 도구", icon: Code2, section: "system", category: "system", keywords: "개발 dev 버그 패치노트" },
   // 운영 상태는 전원 기본 숨김(DEFAULT_HIDDEN_HREFS)이라 시스템 블록 맨 뒤에 둔다.
   { href: "/admin/ops", label: "운영 상태", icon: Activity, section: "system", category: "system", keywords: "ops health 상태 통합 크론 cron automation" },

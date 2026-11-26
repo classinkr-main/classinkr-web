@@ -191,6 +191,16 @@ export async function GET(
 
   const dryRun = request.nextUrl.searchParams.get("dryRun") === "true"
   // 매 슬롯 잡 — 알림 설정과 무관하게 맨 앞에서 돈다(설정 실패·503 경로에도 결과를 싣는다).
+  const captureCleanup = slot === 3 && !dryRun && process.env.VERCEL_ENV === "production"
+    ? import("@/lib/repositories/admin-requests")
+        .then(({ purgeExpiredRequestCaptures }) => purgeExpiredRequestCaptures())
+        .then((purged) => ({ status: "ok", purged } as const))
+        .catch((cause: unknown) => {
+          const code = typeof cause === "object" && cause && "code" in cause ? cause.code : undefined
+          console.error("[request capture cleanup] Failed", code)
+          return { status: "failed" } as const
+        })
+    : undefined
   const compassLeadReconcile = await runCompassLeadReconcileJob(dryRun)
   const compassFailed = compassLeadReconcile.status === "failed"
 
@@ -209,7 +219,7 @@ export async function GET(
   }
   if (!notificationSchedule && !runsFixedJobs) {
     return NextResponse.json(
-      { ok: false, error: SETTINGS_UNAVAILABLE_ERROR, compassLeadReconcile },
+      { ok: false, error: SETTINGS_UNAVAILABLE_ERROR, compassLeadReconcile, requestCaptureCleanup: await captureCleanup },
       { status: 503 }
     )
   }
@@ -269,7 +279,8 @@ export async function GET(
   if (runsSegments) ran.push(await runCrmSegmentsDailyJob(false, requestStartedAt))
   if (runsHardwareAlerts) ran.push(await runHardwareProcessAlertsJob(false))
 
-  const ok = ran.every((result) => result.status !== "failed") && !compassFailed
+  const requestCaptureCleanup = await captureCleanup
+  const ok = ran.every((result) => result.status !== "failed") && !compassFailed && requestCaptureCleanup?.status !== "failed"
 
-  return NextResponse.json({ ok, slot, kstHour, ran, compassLeadReconcile }, { status: ok ? 200 : 500 })
+  return NextResponse.json({ ok, slot, kstHour, ran, compassLeadReconcile, requestCaptureCleanup }, { status: ok ? 200 : 500 })
 }

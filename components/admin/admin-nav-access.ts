@@ -100,6 +100,7 @@ import {
   type AdminNavItem,
 } from "./admin-nav"
 import { ADMIN_AI_HREF, isAdminAiPreviewEnabled } from "@/lib/admin-ai/preview"
+import { ADMIN_REQUESTS_HREF, canSubmitAdminRequest } from "@/lib/admin/requests"
 
 /**
  * 렌더 자리는 두 곳뿐이다. "deny" 는 2026-09-10 전면 공개 전환으로 제거됐다 —
@@ -344,9 +345,10 @@ function resolveDefaultNavPlacement(href: string): NavPlacement {
  * 오버라이드가 없을 때 그 계정의 기본값. setNavOverride 의 "기본과 같으면 키 삭제" 기준이기도 하다.
  *  - 착지 화면은 항상 보인다(숨김 불가).
  *  - 전체 계정: 기본 숨김(DEFAULT_HIDDEN_HREFS) → 상시 → 접힘.
- *  - 간소 계정: SIMPLE_NAV_PRIMARY_HREFS 만 보이고 나머지는 전부 숨김.
+ *  - 간소 계정: SIMPLE_NAV_PRIMARY_HREFS와 접수 권한이 있는 요청 메뉴를 표시한다.
  */
 export function resolveDefaultNavPreference(href: string, ctx: NavAudienceContext): NavPreference {
+  if (href === ADMIN_REQUESTS_HREF) return canSubmitAdminRequest(ctx.role) ? "folded" : "hidden"
   if (!isNavHideable(href, ctx)) return resolveDefaultNavPlacement(href)
   const hiddenByDefault = hasFullAdminNav(ctx)
     ? DEFAULT_HIDDEN_HREFS.includes(href)

@@ -84,12 +84,11 @@ describe("사이드바 CRM 평탄화", () => {
   })
 
   it("접힘 묶음이 범주마다 항목 수와 함께 토글로 렌더된다(2026-11-09 D안)", () => {
-    // 접힘 자리 8개 = 주문·매출 2 + 마케팅·분석 3 + 시스템 3. 시스템의 운영 상태는 기본 숨김이라(2026-09-25)
-    // 시스템 묶음에는 2개가 뜨고, 나머지 1개는 그 아래 "숨긴 탭 1"로 묶인다. "기타" 묶음은 더는 없다.
+    // 운영 상태는 기본 숨김이다. 시스템 묶음에는 설정, 요청, 개발 도구가 표시된다.
     const html = render("/admin/crm")
     expect(foldCount(html, "주문·매출")).toBe(1)
     expect(foldCount(html, "마케팅·분석")).toBe(3)
-    expect(foldCount(html, "시스템")).toBe(2)
+    expect(foldCount(html, "시스템")).toBe(3)
     expect(html).not.toContain(">기타<")
     expect(hiddenCount(html)).toBe(1)
     // 처음에는 전부 접혀 있다 — 접힌 탭 링크는 그리지 않는다.
@@ -312,12 +311,14 @@ describe("간소 사이드바", () => {
     expect(designated).not.toContain("최고 관리자")
   })
 
-  it("범주 소제목·기타·숨긴 탭 묶음·사이드바 편집 진입점이 없다", () => {
+  it("요청만 시스템에 접히고 다른 묶음과 편집 진입점은 표시하지 않는다", () => {
     const html = render(LEDGER, SIMPLE)
-    for (const label of ["고객·매출", "마케팅·분석", "시스템", "기타", "숨긴 탭", "다시 표시", "사이드바 편집"]) {
+    for (const label of ["고객·매출", "마케팅·분석", "기타", "숨긴 탭", "다시 표시", "사이드바 편집"]) {
       expect(html, label).not.toContain(label)
     }
+    expect(foldCount(html, "시스템")).toBe(1)
     expect(hiddenCount(html)).toBeNull()
+    expect(navHrefs(render("/admin/requests", SIMPLE))).toContain("/admin/requests")
     // 빠른 이동(⌘K)·로그아웃은 남는다 — 팔레트 목록은 따로 걸러진다(command-palette.test.ts).
     expect(html).toContain("빠른 이동·검색")
     expect(html).toContain("로그아웃")

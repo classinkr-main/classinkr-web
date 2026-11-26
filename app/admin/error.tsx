@@ -1,7 +1,9 @@
 "use client"
 
 import Link from "next/link"
+import { usePathname } from "next/navigation"
 import { useEffect } from "react"
+import { ADMIN_REQUESTS_HREF, requestContextQuery } from "@/lib/admin/requests"
 
 export default function AdminError({
   error,
@@ -10,6 +12,8 @@ export default function AdminError({
   error: Error & { digest?: string }
   reset: () => void
 }) {
+  const path = usePathname()
+  const reportContext = requestContextQuery(new URLSearchParams({ screen: path, errorCode: error.digest ?? "" }))
   useEffect(() => {
     console.error("[AdminError]", error)
   }, [error])
@@ -76,7 +80,7 @@ export default function AdminError({
           >
             관리자 페이지에서 예기치 않은 오류가 발생했습니다.
           </p>
-          <div className="flex flex-col sm:flex-row gap-3 justify-center">
+          <div className="flex flex-col sm:flex-row sm:flex-wrap gap-3 justify-center">
             <button
               type="button"
               onClick={reset}
@@ -107,6 +111,14 @@ export default function AdminError({
             >
               캘린더로
             </Link>
+            {path !== ADMIN_REQUESTS_HREF && (
+              <Link
+                href={`${ADMIN_REQUESTS_HREF}?${reportContext}`}
+                className="inline-flex min-h-11 items-center justify-center rounded-lg border border-line-control px-4 text-sm font-semibold text-fg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fg-accent"
+              >
+                오류 신고
+              </Link>
+            )}
           </div>
         </div>
       </div>
