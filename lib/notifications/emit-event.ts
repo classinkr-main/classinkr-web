@@ -175,7 +175,10 @@ function buildLeadDigestWecomCard(input: EmitNotificationEventInput) {
   const convertedCount = getPayloadValue(input, "convertedCount")
   const periodLabel = getPayloadValue(input, "periodLabel")
   const previousLabel = period === "monthly" ? "전월 대비" : "전주 대비"
-  const handoffLabel = chatbotHandoffCount
+  // 다이제스트가 읽기 실패로 null 을 실으면(payload 에 값 없음) 0개로 위장하지 않는다.
+  const handoffLabel = chatbotHandoffCount === undefined && chatbotHandoffSentCount === undefined
+    ? "확인 불가"
+    : chatbotHandoffCount
     ? `${countLabel(chatbotHandoffSentCount)} / ${countLabel(chatbotHandoffCount)}`
     : countLabel(chatbotHandoffSentCount)
 

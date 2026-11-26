@@ -391,6 +391,45 @@ export async function listDurableConversations(
   }
 }
 
+const PERIOD_PAGE_SIZE = 500
+
+/**
+ * 기간 집계용 — last_message_at >= startIso 인 durable(Supabase) 상담을 전부 읽는다(1000행 상한을 넘기지 않게 range 페이징).
+ * 상담 시작(firstAskedAt)은 마지막 메시지보다 늦을 수 없어 이 범위가 기간 안에 시작한 상담을 모두 포함한다.
+ * 미설정/실패 시 null — 호출자가 JSON 폴백을 정한다(무음 빈 배열 금지).
+ */
+export async function listDurableConversationsSince(
+  startIso: string
+): Promise<ChannelConversationRecord[] | null> {
+  if (!channelConversationsSupabaseEnabled()) return null
+
+  try {
+    const supabase = createSupabaseAdminClient()
+    const rows: SupabaseChannelConversationRow[] = []
+    for (let from = 0; ; from += PERIOD_PAGE_SIZE) {
+      const { data, error } = await supabase
+        .from("channel_conversations")
+        .select(
+          "id, name, email, phone, state, tags, first_question, matched_lead_id, matched_org, last_message_at, transcript, synced_at"
+        )
+        .gte("last_message_at", startIso)
+        .order("id", { ascending: true })
+        .range(from, from + PERIOD_PAGE_SIZE - 1)
+      if (error) throw new Error(error.message)
+      const page = (data ?? []) as SupabaseChannelConversationRow[]
+      rows.push(...page)
+      if (page.length < PERIOD_PAGE_SIZE) break
+    }
+    return rows.map(supabaseRowToRecord)
+  } catch (error) {
+    console.warn(
+      "[channel-conversations] Supabase 기간 조회 실패:",
+      error instanceof Error ? error.message : error
+    )
+    return null
+  }
+}
+
 /**
  * 목록 전용(transcript 미포함) 레코드 — 상세/sync 경로(ChannelConversationRecord)와 달리
  * 상담 전문을 담지 않는다. app/api/admin/channel-talk/route.ts 전용.

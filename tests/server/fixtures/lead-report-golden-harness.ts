@@ -129,6 +129,7 @@ export async function loadLeadReportModules(env: LeadReportEnv) {
   }))
   vi.doMock("@/lib/repositories/channel-conversations", () => ({
     getConversations: vi.fn().mockReturnValue([]),
+    listDurableConversationsSince: vi.fn().mockResolvedValue(null),
   }))
   vi.doMock("@/lib/supabase/admin", () => ({
     createSupabaseAdminClient: () => createFakeSupabase(env, capture),
