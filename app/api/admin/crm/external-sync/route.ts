@@ -6,7 +6,7 @@ import {
   notifyExternalCrmSyncOutcome,
   runExternalCrmSyncChain,
 } from "@/lib/external-crm/sync-chain"
-import { getExternalCrmSyncHttpStatus } from "@/lib/external-crm/sync-result"
+import { getExternalCrmSyncChainHttpStatus } from "@/lib/external-crm/sync-result"
 import { expireSyncCacheTags } from "@/lib/server/sync-cache-tags"
 import { getXiaoshouyiSyncRuntimePreflight } from "@/lib/external-crm/xiaoshouyi-sync"
 import { refreshCrmNeoCustomerSnapshotsFromExternalRecords } from "@/lib/repositories/crm-neo-customer-snapshots"
@@ -93,11 +93,13 @@ export async function POST(req: NextRequest) {
       neoCustomerSnapshotsError: chain.neoCustomerSnapshotsError ?? null,
       candidates: chain.candidates ?? null,
       candidatesError: chain.candidatesError ?? null,
+      renewalAlerts: chain.renewalAlerts ?? null,
+      renewalAlertsError: chain.renewalAlertsError ?? null,
     }
     // 새 데이터가 있을 때만(잠김·최근 결과 재사용·건너뜀이면 그대로) 즉시 만료 — 크론과 같은 규칙(lib/external-crm/sync-cache.ts).
     expireExternalCrmSyncCaches(chain)
     after(() => notifyExternalCrmSyncOutcome(chain, "manual"))
-    return NextResponse.json(result, { status: getExternalCrmSyncHttpStatus(chain.sync) })
+    return NextResponse.json(result, { status: getExternalCrmSyncChainHttpStatus(chain) })
   } catch (error) {
     console.error("[POST /api/admin/crm/external-sync]", error)
     const message = error instanceof Error ? error.message : "Failed to sync external CRM"
