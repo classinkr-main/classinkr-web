@@ -669,8 +669,14 @@ function mainClauseRescue(index: CompiledAnswerIndex, analysis: QuestionAnalysis
   if (decision.kind !== "abstain" || decision.abstainReason === "symptom" || decision.segments || analysis.parts) return decision
   const main = situationMainClause(analysis.whole.text)
   if (!main) return decision
-  const result = resolveSegment(index, analyzeSegment(index, main, { votes: analysis.votes }), threshold)
+  const mainAnalysis = analyzeSegment(index, main, { votes: analysis.votes })
+  // 주절에 제 주제 개념(비일반)이 있고 고른 카드가 그 개념을 설명할 때만("쓸 만한가요"처럼 주제가 상황 절에만 있으면 다시 보지 않는다).
+  const topics = topicConcepts(index, mainAnalysis)
+  if (topics.length === 0) return decision
+  const result = resolveSegment(index, mainAnalysis, threshold)
   if (result.kind !== "answer" || !result.card) return decision
+  const card = index.cardById.get(result.card)
+  if (card === undefined || !topics.some((concept) => conceptExplained(index, concept.id, card))) return decision
   return toDecision({ ...result, text: analysis.whole.text }, null, cautionsOf(analysis.whole))
 }
 

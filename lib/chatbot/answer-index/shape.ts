@@ -61,6 +61,7 @@ export const CLOSING_TEMPLATE_LINES: readonly string[] = [
   "그래도 안 되면 담당자 상담으로 이어 드릴게요.",
   "따라 하다 막히는 부분이 있으면 담당자 상담으로 이어 드릴게요.",
   "더 궁금한 점은 \"상담원 연결\"이라고 남겨 주세요.",
+  "더 궁금한 점은 \"상담원 연결\"이라고 말씀해 주시면 이어서 도와드릴게요.",
 ]
 
 export function isClosingTemplate(line: string): boolean {

@@ -182,7 +182,7 @@ export const SEGMENT_SYMPTOM_LINE = "이 증상에 딱 맞는 해결 안내는 �
  * 상담이 필요한 알림이 있을 때 답 맨 끝에 한 줄(필요할 때만, shape.ts CLOSING_TEMPLATE_LINES 와 같은 글). 알림 줄 자체에는 상담 안내를 넣지 않아
  * 답 끝의 상담 안내가 한 줄이 되게 한다(결정 2, 품질-4).
  */
-export const COMPOUND_CLOSING_LINE = "더 궁금한 점은 \"상담원 연결\"이라고 남겨 주세요."
+export const COMPOUND_CLOSING_LINE = "더 궁금한 점은 \"상담원 연결\"이라고 말씀해 주시면 이어서 도와드릴게요."
 
 const ORDINALS = ["첫 번째", "두 번째", "세 번째", "네 번째", "다섯 번째"]
 
@@ -784,7 +784,13 @@ function chipText(segment: AnswerIndexSegmentDecision, original: string): string
   return text
 }
 
-/** 서비스가 복합 답 뒤에 붙일 수 있는 줄(말투·기기 되묻기)의 몫: 본문 상한에서 미리 뺀다(회귀-5). */
+/** 상담 안내 줄(상담·담당자에게 남기거나 연결해 달라는 줄). */
+const CONSULT_GUIDE_RE = /(?:상담|담당자)[^.\n]*(?:남겨|연결|문의|요청|알려)/
+
+/**
+ * 서비스가 복합 답 뒤에 붙일 수 있는 줄(말투·기기 되묻기)의 몫: 본문 상한에서 미리 뺀다(회귀-5). 끝맺음 줄은 '…말씀해 주시면'으로 끝나 서비스가
+ * 되묻기를 더 붙이지 않는다(follow-up.ts ALREADY_ASKS_RE).
+ */
 export const COMPOUND_FOLLOW_UP_RESERVE = 60
 
 /**
@@ -989,7 +995,8 @@ function buildCompound(decision: AnswerIndexDecision, segments: AnswerIndexSegme
   }
   // 끝맺음은 필요할 때만 한 줄(결정 2): 상담이 필요한 알림이 있거나 조각 끝맺음 틀을 거뒀고, 어느 조각 본문에도 상담 안내 줄이 없을 때.
   const needClosing = notices.some((piece) => piece.kind !== "retry") || answered.some((piece) => piece.closing !== null)
-  const bodyHasClosing = answered.some((piece) => piece.blocks.flat().some((line) => isClosingLine(line)))
+  // 조각 본문에 이미 상담 안내 줄('[도입 상담 남기기]에 … 남겨 주세요' 같은 사람 글 포함)이 있으면 끝맺음을 더하지 않는다.
+  const bodyHasClosing = answered.some((piece) => piece.blocks.flat().some((line) => isClosingLine(line) || CONSULT_GUIDE_RE.test(line)))
   const closing = needClosing && !bodyHasClosing ? COMPOUND_CLOSING_LINE : null
   const cap = compoundLengthCap(segments.length)
   const budget = cap - COMPOUND_FOLLOW_UP_RESERVE

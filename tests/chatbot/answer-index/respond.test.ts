@@ -542,6 +542,23 @@ describe("respond: two-part questions (R2 B4)", () => {
     }
   })
 
+  it("adds no closing line when an answered part already carries consult guidance (one consult line at the end, 품질-4)", () => {
+    const { core } = respond(
+      decision("answer", EXTRA.policy, {
+        segments: [
+          { text: "x", kind: "abstain", card: null, conf: 0.1, topCard: CARDS.count, topConf: 0.2, alone: "abstain" },
+          { text: "y", kind: "answer", card: EXTRA.policy, conf: 0.9 },
+        ],
+      }),
+      "질문",
+      { env: ON }
+    )
+    expect(core.response.answer).toContain(SEGMENT_NOTFOUND_LINE)
+    expect(core.response.answer).toContain(POLICY_TEXT)
+    expect(core.response.answer).not.toContain(COMPOUND_CLOSING_LINE)
+    expect(core.response.needsHandoff).toBe(true)
+  })
+
   it("answers one card once when every part points at it, and leaves the single-card path alone", () => {
     const same = decision("answer", CARDS.chat, {
       segments: [
