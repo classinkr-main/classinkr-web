@@ -65,6 +65,23 @@ const THIRD_PARTY_PRIOR_RE =
   /(?:원장|선생님|강사|실장|엄마|아빠|부모님|친구|담임|팀장)(?:님)?\s*(?:이|가|께서|한테서|이\s*저한테)\s*['"‘“]?\s*(?:저번|지난번|아까|어제|전에)/
 const ENGLISH_LEAD_RE = /^(?:hi|hello|hey|can you|could you|how do|how can|how to|my |i |is there|why)/i
 
+// 화남 낱말이 화남이 아닌 자리(R2 B5): 부정("짜증 나는 건 아니고", "언제 해결되는지가 아니라"), 관용구("최악의 경우",
+// "수업료 아깝지 않게", "책임 지는 담임 교사", "엉망인 판서를"). 따옴표로 옮긴 남의 말('도대체 왜 안 돼요')도 묻는 사람의 화남이 아니다.
+// 화남은 말투(사과 첫마디·상담 연결 앞세우기)와 '이미 해 봤다는 화난 문의'에만 쓴다.
+const ANGRY_IDIOM_RE =
+  /최악의\s*(?:경우|상황|시나리오)|(?:돈|시간|비용|요금|수업료)\S{0,4}\s*아깝지\s*않|책임\s*(?:지|져)는\s*(?:담임|교사|선생|강사|관리자|역할|담당)|엉망(?:인|이\s*된|진)\s+[가-힣]+(?:을|를)/g
+const ANGRY_NEGATED_TAIL_RE = /^[^.?!,\n]{0,14}?(?:건|게|것은|거는|지가|지는|것이)\s*아니(?:고|라|에요|예요|구요|지만)/
+
+function hasAngryWords(text: string) {
+  const plain = text.replace(QUOTED_SPEECH_RE, " ").replace(ANGRY_IDIOM_RE, " ")
+  const global = new RegExp(ANGRY_RE.source, "g")
+  for (const match of plain.matchAll(global)) {
+    const after = plain.slice((match.index ?? 0) + match[0].length)
+    if (!ANGRY_NEGATED_TAIL_RE.test(after)) return true
+  }
+  return false
+}
+
 export function detectConversationTone(question: string): ConversationTone {
   const text = question.trim()
   // 따옴표로 옮긴 말('Good job!')의 느낌표는 묻는 사람의 감정이 아니다.
@@ -89,7 +106,7 @@ export function detectConversationTone(question: string): ConversationTone {
   return {
     // 느낌표 두 개 이상, 또는 "~입니까!" 같은 따지는 어미는 화가 난 신호로 본다(들뜬 느낌표는 뺀다).
     angry:
-      ANGRY_RE.test(text) ||
+      hasAngryWords(text) ||
       (THIS_WHAT_RE.test(text) && repeated) ||
       (!excitedNotAngry &&
         (exclamations >= 2 || (exclamations >= 1 && /(?:니까|겁니까|입니까|습니까)\s*[!?！]|저만\s*이런/.test(text)))),
@@ -298,8 +315,18 @@ export const ENGLISH_SUPPORT_ANSWER = [
 ].join("\n\n")
 
 // "영어로만 뜹니다", "오류가 영어로 나와요"처럼 화면 언어를 말하는 문장은 영어 상담 요청이 아니다.
+const ENGLISH_SUPPORT_WORD_RE =
+  /speak\s*english|in\s*english|english\s*(?:please|ok|support)|영어\s*로\s*(?:답|대답|설명|상담|안내|알려|말해|말씀|대화|얘기|이야기|물어|질문|해\s*(?:줘|주|도))|영어\s*(?:가능|돼요|되나요|되요|할\s*줄|지원)|english\s*(?:가능|돼|되)/i
+// 대화 언어를 청하는 말(R2 B5). 이 말이 있으면 아래 '앱·자료 언어' 틀이 함께 있어도 영어 안내로 본다.
+const ENGLISH_CONVERSATION_RE =
+  /speak\s*english|in\s*english|english\s*please|영어\s*로\s*(?:답|대답|설명|상담|대화|얘기|이야기|말해|말씀)|영어\s*(?:로\s*)?(?:상담|대화)\s*(?:가능|돼|되|할\s*수)/i
+// 앱 화면 언어·영어 교재·자막처럼 '영어'가 기능·자료를 꾸미는 말("앱 언어를 영어로 해 주는 설정", "영어 지원 교재를 수업에 올리는 방법").
+const ENGLISH_FEATURE_CONTEXT_RE =
+  /설정|기능|교재|자막|메뉴|앱\s*언어|언어\s*(?:설정|변경|바꾸|바꿔)|화면\s*언어|표시|키보드|자료|올리|업로드|버전|인터페이스|\bui\b|파일|문서|수업\s*(?:에|을|자료)/i
+
+// 문장마다 본다: 영어를 말한 문장 안에 기능·자료 틀이 있을 때만 영어 안내가 아니다("영어로 해 주세요. 설정은 어디 있어요?"는 영어 안내).
 export function isEnglishSupportRequest(question: string) {
-  return /speak\s*english|in\s*english|english\s*(?:please|ok|support)|영어\s*로\s*(?:답|대답|설명|상담|안내|알려|말해|말씀|대화|얘기|이야기|물어|질문|해\s*(?:줘|주|도))|영어\s*(?:가능|돼요|되나요|되요|할\s*줄|지원)|english\s*(?:가능|돼|되)/i.test(
-    question
-  )
+  if (!ENGLISH_SUPPORT_WORD_RE.test(question)) return false
+  const sentences = question.split(/(?<=[.?!？。…])\s+|\n+/).filter((sentence) => ENGLISH_SUPPORT_WORD_RE.test(sentence))
+  return sentences.some((sentence) => ENGLISH_CONVERSATION_RE.test(sentence) || !ENGLISH_FEATURE_CONTEXT_RE.test(sentence))
 }
