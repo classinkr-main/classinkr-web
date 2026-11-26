@@ -103,8 +103,8 @@ import {
   type AnswerCardPickFailure,
 } from "@/lib/chatbot/answer-index/assist"
 import { collectLegacyVotes } from "@/lib/chatbot/answer-index/legacy-votes"
-import { disabledCardIds, type QuestionAnalysis } from "@/lib/chatbot/answer-index/decide"
-import { detectAskType, segmentQuestion } from "@/lib/chatbot/answer-index/normalize"
+import { disabledCardIds, labelForSegmentText, type QuestionAnalysis } from "@/lib/chatbot/answer-index/decide"
+import { detectAskType, isQuestionSentence, segmentQuestion, splitQuestion } from "@/lib/chatbot/answer-index/normalize"
 import {
   isUnverifiedFixedAnswerText,
   MODEL_UNAVAILABLE_ANSWER,
@@ -132,6 +132,9 @@ export {
 import { groupSentenceParagraphs } from "@/lib/chatbot/answer-index/paragraphs"
 import {
   buildAnswerIndexCore,
+  SEGMENT_ABSENT_LINE,
+  SEGMENT_RETRY_LINE,
+  shortTopic,
   type AnswerIndexCoreParts,
   type AnswerIndexHost,
 } from "@/lib/chatbot/answer-index/respond"
@@ -6609,6 +6612,59 @@ function countActiveAnswerIndexCards(index: ReturnType<typeof getRouterAnswerInd
   return index.cards.filter((card) => !disabled.has(card.id)).length
 }
 
+// 앞단 답 뒤 남은 조각 알림(R2 B5, 계획 §2.4): 즉시 상담·이미 해 봄·관문 밖 정해 둔 답(시험 정답 거절)이 메시지 전체를 맡았는데
+// 다른 조각(질문 나누기 v2 조각, 나뉘지 않으면 묻는 문장)을 함께 물었으면, 그 조각만 따로 물었을 때 답이 나오는 조각(색인 answer)과
+// 공개 안내에 없다고 확인된 조각(gap)마다 머리 줄(카드 주제·없는 개념 이름, 손님 글이 아니다) + 알림 한 줄을 정해 둔 답 맨 끝에 붙인다.
+// 정해 둔 답 글은 바꾸지 않고 사실을 새로 말하지 않는다(정책 가드 답은 legacy 라 여기 오지 않는다).
+// 못 찾음·증상 조각은 붙이지 않는다(상담 연결이 그 조각까지 받는다). compiled 라우터에서만 돈다.
+const PRE_REMAINING_NOTICE_MAX = 2
+
+function preRemainingPieces(text: string) {
+  const split = splitQuestion(text).segments
+  const pieces =
+    split.length >= 2
+      ? split
+      : text
+          .split(/(?<=[.?!？。])\s+|\n+/)
+          .map((piece) => piece.replace(/^(?:그리고|또|근데|그런데|및)\s+/, "").trim())
+          .filter(Boolean)
+  return pieces.length >= 2 ? pieces : []
+}
+
+function withPreRemainingNotices(core: ChatbotCore, question: NormalizedQuestion, fires: (segment: NormalizedQuestion) => boolean): ChatbotCore {
+  // 나눌 조각이 없으면 색인을 부르지 않는다(한 줄 연결 요청은 지금과 같다).
+  const pieces = preRemainingPieces(question.redacted)
+  if (pieces.length === 0) return core
+  const index = getRouterAnswerIndex()
+  const notices: { label: string; line: string; text: string }[] = []
+  pieces.forEach((piece, at) => {
+    if (notices.length >= PRE_REMAINING_NOTICE_MAX) return
+    if (!isQuestionSentence(piece) && !/[?？]\s*$/.test(piece)) return
+    if (fires(normalizeQuestion(piece))) return
+    const { decision } = routeAnswerIndexWithAnalysis(piece, {
+      index,
+      isSymptomReport: (text) => SYMPTOM_REPORT_RE.test(text.toLowerCase()),
+    })
+    if (decision.kind !== "answer" && decision.kind !== "gap") return
+    const absentLabel = decision.absentHit ? index.absent.byId.get(decision.absentHit)?.label : undefined
+    const cardAt = decision.card ? index.cardById.get(decision.card) : undefined
+    const topic = cardAt === undefined ? null : (index.cards[cardAt].card as { topic?: string }).topic ?? null
+    const label = absentLabel ?? labelForSegmentText(index, piece) ?? (topic ? shortTopic(topic) : `${at + 1}번째 질문`)
+    notices.push({ label, line: decision.kind === "answer" ? SEGMENT_RETRY_LINE : SEGMENT_ABSENT_LINE, text: piece })
+  })
+  if (notices.length === 0) return core
+  const response = core.response
+  response.answer = [response.answer.trimEnd(), ...notices.map((notice) => `【${notice.label}】\n${notice.line}`)].join("\n\n")
+  // 따로 물으면 답이 나오는 조각은 추천 질문 맨 앞에 둔다(누르면 그 조각만 묻는다).
+  const chips = notices
+    .filter((notice) => notice.line === SEGMENT_RETRY_LINE && notice.text.length <= 60)
+    .map((notice) => notice.text)
+  if (chips.length > 0) {
+    response.suggestedQuestions = Array.from(new Set([...chips, ...response.suggestedQuestions])).slice(0, Math.max(3, response.suggestedQuestions.length))
+  }
+  return core
+}
+
 function planCompiledRoute(question: NormalizedQuestion, router: AnswerIndexRouter, startedAt: number): CompiledRoutePlan {
   const pre = (name: NonNullable<AnswerIndexTrace["pre"]>) => preIndexTrace(router, "in", name)
   if (isGreetingOnly(question)) return { kind: "legacy", trace: pre("greeting") }
@@ -6620,16 +6676,31 @@ function planCompiledRoute(question: NormalizedQuestion, router: AnswerIndexRout
   }
   const quick = buildServiceQuickAnswer(question)
   if (quick?.gateExempt) {
-    return { kind: "pre", trace: pre("exempt"), build: () => ({ question, ...quick, latencyMs: elapsedSince(startedAt) }) }
+    return {
+      kind: "pre",
+      trace: pre("exempt"),
+      build: () =>
+        withPreRemainingNotices({ question, ...quick, latencyMs: elapsedSince(startedAt) }, question, (segment) =>
+          Boolean(buildServiceQuickAnswer(segment)?.gateExempt)
+        ),
+    }
   }
   if (isEnglishSupportRequest(question.redacted)) {
     return { kind: "pre", trace: pre("english"), build: () => buildEnglishSupportCore(question, startedAt) }
   }
   if (wantsImmediateHumanHandoff(question) && !isWeakHandoffSignal(question)) {
-    return { kind: "pre", trace: pre("handoff"), build: () => buildImmediateHandoffCore(question, startedAt) }
+    return {
+      kind: "pre",
+      trace: pre("handoff"),
+      build: () => withPreRemainingNotices(buildImmediateHandoffCore(question, startedAt), question, wantsImmediateHumanHandoff),
+    }
   }
   if (isTriedAlreadyUpset(question)) {
-    return { kind: "pre", trace: pre("tried"), build: () => buildTriedAlreadyCore(question, startedAt) }
+    return {
+      kind: "pre",
+      trace: pre("tried"),
+      build: () => withPreRemainingNotices(buildTriedAlreadyCore(question, startedAt), question, isTriedAlreadyUpset),
+    }
   }
   if (!inScope) return { kind: "legacy", trace: preIndexTrace(router, "out") }
   const index = getRouterAnswerIndex()

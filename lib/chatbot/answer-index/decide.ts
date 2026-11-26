@@ -708,6 +708,11 @@ function segmentLabel(index: CompiledAnswerIndex, analysis: SegmentAnalysis): st
   return forms[0].length <= SEGMENT_LABEL_MAX ? forms[0] : null
 }
 
+/** 조각 글 하나의 머리 줄 이름(segmentLabel 과 같다). 색인 앞단 답 뒤 남은 조각 알림 줄(service.ts, R2 B5)이 쓴다. 못 정하면 null. */
+export function labelForSegmentText(index: CompiledAnswerIndex, text: string): string | null {
+  return segmentLabel(index, analyzeSegment(index, text))
+}
+
 /**
  * 조각 판정에 답 꼴이 쓰는 표시를 붙인다(R2 검토 품질-3·품질-10·품질-12): 머리 줄 이름(label), 증상 조각(symptom), 못 정한 조각을
  * 그 글만 따로 물었을 때의 판정(alone, 단일 질문 문턱 θ — 주제를 이어 붙여 점수를 냈으면 원문 조각으로 다시 본다). 판정 자체는 바꾸지 않는다.
