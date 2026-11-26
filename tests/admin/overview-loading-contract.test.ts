@@ -7,6 +7,18 @@ const workspace = readFileSync(join(process.cwd(), "components/admin/overview/Ov
 const source = readFileSync(join(process.cwd(), "app/admin/overview/OverviewClient.tsx"), "utf8")
 
 describe("admin overview loading and failure contract", () => {
+  it("does not turn failed secondary fetches into zero or empty values", () => {
+    expect(source).not.toContain("setSubscriberCount(subscribersData?.total ?? 0)")
+    expect(source).not.toContain("setCampaigns(campaignData?.campaigns ?? [])")
+    expect(source).not.toContain("setBugs(bugsData ?? [])")
+    expect(source).toContain("useState<number | null>(null)")
+    expect(source).toContain("if (subscribersData) setSubscriberCount(subscribersData.total ?? 0)")
+    expect(source).toContain("...failedCumulativeLabels, ...failedSecondaryLabels]")
+    expect(source).toContain('value={subscriberCount ?? "조회 실패"}')
+    expect(source).toContain('<KpiUnavailable label="캠페인 상태" onRetry={() => retryOverview()} />')
+    expect(source).toContain('!integrationStatus && !loading ? "확인 필요"')
+  })
+
   it("bounds admin requests and keeps a stale cache path for fast revisits", () => {
     expect(source).toContain("const OVERVIEW_FETCH_TIMEOUT_MS = 12_000")
     expect(source).toContain("adminTimeoutMs: OVERVIEW_FETCH_TIMEOUT_MS")
