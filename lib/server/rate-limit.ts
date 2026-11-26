@@ -101,9 +101,11 @@ export function checkRateLimit(
 }
 
 /**
- * Upstash 호출 시간 제한 — 모든 요청 앞에 직렬로 걸리므로 짧게 둔다(전에는 1.5초). 넘으면 메모리로 폴백한다.
+ * Upstash 호출 시간 제한 — 넘으면 인스턴스 메모리 카운트로 폴백한다(공유되지 않아 한도가 인스턴스 수만큼 약해진다).
+ * 0.5초로 줄였다가 1.5초로 되돌렸다: 서버리스 첫 연결(DNS·TLS)이 0.5초를 넘기 쉬워, 관리자 로그인 등 모든 분산 한도가
+ * 그때마다 약해졌다. Upstash 가 느린 장애 때만 요청 앞에 최대 1.5초가 붙는다. 시험: tests/server/rate-limit-store.test.ts.
  */
-const UPSTASH_TIMEOUT_MS = 500
+const UPSTASH_TIMEOUT_MS = 1500
 
 /**
  * 분산 rate limiter (Upstash Redis REST). 동기 checkRateLimit 와 동일한 형태를 반환하되,

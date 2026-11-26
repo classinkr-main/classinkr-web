@@ -164,3 +164,29 @@ describe("상담 내역 갈래 — 판정 표(새 문장 30개)", () => {
     expect(routeSegment("가나학원 상담 기록 남겨 줘").branch).toBe("write")
   })
 })
+
+describe("묻는 어미 + 쉼표 끊기 — 뒤 조각이 제 대상을 가진 질문일 때만(반박 검토)", () => {
+  it("뒤에 대상 없는 청하는 말만 붙으면 한 조각이다", () => {
+    for (const text of ["환불 규정이 뭐야, 알려줘", "환불 규정 뭐야, 설명해줘", "재고 있어, 알려줘", "환불 정책이 뭐였지, 알려줘"]) {
+      expect(splitSegments(text), text).toHaveLength(1)
+      expect(routeMessage(text), text).toHaveLength(1)
+    }
+  })
+
+  it("뒤가 청하는 말이면 끊지 않는다 — 옛 판정 그대로 담당자 찾기 하나", () => {
+    const decisions = routeMessage("이거 뭐야, 담당자 알려줘")
+    expect(decisions.map((decision) => decision.branch)).toEqual(["contact"])
+  })
+
+  it("뒤가 서술이면 끊지 않는다 — 꼴이 서술로 남는다", () => {
+    const decisions = routeMessage("라이선스 있어, 연결이 안 돼요")
+    expect(splitSegments("라이선스 있어, 연결이 안 돼요")).toHaveLength(1)
+    expect(decisions).toHaveLength(1)
+    expect(decisions[0].form).toBe("statement")
+    expect(decisions[0].text).toContain("있어,")
+  })
+
+  it("뒤도 묻는 질문이면 끊는다", () => {
+    expect(splitSegments("가나학원 지난달 문의 뭐였지, 재고는 몇 대 남았어?")).toHaveLength(2)
+  })
+})

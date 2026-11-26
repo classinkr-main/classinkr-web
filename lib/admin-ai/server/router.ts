@@ -50,9 +50,14 @@ export interface RouteDecision {
 
 const SENTENCE_BREAK = /(?<=[?？!])\s*|(?<=[가-힣A-Za-z0-9)])[.。]\s+|[.。]$|\n+/
 // 늘 끊는 이음 — "…하고, …" "…이고, …" "…며, …"(쉼표가 붙은 이음 어미)와 "그리고"·"또". 앞 조각에 이음 어미를 남겨 원형으로 되돌린다.
-// 묻는 어미 + 쉼표도 끊는다 — "가나학원 지난달 문의 뭐였지, 재고는 몇 대 남았어?"(앞 갈래 답이 사라지지 않게).
-const ALWAYS_BREAK =
-  /(?<=[가-힣](?:고|며|면서|구))\s*,\s*|(?<=(?:였지|었지|았지|했지|뭐지|뭐야|이야|거야|있어|있나|었나|았나|였나|했나|했어|됐어|됐나))\s*,\s*|\s*,?\s*그리고\s+|\s+또\s+(?=[가-힣])/
+const ALWAYS_BREAK = /(?<=[가-힣](?:고|며|면서|구))\s*,\s*|\s*,?\s*그리고\s+|\s+또\s+(?=[가-힣])/
+// 묻는 어미 + 쉼표 — "가나학원 지난달 문의 뭐였지, 재고는 몇 대 남았어?"(앞 갈래 답이 사라지지 않게). 늘 끊지 않고
+// 뒤 조각이 제 대상을 묻는 질문일 때만 끊는다(acceptQuestionCommaSplit) — "환불 규정이 뭐야, 알려줘"·"이거 뭐야, 담당자 알려줘"
+// (뒤가 청하는 말)와 "라이선스 있어, 연결이 안 돼요"(뒤가 서술)는 한 조각 그대로다.
+const QUESTION_COMMA =
+  /(?<=(?:였지|었지|았지|했지|뭐지|뭐야|이야|거야|있어|있나|었나|았나|였나|했나|했어|됐어|됐나))\s*,\s*/g
+/** 청하는 꼬리로 끝나는 말 — 앞 질문을 다시 청하는 것이라 따로 묻는 조각이 아니다("…뭐야, 알려줘"). */
+const REQUEST_END = /(?:알려|보여|찾아|설명해|정리해|확인해|뽑아|조회해|말해)\s*(?:줘|주세요|줄래|주라|봐|봐요)\s*[?？.!]*$/
 // 쉼표 없는 이음(검토 동작-2) — 청하거나 시키는 동사 + 고. "환불 규정 알려 주고 담당자도 알려 줘", "출고 예정 등록하고 견적 초안도 만들어 줘".
 // 끊은 뒤 양쪽 꼴을 보고 받아들인다(acceptVerbSplit). "바꾸고 내가 맡을게"·"만들고 나서 …"는 끊지 않는다.
 const VERB_JOINT =
@@ -131,6 +136,11 @@ function splitAt(piece: string, joint: RegExp, accept: (left: string, right: str
   return out
 }
 
+function acceptQuestionCommaSplit(left: string, right: string): string | null {
+  if (detectForm(right) !== "question" || REQUEST_END.test(right)) return null
+  return left
+}
+
 function acceptNounSplit(left: string, right: string): string | null {
   if (left.length > 20 || VERBISH_END.test(left)) return null
   const leftTool = jointTargetOf(left)
@@ -144,7 +154,11 @@ export function splitPieces(text: string): string[] {
   const sentences = text.split(SENTENCE_BREAK).map((piece) => (piece ?? "").trim()).filter(Boolean)
   const out: string[] = []
   for (const sentence of sentences) {
-    const clauses = sentence.split(ALWAYS_BREAK).map((piece) => (piece ?? "").trim()).filter(Boolean)
+    const clauses = sentence
+      .split(ALWAYS_BREAK)
+      .map((piece) => (piece ?? "").trim())
+      .filter(Boolean)
+      .flatMap((piece) => splitAt(piece, QUESTION_COMMA, acceptQuestionCommaSplit))
     clauses.forEach((clause, index) => {
       const next = clauses[index + 1]
       const restored = next ? restoreJoint(clause, detectForm(next)) : clause

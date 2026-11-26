@@ -81,7 +81,7 @@ describe("상한에서 버릴 키 고르기(반박 검토 2026-11-25)", () => {
 })
 
 describe("분산 저장소 시간 제한", () => {
-  it("Upstash 가 0.5초 안에 답하지 않으면 중단하고 메모리로 폴백한다(전에는 1.5초)", async () => {
+  it("Upstash 가 1.5초 안에 답하지 않으면 중단하고 메모리로 폴백한다", async () => {
     vi.stubEnv("UPSTASH_REDIS_REST_URL", "https://redis.example.test")
     vi.stubEnv("UPSTASH_REDIS_REST_TOKEN", "t")
     vi.stubGlobal(
@@ -89,12 +89,30 @@ describe("분산 저장소 시간 제한", () => {
       vi.fn((_url: string, init: RequestInit) => new Promise((_resolve, reject) => init.signal?.addEventListener("abort", () => reject(new Error("aborted")))))
     )
     const pending = checkRateLimitDistributed("9.9.9.9", "dist", opts)
-    await vi.advanceTimersByTimeAsync(499)
+    await vi.advanceTimersByTimeAsync(1499)
     let settled = false
     void pending.then(() => (settled = true))
     await vi.advanceTimersByTimeAsync(0)
     expect(settled).toBe(false)
     await vi.advanceTimersByTimeAsync(2)
     await expect(pending).resolves.toMatchObject({ allowed: true, remaining: 4 })
+  })
+
+  it("0.8초 걸린 답(첫 연결 TLS 등)도 공유 카운트로 쓴다 — 메모리 폴백으로 한도가 약해지지 않는다(반박 검토)", async () => {
+    vi.stubEnv("UPSTASH_REDIS_REST_URL", "https://redis.example.test")
+    vi.stubEnv("UPSTASH_REDIS_REST_TOKEN", "t")
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        (_url: string, init: RequestInit) =>
+          new Promise((resolve, reject) => {
+            init.signal?.addEventListener("abort", () => reject(new Error("aborted")))
+            setTimeout(() => resolve(new Response(JSON.stringify([{ result: 6 }, { result: 1 }, { result: 30_000 }]), { status: 200 })), 800)
+          })
+      )
+    )
+    const pending = checkRateLimitDistributed("9.9.9.9", "dist", opts)
+    await vi.advanceTimersByTimeAsync(801)
+    await expect(pending).resolves.toMatchObject({ allowed: false, remaining: 0 })
   })
 })
