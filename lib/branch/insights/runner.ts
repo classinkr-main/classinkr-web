@@ -25,8 +25,12 @@ export interface RunInsightsResult {
   retried?: boolean
 }
 
+// 첫 호출에 이만큼 지났으면 재시도(2회차)를 하지 않는다 — 라우트 maxDuration(300초) 안에 한 라운드 최악(180초)이 들어가야 한다.
+const RETRY_ELAPSED_LIMIT_MS = 60_000
+
 export async function runInsights(team: TeamScope, force: boolean): Promise<RunInsightsResult> {
   const now = new Date()
+  const startedAt = Date.now()
   try {
     if (force) {
       const latest = await getLatestInsight(team)
@@ -67,7 +71,7 @@ export async function runInsights(team: TeamScope, force: boolean): Promise<RunI
     let fallbackReason = first.fallbackReason
     let warnings = checkNumericalSanity(input, result)
     let retried = false
-    if (warnings.length >= 3) {
+    if (warnings.length >= 3 && Date.now() - startedAt <= RETRY_ELAPSED_LIMIT_MS) {
       retried = true
       const retry = await callInsightModel(input, mode)
       const retryWarnings = checkNumericalSanity(input, retry.result)
