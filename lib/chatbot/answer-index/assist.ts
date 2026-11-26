@@ -666,7 +666,8 @@ export function askedPolicyConcepts(index: CompiledAnswerIndex, query: Pick<Inde
  * 정책 주제 거절(R2 B3, 계획 §3 정책 주제 (3), R2 검토 회귀-6): 질문이 정책 주제(isPolicyTopic)이고 고른 카드가 정책 카드·공백 카드·허용 표시
  * (policyTopicAllowed) 카드가 아니면, 질문(조각)에 정책 개념이 하나라도 있을 때 막는다(겹침 여부와 상관없이 — 정책 개념이 있는 질문에 겹치지 않는
  * 카드를 받으면 엉뚱한 카드가 정책 질문의 답처럼 읽힌다). 완화는 질문에 정책 개념이 없는 정규식 오탐('원가'⊂'회원가입', 정책 값을 묻지 않는
- * 사용법 질문)에만 둔다: 그때는 받아들이고 주의 표시를 남긴다.
+ * 사용법 질문)에만 둔다: 그때는 받아들이고 주의 표시를 남긴다. 허용 표시(policyTopicAllowed) 카드는 질문의 정책 개념을 그 카드 개념(과 상위)이
+ * 모두 덮을 때만 받아들인다.
  */
 export function policyTopicBlocks(
   index: CompiledAnswerIndex,
@@ -674,9 +675,13 @@ export function policyTopicBlocks(
   compiled: CompiledCard,
   isPolicyTopic?: () => boolean
 ): boolean {
-  if (isPolicyGovernedCard(compiled.card) || compiled.kind === "gap" || compiled.card.policyTopicAllowed === true) return false
+  if (isPolicyGovernedCard(compiled.card) || compiled.kind === "gap") return false
   if (!isPolicyTopic?.()) return false
-  return askedPolicyConcepts(index, query).length > 0
+  const asked = askedPolicyConcepts(index, query)
+  if (asked.length === 0) return false
+  // 허용 표시 카드도 질문의 정책 개념을 그 카드가 모두 설명할 때만 받아들인다(R2 검토 회귀-7: 표시가 겹침 검사를 통째로 건너뛰지 않게).
+  if (compiled.card.policyTopicAllowed === true) return !asked.every((id) => compiled.conceptClosure.has(id))
+  return true
 }
 
 /** 받아들인 판정에 붙일 주의 표시: 결정형의 것 + 정책 주제(정규식이 걸렸는데 받아들였을 때). */

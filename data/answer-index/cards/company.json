@@ -6804,7 +6804,7 @@
         }
       ],
       "headline": {
-        "text": "기본 도입은 판서, 녹화, 다시보기 복습, LMS 숙제·시험이에요.",
+        "text": "가장 흔한 기본 도입은 판서, 녹화, 다시보기 복습, LMS 숙제·시험이에요.",
         "basis": [
           {
             "unit": "doc:/docs/start/adoption-journey-90days#4",

@@ -45,7 +45,7 @@ export const VERIFY_RULES = [
   { rule: "V-10", title: "옛 정해 둔 답 id 가 legacy-alias.json 에 있음(카드 또는 null)" },
   { rule: "V-11", title: "active policy 카드의 policyRef 가 사람 결정 대기열에 있음, site 근거 카드는 결정 전 review" },
   { rule: "V-12", title: "자료 합계 25MB 이하, 카드 id 형식, 스키마" },
-  { rule: "V-13", title: "first·headline 칸(R2): first 는 답 문장 안(접속어면 앞 문장과 함께), headline 은 60자 이하·요체 마침표·근거 문장이 카드 안·숫자/[메뉴]/영문 토큰이 카드 문장에 있음·부정 극성 일치·안전/정책 구절 없음" },
+  { rule: "V-13", title: "first·headline 칸(R2): first 는 답 문장 안(접속어면 앞 문장과 함께), headline 은 60자 이하·요체 마침표·근거 문장이 카드 안·숫자/[메뉴]/영문 토큰이 카드 문장에 있음·부정 극성 일치·근거의 단서(수도 있·경우가 많…) 유지·안전/정책 구절 없음(첫 두 문장 되풀이는 경고)" },
 ] as const
 
 export type VerifyRule = (typeof VERIFY_RULES)[number]["rule"] | "load"
@@ -758,6 +758,7 @@ export async function runVerify(options: VerifyOptions = {}): Promise<VerifyResu
   {
     const policyPhrases = pendingPolicyPhrases(data.humanQueue.map((item) => item.value))
     const NEGATION = /(않|없|못|안\s|불가|아니|말고|금지|지 마)/
+    const HEDGE = /수도\s*있|경우가\s*많|보통|대부분|가장\s*흔한|흔히|대개|주로/
     const tokensOf = (text: string) => {
       const tokens = new Set<string>()
       for (const m of text.matchAll(/\d[\d,.]*/g)) tokens.add(m[0].replace(/[.,]$/, ""))
@@ -818,10 +819,16 @@ export async function runVerify(options: VerifyOptions = {}): Promise<VerifyResu
         }
         const joined = cardTexts.join(" ")
         const cardTokens = tokensOf(joined)
-        for (const token of tokensOf(text)) if (!cardTokens.has(token)) add("V-13", level, card.file, `${value.id}: headline 의 "${token}"이(가) 카드 문장에 없음(숫자·[메뉴]·영문은 카드 문장 것만)`)
-        if (basisTexts.length > 0 && NEGATION.test(text) !== NEGATION.test(basisTexts.join(" "))) add("V-13", level, card.file, `${value.id}: headline 부정 극성이 근거 문장과 다름`)
         const cardGrams = gramsOf(joined)
         const headGrams = gramsOf(text)
+        for (const token of tokensOf(text)) if (!cardTokens.has(token)) add("V-13", level, card.file, `${value.id}: headline 의 "${token}"이(가) 카드 문장에 없음(숫자·[메뉴]·영문은 카드 문장 것만)`)
+        if (basisTexts.length > 0 && NEGATION.test(text) !== NEGATION.test(basisTexts.join(" "))) add("V-13", level, card.file, `${value.id}: headline 부정 극성이 근거 문장과 다름`)
+        // (e) 단서: 근거에 '수도 있·경우가 많·보통·대부분·가장 흔한' 같은 단서가 있으면 headline 에도 있어야 한다(단정이 세지지 않게, R2 검토 회귀-8).
+        if (basisTexts.length > 0 && HEDGE.test(basisTexts.join(" ")) && !HEDGE.test(text)) add("V-13", level, card.file, `${value.id}: headline 이 근거 문장의 단서(${basisTexts.join(" ").match(HEDGE)?.[0]})를 뺐다`)
+        // 되풀이: headline 이 카드 첫 두 문장과 거의 같으면(2글자 겹침 0.6 이상) 바로 아래에서 같은 말을 한다(경고, 품질-5 — 런타임은 근거가 첫 문단에 있으면 그리지 않는다).
+        const opening = gramsOf(cardTexts.slice(0, 2).join(" "))
+        const repeated = Array.from(headGrams).filter((gram) => opening.has(gram)).length
+        if (headGrams.size > 0 && repeated / headGrams.size >= 0.6) add("V-13", "warning", card.file, `${value.id}: headline 이 첫 두 문장과 ${Math.round((repeated / headGrams.size) * 100)}% 겹침(바로 아래에서 되풀이)`)
         const shared = Array.from(headGrams).filter((gram) => cardGrams.has(gram)).length
         if (headGrams.size > 0 && shared / headGrams.size < 0.5) add("V-13", level, card.file, `${value.id}: headline 낱말이 카드 문장과 ${Math.round((shared / headGrams.size) * 100)}%만 겹침(50% 이상이어야 함)`)
         for (const rule of findSafetyViolations(text)) add("V-13", level, card.file, `${value.id}: headline 에 ${rule.label}`)

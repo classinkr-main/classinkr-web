@@ -2962,7 +2962,7 @@
         }
       ],
       "headline": {
-        "text": "[인증 코드로 로그인]을 누르면 비밀번호 없이 들어가요.",
+        "text": "[인증 코드로 로그인]으로 비밀번호 없이 들어갈 수도 있어요.",
         "basis": [
           {
             "unit": "doc:/docs/start/password-change-mobile#0",
