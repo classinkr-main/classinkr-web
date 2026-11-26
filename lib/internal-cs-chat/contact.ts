@@ -12,9 +12,13 @@ import "server-only"
 //  ③ 본사 기술 문제면 HQ 도메인(escalation-routing 의 점수식)
 //  ④ 모르면 이름을 지어내지 않고 "담당표에 없음 — 누구에게 물어 채울지" 기본 답
 //
-// 사람 이름은 이 파일에 쓰지 않는다. 한국 담당표(KR_CONTACT_ROWS)는 비어 있고 사용자가 채운다
+// 사람 이름은 이 파일에 쓰지 않는다. 한국 담당표는 DB(internal_team_contacts — 설정 › 담당자 표, 2026-11-26)에서
+// 사람이 채우고, 서버 연결(contact-deps.ts)이 deps.loadKrContacts 로 넘긴다. 코드의 KR_CONTACT_ROWS 는 여전히 빈 표다
 // (양식: 업무 영역별 1차 담당·대리·연락 방법·준비물·어드민 링크·확인일). 값이 없으면 역할 이름과
-// 어드민 계정의 역할·권한(deps.listStaff)으로만 답한다.
+// 어드민 계정의 역할·권한(deps.listStaff)으로만 답한다. 표를 읽지 못하면 빈 표로 답하고 카드에 실패를 적는다.
+//
+// deps.roleOnly — 답이 여러 사람에게 보이는 곳(위컴 단체방): 한국 지사·모름 카드에 사람 이름(담당표·어드민 계정)을 싣지 않고
+// 역할만 싣는다(namesHidden). 본사 카드는 문서의 본사 담당 표(HQ_DOMAINS) 그대로다.
 
 import { classifyHqDomain, HQ_DOMAINS } from "./escalation-routing"
 import type { EscalationCandidate } from "./escalation-types"
@@ -70,6 +74,8 @@ export interface ContactCard {
   alternatives: string[]
   /** 담당표·자료에 빈칸이 있어 사람이 채워야 할 것. */
   gaps: string[]
+  /** deps.roleOnly 로 만든 카드 — 사람 이름 없이 역할만 실었다. 그 밖의 카드에는 이 칸이 없다. */
+  namesHidden?: true
 }
 
 // ── 한국 담당표 ─────────────────────────────────────────────────────────────────────────
@@ -111,6 +117,8 @@ export interface KrTopic {
 /** 사용자가 채우는 한국 담당표 한 행. 이름·연락 방법은 저장소 밖 자료라 기본값은 비어 있다. */
 export interface KrContactRow {
   topic: KrTopicKey
+  /** 1차 담당 역할(양식의 "1차 담당 역할"). 비면 KR_TOPICS 의 역할을 쓴다. */
+  role?: string | null
   primaryName: string | null
   backupName: string | null
   /** 위컴 방·멘션 등. 웹훅 주소·키는 넣지 않는다. */
@@ -285,40 +293,89 @@ const KR_AREA_TO_KEY = new Map(KR_TOPICS.map((topic) => [topic.area, topic.key])
 KR_AREA_TO_KEY.set("AS", "as")
 KR_AREA_TO_KEY.set("A/S", "as")
 
-function splitCsvLine(line: string) {
-  const cells: string[] = []
+/**
+ * CSV 글을 행·칸으로 나눈다. 따옴표 안의 쉼표·줄바꿈·두 겹 따옴표("")를 받는다(구글 시트 내보내기 꼴).
+ * 각 행은 [시작 줄 번호, 칸 목록] — 줄 번호는 미리보기에서 "몇째 줄"을 알릴 때 쓴다.
+ */
+function splitCsvRecords(text: string): Array<{ line: number; cells: string[] }> {
+  const records: Array<{ line: number; cells: string[] }> = []
+  let cells: string[] = []
   let current = ""
   let quoted = false
-  for (let index = 0; index < line.length; index += 1) {
-    const char = line[index]
+  let line = 1
+  let recordLine = 1
+  const pushRecord = () => {
+    cells.push(current)
+    if (cells.some((cell) => cell.trim())) records.push({ line: recordLine, cells: cells.map((cell) => cell.trim()) })
+    cells = []
+    current = ""
+  }
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index]
     if (quoted) {
-      if (char === '"' && line[index + 1] === '"') {
+      if (char === '"' && text[index + 1] === '"') {
         current += '"'
         index += 1
       } else if (char === '"') quoted = false
-      else current += char
+      else {
+        if (char === "\n") line += 1
+        current += char
+      }
     } else if (char === '"') quoted = true
     else if (char === ",") {
       cells.push(current)
       current = ""
+    } else if (char === "\r" && text[index + 1] === "\n") {
+      // \r\n 은 다음 글자(\n)에서 행을 끝낸다.
+    } else if (char === "\n" || char === "\r") {
+      pushRecord()
+      line += 1
+      recordLine = line
     } else current += char
   }
-  cells.push(current)
-  return cells.map((cell) => cell.trim())
+  pushRecord()
+  return records
 }
+
+/** 미리보기용 — 건너뛴 행과 이유. 줄 번호는 CSV 글의 줄(머리 줄이 1). */
+export interface KrContactsCsvSkip {
+  line: number
+  area: string | null
+  reason: string
+}
+
+/** 미리보기용 — 넣기는 하지만 값 일부를 비운 행(형식이 맞지 않는 확인일·어드민 링크). */
+export interface KrContactsCsvNote {
+  line: number
+  topic: KrTopicKey
+  message: string
+}
+
+export interface KrContactsCsvParse {
+  rows: KrContactRow[]
+  /** rows[i] 가 CSV 의 몇째 줄에서 왔는지(rows 와 같은 순서). */
+  lines: number[]
+  skipped: KrContactsCsvSkip[]
+  notes: KrContactsCsvNote[]
+  /** 꼭 있어야 하는 머리 칸(업무 영역·1차 담당자) 중 없는 것. 있으면 rows 는 비어 있다. */
+  missingColumns: string[]
+}
+
+const REQUIRED_CSV_COLUMNS = ["업무 영역", "1차 담당자"] as const
 
 /**
  * 한국 담당표 CSV(양식: 업무 영역, 예시 질문, 1차 담당 역할, 1차 담당자, 대리 담당자, 연락 방법, 준비해 갈 것,
- * 관련 어드민 화면 링크, 비고[, 확인일])를 읽는다. 담당자 칸이 빈 행은 건너뛴다. 모르는 영역 이름도 건너뛴다.
- * 인자가 없으면 코드의 KR_CONTACT_ROWS(기본 빈 표)를 돌려준다.
+ * 관련 어드민 화면 링크, 비고[, 확인일])를 읽고, 건너뛴 행의 이유까지 돌려준다(담당자 표 화면의 CSV 가져오기 미리보기).
+ * 담당자 칸이 빈 행·모르는 영역·같은 영역이 앞에 있는 행은 건너뛴다.
  */
-export function readKrContacts(csv?: string | null): KrContactRow[] {
-  if (!csv) return [...KR_CONTACT_ROWS]
-  const lines = csv.replace(/^﻿/, "").split(/\r?\n/).filter((line) => line.trim())
-  if (lines.length < 2) return []
-  const header = splitCsvLine(lines[0])
+export function parseKrContactsCsv(csv: string): KrContactsCsvParse {
+  const records = splitCsvRecords(csv.replace(/^\uFEFF/, ""))
+  const empty: KrContactsCsvParse = { rows: [], lines: [], skipped: [], notes: [], missingColumns: [] }
+  if (records.length === 0) return { ...empty, missingColumns: [...REQUIRED_CSV_COLUMNS] }
+  const header = records[0].cells
   const col = (name: string) => header.findIndex((cell) => cell.replace(/\s/g, "").includes(name.replace(/\s/g, "")))
   const areaCol = col("업무영역")
+  const roleCol = col("1차담당역할")
   const primaryCol = col("1차담당자")
   const backupCol = col("대리담당자")
   const channelCol = col("연락방법")
@@ -326,27 +383,64 @@ export function readKrContacts(csv?: string | null): KrContactRow[] {
   const linkCol = col("관련어드민")
   const noteCol = col("비고")
   const verifiedCol = col("확인일")
-  const rows: KrContactRow[] = []
-  for (const line of lines.slice(1)) {
-    const cells = splitCsvLine(line)
+  const missingColumns = REQUIRED_CSV_COLUMNS.filter((name) => col(name) < 0)
+  if (missingColumns.length > 0) return { ...empty, missingColumns }
+
+  const result: KrContactsCsvParse = { ...empty }
+  const seen = new Set<KrTopicKey>()
+  for (const { line, cells } of records.slice(1)) {
     const cell = (index: number) => (index >= 0 ? cells[index]?.trim() || null : null)
     const area = cell(areaCol)
     const topic = area ? KR_AREA_TO_KEY.get(area) ?? (KR_TOPIC_KEYS.has(area) ? (area as KrTopicKey) : null) : null
     const primaryName = cell(primaryCol)
-    if (!topic || !primaryName) continue
+    if (!area) {
+      result.skipped.push({ line, area: null, reason: "업무 영역이 비었습니다." })
+      continue
+    }
+    if (!topic) {
+      result.skipped.push({ line, area, reason: `모르는 업무 영역입니다("${area}").` })
+      continue
+    }
+    if (!primaryName) {
+      result.skipped.push({ line, area, reason: "1차 담당자가 비어 있습니다(양식 행)." })
+      continue
+    }
+    if (seen.has(topic)) {
+      result.skipped.push({ line, area, reason: "같은 업무 영역이 앞 줄에 있습니다 — 앞 줄만 씁니다." })
+      continue
+    }
+    seen.add(topic)
     const verifiedAt = cell(verifiedCol)
-    rows.push({
+    const link = cell(linkCol)
+    if (verifiedAt && !/^\d{4}-\d{2}-\d{2}$/.test(verifiedAt)) {
+      result.notes.push({ line, topic, message: `확인일 "${verifiedAt}"이 YYYY-MM-DD 가 아니라 비웠습니다.` })
+    }
+    if (link && !link.startsWith("/admin")) {
+      result.notes.push({ line, topic, message: "관련 어드민 화면 링크가 /admin 으로 시작하지 않아 비웠습니다." })
+    }
+    result.rows.push({
       topic,
+      role: cell(roleCol),
       primaryName,
       backupName: cell(backupCol),
       channel: cell(channelCol),
-      prepare: (cell(prepareCol) ?? "").split(/[·;|]/).map((item) => item.trim()).filter(Boolean),
-      adminLink: cell(linkCol)?.startsWith("/admin") ? cell(linkCol) : null,
+      prepare: (cell(prepareCol) ?? "").split(/[·;|\n]/).map((item) => item.trim()).filter(Boolean),
+      adminLink: link?.startsWith("/admin") ? link : null,
       verifiedAt: verifiedAt && /^\d{4}-\d{2}-\d{2}$/.test(verifiedAt) ? verifiedAt : null,
       note: cell(noteCol),
     })
+    result.lines.push(line)
   }
-  return rows
+  return result
+}
+
+/**
+ * 한국 담당표 CSV 를 읽는다(parseKrContactsCsv 의 행만). 담당자 칸이 빈 행은 건너뛴다. 모르는 영역 이름도 건너뛴다.
+ * 인자가 없으면 코드의 KR_CONTACT_ROWS(기본 빈 표)를 돌려준다.
+ */
+export function readKrContacts(csv?: string | null): KrContactRow[] {
+  if (!csv) return [...KR_CONTACT_ROWS]
+  return parseKrContactsCsv(csv).rows
 }
 
 // ── 주입 자료 ──────────────────────────────────────────────────────────────────────────
@@ -399,8 +493,22 @@ export interface ResolveContactDeps {
   searchConsultations?: (question: string, customer: CustomerRef) => Promise<ConsultationHit[]>
   /** 어드민 계정의 역할·권한(사람을 역할로 찾는다). */
   listStaff?: () => Promise<StaffMember[]>
-  /** 한국 담당표. 없으면 readKrContacts()(기본 빈 표). */
+  /** 한국 담당표(고정 값 — 시험·스크립트용). 있으면 loadKrContacts 보다 먼저 쓴다. */
   krContacts?: KrContactRow[]
+  /**
+   * 한국 담당표 읽기(서버 연결: DB internal_team_contacts, 짧은 캐시). 한국 지사 업무 갈래에서만 부른다.
+   * 실패(던짐 또는 failed:true)면 빈 표로 답하고 카드 gaps 맨 앞에 실패를 적는다. 둘 다 없으면 readKrContacts()(기본 빈 표).
+   */
+  loadKrContacts?: () => Promise<KrContactTable>
+  /** 답이 여러 사람에게 보이는 곳(위컴 단체방) — 한국 지사·모름 카드에 사람 이름 없이 역할만 싣는다. */
+  roleOnly?: boolean
+}
+
+/** 한국 담당표 읽기 결과. failed 면 rows 는 빈 배열이고 warning 이 이유(표 미적용 등)다. */
+export interface KrContactTable {
+  rows: KrContactRow[]
+  failed: boolean
+  warning: string | null
 }
 
 export interface ResolveContactOptions {
@@ -422,6 +530,8 @@ const HQ_PREPARE = [
 ]
 
 const UNKNOWN_DEFAULT_ASK = "지사장(branch_director)"
+const KR_TABLE_FAILED_GAP = "한국 담당자 표를 읽지 못해 기본 경로(역할·계정 권한)로 안내합니다 — 설정 › 담당자 표를 확인하세요."
+const NAME_IN_PRIVATE = "이름은 갈매봇 1:1 로 물어봐 주세요"
 
 async function safe<T>(task: (() => Promise<T>) | undefined, fallback: T): Promise<{ value: T; failed: boolean }> {
   if (!task) return { value: fallback, failed: false }
@@ -531,48 +641,78 @@ async function customerCard(
   }
 }
 
+interface KrCardOptions {
+  alternatives?: string[]
+  /** 사람 이름 없이 역할만(위컴 단체방). */
+  roleOnly?: boolean
+  /** 한국 담당표를 읽지 못했다(빈 표로 답한다). */
+  tableFailed?: boolean
+  tableWarning?: string | null
+}
+
+/**
+ * 역할만 싣는 카드에서 — 사람 이름이 든 글(역할·연락 방법·준비물 칸에 이름을 적은 경우)은 싣지 않는다.
+ * 아는 이름(그 행의 1차·대리, 어드민 계정 이름)만 거른다. 표에도 계정에도 없는 사람 이름은 글만으로 가려낼 수 없다 —
+ * 그래서 담당자 표 화면은 역할·연락 방법 칸에 이름 대신 역할·방 이름만 적게 안내한다(TeamContactsPanel).
+ */
+function mentionsAny(text: string, names: string[]) {
+  return names.some((name) => text.includes(name))
+}
+
 function krCard(
   topic: KrTopic,
   rows: KrContactRow[],
   staff: StaffMember[],
   staffFailed: boolean,
-  alternatives: string[] = []
+  options: KrCardOptions = {}
 ): ContactCard {
+  const roleOnly = options.roleOnly === true
   const row = rows.find((item) => item.topic === topic.key) ?? null
   const byRole = staffFor(topic.resolver, staff)
   const directors = branchDirectors(staff)
   const gaps: string[] = []
   const evidence: ContactEvidence[] = []
+  const knownNames = [row?.primaryName, row?.backupName, ...staff.map((member) => member.displayName)]
+    .map((name) => name?.trim() ?? "")
+    .filter((name) => name.length >= 2)
+  // 역할 칸은 자유 글(80자)이다 — 단체방에서는 이름이 든 역할 글 대신 문서의 역할(KR_TOPICS)을 쓴다.
+  const rowRole = row?.role?.trim() || null
+  const roleLabel = rowRole && !(roleOnly && mentionsAny(rowRole, knownNames)) ? rowRole : topic.role
   let who: string
   if (row?.primaryName) {
-    who = `${topic.role ?? topic.area} — ${row.primaryName}`
+    who = roleOnly ? `${roleLabel ?? `${topic.area} 담당`} — ${NAME_IN_PRIVATE}` : `${roleLabel ?? topic.area} — ${row.primaryName}`
     evidence.push({ kind: "kr_table", label: `한국 담당표: ${topic.area}`, count: 1, href: row.adminLink ?? topic.adminLink })
   } else if (byRole.length > 0) {
-    who = `${topic.role} — ${joinNames(byRole)}`
+    who = roleOnly ? `${roleLabel} — ${NAME_IN_PRIVATE}` : `${roleLabel} — ${joinNames(byRole)}`
     evidence.push({ kind: "staff_role", label: `어드민 계정 역할·권한 기준(${topic.resolver?.value})`, count: byRole.length, href: "/admin/users" })
     gaps.push(`한국 담당표의 "${topic.area}" 행이 비어 있어 계정 권한으로 찾았습니다.`)
   } else {
-    who = topic.role ? `${topic.role} (담당자 이름은 담당표에 없음)` : `담당표에 없음 — ${topic.area}`
+    who = roleLabel ? `${roleLabel} (담당자 이름은 담당표에 없음)` : `담당표에 없음 — ${topic.area}`
     gaps.push(`한국 담당표의 "${topic.area}" 행을 채워 주세요(1차·대리 담당, 연락 방법).`)
   }
+  if (options.tableFailed) gaps.unshift(options.tableWarning?.trim() || KR_TABLE_FAILED_GAP)
   if (staffFailed) gaps.push("어드민 계정 목록을 읽지 못했습니다.")
   if (topic.roleSource) evidence.push({ kind: "document", label: `역할 근거: ${topic.roleSource}`, count: null, href: null })
-  const backup = row?.backupName
-    ? row.backupName
-    : directors.length > 0
-      ? `지사장 — ${joinNames(directors)}`
-      : "지사장(담당표가 비어 있을 때의 기본 경로)"
+
+  let backup: string
+  if (roleOnly) backup = row?.backupName ? `대리 담당 — ${NAME_IN_PRIVATE}` : "지사장(기본 경로)"
+  else if (row?.backupName) backup = row.backupName
+  else backup = directors.length > 0 ? `지사장 — ${joinNames(directors)}` : "지사장(담당표가 비어 있을 때의 기본 경로)"
+  const channelLabel = row?.channel && !(roleOnly && mentionsAny(row.channel, knownNames)) ? row.channel : null
+  const prepareSource = row?.prepare.length ? row.prepare : topic.prepare
+  const prepare = roleOnly ? prepareSource.filter((item) => !mentionsAny(item, knownNames)) : prepareSource
   return {
     kind: "kr",
     who,
     backup,
-    prepare: row?.prepare.length ? row.prepare : topic.prepare,
-    channel: { label: row?.channel ?? "한국 팀 사내 메신저(담당표에 연락 방법 없음)", href: row?.adminLink ?? topic.adminLink },
+    prepare: prepare.length ? prepare : topic.prepare,
+    channel: { label: channelLabel ?? "한국 팀 사내 메신저(담당표에 연락 방법 없음)", href: row?.adminLink ?? topic.adminLink },
     evidence,
     verifiedAt: row?.verifiedAt ?? null,
     reason: `한국 지사 업무: ${topic.area}`,
-    alternatives,
+    alternatives: options.alternatives ?? [],
     gaps,
+    ...(roleOnly ? { namesHidden: true as const } : {}),
   }
 }
 
@@ -595,8 +735,8 @@ function hqCard(domain: string, candidates: EscalationCandidate[]): ContactCard 
   }
 }
 
-function unknownCard(staff: StaffMember[], candidates: EscalationCandidate[]): ContactCard {
-  const directors = branchDirectors(staff)
+function unknownCard(staff: StaffMember[], candidates: EscalationCandidate[], roleOnly = false): ContactCard {
+  const directors = roleOnly ? [] : branchDirectors(staff)
   const ask = directors.length > 0 ? `${UNKNOWN_DEFAULT_ASK} — ${joinNames(directors)}` : UNKNOWN_DEFAULT_ASK
   return {
     kind: "unknown",
@@ -609,7 +749,22 @@ function unknownCard(staff: StaffMember[], candidates: EscalationCandidate[]): C
     reason: "고객사·한국 업무·본사 기술 영역 어디에도 맞지 않습니다",
     alternatives: candidates.map((item) => item.domainLabel),
     gaps: ["이 질문 유형의 담당을 한국 담당표에 추가해 주세요."],
+    ...(roleOnly ? { namesHidden: true as const } : {}),
   }
+}
+
+/** 한국 담당표 — 고정 값 > 서버 읽기(실패면 빈 표 + failed) > 코드의 기본 빈 표. */
+async function readKrTable(deps: ResolveContactDeps): Promise<KrContactTable> {
+  if (deps.krContacts) return { rows: deps.krContacts, failed: false, warning: null }
+  if (deps.loadKrContacts) {
+    try {
+      const table = await deps.loadKrContacts()
+      return table.failed ? { rows: [], failed: true, warning: table.warning } : table
+    } catch {
+      return { rows: [], failed: true, warning: null }
+    }
+  }
+  return { rows: readKrContacts(), failed: false, warning: null }
 }
 
 /** 질문 하나에 대한 담당 카드. 결정형이고 모델을 부르지 않는다. 자료 조회가 실패해도 던지지 않는다. */
@@ -637,7 +792,13 @@ export async function resolveContact(
 
   // ② 한국 지사 업무(R20: 본사보다 먼저)
   if (topic && topic.key !== "hq_escalation") {
-    return krCard(topic, deps.krContacts ?? readKrContacts(), staffResult.value, staffResult.failed, hqAlternative)
+    const table = await readKrTable(deps)
+    return krCard(topic, table.rows, staffResult.value, staffResult.failed, {
+      alternatives: hqAlternative,
+      roleOnly: deps.roleOnly === true,
+      tableFailed: table.failed,
+      tableWarning: table.warning,
+    })
   }
 
   // ③ 본사 기술
@@ -646,5 +807,5 @@ export async function resolveContact(
   if (topic) return hqCard("general", classification.candidates)
 
   // ④ 모름
-  return unknownCard(staffResult.value, classification.candidates)
+  return unknownCard(staffResult.value, classification.candidates, deps.roleOnly === true)
 }

@@ -294,7 +294,8 @@ const NAMED_TITLE = /(?<![가-힣])([가-힣]{2,4})(\s*)(선생님|원장님|실
 const NOT_NAME =
   /^(?:담당|담임|수학|영어|국어|과학|사회|원어민|학원|센터|우리|저희|해당|다른|모든|여러|부원장|본사|지사|원장|교사|강사|학부모|고객|상담|관리|운영|교무|행정)$/
 
-function redactSummary(value: string): string {
+/** 화면 한 줄 가림 — 비껴 쓴 이메일·호칭 앞 이름을 되돌려 가린 뒤 redactInternalCsValue. 고객 이력(customer-history.ts)도 쓴다. */
+export function redactSummary(value: string): string {
   const unmasked = value.replace(OBFUSCATED_EMAIL, (_whole, local: string, domain: string) =>
     `${local}@${domain.replace(/\s*(?:\[\s*dot\s*\]|\(\s*dot\s*\)|\s+dot\s+)\s*/gi, ".").replace(/\s*\.\s*/g, ".")}`
   )

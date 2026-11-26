@@ -152,6 +152,8 @@ export interface ReadCard {
   note?: string
   openLabel?: string
   openHref?: string
+  /** 사내 자료(CRM 활동 기록 등)라 그대로 보내면 안 된다 — 위컴 글은 맨 앞에 "내부용" 줄을 단다. */
+  internalOnly?: boolean
 }
 
 export interface DenyCard {

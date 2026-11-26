@@ -219,6 +219,9 @@ export const SCHEMA_CONTRACT_MIGRATIONS = [
   "supabase/migrations/20261123_partner_settlement_snapshots.sql",
   // 총판 견적서 확인·발행 후 수정(2026-11-24). 미적용이면 새 칸 없이 읽고(42703 폴백) 확인 버튼·발행 후 수정만 막힌다.
   "supabase/migrations/20261124_distributor_settlement_confirm_revise.sql",
+  // 한국팀·본사 담당자 표(2026-11-26) — 갈매봇·위컴 1:1 담당자 안내. RLS deny-all. 미적용이면 안내는 빈 표로 돌고
+  // 카드에 "담당자 표를 읽지 못했습니다"가 붙는다(warning).
+  "supabase/migrations/20261126_internal_team_contacts.sql",
 ] as const
 
 export const SCHEMA_PROBES: SchemaProbe[] = [
@@ -1153,6 +1156,33 @@ export const SCHEMA_PROBES: SchemaProbe[] = [
     severity: "warning",
     impact:
       "총판 미수금 탭의 쿼드러닝 보드가 '아직 올라오지 않았다' 한 줄로 바뀌고 Overview 정산 잔액 카드가 사라진다. 견적별 총판 미수금은 그대로다.",
+  },
+  {
+    kind: "table",
+    table: "internal_team_contacts",
+    label: "한국팀·본사 담당자 표(갈매봇 담당자 안내)",
+    columns: [
+      "id",
+      "org",
+      "area",
+      "role",
+      "name",
+      "deputy",
+      "channel",
+      "prep",
+      "admin_link",
+      "note",
+      "confirmed_at",
+      "confirmed_by",
+      "active",
+      "sort_order",
+      "created_at",
+      "updated_at",
+    ],
+    migration: "supabase/migrations/20261126_internal_team_contacts.sql",
+    severity: "warning",
+    impact:
+      "갈매봇·위컴 1:1 의 한국 지사 업무 담당자 안내가 지금처럼 역할·계정 권한으로만 답하고 카드에 '담당자 표를 읽지 못했습니다'가 붙는다. 설정 › 담당자 표는 적용 안내만 보이고 저장은 503.",
   },
 ]
 

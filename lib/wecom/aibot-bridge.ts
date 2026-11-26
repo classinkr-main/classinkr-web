@@ -4,9 +4,10 @@
 //  - 연결표에 없는 사람: 자료 없이 "연결되지 않은 계정입니다 — 어드민에서 써 주세요"만.
 //  - 연결된 사람: 그 어드민 계정의 역할로 조율기를 부른다. 비활성·역할 없음·갈매봇 역할 밖이면 거절.
 //  - 단체방(chattype group): 답이 방 전체에 보인다 — 클래스인 정보 답·링크·사내 역할 담당 안내만. 조회 도구·쓰기 미리보기·
-//    고객사 담당(CRM 담당·딜 담당·고객 키)·상담 내역(목록·요지·건수, 묻기 답의 "관련 상담 n건" 줄까지)은 "1:1 로 물어봐 주세요". 행위자 범위도 비운다(이중 잠금). 담당자 찾기는
+//    고객사 담당(CRM 담당·딜 담당·고객 키)·상담 내역(목록·요지·건수, 묻기 답의 "관련 상담 n건" 줄까지)·고객 이력(CRM 활동 기록·담당 영업)은
+//    "1:1 로 물어봐 주세요". 행위자 범위도 비운다(이중 잠금). 담당자 찾기는
 //    행위자 범위를 보지 않으므로 deps 에서 따로 막는다(서버는 고객 조회를 끄고, 여기서 고객사 카드를 바꾼다).
-//  - 1:1(single): 조회 도구까지. 상담 내역은 어드민 화면과 같은 역할 규칙(actor.ts canReadConsultationContent — 아니면 건수만). 쓰기(견적 초안·배송 예정)는 미리보기 요지와 "어드민에서 확인" 주소만 —
+//  - 1:1(single): 조회 도구까지. 상담 내역·고객 이력 기록 글은 어드민 화면과 같은 역할 규칙(actor.ts canReadConsultationContent — 아니면 건수만). 쓰기(견적 초안·배송 예정)는 미리보기 요지와 "어드민에서 확인" 주소만 —
 //    확인표를 발급하지 않으므로(ticketSecret null) 위컴에서 실행되는 길이 없다.
 //  - 연락처 원문(pii 범위)은 위컴으로 내보내지 않는다 — 역할과 상관없이 가린 값.
 import type { StaffIdentity } from "@/lib/admin-ai/server/actor"
@@ -122,14 +123,35 @@ export const GROUP_CUSTOMER_CONTACT: InternalContactCard = {
 }
 
 /**
+ * 단체방에서 역할만 싣지 않은(namesHidden 이 없는) 한국 지사·모름 카드를 대신하는 꼴 — 사람 이름이 어느 칸에 들었는지
+ * 모르므로 담당·대리·연락 방법·근거를 비우고 갈래(reason)·준비물·후보 영역만 남긴다.
+ */
+export function groupRoleOnlyContact(card: InternalContactCard): InternalContactCard {
+  return {
+    ...card,
+    who: card.kind === "kr" ? `${card.reason.replace(/^한국 지사 업무:\s*/, "")} 담당 — 이름은 1:1 로 물어봐 주세요` : "담당표에 없음",
+    backup: null,
+    channel: { label: "갈매봇 1:1 대화", href: null },
+    evidence: [],
+    gaps: [],
+    namesHidden: true,
+  }
+}
+
+/**
  * 단체방 담당자 찾기 — 열린 고객을 넘기지 않고, 고객사 담당 카드(CRM 담당·딜 담당·같은 이름 고객 키)는 1:1 안내로 바꾼다.
- * 서버 연결은 단체방에서 고객 조회(통합 고객 목록·고객 360) 자체를 끄고(aibot-server.ts), 여기서 한 번 더 막는다(이중 잠금).
+ * 한국 지사·모름 카드는 사람 이름(담당표 1차·대리, 어드민 계정 이름) 없이 역할만 — 서버 연결이 역할만 만든 카드(namesHidden)는
+ * 그대로, 아니면 groupRoleOnlyContact 로 비운다.
+ * 서버 연결은 단체방에서 고객 조회(통합 고객 목록·고객 360) 자체를 끄고 이름 없이 만들며(aibot-server.ts), 여기서 한 번 더 막는다(이중 잠금).
  * 담당자 갈래뿐 아니라 근거를 못 찾은 묻기 갈래의 담당자 대체 길도 이 함수를 지난다.
  */
 async function groupResolveContact(base: OrchestratorDeps, question: string): Promise<InternalContactCard> {
   const card = await base.resolveContact(question, null)
-  // 고객 이름·후보 고객은 고객사 갈래 카드에만 실린다(contact.ts customerCard). 다른 갈래는 사내 역할 안내라 그대로.
-  return card.kind === "customer_owner" ? GROUP_CUSTOMER_CONTACT : card
+  // 고객 이름·후보 고객은 고객사 갈래 카드에만 실린다(contact.ts customerCard).
+  if (card.kind === "customer_owner") return GROUP_CUSTOMER_CONTACT
+  if ((card.kind === "kr" || card.kind === "unknown") && card.namesHidden !== true) return groupRoleOnlyContact(card)
+  // 본사 카드는 문서의 본사 담당 표(HQ_DOMAINS — 위컴 멘션 대상)라 그대로 낸다.
+  return card
 }
 
 /**
@@ -138,7 +160,13 @@ async function groupResolveContact(base: OrchestratorDeps, question: string): Pr
  */
 export const GROUP_CONSULTATIONS_DENY: AiBlock = groupDeny("상담 내역")
 
-/** 단체방 — 조회 도구·쓰기 미리보기·고객 담당 조회·상담 내역을 막는 deps. */
+/**
+ * 단체방 — 고객 이력 갈래를 통째로 막는다(고객 찾기·기록 조회를 부르지 않는다). 건수·담당 영업도 방에 나가지 않는다.
+ * 서버 연결은 단체방에서 고객 조회를 끈 연결이라 고객 이력 자체가 없다(aibot-server.ts — 이중 잠금).
+ */
+export const GROUP_CUSTOMER_HISTORY_DENY: AiBlock = groupDeny("고객 이력")
+
+/** 단체방 — 조회 도구·쓰기 미리보기·고객 담당 조회·상담 내역·고객 이력을 막는 deps. */
 export function groupScopedDeps(base: OrchestratorDeps): OrchestratorDeps {
   const ops: OpsDeps = {
     ...base.ops,
@@ -161,6 +189,8 @@ export function groupScopedDeps(base: OrchestratorDeps): OrchestratorDeps {
     ops,
     consultations: undefined,
     consultationsDenied: GROUP_CONSULTATIONS_DENY,
+    customerHistory: undefined,
+    customerHistoryDenied: GROUP_CUSTOMER_HISTORY_DENY,
     resolveContact: (question) => groupResolveContact(base, question),
     previewWrite: async () => ({ blocks: [groupDeny("오더")] }),
   }

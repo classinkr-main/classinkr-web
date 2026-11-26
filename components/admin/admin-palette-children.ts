@@ -90,5 +90,6 @@ export const PALETTE_CHILD_COMMANDS: Record<string, AdminPaletteChildCommand[]> 
   "/admin/settings": [
     { label: "통합 설정", href: "/admin/settings?tab=integrations", keywords: "설정 settings integrations webhook api key" },
     { label: "회원 관리", href: "/admin/settings?tab=members", keywords: "회원 사용자 권한 계정 users members role" },
+    { label: "담당자 표", href: "/admin/settings?tab=contacts", keywords: "담당자 표 담당표 한국팀 본사 1차 대리 연락 방법 갈매봇 contacts" },
   ],
 }

@@ -211,6 +211,39 @@ describe("방에서 보이는 것의 경계", () => {
     expect(single.markdown).toContain("담당샘플갑")
   })
 
+  it("단체방 — 한국 담당표·어드민 계정의 사람 이름은 나가지 않고 역할만(서버 연결이 놓쳐도 브리지가 막는다)", async () => {
+    // 서버 연결이 이름을 실은 카드(namesHidden 없음)를 돌려준 경우 — 담당표 1차·대리 이름과 지사장 이름이 들어 있다.
+    const named = (kind: "kr" | "unknown"): InternalContactCard => ({
+      kind,
+      who: kind === "kr" ? "BD 팀 매니저 — 담당자샘플갑" : "담당표에 없음",
+      backup: kind === "kr" ? "담당자샘플을" : null,
+      prepare: ["고객사", "품목·수량"],
+      channel: { label: kind === "kr" ? "담당자샘플갑 에게 위컴" : "지사장(branch_director) — 지사장샘플병에게 물어 담당표를 채운다", href: "/admin/quotes" },
+      evidence: [{ kind: "kr_table", label: "한국 담당표: 견적", count: 1, href: "/admin/quotes" }],
+      verifiedAt: "2026-11-20",
+      reason: kind === "kr" ? "한국 지사 업무: 견적" : "고객사·한국 업무·본사 기술 영역 어디에도 맞지 않습니다",
+      alternatives: [],
+      gaps: ["한국 담당표의 \"견적\" 행이 비어 있어 계정 권한으로 찾았습니다. 지사장샘플병"],
+    })
+    const roleOnly: InternalContactCard = { ...named("kr"), who: "BD 팀 매니저 — 이름은 갈매봇 1:1 로 물어봐 주세요", backup: "지사장(기본 경로)", channel: { label: "위컴 1:1", href: "/admin/quotes" }, gaps: [], namesHidden: true }
+    const NAMES = /담당자샘플갑|담당자샘플을|지사장샘플병/
+    for (const [question, card] of [
+      ["견적서 담당 누구야?", named("kr")],
+      ["점심 메뉴 누구한테 물어?", named("unknown")],
+    ] as const) {
+      const { deps } = bridge({ orchestratorDeps: () => ({ ...fakeDeps().deps, resolveContact: async () => card }) })
+      const reply = await answerWecomMessage(message({ chattype: "group", chatid: "room-1", text: `@갈매봇 ${question}` }), deps)
+      expect(reply.markdown, question).not.toMatch(NAMES)
+      const single = await answerWecomMessage(message({ text: question }), deps)
+      expect(single.markdown, question).toMatch(NAMES)
+    }
+    // 서버 연결이 이미 역할만 실은 카드는 그대로 — 역할·연락 방법 종류가 방에 나간다.
+    const { deps } = bridge({ orchestratorDeps: () => ({ ...fakeDeps().deps, resolveContact: async () => roleOnly }) })
+    const reply = await answerWecomMessage(message({ chattype: "group", text: "@갈매봇 견적서 담당 누구야?" }), deps)
+    expect(reply.markdown).toContain("BD 팀 매니저")
+    expect(reply.markdown).toContain("위컴 1:1")
+  })
+
   it("쓰기 요청 — 위컴에서는 실행·미리보기 표를 만들지 않는다(단체방은 1:1 안내, 1:1 은 값이 모자라면 되묻기)", async () => {
     const group = bridge()
     const g = await answerWecomMessage(message({ chattype: "group", text: "T1 카메라 견적 초안 만들어 줘" }), group.deps)

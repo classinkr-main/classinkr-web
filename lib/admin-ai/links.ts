@@ -65,8 +65,10 @@ function slug(value: string): string {
 
 // 필요 역할이 정해진 화면 — 정본은 각 화면의 API 가드이고 여기는 안내용 사본이다.
 // 회원 관리: app/api/admin/users PATCH 가 SUPER_ADMIN 만 허용한다.
+// 담당자 표: app/api/admin/team-contacts 쓰기(추가·수정·비활성화·확인일·CSV 넣기)가 SUPER_ADMIN 만 허용한다.
 const REQUIRES_BY_HREF: Readonly<Record<string, readonly AdminRole[]>> = {
   "/admin/settings?tab=members": ["SUPER_ADMIN"],
+  "/admin/settings?tab=contacts": ["SUPER_ADMIN"],
 }
 
 function buildInternalLinks(): InternalLink[] {
