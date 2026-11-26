@@ -2,7 +2,8 @@ import "server-only"
 
 // 갈매봇 조율기의 서버 연결 — 실제 자료 함수를 deps 로 묶는다. 시험은 이 파일 대신 가짜 deps 를 쓴다.
 //  - 묻기: buildInternalEvidence(정리 지식·선례·공개/내부 문서) + 공개 챗봇 답 색인(읽기 전용, 고객용 문안 칸)
-//  - 담당자: resolveContact + buildContactDeps(상담 검색은 끈다 — 임베딩 검색이라 비용이 들고 R17 범위 결정 전)
+//  - 담당자: resolveContact + buildContactDeps(상담 검색은 끈다 — 임베딩 검색이라 비용이 들고 R17 범위 결정 전).
+//    한국 담당표는 DB(internal_team_contacts, 설정 › 담당자 표)를 60초 캐시로 읽는다 — 실패면 빈 표 + 카드에 실패 표시.
 //  - 도구: lib/ops-tools 레지스트리·실행기
 //  - 모델: 연결 전(null) — 결정형만 돈다
 //  - 쓰기: preview 까지(writes.ts) + 서명 표(ADMIN_AI_TICKET_SECRET 이 있을 때만)
@@ -71,13 +72,18 @@ export const serverOpsDeps: OpsDeps = {
  * sub 는 행위자 키(actor.ts staffKey) — 쓰기 확인 표에 서명해 싣는다.
  * canReadConsultations 는 상담 글(누가·요지)을 볼 수 있는 역할인가(actor.ts canReadConsultationContent) — 아니면 건수만.
  * customerContacts:false — 담당자 찾기에서 고객사 갈래(CRM 고객 조회)를 끈다(위컴 단체방처럼 답이 여러 사람에게 보일 때).
+ * contactNames:false — 한국 지사·모름 담당 카드에 사람 이름(담당표·어드민 계정) 없이 역할만 싣는다(같은 곳).
  */
 export function buildServerOrchestratorDeps(options: {
   sub: string
   canReadConsultations: boolean
   customerContacts?: boolean
+  contactNames?: boolean
 }): OrchestratorDeps {
-  const contactDeps = buildContactDeps({ customers: options.customerContacts !== false })
+  const contactDeps = buildContactDeps({
+    customers: options.customerContacts !== false,
+    names: options.contactNames !== false,
+  })
   const consultationDeps = buildConsultationDeps()
   // 고객 이력은 고객 조회를 켠 연결에서만 — 담당자 찾기의 고객 이름 일치(findCustomersInText)를 같이 쓴다.
   const customerHistoryDeps =

@@ -50,12 +50,14 @@ export function buildWecomBridgeDeps(config: WecomAibotConfig): BridgeDeps {
     orchestratorDeps: (admin, chatType) => {
       const sub = staffKey(admin)
       const group = chatType === "group"
-      // 단체방은 답이 방 전체에 보인다 — 담당자 찾기에서 CRM 고객 조회를 끄고, 상담 내역 갈래·관련 상담 건수를 떼어 낸다
-      // (브리지 groupScopedDeps 가 한 번 더 막는다). 1:1 은 어드민 화면과 같은 역할 규칙으로 상담 글 권한을 정한다.
+      // 단체방은 답이 방 전체에 보인다 — 담당자 찾기에서 CRM 고객 조회를 끄고, 한국 담당·모름 카드는 사람 이름 없이 역할만 싣고,
+      // 상담 내역 갈래·관련 상담 건수를 떼어 낸다(브리지 groupScopedDeps 가 한 번 더 막는다).
+      // 1:1 은 어드민 화면과 같은 역할 규칙으로 상담 글 권한을 정한다.
       const built = buildServerOrchestratorDeps({
         sub,
         canReadConsultations: !group && canReadConsultationContent(admin),
         customerContacts: !group,
+        contactNames: !group,
       })
       const base = group ? withoutConsultations(built) : built
       // 위컴에서는 확인표를 발급하지 않는다 — 미리보기까지만(확인은 로그인한 어드민 화면에서).

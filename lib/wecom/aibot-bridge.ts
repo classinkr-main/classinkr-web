@@ -123,14 +123,35 @@ export const GROUP_CUSTOMER_CONTACT: InternalContactCard = {
 }
 
 /**
+ * 단체방에서 역할만 싣지 않은(namesHidden 이 없는) 한국 지사·모름 카드를 대신하는 꼴 — 사람 이름이 어느 칸에 들었는지
+ * 모르므로 담당·대리·연락 방법·근거를 비우고 갈래(reason)·준비물·후보 영역만 남긴다.
+ */
+export function groupRoleOnlyContact(card: InternalContactCard): InternalContactCard {
+  return {
+    ...card,
+    who: card.kind === "kr" ? `${card.reason.replace(/^한국 지사 업무:\s*/, "")} 담당 — 이름은 1:1 로 물어봐 주세요` : "담당표에 없음",
+    backup: null,
+    channel: { label: "갈매봇 1:1 대화", href: null },
+    evidence: [],
+    gaps: [],
+    namesHidden: true,
+  }
+}
+
+/**
  * 단체방 담당자 찾기 — 열린 고객을 넘기지 않고, 고객사 담당 카드(CRM 담당·딜 담당·같은 이름 고객 키)는 1:1 안내로 바꾼다.
- * 서버 연결은 단체방에서 고객 조회(통합 고객 목록·고객 360) 자체를 끄고(aibot-server.ts), 여기서 한 번 더 막는다(이중 잠금).
+ * 한국 지사·모름 카드는 사람 이름(담당표 1차·대리, 어드민 계정 이름) 없이 역할만 — 서버 연결이 역할만 만든 카드(namesHidden)는
+ * 그대로, 아니면 groupRoleOnlyContact 로 비운다.
+ * 서버 연결은 단체방에서 고객 조회(통합 고객 목록·고객 360) 자체를 끄고 이름 없이 만들며(aibot-server.ts), 여기서 한 번 더 막는다(이중 잠금).
  * 담당자 갈래뿐 아니라 근거를 못 찾은 묻기 갈래의 담당자 대체 길도 이 함수를 지난다.
  */
 async function groupResolveContact(base: OrchestratorDeps, question: string): Promise<InternalContactCard> {
   const card = await base.resolveContact(question, null)
-  // 고객 이름·후보 고객은 고객사 갈래 카드에만 실린다(contact.ts customerCard). 다른 갈래는 사내 역할 안내라 그대로.
-  return card.kind === "customer_owner" ? GROUP_CUSTOMER_CONTACT : card
+  // 고객 이름·후보 고객은 고객사 갈래 카드에만 실린다(contact.ts customerCard).
+  if (card.kind === "customer_owner") return GROUP_CUSTOMER_CONTACT
+  if ((card.kind === "kr" || card.kind === "unknown") && card.namesHidden !== true) return groupRoleOnlyContact(card)
+  // 본사 카드는 문서의 본사 담당 표(HQ_DOMAINS — 위컴 멘션 대상)라 그대로 낸다.
+  return card
 }
 
 /**
