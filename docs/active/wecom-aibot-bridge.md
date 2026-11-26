@@ -29,6 +29,7 @@
 - 단체방에서는 행위자 범위를 비운다. 조회 도구와 미리보기 함수도 막아서 이중으로 잠근다(`lib/wecom/aibot-bridge.ts` `groupScopedDeps`·`wecomActor`).
 - 담당자 찾기(`resolveContact`)는 행위자 범위를 보지 않는다. 그래서 단체방은 연결 단계에서 고객사 갈래(통합 고객 목록·고객 360)를 끄고(`lib/wecom/aibot-server.ts` → `buildServerOrchestratorDeps({ customerContacts: false })` → `buildContactDeps({ customers: false })`), 브리지가 고객사 담당 카드가 오더라도 1:1 안내 카드로 바꾼다. 담당자 갈래뿐 아니라 근거를 못 찾은 묻기 갈래의 담당자 대체 길도 같은 함수를 지난다. 방에는 연결표에 없는 사람도 있다.
 - 고객 이력도 같은 이중 잠금이다. 연결 단계는 고객 조회를 끈 단체방 연결에 고객 이력(`customerHistory`)을 싣지 않고 한 번 더 떼어 내며, 브리지(`groupScopedDeps`)가 1:1 안내 카드(`GROUP_CUSTOMER_HISTORY_DENY`)를 낸다.
+- 한국 지사·모름 담당 카드의 사람 이름도 같은 이중 잠금이다. 연결 단계가 단체방에서는 `contactNames: false` → `buildContactDeps({ names: false })`로 담당자 표(DB)의 1차·대리 이름과 어드민 계정 이름 없이 역할만 싣고(`namesHidden`), 브리지(`groupScopedDeps`)가 `namesHidden` 없는 카드를 한 번 더 비운다(`groupRoleOnlyContact`). 본사 카드(문서의 본사 담당 표·위컴 멘션)는 그대로다. 근거: [담당자 표 연결](./internal-team-contacts-2026-11-26.md) §4.
 - 상담 내역도 같은 이중 잠금이다. 연결 단계(`lib/wecom/aibot-server.ts`)가 단체방에서는 상담 글 권한을 끄고(`canReadConsultations: false`) 상담 찾기(`consultations`)와 관련 상담 건수(`knowledge.consultationCount`)를 떼어 낸다. 브리지(`groupScopedDeps`)가 한 번 더 떼고 상담 내역 갈래에는 1:1 안내 카드(`GROUP_CONSULTATIONS_DENY`)를 낸다. 1:1 의 상담 내역 카드는 늘 "내부용" 줄을 단다.
 - 연결표에 없는 사람에게는 자료 없이 "연결되지 않은 계정입니다 — 어드민에서 써 주세요"만 답한다.
 - 연결된 사람이라도 계정이 비활성이거나 역할이 없거나 갈매봇 역할(CRM 스태프) 밖이면 거절한다. 프로필(상태·역할)은 글마다 새로 읽으므로 어드민 화면에서 비활성·역할 변경을 하면 다음 글부터 따른다. 이메일 → 계정 키만 인스턴스 메모리에 5분 둔다(새로 만든 계정은 최대 5분 늦게 연결된다).
