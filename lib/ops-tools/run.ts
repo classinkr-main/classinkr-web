@@ -14,11 +14,63 @@ import "server-only"
 import { type OpsActor, actorDisplayName, hasScope } from "@/lib/ops-tools/actor"
 import { auditOps } from "@/lib/ops-tools/audit"
 import { OpsToolError } from "@/lib/ops-tools/errors"
-import { fingerprintArgs, idempotencyKeyHash, readIdempotencyKey, runIdempotent, takeWriteSlot } from "@/lib/ops-tools/guard"
+import { fingerprintArgs, idempotencyConflict, idempotencyKeyHash, readIdempotencyKey, runIdempotent, takeWriteSlot } from "@/lib/ops-tools/guard"
+import { type SharedIdempotencyStore, readSharedIdempotencyStore } from "@/lib/ops-tools/idempotency-store"
 import { findMaskedInput, redactContacts } from "@/lib/ops-tools/redact"
 import { type OpsToolDef, type ToolArgs, type WriteExecuteResult, isWriteDef } from "@/lib/ops-tools/types"
 
 export type OpsRunResult = { value: unknown; logCode?: string }
+
+const SHARED_WAIT_MS = 5_000
+const SHARED_POLL_MS = 200
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
+
+/**
+ * 공용 저장소로 같은 키 동시 실행을 한 번으로 막는다(sharedIdempotency 도구). 키를 먼저 잡은 쪽만 execute 하고,
+ * 다른 인스턴스에서 같은 키가 오면 끝난 결과(처음 결과)를 돌려준다. 실행이 실패하면 키를 지워 다시 시도할 수 있게 한다.
+ * 저장소 호출이 실패하면 닫지 않고 execute 를 그대로 한다(인스턴스 메모리 판정 — idempotencyScope 로 표시).
+ */
+async function executeWithSharedClaim(
+  store: SharedIdempotencyStore,
+  keyHash: string,
+  fingerprint: string,
+  execute: () => Promise<WriteExecuteResult>,
+  waitMs: number = SHARED_WAIT_MS
+): Promise<WriteExecuteResult> {
+  const deadline = Date.now() + waitMs
+  for (;;) {
+    let claim: Awaited<ReturnType<SharedIdempotencyStore["claim"]>>
+    try {
+      claim = await store.claim(keyHash, fingerprint)
+    } catch {
+      console.error("[mcp] idempotency_store_unavailable")
+      return { ...(await execute()), idempotencyScope: "instance_memory" }
+    }
+    if (claim.won) {
+      try {
+        const result = await execute()
+        await store.complete(keyHash, fingerprint, result).catch(() => console.error("[mcp] idempotency_store_complete_failed"))
+        return result
+      } catch (e) {
+        await store.release(keyHash).catch(() => undefined)
+        throw e
+      }
+    }
+    const record = claim.record
+    if (record) {
+      if (record.fingerprint !== fingerprint) throw idempotencyConflict()
+      if (record.state === "done" && record.result) return { ...record.result, replayed: true }
+    }
+    // 진행 중(또는 읽는 사이 지워졌다) — 잠깐 기다렸다가 다시 본다
+    if (Date.now() >= deadline) {
+      throw new OpsToolError("같은 idempotency_key 로 진행 중인 호출이 있다. 잠시 뒤 같은 키로 다시 부른다.", "idempotency_in_progress")
+    }
+    await sleep(SHARED_POLL_MS)
+  }
+}
+
+/** 시험 전용 */
+export const executeWithSharedClaimForTest = executeWithSharedClaim
 
 export async function runOpsTool(def: OpsToolDef, args: ToolArgs, actor: OpsActor): Promise<OpsRunResult> {
   if (!hasScope(actor, def.requiredScope)) {
@@ -54,14 +106,24 @@ export async function runOpsTool(def: OpsToolDef, args: ToolArgs, actor: OpsActo
     return def.execute(preview, actor, keyHash ? { idempotency: { keyHash, fingerprint } } : {})
   }
 
+  // 도메인 행에 키를 실을 칸이 없는 도구 — 공용 저장소가 있으면 거기서, 없으면 인스턴스 메모리(아래에서 표시)
+  const sharedStore = keyHash && def.sharedIdempotency ? readSharedIdempotencyStore() : null
+  const memoryJudged = Boolean(keyHash && def.sharedIdempotency && !sharedStore)
+  const execute = sharedStore && keyHash ? () => executeWithSharedClaim(sharedStore, keyHash, fingerprint, executeOnce) : executeOnce
+
   const { result, replayed } = await runIdempotent<WriteExecuteResult>(
     { caller: actor.name, tool: def.mcpName, key, fingerprint },
-    executeOnce,
+    execute,
     keyHash && def.findExisting ? () => def.findExisting!(actor, keyHash) : undefined
   )
   // replay 도 처음 결과와 같은 꼴(배열은 배열 그대로) — replay 여부는 로그 코드로만
-  if (replayed) return { value: result.output, logCode: "replayed" }
-  return { value: result.output, ...(result.auditFailure ? { logCode: `audit_${result.auditFailure}` } : {}) }
+  // 메모리로만 판정했으면(공용 저장소 없음·실패) 객체 결과에 칸 하나(idempotency_scope)를 더하고 로그에도 남긴다
+  const memory = memoryJudged || result.idempotencyScope === "instance_memory"
+  const out = result.output
+  const value = memory && out && typeof out === "object" && !Array.isArray(out) ? { ...(out as Record<string, unknown>), idempotency_scope: "instance_memory" } : out
+  const base = replayed || result.replayed ? "replayed" : result.auditFailure ? `audit_${result.auditFailure}` : undefined
+  const logCode = [base, memory ? "idem_memory" : undefined].filter(Boolean).join("-") || undefined
+  return { value, ...(logCode ? { logCode } : {}) }
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i

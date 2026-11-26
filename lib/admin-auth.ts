@@ -329,11 +329,11 @@ function getLegacyAdminContext(req: NextRequest): VerifiedAdminContext | null {
 }
 
 // Supabase 관리자 컨텍스트는 요청마다 admin_profiles 왕복이 필요하므로 동일 세션 쿠키에
-// 대해 짧게 캐시한다. (관리자 권한 회수 반영 지연 최대 60초)
+// 대해 짧게 캐시한다. (관리자 권한 회수 반영 지연 최대 15초)
 // 토큰 검증은 verifySupabaseAuthUser()가 담당한다. 비대칭 서명 키 프로젝트에서는 JWKS
 // 로컬 검증이라 캐시 미스에도 GoTrue 왕복이 없고, 사용자 삭제·차단은 토큰 만료(최대 1시간)
 // 까지 반영이 늦어질 수 있다. 자세한 신뢰 모델은 verifySupabaseAuthUser() 주석 참고.
-const SUPABASE_ADMIN_CONTEXT_TTL_MS = 60_000
+const SUPABASE_ADMIN_CONTEXT_TTL_MS = 15_000
 const SUPABASE_ADMIN_CONTEXT_CACHE_MAX = 200
 // 콜드 스타트에서 한 화면이 여러 어드민 API를 동시에 때리므로 완료된 결과뿐 아니라
 // 진행 중 요청도 같은 키로 공유한다.
@@ -397,7 +397,7 @@ async function getSupabaseAdminContext(
     }
   )
 
-  // 진행 중 엔트리도 같은 TTL을 달아 둔다. 응답이 끝내 안 오면 60초 뒤 새 요청이 뜨도록.
+  // 진행 중 엔트리도 같은 TTL을 달아 둔다. 응답이 끝내 안 오면 15초 뒤 새 요청이 뜨도록.
   supabaseAdminContextCache.set(cacheKey, {
     promise: request,
     expiresAt: Date.now() + SUPABASE_ADMIN_CONTEXT_TTL_MS,

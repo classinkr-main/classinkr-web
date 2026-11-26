@@ -9,13 +9,13 @@ import {
   readRequiredPositiveInt,
 } from "@/app/api/admin/hardware/_validation"
 import { auditOps } from "@/lib/ops-tools/audit"
-import { includesText, limitOf, schema } from "@/lib/ops-tools/defs/shared"
+import { limitOf, schema } from "@/lib/ops-tools/defs/shared"
 import { OpsToolError } from "@/lib/ops-tools/errors"
 import { type ReadToolDef, type ToolArgs, type WriteToolDef, defineWrite } from "@/lib/ops-tools/types"
 import type { PartnerQuoteDetailsInput, PartnerQuoteLineItemInput } from "@/lib/partners-types"
 import { logActivity } from "@/lib/portal/repositories/activity"
 import { listDealListItems } from "@/lib/portal/repositories/deals"
-import { listPortalDocuments } from "@/lib/portal/repositories/documents"
+import { searchDealsForMcp, searchQuotesForMcp } from "@/lib/portal/repositories/mcp-queries"
 import {
   createQuoteDocument,
   createQuoteDocumentVersion,
@@ -35,6 +35,14 @@ import {
 
 const QUOTE_TEMPLATE_IDS = STANDARD_QUOTE_TEMPLATES.map((t) => t.id).filter((id) => !isRetiredQuoteTemplate(id))
 
+/**
+ * 목록 끝에 붙이는 "더 있음" 표시 — 조건에 맞는 항목이 limit 을 넘거나 검색이 상한에서 멈췄을 때만 붙는다.
+ * 결과는 계속 배열이고, 표시는 마지막 한 칸이다(항목 꼴은 그대로). tools/list(이름·설명·입력 칸)는 바꾸지 않는다 —
+ * 기간(updatedFrom·updatedTo) 거르기는 조회 모듈이 받지만 도구 입력 칸으로는 열지 않았다(tests/mcp/fixtures/tools-list.before.json 동결).
+ */
+export const MORE_RESULTS_NOTE = "조건에 맞는 항목이 더 있다. limit 을 올리거나 query·기간으로 좁혀 다시 부른다."
+const withMore = <T>(items: T[], more: boolean): Array<T | { more: true; note: string }> => (more ? [...items, { more: true as const, note: MORE_RESULTS_NOTE }] : items)
+
 export const dealsList: ReadToolDef = {
   id: "deals.list",
   mcpName: "deals_list",
@@ -44,12 +52,12 @@ export const dealsList: ReadToolDef = {
   description: "견적을 붙일 딜 찾기 — 고객(학원)명·딜 제목 일부로 거른다. 최근 갱신순.",
   inputSchema: schema({ query: { type: "string" }, limit: { type: "integer", minimum: 1, maximum: 100, default: 30 } }),
   async run(args) {
-    const query = readOptionalString(args, "query", "query")
-    const deals = await listDealListItems()
-    return deals
-      .filter((d) => includesText(query, d.customer_name, d.customer_campus_name, d.title))
-      .slice(0, limitOf(args, 30, 100))
-      .map((d) => ({
+    const { items, more } = await searchDealsForMcp({
+      query: readOptionalString(args, "query", "query"),
+      limit: limitOf(args, 30, 100),
+    })
+    return withMore(
+      items.map((d) => ({
         id: d.id,
         title: d.title,
         customer_name: d.customer_name,
@@ -59,7 +67,9 @@ export const dealsList: ReadToolDef = {
         status: d.status,
         owner: d.owner_name,
         updated_at: d.updated_at,
-      }))
+      })),
+      more
+    )
   },
 }
 
@@ -77,13 +87,13 @@ export const quotesList: ReadToolDef = {
     limit: { type: "integer", minimum: 1, maximum: 100, default: 30 },
   }),
   async run(args) {
-    const query = readOptionalString(args, "query", "query")
-    const { documents } = await listPortalDocuments({
-      type: "quote",
+    const { items, more } = await searchQuotesForMcp({
+      query: readOptionalString(args, "query", "query"),
       dealId: readOptionalUuid(args, "deal_id", "deal_id") ?? undefined,
       status: readOptionalString(args, "status", "status"),
+      limit: limitOf(args, 30, 100),
     })
-    return documents.filter((d) => includesText(query, d.customer_name, d.title, d.document_number, d.deal_title)).slice(0, limitOf(args, 30, 100))
+    return withMore(items, more)
   },
 }
 
@@ -188,6 +198,8 @@ export const quoteCreateDraft: WriteToolDef = defineWrite<QuotePlan>({
   mcpName: "quote_create_draft",
   risk: "R1",
   requiredScope: "write:quote",
+  // 견적 문서에는 키를 실을 칸이 없다 — 같은 키 동시 실행은 공용 저장소(없으면 인스턴스 메모리)로 막는다
+  sharedIdempotency: true,
   title: "견적 초안 만들기",
   description:
     "딜에 표준 템플릿 견적 초안(draft, 버전 1)을 만든다. 공급자(SW=클래스인/HW=퀴드러닝)·합계는 어드민 작성기와 같은 계산이다. 공유 링크·발송·승인은 하지 않는다 — 어드민 견적 탭에서 열어 옵션·담당자를 고친 뒤 사람이 보낸다. 줄을 안 주면 템플릿 기본 수량·단가를 쓴다(quote_templates 로 먼저 본다).",
