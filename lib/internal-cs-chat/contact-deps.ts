@@ -113,7 +113,12 @@ async function listStaff(): Promise<StaffMember[]> {
   }))
 }
 
-export function buildContactDeps(options: { consultations?: boolean } = {}): ResolveContactDeps {
+/**
+ * customers:false — 고객사 갈래(통합 고객 목록·고객 360·과거 상담)를 끈다. 답이 여러 사람에게 보이는 곳(위컴 단체방)용:
+ * 이 조회는 행위자 범위를 보지 않으므로 연결 단계에서 뺀다.
+ */
+export function buildContactDeps(options: { consultations?: boolean; customers?: boolean } = {}): ResolveContactDeps {
+  if (options.customers === false) return { listStaff }
   return {
     findCustomersInText,
     loadCustomerEvidence,

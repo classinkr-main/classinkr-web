@@ -108,4 +108,17 @@ describe("buildContactDeps (wired to repository functions, faked here)", () => {
     const hits = await deps.searchConsultations!("결제", { key: "neo:a1", name: "가상학원", href: "/admin/x" })
     expect(hits.map((hit) => hit.conversationId)).toEqual(["c1"])
   })
+
+  it("customers:false 면 고객사 갈래(통합 고객 목록·고객 360·과거 상담)를 부르지 않는다 — 위컴 단체방용", async () => {
+    mocks.getCrmUnifiedCustomers.mockResolvedValue({ rows: ROWS })
+    mocks.listAdminUserDirectoryCached.mockResolvedValue({ users: [] })
+    const deps = buildContactDeps({ customers: false, consultations: true })
+    expect(deps.findCustomersInText).toBeUndefined()
+    expect(deps.loadCustomerEvidence).toBeUndefined()
+    expect(deps.searchConsultations).toBeUndefined()
+    const card = await resolveContact("가상학원 담당 누구야?", deps)
+    expect(card.kind).not.toBe("customer_owner")
+    expect(mocks.getCrmUnifiedCustomers).not.toHaveBeenCalled()
+    expect(mocks.getCrmCustomer360).not.toHaveBeenCalled()
+  })
 })
