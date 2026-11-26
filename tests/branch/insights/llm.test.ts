@@ -110,4 +110,15 @@ describe("모델 순서", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 429, text: async () => "quota" } as unknown as Response))
     await expect(generateStructured(call)).rejects.toThrow(/Claude: 402 credit \/ Gemini: Gemini 429/)
   })
+
+  it("Gemini fetch에 타임아웃 signal을 달고, 타임아웃은 읽을 수 있는 오류로 올린다", async () => {
+    process.env.ANTHROPIC_API_KEY = "k"
+    process.env.GEMINI_API_KEY = "g"
+    createMock.mockRejectedValue(new Error("402 credit"))
+    const timeout = Object.assign(new Error("The operation was aborted due to timeout"), { name: "TimeoutError" })
+    const fetchMock = vi.fn().mockRejectedValue(timeout)
+    vi.stubGlobal("fetch", fetchMock)
+    await expect(generateStructured(call)).rejects.toThrow(/Claude: 402 credit \/ Gemini: Gemini 응답 타임아웃\(60초 초과\)/)
+    expect((fetchMock.mock.calls[0][1] as RequestInit).signal).toBeInstanceOf(AbortSignal)
+  })
 })

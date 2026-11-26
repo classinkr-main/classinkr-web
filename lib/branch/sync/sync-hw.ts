@@ -25,6 +25,15 @@ export async function syncHw(): Promise<{ inbound: number; outbound: number; sto
   }))
   const stock = parseStock(stockGrid).map((p) => ({ ...p, quantity: String(p.quantity) }))
   const sales = parseSalesMonthly(salesGrid, refFy).map((p) => ({ ...p, quantity: String(p.quantity), fiscal_year: String(p.fiscal_year), fiscal_month: String(p.fiscal_month) }))
+  // 입고·출고 원장은 비는 일이 없다 — 0행이면 빈 시트/열 이동으로 보고 replace(truncate+insert)를 막는다.
+  // 검증은 네 replace 보다 앞이라, 파싱 이상이 일부 테이블만 교체된 상태를 만들지 않는다.
+  const problems: string[] = []
+  if (inbound.length === 0) problems.push("입고 0행")
+  if (outbound.length === 0) problems.push("출고 0행")
+  if (sales.length === 0 && salesGrid.length > 1) problems.push("월별 판매 0행(데이터 행은 있음)")
+  if (problems.length > 0) {
+    throw new Error(`HW 시트 읽기 이상 — ${problems.join(", ")}. 기존 미러는 건드리지 않았습니다.`)
+  }
   const [iN, oN, sN, mN] = await Promise.all([
     replaceHwInbound(inbound), replaceHwOutbound(outbound),
     replaceHwStock(stock), replaceHwSalesMonthly(sales),

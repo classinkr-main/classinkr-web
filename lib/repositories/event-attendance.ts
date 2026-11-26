@@ -1,7 +1,7 @@
 import "server-only"
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
-import { getLeads } from "@/lib/repositories/leads"
+import { fetchSupabasePages } from "@/lib/supabase/pagination"
 import type { AttendeeOrigin } from "@/lib/supabase/database.types"
 
 // 행사 참석자(crm_customer_events.public_event_id) → 출신(origin)별 참석 + 리드 전환 집계.
@@ -35,31 +35,63 @@ export const ATTENDEE_ORIGINS: AttendeeOrigin[] = [
 
 const LEAD_ORIGINS = new Set<AttendeeOrigin>(["ad_lead", "site_lead", "kr_team_lead", "new_lead"])
 
+interface AttendanceRow {
+  id: string
+  public_event_id: string | null
+  target_type: string | null
+  target_id: string | null
+  attendee_origin: AttendeeOrigin | null
+}
+
+const ATTENDANCE_SCAN_MAX_ROWS = 100_000
+const LEAD_ID_CHUNK = 200
+const MISSING_SCHEMA_CODES = new Set(["42P01", "PGRST205", "42703", "PGRST204"])
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 export async function getAllEventAttendanceMatrices(): Promise<Record<string, EventAttendanceMatrix>> {
   const supabase = createSupabaseAdminClient()
-  const { data, error } = await supabase
-    .from("crm_customer_events")
-    .select("public_event_id, target_type, target_id, attendee_origin")
-    .not("public_event_id", "is", null)
+  const paged = await fetchSupabasePages<AttendanceRow>({
+    maxRows: ATTENDANCE_SCAN_MAX_ROWS,
+    fetchPage: (from, to) =>
+      supabase
+        .from("crm_customer_events")
+        .select(
+          "id, public_event_id, target_type, target_id, attendee_origin",
+          from === 0 ? { count: "exact" } : undefined
+        )
+        .not("public_event_id", "is", null)
+        .order("id", { ascending: true })
+        .range(from, to),
+  })
 
-  // 마이그레이션 전이거나 컬럼 부재 시 조용히 빈 결과
-  if (error) return {}
+  if (paged.error) {
+    // 마이그레이션 전이거나 컬럼 부재일 때만 빈 결과 — 그 밖의 오류는 숨기지 않고 던진다.
+    if (paged.error.code && MISSING_SCHEMA_CODES.has(paged.error.code)) return {}
+    throw new Error(`행사 참석 조회 실패: ${paged.error.message ?? "unknown"}`)
+  }
+  if (paged.truncated) throw new Error("행사 참석 스캔이 상한에 닿았습니다.")
 
-  const rows = (data ?? []) as Array<{
-    public_event_id: string | null
-    target_type: string | null
-    target_id: string | null
-    attendee_origin: AttendeeOrigin | null
-  }>
+  const rows = paged.data
   if (rows.length === 0) return {}
 
-  // 전환 판정용 리드 상태 맵
+  // 전환 판정용 리드 상태 맵 — 참석 행이 가리키는 리드만 id/status 로 읽는다.
   const leadStatus = new Map<string, string>()
-  try {
-    const leads = await getLeads()
-    for (const lead of leads) leadStatus.set(lead.id, lead.status)
-  } catch {
-    // 리드 조회 실패 시 전환은 0으로 둔다(참석 집계는 유지)
+  const leadIds = [
+    ...new Set(
+      rows
+        .filter((row) => row.target_type === "lead" && row.target_id && UUID_PATTERN.test(row.target_id))
+        .map((row) => row.target_id as string)
+    ),
+  ]
+  for (let i = 0; i < leadIds.length; i += LEAD_ID_CHUNK) {
+    const { data: leads, error: leadError } = await supabase
+      .from("leads")
+      .select("id, status")
+      .in("id", leadIds.slice(i, i + LEAD_ID_CHUNK))
+    if (leadError) throw new Error(`리드 상태 조회 실패: ${leadError.message ?? "unknown"}`)
+    for (const lead of (leads ?? []) as Array<{ id: string; status: string }>) {
+      leadStatus.set(lead.id, lead.status)
+    }
   }
 
   const acc = new Map<string, Map<AttendeeOrigin, { attended: number; converted: number }>>()

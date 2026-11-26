@@ -18,6 +18,7 @@ import {
   type ChannelConversationMessage,
   type ChannelConversationRecord,
   listDurableConversations,
+  listDurableConversationsSince,
 } from "@/lib/repositories/channel-conversations"
 
 const SUPABASE_ENV_KEYS = [
@@ -403,5 +404,44 @@ describe("getDurableConversationSyncMeta", () => {
     const meta = await getDurableConversationSyncMeta()
     expect(createSupabaseAdminClient).not.toHaveBeenCalled()
     expect(meta).toEqual({ lastSyncedAt: null, matchedLeads: 0, total: 0 })
+  })
+})
+
+// 기간 집계 읽기 경로 — PostgREST 1000행 상한 때문에 range 로 끝까지 읽는다.
+describe("listDurableConversationsSince", () => {
+  const row = (id: string) => ({
+    id, name: null, email: null, phone: null, state: "opened", tags: [], first_question: null,
+    matched_lead_id: null, matched_org: null, last_message_at: "2026-09-16T00:00:00.000Z",
+    transcript: [], synced_at: null,
+  })
+
+  it("페이지가 가득 찬 동안 range 로 이어 읽는다", async () => {
+    enableSupabase()
+    const pages = [Array.from({ length: 500 }, (_, i) => row(`a${i}`)), [row("z1"), row("z2")]]
+    const range = vi.fn(async () => ({ data: pages.shift(), error: null }))
+    const order = vi.fn(() => ({ range }))
+    const gte = vi.fn(() => ({ order }))
+    createSupabaseAdminClient.mockReturnValue({ from: vi.fn(() => ({ select: vi.fn(() => ({ gte })) })) })
+
+    const records = await listDurableConversationsSince("2026-09-14T00:00:00.000Z")
+
+    expect(records).toHaveLength(502)
+    expect(gte).toHaveBeenCalledWith("last_message_at", "2026-09-14T00:00:00.000Z")
+    expect(order).toHaveBeenCalledWith("id", { ascending: true })
+    expect(range).toHaveBeenNthCalledWith(1, 0, 499)
+    expect(range).toHaveBeenNthCalledWith(2, 500, 999)
+  })
+
+  it("미설정이면 null, 조회 오류면 경고 후 null(빈 배열로 위장하지 않는다)", async () => {
+    disableSupabase()
+    expect(await listDurableConversationsSince("2026-09-14T00:00:00.000Z")).toBeNull()
+
+    enableSupabase()
+    vi.spyOn(console, "warn").mockImplementation(() => {})
+    const range = vi.fn(async () => ({ data: null, error: { message: "rls denied" } }))
+    createSupabaseAdminClient.mockReturnValue({
+      from: vi.fn(() => ({ select: vi.fn(() => ({ gte: vi.fn(() => ({ order: vi.fn(() => ({ range })) })) })) })),
+    })
+    expect(await listDurableConversationsSince("2026-09-14T00:00:00.000Z")).toBeNull()
   })
 })

@@ -3,6 +3,8 @@ import { BRANCH_READ_ADMIN_API_ROLES, verifyAdmin } from "@/lib/admin-auth"
 import { runInsights } from "@/lib/branch/insights/runner"
 import type { TeamScope } from "@/lib/branch/insights/input-builder"
 
+export const maxDuration = 300
+
 const TEAM_SCOPES = new Set<TeamScope>(["ALL", "BD", "MKT", "CSM"])
 
 function readTeamParam(url: URL): TeamScope | NextResponse {

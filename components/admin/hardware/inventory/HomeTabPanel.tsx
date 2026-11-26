@@ -33,6 +33,8 @@ interface HomeTabPanelProps {
   activeTabId: string
   reduceMotion: boolean | null
   data: HardwareDashboard | null
+  /** 판매대시보드 재조회 신호 — data 객체가 아니라 부모가 올리는 원시 카운터. */
+  salesReloadKey: number
   categoryCards: {
     cards: ComponentProps<typeof CategoryCardsSection>["categoryCards"]
     etcSummary: ComponentProps<typeof CategoryCardsSection>["etcSummary"]
@@ -102,6 +104,7 @@ export default function HomeTabPanel({
   activeTabId,
   reduceMotion,
   data,
+  salesReloadKey,
   categoryCards,
   openOutboundDetail,
   hardwareSearch,
@@ -319,8 +322,8 @@ export default function HomeTabPanel({
           onSelectionCountChange={onSelectionCountChange}
         />
 
-        {/* 판매대시보드(정의서) — 서버 집계. 원장 응답(data)이 바뀌면 같이 다시 받는다. */}
-        <SalesDashboardSection reloadKey={data} onOpenDetail={openOutboundDetail} />
+        {/* 판매대시보드(정의서) — 서버 집계. 원장을 새로 받았거나 기록을 저장했을 때만(salesReloadKey) 다시 받는다. */}
+        <SalesDashboardSection reloadKey={salesReloadKey} onOpenDetail={openOutboundDetail} />
 
         <HardwareSearchPanel
           hardwareSearch={hardwareSearch}

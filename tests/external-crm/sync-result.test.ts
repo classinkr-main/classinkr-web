@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import {
+  getExternalCrmSyncChainHttpStatus,
   getExternalCrmSyncHttpStatus,
   hasFreshExternalCrmSyncData,
 } from "@/lib/external-crm/sync-result"
@@ -50,5 +51,16 @@ describe("external CRM sync result", () => {
         objects: [{ status: "failed", rowsUpserted: 12 }],
       })
     ).toBe(true)
+  })
+
+  it("returns 207 when sync is ok but a follow-up step failed", () => {
+    const sync = { ok: true, objects: [{ status: "success" as const }] }
+    expect(getExternalCrmSyncChainHttpStatus({ sync })).toBe(200)
+    expect(getExternalCrmSyncChainHttpStatus({ sync, neoCustomerSnapshotsError: "boom" })).toBe(207)
+    expect(getExternalCrmSyncChainHttpStatus({ sync, candidatesError: "boom" })).toBe(207)
+    expect(getExternalCrmSyncChainHttpStatus({ sync, renewalAlertsError: "boom" })).toBe(207)
+    expect(
+      getExternalCrmSyncChainHttpStatus({ sync: { ok: false, objects: [{ status: "failed" as const }] }, candidatesError: "x" })
+    ).toBe(502)
   })
 })

@@ -30,7 +30,6 @@ import {
   isDateString,
   isTimelineSpan,
   stepAnchor,
-  toDateString,
   type CalendarViewId,
   type TimelineSpan,
 } from "@/lib/admin-calendar/range"
@@ -39,7 +38,7 @@ import {
   buildSourceStats,
   buildWeekStripDays,
 } from "@/lib/admin-calendar/insights"
-import { buildAdminCalendarUrl, getAdminCalendarWeekStripRange } from "@/lib/admin/calendar-range"
+import { buildAdminCalendarUrl, getAdminCalendarWeekStripRange, todayDateString } from "@/lib/admin/calendar-range"
 
 import {
   createRequestGeneration,
@@ -94,11 +93,6 @@ const ASSIGNEE_FILTERED_SOURCES = new Set<EventSource>([
   "compass_demo",
 ])
 
-function todayString() {
-  const now = new Date()
-  return toDateString(now.getFullYear(), now.getMonth() + 1, now.getDate())
-}
-
 async function readJsonOrThrow<T>(response: Response): Promise<T> {
   const data = await response.json().catch(() => null)
   if (!response.ok) {
@@ -119,7 +113,8 @@ interface LeadActionKpisPayload {
 }
 
 export default function AdminCalendarPage() {
-  const [todayStr] = useState(todayString)
+  // 서울 기준 날짜 — 서버(UTC)와 브라우저가 같은 "오늘"을 그려야 오늘 표시 속성이 하이드레이션에서 어긋나지 않는다.
+  const [todayStr] = useState(() => todayDateString())
   const [view, setView] = useState<CalendarViewId>("month")
   const [anchor, setAnchor] = useState<string>(todayStr)
   const [prefsHydrated, setPrefsHydrated] = useState(false)

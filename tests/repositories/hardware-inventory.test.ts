@@ -114,7 +114,7 @@ function tableClient(table: string) {
           const chain: Record<string, unknown> = {
             then: (resolve: (value: typeof result) => unknown) => Promise.resolve(result).then(resolve),
           }
-          for (const method of ["is", "not", "in", "eq", "order", "limit", "gte"]) {
+          for (const method of ["is", "not", "in", "eq", "order", "limit", "gte", "gt"]) {
             chain[method] = () => chain
           }
           return chain
@@ -153,6 +153,14 @@ async function loadRepository() {
     unstable_cache: (fn: unknown) => fn,
   }))
   vi.doMock("@/lib/repositories/branch-hw", () => ({
+    // 복원 스냅샷 읽기(listCurrentSheetImportMovements)가 id 키셋 헬퍼를 쓴다 — 한 페이지짜리 실제 동작을 흉내 낸다.
+    fetchAllSupabaseRows: async (
+      buildQuery: (afterId: string | null, limit: number) => PromiseLike<{ data: unknown[] | null; error: unknown }>
+    ) => {
+      const { data, error } = await buildQuery(null, 1000)
+      if (error) throw error
+      return data ?? []
+    },
     listHwInbound,
     listHwOutbound,
     listHwStock,

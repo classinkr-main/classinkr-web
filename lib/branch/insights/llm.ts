@@ -77,10 +77,15 @@ export function toClaudeSchema(schema: unknown): unknown {
   return out
 }
 
+const CLAUDE_TIMEOUT_MS = 120_000
+/** Gemini 폴백 fetch 타임아웃 — 응답이 안 오면 사슬이 영원히 멈춰 크론이 플랫폼 상한에 죽는다. */
+export const GEMINI_BRANCH_FETCH_TIMEOUT_MS = 60_000
+
 let anthropicClient: Anthropic | null = null
 function getAnthropic(): Anthropic {
-  // 요청 한 번이 길어질 수 있어 타임아웃을 넉넉히, 재시도는 1회(실패하면 Gemini로 넘어간다).
-  if (!anthropicClient) anthropicClient = new Anthropic({ maxRetries: 1, timeout: 180_000 })
+  // 재시도 없이 120초로 끊는다(실패하면 Gemini로 넘어간다). 라우트 maxDuration(300초) 안에
+  // Claude(120) + Gemini(GEMINI_BRANCH_FETCH_TIMEOUT_MS) 한 라운드가 들어가야 한다.
+  if (!anthropicClient) anthropicClient = new Anthropic({ maxRetries: 0, timeout: CLAUDE_TIMEOUT_MS })
   return anthropicClient
 }
 
@@ -162,7 +167,17 @@ export async function callGeminiStructured<T>(call: StructuredCall<T>): Promise<
         ...(thinking ? { thinkingConfig: thinking } : {}),
       },
     }
-    const res = await fetch(urlFor(model), { method: "POST", headers, body: JSON.stringify(body) })
+    const res = await fetch(urlFor(model), {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(GEMINI_BRANCH_FETCH_TIMEOUT_MS),
+    }).catch((e: unknown) => {
+      if (e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError")) {
+        throw new Error(`Gemini 응답 타임아웃(${GEMINI_BRANCH_FETCH_TIMEOUT_MS / 1000}초 초과) — model=${model}`)
+      }
+      throw e
+    })
     if (!res.ok) throw new Error(`Gemini ${res.status}: ${await res.text()}`)
     const json = (await res.json()) as GeminiResponse
     const text = json.candidates?.[0]?.content?.parts?.[0]?.text ?? ""

@@ -2566,12 +2566,17 @@ function getImportWarehouseBalances(rows: ImportMovementRow[]) {
 
 async function listCurrentSheetImportMovements() {
   const sb = createSupabaseAdminClient()
-  const { data, error } = await sb
-    .from("hardware_movements")
-    .select("*")
-    .eq("source", "sheet_import")
-  if (error) throw error
-  return data ?? []
+  // 복원 지점이라 1000행 캡으로 잘리면 안 된다 — id 키셋으로 전량 읽는다(오류는 그대로 던진다).
+  return fetchAllSupabaseRows<HardwareMovement>((afterId, limit) => {
+    let query = sb
+      .from("hardware_movements")
+      .select("*")
+      .eq("source", "sheet_import")
+      .order("id", { ascending: true })
+      .limit(limit)
+    if (afterId) query = query.gt("id", afterId)
+    return query
+  })
 }
 
 const SHEET_WINS_VOID_REASON =

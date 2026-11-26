@@ -104,7 +104,7 @@ export default function CrmPerformanceCharts() {
     adminFetchJsonCached<{ target: { amount: number } | null }>(
       `/api/admin/crm/revenue-target?month=${monthKey}`,
       undefined,
-      { cacheKey: `rev-target:${monthKey}`, ttlMs: 300_000, staleWhileRevalidateMs: 600_000 }
+      { ttlMs: 300_000, staleWhileRevalidateMs: 600_000 }
     )
       .then((res) => {
         if (alive) setTarget(res.target?.amount ?? null)

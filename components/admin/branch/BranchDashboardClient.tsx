@@ -417,13 +417,16 @@ export default function BranchDashboardClient({
   const kpi = useBranchJson<BranchKpiResponse>(kpiUrl, refreshKey, { enabled: dataNeeds.kpi })
   const [compassTick, setCompassTick] = useState(0)
   const compassEnabled = dataNeeds.kpi && !isLegacyBranchTeam(team)
-  const compass = useBranchJson<CompassKrTeamResult>(`/api/admin/branch/compass?month=${selectedMonth}${managerQuery}`, refreshKey + compassTick, { enabled: compassEnabled })
+  const compass = useBranchJson<CompassKrTeamResult>(`/api/admin/branch/compass?month=${selectedMonth}${managerQuery}`, refreshKey, { enabled: compassEnabled, revalidateKey: compassTick })
   useEffect(() => {
     if (!compassEnabled) return
-    const refresh = () => { if (document.visibilityState === "visible") setCompassTick((tick) => tick + 1) }
+    let lastTickAt = Date.now()
+    const tick = () => { lastTickAt = Date.now(); setCompassTick((value) => value + 1) }
+    const refresh = () => { if (document.visibilityState === "visible") tick() }
+    const onVisibility = () => { if (Date.now() - lastTickAt >= 60_000) refresh() }
     const timer = window.setInterval(refresh, 60_000)
-    document.addEventListener("visibilitychange", refresh)
-    return () => { window.clearInterval(timer); document.removeEventListener("visibilitychange", refresh) }
+    document.addEventListener("visibilitychange", onVisibility)
+    return () => { window.clearInterval(timer); document.removeEventListener("visibilitychange", onVisibility) }
   }, [compassEnabled])
   const monthOptions = useMemo(() => buildMonthOptions(new Date()), [])
   const activePeriodLabel = period === "M" ? formatMonthLabel(selectedMonth) : PERIOD_LABEL[period]
@@ -714,7 +717,7 @@ export default function BranchDashboardClient({
 
           {activeTab === "ai" && (
             <div id={activePanelId} role="tabpanel" aria-labelledby={activeTabId} className="space-y-6">
-              <BranchAiInsights key={`${team}:${pipelineManager}`} manager={pipelineManager} team={team} refreshKey={refreshKey} summary={summary.data} canGenerate={canRunAdminOperations} />
+              <BranchAiInsights key={team} manager={pipelineManager} team={team} refreshKey={refreshKey} summary={summary.data} canGenerate={canRunAdminOperations} />
             </div>
           )}
         </div>

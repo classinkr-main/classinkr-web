@@ -256,7 +256,7 @@ export default function CrmCommandPalette({ initiallyOpen = false }: CrmCommandP
         const data = await adminFetchJsonCached<UnifiedResponse>(
           commandPaletteCustomerSearchUrl(term),
           undefined,
-          { cacheKey: `cmdk:${term}`, ttlMs: 30_000, staleWhileRevalidateMs: 60_000 }
+          { ttlMs: 30_000, staleWhileRevalidateMs: 60_000, persist: false }
         )
         if (current === reqId.current) {
           setRows(data.rows ?? [])

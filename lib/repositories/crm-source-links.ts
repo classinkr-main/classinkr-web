@@ -2084,22 +2084,39 @@ export async function upsertConfirmedLeadCustomerLink(input: {
 // convert-v2 등이 남긴 confirmed lead→customer 링크를 leadId→customerId 맵으로 반환.
 // 통합 고객 목록이 전환된 리드와 portal customer의 이중 등장을 접는 데 사용한다.
 // confirmed_at 오름차순으로 덮어써서 같은 리드에 확정이 여럿이면 최신 확정이 남는다.
+const CONFIRMED_LEAD_CUSTOMER_LINK_MAX_ROWS = 20_000
+
 export async function listConfirmedLeadCustomerLinks(): Promise<Map<string, string>> {
   const sb = createSupabaseAdminClient()
-  const { data, error } = await sb
-    .from("crm_source_links")
-    .select("source_record_key, target_id, confirmed_at")
-    .eq("source_system", "lead")
-    .eq("source_object", "leads")
-    .eq("target_type", "customer")
-    .eq("status", "confirmed")
-    .order("confirmed_at", { ascending: true, nullsFirst: true })
-    .limit(5000)
+  // 단일 .limit(5000)은 PostgREST max-rows(1000)에서 조용히 잘려 오름차순 정렬의 최신 확정이 빠졌다.
+  // confirmed_at + id(유일 키) 정렬로 range 페이지를 끝까지 읽고, 오류·절단은 그대로 던진다.
+  const result = await fetchSupabasePages<{ source_record_key: string; target_id: string }>({
+    maxRows: CONFIRMED_LEAD_CUSTOMER_LINK_MAX_ROWS,
+    fetchPage: (from, to) =>
+      sb
+        .from("crm_source_links")
+        .select(
+          "source_record_key, target_id, confirmed_at",
+          from === 0 ? { count: "exact" } : undefined
+        )
+        .eq("source_system", "lead")
+        .eq("source_object", "leads")
+        .eq("target_type", "customer")
+        .eq("status", "confirmed")
+        .order("confirmed_at", { ascending: true, nullsFirst: true })
+        .order("id", { ascending: true })
+        .range(from, to),
+  })
 
-  if (error) throw error
+  if (result.error) throw new Error(result.error.message ?? "confirmed lead→customer 링크 조회 실패")
+  if (result.truncated) {
+    throw new Error(
+      `confirmed lead→customer 링크가 ${CONFIRMED_LEAD_CUSTOMER_LINK_MAX_ROWS}행 상한을 넘었습니다 — 상한을 재검토하세요.`
+    )
+  }
 
   const map = new Map<string, string>()
-  for (const row of (data ?? []) as Array<{ source_record_key: string; target_id: string }>) {
+  for (const row of result.data) {
     if (row.source_record_key && row.target_id) map.set(row.source_record_key, row.target_id)
   }
   return map

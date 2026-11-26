@@ -338,6 +338,19 @@ npm run check:db --  --strict
 
 롤백(비상용): `supabase/rollbacks/20261126_internal_team_contacts.rollback.sql` — 표와 행이 모두 사라진다. 지우기 전에 파일 머리 주석의 조회로 행을 내려받는다.
 
+### 2026-11-26 REV 엔트리 읽기 색인 · 중복 색인 정리 — 서울 프로젝트 미적용
+
+[어드민·Compass 점검(2026-11-25)](admin-compass-audit-2026-11-25.md) §3 에서 만든 색인 전용 마이그레이션 두 개다.
+둘 다 코드와 순서가 무관하다(미적용이어도 동작은 같고 성능·경고만 다르다). 표·칼럼·정책은 건드리지 않는다.
+
+| 파일 | 하는 일 | 미적용 시 | 확인 |
+| --- | --- | --- | --- |
+| `20261126_branch_rev_period_entries_run_id_idx.sql` | `branch_rev_period_entries (import_run_id, id)` 색인 추가. 임포트 1회분을 id 순으로 1000행씩 읽는 조회가 페이지마다 5천여 행을 다시 정렬하던 것을 없앤다. 멱등(`IF NOT EXISTS`) | 지금과 같다(페이지당 정렬). 장애는 아니다 | `select indexname from pg_indexes where tablename = 'branch_rev_period_entries'` 에 `branch_rev_period_entries_run_id_idx` |
+| `20261126_drop_duplicate_indexes.sql` | 정의가 같은 중복 색인 3개 중 운영에만 있는 이름을 지운다(`lead_contact_logs_lead_id_idx`·`idx_subscribers_email`·`idx_subscribers_status`). 남길 쪽이 없으면 지우지 않고 WARNING 만 남긴다 | 지금과 같다(어드바이저 duplicate_index 경고 3건) | 성능 어드바이저의 duplicate_index 가 0건 |
+
+- 색인 생성은 트랜잭션 안에서 돌아 그동안 `branch_rev_period_entries` 쓰기(시트 임포트·주간 마감)가 잠깐 막힌다. 임포트가 돌지 않는 때 적용한다.
+- 롤백 파일은 `supabase/rollbacks/20261126_*.rollback.sql` 이다.
+
 ## 적용 보류 중인 마이그레이션
 
 `check:db`에 걸리지 않는(프로브가 없는) 파일이라도, 아래 파일은 **파일명 순서대로 일괄 적용하지 않는다.**

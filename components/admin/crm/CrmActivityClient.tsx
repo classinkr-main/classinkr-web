@@ -341,6 +341,12 @@ function ActivityEventRow({ event }: { event: CrmEventRecord }) {
 
 function CrmActivityClientInner({ initialData }: { initialData?: CrmActivityInitialData | null }) {
   const [query, setQuery] = useState("")
+  // 키 입력마다 요청·localStorage 캐시 항목이 생기지 않도록 조회에는 디바운스한 값을 쓴다(CrmUnifiedCustomersClient와 동일 200ms).
+  const [debouncedQuery, setDebouncedQuery] = useState("")
+  useEffect(() => {
+    const handle = setTimeout(() => setDebouncedQuery(query), 200)
+    return () => clearTimeout(handle)
+  }, [query])
   const [filterTarget, setFilterTarget] = useState<TargetType>("all")
   const [filterSource, setFilterSource] = useState<SourceType>("all")
   const [filterSentiment, setFilterSentiment] = useState<Sentiment>("all")
@@ -390,7 +396,7 @@ function CrmActivityClientInner({ initialData }: { initialData?: CrmActivityInit
       const append = Boolean(options?.append)
       const { from, to } = resolveActivityPeriod(period, Date.now())
       const url = listUrl({
-        query,
+        query: debouncedQuery,
         owner: focusTargetId && !searchParams.has("owner") ? "" : dataOwner,
         targetType: filterTarget,
         sourceType: filterSource,
@@ -467,7 +473,7 @@ function CrmActivityClientInner({ initialData }: { initialData?: CrmActivityInit
         }
       }
     },
-    [activityScope, filterSentiment, filterSource, filterTarget, query, period, focusTargetId, dataOwner, searchParams]
+    [activityScope, filterSentiment, filterSource, filterTarget, debouncedQuery, period, focusTargetId, dataOwner, searchParams]
   )
 
   // P1a — 최초 로드는 아래 PrefetchSourceBridge(seedEvents)가 담당한다(프리페치가 없으면

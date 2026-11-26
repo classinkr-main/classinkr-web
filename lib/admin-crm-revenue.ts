@@ -815,6 +815,9 @@ async function assembleAdminCrmRevenueDashboard(): Promise<CrmRevenueDashboard> 
     return createEmptyDashboard(safeMonths, [message])
   }
 
+  // 액티브 임포트 읽기는 아래 쿼리 묶음과 독립이므로 함께 시작한다(결과는 아래 같은 자리에서 사용).
+  const activeImportDealsPromise = readRevDealsFromActiveImport(fyOf(new Date())).catch(() => null)
+
   const [
     partnersResult,
     quotesResult,
@@ -1012,7 +1015,7 @@ async function assembleAdminCrmRevenueDashboard(): Promise<CrmRevenueDashboard> 
   // 데이터가 없는 행이 많아(2026-07 실측 310/398) 그대로 집계하면 장부 확정과 어긋난다.
   // record key(getBranchRevSourceRecordKey)는 sheet_row·고객명·first_payment·계약목표로
   // 유도되는 계산 필드라 두 데이터셋에서 동일하게 나온다(링크 매칭 무손실).
-  const activeImportDeals = await readRevDealsFromActiveImport(fyOf(new Date())).catch(() => null)
+  const activeImportDeals = await activeImportDealsPromise
   const sheetDeals = activeImportDeals ?? sheetResult.rows
   const sourceLinks = sourceLinksResult.rows
   const externalSourceLinks = externalSourceLinksResult.rows

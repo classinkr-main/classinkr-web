@@ -25,8 +25,12 @@ export interface RunInsightsResult {
   retried?: boolean
 }
 
+// 첫 호출에 이만큼 지났으면 재시도(2회차)를 하지 않는다 — 라우트 maxDuration(300초) 안에 한 라운드 최악(180초)이 들어가야 한다.
+const RETRY_ELAPSED_LIMIT_MS = 60_000
+
 export async function runInsights(team: TeamScope, force: boolean): Promise<RunInsightsResult> {
   const now = new Date()
+  const startedAt = Date.now()
   try {
     if (force) {
       const latest = await getLatestInsight(team)
@@ -38,7 +42,7 @@ export async function runInsights(team: TeamScope, force: boolean): Promise<RunI
       }
     }
     const [dsh, kpi, deals, events, campaigns] = await Promise.all([
-      readDsh(), readKpi(), listBranchRevDeals(), listPublicEvents(), summarizeCampaigns(now),
+      readDsh(), readKpi(), listBranchRevDeals(), listPublicEvents().catch(() => []), summarizeCampaigns(now),
     ])
     // Compass 주간 구획 — 끝난 주 기준이라 한 주 동안 입력이 크게 흔들리지 않는다(다이제스트 캐시 유지).
     // 읽기 실패는 인사이트 전체를 막지 않고 state=missing으로 넘겨 AI가 한계를 말하게 한다.
@@ -67,7 +71,7 @@ export async function runInsights(team: TeamScope, force: boolean): Promise<RunI
     let fallbackReason = first.fallbackReason
     let warnings = checkNumericalSanity(input, result)
     let retried = false
-    if (warnings.length >= 3) {
+    if (warnings.length >= 3 && Date.now() - startedAt <= RETRY_ELAPSED_LIMIT_MS) {
       retried = true
       const retry = await callInsightModel(input, mode)
       const retryWarnings = checkNumericalSanity(input, retry.result)

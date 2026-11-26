@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
 
 import { CRM_STAFF_ADMIN_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
+import { logAdminAudit } from "@/lib/auth/audit"
 import {
   deleteLead,
+  getLeadById,
   updateLead,
   LeadVersionConflictError,
   type LeadStatus,
@@ -123,8 +125,18 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   const { id } = await params
 
   try {
+    const existing = await getLeadById(id)
+    if (!existing) return NextResponse.json({ error: "리드를 찾을 수 없습니다." }, { status: 404 })
     const ok = await deleteLead(id)
     if (!ok) return NextResponse.json({ error: "리드를 찾을 수 없습니다." }, { status: 404 })
+    // 하드 삭제는 연락 이력(lead_contact_logs)까지 cascade 되므로 누가 지웠는지 남긴다(연락처는 싣지 않는다).
+    await logAdminAudit({
+      admin,
+      action: "lead.delete",
+      targetType: "lead",
+      targetId: id,
+      payload: { status: existing.status, source: existing.source ?? null, assignedTo: existing.assigned_to ?? null },
+    })
     return NextResponse.json({ ok: true })
   } catch (error) {
     console.error(`[DELETE /api/admin/leads/${id}] error:`, error)

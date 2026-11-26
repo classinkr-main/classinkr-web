@@ -23,6 +23,7 @@ const db = vi.hoisted(() => ({
   subscribers: [] as Row[],
   profiles: [] as Row[],
   failConsent: false,
+  failLeads: false,
   queries: [] as QueryState[],
 }))
 
@@ -33,14 +34,17 @@ function pageOf(rows: Row[], state: QueryState) {
 }
 
 function resolve(state: QueryState): { data: Row[] | null; error: { message: string } | null } {
-  if (state.table === "leads") return { data: db.leads, error: null }
+  if (state.table === "leads") {
+    if (db.failLeads) return { data: null, error: { message: "leads down" } }
+    return { data: pageOf(db.leads, state), error: null }
+  }
   if (state.table === "newsletter_subscribers") {
-    // 동의 인덱스 조회(모든 상태, 페이지)와 구독자 분기(active만, 페이지 없음)를 가른다.
-    if (state.range) {
+    // 동의 인덱스 조회(모든 상태)와 구독자 분기(active만)를 select 컬럼으로 가른다.
+    if (state.select === "id, email, status") {
       if (db.failConsent) return { data: null, error: { message: "consent down" } }
       return { data: pageOf(db.subscribers, state), error: null }
     }
-    return { data: db.subscribers.filter((row) => row.status === "active"), error: null }
+    return { data: pageOf(db.subscribers.filter((row) => row.status === "active"), state), error: null }
   }
   if (state.table === "user_profiles") {
     if (db.failConsent) return { data: null, error: { message: "consent down" } }
@@ -109,6 +113,7 @@ beforeEach(() => {
   db.subscribers = []
   db.profiles = []
   db.failConsent = false
+  db.failLeads = false
   db.queries = []
 })
 
@@ -212,5 +217,23 @@ describe("resolveSegmentRecipients — leads 분기 동의 게이트", () => {
   it("리드 행이 없으면 동의 인덱스를 조회하지 않는다", async () => {
     await resolveSegmentRecipients({ targetTable: "leads" })
     expect(db.queries.filter((q) => q.table !== "leads")).toEqual([])
+  })
+})
+
+describe("resolveSegmentRecipients — 읽기 오류·절단", () => {
+  it("리드 읽기 실패는 빈 대상이 아니라 오류로 던진다", async () => {
+    db.failLeads = true
+    await expect(resolveSegmentRecipients({ targetTable: "leads" })).rejects.toThrow("리드 조회 실패")
+  })
+
+  it("구독자가 1,000명을 넘어도 전량 수신자가 된다", async () => {
+    db.subscribers = Array.from({ length: 2300 }, (_, i) => ({
+      id: String(i).padStart(5, "0"),
+      email: `u${i}@x.com`,
+      status: "active",
+      source: "newsletter",
+    }))
+    const recipients = await resolveSegmentRecipients({ targetTable: "subscribers" })
+    expect(recipients).toHaveLength(2300)
   })
 })

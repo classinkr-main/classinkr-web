@@ -16,7 +16,7 @@ vi.mock("@/lib/repositories/branch-sync", () => ({
   getRecentSyncRuns,
 }))
 
-import { GET } from "@/app/api/cron/sync-branch-insights/route"
+import { GET, maxDuration } from "@/app/api/cron/sync-branch-insights/route"
 
 const ORIGINAL_ENV = { ...process.env }
 
@@ -128,5 +128,20 @@ describe("sync-branch-insights cron self-defense", () => {
     expect(runInsights).not.toHaveBeenCalledWith("CSM", true)
     const body = await response.json()
     expect(body).toMatchObject({ ALL: { from: "cache", error: null } })
+  })
+
+  it("exports maxDuration and skips remaining teams once the time budget is spent", async () => {
+    expect(maxDuration).toBe(300)
+    getRecentSyncRuns.mockResolvedValue([runAt(1)])
+    const now = Date.now()
+    const spy = vi.spyOn(Date, "now")
+    // 크론 게이트(cutoff)·startedAt 은 현재 시각, 첫 팀 처리 후에는 예산 소진 시각.
+    let calls = 0
+    spy.mockImplementation(() => (calls++ < 3 ? now : now + 290_000))
+    const res = await GET(cronRequest())
+    spy.mockRestore()
+    const body = await res.json()
+    expect(runInsights).toHaveBeenCalledTimes(1)
+    expect(Object.values(body).filter((v) => (v as { from: string }).from === "skipped").length).toBeGreaterThan(0)
   })
 })

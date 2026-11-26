@@ -16,8 +16,15 @@ import {
   type CalendarRange,
 } from "@/lib/admin-calendar/range"
 
-function todayDateString(now: Date): string {
-  return toDateString(now.getFullYear(), now.getMonth() + 1, now.getDate())
+const KST_OFFSET_MS = 9 * 60 * 60 * 1000
+
+/**
+ * "오늘"(YYYY-MM-DD)을 서울 기준으로 못박는다. 서버(Vercel)는 UTC 라 로컬 날짜로 구하면
+ * 한국 시간 00~09시에 서버·브라우저가 서로 다른 날짜를 "오늘"로 잡아 하이드레이션 속성이 어긋난다.
+ */
+export function todayDateString(now: Date = new Date()): string {
+  const kst = new Date(now.getTime() + KST_OFFSET_MS)
+  return toDateString(kst.getUTCFullYear(), kst.getUTCMonth() + 1, kst.getUTCDate())
 }
 
 export function getDefaultAdminCalendarRange(now: Date = new Date()): CalendarRange {
@@ -31,7 +38,7 @@ export function getDefaultAdminCalendarRange(now: Date = new Date()): CalendarRa
  * 위 주석의 이유(캐시 키 = URL 문자열 그대로)로 두 소비처가 같은 함수를 타야 한다.
  */
 export function getAdminCalendarWeekStripRange(
-  todayStr: string = todayDateString(new Date())
+  todayStr: string = todayDateString()
 ): CalendarRange {
   const from = startOfWeek(todayStr)
   return { from, to: addDays(from, 6) }

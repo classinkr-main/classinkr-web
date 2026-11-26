@@ -115,6 +115,8 @@ const ADMIN_TIMEOUT_MESSAGE = "요청이 너무 오래 걸립니다 — 다시 �
 // SalesLedgerWorkbench처럼 이 웨이브에서 손댈 수 없는 파일이어도 안전하게 적용된다.
 const LONG_RUNNING_ADMIN_PATHS = [
   "/api/admin/branch/sync",
+  // LLM 체인(Claude→Gemini)이 정상적으로 45초를 넘긴다 — 클라이언트만 abort되면 서버가 계속 돌아 재시도가 유료 호출을 중복시킨다.
+  "/api/admin/branch/insights",
   "/api/admin/branch/ledger/db-import",
   "/api/admin/crm/external-sync",
   "/api/admin/crm/source-links/generate",

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 
 import {
   elapsedDaysSince,
@@ -76,9 +76,27 @@ describe("elapsedDaysSince", () => {
     expect(elapsedDaysSince("not-a-date")).toBeNull()
   })
 
-  it("counts whole days from a past date key", () => {
-    // 날짜 키는 KST 기준이어야 한다 — UTC 로 자르면 KST 00~09시에 하루가 어긋나 41로 계산된다.
-    const past = new Date(Date.now() + 9 * 3600000 - 40 * 86400000).toISOString().slice(0, 10)
-    expect(elapsedDaysSince(past)).toBe(40)
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  // 날짜 키는 KST 달력일 — KST 자정(UTC 15:00)·UTC 자정 양쪽 경계에서 시각과 무관하게 같은 값이어야 한다.
+  it.each([
+    ["just before KST midnight (KST 23:59)", "2026-11-25T14:59:00Z", "2026-10-16"],
+    ["just after KST midnight (KST 00:13)", "2026-11-25T15:13:00Z", "2026-10-17"],
+    ["late UTC evening (KST 08:59)", "2026-11-25T23:59:00Z", "2026-10-17"],
+    ["just after UTC midnight (KST 09:01)", "2026-11-26T00:01:00Z", "2026-10-17"],
+  ])("counts 40 whole KST calendar days from a past date key: %s", (_label, nowIso, pastKey) => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(nowIso))
+    expect(elapsedDaysSince(pastKey)).toBe(40)
+  })
+
+  it("returns 0 for today's KST date key and clamps future keys to 0", () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date("2026-11-25T15:13:00Z")) // KST 2026-11-26 00:13
+    expect(elapsedDaysSince("2026-11-26")).toBe(0)
+    expect(elapsedDaysSince("2026-11-25")).toBe(1)
+    expect(elapsedDaysSince("2026-11-30")).toBe(0)
   })
 })

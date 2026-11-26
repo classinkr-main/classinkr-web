@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react"
 import {
   ArrowRight,
   CheckCircle2,
@@ -335,12 +335,16 @@ function fmtRelative(d: string): string {
   return fmtShortDate(d)
 }
 
+// 서울 달력일 번호(1970-01-01 KST 기준). 서버(UTC)와 브라우저(KST)가 같은 날짜 차이를 내도록 로컬 시간대를 쓰지 않는다 —
+// 로컬 자정으로 자르면 KST 00~09시에 서버가 하루 앞선 D-day 를 그려 하이드레이션이 깨졌다.
+function seoulDayIndex(ms: number): number {
+  return Math.floor((ms + 9 * 3_600_000) / 86_400_000)
+}
+
 function daysUntil(d: string): number {
-  const target = new Date(d)
-  const now = new Date()
-  target.setHours(0, 0, 0, 0)
-  now.setHours(0, 0, 0, 0)
-  return Math.ceil((target.getTime() - now.getTime()) / 86400000)
+  const target = new Date(d).getTime()
+  if (Number.isNaN(target)) return Number.NaN
+  return seoulDayIndex(target) - seoulDayIndex(Date.now())
 }
 
 function dealPaymentBadge(deal: DealItem): { label: string; cls: string } {
@@ -509,7 +513,17 @@ function MiniCalendar({
 
 /* ─── Left Sidebar ───────────────────────────────────────────── */
 
-function LeftSidebar({
+function subscribeNever(): () => void {
+  return () => {}
+}
+
+// 서버 렌더·하이드레이션 첫 렌더는 false, 그 뒤 클라이언트에서만 true.
+// "오늘/지금" 기준 값(미니 달력, D-n, N시간 전)은 서버 시계·시간대와 브라우저가 달라 첫 렌더에 그리면 어긋난다.
+function useClientReady(): boolean {
+  return useSyncExternalStore(subscribeNever, () => true, () => false)
+}
+
+export function LeftSidebar({
   upcoming_installations,
   recent_calendar_events,
   recent_activity,
@@ -520,6 +534,7 @@ function LeftSidebar({
   recent_activity: ActivityLog[]
   calendarHref: string
 }) {
+  const clientReady = useClientReady()
   // build event dots for current month
   const calDots: CalDot[] = useMemo(() => {
     const now = new Date()
@@ -572,7 +587,11 @@ function LeftSidebar({
       <div className="p-4 space-y-6">
         {/* Mini Calendar */}
         <div>
-          <MiniCalendar eventDots={calDots} />
+          {clientReady ? (
+            <MiniCalendar eventDots={calDots} />
+          ) : (
+            <div className="min-h-[250px]" aria-hidden="true" />
+          )}
         </div>
 
         <div className="h-px bg-[#e7e0d6]" />
@@ -620,7 +639,7 @@ function LeftSidebar({
                         ? "bg-orange-50 text-orange-500"
                         : "bg-[#ece4d8] text-[#1a1a1a]/50"
                     }`}>
-                      {item.days === 0 ? "오늘" : `D-${item.days}`}
+                      {clientReady ? (item.days === 0 ? "오늘" : `D-${item.days}`) : "\u00A0"}
                     </span>
                   </div>
                 )
@@ -654,7 +673,7 @@ function LeftSidebar({
                         {log._dummy && <DummyBadge />}
                         {log.summary}
                       </p>
-                      <p className="mt-0.5 text-[10px] text-[#1a1a1a]/40">{fmtRelative(log.created_at)}</p>
+                      <p className="mt-0.5 text-[10px] text-[#1a1a1a]/40">{clientReady ? fmtRelative(log.created_at) : "\u00A0"}</p>
                     </div>
                   </div>
                 )
@@ -827,6 +846,8 @@ export function PortalHome(props: PortalHomeProps = {}) {
   const canCreateInPortal = overview.mode === "v2" && props.allowCreate !== false
 
   const todayStr = new Date().toLocaleDateString("ko-KR", {
+    // 서버(UTC)와 브라우저(KST)가 같은 날짜를 그리도록 서울 시간대로 고정한다 — KST 00~09시에 하루 어긋나 하이드레이션이 깨졌다.
+    timeZone: "Asia/Seoul",
     year: "numeric", month: "long", day: "numeric", weekday: "short",
   })
 
