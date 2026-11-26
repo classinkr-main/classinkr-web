@@ -483,13 +483,20 @@ export const SAMPLE_EVENT_META: Record<SampleEventType, { label: string; dot: st
   retire: { label: "폐기", dot: "#615D59" },
 }
 
-// 대여 경과일 — loaned 유닛 목록·시트 공용. 날짜만 비교(UTC 자정 기준).
+// 날짜 키(loaned_at·expected_return_at 등)는 KST 달력일이다. "오늘"도 KST 로 맞춰야 서버(UTC)·브라우저
+// 시간대와 무관하게 KST 00~09시에 하루가 어긋나지 않는다(예전엔 todayKey() 의 로컬/UTC 날짜를 썼다).
+const KST_OFFSET_MS = 9 * 3_600_000
+
+function kstTodayStartUtcMs(now: number = Date.now()): number {
+  return Math.floor((now + KST_OFFSET_MS) / 86_400_000) * 86_400_000
+}
+
+// 대여 경과일 — loaned 유닛 목록·시트 공용. KST 달력일 기준으로 날짜만 비교한다.
 export function loanElapsedDays(loanedAt: string | null): number | null {
   if (!loanedAt) return null
   const start = new Date(`${loanedAt.slice(0, 10)}T00:00:00Z`).getTime()
   if (Number.isNaN(start)) return null
-  const today = new Date(`${todayKey()}T00:00:00Z`).getTime()
-  return Math.max(0, Math.round((today - start) / 86400000))
+  return Math.max(0, Math.round((kstTodayStartUtcMs() - start) / 86400000))
 }
 
 // 경과일(일반) — 예상 출고 큐 방치 표시, 이관 신선도 등 날짜 문자열 기반 경과 계산 공용.

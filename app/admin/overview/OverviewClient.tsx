@@ -362,7 +362,9 @@ interface ChatbotStatsPayload {
 
 export default function OverviewClient({ initialData }: { initialData: OverviewInitialData }) {
   const [leadOverview, setLeadOverview] = useState<OverviewLeadSummary | null>(null)
-  const [subscriberCount, setSubscriberCount] = useState(0)
+  const [subscriberCount, setSubscriberCount] = useState<number | null>(null)
+  // 보조 소스(구독자·블로그·캠페인·일정·연동·버그·패치노트) 중 조회에 실패한 항목 — 실패를 0·빈 값으로 보이지 않게 한다.
+  const [failedSecondaryLabels, setFailedSecondaryLabels] = useState<string[]>([])
   const [blogOverview, setBlogOverview] = useState<AdminBlogOverviewSummary | null>(null)
   const [campaigns, setCampaigns] = useState<EmailCampaign[]>([])
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([])
@@ -689,7 +691,7 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
           for (const events of results) {
             for (const event of events ?? []) merged.set(event.id, event)
           }
-          return Array.from(merged.values())
+          return results.some((events) => events === null) ? null : Array.from(merged.values())
         }),
         // 연동 여부는 GET /api/admin/settings가 webhook URL을 마스킹하므로
         // env+DB 합성 health(integrations/status)를 사용한다. (ops/settings와 동일 소스)
@@ -705,13 +707,25 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
         setLeadOverview(leadsData?.overview ?? null)
         setSourceStates((current) => ({ ...current, leads: leadsData?.overview ? "ready" : "error" }))
       }
-      setSubscriberCount(subscribersData?.total ?? 0)
-      setBlogOverview(blogData?.overview ?? null)
-      setCampaigns(campaignData?.campaigns ?? [])
-      setCalendarEvents(calendarData ?? [])
-      setIntegrationStatus(integrationStatusData ?? null)
-      setBugs(bugsData ?? [])
-      setPatchNotes(patchNotesData ?? [])
+      // 실패(null)한 소스는 기본값(0·빈 배열)으로 덮지 않고 이전 값을 유지한 채 실패 목록에 올린다.
+      if (subscribersData) setSubscriberCount(subscribersData.total ?? 0)
+      if (blogData) setBlogOverview(blogData.overview ?? null)
+      if (campaignData) setCampaigns(campaignData.campaigns ?? [])
+      if (calendarData) setCalendarEvents(calendarData)
+      if (integrationStatusData) setIntegrationStatus(integrationStatusData)
+      if (bugsData) setBugs(bugsData)
+      if (patchNotesData) setPatchNotes(patchNotesData)
+      setFailedSecondaryLabels(
+        [
+          [subscribersData, "구독자"],
+          [blogData, "블로그"],
+          [campaignData, "캠페인"],
+          [calendarData, "일정"],
+          [integrationStatusData, "연동 상태"],
+          [bugsData, "버그"],
+          [patchNotesData, "패치노트"],
+        ].flatMap(([data, label]) => (data ? [] : [label as string]))
+      )
       setLoading(false)
     }
 
@@ -889,7 +903,7 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
   const failedCumulativeLabels = !cumulativeLoading
     ? [cumulative?.customers.status === "ready" || cumulative?.customers.status === "forbidden" ? null : "누적 고객", cumulative?.units.status === "ready" || cumulative?.units.status === "forbidden" ? null : "누적 판매"].filter((label): label is string => Boolean(label))
     : []
-  const failedSourceLabels = [...failedRequestSourceLabels, ...failedOsSourceLabels, ...failedOperationsLabels, ...failedCumulativeLabels]
+  const failedSourceLabels = [...failedRequestSourceLabels, ...failedOsSourceLabels, ...failedOperationsLabels, ...failedCumulativeLabels, ...failedSecondaryLabels]
   const osSourceState = (key: OsSummarySourceKey): OverviewSourceState => {
     if (sourceStates.os !== "ready") return sourceStates.os
     return osSummary?.sources?.[key]?.status === "ready" ? "ready" : "error"
@@ -1444,6 +1458,8 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
         >
           {loading ? (
             <SectionSkeleton rows={4} />
+          ) : failedSecondaryLabels.includes("캠페인") && recentCampaigns.length === 0 ? (
+            <KpiUnavailable label="캠페인 상태" onRetry={() => retryOverview()} />
           ) : recentCampaigns.length === 0 ? (
             <EmptyState
               title="아직 발송된 캠페인이 없습니다."
@@ -1495,10 +1511,10 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
           action={
             <span
               className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${statusToneClasses(
-                missingConnections.length > 0 ? "warning" : "success"
+                missingConnections.length > 0 || !integrationStatus ? "warning" : "success"
               )}`}
             >
-              {missingConnections.length > 0 ? `미연결 ${missingConnections.length}` : "연결됨"}
+              {!integrationStatus && !loading ? "확인 필요" : missingConnections.length > 0 ? `미연결 ${missingConnections.length}` : "연결됨"}
             </span>
           }
         >
@@ -1549,7 +1565,7 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
               <StatCard
                 icon={<Mail className="h-4 w-4" />}
                 label="구독자"
-                value={subscriberCount}
+                value={subscriberCount ?? "조회 실패"}
                 sub="활성 구독자"
                 tone="neutral"
                 href="/admin/campaigns"

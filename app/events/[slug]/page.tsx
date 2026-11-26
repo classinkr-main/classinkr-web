@@ -40,7 +40,14 @@ interface EventDetailPageProps {
   params: Promise<{ slug: string }>
 }
 
-const readPublicEventBySlug = cache((slug: string) => getCachedPublicEventBySlug(slug))
+// 빌드 중 조회 실패는 이전처럼 null(404)로 넘겨 배포를 막지 않는다. 운영 런타임 실패는 던져서
+// 직전 ISR 페이지를 유지한다 — 실제 행사가 1시간 동안 404로 굳지 않게 한다.
+const readPublicEventBySlug = cache((slug: string) =>
+  getCachedPublicEventBySlug(slug).catch((error: unknown) => {
+    if (process.env.NEXT_PHASE === "phase-production-build") return null
+    throw error
+  })
+)
 
 // ISO → 구글 캘린더 URL용 UTC 포맷 (YYYYMMDDTHHMMSSZ)
 function toCalendarUtc(iso: string): string {
@@ -74,7 +81,7 @@ function buildGoogleCalendarUrl(event: {
 }
 
 export async function generateStaticParams() {
-  const slugs = await listCachedPublicEventSlugs()
+  const slugs = await listCachedPublicEventSlugs().catch(() => [])
   // 한글 슬러그는 proxy 가 rewrite 하는 토큰 경로로 사전 생성한다(원문 경로는 요청이 닿지 않는다).
   return slugs.map((slug) => ({ slug: getEventRouteSegment(slug) }))
 }

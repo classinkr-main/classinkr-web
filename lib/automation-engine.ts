@@ -65,6 +65,30 @@ export { isLeadMarketingEligible, loadLeadMarketingConsentIndex, type LeadMarket
    세그먼트 수신자 추출
    ───────────────────────────────────────────────────────────── */
 
+const SEGMENT_PAGE_SIZE = 1000
+const SEGMENT_MAX_PAGES = 100
+
+/** range 페이지네이션 — PostgREST max-rows 절단을 피하고, 읽기 오류·상한 초과는 던진다(빈 대상으로 오인하지 않는다). */
+async function readAllSegmentRows<T>(
+  label: string,
+  fetchPage: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>
+): Promise<T[]> {
+  const rows: T[] = []
+  let from = 0
+  for (let page = 0; ; page += 1) {
+    if (page >= SEGMENT_MAX_PAGES) {
+      throw new Error(`[automation] ${label} 조회가 ${SEGMENT_MAX_PAGES}페이지를 넘었습니다.`)
+    }
+    const { data, error } = await fetchPage(from, from + SEGMENT_PAGE_SIZE - 1)
+    if (error) throw new Error(`[automation] ${label} 조회 실패: ${error.message}`)
+    const batch = data ?? []
+    if (batch.length === 0) break
+    rows.push(...batch)
+    from += batch.length
+  }
+  return rows
+}
+
 export async function resolveSegmentRecipients(
   seg: SegmentConfig
 ): Promise<AutomationRecipient[]> {
@@ -94,8 +118,10 @@ export async function resolveSegmentRecipients(
       query = query.gte("created_at", cutoff.toISOString())
     }
 
-    const { data } = await query
-    for (const row of data ?? []) {
+    // 빌더는 호출마다 URL 을 고쳐 쓰므로 정렬은 한 번만 붙이고, 페이지마다 range 만 바꾼다.
+    const ordered = query.order("id", { ascending: true })
+    const data = await readAllSegmentRows("구독자", (from, to) => ordered.range(from, to))
+    for (const row of data) {
       if (!row.email) continue
       seenEmails.add(row.email.toLowerCase())
       recipients.push({
@@ -131,8 +157,10 @@ export async function resolveSegmentRecipients(
       query = query.gte("created_at", cutoff.toISOString())
     }
 
-    const { data } = await query
-    const leadRows = (data ?? []).filter((row) => Boolean(row.email))
+    // 빌더는 호출마다 URL 을 고쳐 쓰므로 정렬은 한 번만 붙이고, 페이지마다 range 만 바꾼다.
+    const ordered = query.order("id", { ascending: true })
+    const data = await readAllSegmentRows("리드", (from, to) => ordered.range(from, to))
+    const leadRows = data.filter((row) => Boolean(row.email))
 
     // 동의 게이트 — 조회 실패면 leads 분기 전체를 뺀다(미결정 consent = 거부).
     let consent: LeadMarketingConsentIndex | null = null

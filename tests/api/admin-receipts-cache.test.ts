@@ -86,6 +86,24 @@ describe("POST /api/admin/receipts", () => {
     expect(profile).toEqual({ expire: 0 })
   })
 
+  it("자동 채번이 유니크 위반(23505)이면 새 번호로 다시 시도해 201 을 낸다", async () => {
+    vi.resetModules()
+    mocks.generateReceiptNumber.mockResolvedValueOnce("R-2026-003").mockResolvedValueOnce("R-2026-004")
+    mocks.createReceipt
+      .mockRejectedValueOnce(Object.assign(new Error("dup"), { code: "23505" }))
+      .mockResolvedValueOnce({ id: "r2", receipt_number: "R-2026-004" })
+    const { POST } = await import("@/app/api/admin/receipts/route")
+    const res = await POST(
+      new NextRequest("https://classin.kr/api/admin/receipts", {
+        method: "POST",
+        body: JSON.stringify({ contract_id: "c1" }),
+      }),
+    )
+    expect(res.status).toBe(201)
+    expect(mocks.createReceipt).toHaveBeenCalledTimes(2)
+    expect(mocks.createReceipt.mock.calls[1][0]).toMatchObject({ receipt_number: "R-2026-004" })
+  })
+
   it("생성 실패 시 무효화하지 않는다", async () => {
     vi.resetModules()
     mocks.createReceipt.mockRejectedValue(new Error("db down"))

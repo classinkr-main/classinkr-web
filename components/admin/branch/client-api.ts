@@ -32,6 +32,9 @@ export interface BranchJsonState<T> {
 interface UseBranchJsonOptions {
   /** false면 네트워크 요청을 만들지 않는다. 탭·렌즈가 실제로 소비하는 동안에만 켠다. */
   enabled?: boolean
+  /** 값이 바뀌면 상태 키(로딩 리셋) 없이 조용히 다시 불러온다 — 기존 data는 새 응답이 올 때까지 유지하고,
+   *  실패하면 이전 data를 그대로 둔다(주기 폴링용). */
+  revalidateKey?: number
 }
 
 const EMPTY_STATE = { data: null, error: null, loading: true, stale: false, staleSince: null } as const
@@ -122,6 +125,33 @@ export function useBranchJson<T>(url: string, refreshKey: number, options: UseBr
 
     return () => { active = false }
   }, [stateKey, enabled, url, refreshKey])
+
+  // 조용한 재검증: stateKey를 건드리지 않아 로딩 플레이스홀더로 되돌아가지 않는다.
+  const revalidateKey = options.revalidateKey
+  const lastRevalidateKeyRef = useRef(revalidateKey)
+  useEffect(() => {
+    if (lastRevalidateKeyRef.current === revalidateKey) return
+    lastRevalidateKeyRef.current = revalidateKey
+    if (!enabled) return
+    let active = true
+    void loadBranchJson<T>(url, true)
+      .then((result) => {
+        if (!active) return
+        const isErrorFallback = result.staleReason === "error"
+        // 응답을 기다리는 사이 url 이 바뀌었으면(월·담당자 전환) 옛 url 의 응답으로 새 상태를 덮지 않는다.
+        setState((previous) => previous.key !== stateKey ? previous : {
+          key: stateKey,
+          data: result.data,
+          error: null,
+          loading: false,
+          stale: isErrorFallback,
+          staleSince: isErrorFallback ? result.staleSince : null,
+        })
+      })
+      .catch(() => { /* 실패하면 이전 data를 유지한다 */ })
+    return () => { active = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [revalidateKey])
 
   if (!enabled) {
     return { key: stateKey, data: null, error: null, loading: false, stale: false, staleSince: null }

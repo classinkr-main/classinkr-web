@@ -7,6 +7,7 @@ import { DIRECT_INBOUND_LEAD_SOURCES, INTAKE_LEAD_SOURCES } from "@/lib/lead-typ
 import { emitNotificationEvent } from "@/lib/notifications/emit-event"
 import {
   getConversations,
+  listDurableConversationsSince,
   type ChannelConversationRecord,
 } from "@/lib/repositories/channel-conversations"
 import { getLeads, type LeadRecord } from "@/lib/repositories/leads"
@@ -50,8 +51,9 @@ export interface LeadDigestAlertResult {
   channelTalkInquiryCount: number
   channelTalkOpenCount: number
   channelTalkMatchedLeadCount: number
-  chatbotHandoffCount: number
-  chatbotHandoffSentCount: number
+  /** 읽기 실패·미설정이면 null(확인 불가). */
+  chatbotHandoffCount: number | null
+  chatbotHandoffSentCount: number | null
   topSourceLabel: string
   topSourceCount: number
   eventId: string
@@ -173,8 +175,8 @@ function buildDigestMessage(input: {
   channelTalkInquiryCount: number
   channelTalkOpenCount: number
   channelTalkMatchedLeadCount: number
-  chatbotHandoffCount: number
-  chatbotHandoffSentCount: number
+  chatbotHandoffCount: number | null
+  chatbotHandoffSentCount: number | null
   topSourceLabel: string
   topSourceCount: number
 }) {
@@ -186,7 +188,9 @@ function buildDigestMessage(input: {
       ? `리드 ${input.totalLeads}개 — 신규 ${input.newLeadCount}개 · 재유입 ${input.reinflowLeadCount}개`
       : null,
     `채널톡 문의 ${input.channelTalkInquiryCount}개 / 열린 상담 ${input.channelTalkOpenCount}개 / CRM 매칭 ${input.channelTalkMatchedLeadCount}개`,
-    `챗봇→채널톡 넘김 ${input.chatbotHandoffSentCount}개 / 전체 ${input.chatbotHandoffCount}개`,
+    input.chatbotHandoffCount == null || input.chatbotHandoffSentCount == null
+      ? "챗봇→채널톡 넘김 확인 불가"
+      : `챗봇→채널톡 넘김 ${input.chatbotHandoffSentCount}개 / 전체 ${input.chatbotHandoffCount}개`,
     `${input.previousLabel} ${formatDelta(input.deltaLeads)}개`,
     `미응답 ${input.unrespondedCount}개 / 24시간 초과 ${input.over24h}개 / 48시간 초과 ${input.over48h}개`,
     `상담 진행 ${input.contactedCount}개 / 전환 ${input.convertedCount}개 / 종료 ${input.closedCount}개`,
@@ -216,10 +220,13 @@ function getConversationStartedAt(conversation: ChannelConversationRecord) {
     getValidTimestamp(conversation.lastMessageAt)
 }
 
-function getChannelTalkPeriodStats(range: Pick<PeriodRange, "start" | "end">) {
+async function getChannelTalkPeriodStats(range: Pick<PeriodRange, "start" | "end">) {
   const startMs = range.start.getTime()
   const endMs = range.end.getTime()
-  const conversations = getConversations().filter((conversation) => {
+  // 운영에서는 채널톡 동기화가 Supabase 에만 쓴다 — 파일 저장소(getConversations)는 비어 있다.
+  // Supabase 미설정/조회 실패일 때만 파일로 폴백한다(조회 실패는 저장소에서 경고 로그).
+  const source = (await listDurableConversationsSince(range.start.toISOString())) ?? getConversations()
+  const conversations = source.filter((conversation) => {
     const startedAt = getConversationStartedAt(conversation)
     return startedAt != null && startedAt >= startMs && startedAt < endMs
   })
@@ -231,31 +238,40 @@ function getChannelTalkPeriodStats(range: Pick<PeriodRange, "start" | "end">) {
   }
 }
 
+/** 읽을 수 없으면 null — 0 으로 위장하지 않고 메시지에 "확인 불가"로 찍는다. */
 async function getChatbotHandoffPeriodStats(range: Pick<PeriodRange, "start" | "end">) {
   if (!hasSupabaseServerEnv()) {
-    return { total: 0, sent: 0 }
+    return null
   }
 
   try {
     const supabase = createSupabaseAdminClient()
-    const { data, error } = await supabase
-      .from("chatbot_channel_handoffs")
-      .select("status")
-      .gte("created_at", range.start.toISOString())
-      .lt("created_at", range.end.toISOString())
-
-    if (error) throw error
-
-    return {
-      total: data?.length ?? 0,
-      sent: (data ?? []).filter((row) => row.status === "sent").length,
+    // PostgREST 는 요청당 1000행에서 끊으므로 range 로 끝까지 읽는다(id 정렬로 페이지 경계를 고정).
+    const pageSize = 1000
+    let total = 0
+    let sent = 0
+    for (let from = 0; ; from += pageSize) {
+      const { data, error } = await supabase
+        .from("chatbot_channel_handoffs")
+        .select("status")
+        .gte("created_at", range.start.toISOString())
+        .lt("created_at", range.end.toISOString())
+        .order("id", { ascending: true })
+        .range(from, from + pageSize - 1)
+      if (error) throw error
+      const rows = data ?? []
+      total += rows.length
+      sent += rows.filter((row) => row.status === "sent").length
+      if (rows.length < pageSize) break
     }
+
+    return { total, sent }
   } catch (error) {
     console.warn(
       "[lead-digest-alerts] chatbot handoff stats unavailable:",
       error instanceof Error ? error.message : error
     )
-    return { total: 0, sent: 0 }
+    return null
   }
 }
 
@@ -280,7 +296,7 @@ export async function sendLeadDigestAlert(
   // 방치 시간은 최신 유입부터 잰다(lib/crm/lead-response-status.ts 와 같은 규칙) — 몇 달 전 첫 문의 때문에
   // 방금 재문의한 리드가 곧장 48시간 초과로 뜨지 않게. 재문의가 없는 리드는 예전처럼 생성 시각이다.
   const responseStatus = summarizeLeadResponseStatus(unrespondedLeads, now)
-  const channelTalkStats = getChannelTalkPeriodStats(range)
+  const channelTalkStats = await getChannelTalkPeriodStats(range)
   const chatbotHandoffStats = await getChatbotHandoffPeriodStats(range)
   const topSource = getTopSource(periodLeads)
   const title = period === "weekly" ? "주간 리드 리포트" : "월간 리드 리포트"
@@ -317,8 +333,8 @@ export async function sendLeadDigestAlert(
     channelTalkInquiryCount: channelTalkStats.total,
     channelTalkOpenCount: channelTalkStats.open,
     channelTalkMatchedLeadCount: channelTalkStats.matchedLeads,
-    chatbotHandoffCount: chatbotHandoffStats.total,
-    chatbotHandoffSentCount: chatbotHandoffStats.sent,
+    chatbotHandoffCount: chatbotHandoffStats?.total ?? null,
+    chatbotHandoffSentCount: chatbotHandoffStats?.sent ?? null,
     topSourceLabel: topSource.label,
     topSourceCount: topSource.count,
   }

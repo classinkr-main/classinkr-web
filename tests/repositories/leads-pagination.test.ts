@@ -117,6 +117,18 @@ describe("getLeads pagination", () => {
     expect(new Set(leads.map((lead) => lead.id)).size).toBe(1_000)
   })
 
+  it("채널 집계도 max-rows 상한을 넘는 리드를 전량 센다", async () => {
+    vi.resetModules()
+    process.env.USE_SUPABASE_LEADS = "true"
+    const { calls } = mockSupabaseLeads(2_500)
+
+    const { getLeadChannelStats } = await import("@/lib/repositories/leads")
+    const stats = await getLeadChannelStats()
+
+    expect(stats).toEqual([{ source: "contact_page", total: 2_500, converted: 0, rate: 0 }])
+    expect(calls.map((call) => call.from)).toEqual([0, 1000, 2000])
+  })
+
   it("빈 테이블에서도 한 번만 조회하고 끝낸다", async () => {
     vi.resetModules()
     process.env.USE_SUPABASE_LEADS = "true"

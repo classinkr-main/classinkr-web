@@ -1,6 +1,6 @@
 import "server-only"
 import { readRangeWithFormat, envSheetId } from "@/lib/branch/google-sheets"
-import { parseRev, REV_RANGE, revRowIdWarning, summarizeRevRowIds } from "@/lib/branch/parsers/rev"
+import { parseRev, resolveRevColumns, REV_RANGE, revRowIdWarning, summarizeRevRowIds } from "@/lib/branch/parsers/rev"
 import { parseDsh, DSH_RANGE } from "@/lib/branch/parsers/dsh"
 import { parseKpiBlocks, KPI_RANGE } from "@/lib/branch/parsers/kpi"
 import { replaceBranchRevDeals } from "@/lib/repositories/branch-deals"
@@ -20,6 +20,14 @@ export async function syncRev(): Promise<{ rows: number; warning?: string }> {
     readRangeWithFormat(sheetId, KPI_RANGE),
   ])
   const parsed = parseRev(revGrid, { refFy })
+  // 빈 시트·고객 헤더 이름 변경 등으로 0행이 파싱되면 replace(truncate+insert)가 REV 미러 전체를 지우고
+  // 성공으로 기록된다. 시트 측 오류로 보고 쓰기 전에 던진다 — run-all 이 revOk=false 로 처리해
+  // 재캡처·링크 유지보수를 건너뛴다.
+  if (parsed.length === 0) {
+    const customerCol = resolveRevColumns(revGrid[1] ?? []).customer
+    const why = revGrid.length < 2 ? "시트 범위가 비어 있습니다" : customerCol < 0 ? "고객(Account) 열 머리를 인식하지 못했습니다" : "파싱된 행이 0개입니다"
+    throw new Error(`REV 시트(${REV_RANGE}) 읽기 이상 — ${why}. 기존 미러(branch_rev_deals)는 건드리지 않았습니다.`)
+  }
   const rows = parsed.map((p) => ({
     sheet_row: p.sheet_row, customer_name: p.customer_name, branch_contact: p.branch_contact,
     team: p.team, manager: p.manager, deal_type: p.deal_type, status: p.status,

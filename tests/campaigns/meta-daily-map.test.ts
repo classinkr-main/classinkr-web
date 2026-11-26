@@ -160,4 +160,41 @@ describe("fetchMetaDailyInsights", () => {
       expect.objectContaining({ since: "2026-08-01", until: "2026-08-01" })
     )
   })
+
+  it("Graph fetch에 타임아웃 signal을 달고, 타임아웃은 읽을 수 있는 오류로 던진다", async () => {
+    const timeout = Object.assign(new Error("aborted due to timeout"), { name: "TimeoutError" })
+    const fetchMock = vi.fn().mockRejectedValue(timeout)
+    vi.stubGlobal("fetch", fetchMock)
+    await expect(fetchMetaDailyInsights({ since: "2026-08-01", until: "2026-08-01" })).rejects.toThrow(
+      /Meta API request timed out/
+    )
+    expect((fetchMock.mock.calls[0][1] as RequestInit).signal).toBeInstanceOf(AbortSignal)
+  })
+
+  it("페이징 시간 예산을 넘기면 truncated=true 로 멈춘다", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {})
+    let t = 1_000_000
+    vi.spyOn(Date, "now").mockImplementation(() => t)
+    let insightsCallCount = 0
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        if (!String(input).includes("/insights")) {
+          return { ok: true, json: async () => ACCOUNT_BODY } as unknown as Response
+        }
+        insightsCallCount += 1
+        t += 30_000
+        return {
+          ok: true,
+          json: async () => ({
+            data: [dailyRow(String(insightsCallCount), "2026-08-01")],
+            paging: { next: "https://graph.facebook.com/next", cursors: { after: `C${insightsCallCount}` } },
+          }),
+        } as unknown as Response
+      })
+    )
+    const result = await fetchMetaDailyInsights({ since: "2026-08-01", until: "2026-08-01" })
+    expect(insightsCallCount).toBe(2)
+    expect(result.truncated).toBe(true)
+  })
 })

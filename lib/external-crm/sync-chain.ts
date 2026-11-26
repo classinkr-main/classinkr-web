@@ -50,6 +50,30 @@ export async function notifyExternalCrmSyncOutcome(
       return
     }
 
+    const followUpErrors = [
+      result.neoCustomerSnapshotsError && `NEO 스냅샷 갱신: ${result.neoCustomerSnapshotsError}`,
+      result.candidatesError && `매칭 후보 생성: ${result.candidatesError}`,
+      result.renewalAlertsError && `재연락 알림: ${result.renewalAlertsError}`,
+    ].filter((value): value is string => Boolean(value))
+    if (sync.ok && !sync.skipped && followUpErrors.length > 0) {
+      await emitNotificationEvent({
+        eventType: "crm.external_sync.followup_failed",
+        notificationType: "warning",
+        categoryTag: "partner",
+        severity: "warning",
+        title: "외부 CRM 동기화 후속 단계 실패",
+        message: `Xiaoshouyi 동기화는 성공했지만 후속 단계가 실패했습니다 — ${followUpErrors.join(" / ")}`,
+        routeUrl: "/admin/crm/deals",
+        source: "external_crm_sync",
+        payload: {
+          trigger,
+          neoCustomerSnapshotsError: result.neoCustomerSnapshotsError ?? null,
+          candidatesError: result.candidatesError ?? null,
+          renewalAlertsError: result.renewalAlertsError ?? null,
+        },
+      })
+    }
+
     if (!candidates) return
 
     const newCandidates = candidates.insertedCandidates

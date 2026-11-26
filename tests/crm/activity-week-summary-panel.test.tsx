@@ -256,6 +256,14 @@ describe("loadWeekOpenTasks", () => {
 describe("CrmActivityClient — 캐시 TTL SSOT(P2) + 요약 패널 배선(A5)", () => {
   const source = readFileSync(path.resolve(__dirname, "../../components/admin/crm/CrmActivityClient.tsx"), "utf8")
 
+  it("검색어는 200ms 디바운스한 값으로만 조회한다(키 입력마다 요청·캐시 금지)", () => {
+    expect(source).toContain("const [debouncedQuery, setDebouncedQuery] = useState(\"\")")
+    expect(source).toContain("setTimeout(() => setDebouncedQuery(query), 200)")
+    expect(source).toContain("query: debouncedQuery,")
+    expect(source).toMatch(/filterTarget, debouncedQuery, period/)
+    expect(source).not.toMatch(/filterTarget, query, period/)
+  })
+
   it("로컬 TTL 상수를 갖지 않고 lib/crm/client-cache 상수를 쓴다", () => {
     expect(source).not.toMatch(/const\s+CACHE_TTL_MS\s*=/)
     expect(source).not.toContain("30_000")

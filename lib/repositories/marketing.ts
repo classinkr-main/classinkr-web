@@ -298,18 +298,24 @@ export async function getActiveSubscribersByTags(
     return jsonGet(tags);
   }
 
-  let query = sb()
-    .from("newsletter_subscribers")
-    .select("*")
-    .eq("status", "active");
-
-  if (tags.length > 0) {
-    query = query.overlaps("tags", tags);
-  }
-
-  const { data, error } = await query.order("created_at", { ascending: false });
-  if (error) throw new Error(`[marketing] 태그 구독자 조회 실패: ${error.message}`);
-  return (data ?? []).map(rowToSubscriber);
+  // PostgREST max-rows(1000) 절단으로 수신자가 조용히 빠지지 않도록 id keyset 으로 전량을 읽는다.
+  // 페이지 오류·안전 상한 초과는 helper 가 던진다 — 일부 목록으로 발송하지 않는다.
+  const rows = await fetchAllSubscriberRowsById(async (afterId, limit) => {
+    let query = sb()
+      .from("newsletter_subscribers")
+      .select(SUBSCRIBER_COLUMNS)
+      .eq("status", "active")
+      .order("id", { ascending: true })
+      .limit(limit);
+    if (tags.length > 0) query = query.overlaps("tags", tags);
+    if (afterId) query = query.gt("id", afterId);
+    const { data, error } = await query;
+    return { data: (data ?? null) as unknown as Array<{ id: string; created_at: string }> | null, error };
+  });
+  // 기존 정렬(최신 가입 순) 유지
+  return rows
+    .map(rowToSubscriber)
+    .sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
 }
 
 export async function upsertSubscriber(

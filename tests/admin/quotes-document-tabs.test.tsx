@@ -22,6 +22,12 @@ vi.mock("@/components/admin/documents/DistributorReceivablesPanel", () => ({
   default: () => <div data-panel="receivables" />,
 }))
 
+// 서버·클라이언트가 같은 주소에서 같은 값을 받는 useSearchParams 를 흉내낸다.
+let mockSearch = ""
+vi.mock("next/navigation", () => ({
+  useSearchParams: () => new URLSearchParams(mockSearch),
+}))
+
 import QuotesPage from "@/app/admin/quotes/page"
 import {
   AdminNavPreferencesProvider,
@@ -33,8 +39,8 @@ const FULL_BY_ROLE: AdminNavPreferencesValue = { role: "SUPER_ADMIN", navPreset:
 const FULL_BY_PRESET: AdminNavPreferencesValue = { role: "ADMIN", navPreset: "super", navOverrides: {} }
 
 function render(value: AdminNavPreferencesValue | null, search = "") {
-  // 페이지는 첫 렌더에 window.location.search 로 탭을 정한다(서버에서는 window 가 없어 견적서 탭).
-  if (search) vi.stubGlobal("window", { location: { search } })
+  // 페이지는 첫 렌더에 useSearchParams() 로 탭을 정한다 — window 가 없는 서버 렌더에서도 ?tab= 이 반영된다.
+  mockSearch = search
   const html = renderToStaticMarkup(
     <AdminNavPreferencesProvider value={value}>
       <QuotesPage />
@@ -51,6 +57,7 @@ function render(value: AdminNavPreferencesValue | null, search = "") {
 }
 
 afterEach(() => {
+  mockSearch = ""
   vi.unstubAllGlobals()
 })
 
@@ -117,6 +124,18 @@ describe("견적·문서 탭 줄 — 전체 / 간소 계정", () => {
     expect(view.selected).toBe(label)
     // 지금 있는 탭 하나만 더해진다 — 나머지 숨긴 탭은 여전히 줄에 없다.
     expect(view.labels).toHaveLength(4)
+  })
+
+  it("하이드레이션: window 가 없는 서버 렌더도 ?tab= 탭을 고르고, 같은 값을 클라이언트 첫 렌더가 받는다", () => {
+    expect(typeof window).toBe("undefined")
+    const server = render(FULL_BY_ROLE, "?tab=contracts")
+    expect(server.selected).toBe("계약서")
+    expect(server.panels).toEqual(["contracts"])
+    // 클라이언트 첫 렌더: window.location 이 있어도 같은 주소에서 같은 마크업이어야 한다.
+    vi.stubGlobal("window", { location: { search: "?tab=contracts" } })
+    expect(render(FULL_BY_ROLE, "?tab=contracts")).toEqual(server)
+    const source = readFileSync(join(process.cwd(), "app/admin/quotes/page.tsx"), "utf8")
+    expect(source).not.toMatch(/useState[^\n]*FromSearch\(\)/)
   })
 
   it("탭 정의는 지우지 않고 탭 줄에서만 거른다", () => {

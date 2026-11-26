@@ -24,6 +24,9 @@ let outboundSheetRows: Row[] = []
 const linkSheetOutboundToOrders = vi.fn(async (..._args: unknown[]) => ({ appRowsReplaced: 0, dealsAdvanced: 0, error: null as string | null }))
 
 let upsertedItemNames: string[] = []
+// 스냅샷용 기존 시트 이관분을 id 키셋으로 읽는 경로를 검증할 때만 쓴다.
+let existingSheetMovements: Row[] | null = null
+let snapshotInsertPayload: Row | null = null
 
 function movementsTable() {
   return {
@@ -49,6 +52,29 @@ function movementsTable() {
         return chain
       }
       // 스냅샷용 기존 시트 이관분
+      if (existingSheetMovements) {
+        const rows = existingSheetMovements
+        let afterId: string | null = null
+        let pageLimit = 1000
+        const chain = {
+          eq: () => chain,
+          order: () => chain,
+          gt: (_column: string, value: string) => {
+            afterId = value
+            return chain
+          },
+          limit: (limit: number) => {
+            pageLimit = limit
+            return chain
+          },
+          then: (resolve: (value: { data: Row[]; error: null }) => unknown) =>
+            Promise.resolve({
+              data: rows.filter((row) => afterId == null || (row.id as string) > afterId).slice(0, pageLimit),
+              error: null,
+            }).then(resolve),
+        }
+        return chain
+      }
       return { eq: () => Promise.resolve({ data: [], error: null }) }
     },
     update(payload: Row) {
@@ -68,7 +94,8 @@ function movementsTable() {
 
 function otherTable(table: string) {
   return {
-    insert() {
+    insert(payload?: Row) {
+      if (table === "hardware_sheet_import_snapshots") snapshotInsertPayload = payload ?? null
       return {
         select: () => ({
           single: async () => ({
@@ -108,6 +135,9 @@ function otherTable(table: string) {
 
 async function loadRepository() {
   vi.resetModules()
+  const realFetchAll = existingSheetMovements
+    ? (await vi.importActual<typeof import("@/lib/repositories/branch-hw")>("@/lib/repositories/branch-hw")).fetchAllSupabaseRows
+    : null
   const client = {
     from: vi.fn((table: string) => (table === "hardware_movements" ? movementsTable() : otherTable(table))),
     rpc: vi.fn((fn: string) => {
@@ -120,7 +150,7 @@ async function loadRepository() {
   vi.doMock("@/lib/supabase/admin", () => ({ createSupabaseAdminClient: vi.fn(() => client) }))
   vi.doMock("@/lib/orders/sheet-order-sync", () => ({ linkSheetOutboundToOrders }))
   vi.doMock("@/lib/repositories/branch-hw", () => ({
-    fetchAllSupabaseRows: vi.fn(async () => []),
+    fetchAllSupabaseRows: realFetchAll ?? vi.fn(async () => []),
     listFreshHwInbound: vi.fn(async () => [
       {
         id: "inbound-1",
@@ -154,6 +184,8 @@ describe("importHardwareFromBranchSheets — 시트가 이긴다(§8-6)", () => 
     linkSheetOutboundToOrders.mockClear()
     adminConvertedRows = []
     sheetSourceRows = []
+    existingSheetMovements = null
+    snapshotInsertPayload = null
     outboundSheetRows = [
       {
         id: "sheet-out-1",
@@ -178,6 +210,19 @@ describe("importHardwareFromBranchSheets — 시트가 이긴다(§8-6)", () => 
     vi.restoreAllMocks()
     vi.resetModules()
     delete process.env.HARDWARE_SHEET_ADDITIVE_MERGE
+  })
+
+  it("복원 지점 스냅샷은 시트 이관분을 1000행 캡 없이 전량 담는다", async () => {
+    existingSheetMovements = Array.from({ length: 2300 }, (_, index) => ({
+      id: `m-${String(index).padStart(5, "0")}`,
+    }))
+
+    const { importHardwareFromBranchSheets } = await loadRepository()
+    await importHardwareFromBranchSheets({ actor: "ops@classin.kr" })
+
+    const previous = snapshotInsertPayload?.previous_sheet_movements as unknown[]
+    expect(previous).toHaveLength(2300)
+    expect(snapshotInsertPayload?.row_counts).toMatchObject({ previous_sheet_movements: 2300 })
   })
 
   it("시트 행에서 확정한 어드민 기록만 취소하고, 사람이 직접 만든 기록은 건드리지 않는다", async () => {

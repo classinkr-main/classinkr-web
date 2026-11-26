@@ -5,6 +5,8 @@ import { NextRequest } from "next/server"
 const requireVerifiedAdminContext = vi.fn()
 const updateLead = vi.fn()
 const deleteLead = vi.fn()
+const getLeadById = vi.fn()
+const logAdminAudit = vi.fn()
 const hasContactLog = vi.fn()
 const hasLeadContactEvent = vi.fn()
 
@@ -16,10 +18,12 @@ vi.mock("@/lib/admin-auth", () => ({
 vi.mock("@/lib/repositories/leads", () => ({
   updateLead,
   deleteLead,
+  getLeadById,
   // 감사 §8 — route.ts가 `instanceof LeadVersionConflictError`로 낙관적 잠금 충돌을 가려낸다.
   // import가 undefined면 catch 블록에서 instanceof가 TypeError로 죽는다.
   LeadVersionConflictError: class LeadVersionConflictError extends Error {},
 }))
+vi.mock("@/lib/auth/audit", () => ({ logAdminAudit }))
 vi.mock("@/lib/repositories/contact-logs", () => ({ hasContactLog }))
 vi.mock("@/lib/repositories/crm-events", () => ({ hasLeadContactEvent }))
 
@@ -187,5 +191,54 @@ describe("PATCH /api/admin/leads/[id] — 연락 체크와 확인 도장", () =>
       expect(res.status).toBe(409)
       await expect(res.json()).resolves.toEqual({ error: "다른 곳에서 먼저 수정했습니다." })
     })
+  })
+})
+
+describe("DELETE /api/admin/leads/[id] — 오류 노출과 감사 로그", () => {
+  async function callDelete() {
+    const { DELETE } = await import("@/app/api/admin/leads/[id]/route")
+    return DELETE(
+      new NextRequest("https://classin.kr/api/admin/leads/lead-1", { method: "DELETE" }),
+      { params: Promise.resolve({ id: "lead-1" }) }
+    )
+  }
+
+  beforeEach(() => {
+    requireVerifiedAdminContext.mockResolvedValue({ source: "supabase", role: "ADMIN", userId: "admin-1" })
+    getLeadById.mockResolvedValue({ id: "lead-1", status: "new", source: "contact_page", assigned_to: "kim" })
+    deleteLead.mockResolvedValue(true)
+    vi.spyOn(console, "error").mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    vi.clearAllMocks()
+    vi.resetModules()
+  })
+
+  it("저장소 오류는 404가 아니라 500으로 드러내고 감사 로그를 남기지 않는다", async () => {
+    deleteLead.mockRejectedValue(new Error("[leads] 삭제 실패: connection reset"))
+    const res = await callDelete()
+    expect(res.status).toBe(500)
+    expect(logAdminAudit).not.toHaveBeenCalled()
+  })
+
+  it("없는 리드는 404이고 삭제하지 않는다", async () => {
+    getLeadById.mockResolvedValue(null)
+    const res = await callDelete()
+    expect(res.status).toBe(404)
+    expect(deleteLead).not.toHaveBeenCalled()
+  })
+
+  it("삭제 성공 시 연락처 없이 lead.delete 감사 로그를 남긴다", async () => {
+    const res = await callDelete()
+    expect(res.status).toBe(200)
+    expect(logAdminAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "lead.delete",
+        targetType: "lead",
+        targetId: "lead-1",
+        payload: { status: "new", source: "contact_page", assignedTo: "kim" },
+      })
+    )
   })
 })

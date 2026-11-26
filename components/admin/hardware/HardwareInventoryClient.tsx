@@ -541,6 +541,9 @@ export default function HardwareInventoryClient({
   const formRef = useRef<HTMLFormElement | null>(null)
   // 재조회 순번 — 겹친 재검증에서 늦게 온 옛 응답을 버린다(load 참고).
   const loadSeqRef = useRef(0)
+  // 판매대시보드 재조회 신호 — 원장 응답(data)이 바뀔 때마다가 아니라, 서버 원장을 실제로 받았을 때(최초·새로고침)와
+  // 저장 직후(applySavedMovements)에만 올린다. data 객체 자체를 넘기면 "더 불러오기" 같은 부분 갱신에도 재조회했다.
+  const [salesReloadKey, setSalesReloadKey] = useState(0)
   const [data, setData] = useState<HardwareDashboard | null>(() =>
     prefetched ? withDerivedMovementViews(prefetched) : null
   )
@@ -865,6 +868,7 @@ export default function HardwareInventoryClient({
       )
       if (seq !== loadSeqRef.current) return
       setData(next)
+      setSalesReloadKey((key) => key + 1)
       setSelectedItemId((current) => current || defaultEntryItemId(next.items))
     } catch (err) {
       if (seq !== loadSeqRef.current) return
@@ -917,6 +921,7 @@ export default function HardwareInventoryClient({
   const applySavedMovements = useCallback((saved: readonly HardwareMovement[]) => {
     const rows = saved.filter((movement): movement is HardwareMovement => Boolean(movement?.id))
     if (rows.length === 0) return
+    setSalesReloadKey((key) => key + 1)
     setData((current) => {
       if (!current) return current
       const seen = new Set(current.movements.map((movement) => movement.id))
@@ -3555,6 +3560,7 @@ export default function HardwareInventoryClient({
               activeTabId={activeTabId}
               reduceMotion={reduceMotion}
               data={data}
+              salesReloadKey={salesReloadKey}
               homeQuickRecord={{
                 data,
                 draft: { ...homeRecordDraft, itemId: homeRecordDraft.itemId || defaultEntryItemId(data?.items ?? []) },

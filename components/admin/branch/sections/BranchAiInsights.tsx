@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react"
 import { Sparkles, RefreshCw, AlertTriangle } from "lucide-react"
 import type { BranchSummaryResponse, Team } from "../types"
 import { adminFetchJson, useBranchJson } from "../client-api"
+import { adminFetchJsonCached, clearAdminRequestCache } from "@/lib/admin-client"
 import { readWeeklyReportDraft, type BranchWeeklyCompassReport, type ReportModule } from "@/lib/branch/weekly-report-contract"
 import HqWeeklyReport, { type ReportLang } from "./HqWeeklyReport"
 import { cny } from "@/lib/branch/money-format"
@@ -158,7 +159,8 @@ export default function BranchAiInsights({ team, refreshKey, summary, canGenerat
   useEffect(() => {
     let cancelled = false
     setLoading(true); setErrorMsg(null)
-    void adminFetchJson<InsightResp>(`/api/admin/branch/insights?team=${team}`)
+    // 캐시 경로: 같은 URL의 중복 요청을 합치고 60초 TTL로 재사용한다(전역 새로고침은 branch prefix를 비운다).
+    void adminFetchJsonCached<InsightResp>(`/api/admin/branch/insights?team=${team}`, undefined, { ttlMs: 60_000, staleWhileRevalidateMs: 0, persist: false })
       .then((d: InsightResp) => {
         if (cancelled) return
         if (d.error) setErrorMsg(d.error)
@@ -176,6 +178,8 @@ export default function BranchAiInsights({ team, refreshKey, summary, canGenerat
     setRefreshing(true); setErrorMsg(null)
     try {
       const d = await adminFetchJson<InsightResp>(`/api/admin/branch/insights?team=${team}&force=1`)
+      // 재생성 결과가 다음 마운트에서 재생성 전 캐시로 덮이지 않도록 insights 캐시를 비운다.
+      clearAdminRequestCache("/api/admin/branch/insights")
       if (d.error) setErrorMsg(d.error)
       // 실패 응답에 결과가 없으면 이전 결과를 지우지 않는다 — 오류 문장과 함께 마지막 결과를 계속 보여 준다.
       if (d.insight) { setInsight(d.insight); setFrom(d.from) }

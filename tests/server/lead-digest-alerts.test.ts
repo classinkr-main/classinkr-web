@@ -67,7 +67,10 @@ const REINFLOW_LEADS = [
   },
 ]
 
-async function loadDigest(leads: Array<Record<string, unknown>>) {
+async function loadDigest(
+  leads: Array<Record<string, unknown>>,
+  durableConversations: Array<Record<string, unknown>> | null = null
+) {
   vi.resetModules()
 
   const postJson = vi.fn().mockResolvedValue({ ok: true, status: 200 })
@@ -102,6 +105,8 @@ async function loadDigest(leads: Array<Record<string, unknown>>) {
   }))
   vi.doMock("@/lib/repositories/channel-conversations", () => ({
     getConversations: vi.fn().mockReturnValue([]),
+    // 운영 경로 — Supabase(durable) 상담. null 이면 미설정/실패라 파일 폴백.
+    listDurableConversationsSince: vi.fn().mockResolvedValue(durableConversations),
   }))
   // 챗봇 넘김 통계는 이 테스트의 관심사가 아니다 — 조회가 일어나도 0 으로 강등되게 막아 둔다.
   vi.doMock("@/lib/supabase/admin", () => ({
@@ -215,5 +220,37 @@ describe("주간·월간 리드 다이제스트 — 유입 축", () => {
       // 8월: aug-reinflow(재문의) + p-reinflow(8월 1일 생성 — 8월엔 신규, 9월엔 재유입으로 각 1건).
       previousTotalLeads: 2,
     })
+  })
+
+  it("채널톡 건수는 파일이 아니라 durable(Supabase) 상담에서 센다 — 기간 밖은 뺀다", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {})
+    const { sendLeadDigestAlert, createNotificationEvent } = await loadDigest(BASE_LEADS, [
+      { id: "a", state: "opened", matchedLeadId: "l1", firstAskedAt: "2026-09-16T01:00:00.000Z", lastMessageAt: "2026-09-16T02:00:00.000Z" },
+      { id: "b", state: "closed", firstAskedAt: "2026-09-17T01:00:00.000Z", lastMessageAt: "2026-09-17T02:00:00.000Z" },
+      { id: "old", state: "closed", firstAskedAt: "2026-09-01T01:00:00.000Z", lastMessageAt: "2026-09-16T02:00:00.000Z" },
+    ])
+
+    const result = await sendLeadDigestAlert("weekly", NOW)
+
+    expect(result).toMatchObject({
+      channelTalkInquiryCount: 2,
+      channelTalkOpenCount: 1,
+      channelTalkMatchedLeadCount: 1,
+      totalInboundCount: 4,
+    })
+    expect(createNotificationEvent.mock.calls[0][0].message).toContain("채널톡 문의 2개 / 열린 상담 1개 / CRM 매칭 1개")
+  })
+
+  it("챗봇 넘김 통계를 읽을 수 없으면 0 이 아니라 확인 불가로 알린다", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {})
+    const { sendLeadDigestAlert, createNotificationEvent } = await loadDigest(BASE_LEADS)
+
+    const result = await sendLeadDigestAlert("weekly", NOW)
+
+    expect(result.chatbotHandoffCount).toBeNull()
+    expect(result.chatbotHandoffSentCount).toBeNull()
+    const message = createNotificationEvent.mock.calls[0][0].message as string
+    expect(message).toContain("챗봇→채널톡 넘김 확인 불가")
+    expect(message).not.toContain("챗봇→채널톡 넘김 0개")
   })
 })

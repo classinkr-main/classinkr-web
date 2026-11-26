@@ -52,4 +52,28 @@ describe("KR Team 개요 런타임 상태", () => {
     expect(source).toContain("stale: boolean")
     expect(source).toContain("staleSince: number | null")
   })
+
+  it("Compass 60초 폴링은 refreshKey에 섞지 않고 revalidateKey로 조용히 재검증한다", () => {
+    const source = sourceOf(branchClientPath)
+
+    expect(source).not.toContain("refreshKey + compassTick")
+    expect(source).toContain("revalidateKey: compassTick")
+    const api = sourceOf(clientApiPath)
+    expect(api).toContain("revalidateKey?: number")
+    // stateKey(로딩 리셋)에는 revalidateKey가 들어가지 않고, 재검증 실패는 이전 data를 유지한다.
+    expect(api).toContain("const stateKey = `${refreshKey}:${url}`")
+    expect(api).toContain("실패하면 이전 data를 유지한다")
+    // 탭 복귀(visibilitychange)는 마지막 틱 후 60초가 지났을 때만 재검증한다.
+    expect(source).toContain("Date.now() - lastTickAt >= 60_000")
+  })
+
+  it("AI 인사이트는 캐시 경로로 조회하고 담당자 토글로 리마운트하지 않는다", () => {
+    const dashboard = sourceOf(branchClientPath)
+    const insights = sourceOf(join(process.cwd(), "components/admin/branch/sections/BranchAiInsights.tsx"))
+
+    expect(dashboard).toContain("<BranchAiInsights key={team}")
+    expect(dashboard).not.toContain("key={`${team}:${pipelineManager}`}")
+    expect(insights).toContain("adminFetchJsonCached<InsightResp>(`/api/admin/branch/insights?team=${team}`")
+    expect(insights).toContain('clearAdminRequestCache("/api/admin/branch/insights")')
+  })
 })

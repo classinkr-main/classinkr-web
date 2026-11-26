@@ -1,7 +1,7 @@
 "use client"
 import { branchManagerLabel, branchManagerMatches, initialBranchManager, UNMAPPED_BRANCH_MEMBER } from "@/lib/branch/personal-scope"
 
-import { Fragment, use, useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { Fragment, use, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react"
 import dynamic from "next/dynamic"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
@@ -507,6 +507,8 @@ export default function SalesLedgerWorkbench({
   const [sourceStripNow, setSourceStripNow] = useState(() => Date.now())
   useVisibleInterval(() => setSourceStripNow(Date.now()), 60_000)
   const [query, setQuery] = useState("")
+  // 검색 필터링(장부 전체 재계산)은 입력보다 낮은 우선순위로 돌려 타이핑이 막히지 않게 한다.
+  const deferredQuery = useDeferredValue(query)
   // 품질 웨이브 7 — 항목 3: 단일 select → MultiSelect(Set) 전환. 빈 Set === "전체"(기존 "ALL"과
   // 동일 의미) — 필터 로직·URL 직렬화·크로스링크 모두 Set 기준으로 다시 쓴다.
   const [managerFilter, setManagerFilter] = useState<Set<string>>(() => new Set(defaultManager ? [defaultManager] : []))
@@ -1415,7 +1417,7 @@ export default function SalesLedgerWorkbench({
     // 검색을 지원한다. sheetRow를 필드에 포함(항목 2) — IntegrityStrip의 "장부에서 열기 →"
     // 딥링크(`?lens=rev&q=<sheetRow>`)가 실제로 그 행을 찾아 매칭되게 한다(기존엔 sheetRow가
     // 검색 대상에 없어 링크를 눌러도 검색 결과가 비었다).
-    const tokens = tokenize(query)
+    const tokens = tokenize(deferredQuery)
     return rows
       .filter((row) => managerFilter.size === 0 || Array.from(managerFilter).some((manager) => branchManagerMatches(row.manager, manager)))
       .filter((row) => regionFilter.size === 0 || (row.region != null && regionFilter.has(row.region)))
@@ -1445,7 +1447,7 @@ export default function SalesLedgerWorkbench({
           row.sheetRow != null ? String(row.sheetRow) : "",
         ])
       })
-  }, [managerFilter, productFilter, query, regionFilter, revDealTypeFilter, revOriginFilter, revStatusFilter, rows])
+  }, [managerFilter, productFilter, deferredQuery, regionFilter, revDealTypeFilter, revOriginFilter, revStatusFilter, rows])
 
   const filteredRows = useMemo(() => {
     // "연간합계" 헤더 정렬은 표시값과 같은 12개월 전체(모든 확도) 합으로 — period 스코프

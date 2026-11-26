@@ -111,7 +111,9 @@ export default function CrmCustomerPicker({ label, linkedId, onPick, onFreeText,
       try {
         const query = customerPickerQuery(term, sources)
         const data = await adminFetchJsonCached<UnifiedResponse>(`/api/admin/crm/customers/unified?${query}`, undefined, {
-          cacheKey: `picker:${query}`,
+          // 키에 /api/admin/crm 범위를 넣어 고객·리드 변경(non-GET)이 이 검색 캐시를 비우게 한다. 검색어별 항목이라 persist 하지 않는다.
+          cacheKey: `/api/admin/crm#picker:${query}`,
+          persist: false,
           ttlMs: 30_000,
           staleWhileRevalidateMs: 60_000,
           force,

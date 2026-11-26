@@ -1,5 +1,6 @@
 "use client"
 
+import { useSearchParams } from "next/navigation"
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import {
   ChevronDown,
@@ -164,11 +165,6 @@ function quickActionFromParams(params: Pick<URLSearchParams, "get" | "toString">
   }
 }
 
-function quickActionFromSearch() {
-  if (typeof window === "undefined") return null
-  return quickActionFromParams(new URLSearchParams(window.location.search))
-}
-
 function prefillFromParams(params: Pick<URLSearchParams, "get">): QuickQuotePrefill | null {
   const dealId = params.get("dealId") ?? params.get("deal")
   const customerId = params.get("customerId") ?? params.get("customer")
@@ -180,11 +176,6 @@ function prefillFromParams(params: Pick<URLSearchParams, "get">): QuickQuotePref
     customerId: customerId || null,
     customerName: customerName || null,
   }
-}
-
-function prefillFromSearch() {
-  if (typeof window === "undefined") return null
-  return prefillFromParams(new URLSearchParams(window.location.search))
 }
 
 function QuoteCreateButtons({
@@ -285,13 +276,16 @@ function QuoteCreateButtons({
 
 export default function QuotesPage() {
   const quickActionSequenceRef = useRef(0)
-  const [activeTab, setActiveTab] = useState<DocumentTab>(() => tabFromSearch())
-  const [prefill] = useState<QuickQuotePrefill | null>(() => prefillFromSearch())
+  // 첫 렌더 값은 서버와 클라이언트가 똑같이 받는 useSearchParams() 에서 가져온다. window.location 으로
+  // 읽으면 서버는 항상 견적서 탭을 그리고 클라이언트 첫 렌더만 ?tab= 탭을 골라 하이드레이션이 어긋난다.
+  const searchParams = useSearchParams()
+  const [activeTab, setActiveTab] = useState<DocumentTab>(() => tabFromParams(searchParams))
+  const [prefill] = useState<QuickQuotePrefill | null>(() => prefillFromParams(searchParams))
   const [hardwareQuickAction, setHardwareQuickAction] = useState<HardwareQuoteQuickActionRequest>(() => {
-    const fromSearch = quickActionFromSearch()
+    const fromSearch = quickActionFromParams(searchParams)
     if (fromSearch) return fromSearch
     // 딜/고객 프리필로 진입하면 작성기를 자동으로 연다(action 파라미터가 없어도).
-    if (prefillFromSearch()) return { action: "new", key: "prefill-open" }
+    if (prefillFromParams(searchParams)) return { action: "new", key: "prefill-open" }
     return null
   })
 
