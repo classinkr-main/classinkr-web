@@ -4,7 +4,7 @@ import { createHash } from "node:crypto"
 
 import {
   REQUEST_CAPTURE_RETENTION_MS, REQUEST_PAGE_SIZE, REQUEST_REPLY_LIMIT,
-  type AdminRequest, type AdminRequestSummary, type RequestReview, type RequestStatus,
+  type AdminRequest, type AdminRequestQueue, type AdminRequestSummary, type RequestReview, type RequestStatus,
 } from "@/lib/admin/requests"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 
@@ -26,11 +26,37 @@ type NewRequest = Pick<AdminRequest, "kind" | "title" | "description" | "reporte
   capture_data: string | null
 }
 
-export async function listAdminRequests(ownerId: string | null, page: number, status: RequestStatus | null) {
+const REQUEST_QUEUE_FILTERS: Record<AdminRequestQueue, [column: string, operator: "is" | "eq", value: string]> = {
+  unacknowledged: ["acknowledged_at", "is", "null"],
+  reopened: ["requester_review", "eq", "reopened"],
+  review: ["status", "eq", "resolved"],
+}
+
+export async function countAdminRequestQueues(ownerId: string | null) {
+  const table = createSupabaseAdminClient().from("admin_requests")
+  const queues: AdminRequestQueue[] = ownerId ? ["review"] : ["unacknowledged", "reopened"]
+  const signal = AbortSignal.timeout(2500)
+  const counts = await Promise.all(queues.map(async (queue) => {
+    const query = table.select("id", { count: "exact", head: true }).filter(...REQUEST_QUEUE_FILTERS[queue])
+    if (ownerId) query.eq("reporter_id", ownerId)
+    const { count, error } = await query.abortSignal(signal)
+    if (error) throw error
+    return [queue, count ?? 0] as const
+  }))
+  return Object.fromEntries(counts)
+}
+
+export async function listAdminRequests(
+  ownerId: string | null,
+  page: number,
+  status: RequestStatus | null,
+  queue: AdminRequestQueue | null = null,
+) {
   const offset = page * REQUEST_PAGE_SIZE
   const query = createSupabaseAdminClient().from("admin_requests").select(SUMMARY_COLUMNS)
   if (ownerId) query.eq("reporter_id", ownerId)
   if (status) query.eq("status", status)
+  if (queue) query.filter(...REQUEST_QUEUE_FILTERS[queue])
   const { data, error } = await query
     .order("created_at", { ascending: false })
     .order("id", { ascending: false })

@@ -14,6 +14,7 @@ import {
   EyeOff,
   LogOut,
   Menu,
+  MessageSquarePlus,
   MoreHorizontal,
   Search,
   SlidersHorizontal,
@@ -27,6 +28,7 @@ import {
   getAdminCalendarWeekStripRange,
   getDefaultAdminCalendarRange,
 } from "@/lib/admin/calendar-range"
+import { ADMIN_REQUESTS_HREF, canSubmitAdminRequest, cleanRequestScreen } from "@/lib/admin/requests"
 import { TODAY_CONTACTS_DEFAULT_OWNER, todayContactsUrl } from "@/lib/crm/today-contacts-request"
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser"
 import { hasSupabaseBrowserEnv } from "@/lib/supabase/public-env"
@@ -524,6 +526,18 @@ export default function AdminSidebar(props: Props) {
 
 function AdminSidebarContent({ role, name, email, navPreset, navOverrides, onNavOverridesChange }: Props) {
   const pathname = usePathname()
+  const requestContext = new URLSearchParams({ screen: cleanRequestScreen(pathname) ?? "/admin" })
+  const quickRequest = canSubmitAdminRequest(role) && pathname !== ADMIN_REQUESTS_HREF ? (
+    <Link
+      href={ADMIN_REQUESTS_HREF + "?" + requestContext}
+      prefetch={false}
+      aria-label="요청·오류 신고"
+      title="요청·오류 신고"
+      className="inline-flex size-11 shrink-0 items-center justify-center rounded-lg text-fg-accent hover:bg-surface-sunken focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg-accent lg:size-8"
+    >
+      <MessageSquarePlus className="size-4" aria-hidden="true" />
+    </Link>
+  ) : null
   const searchParams = useSearchParams()
   const router = useRouter()
   const navCounts = useAdminNavCounts()
@@ -1056,6 +1070,7 @@ function AdminSidebarContent({ role, name, email, navPreset, navOverrides, onNav
           {currentCrmRouteLabel ?? currentNavItem?.label ?? "Admin"}
         </p>
       </div>
+      {quickRequest}
       {isDesktop === false ? <AdminNotificationsBell placement="inline" /> : null}
     </header>
 
@@ -1242,6 +1257,7 @@ function AdminSidebarContent({ role, name, email, navPreset, navOverrides, onNav
             <p className="text-[15px] font-semibold text-[#111110]">Admin</p>
           </div>
         )}
+        {quickRequest}
         {isDesktop === true ? <AdminNotificationsBell placement="inline" /> : null}
         <button
           onClick={toggle}

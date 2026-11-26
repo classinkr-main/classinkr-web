@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
   list: vi.fn(),
+  queueCounts: vi.fn(),
   detail: vi.fn(),
   capture: vi.fn(),
   insert: vi.fn(),
@@ -19,6 +20,7 @@ vi.mock("@/lib/admin-auth", () => ({
 }))
 vi.mock("@/lib/repositories/admin-requests", () => ({
   listAdminRequests: mocks.list,
+  countAdminRequestQueues: mocks.queueCounts,
   findAdminRequest: mocks.detail,
   findRequestCapture: mocks.capture,
   insertAdminRequest: mocks.insert,
@@ -37,12 +39,13 @@ beforeEach(() => {
   vi.resetAllMocks()
   mocks.auth.mockResolvedValue({ role: "EDITOR", userId: OWNER, name: "팀원" })
   mocks.list.mockResolvedValue({ requests: [], hasMore: false })
+  mocks.queueCounts.mockResolvedValue({ review: 0 })
 })
 
 describe("homepage admin requests", () => {
   it("limits an editor's requests and screenshot lookups to their verified ID", async () => {
     await GET(new NextRequest(URL))
-    expect(mocks.list).toHaveBeenCalledWith(OWNER, 0, null)
+    expect(mocks.list).toHaveBeenCalledWith(OWNER, 0, null, null)
 
     const manage = await GET(new NextRequest(URL + "?view=manage"))
     expect(manage.status).toBe(403)
@@ -64,7 +67,33 @@ describe("homepage admin requests", () => {
     const response = await GET(new NextRequest(URL + "?view=manage&status=open"))
     expect(response.headers.get("cache-control")).toBe("private, no-store")
     expect(await response.json()).toMatchObject({ canManage: true, bugs: [{ id: "BUG-1" }] })
-    expect(mocks.list).toHaveBeenCalledWith(null, 0, "open")
+    expect(mocks.list).toHaveBeenCalledWith(null, 0, "open", null)
+  })
+
+  it("scopes queue counts and filters to the role and applies filtering before pagination", async () => {
+    mocks.queueCounts.mockResolvedValueOnce({ review: 2 })
+    const mine = await GET(new NextRequest(URL + "?queue=review&page=1"))
+    expect(await mine.json()).toMatchObject({ queueCounts: { review: 2 }, bugs: null })
+    expect(mocks.list).toHaveBeenCalledWith(OWNER, 1, null, "review")
+    expect(mocks.queueCounts).toHaveBeenCalledWith(OWNER)
+    expect((await GET(new NextRequest(URL + "?queue=unacknowledged"))).status).toBe(400)
+    expect((await GET(new NextRequest(URL + "?queue=review&status=resolved"))).status).toBe(400)
+
+    mocks.auth.mockResolvedValue({ role: "ADMIN", userId: OWNER })
+    mocks.queueCounts.mockResolvedValueOnce({ unacknowledged: 3, reopened: 1 })
+    const manage = await GET(new NextRequest(URL + "?view=manage&queue=unacknowledged"))
+    expect(await manage.json()).toMatchObject({ queueCounts: { unacknowledged: 3, reopened: 1 }, bugs: null })
+    expect(mocks.list).toHaveBeenCalledWith(null, 0, null, "unacknowledged")
+    expect(mocks.queueCounts).toHaveBeenCalledWith(null)
+    expect(mocks.bugs).not.toHaveBeenCalled()
+    expect((await GET(new NextRequest(URL + "?view=manage&queue=review"))).status).toBe(400)
+  })
+
+  it("serves the request list when queue counts are temporarily unavailable", async () => {
+    mocks.queueCounts.mockRejectedValueOnce(new Error("timeout"))
+    const response = await GET(new NextRequest(URL))
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({ requests: [], queueCounts: null })
   })
 
   it("registers a screenshot and log with validated context and the verified reporter", async () => {

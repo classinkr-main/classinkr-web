@@ -1,14 +1,17 @@
 "use client"
 
+import Image from "next/image"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { useEffect, useRef, useState, type FormEvent } from "react"
 
 import { adminFetchJson } from "@/lib/admin-client"
 import {
-  ADMIN_REQUESTS_API, REQUEST_CAPTURE_BYTES, REQUEST_CAPTURE_TYPES, REQUEST_KINDS, REQUEST_STATUSES,
-  type AdminRequest, type AdminRequestsPage, type RequestStatus,
+  ADMIN_REQUESTS_API, ADMIN_REQUEST_QUEUES, REQUEST_CAPTURE_BYTES, REQUEST_CAPTURE_TYPES, REQUEST_KINDS, REQUEST_STATUSES,
+  type AdminRequest, type AdminRequestQueue, type AdminRequestsPage, type RequestStatus,
 } from "@/lib/admin/requests"
 import { Button } from "@/components/ui/button"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from "@/components/ui/dialog"
 import { RequestThread } from "./RequestThread"
 import { RequestWriteRejection, sendRequestWrite } from "./request-write"
 
@@ -25,13 +28,49 @@ function messageFor(error: unknown) {
 }
 
 function RequestForm({ context, onSubmit }: { context: RequestContext; onSubmit: (request: AdminRequest) => void }) {
-  const [capture, setCapture] = useState<File | null>(null)
+  const router = useRouter()
+  const [leaveHref, setLeaveHref] = useState<string | null>(null)
+  const formElement = useRef<HTMLFormElement>(null)
+  const [capture, setCapture] = useState<{ file: File; url: string } | null>(null)
+  const [hasDraftText, setHasDraftText] = useState(false)
   const [pending, setPending] = useState(false)
   const [error, setError] = useState("")
   const [captureError, setCaptureError] = useState("")
   const upload = useRef<HTMLInputElement>(null)
   const working = useRef(false)
   const [retry, setRetry] = useState<{ id: string; form: FormData } | null>(null)
+  const hasDraft = hasDraftText || capture !== null
+  const captureUrl = capture?.url
+
+  useEffect(() => {
+    if (captureUrl) return () => URL.revokeObjectURL(captureUrl)
+  }, [captureUrl])
+
+  useEffect(() => {
+    if (!hasDraft) return
+
+    const beforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault()
+      event.returnValue = ""
+    }
+    const confirmLink = (event: MouseEvent) => {
+      if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+      const anchor = event.target instanceof Element ? event.target.closest<HTMLAnchorElement>("a[href]") : null
+      if (!anchor || (anchor.target && anchor.target !== "_self") || anchor.hasAttribute("download")) return
+      const next = new URL(anchor.href, window.location.href)
+      if (next.origin !== window.location.origin) return
+      if (next.pathname === window.location.pathname && next.search === window.location.search) return
+      event.preventDefault()
+      event.stopPropagation()
+      setLeaveHref(next.pathname + next.search + next.hash)
+    }
+    window.addEventListener("beforeunload", beforeUnload)
+    document.addEventListener("click", confirmLink, true)
+    return () => {
+      window.removeEventListener("beforeunload", beforeUnload)
+      document.removeEventListener("click", confirmLink, true)
+    }
+  }, [hasDraft])
 
   function chooseCapture(file: File | null) {
     if (file && (!REQUEST_CAPTURE_TYPES.some((type) => type === file.type) || file.size === 0 || file.size > REQUEST_CAPTURE_BYTES)) {
@@ -41,7 +80,7 @@ function RequestForm({ context, onSubmit }: { context: RequestContext; onSubmit:
       return
     }
     setCaptureError("")
-    setCapture(file)
+    setCapture(file ? { file, url: URL.createObjectURL(file) } : null)
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -53,7 +92,7 @@ function RequestForm({ context, onSubmit }: { context: RequestContext; onSubmit:
       const form = new FormData(event.currentTarget)
       const id = crypto.randomUUID()
       form.set("submissionId", id)
-      if (capture) form.set("capture", capture)
+      if (capture) form.set("capture", capture.file)
       if (context.screen) form.set("screen", context.screen)
       if (context.testVersion) form.set("testVersion", context.testVersion)
       if (context.errorCode) form.set("errorCode", context.errorCode)
@@ -81,10 +120,29 @@ function RequestForm({ context, onSubmit }: { context: RequestContext; onSubmit:
     }
   }
 
+  function discardAndLeave() {
+    if (!leaveHref) return
+
+    formElement.current?.reset()
+    chooseCapture(null)
+    setHasDraftText(false)
+    setRetry(null)
+    setError("")
+    setLeaveHref(null)
+    router.push(leaveHref)
+  }
+
   return (
     <form
+      ref={formElement}
       className={PANEL + " grid max-w-3xl gap-4"}
       onSubmit={submit}
+      onChange={(event) => {
+        const form = new FormData(event.currentTarget)
+        setHasDraftText(form.get("kind") !== "bug" || ["title", "description", "logs"].some(
+          (name) => String(form.get(name) ?? "").trim() !== "",
+        ))
+      }}
       onPaste={(event) => {
         if (pending || retry) return
         const file = Array.from(event.clipboardData.files).find((item) => item.type.startsWith("image/"))
@@ -137,9 +195,19 @@ function RequestForm({ context, onSubmit }: { context: RequestContext; onSubmit:
             />
           </label>
           <p id="request-capture-help" className="text-sm text-fg-muted">이미지를 선택하거나 이 양식에 붙여넣으세요. PNG, JPG, WebP 1장 · 최대 2MB. 담당자 확인 7일 후 삭제됩니다.</p>
+          {capture && (
+            <Image
+              src={capture.url}
+              alt="첨부할 캡처 미리보기"
+              width={480}
+              height={320}
+              unoptimized
+              className="h-auto max-h-64 w-auto max-w-full rounded-lg border border-line-hair object-contain"
+            />
+          )}
           {(capture || captureError) && (
             <div className="flex flex-wrap items-center gap-2 text-sm" role="status">
-              {capture && <span className="break-all">{capture.name} 첨부됨</span>}
+              {capture && <span className="break-all">{capture.file.name} 첨부됨</span>}
               <Button type="button" variant="outline" onClick={() => {
                 chooseCapture(null)
                 if (upload.current) upload.current.value = ""
@@ -149,19 +217,31 @@ function RequestForm({ context, onSubmit }: { context: RequestContext; onSubmit:
           )}
         </div>
       </fieldset>
+      {hasDraft && <p className="text-sm text-fg-muted">등록 전에 페이지를 벗어나면 작성한 내용이 지워집니다.</p>}
       {(error || captureError) && <p role="alert" className="text-sm text-fg-danger">{error || captureError}</p>}
       <Button className="w-fit" type="submit" disabled={pending || !!captureError}>
         {pending ? "접수 중…" : retry ? "접수 다시 확인" : "요청 등록"}
       </Button>
+      <Dialog open={leaveHref !== null} onOpenChange={(open) => { if (!open) setLeaveHref(null) }}>
+        <DialogContent className="z-[70]">
+          <DialogTitle>작성 중인 요청이 있습니다</DialogTitle>
+          <DialogDescription>페이지를 이동하면 작성한 내용과 첨부가 지워집니다.</DialogDescription>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={discardAndLeave}>이동하기</Button>
+            <Button type="button" autoFocus onClick={() => setLeaveHref(null)}>계속 작성</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </form>
   )
 }
 
 function RequestList({
-  data, manage, generation, openId, onOpen, onSaved, onRefresh,
+  data, manage, queue, generation, openId, onOpen, onSaved, onRefresh,
 }: {
   data: AdminRequestsPage
   manage: boolean
+  queue: AdminRequestQueue | null
   generation: number
   openId: string | null
   onOpen: (id: string | null) => void
@@ -175,7 +255,7 @@ function RequestList({
 
   return (
     <div className="grid gap-3">
-      {manage && data.bugs === null && (
+      {manage && !queue && data.bugs === null && (
         <p className="text-sm text-fg-muted">기존 버그 리포트는 <Link href="/admin/dev?tab=bugs" className="text-fg-accent underline">개발 도구</Link>에서도 확인할 수 있습니다.</p>
       )}
       {entries.length === 0 && <p className={PANEL + " text-sm text-fg-muted"}>이 조건에 맞는 요청이 없습니다.</p>}
@@ -239,8 +319,9 @@ export function RequestsWorkspace({ testSite, ...context }: RequestContext & { t
   const [formOpened, setFormOpened] = useState(view === "new")
   const [formKey, setFormKey] = useState(0)
   const [statusFilter, setStatusFilter] = useState<"all" | RequestStatus>("all")
+  const [queue, setQueue] = useState<AdminRequestQueue | null>(null)
   const listView = view === "manage" ? "manage" : "mine"
-  const listKey = listView + ":" + page + ":" + statusFilter + ":"
+  const listKey = listView + ":" + page + ":" + statusFilter + ":" + (queue ?? "") + ":"
   const resultKey = listKey + generation
   const result = loaded?.key === resultKey ? loaded : undefined
 
@@ -248,6 +329,7 @@ export function RequestsWorkspace({ testSite, ...context }: RequestContext & { t
     const controller = new AbortController()
     const query = new URLSearchParams({ view: listView, page: String(page) })
     if (statusFilter !== "all") query.set("status", statusFilter)
+    if (queue) query.set("queue", queue)
     void adminFetchJson<AdminRequestsPage>(API + "?" + query, { signal: controller.signal })
       .then((data) => {
         if (controller.signal.aborted) return
@@ -277,7 +359,7 @@ export function RequestsWorkspace({ testSite, ...context }: RequestContext & { t
         }))
       })
     return () => controller.abort()
-  }, [listView, page, listKey, resultKey, statusFilter])
+  }, [listView, page, listKey, resultKey, statusFilter, queue])
 
   const changeView = (next: View) => {
     setPage(0)
@@ -285,6 +367,7 @@ export function RequestsWorkspace({ testSite, ...context }: RequestContext & { t
     setView(next)
     setNotice("")
     setStatusFilter("all")
+    setQueue(null)
     setOpenId(null)
   }
   const views: { id: View; label: string }[] = [
@@ -293,6 +376,15 @@ export function RequestsWorkspace({ testSite, ...context }: RequestContext & { t
     { id: "new", label: "새 요청" },
   ]
   const data = result?.data ?? (loaded?.key.startsWith(listKey) ? loaded.data : null)
+  const counts = loaded?.key.startsWith(listView + ":") ? loaded.data?.queueCounts : null
+  const queues: AdminRequestQueue[] = view === "manage" ? ["unacknowledged", "reopened"] : ["review"]
+
+  function changeQueue(next: AdminRequestQueue) {
+    setPage(0)
+    setOpenId(null)
+    setStatusFilter("all")
+    setQueue((current) => current === next ? null : next)
+  }
 
   return (
     <div className="mx-auto grid max-w-5xl gap-5 px-4 py-6 sm:px-6">
@@ -321,12 +413,27 @@ export function RequestsWorkspace({ testSite, ...context }: RequestContext & { t
       )}
       {view !== "new" && (
         <>
+          <div className="flex flex-wrap items-center gap-2" role="group" aria-label={view === "manage" ? "담당자 처리할 요청" : "내 차례"}>
+            {queues.map((item) => (
+              <Button
+                key={item}
+                type="button"
+                variant={queue === item ? "default" : "outline"}
+                aria-pressed={queue === item}
+                onClick={() => changeQueue(item)}
+              >
+                {ADMIN_REQUEST_QUEUES[item]}
+                {typeof counts?.[item] === "number" && <span className="tabular-nums">{counts[item]}건</span>}
+              </Button>
+            ))}
+          </div>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <label className="flex items-center gap-2 text-sm">
               상태
               <select className={FIELD + " w-auto"} value={statusFilter} onChange={(event) => {
                 setPage(0)
                 setOpenId(null)
+                setQueue(null)
                 setStatusFilter(event.target.value as typeof statusFilter)
               }}>
                 <option value="all">전체</option>
@@ -344,15 +451,14 @@ export function RequestsWorkspace({ testSite, ...context }: RequestContext & { t
                 requests: data.requests.filter((request) => request.status === statusFilter),
               }}
               manage={view === "manage"}
+              queue={queue}
               generation={generation}
               openId={openId}
               onOpen={setOpenId}
               onRefresh={() => setGeneration((value) => value + 1)}
               onSaved={(updated, message) => {
                 setNotice(message)
-                if (statusFilter !== "all" && updated.status !== statusFilter) {
-                  setGeneration((value) => value + 1)
-                }
+                setGeneration((value) => value + 1)
                 setLoaded((previous) => previous?.data && previous.key.startsWith(listKey) ? {
                   ...previous,
                   data: {

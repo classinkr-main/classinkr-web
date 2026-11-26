@@ -2,8 +2,8 @@ import { randomUUID } from "node:crypto"
 import { NextRequest, NextResponse } from "next/server"
 
 import { STAFF_ADMIN_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
-import { ADMIN_REQUEST_ROLES, cleanRequestErrorCode, cleanRequestScreen, cleanTestVersion, isRequestKind, isRequestReview, isRequestStatus, REQUEST_CAPTURE_BYTES, REQUEST_CAPTURE_TYPES } from "@/lib/admin/requests"
-import { findAdminRequest, findRequestCapture, insertAdminRequest, listAdminRequests, reviewAdminRequest, updateAdminRequest } from "@/lib/repositories/admin-requests"
+import { ADMIN_REQUEST_ROLES, cleanRequestErrorCode, cleanRequestScreen, cleanTestVersion, isAdminRequestQueue, isRequestKind, isRequestReview, isRequestStatus, REQUEST_CAPTURE_BYTES, REQUEST_CAPTURE_TYPES } from "@/lib/admin/requests"
+import { countAdminRequestQueues, findAdminRequest, findRequestCapture, insertAdminRequest, listAdminRequests, reviewAdminRequest, updateAdminRequest } from "@/lib/repositories/admin-requests"
 import { getBugReports } from "@/lib/repositories/bugs"
 import { validateImageFile } from "@/lib/server/image-validation"
 
@@ -65,11 +65,17 @@ export async function GET(req: NextRequest) {
     if (!Number.isInteger(page) || page < 0 || page > 1000) return error("페이지 번호를 확인해 주세요.", 400)
     const filter = params.get("status")
     if (filter !== null && !isRequestStatus(filter)) return error("요청 상태를 확인해 주세요.", 400)
-    const [result, bugs] = await Promise.all([
-      listAdminRequests(manage ? null : ownerId, page, filter),
-      manage && page === 0 ? getBugReports(AbortSignal.timeout(2500)).catch(() => null) : null,
+    const queue = params.get("queue")
+    if (queue !== null && (!isAdminRequestQueue(queue) || (manage ? queue === "review" : queue !== "review") || filter !== null)) {
+      return error("이 목록에서 사용할 수 있는 처리 필터를 선택해 주세요.", 400)
+    }
+    const scope = manage ? null : ownerId
+    const [result, bugs, queueCounts] = await Promise.all([
+      listAdminRequests(scope, page, filter, queue),
+      manage && !queue && page === 0 ? getBugReports(AbortSignal.timeout(2500)).catch(() => null) : null,
+      countAdminRequestQueues(scope).catch(() => null),
     ])
-    return json({ ...result, canManage, bugs: bugs && filter ? bugs.filter((bug) => bug.status === filter) : bugs })
+    return json({ ...result, canManage, queueCounts, bugs: bugs && filter ? bugs.filter((bug) => bug.status === filter) : bugs })
   } catch (cause) {
     return reportFailure(cause)
   }

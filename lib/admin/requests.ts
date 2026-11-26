@@ -31,6 +31,18 @@ export type RequestKind = keyof typeof REQUEST_KINDS
 export type RequestStatus = keyof typeof REQUEST_STATUSES
 export type RequestReview = "confirmed" | "reopened"
 
+export const ADMIN_REQUEST_QUEUES = {
+  unacknowledged: "미확인",
+  reopened: "재확인 요청",
+  review: "해결 확인 필요",
+} as const
+
+export type AdminRequestQueue = keyof typeof ADMIN_REQUEST_QUEUES
+
+export function isAdminRequestQueue(value: string): value is AdminRequestQueue {
+  return Object.hasOwn(ADMIN_REQUEST_QUEUES, value)
+}
+
 export interface AdminRequestSummary {
   id: string
   kind: RequestKind
@@ -62,6 +74,7 @@ export interface AdminRequestsPage {
   requests: AdminRequestSummary[]
   bugs: BugReport[] | null
   hasMore: boolean
+  queueCounts: Partial<Record<AdminRequestQueue, number>> | null
 }
 
 export function isRequestReview(value: unknown): value is RequestReview {
