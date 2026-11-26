@@ -67,3 +67,13 @@ describe("1분 tick visibility 인식(useVisibleInterval 공용 훅)", () => {
     expect(onVisible).toContain("start()")
   })
 })
+
+describe("장부 검색 입력은 지연 값으로 필터링한다", () => {
+  it("revBaseFilteredRows는 query가 아니라 useDeferredValue(query)를 읽는다", () => {
+    const source = read(workbenchPath)
+    expect(source).toContain("const deferredQuery = useDeferredValue(query)")
+    expect(source).toContain("const tokens = tokenize(deferredQuery)")
+    expect(source).not.toContain("tokenize(query)")
+    expect(source).toMatch(/\[managerFilter, productFilter, deferredQuery, regionFilter/)
+  })
+})
