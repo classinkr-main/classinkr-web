@@ -78,12 +78,14 @@
     "data/chatbot-fresh-open-set.json": "43b6a81ff871c62a",
     "data/chatbot-golden-set.json": "e189390b124f5183",
     "data/chatbot-persona-eval-set.json": "d34d3ee4d751f7ed",
+    "lib/chatbot/answer-index/doc-units.ts": "253caea59ea8633d",
+    "lib/chatbot/answer-index/sentences.ts": "176f1c8f87fd2d99",
     "lib/chatbot/doc-outline.ts": "c9c194daba7b15fb",
     "lib/chatbot/quick-answers-basics.ts": "147f6fd96d96c2ce",
     "lib/chatbot/quick-answers-field.ts": "683e2a13a83ea93f",
     "lib/chatbot/self-knowledge.ts": "4f1ee990ebd1c5d2",
     "lib/chatbot/service.ts": "a16f3065b656a474",
-    "lib/chatbot/source-grounding.ts": "c785c0c515fade9c",
+    "lib/chatbot/source-grounding.ts": "df853483aa6bd647",
     "lib/chatbot/symptom-topics-field.ts": "2d9ae8dda5294096",
     "lib/chatbot/symptom-triage.ts": "2c33c3e918cf5d9f",
     "lib/cs-figma-enrichments.generated.ts": "34532e43bdaecfee",
@@ -113,11 +115,11 @@
     "lib/introduction/content.ts": "9df4b51bce23a8f3",
     "scripts/answer-index/lib/areas.ts": "97f79812d8a2784c",
     "scripts/answer-index/lib/inventory.ts": "04b50635f9f306b7",
-    "scripts/answer-index/lib/sentences.ts": "d43caabbd0c848cc",
+    "scripts/answer-index/lib/sentences.ts": "0f479ccda597d354",
     "scripts/answer-index/lib/site-facts.ts": "cf6aadc2a64fd5a3",
     "scripts/answer-index/lib/text-rules.ts": "0a9e5da9e29ddc00",
     "scripts/answer-index/lib/ts-extract.ts": "9c2be4e06e2b2ccf",
-    "scripts/answer-index/lib/units.ts": "ef9883049e199852"
+    "scripts/answer-index/lib/units.ts": "d9f9d82c08b38c61"
   },
   "outputs": {
     "absent.json": {
