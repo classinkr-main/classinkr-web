@@ -5,6 +5,12 @@ import type { TeamScope } from "@/lib/branch/insights/input-builder"
 import { getRecentSyncRuns } from "@/lib/repositories/branch-sync"
 import { CURRENT_BRANCH_TEAMS } from "@/lib/branch/current-organization"
 
+export const maxDuration = 300
+
+// 팀 하나의 최악 시간(Claude 120s + Gemini 60s) 이하로 남으면 새 팀을 시작하지 않는다.
+const WORST_CASE_TEAM_MS = 180_000
+const TIME_BUDGET_MS = maxDuration * 1000
+
 const TEAMS: TeamScope[] = ["ALL", ...CURRENT_BRANCH_TEAMS]
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000
@@ -45,7 +51,13 @@ export async function GET(req: NextRequest) {
   }
 
   const results: Record<string, unknown> = {}
+  const startedAt = Date.now()
   for (const t of TEAMS) {
+    if (TIME_BUDGET_MS - (Date.now() - startedAt) < WORST_CASE_TEAM_MS) {
+      console.warn(`[cron/sync-branch-insights] ${t} skipped — time budget exhausted`)
+      results[t] = { from: "skipped", error: "time-budget" }
+      continue
+    }
     const r = await runInsights(t, true)
     results[t] = { from: r.from, error: r.error }
   }
