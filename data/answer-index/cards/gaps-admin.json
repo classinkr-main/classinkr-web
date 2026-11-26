@@ -1779,5 +1779,177 @@
         "checked": "관련 문장 없음 확인"
       }
     ]
+  },
+  {
+    "id": "gap:admin/proxy-register-check",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "admin",
+    "topic": "학생 추가 때 대리 등록 체크 여부 확인",
+    "textHash": "",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "support",
+      "related": [
+        {
+          "unit": "doc:/docs/admin/student-onboarding#4",
+          "i": 5,
+          "hash": "6cc773e01f1acd30"
+        }
+      ]
+    },
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_academy_created_account",
+      "C_course_member"
+    ],
+    "anchors": [
+      "대리 등록 확인",
+      "대리 등록 체크",
+      "대리 등록했는지",
+      "대리 등록 여부",
+      "체크했는지 확인",
+      "가입 학생 구분"
+    ],
+    "covers": "학생을 추가한 뒤 그 학생이 대리 등록으로 만들어졌는지, 추가할 때 대리 등록을 체크했는지를 나중에 확인하는 방법은 공개 안내에 없다는 것",
+    "notCovers": [
+      "[학생 대리 등록] 옵션이 안 보일 때 → doc:/docs/admin/student-onboarding#4/proxy-option-missing",
+      "대리 등록으로 학생 대신 만드는 순서 → doc:/docs/admin/student-onboarding#4/proxy-register-how",
+      "임시 비밀번호 문자가 안 갈 때 → doc:/docs/admin/student-onboarding#5/sms-not-received"
+    ],
+    "negatives": [
+      {
+        "q": "대리 등록 옵션이 화면에 안 보여요",
+        "route": "doc:/docs/admin/student-onboarding#4/proxy-option-missing"
+      },
+      {
+        "q": "가입 안 한 학생을 대신 만드는 순서가 궁금해요",
+        "route": "doc:/docs/admin/student-onboarding#4/proxy-register-how"
+      },
+      {
+        "q": "대리 등록한 학생에게 임시 비밀번호 문자가 안 와요",
+        "route": "doc:/docs/admin/student-onboarding#5/sms-not-received"
+      }
+    ],
+    "handoff": "support",
+    "status": "active",
+    "provenance": {
+      "unit": "R2-B6",
+      "writer": "agent:fable#B6",
+      "at": "2026-11-25",
+      "legacyIds": []
+    },
+    "searchLog": [
+      {
+        "query": "대리 등록 여부",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "대리 등록했는지",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "체크 확인",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "가입 학생 구분",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ]
+  },
+  {
+    "id": "gap:admin/monitoring-contact-sms",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "admin",
+    "topic": "모니터링 화면 [연락] 기능의 발송 방식과 비용",
+    "textHash": "",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "support",
+      "related": []
+    },
+    "asks": [
+      "definition",
+      "yesno",
+      "quantity"
+    ],
+    "concepts": [
+      "C_monitoring_contact"
+    ],
+    "anchors": [
+      "모니터링 연락",
+      "연락 버튼",
+      "문자 발송",
+      "연락 기능 비용",
+      "건당 요금",
+      "교사에게 연락"
+    ],
+    "covers": "수업 모니터링 화면의 [연락] 기능이 문자로 나가는지, 건당 비용이 있는지는 공개 안내에 없다는 것",
+    "notCovers": [
+      "모니터링 기록을 쓸 때 지킬 것 → doc:/docs/admin/class-monitoring#5/usage-rules",
+      "교사 미입장·수업 이상 자동 알림 → gap:admin/monitoring-alert",
+      "통계가 말해 주는 범위 → doc:/docs/admin/statistics-data#7/stats-limits-participation"
+    ],
+    "negatives": [
+      {
+        "q": "모니터링 기록은 어떤 용도로만 써야 해요",
+        "route": "doc:/docs/admin/class-monitoring#5/usage-rules"
+      },
+      {
+        "q": "교사가 안 들어오면 자동으로 알려 주나요",
+        "route": "gap:admin/monitoring-alert"
+      },
+      {
+        "q": "출석 인원이 학습 성과를 뜻하나요",
+        "route": "doc:/docs/admin/statistics-data#7/stats-limits-participation"
+      }
+    ],
+    "handoff": "support",
+    "status": "active",
+    "provenance": {
+      "unit": "R2-B6",
+      "writer": "agent:fable#B6",
+      "at": "2026-11-25",
+      "legacyIds": []
+    },
+    "searchLog": [
+      {
+        "query": "연락 기능",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "연락 버튼",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "건당",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "문자 발송",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ]
   }
 ]

@@ -614,7 +614,7 @@
     "area": "company",
     "topic": "오프라인(현장) 출석 체크 기능 여부와 현장 출결 처리",
     "answer": {
-      "lead": "none",
+      "lead": "not_supported",
       "sentences": [
         {
           "unit": "doc:/docs/start/pre-adoption-faq-22-questions#6",
@@ -627,7 +627,12 @@
             "883b289997218c59"
           ]
         }
-      ]
+      ],
+      "leadBasis": {
+        "unit": "doc:/docs/start/pre-adoption-faq-22-questions#6",
+        "i": 12,
+        "hash": "ef8ce92e2d4d948a"
+      }
     },
     "sources": [
       {
@@ -1363,7 +1368,17 @@
             "398c7def23bf6008"
           ]
         }
-      ]
+      ],
+      "headline": {
+        "text": "수업 전에는 강사가 EDB 교안이나 PDF를 드라이브에 올려요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/start/academy-system-os-positioning#0",
+            "i": 2,
+            "hash": "430274ac040b553e"
+          }
+        ]
+      }
     },
     "sources": [
       {
@@ -1760,7 +1775,12 @@
             "dc322d8c89da5f2c"
           ]
         }
-      ]
+      ],
+      "first": {
+        "unit": "doc:/docs/start/academy-system-os-positioning#2",
+        "i": 1,
+        "hash": "e013ad837cb2abef"
+      }
     },
     "sources": [
       {
@@ -2271,7 +2291,17 @@
             "01a93e2424db0fa0"
           ]
         }
-      ]
+      ],
+      "headline": {
+        "text": "끝난 수업은 저장된 수업 화면과 입장·퇴장 기록으로 확인해요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/start/academy-system-os-positioning#4",
+            "i": 3,
+            "hash": "c7067603012c29d1"
+          }
+        ]
+      }
     },
     "sources": [
       {
@@ -2487,7 +2517,17 @@
             "96cfe0488a0f63ac"
           ]
         }
-      ]
+      ],
+      "headline": {
+        "text": "수강료 결제와 정산은 지금 쓰는 결제·관리 프로그램과 역할을 나눠요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/start/academy-system-os-positioning#5",
+            "i": 1,
+            "hash": "209db20cc60b76c0"
+          }
+        ]
+      }
     },
     "sources": [
       {
@@ -2592,7 +2632,17 @@
             "2a380d9dd7158a62"
           ]
         }
-      ]
+      ],
+      "headline": {
+        "text": "자체 CRM 연계는 공식 API, 데이터 구독 범위로 따로 검토해요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/start/academy-system-os-positioning#5",
+            "i": 3,
+            "hash": "c857bfe85a7cac65"
+          }
+        ]
+      }
     },
     "sources": [
       {
@@ -5247,7 +5297,17 @@
             "374a3c06a65a1894"
           ]
         }
-      ]
+      ],
+      "headline": {
+        "text": "클래스인은 학생 단위로 수업·판서·녹화·과제 기록을 이어 둬요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/start/why-classin-needs#3",
+            "i": 2,
+            "hash": "374a3c06a65a1894"
+          }
+        ]
+      }
     },
     "sources": [
       {
@@ -5887,7 +5947,12 @@
             "bcf38647affb37d6"
           ]
         }
-      ]
+      ],
+      "first": {
+        "unit": "doc:/docs/start/why-classin-needs#9",
+        "i": 1,
+        "hash": "9a491beea3737b9d"
+      }
     },
     "sources": [
       {
@@ -6737,7 +6802,17 @@
             "bd32a0ff82c7d649"
           ]
         }
-      ]
+      ],
+      "headline": {
+        "text": "가장 흔한 기본 도입은 판서, 녹화, 다시보기 복습, LMS 숙제·시험이에요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/start/adoption-journey-90days#4",
+            "i": 0,
+            "hash": "f4cd3bccda4783df"
+          }
+        ]
+      }
     },
     "sources": [
       {
@@ -7171,7 +7246,17 @@
             "f439d69838a907d8"
           ]
         }
-      ]
+      ],
+      "headline": {
+        "text": "정착 단계에서는 반별 수업이 판서·녹화·복습·LMS 흐름으로 맞춰져요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/start/adoption-journey-90days#6",
+            "i": 5,
+            "hash": "a7e67ec7c43e2ec2"
+          }
+        ]
+      }
     },
     "sources": [
       {
@@ -8336,7 +8421,17 @@
             "3833d8454c90bb62"
           ]
         }
-      ]
+      ],
+      "headline": {
+        "text": "한국 학원은 보통 판서, 자동 녹화, 다시보기, LMS 순서로 써요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/start/company-overview#3",
+            "i": 1,
+            "hash": "0e690d7f449ee93d"
+          }
+        ]
+      }
     },
     "sources": [
       {
@@ -8511,7 +8606,7 @@
     "category": "classroom",
     "intent": "docs_lookup",
     "suggestedQuestions": [],
-    "status": "active",
+    "status": "review",
     "provenance": {
       "unit": "D1-19",
       "writer": "agent:opus#D1",
@@ -8747,7 +8842,17 @@
             "071fa90cc4ca5322"
           ]
         }
-      ]
+      ],
+      "headline": {
+        "text": "한국에서는 학원 원장, 관리자, 운영 책임자와 도입을 준비해요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/start/company-overview#4",
+            "i": 1,
+            "hash": "071fa90cc4ca5322"
+          }
+        ]
+      }
     },
     "sources": [
       {
@@ -10070,7 +10175,17 @@
             "55263b6996995056"
           ]
         }
-      ]
+      ],
+      "headline": {
+        "text": "AI 칠판은 기본으로 꺼져 있어 담당 매니저에게 활성화를 요청해야 해요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/software/app-capabilities-map#3",
+            "i": 9,
+            "hash": "55263b6996995056"
+          }
+        ]
+      }
     },
     "sources": [
       {
@@ -11171,7 +11286,12 @@
             "3f63a37996983a59"
           ]
         }
-      ]
+      ],
+      "first": {
+        "unit": "doc:/docs/software/classin-ai-feature-guide#0",
+        "i": 5,
+        "hash": "3f63a37996983a59"
+      }
     },
     "sources": [
       {
@@ -11871,7 +11991,17 @@
             "31e6d9bfa9eb643e"
           ]
         }
-      ]
+      ],
+      "headline": {
+        "text": "수업 전·중·후 과정이 한 앱 안에서 이어져요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/software/software-overview#0",
+            "i": 1,
+            "hash": "e78f24f01e0b6cd4"
+          }
+        ]
+      }
     },
     "sources": [
       {
@@ -12719,7 +12849,17 @@
             "443b12bb6d60be06"
           ]
         }
-      ]
+      ],
+      "headline": {
+        "text": "LMS 쪽에는 코스, 단원, 출결, 과제, 성적, 보고서, 드라이브가 있어요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/software/software-overview#2",
+            "i": 6,
+            "hash": "2612eb3e168629f8"
+          }
+        ]
+      }
     },
     "sources": [
       {
@@ -13035,7 +13175,17 @@
             "499788031b4a8f72"
           ]
         }
-      ]
+      ],
+      "headline": {
+        "text": "강사는 프로필, 드라이브, 코스와 수업 만들기 순서로 익혀요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/software/software-overview#3",
+            "i": 4,
+            "hash": "cf192936a76789a3"
+          }
+        ]
+      }
     },
     "sources": [
       {

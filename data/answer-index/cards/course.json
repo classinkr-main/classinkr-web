@@ -1915,7 +1915,17 @@
             "3f11938856be7840"
           ]
         }
-      ]
+      ],
+      "headline": {
+        "text": "[대량 작업] > [수업 교사 설정하기]로 수업 교사를 한꺼번에 바꿔요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/admin/course-management#1",
+            "i": 7,
+            "hash": "2471ef41f1c4d3b5"
+          }
+        ]
+      }
     },
     "sources": [
       {
@@ -2228,7 +2238,17 @@
             "24f7383e9e50594a"
           ]
         }
-      ]
+      ],
+      "headline": {
+        "text": "수업 이름, 교사, 상태, 시작일로 수업을 검색해요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/admin/course-management#2",
+            "i": 1,
+            "hash": "4688d70f0297e8a0"
+          }
+        ]
+      }
     },
     "sources": [
       {
@@ -2982,7 +3002,17 @@
             "c0f4eebb7ed5c0ad"
           ]
         }
-      ]
+      ],
+      "headline": {
+        "text": "종료 뒤에도 보게 하려면 [다시 보기 유효 기간]을 먼저 확인해요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/admin/course-management#4",
+            "i": 6,
+            "hash": "9f8d4b0eab9eea97"
+          }
+        ]
+      }
     },
     "sources": [
       {
@@ -3164,7 +3194,7 @@
     "area": "course",
     "topic": "끝난 수업이 앱 목록에서 안 지워질 때('휴지통' 단원으로 옮겨 정리)",
     "answer": {
-      "lead": "none",
+      "lead": "not_supported",
       "sentences": [
         {
           "unit": "doc:/docs/admin/course-management#5",
@@ -3181,7 +3211,12 @@
             "523f0511faee147b"
           ]
         }
-      ]
+      ],
+      "leadBasis": {
+        "unit": "doc:/docs/admin/course-management#5",
+        "i": 0,
+        "hash": "3a0d5598788daa40"
+      }
     },
     "sources": [
       {
@@ -4519,7 +4554,17 @@
             "fe881db13334e8eb"
           ]
         }
-      ]
+      ],
+      "headline": {
+        "text": "쓰지 않을 기능은 꺼 둬도 돼요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/teacher/course-create#2",
+            "i": 6,
+            "hash": "fe881db13334e8eb"
+          }
+        ]
+      }
     },
     "sources": [
       {
@@ -5098,7 +5143,7 @@
     "area": "course",
     "topic": "코스를 종료하면 판서·녹화가 지워지는지와 되살릴 수 있는지",
     "answer": {
-      "lead": "none",
+      "lead": "not_supported",
       "sentences": [
         {
           "unit": "doc:/docs/teacher/course-create#4",
@@ -5111,7 +5156,12 @@
             "7d3cec397d9f0de9"
           ]
         }
-      ]
+      ],
+      "leadBasis": {
+        "unit": "doc:/docs/teacher/course-create#4",
+        "i": 2,
+        "hash": "29ffb428930a26de"
+      }
     },
     "sources": [
       {

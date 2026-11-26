@@ -1880,5 +1880,181 @@
       "at": "2026-11-20",
       "legacyIds": []
     }
+  },
+  {
+    "id": "gap:recording/external-attendance-sync",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "recording",
+    "topic": "외부 출결 기기·시스템 연동",
+    "textHash": "",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "support",
+      "related": [
+        {
+          "unit": "doc:/docs/admin/statistics-data#7",
+          "i": 7,
+          "hash": "f15250a526afe39a"
+        }
+      ]
+    },
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_attendance",
+      "C_api",
+      "C_external_attendance_sync"
+    ],
+    "anchors": [
+      "출결 단말기",
+      "외부 출결",
+      "출결 연동",
+      "출결 API",
+      "등하원 기록",
+      "학부모 푸시",
+      "출결 시스템 연동"
+    ],
+    "covers": "학원이 쓰는 외부 출결 단말기·출결 시스템의 기록을 클래스인에 올리거나 연동하는 방법과 학부모 알림이 가는지는 공개 안내에 없다는 것",
+    "notCovers": [
+      "출석 기록 직접 수정 → gap:recording/attendance-edit",
+      "수업별 출결 내역 통계 파일 받기 → doc:/docs/admin/statistics-data#2/consumption-date-basis-items",
+      "통계가 말해 주는 범위 → doc:/docs/admin/statistics-data#7/stats-limits-participation"
+    ],
+    "negatives": [
+      {
+        "q": "수업별 출결 내역은 어디서 내려받나요",
+        "route": "doc:/docs/admin/statistics-data#2/consumption-date-basis-items"
+      },
+      {
+        "q": "출석부에서 지각을 출석으로 고칠 수 있나요",
+        "route": "gap:recording/attendance-edit"
+      },
+      {
+        "q": "출석 인원이 학습 성과를 뜻하나요",
+        "route": "doc:/docs/admin/statistics-data#7/stats-limits-participation"
+      }
+    ],
+    "handoff": "support",
+    "status": "active",
+    "provenance": {
+      "unit": "R2-B6",
+      "writer": "agent:fable#B6",
+      "at": "2026-11-25",
+      "legacyIds": []
+    },
+    "searchLog": [
+      {
+        "query": "출결 단말기",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "출결 연동",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "등하원",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "학부모 푸시",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ]
+  },
+  {
+    "id": "gap:recording/watermark-control",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "recording",
+    "topic": "녹화 영상 워터마크 표시·해제",
+    "textHash": "",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "support",
+      "related": []
+    },
+    "asks": [
+      "yesno",
+      "howto",
+      "definition"
+    ],
+    "concepts": [
+      "C_recording",
+      "C_watermark"
+    ],
+    "anchors": [
+      "워터마크",
+      "녹화 워터마크",
+      "영상 워터마크",
+      "워터마크 삭제",
+      "워터마크 없애기",
+      "워터마크 끄기",
+      "워터마크 내용"
+    ],
+    "covers": "녹화 영상에 보이는 워터마크의 표시 내용을 바꾸거나 끄고 켜는 방법, 누가 설정하는지는 공개 안내에 없다는 것",
+    "notCovers": [
+      "학생 몰래 녹화·화면 캡처 방지 → gap:classroom/anti-capture",
+      "녹화본 저장 위치와 녹화 화면 → doc:/docs/admin/course-creation#4/class-recording-what",
+      "수업에서 녹화 시작하는 법 → doc:/docs/teacher/classroom-basic-setup#2/record-class"
+    ],
+    "negatives": [
+      {
+        "q": "수업 녹화가 어느 화면을 찍는지 알려주세요",
+        "route": "doc:/docs/admin/course-creation#4/class-recording-what"
+      },
+      {
+        "q": "수업 중 녹화 버튼은 어떻게 눌러요",
+        "route": "doc:/docs/teacher/classroom-basic-setup#2/record-class"
+      },
+      {
+        "q": "학생이 화면 캡처하는 걸 막을 수 있나요",
+        "route": "gap:classroom/anti-capture"
+      }
+    ],
+    "handoff": "support",
+    "status": "active",
+    "provenance": {
+      "unit": "R2-B6",
+      "writer": "agent:fable#B6",
+      "at": "2026-11-25",
+      "legacyIds": []
+    },
+    "searchLog": [
+      {
+        "query": "워터마크 끄기",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "워터마크 해제",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "워터마크 설정",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "워터마크 내용",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ]
   }
 ]

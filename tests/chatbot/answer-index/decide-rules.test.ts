@@ -30,24 +30,26 @@ describe("R15 조각 답은 그 종류 θ + 0.1 이상일 때만", () => {
     expect(segmentThreshold(() => 0.55)("doc")).toBeCloseTo(0.65, 10)
   })
 
-  it("조각 확신도가 θ 와 θ + 0.1 사이면 그 조각은 답하지 않는다(원문 문턱은 그대로)", () => {
+  it("조각 확신도가 θ 와 θ + 0.1 사이면 그 조각은 제 판정으로 답하지 않는다(원문 문턱은 그대로)", () => {
     const analysis = analyzeQuestion(index, question, { env: {} })
     const [replay, kick] = analysis.parts!.map((part) => part.confs[part.topReal])
     expect(analysis.parts!.map((part) => part.ranked[part.topReal].id)).toEqual([CARDS.replay, CARDS.kick])
-    // θ 를 강퇴 조각 확신도 바로 아래로 두면 θ 는 넘지만 θ + 0.1 은 넘지 못한다.
-    const theta = kick - 0.01
+    // θ 를 강퇴 조각은 θ 는 넘지만 θ + 0.1 은 넘지 못하고, 녹화 조각은 θ + 0.1 도 넘는 자리에 둔다.
+    const theta = (replay + kick) / 2 - SEGMENT_CONF_MARGIN
+    expect(kick).toBeGreaterThanOrEqual(theta)
+    expect(kick).toBeLessThan(theta + SEGMENT_CONF_MARGIN)
     expect(replay).toBeGreaterThanOrEqual(theta + SEGMENT_CONF_MARGIN)
     const decision = resolveDecision(index, analysis, () => theta)
-    expect(decision.segments?.map((segment) => [segment.kind, segment.card])).toEqual([
-      ["answer", CARDS.replay],
-      ["abstain", null],
-    ])
+    expect(decision.segments?.[0]).toMatchObject({ kind: "answer", card: CARDS.replay, source: "segment" })
+    // 강퇴 조각은 제 판정으로 답하지 않는다. 이 픽스처에서는 원문 판정도 강퇴 카드로 정하지 않아 그 조각은 못 정함(알림 줄 대상)이다(R2 검토 회귀-12: 한 결과로 고정).
+    expect(decision.segments?.[1]).toMatchObject({ kind: "abstain", card: null })
+    expect(decision.segments?.[1]?.source).toBeUndefined()
     expect(decision).toMatchObject({ kind: "answer", card: CARDS.replay, partial: true })
-    // 여유를 넘는 문턱이면 두 조각을 잇는다.
+    // 여유를 넘는 문턱이면 두 조각 모두 제 판정으로 답한다.
     const loose = resolveDecision(index, analysis, () => kick - SEGMENT_CONF_MARGIN - 0.01)
-    expect(loose.segments?.map((segment) => [segment.kind, segment.card])).toEqual([
-      ["answer", CARDS.replay],
-      ["answer", CARDS.kick],
+    expect(loose.segments?.map((segment) => [segment.kind, segment.card, segment.source])).toEqual([
+      ["answer", CARDS.replay, "segment"],
+      ["answer", CARDS.kick, "segment"],
     ])
   })
 

@@ -917,7 +917,17 @@
             "c241b95f73859d30"
           ]
         }
-      ]
+      ],
+      "headline": {
+        "text": "소리가 안 들리거나 튕기면 업데이트나 캐시 삭제로 풀린 경우가 많아요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/start/class-connection-troubleshooting#3",
+            "i": 0,
+            "hash": "9cf0ac772f4a8806"
+          }
+        ]
+      }
     },
     "sources": [
       {
@@ -1496,7 +1506,17 @@
             "f9079f7c00f0d276"
           ]
         }
-      ]
+      ],
+      "headline": {
+        "text": "카메라·마이크가 안 되면 연결과 권한 허용부터 봐요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/start/camera-mic-troubleshooting#summary",
+            "i": 2,
+            "hash": "bd3b52867c442ba5"
+          }
+        ]
+      }
     },
     "sources": [
       {
@@ -1619,7 +1639,22 @@
             "cc90de76853bcea7"
           ]
         }
-      ]
+      ],
+      "headline": {
+        "text": "카메라·마이크·이어폰 연결과 클래스인 사용 허용을 먼저 봐요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/start/camera-mic-troubleshooting#0",
+            "i": 2,
+            "hash": "dfccfc9fd87ba8e5"
+          },
+          {
+            "unit": "doc:/docs/start/camera-mic-troubleshooting#0",
+            "i": 3,
+            "hash": "2e303a499ba43d54"
+          }
+        ]
+      }
     },
     "sources": [
       {
@@ -1837,7 +1872,17 @@
             "86beb61b8ee39c00"
           ]
         }
-      ]
+      ],
+      "headline": {
+        "text": "마이크 아이콘 옆 삼각형에서 [마이크 선택]을 눌러 바꿔요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/start/camera-mic-troubleshooting#1",
+            "i": 2,
+            "hash": "f3d5f88a0db8dde7"
+          }
+        ]
+      }
     },
     "sources": [
       {
@@ -2516,7 +2561,17 @@
             "80565f315f1c7782"
           ]
         }
-      ]
+      ],
+      "headline": {
+        "text": "[스피커 선택]에서 실제로 소리를 낼 장치를 골라요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/start/camera-mic-troubleshooting#4",
+            "i": 3,
+            "hash": "cb5865d15a99c4e5"
+          }
+        ]
+      }
     },
     "sources": [
       {
@@ -4626,7 +4681,17 @@
             "474fbe8ed19db95a"
           ]
         }
-      ]
+      ],
+      "headline": {
+        "text": "[수업 도구] → [파일 열기]로 내 컴퓨터의 .edb 파일을 불러와요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/software/classroom-tools#3",
+            "i": 7,
+            "hash": "caa8eb79359bd663"
+          }
+        ]
+      }
     },
     "sources": [
       {
@@ -4938,7 +5003,17 @@
             "4555952807e838e6"
           ]
         }
-      ]
+      ],
+      "headline": {
+        "text": "인원 제한을 없애는 기능은 기본으로 꺼져 있어요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/software/classroom-tools#4",
+            "i": 9,
+            "hash": "293eb99247af9e29"
+          }
+        ]
+      }
     },
     "sources": [
       {
@@ -5474,7 +5549,17 @@
             "809e013b5b801d72"
           ]
         }
-      ]
+      ],
+      "headline": {
+        "text": "발표가 끝나면 권한을 거둬 수업 흐름을 교사 쪽으로 가져와요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/software/classroom-tools#5",
+            "i": 9,
+            "hash": "809e013b5b801d72"
+          }
+        ]
+      }
     },
     "sources": [
       {
@@ -5680,7 +5765,17 @@
             "5e159986dc9a1af0"
           ]
         }
-      ]
+      ],
+      "headline": {
+        "text": "과학·수학 수업에는 도구 팔레트의 실험과 측정 도구를 꺼내요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/software/classroom-tools#6",
+            "i": 0,
+            "hash": "0c3c58b5b112bf60"
+          }
+        ]
+      }
     },
     "sources": [
       {
@@ -6834,7 +6929,17 @@
             "a5aab80815e93889"
           ]
         }
-      ]
+      ],
+      "headline": {
+        "text": "앱 설치 없이 링크 하나로 보여 줄 때 웹 라이브 수업을 열어요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/admin/web-live-playback#summary",
+            "i": 0,
+            "hash": "6934e28852227409"
+          }
+        ]
+      }
     },
     "sources": [
       {
@@ -7546,7 +7651,17 @@
             "d8f665b80f5df959"
           ]
         }
-      ]
+      ],
+      "headline": {
+        "text": "커버 이미지는 1920×1080px에 500KB 이하를 권장해요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/admin/web-live-playback#1",
+            "i": 7,
+            "hash": "d8f665b80f5df959"
+          }
+        ]
+      }
     },
     "sources": [
       {
@@ -8763,7 +8878,17 @@
             "4bf55192ff21423f"
           ]
         }
-      ]
+      ],
+      "headline": {
+        "text": "[기관 관리] > [수업 관리]에서 [웹 라이브 및 다시 보기 관리]를 열어요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/admin/web-live-playback#5",
+            "i": 3,
+            "hash": "0b9c57864ce5f6f9"
+          }
+        ]
+      }
     },
     "sources": [
       {
@@ -9785,7 +9910,17 @@
             "a13ac5eafaae57ee"
           ]
         }
-      ]
+      ],
+      "headline": {
+        "text": "HWP 파일은 열리지 않으니 PDF로 바꿔 올려요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/teacher/drive-materials#1",
+            "i": 3,
+            "hash": "a13ac5eafaae57ee"
+          }
+        ]
+      }
     },
     "sources": [
       {
@@ -10303,7 +10438,17 @@
             "281eca4d191f433b"
           ]
         }
-      ]
+      ],
+      "headline": {
+        "text": "저장해 둔 판서는 [클라우드 드라이브] 버튼으로 열어요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/teacher/drive-materials#2",
+            "i": 5,
+            "hash": "205e8c4e9659d9a3"
+          }
+        ]
+      }
     },
     "sources": [
       {
@@ -14315,7 +14460,17 @@
           ]
         }
       ],
-      "lead": "how_to"
+      "lead": "how_to",
+      "headline": {
+        "text": "스테이지 밖 학생은 카메라와 마이크가 모두 꺼져요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/teacher/classroom-basic-setup#3",
+            "i": 2,
+            "hash": "6d05def3b50c2832"
+          }
+        ]
+      }
     },
     "sources": [
       {
@@ -15745,7 +15900,17 @@
             "25fade6a35417c31"
           ]
         }
-      ]
+      ],
+      "headline": {
+        "text": "개인 칠판 인원 제한 해제는 기본 비활성화 상태예요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/teacher/classin-607-update#1",
+            "i": 3,
+            "hash": "a7b5fa48b008a157"
+          }
+        ]
+      }
     },
     "sources": [
       {
@@ -16256,7 +16421,17 @@
             "1da4eecab492e293"
           ]
         }
-      ]
+      ],
+      "headline": {
+        "text": "개인 칠판 인원 제한 해제는 매니저에게 활성화를 요청해야 써요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/teacher/classin-607-update#4",
+            "i": 4,
+            "hash": "1da4eecab492e293"
+          }
+        ]
+      }
     },
     "sources": [
       {
@@ -16468,7 +16643,22 @@
             "1da4eecab492e293"
           ]
         }
-      ]
+      ],
+      "headline": {
+        "text": ".edb 삽입은 기본 비활성화라 담당 매니저에게 요청해요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/teacher/classin-607-update#5",
+            "i": 3,
+            "hash": "ba5d17bafb9afe2a"
+          },
+          {
+            "unit": "doc:/docs/teacher/classin-607-update#5",
+            "i": 4,
+            "hash": "1da4eecab492e293"
+          }
+        ]
+      }
     },
     "sources": [
       {
@@ -16778,7 +16968,17 @@
             "799fa4b2aad7dd27"
           ]
         }
-      ]
+      ],
+      "headline": {
+        "text": "처음 켜면 역할에 맞는 온보딩 안내와 스타터 가이드를 봐요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/teacher/classin-607-update#6",
+            "i": 0,
+            "hash": "56ba49297680ddb0"
+          }
+        ]
+      }
     },
     "sources": [
       {
@@ -17299,6 +17499,16 @@
         "unit": "doc:/docs/teacher/classin-607-update#8",
         "i": 1,
         "hash": "58d690083fe45c61"
+      },
+      "headline": {
+        "text": "데모 학생 3명이 입장한 체험 교실에서 수업을 연습할 수 있어요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/teacher/classin-607-update#8",
+            "i": 1,
+            "hash": "58d690083fe45c61"
+          }
+        ]
       }
     },
     "sources": [
@@ -17606,7 +17816,17 @@
             "fab4b7e0a01d3145"
           ]
         }
-      ]
+      ],
+      "headline": {
+        "text": "왼쪽 메뉴 [채팅]에서 코스를 누르면 반 채팅방이 열려요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/student/chat#summary",
+            "i": 2,
+            "hash": "0e77f1bf9fdf6983"
+          }
+        ]
+      }
     },
     "sources": [
       {
@@ -19202,7 +19422,8 @@
       "actions": [
         "변경 없음: 표본 10개 점검, lead·notCovers·negatives 행선 확인"
       ]
-    }
+    },
+    "policyTopicAllowed": true
   },
   {
     "id": "doc:/docs/student/chat#4/chat-banned",
@@ -19504,7 +19725,7 @@
     "area": "classroom",
     "topic": "수업 입장 가능 시각(10분 전)과 들어가는 곳",
     "answer": {
-      "lead": "how_to",
+      "lead": "yes_can",
       "sentences": [
         {
           "unit": "doc:/docs/student/class-join-replay#0",
@@ -19524,7 +19745,12 @@
             "26bed1cafd4fa719"
           ]
         }
-      ]
+      ],
+      "leadBasis": {
+        "unit": "doc:/docs/student/class-join-replay#0",
+        "i": 0,
+        "hash": "443c2ef61baeb687"
+      }
     },
     "sources": [
       {
@@ -23183,7 +23409,7 @@
     "area": "classroom",
     "topic": "학생도 수업 중 AgentIn·AI 기능 쓰게 허용하기",
     "answer": {
-      "lead": "how_to",
+      "lead": "yes_can",
       "sentences": [
         {
           "unit": "doc:/docs/updates/classin-609-update#1",
@@ -23196,7 +23422,12 @@
             "1f66fde4966a78fa"
           ]
         }
-      ]
+      ],
+      "leadBasis": {
+        "unit": "doc:/docs/updates/classin-609-update#1",
+        "i": 4,
+        "hash": "8cebf3e122266de3"
+      }
     },
     "sources": [
       {
@@ -23570,7 +23801,17 @@
             "19f603314e49b445"
           ]
         }
-      ]
+      ],
+      "headline": {
+        "text": "수업 새로 만들기 창 오른쪽에서 [AI 요약]을 켜요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/updates/classin-609-update#3",
+            "i": 1,
+            "hash": "19f603314e49b445"
+          }
+        ]
+      }
     },
     "sources": [
       {
@@ -23666,7 +23907,17 @@
             "0b2fa40c0dae6513"
           ]
         }
-      ]
+      ],
+      "headline": {
+        "text": "같은 코스 그룹 교사끼리 에이전트 목록을 함께 써요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/updates/classin-609-update#3",
+            "i": 3,
+            "hash": "0b2fa40c0dae6513"
+          }
+        ]
+      }
     },
     "sources": [
       {
@@ -24025,7 +24276,7 @@
     "area": "classroom",
     "topic": "수업 실시간 자막·번역 기능과 지원 언어",
     "answer": {
-      "lead": "none",
+      "lead": "yes_can",
       "sentences": [
         {
           "unit": "doc:/docs/updates/classin-609-update#5",
@@ -24042,7 +24293,12 @@
             "2174cb4dba510b87"
           ]
         }
-      ]
+      ],
+      "leadBasis": {
+        "unit": "doc:/docs/updates/classin-609-update#5",
+        "i": 0,
+        "hash": "d376f86b8b29beb6"
+      }
     },
     "sources": [
       {
@@ -24415,7 +24671,17 @@
             "1f9851e26a883e49"
           ]
         }
-      ]
+      ],
+      "headline": {
+        "text": "강사가 자기 수업을 돌아보고 관리자는 코칭의 근거로 써요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/updates/classin-609-update#6",
+            "i": 1,
+            "hash": "1f9851e26a883e49"
+          }
+        ]
+      }
     },
     "sources": [
       {
@@ -24516,7 +24782,12 @@
             "d56bd657f4380d4c"
           ]
         }
-      ]
+      ],
+      "first": {
+        "unit": "doc:/docs/updates/classin-609-update#6",
+        "i": 2,
+        "hash": "d56bd657f4380d4c"
+      }
     },
     "sources": [
       {
@@ -27170,7 +27441,17 @@
             "d5d1acd2cd7bde28"
           ]
         }
-      ]
+      ],
+      "headline": {
+        "text": "안드로이드는 앱 안에서 마이크 입력 크기를 조절할 수 없어요.",
+        "basis": [
+          {
+            "unit": "guide:microphone-camera-check",
+            "i": 25,
+            "hash": "a3f7f6e2b00fef94"
+          }
+        ]
+      }
     },
     "sources": [
       {
@@ -29665,7 +29946,17 @@
           ]
         }
       ],
-      "lead": "none"
+      "lead": "none",
+      "headline": {
+        "text": "학습 자료는 [새로 만들기] > [학습 자료]에서 파일을 올려요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/teacher/course-activities#3",
+            "i": 14,
+            "hash": "84c454afc1dfcefc"
+          }
+        ]
+      }
     },
     "sources": [
       {

@@ -34,6 +34,11 @@
  *   하지 않는다) Gemini 연결이 있어야 하고, --simulate-gemini 와 함께 쓰면 가짜 응답으로 돈다(실제 호출 0). 호출은 다른 단계와 같이
  *   질문별로 세고(geminiCalls·geminiKinds), 결과 줄의 assist 는 answerIndex.assist(mode·used·pick·pickCard·model·ms·accepted·
  *   rejectReason·original)다. decidedBy 는 최종 카드 기준이다.
+ * - 탐침 칸(결과 줄에 칸만 더한다): 입력 줄의 expectFragments(복합 질문 조각 기대)·single(질문 하나)·decoy(낱말 미끼)를 읽어
+ *   결과 줄에 fragments(조각 기록: segments·answeredCards·notice·perFragment)·outcome(결정 표시)을 더하고, 끝에 조각 답 비율·모든 조각 답·
+ *   소리 없는 누락·거짓 알림·쏠림 방향·과분할·미끼 장치별 걸림을 요약해 찍는다. --summary-out <경로> 면 같은 요약을 JSON 으로도 쓴다.
+ *   조각 기록은 흔적의 segments 배열이 있으면 그것을, 없으면(지금 코드는 조각 수만 준다) 같은 자료·같은 질문으로 결정형 판정을 다시 계산해
+ *   쓴다(source: trace|probe|count). compiled 라우터에서만 일한다. 입력 꼴과 판정 정의는 scripts/lib/chatbot-live-eval-probes.ts.
  * - 무효 측정 알아채기: 결과 줄의 modelError 는 그 줄의 답에 쓰이는 Gemini 호출(관문·근거 선별·목차 고르기·답 생성)이
  *   401·402·403(결제 크레딧 소진·키 인증 실패)을 받았거나, 그 때문에 열린 차단기(lib/chatbot/llm.ts)가 그 호출을 막았거나
  *   (geminiBlocked: 관문이 차단기를 보고 판정 없이 넘긴 것 포함), Vertex 토큰 발급이 실패해 그 호출을 못 보냈거나
@@ -94,6 +99,14 @@ import {
   type GeminiCallRecord,
   type TurnRequest,
 } from "./lib/chatbot-live-eval-checks"
+import {
+  buildFragmentRecord,
+  outcomeSignature,
+  summarizeDecoys,
+  summarizeFragments,
+  type FragmentRecord,
+  type SoloProbe,
+} from "./lib/chatbot-live-eval-probes"
 
 function loadEnvLocal() {
   const envPath = join(process.cwd(), ".env.local")
@@ -144,7 +157,7 @@ function argValue(name: string): string | undefined {
 function usage(message?: string): never {
   if (message) console.error(`오류: ${message}`)
   console.error(
-    "사용법: npx tsx scripts/chatbot-live-eval.ts --in <questions.json> --out <results.jsonl> [--concurrency 4] [--mode select|generate|off] [--gate on|off] [--second-chance on|off] [--router legacy|shadow|compiled] [--assist off|band|always] [--repeat N] [--simulate-gemini 402|hang|429] [--allow-model-errors]"
+    "사용법: npx tsx scripts/chatbot-live-eval.ts --in <questions.json> --out <results.jsonl> [--concurrency 4] [--mode select|generate|off] [--gate on|off] [--second-chance on|off] [--router legacy|shadow|compiled] [--assist off|band|always] [--repeat N] [--simulate-gemini 402|hang|429] [--allow-model-errors] [--summary-out <요약.json>]"
   )
   process.exit(2)
 }
@@ -168,6 +181,61 @@ function tally(values: string[]) {
   const counts: Record<string, number> = {}
   for (const value of values) counts[value] = (counts[value] ?? 0) + 1
   return Object.fromEntries(Object.entries(counts).sort((a, b) => b[1] - a[1]))
+}
+
+type ProbeRow = Parameters<typeof summarizeFragments>[0][number] & Parameters<typeof summarizeDecoys>[0][number]
+
+/**
+ * 복합 답 길이(R2 검토 회귀-5): 흔적 compound 가 있는 줄 가운데 서비스가 후속 줄까지 붙인 최종 답이 상한(cap)을 넘은 줄.
+ * 흔적 글자 수(compound.chars)가 아니라 최종 answer 길이로 잰다.
+ */
+function compoundLength(rows: unknown[]) {
+  let compound = 0
+  const overCap: string[] = []
+  for (const row of rows as Array<{ id?: unknown; answer?: unknown; answerIndex?: { compound?: { cap?: number } } | null }>) {
+    const cap = row.answerIndex?.compound?.cap
+    if (typeof cap !== "number") continue
+    compound += 1
+    if (typeof row.answer === "string" && row.answer.length > cap) overCap.push(String(row.id))
+  }
+  return { compound, overCap: overCap.length, overCapIds: overCap }
+}
+
+/** 탐침 칸이 있는 줄만 모아 조각·과분할·미끼 요약을 만든다. 탐침 줄이 없으면 null. */
+function summarizeProbeRows(rows: unknown[]) {
+  const probeRows = (rows as ProbeRow[]).filter((row) => row.fragments || row.decoy)
+  if (probeRows.length === 0) return null
+  const fragments = probeRows.some((row) => row.fragments) ? summarizeFragments(probeRows) : null
+  const decoys = probeRows.some((row) => row.decoy) ? summarizeDecoys(probeRows) : null
+  return { fragments, decoys, compoundLength: compoundLength(rows) }
+}
+
+function printProbeSummary(summary: NonNullable<ReturnType<typeof summarizeProbeRows>>) {
+  const { fragments, decoys } = summary
+  if (fragments && fragments.multi.rows > 0) {
+    const m = fragments.multi
+    console.error(
+      `복합 질문 ${m.rows}줄: 조각 답 ${m.answeredFragments}/${m.fragments} (${m.answeredRatio}%), 모든 조각 답 ${m.allAnswered}/${m.rows} (${m.allAnsweredRatio}%), ` +
+        `한 조각도 못 답 ${m.noneAnswered}/${m.rows} (${m.noneAnsweredRatio}%, 그중 답 카드 없음 ${m.noCard}), 일부만 답 ${m.partialRows}줄`
+    )
+    console.error(
+      `  쏠림 방향: 앞 조각만 ${m.lean.firstOnly}, 뒤 조각만 ${m.lean.laterOnly}, 답한 쪽이 혼자 물을 때 확신도 더 높음 ${m.lean.strongerSolo}/${m.lean.soloKnown}` +
+        ` / 소리 없는 누락 ${m.silentMissing}/${m.partialRows} / 거짓 알림 ${m.falseNotice}/${m.noticeRows}(엄격 ${m.falseNoticeStrict}) / 나누지 못함 ${m.underSplit}`
+    )
+  }
+  if (summary.compoundLength.compound > 0) {
+    console.error(`복합 답 ${summary.compoundLength.compound}줄 중 최종 답이 길이 상한을 넘은 줄 ${summary.compoundLength.overCap}`)
+  }
+  if (fragments && fragments.single.rows > 0) {
+    const single = fragments.single
+    console.error(`단일 질문 ${single.rows}줄: 과분할(2조각 이상) ${single.overSplit}/${single.rows} (${single.overSplitRatio}%)`)
+  }
+  if (decoys && decoys.total > 0) {
+    console.error(`낱말 미끼 ${decoys.total}줄, 장치별(걸림/기대대로/그 밖/관찰 불가 · 줄 수):`)
+    for (const [device, bucket] of Object.entries(decoys.devices)) {
+      console.error(`  ${device}: 걸림 ${bucket.trapped} / 기대대로 ${bucket.expected} / 그 밖 ${bucket.other} / 관찰 불가 ${bucket.unobservable} · ${bucket.n}줄`)
+    }
+  }
 }
 
 const sleep = (ms: number) => new Promise((done) => setTimeout(done, ms))
@@ -413,6 +481,17 @@ async function main() {
   const evaluateWithContext = evaluateChatbotQuery as unknown as EvaluateWithContext
   const asEvalSlot = (answer: string) => detectAskedSlot(answer)
 
+  /** 탐침 칸(expectFragments·single·decoy → fragments·outcome). 입력에 없으면 칸을 더하지 않는다. */
+  function probeColumns(item: EvalCase, question: string, answer: string, decidedBy: string, answerIndex: unknown) {
+    const fragments = fragmentRecordOf(item, question, answer, decidedBy, answerIndex)
+    return {
+      ...(item.expectFragments ? { expectFragments: item.expectFragments } : {}),
+      ...(item.single ? { single: true } : {}),
+      ...(item.decoy ? { decoy: item.decoy, outcome: outcomeSignature(answerIndex) } : {}),
+      ...(fragments ? { fragments } : {}),
+    }
+  }
+
   /** 한 턴(= 한 질문)을 돌린다. 모델이 전부 일시 오류면 최대 3번까지 다시 돌리되, 시도마다 attemptLog 에 남기고 firstAttempt 는 첫 시도다. */
   async function runTurn(item: EvalCase, request: TurnRequest, turnIndex: number, repeatIndex: number) {
     const maxAttempts = 3
@@ -487,6 +566,7 @@ async function main() {
           },
           attemptLog,
           ...(answerIndex !== undefined ? { answerIndex } : {}),
+          ...probeColumns(item, request.question, result.answer, decidedBy, answerIndex),
           gate: result.answerGate.gate,
           gateOriginal: result.answerGate.gateOriginal ?? null,
           gateMs: result.answerGate.gateMs ?? null,
@@ -566,6 +646,52 @@ async function main() {
       attempts: maxAttempts,
       error: lastError || "unknown error",
     }
+  }
+
+  // 탐침(조각 기록): 입력에 expectFragments·single 이 있고 compiled 라우터일 때만, 같은 자료로 결정형 판정을 다시 계산한다.
+  const needsFragments = router === "compiled" && inputs.some((item) => item.expectFragments || item.single)
+  let fragmentProbe: {
+    decisionOf: (question: string) => { kind: string; card: string | null; conf: number; segments: Array<{ text: string; kind: string; card: string | null; conf?: number }> | null }
+    soloOf: (text: string) => SoloProbe
+    topicOf: (cardId: string) => string
+  } | null = null
+  if (needsFragments) {
+    const { buildTopKIndex, topKForQuestion, topKDataDir } = await import("./answer-index/lib/topk-core")
+    const { index } = buildTopKIndex({ dir: topKDataDir(null) })
+    const topicOf = (cardId: string) => {
+      const at = index.cardById.get(cardId)
+      return at === undefined ? "" : String((index.cards[at].card as { topic?: string }).topic ?? "")
+    }
+    const rowOf = (text: string) => topKForQuestion(index, { id: "probe", q: text }, { k: 10, votes: true })
+    fragmentProbe = {
+      topicOf,
+      decisionOf: (question) => {
+        const decision = rowOf(question).decision
+        return {
+          kind: decision.kind,
+          card: decision.card,
+          conf: decision.conf,
+          segments: decision.segments ? decision.segments.map((part) => ({ text: part.text, kind: part.kind, card: part.card, conf: part.conf })) : null,
+        }
+      },
+      soloOf: (text) => {
+        const row = rowOf(text)
+        return { kind: row.decision.kind, card: row.decision.card, conf: row.decision.conf, top: row.top.map((item) => ({ id: item.id, topic: item.topic })) }
+      },
+    }
+  }
+  const fragmentRecordOf = (item: EvalCase, question: string, answer: string, decidedBy: string, answerIndex: unknown): FragmentRecord | null => {
+    if (!fragmentProbe || !(item.expectFragments || item.single)) return null
+    return buildFragmentRecord({
+      question,
+      answer,
+      indexDecided: decidedBy.startsWith("index"),
+      trace: answerIndex,
+      probe: fragmentProbe.decisionOf(question),
+      expect: item.expectFragments,
+      solo: item.expectFragments?.map((fragment) => (fragment.text ? fragmentProbe!.soloOf(fragment.text) : null)),
+      topicOf: fragmentProbe.topicOf,
+    })
   }
 
   mkdirSync(dirname(resolve(outPath)), { recursive: true })
@@ -698,6 +824,16 @@ async function main() {
   if (repeat > 1) {
     const divergence = answerDivergence(done.map((row) => ({ key: row.id, answer: row.answer })))
     console.error(`--repeat ${repeat}: 답이 갈린 질문 ${divergence.diverged}/${divergence.groups} (${divergence.ratio})`)
+  }
+  const probeSummary = summarizeProbeRows(done)
+  if (probeSummary) {
+    printProbeSummary(probeSummary)
+    const summaryOut = argValue("--summary-out")
+    if (summaryOut) {
+      mkdirSync(dirname(resolve(summaryOut)), { recursive: true })
+      writeFileSync(resolve(summaryOut), `${JSON.stringify(probeSummary, null, 2)}\n`)
+      console.error(`탐침 요약: ${resolve(summaryOut)}`)
+    }
   }
   console.error(`오류: ${errors.length}개`)
   const modelErrorRows = done.filter((row) => row.modelError)

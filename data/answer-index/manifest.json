@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "dataVersion": "ai-53a24f44e9b8",
+  "dataVersion": "ai-2b3cd6ae1fda",
   "sources": {
     "app/about/AboutPageClient.tsx": "201307dd2bc22b3b",
     "app/about/layout.tsx": "cbced2f28647c89c",
@@ -78,14 +78,12 @@
     "data/chatbot-fresh-open-set.json": "43b6a81ff871c62a",
     "data/chatbot-golden-set.json": "e189390b124f5183",
     "data/chatbot-persona-eval-set.json": "d34d3ee4d751f7ed",
-    "lib/chatbot/answer-index/doc-units.ts": "253caea59ea8633d",
-    "lib/chatbot/answer-index/sentences.ts": "176f1c8f87fd2d99",
     "lib/chatbot/doc-outline.ts": "c9c194daba7b15fb",
-    "lib/chatbot/quick-answers-basics.ts": "cd54d16557fd2c69",
+    "lib/chatbot/quick-answers-basics.ts": "147f6fd96d96c2ce",
     "lib/chatbot/quick-answers-field.ts": "683e2a13a83ea93f",
     "lib/chatbot/self-knowledge.ts": "4f1ee990ebd1c5d2",
-    "lib/chatbot/service.ts": "0e5caf025f4eeb8d",
-    "lib/chatbot/source-grounding.ts": "df853483aa6bd647",
+    "lib/chatbot/service.ts": "a16f3065b656a474",
+    "lib/chatbot/source-grounding.ts": "c785c0c515fade9c",
     "lib/chatbot/symptom-topics-field.ts": "2d9ae8dda5294096",
     "lib/chatbot/symptom-triage.ts": "2c33c3e918cf5d9f",
     "lib/cs-figma-enrichments.generated.ts": "34532e43bdaecfee",
@@ -115,15 +113,15 @@
     "lib/introduction/content.ts": "9df4b51bce23a8f3",
     "scripts/answer-index/lib/areas.ts": "97f79812d8a2784c",
     "scripts/answer-index/lib/inventory.ts": "04b50635f9f306b7",
-    "scripts/answer-index/lib/sentences.ts": "0f479ccda597d354",
+    "scripts/answer-index/lib/sentences.ts": "d43caabbd0c848cc",
     "scripts/answer-index/lib/site-facts.ts": "cf6aadc2a64fd5a3",
     "scripts/answer-index/lib/text-rules.ts": "0a9e5da9e29ddc00",
     "scripts/answer-index/lib/ts-extract.ts": "9c2be4e06e2b2ccf",
-    "scripts/answer-index/lib/units.ts": "d9f9d82c08b38c61"
+    "scripts/answer-index/lib/units.ts": "ef9883049e199852"
   },
   "outputs": {
     "absent.json": {
-      "sha": "f6b41cb3e338ce40",
+      "sha": "5e3474c4aa10917a",
       "count": 276
     },
     "audit/C-01.jsonl": {
@@ -271,27 +269,27 @@
       "count": 8
     },
     "cards/account.json": {
-      "sha": "df624f31a783b4b4",
+      "sha": "714af3100293075c",
       "count": 112
     },
     "cards/admin.json": {
-      "sha": "2f4ef0b6e0d3b240",
+      "sha": "9a5013b88f9ed697",
       "count": 177
     },
     "cards/board.json": {
-      "sha": "fee85bb3ddb93c1e",
+      "sha": "b81a5c753e5a1af7",
       "count": 343
     },
     "cards/classroom.json": {
-      "sha": "a9ded8dfd75b35f4",
+      "sha": "4319be41b7f1f68a",
       "count": 357
     },
     "cards/company.json": {
-      "sha": "eb3b504cd4e2b1a4",
+      "sha": "f38c57f940ecea96",
       "count": 194
     },
     "cards/course.json": {
-      "sha": "7b934bf4fcdd3c94",
+      "sha": "909ea5b0a39dc00a",
       "count": 200
     },
     "cards/gaps-account.json": {
@@ -299,16 +297,16 @@
       "count": 23
     },
     "cards/gaps-admin.json": {
-      "sha": "cc679fdae208a957",
-      "count": 20
+      "sha": "20e060790bfecad2",
+      "count": 22
     },
     "cards/gaps-board.json": {
-      "sha": "69e6322bcef96d7e",
-      "count": 33
+      "sha": "f0098b969370cd26",
+      "count": 34
     },
     "cards/gaps-classroom.json": {
-      "sha": "46b6702cf5476f31",
-      "count": 20
+      "sha": "7568c56209e73456",
+      "count": 22
     },
     "cards/gaps-company.json": {
       "sha": "6f6f9d6291d79dd7",
@@ -327,23 +325,23 @@
       "count": 25
     },
     "cards/gaps-recording.json": {
-      "sha": "426f2f0bd10fb669",
-      "count": 21
-    },
-    "cards/gaps-start.json": {
-      "sha": "fa3dc987b5d3a172",
+      "sha": "ac9dff25a8c87f49",
       "count": 23
     },
+    "cards/gaps-start.json": {
+      "sha": "90e31b3d5b481975",
+      "count": 24
+    },
     "cards/gaps-support.json": {
-      "sha": "35872a122a0e2ed0",
-      "count": 15
+      "sha": "c002af4ca5080616",
+      "count": 16
     },
     "cards/gaps-trust.json": {
       "sha": "2157e2f4e148c875",
       "count": 19
     },
     "cards/homework.json": {
-      "sha": "8728a664f7e6dae0",
+      "sha": "0412ebc5a60179df",
       "count": 223
     },
     "cards/pricing.json": {
@@ -351,11 +349,11 @@
       "count": 127
     },
     "cards/recording.json": {
-      "sha": "dfa332736403f97f",
+      "sha": "0af0886a0d1f06b4",
       "count": 212
     },
     "cards/start.json": {
-      "sha": "5186b2ce60a7ea3e",
+      "sha": "381e2f96b9afbf14",
       "count": 133
     },
     "cards/support.json": {
@@ -383,8 +381,8 @@
       "count": 1459
     },
     "lexicon.json": {
-      "sha": "26a04704343381e2",
-      "count": 1151
+      "sha": "839f70a680ad1030",
+      "count": 1159
     },
     "site-facts.json": {
       "sha": "21e2943d0893d437",
@@ -435,16 +433,16 @@
       "count": 22
     },
     "variants/gaps-admin.json": {
-      "sha": "358dbc3e0e8f85d6",
-      "count": 20
+      "sha": "b3ee05737f0323f1",
+      "count": 22
     },
     "variants/gaps-board.json": {
-      "sha": "c28e3410db6c11dc",
-      "count": 33
+      "sha": "bed6e71093444982",
+      "count": 34
     },
     "variants/gaps-classroom.json": {
-      "sha": "8b5c1e8732821c04",
-      "count": 20
+      "sha": "6b88b77d7fa50416",
+      "count": 22
     },
     "variants/gaps-company.json": {
       "sha": "9ab44ef44fcd3cde",
@@ -463,16 +461,16 @@
       "count": 24
     },
     "variants/gaps-recording.json": {
-      "sha": "0a557beb94af2f59",
-      "count": 21
-    },
-    "variants/gaps-start.json": {
-      "sha": "aef4b3f46bcff5cb",
+      "sha": "a4e06e4061ee99ff",
       "count": 23
     },
+    "variants/gaps-start.json": {
+      "sha": "1c917d8edbe3a729",
+      "count": 24
+    },
     "variants/gaps-support.json": {
-      "sha": "32d3fd18e75739a5",
-      "count": 15
+      "sha": "ce65aa7d918ad4bc",
+      "count": 16
     },
     "variants/gaps-trust.json": {
       "sha": "57b0ccbed3b18e38",
@@ -504,8 +502,118 @@
     }
   },
   "inputs": {
-    "devSets": [],
-    "failureLogs": []
+    "devSets": [
+      {
+        "name": "dev5",
+        "sha": "35aee9790d7bdbd4"
+      },
+      {
+        "name": "holdout1",
+        "sha": "8c655dbe30b10fbd"
+      },
+      {
+        "name": "input371",
+        "sha": "10ae0565a06e0c34"
+      }
+    ],
+    "failureLogs": [
+      {
+        "name": "failures-0.json",
+        "sha": "44987a9b2b619da6"
+      },
+      {
+        "name": "failures-1.json",
+        "sha": "bf2bdf64d777d9bb"
+      },
+      {
+        "name": "failures-2.json",
+        "sha": "757afc4d2401fe9c"
+      },
+      {
+        "name": "failures-3.json",
+        "sha": "4166eb8905cb70fe"
+      },
+      {
+        "name": "failures-4.json",
+        "sha": "88504fc42290b8ae"
+      },
+      {
+        "name": "failures-5.json",
+        "sha": "5e7f7d3fcf68909e"
+      },
+      {
+        "name": "failures-6.json",
+        "sha": "56ab2d35a4333172"
+      },
+      {
+        "name": "failures-7.json",
+        "sha": "4aef8d8a75ec61d3"
+      },
+      {
+        "name": "failures-8.json",
+        "sha": "221b8e64756a1d24"
+      },
+      {
+        "name": "failures-9.json",
+        "sha": "5bbd53753b78ef63"
+      },
+      {
+        "name": "failures2-changed-0.json",
+        "sha": "e2d09f76901175fa"
+      },
+      {
+        "name": "failures2-changed-1.json",
+        "sha": "57ac215541f7f20b"
+      },
+      {
+        "name": "failures2-changed-2.json",
+        "sha": "1cd3643f9b1cc1e0"
+      },
+      {
+        "name": "failures2-changed-3.json",
+        "sha": "5726115c6b6eb129"
+      },
+      {
+        "name": "failures2-holdout-0.json",
+        "sha": "780b2dcb6b44883c"
+      },
+      {
+        "name": "failures2-holdout-1.json",
+        "sha": "aeebb7f3d8b99fb5"
+      },
+      {
+        "name": "failures2-holdout-2.json",
+        "sha": "2cb91f065d3de79f"
+      },
+      {
+        "name": "failures3-changed3-0.json",
+        "sha": "c53d6e78e9fd5194"
+      },
+      {
+        "name": "failures3-hold1-0.json",
+        "sha": "b3c002407af8c008"
+      },
+      {
+        "name": "failures3-hold1-1.json",
+        "sha": "428b62d87277a33a"
+      },
+      {
+        "name": "failures3-hold1-2.json",
+        "sha": "19d1c777fe0791a6"
+      },
+      {
+        "name": "failures-holdout1-0.json",
+        "sha": "572bf117226152df"
+      },
+      {
+        "name": "failures-holdout1-1.json",
+        "sha": "c19b0226a97c94da"
+      },
+      {
+        "name": "failures-holdout1-2.json",
+        "sha": "64975e2998bb22c9"
+      }
+    ]
   },
   "generation": {
     "D1-01": {

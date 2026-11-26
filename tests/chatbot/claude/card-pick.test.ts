@@ -216,7 +216,12 @@ describe("readAssistPickConfig", () => {
       dailyBudgetUsd: 1,
       apiKeys: [],
     })
-    expect(assistPickCacheSuffix(config)).toBe("")
+    // R2 B3: 켰을 때 열쇠 꼬리 맨 앞에 고르기 규약 판(picks1)이 붙는다(끄면 열쇠에 꼬리가 없다 — service.ts answerCacheRouterKey).
+    expect(assistPickCacheSuffix(config)).toBe("+picks1")
+    expect(config).toMatchObject({ pickPrompt: "v1", candidates: 10, band: [null, null] })
+    expect(
+      assistPickCacheSuffix(readAssistPickConfig({ CHATBOT_ASSIST_PICK_PROMPT: "v2", CHATBOT_ASSIST_CANDIDATES: "15", CHATBOT_ASSIST_BAND_LO: "0.1" }))
+    ).toBe("+picks1+prompt-v2+cand-15+band-0.1-")
     expect(readAssistPickConfig({ CHATBOT_ASSIST_PICK_PROVIDER: "claude" }).pickModel).toBe("claude-haiku-5-5")
     expect(readAssistPickConfig({ CHATBOT_ASSIST_PICK_MODEL: "gemini-3.5-flash-lite" }).pickModel).toBe("gemini-3.5-flash-lite")
     const on = readAssistPickConfig({
@@ -227,7 +232,7 @@ describe("readAssistPickConfig", () => {
       ANTHROPIC_API_KEY: "k",
     })
     expect(on).toMatchObject({ escalate: true, crossFallback: true, escalateTimeoutMs: 1500, dailyBudgetUsd: 0.25, apiKeys: ["k"] })
-    expect(assistPickCacheSuffix(on)).toBe("+esc-claude-sonnet-5-5+xfb-claude-haiku-5-5")
+    expect(assistPickCacheSuffix(on)).toBe("+picks1+esc-claude-sonnet-5-5+xfb-claude-haiku-5-5")
     expect(readAssistPickConfig({ CHATBOT_ASSIST_ESCALATE: "off" }).escalate).toBe(false)
   })
 })

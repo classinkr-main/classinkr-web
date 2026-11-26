@@ -103,8 +103,8 @@ import {
   type AnswerCardPickFailure,
 } from "@/lib/chatbot/answer-index/assist"
 import { collectLegacyVotes } from "@/lib/chatbot/answer-index/legacy-votes"
-import { disabledCardIds, type QuestionAnalysis } from "@/lib/chatbot/answer-index/decide"
-import { detectAskType, segmentQuestion } from "@/lib/chatbot/answer-index/normalize"
+import { disabledCardIds, labelForSegmentText, type QuestionAnalysis } from "@/lib/chatbot/answer-index/decide"
+import { detectAskType, isQuestionSentence, segmentQuestion, splitQuestion } from "@/lib/chatbot/answer-index/normalize"
 import {
   isUnverifiedFixedAnswerText,
   MODEL_UNAVAILABLE_ANSWER,
@@ -132,6 +132,9 @@ export {
 import { groupSentenceParagraphs } from "@/lib/chatbot/answer-index/paragraphs"
 import {
   buildAnswerIndexCore,
+  SEGMENT_ABSENT_LINE,
+  SEGMENT_RETRY_LINE,
+  shortTopic,
   type AnswerIndexCoreParts,
   type AnswerIndexHost,
 } from "@/lib/chatbot/answer-index/respond"
@@ -441,7 +444,8 @@ interface CachedAnswerEntry {
 }
 
 // 2026-11-23: 쇼룸 실시간 응답·수업 워크플로 통합에 맞춰 캐시 판을 올렸다.
-const ANSWER_CACHE_VERSION = "answer-20261123-v1"
+// 20261126: R2 B5 앞단 낱말 장치(정책 주제·즉시 상담·거절·이미 해 봄·시험·영어)와 공감 줄 자리가 바뀌어 같은 글의 답이 달라진다.
+const ANSWER_CACHE_VERSION = "answer-20261126-v1"
 const ANSWER_CACHE_TTL_MS = 5 * 60 * 1000
 const ANSWER_CACHE_MAX = 200
 const answerCache = new Map<string, { expiresAt: number; value: CachedAnswerEntry }>()
@@ -676,21 +680,82 @@ const CAPABILITY_REQUEST_RE =
   /되나요|돼요|가능|지원|제공|처리|관리|기능|자동|연동|만들|추가|하려고|하고\s*싶|쓸\s*수|사용할\s*수/i
 
 const PROMPT_OR_SECURITY_ABUSE_RE =
-  /sql\s*injection|\bsqli\b|union\s+select|drop\s+table|\bor\s+1\s*=\s*1|information_schema|xp_cmdshell|\bxss\b|\bcsrf\b|\bssrf\b|\brce\b|프롬프트\s*인젝션|system\s*prompt|developer\s*(?:message|instruction)|시스템\s*프롬프트|개발자\s*메시지|(?:개발자|시스템|숨겨진|비공개).{0,12}(?:지침|규칙|지시|명령어?|명령문).{0,16}(?:원문|보여|출력|공개|알려|노출|그대로)|(?:개발자|시스템).{0,10}(?:준|받은).{0,10}(?:지침|규칙|지시|명령어?|명령문).{0,16}(?:원문|보여|출력|공개|알려|노출|그대로)|내부\s*(?:프롬프트|규칙|지시|명령어?|명령문)|(?:프롬프트|prompt|지시문).{0,16}(?:보여|출력|공개|알려|노출|그대로)|(?:보여|출력|공개|알려|노출).{0,16}(?:프롬프트|prompt|지시문)|(?:이전|위|앞선).{0,12}(?:지시|규칙|프롬프트).{0,12}(?:무시|잊어|삭제)|보안.{0,12}(?:뚫|우회|공격)|취약점.{0,12}(?:공격|악용|우회)|해킹.{0,12}(?:방법|공격|뚫|탈취|우회)|(?:비밀번호|토큰|api\s*key|관리자).{0,12}(?:탈취|훔|우회|크랙)/i
+  /sql\s*injection|\bsqli\b|union\s+select|drop\s+table|\bor\s+1\s*=\s*1|information_schema|xp_cmdshell|\bxss\b|\bcsrf\b|\bssrf\b|\brce\b|프롬프트\s*인젝션|system\s*prompt|developer\s*(?:message|instruction)|시스템\s*프롬프트|개발자\s*메시지|(?:개발자|시스템|숨겨진|비공개).{0,12}(?:지침|규칙|지시|명령어?|명령문).{0,16}(?:원문|보여|출력|공개|알려|노출|그대로)|(?:개발자|시스템).{0,10}(?:준|받은).{0,10}(?:지침|규칙|지시|명령어?|명령문).{0,16}(?:원문|보여|출력|공개|알려|노출|그대로)|내부\s*(?:프롬프트|규칙|지시|명령어?|명령문)|(?:프롬프트|prompt).{0,16}(?:보여|출력|공개|알려|노출|그대로)|(?:보여|출력|공개|알려|노출).{0,16}(?:프롬프트|prompt)|(?:이전|위|앞선).{0,12}(?:지시|규칙|프롬프트).{0,12}(?:무시|잊어|삭제)/i
+// 피해·방어 쪽 공격 낱말(R2 B5): "보안 뚫는", "해킹 방법", "관리자 비밀번호 탈취"처럼 공격을 묻는 말과 같은 낱말이
+// "계정 해킹 당했을 때 복구 방법", "보안 프로그램이 공격으로 인식해 앱이 막혀요"처럼 당한 일·막을 일을 묻는 말에도 나온다.
+// 이 갈래는 피해·방어 단서가 있고 공격을 '하는' 말이 없을 때만 거절하지 않는다(isVictimOrDefenseText). 기술 공격 낱말(sql injection·xss·
+// 시스템 프롬프트 등)은 위 정규식이 그대로 거절한다.
+const SOFT_SECURITY_ABUSE_RE =
+  /보안.{0,12}(?:뚫|우회|공격)|취약점.{0,12}(?:공격|악용|우회)|해킹.{0,12}(?:방법|공격|뚫|탈취|우회)|(?:비밀번호|토큰|api\s*key|관리자).{0,12}(?:탈취|훔|우회|크랙)/i
+// 지시문을 보여 달라는 말. "시험 지시문을 학생 화면에 크게 보여 주는 방법"처럼 수업 글을 가리키면 거절하지 않는다
+// (너·챗봇·시스템·숨겨진 지침처럼 이 대화의 지시를 가리키는 말이 함께 있으면 그대로 거절한다).
+const INSTRUCTION_TEXT_ABUSE_RE = /지시문.{0,16}(?:보여|출력|공개|알려|노출|그대로)|(?:보여|출력|공개|알려|노출).{0,16}지시문/
+const CLASSROOM_TEXT_CONTEXT_RE = /시험|문제|숙제|과제|학생|수업|칠판|교재|문항|활동/
+const BOT_INSTRUCTION_REF_RE =
+  /(?<![가-힣])(?:너|네|니)(?:한테|에게|가|는|의)?(?![가-힣])|너한테|너에게|네가|니가|당신|챗봇|(?<![가-힣])봇|시스템|숨겨|내부|원래\s*(?:지시|지침|규칙)|받은\s*(?:지시|지침|규칙)|설정된|비공개|\bai\b|gpt|모델|개발자|원문/i
+// 당한 일·막을 일을 묻는 단서(피해·복구·차단·신고·오탐·증거 보관·사기 문자 거르기). 공격을 '하는' 말(ABUSE_ACTION_RE)이 함께 있으면 쓰지 않는다.
+const ABUSE_VICTIM_CONTEXT_RE =
+  /당했|당한|당해|털렸|털린|받았|받은|피해|복구|되찾|막(?:는|으려|을|아|기|나)|차단|예방|대처|대응|신고|의심|조심|속지|인식(?:해|돼|되|했|하)|오탐|백신|보안\s*프로그램|증거|보관|(?:문자|전화|메일|링크)(?:를|을)?\s*(?:피하|거르|걸러|구별|알아보)/
+const ABUSE_ACTION_RE =
+  /(?<!신고|예방|대처|대응|차단|방지|조심|복구|피)하는\s*(?:방법|법)|해킹\s*(?:하|해서|해\s*줘|해\s*주|툴)|뚫(?:는|어|을|고)|탈취\s*(?:하|해)|훔치|훔쳐|크랙|우회\s*(?:하|해)|공격\s*(?:하|해|할)|사기\s*(?:치|쳐)|치는\s*(?:방법|법)|저지르|만드는|만들어|만들기|제조|구하는|구해|숨기|팔(?:아|고|는)\s|침투/
+
+/** 문장 끊기(마침표·물음표·느낌표·줄바꿈). 앞단 낱말 장치가 단서를 같은 문장 안에서만 보게 한다(R2 B5). */
+function splitSentencesLoose(text: string) {
+  return text
+    .split(/(?<=[.?!？。…])\s+|\n+/)
+    .map((sentence) => sentence.trim())
+    .filter(Boolean)
+}
+
+/**
+ * 공격 낱말이 걸린 자리마다(가장 짧게 맞춘 자리) 그 안에 피해·방어 단서가 있고, 글 어디에도 공격을 '하는' 말이 없을 때만 참.
+ * "계정 해킹 당했을 때 복구 방법"은 '해킹 … 방법' 자리 안에 '당했'이 있다. "나 해킹 당했는데 해킹 방법 알려줘"는 둘째 '해킹 방법' 자리에
+ * 단서가 없어 거절한다.
+ */
+function isVictimOrDefenseText(text: string, pattern: RegExp) {
+  if (ABUSE_ACTION_RE.test(text)) return false
+  const lazy = new RegExp(pattern.source.replace(/\.\{0,(\d+)\}(?!\?)/g, ".{0,$1}?"), `${pattern.flags.replace(/[gy]/g, "")}y`)
+  let spans = 0
+  for (let at = 0; at < text.length; at += 1) {
+    lazy.lastIndex = at
+    const match = lazy.exec(text)
+    if (!match) continue
+    spans += 1
+    if (!ABUSE_VICTIM_CONTEXT_RE.test(match[0])) return false
+  }
+  return spans > 0
+}
 // 공격 낱말 없이 "무슨 기준으로 답하는지 알아야 믿고 견적 얘기를 하죠"처럼 답변 기준을 묻는 말.
 // 거절 문구 대신 정해 둔 답(chatbot-system-prompt-request)이 지시문은 보여 주지 않고 근거와 상담 경로를 알려 준다.
 const SINCERE_ANSWER_BASIS_RE = /견적|믿고|신뢰|무슨\s*기준|어떤\s*기준/
 const PROMPT_ATTACK_WORD_RE = /sql|injection|인젝션|xss|csrf|ssrf|\brce\b|무시하고|무시해|우회|탈옥|jailbreak|원문|출력해|그대로\s*출력/i
 
 function isPromptOrSecurityAbuse(text: string) {
-  if (!PROMPT_OR_SECURITY_ABUSE_RE.test(text)) return false
+  const hit =
+    PROMPT_OR_SECURITY_ABUSE_RE.test(text) ||
+    (SOFT_SECURITY_ABUSE_RE.test(text) && !isVictimOrDefenseText(text, SOFT_SECURITY_ABUSE_RE)) ||
+    (INSTRUCTION_TEXT_ABUSE_RE.test(text) && !(CLASSROOM_TEXT_CONTEXT_RE.test(text) && !BOT_INSTRUCTION_REF_RE.test(text)))
+  if (!hit) return false
   return !(SINCERE_ANSWER_BASIS_RE.test(text) && !PROMPT_ATTACK_WORD_RE.test(text))
 }
 
 const CRIMINAL_ABUSE_RE =
   /(?:범죄|불법|사기|피싱|스미싱|절도|도둑|마약|폭탄|무기|살인|폭행).{0,18}(?:방법|하는\s*법|계획|도와|만들|제조|우회|탈취|공격|훔|숨기|피하)|(?:방법|하는\s*법|계획).{0,18}(?:범죄|불법|사기|피싱|스미싱|절도|마약|폭탄|무기|살인|폭행)/i
 const TOKEN_WASTE_RE =
-  /토큰.{0,12}(?:낭비|소모|다\s*써|태워)|(?:무한|계속).{0,8}반복|(?:1000|10000|10,000|만\s*번).{0,12}(?:반복|써|출력)|(?:반복|출력).{0,12}(?:1000|10000|10,000|만\s*번)/i
+  /토큰.{0,12}(?:낭비|소모|다\s*써|태워)|(?:1000|10000|10,000|만\s*번).{0,12}(?:반복|써|출력)|(?:반복|출력).{0,12}(?:1000|10000|10,000|만\s*번)/i
+// "무한·계속 반복"은 출력·답을 되풀이하라는 말과 함께일 때만 토큰 낭비 요청이다(R2 B5). "수업 영상이 계속 반복 재생돼요",
+// "무한 반복 재생으로 강의 영상 틀어 두는 설정"은 재생 기능·증상이라 거절하지 않는다.
+const REPEAT_LOOP_RE = /(?:무한|계속).{0,8}반복/
+const REPEAT_OUTPUT_RE =
+  /출력|써\s*(?:줘|주|봐|라|서)|쓰(?:라|세요|시오)|적어|말해|말하|답해|답하|대답|생성|타이핑|토큰|글자|문장|단어|같은\s*말|반복\s*해\s*(?:줘|주|봐|라)|반복해(?:줘|주|봐|라)|반복해\s*$/
+
+function isTokenWasteRequest(text: string) {
+  return TOKEN_WASTE_RE.test(text) || (REPEAT_LOOP_RE.test(text) && REPEAT_OUTPUT_RE.test(text))
+}
+
+function isCriminalAbuseRequest(text: string) {
+  return CRIMINAL_ABUSE_RE.test(text) && !isVictimOrDefenseText(text, CRIMINAL_ABUSE_RE)
+}
 
 function isUnsupportedAcademyPaymentFeatureQuestion(question: NormalizedQuestion) {
   const text = question.redacted.toLowerCase()
@@ -803,7 +868,7 @@ function buildPolicyGuardResponse(question: NormalizedQuestion): {
     }
   }
 
-  if (CRIMINAL_ABUSE_RE.test(text)) {
+  if (isCriminalAbuseRequest(text)) {
     return {
       response: {
         answer:
@@ -825,7 +890,7 @@ function buildPolicyGuardResponse(question: NormalizedQuestion): {
     }
   }
 
-  if (TOKEN_WASTE_RE.test(text)) {
+  if (isTokenWasteRequest(text)) {
     return {
       response: {
         answer:
@@ -2798,15 +2863,83 @@ function isContactChannelFactQuestion(text: string) {
   )
 }
 
+// 사람·연결을 청하는 말(즉시 상담 연결). 이 정규식 하나가 걸리면 앞단이 답을 끝낸다(색인·검색을 건너뛴다).
+const HANDOFF_EXPLICIT_RE =
+  /상담\s*(?:받|받고|하고|하고\s*싶|할래|신청|연결|이어|부탁|필요|문의|원해|원함)|상담받|상담할래|상담하고\s*싶|상담\s*(?:원|사)|담당자.{0,10}(?:상담|연결|연락|통화|배정|문의)|매니저.{0,10}(?:상담|연결|연락|통화|문의)|상담원.{0,10}(?:상담|연결|연락|통화|문의)|(?:상담|연결|연락|통화|문의).{0,10}(?:담당자|매니저|상담원)|전담\s*매니저|연락\s*(?:주세요|받고|하고|원해|원함|가능)|전화\s*(?:주세요|받고|하고|원해|원함|가능)|통화\s*(?:하고|원해|원함|가능)|미팅\s*(?:잡|하고|원해|원함)|데모\s*(?:신청|보고|받|연결|원해|원함|요청)|데모.{0,10}신청|시연.{0,10}신청|시연\s*(?:신청|보고|연결|원해|원함)|쇼룸\s*(?:방문|데모|신청|예약|연결|체험|보|보러)|채널톡\s*(?:연결|상담|문의)|구매\s*상담|도입\s*(?:상담|문의|검토)|사람\s*(?:이랑|하고|한테|과)\s*(?:연결|통화|이야기|얘기|대화|상담)|사람\s*(?:연결|이랑\s*얘기)|(?:진짜|실제|살아\s*있는)\s*사람|사람\s*(?:바꿔|불러|연결)|직원\s*(?:연결|분|이랑|하고)|상담사\s*(?:연결|분|님)|상담원\s*(?:분|님|이랑|하고)|챗봇\s*말고|봇\s*말고|책임자|윗사람|상급자|대표\s*(?:바꿔|연결|나와|불러)|보상\s*(?:어떻게|해\s*주|받|요구|안\s*해)|통화\s*(?:할\s*수|할수|가능|되|돼)|전화\s*(?:로\s*(?:상담|설명|도와|해결)|상담|해\s*주실|해줄)|원격\s*(?:지원|제어|상담|으로)|화면\s*(?:을\s*)?(?:보면서|같이\s*보)|담당자\s*(?:번호|연락처|전화번호)|(?:번호|연락처)\s*(?:좀\s*)?(?:줘|주세요|알려)|(?:누구|사람|담당자)(?:랑|와|하고)\s*직접\s*(?:얘기|이야기|통화|상담)|사람이\s*답하는|사람(?:은|이)\s*(?:아예\s*)?(?:없|있)/
+// '문의' 문맥: 문의 + 사람·채널·도입 낱말. 연락·전화·통화만 함께인 문의는 기능 틀이 있으면 연결 요청으로 보지 않는다(아래 isFeatureHandoffText).
+const HANDOFF_INQUIRY_STRONG_RE = /담당자|매니저|상담원|채널톡|쇼룸|구매|도입|시연|데모/
+const HANDOFF_INQUIRY_WEAK_RE = /연락|전화|통화/
+const HANDOFF_INQUIRY_ANY_RE = new RegExp(`${HANDOFF_INQUIRY_STRONG_RE.source}|${HANDOFF_INQUIRY_WEAK_RE.source}`)
+
+// R2 B5: 즉시 상담 연결의 '흔한 낱말' 갈래. 사람·연결을 청하는 말이 아니라 기능·수업 상황을 말하는 질문에서도 걸린다
+// ("학생이랑 화면 같이 보면서 수업하고 싶어요", "수업 중에 학생끼리 음성 통화 가능한가요", "학생 연락처 알려주는 기능을 끄고 싶어요",
+// "전화 가능한 시간에 맞춰 수업 알림 보내는 법", "수업에 들어온 사람이 없다고 떠요", "미팅 잡기 기능처럼 1:1 수업 시간을 잡고 싶어요").
+// 이 갈래를 지운 글에 연결 요청이 남지 않고 기능 틀이 있으면 앞단에서 끝내지 않는다(색인 답 + 상담 버튼, 결정 8).
+// '원격 지원'·'원격 상담'은 지원을 청하는 말이라 이 갈래가 아니다.
+const HANDOFF_AMBIGUOUS_RE =
+  /원격\s*(?:제어|으로)|화면\s*(?:을\s*)?(?:보면서|같이\s*보)|통화\s*(?:할\s*수|할수|가능|되|돼)|전화\s*(?:주세요|받고|하고|원해|원함|가능)|연락\s*(?:주세요|받고|하고|원해|원함|가능)|(?:번호|연락처)\s*(?:좀\s*)?(?:줘|주세요|알려)|사람(?:은|이)\s*(?:아예\s*)?(?:없|있)|보상\s*(?:어떻게|해\s*주|받|요구|안\s*해)|미팅\s*(?:잡|하고|원해|원함)/g
+// 기능·수업 상황 틀: 기능·설정·방법을 묻거나 학생·수업 안의 일을 말한다.
+const HANDOFF_FEATURE_FRAME_RE =
+  /기능|설정|방법|어떻게|하는\s*법|보내는\s*법|학생|수업\s*중|수업에|수업을|수업\s*시간|수업하|끄(?:고|는|려|기|면)|켜(?:고|는|려|기|면)|막(?:나요|는|으려|을|기|아)|알림/
+
+// 손님 쪽 직원을 주어로 말한 '상담사가·상담원이·매니저가'("우리 학원 상담사가 강의실 노트북에서 앱이 안 열린다고 해요"). 높임말(상담원분·상담사님·
+// 매니저님)은 클래스인 상담원을 가리키는 말이 많아(지난 통화 후속) 여기에 넣지 않는다. 연결·회신 문제를 말하면 그대로 연결이다.
+const STAFF_SUBJECT_RE = /(?:상담사|상담원|매니저|직원)(?:가|이|들이|들은|들도|도)(?=\s)/g
+const HANDOFF_CONTACT_TROUBLE_RE = /연결|통화|연락|답(?:이|을|변)?\s*(?:없|안)|안\s*(?:와|옴|왔|받)|대기|기다리|회신|답장/
+// 우리에게 도움을 청하는 말("원격으로 설정 도와주나요", "원격으로 봐 주실 수 있나요")이 있으면 흔한 낱말 갈래여도 연결 요청이다.
+const HANDOFF_HELP_REQUEST_RE = /도와\s*(?:주|줘|줄|드)|도움\s*(?:받|요청|주|을\s*받)|봐\s*(?:주|줘|줄)|해\s*주실\s*수|대신\s*해|점검해\s*(?:주|줘)/
+
+function matchesHandoffWords(text: string, inquiryContext: RegExp) {
+  return HANDOFF_EXPLICIT_RE.test(text) || (/문의/.test(text) && inquiryContext.test(text))
+}
+
+// 남의 말을 옮긴 따옴표('…'라고·'…'하면). 손님이 "'상담원 연결'"처럼 안내 문구를 그대로 적은 말은 옮긴 말이 아니라 빼지 않는다.
+const REPORTED_SPEECH_RE = /['"‘’“”][^'"‘’“”]{1,60}['"‘’“”]\s*(?=이?라(?:고|는|며|면)|이?란\s|하(?:고|면|길래|는|며|니까|더라))/g
+
+/**
+ * 연결 낱말이 걸렸지만 연결 요청이 아닌 말(R2 B5): (a) 옮긴 말 따옴표 안에서만 걸린 말("학생이 '담당자 연결해 주세요'라고 쓰면 알림 가요?"),
+ * (b) 흔한 낱말 갈래(HANDOFF_AMBIGUOUS_RE)만 걸렸고 기능·수업 틀이 있고 도움을 청하는 말이 없는 말, (c) 손님 쪽 직원을 주어로 말했을 뿐인 말.
+ * 따옴표 밖에 남는 글이 없으면(손님이 "'상담원 연결'"만 적음) 연결로 본다.
+ */
+function isFeatureHandoffText(text: string) {
+  // 화난·반복 문의와 지난 문의·통화를 잇는 말은 좁히지 않는다(결정 8: 바로 연결 유지).
+  const tone = detectConversationTone(text)
+  if (tone.angry || tone.repeated || tone.priorContext) return false
+  const unquoted = text.replace(REPORTED_SPEECH_RE, " ")
+  if (unquoted !== text && /[가-힣]{2}/.test(unquoted) && unquoted.replace(/[\s\p{P}]+/gu, "").length >= 4) {
+    if (!matchesHandoffWords(unquoted, HANDOFF_INQUIRY_ANY_RE)) return true
+  }
+  // (c) 손님 쪽 직원을 주어로 말했을 뿐인 말: 그 말을 지우면 연결 요청이 남지 않는다(기능 틀과 상관없다).
+  const withoutStaff = unquoted.replace(STAFF_SUBJECT_RE, " ")
+  if (withoutStaff !== unquoted && !HANDOFF_CONTACT_TROUBLE_RE.test(withoutStaff) && !matchesHandoffWords(withoutStaff, HANDOFF_INQUIRY_STRONG_RE)) {
+    return true
+  }
+  if (HANDOFF_HELP_REQUEST_RE.test(unquoted)) return false
+  // (b) 연결 낱말이 걸린 문장마다 그 문장 안에 기능 틀이 있고, 흔한 낱말 갈래를 지우면 연결 요청이 남지 않아야 한다
+  // ("화면 같이 보면서 설명 듣고 싶어요. 학생 관리 때문에요"는 첫 문장에 틀이 없어 그대로 연결한다).
+  const sentences = splitSentencesLoose(unquoted).filter((sentence) => matchesHandoffWords(sentence, HANDOFF_INQUIRY_ANY_RE))
+  if (sentences.length === 0) return !matchesHandoffWords(unquoted.replace(HANDOFF_AMBIGUOUS_RE, " "), HANDOFF_INQUIRY_STRONG_RE) && HANDOFF_FEATURE_FRAME_RE.test(unquoted)
+  return sentences.every(
+    (sentence) =>
+      HANDOFF_FEATURE_FRAME_RE.test(sentence) && !matchesHandoffWords(sentence.replace(HANDOFF_AMBIGUOUS_RE, " "), HANDOFF_INQUIRY_STRONG_RE)
+  )
+}
+
+/** 옛 낱말 판정으로는 즉시 상담이지만 B5 가 기능 질문으로 본 말. 공개 답에 상담 버튼만 남긴다(applyPublicAnswerLayers). */
+function isNarrowedHandoffQuestion(question: NormalizedQuestion) {
+  const text = question.redacted.toLowerCase()
+  if (!matchesHandoffWords(text, HANDOFF_INQUIRY_ANY_RE)) return false
+  if (isContactChannelFactQuestion(text)) return false
+  return isFeatureHandoffText(text)
+}
+
 function wantsImmediateHumanHandoff(question: NormalizedQuestion) {
   const text = question.redacted.toLowerCase()
-  const explicitHandoff =
-    /상담\s*(?:받|받고|하고|하고\s*싶|할래|신청|연결|이어|부탁|필요|문의|원해|원함)|상담받|상담할래|상담하고\s*싶|상담\s*(?:원|사)|담당자.{0,10}(?:상담|연결|연락|통화|배정|문의)|매니저.{0,10}(?:상담|연결|연락|통화|문의)|상담원.{0,10}(?:상담|연결|연락|통화|문의)|(?:상담|연결|연락|통화|문의).{0,10}(?:담당자|매니저|상담원)|전담\s*매니저|연락\s*(?:주세요|받고|하고|원해|원함|가능)|전화\s*(?:주세요|받고|하고|원해|원함|가능)|통화\s*(?:하고|원해|원함|가능)|미팅\s*(?:잡|하고|원해|원함)|데모\s*(?:신청|보고|받|연결|원해|원함|요청)|데모.{0,10}신청|시연.{0,10}신청|시연\s*(?:신청|보고|연결|원해|원함)|쇼룸\s*(?:방문|데모|신청|예약|연결|체험|보|보러)|채널톡\s*(?:연결|상담|문의)|구매\s*상담|도입\s*(?:상담|문의|검토)|사람\s*(?:이랑|하고|한테|과)\s*(?:연결|통화|이야기|얘기|대화|상담)|사람\s*(?:연결|이랑\s*얘기)|(?:진짜|실제|살아\s*있는)\s*사람|사람\s*(?:바꿔|불러|연결)|직원\s*(?:연결|분|이랑|하고)|상담사\s*(?:연결|분|님)|상담원\s*(?:분|님|이랑|하고)|챗봇\s*말고|봇\s*말고|책임자|윗사람|상급자|대표\s*(?:바꿔|연결|나와|불러)|보상\s*(?:어떻게|해\s*주|받|요구|안\s*해)|통화\s*(?:할\s*수|할수|가능|되|돼)|전화\s*(?:로\s*(?:상담|설명|도와|해결)|상담|해\s*주실|해줄)|원격\s*(?:지원|제어|상담|으로)|화면\s*(?:을\s*)?(?:보면서|같이\s*보)|담당자\s*(?:번호|연락처|전화번호)|(?:번호|연락처)\s*(?:좀\s*)?(?:줘|주세요|알려)|(?:누구|사람|담당자)(?:랑|와|하고)\s*직접\s*(?:얘기|이야기|통화|상담)|사람이\s*답하는|사람(?:은|이)\s*(?:아예\s*)?(?:없|있)/.test(text)
-  const contextualInquiry =
-    /문의/.test(text) && /담당자|매니저|상담원|채널톡|쇼룸|연락|전화|통화|구매|도입|시연|데모/.test(text)
+  const explicitHandoff = HANDOFF_EXPLICIT_RE.test(text)
+  const contextualInquiry = /문의/.test(text) && HANDOFF_INQUIRY_ANY_RE.test(text)
 
   if ((explicitHandoff || contextualInquiry) && isContactChannelFactQuestion(text)) return false
-  if (explicitHandoff || contextualInquiry) return true
+  if (explicitHandoff || contextualInquiry) return !isFeatureHandoffText(text)
 
   if (isHardwareSpecsQuestion(question)) return false
   if (isHardwareBoardLineupQuestion(question)) return false
@@ -4471,6 +4604,19 @@ const SHOWROOM_BOOKING_ANSWER = `네, 목동 쇼룸 방문 상담을 예약하�
 const QUOTE_FIX_RE = /견적서?.{0,24}(?:잘못|틀려|틀렸|다르게|다르|수정|오류|빠졌|빠져|대로\s*안)/
 const EXAM_ANSWER_RE =
   /(?:시험|퀴즈|문제|숙제)\s*(?:의\s*)?(?:답|정답|답안)\s*(?:좀\s*)?(?:알려|가르쳐|보여|줘|주세요|주셈)|(?:^|\s)(?:정답|답)\s*(?:좀\s*)?(?:알려|가르쳐)\s*(?:줘|주세요|주셈)/
+// 정답 공개 '기능'을 묻는 말(R2 B5): "숙제 답안 보여 주는 설정은 어디서 켜요", "시험 정답 알려 주기 기능을 제출 후에만 켜고 싶어요",
+// "퀴즈 답 보여 주기 옵션을 끄는 방법", "문제 정답 가르쳐 주는 AI 기능이 있나요". 교사 설정 질문이라 거절하지 않는다.
+// 챗봇에게 정답을 직접 청하는 말("3번 문제 정답 알려 주세요", "시험 정답 알려 줄 수 있어요?")은 이 틀이 없어 그대로 거절한다.
+const EXAM_FEATURE_FRAME_RE =
+  /설정|기능|옵션|켜(?:요|고|는|기|면|려|야|져)|끄(?:는|고|기|면|려)|꺼(?:요|야|두|놓|지)|방법|어디(?:서|에)|제출\s*(?:후|뒤|하고|한\s*뒤|한\s*다음)|공개|(?:보여|알려|가르쳐)\s*주기/
+
+// 문장 단위로 본다: 정답을 청하는 문장마다 그 문장 안에 기능 틀이 있어야 거절하지 않는다
+// ("시험 정답 알려줘. 숙제 제출 기한은 어디서 바꿔요?"는 첫 문장에 틀이 없어 그대로 거절한다).
+function isExamAnswerFeatureQuestion(text: string) {
+  const asking = splitSentencesLoose(text).filter((sentence) => EXAM_ANSWER_RE.test(sentence))
+  return asking.length > 0 && asking.every((sentence) => EXAM_FEATURE_FRAME_RE.test(sentence))
+}
+
 const ACCOUNT_DELETE_RE =
   /(?:계정|아이디).{0,20}(?:삭제|탈퇴|지워|없애)|회원\s*탈퇴|(?:영상|녹화|사진|기록|개인\s*정보).{0,30}(?:지워|삭제)\s*(?:달라|해\s*달|해\s*주|요청|가능|할\s*수)/
 const INVOICE_MISSING_RE =
@@ -4516,8 +4662,14 @@ const SHOWROOM_DEVICE_RE = /(?:쇼룸|전시).{0,40}(?:데모|받은|우리).{0,
 const ZOOM_WEAKNESS_RE = /(?:zoom|줌).{0,30}(?:보다\s*)?(?:못한|단점|약점|부족|안\s*좋은)|(?:단점|약점|못한\s*게).{0,20}(?:솔직|뭐|말해)/
 const PERSONAL_USE_RE =
   /(?:개인|혼자|private|과외).{0,24}(?:으로\s*)?(?:쓸\s*수|사용할|쓰고\s*싶|가입|이용)|(?:학원\s*(?:끝나|그만|나오|끝나면)).{0,30}(?:개인|혼자|private)/
-const TRIED_ALREADY_RE =
-  /다\s*해\s*봤|해\s*봤(?:다고|어요|는데|습니다)|소용\s*(?:없|이\s*없)|그래도\s*똑같|매번\s*(?:재부팅|인터넷|껐다)/
+// 기본 조치를 이미 해 봤다는 말. '매번 재부팅·인터넷'은 반복 문의 신호(tone.ts REPEATED_RE)와 같은 구라 여기서는 뺀다(R2 B5):
+// 한 구가 반복·시도 조건을 둘 다 채워 "매번 재부팅해야 업데이트가 적용되나요?" 같은 첫 문의가 '같은 안내 또 안 드릴게요'로 갔다.
+const TRIED_ALREADY_RE = /다\s*해\s*봤|해\s*봤(?:다고|어요|는데|습니다)|소용\s*(?:없|이\s*없)|그래도\s*똑같/
+// 해 본 뒤에도 문제가 이어진다는 말. 이 말 없이 위치·방법·기능을 묻는 말("…해 봤는데 안내 화면 있나요", "…다 해 봤어요, 마이크 권한은 어디서 줘요?")은
+// 이미 해 봤다는 화난 문의가 아니라 질문이다(색인·검색으로 답한다).
+const TRIED_STILL_FAILING_RE =
+  /안\s*(?:돼|되|됨|됐|나와|나오|들려|보여|켜|열려|떠|고쳐)|안돼|안되|똑같|그대로|여전|소용|해결\s*(?:이\s*)?안|계속|또\s|반복|끊|튕|멈|오류|에러|먹통/
+const TRIED_FEATURE_ASK_RE = /어디|위치|방법|어떻게|하는\s*법|있나요|있을까요|있어요\?|궁금|알려\s*주|가능한가요|되나요/
 const FAR_REGION_RE = /부산|대구|광주|대전|울산|제주|강원|경남|경북|전남|전북|충남|충북|지방|멀어|먼\s*곳/
 
 type QuickAnswer = Omit<ChatbotCore, "question" | "latencyMs">
@@ -4585,7 +4737,7 @@ function buildServiceQuickAnswer(question: NormalizedQuestion): QuickAnswer | nu
     return { ...quick, topicId: field.id, suppressSalesFollowUp: !field.salesFollowUp, gateOriginal: `field:${field.id}` }
   }
 
-  if (EXAM_ANSWER_RE.test(text)) {
+  if (EXAM_ANSWER_RE.test(text) && !isExamAnswerFeatureQuestion(text)) {
     // 시험 정답을 대신 알려 달라는 요청을 막는 거절 답이라 관문 대상이 아니다.
     const refusal = direct(
       [
@@ -5580,7 +5732,7 @@ function applyConversationTone(core: ChatbotCore) {
   // 말투(감정·형식 신호)는 이번 말로 본다. 대화 맥락으로 넓힌 검색용 질문(core.question)에는 직전 질문의 신호가 섞여 있다.
   const said = core.utterance ?? core.question
   const text = said.redacted.toLowerCase()
-  if (isPromptOrSecurityAbuse(text) || CRIMINAL_ABUSE_RE.test(text) || TOKEN_WASTE_RE.test(text)) return
+  if (isPromptOrSecurityAbuse(text) || isCriminalAbuseRequest(text) || isTokenWasteRequest(text)) return
   if (isGreetingOnly(said)) return
   const tone = detectConversationTone(said.redacted)
   // 같은 대화의 앞 턴을 가리킨 말("아까 그거", "또 안 돼요")이고 직전 턴으로 답했으면 "지난 대화는 볼 수 없어요"를 붙이지 않는다.
@@ -5739,24 +5891,92 @@ function isNotFoundResponse(response: CoreResponse) {
 // 붙이지 않는다. 기준: docs/active/chatbot-first-contact-audit-2026-11-13.md "정해 둔 답의 기준".
 const CAPACITY_TOPIC_RE =
   /(?:최대|몇\s*명|인원|정원).{0,12}(?:수업|교실|들어|참여|무대|스테이지|온\s*스테이지|카메라)|(?:수업|교실|무대|스테이지|온\s*스테이지).{0,12}(?:최대|몇\s*명|인원|정원)/
-const INTERNAL_COST_TOPIC_RE = /원가|마진|공급가|납품가|도매가/
 const NATIONALITY_TOPIC_RE = /(?:어느|어디|무슨)\s*나라|국적|중국\s*(?:회사|기업|업체|거|꺼|제품)|본사\s*(?:가|는|위치)?\s*어디/
 
-function isPolicyGovernedTopic(question: NormalizedQuestion) {
+// ── 정책 주제 낱말의 부분 문자열·다른 뜻 거르기(R2 B5) ──────────────────────────────────────────────
+// 위 정규식과 isPricingInfoQuestion 같은 판정은 정해 둔 답·검색 출처에도 쓰이므로 그대로 두고, '정책 주제' 표시에서만 다른 뜻을 거른다.
+// 정책 주제 표시는 두 번째 검색·관문 뒤 문서 답·페이지 맥락을 끄고 모델 고르기의 카드를 정책·공백 카드로 묶는다.
+
+// '원가'는 낱말 첫머리일 때만("회원가입"의 '원가' 아님). 붙여 쓴 '전자칠판원가·제조원가'는 앞 낱말을 적어 둔다.
+const COST_WORD_RE = /(?<![가-힣])원가|(?:제조|생산|매입|제품|구매|칠판|기기|장비|하드웨어|소프트웨어|컴퓨터|ops)\s*원가|공급가(?!액)|납품가|도매가/
+// '마진'은 이익 뜻일 때만("교재 PDF 인쇄할 때 마진 줄이는 법"의 여백 뜻 아님).
+const MARGIN_WORD_RE = /마진(?!\s*(?:을|이|은|를)?\s*(?:줄|늘|조절|조정|설정|없애|넓|좁))/
+const MARGIN_LAYOUT_CONTEXT_RE = /인쇄|프린트|여백|레이아웃|페이지|문서|pdf|슬라이드|글자|판서/
+// '얼마'가 돈이 아닌 말: "얼마 전에 바꾼", "일 시작한 지 얼마 안 돼서"(때), 어디서 보는지 묻는 "출석률이 얼마인지 어디서 봐요"(비율·횟수).
+// 비율·횟수는 보는 곳·방법을 물을 때만 뺀다("재등록률이 얼마 늘었는지 사례 있어요?"는 성과 수치 질문이라 그대로 정책 주제다).
+const NON_MONEY_EOLMA_TIME_RE = /얼마\s*(?:전|후|뒤|동안|만에|안\s*(?:되|돼|됐|남|지나|걸))/g
+const NON_MONEY_EOLMA_RATE_RE = /(?:률|율|점수|진도|개수|횟수|비율|퍼센트|분량)\s*(?:이|가|은|는|도)?\s*얼마/g
+// 가격표·요금표를 자료로 다루는 기능 질문("가격표 이미지를 칠판에 붙여 넣는 방법").
+const PRICE_DOC_OBJECT_RE =
+  /(?:가격표|요금표|가격\s*비교표|요금\s*안내문|가격\s*안내문)(?:\s*(?:이미지|사진|파일|엑셀|pdf|자료|캡처|화면))?\s*(?:를|을|도)?(?=[^.?!]{0,24}(?:붙여|올리|올려|띄우|띄워|공유|넣|첨부|업로드|인쇄|출력|그리|판서))/g
+const HOWTO_ASK_RE = /방법|어떻게|하는\s*법|어디서|어디에/
+// '체험 수업'(체험 학습·체험 활동)은 손님 학생의 시범 수업이지 체험 계정이 아니다. 계정·기간·요금 낱말이 함께 있으면 체험 계정으로 본다.
+const TRIAL_LESSON_RE = /체험\s*(?:수업|학습|활동|교실|레슨)/
+const TRIAL_ACCOUNT_WORD_RE = /체험판|체험\s*(?:계정|기간|버전|플랜|신청|중)|무료\s*체험|계정|요금|결제|기간|만료|연장|유료|무료|한도|제한|몇\s*명/
+// 인원: 한도를 묻는 말(최대·몇 명·정원·까지·들어올 수 있나)과 함께일 때만. "수업에 들어온 인원 확인하는 방법"은 기능 질문이다.
+const CAPACITY_LIMIT_RE = /최대|몇\s*명|정원|한도|제한|까지|이상|넘|수\s*있|가능|되나|돼요|될까|많|백|천|\d+\s*명/
+// "수업 최대 몇 분까지 녹화되나요"처럼 '최대'가 시간을 꾸미면 인원 한도가 아니다.
+const CAPACITY_DURATION_RE = /최대\s*(?:몇\s*(?:분|시간)|\d+\s*(?:분|시간))(?!\s*(?:이|께서|이서|정도\s*들어))/
+const CAPACITY_PEOPLE_RE = /몇\s*명|\d+\s*명|인원|정원|학생\s*수|사람\s*수|몇\s*분이|몇\s*개/
+// 나라: 회사·제품·서버의 나라를 물을 때만("어느 나라 시간대 기준으로" 아님).
+const NATION_NON_COMPANY_RE = /나라\s*(?:시간|시각|시간대|표준시|언어|말|기준|공휴일|휴일|날짜)/
+// '다들 …어떻게 쓰세요'처럼 남들이 기능을 쓰는 방법을 묻는 말은 고객사·도입 분위기 질문이 아니다.
+const CROWD_USAGE_RE = /다들|많이들|보통/
+const ADOPTION_TOPIC_RE = /클래스인|classin|도입|추세|분위기|대세|유행|지역|동네|근처|인근|학원\s*(?:도|은|는|이|가|에서)|쓰는\s*(?:곳|데|학원)/i
+// 소프트웨어 요금: '앱만·프로그램만'은 따로 쓰거나 사는 말일 때, '플랜'은 요금·종류를 물을 때만("앱만 하얌" 아님).
+const SOFTWARE_ONLY_PHRASE_RE = /소프트웨어만|프로그램만|앱만/
+const SOFTWARE_ONLY_USE_RE = /(?:소프트웨어만|프로그램만|앱만)\s*(?:으로|가지고|갖고)?\s*(?:따로|쓰|써|사용|이용|구매|구입|사|살|결제|계약|도입|설치|깔|가능|되|돼|할\s*수)/
+const PRICING_CONTEXT_RE = /요금|가격|비용|금액|구독|구매|구입|결제|견적|얼마|계약|라이선스|라이센스|무료|유료|플랜\s*(?:차이|비교|종류|뭐|어떤|있)|요금제/
+
+function withRedacted(question: NormalizedQuestion, redacted: string): NormalizedQuestion {
+  return { ...question, redacted }
+}
+
+/** 정책 주제 표시가 걸린 갈래 이름(없으면 빈 배열). isPolicyGovernedTopic 의 근거이고 탐침·시험이 갈래별로 센다. */
+function policyTopicHits(question: NormalizedQuestion): string[] {
   const text = question.redacted.toLowerCase()
-  return (
-    isPricingInfoQuestion(question) ||
-    isSoftwarePricingQuestion(question) ||
-    isTrialOrPilotQuestion(question) ||
-    isAccountPlanOrTrialLimitQuestion(question) ||
-    isHardwareSpecsQuestion(question) ||
-    isHardwareBoardLineupQuestion(question) ||
-    isHardwareUnconfirmedDetailQuestion(question) ||
-    asksAboutThirdPartyAdoption(question.redacted) ||
-    CAPACITY_TOPIC_RE.test(text) ||
-    INTERNAL_COST_TOPIC_RE.test(text) ||
-    NATIONALITY_TOPIC_RE.test(text)
-  )
+  const hits: string[] = []
+  // 돈이 아닌 '얼마'와 자료로 다루는 가격표를 지운 글로 다시 본다(지워도 요금·가격 낱말이 남으면 그대로 정책 주제다).
+  const withoutTime = text.replace(NON_MONEY_EOLMA_TIME_RE, " ")
+  const pricingText = HOWTO_ASK_RE.test(text)
+    ? withoutTime.replace(NON_MONEY_EOLMA_RATE_RE, " ").replace(PRICE_DOC_OBJECT_RE, " ")
+    : withoutTime
+  const pricingQuestion = withRedacted(question, pricingText)
+  if (isPricingInfoQuestion(question) && isPricingInfoQuestion(pricingQuestion)) hits.push("pricing")
+  if (isSoftwarePricingQuestion(question) && isSoftwarePricingQuestion(pricingQuestion)) {
+    const onlyPhrase = SOFTWARE_ONLY_PHRASE_RE.test(text) && !isSoftwarePricingQuestion(withRedacted(question, text.replace(/소프트웨어만|프로그램만|앱만/g, " ")))
+    const onlyPlan = /플랜/.test(text) && !isSoftwarePricingQuestion(withRedacted(question, text.replace(/플랜/g, " ")))
+    const keep = onlyPhrase ? SOFTWARE_ONLY_USE_RE.test(text) || PRICING_CONTEXT_RE.test(text) : onlyPlan ? PRICING_CONTEXT_RE.test(text) : true
+    if (keep) hits.push("swPricing")
+  }
+  const trialLessonOnly = TRIAL_LESSON_RE.test(text) && !TRIAL_ACCOUNT_WORD_RE.test(text.replace(TRIAL_LESSON_RE, " "))
+  if (isTrialOrPilotQuestion(question) && !trialLessonOnly) hits.push("trial")
+  if (isAccountPlanOrTrialLimitQuestion(question) && !trialLessonOnly) hits.push("planLimit")
+  if (isHardwareSpecsQuestion(question)) hits.push("hwSpecs")
+  if (isHardwareBoardLineupQuestion(question)) hits.push("hwLineup")
+  if (isHardwareUnconfirmedDetailQuestion(question)) hits.push("hwUnconfirmed")
+  if (
+    asksAboutThirdPartyAdoption(question.redacted) &&
+    !(CROWD_USAGE_RE.test(text) && HOWTO_ASK_RE.test(text) && !ADOPTION_TOPIC_RE.test(text))
+  ) {
+    hits.push("thirdParty")
+  }
+  if (
+    CAPACITY_TOPIC_RE.test(text) &&
+    CAPACITY_LIMIT_RE.test(text) &&
+    !(CAPACITY_DURATION_RE.test(text) && !CAPACITY_PEOPLE_RE.test(text))
+  ) {
+    hits.push("capacity")
+  }
+  if (COST_WORD_RE.test(text) || (MARGIN_WORD_RE.test(text) && !MARGIN_LAYOUT_CONTEXT_RE.test(text))) hits.push("cost")
+  if (NATIONALITY_TOPIC_RE.test(text) && !(NATION_NON_COMPANY_RE.test(text) && !/회사|기업|업체|제품|본사|법인|서버|국적/.test(text))) {
+    hits.push("nation")
+  }
+  return hits
+}
+
+function isPolicyGovernedTopic(question: NormalizedQuestion) {
+  return policyTopicHits(question).length > 0
 }
 
 // 두 번째 검색 결과 가운데 판정을 못 받은 것(호출 실패·시간 초과, 앞 단계가 느려 시간이 모자라 건너뛴 것). 이 답은 답 캐시에 넣지 않는다.
@@ -6197,6 +6417,8 @@ function appendUnansweredSegmentNotice(core: ChatbotCore) {
 function applyPublicAnswerLayers(core: ChatbotCore) {
   if (!isCompiledFinalCore(core)) appendUnansweredSegmentNotice(core)
   applyConversationTone(core)
+  // R2 B5(결정 8): 옛 낱말 판정이면 즉시 상담으로 끝냈을 기능 질문은 답을 내되 상담 버튼을 남긴다(연결 경로는 그대로).
+  if (isNarrowedHandoffQuestion(core.utterance ?? core.question)) core.response.needsHandoff = true
 }
 
 async function buildChatbotCore(
@@ -6391,6 +6613,59 @@ function countActiveAnswerIndexCards(index: ReturnType<typeof getRouterAnswerInd
   return index.cards.filter((card) => !disabled.has(card.id)).length
 }
 
+// 앞단 답 뒤 남은 조각 알림(R2 B5, 계획 §2.4): 즉시 상담·이미 해 봄·관문 밖 정해 둔 답(시험 정답 거절)이 메시지 전체를 맡았는데
+// 다른 조각(질문 나누기 v2 조각, 나뉘지 않으면 묻는 문장)을 함께 물었으면, 그 조각만 따로 물었을 때 답이 나오는 조각(색인 answer)과
+// 공개 안내에 없다고 확인된 조각(gap)마다 머리 줄(카드 주제·없는 개념 이름, 손님 글이 아니다) + 알림 한 줄을 정해 둔 답 맨 끝에 붙인다.
+// 정해 둔 답 글은 바꾸지 않고 사실을 새로 말하지 않는다(정책 가드 답은 legacy 라 여기 오지 않는다).
+// 못 찾음·증상 조각은 붙이지 않는다(상담 연결이 그 조각까지 받는다). compiled 라우터에서만 돈다.
+const PRE_REMAINING_NOTICE_MAX = 2
+
+function preRemainingPieces(text: string) {
+  const split = splitQuestion(text).segments
+  const pieces =
+    split.length >= 2
+      ? split
+      : text
+          .split(/(?<=[.?!？。])\s+|\n+/)
+          .map((piece) => piece.replace(/^(?:그리고|또|근데|그런데|및)\s+/, "").trim())
+          .filter(Boolean)
+  return pieces.length >= 2 ? pieces : []
+}
+
+function withPreRemainingNotices(core: ChatbotCore, question: NormalizedQuestion, fires: (segment: NormalizedQuestion) => boolean): ChatbotCore {
+  // 나눌 조각이 없으면 색인을 부르지 않는다(한 줄 연결 요청은 지금과 같다).
+  const pieces = preRemainingPieces(question.redacted)
+  if (pieces.length === 0) return core
+  const index = getRouterAnswerIndex()
+  const notices: { label: string; line: string; text: string }[] = []
+  pieces.forEach((piece, at) => {
+    if (notices.length >= PRE_REMAINING_NOTICE_MAX) return
+    if (!isQuestionSentence(piece) && !/[?？]\s*$/.test(piece)) return
+    if (fires(normalizeQuestion(piece))) return
+    const { decision } = routeAnswerIndexWithAnalysis(piece, {
+      index,
+      isSymptomReport: (text) => SYMPTOM_REPORT_RE.test(text.toLowerCase()),
+    })
+    if (decision.kind !== "answer" && decision.kind !== "gap") return
+    const absentLabel = decision.absentHit ? index.absent.byId.get(decision.absentHit)?.label : undefined
+    const cardAt = decision.card ? index.cardById.get(decision.card) : undefined
+    const topic = cardAt === undefined ? null : (index.cards[cardAt].card as { topic?: string }).topic ?? null
+    const label = absentLabel ?? labelForSegmentText(index, piece) ?? (topic ? shortTopic(topic) : `${at + 1}번째 질문`)
+    notices.push({ label, line: decision.kind === "answer" ? SEGMENT_RETRY_LINE : SEGMENT_ABSENT_LINE, text: piece })
+  })
+  if (notices.length === 0) return core
+  const response = core.response
+  response.answer = [response.answer.trimEnd(), ...notices.map((notice) => `【${notice.label}】\n${notice.line}`)].join("\n\n")
+  // 따로 물으면 답이 나오는 조각은 추천 질문 맨 앞에 둔다(누르면 그 조각만 묻는다).
+  const chips = notices
+    .filter((notice) => notice.line === SEGMENT_RETRY_LINE && notice.text.length <= 60)
+    .map((notice) => notice.text)
+  if (chips.length > 0) {
+    response.suggestedQuestions = Array.from(new Set([...chips, ...response.suggestedQuestions])).slice(0, Math.max(3, response.suggestedQuestions.length))
+  }
+  return core
+}
+
 function planCompiledRoute(question: NormalizedQuestion, router: AnswerIndexRouter, startedAt: number): CompiledRoutePlan {
   const pre = (name: NonNullable<AnswerIndexTrace["pre"]>) => preIndexTrace(router, "in", name)
   if (isGreetingOnly(question)) return { kind: "legacy", trace: pre("greeting") }
@@ -6402,16 +6677,31 @@ function planCompiledRoute(question: NormalizedQuestion, router: AnswerIndexRout
   }
   const quick = buildServiceQuickAnswer(question)
   if (quick?.gateExempt) {
-    return { kind: "pre", trace: pre("exempt"), build: () => ({ question, ...quick, latencyMs: elapsedSince(startedAt) }) }
+    return {
+      kind: "pre",
+      trace: pre("exempt"),
+      build: () =>
+        withPreRemainingNotices({ question, ...quick, latencyMs: elapsedSince(startedAt) }, question, (segment) =>
+          Boolean(buildServiceQuickAnswer(segment)?.gateExempt)
+        ),
+    }
   }
   if (isEnglishSupportRequest(question.redacted)) {
     return { kind: "pre", trace: pre("english"), build: () => buildEnglishSupportCore(question, startedAt) }
   }
   if (wantsImmediateHumanHandoff(question) && !isWeakHandoffSignal(question)) {
-    return { kind: "pre", trace: pre("handoff"), build: () => buildImmediateHandoffCore(question, startedAt) }
+    return {
+      kind: "pre",
+      trace: pre("handoff"),
+      build: () => withPreRemainingNotices(buildImmediateHandoffCore(question, startedAt), question, wantsImmediateHumanHandoff),
+    }
   }
   if (isTriedAlreadyUpset(question)) {
-    return { kind: "pre", trace: pre("tried"), build: () => buildTriedAlreadyCore(question, startedAt) }
+    return {
+      kind: "pre",
+      trace: pre("tried"),
+      build: () => withPreRemainingNotices(buildTriedAlreadyCore(question, startedAt), question, isTriedAlreadyUpset),
+    }
   }
   if (!inScope) return { kind: "legacy", trace: preIndexTrace(router, "out") }
   const index = getRouterAnswerIndex()
@@ -6625,7 +6915,10 @@ function buildImmediateHandoffCore(question: NormalizedQuestion, startedAt: numb
 
 function isTriedAlreadyUpset(question: NormalizedQuestion) {
   const routingTone = detectConversationTone(question.redacted)
-  return (routingTone.repeated || routingTone.angry) && TRIED_ALREADY_RE.test(question.redacted.toLowerCase())
+  if (!(routingTone.repeated || routingTone.angry)) return false
+  const text = question.redacted.toLowerCase()
+  if (!TRIED_ALREADY_RE.test(text)) return false
+  return TRIED_STILL_FAILING_RE.test(text) || !TRIED_FEATURE_ASK_RE.test(text)
 }
 
 function buildTriedAlreadyCore(question: NormalizedQuestion, startedAt: number): ChatbotCore {
@@ -8239,4 +8532,34 @@ export async function listChatbotRegressionEvalCases(limit = 50) {
     )
     return []
   }
+}
+
+/**
+ * 시험·탐침 전용(R2 B5): 앞단 낱말 장치가 한 줄 질문을 어떻게 보는지 돌려준다. 운영 경로는 이 값을 쓰지 않는다.
+ * 대화 맥락 없이 normalizeQuestion 만 거친 질문으로 본다(prepareConversationTurn 의 맥락 없는 경우와 같다).
+ */
+export const __frontDoorForTests = {
+  inspect(message: string) {
+    const question = normalizeQuestion(message)
+    const guard = buildPolicyGuardResponse(question)
+    const quick = buildServiceQuickAnswer(question)
+    const handoff = wantsImmediateHumanHandoff(question)
+    const tone = detectConversationTone(question.redacted)
+    const plan = planCompiledRoute(question, "compiled", Date.now())
+    return {
+      guard: guard ? { answer: guard.response.answer, gateOriginal: guard.gateOriginal ?? null } : null,
+      quick: quick
+        ? { answer: quick.response.answer, gateOriginal: quick.gateOriginal ?? null, gateExempt: Boolean(quick.gateExempt) }
+        : null,
+      handoff: handoff ? (isWeakHandoffSignal(question) ? ("weak" as const) : ("strong" as const)) : null,
+      narrowedHandoff: isNarrowedHandoffQuestion(question),
+      tried: isTriedAlreadyUpset(question),
+      english: isEnglishSupportRequest(question.redacted),
+      angry: tone.angry,
+      repeated: tone.repeated,
+      policyTopic: isPolicyGovernedTopic(question),
+      policyTopicHits: policyTopicHits(question),
+      plan: plan.kind === "index" ? { kind: plan.kind, decision: plan.decision.kind, card: plan.decision.card } : { kind: plan.kind, pre: plan.trace.pre ?? null, scope: plan.trace.scope ?? null },
+    }
+  },
 }

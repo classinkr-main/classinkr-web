@@ -11958,7 +11958,12 @@
           ]
         }
       ],
-      "lead": "none"
+      "lead": "yes_can",
+      "leadBasis": {
+        "unit": "doc:/docs/student/course-submit-activity#7",
+        "i": 1,
+        "hash": "a7394648088e9680"
+      }
     },
     "sources": [
       {

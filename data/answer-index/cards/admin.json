@@ -856,7 +856,17 @@
             "e496ad2adc5f1497"
           ]
         }
-      ]
+      ],
+      "headline": {
+        "text": "PC 앱 프로필의 [나의 서비스]에서 관리자용 대시보드를 열어요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/admin/admin-operation-standardization#2",
+            "i": 3,
+            "hash": "ef8e1ff3d733e93a"
+          }
+        ]
+      }
     },
     "sources": [
       {
@@ -960,7 +970,17 @@
             "57866de557165a05"
           ]
         }
-      ]
+      ],
+      "headline": {
+        "text": "[기관 관리]에서 코스, 수업, 교사, 학생을 관리해요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/admin/admin-operation-standardization#2",
+            "i": 9,
+            "hash": "362b293f1b591d61"
+          }
+        ]
+      }
     },
     "sources": [
       {
@@ -1716,7 +1736,12 @@
             "dce4b9e445da6da2"
           ]
         }
-      ]
+      ],
+      "first": {
+        "unit": "doc:/docs/admin/admin-operation-standardization#7",
+        "i": 1,
+        "hash": "44a3abc2a37a97a0"
+      }
     },
     "sources": [
       {
@@ -2113,7 +2138,7 @@
     "area": "admin",
     "topic": "학원 홈페이지(워드프레스 등)와 클래스인을 API로 붙이기(개발 필요)",
     "answer": {
-      "lead": "none",
+      "lead": "yes_can",
       "sentences": [
         {
           "unit": "doc:/docs/admin/admin-operation-standardization#9",
@@ -2126,7 +2151,12 @@
             "91bdbe1b13108230"
           ]
         }
-      ]
+      ],
+      "leadBasis": {
+        "unit": "doc:/docs/admin/admin-operation-standardization#9",
+        "i": 0,
+        "hash": "28020186cf5a0230"
+      }
     },
     "sources": [
       {
@@ -2645,7 +2675,12 @@
             "ba5d7f9fd5c01fda"
           ]
         }
-      ]
+      ],
+      "first": {
+        "unit": "doc:/docs/admin/account-verification#0",
+        "i": 1,
+        "hash": "ba5d7f9fd5c01fda"
+      }
     },
     "sources": [
       {
@@ -4502,7 +4537,17 @@
             "bc3deb00a27e38fe"
           ]
         }
-      ]
+      ],
+      "headline": {
+        "text": "공통 설정은 [계정 정보] > [일반 설정]에서 바꿔요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/admin/institution-settings#summary",
+            "i": 2,
+            "hash": "b5522951c6536a6d"
+          }
+        ]
+      }
     },
     "sources": [
       {
@@ -5187,6 +5232,16 @@
         "unit": "doc:/docs/admin/institution-settings#2",
         "i": 12,
         "hash": "debb0f22b6c63363"
+      },
+      "headline": {
+        "text": "[브라우저 즐겨찾기 설정]에 자주 여는 링크를 넣어 둬요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/admin/institution-settings#2",
+            "i": 12,
+            "hash": "debb0f22b6c63363"
+          }
+        ]
       }
     },
     "sources": [
@@ -5296,7 +5351,17 @@
             "3b01a4a5b8357c05"
           ]
         }
-      ]
+      ],
+      "headline": {
+        "text": "학생이 전화번호로 보이면 클래스 닉네임 동기화를 켜요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/admin/institution-settings#3",
+            "i": 1,
+            "hash": "61cebca9f6494e4e"
+          }
+        ]
+      }
     },
     "sources": [
       {
@@ -9996,7 +10061,17 @@
             "85b31785db95c6fe"
           ]
         }
-      ]
+      ],
+      "headline": {
+        "text": "편입생은 [코스 관리]의 코스 상세 화면에서 추가해요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/admin/student-onboarding#6",
+            "i": 7,
+            "hash": "8732328e8e76d55e"
+          }
+        ]
+      }
     },
     "sources": [
       {
@@ -11619,7 +11694,17 @@
             "f70318f39cfa2858"
           ]
         }
-      ]
+      ],
+      "headline": {
+        "text": "지운 녹화 영상과 칠판 내용은 복구되지 않아요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/admin/storage-management#6",
+            "i": 1,
+            "hash": "c05a59269fe8259f"
+          }
+        ]
+      }
     },
     "sources": [
       {
@@ -12118,7 +12203,12 @@
           ]
         }
       ],
-      "lead": "how_to"
+      "lead": "yes_can",
+      "leadBasis": {
+        "unit": "doc:/docs/admin/shared-drive#1",
+        "i": 1,
+        "hash": "bfae9fc3ee0bcaa7"
+      }
     },
     "sources": [
       {
@@ -12736,7 +12826,17 @@
           ]
         }
       ],
-      "lead": "none"
+      "lead": "none",
+      "headline": {
+        "text": "과목, 학년, 레벨별로 폴더를 나누면 자료를 바로 찾아요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/admin/shared-drive#4",
+            "i": 0,
+            "hash": "6b11e4e4818e62f5"
+          }
+        ]
+      }
     },
     "sources": [
       {
@@ -12835,7 +12935,12 @@
           ]
         }
       ],
-      "lead": "none"
+      "lead": "not_supported",
+      "leadBasis": {
+        "unit": "doc:/docs/admin/shared-drive#4",
+        "i": 2,
+        "hash": "848aa1380b35e714"
+      }
     },
     "sources": [
       {
@@ -14596,7 +14701,17 @@
           ]
         }
       ],
-      "lead": "how_to"
+      "lead": "how_to",
+      "headline": {
+        "text": "[기관 관리] > [수업 관리]에서 수업 모니터링 데이터를 열어요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/admin/class-monitoring#4",
+            "i": 0,
+            "hash": "b7aa3b48ff1da5e6"
+          }
+        ]
+      }
     },
     "sources": [
       {

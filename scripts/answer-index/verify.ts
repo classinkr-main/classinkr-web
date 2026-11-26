@@ -1,5 +1,5 @@
 /**
- * 답 색인 자료 검사 V-1~V-12(사양 §6). CI 필수: npm run answer-index:verify
+ * 답 색인 자료 검사 V-1~V-13(사양 §6). CI 필수: npm run answer-index:verify
  *
  * 실행:
  *   npx tsx scripts/answer-index/verify.ts [--only <자료 파일>]… [--strict] [--require-blind]

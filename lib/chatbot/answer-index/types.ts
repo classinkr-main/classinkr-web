@@ -331,12 +331,34 @@ interface AnswerCardBase {
   auditRef?: string
   /** 공개 페이지 사실(site-facts)에 기대는 카드. 결정 전까지 review(§14 결정 과제 3). */
   evidenceScope?: "docs" | "site"
+  /**
+   * 정책 주제 허용 표시(R2 B3·B6, 사람이 단다). 질문이 사람이 공개 범위를 정한 주제(service.ts isPolicyGovernedTopic)여도 모델 고르기가
+   * 이 카드를 고르면 받아들인다(정책 카드가 아닌 doc·howto·fixed 카드가 정책 주제 안의 사실만 말할 때 — 회원가입·인증·체험 계정 사용법 등).
+   * 없으면 개념 겹침 규칙(assist.ts policyTopicBlocks)으로 정한다.
+   */
+  policyTopicAllowed?: boolean
 }
 
 export interface DocCardAnswer {
   lead?: AnswerLead
   leadBasis?: SingleSentenceRef
   sentences: SentenceRef[]
+  /**
+   * 결론 문장(R2 두괄식, 계획 §4.4 C). sentences 안의 한 문장을 맨 앞으로 옮긴다(문장 집합은 같고 순서만 바뀐다). 아직 렌더하지 않는다(B4).
+   * V-13(a): sentences 에 있어야 한다.
+   */
+  first?: SingleSentenceRef
+  /** 새로 쓴 결론 한 줄(≤60자, 근거 문장 토큰 ⊂ 카드 문장 토큰, V-13 c~e). 카드 글을 덮지 않는다. 아직 렌더하지 않는다(B4). */
+  headline?: CardHeadline
+}
+
+/** 카드 결론 한 줄(R2 headline 파일럿). 근거 문장과 만든 기록을 같이 둔다. */
+export interface CardHeadline {
+  text: string
+  /** 결론이 기대는 카드 문장(하나 이상). */
+  basis: SingleSentenceRef[]
+  /** 만든 기록(audit/<batch>.jsonl#<id>): 만든 방법·검사 결과. */
+  auditRef?: string
 }
 
 export interface DocAnswerCard extends AnswerCardBase {
@@ -755,11 +777,80 @@ export interface AnswerIndexCandidate {
 }
 
 export interface AnswerIndexSegmentDecision {
+  /** 조각 글(원문을 자른 것). */
   text: string
   kind: AnswerIndexDecisionKind
   card: string | null
   conf: number
+  /**
+   * 이 조각을 누가 정했나: index(결정형 — 조각 판정·원문 판정·다른 조각과 같은 카드), assist(모델 고르기, B3), none(못 정함).
+   * 없으면 card 가 있을 때 index 로 본다.
+   */
+  by?: "index" | "assist" | "none"
+  /**
+   * 결정형 안에서의 출처: segment(조각 판정), whole(원문 판정을 이 조각에 붙임), shared(다른 조각이 답한 카드가 이 조각의 1위),
+   * overflow(최대 조각 수를 넘어 답하지 않음).
+   */
+  source?: "segment" | "whole" | "shared" | "overflow"
+  /** 주제를 이어 붙여 점수를 낸 글(주어를 잃은 조각, "요금은요?" → "<앞 조각 주제> 요금은요?"). 답 글에는 쓰지 않는다. */
+  scoringText?: string
+  /** 이 조각에 걸린 없는 개념(묻는 대상일 때만). */
+  absentHit?: string | null
+  /** 정해 둔 답 승격으로 정한 조각(조각 글로 센 옛 정규식 표, 또는 원문 승격을 이 조각에 붙임). */
+  rescue?: "vote" | null
+  /** 이 조각만 물었을 때 1위 실제 카드와 확신도(못 답한 조각 알림 줄이 '카드가 있을 법한지'를 가리는 데 쓴다. 답 글에는 쓰지 않는다). */
+  topCard?: string
+  topConf?: number
+  /**
+   * 못 정한 조각을 그 글만 따로 물었을 때의 판정(단일 질문 문턱 θ, R2 검토 품질-3). answer 면 '따로 한 번 더 물어봐 주세요' 알림이
+   * 막다른 길이 아니다. 정한 조각에는 없다.
+   */
+  alone?: AnswerIndexDecisionKind
+  /** 이 조각이 증상·문제 신고인지(원문이 증상 못 찾음이어도 조각마다 따로 알림을 낸다, 품질-10). */
+  symptom?: boolean
+  /** 머리 줄 이름(조각 주절의 비일반 개념의 문서 형태, 손님 글이 아니다). 정하지 못하면 없음. */
+  label?: string
 }
+
+/**
+ * 주의 표시(R2 낱말 장치: 낱말 하나는 결정이 아니라 표시). 결정형이 알아본 신호를 모델 지시문·측정에 넘긴다.
+ * absent: 없는 개념 형태가 질문에 있음(target 이면 그 자리가 묻는 대상 — 공백·꼬리 판정에 쓴다, 아니면 수식어·비교·제외 문맥이라 쓰지 않는다).
+ * policy_topic·handoff 는 앞단(service.ts, B5)이 채운다.
+ */
+export interface AnswerIndexCaution {
+  kind: "absent" | "policy_topic" | "handoff"
+  /** absent 개념 id 등. */
+  id: string | null
+  /** 맞춘 글(형태). */
+  form: string | null
+  /** 그 자리가 묻는 대상인지. */
+  target: boolean
+  /** target 이 아니면 그 까닭(modifier·comparison·exclusion·adjectival). */
+  reason?: string | null
+}
+
+/** 흔적에 싣는 조각 하나(사양 §3.7 segments[], 계획 §2.6). */
+export interface AnswerIndexTraceSegment {
+  text: string
+  kind: AnswerIndexDecisionKind
+  card: string | null
+  by: "index" | "assist" | "none"
+  source?: AnswerIndexSegmentDecision["source"]
+  /** 이 조각만 물었을 때 1위 실제 카드와 확신도(측정용). */
+  topCard?: string
+  topConf?: number
+  /** 답 글에서 이 조각 자리를 '못 답함' 알림으로 채우는지(answer·gap 이 아니면 true). */
+  notice: boolean
+  /**
+   * 알림 종류: retry(그 조각만 물으면 답이 나옴 — 따로 한 번 더 물어봐 달라), notfound(공개 안내에서 바로 찾지 못함 — 상담 버튼),
+   * absent(공백 카드·없는 개념으로 공개 안내에 없음 확인 — 상담으로 확인), symptom(증상 조각 — 증상을 남겨 달라).
+   */
+  noticeKind?: AnswerIndexNoticeKind
+  /** 못 정한 조각을 따로 물었을 때의 판정(측정용). */
+  alone?: AnswerIndexDecisionKind
+}
+
+export type AnswerIndexNoticeKind = "retry" | "notfound" | "absent" | "symptom"
 
 export interface AnswerIndexDecision {
   kind: AnswerIndexDecisionKind
@@ -789,6 +880,8 @@ export interface AnswerIndexDecision {
    * 그 카드로 답했으면 "vote". 흔적에는 decidedBy "index:vote-rescue" 로 남는다.
    */
   rescue?: "vote" | null
+  /** 주의 표시(없는 개념 형태 등). 없거나 빈 배열이면 신호 없음. */
+  cautions?: AnswerIndexCaution[]
 }
 
 /** ChatbotCore.answerIndex 에 싣는 흔적. 응답에는 싣지 않는다. */
@@ -801,7 +894,13 @@ export interface AnswerIndexTrace {
   conf: number | null
   unexplained: string[]
   absentHit: string | null
+  /** 조각 수(나누지 않았으면 1, 색인이 정하지 않았으면 0). 조각별 판정은 parts. */
   segments: number
+  /** 질문을 나눠 정했을 때 조각별 판정(질문 순서). 나누지 않았으면 없다. */
+  parts?: AnswerIndexTraceSegment[]
+  /** 복합 질문 답 합치기 기록(R2 B4): 본문 글자 수·상한·결론만 남긴 조각 수·알림으로 바꾼 조각 수. 단일 답이면 없다. */
+  /** 복합 답 길이: chars 는 합친 본문 글자 수, cap 은 결정 1 상한, budget 은 서비스 후속 줄 몫을 뺀 본문 상한. */
+  compound?: { chars: number; cap: number; budget: number; compacted: number; dropped: number }
   /**
    * 고른 카드 id(answer 는 답 카드, gap 은 공백 카드 — absentHit 으로 간 gap 이면 absent.gapCard).
    * 측정 스크립트가 decidedBy index:<card>·index-gap:<card> 로 쓴다(scripts/lib/chatbot-live-eval-checks.ts).
@@ -850,10 +949,11 @@ export interface AnswerIndexAssistTrace {
   /** 최종 판정이 모델의 고름을 따랐는지(같은 카드를 골라 결정형 그대로인 경우 포함). */
   accepted: boolean
   /**
-   * 따르지 않은 이유. 묻지 않음: calibration_disabled·out_of_band·gap·absent·segments·policy_card·no_candidates.
+   * 따르지 않은 이유. 묻지 않음: calibration_disabled·out_of_band·gap·absent·segments_decided(복합 질문의 모든 조각을 결정형이 답함)·
+   * no_candidates.
    * 호출 실패: no_connection·circuit_open·access_denied·auth_error·timeout·http_error·parse_error·error.
    * 받아들이지 않음: out_of_range·negative·absent·policy_card·policy_topic·scope·card_unavailable·nodoc(결정형이 NODOC 신호로 답하지 않은
-   * 질문을 카드 답으로 바꾸려 함). 따랐으면 null.
+   * 질문을 카드 답으로 바꾸려 함). 복합 질문은 어느 조각도 따르지 않았을 때 첫 물은 조각의 까닭(조각별은 parts). 따랐으면 null.
    */
   rejectReason: string | null
   /** 결정형 판정(모델 전). */
@@ -873,6 +973,29 @@ export interface AnswerIndexAssistTrace {
   escalated?: boolean
   /** 올림 판단·결과. 올림 조건에 걸렸을 때만 있다. */
   escalation?: AnswerIndexAssistEscalation
+  /**
+   * 고르기 지시문 판(R2 B3): v1 단일 질문 옛 판(기본, 대역 추정과 같은 글), v2 단일 질문 새 판(CHATBOT_ASSIST_PICK_PROMPT=v2),
+   * multi 복합 질문({"picks": […]}). 칸이 없으면 v1 이다(옛 흔적).
+   */
+  prompt?: "v1" | "v2" | "multi"
+  /** 모델에 보인 후보 수. */
+  candidates?: number
+  /** 복합 질문: 모델이 낸 조각별 번호(조각 순서, 응답 그대로). 단일 질문이면 없다. */
+  picks?: number[]
+  /** 복합 질문: 조각마다 받아들였는지와 그 까닭(질문 순서, 넘친 조각은 빼고). */
+  parts?: AnswerIndexAssistPartTrace[]
+}
+
+/** 복합 질문 고르기에서 조각 하나의 결과(R2 B3). */
+export interface AnswerIndexAssistPartTrace {
+  /** 모델에 물은 조각인지(결정형이 이미 답한 조각은 묻지 않고 그대로 둔다 — rejectReason index_kept). */
+  asked: boolean
+  /** 그 조각의 번호(응답 배열에 없으면 null). */
+  pick: number | null
+  pickCard: string | null
+  accepted: boolean
+  /** index_kept·missing·out_of_range·scope·card_unavailable·segment_rank·nodoc·policy_topic·negative·absent. 따랐으면 null. */
+  rejectReason: string | null
 }
 
 export interface AnswerIndexAssistUsage {
@@ -892,9 +1015,11 @@ export interface AnswerIndexAssistEscalation {
   model: string | null
   /** 올림 모델의 고름. 부르지 않았거나 실패했으면 null. */
   pick: number | null
+  /** 복합 질문: 올림 모델의 조각별 번호. */
+  picks?: number[]
   ms: number | null
   /** 올림 호출 실패 이유(실패하면 결정형 판정 그대로). */
   failure: string | null
-  /** 고르기 단계(②)의 고름. */
-  first: { provider: "gemini" | "claude" | null; model: string | null; pick: number; pickCard: string | null }
+  /** 고르기 단계(②)의 고름(복합 질문이면 pick 은 첫 조각 번호, picks 는 조각별 번호). */
+  first: { provider: "gemini" | "claude" | null; model: string | null; pick: number; pickCard: string | null; picks?: number[] }
 }

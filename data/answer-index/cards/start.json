@@ -424,7 +424,7 @@
     "area": "start",
     "topic": "윈도우 지원 버전과 32비트·64비트 설치 파일",
     "answer": {
-      "lead": "none",
+      "lead": "yes_can",
       "sentences": [
         {
           "unit": "doc:/docs/start/pc-install#1",
@@ -437,7 +437,12 @@
             "e424471ca23ed4f3"
           ]
         }
-      ]
+      ],
+      "leadBasis": {
+        "unit": "doc:/docs/start/pc-install#1",
+        "i": 0,
+        "hash": "eb8cdf04cb979df6"
+      }
     },
     "sources": [
       {
@@ -2943,7 +2948,7 @@
     "area": "start",
     "topic": "휴대폰·태블릿과 PC 기능 차이(기본 기능은 모든 기기, 일부 기능·배치는 다름)",
     "answer": {
-      "lead": "none",
+      "lead": "yes_can",
       "sentences": [
         {
           "unit": "doc:/docs/start/mobile-install#4",
@@ -2958,7 +2963,12 @@
             "a01865a4b3aa4e5f"
           ]
         }
-      ]
+      ],
+      "leadBasis": {
+        "unit": "doc:/docs/start/mobile-install#4",
+        "i": 0,
+        "hash": "e85d2b891b86d5cb"
+      }
     },
     "sources": [
       {
