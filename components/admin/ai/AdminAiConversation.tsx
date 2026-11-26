@@ -6,6 +6,7 @@ import { Check } from "lucide-react"
 import { adminAiStore, type AdminAiState } from "@/lib/admin-ai/store"
 import type { AiBlock, AiMessage } from "@/lib/admin-ai/types"
 import { AnswerCardView, ContactCardView, LinksCardView } from "./cards/AnswerCards"
+import { ConsultationsCardView } from "./cards/ConsultationsCard"
 import { ChoiceCardView, DenyCardView, ReadCardView } from "./cards/InfoCards"
 import { OrderCard } from "./cards/OrderCard"
 import { GalmaebotAvatar } from "./GalmaebotAvatar"
@@ -61,6 +62,8 @@ function Block({ block, state }: { block: AiBlock; state: AdminAiState }) {
       return <LinksCardView card={block.card} />
     case "contact":
       return <ContactCardView card={block.card} now={state.now} />
+    case "consultations":
+      return <ConsultationsCardView card={block.card} />
   }
 }
 

@@ -7,7 +7,7 @@
 //  배지: 확정 / 확인 필요(confidence), 고객 전달 가능 여부는 화면이 sources 에서 다시 계산한다(lib/admin-ai/answers.ts).
 //  근거: 정리 지식·사고 선례·공개 문서·내부 문서(buildInternalEvidence 부품). 링크는 링크 목록 id 만.
 //  고객용 문안: 공개 챗봇 답 색인 카드가 근거면 그 말투 그대로 따로 둔다(R18). 정책 결정 대기 카드는 "확인 필요".
-//  상담 사례: 건수만(기관 이름·원문 없음, R17).
+//  상담 사례: 건수와 "상담 내역 찾기" 추천 한 줄만(기관 이름·원문 없음, R17).
 // 1순위 근거와 결론 문장은 질문 낱말과 겹치는 정도로 고른다(정리 지식을 무조건 앞세우지 않는다, 검토 동작-1).
 // 근거가 없거나 질문과 거의 겹치지 않으면 지어내지 않는다 — "근거를 찾지 못했습니다" + 담당자 카드 + CS 코파일럿 열기.
 // 자료는 deps 로 받는다(서버 연결은 deps.ts, 시험은 가짜). 이 파일은 I/O 를 하지 않는다.
@@ -21,6 +21,7 @@ import type {
 
 import { ADMIN_AI_LINKS, getLinkById } from "../links"
 import type { AiBlock, AnswerCard, AnswerConfidence, AnswerSource, ContactCard } from "../types"
+import { relatedConsultationAsk, relatedConsultationWords } from "./consultations"
 
 export interface CustomerPhrasing {
   /** 답 색인 카드 id. */
@@ -37,14 +38,29 @@ export interface KnowledgeDeps {
   evidence: (question: string) => Promise<InternalEvidenceParts>
   /** 공개 챗봇 답 색인의 상위 카드(읽기 전용). 없거나 실패하면 고객용 문안 칸이 없다. */
   customerPhrasing?: (question: string) => Promise<CustomerPhrasing | null>
-  /** 비슷한 상담 사례 건수(원문 없음). 없으면 상담 근거를 싣지 않는다. */
+  /** 질문과 관련된 상담 건수(원문 없음) — "관련 상담 n건 — 상담 내역 보기" 줄. 없으면 싣지 않는다. */
   consultationCount?: (question: string) => Promise<number | null>
+  /** 선택 부품(consultationCount)을 기다리는 시간 상한(ms). 기본 OPTIONAL_PART_TIMEOUT_MS — 넘으면 그 줄 없이 답한다. */
+  optionalTimeoutMs?: number
   /** 근거가 없을 때 붙일 담당자 카드. */
   contact: (question: string) => Promise<ContactCard>
 }
 
 export const NO_EVIDENCE_ANSWER = "근거를 찾지 못했습니다."
 export const CS_COPILOT_LINK_ID = "admin:cs-chatbot"
+/** 관련 상담 줄이 여는 상담 화면(consultations.ts CONSULTATION_INBOX_LINK_ID 와 같은 값 — 순환 가져오기를 피해 따로 둔다). */
+const CONSULTATION_LINK_ID = "admin:channel-talk"
+
+/**
+ * 묻기 질문 → 상담 내역 갈래로 가는 추천 문장. 질문 낱말 둘까지만 쓴다(고객 이름·원문을 늘리지 않는다).
+ * 건수 줄(countRelatedConsultations)과 같은 낱말 고르기를 쓴다 — 추천대로 물으면 상담 내역 갈래로 가고 같은 건수가 나온다.
+ */
+export function consultationAskOf(question: string): string {
+  return relatedConsultationAsk(relatedConsultationWords(question))
+}
+
+/** 선택 부품(상담 건수)의 시간 상한 기본값 — 느려도 정보 답을 붙잡지 않는다. */
+export const OPTIONAL_PART_TIMEOUT_MS = 2_500
 
 const MAX_STEPS = 5
 const MAX_SOURCES = 4
@@ -317,6 +333,17 @@ async function safely<T>(task: (() => Promise<T>) | undefined, fallback: T): Pro
   }
 }
 
+/** 선택 부품 — 시간 상한 안에 오지 않으면 fallback(느린 부품이 답 전체를 조각 시간 상한으로 밀지 않게). */
+async function within<T>(task: (() => Promise<T>) | undefined, ms: number, fallback: T): Promise<T> {
+  if (!task) return fallback
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([safely(task, fallback), new Promise<T>((resolve) => (timer = setTimeout(() => resolve(fallback), ms)))])
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
+}
+
 const EMPTY_PARTS: InternalEvidenceParts = { curated: [], incidents: [], publicDocs: [], internalDocs: [], publicAnswer: null, internalDraft: null }
 
 /** 정보 질문 하나의 답 블록. 근거가 있으면 [answer], 없으면 [answer(못 찾음), contact, links(코파일럿)]. */
@@ -324,7 +351,7 @@ export async function answerKnowledge(question: string, deps: KnowledgeDeps): Pr
   const [parts, phrasing, consultations] = await Promise.all([
     safely(() => deps.evidence(question), EMPTY_PARTS),
     safely(deps.customerPhrasing ? () => deps.customerPhrasing!(question) : undefined, null),
-    safely(deps.consultationCount ? () => deps.consultationCount!(question) : undefined, null),
+    within(deps.consultationCount ? () => deps.consultationCount!(question) : undefined, deps.optionalTimeoutMs ?? OPTIONAL_PART_TIMEOUT_MS, null),
   ])
   const picked = assemble(parts, question)
   const title = clip(question, 40)
@@ -351,14 +378,15 @@ export async function answerKnowledge(question: string, deps: KnowledgeDeps): Pr
   }
 
   const sources = [...picked.sources]
+  // 관련 상담은 건수와 "상담 내역 찾기" 갈래로 가는 추천 한 줄만 — 상담 글을 답에 섞지 않는다(R17).
   if (typeof consultations === "number" && consultations > 0) {
     sources.push({
-      title: `비슷한 상담 사례 ${consultations}건`,
-      where: "원문은 CS 코파일럿에서",
+      title: `관련 상담 ${consultations}건`,
+      where: `상담 내역 보기 — "${consultationAskOf(question)}"로 물어보세요`,
       kind: "consultation",
       status: "needs-check",
       externalUse: false,
-      linkId: CS_COPILOT_LINK_ID,
+      ...(getLinkById(CONSULTATION_LINK_ID) ? { linkId: CONSULTATION_LINK_ID } : {}),
     })
   }
   const customerDraft = customerDraftOf(question, phrasing)

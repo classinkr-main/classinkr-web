@@ -116,6 +116,7 @@ export const LIVE_COMMON_ASK_ITEMS: readonly AdminAiLiveSuggestion[] = [
   { label: "담당자 찾기", risk: "R0", prompt: "결제 오류는 누구한테 물어봐?" },
   { label: "링크 찾기", risk: "R0", prompt: "견적 화면 링크 알려 줘" },
   { label: "정책 묻기", risk: "R0", prompt: "환불 규정 알려 줘" },
+  { label: "상담 내역 찾기", risk: "R0", prompt: "환불 문의 최근에 들어온 거 있어?" },
 ]
 
 export function resolveLiveSuggestions(pathname: string): AdminAiLiveSuggestion[] {

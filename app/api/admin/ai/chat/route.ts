@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 
 import { requireVerifiedAdminContext } from "@/lib/admin-auth"
 import { adminAiMode } from "@/lib/admin-ai/preview"
-import { GALMAE_CHAT_ROLES, staffActor, staffKey } from "@/lib/admin-ai/server/actor"
+import { canReadConsultationContent, GALMAE_CHAT_ROLES, staffActor, staffKey } from "@/lib/admin-ai/server/actor"
 import { buildServerOrchestratorDeps } from "@/lib/admin-ai/server/deps"
 import { runTurn } from "@/lib/admin-ai/server/orchestrator"
 import { MAX_BODY_BYTES, parseChatBody } from "@/lib/admin-ai/server/request"
@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
   if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 })
 
   const actor = staffActor(admin)
-  const deps = buildServerOrchestratorDeps({ sub: staffKey(admin) })
+  const deps = buildServerOrchestratorDeps({ sub: staffKey(admin), canReadConsultations: canReadConsultationContent(admin) })
   const encoder = new TextEncoder()
 
   const stream = new ReadableStream<Uint8Array>({

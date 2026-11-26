@@ -6,6 +6,7 @@ import "server-only"
 //  - 도구: lib/ops-tools 레지스트리·실행기
 //  - 모델: 연결 전(null) — 결정형만 돈다
 //  - 쓰기: preview 까지(writes.ts) + 서명 표(ADMIN_AI_TICKET_SECRET 이 있을 때만)
+//  - 상담 내역: consultation-deps.ts(채널톡 경량 목록·내부 CS 목록 — 최근 N건을 읽어 거른다). 상담 글은 코파일럿 역할만 본다.
 import { randomUUID } from "crypto"
 
 import { routeAnswerIndex, getRouterAnswerIndex } from "@/lib/chatbot/answer-index"
@@ -20,6 +21,8 @@ import { getOpsToolByMcpName } from "@/lib/ops-tools/registry"
 import { presentOpsResult, runOpsTool } from "@/lib/ops-tools/run"
 import { isWriteDef } from "@/lib/ops-tools/types"
 
+import { buildConsultationDeps } from "./consultation-deps"
+import { countRelatedConsultations, findConsultations } from "./consultations"
 import type { CustomerPhrasing } from "./knowledge"
 import { getAdminAiModelAdapter } from "./llm/adapter"
 import type { OrchestratorDeps } from "./orchestrator"
@@ -60,16 +63,23 @@ export const serverOpsDeps: OpsDeps = {
   },
 }
 
-/** sub 는 행위자 키(actor.ts staffKey) — 쓰기 확인 표에 서명해 싣는다. */
-export function buildServerOrchestratorDeps(options: { sub: string }): OrchestratorDeps {
+/**
+ * sub 는 행위자 키(actor.ts staffKey) — 쓰기 확인 표에 서명해 싣는다.
+ * canReadConsultations 는 상담 글(누가·요지)을 볼 수 있는 역할인가(actor.ts canReadConsultationContent) — 아니면 건수만.
+ */
+export function buildServerOrchestratorDeps(options: { sub: string; canReadConsultations: boolean }): OrchestratorDeps {
   const contactDeps = buildContactDeps()
+  const consultationDeps = buildConsultationDeps()
   // 카드에 표를 실을지(확인 버튼) — 표 비밀 + 일회용 저장소가 있을 때만(ticket-claims.ts 한 곳에서 판정).
   const ticketSecret = readConfirmSetup().cardSecret
   return {
     knowledge: {
       evidence: (question) => buildInternalEvidence(question, { includeInternalDocs: true }),
       customerPhrasing: answerIndexPhrasing,
+      consultationCount: (question) => countRelatedConsultations(question, consultationDeps),
     },
+    consultations: (question, openCustomer, now) =>
+      findConsultations(question, consultationDeps, { openCustomer, actor: { canReadContent: options.canReadConsultations }, now }),
     resolveContact: (question, openCustomer) => resolveContact(question, contactDeps, { openCustomer }),
     ops: serverOpsDeps,
     model: getAdminAiModelAdapter(),
