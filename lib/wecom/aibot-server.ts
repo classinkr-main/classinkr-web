@@ -3,9 +3,9 @@ import "server-only"
 // 위컴 수신구의 서버 연결 — 실제 계정 조회·조율기 deps·중복 제거 저장소·답 보내기. 시험은 이 파일을 가짜로 바꾼다.
 import { randomUUID } from "crypto"
 
-import { staffKey } from "@/lib/admin-ai/server/actor"
+import { canReadConsultationContent, staffKey } from "@/lib/admin-ai/server/actor"
 import { buildServerOrchestratorDeps, serverOpsDeps } from "@/lib/admin-ai/server/deps"
-import { collectTurn } from "@/lib/admin-ai/server/orchestrator"
+import { collectTurn, type OrchestratorDeps } from "@/lib/admin-ai/server/orchestrator"
 import {
   allowsMemoryClaims,
   createMemoryClaimStore,
@@ -36,14 +36,27 @@ export function getWecomDedupStore(env: Record<string, string | undefined> = pro
   return allowsMemoryClaims(env) ? memoryDedup : null
 }
 
+function withoutConsultations(deps: OrchestratorDeps): OrchestratorDeps {
+  const { consultationCount: _consultationCount, ...knowledge } = deps.knowledge
+  void _consultationCount
+  return { ...deps, knowledge, consultations: undefined }
+}
+
 export function buildWecomBridgeDeps(config: WecomAibotConfig): BridgeDeps {
   return {
     userMap: config.userMap,
     lookupAdmin: (email) => lookupAdminByEmail(email),
     orchestratorDeps: (admin, chatType) => {
       const sub = staffKey(admin)
-      // 단체방은 답이 방 전체에 보인다 — 담당자 찾기에서 CRM 고객 조회를 끈다(브리지 groupScopedDeps 가 한 번 더 막는다).
-      const base = buildServerOrchestratorDeps({ sub, customerContacts: chatType !== "group" })
+      const group = chatType === "group"
+      // 단체방은 답이 방 전체에 보인다 — 담당자 찾기에서 CRM 고객 조회를 끄고, 상담 내역 갈래·관련 상담 건수를 떼어 낸다
+      // (브리지 groupScopedDeps 가 한 번 더 막는다). 1:1 은 어드민 화면과 같은 역할 규칙으로 상담 글 권한을 정한다.
+      const built = buildServerOrchestratorDeps({
+        sub,
+        canReadConsultations: !group && canReadConsultationContent(admin),
+        customerContacts: !group,
+      })
+      const base = group ? withoutConsultations(built) : built
       // 위컴에서는 확인표를 발급하지 않는다 — 미리보기까지만(확인은 로그인한 어드민 화면에서).
       return { ...base, previewWrite: (kind, ctx) => previewWriteTurn(kind, ctx, { ops: serverOpsDeps, ticketSecret: null, sub, newId: randomUUID }) }
     },

@@ -4,9 +4,9 @@
 //  - 연결표에 없는 사람: 자료 없이 "연결되지 않은 계정입니다 — 어드민에서 써 주세요"만.
 //  - 연결된 사람: 그 어드민 계정의 역할로 조율기를 부른다. 비활성·역할 없음·갈매봇 역할 밖이면 거절.
 //  - 단체방(chattype group): 답이 방 전체에 보인다 — 클래스인 정보 답·링크·사내 역할 담당 안내만. 조회 도구·쓰기 미리보기·
-//    고객사 담당(CRM 담당·딜 담당·고객 키)은 "1:1 로 물어봐 주세요". 행위자 범위도 비운다(이중 잠금). 담당자 찾기는
+//    고객사 담당(CRM 담당·딜 담당·고객 키)·상담 내역(목록·요지·건수, 묻기 답의 "관련 상담 n건" 줄까지)은 "1:1 로 물어봐 주세요". 행위자 범위도 비운다(이중 잠금). 담당자 찾기는
 //    행위자 범위를 보지 않으므로 deps 에서 따로 막는다(서버는 고객 조회를 끄고, 여기서 고객사 카드를 바꾼다).
-//  - 1:1(single): 조회 도구까지. 쓰기(견적 초안·배송 예정)는 미리보기 요지와 "어드민에서 확인" 주소만 —
+//  - 1:1(single): 조회 도구까지. 상담 내역은 어드민 화면과 같은 역할 규칙(actor.ts canReadConsultationContent — 아니면 건수만). 쓰기(견적 초안·배송 예정)는 미리보기 요지와 "어드민에서 확인" 주소만 —
 //    확인표를 발급하지 않으므로(ticketSecret null) 위컴에서 실행되는 길이 없다.
 //  - 연락처 원문(pii 범위)은 위컴으로 내보내지 않는다 — 역할과 상관없이 가린 값.
 import type { StaffIdentity } from "@/lib/admin-ai/server/actor"
@@ -132,7 +132,13 @@ async function groupResolveContact(base: OrchestratorDeps, question: string): Pr
   return card.kind === "customer_owner" ? GROUP_CUSTOMER_CONTACT : card
 }
 
-/** 단체방 — 조회 도구·쓰기 미리보기·고객 담당 조회를 막는 deps. */
+/**
+ * 단체방 — 상담 내역 갈래를 통째로 막는다. 목록·요지뿐 아니라 건수도 방에 나가지 않는다(상담 찾기를 부르지 않는다).
+ * 묻기 답의 "관련 상담 n건" 줄도 같은 건수라 consultationCount 를 뗀다. 서버 연결도 단체방에서는 두 부품을 떼어 낸다(이중 잠금).
+ */
+export const GROUP_CONSULTATIONS_DENY: AiBlock = groupDeny("상담 내역")
+
+/** 단체방 — 조회 도구·쓰기 미리보기·고객 담당 조회·상담 내역을 막는 deps. */
 export function groupScopedDeps(base: OrchestratorDeps): OrchestratorDeps {
   const ops: OpsDeps = {
     ...base.ops,
@@ -147,9 +153,14 @@ export function groupScopedDeps(base: OrchestratorDeps): OrchestratorDeps {
     },
     describeError: async (error) => (error instanceof GroupScopeError ? GROUP_SCOPE_TEXT : base.ops.describeError(error)),
   }
+  const { consultationCount: _consultationCount, ...knowledge } = base.knowledge
+  void _consultationCount
   return {
     ...base,
+    knowledge,
     ops,
+    consultations: undefined,
+    consultationsDenied: GROUP_CONSULTATIONS_DENY,
     resolveContact: (question) => groupResolveContact(base, question),
     previewWrite: async () => ({ blocks: [groupDeny("오더")] }),
   }

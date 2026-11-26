@@ -1,11 +1,12 @@
 import { describe, expect, it, vi } from "vitest"
 
-const hoisted = vi.hoisted(() => ({ buildServerOrchestratorDeps: vi.fn<(options: { sub: string; customerContacts?: boolean }) => object>(() => ({})), postJson: vi.fn<(...args: unknown[]) => Promise<{ ok: boolean; status: number; json: () => Promise<unknown>; text: () => Promise<string> }>>(async () => ({ ok: true, status: 200, json: async () => ({ errcode: 0 }), text: async () => "" })) }))
+const hoisted = vi.hoisted(() => ({ buildServerOrchestratorDeps: vi.fn<(options: { sub: string; canReadConsultations: boolean; customerContacts?: boolean }) => object>(() => ({ knowledge: { evidence: async () => ({}), consultationCount: async () => 1 }, consultations: async () => ({}) })), postJson: vi.fn<(...args: unknown[]) => Promise<{ ok: boolean; status: number; json: () => Promise<unknown>; text: () => Promise<string> }>>(async () => ({ ok: true, status: 200, json: async () => ({ errcode: 0 }), text: async () => "" })) }))
 
 vi.mock("@/lib/admin-ai/server/deps", () => ({ buildServerOrchestratorDeps: hoisted.buildServerOrchestratorDeps, serverOpsDeps: {} }))
 vi.mock("@/lib/wecom/aibot-accounts", () => ({ lookupAdminByEmail: async () => ({ ok: false, reason: "not_found" }) }))
 vi.mock("@/lib/server/post-json", () => ({ postJson: hoisted.postJson }))
 
+import { canReadConsultationContent } from "@/lib/admin-ai/server/actor"
 import { buildWecomBridgeDeps, getWecomDedupStore, isWecomResponseUrl, sendResponseMarkdown } from "@/lib/wecom/aibot-server"
 
 // 저장소 판정은 갈매봇 확인표(ticket-claims.ts)와 같다 — 운영·미리보기·자체 호스팅에서 Upstash 가 없으면 null(수신을 열지 않는다).
@@ -57,5 +58,22 @@ describe("조율기 연결", () => {
     deps.orchestratorDeps(admin, "single")
     const calls = hoisted.buildServerOrchestratorDeps.mock.calls.map(([options]) => options.customerContacts)
     expect(calls).toEqual([false, true])
+  })
+
+  it("상담 글 권한 — 1:1 은 어드민 화면과 같은 역할 규칙, 단체방은 늘 끄고 상담 갈래·관련 상담 건수를 떼어 낸다", () => {
+    hoisted.buildServerOrchestratorDeps.mockClear()
+    const deps = buildWecomBridgeDeps({ token: "t", key: Buffer.alloc(32), botId: "b", userMap: new Map(), allowedChatIds: new Set() })
+    const admin = { source: "supabase" as const, role: "ADMIN", userId: "user-1", capabilities: [] }
+    const viewer = { ...admin, role: "VIEWER" }
+    const group = deps.orchestratorDeps(admin, "group")
+    const single = deps.orchestratorDeps(admin, "single")
+    deps.orchestratorDeps(viewer, "single")
+    const calls = hoisted.buildServerOrchestratorDeps.mock.calls.map(([options]) => options.canReadConsultations)
+    expect(calls).toEqual([canReadConsultationContent(admin) && false, canReadConsultationContent(admin), canReadConsultationContent(viewer)])
+    expect(calls).toEqual([false, true, false])
+    expect(group.consultations).toBeUndefined()
+    expect(group.knowledge.consultationCount).toBeUndefined()
+    expect(single.consultations).toBeDefined()
+    expect(single.knowledge.consultationCount).toBeDefined()
   })
 })

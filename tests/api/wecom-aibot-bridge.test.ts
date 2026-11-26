@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest"
 
 import type { StaffIdentity } from "@/lib/admin-ai/server/actor"
+import type { ConsultationSearchResult } from "@/lib/admin-ai/server/consultations"
 import { collectTurn } from "@/lib/admin-ai/server/orchestrator"
 import type { AiBlock, OrderTicket } from "@/lib/admin-ai/types"
 import type { ContactCard as InternalContactCard } from "@/lib/internal-cs-chat/contact"
@@ -257,6 +258,77 @@ describe("방에서 보이는 것의 경계", () => {
     expect(reply.markdown).not.toContain("SECRET-TICKET")
     expect(reply.markdown).not.toContain("카드에서 확인하면 실행합니다")
     expect(reply.markdown).toMatch(/https:\/\/example\.test\/admin\//)
+  })
+})
+
+describe("상담 내역 — 단체방은 통째로 막고, 1:1 은 역할대로", () => {
+  // 가짜 상담 찾기 결과 — 실제 findConsultations 와 같은 꼴. 이름·요지는 샘플 값.
+  const RESULT: ConsultationSearchResult = {
+    items: [
+      { id: "c-1", source: "channel_talk", date: "2026-11-20", who: "샘플고객학원", summary: "녹화 파일 문의(샘플요지)", status: "종료", href: "/admin/channel-talk", linkKind: "channel_talk_conversation" },
+    ],
+    total: 4,
+    more: 3,
+    period: null,
+    periodUnsupported: false,
+    basis: { customer: "샘플고객학원", customerFrom: "question", keywords: [], scanned: [], capped: false, coverageFrom: null, semantic: false },
+    restricted: false,
+    partial: false,
+    failed: [],
+  }
+
+  function consultationBridge() {
+    const consultations = vi.fn(async () => RESULT)
+    const consultationCount = vi.fn(async () => 3)
+    const seen: string[] = []
+    const { deps } = bridge({
+      orchestratorDeps: (_admin, chatType) => {
+        seen.push(chatType)
+        const base = fakeDeps().deps
+        return { ...base, knowledge: { ...base.knowledge, consultationCount }, consultations }
+      },
+    })
+    return { deps, consultations, consultationCount, seen }
+  }
+
+  it("단체방 — 상담 내역 질문은 \"1:1 로\" 안내만, 목록·요지·건수가 나가지 않고 찾기를 부르지 않는다", async () => {
+    const { deps, consultations } = consultationBridge()
+    for (const text of ["샘플고객학원 상담 최근에 있었나?", "샘플고객학원 상담 이력 보여줘", "지난달 문의 뭐였지?"]) {
+      const reply = await answerWecomMessage(message({ chattype: "group", chatid: "room-1", text: `@갈매봇 ${text}` }), deps)
+      expect(reply.outcome, text).toBe("answered")
+      expect(reply.markdown, text).toContain(GROUP_SCOPE_TEXT)
+      expect(reply.markdown, text).not.toMatch(/샘플고객학원|샘플요지|4건|3건|상담 내역 보기/)
+    }
+    expect(consultations).not.toHaveBeenCalled()
+  })
+
+  it("단체방 — 묻기 답에 \"관련 상담 n건\" 줄이 붙지 않고, 건수를 세지도 않는다", async () => {
+    const { deps, consultationCount } = consultationBridge()
+    const reply = await answerWecomMessage(message({ chattype: "group", text: "@갈매봇 수업 녹화는 어떻게 해?" }), deps)
+    expect(reply.markdown).toContain("수업 녹화")
+    expect(reply.markdown).not.toMatch(/관련 상담|상담 내역 보기/)
+    expect(consultationCount).not.toHaveBeenCalled()
+  })
+
+  it("1:1 — 상담 내역 질문은 찾기를 부르고 결론·목록을 싣는다, 묻기 답에는 관련 상담 줄", async () => {
+    const { deps, consultations, consultationCount } = consultationBridge()
+    const list = await answerWecomMessage(message({ text: "샘플고객학원 상담 최근에 있었나?" }), deps)
+    expect(consultations).toHaveBeenCalled()
+    expect(list.markdown).toContain("상담 4건을 찾았습니다")
+    expect(list.markdown).toContain("샘플요지")
+    expect(list.markdown).toMatch(/https:\/\/example\.test\/admin\/channel-talk/)
+
+    const ask = await answerWecomMessage(message({ text: "수업 녹화는 어떻게 해?" }), deps)
+    expect(consultationCount).toHaveBeenCalled()
+    expect(ask.markdown).toContain("관련 상담 3건")
+  })
+
+  it("1:1 — 상담 글을 볼 수 없는 역할(restricted)이면 건수만, 요지·고객 이름은 없다", async () => {
+    const restricted: ConsultationSearchResult = { ...RESULT, items: [], restricted: true }
+    const { deps } = bridge({ orchestratorDeps: () => ({ ...fakeDeps().deps, consultations: async () => restricted }) })
+    const reply = await answerWecomMessage(message({ text: "상담 최근에 있었나?" }), deps)
+    expect(reply.markdown).toContain("상담 4건이 있습니다")
+    expect(reply.markdown).not.toContain("샘플요지")
   })
 })
 

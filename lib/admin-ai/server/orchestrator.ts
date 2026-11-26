@@ -32,6 +32,11 @@ export interface OrchestratorDeps {
    * 질문·상담 글을 로그나 모델 입력으로 보내지 않는다.
    */
   consultations?: (question: string, openCustomer: CustomerRef | null, now: number) => Promise<ConsultationSearchResult>
+  /**
+   * 상담 내역 갈래를 통째로 막을 때 대신 낼 카드(위컴 단체방 — 답이 방 전체에 보인다). 있으면 consultations 를 부르지 않는다.
+   * 묻기 답의 "관련 상담 n건" 줄은 knowledge.consultationCount 를 빼서 따로 막는다.
+   */
+  consultationsDenied?: AiBlock
   /** 쓰기(견적 초안·HW 배송 예정) 미리보기 — 없으면 쓰기는 모두 "아직 준비 중" 카드. */
   previewWrite?: (kind: "quote_draft" | "hw_plan", ctx: ToolTurnContext) => Promise<WriteTurnResult>
   /** 조각 하나(근거 찾기·조회·미리보기)의 시간 상한. 기본 15초 — 넘으면 "시간이 넘었습니다 — 화면에서" 카드. */
@@ -97,6 +102,7 @@ async function askBranchBlocks(branch: AskBranch, decision: RouteDecision, input
       if (!decision.read) return [{ kind: "text", text: "무엇을 조회할지 알아듣지 못했습니다." }]
       return readBlocks(decision.read, { text, actor: input.actor, context: input.context, now: input.now }, deps.ops)
     case "consultations": {
+      if (deps.consultationsDenied) return [deps.consultationsDenied]
       if (!deps.consultations) {
         return [
           { kind: "text", text: "상담 내역 찾기가 아직 연결되지 않았습니다. 상담 화면에서 찾아 주세요." },

@@ -157,6 +157,8 @@ const answerIndexRoutes = [
   "/api/chatbot/query/stream",
   "/api/cron/channel-talk-sync",
   "/api/mcp",
+  // 위컴 지능형 로봇 수신구 — 갈매봇 조율기(묻기 → answerIndexPhrasing)를 부른다.
+  "/api/webhook/wecom-aibot",
 ];
 // 답 색인 라우트는 public/·tests/·docs/·supabase/ 를 읽지 않는다. 동적 경로가 다시 생겨도 이 넷은 싣지 않는다.
 const answerIndexRouteExcludes = ["./public/**", "./tests/**", "./docs/**", "./supabase/**"];
