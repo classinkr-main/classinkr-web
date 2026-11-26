@@ -5,8 +5,9 @@ import type { Receipt, ReceiptInsert, ReceiptUpdate } from "@/lib/supabase/datab
 
 /* ─── 채번 ─────────────────────────────────────────────── */
 
-// 해당 연도 번호를 이만큼까지 읽는다(사전순 내림차순이라 999 를 넘어도 최댓값이 이 범위에 들어온다).
-const RECEIPT_NUMBER_FETCH_LIMIT = 2000;
+// 해당 연도 번호를 이만큼까지 읽는다 — PostgREST 응답 상한(1000행)과 같다.
+// 연 1000건을 넘으면 최댓값이 이 범위 밖일 수 있으므로 그때는 DB 시퀀스로 바꿔야 한다(현재 운영 건수는 그보다 훨씬 적다).
+const RECEIPT_NUMBER_FETCH_LIMIT = 1000;
 
 /**
  * 영수증 번호(`R-<연도>-<NNN>`) 채번 — 행 수가 아니라 최대 순번 + 1 이다.

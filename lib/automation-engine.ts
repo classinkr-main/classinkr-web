@@ -118,9 +118,9 @@ export async function resolveSegmentRecipients(
       query = query.gte("created_at", cutoff.toISOString())
     }
 
-    const data = await readAllSegmentRows("구독자", (from, to) =>
-      query.order("id", { ascending: true }).range(from, to)
-    )
+    // 빌더는 호출마다 URL 을 고쳐 쓰므로 정렬은 한 번만 붙이고, 페이지마다 range 만 바꾼다.
+    const ordered = query.order("id", { ascending: true })
+    const data = await readAllSegmentRows("구독자", (from, to) => ordered.range(from, to))
     for (const row of data) {
       if (!row.email) continue
       seenEmails.add(row.email.toLowerCase())
@@ -157,9 +157,9 @@ export async function resolveSegmentRecipients(
       query = query.gte("created_at", cutoff.toISOString())
     }
 
-    const data = await readAllSegmentRows("리드", (from, to) =>
-      query.order("id", { ascending: true }).range(from, to)
-    )
+    // 빌더는 호출마다 URL 을 고쳐 쓰므로 정렬은 한 번만 붙이고, 페이지마다 range 만 바꾼다.
+    const ordered = query.order("id", { ascending: true })
+    const data = await readAllSegmentRows("리드", (from, to) => ordered.range(from, to))
     const leadRows = data.filter((row) => Boolean(row.email))
 
     // 동의 게이트 — 조회 실패면 leads 분기 전체를 뺀다(미결정 consent = 거부).
