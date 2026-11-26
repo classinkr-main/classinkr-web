@@ -375,8 +375,18 @@ export function gapEligible(index: CompiledAnswerIndex, analysis: Pick<SegmentAn
   if (analysis.query.askType !== "yesno" && askTypeMatch(index, analysis.query, candidate.card) === 0) return false
   // 덮임: 질문 전체 IDF 덮임, 또는 질문 내용 낱말이 공백 카드 주제·anchors·개념으로 덮이는 몫(공백 카드 자체를 묻는 짧은 질문 — "채팅 기록도
   // 저장되나요"는 IDF 덮임 0.48·낱말 덮임 1.0, 품질-6). 묻는 꼴이 어긋나면 낱말 덮임이 높아도 공백 답을 내지 않는다(방법을 묻는 질문에 맞는 카드가 있을 수 있다).
-  return (candidate.check?.coverage ?? 0) >= GAP_MIN_COVERAGE || gapWordCoverage(index, analysis.query, candidate.card) >= GAP_MIN_COVERAGE
+  if ((candidate.check?.coverage ?? 0) >= GAP_MIN_COVERAGE) return true
+  // 낱말 덮임으로만 서는 공백 답은, 상위 실제 카드가 질문을 거의 다 덮거나(그 카드가 답일 수 있다 — "집에 있는 TV로 해도 되나요") 공백 카드의 없는 개념이
+  // 다른 낱말을 꾸미는 자리면("대리점 마진율") 내지 않는다.
+  const wellCovered = analysis.ranked
+    .slice(0, CHECK_TOP)
+    .some((other) => other.card >= 0 && other.kind !== "gap" && other.kind !== "none" && (other.check?.coverage ?? 0) >= GAP_WORD_RIVAL_COVERAGE)
+  const modifierOnly = analysis.absentTargets.some((item) => item.reason === "modifier" && index.absent.byId.get(item.match.id)?.gapCard === candidate.id)
+  return !wellCovered && !modifierOnly && gapWordCoverage(index, analysis.query, candidate.card) >= GAP_MIN_COVERAGE
 }
+
+/** 낱말 덮임 공백 답을 막는 상위 실제 카드의 덮임(이만큼 덮는 카드가 있으면 그 카드가 답일 수 있다). */
+const GAP_WORD_RIVAL_COVERAGE = 0.8
 
 /** 분석 + 문턱 → 조각 판정(§3.5). */
 export function resolveSegment(index: CompiledAnswerIndex, analysis: SegmentAnalysis, threshold: ThresholdFn): SegmentResult {
@@ -611,13 +621,16 @@ export function resolveDecision(index: CompiledAnswerIndex, analysis: QuestionAn
 }
 
 /**
- * 조각의 머리 개념(주절에서 마지막으로 맞은 비일반 개념 — 한국어는 묻는 대상이 술어 바로 앞에 온다): "강사 계정 탈퇴는 어디서 해요"의 '탈퇴'.
- * 주절에 비일반 개념이 없으면 null.
+ * 조각의 머리 개념(주절에서 마지막으로 맞은 비일반 동작 개념 — 한국어는 묻는 동작이 술어 바로 앞에 온다): "강사 계정 탈퇴는 어디서 해요"의 '탈퇴'.
+ * 주절에 비일반 동작 개념이 없으면 null(가드를 걸지 않는다).
  */
-function headConcept(index: CompiledAnswerIndex, analysis: SegmentAnalysis): string | null {
+function headConcept(index: CompiledAnswerIndex, analysis: SegmentAnalysis): { id: string; form: string } | null {
   const main = normalizeText(mainClauseOf(analysis.text)).replace(/\s+/g, "")
-  const inMain = topicConcepts(index, analysis).filter((concept) => main.includes(concept.form.replace(/\s+/g, "").toLowerCase()))
-  return inMain.length > 0 ? inMain[inMain.length - 1].id : null
+  // 묻는 동작(종류 action — 탈퇴·삭제·변경…)만 머리 개념으로 본다. 대상 명사(object)는 사전 형태가 넓게 걸려('과제 제출' → 학생 기본) 가드가 맞는 카드를 막는다.
+  const inMain = topicConcepts(index, analysis).filter(
+    (concept) => index.lexicon.concepts.get(concept.id)?.kind === "action" && main.includes(concept.form.replace(/\s+/g, "").toLowerCase())
+  )
+  return inMain.length > 0 ? inMain[inMain.length - 1] : null
 }
 
 /**
@@ -628,8 +641,11 @@ function headConceptGuard(index: CompiledAnswerIndex, analysis: SegmentAnalysis,
   if (result.kind !== "answer" || !result.card) return result
   const head = headConcept(index, analysis)
   const card = index.cardById.get(result.card)
-  // 상위 개념만 겹치는 카드(계정 일반 카드가 '탈퇴'를 묻는 조각)는 설명으로 보지 않는다: 카드 개념(과 그 상위)에 머리 개념 자체가 있어야 한다.
-  if (!head || card === undefined || index.cards[card].conceptClosure.has(head)) return result
+  if (!head || card === undefined) return result
+  // 상위 개념만 겹치는 카드(계정 일반 카드가 '탈퇴'를 묻는 조각)는 설명으로 보지 않는다: 카드 개념(과 그 상위)에 머리 개념 자체가 있거나,
+  // 카드 주제·anchors 에 그 형태가 있어야 한다("과제 제출" → 숙제 내는 방법 카드).
+  const form = head.form.replace(/\s+/g, "").toLowerCase()
+  if (index.cards[card].conceptClosure.has(head.id) || index.cards[card].anchorCompacts.some((anchor) => anchor.includes(form))) return result
   return { ...result, ...analysis.fallback, card: null, absentTail: null }
 }
 
